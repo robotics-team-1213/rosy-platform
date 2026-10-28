@@ -43,7 +43,7 @@ def test_long_stop_error_wraps_and_scrolls_without_hiding_stop(tmp_path, width, 
         assert box['x'] >= 0 and box['x'] + box['width'] <= width + 1 and box['y'] + box['height'] < 180
         notice.focus()
         page.keyboard.press('End')
-        assert notice.evaluate('n => n.scrollHeight <= n.clientHeight + 1 || n.scrollTop > 0')
+        page.wait_for_function("() => { const n = document.querySelector('#shell-notice'); return n.scrollHeight <= n.clientHeight + 1 || n.scrollTop > 0; }")
         if value := os.environ.get('ROSY_SHOT_DIR'):
             root = Path(value).expanduser(); root.mkdir(parents=True, exist_ok=True)
             page.screenshot(path=str(root / f'robot-notice-{theme}-{width}.png'))

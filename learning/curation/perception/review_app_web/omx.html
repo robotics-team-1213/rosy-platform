@@ -5,9 +5,13 @@
 <link rel="stylesheet" href="/common/components.css"><link rel="stylesheet" href="/common/app-shell.css"><link rel="stylesheet" href="/app.css">
 <script type="module" src="/omx.js"></script></head>
 <body><a class="skip-link" href="#omx-main">로봇암 시범 검수로 이동</a>
-<ui-shell grammar="procedure" class="ui-app-shell"><ui-topbar role="banner"><ui-brand href="/learning" aria-label="Rosy Learning"><b>Learning</b></ui-brand><span data-spacer></span><a class="workspace-link" data-action-icon="account" data-learning-account-entry href="/accounts" title="로그인·계정">로그인·계정</a>
+<ui-shell grammar="procedure" class="ui-app-shell"><!-- review:header:start -->
+<ui-topbar role="banner"><ui-brand href="/learning" aria-label="Rosy Learning"><b>Learning</b></ui-brand><span data-spacer></span><a class="workspace-link" data-action-icon="account" data-learning-account-entry href="/accounts" title="로그인·계정">로그인·계정</a>
 <ui-button kind="quiet" data-theme-cycle="" data-icon-only="" type="button" aria-label="테마 변경" data-action-icon="theme-dark"></ui-button></ui-topbar>
-<div class="ui-app-body" data-seats="rail"><div class="ui-rail"><nav class="ui-rail-nav workspace-tabs" aria-label="학습 화면"><a class="ui-rail-item" data-action-icon="list" href="/learning" aria-label="홈">홈</a><a class="ui-rail-item" data-action-icon="folder" href="/catalog" aria-label="자료 등록">자료</a><a class="ui-rail-item" data-action-icon="pencil" href="/" aria-label="정답 달기" aria-current="true">정답</a><a class="ui-rail-item" data-action-icon="robot" href="/learning/tasks" aria-label="학습 실행">학습</a><a class="ui-rail-item" data-action-icon="check" href="/learning/evaluate" aria-label="평가·승격">평가·승격</a></nav></div>
+<!-- review:header:end -->
+<div class="ui-app-body" data-seats="rail"><div class="ui-rail"><!-- review:rail:start -->
+<nav class="ui-rail-nav workspace-tabs" aria-label="학습 화면"><a class="ui-rail-item" data-action-icon="list" href="/learning" aria-label="홈">홈</a><a class="ui-rail-item" data-action-icon="folder" href="/catalog" aria-label="자료 등록">자료</a><a class="ui-rail-item" data-action-icon="pencil" href="/" aria-label="정답 달기" aria-current="true">정답</a><a class="ui-rail-item" data-action-icon="robot" href="/learning/tasks" aria-label="학습 실행">학습</a><a class="ui-rail-item" data-action-icon="check" href="/learning/evaluate" aria-label="평가·승격">평가·승격</a></nav>
+<!-- review:rail:end --></div>
 <div class="ui-app-main"><div class="ui-pathbar"><h1>로봇암 시범 검수</h1><span data-spacer></span><ui-button id="refresh" data-action-icon="refresh" kind="quiet">다시 확인</ui-button></div><nav class="review-kinds" aria-label="정답 하위 메뉴"><a class="ui-subnav-item" href="/">객체 검수</a><a class="ui-subnav-item" href="/pixels">픽셀 검수</a><a class="ui-subnav-item" href="/learning/omx" aria-current="page">로봇암 시범 검수</a><a class="ui-subnav-item" href="/learning/vlm">VLM 판단</a></nav>
 <main id="omx-main" class="learning-main" tabindex="-1">
 <p class="learning-lede">같은 과제에서 ACT+교정과 HIL-SERL을 비교합니다. 먼저 성공 조건을 정하고, 시범과 평가 근거를 연결하세요.</p>

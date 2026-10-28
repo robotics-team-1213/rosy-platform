@@ -1,0 +1,2 @@
+<ui-topbar role="banner"><ui-brand href="/learning" aria-label="Rosy Learning"><b>Learning</b></ui-brand><span data-spacer></span><a class="workspace-link" data-action-icon="account" data-learning-account-entry href="/accounts"{{account}} title="로그인·계정">로그인·계정</a>
+<ui-button kind="quiet" data-theme-cycle="" data-icon-only="" type="button" aria-label="테마 변경" data-action-icon="theme-dark"></ui-button></ui-topbar>

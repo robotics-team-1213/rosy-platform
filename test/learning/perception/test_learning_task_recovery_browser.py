@@ -1,6 +1,7 @@
 """Read recovery and progress updates must not erase action errors or keyboard context."""
 import copy
 import threading
+from urllib.parse import urlsplit
 
 import pytest
 from browser_harness import browser_tests_enabled, free_port
@@ -94,3 +95,23 @@ def test_progress_poll_preserves_action_focus_and_completion_returns_to_heading(
     expect(page.locator('#task-runs article h3')).to_be_focused()
     expect(panel).to_have_count(0)
     assert not errors
+
+
+@pytest.mark.parametrize('width', [320, 390, 768, 1440])
+def test_review_shell_is_in_the_first_response_without_javascript(task_page, width):
+    fixture, _, url, _ = task_page
+    origin = urlsplit(url).scheme + '://' + urlsplit(url).netloc
+    routes = ['/', '/learning', '/catalog', '/pixels', '/accounts', '/learning/tasks',
+              '/learning/omx', '/learning/sim', '/learning/vlm', '/learning/evaluate',
+              '/learning/camera', '/learning/workspaces']
+    for route in routes:
+        page = fixture.context.browser.new_page(viewport={'width': width, 'height': 900}, java_script_enabled=False)
+        response = page.goto(origin + route)
+        assert '<!-- review:header:start -->' in response.text(), route
+        assert '<!-- review:rail:start -->' in response.text(), route
+        expect(page.locator('ui-topbar ui-brand')).to_have_count(1)
+        expect(page.locator('ui-topbar [data-theme-cycle]')).to_have_count(1)
+        expect(page.locator('.ui-rail-nav > a')).to_have_count(5)
+        box = page.locator('ui-topbar').bounding_box()
+        assert box['x'] >= 0 and box['x'] + box['width'] <= width + 1, (route, box)
+        page.close()
