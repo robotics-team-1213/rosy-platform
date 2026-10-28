@@ -39,6 +39,7 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
     targets = [np.zeros(r.num_dof) for r in robots]
     tick = 0
     images, trials = [], []
+    print('MAPPED_AFTER_RESET', [r.get_joint_positions().tolist() for r in robots], flush=True)
     for i, robot in enumerate(robots):
         controller = robot.get_articulation_controller()
         gains = controller.get_gains()
@@ -55,6 +56,8 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
         view.set_max_efforts(efforts)
         print('MAPPED_SI_EFFORTS', i, view.get_max_efforts().tolist(), flush=True)
         print('MAPPED_MASSES', i, view.get_body_masses().tolist(), flush=True)
+        inertias = np.asarray(view.get_body_inertias()).reshape(-1, 3, 3)
+        print('MAPPED_INERTIA_EIGENVALUES', i, np.linalg.eigvalsh(inertias).tolist(), flush=True)
         print('MAPPED_EFFORT_MODES', i, view.get_effort_modes(), flush=True)
         view.set_solver_position_iteration_counts(np.array([64]))
         view.set_solver_velocity_iteration_counts(np.array([16]))
@@ -64,11 +67,13 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
         for i, robot in enumerate(robots):
             state = robot.get_joint_positions()
             if not np.isfinite(state).all():
-                raise ValueError('nonfinite articulation')
+                raise ValueError(f'nonfinite articulation arm={i} tick={tick}')
             targets[i][fingers[i][1]] = -state[fingers[i][0]]
             robot.get_articulation_controller().apply_action(ArticulationAction(joint_positions=targets[i]))
         world.step(render=False, update_fabric=True)
         tick += 1
+        if tick <= 3:
+            print('MAPPED_FIRST_STEP', tick, [r.get_joint_positions().tolist() for r in robots], flush=True)
 
     def hold(steps):
         for _ in range(steps):
@@ -142,6 +147,7 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
             targets[i][fingers[i]] = [.6, -.6]
             robot.set_joint_positions(targets[i])
             robot.set_joint_velocities(np.zeros(robot.num_dof))
+        print('MAPPED_AFTER_POSE', [r.get_joint_positions().tolist() for r in robots], flush=True)
         hold(120)
         print('MAPPED_HOME', snapshot(), flush=True)
         print('MAPPED_APPLIED', [(r.get_applied_action().joint_positions.tolist(),
