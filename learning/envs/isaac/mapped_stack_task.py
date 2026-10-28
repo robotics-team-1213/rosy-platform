@@ -112,7 +112,8 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
             if not np.isfinite(state).all():
                 raise ValueError(f'nonfinite articulation arm={i} tick={tick}')
             apply_servo(robot, targets[i], joints[i], fingers[i])
-        world.step(render=False, update_fabric=True)
+        for _ in range(FIXTURE['physics_substeps']):
+            world.step(render=False, update_fabric=True)
         tick += 1
         if tick <= 3:
             print('MAPPED_FIRST_STEP', tick, [r.get_joint_positions().tolist() for r in robots], flush=True)
@@ -127,8 +128,8 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
             p, q = box.get_world_pose()
             boxes.append(dict(position=p.tolist(), orientation=q.tolist(),
                 velocity=box.get_linear_velocity().tolist(), angular_velocity=box.get_angular_velocity().tolist(),
-                net_force=np.asarray(contacts[i].get_net_contact_forces(dt=DT))[0].tolist(),
-                forces=np.asarray(contacts[i].get_contact_force_matrix(dt=DT))[0].tolist()))
+                net_force=np.asarray(contacts[i].get_net_contact_forces(dt=FIXTURE['physics_dt_s']))[0].tolist(),
+                forces=np.asarray(contacts[i].get_contact_force_matrix(dt=FIXTURE['physics_dt_s']))[0].tolist()))
         for i in range(2):
             tcps.append(tcp_position(i).tolist())
         return dict(tick=tick, boxes=boxes, tcps=tcps,
@@ -149,7 +150,7 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
         filters, probes = grasp_probes[arm]
         value['arm_contacts'] = []
         for path, probe in probes:
-            forces = np.asarray(probe.get_contact_force_matrix(dt=DT))[0]
+            forces = np.asarray(probe.get_contact_force_matrix(dt=FIXTURE['physics_dt_s']))[0]
             for name, force in zip(filters, forces):
                 if np.linalg.norm(force) > .01:
                     value['arm_contacts'].append(dict(body=path, other=name, force=force.tolist()))

@@ -57,7 +57,7 @@ def run(args):
             raise RuntimeError('Second arm PhysX variant unavailable')
     for prim, base in zip((first, second), FIXTURE['arm_bases_m']):
         UsdGeom.XformCommonAPI(prim).SetTranslate(Gf.Vec3d(*base))
-    world = World(physics_dt=DT, rendering_dt=DT, stage_units_in_meters=1.)
+    world = World(physics_dt=FIXTURE.get('physics_dt_s', DT), rendering_dt=DT, stage_units_in_meters=1.)
     mat = PhysicsMaterial('/World/GripMaterial', static_friction=1., dynamic_friction=1., restitution=0.)
 
     def fixed(name, position, size, color):
@@ -339,7 +339,8 @@ def run(args):
                 if mapped:
                     for i, robot in enumerate(robots):
                         apply_servo(robot, self.targets[i], joint_indices[i], fingers[i])
-                world.step(render=False, update_fabric=True)
+                for _ in range(FIXTURE.get('physics_substeps', 1)):
+                    world.step(render=False, update_fabric=True)
             return self.get_observations()
 
         def activate(self):
@@ -355,7 +356,7 @@ def run(args):
 
         def measured(self, index):
             position, orientation = cargo[index].get_world_pose()
-            vectors = np.asarray(contacts[index].get_contact_force_matrix(dt=DT))[0]
+            vectors = np.asarray(contacts[index].get_contact_force_matrix(dt=FIXTURE.get('physics_dt_s', DT)))[0]
             force = np.linalg.norm(vectors[:4], axis=-1)
             speed = max(float(np.linalg.norm(cargo[index].get_linear_velocity())),
                         UNIT*float(np.linalg.norm(cargo[index].get_angular_velocity())))
@@ -365,7 +366,7 @@ def run(args):
             if mapped:
                 sample['body'] = dict(position=position.tolist(), orientation=orientation.tolist(),
                     velocity=cargo[index].get_linear_velocity().tolist(), angular_velocity=cargo[index].get_angular_velocity().tolist(),
-                    forces=vectors.tolist(), net_force=np.asarray(contacts[index].get_net_contact_forces(dt=DT))[0].tolist())
+                    forces=vectors.tolist(), net_force=np.asarray(contacts[index].get_net_contact_forces(dt=FIXTURE.get('physics_dt_s', DT)))[0].tolist())
             return position, sample, force
 
         def get_observations(self):
@@ -412,7 +413,8 @@ def run(args):
                 if mapped:
                     for i, robot in enumerate(robots):
                         apply_servo(robot, self.targets[i], joint_indices[i], fingers[i])
-                world.step(render=False, update_fabric=True)
+                for _ in range(FIXTURE.get('physics_substeps', 1)):
+                    world.step(render=False, update_fabric=True)
             self.transitions += 1
             self.episode_length_buf += 1
             p, sample, force = self.measured(self.index)
@@ -465,7 +467,8 @@ def run(args):
     # Observe uncommanded cargo transport on the belt before any policy is applied.
     start = cargo[0].get_world_pose()[0].copy()
     for _ in range(120):
-        world.step(render=False, update_fabric=True)
+        for _ in range(FIXTURE.get('physics_substeps', 1)):
+            world.step(render=False, update_fabric=True)
     belt_motion = (cargo[0].get_world_pose()[0]-start).tolist()
     capture('stacking-initial.png')
     print('OMX_STACKING_SCENE_READY', json.dumps(dict(arms=2, cargo=len(plan),
