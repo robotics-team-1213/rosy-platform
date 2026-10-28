@@ -3916,3 +3916,10 @@
 - 증거: tests-only `b808a821c2`의 공식 원격 실행에서 도구 부재 15 ERROR를 확인했다. Windows PowerShell의 폐기용 도우미 fixture는 수정 전 키 누락 assertion으로 실패했고 수정 후 7개 self-check와 설정·3장 연속 기록 fixture가 통과했다. 후보 `f594cb588d`의 집중 원격 회귀는 140 passed/2 Windows-only skipped, NEW 0이다. 독립 검토의 계정 디렉터리 탐색·키 읽기 권한 누락은 `bf3cab97bc`에서 6 FAILED로 재현했다. 보강한 `8c3a60f344`의 영향 선택은 459 passed/2 skipped이며 갱신 전 생성 인덱스의 계약 2건이 실패했다. 인덱스를 재생성해 후속 커밋에서 재검증한다. 독립 재검토의 Critical/Important는 0이다.
 - gate 변화: 없음. 카드 마운트·실물 키 변경·장치 등록·모터 활성화·배포·착지는 수행하지 않았다. 유지보수용 관리자 웹 endpoint를 새로 열지 않는다.
 - CE: 미해결 — 실제 장치의 인증 장애 원인과 실물 복구는 확인하지 못했다. 코드의 복구 거절·원본 보존과 장치 수용을 구분한다.
+
+## 2026-10-29 · 535d81ae8b · 서버 서비스 이미지 증분 후보
+
+- 변경: 서명된 기준 후보와 Git 빌드 입력 비교로 변경 없는 이미지·SBOM을 재사용하고 변경 이미지만 전달하는 manifest v2를 추가했다. 전체 목표 이미지·플랫폼·Compose 참조 검증과 v1 복구를 유지한다. 활성 스택은 기존 방화벽·인증서 preflight 후 Compose로 조정한다. 설정만 바뀌어도 기본/Account Caddyfile의 별도 내용 해시 label이 proxy 교체를 유도한다. 보존 후보의 재사용 이미지 참조도 정리에서 보호한다. 기준 없는 전체 빌드와 CI dispatch의 base_commit 선택을 유지한다.
+- 증거: ccd8049112 공식 원격 RED 17 failed. f33f660d59 집중 회귀 203 passed. 검토에서 찾은 파일 bind 갱신·과도한 이미지 보존은 8bf52891bc의 2 failed로 재현했고, 535d81ae8b는 집중 205 passed/skip0/NEW0이다. 최종 source 재검토의 중대 지적은 없다. workflow 변경으로 FULL이 필수이며 최종 결과는 별도 완료 기록에 남긴다.
+- gate 변화: 없음. 실제 Docker 연속성·CI dispatch·설치·운영 배포·실물 수용·착지/push는 수행하지 않았다. v2 게시 전에 별도 설치된 서명기·검증기·업데이터를 먼저 갱신해야 한다.
+- CE: 해당 없음 — 파일 bind의 제약과 예방 판단이 D-301 추가 결정, 구성 label과 회귀 시험에 남는다.
