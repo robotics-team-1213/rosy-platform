@@ -12698,3 +12698,11 @@ osy-d395-s1d\`.
 - 증거: 원격 `operations/monitoring/test`·`shared/web/test`·`test/architecture`.
 - gate 변화: 없음.
 - CE: 해당 없음 — 시험이 잡은 토큰 이름 차이다.
+
+## 2026-10-28 · uncommitted · fix(release): Monitoring TLS 시험이 고정한 Caddy 배포 파일 SHA256을 공개 출처로 등록
+
+- 변경: `deploy/robot/pinky_pro/release/public_provenance.json`에 `operations/monitoring/test/test_tls_proxy.py`의 Caddy v2.10.2 linux_amd64 배포 파일 SHA256 줄을 기록한다. 2026-10-28에 그 파일을 내려받아 크기 15875694와 값이 맞음을 확인했다.
+- 근거: 착지 사전 시험의 `test/test_release_boundary_guards.py::test_no_secrets_in_tracked_files`가 그 값을 high-entropy-token으로 잡았다(main에서는 통과).
+- 증거: 원격 `test/test_release_boundary_guards.py`·`test/test_secret_public_provenance.py`.
+- gate 변화: 없음.
+- CE: 해당 없음 — 저장소의 공개 출처 등록 절차를 따른 것이다.

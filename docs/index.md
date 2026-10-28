@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-10-28 · uncommitted · fix(release): Monitoring TLS 시험이 고정한 Caddy 배포 파일 SHA256을 공개 출처로 등록
 - 2026-10-28 · uncommitted · fix(monitoring): Monitoring 화면 배경을 의미 색 역할로
 - 2026-10-28 · uncommitted · docs(adr): D-902 Pilot 실물 OMX 조종·녹화는 Fleet과 CORE 수동 팔 경로로
 - 2026-10-28 · uncommitted · docs(landing): land_async is the default landing; publish push reuses its own record (D-889 addendum 5)
 - 2026-10-28 · uncommitted · docs(adr): D-889 addendum 3 follow-up, speculative prepare and measurements
-- 2026-10-28 · uncommitted · feat(sim): Isaac 쥐는 각도를 Gazebo 보정값에 맞춤
