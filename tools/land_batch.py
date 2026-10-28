@@ -98,10 +98,17 @@ def batchable(land, wt: Path, other: Path, name: str, tip: str) -> bool:
     return _BATCHABLE[key]
 
 
+def plain_auto(args, extra) -> bool:
+    """Explicit checks or freshness requests run alone; only plain auto opts into batching."""
+    return (args.tests == "auto" and not extra and not getattr(args, "node", False)
+            and not getattr(args, "no_cache", False))
+
+
 def eligible(land, wt: Path, row: dict) -> bool:
     """A waiting or pending ticket another landing may carry: this host, a clean branch at its worktree's HEAD."""
     other, name = Path(row.get("worktree") or "."), row.get("branch") or ""
-    if row.get("status") not in ("waiting", "pending") or row.get("host") != socket.gethostname():
+    if (row.get("batch_auto") is not True or row.get("status") not in ("waiting", "pending")
+            or row.get("host") != socket.gethostname()):
         return False
     if row.get("batch") or name in ("", "main", "HEAD") or not other.is_dir() or other.resolve() == wt.resolve():
         return False
@@ -154,7 +161,7 @@ def former(land, wt: Path, qdir: Path, ticket: Path):
 def queue(land, wt: Path, branch: str, args, python: str, qdir: Path, ticket: Path, main_co: Path) -> int | None:
     """Wait for the turn. 0 when a batch landed this branch; None when it lands alone (``land.rounds``)."""
     form, chosen, measured = former(land, wt, qdir, ticket)
-    if args.tests != "auto" or safety(land, wt, branch) or not affected(wt, branch):
+    if not plain_auto(args, land.EXTRA) or safety(land, wt, branch) or not affected(wt, branch):
         form = None  # a batch is tested; safety and FULL-class branches land alone (D-889 3/6)
     while True:
         got = land_queue.wait(qdir, ticket, args.queue_timeout * 60, check=land_prepare.watch(land, wt),

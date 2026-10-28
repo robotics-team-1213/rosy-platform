@@ -128,7 +128,7 @@ def test_a_batch_that_selects_the_full_tier_goes_alone_before_any_pretest(repos,
 
 def test_eligible_wants_a_member_at_its_worktree_head_judged_by_its_tier_or_selection(repos, tmp_path, monkeypatch):
     main, wt, rows = batch_repos(repos, tmp_path)
-    row = {**rows[0], "host": socket.gethostname(), "status": "waiting"}
+    row = {**rows[0], "host": socket.gethostname(), "status": "waiting", "batch_auto": True}
     monkeypatch.setattr(land, "select", lambda *a, **k: ([["test"]], "selector escalated to FULL (x)"))
     assert not land_batch.eligible(land, wt, row), "no prepared tier: its selection is FULL"
     assert not land_batch.eligible(land, wt, {**row, "status": "preparing"}), "a pretest under way is not carried"

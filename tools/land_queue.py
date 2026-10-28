@@ -68,19 +68,20 @@ def queue_dir(wt: Path) -> Path:
     return Path(common.stdout.strip()) / QUEUE
 
 
-def take(qdir: Path, branch: str, worktree: str = "", status: str = "waiting") -> Path:
+def take(qdir: Path, branch: str, worktree: str = "", status: str = "waiting", *, batch_auto: bool = False) -> Path:
     """Write this process's ticket at the end of the queue and return its path.
 
     ``status``: ``pending`` (waiting for a preparation slot) or ``preparing`` (tests outside the lock: keeps its
     place, blocks no one; ``land_prepare.py``), ``waiting``,
-    or ``turn`` (merging, testing, landing). A ticket without one (an older land.py) counts as waiting."""
+    or ``turn`` (merging, testing, landing). A ticket without one (an older land.py) counts as waiting.
+    ``batch_auto`` explicitly opts an uncustomized automatic request into batch membership."""
     qdir.mkdir(parents=True, exist_ok=True)
     stamp = time.time_ns()
     while (qdir / f"{stamp:020d}-{os.getpid()}.json").exists():  # one process, one clock tick (Windows)
         stamp += 1
     name = f"{stamp:020d}-{os.getpid()}.json"
     info = {"pid": os.getpid(), "host": socket.gethostname(), "start": time.time(), "branch": branch,
-            "worktree": worktree, "status": status}
+            "worktree": worktree, "status": status, "batch_auto": batch_auto}
     tmp = qdir / f".{name}.tmp"
     tmp.write_text(json.dumps(info), encoding="utf-8")
     os.replace(tmp, qdir / name)
@@ -188,10 +189,10 @@ def wait(qdir: Path, ticket: Path, timeout: float, clock=time.time, sleep=time.s
         sleep(POLL)
 
 
-def enter(wt: Path, branch: str, status: str = "waiting") -> tuple[Path, Path]:
+def enter(wt: Path, branch: str, status: str = "waiting", *, batch_auto: bool = False) -> tuple[Path, Path]:
     """Take a ticket (its place in the queue) and release it at exit whatever happens; (queue dir, ticket)."""
     qdir = queue_dir(wt)
-    ticket = take(qdir, branch, str(wt), status)
+    ticket = take(qdir, branch, str(wt), status, batch_auto=batch_auto)
     _held.append(ticket)
     atexit.register(leave)
     print(f"[queue] ticket {ticket.name} in {qdir}", flush=True)
