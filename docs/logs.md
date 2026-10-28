@@ -12633,3 +12633,11 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: D-889 추가 5
 - 교훈: 없음
+
+## 2026-10-28 · uncommitted · fix(omx): 움직임 분리 시험 파일의 BOM 제거
+
+- 변경: `middleware/devices/omx/adapter/test/test_omx_dynamixel_motion.py` 맨 앞의 UTF-8 BOM을 지운다. 내용은 같다.
+- 근거: 착지 사전 시험에서 `test/test_source_encoding.py::test_no_active_tracked_python_file_starts_with_a_bom`과 `test/test_ci_dependencies.py::test_no_test_module_defines_a_nose_style_setup_function`이 이 파일의 BOM 때문에 실패했다(BOM이 있으면 파일을 파싱하지 못한다).
+- 증거: 원격 위 두 시험과 `middleware/devices/omx/adapter/test`.
+- gate 변화: 없음.
+- CE: 해당 없음 — 시험이 잡은 인코딩 실수다.

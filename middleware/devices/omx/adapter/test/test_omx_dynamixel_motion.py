@@ -1,4 +1,4 @@
-﻿"""Legacy exception imports remain catch-compatible after motion extraction."""
+"""Legacy exception imports remain catch-compatible after motion extraction."""
 
 import pytest
 
