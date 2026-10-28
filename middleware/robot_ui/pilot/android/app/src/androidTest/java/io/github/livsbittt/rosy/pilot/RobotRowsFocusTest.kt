@@ -10,14 +10,17 @@ import androidx.test.platform.app.InstrumentationRegistry
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.io.File
-import java.util.UUID
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
+import org.junit.Rule
+import org.junit.rules.TestName
 
 /** Input focus is exercised on Android Views; this does not assert TalkBack focus. */
 class RobotRowsFocusTest {
+    @get:Rule val testName = TestName()
+    private var capture = 0
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private lateinit var activity: RobotRowsFixtureActivity
     private val first = Candidate("fixture.local", 8443, listOf("127.0.0.1"), "같은 이름", "duplicate")
@@ -77,11 +80,18 @@ class RobotRowsFocusTest {
             assertTrue("focus is under the right system bar", bounds.right <= decor.width - insets.systemWindowInsetRight)
             assertEquals(0, activity.selections)
         }
+        val frame = CountDownLatch(1)
+        instrumentation.runOnMainSync {
+            val decor = activity.window.decorView
+            decor.viewTreeObserver.registerFrameCommitCallback { frame.countDown() }
+            decor.invalidate()
+        }
+        assertTrue("focused frame was not drawn", frame.await(5, TimeUnit.SECONDS))
         instrumentation.waitForIdleSync()
         val bitmap = requireNotNull(instrumentation.uiAutomation.takeScreenshot())
         val folder = requireNotNull(activity.getExternalFilesDir("native-ui"))
         require(folder.isDirectory || folder.mkdirs())
-        File(folder, "pilot-focus-${UUID.randomUUID()}.png").outputStream().use {
+        File(folder, "${testName.methodName}-${++capture}.png").outputStream().use {
             check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it))
         }
     }
