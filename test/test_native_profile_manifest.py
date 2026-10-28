@@ -278,6 +278,39 @@ def test_real_signature_and_checksum_refusals(case, keys, tmp_path, fault):
         _verify(case)
 
 
+@pytest.mark.parametrize("metadata", ["manifest.json", "runtime-identity.json"])
+def test_metadata_reopened_after_real_signature_verification_is_refused(case, monkeypatch, metadata):
+    module = importlib.import_module("deploy.hosts.common.release.native_profiles")
+    root, private, public, manifest, expected = case
+    if metadata == "manifest.json":
+        manifest["profile"]["component_role"] = "observer"
+        _seal(root, private, manifest)
+        replacement = copy.deepcopy(manifest)
+        replacement["profile"]["component_role"] = expected["expected_profile"]["component_role"]
+        unsigned = _canonical(replacement)
+    else:
+        identity = expected["expected_runtime_identity"]
+        unsigned = json.dumps(dict(reversed(list(identity.items()))), indent=2).encode()
+    signed_bytes = (root / metadata).read_bytes()
+    assert signed_bytes != unsigned
+    assert verify_release_files(root, public) == []
+    real_verify = module.verify_release_checksums
+    swapped = []
+
+    def verify_then_swap(release, key):
+        entries, rejections = real_verify(release, key)
+        assert rejections == []
+        assert entries[metadata] == _digest(signed_bytes)
+        (release / metadata).write_bytes(unsigned)
+        swapped.append(metadata)
+        return entries, rejections
+
+    monkeypatch.setattr(module, "verify_release_checksums", verify_then_swap)
+    with pytest.raises(ValueError):
+        _verify(case)
+    assert swapped == [metadata]
+
+
 @pytest.mark.parametrize("name,data", [
     ("install/.rosy-release", b"2026.10.28-999\n"), ("source-revision.txt", b"b" * 40 + b"\n"),
     ("python-runtime.sha256", b"0" * 64 + b"\n"), (LOCK, b"changed lock\n"),
