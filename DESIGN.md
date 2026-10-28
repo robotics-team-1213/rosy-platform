@@ -135,6 +135,8 @@ components:
 > 근거: [D-359](docs/adr/D-359-theme-ready-tokens-shared-controls-and-responsive-tiers.md) §8.
 > 값의 원본은 [`tokens.css`](shared/web/tokens.css), 부품은 [`components.css`](shared/web/components.css)·[`ui.js`](shared/web/ui.js), 표면 목록은 [`surfaces.yaml`](shared/web/surfaces.yaml), 살아 있는 견본은 [`styleguide.html`](middleware/robot_ui/robot/styleguide.html)이다.
 > Fleet 헤더·탐색의 정적 컴포넌트와 작업 본문·접속 폭의 역할 토큰은 [D-906](docs/adr/D-906-fleet-static-components-layout-roles.md)을 따른다. 원본은 Fleet의 `shared/fleet-header.html.inc`·`fleet-nav.html.inc`이며 생성된 네 문서 사본은 직접 편집하지 않는다. [D-909](docs/adr/D-909-fleet-procedure-document-components.md)의 나머지 다섯 절차 문서는 `fleet-document-header.html.inc`·`fleet-document.css`를 소비한다. `fleet_components.py --check`가 아홉 문서의 드리프트를 거절하고 공용 갤러리에서 계산된 역할 값을 확인한다.
+
+> Learning의 12개 정적 문서는 [D-910](docs/adr/D-910-learning-static-shell-components.md)의 `review_app_web/components/`에서 헤더·전역 메뉴를 합성한다. `review_shell.py --check`가 원본과 문서 사본의 일치를 확인한다. 기존 셸 자리·시각 토큰을 소비하며, 화면별 폼과 하위 탐색은 각 문서에 둔다.
 > 위 frontmatter의 색은 기본(어둡게) 테마 값이다. 밝게 값은 `tokens.css`의 `[data-theme="light"]` 블록에 있다.
 
 ## Overview

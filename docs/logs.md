@@ -12661,3 +12661,9 @@ osy-d395-s1d\`.
 - 증거: 긴 값 RED26→84 passed, 정책 상태 RED3→39 passed, 공식 영향8898 passed/760 skipped/NEW0,102파일 브라우저1510 passed/skip0/NEW0. 정책 후속·독립 시각 검토는 `validation/remaining-ui-layout-2026-10-28/result.md`에 source별로 보존한다. detector0건은 stylesheet 해석 경고가 있는 제한된 기계 근거다.
 - gate 변화: 없음. 배포·실물·현장 수용·추가 병합 없음.
 - CE: 해당 없음. 판단 근거가 코드·회귀·ADR에 남는다.
+
+## 2026-10-28 · fce9c60216 · D-910 Learning 정적 셸과 UI 검증 기록
+
+- 변경: D-910과 ADR Log·DESIGN에 Learning의 정적 헤더/메뉴 원본 및 생성·드리프트 검사를 기록했다.
+- 증거: 날짜별 검증 기록 `docs/validation/robot-pilot-learning-ux-2026-10-28/result.md`에 RED·고정 SHA·원격 영향/브라우저 결과·독립 소스/실제 화면 검토를 구분했다. 설치 자산·라우트 회귀 fce9c60216은20 passed, skip0이다.
+- gate 변화: 없음. 실제 장치·APK/ARM64 빌드·현장 수용은 별도다. CE: 해당 없음 — 기존 크기 이력 교훈을 적용하고 이번 경계의 판단을 코드·회귀·D-910에 남겼다.

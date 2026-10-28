@@ -1312,3 +1312,9 @@
 - 변경: api/AGENTS.md의 Dashboard 안내 링크를 middleware/robot_ui/robot/AGENTS.md로 바로잡았다. 인증·API·CSP 계약은 유지한다.
 - 증거: app.py::_dashboard_root의 소스 fallback과 대상 AGENTS.md의 존재를 대조했다. 전체 AGENTS.md의 로컬 Markdown 링크와 Parent context 경로를 정적으로 확인한다.
 - gate 변화: 없음. HTTP·WebSocket·장치 동작 시험을 수행한 기록이 아니다.
+
+## 2026-10-28 · fce9c60216 · 분리한 Pilot 배치 CSS 서빙
+
+- 변경: 기존 Pilot allowlist에 layout.css만 추가했다. 경로 방어·인증·API·정지 명령 owner는 유지한다.
+- 증거: 날짜별 검증 기록 `docs/validation/robot-pilot-learning-ux-2026-10-28/result.md`에 RED·고정 SHA·원격 영향/브라우저 결과·독립 소스/실제 화면 검토를 구분했다. 설치 자산·라우트 회귀 fce9c60216은20 passed, skip0이다.
+- gate 변화: 없음. 실제 장치·APK/ARM64 빌드·현장 수용은 별도다. CE: 해당 없음 — 기존 크기 이력 교훈을 적용하고 이번 경계의 판단을 코드·회귀·D-910에 남겼다.

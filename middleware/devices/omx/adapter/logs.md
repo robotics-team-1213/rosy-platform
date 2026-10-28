@@ -802,3 +802,9 @@
 - 변경: public S3 #184의 commit 3f6071fe73에 있던 `devices/omx/adapter/omx_adapter/real` 크기 단위 행을 복원하고 부모 AGENTS 표에 기존 책임을 적었다. commit 4f483955bf의 cherry-pick은 코드와 독스트링을 유지했지만 이 행을 가져오지 않았고, 이력 합류 commit 1a474f511f도 행이 있는 두 번째 부모와 달리 누락을 유지했다. 새 하위 패키지 승격이나 B/C 기준 충족 주장이 아니다. 한도·바닥·ratchet·계산 규칙과 드라이버 동작은 그대로다.
 - 증거: 원본 commit 3220c61927과 public commit 3f6071fe73의 init·로그·크기 행 및 현재 트리를 Git으로 비교했다. 기존 profile 소비자 원격 결과 344 PASS / 1 NEW는 부모 단위 10,353 > 10,000의 RED 증거다. 이 복원 변경의 원격 검증과 독립 검토는 아직 대기 중이다.
 - gate 변화: 없음. 복원은 rebuilt profile의 검증이나 실물·배포·현장 수용이 아니다. CE: 미해결 — 이력 누락 원인은 확인했으며 복원 검증 전이다.
+
+## 2026-10-28 · fce9c60216 · SIM Pilot의 배치 자산 일치
+
+- 변경: SIM Pilot allowlist에 layout.css를 추가해 CORE·개발 서버와 같은 자산을 제공한다. 시뮬레이션 명령·latch·소유권은 변경하지 않는다.
+- 증거: 날짜별 검증 기록 `docs/validation/robot-pilot-learning-ux-2026-10-28/result.md`에 RED·고정 SHA·원격 영향/브라우저 결과·독립 소스/실제 화면 검토를 구분했다. 설치 자산·라우트 회귀 fce9c60216은20 passed, skip0이다.
+- gate 변화: 없음. 실제 장치·APK/ARM64 빌드·현장 수용은 별도다. CE: 해당 없음 — 기존 크기 이력 교훈을 적용하고 이번 경계의 판단을 코드·회귀·D-910에 남겼다.

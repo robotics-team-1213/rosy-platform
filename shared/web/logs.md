@@ -978,3 +978,9 @@
 - 증거: 테마/known-failure 계약36 passed/2 skipped(실패 목록이 비어 조건부 비교 사례를 생략), 후속 실제 테마9건 포함39 passed/skip0/NEW0. 상세 source·화면·검사 한계는 `docs/validation/remaining-ui-layout-2026-10-28/result.md`다.
 - gate 변화: 없음. 전체 제품 UI 수용 승격 없음.
 - CE: 해당 없음. 보안 컨텍스트 의존성은 시험 assertion·주석에서 복원된다.
+
+## 2026-10-28 · bc920d2dac · Pilot 분리 시트의 측정 기하 검사
+
+- 변경: element style 금지·typed attr 계약의 기존 assertion을 유지하면서 Pilot CSS 입력을 실제 styles→layout 순서로 확장했다. 공용 시각 부품·토큰은 바꾸지 않았다.
+- 증거: 기존 단일 파일 입력은 원격 영향 검사에서 NEW였고, 보완한 app bar·typed attr·앱 식별 집중 검사는13 passed, skip0이다. 전체 재검증은 `docs/validation/robot-pilot-learning-ux-2026-10-28/result.md`를 따른다.
+- gate 변화: 없음. CE: 해당 없음 — 순서와 측정 조건이 기존 검사에 남는다.
