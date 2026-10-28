@@ -29,6 +29,8 @@ ENV_WORD = re.compile(r"^ROSY_[A-Z0-9_]*=")
 # xdist job and up to 3 preparing landings share the host, and load-flaky browser ids exist.
 # ROSY_BROWSER_PER_HOST overrides it to measure.
 BROWSER_PER_HOST = int(os.environ.get("ROSY_BROWSER_PER_HOST", "2"))
+MAX_MAIN = 4  # main workers one run may ask of a full host (1 restores one-at-a-time)
+MAIN_CORES, MAIN_GB = 2, 2  # headroom one more main worker needs
 
 
 def cancelled(invocations: list[list[str]], codes: list) -> list[int | str]:
@@ -55,9 +57,21 @@ def workers(hosts: list[str], invocations: list[list[str]], headroom: dict) -> l
     for host in hosts:
         room = headroom.get(host)
         free = BROWSER_PER_HOST - room.get("browser_jobs", 0) if room else 0  # other runs' browser jobs count
-        n = 0 if not room or room["light"] or room["site"] or room.get("sim_held") else max(0, min(free, lanes))
-        plan += [(host, "any")] if n == 0 else [(host, "main")] * bool(rest) + [(host, "lane")] * n
+        full = room and not (room["light"] or room["site"] or room.get("sim_held"))
+        n = max(0, min(free, lanes)) if full else 0
+        mains = main_workers(room, rest) if full else 1
+        if room is not None and mains > 1:
+            room["share"] = mains  # xdist_plan sizes each job's -n from its share, never the whole host
+        plan += [(host, "any")] * mains if n == 0 else [(host, "main")] * (mains if rest else 0) + [(host, "lane")] * n
     return plan
+
+
+def main_workers(room: dict, jobs: int) -> int:
+    """Main workers of one run on a full host: 2026-10-28, 94 % of queued_s was a run's own jobs waiting behind
+    its one worker per host (pytest_s p50 10 s, queued_s p50 379 s). The host's JOB admission (remote_job) still
+    holds every job to the free cores and GB across runs, so this is the most a run asks for."""
+    by_room = min(int(room.get("cores", 0)) // MAIN_CORES, int(room.get("mem", 0)) // MAIN_GB)
+    return max(1, min(MAX_MAIN, by_room, jobs))
 
 
 def wanted(kind: str, invocations: list[list[str]]):
