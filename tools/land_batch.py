@@ -197,12 +197,17 @@ def early(land, wt: Path, branch: str, args, python: str, qdir: Path, ticket: Pa
     so they share one pretest. On 2026-10-28 every waiting ticket was FULL-class or unprepared, so the pending
     affected ones never found a leader and each waited for a pretest slot of its own. 0 when the batch landed
     this branch; None to go on alone (its own pretest, then ``queue``)."""
-    if ticket is None or args.tests != "auto" or land_full.restore(wt, branch) is not None:
-        return None  # a prepared landing leads from its wait (``former``); a skipped or explicit run never leads
-    kind = batchable(land, wt, wt, branch, land.out(wt, "rev-parse", "HEAD"))
+    if ticket is None or args.tests != "auto":
+        return None  # a skipped or explicit run never leads
     tickets = land_queue.ahead(qdir, Path("~"))
-    if kind is None or any(r.get("batch") for r in tickets):
-        return None  # safety lands alone; one batch at a time
+    if any(r.get("batch") for r in tickets) or not any(
+            r["ticket"] != ticket.name and r.get("status") in ("waiting", "pending") for r in tickets):
+        return None  # one batch at a time; nobody to carry
+    if land_full.restore(wt, branch) is not None:
+        return None  # a prepared landing leads from its wait (``former``)
+    kind = batchable(land, wt, wt, branch, land.out(wt, "rev-parse", "HEAD"))
+    if kind is None:
+        return None  # safety lands alone
     joined = [r for r in tickets if r["ticket"] != ticket.name and eligible(land, wt, r, kind)]
     if not joined:
         return None
