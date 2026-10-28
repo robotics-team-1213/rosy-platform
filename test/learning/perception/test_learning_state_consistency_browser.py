@@ -128,6 +128,7 @@ def test_failed_read_finishes_and_recovers_without_losing_input(workspace, surfa
     if surface == 'camera':
         page.locator('details summary').click()
         page.fill('#camera-identity', 'keep fixture input')
+    page.locator('#' + surface + '-error').scroll_into_view_if_needed()
     capture(page, f'read-error-{surface}-{status}-{width}')
     state['status'] = 200
     page.locator('#' + surface + '-refresh').click()
