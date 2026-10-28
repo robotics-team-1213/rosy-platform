@@ -3802,6 +3802,13 @@
 - 검증: source6bd97f99149656ebf09d625d56d441ca6d6775d2를 모델 PC에서 원격 실행했다. guest/ARM, mounted-image, public-provenance, publish-policy, CMS, operator, public-input8파일196passed6opt-in skips, runner session47343 exit0, known compare0NEW/0known/0flaky다. 6skip은 실제 SYSTEM guest4개와 ARM source-slot a/b2개이며 이 실행에서는 활성화하지 않았다. 실행 argv·source·role·환경 해시·로그 digest는 외부 operator-verification-evidence.json에 부모 agent의 canonical runner 관측으로 결속한다. test log 자체가 source를 내장한다고 주장하지 않는다.
 - gate 변화: 독립 contract 검토에 지원되는 위반 없음. evidence 검토가 지적한 기록 최신성과 실행 결속을 보완했다. safety-trailer gate93commits exit0. FULL 착지 검증·native ARM64 image qualification·실제 operator 전체 거래·서명된 이미지/RAUC 게시·SD 선택·실물 수용은 아직 남았다. production BUILD_GO와 D-888 HOLD는 유지한다. CE: 해당 없음 — 원인과 예방이 snapshot 구현·재현 시험·서명 경계와 이 기록에 남는다.
 
+## 2026-10-27 · 6e71f6ad62 · 매일 원장 백업 타이머(14개 보존)
+
+- 변경: `backup_database`는 있었으나 주기 호출자가 없어 운영 원장에 예약 백업이 없었다. `site_db.py backup`에 `--dest-dir`(타임스탬프 파일명)·`--prune N`(자기 접두사 파일만 최신 N개 보존)을 추가하고, compose에 `fleet-backup` 프로파일 서비스(fleet 이미지 내장 site_db.py·entrypoint python3·네트워크 none·원장 볼륨 읽기 전용·호스트 바인드 `ROSY_SITE_BACKUP_DIR` 기본 `/var/backups/rosy-site`)를 두었으며 `rosy-site-ledger-backup.service/.timer`(매일·Persistent)가 `docker compose run`으로 실행한다. README에 타이머 활성화와 "현장 디스크 경계일 뿐 오프사이트 백업이 아님"을 적었다.
+- 증거: 원격 5 suite(정리 단위·CLI·배포 고정·compose·문서 배치) green, known NEW 0. 변이 검증: 정리 무력화 → CLI 보존 시험 red(`129ed21fac`), 복원 green(`6e71f6ad62`).
+- gate 변화: 없음. 현장 호스트에서 타이머 실가동·복구 훈련(백업→빈 프로젝트 복원)은 별도 수행문.
+- CE: 해당 없음 — 계약 시험과 변이 이력이 커밋에 남아 있다.
+
 ## 2026-10-28 · uncommitted · Native motor-health 종료 시각 수정 초안
 
 - 변경: 실제 MotorHealth와 부모 cleanup snapshot에 최초 terminal_at을 보존하는 수정 초안이다. 관측된 motor 측정 시각과 값은 유지하며 읽기·토크·guard 경계는 바꾸지 않는다.

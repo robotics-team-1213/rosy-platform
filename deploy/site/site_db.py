@@ -16,6 +16,17 @@ from itertools import zip_longest
 from pathlib import Path
 
 DEFAULT_DATABASE = Path("/var/lib/rosy/fleet.sqlite3")
+BACKUP_PREFIX = "fleet-backup-"
+
+
+def _prune_backups(directory: Path, keep: int) -> list[str]:
+    """Keep the newest ``keep`` timestamped backups, return what was removed."""
+    backups = sorted(path for path in directory.glob(f"{BACKUP_PREFIX}*.sqlite3")
+                     if path.is_file())
+    removed = [path.name for path in backups[:-keep]]
+    for stale in backups[:-keep]:
+        stale.unlink(missing_ok=True)
+    return removed
 
 
 class DatabaseError(RuntimeError):
@@ -233,7 +244,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     commands = parser.add_subparsers(dest="command", required=True)
     backup = commands.add_parser("backup", help="create a consistent SQLite online backup")
     backup.add_argument("--source", type=Path, default=DEFAULT_DATABASE)
-    backup.add_argument("--destination", type=Path, required=True)
+    backup.add_argument("--destination", type=Path,
+                        help="explicit backup file (one-shot use)")
+    backup.add_argument("--dest-dir", type=Path,
+                        help="timestamped backup directory (timer use); prunes old backups")
+    backup.add_argument("--prune", type=int, default=14,
+                        help="backups to keep when --dest-dir is used (default 14)")
     verify = commands.add_parser("verify", help="run SQLite integrity_check")
     verify.add_argument("--path", type=Path, required=True)
     restore = commands.add_parser("restore", help="restore after stopping the site services")
@@ -250,8 +266,19 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "rekey":
         return _rekey(parser, args)
     try:
+        pruned = []
         if args.command == "backup":
+            if bool(args.destination) == bool(args.dest_dir):
+                parser.error("pass exactly one of --destination or --dest-dir")
+            if args.dest_dir is not None:
+                if args.prune < 1:
+                    parser.error("--prune must keep at least one backup")
+                args.dest_dir.mkdir(parents=True, exist_ok=True)
+                timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+                args.destination = args.dest_dir / f"{BACKUP_PREFIX}{timestamp}.sqlite3"
             result = backup_database(args.source, args.destination)
+            if args.dest_dir is not None:
+                pruned = _prune_backups(args.dest_dir, args.prune)
         elif args.command == "verify":
             print(json.dumps({"path": str(args.path), "integrity": verify_database(args.path)}))
             return 0
@@ -265,6 +292,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "integrity": result.integrity,
         "sha256": result.sha256,
         "rollback_path": str(result.rollback_path) if result.rollback_path else None,
+        "pruned": pruned,
     }))
     return 0
 
