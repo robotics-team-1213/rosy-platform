@@ -1,19 +1,20 @@
 """A verdict belongs to its submitted inputs; failed reads must finish and be retryable."""
-import base64
 import copy
 import os
 from pathlib import Path
 from urllib.parse import urlsplit
 
 import pytest
+import cv2
 from browser_harness import browser_tests_enabled
+from test_camera_setup import scene
 from test_review_app import open_store
 from test_review_flow_browser import serve
 
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason='opt-in Chromium state consistency')
-PNG = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aS1cAAAAASUVORK5CYII=')
+PNG = cv2.imencode('.png', scene())[1].tobytes()
 REF = {'revision': 'a' * 64, 'camera_role': 'front', 'camera_identity': 'fixture-camera',
-       'created_at': 'fixture', 'method': 'features', 'width': 1, 'height': 1,
+       'created_at': 'fixture', 'method': 'features', 'width': 640, 'height': 480,
        'intrinsics': {'camera_info_sha256': 'c' * 64}, 'guides': [], 'markers': [],
        'check_pose': {'joint_names': ['joint1'], 'positions_rad': [0]}}
 OK = {'check': {'verdict': 'ok', 'method': 'features', 'matches': 40}, 'homography': None}
@@ -29,7 +30,7 @@ def capture(page, name):
 def workspace(tmp_path):
     with serve(open_store(tmp_path)) as (page, _, expect):
         origin = '{0.scheme}://{0.netloc}'.format(urlsplit(page.url))
-        state = {'status': 200, 'hold': False, 'checks': [], 'held': []}
+        state = {'status': 200, 'hold': False, 'checks': [], 'held': [], 'post_status': 503, 'posts': 0, 'candidates': []}
         refs = [REF, dict(REF, revision='b' * 64)]
         def camera(route):
             path = urlsplit(route.request.url).path
@@ -43,7 +44,12 @@ def workspace(tmp_path):
                 route.fulfill(status=state['status'], json={'references': refs} if state['status'] == 200 else {'error': 'fixture read failed'})
         page.route('**/api/learning/camera/**', camera)
         page.route('**/api/learning', lambda route: route.fulfill(status=state['status'], json={'token': 'fixture', 'domains': []} if state['status'] == 200 else {'error': 'fixture read failed'}))
-        page.route('**/api/learning/promotion-requests', lambda route: route.fulfill(json={'candidates': [], 'requests': []}))
+        def promotion(route):
+            if route.request.method == 'POST':
+                state['posts'] += 1
+                route.fulfill(status=state['post_status'], json={'sha256': 'e' * 64} if state['post_status'] == 200 else {'error': 'fixture save rejected'})
+            else: route.fulfill(json={'candidates': state['candidates'], 'requests': []})
+        page.route('**/api/learning/promotion-requests', promotion)
         yield page, state, origin, expect
 
 
@@ -133,3 +139,26 @@ def test_failed_read_finishes_and_recovers_without_losing_input(workspace, surfa
         expect(page.locator('#promote-request')).to_be_disabled()
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
     capture(page, f'recovered-{surface}-{status}-{width}')
+
+
+def test_promotion_error_and_receipt_describe_the_latest_attempt(workspace):
+    page, state, origin, expect = workspace
+    state['candidates'] = [{'id': 'fixture', 'name': 'fixture', 'qualified': True, 'model_revision': 'fixture'}]
+    page.goto(origin + '/learning/evaluate?domain=lane')
+    button, error, receipt = page.locator('#promote-request'), page.locator('#evaluate-error'), page.locator('#promote-result')
+    button.click()
+    expect(error).to_contain_text('fixture save rejected')
+    page.locator('#evaluate-refresh').click()
+    expect(button).to_be_enabled()
+    expect(error).to_contain_text('fixture save rejected')
+    assert state['posts'] == 1
+    state['post_status'] = 200
+    button.click()
+    expect(receipt).to_contain_text('e' * 64)
+    expect(error).to_be_hidden()
+    expect(button).to_be_enabled()
+    state['post_status'] = 503
+    button.click()
+    expect(error).to_contain_text('fixture save rejected')
+    expect(receipt).to_be_hidden()
+    assert state['posts'] == 3
