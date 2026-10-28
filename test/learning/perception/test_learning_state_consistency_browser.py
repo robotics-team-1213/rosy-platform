@@ -162,3 +162,21 @@ def test_promotion_error_and_receipt_describe_the_latest_attempt(workspace):
     expect(error).to_contain_text('fixture save rejected')
     expect(receipt).to_be_hidden()
     assert state['posts'] == 3
+
+
+def test_promotion_stays_disabled_until_the_read_cycle_finishes(workspace):
+    page, state, origin, expect = workspace
+    state['candidates'] = [{'id': 'fixture', 'name': 'fixture', 'qualified': True, 'model_revision': 'fixture'}]
+    held = []
+    page.route('**/api/learning/vlm/summary', lambda route: held.append(route))
+    page.route('**/api/learning/sim/runs', lambda route: route.fulfill(json={'runs': []}))
+    page.goto(origin + '/learning/evaluate')
+    expect(page.locator('#promote-status')).to_contain_text('요청 가능한 후보 1개')
+    button = page.locator('#promote-request')
+    expect(button).to_be_disabled()
+    assert len(held) == 1 and state['posts'] == 0
+    held[0].fulfill(json={'total': 0})
+    expect(button).to_be_enabled()
+    button.click()
+    expect(page.locator('#evaluate-error')).to_contain_text('fixture save rejected')
+    assert state['posts'] == 1
