@@ -120,6 +120,36 @@ def leader_arm(**state):
     return Arm({motor: {"torque": 0, "hw_error": 0, **state} for motor in m.LEADER})
 
 
+def test_chunk_profile_is_validated_before_bus_work_and_forwarded_to_the_child(tmp_path, monkeypatch):
+    from cell_robot_profile import SCHEMA, digest, load
+
+    path = config(tmp_path)
+    robot = json.loads(path.read_text())["robot"]
+    profile = tmp_path / "operating-profile.json"
+    document = {"schema": SCHEMA, "device_id": "fixture-device", "instance_id": robot["id"],
+        "robot_config_sha256": digest(robot), "work_dir": "work", "operating_envelope_path": "work/review.json"}
+    profile.write_text(json.dumps(document))
+    arm, leader, seen = follower(), leader_arm(), []
+    s, _ = session(arm, leader, run=lambda command: seen.append(command) or 0)
+    s.chunks = {"library": str(tmp_path / "lib.json"), "io": str(tmp_path / "io"), "sha256": "fixture"}
+    original_path = m.Path
+    class TildeProfile:
+        def expanduser(self):
+            return profile
+    monkeypatch.setattr(m, "Path", lambda value: TildeProfile() if str(value) == "~/fixture-profile.json" else original_path(value))
+    s.operating_profile = "~/fixture-profile.json"
+    record = s.execute(path, CAPS, teleop_only=False)
+    assert record["safe_end"] and record["operating_profile"] == load(profile)["binding"]
+    assert f"--operating-profile={profile.resolve()}" in seen[0]
+    profile.write_text(json.dumps({**document, "instance_id": "other-arm"}))
+    arm, leader = follower(), leader_arm()
+    s, _ = session(arm, leader)
+    s.operating_profile = profile
+    with pytest.raises(ValueError):
+        s.execute(path, CAPS, teleop_only=False)
+    assert arm.writes == leader.writes == []
+
+
 @pytest.mark.parametrize("moving, marked", [((), True), ((1,), False)])
 def test_episodes_with_an_untouched_leader_are_flagged_after_recording(tmp_path, moving, marked):
     # 2026-10-24: two five-episode datasets had leader action range 0.0 in every episode.

@@ -13,7 +13,9 @@ OMX = Path(__file__).parents[1] / "deploy/robot/omx"
 @pytest.fixture
 def profiles(monkeypatch):
     monkeypatch.syspath_prepend(str(OMX))
-    return importlib.import_module("cell_robot_profile")
+    module = importlib.import_module("cell_robot_profile")
+    assert Path(module.__file__).resolve() == (OMX / "cell_robot_profile.py").resolve()
+    return module
 
 
 @pytest.fixture
@@ -30,9 +32,10 @@ def profile_file(tmp_path, profiles):
 def test_profile_pins_existing_robot_and_resolves_its_own_evidence_paths(profile_file, profiles):
     path, robot, document = profile_file
     loaded = profiles.load(path, robot_config=robot)
-    assert loaded["binding"] == {"device_id": document["device_id"], "instance_id": "arm-a",
-                                  "robot_config_sha256": profiles.digest(robot),
-                                  "profile_sha256": profiles.digest(document)}
+    assert {key: loaded["binding"][key] for key in ("device_id", "instance_id", "robot_config_sha256")} == {
+        "device_id": document["device_id"], "instance_id": "arm-a", "robot_config_sha256": profiles.digest(robot)}
+    assert len(loaded["binding"]["profile_sha256"]) == 64
+    assert loaded["binding"] == profiles.load(path, robot_config=robot)["binding"]
     assert Path(loaded["work_dir"]) == path.parent / "arm-a"
     assert Path(loaded["operating_envelope_path"]) == path.parent / "arm-a/review.json"
 
@@ -77,6 +80,25 @@ def test_review_updates_do_not_make_the_profile_digest_circular(profile_file, pr
     assert profiles.load(path)["binding"] == first["binding"]
 
 
+def test_relocated_profile_cannot_switch_to_a_copied_old_ledger_without_invalidation(profile_file, profiles, tmp_path):
+    path, robot, _ = profile_file
+    original = profiles.load(path, robot_config=robot)
+    other = tmp_path / "other-location" / path.name
+    other.parent.mkdir()
+    other.write_bytes(path.read_bytes())
+    relocated = profiles.load(other, robot_config=robot)
+    assert relocated["binding"] != original["binding"]
+    assert relocated["work_dir"] != original["work_dir"]
+
+
+def test_equivalent_resolved_paths_keep_one_profile_identity(profile_file, profiles):
+    path, robot, document = profile_file
+    original = profiles.load(path, robot_config=robot)
+    path.write_text(json.dumps({**document, "work_dir": "./arm-a",
+                               "operating_envelope_path": "./arm-a/review.json"}))
+    assert profiles.load(path, robot_config=robot)["binding"] == original["binding"]
+
+
 def test_profile_change_invalidates_binding_even_when_robot_config_is_unchanged(profile_file, profiles):
     path, robot, document = profile_file
     first = profiles.load(path, robot_config=robot)
@@ -92,3 +114,60 @@ def test_binding_pipeline_selects_profile_owned_paths_without_touching_vendor_co
     assert configured["work_dir"] == str(path.parent / "arm-a")
     assert configured["operating_envelope_path"] == str(path.parent / "arm-a/review.json")
     assert config["work_dir"] == "wrong" and robot == vendor
+
+
+def test_runtime_rejects_a_wrong_profile_before_any_bus_read(profile_file, profiles):
+    from cell_envelope import runtime_context
+
+    path, robot, _ = profile_file
+    loaded = profiles.load(path, robot_config=robot)
+    class UnreadBus:
+        def __getattr__(self, name):
+            pytest.fail("a wrong-profile runtime must not read hardware")
+    with pytest.raises(ValueError):
+        runtime_context({**robot, "id": "arm-b"}, UnreadBus(), 30, operating_profile=loaded)
+
+
+def test_duplicate_profile_keys_are_rejected(profile_file, profiles):
+    path, _, _ = profile_file
+    raw = path.read_text()
+    path.write_text(raw.replace('"device_id":', '"device_id": "other-device", "device_id":', 1))
+    with pytest.raises(ValueError, match="duplicate"):
+        profiles.load(path)
+
+
+def test_profile_inspector_reports_pins_without_hardware_or_motion_authority(profile_file, profiles, capsys):
+    path, robot, _ = profile_file
+    record = path.with_name("recorder.json")
+    record.write_text(json.dumps({"robot": robot}))
+    profiles.main([str(record)])
+    assert json.loads(capsys.readouterr().out) == {"instance_id": "arm-a",
+        "robot_config_sha256": profiles.digest(robot), "motion_admitted": False}
+    profiles.main([str(record), "--profile", str(path)])
+    assert json.loads(capsys.readouterr().out)["device_id"] == "fixture-device-a"
+
+
+def test_empty_per_robot_profile_template_cannot_bind_a_device(profiles):
+    with pytest.raises(ValueError):
+        profiles.load(OMX / "cell-robot-profile.example.json")
+
+
+def test_wrong_recorder_profile_stops_before_camera_or_subprocess_work(profile_file, profiles, tmp_path):
+    pytest.importorskip("numpy")
+    pytest.importorskip("cv2")
+    import cell_record
+
+    path, robot, _ = profile_file
+    record = tmp_path / "wrong-recorder.json"
+    record.write_text(json.dumps({"robot": {**robot, "id": "arm-b"}}))
+    calls = []
+    class UntouchedCell:
+        def frame(self, camera):
+            pytest.fail("wrong recorder must be rejected before camera work")
+        def act(self, command):
+            pytest.fail("wrong recorder must not command an arm")
+    result = cell_record.record_cycle(UntouchedCell(), {
+        "record": {"config": str(record)}, "operating_profile_path": str(path)}, {}, tmp_path / "unused",
+        run=lambda *a, **kw: calls.append(a))
+    assert result["result"] == "held: recorder profile mismatch" and calls == []
+    assert not (tmp_path / "unused").exists()

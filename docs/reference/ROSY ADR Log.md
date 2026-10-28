@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-914 | 장치별 프로필과 native 운용범위 근거를 연결한다. [전문](../adr/D-914-omx-per-device-operating-profile-binding.md) | Accepted (2026-10-29, 구현·머지 승인; 실물 수용 별도) |
 | D-911 | OMX native 셀의 검증된 작업 범위와 현재 실행 조건을 구분한다. [전문](../adr/D-911-omx-native-reviewed-operating-envelope.md) | Accepted (2026-10-28, 구현 승인; 장치 수용 별도) |
 | D-897 | AI PC와 모델 PC에서 격리된 시뮬레이션 학습 작업을 병렬 실행한다 | Accepted (2026-10-27, 사용자 요청; 운영 권한·승격 별도) |
 | D-902 | Pilot real OMX teleop and recording through Fleet and the CORE manual arm path. [전문](../adr/D-902-pilot-real-omx-teleop-and-recording.md) | Proposed (2026-10-28) |
@@ -1342,3 +1343,9 @@ Fleet stores editable device names, models, declared arm counts and hardware ide
 **Status:** Accepted (2026-10-28). 사용자 구현 지시이며 실물 운용·배포·현장 수용은 별도다.
 
 전체 경로·장치 readback·설치/물체/환경 조건과 감독 시험의 검토 근거를 묶어 native 셀의 자동 작업을 판정한다. 미검증·중간 개입·미완료·실패는 기존 근거만으로 재실행하지 않는다. 전문은 [D-911](../adr/D-911-omx-native-reviewed-operating-envelope.md).
+
+## D-914 장치별 프로필과 native 운용범위 근거를 연결한다
+
+**Status:** Accepted (2026-10-29). 사용자 구현·커밋·머지 지시이며 장치 배포와 수용은 별도다.
+
+Fleet device ID, 실제 follower 설정, 장치별 검증·기록 경로를 별도 native 운용 프로필로 묶는다. parent/runner/pipeline이 같은 binding을 확인하며 감독 이동·녹화도 다른 팔로 넘기지 않는다. 전문은 [D-914](../adr/D-914-omx-per-device-operating-profile-binding.md).

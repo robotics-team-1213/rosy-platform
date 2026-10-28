@@ -23,16 +23,24 @@ def envelope():
 
 @pytest.fixture
 def task(tmp_path, envelope):
+    from cell_robot_profile import load
+
+    profile_path = tmp_path / "robot-profile.json"
+    profile_path.write_text(json.dumps({"schema": "rosy.omx-cell-robot-profile.v1",
+        "device_id": "fixture-device", "instance_id": "fixture-arm", "robot_config_sha256": "c" * 64,
+        "operating_envelope_path": "review.json", "work_dir": "."}))
     config = {"plan": {"lift_m": 0.04}, "profiles": {}, "sites": {}, "cameras": {},
               "operating_conditions": {"installation_revision": "fixture-install-1",
                   "object_revision": "fixture-object-1", "payload_kg": 0.05,
                   "object_dimensions_m": [0.03, 0.03, 0.03], "environment_revision": "fixture-scene-1"},
-              "operating_envelope_path": str(tmp_path / "review.json"), "work_dir": str(tmp_path)}
+              "operating_envelope_path": str(tmp_path / "review.json"), "work_dir": str(tmp_path),
+              "operating_profile_path": str(profile_path)}
     calibration = {"sites": {"tray": {"revision": "fixture-map-1"}}}
     library = {"fps": 30, "chunks": {"home": [[0, 0, 0, 0, 0, 47]],
                                     "lift_pick": [[0, 1, 2, 3, 4, 49]]}}
     state = {"ok": True, "fault": None, "t": 100.0, "state": [0, 0, 0, 0, 0, 47],
-             "operating_context": {"scope": "hardware", "sha256": "a" * 64, "session_id": "fixture-session"}}
+             "operating_context": {"scope": "hardware", "sha256": "a" * 64, "session_id": "fixture-session",
+                                   "operating_profile": load(profile_path)["binding"]}}
     return config, calibration, library, state
 
 
@@ -50,7 +58,9 @@ def approve(tmp_path, envelope, task, outcomes=("placed", "placed")):
               "reviewed_by": "fixture-reviewer", "evidence_ref": "fixture-physical-checks",
               "attempts_sha256": envelope.digest(rows), "min_attempts": 2,
               "min_success_rate": 1.0, "home_tolerance_units": 0.5}
-    document = {"schema": envelope.SCHEMA, "attempts_path": str(attempts), "reviews": [review]}
+    binding = state["operating_context"]["operating_profile"]
+    document = {"schema": envelope.SCHEMA, "attempts_path": str(attempts), "reviews": [review],
+                **{key: binding[key] for key in ("device_id", "instance_id", "profile_sha256")}}
     Path(config["operating_envelope_path"]).write_text(json.dumps(document), encoding="utf-8")
     return attempts, document
 
@@ -66,6 +76,22 @@ def test_reviewed_identical_full_task_can_proceed(tmp_path, task, envelope):
     result = envelope.assess(*task, now=100.01)
     assert result["allowed"] and result["status"] == "verified"
     assert result["attempts"] == result["successes"] == 2
+
+
+def test_an_unbound_or_different_device_profile_cannot_use_even_commissioning(task, envelope):
+    config, calibration, library, state = copy.deepcopy(task)
+    config["_commissioning"] = {"person_at_switch": True}
+    state["operating_context"]["operating_profile"]["device_id"] = "other-device"
+    assert envelope.assess(config, calibration, library, state, now=100.01)["reason"] == "profile_mismatch"
+    state["operating_context"]["operating_profile"] = None
+    assert not envelope.assess(config, calibration, library, state, now=100.01)["allowed"]
+
+
+def test_a_review_manifest_from_another_profile_is_rejected(tmp_path, task, envelope):
+    _, document = approve(tmp_path, envelope, task)
+    document["device_id"] = "other-device"
+    Path(task[0]["operating_envelope_path"]).write_text(json.dumps(document))
+    assert envelope.assess(*task, now=100.01)["reason"] == "review_profile_mismatch"
 
 
 @pytest.mark.parametrize("changed", ["arm", "scope", "map", "height", "payload", "installation", "speed"])
@@ -213,6 +239,37 @@ def test_fifo_checked_command_accepts_the_runners_inner_command_ack(tmp_path, en
         "session_id": "fixture-session", "library_sha256": "a" * 64})
     assert result["ok"]
     assert sent == [f"checked fixture-session {'a' * 64} load plan.json"]
+
+
+@pytest.mark.parametrize("wrong_device", [False, True])
+def test_supervised_fifo_motion_cannot_bypass_the_selected_device(tmp_path, task, envelope, monkeypatch, wrong_device):
+    import time
+
+    transport = importlib.import_module("cell_pipeline_io")
+    state = copy.deepcopy(task[3])
+    selected = copy.deepcopy(state["operating_context"]["operating_profile"])
+    state.update(t=time.time(), command="state", library_sha256="a" * 64)
+    if wrong_device:
+        state["operating_context"]["operating_profile"]["device_id"] = "other-device"
+    status = tmp_path / "chunk-status.jsonl"
+    status.write_text("")
+    sent = []
+    def write(fd, payload):
+        line = payload.decode().strip()
+        sent.append(line)
+        row = state if line == "state" else {"command": "jog shoulder_pan.pos 1", "ok": True}
+        with status.open("a") as stream:
+            stream.write(json.dumps(row) + "\n")
+        return len(payload)
+    monkeypatch.setattr(transport.os, "open", lambda *a, **kw: 42)
+    monkeypatch.setattr(transport.os, "write", write)
+    monkeypatch.setattr(transport.os, "close", lambda fd: None)
+    cell = transport.FifoCell(tmp_path, {}, operating_profile=selected)
+    result = cell.act("jog shoulder_pan.pos 1")
+    if wrong_device:
+        assert not result["ok"] and result["fault"] == "profile_mismatch" and sent == ["state"]
+    else:
+        assert result["ok"] and sent == ["state", f"checked fixture-session {'a' * 64} jog shoulder_pan.pos 1"]
 
 
 def test_shipped_envelope_and_condition_templates_cannot_enable_automatic_motion(task, envelope):

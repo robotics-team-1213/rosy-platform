@@ -1127,7 +1127,7 @@ adapter의 시뮬레이션 preflight 통과는 실물 인양 근거가 아니다
 현장 승인과 준비가 끝난 시험만 개별 stage로 수집한다. 아래는 사용 형식이며 자동 실행 지시가 아니다.
 
 ```bash
-python deploy/robot/omx/cell_pipeline.py --config <private-cell-config.json> --stage transfer --from pinky --to belt --commissioning --person-at-switch
+python deploy/robot/omx/cell_pipeline.py --config <private-cell-config.json> --operating-profile <private-robot-profile.json> --stage transfer --from pinky --to belt --commissioning --person-at-switch
 python deploy/robot/omx/cell_attempts.py summary <work-dir>/attempts.jsonl
 ```
 
@@ -1171,6 +1171,45 @@ park나 torque-off를 새로 시도하지 않는다. 기존 guard/정지 정책�
 
 이 범위는 native 셀 자동 파지에 대한 추가 검사다. 다른 low-level 수동 도구나 Fleet 제품 경로의
 활성화를 승인하지 않으며, 사람과 함께 작업하는 안전 인증이나 실물 장치 수용을 대신하지 않는다.
+
+### 로봇별 프로필 연계 (D-914)
+
+로봇마다 `cell-robot-profile.example.json`의 별도 로컬 사본을 둔다. Fleet 장치 정보의 안정된
+`device_id`, 기존 recorder `robot.id`인 `instance_id`, recorder 전체 `robot` 객체의 SHA를
+지정한다. 로봇 이름이나 USB 개수로 선택을 추측하지 않는다. Fleet의 장치 정보 저장은 접속·동작
+승인이 아니고, 이 파일은 D-907의 signed software component profile과도 별개다.
+
+설정의 SHA를 구하거나 작성한 프로필이 해당 recorder와 맞는지 검사하는 읽기 전용 명령이다.
+어느 명령도 포트를 열거나 동작을 허용하지 않는다.
+
+```bash
+python deploy/robot/omx/cell_robot_profile.py <private-record-config.json>
+python deploy/robot/omx/cell_robot_profile.py <private-record-config.json> --profile <private-robot-profile.json>
+```
+
+프로필의 `operating_envelope_path`와 `work_dir`는 그 로봇의 검토 파일·실제 시도 장부를 선택한다.
+상대 경로는 프로필 파일 위치 기준이다. 실제 해석한 경로를 profile SHA에 포함하므로 프로필을
+다른 폴더로 복사해 다른 장부를 고르면 재검증이 필요하다. 같은 경로의 `./` 별칭은 동일하다.
+검토 내용은 profile SHA에 넣지 않으므로 검토 파일을 쓰는 작업과 task SHA 사이의 순환은 없다.
+
+실제로 승인된 실행을 준비할 때 parent session과 pipeline 양쪽에서 **같은 프로필**을 고른다.
+다음은 사용 형식이며 장치 시작 지시가 아니다.
+
+```bash
+python deploy/robot/omx/record_session.py --config <private-record-config.json> --caps <private-caps.json> --chunks <library.json> --io <chunk-io> --operating-profile <private-robot-profile.json>
+python deploy/robot/omx/cell_pipeline.py --config <private-cell-config.json> --operating-profile <private-robot-profile.json> --stage transfer --from pinky --to belt
+```
+
+pipeline 설정의 `operating_profile_path`로 선택을 저장할 수도 있다. 선택하면 프로필이 work/review
+경로의 정본이며 옛 전역 경로로 다른 장부를 고르지 않는다. 같은 Fleet 장치에 팔이 둘이면 각
+`instance_id`·설정 SHA·장부 경로를 따로 둔다. manifest 상단의 `device_id`, `instance_id`,
+`profile_sha256`는 inspector/summary의 binding과 같아야 한다. 기존 검토를 다른 로봇 파일로
+복사해도 허용되지 않는다. summary의 `operating_profile`로 장치와 프로필을 확인할 수 있다.
+
+감독 survey·coarse/reset도 실제 FIFO의 profile이 다른 경우 이동을 보내지 않는다. 녹화 replay는
+실제 recorder robot을 검사하고 같은 선택을 parent에 전달한다. 프로필 없는 기존 수동 세션은
+자동 파지에 사용할 수 없다. 카메라/좌표 보정·높이·물체·경로는 task 조건으로 계속 검사하며,
+이 소프트웨어 연계가 각 실물의 설치·최대 도달범위·인양 능력을 측정한 것은 아니다.
 
 ## Fleet PC의 상시 관측과 기존 Cell 화면
 

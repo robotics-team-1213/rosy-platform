@@ -3925,3 +3925,11 @@
 - 증거: tests-only `b808a821c2`의 공식 원격 실행에서 도구 부재 15 ERROR를 확인했다. Windows PowerShell의 폐기용 도우미 fixture는 수정 전 키 누락 assertion으로 실패했고 수정 후 7개 self-check와 설정·3장 연속 기록 fixture가 통과했다. 후보 `f594cb588d`의 집중 원격 회귀는 140 passed/2 Windows-only skipped, NEW 0이다. 독립 검토의 계정 디렉터리 탐색·키 읽기 권한 누락은 `bf3cab97bc`에서 6 FAILED로 재현했다. 보강한 `8c3a60f344`의 영향 선택은 459 passed/2 skipped이며 갱신 전 생성 인덱스의 계약 2건이 실패했다. 인덱스를 재생성해 후속 커밋에서 재검증한다. 독립 재검토의 Critical/Important는 0이다.
 - gate 변화: 없음. 카드 마운트·실물 키 변경·장치 등록·모터 활성화·배포·착지는 수행하지 않았다. 유지보수용 관리자 웹 endpoint를 새로 열지 않는다.
 - CE: 미해결 — 실제 장치의 인증 장애 원인과 실물 복구는 확인하지 못했다. 코드의 복구 거절·원본 보존과 장치 수용을 구분한다.
+
+## 2026-10-29 · uncommitted · feat(omx): 로봇별 프로필과 운용범위 근거 연계 (D-914)
+
+- 변경: Fleet의 설명용 device ID와 native follower instance/config SHA를 장치별 sidecar로 연결한다. 실제로 해석한 work/review 경로를 profile SHA에 포함하고 parent→runner→pipeline과 시도 장부에서 같은 binding을 확인한다. 기존 vendor JSON과 Fleet의 접속/동작 권한 필드는 바꾸지 않는다.
+- 보호: 자동 작업 외에 감독 이동도 다른 profile의 FIFO로 보내지 않는다. recorder는 bus 접근 전에 설정을 검증하고 replay도 같은 선택을 받는다. 다른 디렉터리의 옛 장부 복사·프로필 없는 자동 세션·잘못된 manifest·quoted tilde 경로를 회귀 검증한다.
+- 검증: tests-only b07574fbac 원격 실행에서 새 loader 부재로 RED를 확인했다. a93a18e8d1 및 보강한 aa62d0f5a8의 관련 원격 호출은 exit 0이며, 최종 변경 범위의 공식 원격 검증과 merge는 별도 작업 기록에 연결한다. 실제 장치·서명/배포·가동범위 수용은 하지 않았다.
+- gate 변화: 실물 활성화/수용 변화 없음. 프로필 연관 관계는 설명용 ID와 실제 설정의 일치 검사이며, 이름·모델명이나 JSON 저장이 동작 승인을 만들지 않는다.
+- CE: 해당 없음 — 기존 설정/보정·import/장부 교훈을 새 계약과 회귀 시험에 반영했다. 새 실물 장애의 원인·복구를 검증한 작업은 아니다.

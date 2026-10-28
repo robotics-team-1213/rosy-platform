@@ -26,7 +26,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cell_calibration as cal  # noqa: E402
-from cell_pipeline_io import FifoCell, write_receipt  # noqa: E402
+from cell_pipeline_io import FifoCell, write_library, write_receipt  # noqa: E402
 from cell_observe import (  # noqa: E402
     KEEP, fixed_cameras, grid_points, hover_check, keep, locate, on_flat, predicted_pixel, record_key, see, wrap90,
 )
@@ -39,15 +39,6 @@ def target(config: dict, site: str, xy, yaw_deg=None, place=False) -> dict:
     s = config["sites"][site]
     return {"x": xy[0], "y": xy[1], "z": round(s["z"] + (s.get("place_dz", 0.0) if place else 0.0), 4),
             "yaw_deg": s["yaw_deg"] if yaw_deg is None else yaw_deg}
-
-
-def write_library(config: dict, pick: dict, place: dict, path: Path) -> Path:
-    from grasp_planner import Planner
-
-    library = Planner(dict(config["plan"], pick=pick, place=place)).library()
-    path.parent.mkdir(parents=True, exist_ok=True)  # the first run on a cell has no work folder yet
-    path.write_text(json.dumps({k: v for k, v in library.items() if v is not None}))
-    return path
 
 
 SEQUENCE = ("goto above_pick", "run descend_pick", "run grasp_pick", "run lift_pick", "goto above_place",
@@ -520,10 +511,12 @@ def main(argv=None):
     parser.add_argument("--cycles", type=int, default=1, help="run: A/B cycles after calibration")
     parser.add_argument("--person-at-switch", action="store_true", help="recover: a person is at the power switch")
     parser.add_argument("--commissioning", action="store_true", help="supervised evidence collection; never enables run")
+    parser.add_argument("--operating-profile", type=Path, help="select this device's pinned operating profile")
     parser.add_argument("--from", dest="source", default="pinky")
     parser.add_argument("--to", default="belt")
     args = parser.parse_args(argv)
     config = json.loads(args.config.read_text())
+    config.pop("_operating_profile_binding", None)
     config.pop("_commissioning", None)  # a stored config cannot attest a person's presence
     if args.commissioning:
         if not args.person_at_switch or args.stage == "run":
@@ -531,6 +524,12 @@ def main(argv=None):
         config["_commissioning"] = {"person_at_switch": True}
     if args.stage in ("calibrate", "reset", "survey", "record") and not args.commissioning:
         parser.error(f"{args.stage} requires supervised --commissioning --person-at-switch")
+    if args.operating_profile or config.get("operating_profile_path"):
+        from cell_robot_profile import bind_pipeline
+
+        config = bind_pipeline(config, args.operating_profile)
+    elif args.stage not in ("locate", "verify", "recover"):
+        parser.error("select a per-device --operating-profile before a motion stage")
     import cell_perception as cp
 
     config["profiles"] = {camera: cp.load_profile(Path(spec.get("profile_path", config["profile_path"])).expanduser())
@@ -538,7 +537,8 @@ def main(argv=None):
     config["plan"] = json.loads(Path(config["plan_path"]).expanduser().read_text())  # grasp-plan.example.json form
     work = Path(config["work_dir"]).expanduser()
     calibration_path = Path(config["calibration_path"]).expanduser()
-    cell = FifoCell(Path(config["io"]).expanduser(), config["cameras"])
+    cell = FifoCell(Path(config["io"]).expanduser(), config["cameras"],
+                    operating_profile=config.get("_operating_profile_binding"))
     if args.stage == "record":  # record_session takes the arm itself: no chunk session may hold it
         if cell.act("state").get("ok"):
             raise SystemExit("stop the chunk session first (park, stop): record_session needs the arm")

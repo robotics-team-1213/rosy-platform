@@ -158,9 +158,10 @@ def static_episodes(root: Path, threshold: float = STATIC_RANGE) -> dict:
 
 class Session:
     def __init__(self, *, open_bus, systemctl, run, log, sleep=time.sleep, clock=time.monotonic, replay=None,
-                 chunks=None) -> None:
+                 chunks=None, operating_profile=None) -> None:
         self.open_bus, self.systemctl, self.run_command, self.log = open_bus, systemctl, run, log
         self.sleep, self.clock, self.replay, self.chunks = sleep, clock, replay, chunks
+        self.operating_profile = operating_profile
         self.hardware_faults = {}
 
     @staticmethod
@@ -332,6 +333,12 @@ class Session:
             record["task_card"] = {"path": str(task_card), "sha256": hashlib.sha256(text).hexdigest(),
                                    "text": text.decode("utf-8")}
         config = validate_config(json.loads(config_path.read_text(encoding="utf-8-sig")))
+        if self.operating_profile:
+            from cell_robot_profile import load
+
+            self.operating_profile = Path(self.operating_profile).expanduser().resolve()
+            profile = load(self.operating_profile, robot_config=config["robot"])
+            record["operating_profile"] = profile["binding"]
         pairs = self.pair_sessions(config)
         for session in pairs.values():
             session._with_follower(session.check_idle)
@@ -353,6 +360,8 @@ class Session:
             if self.chunks:
                 command = [sys.executable, str(Path(__file__).resolve().with_name("chunk_runner.py")),
                            f"--config={config_path}", f"--library={self.chunks['library']}", f"--io={self.chunks['io']}"]
+                if self.operating_profile:
+                    command.append(f"--operating-profile={Path(self.operating_profile).expanduser().resolve()}")
                 record["source_mode"] = "scripted_teacher"
                 record["chunks"] = self.chunks
             else:
@@ -479,7 +488,12 @@ def main(argv=None):
     parser.add_argument("--replay", type=Path, help="teach_trajectory.py output: a scripted teacher replaces the leader")
     parser.add_argument("--chunks", type=Path, help="chunk library: chunk_runner.py holds the arm and takes judge commands")
     parser.add_argument("--io", type=Path, default=Path("chunk-io"), help="--chunks: command FIFO and status directory")
+    parser.add_argument("--operating-profile", type=Path, help="--chunks/--replay: per-device operating profile")
     args = parser.parse_args(argv)
+    if args.operating_profile:
+        if not (args.chunks or args.replay):
+            parser.error("--operating-profile requires --chunks or --replay")
+        args.operating_profile = args.operating_profile.expanduser().resolve()
     if args.body_only and not args.teleop_only:
         parser.error("--body-only requires --teleop-only")
     caps = load_caps(args.caps)
@@ -545,7 +559,7 @@ def main(argv=None):
         chunks = {"library": str(args.chunks.resolve()), "io": str(args.io.resolve()),
                   "sha256": hashlib.sha256(args.chunks.read_bytes()).hexdigest()}
     session = Session(open_bus=lambda which: SerialBus(ports[which], 0), systemctl=systemctl, run=run, log=log,
-                      replay=replay, chunks=chunks)
+                      replay=replay, chunks=chunks, operating_profile=args.operating_profile)
     lock = session_lock()
     record = {}
     try:

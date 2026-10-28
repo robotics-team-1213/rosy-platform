@@ -75,3 +75,5 @@ D-907 reserved in another in-flight branch (refs/adr/D-907), absent from this D-
 D-908 reserved in another in-flight branch (refs/adr/D-908), absent from this D-911 branch; remove when its ADR lands
 D-909 reserved in another in-flight branch (refs/adr/D-909), absent from this D-911 branch; remove when its ADR lands
 D-910 reserved in another in-flight branch (refs/adr/D-910), absent from this D-911 branch; remove when its ADR lands
+D-912 reserved in another in-flight branch (refs/adr/D-912), absent from this D-914 branch; remove when its ADR lands
+D-913 reserved in another in-flight branch (refs/adr/D-913), absent from this D-914 branch; remove when its ADR lands
