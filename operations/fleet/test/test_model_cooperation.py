@@ -3,6 +3,9 @@ import asyncio
 from dataclasses import replace
 import importlib
 import importlib.util
+import os
+import subprocess
+import sys
 
 import pytest
 
@@ -363,3 +366,10 @@ def test_transport_replacement_before_dispatch_is_rejected(during):
         assert result['state'] == 'HOLD'
         assert not replacement.calls and not any(p.calls for p in originals)
     asyncio.run(scenario())
+
+
+def test_runtime_module_can_be_imported_first_in_a_fresh_process():
+    result = subprocess.run([sys.executable, '-c',
+        'from rosy.decision.deliberation.cooperation_runtime import CooperationSupervisor'],
+        env={**os.environ, 'PYTHONPATH': os.pathsep.join(sys.path)}, capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, result.stderr
