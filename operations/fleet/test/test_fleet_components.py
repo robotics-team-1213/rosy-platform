@@ -59,3 +59,8 @@ def test_layout_values_have_one_role_owner_and_no_per_page_duplicates():
         assert 'max-width: 90rem' not in source
         assert '\n.actions { display: flex;' not in source
         assert '#estop-feedback' not in source
+    header = (WEB/'shared/fleet-header.css').read_text(encoding='utf-8')
+    login = (WEB/'shared/password-login.css').read_text(encoding='utf-8')
+    for role, sheet in [('measure-credential-field', header), ('measure-account-label', header), ('measure-login-field', login)]:
+        assert f'--{role}:' in tokens and f'var(--{role})' in sheet
+    assert '.token { width:' not in header

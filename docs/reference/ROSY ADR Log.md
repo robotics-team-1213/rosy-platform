@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-906 | Fleet 정적 공통 컴포넌트와 레이아웃 역할 토큰. [전문](../adr/D-906-fleet-static-components-layout-roles.md) | Accepted (2026-10-28) |
 | D-901 | Native workcell observation communication isolation. [전문](../adr/D-901-native-workcell-observation-isolation.md) | Accepted (2026-10-28) |
 | D-893 | 관제 단위와 호스트 배치를 분리하고 부하에 따라 합치거나 나눈다 | Accepted (2026-10-27) |
 | D-899 | 인증된 이송 복구 요청과 독립 운영자 승인. [전문](../adr/D-899-authenticated-transfer-recovery-intent.md) | Accepted for implementation (2026-10-27) |
