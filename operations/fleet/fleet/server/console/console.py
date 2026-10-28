@@ -33,6 +33,7 @@ from fleet.formation.geometry import DEFAULT_SPACING, Formation
 from fleet.hub.hub import HubError, SiteHub
 from fleet.localization import trust
 from fleet.server import bays, goal_lease, traffic
+from fleet.server.console.observe import observe_states
 from fleet.server.console_view import (
     CapabilityDisplay, TripAware, _error_of, _formation_stream_evidence, _shown,
     _stream_evidence,  # noqa: F401
@@ -720,13 +721,8 @@ class FleetConsole(TripAware):
         self._yielding[robot_id] = {"bay": {"x": bay[0], "y": bay[1]}, "for": mover}
 
     async def _observe(self) -> None:
-        """로봇 좌표를 새로 읽는다. 미션을 내리는 순간에만 부른다 - 폴링은 스냅샷이 한다."""
-        order = list(self._order)
-        results = await asyncio.gather(
-            *(self.read_state(rid, 0.2) for rid in order), return_exceptions=True)   # D-760 8: shared
-        self._remember([
-            {"robot_id": rid, "state": None if isinstance(r, BaseException) else r}
-            for rid, r in zip(order, results) if rid in self._clients])
+        """미션을 내리는 순간의 좌표 읽기 — 활동/대기 로봇의 읽기 선택은 `observe.py`."""
+        await observe_states(self)
 
     def _remember(self, robots: Sequence[dict]) -> None:
         for row in robots:
