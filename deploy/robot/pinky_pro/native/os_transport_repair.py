@@ -11,9 +11,11 @@ import socket
 import stat
 import subprocess
 import sys
+import tempfile
 
 PREFIX = 'opt/rosy/os-bootstrap/native-runtime'
 PUBLIC_KEY = 'etc/rosy/trusted-release-keys/rosy-release-2026-01.pem'
+CMS_KEY = 'etc/rauc/keyring.pem'
 COMMON = 'var/lib/rosy-device'
 CONFIG = COMMON + '/policy/updates/config.json'
 FILES = ('os_update_feed.py', 'os_update_stage.py', 'os_update_transport.py')
@@ -51,16 +53,44 @@ def _read(path, limit, owner=None):
     return raw
 
 
-def validate_package(package, public_key, *, owner=None):
+def _openssl(arguments, raw):
+    from signing import _openssl as executable
+    result = subprocess.run([executable(), *map(str, arguments)], input=raw, capture_output=True, timeout=60,
+                            **({'creationflags': 0x08000000} if os.name == 'nt' else {}))
+    if result.returncode or len(result.stdout) > 65536 or len(result.stderr) > 65536:
+        raise ValueError('OS transport CMS operation refused')
+    return result.stdout
+
+
+def _verify_cms(raw, cms, certificate):
+    pem = rb'-----BEGIN CERTIFICATE-----\r?\n(?:[A-Za-z0-9+/=]+\r?\n)+-----END CERTIFICATE-----'
+    if not isinstance(certificate, bytes) or not re.fullmatch(rb'\s*' + pem + rb'\s*', certificate):
+        raise ValueError('one image-owned OS certificate is required')
+    pinned = _openssl(['x509', '-outform', 'DER'], certificate)
+    public = _openssl(['x509', '-pubkey', '-noout'], certificate)
+    if b'ASN1 OID: prime256v1' not in _openssl(['pkey', '-pubin', '-text', '-noout'], public):
+        raise ValueError('OS authority must use P-256')
+    embedded = re.findall(pem, _openssl(['pkcs7', '-inform', 'DER', '-print_certs'], cms))
+    if len(embedded) != 1 or _openssl(['x509', '-outform', 'DER'], embedded[0]) != pinned:
+        raise ValueError('repair CMS signer differs from image-owned OS authority')
+    with tempfile.TemporaryDirectory(prefix='rosy-transport-cms-') as temporary:
+        authority = Path(temporary) / 'authority.pem'
+        authority.write_bytes(certificate)
+        verified = _openssl(['cms', '-verify', '-binary', '-purpose', 'any', '-CAfile', authority, '-inform', 'DER'], cms)
+    if verified != raw: raise ValueError('OS signature content differs from Ed25519 manifest')
+
+
+def validate_package(package, public_key, *, cms_certificate, owner=None):
     """Capture authenticated bytes; callers never reopen mutable payload paths to install them."""
     from signing import verify_signature
     package = Path(package).absolute()
-    names = {*FILES, 'os_transport_repair.py', 'transport-repair.json', 'transport-repair.json.sig'}
+    names = {*FILES, 'os_transport_repair.py', 'transport-repair.json', 'transport-repair.json.sig', 'transport-repair.cms'}
     if package.is_symlink() or not package.is_dir() or {p.name for p in package.iterdir()} != names:
         raise ValueError('repair package must contain exactly the fixed signed set')
     raw = _read(package / 'transport-repair.json', 16384, owner)
     sig = _read(package / 'transport-repair.json.sig', 512, owner).decode('ascii').strip()
     if verify_signature(raw, sig, public_key): raise ValueError('untrusted transport repair')
+    _verify_cms(raw, _read(package / 'transport-repair.cms', 65536, owner), cms_certificate)
     value = _json(raw)
     if (not isinstance(value, dict) or set(value) != FIELDS or type(value['schema_version']) is not int
             or value['schema_version'] != 1 or value['kind'] != 'os-transport-repair'
@@ -132,11 +162,13 @@ def _record(root, directory, raw, identity):
     if not path.exists(): return None
     data = _json(_read(path, 65536, root.stat().st_uid))
     if (not isinstance(data, dict) or set(data) != {'schema_version', 'manifest_sha256', 'root_partuuid', 'phase',
-            'policy_sha256', 'disabled_sha256', 'policy_mode', 'file_modes'} or type(data['schema_version']) is not int or data['schema_version'] != 1
+            'policy_sha256', 'disabled_sha256', 'policy_mode', 'file_modes', 'attempt'} or type(data['schema_version']) is not int or data['schema_version'] != 1
             or data['manifest_sha256'] != _sha(raw) or data['root_partuuid'] != identity
             or data['phase'] not in ('PREPARED', 'COMMIT_INTENT', 'COMPLETE', 'ROLLED_BACK')
             or not isinstance(data['file_modes'], dict) or set(data['file_modes']) != set(FILES)):
         raise ValueError('repair journal differs from the authenticated transaction')
+    if type(data['attempt']) is not int or not 1 <= data['attempt'] <= 128:
+        raise ValueError('repair retry count exceeds its bound')
     for mode in [data['policy_mode'], *data['file_modes'].values()]:
         if type(mode) is not int or not 0 <= mode <= 0o777 or mode & 0o022:
             raise ValueError('unsafe repair restoration mode')
@@ -175,7 +207,10 @@ def _operate(root, package, *, run, recovering):
     import rosy_claim
     authority = _path(root, PUBLIC_KEY)
     _read(authority, 16384, root.stat().st_uid)
-    value, raw, payload = validate_package(package, authority, owner=root.stat().st_uid)
+    certificate = _read(_path(root, CMS_KEY), 32768, root.stat().st_uid)
+    value, raw, payload = validate_package(package, authority, cms_certificate=certificate, owner=root.stat().st_uid)
+    if _sha(_read(Path(__file__), MAX_FILE, root.stat().st_uid)) != value['installer_sha256']:
+        raise ValueError('executing installer differs from authenticated package')
     with controller._locks(root):
         identity = _admit(root, value, run)
         prefix = _path(root, PREFIX)
@@ -184,6 +219,8 @@ def _operate(root, package, *, run, recovering):
         if directory.exists() and (not directory.is_dir() or stat.S_IMODE(directory.stat().st_mode) != 0o700):
             raise ValueError('repair directory must be private')
         record = _record(root, directory, raw, identity) if directory.exists() else None
+        if directory.exists() and record is None:
+            raise ValueError('unrecognized canonical repair directory; HOLD')
         holder = 'os-transport:' + value['source_revision'][:16] + ':' + identity[:8]
         claim = rosy_claim.check(root)
         if claim is not None and claim['holder'] != holder: raise ValueError('another owner holds the device')
@@ -221,7 +258,15 @@ def _operate(root, package, *, run, recovering):
                 _save(directory / 'journal.json', record)
                 _atomic(root / CONFIG, original, record['policy_mode'])
                 return dict(phase='ROLLED_BACK', source_revision=value['source_revision'])
-            if record is not None: raise ValueError('recover the previous repair journal before applying again')
+            attempt = 1
+            if record is not None:
+                if record['phase'] != 'ROLLED_BACK':
+                    raise ValueError('recover the previous repair journal before applying again')
+                original, _ = _policy(root, directory, record)
+                if _read(root / CONFIG, 65536, root.stat().st_uid) != original:
+                    raise ValueError('finish policy recovery before retrying')
+                if record['attempt'] >= 128: raise ValueError('repair retry count exhausted')
+                attempt = record['attempt'] + 1
             for name in FILES:
                 if _current(root, prefix / name) != value['files'][name]['preimage_sha256']:
                     raise ValueError('installed transport differs from signed preimage')
@@ -231,16 +276,31 @@ def _operate(root, package, *, run, recovering):
             if not isinstance(policy, dict) or type(policy.get('enabled')) is not bool:
                 raise ValueError('explicit updater policy required')
             disabled = (json.dumps(dict(policy, enabled=False), sort_keys=True, separators=(',', ':')) + '\n').encode()
-            directory.mkdir(parents=True, mode=0o700)
-            _atomic(directory / 'config.backup', original, 0o600)
+            if record is None:
+                directory.parent.mkdir(parents=True, mode=0o700, exist_ok=True)
+                prepared = Path(tempfile.mkdtemp(prefix='.' + identity + '-', dir=directory.parent))
+            else:
+                prepared = directory
+                history = directory / ('attempt-' + str(record['attempt']).zfill(4) + '.json')
+                archived = (json.dumps(record, sort_keys=True, separators=(',', ':')) + '\n').encode()
+                if history.exists() and _read(history, 65536, root.stat().st_uid) != archived:
+                    raise ValueError('unknown repair attempt history')
+                _atomic(history, archived, 0o600)
+            _atomic(prepared / 'config.backup', original, 0o600)
             modes = {}
             for name in FILES:
                 old = prefix / name
                 modes[name] = stat.S_IMODE(old.stat().st_mode) if old.exists() else 0o644
-                if old.exists(): _atomic(directory / (name + '.backup'), _read(old, MAX_FILE, root.stat().st_uid), 0o600)
+                if old.exists(): _atomic(prepared / (name + '.backup'), _read(old, MAX_FILE, root.stat().st_uid), 0o600)
             record = dict(schema_version=1, manifest_sha256=_sha(raw), root_partuuid=identity, phase='PREPARED',
-                policy_sha256=_sha(original), disabled_sha256=_sha(disabled), policy_mode=stat.S_IMODE(config.stat().st_mode), file_modes=modes)
-            _save(directory / 'journal.json', record)
+                policy_sha256=_sha(original), disabled_sha256=_sha(disabled), policy_mode=stat.S_IMODE(config.stat().st_mode), file_modes=modes, attempt=attempt)
+            _save(prepared / 'journal.json', record)
+            if prepared != directory:
+                if directory.exists(): raise ValueError('canonical repair appeared during preparation')
+                os.rename(prepared, directory)
+                descriptor = os.open(directory.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+                try: os.fsync(descriptor)
+                finally: os.close(descriptor)
             _atomic(config, disabled, record['policy_mode'])
             for name, content in payload.items():
                 if _current(root, prefix / name) != value['files'][name]['preimage_sha256']:
@@ -271,12 +331,9 @@ def main(argv=None):
         trusted = Path('/') / PREFIX
         _read(trusted / 'signing.py', MAX_FILE, 0)
         sys.path.insert(0, str(trusted))
-        metadata, _, _ = validate_package(args.package, Path('/') / PUBLIC_KEY, owner=0)
-        if _sha(_read(Path(__file__), MAX_FILE, 0)) != metadata['installer_sha256']:
-            raise ValueError('executing installer differs from signed package')
         print(json.dumps((recover if args.command == 'recover' else apply)(Path('/'), args.package), sort_keys=True))
         return 0
-    except (OSError, ValueError, TypeError, KeyError, UnicodeError, RuntimeError) as exc:
+    except (OSError, ValueError, TypeError, KeyError, UnicodeError, RuntimeError, subprocess.SubprocessError) as exc:
         print('OS_TRANSPORT_REPAIR_HOLD: ' + type(exc).__name__, file=sys.stderr)
         return 1
 

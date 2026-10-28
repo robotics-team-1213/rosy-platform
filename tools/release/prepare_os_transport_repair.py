@@ -18,7 +18,8 @@ sys.path.insert(0, str(ROOT / 'deploy/robot/pinky_pro/release'))
 sys.path.insert(0, str(ROOT / 'deploy/robot/pinky_pro/native'))
 from signing import sign_checksums
 from os_transport_repair import BASE_SOURCE, BASE_RELEASE, FILES, MAX_FILE, validate_package
-from tools.release.external_os_signing import _local_private_key
+from tools.release.external_os_signing import _local_private_key, _openssl_run
+from tools.release.prepare_os_release import _approved_cms
 
 SOURCE = 'deploy/robot/pinky_pro/native/'
 
@@ -32,7 +33,7 @@ def _blob(revision, filename, *, optional=False):
     return result.stdout
 
 
-def prepare(output, private_key, public_key, *, source_revision, canary):
+def prepare(output, private_key, public_key, cms_private_key, *, source_revision, canary):
     if os.environ.get('GITHUB_ACTIONS', '').lower() == 'true':
         raise ValueError('repair signing runs only on the operator PC')
     if not isinstance(source_revision, str) or not re.fullmatch('[0-9a-f]{40}', source_revision):
@@ -43,7 +44,10 @@ def prepare(output, private_key, public_key, *, source_revision, canary):
     if any(p.is_symlink() for p in (output.parent, *output.parents)):
         raise ValueError('redirected repair output')
     private_key = _local_private_key(private_key)
-    if private_key.is_relative_to(output): raise ValueError('private key must stay outside repair output')
+    cms_private_key = _local_private_key(cms_private_key)
+    if any(key.is_relative_to(output) for key in (private_key, cms_private_key)):
+        raise ValueError('private keys must stay outside repair output')
+    approved = _approved_cms()
     files, records = {}, {}
     for name in FILES:
         content = _blob(source_revision, name)
@@ -61,6 +65,11 @@ def prepare(output, private_key, public_key, *, source_revision, canary):
     raw = (json.dumps(value, sort_keys=True, separators=(',', ':')) + '\n').encode()
     files['transport-repair.json'] = raw
     files['transport-repair.json.sig'] = (sign_checksums(raw, private_key) + '\n').encode('ascii')
+    with tempfile.TemporaryDirectory(prefix='rosy-transport-authority-') as temporary:
+        certificate = Path(temporary) / 'authority.pem'
+        certificate.write_bytes(approved['certificate'])
+        files['transport-repair.cms'] = _openssl_run(['cms', '-sign', '-binary', '-signer', certificate,
+            '-inkey', cms_private_key, '-nodetach', '-outform', 'DER'], data=raw)
     staged = Path(tempfile.mkdtemp(prefix='.' + output.name + '-', dir=output.parent))
     complete = False
     try:
@@ -69,7 +78,7 @@ def prepare(output, private_key, public_key, *, source_revision, canary):
                 stream.write(content)
                 stream.flush()
                 os.fsync(stream.fileno())
-        validate_package(staged, public_key)
+        validate_package(staged, public_key, cms_certificate=approved['certificate'])
         if output.exists() or output.is_symlink(): raise ValueError('repair output appeared during preparation')
         os.rename(staged, output)
         complete = True
@@ -89,11 +98,12 @@ def main(argv=None):
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--private-key', type=Path, required=True)
     parser.add_argument('--public-key', type=Path, required=True)
+    parser.add_argument('--cms-private-key', type=Path, required=True)
     parser.add_argument('--source-revision', required=True)
     parser.add_argument('--canary', action='append', required=True)
     args = parser.parse_args(argv)
     try:
-        print(json.dumps(prepare(args.output, args.private_key, args.public_key,
+        print(json.dumps(prepare(args.output, args.private_key, args.public_key, args.cms_private_key,
             source_revision=args.source_revision, canary=args.canary), sort_keys=True))
         return 0
     except (OSError, ValueError, SyntaxError) as exc:
