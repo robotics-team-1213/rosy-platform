@@ -236,9 +236,10 @@ def test_a_pending_member_is_judged_by_its_selection_from_the_fork_point(repos, 
     assert not land_batch.batchable(land, wt, member, "feat/m", git(member, "rev-parse", "HEAD")), "FULL-class goes alone"
 
 
-@pytest.mark.parametrize("tests,node,allowed", [("auto", False, True), ("full", False, False),
-                                               ("pkg/test", False, False), ("auto", True, False)])
-def test_requested_checks_control_whether_a_pending_landing_can_be_carried(repos, monkeypatch, tests, node, allowed):
+@pytest.mark.parametrize("tests,flags,allowed", [("auto", [], True), ("full", [], False),
+                                               ("pkg/test", [], False), ("auto", ["--node"], False),
+                                               ("auto", ["--no-cache"], False)])
+def test_requested_checks_control_whether_a_pending_landing_can_be_carried(repos, monkeypatch, tests, flags, allowed):
     main, wt = repos
     commit(wt, {"pkg/member.py": "member = 1\n"}, "member")
     monkeypatch.delenv(land.FIXTURE_ENV)  # custom --tests become auto plus EXTRA in production
@@ -252,7 +253,7 @@ def test_requested_checks_control_whether_a_pending_landing_can_be_carried(repos
 
     monkeypatch.setattr(land.land_prepare, "prepare", prepare)
     monkeypatch.setattr(land_batch, "queue", lambda *a: 0)
-    assert land.main(["--tests", tests, *(["--node"] if node else [])]) == 0
+    assert land.main(["--tests", tests, *flags]) == 0
     assert seen == [allowed]
 
 
