@@ -6,9 +6,12 @@ import os
 from pathlib import Path
 import stat
 import struct
+import sys
 import tempfile
 
 import pytest
+
+pytestmark = pytest.mark.skipif(not sys.platform.startswith("linux"), reason="offline ext4 recovery runs on Linux")
 
 ROOT = Path(__file__).resolve().parents[1]
 SD = ROOT / "deploy/robot/pinky_pro/sd"
@@ -120,6 +123,16 @@ def test_repeat_is_no_write_and_creates_no_extra_backup(card, backup, recovery):
     assert (keys.stat().st_mtime_ns, list(backup.iterdir())) == previous
 
 
+def test_missing_authorized_keys_is_restored_without_touching_setup(card, backup, recovery):
+    root, identity, keys = card
+    keys.unlink()
+    result = recovery.apply(root, KEY, backup, identity)
+    assert keys.read_text() == KEY + "\n"
+    assert result["registration_pending"] is True
+    metadata = json.loads((Path(result["backup"]) / "before.json").read_text())
+    assert metadata["existed"] is False
+
+
 @pytest.mark.parametrize("field", ["device_uid", "device_name", "robot_number", "release_id"])
 def test_wrong_card_confirmation_cannot_write(card, backup, recovery, field):
     root, identity, _ = card
@@ -175,7 +188,7 @@ def test_cli_defaults_to_inspection(card, recovery, monkeypatch, tmp_path, capsy
     root, _, _ = card
     public = tmp_path / "operator.pub"
     public.write_text(KEY)
-    monkeypatch.setattr(recovery.card, "card_root", lambda path: root)
+    monkeypatch.setattr(recovery, "mounted_card", lambda path: root)
     before = snapshot(root)
     assert recovery.main(["--root", str(root), "--public-key", str(public)]) == 0
     result = json.loads(capsys.readouterr().out)
