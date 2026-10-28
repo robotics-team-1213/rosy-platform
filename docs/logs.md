@@ -12633,3 +12633,11 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: D-889 추가 5
 - 교훈: 없음
+
+## 2026-10-28 · uncommitted · fix(omx): 값 계약 이동을 OMX 배포 묶음 경로에 반영
+
+- 변경: `deploy/robot/omx/omx-devices-autoupdate.json.example`의 `paths`에 `omx_adapter/contracts/adapter_profile.py`·`contracts/watchdog_observation.py`를 더한다. 이 브랜치가 `watchdog_observation.py`·`profile.py`가 쓰는 값을 `contracts/` 아래로 옮겼는데, main에 먼저 들어온 chunk-library의 배포 묶음에는 그 두 모듈이 없었다.
+- 근거: 착지 사전 시험의 `middleware/devices/omx/adapter/test/test_chunk_library.py::test_native_export_contains_the_script_import_closure`가 `No module named 'omx_adapter.contracts.watchdog_observation'`으로 실패했다(main에서는 통과).
+- 증거: 원격 `middleware/devices/omx/adapter/test`·`test/test_omx_arm_status_bridge.py`.
+- gate 변화: 없음.
+- CE: 해당 없음 — 두 착지의 import 목록을 맞춘 것이다.
