@@ -75,6 +75,7 @@ class CameraLanRowsTest {
         capture("800-reordered-focus")
     }
 
+    @OptIn(ExperimentalTestApi::class)
     @Test fun tabFocusSurvivesReorderWithoutSelectingAnotherEndpoint() {
         var records by mutableStateOf(listOf(peer, legacy))
         val calls = mutableListOf<OverheadServiceRecord>()
