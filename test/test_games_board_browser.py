@@ -745,18 +745,24 @@ def test_stop_failure_is_visible_and_can_be_retried(width, height):
 @pytest.mark.parametrize('width,height', [(1280, 800), (320, 900)])
 @pytest.mark.parametrize('stage', ['headers', 'body'])
 @pytest.mark.parametrize('prior_match', [False, True])
-def test_hung_overlay_expires_and_recovers_without_stopping_controls(width, height, stage, prior_match):
+@pytest.mark.parametrize('mode', ['timeout', 'late'])
+def test_hung_overlay_expires_and_recovers_without_stopping_controls(width, height, stage, prior_match, mode):
     import json
     import threading
     from functools import partial
     from playwright.sync_api import sync_playwright, expect
     from games.host.preview import _Handler
 
-    paused, entered, release = threading.Event(), threading.Event(), threading.Event()
+    paused, entered, release, first_release = (threading.Event() for _ in range(4))
     class PausedHandler(_Handler):
         def do_GET(self):
             if self.path != '/overlay.json' or not paused.is_set():
                 return super().do_GET()
+            first = not entered.is_set()
+            payload = self.board.snapshot()[0]
+            if mode == 'late' and first:
+                payload['score'] = {**payload['score'], payload['field']['home_id']: 3}
+                self.board.publish(payload, jpeg=None)
             body = json.dumps(self.board.snapshot()[0]).encode()
             entered.set()
             try:
@@ -766,7 +772,7 @@ def test_hung_overlay_expires_and_recovers_without_stopping_controls(width, heig
                     self.send_header('Content-Length', str(len(body)))
                     self.end_headers()
                     self.wfile.write(body[:1]); self.wfile.flush()
-                release.wait(12)
+                (first_release if mode == 'late' and first else release).wait(12)
                 if stage == 'body':
                     self.wfile.write(body[1:])
                 else:
@@ -790,20 +796,28 @@ def test_hung_overlay_expires_and_recovers_without_stopping_controls(width, heig
                     page.wait_for_function("() => document.querySelector('#connection').dataset.evidence === 'fresh'")
                     paused.set()
                 assert entered.wait(5), 'fixture did not receive the paused overlay GET'
-                if prior_match:
+                if mode == 'late':
+                    assert not release.wait(board.snapshot()[0]['stale_after_s'] + 0.3)
+                    first_release.set()
+                    page.wait_for_function("() => document.querySelector('#home-score').textContent === '3'")
+                    assert page.locator('#connection').get_attribute('data-evidence') == 'delayed'
+                    expect(page.locator('#phase')).to_have_text('마지막 수신 단계 · 경기 진행')
+                    expect(page.locator('.score')).to_have_attribute('aria-label', '마지막 수신 점수')
+                elif prior_match:
                     page.wait_for_function("() => document.querySelector('#connection').dataset.evidence === 'delayed'", timeout=4500)
                     expect(page.locator('#home-score')).to_have_text('2')
                     expect(page.locator('#phase')).to_have_text('마지막 수신 단계 · 경기 진행')
                     expect(page.locator('#field-evidence')).to_contain_text('현재 위치 아님')
                     expect(page.locator('.score')).to_have_attribute('aria-label', '마지막 수신 점수')
-                page.wait_for_function("() => document.querySelector('#connection').dataset.evidence === 'disconnected'", timeout=7500)
+                if mode == 'timeout':
+                    page.wait_for_function("() => document.querySelector('#connection').dataset.evidence === 'disconnected'", timeout=7500)
                 expect(page.locator('#halt')).to_be_enabled()
                 expect(page.locator('#halt')).to_be_visible()
-                expect(page.locator('#home-score')).to_have_text('2' if prior_match else '—')
-                if not prior_match:
+                expect(page.locator('#home-score')).to_have_text('3' if mode == 'late' else '2' if prior_match else '—')
+                if mode == 'timeout' and not prior_match:
                     expect(page.locator('#connection')).to_contain_text('경기 정보 없음')
                     assert '마지막 수신 값' not in page.locator('#match-announcement').inner_text()
-                paused.clear(); release.set()
+                paused.clear(); release.set(); first_release.set()
                 page.wait_for_function("() => document.querySelector('#connection').dataset.evidence === 'fresh'")
                 expect(page.locator('#phase')).to_have_text('경기 진행')
                 expect(page.locator('#field-evidence')).to_be_hidden()
@@ -811,9 +825,11 @@ def test_hung_overlay_expires_and_recovers_without_stopping_controls(width, heig
                 assert not errors, errors
             finally:
                 release.set()
+                first_release.set()
                 browser.close()
     finally:
         release.set()
+        first_release.set()
         server.close()
 
 
