@@ -61,6 +61,7 @@ export function mount(root, ctx) {
   sshSection.append(sshForm, sshOff, sshNote, sshActionStatus, sshCredential, sshStatus);
   async function loadSshStatus() {
     if (disposed) return;
+    setOff(sshIssue, true, "상태 확인 중"); setOff(sshOff, true, "상태 확인 중");
     try {
       const status = await ctx.api("/api/v1/host/ssh/password", {signal: lifetime.signal});
       if (disposed) return;

@@ -1,13 +1,19 @@
 """Procedure results and confirmation targets survive live readbacks."""
-from test_panel_copy_evidence_browser import panel, pytestmark
+from test_panel_copy_evidence_browser import panel, pytestmark, MOUNT
 from playwright.sync_api import expect
 import pytest
+import os
+from pathlib import Path
+from uuid import uuid4
 
 
 @pytest.mark.parametrize('method', ['POST', 'DELETE'])
 @pytest.mark.parametrize('read_failed', [False, True])
-def test_ssh_write_failure_survives_followup_read_and_explicit_retry(panel, method, read_failed):
-    page = panel('system/security.js', role='administrator', width=320)
+@pytest.mark.parametrize('width', [320, 390, 768, 1440])
+@pytest.mark.parametrize('theme', ['dark', 'light'])
+def test_ssh_write_failure_survives_followup_read_and_explicit_retry(panel, method, read_failed, width, theme):
+    page = panel('system/security.js', role='administrator', width=width)
+    page.evaluate('(theme) => document.documentElement.dataset.theme = theme', theme)
     section = page.locator('section').filter(has=page.get_by_role('heading', name='임시 SSH 비밀번호', exact=True))
     page.evaluate("""() => {
       window.sshWrites = 0;
@@ -33,6 +39,14 @@ def test_ssh_write_failure_survives_followup_read_and_explicit_retry(panel, meth
     expect(section.get_by_text(expected, exact=True)).to_be_visible()
     expect(section.get_by_text('SSH 비밀번호 상태를 가져오지 못했습니다. 호스트 에이전트를 확인하세요.' if read_failed else '임시 비밀번호 켜짐 · 만료 fixture expiry', exact=True)).to_be_visible()
     assert page.evaluate('sshWrites') == 1
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    capture_dir = os.environ.get('ROSY_UI_CAPTURE_DIR')
+    if capture_dir:
+        from browser_harness import save_temp_screenshot
+        destination = Path(capture_dir) / f'ssh-{method}-{read_failed}-{width}-{theme}-{uuid4().hex}.png'
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        section.scroll_into_view_if_needed()
+        save_temp_screenshot(page, str(destination))
     if not read_failed:
         page.evaluate("""() => {window.__api = async (_path, options = {}) => {
           if (options.method) { sshWrites++; return {password:'fixture-only', expires_at:'fixture expiry'}; }
@@ -41,6 +55,57 @@ def test_ssh_write_failure_survives_followup_read_and_explicit_retry(panel, meth
         control.click()
         expect(section.get_by_text(expected, exact=True)).to_have_count(0)
         expect(section.get_by_text('임시 비밀번호는 꺼져 있습니다(키 로그인만 가능).', exact=True)).to_be_visible()
+
+
+def test_ssh_initial_read_blocks_actions_until_state_is_known(panel):
+    page = panel('system/security.js', role='administrator')
+    page.evaluate("""() => {
+      __unmount(); document.querySelector('#root').replaceChildren();
+      window.sshWrites = 0;
+      window.__api = (_path, options = {}) => {
+        if (options.method) { sshWrites++; return Promise.resolve({}); }
+        return new Promise(resolve => window.finishSsh = resolve);
+      };
+    }""")
+    page.evaluate(MOUNT, ['/assets/panels/system/security.js', 'administrator'])
+    section = page.locator('section').filter(has=page.get_by_role('heading', name='임시 SSH 비밀번호', exact=True))
+    for control in section.locator('ui-button').all():
+        expect(control).to_be_disabled()
+        assert control.get_attribute('reason') == '상태 확인 중'
+    section.locator('form').evaluate('form => form.requestSubmit()')
+    assert page.evaluate('sshWrites') == 0
+    page.evaluate('finishSsh({enabled: true})')
+    for control in section.locator('ui-button').all():
+        expect(control).to_be_enabled()
+
+
+@pytest.mark.parametrize('method', ['POST', 'DELETE'])
+def test_ssh_mutations_lock_both_actions_through_readback(panel, method):
+    page = panel('system/security.js', role='administrator')
+    section = page.locator('section').filter(has=page.get_by_role('heading', name='임시 SSH 비밀번호', exact=True))
+    page.evaluate("""() => {window.__api = async (_path, options = {}) => options.method
+      ? {password:'fixture-before', expires_at:'fixture expiry'} : {enabled:true};}""")
+    section.locator('form').evaluate('form => form.requestSubmit()')
+    expect(section.get_by_text('임시 비밀번호 켜짐 · 만료 알 수 없음', exact=True)).to_be_visible()
+    page.evaluate("""() => {
+      window.sshWrites = 0;
+      window.__api = (_path, options = {}) => {
+        if (options.method) { sshWrites++; return new Promise(resolve => window.finishWrite = resolve); }
+        return new Promise(resolve => window.finishRead = resolve);
+      };
+    }""")
+    section.get_by_role('button', name='임시 비밀번호 발급' if method == 'POST' else '지금 끄기', exact=True).click()
+    for control in section.locator('ui-button').all():
+        expect(control).to_be_disabled()
+    section.locator('form').evaluate('form => form.requestSubmit()')
+    assert page.evaluate('sshWrites') == 1
+    page.evaluate("finishWrite({password:'fixture-only', expires_at:'fixture expiry'})")
+    page.wait_for_function("typeof finishRead === 'function'")
+    for control in section.locator('ui-button').all():
+        expect(control).to_be_disabled()
+    page.evaluate('finishRead({enabled: true})')
+    for control in section.locator('ui-button').all():
+        expect(control).to_be_enabled()
 
 
 def test_ssh_one_time_credential_survives_read_failure(panel):
