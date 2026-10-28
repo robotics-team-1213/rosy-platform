@@ -95,3 +95,31 @@ def test_long_cargo_rotated_outside_the_envelope_is_rejected():
     angle = math.radians(2)
     assert not mod.placed(item, position=mod.target(item), orientation=[math.cos(angle/2), 0., 0., math.sin(angle/2)],
                           speed=0., finger_force=0., support_force=.1, lifted=True)
+
+
+def test_training_report_checks_transport_and_checkpoint_without_loading_weights(tmp_path):
+    import hashlib
+    import json
+    from stacking_fixture import FIXTURE
+    from stacking_report import verify_report
+    weights = b'opaque checkpoint: the verifier must never execute it'
+    (tmp_path/'stacking-policy.pt').write_bytes(weights)
+    joints = ['joint'+str(i) for i in range(1, 6)]+['gripper_joint_1', 'gripper_joint_2']
+    report = dict(schema='rosy.omx-stacking-rl/1', fixture=FIXTURE, sdk_version='6.2.0.0', seed=42,
+        updates=32, transitions=1024, parameter_delta=.1, training_verified=True, task_success=False,
+        evaluation_seed=10042, evaluation_episodes=1, evaluation_successes=0, evaluation_steps=600,
+        articulations=['/World/A', '/World/B'], joints=[joints, joints], attachment_aid=False,
+        belt_displacement_m=[0., .018, 0.], checkpoint=dict(name='stacking-policy.pt', bytes=len(weights),
+            sha256=hashlib.sha256(weights).hexdigest()), images=['stacking-initial.png', 'stacking-evaluation.png'])
+    path = tmp_path/'report.json'
+    path.write_text(json.dumps(report))
+    assert verify_report(path, sdk_version='6.2.0.0', seed=42)['task_success'] is False
+    for override in [dict(belt_displacement_m=[0., 0., 0.]), dict(parameter_delta=0.),
+                     dict(task_success=True), dict(evaluation_seed=42)]:
+        path.write_text(json.dumps(dict(report, **override)))
+        with pytest.raises(ValueError):
+            verify_report(path, sdk_version='6.2.0.0', seed=42)
+    path.write_text(json.dumps(report))
+    (tmp_path/'stacking-policy.pt').write_bytes(b'tampered')
+    with pytest.raises(ValueError, match='fingerprint'):
+        verify_report(path, sdk_version='6.2.0.0', seed=42)
