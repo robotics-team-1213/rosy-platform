@@ -1,6 +1,7 @@
 """Mounted configuration changes must invalidate only their consumer."""
 
 import hashlib
+import json
 from pathlib import Path
 import shutil
 from types import SimpleNamespace
@@ -44,9 +45,32 @@ def test_changed_mounted_caddy_config_recreates_proxy_without_image_transfer(can
         for config, name in zip(docs, ("Caddyfile", "Caddyfile.account")):
             expected = hashlib.sha256((site / name).read_bytes()).hexdigest()
             assert expected in config["services"]["proxy"]["labels"].values()
+        combined = {**docs[0]["services"]["proxy"]["labels"],
+                    **docs[1]["services"]["proxy"]["labels"]}
+        assert len(combined) == 2  # Account must preserve the base config change signal.
         configs.append(docs)
     assert configs[0][0]["services"]["fleet"] == configs[1][0]["services"]["fleet"]
     assert configs[0][0]["services"]["vision"] == configs[1][0]["services"]["vision"]
     assert configs[0][0]["services"]["proxy"] != configs[1][0]["services"]["proxy"]
     assert configs[0][1]["services"]["proxy"] != configs[1][1]["services"]["proxy"]
     assert not any(c[:2] == ["docker", "build"] or c[:3] == ["docker", "image", "save"] for c in calls)
+
+
+def test_retaining_one_reused_image_does_not_retain_unreferenced_siblings(tmp_path):
+    from deploy.site.rosy_site_autoupdate import SiteUpdater
+    from deploy.site.site_update_io import Paths
+    paths = Paths(tmp_path)
+    rollback = paths.candidates / ("b" * 40)
+    rollback.mkdir(parents=True)
+    kept = "rosy-site-vision:" + "a" * 40
+    obsolete = "rosy-site-fleet:" + "a" * 40
+    (rollback / "release.json").write_text(json.dumps({
+        "source_commit": "b" * 40, "images": {"vision": {"reference": kept}}}))
+    calls = []
+    def run(args, **kwargs):
+        calls.append(args)
+        return SimpleNamespace(stdout=f"{kept}\n{obsolete}" if args[:3] == ["docker", "image", "ls"] else "",
+                               stderr="", returncode=0)
+    SiteUpdater({"keep": 1}, paths=paths, runner=run).prune({rollback})
+    assert ["docker", "image", "rm", obsolete] in calls
+    assert ["docker", "image", "rm", kept] not in calls
