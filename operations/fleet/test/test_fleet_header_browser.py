@@ -313,6 +313,7 @@ def test_canonical_chrome_is_in_first_response_without_page_javascript(tmp_path,
             expect(page.locator('#estop')).to_be_visible()
             expect(page.locator('#estop')).to_have_attribute('data-always-live', '')
             expect(page.locator('.doc-tabs a')).to_have_count(5)
+            expect(page.locator('.doc-tabs + .ui-subnav')).to_have_count(1)
             expect(page.locator('#topbar-extra')).to_be_hidden()
             assert page.evaluate('document.documentElement.scrollWidth<=innerWidth'), name
             box = page.locator('#estop').bounding_box()
