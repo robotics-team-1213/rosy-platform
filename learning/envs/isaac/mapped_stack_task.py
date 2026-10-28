@@ -47,6 +47,12 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
         kp[fingers[i]], kd[fingers[i]] = [30., 300.], [2., 5.]
         controller.set_gains(kps=kp, kds=kd)
         print('MAPPED_SI_GAINS', i, [np.asarray(v).tolist() for v in controller.get_gains()], flush=True)
+        view = robot._articulation_view
+        print('MAPPED_IMPORTED_EFFORTS', i, view.get_max_efforts().tolist(), flush=True)
+        efforts = np.full((1, robot.num_dof), 30.)
+        efforts[0, fingers[i]] = [.2, 2.]
+        view.set_max_efforts(efforts)
+        print('MAPPED_SI_EFFORTS', i, view.get_max_efforts().tolist(), flush=True)
 
     def step():
         nonlocal tick
@@ -131,6 +137,8 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
             robot.set_joint_velocities(np.zeros(robot.num_dof))
         hold(120)
         print('MAPPED_HOME', snapshot(), flush=True)
+        print('MAPPED_APPLIED', [(r.get_applied_action().joint_positions.tolist(),
+            r.get_applied_action().joint_velocities.tolist(), r.get_joint_velocities().tolist()) for r in robots], flush=True)
         if trial_index == 0:
             photo('mapped-overview.png', True)
             photo('mapped-initial.png')
