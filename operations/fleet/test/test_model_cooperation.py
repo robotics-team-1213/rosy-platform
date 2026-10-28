@@ -244,7 +244,6 @@ def test_readable_case_adapter_can_use_cooperation_without_new_execution_path(tm
         tuple(e.reference for e in assessment.request.evidence), ('reobserve', 'human'), 'INTERVENE',
         facts_json='{"state":"blocked"}', fleet_choice='human')
     for port in ports:
-        original = port.exchange.__call__
         class BoundExchange(Exchange):
             async def __call__(self, body, remaining, *, budget_usd):
                 response = await super().__call__(body, remaining, budget_usd=budget_usd)

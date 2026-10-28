@@ -1,6 +1,6 @@
 """D-913 bounded independent reviews, compatible with the Fleet advisory journal."""
 import asyncio
-from dataclasses import asdict
+from dataclasses import asdict, replace
 import hashlib
 import json
 import time
@@ -29,7 +29,8 @@ class CooperationSupervisor(Supervisor):
         return hashlib.sha256(canonical({'policy': self.policy_id, 'input_hash': problem.digest,
             'mode': self.mode, 'measurements': asdict(self.measurements), 'primary': self.primary_json,
             'primary_cost_usd': self.primary_cost_usd, 'timeout_s': self.timeout_s,
-            'max_cost_usd': self.max_cost_usd, 'profiles': [p.profile_key for p in providers]}).encode()).hexdigest()
+            'max_cost_usd': self.max_cost_usd, 'profiles': [p.profile_key for p in providers],
+            'reused': asdict(self.reused) if self.reused is not None else None}).encode()).hexdigest()
 
     async def run(self, problem, providers, *, current, record=None):
         result = dict(state='HOLD', reason='UNCONFIGURED', choice=None, calls=0, total_calls=1,
@@ -38,9 +39,9 @@ class CooperationSupervisor(Supervisor):
             input_hash=problem.digest, requested_mode=self.mode, effective_mode='hold',
             action_admissible=False, reserved_usd=0.0, reused=False)
         def finish(reason, state='HOLD', choice=None):
-            return {**result, 'reason': reason, 'state': state, 'choice': choice,
+            return json.loads(canonical({**result, 'reason': reason, 'state': state, 'choice': choice,
                 'cost_complete': result['unknown_cost_calls'] == 0,
-                'cost_usd': result['known_cost_usd'] if result['unknown_cost_calls'] == 0 else None}
+                'cost_usd': result['known_cost_usd'] if result['unknown_cost_calls'] == 0 else None}))
         def fresh():
             try:
                 return current() is True and 0 <= self.clock() - problem.observed_at < 3
@@ -81,7 +82,10 @@ class CooperationSupervisor(Supervisor):
         def remaining():
             return max(0, deadline - (time.monotonic() - started))
         def unchanged():
-            return fresh() and tuple(p.profile_key for p in providers) == keys and remaining() > 0
+            latest = self.environment()
+            return (fresh() and tuple(p.profile_key for p in providers) == keys and remaining() > 0
+                    and type(latest) is ExecutionEnvironment and latest.expires_at > self.clock()
+                    and latest.revision == plan.environment.revision)
         async def invoke(index, token=None):
             provider, request = providers[index], requests[index]
             owned = token is None
@@ -126,21 +130,15 @@ class CooperationSupervisor(Supervisor):
                             confirmed = await provider.cancel(provider.call_id(request))
                     except Exception:
                         confirmed = False
+                    if confirmed:
+                        pending_ids.pop(index, None)
                 if owned and confirmed:
                     if await self.admission.release(token) is not True:
                         raise ValueError('RESOURCE_RELEASE_UNKNOWN')
         try:
             async with asyncio.timeout(deadline):
-                environment = self.environment()
-                plan = select_mode(requested_mode=self.mode, environment=environment, measurements=self.measurements,
-                    profile_keys=keys, input_hash=problem.digest, now=self.clock(), remaining_s=remaining(),
-                    remaining_usd=self.max_cost_usd - self.primary_cost_usd)
-                result.update(decision_hash=plan.decision_hash, selection_reason=plan.reason,
-                    effective_mode=plan.mode, environment_revision=environment.revision,
-                    measurement_revision=self.measurements.revision)
-                if plan.mode == 'hold':
-                    return finish(plan.reason)
                 indices = [0, 1]
+                measurements = self.measurements
                 if self.reused is not None:
                     from .cooperation import ReviewReceipt
                     if type(self.reused) is not ReviewReceipt:
@@ -149,8 +147,22 @@ class CooperationSupervisor(Supervisor):
                     if checked['objections'] or self.reused.cost_usd != self.primary_cost_usd:
                         raise ValueError('INVALID_REUSE')
                     receipt_by_role[0] = checked
+                    result['opinions'].append({'role': 'proposal', 'profile_key': keys[0],
+                        'request_hash': requests[0].digest, 'call_id': self.reused.call_id, **checked})
                     indices = [1]
-                    result.update(reused=True, effective_mode='sequential')
+                    measurements = replace(measurements, cost_caps=(0, measurements.cost_caps[1]),
+                                           parallel_accepted=False)
+                    result['reused'] = True
+                environment = self.environment()
+                plan = select_mode(requested_mode='sequential' if self.reused else self.mode,
+                    environment=environment, measurements=measurements,
+                    profile_keys=keys, input_hash=problem.digest, now=self.clock(), remaining_s=remaining(),
+                    remaining_usd=self.max_cost_usd - self.primary_cost_usd)
+                result.update(decision_hash=plan.decision_hash, selection_reason=plan.reason,
+                    effective_mode=plan.mode, environment_revision=environment.revision,
+                    measurement_revision=self.measurements.revision, decision_inputs=asdict(plan))
+                if plan.mode == 'hold':
+                    return finish(plan.reason)
                 result['reserved_usd'] = sum(self.measurements.cost_caps[i] for i in indices)
                 await save('BUDGET_RESERVED')
                 if not unchanged():
@@ -166,7 +178,7 @@ class CooperationSupervisor(Supervisor):
                             now=self.clock(), remaining_s=remaining(),
                             remaining_usd=self.max_cost_usd - self.primary_cost_usd)
                         result.update(effective_mode=plan.mode, decision_hash=plan.decision_hash,
-                                      selection_reason='PARALLEL_RESERVATION_REFUSED')
+                            decision_inputs=asdict(plan), selection_reason='PARALLEL_RESERVATION_REFUSED')
                         if plan.mode == 'hold':
                             return finish('RESOURCE_NOT_ADMITTED')
                 if token is not None:
