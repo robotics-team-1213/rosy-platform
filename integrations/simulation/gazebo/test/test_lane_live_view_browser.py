@@ -2,6 +2,7 @@
 
 import importlib.util
 import json
+import os
 import threading
 from http.server import ThreadingHTTPServer
 from pathlib import Path
@@ -16,10 +17,12 @@ pytestmark = pytest.mark.skipif(
 )
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
+LONG_RUN = "mission_" + "long_run_" * 16
+LONG_REASON = "dock_goal_unavailable_" * 8
 
 
 @pytest.fixture()
-def viewer_url():
+def viewer_url(tmp_path, request):
     spec = importlib.util.spec_from_file_location("lane_live_view_browser", SCRIPTS / "lane_live_view.py")
     viewer = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(viewer)
@@ -27,8 +30,13 @@ def viewer_url():
     viewer.COMMON = root / "shared" / "web"
     viewer.COMMON_ASSETS = json.loads((viewer.COMMON / "shared-assets.json").read_text())["shared_assets"]
     graph = root / "middleware/perception/map/map_v2_fleet/lane_graph.yaml"
+    evidence = tmp_path / "evidence"
+    if getattr(request, "param", "empty") == "long":
+        run = evidence / LONG_RUN
+        run.mkdir(parents=True)
+        (run / "results.json").write_text(json.dumps({"pass": False, "reason": LONG_REASON}))
 
-    class Handler(viewer.make_handler(viewer.ViewerState(viewer.load_graph(graph)))):
+    class Handler(viewer.make_handler(viewer.ViewerState(viewer.load_graph(graph), evidence_dir=evidence))):
         def _stream_mjpeg(self, stream):
             self.send_error(503)  # Synthetic fixture has no camera and must not retain stream threads.
 
@@ -78,12 +86,16 @@ def test_view_tabs_have_keyboard_and_panel_contract(viewer_url):
 
 @pytest.mark.parametrize("theme", ["dark", "light"])
 @pytest.mark.parametrize("width", [320, 390, 1280, 2000])
-def test_shared_assets_responsive_layout_and_tab_targets(viewer_url, theme, width):
+@pytest.mark.parametrize("viewer_url", ["empty", "long", "error"], indirect=True)
+def test_shared_assets_responsive_layout_and_tab_targets(viewer_url, theme, width, request):
     from playwright.sync_api import sync_playwright, expect
 
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch()
         page = browser.new_page(viewport={"width": width, "height": 900})
+        state = request.node.callspec.params["viewer_url"]
+        if state == "error":
+            page.route("**/runs.json", lambda route: route.abort())
         page.add_init_script("localStorage.setItem('rosy.theme', " + json.dumps(theme) + ")")
         page.goto(viewer_url, wait_until="domcontentloaded")
         page.wait_for_function("customElements.get('ui-button') !== undefined")
@@ -96,10 +108,29 @@ def test_shared_assets_responsive_layout_and_tab_targets(viewer_url, theme, widt
         tab = page.locator("#tab-live")
         assert tab.bounding_box()["height"] >= 48
         tab.focus()
+        capture = os.environ.get("ROSY_UI_CAPTURE_DIR")
+        if capture:
+            folder = Path(capture)
+            folder.mkdir(parents=True, exist_ok=True)
+            if state == "empty":
+                page.screenshot(path=str(folder / f"{theme}-{width}-live.png"), full_page=True)
         page.keyboard.press("ArrowRight")
         expect(page.locator("#tab-results")).to_be_focused()
         expect(page.locator("#results")).to_be_visible()
+        if state == "long":
+            expect(page.locator("#runTitle")).to_have_text(LONG_RUN)
+            expect(page.locator("#runFacts")).to_contain_text(LONG_REASON)
+            row = page.locator("#runRows tr[data-id]")
+            row.focus()
+            page.keyboard.press("Enter")
+            expect(row).to_be_focused()
+        else:
+            text = "증거 디렉터리에 실행이 없습니다." if state == "empty" else "실행 목록을 불러올 수 없습니다."
+            expect(page.locator("#runRows")).to_have_text(text)
         assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+        if capture:
+            page.screenshot(path=str(folder / f"{theme}-{width}-{state}.png"), full_page=True)
+        page.locator("#tab-results").focus()
         page.keyboard.press("Home")
         expect(tab).to_be_focused()
         expect(page.locator("#live")).to_be_visible()
