@@ -4,6 +4,7 @@ import '/common/ui.js';
 import '/commands.js';
 const $=id=>document.getElementById(id);
 const KINDS={training:'학습',evaluation:'평가',review:'검수'};
+let loading=false;
 
 function entry(label,tag,note,url){
   const item=document.createElement('li');item.className='workspace-entry';
@@ -16,7 +17,11 @@ function entry(label,tag,note,url){
 }
 
 async function load(){
+  if(loading)return;
+  loading=true;$('workspaces-retry').disabled=true;
   const status=$('workspaces-status');
+  status.setAttribute('state','pending');status.setAttribute('role','status');status.textContent='작업 공간 목록을 읽는 중입니다.';
+  $('workspaces').replaceChildren();
   try{
     const response=await accountFetch('/api/learning/workspaces');
     const value=await response.json();
@@ -25,6 +30,8 @@ async function load(){
     $('workspaces').replaceChildren(current,...value.workspaces.map(row=>entry(row.label,KINDS[row.kind]||row.kind,row.note,row.url)));
     status.setAttribute('state',value.workspaces.length?'ready':'empty');
     status.textContent=value.workspaces.length?`연결된 작업 공간 ${value.workspaces.length}개`:value.configured?'연결된 작업 공간이 없습니다.':'이 센터에는 연결된 작업 공간 설정이 없습니다.';
-  }catch(error){status.setAttribute('state','error');status.textContent=error.message;}
+  }catch(error){status.setAttribute('state','error');status.setAttribute('role','alert');status.textContent=error.message+' · 다시 확인을 눌러 목록을 읽으세요.';}
+  finally{loading=false;$('workspaces-retry').disabled=false;}
 }
+$('workspaces-retry').onclick=load;
 load();

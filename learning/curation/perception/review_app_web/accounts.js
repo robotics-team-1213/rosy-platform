@@ -3,6 +3,8 @@ import '/common/ui.js';
 import '/commands.js';
 const $ = id => document.getElementById(id);
 let token, session, active = false, pending = false, loginOptions = null;
+let actionError='',pollError='';
+const connectionChoiceRequired=[false,false];
 const loginFailures = new Map([
   ['account_callback_failed', ['error', '로그인 연결을 완료하지 못했습니다. 로그인 요청이 만료되었거나 확인되지 않았습니다. Rosy Account에서 로그인을 다시 시작하세요.']],
   ['account_unavailable', ['unavailable', '로그인 서비스에 연결할 수 없습니다. 연결을 확인한 뒤 Rosy Account에서 다시 로그인하세요.']],
@@ -17,7 +19,10 @@ const failures = {insufficient_space:'저장 공간이 부족합니다. 여유 �
   import_failed:'가져오기에 실패했습니다. 연결과 자료 접근을 확인한 뒤 재시도하세요.'};
 const size = n=>`${Number(n || 0).toLocaleString('ko-KR')} bytes`;
 const scopeLabel={'read-repos':'읽기','gated-repos':'제한 자료 읽기','write-repos':'쓰기','manage-repos':'저장소 생성·삭제'};
-function error(message) { $('account-error').textContent=message || ''; $('account-error').hidden=!message; }
+function error(message,owner='action') {
+  if(owner==='poll')pollError=message||'';else actionError=message||'';
+  $('account-error').textContent=[pollError,actionError].filter(Boolean).join('\n');$('account-error').hidden=!$('account-error').textContent;
+}
 function status(text, state) {
   $('account-status').textContent=text; $('account-status').setAttribute('state',state);
 }
@@ -26,6 +31,7 @@ function loginControls() {
 }
 function signedOut() {
   token=null; session=null; active=false;
+  connectionChoiceRequired.fill(false);actionError=pollError='';error('');
   $('login-panel').hidden=false; $('signed-in').hidden=true;
   status(loginOptions?.enabled?'Rosy Account로 로그인하세요.':'계정 서버 연결 준비 중입니다.', loginOptions?.enabled?'empty':'unavailable');
   $('login-help').textContent=loginOptions?.enabled?'아래 버튼으로 Rosy Account 로그인 화면을 여세요. 로그인 후 이 Learning 화면으로 돌아옵니다.':'계정 서버 연결 준비 중입니다. 연결 후 Rosy Account로 로그인할 수 있습니다.';
@@ -49,16 +55,16 @@ function button(parent,label,action) {
   const b=document.createElement('button'); b.type='button'; b.className='ui-field'; b.textContent=label;
   b.addEventListener('click',()=>perform(action)); parent.append(b);
 }
-async function perform(action) {
+async function perform(action,owner='action') {
   if(pending)return;
-  pending=true; error('');
+  pending=true; if(owner!=='poll')error('');
   $('accounts-main').setAttribute('aria-busy','true');
   try { await action(); } catch(e) {
-    if(active) error(e.message);
+    if(active) error(e.message,owner);
     if($('account-status').getAttribute('state')==='pending') {
       status('로그인 상태를 확인할 수 없습니다. 연결을 확인하고 다시 시도하세요.', 'unavailable');
       $('account-retry').hidden=false;
-    } else error(e.message);
+    } else error(e.message,owner);
   }
   finally { pending=false; $('accounts-main').setAttribute('aria-busy','false'); }
 }
@@ -102,6 +108,7 @@ async function refresh() {
   $('sharing').querySelector('[value=project]').disabled=!session.capabilities.includes('manage');
   if(!session.capabilities.includes('manage')) $('sharing').value='personal';
   const list=$('connections'), select=$('connection'), managed=$('repo-connection');
+  const previous=[select.value,managed.value];
   list.replaceChildren(); select.replaceChildren(); managed.replaceChildren(); $('repos').replaceChildren();
   for(const account of session.connections) {
     const row=document.createElement('article'); list.append(row);
@@ -117,6 +124,10 @@ async function refresh() {
     managed.append(option.cloneNode(true));
   }
   if(!session.connections.length) line(list,'연결된 계정이 없습니다.');
+  for(const [index,control] of [select,managed].entries()){
+    if(previous[index]&&[...control.options].some(option=>option.value===previous[index])){control.value=previous[index];connectionChoiceRequired[index]=false;}
+    else if(previous[index]||connectionChoiceRequired[index]){connectionChoiceRequired[index]=true;const option=document.createElement('option');option.value='';option.textContent='연결을 다시 선택하세요.';option.disabled=true;option.selected=true;control.prepend(option);}
+  }
   await jobs();
 }
 async function jobs() {
@@ -124,6 +135,7 @@ async function jobs() {
   const identity=session;
   const result=await api('/api/learning/imports'), root=$('imports');
   if(!active||session!==identity)return;
+  error('','poll');
   const opened=new Set([...root.querySelectorAll('details[open]')].map(node=>node.dataset.job));
   const focused=document.activeElement, focusId=focused.closest('article')?.dataset.job;
   const focusText=root.contains(focused)?focused.textContent:null;
@@ -168,7 +180,8 @@ $('connect-form').addEventListener('submit',event=>{event.preventDefault();perfo
     resources:$('resources').value.split('\n').map(x=>x.trim()).filter(Boolean)}); await refresh();
 });});
 $('import-form').addEventListener('submit',event=>{event.preventDefault();perform(async()=>{
-  await api('/api/learning/imports/create',{connection_id:$('connection').value,repo_type:$('repo-type').value,
+  const connection=$('connection').value;if(!connection)throw new Error('가져올 계정을 선택하세요.');
+  await api('/api/learning/imports/create',{connection_id:connection,repo_type:$('repo-type').value,
     repo_id:$('repo-id').value.trim(),revision:$('revision').value.trim(),
     files:$('files').value.split('\n').map(x=>x.trim()).filter(Boolean),
     rights:{license:$('license').value.trim(),evidence:$('rights-evidence').value.trim(),internal_use:$('internal-use').checked,
@@ -176,6 +189,7 @@ $('import-form').addEventListener('submit',event=>{event.preventDefault();perfor
   await jobs();
 });});
 function selectedRepo() {
+  if(!$('repo-connection').value) throw new Error('관리 계정을 선택하세요.');
   const repoId=$('manage-repo-id').value.trim();
   if(!repoId) throw new Error('저장소 이름을 입력하세요.');
   return {connection_id:$('repo-connection').value, repo_type:$('manage-repo-type').value, repo_id:repoId};
@@ -211,5 +225,5 @@ $('account-retry').addEventListener('click',()=>perform(async()=>{
   const url=new URL(location.href); url.searchParams.delete('error'); history.replaceState(null,'',url);
   await refresh();
 }));
-setInterval(()=>{if(active&&!pending&&!document.hidden)perform(jobs);},5000);
+setInterval(()=>{if(active&&!pending&&!document.hidden)perform(jobs,'poll');},5000);
 perform(refresh);

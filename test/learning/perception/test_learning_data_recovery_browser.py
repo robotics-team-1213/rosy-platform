@@ -67,20 +67,22 @@ def test_catalog_import_states_follow_the_producer(workspace, status, label, wid
     capture(page, f'import-{status}-{width}')
 
 
-@pytest.mark.parametrize('status', [403, 503])
+@pytest.mark.parametrize('status', [401, 403, 503])
 @pytest.mark.parametrize('width', [390, 1440])
 def test_catalog_subread_failure_is_visible_and_recoverable(workspace, status, width):
     page, state, origin, expect = workspace
     state['hold_get'] = True
     page.set_viewport_size({'width': width, 'height': 900})
-    page.goto(origin + '/catalog')
+    with page.expect_request('**/api/learning/imports'):
+        page.goto(origin + '/catalog')
+    expect(page.locator('#hf-load')).to_have_attribute('state', 'pending')
     expect(page.locator('#import')).to_be_disabled()
     assert len(state['held_get']) == 1
     state['held_get'].pop().fulfill(status=status, json={'error': 'fixture list unavailable'})
     expect(page.locator('#hf-section')).to_be_visible()
     expect(page.locator('#hf-load')).to_have_attribute('state', 'error')
     expect(page.locator('#hf-retry')).to_be_enabled()
-    if status == 403:
+    if status in [401, 403]:
         expect(page.locator('#import')).to_be_disabled()
         expect(page.locator('#catalog-retry')).to_be_visible()
     capture(page, f'catalog-error-{status}-{width}')
@@ -137,16 +139,29 @@ def fill_import(page):
     page.check('#internal-use')
 
 
+def ready_accounts(page, origin, expect):
+    page.goto(origin + '/accounts')
+    expect(page.locator('#account-status')).to_have_attribute('state', 'ready')
+    expect(page.locator('#accounts-main')).to_have_attribute('aria-busy', 'false')
+
+
 def test_account_write_error_survives_the_automatic_read_and_clears_on_retry(workspace):
     page, state, origin, expect = workspace
     state['jobs'][0]['status'] = 'failed'
-    page.goto(origin + '/accounts')
+    ready_accounts(page, origin, expect)
     retry = page.locator('#imports').get_by_role('button', name='같은 버전 재시도', exact=True)
     retry.click()
     expect(page.locator('#account-error')).to_contain_text('fixture operation rejected')
     count = state['gets']
     page.wait_for_timeout(5500)
     assert state['gets'] > count
+    expect(page.locator('#account-error')).to_contain_text('fixture operation rejected')
+    state['status'] = 503
+    page.wait_for_timeout(5500)
+    expect(page.locator('#account-error')).to_contain_text('fixture list unavailable')
+    state['status'] = 200
+    page.wait_for_timeout(5500)
+    expect(page.locator('#account-error')).not_to_contain_text('fixture list unavailable')
     expect(page.locator('#account-error')).to_contain_text('fixture operation rejected')
     state['post_status'] = 200
     retry.click()
@@ -156,7 +171,7 @@ def test_account_write_error_survives_the_automatic_read_and_clears_on_retry(wor
 
 def test_account_refresh_keeps_both_selected_connections_and_request_identity(workspace):
     page, state, origin, expect = workspace
-    page.goto(origin + '/accounts')
+    ready_accounts(page, origin, expect)
     expect(page.locator('#connection option')).to_have_count(2)
     for key in ['connection', 'repo-connection']: page.select_option('#' + key, 'b')
     fill_import(page)
@@ -175,7 +190,7 @@ def test_account_refresh_keeps_both_selected_connections_and_request_identity(wo
 
 def test_removed_connection_requires_a_new_explicit_choice(workspace):
     page, state, origin, expect = workspace
-    page.goto(origin + '/accounts')
+    ready_accounts(page, origin, expect)
     expect(page.locator('#connection option')).to_have_count(2)
     for key in ['connection', 'repo-connection']: page.select_option('#' + key, 'b')
     fill_import(page)
@@ -188,6 +203,19 @@ def test_removed_connection_requires_a_new_explicit_choice(workspace):
     page.locator('#repo-create-form').evaluate('form => form.requestSubmit()')
     expect(page.locator('#account-error')).to_contain_text('관리 계정을 선택하세요')
     assert not state['posts']
+    page.locator('#reload').click()
+    expect(page.locator('#accounts-main')).to_have_attribute('aria-busy', 'false')
+    for key in ['connection', 'repo-connection']: expect(page.locator('#' + key)).to_have_value('')
+
+
+def test_first_available_connection_can_be_selected_after_initial_empty_state(workspace):
+    page, state, origin, expect = workspace
+    state['connections'] = []
+    ready_accounts(page, origin, expect)
+    state['connections'] = [CONNECTIONS[0]]
+    page.locator('#reload').click()
+    expect(page.locator('#accounts-main')).to_have_attribute('aria-busy', 'false')
+    for key in ['connection', 'repo-connection']: expect(page.locator('#' + key)).to_have_value('a')
 
 
 @pytest.mark.parametrize('status', [401, 403, 503])
