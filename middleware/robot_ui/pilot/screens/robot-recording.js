@@ -199,6 +199,7 @@ export function mountRobotRecording({toggle, detail, openButton, sheetHost, anch
         restoreFocus = noticeNode;
       }
       restoreFocus.focus({preventScroll: true});
+      restoreFocus.scrollIntoView({block: "nearest", inline: "nearest"});
     }
   }
 
