@@ -947,3 +947,11 @@ def test_known_failures_added_line_needing_a_person_stays_full(sample, head, cha
 def test_flaky_quarantine_stays_full_as_a_safety_root():
     sel = affected.select(affected.Repo.load(ROOT), ["test/flaky_quarantine.txt"], base_text=lambda path: "")
     assert sel.mode == "full" and _safety_escalations(sel)
+
+
+def test_full_json_forces_the_actual_lab_plan_on_an_affected_only_change(sample, capsys):
+    assert harness.main(["affected", "--repo", str(sample), "--base", "HEAD", "--full", "--json"]) == 0
+    result = json.loads(capsys.readouterr().out)
+    assert result["mode"] == "full"
+    assert result["full_invocations"] == affected.lab_full_invocations(affected.Repo.load(sample), result["local_invocations"])
+    assert ["test"] in result["full_invocations"]

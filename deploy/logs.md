@@ -3809,6 +3809,28 @@
 - gate 변화: 없음. 현장 호스트에서 타이머 실가동·복구 훈련(백업→빈 프로젝트 복원)은 별도 수행문.
 - CE: 해당 없음 — 계약 시험과 변이 이력이 커밋에 남아 있다.
 
+## 2026-10-27 · 296fdfc384 · 고정 검증 기록의 Git 참조 비밀정보 오탐 검토
+
+- 변경: 게시 검토 대장에 commit 296fdfc384의 검증 문서 경로와 high-entropy-token 규칙 한 건만 추가했다. 기존 109개 record와 scanner·규칙·임계값을 유지한다.
+- 증거: 추가된 고정 기록 58줄과 Finding 위치를 값 출력 없이 독립 검토했다. 해당 줄의 두 참조는 실제 Git commit으로 확인됐고 credential 자료가 아니다. 기록·이력은 유지하며 판정은 agent review로 표시한다.
+- gate 변화: 새 commit·다른 path·다른 rule은 계속 게시를 중단한다. 이 검토는 공개 가능한 Git 참조 오탐 한 건에 한정하며 FULL·게시·배포·장치 수용을 뜻하지 않는다. 커밋 전 검사 순서를 놓친 사실도 유지한다.
+- CE: 해당 없음 — 기존 D-889 exact-triple 판정 절차를 적용했다. 충전 시뮬레이션 실패의 원인은 별도 미해결이다.
+
+## 2026-10-27 · uncommitted · 고정 검증 기록의 전체 파일 검사 provenance 보완
+
+- 변경: 기존 public provenance 목록에 검증 기록 27b의 정확한 경로·7행 UTF-8 해시·두 Git 참조 한 건을 추가했다. 기존 231개 record와 순서, 고정 기록, 게시 검토 대장, scanner·규칙·임계값을 유지했다.
+- 원인: 게시의 commit/path/rule 검토와 전체 추적 파일 검사의 path/line/token 검토는 독립이다. 게시 대장만 등록해 실제 전체 시험의 비밀 검사 가드가 실패했다. 후보 단독 재실행도 실패했고 main에서는 통과했다.
+- 증거: 두 참조가 실제 commit 객체이며 고정 기록이 원본 blob과 같음을 독립 검토했다. 수정된 목록을 사용한 가드의 순수 함수 전체 추적 파일 스캔은 0건이다. 커밋된 수정본의 원격 가드 검증은 아직 대기 중이다.
+- gate 변화: 없음. 이 한 줄의 정확한 entropy token만 판정하며 private-key·credential·PSK·QR 검사를 유지한다. 중단된 전체 시험과 취소된 충전 시험을 통과로 보고하지 않는다.
+- CE: 미해결 — 원격 집중 검증 후 기존 Git ID 교훈의 두 검사 구분과 고정 기록 처리 설명을 보완한다.
+
+## 2026-10-27 · f44520f70e · exact-line provenance 원격 가드 확인
+
+- 변경: 고정 기록을 보존한 정확한 provenance 보완과 증거 라벨 형식 복구의 집중 결과를 `../docs/validation/land-explicit-full-2026-10-27c/result.md`에 남겼다. 앞선 실패와 최초 라벨 누락 커밋도 유지한다.
+- 증거: 공식 원격 runner에서 harness·release boundary 183 PASS/0 SKIP/0 FAIL, runner·외부 명령·known exit0·NEW0이다. source·환경·raw 해시는 검증 기록에 묶었다. 기존 secret 탐지 시험과 append-only 보호를 완화하지 않았다.
+- gate 변화: 집중 가드만 회복했다. 중단된 FULL, 취소된 충전 시험, 게시·배포·장치 수용은 완료로 올리지 않는다.
+- CE: 기존 교훈 갱신 — 게시 대장과 전체 파일 provenance의 독립성, 고정 기록 처리의 잘못된 선례 해석을 보완했다.
+
 ## 2026-10-28 · uncommitted · Native motor-health 종료 시각 수정 초안
 
 - 변경: 실제 MotorHealth와 부모 cleanup snapshot에 최초 terminal_at을 보존하는 수정 초안이다. 관측된 motor 측정 시각과 값은 유지하며 읽기·토크·guard 경계는 바꾸지 않는다.

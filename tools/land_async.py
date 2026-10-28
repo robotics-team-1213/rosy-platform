@@ -54,14 +54,20 @@ def start(cwd: Path, land_args: list[str], now: datetime, launch) -> tuple[str, 
     git(cwd, "branch", snap, "HEAD")
     git(cwd, "worktree", "add", "-q", str(tree), snap)
     log = tree.parent / (tree.name + ".log")
-    launch([sys.executable, "-X", "utf8", str(Path(__file__).resolve()), "--supervise", str(tree), snap, *land_args],
-           log)
+    # The supervisor runs a copy beside the log, never the caller's file: Windows keeps a running script's
+    # folder from being deleted, and the caller's worktree must be free (2026-10-28).
+    script = place / (tree.name + ".land_async.py")  # one per landing: a running copy cannot be rewritten
+    script.write_bytes(Path(__file__).read_bytes())
+    launch([sys.executable, "-X", "utf8", str(script), "--supervise", str(tree), snap, *land_args], log)
     return snap, log
 
 
 def supervise(tree: Path, snap: str, land_args: list[str], run=subprocess.call) -> int:
     """Run land.py in ``tree``; clean up when the snapshot landed, keep it and mark it stopped otherwise."""
-    code = run([sys.executable, "-X", "utf8", "tools/land.py", *land_args], cwd=str(tree))
+    # land.py's own lines (the STOP reason) into the .log, appended: the inherited handle lost them (2026-10-28)
+    with open(tree.parent / (tree.name + ".log"), "a", encoding="utf-8") as log:
+        code = run([sys.executable, "-X", "utf8", "tools/land.py", *land_args], cwd=str(tree), stdout=log,
+                   stderr=subprocess.STDOUT)
     landed = subprocess.run(["git", "-C", str(tree), "merge-base", "--is-ancestor", snap, "main"]).returncode == 0
     if landed:
         main = git(tree, "rev-parse", "--path-format=absolute", "--git-common-dir")
@@ -75,11 +81,12 @@ def supervise(tree: Path, snap: str, land_args: list[str], run=subprocess.call) 
     return code
 
 
-def detach(argv: list[str], log: Path) -> None:
+def detach(argv: list[str], log: Path) -> subprocess.Popen:
     flags = 0x00000008 | 0x00000200 if os.name == "nt" else 0  # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
+    # cwd: the holder, never the caller's worktree, which Windows then cannot delete while the landing runs
     with open(log, "w", encoding="utf-8") as out:
-        subprocess.Popen(argv, stdout=out, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
-                         creationflags=flags, start_new_session=os.name != "nt")
+        return subprocess.Popen(argv, stdout=out, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, cwd=log.parent,
+                                creationflags=flags, start_new_session=os.name != "nt")
 
 
 def main(argv: list[str]) -> int:

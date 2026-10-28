@@ -147,6 +147,7 @@ def describe(rows: list[dict]) -> str:
 
 def touch(ticket: Path | None = None) -> None:
     """Refresh a held ticket so others do not reclaim it while its holder still waits or tests."""
+    land_events.beat()
     for path in [ticket] if ticket else list(_held):
         try:
             os.utime(path)
