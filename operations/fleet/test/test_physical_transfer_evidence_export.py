@@ -2,6 +2,7 @@
 from hashlib import sha256
 from importlib import import_module
 import json
+import os
 import sqlite3
 
 import pytest
@@ -12,6 +13,15 @@ from test_physical_transfer_observer_api import (
 from test_arm_transfer_job_api import PATH
 from test_physical_transfer_evidence import geometry, policy  # noqa: F401
 from test_physical_transfer_store import installation  # noqa: F401
+
+
+@pytest.fixture(autouse=True)
+def joint_source_order_mutation(monkeypatch):
+    # Explicit remote mutation check; normal runs retain both production guards.
+    if os.environ.get("ROSY_MUTATE_D915_JOINT_ORDER") == "1":
+        for name in ("physical_transfer_execution", "physical_transfer_outcomes"):
+            module = import_module("fleet.server." + name)
+            monkeypatch.setattr(module, "validate_post_action_order", lambda *args: None)
 
 
 def joint_measurement(timestamp, sequence, *, instance="arm-1"):
