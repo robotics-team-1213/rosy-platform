@@ -47,6 +47,16 @@ def test_untracked_and_modified_source_change_snapshot(repo):
     assert changed != pipeline.snapshot(root, scope)
 
 
+def test_snapshot_rejects_embedded_git_checkouts(repo):
+    root, _ = repo
+    nested = root / "nested"
+    nested.mkdir()
+    subprocess.run(["git", "init", str(nested)], check=True, capture_output=True)
+    (nested / "indexed.py").write_text("class Nested: pass\n")
+    with pytest.raises(ValueError, match="Nested"):
+        pipeline.snapshot(root, root)
+
+
 def test_query_rejects_changed_selection_before_invoking_graphify(repo, tmp_path):
     root, scope = repo
     run = tmp_path / "run"
