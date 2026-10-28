@@ -38,7 +38,7 @@ def load_binding(path, sha=None, *, expected_digest=None):
             or value['uid'] != os.getuid() or not re.fullmatch('[0-9a-f]{40}', value['source_sha'])
             or (sha is not None and sha != value['source_sha'])
             or not re.fullmatch('[0-9a-f]{64}', value['sdk_python_sha256'])
-            or value['sdk_version'] not in {'5.1.0.0', '6.0.0.0'}):
+            or value['sdk_version'] not in {'5.1.0.0', '6.0.0.0', '6.2.0.0'}):
         raise ValueError('Unapproved SDK or source binding')
     source = _owned(Path(value['source_root']), directory=True)
     if source != Path(__file__).resolve().parents[3]:
