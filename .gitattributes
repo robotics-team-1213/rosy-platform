@@ -16,8 +16,9 @@ middleware/perception/map/map_v2_fleet/lane_graph.yaml text eol=lf
 deploy/robot/native/rosy-diag text eol=lf
 # D-189: inputs.lock.yaml pins this file by SHA-256; its bytes must not change per checkout.
 deploy/robot/pinky_pro/image/device-python-requirements.txt text eol=lf
-# CMS build pins bind exact PEM bytes across Windows and Linux checkouts.
+# OS preparation binds exact public PEM bytes across Windows and Linux checkouts.
 deploy/robot/pinky_pro/release/public-keys/rosy-os-cms-2026-01.pem text eol=lf
+deploy/robot/pinky_pro/release/public-keys/rosy-release-*.pem text eol=lf
 deploy/robot/pinky_pro/image/camera-sources.lock.json text eol=lf
 deploy/robot/pinky_pro/image/camera-python-requirements.txt text eol=lf
 # D-373: systemd EnvironmentFile would read a CRLF value as "false" (not a switch value).

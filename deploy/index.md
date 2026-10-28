@@ -76,8 +76,8 @@
 
 ## 최근 기록
 
+- 2026-10-29 · uncommitted · deploy: GitHub OS 전송과 서명된 부분 갱신
 - 2026-10-28 · 8c3a60f344 · Pinky 접속 복구와 운영 키 누락 차단
 - 2026-10-28 · 0f76cb9a4e · Learning 인계 런타임의 필수 파일 closure
+- 2026-10-28 · uncommitted · feat(omx): native 셀의 검증된 작업 범위를 실행 조건과 연결 (D-911)
 - 2026-10-28 · uncommitted · fix(omx): 카메라 자동 조정이 역할마다 실제 미리보기 유닛을 확인
-- 2026-10-28 · bc32cb9b41 · 정지 시험의 OS 가짜 호출 격리
-- 2026-10-28 · b3641b2165 · OMX 운영 관측의 native 통신 경계

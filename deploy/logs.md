@@ -3904,6 +3904,15 @@
 - gate 변화: 없음. 호스트 적용(프로필에 `"unit": "arm_a_wrist"`, 이전 상태 디렉터리 정리, 업데이트 관문 복귀)은 배포 뒤 셀이 쉴 때 한다.
 - CE: 미해결 — 호스트 적용 후 판단.
 
+## 2026-10-28 · uncommitted · feat(omx): native 셀의 검증된 작업 범위를 실행 조건과 연결 (D-911)
+
+- 변경: 장치/설정/보정 readback, 코드, 선언된 설치·물체 질량/치수·환경, 전체 library가 일치하는 작업만 검토 근거로 자동 실행한다. 미검증·오래된 상태·다른 높이/경로·다른 근거는 보류한다. 감독 시험과 자동 순환을 분리하며 기본 예제는 닫혀 있다.
+- 기록: 기존 attempts ledger에 단계별 실패와 운용범위 판정을 남긴다. 동작 전 독점 pending intent를 fsync하고 자신의 완료 기록 뒤에만 해제한다. 중간 관측 상실은 실패이며 같은 작업의 기존 근거로 자동 재실행하지 않는다.
+- 경계: native runner가 checked 명령의 session/library를 처리 시점에 확인한다. unchecked 수동 개입은 자동 사슬을 무효화한다. 기존 guard와 CORE/Fleet/OMX 권한은 유지한다. FIFO/카메라·receipt는 `cell_pipeline_io.py`로 옮겨 기존 import 이름을 유지했다.
+- 검증: 개발 중 `fd254ed147`에서 관련 원격 시험 96 passed. 최종 커밋의 원격 시험·크기/lint 결과는 workspace 작업 기록에 결합한다. 실물 구동·배포·현장 수용은 미실시.
+- gate 변화: 장치 활성화·실물/현장 수용은 그대로 미실시. native 셀 자동 작업에 검증 근거와 현재 조건의 추가 검사를 적용한다.
+- CE: 해당 없음 — 기존 처짐/접촉/설정 복구 교훈을 반영한 새 기능이며 새 실물 장애 해결을 검증하지 않았다.
+
 ## 2026-10-28 · 0f76cb9a4e · Learning 인계 런타임의 필수 파일 closure
 
 - 변경: storage_omx.py와 review_app_web/omx-export.js를 signed model-code의 필수 파일에 추가했다. 실제 설치·서명·배포·서비스 재시작은 하지 않았다.
@@ -3916,3 +3925,11 @@
 - 증거: tests-only `b808a821c2`의 공식 원격 실행에서 도구 부재 15 ERROR를 확인했다. Windows PowerShell의 폐기용 도우미 fixture는 수정 전 키 누락 assertion으로 실패했고 수정 후 7개 self-check와 설정·3장 연속 기록 fixture가 통과했다. 후보 `f594cb588d`의 집중 원격 회귀는 140 passed/2 Windows-only skipped, NEW 0이다. 독립 검토의 계정 디렉터리 탐색·키 읽기 권한 누락은 `bf3cab97bc`에서 6 FAILED로 재현했다. 보강한 `8c3a60f344`의 영향 선택은 459 passed/2 skipped이며 갱신 전 생성 인덱스의 계약 2건이 실패했다. 인덱스를 재생성해 후속 커밋에서 재검증한다. 독립 재검토의 Critical/Important는 0이다.
 - gate 변화: 없음. 카드 마운트·실물 키 변경·장치 등록·모터 활성화·배포·착지는 수행하지 않았다. 유지보수용 관리자 웹 endpoint를 새로 열지 않는다.
 - CE: 미해결 — 실제 장치의 인증 장애 원인과 실물 복구는 확인하지 못했다. 코드의 복구 거절·원본 보존과 장치 수용을 구분한다.
+
+## 2026-10-29 · uncommitted · deploy: GitHub OS 전송과 서명된 부분 갱신
+
+- 변경: OS bundle의 staged 분할 게시와 전체 해시 재조립, 서명된 engineering canary 제한, 독립 OS CMS가 필요한 전송기 유지보수 및 durable recovery, 기존 전체 파일을 보존하는 native delta 전송 정책을 연결했다. OS·부팅 변경과 알 수 없는 기준은 native 델타로 처리하지 않는다.
+- 검증: OS 게시54·초기수신79·잔여 partial 복구39·게시→HTTP 연결5·유지보수127개 원격 통과(각 0 skipped/0 NEW). 부분 전송 초기430개 통과 후 v2 resume·실패 baseline·OS 정책 보강을 별도로 재검증 중이다. 실제 GitHub 게시·Pinky 부팅·OTA·롤백은 아직 미검증이다.
+- 성능: exporter preset만6→1로 이행했다. 원본 변경의22개 원격 회귀와 독립 검토, 제한된 x86 표본은 [측정 기록](../docs/validation/pinky-image-throughput-2026-10-28/result.md)에 보존했다. 전체 ARM 빌드 절감량은 주장하지 않는다.
+- gate 변화: 없음. SOURCE·모델링된 중단 복구·MEDIA·실제 장치 수용을 구분하며 최종 통합 검증 전 배포 완료를 기록하지 않는다.
+- CE: 해당 없음 — 이 변경의 계약과 적용 조건은 코드·회귀·측정 기록으로 복원할 수 있다. 실제 GPT 재발 순서의 교훈은 별도 solutions 기록에 보존했다.
