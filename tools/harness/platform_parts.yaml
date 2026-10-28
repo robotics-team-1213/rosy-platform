@@ -1136,6 +1136,7 @@ safety_modules:
   - middleware/devices/omx/adapter/omx_adapter/owner_recovery_api.py
   - middleware/devices/omx/adapter/omx_adapter/action_store_readback.py
   - middleware/devices/omx/adapter/omx_adapter/real/dynamixel_port.py  # D-858 S1 real bus port: HOLD, stop latch, gate
+  - middleware/devices/omx/adapter/omx_adapter/real/dynamixel_motion.py  # D-858 legacy motion thread, same port state and bus
   - middleware/devices/omx/adapter/omx_adapter/real/dynamixel_bus.py  # D-858 S1 RAM-only writes, exclusive SDK bus, one-writer claim
   - middleware/devices/omx/adapter/omx_adapter/real/dynamixel_gates.py  # D-858 S1 §4 motion gate evidence, tracking bounds
   - middleware/devices/omx/adapter/omx_adapter/real/commissioning_record.py  # D-858 S3 measured record, MotionEvidence loader, revision
@@ -1308,6 +1309,7 @@ safety_anchors:
   - {symbol: omx_adapter.contracts.command_types.ArmCommandConfig}
   - {symbol: omx_adapter.local_stop.LocalStopController, public: true}
   - {symbol: omx_adapter.real.dynamixel_port.DynamixelPort}
+  - {symbol: omx_adapter.real.dynamixel_motion._DynamixelMotion}
   - {symbol: omx_adapter.real.dynamixel_bus.SdkBus}
   - {symbol: omx_adapter.real.dynamixel_gates.MotionEvidence}
   - {symbol: omx_adapter.real.commissioning_record.load_motion_evidence}
