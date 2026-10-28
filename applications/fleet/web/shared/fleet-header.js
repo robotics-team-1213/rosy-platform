@@ -98,7 +98,7 @@ export function showSession(identity) {
   $('fleet-account').hidden = false;
   $('fleet-account-identity').textContent = `${identity.principal_id} · ${roleLabel(identity.role)}`;
   const token = $('token-access');
-  if (token) { token.open = false; token.hidden = true; }
+  if (token && changed) token.open = false;
   // A session is stated in words, so the row it was entered through folds again (D-741 3):
   // one header line is what the operator reads after connecting.
   if (changed) setTopbarOpen(false);
@@ -113,8 +113,6 @@ export function showSession(identity) {
 // `refused` is false when the session probe failed for another reason (Fleet down): the words change,
 // the E-stop stays live. A lock never opens the account row (D-741 3): the guide strip's 관제 접속 does.
 export function showSignedOut({refused = true} = {}) {
-  const token = $('token-access');
-  if (token) token.hidden = false;
   $('fleet-account').hidden = true;
   $('fleet-login').hidden = false;
   const tag = $("user-role");

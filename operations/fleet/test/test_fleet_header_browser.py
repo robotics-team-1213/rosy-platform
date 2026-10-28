@@ -269,7 +269,7 @@ def test_four_documents_draw_one_header_and_one_estop(tmp_path):
 
 @pytest.mark.parametrize('name,path', DOCS)
 @pytest.mark.parametrize('width', [320, 390, 768, 1440])
-def test_authenticated_account_refresh_does_not_reveal_token_or_collapse_layout(tmp_path, name, path, width):
+def test_authenticated_account_refresh_preserves_explicit_menu_and_token_access(tmp_path, name, path, width):
     from playwright.sync_api import expect
     with _fleet(tmp_path, console_token='header-token') as (browser, origin):
         page = browser.new_page(viewport={'width': width, 'height': 1000})
@@ -279,9 +279,12 @@ def test_authenticated_account_refresh_does_not_reveal_token_or_collapse_layout(
         page.locator('#console-token').fill('header-token')
         page.locator('#token-save').click()
         expect(page.locator('#fleet-login')).to_be_hidden()
+        expect(page.locator('#topbar-extra')).to_be_hidden()
         page.locator('#topbar-more').click()
         expect(page.locator('#topbar-extra')).to_be_visible()
-        expect(page.locator('#token-access')).to_be_hidden()
+        expect(page.locator('#token-access')).to_be_visible()
+        open_token_access(page)
+        page.locator('#console-token').fill('replacement-pending')
         before = page.locator('ui-topbar').bounding_box()
         page.evaluate("""async()=>{
           const header=await import('/console/assets/fleet-header.js');
@@ -289,6 +292,8 @@ def test_authenticated_account_refresh_does_not_reveal_token_or_collapse_layout(
           header.showSession(await response.json());
         }""")
         expect(page.locator('#topbar-more')).to_have_attribute('aria-expanded', 'true')
+        expect(page.locator('#console-token')).to_be_visible()
+        expect(page.locator('#console-token')).to_have_value('replacement-pending')
         assert abs(page.locator('ui-topbar').bounding_box()['height']-before['height'])<=1
         assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
         page.locator('#fleet-theme').focus()
