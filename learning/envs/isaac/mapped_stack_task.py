@@ -1,7 +1,7 @@
 """CAD board context and measured-contact three-layer reference execution."""
 import math
 
-from mapped_stack_fixture import DT, FIXTURE, home, judge, plan, planning, solve
+from mapped_stack_fixture import DT, FIXTURE, free_lift, home, judge, plan, planning, solve, stable_box
 
 
 def build_map(world, stage):
@@ -172,7 +172,7 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
                 arm, box = item['arm'], cargo[index]
                 UsdGeom.Imageable(box.prim).MakeVisible()
                 yaw = float(rng.uniform(-.01, .01))
-                box.set_world_pose(np.array([.16+rng.uniform(-.001, .001), -.09, .041]),
+                box.set_world_pose(np.array([.16+rng.uniform(-.001, .001), -.09+rng.uniform(-.001, .001), .041]),
                     np.array([math.cos(yaw/2), 0., 0., math.sin(yaw/2)]))
                 box.set_linear_velocity(np.zeros(3)); box.set_angular_velocity(np.zeros(3))
                 start = box.get_world_pose()[0].copy()
@@ -182,19 +182,28 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
                 if not .01 < p[1]-start[1] < .06:
                     raise ValueError('belt failed to transport cargo')
                 yaw = math.atan2(2*(q[0]*q[3]+q[1]*q[2]), 1-2*(q[2]**2+q[3]**2))
-                layer = dict(item=index, arm=arm, source_center_z=float(p[2]), lift_samples=[], settle_samples=[])
+                layer = dict(item=index, arm=arm, source_center_z=float(p[2]),
+                    infeed_start=start.tolist(), infeed_settled=p.tolist(), grasp_samples=[], lift_samples=[], settle_samples=[])
                 trial['layers'].append(layer)
                 move(arm, [p[0], p[1], .145], yaw)
-                move(arm, p.tolist(), yaw)
+                grip(arm, profile.gripper_contact_for_width(.036))
+                move(arm, [p[0], p[1], p[2]+.002], yaw)
+                layer['grasp_samples'].append(snapshot())
                 grip(arm, profile.gripper_close_for_width(.03))
+                layer['grasp_samples'].append(snapshot())
                 move(arm, [p[0], p[1], .145], yaw)
                 layer['lift_samples'] = samples(36)
+                if not all(free_lift(s['boxes'][index], arm, float(p[2])) for s in layer['lift_samples']):
+                    photo('mapped-grasp-failed.png')
+                    raise ValueError('bilateral free lift failed; transport interlock stopped the arm')
                 move(arm, [*item['target'][:2], .145])
-                move(arm, [*item['target'][:2], item['target'][2]+.001])
+                move(arm, [*item['target'][:2], item['target'][2]+.003])
                 grip(arm, profile.gripper_contact_for_width(.04))
                 move(arm, [*item['target'][:2], .145])
                 move(arm, home(arm))
                 layer['settle_samples'] = samples(132)
+                if not all(stable_box(s['boxes'][j], j) for s in layer['settle_samples'] for j in range(index+1)):
+                    raise ValueError('released stack failed stability; next infeed blocked')
                 if trial_index == 0:
                     photo('mapped-layer-'+str(index+1)+'.png')
                 print('MAPPED_LAYER', trial_index, index+1, flush=True)

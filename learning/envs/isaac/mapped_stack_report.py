@@ -15,7 +15,7 @@ def verify_report(path, *, sdk_version, seed):
             or not isinstance(value.get('trials'), list) or not 1 <= len(value['trials']) <= 3):
         raise ValueError('Mapped scene provenance differs')
     images = value.get('images')
-    allowed = {'mapped-overview.png', 'mapped-initial.png'} | {
+    allowed = {'mapped-overview.png', 'mapped-initial.png', 'mapped-grasp-failed.png'} | {
         f'mapped-{kind}-{i}.png' for kind in ('layer', 'trial') for i in (1, 2, 3)}
     if (not isinstance(images, list) or len(set(images)) != len(images) or not set(images) <= allowed
             or not {'mapped-overview.png', 'mapped-initial.png'} <= set(images)):
@@ -25,6 +25,12 @@ def verify_report(path, *, sdk_version, seed):
             if trial['seed'] != seed+i or not 0 <= len(trial['layers']) <= 3:
                 raise ValueError('Trial mismatch')
             for layer in trial['layers']:
+                start, end = layer['infeed_start'], layer['infeed_settled']
+                if (len(start) != 3 or len(end) != 3
+                        or not all(type(x) in (int, float) and math.isfinite(x) for x in start+end)
+                        or not .01 < end[1]-start[1] < .06
+                        or abs(end[2]-layer['source_center_z']) > 1e-6):
+                    raise ValueError('Belt transport was not observed for this layer')
                 if not math.isfinite(layer['source_center_z']) or not .035 <= layer['source_center_z'] <= .05:
                     raise ValueError('Invalid belt source height')
                 for samples in (layer['lift_samples'], layer['settle_samples']):
