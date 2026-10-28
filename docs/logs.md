@@ -12826,3 +12826,11 @@ osy-d395-s1d\`.
 - 증거: 원격 `test/test_land_batch.py`·`test_land_queue.py`·`test_land_prepare.py`·`test_land.py`·`test_land_speculate.py`, known_failures NEW 0.
 - gate 변화: 없음.
 - CE: 해당 없음 — 규칙이 D-889 추가 4와 시험에 남는다.
+
+## 2026-10-28 · uncommitted · docs(reference): 문서로 남긴 작업 기록을 Jira 이슈에 짧은 코멘트로 연결한다
+
+- 변경: `docs/reference/atlassian-integration.md` §4 첫 항목에 기록 연결 규칙 추가. 작업의 기록·결과·결정을 Confluence 문서로 남긴 뒤 그 일을 추적하는 Jira 이슈에 짧은 코멘트와 문서 링크를 남기고, 상태·담당자·기한은 바꾸지 않는다. Notion 등 다른 문서 도구 기록도 같다. 3장의 스마트 커밋 금지와 충돌하지 않게 코멘트는 Atlassian 연결 도구(MCP·API)로 남긴다고 명시했고, 머리 갱신 날짜를 2026-10-28로 올렸다.
+- 근거: 2026-10-28 사용자 결정. 같은 규칙을 작업 공간 내부 스킬(`.agents/skills/rosy-confluence`·`rosy-notion`)의 절차와 우산 `Rosy/AGENTS.md` 「Jira 이슈와 문서 기록 연결」 절에도 반영했고, 이 문서 4장을 정본으로 지정했다.
+- 증거: `python tools/harness/rosy_harness.py generate`·`lint` 통과(이 항목 추가 뒤 실행). 코멘트 규칙 문구는 기존 §3 스마트 커밋 금지와 주체를 구분해 충돌하지 않는다.
+- gate 변화: 없음.
+- CE: 해당 없음 — 문서 관례 추가이며 코드·장치·시험 경로 변경이 없다.
