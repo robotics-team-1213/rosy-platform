@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 import importlib.util
 from pathlib import Path
 import subprocess
+import sys
 
 import pytest
 
@@ -48,6 +49,7 @@ def test_start_snapshots_head_into_a_hidden_worktree_and_frees_the_branch(repo):
     assert _git(dev, "rev-parse", "--abbrev-ref", "HEAD") == "feat/x"  # the owner's worktree is untouched
     (argv, _), = launched
     assert argv[-4:] == [str(tree), snap, "--tests", "auto"] and "--supervise" in argv
+    assert Path(argv[3]).parent == tree.parent and str(dev) not in argv[3]  # never the caller's file
 
 
 @pytest.mark.parametrize("dirty", [True, False])
@@ -73,12 +75,25 @@ def test_supervise_cleans_up_only_a_landed_snapshot(repo, lands):
     snap, log = tool.start(dev, [], NOW, lambda *a: None)
     tree = log.parent / log.name.removesuffix(".log")
 
-    def fake_land(argv, cwd):
+    def fake_land(argv, cwd, stdout, stderr):
+        stdout.write("[land] STOP: merge aborted\n")  # what the owner must find in the .log
         if lands:
             _git(main, "merge", "-q", "--ff-only", snap)
         return 0 if lands else 1
     code = tool.supervise(tree, snap, [], run=fake_land)
+    assert "[land] STOP: merge aborted" in log.read_text(encoding="utf-8")
     assert code == (0 if lands else 1)
     assert tree.exists() is not lands
     assert bool(_git(main, "branch", "--list", snap)) is not lands
     assert (tree.parent / (tree.name + ".stopped")).exists() is not lands
+
+
+def test_the_supervisor_never_holds_the_callers_worktree(tmp_path, monkeypatch):
+    """Windows cannot delete a folder that a live process has as its cwd (2026-10-28: freed worktrees stayed)."""
+    caller = tmp_path / "worktree"
+    caller.mkdir()
+    monkeypatch.chdir(caller)
+    log = tmp_path / "holder" / "snap.log"
+    log.parent.mkdir()
+    tool.detach([sys.executable, "-c", "import os; print(os.getcwd())"], log).wait(timeout=60)
+    assert Path(log.read_text(encoding="utf-8").strip()) == log.parent

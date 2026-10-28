@@ -3824,6 +3824,28 @@
 - 근거: RED bb04d6ae07 원격 16 expected NEW/88 passed → 83b85f7f8a 동일 loader/status/transfer/manifest/ArmS 집중 원격 104 passed, SKIP 0, NEW/KNOWN/FLAKY 0. helper와 transfer 각각 명시·기존 fallback 배치를 검사하고 _remote/_copy 호출 전 거부를 확인했다. 로그는 저장소 밖 D:/DevTemp/fleet-omx-host-placement-fix-round1-{red-complete,green}/run-1.txt.
 - gate 변화: 없음. 실제 호스트·장치·배포에 접근하지 않았다. CE: 해당 없음 — 호출자 경계와 거부 이유는 정본 loader 및 회귀 시험이 보존한다.
 
+## 2026-10-27 · 296fdfc384 · 고정 검증 기록의 Git 참조 비밀정보 오탐 검토
+
+- 변경: 게시 검토 대장에 commit 296fdfc384의 검증 문서 경로와 high-entropy-token 규칙 한 건만 추가했다. 기존 109개 record와 scanner·규칙·임계값을 유지한다.
+- 증거: 추가된 고정 기록 58줄과 Finding 위치를 값 출력 없이 독립 검토했다. 해당 줄의 두 참조는 실제 Git commit으로 확인됐고 credential 자료가 아니다. 기록·이력은 유지하며 판정은 agent review로 표시한다.
+- gate 변화: 새 commit·다른 path·다른 rule은 계속 게시를 중단한다. 이 검토는 공개 가능한 Git 참조 오탐 한 건에 한정하며 FULL·게시·배포·장치 수용을 뜻하지 않는다. 커밋 전 검사 순서를 놓친 사실도 유지한다.
+- CE: 해당 없음 — 기존 D-889 exact-triple 판정 절차를 적용했다. 충전 시뮬레이션 실패의 원인은 별도 미해결이다.
+
+## 2026-10-27 · uncommitted · 고정 검증 기록의 전체 파일 검사 provenance 보완
+
+- 변경: 기존 public provenance 목록에 검증 기록 27b의 정확한 경로·7행 UTF-8 해시·두 Git 참조 한 건을 추가했다. 기존 231개 record와 순서, 고정 기록, 게시 검토 대장, scanner·규칙·임계값을 유지했다.
+- 원인: 게시의 commit/path/rule 검토와 전체 추적 파일 검사의 path/line/token 검토는 독립이다. 게시 대장만 등록해 실제 전체 시험의 비밀 검사 가드가 실패했다. 후보 단독 재실행도 실패했고 main에서는 통과했다.
+- 증거: 두 참조가 실제 commit 객체이며 고정 기록이 원본 blob과 같음을 독립 검토했다. 수정된 목록을 사용한 가드의 순수 함수 전체 추적 파일 스캔은 0건이다. 커밋된 수정본의 원격 가드 검증은 아직 대기 중이다.
+- gate 변화: 없음. 이 한 줄의 정확한 entropy token만 판정하며 private-key·credential·PSK·QR 검사를 유지한다. 중단된 전체 시험과 취소된 충전 시험을 통과로 보고하지 않는다.
+- CE: 미해결 — 원격 집중 검증 후 기존 Git ID 교훈의 두 검사 구분과 고정 기록 처리 설명을 보완한다.
+
+## 2026-10-27 · f44520f70e · exact-line provenance 원격 가드 확인
+
+- 변경: 고정 기록을 보존한 정확한 provenance 보완과 증거 라벨 형식 복구의 집중 결과를 `../docs/validation/land-explicit-full-2026-10-27c/result.md`에 남겼다. 앞선 실패와 최초 라벨 누락 커밋도 유지한다.
+- 증거: 공식 원격 runner에서 harness·release boundary 183 PASS/0 SKIP/0 FAIL, runner·외부 명령·known exit0·NEW0이다. source·환경·raw 해시는 검증 기록에 묶었다. 기존 secret 탐지 시험과 append-only 보호를 완화하지 않았다.
+- gate 변화: 집중 가드만 회복했다. 중단된 FULL, 취소된 충전 시험, 게시·배포·장치 수용은 완료로 올리지 않는다.
+- CE: 기존 교훈 갱신 — 게시 대장과 전체 파일 provenance의 독립성, 고정 기록 처리의 잘못된 선례 해석을 보완했다.
+
 ## 2026-10-28 · uncommitted · Native motor-health 종료 시각 수정 초안
 
 - 변경: 실제 MotorHealth와 부모 cleanup snapshot에 최초 terminal_at을 보존하는 수정 초안이다. 관측된 motor 측정 시각과 값은 유지하며 읽기·토크·guard 경계는 바꾸지 않는다.
@@ -3838,3 +3860,18 @@
 - Verification: this is an uncommitted integration candidate with static checks only. The earlier 117 focused passes belong to commit `8426f896e4d13452828841928e80b2974a95a8b3`. This candidate has no new committed revision, remote result or FULL completion.
 - Gate: unchanged. Independent source review, commit, exact committed selector and ordinary canonical auto verification remain pending. No deployment, signing, device operation or field acceptance occurred.
 - CE: unresolved; integration and acceptance remain pending.
+
+## 2026-10-28 · b3641b2165 · OMX 운영 관측의 native 통신 경계
+
+- 변경: D-901에 따라 camera_source·hardware_observer·commissioning_view·workcell_observation_bridge의 실제 ROS 발행·구독을 같은 사용자 최신 스냅샷으로 대체했다. unit도 ROS setup 없이 시작한다. 원본 화질 측정·JPEG 한 번 인코딩·host source/monotonic 시각·기존 토큰/TLS ingress를 유지한다. 설정의 topic 문자열은 로컬 키이며 DDS fallback은 없다.
+- 검증: tests-only7368fd6fed에서 helper 부재로 원격 RED를 확인했다. 최초 원격 집중 실행의 새 통합 fixture 오류 3건을 고치고 b3641b2165 재시험을 요청했다. 최종 증거와 현장 수용은 완료 기록에서 구분한다.
+- gate 변화: 없음. 실행 중 장치 소유자·녹화·serial bus는 건드리지 않았다. 이전 DDS collection/simulator 입력은 이 native 카메라와 호환되지 않으며, idle 상태의 동일 버전 unit/env 전환과 소스별 실제 수용이 필요하다.
+- CE: 해당 없음 — 전송 경계와 시간·소유권 판단은 D-901 및 회귀 시험으로 설명할 수 있다. 실물에서 새 원인·복구 교훈을 검증한 변경이 아니다.
+
+## 2026-10-28 · bc32cb9b41 · 정지 시험의 OS 가짜 호출 격리
+
+- 변경: `test_omx_commissioning_stop.py`의 세 시험이 공용 stdlib OS를 바꾸는 대신, 각 시험에서 로드한 모듈의 OS 의존성만 대체한다. 실제 receipt fsync와 모든 장치 동일성·정지 시도·정리 실패 assertion을 유지한다. 생산 정지 경로는 바꾸지 않는다.
+- 원인: 공용 fstat 가짜 값은 st_rdev만 제공해, pytest 9.2 출력 캡처가 읽는 st_size를 없앴다. 후보 65c4cf7164에서 세 시험 모두 단독 재현됐고, 기준 main의 이전 시험 환경에서는 통과했다.
+- 증거: 수정 커밋 bc32cb9b41에서 정지 파일 27개와 Fleet 상태 파일 11개를 함께 원격 실행해 38 passed / 0 skipped / NEW 0. 같은 pytest 9.2 환경 1fde7a90b47fe7fb의 결과이며, 독립 검토는 전용 모듈 격리·실제 fsync 유지·안전 assertion 보존을 확인했다. 실행 로그는 native-cell-transport 작업 기록에 연결했다.
+- gate 변화: 없음. 전체 착지 검증은 별도이며 실제 포트·모터·서비스를 실행한 수용 근거가 아니다.
+- CE: 해당 없음 — 가짜 호출이 프레임워크에 번지는 원인과 적용 조건을 시험 주석·이 기록에서 복원할 수 있다.

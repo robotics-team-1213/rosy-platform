@@ -17,7 +17,7 @@ import time
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from omx_topic_backend import SIM_COMMANDS, SIM_STATES  # noqa: E402
 from omx_backend_conformance import CAMERAS, JOINTS, OBJECTS  # noqa: E402
-from omx_cell_world import boxes, quaternion  # noqa: E402
+from omx_cell_world import PAD_HALF_LENGTH, PAD_RADIUS, boxes, jaw_contact_point, quaternion  # noqa: E402
 
 TIMESTEP_S, STATE_PERIOD_S = .002, .01
 KP, DAMPING, ARMATURE = 40.0, .3, .01  # Position servo and joint damping; stable at 2 ms, not tuned to the real arm.
@@ -28,11 +28,7 @@ TOP_CAMERA_POS = (.12, 0.0, .65)  # Above the work area, looking down (cell top 
 # (cell_profile.yaml gripper.jaw; link7 mirrors link6), so the jaw gap matches the teacher's width-matched close.
 # The default pyramidal friction cone let the squeeze drop a 20 g block; the elliptic cone with impratio 10 holds
 # it, and stiff pad/object contacts keep the soft-contact overlap out of the jaw gap.
-PROFILE = Path(__file__).resolve().parents[2]/'deploy/robot/omx/sim/cell_profile.yaml'
 GRIP_SOLREF, GRIP_SOLIMP = [.002, 1], [.95, .99, .001, .5, 2]
-# A capsule across the finger: its reach toward the item does not change as the finger turns (a box's corner did,
-# 4 mm of jaw gap at 30 mm).
-PAD_RADIUS, PAD_HALF_LENGTH = .0015, .008
 
 
 def mjcf_urdf(urdf, mesh_root):
@@ -67,8 +63,7 @@ def build(urdf, mesh_root, shape):
             body = world.add_body(name=box['name'], pos=box['pos'], quat=quaternion(box['rpy']))
             body.add_freejoint()
             body.add_geom(name=box['name'], mass=box['mass'], solref=GRIP_SOLREF, solimp=GRIP_SOLIMP, **geom)
-    import yaml
-    x, y = yaml.safe_load(PROFILE.read_text())['gripper']['jaw']['contact_point_m']
+    x, y = jaw_contact_point()
     for finger, side in (('link6', 1), ('link7', -1)):
         for part in spec.body(finger).geoms:
             part.contype = part.conaffinity = 0

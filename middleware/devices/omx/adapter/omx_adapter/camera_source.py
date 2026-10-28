@@ -3,6 +3,7 @@ import argparse
 import os
 from pathlib import Path
 import socket
+import signal
 import time
 
 
@@ -64,7 +65,7 @@ def main():
     parser.add_argument('--device', required=True)
     parser.add_argument('--topic', required=True)
     parser.add_argument('--frame-id', required=True)
-    # Raw 640x480 bgr8 is ~0.9 MB/frame; the cap bounds same-host DDS load.
+    # The registered topic-shaped key addresses local IPC, never DDS.
     parser.add_argument('--max-fps', type=float, default=10.0)
     args = parser.parse_args()
     if not 0 < args.max_fps <= 30:
@@ -76,43 +77,40 @@ def main():
     if Path(args.device).parent not in PERSISTENT_CAMERA_DIRECTORIES:
         parser.error(PERSISTENT_CAMERA_ERROR)
     import cv2
-    from cv_bridge import CvBridge
-    import rclpy
-    from rclpy.qos import QoSProfile, ReliabilityPolicy
-    from sensor_msgs.msg import Image
+    from core_common.observation_snapshot import SnapshotChannel, interrupt_on_termination
+    from camera_quality import frame_quality
 
-    rclpy.init(args=[])
-    node = rclpy.create_node('rosy_camera_'+args.frame_id.replace('/', '_'))
-    publisher = node.create_publisher(Image, args.topic,
-                                     QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT))
-    bridge, capture = CvBridge(), None
+    channel, capture = SnapshotChannel(args.topic), None
+    previous = signal.signal(signal.SIGTERM, interrupt_on_termination)
     try:
-        while rclpy.ok():
+        while True:
             started = time.monotonic()
             notify_watchdog()
             try:
                 if capture is None:
                     capture = open_capture(cv2, selected_device(args.device))
-                    node.get_logger().info('MJPEG 640x480 preview; timestamp=host_receive; calibration=unverified')
-                image = bridge.cv2_to_imgmsg(read_frame(capture), encoding='bgr8')
+                    print('native MJPEG 640x480 preview; calibration=unverified', flush=True)
+                frame = read_frame(capture)
+                captured_at = time.time()
                 # shortcut: receipt time only; use exposure timestamps before calibrated control or recording.
-                image.header.stamp = node.get_clock().now().to_msg()
-                image.header.frame_id = args.frame_id
-                publisher.publish(image)
+                quality = frame_quality(frame)
+                ok, encoded = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+                if not ok:
+                    raise OSError('camera JPEG encoding failed')
+                channel.write('jpeg', encoded.tobytes(), captured_at=captured_at, quality=quality)
             except (OSError, cv2.error) as error:
                 if capture is not None:
                     capture.release()
                 capture = None
-                node.get_logger().warning(str(error))
+                print(str(error), flush=True)
                 time.sleep(1)
             time.sleep(max(0, 1/args.max_fps-(time.monotonic()-started)))
     except KeyboardInterrupt:
         pass
     finally:
+        signal.signal(signal.SIGTERM, previous)
         if capture is not None:
             capture.release()
-        node.destroy_node()
-        rclpy.shutdown()
 
 
 if __name__ == '__main__':
