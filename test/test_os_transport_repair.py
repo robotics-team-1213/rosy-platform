@@ -2,8 +2,8 @@
 import hashlib
 import importlib
 import json
+import os
 from pathlib import Path
-import struct
 import subprocess
 
 import pytest
@@ -21,6 +21,7 @@ def repair(tmp_path, monkeypatch):
     monkeypatch.syspath_prepend(str(NATIVE))
     m = importlib.import_module('os_transport_repair')
     controller, state, boot, root, journal, _, _, _, _, _, config_dir = _source(tmp_path, monkeypatch)
+    monkeypatch.setattr(m.socket, 'gethostname', lambda: (root / 'etc/hostname').read_text().strip())
     current = state.read_state(root)
     current['committed']['release_id'] = '2026.10.28-172'
     journal.write_text(json.dumps(current))
@@ -175,3 +176,49 @@ def test_unknown_policy_change_is_preserved_during_recovery(repair, monkeypatch)
     config.write_bytes(changed)
     with pytest.raises(ValueError): m.recover(root, package, run=run)
     assert config.read_bytes() == changed
+
+
+def test_process_death_releases_locks_but_keeps_policy_disabled_until_recovered(repair, monkeypatch):
+    m, root, package, prefix, config, _, _, _, run, _, _ = repair
+    original = config.read_bytes()
+    atomic = m._atomic
+    child = os.fork()
+    if child == 0:
+        def interrupted(path, raw, mode):
+            atomic(path, raw, mode)
+            if path == prefix / m.FILES[0]: os._exit(77)
+        m._atomic = interrupted
+        m.apply(root, package, run=run)
+        os._exit(99)
+    _, status = os.waitpid(child, 0)
+    assert os.waitstatus_to_exitcode(status) == 77
+    assert json.loads(config.read_bytes())['enabled'] is False
+    assert m.recover(root, package, run=run)['phase'] == 'ROLLED_BACK'
+    assert config.read_bytes() == original
+
+
+def test_host_preparer_signs_only_exact_git_bytes_and_refuses_overwrite(tmp_path, monkeypatch):
+    monkeypatch.syspath_prepend(str(NATIVE))
+    from tools.release import prepare_os_transport_repair as host
+    private, public = _keys(tmp_path / 'host-keys', 'repair')
+    expected = {name: ('# exact target ' + name + '\n').encode() for name in host.FILES}
+    expected['os_transport_repair.py'] = (NATIVE / 'os_transport_repair.py').read_bytes()
+    def blob(revision, name, *, optional=False):
+        if revision != host.BASE_SOURCE: return expected[name]
+        return None if optional else ('# exact base ' + name).encode()
+    monkeypatch.setattr(host, '_blob', blob)
+    output = tmp_path / 'signed-repair'
+    result = host.prepare(output, private, public, source_revision='a' * 40, canary=['rosy-pinky-geg6'])
+    value, _, payload = host.validate_package(output, public)
+    assert set(payload) == set(host.FILES)
+    assert value['source_revision'] == result['source_revision'] == 'a' * 40
+    assert all(payload[name] == expected[name] for name in host.FILES)
+    with pytest.raises(ValueError):
+        host.prepare(output, private, public, source_revision='a' * 40, canary=['rosy-pinky-geg6'])
+
+
+def test_standalone_commands_expose_help_without_bootstrap_import_side_effects():
+    import sys
+    for path in (NATIVE / 'os_transport_repair.py', ROOT / 'tools/release/prepare_os_transport_repair.py'):
+        result = subprocess.run([sys.executable, '-I', str(path), '--help'], capture_output=True)
+        assert result.returncode == 0, result.stderr.decode()
