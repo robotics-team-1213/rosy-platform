@@ -138,13 +138,16 @@ def test_documents_resolve_inline_reference_and_encoded_links(tmp_path):
     out = tmp_path / "graphify-out"
     (out / "cache").mkdir(parents=True)
     pipeline.save(out / "cache/stat-index.json", {name: {} for name in ("bus.py", "a b.md", "guide.md")})
-    graph = {"nodes": [{"id": "symbol", "label": "Bus"}], "edges": []}
+    graph = {"nodes": [{"id": "symbol", "label": "Bus"},
+                       {"id": "bus-file", "label": "bus.py", "source_file": "bus.py"}], "edges": []}
     coverage = document_helper().augment(graph, out, root)
     assert coverage["document_links"] == 3
     assert len(coverage["unresolved_links"]) == 1
     assert coverage["unresolved_links"][0]["target"] == "missing.md"
     assert len(graph["edges"]) == 3
     assert all(edge["confidence"] == "EXTRACTED" for edge in graph["edges"])
+    assert sum(node.get("source_file") == "bus.py" for node in graph["nodes"]) == 1
+    assert sum(edge["target"] == "bus-file" for edge in graph["edges"]) == 2
     assert {node["source_file"] for node in graph["nodes"] if "source_file" in node} == {
         "guide.md", "bus.py", "a b.md"}
 
