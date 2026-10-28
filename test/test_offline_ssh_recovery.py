@@ -8,6 +8,7 @@ import stat
 import struct
 import sys
 import tempfile
+from types import SimpleNamespace
 
 import pytest
 
@@ -178,6 +179,75 @@ def test_invalid_public_key_cannot_create_a_backup(card, backup, recovery):
     with pytest.raises(ValueError):
         recovery.apply(root, 'command="sh" ' + KEY, backup, identity)
     assert not list(backup.iterdir())
+
+
+@pytest.mark.parametrize("present", [False, True])
+@pytest.mark.parametrize("directory", ["home/rosy", "home/rosy/.ssh"])
+def test_root_readability_does_not_hide_missing_operator_traversal(card, backup, recovery, directory, present):
+    root, identity, keys = card
+    if present:
+        keys.write_text(KEY + "\n")
+    target = root / directory
+    # Present root-visible metadata without changing host filesystem permissions.
+    class CardPath(type(root)):
+        def lstat(self):
+            value = super().lstat()
+            if str(self) == str(target):
+                fields = list(value)
+                fields[0] = stat.S_IFDIR | 0o600
+                return os.stat_result(fields)
+            return value
+    before = keys.read_bytes()
+    with pytest.raises(ValueError, match="directory"):
+        recovery.apply(CardPath(root), KEY, backup, identity)
+    assert keys.read_bytes() == before and not list(backup.iterdir())
+
+
+@pytest.mark.parametrize("present", [False, True])
+def test_root_readability_does_not_hide_unreadable_operator_keys(card, backup, recovery, monkeypatch, present):
+    root, identity, keys = card
+    if present:
+        keys.write_text(KEY + "\n")
+    def root_metadata(descriptor):
+        fields = list(os.fstat(descriptor))
+        fields[0] = stat.S_IFREG
+        return os.stat_result(fields)
+    local_os = SimpleNamespace(**vars(os))
+    local_os.fstat = root_metadata
+    monkeypatch.setattr(recovery, "os", local_os)
+    before = keys.read_bytes()
+    with pytest.raises(ValueError, match="key file"):
+        recovery.apply(root, KEY, backup, identity)
+    assert keys.read_bytes() == before and not list(backup.iterdir())
+
+
+@pytest.mark.parametrize("shared", [False, True])
+def test_mounted_card_cannot_share_the_live_root_filesystem(recovery, monkeypatch, shared):
+    device = Path("/").stat().st_dev + (0 if shared else 1)
+    mounted = SimpleNamespace(stat=lambda: SimpleNamespace(st_dev=device))
+    monkeypatch.setattr(recovery.card, "card_root", lambda path: mounted)
+    if shared:
+        with pytest.raises(ValueError, match="running host"):
+            recovery.mounted_card("/mnt/card")
+    else:
+        assert recovery.mounted_card("/mnt/card") is mounted
+
+
+@pytest.mark.parametrize("filesystem,source,valid", [
+    ("ext4", "/dev/sdb2", True), ("ext4", "overlay", False), ("vfat", "/dev/sdb1", False)])
+def test_card_mount_requires_ext4_on_a_block_device(recovery, monkeypatch, tmp_path, filesystem, source, valid):
+    local_os = SimpleNamespace(**vars(os))
+    local_os.geteuid = lambda: 0
+    local_os.path = SimpleNamespace(**vars(os.path))
+    local_os.path.ismount = lambda path: True
+    monkeypatch.setattr(recovery.card, "os", local_os)
+    monkeypatch.setattr(recovery.card, "subprocess", SimpleNamespace(
+        run=lambda *args, **kwargs: SimpleNamespace(stdout=f"{filesystem} {source}\n")))
+    if valid:
+        assert recovery.card.card_root(str(tmp_path)) == tmp_path
+    else:
+        with pytest.raises(ValueError, match="ext4 block device"):
+            recovery.card.card_root(str(tmp_path))
 
 
 def test_cli_refuses_the_live_system_before_inspecting_keys(recovery):
