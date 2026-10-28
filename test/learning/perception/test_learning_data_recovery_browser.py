@@ -114,7 +114,8 @@ def test_catalog_retry_preserves_drafts_and_marks_old_rows_unavailable(workspace
     expect(page.locator('#hf-imports > article')).to_have_count(1)
 
 
-def test_review_handoff_blocks_duplicate_actions_and_preserves_row_focus(workspace):
+@pytest.mark.parametrize('move_focus', [False, True])
+def test_review_handoff_blocks_duplicate_actions_and_preserves_row_focus(workspace, move_focus):
     page, state, origin, expect = workspace
     state['jobs'].append(dict(JOB, id='c' * 32, repo_id='fixture/second'))
     state['hold_post'] = True
@@ -126,11 +127,16 @@ def test_review_handoff_blocks_duplicate_actions_and_preserves_row_focus(workspa
     expect(page.locator('#import')).to_be_disabled()
     buttons.nth(1).dispatch_event('click')
     assert len(state['posts']) == 1 and len(state['held_post']) == 1
+    capture(page, 'handoff-pending-' + str(move_focus))
+    theme = page.locator('ui-topbar [data-theme-cycle]')
+    if move_focus: theme.focus()
     state['jobs'][0]['review'] = {'added': 1, 'pixel_reviews_pending': 1, 'registered_by': 'fixture'}
     state['held_post'].pop().fulfill(json={})
-    expect(page.locator('#hf-imports a[href="/?filter=pending"]')).to_be_focused()
+    expect(page.locator('#hf-imports a[href="/?filter=pending"]')).to_be_visible()
+    expect(theme if move_focus else page.locator('#hf-imports a[href="/?filter=pending"]')).to_be_focused()
     expect(page.locator('#hf-imports ui-button')).to_be_enabled()
     expect(page.locator('#import')).to_be_enabled()
+    capture(page, 'handoff-received-' + str(move_focus))
 
 
 def fill_import(page):
@@ -152,6 +158,8 @@ def test_account_write_error_survives_the_automatic_read_and_clears_on_retry(wor
     retry = page.locator('#imports').get_by_role('button', name='같은 버전 재시도', exact=True)
     retry.click()
     expect(page.locator('#account-error')).to_contain_text('fixture operation rejected')
+    page.locator('#account-error').scroll_into_view_if_needed()
+    capture(page, 'account-operation-error')
     count = state['gets']
     page.wait_for_timeout(5500)
     assert state['gets'] > count
@@ -179,6 +187,9 @@ def test_account_refresh_keeps_both_selected_connections_and_request_identity(wo
     page.locator('#reload').click()
     expect(page.locator('#accounts-main')).to_have_attribute('aria-busy', 'false')
     for key in ['connection', 'repo-connection']: expect(page.locator('#' + key)).to_have_value('b')
+    for key in ['connection', 'repo-connection']:
+        page.locator('#' + key).scroll_into_view_if_needed()
+        capture(page, 'account-preserved-' + key)
     expect(page.locator('#repo-id')).to_have_value('fixture/data')
     page.locator('#import-form').evaluate('form => form.requestSubmit()')
     expect(page.locator('#account-error')).to_contain_text('fixture operation rejected')
@@ -199,6 +210,9 @@ def test_removed_connection_requires_a_new_explicit_choice(workspace):
     page.locator('#reload').click()
     expect(page.locator('#accounts-main')).to_have_attribute('aria-busy', 'false')
     for key in ['connection', 'repo-connection']: expect(page.locator('#' + key)).to_have_value('')
+    for key in ['connection', 'repo-connection']:
+        page.locator('#' + key).scroll_into_view_if_needed()
+        capture(page, 'account-reselect-' + key)
     page.locator('#import-form').evaluate('form => form.requestSubmit()')
     page.locator('#repo-create-form').evaluate('form => form.requestSubmit()')
     expect(page.locator('#account-error')).to_contain_text('관리 계정을 선택하세요')
@@ -226,6 +240,7 @@ def test_workspaces_retry_recovers_without_duplicate_or_stale_links(workspace, s
     page.set_viewport_size({'width': width, 'height': 900})
     page.goto(origin + '/learning/workspaces')
     expect(page.locator('#workspaces-status')).to_have_attribute('state', 'error')
+    capture(page, f'workspaces-error-{status}-{width}')
     page.locator('#workspaces-retry').click()
     expect(page.locator('#workspaces-status')).to_have_attribute('state', 'error')
     state['workspace_status'] = 200
@@ -244,3 +259,19 @@ def test_workspaces_retry_recovers_without_duplicate_or_stale_links(workspace, s
     expect(page.locator('#workspaces > li')).to_have_count(1)
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
     capture(page, f'workspaces-recovered-{status}-{width}')
+
+
+def test_workspaces_retry_does_not_steal_focus_from_another_control(workspace):
+    page, _, origin, expect = workspace
+    page.goto(origin + '/learning/workspaces')
+    expect(page.locator('#workspaces-retry')).to_be_enabled()
+    held = []
+    page.route('**/api/learning/workspaces', lambda route: held.append(route))
+    page.locator('#workspaces-retry').click()
+    expect(page.locator('#workspaces-retry')).to_be_disabled()
+    theme = page.locator('ui-topbar [data-theme-cycle]')
+    theme.focus()
+    assert len(held) == 1
+    held[0].fulfill(json={'configured': True, 'workspaces': []})
+    expect(page.locator('#workspaces-retry')).to_be_enabled()
+    expect(theme).to_be_focused()
