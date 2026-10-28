@@ -188,6 +188,14 @@ def run(args):
             track_contact_forces=True, contact_filter_prim_paths_expr=filters+['/World/Bin']+(['/World/Conveyor'] if mapped else [])+
             ['/World/Cargo'+str(j) for j in range(len(plan)) if j != i], max_contact_count=128)))
     eye = Gf.Vec3d(.60, -.62, .48)
+    arm_contacts, body_paths = [], []
+    if mapped:
+        for root in (first, second):
+            body_paths.append([str(p.GetPath()) for p in Usd.PrimRange(root) if p.HasAPI(UsdPhysics.RigidBodyAPI)])
+        for i in range(2):
+            arm_contacts.append(world.scene.add(RigidPrim(body_paths[i], name='arm_contacts'+str(i),
+                track_contact_forces=True, contact_filter_prim_paths_expr=body_paths[1-i]+[
+                    '/World/Table', '/World/PlywoodMap', '/World/Conveyor', '/World/Bin'], max_contact_count=256)))
     look = Gf.Matrix4d().SetLookAt(eye, Gf.Vec3d(.13, -.10, .12), Gf.Vec3d(0., 0., 1.)).GetInverse()
     rotation = look.ExtractRotationQuat()
     camera = Camera('/World/Observer', position=np.array(eye), resolution=(800, 600))
@@ -216,7 +224,7 @@ def run(args):
 
     if mapped:
         from mapped_stack_task import execute
-        return execute(args, world, stage, robots, joint_indices, fingers, cargo, contacts, capture)
+        return execute(args, world, stage, robots, joint_indices, fingers, cargo, contacts, capture, arm_contacts, body_paths)
 
     class StackingEnv:
         # shortcut: one CPU-facing SDK world, use Isaac Lab vector scenes when measured rollout throughput is limiting.

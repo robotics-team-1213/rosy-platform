@@ -31,7 +31,7 @@ def build_map(world, stage):
             color=np.array([.95, .72, .06])))
 
 
-def execute(args, world, stage, robots, joints, fingers, cargo, contacts, capture):
+def execute(args, world, stage, robots, joints, fingers, cargo, contacts, capture, arm_contacts, body_paths):
     import numpy as np
     from pxr import UsdGeom
     from isaacsim.core.utils.types import ArticulationAction
@@ -59,6 +59,7 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
         inertias = np.asarray(view.get_body_inertias()).reshape(-1, 3, 3)
         print('MAPPED_INERTIA_EIGENVALUES', i, np.linalg.eigvalsh(inertias).tolist(), flush=True)
         print('MAPPED_EFFORT_MODES', i, view.get_effort_modes(), flush=True)
+        print('MAPPED_SELF_COLLISIONS', i, view.get_enabled_self_collisions().tolist(), flush=True)
         view.set_solver_position_iteration_counts(np.array([64]))
         view.set_solver_velocity_iteration_counts(np.array([16]))
 
@@ -77,6 +78,13 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
         tick += 1
         if tick <= 3:
             print('MAPPED_FIRST_STEP', tick, [r.get_joint_positions().tolist() for r in robots], flush=True)
+        if tick <= 120 and tick % 12 == 0:
+            for i, probe in enumerate(arm_contacts):
+                forces = np.linalg.norm(np.asarray(probe.get_contact_force_matrix(dt=DT)), axis=-1)
+                a, b = np.unravel_index(np.argmax(forces), forces.shape)
+                names = body_paths[1-i]+['table', 'board', 'conveyor', 'bin']
+                print('MAPPED_CONTACT', tick, i, body_paths[i][a], names[b], float(forces[a, b]),
+                    robots[i].get_joint_positions().tolist(), robots[i].get_joint_velocities().tolist(), flush=True)
 
     def hold(steps):
         for _ in range(steps):
