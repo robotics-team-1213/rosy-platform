@@ -75,8 +75,8 @@
 
 ## 최근 기록
 
+- 2026-10-28 · uncommitted · CORE host-file declared reads and C6 triage
 - 2026-10-28 · uncommitted · CORE host-file 실행 소유권 분리
 - 2026-10-28 · uncommitted · CORE host-file owner 위임 RED 준비
 - 2026-10-27 · uncommitted · test(core): 다음 공식 검증에 charging 최초 원인 관측을 포함한다
 - 2026-10-25 · 4fdf8c9fee · installed package 내용과 기종 결속
-- 2026-10-25 · uncommitted · 제품 기종 설정 결속과 snapshot 소비

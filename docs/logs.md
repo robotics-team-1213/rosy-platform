@@ -12619,3 +12619,10 @@ osy-d395-s1d\`.
 - 증거: `docs/validation/omx-sim-grasp-2026-10-27b/`(Isaac 0.405–0.408rad, 5/5, 적합성 0.972).
 - gate 변화: 없음.
 - CE: 기존 교훈 갱신 — 같은 교훈 파일에 4번 항목(쥔 각도를 보정값과 비교).
+
+## 2026-10-28 · uncommitted · CORE host-file C6 published triage
+
+- Change: Record individual verdicts for the 33 remaining host-file reaches in the existing C6 criteria; the exact tuples live only in its literal registry. Three declared-member reaches are fixed in source instead of admitted. Correct the battery absent-judgment rationale without tightening runtime freshness.
+- Evidence: committed 50ba472d focused preservation has 246 PASS; its broader mapped run has 5285 PASS, one C6 registry failure, and 186 summary skips (180 attributed nodes; six unbound skip events). This candidate has no remote result yet; static per-commit preflight and independent SOURCE/safety review precede its normal commit.
+- gate 변화: none. No installed/device/field acceptance or C6 GREEN is claimed.
+- CE: unresolved; existing folder-move-widens-path-scoped-contract-tests-2026-09-25.md applies. No solved lesson is added before verification.

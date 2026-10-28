@@ -201,7 +201,7 @@ def _topic_overlay(row: dict[str, Any], state: Any, snapshot: Any) -> dict[str, 
     device = row["id"]
     if device in SAMPLE_TOPICS:
         sensor, topic = SAMPLE_TOPICS[device]
-        sample = state.get_sensor(sensor) if hasattr(state, "get_sensor") else None
+        sample = state.get_sensor(sensor)
         received = (sample or {}).get("received_at")
         if not isinstance(received, (int, float)):
             return {**row, "evidence": f"측정 안 함 — {row['held_by'].removesuffix('.service')} 사용 중"}
@@ -238,7 +238,7 @@ def _battery_reading(snapshot: Any) -> tuple[Optional[float], Optional[float]]:
 
 def _warning_percent(svc: Any) -> float:
     policy = getattr(getattr(svc, "safety", None), "battery_policy", None)
-    value = getattr(policy, "warning_percent", robot_state.BATTERY_WARNING_PERCENT)
+    value = robot_state.BATTERY_WARNING_PERCENT if policy is None else policy.warning_percent
     try:
         return float(value)
     except (TypeError, ValueError):

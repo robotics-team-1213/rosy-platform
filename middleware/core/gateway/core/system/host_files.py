@@ -74,8 +74,10 @@ def _write_private(path: str, payload: str, mode: int, prefix: str) -> None:
 
 def _snapshot(svc: Any) -> Any:
     """One StateSnapshot (what GET /robot/state serves), or None without a state manager."""
-    snapshot = getattr(getattr(svc, "state", None), "snapshot", None)
-    return snapshot() if callable(snapshot) else None
+    state = svc.state
+    if state is None:
+        return None
+    return state.snapshot()
 
 
 def _hardware(svc: Any, snapshot: Any = _UNSET) -> Optional[dict[str, Any]]:
@@ -84,7 +86,7 @@ def _hardware(svc: Any, snapshot: Any = _UNSET) -> Optional[dict[str, Any]]:
     if result is None:
         return None
     age = max(0.0, (datetime.now(timezone.utc) - result["measured_at"]).total_seconds())
-    state = getattr(svc, "state", None)
+    state = svc.state
     needs = state is not None and any(row["state"] == "not_measured" and row.get("held_by")
                                        for row in result["devices"])
     if snapshot is _UNSET:

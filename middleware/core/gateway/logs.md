@@ -2012,3 +2012,10 @@
 - 증거: commit `2249cc5130c37c37b501501d64584367235b2661`의 공식 원격 동작 RED는 5 collected/5 FAILED/0 skipped이며 collection/setup 오류는 없었다. 새 제품 소스는 정적 AST·호출 경로·크기 검사 후 독립 SOURCE/safety 검토를 기다린다. 상태 파일의 overlay와 live 필드는 한 snapshot을 공유하며 실제 파일 기반 회귀를 추가했다. GREEN은 아직 실행하지 않았다.
 - gate 변화: 없음. 제품 변경은 검토 전 미커밋이고 설치본·장치·현장 수용을 주장하지 않는다.
 - CE: 해당 없음 — 경계 이동의 판단은 코드·보존 회귀·검토 기록에 남으며 운영 장애 해결 단계가 아니다.
+
+## 2026-10-28 · uncommitted · CORE host-file declared reads and C6 triage
+
+- Change: Read declared state/snapshot/get_sensor and present BatteryPolicy.warning_percent directly; preserve explicit None, existing defaults/float fallback, one snapshot and sensor None. Publish only the 33 remaining reviewed observation/platform/config tuples (41 occurrences), preserving strict C6 equality and current battery evidence-absence behavior.
+- Evidence: committed 50ba472d focused preservation has 246 PASS; its broader mapped run has 5285 PASS, one C6 registry failure, and 186 summary skips (180 attributed nodes; six unbound skip events). This candidate has no remote result yet; static per-commit preflight and independent SOURCE/safety review precede its normal commit.
+- gate 변화: none. No installed/device/field acceptance or C6 GREEN is claimed.
+- CE: unresolved; existing folder-move-widens-path-scoped-contract-tests-2026-09-25.md applies. No solved lesson is added before verification.
