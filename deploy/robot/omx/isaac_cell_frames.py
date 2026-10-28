@@ -42,6 +42,7 @@ def frames_for(scenario, plan: dict | None = None) -> dict:
     case = f.spec(scenario)
     plan = plan or json.loads((HERE / "grasp-plan.example.json").read_text())
     (bx, by, _), yaw = f.box_start(scenario)
+    ax, ay = case.get("aim", (0.0, 0.0))  # the pick aimed off the box, as a map or arm error would aim it
     px, py, top = f.place_point(scenario)
     on_belt = case["place"] == "belt"
     grasp_z = f.TRAY["top"] + f.BOX - GRASP_DEPTH
@@ -50,7 +51,7 @@ def frames_for(scenario, plan: dict | None = None) -> dict:
     transit = {NAMES.index(k): v for k, v in plan["transit"].items()}
     transit_q = [norm_to_rad(transit.get(i, plan["home"][i])) for i in range(5)]
     arm = sim_plan(home_q=[norm_to_rad(v) for v in plan["home"]], transit_q=transit_q,
-                   pick=(bx, by, grasp_z, site_yaw), place=(px, py, top + f.BOX - GRASP_DEPTH + RELEASE_DZ, place_yaw),
+                   pick=(bx + ax, by + ay, grasp_z, site_yaw), place=(px, py, top + f.BOX - GRASP_DEPTH + RELEASE_DZ, place_yaw),
                    approach_m=plan["approach_m"], grip_open=f.FIXTURE["gripper_open_rad"],
                    grip_close=f.FIXTURE["gripper_closed_rad"], limits=plan["limits"], fps=f.FIXTURE["frame_fps"])
     phases = chunk_phases(Planner(arm), JOINTS, "gripper_joint_1", 0.0)  # step 0: keep every frame

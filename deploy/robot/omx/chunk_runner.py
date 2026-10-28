@@ -66,6 +66,18 @@ HEALTH_PERIOD_S = 1.0
 # extended arm drops (three times on 2026-10-25). A body unit is at most 1.8 degrees: 1.5 units <= 2.7.
 CONTACT_LAG, CONTACT_TICKS = 1.5, 2
 CONTACT_CHUNKS = ("descend", "grasp", "release")
+# Pacing: a body joint behind the guard's sent command by PACE_LAG units holds the next frame until it catches
+# up. On arm S the wrist_flex (XL330) gives ~35 PWM per degree, so a lift or goto grew its lag 0.2 -> 2.6 -> 5
+# degrees at PWM 135-165 of 300 and the guard turned torque off (12 sessions, 2026-10-25..27). 1.6 units is 2.9
+# degrees of the guard's 5. A hold lasts only while the lag shrinks: reached over the conveyor, the wrist sat
+# 2.08 units low with no motion at all (2026-10-28), and waiting for 1.6 there moved one frame per PACE_MAX_S.
+# Where the lag stops shrinking it is the pose's droop (`pace_floor`); frames go on, and hold again only when the
+# lag grows PACE_RISE past it. Contact chunks reach CONTACT_LAG first and keep their contact response.
+PACE_LAG, PACE_RISE, PACE_MAX_S = 1.6, 0.3, 3.0
+# Nobody sent a command for IDLE_PARK_S (a lost link, a crashed caller): fold home. IDLE_STOP_S more at home ends
+# the session, so record_session turns torque OFF and the motors rest instead of holding for hours (a session
+# held home 6 h on 2026-10-27/28 until its health log ran out). A caller that wants the arm held sends `state`.
+IDLE_PARK_S, IDLE_STOP_S = 180.0, 180.0
 # Stalled = pushing at its session cap (300) while short of its target and not moving: blocked or colliding.
 # At the cap alone is normal: the elbow saturates while lifting the arm out of home (2026-10-25).
 PWM_STOP, PWM_STOP_S, STALL_GAP, STALL_MOVE = 285, 0.5, 4.0, 0.3
@@ -88,6 +100,9 @@ class Runner:
         self.pending: list = []
         self.ticks, self.health, self.overload_since, self.fault = 0, None, None, None
         self.played, self.retreat_frames, self.contact_ticks = [], [], 0
+        self.lag, self.paced, self.paced_ticks = 0.0, 0, 0  # paced_ticks: frames held in the current chunk
+        self.pace_floor, self.pace_last = 0.0, None
+        self.last_input, self.home_since = 0.0, None  # home_since: a park settled and nothing moved since
         self.live = live  # called about twice a second with the current state (Fleet observation bridge)
         self.health_present = None
 
@@ -117,6 +132,8 @@ class Runner:
         if not words:
             return True
         verb = words[0]
+        if verb not in ("state", "stop", "park"):
+            self.home_since = None
         try:
             if verb == "stop":
                 self.report(command=line, ok=True)
@@ -202,12 +219,23 @@ class Runner:
         return True
 
     def tick(self) -> None:
-        if self.queue:
-            self.target = self.queue.pop(0)
+        if self.lag < PACE_LAG:
+            self.pace_floor = 0.0
+        shrinking = self.pace_last is None or self.lag < self.pace_last - 0.01
+        if (self.queue and self.lag > max(PACE_LAG, self.pace_floor + PACE_RISE) and shrinking
+                and self.paced < PACE_MAX_S * self.fps):
+            self.paced, self.paced_ticks, self.pace_last = self.paced + 1, self.paced_ticks + 1, self.lag
+        elif self.queue:
+            if self.pace_last is not None:  # the hold ended: what is left is this pose's droop
+                self.pace_floor = max(self.pace_floor, self.lag)
+            self.target, self.paced, self.pace_last = self.queue.pop(0), 0, None
             if self.chunk is not None:
                 self.played.append(list(self.target))
         sent = self.robot.send_action(dict(zip(NAMES, self.target)))
         present = self.present()
+        if isinstance(sent, dict):
+            self.lag = max((abs(present[i] - sent[name]) for i, name in enumerate(NAMES[:5]) if name in sent),
+                           default=0.0)
         if (isinstance(sent, dict) and not self.fault and self.chunk is not None
                 and self.chunk.startswith(CONTACT_CHUNKS)):
             lag = max((abs(present[i] - sent[name]) for i, name in enumerate(NAMES[:5]) if name in sent), default=0.0)
@@ -259,7 +287,11 @@ class Runner:
             gripper_still = self.last_grip is not None and abs(present[5] - self.last_grip) < 0.3
             self.last_grip = present[5]
             if (error <= SETTLE_TOL and (gripper_still or not grasp)) or now - self.settle_since >= SETTLE_S:
-                fields = dict(command=f"run {self.chunk}", ok=True, settled=error <= SETTLE_TOL)
+                fields = dict(command=f"run {self.chunk}", ok=True, settled=error <= SETTLE_TOL,
+                              paced_ticks=self.paced_ticks)
+                self.paced_ticks, self.pace_floor = 0, 0.0
+                if self.chunk == "park":
+                    self.home_since = now
                 if self.chunk == "park" and (self.fault or "").startswith("contact"):
                     self.fault = None  # folded home after a soft contact: the next attempt may start
                 if grasp:  # jaws stopped short of this chunk's closed target: something is between them
@@ -276,18 +308,45 @@ class Runner:
                 self.chunk, self.last_grip = None, None
                 self.report(**fields)
 
+    def idle(self) -> bool:
+        """Fold home, then end the session (True), when no command has come for a while."""
+        if self.chunk is not None or self.queue or self.pending:
+            return False
+        quiet = self.clock() - self.last_input
+        if self.home_since is None and quiet >= IDLE_PARK_S:
+            self.last_input = self.clock()  # the stop's quiet time starts once the arm is folded
+            self.command("park")
+            return False
+        if self.home_since is not None and min(quiet, self.clock() - self.home_since) >= IDLE_STOP_S:
+            self.report(command="stop", ok=True, reason=f"no command for {quiet:.0f} s; folded home, torque goes OFF")
+            return True
+        return False
+
     def run(self, lines) -> None:
         """`lines()` returns the commands that arrived since the last call."""
         self.target = self.present()
         self.report(command="start", ok=True)
         period = 1.0 / self.fps
+        self.last_input = self.clock()
         while True:
             started = self.clock()
-            self.pending += lines()
+            arrived = lines()
+            if arrived:
+                self.last_input = started
+            self.pending += arrived
             # one command per tick: a burst of jogs must not move the target by more than one jog at once
             if self.pending and not self.command(self.pending.pop(0)):
                 return
-            self.tick()
+            try:
+                self.tick()
+            except Exception as error:
+                # a guard stop or a bus error ends the session; without this row the caller waited 300 s for a
+                # status that never came (2026-10-25..27). No bus read here: after a bus error it would raise again
+                self.status({"command": f"run {self.chunk}" if self.chunk else "tick", "ok": False,
+                             "fault": f"session ended: {type(error).__name__}: {error}"[:300], "t": round(time.time(), 3)})
+                raise
+            if self.idle():
+                return
             if self.live and self.ticks % max(1, self.fps // 2) == 0:
                 self.live({"t": round(time.time(), 3), "state": [round(v, 2) for v in self.present()],
                            "target": [round(v, 2) for v in self.target], "chunk": self.chunk,
