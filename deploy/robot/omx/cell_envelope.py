@@ -10,9 +10,10 @@ import uuid
 from dataclasses import asdict
 from pathlib import Path
 
-from guarded_native import MAX_GAP_S, NAMES
+from omx_adapter.chunk_library import NAMES as COMMAND_NAMES
 
 SCHEMA = "rosy.omx-cell-envelope.v1"
+NAMES = tuple(name.removesuffix(".pos") for name in COMMAND_NAMES)
 
 
 def digest(value) -> str:
@@ -57,6 +58,8 @@ def _number(value) -> bool:
 
 
 def _state_current(state: dict, now: float) -> bool:
+    from guarded_native import MAX_GAP_S
+
     return (isinstance(state, dict) and state.get("ok") is True and not state.get("fault")
             and _number(state.get("t")) and 0 <= now - state["t"] <= MAX_GAP_S
             and isinstance(state.get("operating_context"), dict)
