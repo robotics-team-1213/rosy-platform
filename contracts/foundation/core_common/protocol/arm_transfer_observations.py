@@ -2,7 +2,7 @@
 from datetime import datetime
 from typing import Annotated, Literal
 
-from pydantic import AwareDatetime, BaseModel, BeforeValidator, ConfigDict, Field, model_validator
+from pydantic import AwareDatetime, BaseModel, BeforeValidator, ConfigDict, Field, model_serializer, model_validator
 
 from .arm_transfer import ArmActionId, ArmJournalId, ArmScopeId
 from .arm_transfer_jobs import ArmTransferJobSnapshot
@@ -88,7 +88,14 @@ class ArmOwnerObservation(ArmTransferOwnerContext):
     gripper_state: Literal["OPEN", "CLOSED", "MOVING", "UNKNOWN"]
     held_state: Literal["NONE", "HELD", "UNKNOWN"]
     held_object_ref: ArmPhysicalRef | None
-    joints: ArmJointObservation | None = Field(default=None, exclude_if=lambda value: value is None)
+    joints: ArmJointObservation | None = None
+
+    @model_serializer(mode="wrap")
+    def _legacy_optional_joints(self, handler):
+        document = handler(self)
+        if self.joints is None:
+            document.pop("joints", None)
+        return document
 
     @model_validator(mode="after")
     def _held_reference(self):

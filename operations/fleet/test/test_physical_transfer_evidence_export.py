@@ -55,6 +55,7 @@ def close_job(rig, *, joints=True):
 
 def test_source_joint_facts_are_closed_finite_and_ordered():
     contracts = import_module("core_common.protocol.arm_transfer_observations")
+    json.dumps(contracts.ArmOwnerObservation.model_json_schema())
     cls = contracts.ArmJointObservation
     original = joint_measurement(1_000_000_000, 4)
     facts = cls.model_validate(original)
