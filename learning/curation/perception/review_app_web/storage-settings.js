@@ -2,6 +2,7 @@ const $=id=>document.getElementById(id), GiB=1024**3;
 let send, changed, state, draft=[], quotas={}, generation=0, timer, busy=false, dirty=false, formRevision=0;
 const archiveParams=new URLSearchParams(location.search);
 let requestedOmx=archiveParams.get('archive')==='omx'?{id:archiveParams.get('dataset'),revision:archiveParams.get('revision')}:null;
+let archiveArrivalPending=Boolean(requestedOmx);
 let omxSources=[],sourceLoaded=false,sourceRequest=0;
 const selectedOmx=()=>omxSources.find(row=>row.id===$('storage-prepare-dataset').value);
 const text=(parent,tag,value)=>{const node=document.createElement(tag);node.textContent=value;parent.append(node);return node;};
@@ -192,13 +193,16 @@ async function sources(){
       input.value=requestedOmx?(rows.find(row=>row.id===requestedOmx.id&&row.revision===requestedOmx.revision)?.id||''):old;
       if(previous?.revision!==selectedOmx()?.revision)$('storage-completed-consent').checked=false;
       showOmx();sourceLoaded=true;
-      if(requestedOmx){$('storage-preparation').open=true;$('storage-preparation').scrollIntoView({block:'start'});}
     }
     $('storage-source-help').textContent=omx&&requestedOmx&&!selectedOmx()?'요청한 데이터 버전이 등록 목록과 일치하지 않습니다. 원본 변환 결과를 확인하거나 사용할 버전을 직접 선택하세요.':
       omx&&!data.omx_configured?'OMX 학습센터 연결이 필요합니다. 학습센터 설정을 확인하세요.':
       isaac&&!data.configured?'SIM 실행 연결이 필요합니다. SIM 실험 화면에서 실행기 상태를 확인하세요.':
       !rows.length?'준비할 완료 자료가 없습니다. 등록된 완료 자료 위치 또는 SIM 실험의 종료 결과를 확인하세요.':
         omx?'선택한 고정 버전의 별도 사본을 만듭니다. 원본 학습 데이터는 보존하며 확인 후에만 전송합니다.':'파일의 쓰기가 끝난 자료만 선택하세요. 이미 준비한 목록은 다시 작성하지 않습니다.';
+    if(omx&&archiveArrivalPending&&requestedOmx){
+      archiveArrivalPending=false;$('storage-preparation').open=true;
+      const heading=$('storage-preparation').querySelector('summary');heading.focus({preventScroll:true});heading.scrollIntoView({block:'center'});
+    }
   }catch(failure){if(current===generation&&ticket===sourceRequest){if(omx){omxSources=[];showOmx();}error(failureMessage(failure));}}
   finally{if(current===generation&&ticket===sourceRequest)controls();}
 }

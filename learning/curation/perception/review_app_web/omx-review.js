@@ -41,7 +41,7 @@ async function discardReview(action,opener){
 function identity(value){$('review-identity').textContent=value?`${value.kind} · ${value.id}`:'로컬 입력 검수자 · 신원 미검증. 계정 사용 시 서버가 검수자를 바인딩합니다.';}
 function choice(field,values,value,index){
   const select=el('select');select.className='ui-field';select.dataset.field=field;
-  select.setAttribute('aria-label',`시도 ${index} ${field}`);
+  select.setAttribute('aria-label',`시도 ${index} ${{outcome:'결과',object_result:'물체 결과',split:'분할'}[field]}`);
   for(const [key,label] of Object.entries(values)){const option=el('option',label);option.value=key;select.append(option);}
   select.value=value;select.onchange=dirty;return select;
 }
