@@ -10,12 +10,15 @@ LCD는 이 이미지를 회전/리사이즈해 출력하므로 여기서는 GIF 
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 
-from . import wifi_qr
+from .lcd_primitives import (  # noqa: F401 - preserve renderer exports
+    DEFAULT_HOLD_S, hold_duration, battery_measurement, _font, _fit, _FONT_CANDIDATES,
+    _MIN_FONT, _QR_BOX, _QR_QUIET, _QR_TOP, _QR_GAP, _QR_DARK, _QR_LIGHT,
+    ap_qr, _draw_qr, to_panel,
+)
 from .light_assist import render_light_assist as render_light_assist
 
 
@@ -39,19 +42,6 @@ class DisplayProfile:
 PINKY_ST7789 = DisplayProfile("pinky-st7789", (320, 240))
 DEFAULT_PROFILE = PINKY_ST7789
 DEFAULT_SIZE = DEFAULT_PROFILE.size
-DEFAULT_HOLD_S = 15.0
-
-
-def hold_duration(raw: object) -> float:
-    """Return a finite positive wake-card duration; malformed input gets the default."""
-    if isinstance(raw, bool):
-        return DEFAULT_HOLD_S
-    try:
-        duration = float(raw)
-    except (TypeError, ValueError, OverflowError):
-        return DEFAULT_HOLD_S
-    return duration if math.isfinite(duration) and duration > 0 else DEFAULT_HOLD_S
-
 # concept 16 L1 / D-82 / D-194 — 색은 토큰과 같은 값이다. 이 모듈은 파일을
 # 읽지 않고 튜플만 가진다. 숫자가 토큰과 어긋나면
 # web_common/test/test_shared_controls.py 가 실패한다.
@@ -68,44 +58,12 @@ _NOMINAL = _FG              # --nominal  정상은 잉크다
 _WARN = (254, 180, 50)      # --status-warn #feb432
 _CRIT = (196, 9, 33)        # --status-crit #c40921
 
-_FONT_CANDIDATES = (
-    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-)
-
-
-def _font(size: int) -> ImageFont.ImageFont:
-    """설치된 트루타입을 우선 쓰고, 없으면 기본 폰트로 떨어진다."""
-    for path in _FONT_CANDIDATES:
-        try:
-            return ImageFont.truetype(path, size)
-        except OSError:
-            continue
-    try:
-        return ImageFont.load_default(size=size)
-    except TypeError:      # Pillow < 10.1 — 크기 지정 불가
-        return ImageFont.load_default()
-
-
 def battery_color(percent: float) -> tuple[int, int, int]:
     if percent >= 60.0:
         return _NOMINAL
     if percent >= 30.0:
         return _WARN
     return _CRIT
-
-
-def battery_measurement(raw: object, *, percent: bool = False) -> float | None:
-    """Accept only a finite measured value; invalid input is missing evidence."""
-    if isinstance(raw, bool):
-        return None
-    try:
-        value = float(raw)
-    except (TypeError, ValueError, OverflowError):
-        return None
-    if not math.isfinite(value) or value < 0 or (percent and value > 100):
-        return None
-    return value
 
 
 def _draw_alarm(draw: ImageDraw.ImageDraw, xy, text: str, font) -> None:
@@ -318,8 +276,6 @@ _STAGE_TITLES = {
     "CORE_READY": "READY",
     "FAILED": "FAILED",
 }
-_MIN_FONT = 11
-
 # (slot, y, font size) in draw order; the slot names are what boot_lines returns.
 _BOOT_LAYOUT = {
     "name": (8, 18),
@@ -341,12 +297,6 @@ _BOOT_LAYOUT = {
 #: between the header and the AP rows: black on white with a 2-module quiet zone, at
 #: the largest whole pixels per module that fit _QR_BOX (a version-4 code: 4 px, 148 px,
 #: about 22 mm on the 2.4-inch panel). Rows beside it keep to the left column.
-_QR_BOX = 148
-_QR_QUIET = 2
-_QR_TOP = 28
-_QR_GAP = 6
-_QR_DARK = (0, 0, 0)          # token-exempt: QR modules need full black/white contrast
-_QR_LIGHT = (255, 255, 255)   # token-exempt: QR quiet zone
 #: D-260: the state line's colour; failed is the alarm fill, like FAILED above.
 _STATE_COLOURS = {"failed": _CRIT, "caution": _WARN, "booting": _MUTED}
 
@@ -420,55 +370,6 @@ def boot_lines(payload: dict) -> list[tuple[str, str, tuple[int, int, int]]]:
         elif payload.get("login_burned"):
             lines.append(("login", "Login code burned", _CRIT))
     return lines
-
-
-def ap_qr(payload: dict) -> list[list[bool]] | None:
-    """The AP's Wi-Fi join matrix, only while the AP is open and its SSID and key are known.
-
-    None otherwise, and for a payload too long for the encoder (the text rows
-    still show it). Holds the key: drawn, never logged.
-    """
-    network = payload.get("network") or {}
-    login, ssid = payload.get("ap_login"), network.get("ssid")
-    if network.get("mode") != "ap" or not login or not ssid:
-        return None
-    try:
-        return wifi_qr.encode(wifi_qr.wifi_payload(str(ssid), str(login)))
-    except ValueError:
-        return None
-
-
-def _draw_qr(draw: ImageDraw.ImageDraw, matrix: list[list[bool]], width: int) -> tuple[int, int]:
-    """Draw ``matrix`` right-aligned below the header; (left x, bottom y) of its box."""
-    modules = len(matrix) + 2 * _QR_QUIET
-    scale = max(1, _QR_BOX // modules)
-    side = modules * scale
-    left = width - 4 - side
-    draw.rectangle((left, _QR_TOP, left + side - 1, _QR_TOP + side - 1), fill=_QR_LIGHT)
-    origin_x, origin_y = left + _QR_QUIET * scale, _QR_TOP + _QR_QUIET * scale
-    for row, line in enumerate(matrix):
-        for column, dark in enumerate(line):
-            if dark:
-                x, y = origin_x + column * scale, origin_y + row * scale
-                draw.rectangle((x, y, x + scale - 1, y + scale - 1), fill=_QR_DARK)
-    return left, _QR_TOP + side
-
-
-def _fit(draw: ImageDraw.ImageDraw, text: str, size: int, width: int):
-    """(font, text): the largest font up to ``size`` that fits ``width``.
-
-    Text that does not fit even the smallest font is cut with an ellipsis
-    rather than drawn off the screen.
-    """
-    while size > _MIN_FONT:
-        font = _font(size)
-        if draw.textlength(text, font=font) <= width:
-            return font, text
-        size -= 1
-    font = _font(_MIN_FONT)
-    while len(text) > 1 and draw.textlength(text, font=font) > width:
-        text = text[:-2] + "\u2026"
-    return font, text
 
 
 def _dim(color: tuple[int, int, int]) -> tuple[int, int, int]:
@@ -655,22 +556,3 @@ def render_bar(text: str, level: str, battery_percent=None, charging=None,
     draw.text((12, middle), text, font=font, fill=ink, anchor="lm")
     ImageDraw.Draw(mask).rectangle((0, 0, width, BAR_HEIGHT - 1), fill=255)
     return image, mask
-
-
-def to_panel(image: Image.Image, panel: tuple[int, int] = (240, 320)):
-    """The ST7789's bytes for a landscape image: the same flip, rotation and RGB565
-    packing ``rosy_lcd.LCD.img_show`` always did, as a (h, w, 2) uint8 array.
-
-    rosy-face converts each GIF frame once with this and replays the bytes.
-    """
-    import numpy as np
-
-    width, height = panel
-    image = image.transpose(Image.FLIP_LEFT_RIGHT).transpose(Image.ROTATE_270)
-    if image.size != (width, height):
-        image = image.resize((width, height), Image.LANCZOS)
-    rgb = np.asarray(image.convert("RGB"))
-    pixel = np.empty((height, width, 2), dtype=np.uint8)
-    pixel[..., 0] = (rgb[..., 0] & 0xF8) + (rgb[..., 1] >> 5)
-    pixel[..., 1] = ((rgb[..., 1] << 3) & 0xE0) + (rgb[..., 2] >> 3)
-    return pixel
