@@ -134,7 +134,7 @@ def test_success_requires_free_lift_release_support_and_retreat():
             lift_samples=[dict(copy.deepcopy(lifted), tick=t) for t in (0, 12, 24)],
             settle_samples=[dict(copy.deepcopy(settled), tick=t) for t in range(120, 253, 12)]))
     assert mod.judge(trial)['task_success']
-    for mutation in ('held', 'no_lift', 'unsupported', 'displaced', 'hidden_support'):
+    for mutation in ('held', 'no_lift', 'unsupported', 'displaced', 'hidden_support', 'moving_stack'):
         bad = copy.deepcopy(trial)
         layer = bad['layers'][2]
         if mutation == 'held':
@@ -145,6 +145,8 @@ def test_success_requires_free_lift_release_support_and_retreat():
             layer['settle_samples'][0]['boxes'][2]['forces'] = [[0., 0., 0.] for _ in range(8)]
         elif mutation == 'hidden_support':
             layer['lift_samples'][0]['boxes'][2]['net_force'][2] += .1
+        elif mutation == 'moving_stack':
+            layer['settle_samples'][0]['boxes'][2]['velocity'][2] = .0118
         else:
             layer['settle_samples'][0]['boxes'][0]['position'][0] += .01
         assert not mod.judge(bad)['task_success'], mutation
