@@ -257,3 +257,59 @@ def test_a_pending_member_is_judged_by_its_selection_from_the_fork_point(repos, 
     monkeypatch.setattr(land, "select", lambda *a: ([["test"]], "selector escalated to FULL (x)"))
     assert land_batch.batchable(land, wt, member, "feat/m", git(member, "rev-parse", "HEAD")) == "full", \
         "FULL-class joins only a FULL batch (D-889 addendum 6)"
+
+
+def _early_setup(tmp_path, monkeypatch, kind="affected"):
+    qdir = tmp_path / "q"
+    peer = queue.take(qdir, "feat/peer", status="pending")
+    mine = queue.take(qdir, "feat/mine", status="preparing")
+    monkeypatch.setattr(land_batch, "batchable", lambda *a: kind)
+    monkeypatch.setattr(land_batch, "eligible", lambda land_, wt, row, k="affected": row["branch"] == "feat/peer" and k == kind)
+    monkeypatch.setattr(land_batch, "rate", lambda path: (0.25, 50))
+    monkeypatch.setattr(land_batch.land_full, "restore", lambda *a: None)
+    monkeypatch.setattr(land, "out", lambda *a: "c" * 40)
+    return qdir, peer, mine
+
+
+def test_a_landing_leads_pending_tickets_of_its_group_before_any_pretest(tmp_path, monkeypatch):
+    """2026-10-28: every waiting ticket was FULL-class or unprepared, so pending affected ones never got a leader."""
+    qdir, peer, mine = _early_setup(tmp_path, monkeypatch)
+    led = []
+
+    def run(land_, wt, branch, args, python, qdir_, ticket, main_co, members, measured, kind, after="waiting"):
+        led.append(([r["branch"] for r in members], kind, after, info(ticket)["batch"]))
+        return 0
+    monkeypatch.setattr(land_batch, "run", run)
+    args = land.argparse.Namespace(tests="auto")
+    assert land_batch.early(land, tmp_path, "feat/mine", args, sys.executable, qdir, mine, tmp_path) == 0
+    assert led == [(["feat/peer"], "affected", "pending", ["feat/peer"])]
+
+
+@pytest.mark.parametrize("why", ["prepared", "explicit", "safety", "other batch", "no peer"])
+def test_a_landing_goes_on_alone_when_it_may_not_lead_at_the_start(tmp_path, monkeypatch, why):
+    qdir, peer, mine = _early_setup(tmp_path, monkeypatch, kind=None if why == "safety" else "affected")
+    args = land.argparse.Namespace(tests="full" if why == "explicit" else "auto")
+    if why == "prepared":
+        monkeypatch.setattr(land_batch.land_full, "restore", lambda *a: "m" * 40)
+    if why == "other batch":
+        queue.set_status(peer, "pending", batch=["feat/x"])
+    if why == "no peer":
+        peer.unlink()
+    monkeypatch.setattr(land_batch, "run", lambda *a, **k: pytest.fail("led a batch"))
+    assert land_batch.early(land, tmp_path, "feat/mine", args, sys.executable, qdir, mine, tmp_path) is None
+    assert not info(mine).get("batch")
+
+
+def test_a_landing_backs_off_when_an_earlier_ticket_formed_a_batch_in_the_same_moment(tmp_path, monkeypatch):
+    qdir, peer, mine = _early_setup(tmp_path, monkeypatch)
+    real = queue.set_status
+
+    def set_status(ticket, status, **fields):  # the earlier peer names its own batch right after this check
+        real(ticket, status, **fields)
+        if ticket == mine and fields.get("batch"):
+            real(peer, "pending", batch=["feat/mine"])
+    monkeypatch.setattr(land_batch.land_queue, "set_status", set_status)
+    monkeypatch.setattr(land_batch, "run", lambda *a, **k: pytest.fail("both led"))
+    args = land.argparse.Namespace(tests="auto")
+    assert land_batch.early(land, tmp_path, "feat/mine", args, sys.executable, qdir, mine, tmp_path) is None
+    assert info(mine)["batch"] == []

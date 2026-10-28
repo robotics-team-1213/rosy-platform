@@ -310,6 +310,8 @@ def land(args) -> int:
         safety_review(wt, before, "HEAD", python)  # seconds each: fail before a long wait, not after it
         size_check(wt, before, "HEAD", python)
         qdir, ticket = land_queue.enter(wt, branch, "preparing", args.urgent)  # main() releases it on every exit
+        if (code := land_batch.early(sys.modules[__name__], wt, branch, args, python, qdir, ticket, main_co)) is not None:
+            return code  # it led a batch at once: one shared pretest instead of one each
         if args.tests == "full" or (args.tests == "auto" and land_full.restore(wt, branch) is None):
             land_prepare.prepare(sys.modules[__name__], wt, branch, args, python, qdir, ticket)
         if (code := land_batch.queue(sys.modules[__name__], wt, branch, args, python, qdir, ticket, main_co)) is not None:
