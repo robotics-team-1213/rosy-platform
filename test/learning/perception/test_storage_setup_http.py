@@ -31,8 +31,8 @@ def setup_server(tmp_path, accounts, pool_setup, monkeypatch):
     folder = tmp_path / 'review'; folder.mkdir()
     store = open_store(folder)
     @contextmanager
-    def running():
-        server = make_server(store, 0, accounts=accounts)
+    def running(**server_options):
+        server = make_server(store, 0, accounts=accounts, **server_options)
         thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
         try: yield f'http://127.0.0.1:{server.server_port}'
         finally:
@@ -142,7 +142,8 @@ def test_setup_browser_completes_first_use_without_json(setup_server, accounts, 
             session, _ = session_for(url, accounts)
             page.context.add_cookies([dict(name='rosy_learning_session', value=session, url=url)])
             page.goto(url + '/learning', wait_until='networkidle')
-            page.locator('#theme').select_option(theme)
+            if theme == 'light': page.locator('[data-theme-cycle]').click()
+            playwright.expect(page.locator('html')).to_have_attribute('data-theme', theme)
             expect = playwright.expect
             expect(page.locator('#storage-setup')).to_be_visible()
             page.locator('#storage-settings-open').click()

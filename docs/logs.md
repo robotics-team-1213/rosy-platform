@@ -12826,3 +12826,17 @@ osy-d395-s1d\`.
 - 증거: 원격 `test/test_land_batch.py`·`test_land_queue.py`·`test_land_prepare.py`·`test_land.py`·`test_land_speculate.py`, known_failures NEW 0.
 - gate 변화: 없음.
 - CE: 해당 없음 — 규칙이 D-889 추가 4와 시험에 남는다.
+
+## 2026-10-28 · 55117575a3 · 녹화·검수·학습·HF 보관 연결 검증
+
+- 변경: 고정 OMX 자료의 보관 인계, 검수 유실 방지, 변환 상태와 API v1.328, signed runtime closure의 구현·화면·원격 증거를 `docs/validation/recording-learning-handoff-2026-10-28/`에 보존한다. HTTP 이름의 Chromium 시험도 선택되도록 브라우저 선택기를 고쳤다.
+- 증거: FULL 26 invocation 전부 원격 실행, 종료 코드 모두 0. 첫 실행 합계 36,657 passed / 2,297 skipped / 1 failed이며 기존 quarantine의 G1 timing 한 건은 공식 재시도 통과다. 전체 로그 비교 NEW0 / known0 / flaky1. 두 화면 크기·테마의 실제 Chromium 캡처를 독립 검토했다. 실패·중단·후속 시험은 결과 기록에서 구분한다.
+- gate 변화: 없음. fixture HTTP/Chromium, 소스·계약·패키지 회귀 근거다. 실물 녹화·실제 HF 쓰기·reader 왕복·장치/현장 수용·설치/배포·착지/push는 새로 수행하지 않았다.
+- CE: 해당 없음. 검수 상태, 파일 무결성과 시험 선택·동기화 판단이 코드·회귀 시험·기존 안내에 남아 별도 교훈을 늘리지 않는다.
+
+## 2026-10-28 · 030c2fb110 · 녹화 인계 UI 후속 검증 기록
+
+- 변경: 전체 도구/anchor, 폴링 중 초점과 중지 대기, 조회 오류, 검수 접근성, 보관 키보드 도착을 보완하고 새 frozen 검증 기록을 `docs/validation/recording-handoff-ui-followup-2026-10-28/`에 쓴다. 이전 증거의 Git commit 메타데이터만 명확히 하며 원래 결과·로그는 보존했다.
+- 증거: 원격 영향 선택 affected/no escalation 3059 passed /352 skipped /NEW0. 공식17개 Chromium 파일 최초262 passed/1 failed, 실패한 로딩 대기 시험을 보강한 두 파일 전체19 passed/skip0/NEW0. 릴리스·비밀값·배치108 passed. 캡처·원본별 SHA와 실패 이력을 결과 기록에 구분했다.
+- gate 변화: 없음. 실물·실제 HF·reader·학습 품질·설치/배포·merge/push는 별도 수용이다.
+- CE: 해당 없음. 판단 근거가 최종 코드·회귀·기존 문서에 남는다.

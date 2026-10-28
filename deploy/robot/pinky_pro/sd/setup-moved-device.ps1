@@ -200,6 +200,12 @@ try {
         Write-Host "로컬 공통 설정을 준비했습니다. 카드는 기록하지 않았으며, 이미지 서명·매체 검증은 기록 시 별도로 수행합니다."
         exit 0
     }
+    $operatorPrivate = Join-Path $env:LOCALAPPDATA "Rosy\ssh\rosy-operator-ed25519"
+    $operatorKey = $operatorPrivate + ".pub"
+    if (-not (Test-Path -LiteralPath $operatorPrivate -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $operatorKey -PathType Leaf)) {
+        Stop-Setup "운영자 SSH 키 쌍이 없습니다. 웹 등록이 열리지 않아도 접속할 수 있도록 Rosy\ssh\rosy-operator-ed25519와 .pub를 먼저 준비하세요. 키 생성 방법은 docs/deployment/robot-ssh-access.md의 접속 복구 절차를 확인하세요. 카드 계획과 기록은 시작하지 않았습니다."
+    }
     $ReleaseDir = (Resolve-Path -LiteralPath $ReleaseDir -ErrorAction Stop).ProviderPath
     $manifestPath = Join-Path $ReleaseDir "manifest.json"
     $sumsPath = Join-Path $ReleaseDir "SHA256SUMS"
@@ -285,7 +291,6 @@ try {
             "-PlanPath", $planPath,
             "-PlanOnly"
         )
-        $operatorKey = Join-Path $env:LOCALAPPDATA "Rosy\ssh\rosy-operator-ed25519.pub"
         if (Test-Path -LiteralPath $operatorKey -PathType Leaf) {
             $planArguments += @("-OperatorPublicKey", $operatorKey)
         }
