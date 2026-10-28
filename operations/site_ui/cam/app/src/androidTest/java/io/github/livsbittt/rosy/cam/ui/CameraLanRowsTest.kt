@@ -8,6 +8,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.*
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.InputMode
@@ -68,6 +69,7 @@ class CameraLanRowsTest {
         compose.runOnIdle { assertEquals(listOf(peer, legacy), calls) }
     }
 
+    @OptIn(ExperimentalComposeUiApi::class)
     @Test fun reorderKeepsFocusOnTheSameEndpointWithoutSelectingIt() {
         var records by mutableStateOf(listOf(peer, legacy))
         val calls = mutableListOf<OverheadServiceRecord>()
@@ -82,7 +84,7 @@ class CameraLanRowsTest {
         capture("800-reordered-focus")
     }
 
-    @OptIn(ExperimentalTestApi::class)
+    @OptIn(ExperimentalTestApi::class, ExperimentalComposeUiApi::class)
     @Test fun tabFocusSurvivesReorderWithoutSelectingAnotherEndpoint() {
         var records by mutableStateOf(listOf(peer, legacy))
         val calls = mutableListOf<OverheadServiceRecord>()
