@@ -3,7 +3,8 @@
 **Parent:** [operations/AGENTS.md](../AGENTS.md)
 
 `rosy.monitoring` owns D-876 observation models, scoped configuration, durable aggregation,
-owner-source collection, the read API and a POSIX launcher. UI and deployment follow separately.
+owner-source collection, the read API, a POSIX launcher and native deployment inputs.
+The separate application owns the UI; web_assets builds its fixed canonical deployment files.
 See [README.md](README.md) and [the API contract](../../docs/reference/rosy-monitoring-api.md).
 Current acceptance gates live in [progress.md](progress.md); record changes and verification
 in [logs.md](logs.md), then regenerate the harness index.

@@ -58,6 +58,7 @@ function renderDomains() {
 function setBusy(value) {
   busy=value;
   for(const button of document.querySelectorAll('ui-button')) {
+    if(button.closest('#storage-section'))continue; // Storage owns its permission and consent controls.
     button.reason=value?'결과를 확인하는 중입니다':!workspace&&button.id!=='refresh'?'작업 결과를 다시 확인한 뒤 사용하세요.':'';
     button.disabled=value||(!workspace&&button.id!=='refresh');
   }

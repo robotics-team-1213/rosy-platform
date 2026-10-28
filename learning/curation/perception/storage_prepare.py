@@ -6,14 +6,16 @@ import os
 from pathlib import Path
 import re
 import stat
+import uuid
 
 from storage_files import SOURCE, parts
 from storage_inventory import open_root
 
 
 class StoragePrepare:
-    def __init__(self, setup, sim_runs=None):
+    def __init__(self, setup, sim_runs=None, omx_center=None):
         self.setup, self.sim_runs = setup, sim_runs
+        self.omx_catalog = getattr(omx_center, 'catalog', None)
 
     def sources(self, actor):
         self.setup._manager(actor)
@@ -39,7 +41,9 @@ class StoragePrepare:
                                                 prepared=prepared, can_prepare=root['id'] == 'exports'))
                 finally: os.close(fd)
             except OSError: continue
-        return dict(folders=folders, sim_configured=self.sim_runs is not None)
+        datasets = self.omx_catalog.archive_sources(self.setup.project_id) if self.omx_catalog else []
+        return dict(folders=folders, sim_configured=self.sim_runs is not None,
+                    omx_configured=self.omx_catalog is not None, datasets=datasets)
 
     def sim_sources(self, actor):
         self.setup._manager(actor)
@@ -61,6 +65,12 @@ class StoragePrepare:
                 raise ValueError('invalid source profile or provenance')
             if len(json.dumps(body['provenance'], allow_nan=False).encode()) > 65536:
                 raise ValueError('source provenance is too large')
+        elif body.get('kind') == 'omx':
+            if (set(body) != common | {'dataset_id', 'revision'}
+                    or not isinstance(body['dataset_id'], str) or str(uuid.UUID(body['dataset_id'])) != body['dataset_id']
+                    or not isinstance(body['revision'], str) or not re.fullmatch('[0-9a-f]{64}', body['revision'])):
+                raise ValueError('registered dataset UUID and fixed revision required')
+            if self.omx_catalog is None: raise ValueError('learning center is not configured')
         elif body.get('kind') == 'isaac':
             if set(body) != common | {'run_id'} or not isinstance(body['run_id'], str) or not re.fullmatch('[0-9a-f]{32}', body['run_id']):
                 raise ValueError('completed Isaac run required')
@@ -74,13 +84,19 @@ class StoragePrepare:
         _, config = self.setup.configuration()
         if body['archive'] and not config['pool']['enabled']: raise ValueError('activate storage before new archive assignments')
         root = next(row for row in config['roots'] if row['id'] == 'exports')
-        name = body['artifact_id'] if body['kind'] == 'folder' else 'isaac-' + body['run_id']
+        name = (body['artifact_id'] if body['kind'] == 'folder' else
+                'omx-' + body['dataset_id'] + '-' + body['revision'] if body['kind'] == 'omx' else 'isaac-' + body['run_id'])
         location = dict(root_id='exports', relative=name)
         path = Path(root['path']).joinpath(*parts(name))
         if body['kind'] == 'folder':
             with service.files.open(location) as fd:
                 if not recover_source(path): seal(path, body['profile'], body['provenance'])
             profile = body['profile']
+        elif body['kind'] == 'omx':
+            from storage_omx import export_dataset
+            export_dataset(self.omx_catalog, self.setup.project_id, body['dataset_id'], body['revision'],
+                           path, lambda: self.setup._manager(actor))
+            profile = 'dataset'
         else:
             run_id = body['run_id']
             def get(): return self.sim_runs.call(dict(action='status', run_id=run_id))
