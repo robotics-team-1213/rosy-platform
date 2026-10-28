@@ -172,6 +172,14 @@ def _read_health(root: Path, pending: dict) -> dict:
     return value
 
 
+def _running_core(root: Path, host: Host, factory: dict, services: dict, *, run=_run) -> None:
+    expected = str(root / 'opt/rosy/releases' / factory['release_id'])
+    observed = _service(run, 'rosy-core.service')
+    if (observed != services['rosy-core.service']
+            or host.process_cwd(int(observed['MainPID'])) != expected):
+        raise ValueError('running CORE release differs from the verified native factory')
+
+
 def check(root: Path, transaction_id: str, *, host: Host | None = None, run=_run) -> dict:
     """Publish health only; the commit owner must separately bind GOOD_ACK and durable intent."""
     try:
@@ -198,6 +206,7 @@ def check(root: Path, transaction_id: str, *, host: Host | None = None, run=_run
         host.sleep(IO_SETTLE_S)
         _deadline()
         services = {unit: _service(run, unit) for unit in ("rosy-core.service", "rosy-io.service")}
+        _running_core(root, host, factory, services, run=run)
         watchdog = observe_watchdog(root, run=run)
         _probe()
         samples = authorize_trial(root, transaction_id, host=host)
@@ -208,6 +217,7 @@ def check(root: Path, transaction_id: str, *, host: Host | None = None, run=_run
             raise ValueError("runtime service restarted or changed during health observation")
         if _trial(root, transaction_id, checking=True) != (facts, pending) or verify_ready(root) != projection:
             raise ValueError("trial or projection changed during health observation")
+        _running_core(root, host, factory, services, run=run)
         _io_guard(root, factory)
         report = dict(_binding(pending), boot_id=facts["boot_id"], native_factory=factory, projection=projection,
                       services=services, watchdog=watchdog, samples=samples, observed_boottime_ns=_deadline())
@@ -221,17 +231,20 @@ def check(root: Path, transaction_id: str, *, host: Host | None = None, run=_run
         raise ValueError(f"OS_HEALTH_HOLD: {exc}") from exc
 
 
-def revalidate(root: Path, pending: dict, *, run=_run) -> dict:
+def revalidate(root: Path, pending: dict, *, host: Host | None = None, run=_run) -> dict:
     """Commit admission repeats live observations without restarting I/O or extending receipt lifetime."""
     if Path(root) != Path("/") and run is _run:
         raise ValueError("a fake root requires an explicit test runner")
     report = read_health(root, pending)
+    host = host if host is not None else Host(root)
+    _running_core(root, host, report['native_factory'], report['services'], run=run)
     if (verify_ready(root) != report["projection"] or observe_watchdog(root, run=run) != report["watchdog"]
             or verify_current(root, pending["verified"]["metadata"]) != report["native_factory"]
             or any(_service(run, unit) != value for unit, value in report["services"].items())):
         raise ValueError("live trial health changed before commit")
     _io_guard(root, report["native_factory"])
     _probe()
+    _running_core(root, host, report['native_factory'], report['services'], run=run)
     if read_health(root, pending) != report:
         raise ValueError("health evidence changed during revalidation")
     return report

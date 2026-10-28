@@ -5039,6 +5039,14 @@
 - Gate: 없음. 순수 이름 변경.
 - CE: 해당 없음.
 
+## 2026-10-28 · cdbd0c332e · 전용 앱 상태 시험의 pytest 9.2 종료 오류 수정
+
+- 변경: `test_work_sources.py`가 매번 새로 만드는 앱의 State 설정 4곳을 직접 대입한다. 실제 요청·작업 종류 판정 assertion은 유지한다. 생산 코드와 설정은 바꾸지 않는다.
+- 원인: 같은 Starlette 1.6.0에서 pytest 9.1.1은 동적 속성의 원래 값을 저장하지만 9.2.0은 인스턴스 `__dict__`에 없는 값을 NOTSET으로 저장한다. 같은 State 속성을 두 번 patch하면 종료 시 두 번 삭제해 KeyError가 난다. 두 원격 환경의 독립 재현으로 차이를 확인했다.
+- 증거: 후보 `651ec7a06a`의 Fleet 전체·단독 재실행에서 종료 오류 RED, 기준 main의 pytest 9.1.1 환경에서는 단독 통과. 수정 커밋 `cdbd0c332e`는 같은 pytest 9.2.0 환경(`1fde7a90b47fe7fb`)에서 해당 파일 11 passed / 0 skipped / NEW 0. 독립 검토는 전용 앱 격리·검증 조건 유지를 확인했다. 원격 로그는 작업 공간의 native-cell-transport 실행 기록에 연결했다.
+- Gate: 전체 착지 검증은 별도이며 실물·서비스 수용 근거가 아니다.
+- CE: 해당 없음 — 전용 앱이라는 적용 조건과 버전별 원인은 시험 주석·이 기록에서 복원할 수 있다.
+
 ## 2026-10-28 · 239740362c · 목표 어드미션 판정의 순수 모듈 분리 A단계 (계획 2026-10-28-fleet-traffic-arbitration-split)
 
 - 변경: `console.py`의 `_goal()`이 판정과 미션/응답 dict 조립을 다섯 곳에서 반복하며 D-766 래칫(1325)에 묶여 있었다. `fleet/traffic/goal_admission.py`(신규, 순수)이 대기열 보류를 frozen `QueueDecision`(yield_hold·untrusted_self_hold·route_conflict_hold·untrusted_blocker_hold·standing_hold)과 `mission_of`/`response_of`로 소유한다 — 키 순서 동결, reason으로 깃발 유도 금지(LOCALIZATION_UNTRUSTED는 양 단계에 존재), 전송 전 보류는 route 키 없음, `attempt_seq=0` 보존, 저장 미션과 응답은 독립 리스트. 콘솔은 상태 읽기·폐쇄 실패 사슬(`_seen.pop`→`_remember`→`_verdict`)과 전송 순서를 그대로 소유하고 판정 문자열만 넘긴다. `_task_mission`은 별칭 없이 이동, console.py 1325→1299(래칫 행 동락).

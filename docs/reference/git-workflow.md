@@ -123,7 +123,7 @@ gh run view <run-id> --log-failed
 | 단계 | 내용 | 상태 |
 |---|---|---|
 | 0 | Safety-Review 누락을 착지·push에서 거절, FULL 착지는 실험실 전체 등급 | 도구는 `main`에 있음. (나) "`main` 녹색 + 밀린 커밋 push"는 남음 |
-| 1 | CI `merge_group` 트리거, 불안정 시험 격리(`test/flaky_quarantine.txt`, 재시도 1회) | `main`에 있음. **2026-11-15까지 `modules` 러너 실패 0** — 그날 지나면 `test/test_affected_tests.py`가 일부러 실패한다 |
+| 1 | CI `merge_group` 트리거, 불안정 시험 격리(`test/flaky_quarantine.txt`, 재시도 1회) | `main`에 있음. `modules` 러너는 2026-10-27부터 판정에 들어간다(10-25부터 main 연속 녹색) |
 | 2 | `ship.py`가 `main` CI 녹색이 아닌 revision을 거절 | 안 됨 |
 | 3 | merge queue, 필수 검사 `ci-result`, 관리자 우회 축소, CODEOWNERS, 관리자가 아닌 에이전트 신원 | **막힘 — 두 번째 관리자 미지정** |
 | 4 | pre-push를 정적/시험으로 분리, 로그를 항목당 파일로 | 안 됨 |

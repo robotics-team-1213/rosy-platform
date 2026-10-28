@@ -19,6 +19,8 @@
 | `rosy_situation/analyzers/traffic_watch.py` | `TrafficWatch` (`analyzer:traffic_watch@1`, phase (d)): wait cycles cross-checked with Fleet's `wait_cycle`, stale-input false cycles, waiting-but-moving, livelock, stalled trips, long UNKNOWN units; existing `deadlock` module aliases this implementation |
 | `rosy_situation/incidents/context.py` | Source-aware incident context drafts; existing `incident_context` module identity remains |
 | `rosy_situation/incidents/vision.py` | Existing bounded local vision assessments; `vlm` aliases this module, preserving monkeypatch state |
+| `progress.md` | Current gate snapshot (SOURCE…FIELD). Overwrite; state of record over this file |
+| `logs.md` | Append-only work journal, one entry per change |
 | `test/test_situation_service.py` | Fake-Fleet unit tests and one in-process real Fleet test |
 | `test/test_analyzers.py` | Analyzer facts on synthetic snapshots |
 | `test/test_deadlock.py` | Traffic facts on synthetic snapshots, incl. a stale-pose false cycle and a quiet hour |

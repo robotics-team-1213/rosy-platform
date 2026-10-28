@@ -34,6 +34,71 @@ def _candidate(tmp_path, monkeypatch):
     return owner, health, state, boot, root, journal, host, calls, run, data, report
 
 
+def test_commit_refuses_a_core_running_from_another_factory(tmp_path, monkeypatch):
+    m, _, state, _, root, journal, host, _, run, _, _ = _candidate(tmp_path, monkeypatch)
+    bootstrap = root / 'run/rosy-provision-boot/autoboot.txt'
+    before, default = journal.read_bytes(), bootstrap.read_bytes()
+    original = host.process_cwd
+    monkeypatch.setattr(host, 'process_cwd', lambda pid: None if pid == 123 else original(pid))
+    with pytest.raises(ValueError, match='CORE.*release'):
+        m.commit(root, TRANSACTION, host=host, run=run)
+    assert journal.read_bytes() == before and bootstrap.read_bytes() == default
+    assert state.read_state(root)['pending']['phase'] == 'HEALTHY'
+    assert not (root / m.INTENT).exists()
+
+
+@pytest.mark.parametrize('capture_number', [1, 2])
+@pytest.mark.parametrize('change', ['cwd', 'service'])
+def test_commit_rechecks_core_release_after_slow_media_observation(tmp_path, monkeypatch, capture_number, change):
+    m, _, state, _, root, _, host, _, run, data, _ = _candidate(tmp_path, monkeypatch)
+    bootstrap = root / 'run/rosy-provision-boot/autoboot.txt'
+    default = bootstrap.read_bytes()
+    media, cwd = m._media, host.process_cwd
+    observed = []
+
+    def changed_during_capture(*args):
+        result = media(*args)
+        observed.append(True)
+        if len(observed) == capture_number:
+            if change == 'cwd':
+                monkeypatch.setattr(host, 'process_cwd', lambda pid: None if pid == 123 else cwd(pid))
+            else:
+                data['MainPID'] = '124'
+        return result
+
+    monkeypatch.setattr(m, '_media', changed_during_capture)
+    with pytest.raises(ValueError, match='CORE.*release'):
+        m.commit(root, TRANSACTION, host=host, run=run)
+    assert bootstrap.read_bytes() == default
+    assert state.read_state(root)['pending']['phase'] == ('HEALTHY' if capture_number == 1 else 'COMMIT_INTENT')
+
+
+@pytest.mark.parametrize('capture_number', [1, 2])
+@pytest.mark.parametrize('expired_at', [71_000_000_000, 166_000_000_000])
+def test_slow_core_observation_cannot_outlive_health_authority(tmp_path, monkeypatch, capture_number, expired_at):
+    m, health, state, _, root, _, host, _, run, _, _ = _candidate(tmp_path, monkeypatch)
+    bootstrap = root / m.BOOTSTRAP
+    default = bootstrap.read_bytes()
+    media, captures = m._media, []
+
+    def capture(*args):
+        result = media(*args)
+        captures.append(result)
+        return result
+
+    def slow_core(argv, **kwargs):
+        result = run(argv, **kwargs)
+        if 'show' in argv and 'rosy-core.service' in argv and len(captures) == capture_number:
+            monkeypatch.setattr(health, '_now', lambda: expired_at)
+        return result
+
+    monkeypatch.setattr(m, '_media', capture)
+    with pytest.raises(ValueError, match='expired|deadline'):
+        m.commit(root, TRANSACTION, host=host, run=slow_core)
+    assert bootstrap.read_bytes() == default
+    assert state.read_state(root)['pending']['phase'] == ('HEALTHY' if capture_number == 1 else 'COMMIT_INTENT')
+
+
 def _normal(root, slot):
     descriptor = root / "etc/rosy/os-slot.json"
     value = json.loads(descriptor.read_text())

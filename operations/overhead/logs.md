@@ -570,3 +570,9 @@
 - Change: an explicit private workcell manifest adds camera ingress credentials without calibrated tracking workers or map sightings. Verify camera token fingerprints and reserve every manifest producer fingerprint against paired credentials without reading arm secrets.
 - Evidence: c25dce219d remote CLI, manifest, pairing and architecture checks: 101 passed. Independent source review confirms the prior cross-role credential collision finding is resolved.
 - Gate: unchanged. Real camera ingress through the deployed site origin and optical calibration remain unverified.
+
+## 2026-10-28 · 6e0871b746 · Loop death watch and /readyz (fleet supervision twin)
+
+- Change: config-sync tasks and per-source status loops were bare create_task calls, so a loop that died with an exception stayed dead until shutdown while the container healthcheck (/healthz) stayed green. New loops.py adds a self-contained LoopWatch (no Fleet import, vision stays ROS-free and distribution-independent): a loop that ends with an exception logs ERROR and is remembered; clean returns (camera disconnect, stop event) and cancels are forgotten as normal lifecycle. The ingest server watches its status loops and serves /readyz (503 naming the dead loops), cli's config-sync tasks join the same watch. /healthz is untouched.
+- Evidence: remote loops/ingest/cli/stream-demand suites green, known NEW 0. Mutation: never recording a death reddens both new tests (b7457078e9), revert green (6e0871b746).
+- Gate: unchanged. Host tests only; a deployed site vision showing /readyz 503 on an induced death is a separate field check.

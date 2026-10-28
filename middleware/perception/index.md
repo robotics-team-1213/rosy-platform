@@ -72,8 +72,8 @@
 
 ## 최근 기록
 
+- 2026-10-28 · 8325da055d · 거울 위치 가설의 좌표 비교 형식 정렬
+- 2026-10-27 · fe49e767b3 · A/B OS에서 operator overlay와 참조 프로필 보존
 - 2026-10-27 · uncommitted · deepinit 소스 위치 안내 정렬
 - 2026-10-21 · uncommitted · 진단 화면 색을 토큰으로
 - 2026-10-21 · uncommitted · 진단 화면 표시 전환과 회전 아이콘
-- 2026-10-20 · uncommitted · 고정 조건 주행 SIM 연속2회 수용
-- 2026-10-20 · uncommitted · 곡선 진행의 근거리 입장 추가
