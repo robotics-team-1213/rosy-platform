@@ -1,19 +1,36 @@
 """Synthetic two-arm cell in metres; 30 mm units and a strict 90 mm cargo envelope."""
 import math
+import hashlib
+from pathlib import Path
 
 UNIT = .03
 BIN_ORIGIN = (.155, -.025, .025)
 BELT_TOP = .025
 DT = 1 / 120
+PROFILE = Path(__file__).resolve().parents[3]/'deploy/robot/omx/sim/cell_profile.yaml'
 FIXTURE = dict(revision='omx-stacking-v1', coordinate_scope='SYNTHETIC_NOT_CAMERA_REGISTERED',
                unit_m=UNIT, bin_origin_m=BIN_ORIGIN, bin_size_m=[.09]*3,
                arm_bases_m=[[0., -.14, 0.], [0., .14, 0.]],
                belt_size_m=[.12, .50, .025], belt_speed_m_s=.02,
                robot_self_collision=False,
+               control_profile_sha256=hashlib.sha256(PROFILE.read_bytes()).hexdigest(),
                attachment_aid=False, physics_dt_s=DT, control_decimation=4,
                xy_tolerance_m=.0015, z_tolerance_m=.0015, settle_steps=30,
                seed_effect='CARGO_RESET_XY_AND_YAW', num_envs=1,
                iterations=32, steps_per_update=32, evaluation_seed_offset=10000)
+
+
+def advance_joint(position, velocity, requested_velocity, limits, dt):
+    """Apply the existing nominal SIM velocity/acceleration limits before the servo target."""
+    if not all(math.isfinite(v) for v in (position, velocity, requested_velocity, dt)) or dt <= 0:
+        raise ValueError('Finite joint command and positive control interval required')
+    vmax, amax = limits['velocity'], limits['acceleration']
+    requested_velocity = max(-vmax, min(vmax, requested_velocity))
+    velocity += max(-amax*dt, min(amax*dt, requested_velocity-velocity))
+    low, high = limits['position']
+    wanted = position+velocity*dt
+    bounded = max(low, min(high, wanted))
+    return bounded, 0. if bounded != wanted else velocity
 
 
 def stack_plan():

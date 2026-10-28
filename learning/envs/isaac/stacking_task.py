@@ -5,9 +5,8 @@ import json
 import math
 import os
 from pathlib import Path
-import xml.etree.ElementTree as ET
 
-from stacking_fixture import BELT_TOP, DT, FIXTURE, UNIT, placed, stack_plan, target
+from stacking_fixture import BELT_TOP, DT, FIXTURE, PROFILE, UNIT, advance_joint, placed, stack_plan, target
 from importer_compat import import_model, reference_model
 from model_checks import check_urdf, check_vendor_manifest
 from run_omx_backend import (PAD_RADIUS, PAD_HALF_LENGTH, PAD_CONTACT_OFFSET_M, PAD_REST_OFFSET_M,
@@ -17,6 +16,7 @@ from run_omx_backend import (PAD_RADIUS, PAD_HALF_LENGTH, PAD_CONTACT_OFFSET_M, 
 def run(args):
     import numpy as np
     import torch
+    import yaml
     from tensordict import TensorDict
     import omni.kit.app
     import omni.kit.commands
@@ -34,6 +34,9 @@ def run(args):
 
     torch.manual_seed(args.seed)
     torch.set_num_threads(2)
+    profile = yaml.safe_load(PROFILE.read_text())
+    if profile['profile'] != 'simulation':
+        raise ValueError('Only the nominal simulation profile is allowed')
     omni.kit.app.get_app().get_extension_manager().set_extension_enabled_immediate('isaacsim.asset.importer.urdf', True)
     import isaacsim.asset.importer.urdf as api
     usd = import_model(api, omni.kit.commands.execute, args.urdf, args.output_dir, 'Manipulator')
@@ -105,6 +108,11 @@ def run(args):
         for prim in prims:
             if prim.IsA(UsdPhysics.RevoluteJoint):
                 finger = prim.GetName().startswith('gripper')
+                limit = profile['gripper'] if finger else profile['joints'][prim.GetName()]
+                velocity_limit = math.degrees(limit['velocity'])
+                velocity_attr = PhysxSchema.PhysxJointAPI.Apply(prim).CreateMaxJointVelocityAttr(velocity_limit)
+                if not math.isclose(velocity_attr.Get(), velocity_limit, rel_tol=1e-6):
+                    raise RuntimeError('Joint velocity limit readback failed')
                 drive = UsdPhysics.DriveAPI.Apply(prim, 'angular')
                 drive.CreateTypeAttr('force')
                 drive.CreateStiffnessAttr(30. if finger else 5000.)
@@ -164,14 +172,9 @@ def run(args):
     camera.prim.GetAttribute('focalLength').Set(35.)
     camera.prim.GetAttribute('horizontalAperture').Set(36.)
     camera.prim.GetAttribute('verticalAperture').Set(27.)
-    limits_by_name = {joint.get('name'): [float(joint.find('limit').get(key)) for key in ('lower', 'upper')]
-                      for joint in ET.parse(args.urdf).getroot().iter('joint')
-                      if joint.get('type') in ('revolute', 'prismatic')}
-    joint_limits = []
     for robot in robots:
         joint_indices.append([robot.get_dof_index('joint'+str(i)) for i in range(1, 6)])
         fingers.append([robot.get_dof_index('gripper_joint_1'), robot.get_dof_index('gripper_joint_2')])
-        joint_limits.append(np.array([limits_by_name[name] for name in robot.dof_names]))
 
     class StackingEnv:
         # shortcut: one CPU-facing SDK world, use Isaac Lab vector scenes when measured rollout throughput is limiting.
@@ -191,6 +194,7 @@ def run(args):
                 self.rng = np.random.default_rng(seed)
             self.index, self.lifted, self.settle = 0, False, 0
             self.episode_length_buf.zero_()
+            self.targets, self.target_velocities = [], []
             for i, box in enumerate(cargo):
                 box.set_world_pose(np.array([.7, -.5+i*.065, .015]), np.array([1., 0., 0., 0.]))
                 box.set_linear_velocity(np.zeros(3)); box.set_angular_velocity(np.zeros(3))
@@ -201,6 +205,8 @@ def run(args):
                 robot.set_joint_positions(state)
                 robot.set_joint_velocities(np.zeros(robot.num_dof))
                 robot.get_articulation_controller().apply_action(ArticulationAction(joint_positions=state))
+                self.targets.append(state.copy())
+                self.target_velocities.append(np.zeros(robot.num_dof))
             self.activate()
             for _ in range(12):
                 world.step(render=False, update_fabric=True)
@@ -250,11 +256,16 @@ def run(args):
             for i, robot in enumerate(robots):
                 if i != active:
                     continue
-                state = robot.get_joint_positions().copy()
-                limits = joint_limits[i]
-                idx = joint_indices[i]
-                state[idx] = np.clip(state[idx]+.03*action[i*6:i*6+5], limits[idx, 0], limits[idx, 1])
-                opening = -.12+1.12*(action[i*6+5]+1)/2
+                state, speed = self.targets[i], self.target_velocities[i]
+                control_dt = DT*FIXTURE['control_decimation']
+                for n, idx in enumerate(joint_indices[i]):
+                    limit = profile['joints']['joint'+str(n+1)]
+                    state[idx], speed[idx] = advance_joint(state[idx], speed[idx],
+                        action[i*6+n]*limit['velocity'], limit, control_dt)
+                grip = profile['gripper']
+                goal = grip['position'][0]+(grip['position'][1]-grip['position'][0])*(action[i*6+5]+1)/2
+                idx = fingers[i][0]
+                opening, speed[idx] = advance_joint(state[idx], speed[idx], (goal-state[idx])/control_dt, grip, control_dt)
                 state[fingers[i]] = [opening, -opening]
                 robot.get_articulation_controller().apply_action(ArticulationAction(joint_positions=state))
             for _ in range(FIXTURE['control_decimation']):
