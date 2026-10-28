@@ -1587,6 +1587,21 @@
       ],
       "source_revision": "915a46da52e14032671d3ecd4a360b60d3ea586f"
     },
+    "GET:/api/fleet/arm-transfers/jobs/{mission_id}/recovery": {
+      "status": 200,
+      "test": ["operations/fleet/test/test_transfer_recovery_api.py", "test_http_recovery_preserves_failure_and_reserves_only_one_child"],
+      "source_revision": "61f1e0f1695eb376f4512ec3a5a257897cd46afb"
+    },
+    "POST:/api/fleet/arm-transfers/jobs/{mission_id}/recovery": {
+      "status": 200,
+      "test": ["operations/fleet/test/test_transfer_recovery_api.py", "test_http_recovery_preserves_failure_and_reserves_only_one_child"],
+      "source_revision": "61f1e0f1695eb376f4512ec3a5a257897cd46afb"
+    },
+    "POST:/api/fleet/arm-transfers/jobs/{mission_id}/recovery/{request_id}/approve": {
+      "status": 200,
+      "test": ["operations/fleet/test/test_transfer_recovery_api.py", "test_http_recovery_preserves_failure_and_reserves_only_one_child"],
+      "source_revision": "61f1e0f1695eb376f4512ec3a5a257897cd46afb"
+    },
     "POST:/api/fleet/arm-transfers/jobs/{mission_id}/admit": {
       "status": 200,
       "test": [

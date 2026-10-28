@@ -303,7 +303,11 @@
       "calls": [
         {"consumer": "applications/fleet/web/work/arm-transfer-view.js", "expression": "/api/fleet/arm-transfers/jobs/${encodeURIComponent(id)}", "resolution": "literal-or-template", "request_ids": ["GET:/api/fleet/arm-transfers/jobs/{mission_id}"]},
         {"consumer": "applications/fleet/web/work/arm-transfer-view.js", "expression": "/api/fleet/dispatch-control", "resolution": "literal-or-template", "request_ids": ["GET:/api/fleet/dispatch-control"]},
-        {"consumer": "applications/fleet/web/work/arm-transfer-view.js", "expression": "/api/fleet/arm-transfers/jobs/${encodeURIComponent(snapshot.mission_id)}/admit", "resolution": "literal-or-template", "request_ids": ["POST:/api/fleet/arm-transfers/jobs/{mission_id}/admit"]}
+        {"consumer": "applications/fleet/web/work/arm-transfer-view.js", "expression": "/api/fleet/arm-transfers/jobs/${encodeURIComponent(snapshot.mission_id)}/admit", "resolution": "literal-or-template", "request_ids": ["POST:/api/fleet/arm-transfers/jobs/{mission_id}/admit"]},
+        {"consumer": "applications/fleet/web/work/arm-transfer-view.js", "expression": "/api/fleet/arm-transfers/jobs/${encodeURIComponent(id)}/recovery", "resolution": "literal-or-template", "request_ids": ["GET:/api/fleet/arm-transfers/jobs/{mission_id}/recovery"]},
+        {"consumer": "applications/fleet/web/work/arm-transfer-view.js", "expression": "/api/fleet/arm-transfers/jobs/${encodeURIComponent(recovery.child_mission_id)}", "resolution": "literal-or-template", "request_ids": ["GET:/api/fleet/arm-transfers/jobs/{mission_id}"]},
+        {"consumer": "applications/fleet/web/work/arm-transfer-view.js", "expression": "/api/fleet/arm-transfers/jobs/${encodeURIComponent(parent.mission_id)}/recovery", "resolution": "literal-or-template", "request_ids": ["POST:/api/fleet/arm-transfers/jobs/{mission_id}/recovery"]},
+        {"consumer": "applications/fleet/web/work/arm-transfer-view.js", "expression": "/api/fleet/arm-transfers/jobs/${encodeURIComponent(parent.mission_id)}/recovery/${encodeURIComponent(snapshot.request_id)}/approve", "resolution": "literal-or-template", "request_ids": ["POST:/api/fleet/arm-transfers/jobs/{mission_id}/recovery/{request_id}/approve"]}
       ],
       "requests": [
         {
@@ -331,12 +335,43 @@
           "contract_tests": ["operations/fleet/test/test_arm_transfer_console_browser.py", "operations/fleet/test/test_arm_transfer_job_api.py"],
           "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/arm-transfers/jobs/{mission_id}/admit"
+        },
+        {
+          "id": "GET:/api/fleet/arm-transfers/jobs/{mission_id}/recovery",
+          "method": "GET", "path": "/api/fleet/arm-transfers/jobs/{mission_id}/recovery",
+          "implementation": "operations/fleet/fleet/server/work/physical_transfer_recovery_routes.py", "handler": "preview",
+          "expected_statuses": [200], "status": "verified",
+          "verification_scope": "Real authenticated HTTP reads retained owner failure and distinct child state from SQLite; no physical cause inference or device acceptance.",
+          "contract_tests": ["operations/fleet/test/test_transfer_recovery_api.py", "operations/fleet/test/test_transfer_recovery_console_browser.py"],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/arm-transfers/jobs/{mission_id}/recovery"
+        },
+        {
+          "id": "POST:/api/fleet/arm-transfers/jobs/{mission_id}/recovery",
+          "method": "POST", "path": "/api/fleet/arm-transfers/jobs/{mission_id}/recovery",
+          "implementation": "operations/fleet/fleet/server/work/physical_transfer_recovery_routes.py", "handler": "request",
+          "expected_statuses": [200], "status": "verified",
+          "verification_scope": "Original authenticated proposer requests new independent observations. Body cannot supply an actor. No execution permission is created.",
+          "contract_tests": ["operations/fleet/test/test_transfer_recovery_api.py", "operations/fleet/test/test_transfer_recovery_console_browser.py"],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/arm-transfers/jobs/{mission_id}/recovery"
+        },
+        {
+          "id": "POST:/api/fleet/arm-transfers/jobs/{mission_id}/recovery/{request_id}/approve",
+          "method": "POST", "path": "/api/fleet/arm-transfers/jobs/{mission_id}/recovery/{request_id}/approve",
+          "implementation": "operations/fleet/fleet/server/work/physical_transfer_recovery_routes.py", "handler": "approve",
+          "expected_statuses": [200], "status": "verified",
+          "verification_scope": "Another named operator approves exact request, proof and generation. Concurrent or lost-response replay returns the same child; original failure stays retained. Synthetic facts and owner only.",
+          "contract_tests": ["operations/fleet/test/test_transfer_recovery_api.py", "operations/fleet/test/test_transfer_recovery_console_browser.py"],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/arm-transfers/jobs/{mission_id}/recovery/{request_id}/approve"
         }
       ],
       "flows": [
         {"id": "arm_transfer_handoff.happy", "kind": "happy", "steps": [{"request_ids": ["GET:/api/fleet/arm-transfers/jobs/{mission_id}", "GET:/api/fleet/dispatch-control", "POST:/api/fleet/arm-transfers/jobs/{mission_id}/admit"], "screen_assertion": "독립 Fleet 운영자의 명시적 확인 후 실제 HTTP 원장 READY를 조회한다"}], "scenario_id": "arm_transfer_handoff.happy", "browser_test": "operations/fleet/test/test_arm_transfer_console_browser.py::test_real_http_console_admits_external_proposal_with_independent_identity", "sample_status": "verified", "test_scope": "Real API and SQLite with synthetic capability port, no physical owner", "source_revision": "915a46da52e14032671d3ecd4a360b60d3ea586f"},
         {"id": "arm_transfer_handoff.refused", "kind": "refused", "steps": [{"request_ids": ["POST:/api/fleet/arm-transfers/jobs/{mission_id}/admit"], "screen_assertion": "403·409·503 응답 후 자동 재전송을 막고 원본 재조회를 요구한다"}], "scenario_id": "arm_transfer_handoff.refused", "browser_test": "operations/fleet/test/test_arm_transfer_console_browser.py::test_rejection_and_unknown_response_require_read_without_automatic_retry", "sample_status": "verified", "test_scope": "Fixture API browser responses; refusal presentation and no retry, not server authorization evidence", "source_revision": "915a46da52e14032671d3ecd4a360b60d3ea586f"},
-        {"id": "arm_transfer_handoff.terminal", "kind": "terminal", "steps": [{"request_ids": ["GET:/api/fleet/arm-transfers/jobs/{mission_id}"], "screen_assertion": "승인 단계가 READY로 끝나면 승인 단추를 잠그고 실행·물리·업무 완료를 구별한다"}], "scenario_id": "arm_transfer_handoff.terminal", "browser_test": "operations/fleet/test/test_arm_transfer_console_browser.py::test_deep_link_reads_and_explicit_confirmation_admits_saved_contract", "sample_status": "verified", "test_scope": "Terminal approval UI stage only; READY is not terminal execution or business completion", "source_revision": "915a46da52e14032671d3ecd4a360b60d3ea586f"}
+        {"id": "arm_transfer_handoff.terminal", "kind": "terminal", "steps": [{"request_ids": ["GET:/api/fleet/arm-transfers/jobs/{mission_id}"], "screen_assertion": "승인 단계가 READY로 끝나면 승인 단추를 잠그고 실행·물리·업무 완료를 구별한다"}], "scenario_id": "arm_transfer_handoff.terminal", "browser_test": "operations/fleet/test/test_arm_transfer_console_browser.py::test_deep_link_reads_and_explicit_confirmation_admits_saved_contract", "sample_status": "verified", "test_scope": "Terminal approval UI stage only; READY is not terminal execution or business completion", "source_revision": "915a46da52e14032671d3ecd4a360b60d3ea586f"},
+        {"id": "arm_transfer_handoff.recovery", "kind": "happy", "steps": [{"request_ids": ["GET:/api/fleet/arm-transfers/jobs/{mission_id}/recovery", "POST:/api/fleet/arm-transfers/jobs/{mission_id}/recovery", "POST:/api/fleet/arm-transfers/jobs/{mission_id}/recovery/{request_id}/approve", "GET:/api/fleet/arm-transfers/jobs/{mission_id}"], "screen_assertion": "원래 실패를 보존하고 독립 관측·다른 운영자 승인으로 자식 하나를 만든다. 응답 유실은 자동 재전송 없이 재조회하고 별도 자식의 물리 완료를 표시한다."}], "scenario_id": "arm_transfer_handoff.recovery", "browser_test": "operations/fleet/test/test_transfer_recovery_console_browser.py::test_real_http_failure_request_observation_approval_and_child_result", "sample_status": "verified", "test_scope": "Actual HTTP, SQLite, two authenticated pages and Chromium at 320/390/1920, success and lost reply; synthetic World/owner, no field or model acceptance", "source_revision": "61f1e0f1695eb376f4512ec3a5a257897cd46afb"}
       ]
     },
     {

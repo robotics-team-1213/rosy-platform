@@ -122,10 +122,10 @@ class AccountLedger:
             row = db.execute("SELECT * FROM rosy_accounts WHERE login=? AND enabled=1", (login,)).fetchone()
             return dict(row) if row else None
 
-    def principal_for(self, row, *, fingerprint=""):
+    def principal_for(self, row, *, fingerprint="", site_id=None):
         return SitePrincipal(row["principal_id"], row["role"], bool(row["change_required"]), fingerprint,
                              row["account_id"], tuple((g["resource"], tuple(g["capabilities"]))
-                                                      for g in json.loads(row["grants"])), "site:" + self.site_id)
+                                                      for g in json.loads(row["grants"])), "site:" + (site_id or self.site_id))
 
     @staticmethod
     def credential_revision(row):

@@ -53,7 +53,7 @@ PINNED_CONFIRMS = {
     "applications/fleet/web/installation/camera-peer.js": 2,
     "applications/fleet/web/cell/cell.js": 1,
     "applications/fleet/web/work/channel-request-view.js": 3,  # D-680/D-687/D-693 Task, Mission admission, incident claim
-    "applications/fleet/web/work/arm-transfer-view.js": 1,  # Explicit independent ARM admission.
+    "applications/fleet/web/work/arm-transfer-view.js": 2,  # Independent ARM admission and one recovery approval.
     "applications/fleet/web/work/trip-proposal-view.js": 1,  # D-908 explicit independent trip admission.
     "applications/fleet/web/work/policy-page.js": 1,  # D-793 incident lock release
     "applications/fleet/web/confirmed-action.js": 1,
