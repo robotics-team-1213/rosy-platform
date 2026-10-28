@@ -3838,6 +3838,13 @@
 - gate 변화: 없음. 현장 호스트에서 실제 로테이션 관찰(디스크 절감)은 별도 확인.
 - CE: 해당 없음 — 계약 시험과 변이 이력이 커밋에 남아 있다.
 
+## 2026-10-27 · 2ecb9b9015 · fleet가 best-effort 컨텍스트 미러를 기다리지 않는다
+
+- 변경: D-796은 컨텍스트 로그 미러를 가산·best-effort(쓰기 실패는 경고, SQLite 원장 불변)로 설계했는데 compose는 fleet 시작을 `postgres(service_healthy)`에 묶어 두었다. 미러가 느리면 관제 자체가 열리지 않는 이 위반을 풀었다 — fleet의 `depends_on` 제거, postgres는 스택에 그대로 배포된다. 신규 계약 시험이 의존 부재와 미러 잔존을 함께 고정한다.
+- 증거: 원격 5 suite(신규 계약 + compose·후보·이행 고정) green, known NEW 0. 변이 검증: depends_on 복원 → 계약 시험 red(`3923f1121e`), 복원 green(`2ecb9b9015`).
+- gate 변화: 없음. 실제 현장에서 postgres 지연 시 관제 기동·경고 로그 관찰은 별도.
+- CE: 해당 없음 — 계약 시험과 변이 이력이 커밋에 남아 있다.
+
 ## 2026-10-28 · uncommitted · Native motor-health 종료 시각 수정 초안
 
 - 변경: 실제 MotorHealth와 부모 cleanup snapshot에 최초 terminal_at을 보존하는 수정 초안이다. 관측된 motor 측정 시각과 값은 유지하며 읽기·토크·guard 경계는 바꾸지 않는다.
