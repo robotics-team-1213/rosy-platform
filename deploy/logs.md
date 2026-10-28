@@ -3846,6 +3846,20 @@
 - gate 변화: 집중 가드만 회복했다. 중단된 FULL, 취소된 충전 시험, 게시·배포·장치 수용은 완료로 올리지 않는다.
 - CE: 기존 교훈 갱신 — 게시 대장과 전체 파일 provenance의 독립성, 고정 기록 처리의 잘못된 선례 해석을 보완했다.
 
+## 2026-10-27 · 82ca57ab0b · 사이트 컨테이너 로그 회전 경계
+
+- 변경: compose 파일 어디에도 `logging:` 정의가 없어 장기 서비스(fleet·vision·postgres·proxy·media·media-gateway)의 json-file 로그가 호스트 디스크에서 무제한이었다. 기본 스택과 미디어 프로젝트에 20m×3 회전 앵커(`x-logging`)를 걸고 오버레이는 병합 상속으로 그대로 받는다. 신규 계약 시험 `test_site_compose_log_rotation.py`이 전 서비스 경계와 오버레이 비덮어쓰기를 고정한다.
+- 증거: 원격 5 suite(신규 계약 + compose 고정 시험들 + 문서 배치) green, known NEW 0. 변이 검증: postgres의 logging 행 제거 → 계약 시험 red(`9b829fd04d`), 복원 green(`82ca57ab0b`).
+- gate 변화: 없음. 현장 호스트에서 실제 로테이션 관찰(디스크 절감)은 별도 확인.
+- CE: 해당 없음 — 계약 시험과 변이 이력이 커밋에 남아 있다.
+
+## 2026-10-27 · 2ecb9b9015 · fleet가 best-effort 컨텍스트 미러를 기다리지 않는다
+
+- 변경: D-796은 컨텍스트 로그 미러를 가산·best-effort(쓰기 실패는 경고, SQLite 원장 불변)로 설계했는데 compose는 fleet 시작을 `postgres(service_healthy)`에 묶어 두었다. 미러가 느리면 관제 자체가 열리지 않는 이 위반을 풀었다 — fleet의 `depends_on` 제거, postgres는 스택에 그대로 배포된다. 신규 계약 시험이 의존 부재와 미러 잔존을 함께 고정한다.
+- 증거: 원격 5 suite(신규 계약 + compose·후보·이행 고정) green, known NEW 0. 변이 검증: depends_on 복원 → 계약 시험 red(`3923f1121e`), 복원 green(`2ecb9b9015`).
+- gate 변화: 없음. 실제 현장에서 postgres 지연 시 관제 기동·경고 로그 관찰은 별도.
+- CE: 해당 없음 — 계약 시험과 변이 이력이 커밋에 남아 있다.
+
 ## 2026-10-28 · uncommitted · Native motor-health 종료 시각 수정 초안
 
 - 변경: 실제 MotorHealth와 부모 cleanup snapshot에 최초 terminal_at을 보존하는 수정 초안이다. 관측된 motor 측정 시각과 값은 유지하며 읽기·토크·guard 경계는 바꾸지 않는다.

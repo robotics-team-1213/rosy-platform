@@ -5,6 +5,14 @@ x-rosy-site:
   allow_literal_bind: "${ROSY_SITE_ALLOW_LITERAL_BIND:-}"
   tls_host: "${ROSY_SITE_TLS_HOST:-}"
 
+# Bounded json-file logging for every long-running service: unbounded container
+# logs have no upper bound on the site host's disk otherwise.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "3"
+
 services:
   fleet:
     image: rosy-site-fleet:${ROSY_SITE_IMAGE_TAG:-local}
@@ -148,10 +156,8 @@ services:
       timeout: 3s
       retries: 3
       start_period: 15s
-    depends_on:
-      postgres:
-        condition: service_healthy
     networks: [site_backend, robot_egress]
+    logging: *default-logging
 
   vision:
     image: rosy-site-vision:${ROSY_SITE_IMAGE_TAG:-local}
@@ -219,6 +225,7 @@ services:
       retries: 3
       start_period: 15s
     networks: [site_backend]
+    logging: *default-logging
 
   # D-796: optional site-host context/log store. It is an additive mirror of the
   # D-640 advisory journal only — the Fleet SQLite ledger stays the single source
@@ -226,6 +233,8 @@ services:
   # and no robot, AI PC or model PC connects to it. Less hardened than fleet and
   # vision (stock upstream image, so read_only with tmpfs and a minimal cap set)
   # — see the D-796 ADR. An absent image.tags entry fails the stack loudly.
+  # Fleet deliberately does not wait for this service: the mirror is best-effort
+  # and a slow or broken postgres only produces warnings, never a blocked console.
   postgres:
     image: rosy-site-postgres:${ROSY_SITE_IMAGE_TAG:-local}
     command:
@@ -258,6 +267,7 @@ services:
       retries: 5
       start_period: 20s
     networks: [site_backend]
+    logging: *default-logging
 
   # Daily ledger backup target for the host timer (rosy-site-ledger-backup.timer):
   # `docker compose ... run --rm fleet-backup`. The fleet image already ships
@@ -337,6 +347,7 @@ services:
       site_backend:
         aliases: [proxy]
       site_edge: {}
+    logging: *default-logging
 
 volumes:
   sighting_data:

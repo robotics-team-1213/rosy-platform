@@ -89,7 +89,7 @@ def test_existing_trust_is_not_silently_replaced(tmp_path, change):
     assert target.read_bytes() == before
 
 
-def test_engineering_build_selects_exact_existing_public_cms_certificate():
+def test_engineering_build_selects_exact_existing_public_cms_certificate(tmp_path):
     m = module()
     root = Path(__file__).resolve().parents[1]
     lock = yaml.safe_load((IMAGE / "inputs.lock.yaml").read_bytes())["os_updates"]
@@ -98,7 +98,15 @@ def test_engineering_build_selects_exact_existing_public_cms_certificate():
     raw = (root / CERTIFICATE).read_bytes()
     assert lock["cms_certificate_sha256"] == hashlib.sha256(raw).hexdigest() == "c9b715ef42497e1e1f746529a882604e7159f7957f652d25977d56f49d9104a1"
     assert lock["cms_signer_spki_sha256"] == m._spki(raw) == "f0a17ffa253b371ea1a5c8ea541730a7b359ced40d70ee83d63d08be24497a88"
-    assert m.verify(lock, root) == raw
+    # verify() wants an offline tree owned by this user; CI runs as root on a checkout owned by the runner.
+    tree = tmp_path / "source"
+    (tree / CERTIFICATE).parent.mkdir(parents=True)
+    for folder in (tree, *(tree / CERTIFICATE).parents):
+        if folder.is_relative_to(tree):
+            folder.chmod(0o755)
+    (tree / CERTIFICATE).write_bytes(raw)
+    (tree / CERTIFICATE).chmod(0o644)
+    assert m.verify(lock, tree) == raw
 
 
 def test_build_cannot_resolve_or_customize_without_explicit_public_cms_pins():
