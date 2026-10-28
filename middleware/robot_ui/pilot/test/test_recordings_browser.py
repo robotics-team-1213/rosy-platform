@@ -445,6 +445,9 @@ def test_full_drive_recording_sheet_keeps_its_focus_visible(tablet_page, size, c
       return (await api('/api/v1/recordings')).body;
     }""")
     row.locator('[data-recording-fetch]').focus()
+    page.keyboard.press('Shift+Tab')
+    page.keyboard.press('Tab')
+    playwright_sync.expect(row.locator('[data-recording-fetch]')).to_be_focused()
     page.evaluate('window.oldFullRecordingButton = document.activeElement')
     if change == 'reorder':
         listing['items'].reverse()
