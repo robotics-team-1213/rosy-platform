@@ -21,16 +21,34 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import time
 from collections import Counter, defaultdict
 from pathlib import Path
 
 SCHEMA = "rosy.omx-cell-attempt.v1"
-RUN = {"path": None, "run_id": None, "n": 0}  # set by cell_pipeline.main(): one run per pipeline process
+RUN = {"path": None, "run_id": None, "n": 0, "pending": None}  # one run per pipeline process
 
 
 def start(path: Path, run_id: str | None = None) -> None:
-    RUN.update(path=Path(path), run_id=run_id or time.strftime("%Y%m%dT%H%M%SZ", time.gmtime()), n=0)
+    RUN.update(path=Path(path), run_id=run_id or time.strftime("%Y%m%dT%H%M%SZ", time.gmtime()), n=0, pending=None)
+
+
+def begin(config: dict, envelope: dict) -> None:
+    """An exclusive durable intent survives a crash before the completed attempt row."""
+    if RUN["path"] is None:
+        if envelope["mode"] == "commissioning":
+            return  # an unrecorded supervised probe cannot become reviewed evidence
+        raise OSError("no active attempt ledger")
+    path = Path(RUN["path"])
+    if envelope["mode"] == "automatic" and path.resolve() != (Path(config["work_dir"]).expanduser() / "attempts.jsonl").resolve():
+        raise OSError("active attempt ledger differs from the reviewed pipeline")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.with_suffix(".pending.json").open("x", encoding="utf-8") as stream:
+        json.dump({"attempt_id": f"{RUN['run_id']}-{RUN['n'] + 1:03d}", "envelope": envelope}, stream)
+        stream.flush()
+        os.fsync(stream.fileno())
+    RUN["pending"] = f"{RUN['run_id']}-{RUN['n'] + 1:03d}"
 
 
 def digest(value) -> str:
@@ -59,6 +77,10 @@ def classify(tried: dict) -> tuple[str, str | None, str | None]:
         return "failed", "locate", "box not seen"
     if "plan_error" in tried:
         return "failed", "plan", "no IK for the located box"
+    envelope = tried.get("envelope") or (tried.get("transfer") or {}).get("envelope") or {}
+    if envelope.get("allowed") is False:
+        started = any(not s["command"].startswith("load ") for s in (tried.get("transfer") or {}).get("steps", []))
+        return "failed" if started else "held", "envelope", envelope.get("reason")
     moved = tried.get("transfer") or {}
     result, at = moved.get("result"), moved.get("at")
     if result == "surveyed":
@@ -67,7 +89,10 @@ def classify(tried: dict) -> tuple[str, str | None, str | None]:
         if (tried.get("verify") or {}).get("inside"):
             return "placed", None, None
         return "failed", "verify", "placed out of the next grasp's reach"
-    return "failed", {"empty": "grasp", "misaligned": "hover"}.get(result, "transfer"), f"{result} at {at}"
+    phase = {"run descend_pick": "approach", "run grasp_pick": "grasp", "run lift_pick": "lift",
+             "goto above_place": "carry", "run descend_place": "place", "run release_place": "release",
+             "run lift_place": "retreat", "park": "retreat"}.get(at, "transfer")
+    return "failed", {"empty": "grasp", "misaligned": "hover"}.get(result, phase), f"{result} at {at}"
 
 
 def record(config: dict, calibration: dict, source: str, dest: str, attempt: int, tried: dict,
@@ -83,8 +108,15 @@ def record(config: dict, calibration: dict, source: str, dest: str, attempt: int
            "context": context(config, calibration, source, choices), **tried,
            "outcome": outcome, "fail_stage": stage, "fail_class": why}
     RUN["path"].parent.mkdir(parents=True, exist_ok=True)
-    with RUN["path"].open("a") as f:
+    with RUN["path"].open("a", encoding="utf-8") as f:
         f.write(json.dumps(row, default=str) + "\n")
+        f.flush()
+        os.fsync(f.fileno())
+    pending = RUN["path"].with_suffix(".pending.json")
+    if (RUN.get("pending") == attempt_id and pending.exists()
+            and json.loads(pending.read_text(encoding="utf-8")).get("attempt_id") == attempt_id):
+        pending.unlink()
+        RUN["pending"] = None
     return attempt_id
 
 
@@ -148,7 +180,10 @@ def summary(rows: list[dict], bin_mm: float = 10.0) -> dict:
         cal = (row.get("context") or {}).get("calibration") or {}
         by_map[f"{cal.get('sha', '?')} coarse={cal.get('coarse')} loo={cal.get('loo_error_mm')}"].update(
             tried=1, placed=placed)
+    from cell_envelope import review_candidates
+
     return {"attempts": len(rows), "placed": sum(r["outcome"] == "placed" for r in rows),
+            "operating_tasks": review_candidates(rows),
             "by_position": {f"{s} {k}": {**c, **errors.get((s, k), {})} for (s, k), c in sorted(by_bin.items())},
             "by_map": {k: dict(c) for k, c in by_map.items()},
             "failures": dict(Counter(f"{r['fail_stage']}: {r['fail_class']}" for r in rows if r["fail_stage"]))}
