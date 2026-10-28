@@ -12906,3 +12906,9 @@ osy-d395-s1d\`.
 - 변경: `validation/pilot-recording-browser-split-2026-10-29/`에 AST 동일성·fixture 재사용·OMX 선택 범위·ratchet 감소와 원격 검증을 동결했다. runtime 변경은 없다.
 - 증거: browser16+scope17=33pass/0skip, 공식 affected635pass/137skip/NEW0. 선택 확대 및 ratchet 갱신 누락 실패를 숨기지 않았다. mapped full preflight를 전체 CI/FULL로 간주하지 않는다.
 - gate 변화: 없음. CE: 해당 없음 — 최종 코드·guard·측정·기록으로 복원된다.
+
+## 2026-10-29 · d99e15a1e2 · Pilot 녹화 목록 초점·시트 수명 검증
+
+- 변경: `validation/pilot-recording-focus-2026-10-29/`에 현재 초점·fallback·시트 객체 소유권·스크롤 반례와 실제 RED/GREEN을 동결했다. fixture 실패와 실제 제품 반례를 분리했다.
+- 증거: 전체 browser39pass/0skip, 실제 키보드/문서 스크롤 부분8건씩, affected609pass/189skip/NEW0. 같은39건의 반복과 부분8건은 합산하지 않는다. A source 검토·B12+8장 직접 관측과 hash를 기록했다.
+- gate 변화: 없음. CE: 해당 없음 — 최종 코드·회귀·검증 기록으로 설명되는 수정이다.

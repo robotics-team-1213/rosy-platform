@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-10-29 · d99e15a1e2 · Pilot 녹화 목록 초점·시트 수명 검증
 - 2026-10-29 · da361c0aa0 · Pilot 녹화 시험 경계 분리 근거
 - 2026-10-29 · ccc8712ece · 이송 결과 검수 패키지 검증 기록
 - 2026-10-29 · uncommitted · docs(reference): 기록용 Jira 코멘트 예외를 기존 사람 작업 규칙에 명시한다
 - 2026-10-29 · uncommitted · docs(reference): 연결 안내 행에 §4 기록 코멘트 규칙을 넣는다
-- 2026-10-29 · uncommitted · docs(reference): 기록 코멘트는 이슈마다 하나로 이어 붙인다
