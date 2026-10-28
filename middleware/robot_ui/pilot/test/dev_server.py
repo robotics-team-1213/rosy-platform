@@ -32,6 +32,7 @@ DEV_TOKEN = "devtoken"
 DEV_ADMIN_TOKEN = "devadmintoken"
 
 PILOT_MIME = {
+    "layout.css": "text/css",
     "styles.css": "text/css",
     "app.js": "application/javascript",
     "client.js": "application/javascript",

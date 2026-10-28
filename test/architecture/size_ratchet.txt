@@ -43,7 +43,6 @@
 1857 perception/web/diagnostic.html
 676 robot_ui/face/emotion/info_screen.py
 732 robot_ui/pilot/screens/drive.js
-945 robot_ui/pilot/styles.css
 898 robot_ui/robot/app.js
 856 simulation/gazebo/scripts/lane_live_view.html
 709 simulation/gazebo/scripts/lane_live_view.py
