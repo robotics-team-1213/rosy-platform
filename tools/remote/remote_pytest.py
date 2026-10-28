@@ -152,7 +152,7 @@ VENV = remote_test_tools.VENV
 RESERVE = r"""mkdir -p ~/rosy-jobs; echo "$(( $(date +%s) + $4 )) $1 $2 $3" > ~/rosy-jobs/pick-$(date +%s%N).resv"""
 
 CLEANUP = r"""R=~/rosy-test
-rm -f ~/rosy-jobs/"$1".lock ~/rosy-jobs/"$1".resv
+rm -f ~/rosy-jobs/"$1".lock ~/rosy-jobs/"$1".*.lock ~/rosy-jobs/"$1".resv
 # Release/rollback tests leave read-only dirs (product behaviour); without u+w rm -rf leaves them behind.
 chmod -R u+rwX -- "$R/runs/$1" "$R/runs/$1.jobs" 2>/dev/null || true
 git -C "$R/repo" worktree remove --force "$R/runs/$1" 2>/dev/null || rm -rf "$R/runs/$1"
