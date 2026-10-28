@@ -2,6 +2,7 @@
   "test_hosts": ["user@<model-pc>", "user@<ai-pc>", "user@<site-pc>"],
   "sim_hosts": ["user@<model-pc>=model", "user@<ai-pc>=ai"],
   "site_host": "user@<site-pc>",
+  "omx_hosts": ["user@<omx-control-pc>"],
   "robots": {
     "<robot-id>": "<robot-ip>"
   }
