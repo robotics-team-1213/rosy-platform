@@ -12,6 +12,7 @@ from os_state_io import _write_atomic
 from os_state_layout import COMMON, _path, _read
 from os_update_manifest import release_id, verify_metadata
 from os_update_state import read_state
+from os_update_transport import bundle_assets
 
 STAGING = COMMON + "/os-update/staging"
 
@@ -62,20 +63,37 @@ def _reclaim(root, staging, keep):
             if metadata["release_id"] != directory.name: continue
             name = metadata["bundle"]["filename"]
             paths = list(directory.iterdir())
-            if any(p.name not in {"os-update.json", "os-update.json.sig", name, name + ".part"} for p in paths): continue
+            if any(p.name not in {"os-update.json", "os-update.json.sig", name, name + ".part", name + ".chunk"} for p in paths): continue
             for path in paths:
                 _path(root, path.relative_to(root).as_posix())
-                mode = 0o600 if path.name.endswith(".part") else 0o400
+                mode = 0o600 if path.name.endswith((".part", ".chunk")) else 0o400
                 info = path.stat()
                 if (not stat.S_ISREG(info.st_mode) or info.st_uid != root.stat().st_uid or info.st_nlink != 1
                         or stat.S_IMODE(info.st_mode) != mode): raise ValueError("unsafe cache entry")
+                if path.name == name + ".part" and info.st_size > metadata["bundle"]["size_bytes"]:
+                    raise ValueError("oversized partial cache")
+                if path.name == name + ".chunk" and info.st_size > max(size for _, size in bundle_assets(metadata["bundle"])):
+                    raise ValueError("oversized chunk cache")
             for path in paths: path.unlink()
             directory.rmdir()
         except (OSError, ValueError, UnicodeError):
             continue  # Unknown or interrupted metadata is preserved for inspection.
 
 
-def stage(root: Path, metadata: dict, raw: bytes, signature: str, url: str, *, host, http) -> Path:
+def _remove_partial(root, path):
+    if not path.exists(): return
+    info = path.stat()
+    if (not stat.S_ISREG(info.st_mode) or info.st_uid != root.stat().st_uid
+            or info.st_nlink != 1 or stat.S_IMODE(info.st_mode) != 0o600):
+        raise ValueError("OS_STAGE: unknown partial file")
+    path.unlink()
+
+
+def _create_partial(path):
+    os.close(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600))
+
+
+def stage(root: Path, metadata: dict, raw: bytes, signature: str, url: str | list[str], *, host, http) -> Path:
     if read_state(root)["pending"] is not None:
         raise ValueError("OS_STAGE: pending transaction owns the existing cache")
     if verify_metadata(raw, signature, _path(root, PUBLIC_KEY)) != metadata:
@@ -83,7 +101,13 @@ def stage(root: Path, metadata: dict, raw: bytes, signature: str, url: str, *, h
     staging = _directory(root, STAGING)
     directory = _directory(root, STAGING + "/" + metadata["release_id"])
     expected = metadata["bundle"]
-    allowed = {"os-update.json", "os-update.json.sig", expected["filename"], expected["filename"] + ".part"}
+    assets = bundle_assets(expected)
+    urls = [url] if isinstance(url, str) else url
+    if (not isinstance(urls, list) or not urls or any(not isinstance(value, str) for value in urls)
+            or not isinstance(url, str) and len(urls) != len(assets)):
+        raise ValueError("OS_STAGE: invalid transport URLs")
+    multipart = len(urls) > 1
+    allowed = {"os-update.json", "os-update.json.sig", expected["filename"], expected["filename"] + ".part", expected["filename"] + ".chunk"}
     if any(p.name not in allowed for p in directory.iterdir()):
         raise ValueError("OS_STAGE: unknown staging entry")
     for name, content in (("os-update.json", raw), ("os-update.json.sig", (signature + "\n").encode("ascii"))):
@@ -94,23 +118,42 @@ def stage(root: Path, metadata: dict, raw: bytes, signature: str, url: str, *, h
         else: _write_atomic(target, content, 0o400)
     target = _path(root, directory.relative_to(root).as_posix() + "/" + expected["filename"])
     cached = _cached(root, target, expected)
-    need = DISK_MARGIN_BYTES + (0 if cached else expected["size_bytes"])
+    need = DISK_MARGIN_BYTES + (0 if cached else expected["size_bytes"] + (max(size for _, size in assets) if multipart else 0))
     if host.free_bytes(staging) < need:
         _reclaim(root, staging, metadata["release_id"])
     if host.free_bytes(staging) < need:
         raise ValueError("OS_STAGE_DISK_LOW: bundle and safety margin do not fit")
     if cached: return target
     part = _path(root, target.relative_to(root).as_posix() + ".part")
-    if part.exists():
-        info = part.stat()
-        if (not stat.S_ISREG(info.st_mode) or info.st_uid != root.stat().st_uid
-                or info.st_nlink != 1 or stat.S_IMODE(info.st_mode) != 0o600):
-            raise ValueError("OS_STAGE: unknown partial file")
-        part.unlink()
-    descriptor = os.open(part, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
-    os.close(descriptor)
+    chunk = _path(root, target.relative_to(root).as_posix() + ".chunk")
+    _remove_partial(root, part)
+    _remove_partial(root, chunk)
+    _create_partial(part)
     try:
-        try: digest = http.download(url, part, expected["size_bytes"])
+        try:
+            if not multipart:
+                digest = http.download(urls[0], part, expected["size_bytes"])
+            else:
+                whole = hashlib.sha256()
+                with os.fdopen(os.open(part, os.O_WRONLY | os.O_NOFOLLOW), "wb") as output:
+                    for address, (_, size) in zip(urls, assets):
+                        _create_partial(chunk)
+                        http.download(address, chunk, size)
+                        with os.fdopen(os.open(chunk, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK), "rb") as source:
+                            info = os.fstat(source.fileno())
+                            if (not stat.S_ISREG(info.st_mode) or info.st_uid != root.stat().st_uid
+                                    or info.st_nlink != 1 or stat.S_IMODE(info.st_mode) != 0o600 or info.st_size != size):
+                                raise ValueError("OS_STAGE: downloaded part size/mode differs")
+                            remaining = size
+                            while remaining:
+                                block = source.read(min(2 * 1024**2, remaining))
+                                if not block: raise ValueError("OS_STAGE: truncated part")
+                                remaining -= len(block)
+                                whole.update(block)
+                                output.write(block)
+                            if source.read(1): raise ValueError("OS_STAGE: oversized part")
+                        _remove_partial(root, chunk)
+                digest = whole.hexdigest()
         except UpdateError as exc: raise ValueError(f"OS_STAGE_DOWNLOAD: {exc}") from exc
         if part.stat().st_size != expected["size_bytes"] or digest != expected["sha256"]:
             raise ValueError("OS_STAGE: downloaded bundle size/digest differs")
@@ -124,3 +167,4 @@ def stage(root: Path, metadata: dict, raw: bytes, signature: str, url: str, *, h
         return target
     finally:
         part.unlink(missing_ok=True)
+        _remove_partial(root, chunk)

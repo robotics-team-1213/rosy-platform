@@ -1,11 +1,9 @@
 """Real local HTTP transport with unchanged signed whole-bundle metadata."""
-import datetime as dt
 import importlib
 import json
 
 import pytest
 
-from auto_update_fakes import HOST
 from signing import sign_checksums
 from test_os_update_feed import feed, publish  # noqa: F401
 
@@ -56,19 +54,20 @@ def test_chunked_engineering_canary_reassembles_exact_readonly_signed_bundle(fee
 
 def test_noncanary_engineering_never_uses_promotion_or_blocks_older_stable(feed):
     m, hub, host, root, _, _, private, _ = feed
-    stable, _, _ = publish(hub, private)
+    stable, _, _, _ = chunked(hub, private)
     value, _, original, entry = chunked(hub, private, revision="2026.10.26-012")
     entry["prerelease"] = True
-    policy(hub, private, value, original, canary=["rosy-pinky-zzzz"], canary_ok=True, wave_delay_s=0)
+    policy(hub, private, value, original, canary=["rosy-pinky-zzzz"], canary_ok=True, wave_delay_s=600)
     assert m.Feed(root, host=host).poll(apply=False)["release_id"] == stable["release_id"]
 
 
-@pytest.mark.parametrize("fault", ["missing", "duplicate", "mixed", "size", "corrupt", "url", "signature"])
+@pytest.mark.parametrize("fault", ["missing", "last_missing", "duplicate", "mixed", "size", "corrupt", "url", "escaped_url", "signature", "rollout_signature"])
 def test_bad_part_inventory_or_content_never_reaches_install(feed, monkeypatch, fault):
     m, hub, host, root, state, journal, private, _ = feed
     value, body, _, entry = chunked(hub, private)
     part = entry["assets"][-1]
     if fault == "missing": entry["assets"].pop(-2)
+    if fault == "last_missing": entry["assets"].pop()
     if fault == "duplicate": entry["assets"].append(dict(part))
     if fault == "mixed":
         name = value["bundle"]["filename"]
@@ -77,7 +76,9 @@ def test_bad_part_inventory_or_content_never_reaches_install(feed, monkeypatch, 
         path = value["release_id"] + "/" + part["name"]
         hub.assets[path] = b"x" + hub.assets[path] if fault == "size" else b"x" * len(hub.assets[path])
     if fault == "url": part["browser_download_url"] += "?escape=1"
+    if fault == "escaped_url": part["browser_download_url"] = part["browser_download_url"].replace("/dl/", "/dl/%2e%2e/")
     if fault == "signature": hub.assets[value["release_id"] + "/os-update.json.sig"] = b"invalid"
+    if fault == "rollout_signature": hub.assets[value["release_id"] + "/os-rollout.json.sig"] = b"invalid"
     monkeypatch.setattr(m.lifecycle, "start", lambda *a, **k: pytest.fail("unsafe install"))
     before = journal.read_bytes()
     try:
@@ -87,6 +88,7 @@ def test_bad_part_inventory_or_content_never_reaches_install(feed, monkeypatch, 
         pass
     target = root / "var/lib/rosy-device/os-update/staging" / value["release_id"] / value["bundle"]["filename"]
     assert not target.exists() and journal.read_bytes() == before and state.read_state(root)["pending"] is None
+    if target.parent.exists(): assert not any(p.name.endswith((".part", ".chunk")) for p in target.parent.iterdir())
 
 
 def test_chunked_space_accounts_for_one_part_and_does_not_download_when_low(feed):
@@ -109,3 +111,14 @@ def test_fresh_engineering_admission_rechecks_canary_and_withdrawal(feed):
     with pytest.raises(ValueError): client.admit(value)
     policy(hub, private, value, original, withdrawn=True)
     with pytest.raises(m.Withdrawn): client.admit(value)
+
+
+def test_legacy_stable_cache_remains_stable_and_unknown_classification_fails_closed(feed):
+    m, hub, host, root, _, _, private, _ = feed
+    _, _, _, entry = chunked(hub, private)
+    client = m.Feed(root, host=host)
+    normalized = client._entry(entry)
+    normalized.pop("prerelease")
+    assert client._cached_entry(normalized)["prerelease"] is False
+    normalized["prerelease"] = "false"
+    with pytest.raises(ValueError): client._cached_entry(normalized)
