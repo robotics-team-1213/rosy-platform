@@ -1,0 +1,19 @@
+collector_id: site-a-monitoring
+site_id: site-a
+readers:
+  - principal_id: site-operator
+    token_env: MONITORING_SITE_READ
+    sites: [site-a]
+  - principal_id: central-reader
+    token_env: MONITORING_CENTRAL_UPSTREAM
+    sites: [site-a]
+sources:
+  - id: fleet-a
+    site_id: site-a
+    kind: fleet
+    url: https://fleet-a.example.invalid
+    token_env: MONITORING_FLEET_UPSTREAM
+  - id: host-a
+    site_id: site-a
+    kind: host_state
+    path: /var/lib/rosy-host-state/status.json
