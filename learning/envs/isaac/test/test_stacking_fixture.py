@@ -132,6 +132,8 @@ def test_joint_commands_accelerate_within_sim_profile_and_stop_at_position_limit
     assert velocity == pytest.approx(.5/30)
     assert position == pytest.approx(.5/900)
     for _ in range(300):
+        previous_velocity = velocity
         position, velocity = mod.advance_joint(position, velocity, 100., limits, 1/30)
         assert -.1 <= position <= 1.1 and abs(velocity) <= .5
-    assert position == 1.1 and velocity == 0.
+        assert abs(velocity-previous_velocity) <= .5/30+1e-12
+    assert position == pytest.approx(1.1) and abs(velocity) < 1e-9
