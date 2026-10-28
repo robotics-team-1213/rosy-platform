@@ -12640,3 +12640,10 @@ osy-d395-s1d\`.
 - 증거: 원격 영향 선택 affected/no escalation 3059 passed /352 skipped /NEW0. 공식17개 Chromium 파일 최초262 passed/1 failed, 실패한 로딩 대기 시험을 보강한 두 파일 전체19 passed/skip0/NEW0. 릴리스·비밀값·배치108 passed. 캡처·원본별 SHA와 실패 이력을 결과 기록에 구분했다.
 - gate 변화: 없음. 실물·실제 HF·reader·학습 품질·설치/배포·merge/push는 별도 수용이다.
 - CE: 해당 없음. 판단 근거가 최종 코드·회귀·기존 문서에 남는다.
+
+## 2026-10-28 · ae4771b936 · Fleet 계정 영역의 레이아웃 일관성
+
+- 변경: 사용자 제보의 토큰 영역 출현 원인을 공통 인증 표시 정책과 동일 identity 재조회 상태 보존으로 수정하고 `docs/validation/fleet-account-layout-2026-10-28/`에 기록했다.
+- 증거: 원격 Chromium RED8 뒤 공통 헤더/세션14, 비밀번호 로그인1 passed/skip0/NEW0. 공식 영향53대상8043 passed/757 skipped/NEW0. 실제8PNG·독립 소스/화면 검토 완료.
+- gate 변화: 없음. 운영 배포·실물 비상 정지·현장 수용은 별도다.
+- CE: 해당 없음. 원인과 거부/표시 조건이 코드·시험에 남는다.

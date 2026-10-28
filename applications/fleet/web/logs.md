@@ -539,3 +539,10 @@
 - 변경: work 뷰가 `GET /api/fleet/policy-admission`을 함께 읽어 승인 대기 행에 범위 소속 배지(`자동 승인`)를 붙이고, work 개요에 범위 readback(로봇·종류·잔여 상한·revision·차단 사유)과 기명 운영자 전환 단추를 둔 `<details>` 패널을 추가했다. 판정·문구는 순수 함수(`autoAdmitScope`·`policyScopeText`·`autoAdmitDetail`)이고 readback이 없으면 fail-closed로 배지를 끈다. 범위 밖 로봇·`two_person`·상한 소진·전환 꺼짐은 배지 없이 사람 승인으로 남는다. 새 자산이 없어 allowlist·CSP는 그대로다.
 - 증거: node `work-view.test.mjs` 6 통과(범위 안·로봇 밖·two_person·소진·비활성·readback 문구). 모델 PC 원격 `ROSY_RUN_BROWSER_TESTS=1`로 `test_work_overview_browser.py` 36 통과·`test_console_palette`·`test_console_disabled_features`·`test_document_imports`·`test_doc_tabs` 포함 0 NEW, `test_server_app`·`test_remaining_platform_installed` 50 통과 0 NEW. 전체 affected/FULL 통과를 뜻하지 않는다.
 - gate 변화: 제품·장치·현장 수용 승격 없음. 자동 승인 활성화는 P5 현장 수용 기록이 별도다.
+
+## 2026-10-28 · ae4771b936 · 계정·토큰 영역의 화면별 표시와 재조회 레이아웃 통일
+
+- 변경: 관제·설치·지도·Cell의 토큰 접속 폼은 처음 숨기고, 인증된 세션에서는 공통 헤더가 숨김을 유지하며 접속 해제 시 복원한다. 페이지별 저장 토큰/development 조건의 별도 숨김을 없앴다. 같은 사용자·역할 확인은 사용자가 연 계정 영역을 닫지 않고 새 인증일 때만 접는다. 인증 전송·권한·비상 정지 규칙은 바꾸지 않았다.
+- 증거: 실제 Chromium 네 문서×320/1440 RED8건 뒤 공통 헤더/토큰 재인증/세션 만료/안전 표시14 passed 및 비밀번호 로그인1 passed, skip0/NEW0. 실제 PNG8장과 독립 소스/화면 검토 근거는 `docs/validation/fleet-account-layout-2026-10-28/`에 보존한다. 최종 영향 회귀는 같은 기록에서 별도 판정한다.
+- gate 변화: 없음. 실제 비상 정지 동작·운영 배포·현장 수용은 실행하지 않았다.
+- CE: 해당 없음. 표시 소유권과 반복 인증의 상태 유지 판단이 공통 코드·브라우저 회귀에 남는다.
