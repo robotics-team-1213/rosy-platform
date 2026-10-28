@@ -64,6 +64,7 @@ class CooperationSupervisor(Supervisor):
                 return finish('PROFILES_REQUIRED')
             requests = tuple(ReviewRequest(problem, role, trigger) for role in ('proposal', 'critique'))
             keys = tuple(p.profile_key for p in providers)
+            transports = tuple(p.exchange for p in providers)
             if self.measurements.cost_caps != tuple(p.profile.max_cost_usd for p in providers):
                 return finish('COST_PROFILE_CHANGED')
         except (ValueError, TypeError, KeyError, AttributeError):
@@ -84,6 +85,7 @@ class CooperationSupervisor(Supervisor):
         def unchanged():
             latest = self.environment()
             return (fresh() and tuple(p.profile_key for p in providers) == keys and remaining() > 0
+                    and all(p.exchange is transport for p, transport in zip(providers, transports))
                     and type(latest) is ExecutionEnvironment and latest.expires_at > self.clock()
                     and latest.revision == plan.environment.revision
                     and latest.workload_key == self.measurements.workload_key
@@ -94,7 +96,7 @@ class CooperationSupervisor(Supervisor):
                     raise ValueError('RESOURCE_RELEASE_UNKNOWN')
         async def invoke(index, token=None):
             provider, request = providers[index], requests[index]
-            call_id, cancel = provider.call_id(request), provider.exchange.cancel
+            call_id, cancel = provider.call_id(request), transports[index].cancel
             owned = token is None
             if owned:
                 token = await self.admission.reserve((keys[index],), plan.environment.revision)
