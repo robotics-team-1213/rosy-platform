@@ -67,3 +67,4 @@ D-896 reserved in another in-flight branch (refs/adr/D-896, Arm S measured-cell 
 D-897 reserved in another in-flight branch (refs/adr/D-897, isolated AI/model PC simulation training); remove when its ADR lands
 D-898 reserved in another in-flight branch (refs/adr/D-898, Fleet perception approval to model registry); remove when its ADR lands
 D-900 reserved in another in-flight branch (refs/adr/D-900), absent from this D-901 branch; remove when its ADR lands
+D-902 reserved in another in-flight branch (refs/adr/D-902, Pilot real OMX teleop), absent from main; remove when it lands
