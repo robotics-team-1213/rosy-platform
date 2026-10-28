@@ -125,7 +125,9 @@ def test_failed_read_finishes_and_recovers_without_losing_input(workspace, surfa
     expect(page.locator('#' + surface + '-error')).to_be_visible()
     status_node = page.locator('#verdict' if surface == 'camera' else '#promote-status')
     expect(status_node).to_contain_text('다시 확인')
-    if surface == 'camera': page.fill('#camera-identity', 'keep fixture input')
+    if surface == 'camera':
+        page.locator('details summary').click()
+        page.fill('#camera-identity', 'keep fixture input')
     capture(page, f'read-error-{surface}-{status}-{width}')
     state['status'] = 200
     page.locator('#' + surface + '-refresh').click()
@@ -162,6 +164,23 @@ def test_promotion_error_and_receipt_describe_the_latest_attempt(workspace):
     expect(error).to_contain_text('fixture save rejected')
     expect(receipt).to_be_hidden()
     assert state['posts'] == 3
+
+
+def test_camera_refresh_keeps_edits_made_during_the_read(workspace):
+    page, _, origin, expect = workspace
+    ready_camera(page, origin, expect)
+    held = []
+    page.route('**/api/learning/camera/references', lambda route: held.append(route))
+    page.locator('#camera-refresh').click()
+    expect(page.locator('#camera-refresh')).to_be_disabled()
+    page.fill('#fingerprint', 'd' * 64)
+    page.fill('#joints', '{"joint1":0.2}')
+    assert len(held) == 1
+    held[0].fulfill(json={'references': [REF, dict(REF, revision='b' * 64)]})
+    expect(page.locator('#camera-refresh')).to_be_enabled()
+    expect(page.locator('#fingerprint')).to_have_value('d' * 64)
+    expect(page.locator('#joints')).to_have_value('{"joint1":0.2}')
+    assert page.locator('#check-photo').evaluate('n => n.files[0].name') == 'fixture.png'
 
 
 def test_promotion_stays_disabled_until_the_read_cycle_finishes(workspace):
