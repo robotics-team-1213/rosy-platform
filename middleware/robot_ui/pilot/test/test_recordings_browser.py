@@ -461,5 +461,6 @@ def test_full_drive_recording_sheet_keeps_its_focus_visible(tablet_page, size, c
               else page.locator('[data-recordings-notice]'))
     playwright_sync.expect(target).to_be_focused()
     playwright_sync.expect(target).to_be_in_viewport()
+    playwright_sync.expect(page.locator('ui-topbar [data-estop]')).to_be_in_viewport()
     _capture_recording_view(page, change)
     assert errors == [], errors
