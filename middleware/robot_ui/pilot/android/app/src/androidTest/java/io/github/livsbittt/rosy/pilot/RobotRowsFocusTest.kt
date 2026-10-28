@@ -69,6 +69,12 @@ class RobotRowsFocusTest {
             assertTrue(view.getGlobalVisibleRect(bounds))
             assertEquals(view.width, bounds.width())
             assertEquals(view.height, bounds.height())
+            val decor = activity.window.decorView
+            val insets = requireNotNull(decor.rootWindowInsets)
+            assertTrue("focus is under the status bar", bounds.top >= insets.systemWindowInsetTop)
+            assertTrue("focus is under the navigation bar", bounds.bottom <= decor.height - insets.systemWindowInsetBottom)
+            assertTrue("focus is under the left system bar", bounds.left >= insets.systemWindowInsetLeft)
+            assertTrue("focus is under the right system bar", bounds.right <= decor.width - insets.systemWindowInsetRight)
             assertEquals(0, activity.selections)
         }
         instrumentation.waitForIdleSync()
