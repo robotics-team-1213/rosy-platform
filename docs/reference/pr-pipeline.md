@@ -43,6 +43,20 @@ PR에는 다음 근거를 남긴다. 인수인계 내용은 [팀 가이드 §3.6
 
 ## CI와 병합
 
+### 로컬 FULL 근거와 게시 SHA
+
+게시할 마지막 기능이 있는 작업 worktree에서, 변경 범위가 작아도 정본 FULL 검증이 필요하면 다음 모드를 쓴다. 이 명령은 기존 착지 대기열·검토·크기·원격 시험 관문을 거쳐 로컬 main에 착지하며 push하지 않는다.
+
+```bash
+python tools/land.py --tests full --no-cache
+```
+
+`full`은 현재 후보의 CI·모듈·전체 root 시험과 등록된 모든 opt-in 브라우저의 chunk·ALONE 계획을 고른다. 매 프로세스 실행마다 정상 준비를 거치고 guard·isolation은 현재 실행에서 cache 없이 확인한다. 본시험은 같은 tree·시험 환경의 clean cache를 재사용할 수 있으며, `--no-cache`는 이 본시험 재사용을 끈다. 한 실행에서 확인한 준비 근거로 main 변경분을 검증하는 흐름은 유지하므로, 이 옵션을 모든 후속 호출의 무조건 재실행으로 설명하지 않는다. main·registry·packing·환경이 달라져 근거가 부족하면 다시 준비한다. `full --no-queue`는 지원하지 않는다.
+
+LOAD-FLAKY·다른 tree의 좁은 재사용·불완전 본시험·빈 브라우저 통과는 explicit FULL의 저장·착지를 막는다. isolation의 기존 정책은 유지한다. Safety 미도달·새 실패·죽거나 report가 없는 job은 중단하고, 허용된 nonSafety 예산 초과는 미완료로 기록·보고한다. auto의 착지 허용은 그대로지만 부적격 준비·차례 결과는 재사용 가능한 게시 기록이 되지 않는다. 준비 기록의 `tier=full` 문자열만으로 이전 실행을 신뢰하지 않는다.
+
+게시 담당은 `tools/publish_main.py`가 선택한 **실제 SHA**에 요청된 모든 착지가 포함되는지 각각 `git merge-base --is-ancestor <착지-SHA> <선택-SHA>`로 확인한다. 도구가 고른 가장 최근 FULL 조상에 마지막 기능이 없으면 게시하지 않는다. 해당 SHA의 적격 FULL 기록, 같은 PR head의 녹색 `ci-result`, merge commit 병합과 origin 역동기화를 함께 확인한다(D-868). `--force-blocked`는 FULL 근거나 기능 포함 확인을 대신하지 않는다. 실제 FULL·공개 CI·산출물·현장 수용은 별도 근거다.
+
 `ci-result` 성공이 모든 개별 잡의 통과를 뜻하지는 않는다. 보고용 비게이팅 잡도 읽고 실패·수집 오류·미실행을 별도로 기록한다. 새로 드러난 실패는 원인을 확인하고 해결한다. 기존 실패로 판단하려면 변경 전 기준선의 같은 실패 근거를 남긴다. 시험을 숨기거나 freshness·안전 기준을 느슨하게 바꾸지 않는다. 관리자 예외로 적색 CI를 넘기지 않는다.
 
 ```bash
