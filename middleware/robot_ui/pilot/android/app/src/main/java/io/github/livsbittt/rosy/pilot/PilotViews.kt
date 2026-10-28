@@ -39,8 +39,17 @@ class PilotViews(private val context: Context) {
         setOnClickListener { action() }
     }
     fun replaceRobots(container: LinearLayout, status: View, content: () -> Unit) {
+        val focused = (0 until container.childCount).map(container::getChildAt).firstOrNull { it.hasFocus() }?.tag
         container.removeAllViews()
         content()
+        if (focused != null) {
+            val replacement = (0 until container.childCount).map(container::getChildAt)
+                .firstOrNull { it.tag == focused && it.isEnabled }
+            if (replacement?.requestFocus() != true) {
+                status.isFocusableInTouchMode = true
+                status.requestFocus()
+            }
+        }
     }
     fun robot(candidate: Candidate, enabled: Boolean, action: () -> Unit): View = LinearLayout(context).apply {
         tag = Triple(candidate.host, candidate.port, candidate.secure)

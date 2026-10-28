@@ -141,7 +141,7 @@ class MainActivity : Activity() {
             android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT) { backToLobbyOrExit() }
     }
     private val views by lazy { PilotViews(this) }
-    private fun label(text: String, size: Float = 16f) = views.label(text, size)
+    private fun label(text: String, size: Float = RosyMetrics.TextBody) = views.label(text, size)
     private fun button(text: String, action: () -> Unit) = views.button(text, action = action)
     private fun showLobby() {
         root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(PilotColors.background) }
