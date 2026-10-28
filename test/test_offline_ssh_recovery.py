@@ -136,6 +136,60 @@ def test_missing_authorized_keys_is_restored_without_touching_setup(card, backup
     assert metadata["existed"] is False
 
 
+def test_backup_failure_reports_no_card_write_and_retains_recovery_directory(card, backup, recovery, monkeypatch):
+    root, identity, keys = card
+    before = keys.read_bytes()
+    save = recovery._save
+    def fail_metadata(path, content):
+        if path.name == "before.json":
+            raise OSError("fixture backup disk full")
+        save(path, content)
+    monkeypatch.setattr(recovery, "_save", fail_metadata)
+    with pytest.raises(ValueError, match="before card write") as failure:
+        recovery.apply(root, KEY, backup, identity)
+    saved, = backup.iterdir()
+    assert str(saved) in str(failure.value)
+    assert keys.read_bytes() == before
+    assert (saved / "authorized_keys.before").read_bytes() == before
+
+
+@pytest.mark.parametrize("interrupt", [False, True])
+def test_receipt_failure_reports_possible_card_write_and_preserves_backup(card, backup, recovery, monkeypatch, interrupt):
+    root, identity, keys = card
+    before = keys.read_bytes()
+    save = recovery._save
+    def fail_receipt(path, content):
+        if path.name == "receipt.json":
+            if interrupt:
+                raise KeyboardInterrupt
+            raise OSError("fixture receipt disk full")
+        save(path, content)
+    monkeypatch.setattr(recovery, "_save", fail_receipt)
+    with pytest.raises(ValueError, match="after card write started") as failure:
+        recovery.apply(root, KEY, backup, identity)
+    saved, = backup.iterdir()
+    assert str(saved) in str(failure.value)
+    assert (saved / "authorized_keys.before").read_bytes() == before
+    assert KEY in keys.read_text().splitlines()
+    assert OLD_KEY in keys.read_text().splitlines()
+    assert recovery.inspect(root, KEY)["key_present"] is True
+
+
+def test_card_change_during_backup_is_refused_before_key_merge(card, backup, recovery, monkeypatch):
+    root, identity, keys = card
+    changed = keys.read_bytes() + b"# concurrent operator change\n"
+    sync = recovery._sync
+    def change_after_backup(path):
+        sync(path)
+        if path == backup:
+            keys.write_bytes(changed)
+    monkeypatch.setattr(recovery, "_sync", change_after_backup)
+    with pytest.raises(ValueError, match="before card write"):
+        recovery.apply(root, KEY, backup, identity)
+    assert keys.read_bytes() == changed
+    assert KEY not in keys.read_text().splitlines()
+
+
 @pytest.mark.parametrize("field", ["device_uid", "device_name", "robot_number", "release_id"])
 def test_wrong_card_confirmation_cannot_write(card, backup, recovery, field):
     root, identity, _ = card
