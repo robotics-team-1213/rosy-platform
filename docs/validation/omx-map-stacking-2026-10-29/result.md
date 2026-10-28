@@ -85,6 +85,22 @@ The successful continuation corrected imported topology and collider traversal:
 
 ## Separate earlier PPO smoke
 
+The current map was subsequently used by `omx-map-stacking-rl` on source
+`77d74168bb` (full source binding in its snapshot), run
+`394741d76b9c582e97bdabc48dd9aef0`. It completed 32 updates / 1,024 transitions
+with finite parameter delta 0.5232045650482178 and confirmed owned cleanup.
+The separate evaluation seed 10042 ran 6,000 control steps (200 simulated seconds)
+and completed **0/1** stacks. The policy directly controls bounded joint motions;
+it does not replay the successful reference trajectory.
+
+Its checkpoint is 200,319 bytes, SHA-256
+`cbe0e45f25949a4930c6258cd276c3d9a96f94fd1b7562e705a34bdacb58823a`.
+Its report is 2,518 bytes, SHA-256
+`d13d69d51a13ce16d84e1835af0104e0fdf741e3438f5e881bc9b5fcdbe3705c`.
+The snapshot is under workspace
+`Rosy/artifacts/isaac/omx-stacking-20261029/394741d76b9c582e97bdabc48dd9aef0-5012136c47b44dfcb3211666b040d0d5/`.
+This proves mapped training integration, not learned palletizing proficiency.
+
 Source `83e3d61303703e6dc334f96ad2e72adaf6bea1d0`, run
 `c6cb3a15e1985f0bb686c272867734ce`: the earlier synthetic cell completed 32 PPO
 updates / 1,024 transitions and changed finite policy parameters (delta
@@ -98,6 +114,9 @@ The mapped fixture/IK/catalog/contact-acceptance suite on `a7df4c5b90` passed
 4 remote tests. Full Isaac regression on `ac9d8e00db` passed 415 tests and skipped
 one ROS xacro-overlay-dependent test, exit 0 / 0 NEW. Later runtime changes need
 their own verification; that source result does not establish physical success.
+The mapped-RL source `729acc9729` then passed 417 tests, skipped one and had
+0 NEW. The `77d74168bb` runtime additionally verified the corrected grasp-goal
+variable and one-episode mapped RL metadata. Final affected checks follow below.
 
 ## Scope and remaining uncertainty
 
