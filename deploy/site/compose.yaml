@@ -270,6 +270,35 @@ services:
     networks: [site_backend]
     logging: *default-logging
 
+  # Daily ledger backup target for the host timer (rosy-site-ledger-backup.timer):
+  # `docker compose ... run --rm fleet-backup`. The fleet image already ships
+  # site_db.py; the online backup reads the live volume read-only and writes to
+  # the host bind. The profile keeps it out of plain `up` runs.
+  fleet-backup:
+    image: rosy-site-fleet:${ROSY_SITE_IMAGE_TAG:-local}
+    profiles: ["backup"]
+    entrypoint: ["python3"]
+    command:
+      - /opt/rosy/site_db.py
+      - backup
+      - --source
+      - /var/lib/rosy/fleet.sqlite3
+      - --dest-dir
+      - /backup
+      - --prune
+      - "14"
+    user: "10001:10001"
+    volumes:
+      - sighting_data:/var/lib/rosy:ro
+      - ${ROSY_SITE_BACKUP_DIR:-/var/backups/rosy-site}:/backup
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    network_mode: "none"
+
   proxy:
     image: rosy-site-proxy:${ROSY_SITE_IMAGE_TAG:-local}
     build:

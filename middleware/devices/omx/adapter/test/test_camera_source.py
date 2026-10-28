@@ -116,7 +116,7 @@ def test_frame_rate_cap_is_bounded_before_ros_starts(monkeypatch, fps):
         camera_source.main()
 
 
-def test_cli_accepts_persistent_by_path_before_optional_ros_imports(monkeypatch):
+def test_cli_accepts_persistent_by_path_before_camera_imports(monkeypatch):
     import builtins
     original_import = builtins.__import__
 
@@ -130,3 +130,37 @@ def test_cli_accepts_persistent_by_path_before_optional_ros_imports(monkeypatch)
     monkeypatch.setattr(builtins, "__import__", stop_at_camera_import)
     with pytest.raises(RuntimeError, match="camera arguments accepted"):
         main()
+
+
+def test_native_camera_encodes_once_without_ros_and_releases_device(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+    import sys
+    from omx_adapter import camera_source as source
+    from core_common.observation_snapshot import SnapshotChannel
+    events, frame = [], object()
+    monkeypatch.setenv('ROSY_OBSERVATION_DIR', str(tmp_path))
+    monkeypatch.setattr(sys, 'argv', ['camera', '--device', '/dev/v4l/by-id/cam',
+        '--topic', '/top_camera/image_raw', '--frame-id', 'top'])
+    monkeypatch.setattr(source, 'selected_device', lambda value: value)
+    monkeypatch.setattr(source, 'open_capture', lambda *args: SimpleNamespace(release=lambda: events.append('release')))
+    monkeypatch.setattr(source, 'read_frame', lambda capture: frame)
+    monkeypatch.setattr(source, 'notify_watchdog', lambda: events.append('watchdog'))
+    def encode(extension, pixels, options):
+        assert pixels is frame
+        events.append('encode')
+        return True, SimpleNamespace(tobytes=lambda: b'jpeg')
+    def quality(pixels):
+        assert pixels is frame
+        events.append('quality')
+        return {'source': 'original'}
+    def stop(delay): raise KeyboardInterrupt()
+    monkeypatch.setattr(source.time, 'sleep', stop)
+    monkeypatch.setitem(sys.modules, 'cv2', SimpleNamespace(
+        imencode=encode, IMWRITE_JPEG_QUALITY=1, error=RuntimeError))
+    monkeypatch.setitem(sys.modules, 'camera_quality', SimpleNamespace(frame_quality=quality))
+    for name in ('rclpy', 'sensor_msgs', 'cv_bridge'):
+        monkeypatch.setitem(sys.modules, name, None)
+    source.main()
+    sample = SnapshotChannel('/top_camera/image_raw').read()
+    assert sample['payload'] == b'jpeg' and sample['quality'] == {'source': 'original'}
+    assert events == ['watchdog', 'quality', 'encode', 'release']

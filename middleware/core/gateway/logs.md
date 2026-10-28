@@ -1991,3 +1991,10 @@
 - 변경: signed package의 binding schema/model과 canonical snapshot digest를 검증한다. 설치 디렉터리 이름만 맞고 다른 기종의 설정이 들어간 경우도 서비스 조립 전에 거절한다.
 - 증거: 새 package-mix/shape 반례9개 RED 후 관련153 PASS/NEW0, source 독립 검토 승인. 앞선 전체 CORE/공통 계약 묶음7585 PASS/91 SKIP는 이 보완 전 revision이며 최신 전체 착지는 별도로 검증한다.
 - gate 변화: 기존 ARTIFACT/DEVICE/FIELD 변화 없음. 이전 profile package에 binding이 없으면 새 CORE와 호환 릴리스로 함께 갱신해야 한다.
+
+## 2026-10-27 · uncommitted · test(core): 다음 공식 검증에 charging 최초 원인 관측을 포함한다
+
+- 변경: 검토된 commit `27a4d42e3b184b674e916d0da2245e60e447ef7a`의 진단 시험 4파일만 독립 이식한다. 최초 owner HOLD·Fleet stop과 real/SIM·RPC·HTTP worker·SQL 시각을 기록하고, 실제 인증 요청·SQLite 회귀로 계측 경로를 확인한다. A 제품 코드는 포함하지 않는다. 기존 timeout·assertion·durability 정책을 유지한다.
+- 증거: 원본 27a의 작은 회귀는 1 passed, 0 skipped이고 Gateway 전체는 3484 passed, 15 skipped, NEW 0이었다. 원래 충전 지연은 비재현이며 해결된 원인으로 주장하지 않는다. 이식 전 Tool1 commit `fa6ce881ede6fd7b2cca101fd469621cd0bc6f15`의 관련 도구 168 passed, 0 skipped는 이 새 시험 소스의 검증을 대신하지 않는다. 이식한 committed source에서 작은 회귀와 집중 검증을 먼저 수행한다.
+- gate 변화: 없음. 실제 eligible FULL·착지·게시·배포는 아직 대기하며 재발하면 추가 반복을 멈추고 관측된 최초 원인을 조사한다.
+- CE: 미해결 — 계측은 작동을 확인했으나 이전 charging 지연의 원인은 미확정이다.

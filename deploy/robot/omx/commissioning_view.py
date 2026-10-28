@@ -1,6 +1,6 @@
 """Local read-only OMX observation viewer. No device access or command publisher.
 
-Run on the camera ROS host; access remotely through an SSH localhost forward.
+Run on the camera host; access remotely through an SSH localhost forward.
 With ``--record-root`` it also shows each arm's D-858 S3 commissioning gate (read only:
 which measurements are missing or failing, and the record revision). It never saves.
 Source stamps describe host capture/read time, not synchronized exposure time.
@@ -12,6 +12,7 @@ import copy
 import json
 import math
 import re
+import signal
 import threading
 import time
 from pathlib import Path
@@ -308,6 +309,28 @@ def make_server(store, *, port=8766):
     return ThreadingHTTPServer(("127.0.0.1", port), Handler)
 
 
+def consume_native(store):
+    """Read only selected local channels without making repeated reads fresh."""
+    from core_common.observation_snapshot import SnapshotChannel
+    channels = [(label, key, 'jpeg') for label, key in store.cameras.items()]
+    channels += [(f'arm:{label}', key, 'joints') for label, key in store.arms.items()]
+    if not store.arms:
+        channels.append(('joints', '/omx_commissioning/joint_states', 'joints'))
+    for label, key, kind in channels:
+        sample = SnapshotChannel(key).read()
+        if sample is None or sample['kind'] != kind:
+            continue
+        try:
+            value = sample['payload'] if kind == 'jpeg' else json.loads(sample['payload'])
+            if kind == 'joints' and (not isinstance(value, dict) or len(value) != 6
+                    or not all(type(v) in (int, float) and math.isfinite(v) for v in value.values())):
+                continue
+            store.put(label, sample['captured_at'], value, received=sample['monotonic'],
+                      quality=sample.get('quality'))
+        except (ValueError, TypeError):
+            continue
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", type=int, default=8766)
@@ -322,68 +345,22 @@ def main():
                                  gates=gate_reader(args.record_root, args.gate_arm))
     except ValueError as exc:
         parser.error(str(exc))
-    import cv2
-    from camera_quality import frame_quality
-    import numpy as np
-    import rclpy
-    from rclpy.qos import qos_profile_sensor_data
-    from sensor_msgs.msg import Image, JointState
-
-    rclpy.init()
-    node = rclpy.create_node("omx_commissioning_view")
-
-    def stamp(message):
-        return message.header.stamp.sec + message.header.stamp.nanosec / 1e9
-
-    def image(message, source):
-        try:
-            if (message.encoding not in ("bgr8", "rgb8") or message.width != 640
-                    or message.height != 480 or message.step < message.width * 3
-                    or len(message.data) != message.step * message.height):
-                raise ValueError("unsupported image layout")
-            pixels = np.frombuffer(message.data, np.uint8).reshape(message.height, message.step)
-            pixels = pixels[:, :message.width * 3].reshape(message.height, message.width, 3)
-            if message.encoding == "rgb8":
-                pixels = cv2.cvtColor(pixels, cv2.COLOR_RGB2BGR)
-            ok, encoded = cv2.imencode(".jpg", pixels, [cv2.IMWRITE_JPEG_QUALITY, 80])
-            if ok:
-                store.put(source, stamp(message), encoded.tobytes(), quality=frame_quality(pixels))
-        except (ValueError, TypeError, cv2.error) as exc:
-            node.get_logger().warning(str(exc))
-
-    def joints(message, source="joints"):
-        try:
-            if (len(message.name) != 6 or len(set(message.name)) != 6
-                    or len(message.position) != 6
-                    or not all(math.isfinite(value) for value in message.position)):
-                raise ValueError("invalid joint observation")
-            store.put(source, stamp(message), dict(zip(message.name, message.position)))
-        except (ValueError, TypeError) as exc:
-            node.get_logger().warning(str(exc))
-
-    for source, topic in store.cameras.items():
-        node.create_subscription(Image, topic,
-                                 lambda msg, key=source: image(msg, key), qos_profile_sensor_data)
-    if store.arms:
-        for label, topic in store.arms.items():
-            node.create_subscription(JointState, topic,
-                                     lambda msg, key=label: joints(msg, f"arm:{key}"), qos_profile_sensor_data)
-    else:
-        node.create_subscription(JointState, "/omx_commissioning/joint_states", joints, qos_profile_sensor_data)
     server = make_server(store, port=args.port)
     worker = threading.Thread(target=server.serve_forever, daemon=True)
     worker.start()
+    from core_common.observation_snapshot import interrupt_on_termination
+    previous = signal.signal(signal.SIGTERM, interrupt_on_termination)
     try:
-        rclpy.spin(node)
+        while True:
+            consume_native(store)
+            time.sleep(.05)
     except KeyboardInterrupt:
         pass
     finally:
+        signal.signal(signal.SIGTERM, previous)
         server.shutdown()
         server.server_close()
         worker.join()
-        node.destroy_node()
-        if rclpy.ok():
-            rclpy.shutdown()
 
 
 if __name__ == "__main__":

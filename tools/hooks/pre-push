@@ -133,12 +133,18 @@ git rev-parse --verify -q origin/main >/dev/null || {
 }
 # D-889 5: a publish push puts the whole range's history on a public repo. A plain git push to
 # publish/main-* skipped publish_main.py's per-commit scan (2026-10-27), so the hook runs it too.
-if [ -n "${PUBLISH_REF:-}" ] && [ -f tools/publish_main.py ]; then
+# publish_main.py --apply ran both checks for exactly this SHA moments ago and says so (D-889); any other push runs them.
+CHECKED=""
+if [ -n "${PUBLISH_REF:-}" ] && [ "${ROSY_PUBLISH_CHECKED:-}" = "$PUSH_SHA" ]; then
+  CHECKED=1
+  echo "[pre-push] secret scan and Safety-Review: publish_main.py passed them on ${PUSH_SHA:0:10}"
+fi
+if [ -n "${PUBLISH_REF:-}" ] && [ -z "$CHECKED" ] && [ -f tools/publish_main.py ]; then
   echo "[pre-push] secret scan on origin/main..${PUSH_SHA:0:10}"
   "$PY" tools/publish_main.py --secret-scan "$PUSH_SHA" || exit 1
 fi
-echo "[pre-push] Safety-Review trailer on origin/main..${PUSH_SHA:0:10}"
-if ! SAFETY_OUT="$("$PY" tools/harness/safety_review.py origin/main "$PUSH_SHA" 2>&1)"; then
+[ -n "$CHECKED" ] || echo "[pre-push] Safety-Review trailer on origin/main..${PUSH_SHA:0:10}"
+if [ -z "$CHECKED" ] && ! SAFETY_OUT="$("$PY" tools/harness/safety_review.py origin/main "$PUSH_SHA" 2>&1)"; then
   printf '%s\n' "$SAFETY_OUT" >&2
   case "$SAFETY_OUT" in
     *"without a \`Safety-Review:"*)
@@ -148,10 +154,12 @@ if ! SAFETY_OUT="$("$PY" tools/harness/safety_review.py origin/main "$PUSH_SHA" 
   esac
   exit 1
 fi
-printf '%s\n' "$SAFETY_OUT"
+[ -n "$CHECKED" ] || printf '%s\n' "$SAFETY_OUT"
 
 # D-766 2: every pushed commit passes the size rule on its own (git only, no tests).
-if [ -f tools/harness/size_range.py ]; then
+# publish_main.py's push is skipped: each landing ran it on its own commits and the PR's CI scope job runs it on
+# the whole range again; on this laptop it took 40+ min over a 4,000-commit range (2026-10-28, git reads under load).
+if [ -z "$CHECKED" ] && [ -f tools/harness/size_range.py ]; then
   echo "[pre-push] size rule per commit on origin/main..${PUSH_SHA:0:10}"
   "$PY" tools/harness/size_range.py origin/main "$PUSH_SHA" || exit 1
 fi
@@ -184,7 +192,8 @@ FAST_SUITES=(
 # landed by tools/land.py with its affected tier green (land records in
 # <git-common-dir>/rosy-land), reuse those results and run only the fast suites no
 # record ran. A missing record (hand-landed commit, --tests none) runs the gate below.
-if OWED="$("$PY" tools/hooks/land_record.py owed --head "$PUSH_SHA" --upstream origin/main "${FAST_SUITES[@]}")"; then
+# D-889: a publish/main-* push reuses the pushed commit's own record (--own); ci-result is its FULL gate.
+if OWED="$("$PY" tools/hooks/land_record.py owed --head "$PUSH_SHA" --upstream origin/main ${PUBLISH_REF:+--own} "${FAST_SUITES[@]}")"; then
   if [ -z "$OWED" ]; then
     echo "[pre-push] land records cover origin/main..${PUSH_SHA:0:10}; no suite owed"
   else

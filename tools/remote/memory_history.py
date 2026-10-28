@@ -50,11 +50,22 @@ def cpu_cores(log_text: str) -> float | None:
     return round(int(found[-1][0]) / int(found[-1][1]), 2) if found and int(found[-1][1]) else None
 
 
-def record(history: Path | None, inv: list[str], host: str, peak: int, sha: str, cores: float | None = None) -> None:
+def timing(log_text: str, queued: float, job: float) -> dict:
+    """Seconds of one invocation (D-889 addendum 3): ``queued_s`` from the run's start until a host took it (ship
+    and venv setup included), ``job_s`` from then until its exit code, ``pytest_s`` pytest's own wall on the host
+    (the cpu line); job_s minus pytest_s is the start, Chromium install and polling around it."""
+    found = CPU.findall(log_text)
+    return {"queued_s": round(queued), "job_s": round(job),
+            **({"pytest_s": round(int(found[-1][1]) / 1000)} if found else {})}
+
+
+def record(history: Path | None, inv: list[str], host: str, peak: int, sha: str, cores: float | None = None,
+           timing: dict | None = None) -> None:
     if history is None:
         return
     row = {"key": key(inv), "host": host, "peak_mib": peak, "sha": sha,
-           "time": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), **({"cores": cores} if cores is not None else {})}
+           "time": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), **({"cores": cores} if cores is not None else {}),
+           **(timing or {})}
     with history.open("a", encoding="utf-8") as out:
         out.write(json.dumps(row) + "\n")
 

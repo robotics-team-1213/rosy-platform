@@ -5031,3 +5031,18 @@
 - 증거: 신규 시험(보유 lease 2종·미보유 1종) 포함 원격 4 suite green, known NEW 0. 변이 검증: 기록 조건을 끄면 신규 시험 red(`2790088abd`), 복원 green(`441d50c066`).
 - Gate: 없음. 감사 행 추가일 뿐 상태 기계·전이 조건은 불변(기존 재시작 시험 회귀 없음).
 - CE: 해당 없음 — 결함·수정·근거가 시험과 커밋에 남아 있다.
+
+## 2026-10-27 · 398b533c38 · 자동화 worker의 거절 증거 import 공개 이름 전환
+
+- 변경: `incidents/automation/execution/worker.py`가 분포 경계 너머 import하던 `rosy.decision.billing._RejectedJudgment`가 공개 `RejectedJudgment`로 바뀜에 따라 import·엄격 타입 검사를 따라갔다. 정본 기록은 `operations/decision/logs.md` 같은 SHA 행.
+- 증거: 원격 5 suite(known-cost·deliberation 3종·installed wheel) green, known NEW 0.
+- Gate: 없음. 순수 이름 변경.
+- CE: 해당 없음.
+
+## 2026-10-28 · cdbd0c332e · 전용 앱 상태 시험의 pytest 9.2 종료 오류 수정
+
+- 변경: `test_work_sources.py`가 매번 새로 만드는 앱의 State 설정 4곳을 직접 대입한다. 실제 요청·작업 종류 판정 assertion은 유지한다. 생산 코드와 설정은 바꾸지 않는다.
+- 원인: 같은 Starlette 1.6.0에서 pytest 9.1.1은 동적 속성의 원래 값을 저장하지만 9.2.0은 인스턴스 `__dict__`에 없는 값을 NOTSET으로 저장한다. 같은 State 속성을 두 번 patch하면 종료 시 두 번 삭제해 KeyError가 난다. 두 원격 환경의 독립 재현으로 차이를 확인했다.
+- 증거: 후보 `651ec7a06a`의 Fleet 전체·단독 재실행에서 종료 오류 RED, 기준 main의 pytest 9.1.1 환경에서는 단독 통과. 수정 커밋 `cdbd0c332e`는 같은 pytest 9.2.0 환경(`1fde7a90b47fe7fb`)에서 해당 파일 11 passed / 0 skipped / NEW 0. 독립 검토는 전용 앱 격리·검증 조건 유지를 확인했다. 원격 로그는 작업 공간의 native-cell-transport 실행 기록에 연결했다.
+- Gate: 전체 착지 검증은 별도이며 실물·서비스 수용 근거가 아니다.
+- CE: 해당 없음 — 전용 앱이라는 적용 조건과 버전별 원인은 시험 주석·이 기록에서 복원할 수 있다.

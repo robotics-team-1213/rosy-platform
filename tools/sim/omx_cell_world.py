@@ -5,9 +5,15 @@ directly; the MuJoCo and Isaac adapters call boxes() and add the same boxes. ROS
 Isaac adapter runs on the Isaac SDK's own Python.
 """
 from pathlib import Path
+import re
 import xml.etree.ElementTree as ET
 
 WORLD = Path(__file__).resolve().parents[2]/'integrations/simulation/gazebo/worlds/omx_cell_workcell.sdf'
+PROFILE = Path(__file__).resolve().parents[2]/'deploy/robot/omx/sim/cell_profile.yaml'
+# Finger collision pads, one capsule across each finger (2026-10-27): MuJoCo collided the finger meshes as convex
+# hulls and Isaac's imported finger collision missed a 30 mm block. A capsule's reach toward the item does not change
+# as the finger turns (a box's corner cost 4 mm of jaw gap at 30 mm).
+PAD_RADIUS, PAD_HALF_LENGTH = .0015, .008
 
 
 def _floats(text, count):
@@ -43,3 +49,11 @@ def quaternion(rpy):
     from math import cos, sin
     (cr, sr), (cp, sp), (cy, sy) = ((cos(a/2), sin(a/2)) for a in rpy)
     return [cr*cp*cy+sr*sp*sy, sr*cp*cy-cr*sp*sy, cr*sp*cy+sr*cp*sy, cr*cp*sy-sr*sp*cy]
+
+
+def jaw_contact_point(path=PROFILE):
+    """(x, y) of the Gazebo-calibrated fingertip contact point in link6's frame (cell_profile.yaml gripper.jaw)."""
+    found = re.findall(r'^\s*contact_point_m:\s*\[([^\]]+)\]', Path(path).read_text(), flags=re.M)
+    if len(found) != 1:
+        raise ValueError(f'expected one gripper.jaw.contact_point_m in {path}')
+    return tuple(_floats(found[0].replace(',', ' '), 2))
