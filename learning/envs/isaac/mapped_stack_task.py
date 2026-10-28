@@ -76,6 +76,7 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
             p, q = box.get_world_pose()
             boxes.append(dict(position=p.tolist(), orientation=q.tolist(),
                 velocity=box.get_linear_velocity().tolist(), angular_velocity=box.get_angular_velocity().tolist(),
+                net_force=np.asarray(contacts[i].get_net_contact_forces(dt=DT))[0].tolist(),
                 forces=np.asarray(contacts[i].get_contact_force_matrix(dt=DT))[0].tolist()))
         for i, robot in enumerate(robots):
             pose = kin.fk(robot.get_joint_positions()[joints[i]])

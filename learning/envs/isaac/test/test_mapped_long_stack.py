@@ -54,18 +54,19 @@ def test_success_requires_free_lift_release_support_and_retreat():
             below = 'bin' if j == 0 else mod.plan()[j-1]['id']
             forces[mod.contact_names(j).index(below)][2] = .6
             boxes.append(dict(position=item['target'][:], orientation=[1., 0., 0., 0.],
-                velocity=[0., 0., 0.], angular_velocity=[0., 0., 0.], forces=forces))
+                velocity=[0., 0., 0.], angular_velocity=[0., 0., 0.], forces=forces, net_force=[0., 0., .6]))
         settled = dict(boxes=boxes, tcps=[[0., -.15, .13], [0., .15, .13]])
         lifted = copy.deepcopy(settled)
         lifted['boxes'][i]['position'][2] = .145
         lifted['boxes'][i]['forces'] = [[0., 0., 0.] for _ in range(8)]
         for finger in (2*(i % 2), 2*(i % 2)+1):
             lifted['boxes'][i]['forces'][finger] = [0., .1, .3]
+        lifted['boxes'][i]['net_force'] = [0., .2, .6]
         trial['layers'].append(dict(item=i, arm=i % 2, source_center_z=.04,
             lift_samples=[dict(copy.deepcopy(lifted), tick=t) for t in (0, 12, 24)],
             settle_samples=[dict(copy.deepcopy(settled), tick=t) for t in range(120, 253, 12)]))
     assert mod.judge(trial)['task_success']
-    for mutation in ('held', 'no_lift', 'unsupported', 'displaced'):
+    for mutation in ('held', 'no_lift', 'unsupported', 'displaced', 'hidden_support'):
         bad = copy.deepcopy(trial)
         layer = bad['layers'][2]
         if mutation == 'held':
@@ -74,6 +75,8 @@ def test_success_requires_free_lift_release_support_and_retreat():
             layer['lift_samples'][0]['boxes'][2]['position'][2] = .04
         elif mutation == 'unsupported':
             layer['settle_samples'][0]['boxes'][2]['forces'] = [[0., 0., 0.] for _ in range(8)]
+        elif mutation == 'hidden_support':
+            layer['lift_samples'][0]['boxes'][2]['net_force'][2] += .1
         else:
             layer['settle_samples'][0]['boxes'][0]['position'][0] += .01
         assert not mod.judge(bad)['task_success'], mutation

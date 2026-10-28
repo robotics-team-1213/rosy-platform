@@ -38,9 +38,9 @@ def verify_report(path, *, sdk_version, seed):
                         if len(sample['boxes']) != 3 or len(sample['tcps']) != 2:
                             raise ValueError('Missing measured bodies')
                         for box in sample['boxes']:
-                            if [len(box[k]) for k in ('position', 'orientation', 'velocity', 'angular_velocity', 'forces')] != [3, 4, 3, 3, 8]:
+                            if [len(box[k]) for k in ('position', 'orientation', 'velocity', 'angular_velocity', 'forces', 'net_force')] != [3, 4, 3, 3, 8, 3]:
                                 raise ValueError('Malformed rigid body observation')
-                            vectors = [box['position'], box['orientation'], box['velocity'], box['angular_velocity'], *box['forces']]
+                            vectors = [box['position'], box['orientation'], box['velocity'], box['angular_velocity'], box['net_force'], *box['forces']]
                             if any(len(v) != 3 for v in box['forces']):
                                 raise ValueError('Malformed contact vector')
                             if not all(type(x) in (int, float) and math.isfinite(x) for v in vectors for x in v):

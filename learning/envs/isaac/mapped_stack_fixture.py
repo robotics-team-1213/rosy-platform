@@ -63,6 +63,10 @@ def norm(values):
     return math.sqrt(sum(v*v for v in values))
 
 
+def explained_contacts(box):
+    return norm([box['net_force'][axis]-sum(f[axis] for f in box['forces']) for axis in range(3)]) <= .001
+
+
 def stable_box(box, index):
     item = plan()[index]
     p, q, forces = box['position'], box['orientation'], box['forces']
@@ -71,7 +75,7 @@ def stable_box(box, index):
         return False
     if (any(abs(p[i]-item['target'][i]) > .0015 for i in range(3))
             or norm(box['velocity']) > .01 or norm(box['angular_velocity']) > .1
-            or any(norm(f) > .001 for f in forces[:4])):
+            or any(norm(f) > .001 for f in forces[:4]) or not explained_contacts(box)):
         return False
     below = 'bin' if index == 0 else plan()[index-1]['id']
     if forces[contact_names(index).index(below)][2] <= .001:
@@ -106,7 +110,8 @@ def judge(trial):
                 arm = i % 2
                 if (box['position'][2] < layer['source_center_z']+FIXTURE['minimum_lift_m']
                         or any(norm(f) <= .005 for f in forces[2*arm:2*arm+2])
-                        or any(norm(f) > .001 for f in forces[4:])):
+                        or any(norm(f) > .001 for n, f in enumerate(forces) if n not in (2*arm, 2*arm+1))
+                        or not explained_contacts(box)):
                     failures.append(f'layer_{i+1}:no_bilateral_free_lift')
                     break
         if len(settles) < 10 or settles[-1]['tick']-settles[0]['tick'] < FIXTURE['settle_steps']:
