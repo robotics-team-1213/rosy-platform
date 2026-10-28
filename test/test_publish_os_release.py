@@ -189,6 +189,29 @@ def test_missing_or_corrupt_uploaded_chunk_never_opens_the_draft(prepared, monke
     assert "publish" not in hub.operations
 
 
+def test_changed_captured_bundle_is_refused_before_chunk_publication(prepared, monkeypatch):
+    import os_update_transport as transport
+    monkeypatch.setattr(transport, "CHUNK_BYTES", 17)
+    monkeypatch.setattr(transport, "GITHUB_MAX_ASSET_BYTES", 20)
+    directory, public, value, _ = prepared
+    original = (directory / value["bundle"]["filename"]).read_bytes()
+    publisher, hub = module(), GitHub()
+    capture = publisher._capture
+
+    def changed_capture(source, target, limit):
+        result = capture(source, target, limit)
+        if source.name == value["bundle"]["filename"]:
+            target.write_bytes(b"X" * len(original))
+        return result
+
+    monkeypatch.setattr(publisher, "_capture", changed_capture)
+    with pytest.raises(ValueError, match="changed while creating transport parts"):
+        publisher.publish(directory, public, release_id=value["release_id"],
+                          source_revision=value["source_revision"], apply=True, gh=hub)
+    assert not hub.calls
+    assert (directory / value["bundle"]["filename"]).read_bytes() == original
+
+
 @pytest.mark.parametrize("fault", ["bundle", "metadata", "rollout", "signature", "unknown", "missing", "source", "release", "rollout_binding"])
 def test_bad_local_inputs_never_mutate_remote(prepared, fault):
     directory, public, value, private = prepared

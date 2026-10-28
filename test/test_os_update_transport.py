@@ -31,6 +31,13 @@ def test_invalid_or_oversized_bundle_is_refused(size):
         transport.bundle_assets(dict(filename=NAME, size_bytes=size))
 
 
+@pytest.mark.parametrize("name", ["../bundle.raucb", "folder\\bundle.raucb", None, "bundle.zip", "bad\0.raucb"])
+def test_noncanonical_bundle_filename_is_refused(name):
+    transport = importlib.import_module("os_update_transport")
+    with pytest.raises(ValueError):
+        transport.bundle_assets(dict(filename=name, size_bytes=1))
+
+
 def test_more_than_sixteen_parts_is_refused(monkeypatch):
     transport = importlib.import_module("os_update_transport")
     monkeypatch.setattr(transport, "CHUNK_BYTES", 1)
