@@ -17,7 +17,7 @@ from pathlib import Path
 
 import land_isolation
 
-GUARDS = ("test/architecture", "test/test_harness_contracts.py")
+GUARDS = ("test/architecture", "test/test_harness_contracts.py", "test/test_behavior_test_ownership.py")
 
 
 def first(wt: Path, args, invocations: list[list[str]], logdir: Path, round_no: int | str, run_tests,
