@@ -11,6 +11,16 @@ sys.path.insert(0, str(ROOT / "tools"))
 
 import land  # noqa: E402
 from test_land import commit, git, repos  # noqa: E402,F401  (land.py's fixture repos)
+from test_land_selection import assert_full_plan, body_calls, full_case  # noqa: E402,F401
+
+
+def test_literal_full_is_a_mode_without_the_fixture_override(full_case, monkeypatch):
+    case = full_case
+    monkeypatch.delenv(land.FIXTURE_ENV)
+    assert land.main(["--tests", "full"]) == 0
+    assert_full_plan(body_calls(case))
+    record = land.land_record.read(case.main, git(case.main, "rev-parse", "HEAD"))
+    assert record and record["tier"] == "full"
 
 
 def test_hand_picked_tests_run_on_top_of_the_selection(repos, monkeypatch):

@@ -458,7 +458,7 @@ def test_the_pytest_job_is_best_effort_lowest_io_not_idle():
 
 def test_setup_steps_run_at_low_priority_and_capped_on_site_hosts(monkeypatch):
     sent = []
-    monkeypatch.setattr(rp.subprocess, "run", lambda cmd, **kw: sent.append(cmd[-1]) or
+    monkeypatch.setattr(rp.remote_job, "step", lambda cmd, **kw: sent.append(cmd[-1]) or
                         subprocess.CompletedProcess(cmd, 0))
     monkeypatch.setattr(rp, "SITES", {"site@9"})
     rp.remote("model@1", rp.VENV, "x", timeout=1)
@@ -470,7 +470,7 @@ def test_setup_steps_run_at_low_priority_and_capped_on_site_hosts(monkeypatch):
 def test_timeout_is_a_failed_step(monkeypatch):
     def hang(*a, **kw):
         raise subprocess.TimeoutExpired("ssh", 1)
-    monkeypatch.setattr(rp.subprocess, "run", hang)
+    monkeypatch.setattr(rp.remote_job, "step", hang)
     assert rp.remote("h", "true", timeout=1).returncode == 124
 
 
@@ -760,6 +760,8 @@ def test_ship_is_retried_from_scratch_after_a_dropped_link(tmp_path, monkeypatch
     real = subprocess.run
     monkeypatch.setattr(rp.subprocess, "run", lambda argv, **kw: real(argv, **kw) if argv[0] == "git" else
                         sent.append(kw["input"]) or subprocess.CompletedProcess(argv, answers.pop(0), b"", b""))
+    monkeypatch.setattr(rp.remote_job, "step", lambda argv, **kw: sent.append(kw["input"]) or  # ssh goes via step
+                        subprocess.CompletedProcess(argv, answers.pop(0), b"", b""))
     rp.ship(repo, "h", head, "run1")
     assert len(sent) == 3 and sent[0] == sent[2]  # the whole bundle again each time
     answers[:] = [255, 255, 255]
@@ -773,7 +775,7 @@ def test_a_dropped_link_reruns_only_steps_given_tries(monkeypatch):
     """2026-10-27: one ssh banner timeout in venv setup stopped a landing after an hour in the queue."""
     answers, calls = [255, 255, 0], []
     monkeypatch.setattr(rp.time, "sleep", lambda s: None)
-    monkeypatch.setattr(rp.subprocess, "run", lambda argv, **kw: calls.append(argv) or
+    monkeypatch.setattr(rp.remote_job, "step", lambda argv, **kw: calls.append(argv) or
                         subprocess.CompletedProcess(argv, answers.pop(0)))
     assert rp.remote("h", rp.VENV, "run1", timeout=1, tries=3).returncode == 0 and len(calls) == 3
     answers[:], calls[:] = [255, 0], []
@@ -968,7 +970,7 @@ def test_ssh_call_keeps_a_long_job_word_whole_past_the_ssh_exe_cut():
 
 
 def test_remote_refuses_a_command_ssh_exe_would_cut(monkeypatch):
-    monkeypatch.setattr(rp.subprocess, "run", lambda *a, **k: pytest.fail("a cut command reached ssh"))
+    monkeypatch.setattr(rp.remote_job, "step", lambda *a, **k: pytest.fail("a cut command reached ssh"))
     with pytest.raises(SystemExit, match="over"):
         rp.remote("h", "true", "x" * rj.ARGV_MAX, timeout=1)
 

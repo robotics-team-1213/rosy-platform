@@ -68,3 +68,11 @@ def test_cell_world_refuses_a_movable_box_without_mass(tmp_path):
                      '<size>1 1 1</size></box></geometry></collision></link></model></world></sdf>')
     with pytest.raises(ValueError):
         mod.boxes(world)
+
+
+def test_finger_pads_sit_on_the_calibrated_jaw_contact_point():
+    """Both simulator backends grip through pads on this point; it must stay the teacher's calibrated value."""
+    import yaml
+    mod = _mod("omx_cell_world")
+    profile = yaml.safe_load(mod.PROFILE.read_text(encoding="utf-8"))
+    assert mod.jaw_contact_point() == tuple(profile["gripper"]["jaw"]["contact_point_m"])

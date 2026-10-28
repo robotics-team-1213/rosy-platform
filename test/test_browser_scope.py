@@ -5,6 +5,12 @@ from __future__ import annotations
 import browser_scope
 
 
+def test_monitoring_backend_and_app_share_the_real_browser_contract():
+    expected = ['test/test_monitoring_browser.py']
+    assert browser_scope.targets(['applications/monitoring/README.md']) == expected
+    assert browser_scope.targets(['operations/monitoring/src/rosy/monitoring/service.py']) == expected
+
+
 def test_fleet_development_changes_include_independent_browser_flows():
     for path in ('applications/fleet/dev/sample/engine.py', 'applications/fleet/web/runtime.js'):
         found = browser_scope.targets([path])
@@ -110,3 +116,11 @@ def test_common_robot_tasks_select_real_browser_flow():
                    'review_app_web/tasks.js', 'review_app_web/tasks.html', 'review_app_web/learning.html'):
         assert expected in browser_scope.targets(['learning/curation/perception/' + source])
     assert expected in browser_scope.targets(['learning/training/omx/experiment_center.py'])
+
+
+def test_all_json_expands_the_actual_browser_registry_without_fake_changed_paths(capsys):
+    import json
+    assert browser_scope.main(["--all", "--json"]) == 0
+    found = json.loads(capsys.readouterr().out)
+    assert found == sorted({path for pattern in browser_scope.EVERYTHING for path in browser_scope._expand(pattern)})
+    assert found and "tools/land_browser.py" not in found

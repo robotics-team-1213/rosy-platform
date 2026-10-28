@@ -188,7 +188,8 @@ def test_orchestration_executes_real_slot_configurers_before_publishing(tmp_path
     (source_root / "etc/passwd").write_text("".join(
         f"{name}:x:{uid}:{uid}::{('/home/rosy' if name == 'rosy' else '/nonexistent')}:"
         f"{('/bin/bash' if name == 'rosy' else '/usr/sbin/nologin')}\n" for name, uid in users))
-    (source_root / "etc/group").write_text("".join(f"{name}:x:{uid}:\n" for name, uid in users))
+    (source_root / "etc/group").write_text("".join(f"{name}:x:{uid}:\n" for name, uid in users)
+                                            + "rosy-calib:x:964:\n")
     (source_boot / "cmdline.txt").write_text("root=LABEL=writable rootwait\n")
     (source_boot / "config.txt").write_text("# model boot assets\n")
     source, output = tmp_path / "source.img", tmp_path / "assembled.img"
