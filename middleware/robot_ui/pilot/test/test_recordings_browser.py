@@ -448,6 +448,7 @@ def test_full_drive_recording_sheet_keeps_its_focus_visible(tablet_page, size, c
     page.keyboard.press('Shift+Tab')
     page.keyboard.press('Tab')
     playwright_sync.expect(row.locator('[data-recording-fetch]')).to_be_focused()
+    scroll_before = page.evaluate('window.scrollY')
     page.evaluate('window.oldFullRecordingButton = document.activeElement')
     if change == 'reorder':
         listing['items'].reverse()
@@ -464,6 +465,7 @@ def test_full_drive_recording_sheet_keeps_its_focus_visible(tablet_page, size, c
               else page.locator('[data-recordings-notice]'))
     playwright_sync.expect(target).to_be_focused()
     playwright_sync.expect(target).to_be_in_viewport()
+    assert page.evaluate('window.scrollY') == scroll_before
     playwright_sync.expect(page.locator('ui-topbar [data-estop]')).to_be_in_viewport()
     _capture_recording_view(page, change)
     assert errors == [], errors
