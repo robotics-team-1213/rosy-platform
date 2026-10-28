@@ -29,7 +29,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 import os
 import select
 import stat
@@ -37,21 +36,25 @@ import sys
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))  # teach_trajectory, guarded_native, motor_health
-from teach_trajectory import GUARD_UNITS_PER_S, too_fast  # noqa: E402
-from motion_profile import smooth  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # guarded_native, motor_health
+from omx_adapter.chunk_library import (  # noqa: E402
+    GUARD_UNITS_PER_S as GUARD_UNITS_PER_S,
+    NAMES,
+    PARK_SPEED as PARK_SPEED,
+    SCHEMA as SCHEMA,
+    TRANSIT as TRANSIT,
+    load_library,
+    park_path,
+    too_fast as too_fast,
+    transit_path,
+)
+from omx_adapter.motion_profile import smooth as smooth  # noqa: E402
 
-NAMES = ["shoulder_pan.pos", "shoulder_lift.pos", "elbow_flex.pos", "wrist_flex.pos", "wrist_roll.pos",
-         "gripper.pos"]
 JOG_MAX = 5.0
 FOLLOW_STOP, FOLLOW_STOP_S = 25.0, 1.0   # body joints, LeRobot units; the clip alone keeps steps small
 SETTLE_TOL, SETTLE_S = 3.0, 3.0
 EMPTY_MARGIN = 2.0
 REL_MAX = 20.0  # largest body-joint correction a relative chunk may carry
-# park: lift/elbow/wrist of the taught carry (high and clear) and a slow, even speed. Turning low first
-# scraped the jaws on the table on 2026-10-24.
-TRANSIT = {1: -27.0, 2: 18.0, 3: 46.0}
-PARK_SPEED = GUARD_UNITS_PER_S  # units per second for every joint: what the guard's teacher mode streams
 # Motor health (Present_PWM / Present_Current / Present_Temperature, raw): read once per HEALTH_PERIOD_S, and
 # fresh for a grasp verdict. The guard already samples PWM about 5 times a second on the same bus; reading
 # these three every 3 ticks as well doubled the traffic, and on 2026-10-25 a bus read stalled the loop past
@@ -81,53 +84,6 @@ PWM_STOP, PWM_STOP_S, STALL_GAP, STALL_MOVE = 285, 0.5, 4.0, 0.3
 TEMP_STOP = 65                    # degrees C; the motors' own limits are 70-72
 MOTORS = [n.split(".")[0] for n in ["shoulder_pan.pos", "shoulder_lift.pos", "elbow_flex.pos", "wrist_flex.pos",
                                     "wrist_roll.pos", "gripper.pos"]]
-
-
-def transit_path(start: list, goal: list, grip_transit: float, fps: int, transit: dict | None = None) -> list:
-    """From anywhere to `goal` without sweeping low: jaws to `grip_transit`, rise to the transit height,
-    turn pan/roll to the goal there, descend into the goal body pose, then set the goal's jaws.
-    `transit` maps joint indexes to values (a cell profile's transit); default TRANSIT (arm S)."""
-    transit = TRANSIT if transit is None else transit
-    waypoints = [list(start)]
-    waypoints.append(waypoints[-1][:5] + [grip_transit])
-    waypoints.append([transit.get(i, v) for i, v in enumerate(waypoints[-1])])
-    waypoints.append([goal[i] if i in (0, 4) else v for i, v in enumerate(waypoints[-1])])
-    waypoints.append(list(goal[:5]) + [grip_transit])
-    waypoints.append(list(goal[:6]))
-    # One flowing move: the turn starts as the rise ends and the descent as the turn ends (blended corners);
-    # the jaws' changes and the goal are reached at rest. 85 % of the guard speed leaves room for the moment
-    # two blended segments overlap on one joint.
-    # The overlap is capped at 0.6 s: the rise has at most 0.5 * 5 * 0.6^2 = 0.9 units left when the turn begins.
-    return smooth(waypoints, fps, 0.85 * PARK_SPEED, blend=[False, False, True, True, False, False], blend_s=0.6)
-
-
-def park_path(start: list, home: list, closed: float, fps: int, transit: dict | None = None) -> list:
-    """Close the jaws, rise, turn at that height, then descend into home (jaws stay closed)."""
-    return transit_path(start, list(home[:5]) + [closed], closed, fps, transit)
-
-
-SCHEMA = "rosy.omx-chunk-library.v1"
-
-
-def load_library(path: Path) -> dict:
-    library = json.loads(Path(path).read_text())
-    if library.get("schema") != SCHEMA or library.get("names") != NAMES:
-        raise SystemExit(f"chunk library needs schema {SCHEMA} and the six follower names")
-    if not isinstance(library.get("fps"), int) or library["fps"] <= 0:
-        raise SystemExit("chunk library needs its fps")
-    chunks = library.get("chunks")
-    if not isinstance(chunks, dict) or not chunks:
-        raise SystemExit("chunk library has no chunks")
-    for name, frames in chunks.items():
-        if not frames or any(len(f) != 6 or not all(isinstance(v, (int, float)) and math.isfinite(v)
-                                                    and -100 <= v <= 100 for v in f) for f in frames):
-            raise SystemExit(f"chunk {name}: frames must be six finite values within -100..100")
-        if too_fast(frames, library["fps"]):
-            raise SystemExit(f"chunk {name}: frames move faster than the guard streams ({GUARD_UNITS_PER_S} units/s); "
-                             "regenerate the library with grasp_planner.py or teach_trajectory.py")
-    if not isinstance(library.get("gripper_closed"), (int, float)):
-        raise SystemExit("chunk library needs gripper_closed (the taught fully closed value)")
-    return library
 
 
 class Runner:

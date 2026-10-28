@@ -80,19 +80,8 @@ roles:
     rosy-account-tls-renew.timer: {run: timer, channel: autoupdate, template: deploy/site/rosy-account-tls-renew.timer, doc: deploy/site/README.md}
     rosy-cam-stream.service: {run: oneshot, channel: autoupdate, template: deploy/site/rosy-cam-stream.service, source: ".local/share/rosy/site-tools/current", doc: deploy/site/README.md}
     rosy-cam-stream.timer: {run: timer, channel: autoupdate, template: deploy/site/rosy-cam-stream.timer, doc: deploy/site/README.md}
-    rosy-omx-autoupdate.service: {run: oneshot, channel: updater, template: deploy/robot/omx/rosy-omx-autoupdate.service, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
-    rosy-omx-autoupdate.timer: {run: timer, channel: updater, template: deploy/robot/omx/rosy-omx-autoupdate.timer, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
-    rosy-omx-devices-autoupdate.service: {run: oneshot, channel: updater, template: deploy/robot/omx/rosy-omx-devices-autoupdate.service, doc: docs/adr/D-871-auto-update-every-host-service-and-update-view.md}
-    rosy-omx-devices-autoupdate.timer: {run: timer, channel: updater, template: deploy/robot/omx/rosy-omx-devices-autoupdate.timer, doc: docs/adr/D-871-auto-update-every-host-service-and-update-view.md}
     rosy-site-tools-autoupdate.service: {run: oneshot, channel: updater, template: deploy/site/rosy-site-tools-autoupdate.service, doc: docs/adr/D-871-auto-update-every-host-service-and-update-view.md}
     rosy-site-tools-autoupdate.timer: {run: timer, channel: updater, template: deploy/site/rosy-site-tools-autoupdate.timer, doc: docs/adr/D-871-auto-update-every-host-service-and-update-view.md}
-    rosy-omx-camera-readiness.service: {run: active, channel: autoupdate, template: deploy/robot/omx/rosy-omx-camera-readiness.service, source: ".local/share/rosy/omx-devices/current", doc: deploy/robot/omx/README.md}
-    rosy-omx-camera-view.service: {run: active, channel: autoupdate, template: deploy/robot/omx/rosy-omx-camera-view.service, source: ".local/share/rosy/omx-devices/current", doc: deploy/robot/omx/README.md}
-    rosy-omx-camera@.service: {run: active, instances: [top, front, arm_a_wrist], channel: autoupdate, template: deploy/robot/omx/rosy-omx-camera@.service, source: ".local/share/rosy/omx-devices/current", doc: deploy/robot/omx/README.md}
-    rosy-omx-collection.service: {run: "off", channel: snapshot, template: deploy/robot/omx/rosy-omx-collection.service, doc: docs/plans/2026-10-17-omx-next-day-collection.md}
-    rosy-omx-observation-bridge.service: {run: active, channel: autoupdate, template: deploy/robot/omx/rosy-omx-observation-bridge.service, source: ".local/share/rosy/omx-devices/current", doc: deploy/robot/omx/README.md}
-    rosy-omx-arm-status.service: {run: active, channel: autoupdate, template: deploy/robot/omx/rosy-omx-arm-status.service, source: ".local/share/rosy/omx-devices/current", doc: deploy/robot/omx/README.md}
-    rosy-omx-observer@.service: {run: active, instances_from: workcell-arms, channel: autoupdate, template: deploy/robot/omx/rosy-omx-observer@.service, source: ".local/share/rosy/omx-devices/current", doc: deploy/robot/omx/README.md}
     rosy-site-config-reload.service: {run: "off", channel: retired, doc: deploy/site/README.md}
     rosy-site-fleet-mdns.service: {run: "off", channel: retired, doc: deploy/site/README.md}
     rosy-site-overhead-mdns.service: {run: "off", channel: retired, doc: deploy/site/README.md}
@@ -102,3 +91,15 @@ roles:
     rosy-user-mdns-bridge.timer: {run: timer, channel: snapshot, doc: deploy/site/README.md}
     rosy-test-storage.service: {run: oneshot, channel: copy, template: "rosy-ops:deploy/lab-host-storage/rosy-test-storage.service", copies: {rosy-test/maintenance/host_storage.py: "rosy-ops:tools/host_storage.py"}, doc: "rosy-ops:docs/lab-host-storage.md"}
     rosy-test-storage.timer: {run: timer, channel: copy, template: "rosy-ops:deploy/lab-host-storage/rosy-test-storage.timer", doc: "rosy-ops:docs/lab-host-storage.md"}
+  omx:
+    rosy-omx-autoupdate.service: {run: oneshot, channel: updater, template: deploy/robot/omx/rosy-omx-autoupdate.service, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
+    rosy-omx-autoupdate.timer: {run: timer, channel: updater, template: deploy/robot/omx/rosy-omx-autoupdate.timer, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
+    rosy-omx-devices-autoupdate.service: {run: oneshot, channel: updater, template: deploy/robot/omx/rosy-omx-devices-autoupdate.service, doc: docs/adr/D-871-auto-update-every-host-service-and-update-view.md}
+    rosy-omx-devices-autoupdate.timer: {run: timer, channel: updater, template: deploy/robot/omx/rosy-omx-devices-autoupdate.timer, doc: docs/adr/D-871-auto-update-every-host-service-and-update-view.md}
+    rosy-omx-camera-readiness.service: {run: active, channel: autoupdate, template: deploy/robot/omx/rosy-omx-camera-readiness.service, source: ".local/share/rosy/omx-devices/current", doc: deploy/robot/omx/README.md}
+    rosy-omx-camera-view.service: {run: active, channel: autoupdate, template: deploy/robot/omx/rosy-omx-camera-view.service, source: ".local/share/rosy/omx-devices/current", doc: deploy/robot/omx/README.md}
+    rosy-omx-camera@.service: {run: active, instances: [top, front, arm_a_wrist], channel: autoupdate, template: deploy/robot/omx/rosy-omx-camera@.service, source: ".local/share/rosy/omx-devices/current", doc: deploy/robot/omx/README.md}
+    rosy-omx-collection.service: {run: "off", channel: snapshot, template: deploy/robot/omx/rosy-omx-collection.service, doc: docs/plans/2026-10-17-omx-next-day-collection.md}
+    rosy-omx-observation-bridge.service: {run: active, channel: autoupdate, template: deploy/robot/omx/rosy-omx-observation-bridge.service, source: ".local/share/rosy/omx-devices/current", doc: deploy/robot/omx/README.md}
+    rosy-omx-arm-status.service: {run: active, channel: autoupdate, template: deploy/robot/omx/rosy-omx-arm-status.service, source: ".local/share/rosy/omx-devices/current", doc: deploy/robot/omx/README.md}
+    rosy-omx-observer@.service: {run: active, instances_from: workcell-arms, channel: autoupdate, template: deploy/robot/omx/rosy-omx-observer@.service, source: ".local/share/rosy/omx-devices/current", doc: deploy/robot/omx/README.md}
