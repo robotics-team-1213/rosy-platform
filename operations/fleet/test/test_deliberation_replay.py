@@ -4,6 +4,45 @@ import pytest
 from tools.decision_replay import compare_deliberation
 
 
+def cooperation_rows(cases):
+    result = rows(cases)
+    for c in cases:
+        for mode in ('sequential', 'parallel', 'auto'):
+            result.append(dict(result[0], case_id=c['id'], problem_hash=c['problem_hash'], mode=mode,
+                effective_mode='parallel' if mode == 'auto' else mode, decision_hash='b'*64,
+                environment_revision='env-1', measurement_revision='measure-1'))
+    return result
+
+
+def test_cooperation_comparison_requires_all_six_modes_with_identical_cases():
+    cases = [case(), case('case-2')]
+    report = compare_deliberation(cases, cooperation_rows(cases), training_sessions=[],
+                                 limits=None, cooperation=True)
+    assert report['state'] == 'HOLD' and report['field_accepted'] is False
+    assert set(report['modes']) == {'rules', 'single', 'deliberation', 'sequential', 'parallel', 'auto'}
+    assert all(m['count'] == 2 for m in report['modes'].values())
+    with pytest.raises(ValueError, match='same independent cases'):
+        compare_deliberation(cases, cooperation_rows(cases)[:-1], training_sessions=[],
+                             limits=None, cooperation=True)
+
+
+@pytest.mark.parametrize('field,value', [('effective_mode', 'single'), ('decision_hash', 'invalid'),
+    ('environment_revision', ''), ('measurement_revision', '')])
+def test_cooperation_comparison_rejects_missing_selection_evidence(field, value):
+    runs = cooperation_rows([case()])
+    runs[-1][field] = value
+    with pytest.raises(ValueError, match='selection'):
+        compare_deliberation([case()], runs, training_sessions=[], limits=None, cooperation=True)
+
+
+def test_cooperation_replay_is_not_a_model_quality_pass_without_reviewed_limits():
+    cases = [case()]
+    report = compare_deliberation(cases, cooperation_rows(cases), training_sessions=[],
+                                 limits=None, cooperation=True)
+    assert report['state'] == 'HOLD'
+    assert report['modes']['parallel']['p50_latency_ms'] == 10
+
+
 def case(case_id='case-1', **changes):
     return {**dict(id=case_id, session_id='evaluation', recording_id=case_id,
                    expected='reobserve', reviewed_by='team', problem_hash='a'*64), **changes}
