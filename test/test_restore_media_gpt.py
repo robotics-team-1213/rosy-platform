@@ -37,7 +37,7 @@ def media(tmp_path):
 
 def invoke(media, digest=None):
     raw, image, device, snapshot, capacity = media
-    return subprocess.run([sys.executable, "-I", str(SCRIPT), "--image", str(image), "--device", str(device),
+    return subprocess.run([sys.executable, "-I", str(SCRIPT), "--image", str(image), "--fixture-device", str(device),
         "--layout-file", str(snapshot), "--image-sha256", digest or hashlib.sha256(image.read_bytes()).hexdigest(),
         "--capacity-bytes", str(capacity)], cwd=device.parent, capture_output=True, text=True, timeout=30)
 
@@ -62,7 +62,7 @@ def test_cli_rejects_every_other_drift_without_writing(media, drift):
     current = bytearray(device.read_bytes())
     current[512:1024] = relocated(raw[512:1024], capacity)
     offsets = {"mbr": 446, "table": 1024, "backup_header": len(raw) - 512,
-               "backup_table": len(raw) - 33 * 512, "primary": 512 + 528 % 512}
+               "backup_table": len(raw) - 33 * 512, "primary": 512 + 56}
     if drift in offsets:
         current[offsets[drift]] ^= 1
     device.write_bytes(current)
@@ -70,6 +70,7 @@ def test_cli_rejects_every_other_drift_without_writing(media, drift):
         media = (*media[:-1], capacity + 512)
     result = invoke(media, "0" * 64 if drift == "image_hash" else None)
     assert result.returncode != 0
+    assert "GPT_RESTORE_FAILED" in result.stderr
     assert device.read_bytes() == current
 
 
