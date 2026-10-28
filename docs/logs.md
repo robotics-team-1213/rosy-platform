@@ -12810,3 +12810,19 @@ osy-d395-s1d\`.
 - 증거: 원격 `ROSY_RUN_BROWSER_TESTS=1 test/test_role_surface_states_browser.py`.
 - gate 변화: 없음.
 - CE: 해당 없음 — 같은 브랜치가 바꾼 import에 하네스를 맞춘 것이다.
+
+## 2026-10-28 · uncommitted · fix(land): 착지가 시작할 때 같은 무리의 대기 티켓을 묶어 이끈다
+
+- 변경: `tools/land_batch.py`(`early`, 나누기 반복을 `run`으로 묶음), `tools/land.py`(줄에 선 직후 `early`). 사전 시험 기록이 없는 착지가 같은 무리의 `waiting`·`pending` 티켓을 곧바로 묶어 사전 시험을 한 번만 받는다. robot-f4의 `feat/land-batch-full`(무리별 묶음) 위에 쌓았다. D-889 추가 4.
+- 근거: 19:35 대기열에서 `waiting`이 모두 FULL급이거나 tier 기록이 없어 affected 리더가 없었다(사용자 지시).
+- 증거: 원격 `test/test_land_batch.py`·`test_land_queue.py`·`test_land_prepare.py`·`test_land.py`·`test_land_speculate.py`, known_failures NEW 0.
+- gate 변화: 없음.
+- CE: 해당 없음 — 규칙과 근거가 D-889 추가 4와 시험에 남는다.
+
+## 2026-10-28 · uncommitted · fix(land): 겹치지 않는 묶음은 함께 있을 수 있다
+
+- 변경: `tools/land_batch.py`. "묶음은 한 번에 하나" 대신, 이미 실린 브랜치(`taken`)를 다른 묶음의 구성원에서 빼고 실린 착지는 리더가 되지 않게 했다. 동시에 생긴 두 리더는 구성원이 겹칠 때만 늦은 쪽이 물러난다. D-889 추가 4.
+- 근거: 21:31에 FULL 묶음 하나가 사전 시험 슬롯을 1.5시간 기다리는 동안, 차례를 기다리는 FULL 티켓이 묶음을 만들지 못했다(사용자 지시).
+- 증거: 원격 `test/test_land_batch.py`·`test_land_queue.py`·`test_land_prepare.py`·`test_land.py`·`test_land_speculate.py`, known_failures NEW 0.
+- gate 변화: 없음.
+- CE: 해당 없음 — 규칙이 D-889 추가 4와 시험에 남는다.
