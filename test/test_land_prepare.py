@@ -66,6 +66,25 @@ def test_a_landing_whose_test_hosts_give_up_leaves_a_stop(repos, monkeypatch):
     assert [e["reason"] for e in events if e["event"] == "stop"] == ["[remote-pytest] venv setup on h failed"]
 
 
+def test_a_lost_queue_ticket_leaves_a_stop_without_recreating_its_place(repos, monkeypatch):
+    main, wt = repos
+    commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")
+    before = git(main, "rev-parse", "HEAD")
+    enter = land.land_queue.enter
+
+    def lost(*args, **kwargs):
+        qdir, ticket = enter(*args, **kwargs)
+        ticket.unlink()
+        return qdir, ticket
+
+    monkeypatch.setattr(land.land_queue, "enter", lost)
+    assert land.main(["--tests", "auto"]) == 1
+    events = [json.loads(line) for line in (main / ".git" / land.land_events.EVENTS).read_text().splitlines()]
+    assert any(e["event"] == "stop" and "ticket disappeared" in e["reason"] for e in events)
+    assert git(main, "rev-parse", "HEAD") == before
+    assert not list((main / ".git" / land.land_queue.QUEUE).glob("*.json"))
+
+
 @pytest.fixture
 def full_anchor(repos, monkeypatch):
     main, wt = repos
