@@ -188,7 +188,7 @@ assert NativeReceipts is LegacyNativeReceipts
 assert LineStuckPrecondition is OwnedPrecondition
 assert Path(__import__('core_common.protocol.line_stuck', fromlist=['']).__file__).is_relative_to(installed)
 assert LineStuckPrecondition(phase='ASKING', attempts=0).model_dump() == {'phase': 'ASKING', 'attempts': 0}
-assert ('rosy-contracts-learning', '>=0.1.14', (), None, None) in fleet_requirements, fleet_requirements
+assert ('rosy-contracts-learning', '>=0.1.15', (), None, None) in fleet_requirements, fleet_requirements
 from rosy.contracts.learning import incident_rule
 assert Path(incident_rule.__file__).is_relative_to(installed)
 from rosy.contracts.learning import incident_operation
