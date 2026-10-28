@@ -9,6 +9,7 @@ FIXTURE = dict(revision='omx-stacking-v1', coordinate_scope='SYNTHETIC_NOT_CAMER
                unit_m=UNIT, bin_origin_m=BIN_ORIGIN, bin_size_m=[.09]*3,
                arm_bases_m=[[0., -.14, 0.], [0., .14, 0.]],
                belt_size_m=[.12, .50, .025], belt_speed_m_s=.02,
+               robot_self_collision=False,
                attachment_aid=False, physics_dt_s=DT, control_decimation=4,
                xy_tolerance_m=.0015, z_tolerance_m=.0015, settle_steps=30,
                seed_effect='CARGO_RESET_XY_AND_YAW', num_envs=1,

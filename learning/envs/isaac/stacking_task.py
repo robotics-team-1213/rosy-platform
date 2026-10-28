@@ -95,6 +95,8 @@ def run(args):
         roots = [p for p in prims if p.HasAPI(UsdPhysics.ArticulationRootAPI)]
         if len(roots) != 1:
             raise RuntimeError('Each OMX reference requires one articulation')
+        # Match the existing OMX backend: imported adjacent finger hulls overlap and must not self-collide.
+        PhysxSchema.PhysxArticulationAPI.Apply(roots[0]).CreateEnabledSelfCollisionsAttr(False)
         tool = {p.GetName(): str(p.GetPath()) for p in prims
                 if p.GetName() in ('link6', 'link7', 'end_effector_link')}
         if set(tool) != {'link6', 'link7', 'end_effector_link'}:
@@ -236,7 +238,8 @@ def run(args):
                            float(plan[self.index]['arm'])])
             obs = torch.tensor([values], dtype=torch.float32, device=self.device)
             if not torch.isfinite(obs).all():
-                raise RuntimeError('Nonfinite stacking observation')
+                raise RuntimeError('Nonfinite stacking observation '+repr(dict(
+                    step=self.transitions, cargo=self.index, values=values)))
             return TensorDict({'policy': obs}, batch_size=[1])
 
         def step(self, actions):
