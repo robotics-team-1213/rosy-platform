@@ -50,6 +50,10 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
         controller.set_gains(kps=kp, kds=kd)
         print('MAPPED_SI_GAINS', i, [np.asarray(v).tolist() for v in controller.get_gains()], flush=True)
         view = robot._articulation_view
+        print('MAPPED_FIXED_BASE', i, view._physics_view.shared_metatype.fixed_base, flush=True)
+        print('MAPPED_GRAVITY', i, view.get_generalized_gravity_forces().tolist(), flush=True)
+        if not view._physics_view.shared_metatype.fixed_base:
+            raise ValueError('Mapped OMX must be anchored to the simulation world')
         print('MAPPED_IMPORTED_EFFORTS', i, view.get_max_efforts().tolist(), flush=True)
         efforts = np.full((1, robot.num_dof), FIXTURE['arm_max_effort_nm'])
         efforts[0, fingers[i]] = [.2, 2.]

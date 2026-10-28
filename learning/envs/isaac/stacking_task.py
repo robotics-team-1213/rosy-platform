@@ -127,6 +127,14 @@ def run(args):
         if set(tool) != {'link6', 'link7', 'end_effector_link'}:
             raise RuntimeError('Each OMX requires both finger and TCP links')
         links.append(tool)
+        if mapped:
+            anchors = [p for p in prims if p.GetName() == 'world_fixed' and p.IsA(UsdPhysics.FixedJoint)]
+            if len(anchors) != 1:
+                raise RuntimeError('Expected one OMX world anchor')
+            anchor = UsdPhysics.FixedJoint(anchors[0])
+            anchor.GetBody0Rel().SetTargets([])
+            anchor.GetLocalPos0Attr().Set(Gf.Vec3f(*FIXTURE['arm_bases_m'][len(robots)]))
+            anchor.GetLocalRot0Attr().Set(Gf.Quatf(1.))
         for prim in prims:
             if prim.IsA(UsdPhysics.RevoluteJoint):
                 finger = prim.GetName().startswith('gripper')
