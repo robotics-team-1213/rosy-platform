@@ -305,3 +305,10 @@
 - 증거: 원격 RED 7/4/1건 재현 뒤 관련 전체 회귀 16/19/17 passed, skip0, NEW0. 공식 브라우저 선택 17파일의 최초 결과는 262 passed / 1 failed였고, 기존 메뉴 이동 시험의 로딩 대기를 보강한 뒤 해당 두 파일 전체 19 passed / skip0 / NEW0. 저장 검수 캡처 2건과 오류 crop 1건도 실제 Chromium으로 재검증했다. 최종 영향 선택과 원본별 SHA는 `docs/validation/recording-handoff-ui-followup-2026-10-28/`에 분리한다.
 - gate 변화: 없음. 실제 HF 쓰기·실물 녹화/행동·reader 수용·배포·merge/push는 수행하지 않았다. 앞선 전체26 시험은 이전 소스의 기록이며 새 main 통합 이후의 수용으로 재사용하지 않는다.
 - CE: 해당 없음. 상태·거부·초점 경계와 동기화 판단이 코드·회귀·날짜별 검증 기록에 남는다.
+
+## 2026-10-29 · 8e084f3e59 · 객체·픽셀의 공용 클래스 선택
+
+- 변경: class-chip을 공용 segment/type=button과 명시 value attribute로 이행하고 enable·pressed·test selector를 함께 고쳤다. 화면별 painting을 제거하며 데이터 색·클래스/index·권한·저장/승인·canvas 복귀를 유지했다.
+- 증거: runtime b3b265f7e8의 기존 두 Chromium 파일 전체220 passed/skip0, 최종 test-only8e의 강화32 passed·16PNG, 계약80 passed와 공식 영향2880 passed/384 skipped, 모두 NEW0. 중복 subset을 합산하지 않는다. 독립 source/화면 검토와 hash는 `docs/validation/learning-class-controls-2026-10-29/` 참조.
+- gate 변화: 없음. 실물·실제 라벨·전체 통합·native·배포/착지/push/merge 수용과 별도다.
+- CE: 해당 없음 — attribute·상태·데이터 경계 판단이 코드·회귀·검증 기록에 남는다.

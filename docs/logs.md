@@ -12846,3 +12846,10 @@ osy-d395-s1d\`.
 - 증거: 원격 영향 선택 affected/no escalation 3059 passed /352 skipped /NEW0. 공식17개 Chromium 파일 최초262 passed/1 failed, 실패한 로딩 대기 시험을 보강한 두 파일 전체19 passed/skip0/NEW0. 릴리스·비밀값·배치108 passed. 캡처·원본별 SHA와 실패 이력을 결과 기록에 구분했다.
 - gate 변화: 없음. 실물·실제 HF·reader·학습 품질·설치/배포·merge/push는 별도 수용이다.
 - CE: 해당 없음. 판단 근거가 최종 코드·회귀·기존 문서에 남는다.
+
+## 2026-10-29 · 8e084f3e59 · 검수 클래스 선택 부품 이행 검증
+
+- 변경: 객체·픽셀의 class-chip을 기존 공용 segment로 통일하고 중복 painting을 지웠다. frozen 결과·로그5개/캡처16장 SHA를 `docs/validation/learning-class-controls-2026-10-29/`에 보존한다.
+- 증거: 기존 두 Chromium 전체220 passed, 강화 부분집합32 passed, 정적 계약80 passed, 공식 영향2880 passed/384 skipped, NEW0. 최초 object locator 오류와 실제 pixel kind 누락을 구분하고 실패·통과 원본을 보존했다. A source/B16장 직접 검토를 수행했다.
+- gate 변화: 없음. 전체 UI 통합·native/실물·진짜 라벨·배포/착지/push/merge 수용과 구분한다.
+- CE: 해당 없음 — attribute·상태·데이터/승인 경계가 코드·회귀·이 기록에 남는다.
