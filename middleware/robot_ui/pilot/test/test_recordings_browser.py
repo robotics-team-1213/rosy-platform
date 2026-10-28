@@ -1,6 +1,7 @@
 """Robot recording browser workflows over the shared Pilot fake CORE."""
 from pathlib import Path
 import os
+from uuid import uuid4
 
 import pytest
 from browser_harness import browser_tests_enabled
@@ -9,6 +10,15 @@ from test_pilot_browser import (
     _enter_drive, _enter_recording_drive, _eventually, _open_sheet, _recordings,
     _settled_polls, playwright_sync,
 )
+
+
+def _capture_recording_view(page, name):
+    from browser_harness import save_temp_screenshot
+    capture_dir = os.environ.get('ROSY_UI_CAPTURE_DIR')
+    if capture_dir:
+        destination = Path(capture_dir) / f'pilot-recording-{name}-{page.viewport_size["width"]}-{uuid4().hex}.png'
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        save_temp_screenshot(page, str(destination))
 
 
 @pytest.mark.skipif(not browser_tests_enabled(),
@@ -238,9 +248,11 @@ def test_a_cut_or_refused_download_saves_nothing(tablet_page, mode, text):
 @pytest.mark.skipif(not browser_tests_enabled(),
                     reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
 @pytest.mark.parametrize("how", ["cancel", "exit"])
-def test_an_in_flight_download_is_aborted_by_cancel_or_leaving(tablet_page, how):
+@pytest.mark.parametrize('size', [(320, 900), (1200, 800)])
+def test_an_in_flight_download_is_aborted_by_cancel_or_leaving(tablet_page, how, size):
     """받는 중에 취소하거나 화면을 나가면 요청을 끊는다 — CORE 가 fetched 로 표시하지 않게."""
     base_url, page, errors = tablet_page
+    page.set_viewport_size({'width':size[0], 'height':size[1]})
     _enter_recording_drive(page, base_url, archive="slow")
     try:
         row = _open_sheet(page)
@@ -248,6 +260,8 @@ def test_an_in_flight_download_is_aborted_by_cancel_or_leaving(tablet_page, how)
         page.keyboard.press("Enter")
         row.locator("[data-recording-cancel]").wait_for()
         playwright_sync.expect(row.locator("[data-recording-cancel]")).to_be_focused()
+        if how == 'cancel':
+            _capture_recording_view(page, 'receiving')
         assert _eventually(lambda: "archive" in _recordings(page, base_url)["log"])
         if how == "cancel":
             page.keyboard.press("Enter")
@@ -258,6 +272,7 @@ def test_an_in_flight_download_is_aborted_by_cancel_or_leaving(tablet_page, how)
         if how == "cancel":
             page.wait_for_function("document.querySelector('[data-recording-status]')?.textContent.includes('취소')")
             playwright_sync.expect(row.locator("[data-recording-fetch]")).to_be_focused()
+            _capture_recording_view(page, 'cancelled')
     finally:
         _recordings(page, base_url, release=True)
     assert "archive_done" not in _recordings(page, base_url)["log"]
@@ -415,3 +430,36 @@ def test_recording_read_belongs_to_the_sheet_that_started_it(recording_panel, en
     else:
         playwright_sync.expect(page.locator('[data-recording-id="new-sheet"] [data-recording-fetch]')).to_be_focused()
         playwright_sync.expect(page.locator('[data-recording-id="old-sheet"]')).to_have_count(0)
+
+
+@pytest.mark.skipif(not browser_tests_enabled(), reason='browser opt-in')
+@pytest.mark.parametrize('size', [(320, 900), (1200, 800)])
+@pytest.mark.parametrize('change', ['reorder', 'removed', 'disabled', 'read-failed'])
+def test_full_drive_recording_sheet_keeps_its_focus_visible(tablet_page, size, change):
+    base_url, page, errors = tablet_page
+    page.set_viewport_size({'width':size[0], 'height':size[1]})
+    _enter_recording_drive(page, base_url, many=True)
+    row = _open_sheet(page)
+    listing = page.evaluate("""async () => {
+      const {api} = await import('/pilot/assets/client.js');
+      return (await api('/api/v1/recordings')).body;
+    }""")
+    row.locator('[data-recording-fetch]').focus()
+    page.evaluate('window.oldFullRecordingButton = document.activeElement')
+    if change == 'reorder':
+        listing['items'].reverse()
+    elif change == 'removed':
+        listing['items'] = listing['items'][1:]
+    elif change == 'disabled':
+        listing.update(download_allowed=False, download_blocker='RECORDING_BUSY')
+    page.route('**/api/v1/recordings', lambda route: route.fulfill(status=503, json={'error':{'code':'RECORDING_UNAVAILABLE'}})
+               if change == 'read-failed' else route.fulfill(json=listing))
+    page.locator('[data-recordings-refresh]').evaluate('button => button.click()')
+    page.wait_for_function('!oldFullRecordingButton.isConnected')
+    target = (row.locator('[data-recording-fetch]') if change == 'reorder'
+              else row.locator('[data-recording-facts]') if change == 'disabled'
+              else page.locator('[data-recordings-notice]'))
+    playwright_sync.expect(target).to_be_focused()
+    playwright_sync.expect(target).to_be_in_viewport()
+    _capture_recording_view(page, change)
+    assert errors == [], errors
