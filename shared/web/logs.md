@@ -963,3 +963,10 @@
 - 변경: 닫힌 이름(D-641 3항)은 그대로 두고 그림만 바꿨다. tools=렌치, settings=슬라이더(전에는 좌표만 다른 같은 그림), install=망치(내려받기 화살표와 겹쳤음), account=사람(문서처럼 읽혔음), fit=모서리 괄호 안 상자(expand와 구분), box=입체 상자(fit과 같은 그림이었음). `test_action_icon_contract.py`는 경로 문자열 고정 대신 한 이름·한 그림(경로 중복 0)을 검사한다. 장미색 허용 파일에서 `surface-panels.css`를 뺐다(D-277 게이트 강화).
 - 증거: 원격 서버 시험 8f85ca2d0f 기준 shared/web·Robot·Fleet·Pilot 471 passed/0 NEW, Learning 브라우저 2456 passed/1 NEW(왼쪽 정렬 누락, 고친 뒤 89421d5732 해당 5묶음 210 passed/0 NEW). 이 커밋은 착지 시험(land.py --tests auto)이 다시 돈다.
 - gate 변화: 없음.
+
+## 2026-10-28 · 2d96683c9c · Fleet 레이아웃 역할 토큰
+
+- 변경: 본문 최대 폭·안쪽 여백·묶음/동작 간격·탐색 크기·접속 입력/계정 글 폭의8개 역할을 `tokens.css`에 두고 Fleet 공통 컴포넌트가 소비한다. 갤러리는 계산된 값을 읽는다. 중복 본문 규칙과 쓰지 않는 입력 폭 규칙을 제거했다. D-906을 DESIGN에 연결했다.
+- 증거: 초기 공통 컨트롤·셸·패키지 계약64 passed, 공통 헤더·세션·갤러리 브라우저57 passed. source별 검증 범위는 `docs/validation/fleet-components-layout-tokens-2026-10-28/result.md`에 구분한다. 배치 캡처32개 독립 검토에서 P1/P2 잘림·겹침 없음.
+- gate 변화: 없음. 전체 플랫폼의 모든 하드코딩 제거나 실물 수용을 뜻하지 않는다.
+- CE: 해당 없음. 역할·소비처·값 보존 판단은 코드와 D-906에 남는다.
