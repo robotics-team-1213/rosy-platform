@@ -12706,6 +12706,14 @@ osy-d395-s1d\`.
 - gate 변화: 없음(문서만, 구현·실물 동작 없음). D-894 착지·런타임 수용이 선행 조건이다.
 - CE: 해당 없음 — 방향 결정이며 해결한 장애가 없다.
 
+## 2026-10-28 · uncommitted · fix(omx): 움직임 분리 시험 파일의 BOM 제거
+
+- 변경: `middleware/devices/omx/adapter/test/test_omx_dynamixel_motion.py` 맨 앞의 UTF-8 BOM을 지운다. 내용은 같다.
+- 근거: 착지 사전 시험에서 `test/test_source_encoding.py::test_no_active_tracked_python_file_starts_with_a_bom`과 `test/test_ci_dependencies.py::test_no_test_module_defines_a_nose_style_setup_function`이 이 파일의 BOM 때문에 실패했다(BOM이 있으면 파일을 파싱하지 못한다).
+- 증거: 원격 위 두 시험과 `middleware/devices/omx/adapter/test`.
+- gate 변화: 없음.
+- CE: 해당 없음 — 시험이 잡은 인코딩 실수다.
+
 ## 2026-10-28 · uncommitted · fix(land): 묶음이 FULL급 맨 앞을 건너뛰고 사전 시험 대기 티켓도 싣는다
 
 - 변경: `tools/land_batch.py`·`tools/land_prepare.py`. 리더는 묶을 수 있는 `waiting` 가운데 가장 앞선 것이다. 구성원에 `pending`을 더한다(갈라진 지점의 선택이 affected일 때). 묶음에 든 `pending`은 슬롯을 잡지 않고, 착지되면 사전 시험을 건너뛴다. D-889 추가 4.
