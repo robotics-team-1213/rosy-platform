@@ -232,6 +232,55 @@ def test_first_available_connection_can_be_selected_after_initial_empty_state(wo
     for key in ['connection', 'repo-connection']: expect(page.locator('#' + key)).to_have_value('a')
 
 
+def test_slow_account_poll_locks_actions_but_keeps_the_typed_request(workspace):
+    page, state, origin, expect = workspace
+    ready_accounts(page, origin, expect)
+    fill_import(page)
+    page.select_option('#connection', 'b')
+    page.focus('#repo-id')
+    state['hold_get'] = True
+    page.wait_for_timeout(5500)
+    assert len(state['held_get']) == 1
+    expect(page.locator('#import-form button[type=submit]')).to_be_disabled()
+    expect(page.locator('#reload')).to_be_disabled()
+    expect(page.locator('#repo-id')).to_be_enabled()
+    expect(page.locator('#repo-id')).to_be_focused()
+    expect(page.locator('#account-status')).to_contain_text('가져오기 상태 확인 중')
+    page.locator('#import-form').evaluate('form => form.requestSubmit()')
+    assert not state['posts']
+    capture(page, 'account-poll-pending')
+    state['hold_get'] = False
+    state['held_get'].pop().fulfill(json={'jobs': state['jobs']})
+    expect(page.locator('#import-form button[type=submit]')).to_be_enabled()
+    expect(page.locator('#repo-id')).to_have_value('fixture/data')
+    expect(page.locator('#connection')).to_have_value('b')
+    expect(page.locator('#repo-id')).to_be_focused()
+    page.locator('#import-form').evaluate('form => form.requestSubmit()')
+    expect(page.locator('#account-error')).to_contain_text('fixture operation rejected')
+    assert len(state['posts']) == 1 and state['posts'][0][1]['connection_id'] == 'b'
+
+
+@pytest.mark.parametrize('move_focus', [False, True])
+def test_account_poll_restores_replaced_job_control_without_stealing_focus(workspace, move_focus):
+    page, state, origin, expect = workspace
+    state['jobs'][0]['status'] = 'failed'
+    ready_accounts(page, origin, expect)
+    retry = page.locator('#imports').get_by_role('button', name='같은 버전 재시도', exact=True)
+    retry.focus()
+    state['hold_get'] = True
+    page.wait_for_timeout(5500)
+    expect(retry).to_be_disabled()
+    theme = page.locator('ui-topbar [data-theme-cycle]')
+    if move_focus: theme.focus()
+    assert len(state['held_get']) == 1
+    state['hold_get'] = False
+    state['held_get'].pop().fulfill(json={'jobs': state['jobs']})
+    expect(retry).to_be_enabled()
+    expect(theme if move_focus else retry).to_be_focused()
+    assert not state['posts']
+    capture(page, 'account-poll-focus-' + str(move_focus))
+
+
 @pytest.mark.parametrize('status', [401, 403, 503])
 @pytest.mark.parametrize('width', [390, 1440])
 def test_workspaces_retry_recovers_without_duplicate_or_stale_links(workspace, status, width):
