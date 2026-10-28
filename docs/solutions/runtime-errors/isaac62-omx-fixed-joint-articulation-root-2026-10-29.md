@@ -67,3 +67,10 @@ drive units, mimic constraints and measured motion. Keep failed run receipts.
 Stop/fetch through the owned runner and confirm cleanup before retrying. Revert
 only the task branch's scene overrides if necessary; do not replace the installed
 SDK or relax contact acceptance to recover a passing result.
+
+The final continuation, source `dc2f2f05c5`, run
+`74098c1235c4589cbdc9104852b6f186`, retained this fixed-root correction and passed
+three nominal 90×30×90 mm stacking trials with native contact evidence and owned
+cleanup. Additional collider and 240 Hz contact-integration changes were needed;
+the root correction alone did not establish the complete task. See the execution
+record for the failed intermediate runs and separate PPO outcome.

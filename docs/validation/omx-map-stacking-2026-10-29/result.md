@@ -2,13 +2,13 @@
 
 Status: **PASS — mapped deterministic three-layer reference, 3/3 seeded trials.**
 
-Source `ea39371f17fdd57ae61c38396aa38e5693923203`, model-PC SDK 6.2.0.0,
-run `03a9b112fb34518cb10997cc27e70d1e` completed with `SUCCEEDED`, verified
+Source `dc2f2f05c5290d7c7c7db1a9002ee80121d9971e`, model-PC SDK 6.2.0.0,
+run `74098c1235c4589cbdc9104852b6f186` completed with `SUCCEEDED`, verified
 report, successful trials 3, and `OWNED_PROCESSES_EXITED_GPU_RELEASED`.
 Seeds 42/43/44 each completed A/B/A pickup, unsupported contact lift, transport,
 release and retreat. Every placed prefix and the final stack stayed accepted
 over 1.1 s of observations after each release. Minimum observed cargo lift was
-102.26 mm; maximum settled XY axis error was 0.927 mm. Cargo centre heights
+102.15 mm; maximum settled XY axis error was 0.750 mm. Cargo centre heights
 were approximately 40/70/100 mm above the tabletop (25 mm pallet included).
 
 This is the user's 3×1×3 fallback: 90×30×90 mm of cargo. It is not full mixed
@@ -61,7 +61,7 @@ Artifacts for the second run are under workspace
 `Rosy/artifacts/isaac/omx-stacking-20261029/6d2e0b0b94d350c3a9a518cc9df7b4c9-305f304bc6b34b7d9318db6af820d4e0/`.
 The source run manifest binds the raw report and actual 800 × 600 PNGs.
 
-Accepted artifacts are under workspace
+Earlier accepted artifacts are under workspace
 `Rosy/artifacts/isaac/omx-stacking-20261029/03a9b112fb34518cb10997cc27e70d1e-3cda294dfabc45ec878a9add9a0600c9/`.
 The bounded report is 455,980 bytes, SHA-256
 `sha256=6f2d6eaff258dcbcdddc84aa37f9955a8fcd5658f9ba01d420af849b3ae4e0df`.
@@ -101,6 +101,26 @@ The snapshot is under workspace
 `Rosy/artifacts/isaac/omx-stacking-20261029/394741d76b9c582e97bdabc48dd9aef0-5012136c47b44dfcb3211666b040d0d5/`.
 This proves mapped training integration, not learned palletizing proficiency.
 
+After the ownership and 240 Hz changes, source `803bd0ae5f`, run
+`e241107617db5a2084890819d11e0870`, failed during SDK import before any training
+report or checkpoint. The worker recorded `FileNotFoundError`, import unverified,
+zero updates and confirmed owned cleanup. The exact importer interruption cause
+is unresolved. It is retained as a failed run, independently of the later retry.
+
+The identical-source retry, run `ed22e8d05c2f52419437f1a5254fcef9`, completed
+with verified training and owned cleanup: 32 updates / 1,024 transitions,
+parameter delta 0.5478506088256836. The physical belt moved the observed cargo
+20.017 mm. Independent evaluation seed 10042 ran 6,000 control steps / 200 s
+and completed **0/1** stacks. Runner `SUCCEEDED` means the experiment completed;
+its task-success flag is false.
+
+Final PPO snapshot under workspace:
+`Rosy/artifacts/isaac/omx-stacking-20261029/ed22e8d05c2f52419437f1a5254fcef9-d00b5a578a744d3c8d077f1ce508f8ef/`.
+Report: 2,539 bytes,
+`sha256=0b7ed18bf394876c2a68659691f6067afa2ce98829f88f9fcd0ab2cd25301eb9`.
+Checkpoint: 200,319 bytes,
+`sha256=7467100acf46d6f1d33a727557b6dbb3a251dae9fe38c1af6e75e77c831f8aa4`.
+
 Source `83e3d61303703e6dc334f96ad2e72adaf6bea1d0`, run
 `c6cb3a15e1985f0bb686c272867734ce`: the earlier synthetic cell completed 32 PPO
 updates / 1,024 transitions and changed finite policy parameters (delta
@@ -137,7 +157,29 @@ The released middle/top bars had approximately 10.66/11.79 mm/s reported speed,
 above the unchanged 10 mm/s limit, while positions remained nearly constant.
 Expected supports, absent finger contact and explained contact forces passed.
 Source `af233392bb` raises mapped cargo solver iterations to 64 position / 16
-velocity, matching the arms; its physical rerun remains separately classified.
+velocity, matching the arms. Run `c37b8291d4025bebbe9e979248c44c5d` still failed
+the same speed criterion, with confirmed owned cleanup.
+
+Source `dc2f2f05c5` uses two 240 Hz physics steps for each 120 Hz command tick.
+Planner timing, 30 Hz PPO actions and the 1.1 s stability observation duration
+are preserved; contact forces divide impulses by the actual 1/240 s step.
+The final reference run above passed all three seeds with maximum settled speed
+4.970 mm/s and angular speed 0.05737 rad/s, without changing acceptance limits.
+This establishes the observed correction for this fixture; it does not prove a
+general SDK defect or a reliability rate beyond these three trials.
+
+Final accepted snapshot under workspace:
+`Rosy/artifacts/isaac/omx-stacking-20261029/74098c1235c4589cbdc9104852b6f186-a027c878ddfc4347b6a2f2bb99ba7bf2/`.
+Report: 453,913 bytes,
+`sha256=cb277ceec354e3aeeb8a42ece6c339b411f4748894866ccd84092a348da22bdf`.
+`mapped-layer-3.png`: 241,254 bytes,
+`sha256=ae4df32721bbc2d282da84547533058be8c7ce0d3674c83b90558835510eaef7`.
+
+Remote full Isaac regression on `dc2f2f05c5`: 419 passed / 1 ROS overlay skip,
+exit 0 and 0 NEW. Final fixture/timing/document/module/harness/provenance checks
+on `803bd0ae5f`: 185 passed, exit 0 and 0 NEW. Static harness lint: 0 errors,
+39 existing module-history warnings. The read-only reviewer found no important
+issue in the ownership, wrist branch or physics substep changes.
 
 ## Scope and remaining uncertainty
 
