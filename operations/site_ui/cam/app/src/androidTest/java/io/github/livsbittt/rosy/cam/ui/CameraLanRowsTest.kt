@@ -1,14 +1,19 @@
 package io.github.livsbittt.rosy.cam.ui
 
 import android.graphics.Bitmap
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.*
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.InputMode
+import androidx.compose.ui.input.InputModeManager
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
@@ -26,6 +31,7 @@ import org.junit.Test
 class CameraLanRowsTest {
     @get:Rule val compose = createComposeRule()
     private var screenDensity = 1f
+    private lateinit var inputMode: InputModeManager
     private val peer = OverheadServiceRecord("승인 가능한 기기", "peer.local", 8443, "192.0.2.1", peerApproval = true)
     private val legacy = peer.copy(serviceName = "기존 승인 기기", tlsHost = "legacy.local", pairable = true, peerApproval = false)
     private val missing = peer.copy(serviceName = "주소를 찾지 못한 기기", tlsHost = "missing.local", address = null)
@@ -66,6 +72,7 @@ class CameraLanRowsTest {
         var records by mutableStateOf(listOf(peer, legacy))
         val calls = mutableListOf<OverheadServiceRecord>()
         show(800) { CameraLanRows(records) { calls += it } }
+        compose.runOnIdle { assertTrue(inputMode.requestInputMode(InputMode.Keyboard)) }
         compose.onNodeWithText(peer.name).performSemanticsAction(SemanticsActions.RequestFocus) { it() }
         compose.onNodeWithText(peer.name).assertIsFocused()
         compose.runOnIdle { records = listOf(legacy, peer) }
@@ -80,6 +87,7 @@ class CameraLanRowsTest {
         var records by mutableStateOf(listOf(peer, legacy))
         val calls = mutableListOf<OverheadServiceRecord>()
         show(800) { CameraLanRows(records) { calls += it } }
+        compose.runOnIdle { assertTrue(inputMode.requestInputMode(InputMode.Keyboard)) }
         compose.onNodeWithText(peer.name).performSemanticsAction(SemanticsActions.RequestFocus) { it() }
         compose.onNodeWithText(peer.name).performKeyInput { pressKey(Key.Tab) }
         compose.onNodeWithText(legacy.name).assertIsFocused()
@@ -94,10 +102,11 @@ class CameraLanRowsTest {
         compose.setContent {
             val density = LocalDensity.current.density
             screenDensity = density
+            inputMode = LocalInputModeManager.current
             CompositionLocalProvider(LocalDensity provides Density(density, fontScale = 1.3f)) {
                 RosyTheme {
                     Column(
-                        Modifier.requiredWidth(width.dp).height(800.dp).testTag("screen")
+                        Modifier.requiredWidth(width.dp).height(800.dp).background(MaterialTheme.colorScheme.background).testTag("screen")
                             .safeDrawingPadding().verticalScroll(rememberScrollState()).padding(RosyMetrics.Space5.dp),
                         verticalArrangement = Arrangement.spacedBy(RosyMetrics.Space3.dp),
                     ) { content() }
