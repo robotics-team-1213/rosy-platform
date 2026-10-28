@@ -34,7 +34,7 @@
 1533 middleware/core/events/test/test_audit.py
 2827 middleware/robot_ui/pilot/test/test_pilot_browser.py
 1748 operations/fleet/test/test_trip_runner.py
-718 overhead/rosy_vision/ingest.py
+717 overhead/rosy_vision/ingest.py
 633 overhead/rosy_vision/track/background_blob.py
 10074 perception/front_camera/perception
 771 perception/front_camera/perception/lane.py
