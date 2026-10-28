@@ -1,8 +1,9 @@
 """The shared invocation queue remote_pytest's host workers pull from, its largest-first cost, and browser lanes.
 
-A full lab host runs its usual one-at-a-time worker ("main") and, beside it, up to BROWSER_PER_HOST "lane"
-workers that take only browser invocations (serial, ~1 core each), so the FULL tier's browser chunks stop
-queueing behind the xdist suites. Each worker is a run of its own (own run dir and lock, remote_job.JOB).
+A full lab host runs up to MAX_MAIN main workers of one run (``main_workers``, each job's xdist sized from its
+share) and, beside them, up to BROWSER_PER_HOST "lane" workers that take only browser invocations (serial, ~1 core
+each), so the FULL tier's browser chunks stop queueing behind the xdist suites. Every job takes its own lock and
+starts only when the host's JOB admission (remote_job.ADMIT) finds room across all runs.
 While Gazebo holds a host (a live class-sim lock or reservation) it gets no lanes, so with one lab host left
 the browser chunks mostly run behind main's queue there; the site PC never gets lanes (it is no FULL target)."""
 from __future__ import annotations
