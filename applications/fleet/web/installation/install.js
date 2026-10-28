@@ -312,7 +312,6 @@ async function refreshAuthorization(renewed = false) {
     life.check();
     auth.role = identity.role;
     auth.principal = identity.principal_id;
-    if (identity.principal_id.startsWith("development-")) el("token-access").hidden = true;
     loginForm.refresh(false);
     showSession(identity);
     applyRole();
@@ -335,7 +334,6 @@ async function refreshAuthorization(renewed = false) {
         if (token && token !== auth.token) {
           auth.token = token;
           el("console-token").value = token;
-          el("token-access").hidden = true;
           await refreshAuthorization(true);
           return;
         }
