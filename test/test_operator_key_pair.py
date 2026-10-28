@@ -4,6 +4,7 @@ import hashlib
 import importlib.util
 import json
 from pathlib import Path
+import secrets
 import shutil
 import subprocess
 
@@ -50,7 +51,8 @@ def test_matching_real_keys_work_without_decryption(verifier, make_key, key_type
 
 @pytest.mark.parametrize("cipher", ["aes256-gcm@openssh.com", "chacha20-poly1305@openssh.com"])
 def test_authenticated_encryption_keys_are_accepted(verifier, make_key, cipher):
-    private, public = make_key(passphrase="fixture", cipher=cipher)
+    unlock = secrets.token_urlsafe(16)
+    private, public = make_key(passphrase=unlock, cipher=cipher)
     assert verifier.key_pair(private, public).startswith("SHA256:")
 
 
