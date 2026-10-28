@@ -77,7 +77,7 @@
 ## 최근 기록
 
 - 2026-10-28 · uncommitted · Native motor-health 종료 시각 수정 초안
+- 2026-10-27 · f44520f70e · exact-line provenance 원격 가드 확인
+- 2026-10-27 · uncommitted · 고정 검증 기록의 전체 파일 검사 provenance 보완
+- 2026-10-27 · 296fdfc384 · 고정 검증 기록의 Git 참조 비밀정보 오탐 검토
 - 2026-10-27 · 6e71f6ad62 · 매일 원장 백업 타이머(14개 보존)
-- 2026-10-27 · 6bd97f9914 · operator OS preparation and current-main integration
-- 2026-10-27 · db99bab13e · bounded guest bundle return and engineering CMS selection
-- 2026-10-27 · 8768fa17cf · common delivery profiles and keyless OS bundle stages

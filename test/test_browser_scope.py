@@ -116,3 +116,11 @@ def test_common_robot_tasks_select_real_browser_flow():
                    'review_app_web/tasks.js', 'review_app_web/tasks.html', 'review_app_web/learning.html'):
         assert expected in browser_scope.targets(['learning/curation/perception/' + source])
     assert expected in browser_scope.targets(['learning/training/omx/experiment_center.py'])
+
+
+def test_all_json_expands_the_actual_browser_registry_without_fake_changed_paths(capsys):
+    import json
+    assert browser_scope.main(["--all", "--json"]) == 0
+    found = json.loads(capsys.readouterr().out)
+    assert found == sorted({path for pattern in browser_scope.EVERYTHING for path in browser_scope._expand(pattern)})
+    assert found and "tools/land_browser.py" not in found

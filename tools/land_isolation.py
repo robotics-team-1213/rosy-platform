@@ -160,10 +160,11 @@ def _git(wt: Path, *args: str) -> str:
     return subprocess.run(["git", "-C", str(wt), *args], capture_output=True, text=True, encoding="utf-8").stdout.strip()
 
 
-def unreached(wt: Path, inv: list[str], logs: list[Path]) -> list[str] | None:
+def unreached(wt: Path, inv: list[str], logs: list[Path], *, fresh_only: bool = False) -> list[str] | None:
     """Files of an alone job the budget did not reach, from its report line; ``None`` without a report (the job
     died, or a reused pass whose log is gone): a failed job, not overflow."""
-    cached = [Path(e["log"]) for e in _cache_entries(wt) if e.get("argv") == inv and e.get("log")]
+    cached = [] if fresh_only else [Path(e["log"]) for e in _cache_entries(wt)
+                                   if e.get("argv") == inv and e.get("log")]
     for log in [*logs, *reversed(cached)]:
         text = log.read_text(encoding="utf-8", errors="replace") if log.is_file() else ""
         if m := REPORT.search(text):
@@ -267,11 +268,11 @@ def _prepare(wt, branch, selection, args, logdir, round_no, run_tests, guards, s
         if files:  # a NEW failure or a dead job stops the landing; the files still never ran alone to a pass
             record(wt, branch, "prepare", files, files, error="the round stopped")
         raise
-    cut = unreached(wt, job(files)[0], _fresh(logdir, round_no, since)) if files else []
+    cut = unreached(wt, job(files)[0], _fresh(logdir, round_no, since), fresh_only=args.tests == "full") if files else []
     if cut is None:  # a job without its report failed; once more without the cache, then stop
         retry = argparse.Namespace(**{**vars(args), "no_cache": True})
         done += run_tests(wt, retry, job(files), logdir, f"g{round_no}r")
-        cut = unreached(wt, job(files)[0], _fresh(logdir, f"{round_no}r", since))
+        cut = unreached(wt, job(files)[0], _fresh(logdir, f"{round_no}r", since), fresh_only=args.tests == "full")
         if cut is None:
             record(wt, branch, "prepare", files, files, error="no [isolation] report twice")
             raise stop("isolation: the alone job ended twice without its [isolation] report; not landing")
