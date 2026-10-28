@@ -46,7 +46,7 @@ def viewer_url():
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
-        yield f"http://127.0.0.1:{server.server_address[1]}/lane_live_view.html"
+        yield f"http://127.0.0.1:{server.server_address[1]}/"
     finally:
         server.shutdown()
         server.server_close()
