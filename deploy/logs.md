@@ -3923,3 +3923,9 @@
 - 증거: ccd8049112 공식 원격 RED 17 failed. f33f660d59 집중 회귀 203 passed. 검토에서 찾은 파일 bind 갱신·과도한 이미지 보존은 8bf52891bc의 2 failed로 재현했고, 535d81ae8b는 집중 205 passed/skip0/NEW0이다. 최종 source 재검토의 중대 지적은 없다. workflow 변경으로 FULL이 필수이며 최종 결과는 별도 완료 기록에 남긴다.
 - gate 변화: 없음. 실제 Docker 연속성·CI dispatch·설치·운영 배포·실물 수용·착지/push는 수행하지 않았다. v2 게시 전에 별도 설치된 서명기·검증기·업데이터를 먼저 갱신해야 한다.
 - CE: 해당 없음 — 파일 bind의 제약과 예방 판단이 D-301 추가 결정, 구성 label과 회귀 시험에 남는다.
+
+## 2026-10-29 · 6c77de81e0 · 빌더 직접 import 호환성 유지
+
+- 변경: 증분 빌드에서만 필요한 검증기 import를 해당 분기로 옮겼다. 기존 배포 목록 독자는 빌더를 파일 경로로 직접 불러와도 동작한다.
+- 증거: 8a4802129a 빠른 사전 검사에서 기존 pairing 목록 독자의 ModuleNotFoundError 1건을 확인했다(1304 passed/2 skipped 및 별도 도구 160 passed). 6c77de81e0의 pairing·증분·빌더·workflow 64 passed/skip0/NEW0이다. 이전 SHA의 진행 중 FULL은 수정 뒤 취소했으며 통과 근거로 쓰지 않는다. 최종 SHA의 canonical FULL을 별도로 수행한다.
+- gate 변화: 없음. CE: 해당 없음 — 기존 직접 import 시험이 회귀를 검출하며 변경은 의존성 적재 위치에 한정된다.
