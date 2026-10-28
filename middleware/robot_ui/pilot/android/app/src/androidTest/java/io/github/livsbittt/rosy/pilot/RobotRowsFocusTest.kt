@@ -2,12 +2,15 @@ package io.github.livsbittt.rosy.pilot
 
 import android.content.Intent
 import android.graphics.Rect
+import android.graphics.Bitmap
 import android.view.KeyEvent
 import android.view.View
 import android.view.ViewTreeObserver
 import androidx.test.platform.app.InstrumentationRegistry
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.io.File
+import java.util.UUID
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
@@ -58,14 +61,23 @@ class RobotRowsFocusTest {
         assertTrue(activity.robots.getChildAt(index).requestFocus())
     }
 
-    private fun visible(target: () -> View) = instrumentation.runOnMainSync {
-        val view = target()
-        assertTrue(view.hasFocus())
-        val bounds = Rect()
-        assertTrue(view.getGlobalVisibleRect(bounds))
-        assertEquals(view.width, bounds.width())
-        assertEquals(view.height, bounds.height())
-        assertEquals(0, activity.selections)
+    private fun visible(target: () -> View) {
+        instrumentation.runOnMainSync {
+            val view = target()
+            assertTrue(view.hasFocus())
+            val bounds = Rect()
+            assertTrue(view.getGlobalVisibleRect(bounds))
+            assertEquals(view.width, bounds.width())
+            assertEquals(view.height, bounds.height())
+            assertEquals(0, activity.selections)
+        }
+        instrumentation.waitForIdleSync()
+        val bitmap = requireNotNull(instrumentation.uiAutomation.takeScreenshot())
+        val folder = requireNotNull(activity.getExternalFilesDir("native-ui"))
+        require(folder.isDirectory || folder.mkdirs())
+        File(folder, "pilot-focus-${UUID.randomUUID()}.png").outputStream().use {
+            check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it))
+        }
     }
 
     @Test fun reorderAndAddKeepsTheEndpointRatherThanTheNameOrPosition() {
