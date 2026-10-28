@@ -12266,6 +12266,12 @@ osy-d395-s1d\`.
 - 증거: `1a9cd5b164` 실제 Chromium3시험과 구조/harness/affected/browser-scope262시험이 통과했다(각 NEW/KNOWN/FLAKY0, SKIP0). API 브라우저 경로의 증거이며 화면 완성·G1/G2/G3·native 배포·현장 수용은 아니다.
 - gate 변화: UI·배포·실제 PC HOLD 유지. CE: 해당 없음 — 소유/등록/회귀로 기록했다.
 
+## 2026-10-26 · uncommitted · feat(remote): OMX 팔 S 핫픽스 반복 도구
+
+- 변경: `tools/remote/omx_hotfix.py` 추가. 손으로 하던 임시 커밋(임시 `GIT_INDEX_FILE`·`commit-tree`·`refs/rosy-wip/<이름>`), 원격 시험(`remote_pytest.py --sha`), 현장 PC 배포(`git archive`를 ssh 표준 입력으로 `~/rosy-test/omx-tools-<sha10>/`에 풀고 `REVISION`이 같으면 건너뜀, `omx-tools-current` 링크를 임시 이름 `ln -sfn` 뒤 `mv -T`로 교체), 상태 보기를 하위 명령 넷으로 묶었다. 배포는 `test`가 같은 sha로 남긴 로그의 마지막 pytest 요약이 `passed`이고 `failed`/`error`가 없을 때만 한다. 주소는 `--host`나 `OMX_HOTFIX_HOST`로만 받는다(D-226). 팔을 움직이거나 세션을 시작하지 않는다.
+- 증거: 원격 `test/test_omx_hotfix.py test/architecture/test_document_placement.py` 28 passed(exit 0, 모델 PC). 변이 4개(로그의 `failed` 검사 제거, 링크를 제자리 `ln -sfn`, `REVISION` 건너뜀 끔, 임시 인덱스 대신 공유 인덱스)는 해당 시험 5 failed. 실제 `run-1.txt`에 배포 관문이 통과, 다른 sha로는 거절. 현장 PC 배포·실물 수용은 하지 않았다.
+- gate 변화: 없음. 현장 PC 배포 전에 원격 시험 통과 로그가 필요하다.
+
 ## 2026-10-27 · uncommitted · selector 분리 FULL 실패와 G2 교차 대조
 
 - 변경: 분리 소스와 G2 구현·시험·종료 예산은 유지하고, 최신 main 합류 뒤 공식 root6 NEW 실패 원본과 같은 AI 호스트 A–B–B–A 대조를 보존했다. 실패한 writer close 경계와 실제 main 동일 blob을 구분했다.
@@ -12558,6 +12564,64 @@ osy-d395-s1d\`.
 - gate 변화: Isaac 전환 조건 중 파지 반복 충족(시험 범위 안). 카메라 640×480 10Hz와 렌더링 비교는 미충족.
 - CE: 기존 교훈 갱신 — `docs/solutions/logic-errors/mujoco-finger-convex-hulls-never-close-on-the-block-2026-10-27.md`에 Isaac 원인 세 겹과 공용 패드 위치.
 
+## 2026-10-27 · uncommitted · test(isaac): Lab 3 설치 증거와 복구 회귀
+
+- 변경: 별도 Newton·Sim 후보 환경의 최초 설치 증거와 SDK 호환·종료 정리의 회귀 조건을 기록했다.
+- 증거: Newton 의존성·GPU·PPO 기본 실행을 확인했고 Sim 후보의 의존성 충돌·종료 정리 실패를 분리했다. 코드 복구와 새 실행은 후속 검증으로 확인한다.
+- gate 변화: 없음. 설치 검증은 제품 task·장치 수용을 뜻하지 않는다.
+- CE: 해당 없음 — 원인·판정 범위는 설정 문서와 회귀 조건에 보존한다.
+
+- 2026-10-27: Lab 3 분리 환경의 최초 설치 증거를 기록했다. Newton 기본 학습은 통과했고 Sim 후보 의존성·종료 정리 복구를 별도 검증한다. 실제 Torch fsspec 요구와 상위 주석 차이를 정정했다.
+
+## 2026-10-27 · uncommitted · docs(learning): D-897 두 호스트 오프라인 시뮬레이션 학습
+
+- 변경: AI PC·모델 PC의 격리된 학습 병렬 배치와 첫 검증의 AI 추론 서비스 일시 중지·원상 복원 승인 범위를 기록했다. 운영 권한·승격 경계는 유지한다.
+- 증거: 사용자 요청과 두 호스트의 GPU·RAM·드라이버·실제 서비스 상태를 조회했다. 설치와 동시 학습의 실제 수용은 후속 기록으로 확인한다.
+- gate 변화: 없음. 역할 예외 승인과 환경·제품 수용을 구분한다.
+- CE: 해당 없음 — 새 사용자 결정은 ADR에 보존한다.
+
+## 2026-10-27 · uncommitted · docs(isaac): SDK 복구와 두 PC 동시 학습 검증
+
+- 변경: Lab 3 README의 두 호스트 실행 조건과 동결 복구 기록을 추가했다. 설치된 Torch metadata로 fsspec 설명을 정정하고 로컬 kernel 버전·원본 payload 보존·SDK 보안 범위를 구분했다.
+- 증거: AI·모델 PC에서 각각 Newton 64환경·64iteration·65,536 transitions, 새 checkpoint 3개와 clean을 확인했다. 실제 learn 구간이 8.457134초 겹쳤고 AI의 두 user unit은 active/running/enabled로 복원됐다. 모델 SDK는 CUDA·PhysX·fsspec IO·PPO와 종료 정리를 통과했다. helper SHA·lock·정제 증거 ZIP은 docs/validation/isaaclab3-repair-2026-10-27/result.md와 Confluence 10190849에 연결했다.
+- 검증 범위: 구현 회귀는 원격 RED→GREEN, 이전 소스 회귀 511 PASS/1 SKIP/NEW 0이다. 최종 커밋의 원격 검사·착지는 후속 관문에서 확인한다. SDK 종료 직전 관측과 Hub disabled 조건을 검토했고 최초 실패도 보존했다.
+- gate 변화: 없음. 설치 검증은 제품 task·일반화·실물 수용을 뜻하지 않는다.
+- CE: 해당 없음 — 원인·복구 판단은 구현·회귀 시험·README·동결 검증 기록으로 보존돼 별도 교훈을 중복하지 않는다.
+
+## 2026-10-27 · uncommitted · docs(isaac): 실행 파일의 SHA-256 표기를 명확히 함
+
+- 변경: 동결 기록의 두 공개 파일 해시를 SHA-256으로 명시했다. 해시 값과 구현은 그대로다.
+- 증거: 착지 회귀에서 문서의 `SHA는` 표기가 비밀정보 검사에 걸렸고 단독 재현은 실패, main 대조는 통과했다. 실제 검사기의 자기 검사로 원래 표기 RED·명시한 SHA-256 GREEN을 확인했다. 검사 규칙과 예외 목록은 바꾸지 않았다.
+- gate 변화: 없음. 수정 커밋은 원격 착지 관문을 다시 통과해야 한다.
+- CE: 해당 없음 — 수정과 기존 검사 규칙에서 원인이 명확하다.
+
+## 2026-10-27 · uncommitted · docs(isaac): SDK 6.2 기본 경로 전환과 제어 증거
+
+- 변경: 두 PC의 SDK 설치·PPO, 모델 PC의 실제 ROS 제어·카메라와 기본 pointer 전환을 별도 [검증 기록](validation/isaac62-sdk-migration-2026-10-27/result.md)으로 보존하고 운영 binding·Lab 3 안내를 갱신했다.
+- 증거: 원격 Isaac 전체 시험 exit 0·신규 실패 0, ROS conformance failures 빈 목록, 두 pointer와 인터프리터 해시 전환 후 재조회. AI 추가 ROS는 외부 GPU owner로 실행 전에 거절됐으며 승인 서비스 복원을 확인했다.
+- gate 변화: 특정 SDK/소프트웨어 실행 증거만 추가한다. 학습 정책·실물·현장 수용을 주장하지 않는다. 초기 UNKNOWN/조기 실패의 미확정 원인을 보존한다.
+- CE: 새 교훈 기록 — USD variant와 누락된 position drive gain은 import 성공만으로 놓칠 수 있어 [해결·회귀·복구 조건](solutions/runtime-errors/isaac62-imported-articulation-with-zero-position-drive-2026-10-27.md)을 남겼다.
+
+## 2026-10-27 · uncommitted · AI ROS 거절의 관측 범위 보충
+
+- 변경: 앞 기록의 외부 GPU owner 표현을 GPU 무점유 확인 조건 미충족으로 한정한다. 당시 원본 조회 응답이 없어 점유와 조회 실패를 구분하지 않는다. SDK 미시작·서비스 복원과 AI 학습 스모크 성공의 구분은 유지한다.
+- 증거: helper의 gpu_empty는 비어 있지 않은 결과와 조회 실패를 모두 false로 반환한다. 두 서비스의 실제 복원과 후속 NRestarts 0은 별도 재조회했다.
+- gate 변화: 없음. 추가 runtime 성공으로 표시하지 않는다.
+
+## 2026-10-27 · uncommitted · SDK 검증 기록의 공개 지문 종류 명시
+
+- 변경: SDK 이관 기록과 해결 문서의 커밋 지문에 commit, 파일 지문 표의 각 행에 SHA-256을 명시했다. 값·실행 코드·비밀정보 검사 규칙은 유지한다.
+- 증거: 착지 검사의 비밀정보 guard가 브랜치에서 실패하고 main에서 통과했다. 실제 scan_text로 원문 8건 탐지와 수정문 0건 탐지를 확인했다. 커밋 뒤 같은 guard를 원격 재검증한다.
+- gate 변화: 없음. 전체 착지 검사를 재개한다.
+- CE: 해당 없음 — 기존 공개 provenance 표기 규칙을 적용한 문서 수정이며 검사 예외를 늘리지 않았다.
+
+## 2026-10-27 · 477761474d · 공개 simulation 복구 연결 검증과 clipping 교훈
+
+- 변경: 기존 복구 how-to에 authenticated 요청·독립 관측·정확 승인·자식 조회 경로를 기록했다. frozen public 검증 기록은 실제 source revision과 RED/GREEN·skip·실물 미수행을 구분한다. source-only commit은 공개 PR이나 main 착지 증거로 표현하지 않는다.
+- 증거: auth 109, HTTP/service 37, 최종 API/auth 18, 최종 actual browser 14 pass; broad 453 pass/35 skip는 별도 범위다. 독립 계약 검토의 simulation 표시 Minor를 해결했고 시각 검토 ship. 공개 ingress·진행 기록과 별개로 장치·학습 수용은 남는다.
+- gate 변화: 없음. 공식 선행 계약/제품 로컬 착지 도구 결과는 별도 후속 기록한다.
+- CE: 새 교훈 기록 — page/element scrollWidth만으로 nested card clipping을 검출할 수 없는 실제 반례와 ancestor-bounds 회귀를 solutions/logic-errors/page-overflow-guards-miss-clipped-child-identifiers-2026-10-27.md에 남겼다. Frontmatter parser 통과, local-only commit 인용 2건은 미게시·착지 대기로 명시해 의도 확인했다.
+
 ## 2026-10-28 · uncommitted · perf(remote): per-invocation timing and D-889 addendum 3
 - 변경: `rosy-pytest-memory.jsonl` 행에 호출별 `queued_s`·`job_s`·`pytest_s`를 남긴다(`memory_history.timing`, `work_queue.Work.began`). D-889 추가 3에 차례 튕김 측정과 B·A·C 규칙을 적었다.
 - 증거: 10-27 00:00~10-28 01:40 차례 119번 가운데 착지 46, 한도 초과 44, main delta FULL 12, 멈춤 12. 잠금 시간의 56%가 튕긴 차례. 원격 `test_remote_pytest_memory.py`·`test_remote_pytest.py`·`test_remote_test_tools.py`·`test_harness_contracts.py` exit 0. `pytest_s`를 cpu 사용량 칸에서 읽는 변이를 새 시험이 잡았다.
@@ -12627,6 +12691,20 @@ osy-d395-s1d\`.
 - gate 변화: 없음(문서만). `tools/remote/remote_pytest.py`는 598줄이라 다음 변경 전에 나눠야 한다. `fix/land-turn-deadline-v3`가 C 뒤에 착지하면 그 브랜치가 `remote_pytest.py`·`work_queue.py` 충돌을 푼다.
 - 교훈: 기존 교훈 갱신 없음. 튕김("main 따라잡기")의 정본 기록은 D-889 추가 3이다.
 
+## 2026-10-28 · ce1ef8ebb0 · 제안자의 요청 응답 유실 후 조회 검증
+
+- 변경: 27일 public 기록은 보존하고 조회 입력의 role-lock 수정·실제 lost-request 흐름·독립 재검토를 새 날짜의 frozen 기록에 분리했다. 승인 응답 유실과 요청 응답 유실을 혼동하지 않는다.
+- 증거: focused RED1은 조회 입력 disabled였고 HTTP 재조회 자체는 성공했다. source ce1ef8ebb0의 actual browser 14 passed/0 skipped·NEW0, 원격 PNG SHA-256 대조, 계약 재검토의 권한 확대 없음. docs/validation/transfer-recovery-public-2026-10-28/result.md 참고.
+- gate 변화: 없음. 공식 로컬 병합 결과는 별도 확인한다.
+- CE: 추가 기록 없음 — 기존 clipping 교훈과 새 source 회귀가 판단 근거를 보존한다.
+
+## 2026-10-28 · b948a23204 · public UI 계약 실패와 수정 검증 기록
+
+- 변경: 이전 frozen 결과는 보존하고 native UI 계약 실패, 수정 중 초기화 회귀, 후속 공용 계약·실제 browser 통과를 ui-contract-correction.md에 구분했다. 최종 캡처와 중간 응답 유실 검증의 증거 범위를 분리했다.
+- 증거: source af1b7ac467의 계약 37 PASS/0 skip·browser 14 PASS/0 skip, 최신 b948a23204의 실제 browser 14 PASS/0 skip·NEW0. 원격 PNG 6개의 SHA-256을 대조했다. 초기화 순서의 독립 재검토에서 남은 회귀 없음.
+- gate 변화: 없음. 공유 계약은 main에 반영됐고 public 공식 재착지는 후속 결과를 따른다.
+- CE: 새 교훈 추가 없음. 기존 nested clipping 교훈과 코드·시험이 각 판단을 보존한다.
+
 ## 2026-10-28 · uncommitted · docs(landing): land_async is the default landing; publish push reuses its own record (D-889 addendum 5)
 - 변경: `reference/shared-checkout.md` 4·6번의 기본 착지를 `python tools/land_async.py --tests auto`로 바꾸고 숨은 스냅샷 워크트리·`.log`·`.stopped`·복구 순서, 대기열 동작(10분 마감, 미리 준비, 적응형 묶음, 30분 감시자), 게시 push 규칙(자기 pre-push 사본, 자기 기록 재사용, 중복 검사·크기 규칙 생략, `--merge-when-green`)을 적었다. D-889 추가 5에 이유·측정·남은 일. `tools/land.py`는 `.worktrees`에서 직접 돌면 land_async를 권하는 한 줄을 찍는다
 - 증거: 10-28 게시 1회 59분 → 10.5분, 04:16~04:42 착지 5건, 대기열 10개 이상 → 3개 (rosy-land-events.jsonl, publish 로그)
@@ -12634,12 +12712,134 @@ osy-d395-s1d\`.
 - 결정: D-889 추가 5
 - 교훈: 없음
 
+## 2026-10-28 · uncommitted · fix(remote): omx_hotfix 시험의 가짜 SHA를 비밀 검사에 걸리지 않게
+
+- 변경: `test/test_omx_hotfix.py`의 가짜 리비전 `"0123…4567"`을 `"d" * 40`으로 바꾼다. 시험의 뜻은 같다(새 커밋 `"c" * 40`과 다르다).
+- 근거: 착지 사전 시험의 `test/test_release_boundary_guards.py::test_no_secrets_in_tracked_files`가 그 리터럴을 high-entropy-token으로 잡았다.
+- 증거: 원격 `test/test_omx_hotfix.py`·`test/test_release_boundary_guards.py`.
+- gate 변화: 없음.
+- CE: 해당 없음 — 시험이 잡은 픽스처 값이다.
+
 ## 2026-10-28 · uncommitted · docs(adr): D-902 Pilot 실물 OMX 조종·녹화는 Fleet과 CORE 수동 팔 경로로
 
 - 변경: `docs/adr/D-902-pilot-real-omx-teleop-and-recording.md`(Proposed)와 ADR Log 행. 실물 OMX Pilot은 Fleet origin에서 제공하고 D-894 seat·deadman·jog/park/goto/run만 쓴다. 녹화는 OMX 수집 owner가 하고 D-411·D-534·D-848 원칙을 따른다. 실행 중인 수집 세션을 빼앗지 않는다.
 - 근거: Pilot 팔 드라이버는 `omx_sim.js`뿐이고(D-390), 실물 팔 S는 SSH·FIFO로만 조작·녹화한다. D-894는 브라우저가 Fleet origin만 부르게 해 장치-origin Pilot과 맞지 않는다.
 - gate 변화: 없음(문서만, 구현·실물 동작 없음). D-894 착지·런타임 수용이 선행 조건이다.
 - CE: 해당 없음 — 방향 결정이며 해결한 장애가 없다.
+
+## 2026-10-28 · uncommitted · fix(omx): 움직임 분리 시험 파일의 BOM 제거
+
+- 변경: `middleware/devices/omx/adapter/test/test_omx_dynamixel_motion.py` 맨 앞의 UTF-8 BOM을 지운다. 내용은 같다.
+- 근거: 착지 사전 시험에서 `test/test_source_encoding.py::test_no_active_tracked_python_file_starts_with_a_bom`과 `test/test_ci_dependencies.py::test_no_test_module_defines_a_nose_style_setup_function`이 이 파일의 BOM 때문에 실패했다(BOM이 있으면 파일을 파싱하지 못한다).
+- 증거: 원격 위 두 시험과 `middleware/devices/omx/adapter/test`.
+- gate 변화: 없음.
+- CE: 해당 없음 — 시험이 잡은 인코딩 실수다.
+
+## 2026-10-28 · uncommitted · fix(land): 묶음이 FULL급 맨 앞을 건너뛰고 사전 시험 대기 티켓도 싣는다
+
+- 변경: `tools/land_batch.py`·`tools/land_prepare.py`. 리더는 묶을 수 있는 `waiting` 가운데 가장 앞선 것이다. 구성원에 `pending`을 더한다(갈라진 지점의 선택이 affected일 때). 묶음에 든 `pending`은 슬롯을 잡지 않고, 착지되면 사전 시험을 건너뛴다. D-889 추가 4.
+- 근거: 10-28 15:45 대기 23건 중 16건이 `pending`이었는데 `train` 사건은 0건이었다(사용자 지시).
+- 증거: 원격 `test/test_land_batch.py`·`test_land_queue.py`·`test_land_prepare.py`·`test_land.py`·`test_land_speculate.py`, known_failures NEW 0.
+- gate 변화: 없음.
+- CE: 해당 없음 — 규칙과 근거가 D-889 추가 4와 시험에 남는다.
+
+## 2026-10-28 · uncommitted · fix(omx): 값 계약 이동을 OMX 배포 묶음 경로에 반영
+
+- 변경: `deploy/robot/omx/omx-devices-autoupdate.json.example`의 `paths`에 `omx_adapter/contracts/adapter_profile.py`·`contracts/watchdog_observation.py`를 더한다. 이 브랜치가 `watchdog_observation.py`·`profile.py`가 쓰는 값을 `contracts/` 아래로 옮겼는데, main에 먼저 들어온 chunk-library의 배포 묶음에는 그 두 모듈이 없었다.
+- 근거: 착지 사전 시험의 `middleware/devices/omx/adapter/test/test_chunk_library.py::test_native_export_contains_the_script_import_closure`가 `No module named 'omx_adapter.contracts.watchdog_observation'`으로 실패했다(main에서는 통과).
+- 증거: 원격 `middleware/devices/omx/adapter/test`·`test/test_omx_arm_status_bridge.py`.
+- gate 변화: 없음.
+- CE: 해당 없음 — 두 착지의 import 목록을 맞춘 것이다.
+
+## 2026-10-28 · uncommitted · CORE host-file C6 published triage
+
+- Change: Record individual verdicts for the 33 remaining host-file reaches in the existing C6 criteria; the exact tuples live only in its literal registry. Three declared-member reaches are fixed in source instead of admitted. Correct the battery absent-judgment rationale without tightening runtime freshness.
+- Evidence: committed 50ba472d focused preservation has 246 PASS; its broader mapped run has 5285 PASS, one C6 registry failure, and 186 summary skips (180 attributed nodes; six unbound skip events). This candidate has no remote result yet; static per-commit preflight and independent SOURCE/safety review precede its normal commit.
+- gate 변화: none. No installed/device/field acceptance or C6 GREEN is claimed.
+- CE: unresolved; existing folder-move-widens-path-scoped-contract-tests-2026-09-25.md applies. No solved lesson is added before verification.
+
+## 2026-10-28 · uncommitted · fix(land): 사전 시험 자리 예약을 묶음 규칙과 합침
+
+- 변경: `tools/land_prepare.py`의 `slot()`이 오래된 `pending`에 자리를 먼저 주는 규칙(이 브랜치)과 묶음에 든 구성원을 붙잡는 규칙(`fix/land-batch-pending`)을 함께 쓴다. 묶음에 든 `pending`은 혼자 사전 시험을 하지 않으므로 자리를 예약하지 않는다. 시험 1건을 더했다.
+- 근거: 두 브랜치가 같은 함수를 고쳐 나중에 착지하는 쪽이 충돌했다. 이 브랜치는 3시간 동안 쉬고 있어 이어받았다(사용자 지시).
+- 증거: 원격 `test/test_land_queue.py`·`test/test_land_batch.py`·`test/test_land_prepare.py`.
+- gate 변화: 없음.
+- CE: 해당 없음 — 규칙이 코드와 시험에 남는다.
+
+## 2026-10-28 · uncommitted · feat(land): urgent ticket (`--urgent "<the user's words>"`)
+- 변경: `land_queue`에 급한 표(한 번에 하나, 사유 필수, `urgent` 사건)를 넣고 `land.py --urgent`로 받는다. 기다리는 일반 표를 앞지르고 차례는 끊지 않는다. `shared-checkout.md` 6번에 쓰는 법과 남의 `land.py`를 멈추지 않는다는 규칙
+- 증거: test_land_urgent.py 3건, land_queue·land·land_batch 시험 142 passed (원격)
+- gate 변화: 없음
+- 결정: D-889 추가 5의 남은 일(우선 차선)
+- 교훈: 없음
+
+## 2026-10-28 · uncommitted · feat(land): FULL 등급끼리 묶음 착지 (D-889 추가 6)
+
+- 변경: D-889 추가 6. `tools/land_batch.py`가 준비 등급 무리(affected/full)별로 묶고, full 묶음은 병합 트리에서 FULL을 한 번 돌린다. full 묶음 크기는 min(kopt(p), 3). safety와 `--tests` 지정은 혼자 간다.
+- 근거: 10-28 12시간 착지 39건 중 묶음 2번, 준비 78건 중 FULL 48건(게이트 도구 Rule 8 약 60회, safety 25회).
+- gate 변화: 없음(착지 절차).
+- CE: 해당 없음 — 측정과 규칙은 ADR 추가 6에 남겼다.
+
+## 2026-10-28 · uncommitted · fix(monitoring): Monitoring 화면 배경을 의미 색 역할로
+
+- 변경: `applications/monitoring/web/monitoring.css`의 `body` 배경을 `--ground`에서 `--surface-canvas`로 바꾼다. 이 레인은 main보다 늦게 합쳐졌고, 그사이 main에 들어온 `shared/web/test/test_design_scope_gates.py::test_direct_colour_declarations_use_semantic_roles`가 직접 배경 선언에 의미 역할을 요구한다.
+- 증거: 원격 `operations/monitoring/test`·`shared/web/test`·`test/architecture`.
+- gate 변화: 없음.
+- CE: 해당 없음 — 시험이 잡은 토큰 이름 차이다.
+
+## 2026-10-28 · uncommitted · fix(release): Monitoring TLS 시험이 고정한 Caddy 배포 파일 SHA256을 공개 출처로 등록
+
+- 변경: `deploy/robot/pinky_pro/release/public_provenance.json`에 `operations/monitoring/test/test_tls_proxy.py`의 Caddy v2.10.2 linux_amd64 배포 파일 SHA256 줄을 기록한다. 2026-10-28에 그 파일을 내려받아 크기 15875694와 값이 맞음을 확인했다.
+- 근거: 착지 사전 시험의 `test/test_release_boundary_guards.py::test_no_secrets_in_tracked_files`가 그 값을 high-entropy-token으로 잡았다(main에서는 통과).
+- 증거: 원격 `test/test_release_boundary_guards.py`·`test/test_secret_public_provenance.py`.
+- gate 변화: 없음.
+- CE: 해당 없음 — 저장소의 공개 출처 등록 절차를 따른 것이다.
+
+## 2026-10-28 · uncommitted · fix(web): 대시보드 시험을 공용 부품의 상대 import에 맞춤 (monitoring 레인)
+
+- 변경: `middleware/core/gateway/test/test_dashboard.py`가 공용 `shared/web/ui.js`에서 찾는 줄을 `"./confirmation.js"`로 바꾼다. 이 레인이 공용 control 모듈을 상대 import로 바꿨다(feat/monitoring-surface-registration과 같은 변경과 같은 수정).
+- 근거: 착지 사전 시험의 `test_dashboard_assets_are_local_and_reference_runtime_contract`·`test_dashboard_exposes_local_field_settings_not_fleet`가 실패했다(main에서는 통과).
+- 증거: 원격 `middleware/core/gateway/test/test_dashboard.py`·`shared/web/test`.
+- gate 변화: 없음.
+- CE: 해당 없음 — 같은 레인이 바꾼 import를 시험에 맞춘 것이다.
+
+## 2026-10-28 · uncommitted · fix(test): 역할 화면 브라우저 시험이 공용 부품의 상대 import를 어느 mount에서나 제공
+
+- 변경: `test/test_role_surface_states_browser.py`가 `confirmation.js`·`live-dialog-geometry.js`·`ui-wiring.js`를 `/common/` 밑에서만 내주던 것을 `**/` 밑 어디서나 내준다. 이 브랜치가 `shared/web/ui.js`의 import를 상대 경로로 바꿨는데, 이 하네스는 `ui.js`를 `/assets/ui.js`로 올리고 이웃 파일은 `/common/`에만 두어 `Failed to fetch dynamically imported module`이 났다.
+- 근거: 착지 사전 시험의 `test_shared_components_apply_button_size_palette_and_status_contracts`가 실패했다(main에서는 통과).
+- 증거: 원격 `ROSY_RUN_BROWSER_TESTS=1 test/test_role_surface_states_browser.py`.
+- gate 변화: 없음.
+- CE: 해당 없음 — 같은 브랜치가 바꾼 import에 하네스를 맞춘 것이다.
+
+## 2026-10-28 · uncommitted · fix(land): 착지가 시작할 때 같은 무리의 대기 티켓을 묶어 이끈다
+
+- 변경: `tools/land_batch.py`(`early`, 나누기 반복을 `run`으로 묶음), `tools/land.py`(줄에 선 직후 `early`). 사전 시험 기록이 없는 착지가 같은 무리의 `waiting`·`pending` 티켓을 곧바로 묶어 사전 시험을 한 번만 받는다. robot-f4의 `feat/land-batch-full`(무리별 묶음) 위에 쌓았다. D-889 추가 4.
+- 근거: 19:35 대기열에서 `waiting`이 모두 FULL급이거나 tier 기록이 없어 affected 리더가 없었다(사용자 지시).
+- 증거: 원격 `test/test_land_batch.py`·`test_land_queue.py`·`test_land_prepare.py`·`test_land.py`·`test_land_speculate.py`, known_failures NEW 0.
+- gate 변화: 없음.
+- CE: 해당 없음 — 규칙과 근거가 D-889 추가 4와 시험에 남는다.
+
+## 2026-10-28 · uncommitted · fix(land): 겹치지 않는 묶음은 함께 있을 수 있다
+
+- 변경: `tools/land_batch.py`. "묶음은 한 번에 하나" 대신, 이미 실린 브랜치(`taken`)를 다른 묶음의 구성원에서 빼고 실린 착지는 리더가 되지 않게 했다. 동시에 생긴 두 리더는 구성원이 겹칠 때만 늦은 쪽이 물러난다. D-889 추가 4.
+- 근거: 21:31에 FULL 묶음 하나가 사전 시험 슬롯을 1.5시간 기다리는 동안, 차례를 기다리는 FULL 티켓이 묶음을 만들지 못했다(사용자 지시).
+- 증거: 원격 `test/test_land_batch.py`·`test_land_queue.py`·`test_land_prepare.py`·`test_land.py`·`test_land_speculate.py`, known_failures NEW 0.
+- gate 변화: 없음.
+- CE: 해당 없음 — 규칙이 D-889 추가 4와 시험에 남는다.
+
+## 2026-10-28 · 55117575a3 · 녹화·검수·학습·HF 보관 연결 검증
+
+- 변경: 고정 OMX 자료의 보관 인계, 검수 유실 방지, 변환 상태와 API v1.328, signed runtime closure의 구현·화면·원격 증거를 `docs/validation/recording-learning-handoff-2026-10-28/`에 보존한다. HTTP 이름의 Chromium 시험도 선택되도록 브라우저 선택기를 고쳤다.
+- 증거: FULL 26 invocation 전부 원격 실행, 종료 코드 모두 0. 첫 실행 합계 36,657 passed / 2,297 skipped / 1 failed이며 기존 quarantine의 G1 timing 한 건은 공식 재시도 통과다. 전체 로그 비교 NEW0 / known0 / flaky1. 두 화면 크기·테마의 실제 Chromium 캡처를 독립 검토했다. 실패·중단·후속 시험은 결과 기록에서 구분한다.
+- gate 변화: 없음. fixture HTTP/Chromium, 소스·계약·패키지 회귀 근거다. 실물 녹화·실제 HF 쓰기·reader 왕복·장치/현장 수용·설치/배포·착지/push는 새로 수행하지 않았다.
+- CE: 해당 없음. 검수 상태, 파일 무결성과 시험 선택·동기화 판단이 코드·회귀 시험·기존 안내에 남아 별도 교훈을 늘리지 않는다.
+
+## 2026-10-28 · 030c2fb110 · 녹화 인계 UI 후속 검증 기록
+
+- 변경: 전체 도구/anchor, 폴링 중 초점과 중지 대기, 조회 오류, 검수 접근성, 보관 키보드 도착을 보완하고 새 frozen 검증 기록을 `docs/validation/recording-handoff-ui-followup-2026-10-28/`에 쓴다. 이전 증거의 Git commit 메타데이터만 명확히 하며 원래 결과·로그는 보존했다.
+- 증거: 원격 영향 선택 affected/no escalation 3059 passed /352 skipped /NEW0. 공식17개 Chromium 파일 최초262 passed/1 failed, 실패한 로딩 대기 시험을 보강한 두 파일 전체19 passed/skip0/NEW0. 릴리스·비밀값·배치108 passed. 캡처·원본별 SHA와 실패 이력을 결과 기록에 구분했다.
+- gate 변화: 없음. 실물·실제 HF·reader·학습 품질·설치/배포·merge/push는 별도 수용이다.
+- CE: 해당 없음. 판단 근거가 최종 코드·회귀·기존 문서에 남는다.
 
 ## 2026-10-28 · uncommitted · docs: GPT 용량 재배치 뒤 SD 검증 복구 교훈
 

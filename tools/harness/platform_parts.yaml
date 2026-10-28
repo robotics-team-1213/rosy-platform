@@ -1136,6 +1136,7 @@ safety_modules:
   - middleware/devices/omx/adapter/omx_adapter/owner_recovery_api.py
   - middleware/devices/omx/adapter/omx_adapter/action_store_readback.py
   - middleware/devices/omx/adapter/omx_adapter/real/dynamixel_port.py  # D-858 S1 real bus port: HOLD, stop latch, gate
+  - middleware/devices/omx/adapter/omx_adapter/real/dynamixel_motion.py  # D-858 legacy motion thread, same port state and bus
   - middleware/devices/omx/adapter/omx_adapter/real/dynamixel_bus.py  # D-858 S1 RAM-only writes, exclusive SDK bus, one-writer claim
   - middleware/devices/omx/adapter/omx_adapter/real/dynamixel_gates.py  # D-858 S1 §4 motion gate evidence, tracking bounds
   - middleware/devices/omx/adapter/omx_adapter/real/commissioning_record.py  # D-858 S3 measured record, MotionEvidence loader, revision
@@ -1153,6 +1154,7 @@ safety_modules:
   - operations/fleet/fleet/server/ledger/task_dispatch_routes.py
   - operations/fleet/fleet/server/auth/owner_recovery_routes.py
   - operations/fleet/fleet/server/console/console.py
+  - operations/fleet/fleet/server/console/goal_admission.py  # D-430 pure goal-admission hold shapes (console helper)
   - operations/fleet/fleet/server/goal_lease.py
   - operations/fleet/fleet/server/tether_watch.py
 
@@ -1165,6 +1167,8 @@ safety_modules:
 # PUT or device overlays): a robot config whose safety.fleet_loss_policy is not
 # STOP/HOLD carries safety.fleet_loss_policy_approval {robot, approver, evidence}.
 safety_anchors:
+  - {symbol: fleet.server.goal_admission.QueueDecision}  # D-430 frozen hold shapes (console helper)
+  - {symbol: fleet.server.goal_admission.response_of}
   - {symbol: fleet.swarm.session_lifecycle.FormationLifecycle, public: true}
   - {symbol: fleet.swarm.session_lifecycle.EVENT_TYPES, public: true}
   - {symbol: fleet.swarm.session_lifecycle.TRIGGERS, public: true}
@@ -1308,6 +1312,7 @@ safety_anchors:
   - {symbol: omx_adapter.contracts.command_types.ArmCommandConfig}
   - {symbol: omx_adapter.local_stop.LocalStopController, public: true}
   - {symbol: omx_adapter.real.dynamixel_port.DynamixelPort}
+  - {symbol: omx_adapter.real.dynamixel_motion._DynamixelMotion}
   - {symbol: omx_adapter.real.dynamixel_bus.SdkBus}
   - {symbol: omx_adapter.real.dynamixel_gates.MotionEvidence}
   - {symbol: omx_adapter.real.commissioning_record.load_motion_evidence}

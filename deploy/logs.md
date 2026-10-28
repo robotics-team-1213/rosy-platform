@@ -3896,6 +3896,27 @@
 - gate 변화: 없음. 전체 착지 검증은 별도이며 실제 포트·모터·서비스를 실행한 수용 근거가 아니다.
 - CE: 해당 없음 — 가짜 호출이 프레임워크에 번지는 원인과 적용 조건을 시험 주석·이 기록에서 복원할 수 있다.
 
+## 2026-10-28 · uncommitted · fix(omx): 카메라 자동 조정이 역할마다 실제 미리보기 유닛을 확인
+
+- 변경: `camera_readiness.py` 프로필의 카메라마다 선택 항목 `unit`(기본은 역할 이름). 확인·복구가 `rosy-omx-camera@<unit>`을 단독 소유자로 본다. README와 시험 1건.
+- 원인: 관제 PC의 front 역할 카메라는 팔 S 그리퍼(Innomaker)이고 `rosy-omx-camera@arm_a_wrist`가 연다. 자동 조정이 `@front`를 소유자로 찾아 06:27부터 restore가 실패했고, 그 실패가 장치 자동 업데이트를 되돌렸다.
+- 증거: 원격 `test/test_omx_camera_readiness.py` 29 passed (2026-10-28 착지 재실행). 호스트 적용은 아직이다.
+- gate 변화: 없음. 호스트 적용(프로필에 `"unit": "arm_a_wrist"`, 이전 상태 디렉터리 정리, 업데이트 관문 복귀)은 배포 뒤 셀이 쉴 때 한다.
+- CE: 미해결 — 호스트 적용 후 판단.
+
+## 2026-10-28 · 0f76cb9a4e · Learning 인계 런타임의 필수 파일 closure
+
+- 변경: storage_omx.py와 review_app_web/omx-export.js를 signed model-code의 필수 파일에 추가했다. 실제 설치·서명·배포·서비스 재시작은 하지 않았다.
+- 증거: 6b22a71b8f에서 각 파일 누락 묶음이 거부되지 않는 2개 실패를 재현했다. 0f76cb9a4e의 전체 model-code/review release·OMX 저장 회귀 255 passed, skip0. 최종 영향 선택은 별도 로그로 확인한다.
+- gate 변화: 없음. 파일 목록 수용은 실행 호스트나 장치의 실제 설치 수용이 아니다. CE: 해당 없음 — 필수 파일과 누락 부정 회귀가 예방 근거다.
+
+## 2026-10-28 · 8c3a60f344 · Pinky 접속 복구와 운영 키 누락 차단
+
+- 변경: 안내형 카드 준비에서 운영자 개인키·공개키 누락을 계획 전에 거절한다. 웹과 SSH가 함께 닫힌 경우에는 별도 Linux에 마운트한 전원 꺼진 카드의 기존 계정에 공개키만 추가하는 오프라인 복구 도구를 제공한다. 기존 키·신원·SETUP·모드·보정 자료를 유지한다.
+- 증거: tests-only `b808a821c2`의 공식 원격 실행에서 도구 부재 15 ERROR를 확인했다. Windows PowerShell의 폐기용 도우미 fixture는 수정 전 키 누락 assertion으로 실패했고 수정 후 7개 self-check와 설정·3장 연속 기록 fixture가 통과했다. 후보 `f594cb588d`의 집중 원격 회귀는 140 passed/2 Windows-only skipped, NEW 0이다. 독립 검토의 계정 디렉터리 탐색·키 읽기 권한 누락은 `bf3cab97bc`에서 6 FAILED로 재현했다. 보강한 `8c3a60f344`의 영향 선택은 459 passed/2 skipped이며 갱신 전 생성 인덱스의 계약 2건이 실패했다. 인덱스를 재생성해 후속 커밋에서 재검증한다. 독립 재검토의 Critical/Important는 0이다.
+- gate 변화: 없음. 카드 마운트·실물 키 변경·장치 등록·모터 활성화·배포·착지는 수행하지 않았다. 유지보수용 관리자 웹 endpoint를 새로 열지 않는다.
+- CE: 미해결 — 실제 장치의 인증 장애 원인과 실물 복구는 확인하지 못했다. 코드의 복구 거절·원본 보존과 장치 수용을 구분한다.
+
 ## 2026-10-29 · uncommitted · deploy: GitHub OS 전송과 서명된 부분 갱신
 
 - 변경: OS bundle의 staged 분할 게시와 전체 해시 재조립, 서명된 engineering canary 제한, 독립 OS CMS가 필요한 전송기 유지보수 및 durable recovery, 기존 전체 파일을 보존하는 native delta 전송 정책을 연결했다. OS·부팅 변경과 알 수 없는 기준은 native 델타로 처리하지 않는다.

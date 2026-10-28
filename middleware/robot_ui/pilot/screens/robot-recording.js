@@ -217,7 +217,7 @@ export function mountRobotRecording({toggle, detail, openButton, sheetHost, anch
       rowStatus.set(id, "받기를 취소했습니다");
     } else if (response?.ok && response.blob && (response.length == null || response.blob.size === response.length)) {
       save(response.blob, `${id}.tar`);
-      rowStatus.set(id, "받음 — 기기의 다운로드 폴더");
+      rowStatus.set(id, "받음 — 기기의 다운로드 폴더. Pinky 녹화(.tar)는 모델 PC 수신·영상 변환 후 Learning의 자료 등록에서 검수합니다. OMX 시연 입력은 별도입니다.");
     } else if (response && !response.ok) {
       // 409(움직임·녹화 중·다른 받기)는 사유만 보이고 저절로 다시 받지 않는다.
       rowStatus.set(id, errorText(response.body?.error?.code, "fetch"));

@@ -7,14 +7,14 @@ PREFIX = '/api/learning/storage/'
 
 
 class StorageWeb:
-    def __init__(self, storage, accounts, jobs, db, *, sim_runs=None):
+    def __init__(self, storage, accounts, jobs, db, *, sim_runs=None, omx_center=None):
         self.setup, self.prepare, self.inventory = None, None, storage
         self.settings_revision, self.enabled = 0, jobs is not None
         if accounts:
             from storage_setup import StorageSetup
             from storage_prepare import StoragePrepare
             self.setup = StorageSetup(db, accounts, storage)
-            self.prepare = StoragePrepare(self.setup, sim_runs)
+            self.prepare = StoragePrepare(self.setup, sim_runs, omx_center)
         config = storage.config.get('pool') if storage else None
         if config is not None and (not isinstance(config, dict) or type(config.get('enabled', True)) is not bool):
             raise ValueError('invalid optional storage pool configuration')
