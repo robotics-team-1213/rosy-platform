@@ -991,3 +991,9 @@
 - 변경: 다운로드 완료 안내에 Pinky MCAP 원본 수신·영상 변환 후 Learning 자료 등록으로 이어가는 순서를 표시하고 OMX 시연 입력과 구분했다. 녹화 시작/정지·다운로드 가드는 바꾸지 않았다.
 - 증거: 학습 인계와 저장 UI의 실제 Chromium 회귀는 소유 Learning 기록을 따른다. Pilot의 영향·브라우저 회귀는 최종 선택 로그에 별도로 남긴다.
 - gate 변화: 없음. 실제 녹화·기기·현장 수용은 수행하지 않았다. CE: 해당 없음 — 지원 형식과 다음 행동의 안내이며 녹화 제어 변경은 없다.
+
+## 2026-10-29 · da361c0aa0 · 녹화 브라우저 시험 분리
+
+- 변경: 기존 녹화 test11개를 별도286줄 module로 옮기고 browser scope에 등록했다. 기존 파일2554줄에 맞춰 ratchet을 낮추며 OMX 선택의 순서 의존 slice를 명시적 목록으로 교체했다. 제품 runtime은 그대로다.
+- 증거: 이동11개·유지89개 함수 AST 동일, 독립 A도 test11개 이동·70개 유지와 fixture를 확인. 실제 Chromium16+scope17=33pass/0skip, 공식 affected635pass/137skip/NEW0. 초기 selector 및 ratchet 실패도 `docs/validation/pilot-recording-browser-split-2026-10-29/`에 보존했다.
+- gate 변화: 없음. CE: 해당 없음 — 기계적 이동·회귀·측정값으로 설명된다. 제품 수정은 별도 브랜치다.
