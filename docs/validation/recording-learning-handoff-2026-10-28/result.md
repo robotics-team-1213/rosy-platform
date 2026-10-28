@@ -1,6 +1,6 @@
 # 녹화·검수·학습·HF 보관 연결 검증
 
-2026-10-28 KST. 브랜치 `fix/recording-learning-handoff`. 기준은 `fedd349e37b0dc41c0ab222d2d450e50c26656c3`, 최종 제품 소스는 `55117575a3331d886963f4b97631c18f19c25416`이다. 이후 `79c0c58074`까지는 키보드 회귀 시험만 보강했으며 제품 디렉터리의 diff가 0임을 확인했다. 이 기록과 생성 색인은 문서 변경이다.
+2026-10-28 KST. 브랜치 `fix/recording-learning-handoff`. 기준 commit은 `fedd349e37b0dc41c0ab222d2d450e50c26656c3`, 최종 제품 소스 commit은 `55117575a3331d886963f4b97631c18f19c25416`이다. 이후 `79c0c58074`까지는 키보드 회귀 시험만 보강했으며 제품 디렉터리의 diff가 0임을 확인했다. 이 기록과 생성 색인은 문서 변경이다.
 
 ## 판정과 구현
 
@@ -17,7 +17,9 @@
 
 ## 전체 원격 회귀
 
-공식 `rosy_harness.py affected --base fedd349e37 --json` 결과는 FULL이며 사유는 `test/browser_scope.py: harness configuration or the selector itself`다. 보존한 [26개 invocation](evidence/full-selection.json)은 원본 `full_invocations`와 같다. 이 파일의 SHA-256은 `c9ba2e560c49a7414d06e9e9af375547416d704735a1490295d034cde42da387`다.
+공식 `rosy_harness.py affected --base fedd349e37 --json` 결과는 FULL이며 사유는 `test/browser_scope.py: harness configuration or the selector itself`다. 보존한 [26개 invocation](evidence/full-selection.json)은 원본 `full_invocations`와 같다. 이 파일의 SHA-256은 `431ff032d5c6821f6deab9e399ef4d11599485d62eb45d90a1ef4d1940e9761d`다.
+
+메타데이터 정정(2026-10-28 후속 UI 검증): 두 Git 객체를 `git cat-file -t`로 확인하고 JSON의 `base`/`tested` 이름을 `base_commit`/`tested_commit`으로 명확히 했다. 원래 파일 SHA-256은 `c9ba2e560c49a7414d06e9e9af375547416d704735a1490295d034cde42da387`다. 커밋 값·실행 행렬·원본 로그·시험 결과는 변경하지 않았다. 새 보안 검사의 비밀값 오탐을 검사 예외나 baseline 추가 없이 바로잡은 표기 정정이다.
 
 `remote_pytest.py --affected-json`은 FULL에서 guard만 고르는 현재 동작이 있으므로, 공식 `remote_pytest.run()`에 전체 26개를 그대로 전달했다. 실제 실행은 외부 selection JSON을 읽었으며 아래는 보존본으로 같은 실행을 구성하는 코드다. 노트북 pytest는 실행하지 않았다.
 
@@ -30,7 +32,7 @@ selection = json.loads(Path('docs/validation/recording-learning-handoff-2026-10-
 invocations = selection['full_invocations']
 logs = [Path('C:/DevTemp/recording-learning-handoff-full-final') / f'run-{i}.txt'
         for i in range(1, len(invocations) + 1)]
-codes = runner.run(invocations, logs, sha=selection['tested'], wait=3600, poll=30)
+codes = runner.run(invocations, logs, sha=selection['tested_commit'], wait=3600, poll=30)
 sys.exit(runner.worst(codes))
 ```
 

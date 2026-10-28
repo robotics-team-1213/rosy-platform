@@ -1,7 +1,7 @@
 {
   "mode": "full",
-  "base": "fedd349e37b0dc41c0ab222d2d450e50c26656c3",
-  "tested": "55117575a3331d886963f4b97631c18f19c25416",
+  "base_commit": "fedd349e37b0dc41c0ab222d2d450e50c26656c3",
+  "tested_commit": "55117575a3331d886963f4b97631c18f19c25416",
   "escalations": [
     "test/browser_scope.py: harness configuration or the selector itself"
   ],
