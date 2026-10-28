@@ -19,7 +19,11 @@ def read_regular(path, limit=1024*1024):
         return stream.read(limit+1)
 
 
-def verify_report(path, *, sdk_version, seed):
+def verify_report(path, *, sdk_version, seed, mapped=False):
+    expected = FIXTURE
+    if mapped:
+        from mapped_stack_fixture import RL_FIXTURE
+        expected = RL_FIXTURE
     path = Path(path)
     value = json.loads(read_regular(path))
     displacement = value.get('belt_displacement_m', [])
@@ -27,15 +31,15 @@ def verify_report(path, *, sdk_version, seed):
             or not all(type(v) in (int, float) and math.isfinite(v) for v in displacement)
             or not .005 < displacement[1] < .04 or abs(displacement[0]) > .01 or abs(displacement[2]) > .01):
         raise ValueError('Moving-belt contact transport was not observed')
-    if (value.get('schema') != 'rosy.omx-stacking-rl/1' or value.get('fixture') != json.loads(json.dumps(FIXTURE))
+    if (value.get('schema') != 'rosy.omx-stacking-rl/1' or value.get('fixture') != json.loads(json.dumps(expected))
             or value.get('sdk_version') != sdk_version or value.get('seed') != seed
             or value.get('updates') != 32 or value.get('transitions') != 1024
             or value.get('training_verified') is not True or value.get('attachment_aid') is not False
             or type(value.get('parameter_delta')) not in (int, float)
             or not math.isfinite(value['parameter_delta']) or value['parameter_delta'] <= 0
             or value.get('evaluation_episodes') != 1
-            or value.get('evaluation_seed') != seed+FIXTURE['evaluation_seed_offset']
-            or type(value.get('evaluation_steps')) is not int or not 1 <= value['evaluation_steps'] <= 600
+            or value.get('evaluation_seed') != seed+expected['evaluation_seed_offset']
+            or type(value.get('evaluation_steps')) is not int or not 1 <= value['evaluation_steps'] <= expected.get('max_episode_steps', 600)
             or type(value.get('evaluation_successes')) is not int or value['evaluation_successes'] not in (0, 1)
             or value.get('task_success') is not (value['evaluation_successes'] == 1)
             or value.get('images') != ['stacking-initial.png', 'stacking-evaluation.png']

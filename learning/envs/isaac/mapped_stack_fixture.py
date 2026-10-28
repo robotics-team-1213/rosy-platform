@@ -32,6 +32,11 @@ FIXTURE = dict(revision='confluence-map-long-stack-v1',
     envelope_tolerance_m=.001, settle_steps=120, seed_effect='INFEED_XY_AND_YAW',
     controller='NOMINAL_IK_REFERENCE_NOT_LEARNED_POLICY')
 
+RL_FIXTURE = dict(FIXTURE, revision='confluence-map-stacking-rl-v1',
+    controller='RSL_RL_PPO_DIRECT_JOINT_VELOCITY', control_decimation=4, max_episode_steps=6000,
+    iterations=32, steps_per_update=32, num_envs=1, evaluation_seed_offset=10000,
+    infeed_jitter_m=.003, infeed_yaw_jitter_rad=.03)
+
 
 def plan():
     return [dict(id='bar-'+str(i+1), cells=3, cell=[0, 0, i], size=[.09, .03, .03],

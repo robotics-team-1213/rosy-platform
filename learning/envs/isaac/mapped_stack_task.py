@@ -4,6 +4,19 @@ import math
 from mapped_stack_fixture import DT, FIXTURE, free_lift, home, judge, plan, planning, solve, stable_box
 
 
+def apply_servo(robot, targets, joints, fingers):
+    import numpy as np
+    from isaacsim.core.utils.types import ArticulationAction
+    state = robot.get_joint_positions()
+    if not np.isfinite(state).all():
+        raise ValueError('Nonfinite mapped articulation')
+    targets[fingers[1]] = -state[fingers[0]]
+    effort = np.zeros(robot.num_dof)
+    gravity = np.asarray(robot._articulation_view.get_generalized_gravity_forces())[0]
+    effort[joints] = np.clip(gravity[joints], -FIXTURE['arm_max_effort_nm'], FIXTURE['arm_max_effort_nm'])
+    robot.get_articulation_controller().apply_action(ArticulationAction(joint_positions=targets, joint_efforts=effort))
+
+
 def build_map(world, stage):
     import numpy as np
     from pxr import Gf, UsdGeom
@@ -34,7 +47,6 @@ def build_map(world, stage):
 def execute(args, world, stage, robots, joints, fingers, cargo, contacts, capture, grasp_probes):
     import numpy as np
     from pxr import UsdGeom
-    from isaacsim.core.utils.types import ArticulationAction
     kin, profile = planning()
     targets = [np.zeros(r.num_dof) for r in robots]
     tick = 0
@@ -73,11 +85,7 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
             state = robot.get_joint_positions()
             if not np.isfinite(state).all():
                 raise ValueError(f'nonfinite articulation arm={i} tick={tick}')
-            targets[i][fingers[i][1]] = -state[fingers[i][0]]
-            effort = np.zeros(robot.num_dof)
-            gravity = np.asarray(robot._articulation_view.get_generalized_gravity_forces())[0]
-            effort[joints[i]] = np.clip(gravity[joints[i]], -FIXTURE['arm_max_effort_nm'], FIXTURE['arm_max_effort_nm'])
-            robot.get_articulation_controller().apply_action(ArticulationAction(joint_positions=targets[i], joint_efforts=effort))
+            apply_servo(robot, targets[i], joints[i], fingers[i])
         world.step(render=False, update_fabric=True)
         tick += 1
         if tick <= 3:

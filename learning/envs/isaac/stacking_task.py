@@ -15,9 +15,11 @@ from run_omx_backend import (PAD_RADIUS, PAD_HALF_LENGTH, PAD_CONTACT_OFFSET_M, 
 
 def run(args):
     global FIXTURE
-    mapped = args.mapped_long_stack
+    mapped = args.mapped_long_stack or args.mapped_rl
     if mapped:
         from mapped_stack_fixture import FIXTURE
+        if args.mapped_rl:
+            from mapped_stack_fixture import RL_FIXTURE as FIXTURE
     import numpy as np
     import torch
     import yaml
@@ -222,7 +224,7 @@ def run(args):
     grasp_probes = []
     probe_filters = ['/World/Table', '/World/PlywoodMap', '/World/Conveyor', '/World/BeltStop', '/World/Bin']+[
         '/World/Cargo'+str(i) for i in range(len(plan))]
-    if mapped:
+    if args.mapped_long_stack:
         body_paths = [[str(p.GetPath()) for p in Usd.PrimRange(root) if p.HasAPI(UsdPhysics.RigidBodyAPI)]
                       for root in (first, second)]
         for i in range(2):
@@ -246,6 +248,8 @@ def run(args):
     for robot in robots:
         joint_indices.append([robot.get_dof_index('joint'+str(i)) for i in range(1, 6)])
         fingers.append([robot.get_dof_index('gripper_joint_1'), robot.get_dof_index('gripper_joint_2')])
+        if mapped and not robot._articulation_view._physics_view.shared_metatype.fixed_base:
+            raise RuntimeError('Mapped OMX requires a native fixed base')
 
     def capture(name, overview=False):
         position = Gf.Vec3d(2.2, -2.2, 3.) if overview else eye
@@ -259,13 +263,31 @@ def run(args):
             raise RuntimeError('Actual SDK image unavailable')
         Image.fromarray(rgba.astype(np.uint8)).save(args.report.parent/name)
 
-    if mapped:
+    if args.mapped_long_stack:
         from mapped_stack_task import execute
         return execute(args, world, stage, robots, joint_indices, fingers, cargo, contacts, capture, grasp_probes)
 
+    if mapped:
+        from mapped_stack_fixture import free_lift, home, planning, solve, stable_box
+        from mapped_stack_task import apply_servo
+        kin, _ = planning()
+
+    def goal(item):
+        return item['target'] if mapped else target(item)
+
+    def accepted(index, sample):
+        if not mapped:
+            return placed(plan[index], **sample)
+        for i, robot in enumerate(robots):
+            pose = kin.fk(robot.get_joint_positions()[joint_indices[i]])
+            tcp = np.array([pose.x, pose.y, pose.z])+np.array(FIXTURE['arm_bases_m'][i])
+            if np.linalg.norm(tcp-np.array(sample['position'])) < .04:
+                return False
+        return sample['lifted'] and stable_box(sample['body'], index)
+
     class StackingEnv:
         # shortcut: one CPU-facing SDK world, use Isaac Lab vector scenes when measured rollout throughput is limiting.
-        num_envs, num_actions, max_episode_length, device = 1, 12, 600, 'cuda:0'
+        num_envs, num_actions, max_episode_length, device = 1, 12, FIXTURE.get('max_episode_steps', 600), 'cuda:0'
         cfg = dict(FIXTURE)
 
         def __init__(self):
@@ -283,11 +305,13 @@ def run(args):
             self.episode_length_buf.zero_()
             self.targets, self.target_velocities = [], []
             for i, box in enumerate(cargo):
-                box.set_world_pose(np.array([.7, -.5+i*.065, .015]), np.array([1., 0., 0., 0.]))
+                box.set_world_pose(np.array([-.45, .4+i*.065, .016] if mapped else [.7, -.5+i*.065, .015]), np.array([1., 0., 0., 0.]))
                 box.set_linear_velocity(np.zeros(3)); box.set_angular_velocity(np.zeros(3))
+                if mapped:
+                    UsdGeom.Imageable(box.prim).MakeInvisible()
             for i, robot in enumerate(robots):
                 state = np.zeros(robot.num_dof)
-                state[joint_indices[i]] = [0., -.4, .7, 1.27, 0.]
+                state[joint_indices[i]] = solve(i, home(i), 0.) if mapped else [0., -.4, .7, 1.27, 0.]
                 state[fingers[i]] = [1., -1.]
                 robot.set_joint_positions(state)
                 robot.set_joint_velocities(np.zeros(robot.num_dof))
@@ -296,16 +320,21 @@ def run(args):
                 self.target_velocities.append(np.zeros(robot.num_dof))
             self.activate()
             for _ in range(12):
+                if mapped:
+                    for i, robot in enumerate(robots):
+                        apply_servo(robot, self.targets[i], joint_indices[i], fingers[i])
                 world.step(render=False, update_fabric=True)
             return self.get_observations()
 
         def activate(self):
             jitter = self.rng.uniform(-.003, .003, 2)
             yaw = self.rng.uniform(-.03, .03)
-            cargo[self.index].set_world_pose(np.array([.20+jitter[0], -.09+jitter[1], BELT_TOP+.015+.001]),
+            cargo[self.index].set_world_pose(np.array([(.16 if mapped else .20)+jitter[0], -.09+jitter[1], BELT_TOP+.015+.001]),
                 np.array([math.cos(yaw/2), 0., 0., math.sin(yaw/2)]))
             cargo[self.index].set_linear_velocity(np.zeros(3))
             cargo[self.index].set_angular_velocity(np.zeros(3))
+            if mapped:
+                UsdGeom.Imageable(cargo[self.index].prim).MakeVisible()
             self.lifted, self.settle = False, 0
 
         def measured(self, index):
@@ -314,9 +343,14 @@ def run(args):
             force = np.linalg.norm(vectors[:4], axis=-1)
             speed = max(float(np.linalg.norm(cargo[index].get_linear_velocity())),
                         UNIT*float(np.linalg.norm(cargo[index].get_angular_velocity())))
-            return position, dict(position=position.tolist(), orientation=orientation.tolist(), speed=speed,
+            sample = dict(position=position.tolist(), orientation=orientation.tolist(), speed=speed,
                 finger_force=float(force.sum()), support_force=max(0., float(vectors[4:, 2].sum())),
-                lifted=self.lifted), force
+                lifted=self.lifted)
+            if mapped:
+                sample['body'] = dict(position=position.tolist(), orientation=orientation.tolist(),
+                    velocity=cargo[index].get_linear_velocity().tolist(), angular_velocity=cargo[index].get_angular_velocity().tolist(),
+                    forces=vectors.tolist(), net_force=np.asarray(contacts[index].get_net_contact_forces(dt=DT))[0].tolist())
+            return position, sample, force
 
         def get_observations(self):
             values = []
@@ -326,7 +360,7 @@ def run(args):
             p, q = cargo[self.index].get_world_pose()
             values.extend(p); values.extend(q)
             values.extend(cargo[self.index].get_linear_velocity())
-            values.extend(target(plan[self.index]))
+            values.extend(goal(plan[self.index]))
             values.extend([self.index/len(plan), float(self.lifted), plan[self.index]['cells']/3,
                            float(plan[self.index]['arm'])])
             obs = torch.tensor([values], dtype=torch.float32, device=self.device)
@@ -356,28 +390,42 @@ def run(args):
                         if moving else state[idx])
                 opening, speed[idx] = advance_joint(state[idx], speed[idx], (goal-state[idx])/control_dt, grip, control_dt)
                 state[fingers[i]] = [opening, -opening]
-                robot.get_articulation_controller().apply_action(ArticulationAction(joint_positions=state))
+                if not mapped:
+                    robot.get_articulation_controller().apply_action(ArticulationAction(joint_positions=state))
             for _ in range(FIXTURE['control_decimation']):
+                if mapped:
+                    for i, robot in enumerate(robots):
+                        apply_servo(robot, self.targets[i], joint_indices[i], fingers[i])
                 world.step(render=False, update_fabric=True)
             self.transitions += 1
             self.episode_length_buf += 1
             p, sample, force = self.measured(self.index)
-            self.lifted |= bool(p[2] > BELT_TOP+.015+.02 and np.all(force[2*active:2*active+2] > .005))
+            self.lifted |= (free_lift(sample['body'], active, BELT_TOP+.015) if mapped else
+                bool(p[2] > BELT_TOP+.015+.02 and np.all(force[2*active:2*active+2] > .005)))
             sample['lifted'] = self.lifted
-            good = placed(plan[self.index], **sample)
-            self.settle = self.settle+1 if good else 0
-            tcp = np.array(UsdGeom.XformCache().GetLocalToWorldTransform(
-                stage.GetPrimAtPath(links[active]['end_effector_link'])).ExtractTranslation())
+            good = accepted(self.index, sample)
+            if mapped:
+                pose = kin.fk(robots[active].get_joint_positions()[joint_indices[active]])
+                tcp = np.array([pose.x, pose.y, pose.z])+np.array(FIXTURE['arm_bases_m'][active])
+            else:
+                tcp = np.array(UsdGeom.XformCache().GetLocalToWorldTransform(
+                    stage.GetPrimAtPath(links[active]['end_effector_link'])).ExtractTranslation())
             reach = float(np.linalg.norm(tcp-p))
-            distance = float(np.linalg.norm(p-np.array(target(plan[self.index]))))
+            distance = float(np.linalg.norm(p-np.array(goal(plan[self.index]))))
             reward = math.exp(-20*reach)+float(self.lifted)*(2+2*math.exp(-25*distance))-.01*float(np.square(action).sum())
             done = bool(p[2] < -.01 or np.linalg.norm(p[:2]) > .6)
             for i in range(self.index):
                 _, previous, _ = self.measured(i)
                 previous['lifted'] = True
                 # New loads may increase support forces; any displaced earlier cargo invalidates this stack.
-                done |= not placed(plan[i], **previous)
-            success = not done and self.settle >= FIXTURE['settle_steps']
+                if mapped:
+                    done |= np.max(np.abs(np.array(previous['position'])-np.array(goal(plan[i])))) > .01
+                    good &= accepted(i, previous)
+                else:
+                    done |= not accepted(i, previous)
+            self.settle = self.settle+1 if good else 0
+            settle_steps = FIXTURE['settle_steps']//FIXTURE['control_decimation'] if mapped else FIXTURE['settle_steps']
+            success = not done and self.settle >= settle_steps
             full_stack = success and self.index == len(plan)-1
             if success:
                 reward += 20
@@ -455,10 +503,12 @@ def main():
     parser.add_argument('--output-dir', type=Path, required=True)
     parser.add_argument('--report', type=Path, required=True)
     parser.add_argument('--seed', type=int, required=True)
-    parser.add_argument('--mapped-long-stack', action='store_true')
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument('--mapped-long-stack', action='store_true')
+    modes.add_argument('--mapped-rl', action='store_true')
     args = parser.parse_args()
     check_vendor_manifest()
-    if args.mapped_long_stack:
+    if args.mapped_long_stack or args.mapped_rl:
         from mapped_stack_fixture import physical_model
         # The original remains unchanged; the visual-only TCP is restored as a nonphysical USD child of link5.
         model = physical_model(args.urdf)
