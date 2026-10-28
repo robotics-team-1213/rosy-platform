@@ -124,10 +124,14 @@ def unusable(code: int | None, log: Path) -> str | None:
         return f"exited {code}"
     if code == 1:
         report = log.read_text(encoding="utf-8-sig", errors="replace") if log.is_file() else ""
+        # ERROR (setup/teardown/collection) is evidence too: known_failures.SUMMARY reads both (2026-10-28)
         if ("[tailscale-ssh: process died: signal:" in report
-                or not any(re.match(r"^FAILED \S", line.strip()) for line in report.splitlines())):
-            return "exited 1 without usable failure evidence"
+                or not any(re.match(r"^(?:FAILED|ERROR) \S", line.strip()) for line in report.splitlines())):
+            return NO_EVIDENCE
     return None
+
+
+NO_EVIDENCE = "exited 1 without usable failure evidence"
 
 
 def _paths(inv: list[str]) -> list[str] | None:

@@ -57,6 +57,28 @@ def _new(base: list[bytes], side: list[bytes], may_reorder: bool = False) -> tup
     return added, prefix
 
 
+def _anchored(theirs: list[bytes], ours: list[bytes], main_keys: set[bytes]) -> list[bytes] | None:
+    """Main's entries in main's order; each entry only ours has goes after the entry it followed in ours, after
+    main's own new entries at that spot. None when that puts a date before an earlier one."""
+    kept = list(theirs)
+    keys = [_key(x) for x in kept]
+    main_only = main_keys - {_key(x) for x in ours}
+    prev = -1  # index in kept of the entry our next new one follows; -1: right after the head
+    for block in ours:
+        k = _key(block)
+        if k in keys:
+            prev = keys.index(k)
+            continue
+        pos = prev + 1
+        while pos < len(kept) and keys[pos] in main_only:
+            pos += 1  # main's own new entry at the same spot stays first (main landed first)
+        kept.insert(pos, block)
+        keys.insert(pos, k)
+        prev = pos
+    days = [d for d in map(_date, kept) if d]
+    return kept if days == sorted(days) else None
+
+
 def append_blocks(base: bytes, ours: bytes, theirs: bytes) -> bytes | None:
     """The merged log, or None when a side changed an existing line (a human resolves it).
 
@@ -65,7 +87,9 @@ def append_blocks(base: bytes, ours: bytes, theirs: bytes) -> bytes | None:
     sequence (the side that inserted or moved entries, else theirs = main, which
     landed first) and inserts the other side's new entries after every entry dated
     on or before them, never above the last base entry: dates stay non-decreasing
-    and same-date entries keep their side's order.
+    and same-date entries keep their side's order. When both sides inserted mid-file,
+    main's sequence is kept and each of ours goes after the entry it followed, unless
+    that would break date order.
     """
     (head, b), (oh, o), (th, t) = split(base), split(ours), split(theirs)
     if oh.rstrip() != head.rstrip() or th.rstrip() != head.rstrip():
@@ -81,18 +105,23 @@ def append_blocks(base: bytes, ours: bytes, theirs: bytes) -> bytes | None:
     if other == ([], True) and not reordered:
         return ours
     if not reordered and not mine[1] and not other[1]:
-        return None  # both sides inserted or moved entries: no one sequence to keep
-    keep, extra, top = (o, other[0], oh) if not mine[1] and not reordered else (t, mine[0], th)
-    old = {_key(x) for x in b}
-    kept = list(keep)
-    floor = max((i + 1 for i, x in enumerate(kept) if _key(x) in old), default=0)
-    for block in extra:
-        if _key(block) in {_key(x) for x in kept}:
-            continue  # the same entry on both sides (a cherry-pick): keep one
-        pos, day = len(kept), _date(block)
-        while day and pos > floor and (_date(kept[pos - 1]) or b"") > day:
-            pos -= 1
-        kept.insert(pos, block)
+        # both sides inserted mid-file (2026-10-28 stop): main's sequence, each of ours after the entry it followed
+        kept = _anchored(t, o, {_key(x) for x in t})
+        if kept is None:
+            return None
+        top = th
+    else:
+        keep, extra, top = (o, other[0], oh) if not mine[1] and not reordered else (t, mine[0], th)
+        old = {_key(x) for x in b}
+        kept = list(keep)
+        floor = max((i + 1 for i, x in enumerate(kept) if _key(x) in old), default=0)
+        for block in extra:
+            if _key(block) in {_key(x) for x in kept}:
+                continue  # the same entry on both sides (a cherry-pick): keep one
+            pos, day = len(kept), _date(block)
+            while day and pos > floor and (_date(kept[pos - 1]) or b"") > day:
+                pos -= 1
+            kept.insert(pos, block)
     eol = b"\r\n" if b"\r\n" in ours + theirs else b"\n"
     body = [x if x.endswith(eol + eol) else x.rstrip(b"\r\n") + eol + eol for x in kept[:-1]]
     return top + b"".join(body) + kept[-1].rstrip(b"\r\n") + eol
