@@ -131,9 +131,10 @@ def apply(root: Path, key: str, backup_dir: Path, expected: dict) -> dict:
     after, _ = _keys(root)
     if not _contains(after, key):
         raise ValueError(f"key write readback failed; backup retained at {saved}")
-    result.update(state="SSH_KEY_RESTORED_ON_CARD", changed=True, backup=str(saved),
+    after_hash = hashlib.sha256(after).hexdigest()
+    result.update(state="SSH_KEY_RESTORED_ON_CARD", changed=True, backup=str(saved), key_present=True,
                   before_sha256=result["authorized_keys_sha256"],
-                  after_sha256=hashlib.sha256(after).hexdigest())
+                  after_sha256=after_hash, authorized_keys_sha256=after_hash)
     _save(saved / "receipt.json", (json.dumps(result, sort_keys=True, indent=2) + "\n").encode())
     _sync(saved)
     return result

@@ -103,6 +103,8 @@ def test_restore_appends_key_backs_up_bytes_and_preserves_every_other_file(card,
     result = recovery.apply(root, KEY, backup, identity)
     assert result["state"] == "SSH_KEY_RESTORED_ON_CARD"
     assert result["changed"] is True and result["registration_pending"] is True
+    assert result["key_present"] is True
+    assert result["authorized_keys_sha256"] == result["after_sha256"]
     assert KEY in keys.read_text().splitlines() and OLD_KEY in keys.read_text().splitlines()
     assert stat.S_IMODE(keys.stat().st_mode) == 0o600
     saved = Path(result["backup"])
