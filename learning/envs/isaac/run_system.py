@@ -36,9 +36,14 @@ class System:
         return sdk_check(binding)
 
     def launch(self, unit, binding_file, run_id):
+        from run_binding import load_binding
+        from run_store import RunStore
+        binding = load_binding(binding_file)
+        scenario = RunStore(Path(binding['data_root'])).get(run_id)['input']['scenario_id']
+        timeout = 900 if scenario == 'omx-stacking-rl' else 180
         command = ['systemd-run', '--user', '--quiet', '--unit=' + _unit(unit),
             '--property=Type=exec', '--property=KillMode=control-group',
-            '--property=RuntimeMaxSec=180', '--property=TimeoutStopSec=10',
+            '--property=RuntimeMaxSec='+str(timeout), '--property=TimeoutStopSec=10',
             '--property=UMask=0077', '--property=MemoryMax=12G',
             '--property=StandardOutput=null', '--property=StandardError=null',
             '/usr/bin/python3', str(Path(__file__).with_name('run_control.py')),

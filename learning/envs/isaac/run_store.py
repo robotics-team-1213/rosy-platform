@@ -194,6 +194,12 @@ def input_snapshot(scenario_id: str, config: dict, source_sha: str) -> dict:
         from conveyor_fixture import FIXTURE, fixture_sha256
         value.update(scene=FIXTURE, scene_sha256=fixture_sha256(), scene_not_applicable_reason=None,
             verifier_sha256=hashlib.sha256(Path(__file__).with_name('conveyor_report.py').read_bytes()).hexdigest())
+    if scenario_id == 'omx-stacking-rl':
+        from stacking_fixture import FIXTURE as STACKING
+        scene = json.loads(json.dumps(STACKING))
+        value.update(scene=scene, scene_sha256=hashlib.sha256(_bytes(scene)).hexdigest(),
+            scene_not_applicable_reason=None,
+            verifier_sha256=hashlib.sha256(Path(__file__).with_name('stacking_report.py').read_bytes()).hexdigest())
     return {'input': value, 'input_sha256': hashlib.sha256(_bytes(value)).hexdigest()}
 
 

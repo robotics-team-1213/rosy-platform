@@ -8,6 +8,10 @@ _CATALOG = [
      'timeout_seconds': 180,
      'requirements': ['승인 SDK·GPU·동일 계정의 두 학습 잠금 확인'],
      'reason': '모델·관절 검사이며 물리 집기 성공을 검증하지 않습니다.'},
+    {'id': 'omx-stacking-rl', 'name': 'OMX-F 두 팔 90 mm 적재 PPO 구동 검사',
+     'implemented': True, 'stage': 'stacking_rl', 'seed_effect': 'CARGO_RESET_XY_AND_YAW',
+     'timeout_seconds': 900, 'requirements': ['승인 SDK·GPU·학습 잠금', 'RSL-RL 5.5 PPO'],
+     'reason': '합성 두 팔·이동 벨트·3 cm 화물의 짧은 PPO 실행이며 적층 숙련·실물 수용이 아닙니다.'},
     {'id': 'pinky-conveyor-roundtrip', 'name': 'Pinky 정지 적재면 ↔ 컨베이어 왕복',
      'implemented': True, 'stage': 'contact_roundtrip',
      'seed_effect': 'NOT_USED_BY_FIXED_FIXTURE', 'timeout_seconds': 180,
@@ -57,6 +61,9 @@ def normalize(scenario_id: str, config: dict) -> dict:
             or type(config['seed']) is not int or not 0 <= config['seed'] <= 2147483647):
         raise ValueError('settings require an integer seed in 0..2147483647'
                          + (' and a case' if scenario_id == 'arm-s-cell-case' else ' only'))
+    if scenario_id == 'omx-stacking-rl':
+        return {'model': 'omx_f', 'headless': True, 'seed': config['seed'],
+                'fixture': 'omx-stacking-v1', 'iterations': 32, 'num_envs': 1}
     if scenario_id == 'arm-s-cell-case':
         from arm_s_cell_fixture import check_case
         return {'model': 'omx_f', 'headless': True, 'seed': config['seed'], 'fixture': 'arm-s-cell-v1',
