@@ -3,4 +3,7 @@ Description=Rosy team PC nightly reboot (warns 2 min ahead)
 
 [Service]
 Type=oneshot
+# An OMX arm session (record_session, joint_tune, chunk runs) holds ~/rosy-omx/session.lock: skip this night's
+# reboot then. On 2026-10-28 the 06:10 reboot cut a chunk session mid-move and the arm dropped with torque off.
+ExecCondition=/bin/sh -c 'for lock in /home/*/rosy-omx/session.lock; do [ -e "$lock" ] || continue; /usr/bin/flock -n "$lock" true || exit 1; done'
 ExecStart=/bin/sh -c 'wall "Rosy nightly reboot in 2 minutes (06:10). Save your work." ; sleep 120 ; /bin/systemctl reboot'
