@@ -31,12 +31,7 @@ fun CameraLanScreen(onSelect: (OverheadServiceRecord) -> Unit, onSettings: () ->
         Text("같은 Wi-Fi의 기기를 선택하세요. 처음 연결할 때만 상대 화면에서 승인합니다.")
         if (!wifi) Text("Wi-Fi에 연결한 뒤 다시 찾으세요.")
         else if (records.isEmpty()) Text(if (scanning) "기기를 찾고 있습니다…" else "발견한 기기가 없습니다. 상대 기기의 연결 화면을 확인하세요.")
-        records.forEach { record ->
-            val conflict = records.any { it !== record && it.tlsHost == record.tlsHost && it.port == record.port && it.address != record.address }
-            OutlinedButton(contentPadding = RosyButtonPadding, shape = RosyButtonShape, onClick = { onSelect(record) }, enabled = !conflict && record.address != null && (record.peerApproval || record.pairable), modifier = Modifier.heightIn(min = RosyMetrics.TargetSecondary.dp).fillMaxWidth()) {
-                Column { Text(record.name); Text(record.tlsHost); if (conflict) Text("같은 이름의 주소가 충돌합니다.") }
-            }
-        }
+        CameraLanRows(records, onSelect)
         remembered.filter { saved -> records.none { it.tlsHost == saved.tlsHost && it.port == saved.port } }.forEach { saved ->
             OutlinedButton(contentPadding = RosyButtonPadding, shape = RosyButtonShape, onClick = { onRemembered(saved) }, modifier = Modifier.heightIn(min = RosyMetrics.TargetSecondary.dp).fillMaxWidth()) {
                 Column { Text(saved.tlsHost); Text("승인 기록 유지 · 다시 연결 확인") }
@@ -45,6 +40,16 @@ fun CameraLanScreen(onSelect: (OverheadServiceRecord) -> Unit, onSettings: () ->
         OutlinedButton(contentPadding = RosyButtonPadding, shape = RosyButtonShape, onClick = { records = emptyList(); scan++ }, modifier = Modifier.heightIn(min = RosyMetrics.TargetSecondary.dp).fillMaxWidth()) { Text("다시 찾기") }
         onCurrent?.let { TextButton(contentPadding = RosyButtonPadding, shape = RosyButtonShape, onClick = it, modifier = Modifier.heightIn(min = RosyMetrics.TargetSecondary.dp).fillMaxWidth()) { Text("연결 기록 · 촬영 화면") } }
         TextButton(contentPadding = RosyButtonPadding, shape = RosyButtonShape, onClick = onSettings, modifier = Modifier.heightIn(min = RosyMetrics.TargetSecondary.dp).fillMaxWidth()) { Text("기존 연결 · 수동 설정") }
+    }
+}
+
+@Composable
+internal fun CameraLanRows(records: List<OverheadServiceRecord>, onSelect: (OverheadServiceRecord) -> Unit) {
+    records.forEach { record ->
+        val conflict = records.any { it !== record && it.tlsHost == record.tlsHost && it.port == record.port && it.address != record.address }
+        OutlinedButton(contentPadding = RosyButtonPadding, shape = RosyButtonShape, onClick = { onSelect(record) }, enabled = !conflict && record.address != null && (record.peerApproval || record.pairable), modifier = Modifier.heightIn(min = RosyMetrics.TargetSecondary.dp).fillMaxWidth()) {
+            Column { Text(record.name); Text(record.tlsHost); if (conflict) Text("같은 이름의 주소가 충돌합니다.") }
+        }
     }
 }
 
