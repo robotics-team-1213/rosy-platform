@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 import time
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
@@ -13,8 +16,58 @@ sys.path.insert(0, str(ROOT / "tools"))
 import doctor  # noqa: E402
 import land  # noqa: E402
 from test_land import commit, git, repos  # noqa: E402,F401  (land.py's fixture repos)
+from test_land_selection import full_args, full_case, NORMAL  # noqa: E402,F401
 
 ID = "pkg/test/test_a.py::test_a"
+Stop = land.Stop  # The real isolation gate keeps the controller's exception identity through this wrapper.
+
+
+def carried_outcome(case, monkeypatch, producer, marker, active):
+    """Exercise real preparation/selection/isolation, varying only a producer's returned evidence/state."""
+    monkeypatch.setattr(land.land_mainred, "CARRIED", [])
+    monkeypatch.setattr(land.land_mainred, "PASSES", [])
+    monkeypatch.setattr(land.land_prepare, "after_reboot", lambda ticket: None)  # clock has its own test below
+    actual = land.run_tests
+
+    def run(wt, args, invocations, logdir, round_no):
+        done = actual(wt, args, invocations, logdir, round_no)
+        if str(round_no) == producer:
+            if active:
+                land.land_mainred.CARRIED.append((ID, git(case.main, "rev-parse", "HEAD"), "same main",
+                                                  tuple(invocations[0])))
+            if marker:
+                done += [marker]
+        return done
+    monkeypatch.setattr(land, "run_tests", run)
+
+
+@pytest.mark.parametrize("producer", ["gpre", "pre"])
+@pytest.mark.parametrize("marker, active", [("pytest fixture ok, main-red carried: same main", False),
+                                           ("", True), ("pytest fixture ok, main-red carried: same main", True)],
+                         ids=["summary_only", "active_only", "both"])
+def test_literal_full_prepare_rejects_carried_summary_or_active_state(full_case, monkeypatch, producer, marker, active):
+    case = full_case
+    carried_outcome(case, monkeypatch, producer, marker, active)
+    args = full_args()
+    with pytest.raises(land.Stop, match="qualifying clean evidence"):
+        land.land_prepare.prepare(land, case.wt, "feat/x", args, sys.executable, None, None)
+    assert not land.land_full._path(case.wt, "feat/x").exists(), "no carried or full preparation is saved"
+    assert getattr(args, "_full_witness", None) is None
+    assert land.land_full.restore(case.wt, "feat/x") is None
+
+
+@pytest.mark.parametrize("producer", ["gpre", "pre"])
+def test_auto_carried_tier_overwrites_old_full_before_unclean_tier_and_never_restores(full_case, monkeypatch, producer):
+    case = full_case
+    head, base = git(case.wt, "rev-parse", "HEAD"), git(case.main, "rev-parse", "HEAD")
+    land.land_full.save(case.wt, "feat/x", head, base, "full", NORMAL)
+    carried_outcome(case, monkeypatch, producer, "LOAD-FLAKY fixture", True)
+    land.land_prepare.prepare(land, case.wt, "feat/x", full_args(tests="auto"), sys.executable, None, None,
+                              NORMAL, "FULL fixture")
+    saved = json.loads(land.land_full._path(case.wt, "feat/x").read_text())
+    assert saved["tier"] == "carried", "None would wrongly restore a bridge to carried evidence"
+    assert land.land_full.restore(case.wt, "feat/x") is None
+    assert land.land_full.prepared(case.wt, "feat/x", base) is None
 
 
 def test_a_carrying_landing_lands_without_a_land_record_and_records_the_carry(repos, monkeypatch):
