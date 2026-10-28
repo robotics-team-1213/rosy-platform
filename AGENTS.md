@@ -54,13 +54,13 @@ ROSY Platform connects observed world state, site orchestration, device executio
 ### 모델 PC·AI PC·현장 PC 역할
 
 - **모델 PC:** `learning/`의 데이터·사람 정답·학습·독립 평가·승격 증거와 고정 모델 산출물을 맡는다. 운영 추론·Fleet 판단·장치 명령을 맡지 않는다.
-- **AI PC:** 승인된 고정 버전의 추론만 맡는다. 막힘 VLM은 출처·시각이 붙은 정체 사실만, 숙고형 모델은 Mission/Task 후보만 낸다. Fleet 원장 쓰기·admission·ROS·`cmd_vel`·장치 Action 권한은 없다.
+- **AI PC:** 운영에서는 승인된 고정 버전 추론을 맡는다. [D-897](docs/adr/D-897-dual-host-offline-simulation-learning.md)에 따라 별도 환경의 오프라인 시뮬레이션 학습도 허용하며, 운영 추론과 GPU 시간을 분리한다. 막힘 VLM은 출처·시각이 붙은 정체 사실만, 숙고형 모델은 Mission/Task 후보만 낸다. Fleet 원장 쓰기·admission·ROS·`cmd_vel`·장치 Action 권한은 없다.
 - **현장 PC:** `operations/fleet`가 사실을 검증하고 규칙·admission·사람 확인을 거쳐 답을 고른다. 기존 Decision 구현은 `operations/decision/src/rosy/decision`으로 분리했고 Fleet transaction과 배포를 유지한다. 후속 숙고형 모델 파이프라인의 구현 여부는 [설계](docs/plans/2026-10-08-decision-model-pipeline-design.md)를 본다.
 - **로봇:** CORE가 장치 상태·안전을 다시 확인하고 최종 `/cmd_vel`을 단독 발행한다. 소스 경로로 실행 호스트를 추정하지 않는다(D-315). 이 역할 분담은 D-516이며, AI PC의 현장 경로는 아직 활성화되지 않았다.
 
 시험 위치도 분리한다(D-527). 개발 PC는 원격 시험을 요청하고 CI는 코드 계약과 푸시 게이트, 모델 PC는 사람 정답 기반 Laya/Kev·VLM 독립 평가와 승격 receipt, AI PC는 승인 고정 버전의 적재·GPU·loopback 스모크와 watchdog, 현장 Fleet·CORE는 그림자/장치 수용을 맡는다. AI PC 합성 재생의 일치 수치를 L0 정확도로 쓰지 않는다.
 
-상세 입력·출력, 모델 교체와 실패 처리: [Decision 모델 파이프라인](docs/plans/2026-10-08-decision-model-pipeline-design.md). 실제 장치 주소·계정은 공개 문서 대신 gitignored `private/`에 둔다.
+상세 입력·출력, 모델 교체와 실패 처리: [Decision 모델 파이프라인](docs/plans/2026-10-08-decision-model-pipeline-design.md). 오프라인 시뮬레이션 학습의 두 호스트 배치는 D-897을 따른다. 실제 장치 주소·계정은 공개 문서 대신 gitignored `private/`에 둔다.
 
 ### D-427 이후 공동 작업 규칙 (2026-10-04, 이동 기간 2·5항 삭제)
 

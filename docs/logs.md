@@ -12266,6 +12266,12 @@ osy-d395-s1d\`.
 - 증거: `1a9cd5b164` 실제 Chromium3시험과 구조/harness/affected/browser-scope262시험이 통과했다(각 NEW/KNOWN/FLAKY0, SKIP0). API 브라우저 경로의 증거이며 화면 완성·G1/G2/G3·native 배포·현장 수용은 아니다.
 - gate 변화: UI·배포·실제 PC HOLD 유지. CE: 해당 없음 — 소유/등록/회귀로 기록했다.
 
+## 2026-10-26 · uncommitted · feat(remote): OMX 팔 S 핫픽스 반복 도구
+
+- 변경: `tools/remote/omx_hotfix.py` 추가. 손으로 하던 임시 커밋(임시 `GIT_INDEX_FILE`·`commit-tree`·`refs/rosy-wip/<이름>`), 원격 시험(`remote_pytest.py --sha`), 현장 PC 배포(`git archive`를 ssh 표준 입력으로 `~/rosy-test/omx-tools-<sha10>/`에 풀고 `REVISION`이 같으면 건너뜀, `omx-tools-current` 링크를 임시 이름 `ln -sfn` 뒤 `mv -T`로 교체), 상태 보기를 하위 명령 넷으로 묶었다. 배포는 `test`가 같은 sha로 남긴 로그의 마지막 pytest 요약이 `passed`이고 `failed`/`error`가 없을 때만 한다. 주소는 `--host`나 `OMX_HOTFIX_HOST`로만 받는다(D-226). 팔을 움직이거나 세션을 시작하지 않는다.
+- 증거: 원격 `test/test_omx_hotfix.py test/architecture/test_document_placement.py` 28 passed(exit 0, 모델 PC). 변이 4개(로그의 `failed` 검사 제거, 링크를 제자리 `ln -sfn`, `REVISION` 건너뜀 끔, 임시 인덱스 대신 공유 인덱스)는 해당 시험 5 failed. 실제 `run-1.txt`에 배포 관문이 통과, 다른 sha로는 거절. 현장 PC 배포·실물 수용은 하지 않았다.
+- gate 변화: 없음. 현장 PC 배포 전에 원격 시험 통과 로그가 필요하다.
+
 ## 2026-10-27 · uncommitted · selector 분리 FULL 실패와 G2 교차 대조
 
 - 변경: 분리 소스와 G2 구현·시험·종료 예산은 유지하고, 최신 main 합류 뒤 공식 root6 NEW 실패 원본과 같은 AI 호스트 A–B–B–A 대조를 보존했다. 실패한 writer close 경계와 실제 main 동일 blob을 구분했다.
@@ -12558,6 +12564,57 @@ osy-d395-s1d\`.
 - gate 변화: Isaac 전환 조건 중 파지 반복 충족(시험 범위 안). 카메라 640×480 10Hz와 렌더링 비교는 미충족.
 - CE: 기존 교훈 갱신 — `docs/solutions/logic-errors/mujoco-finger-convex-hulls-never-close-on-the-block-2026-10-27.md`에 Isaac 원인 세 겹과 공용 패드 위치.
 
+## 2026-10-27 · uncommitted · test(isaac): Lab 3 설치 증거와 복구 회귀
+
+- 변경: 별도 Newton·Sim 후보 환경의 최초 설치 증거와 SDK 호환·종료 정리의 회귀 조건을 기록했다.
+- 증거: Newton 의존성·GPU·PPO 기본 실행을 확인했고 Sim 후보의 의존성 충돌·종료 정리 실패를 분리했다. 코드 복구와 새 실행은 후속 검증으로 확인한다.
+- gate 변화: 없음. 설치 검증은 제품 task·장치 수용을 뜻하지 않는다.
+- CE: 해당 없음 — 원인·판정 범위는 설정 문서와 회귀 조건에 보존한다.
+
+- 2026-10-27: Lab 3 분리 환경의 최초 설치 증거를 기록했다. Newton 기본 학습은 통과했고 Sim 후보 의존성·종료 정리 복구를 별도 검증한다. 실제 Torch fsspec 요구와 상위 주석 차이를 정정했다.
+
+## 2026-10-27 · uncommitted · docs(learning): D-897 두 호스트 오프라인 시뮬레이션 학습
+
+- 변경: AI PC·모델 PC의 격리된 학습 병렬 배치와 첫 검증의 AI 추론 서비스 일시 중지·원상 복원 승인 범위를 기록했다. 운영 권한·승격 경계는 유지한다.
+- 증거: 사용자 요청과 두 호스트의 GPU·RAM·드라이버·실제 서비스 상태를 조회했다. 설치와 동시 학습의 실제 수용은 후속 기록으로 확인한다.
+- gate 변화: 없음. 역할 예외 승인과 환경·제품 수용을 구분한다.
+- CE: 해당 없음 — 새 사용자 결정은 ADR에 보존한다.
+
+## 2026-10-27 · uncommitted · docs(isaac): SDK 복구와 두 PC 동시 학습 검증
+
+- 변경: Lab 3 README의 두 호스트 실행 조건과 동결 복구 기록을 추가했다. 설치된 Torch metadata로 fsspec 설명을 정정하고 로컬 kernel 버전·원본 payload 보존·SDK 보안 범위를 구분했다.
+- 증거: AI·모델 PC에서 각각 Newton 64환경·64iteration·65,536 transitions, 새 checkpoint 3개와 clean을 확인했다. 실제 learn 구간이 8.457134초 겹쳤고 AI의 두 user unit은 active/running/enabled로 복원됐다. 모델 SDK는 CUDA·PhysX·fsspec IO·PPO와 종료 정리를 통과했다. helper SHA·lock·정제 증거 ZIP은 docs/validation/isaaclab3-repair-2026-10-27/result.md와 Confluence 10190849에 연결했다.
+- 검증 범위: 구현 회귀는 원격 RED→GREEN, 이전 소스 회귀 511 PASS/1 SKIP/NEW 0이다. 최종 커밋의 원격 검사·착지는 후속 관문에서 확인한다. SDK 종료 직전 관측과 Hub disabled 조건을 검토했고 최초 실패도 보존했다.
+- gate 변화: 없음. 설치 검증은 제품 task·일반화·실물 수용을 뜻하지 않는다.
+- CE: 해당 없음 — 원인·복구 판단은 구현·회귀 시험·README·동결 검증 기록으로 보존돼 별도 교훈을 중복하지 않는다.
+
+## 2026-10-27 · uncommitted · docs(isaac): 실행 파일의 SHA-256 표기를 명확히 함
+
+- 변경: 동결 기록의 두 공개 파일 해시를 SHA-256으로 명시했다. 해시 값과 구현은 그대로다.
+- 증거: 착지 회귀에서 문서의 `SHA는` 표기가 비밀정보 검사에 걸렸고 단독 재현은 실패, main 대조는 통과했다. 실제 검사기의 자기 검사로 원래 표기 RED·명시한 SHA-256 GREEN을 확인했다. 검사 규칙과 예외 목록은 바꾸지 않았다.
+- gate 변화: 없음. 수정 커밋은 원격 착지 관문을 다시 통과해야 한다.
+- CE: 해당 없음 — 수정과 기존 검사 규칙에서 원인이 명확하다.
+
+## 2026-10-27 · uncommitted · docs(isaac): SDK 6.2 기본 경로 전환과 제어 증거
+
+- 변경: 두 PC의 SDK 설치·PPO, 모델 PC의 실제 ROS 제어·카메라와 기본 pointer 전환을 별도 [검증 기록](validation/isaac62-sdk-migration-2026-10-27/result.md)으로 보존하고 운영 binding·Lab 3 안내를 갱신했다.
+- 증거: 원격 Isaac 전체 시험 exit 0·신규 실패 0, ROS conformance failures 빈 목록, 두 pointer와 인터프리터 해시 전환 후 재조회. AI 추가 ROS는 외부 GPU owner로 실행 전에 거절됐으며 승인 서비스 복원을 확인했다.
+- gate 변화: 특정 SDK/소프트웨어 실행 증거만 추가한다. 학습 정책·실물·현장 수용을 주장하지 않는다. 초기 UNKNOWN/조기 실패의 미확정 원인을 보존한다.
+- CE: 새 교훈 기록 — USD variant와 누락된 position drive gain은 import 성공만으로 놓칠 수 있어 [해결·회귀·복구 조건](solutions/runtime-errors/isaac62-imported-articulation-with-zero-position-drive-2026-10-27.md)을 남겼다.
+
+## 2026-10-27 · uncommitted · AI ROS 거절의 관측 범위 보충
+
+- 변경: 앞 기록의 외부 GPU owner 표현을 GPU 무점유 확인 조건 미충족으로 한정한다. 당시 원본 조회 응답이 없어 점유와 조회 실패를 구분하지 않는다. SDK 미시작·서비스 복원과 AI 학습 스모크 성공의 구분은 유지한다.
+- 증거: helper의 gpu_empty는 비어 있지 않은 결과와 조회 실패를 모두 false로 반환한다. 두 서비스의 실제 복원과 후속 NRestarts 0은 별도 재조회했다.
+- gate 변화: 없음. 추가 runtime 성공으로 표시하지 않는다.
+
+## 2026-10-27 · uncommitted · SDK 검증 기록의 공개 지문 종류 명시
+
+- 변경: SDK 이관 기록과 해결 문서의 커밋 지문에 commit, 파일 지문 표의 각 행에 SHA-256을 명시했다. 값·실행 코드·비밀정보 검사 규칙은 유지한다.
+- 증거: 착지 검사의 비밀정보 guard가 브랜치에서 실패하고 main에서 통과했다. 실제 scan_text로 원문 8건 탐지와 수정문 0건 탐지를 확인했다. 커밋 뒤 같은 guard를 원격 재검증한다.
+- gate 변화: 없음. 전체 착지 검사를 재개한다.
+- CE: 해당 없음 — 기존 공개 provenance 표기 규칙을 적용한 문서 수정이며 검사 예외를 늘리지 않았다.
+
 ## 2026-10-27 · uncommitted · feat(perception): Fleet 승인을 모델 PC 레지스트리에 반영(D-898)
 
 - 변경: Fleet `GET /api/fleet/perception-promotions/{sha}/decision.signed`(viewer)가 정본 결정과 새 역할 키 `perception-decision`의 Ed25519 서명을 돌려준다(키 없음 503, 미결정 409). 모델 PC `approval_import.py`가 서명·APPROVED·묶음 해시·revision·files·결과 폴더·제안자≠승인자를 확인한 뒤 model-watch와 같은 work.lock 아래 `accepted/`와 `models/approvals/<sha>/`에 기록한다. 활성 포인터·shadow·배포는 건드리지 않는다. contracts 0.1.15(`decision_encoded`·`sign`·`verify`), 상태 행 조회는 `promotion_request.ready_rows`로 공유.
@@ -12639,6 +12696,14 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: D-889 추가 5
 - 교훈: 없음
+
+## 2026-10-28 · uncommitted · fix(remote): omx_hotfix 시험의 가짜 SHA를 비밀 검사에 걸리지 않게
+
+- 변경: `test/test_omx_hotfix.py`의 가짜 리비전 `"0123…4567"`을 `"d" * 40`으로 바꾼다. 시험의 뜻은 같다(새 커밋 `"c" * 40`과 다르다).
+- 근거: 착지 사전 시험의 `test/test_release_boundary_guards.py::test_no_secrets_in_tracked_files`가 그 리터럴을 high-entropy-token으로 잡았다.
+- 증거: 원격 `test/test_omx_hotfix.py`·`test/test_release_boundary_guards.py`.
+- gate 변화: 없음.
+- CE: 해당 없음 — 시험이 잡은 픽스처 값이다.
 
 ## 2026-10-28 · uncommitted · docs(adr): D-902 Pilot 실물 OMX 조종·녹화는 Fleet과 CORE 수동 팔 경로로
 

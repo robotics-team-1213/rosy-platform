@@ -86,7 +86,7 @@ def watch(land, wt: Path):
             return size(tree.stdout.split()[0], main)
         if tree.returncode != 1:
             return None
-        manual = land.plan(wt, land.conflict_stages(tree.stdout))[1]
+        manual = land.plan(wt, land.conflict_stages(tree.stdout), ("HEAD", main))[1]
         return f"main {main[:10]} conflicts with this branch outside the auto-resolved records: {manual}" if manual else None
     return check
 
