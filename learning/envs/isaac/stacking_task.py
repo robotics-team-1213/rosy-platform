@@ -25,7 +25,7 @@ def run(args):
     import omni.kit.app
     import omni.kit.commands
     import omni.usd
-    from pxr import Gf, Usd, UsdGeom, UsdLux, UsdPhysics, UsdShade, PhysxSchema
+    from pxr import Gf, Sdf, Usd, UsdGeom, UsdLux, UsdPhysics, UsdShade, PhysxSchema
     from isaacsim.core.api import World
     from isaacsim.core.api.robots import Robot
     from isaacsim.core.api.objects import DynamicCuboid, FixedCuboid, VisualCuboid
@@ -144,6 +144,9 @@ def run(args):
                     drive.CreateStiffnessAttr(math.radians(FOLLOWER_STIFFNESS) if mapped else FOLLOWER_STIFFNESS)
                     drive.CreateDampingAttr(math.radians(FOLLOWER_DAMPING) if mapped else FOLLOWER_DAMPING)
                     drive.CreateMaxForceAttr(FOLLOWER_MAX_EFFORT_NM)
+                    prim.CreateAttribute('newton:mimicEnabled', Sdf.ValueTypeNames.Bool).Set(False)
+                    if prim.GetAttribute('newton:mimicEnabled').Get() is not False:
+                        raise RuntimeError('Imported Newton mimic remains enabled')
                     for schema in prim.GetAppliedSchemas():
                         if str(schema).startswith('PhysxMimicJointAPI:'):
                             prim.RemoveAPI(PhysxSchema.PhysxMimicJointAPI, str(schema).split(':', 1)[1])
@@ -188,14 +191,6 @@ def run(args):
             track_contact_forces=True, contact_filter_prim_paths_expr=filters+['/World/Bin']+(['/World/Conveyor'] if mapped else [])+
             ['/World/Cargo'+str(j) for j in range(len(plan)) if j != i], max_contact_count=128)))
     eye = Gf.Vec3d(.60, -.62, .48)
-    arm_contacts, body_paths = [], []
-    if mapped:
-        for root in (first, second):
-            body_paths.append([str(p.GetPath()) for p in Usd.PrimRange(root) if p.HasAPI(UsdPhysics.RigidBodyAPI)])
-        for i in range(2):
-            arm_contacts.append(world.scene.add(RigidPrim(body_paths[i], name='arm_contacts'+str(i),
-                track_contact_forces=True, contact_filter_prim_paths_expr=body_paths[1-i]+[
-                    '/World/Table', '/World/PlywoodMap', '/World/Conveyor', '/World/Bin'], max_contact_count=256)))
     look = Gf.Matrix4d().SetLookAt(eye, Gf.Vec3d(.13, -.10, .12), Gf.Vec3d(0., 0., 1.)).GetInverse()
     rotation = look.ExtractRotationQuat()
     camera = Camera('/World/Observer', position=np.array(eye), resolution=(800, 600))
@@ -224,7 +219,7 @@ def run(args):
 
     if mapped:
         from mapped_stack_task import execute
-        return execute(args, world, stage, robots, joint_indices, fingers, cargo, contacts, capture, arm_contacts, body_paths)
+        return execute(args, world, stage, robots, joint_indices, fingers, cargo, contacts, capture)
 
     class StackingEnv:
         # shortcut: one CPU-facing SDK world, use Isaac Lab vector scenes when measured rollout throughput is limiting.
