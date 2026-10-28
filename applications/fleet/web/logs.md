@@ -566,3 +566,9 @@
 - 증거: native 후보 d01의 UI 계약 2개 wrapper 실패와 수정 중 초기화 회귀의 실제 browser 14 FAIL을 보존했다. af1b7ac467에서 공용 계약 37 PASS/0 skip와 browser 14 PASS/0 skip, 최신 b948a23204에서 소진 사유를 포함한 실제 browser 14 PASS/0 skip·NEW0. 독립 계약 재검토는 초기화 경로를 대조해 남은 회귀 없음. docs/validation/transfer-recovery-public-2026-10-28/ui-contract-correction.md 참고.
 - gate 변화: 없음. 합성 World/owner 검증이며 최종 공식 public 착지는 별도다.
 - CE: 추가 교훈 없음. 기존 clipping 교훈은 유지하며 초기화 판단은 source comment와 실제 회귀가 보존한다.
+
+## 2026-10-29 · b90b4569bc · 대화 요청 목록의 키보드 초점 유지
+
+- 변경: 목록 갱신은 현재 초점을 GET 뒤 읽고 요청 ID로 복원한다. 삭제·조회 실패·상위 reset은 기존 상태 문구를 초점 대상으로 사용하며 목록 밖으로 이동한 초점은 유지한다. API·권한·명령 경로는 그대로다.
+- 증거: 수정 전18fail4pass, 최종 Chromium 파일 전체80pass/0skip, 공식 affected8004pass/631skip/NEW0. A source 검토·B 캡처16장 전수 직접 검토에서 해당 범위 추가 P1/P2 없음. frozen `docs/validation/fleet-request-focus-2026-10-29/`에 SHA/skip/hash/제한을 보존했다.
+- gate 변화: 없음. 실제 장치/정지·ARTIFACT/FIELD·착지·배포·공개 push/merge는 별도다. CE: 해당 없음 — 코드·회귀·기존 복원 패턴으로 설명된다.
