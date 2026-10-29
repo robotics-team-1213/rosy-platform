@@ -212,3 +212,12 @@ def test_old_and_new_image_defaults_select_open_fallback(tmp_path):
     legacy = tmp_path / "defaults.yaml"
     legacy.write_text("schema_version: 1\nap:\n  mode: fallback\n", encoding="utf-8")
     assert module.load_defaults(legacy)["ap"]["fallback_security"] == "open"
+
+
+@pytest.mark.parametrize("security", [None, "invalid"])
+def test_image_defaults_reject_invalid_fallback_security(tmp_path, security):
+    module = _module()
+    defaults = tmp_path / "defaults.yaml"
+    defaults.write_text(f"schema_version: 1\nap:\n  fallback_security: {security}\n", encoding="utf-8")
+    with pytest.raises(module.ConfigError):
+        module.load_defaults(defaults)

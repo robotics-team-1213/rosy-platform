@@ -397,3 +397,31 @@ def test_invalid_fallback_security_does_not_open_an_ap(tmp_path, security):
 def test_default_fallback_security_is_open(tmp_path):
     module = _module()
     assert module.load_policy(tmp_path)["fallback_security"] == "open"
+
+
+@pytest.mark.parametrize("device_name", ["rosy-pinky-geg6", "rosy-pinky-nsfh"])
+@pytest.mark.parametrize("override", [None, "fixture-recovery"])
+def test_open_ap_keeps_each_device_name_unless_ssid_is_explicit(tmp_path, device_name, override):
+    module = _module()
+    root = _device(tmp_path)
+    (root / "etc/rosy/device-identity.json").write_text(json.dumps({"device_name": device_name}))
+    policy = {"mode": "fallback"}
+    if override is not None:
+        policy["ssid"] = override
+    (root / "etc/rosy/network-policy.json").write_text(json.dumps(policy))
+    assert module.perform(root, "open", _activated)
+    assert json.loads((root / module.STATUS).read_text())["ssid"] == (override or device_name)
+
+
+@pytest.mark.parametrize("override", [None, "fixture-recovery"])
+def test_open_ap_does_not_invent_an_identity_when_the_canonical_one_is_absent(tmp_path, override):
+    module = _module()
+    root = _device(tmp_path)
+    (root / "etc/rosy/device-identity.json").unlink()
+    policy = {"mode": "fallback"}
+    if override is not None:
+        policy["ssid"] = override
+    (root / "etc/rosy/network-policy.json").write_text(json.dumps(policy))
+    calls = []
+    assert not module.perform(root, "open", lambda command: calls.append(command) or _activated(command))
+    assert calls == []
