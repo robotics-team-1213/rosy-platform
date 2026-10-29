@@ -96,3 +96,11 @@ CE: 해당 없음 — 복구·무결성·중복 방지·fixture 시계 판단은
 후속 로그는 `C:/DevTemp/pilot-collection-deploy/` 아래에 보존했다. `rollout-verification.json`은 주소·자격·라벨 본문을 제외한 운영 관측 영수증이다. 착지는 기존 `tools/land_async.py --tests auto` 대기열로 진행하며, 통과·완료는 해당 gateway 로그에서 따로 확인한다.
 
 CE: 해당 없음 — 실행 소유자·보류 코드 판단은 수정 코드·회귀·README에, exact-unit 복구는 기존 교훈에 있다. 중복 교훈은 추가하지 않았다. GPU 보류와 로봇 접속 장애는 미해결 운영 상태로 남긴다.
+
+## 운영 기존 녹화 수용 후속
+
+작업 소유자가 유휴인 시점에 같은 signed executor와 수집 flock으로 기존 녹화 `20261009T213528Z_rosy_41`만 명시 실행했다. 실제 주행 Learning workspace에 **19장 added**, 동일 명령 재실행은 **0장 added**였다. read-only 독립 재검증에서 DB는 pending **72장(기존53+신규19)**이며 원래53장의 review/status/version·masks·events·pixel_events digest는 모두 그대로였다. 준비본 전체 파일 해시가 영수증과 일치했고 catalog SHA는 별도 수용 때와 같은 `45f1e9ed59983cf7b1c73b1c5f59d3c00312c6eb07ab19998b4e99277828f219`다. 원본 영상 증명·사람 승인·학습·승격은 부여하지 않았다.
+
+일괄 복구의 과거 불완전 raw는 그대로 남겼다. 직접 시작했던 일괄 service만 중지해 단일 녹화 수용을 먼저 확인했고, 중간의 legacy job 보류는 우회하지 않았다. 확인 후 두 타이머를 활성 상태로 두고 process service를 다시 요청했다. 이 신규19장은 **기존 저장 녹화의 운영 등록 수용**이며, 오프라인 로봇에서 새로 녹화·수신한 결과가 아니다. 주소·자격·라벨 본문을 제외한 영수증은 `C:/DevTemp/pilot-collection-deploy/production-acceptance.json`에 보존했다.
+
+기록 검사 명령 한 회차는 존재하지 않는 시험 경로를 포함해, 실제 시험 시작 전 자기 remote job만 runner의 취소 경로로 종료했다(exit143). 통과로 세지 않는다. 올바른 경로의 후속 회차와 main 착지 FULL 검증은 공용 실행 자원 대기 중이며, 앞서 완료한 unit 회귀209건을 그 회차의 완료 증거로 바꾸어 쓰지 않는다.
