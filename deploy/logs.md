@@ -4093,3 +4093,10 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: path-only 2f88347d69 원격은 30 passed / 4 failed로 다음 경계를 드러냈다. 명시 승인된 Windows 격리 PowerShell 실행은 원래 세 사례의 모든 assertion을 그대로 실행해 3 passed였다. 4개 하위 호출 모두 non-admin을 먼저 확인하고 native Start-Process/Storage 호출을 가로채 0회를 확인했다. local pytest·실제 UAC·카드 접근은 하지 않았다. Linux의 세 skip과 이 별도 native Windows 증거는 구분하며 최종 원격 결과는 완료 기록을 따른다.
 - gate 변화: 없음. 세 native Windows fixture의 별도 성공을 Linux 실행으로 세지 않으며 새 소스의 실물 수용을 주장하지 않는다.
 - CE: 기존 교훈 갱신 결과 유지. parameter-set·metadata autoload 판단은 기존 fake-surface 교훈에 남겼고, 단순 fixture 경로/표시 형식 수정을 별도 교훈으로 늘리지 않았다.
+
+## 2026-10-29 · 8a381b7f12 · 자기 배치의 준비 슬롯 중복 예약 수정
+
+- 변경: carried 집합을 자기 leader를 포함한 전체 티켓에서 먼저 계산하고 busy 합계에서만 자기 행을 제외한다. k2의 슬롯 낭비와 k4의 자체 정체를 막으며 FIFO·urgent·stale·held 처리와 MAX_PREPARING=3은 유지한다.
+- 증거: tests-only commit bc303cdb1b의 공식 원격 회귀는 7 failed/19 passed, known_failures NEW7이었다. 수정 commit 8a381b7f12의 land_prepare·land_queue·land_batch 집중 회귀는 85 passed, NEW0/known0/flaky0이다. 로그는 Git 밖 receipts/2026-10-29-queue-own-batch-slots/red 및 green에 보존한다.
+- gate 변화: 없음. 공식 affected 선택은 FULL이며 land_async의 전체 착지 검증을 유지한다. 이미 실행 중인 worker는 이 소스를 다시 읽지 않으므로 현재 큐 대기가 풀렸다고 주장하지 않는다. 공유 main 게시·장치 동작은 이 변경의 범위가 아니다.
+- CE: 해당 없음 — 전체 티켓으로 carried를 구한 뒤 자기 행만 제외해야 한다는 원인과 재현 조건은 최종 코드 및 k2/k4·다른 pending/preparing 예약을 검증하는 8개 회귀 시험에 직접 남는다. 별도 교훈 문서는 늘리지 않는다.

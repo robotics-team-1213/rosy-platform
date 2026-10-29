@@ -47,10 +47,11 @@ def slot(qdir: Path, ticket: Path, sleep=time.sleep, held=None) -> None:
     land_queue.set_status(ticket, "pending")
 
     def busy() -> int:
-        rows = [r for r in land_queue.ahead(qdir, Path("~")) if r["ticket"] != ticket.name]
+        rows = land_queue.ahead(qdir, Path("~"))
         carried = {name for r in rows for name in (r.get("batch") or [])}
         return sum(r.get("status") == "preparing" or (r.get("status") == "pending" and r["ticket"] < ticket.name
-                                                      and r.get("branch") not in carried) for r in rows)
+                                                      and r.get("branch") not in carried)
+                   for r in rows if r["ticket"] != ticket.name)
     while (held and held()) or busy() >= MAX_PREPARING:
         land_queue.touch(ticket)
         sleep(POLL)
