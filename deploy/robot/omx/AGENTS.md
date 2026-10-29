@@ -56,6 +56,25 @@ Workstation development and simulation preparation for the OMX-AI workcell: a se
 | `sim_reach_task.py`, `sim/reach_task.example.json` | `rosy.omx-sim-reach-task.v1` reach-task validator, seeded start sampling, greedy jog plan and readback judge (stdlib; shared with batch export and the evaluator) |
 | `sim_reach_teacher.py` | Scripted SIM teacher over Pilot HTTP: unrecorded reset, recorded greedy jogs, automatic `task_outcome` from joint readback, lease renewal, no goal retry; writes `rosy.omx-sim-reach-teacher-results.v1`. Test `test/test_omx_sim_reach_teacher.py` |
 
+## Arm S carry: modules in run order
+
+One file per step; a step that a parameter turns off returns None and the carry runs without it. Change a step in its own module, never in `cell_auto_pick` (it only orders them; under 600 lines).
+
+| Step | Module | Turned off by |
+|---|---|---|
+| Before a run | `cell_preflight` (camera shift, other sessions), `cell_calibrate check/auto` (remap, pivot, surface touch; moving steps need `--commissioning --person-at-switch`) | — |
+| Look and choose | `cell_objects` (catalogue), `cell_auto_pick.choose` (finger gaps, yaw candidates, plan) | — |
+| Location correction | `cell_calibrate.self_calibrate` (pivot near the target, or over it), `cell_pivot` (bias regions), `learn_bias` (from a confirmed place) | `calibrate.bias_near_mm`, `pivot.over_target` |
+| D-911 gate | `cell_transfer.Gate` (every command `checked`; each re-plan assessed) | never |
+| Hooks, assembled | `cell_hooks.pick_hooks` | — |
+| Above the box | `cell_reach` (FK feed-forward) → `cell_wrist_ref` (reference servo) → `cell_fingers` (finger servo) → `cell_wrist` (calibrated band) | `reach.enabled`, `wrist.ref_servo`, `wrist.finger_servo`, `wrist.enabled` |
+| After the descent | `cell_pinch` (box between the pads at grasp height; mount signature) | `pinch.enabled` |
+| Empty grasp | `cell_feel` (shifted along the closing axis) | `feel.enabled` |
+| Carry and place | `cell_transfer.transfer_folded` (fold home between lift and place) | `auto.fold_before_transport` (0: `cell_pipeline.SEQUENCE`) |
+| After | `cell_auto_pick.verify_placed`, `cell_attempts`, `cell_decisions`, `episode_recorder`; on a failure `cell_diagnose` (cause from the contact height, strategy table) | — |
+| Roles and tasks | `cell_role` (rescue/load/retrieve; automatic, so held by D-911 until reviewed), `cell_task_runner` (move/swap queue) | — |
+| Camera geometry | `cell_checkerboard` (intrinsics, gripper-down hand-eye, pixel → plane); not in the pick path yet | — |
+
 ## Subdirectories
 
 | Directory | Purpose |
