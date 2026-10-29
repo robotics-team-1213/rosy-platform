@@ -75,8 +75,8 @@
 
 ## 최근 기록
 
+- 2026-10-29 · 7608139018 · Station SIM ASGI 회귀와 운영 제한 변이 검증
+- 2026-10-29 · 33ffa6e6a2 · Station SIM HTTP 시험의 실제 RPC 시간 예산 분리
 - 2026-10-28 · uncommitted · CORE host-file declared reads and C6 triage
 - 2026-10-28 · uncommitted · CORE host-file 실행 소유권 분리
 - 2026-10-28 · uncommitted · CORE host-file owner 위임 RED 준비
-- 2026-10-28 · feb1cd65c · fix(core): tf2 Buffer 변환 캐시를 명시적 10초로
-- 2026-10-27 · uncommitted · test(core): 다음 공식 검증에 charging 최초 원인 관측을 포함한다

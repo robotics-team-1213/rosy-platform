@@ -93,7 +93,7 @@ def transfer_folded(cell, library, closed: float | None = None, wrist=None, afte
             return {"result": "fault" if status.get("fault") else "refused", "at": command, "steps": steps}
         if command == "goto above_pick" and wrist is not None:  # cell_hooks: reach and wrist corrections before the descent
             aligned = wrist()
-            steps.append({"command": "wrist", **{k: aligned[k] for k in ("verdict", "dx_mm", "dy_mm", "total_mm")}})
+            steps.append({"command": "wrist", **{k: aligned.get(k) for k in ("verdict", "dx_mm", "dy_mm", "total_mm")}})
             if aligned["verdict"] == "refuse":
                 run("park")
                 return {"result": "misaligned", "at": "wrist", "wrist": aligned, "steps": steps}

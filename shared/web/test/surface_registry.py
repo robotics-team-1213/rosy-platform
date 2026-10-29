@@ -130,7 +130,7 @@ def for_contract(root=None, name: str | None = None) -> list[Path]:
 
 
 def discover_html(root=None) -> list[Path]:
-    """`src/`·`operations/`(D-427 wave 3b) 아래 HTML 전부 — 추적 파일과 아직 add하지 않은 파일.
+    """현재 제품 소스 holder 아래 HTML 전부 — 추적 파일과 아직 add하지 않은 파일.
 
     `git ls-files -c -o --exclude-standard`를 쓴다. 파일시스템 `rglob`은
     `.gitignore`된 빌드 산출물을 집어오고, `-c`만 쓰면 아직 add하지 않은 새 표면이
@@ -139,7 +139,8 @@ def discover_html(root=None) -> list[Path]:
     base = REPO if root is None else Path(root)
     if not git_available(base):
         raise RuntimeError("D-329 발견 스캔은 git 체크아웃이 필요하다")
-    out = _git(base, "ls-files", "-c", "-o", "--exclude-standard", "--", "src", "operations")
+    out = _git(base, "ls-files", "-c", "-o", "--exclude-standard", "--",
+               "applications", "integrations", "learning", "middleware", "operations", "shared")
     return [base / line for line in out.stdout.splitlines() if line.endswith(".html")]
 
 

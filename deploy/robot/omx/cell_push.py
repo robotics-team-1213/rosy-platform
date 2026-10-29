@@ -164,7 +164,7 @@ def main(argv=None):
     direction = b - a
     gap = prm.get(params, "push.gap_mm")
     start, end, d = geometry(a, direction, args.half_mm, args.mm, gap)
-    mask = cell_objects.foreground(img, args.roi, params=params, surface_px=site.get("surface_px"))
+    mask = cell_objects.foreground(img, args.roi, params=params, surface_px=site.get("surface_px"), surface_lab=site.get("surface_lab"))
     hits = path_clear(mask, args.roi, lambda p: predicted_pixel(config, calibration, args.site, p), a, d,
                       args.half_mm, args.mm, gap, site.get("surface_px"))
     region = cell_pivot.bias_at(cell_pivot.load_bias(cell_pivot.bias_path(calibration_path)), args.site, a.tolist(),
@@ -203,7 +203,8 @@ def main(argv=None):
             keep("push-after", after)
             if args.catalog:
                 objects = cell_objects.detect(after, args.roi, record, camera, cell_objects.load_catalog(args.catalog),
-                                              site["surface_z"], params, site.get("surface_px"))
+                                              site["surface_z"], params, site.get("surface_px"), site.get("surface_lab"),
+                                              (config.get("objects") or {}).get("hsv"))
                 out["after"] = [{"centre_mm": o["centre_mm"], "object": o.get("object"), "matched": o["matched"],
                                  "tangled": o.get("tangled", False)} for o in objects]
     (work / f"{stamp}-push.result.json").write_text(json.dumps(out, indent=1, default=str))

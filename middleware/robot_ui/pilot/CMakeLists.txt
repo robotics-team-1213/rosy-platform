@@ -6,6 +6,7 @@ find_package(ament_cmake REQUIRED)
 install(FILES
   index.html
   styles.css
+  layout.css
   stick.js
   link.js
   app.js
