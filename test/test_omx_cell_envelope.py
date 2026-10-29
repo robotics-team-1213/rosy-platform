@@ -211,6 +211,39 @@ def test_runtime_fingerprint_uses_real_calibration_and_readback_including_xl330_
     assert envelope.runtime_context(config, bus, 30)["sha256"] != first["sha256"]
 
 
+@pytest.fixture
+def runner_context(envelope):
+    @dataclass
+    class Calibration:
+        range_min: int = 0
+
+    bus = SimpleNamespace(
+        motors={name: SimpleNamespace(id=i, model="xl430-w250") for i, name in enumerate(envelope.NAMES)},
+        calibration={name: Calibration() for name in envelope.NAMES}, read=lambda *args: 20)
+    return lambda **kwargs: envelope.runtime_context({"id": "fixture-arm"}, bus, 30, **kwargs)
+
+
+@pytest.mark.parametrize("name,value", [("runner.pace_lag", 1.7), ("runner.contact_ticks", 3),
+                                       ("runner.contact_loaded_max", 2.1)])
+def test_changed_runner_params_cannot_reuse_a_review(tmp_path, task, envelope, runner_context, name, value):
+    import cell_params
+
+    params = cell_params.load()["values"]
+    task[3]["operating_context"]["sha256"] = runner_context(params=params)["sha256"]
+    approve(tmp_path, envelope, task)
+    assert envelope.assess(*task, now=100.01)["allowed"]
+    task[3]["operating_context"]["sha256"] = runner_context(params={**params, name: value})["sha256"]
+    assert not envelope.assess(*task, now=100.01)["allowed"]
+
+
+def test_explicit_default_params_keep_runtime_identity(tmp_path, envelope, runner_context):
+    import cell_params
+
+    path = tmp_path / "params.json"
+    path.write_text(json.dumps({"schema": cell_params.SCHEMA, "params": {}}))
+    assert runner_context(params=cell_params.load(path)["values"])["sha256"] == runner_context()["sha256"]
+
+
 @pytest.mark.parametrize("value", [None, True, float("nan"), 0, -1])
 def test_invalid_payload_never_reaches_approval(task, envelope, value):
     config, calibration, library, state = copy.deepcopy(task)
