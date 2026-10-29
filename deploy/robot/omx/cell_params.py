@@ -24,7 +24,7 @@ DEFAULTS = {
     "pivot.still_px": (40, "px", 1, 100000), "pivot.diff_px": (30, "gray", 1, 255),
     "pivot.min_blob": (300, "px", 1, 100000), "pivot.max_blob": (90, "px", 1, 1000),
     "pivot.follow_px": (60, "px", 1, 1000), "pivot.agree_px": (3.0, "px", 0.1, 50),
-    "pivot.bias_reach_mm": (80.0, "mm", 1, 500), "pivot.settle_limit_s": (5.0, "s", 0.5, 60),
+    "pivot.bias_reach_mm": (80.0, "mm", 1, 500), "pivot.clear_above_m": (0.074, "m", 0.03, 0.2), "pivot.settle_limit_s": (5.0, "s", 0.5, 60),
     "pivot.settle_step_s": (0.4, "s", 0.05, 5), "pivot.grip_closed": (50.5, "gripper", 0, 100), "pivot.grip_open": (62.0, "gripper", 0, 100),
     "pivot.max_rms_mm": (5.0, "mm", 0.5, 30), "pivot.radius_lo_mm": (12.0, "mm", 1, 100), "pivot.radius_hi_mm": (40.0, "mm", 5, 200),
     "auto.temp_stop_c": (55, "C", 30, 80), "auto.pwm_fraction": (0.8, "ratio", 0.1, 1.0),
