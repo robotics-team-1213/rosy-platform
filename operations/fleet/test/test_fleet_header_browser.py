@@ -111,10 +111,15 @@ def test_fleet_uuid_preserves_native_crypto_on_trusted_localhost(tmp_path):
 @pytest.mark.parametrize('width,height', [(320, 568), (390, 844), (1366, 768)])
 @pytest.mark.parametrize('theme', ['dark', 'light'])
 def test_header_stays_one_row_with_account_overlay_and_connection_exceptions(tmp_path, name, path, width, height, theme):
-    from playwright.sync_api import expect
+    from playwright.sync_api import TimeoutError as PlaywrightTimeoutError, expect
 
     with _fleet(tmp_path, console_token='registry-only', development_sessions=DevelopmentSessions()) as (browser, origin):
         page = browser.new_page(viewport={'width': width, 'height': height}, color_scheme=theme)
+        pending_reads = set()
+        page.on('request', lambda request: pending_reads.add(request)
+                if request.resource_type == 'fetch' and request.url.startswith(origin + '/api/fleet/') else None)
+        page.on('requestfinished', pending_reads.discard)
+        page.on('requestfailed', pending_reads.discard)
         page.add_init_script(f"localStorage.setItem('rosy.theme', '{theme}')")
         page.goto(origin + path)
         expect(page.locator('html')).to_have_attribute('data-theme', theme)
@@ -140,9 +145,18 @@ def test_header_stays_one_row_with_account_overlay_and_connection_exceptions(tmp
         check_bar()
         expect(page.locator('#topbar-extra')).to_be_hidden()
         shot('closed')
-        # Stop healthy background polls from undoing the simulated outage; drain earlier replies first.
+        # Drain only pre-outage Fleet fetches; background traffic need not become idle.
         page.route('**/api/fleet/**', lambda route: route.fulfill(status=503, json={'detail': 'unavailable'}))
-        page.wait_for_load_state('networkidle')
+        earlier_reads = frozenset(pending_reads)
+
+        def pending_fleet_reads():
+            return sorted(request.url for request in earlier_reads.intersection(pending_reads))
+
+        page.expose_function('__pendingFleetReads', pending_fleet_reads)
+        try:
+            page.wait_for_function('async () => !(await window.__pendingFleetReads()).length', timeout=30000)
+        except PlaywrightTimeoutError as error:
+            raise AssertionError(f'Pre-outage Fleet reads did not finish: {pending_fleet_reads()}') from error
         page.evaluate('''async () => {
             const header = await import('/console/assets/fleet-header.js');
             const response = await fetch('/api/fleet/state');

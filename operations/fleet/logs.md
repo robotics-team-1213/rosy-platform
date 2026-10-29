@@ -5146,3 +5146,10 @@
 - 증거: 읽기전용 producer/consumer 추적과 scoped 독립 검토를 받았다. 새로운 원격 matrix 검증은 아직 대기이며 실제 API200 뒤 UI가 실시간으로 복구하는 동작을 막지 않는다.
 - gate 변화: 없음. 성공 응답을 오류로 표시하는 제품 변경이나 skip/quarantine은 없다.
 - CE: 미해결 — 재현과 source 교정은 확인했으나 수정된 matrix의 실행 결과가 필요하다.
+
+## 2026-10-29 · uncommitted · outage 시험에서 대기할 요청 범위 제한
+
+- 원인: source d9daf10d9e의 등록된 보조 시험 PC matrix는 14 passed / 12 NEW였다. Console·Cell의 모든 실패는 추가한 networkidle 대기의 30초 timeout이며 상태·기하 assertion 실패가 아니다. 특정 연결 종류가 원인이라고 단정하지 않는다.
+- 변경: 탐색 전부터 진행 중인 Fleet fetch를 추적하고, 503 route를 설치한 시점의 요청만 finished/failed event로 기다린다. 이후 요청은 503으로 처리한다. 독립 검토에서 지적한 response API의 무제한 대기를 피하고 기존30초 총 제한과 남은 URL 진단을 유지했다. 제품 JS·CSS·assertion·실패 기준선은 바꾸지 않는다.
+- 검증: syntax·diff 검사와 독립 검토 뒤 커밋 SHA로 원격 matrix를 다시 확인한다. 실패한 d9 FULL 대기는 중단했으며 hidden snapshot·로그를 보존했다. 다른 작업·잠금은 수정하지 않았다.
+- CE: 미해결 — 새 대기 방식의 원격 결과를 아직 확인하지 않았다.
