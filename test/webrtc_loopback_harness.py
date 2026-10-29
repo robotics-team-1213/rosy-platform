@@ -112,7 +112,24 @@ BROWSER = '''async ({url,token='loopback-scoped-token'}) => {
 }'''
 
 
-def run_loopback(root, tmp_path, *, secure=False):
+SHARED_BROWSER = '''async ({grant}) => {
+  const {openCamera} = await import('/common/webrtc.js');
+  const video = document.createElement('video');
+  Object.assign(video, {muted: true, autoplay: true, playsInline: true, hidden: true});
+  document.body.append(video); window.mediaVideo = video;
+  window.mediaRevoked = [];
+  window.mediaView = await openCamera({grant, video,
+    Peer: class extends RTCPeerConnection {
+      constructor(...args) {super(...args); window.mediaPeer = this;}
+    },
+    renewGrant: async () => grant,
+    revokeGrant: async id => {window.mediaRevoked.push(id);},
+    onState: state => {video.hidden = !['live', 'stale'].includes(state.state);},
+  });
+}'''
+
+
+def run_loopback(root, tmp_path, *, secure=False, shared_client=False):
     from playwright.sync_api import sync_playwright
     runtime = Path.home() / 'rosy-test/media-runtime-d789'
     binary = runtime / 'amd64/mediamtx'
@@ -123,7 +140,7 @@ def run_loopback(root, tmp_path, *, secure=False):
     port, udp = free_port(), free_port(socket.SOCK_DGRAM)
     api_port = free_port()
     app, delegated, original, admin = None, None, None, None
-    media_path = 'camera'
+    media_path = 'robots/rosy_01/front' if shared_client else 'camera'
     if secure:
         from cryptography.hazmat.primitives import serialization
         from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
@@ -153,7 +170,7 @@ def run_loopback(root, tmp_path, *, secure=False):
         env['ROSY_TEST_MEDIA_TOKEN'] = publish.token
         media_path = read.path
     config = yaml.safe_load((root / 'deploy/site/mediamtx.yaml').read_text())
-    config.update({'webrtcAddress': f'127.0.0.1:{port}', 'api': secure,
+    config.update({'webrtcAddress': f'127.0.0.1:{port}', 'api': secure, 'moq': False,
                    'apiAddress': f'127.0.0.1:{api_port}',
                    'webrtcLocalUDPAddress': f'127.0.0.1:{udp}',
                    'webrtcIPsFromInterfaces': False, 'webrtcAdditionalHosts': ['127.0.0.1'],
@@ -186,14 +203,39 @@ def run_loopback(root, tmp_path, *, secure=False):
                     assert time.monotonic() < deadline, (tmp_path / 'sender.log').read_text()
                     time.sleep(.1)
                 with sync_playwright() as playwright:
-                    browser = playwright.chromium.launch(headless=True, args=['--autoplay-policy=no-user-gesture-required'])
+                    browser = playwright.chromium.launch(headless=True,
+                        args=[] if shared_client else ['--autoplay-policy=no-user-gesture-required'])
                     try:
                         page = browser.new_page()
                         page.goto(f'http://127.0.0.1:{port}/{media_path}')
                         browser_config = {'url': f'http://127.0.0.1:{port}/{media_path}/whep'}
                         if secure:
                             browser_config['token'] = read.token
-                        page.evaluate(BROWSER, browser_config)
+                        if shared_client:
+                            page.route('**/common/webrtc.js', lambda route: route.fulfill(
+                                content_type='text/javascript', body=(root / 'shared/web/webrtc.js').read_text()))
+
+                            def signaling(route):
+                                path = route.request.url.removeprefix('https://media.site.example')
+                                headers = {'Access-Control-Allow-Origin': '*',
+                                    'Access-Control-Allow-Headers': 'Authorization,Content-Type',
+                                    'Access-Control-Allow-Methods': 'POST,DELETE,OPTIONS',
+                                    'Access-Control-Expose-Headers': 'Location'}
+                                if route.request.method == 'OPTIONS':
+                                    route.fulfill(status=204, headers=headers)
+                                elif path in ('/v1/intents', '/v1/session/renew'):
+                                    route.fulfill(status=201, headers=headers)
+                                else:
+                                    response = route.fetch(url=f'http://127.0.0.1:{port}{path}')
+                                    route.fulfill(response=response, headers={**response.headers, **headers})
+
+                            page.route('https://media.site.example/**', signaling)
+                            page.evaluate(SHARED_BROWSER, {'grant': {
+                                'grant_id': 'a' * 32, 'token': 'loopback-scoped-token',
+                                'site_url': 'https://media.site.example', 'path': media_path}})
+                            page.wait_for_function('!window.mediaVideo.hidden && !window.mediaVideo.paused')
+                        else:
+                            page.evaluate(BROWSER, browser_config)
                         page.wait_for_function('window.mediaVideo.videoWidth === 640', timeout=12000)
                         read = runpy.run_path(str(root / 'middleware/media/src/rosy_media_edge/watermark.py'))['read_rgb']
                         identities = []
@@ -222,6 +264,14 @@ def run_loopback(root, tmp_path, *, secure=False):
                         assert stats['encoder_key_interval'] == 5
                         assert stats['rtp_bytes_sent'] > 0
                         assert stats['rtp_packets_sent'] > 0
+                        if shared_client:
+                            with page.expect_response(lambda response: response.request.method == 'DELETE'
+                                    and response.url.startswith('https://media.site.example/')) as deleted:
+                                page.evaluate('window.mediaView.close()')
+                            assert deleted.value.status == 204
+                            assert page.evaluate('window.mediaVideo.srcObject === null')
+                            assert page.evaluate('window.mediaPeer.connectionState') == 'closed'
+                            assert page.evaluate('window.mediaRevoked') == ['a' * 32]
                         print(json.dumps({'schema': 'rosy-media-loopback/1', 'identities': identities,
                                           'native_arm64': False, 'real_camera': False, 'field_accepted': False}))
                         if secure:
