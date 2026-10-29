@@ -229,6 +229,39 @@ def test_failed_publisher_closes_its_binding_and_retries_with_a_new_grant(rig):
     assert len(publishers) == 2 and publishers[1].token == 'publish-2'
 
 
+def test_failed_whip_delete_still_closes_the_authority_binding(rig):
+    worker, client, publishers, step = rig
+    step(0)
+
+    def broken_stop():
+        raise RuntimeError('WHIP DELETE failed')
+
+    publishers[0].stop = broken_stop
+    publishers[0].fail_push = True
+    step(.1)
+    assert client.closed == ['publish-1']
+    assert worker.publisher is None and worker.grant is None
+
+
+def test_priming_frames_do_not_reset_repeated_startup_backoff(rig):
+    worker, _, publishers, step = rig
+    make = worker._make_publisher
+
+    def negotiating(endpoint, token):
+        publisher = make(endpoint, token)
+        publisher.connected = False
+        return publisher
+
+    worker._make_publisher = negotiating
+    step(0)
+    step(13)
+    first_delay = worker._retry_at - 13
+    step(14)
+    step(27)
+    assert len(publishers) == 2 and publishers[-1].stopped
+    assert first_delay < worker._retry_at - 27 <= 5
+
+
 def test_start_failures_back_off_with_a_five_second_cap():
     client, attempts = Client(), []
 
