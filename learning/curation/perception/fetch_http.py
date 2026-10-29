@@ -289,11 +289,15 @@ def _existing_video(args, final: Path) -> Path | None:
     try:
         meta = json.loads((final / "session.json").read_text(encoding="utf-8"))
         sidecar = Path(args.video_out) / f"{bag_to_video.output_stem(final, meta)}.jsonl"
+        video_meta = json.loads(sidecar.with_suffix(".json").read_text(encoding="utf-8"))
+        rows = _read_rows(sidecar)
         if (sidecar.is_file() and sidecar.with_suffix(".mp4").is_file()
                 and sidecar.with_suffix(".mp4").stat().st_size > 0
-                and pair_counts(_read_rows(sidecar))["paired"] > 0):
+                and video_meta.get("source", {}).get("session") == final.name
+                and video_meta.get("video", {}).get("frames") == len(rows)
+                and pair_counts(rows)["paired"] > 0):
             return sidecar
-    except (OSError, ValueError, TypeError):
+    except (OSError, ValueError, TypeError, AttributeError):
         pass
     return None
 

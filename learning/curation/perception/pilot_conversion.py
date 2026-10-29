@@ -21,8 +21,9 @@ def default_convert(folder: Path, out: Path, codec: str) -> tuple[int, Path | No
             return 1, None
         if rc != 0:
             return rc, None
-        outputs = [stage / f"{stem}{ext}" for ext in (".mp4", ".jsonl", ".json", ".scan.npz")]
-        if not all(p.is_file() for p in outputs[:3]):
+        # Publish the sidecar last so an interrupted publication cannot look complete.
+        outputs = [stage / f"{stem}{ext}" for ext in (".mp4", ".json", ".scan.npz", ".jsonl")]
+        if not all((stage / f"{stem}{ext}").is_file() for ext in (".mp4", ".jsonl", ".json")):
             return 1, None
         old = [out / p.name for p in outputs if (out / p.name).exists()]
         if old:

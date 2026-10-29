@@ -269,6 +269,7 @@ def test_preexisting_paired_video_is_adopted_without_overwrite(server, tmp_path)
     stem = "teleop_rosy_01_20261002T101500Z"
     (video_dir / f"{RID}.jsonl").rename(video_dir / f"{stem}.jsonl")
     (video_dir / f"{RID}.mp4").rename(video_dir / f"{stem}.mp4")
+    (video_dir / f"{stem}.json").write_text(json.dumps({"source": {"session": RID}, "video": {"frames": 2}}))
     state["paths"].clear()
     assert _main(base, tmp_path, lambda *a: pytest.fail("must not overwrite")) == 0
     assert state["paths"] == ["/api/v1/recordings"]
