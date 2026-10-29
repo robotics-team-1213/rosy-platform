@@ -3941,6 +3941,14 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - gate 변화: 없음. 카드 마운트·실물 키 변경·장치 등록·모터 활성화·배포·착지는 수행하지 않았다. 유지보수용 관리자 웹 endpoint를 새로 열지 않는다.
 - CE: 미해결 — 실제 장치의 인증 장애 원인과 실물 복구는 확인하지 못했다. 코드의 복구 거절·원본 보존과 장치 수용을 구분한다.
 
+## 2026-10-29 · uncommitted · feat(omx): 로봇별 프로필과 운용범위 근거 연계 (D-914)
+
+- 변경: Fleet의 설명용 device ID와 native follower instance/config SHA를 장치별 sidecar로 연결한다. 실제로 해석한 work/review 경로를 profile SHA에 포함하고 parent→runner→pipeline과 시도 장부에서 같은 binding을 확인한다. 기존 vendor JSON과 Fleet의 접속/동작 권한 필드는 바꾸지 않는다.
+- 보호: 자동 작업 외에 감독 이동도 다른 profile의 FIFO로 보내지 않는다. recorder는 bus 접근 전에 설정을 검증하고 replay도 같은 선택을 받는다. 다른 디렉터리의 옛 장부 복사·프로필 없는 자동 세션·잘못된 manifest·quoted tilde 경로를 회귀 검증한다.
+- 검증: tests-only b07574fbac 원격 실행에서 새 loader 부재로 RED를 확인했다. a93a18e8d1 및 보강한 aa62d0f5a8의 관련 원격 호출은 exit 0이며, 최종 변경 범위의 공식 원격 검증과 merge는 별도 작업 기록에 연결한다. 실제 장치·서명/배포·가동범위 수용은 하지 않았다.
+- gate 변화: 실물 활성화/수용 변화 없음. 프로필 연관 관계는 설명용 ID와 실제 설정의 일치 검사이며, 이름·모델명이나 JSON 저장이 동작 승인을 만들지 않는다.
+- CE: 해당 없음 — 기존 설정/보정·import/장부 교훈을 새 계약과 회귀 시험에 반영했다. 새 실물 장애의 원인·복구를 검증한 작업은 아니다.
+
 ## 2026-10-29 · uncommitted · deploy: GitHub OS 전송과 서명된 부분 갱신
 
 - 변경: OS bundle의 staged 분할 게시와 전체 해시 재조립, 서명된 engineering canary 제한, 독립 OS CMS가 필요한 전송기 유지보수 및 durable recovery, 기존 전체 파일을 보존하는 native delta 전송 정책을 연결했다. OS·부팅 변경과 알 수 없는 기준은 native 델타로 처리하지 않는다.
@@ -4003,6 +4011,29 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 동일한 3490bddb9b의 canonical FULL 27개 invocation을 공식 remote_pytest.run으로 수행했다. 합계 37,581 passed/2,351 skipped, 각 명령 exit0, 모든 로그 비교 NEW0/known0/flaky0이다. 1~11번은 현장 PC에서 완료한 뒤 자원이 확보된 모델 PC에서 12~27번을 수행했다. 재배정 중 취소한 현장 12번과, 연결 복구 후 별도로 563 passed/1 skipped인 AI PC의 중복 마지막 묶음은 합계에서 제외했다. 수용한 27개 로그는 archive 내부 바이트를 원본 SHA-256과 대조해 보존했다.
 - gate 변화: 없음. monitoring 브라우저 묶음 16개는 모두 skip이며 브라우저 수용을 입증하지 않는다. 실제 Docker 연속성·CI dispatch·설치/운영 배포·실물 수용·main 착지/push는 수행하지 않았다.
 - CE: 해당 없음 — 판단 근거는 D-301·구성 해시·회귀 시험·기존 import 시험에 남긴다.
+
+## 2026-10-29 · cd4e1752c8 · fix(omx): 프로필 recording 회귀의 단독 import 경로
+
+- 변경: 테스트가 필요한 OMX 디렉터리를 monkeypatch 범위에서 명시한다. main 통합은 runner의 params와 operating-profile 인자 및 자식 전달을 모두 보존한다.
+- 검증: 이전 canonical 단독 실행은 cell_robot_profile import 누락으로 1 failed/56 passed/2 skipped였다. 수정 커밋의 공식 원격 단독 실행과 통합 착지 게이트는 진행 중이며 이전 SHA의 통과를 새 SHA 검증으로 세지 않는다.
+- gate 변화: 없음. 장치 접근·배포·push는 하지 않는다.
+- CE: 해당 없음 — 기존 shared-pytest-process-masks-path-dependent-import-2026-10-26 교훈과 한 줄 수정이 원인·재발 조건을 설명한다.
+
+## 2026-10-29 · uncommitted · fix(omx): 실제 runner 매개변수를 운용 근거에 결합
+
+- 변경: main의 params 전달을 보존한 통합 검토에서 실제 pacing·접촉·idle 값이 runtime SHA에 빠진 것을 찾았다. runner가 검증한 값을 한 번 읽어 실행기와 runtime SHA에 함께 전달하고 cell_params.py를 코드 SHA에 포함한다. 물리 동작·기본값·기존 가드는 바꾸지 않는다.
+- 검증: tests-only e4abf6ee1e의 공식 원격 실행은 새 매개변수 결합 부재로 4 failed다. 수정 SHA의 원격 GREEN과 canonical 착지는 별도 확인하며, 이전 단독 import 수정 cd4e1752c8은 exit0/NEW0이다.
+- gate 변화: 없음. 발견 직후 a1f16be836의 pending 착지만 중단했다. 실물 접근·배포·push는 하지 않는다.
+- CE: 해당 없음 — 증거의 적용 범위는 D-914와 실행 값 변경을 검증하는 회귀에 남긴다. 새 장치 장애의 원인·복구를 관측한 작업은 아니다.
+- 추가 검토: 배치 성공 판정의 verify_tol_mm도 task 조건 SHA에 넣고 판정과 같은 유한·비음수 검증을 쓴다. tests-only 7a7e61df27의 공식 원격 실행은 변경/잘못된 허용값으로 기존 검토가 유지되는 7 failed를 재현했다. 누락과 명시적 10.0 mm의 기본값 동치는 유지한다.
+
+## 2026-10-29 · uncommitted · fix(omx): 자동 운반 순서와 현재 시도의 근거 유지
+
+- 변경: main의 새 Gate consumer를 합친 canonical 후보는 합성 auto-pick fixture의 프로필 누락으로 7 failed였고, unchanged main의 같은 7개는 통과했다. fixture만 장치별 합성 프로필과 맞춘 c40c821f5b는 공식 원격 단독 37 passed/0 skipped/NEW0이다.
+- 추가 보호: 실제 선택한 straight/folded 순서와 client 유효 params를 task에 고정한다. 현재 시도의 pending intent 때문에 첫 unchanged-library load가 막히던 경로는 config·보정·순서·library·라이브 세션이 그대로일 때만 기존 검토로 checked 전송한다. unknown pending과 변경된 경로를 허용하는 전역 예외는 만들지 않는다.
+- 검증: tests-only 987b545071은 공식 원격 3 failed/1 passed로 설정·순서 누락과 첫 load 거절을 재현했다. 실제 검토 문서와 시도 장부를 사용해 straight/folded 각각의 pending 생성→동일 load→현재 시도 완료, 새 Gate의 pending 거절, 다른 library·세션·조건 거절을 회귀한다. 새 소스의 원격 GREEN과 canonical 착지는 별도 확인한다.
+- gate 변화: 없음. 물리 동작·기본값·가드·장치 상태는 바꾸지 않았고 배포·push하지 않았다.
+- CE: 해당 없음 — main 통합의 producer/consumer와 증거 적용 조건은 D-914·회귀·기존 import/장부 교훈으로 복원할 수 있다.
 
 ## 2026-10-29 · uncommitted · workcell 팔 자격 증명 전체 매핑 설정
 

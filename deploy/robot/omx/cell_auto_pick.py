@@ -464,11 +464,12 @@ def run_auto(cell, config, calibration, calibration_path, catalog, roi, source, 
             if dry_run:
                 return {**out, "result": "planned"}
             folded = prm.get(config.get("params"), "auto.fold_before_transport")
+            sequence = FOLDED if folded else cp.SEQUENCE
             episode = open_episode(cell, config, source, dest, o["object"])
             # a hover re-plan keeps the pick's own plan values (jaw opening, approach): the default 62 opening came back
             # through the reach re-plan and the fingers met the board again (2026-10-29)
             same = dict(config, plan=dict(config["plan"], **target.get("plan", {})))
-            gate = Gate(guarded, config, calibration)
+            gate = Gate(guarded, config, calibration, sequence=sequence)
             held = gate.open(target["library"], lambda a: cell_attempts.begin(config, a))
             if held is not None:  # D-911: not a reviewed task (or no supervised trial): nothing moved
                 tried["envelope"] = held
@@ -478,7 +479,7 @@ def run_auto(cell, config, calibration, calibration_path, catalog, roi, source, 
                 return {**out, "result": f"held: {held['reason']}"}
             wrist, capture, pinch, feel = cell_hooks.pick_hooks(same, gate, target, cp.write_library, source, dest_site, cd.emit, calibration)
             moved = transfer_folded(gate, target["library"], wrist=wrist, after_place=capture,
-                                    pinch=pinch, feel=feel, sequence=FOLDED if folded else cp.SEQUENCE)
+                                    pinch=pinch, feel=feel, sequence=sequence)
             tried["envelope"] = gate.assessment
             tried["wrist"] = (moved.get("wrist") or next((s for s in moved["steps"] if s.get("command") == "wrist"), None)
                               or ("disabled or uncalibrated" if wrist is None else None))
