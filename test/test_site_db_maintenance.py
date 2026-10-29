@@ -406,10 +406,10 @@ def test_prune_ledger_deletes_only_terminal_task_history_and_expired_audit(tmp_p
         kept_audit = db.execute("SELECT COUNT(*) FROM rosy_account_audit").fetchone()[0]
         kept_pairing = db.execute("SELECT COUNT(*) FROM device_pairing_audit").fetchone()[0]
         kept_events = db.execute("SELECT COUNT(*) FROM core_event_audit").fetchone()[0]
-    assert removed == {"fleet_task_history": 2, "fleet_tasks": 2, "rosy_account_audit": 1,
+    assert removed == {"fleet_task_history": 2, "fleet_tasks": 0, "rosy_account_audit": 1,
                        "device_pairing_audit": 1, "core_event_audit": 2}
     assert kept_tasks == {"old-hold", "new-done", "old-running"}
-    assert kept_rows == {"old-hold", "new-done", "old-running"}   # 종료 작업 행도 함께 정리
+    assert kept_rows == {"old-done", "old-failed", "old-hold", "new-done", "old-running"}
     assert kept_audit == 1 and kept_pairing == 0
     assert kept_events == 1                                        # 최근 감사 사건은 남는다
 
@@ -433,8 +433,8 @@ def test_prune_ledger_zero_retention_disables_and_missing_tables_are_skipped(tmp
                                    "core_event_audit": 0}
 
 
-def test_prune_ledger_collects_terminal_tasks_whose_history_an_earlier_prune_removed(tmp_path):
-    """먼저 착지한 prune은 history만 지웠다 — 고아가 된 종료 작업 행도 회수한다."""
+def test_prune_ledger_preserves_task_identity_after_an_earlier_history_prune(tmp_path):
+    """History expiry must not remove the task identity used for replay admission."""
     database = tmp_path / "fleet.sqlite3"
     _retention_database(database)
     with closing(sqlite3.connect(database)) as db, db:
@@ -444,8 +444,8 @@ def test_prune_ledger_collects_terminal_tasks_whose_history_an_earlier_prune_rem
 
     with closing(sqlite3.connect(database)) as db:
         kept_rows = {row[0] for row in db.execute("SELECT task_id FROM fleet_tasks")}
-    assert removed["fleet_tasks"] == 2
-    assert kept_rows == {"old-hold", "new-done", "old-running"}
+    assert removed["fleet_tasks"] == 0
+    assert kept_rows == {"old-done", "old-failed", "old-hold", "new-done", "old-running"}
 
 
 def test_backup_command_prunes_the_live_ledger_after_writing_the_backup(tmp_path, capsys):
@@ -458,10 +458,44 @@ def test_backup_command_prunes_the_live_ledger_after_writing_the_backup(tmp_path
 
     assert code == 0
     report = json.loads(capsys.readouterr().out)
-    assert report["pruned_ledger"] == {"fleet_task_history": 2, "fleet_tasks": 2,
+    assert report["pruned_ledger"] == {"fleet_task_history": 2, "fleet_tasks": 0,
                                        "rosy_account_audit": 1, "device_pairing_audit": 1,
                                        "core_event_audit": 2}
     assert "checkpoint" in report and report["checkpoint"]["wal_checkpoint"] is not None
     with closing(sqlite3.connect(database)) as db:
         assert db.execute("SELECT COUNT(*) FROM fleet_task_history").fetchone()[0] == 3
-        assert db.execute("SELECT COUNT(*) FROM fleet_tasks").fetchone()[0] == 3
+        assert db.execute("SELECT COUNT(*) FROM fleet_tasks").fetchone()[0] == 5
+
+
+def test_retention_preserves_same_principal_request_replay(tmp_path):
+    from fleet.server.task_store import TaskStore
+
+    database = tmp_path / "fleet.sqlite3"
+    store = TaskStore(database)
+    request = dict(robot_id="rosy_01", task_type="delivery", source="console",
+                   actor_id="op", request_key="retry-key", request={"destination": "dock"},
+                   evidence=None)
+    original = store.create_task(task_id="original", **request)
+    assert original["created"] is True
+    with closing(sqlite3.connect(database)) as db, db:
+        db.execute("UPDATE fleet_tasks SET status='COMPLETED', updated_at='2000-01-01T00:00:00.000+00:00'")
+
+    prune_ledger(database)
+
+    replay = store.create_task(task_id="must-not-be-created", **request)
+    assert replay["created"] is False
+    assert replay["task"]["task_id"] == "original"
+    assert replay["task"]["status"] == "COMPLETED"
+    with closing(sqlite3.connect(database)) as db:
+        assert db.execute("SELECT COUNT(*) FROM fleet_tasks").fetchone()[0] == 1
+
+
+def test_backup_service_retention_has_a_writable_live_database_volume():
+    import yaml
+
+    compose = yaml.safe_load((Path(__file__).parents[1] / "deploy/site/compose.yaml").read_text())
+    backup = compose["services"]["fleet-backup"]
+    assert "--prune-history" in backup["command"] and "--prune-audit" in backup["command"]
+    database = next(volume.split(":") for volume in backup["volumes"]
+                    if volume.split(":")[1] == "/var/lib/rosy")
+    assert "ro" not in database[2:], "post-backup retention writes the live database"

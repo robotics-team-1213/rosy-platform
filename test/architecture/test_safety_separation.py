@@ -259,7 +259,6 @@ KNOWN_SAFETY_VIOLATIONS = {
     ("1", "operations/fleet/fleet/server/console/console.py", "fleet.localization.trust"): "mixed file",
     ("1", "operations/fleet/fleet/server/console/console.py", "fleet.server.bays"): "mixed file",
     ("1", "operations/fleet/fleet/server/console/console.py", "fleet.server.console_view"): "mixed file",
-    ("1", "operations/fleet/fleet/server/console/console.py", "fleet.server.observe"): "mixed file",
     ("1", "operations/fleet/fleet/server/console/console.py", "fleet.server.traffic"): "mixed file",
     ("1", "operations/fleet/fleet/server/console/console.py", "fleet.swarm.robots"): "mixed file",
     ("1", "operations/fleet/fleet/server/console/console.py", "fleet.swarm.session"): "mixed file",
