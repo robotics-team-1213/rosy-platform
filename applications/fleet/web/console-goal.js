@@ -1,3 +1,4 @@
+import {randomUUID} from "/console/assets/uuid.js";
 // 지도 위 목표 지정과 운영자 핀(D-201·D-224·D-593). 캔버스 찍기·방향키 커서·확인 뒤 보내기를 가진다.
 // 셸(console.js)이 그리기(render)와 지도 뷰를 건넨다(D-798 3.2).
 import { motionCommandReason } from "./motion-readiness.js";
@@ -73,7 +74,7 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
     focusGoalButton(robotId);
       const result = await call(`/api/fleet/robots/${encodeURIComponent(robotId)}/goal`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() },
+        headers: { "Content-Type": "application/json", "Idempotency-Key": randomUUID() },
         body: JSON.stringify({ x: point.x, y: point.y, yaw: 0 }),
         signals: [owner.signal],
       });

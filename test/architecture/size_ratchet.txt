@@ -28,11 +28,10 @@
 755 fleet/web/line-stuck.js
 606 fleet/web/shared/site-map-model.js
 788 fleet/web/shared/vision-view.js
-763 fleet/web/sitemap/site-map.js
 678 learning/curation/perception/lane_derived_drivable.py
 629 learning/registry/perception/deliver.py
 1533 middleware/core/events/test/test_audit.py
-2827 middleware/robot_ui/pilot/test/test_pilot_browser.py
+2554 middleware/robot_ui/pilot/test/test_pilot_browser.py
 1748 operations/fleet/test/test_trip_runner.py
 717 overhead/rosy_vision/ingest.py
 633 overhead/rosy_vision/track/background_blob.py
@@ -41,9 +40,7 @@
 712 perception/front_camera/perception/lane_bev.py
 723 perception/sensors/line_observation/line_observer_node.py
 1857 perception/web/diagnostic.html
-676 robot_ui/face/emotion/info_screen.py
 732 robot_ui/pilot/screens/drive.js
-945 robot_ui/pilot/styles.css
 898 robot_ui/robot/app.js
 856 simulation/gazebo/scripts/lane_live_view.html
 709 simulation/gazebo/scripts/lane_live_view.py

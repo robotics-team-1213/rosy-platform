@@ -24,7 +24,8 @@
   <ui-shell grammar="procedure" class="fleet-shell">
   <!-- D-540 2 — 네 문서가 같은 머리다(test_fleet_header.py가 글자 그대로 고정한다). 움직임은 web/shared/fleet-header.js 하나다. -->
   <header class="fleet-header">
-  <ui-topbar>
+  <!-- fleet:header:start -->
+<ui-topbar>
     <div class="fleet-header-identity" data-header-region="identity" role="group" aria-label="제품과 현장">
     <ui-brand href="/console" aria-label="Rosy Fleet 관제 홈"><b><span class="fleet-wordmark">Fleet</span></b><small id="fleet-name">사이트</small></ui-brand>
     </div>
@@ -55,22 +56,25 @@
 
       <details id="token-access" class="token-access">
         <summary>토큰으로 접속</summary>
-        <input id="console-token" class="ui-field token" type="password" placeholder="관제 토큰"
+        <input id="console-token" class="ui-field" type="password" placeholder="관제 토큰"
                autocomplete="off" aria-label="관제 토큰">
         <ui-button kind="quiet" id="token-save" type="button">접속</ui-button>
       </details>
     </div>
   </ui-topbar>
+<!-- fleet:header:end -->
   </header>
   <!-- D-741 2 — Fleet 문서 넷은 같은 탐색 레일을 쓴다. 영역은 관제·작업·기록·지도·설치 다섯이다. -->
   <div class="fleet-body">
-  <nav class="doc-tabs" aria-label="Rosy Fleet 문서">
+  <!-- fleet:nav:start -->
+<nav class="doc-tabs" aria-label="Rosy Fleet 문서">
     <a href="/console" data-action-icon="fleet">관제</a>
     <a href="/console?view=work" data-action-icon="list">작업</a>
     <a href="/console?view=records" data-action-icon="history">기록</a>
     <a href="/console/site-map" data-action-icon="map" aria-label="현장 지도">지도</a>
-    <a href="/console/install" data-action-icon="install" aria-label="설치·보정" aria-current="page">설치</a>
+    <a href="/console/install" aria-current="page" data-action-icon="install" aria-label="설치·보정">설치</a>
   </nav>
+<!-- fleet:nav:end -->
   <div class="fleet-workspace">
   <ui-status id="estop-feedback" hidden></ui-status>
 

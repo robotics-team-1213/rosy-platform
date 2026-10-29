@@ -1,8 +1,9 @@
 ---
 title: OMX camera readiness failed every boot because the Type=simple preview was active before it owned the camera
 date: 2026-10-23
+last_updated: 2026-10-29
 category: runtime-errors
-module: deploy/robot/omx (camera_readiness.py, rosy-omx-camera-readiness.service, rosy-omx-camera@.service)
+module: deploy/robot/omx (camera_readiness.py, camera_environment.py, rosy-omx-camera-readiness.service, rosy-omx-camera@.service)
 problem_type: runtime_error
 component: deployment
 symptoms:
@@ -51,6 +52,100 @@ Fix (#209):
 Recovery was the same order as above. The failed start's `ExecStopPost` restore succeeded (`restoration.json` both `restored: true`), then `systemctl --user reset-failed` and `start` reached READY (top and front 120 confirmations).
 
 Evidence: Fleet PC 2026-10-25 20:33 (first switch, failure); later the same evening the second switch to d0d7f7367b4d with `sequential`, then a rollback and a switch forward again. Readiness was READY after each. This holds for any updater or script that restarts several units in one call: never trust a multi-unit `is-active`, and stop readiness before its cameras.
+
+## Fifth failure: role, producer unit and release configuration diverged (2026-10-28–29)
+
+The front image role moved to the arm S gripper camera (Innomaker), whose producer
+is `rosy-omx-camera@arm_a_wrist`. Readiness still inferred `@front` from the role.
+Restore refused with `existing producer must be the sole camera owner` even while
+the intended wrist producer was running. Renaming the image role would also have
+changed the pipeline URL and dataset feature, so the fix keeps the role and sets
+`cameras.front.unit = "arm_a_wrist"` in the private readiness profile.
+`camera_readiness.py:76` resolves that optional unit; both baseline capture and
+restore use it (`prepare()` and `restore()`). Old baselines retain their old
+producer identity and profile hash: editing the profile alone cannot migrate them.
+
+A separate `50-gripper-topic.conf` drop-in replaced the viewer's `ExecStart` with
+the previous ROS setup command. After the native-snapshot transition (D-901), it
+also bypassed the new foundation `PYTHONPATH`. The viewer journal showed
+`ModuleNotFoundError: No module named 'core_common'`. Restarting without removing
+that override repeated the same failure. Custom camera mappings belong in the
+optional `omx-camera-view.env` supported by the updated unit, as described in the
+[OMX deployment guide](../../../deploy/robot/omx/README.md); do not replace the
+release command to change a source key. Deploy the supporting unit before moving
+a working override, and verify advancing fresh frames afterwards.
+
+These were update failures as well as camera failures. The devices updater rolls
+back if a managed unit fails its restart. Its journal on 10-28 recorded
+`rolled_back`, then repeated `known_bad`, and finally `switched` after recovery.
+`omx_autoupdate.py:343` compares the candidate release with `state.json`'s `failed`
+value before preparing it. Fixing a host configuration does not clear that marker:
+the same release stays blocked until main changes or that marker is cleared.
+
+### Recovery and evidence
+
+The verified 10-28–29 recovery sequence was:
+
+1. Back up private updater, profile, environment and state files. Wait until no
+   `record_session.py` or `chunk_runner.py` owns the cell; keep the idle gate.
+2. Remove the retired `@front` instance from the private updater's `units`.
+   Readiness was temporarily outside that list during repair; restore its gate
+   after it is healthy. Do not add a second producer for the same camera.
+3. Move the obsolete viewer drop-in into the private host directory
+   `~/.config/rosy/disabled-dropins/`, reload systemd and
+   use the release's command and imports.
+4. After correcting the cause, back up updater `state.json` and remove only its
+   `failed` key. Keep current/previous/history and all camera baselines. Run the
+   updater through its normal idle/rollback checks.
+5. With the unit-aware code deployed and the cell idle, stop readiness and inspect
+   `restoration.json` and control readback. Preserve any failed restore as evidence;
+   never discard a baseline to conceal it. Archive the old state directory, set the
+   profile's per-camera `unit`, and start readiness with a new state directory.
+6. Check readiness and advancing fresh top/front images, then put readiness back
+   into the updater's managed units. Exercise a later idle update before claiming
+   update-transition acceptance.
+
+The host retained `omx-camera-environment.pre-unit-20261028` and the disabled
+`50-gripper-topic.conf`. On 10-29, its readiness journal showed a successful start;
+a read-only check at 16:06 found both image roles fresh with `NORMAL` photometric
+quality. That observation does not establish task visibility or motion acceptance.
+Regression coverage remains in `test/test_omx_camera_readiness.py` and
+`test/test_omx_autoupdate.py`; `test/test_native_observation_snapshot.py` additionally
+executes the viewer command through user systemd with default and overridden keys.
+
+## Sixth failure: READY did not exercise the mapped recovery owner (2026-10-29)
+
+Initial preparation and restoration used the profile's per-camera `unit`, but
+`camera_environment.monitor()` still called `io.producer(role, device)` before
+changing exposure. The front role could therefore reach READY with its wrist
+producer and fail hours later when lighting first required a correction.
+The host journal at 18:46 and 19:10–12 showed the sole-owner refusal and exhausted
+service retries. A read-only probe confirmed that `front` refused the same device
+while the baseline's `arm_a_wrist` unit was its sole owner.
+
+The recovery guard now resolves the producer from `saved.get('unit', role)` in
+`camera_environment.py:176`, matching preparation and restoration. Device identity,
+producer identity, control budget, readback and baseline restoration checks remain
+in place. Older baselines without a unit retain the role fallback.
+
+The previous monitor test returned an empty producer identity for any argument,
+so it could not detect an incorrect unit. The existing dark-to-bright test now
+checks which unit the backend was asked to inspect, with both the role fallback
+and the wrist override, and with advancing or repeated frames. Before the fix,
+the two override cases failed and the two fallback cases passed. The tested local
+commit `37eba1b6e7` (not publicly released at this checkpoint) passed 61 related
+remote tests, including the native snapshot checks.
+
+Recovery at 20:11 used the cell/update locks and verified no recording/chunk owner.
+The deployed module first matched the expected pre-fix source, then was backed up
+before the tested replacement. `reset-failed` and `start` reached READY with three
+fresh advancing confirmations and the same invocation twelve seconds later.
+The baseline was preserved; camera producers and the arm owner were not restarted.
+This was a tested hotfix over the existing host release, not a new-release switch.
+The next accepted release must contain the fix. Dark-to-bright recovery logic was
+covered by deterministic host tests, not a controlled lighting experiment on the
+cell. Apply this check to every producer lookup in the lifecycle; initial READY
+alone does not establish the recovery path.
 
 ## Evidence
 Fleet PC journal 2026-10-23 06:10 (boot failure) and 11:33–11:34 (refusal, restore, READY). Fix commit on `fix/omx-camera-readiness-producer-wait`. The deployed file was replaced only after its SHA-256 matched the pre-fix repository version, and a backup `.bak-20261023` was kept.

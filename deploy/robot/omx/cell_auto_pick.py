@@ -161,14 +161,14 @@ def observe(cell, config: dict, calibration: dict, site: str, roi, catalog: list
         return None, None, [], f"no map for {site}"
     img = cell.frame("top")
     cd.see(keep(f"auto-{site}-top", img))
-    poly = config["sites"][site].get("surface_px")
+    poly, lab = config["sites"][site].get("surface_px"), config["sites"][site].get("surface_lab")
     objects = cell_objects.detect(img, roi, record, config["cameras"]["top"], catalog, surface_z(config, site),
-                                  config.get("params"), poly)
+                                  config.get("params"), poly, lab, (config.get("objects") or {}).get("hsv"))
     for o in objects:
         o["raw_m"] = [o["centre_mm"][0] / 1000, o["centre_mm"][1] / 1000]
     # the finger-side mask is not clipped to the site polygon: a container on the next surface (the board beside the
     # floor) still meets an open finger (2026-10-29: the jaws came down on a 2-cell on the board, contact at z 0.040)
-    return img, object_sized(cell_objects.foreground(img, roi, params=config.get("params")), config.get("params")), objects, None
+    return img, object_sized(cell_objects.foreground(img, roi, params=config.get("params"), surface_lab=lab), config.get("params")), objects, None
 
 
 def object_sized(mask, params=None):
@@ -392,10 +392,18 @@ def run_auto(cell, config, calibration, calibration_path, catalog, roi, source, 
     try:
         for attempt in range(attempts):
             t0, tried = time.time(), {"locate": {"found": False}}
-            _, mask, objects, error = observe(cell, config, calibration, source, roi, catalog)
+            img, mask, objects, error = observe(cell, config, calibration, source, roi, catalog)
             usable, refused = choose(cell, config, calibration, source, dest_site, place_xy, roi, objects, mask, catalog,
                                      bias_data, choices, work, failed_yaws) if not error else ([], [])
             cd.target(objects, usable, refused)
+            if usable and config.get("decision_model"):  # the model orders what the measurement kept, or vetoes all
+                import cell_pick_judge
+                import judge_seat
+
+                judged = cell_pick_judge.ask(judge_seat.ollama(**config["decision_model"]), img, usable)
+                cd.emit("target_judge", {"candidates": len(usable)}, list(range(len(usable))) + [-1], judged["choice"],
+                        judged["by"], judged["reason"])
+                usable = [usable[i] for i in judged["order"]]
             row = {"observed": len(objects), "refused": refused}
             out["attempts"].append(row)
             if error or not usable:

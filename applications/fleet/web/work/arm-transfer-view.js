@@ -1,3 +1,4 @@
+import {randomUUID} from "/console/assets/uuid.js";
 // Known external proposals keep their neutral contract and independent admission.
 const node = (tag, text = "", className = "") => Object.assign(document.createElement(tag), {textContent: text, className});
 const states = {PROPOSED: "독립 운영자 승인 대기", READY: "승인됨 · 실행 준비", RUNNING: "실행 중",
@@ -193,7 +194,7 @@ export function createArmTransferView({scope, call, anchor, active, approveReaso
     busy = true; recoveryAttempted = true; recoveryError = ""; paint();
     try {
       const result = await call(`/api/fleet/arm-transfers/jobs/${encodeURIComponent(parent.mission_id)}/recovery`,
-        {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({request_key: crypto.randomUUID(), expected_context_digest: snapshot.context_digest})});
+        {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({request_key: randomUUID(), expected_context_digest: snapshot.context_digest})});
       life.check();
       if (current !== version) return;
       if (result.request?.context_digest !== snapshot.context_digest) throw new Error("invalid recovery request response");

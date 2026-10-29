@@ -76,8 +76,8 @@
 
 ## 최근 기록
 
-- 2026-10-29 · uncommitted · fix(omx): 자동 운반 순서와 현재 시도의 근거 유지
-- 2026-10-29 · uncommitted · fix(omx): 실제 runner 매개변수를 운용 근거에 결합
-- 2026-10-29 · cd4e1752c8 · fix(omx): 프로필 recording 회귀의 단독 import 경로
-- 2026-10-29 · 3490bddb9b · 서버 증분 업데이트 최종 원격 회귀
-- 2026-10-29 · 6c77de81e0 · 빌더 직접 import 호환성 유지
+- 2026-10-29 · 2f88347d69 · SD 원격 fixture의 플랫폼 경계 검증
+- 2026-10-29 · 0ab037ed49 · SD mount의 native parameter set 수정
+- 2026-10-29 · uncommitted · Site readiness 게시 검사 출처 검토
+- 2026-10-29 · 05f19a73ea · 팔 credential 및 signed candidate 집중 회귀
+- 2026-10-29 · uncommitted · 동결 UI 검증 기록의 커밋 출처 검토
