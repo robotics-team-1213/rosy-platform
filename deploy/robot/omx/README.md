@@ -848,6 +848,23 @@ in `~/.config/rosy/omx-camera-readiness.env`; that directory must contain
 kept 236 of 236 top/front samples fresh (maximum source age 0.107 s) without any device command.
 Keep the existing two preview environment files and producers.
 
+Viewer label-to-source overrides belong in the optional private
+`~/.config/rosy/omx-camera-view.env`, rather than an `ExecStart` drop-in. For a
+front view supplied by the arm S wrist producer, keep the existing source keys:
+
+```ini
+ROSY_VIEW_ARGS="--camera-topic top=/top_camera/image_raw --camera-topic front=/arm_a_wrist_camera/image_raw"
+```
+
+These are native snapshot keys (D-901). Arguments are whitespace-separated;
+use plain labels and keys without spaces or shell glob characters. Keep the
+file mode 0600. Back up the environment and drop-in, wait until no recording or
+chunk owner is running, then move the overriding drop-in out of systemd's
+directory, install the matching release unit, reload and restart the viewer.
+Check advancing fresh top/front frames before restarting readiness. A host on
+an older unit without this optional environment file must keep its working
+drop-in until the updated unit is deployed.
+
 Install the two user units in `~/.config/systemd/user/`, then run:
 
 ```bash
