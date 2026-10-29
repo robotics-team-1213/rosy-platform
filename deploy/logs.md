@@ -4003,3 +4003,24 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 동일한 3490bddb9b의 canonical FULL 27개 invocation을 공식 remote_pytest.run으로 수행했다. 합계 37,581 passed/2,351 skipped, 각 명령 exit0, 모든 로그 비교 NEW0/known0/flaky0이다. 1~11번은 현장 PC에서 완료한 뒤 자원이 확보된 모델 PC에서 12~27번을 수행했다. 재배정 중 취소한 현장 12번과, 연결 복구 후 별도로 563 passed/1 skipped인 AI PC의 중복 마지막 묶음은 합계에서 제외했다. 수용한 27개 로그는 archive 내부 바이트를 원본 SHA-256과 대조해 보존했다.
 - gate 변화: 없음. monitoring 브라우저 묶음 16개는 모두 skip이며 브라우저 수용을 입증하지 않는다. 실제 Docker 연속성·CI dispatch·설치/운영 배포·실물 수용·main 착지/push는 수행하지 않았다.
 - CE: 해당 없음 — 판단 근거는 D-301·구성 해시·회귀 시험·기존 import 시험에 남긴다.
+
+## 2026-10-29 · uncommitted · workcell 팔 자격 증명 전체 매핑 설정
+
+- 변경: 서명된 workcell Compose에서 관리자 설정 `ROSY_SITE_WORKCELL_ARM_CREDENTIAL_PATHS`로 Fleet 팔 credential 전체 매핑을 지정한다. 기본 A/B와 Vision 매핑, 역할별 mount, 기존 bootstrap 거부 규칙은 유지했다. A/B/S 렌더링과 누락 S 거부 시험 및 마이그레이션 설명을 추가했다.
+- 증거: 테스트 선행 commit b7cf245d37과 현장 Docker Compose 5.6.1에서 기존 템플릿의 unset/empty는 A/B를 유지하지만 명시한 A/B/S는 A/B만 전달해 실패함을 확인했다(exit1). b7cf245d37의 원격 pytest는 대기/진행 중이며 새 소스의 통과 근거로 쓰지 않는다. 원본 config·candidate·컨테이너는 바꾸지 않았다.
+- gate 변화: 없음. 새 서명 candidate·설정 동시 마이그레이션과 운영 수용은 별도다. 서명 오버레이 허용 목록을 완화하거나 기존 S 자격 증명을 제거하지 않는다.
+- CE: 미해결 — 기존 추가 팔 오버레이를 표준 배포 경로로 옮기기 위한 소스 수정이며 설치·운영 전환은 아직 검증하지 않았다.
+
+## 2026-10-29 · 05f19a73ea · 실제 Compose 렌더링과 A/B/S 보존 비교
+
+- 변경: 관리자 전체 매핑을 제공하는 canonical workcell template의 실제 렌더링과 기존 현장 구성의 동등성을 검증했다.
+- 증거: 현장 Docker Compose 5.6.1에서 unset·empty는 기존 A/B, 명시적 JSON은 A/B/S를 정확히 전달했다(exit0). 현재 private arm overlay를 제외하고 새 template·동일 매핑을 넣은 전체 Compose 결과가 기존 결과와 일치했다. A/B/S 토큰은 원문 출력 없이 manifest 지문과 대조했고 모두 일치했다. 보호된 경로에 이전 config와 제안 config를 저장했으며 라이브 config·서비스는 바꾸지 않았다. base cb729139723d..05f19a73ea 독립 소스 계약 검토에 중대 지적 없음. 원격 pytest는 아직 대기/진행 중이라 통과로 기록하지 않는다.
+- gate 변화: 없음. 새 template를 포함한 서명 candidate 및 그 candidate와 설정의 동시 전환은 아직 수행하지 않았다. 서명·오버레이 허용 목록과 실제 장치 권한을 완화하지 않았다.
+- CE: 미해결 — 구성 동등성만 확인했으며 실제 candidate 적용과 CI 차단 해결은 후속이다.
+
+## 2026-10-29 · uncommitted · 동결 UI 검증 기록의 커밋 출처 검토
+
+- 변경: 동결된 platform UI 통합 결과 본문을 유지하고, 실제 로컬 runtime commit 식별자 한 건의 path·UTF-8 행 해시·값을 독립 검토해 public provenance에 추가했다. 기존 267건과 순서, matcher·credential 검사·실패 baseline은 유지한다.
+- 증거: 기준 commit 8f4b634e51의 공식 FULL에서 secret guard NEW1, 단독 재현 실패, main commit 23633e759f의 동일 단독 시험은 1 passed였다. 해당 값 commit 42508b116e의 실제 Git 객체·조상 관계와 원본 행 해시를 독립 검토했다. 수정 뒤 원격 집중 guard 결과는 외부 ui-validation-provenance-20261029 로그에 남긴다.
+- gate 변화: 없음. 새 canonical FULL과 main ancestry가 남으며 공개 게시·장치 수용을 뜻하지 않는다.
+- CE: 해당 없음 — 기존 git-ids-in-validation-records 교훈의 동결 기록 절차를 적용했다. 새 정책이나 예외 범위 확대는 없다.
