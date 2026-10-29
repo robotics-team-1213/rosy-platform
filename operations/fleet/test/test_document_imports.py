@@ -24,6 +24,7 @@ SHARED = {
     "address-drift.js",
     "authorization.js",
     "poll-gate.js",
+    "uuid.js",  # DOM-free CSPRNG identifiers shared by Console, Cell and site-map documents.
     "development-auth.js",
     "password-login.js",
     "account-permissions.js",  # D-757: shared read-only session capability predicates
@@ -115,6 +116,7 @@ OWN = {
         "site-map-teach.js",
         "site-map-survey.js",
         "site-map-camera.js",
+        "site-map-sources.js",  # Map profile selection and read-only camera-plane presentation.
         "site-map-edit.js",  # D-655: pure draft edits belong to the map editor document
     },
 }
