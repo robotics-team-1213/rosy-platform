@@ -317,3 +317,83 @@ def test_fallback_holds_claim_before_radio_lock_and_releases_it(tmp_path, monkey
         assert holders[0] != holders[1], "each radio ownership must use a unique claim holder"
     assert calls
     assert rosy_claim.check(tmp_path) is None
+
+
+@pytest.mark.parametrize("configured, expected", [(None, "open"), ("open", "open"), ("wpa2", "wpa2")])
+def test_fallback_security_controls_profile_and_public_status(tmp_path, monkeypatch, configured, expected):
+    module = _module()
+    monkeypatch.setattr(module, "_display_gid", lambda: None)
+    root = _device(tmp_path)
+    policy = dict(POLICY)
+    if configured is not None:
+        policy["fallback_security"] = configured
+    (root / "etc/rosy/network-policy.json").write_text(json.dumps(policy), encoding="utf-8")
+    handoff = root / module.DISPLAY_AP
+    handoff.parent.mkdir(parents=True)
+    handoff.write_text(AP_VALUE, encoding="utf-8")
+
+    assert module.perform(root, "open", _activated)
+
+    profile = (root / f"etc/NetworkManager/system-connections/{module.PROFILE}.nmconnection").read_text()
+    status = json.loads((root / module.STATUS).read_text())
+    assert status["security"] == expected
+    assert ("[wifi-security]" in profile) == (expected == "wpa2")
+    assert (AP_VALUE in profile) == (expected == "wpa2")
+    assert AP_VALUE not in json.dumps(status)
+    if expected == "open":
+        assert not handoff.exists()
+
+
+def test_open_fallback_does_not_access_the_unused_password_value(tmp_path, monkeypatch):
+    module = _module()
+    root = _device(tmp_path)
+    original = module._read_json
+
+    class Credentials(dict):
+        def get(self, key, *args):
+            assert key != PW, "an open AP must not use its stored key"
+            return super().get(key, *args)
+
+    def read(path):
+        value = original(path)
+        return Credentials(value) if path.name == "ap-credentials.json" else value
+
+    monkeypatch.setattr(module, "_read_json", read)
+    assert module.perform(root, "open", _activated)
+
+
+def test_open_fallback_only_needs_a_known_ssid(tmp_path):
+    module = _module()
+    root = _device(tmp_path)
+    (root / "etc/rosy/ap-credentials.json").write_text(json.dumps({"ssid": "fixture-ap"}), encoding="utf-8")
+    assert module.perform(root, "open", _activated)
+    assert json.loads((root / module.STATUS).read_text())["security"] == "open"
+
+
+def test_relay_keeps_wpa2_even_when_fallback_is_open(tmp_path, monkeypatch):
+    module = _module()
+    monkeypatch.setattr(module, "_display_gid", lambda: None)
+    root = _device(tmp_path)
+    (root / "etc/rosy/network-policy.json").write_text(
+        json.dumps({"mode": "relay", "fallback_security": "open"}), encoding="utf-8")
+    assert module.perform(root, "open", _activated)
+    profile = (root / f"etc/NetworkManager/system-connections/{module.PROFILE}.nmconnection").read_text()
+    assert "[wifi-security]" in profile and AP_VALUE in profile
+    (root / "etc/rosy/ap-credentials.json").write_text(json.dumps({"ssid": "fixture-ap"}), encoding="utf-8")
+    assert not module.perform(root, "open", _activated)
+
+
+@pytest.mark.parametrize("security", [None, "invalid", {}, []])
+def test_invalid_fallback_security_does_not_open_an_ap(tmp_path, security):
+    module = _module()
+    root = _device(tmp_path)
+    (root / "etc/rosy/network-policy.json").write_text(
+        json.dumps({"mode": "fallback", "fallback_security": security}), encoding="utf-8")
+    calls = []
+    assert not module.perform(root, "open", lambda command: calls.append(command) or _activated(command))
+    assert calls == []
+
+
+def test_default_fallback_security_is_open(tmp_path):
+    module = _module()
+    assert module.load_policy(tmp_path)["fallback_security"] == "open"
