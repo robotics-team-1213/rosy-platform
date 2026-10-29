@@ -177,7 +177,7 @@ def mdns_diagnostic(root: Path, run: Runner) -> dict:
 
     status = public_json('run/rosy-boot/boot-status.json')
     port, tls, tls_host = (status.get(k) for k in ('api_port', 'api_tls', 'api_tls_host'))
-    valid = type(port) is int and 1 <= port <= 65535 and tls in {'none', 'required'}
+    valid = type(port) is int and 1 <= port <= 65535 and isinstance(tls, str) and tls in {'none', 'required'}
     if tls == 'required':
         valid = valid and isinstance(tls_host, str) and tls_host.endswith('.local') and hostname(tls_host[:-6]) is not None
     if not valid:
