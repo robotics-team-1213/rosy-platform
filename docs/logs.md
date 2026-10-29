@@ -13064,6 +13064,13 @@ osy-d395-s1d\`.
 - gate 변화: 없음. READY는 photometric 근거이며 팔 동작이나 물리 조명 변화 수용을 뜻하지 않는다.
 - CE: 기존 교훈 갱신 — [초기 READY와 재조정 소유권의 차이](solutions/runtime-errors/omx-camera-readiness-preview-active-before-owning-camera-2026-10-23.md). 초기 준비/복원만 unit을 반영하고 실행 중 재조정은 role을 쓴 누락과 기존 mock이 놓친 경로를 보완했다.
 
+## 2026-10-29 · uncommitted · docs: 관제 유닛 첫 배치 확정(R·CELL-A)으로 N1 마감
+
+- 변경: 독립·상하위 관제 후속 목표의 N1을 닫았다. 관제 유닛 첫 배치 확정 문서(R=통합관제+현장 주행, CELL-A=OMX 셀 관제, 현장 PC 동거 격리)를 추가하고 후속 목표의 N1 행을 근거와 함께 갱신했다.
+- 증거: 2026-10-29 현장 PC 읽기 조사(단일 Fleet·관제 계층 미배포·셀 도구 세션 단위 확인)와 D-850·D-855·D-862·D-893 계약 대조. 문서 변경이므로 harness lint·생성 문서 대조로 확인한다. 설치·연결 수용은 N2·N3 그대로 열려 있다.
+- gate 변화: 없음. 배치 정의 완료이며 실제 설치·PC 간 TLS 연결·장애 수용은 미실행이다.
+- CE: 해당 없음 — 배치 정의 문서이며 장애 원인·복구를 새로 검증한 사례가 아니다.
+
 ## 2026-10-29 · afa10f26b2 · 복구 관측 클라이언트 검증 범위와 생산자 공백
 
 - 변경: `validation/recovery-observer-client-2026-10-29/result.md`에 committed RED/GREEN·독립 계약 검토·기존 승인 경로 보존과 실제 수집기의 미충족 입력을 구분해 기록했다.
