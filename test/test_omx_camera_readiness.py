@@ -291,7 +291,12 @@ def test_a_reused_baseline_guards_the_current_preview_not_the_one_that_recorded_
     monkeypatch.setattr(runtime, 'identity', lambda device: {'rdev': 1})
     monkeypatch.setattr(runtime, 'producer', lambda role, device, wait_s=15.0: now)
     monkeypatch.setattr(runtime, 'get_controls', lambda device, names: dict(original))
-    baseline = runtime.prepare({}, tmp_path, 'p')
+    monkeypatch.setattr(runtime, 'command', lambda args: (
+        'auto_exposure 0x9a0901 (menu) : min=0 max=3\n 1: Manual\n 3: Auto\n'
+        'exposure_time_absolute 0x9a0902 (int) : min=1 max=5000 step=1\n'
+        'gain 0x00980913 (int) : min=0 max=7 step=1\n'))
+    profile = dict(cameras={'top': dict(candidates=[dict(auto_exposure=1, exposure_time_absolute=400)])})
+    baseline = runtime.prepare(profile, tmp_path, 'p')
     assert baseline['cameras']['top']['producer'] == now
     assert json.loads((tmp_path/'baseline.json').read_text())['cameras']['top']['producer'] == old  # file unchanged
 

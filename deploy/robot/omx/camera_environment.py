@@ -188,7 +188,7 @@ def monitor(profile, root, digest, duration, io):
                                 and quality.get('condition') == plan.condition)
                 if attributable:
                     score = quality['spatial_contrast']*(1-quality['clipped_fraction'])
-                    if role not in best or score > best[role]['score']:
+                    if role not in best or score >= best[role]['score']:
                         best[role] = dict(score=score, controls=dict(current[role]))
                 if action is None:
                     continue
