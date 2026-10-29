@@ -3809,6 +3809,21 @@
 - gate 변화: 없음. 현장 호스트에서 타이머 실가동·복구 훈련(백업→빈 프로젝트 복원)은 별도 수행문.
 - CE: 해당 없음 — 계약 시험과 변이 이력이 커밋에 남아 있다.
 
+## 2026-10-27 · 1f121be8a1 · 네이티브 OMX 제어 호스트 명시 등록
+
+- 변경: private `omx_hosts` SSH 대상 배열을 기존 lab loader에 추가했다. 키 없음은 site+omx 기존 배치, 명시적 빈 배열은 site만, 대상 목록은 해당 호스트의 omx 역할만 뜻한다. 네이티브 11개 유닛과 업데이터를 단일 omx 그룹으로 옮기고 역할 합성 시 충돌을 거부한다.
+- 감시·호출자: 별도 제어 PC를 test/sim 후보로 추가하지 않고 상태 probe에 포함한다. 수집 전송은 유일한 네이티브 호스트에서 읽고 0개/복수면 거부한다. 복구 가드는 별도 hosts.conf와 기존 권한을 유지한다. 자체 검토에서 기존 test_hosts 빈 문자열 무시 동작도 보존했다.
+- 증거: RED 4454ff7500 원격 38 expected NEW/47 passed → 1f121be8a1 집중 loader/status/host-manifest/ArmS/transfer 원격 86 passed, SKIP 0, NEW/KNOWN/FLAKY 0. 로그는 저장소 밖 D:/DevTemp/fleet-omx-host-placement-{red,green}/run-1.txt.
+- gate 변화: 없음. 호스트 등록은 서비스 설치·활성화·동작 허가가 아니다. 실제 private 설정, signed artifact 배포, 재부팅·장치·Fleet 브라우저 수용은 별도이며 이 변경에서는 수행하지 않았다.
+- CE: 해당 없음 — 배치 의미·충돌·수집 거부 판단은 코드·회귀 시험·hosts README에 남아 별도 교훈을 늘리지 않는다.
+
+## 2026-10-27 · 83b85f7f8a · 네이티브 수집 호출자의 시뮬레이션 호스트 중복 거부
+
+- 원인: 상태 도구에만 둔 역할 중복 검사가 정본 loader를 직접 쓰는 수집 전송 경로에는 적용되지 않았다. 별도 검토가 transport 이전 거부 누락을 찾았다.
+- 변경: 시뮬레이션 후보 파싱과 네이티브 중복 검사를 lab_hosts로 모았다. 명시적 model/ai, suffix 없는 후보, 잘못 쓴 역할을 정본에서 거부한다. suffix 없는 후보의 상태 inventory 역할은 기존대로 생략하며, site+omx 및 test_hosts 소속만 있는 배치는 허용한다.
+- 근거: RED bb04d6ae07 원격 16 expected NEW/88 passed → 83b85f7f8a 동일 loader/status/transfer/manifest/ArmS 집중 원격 104 passed, SKIP 0, NEW/KNOWN/FLAKY 0. helper와 transfer 각각 명시·기존 fallback 배치를 검사하고 _remote/_copy 호출 전 거부를 확인했다. 로그는 저장소 밖 D:/DevTemp/fleet-omx-host-placement-fix-round1-{red-complete,green}/run-1.txt.
+- gate 변화: 없음. 실제 호스트·장치·배포에 접근하지 않았다. CE: 해당 없음 — 호출자 경계와 거부 이유는 정본 loader 및 회귀 시험이 보존한다.
+
 ## 2026-10-27 · 296fdfc384 · 고정 검증 기록의 Git 참조 비밀정보 오탐 검토
 
 - 변경: 게시 검토 대장에 commit 296fdfc384의 검증 문서 경로와 high-entropy-token 규칙 한 건만 추가했다. 기존 109개 record와 scanner·규칙·임계값을 유지한다.
@@ -3838,12 +3853,33 @@
 - gate 변화: 없음. 현장 호스트에서 실제 로테이션 관찰(디스크 절감)은 별도 확인.
 - CE: 해당 없음 — 계약 시험과 변이 이력이 커밋에 남아 있다.
 
+## 2026-10-27 · 2ecb9b9015 · fleet가 best-effort 컨텍스트 미러를 기다리지 않는다
+
+- 변경: D-796은 컨텍스트 로그 미러를 가산·best-effort(쓰기 실패는 경고, SQLite 원장 불변)로 설계했는데 compose는 fleet 시작을 `postgres(service_healthy)`에 묶어 두었다. 미러가 느리면 관제 자체가 열리지 않는 이 위반을 풀었다 — fleet의 `depends_on` 제거, postgres는 스택에 그대로 배포된다. 신규 계약 시험이 의존 부재와 미러 잔존을 함께 고정한다.
+- 증거: 원격 5 suite(신규 계약 + compose·후보·이행 고정) green, known NEW 0. 변이 검증: depends_on 복원 → 계약 시험 red(`3923f1121e`), 복원 green(`2ecb9b9015`).
+- gate 변화: 없음. 실제 현장에서 postgres 지연 시 관제 기동·경고 로그 관찰은 별도.
+- CE: 해당 없음 — 계약 시험과 변이 이력이 커밋에 남아 있다.
+
+## 2026-10-27 · 752c9b0aed · 네이티브 chunk 스크립트의 설치 패키지 import 유지
+
+- 변경: chunk 계산의 설치 패키지 추출에 맞춰 기존 스크립트 이름을 호환 export로 유지하고, 네이티브 배포 예제에 최소 package import 파일과 smoke를 추가했다. adapter 부모 PYTHONPATH와 개인 배포 설정 이전을 README에 적었다. 현재 개인 설정과 장치는 바꾸지 않았다.
+- 증거: tests-only `9a2a504f02` 원격 RED 10개 실패. 독립 검토한 소스 `752c9b0aed`에서 소스 체크아웃이 없는 임시 배포본의 예제 paths/smoke·기존 import와 배포 회귀 62 passed, 별도 기존 스크립트 회귀 113 passed/2 skipped, NEW 0. 후자는 adapter 시험 하위 트리 없이 실행해 공통 fixture의 import 경로를 확인했다. 건너뛴 녹화 데이터 leader 활동 검사 두 개는 별도 node 실행에서도 skipped였으며, 장치·배포 수용으로 세지 않는다.
+- gate 변화: 없음. 실행·토크·실물 활성화를 바꾸지 않는다. CE: 해당 없음 — 배포 import 의존 파일과 검증은 코드·예제·회귀에 남겼다.
+
 ## 2026-10-28 · uncommitted · Native motor-health 종료 시각 수정 초안
 
 - 변경: 실제 MotorHealth와 부모 cleanup snapshot에 최초 terminal_at을 보존하는 수정 초안이다. 관측된 motor 측정 시각과 값은 유지하며 읽기·토크·guard 경계는 바꾸지 않는다.
 - 증거: 승인된 RED merge 3bc312f9dd5867ca49105dd8d7c36de908afaa97의 bridge 원격 시험은 실제 작성기 경로 8 NEW / 기존 12 PASS / SKIP 0으로 종료 이벤트 누락을 재현했다. 추가 무측정·fault→end→parent 시각 보존 5개 사례는 검토용 초안이며 아직 실행하지 않았다.
 - gate 변화: 없음. P2 OPEN이며 제품 수정은 독립 검토·커밋 원격 GREEN 전이다. 착지·배포·실물 수용은 하지 않았다.
 - CE: 미해결 — 원인을 실제 작성기 회귀로 확인했으나 수정의 GREEN과 재검토 전이다.
+
+## 2026-10-28 · 8facd08fea · Native enrollment current-main integration candidate
+
+- Change: normal pending merge of source commit `8facd08fea9b452ffecd905cc47bd479f955fa73` and main commit `7fd0d147dfa4203b40cbe00ad0bdf08f0fbf6752`. Preserve main's journal entries and insert the two original native-enrollment records in date order; production source and tests gain no additional edits.
+- Evidence: both sides inserted 2026-10-27 records before an unchanged 2026-10-28 base entry, triggering the append resolver's both-insertion guard. Static block, parent and source-accounting evidence is recorded separately; no historical block or reference is rewritten.
+- Verification: this is an uncommitted integration candidate with static checks only. The earlier 117 focused passes belong to commit `8426f896e4d13452828841928e80b2974a95a8b3`. This candidate has no new committed revision, remote result or FULL completion.
+- Gate: unchanged. Independent source review, commit, exact committed selector and ordinary canonical auto verification remain pending. No deployment, signing, device operation or field acceptance occurred.
+- CE: unresolved; integration and acceptance remain pending.
 
 ## 2026-10-28 · b3641b2165 · OMX 운영 관측의 native 통신 경계
 
@@ -3859,3 +3895,55 @@
 - 증거: 수정 커밋 bc32cb9b41에서 정지 파일 27개와 Fleet 상태 파일 11개를 함께 원격 실행해 38 passed / 0 skipped / NEW 0. 같은 pytest 9.2 환경 1fde7a90b47fe7fb의 결과이며, 독립 검토는 전용 모듈 격리·실제 fsync 유지·안전 assertion 보존을 확인했다. 실행 로그는 native-cell-transport 작업 기록에 연결했다.
 - gate 변화: 없음. 전체 착지 검증은 별도이며 실제 포트·모터·서비스를 실행한 수용 근거가 아니다.
 - CE: 해당 없음 — 가짜 호출이 프레임워크에 번지는 원인과 적용 조건을 시험 주석·이 기록에서 복원할 수 있다.
+
+## 2026-10-28 · uncommitted · fix(omx): 카메라 자동 조정이 역할마다 실제 미리보기 유닛을 확인
+
+- 변경: `camera_readiness.py` 프로필의 카메라마다 선택 항목 `unit`(기본은 역할 이름). 확인·복구가 `rosy-omx-camera@<unit>`을 단독 소유자로 본다. README와 시험 1건.
+- 원인: 관제 PC의 front 역할 카메라는 팔 S 그리퍼(Innomaker)이고 `rosy-omx-camera@arm_a_wrist`가 연다. 자동 조정이 `@front`를 소유자로 찾아 06:27부터 restore가 실패했고, 그 실패가 장치 자동 업데이트를 되돌렸다.
+- 증거: 원격 `test/test_omx_camera_readiness.py` 29 passed (2026-10-28 착지 재실행). 호스트 적용은 아직이다.
+- gate 변화: 없음. 호스트 적용(프로필에 `"unit": "arm_a_wrist"`, 이전 상태 디렉터리 정리, 업데이트 관문 복귀)은 배포 뒤 셀이 쉴 때 한다.
+- CE: 미해결 — 호스트 적용 후 판단.
+
+## 2026-10-28 · uncommitted · feat(omx): native 셀의 검증된 작업 범위를 실행 조건과 연결 (D-911)
+
+- 변경: 장치/설정/보정 readback, 코드, 선언된 설치·물체 질량/치수·환경, 전체 library가 일치하는 작업만 검토 근거로 자동 실행한다. 미검증·오래된 상태·다른 높이/경로·다른 근거는 보류한다. 감독 시험과 자동 순환을 분리하며 기본 예제는 닫혀 있다.
+- 기록: 기존 attempts ledger에 단계별 실패와 운용범위 판정을 남긴다. 동작 전 독점 pending intent를 fsync하고 자신의 완료 기록 뒤에만 해제한다. 중간 관측 상실은 실패이며 같은 작업의 기존 근거로 자동 재실행하지 않는다.
+- 경계: native runner가 checked 명령의 session/library를 처리 시점에 확인한다. unchecked 수동 개입은 자동 사슬을 무효화한다. 기존 guard와 CORE/Fleet/OMX 권한은 유지한다. FIFO/카메라·receipt는 `cell_pipeline_io.py`로 옮겨 기존 import 이름을 유지했다.
+- 검증: 개발 중 `fd254ed147`에서 관련 원격 시험 96 passed. 최종 커밋의 원격 시험·크기/lint 결과는 workspace 작업 기록에 결합한다. 실물 구동·배포·현장 수용은 미실시.
+- gate 변화: 장치 활성화·실물/현장 수용은 그대로 미실시. native 셀 자동 작업에 검증 근거와 현재 조건의 추가 검사를 적용한다.
+- CE: 해당 없음 — 기존 처짐/접촉/설정 복구 교훈을 반영한 새 기능이며 새 실물 장애 해결을 검증하지 않았다.
+
+## 2026-10-28 · 0f76cb9a4e · Learning 인계 런타임의 필수 파일 closure
+
+- 변경: storage_omx.py와 review_app_web/omx-export.js를 signed model-code의 필수 파일에 추가했다. 실제 설치·서명·배포·서비스 재시작은 하지 않았다.
+- 증거: 6b22a71b8f에서 각 파일 누락 묶음이 거부되지 않는 2개 실패를 재현했다. 0f76cb9a4e의 전체 model-code/review release·OMX 저장 회귀 255 passed, skip0. 최종 영향 선택은 별도 로그로 확인한다.
+- gate 변화: 없음. 파일 목록 수용은 실행 호스트나 장치의 실제 설치 수용이 아니다. CE: 해당 없음 — 필수 파일과 누락 부정 회귀가 예방 근거다.
+
+## 2026-10-28 · 8c3a60f344 · Pinky 접속 복구와 운영 키 누락 차단
+
+- 변경: 안내형 카드 준비에서 운영자 개인키·공개키 누락을 계획 전에 거절한다. 웹과 SSH가 함께 닫힌 경우에는 별도 Linux에 마운트한 전원 꺼진 카드의 기존 계정에 공개키만 추가하는 오프라인 복구 도구를 제공한다. 기존 키·신원·SETUP·모드·보정 자료를 유지한다.
+- 증거: tests-only `b808a821c2`의 공식 원격 실행에서 도구 부재 15 ERROR를 확인했다. Windows PowerShell의 폐기용 도우미 fixture는 수정 전 키 누락 assertion으로 실패했고 수정 후 7개 self-check와 설정·3장 연속 기록 fixture가 통과했다. 후보 `f594cb588d`의 집중 원격 회귀는 140 passed/2 Windows-only skipped, NEW 0이다. 독립 검토의 계정 디렉터리 탐색·키 읽기 권한 누락은 `bf3cab97bc`에서 6 FAILED로 재현했다. 보강한 `8c3a60f344`의 영향 선택은 459 passed/2 skipped이며 갱신 전 생성 인덱스의 계약 2건이 실패했다. 인덱스를 재생성해 후속 커밋에서 재검증한다. 독립 재검토의 Critical/Important는 0이다.
+- gate 변화: 없음. 카드 마운트·실물 키 변경·장치 등록·모터 활성화·배포·착지는 수행하지 않았다. 유지보수용 관리자 웹 endpoint를 새로 열지 않는다.
+- CE: 미해결 — 실제 장치의 인증 장애 원인과 실물 복구는 확인하지 못했다. 코드의 복구 거절·원본 보존과 장치 수용을 구분한다.
+
+## 2026-10-29 · uncommitted · deploy: GitHub OS 전송과 서명된 부분 갱신
+
+- 변경: OS bundle의 staged 분할 게시와 전체 해시 재조립, 서명된 engineering canary 제한, 독립 OS CMS가 필요한 전송기 유지보수 및 durable recovery, 기존 전체 파일을 보존하는 native delta 전송 정책을 연결했다. OS·부팅 변경과 알 수 없는 기준은 native 델타로 처리하지 않는다.
+- 검증: OS 게시54·초기수신79·잔여 partial 복구39·게시→HTTP 연결5·유지보수127개 원격 통과(각 0 skipped/0 NEW). 부분 전송 초기430개 통과 후 v2 resume·실패 baseline·OS 정책 보강을 별도로 재검증 중이다. 실제 GitHub 게시·Pinky 부팅·OTA·롤백은 아직 미검증이다.
+- 성능: exporter preset만6→1로 이행했다. 원본 변경의22개 원격 회귀와 독립 검토, 제한된 x86 표본은 [측정 기록](../docs/validation/pinky-image-throughput-2026-10-28/result.md)에 보존했다. 전체 ARM 빌드 절감량은 주장하지 않는다.
+- gate 변화: 없음. SOURCE·모델링된 중단 복구·MEDIA·실제 장치 수용을 구분하며 최종 통합 검증 전 배포 완료를 기록하지 않는다.
+- CE: 해당 없음 — 이 변경의 계약과 적용 조건은 코드·회귀·측정 기록으로 복원할 수 있다. 실제 GPT 재발 순서의 교훈은 별도 solutions 기록에 보존했다.
+
+## 2026-10-29 · 8704f12108 · 운영 키 조합 검사와 접속 복구 중단 상태
+
+- 변경: 카드 도우미가 OpenSSH 개인키 헤더의 공개키 부분과 `.pub`를 비교해 불일치·잘못된 파일을 계획 전에 거절한다. 암호 해제나 개인키 출력 없이 기존 공개키 검증기를 재사용한다. 복구 도구는 실패한 쓰기 단계와 보존 폴더를 알리고, 백업 후 카드/키 스냅샷을 다시 확인한다. 중단 뒤 자동 롤백은 다른 키 변경을 덮어쓸 수 있어 수행하지 않는다.
+- 증거: tests-only `7f0f631845`에서 복구 실패 4개를 공식 원격 시험으로 재현했다. 키 확인 실패를 무시하던 Windows 도우미도 fixture assertion으로 재현했다. `e49261522d`는 실제 OpenSSH 생성 키와 복구 경계를 포함해 원격 45 passed/0 skipped, NEW 0이다. Windows 도우미 8개 self-check·설정/3장 연속 기록 fixture와 native 일반/암호 키 일치·불일치 self-check도 통과했다. GCM·ChaCha20 태그 지원을 보강한 최종 소스의 전체 영향 검증은 별도로 기록한다.
+- gate 변화: 없음. 기존 전원 꺼진 로봇·실물 SD·서비스·SSH 설정은 변경하지 않았다. 개인키 본문의 무결성이나 실제 잠금 해제/로그인 가능 여부는 공개키 헤더 비교로 증명하지 않는다.
+- CE: 해당 없음 — 실제 OpenSSH와 합성 fixture를 구분하는 기존 교훈을 적용했고 판단 근거는 코드·회귀·운영 안내에 보존했다. 기존 장치의 실물 복구는 미해결이다.
+
+## 2026-10-29 · uncommitted · fix(deploy): 관제 PC front 카메라 인스턴스 선언 정리
+
+- 변경: `deploy/hosts/services.yaml`의 `rosy-omx-camera@` 인스턴스에서 `front`를 뺐다(top, arm_a_wrist만).
+- 근거: front가 가리키던 USB by-path 1.3은 10-26 재연결 뒤 없고, 팔 S 그리퍼 카메라는 arm_a_wrist가 연다. 10-28 호스트에서 front를 업데이트 관문에서 빼고 유닛을 멈췄는데 선언이 남아 update_status가 DOWN을 냈다.
+- gate 변화: 없음.
+- CE: 해당 없음 — 호스트 정리 기록.

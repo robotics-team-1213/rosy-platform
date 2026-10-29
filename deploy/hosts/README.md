@@ -128,7 +128,15 @@ git fetch origin && python tools/remote/update_status.py
 2. 업데이트 경로를 D-805에서 고른다. OMX 셀은 `deploy/robot/omx/omx_autoupdate.py`, 네이티브 서비스는 같은 업데이터의 `"kind": "service"`, 모델 PC 코드는 서명 후보(D-446)를 따른다. 타이머 유닛은 관문(`ExecCondition`)을 거쳐야 한다.
 3. OMX 셀 설정의 `devices`·`follower_device`는 실제 `/dev/serial/by-id/` 경로로 적는다. 상시 토크 OFF 관측기가 버스를 잡는 셀은 `observers`(`unit`·`device`·`health`)를 함께 적는다. 보드를 바꾸면 이 설정과 관측기 env를 같은 날 고친다.
 4. 설치한 날 업데이트를 한 번 직접 실행(`systemctl --user start <unit>`)하고 `update_status.py`에서 `ok`를 확인한다.
-5. `private/lab-hosts.json`에 역할을 둔다. 관제 PC는 `site_host`이고, 모델·AI PC는 `sim_hosts`의 `<ssh>=model`·`<ssh>=ai`다. 그 역할의 유닛을 `services.yaml`에 선언한다. `update_status.py`의 `<role>: N declared units, 0 findings`가 연결 완료 기준이다. 유닛을 추가·변경·폐기하면 같은 변경에서 그 항목을 고친다.
+5. `private/lab-hosts.json`에 역할을 둔다. 관제 PC는 `site_host`이고, 모델·AI PC는 `sim_hosts`의 `<ssh>=model`·`<ssh>=ai`다. 네이티브 OMX 제어 PC는 별도 `omx_hosts` 문자열 배열에 SSH 대상을 적는다. 감시를 위해 제어 PC를 `test_hosts`나 `sim_hosts`에 추가하지 않는다. 그 역할의 유닛을 `services.yaml`에 선언한다. `update_status.py`의 `<role>: N declared units, 0 findings`가 연결 완료 기준이다. 유닛을 추가·변경·폐기하면 같은 변경에서 그 항목을 고친다.
+
+`omx_hosts` 키가 없으면 기존 배치대로 `site_host`에서 `site`와 `omx` 역할을 합쳐 검사한다.
+명시적인 `[]`는 네이티브 OMX 호스트가 없다는 뜻이다. 대상을 적으면 그 목록만 `omx` 역할을 맡고,
+목록에 `site_host`도 있을 때만 해당 PC의 역할을 합친다. 중복·빈 대상·잘못된 타입 및
+모델/AI 시뮬레이션 역할과의 중복 배치는 거부한다. OMX 유닛·업데이터는 `omx` 그룹 한 곳에 둔다.
+호스트 등록은 읽기 전용 상태 검사 범위만 정하며 서비스 설치·활성화·동작 권한을 부여하지 않는다.
+기존 OMX 설치·서명 릴리스·세션 잠금·토크 OFF 관문은 각 제어 PC에서 그대로 적용한다.
+수집 전송 도구는 유일한 OMX 호스트에서 읽으며, 명시된 호스트가 없거나 여럿이면 선택을 추측하지 않고 거부한다.
 
 ## PC별 모니터링 연결
 
@@ -137,6 +145,9 @@ git fetch origin && python tools/remote/update_status.py
 템플릿은 `deploy/site/host-guard.conf.example`이다. 자동화용 SSH는 강제 명령 키를 쓰는
 OpenSSH LAN 경로로 연결한다. Tailscale SSH는 `authorized_keys` 강제 명령을 우회하므로
 이 감시 키의 전송 경로로 사용하지 않는다.
+
+이 복구 가드의 대상·권한은 별도 `hosts.conf`와 기존 설치 절차가 정한다.
+`lab-hosts.json`의 `omx_hosts` 등록으로 가드 계정·복구 대상·재시작 권한이 자동 추가되지 않는다.
 
 대상 PC마다 `common/install-guard-remote.sh --site-key "<guard-public-key>"`로 공개키를
 등록한다. 계정·접속 범위와 대상 소유자의 동의는 기존 설치 절차를 따른다.

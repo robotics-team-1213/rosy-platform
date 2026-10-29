@@ -58,3 +58,12 @@ def test_a_case_turns_the_jaws_by_its_grasp_turn_and_travels_with_the_frames():
     wrist = value["phases"][0]["frames"][-1][4] - nominal["phases"][0]["frames"][-1][4]
     # joint5 rolls the jaws by the turn; the jaws are symmetric, so the IK may take the roll half a turn away
     assert abs((wrist + math.pi / 2) % math.pi - math.pi / 2) == pytest.approx(math.radians(10.0), abs=0.01)
+
+
+def test_an_aimed_case_reaches_off_the_box_by_its_aim_and_leaves_the_box_where_it_is():
+    case = {"box": [0.0, 0.0, 0.0], "place": "belt", "grasp_turn": 0.0, "expect": None, "aim": [0.006, -0.008]}
+    value, nominal = m.frames_for(case), m.frames_for("nominal")
+    assert value["box_start_m"] == nominal["box_start_m"]  # the box is not moved, only where the jaws go
+    aimed, centred = tcp(value["phases"][0]["frames"][-1]), tcp(nominal["phases"][0]["frames"][-1])
+    assert (aimed.x - centred.x, aimed.y - centred.y) == pytest.approx((0.006, -0.008), abs=0.002)
+    assert aimed.z == pytest.approx(centred.z, abs=0.002)

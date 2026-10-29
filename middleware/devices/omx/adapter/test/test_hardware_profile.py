@@ -1,5 +1,6 @@
 """Synthetic document validation, never measured hardware acceptance."""
 import json
+from pathlib import Path
 
 import pytest
 import yaml
@@ -9,22 +10,8 @@ from omx_adapter.hardware_profile import main, validate_profile
 
 @pytest.fixture
 def profile():
-    return {
-        "schema": "rosy.omx-hardware-profile.v1", "profile": "hardware",
-        "measured": {"date": "2026-10-15", "revision": "test-fixture-only",
-                     "evidence": "docs/validation/omx-hardware-2026-10-15/result.md"},
-        "serial": {"by_id": "/dev/serial/by-id/test-fixture-only", "baudrate": 1000000},
-        "joints": {f"joint{i}": {"position": [-1., 1.], "velocity": .1, "acceleration": .2}
-                   for i in range(1, 6)},
-        "gripper": {"joint": "gripper_joint_1", "position": [0., 1.], "open": .9,
-                    "closed": .1, "preload": .01,
-                    "jaw": {"pivot_y_m": [.0075, -.0108], "contact_point_m": [.04, -.01],
-                            "squeeze_m": .001, "min_grasp_width_m": .01,
-                            "max_grasp_width_m": .04, "release_clearance_m": .005}},
-        "workspace": {"min_m": [-.1, -.1, .01], "max_m": [.1, .1, .1]},
-        "owner": {"max_joint_state_age_s": .2, "action_timeout_s": 10., "wall_clock_bound_factor": 1.},
-        "power": {"supply_v": 12., "noted_load_a": .5},
-    }
+    path = Path(__file__).parent / "fixtures/synthetic_hardware_profile.json"
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def test_document_validation_does_not_admit_hardware(profile):

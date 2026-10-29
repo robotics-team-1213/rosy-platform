@@ -103,12 +103,18 @@ def each_alone(root: Path, files: list[str], options: list[str], workers: int = 
 
 
 def new_failures(report: str) -> list[str]:
-    """Failures in one file's run that test/known_failures.txt does not list."""
+    """Failures in one file's run that neither test/known_failures.txt nor flaky_quarantine.txt lists.
+
+    This gate looks for import isolation; a quarantined load-timing flake (g1 timing on the AI PC) stopped
+    every landing in its alone runs on 2026-10-28 while the main checks rerun it as FLAKY."""
     test_dir = str(Path(__file__).resolve().parents[1] / "test")
     if test_dir not in sys.path:
         sys.path.insert(0, test_dir)
     import known_failures
-    return known_failures.compare(report, known_failures.load_known(known_failures.LIST.read_text(encoding="utf-8")))[0]
+    listed = known_failures.load_known(known_failures.LIST.read_text(encoding="utf-8"))
+    if known_failures.QUARANTINE.is_file():
+        listed = {**listed, **known_failures.load_known(known_failures.QUARANTINE.read_text(encoding="utf-8"))}
+    return known_failures.compare(report, listed)[0]
 
 
 def report_line(files: list[str], done: dict) -> str:

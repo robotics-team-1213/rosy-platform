@@ -19,6 +19,11 @@ import re
 from pathlib import Path
 
 SERIAL_FILE = Path(__file__).with_name("serial_suites.txt")
+ALONE = "ROSY_BROWSER_ALONE=1"  # work_queue.ALONE_ENV: a timing-sensitive browser chunk
+# Suites that need the host to themselves (ROS_DOMAIN_ID, ports, subprocesses), not merely no -n: serial_suites.txt's
+# tools line (home-directory tools, collect_alone one file per process) and browser or node-id jobs are admitted
+# normally. land_isolation runs its timing files one at a time inside its own job.
+HOST_ALONE = ("integrations/simulation/gazebo/test", "learning/envs/isaac/test")
 JOB_MEM_GB = 6  # remote_job.JOB MemoryMax default (D-568 2)
 GB_PER_WORKER = 1.0  # shortcut: a guess, not measured; lower it once the measurement plan shows per-worker RSS
 MAX_WORKERS = int(JOB_MEM_GB // GB_PER_WORKER)
@@ -71,11 +76,17 @@ def plan(inv: list[str], headroom: dict | None, serial: list[str] | None = None)
         serial = load_serial(SERIAL_FILE.read_text(encoding="utf-8"))
     if headroom is None:
         return [], [], "serial: host below the floor (D-568 7 fallback)"
+    why = serial_reason(inv, serial)
+    # The host's JOB admission runs these with no other job on the host, from any run (HOST_ALONE, ALONE).
+    paths = [w.replace("\\", "/") for w in inv if not ENV_WORD.match(w) and not w.startswith("-")]
+    alone = ["ROSY_JOB_ALONE=1"] if ALONE in inv or any(p == a or p.startswith(a + "/") or a.startswith(p + "/")
+                                                        for p in paths for a in HOST_ALONE) else []
     if headroom["light"]:  # below the pytest memory floor: cap the job at what the host has free
         mem = max(1, int(headroom["mem"]))
-        return [f"ROSY_JOB_MEM_GB={mem}"], [], f"serial: light host, MemoryMax {mem} GB"
-    why = serial_reason(inv, serial)
-    n = 1 if why else workers(headroom["cores"], headroom["mem"], headroom["site"])
+        return [f"ROSY_JOB_MEM_GB={mem}", *alone], [], f"serial: light host, MemoryMax {mem} GB"
+    share = max(1, int(headroom.get("share", 1)))  # this run's main workers on the host (work_queue.main_workers)
+    n = 1 if why else workers(headroom["cores"] / share, headroom["mem"] / share, headroom["site"])
     if n == 1:
-        return [], [], f"serial: {why or 'not enough headroom for 2 workers'}"
-    return [f"ROSY_JOB_CORES={n}"], ["-n", str(n), "--dist", "loadfile"], f"xdist: {n} workers"
+        return alone, [], f"serial: {why or 'not enough headroom for 2 workers'}"
+    note = f"xdist: {n} workers" + (f" (1/{share} of the host)" if share > 1 else "")
+    return [f"ROSY_JOB_CORES={n}", *alone], ["-n", str(n), "--dist", "loadfile"], note

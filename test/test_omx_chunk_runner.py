@@ -64,6 +64,49 @@ def by_command(status, command):
     return [s for s in status if s["command"] == command]
 
 
+def test_checked_commands_bind_the_session_and_library_at_the_motion_boundary():
+    robot, status = Robot(), []
+    r = m.Runner(robot, library(), fps=30, status=status.append,
+                 operating_context={"scope": "simulation", "sha256": "a" * 64, "session_id": "current"})
+    r.target = list(HOME)
+    reviewed = m.digest(r.library)
+    r.command(f"checked other {reviewed} run approach_pinky")
+    assert not status[-1]["ok"] and "session" in status[-1]["error"]
+    r.library = {**r.library, "gripper_closed": 48.0}
+    r.command(f"checked current {reviewed} run approach_pinky")
+    assert not status[-1]["ok"] and "library" in status[-1]["error"]
+    assert not r.queue and not robot.sent
+
+
+def test_checked_load_validates_content_before_replacing_the_library(tmp_path):
+    import json
+
+    status = []
+    r = m.Runner(Robot(), library(), fps=30, status=status.append,
+                 operating_context={"session_id": "current"})
+    r.target = list(HOME)
+    original = r.library
+    candidate = {**library(), "fps": 30, "chunks": {"home": [HOME]}}
+    path = tmp_path / "candidate.json"
+    path.write_text(json.dumps(candidate))
+    r.command(f"checked current {'0' * 64} load {path}")
+    assert not status[-1]["ok"] and r.library is original
+    r.command(f"checked current {m.digest(candidate)} load {path}")
+    assert status[-1]["ok"] and r.library == candidate
+
+
+def test_manual_intervention_invalidates_the_automatic_command_chain():
+    status = []
+    r = m.Runner(Robot(), library(), fps=30, status=status.append,
+                 operating_context={"session_id": "current"})
+    r.target = list(HOME)
+    reviewed = m.digest(r.library)
+    r.command("grip 50")
+    assert r.operating_context["session_id"] != "current"
+    r.command(f"checked current {reviewed} run approach_pinky")
+    assert not status[-1]["ok"] and not r.queue
+
+
 def test_a_chunk_plays_then_holds_and_reports_the_settled_state():
     robot = Robot()
     status = runner(robot, ["run approach_pinky", "state", "state", "state", "stop"])
@@ -153,6 +196,37 @@ def test_park_runs_through_the_runner_and_needs_a_home_chunk():
     assert done["settled"] and done["state"][:5] == pytest.approx(HOME[:5])
     refused = runner(Robot(), ["park", "stop"])  # library() has no home chunk
     assert refused[1]["ok"] is False and "home chunk" in refused[1]["error"]
+
+
+def test_a_session_nobody_talks_to_folds_home_then_ends_so_torque_goes_off():
+    lib = library()
+    lib["chunks"]["home"] = [HOME]
+    robot, status, clock, queue = Robot(), [], [0.0], ["run approach_pinky"]  # then the link is lost
+    r = m.Runner(robot, lib, fps=30, status=status.append, clock=lambda: clock[0],
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+    r.run(lambda: [queue.pop(0)] if queue and not r.chunk else [])  # returns: the session ends by itself
+    park, end = by_command(status, "run park")[0], status[-1]
+    assert park["ok"] and park["state"][:5] == pytest.approx(HOME[:5])
+    assert end["command"] == "stop" and "no command" in end["reason"]
+    assert clock[0] >= m.IDLE_PARK_S + m.IDLE_STOP_S
+
+
+def test_a_caller_that_keeps_asking_for_state_keeps_the_arm_where_it_is():
+    lib = library()
+    lib["chunks"]["home"] = [HOME]
+    status, clock, sent = [], [0.0], []
+
+    def lines():  # a `state` every 100 s for 10 minutes, then stop
+        due = int(clock[0] // 100)
+        if due > len(sent):
+            sent.append(due)
+            return ["stop"] if clock[0] > 600 else ["state"]
+        return ["run approach_pinky"] if not sent and clock[0] < 1 / 30 else []
+
+    r = m.Runner(Robot(), lib, fps=30, status=status.append, clock=lambda: clock[0],
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+    r.run(lines)
+    assert not by_command(status, "run park") and status[-1]["command"] == "stop" and "reason" not in status[-1]
 
 
 class Bus:
@@ -272,6 +346,102 @@ def test_a_blocked_arm_stops_the_runner():
                  sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
     with pytest.raises(RuntimeError, match="following error"):
         r.run(lambda: [queue.pop(0)] if queue else [])
+
+
+class GuardStops(Robot):
+    """The guard raises in the middle of a chunk (following error), or the bus dies and reads fail too."""
+
+    def __init__(self, after, bus_dead=False):
+        super().__init__()
+        self.after, self.bus_dead, self.dead = after, bus_dead, False
+
+    def send_action(self, action):
+        if len(self.sent) >= self.after:
+            self.dead = self.bus_dead
+            raise ValueError("wrist_flex: following error >5 motor degrees; command=3344, current=3287")
+        super().send_action(action)
+
+    def get_observation(self):
+        if self.dead:
+            raise ConnectionError("Failed to sync read 'Present_Position'")
+        return super().get_observation()
+
+
+@pytest.mark.parametrize("bus_dead", [False, True])
+def test_a_session_that_ends_mid_chunk_says_so_in_its_last_status(bus_dead):
+    status, clock, queue = [], [0.0], ["run approach_pinky"]
+    r = m.Runner(GuardStops(after=4, bus_dead=bus_dead), library(), fps=30, status=status.append,
+                 clock=lambda: clock[0], sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+    with pytest.raises(ValueError, match="following error"):  # the stop itself is untouched
+        r.run(lambda: [queue.pop(0)] if queue else [])
+    last = status[-1]
+    assert last["command"] == "run approach_pinky" and last["ok"] is False
+    assert last["fault"].startswith("session ended: ValueError: wrist_flex: following error")
+
+
+class SlowWrist(Robot):
+    """wrist_flex follows at most `rate` units a tick, and the guard stops past 2.78 units (5 motor degrees)."""
+
+    def __init__(self, rate=0.1):
+        super().__init__()
+        self.rate, self.worst = rate, 0.0
+
+    def send_action(self, action):
+        self.sent.append(action)
+        for i, name in enumerate(m.NAMES):
+            step = action[name] - self.pos[i]
+            self.pos[i] += max(-self.rate, min(self.rate, step)) if i == 3 else step
+        self.worst = max(self.worst, abs(action["wrist_flex.pos"] - self.pos[3]))
+        if self.worst > 2.78:
+            raise ValueError("wrist_flex: following error >5 motor degrees")
+        return action
+
+
+@pytest.mark.parametrize("paced", [True, False])
+def test_a_lagging_joint_holds_the_next_frame_until_it_catches_up_before_the_guard_stops(monkeypatch, paced):
+    if not paced:
+        monkeypatch.setattr(m, "PACE_LAG", 99.0)
+    lift = library()
+    lift["chunks"]["approach_pinky"] = [[0.0, -60.0, 50.0, 45.0 + 0.15 * k, 10.0, 46.6] for k in range(1, 101)]
+    robot, status, clock, queue = SlowWrist(), [], [0.0], ["run approach_pinky", "stop"]
+    r = m.Runner(robot, lift, fps=30, status=status.append, clock=lambda: clock[0],
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+    if not paced:  # the wrist falls 0.05 units a tick further behind and the guard turns torque off
+        with pytest.raises(ValueError, match="following error"):
+            r.run(lambda: [queue.pop(0)] if queue and not r.chunk else [])
+        return
+    r.run(lambda: [queue.pop(0)] if queue and not r.chunk else [])
+    done = by_command(status, "run approach_pinky")[0]
+    assert done["ok"] and done["settled"] and done["paced_ticks"] > 0
+    assert 60.0 - done["state"][3] <= m.PACE_LAG + 0.2  # the whole chunk played; settled within the runner's tolerance
+    assert robot.worst < m.PACE_LAG + 0.2  # held near the pace bound, far from the guard's
+
+
+class DroopingWrist(SlowWrist):
+    """Reached out, the wrist sits `droop` units under its command even at rest (2.08 over the conveyor)."""
+
+    def __init__(self, droop=2.0):
+        super().__init__(rate=1.0)
+        self.droop = droop
+
+    def send_action(self, action):
+        self.sent.append(action)
+        for i, name in enumerate(m.NAMES):
+            self.pos[i] = action[name] - (self.droop if i == 3 else 0.0)
+        self.worst = max(self.worst, abs(action["wrist_flex.pos"] - self.pos[3]))
+        return action
+
+
+def test_a_steady_droop_is_not_waited_out_frame_by_frame():
+    lift = library()
+    lift["chunks"]["approach_pinky"] = [[0.0, -60.0, 50.0, 45.0 + 0.15 * k, 10.0, 46.6] for k in range(1, 101)]
+    status, clock, queue = [], [0.0], ["run approach_pinky", "stop"]
+    r = m.Runner(DroopingWrist(), lift, fps=30, status=status.append, clock=lambda: clock[0],
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+    r.run(lambda: [queue.pop(0)] if queue and not r.chunk else [])
+    done = by_command(status, "run approach_pinky")[0]
+    assert done["ok"] and done["paced_ticks"] <= 3  # one look at a lag that does not shrink, then on
+    assert clock[0] < 100 / 30 + m.SETTLE_S + 1  # 2026-10-28: one frame per 3 s took a park past 300 s
 
 
 def test_the_library_contract_is_enforced(tmp_path):

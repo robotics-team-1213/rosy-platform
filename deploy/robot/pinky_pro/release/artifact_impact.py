@@ -58,6 +58,11 @@ NO_PINKY_FILES = {
     "deploy/progress.md",
 }
 
+# These execute from the frozen OS/bootstrap closure, not the switchable SDK.
+# Policy is trusted snapshot data; never import candidate OS code to classify it.
+OS_NATIVE_PREFIXES = ("os_", "rosy-os-", "rosy-rauc-")
+OS_NATIVE_FILES = frozenset({"media_layout.py"})
+
 
 @dataclass(frozen=True)
 class PathImpact:
@@ -105,6 +110,8 @@ def _classify_path(path: str) -> PathImpact:
                       for name in ('rosy-first-boot.py', 'rosy-first-boot.sh')}:
         return PathImpact(path, 'native-payload', 'signed boot catalog; bridge capability and compatibility gates required')
     if normalized.startswith('deploy/robot/pinky_pro/native/'):
+        if name.startswith(OS_NATIVE_PREFIXES) or name in OS_NATIVE_FILES:
+            return PathImpact(path, 'flashable-image', 'frozen privileged OS lifecycle requires A/B OS delivery')
         if name.endswith(('.service', '.timer', '.path', '.target')) and name not in _ota_units():
             return PathImpact(path, 'review', 'unit has no installed image-layer destination')
         return PathImpact(path, 'native-payload', 'signed native runtime; installed-image compatibility gates required')
@@ -129,6 +136,18 @@ def classify_paths(paths: list[str] | tuple[str, ...]) -> ImpactReport:
     else:
         impact = "none"
     return ImpactReport(impact=impact, paths=classified)
+
+
+def delivery_policy(paths: list[str] | tuple[str, ...]) -> str:
+    """Executable CD route; delta additionally needs authenticated artifact checks.
+
+    Host release tooling does not change the robot's installed payload. Unknown
+    paths retain the existing review gate. OS delivery requires its own approval.
+    """
+    robot_paths = [path for path in paths if not path.startswith("tools/release/")]
+    impact = classify_paths(robot_paths).impact
+    return {"none": "none", "native-payload": "full-payload",
+            "flashable-image": "os-image", "review": "review"}[impact]
 
 
 def select_impact(base: str, head: str, *, repository: Path | str = ".") -> ImpactReport:

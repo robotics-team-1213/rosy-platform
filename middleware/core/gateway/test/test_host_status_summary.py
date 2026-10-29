@@ -16,6 +16,7 @@ from types import SimpleNamespace
 import pytest
 from core_api_web.api.app import create_app
 from core_api_web.api.v1 import host as host_api
+from core.system.host_files import HostFileExchange
 from core_common import robot_state
 
 VIEWER_TOKEN = "viewer-token"
@@ -60,7 +61,7 @@ def _get(tmp_path: Path, *, mode: str = "core", token: str = VIEWER_TOKEN, **ser
     from fastapi.testclient import TestClient
 
     config = _config(tmp_path, mode)
-    svc = SimpleNamespace(config=config, state=services.pop("state", None), **services)
+    svc = SimpleNamespace(host_files=HostFileExchange(), config=config, state=services.pop("state", None), **services)
     return TestClient(create_app(config, svc)).get(
         "/api/v1/host/status-summary", headers={"Authorization": f"Bearer {token}"} if token else {})
 
@@ -174,14 +175,14 @@ def test_a_malformed_boot_status_is_not_trusted(tmp_path, content):
     (tmp_path / "run/rosy-boot").mkdir(parents=True, exist_ok=True)
     (tmp_path / "run/rosy-boot/boot-status.json").write_text(content, encoding="utf-8")
 
-    assert host_api.read_boot_status(str(tmp_path / "run/rosy-boot/boot-status.json")) is None
+    assert HostFileExchange().read_boot_status(str(tmp_path / "run/rosy-boot/boot-status.json")) is None
 
 
 def test_an_oversized_boot_status_is_not_read(tmp_path):
     path = tmp_path / "boot-status.json"
     path.write_text(json.dumps({"stage": "CORE_READY", "pad": "x" * 9000}), encoding="utf-8")
 
-    assert host_api.read_boot_status(str(path)) is None
+    assert HostFileExchange().read_boot_status(str(path)) is None
 
 
 @pytest.mark.skipif(os.name != "posix", reason="symlinks")
@@ -191,7 +192,7 @@ def test_a_symlinked_boot_status_is_never_followed(tmp_path):
     link = tmp_path / "boot-status.json"
     link.symlink_to(real)
 
-    assert host_api.read_boot_status(str(link)) is None
+    assert HostFileExchange().read_boot_status(str(link)) is None
 
 
 def test_human_answers_reach_the_summary_through_the_card_overlay(tmp_path):
@@ -288,10 +289,10 @@ def test_the_boot_display_and_the_summary_say_the_same_state(tmp_path, case):
             "observed": True, "by": "t", "label": "관리자", "at": "2026-09-26T05:00:00+00:00"}}}), encoding="utf-8")
     _boot(tmp_path, "CORE_READY")
     _hardware(tmp_path, devices)
-    svc = SimpleNamespace(config=config, state=FakeState(battery, 7.4, evidence=evidence),
+    svc = SimpleNamespace(host_files=HostFileExchange(), config=config, state=FakeState(battery, 7.4, evidence=evidence),
                           safety=SimpleNamespace(battery_policy=SimpleNamespace(warning_percent=warning)))
 
-    host_api.write_status_inputs(svc)
+    svc.host_files.write_status_inputs(svc)
     pytest.importorskip("httpx")
     from fastapi.testclient import TestClient
 
@@ -320,10 +321,10 @@ SCHEMA_2_KEYS = {"velocity_linear", "velocity_angular", "battery_percent", "batt
 def test_the_status_inputs_carry_only_the_threshold_the_states_and_the_mode(tmp_path):
     config = _m1_config(tmp_path)
     _hardware(tmp_path, [_device("camera", "no_response", label="카메라")])
-    svc = SimpleNamespace(config=config, state=FakeState(80.0, 8.0, mode="NAVIGATION", nav="BLOCKED"),
+    svc = SimpleNamespace(host_files=HostFileExchange(), config=config, state=FakeState(80.0, 8.0, mode="NAVIGATION", nav="BLOCKED"),
                           safety=SimpleNamespace(battery_policy=SimpleNamespace(warning_percent=25.0)))
 
-    host_api.write_status_inputs(svc)
+    svc.host_files.write_status_inputs(svc)
     written = json.loads((tmp_path / "run/rosy/status-inputs.json").read_text(encoding="utf-8"))
 
     assert set(written) == SCHEMA_1_KEYS | SCHEMA_2_KEYS | {
@@ -342,10 +343,10 @@ def test_the_status_inputs_carry_only_the_threshold_the_states_and_the_mode(tmp_
 def test_an_unknown_or_missing_mode_is_written_as_absent(tmp_path, mode, nav):
     # D-380/D-381: both are additive — a value outside the enums is absent, never guessed.
     config = _m1_config(tmp_path)
-    svc = SimpleNamespace(config=config, state=FakeState(80.0, 8.0, mode=mode, nav=nav),
+    svc = SimpleNamespace(host_files=HostFileExchange(), config=config, state=FakeState(80.0, 8.0, mode=mode, nav=nav),
                           safety=SimpleNamespace(battery_policy=SimpleNamespace(warning_percent=20.0)))
 
-    host_api.write_status_inputs(svc)
+    svc.host_files.write_status_inputs(svc)
     written = json.loads((tmp_path / "run/rosy/status-inputs.json").read_text(encoding="utf-8"))
 
     assert written["robot_mode"] is None and written["nav_state"] is None
@@ -353,10 +354,10 @@ def test_an_unknown_or_missing_mode_is_written_as_absent(tmp_path, mode, nav):
 
 def test_a_core_without_a_state_manager_writes_no_mode(tmp_path):
     config = _m1_config(tmp_path)
-    svc = SimpleNamespace(config=config, state=None,
+    svc = SimpleNamespace(host_files=HostFileExchange(), config=config, state=None,
                           safety=SimpleNamespace(battery_policy=SimpleNamespace(warning_percent=20.0)))
 
-    host_api.write_status_inputs(svc)
+    svc.host_files.write_status_inputs(svc)
     written = json.loads((tmp_path / "run/rosy/status-inputs.json").read_text(encoding="utf-8"))
 
     assert written["robot_mode"] is None
@@ -387,9 +388,9 @@ def _evidence(**channels) -> dict:
 def _schema_2_written(tmp_path: Path, snapshot, devices=()) -> dict:
     config = _m1_config(tmp_path)
     _hardware(tmp_path, list(devices))
-    svc = SimpleNamespace(config=config, state=SnapshotState(snapshot),
+    svc = SimpleNamespace(host_files=HostFileExchange(), config=config, state=SnapshotState(snapshot),
                           safety=SimpleNamespace(battery_policy=SimpleNamespace(warning_percent=20.0)))
-    host_api.write_status_inputs(svc)
+    svc.host_files.write_status_inputs(svc)
     return json.loads((tmp_path / "run/rosy/status-inputs.json").read_text(encoding="utf-8"))
 
 
@@ -448,11 +449,34 @@ def test_one_write_reads_one_snapshot(tmp_path):
             return self.value
 
     config = _m1_config(tmp_path)
-    svc = SimpleNamespace(config=config, state=CountingState(s.StateSnapshot(robot_id="rosy_01")),
+    svc = SimpleNamespace(host_files=HostFileExchange(), config=config, state=CountingState(s.StateSnapshot(robot_id="rosy_01")),
                           safety=SimpleNamespace(battery_policy=SimpleNamespace(warning_percent=20.0)))
-    host_api.status_inputs(svc)
+    svc.host_files.status_inputs(svc)
 
     assert CountingState.calls == 1
+
+
+def test_one_write_shares_its_snapshot_with_hardware_topic_overlays(tmp_path):
+    from core_common.protocol import schemas as s
+
+    class CountingState(SnapshotState):
+        calls = 0
+
+        def snapshot(self):
+            self.calls += 1
+            return self.value
+
+    config = _m1_config(tmp_path)
+    _hardware(tmp_path, [{**_device("adc.battery", "not_measured"), "held_by": "rosy-io.service"}])
+    state = CountingState(s.StateSnapshot(robot_id="rosy_01", battery=s.Battery(percent=55., voltage=8.),
+                                        evidence=_evidence(battery="fresh")))
+    svc = SimpleNamespace(config=config, state=state, host_files=HostFileExchange())
+    svc.host_files.write_status_inputs(svc)
+    written = json.loads(Path(config["hardware_probe"]["status_inputs_path"]).read_text())
+
+    assert state.calls == 1
+    assert written["devices"] == [{"id": "adc.battery", "state": "ok", "product": True}]
+    assert written["battery_percent"] == 55.
 
 
 def test_core_handover_exports_effective_law_without_private_credentials(tmp_path):
@@ -462,10 +486,10 @@ def test_core_handover_exports_effective_law_without_private_credentials(tmp_pat
     config = _m1_config(tmp_path)
     config['auth'] = dict(tokens=[dict(token='never-export')])
     config['line_follow'] = dict(steering_gain=.8)
-    svc = SimpleNamespace(config=config, state=SnapshotState(StateSnapshot(robot_id='rosy_02')),
+    svc = SimpleNamespace(host_files=HostFileExchange(), config=config, state=SnapshotState(StateSnapshot(robot_id='rosy_02')),
         safety=SimpleNamespace(battery_policy=SimpleNamespace(warning_percent=20.)),
         line_follow=SimpleNamespace(config=LineFollowConfig(**law)))
-    data = host_api.status_inputs(svc)
+    data = svc.host_files.status_inputs(svc)
     assert data['robot_id'] == 'rosy_02'
     assert data['core_process_id'] == os.getpid()
     assert data['line_follow_steering_law'] == law

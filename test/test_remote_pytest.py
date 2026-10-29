@@ -477,6 +477,7 @@ def test_timeout_is_a_failed_step(monkeypatch):
 def _fake_hosts(monkeypatch, tmp_path, hosts, job, venv_fails=()):
     """run() over fake hosts: setup succeeds (venv fails on venv_fails), job(host, inv) is one pytest."""
     seen = []
+    monkeypatch.setattr(wq, "MAX_MAIN", 1)  # one main worker per host; several: test_host_admission.py
     monkeypatch.delenv("ROSY_TEST_LOCAL", raising=False)
     monkeypatch.setattr(rp, "git", lambda repo, *args: str(tmp_path) if "--show-toplevel" in args else "ab" * 20)
     monkeypatch.setattr(rp, "probe", lambda h: None if h.startswith("down") else host())
@@ -746,7 +747,7 @@ def test_exit_code_counts_only_when_complete_and_chatter_is_ignored():
     assert 'mv -f "$D/$K.rc.tmp" "$D/$K.rc"' in rj.JOB
     assert '[ -f "$D/$2.rc" ]' in rj.POLL and rj.POLL.index(".rc") < rj.POLL.index("tail")
     assert 'rm -f "$L"' in rj.JOB.split("trap '", 1)[1].split("' EXIT", 1)[0]
-    assert 'echo "$$ pytest 2 6" > "$L"' in rj.JOB  # the lock pid is the detached job's own
+    assert 'echo $$ > "$D/$K.pid"' in rj.JOB and 'L=~/rosy-jobs/$1.$4.lock' in rj.JOB  # one lock per job
     assert 'X=browser' in rj.JOB and 'echo "$$ $X $RC $G" > "$L"' in rj.JOB  # PROBE counts browser jobs per host
 
 
@@ -782,6 +783,12 @@ def test_a_dropped_link_reruns_only_steps_given_tries(monkeypatch):
     assert rp.remote("h", rp.CLEANUP, "run1", timeout=1).returncode == 255 and len(calls) == 1
     src = inspect.getsource(rp.run_on)
     assert 'STEP_TIMEOUT["venv"], tries=3' in src, "venv setup reruns (its recipe locks and rebuilds from scratch)"
+
+
+@pytest.fixture(autouse=True)
+def _one_main_worker(monkeypatch):
+    """These tests pin one main worker per host; several workers and host admission: test_host_admission.py."""
+    monkeypatch.setattr(wq, "MAX_MAIN", 1)
 
 
 def _job_env(tmp_path, python_body):
@@ -840,7 +847,7 @@ def test_detached_job_holds_its_own_lock_and_writes_the_code_atomically(tmp_path
                                    'sleep 2; echo "args $* mode $(stat -c %a "$4")"; exit 3\n')
     start = _sh(rj.START, env, "r", "d", "", "0", "60", rj.JOB, "test/x.py", "-q")
     assert start.returncode == 0, start.stderr
-    lock, jobs = home / "rosy-jobs" / "r.lock", home / "rosy-test" / "runs" / "r.jobs"
+    lock, jobs = home / "rosy-jobs" / "r.0.lock", home / "rosy-test" / "runs" / "r.jobs"
     pid = _wait_for_lock(lock)
     assert lock.read_text().split()[1:] == ["pytest", "2", "6"]
     assert os.getpgid(pid) == pid  # KILL's process-group target
@@ -908,9 +915,9 @@ def test_kill_stops_the_detached_job_and_its_trap_still_runs(tmp_path):
     move.chmod(0o755)
     try:
         assert _sh(rj.START, env, "r", "d", "", "0", "60", rj.JOB).returncode == 0
-        lock = home / "rosy-jobs" / "r.lock"
+        lock = home / "rosy-jobs" / "r.0.lock"
         _wait_for_lock(lock)
-        _sh(rj.KILL, env, "r")
+        _sh(rj.KILL, env, "r", "0")
         assert _poll_until_done(env) == 143 and not lock.exists()
     finally:
         (home / "release").touch()
@@ -980,7 +987,7 @@ def test_killed_job_shows_no_live_pid_and_no_code_and_start_does_not_rerun_a_fin
         pytest.skip("Linux setsid/timeout/ionice are required")
     home, env = _job_env(tmp_path, "sleep 30\n")
     assert _sh(rj.START, env, "r", "d", "", "0", "60", rj.JOB).returncode == 0
-    pid = _wait_for_lock(home / "rosy-jobs" / "r.lock")
+    pid = _wait_for_lock(home / "rosy-jobs" / "r.0.lock")
     assert rj.parse_poll(_sh(rj.POLL, env, "r", "0", "0").stdout)[:2] == (None, True)
     os.killpg(pid, 9)  # host reboot / OOM kill: no trap, no exit code
     for _ in range(50):
@@ -1250,7 +1257,7 @@ def test_plan_gives_xdist_words_and_args_only_to_safe_invocations_on_full_hosts(
     full = {"cores": 14.0, "mem": 10.0, "site": False, "light": False}
     words, extra, note = xp.plan(GROUP, full, [])
     assert (words, extra, note) == (["ROSY_JOB_CORES=6"], ["-n", "6", "--dist", "loadfile"], "xdist: 6 workers")
-    assert xp.plan(["test"], full, ["test"])[:2] == ([], [])
+    assert xp.plan(["test"], full, ["test"])[:2] == ([], [])  # serial (no -n), not alone on the host
     assert xp.plan(GROUP, None, [])[:2] == ([], [])  # D-568 7 fallback host: unmeasured, serial
     assert xp.plan(GROUP, {**full, "light": True, "mem": 4.7}, [])[:2] == (["ROSY_JOB_MEM_GB=4"], [])
 
@@ -1298,7 +1305,7 @@ def test_venv_installs_pinned_xdist_so_its_hash_rebuilds_the_venv():
 def test_job_records_its_xdist_budget_in_the_lock_and_caps_memory(tmp_path, words, lock, mem):
     if not shutil.which("setsid") or sys.platform == "win32":
         pytest.skip("Linux setsid/timeout/ionice are required")
-    home, env = _job_env(tmp_path, 'cat "$HOME/rosy-jobs/r.lock"\n')
+    home, env = _job_env(tmp_path, 'cat "$HOME/rosy-jobs/r.0.lock"\n')
     (tmp_path / "bin" / "systemd-run").write_text(
         '#!/bin/bash\necho "$*" > "$HOME/scope"\nwhile [ "$1" != -- ]; do shift; done; shift; exec "$@"\n')
     start = _sh(rj.START, env, "r", "d", "", "0", "60", rj.JOB, *words, "x.py")

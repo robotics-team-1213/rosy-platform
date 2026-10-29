@@ -140,10 +140,10 @@ def create_app(collector: Collector, *, web_root: Path | None = None):
 
     if web_root is not None:
         root = Path(web_root).resolve(strict=True)
-        assets = {'/': 'index.html', '/monitoring.js': 'monitoring.js', '/monitoring.css': 'monitoring.css'}
-        for route, name in assets.items():
+        from .web_assets import ASSETS
+        for route, name in ASSETS.items():
             path = (root / name).resolve(strict=True)
-            if path.parent != root or not path.is_file():
+            if not path.is_relative_to(root) or not path.is_file():
                 raise ValueError('monitoring web assets unavailable')
             def asset_handler(asset_path):
                 async def asset():

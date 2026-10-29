@@ -13,7 +13,7 @@ POWERSHELL = shutil.which("powershell.exe")
 
 @pytest.mark.skipif(POWERSHELL is None, reason="Windows PowerShell is required for the Windows SD guide")
 @pytest.mark.parametrize("script,success", [
-    ("Setup-MovedDevice.Tests.ps1", "All 6 guided SD self-checks passed"),
+    ("Setup-MovedDevice.Tests.ps1", "All 8 guided SD self-checks passed"),
     ("Sd-SetupSettings.Tests.ps1", "SD settings and three-card fixture checks passed"),
 ])
 def test_guided_setup_keeps_settings_and_media_guards(script, success):
