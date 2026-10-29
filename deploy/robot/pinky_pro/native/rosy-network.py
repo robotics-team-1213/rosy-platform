@@ -116,7 +116,15 @@ def load_policy(root: Path) -> dict:
         except Exception:
             # Keep close supervision alive without downgrading malformed defaults to an open AP.
             return {**policy, "mode": "off"}
-    policy.update({key: value for key, value in _read_json(root / "etc/rosy/network-policy.json").items()
+    try:
+        override = json.loads((root / "etc/rosy/network-policy.json").read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        override = {}
+    except (OSError, ValueError):
+        return {**policy, "mode": "off"}
+    if not isinstance(override, dict):
+        return {**policy, "mode": "off"}
+    policy.update({key: value for key, value in override.items()
                    if key in {"mode", "fallback_security", "grace_seconds", "hold_seconds", "ssid", "country"}})
     return policy
 
