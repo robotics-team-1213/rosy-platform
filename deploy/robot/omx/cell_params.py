@@ -55,6 +55,7 @@ DEFAULTS = {
     "pinch.mount_tol_px": (40.0, "px", 5, 200),
     "look.enabled": (0, "flag", 0, 1), "look.tol_mm": (3.0, "mm", 0.5, 20), "look.max_iter": (4, "count", 0, 6),
     "look.max_total_mm": (30.0, "mm", 5, 80), "push.look_tol_mm": (6.0, "mm", 1, 15), "look.near_px": (40.0, "px", 10, 150),
+    "look.other_finger_deg": (229.5, "deg", 0, 360), "look.other_finger_mm": (34.4, "mm", 10, 60),
     "objects.drop_shadow": (1, "flag", 0, 1), "objects.shadow_tol": (12.0, "lab", 2, 40), "objects.shadow_min_light": (0.45, "ratio", 0.1, 0.9),
     "objects.top_v_frac": (0.8, "ratio", 0, 0.95),
     "grasp.end_frac": (0.7, "ratio", 0, 1),

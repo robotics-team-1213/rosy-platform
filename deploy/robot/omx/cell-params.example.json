@@ -650,6 +650,18 @@
   "source": "measured",
   "evidence": "2026-10-29: a push keeps push.gap_mm (20) from the box; 6 mm off still meets it"
  },
+ "look.other_finger_deg": {
+  "value": 229.5,
+  "unit": "deg",
+  "source": "tuned",
+  "evidence": "2026-10-29 board pivot point, jaws marked at fk yaw 3.2/12.5/30.2: the mark at yaw + 288.8/284.8/280.6 deg about the circle fitted on the other finger (phase 55.2): 284.7 - 55.2"
+ },
+ "look.other_finger_mm": {
+  "value": 34.4,
+  "unit": "mm",
+  "source": "tuned",
+  "evidence": "2026-10-29 board pivot point, the same marks: 31.7/33.1/38.3 mm from the circle's centre"
+ },
  "look.near_px": {
   "value": 40.0,
   "unit": "px",

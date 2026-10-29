@@ -33,6 +33,11 @@ def look(cell, config: dict, record: dict, site: str, target: dict, write_librar
     params, region = config.get("params"), target.get("bias_region") or {}
     box, start = target["object"]["raw_m"], (target["pick"]["x"], target["pick"]["y"])
     rows, total = [], 0.0
+    # the pivot circle follows the finger the camera saw then; the arm link hides it at some yaws and the other finger
+    # shows (2026-10-29 board: yaw 3-31 the mark sat at yaw + 285 deg, the circle said yaw + 55; the look searched 70 mm
+    # away and refused). Both fingers turn about the TCP, so the other is a fixed angle and radius from the first.
+    fingers = [region, dict(region, phase_deg=region["phase_deg"] + prm.get(params, "look.other_finger_deg"),
+                            radius_mm=prm.get(params, "look.other_finger_mm"))]
 
     def out(verdict, **extra):  # the hover chain records verdict, dx_mm, dy_mm, total_mm for every hook
         moved = (1000 * (target["pick"]["x"] - start[0]), 1000 * (target["pick"]["y"] - start[1]))
@@ -44,18 +49,22 @@ def look(cell, config: dict, record: dict, site: str, target: dict, write_librar
         if state is None or commanded is None:
             return out("refuse", why="no arm state")
         x, y, z, yaw = cell_pivot.joints_tcp(state)
-        bias, a = region.get("bias_mm", [0.0, 0.0]), math.radians(yaw + region["phase_deg"])
-        expect = (x + bias[0] / 1000 + region["radius_mm"] / 1000 * math.cos(a), y + bias[1] / 1000 + region["radius_mm"] / 1000 * math.sin(a))
-        near = (cell_pivot.mark_pixel(record, config, site, expect, z), prm.get(params, "look.near_px"))
-        pixel = cell_pivot.mark_jaws(cell, config, sleep, near=near)
+        bias = region.get("bias_mm", [0.0, 0.0])
+        expected = []
+        for f in fingers:
+            a = math.radians(yaw + f["phase_deg"])
+            expect = (x + bias[0] / 1000 + f["radius_mm"] / 1000 * math.cos(a), y + bias[1] / 1000 + f["radius_mm"] / 1000 * math.sin(a))
+            expected.append(cell_pivot.mark_pixel(record, config, site, expect, z))
+        pixel = cell_pivot.mark_jaws(cell, config, sleep, near=(expected, prm.get(params, "look.near_px")))
         if pixel is None:
-            rows.append({"look": i, "seen": False, "expected_px": [round(v, 1) for v in near[0]]})
+            rows.append({"look": i, "seen": False, "expected_px": [[round(v, 1) for v in e] for e in expected]})
             # no measurement, no descent: a look that passed unseen let a push come down on a box (2026-10-29)
             return out("refuse", why="jaw mark not seen near where the jaws should be")
-        tcp = tcp_from_mark(cell_pivot.mark_to_arm(record, config, site, pixel, z), yaw, region)
+        k = min(range(len(fingers)), key=lambda j: math.dist(pixel, expected[j]))
+        tcp = tcp_from_mark(cell_pivot.mark_to_arm(record, config, site, pixel, z), yaw, fingers[k])
         d = (box[0] - tcp[0], box[1] - tcp[1])
         off = 1000 * math.hypot(*d)
-        rows.append({"look": i, "mark_px": [round(v, 1) for v in pixel], "fk_m": [round(x, 4), round(y, 4)],
+        rows.append({"look": i, "mark_px": [round(v, 1) for v in pixel], "finger": k, "fk_m": [round(x, 4), round(y, 4)],
                      "box_minus_tcp_mm": [round(1000 * d[0], 1), round(1000 * d[1], 1)]})
         if off <= (prm.get(params, "look.tol_mm") if tol_mm is None else tol_mm):
             return out("pass")
