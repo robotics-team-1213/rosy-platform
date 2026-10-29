@@ -26,6 +26,7 @@ import re
 import subprocess
 import sys
 import tarfile
+import xml.etree.ElementTree as ET
 from typing import Callable
 from itertools import islice
 
@@ -102,8 +103,14 @@ def run_command(argv: list[str]) -> tuple[int, str]:
     return completed.returncode, output
 
 
-def _read_text(path: Path) -> str | None:
+def _read_text(path: Path, limit: int | None = None) -> str | None:
     try:
+        if limit is not None:
+            if path.is_symlink():
+                return None
+            with path.open('rb') as stream:
+                data = stream.read(limit + 1)
+            return data.decode('utf-8', 'replace') if len(data) <= limit else None
         return path.read_bytes().decode("utf-8", "replace")
     except OSError:
         return None
@@ -112,7 +119,7 @@ def _read_text(path: Path) -> str | None:
 def correlation(root: Path) -> dict:
     boot_id = (_read_text(root / "proc/sys/kernel/random/boot_id") or "").strip() or None
     try:
-        identity = json.loads(_read_text(root / "etc/rosy/device-identity.json") or "{}")
+        identity = json.loads(_read_text(root / "etc/rosy/device-identity.json", 32 * 1024) or "{}")
     except ValueError:
         identity = {}
     if not isinstance(identity, dict):
@@ -135,6 +142,78 @@ def correlation(root: Path) -> dict:
         "uptime_s": uptime,
         "collected_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
     }
+
+
+def mdns_diagnostic(root: Path, run: Runner) -> dict:
+    """Compare bounded public local facts, never browse or establish network reachability."""
+    def public_json(relative):
+        try:
+            value = json.loads(_read_text(root / relative, 32 * 1024) or '{}')
+            return value if isinstance(value, dict) else {}
+        except ValueError:
+            return {}
+
+    def hostname(value):
+        if isinstance(value, str) and re.fullmatch(r'[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?', value.strip().lower()):
+            return value.strip().lower()
+        return None
+
+    reasons = []
+    expected = hostname(public_json('etc/rosy/device-identity.json').get('hostname'))
+    configured = hostname(_read_text(root / 'etc/hostname', 1024))
+    code, output = run(['hostname', '-s'])
+    live = hostname(output) if code == 0 else None
+    for value, label in [(expected, 'identity'), (configured, 'configured_hostname'), (live, 'live_hostname')]:
+        if value is None:
+            reasons.append(label + '_unavailable')
+        elif expected and value != expected:
+            reasons.append(label + '_mismatch')
+    code, output = run(['systemctl', 'is-active', 'avahi-daemon.service'])
+    state = output.strip()
+    if state not in {'active', 'inactive', 'failed', 'activating', 'deactivating'} or (state == 'active' and code != 0):
+        state = 'unknown'
+    if state != 'active':
+        reasons.append('avahi_unavailable' if state == 'unknown' else 'avahi_inactive')
+
+    status = public_json('run/rosy-boot/boot-status.json')
+    port, tls, tls_host = (status.get(k) for k in ('api_port', 'api_tls', 'api_tls_host'))
+    valid = type(port) is int and 1 <= port <= 65535 and tls in {'none', 'required'}
+    if tls == 'required':
+        valid = valid and isinstance(tls_host, str) and tls_host.endswith('.local') and hostname(tls_host[:-6]) is not None
+    if not valid:
+        reasons.append('expectations_unavailable')
+    checks = {}
+    path = root / 'etc/avahi/services/rosy.service'
+    text = _read_text(path, 32 * 1024)
+    try:
+        if text is None or '<!ENTITY' in text.upper():
+            raise ValueError('missing, oversized or unsupported XML')
+        tree = ET.fromstring(text)  # ElementTree does not fetch the external house DTD.
+        services = tree.findall('service')
+        if tree.tag != 'service-group' or len(services) != 1:
+            raise ValueError('expected one ROSY service')
+        service, name = services[0], tree.find('name')
+        pairs = [node.text.split('=', 1) for node in service.findall('txt-record') if node.text and '=' in node.text]
+        fields = dict(pairs)
+        checks = {
+            'name': name is not None and name.get('replace-wildcards') == 'yes' and name.text in {'ROSY %h', 'ROSY %H'},
+            'type': service.findtext('type') == '_rosy._tcp',
+            'txt': len(fields) == len(pairs) and all(fields.get(k) == v for k, v in
+                   {'product': 'rosy', 'role': 'robot', 'proto': 'core-v1'}.items()),
+            'port': valid and service.findtext('port') == str(port),
+            'tls': valid and fields.get('tls') == tls,
+            'tls_host': valid and (fields.get('tls_host') == tls_host if tls == 'required' else 'tls_host' not in fields),
+            'host': service.findtext('host-name') in (None, (expected + '.local') if expected else ''),
+        }
+        if not all(checks.values()):
+            reasons.append('service_mismatch')
+    except (ET.ParseError, ValueError):
+        reasons.append('service_invalid' if path.exists() else 'service_missing')
+    incomplete = any(r.endswith(('_unavailable', '_invalid', '_missing')) for r in reasons)
+    return {'status': 'consistent' if not reasons else 'incomplete' if incomplete else 'mismatch',
+            'expected_hostname': expected, 'configured_hostname': configured, 'live_hostname': live,
+            'avahi_state': state, 'service_checks': checks, 'reasons': reasons,
+            'network_advertisement': 'not_tested'}
 
 
 def _fit(text: str, budget: int) -> tuple[bytes, bool]:
@@ -230,6 +309,8 @@ def collect(root: Path, run: Runner, out_dir: Path) -> Path:
                 continue
             add(f"{prefix}/{path.name}", text, device_path)
 
+    add('network/mdns.json', json.dumps(mdns_diagnostic(root, run), sort_keys=True) + '\n',
+        'local hostname, Avahi state and public ROSY service consistency')
     for name, argv, tail in COMMANDS:
         code, output = run(argv)
         if tail is not None:
