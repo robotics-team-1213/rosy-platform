@@ -103,6 +103,53 @@ def _paired_convert(folder, out, codec):
     return 0, path
 
 
+def _local_main(tmp_path, convert, *extra):
+    return fetch_http.main(["--local-only", "--dest", str(tmp_path / "raw"),
+                            "--video-out", str(tmp_path / "video"), *extra], convert=convert)
+
+
+def test_local_only_recovers_without_robot_credentials_or_network(tmp_path, monkeypatch):
+    fetch_http.safe_extract(_write_archive(tmp_path), tmp_path / "raw", RID)
+    monkeypatch.setattr(fetch_http, "list_recordings", lambda *a: pytest.fail("robot contacted"))
+    assert _local_main(tmp_path, _paired_convert) == 0
+    assert fetch_http._paired_receipt_valid(tmp_path / "raw", RID)
+    assert _local_main(tmp_path, lambda *a: pytest.fail("already converted")) == 0
+
+
+def _write_archive(tmp_path):
+    path = tmp_path / "recording.tar"
+    path.write_bytes(_recording())
+    return path
+
+
+def test_local_only_rechecks_raw_even_after_conversion(tmp_path):
+    fetch_http.safe_extract(_write_archive(tmp_path), tmp_path / "raw", RID)
+    assert _local_main(tmp_path, _paired_convert) == 0
+    bag = tmp_path / "raw" / RID / "bag" / "bag_0.mcap"
+    bag.write_bytes(b"changed")
+    assert _local_main(tmp_path, lambda *a: pytest.fail("corrupt raw converted")) == 1
+    assert bag.read_bytes() == b"changed"
+
+
+def test_local_only_filters_and_retries_failed_conversion(tmp_path):
+    fetch_http.safe_extract(_write_archive(tmp_path), tmp_path / "raw", RID)
+    assert _local_main(tmp_path, lambda *a: (1, None), "--only", RID) == 1
+    assert not fetch_http._receipt_path(tmp_path / "raw", RID).exists()
+    assert _local_main(tmp_path, _paired_convert, "--only", RID) == 0
+    assert _local_main(tmp_path, lambda *a: pytest.fail("wrong session"), "--only", RID2) == 1
+    assert _local_main(tmp_path, lambda *a: pytest.fail("before boundary"), "--since-id", RID2) == 0
+
+
+def test_missing_video_cannot_create_a_success_receipt(server, tmp_path):
+    def missing_video(folder, out, codec):
+        rc, sidecar = _paired_convert(folder, out, codec)
+        sidecar.with_suffix(".mp4").unlink()
+        return rc, sidecar
+
+    assert _main(server[0], tmp_path, missing_video) == 1
+    assert not fetch_http._receipt_path(tmp_path / "raw", RID).exists()
+
+
 def test_fetch_verifies_extracts_converts_and_pair_checks(server, tmp_path, capsys):
     base, state = server
     assert _main(base, tmp_path, _paired_convert) == 0
