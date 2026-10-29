@@ -177,6 +177,31 @@ def test_header_stays_one_row_with_account_overlay_and_connection_exceptions(tmp
 
 
 @pytest.mark.parametrize('name,path', DOCS)
+@pytest.mark.parametrize('focus_target', ['trigger', 'body', 'theme', 'outside'])
+def test_account_escape_closes_menu_without_stealing_outside_focus(tmp_path, name, path, focus_target):
+    from playwright.sync_api import expect
+
+    with _fleet(tmp_path, console_token='registry-only', development_sessions=DevelopmentSessions()) as (browser, origin):
+        page = browser.new_page(viewport={'width': 390, 'height': 844})
+        page.goto(origin + path)
+        expect(page.locator('#user-role')).to_have_text('운영자', timeout=15000)
+        trigger = page.locator('#topbar-more')
+        trigger.click()
+        menu = page.locator('#topbar-extra')
+        expect(menu).to_be_visible()
+        if focus_target == 'body':
+            page.evaluate('document.activeElement.blur()')
+        elif focus_target == 'theme':
+            page.locator('#fleet-theme').focus()
+        elif focus_target == 'outside':
+            page.locator('main').first.evaluate("node => { node.tabIndex = -1; node.focus(); }")
+        page.keyboard.press('Escape')
+        expect(menu).to_be_hidden()
+        expect(page.locator('main').first if focus_target == 'outside' else trigger).to_be_focused()
+        page.close()
+
+
+@pytest.mark.parametrize('name,path', DOCS)
 def test_explicit_same_identity_connection_closes_preferences_after_success(tmp_path, name, path):
     from playwright.sync_api import expect
 
