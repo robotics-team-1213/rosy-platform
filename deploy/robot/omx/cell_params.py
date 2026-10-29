@@ -56,6 +56,7 @@ DEFAULTS = {
     "look.max_total_mm": (30.0, "mm", 5, 80), "push.look_tol_mm": (6.0, "mm", 1, 15), "look.near_px": (40.0, "px", 10, 150),
     "objects.drop_shadow": (1, "flag", 0, 1), "objects.shadow_tol": (12.0, "lab", 2, 40), "objects.shadow_min_light": (0.45, "ratio", 0.1, 0.9),
     "objects.top_v_frac": (0.8, "ratio", 0, 0.95),
+    "grasp.end_frac": (0.7, "ratio", 0, 1),
     "objects.split_touching": (1, "flag", 0, 1), "objects.split_peak_frac": (0.6, "ratio", 0.3, 0.9),
     "pivot.over_target": (0, "flag", 0, 1), "pivot.over_top_mm": (30.0, "mm", 5, 120), "pivot.over_clear_mm": (30.0, "mm", 10, 100),
     "feel.enabled": (1, "flag", 0, 1), "feel.step_mm": (12.0, "mm", 3, 30), "feel.tries": (4, "count", 0, 6),

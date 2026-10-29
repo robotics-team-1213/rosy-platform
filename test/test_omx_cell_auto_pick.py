@@ -623,3 +623,12 @@ def test_two_candidates_keep_their_own_libraries(tmp_path):
     for u in usable:
         lib = json.loads(Path(u["library"]).read_text())
         assert lib["source"]["pick"]["x"] == u["pick"]["x"] and lib["source"]["pick"]["y"] == u["pick"]["y"]
+
+
+def test_a_long_box_out_of_reach_at_its_middle_offers_grasp_points_toward_the_base_first():
+    """2026-10-29: a 2-cell on the moved Pinky was out of reach at its middle (planar wrist 0.286 m)."""
+    o = {"raw_m": [0.10, 0.24], "long_axis_deg": 90.0, "object": "container-2"}
+    ends = auto.reachable_ends(o, {"length_mm": 60, "width_mm": 30}, None)
+    assert [e["grasp_shift_mm"] for e in ends] == [-10.5, 10.5]  # 0.7 of the 15 mm from the middle to the jaws' end
+    assert ends[0]["raw_m"] == pytest.approx([0.10, 0.2295]) and math.hypot(*ends[0]["raw_m"]) < math.hypot(*o["raw_m"])
+    assert auto.reachable_ends(o, {"length_mm": 30, "width_mm": 30}, None) == []  # a square box has no end to move to

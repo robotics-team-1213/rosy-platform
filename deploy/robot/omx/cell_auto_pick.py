@@ -232,6 +232,18 @@ def jaw_open_for(width_mm: float, params=None) -> float:
     return round(min(max(value, g("gripper.held_30mm") + 0.5), g("gripper.open_max")), 2)
 
 
+def reachable_ends(o: dict, entry: dict, params=None) -> list:
+    """Grasp points shifted along a long box's axis, toward the arm's base first: grasp.end_frac of the way from
+    the middle to where the jaws would reach the box's end. A square box has none."""
+    reach = prm.get(params, "grasp.end_frac") * (entry["length_mm"] - entry["width_mm"]) / 2000
+    if reach <= 0:
+        return []
+    u = math.radians(o["long_axis_deg"])
+    ends = [dict(o, raw_m=[o["raw_m"][0] + k * reach * math.cos(u), o["raw_m"][1] + k * reach * math.sin(u)],
+                 grasp_shift_mm=round(1000 * k * reach, 1)) for k in (1, -1)]
+    return sorted(ends, key=lambda e: math.hypot(*e["raw_m"]))
+
+
 def plan_pick(config: dict, site: str, dest_site: str, place_xy, o: dict, entry: dict, offset, bias_mm, work: Path,
               yaw: float | None = None):
     """Library for one candidate: grasp 15 mm below the top, approach 40 mm above it (else 20), the yaw and its
@@ -326,6 +338,12 @@ def choose(cell, config, calibration, site, dest_site, place_xy, roi, objects, m
         region = cell_pivot.bias_at(bias_data, site, o["raw_m"], params=p)
         bias = region["bias_mm"] if region else [0.0, 0.0]
         planned = plan_pick(config, site, dest_site, place_xy, o, entry, offset, bias, work, yaw)
+        for end in (reachable_ends(o, entry, p) if isinstance(planned, str) and "UNREACHABLE" in planned else []):
+            # a long box whose middle is out of reach is held nearer its end (2026-10-29: a 2-cell on the moved Pinky)
+            planned = plan_pick(config, site, dest_site, place_xy, end, entry, offset, bias, work, yaw)
+            if not isinstance(planned, str):
+                o = end
+                break
         if isinstance(planned, str):
             refused.append({"centre_mm": o["centre_mm"], "object": o["object"], "why": f"planner: {planned}"})
             continue

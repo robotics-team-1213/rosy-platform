@@ -667,5 +667,11 @@
   "unit": "ratio",
   "source": "measured",
   "evidence": "2026-10-29: top faces V 186 against side faces 137 by day; at night (exposure at its 80 ms cap) a 2-cell read 58 x 51 mm with its side; 0 = off"
+ },
+ "grasp.end_frac": {
+  "value": 0.7,
+  "unit": "ratio",
+  "source": "default",
+  "evidence": "2026-10-29: a 2-cell on the moved Pinky was out of reach at its middle (planar wrist 0.286 m); 0 = only the middle"
  }
 }
