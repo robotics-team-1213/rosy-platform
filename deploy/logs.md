@@ -4017,3 +4017,11 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 현장 Docker Compose 5.6.1에서 unset·empty는 기존 A/B, 명시적 JSON은 A/B/S를 정확히 전달했다(exit0). 현재 private arm overlay를 제외하고 새 template·동일 매핑을 넣은 전체 Compose 결과가 기존 결과와 일치했다. A/B/S 토큰은 원문 출력 없이 manifest 지문과 대조했고 모두 일치했다. 보호된 경로에 이전 config와 제안 config를 저장했으며 라이브 config·서비스는 바꾸지 않았다. base cb729139723d..05f19a73ea 독립 소스 계약 검토에 중대 지적 없음. 원격 pytest는 아직 대기/진행 중이라 통과로 기록하지 않는다.
 - gate 변화: 없음. 새 template를 포함한 서명 candidate 및 그 candidate와 설정의 동시 전환은 아직 수행하지 않았다. 서명·오버레이 허용 목록과 실제 장치 권한을 완화하지 않았다.
 - CE: 미해결 — 구성 동등성만 확인했으며 실제 candidate 적용과 CI 차단 해결은 후속이다.
+
+## 2026-10-29 · 05f19a73ea · 팔 credential 및 signed candidate 집중 회귀
+
+- 변경: 관리자 전체 매핑 후보의 원격 집중 회귀 결과를 기록했다. 실행 코드·시험은 05f19a73ea와 같다.
+- 증거: workcell/bootstrap·증분·빌더·서명·verifier·autoupdater 집중 묶음 200 passed/3 skipped, known_failures NEW0/known0/flaky0이다. 세 skip은 시험 PC의 Docker Compose CLI 부재 때문이며 앞선 현장 Compose5.6.1 실제 렌더링 세 경우 통과 근거와 구분한다. baseline b7cf245d37의 pytest도 10 passed/3 skipped였고 기능 RED 근거는 현장 실제 Compose에서 명시 A/B/S가 A/B만 전달했던 exit1이다. 로그는 외부 rosy-site-credentials-red 및 rosy-site-credentials-green/run-1.txt다.
+- 증거 범위: 현재 현장 A/B/S 전체 Compose 동등성과 manifest credential 지문 일치는 별도로 확인했다. old posted fa3aeeed4d92의 CI attempt2가 success이고 signer dry-run은 would-sign으로 바뀌었지만, 그 후보는 새 매핑 인터페이스를 포함한 후보가 아니다. 제안 site.env를 그 옛 candidate에 먼저 적용하지 않는다.
+- gate 변화: 없음. 새 서명 candidate와 설정 동시 전환·실제 서비스 수용은 아직 미실행이다. 토큰 값·개인키를 기록하거나 unsigned overlay 허용 목록을 확대하지 않았다.
+- CE: 미해결 — 소스·회귀 검증은 통과했으며 남은 게시·candidate·운영 전환은 별도 근거가 필요하다.
