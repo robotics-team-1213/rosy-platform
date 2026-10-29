@@ -5131,6 +5131,13 @@
 - Gate: 공식 재착지는 별도 확인한다. 실제 관측 생산자·장치·학습 수용 변화는 없다.
 - CE: 해당 없음 — 기존 검사기의 명시적 자리표시자 규칙과 이번 회귀·수정 기록에서 이유를 복원한다.
 
+## 2026-10-30 · uncommitted · fix(fleet): 관측 기록 행 상한 정리를 MAX(id) 경계로
+
+- 변경: `ObservationStore`가 스냅샷마다 쓰기 트랜잭션 안에서 `ORDER BY observation_id DESC LIMIT 1 OFFSET 100000`으로 10만 행(로봇 JSON 본문이 든 rowid leaf)을 훑던 정리를 `MAX(observation_id) - max_rows` 경계로 바꿨다. AUTOINCREMENT id는 다시 쓰이지 않으므로 상한(최대 `max_rows`행)은 그대로이고, id가 이어져 있으면 남는 행도 같다.
+- 증거: 저장소 밖 측정(워크스페이스 조사 기록 `Rosy/docs/research/d271-gate-a-2026-10-30/sqlite-prune/`, 원격 시험 PC, 1.5KB 행 10만, 스냅샷 1회 = 8행 삽입+8행 정리, 40회): 쓰기 트랜잭션 p50 66→37ms, p95 98→83ms, max 136→236ms(잡음). 대부분은 `synchronous=FULL` 커밋이며 그대로 둔다. 이 정리는 Gate A의 0.5초 잠금의 원인이 아니다. 같은 패턴의 `observe/rules.py`는 측정하지 않아 바꾸지 않았다.
+- Gate: 보존 상한·보존 기간·공개 필드 변화 없음. 실제 현장 DB 크기와 잠금 시간은 발행 로그 `claim_s`로 따로 본다.
+- CE: 해당 없음 — 이유는 코드 주석과 이 기록, 측정 원본에 남는다.
+
 ## 2026-10-30 · uncommitted · fix(fleet): 교통 판정 구간을 콘솔 잠금 하나로 직렬화
 
 - 변경: `FleetConsole._goal`에서 경로 확인부터 점유(`_claims`) 기록·비켜세우기까지를 `asyncio.Lock` 하나로 묶었다. 목표 전송과 그 앞 확인은 잠금 밖에 그대로 두고, 정지 경로(`cancel`, `estop_all`, 위치 신뢰 보류)는 잠금을 잡지 않는다.
