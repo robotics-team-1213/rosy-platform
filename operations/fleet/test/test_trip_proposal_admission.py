@@ -123,3 +123,37 @@ def test_a_direct_job_cannot_be_relabelled_as_an_independent_proposal_approval(a
     assert response.status_code == 409
     read = client.get(PATH + "/" + proposal["proposal_id"], headers={"X-Actor": "operator-a"})
     assert read.json()["proposal"]["status"] == "PROPOSED"
+
+
+@pytest.mark.parametrize("mutation", [
+    "UPDATE fleet_trip_proposals SET approved_by='operator-b'",
+    "UPDATE fleet_trip_proposals SET dispatch_generation=dispatch_generation+1",
+    "UPDATE fleet_trip_proposals SET mission_id='another-job'",
+    "UPDATE fleet_cell_jobs SET instance_id='rosy_99'",
+])
+def test_admitted_reads_reject_a_proposal_that_disagrees_with_the_original_job(admission, mutation):
+    client, rig = admission
+    proposal = propose(client)
+    assert approve(client, rig, proposal).status_code == 200
+    with closing(rig.store._connect()) as connection, connection:
+        connection.execute(mutation)
+
+    response = client.get(PATH + "/" + proposal["proposal_id"], headers={"X-Actor": "proposer"})
+
+    assert response.status_code == 409
+
+
+def test_admitted_retry_keeps_its_original_approval_after_dispatch_stops(admission):
+    client, rig = admission
+    proposal = propose(client)
+    first = approve(client, rig, proposal)
+    assert first.status_code == 200
+    recorded = first.json()["proposal"]
+    rig.tasks.trip_stop_latch(actor_id="operator-b")
+
+    retry = approve(client, rig, proposal, actor="operator-b", generation=recorded["dispatch_generation"])
+
+    assert retry.status_code == 200
+    assert retry.json() == first.json()
+    with closing(rig.store._connect()) as connection:
+        assert connection.execute("SELECT COUNT(*) FROM fleet_cell_jobs").fetchone()[0] == 1
