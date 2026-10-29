@@ -177,6 +177,8 @@ def test_monitor_does_not_restore_a_previous_dark_epoch_best_into_a_bright_scene
         producer=producer, get_controls=lambda d, names: {key: current[d][key] for key in names},
         write_control=write, restore_controls=runtime.restore_controls, apply_candidate=runtime.apply_candidate,
         save=runtime.save, append_event=runtime.append_event, restore=restore,
+        control_intent=runtime.control_intent,
+        validate_device_controls=lambda *a: None,
         reserve_budget=lambda root: runtime.reserve_budget(root, now_ns=int((1000+clock[0])*1e9)),
         BudgetExhausted=runtime.BudgetExhausted)
     env.monitor(dict(viewer_url='http://127.0.0.1:8767', cameras=cameras), tmp_path, 'test-profile', 20, backend)
