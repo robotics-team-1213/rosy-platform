@@ -112,3 +112,10 @@ def test_a_1_cell_and_a_2_cell_touching_at_a_corner_are_found_as_two_targets():
     assert [o["object"] for o in found] == ["container-1", "container-2"]
     assert all(o["matched"] and o.get("split_from") == "touching" and o["hull_px"] for o in found)
     assert found[0]["centre_mm"] == pytest.approx([-60, 0], abs=3) and found[1]["centre_mm"] == pytest.approx([-25.5, 32.5], abs=3)
+
+
+def test_a_split_piece_that_matches_is_a_target_while_its_unmatched_neighbour_stays_an_obstacle():
+    img = scene([(-60, 0, 30, 30, 0), (-22, 37, 75, 44, 45)])  # the neighbour reads too wide for any catalogue entry
+    found = sorted(seen(img), key=lambda o: o["matched"], reverse=True)
+    assert len(found) == 2 and found[0]["object"] == "container-1" and found[0]["matched"]
+    assert not found[1]["matched"] and found[1]["hull_px"]  # side_clear sees it

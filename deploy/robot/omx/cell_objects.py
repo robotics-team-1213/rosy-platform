@@ -177,9 +177,10 @@ def _measure_blob(px, record: dict, camera: dict, catalog: list, surface_z: floa
 
 def detect(img, roi, record: dict, camera: dict, catalog: list, surface_z: float = 0.0, params=None,
            surface_px=None) -> list:
-    """All objects in the ROI. A blob that matches nothing is tried as boxes that only touch (cell_split); the pieces
-    replace it only when every piece matches the catalogue. Each object carries `hull_px`, the outline of its own
-    pixels, so a finger check can tell a touching neighbour from the object itself."""
+    """All objects in the ROI. A blob that matches nothing is tried as boxes that only touch (cell_split); each piece
+    is judged on its own, and the pieces replace the blob when at least one matches the catalogue (2026-10-29: the
+    1-cell matched, the 2-cell beside it read 63 x 47 mm with its side faces and stays an unmatched neighbour). Each
+    object carries `hull_px`, the outline of its own pixels, so a finger check sees a touching neighbour as one."""
     import cell_split
 
     x0, y0, _, _ = roi
@@ -195,7 +196,7 @@ def detect(img, roi, record: dict, camera: dict, catalog: list, surface_z: float
             parts = cell_split.split_touching(blob, prm.get(params, "objects.split_peak_frac"), prm.get(params, "objects.min_px", MIN_PX))
             measured = [_measure_blob(np.column_stack(np.nonzero(q))[:, ::-1] + [x0, y0], record, camera, catalog, surface_z, params)
                         for q in parts]
-            if parts and all(r["matched"] for res in measured for r in res):
+            if parts and any(r["matched"] for res in measured for r in res):
                 pieces, found = parts, None
                 for q, res in zip(parts, measured):
                     hull = cv2.convexHull(np.column_stack(np.nonzero(q))[:, ::-1].astype(np.int32) + [x0, y0]).reshape(-1, 2)
