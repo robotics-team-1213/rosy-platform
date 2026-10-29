@@ -94,6 +94,63 @@ def write_control(device, name, value):
     command(['v4l2-ctl', '--device='+device, '--set-ctrl='+name+'='+str(value)])
 
 
+def validate_controls(metadata, snapshots):
+    controls, current = {}, None
+    for line in metadata.splitlines():
+        header = re.match(r'^\s*(\w+)\s+0x\w+\s+\(([^)]+)\)\s*:\s*(.*)', line)
+        if header:
+            name, kind, attributes = header.groups()
+            current = dict(kind=kind, attributes=attributes, menu=set(),
+                           bounds=dict((k, int(v)) for k, v in re.findall(r'\b(min|max|step)=(-?\d+)', attributes)))
+            controls[name] = current
+        elif current is not None and (item := re.match(r'^\s*(-?\d+):', line)):
+            current['menu'].add(int(item[1]))
+    for snapshot in snapshots:
+        for name, value in snapshot.items():
+            control = controls.get(name)
+            if (control is None or type(value) is not int
+                    or (name == 'auto_exposure' and control['kind'] != 'menu')
+                    or any(flag in control['attributes'] for flag in ('read-only', 'disabled'))):
+                raise ValueError('unavailable camera control: '+name)
+            if control['kind'] == 'menu':
+                valid = value in control['menu']
+            else:
+                bounds = control['bounds']
+                step = bounds.get('step', 0)
+                valid = (control['kind'] == 'int' and step > 0 and 'min' in bounds and 'max' in bounds
+                         and bounds['min'] <= value <= bounds['max'] and (value-bounds['min']) % step == 0)
+            if not valid:
+                raise ValueError('value outside actual device controls: '+name)
+
+
+def validate_device_controls(device, snapshots):
+    metadata = command(['v4l2-ctl', '--device='+device, '--list-ctrls-menus'])
+    validate_controls(metadata, snapshots)
+
+
+def intent_binding(role, spec, digest):
+    return dict(role=role, profile_sha256=digest, identity=spec['identity'],
+                unit=unit(role, spec), original=spec['original'])
+
+
+def control_intent(root, role, spec, digest, run_id, previous, requested, *, phase='applying'):
+    record = dict(binding=intent_binding(role, spec, digest), producer=spec['producer'], run_id=run_id,
+                  previous=dict(previous), requested=dict(requested), phase=phase)
+    save(root/f'control-intent-{role}.json', record)
+    return record
+
+
+def owned_controls(actual, original, record):
+    previous, requested = record['previous'], record['requested']
+    if set(actual) != set(original) or set(previous) != set(original) or set(requested) != set(original):
+        return False
+    if 'actual' in record:
+        return record['actual'] == requested == actual
+    return all(type(value) is int and (value in (previous[name], requested[name])
+               or (name == 'auto_exposure' and record['phase'] == 'restoring' and value == 1))
+               for name, value in actual.items())
+
+
 def restore_controls(original, write):
     errors = []
     order = [('auto_exposure', 1)] + [(k, v) for k, v in original.items() if k != 'auto_exposure']
@@ -181,6 +238,10 @@ def identity(device):
     return dict(realpath=str(path.resolve()), rdev=info.st_rdev)
 
 
+class ProducerUnavailable(OSError):
+    """The active preview has not reopened the camera; no competing owner was found."""
+
+
 def producer(role, device, wait_s=15.0):
     # The preview unit is Type=simple: at boot it is active before it opens the camera.
     deadline = time.monotonic()+wait_s
@@ -195,6 +256,8 @@ def producer(role, device, wait_s=15.0):
         if props['ActiveState'] == 'active' and props['MainPID'] != '0' and owners == [props['MainPID']]:
             return props
         if time.monotonic() >= deadline:
+            if props['ActiveState'] == 'active' and props['MainPID'] != '0' and not owners:
+                raise ProducerUnavailable('existing producer must be the sole camera owner; reopen pending')
             raise RuntimeError('existing producer must be the sole camera owner')
         time.sleep(0.5)
 
@@ -208,6 +271,9 @@ def prepare(profile, root, digest):
         for role, spec in baseline['cameras'].items():
             if identity(spec['device']) != spec['identity']:
                 raise RuntimeError('camera identity changed')
+            metadata = command(['v4l2-ctl', '--device='+spec['device'], '--list-ctrls-menus'])
+            profile_spec = profile['cameras'][role]
+            validate_controls(metadata, profile_spec['candidates']+profile_spec.get('bright_candidates', [])+[spec['original']])
             # The baseline keeps the original settings; the owner to guard is this run's preview, not the first one.
             spec['producer'] = producer(unit(role, spec), spec['device'])
             if get_controls(spec['device'], spec['original']) != spec['original']:
@@ -219,18 +285,11 @@ def prepare(profile, root, digest):
         candidates = spec['candidates']+spec.get('bright_candidates', [])
         names = {'auto_exposure'} | set().union(*(set(c) for c in candidates))
         metadata = command(['v4l2-ctl', '--device='+device, '--list-ctrls-menus'])
-        ranges = {name: (int(lo), int(hi), int(step)) for name, lo, hi, step in re.findall(
-            r'^\s*(\w+)\s+0x\w+.*?min=(-?\d+) max=(-?\d+) step=(\d+)', metadata, re.M)}
-        for candidate in candidates:
-            for name, value in candidate.items():
-                if name == 'auto_exposure':
-                    continue
-                lo, hi, step = ranges[name]
-                if not lo <= value <= hi or (value-lo) % step:
-                    raise ValueError('candidate outside actual device control range: '+name)
+        original = get_controls(device, names)
+        validate_controls(metadata, candidates+[original])
         cameras[role] = dict(device=device, identity=identity(device), unit=unit(role, spec),
                              producer=producer(unit(role, spec), device),
-                             original=get_controls(device, names), control_metadata=metadata)
+                             original=original, control_metadata=metadata)
     if len({s['identity']['rdev'] for s in cameras.values()}) != 2:
         raise RuntimeError('camera aliases select the same device')
     baseline = dict(profile_sha256=digest, cameras=cameras, recorded_ns=time.time_ns())
@@ -248,9 +307,27 @@ def restore(root):
         try:
             if identity(spec['device']) != spec['identity']:
                 raise RuntimeError('camera identity changed; refusing wrong device')
-            producer(unit(role, spec), spec['device'], wait_s=5.0)  # two cameras stay inside TimeoutStopSec=20
+            owner = producer(unit(role, spec), spec['device'], wait_s=5.0)
+            before = get_controls(spec['device'], spec['original'])
+            if before == spec['original']:
+                results[role] = dict(errors=[], actual=before, restored=True)
+                continue
+            record = json.loads((root/f'control-intent-{role}.json').read_text())
+            run = json.loads((root/'control-run.json').read_text())
+            if (record['binding'] != intent_binding(role, spec, baseline['profile_sha256'])
+                    or record['producer'] != owner or record['run_id'] != run['run_id']
+                    or not owned_controls(before, spec['original'], record)):
+                raise RuntimeError('unowned camera controls; refusing restore overwrite')
+            metadata = command(['v4l2-ctl', '--device='+spec['device'], '--list-ctrls-menus'])
+            validate_controls(metadata, [spec['original'], dict(auto_exposure=1)])
+            live = {**spec, 'producer': owner}
+            record = control_intent(root, role, live, baseline['profile_sha256'], run['run_id'],
+                                    before, spec['original'], phase='restoring')
             errors = restore_controls(spec['original'], lambda n, v: write_control(spec['device'], n, v))
             actual = get_controls(spec['device'], spec['original'])
+            if not errors and actual == spec['original']:
+                record['actual'] = actual
+                save(root/f'control-intent-{role}.json', record)
             results[role] = dict(errors=errors, actual=actual, restored=actual == spec['original'] and not errors)
         except Exception as exc:
             results[role] = dict(restored=False, error=repr(exc))
@@ -263,7 +340,8 @@ def run(profile, root, digest, duration):
     from camera_environment import monitor
     from types import SimpleNamespace
     names = ('prepare', 'identity', 'producer', 'get_controls', 'write_control', 'apply_candidate',
-             'restore_controls', 'save', 'restore', 'reserve_budget', 'BudgetExhausted', 'append_event')
+             'restore_controls', 'save', 'restore', 'reserve_budget', 'BudgetExhausted', 'append_event',
+             'control_intent', 'validate_device_controls')
     return monitor(profile, root, digest, duration, SimpleNamespace(**{name: globals()[name] for name in names}))
 
 
