@@ -290,7 +290,7 @@ def run(args):
         focus = Gf.Vec3d(0., 1.1, 0.) if overview else Gf.Vec3d(.13, -.10, .12)
         up = Gf.Vec3d(0., 0., 1.)
         if name == 'mapped-top.png':
-            position, focus, up = Gf.Vec3d(.04, 0., 1.), Gf.Vec3d(.04, 0., 0.), Gf.Vec3d(0., 1., 0.)
+            position, focus, up = Gf.Vec3d(.16, .10, 1.25), Gf.Vec3d(.16, .10, 0.), Gf.Vec3d(0., 1., 0.)
         elif name == 'mapped-side.png':
             position, focus = Gf.Vec3d(.8, -.05, .16), Gf.Vec3d(.03, 0., .08)
         rotation = Gf.Matrix4d().SetLookAt(position, focus, up).GetInverse().ExtractRotationQuat()

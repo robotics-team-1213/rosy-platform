@@ -50,7 +50,7 @@ CUBE_FIXTURE = dict(FIXTURE, revision='rosycam-edge-terminal-first-layer-v3', tr
     upstream_velocity_m_s=[0., -.02, 0.], upstream_scope='LAYOUT_ONLY_TURN_TRANSFER_NOT_EVALUATED',
     infeed_start_m=[.295, 0., .041], pickup_center_m=[.25, 0., .04], carry_height_m=.135,
     bin_origin_m=[.085, -.045, .032], bin_size_m=[.09, .09, .03],
-    release_clearance_m=.035, row_clearance_m=.0002, release_feedback_iterations=4)
+    release_clearance_m=.015, row_clearance_m=.0002, release_feedback_iterations=4)
 
 
 def plan(cube=False):
@@ -122,18 +122,22 @@ def explained_contacts(box):
     return norm([box['net_force'][axis]-sum(f[axis] for f in box['forces']) for axis in range(3)]) <= .001
 
 
-def free_lift(box, arm, source_z):
+def unsupported_hold(box, arm):
     forces = box['forces']
-    return (box['position'][2] >= source_z+FIXTURE['minimum_lift_m']
-        and all(norm(f) > .005 for f in forces[2*arm:2*arm+2])
+    return (all(norm(f) > .005 for f in forces[2*arm:2*arm+2])
         and all(norm(f) <= .001 for n, f in enumerate(forces) if n not in (2*arm, 2*arm+1))
         and explained_contacts(box))
+
+
+def free_lift(box, arm, source_z):
+    return box['position'][2] >= source_z+FIXTURE['minimum_lift_m'] and unsupported_hold(box, arm)
 
 
 def cube_release_target(index, sample, source_z, commanded_tcp=None):
     item = plan(True)[index]
     box, arm = sample['boxes'][index], item['arm']
-    if not free_lift(box, arm, source_z):
+    # Lift height was proved during carry; lowering for placement still requires an unsupported bilateral hold.
+    if not unsupported_hold(box, arm):
         raise ValueError('cube carry lost bilateral free lift before release')
     desired = item['target'][:]
     desired[2] += CUBE_FIXTURE['release_clearance_m']
@@ -152,7 +156,8 @@ def cube_release_ready(index, sample, source_z):
     command = cube_release_target(index, sample, source_z)
     tcp = sample['tcps'][plan(True)[index]['arm']]
     error = [command[k]-tcp[k] for k in range(3)]
-    return norm(error) <= .00005 and (index % 3 == 0 or error[1] <= .000001)
+    return (norm(error) <= .00005 and (index % 3 == 0 or error[1] <= .000001)
+            and all(stable_box(sample['boxes'][j], j, True) for j in range(index)))
 
 
 def stable_box(box, index, cube=False):

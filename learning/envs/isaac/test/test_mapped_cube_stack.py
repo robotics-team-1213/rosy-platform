@@ -250,7 +250,7 @@ def test_lowering_for_release_keeps_the_lift_proof_separate_from_retention():
     body['position'] = [.13, -.03, .062]
     assert not f.free_lift(body, 0, .04)
     assert f.unsupported_hold(body, 0)
-    assert f.cube_release_target(0, sample, .04)
+    assert f.cube_release_target(0, sample, .04) == pytest.approx(sample['tcps'][0])
     body['forces'][4][2] = .1
     body['net_force'][2] += .1
     assert not f.unsupported_hold(body, 0)
@@ -262,8 +262,6 @@ def test_opening_is_blocked_if_the_parked_neighbor_is_touched():
     sample = trial()['layers'][1]['lift_samples'][0]
     item = f.plan(True)[1]
     body = sample['boxes'][1]
-    body['position'] = f.cube_release_target(1, sample, .04)
-    # Recompute the cargo pose, independent of the arbitrary synthetic TCP.
     body['position'] = item['target'][:]
     body['position'][2] += f.CUBE_FIXTURE['release_clearance_m']
     body['position'][1] += f.CUBE_FIXTURE['row_clearance_m']
