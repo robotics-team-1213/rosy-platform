@@ -171,11 +171,11 @@ def test_cube_release_corrects_measured_cargo_offset_and_neighbor_clearance():
     item = f.plan(True)[1]
     tcp = sample['tcps'][item['arm']]
     body = sample['boxes'][1]
-    body['position'] = [.1295, -.0005, .1022]
+    body['position'] = [.1295, -.0005, .0822]
     sample['boxes'][0]['position'][1] = -.03
     command = f.cube_release_target(1, sample, .04)
     predicted = [body['position'][k]+command[k]-tcp[k] for k in range(3)]
-    assert predicted == pytest.approx([.13, .0002, .102])
+    assert predicted == pytest.approx([.13, .0002, .082])
     assert not f.cube_release_ready(1, sample, .04)
     body['position'] = predicted[:]
     assert f.cube_release_ready(1, sample, .04)
@@ -212,11 +212,11 @@ def test_only_cube_contact_report_has_a_two_mib_artifact_budget(tmp_path):
 
 def test_cube_feedback_accumulates_loaded_arm_tracking_error():
     sample = trial()['layers'][0]['lift_samples'][0]
-    sample['tcps'][0] = [.1295, -.0304, .1035]
-    sample['boxes'][0]['position'] = [.1295, -.0304, .1015]
-    previous = [.13, -.03, .104]
+    sample['tcps'][0] = [.1295, -.0304, .0835]
+    sample['boxes'][0]['position'] = [.1295, -.0304, .0815]
+    previous = [.13, -.03, .084]
     command = f.cube_release_target(0, sample, .04, commanded_tcp=previous)
-    assert command == pytest.approx([.1305, -.0296, .1045])
+    assert command == pytest.approx([.1305, -.0296, .0845])
     bias = [sample['tcps'][0][k]-previous[k] for k in range(3)]
     sample['tcps'][0] = [command[k]+bias[k] for k in range(3)]
     sample['boxes'][0]['position'] = [sample['tcps'][0][0], sample['tcps'][0][1], sample['tcps'][0][2]-.002]

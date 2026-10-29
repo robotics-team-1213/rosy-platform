@@ -41,12 +41,12 @@ CUBE_FIXTURE = dict(FIXTURE, revision='rosycam-opposed-first-layer-v2', trials=1
     cell_pose_scope='USER_CONFIRMED_TOPOLOGY_NOMINAL_DIMENSIONS_NOT_SURVEYED',
     camera_reference='2026-10-29T03:43:11Z_ceiling_north',
     board_lower_left_m=[-.61, -.25, .001],
-    workplate_center_m=[0., 0., .03], workplate_size_m=[.40, .42, .04],
-    arm_bases_m=[[.08, -.13, .05], [.08, .13, .05]],
+    workplate_center_m=[0., 0., .02], workplate_size_m=[.40, .42, .02],
+    arm_bases_m=[[.08, -.13, .03], [.08, .13, .03]],
     arm_base_yaws_rad=[math.pi/2, -math.pi/2],
     belt_center_m=[.27, 0., .0125], belt_stop_m=[.27, .017, .027],
-    infeed_start_m=[.27, -.045, .041], carry_height_m=.155,
-    bin_origin_m=[.085, -.045, .052], bin_size_m=[.09, .09, .03],
+    infeed_start_m=[.27, -.045, .041], carry_height_m=.135,
+    bin_origin_m=[.085, -.045, .032], bin_size_m=[.09, .09, .03],
     release_clearance_m=.035, row_clearance_m=.0002, release_feedback_iterations=4)
 
 
@@ -54,7 +54,7 @@ def plan(cube=False):
     if cube:
         return [dict(id='bar-'+str(i+1), cells=3, cell=[0, i % 3, i//3], size=[.09, .03, .03],
                      mass=.06, arm=i % 2,
-                     target=[.13, -.03+i*.03, .067]) for i in range(3)]
+                     target=[.13, -.03+i*.03, .047]) for i in range(3)]
     return [dict(id='bar-'+str(i+1), cells=3, cell=[0, 0, i], size=[.09, .03, .03],
                  mass=.06, arm=i % 2, target=[.16, 0., .04+i*.03]) for i in range(3)]
 
