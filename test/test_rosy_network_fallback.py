@@ -394,6 +394,34 @@ def test_invalid_fallback_security_does_not_open_an_ap(tmp_path, security):
     assert calls == []
 
 
+@pytest.mark.parametrize("defaults", ["ap: [broken", "ap:\n  fallback_security: invalid\n",
+                                      "ap:\n  fallback_security: null\n"])
+def test_invalid_defaults_refuse_ap_open_but_keep_close_supervision(tmp_path, defaults):
+    module = _module()
+    root = _device(tmp_path)
+    (root / "etc/rosy/defaults.yaml").write_text(defaults, encoding="utf-8")
+    policy = module.load_policy(root)
+    assert policy["mode"] == "off"
+    calls = []
+    run = lambda command: calls.append(command) or _activated(command)
+    assert not module.perform(root, "open", run)
+    assert calls == []
+    active = _state(module, ap_active=True, ap_since=100)
+    following = module.step(active, 200, policy, False, root, run)
+    assert not following.ap_active
+    assert ["nmcli", "connection", "down", module.PROFILE] in calls
+    assert ["nmcli", "connection", "up", module.PROFILE] not in calls
+
+
+def test_off_policy_cannot_be_opened_by_the_action_handler(tmp_path):
+    module = _module()
+    root = _device(tmp_path)
+    (root / "etc/rosy/network-policy.json").write_text(json.dumps({"mode": "off"}))
+    calls = []
+    assert not module.perform(root, "open", lambda command: calls.append(command) or _activated(command))
+    assert calls == []
+
+
 def test_default_fallback_security_is_open(tmp_path):
     module = _module()
     assert module.load_policy(tmp_path)["fallback_security"] == "open"
