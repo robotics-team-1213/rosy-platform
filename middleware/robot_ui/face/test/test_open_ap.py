@@ -51,6 +51,12 @@ def test_open_join_payload_escapes_ssid_and_omits_even_a_stale_key():
     assert KEY not in payload and ";P:" not in payload
 
 
+@pytest.mark.parametrize("security", [None, "unknown", {}, []])
+def test_malformed_security_does_not_draw_a_join_code(security):
+    payload = {"network": {**NETWORK, "security": security}, "ap_login": KEY}
+    assert info_screen.ap_qr(payload) is None
+
+
 @pytest.mark.parametrize("login", [None, KEY])
 def test_open_ap_card_shows_no_password_and_a_passwordless_qr(login):
     payload = {"stage": "CORE_READY", "network": NETWORK, "ap_login": login}
