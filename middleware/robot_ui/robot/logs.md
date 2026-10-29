@@ -1370,4 +1370,4 @@
 
 - 변경: surface-main의96rem cap/가운데 배치와 폭별 padding override를 제거해 레일 옆 가용 폭과 공통 inset-pane을 사용한다. notice 두줄 스크롤 예산과 brand shrink 방지는 보존한다.
 - 증거: 1366/2000px 레일·본문 경계 회귀와 현재425의 actual CORE manifest/HTTP frontend console/setup/device320·390 셸 기하가 통과했다. 셸42회차의 Robot6PNG도 독립 직접 검토해 해당 범위 P1/P2없음. 이것은 전체20패널·전체키보드·실제명령/장치 수용이 아니다.
-- 경계: 전체 browser 실행과 최종 소비자 검증은 진행 중이다. docs/validation/platform-ui-integration-2026-10-29/result.md 참조. CE: 해당 없음 — layout 소유와 기존 notice/브랜드 회귀를 유지한다.
+- gate 변화: 없음. 전체 browser 실행과 최종 소비자 검증은 진행 중이다. docs/validation/platform-ui-integration-2026-10-29/result.md 참조. CE: 해당 없음 — layout 소유와 기존 notice/브랜드 회귀를 유지한다.

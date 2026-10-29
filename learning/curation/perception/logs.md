@@ -348,4 +348,4 @@
 
 - 변경: 작업 cap과 별도 padding을 기존 inset 토큰으로 정리했다. pixel 승인 영역은 같은 DOM으로 compact 도구 뒤/wide 원위치를 왕복하며 체크값·초점을 보존한다. 초점 대상의 scroll margin은 appbar 높이를 반영한다. h3 전용 행·클래스/라벨·승인·저장·비동기 수명은 유지한다.
 - 증거: 기존 폭/배치 RED5fail3pass 뒤425의 실제8pass/0skip·20PNG 검토. 좌표만으로 놓친 sticky header 가림은 실제 hit-test로 찾아 수정했다. 이후 도구 리본의 top12 문제를 두 테마2RED로 추가 확인했고 c380에서 공용 리본 top을 appbar/space 토큰으로 통일했다. 마지막 GREEN/캡처는 현재 대기이며 완료로 세지 않는다.
-- 경계: 실제 사람 정답·승인·학습/HF 쓰기·실물·배포 수용이 아니다. docs/validation/platform-ui-integration-2026-10-29/result.md 참조. CE: 해당 없음 — 기존 clipping 교훈과 회귀로 원인·해결/미완료를 구분한다.
+- gate 변화: 없음. 실제 사람 정답·승인·학습/HF 쓰기·실물·배포 수용이 아니다. docs/validation/platform-ui-integration-2026-10-29/result.md 참조. CE: 해당 없음 — 기존 clipping 교훈과 회귀로 원인·해결/미완료를 구분한다.

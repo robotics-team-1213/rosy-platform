@@ -1024,6 +1024,6 @@
 
 ## 2026-10-29 · dab8ddacf2 · 네이티브 주요 조작 초점 대비 회귀 준비
 
-- 발견: 밝은 primary fill에 동일 foreground stroke를 사용하는 공용 PilotViews가 다시 찾기·함께 조종에서 쓰인다. 기존 목록/상태22PNG를 이 primary 수용 근거로 확대하지 않는다.
-- 시험: 기존 무동작 RobotRows fixture에 주요/보조 버튼의 DPAD 초점·실제 drawable edge·disabled 우선순위·callback0회 회귀를 추가했다. 제품 fill 로직은 아직 수정하지 않았고 SDK/실행 RED·수정 후 검증은 대기다. token exporter와 APK layout.css 소비도 구분해 확인한다.
-- 경계: 실제 로봇 연결·조종·배포·실물 수용은 수행하지 않았다. docs/validation/platform-ui-integration-2026-10-29/result.md 참조. CE: 미해결 — 새 primary 렌더 수용은 아직 증명하지 않았다.
+- 변경: 회귀 준비. 밝은 primary fill에 동일 foreground stroke를 사용하는 공용 PilotViews가 다시 찾기·함께 조종에서 쓰인다. 기존 목록/상태22PNG를 이 primary 수용 근거로 확대하지 않는다.
+- 증거: 기존 무동작 RobotRows fixture에 주요/보조 버튼의 DPAD 초점·실제 drawable edge·disabled 우선순위·callback0회 회귀를 추가했다. 제품 fill 로직은 아직 수정하지 않았고 SDK/실행 RED·수정 후 검증은 대기다. token exporter와 APK layout.css 소비도 구분해 확인한다.
+- gate 변화: 없음. 실제 로봇 연결·조종·배포·실물 수용은 수행하지 않았다. docs/validation/platform-ui-integration-2026-10-29/result.md 참조. CE: 미해결 — 새 primary 렌더 수용은 아직 증명하지 않았다.

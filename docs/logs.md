@@ -13026,5 +13026,5 @@ osy-d395-s1d\`.
 
 - 변경: 정본 topic을 uiux/platform-ui-consistency로 구성하고 분리 단위 refs를 포함했다. 중간 UUID 증가의 per-commit 한도 문제는 기존 이력을 보존하고 지원 분리와 호출 추가를 같은 commit에 반영해 정리했다. 검사 한도와 baseline은 완화하지 않았다.
 - 근거: 공용137·Map125·핵심헤더29·소유등록55·현행셸42·폭/초점8의 SHA별 실제 원격 결과와134+20PNG 독립 검토를 `docs/validation/platform-ui-integration-2026-10-29/result.md`에 연결했다. 겹치는 검사를 고유 합계로 쓰지 않는다.
-- 미완료: 전체108 browser 회차는 진행 중이며 실패 표시를 포함한다. 리본 sticky 후속 GREEN·native exporter·primary focus의 실제 SDK/DPAD RED/수정·최종 소비자 수용은 남는다. 전체 목표 완료·배포·FIELD를 주장하지 않는다.
+- gate 변화: 없음. 미완료: 전체108 browser 회차는 진행 중이며 실패 표시를 포함한다. 리본 sticky 후속 GREEN·native exporter·primary focus의 실제 SDK/DPAD RED/수정·최종 소비자 수용은 남는다. 전체 목표 완료·배포·FIELD를 주장하지 않는다.
 - CE: 해당 없음 — 기존 clipping 교훈과 코드·회귀·검증 기록으로 판단을 보존한다. 미해결 항목은 해결 교훈으로 쓰지 않는다.

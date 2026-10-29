@@ -607,4 +607,4 @@
 
 - 변경: 계정 메뉴를 한행 앱 바 아래 overlay로 열고 연결 예외도 같은 행에 유지한다. semantic measure·수동 token 접근·공통 Stop padding과 권한 규칙은 보존한다. 명시적 성공만 메뉴를 닫고 자동 재조회는 입력/펼침을 유지한다. Cell은 입력 잠금 전 초점과 재활성화 후 초점을 연결한다.
 - 증거: 동일 identity RED4건 뒤 핵심29pass, 현재425의 셸42pass/134PNG 독립 전수검토 범위 P1/P2없음. LAN UUID는 trusted native와 암호학적 fallback을 함께 검증했다. Map 지원분리의 free-variable 오류는 실제 편집 오류로 재현해 반환값으로 수정했고 전체125pass로 확인했다. 새 canvas/HTTP 소비자와 Node 대역은0bc55pass로 검증했다.
-- 경계: 전체 플랫폼·실제 명령/정지·장치·배포·착지·게시 수용과 구분한다. 자세한 source/실패/skip/진행 상태는 docs/validation/platform-ui-integration-2026-10-29/result.md 참조. CE: 해당 없음 — 코드·회귀·기존 clipping 교훈이 판단을 보존한다.
+- gate 변화: 없음. 전체 플랫폼·실제 명령/정지·장치·배포·착지·게시 수용과 구분한다. 자세한 source/실패/skip/진행 상태는 docs/validation/platform-ui-integration-2026-10-29/result.md 참조. CE: 해당 없음 — 코드·회귀·기존 clipping 교훈이 판단을 보존한다.
