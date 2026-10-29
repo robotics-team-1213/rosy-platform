@@ -826,6 +826,30 @@ process-death handover while unpowered; a powered stop remains unverified.
 See [source, tests and actual stop-only execution](../../../docs/validation/omx-independent-stop-2026-10-16/result.md).
 ## Environment-aware camera readiness
 
+Recovery reads the live controls every five seconds and again before a write.
+Returning to the saved baseline with the same device and producer clears that
+camera's old best settings and candidate progress, then waits for fresh settled
+frames. Other changes are refused. A temporary control-read failure reports
+`UNAVAILABLE` and retries without writing; ownership changes still stop recovery.
+Within each direction, candidates through the currently applied candidate are
+skipped. Equal quality scores keep the latest settings. The existing exposure,
+settling and rolling write limits remain in force.
+
+Control ranges, integer steps and exposure menus are checked on startup,
+baseline reuse, baseline reset and before writes. Restore also checks its
+intermediate manual mode. `control-run.json` and per-role `control-intent-*.json`
+bind partial writes to the baseline, device, producer and run. Preserve these
+records with the baseline: unknown settings or invalid records cause restoration
+to refuse overwriting the device. An interrupted restore keeps its own intent
+for the independent stop handler.
+
+When upgrading an older installation, first stop the old readiness service while
+the cell is idle and verify that it restored both original settings. Back up the
+state and source before installing the new version. Do not erase the baseline or
+invent ownership records to bypass a refusal. The new restore cannot establish
+ownership from an older `changes.json` alone. No upgrade or restart belongs in
+an active recording/chunk session.
+
 `rosy-omx-camera-view.service` subscribes to the existing camera topics and serves
 the original frames and their quality on localhost port8767. It opens no camera
 device. `rosy-omx-camera-readiness.service` reads that viewer and adjusts only
