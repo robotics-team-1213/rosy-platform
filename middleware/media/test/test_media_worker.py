@@ -263,6 +263,22 @@ def test_priming_frames_do_not_reset_repeated_startup_backoff(rig):
     assert first_delay < worker._retry_at - 27 <= 5
 
 
+def test_wire_sampling_continues_while_idle_and_negotiating(rig):
+    worker, client, publishers, step = rig
+    samples = []
+    worker._sampler = type('Sampler', (), {'sample': lambda self, *, now: samples.append(now) or 0})()
+    client.active = False
+    for second in range(13):
+        step(second)
+    client.active = True
+    step(13)
+    publishers[-1].connected = False
+    step(14)
+    step(15)
+    assert samples == list(range(16))
+    assert not publishers[-1].stopped
+
+
 def test_wire_budget_restart_uses_the_reduced_rate_before_the_first_frame(rig):
     worker, _, publishers, step = rig
     wire = [2_000_000]
