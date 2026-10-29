@@ -24,7 +24,7 @@
 | [games](operations/apps/games/progress.md) | GAMES | bed604ef (2026-09-30) | GO | GO | N/A | N/A | PARKED | PARKED |
 | [rosy_vision](operations/overhead/progress.md) | SITE | a8199fd9 (2026-09-30) | GO | GO | N/A | N/A | PARKED | PARKED |
 | [rosy_cell](operations/processes/cell/progress.md) | SITE | 9da93450 (2026-10-02) | GO | N/A | HOLD | N/A | PARKED | PARKED |
-| [palletizing](operations/processes/palletizing/progress.md) | PROCESS | d9e70f71 (2026-10-02) | GO | N/A | HOLD | HOLD | PARKED | PARKED |
+| [palletizing](operations/processes/palletizing/progress.md) | PROCESS | 0e808cd6be (2026-10-29) | GO | N/A | HOLD | HOLD | PARKED | PARKED |
 | [cam](operations/site_ui/cam/progress.md) | SITE | uncommitted (2026-10-04) | GO | GO | N/A | N/A | PARKED | PARKED |
 | [gz_sim](integrations/simulation/gazebo/progress.md) | SIM | uncommitted (2026-09-21) | GO | GO | GO | N/A | N/A | N/A |
 | [navigation](middleware/drive/planning/nav2/progress.md) | NAV | 83db3b1da4 (2026-10-17) | HOLD | GO | HOLD | HOLD | HOLD | PARKED |
@@ -55,7 +55,7 @@
 | [dock](operations/site_devices/dock/progress.md) | 도킹 | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | HOLD | PARKED |
 | [signal](operations/site_devices/signal/progress.md) | 사이트 인프라 | uncommitted (2026-09-22) | GO | GO | PARKED | HOLD | HOLD | PARKED |
 | [docs](docs/progress.md) | 거버넌스 | bed604ef (2026-09-30) | GO | GO | N/A | N/A | N/A | N/A |
-| [isaac_sim](learning/envs/isaac/progress.md) | sim | 764b591ed6 (2026-10-11) | GO | GO | HOLD | N/A | N/A | N/A |
+| [isaac_sim](learning/envs/isaac/progress.md) | sim | 5c89f3d1f3 (2026-10-29) | GO | GO | HOLD | N/A | N/A | N/A |
 
 ## HOLD blockers
 

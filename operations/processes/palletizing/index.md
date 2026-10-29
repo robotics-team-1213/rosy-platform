@@ -31,8 +31,8 @@
 
 ## 최근 기록
 
+- 2026-10-29 · 0e808cd6be · refactor(palletizing): 앱과 Fleet의 완전한 컴파일 결과 공유
 - 2026-10-23 · 97d225c050 · refactor(palletizing): 공정 제출 검증의 단일 정본 이동 (D-849)
 - 2026-10-17 · uncommitted · feat(palletizing): recipe/3 Step 입력에 sku (D-781 §2)
 - 2026-10-17 · uncommitted · feat(palletizing): recipe/3 팔별 Action 변환과 cell/3 작업대 문서 (D-781 §5)
 - 2026-10-17 · f5ce2625a · fix(palletizing): recipe/3 carry_z와 도달 판정 보강 (D-781)
-- 2026-10-17 · fa22f99db · feat(palletizing): recipe/3 혼합 로더와 팔 베이스 둘을 아는 탐욕적 계획기 (D-781)
