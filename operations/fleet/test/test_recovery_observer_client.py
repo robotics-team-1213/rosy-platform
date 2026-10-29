@@ -61,7 +61,7 @@ def test_actual_api_accepts_facts_without_creating_or_dispatching_a_child(module
     assert len(reply['evidence_digest']) == 64 and samples == before
     view = case.client.get(case.url + '/recovery', headers=headers('harbor')).json()['recovery']
     assert view['status'] == 'READY_FOR_APPROVAL' and view['child_mission_id'] is None
-    assert case.store.get(case.parent)['status'] == 'HOLD'
+    assert case.client.get(case.url, headers=headers('harbor')).json()['job']['status'] == 'HOLD'
     assert len(case.port.submitted) == 1
     posts = [call for call in client.opener.calls if call[0] == 'POST']
     assert len(posts) == 1 and posts[0][1].endswith('/observations')
