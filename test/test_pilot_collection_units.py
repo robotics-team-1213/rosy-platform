@@ -1,5 +1,6 @@
 """Collection and offline preparation share a lock and retain signed code and TLS."""
 import configparser
+import importlib.util
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -9,6 +10,16 @@ def unit(name):
     parsed = configparser.ConfigParser(interpolation=None, strict=False)
     parsed.read(ROOT / "deploy/model_pc" / name)
     return parsed
+
+
+def test_signed_model_jobs_resolve_the_pipeline_to_its_canonical_source():
+    path = ROOT / "deploy/site/model_code_jobs.py"
+    spec = importlib.util.spec_from_file_location("pilot_model_jobs", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    expected = "learning/curation/perception/pilot_review.py"
+    file, base, name, mapped = module.job_entry(ROOT, "dataset/pilot_review.py")
+    assert (file, base, name, mapped) == (ROOT / expected, ROOT, expected, expected)
 
 
 def test_receiver_uses_configured_url_and_signed_entry_with_shared_lock():

@@ -4,7 +4,7 @@
 
 `rosy-pilot-fetch@.timer`는 모델 PC 사용자 세션에서 종료된 Pilot 녹화를 10분마다 확인한다. 수신은 기존 `fetch_http.py`가 CORE의 정지 판정, 장치 TLS, Operator 권한, 원본 SHA-256, MP4 변환과 조작 짝 검사를 수행한다. 이 작업은 원본·영상까지이며 픽셀 초안, 사람 승인, 학습은 별도 단계다.
 
-설치 전 모델 PC의 `~/rosy-ml/bin/fetch_http.py`와 checkout의 `learning/curation/perception/bag_to_video.py`를 확인하고, 이 버전의 수신기를 모델 PC에 배치한다. 각 로봇 인스턴스의 장치 CA를 `~/rosy-ml/<id>-ca.pem`, 읽기 전용 Operator 토큰을 `~/.config/rosy/pilot-<id>.operator-token`에 배치한다. `~/.config/rosy/pilot-<id>.env`에는 `SINCE_ID=<첫 자동 수집 세션 ID>`를 넣는다. 기존 세션에 조작 짝이 없어 실패가 반복되는 것을 막는 경계다. 파일 내용과 로봇 주소를 Git에 넣지 않는다. 한 로봇의 예:
+설치 전 승인된 서명 model-code 릴리스의 `learning/curation/perception/fetch_http.py`와 `bag_to_video.py`를 확인한다. 수신 entry도 이 릴리스에서 실행하며 `~/rosy-ml/bin/fetch_http.py` 사본을 실행하지 않는다. 각 로봇 인스턴스의 장치 CA를 `~/rosy-ml/<id>-ca.pem`, Operator 토큰을 `~/.config/rosy/pilot-<id>.operator-token`에 배치한다. `~/.config/rosy/pilot-<id>.env`에는 `SINCE_ID=<첫 자동 수집 세션 ID>`를 넣는다. 기존 세션에 조작 짝이 없어 실패가 반복되는 것을 막는 경계다. 승인된 광고 URL이 기본 `https://rosy-pinky-<id>.local:8080`과 다르면 같은 파일에 `ROBOT_BASE_URL=<승인된 HTTPS URL>`을 넣는다. 인증서 이름이 맞아야 하며 DNS 실패를 이유로 IP를 추측하거나 TLS 검증을 끄지 않는다. 파일 내용과 로봇 주소를 Git에 넣지 않는다. 한 로봇의 예:
 
 ```bash
 mkdir -p ~/.config/systemd/user
@@ -18,6 +18,51 @@ journalctl --user -u rosy-pilot-fetch@9dfk.service -n 80 --no-pager
 
 `9dfk`는 설치 예시의 mDNS ID이며 현장 로봇 ID를 사용한다. `start`에서 정지·토큰·TLS·해시·변환 결과를 확인한 뒤 타이머를 켠다. 변환이 실패하면 검증된 raw 폴더를 남기고 다음 주기에 로컬 변환을 재시도한다. 성공 영수증은 사이드카 해시·영상 존재·조작 짝을 확인한 뒤에만 만든다. 로봇의 원본과 승인 상태는 이 타이머가 변경하지 않는다.
 물리 로그인 코드로 받은 Operator 토큰은 만료된다(D-193 기본 7일). 만료 전에 새 코드로 재페어링하고 타이머의 마지막 성공 시각을 확인한다.
+
+### 오프라인 복구와 Learning 검수 대기 등록
+
+로봇이 꺼졌거나 원본이 로봇 목록에서 사라져도 이미 받은 원본은 로컬에서 처리할 수 있다. 승인된 코드가 있는 모델 PC에서 다음 명령을 실행한다. 원본과 변환 파일은 보존하며, 원본·sidecar·MP4 해시가 맞지 않으면 실패한다. 실패한 자료를 성공으로 표시하지 않는다.
+
+```bash
+SOURCE="$HOME/.local/share/rosy/model-code/current"
+PYTHONPATH="$SOURCE/learning/curation/perception:$SOURCE/tools/perception:$SOURCE/learning/registry/perception:$SOURCE/learning/training/perception:$SOURCE/middleware/perception" \
+  "$HOME/rosy-ml/.venv/bin/python" "$SOURCE/learning/curation/perception/fetch_http.py" \
+  --local-only --dest <raw-root> --video-out <video-root> --only <recording-id> --codec h264
+```
+
+`pilot_review.py`는 같은 로컬 복구를 먼저 실행한 뒤, 수락된 조작과 짝지어진 영상에서 최대 2 FPS로 프레임을 고른다. 기존 `pixel_label_job.prepare_sources`로 영상 사본·정확한 PNG·`verified-inputs.jsonl`을 `<review-root>/<recording-id>/`에 만들고 원본 manifest·sidecar·영상·클래스·출력 해시 영수증을 남긴다. 재실행은 출력 바이트를 확인한 뒤 재사용하며 덮어쓰지 않는다. 다른 원본·클래스·손상된 출력이면 기존 자료를 남기고 실패한다. raw의 `catalog.jsonl`과 이 검수 입력은 다른 산출물이다.
+
+```bash
+PYTHONPATH="$SOURCE/learning/curation/perception:$SOURCE/tools/perception:$SOURCE/learning/registry/perception:$SOURCE/learning/training/perception:$SOURCE/middleware/perception" \
+  "$HOME/rosy-ml/.venv/bin/python" "$SOURCE/learning/curation/perception/pilot_review.py" \
+  --raw-root <raw-root> --video-dir <video-root> --out <new-review-root> \
+  --classes <workspace-classes.yaml> --state <existing-review-state> --only <recording-id>
+```
+
+`--state`는 이미 초기화한 Learning 작업 공간만 받는다. 클래스 결속이 다르면 거절한다. 등록은 기존 `review_ingest`의 catalog-relative 검증을 거쳐 **사람 검수 대기**로만 들어가고, 같은 입력을 다시 등록해도 기존 사람 승인·정답·이력은 유지한다. `--state`를 빼면 준비 폴더만 만들며 Learning의 자료 등록에서 그 폴더를 선택할 수 있다. 이 수집 과정은 운전자를 사람으로 추정하지 않고, 모델 활성화·학습 요청·정답 승인을 만들지 않는다.
+
+자동 처리에는 `rosy-pilot-process.service`와 `.timer`를 사용한다. `~/.config/rosy/pilot-process.env`는 실제 소유 경로로 채운 아래 다섯 변수를 가진 0600 파일이다. 다른 작업 공간의 클래스·DB를 추측해 넣지 않는다.
+
+```text
+RAW_ROOT=<raw-root>
+VIDEO_ROOT=<video-root>
+REVIEW_ROOT=<new-review-root>
+REVIEW_CLASSES=<workspace-classes.yaml>
+REVIEW_STATE=<existing-review-state>
+```
+
+서명 릴리스에 `pilot_review.py`와 그 의존 파일이 있고 기존 작업 공간·클래스가 일치하는지 확인한 뒤 unit을 설치한다. 기존 unit·환경 파일은 먼저 별도 백업한다. 수동 1회 실행에서 준비/등록 결과를 확인한 뒤 10분 타이머를 켠다.
+
+```bash
+cp deploy/model_pc/rosy-pilot-process.{service,timer} ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user start rosy-pilot-process.service
+systemctl --user status rosy-pilot-process.service --no-pager
+journalctl --user -u rosy-pilot-process.service -n 80 --no-pager
+systemctl --user enable --now rosy-pilot-process.timer
+```
+
+수신과 로컬 처리는 같은 `%t/rosy-pilot-collection.lock`을 사용한다. 다른 작업이 잠금을 보유하면 exit 75로 이번 회차만 건너뛰고 다음 타이머에서 재시도한다. 이는 수신·등록 성공 증거가 아니다. 수동 실행도 같은 `flock`을 사용하거나 두 타이머·실행 중 service를 정지한 상태에서 실행한다. 네트워크 수신 실패는 별도로 남으며, 이미 받은 자료의 로컬 검증·등록을 막지 않는다. 중지는 해당 타이머와 service를 멈추고 백업한 unit/config를 복원한 뒤 daemon-reload한다. 준비 자료나 검수 DB를 삭제해 되돌리지 않는다.
 
 [D-527](../../docs/adr/D-527-decision-test-host-boundaries.md)의 L0 실행 위치다. 개발 로컬 PC는 `test/test_decision_replay.py`와 lint·푸시 검사를 수행한다. 모델 PC는 사람 정답이 있는 독립 세트로 텍스트 Laya/Kev/규칙 기준선을 비교하고, VLM은 별도의 영상·LiDAR 정답 세트로 평가한다. AI PC의 역할은 승인된 고정 버전의 적재·추론 스모크와 watchdog 확인이다.
 
