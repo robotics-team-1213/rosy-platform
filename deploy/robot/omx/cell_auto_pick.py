@@ -188,9 +188,8 @@ def object_sized(mask, params=None):
     return out
 
 
-def side_clear(mask, roi, pixel_fn, o: dict, finger_mm: float, closing_deg: float | None = None) -> bool:
-    """Mask beside the object on both closing sides, a finger's width out: clear of other foreground. The closing
-    direction defaults to across the long axis; a square object passes the one its candidate yaw closes along."""
+def own_removed(mask, roi, pixel_fn, o: dict):
+    """The finger mask without the object's own pixels (its outline, or its blob): its sides are not a neighbour."""
     import cv2
 
     centre = pixel_fn(tuple(o["raw_m"]))
@@ -203,19 +202,14 @@ def side_clear(mask, roi, pixel_fn, o: dict, finger_mm: float, closing_deg: floa
         c_col, c_row = round(centre[0]) - roi[0], round(centre[1]) - roi[1]
         if 0 <= c_row < mask.shape[0] and 0 <= c_col < mask.shape[1] and labels[c_row, c_col]:
             mask = np.where(labels == labels[c_row, c_col], 0, mask).astype(mask.dtype)  # its own blob (side faces) is not a neighbour
-    u = math.radians(o["long_axis_deg"] if closing_deg is None else closing_deg - 90)
-    along, across = np.array([math.cos(u), math.sin(u)]), np.array([-math.sin(u), math.cos(u)])
-    half_across = o["width_mm"] / 2 if closing_deg is None else max(o["width_mm"], o["length_mm"]) / 2
-    for side in (-1, 1):
-        for out in (0.5, 1.0, 2.0):  # an open finger spans from the box edge to about two finger widths out
-            for s in (-0.3, 0.0, 0.3):
-                p = np.array(o["raw_m"]) + (side * (half_across + out * finger_mm) * across + s * min(o["length_mm"], 2 * half_across) * along) / 1000
-                px = pixel_fn(tuple(p))
-                col, row = round(px[0]) - roi[0], round(px[1]) - roi[1]
-                if 1 <= row < mask.shape[0] - 1 and 1 <= col < mask.shape[1] - 1 and mask[row - 1:row + 2, col - 1:col + 2].any():
-                    return False
-    return True
+    return mask
 
+
+def finger_room(mask, roi, pixel_fn, o: dict, closing_deg: float | None = None, params=None) -> dict:
+    """Free mm on each closing side and the jaw margin that fits (cell_finger_room); margin None means no room."""
+    import cell_finger_room
+
+    return cell_finger_room.jaw_margin(own_removed(mask, roi, pixel_fn, o), roi, pixel_fn, o, closing_deg, params)
 
 def grasp_yaw(config: dict, site: str, o: dict, entry: dict, offset) -> float:
     """Tool yaw (deg) for a closing-axis candidate. The jaws close along tool y = yaw + offset, and must close
@@ -228,12 +222,13 @@ def grasp_yaw(config: dict, site: str, o: dict, entry: dict, offset) -> float:
     return round(base + (yaw - base + 90) % 180 - 90, 1)
 
 
-def jaw_open_for(width_mm: float, params=None) -> float:
+def jaw_open_for(width_mm: float, params=None, margin_mm: float | None = None) -> float:
     """The jaw value whose finger gap is the object width plus a margin each side. Measured 2026-10-29 from the wrist
     view: about 10.4 mm of gap per unit, 30 mm held at 52.3. Opening to 62 put the fingers ~40 mm out, onto the 2-cells
     standing next to the box; 56 put a finger on the board edge."""
     g = lambda name: prm.get(params, name)  # noqa: E731
-    value = g("gripper.held_30mm") + (width_mm + 2 * g("auto.jaw_margin_mm") - 30.0) / g("gripper.gap_mm_per_unit")
+    margin = g("auto.jaw_margin_mm") if margin_mm is None else margin_mm  # less where a neighbour is near (finger_room)
+    value = g("gripper.held_30mm") + (width_mm + 2 * margin - 30.0) / g("gripper.gap_mm_per_unit")
     return round(min(max(value, g("gripper.held_30mm") + 0.5), g("gripper.open_max")), 2)
 
 
@@ -263,7 +258,7 @@ def plan_pick(config: dict, site: str, dest_site: str, place_xy, o: dict, entry:
             place = {"x": place_xy[0], "y": place_xy[1],
                      "z": round(surface_z(config, dest_site) + height + s.get("place_dz", 0.0), 4), "yaw_deg": s["yaw_deg"]}
             try:
-                jaws = jaw_open_for(entry["width_mm"], config.get("params"))
+                jaws = jaw_open_for(entry["width_mm"], config.get("params"), o.get("jaw_margin_mm"))
                 # one file per object: two boxes on the floor planned into one name, and the arm went to the other one
                 # (2026-10-29, the second candidate overwrote the first's library)
                 lib = cp.write_library(dict(config, plan=dict(config["plan"], approach_m=approach, grip_open=jaws)), pick,
@@ -308,7 +303,6 @@ def choose(cell, config, calibration, site, dest_site, place_xy, roi, objects, m
     entries, usable, refused = {e["id"]: e for e in catalog}, [], []
     pixel_fn = lambda p: predicted_pixel(config, calibration, site, p)  # noqa: E731
     p = config.get("params")
-    finger = config.get("auto", {}).get("finger_mm", prm.get(p, "auto.finger_mm"))
     for o in sorted(objects, key=lambda o: ("split_from" in o, math.dist(o["raw_m"], config["sites"][site]["start"]))):
         why = None
         px = pixel_fn(o["raw_m"])
@@ -318,8 +312,10 @@ def choose(cell, config, calibration, site, dest_site, place_xy, roi, objects, m
             why = "no catalogue match"
         elif px is None or not (roi[0] + 12 <= px[0] <= roi[2] - 12 and roi[1] + 12 <= px[1] <= roi[3] - 12):
             why = "not inside the camera view"
-        elif not square_entry(entries, o) and not side_clear(mask, roi, pixel_fn, o, finger):
-            why = "no finger gap on both closing sides"
+        elif not square_entry(entries, o):
+            room = finger_room(mask, roi, pixel_fn, o, None, p)
+            if room["margin_mm"] is None:
+                why = f"no finger room: {room['free_mm'][0]} / {room['free_mm'][1]} mm free beside it"
         if why:
             refused.append({"centre_mm": o["centre_mm"], "object": o.get("object"), "why": why})
             continue
@@ -336,12 +332,14 @@ def choose(cell, config, calibration, site, dest_site, place_xy, roi, objects, m
             # a yaw that already failed on this object (contact or empty) is not tried again: the next attempt changes it
             fresh = [y for y in (base_yaw, base_yaw + 90.0)
                      if all(abs(wrap90(y - f)) > 5.0 for f in failed_yaws)] or [base_yaw, base_yaw + 90.0]
-            yaw = next((y for y in fresh if side_clear(mask, roi, pixel_fn, o, finger, y + closing)), None)
+            rooms = [(y, finger_room(mask, roi, pixel_fn, o, y + closing, p)) for y in fresh]
+            yaw, room = next(((y, r) for y, r in rooms if r["margin_mm"] is not None), (None, rooms[0][1]))
             if yaw is None:
                 refused.append({"centre_mm": o["centre_mm"], "object": o["object"], "why": "no finger gap on either closing axis"})
                 continue
         region = cell_pivot.bias_at(bias_data, site, o["raw_m"], params=p)
         bias = region["bias_mm"] if region else [0.0, 0.0]
+        o = dict(o, jaw_margin_mm=room["margin_mm"], free_mm=room["free_mm"])  # the jaws open only as far as fits
         planned = plan_pick(config, site, dest_site, place_xy, o, entry, offset, bias, work, yaw)
         for end in (reachable_ends(o, entry, p) if isinstance(planned, str) and "UNREACHABLE" in planned else []):
             # a long box whose middle is out of reach is held nearer its end (2026-10-29: a 2-cell on the moved Pinky)

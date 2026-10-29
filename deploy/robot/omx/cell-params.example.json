@@ -385,6 +385,18 @@
    "source": "tuned",
    "evidence": "2026-10-29 wrist view at home: pad gap 7/62/201/319/445 px at jaws 48.8/50.1/51.9/53.6/55.6 (about 70 px per unit); a 30 mm box is held at 52.3 -> about 10.4 mm of gap per unit; 56 opened ~67 mm, 62 over 110 mm and put the fingers on the neighbours"
   },
+  "auto.finger_pad_mm": {
+   "value": 20.0,
+   "unit": "mm",
+   "source": "tuned",
+   "evidence": "2026-10-29 wrist view: the finger pad is about 20 mm wide; room beside a box is measured across this width only, not +-30 % of the box length"
+  },
+  "auto.min_jaw_margin_mm": {
+   "value": 2.0,
+   "unit": "mm",
+   "source": "tuned",
+   "evidence": "2026-10-29: jaws open the box width + margin each side; under 2 mm the fingers land on the box edge (about one top-view pixel of error)"
+  },
   "gripper.gap_mm_per_unit": {
    "value": 10.4,
    "unit": "mm",

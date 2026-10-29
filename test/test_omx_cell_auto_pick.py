@@ -519,12 +519,27 @@ def test_a_square_box_closes_along_the_axis_whose_finger_sides_are_clear():
     px = lambda p: (100 + p[0] * 1000, 100 + (p[1] - 0.1) * 1000)  # noqa: E731  1 px per mm
     cube = {"raw_m": [0.0, 0.1], "width_mm": 30, "length_mm": 30, "long_axis_deg": 0.0}
     mask[85:116, 85:116] = 255  # the cube itself
-    mask[90:110, 128:140] = 255  # a 2-cell beside it on the next surface, +x side (2026-10-29: jaws landed on it)
+    mask[90:110, 121:140] = 255  # a 2-cell 6 mm beside it, +x side (2026-10-29: jaws landed on it)
+    roi = (0, 0, 200, 200)
     # closing along x (yaw 0 + 90 -> closing 90: fingers at +-x) meets the neighbour; closing along y is clear
-    assert not auto.side_clear(mask, (0, 0, 200, 200), px, cube, 8, closing_deg=0.0)
-    assert auto.side_clear(mask, (0, 0, 200, 200), px, cube, 8, closing_deg=90.0)
-    mask[128:140, 90:110] = 255  # and one on the +y side too: no clear axis
-    assert not auto.side_clear(mask, (0, 0, 200, 200), px, cube, 8, closing_deg=90.0)
+    assert auto.finger_room(mask, roi, px, cube, 0.0)["margin_mm"] is None
+    assert auto.finger_room(mask, roi, px, cube, 90.0)["margin_mm"] == 8.0
+    mask[121:140, 90:110] = 255  # and one on the +y side too: no clear axis
+    assert auto.finger_room(mask, roi, px, cube, 90.0)["margin_mm"] is None
+
+
+def test_a_box_with_a_narrow_gap_is_taken_with_the_jaws_opened_less_not_refused():
+    mask = np.zeros((200, 200), np.uint8)
+    px = lambda p: (100 + p[0] * 1000, 100 + (p[1] - 0.1) * 1000)  # noqa: E731  1 px per mm
+    box = {"raw_m": [0.0, 0.1], "width_mm": 30, "length_mm": 60, "long_axis_deg": 0.0}
+    mask[85:116, 70:131] = 255  # the 2-cell
+    mask[128:140, 60:140] = 255  # a neighbour 12 mm past its +y side; the old check refused this (4/8/16 mm samples)
+    room = auto.finger_room(mask, (0, 0, 200, 200), px, box)
+    assert room["margin_mm"] is not None and 2.0 <= room["margin_mm"] < 8.0
+    assert room["free_mm"][0] > room["free_mm"][1]
+    assert auto.jaw_open_for(30, margin_mm=room["margin_mm"]) < auto.jaw_open_for(30)
+    mask[85:116, 135:200] = 255  # a neighbour 4 mm past its end: outside the pad, not in the fingers' way
+    assert auto.finger_room(mask, (0, 0, 200, 200), px, box)["margin_mm"] == room["margin_mm"]
 
 
 def test_a_whole_surface_in_view_is_not_a_finger_obstacle_but_a_box_is():
