@@ -163,7 +163,7 @@ def observe(cell, config: dict, calibration: dict, site: str, roi, catalog: list
     cd.see(keep(f"auto-{site}-top", img))
     poly, lab = config["sites"][site].get("surface_px"), config["sites"][site].get("surface_lab")
     objects = cell_objects.detect(img, roi, record, config["cameras"]["top"], catalog, surface_z(config, site),
-                                  config.get("params"), poly, lab)
+                                  config.get("params"), poly, lab, (config.get("objects") or {}).get("hsv"))
     for o in objects:
         o["raw_m"] = [o["centre_mm"][0] / 1000, o["centre_mm"][1] / 1000]
     # the finger-side mask is not clipped to the site polygon: a container on the next surface (the board beside the

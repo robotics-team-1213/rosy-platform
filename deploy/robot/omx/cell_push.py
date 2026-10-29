@@ -203,7 +203,8 @@ def main(argv=None):
             keep("push-after", after)
             if args.catalog:
                 objects = cell_objects.detect(after, args.roi, record, camera, cell_objects.load_catalog(args.catalog),
-                                              site["surface_z"], params, site.get("surface_px"), site.get("surface_lab"))
+                                              site["surface_z"], params, site.get("surface_px"), site.get("surface_lab"),
+                                              (config.get("objects") or {}).get("hsv"))
                 out["after"] = [{"centre_mm": o["centre_mm"], "object": o.get("object"), "matched": o["matched"],
                                  "tangled": o.get("tangled", False)} for o in objects]
     (work / f"{stamp}-push.result.json").write_text(json.dumps(out, indent=1, default=str))

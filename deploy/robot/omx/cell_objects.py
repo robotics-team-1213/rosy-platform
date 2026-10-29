@@ -201,8 +201,23 @@ def _measure_blob(px, record: dict, camera: dict, catalog: list, surface_z: floa
     return best
 
 
+def object_mask(img, roi, hsv, surface_px=None, params=None):
+    """Mask (ROI-sized) of the objects by their own colour (OpenCV HSV range, e.g. the green containers): the
+    surface, its shadows, white lines and belts do not matter. On the board the green boxes read hue 78-80, the board
+    20, a box's shadow 34 and the white line saturation 25 (2026-10-29)."""
+    x0, y0, x1, y1 = roi
+    mask = cv2.inRange(cv2.cvtColor(img[y0:y1, x0:x1], cv2.COLOR_BGR2HSV), np.array(hsv[0]), np.array(hsv[1]))
+    if surface_px:
+        keep = np.zeros_like(mask)
+        cv2.fillPoly(keep, [np.asarray(surface_px, np.int32) - [x0, y0]], 255)
+        mask &= keep
+    o, c = (int(prm.get(params, f"objects.{k}")) for k in ("open_px", "close_px"))
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, np.ones((o, o), np.uint8))
+    return cv2.morphologyEx(mask, cv2.MORPH_CLOSE, np.ones((c, c), np.uint8))
+
+
 def detect(img, roi, record: dict, camera: dict, catalog: list, surface_z: float = 0.0, params=None,
-           surface_px=None, surface_lab=None) -> list:
+           surface_px=None, surface_lab=None, object_hsv=None) -> list:
     """All objects in the ROI. A blob that matches nothing is tried as boxes that only touch (cell_split); each piece
     is judged on its own, and the pieces replace the blob when at least one matches the catalogue (2026-10-29: the
     1-cell matched, the 2-cell beside it read 63 x 47 mm with its side faces and stays an unmatched neighbour). Each
@@ -210,8 +225,10 @@ def detect(img, roi, record: dict, camera: dict, catalog: list, surface_z: float
     import cell_split
 
     x0, y0, _, _ = roi
-    n, labels, stats, _ = cv2.connectedComponentsWithStats(foreground(img, roi, params=params, surface_px=surface_px,
-                                                                      surface_lab=surface_lab))
+    # objects by their own colour when the cell names it; else anything far from the surface (any colour)
+    seen = (object_mask(img, roi, object_hsv, surface_px, params) if object_hsv is not None
+            else foreground(img, roi, params=params, surface_px=surface_px, surface_lab=surface_lab))
+    n, labels, stats, _ = cv2.connectedComponentsWithStats(seen)
     out = []
     for i in range(1, n):
         if stats[i, cv2.CC_STAT_AREA] < prm.get(params, "objects.min_px", MIN_PX):
