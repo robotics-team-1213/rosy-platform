@@ -163,6 +163,10 @@ def test_mdns_diagnostic_compares_native_identity_live_host_and_house_xml(tmp_pa
     ('xml_missing', 'service_missing'), ('xml_malformed', 'service_invalid'),
     ('identity_missing', 'identity_unavailable'), ('status_missing', 'expectations_unavailable'),
     ('xml_oversized', 'service_invalid'), ('identity_oversized', 'identity_unavailable'),
+    ('xml_product', 'service_mismatch'), ('xml_port', 'service_mismatch'),
+    ('xml_tls', 'service_mismatch'), ('xml_tls_host', 'service_mismatch'),
+    ('xml_name', 'service_mismatch'), ('configured', 'configured_hostname_mismatch'),
+    ('daemon_unknown', 'avahi_unavailable'),
 ])
 def test_mdns_diagnostic_never_calls_missing_or_inconsistent_local_evidence_ready(tmp_path, problem, reason):
     root = _mdns_device(tmp_path)
@@ -180,8 +184,16 @@ def test_mdns_diagnostic_never_calls_missing_or_inconsistent_local_evidence_read
         identity.write_text('x' * (64 * 1024), encoding='utf-8')
     elif problem == 'status_missing':
         (root / 'run/rosy-boot/boot-status.json').unlink()
+    elif problem.startswith('xml_'):
+        before, after = {'xml_product': ('product=rosy', 'product=foreign'),
+                         'xml_port': ('8080', '9090'), 'xml_tls': ('tls=required', 'tls=none'),
+                         'xml_tls_host': ('e4us.local', 'other.local'),
+                         'xml_name': ('ROSY %h', 'Other service')}[problem]
+        service.write_text(service.read_text(encoding='utf-8').replace(before, after), encoding='utf-8')
+    elif problem == 'configured':
+        (root / 'etc/hostname').write_text('ubuntu\n', encoding='utf-8')
     evidence, _, _ = _mdns_bundle(tmp_path, root, live='ubuntu' if problem == 'live' else 'rosy-pinky-e4us',
-                                 daemon='inactive' if problem == 'daemon' else 'active')
+                                 daemon={'daemon': 'inactive', 'daemon_unknown': 'unknown'}.get(problem, 'active'))
     assert evidence['status'] != 'consistent'
     assert reason in evidence['reasons']
     assert evidence['network_advertisement'] == 'not_tested'
@@ -199,6 +211,22 @@ def test_mdns_diagnostic_does_not_export_unknown_txt_or_identity_fields_or_query
     assert DENIED_MARK not in members['network/mdns.json']
     assert not any(call[0] in {'avahi-browse', 'resolvectl', 'ping', 'curl'} for call in calls)
     assert not any(word in {'restart', 'start', 'enable', '--show-secrets'} for call in calls for word in call)
+
+
+def test_native_identity_is_bounded_before_any_diagnostic_json_parse(tmp_path, monkeypatch):
+    root = _mdns_device(tmp_path)
+    (root / 'etc/rosy/device-identity.json').write_text(
+        json.dumps({'hostname': 'rosy-pinky-e4us', 'extra': 'x' * (64 * 1024)}), encoding='utf-8')
+    module = _module()
+    loads = json.loads
+
+    def bounded(text, *args, **kwargs):
+        assert len(text) <= 32 * 1024, 'identity was parsed before enforcing the input bound'
+        return loads(text, *args, **kwargs)
+
+    monkeypatch.setattr(module.json, 'loads', bounded)
+    bundle = module.collect(root, FakeRunner(), tmp_path / 'out')
+    assert 'identity_unavailable' in loads(_members(bundle)['network/mdns.json'])['reasons']
 
 
 def test_the_bundle_has_every_planned_member_and_the_root_cause(tmp_path):
