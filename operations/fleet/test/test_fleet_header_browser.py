@@ -628,6 +628,10 @@ def test_a_lost_link_is_readable_on_a_phone(tmp_path, text_spacing):
             assert identity['x'] + identity['width'] <= box['x'] + 1
             assert box['x'] + box['width'] <= min(actions['x'], stop['x']) + 1
             assert word.evaluate('node => node.scrollWidth <= node.clientWidth + 1'), metrics
+            assert float(metrics['settled']['#link-state']['dot']['width'].removesuffix('px')) == 8, metrics
+            for selector in ('#fleet-login', '#topbar-more', '#estop'):
+                control = page.locator(selector).bounding_box()
+                assert control['width'] >= 48 and control['height'] >= 48, (selector, control)
             expect(page.locator("#estop")).to_be_visible()
             assert page.evaluate("document.documentElement.scrollWidth - innerWidth") <= 0, name
             page.close()

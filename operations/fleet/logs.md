@@ -5130,3 +5130,11 @@
 - 증거: [별도 수정 검증](../../docs/validation/recovery-observer-client-2026-10-29/guard-correction.md). 해당 커밋에서 원격 client 전체와 정확 secret guard 36 pass·skip 0·NEW 0. 독립 검토는 32자 미만 거절·출력 미노출 의도가 유지됨을 확인했다.
 - Gate: 공식 재착지는 별도 확인한다. 실제 관측 생산자·장치·학습 수용 변화는 없다.
 - CE: 해당 없음 — 기존 검사기의 명시적 자리표시자 규칙과 이번 회귀·수정 기록에서 이유를 복원한다.
+
+## 2026-10-29 · uncommitted · 좁은 화면의 연결 상태 글·점 폭 보존
+
+- 원인: PR220 a985의 실제 CI는320px Console에서 연결 끊김 tag의 scrollWidth/clientWidth assertion에 실패했다. 진단 source8ccebf6878 원격은 authored1 passed/accessibility-spacing1 failed(NEW1)로 재현했다. font ready와2frames 전후가 같았고, client65/scroll71/text66.53px, 점0px였다. 기본 글 간격에서도 점은 nominal8px 대신5.22px로 압축됐다. CI의 실제 fallback font는 미측정이며 loading race로 단정하지 않는다.
+- 변경: status grid의 최소 폭을 max-content로 잡고 tag·점을 줄이지 않는다. compact header의 바깥 gap/inset20px를 반환하되 action 내부 간격·버튼 padding·48px 누름 면·접근 이름·E-stop 동작을 유지한다. 기존 가시성·경계·순서·페이지 overflow 검사를 보존하고 점8px/조작48x48 assertion을 추가했다.
+- 증거: 원격 RED의 PNG와 실제 CDP font/즉시·안정화 DOM metrics를 보존·육안 확인했다. 독립 contract review는 권한·안전 행동 변경이 없음을 확인했다. 수동 Impeccable detector는0 findings였다. 전체 header browser/static GREEN은 아직 대기 중이며 부분 재현을 완료로 쓰지 않는다.
+- gate 변화: 없음. skip·quarantine 추가·폰트 축소·문구 숨김·검사 완화는 없다. status만의 text-spacing 검사를 전체 WCAG 수용으로 주장하지 않는다.
+- CE: 미해결 — 기존 child-clipping 교훈 보완 필요성은 GREEN 이후 실제 증거로 판정한다.
