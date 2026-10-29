@@ -78,6 +78,6 @@
 
 - 2026-10-29 · uncommitted · 기존 게시 검토 판정 재사용
 - 2026-10-29 · uncommitted · SD 교훈 기록의 역사 비밀 검사 판정
+- 2026-10-29 · 8a381b7f12 · 자기 배치의 준비 슬롯 중복 예약 수정
 - 2026-10-29 · 2f88347d69 · SD 원격 fixture의 플랫폼 경계 검증
 - 2026-10-29 · 0ab037ed49 · SD mount의 native parameter set 수정
-- 2026-10-29 · uncommitted · Site readiness 게시 검사 출처 검토

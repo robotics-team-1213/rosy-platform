@@ -442,10 +442,15 @@ def main(argv=None):
     parser.add_argument("--config", required=True, type=Path, help="record config (robot section is used)")
     parser.add_argument("--library", required=True, type=Path)
     parser.add_argument("--io", required=True, type=Path, help="directory for chunk-cmd (FIFO) and chunk-status.jsonl")
+    parser.add_argument("--operating-profile", type=Path, help="per-device operating profile; unbound sessions cannot auto-pick")
     parser.add_argument("--params", type=Path, help="cell-params.json (rosy.omx-cell-params.v1); default: the built-in values")
     args = parser.parse_args(argv)
     library = load_library(args.library)
     config = json.loads(args.config.read_text(encoding="utf-8-sig"))
+    params = prm.load(args.params)["values"]
+    from cell_robot_profile import load as load_operating_profile
+
+    profile = load_operating_profile(args.operating_profile, robot_config=config["robot"]) if args.operating_profile else None
     if library.get("fps") != config["dataset"]["fps"]:  # one frame per tick: another fps replays at another speed
         raise SystemExit(f"chunk library fps {library.get('fps')} differs from the recorder fps {config['dataset']['fps']}")
     from lerobot.robots.omx_follower import OmxFollower, OmxFollowerConfig
@@ -479,9 +484,10 @@ def main(argv=None):
             tmp.write_text(json.dumps(row))
             os.replace(tmp, live_path)
 
-        context = runtime_context(config["robot"], robot.bus, config["dataset"]["fps"])
+        context = runtime_context(config["robot"], robot.bus, config["dataset"]["fps"],
+                                  operating_profile=profile, params=params)
         Runner(guarded, library, fps=config["dataset"]["fps"], status=status, live=live,
-               operating_context=context, params=prm.load(args.params)["values"]).run(lines)
+               operating_context=context, params=params).run(lines)
     finally:
         lines.close()
         try:
