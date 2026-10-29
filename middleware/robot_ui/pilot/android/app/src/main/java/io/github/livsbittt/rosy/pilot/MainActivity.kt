@@ -173,7 +173,7 @@ class MainActivity : Activity() {
         }
         columns.addView(list, if (compact) LinearLayout.LayoutParams(-1, -1) else LinearLayout.LayoutParams(0, -1, 1f))
         val header = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL }
-        header.addView(label(if (compact) "Pilot · 로봇 선택" else "로봇 선택", RosyMetrics.TextTitle).apply { typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL) }, LinearLayout.LayoutParams(0, -2, 1f))
+        header.addView(label(if (compact) "Pilot · 한 대 조종" else "조종할 로봇 한 대 선택", RosyMetrics.TextTitle).apply { typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL) }, LinearLayout.LayoutParams(0, -2, 1f))
         header.addView(views.button("다시 찾기", primary = true) { lastError = null; endSession { opening = false; status.text = "같은 Wi-Fi에서 로봇을 다시 찾고 있습니다…"; startDiscovery() }; opening = true })
         list.addView(header)
         if (accountConfigured) list.addView(profileEntry())
@@ -184,12 +184,12 @@ class MainActivity : Activity() {
             } } }
         })
         status = views.label("같은 Wi-Fi에서 켜진 로봇을 찾고 있습니다…", RosyMetrics.TextBody, true).apply { setPadding(0, views.dp(RosyMetrics.Space4.toInt()), 0, views.dp(RosyMetrics.Space5.toInt())) }; list.addView(status)
-        groupEntry = views.button("2대 함께 조종", primary = true) { chooseGroupRobots() }.apply { isEnabled = false }
-        list.addView(groupEntry, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = views.dp(RosyMetrics.Space4.toInt()) })
-        groupHint = views.label(LinkStatus.groupHint(0, cooling.coolingRequired), RosyMetrics.TextLabel, true)
-        list.addView(groupHint)
         robots = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         list.addView(ScrollView(this).apply { addView(robots) }, LinearLayout.LayoutParams(-1, 0, 1f))
+        groupEntry = views.button("2대 함께 조종") { chooseGroupRobots() }.apply { isEnabled = false }
+        list.addView(groupEntry, LinearLayout.LayoutParams(-1, -2).apply { topMargin = views.dp(RosyMetrics.Space4.toInt()) })
+        groupHint = views.label(LinkStatus.groupHint(0, cooling.coolingRequired), RosyMetrics.TextLabel, true)
+        list.addView(groupHint)
         if (compact) {
             list.addView(healthText)
             list.addView(deviceButton, LinearLayout.LayoutParams(-1, -2))
