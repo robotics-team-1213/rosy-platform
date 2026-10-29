@@ -121,13 +121,19 @@ async def configured(station_api, tmp_path):
     enabled = [True]
     service = ChargeService(ledger, stations=stations, ports=port, clock=lambda: now[0],
         policy_enabled=lambda: enabled[0], admit_return=policy)
+
+    async def asgi_call(function, *args, **kwargs):
+        # SIM time controls permits; in-process ASGI scheduling has a separate bounded harness budget.
+        return await asyncio.wait_for(function(*args, **kwargs), timeout=30.)
+
+    service.motion.call = asgi_call
     install_hold_probe(service.motion, lambda: now[0])
     runtime = ChargeRuntime(service, robot_id='robot-1', station_id='charger-1', admission=policy,
         monotonic=lambda: now[0], period_s=.1)
     return runtime, service, ledger, tasks, client, http, owner, manager, now, sample, enabled
 
 
-def test_motion_keeps_production_deadline_and_transport_failures(monkeypatch):
+def test_motion_keeps_production_deadline_and_transport_failures(pipeline_sources, monkeypatch):
     from fleet.server import charge_motion
 
     deadlines = []

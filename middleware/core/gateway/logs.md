@@ -2027,3 +2027,10 @@ clpy.duration을 추가했다(bridge AGENTS의 두 파일 함께 갱신 규칙).
 - Evidence: committed 50ba472d focused preservation has 246 PASS; its broader mapped run has 5285 PASS, one C6 registry failure, and 186 summary skips (180 attributed nodes; six unbound skip events). This candidate has no remote result yet; static per-commit preflight and independent SOURCE/safety review precede its normal commit.
 - gate 변화: none. No installed/device/field acceptance or C6 GREEN is claimed.
 - CE: unresolved; existing folder-move-widens-path-scoped-contract-tests-2026-09-25.md applies. No solved lesson is added before verification.
+
+## 2026-10-29 · 33ffa6e6a2 · Station SIM HTTP 시험의 실제 RPC 시간 예산 분리
+
+- 변경: SIM charge/departure 통합 시험의 service instance에만 제한된 30초 ASGI 호출 예산을 주입한다. 운영 `ChargeMotion.call`의 1.5초 제한·예외 처리·HOLD 및 claim 유지 경로는 바꾸지 않는다. 기존 세대/receipt 경합 시나리오를 유지하고 운영 기본 제한·예외 전달, 별도 bounded harness 예산, native 완료 전 갱신 실패의 HOLD/claim 보존 회귀를 추가했다.
+- 증거: 게시 fa3aeeed4d92의 CI run40819077121 attempt1은 ordinary renewal의 실제 1.5초 제한이 AnyIO dependency scheduling 도중 만료돼 SIM103.2에서 CHARGE_DEPARTURE_UNVERIFIED로 먼저 HOLD했고, 그 뒤 races=[] assertion이 실패했다. CPU 부하와 thread limiter 중 어느 것이 지연 원인인지는 이 로그만으로 확정하지 않는다. RED33ffa6e6a2의 원격 실행은 16 passed/2 NEW: 별도 예산 회귀는 의도한 controlled scheduling TimeoutError이고, 새 기본 제한 단위 시험은 pipeline_sources 누락으로 import 실패했다. fixture 의존성을 바로잡았으며 수정 후보의 GREEN은 아직 미실행이다.
+- gate 변화: 없음. 실제 RPC 제한을 늘리거나 오류를 성공으로 바꾸지 않았으며 물리 장치 수용을 입증하지 않는다. 기존 후보의 실패 CI 작업도 동일 SHA로 한 번 재실행 요청했고 결과는 아직 진행 중이다.
+- CE: 미해결 — 기존 attribute-intermittent-failure-by-line-then-interleaved-comparison 교훈을 적용했다. GREEN·운영 수용 전에는 해결된 교훈을 추가하지 않는다.
