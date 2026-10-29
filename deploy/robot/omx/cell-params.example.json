@@ -655,5 +655,11 @@
   "unit": "ratio",
   "source": "default",
   "evidence": "2026-10-29 facts-2026-10-29.md 32: a box's dark-yellow shadow on the board stood beside it as a fragment and closed the finger gap"
+ },
+ "pivot.grip_open": {
+  "value": 62.0,
+  "unit": "gripper",
+  "source": "measured",
+  "evidence": "2026-10-29: the plan's 62 left two stable jaw blobs over the floor 2-cell; the pick's 53.84 left none"
  }
 }
