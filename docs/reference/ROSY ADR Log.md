@@ -10,6 +10,8 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-912 | Signed OS transport maintenance with independent authority and durable recovery. [전문](../adr/D-912-signed-os-transport-maintenance.md) | Proposed |
+| D-911 | OMX native 셀의 검증된 작업 범위와 현재 실행 조건을 구분한다. [전문](../adr/D-911-omx-native-reviewed-operating-envelope.md) | Accepted (2026-10-28, 구현 승인; 장치 수용 별도) |
 | D-898 | Fleet 인식 모델 승인을 모델 PC 레지스트리에 반영 — 사람이 나르는 Ed25519 서명 결정 파일 | Proposed (2026-10-27) |
 | D-897 | AI PC와 모델 PC에서 격리된 시뮬레이션 학습 작업을 병렬 실행한다 | Accepted (2026-10-27, 사용자 요청; 운영 권한·승격 별도) |
 | D-902 | Pilot real OMX teleop and recording through Fleet and the CORE manual arm path. [전문](../adr/D-902-pilot-real-omx-teleop-and-recording.md) | Proposed (2026-10-28) |
@@ -26,6 +28,7 @@
 | D-885 | guard가 디스크 부족 시험 PC의 저장소 정리를 요청한다 (D-883 보충) | Accepted for implementation (2026-10-26) |
 | D-884 | Learning 저장 대상 풀과 검증된 로컬 자료 회수. [전문](../adr/D-884-learning-storage-pool-and-local-reclamation.md) | Accepted (2026-10-26) |
 | D-889 | CI/CD 흐름: 통합 열차·정기 게시·잠금 밖 FULL | Proposed (2026-10-26) |
+| D-913 | 판단 난항의 독립 모델 협력과 환경별 순차·병렬 선택 | Accepted (2026-10-29) |
 | D-875 | Swarm owner-local API separates planning from safety lifecycle | Accepted for implementation (2026-10-25) |
 | D-883 | Monitoring 호스트 자원 감시와 시험 PC 저장소 정리 요청 (D-876 §5·D-524 보충) | Accepted for implementation (2026-10-26) |
 | D-877 | OMX 시뮬레이터 백엔드는 공통 층 하나에 붙는다: Gazebo, Isaac Sim, MuJoCo | Accepted (2026-10-25) |
@@ -1336,3 +1339,9 @@ HF user/org별 용량 예약과 작업의 연결·고정 revision·SHA를 보존
 **Status:** Accepted (2026-10-24)
 
 Fleet stores editable device names, models, declared arm counts and hardware identifiers in its existing database. Profiles confer no membership, connection attestation or motion authority. Details: [D-860](../adr/D-860-descriptive-device-profiles.md).
+
+## D-911 OMX native 셀의 검증된 작업 범위와 현재 실행 조건
+
+**Status:** Accepted (2026-10-28). 사용자 구현 지시이며 실물 운용·배포·현장 수용은 별도다.
+
+전체 경로·장치 readback·설치/물체/환경 조건과 감독 시험의 검토 근거를 묶어 native 셀의 자동 작업을 판정한다. 미검증·중간 개입·미완료·실패는 기존 근거만으로 재실행하지 않는다. 전문은 [D-911](../adr/D-911-omx-native-reviewed-operating-envelope.md).

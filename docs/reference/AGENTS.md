@@ -1,10 +1,10 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-10-12 -->
+<!-- Generated: 2026-09-02 | Updated: 2026-10-29 -->
 
 # reference
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-12
+**Updated:** 2026-10-29
 
 ## Purpose
 
@@ -19,7 +19,7 @@ Shared contracts: REST/WS/protocol, architecture decisions, and the Host Agent u
 | `rosy-host-agent-contract.md` | ROSY-HOSTAGENT-001 — `/run/rosy/host-agent.sock`, no arbitrary shell |
 | `team-guide.md` | 개인 클론 설정·훅 예외·공유 범위·작업 분담·인수인계. 게시 조건은 `pr-pipeline.md`로 연결 |
 | `pr-pipeline.md` | 작성·독립 검토·게시·CI·병합의 기준과 확인일을 붙인 GitHub 설정 |
-| `atlassian-integration.md` | Jira·Confluence 연결 안내: 이슈 키를 적는 자리(브랜치·커밋·PR), GitHub for Jira 앱, 스프린트 리뷰 표(`tools/jira_refs.py`), 공개 저장소에 두지 않는 것(사이트 주소·토큰, D-437 secret 금지). 팀 관례이며 저장소 규칙이 아니다 |
+| `atlassian-integration.md` | Jira·Confluence 연결 안내: 이슈 키를 적는 자리(브랜치·커밋·PR), GitHub for Jira 앱, 스프린트 리뷰 표(`tools/jira_refs.py`), 문서 기록을 이슈의 기록용 코멘트 하나에 링크로 이어 붙이는 규칙(§4), 공개 저장소에 두지 않는 것(사이트 주소·토큰, D-437 secret 금지). 팀 관례이며 저장소 규칙이 아니다 |
 | `shared-checkout.md` | 「같이 하는 깃」: 실험실 PC 공유 체크아웃의 착수 순서(README에서 옮김, `test/test_readme_agent_start.py`가 고정). 명령 전문은 루트 `AGENTS.md` |
 | `git-workflow.md` | 사람용 git 규칙 한 장: 팀원 PR 길과 실험실 착지 길의 비교, `--no-verify` 기준, push 순서, D-762 단계 현황, 사용자가 정할 것. 규칙 원본은 D-372·D-427·D-510·D-584·D-761·D-762와 루트 `AGENTS.md` |
 | `handoff.md` | 인수인계: 목표, 증거 기준의 현재 상태, 흐름별 2026-10-15 인계 문서, 다음 할 일, 담당, 새 컴퓨터 체크리스트. 날짜가 있는 사실이다 |

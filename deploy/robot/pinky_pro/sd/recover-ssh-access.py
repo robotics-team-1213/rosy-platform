@@ -116,27 +116,39 @@ def apply(root: Path, key: str, backup_dir: Path, expected: dict) -> dict:
     raw, info = _keys(root)
     if hashlib.sha256(raw).hexdigest() != result["authorized_keys_sha256"]:
         raise ValueError("card changed during recovery")
+    source = root.stat()
     saved = Path(tempfile.mkdtemp(prefix="ssh-access-", dir=backup_dir))
-    _save(saved / "authorized_keys.before", raw)
-    metadata = {"existed": info is not None, "uid": info.st_uid if info else None,
-                "gid": info.st_gid if info else None,
-                "mode": stat.S_IMODE(info.st_mode) if info else None,
-                "before_sha256": result["authorized_keys_sha256"]}
-    _save(saved / "before.json", json.dumps(metadata, sort_keys=True).encode())
-    _sync(saved)
-    _sync(backup_dir)
-    if (saved / "authorized_keys.before").read_bytes() != raw:
-        raise ValueError("backup readback failed; card was not changed")
-    merge_operator_keys(root, [key])
-    after, _ = _keys(root)
-    if not _contains(after, key):
-        raise ValueError(f"key write readback failed; backup retained at {saved}")
-    after_hash = hashlib.sha256(after).hexdigest()
-    result.update(state="SSH_KEY_RESTORED_ON_CARD", changed=True, backup=str(saved), key_present=True,
-                  before_sha256=result["authorized_keys_sha256"],
-                  after_sha256=after_hash, authorized_keys_sha256=after_hash)
-    _save(saved / "receipt.json", (json.dumps(result, sort_keys=True, indent=2) + "\n").encode())
-    _sync(saved)
+    phase = "before card write"
+    try:
+        _save(saved / "authorized_keys.before", raw)
+        metadata = {"existed": info is not None, "uid": info.st_uid if info else None,
+                    "gid": info.st_gid if info else None,
+                    "mode": stat.S_IMODE(info.st_mode) if info else None,
+                    "before_sha256": result["authorized_keys_sha256"]}
+        _save(saved / "before.json", json.dumps(metadata, sort_keys=True).encode())
+        _sync(saved)
+        _sync(backup_dir)
+        if (saved / "authorized_keys.before").read_bytes() != raw:
+            raise ValueError("backup readback failed")
+        current = root.stat()
+        if ((current.st_dev, current.st_ino) != (source.st_dev, source.st_ino)
+                or inspect(root, key) != result):
+            raise ValueError("card changed during backup")
+        phase = "after card write started"
+        merge_operator_keys(root, [key])
+        after, _ = _keys(root)
+        if not _contains(after, key):
+            raise ValueError("key write readback failed")
+        after_hash = hashlib.sha256(after).hexdigest()
+        result.update(state="SSH_KEY_RESTORED_ON_CARD", changed=True, backup=str(saved), key_present=True,
+                      before_sha256=result["authorized_keys_sha256"],
+                      after_sha256=after_hash, authorized_keys_sha256=after_hash)
+        _save(saved / "receipt.json", (json.dumps(result, sort_keys=True, indent=2) + "\n").encode())
+        _sync(saved)
+    except (OSError, ValueError, KeyboardInterrupt) as exc:
+        # A receipt failure may follow a successful key write; never roll back concurrent changes.
+        raise ValueError(f"recovery stopped {phase}; recovery files retained at {saved}; "
+                         "inspect the card before retrying") from exc
     return result
 
 
