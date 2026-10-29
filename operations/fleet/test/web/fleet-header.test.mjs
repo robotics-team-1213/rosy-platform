@@ -36,7 +36,8 @@ function fakeHeader() {
   nodes["topbar-extra"].children.push(nodes["fleet-account"], nodes["fleet-theme"], nodes["token-access"]);
   nodes["token-access"].children.push(nodes["console-token"], nodes["token-save"]);
   const body = fakeNode("body");
-  globalThis.document = {body, activeElement: body, getElementById: id => nodes[id], addEventListener() {}};
+  globalThis.document = {body, activeElement: body, listeners: {}, getElementById: id => nodes[id],
+    addEventListener(type, fn) { this.listeners[type] = fn; }};
   return nodes;
 }
 
@@ -51,9 +52,28 @@ test("one status click toggles once; the theme button is wired by the shared ui.
   assert.equal(nodes["topbar-extra"].dataset.open, "true");
   nodes["topbar-more"].listeners.click();
   assert.equal(nodes["topbar-extra"].dataset.open, "false");
-  nodes["topbar-more"].focus = () => {nodes["topbar-more"].focused = true;};
-  nodes["topbar-extra"].listeners.keydown({key: "Escape"});
-  assert.equal(nodes["topbar-more"].focused, true);
+  nodes["topbar-more"].listeners.click();
+  document.listeners.keydown({key: "Escape"});
+  assert.equal(document.activeElement, nodes["topbar-more"]);
+  assert.equal(nodes["topbar-extra"].dataset.open, "false");
+});
+
+test("Escape leaves a dialog-owned event and outside focus alone", () => {
+  const nodes = fakeHeader();
+  bindTopbarToggle();
+  nodes["topbar-more"].listeners.click();
+  nodes["fleet-theme"].focus();
+  document.listeners.keydown({key: "Escape", defaultPrevented: true});
+  assert.equal(nodes["topbar-extra"].dataset.open, "true");
+  assert.equal(document.activeElement, nodes["fleet-theme"]);
+  const outside = fakeNode("outside");
+  outside.focus();
+  document.listeners.keydown({key: "Escape"});
+  assert.equal(nodes["topbar-extra"].dataset.open, "false");
+  assert.equal(document.activeElement, outside);
+  document.body.focus();
+  document.listeners.keydown({key: "Escape"});
+  assert.equal(document.activeElement, document.body);
 });
 
 test("the E-stop locks only on a press the server would refuse", () => {
