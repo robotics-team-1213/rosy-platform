@@ -18,6 +18,37 @@ corrected-scene runtime or learning acceptance is claimed by this source edit.
 The entries below describe the superseded map and retain their original
 outcomes. They cannot establish success for the current arrangement.
 
+### Corrected layout, seed 42: scene rendered; first layer FAILED
+
+Source `76587c5124a18760c8ef04ac2d5e9533e8af7d6e`, run
+`3c2016972fc05704a1e30382efb37133`, Isaac Sim 6.2.0.0. The SDK completed
+with exit 0, verified import and `OWNED_PROCESSES_EXITED_GPU_RELEASED` cleanup.
+This is a failed physical task, not a completed layer or a trained policy.
+
+Actual `mapped-top.png`, `mapped-initial.png` and `mapped-side.png` show the
+common yellow plate, opposing bases, lower external belt and internal square.
+The first bar passed lift, release and settling. After the second release,
+the first and second bar centers settled at y=-32.624 mm and -2.624 mm,
+respectively, outside the ±1.5 mm target tolerance. The next infeed was blocked.
+The release sample was near the commanded pose; displacement appeared after
+opening. The release/contact mechanism needs further diagnosis; no cause is
+asserted from this observation alone.
+
+Registered snapshot: `Rosy/artifacts/isaac/omx-opposed-floor-20261029/`
+`3c2016972fc05704a1e30382efb37133-780cd59e10cf449db3609358875dedc5/`.
+Report SHA-256:
+`119cab4bc340c10f70537b3790a71e4594ca827d8788a52170ca5809eb97f723`.
+
+Remote validation for that source: 13 focused planning/acceptance tests passed;
+broader Isaac/remote/OMX-owner/document regression: 514 passed and one ROS
+xacro-overlay skip; affected guards: 336 passed. Each successful invocation
+was compared with `test/known_failures.py`: zero new failures. Harness lint:
+zero errors, 39 pre-existing status warnings after updating verification records. Exact camera registration, real
+dimensions, first-layer physical success and learning success remain unverified.
+
+CE: 미해결 — corrected scene is observed, but metric registration and the
+post-release displacement remain unresolved. No solved lesson is claimed.
+
 Each dated entry binds its own source, run and outcome. The earlier three-bar
 fallback success is recorded separately in
 [the mapped stacking record](../omx-map-stacking-2026-10-29/result.md).

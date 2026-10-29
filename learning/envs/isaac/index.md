@@ -32,8 +32,8 @@
 
 ## 최근 기록
 
+- 2026-10-29 · uncommitted · 수정 맵의 실제 SDK 화면과 한 층 실패 보존
+- 2026-10-29 · uncommitted · Rosy Cam 기준 마주보는 두 암과 한 층 배치 정정
 - 2026-10-29 · uncommitted · OMX 맵 3단 적재와 PPO 재실행 결과
 - 2026-10-29 · uncommitted · OMX 오프라인 계획 경계와 물리 시간 간격 검증
 - 2026-10-29 · uncommitted · OMX 두 팔 PPO 구동과 Confluence 맵 적재 기준 동작
-- 2026-10-27 · uncommitted · AI 추가 ROS 거절 근거 보충
-- 2026-10-27 · uncommitted · SDK 6.2 운영 연결과 ROS 제어 검증

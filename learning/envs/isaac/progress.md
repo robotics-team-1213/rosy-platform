@@ -1,12 +1,12 @@
 ---
 module: isaac_sim
 owner: sim
-last_verified: { commit: "dc2f2f05c5", date: 2026-10-29 }
+last_verified: { commit: "76587c5124", date: 2026-10-29 }
 gates:
   SOURCE:
     state: GO
     cmd: "python tools/remote/remote_pytest.py --log-dir X:/DevTemp/isaac-source -- learning/envs/isaac/test"
-    evidence: "dc2f2f05c5 remote Isaac regression: 419 passed, 1 ROS xacro-overlay skip, exit 0. 117aab03c1 affected architecture/release/harness and OMX owner checks: 428 passed, exit 0, 0 NEW. Offline OMX JSON planning boundary, native TCP observations and mapped physics substep consistency reviewed independently. Runtime outcomes are separate in docs/validation/omx-map-stacking-2026-10-29/result.md; learned proficiency and hardware acceptance remain unverified. Earlier CORE/Drive evidence remains in docs/validation/isaac-map-rl-2026-10-11/result.md."
+    evidence: "76587c5124 remote Isaac/transport/OMX owner/document regression: 514 passed, 1 ROS xacro-overlay skip, exit 0, 0 NEW; affected guards: 336 passed, exit 0, 0 NEW. Opposed-base transforms and complete first-layer planned paths: 13 focused passes. Actual corrected map SDK run 3c2016972fc05704a1e30382efb37133 rendered top/side/oblique images; physical first layer FAILED after second release, owned cleanup confirmed. See docs/validation/omx-cube-stacking-2026-10-29/result.md. Source checks do not establish physical, learned-policy or hardware acceptance. Earlier CORE/Drive evidence remains in docs/validation/isaac-map-rl-2026-10-11/result.md."
   LOCAL:
     state: GO
     cmd: "python tools/remote/remote_pytest.py --log-dir X:/DevTemp/isaac-core -- learning/envs/isaac/test middleware/core/gateway/test middleware/core/services/test test/test_structure_installed_packages.py"
