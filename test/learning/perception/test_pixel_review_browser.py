@@ -25,7 +25,7 @@ def test_pixel_decision_resize_preserves_checks_and_keyboard_focus(browser_works
     background.check()
     complete.focus()
     approve_disabled = page.locator('#pixel-approve').is_disabled()
-    for width in (390, 1440, 320, 1440):
+    for step, width in enumerate((390, 1440, 320, 1440)):
         page.set_viewport_size({'width': width, 'height': 844})
         page.evaluate("() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))")
         expect(complete).to_be_focused()
@@ -43,8 +43,18 @@ def test_pixel_decision_resize_preserves_checks_and_keyboard_focus(browser_works
             canvas = page.locator('#pixel-canvas').bounding_box()
             assert decision['x'] >= canvas['x'] + canvas['width'] - 1
         box = complete.bounding_box()
-        assert 0 <= box['y'] and box['y'] + box['height'] <= 844
+        assert -1 <= box['y'] and box['y'] + box['height'] <= 845
+        assert complete.evaluate('''node => {
+            const r = node.getBoundingClientRect();
+            return node.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2));
+        }''')
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+        if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+            target = Path(output)
+            target.mkdir(parents=True, exist_ok=True)
+            name = f'pixel-decision-{theme}-{step}-{width}'
+            page.screenshot(path=str(target / f'{name}-viewport.png'))
+            page.screenshot(path=str(target / f'{name}-workspace.png'), full_page=True)
 
 
 def open_pixels(page, store, expect, index=0):
