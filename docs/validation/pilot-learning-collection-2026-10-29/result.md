@@ -104,3 +104,13 @@ CE: 해당 없음 — 실행 소유자·보류 코드 판단은 수정 코드·�
 일괄 복구의 과거 불완전 raw는 그대로 남겼다. 직접 시작했던 일괄 service만 중지해 단일 녹화 수용을 먼저 확인했고, 중간의 legacy job 보류는 우회하지 않았다. 확인 후 두 타이머를 활성 상태로 두고 process service를 다시 요청했다. 이 신규19장은 **기존 저장 녹화의 운영 등록 수용**이며, 오프라인 로봇에서 새로 녹화·수신한 결과가 아니다. 주소·자격·라벨 본문을 제외한 영수증은 `C:/DevTemp/pilot-collection-deploy/production-acceptance.json`에 보존했다.
 
 기록 검사 명령 한 회차는 존재하지 않는 시험 경로를 포함해, 실제 시험 시작 전 자기 remote job만 runner의 취소 경로로 종료했다(exit143). 통과로 세지 않는다. 올바른 경로의 후속 회차와 main 착지 FULL 검증은 공용 실행 자원 대기 중이며, 앞서 완료한 unit 회귀209건을 그 회차의 완료 증거로 바꾸어 쓰지 않는다.
+
+## 일괄 복구의 운영 등록 후속
+
+운영 일괄 실행 이후 독립 read-only 검사에서 기존 53장 외 **5,029장**이 추가됐고 DB는 **5,082장 모두 pending**이었다. 준비된 catalog는 11건/5,391행이며 그중 10건이 등록됐다. 준비 파일 **5,424개**의 해시, 각 원본 manifest 해시, 실제 workspace 클래스 결속이 모두 맞았다. 신규 프레임 모두의 영상 해시/프레임 번호·capture group·선언 세션을 DB와 대조했다. 원래 53장의 review/status/version·masks·events·pixel_events digest도 모두 불변이었다. 영수증은 `C:/DevTemp/pilot-collection-deploy/bulk-acceptance.json`이다.
+
+남은 한 catalog는 362행이다. 기존 소스 프레임과 세션 신원이 충돌해 `review_ingest`가 등록을 거절했다. 이를 중복 성공으로 세거나 기존 capture group/사람 검수를 덮어쓰지 않았다. 이 catalog와 manifest 누락·원본 부가파일·조작 짝 없는 과거 raw는 미해결 자료로 보존한다. 따라서 일괄 service의 exit 1은 실제 실패를 나타내고 두 timer는 active로 다음 회차를 유지한다. 모든 준비본이 등록됐다는 수용은 아니다.
+
+앞 절에서 대기 중이던 기록 검사도 `3413b02046`에서 **333 passed / 0 skipped, exit 0, NEW 0**으로 끝났다(`final-record-corrected/run-1.txt`). 그 뒤 `48b8a92f5b`는 운영 수용 기록 두 파일만 추가한 커밋이다. 이 실행은 main 착지 gateway의 검증을 대신하지 않는다.
+
+모델 PC와 현장 PC 양쪽에서 두 등록 로봇 이름을 다시 확인해 모두 해석 실패였고, tailnet peer도 offline이었다. 현장에서 전원·네트워크·감독 상태의 실제 확인을 요청했다. 신원 충돌과 장치 연결을 해결된 교훈으로 기록하지 않는다. CE: 해당 없음 — 적용한 복구·잠금 판단은 구현·회귀·기존 문서에 있으며, 남은 자료/연결 문제는 미해결이다.
