@@ -56,7 +56,12 @@ def test_workcell_overlay_adds_manifest_and_separate_role_secrets_without_replac
         assert "command" not in config and "entrypoint" not in config
         assert "ROSY_CREDENTIAL_PATHS" not in config["environment"]
         assert config["environment"]["ROSY_WORKCELL_OBSERVATIONS"] == "/run/rosy-workcell/observations.yaml"
-        paths = json.loads(config["environment"]["ROSY_ADDITIONAL_CREDENTIAL_PATHS"])
+        mapping = config["environment"]["ROSY_ADDITIONAL_CREDENTIAL_PATHS"]
+        if service == "fleet":
+            prefix = "${ROSY_SITE_WORKCELL_ARM_CREDENTIAL_PATHS:-"
+            assert mapping.startswith(prefix) and mapping.endswith("}")
+            mapping = mapping[len(prefix):-1]
+        paths = json.loads(mapping)
         assert set(paths) == names
         volumes = config["volumes"]
         assert len(volumes) == 2
