@@ -78,6 +78,62 @@ def test_reviewed_identical_full_task_can_proceed(tmp_path, task, envelope):
     assert result["attempts"] == result["successes"] == 2
 
 
+def test_changed_client_carry_params_cannot_reuse_a_review(tmp_path, task, envelope):
+    approve(tmp_path, envelope, task)
+    task[0]["params"] = {"auto.fold_before_transport": 0}
+    assert not envelope.assess(*task, now=100.01)["allowed"]
+
+
+def test_explicit_default_client_params_keep_task_identity(tmp_path, task, envelope):
+    import cell_params
+
+    approve(tmp_path, envelope, task)
+    task[0]["params"] = cell_params.load()["values"]
+    assert envelope.assess(*task, now=100.01)["allowed"]
+
+
+def test_straight_review_cannot_authorize_the_folded_executor(tmp_path, task, envelope):
+    from cell_transfer import FOLDED
+
+    approve(tmp_path, envelope, task)
+    straight = envelope.assess(*task, now=100.01)
+    folded = envelope.assess(*task, now=100.01, sequence=FOLDED)
+    assert folded["task_sha256"] != straight["task_sha256"] and not folded["allowed"]
+
+
+def test_reviewed_gate_load_keeps_its_own_durable_intent(tmp_path, task, envelope, monkeypatch):
+    import cell_attempts
+    from cell_transfer import Gate
+
+    monkeypatch.setattr(envelope.time, "time", lambda: 100.01)
+    monkeypatch.setattr(cell_attempts, "RUN", dict(cell_attempts.RUN))
+    attempts, _ = approve(tmp_path, envelope, task)
+    config, calibration, library, state = task
+    path = tmp_path / "library.json"
+    path.write_text(json.dumps(library))
+    commands = []
+    def act(command):
+        commands.append(command)
+        return copy.deepcopy(state) if command == "state" else {"ok": True}
+    cell = SimpleNamespace(act=act)
+    cell_attempts.start(attempts, run_id="current")
+    gate = Gate(cell, config, calibration)
+    assert gate.open(path, lambda a: cell_attempts.begin(config, a)) is None
+    pending = attempts.with_suffix(".pending.json")
+    original = pending.read_bytes()
+    assert gate.act(f"load {path}")["ok"]
+    assert gate.act("run lift_pick")["ok"]
+    assert gate.act(f"load {path}")["ok"] and pending.read_bytes() == original
+    assert Gate(cell, config, calibration).open(path, lambda a: None)["reason"] == "incomplete_attempt"
+    path.write_text(json.dumps({**library, "fps": 25}))
+    assert not gate.act(f"load {path}")["ok"] and pending.read_bytes() == original
+    assert all(c == "state" or c.startswith("checked ") for c in commands)
+    cell_attempts.record(config, calibration, "tray", "belt", 1, {
+        "locate": {"found": True}, "transfer": {"result": "placed"}, "verify": {"inside": True},
+        "envelope": gate.assessment}, 100)
+    assert not pending.exists()
+
+
 def test_changed_verification_tolerance_cannot_reuse_a_review(tmp_path, task, envelope):
     approve(tmp_path, envelope, task)
     task[0]["verify_tol_mm"] = 1000
