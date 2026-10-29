@@ -67,8 +67,10 @@ def jaw_blobs(closed, opened, params=None) -> list:
             and stats[i, cv2.CC_STAT_WIDTH] <= max_blob and stats[i, cv2.CC_STAT_HEIGHT] <= max_blob]
 
 
-def mark_jaws(cell, config: dict, sleep=time.sleep, clock=time.monotonic, max_marks: int = 6):
-    """The jaw mark in the top view as (cx, cy), or None when no two marks agree."""
+def mark_jaws(cell, config: dict, sleep=time.sleep, clock=time.monotonic, max_marks: int = 6, near=None):
+    """The jaw mark in the top view as (cx, cy), or None when no two marks agree. `near` = (pixel, radius_px): only
+    blobs that close to where the jaws should be count, nearest first - with the arm stretched out, opening the jaws
+    shook the whole link and the largest changed blob was not the jaws (2026-10-29, a look 30 mm off)."""
     import cell_pipeline as cp
 
     plan, mark_cfg = config["plan"], config.get("jaw_mark", {})
@@ -85,6 +87,9 @@ def mark_jaws(cell, config: dict, sleep=time.sleep, clock=time.monotonic, max_ma
         if marks:
             blobs = [b for b in blobs if math.dist(b[:2], marks[-1]) <= follow]
             pick = min(blobs, key=lambda b: math.dist(b[:2], marks[-1]), default=None)
+        elif near is not None:
+            blobs = [b for b in blobs if math.dist(b[:2], near[0]) <= near[1]]
+            pick = min(blobs, key=lambda b: math.dist(b[:2], near[0]), default=None)
         else:
             pick = max(blobs, key=lambda b: b[2], default=None)
         if pick is None:
@@ -115,6 +120,12 @@ def mark_to_arm(record: dict, config: dict, site: str, pixel, jaw_z: float):
     """The mark pixel (seen at the jaws' height) to the height the map was fitted at, then through the map."""
     fit_z = record.get("z_view", config["sites"][site]["z"])
     return cal.to_arm(record["homography"], cal.parallax(pixel, jaw_z, fit_z, config["cameras"]["top"]))
+
+
+def mark_pixel(record: dict, config: dict, site: str, raw, jaw_z: float):
+    """mark_to_arm backwards: where a raw map point at the jaws' height shows in the top view."""
+    fit_z = record.get("z_view", config["sites"][site]["z"])
+    return cal.parallax(cal.to_pixel(record["homography"], raw), fit_z, jaw_z, config["cameras"]["top"])
 
 
 def joints_tcp(state):

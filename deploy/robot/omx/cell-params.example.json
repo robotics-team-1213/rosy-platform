@@ -631,5 +631,11 @@
   "unit": "mm",
   "source": "measured",
   "evidence": "2026-10-29: a push keeps push.gap_mm (20) from the box; 6 mm off still meets it"
+ },
+ "look.near_px": {
+  "value": 40.0,
+  "unit": "px",
+  "source": "measured",
+  "evidence": "2026-10-29: with the arm stretched out the open/close shook the link; 3-5 blobs, the largest 120 px from the jaws"
  }
 }

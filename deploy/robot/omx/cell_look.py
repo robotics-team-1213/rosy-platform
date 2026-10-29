@@ -36,11 +36,16 @@ def look(cell, config: dict, record: dict, site: str, target: dict, write_librar
     for i in range(int(prm.get(params, "look.max_iter")) + 1):
         status = cell.act("state")
         state, commanded = status.get("state"), status.get("target")
-        pixel = cell_pivot.mark_jaws(cell, config, sleep)
-        if state is None or commanded is None or pixel is None:
-            rows.append({"look": i, "seen": False})
-            return {"verdict": "pass", "why": "jaw mark not seen: the plan stands", "looks": rows, "total_mm": round(total, 1)}
+        if state is None or commanded is None:
+            return {"verdict": "refuse", "why": "no arm state", "looks": rows, "total_mm": round(total, 1)}
         x, y, z, yaw = cell_pivot.joints_tcp(state)
+        bias, a = region.get("bias_mm", [0.0, 0.0]), math.radians(yaw + region["phase_deg"])
+        expect = (x + bias[0] / 1000 + region["radius_mm"] / 1000 * math.cos(a), y + bias[1] / 1000 + region["radius_mm"] / 1000 * math.sin(a))
+        near = (cell_pivot.mark_pixel(record, config, site, expect, z), prm.get(params, "look.near_px"))
+        pixel = cell_pivot.mark_jaws(cell, config, sleep, near=near)
+        if pixel is None:
+            rows.append({"look": i, "seen": False, "expected_px": [round(v, 1) for v in near[0]]})
+            return {"verdict": "pass", "why": "jaw mark not seen: the plan stands", "looks": rows, "total_mm": round(total, 1)}
         tcp = tcp_from_mark(cell_pivot.mark_to_arm(record, config, site, pixel, z), yaw, region)
         d = (box[0] - tcp[0], box[1] - tcp[1])
         off = 1000 * math.hypot(*d)

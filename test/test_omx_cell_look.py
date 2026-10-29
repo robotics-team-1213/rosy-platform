@@ -50,7 +50,8 @@ def test_looks_move_the_command_onto_the_box_despite_map_error_and_droop(tmp_pat
         return Arm.act(arm, command)
 
     arm.act = act
-    monkeypatch.setattr(cell_pivot, "mark_jaws", lambda cell, config, sleep: (1.0, 1.0))
+    monkeypatch.setattr(cell_pivot, "mark_jaws", lambda cell, config, sleep, near=None: (1.0, 1.0))
+    monkeypatch.setattr(cell_pivot, "mark_pixel", lambda record, config, site, raw, z: (0.0, 0.0))
     monkeypatch.setattr(cell_pivot, "joints_tcp", lambda joints: (*(arm.at if joints == "measured" else arm.cmd), 0.08, yaw))
 
     def mark_to_arm(record, config, site, pixel, z):
@@ -72,3 +73,11 @@ def test_no_hook_without_a_pivot_circle_or_when_off():
     assert cell_look.hook({"params": {"look.enabled": 1}, "work_dir": "."}, None, target, None, cal, "floor") is None
     assert cell_look.hook({"params": {"look.enabled": 0}, "work_dir": "."}, None, {"bias_region": REGION}, None, cal, "floor") is None
     assert cell_look.hook({"params": {"look.enabled": 1}, "work_dir": "."}, None, {"bias_region": REGION}, None, cal, "floor")
+
+
+def test_the_expected_jaw_pixel_is_mark_to_arm_backwards():
+    config = {"sites": {"floor": {"z": 0.021}}, "cameras": {"top": {"height_m": 0.65, "center_px": [320, 240]}}}
+    record = {"homography": [[0.0, -1 / 900, 0.072 + 239.5 / 900], [-1 / 900, 0.0, 0.106 + 134.5 / 900], [0, 0, 1]], "z_view": 0.08}
+    raw = (0.05, 0.11)
+    px = cell_pivot.mark_pixel(record, config, "floor", raw, 0.10)
+    assert cell_pivot.mark_to_arm(record, config, "floor", px, 0.10) == pytest.approx(raw, abs=1e-6)
