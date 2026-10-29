@@ -123,7 +123,9 @@ def look_first(cell, config, record, site, region, start_raw, slide, bias, yaw, 
         path.write_text(json.dumps(push_library(config["plan"], s, s + slide, yaw, z, speed)))
         return path
 
-    out = cell_look.look(cell, config, record, site, target, write, work, goto="goto above_push", name="push-look.json")
+    # a push keeps push.gap_mm from the box, so it needs less than a grasp: the field looks went 9.6 -> 6.8 -> 4.3 mm
+    out = cell_look.look(cell, config, record, site, target, write, work, goto="goto above_push", name="push-look.json",
+                         tol_mm=prm.get(config.get("params"), "push.look_tol_mm"))
     return {**out, "library": work / "push-look.json"} if out["total_mm"] else out
 
 

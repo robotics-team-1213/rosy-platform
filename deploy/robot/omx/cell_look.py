@@ -27,7 +27,7 @@ def tcp_from_mark(mark_raw, yaw_deg: float, region: dict):
 
 
 def look(cell, config: dict, record: dict, site: str, target: dict, write_library, work, sleep=time.sleep,
-         goto: str = "goto above_pick", name: str = "look-replan.json") -> dict:
+         goto: str = "goto above_pick", name: str = "look-replan.json", tol_mm: float | None = None) -> dict:
     """Measure point - TCP at the hover and move the target there; verdict pass / refuse with every look kept.
     `target[\"object\"][\"raw_m\"]` is the raw point the TCP must stand over: a box to pick, or a push's start."""
     params, region = config.get("params"), target.get("bias_region") or {}
@@ -46,7 +46,7 @@ def look(cell, config: dict, record: dict, site: str, target: dict, write_librar
         off = 1000 * math.hypot(*d)
         rows.append({"look": i, "mark_px": [round(v, 1) for v in pixel], "fk_m": [round(x, 4), round(y, 4)],
                      "box_minus_tcp_mm": [round(1000 * d[0], 1), round(1000 * d[1], 1)]})
-        if off <= prm.get(params, "look.tol_mm"):
+        if off <= (prm.get(params, "look.tol_mm") if tol_mm is None else tol_mm):
             return {"verdict": "pass", "looks": rows, "total_mm": round(total, 1)}
         if i == int(prm.get(params, "look.max_iter")) or total + off > prm.get(params, "look.max_total_mm"):
             return {"verdict": "refuse", "why": f"box still {off:.0f} mm from the jaws", "looks": rows, "total_mm": round(total, 1)}

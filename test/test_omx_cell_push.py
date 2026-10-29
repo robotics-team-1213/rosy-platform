@@ -71,7 +71,7 @@ def test_look_first_moves_the_push_start_by_the_measured_offset_and_keeps_the_sl
 
     seen = {}
 
-    def fake_look(cell, config, record, site, target, write, work, goto, name):
+    def fake_look(cell, config, record, site, target, write, work, goto, name, tol_mm):
         seen["goto"] = goto
         target["pick"] = dict(target["pick"], x=target["pick"]["x"] + 0.008, y=target["pick"]["y"] - 0.004)
         write(config, target["pick"], target["place"], work / name)
