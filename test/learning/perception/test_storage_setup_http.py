@@ -142,7 +142,8 @@ def test_setup_browser_completes_first_use_without_json(setup_server, accounts, 
         try:
             session, _ = session_for(url, accounts)
             page.context.add_cookies([dict(name='rosy_learning_session', value=session, url=url)])
-            page.add_init_script(f'Date.now = () => {epoch_ms};')
+            # Quota measurements must share the backend fixture clock across minute boundaries and reloads.
+            page.add_init_script(f'Date.now = () => {now[0] * 1000};')
             page.goto(url + '/learning', wait_until='networkidle')
             if theme == 'light': page.locator('[data-theme-cycle]').click()
             playwright.expect(page.locator('html')).to_have_attribute('data-theme', theme)
@@ -166,14 +167,7 @@ def test_setup_browser_completes_first_use_without_json(setup_server, accounts, 
             expect(page.locator('#storage-setup-status')).to_contain_text('검증')
             page.locator('#storage-check-consent').check()
             page.get_by_role('button', name='소량 전송으로 연결 검증', exact=True).click()
-            try:
-                expect(page.locator('#storage-setup-result')).to_contain_text('검증 완료', timeout=15000)
-            except AssertionError:
-                state = idle(url, session)
-                print('storage clock evidence: ' + json.dumps(dict(backend_now=now[0], browser_now=page.evaluate('Date.now()'),
-                    quotas=[{key: quota[key] for key in ('measured_at', 'expires_at')} for quota in state['quotas'].values()],
-                    error=state.get('error'), result=state.get('result'), remote_commits=remote.commits)))
-                raise
+            expect(page.locator('#storage-setup-result')).to_contain_text('검증 완료', timeout=15000)
             page.get_by_role('button', name='새 보관 활성화', exact=True).click()
             expect(page.locator('#storage-setup-status')).to_contain_text('활성화')
             data = folder / 'storage-data/exports/episode-ui'; data.mkdir()
