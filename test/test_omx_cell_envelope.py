@@ -78,6 +78,25 @@ def test_reviewed_identical_full_task_can_proceed(tmp_path, task, envelope):
     assert result["attempts"] == result["successes"] == 2
 
 
+def test_changed_verification_tolerance_cannot_reuse_a_review(tmp_path, task, envelope):
+    approve(tmp_path, envelope, task)
+    task[0]["verify_tol_mm"] = 1000
+    assert not envelope.assess(*task, now=100.01)["allowed"]
+
+
+def test_explicit_default_verification_tolerance_keeps_task_identity(tmp_path, task, envelope):
+    approve(tmp_path, envelope, task)
+    task[0]["verify_tol_mm"] = 10.0
+    assert envelope.assess(*task, now=100.01)["allowed"]
+
+
+@pytest.mark.parametrize("value", [True, -1, float("nan"), float("inf"), "10", None])
+def test_invalid_verification_tolerance_cannot_use_a_review(tmp_path, task, envelope, value):
+    approve(tmp_path, envelope, task)
+    task[0]["verify_tol_mm"] = value
+    assert not envelope.assess(*task, now=100.01)["allowed"]
+
+
 def test_an_unbound_or_different_device_profile_cannot_use_even_commissioning(task, envelope):
     config, calibration, library, state = copy.deepcopy(task)
     config["_commissioning"] = {"person_at_switch": True}
@@ -240,7 +259,9 @@ def test_explicit_default_params_keep_runtime_identity(tmp_path, envelope, runne
     import cell_params
 
     path = tmp_path / "params.json"
-    path.write_text(json.dumps({"schema": cell_params.SCHEMA, "params": {}}))
+    path.write_text(json.dumps({"schema": cell_params.SCHEMA, "params": {
+        "runner.pace_lag": {"value": cell_params.default("runner.pace_lag"), "unit": "joint_unit",
+                            "source": "default", "evidence": "fixture-default"}}}))
     assert runner_context(params=cell_params.load(path)["values"])["sha256"] == runner_context()["sha256"]
 
 
