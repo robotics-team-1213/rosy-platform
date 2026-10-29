@@ -3,7 +3,9 @@ import copy
 import importlib.util
 import io
 import json
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from threading import Thread
 from urllib.error import HTTPError
 
 import pytest
@@ -139,3 +141,75 @@ def test_saved_context_is_exclusive_external_and_contains_no_token(module, faile
     root.mkdir(); (root / '.git').mkdir()
     with pytest.raises(ValueError, match='outside'):
         client.save_context(root / 'context.json')
+
+
+@pytest.fixture
+def http_peer():
+    calls = []
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            calls.append((self.path, dict(self.headers)))
+            if self.path == '/redirect':
+                self.send_response(302)
+                self.send_header('Location', '/credential-sink')
+                self.end_headers()
+            else:
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(b'{"context":null}')
+
+        def log_message(self, *args):
+            pass
+
+    server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+    worker = Thread(target=server.serve_forever, daemon=True)
+    worker.start()
+    try:
+        yield f'http://127.0.0.1:{server.server_port}', calls
+    finally:
+        server.shutdown()
+        server.server_close()
+        worker.join(timeout=2)
+
+
+def test_real_http_does_not_follow_redirect_with_observer_credential(module, http_peer):
+    origin, calls = http_peer
+    client = module.Client(origin, TOKEN)
+    with pytest.raises(HTTPError) as error:
+        client._request('/redirect')
+    assert error.value.code == 302
+    assert [path for path, _ in calls] == ['/redirect']
+
+
+def test_real_http_ignores_environment_proxy_and_uses_only_observer_header(module, http_peer, monkeypatch):
+    origin, calls = http_peer
+    for name in ('HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'http_proxy', 'https_proxy', 'all_proxy'):
+        monkeypatch.setenv(name, 'http://127.0.0.1:1')
+    for name in ('NO_PROXY', 'no_proxy'):
+        monkeypatch.setenv(name, '')
+    assert module.Client(origin, TOKEN).context() is None
+    headers_seen = {key.lower(): value for key, value in calls[0][1].items()}
+    assert headers_seen['x-physical-observation-token'] == TOKEN
+    assert not {'authorization', 'cookie', 'proxy-authorization'} & set(headers_seen)
+
+
+def test_cli_submits_saved_context_and_original_samples(module, failed_api, monkeypatch, tmp_path, capsys):
+    client, context, samples = ready(module, failed_api, monkeypatch)
+    context_file, sample_file = tmp_path / 'context.json', tmp_path / 'samples.json'
+    context_file.write_text(json.dumps({'context': context}))
+    sample_file.write_text(json.dumps(samples))
+    monkeypatch.setenv('ROSY_TRANSFER_OBSERVER_TOKEN', TOKEN)
+    monkeypatch.setattr(module, 'Client', lambda origin, token: client)
+    module.main(['--origin', client.origin, 'submit', '--context', str(context_file), '--samples', str(sample_file)])
+    printed = capsys.readouterr()
+    assert len(json.loads(printed.out)['evidence_digest']) == 64 and TOKEN not in printed.out + printed.err
+    assert sum(method == 'POST' for method, _, _ in client.opener.calls) == 1
+
+
+def test_cli_error_does_not_print_the_observer_secret(module, monkeypatch, capsys):
+    secret = 'bad-private-credential'
+    monkeypatch.setenv('ROSY_TRANSFER_OBSERVER_TOKEN', secret)
+    with pytest.raises(SystemExit) as error:
+        module.main(['--origin', 'https://example.invalid', 'context', '--out', 'unused.json'])
+    assert error.value.code == 2 and secret not in capsys.readouterr().err
