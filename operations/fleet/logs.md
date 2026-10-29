@@ -5116,3 +5116,10 @@
 - 변경: 별도 예약 API v1.331로 live pin을 갱신하고 main의 v1.328 OMX archive 계약과 양쪽 이력을 함께 보존했다. 존재하는 D-908의 gap 선언만 제거했다. 합성·FULL 및 실제 main 착지는 별도 확인한다.
 - Gate: 추가 실행 권한이나 공개 필드 변경 없음. 실제 장치·현장 수용은 수행하지 않았다.
 - CE: 해당 없음 — 원래 generation과 승인자의 원자 결속, 재시도 검증 기준이 구현·실제 HTTP/SQLite 회귀에 남는다. 별도 교훈이 없으면 재발할 추가 환경 제약은 확인하지 않았다.
+
+## 2026-10-29 · afa10f26b2 · 독립 복구 관측 제출용 호스트 클라이언트
+
+- 변경: 기존 API v1.327의 독립 관측 문맥 조회·시료 POST를 연결했다. 현재 문맥·원본 ID·UTC·시료/관절 순서를 검사하고 한 번만 제출하며 응답 유실은 미확인으로 남긴다. 복구 요청·운영자 승인·정상 PRE_DISPATCH 제출은 호출하지 않는다.
+- 증거: [동결 검증](../../docs/validation/recovery-observer-client-2026-10-29/result.md). 원격 client/API/auth 53 pass·skip 0, runner/classifier exit 0, NEW 0. 기존 실제 API와 loopback HTTP·권한·응답 유실·프록시/리다이렉트·CLI를 검증했다. 관절 짝 4건을 RED 재현한 뒤 POST 전 거절로 보강했고 독립 계약 재검토에 주요 지적이 없다.
+- Gate: 실행·학습·생산자 수용 변화 없음. 실제 Gazebo의 링크별 측정과 source UTC 결속은 별도 수집기 요구사항으로 안내했다.
+- CE: 해당 없음 — 코드·회귀·사용 안내로 판단을 복원할 수 있으며 source 측정 공백은 미해결 요구사항이다.

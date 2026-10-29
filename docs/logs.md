@@ -12920,3 +12920,10 @@ osy-d395-s1d\`.
 - 증거: native CLI가 소비하는 배열과 selector의 full_invocations를 독립 대조했다. 실제 Gazebo 63 entities의 원문과 SDK type 등록명을 비교하여 누락한 각속도·접촉·대상 속도를 확인했다. 관측된 값을 source-clock/전체 물리 수용으로 바꾸지 않는다.
 - Gate: 변화 없음. G1c 전체와 G2–G6, 실물·운영·배포·착지/push는 미완료다.
 - CE: 새 교훈 기록 — [FULL JSON과 실제 행렬 구분](solutions/workflow-issues/full-mode-json-does-not-prove-full-matrix-execution-2026-10-29.md). 정본 함수·배열·원격 실행 로그가 근거이며 claims/frontmatter 검사를 통과했다.
+
+## 2026-10-29 · afa10f26b2 · 복구 관측 클라이언트 검증 범위와 생산자 공백
+
+- 변경: `validation/recovery-observer-client-2026-10-29/result.md`에 committed RED/GREEN·독립 계약 검토·기존 승인 경로 보존과 실제 수집기의 미충족 입력을 구분해 기록했다.
+- 증거: 원격 client/API/auth 53 pass·skip 0·NEW 0. 실제 HTTP 전송과 기존 API fixture를 포함하며 fake owner·합성 시료를 실제 Gazebo나 장치 수용으로 해석하지 않는다.
+- Gate: 없음. 실제 source 시계·링크별 측정·사람 라벨·학습·배포·실물 수용은 별도다.
+- CE: 해당 없음 — solved infrastructure/producer 주장은 없으며 구현된 거절 조건은 시험에 남는다.
