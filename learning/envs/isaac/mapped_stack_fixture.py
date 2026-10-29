@@ -50,7 +50,7 @@ CUBE_FIXTURE = dict(FIXTURE, revision='rosycam-edge-terminal-first-layer-v3', tr
     upstream_velocity_m_s=[0., -.02, 0.], upstream_scope='LAYOUT_ONLY_TURN_TRANSFER_NOT_EVALUATED',
     infeed_start_m=[.295, 0., .041], pickup_center_m=[.25, 0., .04], carry_height_m=.135,
     bin_origin_m=[.085, -.045, .032], bin_size_m=[.09, .09, .03],
-    release_clearance_m=.015, row_clearance_m=.0002, release_feedback_iterations=4)
+    release_clearance_m=.015, row_clearance_m=.0001, release_feedback_iterations=4)
 
 
 def plan(cube=False):

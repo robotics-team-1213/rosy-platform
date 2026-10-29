@@ -213,7 +213,7 @@ def test_cube_release_corrects_measured_cargo_offset_and_neighbor_clearance():
     sample['boxes'][0]['position'][1] = -.03
     command = f.cube_release_target(1, sample, .04)
     predicted = [body['position'][k]+command[k]-tcp[k] for k in range(3)]
-    assert predicted == pytest.approx([.13, .0002, release_z])
+    assert predicted == pytest.approx([.13, f.CUBE_FIXTURE['row_clearance_m'], release_z])
     assert not f.cube_release_ready(1, sample, .04)
     body['position'] = predicted[:]
     assert f.cube_release_ready(1, sample, .04)
