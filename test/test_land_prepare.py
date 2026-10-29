@@ -250,4 +250,3 @@ def test_batch_leader_preserves_other_preparing_and_older_pending_claims(tmp_pat
     assert len(naps) == 1
     assert json.loads(leader.read_text())["status"] == "preparing"
     assert json.loads(later.read_text())["status"] == "pending"
-
