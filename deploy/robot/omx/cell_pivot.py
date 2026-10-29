@@ -81,7 +81,9 @@ def mark_jaws(cell, config: dict, sleep=time.sleep, clock=time.monotonic, max_ma
         if not cp.grip_to(cell, closed_to):
             return None
         closed = settled_frame(cell, sleep, clock, params=p)
-        if not cp.grip_to(cell, plan["grip_open"]):
+        # the mark's own opening, not the pick's: a pick opened only to its box width (53.84 against 50.5 closed)
+        # moved the jaws too little to leave a blob, and every look at the hover saw nothing (2026-10-29)
+        if not cp.grip_to(cell, mark_cfg.get("open", prm.get(p, "pivot.grip_open", plan["grip_open"]))):
             return None
         blobs = jaw_blobs(closed, settled_frame(cell, sleep, clock, params=p), p)
         if marks:
