@@ -1,6 +1,7 @@
 """Pilot originals become portable, pending Learning inputs through the existing importer."""
 import hashlib
 import json
+import os
 from pathlib import Path
 
 import cv2
@@ -113,3 +114,32 @@ def test_pipeline_requires_an_existing_workspace_before_any_outputs(recording, t
     assert pilot_review.main(["--raw-root", str(session.parent), "--video-dir", str(videos),
         "--out", str(out), "--classes", str(classes), "--state", str(tmp_path / "missing")]) != 0
     assert not out.exists()
+
+
+@pytest.mark.skipif(not os.environ.get("ROSY_PILOT_RECORDING_ID"), reason="explicit model-PC recording required")
+def test_existing_model_pc_recording_reaches_a_separate_pending_workspace(tmp_path):
+    import pilot_review
+    from review_store import ReviewStore
+    session = Path(os.environ["ROSY_PILOT_RAW_ROOT"]) / os.environ["ROSY_PILOT_RECORDING_ID"]
+    videos = Path(os.environ["ROSY_PILOT_VIDEO_ROOT"])
+    evidence = Path(os.environ["ROSY_PILOT_EVIDENCE_ROOT"])
+    assert not evidence.exists(), "a new evidence directory is required"
+    evidence.mkdir(parents=True)
+    state, out = evidence / "state", evidence / "prepared"
+    store = ReviewStore(state, empty_training=True)
+    classes = Path(__file__).resolve().parents[3] / "learning/curation/perception/classes/lane_lr6_drivable.yaml"
+    args = ["--raw-root", str(session.parent), "--video-dir", str(videos), "--out", str(out),
+            "--classes", str(classes), "--state", str(state), "--only", session.name]
+    assert pilot_review.main(args) == 0
+    catalog = out / session.name / "verified-inputs.jsonl"
+    rows = [json.loads(line) for line in catalog.read_text().splitlines()]
+    assert rows and all(row["source_session"] == session.name for row in rows)
+    with store.connect() as db:
+        count = db.execute("SELECT COUNT(*) FROM frames").fetchone()[0]
+        assert count == len(rows)
+        assert {row[0] for row in db.execute("SELECT status FROM frames")} == {"pending"}
+    assert pilot_review.main(args) == 0
+    with store.connect() as db:
+        assert db.execute("SELECT COUNT(*) FROM frames").fetchone()[0] == count
+    print(json.dumps({"real_recording": session.name, "prepared_frames": count,
+                      "pending_workspace": str(state), "catalog_sha256": fetch_http._sha256(catalog)}))
