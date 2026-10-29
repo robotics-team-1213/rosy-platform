@@ -148,9 +148,17 @@ def test_cube_release_corrects_measured_cargo_offset_and_neighbor_clearance():
     command = f.cube_release_target(1, sample, .04)
     predicted = [body['position'][k]+command[k]-tcp[k] for k in range(3)]
     assert predicted == pytest.approx([.16, .0452, .075])
+    assert not f.cube_release_ready(1, sample, .04)
+    body['position'] = predicted[:]
+    assert f.cube_release_ready(1, sample, .04)
+    body['position'][1] -= .00001
+    assert not f.cube_release_ready(1, sample, .04)
+    body['position'] = predicted[:]
     body['forces'][2*item['arm']] = [0., 0., 0.]
     with pytest.raises(ValueError, match='bilateral'):
         f.cube_release_target(1, sample, .04)
+    with pytest.raises(ValueError, match='bilateral'):
+        f.cube_release_ready(1, sample, .04)
 
 
 def test_only_cube_contact_report_has_a_two_mib_artifact_budget(tmp_path):
