@@ -461,7 +461,7 @@ def run_auto(cell, config, calibration, calibration_path, catalog, roi, source, 
             tried["auto"] = {"object": o["object"], "closing_axis_offset_deg": target["offset"], "bias_mm": target["bias_mm"],
                              "bias_region": target["bias_region"], "approach_m": target["approach_m"]}
             cd.closing(target["offset"], choices.data["values"].get(CLOSING, []), o["object"])
-            row.update(chosen=tried["auto"], plan=tried["plan"], pivot_needed=problem)
+            row.update(chosen=tried["auto"], plan=tried["plan"], pivot_needed=problem, long_axis_deg=o["long_axis_deg"])
             if dry_run:
                 return {**out, "result": "planned"}
             folded = prm.get(config.get("params"), "auto.fold_before_transport")
