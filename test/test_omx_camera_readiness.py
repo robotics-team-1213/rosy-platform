@@ -301,6 +301,16 @@ def test_a_reused_baseline_guards_the_current_preview_not_the_one_that_recorded_
     assert json.loads((tmp_path/'baseline.json').read_text())['cameras']['top']['producer'] == old  # file unchanged
 
 
+def test_active_preview_without_a_camera_owner_is_retryable_but_another_owner_is_not(monkeypatch):
+    runtime = load('camera_readiness')
+    _producer_world(runtime, monkeypatch, [None])
+    with pytest.raises(OSError):
+        runtime.producer('top', '/dev/v4l/by-id/top', wait_s=1)
+    _producer_world(runtime, monkeypatch, ['4243'])
+    with pytest.raises(RuntimeError, match='sole camera owner'):
+        runtime.producer('top', '/dev/v4l/by-id/top', wait_s=1)
+
+
 def test_viewer_receive_profile_is_the_measured_4mib_udp_buffer_only():
     import xml.etree.ElementTree as ET
     ns = {'p': 'http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles'}
