@@ -109,6 +109,7 @@ def validate_controls(metadata, snapshots):
         for name, value in snapshot.items():
             control = controls.get(name)
             if (control is None or type(value) is not int
+                    or (name == 'auto_exposure' and control['kind'] != 'menu')
                     or any(flag in control['attributes'] for flag in ('read-only', 'disabled'))):
                 raise ValueError('unavailable camera control: '+name)
             if control['kind'] == 'menu':
@@ -120,6 +121,11 @@ def validate_controls(metadata, snapshots):
                          and bounds['min'] <= value <= bounds['max'] and (value-bounds['min']) % step == 0)
             if not valid:
                 raise ValueError('value outside actual device controls: '+name)
+
+
+def validate_device_controls(device, snapshots):
+    metadata = command(['v4l2-ctl', '--device='+device, '--list-ctrls-menus'])
+    validate_controls(metadata, snapshots)
 
 
 def intent_binding(role, spec, digest):
@@ -328,7 +334,8 @@ def run(profile, root, digest, duration):
     from camera_environment import monitor
     from types import SimpleNamespace
     names = ('prepare', 'identity', 'producer', 'get_controls', 'write_control', 'apply_candidate',
-             'restore_controls', 'save', 'restore', 'reserve_budget', 'BudgetExhausted', 'append_event', 'control_intent')
+             'restore_controls', 'save', 'restore', 'reserve_budget', 'BudgetExhausted', 'append_event',
+             'control_intent', 'validate_device_controls')
     return monitor(profile, root, digest, duration, SimpleNamespace(**{name: globals()[name] for name in names}))
 
 

@@ -20,8 +20,9 @@ def load(name):
 
 @pytest.mark.parametrize('condition,values', [('UNDEREXPOSED', [400, 800]), ('OVEREXPOSED', [160, 80])])
 @pytest.mark.parametrize('reset', [False, True])
+@pytest.mark.parametrize('middle', [False, True])
 def test_recovery_uses_applied_controls_after_normal_reentry_or_device_reset(monkeypatch, tmp_path,
-                                                                         condition, values, reset):
+                                                                         condition, values, reset, middle):
     env, runtime, quality = load('camera_environment'), load('camera_readiness'), load('camera_quality')
     monkeypatch.setitem(sys.modules, 'camera_quality', quality)
     clock = [0.]
@@ -30,11 +31,15 @@ def test_recovery_uses_applied_controls_after_normal_reentry_or_device_reset(mon
     cameras = {role: dict(device=role, candidates=[dict(auto_exposure=1, exposure_time_absolute=n) for n in (400, 800)],
                          bright_candidates=[dict(auto_exposure=1, exposure_time_absolute=n) for n in (160, 80)])
                for role in ('top', 'front')}
+    if middle:
+        for spec in cameras.values():
+            spec['candidates'].insert(0, dict(auto_exposure=1, exposure_time_absolute=160))
+            spec['bright_candidates'].insert(0, dict(auto_exposure=1, exposure_time_absolute=400))
     original = dict(auto_exposure=3, exposure_time_absolute=80, gain=3)
     current = {role: dict(original) for role in cameras}
     baseline = {'cameras': {role: dict(device=role, original=dict(original), identity=role, producer={})
                             for role in cameras}}
-    writes, reserved, resets = [], [], []
+    writes, reserved, resets, denied = [], [], [], []
 
     def response(*args, **kwargs):
         if reset and clock[0] >= 16 and not resets:
@@ -42,7 +47,7 @@ def test_recovery_uses_applied_controls_after_normal_reentry_or_device_reset(mon
             resets.append(clock[0])
         state = {'read_only': True}
         for role in cameras:
-            normal = 12 <= clock[0] < 16
+            normal = (7 if middle else 12) <= clock[0] < 16
             exposure = current[role]['exposure_time_absolute']
             state[role] = dict(fresh=True, source_stamp=1000+clock[0], sequence=int(clock[0]*100)+1,
                 quality=dict(policy=quality.POLICY, usable=normal, condition='NORMAL' if normal else condition,
@@ -58,20 +63,34 @@ def test_recovery_uses_applied_controls_after_normal_reentry_or_device_reset(mon
         for role in cameras:
             current[role] = dict(original)
 
+    def reserve(root):
+        if middle and clock[0] >= 16 and not denied:
+            denied.append(clock[0])
+            raise runtime.BudgetExhausted('one occupied budget window')
+        reserved.append(clock[0])
+
     monkeypatch.setattr(env.urllib.request, 'urlopen', response)
     backend = SimpleNamespace(prepare=lambda *a: baseline, identity=lambda d: d, producer=lambda *a: {},
         get_controls=lambda d, names: {key: current[d][key] for key in names}, write_control=write,
         restore_controls=runtime.restore_controls, apply_candidate=runtime.apply_candidate,
         save=runtime.save, append_event=runtime.append_event, restore=restore,
         control_intent=runtime.control_intent,
-        reserve_budget=lambda root: reserved.append(clock[0]), BudgetExhausted=runtime.BudgetExhausted)
+        validate_device_controls=lambda *a: None,
+        reserve_budget=reserve, BudgetExhausted=runtime.BudgetExhausted)
     env.monitor(dict(viewer_url='http://127.0.0.1:8767', cameras=cameras), tmp_path, 'test-profile', 36, backend)
     assert any(name == 'exposure_time_absolute' and value == values[-1] for _, _, name, value in writes)
-    assert not any(at >= 16 and role == 'front' for at, role, _, _ in writes)
+    if middle:
+        assert len(denied) == 1
+        assert any(at >= 16 and role == 'front' and name == 'exposure_time_absolute' and value == values[-1]
+                   for at, role, name, value in writes)
+        assert not any(at >= 16 and role == 'front' and name == 'exposure_time_absolute' and value != values[-1]
+                       for at, role, name, value in writes)
+    else:
+        assert not any(at >= 16 and role == 'front' for at, role, _, _ in writes)
     if reset:
         assert any(at >= 16 and role == 'top' and name == 'exposure_time_absolute' and value == values[-1]
                    for at, role, name, value in writes)
-    else:
+    elif not middle:
         assert not any(at >= 16 for at, _, _, _ in writes)
         assert not any(at >= 16 for at in reserved)
     events = [json.loads(line) for line in (tmp_path/'environment.jsonl').read_text().splitlines()]
@@ -98,6 +117,7 @@ def test_capability_check_accepts_inactive_exposure_and_the_original_auto_mode()
     (METADATA, dict(auto_exposure=1, gain=8)),
     (METADATA, dict(auto_exposure=1, gamma=15)),
     (METADATA, dict(auto_exposure=2)),
+    (METADATA.replace('(menu)', '(int)'), dict(auto_exposure=1)),
     (METADATA.replace('1: Manual Mode', '2: Other Mode'), dict(auto_exposure=1)),
     (METADATA.replace('step=1 default=4', 'step=0 default=4'), dict(auto_exposure=1, gain=4)),
     (METADATA.replace('value=4', 'value=4 flags=read-only'), dict(auto_exposure=1, gain=4)),

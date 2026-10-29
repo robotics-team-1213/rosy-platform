@@ -169,6 +169,8 @@ def monitor(profile, root, digest, duration, io):
                         if actual != current[role]:
                             if actual != baseline['cameras'][role]['original']:
                                 raise RuntimeError('unowned camera controls changed during recovery')
+                            io.validate_device_controls(spec['device'],
+                                spec['candidates']+spec.get('bright_candidates', [])+[actual])
                             old = plan
                             plan = plans[role] = ExposureRecovery(dark_count=old.sizes['dark'], bright_count=old.sizes['bright'])
                             plan.epoch, plan.generation = old.epoch+1, old.generation
@@ -219,6 +221,7 @@ def monitor(profile, root, digest, duration, io):
                     plan.defer(action)
                     checks[role] = 0
                     continue
+                io.validate_device_controls(device, [before, selected])
                 try:
                     io.reserve_budget(root)
                 except io.BudgetExhausted:
