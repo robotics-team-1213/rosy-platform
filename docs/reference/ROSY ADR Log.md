@@ -1353,3 +1353,9 @@ Fleet stores editable device names, models, declared arm counts and hardware ide
 **Status:** Accepted (2026-10-28). 사용자 구현 지시이며 실물 운용·배포·현장 수용은 별도다.
 
 전체 경로·장치 readback·설치/물체/환경 조건과 감독 시험의 검토 근거를 묶어 native 셀의 자동 작업을 판정한다. 미검증·중간 개입·미완료·실패는 기존 근거만으로 재실행하지 않는다. 전문은 [D-911](../adr/D-911-omx-native-reviewed-operating-envelope.md).
+
+## D-919 - Passwordless fallback AP with authenticated Wi-Fi recovery
+
+**Status:** Accepted (2026-10-29). User-authorized fallback-only policy; device acceptance remains separate.
+
+Fallback defaults to an open per-device SSID while relay remains WPA2. Existing HTTPS recovery-code authorization, CORE authority and bounded radio ownership remain unchanged. See [D-919](../adr/D-919-open-fallback-ap.md).
