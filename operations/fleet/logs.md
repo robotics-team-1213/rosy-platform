@@ -5153,3 +5153,4 @@
 - 변경: 탐색 전부터 진행 중인 Fleet fetch를 추적하고, 503 route를 설치한 시점의 요청만 finished/failed event로 기다린다. 이후 요청은 503으로 처리한다. 독립 검토에서 지적한 response API의 무제한 대기를 피하고 기존30초 총 제한과 남은 URL 진단을 유지했다. 제품 JS·CSS·assertion·실패 기준선은 바꾸지 않는다.
 - 검증: syntax·diff 검사와 독립 검토 뒤 커밋 SHA로 원격 matrix를 다시 확인한다. 실패한 d9 FULL 대기는 중단했으며 hidden snapshot·로그를 보존했다. 다른 작업·잠금은 수정하지 않았다.
 - CE: 미해결 — 새 대기 방식의 원격 결과를 아직 확인하지 않았다.
+- 추가 검증·교정: source866c871876의 원격26case는24 NEW/2 passed였다. 탐색 전 Playwright가 builtin set.discard handler에 내부 속성을 붙일 수 없어 실패했다. 두 event callback을 일반 Python lambda로 감싸고 나머지 대기/상태/기하 검사를 유지한다. 재검증은 새 커밋에서 수행한다.
