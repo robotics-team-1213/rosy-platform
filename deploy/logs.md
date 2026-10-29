@@ -4108,3 +4108,10 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거 범위: 첫 빈 poll의 불필요한 render와 label 분리는 재현했지만, 앞선 별도 FULL의 간헐적 높이 0 발생 원인이라고 확정하지 않는다. 기존 height>=12 시험·baseline은 유지한다.
 - gate 변화: 없음. 공식 affected 선택은 affected이며 Fleet·공유 UI guard와 browser scope를 그대로 유지한다. 별도 착지 검증·공유 main 게시·운영 수용은 이 집중 회귀와 구분한다.
 - CE: 해당 없음 — 초기 idle·첫 recording/pending·active→idle의 DOM 수명은 최종 코드와 실제 poll 회귀 세 경우에 직접 남는다. 기존 간헐 실패의 줄별 귀속 교훈을 적용하며, 미확정 원인을 해결 교훈으로 쓰지 않는다.
+
+## 2026-10-30 · 351d048c15 · 끝 집기점 수정 전 손가락 여유 검사 분리
+
+- 변경: 600줄 한도의 95%를 넘은 cell_auto_pick에서 side_clear를 기존 foreground·물체 mask 소유자인 cell_objects로 그대로 옮겼다. 기존 auto.side_clear 호출은 import alias로 유지한다. orchestrator는 581줄에서 553줄로 줄며 새 의존성·명령 경로는 없다.
+- 증거: 분리 source 351d048c15의 공식 원격 auto_pick·objects·params·wrist 회귀는 78 passed/0 skipped, NEW0이다. 함수 signature·docstring·본문의 AST 일치와 두 파일 diff는 독립 계약 검토를 받았다. raw 보고는 Git 밖 omx-end-clearance-20261030/split/run-1.txt에 보존한다.
+- gate 변화: 없음. 이 분리는 끝 집기점의 view/clearance/bias 재승인 누락을 고치지 않는다. 별도 회귀 a567069cea는 실제 mask 전제를 통과한 뒤 선택·bias assertion 네 곳에서 실패했다. 분리가 main에 착지한 뒤 그 수정을 이어 검증한다. 실물 동작·배포·수용은 하지 않았다.
+- CE: 해당 없음 — 함수의 동등 이동과 alias 보존은 최종 diff·기존 회귀·독립 AST 비교로 설명된다. 아직 고치지 않은 끝 집기점 누락은 미해결 기록으로 유지한다.
