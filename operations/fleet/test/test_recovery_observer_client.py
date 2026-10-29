@@ -213,3 +213,46 @@ def test_cli_error_does_not_print_the_observer_secret(module, monkeypatch, capsy
     with pytest.raises(SystemExit) as error:
         module.main(['--origin', 'https://example.invalid', 'context', '--out', 'unused.json'])
     assert error.value.code == 2 and secret not in capsys.readouterr().err
+
+
+@pytest.mark.parametrize('raw', [b'{', b'{"context":null,"context":null}', b'{"context":NaN}',
+                                  b'{"context":1e999}', b' ' * (4 * 1024 * 1024 + 1)])
+def test_hostile_or_oversized_reply_is_not_accepted_as_context(module, raw):
+    class Reply:
+        def open(self, request, timeout):
+            return io.BytesIO(raw)
+
+    client = module.Client('https://example.invalid', TOKEN)
+    client.opener = Reply()
+    with pytest.raises(ValueError):
+        client.context()
+
+
+def test_legacy_g2_measurements_are_not_stamped_or_rebound(module, failed_api, monkeypatch):
+    client, context, _ = ready(module, failed_api, monkeypatch)
+    samples = [{'model_id': 'infeed_block', 'observed_at': 123., 'clock': 9., 'gripper_position': 1.}] * 2
+    before = copy.deepcopy(samples)
+    with pytest.raises(ValueError):
+        client.submit(context, samples)
+    assert samples == before and not any(method == 'POST' for method, _, _ in client.opener.calls)
+
+
+@pytest.mark.parametrize('change', ['presence', 'identity', 'sequence', 'names'])
+def test_optional_joints_keep_their_own_source_pairing_before_post(module, failed_api, monkeypatch, change):
+    client, context, samples = ready(module, failed_api, monkeypatch)
+    for index, sample in enumerate(samples):
+        owner = sample['owners'][0]
+        owner['joints'] = dict(sample_id=f'joint-sample-{index}', sequence=index,
+            observed_at_ns=owner['links_observed_at_ns'], joint_names=['joint'], positions_rad=[0.])
+    first, second = [sample['owners'][0] for sample in samples]
+    if change == 'presence':
+        first['joints'] = None
+    elif change == 'identity':
+        second['joints']['sample_id'] = first['joints']['sample_id']
+    elif change == 'sequence':
+        second['joints']['sequence'] = first['joints']['sequence']
+    else:
+        second['joints']['joint_names'] = ['another-joint']
+    with pytest.raises(ValueError):
+        client.submit(context, samples)
+    assert not any(method == 'POST' for method, _, _ in client.opener.calls)
