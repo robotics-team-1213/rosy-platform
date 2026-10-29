@@ -24,9 +24,9 @@ journalctl --user -u rosy-pilot-fetch@9dfk.service -n 80 --no-pager
 로봇이 꺼졌거나 원본이 로봇 목록에서 사라져도 이미 받은 원본은 로컬에서 처리할 수 있다. 승인된 코드가 있는 모델 PC에서 다음 명령을 실행한다. 원본과 변환 파일은 보존하며, 원본·sidecar·MP4 해시가 맞지 않으면 실패한다. 실패한 자료를 성공으로 표시하지 않는다.
 
 ```bash
-SOURCE="$HOME/.local/share/rosy/model-code/current"
-PYTHONPATH="$SOURCE/learning/curation/perception:$SOURCE/tools/perception:$SOURCE/learning/registry/perception:$SOURCE/learning/training/perception:$SOURCE/middleware/perception" \
-  "$HOME/rosy-ml/.venv/bin/python" "$SOURCE/learning/curation/perception/fetch_http.py" \
+CONTROLLER="$HOME/.local/lib/rosy-model-code/rosy_model_code.py"
+"$HOME/rosy-ml/.venv/bin/python" -I "$CONTROLLER" --config "$HOME/.config/rosy/model-code.json" \
+  exec dataset/fetch_http.py \
   --local-only --dest <raw-root> --video-out <video-root> --only <recording-id> --codec h264
 ```
 
@@ -35,8 +35,8 @@ PYTHONPATH="$SOURCE/learning/curation/perception:$SOURCE/tools/perception:$SOURC
 새 수신 영수증은 MP4 해시도 보존한다. 예전 영수증은 sidecar 해시만 보존했으므로 준비 시점의 영상 해시를 스냅샷에 기록하며 독립 원본 영상 검증으로 승격하지 않는다. 이미 영수증에 기록된 해시가 달라지면 자동으로 새 해시를 승인하지 않는다. 중단된 변환은 새 임시 폴더에서 재실행하고 이전 출력은 별도 `*-interrupted-*` 폴더로 보존한다. 영상·메타데이터를 게시한 뒤 sidecar를 마지막에 게시하며, 부분 출력은 정상 변환본으로 채택하지 않는다.
 
 ```bash
-PYTHONPATH="$SOURCE/learning/curation/perception:$SOURCE/tools/perception:$SOURCE/learning/registry/perception:$SOURCE/learning/training/perception:$SOURCE/middleware/perception" \
-  "$HOME/rosy-ml/.venv/bin/python" "$SOURCE/learning/curation/perception/pilot_review.py" \
+"$HOME/rosy-ml/.venv/bin/python" -I "$CONTROLLER" --config "$HOME/.config/rosy/model-code.json" \
+  exec dataset/pilot_review.py \
   --raw-root <raw-root> --video-dir <video-root> --out <new-review-root> \
   --classes <workspace-classes.yaml> --state <existing-review-state> --only <recording-id>
 ```
@@ -53,7 +53,7 @@ REVIEW_CLASSES=<workspace-classes.yaml>
 REVIEW_STATE=<existing-review-state>
 ```
 
-서명 릴리스에 `pilot_review.py`와 그 의존 파일이 있고 기존 작업 공간·클래스가 일치하는지 확인한 뒤 unit을 설치한다. 기존 unit·환경 파일은 먼저 별도 백업한다. 수동 1회 실행에서 준비/등록 결과를 확인한 뒤 10분 타이머를 켠다.
+서명 릴리스에 `pilot_review.py`와 그 의존 파일이 있고 기존 작업 공간·클래스가 일치하는지 확인한 뒤 unit을 설치한다. 고정 controller의 `model_code_jobs.py`도 새 `dataset/pilot_review.py` 대응표를 포함해야 한다. 등록된 config·공개 키를 유지하며 기존 controller 갱신 절차를 따른다. 서비스는 그 실행기를 통해 릴리스를 고정하고 코드 전환·다른 모델 작업과 같은 work lock을 끝까지 보유한다. 기존 unit·환경 파일은 먼저 별도 백업한다. 수동 1회 실행에서 준비/등록 결과를 확인한 뒤 10분 타이머를 켠다.
 
 ```bash
 cp deploy/model_pc/rosy-pilot-process.{service,timer} ~/.config/systemd/user/

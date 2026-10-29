@@ -8,7 +8,6 @@ ExecStartPre=/usr/bin/test -r %h/rosy-ml/%i-ca.pem
 ExecStartPre=/usr/bin/test -f %h/.local/share/rosy/model-code/current/learning/curation/perception/fetch_http.py
 Environment=ROBOT_BASE_URL=https://rosy-pinky-%i.local:8080
 EnvironmentFile=%h/.config/rosy/pilot-%i.env
-# Modules from the accepted signed model-code release (D-446), not the hand-maintained work tree.
-Environment=PYTHONPATH=%h/.local/share/rosy/model-code/current/learning/curation/perception:%h/.local/share/rosy/model-code/current/tools/perception:%h/.local/share/rosy/model-code/current/learning/registry/perception:%h/.local/share/rosy/model-code/current/middleware/perception
-ExecStart=/usr/bin/flock --nonblock --conflict-exit-code 75 %t/rosy-pilot-collection.lock %h/rosy-ml/.venv/bin/python %h/.local/share/rosy/model-code/current/learning/curation/perception/fetch_http.py ${ROBOT_BASE_URL} --token-file %h/.config/rosy/pilot-%i.operator-token --ca-file %h/rosy-ml/%i-ca.pem --dest %h/rosy-ml/rosy-platform/data/perception/raw --video-out %h/rosy-ml/rosy-platform/data/teleop/learning --codec h264 --since-id ${SINCE_ID}
+# The existing model-code executor pins the release and holds its work lock through completion.
+ExecStart=/usr/bin/flock --nonblock --conflict-exit-code 75 %t/rosy-pilot-collection.lock %h/rosy-ml/.venv/bin/python -I %h/.local/lib/rosy-model-code/rosy_model_code.py --config %h/.config/rosy/model-code.json exec dataset/fetch_http.py ${ROBOT_BASE_URL} --token-file %h/.config/rosy/pilot-%i.operator-token --ca-file %h/rosy-ml/%i-ca.pem --dest %h/rosy-ml/rosy-platform/data/perception/raw --video-out %h/rosy-ml/rosy-platform/data/teleop/learning --codec h264 --since-id ${SINCE_ID}
 SuccessExitStatus=75
