@@ -5116,3 +5116,24 @@
 - 변경: 별도 예약 API v1.331로 live pin을 갱신하고 main의 v1.328 OMX archive 계약과 양쪽 이력을 함께 보존했다. 존재하는 D-908의 gap 선언만 제거했다. 합성·FULL 및 실제 main 착지는 별도 확인한다.
 - Gate: 추가 실행 권한이나 공개 필드 변경 없음. 실제 장치·현장 수용은 수행하지 않았다.
 - CE: 해당 없음 — 원래 generation과 승인자의 원자 결속, 재시도 검증 기준이 구현·실제 HTTP/SQLite 회귀에 남는다. 별도 교훈이 없으면 재발할 추가 환경 제약은 확인하지 않았다.
+
+## 2026-10-29 · afa10f26b2 · 독립 복구 관측 제출용 호스트 클라이언트
+
+- 변경: 기존 API v1.327의 독립 관측 문맥 조회·시료 POST를 연결했다. 현재 문맥·원본 ID·UTC·시료/관절 순서를 검사하고 한 번만 제출하며 응답 유실은 미확인으로 남긴다. 복구 요청·운영자 승인·정상 PRE_DISPATCH 제출은 호출하지 않는다.
+- 증거: [동결 검증](../../docs/validation/recovery-observer-client-2026-10-29/result.md). 원격 client/API/auth 53 pass·skip 0, runner/classifier exit 0, NEW 0. 기존 실제 API와 loopback HTTP·권한·응답 유실·프록시/리다이렉트·CLI를 검증했다. 관절 짝 4건을 RED 재현한 뒤 POST 전 거절로 보강했고 독립 계약 재검토에 주요 지적이 없다.
+- Gate: 실행·학습·생산자 수용 변화 없음. 실제 Gazebo의 링크별 측정과 source UTC 결속은 별도 수집기 요구사항으로 안내했다.
+- CE: 해당 없음 — 코드·회귀·사용 안내로 판단을 복원할 수 있으며 source 측정 공백은 미해결 요구사항이다.
+
+## 2026-10-29 · 8728fc6eb7 · observer CLI 시험 입력의 비밀값 검사 호환
+
+- 변경: 비정상 입력의 오류 출력 검사를 명시적 짧은 자리표시자로 고쳤다. 고정 입력과 중간 참조식 수정이 원격 secret guard에 걸린 이력을 보존했다. 제품 코드·스캐너·예외·실패 기준선은 바꾸지 않았다.
+- 증거: [별도 수정 검증](../../docs/validation/recovery-observer-client-2026-10-29/guard-correction.md). 해당 커밋에서 원격 client 전체와 정확 secret guard 36 pass·skip 0·NEW 0. 독립 검토는 32자 미만 거절·출력 미노출 의도가 유지됨을 확인했다.
+- Gate: 공식 재착지는 별도 확인한다. 실제 관측 생산자·장치·학습 수용 변화는 없다.
+- CE: 해당 없음 — 기존 검사기의 명시적 자리표시자 규칙과 이번 회귀·수정 기록에서 이유를 복원한다.
+
+## 2026-10-30 · uncommitted · fix(fleet): 관측 기록 행 상한 정리를 MAX(id) 경계로
+
+- 변경: `ObservationStore`가 스냅샷마다 쓰기 트랜잭션 안에서 `ORDER BY observation_id DESC LIMIT 1 OFFSET 100000`으로 10만 행(로봇 JSON 본문이 든 rowid leaf)을 훑던 정리를 `MAX(observation_id) - max_rows` 경계로 바꿨다. AUTOINCREMENT id는 다시 쓰이지 않으므로 상한(최대 `max_rows`행)은 그대로이고, id가 이어져 있으면 남는 행도 같다.
+- 증거: 저장소 밖 측정(워크스페이스 조사 기록 `Rosy/docs/research/d271-gate-a-2026-10-30/sqlite-prune/`, 원격 시험 PC, 1.5KB 행 10만, 스냅샷 1회 = 8행 삽입+8행 정리, 40회): 쓰기 트랜잭션 p50 66→37ms, p95 98→83ms, max 136→236ms(잡음). 대부분은 `synchronous=FULL` 커밋이며 그대로 둔다. 이 정리는 Gate A의 0.5초 잠금의 원인이 아니다. 같은 패턴의 `observe/rules.py`는 측정하지 않아 바꾸지 않았다.
+- Gate: 보존 상한·보존 기간·공개 필드 변화 없음. 실제 현장 DB 크기와 잠금 시간은 발행 로그 `claim_s`로 따로 본다.
+- CE: 해당 없음 — 이유는 코드 주석과 이 기록, 측정 원본에 남는다.

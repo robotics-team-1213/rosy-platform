@@ -38,6 +38,23 @@ CONFIG["_commissioning"] = {"person_at_switch": True}  # simulated supervised tr
 CONFIG["operating_conditions"] = {"installation_revision": "sim-install-1", "object_revision": "sim-object-1",
     "payload_kg": 0.05, "object_dimensions_m": [0.03, 0.03, 0.03], "environment_revision": "sim-scene-1"}
 SESSION = {"scope": "simulation", "sha256": "a" * 64, "session_id": "fixture-session"}
+
+
+@pytest.fixture(autouse=True)
+def simulated_operating_profile(tmp_path, monkeypatch):
+    monkeypatch.syspath_prepend(str(OMX))
+    from cell_robot_profile import load
+
+    path = tmp_path / "robot-profile.json"
+    path.write_text(json.dumps({"schema": "rosy.omx-cell-robot-profile.v1", "device_id": "sim-device",
+        "instance_id": "sim-arm", "robot_config_sha256": "c" * 64,
+        "operating_envelope_path": "review.json", "work_dir": "."}))
+    monkeypatch.setitem(CONFIG, "operating_profile_path", str(path))
+    monkeypatch.setitem(CONFIG, "work_dir", str(tmp_path))
+    monkeypatch.setitem(CONFIG, "operating_envelope_path", str(tmp_path / "review.json"))
+    monkeypatch.setitem(SESSION, "operating_profile", load(path)["binding"])
+
+
 CATALOG = cell_objects.load_catalog(OMX / "object-catalog.example.json")
 CAMERA = CONFIG["cameras"]["top"]
 ROI = (40, 205, 300, 420)
@@ -623,3 +640,12 @@ def test_two_candidates_keep_their_own_libraries(tmp_path):
     for u in usable:
         lib = json.loads(Path(u["library"]).read_text())
         assert lib["source"]["pick"]["x"] == u["pick"]["x"] and lib["source"]["pick"]["y"] == u["pick"]["y"]
+
+
+def test_a_long_box_out_of_reach_at_its_middle_offers_grasp_points_toward_the_base_first():
+    """2026-10-29: a 2-cell on the moved Pinky was out of reach at its middle (planar wrist 0.286 m)."""
+    o = {"raw_m": [0.10, 0.24], "long_axis_deg": 90.0, "object": "container-2"}
+    ends = auto.reachable_ends(o, {"length_mm": 60, "width_mm": 30}, None)
+    assert [e["grasp_shift_mm"] for e in ends] == [-10.5, 10.5]  # 0.7 of the 15 mm from the middle to the jaws' end
+    assert ends[0]["raw_m"] == pytest.approx([0.10, 0.2295]) and math.hypot(*ends[0]["raw_m"]) < math.hypot(*o["raw_m"])
+    assert auto.reachable_ends(o, {"length_mm": 30, "width_mm": 30}, None) == []  # a square box has no end to move to

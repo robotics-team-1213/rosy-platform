@@ -39,6 +39,7 @@ import cell_attempts  # noqa: E402
 import cell_calibration as cal  # noqa: E402
 import cell_decisions as cd  # noqa: E402
 import cell_objects  # noqa: E402
+from cell_objects import side_clear  # noqa: E402
 import cell_params as prm  # noqa: E402
 import cell_pivot  # noqa: E402
 import cell_diagnose  # noqa: E402
@@ -183,35 +184,6 @@ def object_sized(mask, params=None):
     return out
 
 
-def side_clear(mask, roi, pixel_fn, o: dict, finger_mm: float, closing_deg: float | None = None) -> bool:
-    """Mask beside the object on both closing sides, a finger's width out: clear of other foreground. The closing
-    direction defaults to across the long axis; a square object passes the one its candidate yaw closes along."""
-    import cv2
-
-    centre = pixel_fn(tuple(o["raw_m"]))
-    if o.get("hull_px"):  # only its own pixels: a box split from a touching neighbour (cell_split) must still see it
-        own = np.zeros(mask.shape, np.uint8)
-        cv2.fillPoly(own, [np.asarray(o["hull_px"], np.int32) - [roi[0], roi[1]]], 1)
-        mask = np.where(cv2.dilate(own, np.ones((5, 5), np.uint8)) > 0, 0, mask).astype(mask.dtype)
-    else:
-        n, labels = cv2.connectedComponents(mask)
-        c_col, c_row = round(centre[0]) - roi[0], round(centre[1]) - roi[1]
-        if 0 <= c_row < mask.shape[0] and 0 <= c_col < mask.shape[1] and labels[c_row, c_col]:
-            mask = np.where(labels == labels[c_row, c_col], 0, mask).astype(mask.dtype)  # its own blob (side faces) is not a neighbour
-    u = math.radians(o["long_axis_deg"] if closing_deg is None else closing_deg - 90)
-    along, across = np.array([math.cos(u), math.sin(u)]), np.array([-math.sin(u), math.cos(u)])
-    half_across = o["width_mm"] / 2 if closing_deg is None else max(o["width_mm"], o["length_mm"]) / 2
-    for side in (-1, 1):
-        for out in (0.5, 1.0, 2.0):  # an open finger spans from the box edge to about two finger widths out
-            for s in (-0.3, 0.0, 0.3):
-                p = np.array(o["raw_m"]) + (side * (half_across + out * finger_mm) * across + s * min(o["length_mm"], 2 * half_across) * along) / 1000
-                px = pixel_fn(tuple(p))
-                col, row = round(px[0]) - roi[0], round(px[1]) - roi[1]
-                if 1 <= row < mask.shape[0] - 1 and 1 <= col < mask.shape[1] - 1 and mask[row - 1:row + 2, col - 1:col + 2].any():
-                    return False
-    return True
-
-
 def grasp_yaw(config: dict, site: str, o: dict, entry: dict, offset) -> float:
     """Tool yaw (deg) for a closing-axis candidate. The jaws close along tool y = yaw + offset, and must close
     across the object (long axis + jaw_axis_deg_from_long); yaw and yaw + 180 are the same grasp, the one
@@ -230,6 +202,18 @@ def jaw_open_for(width_mm: float, params=None) -> float:
     g = lambda name: prm.get(params, name)  # noqa: E731
     value = g("gripper.held_30mm") + (width_mm + 2 * g("auto.jaw_margin_mm") - 30.0) / g("gripper.gap_mm_per_unit")
     return round(min(max(value, g("gripper.held_30mm") + 0.5), g("gripper.open_max")), 2)
+
+
+def reachable_ends(o: dict, entry: dict, params=None) -> list:
+    """Grasp points shifted along a long box's axis, toward the arm's base first: grasp.end_frac of the way from
+    the middle to where the jaws would reach the box's end. A square box has none."""
+    reach = prm.get(params, "grasp.end_frac") * (entry["length_mm"] - entry["width_mm"]) / 2000
+    if reach <= 0:
+        return []
+    u = math.radians(o["long_axis_deg"])
+    ends = [dict(o, raw_m=[o["raw_m"][0] + k * reach * math.cos(u), o["raw_m"][1] + k * reach * math.sin(u)],
+                 grasp_shift_mm=round(1000 * k * reach, 1)) for k in (1, -1)]
+    return sorted(ends, key=lambda e: math.hypot(*e["raw_m"]))
 
 
 def plan_pick(config: dict, site: str, dest_site: str, place_xy, o: dict, entry: dict, offset, bias_mm, work: Path,
@@ -326,6 +310,12 @@ def choose(cell, config, calibration, site, dest_site, place_xy, roi, objects, m
         region = cell_pivot.bias_at(bias_data, site, o["raw_m"], params=p)
         bias = region["bias_mm"] if region else [0.0, 0.0]
         planned = plan_pick(config, site, dest_site, place_xy, o, entry, offset, bias, work, yaw)
+        for end in (reachable_ends(o, entry, p) if isinstance(planned, str) and "UNREACHABLE" in planned else []):
+            # a long box whose middle is out of reach is held nearer its end (2026-10-29: a 2-cell on the moved Pinky)
+            planned = plan_pick(config, site, dest_site, place_xy, end, entry, offset, bias, work, yaw)
+            if not isinstance(planned, str):
+                o = end
+                break
         if isinstance(planned, str):
             refused.append({"centre_mm": o["centre_mm"], "object": o["object"], "why": f"planner: {planned}"})
             continue
@@ -446,11 +436,12 @@ def run_auto(cell, config, calibration, calibration_path, catalog, roi, source, 
             if dry_run:
                 return {**out, "result": "planned"}
             folded = prm.get(config.get("params"), "auto.fold_before_transport")
+            sequence = FOLDED if folded else cp.SEQUENCE
             episode = open_episode(cell, config, source, dest, o["object"])
             # a hover re-plan keeps the pick's own plan values (jaw opening, approach): the default 62 opening came back
             # through the reach re-plan and the fingers met the board again (2026-10-29)
             same = dict(config, plan=dict(config["plan"], **target.get("plan", {})))
-            gate = Gate(guarded, config, calibration)
+            gate = Gate(guarded, config, calibration, sequence=sequence)
             held = gate.open(target["library"], lambda a: cell_attempts.begin(config, a))
             if held is not None:  # D-911: not a reviewed task (or no supervised trial): nothing moved
                 tried["envelope"] = held
@@ -460,7 +451,7 @@ def run_auto(cell, config, calibration, calibration_path, catalog, roi, source, 
                 return {**out, "result": f"held: {held['reason']}"}
             wrist, capture, pinch, feel = cell_hooks.pick_hooks(same, gate, target, cp.write_library, source, dest_site, cd.emit, calibration)
             moved = transfer_folded(gate, target["library"], wrist=wrist, after_place=capture,
-                                    pinch=pinch, feel=feel, sequence=FOLDED if folded else cp.SEQUENCE)
+                                    pinch=pinch, feel=feel, sequence=sequence)
             tried["envelope"] = gate.assessment
             tried["wrist"] = (moved.get("wrist") or next((s for s in moved["steps"] if s.get("command") == "wrist"), None)
                               or ("disabled or uncalibrated" if wrist is None else None))
