@@ -64,7 +64,7 @@ journalctl --user -u rosy-pilot-process.service -n 80 --no-pager
 systemctl --user enable --now rosy-pilot-process.timer
 ```
 
-수신과 로컬 처리는 같은 `%t/rosy-pilot-collection.lock`을 사용한다. 다른 작업이 잠금을 보유하면 exit 75로 이번 회차만 건너뛰고 다음 타이머에서 재시도한다. 이는 수신·등록 성공 증거가 아니다. 수동 실행도 같은 `flock`을 사용하거나 두 타이머·실행 중 service를 정지한 상태에서 실행한다. 네트워크 수신 실패는 별도로 남으며, 이미 받은 자료의 로컬 검증·등록을 막지 않는다. 중지는 해당 타이머와 service를 멈추고 백업한 unit/config를 복원한 뒤 daemon-reload한다. 준비 자료나 검수 DB를 삭제해 되돌리지 않는다.
+수신과 로컬 처리는 같은 `%t/rosy-pilot-collection.lock`을 사용한다. 수집 잠금 충돌은 exit 75, 서명 실행 소유자의 GPU·작업 보류는 exit 3으로 이번 회차만 건너뛰고 다음 타이머에서 재시도한다. 이는 수신·등록 성공 증거가 아니다. 수동 실행도 같은 `flock`을 사용하거나 두 타이머·실행 중 service를 정지한 상태에서 실행한다. 네트워크 수신 실패는 별도로 남으며, 이미 받은 자료의 로컬 검증·등록을 막지 않는다. 중지는 해당 타이머와 service를 멈추고 백업한 unit/config를 복원한 뒤 daemon-reload한다. 준비 자료나 검수 DB를 삭제해 되돌리지 않는다.
 
 [D-527](../../docs/adr/D-527-decision-test-host-boundaries.md)의 L0 실행 위치다. 개발 로컬 PC는 `test/test_decision_replay.py`와 lint·푸시 검사를 수행한다. 모델 PC는 사람 정답이 있는 독립 세트로 텍스트 Laya/Kev/규칙 기준선을 비교하고, VLM은 별도의 영상·LiDAR 정답 세트로 평가한다. AI PC의 역할은 승인된 고정 버전의 적재·추론 스모크와 watchdog 확인이다.
 
