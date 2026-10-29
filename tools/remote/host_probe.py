@@ -15,7 +15,8 @@ FULL_USE = 99
 # locks and expired reservations (<expiry epoch> <class> <cores> <GB>) go; both count toward the budget, and
 # sim_held counts the live ones of class sim or gpu (gpu: SwiftShader browsers are CPU-heavy, robot-4a; remote_sim, --pick sim, a hand-run Gazebo lock), browser_jobs the
 # live browser job locks of every run (remote_job.JOB), so lanes stay under the per-host cap across runs.
-PROBE = r"""J=~/rosy-jobs; c=0; m=0; g=0; w=0; now=$(date +%s)
+# py=2 means Python is present but pytest admission is blocked by a live alone job or waiter.
+PROBE = r"""J=~/rosy-jobs; c=0; m=0; g=0; w=0; a=0; now=$(date +%s)
 for f in "$J"/*.resv; do
   [ -e "$f" ] || continue; read -r t k fc fm < "$f" || true
   case "$t$fc$fm" in ''|*[!0-9]*) rm -f "$f"; continue;; esac
@@ -25,10 +26,16 @@ for f in "$J"/*.lock; do
   [ -e "$f" ] || continue; read -r pid k fc fm < "$f" || true
   case "$fc$fm" in ''|*[!0-9]*) fc=0 fm=0;; esac  # whole numbers only; never evaluate file text
   if kill -0 "$pid" 2>/dev/null; then c=$((c+${fc:-0})); m=$((m+${fm:-0})); case "$k" in sim|gpu) g=$((g+1));; esac; [ "$k" = browser ] && w=$((w+1))
+    [ "$k" = alone ] && a=1
   else rm -f "$f"; fi
+done
+for f in "$J"/*.alone-wait; do
+  [ -e "$f" ] || continue; read -r pid < "$f" || true
+  kill -0 "$pid" 2>/dev/null && a=1
 done
 py=0; for p in /usr/bin/python3 ~/.local/bin/python3.12; do
   "$p" -c 'import sys; sys.exit(sys.version_info[:2] != (3, 12))' 2>/dev/null && py=1 && break; done
+[ "$py" = 1 ] && [ "$a" = 1 ] && py=2
 s=0; [ -f /opt/ros/jazzy/share/ros_gz_sim/package.xml ] && [ -f /opt/ros/jazzy/share/nav2_bringup/package.xml ] && s=1
 b=0; if [ -e "$J/busy" ]; then  # "<expiry epoch> <owner> <pid>" or a bare touch; 2 = pre-boot, 3 = expired
   b=1; t=; read -r t _ < "$J/busy" 2>/dev/null || true
@@ -51,7 +58,8 @@ def parse_probe(out: str) -> dict | None:
         line = [ln for ln in out.splitlines() if ln.startswith("ROSYPROBE ")][-1]
         n, load, avail, total, py, sim, busy, cores, gb, site, held, browsers, *disk = line.split()[1:]
         p = {"nproc": int(n), "load1": float(load), "avail_gb": int(avail) / 2**20,
-             "total_gb": int(total) / 2**20, "pytest": py == "1", "sim": sim == "1", "busy": busy == "1",
+             "total_gb": int(total) / 2**20, "pytest": py == "1", "pytest_blocked": py == "2",
+             "sim": sim == "1", "busy": busy == "1",
              "busy_ignored": {"2": "pre-boot", "3": "expired"}.get(busy),
              "lock_cores": int(cores), "lock_gb": int(gb), "site": site == "1",
              "sim_held": int(held), "browser_jobs": int(browsers)}

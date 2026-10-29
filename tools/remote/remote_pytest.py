@@ -214,7 +214,8 @@ def place(cls: str, hosts: list[str], probes: list[dict | None], cores: int = 0)
         site = host in SITES or p.get("site", False)
         cores = p["nproc"] - max(p["load1"], p["lock_cores"]) - (SITE_RESERVE[0] if site else 0)
         mem = min(p["avail_gb"], p["total_gb"] - p["lock_gb"]) - (SITE_RESERVE[1] if site else 0)
-        why = ("marked busy (~/rosy-jobs/busy)" if p["busy"] else f"no {cls} capability" if not p[cls]
+        why = ("marked busy (~/rosy-jobs/busy)" if p["busy"] else "alone job running or waiting"
+               if cls == "pytest" and p.get("pytest_blocked") else f"no {cls} capability" if not p[cls]
                else f"below disk floor {DISK_FLOOR_GB} GB" if disk_full(p)
                else f"below {cls} floor {need_c} cores/{floor_m} GB" if cores < need_c or mem < floor_m
                else f"light (under {need_m} GB): serial, smallest invocations" if mem < need_m else "ok")
