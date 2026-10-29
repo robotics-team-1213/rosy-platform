@@ -3,14 +3,14 @@ import json
 import math
 from pathlib import Path
 
-from mapped_stack_fixture import CUBE_FIXTURE, FIXTURE, judge
+from mapped_stack_fixture import CUBE_FIXTURE, CUBE_REPORT_BYTES, FIXTURE, judge
 from stacking_report import read_regular
 
 
 def verify_report(path, *, sdk_version, seed, cube=False):
     fixture = CUBE_FIXTURE if cube else FIXTURE
     count = 9 if cube else 3
-    value = json.loads(read_regular(Path(path)))
+    value = json.loads(read_regular(Path(path), limit=CUBE_REPORT_BYTES if cube else 1024*1024))
     if (value.get('schema') != ('rosy.omx-map-cube-stack/1' if cube else 'rosy.omx-map-long-stack/1') or value.get('fixture') != fixture
             or value.get('seed') != seed or value.get('sdk_version') != sdk_version
             or value.get('controller') != FIXTURE['controller'] or value.get('attachment_aid') is not False

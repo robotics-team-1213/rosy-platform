@@ -6,6 +6,7 @@ import xml.etree.ElementTree as ET
 from stacking_fixture import DT, PROFILE
 
 ROOT = Path(__file__).resolve().parents[3]
+CUBE_REPORT_BYTES = 2*1024*1024
 FIXTURE = dict(revision='confluence-map-long-stack-v1',
     confluence_page='8683759', cad_attachment='8585450', photo_attachment='8585456',
     cad_sha256='a0a4be65cabc662c6f93b7a89abb2447e84b07684a277533078616e477ff8cd7',
@@ -43,7 +44,8 @@ CUBE_FIXTURE = dict(FIXTURE, revision='confluence-map-cube-stack-v1', trials=1,
 def plan(cube=False):
     if cube:
         return [dict(id='bar-'+str(i+1), cells=3, cell=[0, i % 3, i//3], size=[.09, .03, .03],
-                     mass=.06, arm=i % 2, target=[.16, .015+(i % 3)*.03, .04+(i//3)*.03]) for i in range(9)]
+                     mass=.06, arm=(1 if i % 3 == 2 else 0 if i % 3 == 0 else (i//3) % 2),
+                     target=[.16, .015+(i % 3)*.03, .04+(i//3)*.03]) for i in range(9)]
     return [dict(id='bar-'+str(i+1), cells=3, cell=[0, 0, i], size=[.09, .03, .03],
                  mass=.06, arm=i % 2, target=[.16, 0., .04+i*.03]) for i in range(3)]
 
@@ -135,7 +137,7 @@ def judge(trial, cube=False):
     if len(layers) != len(plan(cube)):
         return dict(task_success=False, failures=['nine_bars_not_completed' if cube else 'three_layers_not_completed'])
     for i, layer in enumerate(layers):
-        if layer.get('item') != i or layer.get('arm') != i % 2:
+        if layer.get('item') != i or layer.get('arm') != plan(cube)[i]['arm']:
             failures.append(f'layer_{i+1}:wrong_item_or_arm')
         lifts, settles = layer.get('lift_samples', []), layer.get('settle_samples', [])
         if len(lifts) < 3 or lifts[-1]['tick']-lifts[0]['tick'] < 24:

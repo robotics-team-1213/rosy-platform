@@ -29,10 +29,10 @@ def trial():
         box = lifted['boxes'][i]
         box['position'][2] = .145
         box['forces'] = [[0., 0., 0.] for _ in box['forces']]
-        for finger in (2*(i % 2), 2*(i % 2)+1):
+        for finger in (2*item['arm'], 2*item['arm']+1):
             box['forces'][finger] = [0., .1, .3]
         box['net_force'] = [0., .2, .6]
-        result['layers'].append(dict(item=i, arm=i % 2, source_center_z=.04,
+        result['layers'].append(dict(item=i, arm=item['arm'], source_center_z=.04,
             infeed_start=[.16, -.09, .041], infeed_settled=[.16, -.046, .04],
             lift_samples=[dict(copy.deepcopy(lifted), tick=t) for t in (0, 12, 24)],
             settle_samples=[dict(copy.deepcopy(settled), tick=t) for t in range(120, 253, 12)]))
@@ -82,8 +82,11 @@ def test_cube_report_recomputes_nine_body_contact_acceptance(tmp_path):
         attachment_aid=False, trials=[trial()], task_success=True,
         images=['mapped-overview.png', 'mapped-initial.png', 'mapped-layer-9.png', 'mapped-trial-1.png'])
     path = tmp_path/'report.json'
-    path.write_text(json.dumps(value))
+    path.write_text(json.dumps(value)+' '*1024*1024)
     assert verify_report(path, sdk_version='6.2.0.0', seed=42, cube=True)['task_success']
+    path.write_text(json.dumps(value)+' '*f.CUBE_REPORT_BYTES)
+    with pytest.raises(ValueError, match='Unsafe stacking evidence'):
+        verify_report(path, sdk_version='6.2.0.0', seed=42, cube=True)
     value['trials'][0]['layers'][8]['settle_samples'][0]['boxes'].pop()
     path.write_text(json.dumps(value))
     with pytest.raises(ValueError):
@@ -104,8 +107,9 @@ def test_assigned_arm_can_reach_each_cube_release_pose(tmp_path):
         case = tmp_path/'case.json'
         out = tmp_path/f'frames-{len(list(tmp_path.glob("frames-*")))}.json'
         case.write_text(json.dumps(dict(schema='rosy.omx-sim-stack-plan/1', operation=operation, **fields)))
-        subprocess.run([sys.executable, str(f.ROOT/'deploy/robot/omx/isaac_stack_plan.py'),
-            '--case', str(case), '--out', str(out)], check=True, capture_output=True)
+        result = subprocess.run([sys.executable, str(f.ROOT/'deploy/robot/omx/isaac_stack_plan.py'),
+            '--case', str(case), '--out', str(out)], capture_output=True)
+        assert result.returncode == 0, result.stderr.decode()
         return json.loads(out.read_text())
     homes = request('homes', bases=f.FIXTURE['arm_bases_m'], points=[f.home(0), f.home(1)])['homes']
     for item in f.plan(cube=True):

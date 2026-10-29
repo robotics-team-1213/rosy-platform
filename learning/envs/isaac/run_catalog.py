@@ -3,15 +3,15 @@ import copy
 
 
 _CATALOG = [
-    {'id': 'omx-map-cube-stack', 'name': 'Confluence map: nine-bar 90 mm cube stacking',
-     'implemented': True, 'stage': 'mapped_cube_stack', 'seed_effect': 'INFEED_XY_AND_YAW',
-     'timeout_seconds': 900, 'requirements': ['Approved SDK and model GPU'],
-     'reason': 'One bounded seed per run; contact-only reference, not learned or hardware accepted.'},
     {'id': 'omx-f-import', 'name': 'OMX-F 모델 연결 검사', 'implemented': True,
      'stage': 'model_import', 'seed_effect': 'NOT_USED_BY_MODEL_IMPORT',
      'timeout_seconds': 180,
      'requirements': ['승인 SDK·GPU·동일 계정의 두 학습 잠금 확인'],
      'reason': '모델·관절 검사이며 물리 집기 성공을 검증하지 않습니다.'},
+    {'id': 'omx-map-cube-stack', 'name': 'Confluence map: nine-bar 90 mm cube stacking',
+     'implemented': True, 'stage': 'mapped_cube_stack', 'seed_effect': 'INFEED_XY_AND_YAW',
+     'timeout_seconds': 900, 'requirements': ['Approved SDK and model GPU'],
+     'reason': 'One bounded seed per run; contact-only reference, not learned or hardware accepted.'},
     {'id': 'omx-map-stacking-rl', 'name': 'Confluence map: full-task two-arm PPO smoke',
      'implemented': True, 'stage': 'stacking_rl', 'seed_effect': 'INFEED_XY_AND_YAW',
      'timeout_seconds': 900, 'requirements': ['Approved SDK and model GPU', 'RSL-RL PPO'],

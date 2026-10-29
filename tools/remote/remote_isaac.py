@@ -154,7 +154,8 @@ def fetch_snapshot(receipt, remote, destination):
     for item in items:
         name = _name(item['name'])
         total += item['bytes']
-        if name.casefold() in names or not 0 <= item['bytes'] <= LIMIT or total > 256 * LIMIT:
+        limit = 2*LIMIT if row['input']['scenario_id'] == 'omx-map-cube-stack' and name == 'mapped-stack-report.json' else LIMIT
+        if name.casefold() in names or not 0 <= item['bytes'] <= limit or total > 256 * LIMIT:
             raise ValueError('Snapshot artifact size/name conflict')
         names.add(name.casefold())
         blob = remote.call(receipt['source_sha'], {'action': 'artifact', 'run_id': receipt['run_id'],
@@ -184,7 +185,8 @@ binding=json.loads(config.read_text())
 source=Path(binding['source_root'])/'learning/envs/isaac/run_control.py'
 result=subprocess.run(['/usr/bin/python3',str(source),'--binding',str(config)],
  input=json.dumps(value['payload']).encode(),capture_output=True,timeout=35)
-if result.returncode or len(result.stdout)>2097152:
+limit=3145728 if value['payload'].get('action')=='artifact' and value['payload'].get('artifact_id')=='mapped-stack-report' else 2097152
+if result.returncode or len(result.stdout)>limit:
  print(json.dumps({'error':'model-PC operation refused or unavailable'}));sys.exit(2)
 json.loads(result.stdout)
 sys.stdout.buffer.write(result.stdout)
@@ -247,7 +249,9 @@ class SSH:
     def _invoke(self, script, value):
         result = self.runner.remote(self.host, 'exec /usr/bin/python3 -c ' + shlex.quote(script),
             input=json.dumps(value).encode(), capture_output=True, timeout=50)
-        if result.returncode or len(result.stdout) > 2 * LIMIT:
+        payload = value.get('payload', {})
+        limit = 3*LIMIT if payload.get('action') == 'artifact' and payload.get('artifact_id') == 'mapped-stack-report' else 2*LIMIT
+        if result.returncode or len(result.stdout) > limit:
             raise ConnectionError('Model-PC operation refused or disconnected; retain the receipt')
         value = json.loads(result.stdout)
         if isinstance(value, dict) and set(value) == {'error'}:

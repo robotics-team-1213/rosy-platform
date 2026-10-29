@@ -378,6 +378,9 @@ class RunStore:
             suffix = Path(parts[-1]).suffix.lower()
             limit = {'.json': JSON_BYTES, '.log': 16 * 1024 * 1024,
                      '.mp4': 128 * 1024 * 1024}.get(suffix, RUN_BYTES)
+            if parts == ['mapped-stack-report.json'] and self._get(run_id)['input']['scenario_id'] == 'omx-map-cube-stack':
+                from mapped_stack_fixture import CUBE_REPORT_BYTES
+                limit = CUBE_REPORT_BYTES
             total += item['bytes']
             if item['bytes'] > limit or total > RUN_BYTES:
                 raise ValueError('artifact size exceeds limit')
