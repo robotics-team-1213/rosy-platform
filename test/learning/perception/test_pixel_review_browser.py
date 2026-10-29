@@ -46,6 +46,13 @@ def test_pixel_decision_resize_preserves_checks_and_keyboard_focus(browser_works
         header = page.locator('ui-topbar').bounding_box()
         assert max(0, header['y'] + header['height']) - 1 <= box['y']
         assert box['y'] + box['height'] <= 845
+        if width >= 1024:
+            tools = page.locator('.pixel-quick-tools').bounding_box()
+            assert tools['y'] >= header['y'] + header['height'] - 1
+            assert page.locator('#pixel-next').evaluate('''node => {
+                const r = node.getBoundingClientRect();
+                return node.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2));
+            }''')
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
         if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
             target = Path(output)
