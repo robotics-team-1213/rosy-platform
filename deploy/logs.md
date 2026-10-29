@@ -4055,3 +4055,11 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: path-only 2f88347d69 원격은 30 passed / 4 failed로 다음 경계를 드러냈다. 명시 승인된 Windows 격리 PowerShell 실행은 원래 세 사례의 모든 assertion을 그대로 실행해 3 passed였다. 4개 하위 호출 모두 non-admin을 먼저 확인하고 native Start-Process/Storage 호출을 가로채 0회를 확인했다. local pytest·실제 UAC·카드 접근은 하지 않았다. Linux의 세 skip과 이 별도 native Windows 증거는 구분하며 최종 원격 결과는 완료 기록을 따른다.
 - gate 변화: 없음. 세 native Windows fixture의 별도 성공을 Linux 실행으로 세지 않으며 새 소스의 실물 수용을 주장하지 않는다.
 - CE: 기존 교훈 갱신 결과 유지. parameter-set·metadata autoload 판단은 기존 fake-surface 교훈에 남겼고, 단순 fixture 경로/표시 형식 수정을 별도 교훈으로 늘리지 않았다.
+
+## 2026-10-29 · uncommitted · ChArUco OpenCV 4.6 API 호환
+
+- 원인: PR220 sourcea985의 실제 GitHub root-test-1of3는 apt OpenCV4.6.0을 사용하며 보드 page 생성과 calibration fixture의 generateImage 호출에서 2 failed/4655 passed/339 skipped였다. 새 API만 가정한 검출·좌표 matching 경로도 함께 확인했다. 실물 보드나 장치는 실행하지 않았다.
+- 변경: 기존 factory가 있으면 CharucoBoard_create를 사용하고, 렌더링은 generateImage/draw를 지원한다. 구버전 검출은 detectMarkers/interpolateCornersCharuco, object point는 검출 corner ID 순서대로 chessboardCorners를 선택한다. 보드7x5·square0.025m·marker0.018m·float32 shape와 기존 실제 검출/보정 수치 assertion을 유지했다. calibration fixture도 같은 렌더 helper를 쓴다.
+- 증거: legacy fake 회귀는 비연속·재정렬 ID, 최소 corner 수, 누락 검출을 검사한다. 독립 contract review는 좌표 대응·단위·기존 소비자 page/solve/camera capture 경계를 확인했고 motion/admission 변경이 없었다. 원격 실행 및 실제 OpenCV4.6 CI는 아직 미완료이며 fake 시험을 native 수용으로 주장하지 않는다.
+- gate 변화: 없음. 버전 pin 변경·새 skip·quarantine·검사 완화는 없다.
+- CE: 해당 없음 — 기존 OpenCV4.6 aruco API 교훈을 적용했다. 구현·회귀·기존 문서에 없는 새 판단은 확인되지 않았다.
