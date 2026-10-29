@@ -104,8 +104,8 @@
 
 ## 최근 기록
 
+- 2026-10-29 · uncommitted · fix(fleet): proposal admission 회귀 검증과 현 main 통합
 - 2026-10-29 · ccc8712ece · 이송 결과의 검수 패키지와 복구 root 분할 검사
-- 2026-10-29 · uncommitted · fix(fleet): 추출된 목표 판정 관측 helper의 안전 소유권을 보존한다
-- 2026-10-28 · 239740362c · 목표 어드미션 판정의 순수 모듈 분리 A단계 (계획 2026-10-28-fleet-traffic-arbitration-split)
-- 2026-10-28 · 0268ab50f · fix(fleet): 목표 판정 때 대기 로봇은 hub 하트비트로 읽는다
-- 2026-10-28 · 1e6b5fdc0 · fix(fleet): hub 이벤트 메모리 3분리
+- 2026-10-29 · uncommitted · fix(fleet): Trip 제안 승인과 실제 작업 admission을 원자적으로 결속한다
+- 2026-10-29 · f2af364bcf · AI fact 요청 제한 시험 시계 고정
+- 2026-10-29 · 66ba49bef8 · D-915 원본 물리 근거의 읽기 인계

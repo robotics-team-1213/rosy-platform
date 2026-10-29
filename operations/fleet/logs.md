@@ -5082,9 +5082,37 @@
 - gate 변화: 없음. 예외를 늘리거나 안전 검사를 약하게 하지 않는다.
 - CE: 해당 없음 — 분류·예외 제거·회귀 시험이 적용 조건을 설명한다.
 
+## 2026-10-29 · 66ba49bef8 · D-915 원본 물리 근거의 읽기 인계
+
+- 변경: 선택형 측정 관절을 원래 canonical proof에 결속하고 creator-scoped physical-evidence GET을 추가했다. 원문·receipt·원래 released zone을 같은 read snapshot에서 읽으며, 누락된 관절·과거 receipt에 현재 pose를 보충하지 않는다. nested PRE/POST source 재사용을 shared guard에서 거절한다.
+- 증거: 원격 baseline/RED/GREEN·source-order 변이·실제 HTTP/UDS와 Harbor 단계 확인·구형 Pydantic 호환을 검증했다. 정확한 source·계수·실패/skip·최종 FULL 결과는 [검증 정본](../../docs/validation/physical-evidence-export-2026-10-29/result.md)에 둔다.
+- Gate: 기존 module gate 변화 없음. G1c 원본 clock/전체 측정 생산자, 최종 업무 완료, 실물·운영·배포 수용은 별도다.
+- CE: 해당 없음 — 해결 판단은 D-915·회귀·검증 정본에 남고, 미해결 source clock은 해결 교훈으로 기록하지 않는다.
+
+## 2026-10-29 · f2af364bcf · AI fact 요청 제한 시험 시계 고정
+
+- 변경: 기존 FakeClock과 _app(clock=...)를 사용해 세 HTTP 요청의 실시간 처리 속도에 의존하던 시험을 수정했다. 기존 200/200/429와 .999초 거절/정확히 1초 허용을 검증하며 production 요청 제한은 바꾸지 않는다.
+- 증거: 공식 전체 행렬 최초 Fleet 실행에서 1 failed/7270 passed/413 skipped, NEW1. 변경 source의 원격 재검증은 별도이며 [D-916 검증 정본](../../docs/validation/joint-source-provenance-2026-10-29/result.md)에 남긴다. 독립 리뷰에서 정책 약화·P1/P2 없음.
+- Gate: 변화 없음. 최초 전체 행렬의 실패는 지우거나 quarantine하지 않는다.
+- CE: 해당 없음 — 이 시험 수정 판단은 코드·직접 회귀와 기존 가짜 시계 관례에 남는다. 별도 FULL 실행 범위 교훈은 docs 소유 기록을 따른다.
+
+## 2026-10-29 · uncommitted · fix(fleet): Trip 제안 승인과 실제 작업 admission을 원자적으로 결속한다
+
+- 변경: 원래 proposal ID·digest·generation을 최종 작업 생성 트랜잭션까지 전달한다. creator·request key·본문·선택 robot·steps·현재 dispatch를 확인한 뒤 job·steps·claims·승인 event·proposal ADMITTED를 함께 commit한다. 별도의 ADMITTED writer를 제거하고 조회·멱등 재시도는 같은 read snapshot에서 원래 승인 event와 실제 작업 결속을 검증한다. 기존 direct-trip 경로와 실패 시 lease cleanup, SIM 한정·자기 승인 거절은 유지한다.
+- 증거: 가짜 principal·simulated trip ports와 실제 HTTP·SQLite 경로에서 오래된 generation 승인, 부분 job commit, actor 불일치, 기존 direct job 재표기를 4 failed로 확인했다. 승인 기록 변조와 중단 후 재시도를 추가한 확장 RED는 8 failed / 1 passed다. 독립 계약 검토는 원자성·원래 actor·generation·멱등 shortcut 결속을 확인했으며 GREEN·현 main 통합은 별도다.
+- gate 변화: 없음. 추가 로봇 명령이나 새 공개 필드를 열지 않고 기존 승인 계약을 보존한다. 실제 장치·현장 수용을 수행하지 않았다.
+- CE: 미해결 — 회귀 GREEN과 실제 착지 확인 전이며 해결 판단은 통합 시험과 원자 결속 구현에 연결한다.
+
 ## 2026-10-29 · ccc8712ece · 이송 결과의 검수 패키지와 복구 root 분할 검사
 
 - 변경: OMX curation에 기존 export v2 원본 bytes·SHA·계보를 보존하는 오프라인 검수 패키지와 재검증 CLI를 추가했다. 같은 root 및 참조 자식의 분할 혼입·중복 미션·계보 충돌·비정상 JSON을 거절한다. Fleet 안내의 이미 연결된 HTTP·콘솔 상태를 바로잡고 curation 사용 경로를 연결했다.
 - 증거: [동결 검증 기록](../../docs/validation/transfer-review-package-2026-10-29/result.md). 원격 curation 전체 328 pass·10 skip, runner/classifier exit 0, NEW 0. 독립 검토의 root 별칭·숫자 overflow 문제를 각각 RED 재현 후 수정했고 최종 재검토에 주요 지적이 없다.
 - Gate: 실행·학습 수용 변화 없음. 검수 전 메타데이터와 behavior_training_eligible=false를 유지한다. 실제 라벨 검수·학습·장치 수용은 별도다.
 - CE: 해당 없음 — 판단과 거절 조건이 구현·회귀·사용 안내에 남는다.
+
+## 2026-10-29 · uncommitted · fix(fleet): proposal admission 회귀 검증과 현 main 통합
+
+- 검증: `commit db140ac411`의 원격 승인·제안·후보·TRIP ledger·조회 회귀는 97 passed / 0 skipped, NEW·known·flaky 0이다. 이 증거는 병합 전 revision에 속한다.
+- 변경: 별도 예약 API v1.331로 live pin을 갱신하고 main의 v1.328 OMX archive 계약과 양쪽 이력을 함께 보존했다. 존재하는 D-908의 gap 선언만 제거했다. 합성·FULL 및 실제 main 착지는 별도 확인한다.
+- Gate: 추가 실행 권한이나 공개 필드 변경 없음. 실제 장치·현장 수용은 수행하지 않았다.
+- CE: 해당 없음 — 원래 generation과 승인자의 원자 결속, 재시도 검증 기준이 구현·실제 HTTP/SQLite 회귀에 남는다. 별도 교훈이 없으면 재발할 추가 환경 제약은 확인하지 않았다.
