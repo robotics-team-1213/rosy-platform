@@ -76,8 +76,8 @@
 
 ## 최근 기록
 
+- 2026-10-29 · 2062ed7219 · test(storage): 브라우저 quota 측정과 서버 fixture 시계 정렬
 - 2026-10-29 · 2f88347d69 · SD 원격 fixture의 플랫폼 경계 검증
 - 2026-10-29 · 0ab037ed49 · SD mount의 native parameter set 수정
 - 2026-10-29 · uncommitted · Site readiness 게시 검사 출처 검토
 - 2026-10-29 · 05f19a73ea · 팔 credential 및 signed candidate 집중 회귀
-- 2026-10-29 · uncommitted · 동결 UI 검증 기록의 커밋 출처 검토
