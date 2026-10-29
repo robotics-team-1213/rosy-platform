@@ -453,3 +453,45 @@ def test_open_ap_does_not_invent_an_identity_when_the_canonical_one_is_absent(tm
     calls = []
     assert not module.perform(root, "open", lambda command: calls.append(command) or _activated(command))
     assert calls == []
+
+
+@pytest.mark.parametrize("content", ["{broken", "", "[]", "null", '"text"', "unreadable"])
+def test_bad_existing_policy_refuses_open_but_keeps_close_supervision(tmp_path, monkeypatch, content):
+    module = _module()
+    root = _device(tmp_path)
+    path = root / "etc/rosy/network-policy.json"
+    if content == "unreadable":
+        read_text = Path.read_text
+
+        def denied(candidate, *args, **kwargs):
+            if candidate == path:
+                raise PermissionError("fixture")
+            return read_text(candidate, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "read_text", denied)
+    else:
+        path.write_text(content, encoding="utf-8")
+    policy = module.load_policy(root)
+    assert policy["mode"] == "off"
+    calls = []
+    run = lambda command: calls.append(command) or _activated(command)
+    assert not module.perform(root, "open", run)
+    assert calls == []
+    following = module.step(_state(module, ap_active=True, ap_since=100), 200, policy, False, root, run)
+    assert not following.ap_active
+    assert ["nmcli", "connection", "down", module.PROFILE] in calls
+    assert ["nmcli", "connection", "up", module.PROFILE] not in calls
+
+
+@pytest.mark.parametrize("missing", [True, False])
+def test_missing_or_empty_mapping_policy_keeps_the_default_open_behavior(tmp_path, missing):
+    module = _module()
+    root = _device(tmp_path)
+    path = root / "etc/rosy/network-policy.json"
+    if missing:
+        path.unlink()
+    else:
+        path.write_text("{}", encoding="utf-8")
+    assert module.load_policy(root)["fallback_security"] == "open"
+    assert module.perform(root, "open", _activated)
+    assert json.loads((root / module.STATUS).read_text())["security"] == "open"
