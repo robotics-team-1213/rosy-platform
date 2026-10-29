@@ -58,6 +58,20 @@ def test_gpt_writer_selects_signed_provision_role_independently_of_inventory_ord
     assert report["media_readback"]["verified"] is True
 
 
+def test_capacity_relocation_is_restored_before_strict_readback_and_receipt(gpt_writer):
+    from test_restore_media_gpt import relocated
+    case = gpt_writer
+    capacity = json.loads(case["inventory"].read_text())[0]["Size"]
+    raw = bytearray(case["readback"].read_bytes())
+    original = bytes(raw[512:1024])
+    raw[512:1024] = relocated(original, capacity)
+    case["readback"].write_bytes(raw)
+    result = _write(case)
+    assert result.returncode == 0, result.stderr
+    assert case["readback"].read_bytes()[512:1024] == original
+    assert json.loads(case["receipt"].read_text(encoding="utf-8-sig"))["media_readback"]["verified"] is True
+
+
 @pytest.mark.parametrize("wrong", ["bootstrap", "boot_b"])
 def test_explicit_gpt_mount_cannot_select_another_fat(gpt_writer, wrong):
     case = gpt_writer
@@ -85,7 +99,7 @@ def test_wrong_backup_gpt_stops_before_personalization(gpt_writer):
     case["readback"].write_bytes(raw)
     result = _write(case)
     assert result.returncode != 0
-    assert "readback" in result.stderr.lower()
+    assert "signed GPT restoration failed" in result.stderr
     assert not case["receipt"].exists()
 
 

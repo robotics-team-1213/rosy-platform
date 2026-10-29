@@ -24,6 +24,7 @@ def module():
 class GitHub:
     def __init__(self):
         self.calls, self.assets = [], {}
+        self.uploaded = {}
         self.operations = []
         self.release = None
         self.refs = []
@@ -57,6 +58,7 @@ class GitHub:
             assert endpoint.endswith("?name=" + path.name)
             assert "Content-Type: application/octet-stream" in argv
             raw = path.read_bytes()
+            self.uploaded[path.name] = raw
             assert "Content-Length: " + str(len(raw)) in argv
             self.assets[path.name] = dict(name=path.name, size=len(raw), digest="sha256:" + hashlib.sha256(raw).hexdigest())
             result = self.assets[path.name]
@@ -65,6 +67,8 @@ class GitHub:
             if self.fault == "digest": next(iter(self.assets.values()))["digest"] = "sha256:" + "0" * 64
             if self.fault == "missing_digest": next(iter(self.assets.values())).pop("digest", None)
             if self.fault == "size": next(iter(self.assets.values()))["size"] += 1
+            if self.fault == "missing_chunk" and ".part" in path.name: self.assets.pop(path.name)
+            if self.fault == "corrupt_chunk" and ".part" in path.name: self.assets[path.name]["digest"] = "sha256:" + "0" * 64
             if self.fault == "upload": return 1, "", "credential and signed URL must not leak"
             if self.fault == "late_tag":
                 self.refs = [dict(ref="refs/tags/" + self.release["tag_name"], object=dict(type="commit", sha="a" * 40))]
@@ -117,9 +121,9 @@ def test_default_dry_run_has_no_github_mutations(prepared):
     assert not hub.calls
 
 
-@pytest.mark.parametrize("size", [2 * 1024**3, 2 * 1024**3 + 1])
+@pytest.mark.parametrize("size", [16 * 1024**3 + 1, 16 * 1024**3 + 2])
 @pytest.mark.parametrize("apply", [False, True])
-def test_github_size_limit_is_checked_before_bundle_capture(prepared, monkeypatch, size, apply):
+def test_signed_bundle_size_limit_is_checked_before_capture(prepared, monkeypatch, size, apply):
     directory, public, value, private = prepared
     value["bundle"]["size_bytes"] = size
     raw = json.dumps(value).encode()
@@ -133,7 +137,7 @@ def test_github_size_limit_is_checked_before_bundle_capture(prepared, monkeypatc
         return capture(source, target, limit)
 
     monkeypatch.setattr(publisher, "_capture", checked_capture)
-    with pytest.raises(ValueError, match="GitHub.*2 GiB"):
+    with pytest.raises(ValueError):
         publisher.publish(directory, public, release_id=value["release_id"],
                           source_revision=value["source_revision"], apply=apply, gh=hub)
     assert not hub.calls
@@ -148,6 +152,67 @@ def test_success_uploads_exact_captured_bytes_before_opening_engineering_prerele
     assert hub.release["draft"] is False and hub.release["prerelease"] is True
     assert {name: asset["digest"][7:] for name, asset in hub.assets.items()} == expected
     assert hub.operations == ["create", *["upload"] * 5, "publish"]
+
+
+@pytest.mark.parametrize("mutate_original", [False, True])
+def test_chunked_upload_preserves_signed_bytes_and_original_inputs(prepared, monkeypatch, mutate_original):
+    module()
+    import os_update_transport as transport
+    monkeypatch.setattr(transport, "CHUNK_BYTES", 17)
+    monkeypatch.setattr(transport, "GITHUB_MAX_ASSET_BYTES", 20)
+    directory, _, value, _ = prepared
+    original = {p.name: p.read_bytes() for p in directory.iterdir()}
+    hub = GitHub()
+    if mutate_original:
+        hub.on_create = lambda: (directory / value["bundle"]["filename"]).write_bytes(b"changed after capture")
+    result = publish(prepared, hub, apply=True)
+    parts = [value["bundle"]["filename"] + f".part{number:03}" for number in range(3)]
+    assert set(result["assets"]) == set(original) - {value["bundle"]["filename"]} | set(parts)
+    assert [len(hub.uploaded[name]) for name in parts] == [17, 17, 8]
+    assert b"".join(hub.uploaded[name] for name in parts) == original[value["bundle"]["filename"]]
+    for name in set(original) - {value["bundle"]["filename"]}:
+        assert hub.uploaded[name] == original[name]
+    assert hub.operations == ["create", *["upload"] * 7, "publish"]
+    if not mutate_original:
+        assert {p.name: p.read_bytes() for p in directory.iterdir()} == original
+
+
+@pytest.mark.parametrize("fault", ["missing_chunk", "corrupt_chunk"])
+def test_missing_or_corrupt_uploaded_chunk_never_opens_the_draft(prepared, monkeypatch, fault):
+    module()
+    import os_update_transport as transport
+    monkeypatch.setattr(transport, "CHUNK_BYTES", 17)
+    monkeypatch.setattr(transport, "GITHUB_MAX_ASSET_BYTES", 20)
+    hub = GitHub()
+    hub.fault = fault
+    with pytest.raises(ValueError, match="OS draft"):
+        publish(prepared, hub, apply=True)
+    assert hub.release["draft"] is True
+    assert "publish" not in hub.operations
+
+
+def test_changed_captured_bundle_is_refused_before_chunk_publication(prepared, monkeypatch):
+    module()
+    import os_update_transport as transport
+    monkeypatch.setattr(transport, "CHUNK_BYTES", 17)
+    monkeypatch.setattr(transport, "GITHUB_MAX_ASSET_BYTES", 20)
+    directory, public, value, _ = prepared
+    original = (directory / value["bundle"]["filename"]).read_bytes()
+    publisher, hub = module(), GitHub()
+    capture = publisher._capture
+
+    def changed_capture(source, target, limit):
+        result = capture(source, target, limit)
+        if source.name == value["bundle"]["filename"]:
+            target.write_bytes(b"X" * len(original))
+        return result
+
+    monkeypatch.setattr(publisher, "_capture", changed_capture)
+    with pytest.raises(ValueError, match="changed while creating transport parts"):
+        publisher.publish(directory, public, release_id=value["release_id"],
+                          source_revision=value["source_revision"], apply=True, gh=hub)
+    assert not hub.calls
+    assert (directory / value["bundle"]["filename"]).read_bytes() == original
 
 
 @pytest.mark.parametrize("fault", ["bundle", "metadata", "rollout", "signature", "unknown", "missing", "source", "release", "rollout_binding"])

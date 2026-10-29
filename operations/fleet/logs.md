@@ -5060,3 +5060,10 @@
 - 증거: 특성 시험(키 순서 `list(d.items())` 고정, 독립 리스트) + 검토가 요구한 두 미피복 동작 — goal 순간 빈 상태 읽기의 폐쇄 실패(TRUSTED 이력이 전송하지 않음)와 보류의 대기열 항목 무병합 교체. 원격 4 suite(신규·traffic·console·boundaries) green, known NEW 0. 변이 검증: 전송 전 untrusted 보류 비활성화 → 폐쇄 실패 시험 red(`6c6f45582b`), 복원 green(`239740362c`). 독립 검토 2건(codex·claude) 반영 — 단계 분리 판정, 깃발·route 부재 규칙, 판정 문자열만 경계 통과, 무병합 교체, attempt_seq=0.
 - Gate: 없음. B단계(전송 후 경로 충돌 판정)·C단계(_make_room/bays)는 별도 착지.
 - CE: 해당 없음 — 판정·모양이 특성 시험과 변이 이력으로 고정됐다.
+
+## 2026-10-29 · ccc8712ece · 이송 결과의 검수 패키지와 복구 root 분할 검사
+
+- 변경: OMX curation에 기존 export v2 원본 bytes·SHA·계보를 보존하는 오프라인 검수 패키지와 재검증 CLI를 추가했다. 같은 root 및 참조 자식의 분할 혼입·중복 미션·계보 충돌·비정상 JSON을 거절한다. Fleet 안내의 이미 연결된 HTTP·콘솔 상태를 바로잡고 curation 사용 경로를 연결했다.
+- 증거: [동결 검증 기록](../../docs/validation/transfer-review-package-2026-10-29/result.md). 원격 curation 전체 328 pass·10 skip, runner/classifier exit 0, NEW 0. 독립 검토의 root 별칭·숫자 overflow 문제를 각각 RED 재현 후 수정했고 최종 재검토에 주요 지적이 없다.
+- Gate: 실행·학습 수용 변화 없음. 검수 전 메타데이터와 behavior_training_eligible=false를 유지한다. 실제 라벨 검수·학습·장치 수용은 별도다.
+- CE: 해당 없음 — 판단과 거절 조건이 구현·회귀·사용 안내에 남는다.
