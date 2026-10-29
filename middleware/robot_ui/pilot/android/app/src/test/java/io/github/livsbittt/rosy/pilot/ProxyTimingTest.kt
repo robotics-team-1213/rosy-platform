@@ -91,6 +91,7 @@ class ProxyTimingTest {
                     assertThrows(java.io.IOException::class.java) { response.body!!.bytes() }
                 }
                 assertTrue(TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started) < 1000)
+                assertTrue(proxy.diagnosticSummary().lineSequence().first { it.startsWith("영상:") }.contains("오류 1/1"))
             } finally {
                 proxy.stop(); browser.dispatcher.executorService.shutdown(); browser.connectionPool.evictAll()
             }

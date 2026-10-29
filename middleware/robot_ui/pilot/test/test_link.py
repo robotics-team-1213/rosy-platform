@@ -163,6 +163,22 @@ def test_close_4401_rechecks_whoami_and_reconnects_or_stops():
                    "refusedState": "OFFLINE", "refusedTimers": 0}
 
 
+def test_auth_close_with_resolved_http_denial_stops_without_retry():
+    out = _run_js(_harness() + """
+    const outcomes = [];
+    for (const status of [401, 403, 503]) {
+      const h = makeSession({whoami: async () => ({status, ok: false, body: {}})});
+      h.session.open(); connect(h.sockets[0]);
+      h.sockets[0].onclose?.({code: 4401});
+      for (let i = 0; i < 8; i++) await Promise.resolve();
+      outcomes.push({status, state: h.session.state(), retries: h.timers.length});
+    }
+    console.log(JSON.stringify(outcomes));
+    """)
+    assert out == [{"status": status, "state": "OFFLINE", "retries": 0}
+                   for status in (401, 403, 503)]
+
+
 def test_command_posts_teleop_throttled_and_hidden_posts_zero_and_blocks():
     out = _run_js(_harness() + """
     const h = makeSession();

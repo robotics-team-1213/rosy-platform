@@ -525,7 +525,7 @@ class MainActivity : Activity() {
         pairingDialog = AlertDialog.Builder(this).setTitle("기기·연결")
             .setMessage((candidate?.let { "${it.name}\n${it.host}\n\n" } ?: "") + "${healthText.text}\n\n" + (session?.peerApproval?.let {
                 "승인 관계: ${if (it.persistent) "지속 승인" else "기간 제한 (${it.authorizationExpiresAt})"}\n로그인: ${session?.expiresAt}까지\n승인 폐기는 수신 장치에서 확인하세요.\n\n"
-            } ?: "") + "화면을 끄면 조종 연결을 닫습니다. 로봇은 다시 선택해 연결할 수 있습니다.")
+            } ?: "") + (proxy?.let { "연결 진단 (ms, 로봇 응답은 네트워크·서버 합산)\n${it.diagnosticSummary()}\n\n" } ?: "") + "화면을 끄면 조종 연결을 닫습니다. 로봇은 다시 선택해 연결할 수 있습니다.")
             .setPositiveButton("화면 끄기") { _, _ -> sleepScreen(true) }.setNegativeButton("닫기", null)
             .apply { if (candidate != null) setNeutralButton("이 앱의 연결 기록 지우기") { _, _ -> forgetConnection(candidate) } }.create()
         pairingDialog!!.show()

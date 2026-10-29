@@ -42,6 +42,10 @@ class PilotProxy(private val connection: PilotConnection, private val assets: Bu
     private val sockets = ConcurrentHashMap.newKeySet<Relay>()
     private val clients = ConcurrentHashMap.newKeySet<NanoHTTPD.ClientHandler>()
     private val executor = ThreadPoolExecutor(0, 12, 30, TimeUnit.SECONDS, SynchronousQueue<Runnable>())
+    // Four WS handlers plus four background HTTP handlers leave four for control.
+    private val background = java.util.concurrent.Semaphore(4)
+    private val diagnostics = TransportDiagnostics(emit = { android.util.Log.i("RosyPilotLink", it) })
+    fun diagnosticSummary(): String = diagnostics.display()
     init {
         setAsyncRunner(object : NanoHTTPD.AsyncRunner {
             override fun closeAll() { clients.toList().forEach { it.close() }; clients.clear(); executor.shutdownNow() }
@@ -59,6 +63,30 @@ class PilotProxy(private val connection: PilotConnection, private val assets: Bu
         return super.serve(session)
     }
     override fun serveHttp(session: IHTTPSession): Response {
+        val control = session.method == Method.POST && session.uri in setOf("/api/v1/teleop", "/api/v1/mode", "/api/v1/safety/stop")
+        if (!control && !background.tryAcquire()) {
+            diagnostics.rejected()
+            return reply(503, "text/plain", "Background requests busy".toByteArray())
+        }
+        var leased = !control
+        try {
+            val response = serveApprovedHttp(session)
+            if (leased) {
+                val released = java.util.concurrent.atomic.AtomicBoolean()
+                response.data = object : java.io.FilterInputStream(response.data ?: ByteArray(0).inputStream()) {
+                    override fun close() {
+                        try { super.close() } finally { if (released.compareAndSet(false, true)) background.release() }
+                    }
+                }
+                leased = false
+            }
+            // Idle loopback keepalives must not occupy the four remaining control handlers.
+            response.closeConnection(true)
+            return response
+        } finally { if (leased) background.release() }
+    }
+    private fun serveApprovedHttp(session: IHTTPSession): Response {
+        val arrived = System.nanoTime()
         if (connection.managed && session.uri == "/api/account/session") return reply(200, "application/json",
             (connection.accountContext() ?: JSONObject().put("enabled", true).put("authenticated", false)).toString().toByteArray())
         if (connection.managed && session.uri == "/api/account/logout") {
@@ -105,7 +133,12 @@ class PilotProxy(private val connection: PilotConnection, private val assets: Bu
                 liveStream -> streamClient
                 else -> client
             }
-            val response = transport.newCall(request).execute()
+            val upstreamStarted = System.nanoTime()
+            val response = try { transport.newCall(request).execute() } catch (error: Exception) {
+                diagnostics.http(session.uri, (upstreamStarted - arrived) / 1_000_000, (System.nanoTime() - upstreamStarted) / 1_000_000, 0)
+                throw error
+            }
+            diagnostics.http(session.uri, (upstreamStarted - arrived) / 1_000_000, (System.nanoTime() - upstreamStarted) / 1_000_000, response.code)
             var streaming = false
             try {
                 if (failureReported) { failureReported = false; recovery() }
@@ -124,8 +157,12 @@ class PilotProxy(private val connection: PilotConnection, private val assets: Bu
                             if (!liveStream && read > 256L * 1024 * 1024) { close(); throw IOException("download too large") }
                             return value
                         }
-                        override fun read() = super.read().also { if (it >= 0) count(1) }
-                        override fun read(bytes: ByteArray, offset: Int, size: Int) = count(super.read(bytes, offset, size))
+                        private fun failed(error: IOException): Nothing {
+                            if (liveStream) diagnostics.streamFailed()
+                            throw error
+                        }
+                        override fun read() = try { super.read().also { if (it >= 0) count(1) } } catch (error: IOException) { failed(error) }
+                        override fun read(bytes: ByteArray, offset: Int, size: Int) = try { count(super.read(bytes, offset, size)) } catch (error: IOException) { failed(error) }
                         override fun close() { super.close(); response.close() }
                     }
                     val status = status(response.code)
@@ -170,6 +207,7 @@ class PilotProxy(private val connection: PilotConnection, private val assets: Bu
     private fun reply(code: Int, mime: String, bytes: ByteArray): Response = secure(newFixedLengthResponse(
         status(code), mime, bytes.inputStream(), bytes.size.toLong()))
     private fun secure(response: Response): Response = response.apply {
+        closeConnection(true)
         addHeader("Cache-Control", "no-store")
         addHeader("Content-Security-Policy", PilotCsp.header(mediaOrigin))
         addHeader("X-Content-Type-Options", "nosniff")
@@ -239,11 +277,13 @@ class PilotProxy(private val connection: PilotConnection, private val assets: Bu
                 }
                 override fun onFailure(socket: okhttp3.WebSocket, error: Throwable, response: okhttp3.Response?) {
                     if (!closing) {
+                        diagnostics.socketClosed(1006)
                         failureReported = true
                         failure(LINK_LOST)
                     }
                     disconnect()
                 }
+                override fun onClosing(socket: okhttp3.WebSocket, code: Int, reason: String) { robotClosed(socket, code) }
                 override fun onClosed(socket: okhttp3.WebSocket, code: Int, reason: String) { disconnect() }
             })
         }
@@ -261,10 +301,23 @@ class PilotProxy(private val connection: PilotConnection, private val assets: Bu
                 pending.add(text)
             }
         }
-        @Synchronized override fun onClose(code: WebSocketFrame.CloseCode, reason: String, remote: Boolean) { closing = true; heartbeat?.cancel(); upstream?.cancel(); sockets.remove(this) }
+        @Synchronized private fun robotClosed(socket: okhttp3.WebSocket, code: Int) {
+            if (closing) return
+            closing = true; heartbeat?.cancel()
+            val forwarded = if (code in 3000..4999 || code in setOf(1000, 1001, 1002, 1003, 1007, 1008, 1009, 1010, 1011, 1012, 1013, 1014)) code else 1001
+            diagnostics.socketClosed(forwarded)
+            socket.close(forwarded, "")
+            upstream = null
+            // NanoWSD's enum cannot represent application codes; send the wire code and end this transport.
+            runCatching { sendFrame(WebSocketFrame(WebSocketFrame.OpCode.Close, true,
+                byteArrayOf((forwarded shr 8).toByte(), forwarded.toByte()))) }
+            runCatching { handshakeRequest.inputStream.close() }
+            sockets.remove(this)
+        }
+        @Synchronized override fun onClose(code: WebSocketFrame.CloseCode?, reason: String, remote: Boolean) { closing = true; heartbeat?.cancel(); upstream?.cancel(); sockets.remove(this) }
         override fun onPong(frame: WebSocketFrame) = Unit
         @Synchronized override fun onException(error: IOException) { closing = true; heartbeat?.cancel(); upstream?.cancel(); sockets.remove(this) }
-        @Synchronized fun disconnect() { closing = true; heartbeat?.cancel(); upstream?.cancel(); runCatching { close(WebSocketFrame.CloseCode.GoingAway, "connection ended", false) }; sockets.remove(this) }
+        @Synchronized fun disconnect() { if (closing) return; closing = true; heartbeat?.cancel(); upstream?.cancel(); runCatching { close(WebSocketFrame.CloseCode.GoingAway, "connection ended", false) }; sockets.remove(this) }
     }
 }
 
