@@ -255,7 +255,7 @@ def test_cube_feedback_accumulates_loaded_arm_tracking_error():
     sample['boxes'][0]['position'] = [.1295, -.0304, release_z-.0005]
     previous = [.13, -.03, release_z+.002]
     command = f.cube_release_target(0, sample, .04, commanded_tcp=previous)
-    assert command == pytest.approx([.1305, -.0296, release_z+.0025])
+    assert command == pytest.approx([.1305, -.0296+f.CUBE_FIXTURE['first_row_release_bias_m'], release_z+.0025])
     bias = [sample['tcps'][0][k]-previous[k] for k in range(3)]
     sample['tcps'][0] = [command[k]+bias[k] for k in range(3)]
     sample['boxes'][0]['position'] = [sample['tcps'][0][0], sample['tcps'][0][1], sample['tcps'][0][2]-.002]
@@ -265,7 +265,7 @@ def test_cube_feedback_accumulates_loaded_arm_tracking_error():
 def test_lowering_for_release_keeps_the_lift_proof_separate_from_retention():
     sample = trial()['layers'][0]['lift_samples'][0]
     body = sample['boxes'][0]
-    body['position'] = [.13, -.03, .062]
+    body['position'] = [.13, -.03+f.CUBE_FIXTURE['first_row_release_bias_m'], .062]
     assert not f.free_lift(body, 0, .04)
     assert f.unsupported_hold(body, 0)
     assert f.cube_release_target(0, sample, .04) == pytest.approx(sample['tcps'][0])
@@ -288,6 +288,19 @@ def test_opening_is_blocked_if_the_parked_neighbor_is_touched():
     neighbor['forces'][0][2] = .1
     neighbor['net_force'][2] += .1
     assert not f.cube_release_ready(1, sample, .04)
+
+
+def test_first_row_release_compensation_does_not_move_the_acceptance_target():
+    sample = trial()['layers'][0]['lift_samples'][0]
+    body = sample['boxes'][0]
+    nominal = f.plan(True)[0]['target'][:]
+    body['position'] = nominal[:]
+    body['position'][2] += f.CUBE_FIXTURE['release_clearance_m']
+    command = f.cube_release_target(0, sample, .04)
+    predicted = [body['position'][k]+command[k]-sample['tcps'][0][k] for k in range(3)]
+    assert predicted[1] == pytest.approx(nominal[1]-.0006)
+    assert f.plan(True)[0]['target'] == nominal
+    assert abs(predicted[1]-nominal[1]) < f.FIXTURE['xy_tolerance_m']
 
 
 def test_world_rotation_preserves_owner_joint_trajectory(tmp_path):
