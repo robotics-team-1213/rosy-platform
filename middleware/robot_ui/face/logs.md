@@ -268,3 +268,9 @@
 - 증거: 로컬 GIF 측정에서 운용 실루엣 최악은 fun/bored 49/768(6.38%)이고, 20프레임 잉크는 y 16 이상 224 미만이다. 원격 pytest와 1.5 m LCD는 아직이다.
 - gate 변화: 없음. SOURCE 후보이다. DEVICE 거리 판독은 하지 않았다.
 - 결정: D-719
+
+## 2026-10-29 · 75d706130a · LCD 기본 그리기 부품 분리
+
+- 변경: font/fitting·측정값·QR·패널 packing을 lcd_primitives에 모으고 기존 이름을 re-export했다. info_screen은676→560줄이며 팔레트 정본·등록 경로를 유지했다.
+- 증거: 함수/클래스 AST24개·기존7PNG bytes 동일. 전체193 pass/6 skip, 격리 build_py cold import와 캡처3 pass, 영향1307 pass/1 skip·NEW0. 정본: `docs/validation/lcd-primitives-2026-10-29/result.md`.
+- gate 변화: 없음. 기존 overlay clipping은 별도 수정 단위이며 이 분리로 해결했다고 보지 않는다. CE: 해당 없음 — 소스·시험·픽셀 불변 기록에서 판단을 복원한다.
