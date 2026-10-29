@@ -12991,3 +12991,9 @@ osy-d395-s1d\`.
 - 변경: `validation/pilot-recording-focus-2026-10-29/`에 현재 초점·fallback·시트 객체 소유권·스크롤 반례와 실제 RED/GREEN을 동결했다. fixture 실패와 실제 제품 반례를 분리했다.
 - 증거: 전체 browser39pass/0skip, 실제 키보드/문서 스크롤 부분8건씩, affected609pass/189skip/NEW0. 같은39건의 반복과 부분8건은 합산하지 않는다. A source 검토·B12+8장 직접 관측과 hash를 기록했다.
 - gate 변화: 없음. CE: 해당 없음 — 최종 코드·회귀·검증 기록으로 설명되는 수정이다.
+
+## 2026-10-29 · 177706a581 · Pilot 네이티브 초점·안전 여백 검증 기록
+
+- 변경: `validation/pilot-native-focus-2026-10-29/result.md`에 endpoint 초점 복구와 공통 Android 루트 여백의 실제 RED/GREEN, 빌드·JVM·에뮬레이터·독립22장 검토를 구분해 보존했다.
+- 증거: 최종 Android 각5 pass, JVM110 pass/1 skip, 영향 pytest615 pass/166 skip/NEW0. 보고서27개와 캡처22개 해시를 남겼으며 이전 촬영을 최종 근거와 혼합하지 않았다.
+- gate 변화: 없음. 실제 연결·실물·FIELD·서명 release·배포는 수용하지 않았다. CE: 해당 없음 — 코드·시험·결과 기록에서 판단을 복원할 수 있다.

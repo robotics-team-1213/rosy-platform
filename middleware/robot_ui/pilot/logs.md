@@ -1015,3 +1015,9 @@
 - 변경: 행 갱신/받기·취소 전환의 현재 초점을 ID로 복원하고 사용 불가·소실/오류는 facts/notice로 이동한다. 시트 객체로 GET 소유권을 지키며, 가려진 초점은 nearest scroll로 드러낸다. 목록 밖 초점·문서 스크롤·기존 제어 정책은 유지한다.
 - 증거: 초기 제품8반례와 fixture3실패를 구분하고 전체 drive의 clip2 RED도 확인했다. 최종 동일 runtime에서 전체39pass/0skip, 실제 키보드8pass·문서 스크롤8pass, 공식 affected609pass/189skip/NEW0. A source·B12+8장 전수 직접 검토. 지원 ratchet 누락과 종료143/미실행도 `docs/validation/pilot-recording-focus-2026-10-29/`에 보존했다.
 - gate 변화: 없음. 실제 녹화/파일 수신·정지 readback·장치·ARTIFACT/FIELD·배포·착지·공개 push/merge는 별도다. CE: 해당 없음 — 수명·초점·clip 판단은 코드·회귀·검증 기록으로 복원된다.
+
+## 2026-10-29 · 177706a581 · Android 목록 초점과 공통 안전 여백
+
+- 변경: 발견 목록의 endpoint 초점 보존·보이는 상태 안내 fallback, 생성 본문 토큰, 실제 MainActivity와 preview/fixture가 소비하는 공통 시스템 바 여백 및 라벨 초점 표시를 적용했다.
+- 증거: 실제 SDK35 빌드와 JVM110 pass/1 skip, Android 두 크기에서 각각5 pass. 초점 전 RED3/4와 안전 여백 전 RED3/5를 구분했다. 실제 그려진 프레임의22장과 source를 독립 검토했다. 영향 pytest615 pass/166 skip/NEW0. 정본: `docs/validation/pilot-native-focus-2026-10-29/result.md`.
+- gate 변화: 없음. debug fixture이며 실제 Lobby·TalkBack·실물·FIELD·release 배포 수용이 아니다. CE: 해당 없음 — 원인과 해결이 코드·회귀·검증 기록에 드러난다.
