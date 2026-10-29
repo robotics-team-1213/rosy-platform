@@ -10,6 +10,7 @@ symptoms:
   - "a pushed-free 1-cell detected as a 3-cell; the plan aimed at bare floor beside it"
   - "the held box touched 23 mm above the measured Pinky surface during the place descent"
   - "the run reported placed while the box was back in the jaws at home"
+  - "with two boxes on the floor the arm went to the other one: one library file per site, not per object (2026-10-29)"
 root_cause: wrong_assumption
 resolution_type: code_fix
 severity: high
@@ -51,6 +52,14 @@ The grasp itself had worked many times. The first full carry, with no person hel
 8. **A failed carry is training data.** Failed episodes used to be deleted.
    - Fix: they are kept as `outcome: failed` with the reason.
    - `convert --outcome failed` builds them into a separate dataset, so successes and misses never mix.
+
+9. **Two candidates planned into one file (2026-10-29).** `plan_pick` saved every candidate's library as `auto-{site}-{offset}.json`. A square box has offset `None`, so with two boxes on the floor the second candidate overwrote the first one's file.
+   - What happened: the arm pivoted over one box (pan 64), then `goto above_pick` took it to the other box (pan 53). The reach hook refused, 55/43 mm off.
+   - Why it was invisible: the pick and the attempt row named the first box. Only the joint values of the runner's `goto` gave it away.
+   - Fix: the file name carries the object's position.
+   - Regression test: `test_two_candidates_keep_their_own_libraries` fails under the old name.
+   - Verified on the real arm: after the fix, the plan went to the box that had just been pivoted, and the feel search ran four descents without a contact.
+   - Check when a pick misses: compare the pan of the `goto` the runner received with the pan of the pivot or the plan. A different pan means the arm went somewhere else.
 
 ## Recovery when a box stays in the jaws
 

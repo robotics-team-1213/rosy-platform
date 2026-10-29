@@ -2,7 +2,7 @@
 title: A shared arm cell must be checked before every autonomous run, because the last user may have moved the camera, the camera port or the caps
 date: 2026-10-28
 category: workflow-issues
-module: deploy/robot/omx (cell_preflight.py, commissioning_view.py, commissioning_limits.py, cell_pivot.py, episode_recorder.py)
+module: deploy/robot/omx (cell_preflight.py, commissioning_view.py, commissioning_limits.py, cell_pivot.py, episode_recorder.py, cell_pinch.py)
 problem_type: workflow_issue
 component: development_workflow
 symptoms:
@@ -10,6 +10,7 @@ symptoms:
   - "record_session refused: follower caps are not the commissioning baseline"
   - "the scene in the top view sat 20-45 px off and about 7 degrees rotated against this morning's frames"
   - "a pivot beside the Pinky body saved a 6 cm 'bias' (radius 70 mm, rms 13.6 mm)"
+  - "the wrist reference servo moved 55-58 mm and refused: the wrist camera faced the arm base, no finger in view (2026-10-29)"
 root_cause: missing_workflow_step
 resolution_type: code_fix
 severity: high
@@ -38,6 +39,18 @@ On 2026-10-28 another person used the cell between our runs. Afterwards, every p
    - Fix: an episode missing any camera is not kept (`result.json` `kept: false` with the reason).
 6. **The LeRobot conversion had never run for real.** The remote test hosts have no lerobot, so the conversion test is skipped. A dry run on the Fleet PC found a feature-shape bug (`[6]` vs `(6,)`).
    - Fix: the conversion now works. Run that dry run on the arm host after changing `convert`.
+
+7. **The wrist camera was turned to face the arm's base (2026-10-29).** In frames from 10-27 and 10-28, both finger pads were at the bottom of the image with the box between them. On 10-29 neither finger was in view, and the camera looked back at the board and the arm base.
+   - What went wrong:
+     - The reference servo "aligned" on the long containers on the board. It moved 55–58 mm and was refused.
+     - `cell_wrist.finger_pads` also found two "pads" in the turned view (the base plate and cables), so it cannot judge the mount by itself.
+     - Preflight checks only the top camera, so it passed.
+   - How it was found: a probe hover over the target at two heights and three yaws, with the wrist frames compared against 10-28 frames.
+   - Fix in code:
+     - `cell_pinch` stores the pad pixels of the last passing check as a mount signature (`pinch-mount-<arm>.json`).
+     - Pads more than `pinch.mount_tol_px` from it refuse with "wrist camera moved".
+     - Until the first pass on a correctly mounted camera, only a person can confirm the mount.
+   - Rule: after another person or session has used the cell, look at one wrist frame before turning on any wrist-based alignment (`wrist.ref_servo`, `pinch.enabled`). Both fingers must be visible at the bottom of the image. If they are not, turn those off and fix the mount first.
 
 ## The rule (code, not memory)
 

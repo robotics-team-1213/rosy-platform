@@ -42,7 +42,8 @@ import cell_objects  # noqa: E402
 import cell_params as prm  # noqa: E402
 import cell_pivot  # noqa: E402
 import cell_diagnose  # noqa: E402
-import cell_wrist  # noqa: E402
+import cell_hooks  # noqa: E402
+import cell_wrist_ref  # noqa: E402
 from cell_calibrate import learn_bias, self_calibrate  # noqa: E402,F401  (calibration lives there)
 import cell_pipeline as cp  # noqa: E402
 from cell_observe import keep, predicted_pixel, wrap90  # noqa: E402
@@ -188,10 +189,15 @@ def side_clear(mask, roi, pixel_fn, o: dict, finger_mm: float, closing_deg: floa
     import cv2
 
     centre = pixel_fn(tuple(o["raw_m"]))
-    n, labels = cv2.connectedComponents(mask)
-    c_col, c_row = round(centre[0]) - roi[0], round(centre[1]) - roi[1]
-    if 0 <= c_row < mask.shape[0] and 0 <= c_col < mask.shape[1] and labels[c_row, c_col]:
-        mask = np.where(labels == labels[c_row, c_col], 0, mask).astype(mask.dtype)  # its own blob (side faces) is not a neighbour
+    if o.get("hull_px"):  # only its own pixels: a box split from a touching neighbour (cell_split) must still see it
+        own = np.zeros(mask.shape, np.uint8)
+        cv2.fillPoly(own, [np.asarray(o["hull_px"], np.int32) - [roi[0], roi[1]]], 1)
+        mask = np.where(cv2.dilate(own, np.ones((5, 5), np.uint8)) > 0, 0, mask).astype(mask.dtype)
+    else:
+        n, labels = cv2.connectedComponents(mask)
+        c_col, c_row = round(centre[0]) - roi[0], round(centre[1]) - roi[1]
+        if 0 <= c_row < mask.shape[0] and 0 <= c_col < mask.shape[1] and labels[c_row, c_col]:
+            mask = np.where(labels == labels[c_row, c_col], 0, mask).astype(mask.dtype)  # its own blob (side faces) is not a neighbour
     u = math.radians(o["long_axis_deg"] if closing_deg is None else closing_deg - 90)
     along, across = np.array([math.cos(u), math.sin(u)]), np.array([-math.sin(u), math.cos(u)])
     half_across = o["width_mm"] / 2 if closing_deg is None else max(o["width_mm"], o["length_mm"]) / 2
@@ -241,8 +247,10 @@ def plan_pick(config: dict, site: str, dest_site: str, place_xy, o: dict, entry:
                      "z": round(surface_z(config, dest_site) + height + s.get("place_dz", 0.0), 4), "yaw_deg": s["yaw_deg"]}
             try:
                 jaws = jaw_open_for(entry["width_mm"], config.get("params"))
+                # one file per object: two boxes on the floor planned into one name, and the arm went to the other one
+                # (2026-10-29, the second candidate overwrote the first's library)
                 lib = cp.write_library(dict(config, plan=dict(config["plan"], approach_m=approach, grip_open=jaws)), pick,
-                                       place, work / f"auto-{site}-{offset}.json")
+                                       place, work / f"auto-{site}-{offset}-{round(1000 * o['raw_m'][0])}_{round(1000 * o['raw_m'][1])}.json")
                 return lib, pick, place, approach, yaw, {"approach_m": approach, "grip_open": jaws}
             except SystemExit as exc:
                 error = str(exc)[:160]
@@ -442,7 +450,7 @@ def run_auto(cell, config, calibration, calibration_path, catalog, roi, source, 
                 close_episode(cell, episode, False, f"held: {held['reason']}")
                 cell_attempts.record(config, calibration, source, dest, attempt, tried, t0, choices)
                 return {**out, "result": f"held: {held['reason']}"}
-            wrist, capture, pinch, feel = cell_wrist.pick_hooks(same, gate, target, cp.write_library, source, dest_site, cd.emit)
+            wrist, capture, pinch, feel = cell_hooks.pick_hooks(same, gate, target, cp.write_library, source, dest_site, cd.emit, calibration)
             moved = transfer_folded(gate, target["library"], wrist=wrist, after_place=capture,
                                     pinch=pinch, feel=feel, sequence=FOLDED if folded else cp.SEQUENCE)
             tried["envelope"] = gate.assessment
@@ -467,10 +475,10 @@ def run_auto(cell, config, calibration, calibration_path, catalog, roi, source, 
                 cd.emit("verify", dict(tried["verify"]), [True, False], tried["verify"]["inside"], "measurement",
                         f"placement seen on the {tried['verify']['basis']}")
                 tried["learned_bias"] = learn_bias(config, calibration_path, dest_site, place_xy, tried["verify"])
-                pending = cell_wrist.ref_path(work, config.get("arm_id", "arm_s"), dest_site).with_suffix(".pending.json")
+                pending = cell_wrist_ref.ref_path(work, config.get("arm_id", "arm_s"), dest_site).with_suffix(".pending.json")
                 if pending.exists():  # the wrist reference counts only for a place the top camera confirmed
                     if tried["verify"].get("inside"):
-                        pending.replace(cell_wrist.ref_path(work, config.get("arm_id", "arm_s"), dest_site))
+                        pending.replace(cell_wrist_ref.ref_path(work, config.get("arm_id", "arm_s"), dest_site))
                     else:
                         pending.unlink()
             # only a carry the camera confirmed becomes training data
