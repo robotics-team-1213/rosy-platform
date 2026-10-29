@@ -113,8 +113,9 @@ def load_policy(root: Path) -> dict:
             import rosy_config
 
             policy.update(rosy_config.load_defaults(defaults).get("ap", {}))
-        except Exception:  # a broken defaults file must not stop the controller
-            pass
+        except Exception:
+            # Keep close supervision alive without downgrading malformed defaults to an open AP.
+            return {**policy, "mode": "off"}
     policy.update({key: value for key, value in _read_json(root / "etc/rosy/network-policy.json").items()
                    if key in {"mode", "fallback_security", "grace_seconds", "hold_seconds", "ssid", "country"}})
     return policy
@@ -197,6 +198,9 @@ def perform(root: Path, action: str, run: Runner) -> bool:
     """Carry out the action; False when the AP did not come up."""
     if action == "open":
         policy = load_policy(root)
+        if policy.get("mode") == "off":
+            _status(root, "none")
+            return False
         security = policy.get("fallback_security", "open") if policy.get("mode") == "fallback" else "wpa2"
         if security not in ("open", "wpa2"):
             print("rosy-network: invalid fallback security; AP not opened", file=sys.stderr)
