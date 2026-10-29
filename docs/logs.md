@@ -12863,6 +12863,39 @@ osy-d395-s1d\`.
 - gate 변화: 없음.
 - CE: 해당 없음 — 문서 관례 추가이며 코드·장치·시험 경로 변경이 없다.
 
+## 2026-10-28 · ae4771b936 · Fleet 계정 영역의 레이아웃 일관성
+
+- 변경: 사용자 제보의 토큰 영역 출현 원인을 공통 인증 표시 정책과 동일 identity 재조회 상태 보존으로 수정하고 `docs/validation/fleet-account-layout-2026-10-28/`에 기록했다.
+- 증거: 원격 Chromium RED8 뒤 공통 헤더/세션14, 비밀번호 로그인1 passed/skip0/NEW0. 공식 영향53대상8043 passed/757 skipped/NEW0. 실제8PNG·독립 소스/화면 검토 완료.
+- gate 변화: 없음. 운영 배포·실물 비상 정지·현장 수용은 별도다.
+- CE: 해당 없음. 원인과 거부/표시 조건이 코드·시험에 남는다.
+
+## 2026-10-28 · 2d96683c9c · D-906 Fleet 공통 컴포넌트·레이아웃 역할
+
+- 변경: 정적 컴포넌트 정본2개·생성 산출물4개·역할 토큰8개의 소유권을 D-906과 DESIGN/Fleet README에 기록했다. 명시적 토큰 전환을 유지하고 재조회 중 배치를 보존한다. 검증 정본은 `validation/fleet-components-layout-tokens-2026-10-28/result.md`다.
+- 증거: 원격 정본/등록/헤더90 passed·추가 거버넌스607 passed. 넓은 브라우저 선택과 후속 수정은 위 기록에서 source와 실행 범위를 분리한다. ADR Log·예약 gap 반영 뒤 lint 오류0.
+- gate 변화: 없음. 배포·실물·현장 수용·추가 병합은 별도다.
+- CE: 해당 없음. 원인과 소유권 판단을 최종 코드·시험·ADR에서 복원할 수 있다.
+
+## 2026-10-28 · e68f63d769 · D-909와 나머지 UI 레이아웃 점검
+
+- 변경: 기존 컴포넌트/토큰 개선을 나머지 Fleet 절차5문서에 적용하고 D-909에 정본·폭별 역할·기존 owner 관계를 기록했다. impeccable의 독립 소스/기계 평가와 실제 캡처 검토를 분리했다. Robot/Pilot의 관측/조작 기하를 화면 간격 토큰으로 일괄 치환하지 않았다.
+- 증거: 긴 값 RED26→84 passed, 정책 상태 RED3→39 passed, 공식 영향8898 passed/760 skipped/NEW0,102파일 브라우저1510 passed/skip0/NEW0. 정책 후속·독립 시각 검토는 `validation/remaining-ui-layout-2026-10-28/result.md`에 source별로 보존한다. detector0건은 stylesheet 해석 경고가 있는 제한된 기계 근거다.
+- gate 변화: 없음. 배포·실물·현장 수용·추가 병합 없음.
+- CE: 해당 없음. 판단 근거가 코드·회귀·ADR에 남는다.
+
+## 2026-10-28 · fce9c60216 · D-910 Learning 정적 셸과 UI 검증 기록
+
+- 변경: D-910과 ADR Log·DESIGN에 Learning의 정적 헤더/메뉴 원본 및 생성·드리프트 검사를 기록했다.
+- 증거: 날짜별 검증 기록 `docs/validation/robot-pilot-learning-ux-2026-10-28/result.md`에 RED·고정 SHA·원격 영향/브라우저 결과·독립 소스/실제 화면 검토를 구분했다. 설치 자산·라우트 회귀 fce9c60216은20 passed, skip0이다.
+- gate 변화: 없음. 실제 장치·APK/ARM64 빌드·현장 수용은 별도다. CE: 해당 없음 — 기존 크기 이력 교훈을 적용하고 이번 경계의 판단을 코드·회귀·D-910에 남겼다.
+
+## 2026-10-28 · f7eaca4b3b · Learning·Pilot 일관성 검증 기록
+
+- 변경: 설계/검출·화면 독립 검토와 카메라 입력/응답·조회 복구·Pilot 키보드 회귀를 날짜별 검증 기록에 결속했다. 최초 이미지/접힌 폼 fixture 실패를 정상 RED·최종 성공과 구분했다.
+- 증거: 집중42 passed, 공식 영향3994 passed/601 skipped, 브라우저 선택은 교정한7번33건과 나머지392건으로425 passed/skip0/NEW0이다. 독립 검토가 최종41PNG 전체를 확인했다. 원본 SHA와 fixture 실패는 `docs/validation/learning-state-consistency-2026-10-28/result.md`에 구분한다.
+- gate 변화: 없음. 실제 장치·모델·사람 라벨·승격 수용·배포·merge/push는 수행하지 않았다. CE: 해당 없음 — 상태 수명·입력·초점 경계가 코드와 회귀에 남는다.
+
 ## 2026-10-29 · uncommitted · deploy: GitHub OS 전송과 부분 업데이트 정책 연결
 
 - 변경: D-912(Proposed)에 고정 세 파일의 별도 OS 유지보수 소유권, Ed25519와 OS CMS 이중 권한, 정책 freeze와 중단 복구 경계를 기록했다. 다른 세션의 D-903~D-911 예약은 gap ledger에 보존했다.
@@ -12900,39 +12933,6 @@ osy-d395-s1d\`.
 - 증거: 원격 curation 전체 328 pass·10 skip·NEW 0. 분할 별칭 두 사례와 숫자 overflow를 실제 실패로 먼저 확인했으며 최종 구현에서 통과했다. 이전 실패를 최초 통과로 바꾸지 않았다.
 - Gate: 없음. metadata 검수 준비이며 사람 정답·ACT/VLA 수용·장치 수용은 아니다.
 - CE: 해당 없음 — 재현과 최종 판단을 코드·시험·결과 기록에서 복원할 수 있다.
-
-## 2026-10-28 · ae4771b936 · Fleet 계정 영역의 레이아웃 일관성
-
-- 변경: 사용자 제보의 토큰 영역 출현 원인을 공통 인증 표시 정책과 동일 identity 재조회 상태 보존으로 수정하고 `docs/validation/fleet-account-layout-2026-10-28/`에 기록했다.
-- 증거: 원격 Chromium RED8 뒤 공통 헤더/세션14, 비밀번호 로그인1 passed/skip0/NEW0. 공식 영향53대상8043 passed/757 skipped/NEW0. 실제8PNG·독립 소스/화면 검토 완료.
-- gate 변화: 없음. 운영 배포·실물 비상 정지·현장 수용은 별도다.
-- CE: 해당 없음. 원인과 거부/표시 조건이 코드·시험에 남는다.
-
-## 2026-10-28 · 2d96683c9c · D-906 Fleet 공통 컴포넌트·레이아웃 역할
-
-- 변경: 정적 컴포넌트 정본2개·생성 산출물4개·역할 토큰8개의 소유권을 D-906과 DESIGN/Fleet README에 기록했다. 명시적 토큰 전환을 유지하고 재조회 중 배치를 보존한다. 검증 정본은 `validation/fleet-components-layout-tokens-2026-10-28/result.md`다.
-- 증거: 원격 정본/등록/헤더90 passed·추가 거버넌스607 passed. 넓은 브라우저 선택과 후속 수정은 위 기록에서 source와 실행 범위를 분리한다. ADR Log·예약 gap 반영 뒤 lint 오류0.
-- gate 변화: 없음. 배포·실물·현장 수용·추가 병합은 별도다.
-- CE: 해당 없음. 원인과 소유권 판단을 최종 코드·시험·ADR에서 복원할 수 있다.
-
-## 2026-10-28 · e68f63d769 · D-909와 나머지 UI 레이아웃 점검
-
-- 변경: 기존 컴포넌트/토큰 개선을 나머지 Fleet 절차5문서에 적용하고 D-909에 정본·폭별 역할·기존 owner 관계를 기록했다. impeccable의 독립 소스/기계 평가와 실제 캡처 검토를 분리했다. Robot/Pilot의 관측/조작 기하를 화면 간격 토큰으로 일괄 치환하지 않았다.
-- 증거: 긴 값 RED26→84 passed, 정책 상태 RED3→39 passed, 공식 영향8898 passed/760 skipped/NEW0,102파일 브라우저1510 passed/skip0/NEW0. 정책 후속·독립 시각 검토는 `validation/remaining-ui-layout-2026-10-28/result.md`에 source별로 보존한다. detector0건은 stylesheet 해석 경고가 있는 제한된 기계 근거다.
-- gate 변화: 없음. 배포·실물·현장 수용·추가 병합 없음.
-- CE: 해당 없음. 판단 근거가 코드·회귀·ADR에 남는다.
-
-## 2026-10-28 · fce9c60216 · D-910 Learning 정적 셸과 UI 검증 기록
-
-- 변경: D-910과 ADR Log·DESIGN에 Learning의 정적 헤더/메뉴 원본 및 생성·드리프트 검사를 기록했다.
-- 증거: 날짜별 검증 기록 `docs/validation/robot-pilot-learning-ux-2026-10-28/result.md`에 RED·고정 SHA·원격 영향/브라우저 결과·독립 소스/실제 화면 검토를 구분했다. 설치 자산·라우트 회귀 fce9c60216은20 passed, skip0이다.
-- gate 변화: 없음. 실제 장치·APK/ARM64 빌드·현장 수용은 별도다. CE: 해당 없음 — 기존 크기 이력 교훈을 적용하고 이번 경계의 판단을 코드·회귀·D-910에 남겼다.
-
-## 2026-10-28 · f7eaca4b3b · Learning·Pilot 일관성 검증 기록
-
-- 변경: 설계/검출·화면 독립 검토와 카메라 입력/응답·조회 복구·Pilot 키보드 회귀를 날짜별 검증 기록에 결속했다. 최초 이미지/접힌 폼 fixture 실패를 정상 RED·최종 성공과 구분했다.
-- 증거: 집중42 passed, 공식 영향3994 passed/601 skipped, 브라우저 선택은 교정한7번33건과 나머지392건으로425 passed/skip0/NEW0이다. 독립 검토가 최종41PNG 전체를 확인했다. 원본 SHA와 fixture 실패는 `docs/validation/learning-state-consistency-2026-10-28/result.md`에 구분한다.
-- gate 변화: 없음. 실제 장치·모델·사람 라벨·승격 수용·배포·merge/push는 수행하지 않았다. CE: 해당 없음 — 상태 수명·입력·초점 경계가 코드와 회귀에 남는다.
 
 ## 2026-10-29 · 03d493964c · Learning 자료 복구와 공용 버튼 검증 기록
 

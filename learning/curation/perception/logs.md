@@ -306,12 +306,6 @@
 - gate 변화: 없음. 실제 HF 쓰기·실물 녹화/행동·reader 수용·배포·merge/push는 수행하지 않았다. 앞선 전체26 시험은 이전 소스의 기록이며 새 main 통합 이후의 수용으로 재사용하지 않는다.
 - CE: 해당 없음. 상태·거부·초점 경계와 동기화 판단이 코드·회귀·날짜별 검증 기록에 남는다.
 
-## 2026-10-29 · eca72bf579 · feat(learning): media 영수증에 sidecar shadow 증거 수 포함
-
-- 변경: `media_pipeline.py` 영수증(`rosy.learning.media/1`)의 각 세션 행이 sidecar의 `sidecar_rows`, `shadow_live_rows`(로봇이 녹화한 payload), `shadow_backfill_rows`(오프라인 재실행 `"backfill": true` 표시)를 센다. sidecar가 없으면 세 값 모두 null. `trainer_recordings()`와 녹화 잡의 입력은 그대로다. 배경: 녹화 시 shadow 모델이 올라가 있지 않은 세션이 대부분이라(2026-10-28 실험, 모델 PC 학습 mp4에서 shadow 증거 세션 1개) 선택 전략 재료가 있는 세션이 영수증에서 보이지 않았다.
-- 증거: `test_media_pipeline.py` 12 passed(live 1·backfill 1·null payload·빈 side를 구분하는 새 시험 2건 포함), AI PC 원격 실행 exit 0, `known_failures.py` 0 NEW.
-- gate 변화: 없음. 세기만 하고 판정하지 않는다. shadow_live_rows 0인 세션의 백필 여부·선택 전략 채택·로봇 녹화 절차 변경은 별개 결정이다.
-
 ## 2026-10-28 · fce9c60216 · 정적 셸 원본과 자동 갱신의 작업 문맥 보존
 
 - 변경: 12문서의 헤더·전역 메뉴를 D-910의 정적 원본으로 모았다. 조회 오류는 회복 시 지우되 실패한 저장 오류는 유지하고 실행 갱신에서 자료 선택·초점을 보존한다.
@@ -323,6 +317,12 @@
 - 변경: 입력 변경과 새 기준은 이전 판정·수치를 무효화한다. 판정 입력을 await 전에 묶고 현재 generation만 반영한다. 카메라·평가는 다시 확인과 조회/요청 오류 수명을 구분하며 최신 입력을 보존한다. 승격 자격·판정 알고리즘·라벨 owner는 바꾸지 않았다.
 - 증거: 집중42 passed, 공식 영향3994 passed/601 skipped, 브라우저 선택은 교정한7번33건과 나머지392건으로425 passed/skip0/NEW0이다. 독립 검토가 최종41PNG 전체를 확인했다. 원본 SHA와 fixture 실패는 `docs/validation/learning-state-consistency-2026-10-28/result.md`에 구분한다.
 - gate 변화: 없음. 실제 장치·모델·사람 라벨·승격 수용·배포·merge/push는 수행하지 않았다. CE: 해당 없음 — 상태 수명·입력·초점 경계가 코드와 회귀에 남는다.
+
+## 2026-10-29 · eca72bf579 · feat(learning): media 영수증에 sidecar shadow 증거 수 포함
+
+- 변경: `media_pipeline.py` 영수증(`rosy.learning.media/1`)의 각 세션 행이 sidecar의 `sidecar_rows`, `shadow_live_rows`(로봇이 녹화한 payload), `shadow_backfill_rows`(오프라인 재실행 `"backfill": true` 표시)를 센다. sidecar가 없으면 세 값 모두 null. `trainer_recordings()`와 녹화 잡의 입력은 그대로다. 배경: 녹화 시 shadow 모델이 올라가 있지 않은 세션이 대부분이라(2026-10-28 실험, 모델 PC 학습 mp4에서 shadow 증거 세션 1개) 선택 전략 재료가 있는 세션이 영수증에서 보이지 않았다.
+- 증거: `test_media_pipeline.py` 12 passed(live 1·backfill 1·null payload·빈 side를 구분하는 새 시험 2건 포함), AI PC 원격 실행 exit 0, `known_failures.py` 0 NEW.
+- gate 변화: 없음. 세기만 하고 판정하지 않는다. shadow_live_rows 0인 세션의 백필 여부·선택 전략 채택·로봇 녹화 절차 변경은 별개 결정이다.
 
 ## 2026-10-29 · 03d493964c · 자료·계정·작업 공간의 공용 조작과 오류 복구
 
