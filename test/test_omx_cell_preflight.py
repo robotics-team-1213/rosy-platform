@@ -44,4 +44,11 @@ def test_checks_fail_on_a_stale_camera_a_moved_view_and_another_session(tmp_path
 
     rows = {name: ok for name, ok, _ in pf.checks(config, "http://v", 6, fetch=lambda url: pages[url[len("http://v"):]],
                                                     run=lambda *a, **k: Ran())}
-    assert rows == {"camera top": True, "camera front": False, "top camera pose": False, "other arm session": False}
+    assert rows == {"camera top": True, "camera front": False, "light top": True, "top camera pose": False,
+                    "other arm session": False}
+
+
+def test_a_dark_frame_says_the_lights_are_off_and_a_lit_one_passes():
+    rows = pf.lights({"top": np.full((480, 640), 1, np.uint8), "wrist": scene(), "front": None})
+    assert [ok for _, ok, _ in rows] == [False, True, False]
+    assert "lights are off" in rows[0][2] and rows[2][2] == "no frame"

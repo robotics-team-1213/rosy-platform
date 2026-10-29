@@ -409,6 +409,12 @@
    "source": "tuned",
    "evidence": "2026-10-30: 35 of 64 real attempts touched down on a box with the fixed 8 mm margin while the top map errs 6.3 mm mean, 13.6 mm worst; open_max 56 opens ~68 mm (19 mm each side of a 30 mm box); 16 keeps 3 mm short of that and finger_room narrows it near a neighbour"
   },
+  "preflight.min_mean": {
+   "value": 15.0,
+   "unit": "grey",
+   "source": "tuned",
+   "evidence": "2026-10-30 00:40 lights off: top frame mean 1.4 and wrist 0.1 (top 1.4 even at 200 ms, gain 7); lit cell: top 139"
+  },
   "gripper.gap_mm_per_unit": {
    "value": 10.4,
    "unit": "mm",

@@ -573,6 +573,13 @@ def main(argv=None):
                         arm_id=config.get("arm_id", "arm_s"))
     if not args.dry_run:
         cd.start(work / "decisions.jsonl", knowledge=config.get("knowledge"))
+    import cell_preflight
+
+    dark = [f"{name}: {why}" for name, ok, why in cell_preflight.lights({c: cell.frame(c) for c in config["cameras"]},
+                                                                         config.get("params")) if not ok]
+    if dark:  # nothing is seen in the dark: no observe, no motion
+        print(json.dumps({"from": args.source, "to": args.dest, "result": "refused", "error": "; ".join(dark)}, indent=1))
+        return 1
     result = run_auto(cell, config, cal.load(calibration_path), calibration_path, cell_objects.load_catalog(args.catalog),
                       args.roi, args.source, args.dest, work, cell_choices.Choices(work / "choices.json"), args.dry_run)
     print(json.dumps(result, indent=1, default=str))
