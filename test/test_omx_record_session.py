@@ -121,6 +121,7 @@ def leader_arm(**state):
 
 
 def test_chunk_profile_is_validated_before_bus_work_and_forwarded_to_the_child(tmp_path, monkeypatch):
+    monkeypatch.syspath_prepend(str(DIRECTORY))
     from cell_robot_profile import SCHEMA, digest, load
 
     path = config(tmp_path)
