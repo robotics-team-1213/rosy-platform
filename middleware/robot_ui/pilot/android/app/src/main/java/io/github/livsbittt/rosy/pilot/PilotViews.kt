@@ -39,6 +39,7 @@ class PilotViews(private val context: Context) {
             intArrayOf(android.R.attr.state_enabled, android.R.attr.state_focused),
             intArrayOf(android.R.attr.state_enabled), intArrayOf()),
             intArrayOf(PilotColors.foreground, ink, PilotColors.muted)))
+        compoundDrawableTintList = textColors
         val icon = when (text) { "다시 찾기" -> R.drawable.ic_refresh; "로봇 목록" -> R.drawable.ic_back; "화면 끄기" -> R.drawable.ic_screen_off; "태블릿", "기기·연결" -> R.drawable.ic_tablet; else -> null }
         icon?.let { setCompoundDrawablesRelativeWithIntrinsicBounds(context.getDrawable(it)?.mutate()?.apply { setTint(ink) }, null, null, null) }
         compoundDrawablePadding = dp(RosyMetrics.Space2.toInt())

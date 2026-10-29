@@ -105,7 +105,7 @@ class RobotRowsFocusTest {
         instrumentation.runOnMainSync {
             val views = PilotViews(activity)
             activity.robots.removeAllViews()
-            primary = views.button("주요 조작 · 시험", primary = true) { clicks++ }
+            primary = views.button("다시 찾기", primary = true) { clicks++ }
             quiet = views.button("보조 조작 · 시험") { clicks++ }
             activity.robots.addView(primary)
             activity.robots.addView(quiet)
@@ -121,6 +121,7 @@ class RobotRowsFocusTest {
         assertEquals("primary focus ring", PilotColors.foreground, backgroundColor(primary))
         assertEquals("focus changes the fill, not just its outer size", PilotColors.pressed, backgroundColor(primary, center = true))
         assertEquals(PilotColors.foreground, primary.currentTextColor)
+        assertEquals(PilotColors.foreground, primary.compoundDrawableTintList!!.getColorForState(primary.drawableState, 0))
         instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN)
         instrumentation.waitForIdleSync()
         visible { quiet }
