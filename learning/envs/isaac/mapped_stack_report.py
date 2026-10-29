@@ -3,7 +3,7 @@ import json
 import math
 from pathlib import Path
 
-from mapped_stack_fixture import CUBE_FIXTURE, CUBE_REPORT_BYTES, FIXTURE, judge, plan
+from mapped_stack_fixture import CUBE_FIXTURE, CUBE_REPORT_BYTES, FIXTURE, belt_transport_observed, judge, plan
 from stacking_report import read_regular
 
 
@@ -30,7 +30,7 @@ def verify_report(path, *, sdk_version, seed, cube=False):
                 start, end = layer['infeed_start'], layer['infeed_settled']
                 if (len(start) != 3 or len(end) != 3
                         or not all(type(x) in (int, float) and math.isfinite(x) for x in start+end)
-                        or not .01 < end[1]-start[1] < .06
+                        or not belt_transport_observed(start, end, cube)
                         or abs(end[2]-layer['source_center_z']) > 1e-6):
                     raise ValueError('Belt transport was not observed for this layer')
                 if not math.isfinite(layer['source_center_z']) or not .035 <= layer['source_center_z'] <= .05:

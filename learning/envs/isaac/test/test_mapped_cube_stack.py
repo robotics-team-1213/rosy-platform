@@ -36,7 +36,7 @@ def trial():
             box['forces'][finger] = [0., .1, .3]
         box['net_force'] = [0., .2, .6]
         result['layers'].append(dict(item=i, arm=item['arm'], source_center_z=.04,
-            infeed_start=[.16, -.09, .041], infeed_settled=[.16, -.046, .04],
+            infeed_start=[.295, 0., .041], infeed_settled=[.25, 0., .04],
             lift_samples=[dict(copy.deepcopy(lifted), tick=t) for t in (0, 12, 24)],
             settle_samples=[dict(copy.deepcopy(settled), tick=t) for t in range(120, 253, 12)]))
     result.update(f.judge(result, cube=True))
@@ -157,7 +157,7 @@ def test_assigned_arm_can_reach_each_cube_release_pose(tmp_path):
         target = item['target'][:]
         target[2] += .003+f.CUBE_FIXTURE['release_clearance_m']
         arm = item['arm']
-        source = fixture['infeed_start_m'][:]
+        source = fixture['pickup_center_m'][:]
         source[1], source[2] = 0., .042
         q = homes[arm]
         for point in ([source[0], 0., fixture['carry_height_m']], source,

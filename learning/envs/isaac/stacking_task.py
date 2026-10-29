@@ -75,15 +75,26 @@ def run(args):
     surface = PhysxSchema.PhysxSurfaceVelocityAPI.Apply(belt.prim)
     surface.CreateSurfaceVelocityEnabledAttr(True)
     surface.CreateSurfaceVelocityLocalSpaceAttr(False)
-    surface.CreateSurfaceVelocityAttr(Gf.Vec3f(0., FIXTURE['belt_speed_m_s'], 0.))
+    surface.CreateSurfaceVelocityAttr(Gf.Vec3f(*FIXTURE.get('belt_velocity_m_s', [0., FIXTURE['belt_speed_m_s'], 0.])))
     if args.mapped_cube_stack:
         for i, sign in enumerate((-1, 1)):
             center = FIXTURE['belt_center_m'][:]
-            center[0] += sign*(FIXTURE['belt_size_m'][0]/2+.002)
+            center[1] += sign*(FIXTURE['belt_size_m'][1]/2+.002)
             center[2] = .027
-            fixed('BeltRail'+str(i), center, [.004, FIXTURE['belt_size_m'][1], .005], [.65, .65, .65])
+            fixed('BeltRail'+str(i), center, [FIXTURE['belt_size_m'][0], .004, .005], [.65, .65, .65])
+        upstream = fixed('UpstreamConveyor', FIXTURE['upstream_belt_center_m'], FIXTURE['upstream_belt_size_m'], [.12, .15, .18])
+        UsdPhysics.RigidBodyAPI.Apply(upstream.prim).CreateKinematicEnabledAttr(True)
+        surface = PhysxSchema.PhysxSurfaceVelocityAPI.Apply(upstream.prim)
+        surface.CreateSurfaceVelocityEnabledAttr(True)
+        surface.CreateSurfaceVelocityLocalSpaceAttr(False)
+        surface.CreateSurfaceVelocityAttr(Gf.Vec3f(*FIXTURE['upstream_velocity_m_s']))
+        for i, sign in enumerate((-1, 1)):
+            center = FIXTURE['upstream_belt_center_m'][:]
+            center[0] += sign*(FIXTURE['upstream_belt_size_m'][0]/2+.002)
+            center[2] = .027
+            fixed('UpstreamRail'+str(i), center, [.004, FIXTURE['upstream_belt_size_m'][1], .005], [.65, .65, .65])
     fixed('BeltStop', FIXTURE.get('belt_stop_m', [.16 if mapped else .20, -.029, .027 if mapped else .035]),
-          [.12, .004, .004 if mapped else .02], [.65, .65, .65])
+          FIXTURE.get('belt_stop_size_m', [.12, .004, .004 if mapped else .02]), [.65, .65, .65])
     floor = args.mapped_cube_stack
     fixed('Bin', [FIXTURE['bin_origin_m'][0]+.045, 0., FIXTURE['bin_origin_m'][2]-.001] if floor else
           ([.16, FIXTURE['bin_origin_m'][1]+FIXTURE['bin_size_m'][1]/2, .0125] if mapped else [.20, .02, .0125]),

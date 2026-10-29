@@ -36,7 +36,7 @@ RL_FIXTURE = dict(FIXTURE, revision='confluence-map-stacking-rl-v1',
     iterations=32, steps_per_update=32, num_envs=1, trials=1, evaluation_seed_offset=10000,
     infeed_jitter_m=.003, infeed_yaw_jitter_rad=.03)
 
-CUBE_FIXTURE = dict(FIXTURE, revision='rosycam-opposed-first-layer-v2', trials=1,
+CUBE_FIXTURE = dict(FIXTURE, revision='rosycam-edge-terminal-first-layer-v3', trials=1,
     target_stage='FIRST_LAYER_ONLY', target_cells=[3, 3, 1],
     cell_pose_scope='USER_CONFIRMED_TOPOLOGY_NOMINAL_DIMENSIONS_NOT_SURVEYED',
     camera_reference='2026-10-29T03:43:11Z_ceiling_north',
@@ -44,8 +44,11 @@ CUBE_FIXTURE = dict(FIXTURE, revision='rosycam-opposed-first-layer-v2', trials=1
     workplate_center_m=[0., 0., .02], workplate_size_m=[.40, .42, .02],
     arm_bases_m=[[.08, -.13, .03], [.08, .13, .03]],
     arm_base_yaws_rad=[math.pi/2, -math.pi/2],
-    belt_center_m=[.27, 0., .0125], belt_stop_m=[.27, .017, .027],
-    infeed_start_m=[.27, -.045, .041], carry_height_m=.135,
+    belt_center_m=[.376, 0., .0125], belt_size_m=[.35, .12, .025],
+    belt_velocity_m_s=[-.02, 0., 0.], belt_stop_m=[.203, 0., .027], belt_stop_size_m=[.004, .12, .004],
+    upstream_belt_center_m=[.491, .235, .0125], upstream_belt_size_m=[.12, .35, .025],
+    upstream_velocity_m_s=[0., -.02, 0.], upstream_scope='LAYOUT_ONLY_TURN_TRANSFER_NOT_EVALUATED',
+    infeed_start_m=[.295, 0., .041], pickup_center_m=[.25, 0., .04], carry_height_m=.135,
     bin_origin_m=[.085, -.045, .032], bin_size_m=[.09, .09, .03],
     release_clearance_m=.035, row_clearance_m=.0002, release_feedback_iterations=4)
 
@@ -103,6 +106,16 @@ def contact_names(index, cube=False):
 
 def norm(values):
     return math.sqrt(sum(v*v for v in values))
+
+
+def belt_transport_observed(start, end, cube=False):
+    fixture = CUBE_FIXTURE if cube else FIXTURE
+    velocity = fixture.get('belt_velocity_m_s', [0., fixture['belt_speed_m_s'], 0.])
+    direction = [v/norm(velocity) for v in velocity]
+    delta = [end[k]-start[k] for k in range(3)]
+    travel = sum(delta[k]*direction[k] for k in range(3))
+    return (.01 < travel < .06
+            and norm([delta[k]-travel*direction[k] for k in range(3)]) < .005)
 
 
 def explained_contacts(box):

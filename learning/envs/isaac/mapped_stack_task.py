@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 import subprocess
 
-from mapped_stack_fixture import CUBE_FIXTURE, DT, FIXTURE, PROFILE, ROOT, cube_release_ready, cube_release_target, free_lift, home, judge, plan, stable_box
+from mapped_stack_fixture import CUBE_FIXTURE, DT, FIXTURE, PROFILE, ROOT, belt_transport_observed, cube_release_ready, cube_release_target, free_lift, home, judge, plan, stable_box
 
 
 class Planner:
@@ -174,13 +174,20 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
             step()
         hold(120)
 
-    def grip(arm, value):
+    def grip(arm, value, observe=False):
+        observations = [snapshot()] if observe else []
         start = targets[arm][fingers[arm][0]]
         duration = max(.8, 1.875*abs(value-start)/.4, math.sqrt(5.774*abs(value-start)/.4))
-        for u in np.linspace(0., 1., math.ceil(duration/DT)+1)[1:]:
+        for n, u in enumerate(np.linspace(0., 1., math.ceil(duration/DT)+1)[1:]):
             targets[arm][fingers[arm][0]] = start+(value-start)*u**3*(10+u*(-15+6*u))
             step()
-        hold(60)
+            if observe and n % 3 == 0:
+                observations.append(snapshot())
+        for n in range(60):
+            step()
+            if observe and n % 3 == 0:
+                observations.append(snapshot())
+        return observations
 
     for trial_index in range(fixture['trials']):
         trial = dict(seed=args.seed+trial_index, layers=[])
@@ -223,7 +230,7 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
                 hold(360)
                 p, q = box.get_world_pose()
                 trial['belt_displacement_m'] = (p-start).tolist()
-                if not .01 < p[1]-start[1] < .06:
+                if not belt_transport_observed(start, p, cube):
                     raise ValueError('belt failed to transport cargo')
                 yaw = math.atan2(2*(q[0]*q[3]+q[1]*q[2]), 1-2*(q[2]**2+q[3]**2))
                 layer = dict(item=index, arm=arm, source_center_z=float(p[2]),
@@ -258,7 +265,7 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
                     layer['release_sample'] = snapshot()
                     if not cube_release_ready(index, layer['release_sample'], float(p[2])):
                         raise ValueError('cube release correction did not converge; opening blocked')
-                grip(arm, initial['gripper']['release'])
+                layer['opening_samples'] = grip(arm, initial['gripper']['release'], observe=cube)
                 if cube:
                     layer['opened_sample'] = snapshot()
                 move(arm, [*item['target'][:2], carry_height])

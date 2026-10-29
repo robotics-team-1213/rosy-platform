@@ -78,7 +78,7 @@ def normalize(scenario_id: str, config: dict) -> dict:
                 'fixture': 'confluence-map-stacking-rl-v1', 'iterations': 32, 'num_envs': 1}
     if scenario_id == 'omx-map-cube-stack':
         return {'model': 'omx_f', 'headless': True, 'seed': config['seed'],
-                'fixture': 'rosycam-opposed-first-layer-v2', 'trials': 1}
+                'fixture': 'rosycam-edge-terminal-first-layer-v3', 'trials': 1}
     if scenario_id == 'omx-map-long-stack':
         return {'model': 'omx_f', 'headless': True, 'seed': config['seed'],
                 'fixture': 'confluence-map-long-stack-v1', 'trials': 3}
