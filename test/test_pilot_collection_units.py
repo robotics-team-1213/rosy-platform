@@ -28,7 +28,8 @@ def test_receiver_uses_configured_url_and_signed_entry_with_shared_lock():
     assert "${ROBOT_BASE_URL}" in command
     assert "Environment=ROBOT_BASE_URL=https://rosy-pinky-%i.local:8080" in text
     assert text.index("Environment=ROBOT_BASE_URL=") < text.index("EnvironmentFile=")
-    assert "model-code/current/learning/curation/perception/fetch_http.py" in command
+    assert "-I %h/.local/lib/rosy-model-code/rosy_model_code.py" in command
+    assert "--config %h/.config/rosy/model-code.json exec dataset/fetch_http.py" in command
     assert "--ca-file" in command and "--token-file" in command
     assert "/usr/bin/flock --nonblock --conflict-exit-code 75 %t/rosy-pilot-collection.lock" in command
 
@@ -36,7 +37,8 @@ def test_receiver_uses_configured_url_and_signed_entry_with_shared_lock():
 def test_offline_pipeline_has_its_own_timer_and_no_robot_credentials():
     service = unit("rosy-pilot-process.service")["Service"]
     command = service["ExecStart"]
-    assert "model-code/current/learning/curation/perception/pilot_review.py" in command
+    assert "-I %h/.local/lib/rosy-model-code/rosy_model_code.py" in command
+    assert "--config %h/.config/rosy/model-code.json exec dataset/pilot_review.py" in command
     assert "/usr/bin/flock --nonblock --conflict-exit-code 75 %t/rosy-pilot-collection.lock" in command
     assert all(flag in command for flag in ["--raw-root", "--video-dir", "--out", "--classes", "--state"])
     assert "--token" not in command and "--ca-file" not in command
