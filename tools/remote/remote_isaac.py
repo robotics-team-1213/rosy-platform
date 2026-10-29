@@ -154,7 +154,7 @@ def fetch_snapshot(receipt, remote, destination):
     for item in items:
         name = _name(item['name'])
         total += item['bytes']
-        limit = 2*LIMIT if row['input']['scenario_id'] == 'omx-map-cube-stack' and name == 'mapped-stack-report.json' else LIMIT
+        limit = 2*LIMIT if row.get('input', {}).get('scenario_id') == 'omx-map-cube-stack' and name == 'mapped-stack-report.json' else LIMIT
         if name.casefold() in names or not 0 <= item['bytes'] <= limit or total > 256 * LIMIT:
             raise ValueError('Snapshot artifact size/name conflict')
         names.add(name.casefold())
