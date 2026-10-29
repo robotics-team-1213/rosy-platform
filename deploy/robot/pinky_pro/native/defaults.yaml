@@ -8,6 +8,8 @@ ap:
   # fallback: open rosy-pinky-xxxx only while there is no uplink (D-176).
   # relay: D-26 RELAY_AP_STA. off: D-26/D-154 NETWORK_HOLD, no AP.
   mode: fallback
+  # D-919: fallback only; relay stays WPA2. Set wpa2 to retain the AP key.
+  fallback_security: open
   grace_seconds: 120
   hold_seconds: 600
 login:

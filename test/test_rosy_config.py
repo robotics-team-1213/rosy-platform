@@ -218,6 +218,7 @@ def test_old_and_new_image_defaults_select_open_fallback(tmp_path):
 def test_image_defaults_reject_invalid_fallback_security(tmp_path, security):
     module = _module()
     defaults = tmp_path / "defaults.yaml"
-    defaults.write_text(f"schema_version: 1\nap:\n  fallback_security: {security}\n", encoding="utf-8")
+    value = "null" if security is None else security
+    defaults.write_text(f"schema_version: 1\nap:\n  fallback_security: {value}\n", encoding="utf-8")
     with pytest.raises(module.ConfigError):
         module.load_defaults(defaults)
