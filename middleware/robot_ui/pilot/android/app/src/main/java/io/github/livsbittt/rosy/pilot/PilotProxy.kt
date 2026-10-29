@@ -28,7 +28,11 @@ class PilotProxy(private val connection: PilotConnection, private val assets: Bu
     val capability = ByteArray(32).also { SecureRandom().nextBytes(it) }.joinToString("") { "%02x".format(it) }
     val cookieName = "rosy-shell-${capability.take(16)}"
     val origin get() = "http://127.0.0.1:$listeningPort"
-    private val client = connection.client()
+    private val client = connection.client().newBuilder().pingInterval(2, TimeUnit.SECONDS).build()
+    // A browser abort only closes loopback; bound the robot leg too and never replay motion.
+    private val motionClient = client.newBuilder().callTimeout(400, TimeUnit.MILLISECONDS).retryOnConnectionFailure(false).build()
+    // Continuous video has no total lifetime limit; connect/read deadlines still detect a stalled robot.
+    private val streamClient = client.newBuilder().callTimeout(0, TimeUnit.MILLISECONDS).build()
     @Volatile private var identityVerified = false
     /** D-789 site media origin, read once from CORE's /pilot policy; null keeps the bundled screens on JPEG. */
     @Volatile var mediaOrigin: String? = null
@@ -79,6 +83,7 @@ class PilotProxy(private val connection: PilotConnection, private val assets: Bu
             val length = session.headers["content-length"]?.toLongOrNull() ?: 0L
             if (length !in 0..262144 || session.headers.containsKey("transfer-encoding")) return reply(413, "text/plain", ByteArray(0))
             val method = session.method.name
+            val liveStream = method == "GET" && session.uri == "/api/v1/vision/front/stream"
             if (method !in setOf("GET", "HEAD", "POST", "PUT", "PATCH", "DELETE")) return reply(405, "text/plain", ByteArray(0))
             val body = if (method in setOf("POST", "PUT", "PATCH", "DELETE")) {
                 val data = ByteArray(length.toInt())
@@ -95,7 +100,12 @@ class PilotProxy(private val connection: PilotConnection, private val assets: Bu
                     else session.headers["authorization"]?.let { header("Authorization", it) }
                     session.headers["range"]?.let { header("Range", it) }
                 }.build()
-            val response = client.newCall(request).execute()
+            val transport = when {
+                session.uri == "/api/v1/teleop" -> motionClient
+                liveStream -> streamClient
+                else -> client
+            }
+            val response = transport.newCall(request).execute()
             var streaming = false
             try {
                 if (failureReported) { failureReported = false; recovery() }
@@ -105,13 +115,13 @@ class PilotProxy(private val connection: PilotConnection, private val assets: Bu
                 val mime = response.header("Content-Type") ?: "application/octet-stream"
                 if (session.uri.startsWith("/api/v1/") && (mime.startsWith("video/") || mime.startsWith("multipart/x-mixed-replace") || mime.startsWith("application/octet-stream") || mime.startsWith("application/x-tar"))) {
                     val length = response.body?.contentLength() ?: 0
-                    if (length > 256L * 1024 * 1024) return reply(413, "text/plain", "Response too large".toByteArray())
+                    if (!liveStream && length > 256L * 1024 * 1024) return reply(413, "text/plain", "Response too large".toByteArray())
                     val input = response.body?.byteStream() ?: ByteArray(0).inputStream()
                     val bounded = object : java.io.FilterInputStream(input) {
                         private var read = 0L
                         private fun count(value: Int): Int {
                             if (value > 0) read += value
-                            if (read > 256L * 1024 * 1024) { close(); throw IOException("download too large") }
+                            if (!liveStream && read > 256L * 1024 * 1024) { close(); throw IOException("download too large") }
                             return value
                         }
                         override fun read() = super.read().also { if (it >= 0) count(1) }
@@ -121,6 +131,8 @@ class PilotProxy(private val connection: PilotConnection, private val assets: Bu
                     val status = status(response.code)
                     val result = if (length >= 0) newFixedLengthResponse(status, mime, bounded, length)
                         else newChunkedResponse(status, mime, bounded)
+                    // NanoHTTPD swallows body IO errors; close loopback so the browser sees a stalled stream end.
+                    if (liveStream) result.closeConnection(true)
                     response.header("Content-Range")?.let { result.addHeader("Content-Range", it) }
                     forwardRosyHeaders(response, result)
                     streaming = true
