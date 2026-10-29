@@ -276,7 +276,7 @@ def test_producer_waits_for_the_preview_to_open_the_camera_at_boot(monkeypatch):
 def test_producer_still_refuses_a_missing_or_shared_owner_after_the_wait(monkeypatch, owners):
     runtime = load('camera_readiness')
     _producer_world(runtime, monkeypatch, [owners])
-    with pytest.raises(RuntimeError, match='sole camera owner'):
+    with pytest.raises(OSError if owners is None else RuntimeError, match='sole camera owner'):
         runtime.producer('top', '/dev/video0', wait_s=2.0)
 
 

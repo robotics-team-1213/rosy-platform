@@ -19,7 +19,8 @@ def load(name):
 
 
 @pytest.mark.parametrize('condition,values', [('UNDEREXPOSED', [400, 800]), ('OVEREXPOSED', [160, 80])])
-@pytest.mark.parametrize('reset,fault', [(False, None), (True, None), (True, 'ENODEV'), (True, 'unknown')])
+@pytest.mark.parametrize('reset,fault', [(False, None), (True, None), (True, 'ENODEV'),
+                                       (True, 'producer'), (True, 'unknown')])
 @pytest.mark.parametrize('middle', [False, True])
 def test_recovery_uses_applied_controls_after_normal_reentry_or_device_reset(monkeypatch, tmp_path,
                                                                          condition, values, reset, fault, middle):
@@ -76,8 +77,13 @@ def test_recovery_uses_applied_controls_after_normal_reentry_or_device_reset(mon
             raise OSError(19, 'camera temporarily unavailable')
         return {key: current[device][key] for key in names}
 
+    def producer(role, device):
+        if device == 'top' and fault == 'producer' and 16 <= clock[0] < 22:
+            raise runtime.ProducerUnavailable('active producer is reopening')
+        return {}
+
     monkeypatch.setattr(env.urllib.request, 'urlopen', response)
-    backend = SimpleNamespace(prepare=lambda *a: baseline, identity=lambda d: d, producer=lambda *a: {},
+    backend = SimpleNamespace(prepare=lambda *a: baseline, identity=lambda d: d, producer=producer,
         get_controls=read, write_control=write,
         restore_controls=runtime.restore_controls, apply_candidate=runtime.apply_candidate,
         save=runtime.save, append_event=runtime.append_event, restore=restore,

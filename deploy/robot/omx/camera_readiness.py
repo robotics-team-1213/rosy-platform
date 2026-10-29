@@ -238,6 +238,10 @@ def identity(device):
     return dict(realpath=str(path.resolve()), rdev=info.st_rdev)
 
 
+class ProducerUnavailable(OSError):
+    """The active preview has not reopened the camera; no competing owner was found."""
+
+
 def producer(role, device, wait_s=15.0):
     # The preview unit is Type=simple: at boot it is active before it opens the camera.
     deadline = time.monotonic()+wait_s
@@ -252,6 +256,8 @@ def producer(role, device, wait_s=15.0):
         if props['ActiveState'] == 'active' and props['MainPID'] != '0' and owners == [props['MainPID']]:
             return props
         if time.monotonic() >= deadline:
+            if props['ActiveState'] == 'active' and props['MainPID'] != '0' and not owners:
+                raise ProducerUnavailable('existing producer must be the sole camera owner; reopen pending')
             raise RuntimeError('existing producer must be the sole camera owner')
         time.sleep(0.5)
 
