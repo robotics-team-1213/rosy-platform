@@ -12920,3 +12920,10 @@ osy-d395-s1d\`.
 - 증거: native CLI가 소비하는 배열과 selector의 full_invocations를 독립 대조했다. 실제 Gazebo 63 entities의 원문과 SDK type 등록명을 비교하여 누락한 각속도·접촉·대상 속도를 확인했다. 관측된 값을 source-clock/전체 물리 수용으로 바꾸지 않는다.
 - Gate: 변화 없음. G1c 전체와 G2–G6, 실물·운영·배포·착지/push는 미완료다.
 - CE: 새 교훈 기록 — [FULL JSON과 실제 행렬 구분](solutions/workflow-issues/full-mode-json-does-not-prove-full-matrix-execution-2026-10-29.md). 정본 함수·배열·원격 실행 로그가 근거이며 claims/frontmatter 검사를 통과했다.
+
+## 2026-10-29 · uncommitted · docs: 관제 유닛 첫 배치 확정(R·CELL-A)으로 N1 마감
+
+- 변경: 독립·상하위 관제 후속 목표의 N1을 닫았다. 관제 유닛 첫 배치 확정 문서(R=통합관제+현장 주행, CELL-A=OMX 셀 관제, 현장 PC 동거 격리)를 추가하고 후속 목표의 N1 행을 근거와 함께 갱신했다.
+- 증거: 2026-10-29 현장 PC 읽기 조사(단일 Fleet·관제 계층 미배포·셀 도구 세션 단위 확인)와 D-850·D-855·D-862·D-893 계약 대조. 문서 변경이므로 harness lint·생성 문서 대조로 확인한다. 설치·연결 수용은 N2·N3 그대로 열려 있다.
+- gate 변화: 없음. 배치 정의 완료이며 실제 설치·PC 간 TLS 연결·장애 수용은 미실행이다.
+- CE: 해당 없음 — 배치 정의 문서이며 장애 원인·복구를 새로 검증한 사례가 아니다.
