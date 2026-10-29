@@ -51,7 +51,8 @@ def count_sites(cell, config: dict, calibration: dict, catalog: list) -> dict:
         if not roi or record is None or "surface_z" not in site:
             continue
         objs = cell_objects.detect(img, roi, record, config["cameras"]["top"], catalog, site["surface_z"],
-                                   config.get("params"), site.get("surface_px"))
+                                   config.get("params"), site.get("surface_px"), site.get("surface_lab"),
+                                   (config.get("objects") or {}).get("hsv"))
         out[name] = sum(1 for o in objs if o.get("matched") and not o.get("tangled"))
     return out
 

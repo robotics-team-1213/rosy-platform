@@ -63,7 +63,7 @@ def test_task_contract_is_versioned_documented_and_wired_to_the_site_stack():
     assert 'alias="Idempotency-Key"' in intent
     assert 'await execution.step(call, principal, idempotency_key' in intent
     assert 'call.verb == "navigate"' in execution
-    assert '"Idempotency-Key": crypto.randomUUID()' in web
+    assert '"Idempotency-Key": randomUUID()' in web
     assert 'task.status === "QUEUED"' in web_contract
     assert 'task.status === "UNKNOWN"' in web_contract
     assert '`/api/fleet/tasks/${encodeURIComponent(pending.task_id)}/cancel`' in web_contract

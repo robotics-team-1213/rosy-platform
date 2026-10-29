@@ -33,6 +33,8 @@ let polling = false;
 let hasMatch = false;
 let lastEvidence = null;
 let evidenceAnnouncement = "";
+let receipt = null;
+let lastMatchDetails = "";
 let canOperate = false;
 let account = null;
 let loggingOut = false;
@@ -196,14 +198,30 @@ function chips(payload) {
   });
 }
 
+function expireMatchEvidence() {
+  if (!receipt || lastEvidence !== "fresh") return;
+  // Advance the host age by local elapsed time without comparing host/browser clocks.
+  if (receipt.age + (performance.now() - receipt.at) / 1000 <= receipt.after) return;
+  connection.dataset.evidence = "delayed";
+  setFieldEvidence("delayed");
+  const phase = setPhaseEvidence("delayed");
+  setTextIfChanged(connection, "지연 · 마지막 수신 경기 정보");
+  evidenceAnnouncement = connection.textContent;
+  lastEvidence = "delayed";
+  setTextIfChanged(announcement, `${phase} · ${lastMatchDetails} · ${evidenceAnnouncement}`);
+}
+
 async function tick() {
+  expireMatchEvidence();
   if (polling) return;
   polling = true;
+  const requestedAt = performance.now();
   try {
-    const res = await fetch("/overlay.json", { cache: "no-store" });
+    const res = await fetch("/overlay.json", { cache: "no-store", signal: AbortSignal.timeout(5000) });
     if (!res.ok) throw new Error(`overlay ${res.status}`);
     const payload = await res.json();
     if (!payload.field) {
+      receipt = null;
       connection.dataset.evidence = "unavailable";
       lastEvidence = "unavailable";
       setFieldEvidence("unavailable");
@@ -215,13 +233,20 @@ async function tick() {
       return;
     }
     hasMatch = true;
-    const evidence = payload.evidence || "unavailable";
+    const receivedAt = performance.now();
+    const timed = Number.isFinite(payload.age_s) && payload.age_s >= 0
+      && Number.isFinite(payload.stale_after_s) && payload.stale_after_s > 0;
+    // Request elapsed time bounds transit age without requiring synchronized UTC clocks.
+    const age = timed ? payload.age_s + (receivedAt - requestedAt) / 1000 : 0;
+    let evidence = payload.evidence || "unavailable";
+    if (evidence === "fresh") evidence = !timed ? "unavailable" : age > payload.stale_after_s ? "delayed" : "fresh";
+    receipt = evidence === "fresh" ? {at: receivedAt, age, after: payload.stale_after_s} : null;
     setFieldEvidence(evidence);
     connection.dataset.evidence = evidence;
-    if (payload.evidence === "fresh") {
+    if (evidence === "fresh") {
       setTextIfChanged(connection, "\uD638\uC2A4\uD2B8 \uC5F0\uACB0\uB428");
-    } else if (payload.evidence === "delayed") {
-      const age = typeof payload.age_s === "number" ? ` \u00B7 \uB9C8\uC9C0\uB9C9 \uC0DD\uC131 ${payload.age_s.toFixed(1)}\uCD08 \uC804` : "";
+    } else if (evidence === "delayed") {
+      const age = payload.evidence === "delayed" && typeof payload.age_s === "number" ? ` \u00B7 \uB9C8\uC9C0\uB9C9 \uC0DD\uC131 ${payload.age_s.toFixed(1)}\uCD08 \uC804` : "";
       setTextIfChanged(connection, `\uC9C0\uC5F0 \u00B7 \uB9C8\uC9C0\uB9C9 \uC218\uC2E0 \uACBD\uAE30 \uC815\uBCF4${age}`);
     } else {
       setTextIfChanged(connection, "\uC2DC\uAC01 \uC815\uBCF4 \uC5C6\uC74C \u00B7 \uB9C8\uC9C0\uB9C9 \uACBD\uAE30 \uC815\uBCF4");
@@ -242,7 +267,8 @@ async function tick() {
     lostElement.hidden = !lost;
     lostElement.textContent = payload.lost_ball || payload.reason === "lost_ball"
       ? "공을 잃음" : "로봇을 잃음";
-    const matchSummary = `${phaseLabel} · ${payload.field.home_id} ${homeScore}, ${payload.field.away_id} ${awayScore}${lost ? ` · ${lostElement.textContent}` : ""}${evidenceAnnouncement ? ` · ${evidenceAnnouncement}` : ""}`;
+    lastMatchDetails = `${payload.field.home_id} ${homeScore}, ${payload.field.away_id} ${awayScore}${lost ? ` · ${lostElement.textContent}` : ""}`;
+    const matchSummary = `${phaseLabel} · ${lastMatchDetails}${evidenceAnnouncement ? ` · ${evidenceAnnouncement}` : ""}`;
     setTextIfChanged(announcement, matchSummary);
     draw(payload);
     chips(payload);
@@ -264,6 +290,7 @@ async function tick() {
     };
     frame.src = `/frame.jpg?t=${Date.now()}`;
   } catch (_error) {
+    receipt = null;
     connection.dataset.evidence = "disconnected";
     lastEvidence = "disconnected";
     setFieldEvidence("disconnected");

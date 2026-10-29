@@ -52,6 +52,7 @@ def test_mapless_survey_elements_persist_and_stay_out_of_operations(page_site, w
         page.locator('#element-kind').select_option('park')
         point(x, y)
         page.locator('#element-save').click()
+        expect(page.locator('#survey-status')).to_have_text('요소를 초안에 반영했습니다. 저장·검토·활성화는 각각 별도입니다.')
     expect(page.locator('#site-map-svg [data-place]')).to_have_count(2)
     page.locator('#element-id').fill('ab')
     page.locator('#element-name').fill('Road')
