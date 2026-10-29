@@ -4055,3 +4055,11 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: path-only 2f88347d69 원격은 30 passed / 4 failed로 다음 경계를 드러냈다. 명시 승인된 Windows 격리 PowerShell 실행은 원래 세 사례의 모든 assertion을 그대로 실행해 3 passed였다. 4개 하위 호출 모두 non-admin을 먼저 확인하고 native Start-Process/Storage 호출을 가로채 0회를 확인했다. local pytest·실제 UAC·카드 접근은 하지 않았다. Linux의 세 skip과 이 별도 native Windows 증거는 구분하며 최종 원격 결과는 완료 기록을 따른다.
 - gate 변화: 없음. 세 native Windows fixture의 별도 성공을 Linux 실행으로 세지 않으며 새 소스의 실물 수용을 주장하지 않는다.
 - CE: 기존 교훈 갱신 결과 유지. parameter-set·metadata autoload 판단은 기존 fake-surface 교훈에 남겼고, 단순 fixture 경로/표시 형식 수정을 별도 교훈으로 늘리지 않았다.
+
+## 2026-10-29 · 8f43faac07 · 첫 빈 가르치기 poll의 불필요한 지도 재생성 방지
+
+- 변경: recording과 pending이 모두 없으면 처음 drawn 값과 같은 빈 키를 유지한다. 첫 active preview와 active→idle 정리는 계속 다시 그리며, poll 타이머·인증·오류 처리·가르치기 API·로봇 명령 권한은 바꾸지 않는다.
+- 증거: tests-only commit e7839c8382의 실제 Chromium 회귀는 idle에서 기존 SVG label이 분리되어 1 failed/2 passed(NEW1)였다. 수정 commit 8f43faac07의 세 회귀와 기존 높이 경계·profile·대상 유지·survey 경로는 9 passed/0 skipped, NEW0/known0/flaky0이다. 외부 receipts/2026-10-29-site-map-idle-redraw/red 및 green에 보존한다.
+- 증거 범위: 첫 빈 poll의 불필요한 render와 label 분리는 재현했지만, 앞선 별도 FULL의 간헐적 높이 0 발생 원인이라고 확정하지 않는다. 기존 height>=12 시험·baseline은 유지한다.
+- gate 변화: 없음. 공식 affected 선택은 affected이며 Fleet·공유 UI guard와 browser scope를 그대로 유지한다. 별도 착지 검증·공유 main 게시·운영 수용은 이 집중 회귀와 구분한다.
+- CE: 해당 없음 — 초기 idle·첫 recording/pending·active→idle의 DOM 수명은 최종 코드와 실제 poll 회귀 세 경우에 직접 남는다. 기존 간헐 실패의 줄별 귀속 교훈을 적용하며, 미확정 원인을 해결 교훈으로 쓰지 않는다.
