@@ -58,7 +58,7 @@ def parse_probe(out: str) -> dict | None:
         line = [ln for ln in out.splitlines() if ln.startswith("ROSYPROBE ")][-1]
         n, load, avail, total, py, sim, busy, cores, gb, site, held, browsers, *disk = line.split()[1:]
         p = {"nproc": int(n), "load1": float(load), "avail_gb": int(avail) / 2**20,
-             "total_gb": int(total) / 2**20, "pytest": py == "1", "pytest_blocked": py == "2",
+             "total_gb": int(total) / 2**20, "pytest": py in ("1", "2"), "pytest_blocked": py == "2",
              "sim": sim == "1", "busy": busy == "1",
              "busy_ignored": {"2": "pre-boot", "3": "expired"}.get(busy),
              "lock_cores": int(cores), "lock_gb": int(gb), "site": site == "1",

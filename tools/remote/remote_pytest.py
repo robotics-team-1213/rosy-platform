@@ -287,7 +287,8 @@ def placed_hosts(cls: str = "pytest", hosts: list[str] | None = None, cores: int
     if not chosen and cls == "pytest" and cores <= NEEDS[cls][0]:  # a job's own core need waits instead
         # D-568 7: busy hosts must not stop the gate; the site PC and a full disk never take this fallback.
         chosen = [h for h, p in zip(hosts, probes)
-                  if p and p["pytest"] and not p["busy"] and not disk_full(p) and h not in SITES]
+                  if p and p["pytest"] and not p.get("pytest_blocked") and not p["busy"]
+                  and not disk_full(p) and h not in SITES]
         if chosen:
             print("[remote-pytest] WARNING: no host above the pytest floor; using the reachable ones anyway",
                   file=sys.stderr, flush=True)

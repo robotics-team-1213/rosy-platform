@@ -46,6 +46,7 @@ def measured(tmp_path, marker=None, live=True):
 ])
 def test_probe_places_pytest_only_when_admit_allows_nonexclusive_work(tmp_path, marker, live, blocked):
     probe, jobs = measured(tmp_path, marker, live)
+    assert probe['pytest'] is True, 'exclusive admission must not erase Python capability'
     chosen, notes = runner.place('pytest', ['fixture'], [probe])
     assert chosen == ([] if blocked else ['fixture']), notes
     if blocked:
@@ -70,3 +71,11 @@ def test_idle_alternative_wins_over_more_free_capacity_on_exclusive_host(tmp_pat
     available.update(nproc=12, avail_gb=12, total_gb=16)
     chosen, _ = runner.place('pytest', ['blocked', 'available'], [blocked, available])
     assert chosen == ['available']
+
+
+@pytest.mark.parametrize('python,capable', [('0', False), ('1', True)])
+def test_legacy_probe_python_capability_does_not_imply_exclusive_admission(python, capable):
+    probe = host_probe.parse_probe(f'ROSYPROBE 8 0 16777216 33554432 {python} 1 0 0 0 0 0 0')
+    assert probe['pytest'] is capable
+    assert probe['sim'] is True
+    assert probe.get('pytest_blocked') is False
