@@ -12900,3 +12900,17 @@ osy-d395-s1d\`.
 - 증거: 원격 curation 전체 328 pass·10 skip·NEW 0. 분할 별칭 두 사례와 숫자 overflow를 실제 실패로 먼저 확인했으며 최종 구현에서 통과했다. 이전 실패를 최초 통과로 바꾸지 않았다.
 - Gate: 없음. metadata 검수 준비이며 사람 정답·ACT/VLA 수용·장치 수용은 아니다.
 - CE: 해당 없음 — 재현과 최종 판단을 코드·시험·결과 기록에서 복원할 수 있다.
+
+## 2026-10-29 · 66ba49bef8 · D-915 원문 물리 근거와 Harbor 연결 기록
+
+- 변경: D-915/API v1.330과 live version pins, 지원표, [소유 저장소 검증 기록](validation/physical-evidence-export-2026-10-29/result.md)을 정렬했다. 새 read 계약은 원문 증거의 조회이며 명령·관측 쓰기·업무 완료 권한을 추가하지 않는다.
+- 증거: 원격 고정 source, 독립 contract/Safety·최종 branch 검토, 실제 HTTP/UDS, 구형 SIM 직렬화와 FULL의 실패/skip·격리 재검증을 정본에서 구분한다.
+- Gate: 기존 module gate 변화 없음. 실제 source-clock/전체 측정·실물·배포·착지/push는 수용하지 않았다.
+- CE: 해당 없음 — 판단은 ADR·직접 회귀·검증 정본에 보존하며, unresolved producer를 해결된 통합으로 기록하지 않는다.
+
+## 2026-10-29 · 724ecfbff1 · D-916 원본 시각 검증과 FULL 범위 정정
+
+- 변경: D-916 내부 metadata의 source/실제 ROS/수동 Gazebo 근거를 [검증 정본](validation/joint-source-provenance-2026-10-29/result.md)에 기록했다. 이전 D-915의 25,723 passed는 FULL 판정 아래 local_invocations 네 묶음이었음을 추가 정정하고 원래 결과는 보존했다. 공식 27개 행렬은 별도로 실행·기록한다.
+- 증거: native CLI가 소비하는 배열과 selector의 full_invocations를 독립 대조했다. 실제 Gazebo 63 entities의 원문과 SDK type 등록명을 비교하여 누락한 각속도·접촉·대상 속도를 확인했다. 관측된 값을 source-clock/전체 물리 수용으로 바꾸지 않는다.
+- Gate: 변화 없음. G1c 전체와 G2–G6, 실물·운영·배포·착지/push는 미완료다.
+- CE: 새 교훈 기록 — [FULL JSON과 실제 행렬 구분](solutions/workflow-issues/full-mode-json-does-not-prove-full-matrix-execution-2026-10-29.md). 정본 함수·배열·원격 실행 로그가 근거이며 claims/frontmatter 검사를 통과했다.

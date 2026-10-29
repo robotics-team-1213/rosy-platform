@@ -17,10 +17,13 @@ from .arm_transfer_jobs import (  # noqa: F401
     ArmTransferJobSnapshot, ArmTransferJobResponse)
 from .wire_status import RobotMode, NavigationState, HealthState, Severity, AckStatus
 from .arm_transfer_observations import (  # noqa: F401
-    ArmObservationPose, ArmObservationBounds, ArmLinkObservation, ArmOwnerObservation,
+    ArmObservationPose, ArmObservationBounds, ArmLinkObservation, ArmJointObservation, ArmOwnerObservation,
     ArmTransferObservation, ArmTransferObservationRequest, ArmTransferOwnerContext,
     ArmTransferObservationContext, ArmTransferObservationContextResponse, ArmTransferPhysicalReceipt,
     ArmTransferPhysicalReceiptResponse, ArmTransferObservationReply, ArmTransferCancelRequest)
+from .arm_transfer_evidence import (  # noqa: F401
+    ArmTransferEvidenceOwner, ArmTransferEvidenceContext, ArmTransferEvidenceDocument,
+    ArmTransferPhysicalEvidenceResponse)
 from .arm_transfer_recovery import (  # noqa: F401
     ArmTransferRecoveryCreate, ArmTransferRecoveryApprove, ArmTransferRecoveryRequestSnapshot,
     ArmTransferRecoveryRequestResponse, ArmTransferRecoveryPreview, ArmTransferRecoveryPreviewResponse,

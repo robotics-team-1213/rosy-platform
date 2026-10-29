@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-10-29 · 724ecfbff1 · D-916 원본 시각 검증과 FULL 범위 정정
+- 2026-10-29 · 66ba49bef8 · D-915 원문 물리 근거와 Harbor 연결 기록
 - 2026-10-29 · ccc8712ece · 이송 결과 검수 패키지 검증 기록
 - 2026-10-29 · uncommitted · docs(reference): 기록용 Jira 코멘트 예외를 기존 사람 작업 규칙에 명시한다
 - 2026-10-29 · uncommitted · docs(reference): 연결 안내 행에 §4 기록 코멘트 규칙을 넣는다
-- 2026-10-29 · uncommitted · docs(reference): 기록 코멘트는 이슈마다 하나로 이어 붙인다
-- 2026-10-29 · uncommitted · deploy: GitHub OS 전송과 부분 업데이트 정책 연결

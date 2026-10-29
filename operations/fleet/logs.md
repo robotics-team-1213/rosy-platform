@@ -5061,6 +5061,20 @@
 - Gate: 없음. B단계(전송 후 경로 충돌 판정)·C단계(_make_room/bays)는 별도 착지.
 - CE: 해당 없음 — 판정·모양이 특성 시험과 변이 이력으로 고정됐다.
 
+## 2026-10-29 · 66ba49bef8 · D-915 원본 물리 근거의 읽기 인계
+
+- 변경: 선택형 측정 관절을 원래 canonical proof에 결속하고 creator-scoped physical-evidence GET을 추가했다. 원문·receipt·원래 released zone을 같은 read snapshot에서 읽으며, 누락된 관절·과거 receipt에 현재 pose를 보충하지 않는다. nested PRE/POST source 재사용을 shared guard에서 거절한다.
+- 증거: 원격 baseline/RED/GREEN·source-order 변이·실제 HTTP/UDS와 Harbor 단계 확인·구형 Pydantic 호환을 검증했다. 정확한 source·계수·실패/skip·최종 FULL 결과는 [검증 정본](../../docs/validation/physical-evidence-export-2026-10-29/result.md)에 둔다.
+- Gate: 기존 module gate 변화 없음. G1c 원본 clock/전체 측정 생산자, 최종 업무 완료, 실물·운영·배포 수용은 별도다.
+- CE: 해당 없음 — 해결 판단은 D-915·회귀·검증 정본에 남고, 미해결 source clock은 해결 교훈으로 기록하지 않는다.
+
+## 2026-10-29 · f2af364bcf · AI fact 요청 제한 시험 시계 고정
+
+- 변경: 기존 FakeClock과 _app(clock=...)를 사용해 세 HTTP 요청의 실시간 처리 속도에 의존하던 시험을 수정했다. 기존 200/200/429와 .999초 거절/정확히 1초 허용을 검증하며 production 요청 제한은 바꾸지 않는다.
+- 증거: 공식 전체 행렬 최초 Fleet 실행에서 1 failed/7270 passed/413 skipped, NEW1. 변경 source의 원격 재검증은 별도이며 [D-916 검증 정본](../../docs/validation/joint-source-provenance-2026-10-29/result.md)에 남긴다. 독립 리뷰에서 정책 약화·P1/P2 없음.
+- Gate: 변화 없음. 최초 전체 행렬의 실패는 지우거나 quarantine하지 않는다.
+- CE: 해당 없음 — 이 시험 수정 판단은 코드·직접 회귀와 기존 가짜 시계 관례에 남는다. 별도 FULL 실행 범위 교훈은 docs 소유 기록을 따른다.
+
 ## 2026-10-29 · uncommitted · fix(fleet): Trip 제안 승인과 실제 작업 admission을 원자적으로 결속한다
 
 - 변경: 원래 proposal ID·digest·generation을 최종 작업 생성 트랜잭션까지 전달한다. creator·request key·본문·선택 robot·steps·현재 dispatch를 확인한 뒤 job·steps·claims·승인 event·proposal ADMITTED를 함께 commit한다. 별도의 ADMITTED writer를 제거하고 조회·멱등 재시도는 같은 read snapshot에서 원래 승인 event와 실제 작업 결속을 검증한다. 기존 direct-trip 경로와 실패 시 lease cleanup, SIM 한정·자기 승인 거절은 유지한다.
