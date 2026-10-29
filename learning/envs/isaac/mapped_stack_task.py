@@ -234,8 +234,14 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
                     photo('mapped-grasp-failed.png')
                     raise ValueError('bilateral free lift failed; transport interlock stopped the arm')
                 move(arm, [*item['target'][:2], .145])
+                if cube:
+                    layer['carry_sample'] = snapshot()
                 move(arm, [*item['target'][:2], item['target'][2]+(.003+fixture['release_clearance_m'] if cube else .003)])
+                if cube:
+                    layer['release_sample'] = snapshot()
                 grip(arm, initial['gripper']['release'])
+                if cube:
+                    layer['opened_sample'] = snapshot()
                 move(arm, [*item['target'][:2], .145])
                 move(arm, home(arm))
                 layer['settle_samples'] = samples(132)
