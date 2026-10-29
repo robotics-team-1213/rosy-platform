@@ -329,3 +329,10 @@
 - 변경: Catalog는 실제 HF 상태와 조회 실패를 표시하고 권한·목록 갱신까지 인계를 잠근다. Accounts는 선택 ID·오류·직렬 잠금·초점을 보존하며 정적/동적 버튼을 공용 부품으로 통일했다. Workspaces는 재시도·빈 상태·이전 링크 제거·조건부 초점 복구를 제공한다.
 - 증거: 초기 브라우저18파일300 passed, 최종 변경 범위9파일은 교정한49건과 나머지216건으로265 passed/skip0/NEW0이다. 영향3012 passed/439 skipped. 소스·캡처·fixture 실패와 실제 초점 실패는 `docs/validation/learning-data-recovery-2026-10-28/result.md`에 구분했다. 두 테마·세 폭의 공용 버튼 표적/넘침6건도 통과했다.
 - gate 변화: 없음. 실제 HF·사람 라벨·모델·장치·배포·merge/push 수용은 별도다. CE: 해당 없음 — 기존 클라이언트/guard 교훈을 적용하고 상태·잠금·초점 판단을 코드·회귀·검증 기록에 남겼다.
+
+## 2026-10-29 · 06c40584b3 · 저장 공간의 공용 버튼과 제목 배치
+
+- 변경: 저장 재조회·공간 추정 버튼을 공용 quiet로 이행하고 submit caller·native 유효성/Enter 배선을 유지했다. 폼 제목은 전용 행에 둔다. 기존 busy/epoch·권한·인증 취소·데이터 계산은 보존한다.
+- 증거: 최종 원격 실제 HTTP/Chromium9 passed/skip0와 공식 영향2880 passed/358 skipped, 각각 NEW0. 4폭×2테마의 ready/form/error24장과 독립 화면 검토를 `docs/validation/learning-storage-controls-2026-10-29/`에 고정했다. 최초 일반 버튼8 실패와 제목 geometry2 실패 원본도 보존했다.
+- gate 변화: 없음. 전체 UI·모델·실물·실제 HF·배포·착지/push/merge 수용과 구분한다.
+- CE: 해당 없음 — 부품/폼/임시 증거 경로의 판단은 코드·회귀·검증 기록에 남는다.

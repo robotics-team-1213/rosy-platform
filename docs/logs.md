@@ -12946,3 +12946,10 @@ osy-d395-s1d\`.
 - 증거: 원격 집중 78 passed·공식 영향 사전 계약 861 passed·두 실제 소비자 Chromium 18 passed, 각 skip 0/NEW 0. 기존 실패와 리뷰로 찾은 주석 오인을 실제 RED 후 수정했다.
 - gate 변화: 없음. 전체 UI 표준화는 후속 앱 이행·렌더·native 검증이 남는다. FULL selector의 사전 계약을 전체 FULL/CI나 장치 수용으로 쓰지 않는다. 배포·착지·push·merge 미수행.
 - CE: 해당 없음 — 원인·복구 조건이 최종 코드·회귀·이 검증 기록에 남는다.
+
+## 2026-10-29 · 06c40584b3 · Learning 저장 공간 UI 이행 검증
+
+- 변경: 일반 버튼2개와 폼 제목 배치를 기존 공용 부품·배치 규칙으로 이행하고 frozen 결과·원본4로그/24캡처 SHA를 `docs/validation/learning-storage-controls-2026-10-29/`에 보존한다.
+- 증거: 최종 실제 HTTP/Chromium9 passed/skip0, 공식 영향2880 passed/358 skipped/NEW0. 4폭×2테마의24장을 독립 검토했다. TEMP 정리로 소실된 초기 캡처와 이전 제목 배치16장은 최종 시각 수용으로 사용하지 않았다.
+- gate 변화: 없음. 전체 플랫폼 UI·native/실물/현장·실제 HF·배포/착지/push/merge 수용과 분리한다.
+- CE: 해당 없음 — 부품/제출/geometry·증거 수명의 이유가 코드·회귀·이 기록에 남는다.
