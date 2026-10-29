@@ -245,3 +245,64 @@ def test_recent_metadata_cannot_break_gate_or_offer_another_robot_as_this_origin
     assert page.locator("[data-recent-connect]").count() == 0
     assert "legacy-secret" not in page.evaluate("localStorage.getItem('rosy.pilot.recent') || ''")
     assert errors == [], errors
+
+
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
+@pytest.mark.parametrize("role,fresh", [("administrator", True), ("operator", True), ("administrator", False)])
+def test_emergency_release_requires_admin_and_fresh_safety(tablet_page, role, fresh):
+    base_url, page, errors = tablet_page
+    token = "devadmintoken" if role == "administrator" else "devtoken"
+    page.add_init_script(f"sessionStorage.setItem('rosy.pilot.token', {json.dumps(token)})")
+    page.route("**/api/v1/robot/state", lambda route: route.fulfill(json={
+        "mode": "EMERGENCY", "safety": {"estop": True},
+        "velocity": {"linear": 0, "angular": 0},
+        "evidence": {"safety": {"evidence": "fresh" if fresh else "stale"}},
+    }))
+    page.goto(f"{base_url}/pilot")
+    release = page.locator("[data-estop-release]")
+    release.wait_for(state="visible")
+    assert release.evaluate("el => el.disabled") is not (role == "administrator" and fresh)
+    assert page.locator("[data-drive-enter]").evaluate("el => el.disabled")
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
+@pytest.mark.parametrize("outcome", ["released", "stale", "refused"])
+def test_emergency_release_confirms_rechecks_and_never_starts_motion(tablet_page, outcome):
+    base_url, page, errors = tablet_page
+    state = {"mode": "EMERGENCY", "safety": {"estop": True},
+             "velocity": {"linear": 0, "angular": 0},
+             "evidence": {"safety": {"evidence": "fresh"}}}
+    requests = []
+    page.add_init_script("sessionStorage.setItem('rosy.pilot.token', 'devadmintoken')")
+    page.route("**/api/v1/robot/state", lambda route: route.fulfill(json=state))
+
+    def release(route):
+        requests.append(route.request.method)
+        if outcome == "refused":
+            route.fulfill(status=403, json={"detail": "administrator required"})
+        else:
+            state.update(mode="IDLE", safety={"estop": False})
+            route.fulfill(json={"estop": False})
+
+    page.route("**/api/v1/safety/release", release)
+    motion = []
+    page.on("request", lambda request: motion.append(request.url)
+            if request.method == "POST" and request.url.endswith(("/teleop", "/mode")) else None)
+    page.goto(f"{base_url}/pilot")
+    page.locator("[data-estop-release]").click()
+    page.get_by_role("dialog").get_by_text("취소", exact=True).click()
+    assert requests == []
+    page.locator("[data-estop-release]").click()
+    if outcome == "stale":
+        state["evidence"]["safety"]["evidence"] = "stale"
+    page.get_by_role("dialog").get_by_text("비상 정지 해제", exact=True).click()
+    if outcome == "released":
+        playwright_sync.expect(page.locator("[data-drive-enter]")).to_be_enabled()
+        assert requests == ["POST"]
+    else:
+        playwright_sync.expect(page.locator("#pilot-notice")).to_contain_text("해제")
+        assert page.locator("[data-drive-enter]").evaluate("el => el.disabled")
+        assert requests == ([] if outcome == "stale" else ["POST"])
+    assert motion == []
+    assert errors == [], errors

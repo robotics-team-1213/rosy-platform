@@ -7,9 +7,10 @@ class CandidateStore {
     private val seen = mutableSetOf<String>()
     private val present = mutableMapOf<String, Long>()
     private val rows = mutableMapOf<String, Pair<Candidate, Long>>()
+    private var manual: Candidate? = null
     private var generation = 0L
     @Synchronized fun found(name: String): Long? {
-        if (name !in seen && seen.size >= 64) return null
+        if (name !in seen && seen.size + (if (manual == null) 0 else 1) >= 64) return null
         seen.add(name)
         return present.getOrPut(name) { ++generation }
     }
@@ -18,9 +19,15 @@ class CandidateStore {
         if (present[name] == version) rows[name] = row to System.nanoTime()
     }
     @Synchronized fun fresh(name: String): Boolean = rows[name]?.let { System.nanoTime() - it.second < 60_000_000_000L } == true
-    @Synchronized fun records(): List<Candidate> = rows.filterKeys { fresh(it) }.values.map { it.first }.distinct().sortedBy { it.name }
+    @Synchronized fun manual(row: Candidate): Boolean {
+        if (manual == null && seen.size >= 64) return false
+        manual = row
+        return true
+    }
+    private fun current(): List<Candidate> = rows.filterKeys { fresh(it) }.values.map { it.first } + listOfNotNull(manual)
+    @Synchronized fun records(): List<Candidate> = current().distinct().sortedBy { it.name }
     @Synchronized fun addresses(host: String, port: Int): List<String>? {
-        val recent = rows.filterKeys { fresh(it) }.values.map { it.first }.filter { it.host == host }
+        val recent = current().filter { it.host == host }
         if (recent.isEmpty()) return null
         check(recent.all { it.port == port }) { "conflicting service port" }
         check(recent.map { it.secure }.distinct().size == 1) { "conflicting service transport" }
@@ -31,9 +38,9 @@ class CandidateStore {
     }
     @Synchronized fun matches(candidate: Candidate, robotId: String): Boolean = runCatching {
         addresses(candidate.host, candidate.port) == candidate.addresses.sorted() &&
-            rows.filterKeys { fresh(it) }.values.map { it.first }.filter { it.host == candidate.host }.all {
+            current().filter { it.host == candidate.host }.all {
                 it.secure == candidate.secure && (it.robotId.isEmpty() || it.robotId == robotId)
             }
     }.getOrDefault(false)
-    @Synchronized fun clear() { rows.clear(); present.clear(); seen.clear(); generation++ }
+    @Synchronized fun clear() { rows.clear(); present.clear(); seen.clear(); manual = null; generation++ }
 }

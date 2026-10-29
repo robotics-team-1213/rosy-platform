@@ -20,7 +20,6 @@ import android.widget.ScrollView
 import android.widget.TextView
 import java.util.concurrent.Executors
 import io.github.livsbittt.rosy.cam.health.DeviceHealth
-import io.github.livsbittt.rosy.cam.health.ScreenCoolingPolicy
 import io.github.livsbittt.rosy.cam.health.ScreenPower
 
 /** Discover, select, join. A code appears only when the selected server requires pairing. */
@@ -122,7 +121,6 @@ class MainActivity : Activity() {
     private val screenSleep = PendingScreenSleep()
     private val sleeping get() = screenSleep.active
     private var pendingApprovedSleep = false
-    private val cooling = ScreenCoolingPolicy()
     private val screenPower by lazy { ScreenPower(this) }
     private val health by lazy { TabletHealth(this) { value -> showHealth(value) } }
     private var lastHealth: DeviceHealth? = null
@@ -131,7 +129,6 @@ class MainActivity : Activity() {
     private lateinit var status: TextView
     private lateinit var robots: LinearLayout
     private var shownCandidates: List<Candidate>? = null
-    private var shownCooling = false
     private val refreshTick = object : Runnable {
         override fun run() { if (!foreground) return; refresh(); if (foreground) main.postDelayed(this, 5000) }
     }
@@ -174,6 +171,7 @@ class MainActivity : Activity() {
         columns.addView(list, if (compact) LinearLayout.LayoutParams(-1, -1) else LinearLayout.LayoutParams(0, -1, 1f))
         val header = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL }
         header.addView(label(if (compact) "Pilot · 한 대 조종" else "조종할 로봇 한 대 선택", RosyMetrics.TextTitle).apply { typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL) }, LinearLayout.LayoutParams(0, -2, 1f))
+        header.addView(button("주소로 연결") { manualAddress() })
         header.addView(views.button("다시 찾기", primary = true) { lastError = null; endSession { opening = false; status.text = "같은 Wi-Fi에서 로봇을 다시 찾고 있습니다…"; startDiscovery() }; opening = true })
         list.addView(header)
         if (accountConfigured) list.addView(profileEntry())
@@ -188,7 +186,7 @@ class MainActivity : Activity() {
         list.addView(ScrollView(this).apply { addView(robots) }, LinearLayout.LayoutParams(-1, 0, 1f))
         groupEntry = views.button("2대 함께 조종") { chooseGroupRobots() }.apply { isEnabled = false }
         list.addView(groupEntry, LinearLayout.LayoutParams(-1, -2).apply { topMargin = views.dp(RosyMetrics.Space4.toInt()) })
-        groupHint = views.label(LinkStatus.groupHint(0, cooling.coolingRequired), RosyMetrics.TextLabel, true)
+        groupHint = views.label(LinkStatus.groupHint(0), RosyMetrics.TextLabel, true)
         list.addView(groupHint)
         if (compact) {
             list.addView(healthText)
@@ -196,7 +194,7 @@ class MainActivity : Activity() {
         }
     }
     private fun startDiscovery() {
-        if (!foreground || opening || sleeping || cooling.coolingRequired || discovery != null) return
+        if (!foreground || opening || sleeping || discovery != null) return
         discovery = RobotDiscovery(this, candidates) { main.post { refresh() } }
         runCatching { discovery!!.start() }.onFailure { status.text = "Wi-Fi 연결을 확인한 뒤 다시 찾아주세요." }
         main.removeCallbacks(refreshTick); main.postDelayed(refreshTick, 5000)
@@ -215,17 +213,17 @@ class MainActivity : Activity() {
         if (web != null || opening) return
         val records = candidates.records()
         val reachableRobots = records.count { runCatching { candidates.addresses(it.host, it.port) != null }.getOrDefault(false) }
-        groupEntry?.isEnabled = !cooling.coolingRequired && reachableRobots >= 2
-        groupHint.text = LinkStatus.groupHint(reachableRobots, cooling.coolingRequired)
+        groupEntry?.isEnabled = reachableRobots >= 2
+        groupHint.text = LinkStatus.groupHint(reachableRobots)
         reselect?.let { wanted -> records.firstOrNull { it.host == wanted.host && it.port == wanted.port }?.let { reselect = null; select(it); return } }
-        status.text = lastError ?: if (cooling.coolingRequired) "태블릿 발열이 내려갈 때까지 조종 연결을 닫았습니다." else if (records.isEmpty()) discovery?.status ?: "같은 Wi-Fi에서 로봇을 찾고 있습니다…" else "${records.size}대 발견 · 연결할 로봇을 선택하세요."
-        if (shownCandidates == records && shownCooling == cooling.coolingRequired) return
-        shownCandidates = records; shownCooling = cooling.coolingRequired
+        status.text = lastError ?: if (records.isEmpty()) discovery?.status ?: "같은 Wi-Fi에서 로봇을 찾고 있습니다…" else "${records.size}대 발견 · 연결할 로봇을 선택하세요."
+        if (shownCandidates == records) return
+        shownCandidates = records
         views.replaceRobots(robots, status) {
-            if (records.isEmpty()) { robots.addView(label(if (cooling.coolingRequired) "태블릿이 식으면 다시 연결할 수 있습니다." else "로봇이 없나요? Wi-Fi와 전원을 확인하세요.", RosyMetrics.TextBody)); return@replaceRobots }
+            if (records.isEmpty()) { robots.addView(label("로봇이 없나요? Wi-Fi와 전원을 확인하거나 주소로 연결하세요.", RosyMetrics.TextBody)); return@replaceRobots }
             records.forEach { candidate ->
                 val valid = runCatching { candidates.addresses(candidate.host, candidate.port) != null }.getOrDefault(false)
-                robots.addView(views.robot(candidate, valid && !cooling.coolingRequired) { select(candidate) },
+                robots.addView(views.robot(candidate, valid) { select(candidate) },
                     LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = views.dp(RosyMetrics.Space3.toInt()) })
             }
         }
@@ -237,8 +235,41 @@ class MainActivity : Activity() {
             .setItems(available.map { it.name }.toTypedArray()) { _, index -> select(available[index], group = true) }
             .setNegativeButton("취소", null).show()
     }
+    private fun manualAddress() {
+        val input = EditText(this).apply {
+            hint = "http://로봇 IP:8080"; textSize = RosyMetrics.TextValue; setSingleLine(); setTextColor(PilotColors.foreground)
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_URI
+            filters = arrayOf(android.text.InputFilter.LengthFilter(256))
+        }
+        pairingDialog?.dismiss()
+        val dialog = AlertDialog.Builder(this).setTitle("주소로 연결")
+            .setMessage("자동 검색에 나오지 않는 HTTP 로봇의 Wi-Fi IPv4 주소를 입력하세요. 연결할 때 로봇 승인을 확인합니다. HTTPS 로봇은 자동 검색의 인증서 확인 절차로 연결하세요.")
+            .setView(input).setNegativeButton("취소", null).setPositiveButton("로봇 확인", null).create()
+        pairingDialog = dialog
+        dialog.setOnDismissListener { if (pairingDialog === dialog) pairingDialog = null }
+        dialog.setOnShowListener { dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+            val row = runCatching { ManualRobot.parse(input.text.toString()) }.getOrElse {
+                input.error = "HTTP 로봇의 사설 IPv4 주소를 입력하세요. 예: http://로봇-IP:8080"; return@setOnClickListener
+            }
+            dialog.dismiss()
+            val version = attempt; val store = candidates
+            status.text = "입력한 주소에서 로봇을 확인하고 있습니다…"
+            io.execute {
+                val result = runCatching { LobbyPairing.offer(row) }
+                main.post {
+                    if (version != attempt || !foreground) return@post
+                    result.fold(onSuccess = { offer ->
+                        if (store.manual(row.copy(name = offer.robotId.ifBlank { row.name }, robotId = offer.robotId))) {
+                            lastError = null; shownCandidates = null; refresh()
+                        } else status.text = "로봇 목록이 가득 찼습니다. 목록을 다시 찾은 뒤 주소를 입력하세요."
+                    }, onFailure = { status.text = LinkStatus.failure(it, row.secure) })
+                }
+            }
+        } }
+        dialog.show()
+    }
     private fun select(incoming: Candidate, group: Boolean = false) {
-        if (opening || sleeping || cooling.coolingRequired || web != null) return
+        if (opening || sleeping || web != null) return
         groupRequested = group
         lastError = null; reselect = null
         val addresses =runCatching { candidates.addresses(incoming.host, incoming.port) }.getOrNull() ?: return
@@ -476,7 +507,7 @@ class MainActivity : Activity() {
         screens = null
         val oldCandidates = candidates; candidates = CandidateStore()
         discovery?.stop(clearCandidates = false); discovery = null
-        // Serialize the cooling completion behind startup/stale relay cleanup and native zero.
+        // Screen-off waits for startup/stale relay cleanup and native zero.
         SessionShutdown.close(io, java.util.concurrent.Executor { main.post(it) },
             { oldRelay?.stop(); oldCandidates.clear(); forget?.let { vault.erase(it); if (it.secure) peerVault.erase(it) } }, afterClosed?.let { action -> { if (attempt == closingAttempt) action() } })
         CookieManager.getInstance().removeAllCookies(null); WebStorage.getInstance().deleteAllData(); showLobby()
@@ -486,16 +517,13 @@ class MainActivity : Activity() {
         healthText.text = "배터리 ${value.batteryPct?.let { "$it%" } ?: "확인 불가"} · $temperature"
     }
     private fun showHealth(value: DeviceHealth) {
-        val wasCooling = cooling.coolingRequired
         lastHealth = value; renderHealth(value)
-        if (foreground && cooling.requestSleep(value)) sleepScreen(askPermission = false)
-        else if (foreground && !sleeping && !cooling.coolingRequired) { if (wasCooling) screenPower.restore(); startDiscovery() }
+        if (foreground && !sleeping) startDiscovery()
     }
     private fun deviceDetails(candidate: Candidate? = lastSelectedCandidate) {
-        val thermal = when (lastHealth?.thermalStatus) { 0 -> "정상"; 1 -> "가벼운 발열"; 2 -> "발열 주의"; 3, 4, 5, 6 -> "발열 보호"; else -> "상태 확인 불가" }
         pairingDialog?.dismiss()
         pairingDialog = AlertDialog.Builder(this).setTitle("기기·연결")
-            .setMessage((candidate?.let { "${it.name}\n${it.host}\n\n" } ?: "") + "${healthText.text}\n발열: $thermal\n\n" + (session?.peerApproval?.let {
+            .setMessage((candidate?.let { "${it.name}\n${it.host}\n\n" } ?: "") + "${healthText.text}\n\n" + (session?.peerApproval?.let {
                 "승인 관계: ${if (it.persistent) "지속 승인" else "기간 제한 (${it.authorizationExpiresAt})"}\n로그인: ${session?.expiresAt}까지\n승인 폐기는 수신 장치에서 확인하세요.\n\n"
             } ?: "") + "화면을 끄면 조종 연결을 닫습니다. 로봇은 다시 선택해 연결할 수 있습니다.")
             .setPositiveButton("화면 끄기") { _, _ -> sleepScreen(true) }.setNegativeButton("닫기", null)
@@ -544,7 +572,7 @@ class MainActivity : Activity() {
     }
     override fun onResume() {
         super.onResume(); foreground = true; main.removeCallbacks(accountTick); main.post(accountTick)
-        if (!cooling.coolingRequired) screenPower.restore()
+        screenPower.restore()
         health.start()
         if (pendingApprovedSleep) { pendingApprovedSleep = false; sleepScreen(false) } else startDiscovery()
     }

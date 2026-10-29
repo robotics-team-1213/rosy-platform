@@ -32,7 +32,7 @@ val shared = tasks.register<Sync>("sharedContracts") {
     include("**/account/*.kt", "**/settings/LinkPolicy.kt", "**/settings/DiscoveryBudget.kt", "**/settings/SiteLink.kt",
         "**/settings/SiteLinkRecord.kt", "**/settings/PairingUri.kt", "**/settings/OverheadServiceRecord.kt",
         "**/pairing/Pairing.kt", "**/link/PinnedTrust.kt", "**/link/Protocol.kt",
-        "**/health/DeviceHealth.kt", "**/health/PhoneHeat.kt", "**/health/ScreenCoolingPolicy.kt", "**/health/ScreenPower.kt")
+        "**/health/DeviceHealth.kt", "**/health/ScreenPower.kt")
     into(layout.buildDirectory.dir("generated/shared-contracts"))
 }
 val sharedScreenResources = tasks.register<Sync>("sharedScreenResources") {
