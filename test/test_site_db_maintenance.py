@@ -468,10 +468,10 @@ def test_backup_command_prunes_the_live_ledger_after_writing_the_backup(tmp_path
 
 
 def test_retention_preserves_same_principal_request_replay(tmp_path):
-    from fleet.server.task_store import TaskStore
+    from fleet.server.task_store import FleetTaskStore
 
     database = tmp_path / "fleet.sqlite3"
-    store = TaskStore(database)
+    store = FleetTaskStore(database)
     request = dict(robot_id="rosy_01", task_type="delivery", source="console",
                    actor_id="op", request_key="retry-key", request={"destination": "dock"},
                    evidence=None)
