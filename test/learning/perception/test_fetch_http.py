@@ -185,6 +185,38 @@ def test_interrupted_conversion_keeps_partial_outputs_and_recovers(tmp_path):
     assert any(p.read_bytes() == b"interrupted encoder output" for p in out.rglob("*.mp4"))
 
 
+def test_video_without_source_metadata_is_not_adopted(tmp_path):
+    import bag_to_video
+    from types import SimpleNamespace
+    session, out = tmp_path / RID, tmp_path / "video"
+    session.mkdir()
+    (session / "session.json").write_text(json.dumps({"device": "rosy_01"}))
+    _, rows = _paired_convert(session, out, "h264")
+    canonical = out / (bag_to_video.output_stem(session, {"device": "rosy_01"}) + ".jsonl")
+    rows.with_suffix(".mp4").rename(canonical.with_suffix(".mp4"))
+    rows.rename(canonical)
+    assert fetch_http._existing_video(SimpleNamespace(video_out=out), session) is None
+
+
+def test_interrupted_publication_does_not_publish_the_completion_marker(tmp_path, monkeypatch):
+    import pilot_conversion
+    from test_bag_to_video import _write_session
+    session = _write_session(tmp_path)
+    out = tmp_path / "video"
+    rename = pilot_conversion.os.rename
+
+    def interrupted(source, target):
+        if target.parent == out and target.suffix == ".json":
+            raise OSError("interrupted metadata publication")
+        return rename(source, target)
+
+    monkeypatch.setattr(pilot_conversion.os, "rename", interrupted)
+    with pytest.raises(OSError, match="interrupted metadata"):
+        fetch_http.default_convert(session, out, "h264")
+    assert list(out.glob("*.mp4"))
+    assert not list(out.glob("*.jsonl"))
+
+
 def test_fetch_verifies_extracts_converts_and_pair_checks(server, tmp_path, capsys):
     base, state = server
     assert _main(base, tmp_path, _paired_convert) == 0
