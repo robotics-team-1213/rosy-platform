@@ -313,7 +313,7 @@ def restore(root):
                     or not owned_controls(before, spec['original'], record)):
                 raise RuntimeError('unowned camera controls; refusing restore overwrite')
             metadata = command(['v4l2-ctl', '--device='+spec['device'], '--list-ctrls-menus'])
-            validate_controls(metadata, [spec['original']])
+            validate_controls(metadata, [spec['original'], dict(auto_exposure=1)])
             live = {**spec, 'producer': owner}
             record = control_intent(root, role, live, baseline['profile_sha256'], run['run_id'],
                                     before, spec['original'], phase='restoring')

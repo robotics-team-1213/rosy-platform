@@ -6,6 +6,7 @@ import urllib.request
 import json
 import uuid
 import copy
+import subprocess
 
 CONDITIONS = {'NORMAL', 'UNDEREXPOSED', 'OVEREXPOSED', 'MIXED_LIGHTING',
               'LOW_CONTRAST', 'LOW_SPATIAL_SIGNAL', 'TEMPORAL_CHANGE'}
@@ -127,6 +128,7 @@ def monitor(profile, root, digest, duration, io):
     run_id = uuid.uuid4().hex
     checks = dict.fromkeys(plans, 0.)
     resets = dict.fromkeys(plans, 0)
+    control_errors = {}
     signature = None
     began = time.monotonic()
 
@@ -135,6 +137,30 @@ def monitor(profile, root, digest, duration, io):
         device = profile['cameras'][role]['device']
         if io.identity(device) != saved['identity'] or io.producer(saved.get('unit', role), device) != saved['producer']:
             raise RuntimeError('camera producer changed during environmental recovery')
+
+    def read_live(role):
+        recovering = role in control_errors
+        try:
+            guard(role)
+            actual = io.get_controls(profile['cameras'][role]['device'], current[role])
+            guard(role)
+        except (OSError, subprocess.SubprocessError) as exc:
+            control_errors[role] = repr(exc)
+            checks[role] = time.monotonic()+5
+            best.pop(role, None)
+            return None
+        control_errors.pop(role, None)
+        if recovering:
+            plans[role].settle_until = time.monotonic()+1
+            plans[role].source_after = time.time()+1
+        return actual
+
+    def unavailable(role, assessment):
+        plan = plans[role]
+        plan.state, plan.pending, plan.confirmations = 'UNAVAILABLE', None, 0
+        plan.intensities.clear()
+        gate.counts[role] = 0
+        assessment['photometric_ready'] = False
 
     try:
         io.save(root/'control-run.json', dict(run_id=run_id))
@@ -152,6 +178,9 @@ def monitor(profile, root, digest, duration, io):
                 plan = plans[role]
                 item = state.get(role, {})
                 quality = item.get('quality') or {}
+                if role in control_errors and time.monotonic() < checks[role]:
+                    unavailable(role, assessment)
+                    continue
                 if same_fresh_frame(item, previous[role], previous_quality.get(role)):
                     plan.state = 'WAITING_FRAME'
                     continue
@@ -162,9 +191,10 @@ def monitor(profile, root, digest, duration, io):
                     previous_quality[role] = copy.deepcopy(quality)
                     now = time.monotonic()
                     if now >= checks[role]:
-                        guard(role)
-                        actual = io.get_controls(spec['device'], current[role])
-                        guard(role)
+                        actual = read_live(role)
+                        if actual is None:
+                            unavailable(role, assessment)
+                            continue
                         checks[role] = now+5
                         if actual != current[role]:
                             if actual != baseline['cameras'][role]['original']:
@@ -212,9 +242,11 @@ def monitor(profile, root, digest, duration, io):
                     selected = {**current[role], **candidates[index]}
                 saved = baseline['cameras'][role]
                 device = spec['device']
-                guard(role)
-                before = io.get_controls(device, current[role])
-                guard(role)
+                before = read_live(role)
+                if before is None:
+                    plan.defer(action)
+                    unavailable(role, assessment)
+                    continue
                 if before != current[role]:
                     if before != saved['original']:
                         raise RuntimeError('unowned camera controls changed before write')
@@ -256,7 +288,8 @@ def monitor(profile, root, digest, duration, io):
             assessment.update(state='READY' if ready else 'INSUFFICIENT', photometric_ready=ready,
                               recorded_ns=now_ns, expires_ns=now_ns+750_000_000, profile_sha256=digest,
                               run_id=run_id, environment=environment, observations=state,
-                              observation_error=observation_error, control_resets=dict(resets))
+                              observation_error=observation_error, control_resets=dict(resets),
+                              control_errors=dict(control_errors))
             changed = tuple((r, p.condition, p.state, p.epoch, p.generation) for r, p in plans.items())
             if changed != signature:
                 io.append_event(root/'environment.jsonl', assessment)
