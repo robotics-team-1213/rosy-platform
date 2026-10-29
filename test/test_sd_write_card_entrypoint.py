@@ -10,8 +10,10 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import re
 import shutil
 import subprocess
+import sys
 
 import pytest
 
@@ -219,6 +221,7 @@ def _progress_lines(log):
 
 
 @pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows identity/UAC launch contract")
 def test_detach_starts_one_window_and_returns_at_once(case):
     launcher, record = _launcher(case, "accept")
 
@@ -243,6 +246,7 @@ def test_detach_starts_one_window_and_returns_at_once(case):
 
 
 @pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows identity/UAC launch contract")
 def test_a_declined_uac_prompt_is_recorded_as_untouched(case):
     launcher, _record = _launcher(case, "decline")
 
@@ -467,6 +471,7 @@ REASON = "robot needed on the floor now; readback CPU-starved"
 
 
 @pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows identity/UAC launch contract")
 def test_an_emergency_write_passes_the_switch_and_its_reason_to_the_writer_window(case):
     launcher, record = _launcher(case, "accept")
 
@@ -506,7 +511,9 @@ def test_an_emergency_without_a_reason_is_refused_before_the_uac_prompt(case, ex
     completed, _elapsed, log = _launch(case, launcher, "-Detach", *extra)
 
     assert completed.returncode != 0
-    assert message in " ".join(completed.stderr.split())
+    # PowerShell 7 decorates and wraps errors with ANSI codes and a line gutter.
+    rendered = re.sub(r"\x1b\[[0-9;]*m|\|", "", completed.stderr)
+    assert message in " ".join(rendered.split())
     assert not record.exists()
     assert not Path(str(log) + ".progress.jsonl").exists()
 
