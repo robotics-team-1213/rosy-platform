@@ -95,7 +95,9 @@ class Planner:
         p = self.plan
         x, y, z, yaw = target["x"], target["y"], target["z"], target["yaw_deg"]
         above = (x, y, z + p["approach_m"])
-        lifted = (x, y, z + p["lift_m"])
+        # after a release the jaws rise clear before the park closes them: 3 cm let the fingertips take the box back
+        # (2026-10-28); the pick's lift can stay low for the shoulder
+        lifted = (x, y, z + (p.get("release_lift_m", p["lift_m"]) if grip_out > grip_in else p["lift_m"]))
         joints = self.solve(*above, yaw, q5)
         pre = [round(rad_to_norm(q), 3) for q in joints] + [grip_in]
         down, q5 = self.line(above, (x, y, z), p["descend_m_s"], yaw, grip_in, joints[4])
@@ -126,6 +128,7 @@ class Planner:
         return {"schema": "rosy.omx-chunk-library.v1", "names": NAMES, "fps": self.fps, "chunks": chunks,
                 "gripper_closed": p["grip_closed"], "hold_current_ma": p.get("hold_current_ma"),
                 "transit": p.get("transit", {}),
+                "transit_speed": p.get("transit_speed", 0.85),
                 "source": {"planner": "grasp_planner.py top-down v1", "pick": p["pick"], "place": p["place"]}}
 
 

@@ -304,6 +304,9 @@ services:
 
   proxy:
     image: rosy-site-proxy:${ROSY_SITE_IMAGE_TAG:-local}
+    labels:
+      # Candidate builder pins file content; a stable bind path does not track bytes.
+      org.rosy.site-caddy-sha256: unbuilt
     build:
       context: .
       dockerfile: Dockerfile.proxy

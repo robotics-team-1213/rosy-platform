@@ -17,12 +17,14 @@ if __package__:
     from .site_update_io import (
         PROJECT, STACK_UNIT, Rejected, Transient, allowed_overlays, containers_reason,
         functional_inventory, functional_reason, runtime_reason,
+        read_env,
     )
     from .verify_candidate import CandidateVerificationError, verified_services
 else:  # pragma: no cover - installed host CLI
     from site_update_io import (
         PROJECT, STACK_UNIT, Rejected, Transient, allowed_overlays, containers_reason,
         functional_inventory, functional_reason, runtime_reason,
+        read_env,
     )
     from verify_candidate import CandidateVerificationError, verified_services
 
@@ -58,6 +60,15 @@ class SiteRuntimeIO:
             if manifest.get('source_commit') != commit:
                 raise Rejected('signed manifest commit differs from candidate commit')
             services = verified_services(manifest.get('verified_images'))
+            refs = manifest.get('image_references')
+            if refs is not None:
+                if (not isinstance(refs, dict) or set(refs) != set(services)
+                        or any(not isinstance(refs[s], str)
+                               or not re.fullmatch(f'rosy-site-{s}:[0-9a-f]{{40}}', refs[s]) for s in services)):
+                    raise Rejected('signed image reference proof is incomplete')
+                self._image_references[commit] = refs
+            if manifest.get('manifest_version') == 2:
+                self._incremental_commits.add(commit)
             overlays = shlex.split((env or {}).get('ROSY_SITE_PAIRING_COMPOSE', ''))
             for name, field in (('account', 'account_https'), ('omx', 'omx'), ('workcell', 'workcell')):
                 if f'/opt/rosy/candidate/deploy/site/compose.{name}.yaml' in overlays and not manifest.get(field):
@@ -113,7 +124,8 @@ class SiteRuntimeIO:
                 json.loads(line) for line in out.splitlines() if line.strip()]
         except json.JSONDecodeError:
             return "docker compose ps output is not JSON"
-        reason = containers_reason(rows, commit, self._accepted_images.get(commit, {}), self._run, services)
+        reason = containers_reason(rows, commit, self._accepted_images.get(commit, {}), self._run, services,
+                                   self._image_references.get(commit))
         if reason:
             return reason
         try:
@@ -126,6 +138,17 @@ class SiteRuntimeIO:
             return 'Compose configuration hashes cannot be verified'
 
     def _restart(self) -> None:
+        env = read_env(self.paths.site_env)
+        if env.get('ROSY_SITE_IMAGE_TAG') in self._incremental_commits:
+            active = self._run(['systemctl', 'is-active', '--quiet', STACK_UNIT], check=False)
+            if active.returncode != 0:
+                self._run(['systemctl', 'start', STACK_UNIT], timeout=300)
+                return
+            self._run(['python3', str(self.paths.link / 'deploy/site/site-firewall.py'),
+                       'check', '--verify-certs', '--env-file', str(self.paths.site_env),
+                       '--compose-file', str(self.paths.link / 'deploy/site/compose.yaml')])
+            self._compose(env, 'up', '-d', '--no-build', '--pull', 'never', timeout=300)
+            return
         self._run(["systemctl", "restart", STACK_UNIT], timeout=300)
 
     def _retire_postgres(self, env: dict, folder: Path, commit: str, incoming: tuple) -> None:
@@ -167,7 +190,8 @@ class SiteRuntimeIO:
                     manual.add(cid)
                     continue  # Manual containers are outside this cleanup authority.
                 if (labels['com.docker.compose.config-hash'] != expected_hash
-                        or config['Image'] != f'rosy-site-postgres:{commit}'
+                        or config['Image'] != self._image_references.get(commit, {}).get(
+                            'postgres', f'rosy-site-postgres:{commit}')
                         or row['Image'] not in self._accepted_images[commit]['postgres']
                         or type(row['State']['Running']) is not bool):
                     raise ValueError
