@@ -107,3 +107,90 @@ def test_capability_check_accepts_inactive_exposure_and_the_original_auto_mode()
 def test_capability_check_refuses_invalid_candidate_or_restore_values(metadata, controls):
     with pytest.raises(ValueError):
         load('camera_readiness').validate_controls(metadata, [controls])
+
+
+def control_world(monkeypatch, root):
+    runtime = load('camera_readiness')
+    original = dict(auto_exposure=3, exposure_time_absolute=80, gain=3)
+    spec = dict(device='camera', identity={'rdev': 7}, producer={'MainPID': '42', 'InvocationID': 'owner'},
+                original=original)
+    current, writes = dict(original), []
+    monkeypatch.setattr(runtime, 'identity', lambda d: spec['identity'])
+    monkeypatch.setattr(runtime, 'producer', lambda *a, **k: spec['producer'])
+    monkeypatch.setattr(runtime, 'get_controls', lambda d, names: {n: current[n] for n in names})
+    monkeypatch.setattr(runtime, 'command', lambda args: METADATA)
+    def write(device, name, value):
+        current[name] = value
+        writes.append((name, value))
+    monkeypatch.setattr(runtime, 'write_control', write)
+    runtime.save(root/'baseline.json', dict(profile_sha256='digest', cameras={'top': spec}))
+    runtime.save(root/'control-run.json', dict(run_id='run'))
+    return runtime, spec, current, writes
+
+
+@pytest.mark.parametrize('crash', range(3))
+def test_independent_restore_recovers_each_partial_candidate_write(monkeypatch, tmp_path, crash):
+    runtime, spec, current, writes = control_world(monkeypatch, tmp_path)
+    requested = dict(auto_exposure=1, exposure_time_absolute=800, gain=7)
+    runtime.control_intent(tmp_path, 'top', spec, 'digest', 'run', current, requested)
+    def write(name, value):
+        runtime.write_control('camera', name, value)
+        if len(writes) == crash+1:
+            raise OSError('interrupted candidate write')
+    with pytest.raises(OSError):
+        runtime.apply_candidate(requested, write)
+    runtime.restore(tmp_path)
+    assert current == spec['original']
+    assert json.loads((tmp_path/'restoration.json').read_text())['top']['restored']
+
+
+@pytest.mark.parametrize('crash', range(4))
+def test_restore_intent_survives_each_interrupted_restore_step(monkeypatch, tmp_path, crash):
+    runtime, spec, current, writes = control_world(monkeypatch, tmp_path)
+    current.update(auto_exposure=3, exposure_time_absolute=800, gain=7)
+    runtime.control_intent(tmp_path, 'top', spec, 'digest', 'run', current, spec['original'], phase='restoring')
+    def write(name, value):
+        runtime.write_control('camera', name, value)
+        if len(writes) == crash+1:
+            raise KeyboardInterrupt('restore process died')
+    with pytest.raises(KeyboardInterrupt):
+        runtime.restore_controls(spec['original'], write)
+    runtime.restore(tmp_path)
+    assert current == spec['original']
+
+
+@pytest.mark.parametrize('damage', ['unknown-control', 'old-run', 'other-owner', 'other-baseline', 'corrupt', 'missing'])
+def test_restore_refuses_unknown_controls_or_unbound_intent(monkeypatch, tmp_path, damage):
+    runtime, spec, current, writes = control_world(monkeypatch, tmp_path)
+    requested = dict(auto_exposure=1, exposure_time_absolute=800, gain=7)
+    record = runtime.control_intent(tmp_path, 'top', spec, 'digest', 'run', current, requested)
+    current.update(requested)
+    if damage == 'unknown-control':
+        current['gain'] = 6
+    elif damage == 'old-run':
+        record['run_id'] = 'earlier'
+    elif damage == 'other-owner':
+        record['producer'] = {'MainPID': '43', 'InvocationID': 'other'}
+    elif damage == 'other-baseline':
+        record['binding']['profile_sha256'] = 'other'
+    path = tmp_path/'control-intent-top.json'
+    if damage == 'missing':
+        path.unlink()
+    elif damage == 'corrupt':
+        path.write_text('{')
+    else:
+        runtime.save(path, record)
+    with pytest.raises(RuntimeError, match='restore incomplete'):
+        runtime.restore(tmp_path)
+    assert writes == []
+    assert not json.loads((tmp_path/'restoration.json').read_text())['top']['restored']
+
+
+def test_resumed_baseline_rechecks_hardware_and_keeps_original_evidence(monkeypatch, tmp_path):
+    runtime, spec, current, writes = control_world(monkeypatch, tmp_path)
+    before = (tmp_path/'baseline.json').read_bytes()
+    profile = dict(cameras={'top': dict(device='camera', candidates=[dict(auto_exposure=1, exposure_time_absolute=800)])})
+    monkeypatch.setattr(runtime, 'command', lambda args: METADATA.replace('max=7', 'max=2'))
+    with pytest.raises(ValueError):
+        runtime.prepare(profile, tmp_path, 'digest')
+    assert writes == [] and (tmp_path/'baseline.json').read_bytes() == before
