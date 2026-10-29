@@ -108,6 +108,13 @@ def build_request(context, observations, *, now_ns):
             raise ValueError('source capture time is stale, future or before the recovery request')
         times.append(stamps)
     first, second = body.observations
+    previous = {(owner.workcell_id, owner.instance_id): owner.joints for owner in first.owners}
+    for owner in second.owners:
+        before, after = previous[owner.workcell_id, owner.instance_id], owner.joints
+        if ((before is None) != (after is None)
+                or (before is not None and (before.sample_id == after.sample_id
+                    or before.sequence >= after.sequence or before.joint_names != after.joint_names))):
+            raise ValueError('distinct ordered joint source pairs with matching names required')
     if (first.evidence_id == second.evidence_id or first.sequence >= second.sequence
             or min(times[1]) - max(times[0]) < context.min_separation_ns):
         raise ValueError('distinct ordered separated source observations required')
