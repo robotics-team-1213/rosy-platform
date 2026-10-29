@@ -12960,3 +12960,10 @@ osy-d395-s1d\`.
 - 증거: 기존 두 Chromium 전체220 passed, 강화 부분집합32 passed, 정적 계약80 passed, 공식 영향2880 passed/384 skipped, NEW0. 최초 object locator 오류와 실제 pixel kind 누락을 구분하고 실패·통과 원본을 보존했다. A source/B16장 직접 검토를 수행했다.
 - gate 변화: 없음. 전체 UI 통합·native/실물·진짜 라벨·배포/착지/push/merge 수용과 구분한다.
 - CE: 해당 없음 — attribute·상태·데이터/승인 경계가 코드·회귀·이 기록에 남는다.
+
+## 2026-10-29 · 068aa03060 · Games 수신 신선도와 복구 UI 검증
+
+- 변경: GET/JSON 대기·늦은 응답·시각 근거 부재에서 current/last 상태를 구분하고 frozen 결과·로그8개/캡처18장 SHA를 `docs/validation/games-receipt-freshness-2026-10-29/`에 보존한다.
+- 증거: 전체 board Chromium61 passed, 강화부분16 passed, 공식 영향641 passed/61 skipped와 overhead785 passed, NEW0. A source/B18장 직접 검토를 수행했다. 초기50 통과 뒤 발견한 늦은 응답 역전도 RED4→수정했고 실패 원본을 유지했다.
+- gate 변화: 없음. 실제 정지 전달/readback·FIELD·전체 G2/G3·배포/착지/push/merge 수용과 분리한다.
+- CE: 해당 없음 — 시간/상태·권한 경계의 이유가 코드·회귀·이 기록에 남는다.
