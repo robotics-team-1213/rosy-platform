@@ -4147,3 +4147,10 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 검증 한계: 초기 파일명 오타/명령 인수 문제로 collection되지 않은 실행은 통과 근거에서 제외했다. 현재 43호기의 LAN 광고 미발견 원인·현장 Avahi 상태·SSH 신뢰는 아직 확인하지 않았다. 서명된 001 producer와 현재 main의 광고 경로는 기존 조사에서 동일했다.
 - gate 변화: 없음. 실제 로봇 접속·네트워크 query·재시작·설정 변경·게시를 수행하지 않았다. 정상 gateway의 추가 검증과 실물 수용은 별도다.
 - CE: 해당 없음 — 새 로컬 진단 계약과 malformed/bounded/secret 회귀가 구현 판단을 직접 보존한다. 미확정 현장 원인을 해결 교훈으로 기록하지 않는다.
+
+## 2026-10-30 · 351d048c15 · 끝 집기점 수정 전 손가락 여유 검사 분리
+
+- 변경: 600줄 한도의 95%를 넘은 cell_auto_pick에서 side_clear를 기존 foreground·물체 mask 소유자인 cell_objects로 그대로 옮겼다. 기존 auto.side_clear 호출은 import alias로 유지한다. orchestrator는 581줄에서 553줄로 줄며 새 의존성·명령 경로는 없다.
+- 증거: 분리 source 351d048c15의 공식 원격 auto_pick·objects·params·wrist 회귀는 78 passed/0 skipped, NEW0이다. 함수 signature·docstring·본문의 AST 일치와 두 파일 diff는 독립 계약 검토를 받았다. raw 보고는 Git 밖 omx-end-clearance-20261030/split/run-1.txt에 보존한다.
+- gate 변화: 없음. 이 분리는 끝 집기점의 view/clearance/bias 재승인 누락을 고치지 않는다. 별도 회귀 a567069cea는 실제 mask 전제를 통과한 뒤 선택·bias assertion 네 곳에서 실패했다. 분리가 main에 착지한 뒤 그 수정을 이어 검증한다. 실물 동작·배포·수용은 하지 않았다.
+- CE: 해당 없음 — 함수의 동등 이동과 alias 보존은 최종 diff·기존 회귀·독립 AST 비교로 설명된다. 아직 고치지 않은 끝 집기점 누락은 미해결 기록으로 유지한다.

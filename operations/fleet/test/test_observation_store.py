@@ -34,6 +34,16 @@ def test_observations_preserve_values_time_quality_and_bound_retention(tmp_path)
     assert rows[0]["observation"]["state"] is None
 
 
+def test_row_cap_keeps_the_newest_rows_across_multi_robot_snapshots(tmp_path):
+    store = ObservationStore(tmp_path / "fleet.sqlite3", max_rows=3)
+    for received in (10, 11, 12):
+        store.append_snapshot([sample(), {**sample(), "robot_id": "rosy_02"}],
+                              received_at=received, monotonic_now=10)
+    rows = store.read_observations()
+    assert [(r["observation_id"], r["robot_id"]) for r in rows] == [
+        (4, "rosy_02"), (5, "rosy_01"), (6, "rosy_02")]
+
+
 def test_secret_nonfinite_and_large_payloads_cannot_enter_training_source(tmp_path):
     store = ObservationStore(tmp_path / "fleet.sqlite3")
     for bad in ({"access_" + "token": "secret"}, {"value": float("nan")}, {"image": "x" * 70000}):

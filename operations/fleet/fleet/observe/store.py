@@ -74,9 +74,9 @@ class ObservationStore(CoreEventStore):
                 "INSERT INTO fleet_observations(robot_id, received_at, payload_json) VALUES (?, ?, ?)", values)
             connection.execute("DELETE FROM fleet_observations WHERE received_at < ?",
                                (received_at - self.retention_s,))
+            # AUTOINCREMENT ids never repeat, so MAX(id) bounds the cap without walking 100k payload rows.
             connection.execute("""DELETE FROM fleet_observations WHERE observation_id <=
-                COALESCE((SELECT observation_id FROM fleet_observations ORDER BY observation_id DESC
-                          LIMIT 1 OFFSET ?), 0)""", (self.max_rows,))
+                (SELECT COALESCE(MAX(observation_id), 0) FROM fleet_observations) - ?""", (self.max_rows,))
 
     def read_observations(self, *, after_id=0, limit=100, robot_id=None):
         if after_id < 0 or not 1 <= limit <= 200:

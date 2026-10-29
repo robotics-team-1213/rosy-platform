@@ -105,7 +105,7 @@
 ## 최근 기록
 
 - 2026-10-30 · uncommitted · fix(fleet): 작업 발행 루프의 연속 발행과 발행 시간 기록
+- 2026-10-30 · uncommitted · fix(fleet): 관측 기록 행 상한 정리를 MAX(id) 경계로
 - 2026-10-29 · 8728fc6eb7 · observer CLI 시험 입력의 비밀값 검사 호환
 - 2026-10-29 · afa10f26b2 · 독립 복구 관측 제출용 호스트 클라이언트
 - 2026-10-29 · uncommitted · fix(fleet): proposal admission 회귀 검증과 현 main 통합
-- 2026-10-29 · ccc8712ece · 이송 결과의 검수 패키지와 복구 root 분할 검사
