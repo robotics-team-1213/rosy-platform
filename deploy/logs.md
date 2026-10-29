@@ -3937,3 +3937,10 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 독립 검토의 멱등성·DB mount·안전 경계 결함을 원격 6 failed로 재현했다. 실제 backup→prune→restore는 변경 전 계정 감사 삭제로 `Account security state differs` 1 failed를 별도로 확인했다. 후속 GREEN·전체 착지는 공식 게이트에서 확인하며 실물 DB에는 실행하지 않았다.
 - gate 변화: 없음. 백업·복원과 작업 API 계약을 완화하지 않았다.
 - CE: 미해결 — 회귀 GREEN과 실제 착지 확인 전이다. 해결 판단은 새 통합 회귀와 이 보존 범위에 연결한다.
+
+## 2026-10-29 · a2f29868ea · test(site): 실제 Task 원장 재제출과 백업 복원 회귀를 검증한다
+
+- 변경: 앞선 6 failed 중 재제출 시험 1개는 잘못된 `TaskStore` import였으므로 멱등성 재현 근거로 세지 않는다. 실제 `FleetTaskStore`로 교정하고 기존 배포 시험에서 DB rw·rootfs ro·UID·cap drop·네트워크 차단을 함께 검증한다. 생산 코드 추가 변경은 없다.
+- 증거: 교정한 수정 전 source `88ea64a6a4`는 같은 키 재제출이 새 Task를 만들어 `created=True`로 1 failed다. 별도 수정 전 source `eb809b4dab`는 backup 후 계정 감사 정리로 복원이 거절돼 1 failed다. 최종 source `a2f29868ea`의 DB·backup 배포·safety·harness·Hub·Console·stuck·TF 관련 11파일은 공식 원격 331 passed / skip 0 / NEW 0이다. 첫 구현 회귀의 330 passed / 1 ImportError는 완전한 GREEN이 아니다.
+- gate 변화: 없음. 전체 FULL·main 착지와 실물 DB·서비스 수용은 별도다.
+- CE: 해당 없음 — 실제 재제출·복원 회귀와 보존 범위가 판단 근거를 설명한다.
