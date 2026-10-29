@@ -193,7 +193,7 @@ def test_dry_run_only_observes_chooses_and_plans(tmp_path):
     row = result["attempts"][0]
     assert row["chosen"]["closing_axis_offset_deg"] == 90 and "needs a pivot" in row["pivot_needed"]
     assert row["plan"]["pick"]["z"] == pytest.approx(0.060, abs=1e-4) and json.dumps(result, default=str)
-    lib = json.loads(Path(tmp_path / "auto-pinky-90.json").read_text())  # the library opens just past 30 mm, not wide
+    lib = json.loads(next(tmp_path.glob("auto-pinky-90-*.json")).read_text())  # the library opens just past 30 mm, not wide
     grip = [f[5] for f in lib["chunks"]["above_pick"]]
     assert grip[0] == pytest.approx(auto.jaw_open_for(30), abs=0.01)
 
@@ -607,3 +607,19 @@ def test_the_gate_refuses_a_replan_the_review_does_not_cover(tmp_path):
     gate.config["operating_envelope_path"] = str(tmp_path / "missing-envelope.json")
     refused = gate.act(f"load {lib}")
     assert refused["ok"] is False and refused["error"].startswith("held: ") and not cell.commands[-1].startswith("load")
+
+
+def test_two_candidates_keep_their_own_libraries(tmp_path):
+    """2026-10-29: two square boxes on the floor were planned into one file; the first candidate's library held the
+    second one's pick and the arm went to the wrong box."""
+    path = biased_map(tmp_path)
+    one = {"x": 0.080, "y": 0.120, "long": 0.0, "length": 30, "width": 30}  # two square 1-cells, offset None for both
+    other = dict(one, x=0.030, y=0.090)
+    _, mask, objects, error = auto.observe(Cell([one, other]), CONFIG, cal.load(path), "pinky", ROI, CATALOG)
+    assert error is None and len(objects) == 2
+    usable, refused = auto.choose(None, CONFIG, cal.load(path), "pinky", "pinky", (0.06, 0.09), ROI, objects, mask,
+                                  CATALOG, {"regions": []}, cell_choices.Choices(tmp_path / "choices.json"), tmp_path)
+    assert len(usable) == 2 and usable[0]["library"] != usable[1]["library"], refused
+    for u in usable:
+        lib = json.loads(Path(u["library"]).read_text())
+        assert lib["source"]["pick"]["x"] == u["pick"]["x"] and lib["source"]["pick"]["y"] == u["pick"]["y"]

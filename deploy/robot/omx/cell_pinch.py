@@ -17,7 +17,7 @@ from pathlib import Path
 import numpy as np
 
 import cell_params as prm
-from cell_wrist import finger_pads
+from cell_fingers import finger_pads
 
 
 def measure(img, hsv, gap_mm: float, width_mm: float | None = None, params=None) -> dict:
