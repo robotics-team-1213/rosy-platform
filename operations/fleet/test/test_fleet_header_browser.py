@@ -140,9 +140,13 @@ def test_header_stays_one_row_with_account_overlay_and_connection_exceptions(tmp
         check_bar()
         expect(page.locator('#topbar-extra')).to_be_hidden()
         shot('closed')
+        # Stop healthy background polls from undoing the simulated outage; drain earlier replies first.
+        page.route('**/api/fleet/**', lambda route: route.fulfill(status=503, json={'detail': 'unavailable'}))
+        page.wait_for_load_state('networkidle')
         page.evaluate('''async () => {
             const header = await import('/console/assets/fleet-header.js');
-            header.noteLink({status: 503});
+            const response = await fetch('/api/fleet/state');
+            header.noteLink({status: response.status});
         }''')
         word = page.locator('#link-state')
         expect(word).to_have_text('연결 끊김')
@@ -151,7 +155,7 @@ def test_header_stays_one_row_with_account_overlay_and_connection_exceptions(tmp
         shot('authenticated-link-down')
         page.evaluate('''async () => {
             const header = await import('/console/assets/fleet-header.js');
-            header.showSignedOut(); header.noteLink({status: 503});
+            header.showSignedOut();
         }''')
         expect(page.locator('#fleet-login')).to_be_visible()
         expect(page.locator('#development-badge')).to_be_hidden()

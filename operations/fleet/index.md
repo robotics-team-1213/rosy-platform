@@ -104,8 +104,8 @@
 
 ## 최근 기록
 
+- 2026-10-29 · uncommitted · 헤더 outage 시험의 정상 응답 경합 제거
 - 2026-10-29 · uncommitted · 좁은 화면의 연결 상태 글·점 폭 보존
 - 2026-10-29 · 8728fc6eb7 · observer CLI 시험 입력의 비밀값 검사 호환
 - 2026-10-29 · afa10f26b2 · 독립 복구 관측 제출용 호스트 클라이언트
 - 2026-10-29 · uncommitted · fix(fleet): proposal admission 회귀 검증과 현 main 통합
-- 2026-10-29 · ccc8712ece · 이송 결과의 검수 패키지와 복구 root 분할 검사

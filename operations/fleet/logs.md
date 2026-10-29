@@ -5138,3 +5138,11 @@
 - 증거: 원격 RED의 PNG와 실제 CDP font/즉시·안정화 DOM metrics를 보존·육안 확인했다. 독립 contract review는 권한·안전 행동 변경이 없음을 확인했다. 수동 Impeccable detector는0 findings였다. 전체 header browser/static GREEN은 아직 대기 중이며 부분 재현을 완료로 쓰지 않는다.
 - gate 변화: 없음. skip·quarantine 추가·폰트 축소·문구 숨김·검사 완화는 없다. status만의 text-spacing 검사를 전체 WCAG 수용으로 주장하지 않는다.
 - CE: 미해결 — 기존 child-clipping 교훈 보완 필요성은 GREEN 이후 실제 증거로 판정한다.
+
+## 2026-10-29 · uncommitted · 헤더 outage 시험의 정상 응답 경합 제거
+
+- 원인: source3657의 Model browser/static84 passed/NEW0와 달리 이미 실행 중이던 AI 검사는83 passed/1 NEW였다. 실패는 geometry가 아니라 signed-out 뒤 연결 끊김 기대에 실제 실시간이 온 것이었다. 시험은 noteLink503만 직접 호출하고 정상 API 주기 응답을 허용했으며, 실제 client는 성공 응답마다 연결 복구를 알린다.
+- 변경: outage 단계에서 Fleet API를 실제503으로 응답시키고 앞선 network activity를 기다린 뒤 실패 fetch의 status를 기존 header handler에 전달한다. signed-out 단계는 오류를 재주입하지 않고 기존 outage 상태가 유지되는지 확인한다. production JS·타이머·모든 기존 상태/기하 assertion과 timeout을 유지한다.
+- 증거: 읽기전용 producer/consumer 추적과 scoped 독립 검토를 받았다. 새로운 원격 matrix 검증은 아직 대기이며 실제 API200 뒤 UI가 실시간으로 복구하는 동작을 막지 않는다.
+- gate 변화: 없음. 성공 응답을 오류로 표시하는 제품 변경이나 skip/quarantine은 없다.
+- CE: 미해결 — 재현과 source 교정은 확인했으나 수정된 matrix의 실행 결과가 필요하다.
