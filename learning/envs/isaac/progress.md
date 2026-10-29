@@ -1,12 +1,12 @@
 ---
 module: isaac_sim
 owner: sim
-last_verified: { commit: "764b591ed6", date: 2026-10-11 }
+last_verified: { commit: "5c89f3d1f3", date: 2026-10-29 }
 gates:
   SOURCE:
     state: GO
     cmd: "python tools/remote/remote_pytest.py --log-dir X:/DevTemp/isaac-source -- learning/envs/isaac/test"
-    evidence: "CORE final port and existing Drive reused by D-638 diagnostic. 764b591ed6 tools/sim/isaac ownership fix and Isaac/architecture/release/harness remote regression exit 0, 0 NEW; independent source review approved placement, native recording and frozen policy restore. Runtime revisions and source hash readback are separate in docs/validation/isaac-map-rl-2026-10-11/result.md."
+    evidence: "5c89f3d1f3 remote terminal/lift/retention/near-arm/reference regression:32 passed,0NEW. edbf49d6e0 broad checks:807 passed,1 skip,1 public-checksum entropy finding; metadata972f2ae2d1 fixed its integrity label and all80release-boundary checks then passed0NEW. Latest accepted runtime record c1786ef9d6/254a87c630f8581dbdc53a5218438a36 has SDKexit0 and confirmed owned cleanup but physicalFAILED on third-bar envelope. New bias physics is pending GPU admission. See docs/validation/omx-cube-stacking-2026-10-29/result.md. Source checks do not establish physical, learned-policy or hardware acceptance. Earlier CORE/Drive evidence remains in docs/validation/isaac-map-rl-2026-10-11/result.md."
   LOCAL:
     state: GO
     cmd: "python tools/remote/remote_pytest.py --log-dir X:/DevTemp/isaac-core -- learning/envs/isaac/test middleware/core/gateway/test middleware/core/services/test test/test_structure_installed_packages.py"

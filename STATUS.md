@@ -55,7 +55,7 @@
 | [dock](operations/site_devices/dock/progress.md) | 도킹 | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | HOLD | PARKED |
 | [signal](operations/site_devices/signal/progress.md) | 사이트 인프라 | uncommitted (2026-09-22) | GO | GO | PARKED | HOLD | HOLD | PARKED |
 | [docs](docs/progress.md) | 거버넌스 | bed604ef (2026-09-30) | GO | GO | N/A | N/A | N/A | N/A |
-| [isaac_sim](learning/envs/isaac/progress.md) | sim | 764b591ed6 (2026-10-11) | GO | GO | HOLD | N/A | N/A | N/A |
+| [isaac_sim](learning/envs/isaac/progress.md) | sim | 5c89f3d1f3 (2026-10-29) | GO | GO | HOLD | N/A | N/A | N/A |
 
 ## HOLD blockers
 
