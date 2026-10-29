@@ -125,6 +125,8 @@ def test_off_and_relay_modes(mode, ap_active, expected):
 def _device(tmp_path: Path) -> Path:
     root = tmp_path / "device"
     (root / "etc/rosy").mkdir(parents=True)
+    (root / "etc/rosy/device-identity.json").write_text(
+        json.dumps({"device_name": "rosy-pinky-e4us"}), encoding="utf-8")
     (root / "etc/rosy/ap-credentials.json").write_text(
         json.dumps({"ssid": "rosy-pinky-e4us", PW: AP_VALUE}), encoding="utf-8")
     (root / "etc/rosy/network-policy.json").write_text(json.dumps({**POLICY, "country": "KR"}), encoding="utf-8")
@@ -168,6 +170,8 @@ def test_without_ap_credentials_the_ap_is_not_opened(tmp_path):
     module = _module()
     root = _device(tmp_path)
     (root / "etc/rosy/ap-credentials.json").unlink()
+    (root / "etc/rosy/network-policy.json").write_text(
+        json.dumps({"mode": "fallback", "fallback_security": "wpa2"}), encoding="utf-8")
     calls: list[list[str]] = []
 
     module.perform(root, "open", lambda command: calls.append(command) or "")
@@ -344,19 +348,14 @@ def test_fallback_security_controls_profile_and_public_status(tmp_path, monkeypa
         assert not handoff.exists()
 
 
-def test_open_fallback_does_not_access_the_unused_password_value(tmp_path, monkeypatch):
+def test_open_fallback_does_not_read_its_unused_credential_store(tmp_path, monkeypatch):
     module = _module()
     root = _device(tmp_path)
     original = module._read_json
 
-    class Credentials(dict):
-        def get(self, key, *args):
-            assert key != PW, "an open AP must not use its stored key"
-            return super().get(key, *args)
-
     def read(path):
-        value = original(path)
-        return Credentials(value) if path.name == "ap-credentials.json" else value
+        assert path.name != "ap-credentials.json", "an open AP must not read its unused key store"
+        return original(path)
 
     monkeypatch.setattr(module, "_read_json", read)
     assert module.perform(root, "open", _activated)
@@ -365,9 +364,10 @@ def test_open_fallback_does_not_access_the_unused_password_value(tmp_path, monke
 def test_open_fallback_only_needs_a_known_ssid(tmp_path):
     module = _module()
     root = _device(tmp_path)
-    (root / "etc/rosy/ap-credentials.json").write_text(json.dumps({"ssid": "fixture-ap"}), encoding="utf-8")
+    (root / "etc/rosy/ap-credentials.json").unlink()
     assert module.perform(root, "open", _activated)
-    assert json.loads((root / module.STATUS).read_text())["security"] == "open"
+    status = json.loads((root / module.STATUS).read_text())
+    assert status["security"] == "open" and status["ssid"] == "rosy-pinky-e4us"
 
 
 def test_relay_keeps_wpa2_even_when_fallback_is_open(tmp_path, monkeypatch):
