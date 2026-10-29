@@ -13,21 +13,24 @@ import json
 from pathlib import Path
 
 import cell_pipeline as cp
-from cell_envelope import assess, same_session
+from cell_envelope import assess, digest, same_session
 
 
 class Gate:
-    def __init__(self, cell, config: dict, calibration: dict):
+    def __init__(self, cell, config: dict, calibration: dict, *, sequence=cp.SEQUENCE):
         self.cell, self.config, self.calibration, self.assessment = cell, config, calibration, None
+        self.sequence = sequence
 
     def _assess(self, library) -> dict:
-        return assess(self.config, self.calibration, json.loads(Path(library).read_text()), self.cell.act("state"))
+        return assess(self.config, self.calibration, json.loads(Path(library).read_text()), self.cell.act("state"),
+                      sequence=self.sequence)
 
     def open(self, library, before_motion) -> dict | None:
         """None when the carry may start (the intent is written first); else the held envelope."""
         self.assessment = self._assess(library)
         if not self.assessment["allowed"]:
             return self.assessment
+        self.scope_sha = digest([self.config, self.calibration, self.sequence])
         try:
             before_motion(self.assessment)
         except OSError:
@@ -38,12 +41,17 @@ class Gate:
         if command == "state":
             return self.cell.act(command)
         if command.startswith("load "):
-            fresh = self._assess(command[5:])
-            if not fresh["allowed"] or fresh["mode"] != self.assessment["mode"]:
-                return {"ok": False, "error": f"held: {fresh['reason']}", "envelope": fresh}
-            fresh["session_id"] = self.assessment["session_id"]
-            self.assessment = fresh
-        elif not same_session(self.cell.act("state"), self.assessment):
+            # The unchanged reviewed carry already owns its durable pending intent.
+            identical = (self.assessment["mode"] == "automatic"
+                         and digest([self.config, self.calibration, self.sequence]) == self.scope_sha
+                         and digest(json.loads(Path(command[5:]).read_text())) == self.assessment["library_sha256"])
+            if not identical:
+                fresh = self._assess(command[5:])
+                if not fresh["allowed"] or fresh["mode"] != self.assessment["mode"]:
+                    return {"ok": False, "error": f"held: {fresh['reason']}", "envelope": fresh}
+                fresh["session_id"] = self.assessment["session_id"]
+                self.assessment = fresh
+        if not same_session(self.cell.act("state"), self.assessment):
             return {"ok": False, "error": "held: session_changed"}
         a = self.assessment
         return self.cell.act(f"checked {a['session_id']} {a['library_sha256']} {command}")
@@ -93,7 +101,7 @@ def transfer_folded(cell, library, closed: float | None = None, wrist=None, afte
             return {"result": "fault" if status.get("fault") else "refused", "at": command, "steps": steps}
         if command == "goto above_pick" and wrist is not None:  # cell_hooks: reach and wrist corrections before the descent
             aligned = wrist()
-            steps.append({"command": "wrist", **{k: aligned[k] for k in ("verdict", "dx_mm", "dy_mm", "total_mm")}})
+            steps.append({"command": "wrist", **{k: aligned.get(k) for k in ("verdict", "dx_mm", "dy_mm", "total_mm")}})
             if aligned["verdict"] == "refuse":
                 run("park")
                 return {"result": "misaligned", "at": "wrist", "wrist": aligned, "steps": steps}

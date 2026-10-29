@@ -161,14 +161,14 @@ def observe(cell, config: dict, calibration: dict, site: str, roi, catalog: list
         return None, None, [], f"no map for {site}"
     img = cell.frame("top")
     cd.see(keep(f"auto-{site}-top", img))
-    poly = config["sites"][site].get("surface_px")
+    poly, lab = config["sites"][site].get("surface_px"), config["sites"][site].get("surface_lab")
     objects = cell_objects.detect(img, roi, record, config["cameras"]["top"], catalog, surface_z(config, site),
-                                  config.get("params"), poly)
+                                  config.get("params"), poly, lab, (config.get("objects") or {}).get("hsv"))
     for o in objects:
         o["raw_m"] = [o["centre_mm"][0] / 1000, o["centre_mm"][1] / 1000]
     # the finger-side mask is not clipped to the site polygon: a container on the next surface (the board beside the
     # floor) still meets an open finger (2026-10-29: the jaws came down on a 2-cell on the board, contact at z 0.040)
-    return img, object_sized(cell_objects.foreground(img, roi, params=config.get("params")), config.get("params")), objects, None
+    return img, object_sized(cell_objects.foreground(img, roi, params=config.get("params"), surface_lab=lab), config.get("params")), objects, None
 
 
 def object_sized(mask, params=None):
@@ -392,10 +392,18 @@ def run_auto(cell, config, calibration, calibration_path, catalog, roi, source, 
     try:
         for attempt in range(attempts):
             t0, tried = time.time(), {"locate": {"found": False}}
-            _, mask, objects, error = observe(cell, config, calibration, source, roi, catalog)
+            img, mask, objects, error = observe(cell, config, calibration, source, roi, catalog)
             usable, refused = choose(cell, config, calibration, source, dest_site, place_xy, roi, objects, mask, catalog,
                                      bias_data, choices, work, failed_yaws) if not error else ([], [])
             cd.target(objects, usable, refused)
+            if usable and config.get("decision_model"):  # the model orders what the measurement kept, or vetoes all
+                import cell_pick_judge
+                import judge_seat
+
+                judged = cell_pick_judge.ask(judge_seat.ollama(**config["decision_model"]), img, usable)
+                cd.emit("target_judge", {"candidates": len(usable)}, list(range(len(usable))) + [-1], judged["choice"],
+                        judged["by"], judged["reason"])
+                usable = [usable[i] for i in judged["order"]]
             row = {"observed": len(objects), "refused": refused}
             out["attempts"].append(row)
             if error or not usable:
@@ -438,11 +446,12 @@ def run_auto(cell, config, calibration, calibration_path, catalog, roi, source, 
             if dry_run:
                 return {**out, "result": "planned"}
             folded = prm.get(config.get("params"), "auto.fold_before_transport")
+            sequence = FOLDED if folded else cp.SEQUENCE
             episode = open_episode(cell, config, source, dest, o["object"])
             # a hover re-plan keeps the pick's own plan values (jaw opening, approach): the default 62 opening came back
             # through the reach re-plan and the fingers met the board again (2026-10-29)
             same = dict(config, plan=dict(config["plan"], **target.get("plan", {})))
-            gate = Gate(guarded, config, calibration)
+            gate = Gate(guarded, config, calibration, sequence=sequence)
             held = gate.open(target["library"], lambda a: cell_attempts.begin(config, a))
             if held is not None:  # D-911: not a reviewed task (or no supervised trial): nothing moved
                 tried["envelope"] = held
@@ -452,7 +461,7 @@ def run_auto(cell, config, calibration, calibration_path, catalog, roi, source, 
                 return {**out, "result": f"held: {held['reason']}"}
             wrist, capture, pinch, feel = cell_hooks.pick_hooks(same, gate, target, cp.write_library, source, dest_site, cd.emit, calibration)
             moved = transfer_folded(gate, target["library"], wrist=wrist, after_place=capture,
-                                    pinch=pinch, feel=feel, sequence=FOLDED if folded else cp.SEQUENCE)
+                                    pinch=pinch, feel=feel, sequence=sequence)
             tried["envelope"] = gate.assessment
             tried["wrist"] = (moved.get("wrist") or next((s for s in moved["steps"] if s.get("command") == "wrist"), None)
                               or ("disabled or uncalibrated" if wrist is None else None))
