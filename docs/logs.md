@@ -12926,4 +12926,5 @@ osy-d395-s1d\`.
 - 변경: 관측 화면 유닛이 선택적 `omx-camera-view.env`의 `ROSY_VIEW_ARGS`를 받아 소스 키를 설정한다. ExecStart drop-in 없이 front 역할과 wrist producer를 연결하는 절차를 배포 안내에 추가했다.
 - 검증: 원격 user systemd 실행으로 기본값·별도 소스 키 인자 누락을 먼저 재현(2 failed, 3 passed)한 뒤 수정본 `071d9941bf`에서 관측·카메라·arm-status·업데이터·harness 247 passed, 4 skipped. 브라우저 검사는 이 실행의 수용 근거가 아니다.
 - 운영: 호스트 업데이터 설정을 백업하고 기존 Arm S 유닛을 units/unit_files에 추가했다. 두 카메라는 fresh. 관측기 설정의 예전 장치 ID와 현재 연결된 장치가 다름을 확인했다. 녹화/chunk owner가 실행 중이어서 카메라 drop-in 이관·관측기 장치 선택 변경·다음 업데이트 전환 검증은 보류했다.
+- gate 변화: 없음. 호스트 카메라 이관과 업데이트 전환 수용은 셀이 쉰 뒤 별도 확인한다.
 - CE: 기존 교훈 갱신 — [카메라 readiness와 업데이트 복구](solutions/runtime-errors/omx-camera-readiness-preview-active-before-owning-camera-2026-10-23.md). 호스트 journal의 sole-owner 거부·core_common import 실패·rolled_back/known_bad/switched 및 보존된 baseline 디렉터리를 대조했다. 실물 이동 수용은 수행하지 않았다.
