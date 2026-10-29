@@ -4024,3 +4024,11 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 기준 commit 8f4b634e51의 공식 FULL에서 secret guard NEW1, 단독 재현 실패, main commit 23633e759f의 동일 단독 시험은 1 passed였다. 해당 값 commit 42508b116e의 실제 Git 객체·조상 관계와 원본 행 해시를 독립 검토했다. 수정 뒤 원격 집중 guard 결과는 외부 ui-validation-provenance-20261029 로그에 남긴다.
 - gate 변화: 없음. 새 canonical FULL과 main ancestry가 남으며 공개 게시·장치 수용을 뜻하지 않는다.
 - CE: 해당 없음 — 기존 git-ids-in-validation-records 교훈의 동결 기록 절차를 적용했다. 새 정책이나 예외 범위 확대는 없다.
+
+## 2026-10-29 · 05f19a73ea · 팔 credential 및 signed candidate 집중 회귀
+
+- 변경: 관리자 전체 매핑 후보의 원격 집중 회귀 결과를 기록했다. 실행 코드·시험은 05f19a73ea와 같다.
+- 증거: workcell/bootstrap·증분·빌더·서명·verifier·autoupdater 집중 묶음 200 passed/3 skipped, known_failures NEW0/known0/flaky0이다. 세 skip은 시험 PC의 Docker Compose CLI 부재 때문이며 앞선 현장 Compose5.6.1 실제 렌더링 세 경우 통과 근거와 구분한다. baseline b7cf245d37의 pytest도 10 passed/3 skipped였고 기능 RED 근거는 현장 실제 Compose에서 명시 A/B/S가 A/B만 전달했던 exit1이다. 로그는 외부 rosy-site-credentials-red 및 rosy-site-credentials-green/run-1.txt다.
+- 증거 범위: 현재 현장 A/B/S 전체 Compose 동등성과 manifest credential 지문 일치는 별도로 확인했다. old posted fa3aeeed4d92의 CI attempt2가 success이고 signer dry-run은 would-sign으로 바뀌었지만, 그 후보는 새 매핑 인터페이스를 포함한 후보가 아니다. 제안 site.env를 그 옛 candidate에 먼저 적용하지 않는다.
+- gate 변화: 없음. 새 서명 candidate와 설정 동시 전환·실제 서비스 수용은 아직 미실행이다. 토큰 값·개인키를 기록하거나 unsigned overlay 허용 목록을 확대하지 않았다.
+- CE: 미해결 — 소스·회귀 검증은 통과했으며 남은 게시·candidate·운영 전환은 별도 근거가 필요하다.
