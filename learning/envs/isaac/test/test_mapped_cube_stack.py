@@ -180,3 +180,16 @@ def test_only_cube_contact_report_has_a_two_mib_artifact_budget(tmp_path):
         else:
             with pytest.raises(ValueError, match='artifact size exceeds limit'):
                 finish()
+
+
+def test_cube_feedback_accumulates_loaded_arm_tracking_error():
+    sample = trial()['layers'][0]['lift_samples'][0]
+    sample['tcps'][0] = [.1595, .0146, .0765]
+    sample['boxes'][0]['position'] = [.1595, .0146, .0745]
+    previous = [.16, .015, .077]
+    command = f.cube_release_target(0, sample, .04, commanded_tcp=previous)
+    assert command == pytest.approx([.1605, .0154, .0775])
+    bias = [sample['tcps'][0][k]-previous[k] for k in range(3)]
+    sample['tcps'][0] = [command[k]+bias[k] for k in range(3)]
+    sample['boxes'][0]['position'] = [sample['tcps'][0][0], sample['tcps'][0][1], sample['tcps'][0][2]-.002]
+    assert f.cube_release_ready(0, sample, .04)
