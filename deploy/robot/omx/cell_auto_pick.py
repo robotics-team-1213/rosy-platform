@@ -242,8 +242,10 @@ def plan_pick(config: dict, site: str, dest_site: str, place_xy, o: dict, entry:
                      "z": round(surface_z(config, dest_site) + height + s.get("place_dz", 0.0), 4), "yaw_deg": s["yaw_deg"]}
             try:
                 jaws = jaw_open_for(entry["width_mm"], config.get("params"))
+                # one file per object: two boxes on the floor planned into one name, and the arm went to the other one
+                # (2026-10-29, the second candidate overwrote the first's library)
                 lib = cp.write_library(dict(config, plan=dict(config["plan"], approach_m=approach, grip_open=jaws)), pick,
-                                       place, work / f"auto-{site}-{offset}.json")
+                                       place, work / f"auto-{site}-{offset}-{round(1000 * o['raw_m'][0])}_{round(1000 * o['raw_m'][1])}.json")
                 return lib, pick, place, approach, yaw, {"approach_m": approach, "grip_open": jaws}
             except SystemExit as exc:
                 error = str(exc)[:160]
