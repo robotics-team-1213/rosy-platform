@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """How much room the open fingers really have beside an object, in mm, and the jaw margin that fits (2026-10-29).
 
-The old check (cell_auto_pick.side_clear) refused on any foreground at 0.5, 1 and 2 finger widths past the box edge
+The old check (side_clear, removed 2026-10-30) refused on any foreground at 0.5, 1 and 2 finger widths past the box edge
 and at +-30 % of the box's length. With the jaws opened 8 mm past each side the fingers stand 8-16 mm out, so the
 4 mm sample was free space no finger enters, and the length samples reached far past a ~20 mm finger pad: boxes with
 room were refused. Here the free distance on each side is measured along the closing axis across the pad's own width,

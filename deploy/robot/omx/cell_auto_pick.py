@@ -196,6 +196,7 @@ def finger_room(mask, roi, pixel_fn, o: dict, closing_deg: float | None = None, 
 
     return fr.jaw_margin(fr.own_removed(mask, roi, pixel_fn, o), roi, pixel_fn, o, closing_deg, params)
 
+
 def grasp_yaw(config: dict, site: str, o: dict, entry: dict, offset) -> float:
     """Tool yaw (deg) for a closing-axis candidate. The jaws close along tool y = yaw + offset, and must close
     across the object (long axis + jaw_axis_deg_from_long); yaw and yaw + 180 are the same grasp, the one

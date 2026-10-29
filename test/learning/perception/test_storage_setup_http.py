@@ -129,18 +129,21 @@ def test_setup_filesystem_failure_does_not_expose_host_paths(setup_server, accou
         assert status == 400 and 'private-host-path-must-not-leak' not in json.dumps(result)
 
 
-@pytest.mark.parametrize('width,theme', [(320, 'light'), (1440, 'dark')])
-def test_setup_browser_completes_first_use_without_json(setup_server, accounts, width, theme):
+@pytest.mark.parametrize('width,theme,backend_lag_s', [(320, 'light', 0), (1440, 'dark', 0), (320, 'light', 60)])
+def test_setup_browser_completes_first_use_without_json(setup_server, accounts, width, theme, backend_lag_s):
     from browser_harness import browser_tests_enabled, open_page, save_temp_screenshot
     if not browser_tests_enabled(): pytest.skip('requires explicit Chromium browser run')
     playwright = pytest.importorskip('playwright.sync_api')
     running, body, remote, folder, now = setup_server
-    now[0] = int(time.time())
+    epoch_ms = int(time.time() * 1000)
+    now[0] = epoch_ms // 1000 - backend_lag_s
     with running() as url, playwright.sync_playwright() as runtime:
         browser, page, errors = open_page(runtime, width, 900, url=url)
         try:
             session, _ = session_for(url, accounts)
             page.context.add_cookies([dict(name='rosy_learning_session', value=session, url=url)])
+            # Quota measurements must share the backend fixture clock across minute boundaries and reloads.
+            page.add_init_script(f'Date.now = () => {now[0] * 1000};')
             page.goto(url + '/learning', wait_until='networkidle')
             if theme == 'light': page.locator('[data-theme-cycle]').click()
             playwright.expect(page.locator('html')).to_have_attribute('data-theme', theme)
