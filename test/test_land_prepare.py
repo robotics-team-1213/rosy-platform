@@ -203,3 +203,51 @@ def test_failed_affected_reprepare_cannot_create_a_publishable_landing(full_anch
     assert land.land_record.read(main, git(wt, "rev-parse", "HEAD")) is None
     if failure == "head_move":
         assert land.land_full.restore(wt, "feat/x") is None
+
+
+@pytest.mark.parametrize("batch_size", [2, 4])
+@pytest.mark.parametrize("busy_count", [0, 2])
+def test_batch_leader_counts_own_carried_members_before_reserving_capacity(tmp_path, batch_size, busy_count):
+    queue = land.land_queue
+    for n in range(busy_count):
+        queue.take(tmp_path, f"feat/busy-{n}", status="preparing")
+    members = [f"feat/member-{n}" for n in range(batch_size - 1)]
+    for branch in members:
+        queue.take(tmp_path, branch, status="pending")
+    leader = queue.take(tmp_path, "feat/leader", status="pending")
+    queue.set_status(leader, "pending", batch=members)
+
+    land.land_prepare.slot(tmp_path, leader,
+                           sleep=lambda _: pytest.fail("own carried members reserved preparation slots"))
+
+    assert json.loads(leader.read_text())["status"] == "preparing"
+    assert json.loads(leader.read_text())["batch"] == members
+
+
+@pytest.mark.parametrize("batch_size", [2, 4])
+@pytest.mark.parametrize("older_status", ["pending", "preparing"])
+def test_batch_leader_preserves_other_preparing_and_older_pending_claims(tmp_path, batch_size, older_status):
+    queue = land.land_queue
+    for n in range(2):
+        queue.take(tmp_path, f"feat/busy-{n}", status="preparing")
+    older = queue.take(tmp_path, "feat/older", status=older_status)
+    members = [f"feat/member-{n}" for n in range(batch_size - 1)]
+    for branch in members:
+        queue.take(tmp_path, branch, status="pending")
+    leader = queue.take(tmp_path, "feat/leader", status="pending")
+    queue.set_status(leader, "pending", batch=members)
+    later = queue.take(tmp_path, "feat/later", status="pending")
+    naps = []
+
+    def release_older(seconds):
+        naps.append(seconds)
+        assert len(naps) == 1, "own carried members still consume capacity after a peer releases it"
+        assert json.loads(leader.read_text())["status"] == "pending"
+        older.unlink()
+
+    land.land_prepare.slot(tmp_path, leader, sleep=release_older)
+
+    assert len(naps) == 1
+    assert json.loads(leader.read_text())["status"] == "preparing"
+    assert json.loads(later.read_text())["status"] == "pending"
+
