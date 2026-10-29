@@ -134,3 +134,18 @@ def test_cube_worker_success_requires_physical_task_success(passed):
     assert results[0]['stage'] == 'mapped_cube_stack'
     assert results[0]['status'] == ('SUCCEEDED' if passed else 'FAILED')
     assert results[0]['successful_trials'] == int(passed)
+
+
+def test_cube_release_corrects_measured_cargo_offset_and_neighbor_clearance():
+    sample = trial()['layers'][1]['lift_samples'][0]
+    item = f.plan(True)[1]
+    tcp = sample['tcps'][item['arm']]
+    body = sample['boxes'][1]
+    body['position'] = [.1595, .0445, .0752]
+    sample['boxes'][0]['position'][1] = .015
+    command = f.cube_release_target(1, sample, .04)
+    predicted = [body['position'][k]+command[k]-tcp[k] for k in range(3)]
+    assert predicted == pytest.approx([.16, .0452, .075])
+    body['forces'][2*item['arm']] = [0., 0., 0.]
+    with pytest.raises(ValueError, match='bilateral'):
+        f.cube_release_target(1, sample, .04)
