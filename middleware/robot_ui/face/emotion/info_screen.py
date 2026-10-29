@@ -103,6 +103,7 @@ def _draw_caution(draw: ImageDraw.ImageDraw, xy, text: str, font) -> None:
 def render(payload: dict, size: tuple[int, int] = DEFAULT_SIZE) -> Image.Image:
     """웨이크 정보 카드. 값이 없으면 '--'로 두고 화면은 반드시 그린다."""
     width, height = size
+    compact = height < DEFAULT_SIZE[1]
     image = Image.new("RGB", size, _BG)
     draw = ImageDraw.Draw(image)
 
@@ -164,7 +165,7 @@ def render(payload: dict, size: tuple[int, int] = DEFAULT_SIZE) -> Image.Image:
         rows[0] = ("MODE", "CALIBRATING")
 
     for index, (label, value) in enumerate(rows):
-        y = 142 + index * 24
+        y = (128 if compact else 142) + index * (20 if compact else 24)
         draw.text((16, y), label, font=_font(14), fill=_MUTED)
         if value == "E-STOP":
             _draw_alarm(draw, (92, y), value, _font(16))
@@ -177,7 +178,7 @@ def render(payload: dict, size: tuple[int, int] = DEFAULT_SIZE) -> Image.Image:
     address = str(payload.get("address") or "")
     if address:
         address_font, address = _fit(draw, address, 14, width - 32)
-        draw.text((width // 2, height - 14), address,
+        draw.text((width // 2, height - (8 if compact else 14)), address,
                   font=address_font, fill=_MUTED, anchor="ms")
 
     return image
@@ -194,6 +195,7 @@ def render(payload: dict, size: tuple[int, int] = DEFAULT_SIZE) -> Image.Image:
 def render_drive(payload: dict, size: tuple[int, int] = DEFAULT_SIZE) -> Image.Image:
     """주행 카드: 모드(큰 글자) · 속도 · 내비게이션 · 배터리. 값이 없으면 '--'."""
     width, height = size
+    compact = height < DEFAULT_SIZE[1]
     image = Image.new("RGB", size, _BG)
     draw = ImageDraw.Draw(image)
 
@@ -215,19 +217,22 @@ def render_drive(payload: dict, size: tuple[int, int] = DEFAULT_SIZE) -> Image.I
 
     speed = payload.get("speed")
     speed_text = f"{float(speed):.2f} m/s" if isinstance(speed, (int, float)) else "-- m/s"
-    draw.text((16, 108), "SPEED", font=_font(14), fill=_MUTED)
-    draw.text((92, 104), speed_text, font=_font(20), fill=_FG)
-    draw.text((16, 136), "NAV", font=_font(14), fill=_MUTED)
-    nav_font, nav = _fit(draw, str(payload.get("navigation") or "--"), 16, width - 108)
-    draw.text((92, 136), nav, font=nav_font, fill=_FG)
+    speed_y, nav_y = (96, 122) if compact else (104, 136)
+    draw.text((16, speed_y + 4), "SPEED", font=_font(14), fill=_MUTED)
+    draw.text((92, speed_y), speed_text, font=_font(20), fill=_FG)
 
     # 목표 좌표 — NAVIGATION 중에만, NAV 행 오른쪽 끝에 조용히
     goal_x = payload.get("goal_x")
     goal_y = payload.get("goal_y")
+    goal_width = width // 3 if goal_x is not None and goal_y is not None else 0
+    nav_font, nav = _fit(draw, str(payload.get("navigation") or "--"), 16,
+                         width - 108 - (goal_width + 8 if goal_width else 0))
+    draw.text((16, nav_y), "NAV", font=_font(14), fill=_MUTED)
+    draw.text((92, nav_y), nav, font=nav_font, fill=_FG)
     if goal_x is not None and goal_y is not None:
         goal_text = f"({float(goal_x):.1f}, {float(goal_y):.1f})"
         goal_font, goal_text = _fit(draw, goal_text, 14, width // 3)
-        draw.text((width - 16, 140), goal_text, font=goal_font, fill=_MUTED, anchor="rs")
+        draw.text((width - 16, nav_y + 4), goal_text, font=goal_font, fill=_MUTED, anchor="rs")
 
     # 배터리: 웨이크 카드와 같은 게이지 규약 — 결측은 경보가 아니라 침묵이다.
     raw_percent = battery_measurement(payload.get("battery_percent"), percent=True)
@@ -245,23 +250,24 @@ def render_drive(payload: dict, size: tuple[int, int] = DEFAULT_SIZE) -> Image.I
         label, font = f"{percent:.0f}{suffix}", _font(16)
         if color == _CRIT:
             label_width = draw.textbbox((0, 0), label, font=font)[2]
-            _draw_alarm(draw, (width - 16 - label_width, bar_y - 24), label, font)
+            _draw_alarm(draw, (width - 16 - label_width, bar_y - (20 if compact else 24)), label, font)
         else:
-            draw.text((width - 16, bar_y - 24), label, font=font, fill=color, anchor="rs")
+            draw.text((width - 16, bar_y - (8 if compact else 24)), label, font=font, fill=color, anchor="rs")
 
     return image
 
 
-def render_card(payload: dict, size: tuple[int, int] = DEFAULT_SIZE,
+def render_card(payload: dict, size: tuple[int, int] | None = None,
                 profile: DisplayProfile = DEFAULT_PROFILE) -> Image.Image:
     """D-394: display/info 의 단일 입구 — kind 가 카드를 고른다.
 
     CORE 는 ``kind`` 필드로 카드를 구분한다(없으면 웨이크 카드, 호환).
-    다른 장치의 렌더러도 이 디스패치와 같은 계약을 따른다.
+    명시한 size가 우선이며, 생략하면 장치 profile의 크기로 그린다.
     """
+    size = profile.size if size is None else size
     if payload.get("kind") == "drive":
-        return render_drive(payload, profile.size)
-    return render(payload, profile.size)
+        return render_drive(payload, size)
+    return render(payload, size)
 
 
 # --- D-190: boot card -----------------------------------------------------
