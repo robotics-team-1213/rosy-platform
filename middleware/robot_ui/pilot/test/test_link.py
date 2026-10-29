@@ -54,7 +54,7 @@ function makeSession(overrides = {}) {
       openSocket,
       schedule,
       postJson,
-      whoami: overrides.whoami || (async () => { own.whoamiCalls.push(1); return {role: 'operator'}; }),
+      whoami: overrides.whoami || (async () => { own.whoamiCalls.push(1); return {status: 200, ok: true, body: {role: 'operator'}}; }),
       onState: (s) => own.states.push(s),
       onConflict: (c) => own.conflicts.push(c),
     }),

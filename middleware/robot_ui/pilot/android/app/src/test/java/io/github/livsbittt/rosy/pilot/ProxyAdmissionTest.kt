@@ -31,7 +31,7 @@ class ProxyAdmissionTest {
                 override fun authorized() = true
                 override fun client() = OkHttpClient()
             }
-            val proxy = PilotProxy(connection, failure = {}).apply { start(5000, false) }
+            val proxy = PilotProxy(connection, BundledAssets { "fixture asset".toByteArray() }, failure = {}).apply { start(5000, false) }
             val browser = OkHttpClient.Builder().callTimeout(1500, TimeUnit.MILLISECONDS).build()
             browser.dispatcher.maxRequestsPerHost = 16
             fun request(path: String) = Request.Builder().url("${proxy.origin}$path")
@@ -59,6 +59,9 @@ class ProxyAdmissionTest {
                 assertTrue(occupied.await(1, TimeUnit.SECONDS))
                 repeat(4) { browser.newCall(request("/api/v1/vision/front/status").build()).enqueue(callback) }
                 assertTrue("excess background traffic must fail promptly without using control capacity", denied.await(1, TimeUnit.SECONDS))
+                for (path in listOf("/pilot/assets/client.js", "/common/ui.js", "/pilot/bootstrap.js")) {
+                    browser.newCall(request(path).build()).execute().use { assertEquals("bundled assets must survive upstream saturation", 200, it.code) }
+                }
                 val started = System.nanoTime()
                 browser.newCall(request("/api/v1/teleop").post("{\"linear\":0,\"angular\":0}".toRequestBody()).build())
                     .execute().use { assertEquals(200, it.code) }

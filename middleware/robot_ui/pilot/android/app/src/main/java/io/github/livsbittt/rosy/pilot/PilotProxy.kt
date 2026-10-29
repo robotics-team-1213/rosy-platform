@@ -64,11 +64,12 @@ class PilotProxy(private val connection: PilotConnection, private val assets: Bu
     }
     override fun serveHttp(session: IHTTPSession): Response {
         val control = session.method == Method.POST && session.uri in setOf("/api/v1/teleop", "/api/v1/mode", "/api/v1/safety/stop")
-        if (!control && !background.tryAcquire()) {
+        val needsSlot = session.uri.startsWith("/api/v1/") && !control
+        if (needsSlot && !background.tryAcquire()) {
             diagnostics.rejected()
             return reply(503, "text/plain", "Background requests busy".toByteArray())
         }
-        var leased = !control
+        var leased = needsSlot
         try {
             val response = serveApprovedHttp(session)
             if (leased) {
