@@ -274,3 +274,9 @@
 - 변경: font/fitting·측정값·QR·패널 packing을 lcd_primitives에 모으고 기존 이름을 re-export했다. info_screen은676→560줄이며 팔레트 정본·등록 경로를 유지했다.
 - 증거: 함수/클래스 AST24개·기존7PNG bytes 동일. 전체193 pass/6 skip, 격리 build_py cold import와 캡처3 pass, 영향1307 pass/1 skip·NEW0. 정본: `docs/validation/lcd-primitives-2026-10-29/result.md`.
 - gate 변화: 없음. 기존 overlay clipping은 별도 수정 단위이며 이 분리로 해결했다고 보지 않는다. CE: 해당 없음 — 소스·시험·픽셀 불변 기록에서 판단을 복원한다.
+
+## 2026-10-29 · 928ff48d14 · 상태바 아래 카드의 크기와 행 배치
+
+- 변경: 명시 size를 profile보다 우선하고208px 내부의 정보 행·주소·주행/목표/배터리를 분리했다. 기본 그리기 부품 분리는 지원 ref를 통합했다. 팔레트·기존 기본 크기·producer·명령/승인 규칙을 유지한다.
+- 증거: clipping4 RED 후 최종LCD208 pass/4 skip·5subtests, native exporter 별도1 pass. 영향1318 pass/2 skip, 지원문서 merge 뒤1353 pass/2 skip·NEW0. build_py밖 실제native 분기·RGB565 검사, 최종34장 독립 검토 범위 P1/P2없음. 정본: `docs/validation/lcd-card-layout-2026-10-29/result.md`.
+- gate 변화: 없음. ROS 린터·root AP handoff·실물 LCD·거리 판독·QR 현장 스캔·FIELD 수용과 구분한다. CE: 해당 없음 — 기존 설치 교훈 적용과 size/부분영역 회귀에서 판단을 복원한다.

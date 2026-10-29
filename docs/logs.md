@@ -12906,3 +12906,9 @@ osy-d395-s1d\`.
 - 변경: `validation/lcd-primitives-2026-10-29/result.md`에 크기 한도 복귀·기존 API/팔레트·AST/픽셀 불변과 격리 build_py cold import를 구분해 보존했다.
 - 증거: 지원 코드의 영향1307 pass/1 skip·NEW0, 독립 source 검토 범위 추가P1/P2없음. 보고서4개·캡처7개 해시를 기록했다.
 - gate 변화: 없음. 기존 잘림·실물·FIELD·릴리스 이미지 수용이 아니다. CE: 해당 없음 — 소스·시험·검증 기록으로 복원한다.
+
+## 2026-10-29 · 928ff48d14 · LCD 카드 배치·소비 경로 검증 기록
+
+- 변경: `validation/lcd-card-layout-2026-10-29/result.md`에 실제native overlay의 잘림 원인, size/profile·208px 배치, 지원 분리와 build_py cold import·합성/RGB565·skip 세부를 구분해 동결했다.
+- 증거: 실제4 RED→11 layout pass, 최종208 pass/4 skip·5subtests, native token exporter1 pass. 선택 회귀1353 pass/2 skip·NEW0, 독립34장 검토 범위 추가P1/P2없음. reports16·최종PNG34·RED PNG2 해시를 보존했다.
+- gate 변화: 없음. 실제장치·거리·FIELD·배포·공개push/merge 수용이 아니다. CE: 해당 없음 — 코드·회귀·검증 기록으로 복원한다.
