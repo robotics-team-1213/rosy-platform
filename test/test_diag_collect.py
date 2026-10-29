@@ -167,6 +167,7 @@ def test_mdns_diagnostic_compares_native_identity_live_host_and_house_xml(tmp_pa
     ('xml_tls', 'service_mismatch'), ('xml_tls_host', 'service_mismatch'),
     ('xml_name', 'service_mismatch'), ('configured', 'configured_hostname_mismatch'),
     ('daemon_unknown', 'avahi_unavailable'),
+    ('status_malformed', 'expectations_unavailable'),
 ])
 def test_mdns_diagnostic_never_calls_missing_or_inconsistent_local_evidence_ready(tmp_path, problem, reason):
     root = _mdns_device(tmp_path)
@@ -184,6 +185,9 @@ def test_mdns_diagnostic_never_calls_missing_or_inconsistent_local_evidence_read
         identity.write_text('x' * (64 * 1024), encoding='utf-8')
     elif problem == 'status_missing':
         (root / 'run/rosy-boot/boot-status.json').unlink()
+    elif problem == 'status_malformed':
+        (root / 'run/rosy-boot/boot-status.json').write_text(
+            json.dumps({'api_port': 8080, 'api_tls': []}), encoding='utf-8')
     elif problem.startswith('xml_'):
         before, after = {'xml_product': ('product=rosy', 'product=foreign'),
                          'xml_port': ('8080', '9090'), 'xml_tls': ('tls=required', 'tls=none'),
