@@ -91,6 +91,24 @@ def test_first_layer_plan_fills_nine_cells_without_crossing_the_infeed():
     assert len(f.plan()) == 3  # Keep the verified fallback distinct.
 
 
+def test_each_outer_row_uses_the_arm_on_its_own_side():
+    items = f.plan(True)
+    assert items[0]['arm'] == 0
+    assert items[2]['arm'] == 1
+    for item in items:
+        distances = [f.norm([item['target'][k]-base[k] for k in (0, 1)]) for base in f.CUBE_FIXTURE['arm_bases_m']]
+        assert distances[item['arm']] <= min(distances)+1e-9
+
+
+def test_planning_refusal_keeps_the_partial_physical_report_possible(tmp_path, monkeypatch):
+    from mapped_stack_task import Planner
+    def refused(*args, **kwargs):
+        raise subprocess.CalledProcessError(1, args[0], stderr=b'Traceback: private diagnostic path\nValueError: target outside workspace\n')
+    monkeypatch.setattr(subprocess, 'run', refused)
+    with pytest.raises(ValueError, match='SIM planning refused: ValueError: target outside workspace'):
+        Planner(tmp_path).request('move')
+
+
 def test_first_layer_judgement_requires_support_and_stable_prefix():
     good = trial()
     assert good['task_success']
