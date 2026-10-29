@@ -111,6 +111,96 @@ def _members(bundle: Path) -> dict[str, str]:
         }
 
 
+def _mdns_device(tmp_path, alias='%h'):
+    root = _device(tmp_path)
+    files = {
+        'etc/rosy/device-identity.json': json.dumps({'hostname': 'rosy-pinky-e4us'}),
+        'run/rosy-boot/boot-status.json': json.dumps({'api_port': 8080, 'api_tls': 'required',
+                                                   'api_tls_host': 'rosy-pinky-e4us.local'}),
+        'etc/avahi/services/rosy.service': f'''<?xml version="1.0"?>
+<!DOCTYPE service-group SYSTEM "avahi-service.dtd">
+<service-group><name replace-wildcards="yes">ROSY {alias}</name><service>
+<type>_rosy._tcp</type><port>8080</port><txt-record>product=rosy</txt-record>
+<txt-record>role=robot</txt-record><txt-record>proto=core-v1</txt-record>
+<txt-record>tls=required</txt-record><txt-record>tls_host=rosy-pinky-e4us.local</txt-record>
+</service></service-group>''',
+    }
+    for relative, text in files.items():
+        path = root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding='utf-8')
+    return root
+
+
+def _mdns_bundle(tmp_path, root, live='rosy-pinky-e4us', daemon='active'):
+    runner = FakeRunner()
+
+    def run(argv):
+        if argv == ['hostname', '-s']:
+            runner.calls.append(argv)
+            return 0, live + '\n'
+        if argv == ['systemctl', 'is-active', 'avahi-daemon.service']:
+            runner.calls.append(argv)
+            return (0 if daemon == 'active' else 3), daemon + '\n'
+        return runner(argv)
+
+    members = _members(_module().collect(root, run, tmp_path / 'out'))
+    return json.loads(members['network/mdns.json']), members, runner.calls
+
+
+@pytest.mark.parametrize('alias', ['%h', '%H'])
+def test_mdns_diagnostic_compares_native_identity_live_host_and_house_xml(tmp_path, alias):
+    evidence, _, _ = _mdns_bundle(tmp_path, _mdns_device(tmp_path, alias))
+    assert evidence['status'] == 'consistent'
+    assert evidence['expected_hostname'] == evidence['live_hostname'] == 'rosy-pinky-e4us'
+    assert evidence['avahi_state'] == 'active'
+    assert evidence['reasons'] == []
+    assert evidence['network_advertisement'] == 'not_tested'
+
+
+@pytest.mark.parametrize('problem,reason', [
+    ('live', 'live_hostname_mismatch'), ('daemon', 'avahi_inactive'),
+    ('xml_missing', 'service_missing'), ('xml_malformed', 'service_invalid'),
+    ('identity_missing', 'identity_unavailable'), ('status_missing', 'expectations_unavailable'),
+    ('xml_oversized', 'service_invalid'), ('identity_oversized', 'identity_unavailable'),
+])
+def test_mdns_diagnostic_never_calls_missing_or_inconsistent_local_evidence_ready(tmp_path, problem, reason):
+    root = _mdns_device(tmp_path)
+    service = root / 'etc/avahi/services/rosy.service'
+    identity = root / 'etc/rosy/device-identity.json'
+    if problem == 'xml_missing':
+        service.unlink()
+    elif problem == 'xml_malformed':
+        service.write_text('<not-xml', encoding='utf-8')
+    elif problem == 'xml_oversized':
+        service.write_text('x' * (64 * 1024), encoding='utf-8')
+    elif problem == 'identity_missing':
+        identity.unlink()
+    elif problem == 'identity_oversized':
+        identity.write_text('x' * (64 * 1024), encoding='utf-8')
+    elif problem == 'status_missing':
+        (root / 'run/rosy-boot/boot-status.json').unlink()
+    evidence, _, _ = _mdns_bundle(tmp_path, root, live='ubuntu' if problem == 'live' else 'rosy-pinky-e4us',
+                                 daemon='inactive' if problem == 'daemon' else 'active')
+    assert evidence['status'] != 'consistent'
+    assert reason in evidence['reasons']
+    assert evidence['network_advertisement'] == 'not_tested'
+
+
+def test_mdns_diagnostic_does_not_export_unknown_txt_or_identity_fields_or_query_the_network(tmp_path):
+    root = _mdns_device(tmp_path)
+    service = root / 'etc/avahi/services/rosy.service'
+    service.write_text(service.read_text(encoding='utf-8').replace('</service>',
+                       '<txt-record>opaque=' + DENIED_MARK + '</txt-record></service>'), encoding='utf-8')
+    identity = root / 'etc/rosy/device-identity.json'
+    identity.write_text(json.dumps({'hostname': 'rosy-pinky-e4us', 'extra': DENIED_MARK}), encoding='utf-8')
+    evidence, members, calls = _mdns_bundle(tmp_path, root)
+    assert evidence['status'] == 'consistent'
+    assert DENIED_MARK not in members['network/mdns.json']
+    assert not any(call[0] in {'avahi-browse', 'resolvectl', 'ping', 'curl'} for call in calls)
+    assert not any(word in {'restart', 'start', 'enable', '--show-secrets'} for call in calls for word in call)
+
+
 def test_the_bundle_has_every_planned_member_and_the_root_cause(tmp_path):
     module = _module()
     bundle = module.collect(_device(tmp_path), FakeRunner(), tmp_path / "out")
