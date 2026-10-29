@@ -222,7 +222,7 @@ function syncButtons() {
     : state.loadState === 'error' ? '초안 확인 불가 · 다시 접속하세요'
     : state.loadState === 'idle' ? '관제 접속 필요'
     : state.draft?.revision
-      ? `저장된 초안 · ${state.draft.saved_by}${state.dirty ? ' · 고친 내용 저장 필요' : ''}`
+      ? `저장된 초안${state.draft.saved_by ? ` · ${state.draft.saved_by}` : ''}${state.dirty ? ' · 고친 내용 저장 필요' : ''}`
       : (state.dirty ? '저장 안 된 초안' : '저장된 초안 없음'),
   state.loadState === 'pending' ? 'pending' : state.loadState === 'error' ? 'error'
     : state.draft?.revision ? 'ready' : 'empty');

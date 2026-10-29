@@ -533,6 +533,7 @@ def test_view_edit_activate_and_preview_a_trip(page_site, width, height):
     page.locator("#apply-edit").click()
     page.locator("#save-draft").click()
     expect(page.locator("#draft-status")).to_contain_text("저장된 초안")
+    expect(page.locator("#draft-status")).not_to_contain_text("undefined")  # D-926: no raw JS values
     page.locator("#activate").click()
     if output := os.environ.get("ROSY_SHOT_DIR"):
         page.screenshot(path=str(Path(output) / f"site-map-confirm-{width}x{height}.png"), full_page=True)

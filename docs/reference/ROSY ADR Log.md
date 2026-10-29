@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-926 | 운용 화면의 읽는 순서·깊이·말의 규칙. [전문](../adr/D-926-ui-reading-order-depth-and-wording.md) | Accepted (2026-10-30, 사용자 결정; 화면 적용은 단계별) |
 | D-914 | 장치별 프로필과 native 운용범위 근거를 연결한다. [전문](../adr/D-914-omx-per-device-operating-profile-binding.md) | Accepted (2026-10-29, 구현·머지 승인; 실물 수용 별도) |
 | D-910 | Learning 검수 문서의 정적 공통 셸. [전문](../adr/D-910-learning-static-shell-components.md) | Accepted (2026-10-28) |
 | D-909 | Fleet 절차 문서의 경량 헤더와 배치 역할. [전문](../adr/D-909-fleet-procedure-document-components.md) | Accepted (2026-10-28) |
@@ -1360,3 +1361,9 @@ Fleet stores editable device names, models, declared arm counts and hardware ide
 **Status:** Accepted (2026-10-29). 사용자 구현·커밋·머지 지시이며 장치 배포와 수용은 별도다.
 
 Fleet device ID, 실제 follower 설정, 장치별 검증·기록 경로를 별도 native 운용 프로필로 묶는다. parent/runner/pipeline이 같은 binding을 확인하며 감독 이동·녹화도 다른 팔로 넘기지 않는다. 전문은 [D-914](../adr/D-914-omx-per-device-operating-profile-binding.md).
+
+## D-926 운용 화면의 읽는 순서·깊이·말의 규칙
+
+**Status:** Accepted (2026-10-30). 사용자 결정이며 화면 적용은 단계별 착지로 따로 기록한다.
+
+운용 화면을 안전·지금 상태·할 일·근거·진단 순서, 앱·영역·화면·대상·확인의 다섯 깊이, 네 글자 역할로 닫는다. 하위 탐색은 이동이고 접힘은 한 겹이며 앱 바는 한 줄이다. D-641 4항의 맥락 탭 아이콘 단독을 대체한다. 전문은 [D-926](../adr/D-926-ui-reading-order-depth-and-wording.md).

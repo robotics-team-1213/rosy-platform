@@ -614,3 +614,9 @@
 - 변경: 좁은 헤더의 공통 padding12를 유지하면서 아이콘/개발 배지만 세로 배치한다. 계정 메뉴의 Escape는 문서에서 받고 메뉴가 열렸을 때만 닫는다. dialog가 처리한 이벤트와 외부 초점을 존중한다.
 - 증거: 전체 browser1794 중10실패의 padding2·재접속안내1·CSP predicate7을817의72pass/0skip으로 수정 검증했다. trigger Escape 실제 RED 뒤 a822의16초점/24기하/Node gate41pass,473c의실제 dialog4pass와공통/Node48pass. 새96PNG 전수 독립 검토에서 새 P1/P2 없음. CSP·통제 권한·정지 정책은 유지한다.
 - gate 변화: 없음. 최종 SHA 전체1794 재실행·실제 명령·실물·배포·공개 게시 수용이 아니다. 정본 증거는 docs/validation/platform-ui-integration-2026-10-29/result.md. CE: 해당 없음 — 이벤트 우선순위·초점 경계와 형상은 회귀가 설명한다.
+
+## 2026-10-30 · fd11d5158a · D-926 첫 적용: 관제 맥락 탭 이름과 초안 표시
+
+- 변경: 관제 오른쪽 네 탭의 아이콘 단독을 풀고 레일처럼 아이콘 위 한 줄 이름으로 보인다(`shared/styles.css`). 지도 초안 상태가 저장자 없을 때 `undefined`를 쓰지 않는다.
+- 증거: 작업 세션의 Fleet 샘플 서버 Edge 캡처 1366·390·320에서 네 이름이 한 줄이고 칸을 넘지 않는다. 브라우저 시험 `test_fleet_header_browser.py`·`test_site_map_browser.py`가 이 규칙을 지킨다. 원격 시험 결과는 착지 기록에 따로 둔다.
+- gate 변화: 없음. CE: 해당 없음 — 규칙과 이유는 D-926과 시험이 담는다.
