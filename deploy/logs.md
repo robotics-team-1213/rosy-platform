@@ -4035,6 +4035,13 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - gate 변화: 없음. 물리 동작·기본값·가드·장치 상태는 바꾸지 않았고 배포·push하지 않았다.
 - CE: 해당 없음 — main 통합의 producer/consumer와 증거 적용 조건은 D-914·회귀·기존 import/장부 교훈으로 복원할 수 있다.
 
+## 2026-10-29 · 28dc087ea6 · fallback open AP 표시 소비자 호환
+
+- 변경: 공개 AP 상태의 security를 부팅 표시와 LCD로 전달하고 open일 때 저장된 AP 비밀번호를 읽거나 표시하지 않는다. 콘솔과 LCD는 No password를 표시하며 접속 QR은 키 필드 없는 nopass 형식이다. security가 없는 기존 상태와 WPA2 표시는 유지한다.
+- 증거: tests-only commit 38f4baf395의 공식 원격 실행은 open 표시·QR·비밀번호 읽기 차단 6 FAILED/기존 호환 2 PASS였다. commit 28dc087ea6의 집중 부팅·LCD·QR 회귀는 350 passed/1 skipped, NEW0/known0/flaky0이다. 신규 12개 사례에는 skip이 없다. 기존 frozen 파일 크기는 증가하지 않았다.
+- gate 변화: 없음. 이 변경은 향후 open 상태를 읽는 소비자 지원이다. fallback 정책·실제 AP·장치의 부팅·OTA 수용은 아직 바꾸거나 시험하지 않았다.
+- CE: 해당 없음 — 신규 상태와 자격 정보 차단 계약은 코드 및 회귀로 재현된다.
+
 ## 2026-10-29 · uncommitted · workcell 팔 자격 증명 전체 매핑 설정
 
 - 변경: 서명된 workcell Compose에서 관리자 설정 `ROSY_SITE_WORKCELL_ARM_CREDENTIAL_PATHS`로 Fleet 팔 credential 전체 매핑을 지정한다. 기본 A/B와 Vision 매핑, 역할별 mount, 기존 bootstrap 거부 규칙은 유지했다. A/B/S 렌더링과 누락 S 거부 시험 및 마이그레이션 설명을 추가했다.
@@ -4086,6 +4093,13 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: path-only 2f88347d69 원격은 30 passed / 4 failed로 다음 경계를 드러냈다. 명시 승인된 Windows 격리 PowerShell 실행은 원래 세 사례의 모든 assertion을 그대로 실행해 3 passed였다. 4개 하위 호출 모두 non-admin을 먼저 확인하고 native Start-Process/Storage 호출을 가로채 0회를 확인했다. local pytest·실제 UAC·카드 접근은 하지 않았다. Linux의 세 skip과 이 별도 native Windows 증거는 구분하며 최종 원격 결과는 완료 기록을 따른다.
 - gate 변화: 없음. 세 native Windows fixture의 별도 성공을 Linux 실행으로 세지 않으며 새 소스의 실물 수용을 주장하지 않는다.
 - CE: 기존 교훈 갱신 결과 유지. parameter-set·metadata autoload 판단은 기존 fake-surface 교훈에 남겼고, 단순 fixture 경로/표시 형식 수정을 별도 교훈으로 늘리지 않았다.
+
+## 2026-10-29 · 8a381b7f12 · 자기 배치의 준비 슬롯 중복 예약 수정
+
+- 변경: carried 집합을 자기 leader를 포함한 전체 티켓에서 먼저 계산하고 busy 합계에서만 자기 행을 제외한다. k2의 슬롯 낭비와 k4의 자체 정체를 막으며 FIFO·urgent·stale·held 처리와 MAX_PREPARING=3은 유지한다.
+- 증거: tests-only commit bc303cdb1b의 공식 원격 회귀는 7 failed/19 passed, known_failures NEW7이었다. 수정 commit 8a381b7f12의 land_prepare·land_queue·land_batch 집중 회귀는 85 passed, NEW0/known0/flaky0이다. 로그는 Git 밖 receipts/2026-10-29-queue-own-batch-slots/red 및 green에 보존한다.
+- gate 변화: 없음. 공식 affected 선택은 FULL이며 land_async의 전체 착지 검증을 유지한다. 이미 실행 중인 worker는 이 소스를 다시 읽지 않으므로 현재 큐 대기가 풀렸다고 주장하지 않는다. 공유 main 게시·장치 동작은 이 변경의 범위가 아니다.
+- CE: 해당 없음 — 전체 티켓으로 carried를 구한 뒤 자기 행만 제외해야 한다는 원인과 재현 조건은 최종 코드 및 k2/k4·다른 pending/preparing 예약을 검증하는 8개 회귀 시험에 직접 남는다. 별도 교훈 문서는 늘리지 않는다.
 
 ## 2026-10-29 · 66e86cb0fb · Pilot 수신과 오프라인 처리 unit 분리
 
