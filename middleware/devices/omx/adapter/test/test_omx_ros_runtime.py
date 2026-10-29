@@ -94,6 +94,11 @@ def test_feedback_source_stamp_cannot_be_replayed_as_a_fresh_owner_state():
         runtime._on_joint_state(message)
         original = runtime.latest_joint_state
         assert original is not None
+        raw_stamp = message.header.stamp.sec * 1_000_000_000 + message.header.stamp.nanosec
+        assert original.source_stamp_ns == raw_stamp
+        assert original.source_now_ns >= raw_stamp
+        assert runtime.owner._joint_state is original
+        original_source_time = (original.source_stamp_ns, original.source_now_ns)
         from types import SimpleNamespace
         cancellations = []
         pending = SimpleNamespace(cancel=lambda: cancellations.append(True), done=lambda: False)
@@ -106,6 +111,7 @@ def test_feedback_source_stamp_cannot_be_replayed_as_a_fresh_owner_state():
         time.sleep(.12)
         runtime._on_joint_state(message)
         assert runtime.latest_joint_state is original, "replayed source refreshed owner state"
+        assert (original.source_stamp_ns, original.source_now_ns) == original_source_time
         runtime._watchdog_tick()
         assert runtime.owner.state == "hold"
         assert runtime.last_decision.reason == "joint_state_stale"
