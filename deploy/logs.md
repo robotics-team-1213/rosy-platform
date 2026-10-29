@@ -4032,3 +4032,10 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거 범위: 현재 현장 A/B/S 전체 Compose 동등성과 manifest credential 지문 일치는 별도로 확인했다. old posted fa3aeeed4d92의 CI attempt2가 success이고 signer dry-run은 would-sign으로 바뀌었지만, 그 후보는 새 매핑 인터페이스를 포함한 후보가 아니다. 제안 site.env를 그 옛 candidate에 먼저 적용하지 않는다.
 - gate 변화: 없음. 새 서명 candidate와 설정 동시 전환·실제 서비스 수용은 아직 미실행이다. 토큰 값·개인키를 기록하거나 unsigned overlay 허용 목록을 확대하지 않았다.
 - CE: 미해결 — 소스·회귀 검증은 통과했으며 남은 게시·candidate·운영 전환은 별도 근거가 필요하다.
+
+## 2026-10-29 · uncommitted · Site readiness 게시 검사 출처 검토
+
+- 변경: 공유 main의 게시 전 이력 검사에서 잡힌 20건을 정확한 commit/path/rule 8개로 검토했다. peer db543919cd의 독립 검토된 artifact digest/provenance 4개를 재사용하고, 별도 agent가 Git 객체로 확인한 revision 1개·고정 browser mock 응답 2개·디코딩 검증한 1x1 PNG 1개를 추가했다. baseline에는 값·발췌문을 저장하지 않는다. scanner 및 새 commit/다른 rule의 거부는 그대로다.
+- 증거: main76a007dced 기준 실제 `tools/publish_main.py --secret-scan`은 20 hits로 거부했다. 검토 baseline을 적용한 통합 source28d77ce193의 같은 실제 gate는 400 commits' added lines clean, 20 reviewed baseline hit(s) skipped로 통과했다. 이는 실행 gate 검증이며 원격 pytest·clean FULL·게시·서버 설치 증거는 아니다.
+- gate 변화: 없음. 사용자 임시 슬롯 승인으로 source6dad/f56를 한 작업에 병합했고 최종 검증 및 공식 긴급 착지를 준비한다. private overlay admission·운영 motion deadline·서명 검사를 완화하지 않는다.
+- CE: 해당 없음 — 기존 exact-tuple 검토 절차를 적용한 출처 자료 갱신이다. 최초 운영 전환의 복구 검증은 여전히 미해결이다.
