@@ -208,14 +208,14 @@ def test_task_dispatch_drains_without_the_idle_pause(monkeypatch):
     """D-271 Gate A: a dispatch starts the next cycle at once; only an idle cycle pauses."""
     events = _drain_loop(monkeypatch, [{"status": "ACCEPTED"}] * 2,
                          robot_ids={"r1", "r2", "r3"}, sleeps_until_stop=1)
-    assert events == ["dispatch", "dispatch", "idle", 0.25]
+    assert events == ["dispatch", 0, "dispatch", 0, "idle", 0.25]
 
 
 def test_task_dispatch_drain_pauses_after_one_round_of_robots(monkeypatch):
     """A result that never leaves the queue cannot spin: pause after len(robot_ids) in a row."""
     events = _drain_loop(monkeypatch, [{"status": "QUEUED"}] * 10,
                          robot_ids={"r1", "r2"}, sleeps_until_stop=2)
-    assert events == ["dispatch", "dispatch", 0.25, "dispatch", "dispatch", 0.25]
+    assert events == ["dispatch", 0, "dispatch", 0.25, "dispatch", 0, "dispatch", 0.25]
 
 
 # --- 앱 표면: /readyz 와 /healthz 분리 ---

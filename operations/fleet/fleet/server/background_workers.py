@@ -134,6 +134,9 @@ async def _task_dispatch_loop(console: FleetConsole, task_service: FleetTaskServ
         if dispatched is None or drained >= len(task_service.robot_ids):
             drained = 0
             await asyncio.sleep(0.25)
+        else:
+            # Yield between drained cycles: ports that never suspend would hold the loop.
+            await asyncio.sleep(0)
 
 
 async def _mission_model_turn_worker_loop(worker) -> None:
