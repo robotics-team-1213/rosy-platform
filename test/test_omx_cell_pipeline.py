@@ -328,7 +328,7 @@ def attempt_rows(tmp_path):
 def test_every_attempt_passed_or_not_is_one_row_with_its_context_and_its_case_names_it(tmp_path, monkeypatch):
     calibration = calibrated(tmp_path)
     monkeypatch.setattr(cell_attempts, "RUN", dict(cell_attempts.RUN))
-    cell_attempts.start(tmp_path / "attempts.jsonl", "run1")
+    cell_attempts.start(tmp_path / "attempts.jsonl", "run1", knowledge=str(m.Path(m.__file__).parent / "cell-knowledge.example.json"))
     moved = m.move(Cell((0.080, 0.100), slip=0.012), CONFIG, calibration, "pinky", "belt", tmp_path)
     assert moved["result"] == "placed"
     rows = attempt_rows(tmp_path)
@@ -336,7 +336,7 @@ def test_every_attempt_passed_or_not_is_one_row_with_its_context_and_its_case_na
     assert [r["attempt_id"] for r in rows] == ["run1-001", "run1-002"]
     context = rows[0]["context"]
     assert context["calibration"]["key"] == "pinky" and context["calibration"]["coarse"] is False
-    assert context["config_sha"] and context["plan_sha"]
+    assert context["config_sha"] and context["plan_sha"] and len(context["knowledge_sha"]) == 12
     assert rows[0]["plan"]["pick"]["x"] == rows[0]["locate"]["arm_m"][0]  # where it reached vs where it saw
     cases = [json.loads(line) for line in (tmp_path / "cases.jsonl").read_text().splitlines()]
     assert [c["attempt_id"] for c in cases] == ["run1-001", "run1-002"]

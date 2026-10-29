@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-904 | 공급암 S는 사람 손 없이 하나의 파이프라인으로 물체를 고르고 집어 놓는다. [전문](../adr/D-904-arm-s-autonomous-pick-place-pipeline.md) | Proposed (2026-10-28) |
 | D-912 | Signed OS transport maintenance with independent authority and durable recovery. [전문](../adr/D-912-signed-os-transport-maintenance.md) | Proposed |
 | D-911 | OMX native 셀의 검증된 작업 범위와 현재 실행 조건을 구분한다. [전문](../adr/D-911-omx-native-reviewed-operating-envelope.md) | Accepted (2026-10-28, 구현 승인; 장치 수용 별도) |
 | D-898 | Fleet 인식 모델 승인을 모델 PC 레지스트리에 반영 — 사람이 나르는 Ed25519 서명 결정 파일 | Proposed (2026-10-27) |
