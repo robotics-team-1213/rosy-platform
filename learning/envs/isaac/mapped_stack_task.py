@@ -43,12 +43,13 @@ def apply_servo(robot, targets, joints, fingers):
     robot.get_articulation_controller().apply_action(ArticulationAction(joint_positions=targets, joint_efforts=effort))
 
 
-def build_map(world, stage):
+def build_map(world, stage, fixture=FIXTURE):
     import numpy as np
     from pxr import Gf, UsdGeom
     from isaacsim.core.api.objects import FixedCuboid, VisualCuboid
     world.scene.add(FixedCuboid('/World/PlywoodMap', name='plywood_map', size=1.,
-        position=np.array([0., 1.42, -.008]), scale=np.array(FIXTURE['board_size_m']),
+        position=np.array(fixture['board_lower_left_m'])+np.array(fixture['board_size_m'])*np.array([.5, .5, -.5]),
+        scale=np.array(fixture['board_size_m']),
         color=np.array([.35, .36, .37])))
     # shortcut: CAD paint is visually transcribed; surveyed workbench registration replaces nominal photo poses.
     paths = [[(.738, .10), (.738, .02), (1.13, .02), (1.21, .10), (1.21, 2.34),
@@ -60,11 +61,12 @@ def build_map(world, stage):
         for a, b in zip(path, path[1:]):
             dx, dy = b[0]-a[0], b[1]-a[1]
             obj = world.scene.add(VisualCuboid('/World/Tape'+str(count), name='tape'+str(count), size=1.,
-                position=np.array([(a[0]+b[0])/2-.61, (a[1]+b[1])/2+.20, .0015]),
+                position=np.array([(a[0]+b[0])/2+fixture['board_lower_left_m'][0],
+                                   (a[1]+b[1])/2+fixture['board_lower_left_m'][1], .0015]),
                 scale=np.array([math.hypot(dx, dy), .01, .001]), color=np.ones(3)))
             UsdGeom.XformCommonAPI(obj.prim).SetRotate(Gf.Vec3f(0., 0., math.degrees(math.atan2(dy, dx))))
             count += 1
-    for i, y in enumerate((-.15, .15)):
+    for i, y in enumerate(() if 'workplate_size_m' in fixture else (-.15, .15)):
         world.scene.add(VisualCuboid('/World/YellowBench'+str(i), name='yellow_bench'+str(i), size=1.,
             position=np.array([-.10, y, -.001]), scale=np.array([.26, .25, .002]),
             color=np.array([.95, .72, .06])))
@@ -164,7 +166,8 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
         images.append(name)
 
     def move(arm, point, yaw=0.):
-        frames = planner.request('move', base=FIXTURE['arm_bases_m'][arm],
+        frames = planner.request('move', base=fixture['arm_bases_m'][arm],
+            base_yaw=fixture.get('arm_base_yaws_rad', [0., 0.])[arm],
             start=targets[arm][joints[arm]].tolist(), target=[float(v) for v in point], yaw=float(yaw), dt=DT)['frames']
         for q in frames:
             targets[arm][joints[arm]] = q
@@ -201,6 +204,9 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
         if trial_index == 0:
             photo('mapped-overview.png', True)
             photo('mapped-initial.png')
+            if cube:
+                photo('mapped-top.png')
+                photo('mapped-side.png')
         try:
             if any(np.max(np.abs(robot.get_joint_positions()[joints[i]]-targets[i][joints[i]])) > .03
                    for i, robot in enumerate(robots)):
@@ -209,7 +215,8 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
                 arm, box = item['arm'], cargo[index]
                 UsdGeom.Imageable(box.prim).MakeVisible()
                 yaw = float(rng.uniform(-.01, .01))
-                box.set_world_pose(np.array([.16+rng.uniform(-.001, .001), -.09+rng.uniform(-.001, .001), .041]),
+                infeed = fixture.get('infeed_start_m', [.16, -.09, .041])
+                box.set_world_pose(np.array([infeed[0]+rng.uniform(-.001, .001), infeed[1]+rng.uniform(-.001, .001), infeed[2]]),
                     np.array([math.cos(yaw/2), 0., 0., math.sin(yaw/2)]))
                 box.set_linear_velocity(np.zeros(3)); box.set_angular_velocity(np.zeros(3))
                 start = box.get_world_pose()[0].copy()
@@ -222,18 +229,19 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
                 layer = dict(item=index, arm=arm, source_center_z=float(p[2]),
                     infeed_start=start.tolist(), infeed_settled=p.tolist(), grasp_samples=[], lift_samples=[], settle_samples=[])
                 trial['layers'].append(layer)
-                move(arm, [p[0], p[1], .145], yaw)
+                carry_height = fixture.get('carry_height_m', .145)
+                move(arm, [p[0], p[1], carry_height], yaw)
                 grip(arm, initial['gripper']['preopen'])
                 move(arm, [p[0], p[1], p[2]+.002], yaw)
                 layer['grasp_samples'].append(grasp_snapshot(arm))
                 grip(arm, initial['gripper']['close'])
                 layer['grasp_samples'].append(grasp_snapshot(arm))
-                move(arm, [p[0], p[1], .145], yaw)
+                move(arm, [p[0], p[1], carry_height], yaw)
                 layer['lift_samples'] = samples(36)
                 if not all(free_lift(s['boxes'][index], arm, float(p[2])) for s in layer['lift_samples']):
                     photo('mapped-grasp-failed.png')
                     raise ValueError('bilateral free lift failed; transport interlock stopped the arm')
-                move(arm, [*item['target'][:2], .145])
+                move(arm, [*item['target'][:2], carry_height])
                 if cube:
                     layer['carry_sample'] = snapshot()
                     layer['release_samples'] = []
@@ -253,8 +261,8 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
                 grip(arm, initial['gripper']['release'])
                 if cube:
                     layer['opened_sample'] = snapshot()
-                move(arm, [*item['target'][:2], .145])
-                move(arm, home(arm))
+                move(arm, [*item['target'][:2], carry_height])
+                move(arm, home(arm, cube))
                 layer['settle_samples'] = samples(132)
                 if not all(stable_box(s['boxes'][j], j, cube) for s in layer['settle_samples'] for j in range(index+1)):
                     raise ValueError('released stack failed stability; next infeed blocked')

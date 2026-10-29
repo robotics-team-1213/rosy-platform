@@ -400,7 +400,7 @@ class RunStore:
                 if row['input']['scenario_id'] in ('omx-map-long-stack', 'omx-map-cube-stack'):
                     cube = row['input']['scenario_id'] == 'omx-map-cube-stack'
                     required = {'mapped-stack-report', 'mapped-overview', 'mapped-initial',
-                                'mapped-layer-9' if cube else 'mapped-layer-3',
+                                'mapped-layer-3',
                                 'mapped-trial-1' if cube else 'mapped-trial-3'}
                     if (result.get('stage') != ('mapped_cube_stack' if cube else 'mapped_long_stack') or result.get('task_success') is not True
                             or result.get('successful_trials') != (1 if cube else 3)

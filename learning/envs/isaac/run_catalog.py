@@ -8,10 +8,10 @@ _CATALOG = [
      'timeout_seconds': 180,
      'requirements': ['승인 SDK·GPU·동일 계정의 두 학습 잠금 확인'],
      'reason': '모델·관절 검사이며 물리 집기 성공을 검증하지 않습니다.'},
-    {'id': 'omx-map-cube-stack', 'name': 'Confluence map: nine-bar 90 mm cube stacking',
+    {'id': 'omx-map-cube-stack', 'name': 'Rosy Cam: opposed arms, 90 mm square first layer',
      'implemented': True, 'stage': 'mapped_cube_stack', 'seed_effect': 'INFEED_XY_AND_YAW',
      'timeout_seconds': 900, 'requirements': ['Approved SDK and model GPU'],
-     'reason': 'One bounded seed per run; contact-only reference, not learned or hardware accepted.'},
+     'reason': 'Three bars form one 90 x 90 x 30 mm layer; nominal photo layout, contact reference, no learned or hardware acceptance.'},
     {'id': 'omx-map-stacking-rl', 'name': 'Confluence map: full-task two-arm PPO smoke',
      'implemented': True, 'stage': 'stacking_rl', 'seed_effect': 'INFEED_XY_AND_YAW',
      'timeout_seconds': 900, 'requirements': ['Approved SDK and model GPU', 'RSL-RL PPO'],
@@ -78,7 +78,7 @@ def normalize(scenario_id: str, config: dict) -> dict:
                 'fixture': 'confluence-map-stacking-rl-v1', 'iterations': 32, 'num_envs': 1}
     if scenario_id == 'omx-map-cube-stack':
         return {'model': 'omx_f', 'headless': True, 'seed': config['seed'],
-                'fixture': 'confluence-map-cube-stack-v1', 'trials': 1}
+                'fixture': 'rosycam-opposed-first-layer-v2', 'trials': 1}
     if scenario_id == 'omx-map-long-stack':
         return {'model': 'omx_f', 'headless': True, 'seed': config['seed'],
                 'fixture': 'confluence-map-long-stack-v1', 'trials': 3}

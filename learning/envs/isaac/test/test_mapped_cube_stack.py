@@ -1,4 +1,4 @@
-"""Full cube claims require nine physically released bars, including every earlier row."""
+"""Opposed-arm first-layer claims require three released bars and a stable prefix."""
 import copy
 import json
 from pathlib import Path
@@ -131,13 +131,23 @@ def owner_request(tmp_path, operation, **fields):
 
 
 def test_assigned_arm_can_reach_each_cube_release_pose(tmp_path):
-    homes = owner_request(tmp_path, 'homes', bases=f.FIXTURE['arm_bases_m'], points=[f.home(0), f.home(1)])['homes']
+    fixture = f.CUBE_FIXTURE
+    homes = owner_request(tmp_path, 'homes', bases=fixture['arm_bases_m'],
+        base_yaws=fixture['arm_base_yaws_rad'], points=[f.home(0, True), f.home(1, True)])['homes']
     for item in f.plan(cube=True):
         target = item['target'][:]
         target[2] += .003+f.CUBE_FIXTURE['release_clearance_m']
-        frames = owner_request(tmp_path, 'move', base=f.FIXTURE['arm_bases_m'][item['arm']], start=homes[item['arm']],
-            target=target, yaw=0., dt=f.DT)['frames']
-        assert frames and all(len(q) == 5 for q in frames)
+        arm = item['arm']
+        source = fixture['infeed_start_m'][:]
+        source[1], source[2] = 0., .042
+        q = homes[arm]
+        for point in ([source[0], 0., fixture['carry_height_m']], source,
+                      [source[0], 0., fixture['carry_height_m']],
+                      [*target[:2], fixture['carry_height_m']], target, f.home(arm, True)):
+            frames = owner_request(tmp_path, 'move', base=fixture['arm_bases_m'][arm],
+                base_yaw=fixture['arm_base_yaws_rad'][arm], start=q, target=point, yaw=0., dt=f.DT)['frames']
+            assert frames and all(len(joints) == 5 for joints in frames)
+            q = frames[-1]
 
 
 @pytest.mark.parametrize('passed', [False, True])
@@ -161,11 +171,11 @@ def test_cube_release_corrects_measured_cargo_offset_and_neighbor_clearance():
     item = f.plan(True)[1]
     tcp = sample['tcps'][item['arm']]
     body = sample['boxes'][1]
-    body['position'] = [.1595, .0445, .0752]
-    sample['boxes'][0]['position'][1] = .015
+    body['position'] = [.0795, -.0005, .1022]
+    sample['boxes'][0]['position'][1] = -.03
     command = f.cube_release_target(1, sample, .04)
     predicted = [body['position'][k]+command[k]-tcp[k] for k in range(3)]
-    assert predicted == pytest.approx([.16, .0452, .075])
+    assert predicted == pytest.approx([.08, .0002, .102])
     assert not f.cube_release_ready(1, sample, .04)
     body['position'] = predicted[:]
     assert f.cube_release_ready(1, sample, .04)
@@ -202,11 +212,11 @@ def test_only_cube_contact_report_has_a_two_mib_artifact_budget(tmp_path):
 
 def test_cube_feedback_accumulates_loaded_arm_tracking_error():
     sample = trial()['layers'][0]['lift_samples'][0]
-    sample['tcps'][0] = [.1595, .0146, .0765]
-    sample['boxes'][0]['position'] = [.1595, .0146, .0745]
-    previous = [.16, .015, .077]
+    sample['tcps'][0] = [.0795, -.0304, .1035]
+    sample['boxes'][0]['position'] = [.0795, -.0304, .1015]
+    previous = [.08, -.03, .104]
     command = f.cube_release_target(0, sample, .04, commanded_tcp=previous)
-    assert command == pytest.approx([.1605, .0154, .0775])
+    assert command == pytest.approx([.0805, -.0296, .1045])
     bias = [sample['tcps'][0][k]-previous[k] for k in range(3)]
     sample['tcps'][0] = [command[k]+bias[k] for k in range(3)]
     sample['boxes'][0]['position'] = [sample['tcps'][0][0], sample['tcps'][0][1], sample['tcps'][0][2]-.002]

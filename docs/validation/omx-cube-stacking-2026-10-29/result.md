@@ -1,4 +1,22 @@
-# OMX full cube stacking — measured execution entries
+# OMX opposing-arm stacking — measured execution entries
+
+## Current scope: Rosy Cam correction, one layer only
+
+The user rejected the earlier layout. Current `omx-map-cube-stack` uses fixture
+`rosycam-opposed-first-layer-v2`: one common yellow workplate, both arm bases
+on that plate facing each other, a lower conveyor over the gray map, and an
+internal 90×90×30 mm target for three 90×30×30 mm bars. It stops at one layer.
+The retained scenario identifier does not imply a completed 90 mm cube.
+
+Topology follows the user's correction and the actual ceiling/close camera
+stills captured on 2026-10-29. Dimensions remain nominal: 400×420 mm plate,
+50 mm plate top, 25 mm conveyor top, arm spacing 300 mm. The target rectangle
+is provisionally inside the plate; its exact photo registration is unmeasured.
+Top, side and oblique SDK images are required for visual comparison. No
+corrected-scene runtime or learning acceptance is claimed by this source edit.
+
+The entries below describe the superseded map and retain their original
+outcomes. They cannot establish success for the current arrangement.
 
 Each dated entry binds its own source, run and outcome. The earlier three-bar
 fallback success is recorded separately in

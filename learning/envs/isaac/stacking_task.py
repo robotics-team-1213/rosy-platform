@@ -57,8 +57,9 @@ def run(args):
     if 'Physics' in variants.GetNames():
         if not variants.GetVariantSet('Physics').SetVariantSelection('physx'):
             raise RuntimeError('Second arm PhysX variant unavailable')
-    for prim, base in zip((first, second), FIXTURE['arm_bases_m']):
+    for prim, base, yaw in zip((first, second), FIXTURE['arm_bases_m'], FIXTURE.get('arm_base_yaws_rad', [0., 0.])):
         UsdGeom.XformCommonAPI(prim).SetTranslate(Gf.Vec3d(*base))
+        UsdGeom.XformCommonAPI(prim).SetRotate(Gf.Vec3f(0., 0., math.degrees(yaw)))
     world = World(physics_dt=FIXTURE.get('physics_dt_s', DT), rendering_dt=DT, stage_units_in_meters=1.)
     mat = PhysicsMaterial('/World/GripMaterial', static_friction=1., dynamic_friction=1., restitution=0.)
 
@@ -66,22 +67,30 @@ def run(args):
         return world.scene.add(FixedCuboid('/World/'+name, name=name, size=1.,
             position=np.array(position), scale=np.array(size), color=np.array(color), physics_material=mat))
 
-    fixed('Table', [0., -.20, -.025] if mapped else [0., 0., -.025],
-          [.9, .8, .05] if mapped else [1.8, 1.8, .05],
+    fixed('Table', FIXTURE.get('workplate_center_m', [0., -.20, -.025] if mapped else [0., 0., -.025]),
+          FIXTURE.get('workplate_size_m', [.9, .8, .05] if mapped else [1.8, 1.8, .05]),
           [.85, .66, .05] if mapped else [.30, .32, .34])
-    belt = fixed('Conveyor', [.16 if mapped else .20, -.28, .0125], FIXTURE['belt_size_m'], [.12, .15, .18])
+    belt = fixed('Conveyor', FIXTURE.get('belt_center_m', [.16 if mapped else .20, -.28, .0125]), FIXTURE['belt_size_m'], [.12, .15, .18])
     UsdPhysics.RigidBodyAPI.Apply(belt.prim).CreateKinematicEnabledAttr(True)
     surface = PhysxSchema.PhysxSurfaceVelocityAPI.Apply(belt.prim)
     surface.CreateSurfaceVelocityEnabledAttr(True)
     surface.CreateSurfaceVelocityLocalSpaceAttr(False)
     surface.CreateSurfaceVelocityAttr(Gf.Vec3f(0., FIXTURE['belt_speed_m_s'], 0.))
-    fixed('BeltStop', [.16 if mapped else .20, -.029, .027 if mapped else .035],
+    if args.mapped_cube_stack:
+        for i, sign in enumerate((-1, 1)):
+            center = FIXTURE['belt_center_m'][:]
+            center[0] += sign*(FIXTURE['belt_size_m'][0]/2+.002)
+            center[2] = .027
+            fixed('BeltRail'+str(i), center, [.004, FIXTURE['belt_size_m'][1], .005], [.65, .65, .65])
+    fixed('BeltStop', FIXTURE.get('belt_stop_m', [.16 if mapped else .20, -.029, .027 if mapped else .035]),
           [.12, .004, .004 if mapped else .02], [.65, .65, .65])
-    fixed('Bin', [.16, FIXTURE['bin_origin_m'][1]+FIXTURE['bin_size_m'][1]/2, .0125] if mapped else [.20, .02, .0125],
-          [.09, FIXTURE['bin_size_m'][1] if mapped else .09, .025], [.15, .48, .7])
+    floor = args.mapped_cube_stack
+    fixed('Bin', [FIXTURE['bin_origin_m'][0]+.045, 0., FIXTURE['bin_origin_m'][2]-.001] if floor else
+          ([.16, FIXTURE['bin_origin_m'][1]+FIXTURE['bin_size_m'][1]/2, .0125] if mapped else [.20, .02, .0125]),
+          [.09, FIXTURE['bin_size_m'][1] if mapped else .09, .002 if floor else .025], [.30, .32, .34] if floor else [.15, .48, .7])
     if mapped:
         from mapped_stack_task import build_map
-        build_map(world, stage)
+        build_map(world, stage, FIXTURE)
     origin = np.array(FIXTURE['bin_origin_m'])
     for axis in range(3):
         others = [i for i in range(3) if i != axis]
@@ -143,7 +152,8 @@ def run(args):
             anchor = UsdPhysics.FixedJoint(anchors[0])
             anchor.GetBody0Rel().SetTargets([])
             anchor.GetLocalPos0Attr().Set(Gf.Vec3f(*FIXTURE['arm_bases_m'][len(robots)]))
-            anchor.GetLocalRot0Attr().Set(Gf.Quatf(1.))
+            yaw = FIXTURE.get('arm_base_yaws_rad', [0., 0.])[len(robots)]
+            anchor.GetLocalRot0Attr().Set(Gf.Quatf(math.cos(yaw/2), Gf.Vec3f(0., 0., math.sin(yaw/2))))
             roots[0].RemoveAPI(UsdPhysics.ArticulationRootAPI)
             UsdPhysics.ArticulationRootAPI.Apply(anchors[0])
             fixed_articulation = PhysxSchema.PhysxArticulationAPI.Apply(anchors[0])
@@ -267,7 +277,12 @@ def run(args):
     def capture(name, overview=False):
         position = Gf.Vec3d(2.2, -2.2, 3.) if overview else eye
         focus = Gf.Vec3d(0., 1.1, 0.) if overview else Gf.Vec3d(.13, -.10, .12)
-        rotation = Gf.Matrix4d().SetLookAt(position, focus, Gf.Vec3d(0., 0., 1.)).GetInverse().ExtractRotationQuat()
+        up = Gf.Vec3d(0., 0., 1.)
+        if name == 'mapped-top.png':
+            position, focus, up = Gf.Vec3d(.04, 0., 1.), Gf.Vec3d(.04, 0., 0.), Gf.Vec3d(0., 1., 0.)
+        elif name == 'mapped-side.png':
+            position, focus = Gf.Vec3d(.8, -.05, .16), Gf.Vec3d(.03, 0., .08)
+        rotation = Gf.Matrix4d().SetLookAt(position, focus, up).GetInverse().ExtractRotationQuat()
         camera.set_world_pose(np.array(position), np.array([rotation.GetReal(), *rotation.GetImaginary()]), camera_axes='usd')
         for _ in range(8):
             world.render()
@@ -280,7 +295,9 @@ def run(args):
         from mapped_stack_fixture import free_lift, home, stable_box, tcp_from_wrist
         from mapped_stack_task import Planner, apply_servo
         planner = Planner(args.report.parent)
-        initial = planner.request('homes', bases=FIXTURE['arm_bases_m'], points=[home(0), home(1)])
+        initial = planner.request('homes', bases=FIXTURE['arm_bases_m'],
+            base_yaws=FIXTURE.get('arm_base_yaws_rad', [0., 0.]),
+            points=[home(0, args.mapped_cube_stack), home(1, args.mapped_cube_stack)])
 
     def tcp_position(arm):
         positions, quaternions = wrist_views[arm].get_world_poses()

@@ -3,13 +3,13 @@ import json
 import math
 from pathlib import Path
 
-from mapped_stack_fixture import CUBE_FIXTURE, CUBE_REPORT_BYTES, FIXTURE, judge
+from mapped_stack_fixture import CUBE_FIXTURE, CUBE_REPORT_BYTES, FIXTURE, judge, plan
 from stacking_report import read_regular
 
 
 def verify_report(path, *, sdk_version, seed, cube=False):
     fixture = CUBE_FIXTURE if cube else FIXTURE
-    count = 9 if cube else 3
+    count = len(plan(cube))
     value = json.loads(read_regular(Path(path), limit=CUBE_REPORT_BYTES if cube else 1024*1024))
     if (value.get('schema') != ('rosy.omx-map-cube-stack/1' if cube else 'rosy.omx-map-long-stack/1') or value.get('fixture') != fixture
             or value.get('seed') != seed or value.get('sdk_version') != sdk_version
@@ -17,7 +17,7 @@ def verify_report(path, *, sdk_version, seed, cube=False):
             or not isinstance(value.get('trials'), list) or not 1 <= len(value['trials']) <= fixture['trials']):
         raise ValueError('Mapped scene provenance differs')
     images = value.get('images')
-    allowed = {'mapped-overview.png', 'mapped-initial.png', 'mapped-grasp-failed.png'} | {
+    allowed = {'mapped-overview.png', 'mapped-initial.png', 'mapped-grasp-failed.png'} | ({'mapped-top.png', 'mapped-side.png'} if cube else set()) | {
         f'mapped-{kind}-{i}.png' for kind in ('layer', 'trial') for i in range(1, count+1)}
     if (not isinstance(images, list) or len(set(images)) != len(images) or not set(images) <= allowed
             or not {'mapped-overview.png', 'mapped-initial.png'} <= set(images)):
