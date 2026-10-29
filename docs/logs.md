@@ -12921,7 +12921,7 @@ osy-d395-s1d\`.
 - Gate: 변화 없음. G1c 전체와 G2–G6, 실물·운영·배포·착지/push는 미완료다.
 - CE: 새 교훈 기록 — [FULL JSON과 실제 행렬 구분](solutions/workflow-issues/full-mode-json-does-not-prove-full-matrix-execution-2026-10-29.md). 정본 함수·배열·원격 실행 로그가 근거이며 claims/frontmatter 검사를 통과했다.
 
-## 2026-10-29 · OMX 관제 PC 후속 복구
+## 2026-10-29 · 071d9941bf · OMX 관제 PC 후속 복구
 
 - 변경: 관측 화면 유닛이 선택적 `omx-camera-view.env`의 `ROSY_VIEW_ARGS`를 받아 소스 키를 설정한다. ExecStart drop-in 없이 front 역할과 wrist producer를 연결하는 절차를 배포 안내에 추가했다.
 - 검증: 원격 user systemd 실행으로 기본값·별도 소스 키 인자 누락을 먼저 재현(2 failed, 3 passed)한 뒤 수정본 `071d9941bf`에서 관측·카메라·arm-status·업데이터·harness 247 passed, 4 skipped. 브라우저 검사는 이 실행의 수용 근거가 아니다.
