@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
-- 2026-10-28 · uncommitted · fix(test): 역할 화면 브라우저 시험이 공용 부품의 상대 import를 어느 mount에서나 제공
-- 2026-10-28 · uncommitted · fix(web): 대시보드 시험을 공용 부품의 상대 import에 맞춤 (monitoring 레인)
-- 2026-10-28 · uncommitted · fix(release): Monitoring TLS 시험이 고정한 Caddy 배포 파일 SHA256을 공개 출처로 등록
-- 2026-10-28 · uncommitted · fix(monitoring): Monitoring 화면 배경을 의미 색 역할로
-- 2026-10-28 · uncommitted · feat(land): FULL 등급끼리 묶음 착지 (D-889 추가 6)
+- 2026-10-29 · ccc8712ece · 이송 결과 검수 패키지 검증 기록
+- 2026-10-29 · uncommitted · docs(reference): 기록용 Jira 코멘트 예외를 기존 사람 작업 규칙에 명시한다
+- 2026-10-29 · uncommitted · docs(reference): 연결 안내 행에 §4 기록 코멘트 규칙을 넣는다
+- 2026-10-29 · uncommitted · docs(reference): 기록 코멘트는 이슈마다 하나로 이어 붙인다
+- 2026-10-29 · uncommitted · deploy: GitHub OS 전송과 부분 업데이트 정책 연결

@@ -100,12 +100,25 @@ def batchable(land, wt: Path, other: Path, name: str, tip: str) -> str | None:
     return _BATCHABLE[key]
 
 
-def eligible(land, wt: Path, row: dict, kind: str = "affected") -> bool:
+def plain_auto(args, extra) -> bool:
+    """Explicit checks or freshness requests run alone; only plain auto opts into batching."""
+    return (args.tests == "auto" and not extra and not getattr(args, "node", False)
+            and not getattr(args, "no_cache", False))
+
+
+def taken(tickets: list[dict]) -> set[str]:
+    """Branches a live batch already carries (its leaders' ``batch`` lists): no second batch may take them."""
+    return {name for r in tickets for name in (r.get("batch") or [])}
+
+
+def eligible(land, wt: Path, row: dict, kind: str = "affected", carried_now: set[str] = frozenset()) -> bool:
     """A waiting or pending ticket another landing may carry: this host, a clean branch at its worktree's HEAD."""
     other, name = Path(row.get("worktree") or "."), row.get("branch") or ""
-    if row.get("status") not in ("waiting", "pending") or row.get("host") != socket.gethostname():
+    if (row.get("batch_auto") is not True or row.get("status") not in ("waiting", "pending")
+            or row.get("host") != socket.gethostname()):
         return False
-    if row.get("batch") or name in ("", "main", "HEAD") or not other.is_dir() or other.resolve() == wt.resolve():
+    if (row.get("batch") or name in carried_now or name in ("", "main", "HEAD") or not other.is_dir()
+            or other.resolve() == wt.resolve()):
         return False
     if in_main(land, wt, name):
         return False
@@ -133,15 +146,17 @@ def former(land, wt: Path, qdir: Path, ticket: Path, kind: str = "affected"):
 
     def form(rows: list[dict]) -> bool:
         tickets = land_queue.ahead(qdir, Path("~"))
-        if any(r.get("batch") for r in tickets):
-            return False  # one batch at a time
+        busy = taken(tickets)
+        me = next((r for r in tickets if r["ticket"] == ticket.name), {})
+        if me.get("branch") in busy:
+            return False  # another batch carries this landing
         # The earliest waiting ticket that may batch leads; a safety or FULL-class head no longer stops the rest.
         earlier = [r for r in tickets if r.get("status") == "waiting" and r["ticket"] < ticket.name]
-        if any(eligible(land, wt, r, kind) for r in earlier):
+        if any(eligible(land, wt, r, kind, busy) for r in earlier):
             return False
         joined = []
         for row in tickets:  # waiting and pending, in arrival order: a pending member skips its own pretest
-            if row["ticket"] != ticket.name and len(joined) < KMAX - 1 and eligible(land, wt, row, kind):
+            if row["ticket"] != ticket.name and len(joined) < KMAX - 1 and eligible(land, wt, row, kind, busy):
                 joined.append(row)
         if len(joined) + 1 < BATCH_MIN:
             return False
@@ -158,7 +173,7 @@ def queue(land, wt: Path, branch: str, args, python: str, qdir: Path, ticket: Pa
     """Wait for the turn. 0 when a batch landed this branch; None when it lands alone (``land.rounds``)."""
     kind = group_of(wt, branch)
     form, chosen, measured = former(land, wt, qdir, ticket, kind or "affected")
-    if args.tests != "auto" or safety(land, wt, branch) or kind is None:
+    if not plain_auto(args, land.EXTRA) or safety(land, wt, branch) or kind is None:
         form = None  # a batch is tested; safety branches and explicit --tests land alone (D-889 3)
     while True:
         got = land_queue.wait(qdir, ticket, args.queue_timeout * 60, check=land_prepare.watch(land, wt),
@@ -171,18 +186,61 @@ def queue(land, wt: Path, branch: str, args, python: str, qdir: Path, ticket: Pa
             return 0
         if got != "batch":
             return None
-        members = chosen[:]
-        while members:
-            code, took = lead(land, wt, branch, args, python, qdir, ticket, main_co, members, measured, kind)
-            if code is not None:
-                return code
-            group = [branch, *took]
-            keep = [r for r in members if r["branch"] in took][:(len(group) + 1) // 2 - 1]  # the first half
-            land_queue.set_status(ticket, "waiting", batch=[r["branch"] for r in keep])
-            land_events.emit("train", branches=group, k=len(group), **measured, result="stopped",
-                             bisect=f"keeps {len(keep) + 1} of {len(group)}, the rest re-form or go alone")
-            members = keep
+        if (code := run(land, wt, branch, args, python, qdir, ticket, main_co, chosen[:], measured, kind)) is not None:
+            return code
         form = None  # once its half is down to itself, this landing goes alone
+
+
+def run(land, wt: Path, branch: str, args, python: str, qdir: Path, ticket: Path, main_co: Path,
+        members: list[dict], measured: dict, kind: str, after: str = "waiting") -> int | None:
+    """Lead ``members``, bisecting by halving on a stop; 0 once landed, None when this landing is left alone."""
+    while members:
+        code, took = lead(land, wt, branch, args, python, qdir, ticket, main_co, members, measured, kind)
+        if code is not None:
+            return code
+        group = [branch, *took]
+        keep = [r for r in members if r["branch"] in took][:(len(group) + 1) // 2 - 1]  # the first half
+        land_queue.set_status(ticket, after, batch=[r["branch"] for r in keep])
+        land_events.emit("train", branches=group, k=len(group), **measured, result="stopped",
+                         bisect=f"keeps {len(keep) + 1} of {len(group)}, the rest re-form or go alone")
+        members = keep
+    return None
+
+
+def early(land, wt: Path, branch: str, args, python: str, qdir: Path, ticket: Path, main_co: Path) -> int | None:
+    """At the start, before a pretest of its own: lead the waiting and pending tickets of this landing's group,
+    so they share one pretest. On 2026-10-28 every waiting ticket was FULL-class or unprepared, so the pending
+    affected ones never found a leader and each waited for a pretest slot of its own. 0 when the batch landed
+    this branch; None to go on alone (its own pretest, then ``queue``)."""
+    if ticket is None or not plain_auto(args, land.EXTRA):
+        return None  # a skipped or explicit run never leads
+    tickets = land_queue.ahead(qdir, Path("~"))
+    busy = taken(tickets)
+    if branch in busy or not any(
+            r["ticket"] != ticket.name and r.get("status") in ("waiting", "pending") for r in tickets):
+        return None  # another batch carries it; nobody to carry
+    if land_full.restore(wt, branch) is not None:
+        return None  # a prepared landing leads from its wait (``former``)
+    kind = batchable(land, wt, wt, branch, land.out(wt, "rev-parse", "HEAD"))
+    if kind is None:
+        return None  # safety lands alone
+    joined = [r for r in tickets if r["ticket"] != ticket.name and eligible(land, wt, r, kind, busy)]
+    if not joined:
+        return None
+    p, runs = rate(qdir.parent / land_events.EVENTS)
+    joined = joined[:(kopt(p) if kind == "affected" else min(kopt(p), KFULL)) - 1]
+    land_queue.set_status(ticket, "pending", batch=[r["branch"] for r in joined])
+    mine = {branch, *(r["branch"] for r in joined)}
+    rivals = [r for r in land_queue.ahead(qdir, Path("~")) if r["ticket"] < ticket.name and r.get("batch")
+              and mine & {r.get("branch"), *r["batch"]}]
+    if rivals:  # an earlier ticket took one of these in the same moment: it leads, this one goes alone
+        land_queue.set_status(ticket, "pending", batch=[])
+        return None
+    measured = {"p": None if p is None else round(p, 3), "runs": runs}
+    code = run(land, wt, branch, args, python, qdir, ticket, main_co, joined, measured, kind, after="pending")
+    if code is None:
+        land_queue.set_status(ticket, "preparing", batch=[])
+    return code
 
 
 def lead(land, wt: Path, branch: str, args, python: str, qdir: Path, ticket: Path, main_co: Path,

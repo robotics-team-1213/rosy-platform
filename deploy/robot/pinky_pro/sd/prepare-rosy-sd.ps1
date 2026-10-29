@@ -1100,6 +1100,22 @@ if ($imageLayout) {
     $imageLayout | ConvertTo-Json -Depth 20 -Compress | Set-Content -LiteralPath $layoutSnapshotPath -Encoding UTF8
     $layoutOptions = @("--layout-file", $layoutSnapshotPath)
 }
+function Restore-SignedGpt {
+    if (-not $imageLayout) { return }
+    # Storage discovery may relocate GPT again; restore only after the last discovery call.
+    $inventory = Read-DiskInventory $DiskInventoryJson
+    $number = $(if ($DiskSerial) { Resolve-DiskNumberBySerial $inventory $DiskSerial } else { $DiskNumber })
+    $disk = Select-SafeDisk $inventory $number
+    if ((Get-DiskFingerprint $firstDisk) -ne (Get-DiskFingerprint $disk)) {
+        Fail "target disk changed before GPT restoration"
+    }
+    $targetOptions = @("--device", $readbackTarget)
+    if ($DiskInventoryJson -and $ReadbackDevice) { $targetOptions = @("--fixture-device", $ReadbackDevice) }
+    $restoreTool = Join-Path $PSScriptRoot "restore-media-gpt.py"
+    $null = & $PythonExe $restoreTool --image $ImagePath --image-sha256 $signedRelease.sha256 `
+        --layout-file $layoutSnapshotPath --capacity-bytes ([int64]$disk.Size) @targetOptions
+    if ($LASTEXITCODE -ne 0) { Fail "signed GPT restoration failed" }
+}
 Set-Stage "preflight" "untouched" ""
 function Invoke-Probe([int64]$Bytes, [double]$Seconds) {
     $output = & $PythonExe $readbackVerifier --image $ImagePath --device $readbackTarget --probe --probe-bytes $Bytes --probe-seconds $Seconds.ToString($invariant) @layoutOptions
@@ -1477,6 +1493,7 @@ if ($Emergency) {
 }
 else {
     Set-Stage "readback" "written-unverified" "" ([ordered]@{ total = $imageRawSize })
+    Restore-SignedGpt
     # D-188: the readback runs as a watched process. Its heartbeats land in the
     # progress file; if the verified byte count stops rising for
     # -ReadbackStallMinutes, the verifier is stopped and the failure is an I/O one
@@ -1674,8 +1691,9 @@ try {
     if ((Get-DiskFingerprint $firstDisk) -ne (Get-DiskFingerprint $bundleDisk)) {
         Fail "target disk changed between the readback and the bundle"
     }
-    if ($imageLayout) { Assert-DeviceMediaLayout }
     $bootRoot = Resolve-BootMount $bundleNumber $BootMountPath ([bool]$DiskInventoryJson) $true
+    Restore-SignedGpt
+    if ($imageLayout) { Assert-DeviceMediaLayout }
     $bundleDirectory = Join-Path $bootRoot "rosy-provision"
     # D-187 review: from the first byte on the boot partition, a failure (card
     # pulled mid-copy) leaves a partial bundle that the readback would call a
@@ -1689,14 +1707,16 @@ try {
     Move-Item -LiteralPath $bundleTargetTemp -Destination $bundleTarget
     # The bundle is on the card; the readback would now see it as an extra file,
     # so from here on a failure needs a full rewrite, not -ResumeAfterWrite.
-    # D-389 review: an emergency card is never "complete", even if this window dies here.
-    Set-Stage "receipt" $(if ($Emergency) { "complete-unverified" } else { "complete" }) ""
     $bundleReceipt = Get-Content -LiteralPath $bundleReceiptTemp -Raw | ConvertFrom-Json
     # D-176: an editable settings file next to the bundle; never overwrite one a person edited.
     $configTarget = Join-Path $bootRoot "rosy-config.yaml"
     if (-not (Test-Path -LiteralPath $configTarget)) {
         Copy-Item -LiteralPath (Join-Path $PSScriptRoot "rosy-config.template.yaml") -Destination $configTarget
     }
+    Restore-SignedGpt
+    if ($imageLayout) { Assert-DeviceMediaLayout }
+    # D-389 review: an emergency card is never "complete", even if this window dies here.
+    Set-Stage "receipt" $(if ($Emergency) { "complete-unverified" } else { "complete" }) ""
 }
 finally {
     foreach ($temporaryFile in @($bundleTemp, $bundleReceiptTemp)) {

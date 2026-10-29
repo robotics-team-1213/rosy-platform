@@ -5,11 +5,11 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.329
+**Version:** v1.331
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
-### v1.329 Neutral trip proposals and separate operator admission (D-908)
+### v1.331 Neutral trip proposals and separate operator admission (D-908)
 
 Fleet adds simulation-only trip proposal/read/admit HTTP. Default, unbound and
 non-simulation profiles return 503. A proposal is a durable record that claims
@@ -45,6 +45,21 @@ proposal returns it without a second job. An admitted job is read with
 GOAL_CONFIRMED is transport execution only, never cargo arrival or application
 completion. Cancelling a proposal before admission is not provided yet; an
 admitted job uses the existing job cancel path. Envelope 1.0 unchanged.
+
+### v1.328 Registered OMX dataset archive preparation
+
+The existing host Learning paths add registered dataset discovery and source-bound preparation.
+`GET /api/learning/storage/sources` also returns `omx_configured` and `datasets` entries
+with id/name/revision/source. Discovery reads registered metadata without refreshing jobs,
+copying files or uploading. `POST /api/learning/storage/sources/prepare` accepts the closed
+`kind=omx` body: dataset_id (canonical UUID), revision (64 lowercase hex),
+confirm_completed=true and archive (boolean). Current project binding and publish/manage,
+Origin/CSRF, target privacy, quota and byte verification remain mandatory. The server verifies
+the registered dataset, copies bounded original files and receipts to a separate exports
+folder, rechecks source bytes/revision and resumes only matching partial bytes. Original
+learning data is preserved. This is byte archival of ROSY ACT data, not LeRobot reader,
+policy or field acceptance. Existing paths, CORE envelope1.0 and `schemas.py` models stay
+unchanged; host input validation remains owned by `StoragePrepare.validate()` (D-884).
 
 ### v1.327 Simulation recovery request, independent facts and approval (D-899)
 
@@ -143,9 +158,9 @@ Foundation의 `NAVIGATION_ADMISSION_FENCE_VERSION = 1`을 schemas에서 재수�
 | `POST /api/learning/storage/settings` | 정확히 revision/targets/quotas/reserve_bytes/cache_policy. CAS 저장 후 새 배정 중지. 호스트 root 경로·project_id·실행 명령 변경 불가. |
 | `POST /api/learning/storage/settings/verify` | revision 및 confirm=true. 202; enabled 대상마다 작은 실제 private archive를 쓰고 고정 revision 전체를 다시 읽는다. 불확실한 결과는 기존 job을 재사용한다. |
 | `POST /api/learning/storage/settings/activate` | revision. 현재 연결 세대, fresh quota, 요청자의 대상별 실제 private 읽기/쓰기 proof를 재검증한 뒤 활성화. |
-| `GET /api/learning/storage/sources` | 관리자 전용 bounded 등록 폴더 목록. 내부 내용·임의 파일 탐색 제외. |
+| `GET /api/learning/storage/sources` | 관리자 전용 등록 폴더 목록과 omx_configured, datasets(id/name/revision/source). 학습 실행기를 갱신하거나 파일을 복사하지 않는 등록 메타데이터 읽기. 내부 내용·호스트 경로·임의 파일 탐색 제외. |
 | `GET /api/learning/storage/sim-sources` | 기존 pinned SIM owner의 FINAL 결과 목록 요약. SDK 시작 없음. |
-| `POST /api/learning/storage/sources/prepare` | kind=folder이면 artifact_id/profile/provenance, kind=isaac이면 run_id. 공통 confirm_completed=true 및 archive boolean. 202; 전용 exports에서 seal 또는 FINAL 결과 export 후 archive=true이면 기존 job 전송·검증을 잇는다. 같은 source identity/manifest의 재시도는 같은 job을 사용. |
+| `POST /api/learning/storage/sources/prepare` | kind=folder이면 artifact_id/profile/provenance, kind=isaac이면 run_id, kind=omx이면 dataset_id(canonical UUID)/revision(64자리 SHA). 공통 confirm_completed=true 및 archive boolean. 202; 전용 exports에서 seal, FINAL 결과 export 또는 현재 프로젝트의 등록 OMX 데이터 검증·별도 복사 후 archive=true이면 기존 job 전송·검증을 잇는다. 같은 source identity/manifest의 재시도는 같은 job을 사용. 원본 데이터는 보존한다. |
 
 설정 revision은 신규 reservation transaction에서도 검사한다. 변경은 기존 job의 연결·고정 revision이나 복원을 바꾸지 않는다. 전용 exports/cache는 호스트 workspace 기준으로 생성하며 HTTP가 임의 경로나 SDK/패키지 설치 명령을 받지 않는다.
 
@@ -4310,7 +4325,8 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
-| v1.329 | 2026-10-28 | D-908: closed simulation neutral TRIP proposal/read/admit HTTP; the proposer (service or operator) supplies candidates, request key and steps, a different named operator admits with digest and generation, and admission makes the existing TRIP step-ledger job. No cargo fields; operator trip-jobs POST unchanged. Envelope 1.0 unchanged. |
+| v1.331 | 2026-10-28 | D-908: closed simulation neutral TRIP proposal/read/admit HTTP; the proposer (service or operator) supplies candidates, request key and steps, a different named operator admits with digest and generation, and admission makes the existing TRIP step-ledger job. No cargo fields; operator trip-jobs POST unchanged. Envelope 1.0 unchanged. |
+| v1.328 | 2026-10-28 | Learning registered OMX dataset discovery and fixed-revision archive preparation on existing host paths. Separate verified copy, explicit consent and original preservation; byte archival only. CORE envelope1.0 unchanged. |
 | v1.327 | 2026-10-27 | D-899: closed simulation recovery request, independent RECOVERY_RESET observations, exact operator approval bindings and bounded execution review. Contract registration only; HTTP/UI installation and physical acceptance are separate. Envelope1.0 unchanged. |
 | v1.324 | 2026-10-27 | Robot detail care profiles, persistent fault/caution/maintenance observations, shared motion-characteristics JSON validation and source-token-only advisory load report ingestion; no new command authority. |
 | v1.323 | 2026-10-26 | D-890: optional strict navigate/home intent epochs; CORE Home body preservation and explicit pre-admission Fleet navigate caller-epoch rejection. Canonical fence version registration only; runtime qualification and envelope1.0 unchanged. |

@@ -1107,6 +1107,71 @@ Learning 네이티브 검사와 ACT 평가 경로는 기존 단일 팔 6개 또�
 이 규칙은 리더·팔로워 역할을 지정하거나 serial 포트를 열지 않으며, 토크·관찰·제어 프로세스를
 시작하지 않는다. 팔로워 by-id 식별과 단일 버스 소유권 확인은 기존 관찰·시운전 절차를 따른다.
 
+## 검증된 native 셀 작업 범위 (D-911)
+
+최대 도달범위·전체 경로의 계획 가능성·실물로 검증한 운용범위를 구분한다.
+`cell_envelope.py`는 native 셀의 자동 파지 앞에서 마지막 항목을 검사한다.
+adapter의 시뮬레이션 preflight 통과는 실물 인양 근거가 아니다.
+기존 motion guard와 단일 버스 소유권은 그대로 필요하다.
+
+첫 적용은 검증한 **동일 장치·조건·전체 library**만 허용한다. 카메라 추정이나 Z가 조금만
+달라져도 다른 경로면 미검증이다. 반경 축소·좌표 반올림·높이 보간으로 이 검사를 우회하지 않는다.
+공통 모델의 최대 도달거리를 모든 장치의 안전 반경으로 사용하지 않는다.
+
+설정의 `operating_conditions`에는 확인한 `installation_revision`, `object_revision`,
+실측 `payload_kg`, 세 축의 `object_dimensions_m`, `environment_revision`을 넣는다.
+팔·그리퍼의 실제 설정/보정과 코드 문맥은 현재 chunk session이 별도 SHA로 보고한다.
+장치 readback으로 알 수 없는 베이스·작업대 이동과 물체 교체는 운영자가 revision을 바꿔야 한다.
+완성된 실물 설정과 자료는 공개 저장소에 넣지 않는다. 예제의 null은 직접 측정하기 전까지 유지한다.
+
+현장 승인과 준비가 끝난 시험만 개별 stage로 수집한다. 아래는 사용 형식이며 자동 실행 지시가 아니다.
+
+```bash
+python deploy/robot/omx/cell_pipeline.py --config <private-cell-config.json> --stage transfer --from pinky --to belt --commissioning --person-at-switch
+python deploy/robot/omx/cell_attempts.py summary <work-dir>/attempts.jsonl
+```
+
+시험은 기존 chunk session을 사용하며 별도 serial writer를 열지 않는다.
+`--commissioning`은 `run` 자동 순환과 함께 쓸 수 없고 JSON에 저장해 사람의 존재를 대신할 수도 없다.
+`calibrate`, `reset`, `survey`, `record`도 명시적인 감독 시험 stage다.
+실제 파지·물체 이격·유지 시간·처짐·운반·배치의 기준은 시험 전에 정한다.
+모터 도달, jaw current 또는 최종 배치 영상 하나만으로 모든 단계를 수용하지 않는다.
+
+summary의 `operating_tasks`는 장치/조건/경로별 감독 시험 수, 성공 수, 관측 성공 비율과
+`attempts_sha256`을 제공한다. `unreviewed`인 검토 후보이며 자동 승인 결과가 아니다.
+시험 수나 성공률을 원하는 신뢰도와 동일시하지 않는다. 실패·중단을 지워 분모를 줄이지 않는다.
+
+`cell-envelope.example.json`을 작업의 `operating_envelope_path`에 두고, 실제 물리 근거를
+검토한 담당자가 해당 작업의 review 한 개를 추가한다. reviews가 비어 있으면 자동 작업은 보류한다.
+review의 필드는 다음과 같다.
+
+| 필드 | 값의 근거 |
+|---|---|
+| `task_sha256` | summary의 정확한 작업 key |
+| `scope` | `hardware`; 시뮬레이션 시험은 hardware로 바꾸지 않음 |
+| `reviewed_by`, `evidence_ref` | 검토자와 인양·유지·오차 등을 실제로 확인한 증거 참조 |
+| `attempts_sha256` | summary의 같은 key에 속한 감독 시험 전체 digest |
+| `min_attempts`, `min_success_rate` | 시험 전에 정한 반복·수용 기준; 기본값 없음 |
+| `home_tolerance_units` | 해당 장치에서 수용한 시작 home의 몸체 관절 오차, LeRobot 정규화 단위 |
+
+manifest의 `attempts_path`는 실제 `work_dir/attempts.jsonl`이어야 한다. 상대 경로는 manifest
+디렉터리 기준이다. 같은 작업의 review를 중복으로 두지 않는다. 성공한 기록만 다른 파일로 복사해
+근거로 삼거나 실패 후 과거 파일로 되돌리지 않는다. `evidence_ref`의 물리적 타당성을 소프트웨어가
+판독하지 않으므로 검토 책임은 해당 기록을 승인하는 사람에게 있다.
+
+자동 작업 전의 현재 상태·시작 home과 각 명령의 session/library를 다시 확인한다.
+다른 library 로드나 수동 jog/grip/goto 개입은 자동 사슬을 무효화한다. 중간 중단 시 무조건
+park나 torque-off를 새로 시도하지 않는다. 기존 guard/정지 정책과 하중 상태에 맞는 회수를 따른다.
+
+동작 전 기록한 `attempts.pending.json`이 남으면 완료 여부가 불명확한 작업이다.
+기존 검증만으로 재실행하지 말고 receipt·로그·장치와 물체 상태를 확인한다. 미완료 사실을 작업
+기록에 보존하고 기존 승인된 회수 절차를 마친 뒤 담당자가 pending을 정리한다.
+실제로 수행한 자동 작업이 실패한 경우도 같은 task의 기존 승인은 다시 사용하지 못한다.
+원인을 해결하고 영향받은 조건 revision과 근거를 갱신해 재검증한다.
+
+이 범위는 native 셀 자동 파지에 대한 추가 검사다. 다른 low-level 수동 도구나 Fleet 제품 경로의
+활성화를 승인하지 않으며, 사람과 함께 작업하는 안전 인증이나 실물 장치 수용을 대신하지 않는다.
+
 ## Fleet PC의 상시 관측과 기존 Cell 화면
 
 두 팔의 관절 읽기와 세 카메라의 ROS 구독은 Fleet PC에서 실행한다.

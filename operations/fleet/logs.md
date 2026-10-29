@@ -5067,3 +5067,17 @@
 - 증거: 가짜 principal·simulated trip ports와 실제 HTTP·SQLite 경로에서 오래된 generation 승인, 부분 job commit, actor 불일치, 기존 direct job 재표기를 4 failed로 확인했다. 승인 기록 변조와 중단 후 재시도를 추가한 확장 RED는 8 failed / 1 passed다. 독립 계약 검토는 원자성·원래 actor·generation·멱등 shortcut 결속을 확인했으며 GREEN·현 main 통합은 별도다.
 - gate 변화: 없음. 추가 로봇 명령이나 새 공개 필드를 열지 않고 기존 승인 계약을 보존한다. 실제 장치·현장 수용을 수행하지 않았다.
 - CE: 미해결 — 회귀 GREEN과 실제 착지 확인 전이며 해결 판단은 통합 시험과 원자 결속 구현에 연결한다.
+
+## 2026-10-29 · ccc8712ece · 이송 결과의 검수 패키지와 복구 root 분할 검사
+
+- 변경: OMX curation에 기존 export v2 원본 bytes·SHA·계보를 보존하는 오프라인 검수 패키지와 재검증 CLI를 추가했다. 같은 root 및 참조 자식의 분할 혼입·중복 미션·계보 충돌·비정상 JSON을 거절한다. Fleet 안내의 이미 연결된 HTTP·콘솔 상태를 바로잡고 curation 사용 경로를 연결했다.
+- 증거: [동결 검증 기록](../../docs/validation/transfer-review-package-2026-10-29/result.md). 원격 curation 전체 328 pass·10 skip, runner/classifier exit 0, NEW 0. 독립 검토의 root 별칭·숫자 overflow 문제를 각각 RED 재현 후 수정했고 최종 재검토에 주요 지적이 없다.
+- Gate: 실행·학습 수용 변화 없음. 검수 전 메타데이터와 behavior_training_eligible=false를 유지한다. 실제 라벨 검수·학습·장치 수용은 별도다.
+- CE: 해당 없음 — 판단과 거절 조건이 구현·회귀·사용 안내에 남는다.
+
+## 2026-10-29 · uncommitted · fix(fleet): proposal admission 회귀 검증과 현 main 통합
+
+- 검증: `commit db140ac411`의 원격 승인·제안·후보·TRIP ledger·조회 회귀는 97 passed / 0 skipped, NEW·known·flaky 0이다. 이 증거는 병합 전 revision에 속한다.
+- 변경: 별도 예약 API v1.331로 live pin을 갱신하고 main의 v1.328 OMX archive 계약과 양쪽 이력을 함께 보존했다. 존재하는 D-908의 gap 선언만 제거했다. 합성·FULL 및 실제 main 착지는 별도 확인한다.
+- Gate: 추가 실행 권한이나 공개 필드 변경 없음. 실제 장치·현장 수용은 수행하지 않았다.
+- CE: 해당 없음 — 원래 generation과 승인자의 원자 결속, 재시도 검증 기준이 구현·실제 HTTP/SQLite 회귀에 남는다. 별도 교훈이 없으면 재발할 추가 환경 제약은 확인하지 않았다.

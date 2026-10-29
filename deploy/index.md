@@ -76,8 +76,8 @@
 
 ## 최근 기록
 
-- 2026-10-28 · uncommitted · fix(omx): 카메라 자동 조정이 역할마다 실제 미리보기 유닛을 확인
-- 2026-10-28 · bc32cb9b41 · 정지 시험의 OS 가짜 호출 격리
-- 2026-10-28 · b3641b2165 · OMX 운영 관측의 native 통신 경계
-- 2026-10-28 · 8facd08fea · Native enrollment current-main integration candidate
-- 2026-10-28 · uncommitted · Native motor-health 종료 시각 수정 초안
+- 2026-10-29 · 7763e92691 · 접속 복구 착지 전 중간 이력의 오탐 검토
+- 2026-10-29 · uncommitted · fix(deploy): 관제 PC front 카메라 인스턴스 선언 정리
+- 2026-10-29 · 8704f12108 · 운영 키 조합 검사와 접속 복구 중단 상태
+- 2026-10-29 · uncommitted · deploy: GitHub OS 전송과 서명된 부분 갱신
+- 2026-10-28 · 8c3a60f344 · Pinky 접속 복구와 운영 키 누락 차단
