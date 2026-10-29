@@ -31,14 +31,14 @@ def _prune_backups(directory: Path, keep: int) -> list[str]:
 
 
 #: 2026-10-28 자원 경계: 무한히 쌓이던 원장 행의 보존 기간(일).
-DEFAULT_HISTORY_RETENTION_DAYS = 30   # 종료 작업의 fleet_task_history 행과 fleet_tasks 행
-DEFAULT_AUDIT_RETENTION_DAYS = 90     # rosy_account_audit / device_pairing_audit / core_event_audit
+DEFAULT_HISTORY_RETENTION_DAYS = 30   # 종료 작업의 fleet_task_history 행
+DEFAULT_AUDIT_RETENTION_DAYS = 90     # device_pairing_audit / core_event_audit
 
 
 def prune_ledger(source: Path | str, *, history_days: int = DEFAULT_HISTORY_RETENTION_DAYS,
                  audit_days: int = DEFAULT_AUDIT_RETENTION_DAYS) -> dict[str, int]:
-    """Delete terminal-task rows (history first, then the task row) older than
-    ``history_days`` and audit rows older than ``audit_days``. Runs on the live
+    """Delete terminal-task history older than
+    ``history_days`` and pairing/CORE audit rows older than ``audit_days``. Runs on the live
     volume after a fresh backup; tables missing from an older schema are skipped."""
     path = Path(source)
     if history_days < 0 or audit_days < 0:
@@ -70,18 +70,8 @@ def prune_ledger(source: Path | str, *, history_days: int = DEFAULT_HISTORY_RETE
                         " SELECT task_id FROM fleet_tasks WHERE status IN"
                         " ('COMPLETED','FAILED','CANCELED','EXPIRED')"
                         " AND updated_at < ?)", (history_cutoff,)).rowcount
-                    # The task row itself (request/evidence/receipt JSON) goes with its
-                    # history: the NOT EXISTS guard leaves no orphaned history behind and
-                    # also collects tasks whose history an earlier prune already removed.
-                    removed["fleet_tasks"] = db.execute(
-                        "DELETE FROM fleet_tasks WHERE status IN"
-                        " ('COMPLETED','FAILED','CANCELED','EXPIRED') AND updated_at < ?"
-                        " AND NOT EXISTS (SELECT 1 FROM fleet_task_history"
-                        " WHERE task_id = fleet_tasks.task_id)", (history_cutoff,)).rowcount
-                if audit_cutoff is not None and "rosy_account_audit" in tables:
-                    removed["rosy_account_audit"] = db.execute(
-                        "DELETE FROM rosy_account_audit WHERE created_at < ?",
-                        (audit_cutoff,)).rowcount
+                    # Task rows retain request-key identity and the original replay response.
+                # Account audit is part of the exact security-state restore guard.
                 if audit_cutoff is not None and "device_pairing_audit" in tables:
                     removed["device_pairing_audit"] = db.execute(
                         "DELETE FROM device_pairing_audit WHERE at < ?",
@@ -344,7 +334,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                              "backup (default 30; 0 disables)")
     backup.add_argument("--prune-audit", type=int, default=DEFAULT_AUDIT_RETENTION_DAYS,
                         metavar="DAYS",
-                        help="delete account/pairing audit rows older than DAYS after the "
+                        help="delete pairing/CORE event audit rows older than DAYS after the "
                              "backup (default 90; 0 disables)")
     verify = commands.add_parser("verify", help="run SQLite integrity_check")
     verify.add_argument("--path", type=Path, required=True)

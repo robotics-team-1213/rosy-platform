@@ -3930,3 +3930,10 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: tests-only `b808a821c2`의 공식 원격 실행에서 도구 부재 15 ERROR를 확인했다. Windows PowerShell의 폐기용 도우미 fixture는 수정 전 키 누락 assertion으로 실패했고 수정 후 7개 self-check와 설정·3장 연속 기록 fixture가 통과했다. 후보 `f594cb588d`의 집중 원격 회귀는 140 passed/2 Windows-only skipped, NEW 0이다. 독립 검토의 계정 디렉터리 탐색·키 읽기 권한 누락은 `bf3cab97bc`에서 6 FAILED로 재현했다. 보강한 `8c3a60f344`의 영향 선택은 459 passed/2 skipped이며 갱신 전 생성 인덱스의 계약 2건이 실패했다. 인덱스를 재생성해 후속 커밋에서 재검증한다. 독립 재검토의 Critical/Important는 0이다.
 - gate 변화: 없음. 카드 마운트·실물 키 변경·장치 등록·모터 활성화·배포·착지는 수행하지 않았다. 유지보수용 관리자 웹 endpoint를 새로 열지 않는다.
 - CE: 미해결 — 실제 장치의 인증 장애 원인과 실물 복구는 확인하지 못했다. 코드의 복구 거절·원본 보존과 장치 수용을 구분한다.
+
+## 2026-10-29 · uncommitted · fix(site): 보존 정리가 요청 재실행과 새 백업 복원 거절을 만들지 않게 한다
+
+- 변경: terminal history·pairing/CORE audit 정리는 유지하고 `fleet_tasks`와 계정 감사 행은 보존한다. 기존 멱등성 조회와 계정 보안 상태 복원 검사를 그대로 유지한다. backup의 UID·read-only rootfs·cap drop·network 차단은 유지하고 live DB 명명 볼륨만 정리·checkpoint에 필요한 rw로 맞춘다. Task 본문과 계정 감사 저장량은 이번 정리 범위에 포함하지 않는다.
+- 증거: 독립 검토의 멱등성·DB mount·안전 경계 결함을 원격 6 failed로 재현했다. 실제 backup→prune→restore는 변경 전 계정 감사 삭제로 `Account security state differs` 1 failed를 별도로 확인했다. 후속 GREEN·전체 착지는 공식 게이트에서 확인하며 실물 DB에는 실행하지 않았다.
+- gate 변화: 없음. 백업·복원과 작업 API 계약을 완화하지 않았다.
+- CE: 미해결 — 회귀 GREEN과 실제 착지 확인 전이다. 해결 판단은 새 통합 회귀와 이 보존 범위에 연결한다.

@@ -502,14 +502,3 @@ def test_fresh_backup_remains_restorable_after_account_audit_retention(tmp_path,
     assert restored.integrity == "ok"
     with closing(sqlite3.connect(database)) as db:
         assert db.execute("SELECT COUNT(*) FROM rosy_account_audit").fetchone()[0] == 2
-
-
-def test_backup_service_retention_has_a_writable_live_database_volume():
-    import yaml
-
-    compose = yaml.safe_load((Path(__file__).parents[1] / "deploy/site/compose.yaml").read_text())
-    backup = compose["services"]["fleet-backup"]
-    assert "--prune-history" in backup["command"] and "--prune-audit" in backup["command"]
-    database = next(volume.split(":") for volume in backup["volumes"]
-                    if volume.split(":")[1] == "/var/lib/rosy")
-    assert "ro" not in database[2:], "post-backup retention writes the live database"

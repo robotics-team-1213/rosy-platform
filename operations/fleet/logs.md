@@ -5073,3 +5073,10 @@
 - 증거: 특성 시험(키 순서 `list(d.items())` 고정, 독립 리스트) + 검토가 요구한 두 미피복 동작 — goal 순간 빈 상태 읽기의 폐쇄 실패(TRUSTED 이력이 전송하지 않음)와 보류의 대기열 항목 무병합 교체. 원격 4 suite(신규·traffic·console·boundaries) green, known NEW 0. 변이 검증: 전송 전 untrusted 보류 비활성화 → 폐쇄 실패 시험 red(`6c6f45582b`), 복원 green(`239740362c`). 독립 검토 2건(codex·claude) 반영 — 단계 분리 판정, 깃발·route 부재 규칙, 판정 문자열만 경계 통과, 무병합 교체, attempt_seq=0.
 - Gate: 없음. B단계(전송 후 경로 충돌 판정)·C단계(_make_room/bays)는 별도 착지.
 - CE: 해당 없음 — 판정·모양이 특성 시험과 변이 이력으로 고정됐다.
+
+## 2026-10-29 · uncommitted · fix(fleet): 추출된 목표 판정 관측 helper의 안전 소유권을 보존한다
+
+- 변경: `server/console/observe.py`를 canonical safety module과 내부 anchor에 등록하고 frozen 안전 위반 목록에 더했던 예외를 제거했다. 원래 상태 읽기·freshness·REST fallback·판정 순서와 공개 안전 API는 바꾸지 않는다.
+- 증거: 예외를 제거한 원격 RED가 `console.py → fleet.server.observe`의 새 안전 경계 위반을 검출했다. 독립 검토가 내부 anchor와 실제 파일 분류 보존을 요구했으며 최종 manifest·소스·회귀는 공식 게이트에서 재검증한다.
+- gate 변화: 없음. 예외를 늘리거나 안전 검사를 약하게 하지 않는다.
+- CE: 해당 없음 — 분류·예외 제거·회귀 시험이 적용 조건을 설명한다.
