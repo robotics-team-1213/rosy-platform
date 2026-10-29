@@ -92,17 +92,19 @@ export function bindTopbarToggle(listen = (node, type, fn) => node.addEventListe
 
 // English role names and principal ids stay in title (D-540 2); a development session says so with its badge.
 export function showSession(identity) {
+  const tag = $("user-role"), title = `${identity.principal_id} · ${identity.role}`;
+  const changed = tag.title !== title;
   $('fleet-login').hidden = true;
   $('fleet-account').hidden = false;
   $('fleet-account-identity').textContent = `${identity.principal_id} · ${roleLabel(identity.role)}`;
   const token = $('token-access');
-  if (token) token.open = false;
+  if (token && changed) token.open = false;
   // A session is stated in words, so the row it was entered through folds again (D-741 3):
   // one header line is what the operator reads after connecting.
-  setTopbarOpen(false);
-  const tag = $("user-role"), development = identity.principal_id.startsWith("development-");
+  if (changed) setTopbarOpen(false);
+  const development = identity.principal_id.startsWith("development-");
   tag.textContent = roleLabel(identity.role);
-  tag.title = `${identity.principal_id} · ${identity.role}`;
+  tag.title = title;
   tag.setAttribute("status", identity.role === "operator" ? "active" : "neutral");
   if (development) $("development-badge").hidden = false;
   gateEstop(identity);

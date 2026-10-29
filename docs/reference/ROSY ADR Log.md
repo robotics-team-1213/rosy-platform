@@ -10,6 +10,9 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-910 | Learning 검수 문서의 정적 공통 셸. [전문](../adr/D-910-learning-static-shell-components.md) | Accepted (2026-10-28) |
+| D-909 | Fleet 절차 문서의 경량 헤더와 배치 역할. [전문](../adr/D-909-fleet-procedure-document-components.md) | Accepted (2026-10-28) |
+| D-906 | Fleet 정적 공통 컴포넌트와 레이아웃 역할 토큰. [전문](../adr/D-906-fleet-static-components-layout-roles.md) | Accepted (2026-10-28) |
 | D-912 | Signed OS transport maintenance with independent authority and durable recovery. [전문](../adr/D-912-signed-os-transport-maintenance.md) | Proposed |
 | D-911 | OMX native 셀의 검증된 작업 범위와 현재 실행 조건을 구분한다. [전문](../adr/D-911-omx-native-reviewed-operating-envelope.md) | Accepted (2026-10-28, 구현 승인; 장치 수용 별도) |
 | D-898 | Fleet 인식 모델 승인을 모델 PC 레지스트리에 반영 — 사람이 나르는 Ed25519 서명 결정 파일 | Proposed (2026-10-27) |

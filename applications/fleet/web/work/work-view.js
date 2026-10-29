@@ -135,6 +135,12 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
     el("work-context").hidden = fresh;
     document.querySelector('[aria-labelledby="roster-heading"]').hidden = true;
   }
+  function clearRequests(message) {
+    const requests = el("channel-requests"), state = el("channel-requests-state");
+    const focused = requests.contains(document.activeElement);
+    requests.replaceChildren(); state.textContent = message;
+    if (focused) state.focus({preventScroll: true});
+  }
   function reset(message = "접속 후 작업을 확인할 수 있습니다.", preserveUnits = false) {
     if (!preserveUnits) { units.reset(); arms.reset(); integrated.reset(); }
     channelRequestView.reset();
@@ -142,8 +148,7 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
     showKinds();
     newStatus.textContent = message;
     list.replaceChildren(); clear();
-    el("channel-requests").replaceChildren();
-    el("channel-requests-state").textContent = message;
+    clearRequests(message);
     el("work-state").textContent = message;
     el("work-evidence").textContent = "작업을 선택하세요.";
   }
@@ -274,6 +279,8 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
     const requests = el("channel-requests"), state = el("channel-requests-state");
     try {
       const result = await call("/api/fleet/channel-requests"); life.check();
+      const focused = requests.contains(document.activeElement) ? document.activeElement?.closest("[data-request-id]")?.dataset.requestId : null;
+      let restored;
       requests.replaceChildren();
       for (const row of result.rows) {
         const item = document.createElement("li"), text = document.createElement("p"), info = document.createElement("p");
@@ -282,17 +289,19 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
         info.textContent = `접수 · ${new Date(row.received_at).toLocaleString()} · ${row.request_id}`;
         item.append(text, info); requests.append(item);
         const button = document.createElement("ui-button");
+        button.dataset.requestId = row.request_id;
         button.setAttribute("kind", "quiet"); button.setAttribute("type", "button");
         button.textContent = "요청 검토";
         button.addEventListener("click", () => channelRequestView.select(row)); item.append(button);
+        if (focused === row.request_id) restored = button;
       }
       state.textContent = `${result.rows.length}건 · 접수된 원문입니다. 실행 승인은 별도로 확인합니다.`;
+      if (focused) (restored || state).focus({preventScroll: true});
     } catch (error) {
       if (!life.current()) return;
-      requests.replaceChildren();
       channelRequestView.reset();
-      state.textContent = error.status === 404 ? "대화 요청 접수가 설정되지 않았습니다." :
-        error.status === 401 || error.status === 403 ? "기명 운영자 접속이 필요합니다." : "대화 요청 조회 실패";
+      clearRequests(error.status === 404 ? "대화 요청 접수가 설정되지 않았습니다." :
+        error.status === 401 || error.status === 403 ? "기명 운영자 접속이 필요합니다." : "대화 요청 조회 실패");
     }
   }
   scope.listen(el("work-filter"), "change", paint);

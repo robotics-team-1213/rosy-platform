@@ -143,7 +143,6 @@ export function createConsoleAuth({ pageScope, el, view, auth, call, fleetClient
     try {
       const info = await fleetClient("/api/fleet/auth/connection");
       el("development-badge").hidden = info?.mode !== "development";
-      el("token-access").hidden = info?.mode === "development";
       return info?.mode === "development";
     } catch (_err) {
       return false;

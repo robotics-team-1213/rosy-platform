@@ -828,3 +828,9 @@
 - 변경: verification record only for commit `ed77a021dc396e7296141609957fecc4af082d35`, tree oid `4714c995793b4ad2cd883665f3992cd029d6c16d`. Production and test content is unchanged. All inherited log entries, including pending markers, are preserved.
 - 증거: existing committed-source job ed77a021dc-eee696 reported 1106 passed, 9 skipped and 12 dependency deprecation warnings with pinned comparison 0 NEW. Scope was the complete adapter suite plus installed-package/offline-client, hardware-owner, transfer/watchdog/updater/Fleet-preflight/training-parent and selected local event/journal regressions. Verbose worker output contains 1106 unique named passed node IDs. This records that source run, not a new integration run.
 - gate 변화: no ROS-SIM, DEVICE, FIELD or native-consumer readiness. Five named skip events cover three optional Chromium cases and two actual_cpu_synthetic cases; four additional collection/import skip records have no emitted runtime reason/node ID. Existing ROS guards and torch/lerobot requirements are prerequisites, not observed passes. Corrective committed release-boundary verification and formal landing remain pending. CE: existing Git-ID and Windows-parent-UTF8 lessons apply; no new lesson recorded.
+
+## 2026-10-28 · fce9c60216 · SIM Pilot의 배치 자산 일치
+
+- 변경: SIM Pilot allowlist에 layout.css를 추가해 CORE·개발 서버와 같은 자산을 제공한다. 시뮬레이션 명령·latch·소유권은 변경하지 않는다.
+- 증거: 날짜별 검증 기록 `docs/validation/robot-pilot-learning-ux-2026-10-28/result.md`에 RED·고정 SHA·원격 영향/브라우저 결과·독립 소스/실제 화면 검토를 구분했다. 설치 자산·라우트 회귀 fce9c60216은20 passed, skip0이다.
+- gate 변화: 없음. 실제 장치·APK/ARM64 빌드·현장 수용은 별도다. CE: 해당 없음 — 기존 크기 이력 교훈을 적용하고 이번 경계의 판단을 코드·회귀·D-910에 남겼다.

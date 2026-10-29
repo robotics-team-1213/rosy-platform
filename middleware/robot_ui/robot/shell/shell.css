@@ -22,6 +22,8 @@ body {
 .surface-auth-link:hover { color: var(--text-primary); background: var(--brand-rose-wash); }
 .surface-auth-link:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 #shell-estop { flex: none; white-space: nowrap; }
+#shell-notice { min-inline-size: 0; overflow-wrap: anywhere; max-block-size: calc(var(--text-label) * var(--leading-copy) * 2); overflow: auto; }
+ui-topbar > ui-brand { flex-shrink: 0; }
 .surface-main {
   box-sizing: border-box;
   width: 100%;

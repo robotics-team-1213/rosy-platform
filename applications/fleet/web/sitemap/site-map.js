@@ -750,7 +750,7 @@ watchFleet(request);
 $('console-token').addEventListener('keydown', event => { if (event.key === 'Enter') $('token-save').click(); });
 
 developmentToken($('console-token').value).then(token => {
-  if (token) { $('console-token').value = token; $('token-access').hidden = true; $('token-save').click(); }
+  if (token) { $('console-token').value = token; $('token-save').click(); }
   // D-540 2 — a stored token (another Fleet tab) or a login cookie connects at once; neither means signed out.
   else loginForm.refresh(true).then(cookie => {
     if (cookie || stored) $('token-save').click();

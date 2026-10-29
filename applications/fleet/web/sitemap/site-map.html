@@ -22,7 +22,8 @@
   <a class="skip-link" href="#site-map-main">본문으로 건너뛰기</a>
   <!-- D-540 2 — 네 문서가 같은 머리다(test_fleet_header.py가 글자 그대로 고정한다). 움직임은 web/shared/fleet-header.js 하나다. -->
   <header class="fleet-header">
-  <ui-topbar>
+  <!-- fleet:header:start -->
+<ui-topbar>
     <div class="fleet-header-identity" data-header-region="identity" role="group" aria-label="제품과 현장">
     <ui-brand href="/console" aria-label="Rosy Fleet 관제 홈"><b><span class="fleet-wordmark">Fleet</span></b><small id="fleet-name">사이트</small></ui-brand>
     </div>
@@ -53,22 +54,25 @@
 
       <details id="token-access" class="token-access">
         <summary>토큰으로 접속</summary>
-        <input id="console-token" class="ui-field token" type="password" placeholder="관제 토큰"
+        <input id="console-token" class="ui-field" type="password" placeholder="관제 토큰"
                autocomplete="off" aria-label="관제 토큰">
         <ui-button kind="quiet" id="token-save" type="button">접속</ui-button>
       </details>
     </div>
   </ui-topbar>
+<!-- fleet:header:end -->
   </header>
   <!-- D-741 2 — Fleet 문서 넷은 같은 탐색 레일을 쓴다. 영역은 관제·작업·기록·지도·설치 다섯이다. -->
   <div class="fleet-body">
-  <nav class="doc-tabs" aria-label="Rosy Fleet 문서">
+  <!-- fleet:nav:start -->
+<nav class="doc-tabs" aria-label="Rosy Fleet 문서">
     <a href="/console" data-action-icon="fleet">관제</a>
     <a href="/console?view=work" data-action-icon="list">작업</a>
     <a href="/console?view=records" data-action-icon="history">기록</a>
-    <a href="/console/site-map" data-action-icon="map" aria-label="현장 지도" aria-current="page">지도</a>
+    <a href="/console/site-map" aria-current="page" data-action-icon="map" aria-label="현장 지도">지도</a>
     <a href="/console/install" data-action-icon="install" aria-label="설치·보정">설치</a>
   </nav>
+<!-- fleet:nav:end -->
   <div class="ui-subnav"><nav class="ui-subnav-nav" aria-label="현장 지도 작업">
     <a class="ui-subnav-item" href="#map-heading">지도 보기</a>
     <a class="ui-subnav-item" href="#survey-heading">지도 만들기</a>
@@ -80,7 +84,7 @@
   </nav></div>
   <div class="fleet-workspace">
   <ui-status id="estop-feedback" hidden></ui-status>
-  <main id="site-map-main" tabindex="-1">
+  <main id="site-map-main" class="fleet-task-page" tabindex="-1">
     <ui-text id="notice" role="status" aria-live="polite">접속하면 활성 지도와 초안을 읽습니다. 경로 미리보기는 로봇을 움직이지 않습니다.</ui-text>
     <ui-section aria-labelledby="map-heading">
       <ui-head>

@@ -32,7 +32,7 @@ pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason="opt-in Chro
 ROOT = Path(__file__).resolve().parents[3]
 DOCS = [("console", "/console"), ("install", "/console/install"),
         ("site-map", "/console/site-map"), ("cell", "/console/cell")]
-SIZES = [(1920, 1080), (1366, 768), (1440, 900), (1024, 768), (390, 844), (320, 568)]
+SIZES = [(1920, 1080), (1366, 768), (1440, 900), (1024, 768), (768, 1024), (390, 844), (320, 568)]
 STUCK = {"stuck_id": "stuck-abc", "cause": "obstacle_ahead", "phase": "ASKING", "held_s": 41.0,
          "attempts": 1, "max_attempts": 2, "local_enabled": True, "ask_remaining_s": 9.0,
          "last_answer": None, "decisions": ["WAIT", "RESUME", "BACK_AND_RETRY", "MANUAL", "ABORT"],
@@ -265,6 +265,97 @@ def test_four_documents_draw_one_header_and_one_estop(tmp_path):
             # Same size and place on every document (a scrollbar may shift x by its width).
             assert fact["stop"][2:] == first["stop"][2:], (name, width, fact["stop"], first["stop"])
             assert abs(fact["stop"][1] - first["stop"][1]) <= 1, (name, width, fact["stop"], first["stop"])
+
+
+@pytest.mark.parametrize('name,path', DOCS)
+@pytest.mark.parametrize('width', [320, 390, 768, 1440])
+def test_authenticated_account_refresh_preserves_explicit_menu_and_token_access(tmp_path, name, path, width):
+    from playwright.sync_api import expect
+    with _fleet(tmp_path, console_token='header-token') as (browser, origin):
+        page = browser.new_page(viewport={'width': width, 'height': 1000})
+        page.goto(origin+path)
+        expect(page.locator('#user-role')).to_have_text('인증 필요')
+        open_token_access(page)
+        page.locator('#console-token').fill('header-token')
+        page.locator('#token-save').click()
+        expect(page.locator('#fleet-login')).to_be_hidden()
+        expect(page.locator('#topbar-extra')).to_be_hidden()
+        page.locator('#topbar-more').click()
+        expect(page.locator('#topbar-extra')).to_be_visible()
+        expect(page.locator('#token-access')).to_be_visible()
+        open_token_access(page)
+        page.locator('#console-token').fill('replacement-pending')
+        before = page.locator('ui-topbar').bounding_box()
+        page.evaluate("""async()=>{
+          const header=await import('/console/assets/fleet-header.js');
+          const response=await fetch('/api/fleet/session',{headers:{Authorization:'Bearer header-token'}});
+          header.showSession(await response.json());
+        }""")
+        expect(page.locator('#topbar-more')).to_have_attribute('aria-expanded', 'true')
+        expect(page.locator('#console-token')).to_be_visible()
+        expect(page.locator('#console-token')).to_have_value('replacement-pending')
+        assert abs(page.locator('ui-topbar').bounding_box()['height']-before['height'])<=1
+        assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
+        if shots := os.environ.get('ROSY_SHOT_DIR'):
+            target=Path(shots).expanduser();target.mkdir(parents=True,exist_ok=True)
+            page.screenshot(path=str(target/f'account-menu-open-{name}-{width}.png'))
+        page.locator('#fleet-theme').focus()
+        page.keyboard.press('Escape')
+        expect(page.locator('#topbar-more')).to_be_focused()
+        if shots := os.environ.get('ROSY_SHOT_DIR'):
+            target=Path(shots).expanduser();target.mkdir(parents=True,exist_ok=True)
+            page.screenshot(path=str(target/f'account-stable-{name}-{width}.png'))
+        page.close()
+
+
+@pytest.mark.parametrize('width', [320, 390, 768, 1440])
+def test_canonical_chrome_is_in_first_response_without_page_javascript(tmp_path, width):
+    from playwright.sync_api import expect
+    with _fleet(tmp_path, console_token='header-token') as (browser, origin):
+        for name, path in DOCS:
+            page = browser.new_page(viewport={'width': width, 'height': 1000}, java_script_enabled=False)
+            response = page.goto(origin+path)
+            assert '<!-- fleet:header:start -->' in response.text()
+            assert '<!-- fleet:nav:start -->' in response.text()
+            expect(page.locator('ui-topbar')).to_have_count(1)
+            expect(page.locator('#estop')).to_be_visible()
+            expect(page.locator('#estop')).to_have_attribute('data-always-live', '')
+            expect(page.locator('.doc-tabs a')).to_have_count(5)
+            if name != 'install':
+                expect(page.locator('.doc-tabs + .ui-subnav')).to_have_count(1)
+            expect(page.locator('#topbar-extra')).to_be_hidden()
+            assert page.evaluate('document.documentElement.scrollWidth<=innerWidth'), name
+            box = page.locator('#estop').bounding_box()
+            assert box['x']>=0 and box['x']+box['width']<=width+1 and box['y']+box['height']<=1000, (name,box)
+            page.close()
+
+
+@pytest.mark.parametrize('width', [320, 390, 768, 1440])
+def test_task_layout_and_feedback_share_role_geometry(tmp_path, width):
+    from playwright.sync_api import expect
+    with _fleet(tmp_path, console_token='registry-only', development_sessions=DevelopmentSessions()) as (browser, origin):
+        for name, path in DOCS:
+            page = browser.new_page(viewport={'width': width, 'height': 1000})
+            page.goto(origin+path)
+            expect(page.locator('#user-role')).to_have_text('운영자')
+            page.evaluate("""async()=>{
+              const header=await import('/console/assets/fleet-header.js');
+              header.stopNotice('Layout feedback fixture');header.noteLink({status:503});
+            }""")
+            expect(page.locator('#estop-feedback')).to_be_visible()
+            geometry = page.evaluate("""()=>{
+              const main=document.querySelector('main'),css=getComputedStyle(main),root=getComputedStyle(document.documentElement);
+              const box=main.getBoundingClientRect(),feedback=document.querySelector('#estop-feedback').getBoundingClientRect();
+              return {padding:parseFloat(css.paddingLeft),role:parseFloat(root.getPropertyValue('--inset-task-page')),
+                left:box.left+parseFloat(css.paddingLeft),feedback:feedback.left,
+                overflow:document.documentElement.scrollWidth-innerWidth};
+            }""")
+            assert geometry['padding']==geometry['role'] and abs(geometry['left']-geometry['feedback'])<=1, (name,geometry)
+            assert geometry['overflow']<=0, (name,geometry)
+            if shots := os.environ.get('ROSY_SHOT_DIR'):
+                target=Path(shots).expanduser();target.mkdir(parents=True,exist_ok=True)
+                page.screenshot(path=str(target/f'layout-roles-{name}-{width}.png'))
+            page.close()
 
 
 def test_a_lost_link_is_readable_on_a_phone(tmp_path):
