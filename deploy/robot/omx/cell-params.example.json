@@ -589,5 +589,17 @@
   "unit": "mm",
   "source": "default",
   "evidence": "2026-10-29 facts-2026-10-29.md 22-23: with biases varying 12.7 mm over 4.7 cm, pivot right over the target; off until a real run saves a region there (the first ran 5 of 6 yaws, then motor 16 stopped answering)"
+ },
+ "objects.split_touching": {
+  "value": 1,
+  "unit": "flag",
+  "source": "default",
+  "evidence": "2026-10-29 facts-2026-10-29.md 28: a 1-cell and a 2-cell lying corner to corner made one unmatched blob and no push could part them; boxes that only touch are separated by a distance-transform watershed, each piece must match"
+ },
+ "objects.split_peak_frac": {
+  "value": 0.6,
+  "unit": "ratio",
+  "source": "default",
+  "evidence": "2026-10-29 facts-2026-10-29.md 28: a 1-cell and a 2-cell lying corner to corner made one unmatched blob and no push could part them; boxes that only touch are separated by a distance-transform watershed, each piece must match"
  }
 }

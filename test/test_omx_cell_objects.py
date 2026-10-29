@@ -101,3 +101,14 @@ def test_black_object_on_light_surface():
 
 def test_shadow_is_not_an_object():
     assert seen(scene([], patches=[((0, 0, 70, 40, 20), (150, 150, 150))])) == []
+
+
+def test_a_1_cell_and_a_2_cell_touching_at_a_corner_are_found_as_two_targets():
+    """2026-10-29 floor: corner to corner they made one unmatched blob that no push could part."""
+    img = scene([(-60, 0, 30, 30, 0), (-25.5, 32.5, 60, 30, 45)])
+    alone = co.detect(img, ROI, RECORD, CAMERA, CATALOG, params={"objects.split_touching": 0})
+    assert len(alone) == 1 and not alone[0]["matched"]
+    found = sorted(seen(img), key=lambda o: o["object"] or "")
+    assert [o["object"] for o in found] == ["container-1", "container-2"]
+    assert all(o["matched"] and o.get("split_from") == "touching" and o["hull_px"] for o in found)
+    assert found[0]["centre_mm"] == pytest.approx([-60, 0], abs=3) and found[1]["centre_mm"] == pytest.approx([-25.5, 32.5], abs=3)

@@ -189,10 +189,15 @@ def side_clear(mask, roi, pixel_fn, o: dict, finger_mm: float, closing_deg: floa
     import cv2
 
     centre = pixel_fn(tuple(o["raw_m"]))
-    n, labels = cv2.connectedComponents(mask)
-    c_col, c_row = round(centre[0]) - roi[0], round(centre[1]) - roi[1]
-    if 0 <= c_row < mask.shape[0] and 0 <= c_col < mask.shape[1] and labels[c_row, c_col]:
-        mask = np.where(labels == labels[c_row, c_col], 0, mask).astype(mask.dtype)  # its own blob (side faces) is not a neighbour
+    if o.get("hull_px"):  # only its own pixels: a box split from a touching neighbour (cell_split) must still see it
+        own = np.zeros(mask.shape, np.uint8)
+        cv2.fillPoly(own, [np.asarray(o["hull_px"], np.int32) - [roi[0], roi[1]]], 1)
+        mask = np.where(cv2.dilate(own, np.ones((5, 5), np.uint8)) > 0, 0, mask).astype(mask.dtype)
+    else:
+        n, labels = cv2.connectedComponents(mask)
+        c_col, c_row = round(centre[0]) - roi[0], round(centre[1]) - roi[1]
+        if 0 <= c_row < mask.shape[0] and 0 <= c_col < mask.shape[1] and labels[c_row, c_col]:
+            mask = np.where(labels == labels[c_row, c_col], 0, mask).astype(mask.dtype)  # its own blob (side faces) is not a neighbour
     u = math.radians(o["long_axis_deg"] if closing_deg is None else closing_deg - 90)
     along, across = np.array([math.cos(u), math.sin(u)]), np.array([-math.sin(u), math.cos(u)])
     half_across = o["width_mm"] / 2 if closing_deg is None else max(o["width_mm"], o["length_mm"]) / 2
