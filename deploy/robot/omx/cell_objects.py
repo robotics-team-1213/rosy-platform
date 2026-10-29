@@ -39,16 +39,19 @@ def load_catalog(path) -> list:
     return data["objects"]
 
 
-def foreground(img, roi, chroma: float | None = None, light: float | None = None, params=None, surface_px=None):
+def foreground(img, roi, chroma: float | None = None, light: float | None = None, params=None, surface_px=None,
+               surface_lab=None):
     """Mask (ROI-sized) of pixels far from the surface's median colour; a shadow moves lightness only a little.
     Thresholds not given come from `params` (a white floor line passes the lightness test, 2026-10-28).
     `surface_px`, a polygon of the site's surface in the image, drops what lies beyond it (the board next to the
-    floor joined a container into one blob along the ROI's edge, 2026-10-28)."""
+    floor joined a container into one blob along the ROI's edge, 2026-10-28). `surface_lab`: the site's own surface
+    colour (OpenCV Lab); without it the ROI median is used, which on the board was a mix of the white line, the belt
+    and the box (173, 121, 139 against the board's 199, 130, 162), so the box's shadow did not read as a shadow."""
     chroma = prm.get(params, "objects.chroma", CHROMA) if chroma is None else chroma
     light = prm.get(params, "objects.light", LIGHT) if light is None else light
     x0, y0, x1, y1 = roi
     lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB).astype(np.int16)[y0:y1, x0:x1]
-    bg = np.median(lab.reshape(-1, 3), axis=0)
+    bg = np.asarray(surface_lab, float) if surface_lab is not None else np.median(lab.reshape(-1, 3), axis=0)
     far = (np.hypot(lab[..., 1] - bg[1], lab[..., 2] - bg[2]) > chroma) | (np.abs(lab[..., 0] - bg[0]) > light)
     if prm.get(params, "objects.drop_shadow"):
         far &= ~shadow_of(lab, bg, params)
@@ -195,7 +198,7 @@ def _measure_blob(px, record: dict, camera: dict, catalog: list, surface_z: floa
 
 
 def detect(img, roi, record: dict, camera: dict, catalog: list, surface_z: float = 0.0, params=None,
-           surface_px=None) -> list:
+           surface_px=None, surface_lab=None) -> list:
     """All objects in the ROI. A blob that matches nothing is tried as boxes that only touch (cell_split); each piece
     is judged on its own, and the pieces replace the blob when at least one matches the catalogue (2026-10-29: the
     1-cell matched, the 2-cell beside it read 63 x 47 mm with its side faces and stays an unmatched neighbour). Each
@@ -203,7 +206,8 @@ def detect(img, roi, record: dict, camera: dict, catalog: list, surface_z: float
     import cell_split
 
     x0, y0, _, _ = roi
-    n, labels, stats, _ = cv2.connectedComponentsWithStats(foreground(img, roi, params=params, surface_px=surface_px))
+    n, labels, stats, _ = cv2.connectedComponentsWithStats(foreground(img, roi, params=params, surface_px=surface_px,
+                                                                      surface_lab=surface_lab))
     out = []
     for i in range(1, n):
         if stats[i, cv2.CC_STAT_AREA] < prm.get(params, "objects.min_px", MIN_PX):
