@@ -101,6 +101,7 @@ def test_fleet_role_styles_reach_fields_disclosures_and_headings(tmp_path, theme
                         "nodes => nodes.length > 0 && nodes.every(node => getComputedStyle(node).fontSize === '16px')")
                     if path == "/console/site-map":
                         expect(page.get_by_role("heading", name="지도 설정", exact=True)).to_have_count(1)
+                        page.evaluate("location.hash = '#profile-heading'")  # D-926 3: one sub-nav screen at a time
                         _assert_control(page.locator("#profile-file").locator("xpath=ancestor::details/summary"))
                     summary = page.locator("main summary.ui-disclosure-row").first
                     for opened in [False, True]:
