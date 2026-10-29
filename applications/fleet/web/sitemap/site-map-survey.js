@@ -1,3 +1,4 @@
+import {randomUUID} from "/console/assets/uuid.js";
 // D-655 survey drafting UI; it changes the local draft and never commands a robot.
 import {confirmIrreversible} from '/common/ui.js';
 import {createSurveyDraft, appendSurveyElement, editSurveyElement, removeSurveyElement, reviewSurveyDraft} from '/console/assets/site-map-edit.js';
@@ -40,7 +41,7 @@ export function createSurveyPanel(host) {
     points = []; picking = false; editing = false;
     loadedApproaches = []; approachEdited = false;
     gate('element-id', '');
-    $('element-id').value = `e_${crypto.randomUUID().replaceAll('-', '').slice(0, 12)}`;
+    $('element-id').value = `e_${randomUUID().replaceAll('-', '').slice(0, 12)}`;
     geometry();
   }
   function addPoint(x, y) {
@@ -54,7 +55,7 @@ export function createSurveyPanel(host) {
     if ((map?.map_id || null) !== lastMapId) {
       lastMapId = map?.map_id || null;
       points = []; picking = false; editing = false; loadedApproaches = []; approachEdited = false;
-      gate('element-id', ''); $('element-id').value = `e_${crypto.randomUUID().replaceAll('-', '').slice(0, 12)}`;
+      gate('element-id', ''); $('element-id').value = `e_${randomUUID().replaceAll('-', '').slice(0, 12)}`;
       $('element-points').textContent = '찍은 좌표 없음'; $('element-pick').setAttribute('aria-pressed', 'false');
     }
     const draftReason = reason || (host.source() !== 'draft' ? '초안 보기로 바꾸세요' : '') || (!map?.survey ? '조사 기준이 있는 초안을 만드세요' : '');
@@ -94,7 +95,7 @@ export function createSurveyPanel(host) {
     if (host.hasDraft() && !await confirmIrreversible({message: '기존 초안의 작업 내용을 빈 조사 초안으로 바꿀까요? 활성 지도는 유지됩니다.',
       action: '빈 조사 초안 만들기', opener: $('survey-new')})) return;
     act(() => {
-      const id = `survey_${crypto.randomUUID()}`;
+      const id = `survey_${randomUUID()}`;
       host.changed(createSurveyDraft(id, {revision: id, origin: [number('survey-x'), number('survey-y')],
         heading_rad: number('survey-yaw') * Math.PI / 180, scale_source: $('survey-scale').value,
         measured_distance_m: $('survey-scale').value === 'measured' ? number('survey-distance') : null,
@@ -159,7 +160,7 @@ export function createSurveyPanel(host) {
   }));
   for (const id of ['element-kind', 'element-from', 'element-to', 'element-existing', 'survey-scale']) $(id).addEventListener('change', sync);
   for (const id of ['element-forward', 'element-stop']) $(id).addEventListener('input', () => { approachEdited = true; });
-  $('element-id').value = `e_${crypto.randomUUID().replaceAll('-', '').slice(0, 12)}`;
+  $('element-id').value = `e_${randomUUID().replaceAll('-', '').slice(0, 12)}`;
   return {sync, cancel: clear, points: () => picking ? points : [], picking: () => picking,
     pick(event) {
       if (!picking || host.reason() || host.source() !== 'draft' || !host.view()) return false;

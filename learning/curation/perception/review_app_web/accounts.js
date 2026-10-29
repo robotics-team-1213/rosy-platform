@@ -3,6 +3,10 @@ import '/common/ui.js';
 import '/commands.js';
 const $ = id => document.getElementById(id);
 let token, session, active = false, pending = false, loginOptions = null;
+let actionError='',pollError='';
+const connectionChoiceRequired=[false,false];
+const lockedButtons=new Map();
+let pendingOpener=null,pendingFocus=null;
 const loginFailures = new Map([
   ['account_callback_failed', ['error', '로그인 연결을 완료하지 못했습니다. 로그인 요청이 만료되었거나 확인되지 않았습니다. Rosy Account에서 로그인을 다시 시작하세요.']],
   ['account_unavailable', ['unavailable', '로그인 서비스에 연결할 수 없습니다. 연결을 확인한 뒤 Rosy Account에서 다시 로그인하세요.']],
@@ -17,7 +21,10 @@ const failures = {insufficient_space:'저장 공간이 부족합니다. 여유 �
   import_failed:'가져오기에 실패했습니다. 연결과 자료 접근을 확인한 뒤 재시도하세요.'};
 const size = n=>`${Number(n || 0).toLocaleString('ko-KR')} bytes`;
 const scopeLabel={'read-repos':'읽기','gated-repos':'제한 자료 읽기','write-repos':'쓰기','manage-repos':'저장소 생성·삭제'};
-function error(message) { $('account-error').textContent=message || ''; $('account-error').hidden=!message; }
+function error(message,owner='action') {
+  if(owner==='poll')pollError=message||'';else actionError=message||'';
+  $('account-error').textContent=[pollError,actionError].filter(Boolean).join('\n');$('account-error').hidden=!$('account-error').textContent;
+}
 function status(text, state) {
   $('account-status').textContent=text; $('account-status').setAttribute('state',state);
 }
@@ -26,6 +33,7 @@ function loginControls() {
 }
 function signedOut() {
   token=null; session=null; active=false;
+  connectionChoiceRequired.fill(false);actionError=pollError='';error('');
   $('login-panel').hidden=false; $('signed-in').hidden=true;
   status(loginOptions?.enabled?'Rosy Account로 로그인하세요.':'계정 서버 연결 준비 중입니다.', loginOptions?.enabled?'empty':'unavailable');
   $('login-help').textContent=loginOptions?.enabled?'아래 버튼으로 Rosy Account 로그인 화면을 여세요. 로그인 후 이 Learning 화면으로 돌아옵니다.':'계정 서버 연결 준비 중입니다. 연결 후 Rosy Account로 로그인할 수 있습니다.';
@@ -46,21 +54,37 @@ async function api(path, body) {
 }
 function line(parent,text) { const p=document.createElement('p'); p.textContent=text; parent.append(p); return p; }
 function button(parent,label,action) {
-  const b=document.createElement('button'); b.type='button'; b.className='ui-field'; b.textContent=label;
+  const b=document.createElement('ui-button'); b.setAttribute('type','button'); b.setAttribute('kind','quiet'); b.textContent=label;
   b.addEventListener('click',()=>perform(action)); parent.append(b);
+  if(pending)lockButton(b);
 }
-async function perform(action) {
+function lockButton(node){if(!lockedButtons.has(node))lockedButtons.set(node,node.disabled);node.disabled=true;}
+async function perform(action,owner='action') {
   if(pending)return;
-  pending=true; error('');
+  pending=true; if(owner!=='poll')error('');
+  pendingOpener=document.activeElement;pendingFocus=null;lockedButtons.clear();
+  for(const node of $('accounts-main').querySelectorAll('button,ui-button'))lockButton(node);
+  const previousStatus=$('account-status').textContent,progress=owner==='poll'?'가져오기 상태 확인 중…':'요청 처리 중…';
+  $('account-status').textContent=progress;
   $('accounts-main').setAttribute('aria-busy','true');
   try { await action(); } catch(e) {
-    if(active) error(e.message);
+    if(active) error(e.message,owner);
     if($('account-status').getAttribute('state')==='pending') {
       status('로그인 상태를 확인할 수 없습니다. 연결을 확인하고 다시 시도하세요.', 'unavailable');
       $('account-retry').hidden=false;
-    } else error(e.message);
+    } else error(e.message,owner);
   }
-  finally { pending=false; $('accounts-main').setAttribute('aria-busy','false'); }
+  finally {
+    pending=false; $('accounts-main').setAttribute('aria-busy','false');
+    for(const [node,disabled] of lockedButtons)if(node.isConnected)node.disabled=disabled;
+    lockedButtons.clear();
+    if($('account-status').textContent===progress)$('account-status').textContent=previousStatus;
+    if(document.activeElement===document.body||document.activeElement===pendingOpener){
+      const target=pendingFocus?.isConnected?pendingFocus:pendingOpener;
+      if(target?.isConnected&&!target.disabled&&target.getClientRects().length&&document.activeElement!==target)target.focus({preventScroll:true});
+    }
+    pendingOpener=pendingFocus=null;
+  }
 }
 async function refresh() {
   status('로그인 상태를 확인하는 중입니다.','pending');
@@ -102,6 +126,7 @@ async function refresh() {
   $('sharing').querySelector('[value=project]').disabled=!session.capabilities.includes('manage');
   if(!session.capabilities.includes('manage')) $('sharing').value='personal';
   const list=$('connections'), select=$('connection'), managed=$('repo-connection');
+  const previous=[select.value,managed.value];
   list.replaceChildren(); select.replaceChildren(); managed.replaceChildren(); $('repos').replaceChildren();
   for(const account of session.connections) {
     const row=document.createElement('article'); list.append(row);
@@ -117,6 +142,10 @@ async function refresh() {
     managed.append(option.cloneNode(true));
   }
   if(!session.connections.length) line(list,'연결된 계정이 없습니다.');
+  for(const [index,control] of [select,managed].entries()){
+    if(previous[index]&&[...control.options].some(option=>option.value===previous[index])){control.value=previous[index];connectionChoiceRequired[index]=false;}
+    else if(previous[index]||connectionChoiceRequired[index]){connectionChoiceRequired[index]=true;const option=document.createElement('option');option.value='';option.textContent='연결을 다시 선택하세요.';option.disabled=true;option.selected=true;control.prepend(option);}
+  }
   await jobs();
 }
 async function jobs() {
@@ -124,14 +153,15 @@ async function jobs() {
   const identity=session;
   const result=await api('/api/learning/imports'), root=$('imports');
   if(!active||session!==identity)return;
+  error('','poll');
   const opened=new Set([...root.querySelectorAll('details[open]')].map(node=>node.dataset.job));
-  const focused=document.activeElement, focusId=focused.closest('article')?.dataset.job;
+  const focused=document.activeElement===document.body&&root.contains(pendingOpener)?pendingOpener:document.activeElement, focusId=focused.closest('article')?.dataset.job;
   const focusText=root.contains(focused)?focused.textContent:null;
   root.replaceChildren();
   if(!result.jobs.length) line(root,'가져오기 작업이 없습니다.');
   for(const job of result.jobs) {
     const row=document.createElement('article'); row.dataset.job=job.id; root.append(row);
-    line(row,`${job.repo_id} · ${states[job.status] || job.status}`);
+    const heading=line(row,`${job.repo_id} · ${states[job.status] || job.status}`);heading.tabIndex=-1;
     line(row,`버전 ${job.revision} · 요청자 ${job.requester_id || job.requester || ''}`);
     if(job.error) line(row,job.error==='gated_team_use_evidence_required'?'팀 이용 허가 근거가 필요합니다. 확인 후 새 가져오기를 등록하세요.':failures[job.error] || job.error);
     const files=job.files || [], received=f=>f.downloaded_bytes ?? (job.status==='completed'?f.bytes:0);
@@ -149,7 +179,7 @@ async function jobs() {
     if(canControl && ['queued','running'].includes(job.status)) button(row,'가져오기 취소',async()=>{
       await api('/api/learning/imports/cancel',{id:job.id}); await jobs();
     });
-    if(focusId===job.id) [...row.querySelectorAll('button, summary')].find(node=>node.textContent===focusText)?.focus({preventScroll:true});
+    if(focusId===job.id){const target=[...row.querySelectorAll('ui-button, button, summary')].find(node=>node.textContent===focusText)||heading;if(pending)pendingFocus=target;else target.focus({preventScroll:true});}
   }
 }
 $('logout').addEventListener('click',()=>perform(async()=>{
@@ -168,7 +198,8 @@ $('connect-form').addEventListener('submit',event=>{event.preventDefault();perfo
     resources:$('resources').value.split('\n').map(x=>x.trim()).filter(Boolean)}); await refresh();
 });});
 $('import-form').addEventListener('submit',event=>{event.preventDefault();perform(async()=>{
-  await api('/api/learning/imports/create',{connection_id:$('connection').value,repo_type:$('repo-type').value,
+  const connection=$('connection').value;if(!connection)throw new Error('가져올 계정을 선택하세요.');
+  await api('/api/learning/imports/create',{connection_id:connection,repo_type:$('repo-type').value,
     repo_id:$('repo-id').value.trim(),revision:$('revision').value.trim(),
     files:$('files').value.split('\n').map(x=>x.trim()).filter(Boolean),
     rights:{license:$('license').value.trim(),evidence:$('rights-evidence').value.trim(),internal_use:$('internal-use').checked,
@@ -176,6 +207,7 @@ $('import-form').addEventListener('submit',event=>{event.preventDefault();perfor
   await jobs();
 });});
 function selectedRepo() {
+  if(!$('repo-connection').value) throw new Error('관리 계정을 선택하세요.');
   const repoId=$('manage-repo-id').value.trim();
   if(!repoId) throw new Error('저장소 이름을 입력하세요.');
   return {connection_id:$('repo-connection').value, repo_type:$('manage-repo-type').value, repo_id:repoId};
@@ -211,5 +243,5 @@ $('account-retry').addEventListener('click',()=>perform(async()=>{
   const url=new URL(location.href); url.searchParams.delete('error'); history.replaceState(null,'',url);
   await refresh();
 }));
-setInterval(()=>{if(active&&!pending&&!document.hidden)perform(jobs);},5000);
+setInterval(()=>{if(active&&!pending&&!document.hidden&&$('account-status').getAttribute('state')==='ready')perform(jobs,'poll');},5000);
 perform(refresh);

@@ -1,3 +1,4 @@
+import {randomUUID} from "/console/assets/uuid.js";
 // Control-unit candidates remain separate from local Task execution and physical stop evidence.
 const labels = {PENDING: "현장 승인 대기", APPROVING: "승인 접수 · 작업 결속 확인 중", REQUESTED: "요청 접수",
   QUEUED: "실행 대기", ACCEPTED: "장치 수락", RUNNING: "실행 중", UNKNOWN: "실행 결과 미확인",
@@ -42,7 +43,7 @@ export function createControlUnitView({scope, call, anchor, active, approveReaso
   panel.append(heading, context, state, list, disclosure, notice,
     node("p", "취소 요청은 실제 정지 확인과 별개입니다. 소유 관제의 작업 결과와 장치 근거를 확인하세요.", "hint"));
   anchor.before(panel);
-  let revision = 0, inFlight = false, busy = false, available = false, unit = null, identity = crypto.randomUUID();
+  let revision = 0, inFlight = false, busy = false, available = false, unit = null, identity = randomUUID();
   let draft = null, draftKey = null;
   function saveDraft() {
     sessionStorage.setItem(draftKey, JSON.stringify(draft));
@@ -72,7 +73,7 @@ export function createControlUnitView({scope, call, anchor, active, approveReaso
   }
   function reset() {
     revision++; available = false; unit = null; panel.hidden = true; list.replaceChildren(); notice.textContent = "";
-    identity = crypto.randomUUID(); form.reset();
+    identity = randomUUID(); form.reset();
     draft = null; draftKey = null; draftControls();
   }
   function controls() {
@@ -120,7 +121,7 @@ export function createControlUnitView({scope, call, anchor, active, approveReaso
   scope.listen(fresh, "click", () => {
     if (busy || (draft && !draft.confirmed)) return;
     try { if (draftKey) sessionStorage.removeItem(draftKey); } catch { return; }
-    draft = null; identity = crypto.randomUUID(); form.reset(); draftControls(); controls();
+    draft = null; identity = randomUUID(); form.reset(); draftControls(); controls();
     notice.textContent = "새 요청을 작성하세요.";
   });
   function paint(replies) {
