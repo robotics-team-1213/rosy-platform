@@ -4017,3 +4017,11 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 검증: 이전 canonical 단독 실행은 cell_robot_profile import 누락으로 1 failed/56 passed/2 skipped였다. 수정 커밋의 공식 원격 단독 실행과 통합 착지 게이트는 진행 중이며 이전 SHA의 통과를 새 SHA 검증으로 세지 않는다.
 - gate 변화: 없음. 장치 접근·배포·push는 하지 않는다.
 - CE: 해당 없음 — 기존 shared-pytest-process-masks-path-dependent-import-2026-10-26 교훈과 한 줄 수정이 원인·재발 조건을 설명한다.
+
+## 2026-10-29 · uncommitted · fix(omx): 실제 runner 매개변수를 운용 근거에 결합
+
+- 변경: main의 params 전달을 보존한 통합 검토에서 실제 pacing·접촉·idle 값이 runtime SHA에 빠진 것을 찾았다. runner가 검증한 값을 한 번 읽어 실행기와 runtime SHA에 함께 전달하고 cell_params.py를 코드 SHA에 포함한다. 물리 동작·기본값·기존 가드는 바꾸지 않는다.
+- 검증: tests-only e4abf6ee1e의 공식 원격 실행은 새 매개변수 결합 부재로 4 failed다. 수정 SHA의 원격 GREEN과 canonical 착지는 별도 확인하며, 이전 단독 import 수정 cd4e1752c8은 exit0/NEW0이다.
+- gate 변화: 없음. 발견 직후 a1f16be836의 pending 착지만 중단했다. 실물 접근·배포·push는 하지 않는다.
+- CE: 해당 없음 — 증거의 적용 범위는 D-914와 실행 값 변경을 검증하는 회귀에 남긴다. 새 장치 장애의 원인·복구를 관측한 작업은 아니다.
+- 추가 검토: 배치 성공 판정의 verify_tol_mm도 task 조건 SHA에 넣고 판정과 같은 유한·비음수 검증을 쓴다. tests-only 7a7e61df27의 공식 원격 실행은 변경/잘못된 허용값으로 기존 검토가 유지되는 7 failed를 재현했다. 누락과 명시적 10.0 mm의 기본값 동치는 유지한다.

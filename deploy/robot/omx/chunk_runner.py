@@ -447,6 +447,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
     library = load_library(args.library)
     config = json.loads(args.config.read_text(encoding="utf-8-sig"))
+    params = prm.load(args.params)["values"]
     from cell_robot_profile import load as load_operating_profile
 
     profile = load_operating_profile(args.operating_profile, robot_config=config["robot"]) if args.operating_profile else None
@@ -483,9 +484,10 @@ def main(argv=None):
             tmp.write_text(json.dumps(row))
             os.replace(tmp, live_path)
 
-        context = runtime_context(config["robot"], robot.bus, config["dataset"]["fps"], operating_profile=profile)
+        context = runtime_context(config["robot"], robot.bus, config["dataset"]["fps"],
+                                  operating_profile=profile, params=params)
         Runner(guarded, library, fps=config["dataset"]["fps"], status=status, live=live,
-               operating_context=context, params=prm.load(args.params)["values"]).run(lines)
+               operating_context=context, params=params).run(lines)
     finally:
         lines.close()
         try:

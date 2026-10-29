@@ -26,19 +26,23 @@ def _code_digest() -> str:
 
     root = Path(__file__).resolve().parent
     files = {name: root / name for name in (
-        "cell_envelope.py", "cell_robot_profile.py", "cell_pipeline.py", "cell_pipeline_io.py", "cell_attempts.py",
+        "cell_envelope.py", "cell_robot_profile.py", "cell_params.py", "cell_pipeline.py", "cell_pipeline_io.py", "cell_attempts.py",
         "guarded_native.py", "chunk_runner.py", "grasp_planner.py", "motion_profile.py", "teach_trajectory.py")}
     files.update({module.__name__: Path(module.__file__) for module in (chunk_library, motion_profile)})
     return digest({name: hashlib.sha256(path.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
                    for name, path in files.items()})
 
 
-def runtime_context(robot_config: dict, bus, fps: int, *, operating_profile=None) -> dict:
+def runtime_context(robot_config: dict, bus, fps: int, *, operating_profile=None, params=None) -> dict:
     """Read before the control loop starts; the session owns this bus without hot reconfiguration."""
     binding = operating_profile["binding"] if operating_profile is not None else None
     if binding is not None and (robot_config.get("id") != binding["instance_id"]
                                 or digest(robot_config) != binding["robot_config_sha256"]):
         raise ValueError("runtime follower does not match its operating profile")
+    if params is None:
+        from cell_params import load
+
+        params = load()["values"]
     motors = {}
     for name in NAMES:
         motor = bus.motors[name]
@@ -51,7 +55,7 @@ def runtime_context(robot_config: dict, bus, fps: int, *, operating_profile=None
                         "registers": {key: bus.read(key, name) for key in registers}}
     return {"scope": "hardware", "session_id": uuid.uuid4().hex, "operating_profile": binding,
             "sha256": digest({"robot": robot_config, "motors": motors, "fps": fps,
-                              "operating_profile": binding, "code": _code_digest()})}
+                              "operating_profile": binding, "params": params, "code": _code_digest()})}
 
 
 def _sha(value) -> bool:
@@ -60,6 +64,13 @@ def _sha(value) -> bool:
 
 def _number(value) -> bool:
     return type(value) in (int, float) and math.isfinite(value)
+
+
+def verification_tolerance(config: dict) -> float:
+    value = config.get("verify_tol_mm", 10.0)
+    if not _number(value) or value < 0:
+        raise ValueError("verify_tol_mm must be finite and nonnegative")
+    return float(value)
 
 
 def _state_current(state: dict, now: float) -> bool:
@@ -109,7 +120,8 @@ def assess(config: dict, calibration: dict, library: dict, state: dict, *, now=N
         conditions = _conditions(config)
         conditions_sha = digest({"conditions": conditions, "calibration": calibration,
                                   "profiles": config.get("profiles"), "cameras": config.get("cameras"),
-                                  "sites": config.get("sites"), "plan": config.get("plan")})
+                                  "sites": config.get("sites"), "plan": config.get("plan"),
+                                  "verify_tol_mm": verification_tolerance(config)})
         out.update(scope=context["scope"], runtime_sha256=context["sha256"], session_id=context["session_id"],
                    conditions=conditions, operating_profile=profile["binding"],
                    conditions_sha256=conditions_sha, library_sha256=digest(library), client_code_sha256=_code_digest())

@@ -52,6 +52,20 @@ def tray_pixel(x, y):  # arm metres -> top-camera pixel at the box's height: tur
     return 134.5 - 900 * (y - 0.106), 239.5 - 900 * (x - 0.072)
 
 
+@pytest.mark.parametrize("tolerance,inside", [(None, False), (10, False), (20, True), (0, False)])
+def test_fine_map_verification_uses_the_effective_tolerance(monkeypatch, tolerance, inside):
+    monkeypatch.setattr(m, "locate", lambda *args: {"found": True, "arm_m": [0.015, 0]})
+    config = {} if tolerance is None else {"verify_tol_mm": tolerance}
+    calibration = {"sites": {m.record_key("pinky", "top"): {}}}
+    assert m.verify(object(), config, "pinky", calibration, intended=[0, 0])["inside"] is inside
+
+
+@pytest.mark.parametrize("value", [True, -1, float("nan"), float("inf"), "10", None])
+def test_invalid_verification_tolerance_is_rejected_before_observation(value):
+    with pytest.raises(ValueError, match="verify_tol_mm"):
+        m.verify(object(), {"verify_tol_mm": value}, "pinky")
+
+
 def belt_pixel(x, y):
     return 330 - 900 * (y - 0.0), 150 - 900 * (x - 0.150)
 

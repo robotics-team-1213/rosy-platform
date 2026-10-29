@@ -104,13 +104,16 @@ def verify(cell, config: dict, site: str, calibration: dict | None = None, inten
     """Did the box land where it was put? With a fine map for `site`: the located box against the intended
     arm point (verify_tol_mm). With only a coarse map or none, the arm's own placement is trusted once the
     grasp held: a pixel zone drawn for another plan would refuse a correct placement (2026-10-25)."""
+    from cell_envelope import verification_tolerance
+
+    tolerance = verification_tolerance(config)
     record = (calibration or {}).get("sites", {}).get(record_key(site, "top"))
     if record is not None and "z_view" not in record and intended is not None:
         found = locate(cell, config, calibration, site)
         if not found["found"]:
             return {"found": False, "inside": False}
         off = 1000 * math.dist(found["arm_m"], intended)
-        return {"found": True, "inside": off <= config.get("verify_tol_mm", 10.0), "off_mm": round(off, 1),
+        return {"found": True, "inside": off <= tolerance, "off_mm": round(off, 1),
                 "arm_m": found["arm_m"], "basis": "fine map"}
     box = see(cell.frame("top"), config["profiles"]["top"], site)
     return {**{k: box.get(k) for k in ("found", "cx", "cy")}, "inside": bool(box.get("found")),

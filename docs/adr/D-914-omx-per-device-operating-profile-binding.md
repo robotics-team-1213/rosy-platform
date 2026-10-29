@@ -25,6 +25,8 @@ D-911은 실제 팔 설정/보정과 전체 작업을 구분하지만 Fleet의 �
 4. `cell_pipeline --operating-profile` 또는 `operating_profile_path`로 같은 프로필을 선택한다. work/review 경로는 프로필이 정한다. 자동 작업 외에 감독 survey·coarse/reset·복구의 raw 이동도 FIFO client가 현재 profile·신선한 상태를 확인하고 checked session/library 명령으로 보낸다. 다른 팔이면 상태 조회 외 명령을 보내지 않는다. 프로필 없는 기존 명시적 수동 recovery 정책은 유지한다.
 5. record stage는 실제 하달할 recorder robot을 카메라·폴더·subprocess 작업 전에 검증하고 replay 세션에도 같은 선택을 전달한다.
 6. envelope manifest는 `device_id`, `instance_id`, `profile_sha256`를 고정한다. task key·시도·summary에도 binding을 남겨 같은 모델명이나 library만으로 다른 로봇의 검증을 재사용하지 않는다. 빈 예제는 장치 바인딩·자동 허용을 만들지 않는다.
+7. runner가 실제 사용할 검증된 매개변수 전체를 시작 전에 한 번 읽고 같은 값을 runtime SHA와 실행기에 전달한다. 접촉·pacing·idle 값 변경은 기존 task 검토를 재사용할 수 없으며, 파일이 없어 적용한 기본값과 같은 명시적 기본값은 같은 신원이다. `cell_params.py`도 코드 SHA에 포함한다. client의 별도 params 파일이나 경로·설명 메타데이터를 실제 runner 값의 대용으로 쓰지 않는다.
+8. 배치 성공 판정에 사용하는 `verify_tol_mm`도 유효 기본값 10.0 mm를 정규화해 task 조건 SHA에 포함한다. 판정과 해시는 같은 유한·비음수 검증 함수를 사용한다. 값이 바뀌면 기존 검토를 재사용하지 않는다.
 
 Fleet의 이름·모델 수정은 운용범위 승인이 아니다. 이 연결은 Fleet DB의 실시간 접속 확인을 구현하지 않는다. 운영자가 ID 연관 관계를 명시하며 물리 신원·설치·카메라 보정·하중은 기존 owner/검증 절차로 수용한다. task별 물체·높이·카메라·경로와 D-911 보호 조건은 계속 검사한다.
 
