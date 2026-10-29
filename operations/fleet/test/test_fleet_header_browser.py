@@ -7,6 +7,7 @@ session is refused and unlocks with the shared token.
 """
 
 import copy
+import json
 import os
 import re
 import threading
@@ -556,13 +557,21 @@ def test_task_layout_and_feedback_share_role_geometry(tmp_path, width):
             page.close()
 
 
-def test_a_lost_link_is_readable_on_a_phone(tmp_path):
+@pytest.mark.parametrize('text_spacing', ['authored', 'accessible'])
+def test_a_lost_link_is_readable_on_a_phone(tmp_path, text_spacing):
     from playwright.sync_api import expect
 
     # Fleet gone behind the proxy: every API answer is 502, the state poll included.
     with _fleet(tmp_path, console_token="header-token") as (browser, origin):
         for name, path in DOCS:
             page = browser.new_page(viewport={"width": 320, "height": 568})
+            if text_spacing == 'accessible':
+                # WCAG 1.4.12: https://www.w3.org/WAI/WCAG22/Understanding/text-spacing.html
+                def spaced_header(route):
+                    response = route.fetch()
+                    route.fulfill(response=response, body=response.text() +
+                                  '\n#link-state { letter-spacing: .12em; word-spacing: .16em; line-height: 1.5; }')
+                page.route('**/console/assets/fleet-header.css', spaced_header)
             page.route("**/api/fleet/**", lambda route: route.fulfill(status=502, json={"detail": "bad gateway"}))
             page.goto(origin + path)
             initial_bar = page.locator('.fleet-header').bounding_box()
@@ -571,6 +580,43 @@ def test_a_lost_link_is_readable_on_a_phone(tmp_path):
             expect(word).to_have_text("연결 끊김", timeout=15000)
             expect(word).to_be_visible()
             expect(word).to_have_attribute('title', '연결 끊김')
+            probe = """() => {
+              const measure = selector => {
+                const node = document.querySelector(selector), css = getComputedStyle(node);
+                const range = document.createRange(); range.selectNodeContents(node);
+                const dot = getComputedStyle(node, '::before');
+                return {box: node.getBoundingClientRect().toJSON(), clientWidth: node.clientWidth,
+                  scrollWidth: node.scrollWidth, textBox: range.getBoundingClientRect().toJSON(),
+                  font: css.font, letterSpacing: css.letterSpacing, wordSpacing: css.wordSpacing,
+                  gap: css.gap, columns: css.gridTemplateColumns, overflow: css.overflow,
+                  flexShrink: css.flexShrink, minWidth: css.minWidth,
+                  dot: {content: dot.content, width: dot.width, flexShrink: dot.flexShrink}};
+              };
+              return Object.fromEntries(['ui-topbar', '.fleet-link-status', '#link-state',
+                '.fleet-header-identity', '.fleet-header-actions', '#fleet-login', '#topbar-more', '#estop']
+                .map(selector => [selector, measure(selector)]));
+            }"""
+            metrics = {'document': name, 'text_spacing': text_spacing, 'text_ready': page.evaluate(probe)}
+            page.evaluate('''async () => {
+              await document.fonts.ready;
+              await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+            }''')
+            metrics['settled'] = page.evaluate(probe)
+            cdp = page.context.new_cdp_session(page)
+            cdp.send('DOM.enable')
+            cdp.send('CSS.enable')
+            root = cdp.send('DOM.getDocument')['root']['nodeId']
+            metrics['platform_fonts'] = {}
+            for selector in ('#link-state', '#fleet-login', '#estop'):
+                node = cdp.send('DOM.querySelector', {'nodeId': root, 'selector': selector})['nodeId']
+                metrics['platform_fonts'][selector] = cdp.send('CSS.getPlatformFontsForNode', {'nodeId': node})['fonts']
+            cdp.detach()
+            target = Path(os.environ.get('ROSY_SHOT_DIR', str(tmp_path)))
+            target.mkdir(parents=True, exist_ok=True)
+            artifact = target / f'lost-link-{name}-{text_spacing}'
+            artifact.with_suffix('.json').write_text(json.dumps(metrics, ensure_ascii=False, indent=2), encoding='utf-8')
+            page.screenshot(path=str(artifact.with_suffix('.png')))
+            print('Lost-link metrics:', json.dumps(metrics, ensure_ascii=False), 'artifacts:', artifact)
             box, stop = word.bounding_box(), page.locator("#estop").bounding_box()
             assert box["x"] >= 0 and box["x"] + box["width"] <= 320, (name, box)
             bar = page.locator('.fleet-header').bounding_box()
@@ -581,7 +627,7 @@ def test_a_lost_link_is_readable_on_a_phone(tmp_path):
             actions = page.locator('[data-header-region="actions"]').bounding_box()
             assert identity['x'] + identity['width'] <= box['x'] + 1
             assert box['x'] + box['width'] <= min(actions['x'], stop['x']) + 1
-            assert word.evaluate('node => node.scrollWidth <= node.clientWidth + 1')
+            assert word.evaluate('node => node.scrollWidth <= node.clientWidth + 1'), metrics
             expect(page.locator("#estop")).to_be_visible()
             assert page.evaluate("document.documentElement.scrollWidth - innerWidth") <= 0, name
             page.close()
