@@ -673,5 +673,11 @@
   "unit": "ratio",
   "source": "default",
   "evidence": "2026-10-29: a 2-cell on the moved Pinky was out of reach at its middle (planar wrist 0.286 m); 0 = only the middle"
+ },
+ "pivot.clear_above_m": {
+  "value": 0.074,
+  "unit": "m",
+  "source": "measured",
+  "evidence": "2026-10-29: the floor's 0.08 view is 0.074 above its surface; over the Pinky tray an absolute 0.08 knocked a box off"
  }
 }
