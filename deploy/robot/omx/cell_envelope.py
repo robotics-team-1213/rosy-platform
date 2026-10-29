@@ -14,6 +14,8 @@ from omx_adapter.chunk_library import NAMES as COMMAND_NAMES
 
 SCHEMA = "rosy.omx-cell-envelope.v1"
 NAMES = tuple(name.removesuffix(".pos") for name in COMMAND_NAMES)
+SEQUENCE = ("goto above_pick", "run descend_pick", "run grasp_pick", "run lift_pick", "goto above_place",
+            "run descend_place", "run release_place", "run lift_place", "park")
 
 
 def digest(value) -> str:
@@ -27,6 +29,7 @@ def _code_digest() -> str:
     root = Path(__file__).resolve().parent
     files = {name: root / name for name in (
         "cell_envelope.py", "cell_robot_profile.py", "cell_params.py", "cell_pipeline.py", "cell_pipeline_io.py", "cell_attempts.py",
+        "cell_auto_pick.py", "cell_transfer.py",
         "guarded_native.py", "chunk_runner.py", "grasp_planner.py", "motion_profile.py", "teach_trajectory.py")}
     files.update({module.__name__: Path(module.__file__) for module in (chunk_library, motion_profile)})
     return digest({name: hashlib.sha256(path.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
@@ -100,7 +103,7 @@ def _conditions(config: dict) -> dict:
     return values
 
 
-def assess(config: dict, calibration: dict, library: dict, state: dict, *, now=None) -> dict:
+def assess(config: dict, calibration: dict, library: dict, state: dict, *, now=None, sequence=SEQUENCE) -> dict:
     """Exact paths only: no radius shrink, spatial interpolation or automatic promotion from success."""
     out = {"schema": SCHEMA, "mode": "automatic", "status": "unverified", "allowed": False,
            "reason": "not_reviewed"}
@@ -118,10 +121,14 @@ def assess(config: dict, calibration: dict, library: dict, state: dict, *, now=N
                for key in ("work_dir", "operating_envelope_path")):
             return {**out, "reason": "profile_paths_changed"}
         conditions = _conditions(config)
+        import cell_params
+
         conditions_sha = digest({"conditions": conditions, "calibration": calibration,
                                   "profiles": config.get("profiles"), "cameras": config.get("cameras"),
                                   "sites": config.get("sites"), "plan": config.get("plan"),
-                                  "verify_tol_mm": verification_tolerance(config)})
+                                  "verify_tol_mm": verification_tolerance(config), "sequence": list(sequence),
+                                  "params": {name: cell_params.get(config.get("params"), name)
+                                             for name in cell_params.DEFAULTS}})
         out.update(scope=context["scope"], runtime_sha256=context["sha256"], session_id=context["session_id"],
                    conditions=conditions, operating_profile=profile["binding"],
                    conditions_sha256=conditions_sha, library_sha256=digest(library), client_code_sha256=_code_digest())

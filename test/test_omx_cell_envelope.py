@@ -44,9 +44,9 @@ def task(tmp_path, envelope):
     return config, calibration, library, state
 
 
-def approve(tmp_path, envelope, task, outcomes=("placed", "placed")):
+def approve(tmp_path, envelope, task, outcomes=("placed", "placed"), *, sequence=None):
     config, calibration, library, state = task
-    result = envelope.assess(*task, now=100.01)
+    result = envelope.assess(*task, now=100.01, **({"sequence": sequence} if sequence is not None else {}))
     rows = [{"schema": "rosy.omx-cell-attempt.v1", "attempt_id": f"trial-{i}",
              "envelope": {**result, "mode": "commissioning", "status": "commissioning", "allowed": True},
              "outcome": outcome,
@@ -101,30 +101,38 @@ def test_straight_review_cannot_authorize_the_folded_executor(tmp_path, task, en
     assert folded["task_sha256"] != straight["task_sha256"] and not folded["allowed"]
 
 
-def test_reviewed_gate_load_keeps_its_own_durable_intent(tmp_path, task, envelope, monkeypatch):
+@pytest.mark.parametrize("folded", [False, True])
+def test_reviewed_gate_load_keeps_its_own_durable_intent(tmp_path, task, envelope, monkeypatch, folded):
     import cell_attempts
-    from cell_transfer import Gate
+    from cell_transfer import FOLDED, Gate, transfer_folded
 
     monkeypatch.setattr(envelope.time, "time", lambda: 100.01)
     monkeypatch.setattr(cell_attempts, "RUN", dict(cell_attempts.RUN))
-    attempts, _ = approve(tmp_path, envelope, task)
+    sequence = FOLDED if folded else envelope.SEQUENCE
+    attempts, _ = approve(tmp_path, envelope, task, sequence=sequence)
     config, calibration, library, state = task
     path = tmp_path / "library.json"
     path.write_text(json.dumps(library))
     commands = []
     def act(command):
         commands.append(command)
-        return copy.deepcopy(state) if command == "state" else {"ok": True}
+        return copy.deepcopy(state) if command == "state" else {"ok": True, "holding": True}
     cell = SimpleNamespace(act=act)
     cell_attempts.start(attempts, run_id="current")
-    gate = Gate(cell, config, calibration)
+    gate = Gate(cell, config, calibration, sequence=sequence)
     assert gate.open(path, lambda a: cell_attempts.begin(config, a)) is None
     pending = attempts.with_suffix(".pending.json")
     original = pending.read_bytes()
     assert gate.act(f"load {path}")["ok"]
-    assert gate.act("run lift_pick")["ok"]
+    state["operating_context"]["session_id"] = "other-session"
+    assert not gate.act(f"load {path}")["ok"]
+    state["operating_context"]["session_id"] = "fixture-session"
+    config["verify_tol_mm"] = 1000
+    assert not gate.act(f"load {path}")["ok"]
+    del config["verify_tol_mm"]
+    assert transfer_folded(gate, path, sequence=sequence)["result"] == "placed"
     assert gate.act(f"load {path}")["ok"] and pending.read_bytes() == original
-    assert Gate(cell, config, calibration).open(path, lambda a: None)["reason"] == "incomplete_attempt"
+    assert Gate(cell, config, calibration, sequence=sequence).open(path, lambda a: None)["reason"] == "incomplete_attempt"
     path.write_text(json.dumps({**library, "fps": 25}))
     assert not gate.act(f"load {path}")["ok"] and pending.read_bytes() == original
     assert all(c == "state" or c.startswith("checked ") for c in commands)

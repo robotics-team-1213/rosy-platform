@@ -4025,3 +4025,11 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - gate 변화: 없음. 발견 직후 a1f16be836의 pending 착지만 중단했다. 실물 접근·배포·push는 하지 않는다.
 - CE: 해당 없음 — 증거의 적용 범위는 D-914와 실행 값 변경을 검증하는 회귀에 남긴다. 새 장치 장애의 원인·복구를 관측한 작업은 아니다.
 - 추가 검토: 배치 성공 판정의 verify_tol_mm도 task 조건 SHA에 넣고 판정과 같은 유한·비음수 검증을 쓴다. tests-only 7a7e61df27의 공식 원격 실행은 변경/잘못된 허용값으로 기존 검토가 유지되는 7 failed를 재현했다. 누락과 명시적 10.0 mm의 기본값 동치는 유지한다.
+
+## 2026-10-29 · uncommitted · fix(omx): 자동 운반 순서와 현재 시도의 근거 유지
+
+- 변경: main의 새 Gate consumer를 합친 canonical 후보는 합성 auto-pick fixture의 프로필 누락으로 7 failed였고, unchanged main의 같은 7개는 통과했다. fixture만 장치별 합성 프로필과 맞춘 c40c821f5b는 공식 원격 단독 37 passed/0 skipped/NEW0이다.
+- 추가 보호: 실제 선택한 straight/folded 순서와 client 유효 params를 task에 고정한다. 현재 시도의 pending intent 때문에 첫 unchanged-library load가 막히던 경로는 config·보정·순서·library·라이브 세션이 그대로일 때만 기존 검토로 checked 전송한다. unknown pending과 변경된 경로를 허용하는 전역 예외는 만들지 않는다.
+- 검증: tests-only 987b545071은 공식 원격 3 failed/1 passed로 설정·순서 누락과 첫 load 거절을 재현했다. 실제 검토 문서와 시도 장부를 사용해 straight/folded 각각의 pending 생성→동일 load→현재 시도 완료, 새 Gate의 pending 거절, 다른 library·세션·조건 거절을 회귀한다. 새 소스의 원격 GREEN과 canonical 착지는 별도 확인한다.
+- gate 변화: 없음. 물리 동작·기본값·가드·장치 상태는 바꾸지 않았고 배포·push하지 않았다.
+- CE: 해당 없음 — main 통합의 producer/consumer와 증거 적용 조건은 D-914·회귀·기존 import/장부 교훈으로 복원할 수 있다.

@@ -27,6 +27,8 @@ D-911은 실제 팔 설정/보정과 전체 작업을 구분하지만 Fleet의 �
 6. envelope manifest는 `device_id`, `instance_id`, `profile_sha256`를 고정한다. task key·시도·summary에도 binding을 남겨 같은 모델명이나 library만으로 다른 로봇의 검증을 재사용하지 않는다. 빈 예제는 장치 바인딩·자동 허용을 만들지 않는다.
 7. runner가 실제 사용할 검증된 매개변수 전체를 시작 전에 한 번 읽고 같은 값을 runtime SHA와 실행기에 전달한다. 접촉·pacing·idle 값 변경은 기존 task 검토를 재사용할 수 없으며, 파일이 없어 적용한 기본값과 같은 명시적 기본값은 같은 신원이다. `cell_params.py`도 코드 SHA에 포함한다. client의 별도 params 파일이나 경로·설명 메타데이터를 실제 runner 값의 대용으로 쓰지 않는다.
 8. 배치 성공 판정에 사용하는 `verify_tol_mm`도 유효 기본값 10.0 mm를 정규화해 task 조건 SHA에 포함한다. 판정과 해시는 같은 유한·비음수 검증 함수를 사용한다. 값이 바뀌면 기존 검토를 재사용하지 않는다.
+9. 자동 파지 client가 실제 선택한 명령 순서를 Gate와 executor에 같은 값으로 전달하고 task 조건에 넣는다. 같은 library라도 직선 운반과 접은 운반은 서로의 검토를 사용하지 않는다. client의 유효 params도 기본값을 정규화해 함께 고정하고 실제 순서·호출을 소유하는 cell_transfer.py와 cell_auto_pick.py를 코드 SHA에 포함한다.
+10. 검토 후 현재 시도가 만든 durable pending intent는 삭제하거나 전역으로 무시하지 않는다. 같은 config·보정·순서·library와 현재 라이브 세션의 automatic load만 이미 검토한 근거로 checked 전송한다. 새 Gate는 기존 pending에서 시작할 수 없고, 경로·조건 변경은 다시 평가해 거절한다. 감독 모드의 재계획과 시도 소유자가 완료 행을 기록한 뒤 pending을 해제하는 절차는 유지한다.
 
 Fleet의 이름·모델 수정은 운용범위 승인이 아니다. 이 연결은 Fleet DB의 실시간 접속 확인을 구현하지 않는다. 운영자가 ID 연관 관계를 명시하며 물리 신원·설치·카메라 보정·하중은 기존 owner/검증 절차로 수용한다. task별 물체·높이·카메라·경로와 D-911 보호 조건은 계속 검사한다.
 

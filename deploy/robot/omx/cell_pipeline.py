@@ -27,6 +27,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cell_calibration as cal  # noqa: E402
 from cell_pipeline_io import FifoCell, write_library, write_receipt  # noqa: E402
+from cell_envelope import SEQUENCE  # noqa: E402
 from cell_observe import (  # noqa: E402
     KEEP, fixed_cameras, grid_points, hover_check, keep, locate, on_flat, predicted_pixel, record_key, see, wrap90,
 )
@@ -41,8 +42,6 @@ def target(config: dict, site: str, xy, yaw_deg=None, place=False) -> dict:
             "yaw_deg": s["yaw_deg"] if yaw_deg is None else yaw_deg}
 
 
-SEQUENCE = ("goto above_pick", "run descend_pick", "run grasp_pick", "run lift_pick", "goto above_place",
-            "run descend_place", "run release_place", "run lift_place", "park")
 STEP_KEYS = ("ok", "error", "holding", "gripper_current_ma", "settled", "fault", "contact", "state", "target", "t",
              "paced_ticks")
 
