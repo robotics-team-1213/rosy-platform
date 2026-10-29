@@ -406,11 +406,11 @@ def test_prune_ledger_deletes_only_terminal_task_history_and_expired_audit(tmp_p
         kept_audit = db.execute("SELECT COUNT(*) FROM rosy_account_audit").fetchone()[0]
         kept_pairing = db.execute("SELECT COUNT(*) FROM device_pairing_audit").fetchone()[0]
         kept_events = db.execute("SELECT COUNT(*) FROM core_event_audit").fetchone()[0]
-    assert removed == {"fleet_task_history": 2, "fleet_tasks": 0, "rosy_account_audit": 1,
+    assert removed == {"fleet_task_history": 2, "fleet_tasks": 0, "rosy_account_audit": 0,
                        "device_pairing_audit": 1, "core_event_audit": 2}
     assert kept_tasks == {"old-hold", "new-done", "old-running"}
     assert kept_rows == {"old-done", "old-failed", "old-hold", "new-done", "old-running"}
-    assert kept_audit == 1 and kept_pairing == 0
+    assert kept_audit == 2 and kept_pairing == 0
     assert kept_events == 1                                        # 최근 감사 사건은 남는다
 
 
@@ -459,7 +459,7 @@ def test_backup_command_prunes_the_live_ledger_after_writing_the_backup(tmp_path
     assert code == 0
     report = json.loads(capsys.readouterr().out)
     assert report["pruned_ledger"] == {"fleet_task_history": 2, "fleet_tasks": 0,
-                                       "rosy_account_audit": 1, "device_pairing_audit": 1,
+                                       "rosy_account_audit": 0, "device_pairing_audit": 1,
                                        "core_event_audit": 2}
     assert "checkpoint" in report and report["checkpoint"]["wal_checkpoint"] is not None
     with closing(sqlite3.connect(database)) as db:
@@ -488,6 +488,20 @@ def test_retention_preserves_same_principal_request_replay(tmp_path):
     assert replay["task"]["status"] == "COMPLETED"
     with closing(sqlite3.connect(database)) as db:
         assert db.execute("SELECT COUNT(*) FROM fleet_tasks").fetchone()[0] == 1
+
+
+def test_fresh_backup_remains_restorable_after_account_audit_retention(tmp_path, capsys):
+    database, backup = tmp_path / "fleet.sqlite3", tmp_path / "backup.sqlite3"
+    _retention_database(database)
+    assert site_db.main(["backup", "--source", str(database),
+                         "--destination", str(backup)]) == 0
+    capsys.readouterr()
+
+    restored = restore_database(backup, database, replace=True, assume_stopped=True)
+
+    assert restored.integrity == "ok"
+    with closing(sqlite3.connect(database)) as db:
+        assert db.execute("SELECT COUNT(*) FROM rosy_account_audit").fetchone()[0] == 2
 
 
 def test_backup_service_retention_has_a_writable_live_database_volume():
