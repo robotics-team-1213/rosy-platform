@@ -10,7 +10,7 @@ import {bindEstop, bindTopbarToggle, showSession, showSignedOut, tickClock, watc
 import {PLACE_KINDS, PLACE_KIND_LABEL, actionRows, arrowMarks, fitView, planIsCurrent, planPolylines, siteMapErrorText, viewTurnOf, editViewTurn, planTrip, tripRefusalText, planSummaryText, tripPoseReason, robotMapPose, addApproach, removeApproach, mergeCrosswalks} from '/console/assets/site-map-model.js';
 import {tripStatusText} from '/console/assets/trip-display.js';
 import {editEdge, editPlace} from '/console/assets/site-map-edit.js';
-import {bindScreens} from '/console/assets/site-map-screens.js';
+import {bindScreens} from '/console/assets/subnav-screens.js';
 import {guideMarks, poseLabel} from '/console/assets/guide-layer.js';
 import {createTeachPanel} from '/console/assets/site-map-teach.js';
 import {createSurveyPanel} from '/console/assets/site-map-survey.js';
@@ -554,7 +554,12 @@ bindTopbarToggle();
 tickClock();
 setInterval(tickClock, 1000);
 watchFleet(request);
-bindScreens($('site-map-main'), document.querySelector('.ui-subnav-nav'), $('site-map-svg'));
+const screens = bindScreens({nav: document.querySelector('.ui-subnav-nav'), home: 'map-heading', stage: 'map-heading',
+  groups: {'survey-heading': ['survey-heading', 'drawing-heading']}});
+// The map legend promises that picking a place or lane on the view screen opens it for editing.
+$('site-map-svg').addEventListener('click', event => {
+  if (screens.current() === 'map-heading' && event.target.closest('[data-place], [data-edge], [data-crosswalk]')) location.hash = '#edit-heading';
+});
 $('console-token').addEventListener('keydown', event => { if (event.key === 'Enter') $('token-save').click(); });
 
 developmentToken($('console-token').value).then(token => {

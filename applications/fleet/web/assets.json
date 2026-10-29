@@ -398,8 +398,8 @@
       "path": "sitemap/edit-history.js",
       "media_type": "application/javascript"
     },
-    "site-map-screens.js": {
-      "path": "sitemap/site-map-screens.js",
+    "subnav-screens.js": {
+      "path": "shared/subnav-screens.js",
       "media_type": "application/javascript"
     },
     "geometry-edit.js": {

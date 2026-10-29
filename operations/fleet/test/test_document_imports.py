@@ -118,7 +118,7 @@ OWN = {
         "site-map-camera.js",
         "site-map-sources.js",  # Map profile selection and read-only camera-plane presentation.
         "site-map-edit.js",  # D-655: pure draft edits belong to the map editor document
-        "site-map-screens.js",  # D-926 3: sub-nav moves between screens
+        "subnav-screens.js",  # D-926 3: sub-nav moves between screens
     },
 }
 
