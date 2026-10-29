@@ -31,13 +31,18 @@ def look(cell, config: dict, record: dict, site: str, target: dict, write_librar
     """Measure point - TCP at the hover and move the target there; verdict pass / refuse with every look kept.
     `target[\"object\"][\"raw_m\"]` is the raw point the TCP must stand over: a box to pick, or a push's start."""
     params, region = config.get("params"), target.get("bias_region") or {}
-    box = target["object"]["raw_m"]
+    box, start = target["object"]["raw_m"], (target["pick"]["x"], target["pick"]["y"])
     rows, total = [], 0.0
+
+    def out(verdict, **extra):  # the hover chain records verdict, dx_mm, dy_mm, total_mm for every hook
+        moved = (1000 * (target["pick"]["x"] - start[0]), 1000 * (target["pick"]["y"] - start[1]))
+        return {"verdict": verdict, "dx_mm": round(moved[0], 1), "dy_mm": round(moved[1], 1), "looks": rows,
+                "total_mm": round(total, 1), **extra}
     for i in range(int(prm.get(params, "look.max_iter")) + 1):
         status = cell.act("state")
         state, commanded = status.get("state"), status.get("target")
         if state is None or commanded is None:
-            return {"verdict": "refuse", "why": "no arm state", "looks": rows, "total_mm": round(total, 1)}
+            return out("refuse", why="no arm state")
         x, y, z, yaw = cell_pivot.joints_tcp(state)
         bias, a = region.get("bias_mm", [0.0, 0.0]), math.radians(yaw + region["phase_deg"])
         expect = (x + bias[0] / 1000 + region["radius_mm"] / 1000 * math.cos(a), y + bias[1] / 1000 + region["radius_mm"] / 1000 * math.sin(a))
@@ -46,23 +51,23 @@ def look(cell, config: dict, record: dict, site: str, target: dict, write_librar
         if pixel is None:
             rows.append({"look": i, "seen": False, "expected_px": [round(v, 1) for v in near[0]]})
             # no measurement, no descent: a look that passed unseen let a push come down on a box (2026-10-29)
-            return {"verdict": "refuse", "why": "jaw mark not seen near where the jaws should be", "looks": rows, "total_mm": round(total, 1)}
+            return out("refuse", why="jaw mark not seen near where the jaws should be")
         tcp = tcp_from_mark(cell_pivot.mark_to_arm(record, config, site, pixel, z), yaw, region)
         d = (box[0] - tcp[0], box[1] - tcp[1])
         off = 1000 * math.hypot(*d)
         rows.append({"look": i, "mark_px": [round(v, 1) for v in pixel], "fk_m": [round(x, 4), round(y, 4)],
                      "box_minus_tcp_mm": [round(1000 * d[0], 1), round(1000 * d[1], 1)]})
         if off <= (prm.get(params, "look.tol_mm") if tol_mm is None else tol_mm):
-            return {"verdict": "pass", "looks": rows, "total_mm": round(total, 1)}
+            return out("pass")
         if i == int(prm.get(params, "look.max_iter")) or total + off > prm.get(params, "look.max_total_mm"):
-            return {"verdict": "refuse", "why": f"box still {off:.0f} mm from the jaws", "looks": rows, "total_mm": round(total, 1)}
+            return out("refuse", why=f"box still {off:.0f} mm from the jaws")
         total += off
         cx, cy, _, _ = cell_pivot.joints_tcp(commanded)  # what the runner was told; the arm stands short of it
         target["pick"] = dict(target["pick"], x=round(cx + d[0], 4), y=round(cy + d[1], 4))
         library = write_library(config, target["pick"], target["place"], work / name)
         if not all(cell.act(c).get("ok") for c in (f"load {library}", goto)):
-            return {"verdict": "refuse", "why": "re-plan refused", "looks": rows, "total_mm": round(total, 1)}
-    return {"verdict": "refuse", "why": "no look left", "looks": rows, "total_mm": round(total, 1)}
+            return out("refuse", why="re-plan refused")
+    return out("refuse", why="no look left")
 
 
 def hook(config: dict, cell, target: dict, write_library, calibration: dict, site: str):
