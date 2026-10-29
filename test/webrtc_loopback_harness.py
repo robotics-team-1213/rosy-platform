@@ -170,7 +170,7 @@ def run_loopback(root, tmp_path, *, secure=False, shared_client=False):
         env['ROSY_TEST_MEDIA_TOKEN'] = publish.token
         media_path = read.path
     config = yaml.safe_load((root / 'deploy/site/mediamtx.yaml').read_text())
-    config.update({'webrtcAddress': f'127.0.0.1:{port}', 'api': secure, 'moq': False,
+    config.update({'webrtcAddress': f'127.0.0.1:{port}', 'api': secure or shared_client, 'moq': False,
                    'apiAddress': f'127.0.0.1:{api_port}',
                    'webrtcLocalUDPAddress': f'127.0.0.1:{udp}',
                    'webrtcIPsFromInterfaces': False, 'webrtcAdditionalHosts': ['127.0.0.1'],
@@ -265,10 +265,22 @@ def run_loopback(root, tmp_path, *, secure=False, shared_client=False):
                         assert stats['rtp_bytes_sent'] > 0
                         assert stats['rtp_packets_sent'] > 0
                         if shared_client:
+                            sessions = Request(f'http://127.0.0.1:{api_port}/v3/webrtc/sessions/list',
+                                headers={'Authorization': 'Bearer loopback-scoped-token'})
+                            with urlopen(sessions, timeout=1) as response:
+                                assert len(json.load(response)['items']) == 2
                             with page.expect_response(lambda response: response.request.method == 'DELETE'
                                     and response.url.startswith('https://media.site.example/')) as deleted:
                                 page.evaluate('window.mediaView.close()')
-                            assert deleted.value.status == 204, (deleted.value.status, deleted.value.text())
+                            # Peer closure may remove the native session before DELETE arrives.
+                            assert deleted.value.status in (200, 204, 404)
+                            until = time.monotonic() + 5
+                            while True:
+                                with urlopen(sessions, timeout=1) as response:
+                                    if len(json.load(response)['items']) == 1:
+                                        break
+                                assert time.monotonic() < until, 'closing the viewer left its native session alive'
+                                page.wait_for_timeout(50)
                             assert page.evaluate('window.mediaVideo.srcObject === null')
                             assert page.evaluate('window.mediaPeer.connectionState') == 'closed'
                             assert page.evaluate('window.mediaRevoked') == ['a' * 32]

@@ -10,7 +10,8 @@ import subprocess
 
 
 PLUGINS = ('webrtcbin', 'x264enc', 'nicesrc', 'rtph264pay', 'appsrc',
-           'videoconvert', 'h264parse', 'appsink', 'avdec_h264')
+           'videoconvert', 'h264parse', 'appsink', 'avdec_h264',
+           'dtlssrtpenc', 'dtlssrtpdec', 'srtpenc', 'srtpdec')
 
 
 def probe():
