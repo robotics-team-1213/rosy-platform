@@ -4010,3 +4010,10 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 테스트 선행 commit b7cf245d37과 현장 Docker Compose 5.6.1에서 기존 템플릿의 unset/empty는 A/B를 유지하지만 명시한 A/B/S는 A/B만 전달해 실패함을 확인했다(exit1). b7cf245d37의 원격 pytest는 대기/진행 중이며 새 소스의 통과 근거로 쓰지 않는다. 원본 config·candidate·컨테이너는 바꾸지 않았다.
 - gate 변화: 없음. 새 서명 candidate·설정 동시 마이그레이션과 운영 수용은 별도다. 서명 오버레이 허용 목록을 완화하거나 기존 S 자격 증명을 제거하지 않는다.
 - CE: 미해결 — 기존 추가 팔 오버레이를 표준 배포 경로로 옮기기 위한 소스 수정이며 설치·운영 전환은 아직 검증하지 않았다.
+
+## 2026-10-29 · 05f19a73ea · 실제 Compose 렌더링과 A/B/S 보존 비교
+
+- 변경: 관리자 전체 매핑을 제공하는 canonical workcell template의 실제 렌더링과 기존 현장 구성의 동등성을 검증했다.
+- 증거: 현장 Docker Compose 5.6.1에서 unset·empty는 기존 A/B, 명시적 JSON은 A/B/S를 정확히 전달했다(exit0). 현재 private arm overlay를 제외하고 새 template·동일 매핑을 넣은 전체 Compose 결과가 기존 결과와 일치했다. A/B/S 토큰은 원문 출력 없이 manifest 지문과 대조했고 모두 일치했다. 보호된 경로에 이전 config와 제안 config를 저장했으며 라이브 config·서비스는 바꾸지 않았다. base cb729139723d..05f19a73ea 독립 소스 계약 검토에 중대 지적 없음. 원격 pytest는 아직 대기/진행 중이라 통과로 기록하지 않는다.
+- gate 변화: 없음. 새 template를 포함한 서명 candidate 및 그 candidate와 설정의 동시 전환은 아직 수행하지 않았다. 서명·오버레이 허용 목록과 실제 장치 권한을 완화하지 않았다.
+- CE: 미해결 — 구성 동등성만 확인했으며 실제 candidate 적용과 CI 차단 해결은 후속이다.
