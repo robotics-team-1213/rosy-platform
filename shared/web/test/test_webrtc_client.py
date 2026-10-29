@@ -48,11 +48,18 @@ class Peer {
   addTransceiver(kind, init) { this.transceiver = [kind, init.direction]; }
   async createOffer() { return {type: "offer", sdp: "v=0 offer"}; }
   async setLocalDescription(d) { this.localDescription = d; }
-  async setRemoteDescription(d) { this.remote = d; }
+  async setRemoteDescription(d) { this.remote = d; this.ontrack({streams: ["received-stream"]}); }
   addEventListener() {}
   close() { this.closed = true; }
 }
-const video = {srcObject: "stream", getVideoPlaybackQuality: () => ({totalVideoFrames: Math.floor(clock / 66)})};
+let playError = null;
+const video = {srcObject: null, hidden: true, paused: true,
+  async play() {
+    if (!this.srcObject) throw new Error("play before stream");
+    if (playError) throw playError;
+    this.paused = false;
+  },
+  getVideoPlaybackQuality: () => ({totalVideoFrames: Math.floor(clock / 66)})};
 let frame = null;
 const states = [], revoked = [];
 const grant = {grant_id: "a".repeat(32), token: "read-1", site_url: "https://media.site.example",
@@ -127,6 +134,28 @@ def test_open_waits_for_publisher_and_sends_token_only_in_header():
     assert all("read-1" not in url for url in urls)
     assert result["transceiver"] == ["video", "recvonly"]
     assert result["remote"] == {"type": "answer", "sdp": "v=0 answer"}
+
+
+def test_hidden_video_starts_playback_before_waiting_for_rendered_freshness():
+    result = run_js("""
+    const opening = media.openCamera(options()); await advance(600); const camera = await opening;
+    console.log(JSON.stringify({stream: video.srcObject, paused: video.paused, hidden: video.hidden}));
+    camera.close();
+    """)
+    assert result == {"stream": "received-stream", "paused": False, "hidden": True}
+
+
+def test_playback_rejection_closes_peer_session_and_revokes_grant():
+    result = run_js("""
+    playError = new Error("playback denied");
+    const opening = media.openCamera(options()).catch(e => e.message);
+    await advance(600); const error = await opening;
+    await advance(0);
+    console.log(JSON.stringify({error, closed: Peer.last.closed, video: video.srcObject, revoked,
+      deletes: calls.filter(c => c.method === "DELETE").length}));
+    """)
+    assert result == {"error": "playback denied", "closed": True, "video": None,
+                      "revoked": ["a" * 32], "deletes": 1}
 
 
 def test_refused_intent_releases_peer_and_grant():
