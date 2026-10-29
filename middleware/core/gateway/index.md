@@ -78,5 +78,5 @@
 - 2026-10-28 · uncommitted · CORE host-file declared reads and C6 triage
 - 2026-10-28 · uncommitted · CORE host-file 실행 소유권 분리
 - 2026-10-28 · uncommitted · CORE host-file owner 위임 RED 준비
+- 2026-10-28 · feb1cd65c · fix(core): tf2 Buffer 변환 캐시를 명시적 10초로
 - 2026-10-27 · uncommitted · test(core): 다음 공식 검증에 charging 최초 원인 관측을 포함한다
-- 2026-10-25 · 4fdf8c9fee · installed package 내용과 기종 결속
