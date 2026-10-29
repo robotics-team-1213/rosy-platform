@@ -34,3 +34,22 @@ def test_a_moved_camera_makes_the_map_regions_and_every_bias_stale():
     still = cc.stale({"camera_moved": False, "targets": [], "missing_bias": ["pinky:0.04,0.22"], "missing_surface": ["belt"]})
     assert still == ["pivot-near pinky:0.04,0.22", "surface belt"]
     assert cc.stale({"camera_moved": False, "missing_bias": [], "missing_surface": []}) == []
+
+
+def test_over_target_pivots_right_above_the_box_only_when_the_jaws_clear_its_top(tmp_path, monkeypatch):
+    import cell_pivot
+
+    seen = []
+    monkeypatch.setattr(cell_pivot, "pivot_calibrate", lambda cell, config, point, *a: seen.append(point) or {"result": "stopped"})
+    monkeypatch.setattr(cc, "auto_pivot_point", lambda *a: None)  # no clear floor point in this scene
+    config = {"params": {"pivot.over_target": 1}, "pivot": {"z_view": 0.08}, "coarse": {"z_view": 0.118},
+              "sites": {"floor": {"yaw_deg": 0.0, "surface_z": 0.006}}}
+    far = {"regions": [{"site": "floor", "point_m": [0.0, 0.25], "bias_mm": [16.9, 0.0]}]}  # 50 mm away: not near enough
+    _, problem = cc.self_calibrate(object(), config, {}, tmp_path / "cal.json", "floor", (0.0, 0.2), [{"raw_m": [0.0, 0.2]}],
+                                   tmp_path, far, None, None)
+    assert seen == [(0.0, 0.2)] and problem == "pivot: stopped"  # right over the target, even with the box there
+    config["pivot"]["z_view"] = 0.06  # jaws 24 mm over a 30 mm box top on a 6 mm floor: below the 30 mm clearance
+    seen.clear()
+    cc.self_calibrate(object(), config, {}, tmp_path / "cal.json", "floor", (0.0, 0.2), [{"raw_m": [0.0, 0.2]}],
+                      tmp_path, far, None, None)
+    assert (0.0, 0.2) not in seen

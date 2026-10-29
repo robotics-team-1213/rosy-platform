@@ -166,9 +166,15 @@ def self_calibrate(cell, config, calibration, calibration_path, site, target_xy,
         return bias_data, None
     pivot = config.get("pivot", {})
     clear_mm, base = pivot.get("clear_mm", prm.get(p, "auto.clear_mm")), config["sites"][site]["yaw_deg"]
-    points = [p for p in pivot.get("points", [])
-              if 1000 * math.dist(p, target_xy) <= 0.9 * prm.get(p, "pivot.bias_reach_mm", cell_pivot.BIAS_REACH_MM)
-              and all(1000 * math.dist(p, o["raw_m"]) >= clear_mm for o in objects)]
+    points = [q for q in pivot.get("points", [])
+              if 1000 * math.dist(q, target_xy) <= 0.9 * prm.get(p, "pivot.bias_reach_mm", cell_pivot.BIAS_REACH_MM)
+              and all(1000 * math.dist(q, o["raw_m"]) >= clear_mm for o in objects)]
+    z_view, s_z = pivot.get("z_view", config["coarse"]["z_view"]), config["sites"][site].get("surface_z")
+    if (prm.get(p, "pivot.over_target") and cell is not None and s_z is not None
+            and 1000 * (z_view - s_z) - prm.get(p, "pivot.over_top_mm") >= prm.get(p, "pivot.over_clear_mm")):
+        # 2026-10-29: floor biases 3.5-5.7 cm apart read 16.9, 6.1 and 4.2 mm and every pick missed; the jaws hover
+        # above the box, so they are marked right over it (frame differencing sees the jaws on any background)
+        points = [tuple(target_xy)]
     if not points and cell is not None:  # no configured point: find a clear one next to the target in the top view
         found = auto_pivot_point(cell, config, calibration, site, target_xy)
         have = cell_pivot.bias_at(bias_data, site, target_xy, params=p)
