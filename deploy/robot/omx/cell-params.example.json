@@ -601,5 +601,41 @@
   "unit": "ratio",
   "source": "default",
   "evidence": "2026-10-29 facts-2026-10-29.md 28: a 1-cell and a 2-cell lying corner to corner made one unmatched blob and no push could part them; boxes that only touch are separated by a distance-transform watershed, each piece must match"
+ },
+ "look.enabled": {
+  "value": 0,
+  "unit": "flag",
+  "source": "default",
+  "evidence": "2026-10-29 facts-2026-10-29.md 30: biases changed 12.7 mm over 4.7 cm, so a carried bias is a guess; jaws and box in one top image cancel the map's local error. Off until the real arm passes"
+ },
+ "look.tol_mm": {
+  "value": 3.0,
+  "unit": "mm",
+  "source": "default",
+  "evidence": "2026-10-29 facts-2026-10-29.md 30: biases changed 12.7 mm over 4.7 cm, so a carried bias is a guess; jaws and box in one top image cancel the map's local error. Off until the real arm passes"
+ },
+ "look.max_iter": {
+  "value": 4,
+  "unit": "count",
+  "source": "default",
+  "evidence": "2026-10-29 facts-2026-10-29.md 30: biases changed 12.7 mm over 4.7 cm, so a carried bias is a guess; jaws and box in one top image cancel the map's local error. Off until the real arm passes; field looks shrank the offset about 35 % each (9.6 -> 6.8 -> 4.3 mm, backlash): four looks"
+ },
+ "look.max_total_mm": {
+  "value": 30.0,
+  "unit": "mm",
+  "source": "default",
+  "evidence": "2026-10-29 facts-2026-10-29.md 30: biases changed 12.7 mm over 4.7 cm, so a carried bias is a guess; jaws and box in one top image cancel the map's local error. Off until the real arm passes"
+ },
+ "push.look_tol_mm": {
+  "value": 6.0,
+  "unit": "mm",
+  "source": "measured",
+  "evidence": "2026-10-29: a push keeps push.gap_mm (20) from the box; 6 mm off still meets it"
+ },
+ "look.near_px": {
+  "value": 40.0,
+  "unit": "px",
+  "source": "measured",
+  "evidence": "2026-10-29: with the arm stretched out the open/close shook the link; 3-5 blobs, the largest 120 px from the jaws"
  }
 }
