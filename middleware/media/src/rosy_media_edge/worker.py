@@ -70,13 +70,12 @@ class MediaWorker:
             delay = min(MAX_BACKOFF_S, 0.5 * 2 ** min(self._failures, 4))
             self._retry_at = self._now + delay * (0.5 + 0.5 * self._rng())
 
-    def _feedback(self, now):
+    def _feedback(self, now, wire):
         if not self.publisher.ready():
             if now - self._started_at >= STARTUP_TIMEOUT_S:
                 self._stop('startup timeout', failed=True)
             return
         stats = self.publisher.stats()
-        wire = self._sampler.sample(now=now) if self._sampler else None
         # shortcut: an unreadable NIC counter disables only the wire guard; fix the interface name to restore it.
         decision = self._policy.update(demand_age_s=now - self._demand_at,
             queue_age_ms=stats['encoded_queue_ms'], loss_fraction=stats['loss_fraction'] or 0,
@@ -92,10 +91,11 @@ class MediaWorker:
         self._now = now
         if now >= self._next_control:
             self._next_control = now + 1
+            wire = self._sampler.sample(now=now) if self._sampler else None
             self._control(now, wall)
             if self.publisher is not None and self._demanded(now):
                 try:
-                    self._feedback(now)
+                    self._feedback(now, wire)
                 except Exception as exc:
                     self._stop('feedback ' + type(exc).__name__, failed=True)
         if not self._demanded(now):
