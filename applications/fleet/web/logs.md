@@ -602,3 +602,9 @@
 - 변경: Fleet 내부 `shared/uuid.js`와 등록 자산은 native `crypto.randomUUID`가 있으면 그대로 사용하고, 없으면 `crypto.getRandomValues` 16바이트의 RFC UUIDv4 version·variant 비트를 지정한다. Fleet 11개 파일의 24개 호출을 이 함수로 모았다. 전역 덮어쓰기·비암호학적 난수·API·권한·idempotency 형식 변경은 없다.
 - 검증: 동일 insecure fixture의 실제 초기화·메뉴·테마와 UUID 1000개의 v4 형식·variant·중복 여부, 신뢰된 localhost native 경로의 실제 native 호출 1000회 회귀를 기존 헤더 브라우저 suite에 추가했다. 기존 작업 계약은 UUID 생성 함수 이름만 바꿨다. 원격 통합·변이·기존 known failure 해제는 대기다.
 - gate 변화: 없음. 로컬 시험·실제 장치·배포 수용을 수행하지 않았다. CE: 해당 없음 — HTTP 조건은 helper의 원인 주석과 동일 origin의 초기화 회귀가 보존한다.
+
+## 2026-10-29 · 6910f504b8 · 고정 헤더와 명시 인증의 초점 복원
+
+- 변경: 계정 메뉴를 한행 앱 바 아래 overlay로 열고 연결 예외도 같은 행에 유지한다. semantic measure·수동 token 접근·공통 Stop padding과 권한 규칙은 보존한다. 명시적 성공만 메뉴를 닫고 자동 재조회는 입력/펼침을 유지한다. Cell은 입력 잠금 전 초점과 재활성화 후 초점을 연결한다.
+- 증거: 동일 identity RED4건 뒤 핵심29pass, 현재425의 셸42pass/134PNG 독립 전수검토 범위 P1/P2없음. LAN UUID는 trusted native와 암호학적 fallback을 함께 검증했다. Map 지원분리의 free-variable 오류는 실제 편집 오류로 재현해 반환값으로 수정했고 전체125pass로 확인했다. 새 canvas/HTTP 소비자와 Node 대역은0bc55pass로 검증했다.
+- 경계: 전체 플랫폼·실제 명령/정지·장치·배포·착지·게시 수용과 구분한다. 자세한 source/실패/skip/진행 상태는 docs/validation/platform-ui-integration-2026-10-29/result.md 참조. CE: 해당 없음 — 코드·회귀·기존 clipping 교훈이 판단을 보존한다.

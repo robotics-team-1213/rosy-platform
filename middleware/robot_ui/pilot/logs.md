@@ -1021,3 +1021,9 @@
 - 변경: 발견 목록의 endpoint 초점 보존·보이는 상태 안내 fallback, 생성 본문 토큰, 실제 MainActivity와 preview/fixture가 소비하는 공통 시스템 바 여백 및 라벨 초점 표시를 적용했다.
 - 증거: 실제 SDK35 빌드와 JVM110 pass/1 skip, Android 두 크기에서 각각5 pass. 초점 전 RED3/4와 안전 여백 전 RED3/5를 구분했다. 실제 그려진 프레임의22장과 source를 독립 검토했다. 영향 pytest615 pass/166 skip/NEW0. 정본: `docs/validation/pilot-native-focus-2026-10-29/result.md`.
 - gate 변화: 없음. debug fixture이며 실제 Lobby·TalkBack·실물·FIELD·release 배포 수용이 아니다. CE: 해당 없음 — 원인과 해결이 코드·회귀·검증 기록에 드러난다.
+
+## 2026-10-29 · dab8ddacf2 · 네이티브 주요 조작 초점 대비 회귀 준비
+
+- 발견: 밝은 primary fill에 동일 foreground stroke를 사용하는 공용 PilotViews가 다시 찾기·함께 조종에서 쓰인다. 기존 목록/상태22PNG를 이 primary 수용 근거로 확대하지 않는다.
+- 시험: 기존 무동작 RobotRows fixture에 주요/보조 버튼의 DPAD 초점·실제 drawable edge·disabled 우선순위·callback0회 회귀를 추가했다. 제품 fill 로직은 아직 수정하지 않았고 SDK/실행 RED·수정 후 검증은 대기다. token exporter와 APK layout.css 소비도 구분해 확인한다.
+- 경계: 실제 로봇 연결·조종·배포·실물 수용은 수행하지 않았다. docs/validation/platform-ui-integration-2026-10-29/result.md 참조. CE: 미해결 — 새 primary 렌더 수용은 아직 증명하지 않았다.
