@@ -184,15 +184,24 @@ Verification is deterministic remote host testing: reentry in both directions,
 partial candidates, budget deferral, baseline resets under the same producer,
 temporary ENODEV, unknown controls, changed hardware capabilities and each
 interrupted candidate/restore step. These tests do not establish controlled
-lighting recovery or physical acceptance. The new implementation has not yet
-been applied to the active recording host.
+lighting recovery or physical acceptance.
 
 Local tested checkpoint `40449ecfdf` (not publicly released here) passed 107
 related remote tests, with no new failures. The initial regression checkpoint
 failed 13 cases; later targeted RED runs exposed five transient-read/manual-mode
 cases and the real no-owner producer path before their fixes. Independent review
-found no further actionable issues after those corrections. Re-run the hardware
-upgrade and lighting acceptance separately when the cell is idle.
+found no further actionable issues after those corrections.
+
+At 01:06 on 2026-10-30 the recording/chunk processes were absent and both the
+updater and cell locks were held. The old service restored both originals before
+the two tested modules were installed over the existing release. State and source
+were backed up, the baseline bytes were preserved, and neither camera producer
+nor the arm-status producer changed invocation. The new readiness service kept
+the same invocation and fresh assessments twelve seconds later. Front reached
+NORMAL; top remained UNDEREXPOSED/EXHAUSTED, so the overall result correctly
+remained INSUFFICIENT with motion_admitted false. This verifies the idle hotfix
+and bounded on-host adjustment, not a new release switch, controlled lighting
+recovery or physical acceptance. Preserve the upgrade backup for rollback.
 
 ## Evidence
 Fleet PC journal 2026-10-23 06:10 (boot failure) and 11:33–11:34 (refusal, restore, READY). Fix commit on `fix/omx-camera-readiness-producer-wait`. The deployed file was replaced only after its SHA-256 matched the pre-fix repository version, and a backup `.bak-20261023` was kept.
