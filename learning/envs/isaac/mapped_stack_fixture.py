@@ -46,7 +46,7 @@ CUBE_FIXTURE = dict(FIXTURE, revision='rosycam-opposed-first-layer-v2', trials=1
     arm_base_yaws_rad=[math.pi/2, -math.pi/2],
     belt_center_m=[.27, 0., .0125], belt_stop_m=[.27, .017, .027],
     infeed_start_m=[.27, -.045, .041], carry_height_m=.155,
-    bin_origin_m=[.035, -.045, .052], bin_size_m=[.09, .09, .03],
+    bin_origin_m=[.085, -.045, .052], bin_size_m=[.09, .09, .03],
     release_clearance_m=.035, row_clearance_m=.0002, release_feedback_iterations=4)
 
 
@@ -54,7 +54,7 @@ def plan(cube=False):
     if cube:
         return [dict(id='bar-'+str(i+1), cells=3, cell=[0, i % 3, i//3], size=[.09, .03, .03],
                      mass=.06, arm=i % 2,
-                     target=[.08, -.03+i*.03, .067]) for i in range(3)]
+                     target=[.13, -.03+i*.03, .067]) for i in range(3)]
     return [dict(id='bar-'+str(i+1), cells=3, cell=[0, 0, i], size=[.09, .03, .03],
                  mass=.06, arm=i % 2, target=[.16, 0., .04+i*.03]) for i in range(3)]
 
@@ -62,8 +62,9 @@ def plan(cube=False):
 def home(arm, cube=False):
     if cube:
         base, yaw = CUBE_FIXTURE['arm_bases_m'][arm], CUBE_FIXTURE['arm_base_yaws_rad'][arm]
-        return [base[0]+.06*math.cos(yaw)-.12*math.sin(yaw),
-                base[1]+.06*math.sin(yaw)+.12*math.cos(yaw), base[2]+.13]
+        lateral = -.12 if arm == 0 else .12
+        return [base[0]+.06*math.cos(yaw)-lateral*math.sin(yaw),
+                base[1]+.06*math.sin(yaw)+lateral*math.cos(yaw), base[2]+.13]
     return [.05, FIXTURE['arm_bases_m'][arm][1]+(-.20 if arm == 0 else .20), .13]
 
 
