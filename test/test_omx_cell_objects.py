@@ -141,3 +141,13 @@ def test_objects_found_by_their_own_colour_ignore_the_board_its_shadow_and_a_whi
     found = co.detect(img, ROI, RECORD, CAMERA, CATALOG, object_hsv=[[50, 80, 50], [95, 255, 255]])
     assert [(o["object"], o["matched"]) for o in found] == [("container-2", True)]
     assert found[0]["centre_mm"] == pytest.approx([0, 0], abs=2)
+
+
+def test_a_darker_side_face_of_the_same_green_is_left_out_by_relative_lightness():
+    """Night 2026-10-29: the top camera at its exposure cap; a 2-cell's top and side merged to 58 x 51 mm."""
+    top, side = (60, 170, 60), (40, 115, 40)  # the side about 0.68 of the top's lightness
+    img = scene([(0, 0, 60, 30, 0)], colour=top, patches=[((0, 21, 60, 12, 0), side)])
+    hsv = [[50, 80, 50], [95, 255, 255]]
+    merged = co.detect(img, ROI, RECORD, CAMERA, CATALOG, params={"objects.top_v_frac": 0}, object_hsv=hsv)
+    tops = co.detect(img, ROI, RECORD, CAMERA, CATALOG, params={"objects.top_v_frac": 0.8}, object_hsv=hsv)
+    assert merged[0]["width_mm"] > 36 and tops[0]["object"] == "container-2" and tops[0]["width_mm"] == pytest.approx(30, abs=3)
