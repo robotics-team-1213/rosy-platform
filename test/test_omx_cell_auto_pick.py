@@ -632,3 +632,17 @@ def test_a_long_box_out_of_reach_at_its_middle_offers_grasp_points_toward_the_ba
     assert [e["grasp_shift_mm"] for e in ends] == [-10.5, 10.5]  # 0.7 of the 15 mm from the middle to the jaws' end
     assert ends[0]["raw_m"] == pytest.approx([0.10, 0.2295]) and math.hypot(*ends[0]["raw_m"]) < math.hypot(*o["raw_m"])
     assert auto.reachable_ends(o, {"length_mm": 30, "width_mm": 30}, None) == []  # a square box has no end to move to
+
+
+def test_flat_markings_are_no_obstacle_for_the_finger_mask(tmp_path):
+    """2026-10-29: the board's white line beside a 2-cell closed its finger gap; a site lists such flat markings."""
+    path = biased_map(tmp_path)
+    one = {"x": 0.080, "y": 0.120, "long": 0.0, "length": 30, "width": 30}
+    marking = dict(one, x=0.030, y=0.090)  # stands in for a flat line the colour test calls foreground
+    poly = [[60, 280], [200, 280], [200, 380], [60, 380]]
+    config = copy.deepcopy(CONFIG)
+    _, plain, _, _ = auto.observe(Cell([one, marking]), config, cal.load(path), "pinky", ROI, CATALOG)
+    config["sites"]["pinky"]["markings_px"] = [poly]
+    _, masked, _, _ = auto.observe(Cell([one, marking]), config, cal.load(path), "pinky", ROI, CATALOG)
+    inside = (slice(280 - ROI[1], 380 - ROI[1]), slice(60 - ROI[0], 200 - ROI[0]))
+    assert plain[inside].any() and not masked[inside].any()

@@ -156,6 +156,8 @@ def parse_dest(config: dict, source: str, dest: str):
 
 
 def observe(cell, config: dict, calibration: dict, site: str, roi, catalog: list):
+    import cv2
+
     record = cell_pivot.map_record(calibration, site)
     if record is None:
         return None, None, [], f"no map for {site}"
@@ -168,7 +170,10 @@ def observe(cell, config: dict, calibration: dict, site: str, roi, catalog: list
         o["raw_m"] = [o["centre_mm"][0] / 1000, o["centre_mm"][1] / 1000]
     # the finger-side mask is not clipped to the site polygon: a container on the next surface (the board beside the
     # floor) still meets an open finger (2026-10-29: the jaws came down on a 2-cell on the board, contact at z 0.040)
-    return img, object_sized(cell_objects.foreground(img, roi, params=config.get("params"), surface_lab=lab), config.get("params")), objects, None
+    near = cell_objects.foreground(img, roi, params=config.get("params"), surface_lab=lab)
+    for poly in config["sites"][site].get("markings_px", []):  # flat floor markings (a white line) are no obstacle
+        cv2.fillPoly(near, [np.asarray(poly, np.int32) - [roi[0], roi[1]]], 0)
+    return img, object_sized(near, config.get("params")), objects, None
 
 
 def object_sized(mask, params=None):
