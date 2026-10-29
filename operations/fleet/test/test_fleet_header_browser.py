@@ -177,7 +177,7 @@ def test_header_stays_one_row_with_account_overlay_and_connection_exceptions(tmp
 
 
 @pytest.mark.parametrize('name,path', DOCS)
-@pytest.mark.parametrize('focus_target', ['trigger', 'body', 'theme', 'outside'])
+@pytest.mark.parametrize('focus_target', ['trigger', 'body', 'theme', 'outside', 'dialog'])
 def test_account_escape_closes_menu_without_stealing_outside_focus(tmp_path, name, path, focus_target):
     from playwright.sync_api import expect
 
@@ -191,10 +191,23 @@ def test_account_escape_closes_menu_without_stealing_outside_focus(tmp_path, nam
         expect(menu).to_be_visible()
         if focus_target == 'body':
             page.evaluate('document.activeElement.blur()')
-        elif focus_target == 'theme':
+        elif focus_target in ('theme', 'dialog'):
             page.locator('#fleet-theme').focus()
         elif focus_target == 'outside':
             page.locator('main').first.evaluate("node => { node.tabIndex = -1; node.focus(); }")
+        if focus_target == 'dialog':
+            page.evaluate('''async () => {
+                const ui = await import('/console/assets/ui.js');
+                window.dialogResult = null;
+                void ui.confirmIrreversible({message: '초점 복원 확인', action: '실행'})
+                    .then(result => { window.dialogResult = result; });
+            }''')
+            expect(page.locator('dialog.ui-confirm')).to_be_visible()
+            page.keyboard.press('Escape')
+            expect(page.locator('dialog.ui-confirm')).to_have_count(0)
+            expect(menu).to_be_visible()
+            expect(page.locator('#fleet-theme')).to_be_focused()
+            assert page.evaluate('window.dialogResult') is False
         page.keyboard.press('Escape')
         expect(menu).to_be_hidden()
         expect(page.locator('main').first if focus_target == 'outside' else trigger).to_be_focused()
