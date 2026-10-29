@@ -262,7 +262,7 @@ def test_closed_record_stops_ancestry_scan_but_later_incomplete_record_stays_ope
     git(pair, *ident, "commit", "-q", "--allow-empty", "-m", "closed")
     land_isolation.record(pair, "fix/closed", "done", ["m/test/test_b.py"], [])
     git(pair, *ident, "commit", "-q", "--allow-empty", "-m", "incomplete again")
-    land_isolation.record(pair, "fix/new", "skipped", ["m/test/test_b.py"], ["m/test/test_b.py"])
+    land_isolation.record(pair, "fix/new", "prepare", ["m/test/test_b.py"], ["m/test/test_b.py"])
     old, closed, latest = land_isolation.rows(pair)
     ancestor = land_isolation._ancestor
     calls = []
