@@ -31,8 +31,10 @@ def build(case):
     if control['profile'] != 'simulation':
         raise ValueError('Only the simulation planning profile is allowed')
 
-    def solve(base, point, yaw, reference=0.):
-        pose = TopDownPose(*(point[i]-base[i] for i in range(3)), yaw)
+    def solve(base, point, yaw, reference=0., base_yaw=0.):
+        dx, dy = point[0]-base[0], point[1]-base[1]
+        c, s = math.cos(base_yaw), math.sin(base_yaw)
+        pose = TopDownPose(c*dx+s*dy, -s*dx+c*dy, point[2]-base[2], yaw-base_yaw)
         result = kin.solve_top_down(pose, profile.ik_limits(), reference_q5=reference)
         if not result.ok:
             raise ValueError(f'Unreachable SIM target: {result.reason} {result.detail}')
@@ -41,27 +43,34 @@ def build(case):
     result = dict(schema=SCHEMA, joints=['joint'+str(i) for i in range(1, 6)],
                   profile_sha256=hashlib.sha256(PROFILE.read_bytes()).hexdigest())
     if case.get('operation') == 'homes':
-        if set(case) != {'schema', 'operation', 'bases', 'points'} or len(case['bases']) != 2 or len(case['points']) != 2:
+        if set(case)-{'base_yaws'} != {'schema', 'operation', 'bases', 'points'} or len(case['bases']) != 2 or len(case['points']) != 2:
             raise ValueError('Two simulation homes required')
-        result['homes'] = [solve(vector(b, 3), vector(p, 3), 0.) for b, p in zip(case['bases'], case['points'])]
+        yaws = vector(case.get('base_yaws', [0., 0.]), 2)
+        result['homes'] = [solve(vector(b, 3), vector(p, 3), 0., base_yaw=y)
+                           for b, p, y in zip(case['bases'], case['points'], yaws)]
         result['gripper'] = dict(preopen=profile.gripper_contact_for_width(.036),
             close=profile.gripper_close_for_width(.03), release=profile.gripper_contact_for_width(.04))
         return result
-    if case.get('operation') != 'move' or set(case) != {'schema', 'operation', 'base', 'start', 'target', 'yaw', 'dt'}:
+    if case.get('operation') != 'move' or set(case)-{'base_yaw'} != {'schema', 'operation', 'base', 'start', 'target', 'yaw', 'dt'}:
         raise ValueError('Unexpected SIM planning operation')
     base, start, target = vector(case['base'], 3), vector(case['start'], 5), vector(case['target'], 3)
     yaw, dt = vector([case['yaw'], case['dt']], 2)
+    base_yaw = vector([case.get('base_yaw', 0.)], 1)[0]
     if not math.isclose(dt, 1/120, rel_tol=1e-9):
         raise ValueError('Only the pinned simulation timestep is supported')
     initial = kin.fk(start)
-    point = [initial.x+base[0], initial.y+base[1], initial.z+base[2]]
+    c, s = math.cos(base_yaw), math.sin(base_yaw)
+    point = [c*initial.x-s*initial.y+base[0], s*initial.x+c*initial.y+base[1], initial.z+base[2]]
+    initial_yaw = initial.yaw+base_yaw
+    # Parallel jaws have pi symmetry; retain the nearest equivalent grasp direction.
+    yaw += round((initial_yaw-yaw)/math.pi)*math.pi
     q5 = start[-1]
 
     def curve(u):
         nonlocal q5
         s = u**3*(10+u*(-15+6*u))
         q = solve(base, [point[i]+(target[i]-point[i])*s for i in range(3)],
-                  initial.yaw+(yaw-initial.yaw)*s, q5)
+                  initial_yaw+(yaw-initial_yaw)*s, q5, base_yaw)
         q5 = q[-1]
         return q
 

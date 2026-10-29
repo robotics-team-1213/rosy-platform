@@ -43,21 +43,36 @@ def trial():
     return result
 
 
-def test_cube_plan_fills_27_cells_without_crossing_the_infeed():
+def test_opposed_first_layer_stays_inside_one_raised_workplate():
+    fixture = f.CUBE_FIXTURE
+    assert fixture['target_stage'] == 'FIRST_LAYER_ONLY'
+    assert fixture['arm_base_yaws_rad'] == pytest.approx([math.pi/2, -math.pi/2])
+    center, size = fixture['workplate_center_m'], fixture['workplate_size_m']
+    top = center[2]+size[2]/2
+    assert all(base[2] == pytest.approx(top) for base in fixture['arm_bases_m'])
+    assert fixture['belt_center_m'][2]+fixture['belt_size_m'][2]/2 < top
+    for base in fixture['arm_bases_m']:
+        assert all(abs(base[k]-center[k]) < size[k]/2 for k in (0, 1))
+    for item in f.plan(cube=True):
+        assert all(abs(item['target'][k]-center[k])+item['size'][k]/2 < size[k]/2 for k in (0, 1))
+    assert fixture['bin_origin_m'][2] >= top
+
+
+def test_first_layer_plan_fills_nine_cells_without_crossing_the_infeed():
     items = f.plan(cube=True)
-    assert len(items) == 9
+    assert len(items) == 3
     occupied = [(x, row, level) for p in items for x in range(3)
                 for _, row, level in [p['cell']]]
-    assert len(set(occupied)) == 27
-    assert set(occupied) == {(x, y, z) for x in range(3) for y in range(3) for z in range(3)}
-    assert f.CUBE_FIXTURE['bin_size_m'] == [.09, .09, .09]
+    assert len(set(occupied)) == 9
+    assert set(occupied) == {(x, y, 0) for x in range(3) for y in range(3)}
+    assert f.CUBE_FIXTURE['bin_size_m'] == [.09, .09, .03]
     assert f.CUBE_FIXTURE['trials'] == 1
-    assert min(p['target'][1]-.015 for p in items) > -.046+.015+.01
-    assert sum(p['mass'] for p in items) == pytest.approx(.54)
+    assert max(p['target'][0]+.045 for p in items) < f.CUBE_FIXTURE['infeed_start_m'][0]-.045
+    assert sum(p['mass'] for p in items) == pytest.approx(.18)
     assert len(f.plan()) == 3  # Keep the verified fallback distinct.
 
 
-def test_nine_bar_judgement_requires_expected_row_support_and_stable_prefix():
+def test_first_layer_judgement_requires_support_and_stable_prefix():
     good = trial()
     assert good['task_success']
     for mutation in ('missing_bar', 'wrong_support', 'earlier_displaced', 'finger_held', 'moving'):
@@ -65,10 +80,10 @@ def test_nine_bar_judgement_requires_expected_row_support_and_stable_prefix():
         if mutation == 'missing_bar':
             bad['layers'].pop()
         else:
-            box = bad['layers'][8]['settle_samples'][0]['boxes'][8 if mutation != 'earlier_displaced' else 0]
+            box = bad['layers'][2]['settle_samples'][0]['boxes'][2 if mutation != 'earlier_displaced' else 0]
             if mutation == 'wrong_support':
                 box['forces'] = [[0., 0., 0.] for _ in box['forces']]
-                box['forces'][f.contact_names(8, cube=True).index(f.plan(cube=True)[7]['id'])][2] = .6
+                box['forces'][f.contact_names(2, cube=True).index(f.plan(cube=True)[1]['id'])][2] = .6
             elif mutation == 'earlier_displaced':
                 box['position'][1] += .01
             elif mutation == 'finger_held':
@@ -79,18 +94,18 @@ def test_nine_bar_judgement_requires_expected_row_support_and_stable_prefix():
         assert not f.judge(bad, cube=True)['task_success'], mutation
 
 
-def test_cube_report_recomputes_nine_body_contact_acceptance(tmp_path):
+def test_first_layer_report_recomputes_three_body_contact_acceptance(tmp_path):
     value = dict(schema='rosy.omx-map-cube-stack/1', fixture=f.CUBE_FIXTURE,
         seed=42, sdk_version='6.2.0.0', controller=f.CUBE_FIXTURE['controller'],
         attachment_aid=False, trials=[trial()], task_success=True,
-        images=['mapped-overview.png', 'mapped-initial.png', 'mapped-layer-9.png', 'mapped-trial-1.png'])
+        images=['mapped-overview.png', 'mapped-initial.png', 'mapped-layer-3.png', 'mapped-trial-1.png'])
     path = tmp_path/'report.json'
     path.write_text(json.dumps(value)+' '*1024*1024)
     assert verify_report(path, sdk_version='6.2.0.0', seed=42, cube=True)['task_success']
     path.write_text(json.dumps(value)+' '*f.CUBE_REPORT_BYTES)
     with pytest.raises(ValueError, match='Unsafe stacking evidence'):
         verify_report(path, sdk_version='6.2.0.0', seed=42, cube=True)
-    value['trials'][0]['layers'][8]['settle_samples'][0]['boxes'].pop()
+    value['trials'][0]['layers'][2]['settle_samples'][0]['boxes'].pop()
     path.write_text(json.dumps(value))
     with pytest.raises(ValueError):
         verify_report(path, sdk_version='6.2.0.0', seed=42, cube=True)
