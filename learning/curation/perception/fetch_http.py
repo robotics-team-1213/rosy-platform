@@ -4,6 +4,10 @@ the robot's sha256 manifest, convert with bag_to_video and check frame/action pa
 Usage: fetch_http.py <base> [--token-file FILE] [--dest data/perception/raw]
                      [--video-out data/teleop/learning] [--codec hevc|h264] [--only ID]
                      [--ca-file DEVICE-CA.pem] [--since-id ID]
+       fetch_http.py --local-only --dest <raw-root> [--video-out DIR] [--only ID]
+
+--local-only verifies and converts existing originals without contacting a robot or reading
+credentials. It also recovers recordings no longer listed on the robot.
 
 `rosy_ml fetch` fills <base> from the robot's `_rosy._tcp` advertisement
 (`https://<tls_host>:<port>` when it says tls=required, with --ca-file).
@@ -209,6 +213,8 @@ def _sha256(path: Path) -> str:
 
 
 def verify(folder: Path, recording_id: str) -> dict:
+    if folder.is_symlink() or any(p.is_symlink() for p in folder.rglob("*")):
+        raise FetchError(f"{recording_id}: original recording must not contain links")
     try:
         manifest = json.loads((folder / MANIFEST_NAME).read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
@@ -282,6 +288,7 @@ def _paired_receipt_valid(dest: Path, recording_id: str) -> bool:
         video = sidecar.with_suffix(".mp4")
         return (receipt["recording_id"] == recording_id and sidecar.is_file()
                 and video.is_file() and video.stat().st_size > 0
+                and _sha256(video) == receipt.get("video_sha256")
                 and _sha256(sidecar) == receipt["sidecar_sha256"]
                 and pair_counts(_read_rows(sidecar))["paired"] > 0)
     except (OSError, ValueError, KeyError, TypeError):
@@ -307,13 +314,16 @@ def _write_paired_receipt(dest: Path, recording_id: str, rows_path: Path) -> Non
     receipt.parent.mkdir(parents=True, exist_ok=True)
     temporary = receipt.with_suffix(".tmp")
     temporary.write_text(json.dumps({"recording_id": recording_id, "sidecar": str(rows_path.resolve()),
+                                     "video_sha256": _sha256(rows_path.with_suffix(".mp4")),
                                      "sidecar_sha256": _sha256(rows_path)}), encoding="utf-8")
     os.replace(temporary, receipt)
 
 
 def _convert_verified(args, dest: Path, recording_id: str, final: Path, convert) -> int:
     rc, rows_path = convert(final, Path(args.video_out), args.codec)
-    if rc != 0 or rows_path is None or not Path(rows_path).is_file():
+    video = Path(rows_path).with_suffix(".mp4") if rows_path is not None else None
+    if (rc != 0 or rows_path is None or not Path(rows_path).is_file()
+            or not video.is_file() or video.stat().st_size == 0):
         print(f"{recording_id}: FAILED conversion (rc {rc}); raw copy kept in {final}", file=sys.stderr)
         return 1
     rows_path = Path(rows_path)
@@ -357,7 +367,8 @@ def _fetch_one(args, token: str, dest: Path, recording_id: str, convert) -> int:
 def main(argv=None, *, convert=default_convert) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("base", help="CORE base URL from the robot's _rosy._tcp advertisement")
+    ap.add_argument("base", nargs="?", help="CORE base URL from the robot's _rosy._tcp advertisement")
+    ap.add_argument("--local-only", action="store_true", help="recover existing raw copies without robot access")
     ap.add_argument("--token-file", help=f"Operator token file (env {TOKEN_ENV})")
     ap.add_argument("--dest", default=DEFAULT_DEST)
     ap.add_argument("--video-out", help="bag_to_video --out (default data/teleop/learning)")
@@ -370,16 +381,30 @@ def main(argv=None, *, convert=default_convert) -> int:
     ap.add_argument("--limit-mbps", type=float, default=DEFAULT_LIMIT_MBPS,
                     help="pace each download to this many Mbit/s on the site network (0 = unlimited)")
     args = ap.parse_args(argv)
-    if args.since_id and not _id_ok(args.since_id):
-        print("refused: --since-id must be a recording ID", file=sys.stderr)
+    if bool(args.base) == args.local_only:
+        ap.error("provide a CORE base URL or --local-only")
+    if any(value and not _id_ok(value) for value in (args.only, args.since_id)):
+        print("refused: --only and --since-id must be recording IDs", file=sys.stderr)
         return 2
+    if args.video_out is None:
+        import bag_to_video
+        args.video_out = str(bag_to_video.DEFAULT_OUT)
+    dest = Path(args.dest)
+    if args.local_only:
+        if not dest.is_dir():
+            print("refused: local raw root does not exist", file=sys.stderr)
+            return 1
+        listing = {"items": [{"id": p.name, "status": "complete"} for p in sorted(dest.iterdir())
+                             if p.is_dir() and _id_ok(p.name)], "download_allowed": True}
+    else:
+        listing = None
     token_file = args.token_file or os.environ.get(TOKEN_ENV)
     token = Path(token_file).read_text(encoding="utf-8").strip() \
-        if token_file and Path(token_file).is_file() else ""
-    if not token:
+        if not args.local_only and token_file and Path(token_file).is_file() else ""
+    if not args.local_only and not token:
         print(f"refused: needs an Operator token in --token-file or {TOKEN_ENV}", file=sys.stderr)
         return 2
-    https = args.base.startswith("https://")
+    https = bool(args.base and args.base.startswith("https://"))
     if https and not args.ca_file:
         print("refused: https needs --ca-file (the robot device CA)", file=sys.stderr)
         return 2
@@ -389,12 +414,10 @@ def main(argv=None, *, convert=default_convert) -> int:
     if args.ca_file and not Path(args.ca_file).is_file():
         print(f"refused: cannot read device CA {args.ca_file}", file=sys.stderr)
         return 2
-    args.opener = build_opener(args.ca_file)
-    if args.video_out is None:
-        import bag_to_video
-        args.video_out = str(bag_to_video.DEFAULT_OUT)
+    args.opener = build_opener(args.ca_file) if not args.local_only else None
     try:
-        listing = list_recordings(args.base, token, args.list_timeout, args.opener)
+        if listing is None:
+            listing = list_recordings(args.base, token, args.list_timeout, args.opener)
     except TokenRefused as exc:
         print(f"refused: {exc}", file=sys.stderr)
         return EXIT_TOKEN
@@ -405,7 +428,6 @@ def main(argv=None, *, convert=default_convert) -> int:
         print(f"robot not idle: {listing.get('download_blocker') or 'download not allowed'}; "
               "nothing fetched", file=sys.stderr)
         return EXIT_NOT_IDLE
-    dest = Path(args.dest)
     dest.mkdir(parents=True, exist_ok=True)
     items = [item for item in listing["items"] if isinstance(item, dict) and item.get("status") == "complete"
              and (not args.only or item.get("id") == args.only)
@@ -421,14 +443,14 @@ def main(argv=None, *, convert=default_convert) -> int:
             rc, failed = 1, failed + 1
             continue
         if (dest / recording_id).exists():
-            if _paired_receipt_valid(dest, recording_id):
-                print(f"{recording_id}: paired video already verified")
-                continue
             try:
                 verify(dest / recording_id, recording_id)
             except FetchError as exc:
                 print(f"FAILED existing raw copy: {exc}", file=sys.stderr)
                 rc, failed = 1, failed + 1
+                continue
+            if _paired_receipt_valid(dest, recording_id):
+                print(f"{recording_id}: paired video already verified")
                 continue
             existing = _existing_video(args, dest / recording_id)
             if existing is not None:
