@@ -3,7 +3,7 @@ title: OMX camera readiness failed every boot because the Type=simple preview wa
 date: 2026-10-23
 last_updated: 2026-10-29
 category: runtime-errors
-module: deploy/robot/omx (camera_readiness.py, rosy-omx-camera-readiness.service, rosy-omx-camera@.service)
+module: deploy/robot/omx (camera_readiness.py, camera_environment.py, rosy-omx-camera-readiness.service, rosy-omx-camera@.service)
 problem_type: runtime_error
 component: deployment
 symptoms:
@@ -112,6 +112,40 @@ quality. That observation does not establish task visibility or motion acceptanc
 Regression coverage remains in `test/test_omx_camera_readiness.py` and
 `test/test_omx_autoupdate.py`; `test/test_native_observation_snapshot.py` additionally
 executes the viewer command through user systemd with default and overridden keys.
+
+## Sixth failure: READY did not exercise the mapped recovery owner (2026-10-29)
+
+Initial preparation and restoration used the profile's per-camera `unit`, but
+`camera_environment.monitor()` still called `io.producer(role, device)` before
+changing exposure. The front role could therefore reach READY with its wrist
+producer and fail hours later when lighting first required a correction.
+The host journal at 18:46 and 19:10–12 showed the sole-owner refusal and exhausted
+service retries. A read-only probe confirmed that `front` refused the same device
+while the baseline's `arm_a_wrist` unit was its sole owner.
+
+The recovery guard now resolves the producer from `saved.get('unit', role)` in
+`camera_environment.py:176`, matching preparation and restoration. Device identity,
+producer identity, control budget, readback and baseline restoration checks remain
+in place. Older baselines without a unit retain the role fallback.
+
+The previous monitor test returned an empty producer identity for any argument,
+so it could not detect an incorrect unit. The existing dark-to-bright test now
+checks which unit the backend was asked to inspect, with both the role fallback
+and the wrist override, and with advancing or repeated frames. Before the fix,
+the two override cases failed and the two fallback cases passed. The tested local
+commit `37eba1b6e7` (not publicly released at this checkpoint) passed 61 related
+remote tests, including the native snapshot checks.
+
+Recovery at 20:11 used the cell/update locks and verified no recording/chunk owner.
+The deployed module first matched the expected pre-fix source, then was backed up
+before the tested replacement. `reset-failed` and `start` reached READY with three
+fresh advancing confirmations and the same invocation twelve seconds later.
+The baseline was preserved; camera producers and the arm owner were not restarted.
+This was a tested hotfix over the existing host release, not a new-release switch.
+The next accepted release must contain the fix. Dark-to-bright recovery logic was
+covered by deterministic host tests, not a controlled lighting experiment on the
+cell. Apply this check to every producer lookup in the lifecycle; initial READY
+alone does not establish the recovery path.
 
 ## Evidence
 Fleet PC journal 2026-10-23 06:10 (boot failure) and 11:33–11:34 (refusal, restore, READY). Fix commit on `fix/omx-camera-readiness-producer-wait`. The deployed file was replaced only after its SHA-256 matched the pre-fix repository version, and a backup `.bak-20261023` was kept.

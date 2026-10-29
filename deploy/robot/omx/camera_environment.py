@@ -173,7 +173,8 @@ def monitor(profile, root, digest, duration, io):
                     selected = {**current[role], **spec[key][action['index']]}
                 saved = baseline['cameras'][role]
                 device = spec['device']
-                if io.identity(device) != saved['identity'] or io.producer(role, device) != saved['producer']:
+                preview = saved.get('unit', role)
+                if io.identity(device) != saved['identity'] or io.producer(preview, device) != saved['producer']:
                     raise RuntimeError('camera producer changed during environmental recovery')
                 try:
                     io.reserve_budget(root)
