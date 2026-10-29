@@ -10,7 +10,8 @@
 | focused intake/owner/preflight/진단 GREEN | `commit 724ecfbff1` | 139 passed/0 skipped, NEW/known/flaky 0 |
 | 실제 native ROS RED | `commit 77c1f6abfb` | 1 failed/1 passed; source_stamp_ns 부재 AttributeError |
 | 실제 native ROS GREEN | `commit 724ecfbff1` | 2 passed/0 skipped; callback 객체 전달, source replay 이후 기존 stale HOLD/cancel 보존 |
-| 공식 lab FULL 행렬 | `commit 724ecfbff1` | 공식 full_invocations 27개 실행 중; 아직 완료로 보고하지 않는다 |
+| 공식 lab FULL 행렬 | `commit 724ecfbff1` | 27개 실행 종료, 37,479 passed/2,349 skipped/2 failed; NEW2/known0/flaky0. 전체 통과가 아니다 |
+| 두 수정의 Fleet/문서/경계/구조 회귀 | `commit 96b8097c80` | 229 passed/0 skipped, terminal 0; NEW/known/flaky 0 |
 | 실제 Gazebo 수동 intake/state 진단 | `commit 724ecfbff1` | intake-only 실행 terminal 0, native ROS 2 passed/0 skipped, 세 state 응답의 source 시각·iteration 증가 |
 
 기존 네 positional 인수, accepted sequence, source age를 차감한 received_at, 거절 이후 이전 state 보존과 명령 판정은 유지한다. 원본 metadata가 나중 거절 진단 mutation으로 바뀌지 않음을 확인한다. 새 int 상한을 넣어 기존 intake 범위를 바꾸지 않았다.
@@ -41,11 +42,27 @@
 
 이번에는 고정 selector의 공식 27개를 native runner가 소비하는 배열에 그대로 공급했다. 차이는 root test 묶음의 ROSY_BROWSER_ALONE=1 및 -n 0뿐이며 파일은 제거하지 않았다. 독립 최종 리뷰가 원래 배열과 직접 비교해 확인했다. 진행/실패/skip을 최종 통과로 바꾸지 않는다. [재발 방지 교훈](../../solutions/workflow-issues/full-mode-json-does-not-prove-full-matrix-execution-2026-10-29.md)은 이 실행 계층 구분을 설명한다.
 
+27개 원격 invocation은 각각 terminal code를 기록했다(0: 25개, 1: 2개). 각 report를 test/known_failures.py로 비교했고 NEW2는 아래 Fleet/root 실패뿐이다. 합계는 invocation별 실행 수이며 중복을 제거한 고유 test 수가 아니다. run-15는 16 skipped뿐이므로 해당 기능 실행의 수용 근거가 아니다. 기본 runner의 선택 의존성·브라우저·native ROS skip을 실제 실행으로 세지 않는다.
+
+원문 `%TEMP%/rosy-pipeline-g1c-actual-full/run-1.txt`~`run-27.txt`를 보존했다. 파일명 사전순으로 `파일명 + 공백 + 파일 SHA-256` 줄을 만들고 LF로 결합한 목록의 SHA-256은 `8e854f3e1f9bd2f9c569e809372d4845b115a3574be6b82743c6b4d973b8c2d9`다(마지막 LF 없음).
+
 ### 최초 Fleet 실패와 테스트 수정
 
 공식 행렬 run-13은 1 failed/7,270 passed/413 skipped, known-failure 비교 NEW1/known0/flaky0이었다. `operations/fleet/test/test_ai_facts.py::test_more_than_two_fact_posts_a_second_is_429`의 세 요청 결과가 기대 [200,200,429] 대신 [200,200,200]이었다. 실제 요청 처리 시간은 이 로그로 확정하지 않는다. production `AiFactsBoard.admit_post()`는 주입된 monotonic clock에서 1초가 지난 요청을 만료시키므로, 기존 시험은 실행 지연에 의존하며 이 실패만으로 production 결함이 입증되지는 않는다.
 
 후속 테스트 전용 `commit f2af364bcf`는 기존 FakeClock과 _app(clock=...)를 사용한다. 기존 세 응답 assertion을 유지하고 .999초의 429와 정확히 1초의 200을 추가했다. 독립 리뷰에서 정책 약화·추가 P1/P2 없음. production/known-failure/quarantine은 바꾸지 않았다. 수정 source는 `%TEMP%/rosy-pipeline-g1c-fleet-clock-green/`에서 별도 원격 검증하며 최초 행렬의 실패를 지우지 않는다.
+
+### 최초 root 문서 검사 실패
+
+공식 행렬 run-24는 1 failed/13,149 passed/1,277 skipped였다. NEW1은 `test_no_secrets_in_tracked_files`로, 앞선 D-915 기록의 공개 Git ID 두 줄과 log hash 네 줄에 integrity 문맥이 없어 탐지됐다. `commit 96b8097c80`은 원래 값을 유지하고 각 줄에 commit/SHA-256 의미를 명시했다. scanner·규칙·allowlist는 바꾸지 않았다. 새 D-916 hash 표의 SHA-256 열도 검사 대상이다. 수정 source의 release-boundary/harness/layout 회귀는 `%TEMP%/rosy-pipeline-g1c-doc-boundary-green/`에서 별도 검증한다. 전체 행렬의 두 최초 실패를 후속 부분 검증의 통과로 덮지 않는다.
+
+### 수정 검증 재배정
+
+Fleet-only와 문서-only의 별도 검증은 다른 실행의 독점 lock 뒤에 대기했다. 두 actor가 이 세션 소유이고 pytest 진입 전이며 자체 lock/rc가 없음을 원격에서 확인한 뒤 native remote_job.KILL로 취소했다. 원래 controller가 각각 terminal 143을 확인한 뒤에만 대체 작업을 시작했다. 취소는 통과가 아니다. 다른 세션의 lock·작업은 건드리지 않았다.
+
+첫 대체 작업은 model 역할 호스트를 선택했으나 전체 시험이 끝난 실제 호스트와 달라 다시 대기했다. 같은 소유·미진입 검사를 거쳐 native 취소 후 terminal 143을 확인했다. 이후 지원되는 ROSY_TEST_HOSTS로 **실제 공식 전체 시험이 끝난 승인된 시험 호스트**를 선택했다. 불필요한 독점 배정으로 대기한 대체 작업도 같은 절차로 취소했다. 취소된 네 작업은 각각 원래 로그에 남고 통과로 세지 않는다. 수정 검증은 가짜 시계를 사용하며 timing suite를 포함하지 않아 일반 native 자원 배정으로 실행했다. 기존 headroom/admission 규칙과 시험 경로·assertion은 유지했다.
+
+`commit 96b8097c80`에서 test_ai_facts.py, test_release_boundary_guards.py, test_harness_contracts.py, test_document_placement.py와 test_folder_layout.py를 한 묶음으로 실행했다. **229 passed/0 skipped**, terminal 0, NEW/known/flaky 0이다. 최종 원문은 `%TEMP%/rosy-pipeline-g1c-corrections-standard/run-1.txt`, SHA-256 `2d1f0f34b62ad7ef59955afd0f01c9d18784d88d53741c2b4fb2b903a82a8cf5`다. 신규 문서를 포함한 tracked-file 검사도 이 source에서 통과했다. 이후 수정은 이 결과를 기록하는 문서뿐이다. 수정 후 27개 전체를 다시 실행한 결과로 해석하지 않는다.
 
 외부 scratch는 `%TEMP%/rosy-pipeline-g1c-intake-{red,green}/`, `%TEMP%/rosy-pipeline-g1c-native-{red,green}/`, `%TEMP%/rosy-pipeline-g1c-actual-full/`다. native ROS의 ros-runtime.txt와 원격 terminal code를 기본 pytest 보고서와 구분한다. 실제 simulation은 모델 역할의 격리 domain/partition에서만 시도하며 site PC·실물 장치에 실행하지 않는다.
 

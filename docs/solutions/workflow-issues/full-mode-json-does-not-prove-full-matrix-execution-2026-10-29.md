@@ -29,7 +29,7 @@ assert selected == full
 
 필요한 host/process 격리는 경로를 빼는 대신 별도 scheduling 옵션으로 기록한다. 이 회차는 원래 27개 호출을 native CLI가 소비하는 배열에 전달했고, root `test`에만 `ROSY_BROWSER_ALONE=1 -n 0`을 추가했다. 독립 검토가 원래 배열과 비교하여 삭제된 경로가 없음을 확인했다. runner 이름이나 JSON `mode`만 기록하지 말고 source commit, 실제 argv, 각 terminal code, report의 실행·skip 수와 known-failure 비교를 남긴다.
 
-정확한 CLI 동작을 모르거나 전체 호출을 아직 실행하지 않았다면, 통과한 것을 “선택된 로컬 회귀”로 보고하고 공식 FULL은 미수행/진행 중으로 남긴다. 이 교훈을 기록한 시점의 D-916 공식 행렬은 실행 중이므로 아직 통과를 주장하지 않는다.
+정확한 CLI 동작을 모르거나 전체 호출을 아직 실행하지 않았다면, 통과한 것을 “선택된 로컬 회귀”로 보고하고 공식 FULL은 미수행/진행 중으로 남긴다. 후속 D-916 공식 27개 실행은 종료됐지만 두 신규 실패가 있었으므로 전체 통과가 아니다. 최초 실패와 수정 후 부분 검증을 구분한다.
 
 ## Evidence and applicability
 
