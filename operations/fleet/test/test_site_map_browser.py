@@ -1080,6 +1080,49 @@ def test_normal_teach_preview_disappears_on_an_unrelated_profile(page_site, widt
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
 
 
+@pytest.mark.parametrize('first', ['idle', 'recording', 'pending'])
+def test_teach_poll_keeps_idle_map_labels_and_draws_then_clears_previews(page_site, first):
+    from playwright.sync_api import expect
+
+    page, store, robot = page_site
+    replies = []
+    page.route('**/api/fleet/teach', lambda route: replies.append(route))
+    teach_request = re.compile(r'/api/fleet/teach$')
+    open_token_access(page)
+    page.locator('#console-token').fill('operator-token')
+    with page.expect_request(teach_request):
+        page.locator('#token-save').click()
+    expect(page.locator('#map-status')).to_contain_text('활성 지도')
+    label = page.locator('#site-map-svg .label').first.element_handle()
+    assert label is not None and label.evaluate('node => node.isConnected')
+    active = {'teach_id': 'preview', 'robot_id': 'rosy_60',
+              'map_id': store.active_view()['map']['map_id'],
+              'points': [[0, 0], [0.2, 0]], 'started_by': 'bob'}
+    pending = {**active, 'polyline': active['points'], 'points': 2,
+               'expires_at': time.time() + 600, 'from_candidates': [], 'to_candidates': []}
+    idle = {'recording': None, 'pending': []}
+    view = {'recording': active if first == 'recording' else None,
+            'pending': [pending] if first == 'pending' else []}
+    # The next real timer request proves the prior poll finished, without a timing sleep.
+    with page.expect_request(teach_request):
+        replies.pop(0).fulfill(json=view)
+    if first == 'idle':
+        assert label.evaluate('node => node.isConnected'), 'an empty teach poll replaced the map labels'
+        assert label.evaluate('node => node.getBoundingClientRect().height') >= 12
+        expect(page.locator('#site-map-svg polyline.teach')).to_have_count(0)
+        with page.expect_request(teach_request):
+            replies.pop(0).fulfill(json={'recording': active, 'pending': []})
+    else:
+        assert not label.evaluate('node => node.isConnected')
+    expect(page.locator('#site-map-svg polyline.teach')).to_have_count(1)
+    with page.expect_request(teach_request):
+        replies.pop(0).fulfill(json=idle)
+    expect(page.locator('#site-map-svg polyline.teach')).to_have_count(0)
+    expect(page.locator('#teach-status')).to_have_text('기록 없음')
+    assert not [call for call in robot.calls if call[0] not in
+                {'state', 'power_health', 'motor_health', 'map', 'swarm_state', 'navigation_path', 'events'}]
+
+
 @pytest.mark.parametrize('width', [1440, 390])
 def test_camera_observation_accumulates_without_replacing_operator_features(page_site, width):
     from playwright.sync_api import expect

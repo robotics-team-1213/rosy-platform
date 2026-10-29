@@ -104,7 +104,8 @@ export function createTeachPanel(host) {
           fillEnd('teach-to', pending.to_candidates);
         }
         status(teachStatusText(view), view.recording ? 'pending' : pending ? 'ready' : 'empty');
-        const key = `${view.recording?.teach_id}:${view.recording?.points.length}:${pending?.teach_id}`;
+        const key = view.recording || pending
+          ? `${view.recording?.teach_id}:${view.recording?.points.length}:${pending?.teach_id}` : '';
         if (key !== drawn) { drawn = key; host.render(); }  // redraw the map only when a line changed
       } catch (error) {
         status(`가르치기 상태 확인 불가 · ${siteMapErrorText(error)}`, 'error');
