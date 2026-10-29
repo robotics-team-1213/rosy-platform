@@ -16,6 +16,7 @@
 !contracts/foundation/core_common/**
 !contracts/learning/src/**
 !contracts/skill/src/**
+!contracts/motion/src/**
 !operations/processes/palletizing/src/**
 !applications/fleet/gateway/src/**
 !shared/web/**
