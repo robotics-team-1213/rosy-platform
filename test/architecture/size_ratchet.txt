@@ -41,7 +41,6 @@
 712 perception/front_camera/perception/lane_bev.py
 723 perception/sensors/line_observation/line_observer_node.py
 1857 perception/web/diagnostic.html
-676 robot_ui/face/emotion/info_screen.py
 732 robot_ui/pilot/screens/drive.js
 945 robot_ui/pilot/styles.css
 898 robot_ui/robot/app.js
