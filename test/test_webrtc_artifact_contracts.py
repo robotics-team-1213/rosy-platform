@@ -53,7 +53,11 @@ def test_media_runtime_preflight_reports_actual_host(tmp_path):
 
 @pytest.mark.parametrize('series,missing,ready', [((1, 24, 2, 0), None, True),
                                                ((1, 22, 0, 0), None, False),
-                                               ((1, 24, 2, 0), 'x264enc', False)])
+                                               ((1, 24, 2, 0), 'x264enc', False),
+                                               ((1, 24, 2, 0), 'dtlssrtpenc', False),
+                                               ((1, 24, 2, 0), 'dtlssrtpdec', False),
+                                               ((1, 24, 2, 0), 'srtpenc', False),
+                                               ((1, 24, 2, 0), 'srtpdec', False)])
 def test_media_probe_checks_gstreamer_core_not_libnice_plugin_version(monkeypatch, series, missing, ready):
     probe = runpy.run_path(str(PROBE))['probe']
     gi, repository = ModuleType('gi'), ModuleType('gi.repository')

@@ -268,7 +268,7 @@ def run_loopback(root, tmp_path, *, secure=False, shared_client=False):
                             with page.expect_response(lambda response: response.request.method == 'DELETE'
                                     and response.url.startswith('https://media.site.example/')) as deleted:
                                 page.evaluate('window.mediaView.close()')
-                            assert deleted.value.status == 204
+                            assert deleted.value.status == 204, (deleted.value.status, deleted.value.text())
                             assert page.evaluate('window.mediaVideo.srcObject === null')
                             assert page.evaluate('window.mediaPeer.connectionState') == 'closed'
                             assert page.evaluate('window.mediaRevoked') == ['a' * 32]
