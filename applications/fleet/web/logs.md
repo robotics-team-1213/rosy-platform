@@ -589,3 +589,9 @@
 - 증거: 실제 긴 값·5폭·2테마·첫 응답 RED26 뒤84 passed. 정책 빈 상태 RED3 뒤 실제 두 사람 승인·테마 포함39 passed/skip0/NEW0. 후속 비활성 사유 계약1실패는 빈 선택 제거 후83 passed, 마지막 상태3 passed로 확인했다. 공식 영향8898 passed/760 skipped/NEW0,102파일 브라우저1510 passed/skip0/NEW0. source별 결과는 `docs/validation/remaining-ui-layout-2026-10-28/result.md`에서 구분한다.
 - gate 변화: 없음. 실물·현장·배포 수용은 별도다.
 - CE: 해당 없음. 원인·레이아웃 소유·미확인 상태의 폼 조건이 최종 코드·회귀·ADR에 남는다.
+
+## 2026-10-29 · b90b4569bc · 대화 요청 목록의 키보드 초점 유지
+
+- 변경: 목록 갱신은 현재 초점을 GET 뒤 읽고 요청 ID로 복원한다. 삭제·조회 실패·상위 reset은 기존 상태 문구를 초점 대상으로 사용하며 목록 밖으로 이동한 초점은 유지한다. API·권한·명령 경로는 그대로다.
+- 증거: 수정 전18fail4pass, 최종 Chromium 파일 전체80pass/0skip, 공식 affected8004pass/631skip/NEW0. A source 검토·B 캡처16장 전수 직접 검토에서 해당 범위 추가 P1/P2 없음. frozen `docs/validation/fleet-request-focus-2026-10-29/`에 SHA/skip/hash/제한을 보존했다.
+- gate 변화: 없음. 실제 장치/정지·ARTIFACT/FIELD·착지·배포·공개 push/merge는 별도다. CE: 해당 없음 — 코드·회귀·기존 복원 패턴으로 설명된다.

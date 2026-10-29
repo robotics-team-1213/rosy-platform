@@ -12973,3 +12973,9 @@ osy-d395-s1d\`.
 - 변경: `validation/robot-ssh-action-status-2026-10-29/`에 작업/조회 상태 분리·초기/상호 잠금·화면 수명의 원격 RED/GREEN, 실제 실패 복구와 캡처32장 hash를 동결했다.
 - 증거: 최종 browser47pass/0skip, 공식 affected593pass/189skip/NEW0. 독립 A source 검토의 초기 P2를 해결했고 B는32/32장 직접 확인했다. 전체 셸·실제 장치 수용과 단독 패널 근거를 구분한다.
 - gate 변화: 없음. CE: 해당 없음 — 코드·회귀·frozen 기록으로 설명되는 수정이다.
+
+## 2026-10-29 · b90b4569bc · Fleet 대화 요청 초점 회귀 증거
+
+- 변경: `validation/fleet-request-focus-2026-10-29/`에 갱신·삭제·오류·사용자 초점 이동의 RED/GREEN, 공식 영향 검사와 캡처16장 hash를 동결했다.
+- 증거: 최종 browser80pass/0skip, affected8004pass/631skip/NEW0. 독립 A source·B16장 직접 검토와 root2장 관측을 구분했다. 전체 CI/FULL·native·실물 수용으로 확대하지 않는다.
+- gate 변화: 없음. CE: 해당 없음 — 코드·회귀와 frozen 기록으로 복원되는 수정이다.
