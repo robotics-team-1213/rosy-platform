@@ -290,7 +290,7 @@ def test_import_failure_and_unsaved_navigation_preserve_draft(editor_site):
         dialog.dismiss()
     page.on('dialog', refuse)
     page.locator('nav.doc-tabs a[href="/console"]').click()
-    expect(page).to_have_url(re.compile(r'/console/site-map$'))
+    expect(page).to_have_url(re.compile(r'/console/site-map(#[\w-]+)?$'))  # D-926 3: a screen anchor may follow
     assert dialogs == ['beforeunload']
     expect(page.locator('#site-map-svg [data-place]')).to_have_count(1)
     assert store.draft_view() == before
