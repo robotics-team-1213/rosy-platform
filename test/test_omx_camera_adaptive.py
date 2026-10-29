@@ -19,10 +19,10 @@ def load(name):
 
 
 @pytest.mark.parametrize('condition,values', [('UNDEREXPOSED', [400, 800]), ('OVEREXPOSED', [160, 80])])
-@pytest.mark.parametrize('reset', [False, True])
+@pytest.mark.parametrize('reset,fault', [(False, None), (True, None), (True, 'ENODEV'), (True, 'unknown')])
 @pytest.mark.parametrize('middle', [False, True])
 def test_recovery_uses_applied_controls_after_normal_reentry_or_device_reset(monkeypatch, tmp_path,
-                                                                         condition, values, reset, middle):
+                                                                         condition, values, reset, fault, middle):
     env, runtime, quality = load('camera_environment'), load('camera_readiness'), load('camera_quality')
     monkeypatch.setitem(sys.modules, 'camera_quality', quality)
     clock = [0.]
@@ -44,6 +44,8 @@ def test_recovery_uses_applied_controls_after_normal_reentry_or_device_reset(mon
     def response(*args, **kwargs):
         if reset and clock[0] >= 16 and not resets:
             current['top'] = dict(original)
+            if fault == 'unknown':
+                current['top']['gain'] = 6
             resets.append(clock[0])
         state = {'read_only': True}
         for role in cameras:
@@ -69,15 +71,26 @@ def test_recovery_uses_applied_controls_after_normal_reentry_or_device_reset(mon
             raise runtime.BudgetExhausted('one occupied budget window')
         reserved.append(clock[0])
 
+    def read(device, names):
+        if device == 'top' and fault == 'ENODEV' and 16 <= clock[0] < 22:
+            raise OSError(19, 'camera temporarily unavailable')
+        return {key: current[device][key] for key in names}
+
     monkeypatch.setattr(env.urllib.request, 'urlopen', response)
     backend = SimpleNamespace(prepare=lambda *a: baseline, identity=lambda d: d, producer=lambda *a: {},
-        get_controls=lambda d, names: {key: current[d][key] for key in names}, write_control=write,
+        get_controls=read, write_control=write,
         restore_controls=runtime.restore_controls, apply_candidate=runtime.apply_candidate,
         save=runtime.save, append_event=runtime.append_event, restore=restore,
         control_intent=runtime.control_intent,
         validate_device_controls=lambda *a: None,
         reserve_budget=reserve, BudgetExhausted=runtime.BudgetExhausted)
-    env.monitor(dict(viewer_url='http://127.0.0.1:8767', cameras=cameras), tmp_path, 'test-profile', 36, backend)
+    profile = dict(viewer_url='http://127.0.0.1:8767', cameras=cameras)
+    if fault == 'unknown':
+        with pytest.raises(RuntimeError, match='unowned camera controls'):
+            env.monitor(profile, tmp_path, 'test-profile', 46, backend)
+        assert not any(at >= 16 and role == 'top' for at, role, _, _ in writes)
+        return
+    env.monitor(profile, tmp_path, 'test-profile', 46, backend)
     assert any(name == 'exposure_time_absolute' and value == values[-1] for _, _, name, value in writes)
     if middle:
         assert len(denied) == 1
@@ -214,3 +227,14 @@ def test_resumed_baseline_rechecks_hardware_and_keeps_original_evidence(monkeypa
     with pytest.raises(ValueError):
         runtime.prepare(profile, tmp_path, 'digest')
     assert writes == [] and (tmp_path/'baseline.json').read_bytes() == before
+
+
+def test_restore_checks_intermediate_manual_mode_before_any_write(monkeypatch, tmp_path):
+    runtime, spec, current, writes = control_world(monkeypatch, tmp_path)
+    requested = dict(auto_exposure=1, exposure_time_absolute=800, gain=7)
+    runtime.control_intent(tmp_path, 'top', spec, 'digest', 'run', current, requested)
+    current.update(requested)
+    monkeypatch.setattr(runtime, 'command', lambda args: METADATA.replace('1: Manual Mode', '2: Other Mode'))
+    with pytest.raises(RuntimeError, match='restore incomplete'):
+        runtime.restore(tmp_path)
+    assert writes == []
