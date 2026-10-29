@@ -58,6 +58,25 @@ def test_opposed_first_layer_stays_inside_one_raised_workplate():
     assert fixture['bin_origin_m'][2] >= top
 
 
+def test_terminal_belt_arrives_at_the_plate_edge_with_a_small_gap():
+    fixture = f.CUBE_FIXTURE
+    edge = fixture['workplate_center_m'][0]+fixture['workplate_size_m'][0]/2
+    endpoint = fixture['belt_center_m'][0]-fixture['belt_size_m'][0]/2
+    assert .0005 <= endpoint-edge <= .002
+    assert fixture['belt_velocity_m_s'] == [-fixture['belt_speed_m_s'], 0., 0.]
+    assert fixture['pickup_center_m'][0] < .27  # Previous parallel-belt pickup distance.
+    assert fixture['belt_stop_size_m'][0] < fixture['belt_stop_size_m'][1]
+    assert fixture['upstream_belt_size_m'][1] > fixture['upstream_belt_size_m'][0]
+    assert fixture['upstream_belt_center_m'][1]-fixture['upstream_belt_size_m'][1]/2 == pytest.approx(fixture['belt_size_m'][1]/2)
+
+
+@pytest.mark.parametrize('end,passed', [([.25, 0., .04], True),
+    ([.295, .045, .04], False), ([.34, 0., .04], False),
+    ([.295, 0., .04], False), ([.25, .01, .04], False)])
+def test_transport_evidence_follows_terminal_direction(end, passed):
+    assert f.belt_transport_observed([.295, 0., .041], end, cube=True) is passed
+
+
 def test_first_layer_plan_fills_nine_cells_without_crossing_the_infeed():
     items = f.plan(cube=True)
     assert len(items) == 3
