@@ -4109,6 +4109,13 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - gate 변화: 없음. 공식 affected 선택은 affected이며 Fleet·공유 UI guard와 browser scope를 그대로 유지한다. 별도 착지 검증·공유 main 게시·운영 수용은 이 집중 회귀와 구분한다.
 - CE: 해당 없음 — 초기 idle·첫 recording/pending·active→idle의 DOM 수명은 최종 코드와 실제 poll 회귀 세 경우에 직접 남는다. 기존 간헐 실패의 줄별 귀속 교훈을 적용하며, 미확정 원인을 해결 교훈으로 쓰지 않는다.
 
+## 2026-10-29 · 2062ed7219 · test(storage): 브라우저 quota 측정과 서버 fixture 시계 정렬
+- 변경: `fix/storage-browser-clock`, 기준 local main `3f2fafd23a`. `test_storage_setup_http.py`의 Date.now만 고정 backend fixture 시각에 맞추고 320/light/60초 lag 사례를 추가했다. 기존 두 화면 크기·검증·타이머·reload·15초 제한은 유지한다.
+- 증거: RED `17e6b9c5bb` 공식 원격 model PC, browser opt-in 새 사례 1 failed. backend 1793280602초, browser 1793280662241ms, quota measured_at 1793280660초로 58초 미래였다. `storage_operation_failed`, result null, mock remote commits 0; known_failures 1 NEW. GREEN `2062ed7219` 공식 원격 AI PC에서 새 사례 1 passed (9.06초), 파일 전체 6 passed (29.20초), 각각 0 skipped·0 NEW·0 known·0 flaky. 외부 로그는 시스템 임시 폴더 `storage-browser-clock-{red,green-exact,green-file}/run-1.txt`. harness lint 0 errors, 기존 39 warnings.
+- 범위: 위 RED는 통제된 시계 불일치의 인과 증거다. 기존 source075 FULL의 단발 320/light 실패 원인은 미확정이며, baseline 실패나 이 원인의 확정 사례로 분류하지 않는다. 호스트 시험이며 장치·이미지·현장 수용 증거는 아니다.
+- gate 변화: 없음. 제품 동작 변경 없음.
+- CE: 해당 없음 — 최종 시험의 60초 경계 사례와 공유 시계 주석으로 원인·예방을 알 수 있어 별도 교훈 문서를 늘리지 않는다. 기존 unread-fetch-body/networkidle 교훈과 다른 원인이다.
+
 ## 2026-10-29 · uncommitted · SD 교훈 기록의 역사 비밀 검사 판정
 
 - 변경: commit c7b9b53a57의 기존 fake-surface 교훈에 추가된 Git 식별자 세 개를 독립 검토해 정확한 commit/path/rule baseline 한 건만 등록했다. 각 값이 실제 Git commit 객체임을 확인했으며 사람 승인으로 표시하지 않는다. 기존 baseline 행과 순서, 스캐너와 임계값을 유지한다.

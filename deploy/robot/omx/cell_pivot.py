@@ -130,6 +130,17 @@ def mark_pixel(record: dict, config: dict, site: str, raw, jaw_z: float):
     return cal.parallax(cal.to_pixel(record["homography"], raw), fit_z, jaw_z, config["cameras"]["top"])
 
 
+def pivot_z_view(config: dict, site: str) -> float:
+    """The TCP height the jaws are marked at: the configured view height, but never closer to the site's surface than
+    pivot.clear_above_m. The view height was one absolute number tuned on the floor (0.08); over the Pinky tray
+    (surface 0.0467) the jaws swung 3 mm above a box's top and knocked it off the tray (2026-10-29)."""
+    z_view = config.get("pivot", {}).get("z_view", config["coarse"]["z_view"])
+    surface = config["sites"][site].get("surface_z")
+    if surface is None:
+        return z_view
+    return round(max(z_view, surface + prm.get(config.get("params"), "pivot.clear_above_m")), 4)
+
+
 def joints_tcp(state):
     """FK of the measured joints (planner units): x, y, z in metres and the FK yaw in degrees."""
     import grasp_planner as gp
@@ -148,7 +159,7 @@ def pivot_calibrate(cell, config: dict, point, yaws, calibration: dict, site: st
     record = map_record(calibration, site)
     if record is None:
         return {"result": "no map for the site"}
-    z_view = config.get("pivot", {}).get("z_view", config["coarse"]["z_view"])
+    z_view = pivot_z_view(config, site)
     view = {"x": point[0], "y": point[1], "z": round(z_view - config["plan"]["approach_m"], 4)}
     marks, tcps = [], []
     try:
