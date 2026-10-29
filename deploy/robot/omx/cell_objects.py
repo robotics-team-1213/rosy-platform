@@ -45,16 +45,20 @@ def foreground(img, roi, chroma: float | None = None, light: float | None = None
     Thresholds not given come from `params` (a white floor line passes the lightness test, 2026-10-28).
     `surface_px`, a polygon of the site's surface in the image, drops what lies beyond it (the board next to the
     floor joined a container into one blob along the ROI's edge, 2026-10-28). `surface_lab`: the site's own surface
-    colour (OpenCV Lab); without it the ROI median is used, which on the board was a mix of the white line, the belt
-    and the box (173, 121, 139 against the board's 199, 130, 162), so the box's shadow did not read as a shadow."""
+    colour (OpenCV Lab), or a list of them where a box overhangs more than one surface (the board and its white
+    line); without it the ROI median is used, which on the board was a mix of the white line, the belt and the box
+    (173, 121, 139 against the board's 199, 130, 162), so the box's shadow did not read as a shadow."""
     chroma = prm.get(params, "objects.chroma", CHROMA) if chroma is None else chroma
     light = prm.get(params, "objects.light", LIGHT) if light is None else light
     x0, y0, x1, y1 = roi
     lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB).astype(np.int16)[y0:y1, x0:x1]
-    bg = np.asarray(surface_lab, float) if surface_lab is not None else np.median(lab.reshape(-1, 3), axis=0)
-    far = (np.hypot(lab[..., 1] - bg[1], lab[..., 2] - bg[2]) > chroma) | (np.abs(lab[..., 0] - bg[0]) > light)
-    if prm.get(params, "objects.drop_shadow"):
-        far &= ~shadow_of(lab, bg, params)
+    colours = np.atleast_2d(np.asarray(surface_lab, float)) if surface_lab is not None else [np.median(lab.reshape(-1, 3), axis=0)]
+    far = np.ones(lab.shape[:2], bool)
+    for bg in colours:  # background when close to any of the site's surfaces, or a shadow on one
+        near = (np.hypot(lab[..., 1] - bg[1], lab[..., 2] - bg[2]) <= chroma) & (np.abs(lab[..., 0] - bg[0]) <= light)
+        if prm.get(params, "objects.drop_shadow"):
+            near |= shadow_of(lab, bg, params)
+        far &= ~near
     mask = far.astype(np.uint8) * 255
     if surface_px:
         keep = np.zeros_like(mask)
