@@ -18,3 +18,10 @@
 - 증거: 준비/재시도/버전 회귀를 수정 전 실패로 재현했고, 마지막 idle sampling 회귀는 1 failed/15 passed → 83 passed 집중 검사로 검증했다. 기존 source 영향 검사는 4311 passed/156 skipped다. 실제 장치의 진단 재생은 66 unique frames/8.13 fps였으며 마지막 production 경로 수용은 장치 연결 복구 후 확인한다. 상세: `docs/validation/robot-local-video-recovery-2026-10-29/result.md`.
 - gate 변화: SOURCE 갱신. DEVICE는 최종 수정 미배포·렌더 미확인으로 HOLD를 유지한다. ARTIFACT·FIELD는 별도다.
 - CE: 기존 서명 릴리스 bytecode 교훈 갱신. 정상 payload 파일과 이번 진단의 미등록 cache를 구분해 가역 복구했다.
+
+## 2026-10-30 · abd6ce7cab · 보안 전송 요소 사전 검사·제품 클라이언트 실제 렌더
+
+- 변경: DTLS/SRTP 요소가 빠져도 webrtcbin 등록만으로 preflight가 준비됐다고 판단하던 누락을 고쳤다. 실제 native codec 시험은 production WHEP 모듈의 숨겨진 video 재생과 native session 제거까지 검사한다. 시험 PC 사용자 전용 런타임 구조·의존성·증거 범위를 README에 정리했다.
+- 증거: 누락 요소별 회귀 4개가 수정 전 실패했다. 수정 뒤 AI PC에서 native 3사례를 포함한 90 passed/skip 0/NEW 0, 후속 영향 318 passed/skip 0/NEW 0이다. 앞선 전체 UI 검사는 1792 passed와 재실행 통과한 flaky 1개로 구분했다. 상세는 기존 날짜별 검증 기록에 추가했다.
+- 운영: 수집 보류를 15초 실패 재시도로 처리하던 설정을 기존 정상 보류·10분 timer 정책으로 복원했다. 장치 미응답으로 실제 배포·주행·부하 수용은 여전히 미확인이다.
+- gate 변화: SOURCE·LOCAL 근거 갱신. ARTIFACT·DEVICE·FIELD HOLD 유지. CE: 추가 교훈 해당 없음 — 재발 조건을 검사·실행 증거·준비 문서에 남겼다.

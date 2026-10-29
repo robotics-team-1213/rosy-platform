@@ -2,16 +2,16 @@
 module: media_edge
 logical_modules: []
 owner: ROBOT MEDIA
-last_verified: {commit: "93d04a2b2e", date: 2026-10-29}
+last_verified: {commit: "abd6ce7cab", date: 2026-10-30}
 gates:
   SOURCE:
     state: GO
     cmd: "python tools/remote/remote_pytest.py -- middleware/media/test"
-    evidence: "93d04a2b2e: official remote media/shared WHEP/native probe contracts 83 passed. Negotiation primer, startup timeout, binding teardown, downshift-before-primer, continuous idle NIC sampling and playback cleanup regressions covered. 1c8923b441 affected selection: 4311 passed, 156 skipped; source/device limits in docs/validation/robot-local-video-recovery-2026-10-29/result.md."
+    evidence: "abd6ce7cab: official remote media/shared WHEP/native probe and codec tests 90 passed, skip 0, NEW 0; follow-up affected guards 318 passed, skip 0, NEW 0. Transport closure, idle sampling, startup/teardown and hidden playback covered. Earlier broad browser run: 1792 passed, 1 flaky passing on rerun. Limits in docs/validation/robot-local-video-recovery-2026-10-29/result.md."
   LOCAL:
     state: GO
     cmd: "ROSY_TEST_HOSTS=ai@<ai-pc> python tools/remote/remote_pytest.py -- ROSY_RUN_MEDIA_TESTS=1 ROSY_RUN_BROWSER_TESTS=1 test/test_webrtc_loopback.py"
-    evidence: "2190ba6889 on the AI PC: MediaPublisher sends H.264 over WHIP to MediaMTX and Chromium renders the capture watermark; rate change reaches the encoder. Synthetic frames, not the Picamera2 tap."
+    evidence: "abd6ce7cab on AI PC: all 3 native codec cases executed, covering real H.264/WHIP/WHEP watermark rendering, authority revocation and hidden production shared-client playback with native session teardown. Shared-client signaling uses Playwright routing. Synthetic x86_64 frames, not the camera or real TLS/CORE gateway."
   ROS-SIM:
     state: N/A
   ARTIFACT:

@@ -13,7 +13,7 @@
 | [fleet_decision](operations/decision/progress.md) | fleet_decision | 587c0b4c8c (2026-10-29) | GO | GO | HOLD | HOLD | HOLD | HOLD |
 | [situation](operations/situation/progress.md) | SITUATION | 3627ec21fb (2026-10-28) | GO | HOLD | N/A | HOLD | HOLD | HOLD |
 | [media](operations/site_ui/media/progress.md) | SITE MEDIA | 2190ba6889 (2026-10-18) | GO | GO | N/A | HOLD | HOLD | HOLD |
-| [media_edge](middleware/media/progress.md) | ROBOT MEDIA | 93d04a2b2e (2026-10-29) | GO | GO | N/A | HOLD | HOLD | HOLD |
+| [media_edge](middleware/media/progress.md) | ROBOT MEDIA | abd6ce7cab (2026-10-30) | GO | GO | N/A | HOLD | HOLD | HOLD |
 | [console_source](applications/fleet/web/progress.md) | console_source | d4988bffba (2026-10-11) | GO | GO | HOLD | HOLD | HOLD | HOLD |
 | [fleet_app_dev](applications/fleet/dev/progress.md) | fleet_app_dev | c000a57004 (2026-10-21) | GO | GO | HOLD | HOLD | HOLD | HOLD |
 | [perception_curation](learning/curation/perception/progress.md) | perception_curation | d4988bffba (2026-10-11) | GO | GO | HOLD | HOLD | HOLD | HOLD |

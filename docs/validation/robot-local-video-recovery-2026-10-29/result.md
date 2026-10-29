@@ -17,7 +17,23 @@
 | `ae7610a6d1` | 시청자 부재·협상 중 NIC 측정 회귀, AI PC | 1 failed, 15 passed: 수정 전 재현 |
 | `93d04a2b2e` | media + shared WHEP + native probe 계약, AI PC | 83 passed |
 
-집중 시험·영향 검사 로그는 외부 `%TEMP%/rosy-play-green/`, `%TEMP%/rosy-wire-window-green/`, `%TEMP%/rosy-video-affected/`에 보존한다. 알려진 실패 비교는 각 최종 로그에 시행한다. AI PC의 최종 실행은 공식 runner가 자원 하한 미달 fallback으로 직렬 실행했으며 peak 83 MiB였다. 이 결과를 장치·현장 수용으로 올리지 않는다. 브라우저 범위 검사는 별도 실행 중이며 완료 수치를 확인하기 전에는 통과로 간주하지 않는다.
+집중 시험·영향 검사 로그는 외부 `%TEMP%/rosy-play-green/`, `%TEMP%/rosy-wire-window-green/`, `%TEMP%/rosy-video-affected/`에 보존한다. 알려진 실패 비교는 각 최종 로그에 시행한다. AI PC의 최초 실행은 공식 runner가 자원 하한 미달 fallback으로 직렬 실행했으며 peak 83 MiB였다. 이 결과를 장치·현장 수용으로 올리지 않는다.
+
+전체 브라우저 범위 결과(`1c8923b441`, 모델 PC)는 최초 1 failed/1,792 passed였고, 실패한 `test_connected_robot_can_be_selected_after_offline_robot`는 runner의 자동 재실행에서 1 passed였다. `known_failures.py` 결과는 0 NEW/0 known/1 flaky다. 원본과 재실행 로그를 `%TEMP%/rosy-video-browser/`에 함께 보존했다. 간헐 실패를 최초 전부 통과로 바꾸어 보고하지 않는다.
+
+## 2026-10-30 후속 개선
+
+장치는 IP·호스트명 경로에서 계속 응답하지 않았고, 공유기 연결은 살아 있었다. 장치 미응답 상태에서 실물 수용을 올리지 않고 다음 항목을 완료했다.
+
+- 모델 PC의 이번 로봇 수집 drop-in이 GPU 작업 보류(exit 3)까지 실패로 취급해 15초 간격 193회 재시도했다. 변경 전 설정을 백업하고 기존 timer 정책인 `SuccessExitStatus=3 75`, `Restart=no`로 복원했다. 보류 작업이 정상 종료되고 NRestarts=0, 10분 timer 다음 실행이 예약됨을 확인했다. collection/model 잠금과 저속 전송 설정은 유지했다.
+- AI PC의 사용자 전용 테스트 런타임을 복구했다. 고정된 amd64 MediaMTX SHA를 검사하고, 인증된 distro Debian 패키지를 사용자 경로에 추출했다. 전역 패키지·서비스는 바꾸지 않았다. 준비 구조와 실제 검사 범위는 `middleware/media/README.md`를 따른다.
+- 실제 실행에서 `webrtcbin`이 등록돼도 `libsrtp2`가 없어 송출이 실패했다. native preflight와 source lock에 DTLS/SRTP 4개 요소를 추가했다. 수정 전 missing-factory 회귀 4개가 실패했고 수정 뒤 통과했다. 개별 factory 가용성을 실물·종단 간 수용으로 간주하지 않는다.
+- 기존 codec harness는 자체 viewer에서 `video.play()`를 호출해 제품 클라이언트의 누락을 가릴 수 있었다. 실제 production 모듈을 불러 숨겨진 video의 렌더를 검사하는 세 번째 사례를 추가했다. autoplay 우회 옵션을 사용하지 않는다. 네이티브 session 2→1, peer 종료, stream 해제와 revocation callback을 검사한다. ICE 종료가 먼저 세션을 지우면 DELETE 404가 가능하므로 HTTP 코드 하나 대신 실제 native session 제거도 함께 확인한다.
+- `abd6ce7cab`: 공식 원격 AI PC에서 미디어·공유 클라이언트·native codec·probe **90 passed, skip 0, NEW 0**. 네이티브 H.264/RTP 렌더·실제 authority 철회·숨겨진 공유 클라이언트의 재생 및 종료 3개 사례가 모두 실행됐다. peak 341 MiB, `%TEMP%/rosy-media-followup-final/run-1.txt`.
+- 같은 리비전의 후속 영향 검사 **318 passed, skip 0, NEW 0**, `%TEMP%/rosy-media-followup-affected/run-1.txt`. 별도 코드 검토에서 구체적 결함은 발견되지 않았다.
+- shared-client 사례의 HTTPS·intent/renew는 Playwright routing이고 revoke callback은 spy다. 이 결과로 실제 TLS·CORE 연결을 주장하지 않는다. 장치 배포 helper는 설치 리비전·기존 worker 해시 일치와 강화된 native preflight 성공 후에만 적용되도록 준비했다. 장치 미응답으로 실행하지 않았다.
+
+추가 CE 판단: 해당 없음. 재시도 정책 복원은 기존 timer 정본으로 돌아간 것이며, transport 누락과 시험의 빈틈은 최종 검사·회귀·위 런타임 준비 문서로 확인할 수 있다. 기존 bytecode 교훈 갱신은 아래 근거대로 유지한다.
 
 ## 실제 장치와 운영 경계
 
