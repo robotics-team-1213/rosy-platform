@@ -5149,6 +5149,7 @@
 
 ## 2026-10-29 · uncommitted · outage 시험에서 대기할 요청 범위 제한
 
+- gate 변화: 제품 JS·CSS·assertion·실패 기준선은 바꾸지 않는다.
 - 원인: source d9daf10d9e의 등록된 보조 시험 PC matrix는 14 passed / 12 NEW였다. Console·Cell의 모든 실패는 추가한 networkidle 대기의 30초 timeout이며 상태·기하 assertion 실패가 아니다. 특정 연결 종류가 원인이라고 단정하지 않는다.
 - 변경: 탐색 전부터 진행 중인 Fleet fetch를 추적하고, 503 route를 설치한 시점의 요청만 finished/failed event로 기다린다. 이후 요청은 503으로 처리한다. 독립 검토에서 지적한 response API의 무제한 대기를 피하고 기존30초 총 제한과 남은 URL 진단을 유지했다. 제품 JS·CSS·assertion·실패 기준선은 바꾸지 않는다.
 - 검증: syntax·diff 검사와 독립 검토 뒤 커밋 SHA로 원격 matrix를 다시 확인한다. 실패한 d9 FULL 대기는 중단했으며 hidden snapshot·로그를 보존했다. 다른 작업·잠금은 수정하지 않았다.
@@ -5157,6 +5158,7 @@
 
 ## 2026-10-30 · f10444d3af · 헤더 CI 교정 원격 검증
 
+- 변경: 시험 코드만 후속 수정했으며 CSS는 그대로다.
 - 증거: source3657의 Model 전체 header browser/static84 passed / skip0 / NEW0. sourcef104의 등록 보조 시험 PC outage·모바일 집중26case는26 passed / skip0 / NEW0이며 runner·known_failures exit0이다. 본래 AI의 정상 응답 경합, d9 global-idle timeout,866 callback 등록 실패를 실제 로그로 구분하고 보존했다.
 - 시각 확인: source3657의320px authored/accessibility-spacing와390·1440px PNG/JSON을 보존·육안 확인했다. 점8px·조작48px 이상·내용 비잘림을 확인했다. 시험 코드만 후속 수정했으며 CSS는 그대로다. CI의 실제 fallback font는 미측정이고 전체 WCAG 수용으로 주장하지 않는다.
 - Gate: 독립 source 검토와 집중 검증 완료. 새 적격 FULL 착지·GitHub CI·게시·운영 전환은 별도 확인한다. skip/quarantine·production 연결 상태 처리·timeout 완화는 없다.
