@@ -29,7 +29,8 @@ class PilotViews(private val context: Context) {
     }
     private fun fill(color: Int, focus: Boolean = false) = GradientDrawable().apply {
         setColor(color); cornerRadius = dp(RosyMetrics.RadiusButton.toInt()).toFloat()
-        if (focus) setStroke(dp(RosyMetrics.FocusRingWidth.toInt()), PilotColors.foreground)
+        if (focus) setStroke(dp(RosyMetrics.FocusRingWidth.toInt()),
+            if (color == PilotColors.foreground) PilotColors.background else PilotColors.foreground)
     }
     fun button(text: String, primary: Boolean = false, action: () -> Unit) = Button(context).apply {
         this.text = text; isAllCaps = false; textSize = RosyMetrics.TextLabel; minimumHeight = dp(RosyMetrics.TargetSecondary.toInt())
