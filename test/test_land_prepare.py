@@ -52,6 +52,19 @@ def test_waiting_landing_previews_the_size_ratchet_of_mains_merge(repos):
     assert check() is None, "once per main"
 
 
+def test_behavior_ownership_failure_is_checked_before_the_selected_tests(repos, monkeypatch, tmp_path):
+    _, wt = repos
+    guard = "test/test_behavior_test_ownership.py"
+    commit(wt, {guard: "def test_ownership():\n    assert False\n"}, "invalid behavior test ownership")
+    real, calls = land.remote_pytest.run, []
+    monkeypatch.setattr(land.remote_pytest, "run", lambda inv, *a, **k: calls.append(inv) or real(inv, *a, **k))
+    args = land.argparse.Namespace(tests="auto", node=False, no_cache=True)
+    with pytest.raises(land.Stop, match="NEW failure"):
+        land.land_guards.first(wt, args, [["pkg/test"]], tmp_path / "logs", "pre", land.run_tests)
+    assert calls[0] == [[guard]]
+    assert all("pkg/test" not in inv for batch in calls for inv in batch)
+
+
 def test_a_landing_whose_test_hosts_give_up_leaves_a_stop(repos, monkeypatch):
     """2026-10-27: a venv-setup ssh timeout ended a landing with no stop event, invisible to land_stats."""
     main, wt = repos

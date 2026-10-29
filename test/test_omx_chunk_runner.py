@@ -1,5 +1,6 @@
 """Chunks play in order with torque held between them; the judge gets settled state and grasp outcome."""
 import importlib.util
+import json
 from pathlib import Path
 import sys
 
@@ -169,6 +170,19 @@ def test_park_closes_rises_turns_then_descends_slowly():
     # ends, with lift and elbow within a unit of the transit height (the blended corner)
     assert all(f[1] >= -28.0 and f[2] <= 19.0 for f in path[turning:turned + 1])
     assert path[-1][:5] == pytest.approx(HOME[:5])
+
+
+def test_slower_transit_speed_rises_at_that_fraction_and_bad_values_are_refused(tmp_path):
+    start = [35.0, -10.0, 9.0, 41.0, 71.0, 46.6]  # reached out low: the rise is a long shoulder move
+    fast, slow = m.park_path(start, HOME, 46.6, fps=30), m.park_path(start, HOME, 46.6, fps=30, speed=0.4)
+    step = 0.4 * m.PARK_SPEED / 30 + 1e-9
+    assert all(max(abs(b - a) for a, b in zip(p, q)) <= step for p, q in zip([start] + slow, slow))
+    assert len(slow) > 1.8 * len(fast) and slow[-1][:5] == pytest.approx(HOME[:5])
+    for bad in (0.95, 0, "slow", True):
+        path = tmp_path / "lib.json"
+        path.write_text(json.dumps(dict(library(), fps=30, chunks={"home": [HOME]}, transit_speed=bad)))
+        with pytest.raises(SystemExit, match="transit_speed"):
+            m.load_library(path)
 
 
 def test_goto_reaches_a_chunk_start_by_rising_turning_and_descending():
@@ -397,6 +411,23 @@ class SlowWrist(Robot):
         return action
 
 
+def test_pacing_and_idle_thresholds_come_from_the_params_a_runner_is_given():
+    lift = library()
+    lift["chunks"]["approach_pinky"] = [[0.0, -60.0, 50.0, 45.0 + 0.15 * k, 10.0, 46.6] for k in range(1, 101)]
+    robot, status, clock, queue = SlowWrist(), [], [0.0], ["run approach_pinky", "stop"]
+    r = m.Runner(robot, lift, fps=30, status=status.append, clock=lambda: clock[0], params={"runner.pace_lag": 99.0},
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+    with pytest.raises(ValueError, match="following error"):  # the same run the PACE_LAG patch below lets fail
+        r.run(lambda: [queue.pop(0)] if queue and not r.chunk else [])
+    lib = library()
+    lib["chunks"]["home"] = [HOME]
+    status, clock, queue = [], [0.0], ["run approach_pinky"]
+    r = m.Runner(Robot(), lib, fps=30, status=status.append, clock=lambda: clock[0],
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30), params={"runner.idle_park_s": 7.0, "runner.idle_stop_s": 9.0})
+    r.run(lambda: [queue.pop(0)] if queue and not r.chunk else [])
+    assert 16.0 <= clock[0] < 100.0 and status[-1]["command"] == "stop"  # not the 360 s of the built-in values
+
+
 @pytest.mark.parametrize("paced", [True, False])
 def test_a_lagging_joint_holds_the_next_frame_until_it_catches_up_before_the_guard_stops(monkeypatch, paced):
     if not paced:
@@ -548,3 +579,10 @@ def test_normal_following_lag_is_not_a_contact():
     robot = Pressing(after=10**9)  # never stuck: the arm follows
     status = run_with(robot, descend_library(), ["run descend_pick", "stop"])
     assert by_command(status, "run descend_pick")[0]["ok"] is True
+
+
+def test_contact_limits_never_rise_for_an_unloaded_joint_and_stay_under_the_guard_for_a_loaded_one():
+    assert m.contact_limits([0.0, 0.3, 0.8, 0.4, 0.1]) == [1.5] * 5  # unloaded: exactly the old limit (incident 23:59)
+    loaded = m.contact_limits([0.4, 0.2, 2.0, 0.3, 0.1])  # a held box: the elbow starts 2.0 behind
+    assert loaded[2] == pytest.approx(2.2) and loaded[:2] + loaded[3:] == [1.5] * 4
+    assert max(m.contact_limits([2.6] * 5)) <= 2.2 < 2.8  # never toward the guard's ~2.8 units

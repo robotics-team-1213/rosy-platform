@@ -22,10 +22,12 @@ def too_fast(frames: list, fps: int) -> bool:
     return any(abs(a - b) > limit for p, q in zip(frames, frames[1:]) for a, b in zip(p, q))
 
 
-def transit_path(start: list, goal: list, grip_transit: float, fps: int, transit: dict | None = None) -> list:
+def transit_path(start: list, goal: list, grip_transit: float, fps: int, transit: dict | None = None,
+                 speed: float = 0.85) -> list:
     """From anywhere to `goal` without sweeping low: jaws to `grip_transit`, rise to the transit height,
     turn pan/roll to the goal there, descend into the goal body pose, then set the goal's jaws.
-    `transit` maps joint indexes to values (a cell profile's transit); default TRANSIT (arm S)."""
+    `transit` maps joint indexes to values (a cell profile's transit); default TRANSIT (arm S).
+    `speed` is the fraction of the guard speed (a plan's transit_speed)."""
     transit = TRANSIT if transit is None else transit
     waypoints = [list(start)]
     waypoints.append(waypoints[-1][:5] + [grip_transit])
@@ -37,12 +39,13 @@ def transit_path(start: list, goal: list, grip_transit: float, fps: int, transit
     # the jaws' changes and the goal are reached at rest. 85 % of the guard speed leaves room for the moment
     # two blended segments overlap on one joint.
     # The overlap is capped at 0.6 s: the rise has at most 0.5 * 5 * 0.6^2 = 0.9 units left when the turn begins.
-    return smooth(waypoints, fps, 0.85 * PARK_SPEED, blend=[False, False, True, True, False, False], blend_s=0.6)
+    return smooth(waypoints, fps, speed * PARK_SPEED, blend=[False, False, True, True, False, False], blend_s=0.6)
 
 
-def park_path(start: list, home: list, closed: float, fps: int, transit: dict | None = None) -> list:
+def park_path(start: list, home: list, closed: float, fps: int, transit: dict | None = None,
+              speed: float = 0.85) -> list:
     """Close the jaws, rise, turn at that height, then descend into home (jaws stay closed)."""
-    return transit_path(start, list(home[:5]) + [closed], closed, fps, transit)
+    return transit_path(start, list(home[:5]) + [closed], closed, fps, transit, speed)
 
 
 def load_library(path: Path) -> dict:
@@ -63,4 +66,7 @@ def load_library(path: Path) -> dict:
                              "regenerate the library with grasp_planner.py or teach_trajectory.py")
     if not isinstance(library.get("gripper_closed"), (int, float)):
         raise SystemExit("chunk library needs gripper_closed (the taught fully closed value)")
+    speed = library.get("transit_speed", 0.85)
+    if isinstance(speed, bool) or not isinstance(speed, (int, float)) or not 0.1 <= speed <= 0.85:
+        raise SystemExit(f"transit_speed {speed!r} must be 0.1..0.85 of the guard speed (blended corners need the rest)")
     return library

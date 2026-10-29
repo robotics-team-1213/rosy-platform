@@ -286,9 +286,13 @@ services:
       - /backup
       - --prune
       - "14"
+      - --prune-history
+      - "30"
+      - --prune-audit
+      - "90"
     user: "10001:10001"
     volumes:
-      - sighting_data:/var/lib/rosy:ro
+      - sighting_data:/var/lib/rosy:rw
       - ${ROSY_SITE_BACKUP_DIR:-/var/backups/rosy-site}:/backup
     read_only: true
     tmpfs:
@@ -300,6 +304,9 @@ services:
 
   proxy:
     image: rosy-site-proxy:${ROSY_SITE_IMAGE_TAG:-local}
+    labels:
+      # Candidate builder pins file content; a stable bind path does not track bytes.
+      org.rosy.site-caddy-sha256: unbuilt
     build:
       context: .
       dockerfile: Dockerfile.proxy

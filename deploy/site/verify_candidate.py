@@ -100,7 +100,7 @@ def _verify_candidate_content(candidate_dir: Path, *, manifest_bytes: bytes | No
     except (OSError, UnicodeDecodeError, json.JSONDecodeError):
         raise CandidateVerificationError("release.json is unreadable or invalid JSON") from None
     if (not isinstance(manifest, dict) or type(manifest.get("manifest_version")) is not int
-            or manifest.get("manifest_version") != 1):
+            or manifest.get("manifest_version") not in (1, 2)):
         raise CandidateVerificationError("unsupported release manifest")
 
     commit = manifest.get("source_commit")
@@ -152,17 +152,36 @@ def _verify_candidate_content(candidate_dir: Path, *, manifest_bytes: bytes | No
 
     images = manifest.get("images")
     services = verified_services(list(images) if isinstance(images, dict) else None)
+    reused = manifest.get("reused_images", {})
+    if manifest["manifest_version"] == 1:
+        if reused:
+            raise CandidateVerificationError("version 1 cannot contain reused images")
+    elif (not isinstance(manifest.get("base_commit"), str)
+          or not _COMMIT.fullmatch(manifest["base_commit"])):
+        raise CandidateVerificationError("invalid reused image base commit")
+    if not isinstance(reused, dict) or set(reused) - set(services):
+        raise CandidateVerificationError("invalid reused image service set")
     image_ids: dict[str, str] = {}
     for service in services:
         row = images[service]
         if not isinstance(row, dict):
             raise CandidateVerificationError(f"invalid {service} image record")
         reference = f"rosy-site-{service}:{commit}"
+        if service in reused:
+            reference = row.get("reference")
+            if not isinstance(reference, str) or not re.fullmatch(f"rosy-site-{service}:[0-9a-f]{{40}}", reference):
+                raise CandidateVerificationError(f"invalid {service} reused image reference")
         if row.get("reference") != reference or row.get("platform") != "linux/amd64":
             raise CandidateVerificationError(f"{service} manifest image reference/platform mismatch")
         expected_id = row.get("image_id")
         if not isinstance(expected_id, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", expected_id):
             raise CandidateVerificationError(f"invalid {service} image ID")
+        if service in reused:
+            proof = reused[service]
+            if (not isinstance(proof, list) or not 1 <= len(proof) <= 2
+                    or any(not isinstance(i, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", i) for i in proof)
+                    or len(set(proof)) != len(proof) or expected_id not in proof):
+                raise CandidateVerificationError(f"invalid {service} reused image identities")
 
         sbom_name = row.get("sbom")
         if sbom_name != f"sbom/{service}.spdx":
@@ -179,6 +198,9 @@ def _verify_candidate_content(candidate_dir: Path, *, manifest_bytes: bytes | No
         "platform": "linux/amd64",
         "verified_images": list(services),
         "image_ids": image_ids,
+        "manifest_version": manifest["manifest_version"],
+        "image_references": {s: images[s]["reference"] for s in services},
+        "archive_services": [s for s in services if s not in reused],
         "deployment_files": len(hashes),
         "account_https": set(ACCOUNT_DEPLOYMENT_FILES) <= set(hashes),
         "omx": "compose.omx.yaml" in hashes,
@@ -349,13 +371,20 @@ def verify_candidate(
             "image_archive_sha256": summary["image_archive_sha256"],
             "manifest_image_ids": summary["image_ids"],
             "verified_images": summary["verified_images"],
+            "manifest_version": summary["manifest_version"],
+            "image_references": summary["image_references"],
+            "archive_services": summary["archive_services"],
+            "images": summary["manifest"]["images"],
+            "reused_images": summary["manifest"].get("reused_images", {}),
         }
     archive_ids = _archive_image_ids(
         root / "images.tar",
         {service: (summary["manifest"]["images"][service]["reference"],
                    summary["manifest"]["images"][service]["image_id"])
-         for service in summary["verified_images"]},
+         for service in summary["archive_services"]},
     )
+    for service, identities in summary["manifest"].get("reused_images", {}).items():
+        archive_ids[service] = {i: "signed-reuse" for i in identities}
     image_ids: dict[str, str] = {}
     id_forms: dict[str, str] = {}
     for service in summary["verified_images"]:

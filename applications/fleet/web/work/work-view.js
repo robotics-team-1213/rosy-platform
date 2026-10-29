@@ -2,6 +2,7 @@
 import {tripWaitText} from "/console/assets/trip-display.js";
 import { createControlUnitView } from "/console/assets/control-unit-view.js";
 import { createArmTransferView } from "/console/assets/arm-transfer-view.js";
+import { createTripProposalView } from "/console/assets/trip-proposal-view.js";
 import { createIntegratedControlView } from "/console/assets/integrated-control-view.js";
 const states = {REQUESTED: "요청 접수", UNKNOWN: "실행 결과 미확인", PROPOSED: "승인 전", READY: "실행 준비", QUEUED: "대기", DISPATCHING: "전달 중",
   ACCEPTED: "장치 수락", RUNNING: "실행 중", ACTION_SUCCEEDED: "동작 성공 · 목표 확인 대기",
@@ -54,9 +55,10 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
   el("work-new").querySelector("ul").before(newStatus);
   const list = el("work-list"), detail = el("work-detail"), admit = el("work-admit");
   const anchor = el("work-integrations-anchor");
-  el("work-integrations").open = query.has("arm_transfer");
+  el("work-integrations").open = query.has("arm_transfer") || query.has("trip_proposal");
   const units = createControlUnitView({scope, call, anchor, active, approveReason, principal});
   const arms = createArmTransferView({scope, call, anchor, active, approveReason, principal, confirm});
+  const trips = createTripProposalView({scope, call, anchor, active, approveReason, principal, confirm});
   const integrated = createIntegratedControlView({scope, call, anchor, active,
     approveReason, principal, taskStatus: workStatus});
   const clear = () => { detail.replaceChildren(); admit.hidden = true; };
@@ -142,7 +144,7 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
     if (focused) state.focus({preventScroll: true});
   }
   function reset(message = "접속 후 작업을 확인할 수 있습니다.", preserveUnits = false) {
-    if (!preserveUnits) { units.reset(); arms.reset(); integrated.reset(); }
+    if (!preserveUnits) { units.reset(); arms.reset(); trips.reset(); integrated.reset(); }
     channelRequestView.reset();
     rows = []; selected = null; detailVersion++;
     showKinds();
@@ -249,7 +251,7 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
     if (!area || inFlight) return;
     const life = scope.capture(); inFlight = true;
     try {
-      await Promise.all([units.refresh(), arms.refresh(), integrated.refresh(), refreshPolicy(life)]);
+      await Promise.all([units.refresh(), arms.refresh(), trips.refresh(), integrated.refresh(), refreshPolicy(life)]);
       const result = await call("/api/fleet/work"); life.check();
       showKinds(result.kinds);
       if (fresh) return;

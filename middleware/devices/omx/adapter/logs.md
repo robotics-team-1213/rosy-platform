@@ -834,3 +834,10 @@
 - 변경: SIM Pilot allowlist에 layout.css를 추가해 CORE·개발 서버와 같은 자산을 제공한다. 시뮬레이션 명령·latch·소유권은 변경하지 않는다.
 - 증거: 날짜별 검증 기록 `docs/validation/robot-pilot-learning-ux-2026-10-28/result.md`에 RED·고정 SHA·원격 영향/브라우저 결과·독립 소스/실제 화면 검토를 구분했다. 설치 자산·라우트 회귀 fce9c60216은20 passed, skip0이다.
 - gate 변화: 없음. 실제 장치·APK/ARM64 빌드·현장 수용은 별도다. CE: 해당 없음 — 기존 크기 이력 교훈을 적용하고 이번 경계의 판단을 코드·회귀·D-910에 남겼다.
+
+## 2026-10-29 · 724ecfbff1 · D-916 원본 joint 시각 보존
+
+- 변경: intake가 검증한 원본 stamp/source-now를 같은 frozen JointStateSnapshot에 보존한다. 기존 네 인수·sequence·freshness·거절·owner 권한·public projection은 유지한다. metadata를 UTC/domain/epoch나 owner admission 근거로 쓰지 않는다.
+- 증거: tests-only RED 11 failed/19 passed, focused GREEN 139 passed/skip0. 실제 native ROS RED 1 failed/1 passed에서 GREEN 2 passed/skip0. 수동 Gazebo에서 원본 metadata와 증가하는 state 시각을 관측했다. 공식 행렬의 실행 범위·실패·skip과 측정 누락은 [검증 정본](../../../../docs/validation/joint-source-provenance-2026-10-29/result.md)에 구분한다. 독립 contract/Safety 및 최종 소스 리뷰에서 추가 P1/P2 없음.
+- Gate: 변화 없음. 전체 source-clock/물리 producer·장치·현장 수용은 열려 있다.
+- CE: 새 교훈 기록 — FULL 판정과 실제 실행 행렬을 혼동한 원인·정정·배열 대조 기준을 소유 저장소 solutions에 기록했다.

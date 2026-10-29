@@ -1079,3 +1079,10 @@
 - 변경: stdlib `observation_snapshot`은 같은 사용자·호스트의 bounded atomic IPC와 원본 source/monotonic 시각을 보존한다. 느린 독자를 위한 큐나 재조회에 의한 freshness 갱신은 없다. 외부 API wire shape는 바꾸지 않는다. 사용자는 OMX 운영 producer/viewer/bridge이며 D-901이 경계를 정한다.
 - 검증: tests-only7368fd6fed의 원격 RED 뒤 교체·오염·크기·시간·소스 분리·ROS 없는 세 팔 viewer 회귀 시험을 추가했다. 집중 원격 결과는 실행 기록에 남긴다.
 - gate 변화: 없음. 라이브러리 통과로 장치·녹화·노출 동기화 수용을 주장하지 않는다. CE: 해당 없음 — 구현과 시험에 판단이 직접 남는다.
+
+## 2026-10-29 · 66ba49bef8 · D-915 선택형 측정 관절과 원문 증거 응답
+
+- 변경: ordered finite joint fact와 immutable physical evidence response를 추가했다. 관절 없는 기존 wire/canonical 입력은 보존한다. 고정 SIM Pydantic 2.11.7의 schema/직렬화를 깨는 새 Field 옵션 대신 기존 wrap serializer를 사용한다.
+- 증거: 원격 contract RED/GREEN, absent/null DTO→World 원문 왕복, 측정값 보존과 별도 2.11.7 JSON Schema assertion을 확인했다. [검증 정본](../../docs/validation/physical-evidence-export-2026-10-29/result.md)이 source별 결과와 FULL·HTTP 수용 범위를 구분한다.
+- Gate: 기존 module gate 변화 없음. 원본 capture UTC를 수신 시각이나 sim tick으로 대체하지 않으며, simulation clock mapping/실물 수용을 계약 시험으로 대신하지 않는다.
+- CE: 해당 없음 — 호환성 선택과 실패 재현을 D-915·시험·검증 정본에 기록했다.

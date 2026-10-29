@@ -502,6 +502,10 @@
       "path": "work/arm-transfer-view.js",
       "media_type": "application/javascript"
     },
+    "trip-proposal-view.js": {
+      "path": "work/trip-proposal-view.js",
+      "media_type": "application/javascript"
+    },
     "robot-profile-view.js": {
       "path": "devices/robot-profile-view.js",
       "media_type": "text/javascript"

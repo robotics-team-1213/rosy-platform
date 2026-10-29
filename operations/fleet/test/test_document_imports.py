@@ -51,6 +51,7 @@ OWN = {
         "channel-request-view.js",  # D-680: named review and existing navigation submission
         "control-unit-view.js",  # D-855: delegation review belongs to Console.
         "arm-transfer-view.js",  # Neutral ARM admission belongs to Console, never install or Cell.
+        "trip-proposal-view.js",  # D-908: neutral trip admission belongs to Console.
         "integrated-control-view.js",  # D-862: unit information and stop requests belong to Console.
         "inbox.js",  # D-632: console notification and context view owner
         "incident-view.js",  # D-362/D-641: incident evidence, review and export view

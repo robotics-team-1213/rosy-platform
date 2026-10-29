@@ -1999,6 +1999,14 @@
 - gate 변화: 없음. 실제 eligible FULL·착지·게시·배포는 아직 대기하며 재발하면 추가 반복을 멈추고 관측된 최초 원인을 조사한다.
 - CE: 미해결 — 계측은 작동을 확인했으나 이전 charging 지연의 원인은 미확정이다.
 
+## 2026-10-28 · feb1cd65c · fix(core): tf2 Buffer 변환 캐시를 명시적 10초로
+
+- 변경: 
+os_bridge.py의 Buffer()를 Buffer(cache_time=Duration(seconds=10.0))로 바꿔다. 2026-10-28 자원 조사는 tf2 캐시가 “무제한”이라 봤으나 ROS 2 Jazzy 기본값은 이미 10초다(tf2_ros_py 문서·공식 listener 튜토리얼 확인). 60초로 올리면 매모리 6배 증가였다. 동작은 그대로 드늤고 경계만 코드에 명시했다. 	est_bridge_timers.py 스템에 
+clpy.duration을 추가했다(bridge AGENTS의 두 파일 함께 갱신 규칙).
+- 증거: 원격 시험 resource-bounds-1(AI PC, run-1) middleware/core/gateway/test/test_bridge_timers.py 통과 — 구조 계약 불변.
+- gate 변화: 없음. ROS 그래프 동작은 호스트 시험이 본래부터 못 본다.
+- CE: 해당 없음 — 정정 사실(기본값 10초)과 근거를 이 기록과 계획 문서가 보존한다.
 ## 2026-10-28 · uncommitted · CORE host-file owner 위임 RED 준비
 
 - 변경: 독립 검토된 v3 테스트 6파일을 적용한다. API 2·connection 1·node 1·bridge 1 위임 동작을 실제 기존 경로에서 확인하며 제품 소스는 바꾸지 않는다. 승인 패치의 새 EOF 빈 줄 2개만 제거했고 전체 AST·assertion·parameter는 보존했다.
