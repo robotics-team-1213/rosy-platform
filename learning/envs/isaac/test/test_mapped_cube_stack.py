@@ -190,11 +190,12 @@ def test_cube_release_corrects_measured_cargo_offset_and_neighbor_clearance():
     item = f.plan(True)[1]
     tcp = sample['tcps'][item['arm']]
     body = sample['boxes'][1]
-    body['position'] = [.1295, -.0005, .0822]
+    release_z = item['target'][2]+f.CUBE_FIXTURE['release_clearance_m']
+    body['position'] = [.1295, -.0005, release_z+.0002]
     sample['boxes'][0]['position'][1] = -.03
     command = f.cube_release_target(1, sample, .04)
     predicted = [body['position'][k]+command[k]-tcp[k] for k in range(3)]
-    assert predicted == pytest.approx([.13, .0002, .082])
+    assert predicted == pytest.approx([.13, .0002, release_z])
     assert not f.cube_release_ready(1, sample, .04)
     body['position'] = predicted[:]
     assert f.cube_release_ready(1, sample, .04)
@@ -231,15 +232,46 @@ def test_only_cube_contact_report_has_a_two_mib_artifact_budget(tmp_path):
 
 def test_cube_feedback_accumulates_loaded_arm_tracking_error():
     sample = trial()['layers'][0]['lift_samples'][0]
-    sample['tcps'][0] = [.1295, -.0304, .0835]
-    sample['boxes'][0]['position'] = [.1295, -.0304, .0815]
-    previous = [.13, -.03, .084]
+    release_z = f.plan(True)[0]['target'][2]+f.CUBE_FIXTURE['release_clearance_m']
+    sample['tcps'][0] = [.1295, -.0304, release_z+.0015]
+    sample['boxes'][0]['position'] = [.1295, -.0304, release_z-.0005]
+    previous = [.13, -.03, release_z+.002]
     command = f.cube_release_target(0, sample, .04, commanded_tcp=previous)
-    assert command == pytest.approx([.1305, -.0296, .0845])
+    assert command == pytest.approx([.1305, -.0296, release_z+.0025])
     bias = [sample['tcps'][0][k]-previous[k] for k in range(3)]
     sample['tcps'][0] = [command[k]+bias[k] for k in range(3)]
     sample['boxes'][0]['position'] = [sample['tcps'][0][0], sample['tcps'][0][1], sample['tcps'][0][2]-.002]
     assert f.cube_release_ready(0, sample, .04)
+
+
+def test_lowering_for_release_keeps_the_lift_proof_separate_from_retention():
+    sample = trial()['layers'][0]['lift_samples'][0]
+    body = sample['boxes'][0]
+    body['position'] = [.13, -.03, .062]
+    assert not f.free_lift(body, 0, .04)
+    assert f.unsupported_hold(body, 0)
+    assert f.cube_release_target(0, sample, .04)
+    body['forces'][4][2] = .1
+    body['net_force'][2] += .1
+    assert not f.unsupported_hold(body, 0)
+    with pytest.raises(ValueError, match='bilateral'):
+        f.cube_release_target(0, sample, .04)
+
+
+def test_opening_is_blocked_if_the_parked_neighbor_is_touched():
+    sample = trial()['layers'][1]['lift_samples'][0]
+    item = f.plan(True)[1]
+    body = sample['boxes'][1]
+    body['position'] = f.cube_release_target(1, sample, .04)
+    # Recompute the cargo pose, independent of the arbitrary synthetic TCP.
+    body['position'] = item['target'][:]
+    body['position'][2] += f.CUBE_FIXTURE['release_clearance_m']
+    body['position'][1] += f.CUBE_FIXTURE['row_clearance_m']
+    assert f.cube_release_ready(1, sample, .04)
+    neighbor = sample['boxes'][0]
+    neighbor['forces'][0][2] = .1
+    neighbor['net_force'][2] += .1
+    assert not f.cube_release_ready(1, sample, .04)
 
 
 def test_world_rotation_preserves_owner_joint_trajectory(tmp_path):
