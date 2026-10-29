@@ -118,3 +118,19 @@ def test_assigned_arm_can_reach_each_cube_release_pose(tmp_path):
         frames = request('move', base=f.FIXTURE['arm_bases_m'][item['arm']], start=homes[item['arm']],
             target=target, yaw=0., dt=f.DT)['frames']
         assert frames and all(len(q) == 5 for q in frames)
+
+
+@pytest.mark.parametrize('passed', [False, True])
+def test_cube_worker_success_requires_physical_task_success(passed):
+    import run_worker
+    results = []
+    class Store:
+        def get(self, run_id):
+            return dict(input={'scenario_id': 'omx-map-cube-stack'}, revision=2, status='RUNNING')
+        def finish(self, run_id, revision, result, artifacts):
+            results.append(result)
+    report = dict(task_success=passed, trials=[{'task_success': passed}])
+    run_worker._finish(Store(), 'r', {'exit_code': 0, 'reason': 'process_exited'}, report, [], False)
+    assert results[0]['stage'] == 'mapped_cube_stack'
+    assert results[0]['status'] == ('SUCCEEDED' if passed else 'FAILED')
+    assert results[0]['successful_trials'] == int(passed)
