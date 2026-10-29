@@ -3562,6 +3562,7 @@
         "applications/fleet/web/sitemap/site-map-camera.js",
         "applications/fleet/web/sitemap/site-map-teach.js",
         "applications/fleet/web/sitemap/site-map.js",
+        "applications/fleet/web/sitemap/site-map-sources.js",
         "applications/fleet/web/sitemap/drawing-import.js",
         "applications/fleet/web/sitemap/extraction-review.js",
         "applications/fleet/web/sitemap/map-authoring.js"
@@ -3652,7 +3653,7 @@
           ]
         },
         {
-          "consumer": "applications/fleet/web/sitemap/site-map.js",
+          "consumer": "applications/fleet/web/sitemap/site-map-sources.js",
           "expression": "/api/fleet/site-map/profiles",
           "resolution": "literal-or-template",
           "request_ids": [
@@ -5762,6 +5763,7 @@
         "applications/fleet/web/shared/robot-video.js",
         "applications/fleet/web/shared/vision-view.js",
         "applications/fleet/web/sitemap/site-map.js",
+        "applications/fleet/web/sitemap/site-map-sources.js",
         "applications/fleet/web/cell/cell-observation.js"
       ],
       "availability": "configured capability and authorized role; see backend contract",
@@ -5833,7 +5835,7 @@
           ]
         },
         {
-          "consumer": "applications/fleet/web/sitemap/site-map.js",
+          "consumer": "applications/fleet/web/sitemap/site-map-sources.js",
           "expression": "/api/fleet/vision/lease",
           "resolution": "literal-or-template",
           "request_ids": [

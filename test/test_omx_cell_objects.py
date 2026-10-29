@@ -119,3 +119,25 @@ def test_a_split_piece_that_matches_is_a_target_while_its_unmatched_neighbour_st
     found = sorted(seen(img), key=lambda o: o["matched"], reverse=True)
     assert len(found) == 2 and found[0]["object"] == "container-1" and found[0]["matched"]
     assert not found[1]["matched"] and found[1]["hull_px"]  # side_clear sees it
+
+
+def test_a_box_shadow_on_the_yellow_board_is_dropped_but_a_black_plate_stays():
+    """2026-10-29: the dark-yellow shadow beside a box on the board read as a fragment and closed the finger gap."""
+    yellow, shade, black = (60, 190, 230), (30, 100, 125), (25, 25, 25)
+    img = scene([(0, 0, 60, 30, 20)], surface=yellow,
+                patches=[((10, 22, 60, 16, 20), shade), ((-90, -70, 90, 70, 0), black)])
+    found = seen(img)
+    assert [o["object"] for o in found if o["matched"]] == ["container-2"], [(o["object"], o["centre_mm"], o["length_mm"], o["width_mm"]) for o in found]
+    assert not any(not o["matched"] and abs(o["centre_mm"][1] - 22) < 8 for o in found)  # no shadow fragment
+    mask = co.foreground(img, ROI)
+    bx, by = 320 + 2 * -90 - ROI[0], 240 + 2 * -70 - ROI[1]
+    assert mask[by, bx] > 0  # the black plate is still foreground: an obstacle for the fingers
+
+
+def test_objects_found_by_their_own_colour_ignore_the_board_its_shadow_and_a_white_line():
+    yellow, shade, white = (60, 190, 230), (30, 100, 125), (235, 235, 235)
+    img = scene([(0, 0, 60, 30, 20)], surface=yellow,
+                patches=[((10, 22, 60, 16, 20), shade), ((-40, 0, 14, 160, 0), white)])
+    found = co.detect(img, ROI, RECORD, CAMERA, CATALOG, object_hsv=[[50, 80, 50], [95, 255, 255]])
+    assert [(o["object"], o["matched"]) for o in found] == [("container-2", True)]
+    assert found[0]["centre_mm"] == pytest.approx([0, 0], abs=2)

@@ -10,6 +10,9 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-910 | Learning 검수 문서의 정적 공통 셸. [전문](../adr/D-910-learning-static-shell-components.md) | Accepted (2026-10-28) |
+| D-909 | Fleet 절차 문서의 경량 헤더와 배치 역할. [전문](../adr/D-909-fleet-procedure-document-components.md) | Accepted (2026-10-28) |
+| D-906 | Fleet 정적 공통 컴포넌트와 레이아웃 역할 토큰. [전문](../adr/D-906-fleet-static-components-layout-roles.md) | Accepted (2026-10-28) |
 | D-908 | 업무 앱의 중립 이송 제안과 별도 운영자 승인. [전문](../adr/D-908-neutral-trip-proposal.md) | Accepted (2026-10-28, 사용자 결정) |
 | D-904 | 공급암 S는 사람 손 없이 하나의 파이프라인으로 물체를 고르고 집어 놓는다. [전문](../adr/D-904-arm-s-autonomous-pick-place-pipeline.md) | Proposed (2026-10-28) |
 | D-903 | cmd_vel 정지 시 50Hz 영(zero) 발행 억제 — 안전 검토 요건. [전문](../adr/D-903-cmdvel-zero-suppression.md) | Proposed (2026-10-28) |

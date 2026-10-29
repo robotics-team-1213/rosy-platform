@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { armAdmissionReason } from "../../../../applications/fleet/web/work/arm-transfer-view.js";
+const {register} = await import("node:module");
+register("./resolve-console-assets.mjs", import.meta.url);
+const {armAdmissionReason} = await import("../../../../applications/fleet/web/work/arm-transfer-view.js");
 const job = {status: "PROPOSED", proposal_principal_id: "proposer"};
 const control = {dispatch_enabled: true, generation: 3};
 test("neutral ARM approval requires independent identity, current control, and an unapproved proposal", () => {
