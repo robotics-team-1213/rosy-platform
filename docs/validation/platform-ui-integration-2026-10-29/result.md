@@ -36,6 +36,14 @@
 - Cam·LCD·SIM은 각 정본 ref와 해당 소비자 source diff가 없음을 확인했다. Pilot Android의 기존 native 정본과 차이는 layout.css APK 자산 포함이다. 이전 scoped evidence를 전 표면 통합·기기 수용으로 확대하지 않는다.
 - Pilot SW는 main의2026-10-22 키에서2026-10-28 키로 바뀌고 layout.css를 shell에 포함한다. CORE/OMX allowlist도 포함한다. import/cache/설치 계약과 실제 APK 결과를 함께 확인해야 한다.
 
+## 보존 원본
+
+`reports.sha256`는 종료된17회차의 원본 로그를 묶는다. `captures.sha256`는425의 shell134장과 workspace20장(합계154장)을 묶는다. 이는 서로 다른 범위의 이미지 수이며 고유 시험 건수나 전체 UI 수용 건수가 아니다. workspace20장은 후속 리본 문제 발견 이전 상태다.
+
+원본 저장 기준은 외부 scratch의 `rosy-ui-standardization/`이다. 보고서는 manifest의 상대 폴더명, `shell-42508/` 이미지는 `delivery-shell-final-captures/`, `workspace-42508/` 이미지는 `workspace-width-visible-captures/`에 대응한다. 실행 중인 전체 browser·native 및 미완료 GREEN 로그는 완료 manifest에 넣지 않았다.
+
+전체108 browser invocation에는 Gazebo 레인 viewer의 host-exclusive 대상이 포함되어 다른 모델-PC 작업이 admission 대기한다. 작은 검사는 이전 실측(단일 native exporter788MiB, 폭/초점375MiB)을 기준으로 같은 선택·SHA를2GiB/1core 직렬 요청으로 구성했다. 초기 대기 요청의 제어 종료143을 통과로 세지 않는다.
+
 ## 의도된 예외와 수용 경계
 
 색·글꼴·여백·일반 조작 표적은 공통 토큰/부품이 소유한다. 1px 경계는 선이며 SVG/지도/렌즈·로봇 좌표는 해당 producer의 데이터다. 표면의 열·폭·위치는 task grammar owner가 소유하며 임의 paint/spacing 예외로 확대하지 않는다.
