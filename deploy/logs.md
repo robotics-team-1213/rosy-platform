@@ -4018,6 +4018,13 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - gate 변화: 없음. 새 template를 포함한 서명 candidate 및 그 candidate와 설정의 동시 전환은 아직 수행하지 않았다. 서명·오버레이 허용 목록과 실제 장치 권한을 완화하지 않았다.
 - CE: 미해결 — 구성 동등성만 확인했으며 실제 candidate 적용과 CI 차단 해결은 후속이다.
 
+## 2026-10-29 · uncommitted · 동결 UI 검증 기록의 커밋 출처 검토
+
+- 변경: 동결된 platform UI 통합 결과 본문을 유지하고, 실제 로컬 runtime commit 식별자 한 건의 path·UTF-8 행 해시·값을 독립 검토해 public provenance에 추가했다. 기존 267건과 순서, matcher·credential 검사·실패 baseline은 유지한다.
+- 증거: 기준 commit 8f4b634e51의 공식 FULL에서 secret guard NEW1, 단독 재현 실패, main commit 23633e759f의 동일 단독 시험은 1 passed였다. 해당 값 commit 42508b116e의 실제 Git 객체·조상 관계와 원본 행 해시를 독립 검토했다. 수정 뒤 원격 집중 guard 결과는 외부 ui-validation-provenance-20261029 로그에 남긴다.
+- gate 변화: 없음. 새 canonical FULL과 main ancestry가 남으며 공개 게시·장치 수용을 뜻하지 않는다.
+- CE: 해당 없음 — 기존 git-ids-in-validation-records 교훈의 동결 기록 절차를 적용했다. 새 정책이나 예외 범위 확대는 없다.
+
 ## 2026-10-29 · 05f19a73ea · 팔 credential 및 signed candidate 집중 회귀
 
 - 변경: 관리자 전체 매핑 후보의 원격 집중 회귀 결과를 기록했다. 실행 코드·시험은 05f19a73ea와 같다.

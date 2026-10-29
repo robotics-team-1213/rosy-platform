@@ -77,7 +77,7 @@
 ## 최근 기록
 
 - 2026-10-29 · 05f19a73ea · 팔 credential 및 signed candidate 집중 회귀
+- 2026-10-29 · uncommitted · 동결 UI 검증 기록의 커밋 출처 검토
 - 2026-10-29 · 05f19a73ea · 실제 Compose 렌더링과 A/B/S 보존 비교
 - 2026-10-29 · uncommitted · workcell 팔 자격 증명 전체 매핑 설정
 - 2026-10-29 · 3490bddb9b · 서버 증분 업데이트 최종 원격 회귀
-- 2026-10-29 · 6c77de81e0 · 빌더 직접 import 호환성 유지

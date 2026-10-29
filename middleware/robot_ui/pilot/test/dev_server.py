@@ -32,6 +32,7 @@ DEV_TOKEN = "devtoken"
 DEV_ADMIN_TOKEN = "devadmintoken"
 
 PILOT_MIME = {
+    "layout.css": "text/css",
     "styles.css": "text/css",
     "app.js": "application/javascript",
     "client.js": "application/javascript",
@@ -334,7 +335,7 @@ def stop(request: Request):
     if _role(request) is None:
         return JSONResponse({"detail": "unauthorized"}, status_code=401)
     STATE["velocity"] = {"linear": 0.0, "angular": 0.0}
-    return {"stopped": True}
+    return {"estop": True, "operations": []}
 
 
 @app.post("/api/v1/front/evidence")

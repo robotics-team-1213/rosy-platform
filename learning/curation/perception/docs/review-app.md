@@ -4,6 +4,8 @@
 
 Python 3.10 이상과 기존 receiver 의존성 `numpy`, `opencv-python`이 필요하다. 서버·SQLite는 Python 표준 라이브러리이며 Node 빌드가 필요하지 않다. 브라우저 자동 검증은 별도 개발 의존성 Playwright/Chromium을 쓴다.
 
+12개 문서의 공통 헤더·전역 메뉴는 `review_app_web/components/`에서 편집한다([D-910](../../../../docs/adr/D-910-learning-static-shell-components.md)). 저장소 루트에서 `python learning/curation/perception/review_shell.py`로 정적 HTML을 갱신하고 `--check`로 사본 일치를 확인한다. 화면별 폼과 로컬 메뉴는 각 문서가 소유한다.
+
 다중 HF 저장 대상, 완료된 Isaac 자료 보관과 로컬 사본 회수는 [저장 공간 운영 안내](storage-pool.md)를 따른다. 선택적 보관 기능은 기존 계정 연결과 별도 host 의존성·private 설정을 사용하며 기본값은 비활성이다.
 
 첫 실행은 저장소 루트에서 한다. `--images`는 source JSONL의 상대 image 경로가 시작하는 디렉터리다. 아래 경로는 자신의 저장 위치로 바꾼다. 실험실 PC의 일회성 상태·로그·증거는 X 드라이브에 둔다.

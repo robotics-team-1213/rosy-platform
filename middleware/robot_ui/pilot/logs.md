@@ -991,3 +991,45 @@
 - 변경: 다운로드 완료 안내에 Pinky MCAP 원본 수신·영상 변환 후 Learning 자료 등록으로 이어가는 순서를 표시하고 OMX 시연 입력과 구분했다. 녹화 시작/정지·다운로드 가드는 바꾸지 않았다.
 - 증거: 학습 인계와 저장 UI의 실제 Chromium 회귀는 소유 Learning 기록을 따른다. Pilot의 영향·브라우저 회귀는 최종 선택 로그에 별도로 남긴다.
 - gate 변화: 없음. 실제 녹화·기기·현장 수용은 수행하지 않았다. CE: 해당 없음 — 지원 형식과 다음 행동의 안내이며 녹화 제어 변경은 없다.
+
+## 2026-10-28 · fce9c60216 · 비상 정지 결과·캐시·설치 배치 일치
+
+- 변경: 정지 요청 중·접수·거절·확인 불가를 구분하고 오래된 응답과 discovery 완료가 새 안내를 덮지 않도록 했다. 기본/배치 CSS를 순서 그대로 분리해 HTML·서빙·CMake·Android·SW 캐시를 맞췄다.
+- 증거: 날짜별 검증 기록 `docs/validation/robot-pilot-learning-ux-2026-10-28/result.md`에 RED·고정 SHA·원격 영향/브라우저 결과·독립 소스/실제 화면 검토를 구분했다. 설치 자산·라우트 회귀 fce9c60216은20 passed, skip0이다.
+- gate 변화: 없음. 실제 장치·APK/ARM64 빌드·현장 수용은 별도다. CE: 해당 없음 — 기존 크기 이력 교훈을 적용하고 이번 경계의 판단을 코드·회귀·D-910에 남겼다.
+
+## 2026-10-28 · f7eaca4b3b · 입력 설정의 DOM·키보드 초점 보존
+
+- 변경: 프리셋·감도·반전은 기존 버튼의 pressed·라벨만 갱신한다. 패널을 열 때 현재 프리셋으로 초점을 옮기고 Escape는 도구로 복귀한다. 입력 매핑·주행 상한·명령 송신은 유지한다. cdbab06b42에서 셸 캐시 키를 갱신했고 서빙·설치 자산 검사7건이 통과했다.
+- 증거: 집중42 passed, 공식 영향3994 passed/601 skipped, 브라우저 선택은 교정한7번33건과 나머지392건으로425 passed/skip0/NEW0이다. 독립 검토가 최종41PNG 전체를 확인했다. 원본 SHA와 fixture 실패는 `docs/validation/learning-state-consistency-2026-10-28/result.md`에 구분한다.
+- gate 변화: 없음. 실제 장치·모델·사람 라벨·승격 수용·배포·merge/push는 수행하지 않았다. CE: 해당 없음 — 상태 수명·입력·초점 경계가 코드와 회귀에 남는다.
+
+## 2026-10-29 · da361c0aa0 · 녹화 브라우저 시험 분리
+
+- 변경: 기존 녹화 test11개를 별도286줄 module로 옮기고 browser scope에 등록했다. 기존 파일2554줄에 맞춰 ratchet을 낮추며 OMX 선택의 순서 의존 slice를 명시적 목록으로 교체했다. 제품 runtime은 그대로다.
+- 증거: 이동11개·유지89개 함수 AST 동일, 독립 A도 test11개 이동·70개 유지와 fixture를 확인. 실제 Chromium16+scope17=33pass/0skip, 공식 affected635pass/137skip/NEW0. 초기 selector 및 ratchet 실패도 `docs/validation/pilot-recording-browser-split-2026-10-29/`에 보존했다.
+- gate 변화: 없음. CE: 해당 없음 — 기계적 이동·회귀·측정값으로 설명된다. 제품 수정은 별도 브랜치다.
+
+## 2026-10-29 · d99e15a1e2 · 녹화 목록 초점과 시트 조회 소유권
+
+- 변경: 행 갱신/받기·취소 전환의 현재 초점을 ID로 복원하고 사용 불가·소실/오류는 facts/notice로 이동한다. 시트 객체로 GET 소유권을 지키며, 가려진 초점은 nearest scroll로 드러낸다. 목록 밖 초점·문서 스크롤·기존 제어 정책은 유지한다.
+- 증거: 초기 제품8반례와 fixture3실패를 구분하고 전체 drive의 clip2 RED도 확인했다. 최종 동일 runtime에서 전체39pass/0skip, 실제 키보드8pass·문서 스크롤8pass, 공식 affected609pass/189skip/NEW0. A source·B12+8장 전수 직접 검토. 지원 ratchet 누락과 종료143/미실행도 `docs/validation/pilot-recording-focus-2026-10-29/`에 보존했다.
+- gate 변화: 없음. 실제 녹화/파일 수신·정지 readback·장치·ARTIFACT/FIELD·배포·착지·공개 push/merge는 별도다. CE: 해당 없음 — 수명·초점·clip 판단은 코드·회귀·검증 기록으로 복원된다.
+
+## 2026-10-29 · 177706a581 · Android 목록 초점과 공통 안전 여백
+
+- 변경: 발견 목록의 endpoint 초점 보존·보이는 상태 안내 fallback, 생성 본문 토큰, 실제 MainActivity와 preview/fixture가 소비하는 공통 시스템 바 여백 및 라벨 초점 표시를 적용했다.
+- 증거: 실제 SDK35 빌드와 JVM110 pass/1 skip, Android 두 크기에서 각각5 pass. 초점 전 RED3/4와 안전 여백 전 RED3/5를 구분했다. 실제 그려진 프레임의22장과 source를 독립 검토했다. 영향 pytest615 pass/166 skip/NEW0. 정본: `docs/validation/pilot-native-focus-2026-10-29/result.md`.
+- gate 변화: 없음. debug fixture이며 실제 Lobby·TalkBack·실물·FIELD·release 배포 수용이 아니다. CE: 해당 없음 — 원인과 해결이 코드·회귀·검증 기록에 드러난다.
+
+## 2026-10-29 · dab8ddacf2 · 네이티브 주요 조작 초점 대비 회귀 준비
+
+- 변경: 회귀 준비. 밝은 primary fill에 동일 foreground stroke를 사용하는 공용 PilotViews가 다시 찾기·함께 조종에서 쓰인다. 기존 목록/상태22PNG를 이 primary 수용 근거로 확대하지 않는다.
+- 증거: 기존 무동작 RobotRows fixture에 주요/보조 버튼의 DPAD 초점·실제 drawable edge·disabled 우선순위·callback0회 회귀를 추가했다. 제품 fill 로직은 아직 수정하지 않았고 SDK/실행 RED·수정 후 검증은 대기다. token exporter와 APK layout.css 소비도 구분해 확인한다.
+- gate 변화: 없음. 실제 로봇 연결·조종·배포·실물 수용은 수행하지 않았다. docs/validation/platform-ui-integration-2026-10-29/result.md 참조. CE: 미해결 — 새 primary 렌더 수용은 아직 증명하지 않았다.
+
+## 2026-10-29 · 473c39803f · 주요 조작의 보이는 초점과 아이콘 대비
+
+- 변경: primary/quiet 초점을 같은 pressed fill·foreground 테두리/글자로 통일하고 아이콘도 상태별 글자색을 따른다. 기본·blur·disabled·pressed 순서와 콜백은 보존한다.
+- 증거: dab8 AVD6건 중 primary1실패를 재현했다.42c의 edge 검사 통과 뒤 독립 이미지 검토에서 약한 구별을 P2로 확인해 center fill·focus/blur 글자·아이콘 tint·disabled 회귀를 보강했다.473c SDK35 debug/test APK 성공, JVM110pass/1skip(ShellPageProbe), 동일 APK의600×1000/font1.3와1280×800/font1.0에서 각각6pass. 최종30PNG 전수 독립 검토로 P2 해결·새 P1/P2 없음을 확인했으며 첫 수정30장과 구분한다.
+- gate 변화: 없음. 무동작 debug fixture이며 실제 연결·운전·TalkBack·실물·release 수용이 아니다. 정본: docs/validation/platform-ui-integration-2026-10-29/result.md. CE: 해당 없음 — 실제 상태 차이와 시험의 보강 기준을 코드·회귀·이미지 기록이 보존한다.
