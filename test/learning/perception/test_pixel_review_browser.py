@@ -43,7 +43,9 @@ def test_pixel_decision_resize_preserves_checks_and_keyboard_focus(browser_works
             canvas = page.locator('#pixel-canvas').bounding_box()
             assert decision['x'] >= canvas['x'] + canvas['width'] - 1
         box = complete.bounding_box()
-        assert -1 <= box['y'] and box['y'] + box['height'] <= 845
+        header = page.locator('ui-topbar').bounding_box()
+        assert max(0, header['y'] + header['height']) - 1 <= box['y']
+        assert box['y'] + box['height'] <= 845
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
         if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
             target = Path(output)
