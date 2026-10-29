@@ -4116,6 +4116,14 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - gate 변화: 없음. 공식 affected 선택은 FULL이며 land_async의 전체 착지 검증을 유지한다. 이미 실행 중인 worker는 이 소스를 다시 읽지 않으므로 현재 큐 대기가 풀렸다고 주장하지 않는다. 공유 main 게시·장치 동작은 이 변경의 범위가 아니다.
 - CE: 해당 없음 — 전체 티켓으로 carried를 구한 뒤 자기 행만 제외해야 한다는 원인과 재현 조건은 최종 코드 및 k2/k4·다른 pending/preparing 예약을 검증하는 8개 회귀 시험에 직접 남는다. 별도 교훈 문서는 늘리지 않는다.
 
+## 2026-10-29 · 8f43faac07 · 첫 빈 가르치기 poll의 불필요한 지도 재생성 방지
+
+- 변경: recording과 pending이 모두 없으면 처음 drawn 값과 같은 빈 키를 유지한다. 첫 active preview와 active→idle 정리는 계속 다시 그리며, poll 타이머·인증·오류 처리·가르치기 API·로봇 명령 권한은 바꾸지 않는다.
+- 증거: tests-only commit e7839c8382의 실제 Chromium 회귀는 idle에서 기존 SVG label이 분리되어 1 failed/2 passed(NEW1)였다. 수정 commit 8f43faac07의 세 회귀와 기존 높이 경계·profile·대상 유지·survey 경로는 9 passed/0 skipped, NEW0/known0/flaky0이다. 외부 receipts/2026-10-29-site-map-idle-redraw/red 및 green에 보존한다.
+- 증거 범위: 첫 빈 poll의 불필요한 render와 label 분리는 재현했지만, 앞선 별도 FULL의 간헐적 높이 0 발생 원인이라고 확정하지 않는다. 기존 height>=12 시험·baseline은 유지한다.
+- gate 변화: 없음. 공식 affected 선택은 affected이며 Fleet·공유 UI guard와 browser scope를 그대로 유지한다. 별도 착지 검증·공유 main 게시·운영 수용은 이 집중 회귀와 구분한다.
+- CE: 해당 없음 — 초기 idle·첫 recording/pending·active→idle의 DOM 수명은 최종 코드와 실제 poll 회귀 세 경우에 직접 남는다. 기존 간헐 실패의 줄별 귀속 교훈을 적용하며, 미확정 원인을 해결 교훈으로 쓰지 않는다.
+
 ## 2026-10-30 · b830767991 · open AP 소비자 선행 착지 후 producer 통합
 
 - 변경: 소비자 commit fd2131fdcbec가 실제 main 조상이 된 뒤 main commit 9ecc9795e93c를 producer에 병합했다. peer LCD helper/compact renderer와 기존 기록을 유지했다. main에서 D-914 문서가 도착했으므로 그 번호의 낡은 adr_gaps 행만 제거했다.
