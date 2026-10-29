@@ -125,10 +125,10 @@ def test_a_box_shadow_on_the_yellow_board_is_dropped_but_a_black_plate_stays():
     """2026-10-29: the dark-yellow shadow beside a box on the board read as a fragment and closed the finger gap."""
     yellow, shade, black = (60, 190, 230), (30, 100, 125), (25, 25, 25)
     img = scene([(0, 0, 60, 30, 20)], surface=yellow,
-                patches=[((10, 22, 60, 16, 20), shade), ((-80, -60, 50, 40, 0), black)])
+                patches=[((10, 22, 60, 16, 20), shade), ((-90, -70, 90, 70, 0), black)])
     found = seen(img)
     assert [o["object"] for o in found if o["matched"]] == ["container-2"], [(o["object"], o["centre_mm"], o["length_mm"], o["width_mm"]) for o in found]
     assert not any(not o["matched"] and abs(o["centre_mm"][1] - 22) < 8 for o in found)  # no shadow fragment
     mask = co.foreground(img, ROI)
-    bx, by = 320 + 2 * -80 - ROI[0], 240 + 2 * -60 - ROI[1]
+    bx, by = 320 + 2 * -90 - ROI[0], 240 + 2 * -70 - ROI[1]
     assert mask[by, bx] > 0  # the black plate is still foreground: an obstacle for the fingers
