@@ -4,7 +4,10 @@ import json
 from pathlib import Path
 import subprocess
 import sys
+import runpy
+from types import ModuleType, SimpleNamespace
 
+import pytest
 import yaml
 
 
@@ -46,6 +49,32 @@ def test_media_runtime_preflight_reports_actual_host(tmp_path):
     assert report['platform']['machine']
     assert report['accepted'] is False  # preflight alone is never end-to-end evidence
     print(json.dumps(report, sort_keys=True))
+
+
+@pytest.mark.parametrize('series,missing,ready', [((1, 24, 2, 0), None, True),
+                                               ((1, 22, 0, 0), None, False),
+                                               ((1, 24, 2, 0), 'x264enc', False)])
+def test_media_probe_checks_gstreamer_core_not_libnice_plugin_version(monkeypatch, series, missing, ready):
+    probe = runpy.run_path(str(PROBE))['probe']
+    gi, repository = ModuleType('gi'), ModuleType('gi.repository')
+    gi.require_version = lambda *args: None
+    repository.Gst = SimpleNamespace(version=lambda: series)
+    monkeypatch.setitem(sys.modules, 'gi', gi)
+    monkeypatch.setitem(sys.modules, 'gi.repository', repository)
+    monkeypatch.setattr(probe.__globals__['platform'], 'machine', lambda: 'aarch64')
+    monkeypatch.setattr(probe.__globals__['platform'], 'system', lambda: 'Linux')
+    monkeypatch.setattr(probe.__globals__['shutil'], 'which', lambda name: '/usr/bin/gst-inspect-1.0')
+
+    def inspect(command, **kwargs):
+        plugin = command[1]
+        version = '0.1.21' if plugin == 'nicesrc' else '1.24.2'
+        return SimpleNamespace(returncode=int(plugin == missing), stdout='  Version ' + version)
+
+    monkeypatch.setattr(probe.__globals__['subprocess'], 'run', inspect)
+    report = probe()
+    assert report['preflight_ready'] is ready
+    assert report['checks']['plugins']['versions']['nicesrc'] == '0.1.21'
+    assert report['accepted'] is False
 
 
 def test_media_artifact_is_locked_and_carries_provenance():
