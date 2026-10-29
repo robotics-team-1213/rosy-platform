@@ -64,3 +64,30 @@ def test_a_strain_while_sliding_backs_out_and_folds():
     assert out["result"] == "contact" and cell.sent[-2:] == ["retreat", "park"]
     cell = Scripted()
     assert cpu.run_push(cell, Path("lib.json"))["result"] == "pushed" and cell.sent[-1] == "park"
+
+
+def test_look_first_moves_the_push_start_by_the_measured_offset_and_keeps_the_slide(tmp_path, monkeypatch):
+    import cell_look
+
+    seen = {}
+
+    def fake_look(cell, config, record, site, target, write, work, goto, name):
+        seen["goto"] = goto
+        target["pick"] = dict(target["pick"], x=target["pick"]["x"] + 0.008, y=target["pick"]["y"] - 0.004)
+        write(config, target["pick"], target["place"], work / name)
+        return {"verdict": "pass", "looks": [], "total_mm": 8.9}
+
+    class Cell:
+        def act(self, command):
+            return {"ok": True}
+
+    monkeypatch.setattr(cell_look, "look", fake_look)
+    start, slide = np.array([0.03, 0.17]), np.array([-0.03, 0.0])
+    out = cpu.look_first(Cell(), {"params": {"look.enabled": 1}, "plan": PLAN}, {}, "floor",
+                         {"radius_mm": 30.0, "phase_deg": 0.0}, start, slide, np.zeros(2), 0.0, 0.024, 0.01,
+                         tmp_path / "lib.json", tmp_path)
+    assert out["verdict"] == "pass" and seen["goto"] == "goto above_push"
+    library = json.loads(out["library"].read_text())
+    assert set(library["chunks"]) >= {"above_push", "descend_push", "slide_push", "lift_push"}
+    assert cpu.look_first(Cell(), {"params": {"look.enabled": 0}, "plan": PLAN}, {}, "floor", {"radius_mm": 30.0},
+                          start, slide, np.zeros(2), 0.0, 0.024, 0.01, tmp_path / "lib.json", tmp_path)["verdict"] == "pass"

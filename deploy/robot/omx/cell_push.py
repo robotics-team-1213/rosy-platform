@@ -106,6 +106,27 @@ def run_push(cell, library_path: Path) -> dict:
     return {"result": "pushed", "steps": steps}
 
 
+def look_first(cell, config, record, site, region, start_raw, slide, bias, yaw, z, speed, lib, work) -> dict:
+    """cell_look before the descent: the jaws over the push start, measured against the start in the same image,
+    since a carried bias left the push 1 cm off and the box did not move (2026-10-29). Off: the plan stands."""
+    import cell_look
+
+    if not prm.get(config.get("params"), "look.enabled") or not (region or {}).get("radius_mm"):
+        return {"verdict": "pass", "why": "look off or no pivot circle here"}
+    if not all(cell.act(c).get("ok") for c in (f"load {lib}", "goto above_push")):
+        return {"verdict": "refuse", "why": "hover refused"}
+    target = {"pick": {"x": float(start_raw[0] - bias[0]), "y": float(start_raw[1] - bias[1]), "z": z, "yaw_deg": yaw},
+              "place": {}, "object": {"raw_m": [float(v) for v in start_raw]}, "bias_region": region}
+
+    def write(_config, pick, _place, path):
+        s = np.array([pick["x"], pick["y"]])
+        path.write_text(json.dumps(push_library(config["plan"], s, s + slide, yaw, z, speed)))
+        return path
+
+    out = cell_look.look(cell, config, record, site, target, write, work, goto="goto above_push", name="push-look.json")
+    return {**out, "library": work / "push-look.json"} if out["total_mm"] else out
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--config", required=True, type=Path)
@@ -171,7 +192,11 @@ def main(argv=None):
             out["result"] = f"refused: plan {errors}"
         else:
             lib.write_text(json.dumps(library))
-            out.update(run_push(cell, lib))
+            looked = look_first(cell, dict(config, plan=plan), record, args.site, region, start, end - start, bias,
+                                out["yaw_deg"], z, speed, lib, work)
+            out["look"] = looked
+            out.update(run_push(cell, looked.get("library", lib)) if looked["verdict"] == "pass"
+                       else {"result": f"refused: look {looked.get('why')}", "steps": [{"park": cell.act("park").get("ok")}]})
             after = cell.frame("top")
             keep("push-after", after)
             if args.catalog:

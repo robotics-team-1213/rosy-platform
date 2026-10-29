@@ -25,8 +25,10 @@ def tcp_from_mark(mark_raw, yaw_deg: float, region: dict):
     return mark_raw[0] - r * math.cos(a), mark_raw[1] - r * math.sin(a)
 
 
-def look(cell, config: dict, record: dict, site: str, target: dict, write_library, work, sleep=time.sleep) -> dict:
-    """Measure box - TCP at the hover and move the target there; verdict pass / refuse with every look kept."""
+def look(cell, config: dict, record: dict, site: str, target: dict, write_library, work, sleep=time.sleep,
+         goto: str = "goto above_pick", name: str = "look-replan.json") -> dict:
+    """Measure point - TCP at the hover and move the target there; verdict pass / refuse with every look kept.
+    `target[\"object\"][\"raw_m\"]` is the raw point the TCP must stand over: a box to pick, or a push's start."""
     params, region = config.get("params"), target.get("bias_region") or {}
     box = target["object"]["raw_m"]
     rows, total = [], 0.0
@@ -48,8 +50,8 @@ def look(cell, config: dict, record: dict, site: str, target: dict, write_librar
             return {"verdict": "refuse", "why": f"box still {off:.0f} mm from the jaws", "looks": rows, "total_mm": round(total, 1)}
         total += off
         target["pick"] = dict(target["pick"], x=round(x + d[0], 4), y=round(y + d[1], 4))  # where the arm must be
-        library = write_library(config, target["pick"], target["place"], work / "look-replan.json")
-        if not all(cell.act(c).get("ok") for c in (f"load {library}", "goto above_pick")):
+        library = write_library(config, target["pick"], target["place"], work / name)
+        if not all(cell.act(c).get("ok") for c in (f"load {library}", goto)):
             return {"verdict": "refuse", "why": "re-plan refused", "looks": rows, "total_mm": round(total, 1)}
     return {"verdict": "refuse", "why": "no look left", "looks": rows, "total_mm": round(total, 1)}
 
