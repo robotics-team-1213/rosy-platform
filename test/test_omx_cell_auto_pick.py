@@ -38,6 +38,23 @@ CONFIG["_commissioning"] = {"person_at_switch": True}  # simulated supervised tr
 CONFIG["operating_conditions"] = {"installation_revision": "sim-install-1", "object_revision": "sim-object-1",
     "payload_kg": 0.05, "object_dimensions_m": [0.03, 0.03, 0.03], "environment_revision": "sim-scene-1"}
 SESSION = {"scope": "simulation", "sha256": "a" * 64, "session_id": "fixture-session"}
+
+
+@pytest.fixture(autouse=True)
+def simulated_operating_profile(tmp_path, monkeypatch):
+    monkeypatch.syspath_prepend(str(OMX))
+    from cell_robot_profile import load
+
+    path = tmp_path / "robot-profile.json"
+    path.write_text(json.dumps({"schema": "rosy.omx-cell-robot-profile.v1", "device_id": "sim-device",
+        "instance_id": "sim-arm", "robot_config_sha256": "c" * 64,
+        "operating_envelope_path": "review.json", "work_dir": "."}))
+    monkeypatch.setitem(CONFIG, "operating_profile_path", str(path))
+    monkeypatch.setitem(CONFIG, "work_dir", str(tmp_path))
+    monkeypatch.setitem(CONFIG, "operating_envelope_path", str(tmp_path / "review.json"))
+    monkeypatch.setitem(SESSION, "operating_profile", load(path)["binding"])
+
+
 CATALOG = cell_objects.load_catalog(OMX / "object-catalog.example.json")
 CAMERA = CONFIG["cameras"]["top"]
 ROI = (40, 205, 300, 420)
