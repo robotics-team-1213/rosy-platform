@@ -30,19 +30,22 @@ def case(tmp_path: Path):
     (release / "SHA256SUMS.sig").write_text("sig\n", encoding="ascii")
     evidence = tmp_path / "cards"
     evidence.mkdir()
+    imager = tmp_path / "rpi-imager.exe"
+    imager.write_bytes(b"fixture executable is never launched")
     plan = evidence / "plan.json"
     plan.write_text(json.dumps({
         "mode": "PLAN_ONLY", "release_id": RELEASE, "image_sha256": "a" * 64,
         "device_name": "rosy-pinky-e4us", "disk_serial": "000000000207", "disk_number": 2,
         "registry_path": str(tmp_path / "registry.json"),
     }), encoding="utf-8")
-    return {"release": release, "evidence": evidence, "plan": plan, "tmp": tmp_path}
+    return {"release": release, "evidence": evidence, "plan": plan, "tmp": tmp_path, "imager": imager}
 
 
 def _print(case, *extra):
     command = [POWERSHELL, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(SCRIPT),
                "-PlanPath", str(case["plan"]), "-ReleaseDir", str(case["release"]),
-               "-WifiProfile", "site-default", "-PrintArguments", *map(str, extra)]
+               "-WifiProfile", "site-default", "-RpiImager", str(case["imager"]),
+               "-PrintArguments", *map(str, extra)]
     return subprocess.run(command, capture_output=True, text=True)
 
 
@@ -203,7 +206,7 @@ def _launch(case, launcher, *extra):
     log = case["evidence"] / "write-attempt.log"
     command = [POWERSHELL, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(SCRIPT),
                "-PlanPath", str(case["plan"]), "-ReleaseDir", str(case["release"]),
-               "-WifiProfile", "site-default", "-LogPath", str(log),
+               "-WifiProfile", "site-default", "-RpiImager", str(case["imager"]), "-LogPath", str(log),
                "-ElevationLauncher", str(launcher), *map(str, extra)]
     started = time.monotonic()
     completed = subprocess.run(command, capture_output=True, text=True, timeout=120)
