@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 import sys
 import subprocess
+import hashlib
+import uuid
 
 import pytest
 
@@ -149,3 +151,24 @@ def test_cube_release_corrects_measured_cargo_offset_and_neighbor_clearance():
     body['forces'][2*item['arm']] = [0., 0., 0.]
     with pytest.raises(ValueError, match='bilateral'):
         f.cube_release_target(1, sample, .04)
+
+
+def test_only_cube_contact_report_has_a_two_mib_artifact_budget(tmp_path):
+    from run_store import RunStore
+    store = RunStore(tmp_path/'runs')
+    raw = b'{}'+b' '*(1024*1024)
+    for scenario in ('omx-map-cube-stack', 'omx-map-long-stack'):
+        run = store.create(uuid.uuid4().hex, scenario, {'seed': 42}, 'a'*40)
+        name = 'mapped-stack-report.json'
+        (store.root/'runs'/run['run_id']/name).write_bytes(raw)
+        item = dict(id='mapped-stack-report', name=name, bytes=len(raw),
+                    sha256=hashlib.sha256(raw).hexdigest(), media_type='application/json')
+        def finish():
+            return store.finish(run['run_id'], run['revision'],
+                dict(status='FAILED', stage='mapped_cube_stack', task_success=False), [item])
+        if scenario == 'omx-map-cube-stack':
+            finish()
+            assert store.artifact(run['run_id'], item['id'])['data'] == raw
+        else:
+            with pytest.raises(ValueError, match='artifact size exceeds limit'):
+                finish()

@@ -42,23 +42,6 @@ def test_same_request_is_one_run(tmp_path):
     assert len(list((tmp_path / 'runs/runs').iterdir())) == 1
 
 
-def test_only_cube_contact_report_has_a_two_mib_artifact_budget(tmp_path):
-    store = module().RunStore(tmp_path/'runs')
-    raw = b'{}'+b' '*(1024*1024)
-    for scenario in ('omx-map-cube-stack', 'omx-map-long-stack'):
-        run = store.create(uuid.uuid4().hex, scenario, {'seed': 42}, SHA)
-        name = 'mapped-stack-report.json'
-        (store.root/'runs'/run['run_id']/name).write_bytes(raw)
-        item = dict(id='mapped-stack-report', name=name, bytes=len(raw),
-                    sha256=hashlib.sha256(raw).hexdigest(), media_type='application/json')
-        if scenario == 'omx-map-cube-stack':
-            finish(store, run, artifacts=[item])
-            assert store.artifact(run['run_id'], item['id'])['data'] == raw
-        else:
-            with pytest.raises(ValueError, match='artifact size exceeds limit'):
-                finish(store, run, artifacts=[item])
-
-
 def test_changed_request_conflicts_and_new_run_preserves_parent(tmp_path):
     mod = module()
     store = mod.RunStore(tmp_path / 'runs')
