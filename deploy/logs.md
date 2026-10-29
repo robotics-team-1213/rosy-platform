@@ -4031,3 +4031,34 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 기준 commit 8f4b634e51의 공식 FULL에서 secret guard NEW1, 단독 재현 실패, main commit 23633e759f의 동일 단독 시험은 1 passed였다. 해당 값 commit 42508b116e의 실제 Git 객체·조상 관계와 원본 행 해시를 독립 검토했다. 수정 뒤 원격 집중 guard 결과는 외부 ui-validation-provenance-20261029 로그에 남긴다.
 - gate 변화: 없음. 새 canonical FULL과 main ancestry가 남으며 공개 게시·장치 수용을 뜻하지 않는다.
 - CE: 해당 없음 — 기존 git-ids-in-validation-records 교훈의 동결 기록 절차를 적용했다. 새 정책이나 예외 범위 확대는 없다.
+
+## 2026-10-29 · 05f19a73ea · 팔 credential 및 signed candidate 집중 회귀
+
+- 변경: 관리자 전체 매핑 후보의 원격 집중 회귀 결과를 기록했다. 실행 코드·시험은 05f19a73ea와 같다.
+- 증거: workcell/bootstrap·증분·빌더·서명·verifier·autoupdater 집중 묶음 200 passed/3 skipped, known_failures NEW0/known0/flaky0이다. 세 skip은 시험 PC의 Docker Compose CLI 부재 때문이며 앞선 현장 Compose5.6.1 실제 렌더링 세 경우 통과 근거와 구분한다. baseline b7cf245d37의 pytest도 10 passed/3 skipped였고 기능 RED 근거는 현장 실제 Compose에서 명시 A/B/S가 A/B만 전달했던 exit1이다. 로그는 외부 rosy-site-credentials-red 및 rosy-site-credentials-green/run-1.txt다.
+- 증거 범위: 현재 현장 A/B/S 전체 Compose 동등성과 manifest credential 지문 일치는 별도로 확인했다. old posted fa3aeeed4d92의 CI attempt2가 success이고 signer dry-run은 would-sign으로 바뀌었지만, 그 후보는 새 매핑 인터페이스를 포함한 후보가 아니다. 제안 site.env를 그 옛 candidate에 먼저 적용하지 않는다.
+- gate 변화: 없음. 새 서명 candidate와 설정 동시 전환·실제 서비스 수용은 아직 미실행이다. 토큰 값·개인키를 기록하거나 unsigned overlay 허용 목록을 확대하지 않았다.
+- CE: 미해결 — 소스·회귀 검증은 통과했으며 남은 게시·candidate·운영 전환은 별도 근거가 필요하다.
+
+## 2026-10-29 · uncommitted · Site readiness 게시 검사 출처 검토
+
+- 변경: 공유 main의 게시 전 이력 검사에서 잡힌 20건을 정확한 commit/path/rule 8개로 검토했다. peer db543919cd의 독립 검토된 artifact digest/provenance 4개를 재사용하고, 별도 agent가 Git 객체로 확인한 revision 1개·고정 browser mock 응답 2개·디코딩 검증한 1x1 PNG 1개를 추가했다. baseline에는 값·발췌문을 저장하지 않는다. scanner 및 새 commit/다른 rule의 거부는 그대로다.
+- 증거: main76a007dced 기준 실제 `tools/publish_main.py --secret-scan`은 20 hits로 거부했다. 검토 baseline을 적용한 통합 source28d77ce193의 같은 실제 gate는 400 commits' added lines clean, 20 reviewed baseline hit(s) skipped로 통과했다. 이는 실행 gate 검증이며 원격 pytest·clean FULL·게시·서버 설치 증거는 아니다.
+- gate 변화: 없음. 사용자 임시 슬롯 승인으로 source6dad/f56를 한 작업에 병합했고 최종 검증 및 공식 긴급 착지를 준비한다. private overlay admission·운영 motion deadline·서명 검사를 완화하지 않는다.
+- CE: 해당 없음 — 기존 exact-tuple 검토 절차를 적용한 출처 자료 갱신이다. 최초 운영 전환의 복구 검증은 여전히 미해결이다.
+
+## 2026-10-29 · 0ab037ed49 · SD mount의 native parameter set 수정
+
+- 변경: legacy/GPT 두 Add-PartitionAccessPath ByNumber 호출을 DiskNumber·PartitionNumber·AccessPath로 맞췄다. signed provision partition·FAT32·GUID·offset·size·serial·full readback·UID 경계는 유지한다.
+- 원인: 기존 fake가 native에 없는 DiskNumber/PartitionNumber/DriveLetter 조합을 허용했다. native metadata와 같은 제한 set으로 GPT/legacy·기존 mount 유무를 검사하며, metadata auto-import를 먼저 끝내 fake가 native 명령으로 덮이지 않게 했다.
+- 증거: tests-only 9db5428541 원격 SD profile은 4 failed / 4 passed의 정확한 no-letter RED다. 승인된 Windows binding fixture는 corrected tests-only 64fa4f33fa에서 같은 RED, 수정 후 8 passed였다. 공식 변경 SHA 원격 GREEN·착지와 새 코드의 실물 수용은 별도 기록이다.
+- gate 변화: 없음. 이전 카드의 MEDIA 복구는 frozen 1d816 소스에서 native premount + 공식 ResumeAfterWrite로 완료했으며 이 새 소스의 장치 수용으로 세지 않는다. 이 작업은 실제 카드·프로세스·queue를 수정하지 않았다.
+- CE: 기존 교훈 갱신 — [가짜와 실제 API 표면의 일치](../docs/solutions/workflow-issues/fake-with-a-method-the-real-class-lacks-hid-a-shutdown-bug.md)에 parameter-set 불일치, metadata autoload 순서, 재flash 없는 별도 복구와 검증 범위를 보강했다.
+
+## 2026-10-29 · 2f88347d69 · SD 원격 fixture의 플랫폼 경계 검증
+
+- 원인: 승인 SD profile의 entrypoint 시험은 변경 전 main b0a31796b4에서도 14 failed / 20 passed였다. Windows C: 기본 Imager 경로를 Linux fixture가 그대로 썼고, 뒤에는 WindowsPrincipal/UAC 전용 세 사례와 PowerShell 7 오류 표시 형식 차이가 있었다. 제품 UAC/admin·기본값은 바꾸지 않았다.
+- 변경: print/launcher fixture가 temp fake Imager 경로를 명시한다. 실제 Windows identity가 필요한 세 사례만 Windows 조건을 붙이고, 비상 사유 거부의 진단 비교에서는 ANSI/gutter/whitespace 표시만 정규화한다. 거부·launcher 미호출·progress 미생성 assertion은 유지한다.
+- 증거: path-only 2f88347d69 원격은 30 passed / 4 failed로 다음 경계를 드러냈다. 명시 승인된 Windows 격리 PowerShell 실행은 원래 세 사례의 모든 assertion을 그대로 실행해 3 passed였다. 4개 하위 호출 모두 non-admin을 먼저 확인하고 native Start-Process/Storage 호출을 가로채 0회를 확인했다. local pytest·실제 UAC·카드 접근은 하지 않았다. Linux의 세 skip과 이 별도 native Windows 증거는 구분하며 최종 원격 결과는 완료 기록을 따른다.
+- gate 변화: 없음. 세 native Windows fixture의 별도 성공을 Linux 실행으로 세지 않으며 새 소스의 실물 수용을 주장하지 않는다.
+- CE: 기존 교훈 갱신 결과 유지. parameter-set·metadata autoload 판단은 기존 fake-surface 교훈에 남겼고, 단순 fixture 경로/표시 형식 수정을 별도 교훈으로 늘리지 않았다.

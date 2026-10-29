@@ -65,6 +65,8 @@ def test_looks_move_the_command_onto_the_box_despite_map_error_and_droop(tmp_pat
     assert out["verdict"] == "pass" and len(out["looks"]) == 2
     assert arm.at == pytest.approx(box_true, abs=1e-4)  # the arm, not just the command, is over the box
     assert out["looks"][0]["box_minus_tcp_mm"] == pytest.approx([8.0, -3.5], abs=0.2)
+    # the hover chain records verdict, dx_mm, dy_mm, total_mm for every hook (a missing key crashed a field carry)
+    assert (out["dx_mm"], out["dy_mm"]) == pytest.approx((1000 * (target["pick"]["x"] - 0.092), 1000 * (target["pick"]["y"] - 0.206)), abs=0.1)
 
 
 def test_no_hook_without_a_pivot_circle_or_when_off():
