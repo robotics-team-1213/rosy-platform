@@ -351,7 +351,9 @@ def test_the_journal_is_the_current_boot_of_rosy_units_only(tmp_path):
 
     journal = next(call for call in runner.calls if call[0] == "journalctl")
     assert "-b" in journal and "rosy-*" in journal
-    assert not any("-s" == part or "--show-secrets" in part for call in runner.calls for part in call)
+    # hostname -s means short name; the same flag on network tools can expose secrets.
+    assert not any("-s" == part or "--show-secrets" in part for call in runner.calls
+                   if call != ["hostname", "-s"] for part in call)
 
 
 def test_the_cli_prints_the_bundle_and_its_correlation(tmp_path):
