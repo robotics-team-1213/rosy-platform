@@ -46,6 +46,8 @@ def prepare(session: Path, video_dir: Path, out: Path, classes: Path) -> Path:
     receipt = json.loads(fetch_http._receipt_path(session.parent, session.name).read_text(encoding="utf-8"))
     if Path(receipt["sidecar"]).resolve() != video.with_suffix(".jsonl").resolve():
         raise ValueError("paired video does not belong to the selected recording")
+    # Legacy receipts pinned only the sidecar; snapshot the video's current digest without granting source proof.
+    receipt.setdefault("video_sha256", fetch_http._sha256(video))
     side, video_meta = extract._sidecar(video)
     if not video_meta or (video_meta.get("source") or {}).get("session") != session.name:
         raise ValueError("converted video source session differs")

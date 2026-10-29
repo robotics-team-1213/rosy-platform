@@ -288,7 +288,7 @@ def _paired_receipt_valid(dest: Path, recording_id: str) -> bool:
         video = sidecar.with_suffix(".mp4")
         return (receipt["recording_id"] == recording_id and sidecar.is_file()
                 and video.is_file() and video.stat().st_size > 0
-                and _sha256(video) == receipt.get("video_sha256")
+                and ("video_sha256" not in receipt or _sha256(video) == receipt["video_sha256"])
                 and _sha256(sidecar) == receipt["sidecar_sha256"]
                 and pair_counts(_read_rows(sidecar))["paired"] > 0)
     except (OSError, ValueError, KeyError, TypeError):
@@ -451,6 +451,11 @@ def main(argv=None, *, convert=default_convert) -> int:
                 continue
             if _paired_receipt_valid(dest, recording_id):
                 print(f"{recording_id}: paired video already verified")
+                continue
+            if _receipt_path(dest, recording_id).exists():
+                print(f"FAILED {recording_id}: paired evidence changed; existing files and receipt kept",
+                      file=sys.stderr)
+                rc, failed = 1, failed + 1
                 continue
             existing = _existing_video(args, dest / recording_id)
             if existing is not None:
