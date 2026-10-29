@@ -63,6 +63,7 @@ def test_recovery_uses_applied_controls_after_normal_reentry_or_device_reset(mon
         get_controls=lambda d, names: {key: current[d][key] for key in names}, write_control=write,
         restore_controls=runtime.restore_controls, apply_candidate=runtime.apply_candidate,
         save=runtime.save, append_event=runtime.append_event, restore=restore,
+        control_intent=runtime.control_intent,
         reserve_budget=lambda root: reserved.append(clock[0]), BudgetExhausted=runtime.BudgetExhausted)
     env.monitor(dict(viewer_url='http://127.0.0.1:8767', cameras=cameras), tmp_path, 'test-profile', 36, backend)
     assert any(name == 'exposure_time_absolute' and value == values[-1] for _, _, name, value in writes)

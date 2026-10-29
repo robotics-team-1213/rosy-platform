@@ -146,7 +146,10 @@ def test_a_role_names_the_preview_unit_that_owns_its_camera(monkeypatch, tmp_pat
     monkeypatch.setattr(runtime, 'identity', lambda device: {'rdev': device})
     monkeypatch.setattr(runtime, 'producer', lambda unit, device, wait_s=15.0: asked.append(unit) or {})
     monkeypatch.setattr(runtime, 'get_controls', lambda device, names: {'auto_exposure': 3, 'gain': 4})
-    monkeypatch.setattr(runtime, 'command', lambda args: 'exposure_time_absolute 0x9a0902 (int) : min=1 max=5000 step=1\n')
+    monkeypatch.setattr(runtime, 'command', lambda args: (
+        'exposure_time_absolute 0x9a0902 (int) : min=1 max=5000 step=1\n'
+        'auto_exposure 0x9a0901 (menu) : min=0 max=3\n 1: Manual\n 3: Auto\n'
+        'gain 0x00980913 (int) : min=0 max=7 step=1\n'))
     monkeypatch.setattr(runtime, 'write_control', lambda device, name, value: None)
     baseline = runtime.prepare(profile(unit='arm_a_wrist'), tmp_path, 'p')
     assert baseline['cameras']['front']['unit'] == 'arm_a_wrist' and asked == ['top', 'arm_a_wrist']
