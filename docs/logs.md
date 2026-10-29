@@ -13084,3 +13084,10 @@ osy-d395-s1d\`.
 - 증거: 원격 client/정확 secret guard exit 0, skip 0, classifier NEW 0. 원래 실패 로그와 최종 검증 로그는 외부 TEMP의 SHA-256으로 결속했다.
 - Gate: 없음. 실패 이력을 최초 완전 통과로 바꾸거나 예외로 숨기지 않았다.
 - CE: 해당 없음 — 해결 판단을 기존 검사기 규칙·최종 시험·수정 기록에서 복원한다.
+
+## 2026-10-30 · 40449ecfdf · 카메라 자동 복구를 실제 제어값과 복원 기록에 결속
+
+- 변경: 같은 방향의 적용된 후보를 되감지 않고, baseline으로 돌아온 카메라는 실제 readback·지원값 재확인 후 재조정한다. 일시적 읽기 실패와 active preview의 재오픈 대기는 쓰기 없이 UNAVAILABLE로 기다리며 다른 owner는 거부한다. 후보·복원 intent는 baseline/장치/producer/run에 결속해 알 수 없는 설정을 덮지 않는다.
+- 증거: 초기 RED 13 실패, 추가 targeted RED 5 실패 및 producer 경로 1 실패를 각각 확인 후 수정했다. 최종 camera environment/readiness/adaptive/native snapshot 원격 시험 107 passed, skip 0, NEW 0. 독립 검토의 중간 manual 모드와 실제 producer 부재 경로 지적을 해결했고 최종 추가 finding 없음.
+- Gate: 소스·원격 host 검증 및 유휴 hotfix. 01:06 녹화/chunk 부재와 cell/update 잠금 아래 기존 복구기의 원본 복원·백업 후 적용했다. baseline과 camera/arm-status producer invocation은 보존했고 fresh 평가·동일 readiness invocation을 12초 뒤 확인했다. front NORMAL, top UNDEREXPOSED/EXHAUSTED여서 전체 INSUFFICIENT·motion_admitted false를 유지했다. 새 release 전환·통제된 실물 조명 복구·물리 수용을 주장하지 않는다. 공개 push 없음.
+- CE: 기존 camera readiness 교훈 갱신. 같은 PID로 카메라가 재오픈해도 실제 제어값은 baseline으로 돌아갈 수 있었던 운영 증거와 원본/intent 보존·업그레이드 순서를 기록했다.

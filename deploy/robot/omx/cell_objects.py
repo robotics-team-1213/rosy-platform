@@ -206,7 +206,15 @@ def object_mask(img, roi, hsv, surface_px=None, params=None):
     surface, its shadows, white lines and belts do not matter. On the board the green boxes read hue 78-80, the board
     20, a box's shadow 34 and the white line saturation 25 (2026-10-29)."""
     x0, y0, x1, y1 = roi
-    mask = cv2.inRange(cv2.cvtColor(img[y0:y1, x0:x1], cv2.COLOR_BGR2HSV), np.array(hsv[0]), np.array(hsv[1]))
+    hsv_img = cv2.cvtColor(img[y0:y1, x0:x1], cv2.COLOR_BGR2HSV)
+    mask = cv2.inRange(hsv_img, np.array(hsv[0]), np.array(hsv[1]))
+    frac = prm.get(params, "objects.top_v_frac")
+    if frac and mask.any():  # top faces only: a side face is the same green, darker by the same ratio in any light
+        n, labels = cv2.connectedComponents(mask)  # (day: top V 186, side 137; at night, V capped by the exposure limit: 59 / ~40)
+        v = hsv_img[..., 2]
+        for i in range(1, n):
+            blob = labels == i
+            mask[blob & (v < frac * np.percentile(v[blob], 90))] = 0
     if surface_px:
         keep = np.zeros_like(mask)
         cv2.fillPoly(keep, [np.asarray(surface_px, np.int32) - [x0, y0]], 255)

@@ -74,6 +74,7 @@ One file per step; a step that a parameter turns off returns None and the carry 
 | Carry and place | `cell_transfer.transfer_folded` (fold home between lift and place) | `auto.fold_before_transport` (0: `cell_pipeline.SEQUENCE`) |
 | After | `cell_auto_pick.verify_placed`, `cell_attempts`, `cell_decisions`, `episode_recorder`; on a failure `cell_diagnose` (cause from the contact height, strategy table) | — |
 | Roles and tasks | `cell_role` (rescue/load/retrieve; automatic, so held by D-911 until reviewed), `cell_task_runner` (move/swap queue) | — |
+| Field trials | `cell_field` (carry, push search and push, jaw-mark probe, recover, snapshot: frames before and after, a side-by-side picture and a JSON report under `work_dir/field/`; moves only through the programs above) | — |
 | Camera geometry | `cell_checkerboard` (intrinsics, gripper-down hand-eye, pixel → plane); not in the pick path yet | — |
 
 ## Subdirectories
