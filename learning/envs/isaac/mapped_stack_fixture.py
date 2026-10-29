@@ -56,7 +56,7 @@ CUBE_FIXTURE = dict(FIXTURE, revision='rosycam-edge-terminal-first-layer-v3', tr
 def plan(cube=False):
     if cube:
         return [dict(id='bar-'+str(i+1), cells=3, cell=[0, i % 3, i//3], size=[.09, .03, .03],
-                     mass=.06, arm=i % 2,
+                     mass=.06, arm=0 if i == 0 else 1,
                      target=[.13, -.03+i*.03, .047]) for i in range(3)]
     return [dict(id='bar-'+str(i+1), cells=3, cell=[0, 0, i], size=[.09, .03, .03],
                  mass=.06, arm=i % 2, target=[.16, 0., .04+i*.03]) for i in range(3)]

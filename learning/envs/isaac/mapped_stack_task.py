@@ -20,8 +20,12 @@ class Planner:
         output = self.directory/f'plan-frames-{self.count}.json'
         with request.open('x', encoding='utf-8') as stream:
             json.dump(dict(schema='rosy.omx-sim-stack-plan/1', operation=operation, **fields), stream, allow_nan=False)
-        subprocess.run(['/usr/bin/python3', str(ROOT/'deploy/robot/omx/isaac_stack_plan.py'),
-            '--case', str(request), '--out', str(output)], check=True, timeout=60, capture_output=True)
+        try:
+            subprocess.run(['/usr/bin/python3', str(ROOT/'deploy/robot/omx/isaac_stack_plan.py'),
+                '--case', str(request), '--out', str(output)], check=True, timeout=60, capture_output=True)
+        except subprocess.CalledProcessError as exc:
+            lines = (exc.stderr or b'').decode('utf-8', errors='replace').splitlines()
+            raise ValueError('SIM planning refused: '+(lines[-1][:200] if lines else 'no diagnostic')) from None
         value = json.loads(read_regular(output, limit=16*1024*1024))
         if (value.get('schema') != 'rosy.omx-sim-stack-plan/1'
                 or value.get('joints') != ['joint'+str(i) for i in range(1, 6)]
@@ -173,6 +177,9 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
             targets[arm][joints[arm]] = q
             step()
         hold(120)
+        if cube and np.max(np.abs(robots[arm].get_joint_positions()[joints[arm]]-targets[arm][joints[arm]])) > .03:
+            trial['motion_failure_sample'] = grasp_snapshot(arm)
+            raise ValueError('cube arm tracking exceeds 0.03 rad; further correction blocked')
 
     def grip(arm, value, observe=False):
         observations = [snapshot()] if observe else []
