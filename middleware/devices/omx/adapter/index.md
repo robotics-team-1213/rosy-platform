@@ -50,7 +50,7 @@
 ## 최근 기록
 
 - 2026-10-29 · 724ecfbff1 · D-916 원본 joint 시각 보존
+- 2026-10-28 · fce9c60216 · SIM Pilot의 배치 자산 일치
 - 2026-10-28 · ed77a021dc · test(omx): record literal value-contract compatibility
 - 2026-10-27 · uncommitted · refactor(omx): align five literal value-contract families
 - 2026-10-27 · uncommitted · refactor(omx): extract legacy motion thread unchanged
-- 2026-10-27 · 752c9b0aed · 순수 chunk 파서와 경로 계산을 설치 패키지로 추출

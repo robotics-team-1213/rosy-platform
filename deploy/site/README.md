@@ -2184,6 +2184,21 @@ pairing → omx → workcell → Account이며 사용하지 않는 항목은 생
 `ROSY_ADDITIONAL_CREDENTIAL_PATHS`로 역할별 토큰 파일을 기존 secret bootstrap에 추가한다.
 기존 자격 증명 이름을 덮어쓰는 추가 매핑은 거절한다.
 
+기본 팔 매핑은 A/B다. 추가 팔의 관측 자격 증명이 필요하면 관리자가 `site.env`의
+`ROSY_SITE_WORKCELL_ARM_CREDENTIAL_PATHS`에 **전체 교체 매핑**을 JSON으로 지정한다.
+예를 들어 A/B/S를 함께 유지하려면 다음처럼 세 항목을 모두 넣고 같은 Fleet 전용
+secret 디렉터리에 세 파일을 준비한다. 값은 컨테이너 안의 파일 경로이며 토큰 원문이 아니다.
+
+```sh
+ROSY_SITE_WORKCELL_ARM_CREDENTIAL_PATHS='{"ROSY_ARM_A_TOKEN":"/run/rosy-workcell-arm-secrets/arm_a_token","ROSY_ARM_B_TOKEN":"/run/rosy-workcell-arm-secrets/arm_b_token","ROSY_ARM_S_TOKEN":"/run/rosy-workcell-arm-secrets/arm_s_token"}'
+```
+
+변수를 생략하거나 빈 값으로 두면 기존 A/B 매핑을 유지한다. 모든 manifest `token_env`는
+해당 매핑에 있어야 하며 파일이 없거나 기존 자격 증명 이름을 덮어쓰면 시작을 거절한다.
+Vision의 카메라 매핑과 secret mount는 그대로다. 별도 미서명 Compose 오버레이로
+자격 증명을 덧붙이지 않는다. 기존 추가 팔 오버레이를 쓰는 현장은 이 변수를 지원하는
+새 서명 candidate로 전환할 때 전체 매핑을 보존하고 추가 오버레이를 함께 제거한다.
+
 이 기능에는 변경 소스로 다시 빌드한 Fleet·Vision 이미지와 오버레이 해시를 포함한
 새 서명 candidate가 필요하다. 새 오버레이와 서명 coverage를 지원하는 host verifier·updater를
 신뢰한 관리 경로로 먼저 갱신한다. 기존 candidate 안의 파일이나 이미지를 직접 수정하지 않는다.
