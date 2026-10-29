@@ -15,6 +15,38 @@ pytestmark = pytest.mark.skipif(not browser_tests_enabled(),
                                 reason='requires explicit local Chromium browser run')
 
 
+@pytest.mark.parametrize('theme', ['dark', 'light'])
+def test_pixel_decision_resize_preserves_checks_and_keyboard_focus(browser_workspace, theme):
+    page, store, expect = browser_workspace
+    open_pixels(page, store, expect)
+    page.evaluate("theme => RosyTheme.set(theme)", theme)
+    complete, background = page.locator('#pixel-complete'), page.locator('#pixel-background')
+    complete.check()
+    background.check()
+    complete.focus()
+    approve_disabled = page.locator('#pixel-approve').is_disabled()
+    for width in (390, 1440, 320, 1440):
+        page.set_viewport_size({'width': width, 'height': 844})
+        page.evaluate("() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))")
+        expect(complete).to_be_focused()
+        expect(complete).to_be_checked()
+        expect(background).to_be_checked()
+        assert page.locator('#pixel-approve').is_disabled() == approve_disabled
+        assert page.locator('.pixel-decision-panel:has(#pixel-complete)').count() == 1
+        decision = page.locator('.pixel-decision-panel:has(#pixel-complete)').bounding_box()
+        if width < 1024:
+            tools = page.locator('.pixel-quick-tools').bounding_box()
+            assert tools['y'] + tools['height'] <= decision['y'] + 1
+            gap = page.evaluate("parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--space-4'))")
+            assert decision['y'] <= tools['y'] + tools['height'] + gap
+        else:
+            canvas = page.locator('#pixel-canvas').bounding_box()
+            assert decision['x'] >= canvas['x'] + canvas['width'] - 1
+        box = complete.bounding_box()
+        assert 0 <= box['y'] and box['y'] + box['height'] <= 844
+        assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+
+
 def open_pixels(page, store, expect, index=0):
     review_masks.bind_classes(store, CLASSES)
     base = page.url.split('?')[0].rstrip('/')

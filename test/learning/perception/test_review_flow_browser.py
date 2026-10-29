@@ -482,13 +482,13 @@ def test_object_filter_uses_photo_strip_width_on_phone(browser_workspace, width)
     assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
 
 
-@pytest.mark.parametrize('width', [1440, 800, 390])
+@pytest.mark.parametrize('width', [2000, 1440, 800, 390])
 def test_empty_review_can_recover_at_declared_widths(browser_workspace, width):
     page, _, expect = browser_workspace
     page.set_viewport_size({'width': width, 'height': 844})
     workspace = page.locator('.workspace')
     # D-857 §3: the 정답 sub-menu takes its own column beside the rail on wide screens.
-    assert workspace.bounding_box()['width'] == min(page.locator('.ui-app-main').bounding_box()['width'], workspace.evaluate('(node) => parseFloat(getComputedStyle(node).maxWidth)'))
+    assert workspace.bounding_box()['width'] == pytest.approx(page.locator('.ui-app-main').bounding_box()['width'], abs=1)
     # D-741: the path row (page heading) sits between the app bar and the work area.
     pathbar = page.locator('.ui-pathbar').bounding_box()
     assert page.locator('.workspace').bounding_box()['y'] == pathbar['y'] + pathbar['height']
