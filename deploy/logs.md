@@ -4145,3 +4145,10 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 수정 전 커밋67e700358d의 원격 회귀17건은12failed/5passed/skip0이며 known_failures는12NEW를 확인했다. 독립 검토에서 실제 FIFO 검증 경로와 library digest 전이의 fixture 정합성을 확인했다. 구현 수정본 GREEN은 이 커밋 이후 실행하며 실물·시리얼·로봇 SSH 접근은 없다.
 - gate 변화: 없음. 이 기록은 수정 전 RED와 source 검토만 증명하며 원격 GREEN·적격 FULL·CI·현장 수용을 대신하지 않는다. 실패를 기존 quarantine에 추가하지 않는다.
 - CE: 미해결 — 회귀 수정 검증 뒤 기존 교훈과 최종 코드·시험만으로 판단을 복원할 수 있는지 평가한다.
+
+## 2026-10-30 · uncommitted · field marks admission의 원격 GREEN·mutation·복귀 검증
+
+- 변경: 새 field marks의 선택 프로필·감독 admission 수정을 실제 원격 회귀와 격리된 negative mutation으로 검증했다. 기존 FIFO/Runner 권한과 사이트 이미지 구성은 바꾸지 않는다.
+- 증거: source69bbc19002의 field/profile/pipeline/Runner/envelope 5file suite174passed/skip0/96warnings/NEW0. 별도 mutant aa51c31e5d는 FIFO binding과 marks/CLI admission 4줄만 무력화해14failed/4passed/skip0/14NEW를 보였고 TypeError가 아닌 실제 assertion으로 실패했다. 정상69bbc branch 복귀 뒤18passed/skip0/NEW0을 확인했다. mutant는 정상 이력에 포함되지 않으며 착지·게시·설치 금지다. 독립 source 검토와 local lint0errors/39warnings도 확인했다.
+- gate 변화: native source 회귀 범위만 확인했다. 실제 장치 수용·적격 FULL·GitHub CI·게시·운영 서버 전환은 아직 미완료이며 도구 설치 상태와 구분한다. 이전 FULL129576은 새 안전 수정 때문에 원격 시험 시작 전 소유자 확인 후 종료했고 snapshot을 보존했다.
+- CE: 해당 없음 — 새 wrapper의 누락과 필요한 profile/supervision 경계는 정본 D-911/D-914, 기존 FifoCell 구현과 이번 실제 전송 회귀·mutation에서 복원된다. 문서에 없는 장치 성질을 새로 추정하거나 실물 동작을 관측한 결과는 아니다.
