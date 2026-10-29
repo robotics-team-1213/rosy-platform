@@ -47,6 +47,16 @@ $data = Get-Content -LiteralPath $Fixture -Raw | ConvertFrom-Json
 $imageLayout = $data.layout
 $script:volumes = @()
 $script:mounted = @()
+$nativeCommand = Get-Command Add-PartitionAccessPath -ErrorAction SilentlyContinue
+if ($nativeCommand) {
+    $byNumber = @($nativeCommand.ParameterSets | Where-Object { $_.Name -eq 'ByNumber' })
+    if ($byNumber.Count -ne 1) { throw 'native ByNumber parameter set missing' }
+    $names = @($byNumber[0].Parameters.Name)
+    foreach ($required in @('DiskNumber', 'PartitionNumber', 'AccessPath')) {
+        if ($names -notcontains $required) { throw "native ByNumber lacks $required" }
+    }
+    if ($names -contains 'DriveLetter') { throw 'native ByNumber contract changed; review the mock' }
+}
 function Fail($Message) { throw $Message }
 function Update-HostStorageCache {}
 function Get-Partition {
@@ -60,16 +70,6 @@ function Get-Volume {
         $script:volumes += [int]$Partition.PartitionNumber
         [pscustomobject]@{FileSystem='FAT32'; DriveLetter=$Partition.DriveLetter}
     } else { [pscustomobject]@{DriveLetter='D'} }
-}
-$nativeCommand = Get-Command Add-PartitionAccessPath -ErrorAction SilentlyContinue
-if ($nativeCommand) {
-    $byNumber = @($nativeCommand.ParameterSets | Where-Object { $_.Name -eq 'ByNumber' })
-    if ($byNumber.Count -ne 1) { throw 'native ByNumber parameter set missing' }
-    $names = @($byNumber[0].Parameters.Name)
-    foreach ($required in @('DiskNumber', 'PartitionNumber', 'AccessPath')) {
-        if ($names -notcontains $required) { throw "native ByNumber lacks $required" }
-    }
-    if ($names -contains 'DriveLetter') { throw 'native ByNumber contract changed; review the mock' }
 }
 function Add-PartitionAccessPath {
     [CmdletBinding(DefaultParameterSetName='ByNumber')]
