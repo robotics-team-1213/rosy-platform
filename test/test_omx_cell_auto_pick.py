@@ -542,6 +542,17 @@ def test_a_box_with_a_narrow_gap_is_taken_with_the_jaws_opened_less_not_refused(
     assert auto.finger_room(mask, (0, 0, 200, 200), px, box)["margin_mm"] == room["margin_mm"]
 
 
+def test_the_boxs_own_side_face_past_its_outline_is_not_a_neighbour_but_a_touching_box_is():
+    mask = np.zeros((200, 200), np.uint8)
+    px = lambda p: (100 + p[0] * 1000, 100 + (p[1] - 0.1) * 1000)  # noqa: E731  1 px per mm
+    box = {"raw_m": [0.0, 0.1], "width_mm": 30, "length_mm": 60, "long_axis_deg": 0.0,
+           "hull_px": [[70, 85], [130, 85], [130, 115], [70, 115]]}
+    mask[85:121, 70:131] = 255  # its top and, 5 mm past the outline on +y, its side face and shadow (2026-10-29 board)
+    assert auto.finger_room(mask, (0, 0, 200, 200), px, box)["margin_mm"] == 8.0
+    mask[121:150, 70:131] = 255  # a second box touching it: the foreground runs on
+    assert auto.finger_room(mask, (0, 0, 200, 200), px, box)["margin_mm"] is None
+
+
 def test_a_whole_surface_in_view_is_not_a_finger_obstacle_but_a_box_is():
     mask = np.zeros((200, 300), np.uint8)
     mask[:, 200:] = 255  # the board: a surface, far larger than any container

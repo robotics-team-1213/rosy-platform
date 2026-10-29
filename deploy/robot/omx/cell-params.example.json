@@ -397,6 +397,12 @@
    "source": "tuned",
    "evidence": "2026-10-29: jaws open the box width + margin each side; under 2 mm the fingers land on the box edge (about one top-view pixel of error)"
   },
+  "auto.own_side_mm": {
+   "value": 6.0,
+   "unit": "mm",
+   "source": "tuned",
+   "evidence": "2026-10-29 top view of the board: a box's side face and shadow show about 5 px (~4.5 mm) past its top outline on the side away from the camera"
+  },
   "gripper.gap_mm_per_unit": {
    "value": 10.4,
    "unit": "mm",
