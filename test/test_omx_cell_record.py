@@ -71,7 +71,15 @@ def test_one_cycle_is_planned_from_the_located_box_recorded_labelled_and_checked
     config = json.loads((OMX / "cell-pipeline.example.json").read_text())
     config["profiles"] = {name: PROFILE for name in config["cameras"]}
     config["plan"] = json.loads((OMX / "grasp-plan.example.json").read_text())
-    (tmp_path / "record-config.json").write_text(json.dumps({"dataset": {"root": str(tmp_path / "ds"), "fps": 30}}))
+    from cell_robot_profile import SCHEMA, digest
+
+    robot = {"type": "omx_follower", "id": "fixture-arm", "port": "/dev/serial/by-id/fixture-arm"}
+    (tmp_path / "record-config.json").write_text(json.dumps({"robot": robot,
+        "dataset": {"root": str(tmp_path / "ds"), "fps": 30}}))
+    profile = tmp_path / "profile.json"
+    profile.write_text(json.dumps({"schema": SCHEMA, "device_id": "fixture-device", "instance_id": robot["id"],
+        "robot_config_sha256": digest(robot), "work_dir": "work", "operating_envelope_path": "work/review.json"}))
+    config["operating_profile_path"] = str(profile)
     config["record"] = {"config": str(tmp_path / "record-config.json"), "caps": str(tmp_path / "caps.json")}
     points = [(tray_pixel(*q), q) for q in cal.grid(START, 0.015)]
     calibration = {"sites": {"pinky": {"homography": cal.fit(points).tolist(), "loo_error_mm": {"mean": 1.0}}}}
@@ -95,3 +103,10 @@ def test_one_cycle_is_planned_from_the_located_box_recorded_labelled_and_checked
     session = json.loads((Path(result["folder"]) / "session.json").read_text())
     assert [o["segment"] for o in session["episode_outcomes"]] == ["A", "B"] and "cell_record" in session["outcome_source"]
     assert seen["segments"]["A"][1] - seen["segments"]["A"][0] == seen["segments"]["B"][1] - seen["segments"]["B"][0]
+    assert seen["command"][seen["command"].index("--operating-profile") + 1] == str(profile)
+    profile_data = json.loads(profile.read_text())
+    profile.write_text(json.dumps({**profile_data, "instance_id": "other-arm"}))
+    calls = []
+    held = m.record_cycle(Cell(box), config, calibration, tmp_path / "must-not-start", run=lambda *a, **kw: calls.append(a))
+    assert held["result"] == "held: recorder profile mismatch" and calls == []
+    assert not (tmp_path / "must-not-start").exists()
