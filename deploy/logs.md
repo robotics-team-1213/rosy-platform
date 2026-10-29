@@ -4101,6 +4101,14 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - gate 변화: 없음. 공식 affected 선택은 FULL이며 land_async의 전체 착지 검증을 유지한다. 이미 실행 중인 worker는 이 소스를 다시 읽지 않으므로 현재 큐 대기가 풀렸다고 주장하지 않는다. 공유 main 게시·장치 동작은 이 변경의 범위가 아니다.
 - CE: 해당 없음 — 전체 티켓으로 carried를 구한 뒤 자기 행만 제외해야 한다는 원인과 재현 조건은 최종 코드 및 k2/k4·다른 pending/preparing 예약을 검증하는 8개 회귀 시험에 직접 남는다. 별도 교훈 문서는 늘리지 않는다.
 
+## 2026-10-29 · 8f43faac07 · 첫 빈 가르치기 poll의 불필요한 지도 재생성 방지
+
+- 변경: recording과 pending이 모두 없으면 처음 drawn 값과 같은 빈 키를 유지한다. 첫 active preview와 active→idle 정리는 계속 다시 그리며, poll 타이머·인증·오류 처리·가르치기 API·로봇 명령 권한은 바꾸지 않는다.
+- 증거: tests-only commit e7839c8382의 실제 Chromium 회귀는 idle에서 기존 SVG label이 분리되어 1 failed/2 passed(NEW1)였다. 수정 commit 8f43faac07의 세 회귀와 기존 높이 경계·profile·대상 유지·survey 경로는 9 passed/0 skipped, NEW0/known0/flaky0이다. 외부 receipts/2026-10-29-site-map-idle-redraw/red 및 green에 보존한다.
+- 증거 범위: 첫 빈 poll의 불필요한 render와 label 분리는 재현했지만, 앞선 별도 FULL의 간헐적 높이 0 발생 원인이라고 확정하지 않는다. 기존 height>=12 시험·baseline은 유지한다.
+- gate 변화: 없음. 공식 affected 선택은 affected이며 Fleet·공유 UI guard와 browser scope를 그대로 유지한다. 별도 착지 검증·공유 main 게시·운영 수용은 이 집중 회귀와 구분한다.
+- CE: 해당 없음 — 초기 idle·첫 recording/pending·active→idle의 DOM 수명은 최종 코드와 실제 poll 회귀 세 경우에 직접 남는다. 기존 간헐 실패의 줄별 귀속 교훈을 적용하며, 미확정 원인을 해결 교훈으로 쓰지 않는다.
+
 ## 2026-10-29 · 2062ed7219 · test(storage): 브라우저 quota 측정과 서버 fixture 시계 정렬
 - 변경: `fix/storage-browser-clock`, 기준 local main `3f2fafd23a`. `test_storage_setup_http.py`의 Date.now만 고정 backend fixture 시각에 맞추고 320/light/60초 lag 사례를 추가했다. 기존 두 화면 크기·검증·타이머·reload·15초 제한은 유지한다.
 - 증거: RED `17e6b9c5bb` 공식 원격 model PC, browser opt-in 새 사례 1 failed. backend 1793280602초, browser 1793280662241ms, quota measured_at 1793280660초로 58초 미래였다. `storage_operation_failed`, result null, mock remote commits 0; known_failures 1 NEW. GREEN `2062ed7219` 공식 원격 AI PC에서 새 사례 1 passed (9.06초), 파일 전체 6 passed (29.20초), 각각 0 skipped·0 NEW·0 known·0 flaky. 외부 로그는 시스템 임시 폴더 `storage-browser-clock-{red,green-exact,green-file}/run-1.txt`. harness lint 0 errors, 기존 39 warnings.
