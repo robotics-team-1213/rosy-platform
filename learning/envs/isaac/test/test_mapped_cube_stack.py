@@ -3,6 +3,7 @@ import copy
 import json
 from pathlib import Path
 import sys
+import subprocess
 
 import pytest
 
@@ -96,3 +97,20 @@ def test_cube_is_a_fixed_bounded_catalog_scenario():
     assert config['trials'] == 1 and config['fixture'] == f.CUBE_FIXTURE['revision']
     with pytest.raises(ValueError):
         normalize(entry['id'], {'seed': 42, 'attachment_aid': True})
+
+
+def test_assigned_arm_can_reach_each_cube_release_pose(tmp_path):
+    def request(operation, **fields):
+        case = tmp_path/'case.json'
+        out = tmp_path/f'frames-{len(list(tmp_path.glob("frames-*")))}.json'
+        case.write_text(json.dumps(dict(schema='rosy.omx-sim-stack-plan/1', operation=operation, **fields)))
+        subprocess.run([sys.executable, str(f.ROOT/'deploy/robot/omx/isaac_stack_plan.py'),
+            '--case', str(case), '--out', str(out)], check=True, capture_output=True)
+        return json.loads(out.read_text())
+    homes = request('homes', bases=f.FIXTURE['arm_bases_m'], points=[f.home(0), f.home(1)])['homes']
+    for item in f.plan(cube=True):
+        target = item['target'][:]
+        target[2] += .003+f.CUBE_FIXTURE['release_clearance_m']
+        frames = request('move', base=f.FIXTURE['arm_bases_m'][item['arm']], start=homes[item['arm']],
+            target=target, yaw=0., dt=f.DT)['frames']
+        assert frames and all(len(q) == 5 for q in frames)

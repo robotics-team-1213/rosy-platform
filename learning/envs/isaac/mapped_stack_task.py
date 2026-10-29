@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 import subprocess
 
-from mapped_stack_fixture import DT, FIXTURE, PROFILE, ROOT, free_lift, home, judge, plan, stable_box
+from mapped_stack_fixture import CUBE_FIXTURE, DT, FIXTURE, PROFILE, ROOT, free_lift, home, judge, plan, stable_box
 
 
 class Planner:
@@ -74,6 +74,8 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
             planner, initial, tcp_position):
     import numpy as np
     from pxr import UsdGeom
+    cube = args.mapped_cube_stack
+    fixture = CUBE_FIXTURE if cube else FIXTURE
     targets = [np.zeros(r.num_dof) for r in robots]
     tick = 0
     images, trials = [], []
@@ -177,7 +179,7 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
             step()
         hold(60)
 
-    for trial_index in range(FIXTURE['trials']):
+    for trial_index in range(fixture['trials']):
         trial = dict(seed=args.seed+trial_index, layers=[])
         trials.append(trial)
         rng = np.random.default_rng(trial['seed'])
@@ -203,7 +205,7 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
             if any(np.max(np.abs(robot.get_joint_positions()[joints[i]]-targets[i][joints[i]])) > .03
                    for i, robot in enumerate(robots)):
                 raise ValueError('initial arm tracking exceeds 0.03 rad')
-            for index, item in enumerate(plan()):
+            for index, item in enumerate(plan(cube)):
                 arm, box = item['arm'], cargo[index]
                 UsdGeom.Imageable(box.prim).MakeVisible()
                 yaw = float(rng.uniform(-.01, .01))
@@ -232,24 +234,24 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
                     photo('mapped-grasp-failed.png')
                     raise ValueError('bilateral free lift failed; transport interlock stopped the arm')
                 move(arm, [*item['target'][:2], .145])
-                move(arm, [*item['target'][:2], item['target'][2]+.003])
+                move(arm, [*item['target'][:2], item['target'][2]+(.003+fixture['release_clearance_m'] if cube else .003)])
                 grip(arm, initial['gripper']['release'])
                 move(arm, [*item['target'][:2], .145])
                 move(arm, home(arm))
                 layer['settle_samples'] = samples(132)
-                if not all(stable_box(s['boxes'][j], j) for s in layer['settle_samples'] for j in range(index+1)):
+                if not all(stable_box(s['boxes'][j], j, cube) for s in layer['settle_samples'] for j in range(index+1)):
                     raise ValueError('released stack failed stability; next infeed blocked')
                 if trial_index == 0:
                     photo('mapped-layer-'+str(index+1)+'.png')
                 print('MAPPED_LAYER', trial_index, index+1, flush=True)
         except (ValueError, RuntimeError) as exc:
             trial['error'] = str(exc)[:400]
-        trial.update(judge(trial))
+        trial.update(judge(trial, cube))
         photo('mapped-trial-'+str(trial_index+1)+'.png')
         print('MAPPED_TRIAL', trial_index, trial['task_success'], trial.get('error'), trial['failures'], flush=True)
         if not trial['task_success']:
             break
     stage.GetRootLayer().Export(str(args.report.parent/'mapped-scene.usda'))
-    return dict(schema='rosy.omx-map-long-stack/1', fixture=FIXTURE, seed=args.seed, trials=trials,
-        task_success=len(trials) == 3 and all(t['task_success'] for t in trials),
+    return dict(schema='rosy.omx-map-cube-stack/1' if cube else 'rosy.omx-map-long-stack/1', fixture=fixture, seed=args.seed, trials=trials,
+        task_success=len(trials) == fixture['trials'] and all(t['task_success'] for t in trials),
         controller=FIXTURE['controller'], attachment_aid=False, images=images)

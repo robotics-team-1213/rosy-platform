@@ -173,7 +173,8 @@ def execute(store, binding_file, run_id, *, expected_binding_sha256=None):
                             '--headless', '--frames', '120', '--report', str(directory / 'import-report.json')]
                     contact_task = row['input']['scenario_id'] == 'pinky-conveyor-roundtrip'
                     arm_task = row['input']['scenario_id'].startswith('arm-s-cell-')
-                    mapped_task = row['input']['scenario_id'] == 'omx-map-long-stack'
+                    mapped_cube = row['input']['scenario_id'] == 'omx-map-cube-stack'
+                    mapped_task = row['input']['scenario_id'] in ('omx-map-long-stack', 'omx-map-cube-stack')
                     mapped_rl = row['input']['scenario_id'] == 'omx-map-stacking-rl'
                     stacking_task = row['input']['scenario_id'] == 'omx-stacking-rl' or mapped_task or mapped_rl
                     report_path = directory / ('contact-report.json' if contact_task else
@@ -186,7 +187,7 @@ def execute(store, binding_file, run_id, *, expected_binding_sha256=None):
                         if mapped_task:
                             report_path = directory / 'mapped-stack-report.json'
                             argv[argv.index('--report')+1] = str(report_path)
-                            argv.append('--mapped-long-stack')
+                            argv.append('--mapped-cube-stack' if mapped_cube else '--mapped-long-stack')
                         elif mapped_rl:
                             argv.append('--mapped-rl')
                     if arm_task:  # the real cell's chunk frames for this scenario (system python: the planner)
@@ -214,7 +215,7 @@ def execute(store, binding_file, run_id, *, expected_binding_sha256=None):
                         if mapped_task:
                             from mapped_stack_report import verify_report as verify_mapped
                             report = verify_mapped(report_path, sdk_version=binding['sdk_version'],
-                                                   seed=row['input']['config']['seed'])
+                                                   seed=row['input']['config']['seed'], cube=mapped_cube)
                         elif stacking_task:
                             from stacking_report import verify_report as verify_stacking
                             report = verify_stacking(report_path, sdk_version=binding['sdk_version'],
@@ -282,7 +283,8 @@ def _finish(store, run_id, outcome, report, artifacts, stopped, *, gpu=None,
     current = store.get(run_id)
     contact_task = current['input']['scenario_id'] == 'pinky-conveyor-roundtrip'
     arm_task = current['input']['scenario_id'].startswith('arm-s-cell-')
-    mapped_task = current['input']['scenario_id'] == 'omx-map-long-stack'
+    mapped_cube = current['input']['scenario_id'] == 'omx-map-cube-stack'
+    mapped_task = current['input']['scenario_id'] in ('omx-map-long-stack', 'omx-map-cube-stack')
     passed = report is not None and (not (contact_task or arm_task or mapped_task) or report['task_success'] is True)
     status = 'STOPPED' if stopped else ('SUCCEEDED' if passed else 'FAILED')
     result = dict(outcome, status=status, stage='model_import', task_success=None,
@@ -291,7 +293,7 @@ def _finish(store, run_id, outcome, report, artifacts, stopped, *, gpu=None,
                   completed_frames=report.get('completed_frames') if report else None,
                   cleanup=cleanup, gpu=gpu, video_unavailable_reason='model_import_does_not_record_video')
     if mapped_task:
-        result.update(stage='mapped_long_stack', task_success=bool(report and report['task_success']),
+        result.update(stage='mapped_cube_stack' if mapped_cube else 'mapped_long_stack', task_success=bool(report and report['task_success']),
             successful_trials=sum(t['task_success'] for t in report['trials']) if report else 0,
             coordinate_scope='CONFLUENCE_CAD_WITH_NOMINAL_PHOTO_CELL',
             controller='NOMINAL_IK_REFERENCE_NOT_LEARNED_POLICY', video_unavailable_reason='phase_pngs_only_no_video')

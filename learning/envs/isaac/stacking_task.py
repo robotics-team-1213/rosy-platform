@@ -15,11 +15,13 @@ from run_omx_backend import (PAD_RADIUS, PAD_HALF_LENGTH, PAD_CONTACT_OFFSET_M, 
 
 def run(args):
     global FIXTURE
-    mapped = args.mapped_long_stack or args.mapped_rl
+    mapped = args.mapped_long_stack or args.mapped_rl or args.mapped_cube_stack
     if mapped:
         from mapped_stack_fixture import FIXTURE
         if args.mapped_rl:
             from mapped_stack_fixture import RL_FIXTURE as FIXTURE
+        elif args.mapped_cube_stack:
+            from mapped_stack_fixture import CUBE_FIXTURE as FIXTURE
     import numpy as np
     import torch
     import yaml
@@ -75,8 +77,8 @@ def run(args):
     surface.CreateSurfaceVelocityAttr(Gf.Vec3f(0., FIXTURE['belt_speed_m_s'], 0.))
     fixed('BeltStop', [.16 if mapped else .20, -.029, .027 if mapped else .035],
           [.12, .004, .004 if mapped else .02], [.65, .65, .65])
-    fixed('Bin', [.16, 0., .0125] if mapped else [.20, .02, .0125],
-          [.09, .03 if mapped else .09, .025], [.15, .48, .7])
+    fixed('Bin', [.16, FIXTURE['bin_origin_m'][1]+FIXTURE['bin_size_m'][1]/2, .0125] if mapped else [.20, .02, .0125],
+          [.09, FIXTURE['bin_size_m'][1] if mapped else .09, .025], [.15, .48, .7])
     if mapped:
         from mapped_stack_task import build_map
         build_map(world, stage)
@@ -206,7 +208,7 @@ def run(args):
         robots.append(robot)
     if mapped:
         from mapped_stack_fixture import plan as mapped_plan
-        plan = mapped_plan()
+        plan = mapped_plan(args.mapped_cube_stack)
     else:
         plan = stack_plan()
     colors = {1: [.03, .08, .24], 2: [.15, .65, .25], 3: [.95, .4, .08]}
@@ -225,7 +227,7 @@ def run(args):
             assert body.GetSolverVelocityIterationCountAttr().Get() == 16
         contacts.append(world.scene.add(RigidPrim('/World/Cargo'+str(i), name='contact'+str(i),
             track_contact_forces=True, contact_filter_prim_paths_expr=filters+['/World/Bin']+(['/World/Conveyor'] if mapped else [])+
-            ['/World/Cargo'+str(j) for j in range(len(plan)) if j != i], max_contact_count=128)))
+            ['/World/Cargo'+str(j) for j in range(len(plan)) if j != i], max_contact_count=512 if args.mapped_cube_stack else 128)))
     eye = Gf.Vec3d(.60, -.62, .48)
     wrist_views = []
     if mapped:
@@ -235,7 +237,7 @@ def run(args):
     grasp_probes = []
     probe_filters = ['/World/Table', '/World/PlywoodMap', '/World/Conveyor', '/World/BeltStop', '/World/Bin']+[
         '/World/Cargo'+str(i) for i in range(len(plan))]
-    if args.mapped_long_stack:
+    if args.mapped_long_stack or args.mapped_cube_stack:
         body_paths = [[str(p.GetPath()) for p in Usd.PrimRange(root) if p.HasAPI(UsdPhysics.RigidBodyAPI)]
                       for root in (first, second)]
         for i in range(2):
@@ -284,7 +286,7 @@ def run(args):
         positions, quaternions = wrist_views[arm].get_world_poses()
         return np.array(tcp_from_wrist(positions[0], quaternions[0]))
 
-    if args.mapped_long_stack:
+    if args.mapped_long_stack or args.mapped_cube_stack:
         from mapped_stack_task import execute
         return execute(args, world, stage, robots, joint_indices, fingers, cargo, contacts, capture, grasp_probes,
                        planner, initial, tcp_position)
@@ -523,10 +525,11 @@ def main():
     parser.add_argument('--seed', type=int, required=True)
     modes = parser.add_mutually_exclusive_group()
     modes.add_argument('--mapped-long-stack', action='store_true')
+    modes.add_argument('--mapped-cube-stack', action='store_true')
     modes.add_argument('--mapped-rl', action='store_true')
     args = parser.parse_args()
     check_vendor_manifest()
-    if args.mapped_long_stack or args.mapped_rl:
+    if args.mapped_long_stack or args.mapped_rl or args.mapped_cube_stack:
         from mapped_stack_fixture import physical_model
         # The original remains unchanged; the visual-only TCP is restored as a nonphysical USD child of link5.
         model = physical_model(args.urdf)

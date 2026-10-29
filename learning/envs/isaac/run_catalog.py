@@ -3,6 +3,10 @@ import copy
 
 
 _CATALOG = [
+    {'id': 'omx-map-cube-stack', 'name': 'Confluence map: nine-bar 90 mm cube stacking',
+     'implemented': True, 'stage': 'mapped_cube_stack', 'seed_effect': 'INFEED_XY_AND_YAW',
+     'timeout_seconds': 900, 'requirements': ['Approved SDK and model GPU'],
+     'reason': 'One bounded seed per run; contact-only reference, not learned or hardware accepted.'},
     {'id': 'omx-f-import', 'name': 'OMX-F 모델 연결 검사', 'implemented': True,
      'stage': 'model_import', 'seed_effect': 'NOT_USED_BY_MODEL_IMPORT',
      'timeout_seconds': 180,
@@ -72,6 +76,9 @@ def normalize(scenario_id: str, config: dict) -> dict:
     if scenario_id == 'omx-map-stacking-rl':
         return {'model': 'omx_f', 'headless': True, 'seed': config['seed'],
                 'fixture': 'confluence-map-stacking-rl-v1', 'iterations': 32, 'num_envs': 1}
+    if scenario_id == 'omx-map-cube-stack':
+        return {'model': 'omx_f', 'headless': True, 'seed': config['seed'],
+                'fixture': 'confluence-map-cube-stack-v1', 'trials': 1}
     if scenario_id == 'omx-map-long-stack':
         return {'model': 'omx_f', 'headless': True, 'seed': config['seed'],
                 'fixture': 'confluence-map-long-stack-v1', 'trials': 3}

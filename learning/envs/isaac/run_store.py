@@ -194,8 +194,11 @@ def input_snapshot(scenario_id: str, config: dict, source_sha: str) -> dict:
         from conveyor_fixture import FIXTURE, fixture_sha256
         value.update(scene=FIXTURE, scene_sha256=fixture_sha256(), scene_not_applicable_reason=None,
             verifier_sha256=hashlib.sha256(Path(__file__).with_name('conveyor_report.py').read_bytes()).hexdigest())
-    if scenario_id == 'omx-map-long-stack':
-        from mapped_stack_fixture import FIXTURE as MAPPED
+    if scenario_id in ('omx-map-long-stack', 'omx-map-cube-stack'):
+        if scenario_id == 'omx-map-cube-stack':
+            from mapped_stack_fixture import CUBE_FIXTURE as MAPPED
+        else:
+            from mapped_stack_fixture import FIXTURE as MAPPED
         scene = json.loads(json.dumps(MAPPED))
         value.update(scene=scene, scene_sha256=hashlib.sha256(_bytes(scene)).hexdigest(),
             scene_not_applicable_reason=None,
@@ -391,10 +394,13 @@ class RunStore:
                 raise ValueError('a terminal result is required')
             value = self._change(row, expected_revision, {'status': result['status']})
             if result['status'] == 'SUCCEEDED':
-                if row['input']['scenario_id'] == 'omx-map-long-stack':
-                    required = {'mapped-stack-report', 'mapped-overview', 'mapped-initial', 'mapped-layer-3', 'mapped-trial-3'}
-                    if (result.get('stage') != 'mapped_long_stack' or result.get('task_success') is not True
-                            or result.get('successful_trials') != 3
+                if row['input']['scenario_id'] in ('omx-map-long-stack', 'omx-map-cube-stack'):
+                    cube = row['input']['scenario_id'] == 'omx-map-cube-stack'
+                    required = {'mapped-stack-report', 'mapped-overview', 'mapped-initial',
+                                'mapped-layer-9' if cube else 'mapped-layer-3',
+                                'mapped-trial-1' if cube else 'mapped-trial-3'}
+                    if (result.get('stage') != ('mapped_cube_stack' if cube else 'mapped_long_stack') or result.get('task_success') is not True
+                            or result.get('successful_trials') != (1 if cube else 3)
                             or result.get('cleanup') != 'OWNED_PROCESSES_EXITED_GPU_RELEASED'
                             or result.get('coordinate_scope') != 'CONFLUENCE_CAD_WITH_NOMINAL_PHOTO_CELL'
                             or not required <= {item.get('id') for item in artifacts}):

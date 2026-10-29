@@ -3,26 +3,28 @@ import json
 import math
 from pathlib import Path
 
-from mapped_stack_fixture import FIXTURE, judge
+from mapped_stack_fixture import CUBE_FIXTURE, FIXTURE, judge
 from stacking_report import read_regular
 
 
-def verify_report(path, *, sdk_version, seed):
+def verify_report(path, *, sdk_version, seed, cube=False):
+    fixture = CUBE_FIXTURE if cube else FIXTURE
+    count = 9 if cube else 3
     value = json.loads(read_regular(Path(path)))
-    if (value.get('schema') != 'rosy.omx-map-long-stack/1' or value.get('fixture') != FIXTURE
+    if (value.get('schema') != ('rosy.omx-map-cube-stack/1' if cube else 'rosy.omx-map-long-stack/1') or value.get('fixture') != fixture
             or value.get('seed') != seed or value.get('sdk_version') != sdk_version
             or value.get('controller') != FIXTURE['controller'] or value.get('attachment_aid') is not False
-            or not isinstance(value.get('trials'), list) or not 1 <= len(value['trials']) <= 3):
+            or not isinstance(value.get('trials'), list) or not 1 <= len(value['trials']) <= fixture['trials']):
         raise ValueError('Mapped scene provenance differs')
     images = value.get('images')
     allowed = {'mapped-overview.png', 'mapped-initial.png', 'mapped-grasp-failed.png'} | {
-        f'mapped-{kind}-{i}.png' for kind in ('layer', 'trial') for i in (1, 2, 3)}
+        f'mapped-{kind}-{i}.png' for kind in ('layer', 'trial') for i in range(1, count+1)}
     if (not isinstance(images, list) or len(set(images)) != len(images) or not set(images) <= allowed
             or not {'mapped-overview.png', 'mapped-initial.png'} <= set(images)):
         raise ValueError('Unexpected mapped images')
     try:
         for i, trial in enumerate(value['trials']):
-            if trial['seed'] != seed+i or not 0 <= len(trial['layers']) <= 3:
+            if trial['seed'] != seed+i or not 0 <= len(trial['layers']) <= count:
                 raise ValueError('Trial mismatch')
             for layer in trial['layers']:
                 start, end = layer['infeed_start'], layer['infeed_settled']
@@ -41,10 +43,10 @@ def verify_report(path, *, sdk_version, seed):
                         if type(sample['tick']) is not int or sample['tick'] <= prior_tick:
                             raise ValueError('Contact ticks are not increasing')
                         prior_tick = sample['tick']
-                        if len(sample['boxes']) != 3 or len(sample['tcps']) != 2:
+                        if len(sample['boxes']) != count or len(sample['tcps']) != 2:
                             raise ValueError('Missing measured bodies')
                         for box in sample['boxes']:
-                            if [len(box[k]) for k in ('position', 'orientation', 'velocity', 'angular_velocity', 'forces', 'net_force')] != [3, 4, 3, 3, 8, 3]:
+                            if [len(box[k]) for k in ('position', 'orientation', 'velocity', 'angular_velocity', 'forces', 'net_force')] != [3, 4, 3, 3, count+5, 3]:
                                 raise ValueError('Malformed rigid body observation')
                             vectors = [box['position'], box['orientation'], box['velocity'], box['angular_velocity'], box['net_force'], *box['forces']]
                             if any(len(v) != 3 for v in box['forces']):
@@ -53,13 +55,13 @@ def verify_report(path, *, sdk_version, seed):
                                 raise ValueError('Nonfinite rigid body observation')
                         if any(len(tcp) != 3 or not all(math.isfinite(x) for x in tcp) for tcp in sample['tcps']):
                             raise ValueError('Malformed measured TCP')
-            actual = judge(trial)
+            actual = judge(trial, cube)
             if any(trial.get(k) != actual[k] for k in actual):
                 raise ValueError('Claimed trial success differs from measured contacts')
-        success = len(value['trials']) == 3 and all(t['task_success'] for t in value['trials'])
+        success = len(value['trials']) == fixture['trials'] and all(t['task_success'] for t in value['trials'])
         if value.get('task_success') is not success:
             raise ValueError('Claimed task success differs')
-        if success and not {f'mapped-trial-{i}.png' for i in (1, 2, 3)} | {'mapped-layer-3.png'} <= set(images):
+        if success and not {f'mapped-trial-{i}.png' for i in range(1, fixture['trials']+1)} | {f'mapped-layer-{count}.png'} <= set(images):
             raise ValueError('Missing completed stack images')
     except (KeyError, TypeError, IndexError) as exc:
         raise ValueError('Malformed mapped observations') from exc

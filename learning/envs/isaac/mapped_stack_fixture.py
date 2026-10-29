@@ -35,8 +35,15 @@ RL_FIXTURE = dict(FIXTURE, revision='confluence-map-stacking-rl-v1',
     iterations=32, steps_per_update=32, num_envs=1, trials=1, evaluation_seed_offset=10000,
     infeed_jitter_m=.003, infeed_yaw_jitter_rad=.03)
 
+CUBE_FIXTURE = dict(FIXTURE, revision='confluence-map-cube-stack-v1', trials=1,
+    bin_origin_m=[.115, 0., .025], bin_size_m=[.09, .09, .09],
+    release_clearance_m=.035)
 
-def plan():
+
+def plan(cube=False):
+    if cube:
+        return [dict(id='bar-'+str(i+1), cells=3, cell=[0, i % 3, i//3], size=[.09, .03, .03],
+                     mass=.06, arm=i % 2, target=[.16, .015+(i % 3)*.03, .04+(i//3)*.03]) for i in range(9)]
     return [dict(id='bar-'+str(i+1), cells=3, cell=[0, 0, i], size=[.09, .03, .03],
                  mass=.06, arm=i % 2, target=[.16, 0., .04+i*.03]) for i in range(3)]
 
@@ -73,9 +80,9 @@ def tcp_from_wrist(position, quaternion):
     return [position[i]+sum(matrix[i][j]*offset[j] for j in range(3)) for i in range(3)]
 
 
-def contact_names(index):
+def contact_names(index, cube=False):
     return ['a-left', 'a-right', 'b-left', 'b-right', 'bin', 'conveyor']+[
-        item['id'] for i, item in enumerate(plan()) if i != index]
+        item['id'] for i, item in enumerate(plan(cube)) if i != index]
 
 
 def norm(values):
@@ -94,8 +101,10 @@ def free_lift(box, arm, source_z):
         and explained_contacts(box))
 
 
-def stable_box(box, index):
-    item = plan()[index]
+def stable_box(box, index, cube=False):
+    items = plan(cube)
+    fixture = CUBE_FIXTURE if cube else FIXTURE
+    item = items[index]
     p, q, forces = box['position'], box['orientation'], box['forces']
     values = [*p, *q, *box['velocity'], *box['angular_velocity'], *(v for row in forces for v in row)]
     if not all(math.isfinite(v) for v in values) or abs(sum(v*v for v in q)-1) > .01:
@@ -104,8 +113,9 @@ def stable_box(box, index):
             or norm(box['velocity']) > .01 or norm(box['angular_velocity']) > .1
             or any(norm(f) > .001 for f in forces[:4]) or not explained_contacts(box)):
         return False
-    below = 'bin' if index == 0 else plan()[index-1]['id']
-    if forces[contact_names(index).index(below)][2] <= .001:
+    width = 3 if cube else 1
+    below = 'bin' if index < width else items[index-width]['id']
+    if forces[contact_names(index, cube).index(below)][2] <= .001:
         return False
     w, x, y, z = q
     matrix = ((1-2*(y*y+z*z), 2*(x*y-z*w), 2*(x*z+y*w)),
@@ -113,17 +123,17 @@ def stable_box(box, index):
               (2*(x*z-y*w), 2*(y*z+x*w), 1-2*(x*x+y*y)))
     for axis in range(3):
         extent = sum(abs(matrix[axis][j])*item['size'][j]/2 for j in range(3))
-        low = FIXTURE['bin_origin_m'][axis]
-        if p[axis]-extent < low-.001 or p[axis]+extent > low+FIXTURE['bin_size_m'][axis]+.001:
+        low = fixture['bin_origin_m'][axis]
+        if p[axis]-extent < low-.001 or p[axis]+extent > low+fixture['bin_size_m'][axis]+.001:
             return False
     return True
 
 
-def judge(trial):
+def judge(trial, cube=False):
     failures = []
     layers = trial.get('layers', [])
-    if len(layers) != 3:
-        return dict(task_success=False, failures=['three_layers_not_completed'])
+    if len(layers) != len(plan(cube)):
+        return dict(task_success=False, failures=['nine_bars_not_completed' if cube else 'three_layers_not_completed'])
     for i, layer in enumerate(layers):
         if layer.get('item') != i or layer.get('arm') != i % 2:
             failures.append(f'layer_{i+1}:wrong_item_or_arm')
@@ -142,7 +152,7 @@ def judge(trial):
             failures.append(f'layer_{i+1}:settle_not_observed')
         else:
             for sample in settles:
-                if (not all(stable_box(sample['boxes'][j], j) for j in range(i+1))
+                if (not all(stable_box(sample['boxes'][j], j, cube) for j in range(i+1))
                         or any(norm([tcp[k]-sample['boxes'][j]['position'][k] for k in range(3)]) < .04
                                for tcp in sample['tcps'] for j in range(i+1))):
                     failures.append(f'layer_{i+1}:release_support_or_retreat_failed')
