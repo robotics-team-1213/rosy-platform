@@ -109,6 +109,9 @@ class MediaWorker:
                 self.publisher = self._make_publisher(self._client.whip_endpoint(self.grant), self.grant.token)
                 self._started_at = now
                 self.publisher.start()
+                fps, bitrate = self._policy.current_rate()
+                self.publisher.set_rate(fps=min(fps, self._demand['fps']),
+                                        bitrate=min(bitrate, self._demand['target_bitrate']))
             except Exception as exc:
                 self._stop('start ' + type(exc).__name__, failed=True)
                 return
