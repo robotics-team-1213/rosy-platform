@@ -22,7 +22,9 @@ _LOG = logging.getLogger(__name__)
 
 async def create_trip_job(jobs, robot_id: str, steps: list, principal_id: str, *,
                           request_key: str | None = None, request_digest: str | None = None,
-                          approved_by: str | None = None) -> dict:
+                          approved_by: str | None = None, proposal_id: str | None = None,
+                          expected_proposal_digest: str | None = None,
+                          expected_generation: int | None = None) -> dict:
     """The 새 작업 approval: one named operator approves and starts it (registry ``one_person``); the gate is
     ``hold_job``'s, then the ledger row (``JobTripSteps`` runs it from there)."""
     if required_approval([KIND] * len(steps)) != "one_person":
@@ -36,6 +38,10 @@ async def create_trip_job(jobs, robot_id: str, steps: list, principal_id: str, *
     try:
         identity = {"request_key": request_key, "request_digest": request_digest,
                     "approved_by": approved_by} if request_key is not None else {}
+        if any(value is not None for value in
+               (approved_by, proposal_id, expected_proposal_digest, expected_generation)):
+            identity.update(approved_by=approved_by, proposal_id=proposal_id,
+                            expected_proposal_digest=expected_proposal_digest, expected_generation=expected_generation)
         job = await asyncio.to_thread(jobs.rows.create, mission_id, robot_id, principal_id, steps, **identity)
     except BaseException:
         jobs.runner.release_job(robot_id, mission_id)

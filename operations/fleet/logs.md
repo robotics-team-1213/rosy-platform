@@ -5060,3 +5060,10 @@
 - 증거: 특성 시험(키 순서 `list(d.items())` 고정, 독립 리스트) + 검토가 요구한 두 미피복 동작 — goal 순간 빈 상태 읽기의 폐쇄 실패(TRUSTED 이력이 전송하지 않음)와 보류의 대기열 항목 무병합 교체. 원격 4 suite(신규·traffic·console·boundaries) green, known NEW 0. 변이 검증: 전송 전 untrusted 보류 비활성화 → 폐쇄 실패 시험 red(`6c6f45582b`), 복원 green(`239740362c`). 독립 검토 2건(codex·claude) 반영 — 단계 분리 판정, 깃발·route 부재 규칙, 판정 문자열만 경계 통과, 무병합 교체, attempt_seq=0.
 - Gate: 없음. B단계(전송 후 경로 충돌 판정)·C단계(_make_room/bays)는 별도 착지.
 - CE: 해당 없음 — 판정·모양이 특성 시험과 변이 이력으로 고정됐다.
+
+## 2026-10-29 · uncommitted · fix(fleet): Trip 제안 승인과 실제 작업 admission을 원자적으로 결속한다
+
+- 변경: 원래 proposal ID·digest·generation을 최종 작업 생성 트랜잭션까지 전달한다. creator·request key·본문·선택 robot·steps·현재 dispatch를 확인한 뒤 job·steps·claims·승인 event·proposal ADMITTED를 함께 commit한다. 별도의 ADMITTED writer를 제거하고 조회·멱등 재시도는 같은 read snapshot에서 원래 승인 event와 실제 작업 결속을 검증한다. 기존 direct-trip 경로와 실패 시 lease cleanup, SIM 한정·자기 승인 거절은 유지한다.
+- 증거: 가짜 principal·simulated trip ports와 실제 HTTP·SQLite 경로에서 오래된 generation 승인, 부분 job commit, actor 불일치, 기존 direct job 재표기를 4 failed로 확인했다. 승인 기록 변조와 중단 후 재시도를 추가한 확장 RED는 8 failed / 1 passed다. 독립 계약 검토는 원자성·원래 actor·generation·멱등 shortcut 결속을 확인했으며 GREEN·현 main 통합은 별도다.
+- gate 변화: 없음. 추가 로봇 명령이나 새 공개 필드를 열지 않고 기존 승인 계약을 보존한다. 실제 장치·현장 수용을 수행하지 않았다.
+- CE: 미해결 — 회귀 GREEN과 실제 착지 확인 전이며 해결 판단은 통합 시험과 원자 결속 구현에 연결한다.

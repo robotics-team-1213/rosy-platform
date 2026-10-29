@@ -22,12 +22,35 @@ class TripProposalStore:
             connection.commit()
 
     @staticmethod
-    def _view(row) -> dict:
+    def _view(row, connection) -> dict:
         body = json.loads(row["body_json"])
+        if not isinstance(body, dict) or set(body) != {"candidates", "steps"}:
+            raise ValueError("trip proposal body is invalid")
         document = {"proposal_id": row["proposal_id"], "principal_id": row["principal_id"],
                     "request_key": row["request_key"], **body}
         if sha256(_json(body).encode()).hexdigest() != row["request_digest"]:
             raise ValueError("trip proposal does not match its digest")
+        if row["status"] == "ADMITTED":
+            job = connection.execute("SELECT * FROM fleet_cell_jobs WHERE mission_id=?",
+                                     (row["mission_id"],)).fetchone()
+            admissions = connection.execute("SELECT actor_id, detail_json FROM fleet_cell_events WHERE mission_id=? "
+                                            "AND event_type='CELL_JOB_ADMITTED'", (row["mission_id"],)).fetchall()
+            if (job is None or len(admissions) != 1 or not row["approved_by"]
+                    or row["approved_by"] == row["principal_id"] or row["dispatch_generation"] is None):
+                raise MissionConflict("trip proposal has no independent committed admission")
+            admission = json.loads(admissions[0]["detail_json"])
+            actual = json.loads(job["job_json"])
+            if (job["proposal_principal_id"] != row["principal_id"]
+                    or job["request_key"] != "trip-pool:" + row["request_key"]
+                    or job["request_digest"] != row["request_digest"]
+                    or actual["robot_id"] != job["instance_id"]
+                    or actual["robot_id"] not in body["candidates"] or actual["steps"] != body["steps"]
+                    or admissions[0]["actor_id"] != row["approved_by"]
+                    or admission.get("approval") != "proposal"
+                    or admission.get("proposed_by") != row["principal_id"]
+                    or type(admission.get("dispatch_generation")) is not int
+                    or admission["dispatch_generation"] != row["dispatch_generation"]):
+                raise MissionConflict("trip proposal and committed admission disagree")
         return {"proposal_id": row["proposal_id"], "proposal_principal_id": row["principal_id"],
                 "request_key": row["request_key"], "request_digest": row["request_digest"],
                 "proposal_digest": sha256(_json(document).encode()).hexdigest(),
@@ -50,16 +73,18 @@ class TripProposalStore:
                                            (principal_id, request_key)).fetchone()
             elif prior["request_digest"] != digest:
                 raise MissionConflict("trip proposal key was reused with a different request")
+            view = self._view(prior, connection)
             connection.commit()
-            return self._view(prior)
+            return view
 
     def get(self, *, proposal_id: str | None = None, principal_id: str | None = None,
             request_key: str | None = None) -> dict | None:
         where, args = (("proposal_id=?", (proposal_id,)) if proposal_id is not None
                        else ("principal_id=? AND request_key=?", (principal_id, request_key)))
         with closing(self.store._connect()) as connection:
+            connection.execute("BEGIN")
             row = connection.execute(f"SELECT * FROM fleet_trip_proposals WHERE {where}", args).fetchone()
-            return None if row is None else self._view(row)
+            return None if row is None else self._view(row, connection)
 
     def dispatch_generation(self) -> int | None:
         """The open dispatch generation, or None while dispatch is stopped."""
@@ -67,14 +92,3 @@ class TripProposalStore:
             row = connection.execute("SELECT generation, dispatch_enabled FROM fleet_dispatch_control "
                                      "WHERE control_id=1").fetchone()
         return row["generation"] if row is not None and row["dispatch_enabled"] else None
-
-    def admitted(self, proposal_id: str, *, approver: str, generation: int, mission_id: str) -> dict:
-        with closing(self.store._connect()) as connection:
-            connection.execute("BEGIN IMMEDIATE")
-            connection.execute("UPDATE fleet_trip_proposals SET status='ADMITTED', approved_by=?, "
-                               "dispatch_generation=?, mission_id=? WHERE proposal_id=? AND status='PROPOSED'",
-                               (approver, generation, mission_id, proposal_id))
-            row = connection.execute("SELECT * FROM fleet_trip_proposals WHERE proposal_id=?",
-                                     (proposal_id,)).fetchone()
-            connection.commit()
-            return self._view(row)

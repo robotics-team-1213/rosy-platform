@@ -1,4 +1,5 @@
 """D-908: neutral trip proposals are durable and claim nothing; a different named operator admits them."""
+import asyncio
 from contextlib import closing
 from hashlib import sha256
 from types import SimpleNamespace
@@ -11,13 +12,14 @@ from fleet.server import trip_proposal_routes
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
 from fleet.server.mission_service import MissionService
-from fleet.server.mission_store import MissionStore
+from fleet.server.mission_store import MissionStore, _json
 from fleet.server.proposal_store import ProposalStore
 from fleet.server.task_service import FleetTaskService
 from fleet.server.task_store import FleetTaskStore
 from fleet.swarm.robots import RobotEndpoint
 from test_job_trip_steps import Rig, R, TWO
 from fleet.server.trip_candidates import create_candidate_trip_job
+from fleet.server.trip_proposals import TripProposalStore
 
 ROBOT = "rosy_01"
 PATH = "/api/fleet/trip-proposals"
@@ -47,7 +49,12 @@ def rig(tmp_path, monkeypatch):
 
     async def fake_create(jobs, candidates, steps, principal_id, request_key, **kwargs):
         made.append((candidates, steps, principal_id, request_key, kwargs))
-        return {"mission_id": "mission-1"}
+        digest = sha256(_json({"candidates": candidates, "steps": steps}).encode()).hexdigest()
+        return await asyncio.to_thread(
+            jobs.rows.create, "mission-1", candidates[0], principal_id, steps,
+            request_key="trip-pool:" + request_key, request_digest=digest, approved_by=kwargs["approved_by"],
+            proposal_id=kwargs["proposal_id"], expected_proposal_digest=kwargs["expected_proposal_digest"],
+            expected_generation=kwargs["expected_generation"])
     monkeypatch.setattr(trip_proposal_routes, "create_candidate_trip_job", fake_create)
     return TestClient(app), tasks, made
 
@@ -166,7 +173,11 @@ def test_routes_answer_unavailable_outside_the_simulation_profile(tmp_path, prof
 
 def test_admission_makes_the_same_trip_ledger_job_as_the_operator_path(tmp_path):
     rig = Rig(tmp_path)
-    job = rig.do(create_candidate_trip_job(rig.jobs, [R], TWO, "harbor", "k", approved_by="operator-2"))
+    store = TripProposalStore(rig.store)
+    proposal = store.create("harbor", "k", [R], TWO)
+    job = rig.do(create_candidate_trip_job(
+        rig.jobs, [R], TWO, "harbor", "k", approved_by="operator-2", proposal_id=proposal["proposal_id"],
+        expected_proposal_digest=proposal["proposal_digest"], expected_generation=store.dispatch_generation()))
     assert job["proposal_principal_id"] == "harbor" and job["status"] == "READY"
     assert rig.runner.lease.jobs[R].view["job_id"] == job["mission_id"]
     with closing(rig.store._connect()) as connection:

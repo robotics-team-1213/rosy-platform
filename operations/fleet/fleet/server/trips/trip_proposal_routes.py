@@ -91,7 +91,10 @@ def install_trip_proposal_routes(app, *, cell_job_store, jobs, check, require_pr
             job = await create_candidate_trip_job(
                 jobs, found["candidate_robot_ids"], found["steps"], found["proposal_principal_id"],
                 found["request_key"], validate=lambda: check(found["candidate_robot_ids"], found["steps"]),
-                approved_by=principal.principal_id)
-            return await asyncio.to_thread(store.admitted, proposal_id, approver=principal.principal_id,
-                                           generation=generation, mission_id=job["mission_id"])
+                approved_by=principal.principal_id, proposal_id=proposal_id,
+                expected_proposal_digest=body.expected_proposal_digest, expected_generation=body.expected_generation)
+            committed = await asyncio.to_thread(store.get, proposal_id=proposal_id)
+            if committed is None or committed["status"] != "ADMITTED" or committed["mission_id"] != job["mission_id"]:
+                raise MissionConflict("trip proposal has no matching committed admission")
+            return committed
         return await call(run)
