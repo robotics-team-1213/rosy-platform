@@ -433,6 +433,30 @@
    "source": "tuned",
    "evidence": "2026-10-30: a top-view pixel is about 1 mm; 5 mm steps keep the search under a second"
   },
+  "track.around_px": {
+   "value": 60,
+   "unit": "px",
+   "source": "tuned",
+   "evidence": "2026-10-30: the Pinky robot moved ~45 px between 20:30 and 23:04 and its tray polygon sat on its body; the robot body around the tray polygon carries the features (lidar, labels, edges)"
+  },
+  "track.reach_px": {
+   "value": 120,
+   "unit": "px",
+   "source": "tuned",
+   "evidence": "2026-10-30: the Pinky robot moved ~45 px between 20:30 and 23:04 and its tray polygon sat on its body; how far the robot is looked for in the current frame; it moved ~45 px in one evening"
+  },
+  "track.min_inliers": {
+   "value": 25,
+   "unit": "count",
+   "source": "tuned",
+   "evidence": "2026-10-30: the Pinky robot moved ~45 px between 20:30 and 23:04 and its tray polygon sat on its body; fewer matching features than this is not the robot"
+  },
+  "track.roi_pad_px": {
+   "value": 8,
+   "unit": "px",
+   "source": "tuned",
+   "evidence": "2026-10-30: the Pinky robot moved ~45 px between 20:30 and 23:04 and its tray polygon sat on its body; the moved ROI is the polygon's box plus this"
+  },
   "gripper.gap_mm_per_unit": {
    "value": 10.4,
    "unit": "mm",

@@ -42,6 +42,7 @@ import cell_objects  # noqa: E402
 import cell_params as prm  # noqa: E402
 import cell_pivot  # noqa: E402
 import cell_place_fit  # noqa: E402
+import cell_site_track  # noqa: E402
 import cell_diagnose  # noqa: E402
 import cell_hooks  # noqa: E402
 import cell_wrist_ref  # noqa: E402
@@ -397,6 +398,12 @@ def run_auto(cell, config, calibration, calibration_path, catalog, roi, source, 
              dry_run=False, sleep=time.sleep, log=print, attempts=None) -> dict:
     """One object from `source` to `dest`; up to `attempts` grasps (the second with the better candidate)."""
     work, out = Path(work), {"from": source, "to": dest, "attempts": []}
+    for site in {source, dest} & {k for k, v in config["sites"].items() if v.get("track")}:  # a robot that moves
+        config, out[f"track_{site}"] = cell_site_track.follow(config, site, cell.frame("top"),
+                                                              lambda q, s=site: predicted_pixel(config, calibration, s, q), work)
+        if not out[f"track_{site}"]["tracked"]:
+            return {**out, "result": f"refused: {site}: {out[f'track_{site}'].get('why')}"}
+        roi = config["sites"][site]["auto_roi"] if site == source else roi
     dest_site, place_xy = parse_dest(config, source, dest)
     droi = config["sites"][dest_site].get("auto_roi") or (roi if dest_site == source else None)
     guarded = None if dry_run else Guarded(cell, config)
