@@ -828,3 +828,10 @@
 - 변경: verification record only for commit `ed77a021dc396e7296141609957fecc4af082d35`, tree oid `4714c995793b4ad2cd883665f3992cd029d6c16d`. Production and test content is unchanged. All inherited log entries, including pending markers, are preserved.
 - 증거: existing committed-source job ed77a021dc-eee696 reported 1106 passed, 9 skipped and 12 dependency deprecation warnings with pinned comparison 0 NEW. Scope was the complete adapter suite plus installed-package/offline-client, hardware-owner, transfer/watchdog/updater/Fleet-preflight/training-parent and selected local event/journal regressions. Verbose worker output contains 1106 unique named passed node IDs. This records that source run, not a new integration run.
 - gate 변화: no ROS-SIM, DEVICE, FIELD or native-consumer readiness. Five named skip events cover three optional Chromium cases and two actual_cpu_synthetic cases; four additional collection/import skip records have no emitted runtime reason/node ID. Existing ROS guards and torch/lerobot requirements are prerequisites, not observed passes. Corrective committed release-boundary verification and formal landing remain pending. CE: existing Git-ID and Windows-parent-UTF8 lessons apply; no new lesson recorded.
+
+## 2026-10-29 · 724ecfbff1 · D-916 원본 joint 시각 보존
+
+- 변경: intake가 검증한 원본 stamp/source-now를 같은 frozen JointStateSnapshot에 보존한다. 기존 네 인수·sequence·freshness·거절·owner 권한·public projection은 유지한다. metadata를 UTC/domain/epoch나 owner admission 근거로 쓰지 않는다.
+- 증거: tests-only RED 11 failed/19 passed, focused GREEN 139 passed/skip0. 실제 native ROS RED 1 failed/1 passed에서 GREEN 2 passed/skip0. 수동 Gazebo에서 원본 metadata와 증가하는 state 시각을 관측했다. 공식 행렬의 실행 범위·실패·skip과 측정 누락은 [검증 정본](../../../../docs/validation/joint-source-provenance-2026-10-29/result.md)에 구분한다. 독립 contract/Safety 및 최종 소스 리뷰에서 추가 P1/P2 없음.
+- Gate: 변화 없음. 전체 source-clock/물리 producer·장치·현장 수용은 열려 있다.
+- CE: 새 교훈 기록 — FULL 판정과 실제 실행 행렬을 혼동한 원인·정정·배열 대조 기준을 소유 저장소 solutions에 기록했다.

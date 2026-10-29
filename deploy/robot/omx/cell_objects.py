@@ -21,9 +21,11 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cell_calibration as cal  # noqa: E402
+import cell_params as prm  # noqa: E402
 
 SCHEMA = "rosy.omx-object-catalog.v1"
-CHROMA, LIGHT, MIN_PX = 25.0, 60.0, 150  # Lab (OpenCV 0-255) chroma and lightness steps; smallest blob in pixels
+SPLIT_FILL, SPLIT_AXIS_DEG = prm.default("objects.split_fill"), prm.default("objects.split_axis_deg")  # a split piece must fill its rectangle and lie parallel to the others
+CHROMA, LIGHT, MIN_PX = (prm.default(f"objects.{k}") for k in ("chroma", "light", "min_px"))  # Lab (OpenCV 0-255) chroma and lightness steps; smallest blob in pixels
 
 
 def load_catalog(path) -> list:
@@ -37,15 +39,25 @@ def load_catalog(path) -> list:
     return data["objects"]
 
 
-def foreground(img, roi, chroma: float = CHROMA, light: float = LIGHT):
-    """Mask (ROI-sized) of pixels far from the surface's median colour; a shadow moves lightness only a little."""
+def foreground(img, roi, chroma: float | None = None, light: float | None = None, params=None, surface_px=None):
+    """Mask (ROI-sized) of pixels far from the surface's median colour; a shadow moves lightness only a little.
+    Thresholds not given come from `params` (a white floor line passes the lightness test, 2026-10-28).
+    `surface_px`, a polygon of the site's surface in the image, drops what lies beyond it (the board next to the
+    floor joined a container into one blob along the ROI's edge, 2026-10-28)."""
+    chroma = prm.get(params, "objects.chroma", CHROMA) if chroma is None else chroma
+    light = prm.get(params, "objects.light", LIGHT) if light is None else light
     x0, y0, x1, y1 = roi
     lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB).astype(np.int16)[y0:y1, x0:x1]
     bg = np.median(lab.reshape(-1, 3), axis=0)
     far = (np.hypot(lab[..., 1] - bg[1], lab[..., 2] - bg[2]) > chroma) | (np.abs(lab[..., 0] - bg[0]) > light)
     mask = far.astype(np.uint8) * 255
-    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
-    return cv2.morphologyEx(mask, cv2.MORPH_CLOSE, np.ones((5, 5), np.uint8))
+    if surface_px:
+        keep = np.zeros_like(mask)
+        cv2.fillPoly(keep, [np.asarray(surface_px, np.int32) - [x0, y0]], 255)
+        mask &= keep
+    o, c = (int(prm.get(params, f"objects.{k}")) for k in ("open_px", "close_px"))
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, np.ones((o, o), np.uint8))
+    return cv2.morphologyEx(mask, cv2.MORPH_CLOSE, np.ones((c, c), np.uint8))
 
 
 def to_mm(pixels, record: dict, camera: dict, top_z: float):
@@ -64,14 +76,19 @@ def measure(mm) -> dict:
             "long_axis_deg": round((ang + 90) % 180 - 90, 1)}
 
 
-def _fits(m: dict, o: dict, k: int = 1) -> bool:
+def _fits(m: dict, o: dict, k: int = 1, strict: bool = False) -> bool:
+    # lengths come in whole cells, so a lone blob's length may stray up to half a cell; the real top camera read a
+    # 60 mm container 47-56 mm long (dark end frames drop out of the mask) while its 30 mm width held within 9
+    # (2026-10-28). Pieces split from a merged blob stay strict: with the loose length a tangled cluster's
+    # piece matched and would have become a grasp target.
     t = o["tolerance_mm"]
-    return abs(m["width_mm"] - k * o["width_mm"]) <= t and abs(m["length_mm"] - o["length_mm"]) <= t
+    return (abs(m["width_mm"] - k * o["width_mm"]) <= t
+            and abs(m["length_mm"] - o["length_mm"]) <= (t if strict else o.get("length_tolerance_mm", t)))
 
 
-def match(m: dict, catalog: list):
+def match(m: dict, catalog: list, strict: bool = False):
     """The nearest entry within tolerance, or None."""
-    ok = [o for o in catalog if _fits(m, o)]
+    ok = [o for o in catalog if _fits(m, o, strict=strict)]
     return min(ok, key=lambda o: abs(m["width_mm"] - o["width_mm"]) + abs(m["length_mm"] - o["length_mm"])) if ok else None
 
 
@@ -82,35 +99,84 @@ def _strips(mm, m: dict, k: int):
     return [(across >= edges[i]) & (across <= edges[i + 1]) for i in range(k)]
 
 
-def classify(mm, catalog: list) -> list:
-    """One blob's arm-mm points -> results: matched objects (a wide blob split into strips) or one unmatched."""
+def classify(mm, catalog: list, px_mm2: float | None = None, params=None) -> list:
+    """One blob's arm-mm points -> results: matched objects (a wide blob split into strips) or one unmatched.
+    `px_mm2`: the area of one pixel in mm, to check that each strip fills its own rectangle. A wide blob is
+    split only into parallel strips that each match a catalogue entry and fill their rectangle; anything else
+    is tangled (2026-10-28: two side by side plus a third touching at an angle gave a 25 degree axis and wrong
+    pieces) and is never a grasp target."""
     m = measure(mm)
     o = match(m, catalog)
     if o:
         return [{**m, "object": o["id"], "grasp": o["grasp"], "matched": True}]
     for k in (2, 3):
         for o in catalog:
-            if _fits(m, o, k):
+            if _fits(m, o, k, strict=True):
                 strips = [(g, measure(mm[g])) for g in _strips(mm, m, k)]
-                found = [(match(s, catalog), s) for _, s in strips]
-                if all(e for e, _ in found):
-                    return [{**s, "object": e["id"], "grasp": e["grasp"], "matched": True, "split_from": k} for e, s in found]
+                found = [(match(s, catalog, strict=True), s, g) for g, s in strips]
+                ok = all(e for e, _, _ in found) and all(
+                    abs((s["long_axis_deg"] - m["long_axis_deg"] + 90) % 180 - 90) <= prm.get(params, "objects.split_axis_deg", SPLIT_AXIS_DEG)
+                    and (px_mm2 is None or g.sum() * px_mm2 >= prm.get(params, "objects.split_fill", SPLIT_FILL) * s["length_mm"] * s["width_mm"])
+                    for _, s, g in found)
+                if ok:
+                    return [{**s, "object": e["id"], "grasp": e["grasp"], "matched": True, "split_from": k} for e, s, _ in found]
+                return [{**m, "object": None, "grasp": None, "matched": False, "tangled": True}]
     return [{**m, "object": None, "grasp": None, "matched": False}]
 
 
-def detect(img, roi, record: dict, camera: dict, catalog: list, surface_z: float = 0.0) -> list:
+def top_face(px, height_mm: float, camera: dict, surface_z: float, params=None):
+    """The top camera also sees an object's side faces: a 30 mm cube at the image edge measured 44 x 39 mm
+    (2026-10-28). The blob is the top face swept toward the principal point by r*h/(H-h) px (r the radius of
+    the blob's inner edge, H the camera above the surface), so the top face is the blob eroded by that sweep."""
+    if "center_px" not in camera or "height_m" not in camera:
+        return px
+    c = np.asarray(camera["center_px"], float)
+    h, big_h = height_mm / 1000.0, camera["height_m"] - surface_z
+    radial = px - c
+    d = float(np.linalg.norm(radial.mean(axis=0)))
+    if d < 1e-6 or big_h <= h:
+        return px
+    u = radial.mean(axis=0) / d
+    sweep = float((radial @ u).min()) * h / (big_h - h)
+    n = int(math.ceil(sweep))
+    if n < 1:
+        return px
+    lo = px.min(axis=0).astype(int) - n - 1
+    size = (px.max(axis=0).astype(int) - lo + n + 2)[::-1]
+    mask = np.zeros(size, np.uint8)
+    mask[(px[:, 1] - lo[1]).astype(int), (px[:, 0] - lo[0]).astype(int)] = 255
+    kernel = np.zeros((2 * n + 1, 2 * n + 1), np.uint8)  # offsets from a pixel toward the principal point
+    cv2.line(kernel, (n, n), (round(n - sweep * u[0]), round(n - sweep * u[1])), 1, 1)
+    eroded = cv2.erode(mask, kernel, anchor=(n, n))
+    ys, xs = np.nonzero(eroded)
+    keep = np.column_stack([xs, ys]) + lo
+    return keep.astype(float) if len(keep) >= prm.get(params, "objects.min_px", MIN_PX) else px
+
+
+def _px_mm2(px, mm) -> float | None:
+    """Area of one pixel in arm mm (the map is affine, so the hulls' ratio is its determinant)."""
+    if len(px) < 5:
+        return None
+    a_px = cv2.contourArea(cv2.convexHull(px.astype(np.float32)))
+    return None if a_px < 1 else cv2.contourArea(cv2.convexHull(np.asarray(mm, np.float32))) / a_px
+
+
+def detect(img, roi, record: dict, camera: dict, catalog: list, surface_z: float = 0.0, params=None,
+           surface_px=None) -> list:
     """All objects in the ROI. Blob height is unknown before matching, so each catalogue top height is tried
     and the tallest-first best match kept; a blob matching none is measured at the first entry's height."""
     x0, y0, _, _ = roi
-    n, labels, stats, _ = cv2.connectedComponentsWithStats(foreground(img, roi))
+    n, labels, stats, _ = cv2.connectedComponentsWithStats(foreground(img, roi, params=params, surface_px=surface_px))
     out = []
     for i in range(1, n):
-        if stats[i, cv2.CC_STAT_AREA] < MIN_PX:
+        if stats[i, cv2.CC_STAT_AREA] < prm.get(params, "objects.min_px", MIN_PX):
             continue
         px = np.column_stack(np.nonzero(labels == i))[:, ::-1] + [x0, y0]
         best = None
         for h in sorted({o["top_height_mm"] for o in catalog}, reverse=True):
-            res = classify(to_mm(px, record, camera, surface_z + h / 1000.0), catalog)
+            top = top_face(px.astype(float), h, camera, surface_z, params)
+            mm = to_mm(top, record, camera, surface_z + h / 1000.0)
+            res = classify(mm, catalog, _px_mm2(top, mm), params)
             if all(r["matched"] for r in res):
                 best = res
                 break

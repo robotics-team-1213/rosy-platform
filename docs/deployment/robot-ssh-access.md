@@ -38,8 +38,13 @@ ssh -i $operatorKey -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyCheck
 
 ### 카드를 준비할 때 운영자 키를 함께 보존
 
-`setup-moved-device.ps1`은 운영자 개인키와 `.pub` 파일이 모두 없으면 카드 계획과 기록
-전에 멈춘다. 최초 준비 시 Windows 운영 PC에서 다음처럼 키를 만든다. 기존 키는 덮어쓰지
+`setup-moved-device.ps1`은 운영자 개인키나 `.pub` 파일이 없거나 두 파일의 공개키 부분이
+서로 다르면 카드 계획과 기록 전에 멈춘다. OpenSSH 형식의 개인키 헤더를 직접 읽으므로
+암호가 걸린 키도 해제하지 않고 비교한다. 개인키와 암호를 명령 인자나 로그에 넣지 않는다.
+이 비교는 암호화된 개인키 본문의 무결성이나 실제 잠금 해제 가능 여부를 증명하지 않으므로
+첫 부팅 후 SSH 로그인 확인은 여전히 필요하다.
+
+최초 준비 시 Windows 운영 PC에서 다음처럼 키를 만든다. 기존 키는 덮어쓰지
 않으며 개인키는 이 PC에 보관한다. 카드에는 공개키와 그 지문만 전달된다.
 
 ```powershell
@@ -81,6 +86,13 @@ sudo python3 deploy/robot/pinky_pro/sd/recover-ssh-access.py \
 영수증의 `SSH_KEY_RESTORED_ON_CARD`는 카드 파일 변경만 증명한다. 안전하게 마운트를
 해제해 같은 로봇에 넣은 후, 실물 장치의 호스트 키 지문을 확인하고 위 SSH 명령으로 실제
 로그인을 검증한다. 네트워크·SSH 서비스 설정까지 자동 복구됐다고 해석하지 않는다.
+
+중단 메시지의 `before card write`는 도구가 카드 쓰기를 시작하기 전에 멈췄다는 뜻이다.
+`after card write started`는 키가 추가됐어도 영수증 기록이나 readback이 실패했을 수 있다는
+뜻이다. 두 경우 모두 메시지에 보존된 복구 파일 폴더를 표시한다. 먼저 기본 읽기 전용
+검사를 다시 실행해 `key_present`와 파일 해시를 확인한다. 오류만 보고 자동으로 원본을
+덮어쓰거나 다시 굽지 않는다. 도구는 백업 완료 뒤 카드와 키 파일을 다시 확인하며 그동안
+장치 정보나 키가 바뀌었으면 카드 쓰기 전에 거절한다.
 
 되돌릴 때에는 `receipt.json`의 `after_sha256`과 현재 파일이 같은지 먼저 확인하고,
 `authorized_keys.before`와 `before.json`의 원래 소유권·권한을 복원한다. 원본 파일이

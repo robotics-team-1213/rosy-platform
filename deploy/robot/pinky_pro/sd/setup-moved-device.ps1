@@ -206,6 +206,10 @@ try {
         -not (Test-Path -LiteralPath $operatorKey -PathType Leaf)) {
         Stop-Setup "운영자 SSH 키 쌍이 없습니다. 웹 등록이 열리지 않아도 접속할 수 있도록 Rosy\ssh\rosy-operator-ed25519와 .pub를 먼저 준비하세요. 키 생성 방법은 docs/deployment/robot-ssh-access.md의 접속 복구 절차를 확인하세요. 카드 계획과 기록은 시작하지 않았습니다."
     }
+    $null = & python (Join-Path $PSScriptRoot "verify-operator-key.py") --private-key $operatorPrivate --public-key $operatorKey 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Stop-Setup "운영자 개인키와 공개키를 검증하지 못했습니다. 파일이 같은 키 쌍인지 확인하세요. 카드 계획과 기록은 시작하지 않았습니다."
+    }
     $ReleaseDir = (Resolve-Path -LiteralPath $ReleaseDir -ErrorAction Stop).ProviderPath
     $manifestPath = Join-Path $ReleaseDir "manifest.json"
     $sumsPath = Join-Path $ReleaseDir "SHA256SUMS"

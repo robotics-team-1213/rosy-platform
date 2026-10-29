@@ -37,7 +37,7 @@ import time
 import uuid
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))  # guarded_native, motor_health
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # guarded_native, motor_health, cell_params, episode_recorder
 from omx_adapter.chunk_library import (  # noqa: E402
     GUARD_UNITS_PER_S as GUARD_UNITS_PER_S,
     NAMES,
@@ -51,6 +51,8 @@ from omx_adapter.chunk_library import (  # noqa: E402
 )
 from omx_adapter.motion_profile import smooth as smooth  # noqa: E402
 from cell_envelope import digest, runtime_context  # noqa: E402
+import cell_params as prm  # noqa: E402
+from episode_recorder import Recorder  # noqa: E402
 
 JOG_MAX = 5.0
 FOLLOW_STOP, FOLLOW_STOP_S = 25.0, 1.0   # body joints, LeRobot units; the clip alone keeps steps small
@@ -66,7 +68,17 @@ HEALTH_PERIOD_S = 1.0
 # command the guard actually sent by CONTACT_LAG units for CONTACT_TICKS ticks is pressing on something.
 # The runner holds where it is, with torque on, before the guard's 5 degree bound turns torque off and the
 # extended arm drops (three times on 2026-10-25). A body unit is at most 1.8 degrees: 1.5 units <= 2.7.
-CONTACT_LAG, CONTACT_TICKS = 1.5, 2
+CONTACT_LAG, CONTACT_TICKS = prm.default("runner.contact_lag"), prm.default("runner.contact_ticks")
+
+
+def contact_limits(start_lags: list, params=None) -> list:
+    """Per joint: the old limit, raised only for a joint that starts the chunk already loaded (a held box left the
+    elbow 1.5-2.0 behind, 2026-10-28), and then only to start + contact_rise, never past contact_loaded_max (well under
+    the guard's ~2.8 units). An unloaded joint keeps exactly the old limit: raising every joint toward the guard let a
+    descent press until the guard dropped the arm (incident 2026-10-28 23:59)."""
+    base = prm.get(params, "runner.contact_lag", CONTACT_LAG)
+    rise, top = prm.get(params, "runner.contact_rise"), prm.get(params, "runner.contact_loaded_max")
+    return [max(base, min(s + rise, top)) for s in start_lags]
 CONTACT_CHUNKS = ("descend", "grasp", "release")
 # Pacing: a body joint behind the guard's sent command by PACE_LAG units holds the next frame until it catches
 # up. On arm S the wrist_flex (XL330) gives ~35 PWM per degree, so a lift or goto grew its lag 0.2 -> 2.6 -> 5
@@ -75,11 +87,11 @@ CONTACT_CHUNKS = ("descend", "grasp", "release")
 # 2.08 units low with no motion at all (2026-10-28), and waiting for 1.6 there moved one frame per PACE_MAX_S.
 # Where the lag stops shrinking it is the pose's droop (`pace_floor`); frames go on, and hold again only when the
 # lag grows PACE_RISE past it. Contact chunks reach CONTACT_LAG first and keep their contact response.
-PACE_LAG, PACE_RISE, PACE_MAX_S = 1.6, 0.3, 3.0
+PACE_LAG, PACE_RISE, PACE_MAX_S = (prm.default(f"runner.{k}") for k in ("pace_lag", "pace_rise", "pace_max_s"))
 # Nobody sent a command for IDLE_PARK_S (a lost link, a crashed caller): fold home. IDLE_STOP_S more at home ends
 # the session, so record_session turns torque OFF and the motors rest instead of holding for hours (a session
 # held home 6 h on 2026-10-27/28 until its health log ran out). A caller that wants the arm held sends `state`.
-IDLE_PARK_S, IDLE_STOP_S = 180.0, 180.0
+IDLE_PARK_S, IDLE_STOP_S = prm.default("runner.idle_park_s"), prm.default("runner.idle_stop_s")
 # Stalled = pushing at its session cap (300) while short of its target and not moving: blocked or colliding.
 # At the cap alone is normal: the elbow saturates while lifting the arm out of home (2026-10-25).
 PWM_STOP, PWM_STOP_S, STALL_GAP, STALL_MOVE = 285, 0.5, 4.0, 0.3
@@ -90,7 +102,8 @@ MOTORS = [n.split(".")[0] for n in ["shoulder_pan.pos", "shoulder_lift.pos", "el
 
 class Runner:
     def __init__(self, robot, library: dict, *, fps: int, status, clock=time.monotonic, sleep=time.sleep,
-                 live=None, operating_context=None):
+                 live=None, operating_context=None, params=None):
+        self.params = params  # cell_params values (None = the constants above)
         self.robot, self.library, self.fps, self.status = robot, library, fps, status
         self.clock, self.sleep = clock, sleep
         self.target = None
@@ -101,12 +114,13 @@ class Runner:
         self.last_grip = None
         self.pending: list = []
         self.ticks, self.health, self.overload_since, self.fault = 0, None, None, None
-        self.played, self.retreat_frames, self.contact_ticks = [], [], 0
+        self.played, self.retreat_frames, self.contact_ticks, self.contact_start = [], [], 0, None
         self.lag, self.paced, self.paced_ticks = 0.0, 0, 0  # paced_ticks: frames held in the current chunk
         self.pace_floor, self.pace_last = 0.0, None
         self.last_input, self.home_since = 0.0, None  # home_since: a park settled and nothing moved since
         self.live = live  # called about twice a second with the current state (Fleet observation bridge)
         self.health_present = None
+        self.recorder = Recorder()  # raw training episodes: rows here, encoding after the session
         self.operating_context = operating_context
 
     def present(self) -> list:
@@ -154,6 +168,9 @@ class Runner:
             if verb == "stop":
                 self.report(command=line, ok=True)
                 return False
+            if verb == "episode":  # bookkeeping only: allowed between chunks and after a fault (to drop the episode)
+                self.report(command=line, ok=True, **self.recorder.command(words[1:]))
+                return True
             if self.chunk is not None:
                 raise ValueError(f"chunk {self.chunk} is still running")
             soft = (self.fault or "").startswith("contact")
@@ -175,6 +192,7 @@ class Runner:
                     raise ValueError(f"chunk {words[1]} starts {gap:.1f} away from the held target")
                 self.queue = [[max(-100.0, min(100.0, v + o)) for v, o in zip(f, offset)] for f in frames]
                 self.chunk, self.settle_since, self.played, self.contact_ticks = words[1], None, [], 0
+                self.contact_start = None
                 return True
             if verb == "jog" and len(words) >= 3 and len(words) % 2 == 1:
                 # jog <joint> <delta> [<joint> <delta> ...]: one coordinated step (e.g. a forward reach),
@@ -196,7 +214,8 @@ class Runner:
                 if frames is None:
                     raise ValueError(f"unknown chunk {words[1]}")
                 transit = {NAMES.index(k): float(v) for k, v in self.library.get("transit", {}).items()} or None
-                self.queue = transit_path(self.target, frames[0], self.library["gripper_closed"], self.fps, transit)
+                self.queue = transit_path(self.target, frames[0], self.library["gripper_closed"], self.fps, transit,
+                                          self.library.get("transit_speed", 0.85))
                 self.chunk, self.settle_since = f"goto {words[1]}", None
                 return True
             elif verb == "park" and len(words) == 1:
@@ -204,7 +223,8 @@ class Runner:
                 if not home:
                     raise ValueError("park needs a home chunk in the library")
                 transit = {NAMES.index(k): float(v) for k, v in self.library.get("transit", {}).items()} or None
-                self.queue = park_path(self.target, home[-1], self.library["gripper_closed"], self.fps, transit)
+                self.queue = park_path(self.target, home[-1], self.library["gripper_closed"], self.fps, transit,
+                                       self.library.get("transit_speed", 0.85))
                 self.chunk, self.settle_since = "park", None
                 return True
             elif verb == "grip" and len(words) == 2:
@@ -237,11 +257,12 @@ class Runner:
         return True
 
     def tick(self) -> None:
-        if self.lag < PACE_LAG:
+        pace_lag, pace_rise = prm.get(self.params, "runner.pace_lag", PACE_LAG), prm.get(self.params, "runner.pace_rise", PACE_RISE)
+        if self.lag < pace_lag:
             self.pace_floor = 0.0
         shrinking = self.pace_last is None or self.lag < self.pace_last - 0.01
-        if (self.queue and self.lag > max(PACE_LAG, self.pace_floor + PACE_RISE) and shrinking
-                and self.paced < PACE_MAX_S * self.fps):
+        if (self.queue and self.lag > max(pace_lag, self.pace_floor + pace_rise) and shrinking
+                and self.paced < prm.get(self.params, "runner.pace_max_s", PACE_MAX_S) * self.fps):
             self.paced, self.paced_ticks, self.pace_last = self.paced + 1, self.paced_ticks + 1, self.lag
         elif self.queue:
             if self.pace_last is not None:  # the hold ended: what is left is this pose's droop
@@ -251,14 +272,19 @@ class Runner:
                 self.played.append(list(self.target))
         sent = self.robot.send_action(dict(zip(NAMES, self.target)))
         present = self.present()
+        self.recorder.tick(present, [sent.get(n, t) if isinstance(sent, dict) else t for n, t in zip(NAMES, self.target)])
         if isinstance(sent, dict):
             self.lag = max((abs(present[i] - sent[name]) for i, name in enumerate(NAMES[:5]) if name in sent),
                            default=0.0)
         if (isinstance(sent, dict) and not self.fault and self.chunk is not None
                 and self.chunk.startswith(CONTACT_CHUNKS)):
-            lag = max((abs(present[i] - sent[name]) for i, name in enumerate(NAMES[:5]) if name in sent), default=0.0)
-            self.contact_ticks = self.contact_ticks + 1 if lag > CONTACT_LAG else 0
-            if self.contact_ticks >= CONTACT_TICKS:
+            lags = [abs(present[i] - sent[name]) if name in sent else 0.0 for i, name in enumerate(NAMES[:5])]
+            if self.contact_start is None:
+                self.contact_start = contact_limits(lags, self.params)
+            lag = max(lags)
+            over = any(v > limit for v, limit in zip(lags, self.contact_start))
+            self.contact_ticks = self.contact_ticks + 1 if over else 0
+            if self.contact_ticks >= prm.get(self.params, "runner.contact_ticks", CONTACT_TICKS):
                 chunk = self.chunk
                 self.queue, self.retreat_frames = [], self.played[::-1]
                 self.target = list(present[:5]) + [self.target[5]]  # hold here: the lag closes, torque stays on
@@ -331,11 +357,11 @@ class Runner:
         if self.chunk is not None or self.queue or self.pending:
             return False
         quiet = self.clock() - self.last_input
-        if self.home_since is None and quiet >= IDLE_PARK_S:
+        if self.home_since is None and quiet >= prm.get(self.params, "runner.idle_park_s", IDLE_PARK_S):
             self.last_input = self.clock()  # the stop's quiet time starts once the arm is folded
             self.command("park")
             return False
-        if self.home_since is not None and min(quiet, self.clock() - self.home_since) >= IDLE_STOP_S:
+        if self.home_since is not None and min(quiet, self.clock() - self.home_since) >= prm.get(self.params, "runner.idle_stop_s", IDLE_STOP_S):
             self.report(command="stop", ok=True, reason=f"no command for {quiet:.0f} s; folded home, torque goes OFF")
             return True
         return False
@@ -417,6 +443,7 @@ def main(argv=None):
     parser.add_argument("--library", required=True, type=Path)
     parser.add_argument("--io", required=True, type=Path, help="directory for chunk-cmd (FIFO) and chunk-status.jsonl")
     parser.add_argument("--operating-profile", type=Path, help="per-device operating profile; unbound sessions cannot auto-pick")
+    parser.add_argument("--params", type=Path, help="cell-params.json (rosy.omx-cell-params.v1); default: the built-in values")
     args = parser.parse_args(argv)
     library = load_library(args.library)
     config = json.loads(args.config.read_text(encoding="utf-8-sig"))
@@ -458,7 +485,7 @@ def main(argv=None):
 
         context = runtime_context(config["robot"], robot.bus, config["dataset"]["fps"], operating_profile=profile)
         Runner(guarded, library, fps=config["dataset"]["fps"], status=status, live=live,
-               operating_context=context).run(lines)
+               operating_context=context, params=prm.load(args.params)["values"]).run(lines)
     finally:
         lines.close()
         try:

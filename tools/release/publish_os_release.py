@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Publish exactly five signed OS assets as an engineering prerelease.
+"""Publish a signed five-file OS release as an engineering prerelease.
 
 Default is offline dry-run. --apply creates a draft, verifies uploaded SHA256
 bindings, then opens only a prerelease. CMS/verity validation belongs to the
@@ -23,6 +23,7 @@ for relative in ("deploy/robot/pinky_pro/release", "deploy/robot/pinky_pro/nativ
     sys.path.insert(0, str(ROOT / relative))
 from os_update_manifest import verify_metadata
 from os_update_rollout import verify as verify_rollout
+from os_update_transport import bundle_assets
 
 REPO = "robotics-team-1213/rosy-platform"
 SIDECARS = ("os-update.json", "os-update.json.sig", "os-rollout.json", "os-rollout.json.sig")
@@ -64,6 +65,27 @@ def _capture(source, target, limit):
             digest.update(raw)
             outgoing.write(raw)
     return dict(size=total, digest="sha256:" + digest.hexdigest())
+
+
+def _split_bundle(source, assets, expected_sha256):
+    records, whole = {}, hashlib.sha256()
+    with source.open("rb") as incoming:
+        for name, size in assets:
+            digest, remaining = hashlib.sha256(), size
+            with (source.parent / name).open("xb") as outgoing:
+                while remaining:
+                    raw = incoming.read(min(CHUNK, remaining))
+                    if not raw:
+                        raise ValueError("OS captured bundle ended before its transport parts")
+                    digest.update(raw)
+                    whole.update(raw)
+                    outgoing.write(raw)
+                    remaining -= len(raw)
+            records[name] = dict(size=size, digest="sha256:" + digest.hexdigest())
+        if incoming.read(1) or whole.hexdigest() != expected_sha256:
+            raise ValueError("OS captured bundle changed while creating transport parts")
+    source.unlink()
+    return records
 
 
 def publish(directory, public_key, *, release_id, source_revision, apply=False, gh=None):
@@ -113,15 +135,18 @@ def publish(directory, public_key, *, release_id, source_revision, apply=False, 
         if policy["canary_ok"] or policy["withdrawn"]:
             raise ValueError("OS engineering publication requires an initial unpromoted rollout")
         bundle = metadata["bundle"]
-        # GitHub requires each release asset to be strictly below 2 GiB.
-        if bundle["size_bytes"] >= 2 * 1024**3:
-            raise ValueError("OS bundle exceeds GitHub release asset limit: must be below 2 GiB")
+        assets = bundle_assets(bundle)
         names = {*SIDECARS, bundle["filename"]}
         if {path.name for path in directory.iterdir()} != names:
             raise ValueError("OS publication requires exactly the signed five-asset set")
-        expected[bundle["filename"]] = _capture(directory / bundle["filename"], staged / bundle["filename"], bundle["size_bytes"])
-        if expected[bundle["filename"]] != dict(size=bundle["size_bytes"], digest="sha256:" + bundle["sha256"]):
+        captured = _capture(directory / bundle["filename"], staged / bundle["filename"], bundle["size_bytes"])
+        if captured != dict(size=bundle["size_bytes"], digest="sha256:" + bundle["sha256"]):
             raise ValueError("OS bundle size or SHA256 differs from signed metadata")
+        if len(assets) == 1:
+            expected[bundle["filename"]] = captured
+        else:
+            expected.update(_split_bundle(staged / bundle["filename"], assets, bundle["sha256"]))
+        names = set(expected)
         tag = "os-pinky-pro-" + release_id
         result = dict(tag=tag, source_revision=source_revision, assets=sorted(names), prerelease=True, applied=False)
         if not apply:
@@ -159,7 +184,7 @@ def publish(directory, public_key, *, release_id, source_revision, apply=False, 
         remote = api(endpoint)
         validate_draft(remote)
         assets = remote.get("assets")
-        if (not isinstance(assets, list) or len(assets) != 5
+        if (not isinstance(assets, list) or len(assets) != len(names)
                 or any(not isinstance(item, dict) or not isinstance(item.get("name"), str) for item in assets)
                 or {item.get("name") for item in assets} != names):
             raise ValueError("OS draft assets differ from the exact signed set")

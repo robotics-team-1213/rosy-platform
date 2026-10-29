@@ -5,9 +5,77 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.328
+**Version:** v1.331
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.331 Neutral trip proposals and separate operator admission (D-908)
+
+Fleet adds simulation-only trip proposal/read/admit HTTP. Default, unbound and
+non-simulation profiles return 503. A proposal is a durable record that claims
+no robot, lease or resource; admission by a named operator other than the
+proposer creates the same TRIP step-ledger job as `POST /api/fleet/trip-jobs`
+(v1.292 candidate admission). That operator-created one_person path is unchanged.
+
+Canonical closed DTOs live in `core_common.protocol.trip_proposals` and are
+re-exported by `schemas`. TripProposalCreate has exactly candidate_robot_ids
+(1..8 unique), request_key (TripRequestKey) and steps (1..8 TripJobStep), the
+v1.292 limits. No cargo, process or business field exists on the wire.
+
+| Method/path | Input | Access/result |
+|---|---|---|
+| POST /api/fleet/trip-proposals | TripProposalCreate | existing proposer role (operator or service); 200 TripProposalResponse |
+| GET /api/fleet/trip-proposals?request_key=... | caller-scoped key | viewer authentication; own record only |
+| GET /api/fleet/trip-proposals/{proposal_id} | proposal ID | creator or a named site operator |
+| POST /api/fleet/trip-proposals/{proposal_id}/admit | TripProposalAdmit: expected_proposal_digest, expected_generation | named operator different from the proposer; 200 |
+
+TripProposalResponse has exactly proposal: TripProposalSnapshot with proposal_id,
+proposal_principal_id, request_key, request_digest, proposal_digest,
+candidate_robot_ids, steps, status (PROPOSED or ADMITTED), dispatch_generation,
+approved_by and mission_id. The last three are JSON null until ADMITTED and then
+all present. proposal_digest is opaque; send the value you read.
+
+The same principal, key and body returns the existing record; the same key with a
+different body is 409 (TRIP_PROPOSAL_CONFLICT). After a lost response read by the
+original request_key, never mint a new one. Admission rejects the proposer or a
+service role (403), a digest or dispatch generation mismatch, or a stopped
+dispatch (409), and an unknown proposal (404). Repeating admission of an admitted
+proposal returns it without a second job. An admitted job is read with
+`GET /api/fleet/trip-jobs?request_key=...` (v1.298) as the proposer. READY or
+GOAL_CONFIRMED is transport execution only, never cargo arrival or application
+completion. Cancelling a proposal before admission is not provided yet; an
+admitted job uses the existing job cancel path. Envelope 1.0 unchanged.
+
+### v1.330 Immutable ARM physical evidence readback (D-915)
+
+`GET /api/fleet/arm-transfers/jobs/{mission_id}/physical-evidence` uses the same
+creator/permitted-named-operator read scope as the existing physical receipt.
+The closed response is `ArmTransferPhysicalEvidenceResponse`: `receipt` (unchanged
+`ArmTransferPhysicalReceipt`), exact canonical `evidence_document` (UTF-8 JSON text,
+maximum8Mi characters) and `released_zone_ids` (1..32 unique installed zone resource
+references). The SHA-256 of the document's UTF-8 bytes equals `receipt.evidence_digest`.
+The document has only `context` and exactly two `samples`. Context has `action_id`,
+`attempt_id`, `phase=POST_ACTION`, `not_before_ns` and owner identities
+(`workcell_id`, `instance_id`, `journal_id`, `owner_session_id`). Samples retain
+the original `ArmTransferObservation` shape, source IDs/times and installed bindings.
+
+Each owner observation may now carry optional `joints: ArmJointObservation | null`.
+Its closed fields are `sample_id`, `sequence`, source UTC `observed_at_ns`, ordered
+unique `joint_names` and matching finite `positions_rad` (1..32). Joint times enter
+the existing freshness/two-sample-order checks. When present, both source joint
+samples are required with distinct sample IDs, increasing sequence and identical
+ordered names. Command targets, receipt/read times and unconverted simulation
+ticks are not joint measurements. The canonical stored document omits absent
+`joints` so legacy proof bytes and identical retransmission remain compatible.
+
+The new GET requires measured joints for every participant in both stored samples.
+Known jobs with pending/legacy incomplete proof return409
+`ARM_TRANSFER_PHYSICAL_EVIDENCE_UNAVAILABLE`; unknown jobs404, forbidden service
+scope403, missing authentication401, uninstalled observer503. Stored proof tampering
+is an evidence conflict409. The read uses one SQLite snapshot and creates no
+event, Action, claim release or new capture time. Zone IDs describe historical
+release by the original attempt, never current zone availability. Existing receipt
+and observer credentials, application completion and envelope1.0 are unchanged.
 
 ### v1.328 Registered OMX dataset archive preparation
 
@@ -362,6 +430,7 @@ for the observer. Default and production execution stay closed.
 | `GET /api/fleet/arm-transfers/observation-context` | `X-Physical-Observation-Token`; returns `{context: ArmTransferObservationContext \| null}` for the installed profile's current observation request. Null means no request, never robot/resource clearance. |
 | `POST /api/fleet/arm-transfers/jobs/{mission_id}/observations` | Same independent observer credential and present-Origin check. Closed `ArmTransferObservationRequest`: `phase` (`PRE_DISPATCH` or `POST_ACTION`), `expected_request_digest`, exactly two `observations`. Returns `ArmTransferObservationReply` with `job` and nullable `receipt`. |
 | `GET /api/fleet/arm-transfers/jobs/{mission_id}/physical-receipt` | Creator or permitted named operator, same scoped read rule as the job. Returns `{receipt: ArmTransferPhysicalReceipt}`. Known job with no receipt is409 `ARM_TRANSFER_PHYSICAL_RECEIPT_PENDING`, unknown job404. |
+| `GET /api/fleet/arm-transfers/jobs/{mission_id}/physical-evidence` | v1.330 scoped immutable proof export (D-915); requires complete source joint facts. Does not refresh measurements or change claims. |
 | `POST /api/fleet/arm-transfers/jobs/{mission_id}/cancel` | Creator service/operator or permitted named operator, same scoped job access and present-Origin check. Closed `ArmTransferCancelRequest` has only trimmed nonempty `reason` (max192). Returns the job snapshot; cancellation ACK is not stop/clearance proof. |
 
 With an execution profile, admission also prepares stable step/action/attempt and
@@ -4288,6 +4357,8 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.331 | 2026-10-28 | D-908: closed simulation neutral TRIP proposal/read/admit HTTP; the proposer (service or operator) supplies candidates, request key and steps, a different named operator admits with digest and generation, and admission makes the existing TRIP step-ledger job. No cargo fields; operator trip-jobs POST unchanged. Envelope 1.0 unchanged. |
+| v1.330 | 2026-10-29 | D-915: optional measured source joint facts in physical observations and scoped immutable closure proof readback; legacy canonical bytes, writer/admission boundaries and envelope1.0 preserved. Independent SIM/hardware/field acceptance remains separate. |
 | v1.328 | 2026-10-28 | Learning registered OMX dataset discovery and fixed-revision archive preparation on existing host paths. Separate verified copy, explicit consent and original preservation; byte archival only. CORE envelope1.0 unchanged. |
 | v1.327 | 2026-10-27 | D-899: closed simulation recovery request, independent RECOVERY_RESET observations, exact operator approval bindings and bounded execution review. Contract registration only; HTTP/UI installation and physical acceptance are separate. Envelope1.0 unchanged. |
 | v1.324 | 2026-10-27 | Robot detail care profiles, persistent fault/caution/maintenance observations, shared motion-characteristics JSON validation and source-token-only advisory load report ingestion; no new command authority. |

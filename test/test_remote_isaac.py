@@ -169,6 +169,28 @@ def test_fetch_fingerprint_conflict_makes_no_snapshot_or_artifact_request(tmp_pa
     assert not (tmp_path / 'fetch').exists()
 
 
+def test_only_cube_report_can_use_the_larger_snapshot_budget(tmp_path):
+    import base64
+    mod = module()
+    raw = b'{}'+b' '*(1024*1024)
+    metadata = dict(id='mapped-stack-report', name='mapped-stack-report.json', bytes=len(raw),
+                    sha256=hashlib.sha256(raw).hexdigest(), media_type='application/json')
+    class Files:
+        scenario = 'omx-map-cube-stack'
+        def call(self, sha, payload):
+            if payload['action'] == 'artifact':
+                return dict(metadata, data_base64=base64.b64encode(raw).decode())
+            return dict(run_id='d'*32, input_sha256='b'*64, status='SUCCEEDED', snapshot='FINAL',
+                        input={'scenario_id': self.scenario}, artifacts={'files': [metadata]})
+    remote = Files()
+    receipt = dict(source_sha=SHA, run_id='d'*32, input_sha256='b'*64)
+    path = mod.fetch_snapshot(receipt, remote, tmp_path/'fetch')
+    assert (path/metadata['name']).read_bytes() == raw
+    remote.scenario = 'omx-map-long-stack'
+    with pytest.raises(ValueError, match='size/name conflict'):
+        mod.fetch_snapshot(receipt, remote, tmp_path/'fetch')
+
+
 def test_fetch_syncs_artifact_before_completion_marker(tmp_path, monkeypatch):
     mod = module()
     import os

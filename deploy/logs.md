@@ -3896,6 +3896,21 @@
 - gate 변화: 없음. 전체 착지 검증은 별도이며 실제 포트·모터·서비스를 실행한 수용 근거가 아니다.
 - CE: 해당 없음 — 가짜 호출이 프레임워크에 번지는 원인과 적용 조건을 시험 주석·이 기록에서 복원할 수 있다.
 
+## 2026-10-28 · f1627fb4b · fix(site): 원장 보존 정리 — 종료 작업 history 30일·감사 90일
+
+- 변경: site_db.py backup이 성공한 뒤 prune_ledger를 돌을 수 있게 짰다. leet_task_history는 종료 작업(COMPLETED/FAILED/CANCELED/EXPIRED)의 30일 경과 행만, 
+osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD와 비종료 작업은 남기고 --prune-history 0/·--prune-audit 0은 비활성화다. 표가 없는 오래된 스키마는 건너뛰고, compose leet-backup 명령에 30/90을 명시했다. 지금까지 세 표 모두 DELETE가 없어 영구 쌑였다(2026-10-28 자원 조사).
+- 증거: 원격 시험 resource-bounds-1(AI PC, run-1) 	est/test_site_db_maintenance.py 신규 3 시험 통과 — 종료·HOLD·비종료 구분, 0일 비활성화, backup 명령 통합 각각 확인.
+- gate 변화: 없음. 착지 FULL 기록은 착지 때 land record로 남긴다.
+- CE: 해당 없음 — 보존 기간과 SQL이 코드와 시험로 읽힐 수 있다.
+
+## 2026-10-28 · 9b21c8c87b · fix(site): 종료 작업 행·durable 사건 감사·WAL 체크포인트
+
+- 변경: 자원 경계 후속 3건. (1) `fleet_tasks` 종료 행(request/evidence/receipt JSON)을 history와 함께 지운다 — `NOT EXISTS` 가드로 고아 history를 남기지 않고, 과량 prune이 history만 지운 경우도 회수한다. `request_key`는 30일 창이 지나야 재사용된다. (2) `core_event_audit`(observe/events.py, DELETE 0건으로 매 사건 영구 쌓임 확인)를 90일 보존한다 — Fleet 재시작 뒤 중복 제거는 남은 창에서 살고, 90일 넘는 재생은 실제 재생 지평 밖이다. 같은 `fleet.sqlite3`라 `prune_ledger`가 그대로 커버한다. (3) 백업·정리 뒤 `PRAGMA wal_checkpoint(TRUNCATE)`를 최선형으로 돌려 지워진 페이지가 OS 파일로 돌아가게 한다. 세션 만료 정리는 `password_session._issue`가 이미 하고 있어 새 작업 없음.
+- 증거: 원격 시험 retention2-1(AI PC, run-1) `test/test_site_db_maintenance.py`·`test_site_preflight.py`·`test_site_users_cli.py` exit 0, known_failures NEW 0 — 종료·HOLD·비종료 구분, 과거 prune 회수, 감사 90일, 0일 비활성화, backup 통합+체크포인트 보고 각각 확인. `size_range.py` 커밋 직후 통과.
+- gate 변화: 없음. 착지 FULL 기록은 착지 때 land record로 남긴다.
+- CE: 해당 없음 — 보존 근거(재생 지평, request_key 창)가 커밋 문서와 이 기록에 남는다.
+
 ## 2026-10-28 · uncommitted · fix(omx): 카메라 자동 조정이 역할마다 실제 미리보기 유닛을 확인
 
 - 변경: `camera_readiness.py` 프로필의 카메라마다 선택 항목 `unit`(기본은 역할 이름). 확인·복구가 `rosy-omx-camera@<unit>`을 단독 소유자로 본다. README와 시험 1건.
@@ -3933,3 +3948,72 @@
 - 검증: tests-only b07574fbac 원격 실행에서 새 loader 부재로 RED를 확인했다. a93a18e8d1 및 보강한 aa62d0f5a8의 관련 원격 호출은 exit 0이며, 최종 변경 범위의 공식 원격 검증과 merge는 별도 작업 기록에 연결한다. 실제 장치·서명/배포·가동범위 수용은 하지 않았다.
 - gate 변화: 실물 활성화/수용 변화 없음. 프로필 연관 관계는 설명용 ID와 실제 설정의 일치 검사이며, 이름·모델명이나 JSON 저장이 동작 승인을 만들지 않는다.
 - CE: 해당 없음 — 기존 설정/보정·import/장부 교훈을 새 계약과 회귀 시험에 반영했다. 새 실물 장애의 원인·복구를 검증한 작업은 아니다.
+## 2026-10-29 · uncommitted · deploy: GitHub OS 전송과 서명된 부분 갱신
+
+- 변경: OS bundle의 staged 분할 게시와 전체 해시 재조립, 서명된 engineering canary 제한, 독립 OS CMS가 필요한 전송기 유지보수 및 durable recovery, 기존 전체 파일을 보존하는 native delta 전송 정책을 연결했다. OS·부팅 변경과 알 수 없는 기준은 native 델타로 처리하지 않는다.
+- 검증: OS 게시54·초기수신79·잔여 partial 복구39·게시→HTTP 연결5·유지보수127개 원격 통과(각 0 skipped/0 NEW). 부분 전송 초기430개 통과 후 v2 resume·실패 baseline·OS 정책 보강을 별도로 재검증 중이다. 실제 GitHub 게시·Pinky 부팅·OTA·롤백은 아직 미검증이다.
+- 성능: exporter preset만6→1로 이행했다. 원본 변경의22개 원격 회귀와 독립 검토, 제한된 x86 표본은 [측정 기록](../docs/validation/pinky-image-throughput-2026-10-28/result.md)에 보존했다. 전체 ARM 빌드 절감량은 주장하지 않는다.
+- gate 변화: 없음. SOURCE·모델링된 중단 복구·MEDIA·실제 장치 수용을 구분하며 최종 통합 검증 전 배포 완료를 기록하지 않는다.
+- CE: 해당 없음 — 이 변경의 계약과 적용 조건은 코드·회귀·측정 기록으로 복원할 수 있다. 실제 GPT 재발 순서의 교훈은 별도 solutions 기록에 보존했다.
+
+## 2026-10-29 · 8704f12108 · 운영 키 조합 검사와 접속 복구 중단 상태
+
+- 변경: 카드 도우미가 OpenSSH 개인키 헤더의 공개키 부분과 `.pub`를 비교해 불일치·잘못된 파일을 계획 전에 거절한다. 암호 해제나 개인키 출력 없이 기존 공개키 검증기를 재사용한다. 복구 도구는 실패한 쓰기 단계와 보존 폴더를 알리고, 백업 후 카드/키 스냅샷을 다시 확인한다. 중단 뒤 자동 롤백은 다른 키 변경을 덮어쓸 수 있어 수행하지 않는다.
+- 증거: tests-only `7f0f631845`에서 복구 실패 4개를 공식 원격 시험으로 재현했다. 키 확인 실패를 무시하던 Windows 도우미도 fixture assertion으로 재현했다. `e49261522d`는 실제 OpenSSH 생성 키와 복구 경계를 포함해 원격 45 passed/0 skipped, NEW 0이다. Windows 도우미 8개 self-check·설정/3장 연속 기록 fixture와 native 일반/암호 키 일치·불일치 self-check도 통과했다. GCM·ChaCha20 태그 지원을 보강한 최종 소스의 전체 영향 검증은 별도로 기록한다.
+- gate 변화: 없음. 기존 전원 꺼진 로봇·실물 SD·서비스·SSH 설정은 변경하지 않았다. 개인키 본문의 무결성이나 실제 잠금 해제/로그인 가능 여부는 공개키 헤더 비교로 증명하지 않는다.
+- CE: 해당 없음 — 실제 OpenSSH와 합성 fixture를 구분하는 기존 교훈을 적용했고 판단 근거는 코드·회귀·운영 안내에 보존했다. 기존 장치의 실물 복구는 미해결이다.
+
+## 2026-10-29 · uncommitted · fix(deploy): 관제 PC front 카메라 인스턴스 선언 정리
+
+- 변경: `deploy/hosts/services.yaml`의 `rosy-omx-camera@` 인스턴스에서 `front`를 뺐다(top, arm_a_wrist만).
+- 근거: front가 가리키던 USB by-path 1.3은 10-26 재연결 뒤 없고, 팔 S 그리퍼 카메라는 arm_a_wrist가 연다. 10-28 호스트에서 front를 업데이트 관문에서 빼고 유닛을 멈췄는데 선언이 남아 update_status가 DOWN을 냈다.
+- gate 변화: 없음.
+- CE: 해당 없음 — 호스트 정리 기록.
+
+## 2026-10-29 · 7763e92691 · 접속 복구 착지 전 중간 이력의 오탐 검토
+
+- 변경: 독립 에이전트가 검사한 중간 커밋의 형식 구분자와 합성 키 시험 입력 5건을 기존 게시 검토 baseline에 정확한 commit/path/rule로 기록한다. 값·발췌는 보존하지 않으며 다른 커밋·파일·검사 종류에는 적용하지 않는다. 이력을 다시 쓰거나 비밀 검사 규칙을 바꾸지 않는다.
+- 증거: 작업 기준 `fd6fecfb82`부터 소스 `7763e92691`까지 9개 커밋의 추가 줄을 읽어 5건의 미검토 항목을 확인했다. 최종 파일 검사·키/복구 회귀는 원격 48 passed/0 skipped, NEW 0이다. 검토 기록의 반영 후 범위 검사와 게시 도구 회귀는 별도로 확인한다.
+- gate 변화: 사용자가 로컬 commit/merge를 승인했다. 공식 착지 도구의 자동 검증을 사용하며 push·실물 배포는 하지 않는다.
+- CE: 해당 없음 — 최종 파일 검사와 커밋 이력 검사의 차이는 기존 교훈과 검토 기록에 보존했다. 실제 장치 접속은 미확인이다.
+
+## 2026-10-29 · uncommitted · fix(site): 보존 정리가 요청 재실행과 새 백업 복원 거절을 만들지 않게 한다
+
+- 변경: terminal history·pairing/CORE audit 정리는 유지하고 `fleet_tasks`와 계정 감사 행은 보존한다. 기존 멱등성 조회와 계정 보안 상태 복원 검사를 그대로 유지한다. backup의 UID·read-only rootfs·cap drop·network 차단은 유지하고 live DB 명명 볼륨만 정리·checkpoint에 필요한 rw로 맞춘다. Task 본문과 계정 감사 저장량은 이번 정리 범위에 포함하지 않는다.
+- 증거: 독립 검토의 멱등성·DB mount·안전 경계 결함을 원격 6 failed로 재현했다. 실제 backup→prune→restore는 변경 전 계정 감사 삭제로 `Account security state differs` 1 failed를 별도로 확인했다. 후속 GREEN·전체 착지는 공식 게이트에서 확인하며 실물 DB에는 실행하지 않았다.
+- gate 변화: 없음. 백업·복원과 작업 API 계약을 완화하지 않았다.
+- CE: 미해결 — 회귀 GREEN과 실제 착지 확인 전이다. 해결 판단은 새 통합 회귀와 이 보존 범위에 연결한다.
+
+## 2026-10-29 · a2f29868ea · test(site): 실제 Task 원장 재제출과 백업 복원 회귀를 검증한다
+
+- 변경: 앞선 6 failed 중 재제출 시험 1개는 잘못된 `TaskStore` import였으므로 멱등성 재현 근거로 세지 않는다. 실제 `FleetTaskStore`로 교정하고 기존 배포 시험에서 DB rw·rootfs ro·UID·cap drop·네트워크 차단을 함께 검증한다. 생산 코드 추가 변경은 없다.
+- 증거: 교정한 수정 전 source `88ea64a6a4`는 같은 키 재제출이 새 Task를 만들어 `created=True`로 1 failed다. 별도 수정 전 source `eb809b4dab`는 backup 후 계정 감사 정리로 복원이 거절돼 1 failed다. 최종 source `a2f29868ea`의 DB·backup 배포·safety·harness·Hub·Console·stuck·TF 관련 11파일은 공식 원격 331 passed / skip 0 / NEW 0이다. 첫 구현 회귀의 330 passed / 1 ImportError는 완전한 GREEN이 아니다.
+- gate 변화: 없음. 전체 FULL·main 착지와 실물 DB·서비스 수용은 별도다.
+- CE: 해당 없음 — 실제 재제출·복원 회귀와 보존 범위가 판단 근거를 설명한다.
+
+## 2026-10-29 · 535d81ae8b · 서버 서비스 이미지 증분 후보
+
+- 변경: 서명된 기준 후보와 Git 빌드 입력 비교로 변경 없는 이미지·SBOM을 재사용하고 변경 이미지만 전달하는 manifest v2를 추가했다. 전체 목표 이미지·플랫폼·Compose 참조 검증과 v1 복구를 유지한다. 활성 스택은 기존 방화벽·인증서 preflight 후 Compose로 조정한다. 설정만 바뀌어도 기본/Account Caddyfile의 별도 내용 해시 label이 proxy 교체를 유도한다. 보존 후보의 재사용 이미지 참조도 정리에서 보호한다. 기준 없는 전체 빌드와 CI dispatch의 base_commit 선택을 유지한다.
+- 증거: ccd8049112 공식 원격 RED 17 failed. f33f660d59 집중 회귀 203 passed. 검토에서 찾은 파일 bind 갱신·과도한 이미지 보존은 8bf52891bc의 2 failed로 재현했고, 535d81ae8b는 집중 205 passed/skip0/NEW0이다. 최종 source 재검토의 중대 지적은 없다. workflow 변경으로 FULL이 필수이며 최종 결과는 별도 완료 기록에 남긴다.
+- gate 변화: 없음. 실제 Docker 연속성·CI dispatch·설치·운영 배포·실물 수용·착지/push는 수행하지 않았다. v2 게시 전에 별도 설치된 서명기·검증기·업데이터를 먼저 갱신해야 한다.
+- CE: 해당 없음 — 파일 bind의 제약과 예방 판단이 D-301 추가 결정, 구성 label과 회귀 시험에 남는다.
+
+## 2026-10-29 · 6c77de81e0 · 빌더 직접 import 호환성 유지
+
+- 변경: 증분 빌드에서만 필요한 검증기 import를 해당 분기로 옮겼다. 기존 배포 목록 독자는 빌더를 파일 경로로 직접 불러와도 동작한다.
+- 증거: 8a4802129a 빠른 사전 검사에서 기존 pairing 목록 독자의 ModuleNotFoundError 1건을 확인했다(1304 passed/2 skipped 및 별도 도구 160 passed). 6c77de81e0의 pairing·증분·빌더·workflow 64 passed/skip0/NEW0이다. 이전 SHA의 진행 중 FULL은 수정 뒤 취소했으며 통과 근거로 쓰지 않는다. 최종 SHA의 canonical FULL을 별도로 수행한다.
+- gate 변화: 없음. CE: 해당 없음 — 기존 직접 import 시험이 회귀를 검출하며 변경은 의존성 적재 위치에 한정된다.
+
+## 2026-10-29 · 3490bddb9b · 서버 증분 업데이트 최종 원격 회귀
+
+- 변경: 최종 원격 검증 결과와 첫 도입의 전체 재빌드 조건을 기록했다. 실행 코드·workflow·시험은 검증 SHA와 같다.
+- 증거: 동일한 3490bddb9b의 canonical FULL 27개 invocation을 공식 remote_pytest.run으로 수행했다. 합계 37,581 passed/2,351 skipped, 각 명령 exit0, 모든 로그 비교 NEW0/known0/flaky0이다. 1~11번은 현장 PC에서 완료한 뒤 자원이 확보된 모델 PC에서 12~27번을 수행했다. 재배정 중 취소한 현장 12번과, 연결 복구 후 별도로 563 passed/1 skipped인 AI PC의 중복 마지막 묶음은 합계에서 제외했다. 수용한 27개 로그는 archive 내부 바이트를 원본 SHA-256과 대조해 보존했다.
+- gate 변화: 없음. monitoring 브라우저 묶음 16개는 모두 skip이며 브라우저 수용을 입증하지 않는다. 실제 Docker 연속성·CI dispatch·설치/운영 배포·실물 수용·main 착지/push는 수행하지 않았다.
+- CE: 해당 없음 — 판단 근거는 D-301·구성 해시·회귀 시험·기존 import 시험에 남긴다.
+
+## 2026-10-29 · cd4e1752c8 · fix(omx): 프로필 recording 회귀의 단독 import 경로
+
+- 변경: 테스트가 필요한 OMX 디렉터리를 monkeypatch 범위에서 명시한다. main 통합은 runner의 params와 operating-profile 인자 및 자식 전달을 모두 보존한다.
+- 검증: 이전 canonical 단독 실행은 cell_robot_profile import 누락으로 1 failed/56 passed/2 skipped였다. 수정 커밋의 공식 원격 단독 실행과 통합 착지 게이트는 진행 중이며 이전 SHA의 통과를 새 SHA 검증으로 세지 않는다.
+- gate 변화: 없음. 장치 접근·배포·push는 하지 않는다.
+- CE: 해당 없음 — 기존 shared-pytest-process-masks-path-dependent-import-2026-10-26 교훈과 한 줄 수정이 원인·재발 조건을 설명한다.

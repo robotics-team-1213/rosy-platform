@@ -1610,6 +1610,22 @@
       ],
       "source_revision": "915a46da52e14032671d3ecd4a360b60d3ea586f"
     },
+    "GET:/api/fleet/trip-proposals/{proposal_id}": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_trip_proposals.py",
+        "test_proposal_is_durable_scoped_idempotent_and_claims_nothing"
+      ],
+      "source_revision": "d6d5feea75e1bc4b059a396943b83b409dfa1582"
+    },
+    "POST:/api/fleet/trip-proposals/{proposal_id}/admit": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_trip_proposals.py",
+        "test_a_different_named_operator_admits_once_and_a_lost_response_is_recoverable"
+      ],
+      "source_revision": "d6d5feea75e1bc4b059a396943b83b409dfa1582"
+    },
     "GET:/api/fleet/policy-admission": {
       "status": 200,
       "test": [

@@ -11,7 +11,12 @@
 | ID | 제목 | Status |
 |---|---|---|
 | D-914 | 장치별 프로필과 native 운용범위 근거를 연결한다. [전문](../adr/D-914-omx-per-device-operating-profile-binding.md) | Accepted (2026-10-29, 구현·머지 승인; 실물 수용 별도) |
+| D-908 | 업무 앱의 중립 이송 제안과 별도 운영자 승인. [전문](../adr/D-908-neutral-trip-proposal.md) | Accepted (2026-10-28, 사용자 결정) |
+| D-904 | 공급암 S는 사람 손 없이 하나의 파이프라인으로 물체를 고르고 집어 놓는다. [전문](../adr/D-904-arm-s-autonomous-pick-place-pipeline.md) | Proposed (2026-10-28) |
+| D-903 | cmd_vel 정지 시 50Hz 영(zero) 발행 억제 — 안전 검토 요건. [전문](../adr/D-903-cmdvel-zero-suppression.md) | Proposed (2026-10-28) |
+| D-912 | Signed OS transport maintenance with independent authority and durable recovery. [전문](../adr/D-912-signed-os-transport-maintenance.md) | Proposed |
 | D-911 | OMX native 셀의 검증된 작업 범위와 현재 실행 조건을 구분한다. [전문](../adr/D-911-omx-native-reviewed-operating-envelope.md) | Accepted (2026-10-28, 구현 승인; 장치 수용 별도) |
+| D-898 | Fleet 인식 모델 승인을 모델 PC 레지스트리에 반영 — 사람이 나르는 Ed25519 서명 결정 파일 | Proposed (2026-10-27) |
 | D-897 | AI PC와 모델 PC에서 격리된 시뮬레이션 학습 작업을 병렬 실행한다 | Accepted (2026-10-27, 사용자 요청; 운영 권한·승격 별도) |
 | D-902 | Pilot real OMX teleop and recording through Fleet and the CORE manual arm path. [전문](../adr/D-902-pilot-real-omx-teleop-and-recording.md) | Proposed (2026-10-28) |
 | D-901 | Native workcell observation communication isolation. [전문](../adr/D-901-native-workcell-observation-isolation.md) | Accepted (2026-10-28) |
@@ -27,6 +32,7 @@
 | D-885 | guard가 디스크 부족 시험 PC의 저장소 정리를 요청한다 (D-883 보충) | Accepted for implementation (2026-10-26) |
 | D-884 | Learning 저장 대상 풀과 검증된 로컬 자료 회수. [전문](../adr/D-884-learning-storage-pool-and-local-reclamation.md) | Accepted (2026-10-26) |
 | D-889 | CI/CD 흐름: 통합 열차·정기 게시·잠금 밖 FULL | Proposed (2026-10-26) |
+| D-913 | 판단 난항의 독립 모델 협력과 환경별 순차·병렬 선택 | Accepted (2026-10-29) |
 | D-875 | Swarm owner-local API separates planning from safety lifecycle | Accepted for implementation (2026-10-25) |
 | D-883 | Monitoring 호스트 자원 감시와 시험 PC 저장소 정리 요청 (D-876 §5·D-524 보충) | Accepted for implementation (2026-10-26) |
 | D-877 | OMX 시뮬레이터 백엔드는 공통 층 하나에 붙는다: Gazebo, Isaac Sim, MuJoCo | Accepted (2026-10-25) |
@@ -901,6 +907,8 @@
 | D-784 | 공개 소스·비공개 운영 설정과 staging 경계 | Accepted |
 | D-805 | 호스트 업데이트: 장치 owner는 네이티브, 나머지는 컨테이너 — 역할별 두 경로와 현장 전체 동결 관문 | Proposed |
 | D-881 | A/B 이미지의 기체 상태와 슬롯별 적용 기록을 분리한다 | Proposed |
+| D-915 | Immutable physical evidence export with measured joint provenance | Accepted |
+| D-916 | Atomic raw source stamps on validated OMX joint snapshots | Accepted |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 

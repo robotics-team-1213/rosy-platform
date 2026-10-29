@@ -2,15 +2,10 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import asdict
-import json
 import math
 import re
 
-from rosy.processes.palletizing.cell import load_cell
-from rosy.processes.palletizing.compiler import compile_job, job_document
-from rosy.processes.palletizing.plan_bundle import compile_plan_bundle
-from rosy.processes.palletizing.recipe import load_recipe
+from rosy.processes.palletizing import compilation
 from rosy.processes.palletizing.submission import CellJobCompilation, compile_cell_submission
 
 
@@ -32,25 +27,11 @@ class PalletizingCellCompiler:
 
     def item_geometry(self, recipe: Mapping) -> dict[str, dict[str, float]]:
         """Supply recipe-owned height/depth for Fleet's persisted goal predicates."""
-        parsed = load_recipe(json.dumps(dict(recipe), allow_nan=False))
-        result = {"box": {"grasp_depth_m": parsed.box.grasp_depth, "height_m": parsed.box.height}}
-        if parsed.slip_sheet_thickness is not None:
-            result["slip_sheet"] = {"grasp_depth_m": 0.0, "height_m": parsed.slip_sheet_thickness}
-        return result
+        return compilation.item_geometry(recipe)
 
     def compile(self, recipe: Mapping, cell: Mapping) -> CellJobCompilation:
-        if not isinstance(recipe, Mapping) or not isinstance(cell, Mapping):
-            raise ValueError("recipe and cell must be document mappings")
-        parsed_recipe = load_recipe(json.dumps(dict(recipe), allow_nan=False))
-        parsed_cell = load_cell(json.dumps(dict(cell), allow_nan=False))
-        job = compile_job(parsed_recipe, parsed_cell, tol_m=self.tol_m)
-        plan = compile_plan_bundle(job, parsed_recipe, parsed_cell,
-                                   process_artifact_digest=self.process_artifact_digest, tol_m=self.tol_m)
-        return CellJobCompilation(
-            job=job_document(job),
-            plan_bundle=plan.bundle,
-            ledger_markers=tuple(asdict(marker) for marker in plan.ledger_markers),
-        )
+        return compilation.compile_cell_job(recipe, cell,
+            process_artifact_digest=self.process_artifact_digest, tol_m=self.tol_m)
 
     def compile_submission(self, candidate: Mapping, *, workcell_id: str, instance_id: str) -> dict:
         return compile_cell_submission(
