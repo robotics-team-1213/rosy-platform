@@ -12920,3 +12920,10 @@ osy-d395-s1d\`.
 - 증거: native CLI가 소비하는 배열과 selector의 full_invocations를 독립 대조했다. 실제 Gazebo 63 entities의 원문과 SDK type 등록명을 비교하여 누락한 각속도·접촉·대상 속도를 확인했다. 관측된 값을 source-clock/전체 물리 수용으로 바꾸지 않는다.
 - Gate: 변화 없음. G1c 전체와 G2–G6, 실물·운영·배포·착지/push는 미완료다.
 - CE: 새 교훈 기록 — [FULL JSON과 실제 행렬 구분](solutions/workflow-issues/full-mode-json-does-not-prove-full-matrix-execution-2026-10-29.md). 정본 함수·배열·원격 실행 로그가 근거이며 claims/frontmatter 검사를 통과했다.
+
+## 2026-10-29 · OMX 관제 PC 후속 복구
+
+- 변경: 관측 화면 유닛이 선택적 `omx-camera-view.env`의 `ROSY_VIEW_ARGS`를 받아 소스 키를 설정한다. ExecStart drop-in 없이 front 역할과 wrist producer를 연결하는 절차를 배포 안내에 추가했다.
+- 검증: 원격 user systemd 실행으로 기본값·별도 소스 키 인자 누락을 먼저 재현(2 failed, 3 passed)한 뒤 수정본 `071d9941bf`에서 관측·카메라·arm-status·업데이터·harness 247 passed, 4 skipped. 브라우저 검사는 이 실행의 수용 근거가 아니다.
+- 운영: 호스트 업데이터 설정을 백업하고 기존 Arm S 유닛을 units/unit_files에 추가했다. 두 카메라는 fresh. 관측기 설정의 예전 장치 ID와 현재 연결된 장치가 다름을 확인했다. 녹화/chunk owner가 실행 중이어서 카메라 drop-in 이관·관측기 장치 선택 변경·다음 업데이트 전환 검증은 보류했다.
+- CE: 기존 교훈 갱신 — [카메라 readiness와 업데이트 복구](solutions/runtime-errors/omx-camera-readiness-preview-active-before-owning-camera-2026-10-23.md). 호스트 journal의 sole-owner 거부·core_common import 실패·rolled_back/known_bad/switched 및 보존된 baseline 디렉터리를 대조했다. 실물 이동 수용은 수행하지 않았다.
