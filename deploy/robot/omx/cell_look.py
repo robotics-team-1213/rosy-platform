@@ -45,7 +45,8 @@ def look(cell, config: dict, record: dict, site: str, target: dict, write_librar
         pixel = cell_pivot.mark_jaws(cell, config, sleep, near=near)
         if pixel is None:
             rows.append({"look": i, "seen": False, "expected_px": [round(v, 1) for v in near[0]]})
-            return {"verdict": "pass", "why": "jaw mark not seen: the plan stands", "looks": rows, "total_mm": round(total, 1)}
+            # no measurement, no descent: a look that passed unseen let a push come down on a box (2026-10-29)
+            return {"verdict": "refuse", "why": "jaw mark not seen near where the jaws should be", "looks": rows, "total_mm": round(total, 1)}
         tcp = tcp_from_mark(cell_pivot.mark_to_arm(record, config, site, pixel, z), yaw, region)
         d = (box[0] - tcp[0], box[1] - tcp[1])
         off = 1000 * math.hypot(*d)

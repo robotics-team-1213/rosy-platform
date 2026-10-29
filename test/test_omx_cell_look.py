@@ -81,3 +81,12 @@ def test_the_expected_jaw_pixel_is_mark_to_arm_backwards():
     raw = (0.05, 0.11)
     px = cell_pivot.mark_pixel(record, config, "floor", raw, 0.10)
     assert cell_pivot.mark_to_arm(record, config, "floor", px, 0.10) == pytest.approx(raw, abs=1e-6)
+
+
+def test_an_unseen_jaw_mark_refuses_the_descent(tmp_path, monkeypatch):
+    monkeypatch.setattr(cell_pivot, "mark_jaws", lambda cell, config, sleep, near=None: None)
+    monkeypatch.setattr(cell_pivot, "mark_pixel", lambda record, config, site, raw, z: (0.0, 0.0))
+    monkeypatch.setattr(cell_pivot, "joints_tcp", lambda joints: (0.1, 0.2, 0.08, 0.0))
+    target = {"pick": {"x": 0.1, "y": 0.2}, "place": {}, "object": {"raw_m": [0.1, 0.2]}, "bias_region": REGION}
+    out = cell_look.look(Arm((0.1, 0.2), (0, 0)), {"params": None}, {}, "floor", target, None, tmp_path, sleep=lambda s: None)
+    assert out["verdict"] == "refuse" and "not seen" in out["why"]
