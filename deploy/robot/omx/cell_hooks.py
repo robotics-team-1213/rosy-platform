@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """The per-carry hooks of a pick, assembled in one place, in the order the carry runs them:
 
-  above the box     cell_reach (FK feed-forward) -> cell_wrist_ref (reference servo) -> cell_fingers (finger servo)
+  above the box     cell_reach (FK feed-forward) -> cell_look (top camera: jaws vs box in one image, last word on
+                    position) -> cell_wrist_ref (reference servo) -> cell_fingers (finger servo)
                     -> cell_wrist (calibrated band)          one chain; the first refusal stops the descent
   after the descent cell_pinch (lower, then look: the box between the fingers)
   on an empty grasp cell_feel (feel along the closing axis)
@@ -15,6 +16,7 @@ from pathlib import Path
 
 import cell_feel
 import cell_fingers
+import cell_look
 import cell_params as prm
 import cell_pinch
 import cell_reach
@@ -22,7 +24,7 @@ import cell_wrist
 import cell_wrist_ref
 
 
-def pick_hooks(config: dict, cell, target: dict, write_library, source: str, dest_site: str, emit=None):
+def pick_hooks(config: dict, cell, target: dict, write_library, source: str, dest_site: str, emit=None, calibration=None):
     """(hover hook chain, after-place reference capture, after-descent pinch check, empty-grasp feel search) for one
     pick; None where off.
     `config` carries the pick's own plan values (jaw opening): the gap between the open pads comes from it."""
@@ -30,6 +32,7 @@ def pick_hooks(config: dict, cell, target: dict, write_library, source: str, des
     params, spec = config.get("params"), config.get("wrist") or {}
     gap = 30.0 + (config["plan"]["grip_open"] - prm.get(params, "gripper.held_30mm")) * prm.get(params, "gripper.gap_mm_per_unit")
     wrist = cell_reach.chain(cell_reach.hook(config, cell, target, write_library),
+                             cell_look.hook(config, cell, target, write_library, calibration, source),
                              cell_wrist_ref.ref_hook(config, cell, target, write_library, source),
                              cell_fingers.finger_hook(config, cell, target, write_library, gap),
                              cell_wrist.hook(config, cell, target, write_library, emit))

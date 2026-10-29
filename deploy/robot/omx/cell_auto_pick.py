@@ -450,7 +450,7 @@ def run_auto(cell, config, calibration, calibration_path, catalog, roi, source, 
                 close_episode(cell, episode, False, f"held: {held['reason']}")
                 cell_attempts.record(config, calibration, source, dest, attempt, tried, t0, choices)
                 return {**out, "result": f"held: {held['reason']}"}
-            wrist, capture, pinch, feel = cell_hooks.pick_hooks(same, gate, target, cp.write_library, source, dest_site, cd.emit)
+            wrist, capture, pinch, feel = cell_hooks.pick_hooks(same, gate, target, cp.write_library, source, dest_site, cd.emit, calibration)
             moved = transfer_folded(gate, target["library"], wrist=wrist, after_place=capture,
                                     pinch=pinch, feel=feel, sequence=FOLDED if folded else cp.SEQUENCE)
             tried["envelope"] = gate.assessment
