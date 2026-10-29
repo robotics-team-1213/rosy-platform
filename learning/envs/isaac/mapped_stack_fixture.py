@@ -38,7 +38,7 @@ RL_FIXTURE = dict(FIXTURE, revision='confluence-map-stacking-rl-v1',
 
 CUBE_FIXTURE = dict(FIXTURE, revision='confluence-map-cube-stack-v1', trials=1,
     bin_origin_m=[.115, 0., .025], bin_size_m=[.09, .09, .09],
-    release_clearance_m=.035)
+    release_clearance_m=.035, row_clearance_m=.0002, release_feedback_iterations=4)
 
 
 def plan(cube=False):
@@ -101,6 +101,23 @@ def free_lift(box, arm, source_z):
         and all(norm(f) > .005 for f in forces[2*arm:2*arm+2])
         and all(norm(f) <= .001 for n, f in enumerate(forces) if n not in (2*arm, 2*arm+1))
         and explained_contacts(box))
+
+
+def cube_release_target(index, sample, source_z):
+    item = plan(True)[index]
+    box, arm = sample['boxes'][index], item['arm']
+    if not free_lift(box, arm, source_z):
+        raise ValueError('cube carry lost bilateral free lift before release')
+    desired = item['target'][:]
+    desired[2] += CUBE_FIXTURE['release_clearance_m']
+    if index % 3:
+        def half_width(body):
+            w, x, y, z = body['orientation']
+            row = (2*(x*y+z*w), 1-2*(x*x+z*z), 2*(y*z-x*w))
+            return sum(abs(row[k])*item['size'][k]/2 for k in range(3))
+        neighbor = sample['boxes'][index-1]
+        desired[1] = max(desired[1], neighbor['position'][1]+half_width(neighbor)+half_width(box)+CUBE_FIXTURE['row_clearance_m'])
+    return [sample['tcps'][arm][k]+desired[k]-box['position'][k] for k in range(3)]
 
 
 def stable_box(box, index, cube=False):

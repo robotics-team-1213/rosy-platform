@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 import subprocess
 
-from mapped_stack_fixture import CUBE_FIXTURE, DT, FIXTURE, PROFILE, ROOT, free_lift, home, judge, plan, stable_box
+from mapped_stack_fixture import CUBE_FIXTURE, DT, FIXTURE, PROFILE, ROOT, cube_release_target, free_lift, home, judge, plan, stable_box
 
 
 class Planner:
@@ -236,7 +236,12 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
                 move(arm, [*item['target'][:2], .145])
                 if cube:
                     layer['carry_sample'] = snapshot()
-                move(arm, [*item['target'][:2], item['target'][2]+(.003+fixture['release_clearance_m'] if cube else .003)])
+                    layer['release_samples'] = []
+                    for _ in range(fixture['release_feedback_iterations']):
+                        move(arm, cube_release_target(index, snapshot(), float(p[2])))
+                        layer['release_samples'].append(snapshot())
+                else:
+                    move(arm, [*item['target'][:2], item['target'][2]+.003])
                 if cube:
                     layer['release_sample'] = snapshot()
                 grip(arm, initial['gripper']['release'])
