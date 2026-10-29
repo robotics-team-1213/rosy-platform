@@ -74,3 +74,26 @@ This source verification is not a passing physical cube run.
 CE: 미해결 — the full cube release mechanism is under correction. The earlier
 fixed-root lesson remains verified for the fallback; no new solved lesson or
 full-cube success is claimed by these diagnostic entries.
+
+## 2026-10-29 — final release gate stopped seed 42: FAILED
+
+Source `2689a0c35a994e59bd7386705dd415d79f9d1d25`, run
+`4fecd020591e5bfc9a8872f52de14fc5`. The final gate prevented opening on the first
+bar after four measured-correction moves. Bilateral retention was present, but
+position correction remained approximately 0.868, 0.866, 0.866 and 0.865 mm.
+Thus this was a retained-cargo convergence failure, not a completed placement.
+
+The repeated calculation anchored the next target at measured TCP position.
+Because the held cargo and measured TCP shared the loaded-arm tracking offset,
+that expression repeatedly produced almost the same absolute IK target. The
+observed constant error was not integrated into the next command. A regression
+now models constant loaded-arm tracking bias; the next experiment accumulates
+measured cargo error from the previous commanded TCP target. Final retention,
+50 µm convergence and 1 µm neighbor-clearance-deficit gates remain unchanged.
+
+SDK exit 0, verified report, terminal FAILED and owned cleanup were confirmed.
+Snapshot under workspace:
+`Rosy/artifacts/isaac/omx-cube-20261029/4fecd020591e5bfc9a8872f52de14fc5-03e2e1845cf8453e82fc39f0b65a32e0/`.
+Report: 85,388 bytes,
+`sha256=b840fc676499a68799272c723d89340191d173d271245589fe37ea495dcd81b1`.
+No later seed was started by the failed-run orchestration.

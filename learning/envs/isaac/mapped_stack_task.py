@@ -237,8 +237,12 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
                 if cube:
                     layer['carry_sample'] = snapshot()
                     layer['release_samples'] = []
+                    layer['release_commands'] = []
+                    release_command = None
                     for _ in range(fixture['release_feedback_iterations']):
-                        move(arm, cube_release_target(index, snapshot(), float(p[2])))
+                        release_command = cube_release_target(index, snapshot(), float(p[2]), commanded_tcp=release_command)
+                        layer['release_commands'].append(release_command)
+                        move(arm, release_command)
                         layer['release_samples'].append(snapshot())
                 else:
                     move(arm, [*item['target'][:2], item['target'][2]+.003])

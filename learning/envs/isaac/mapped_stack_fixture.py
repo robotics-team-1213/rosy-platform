@@ -103,7 +103,7 @@ def free_lift(box, arm, source_z):
         and explained_contacts(box))
 
 
-def cube_release_target(index, sample, source_z):
+def cube_release_target(index, sample, source_z, commanded_tcp=None):
     item = plan(True)[index]
     box, arm = sample['boxes'][index], item['arm']
     if not free_lift(box, arm, source_z):
@@ -117,7 +117,8 @@ def cube_release_target(index, sample, source_z):
             return sum(abs(row[k])*item['size'][k]/2 for k in range(3))
         neighbor = sample['boxes'][index-1]
         desired[1] = max(desired[1], neighbor['position'][1]+half_width(neighbor)+half_width(box)+CUBE_FIXTURE['row_clearance_m'])
-    return [sample['tcps'][arm][k]+desired[k]-box['position'][k] for k in range(3)]
+    anchor = sample['tcps'][arm] if commanded_tcp is None else commanded_tcp
+    return [anchor[k]+desired[k]-box['position'][k] for k in range(3)]
 
 
 def cube_release_ready(index, sample, source_z):
