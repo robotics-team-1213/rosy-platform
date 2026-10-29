@@ -5123,3 +5123,10 @@
 - 증거: [동결 검증](../../docs/validation/recovery-observer-client-2026-10-29/result.md). 원격 client/API/auth 53 pass·skip 0, runner/classifier exit 0, NEW 0. 기존 실제 API와 loopback HTTP·권한·응답 유실·프록시/리다이렉트·CLI를 검증했다. 관절 짝 4건을 RED 재현한 뒤 POST 전 거절로 보강했고 독립 계약 재검토에 주요 지적이 없다.
 - Gate: 실행·학습·생산자 수용 변화 없음. 실제 Gazebo의 링크별 측정과 source UTC 결속은 별도 수집기 요구사항으로 안내했다.
 - CE: 해당 없음 — 코드·회귀·사용 안내로 판단을 복원할 수 있으며 source 측정 공백은 미해결 요구사항이다.
+
+## 2026-10-29 · 8728fc6eb7 · observer CLI 시험 입력의 비밀값 검사 호환
+
+- 변경: 비정상 입력의 오류 출력 검사를 명시적 짧은 자리표시자로 고쳤다. 고정 입력과 중간 참조식 수정이 원격 secret guard에 걸린 이력을 보존했다. 제품 코드·스캐너·예외·실패 기준선은 바꾸지 않았다.
+- 증거: [별도 수정 검증](../../docs/validation/recovery-observer-client-2026-10-29/guard-correction.md). 해당 커밋에서 원격 client 전체와 정확 secret guard 36 pass·skip 0·NEW 0. 독립 검토는 32자 미만 거절·출력 미노출 의도가 유지됨을 확인했다.
+- Gate: 공식 재착지는 별도 확인한다. 실제 관측 생산자·장치·학습 수용 변화는 없다.
+- CE: 해당 없음 — 기존 검사기의 명시적 자리표시자 규칙과 이번 회귀·수정 기록에서 이유를 복원한다.

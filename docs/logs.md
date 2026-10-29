@@ -12927,3 +12927,10 @@ osy-d395-s1d\`.
 - 증거: 원격 client/API/auth 53 pass·skip 0·NEW 0. 실제 HTTP 전송과 기존 API fixture를 포함하며 fake owner·합성 시료를 실제 Gazebo나 장치 수용으로 해석하지 않는다.
 - Gate: 없음. 실제 source 시계·링크별 측정·사람 라벨·학습·배포·실물 수용은 별도다.
 - CE: 해당 없음 — solved infrastructure/producer 주장은 없으며 구현된 거절 조건은 시험에 남는다.
+
+## 2026-10-29 · 8728fc6eb7 · observer 검수 시험의 native guard 실패·수정 근거
+
+- 변경: 기존 53-case 기능 기록을 보존하고 `validation/recovery-observer-client-2026-10-29/guard-correction.md`에 공식 native 중단·단독 재현·main 통과·중간 실패와 최종 36 pass를 추가했다.
+- 증거: 원격 client/정확 secret guard exit 0, skip 0, classifier NEW 0. 원래 실패 로그와 최종 검증 로그는 외부 TEMP의 SHA-256으로 결속했다.
+- Gate: 없음. 실패 이력을 최초 완전 통과로 바꾸거나 예외로 숨기지 않았다.
+- CE: 해당 없음 — 해결 판단을 기존 검사기 규칙·최종 시험·수정 기록에서 복원한다.

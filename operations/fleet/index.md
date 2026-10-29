@@ -104,8 +104,8 @@
 
 ## 최근 기록
 
+- 2026-10-29 · 8728fc6eb7 · observer CLI 시험 입력의 비밀값 검사 호환
 - 2026-10-29 · afa10f26b2 · 독립 복구 관측 제출용 호스트 클라이언트
 - 2026-10-29 · uncommitted · fix(fleet): proposal admission 회귀 검증과 현 main 통합
 - 2026-10-29 · ccc8712ece · 이송 결과의 검수 패키지와 복구 root 분할 검사
 - 2026-10-29 · uncommitted · fix(fleet): Trip 제안 승인과 실제 작업 admission을 원자적으로 결속한다
-- 2026-10-29 · f2af364bcf · AI fact 요청 제한 시험 시계 고정
