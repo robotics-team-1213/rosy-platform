@@ -12967,3 +12967,9 @@ osy-d395-s1d\`.
 - 증거: 전체 board Chromium61 passed, 강화부분16 passed, 공식 영향641 passed/61 skipped와 overhead785 passed, NEW0. A source/B18장 직접 검토를 수행했다. 초기50 통과 뒤 발견한 늦은 응답 역전도 RED4→수정했고 실패 원본을 유지했다.
 - gate 변화: 없음. 실제 정지 전달/readback·FIELD·전체 G2/G3·배포/착지/push/merge 수용과 분리한다.
 - CE: 해당 없음 — 시간/상태·권한 경계의 이유가 코드·회귀·이 기록에 남는다.
+
+## 2026-10-29 · 70d4a0e579 · Robot SSH 작업 결과 UI 검증
+
+- 변경: `validation/robot-ssh-action-status-2026-10-29/`에 작업/조회 상태 분리·초기/상호 잠금·화면 수명의 원격 RED/GREEN, 실제 실패 복구와 캡처32장 hash를 동결했다.
+- 증거: 최종 browser47pass/0skip, 공식 affected593pass/189skip/NEW0. 독립 A source 검토의 초기 P2를 해결했고 B는32/32장 직접 확인했다. 전체 셸·실제 장치 수용과 단독 패널 근거를 구분한다.
+- gate 변화: 없음. CE: 해당 없음 — 코드·회귀·frozen 기록으로 설명되는 수정이다.

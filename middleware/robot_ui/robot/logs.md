@@ -1359,3 +1359,9 @@
 - 변경: 긴 정지 오류를 두 줄 높이의 스크롤 영역에 표시하고 줄바꿈·키보드 접근을 보장했다. 데스크톱 브랜드의 축소를 막아 실제 캡처에서 찾은 겹침을 수정했다.
 - 증거: 날짜별 검증 기록 `docs/validation/robot-pilot-learning-ux-2026-10-28/result.md`에 RED·고정 SHA·원격 영향/브라우저 결과·독립 소스/실제 화면 검토를 구분했다. 설치 자산·라우트 회귀 fce9c60216은20 passed, skip0이다.
 - gate 변화: 없음. 실제 장치·APK/ARM64 빌드·현장 수용은 별도다. CE: 해당 없음 — 기존 크기 이력 교훈을 적용하고 이번 경계의 판단을 코드·회귀·D-910에 남겼다.
+
+## 2026-10-29 · 70d4a0e579 · 임시 SSH 작업 결과와 화면 수명
+
+- 변경: 비밀번호 발급·끄기 결과를 상태 조회와 분리하고 초기 조회·쓰기·후속 조회 동안 두 버튼을 잠근다. 화면 해제 뒤 응답의 DOM 변경·후속 조회를 막는다. 기존 공용 ui-status·button과 API/관리자 경계를 유지했다.
+- 증거: 수정 전 browser8fail을 재현했다. 최종70d4a0e579의 원격 Chromium 전체47pass/0skip, affected593pass/189skip/NEW0. 첫 affected의 가짜 credential 검사 실패를 기존 허용 시험 문자열로 해결하고 재검증했다. A가 초기 GET P2 해결을 확인했고 B가 최종32장 전수 직접 검토했다. frozen `docs/validation/robot-ssh-action-status-2026-10-29/`에 실패·skip·SHA·캡처 범위를 보존했다.
+- gate 변화: 없음. 실제 SSH·장치·ARTIFACT/FIELD·착지·배포·공개 push/merge는 별도다. CE: 해당 없음 — 원인과 수명 판단은 코드·회귀·검증 기록에 남는다.
