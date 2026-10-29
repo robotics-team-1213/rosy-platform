@@ -91,7 +91,7 @@ def transfer_folded(cell, library, closed: float | None = None, wrist=None, afte
             if not status.get("fault") and command not in ("park", f"load {library}"):
                 run("park")
             return {"result": "fault" if status.get("fault") else "refused", "at": command, "steps": steps}
-        if command == "goto above_pick" and wrist is not None:  # cell_wrist: correct the pick before the descent
+        if command == "goto above_pick" and wrist is not None:  # cell_hooks: reach and wrist corrections before the descent
             aligned = wrist()
             steps.append({"command": "wrist", **{k: aligned[k] for k in ("verdict", "dx_mm", "dy_mm", "total_mm")}})
             if aligned["verdict"] == "refuse":
@@ -104,7 +104,7 @@ def transfer_folded(cell, library, closed: float | None = None, wrist=None, afte
                 run("run lift_pick"), run("park")
                 return {"result": "misaligned", "at": "pinch", "pinch": seen, "steps": steps}
         if command == "run lift_place" and status.get("ok") and after_place is not None:
-            after_place()  # hover over the box just placed: the wrist reference for 'centred' (cell_wrist)
+            after_place()  # hover over the box just placed: the wrist reference for 'centred' (cell_wrist_ref)
         if command == "run grasp_pick" and not status.get("holding") and feel is not None:
             status = feel(run)  # cell_feel: an empty grasp feels again, shifted along the closing axis
             if status.get("contact") or not status.get("ok"):

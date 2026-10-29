@@ -161,29 +161,50 @@ def _px_mm2(px, mm) -> float | None:
     return None if a_px < 1 else cv2.contourArea(cv2.convexHull(np.asarray(mm, np.float32))) / a_px
 
 
+def _measure_blob(px, record: dict, camera: dict, catalog: list, surface_z: float, params) -> list:
+    """One blob's image pixels -> classify results. Blob height is unknown before matching, so each catalogue top
+    height is tried and the tallest-first full match kept; a blob matching none is measured at the first height."""
+    best = None
+    for h in sorted({o["top_height_mm"] for o in catalog}, reverse=True):
+        top = top_face(px.astype(float), h, camera, surface_z, params)
+        mm = to_mm(top, record, camera, surface_z + h / 1000.0)
+        res = classify(mm, catalog, _px_mm2(top, mm), params)
+        if all(r["matched"] for r in res):
+            return res
+        best = best or res
+    return best
+
+
 def detect(img, roi, record: dict, camera: dict, catalog: list, surface_z: float = 0.0, params=None,
            surface_px=None) -> list:
-    """All objects in the ROI. Blob height is unknown before matching, so each catalogue top height is tried
-    and the tallest-first best match kept; a blob matching none is measured at the first entry's height."""
+    """All objects in the ROI. A blob that matches nothing is tried as boxes that only touch (cell_split); each piece
+    is judged on its own, and the pieces replace the blob when at least one matches the catalogue (2026-10-29: the
+    1-cell matched, the 2-cell beside it read 63 x 47 mm with its side faces and stays an unmatched neighbour). Each
+    object carries `hull_px`, the outline of its own pixels, so a finger check sees a touching neighbour as one."""
+    import cell_split
+
     x0, y0, _, _ = roi
     n, labels, stats, _ = cv2.connectedComponentsWithStats(foreground(img, roi, params=params, surface_px=surface_px))
     out = []
     for i in range(1, n):
         if stats[i, cv2.CC_STAT_AREA] < prm.get(params, "objects.min_px", MIN_PX):
             continue
-        px = np.column_stack(np.nonzero(labels == i))[:, ::-1] + [x0, y0]
-        best = None
-        for h in sorted({o["top_height_mm"] for o in catalog}, reverse=True):
-            top = top_face(px.astype(float), h, camera, surface_z, params)
-            mm = to_mm(top, record, camera, surface_z + h / 1000.0)
-            res = classify(mm, catalog, _px_mm2(top, mm), params)
-            if all(r["matched"] for r in res):
-                best = res
-                break
-            best = best or res
-        out += best
+        blob = labels == i
+        pieces = [blob]
+        found = _measure_blob(np.column_stack(np.nonzero(blob))[:, ::-1] + [x0, y0], record, camera, catalog, surface_z, params)
+        if not all(r["matched"] for r in found) and prm.get(params, "objects.split_touching"):
+            parts = cell_split.split_touching(blob, prm.get(params, "objects.split_peak_frac"), prm.get(params, "objects.min_px", MIN_PX))
+            measured = [_measure_blob(np.column_stack(np.nonzero(q))[:, ::-1] + [x0, y0], record, camera, catalog, surface_z, params)
+                        for q in parts]
+            if parts and any(r["matched"] for res in measured for r in res):
+                pieces, found = parts, None
+                for q, res in zip(parts, measured):
+                    hull = cv2.convexHull(np.column_stack(np.nonzero(q))[:, ::-1].astype(np.int32) + [x0, y0]).reshape(-1, 2)
+                    out += [{**r, "split_from": "touching", "hull_px": hull.tolist()} for r in res]
+        if found is not None:
+            hull = cv2.convexHull(np.column_stack(np.nonzero(pieces[0]))[:, ::-1].astype(np.int32) + [x0, y0]).reshape(-1, 2)
+            out += [{**r, "hull_px": hull.tolist()} for r in found]
     return out
-
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
