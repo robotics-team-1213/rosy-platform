@@ -22,10 +22,11 @@ import cell_params as prm
 def free_mm(mask, roi, pixel_fn, start, direction, across_offsets, reach_mm: float, step_mm: float = 1.0,
             own_mm: float = 0.0) -> float:
     """Distance (mm) from `start` along `direction` to the first foreground, sampled at each across offset (mm);
-    reach_mm when nothing is met. Foreground running on from `start` up to own_mm is the object's own."""
+    reach_mm when nothing is met. Foreground running on from `start` up to own_mm is the object's own; a 1 mm gap
+    does not end that run (a slightly skewed outline starts the side face a step out on one pad edge)."""
     d = np.asarray(direction, float)
     n = np.array([-d[1], d[0]])
-    t, leaving = step_mm, True
+    t, clear = step_mm, 0.0
     while t <= reach_mm:
         hit = False
         for s in across_offsets:
@@ -35,9 +36,10 @@ def free_mm(mask, roi, pixel_fn, start, direction, across_offsets, reach_mm: flo
             col, row = round(px[0]) - roi[0], round(px[1]) - roi[1]
             hit = hit or (1 <= row < mask.shape[0] - 1 and 1 <= col < mask.shape[1] - 1
                           and bool(mask[row - 1:row + 2, col - 1:col + 2].any()))
+        leaving = clear < 2.0
         if hit and not (leaving and t <= own_mm):
             return t - step_mm
-        leaving = leaving and hit
+        clear = 0.0 if hit and leaving else clear + step_mm
         t += step_mm
     return reach_mm
 

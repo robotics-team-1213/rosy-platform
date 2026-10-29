@@ -548,6 +548,7 @@ def test_the_boxs_own_side_face_past_its_outline_is_not_a_neighbour_but_a_touchi
     box = {"raw_m": [0.0, 0.1], "width_mm": 30, "length_mm": 60, "long_axis_deg": 0.0,
            "hull_px": [[70, 85], [130, 85], [130, 115], [70, 115]]}
     mask[85:121, 70:131] = 255  # its top and, 5 mm past the outline on +y, its side face and shadow (2026-10-29 board)
+    # the outline removal leaves a 1 mm gap before the strip: still the box's own
     assert auto.finger_room(mask, (0, 0, 200, 200), px, box)["margin_mm"] == 8.0
     mask[121:150, 70:131] = 255  # a second box touching it: the foreground runs on
     assert auto.finger_room(mask, (0, 0, 200, 200), px, box)["margin_mm"] is None
