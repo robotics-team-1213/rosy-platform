@@ -40,6 +40,7 @@ for kind in ['info', 'drive']:
                     'bar': ('Fixture', 'ok', 73, False)})
     assert image.size == (320, 240)
     expected = card.render_card(payload, size=(320, 208))
+    assert expected.size == (320, 208)
     assert ImageChops.difference(image.crop(card.expression_box()), expected).getbbox() is None
     pixels = card.to_panel(image)
     assert pixels.shape == (320, 240, 2) and str(pixels.dtype) == 'uint8'
