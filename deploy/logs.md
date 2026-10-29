@@ -4047,3 +4047,10 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거 범위: 현재 현장 A/B/S 전체 Compose 동등성과 manifest credential 지문 일치는 별도로 확인했다. old posted fa3aeeed4d92의 CI attempt2가 success이고 signer dry-run은 would-sign으로 바뀌었지만, 그 후보는 새 매핑 인터페이스를 포함한 후보가 아니다. 제안 site.env를 그 옛 candidate에 먼저 적용하지 않는다.
 - gate 변화: 없음. 새 서명 candidate와 설정 동시 전환·실제 서비스 수용은 아직 미실행이다. 토큰 값·개인키를 기록하거나 unsigned overlay 허용 목록을 확대하지 않았다.
 - CE: 미해결 — 소스·회귀 검증은 통과했으며 남은 게시·candidate·운영 전환은 별도 근거가 필요하다.
+
+## 2026-10-29 · uncommitted · SD 교훈 기록의 역사 비밀 검사 판정
+
+- 변경: commit c7b9b53a57의 기존 fake-surface 교훈에 추가된 Git 식별자 세 개를 독립 검토해 정확한 commit/path/rule baseline 한 건만 등록했다. 각 값이 실제 Git commit 객체임을 확인했으며 사람 승인으로 표시하지 않는다. 기존 baseline 행과 순서, 스캐너와 임계값을 유지한다.
+- 증거: 현재 본문은 commit 16871f72d4에서 문맥을 보강해 실제 scanner 0건을 확인했다. 이 수정은 불변 c7의 추가 줄을 지우지 않으므로 게시 이력 검사는 별도 판정이 필요하다. 제품·UAC·카드 동작은 바꾸지 않았다. 커밋된 후보의 게시 검사와 원격 회귀는 후속 실제 결과로 확인한다.
+- gate 변화: 없음. Git 객체 판정은 FULL 착지·공개 게시·현장 수용을 대신하지 않는다.
+- CE: 해당 없음 — 기존 git-ids-in-validation-records 교훈의 본문 검사와 역사 검사 구분을 적용했다.
