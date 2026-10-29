@@ -4032,3 +4032,10 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거 범위: 현재 현장 A/B/S 전체 Compose 동등성과 manifest credential 지문 일치는 별도로 확인했다. old posted fa3aeeed4d92의 CI attempt2가 success이고 signer dry-run은 would-sign으로 바뀌었지만, 그 후보는 새 매핑 인터페이스를 포함한 후보가 아니다. 제안 site.env를 그 옛 candidate에 먼저 적용하지 않는다.
 - gate 변화: 없음. 새 서명 candidate와 설정 동시 전환·실제 서비스 수용은 아직 미실행이다. 토큰 값·개인키를 기록하거나 unsigned overlay 허용 목록을 확대하지 않았다.
 - CE: 미해결 — 소스·회귀 검증은 통과했으며 남은 게시·candidate·운영 전환은 별도 근거가 필요하다.
+
+## 2026-10-29 · 8a381b7f12 · 자기 배치의 준비 슬롯 중복 예약 수정
+
+- 변경: carried 집합을 자기 leader를 포함한 전체 티켓에서 먼저 계산하고 busy 합계에서만 자기 행을 제외한다. k2의 슬롯 낭비와 k4의 자체 정체를 막으며 FIFO·urgent·stale·held 처리와 MAX_PREPARING=3은 유지한다.
+- 증거: tests-only commit bc303cdb1b의 공식 원격 회귀는 7 failed/19 passed, known_failures NEW7이었다. 수정 commit 8a381b7f12의 land_prepare·land_queue·land_batch 집중 회귀는 85 passed, NEW0/known0/flaky0이다. 로그는 Git 밖 receipts/2026-10-29-queue-own-batch-slots/red 및 green에 보존한다.
+- gate 변화: 없음. 공식 affected 선택은 FULL이며 land_async의 전체 착지 검증을 유지한다. 이미 실행 중인 worker는 이 소스를 다시 읽지 않으므로 현재 큐 대기가 풀렸다고 주장하지 않는다. 공유 main 게시·장치 동작은 이 변경의 범위가 아니다.
+- CE: 해당 없음 — 전체 티켓으로 carried를 구한 뒤 자기 행만 제외해야 한다는 원인과 재현 조건은 최종 코드 및 k2/k4·다른 pending/preparing 예약을 검증하는 8개 회귀 시험에 직접 남는다. 별도 교훈 문서는 늘리지 않는다.
