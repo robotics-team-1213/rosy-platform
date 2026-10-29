@@ -150,6 +150,41 @@ def test_missing_video_cannot_create_a_success_receipt(server, tmp_path):
     assert not fetch_http._receipt_path(tmp_path / "raw", RID).exists()
 
 
+@pytest.mark.parametrize("suffix", [".mp4", ".jsonl"])
+def test_changed_paired_bytes_are_not_blessed_again(server, tmp_path, suffix):
+    import bag_to_video
+
+    def canonical(folder, out, codec):
+        rc, rows = _paired_convert(folder, out, codec)
+        target = out / (bag_to_video.output_stem(folder, {"device": "rosy_01"}) + ".jsonl")
+        rows.with_suffix(".mp4").rename(target.with_suffix(".mp4"))
+        rows.rename(target)
+        return rc, target
+
+    assert _main(server[0], tmp_path, canonical) == 0
+    receipt = fetch_http._receipt_path(tmp_path / "raw", RID)
+    before = receipt.read_bytes()
+    output = next((tmp_path / "video").glob("*" + suffix))
+    output.write_bytes(output.read_bytes() + (b"\n" if suffix == ".jsonl" else b"changed"))
+    assert _main(server[0], tmp_path, lambda *a: pytest.fail("changed evidence overwritten")) == 1
+    assert receipt.read_bytes() == before
+
+
+def test_interrupted_conversion_keeps_partial_outputs_and_recovers(tmp_path):
+    import bag_to_video
+    from test_bag_to_video import _write_session
+    session = _write_session(tmp_path)
+    out = tmp_path / "video"
+    out.mkdir()
+    meta = json.loads((session / "session.json").read_text())
+    partial = out / (bag_to_video.output_stem(session, meta) + ".mp4")
+    partial.write_bytes(b"interrupted encoder output")
+    rc, sidecar = fetch_http.default_convert(session, out, "h264")
+    assert rc == 0 and sidecar.is_file()
+    assert partial.read_bytes() != b"interrupted encoder output"
+    assert any(p.read_bytes() == b"interrupted encoder output" for p in out.rglob("*.mp4"))
+
+
 def test_fetch_verifies_extracts_converts_and_pair_checks(server, tmp_path, capsys):
     base, state = server
     assert _main(base, tmp_path, _paired_convert) == 0
