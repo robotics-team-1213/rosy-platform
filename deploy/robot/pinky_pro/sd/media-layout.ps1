@@ -67,6 +67,6 @@ function Resolve-GptProvisionMount([int]$Number, [string]$ExplicitPath, [bool]$F
     $used = @((Get-Volume).DriveLetter | Where-Object { $_ })
     $letter = [char[]]([char]'Z'..[char]'D') | Where-Object { $used -notcontains $_ } | Select-Object -First 1
     if (-not $letter) { Fail "no drive letter is available for the provision partition" }
-    Add-PartitionAccessPath -DiskNumber $Number -PartitionNumber $expected.number -DriveLetter $letter
+    Add-PartitionAccessPath -DiskNumber $Number -PartitionNumber $expected.number -AccessPath "${letter}:\"
     return "${letter}:\"
 }
