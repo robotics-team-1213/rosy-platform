@@ -39,17 +39,26 @@ def load_catalog(path) -> list:
     return data["objects"]
 
 
-def foreground(img, roi, chroma: float | None = None, light: float | None = None, params=None, surface_px=None):
+def foreground(img, roi, chroma: float | None = None, light: float | None = None, params=None, surface_px=None,
+               surface_lab=None):
     """Mask (ROI-sized) of pixels far from the surface's median colour; a shadow moves lightness only a little.
     Thresholds not given come from `params` (a white floor line passes the lightness test, 2026-10-28).
     `surface_px`, a polygon of the site's surface in the image, drops what lies beyond it (the board next to the
-    floor joined a container into one blob along the ROI's edge, 2026-10-28)."""
+    floor joined a container into one blob along the ROI's edge, 2026-10-28). `surface_lab`: the site's own surface
+    colour (OpenCV Lab), or a list of them where a box overhangs more than one surface (the board and its white
+    line); without it the ROI median is used, which on the board was a mix of the white line, the belt and the box
+    (173, 121, 139 against the board's 199, 130, 162), so the box's shadow did not read as a shadow."""
     chroma = prm.get(params, "objects.chroma", CHROMA) if chroma is None else chroma
     light = prm.get(params, "objects.light", LIGHT) if light is None else light
     x0, y0, x1, y1 = roi
     lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB).astype(np.int16)[y0:y1, x0:x1]
-    bg = np.median(lab.reshape(-1, 3), axis=0)
-    far = (np.hypot(lab[..., 1] - bg[1], lab[..., 2] - bg[2]) > chroma) | (np.abs(lab[..., 0] - bg[0]) > light)
+    colours = np.atleast_2d(np.asarray(surface_lab, float)) if surface_lab is not None else [np.median(lab.reshape(-1, 3), axis=0)]
+    far = np.ones(lab.shape[:2], bool)
+    for bg in colours:  # background when close to any of the site's surfaces, or a shadow on one
+        near = (np.hypot(lab[..., 1] - bg[1], lab[..., 2] - bg[2]) <= chroma) & (np.abs(lab[..., 0] - bg[0]) <= light)
+        if prm.get(params, "objects.drop_shadow"):
+            near |= shadow_of(lab, bg, params)
+        far &= ~near
     mask = far.astype(np.uint8) * 255
     if surface_px:
         keep = np.zeros_like(mask)
@@ -58,6 +67,23 @@ def foreground(img, roi, chroma: float | None = None, light: float | None = None
     o, c = (int(prm.get(params, f"objects.{k}")) for k in ("open_px", "close_px"))
     mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, np.ones((o, o), np.uint8))
     return cv2.morphologyEx(mask, cv2.MORPH_CLOSE, np.ones((c, c), np.uint8))
+
+
+def shadow_of(lab, bg, params=None):
+    """Pixels that are the surface's own colour, only darker: the chroma vector a shrunk copy of the surface's and the
+    lightness 45-100 % of it. On the yellow board a box's shadow (dark yellow) passed the chroma test and stood next to
+    the box as a fragment, so no finger gap was left (2026-10-29). A black object (darker than that) or another
+    colour is never a shadow."""
+    c0 = np.array([bg[1] - 128.0, bg[2] - 128.0])
+    c = np.stack([lab[..., 1] - 128.0, lab[..., 2] - 128.0], axis=-1)
+    tol, lo = prm.get(params, "objects.shadow_tol"), prm.get(params, "objects.shadow_min_light")
+    darker = (lab[..., 0] < bg[0]) & (lab[..., 0] >= lo * bg[0])
+    n2 = float(c0 @ c0)
+    if n2 < 64:  # a grey surface: its shadow is grey too
+        return darker & (np.hypot(c[..., 0], c[..., 1]) < tol)
+    k = (c @ c0) / n2
+    resid = np.hypot(*(c - k[..., None] * c0).transpose(2, 0, 1))
+    return darker & (k > 0.2) & (k < 1.15) & (resid < tol)
 
 
 def to_mm(pixels, record: dict, camera: dict, top_z: float):
@@ -175,8 +201,23 @@ def _measure_blob(px, record: dict, camera: dict, catalog: list, surface_z: floa
     return best
 
 
+def object_mask(img, roi, hsv, surface_px=None, params=None):
+    """Mask (ROI-sized) of the objects by their own colour (OpenCV HSV range, e.g. the green containers): the
+    surface, its shadows, white lines and belts do not matter. On the board the green boxes read hue 78-80, the board
+    20, a box's shadow 34 and the white line saturation 25 (2026-10-29)."""
+    x0, y0, x1, y1 = roi
+    mask = cv2.inRange(cv2.cvtColor(img[y0:y1, x0:x1], cv2.COLOR_BGR2HSV), np.array(hsv[0]), np.array(hsv[1]))
+    if surface_px:
+        keep = np.zeros_like(mask)
+        cv2.fillPoly(keep, [np.asarray(surface_px, np.int32) - [x0, y0]], 255)
+        mask &= keep
+    o, c = (int(prm.get(params, f"objects.{k}")) for k in ("open_px", "close_px"))
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, np.ones((o, o), np.uint8))
+    return cv2.morphologyEx(mask, cv2.MORPH_CLOSE, np.ones((c, c), np.uint8))
+
+
 def detect(img, roi, record: dict, camera: dict, catalog: list, surface_z: float = 0.0, params=None,
-           surface_px=None) -> list:
+           surface_px=None, surface_lab=None, object_hsv=None) -> list:
     """All objects in the ROI. A blob that matches nothing is tried as boxes that only touch (cell_split); each piece
     is judged on its own, and the pieces replace the blob when at least one matches the catalogue (2026-10-29: the
     1-cell matched, the 2-cell beside it read 63 x 47 mm with its side faces and stays an unmatched neighbour). Each
@@ -184,7 +225,10 @@ def detect(img, roi, record: dict, camera: dict, catalog: list, surface_z: float
     import cell_split
 
     x0, y0, _, _ = roi
-    n, labels, stats, _ = cv2.connectedComponentsWithStats(foreground(img, roi, params=params, surface_px=surface_px))
+    # objects by their own colour when the cell names it; else anything far from the surface (any colour)
+    seen = (object_mask(img, roi, object_hsv, surface_px, params) if object_hsv is not None
+            else foreground(img, roi, params=params, surface_px=surface_px, surface_lab=surface_lab))
+    n, labels, stats, _ = cv2.connectedComponentsWithStats(seen)
     out = []
     for i in range(1, n):
         if stats[i, cv2.CC_STAT_AREA] < prm.get(params, "objects.min_px", MIN_PX):

@@ -63,11 +63,12 @@ One file per step; a step that a parameter turns off returns None and the carry 
 | Step | Module | Turned off by |
 |---|---|---|
 | Before a run | `cell_preflight` (camera shift, other sessions), `cell_calibrate check/auto` (remap, pivot, surface touch; moving steps need `--commissioning --person-at-switch`) | — |
-| Look and choose | `cell_objects` (catalogue), `cell_auto_pick.choose` (finger gaps, yaw candidates, plan) | — |
+| Look and choose | `cell_objects` (catalogue; objects by their own colour `object_mask` when config `objects.hsv` names it, else surface difference with shadows dropped; touching boxes split by `cell_split`), `cell_auto_pick.choose` (finger gaps, yaw candidates, plan) | `objects.split_touching`, `objects.drop_shadow` |
+| Decision model | `cell_pick_judge` (orders only the candidates the measurement kept; -1 vetoes; no answer keeps the rule order) | absent config `decision_model` |
 | Location correction | `cell_calibrate.self_calibrate` (pivot near the target, or over it), `cell_pivot` (bias regions), `learn_bias` (from a confirmed place) | `calibrate.bias_near_mm`, `pivot.over_target` |
 | D-911 gate | `cell_transfer.Gate` (every command `checked`; each re-plan assessed) | never |
 | Hooks, assembled | `cell_hooks.pick_hooks` | — |
-| Above the box | `cell_reach` (FK feed-forward) → `cell_wrist_ref` (reference servo) → `cell_fingers` (finger servo) → `cell_wrist` (calibrated band) | `reach.enabled`, `wrist.ref_servo`, `wrist.finger_servo`, `wrist.enabled` |
+| Above the box | `cell_reach` (FK feed-forward) → `cell_look` (top camera: jaws vs target in one image; also before a push) → `cell_wrist_ref` (reference servo) → `cell_fingers` (finger servo) → `cell_wrist` (calibrated band) | `reach.enabled`, `look.enabled`, `wrist.ref_servo`, `wrist.finger_servo`, `wrist.enabled` |
 | After the descent | `cell_pinch` (box between the pads at grasp height; mount signature) | `pinch.enabled` |
 | Empty grasp | `cell_feel` (shifted along the closing axis) | `feel.enabled` |
 | Carry and place | `cell_transfer.transfer_folded` (fold home between lift and place) | `auto.fold_before_transport` (0: `cell_pipeline.SEQUENCE`) |
