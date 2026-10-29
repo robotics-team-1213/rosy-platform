@@ -13056,3 +13056,10 @@ osy-d395-s1d\`.
 - 운영: 호스트 업데이터 설정을 백업하고 기존 Arm S 유닛을 units/unit_files에 추가했다. 두 카메라는 fresh. 관측기 설정의 예전 장치 ID와 현재 연결된 장치가 다름을 확인했다. 녹화/chunk owner가 실행 중이어서 카메라 drop-in 이관·관측기 장치 선택 변경·다음 업데이트 전환 검증은 보류했다.
 - gate 변화: 없음. 호스트 카메라 이관과 업데이트 전환 수용은 셀이 쉰 뒤 별도 확인한다.
 - CE: 기존 교훈 갱신 — [카메라 readiness와 업데이트 복구](solutions/runtime-errors/omx-camera-readiness-preview-active-before-owning-camera-2026-10-23.md). 호스트 journal의 sole-owner 거부·core_common import 실패·rolled_back/known_bad/switched 및 보존된 baseline 디렉터리를 대조했다. 실물 이동 수용은 수행하지 않았다.
+
+## 2026-10-29 · 37eba1b6e7 · OMX 재조정 중 camera unit 매핑 보존
+
+- 변경: `camera_environment.monitor`가 baseline에 저장한 preview unit으로 소유자를 조회한다. 기존 role fallback, 장치·producer identity 검사와 제어 budget은 유지한다.
+- 증거: 원격 RED 2 failed/2 passed로 wrist 매핑 누락을 재현한 뒤 수정본에서 관련 61 passed, NEW 0. 유휴 cell/update 잠금 아래 예상 원본 해시 확인·백업 후 호스트에 적용했고, READY·advancing fresh 3회 및 12초 뒤 동일 invocation을 확인했다. 새 릴리스 전환은 수행하지 않았다.
+- gate 변화: 없음. READY는 photometric 근거이며 팔 동작이나 물리 조명 변화 수용을 뜻하지 않는다.
+- CE: 기존 교훈 갱신 — [초기 READY와 재조정 소유권의 차이](solutions/runtime-errors/omx-camera-readiness-preview-active-before-owning-camera-2026-10-23.md). 초기 준비/복원만 unit을 반영하고 실행 중 재조정은 role을 쓴 누락과 기존 mock이 놓친 경로를 보완했다.
