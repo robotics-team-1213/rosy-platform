@@ -76,8 +76,8 @@
 
 ## 최근 기록
 
+- 2026-10-30 · e45f4eb60e · native 진단 묶음의 로컬 mDNS 일치 증거
 - 2026-10-29 · 8a381b7f12 · 자기 배치의 준비 슬롯 중복 예약 수정
 - 2026-10-29 · 2f88347d69 · SD 원격 fixture의 플랫폼 경계 검증
 - 2026-10-29 · 0ab037ed49 · SD mount의 native parameter set 수정
 - 2026-10-29 · uncommitted · Site readiness 게시 검사 출처 검토
-- 2026-10-29 · 05f19a73ea · 팔 credential 및 signed candidate 집중 회귀
