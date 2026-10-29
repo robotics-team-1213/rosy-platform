@@ -78,6 +78,6 @@
 
 - 2026-10-30 · uncommitted · 게시 범위의 역사적 비밀값 오탐 검토
 - 2026-10-29 · uncommitted · ChArUco OpenCV 4.6 API 호환
+- 2026-10-29 · 8a381b7f12 · 자기 배치의 준비 슬롯 중복 예약 수정
 - 2026-10-29 · 2f88347d69 · SD 원격 fixture의 플랫폼 경계 검증
 - 2026-10-29 · 0ab037ed49 · SD mount의 native parameter set 수정
-- 2026-10-29 · uncommitted · Site readiness 게시 검사 출처 검토
