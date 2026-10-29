@@ -4139,6 +4139,15 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - gate 변화: 없음. 공식 affected 선택은 FULL이며 독립 검토 뒤 정상 gateway의 정본 FULL 한 회를 유지한다. 수동 광역 FULL·urgent·no-queue·queue/cache/land record 변경·게시를 하지 않았다.
 - CE: 해당 없음 — private wire 주석과 13개 행동 회귀가 capability·exclusive·fallback·dead marker·일반 병렬·SIM·legacy decode 경계를 직접 남긴다. 기존 bookkeeping 진단 교훈을 확인했으며 별도 교훈 문서는 늘리지 않는다.
 
+## 2026-10-30 · e45f4eb60e · native 진단 묶음의 로컬 mDNS 일치 증거
+
+- 변경: 기존 native rosy-diag collect에 network/mdns.json을 더한다. device identity·설정/실행 hostname·Avahi 상태·ROSY service XML의 이름/종류/허용 TXT/port/TLS를 비교한다. %h/%H house alias를 허용하고 missing·invalid·mismatch 사유를 분리한다. identity/status/XML은 parse 전에 32KiB로 제한하며 raw TXT나 추가 identity 필드는 내보내지 않는다. 모든 출력은 기존 redaction·archive cap·manifest hash 경로를 따른다.
+- 경계: 로컬 hostname·systemctl 조회만 추가한다. network_advertisement는 not_tested로 남으며 daemon·프로토콜·네트워크 설정·인증·모터·gate는 바꾸지 않는다. container 중심의 예전 device_readback은 확장하지 않았다.
+- 증거: tests-only commit d652c9e8bb의 새 진단/입력 제한 회귀는 원격 RED19 failed, 추가 malformed TLS metadata는 commit 11977af9f0에서 TypeError RED1이었다. 최종 commit e45f4eb60e의 collector·redaction·installed native contract 및 정본 affected 묶음은 656 passed/0 skipped, NEW0/known0/flaky0이다. hostname -s의 short-name 조회만 기존 secret flag 금지 시험에서 정확히 구분했다. 외부 receipts/2026-10-30-pinky-mdns-readback에 보존한다.
+- 검증 한계: 초기 파일명 오타/명령 인수 문제로 collection되지 않은 실행은 통과 근거에서 제외했다. 현재 43호기의 LAN 광고 미발견 원인·현장 Avahi 상태·SSH 신뢰는 아직 확인하지 않았다. 서명된 001 producer와 현재 main의 광고 경로는 기존 조사에서 동일했다.
+- gate 변화: 없음. 실제 로봇 접속·네트워크 query·재시작·설정 변경·게시를 수행하지 않았다. 정상 gateway의 추가 검증과 실물 수용은 별도다.
+- CE: 해당 없음 — 새 로컬 진단 계약과 malformed/bounded/secret 회귀가 구현 판단을 직접 보존한다. 미확정 현장 원인을 해결 교훈으로 기록하지 않는다.
+
 ## 2026-10-30 · 351d048c15 · 끝 집기점 수정 전 손가락 여유 검사 분리
 
 - 변경: 600줄 한도의 95%를 넘은 cell_auto_pick에서 side_clear를 기존 foreground·물체 mask 소유자인 cell_objects로 그대로 옮겼다. 기존 auto.side_clear 호출은 import alias로 유지한다. orchestrator는 581줄에서 553줄로 줄며 새 의존성·명령 경로는 없다.
