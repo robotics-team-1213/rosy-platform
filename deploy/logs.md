@@ -4024,3 +4024,10 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 기준 commit 8f4b634e51의 공식 FULL에서 secret guard NEW1, 단독 재현 실패, main commit 23633e759f의 동일 단독 시험은 1 passed였다. 해당 값 commit 42508b116e의 실제 Git 객체·조상 관계와 원본 행 해시를 독립 검토했다. 수정 뒤 원격 집중 guard 결과는 외부 ui-validation-provenance-20261029 로그에 남긴다.
 - gate 변화: 없음. 새 canonical FULL과 main ancestry가 남으며 공개 게시·장치 수용을 뜻하지 않는다.
 - CE: 해당 없음 — 기존 git-ids-in-validation-records 교훈의 동결 기록 절차를 적용했다. 새 정책이나 예외 범위 확대는 없다.
+
+## 2026-10-29 · 28d229d44f · fallback 전용 open AP 정책
+
+- 변경: D-919에 따라 fallback만 암호 없는 AP를 기본으로 선택하고 relay는 WPA2를 유지한다. open은 기존 장치 신원 또는 명시된 SSID를 쓰며 AP 자격 증명 저장소를 읽거나 표시용 키 파일을 만들지 않는다. 상태에 실제 security를 담고 설정 검증·적용에서 fallback_security를 전달한다. AP 시간·무선 claim/lock·HTTPS 복구 코드와 CORE 인증은 유지했다.
+- 증거: tests-only commit 51227e5510은 원격 16 failed/273 passed/1 skipped였다. 검토로 찾은 malformed defaults의 open 강등과 off 우회는 commit b88181b986에서 원격 4 FAILED로 재현했다. commit 28d229d44f는 정책·설정·기존 보호 AP·agent·transaction·recovery·handoff 집중 회귀 391 passed/1 skipped, 실제 opt-in 복구 브라우저 3 passed/skip0이며 각 NEW0/known0/flaky0이다. 독립 검토의 새 P0/P1은 0이다.
+- gate 변화: 없음. 소비자 main 조상 관계와 최종 통합 검증·착지·서명된 full native/SDK 빌드·OTA·실물 연결은 아직 남았다. 기존 001을 수정하거나 지원하지 않는 키를 카드에 넣지 않는다. 첫 오프라인 부팅부터 open이 필요하면 정식 새 factory/native 기준이 필요하다.
+- CE: 해당 없음 — 실패 시 mode off 반환과 기존 close 감독 유지는 실제 소비 경로 회귀와 D-919에서 복원할 수 있다.

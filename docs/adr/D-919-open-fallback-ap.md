@@ -18,6 +18,8 @@ D-176 opens a per-device WPA2 fallback AP after the configured uplink fails. The
 
 The controller/configuration/display changes are native payload updates, applied through the existing signed update and next-boot path. Deploy compatible consumers before enabling the new producer. Existing credentials remain valid for WPA2 and relay, and the provisioning schema does not change.
 
+The compatible LCD consumer includes a renderer helper absent from the older base image. Build and sign the complete native/SDK payload; a controller-only delta is insufficient. Classify the actual final release revision again if it includes other changes.
+
 An existing image must first obtain the update before it understands the new configuration key. Do not insert that key into an older strict configuration parser or modify a signed base image. Passwordless fallback on the very first offline boot requires an official factory/native baseline containing this implementation.
 
 ### Verification and acceptance
