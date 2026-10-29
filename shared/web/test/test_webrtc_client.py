@@ -158,6 +158,16 @@ def test_playback_rejection_closes_peer_session_and_revokes_grant():
                       "revoked": ["a" * 32], "deletes": 1}
 
 
+def test_playback_that_never_starts_releases_session_within_ice_timeout():
+    result = run_js("""
+    const opening = media.openCamera(options({video: {...video, play: () => new Promise(() => {})}}))
+      .catch(e => e.message);
+    await advance(9000); const error = await opening;
+    console.log(JSON.stringify({error, closed: Peer.last.closed, revoked}));
+    """)
+    assert result == {"error": "영상 재생 시작 시간 초과", "closed": True, "revoked": ["a" * 32]}
+
+
 def test_refused_intent_releases_peer_and_grant():
     result = run_js("""
     intentStatus = 403;
