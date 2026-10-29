@@ -548,11 +548,11 @@ def main(argv=None):
     if config.get("decision_model"):  # e.g. {"url": "http://127.0.0.1:11434", "model": "qwen3-vl:8b-instruct"}
         import judge_seat
 
-        seat = judge_seat.Seat(judge_seat.ollama(**config["decision_model"]))
+        seat = judge_seat.Seat(judge_seat.ollama(**config["decision_model"]), knowledge=config.get("knowledge"), params=config.get("params_path"), context=config.get("decision_context"))
     KEEP["dir"] = work / "frames"
     import cell_attempts
 
-    cell_attempts.start(work / "attempts.jsonl")
+    cell_attempts.start(work / "attempts.jsonl", knowledge=config.get("knowledge"), params=config.get("params_path"))
     if args.stage == "record":
         import cell_record
 
