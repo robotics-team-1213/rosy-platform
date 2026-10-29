@@ -13084,3 +13084,10 @@ osy-d395-s1d\`.
 - 증거: 원격 client/정확 secret guard exit 0, skip 0, classifier NEW 0. 원래 실패 로그와 최종 검증 로그는 외부 TEMP의 SHA-256으로 결속했다.
 - Gate: 없음. 실패 이력을 최초 완전 통과로 바꾸거나 예외로 숨기지 않았다.
 - CE: 해당 없음 — 해결 판단을 기존 검사기 규칙·최종 시험·수정 기록에서 복원한다.
+
+## 2026-10-30 · uncommitted · docs: 게시용 FULL 근거 착지 기록
+
+- 변경: 관제 유닛 첫 배치 확정(N1)과 사이트 fleet 이미지 패키징 수정(contracts/motion)을 포함한 tip에 full-tier 착지 기록을 만들기 위한 작업 행이다. 내용 변경은 이 행뿐이다.
+- 증거: publish_main의 게시 SHA 선택은 해당 SHA의 green FULL 착지 기록을 요구한다(기존 최신 full 기록 c44859256f에는 패키징 수정이 없다). 이 착지가 만드는 full 기록의 base는 패키징 커밋(8dcc1f51ad)을 포함한 main이다.
+- gate 변화: 없음.
+- CE: 해당 없음 — 게시 절차 기록이다.
