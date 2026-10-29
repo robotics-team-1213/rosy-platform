@@ -6,6 +6,7 @@ import sys
 import subprocess
 import hashlib
 import uuid
+import math
 
 import pytest
 
@@ -104,20 +105,22 @@ def test_cube_is_a_fixed_bounded_catalog_scenario():
         normalize(entry['id'], {'seed': 42, 'attachment_aid': True})
 
 
+def owner_request(tmp_path, operation, **fields):
+    case = tmp_path/'case.json'
+    out = tmp_path/f'frames-{len(list(tmp_path.glob("frames-*")))}.json'
+    case.write_text(json.dumps(dict(schema='rosy.omx-sim-stack-plan/1', operation=operation, **fields)))
+    result = subprocess.run([sys.executable, str(f.ROOT/'deploy/robot/omx/isaac_stack_plan.py'),
+        '--case', str(case), '--out', str(out)], capture_output=True)
+    assert result.returncode == 0, result.stderr.decode()
+    return json.loads(out.read_text())
+
+
 def test_assigned_arm_can_reach_each_cube_release_pose(tmp_path):
-    def request(operation, **fields):
-        case = tmp_path/'case.json'
-        out = tmp_path/f'frames-{len(list(tmp_path.glob("frames-*")))}.json'
-        case.write_text(json.dumps(dict(schema='rosy.omx-sim-stack-plan/1', operation=operation, **fields)))
-        result = subprocess.run([sys.executable, str(f.ROOT/'deploy/robot/omx/isaac_stack_plan.py'),
-            '--case', str(case), '--out', str(out)], capture_output=True)
-        assert result.returncode == 0, result.stderr.decode()
-        return json.loads(out.read_text())
-    homes = request('homes', bases=f.FIXTURE['arm_bases_m'], points=[f.home(0), f.home(1)])['homes']
+    homes = owner_request(tmp_path, 'homes', bases=f.FIXTURE['arm_bases_m'], points=[f.home(0), f.home(1)])['homes']
     for item in f.plan(cube=True):
         target = item['target'][:]
         target[2] += .003+f.CUBE_FIXTURE['release_clearance_m']
-        frames = request('move', base=f.FIXTURE['arm_bases_m'][item['arm']], start=homes[item['arm']],
+        frames = owner_request(tmp_path, 'move', base=f.FIXTURE['arm_bases_m'][item['arm']], start=homes[item['arm']],
             target=target, yaw=0., dt=f.DT)['frames']
         assert frames and all(len(q) == 5 for q in frames)
 
@@ -193,3 +196,27 @@ def test_cube_feedback_accumulates_loaded_arm_tracking_error():
     sample['tcps'][0] = [command[k]+bias[k] for k in range(3)]
     sample['boxes'][0]['position'] = [sample['tcps'][0][0], sample['tcps'][0][1], sample['tcps'][0][2]-.002]
     assert f.cube_release_ready(0, sample, .04)
+
+
+def test_world_rotation_preserves_owner_joint_trajectory(tmp_path):
+    home = owner_request(tmp_path, 'homes', bases=[[0., 0., 0.]]*2, points=[[.16, 0., .13]]*2)['homes'][0]
+    target = [.15, .03, .12]
+    baseline = owner_request(tmp_path, 'move', base=[0., 0., 0.], start=home, target=target, yaw=0., dt=f.DT)['frames']
+    base = [.3, -.2, .01]
+    for yaw in (math.pi/2, -math.pi/2, math.pi):
+        c, s = math.cos(yaw), math.sin(yaw)
+        world = [base[0]+c*target[0]-s*target[1], base[1]+s*target[0]+c*target[1], base[2]+target[2]]
+        frames = owner_request(tmp_path, 'move', base=base, base_yaw=yaw, start=home, target=world, yaw=yaw, dt=f.DT)['frames']
+        assert frames[-1] == pytest.approx(baseline[-1], abs=1e-7)
+        assert len(frames) == len(baseline)
+
+
+def test_opposed_homes_hold_the_same_world_pose_without_wrist_spin(tmp_path):
+    bases = [[.1, -.14, 0.], [.1, .14, 0.]]
+    yaws = [math.pi/2, -math.pi/2]
+    points = [[b[0]+math.cos(y)*.08-math.sin(y)*.12,
+               b[1]+math.sin(y)*.08+math.cos(y)*.12, .13] for b, y in zip(bases, yaws)]
+    homes = owner_request(tmp_path, 'homes', bases=bases, base_yaws=yaws, points=points)['homes']
+    for base, yaw, point, home in zip(bases, yaws, points, homes):
+        frames = owner_request(tmp_path, 'move', base=base, base_yaw=yaw, start=home, target=point, yaw=0., dt=f.DT)['frames']
+        assert max(abs(q[j]-home[j]) for q in frames for j in range(5)) < 1e-6
