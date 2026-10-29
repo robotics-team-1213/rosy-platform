@@ -900,6 +900,7 @@
 | D-805 | 호스트 업데이트: 장치 owner는 네이티브, 나머지는 컨테이너 — 역할별 두 경로와 현장 전체 동결 관문 | Proposed |
 | D-881 | A/B 이미지의 기체 상태와 슬롯별 적용 기록을 분리한다 | Proposed |
 | D-915 | Immutable physical evidence export with measured joint provenance | Accepted |
+| D-916 | Atomic raw source stamps on validated OMX joint snapshots | Accepted |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
