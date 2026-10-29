@@ -7,6 +7,7 @@
 """
 
 import re
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -14,6 +15,24 @@ import pytest
 import surface_registry as registry
 
 REPO = registry.REPO
+
+
+@pytest.mark.parametrize("holder", ["applications", "middleware", "learning", "integrations", "operations", "shared"])
+def test_discovery_sees_new_and_tracked_pages_in_current_source_holders(tmp_path, holder):
+    subprocess.run(["git", "init", "--quiet", str(tmp_path)], check=True)
+    (tmp_path / ".gitignore").write_text("ignored.html\n", encoding="utf-8")
+    source = tmp_path / holder / "web"
+    source.mkdir(parents=True)
+    for name in ("tracked.html", "new.html", "ignored.html", "notes.txt"):
+        (source / name).write_text("fixture", encoding="utf-8")
+    subprocess.run(["git", "add", "--", f"{holder}/web/tracked.html"], cwd=tmp_path, check=True)
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "report.html").write_text("report", encoding="utf-8")
+
+    assert {page.relative_to(tmp_path).as_posix() for page in registry.discover_html(tmp_path)} == {
+        f"{holder}/web/tracked.html", f"{holder}/web/new.html",
+    }
 
 
 @pytest.mark.parametrize("prefix", ["/", "./"])
@@ -94,7 +113,7 @@ def test_declared_baselines_are_tracked():
     assert _under("baseline") == []
 
 
-def test_every_html_under_src_is_registered():
+def test_every_product_html_is_registered():
     """추적 파일과 아직 add하지 않은 파일을 모두 잡는다.
 
     파일시스템 `rglob`을 쓰면 `.gitignore`된 빌드 산출물이 들어오고,
@@ -110,7 +129,7 @@ def test_every_html_under_src_is_registered():
         if not any(here == path or here.startswith(path.rstrip("/") + "/") for path in registered):
             orphans.append(here)
     assert orphans == [], (
-        "src/의 HTML이 레지스트리에 없다 — 표면을 등록하거나 이 파일에서 제외 사유를 적어라:\n"
+        "제품 HTML이 레지스트리에 없다 — 표면을 등록하거나 이 파일에서 제외 사유를 적어라:\n"
         + "\n".join(orphans)
     )
 
