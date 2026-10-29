@@ -3,7 +3,7 @@
 ## Current scope: Rosy Cam correction, one layer only
 
 The user rejected the earlier layout. Current `omx-map-cube-stack` uses fixture
-`rosycam-opposed-first-layer-v2`: one common yellow workplate, both arm bases
+`rosycam-edge-terminal-first-layer-v3`: one common yellow workplate, both arm bases
 on that plate facing each other, a lower conveyor over the gray map, and an
 internal 90×90×30 mm target for three 90×30×30 mm bars. It stops at one layer.
 The retained scenario identifier does not imply a completed 90 mm cube.
@@ -12,11 +12,63 @@ Topology follows the user's correction and the actual ceiling/close camera
 stills captured on 2026-10-29. Dimensions remain nominal: 400×420 mm plate,
 30 mm plate top, 25 mm conveyor top, arm spacing 260 mm. The target rectangle
 is provisionally inside the plate; its exact photo registration is unmeasured.
-Top, side and oblique SDK images are required for visual comparison. No
-corrected-scene runtime or learning acceptance is claimed by this source edit.
+The conveyor terminal now approaches the plate edge along -X, ending at x=.201
+(1 mm nominal gap). Its stop is at x=.203 and cargo pickup at x=.250, 20 mm
+closer than the former parallel-belt arrangement. The upstream -Y segment is
+layout-only; cargo turn transfer is unverified. Rows use arms A/B/B. Release
+height is 15 mm and planned row clearance 0.1 mm; acceptance tolerances remain
+1.5 mm in position and 1 mm on the outer envelope. Exact registration and
+learned-policy acceptance remain unverified.
 
-The entries below describe the superseded map and retain their original
-outcomes. They cannot establish success for the current arrangement.
+Each entry below retains its own geometry, source and outcome. Superseded-map
+results cannot establish success for the current arrangement.
+
+### Terminal correction and lower release: bounded observations
+
+- Source `534c98c0a4`, run `9ccf9d73839550d78980a28a10c05093`: terminal
+  transported cargo from x≈.295 to .250 and stopped it at the plate edge.
+  First placement passed; second ended at y=1.846 mm and failed. Opening
+  snapshots located loss of finger contact around .583 s and first landing
+  around .658 s, with approximately 7.93 N vertical contact force. This run
+  had SDK exit0, verified import and confirmed owned cleanup.
+  Report sha256: `66546cd390b9c440659fb70700058ac90ee2bceaa0c309f1b55112879e9c5c3c`.
+- Source `81bae67682`, run `f0de57a9651455ebb5d828bc17a06d5b`: reducing
+  release clearance35→15 mm retained the initial observed30 mm lift proof.
+  Two placements logged passes, then an arm-A correction for the far row
+  requested a point below the base and the owner planner refused it. SDK
+  exit1, no final physical report. Owned cleanup was confirmed. These partial
+  observations are not a completed layer or verified import result.
+- Source `edbf49d6e0`, run `db17b3d401c45e13ac3f032371a8d3b5`: assigned
+  the far row to the nearer arm B, blocked further correction after >.03 rad
+  joint tracking error, and preserved bounded planner-refusal diagnostics.
+  The raw report and artifact manifest passed independent read-only checks.
+  All three bars settled, but the third center y=.031017 m plus its oriented
+  extent exceeded the envelope tolerance by about21 µm. Physical task FAILED.
+  Worker state remains UNKNOWN because its final cleanup check was not
+  confirmed; no accepted final manifest was published. Later independent
+  checks found MainPID0, no owned cgroup and GPU ready. The UNKNOWN record was
+  retained and only its owned stale resource reservation was released.
+- Source `c1786ef9d6`, run `254a87c630f8581dbdc53a5218438a36`: row
+  clearance .2→.1 mm, with unchanged pose/contact/envelope criteria. Approved
+  seed42 retry links the previous run as parent. SDKexit0, import verified,
+  owned cleanup confirmed, physicalFAILED. All3bars settled, but the third
+  center y=.031203907 plus oriented half width reached maxY=.046420896,
+  exceeding the permitted .046 by .420896 mm. A rendered three-bar layer is
+  not acceptance. Registered report786395 bytes.
+  Report sha256: `3b8228db09636b50ae3e056ff85b5e691a03e0a2492431723c7734a7397bdcc4`.
+- Source `5c89f3d1f3`: compensates the repeatedly observed positive first-row
+  opening drift with a -.6 mm first-row release bias. The nominal acceptance
+  targets and all position/contact/envelope tolerances stay unchanged. Focused
+ 32tests passed0NEW. Physical retry was refused by GPU admission while another
+  compute process held194MiB; its result remains unverified. No unrelated
+  process was stopped and no admission check was bypassed.
+
+Validation: terminal focused27passes; lower-release focused29passes; nearer-arm
+and final clearance focused31passes, each successful invocation0NEW. Source
+`edbf49d6e0` broad regression807passed1skip plus one failure: an existing
+report checksum was on a separate unlabeled line and triggered the entropy
+guard. Metadata-only `972f2ae2d1` put its integrity label on the same line;
+all80 release-boundary checks then passed0NEW. The scanner was not relaxed.
 
 ### Corrected layout, seed 42: scene rendered; first layer FAILED
 
