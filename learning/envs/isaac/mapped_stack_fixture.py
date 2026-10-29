@@ -42,10 +42,10 @@ CUBE_FIXTURE = dict(FIXTURE, revision='rosycam-opposed-first-layer-v2', trials=1
     camera_reference='2026-10-29T03:43:11Z_ceiling_north',
     board_lower_left_m=[-.61, -.25, .001],
     workplate_center_m=[0., 0., .03], workplate_size_m=[.40, .42, .04],
-    arm_bases_m=[[0., -.15, .05], [0., .15, .05]],
+    arm_bases_m=[[.08, -.13, .05], [.08, .13, .05]],
     arm_base_yaws_rad=[math.pi/2, -math.pi/2],
     belt_center_m=[.27, 0., .0125], belt_stop_m=[.27, .017, .027],
-    infeed_start_m=[.27, -.045, .041], carry_height_m=.195,
+    infeed_start_m=[.27, -.045, .041], carry_height_m=.155,
     bin_origin_m=[.035, -.045, .052], bin_size_m=[.09, .09, .03],
     release_clearance_m=.035, row_clearance_m=.0002, release_feedback_iterations=4)
 

@@ -10,7 +10,7 @@ The retained scenario identifier does not imply a completed 90 mm cube.
 
 Topology follows the user's correction and the actual ceiling/close camera
 stills captured on 2026-10-29. Dimensions remain nominal: 400×420 mm plate,
-50 mm plate top, 25 mm conveyor top, arm spacing 300 mm. The target rectangle
+50 mm plate top, 25 mm conveyor top, arm spacing 260 mm. The target rectangle
 is provisionally inside the plate; its exact photo registration is unmeasured.
 Top, side and oblique SDK images are required for visual comparison. No
 corrected-scene runtime or learning acceptance is claimed by this source edit.
