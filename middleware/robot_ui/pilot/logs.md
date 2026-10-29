@@ -1034,7 +1034,7 @@
 - 증거: dab8 AVD6건 중 primary1실패를 재현했다.42c의 edge 검사 통과 뒤 독립 이미지 검토에서 약한 구별을 P2로 확인해 center fill·focus/blur 글자·아이콘 tint·disabled 회귀를 보강했다.473c SDK35 debug/test APK 성공, JVM110pass/1skip(ShellPageProbe), 동일 APK의600×1000/font1.3와1280×800/font1.0에서 각각6pass. 최종30PNG 전수 독립 검토로 P2 해결·새 P1/P2 없음을 확인했으며 첫 수정30장과 구분한다.
 - gate 변화: 없음. 무동작 debug fixture이며 실제 연결·운전·TalkBack·실물·release 수용이 아니다. 정본: docs/validation/platform-ui-integration-2026-10-29/result.md. CE: 해당 없음 — 실제 상태 차이와 시험의 보강 기준을 코드·회귀·이미지 기록이 보존한다.
 
-## 2026-10-29 · 한 대 조종 기본 흐름과 배포 검사 수정
+## 2026-10-29 · 5c2a1f5eb2 · 한 대 조종 기본 흐름과 배포 검사 수정
 
 - 변경: 시작 화면의 제목을 한 대 선택으로 명시하고 두 대 함께 조종은 목록 아래 보조 버튼으로 옮겼다. 기존 두 대 연결과 안전 조건은 유지한다. 로봇 이름의 줄바꿈 상수는 같은 값의 LineBreaker 상수로 바꿔 release lint 오류를 해결했다.
 - 증거: `testReleaseUnitTest assembleRelease lintRelease` 성공. JVM 110 pass/1 skip(ShellPageProbe). Impeccable 기계 검사 결과 없음. 기존 release lint의 WrongConstant 1건 실패와 수정 후 성공을 확인했다. Lenovo 실물에 같은 배포 서명으로 업데이트하고 2000×1200 화면에서 한 대 선택 제목과 하단 두 대 보조 버튼을 확인했다. APK SHA-256 `b8907bd75fee0a504bccbb38c699f7b05c932b3428b866eafa2f4ef1628d4e70`. 로컬 증거는 `C:/DevTemp/pinky-pilot-single-20261029/`.
