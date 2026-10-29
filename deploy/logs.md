@@ -4063,3 +4063,11 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: legacy fake 회귀는 비연속·재정렬 ID, 최소 corner 수, 누락 검출을 검사한다. 독립 contract review는 좌표 대응·단위·기존 소비자 page/solve/camera capture 경계를 확인했고 motion/admission 변경이 없었다. 원격 실행 및 실제 OpenCV4.6 CI는 아직 미완료이며 fake 시험을 native 수용으로 주장하지 않는다.
 - gate 변화: 없음. 버전 pin 변경·새 skip·quarantine·검사 완화는 없다.
 - CE: 해당 없음 — 기존 OpenCV4.6 aruco API 교훈을 적용했다. 구현·회귀·기존 문서에 없는 새 판단은 확인되지 않았다.
+
+## 2026-10-30 · uncommitted · 게시 범위의 역사적 비밀값 오탐 검토
+
+- 원인: sourcee5와현main9b424의 게시 전 검사는 새5 hits/정확3 tuples를 거절했다. main 쪽479개 커밋을 검사했으며 기존157개 검토 기록에는 이 세 항목이 없었다.
+- 검토: 독립 검토자는 문서c7b9의3개 후보가 각각 실제 Git commit object임을 확인했다. testc157은 고정 합성 fixture의16자 slice이고 testa6은 CLI 거절·stderr 비노출 시험의 고정22자 입력이었다. 실제 환경·private 입력으로부터 읽은 값이 아니며 후보 값·발췌문을 출력하거나 기준선에 넣지 않았다.
+- 변경: 해당 commit/path/rule 세 조합과 검토일·agent provenance만 기존 기준선에 추가한다. scanner·규칙·기존157항목·새 커밋/다른 규칙 거절은 유지한다. 수정 파일에서의 실제 게시 검사와 새 커밋 원격 publisher 회귀를 확인한 뒤 최종 FULL source에 포함한다.
+- Gate: 아직 새 최종 FULL·CI·게시·운영 전환 완료가 아니다. source 변경에 맞춰 공식 snapshot과 검증을 갱신하며 대기 중인 hidden branch를 몰래 바꾸지 않는다.
+- CE: 해당 없음 — 기존 exact-tuple 역사적 오탐 검토 절차를 적용했고 추가 판단은 기준선 metadata·회귀·증거 기록에서 복원한다.
