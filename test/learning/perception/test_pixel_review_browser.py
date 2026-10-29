@@ -44,10 +44,6 @@ def test_pixel_decision_resize_preserves_checks_and_keyboard_focus(browser_works
             assert decision['x'] >= canvas['x'] + canvas['width'] - 1
         box = complete.bounding_box()
         assert -1 <= box['y'] and box['y'] + box['height'] <= 845
-        assert complete.evaluate('''node => {
-            const r = node.getBoundingClientRect();
-            return node.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2));
-        }''')
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
         if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
             target = Path(output)
@@ -55,6 +51,13 @@ def test_pixel_decision_resize_preserves_checks_and_keyboard_focus(browser_works
             name = f'pixel-decision-{theme}-{step}-{width}'
             page.screenshot(path=str(target / f'{name}-viewport.png'))
             page.screenshot(path=str(target / f'{name}-workspace.png'), full_page=True)
+        hit = complete.evaluate('''node => {
+            const r = node.getBoundingClientRect();
+            const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+            return {visible: node.contains(hit), hit: hit?.outerHTML.slice(0, 300),
+                box: r.toJSON(), scroll: window.scrollY};
+        }''')
+        assert hit['visible'], hit
 
 
 def open_pixels(page, store, expect, index=0):
