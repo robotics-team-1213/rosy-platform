@@ -83,8 +83,12 @@ export function bindTopbarToggle(listen = (node, type, fn) => node.addEventListe
   new MutationObserver(summarize).observe(entry, {subtree: true, childList: true,
     attributes: true, attributeFilter: ["hidden", "status"]});
   summarize();
-  listen($("topbar-extra"), "keydown", event => {
-    if (event.key === "Escape") { setTopbarOpen(false); $("topbar-more").focus(); }
+  listen(document, "keydown", event => {
+    if (event.key !== "Escape" || event.defaultPrevented || entry.getAttribute("aria-expanded") !== "true") return;
+    const active = document.activeElement;
+    const restore = active === document.body || active === entry || $("topbar-extra").contains(active);
+    setTopbarOpen(false);
+    if (restore) entry.focus();
   });
   listen($("topbar-more"), "click", () => {
     setTopbarOpen($("topbar-more").getAttribute("aria-expanded") !== "true");
