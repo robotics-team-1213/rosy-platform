@@ -147,5 +147,52 @@ covered by deterministic host tests, not a controlled lighting experiment on the
 cell. Apply this check to every producer lookup in the lifecycle; initial READY
 alone does not establish the recovery path.
 
+## Seventh failure: producer continuity did not preserve camera controls (2026-10-30)
+
+Read-only host evidence showed the top preview reporting device-unavailable and
+errno 19, then reopening under the same PID and systemd invocation. The tuner's
+last verified settings were manual exposure 160, gain 2 and brightness -10; later
+device readback matched the original automatic exposure baseline instead. The
+physical cause of the interruption was not established. PID and device-number
+checks alone did not establish continuity of the applied controls.
+
+There was a separate recovery loop: after a short NORMAL interval, another dark
+epoch started with exposure 400 even when 800 was already applied. Equal contrast
+scores could also restore an older automatic mode, creating another unnecessary
+transition. A healthy service and an earlier READY receipt missed these paths.
+
+The monitor now reconciles live controls at a bounded interval and before writes.
+Only a verified return to the saved baseline reinitializes that camera's search;
+old best settings and confirmations are discarded while cooldown and the durable
+write budget remain. Unknown changes are refused. Temporary read failures close
+readiness and wait for another probe; successful readback still needs settling.
+Candidate progress follows the applied settings independently in each direction,
+and ties retain the latest settings. Device control ranges, steps and menu modes
+are checked for candidates and original restoration values, including the manual
+mode written temporarily during restore.
+
+Restoration now needs a run-bound intent matching the baseline, device and
+producer, or controls already equal to the baseline. It records previous,
+requested and confirmed settings before/after writes. Interrupted candidate and
+restore writes can be matched against their allowed partial states. Missing,
+corrupt or unrelated intents do not authorize overwriting unknown controls.
+Preserve all state files for diagnosis. Upgrade an older installation only while
+idle, after its existing restore has returned both devices to their baseline;
+back up state and source first. Do not manufacture intents for legacy settings.
+
+Verification is deterministic remote host testing: reentry in both directions,
+partial candidates, budget deferral, baseline resets under the same producer,
+temporary ENODEV, unknown controls, changed hardware capabilities and each
+interrupted candidate/restore step. These tests do not establish controlled
+lighting recovery or physical acceptance. The new implementation has not yet
+been applied to the active recording host.
+
+Local tested checkpoint `40449ecfdf` (not publicly released here) passed 107
+related remote tests, with no new failures. The initial regression checkpoint
+failed 13 cases; later targeted RED runs exposed five transient-read/manual-mode
+cases and the real no-owner producer path before their fixes. Independent review
+found no further actionable issues after those corrections. Re-run the hardware
+upgrade and lighting acceptance separately when the cell is idle.
+
 ## Evidence
 Fleet PC journal 2026-10-23 06:10 (boot failure) and 11:33–11:34 (refusal, restore, READY). Fix commit on `fix/omx-camera-readiness-producer-wait`. The deployed file was replaced only after its SHA-256 matched the pre-fix repository version, and a backup `.bak-20261023` was kept.
