@@ -3,9 +3,11 @@ package io.github.livsbittt.rosy.pilot
 import android.content.Intent
 import android.graphics.Rect
 import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.view.KeyEvent
 import android.view.View
 import android.view.ViewTreeObserver
+import android.widget.Button
 import androidx.test.platform.app.InstrumentationRegistry
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -94,6 +96,49 @@ class RobotRowsFocusTest {
         File(folder, "${testName.methodName}-${++capture}.png").outputStream().use {
             check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it))
         }
+    }
+
+    @Test fun primaryAndQuietButtonsShowFocusWithoutActivatingTheirActions() {
+        var clicks = 0
+        lateinit var primary: Button
+        lateinit var quiet: Button
+        instrumentation.runOnMainSync {
+            val views = PilotViews(activity)
+            activity.robots.removeAllViews()
+            primary = views.button("주요 조작 · 시험", primary = true) { clicks++ }
+            quiet = views.button("보조 조작 · 시험") { clicks++ }
+            activity.robots.addView(primary)
+            activity.robots.addView(quiet)
+            activity.outside.requestFocus()
+        }
+        visible { activity.outside }
+        assertEquals("primary default fill", PilotColors.foreground, edgeColor(primary))
+        instrumentation.runOnMainSync { quiet.requestFocus() }
+        instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_UP)
+        instrumentation.waitForIdleSync()
+        visible { primary }
+        assertEquals("primary focus ring must contrast with its light fill", PilotColors.background, edgeColor(primary))
+        instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN)
+        instrumentation.waitForIdleSync()
+        visible { quiet }
+        assertEquals("quiet focus ring", PilotColors.foreground, edgeColor(quiet))
+        instrumentation.runOnMainSync { primary.isEnabled = false }
+        visible { quiet }
+        assertEquals("disabled fill keeps precedence", PilotColors.disabled, edgeColor(primary))
+        instrumentation.runOnMainSync { assertEquals(0, clicks) }
+    }
+
+    private fun edgeColor(view: View): Int {
+        var color = 0
+        instrumentation.runOnMainSync {
+            assertTrue(view.width > 0 && view.height > 0)
+            val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
+            view.background.draw(Canvas(bitmap))
+            val inset = maxOf(1, PilotViews(activity).dp(RosyMetrics.FocusRingWidth.toInt()) / 2)
+            color = bitmap.getPixel(inset, view.height / 2)
+            bitmap.recycle()
+        }
+        return color
     }
 
     @Test fun reorderAndAddKeepsTheEndpointRatherThanTheNameOrPosition() {
