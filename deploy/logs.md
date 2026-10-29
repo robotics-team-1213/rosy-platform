@@ -4093,3 +4093,11 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: tests-only commit bc303cdb1b의 공식 원격 회귀는 7 failed/19 passed, known_failures NEW7이었다. 수정 commit 8a381b7f12의 land_prepare·land_queue·land_batch 집중 회귀는 85 passed, NEW0/known0/flaky0이다. 로그는 Git 밖 receipts/2026-10-29-queue-own-batch-slots/red 및 green에 보존한다.
 - gate 변화: 없음. 공식 affected 선택은 FULL이며 land_async의 전체 착지 검증을 유지한다. 이미 실행 중인 worker는 이 소스를 다시 읽지 않으므로 현재 큐 대기가 풀렸다고 주장하지 않는다. 공유 main 게시·장치 동작은 이 변경의 범위가 아니다.
 - CE: 해당 없음 — 전체 티켓으로 carried를 구한 뒤 자기 행만 제외해야 한다는 원인과 재현 조건은 최종 코드 및 k2/k4·다른 pending/preparing 예약을 검증하는 8개 회귀 시험에 직접 남는다. 별도 교훈 문서는 늘리지 않는다.
+
+## 2026-10-30 · cd343694f9 · exclusive 입장 정책과 pytest 호스트 배치 일치
+
+- 변경: PROBE가 실제 ADMIT 형식의 live alone lock과 live PID alone-wait를 확인하고 별도 pytest_blocked 상태를 전달한다. private py=2는 Python capability를 참으로 유지하며 기존 17개 필드 위치와 0/1·SIM 의미를 보존한다. 일반 place와 floor fallback은 blocked 호스트를 제외하고 실제 사유를 표시한다. ADMIT·용량 한도·busy/site/reservation 정책·기존 pruning은 바꾸지 않는다.
+- 원인: 여유 CPU·메모리가 표시돼도 exclusive 작업이나 그 대기자가 있으면 ADMIT는 일반 pytest를 받지 않는다. 기존 배치 측정은 이 조건을 놓쳤다. 이는 관측된 placement/admission 불일치이며 전체 큐 deadlock이나 현재 실행 중인 worker의 자동 교정을 주장하지 않는다.
+- 증거: tests-only commit fe03e9a573의 공식 원격 RED는 5 failed/6 passed(NEW5), 수정 commit cd343694f9의 관련 여섯 시험 파일은 178 passed/0 skipped, NEW0/known0/flaky0이다. 실제 시험 배치는 trusted main commit c44859256f의 runner와 승인된 AI host만 사용했다. 후보 PROBE는 임시 J/HOME와 통제된 kill -0 fixture에서만 실행했으며 live 호스트에 읽기 전용이라고 주장하는 probe를 실행하지 않았다. 외부 receipts/2026-10-30-host-probe-alone/red 및 green에 보존한다.
+- gate 변화: 없음. 공식 affected 선택은 FULL이며 독립 검토 뒤 정상 gateway의 정본 FULL 한 회를 유지한다. 수동 광역 FULL·urgent·no-queue·queue/cache/land record 변경·게시를 하지 않았다.
+- CE: 해당 없음 — private wire 주석과 13개 행동 회귀가 capability·exclusive·fallback·dead marker·일반 병렬·SIM·legacy decode 경계를 직접 남긴다. 기존 bookkeeping 진단 교훈을 확인했으며 별도 교훈 문서는 늘리지 않는다.
