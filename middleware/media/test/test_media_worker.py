@@ -34,6 +34,7 @@ class Frame:
 class Client:
     def __init__(self):
         self.active, self.fail, self.grants, self.renewed, self.issued = True, None, [], [], 0
+        self.closed = []
 
     def source_grant(self, grant_id=None):
         if self.fail:
@@ -51,6 +52,9 @@ class Client:
     def renew_session(self, grant):
         self.renewed.append(grant.token)
 
+    def close_session(self, grant):
+        self.closed.append(grant.token)
+
     def whip_endpoint(self, grant):
         return 'https://site.example/robots/rosy_01/front/whip'
 
@@ -60,6 +64,7 @@ class Publisher:
         self.endpoint, self.token, self.pushed, self.rates = endpoint, token, [], []
         self.started = self.stopped = False
         self.queue_ms, self.fail_push = 10, False
+        self.connected = True
 
     def start(self):
         self.started = True
@@ -75,6 +80,9 @@ class Publisher:
 
     def stats(self):
         return {'encoded_queue_ms': self.queue_ms, 'loss_fraction': None, 'encoded_queue_overrun': False}
+
+    def ready(self):
+        return self.connected
 
     def set_rate(self, *, fps, bitrate):
         self.rates.append((fps, bitrate))
@@ -185,6 +193,40 @@ def test_pipeline_failure_stops_the_session(rig):
     publishers[0].fail_push = True
     step(0.1)
     assert publishers[0].stopped
+
+
+def test_negotiating_publisher_does_not_treat_the_primer_as_stale_video(rig):
+    worker, _, publishers, step = rig
+    step(0)
+    publishers[0].connected = False
+    publishers[0].queue_ms = 250
+    step(1)
+    assert not publishers[0].stopped
+    assert publishers[0].rates == []
+    publishers[0].connected = True
+    step(2)
+    assert publishers[0].stopped, 'connected video still enforces the encoded queue bound'
+
+
+def test_unconnected_startup_is_bounded_even_without_new_camera_frames(rig):
+    worker, client, publishers, step = rig
+    step(0)
+    publishers[0].connected = False
+    worker._reader.latest = lambda: None
+    step(13)
+    assert publishers[0].stopped
+    assert client.closed == ['publish-1']
+
+
+def test_failed_publisher_closes_its_binding_and_retries_with_a_new_grant(rig):
+    _, client, publishers, step = rig
+    step(0)
+    publishers[0].fail_push = True
+    step(.1)
+    assert client.closed == ['publish-1']
+    step(1)
+    assert client.grants == [None, None]
+    assert len(publishers) == 2 and publishers[1].token == 'publish-2'
 
 
 def test_start_failures_back_off_with_a_five_second_cap():
