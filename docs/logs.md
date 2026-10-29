@@ -12939,3 +12939,10 @@ osy-d395-s1d\`.
 - 변경: 권한/작업 상태의 producer-consumer, 자동 조회·명시적 요청 분리, 계정 선택·초점·공용 버튼의 실제 화면/키보드 회귀를 소유 검증 기록과 해시에 결속했다. 첫 실패·교정한 selector·재검증을 분리했다.
 - 증거: 초기 브라우저18파일300 passed, 최종 변경 범위9파일은 교정한49건과 나머지216건으로265 passed/skip0/NEW0이다. 영향3012 passed/439 skipped. 소스·캡처·fixture 실패와 실제 초점 실패는 `docs/validation/learning-data-recovery-2026-10-28/result.md`에 구분했다. 두 테마·세 폭의 공용 버튼 표적/넘침6건도 통과했다.
 - gate 변화: 없음. 실제 HF·사람 라벨·모델·장치·배포·merge/push 수용은 별도다. CE: 해당 없음 — 기존 클라이언트/guard 교훈을 적용하고 상태·잠금·초점 판단을 코드·회귀·검증 기록에 남겼다.
+
+## 2026-10-29 · bc25167b00 · 플랫폼 UI 표면 발견·회귀 기반 검증
+
+- 변경: 현재 제품 holder의 신규 화면 발견, 진입 module의 공용 UI 로드 판정, Monitoring·SIM 레인 뷰어의 공용 변경 회귀 선택을 보강하고 frozen 결과·로그 SHA를 `docs/validation/ui-standardization-foundation-2026-10-29/`에 남긴다.
+- 증거: 원격 집중 78 passed·공식 영향 사전 계약 861 passed·두 실제 소비자 Chromium 18 passed, 각 skip 0/NEW 0. 기존 실패와 리뷰로 찾은 주석 오인을 실제 RED 후 수정했다.
+- gate 변화: 없음. 전체 UI 표준화는 후속 앱 이행·렌더·native 검증이 남는다. FULL selector의 사전 계약을 전체 FULL/CI나 장치 수용으로 쓰지 않는다. 배포·착지·push·merge 미수행.
+- CE: 해당 없음 — 원인·복구 조건이 최종 코드·회귀·이 검증 기록에 남는다.
