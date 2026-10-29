@@ -4003,3 +4003,11 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 동일한 3490bddb9b의 canonical FULL 27개 invocation을 공식 remote_pytest.run으로 수행했다. 합계 37,581 passed/2,351 skipped, 각 명령 exit0, 모든 로그 비교 NEW0/known0/flaky0이다. 1~11번은 현장 PC에서 완료한 뒤 자원이 확보된 모델 PC에서 12~27번을 수행했다. 재배정 중 취소한 현장 12번과, 연결 복구 후 별도로 563 passed/1 skipped인 AI PC의 중복 마지막 묶음은 합계에서 제외했다. 수용한 27개 로그는 archive 내부 바이트를 원본 SHA-256과 대조해 보존했다.
 - gate 변화: 없음. monitoring 브라우저 묶음 16개는 모두 skip이며 브라우저 수용을 입증하지 않는다. 실제 Docker 연속성·CI dispatch·설치/운영 배포·실물 수용·main 착지/push는 수행하지 않았다.
 - CE: 해당 없음 — 판단 근거는 D-301·구성 해시·회귀 시험·기존 import 시험에 남긴다.
+
+## 2026-10-29 · 66e86cb0fb · Pilot 수신과 오프라인 처리 unit 분리
+
+- 변경: 수신 entry도 승인된 서명 model-code에서 실행하고 private 설정의 승인 URL을 사용한다. 로컬 복구·Learning pending 등록 timer를 추가하며 수신과 같은 flock을 사용한다. 기존 TLS·Operator·정지 검사는 유지한다.
+- 증거: unit/서명 실행 경로 시험을 포함한 최종 집중 55 passed/1 skipped와 실제 기존 녹화→별도 pending 작업 공간 시험 1 passed. 전체 결과와 파일 지문은 `docs/validation/pilot-learning-collection-2026-10-29/result.md`.
+- gate 변화: 없음. unit·환경 파일·서명 inbox·현재 운영 service는 배치하거나 재시작하지 않았다. 설치 전 승인 릴리스와 실제 workspace/classes 결속을 확인해야 한다.
+- CE: 해당 없음 — 실행/잠금/복구 조건을 코드·시험·운영 절차에 기록했다. 현재 로봇 이름 해석 실패는 별도 미해결이다.
+- 최종 확인: d2d68c3346 공식 affected 13,602 passed/1,285 skipped/NEW 0와 실제 자료 포함 집중 88 passed/skip0/NEW 0. 운영 venv 의존 import·FFmpeg는 확인했고 새 pipeline의 승인 릴리스 반영은 아직 없다. 생산 배포 수용으로 기록하지 않는다.

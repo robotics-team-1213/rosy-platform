@@ -312,3 +312,11 @@
 - 증거: `test_media_pipeline.py` 12 passed(live 1·backfill 1·null payload·빈 side를 구분하는 새 시험 2건 포함), AI PC 원격 실행 exit 0, `known_failures.py` 0 NEW.
 - gate 변화: 없음. 세기만 하고 판정하지 않는다. shadow_live_rows 0인 세션의 백필 여부·선택 전략 채택·로봇 녹화 절차 변경은 별개 결정이다.
 
+## 2026-10-29 · 66e86cb0fb · Pilot 로컬 복구와 Learning 검수 대기 연결
+
+- 변경: 네트워크 없이 기존 Pilot 원본을 검증·변환하고, 기존 PNG/video 준비기와 catalog-relative importer로 pending 입력을 만든다. 변경된 영수증·출력은 덮어쓰지 않으며 중단된 변환 파일을 보존한다. 실제 수신·로컬 처리·사람 승인을 구분한다.
+- 증거: 최종 소스의 모델 PC pinned raw/실제 FFmpeg 집중 시험 55 passed/1 opt-in skipped, 기존 녹화의 별도 검수 작업 공간 등록 시험 1 passed(19장 pending, 재실행 추가 0장). 전체 영향 선택과 RED/검토 근거는 `docs/validation/pilot-learning-collection-2026-10-29/result.md`에 기록한다.
+- gate 변화: 없음. 운영 검수 DB·사람 정답·학습·모델 활성화·실물 동작은 변경하지 않았다. 새 로봇 녹화·실제 서비스 설치·착지/push는 별도다.
+- CE: 해당 없음 — 복구·무결성·중복 방지 판단은 코드·회귀·운영 문서에 남는다. 로봇 접속 실패는 해결된 사실로 기록하지 않는다.
+- 후속 검증: d2d68c3346의 공식 affected 전체 13,602 passed/1,285 skipped/NEW 0, 실제 기존 녹화와 pinned raw 집중 88 passed/skip0/NEW 0. 생산 코드는 66e86cb0fb와 같으며, 중간 전체 회귀의 OMX 합성 시계 실패 두 건은 기존 시계 fixture를 공유해 보완했다. 원본 실패·대조·취소·skip은 검증 정본에 보존했다.
+

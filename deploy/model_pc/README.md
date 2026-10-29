@@ -32,6 +32,8 @@ PYTHONPATH="$SOURCE/learning/curation/perception:$SOURCE/tools/perception:$SOURC
 
 `pilot_review.py`는 같은 로컬 복구를 먼저 실행한 뒤, 수락된 조작과 짝지어진 영상에서 최대 2 FPS로 프레임을 고른다. 기존 `pixel_label_job.prepare_sources`로 영상 사본·정확한 PNG·`verified-inputs.jsonl`을 `<review-root>/<recording-id>/`에 만들고 원본 manifest·sidecar·영상·클래스·출력 해시 영수증을 남긴다. 재실행은 출력 바이트를 확인한 뒤 재사용하며 덮어쓰지 않는다. 다른 원본·클래스·손상된 출력이면 기존 자료를 남기고 실패한다. raw의 `catalog.jsonl`과 이 검수 입력은 다른 산출물이다.
 
+새 수신 영수증은 MP4 해시도 보존한다. 예전 영수증은 sidecar 해시만 보존했으므로 준비 시점의 영상 해시를 스냅샷에 기록하며 독립 원본 영상 검증으로 승격하지 않는다. 이미 영수증에 기록된 해시가 달라지면 자동으로 새 해시를 승인하지 않는다. 중단된 변환은 새 임시 폴더에서 재실행하고 이전 출력은 별도 `*-interrupted-*` 폴더로 보존한다. 영상·메타데이터를 게시한 뒤 sidecar를 마지막에 게시하며, 부분 출력은 정상 변환본으로 채택하지 않는다.
+
 ```bash
 PYTHONPATH="$SOURCE/learning/curation/perception:$SOURCE/tools/perception:$SOURCE/learning/registry/perception:$SOURCE/learning/training/perception:$SOURCE/middleware/perception" \
   "$HOME/rosy-ml/.venv/bin/python" "$SOURCE/learning/curation/perception/pilot_review.py" \
