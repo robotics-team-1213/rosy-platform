@@ -616,7 +616,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             clients=lambda: {**{rid: client for rid, client in console.clients().items()
                                 if rid in stuck_resolver_enrolled}, **stuck_resolver_clients})
         app.state.stuck_resolver.map_pose = map_pose.stuck_pose   # D-577 1: R3 pose freshness
-        app.state.stuck_resolver.events_since = console.hub.registry.events_since
+        app.state.stuck_resolver.stuck_event = console.hub.registry.stuck_event
         app.state.stuck_resolver.heading_review = app.state.lane_compliance.stuck_heading
         app.state.stuck_resolver.realign_evidence = app.state.lane_compliance.realign_evidence
         app.state.line_stuck.heading_review = app.state.lane_compliance.stuck_heading

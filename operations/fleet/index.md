@@ -105,7 +105,7 @@
 ## 최근 기록
 
 - 2026-10-29 · ccc8712ece · 이송 결과의 검수 패키지와 복구 root 분할 검사
+- 2026-10-29 · uncommitted · fix(fleet): 추출된 목표 판정 관측 helper의 안전 소유권을 보존한다
 - 2026-10-28 · 239740362c · 목표 어드미션 판정의 순수 모듈 분리 A단계 (계획 2026-10-28-fleet-traffic-arbitration-split)
-- 2026-10-28 · cdbd0c332e · 전용 앱 상태 시험의 pytest 9.2 종료 오류 수정
-- 2026-10-27 · 477761474d · 인증된 simulation 복구 HTTP·현재 Account 권한
-- 2026-10-27 · 398b533c38 · 자동화 worker의 거절 증거 import 공개 이름 전환
+- 2026-10-28 · 0268ab50f · fix(fleet): 목표 판정 때 대기 로봇은 hub 하트비트로 읽는다
+- 2026-10-28 · 1e6b5fdc0 · fix(fleet): hub 이벤트 메모리 3분리

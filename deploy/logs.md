@@ -3896,6 +3896,21 @@
 - gate 변화: 없음. 전체 착지 검증은 별도이며 실제 포트·모터·서비스를 실행한 수용 근거가 아니다.
 - CE: 해당 없음 — 가짜 호출이 프레임워크에 번지는 원인과 적용 조건을 시험 주석·이 기록에서 복원할 수 있다.
 
+## 2026-10-28 · f1627fb4b · fix(site): 원장 보존 정리 — 종료 작업 history 30일·감사 90일
+
+- 변경: site_db.py backup이 성공한 뒤 prune_ledger를 돌을 수 있게 짰다. leet_task_history는 종료 작업(COMPLETED/FAILED/CANCELED/EXPIRED)의 30일 경과 행만, 
+osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD와 비종료 작업은 남기고 --prune-history 0/·--prune-audit 0은 비활성화다. 표가 없는 오래된 스키마는 건너뛰고, compose leet-backup 명령에 30/90을 명시했다. 지금까지 세 표 모두 DELETE가 없어 영구 쌑였다(2026-10-28 자원 조사).
+- 증거: 원격 시험 resource-bounds-1(AI PC, run-1) 	est/test_site_db_maintenance.py 신규 3 시험 통과 — 종료·HOLD·비종료 구분, 0일 비활성화, backup 명령 통합 각각 확인.
+- gate 변화: 없음. 착지 FULL 기록은 착지 때 land record로 남긴다.
+- CE: 해당 없음 — 보존 기간과 SQL이 코드와 시험로 읽힐 수 있다.
+
+## 2026-10-28 · 9b21c8c87b · fix(site): 종료 작업 행·durable 사건 감사·WAL 체크포인트
+
+- 변경: 자원 경계 후속 3건. (1) `fleet_tasks` 종료 행(request/evidence/receipt JSON)을 history와 함께 지운다 — `NOT EXISTS` 가드로 고아 history를 남기지 않고, 과량 prune이 history만 지운 경우도 회수한다. `request_key`는 30일 창이 지나야 재사용된다. (2) `core_event_audit`(observe/events.py, DELETE 0건으로 매 사건 영구 쌓임 확인)를 90일 보존한다 — Fleet 재시작 뒤 중복 제거는 남은 창에서 살고, 90일 넘는 재생은 실제 재생 지평 밖이다. 같은 `fleet.sqlite3`라 `prune_ledger`가 그대로 커버한다. (3) 백업·정리 뒤 `PRAGMA wal_checkpoint(TRUNCATE)`를 최선형으로 돌려 지워진 페이지가 OS 파일로 돌아가게 한다. 세션 만료 정리는 `password_session._issue`가 이미 하고 있어 새 작업 없음.
+- 증거: 원격 시험 retention2-1(AI PC, run-1) `test/test_site_db_maintenance.py`·`test_site_preflight.py`·`test_site_users_cli.py` exit 0, known_failures NEW 0 — 종료·HOLD·비종료 구분, 과거 prune 회수, 감사 90일, 0일 비활성화, backup 통합+체크포인트 보고 각각 확인. `size_range.py` 커밋 직후 통과.
+- gate 변화: 없음. 착지 FULL 기록은 착지 때 land record로 남긴다.
+- CE: 해당 없음 — 보존 근거(재생 지평, request_key 창)가 커밋 문서와 이 기록에 남는다.
+
 ## 2026-10-28 · uncommitted · fix(omx): 카메라 자동 조정이 역할마다 실제 미리보기 유닛을 확인
 
 - 변경: `camera_readiness.py` 프로필의 카메라마다 선택 항목 `unit`(기본은 역할 이름). 확인·복구가 `rosy-omx-camera@<unit>`을 단독 소유자로 본다. README와 시험 1건.
@@ -3954,6 +3969,20 @@
 - 증거: 작업 기준 `fd6fecfb82`부터 소스 `7763e92691`까지 9개 커밋의 추가 줄을 읽어 5건의 미검토 항목을 확인했다. 최종 파일 검사·키/복구 회귀는 원격 48 passed/0 skipped, NEW 0이다. 검토 기록의 반영 후 범위 검사와 게시 도구 회귀는 별도로 확인한다.
 - gate 변화: 사용자가 로컬 commit/merge를 승인했다. 공식 착지 도구의 자동 검증을 사용하며 push·실물 배포는 하지 않는다.
 - CE: 해당 없음 — 최종 파일 검사와 커밋 이력 검사의 차이는 기존 교훈과 검토 기록에 보존했다. 실제 장치 접속은 미확인이다.
+
+## 2026-10-29 · uncommitted · fix(site): 보존 정리가 요청 재실행과 새 백업 복원 거절을 만들지 않게 한다
+
+- 변경: terminal history·pairing/CORE audit 정리는 유지하고 `fleet_tasks`와 계정 감사 행은 보존한다. 기존 멱등성 조회와 계정 보안 상태 복원 검사를 그대로 유지한다. backup의 UID·read-only rootfs·cap drop·network 차단은 유지하고 live DB 명명 볼륨만 정리·checkpoint에 필요한 rw로 맞춘다. Task 본문과 계정 감사 저장량은 이번 정리 범위에 포함하지 않는다.
+- 증거: 독립 검토의 멱등성·DB mount·안전 경계 결함을 원격 6 failed로 재현했다. 실제 backup→prune→restore는 변경 전 계정 감사 삭제로 `Account security state differs` 1 failed를 별도로 확인했다. 후속 GREEN·전체 착지는 공식 게이트에서 확인하며 실물 DB에는 실행하지 않았다.
+- gate 변화: 없음. 백업·복원과 작업 API 계약을 완화하지 않았다.
+- CE: 미해결 — 회귀 GREEN과 실제 착지 확인 전이다. 해결 판단은 새 통합 회귀와 이 보존 범위에 연결한다.
+
+## 2026-10-29 · a2f29868ea · test(site): 실제 Task 원장 재제출과 백업 복원 회귀를 검증한다
+
+- 변경: 앞선 6 failed 중 재제출 시험 1개는 잘못된 `TaskStore` import였으므로 멱등성 재현 근거로 세지 않는다. 실제 `FleetTaskStore`로 교정하고 기존 배포 시험에서 DB rw·rootfs ro·UID·cap drop·네트워크 차단을 함께 검증한다. 생산 코드 추가 변경은 없다.
+- 증거: 교정한 수정 전 source `88ea64a6a4`는 같은 키 재제출이 새 Task를 만들어 `created=True`로 1 failed다. 별도 수정 전 source `eb809b4dab`는 backup 후 계정 감사 정리로 복원이 거절돼 1 failed다. 최종 source `a2f29868ea`의 DB·backup 배포·safety·harness·Hub·Console·stuck·TF 관련 11파일은 공식 원격 331 passed / skip 0 / NEW 0이다. 첫 구현 회귀의 330 passed / 1 ImportError는 완전한 GREEN이 아니다.
+- gate 변화: 없음. 전체 FULL·main 착지와 실물 DB·서비스 수용은 별도다.
+- CE: 해당 없음 — 실제 재제출·복원 회귀와 보존 범위가 판단 근거를 설명한다.
 
 ## 2026-10-29 · 535d81ae8b · 서버 서비스 이미지 증분 후보
 
