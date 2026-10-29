@@ -4012,9 +4012,10 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - gate 변화: 없음. 이전 카드의 MEDIA 복구는 frozen 1d816 소스에서 native premount + 공식 ResumeAfterWrite로 완료했으며 이 새 소스의 장치 수용으로 세지 않는다. 이 작업은 실제 카드·프로세스·queue를 수정하지 않았다.
 - CE: 기존 교훈 갱신 — [가짜와 실제 API 표면의 일치](../docs/solutions/workflow-issues/fake-with-a-method-the-real-class-lacks-hid-a-shutdown-bug.md)에 parameter-set 불일치, metadata autoload 순서, 재flash 없는 별도 복구와 검증 범위를 보강했다.
 
-## 2026-10-29 · fix/sd-access-path-binding · SD 원격 fixture의 플랫폼 경계 검증
+## 2026-10-29 · 2f88347d69 · SD 원격 fixture의 플랫폼 경계 검증
 
 - 원인: 승인 SD profile의 entrypoint 시험은 변경 전 main b0a31796b4에서도 14 failed / 20 passed였다. Windows C: 기본 Imager 경로를 Linux fixture가 그대로 썼고, 뒤에는 WindowsPrincipal/UAC 전용 세 사례와 PowerShell 7 오류 표시 형식 차이가 있었다. 제품 UAC/admin·기본값은 바꾸지 않았다.
 - 변경: print/launcher fixture가 temp fake Imager 경로를 명시한다. 실제 Windows identity가 필요한 세 사례만 Windows 조건을 붙이고, 비상 사유 거부의 진단 비교에서는 ANSI/gutter/whitespace 표시만 정규화한다. 거부·launcher 미호출·progress 미생성 assertion은 유지한다.
 - 증거: path-only 2f88347d69 원격은 30 passed / 4 failed로 다음 경계를 드러냈다. 명시 승인된 Windows 격리 PowerShell 실행은 원래 세 사례의 모든 assertion을 그대로 실행해 3 passed였다. 4개 하위 호출 모두 non-admin을 먼저 확인하고 native Start-Process/Storage 호출을 가로채 0회를 확인했다. local pytest·실제 UAC·카드 접근은 하지 않았다. Linux의 세 skip과 이 별도 native Windows 증거는 구분하며 최종 원격 결과는 완료 기록을 따른다.
+- gate 변화: 없음. 세 native Windows fixture의 별도 성공을 Linux 실행으로 세지 않으며 새 소스의 실물 수용을 주장하지 않는다.
 - CE: 기존 교훈 갱신 결과 유지. parameter-set·metadata autoload 판단은 기존 fake-surface 교훈에 남겼고, 단순 fixture 경로/표시 형식 수정을 별도 교훈으로 늘리지 않았다.
