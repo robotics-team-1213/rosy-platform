@@ -26,7 +26,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cell_calibration as cal  # noqa: E402
-from cell_pipeline_io import FifoCell, write_receipt  # noqa: E402
+from cell_pipeline_io import FifoCell, write_library, write_receipt  # noqa: E402
+from cell_envelope import SEQUENCE  # noqa: E402
 from cell_observe import (  # noqa: E402
     KEEP, fixed_cameras, grid_points, hover_check, keep, locate, on_flat, predicted_pixel, record_key, see, wrap90,
 )
@@ -41,17 +42,6 @@ def target(config: dict, site: str, xy, yaw_deg=None, place=False) -> dict:
             "yaw_deg": s["yaw_deg"] if yaw_deg is None else yaw_deg}
 
 
-def write_library(config: dict, pick: dict, place: dict, path: Path) -> Path:
-    from grasp_planner import Planner
-
-    library = Planner(dict(config["plan"], pick=pick, place=place)).library()
-    path.parent.mkdir(parents=True, exist_ok=True)  # the first run on a cell has no work folder yet
-    path.write_text(json.dumps({k: v for k, v in library.items() if v is not None}))
-    return path
-
-
-SEQUENCE = ("goto above_pick", "run descend_pick", "run grasp_pick", "run lift_pick", "goto above_place",
-            "run descend_place", "run release_place", "run lift_place", "park")
 STEP_KEYS = ("ok", "error", "holding", "gripper_current_ma", "settled", "fault", "contact", "state", "target", "t",
              "paced_ticks")
 
@@ -113,13 +103,16 @@ def verify(cell, config: dict, site: str, calibration: dict | None = None, inten
     """Did the box land where it was put? With a fine map for `site`: the located box against the intended
     arm point (verify_tol_mm). With only a coarse map or none, the arm's own placement is trusted once the
     grasp held: a pixel zone drawn for another plan would refuse a correct placement (2026-10-25)."""
+    from cell_envelope import verification_tolerance
+
+    tolerance = verification_tolerance(config)
     record = (calibration or {}).get("sites", {}).get(record_key(site, "top"))
     if record is not None and "z_view" not in record and intended is not None:
         found = locate(cell, config, calibration, site)
         if not found["found"]:
             return {"found": False, "inside": False}
         off = 1000 * math.dist(found["arm_m"], intended)
-        return {"found": True, "inside": off <= config.get("verify_tol_mm", 10.0), "off_mm": round(off, 1),
+        return {"found": True, "inside": off <= tolerance, "off_mm": round(off, 1),
                 "arm_m": found["arm_m"], "basis": "fine map"}
     box = see(cell.frame("top"), config["profiles"]["top"], site)
     return {**{k: box.get(k) for k in ("found", "cx", "cy")}, "inside": bool(box.get("found")),
@@ -520,10 +513,12 @@ def main(argv=None):
     parser.add_argument("--cycles", type=int, default=1, help="run: A/B cycles after calibration")
     parser.add_argument("--person-at-switch", action="store_true", help="recover: a person is at the power switch")
     parser.add_argument("--commissioning", action="store_true", help="supervised evidence collection; never enables run")
+    parser.add_argument("--operating-profile", type=Path, help="select this device's pinned operating profile")
     parser.add_argument("--from", dest="source", default="pinky")
     parser.add_argument("--to", default="belt")
     args = parser.parse_args(argv)
     config = json.loads(args.config.read_text())
+    config.pop("_operating_profile_binding", None)
     config.pop("_commissioning", None)  # a stored config cannot attest a person's presence
     if args.commissioning:
         if not args.person_at_switch or args.stage == "run":
@@ -531,6 +526,12 @@ def main(argv=None):
         config["_commissioning"] = {"person_at_switch": True}
     if args.stage in ("calibrate", "reset", "survey", "record") and not args.commissioning:
         parser.error(f"{args.stage} requires supervised --commissioning --person-at-switch")
+    if args.operating_profile or config.get("operating_profile_path"):
+        from cell_robot_profile import bind_pipeline
+
+        config = bind_pipeline(config, args.operating_profile)
+    elif args.stage not in ("locate", "verify", "recover"):
+        parser.error("select a per-device --operating-profile before a motion stage")
     import cell_perception as cp
 
     config["profiles"] = {camera: cp.load_profile(Path(spec.get("profile_path", config["profile_path"])).expanduser())
@@ -538,7 +539,8 @@ def main(argv=None):
     config["plan"] = json.loads(Path(config["plan_path"]).expanduser().read_text())  # grasp-plan.example.json form
     work = Path(config["work_dir"]).expanduser()
     calibration_path = Path(config["calibration_path"]).expanduser()
-    cell = FifoCell(Path(config["io"]).expanduser(), config["cameras"])
+    cell = FifoCell(Path(config["io"]).expanduser(), config["cameras"],
+                    operating_profile=config.get("_operating_profile_binding"))
     if args.stage == "record":  # record_session takes the arm itself: no chunk session may hold it
         if cell.act("state").get("ok"):
             raise SystemExit("stop the chunk session first (park, stop): record_session needs the arm")
