@@ -92,10 +92,11 @@ export function bindTopbarToggle(listen = (node, type, fn) => node.addEventListe
 }
 
 // English role names and principal ids stay in title (D-540 2); a development session says so with its badge.
-export function showSession(identity, {credentialChange = false} = {}) {
+export function showSession(identity, {credentialChange = false, focusOrigin = document.activeElement} = {}) {
   const tag = $("user-role"), title = `${identity.principal_id} · ${identity.role}`;
   const changed = tag.title !== title;
-  const returnFocus = $("topbar-extra").contains(document.activeElement);
+  const active = document.activeElement, menu = $("topbar-extra");
+  const returnFocus = menu.contains(active) || (active === document.body && menu.contains(focusOrigin));
   $('fleet-login').hidden = true;
   $('fleet-account').hidden = false;
   $('fleet-account-identity').textContent = `${identity.principal_id} · ${roleLabel(identity.role)}`;

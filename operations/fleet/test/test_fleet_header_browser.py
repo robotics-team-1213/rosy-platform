@@ -210,7 +210,8 @@ def test_explicit_same_identity_connection_closes_preferences_after_success(tmp_
         page.evaluate('''async () => {
             const header = await import('/console/assets/fleet-header.js');
             const response = await fetch('/api/fleet/session', {headers: {Authorization: 'Bearer header-token'}});
-            header.showSession(await response.json(), {credentialChange: true});
+            header.showSession(await response.json(), {credentialChange: true,
+                focusOrigin: document.getElementById('console-token')});
         }''')
         expect(page.locator('#topbar-extra')).to_be_hidden()
         expect(page.locator('main').first).to_be_focused()

@@ -114,6 +114,6 @@ ui-topbar {
   #user-role { display: none; }
   #fleet-inbox { gap: var(--space-1); }
   #topbar-more { padding-inline: var(--space-1); }
-  #estop { gap: 0; padding-inline: var(--space-2); }
+  #estop { gap: 0; }
   #estop .ui-icon { width: var(--space-4); height: var(--space-4); }
 }

@@ -138,6 +138,7 @@ function refreshControls() {
 }
 async function action(fn) {
   if (busy) return;
+  const focused = document.activeElement;
   busy = true; refreshControls();
   $('notice').textContent = '요청 처리 중 · 입력 잠시 잠금';
   try { await fn(); } catch (error) {
@@ -156,7 +157,11 @@ async function action(fn) {
         : error.message;
     if (error.status === 401 || error.status === 403) $('notice').scrollIntoView({block: 'center'});
   }
-  finally { busy = false; refreshControls(); }
+  finally {
+    busy = false; refreshControls();
+    if (document.activeElement === document.body && focused?.isConnected && !focused.disabled
+        && focused.getClientRects().length) focused.focus({preventScroll: true});
+  }
 }
 function post(path, body) { return api(path, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)}); }
 function references() {
@@ -341,9 +346,11 @@ $('console-token').addEventListener('input', () => {
   editEpoch++; clearSession();
   $('notice').textContent = '운영자 계정으로 접속해 저장된 레시피와 셀을 준비하세요.';
 });
-function connect(credentialChange = false) { return action(async () => {
+function connect(credentialChange = false) {
+  const focusOrigin = document.activeElement;
+  return action(async () => {
   const session = await api('/api/fleet/session'); role = session.role;
-  showSession(session, {credentialChange});
+  showSession(session, {credentialChange, focusOrigin});
   observations.clear(); void observations.refresh();
   loginForm.refresh(false);
   await list();
@@ -360,7 +367,8 @@ function connect(credentialChange = false) { return action(async () => {
     $('proposal-stage').open = true;
   }
   $('notice').textContent = '접속 완료 · 문서를 준비하세요.';
-}); }
+  });
+}
 $('token-save').addEventListener('click', () => connect(true));
 // D-519 — login and logout change the cookie; drop any token so the cookie (or a 401) decides.
 const loginForm = createPasswordLogin($('password-login'), {onChange: () => {
