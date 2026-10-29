@@ -52,6 +52,8 @@ DEFAULTS = {
     "pinch.enabled": (1, "flag", 0, 1), "pinch.band_px": (40, "px", 5, 200), "pinch.min_gap_mm": (2.0, "mm", 0, 20),
     "pinch.width_tol": (0.35, "ratio", 0.05, 1.0), "pinch.max_iter": (3, "count", 0, 5), "pinch.max_step_mm": (20.0, "mm", 1, 40),
     "pinch.mount_tol_px": (40.0, "px", 5, 200),
+    "look.enabled": (0, "flag", 0, 1), "look.tol_mm": (3.0, "mm", 0.5, 20), "look.max_iter": (4, "count", 0, 6),
+    "look.max_total_mm": (30.0, "mm", 5, 80), "push.look_tol_mm": (6.0, "mm", 1, 15), "look.near_px": (40.0, "px", 10, 150),
     "objects.split_touching": (1, "flag", 0, 1), "objects.split_peak_frac": (0.6, "ratio", 0.3, 0.9),
     "pivot.over_target": (0, "flag", 0, 1), "pivot.over_top_mm": (30.0, "mm", 5, 120), "pivot.over_clear_mm": (30.0, "mm", 10, 100),
     "feel.enabled": (1, "flag", 0, 1), "feel.step_mm": (12.0, "mm", 3, 30), "feel.tries": (4, "count", 0, 6),
