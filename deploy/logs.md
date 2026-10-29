@@ -4035,6 +4035,13 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - gate 변화: 없음. 물리 동작·기본값·가드·장치 상태는 바꾸지 않았고 배포·push하지 않았다.
 - CE: 해당 없음 — main 통합의 producer/consumer와 증거 적용 조건은 D-914·회귀·기존 import/장부 교훈으로 복원할 수 있다.
 
+## 2026-10-29 · 28dc087ea6 · fallback open AP 표시 소비자 호환
+
+- 변경: 공개 AP 상태의 security를 부팅 표시와 LCD로 전달하고 open일 때 저장된 AP 비밀번호를 읽거나 표시하지 않는다. 콘솔과 LCD는 No password를 표시하며 접속 QR은 키 필드 없는 nopass 형식이다. security가 없는 기존 상태와 WPA2 표시는 유지한다.
+- 증거: tests-only commit 38f4baf395의 공식 원격 실행은 open 표시·QR·비밀번호 읽기 차단 6 FAILED/기존 호환 2 PASS였다. commit 28dc087ea6의 집중 부팅·LCD·QR 회귀는 350 passed/1 skipped, NEW0/known0/flaky0이다. 신규 12개 사례에는 skip이 없다. 기존 frozen 파일 크기는 증가하지 않았다.
+- gate 변화: 없음. 이 변경은 향후 open 상태를 읽는 소비자 지원이다. fallback 정책·실제 AP·장치의 부팅·OTA 수용은 아직 바꾸거나 시험하지 않았다.
+- CE: 해당 없음 — 신규 상태와 자격 정보 차단 계약은 코드 및 회귀로 재현된다.
+
 ## 2026-10-29 · uncommitted · workcell 팔 자격 증명 전체 매핑 설정
 
 - 변경: 서명된 workcell Compose에서 관리자 설정 `ROSY_SITE_WORKCELL_ARM_CREDENTIAL_PATHS`로 Fleet 팔 credential 전체 매핑을 지정한다. 기본 A/B와 Vision 매핑, 역할별 mount, 기존 bootstrap 거부 규칙은 유지했다. A/B/S 렌더링과 누락 S 거부 시험 및 마이그레이션 설명을 추가했다.
