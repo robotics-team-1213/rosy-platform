@@ -336,3 +336,10 @@
 - 증거: 최종 원격 실제 HTTP/Chromium9 passed/skip0와 공식 영향2880 passed/358 skipped, 각각 NEW0. 4폭×2테마의 ready/form/error24장과 독립 화면 검토를 `docs/validation/learning-storage-controls-2026-10-29/`에 고정했다. 최초 일반 버튼8 실패와 제목 geometry2 실패 원본도 보존했다.
 - gate 변화: 없음. 전체 UI·모델·실물·실제 HF·배포·착지/push/merge 수용과 구분한다.
 - CE: 해당 없음 — 부품/폼/임시 증거 경로의 판단은 코드·회귀·검증 기록에 남는다.
+
+## 2026-10-29 · 8e084f3e59 · 객체·픽셀의 공용 클래스 선택
+
+- 변경: class-chip을 공용 segment/type=button과 명시 value attribute로 이행하고 enable·pressed·test selector를 함께 고쳤다. 화면별 painting을 제거하며 데이터 색·클래스/index·권한·저장/승인·canvas 복귀를 유지했다.
+- 증거: runtime b3b265f7e8의 기존 두 Chromium 파일 전체220 passed/skip0, 최종 test-only8e의 강화32 passed·16PNG, 계약80 passed와 공식 영향2880 passed/384 skipped, 모두 NEW0. 중복 subset을 합산하지 않는다. 독립 source/화면 검토와 hash는 `docs/validation/learning-class-controls-2026-10-29/` 참조.
+- gate 변화: 없음. 실물·실제 라벨·전체 통합·native·배포/착지/push/merge 수용과 별도다.
+- CE: 해당 없음 — attribute·상태·데이터 경계 판단이 코드·회귀·검증 기록에 남는다.

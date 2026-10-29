@@ -12953,3 +12953,10 @@ osy-d395-s1d\`.
 - 증거: 최종 실제 HTTP/Chromium9 passed/skip0, 공식 영향2880 passed/358 skipped/NEW0. 4폭×2테마의24장을 독립 검토했다. TEMP 정리로 소실된 초기 캡처와 이전 제목 배치16장은 최종 시각 수용으로 사용하지 않았다.
 - gate 변화: 없음. 전체 플랫폼 UI·native/실물/현장·실제 HF·배포/착지/push/merge 수용과 분리한다.
 - CE: 해당 없음 — 부품/제출/geometry·증거 수명의 이유가 코드·회귀·이 기록에 남는다.
+
+## 2026-10-29 · 8e084f3e59 · 검수 클래스 선택 부품 이행 검증
+
+- 변경: 객체·픽셀의 class-chip을 기존 공용 segment로 통일하고 중복 painting을 지웠다. frozen 결과·로그5개/캡처16장 SHA를 `docs/validation/learning-class-controls-2026-10-29/`에 보존한다.
+- 증거: 기존 두 Chromium 전체220 passed, 강화 부분집합32 passed, 정적 계약80 passed, 공식 영향2880 passed/384 skipped, NEW0. 최초 object locator 오류와 실제 pixel kind 누락을 구분하고 실패·통과 원본을 보존했다. A source/B16장 직접 검토를 수행했다.
+- gate 변화: 없음. 전체 UI 통합·native/실물·진짜 라벨·배포/착지/push/merge 수용과 구분한다.
+- CE: 해당 없음 — attribute·상태·데이터/승인 경계가 코드·회귀·이 기록에 남는다.
