@@ -165,3 +165,15 @@ def test_marks_cli_rejects_missing_supervision_before_constructing_field(monkeyp
     with pytest.raises(SystemExit) as caught:
         cf.main(["--config", "unused.json", "--catalog", "unused.json", "marks", "--library", "unused.json", *flags])
     assert caught.value.code == 2
+
+
+def test_marks_cli_passes_explicit_supervision_to_the_guarded_method(monkeypatch, capsys):
+    calls = []
+    def marks(library, goto, *, commissioning, person_at_switch):
+        calls.append((library, goto, commissioning, person_at_switch))
+        return {"result": "fixture"}
+    monkeypatch.setattr(cf, "Field", lambda *a: SimpleNamespace(marks=marks))
+    assert cf.main(["--config", "unused.json", "--catalog", "unused.json", "marks", "--library", "fixture.json",
+                    "--commissioning", "--person-at-switch"]) == 0
+    assert calls == [("fixture.json", "goto above_pick", True, True)]
+    assert json.loads(capsys.readouterr().out) == {"result": "fixture"}

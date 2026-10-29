@@ -4138,3 +4138,10 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: Field 생성자는 profile을 FIFO에 전달하지 않고 marks는 raw load/goto/grip/park를 전송한다. 새 시험은 실제 FifoCell.act와 시험용 전송을 연결해 대상 불일치·오래된 상태·저장된 가짜 binding·감독 플래그 누락·실패 시 park 경로를 구분한다. 수정 전 원격 RED는 이 커밋 이후 실행하며 실물 접근은 없다.
 - gate 변화: 없음. marks admission은 미해결이며 SOURCE 통과나 현장 수용을 주장하지 않는다. 기존 증분 도구 설치·사이트 운영 상태도 바꾸지 않는다.
 - CE: 미해결 — 공개 통합 범위의 새 native 호출 경계 결함이며 회귀 재현과 수정 검증 후 기존 교훈 기준으로 판단한다.
+
+## 2026-10-30 · uncommitted · field marks를 선택 프로필과 감독 절차에 연결
+
+- 변경: 저장된 가짜 binding을 버리고 실제 선택 프로필과 증거 경로를 FIFO client에 바인딩한다. marks의 직접 호출과 CLI 모두 명시적인 commissioning·person-at-switch를 요구하며 profile/감독 거절은 try/finally park 전에 끝난다. gripper 명령이 거절되면 반복을 중단하고 기존 검증된 park 경로는 보존한다.
+- 증거: 수정 전 커밋67e700358d의 원격 회귀17건은12failed/5passed/skip0이며 known_failures는12NEW를 확인했다. 독립 검토에서 실제 FIFO 검증 경로와 library digest 전이의 fixture 정합성을 확인했다. 구현 수정본 GREEN은 이 커밋 이후 실행하며 실물·시리얼·로봇 SSH 접근은 없다.
+- gate 변화: 없음. 이 기록은 수정 전 RED와 source 검토만 증명하며 원격 GREEN·적격 FULL·CI·현장 수용을 대신하지 않는다. 실패를 기존 quarantine에 추가하지 않는다.
+- CE: 미해결 — 회귀 수정 검증 뒤 기존 교훈과 최종 코드·시험만으로 판단을 복원할 수 있는지 평가한다.
