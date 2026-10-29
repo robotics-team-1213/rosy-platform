@@ -8,7 +8,7 @@
     "wrist": {"url": "http://127.0.0.1:8767/frame/front.jpg"}
   },
   "work_dir": "cell-pipeline",
-  "operating_envelope_path": "cell-pipeline/operating-envelope.json",
+  "operating_profile_path": null,
   "operating_conditions": {
     "installation_revision": null,
     "object_revision": null,

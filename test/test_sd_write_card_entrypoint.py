@@ -10,8 +10,10 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import re
 import shutil
 import subprocess
+import sys
 
 import pytest
 
@@ -30,19 +32,22 @@ def case(tmp_path: Path):
     (release / "SHA256SUMS.sig").write_text("sig\n", encoding="ascii")
     evidence = tmp_path / "cards"
     evidence.mkdir()
+    imager = tmp_path / "rpi-imager.exe"
+    imager.write_bytes(b"fixture executable is never launched")
     plan = evidence / "plan.json"
     plan.write_text(json.dumps({
         "mode": "PLAN_ONLY", "release_id": RELEASE, "image_sha256": "a" * 64,
         "device_name": "rosy-pinky-e4us", "disk_serial": "000000000207", "disk_number": 2,
         "registry_path": str(tmp_path / "registry.json"),
     }), encoding="utf-8")
-    return {"release": release, "evidence": evidence, "plan": plan, "tmp": tmp_path}
+    return {"release": release, "evidence": evidence, "plan": plan, "tmp": tmp_path, "imager": imager}
 
 
 def _print(case, *extra):
     command = [POWERSHELL, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(SCRIPT),
                "-PlanPath", str(case["plan"]), "-ReleaseDir", str(case["release"]),
-               "-WifiProfile", "site-default", "-PrintArguments", *map(str, extra)]
+               "-WifiProfile", "site-default", "-RpiImager", str(case["imager"]),
+               "-PrintArguments", *map(str, extra)]
     return subprocess.run(command, capture_output=True, text=True)
 
 
@@ -203,7 +208,7 @@ def _launch(case, launcher, *extra):
     log = case["evidence"] / "write-attempt.log"
     command = [POWERSHELL, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(SCRIPT),
                "-PlanPath", str(case["plan"]), "-ReleaseDir", str(case["release"]),
-               "-WifiProfile", "site-default", "-LogPath", str(log),
+               "-WifiProfile", "site-default", "-RpiImager", str(case["imager"]), "-LogPath", str(log),
                "-ElevationLauncher", str(launcher), *map(str, extra)]
     started = time.monotonic()
     completed = subprocess.run(command, capture_output=True, text=True, timeout=120)
@@ -216,6 +221,7 @@ def _progress_lines(log):
 
 
 @pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows identity/UAC launch contract")
 def test_detach_starts_one_window_and_returns_at_once(case):
     launcher, record = _launcher(case, "accept")
 
@@ -240,6 +246,7 @@ def test_detach_starts_one_window_and_returns_at_once(case):
 
 
 @pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows identity/UAC launch contract")
 def test_a_declined_uac_prompt_is_recorded_as_untouched(case):
     launcher, _record = _launcher(case, "decline")
 
@@ -464,6 +471,7 @@ REASON = "robot needed on the floor now; readback CPU-starved"
 
 
 @pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows identity/UAC launch contract")
 def test_an_emergency_write_passes_the_switch_and_its_reason_to_the_writer_window(case):
     launcher, record = _launcher(case, "accept")
 
@@ -503,7 +511,9 @@ def test_an_emergency_without_a_reason_is_refused_before_the_uac_prompt(case, ex
     completed, _elapsed, log = _launch(case, launcher, "-Detach", *extra)
 
     assert completed.returncode != 0
-    assert message in " ".join(completed.stderr.split())
+    # PowerShell 7 decorates and wraps errors with ANSI codes and a line gutter.
+    rendered = re.sub(r"\x1b\[[0-9;]*m|\|", "", completed.stderr)
+    assert message in " ".join(rendered.split())
     assert not record.exists()
     assert not Path(str(log) + ".progress.jsonl").exists()
 

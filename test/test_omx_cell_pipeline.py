@@ -37,8 +37,33 @@ CONFIG["operating_conditions"] = {"installation_revision": "sim-install-1", "obj
 START = (0.072, 0.106)
 
 
+@pytest.fixture(autouse=True)
+def simulated_operating_profile(tmp_path, monkeypatch):
+    path = tmp_path / "robot-profile.json"
+    path.write_text(json.dumps({"schema": "rosy.omx-cell-robot-profile.v1", "device_id": "sim-device",
+        "instance_id": "sim-arm", "robot_config_sha256": "c" * 64,
+        "operating_envelope_path": "review.json", "work_dir": "."}))
+    monkeypatch.setitem(CONFIG, "operating_profile_path", str(path))
+    monkeypatch.setitem(CONFIG, "work_dir", str(tmp_path))
+    monkeypatch.setitem(CONFIG, "operating_envelope_path", str(tmp_path / "review.json"))
+
+
 def tray_pixel(x, y):  # arm metres -> top-camera pixel at the box's height: turned and mirrored, ~0.9 px/mm
     return 134.5 - 900 * (y - 0.106), 239.5 - 900 * (x - 0.072)
+
+
+@pytest.mark.parametrize("tolerance,inside", [(None, False), (10, False), (20, True), (0, False)])
+def test_fine_map_verification_uses_the_effective_tolerance(monkeypatch, tolerance, inside):
+    monkeypatch.setattr(m, "locate", lambda *args: {"found": True, "arm_m": [0.015, 0]})
+    config = {} if tolerance is None else {"verify_tol_mm": tolerance}
+    calibration = {"sites": {m.record_key("pinky", "top"): {}}}
+    assert m.verify(object(), config, "pinky", calibration, intended=[0, 0])["inside"] is inside
+
+
+@pytest.mark.parametrize("value", [True, -1, float("nan"), float("inf"), "10", None])
+def test_invalid_verification_tolerance_is_rejected_before_observation(value):
+    with pytest.raises(ValueError, match="verify_tol_mm"):
+        m.verify(object(), {"verify_tol_mm": value}, "pinky")
 
 
 def belt_pixel(x, y):
@@ -86,9 +111,11 @@ class Cell:
         elif command.startswith("grip "):
             self.grip = max(48.5, float(command.split()[1]))  # the follower jaws end at 48.5
         elif command == "state":
+            from cell_robot_profile import load
+
             return {"command": "state", "ok": True, "state": [0, 0, 0, 0, 0, self.grip],
                     "t": time.time(), "operating_context": {"scope": "simulation", "sha256": "a" * 64,
-                                                             "session_id": "fixture-session"},
+                        "session_id": "fixture-session", "operating_profile": load(CONFIG["operating_profile_path"])["binding"]},
                     "library_sha256": self.library_sha256,
                     "health": {"current_ma": [0, 0, 0, 0, 0, self.current]}}
         elif command == "park":
@@ -229,6 +256,8 @@ def test_reviewed_automatic_transfer_uses_live_ledger_and_a_failure_revokes_it(t
         "task_sha256": task, "scope": "simulation", "reviewed_by": "fixture-reviewer",
         "evidence_ref": "synthetic-cell-observations", "attempts_sha256": digest(rows),
         "min_attempts": 1, "min_success_rate": 1.0, "home_tolerance_units": 0.5}]}
+    review.update({key: rows[0]["envelope"]["operating_profile"][key]
+                   for key in ("device_id", "instance_id", "profile_sha256")})
     Path(config["operating_envelope_path"]).write_text(json.dumps(review))
     config.pop("_commissioning")
 
