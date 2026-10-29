@@ -66,29 +66,24 @@ D-894 reserved in another in-flight branch (refs/adr/D-894, manual arm shared co
 D-896 reserved on another in-flight branch (refs/adr/D-896), absent from this D-897 branch; remove when its ADR lands
 D-896 reserved in another in-flight branch (refs/adr/D-896, Arm S measured-cell Isaac reproduction and single-model sim training); remove when its ADR lands
 D-900 reserved in another in-flight branch (refs/adr/D-900), absent from this D-901 branch; remove when its ADR lands
-D-904 reserved in another in-flight branch (refs/adr/D-904, arm S autonomous pick-place pipeline, feat/omx-cell-attempt-log), absent from this D-908 branch; remove when its ADR lands
 D-905 reserved in another in-flight branch (refs/adr/D-905, landing gate on the GitHub merge queue pilot), absent from this D-908 branch; remove when its ADR lands
 D-906 reserved in another in-flight branch (refs/adr/D-906, fix/recording-learning-handoff), absent from this D-908 branch; remove when its ADR lands
 D-907 reserved in another in-flight branch (refs/adr/D-907, feat/omx-native-release-profiles), absent from this D-908 branch; remove when its ADR lands
-D-904 reserved in another in-flight branch, absent from this D-913 branch; remove when its ADR lands
 D-905 reserved in another in-flight branch, absent from this D-913 branch; remove when its ADR lands
 D-906 reserved in another in-flight branch, absent from this D-913 branch; remove when its ADR lands
 D-907 reserved in another in-flight branch, absent from this D-913 branch; remove when its ADR lands
 D-909 reserved in another in-flight branch, absent from this D-913 branch; remove when its ADR lands
 D-910 reserved in another in-flight branch, absent from this D-913 branch; remove when its ADR lands
-D-904 reserved in another in-flight branch (refs/adr/D-904), absent from this D-912 branch; remove when its ADR lands
 D-905 reserved in another in-flight branch (refs/adr/D-905), absent from this D-912 branch; remove when its ADR lands
 D-906 reserved in another in-flight branch (refs/adr/D-906), absent from this D-912 branch; remove when its ADR lands
 D-907 reserved in another in-flight branch (refs/adr/D-907), absent from this D-912 branch; remove when its ADR lands
 D-909 reserved in another in-flight branch (refs/adr/D-909), absent from this D-912 branch; remove when its ADR lands
 D-910 reserved in another in-flight branch (refs/adr/D-910), absent from this D-912 branch; remove when its ADR lands
-D-904 reserved in another in-flight branch (refs/adr/D-904), absent from this D-911 branch; remove when its ADR lands
 D-905 reserved in another in-flight branch (refs/adr/D-905), absent from this D-911 branch; remove when its ADR lands
 D-906 reserved in another in-flight branch (refs/adr/D-906), absent from this D-911 branch; remove when its ADR lands
 D-907 reserved in another in-flight branch (refs/adr/D-907), absent from this D-911 branch; remove when its ADR lands
 D-909 reserved in another in-flight branch (refs/adr/D-909), absent from this D-911 branch; remove when its ADR lands
 D-910 reserved in another in-flight branch (refs/adr/D-910), absent from this D-911 branch; remove when its ADR lands
-D-904 reserved in another in-flight branch (refs/adr/D-904), absent from this D-915 branch; remove when its ADR lands
 D-905 reserved in another in-flight branch (refs/adr/D-905), absent from this D-915 branch; remove when its ADR lands
 D-906 reserved in another in-flight branch (refs/adr/D-906), absent from this D-915 branch; remove when its ADR lands
 D-907 reserved in another in-flight branch (refs/adr/D-907), absent from this D-915 branch; remove when its ADR lands

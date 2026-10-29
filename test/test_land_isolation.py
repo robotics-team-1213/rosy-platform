@@ -255,6 +255,29 @@ def test_doctor_open_records_close_by_a_later_alone_run_on_a_descendant(prepared
     assert doctor.run(pair, now=later, out=out.append) in (0, 1) and any("isolation:" in o for o in out)
 
 
+def test_closed_record_stops_ancestry_scan_but_later_incomplete_record_stays_open(pair, monkeypatch):
+    ident = ["-c", "user.name=t", "-c", "user.email=t@t"]
+    git(pair, *ident, "commit", "-q", "-m", "init")
+    land_isolation.record(pair, "fix/old", "skipped", ["m/test/test_b.py"], ["m/test/test_b.py"])
+    git(pair, *ident, "commit", "-q", "--allow-empty", "-m", "closed")
+    land_isolation.record(pair, "fix/closed", "done", ["m/test/test_b.py"], [])
+    git(pair, *ident, "commit", "-q", "--allow-empty", "-m", "incomplete again")
+    land_isolation.record(pair, "fix/new", "prepare", ["m/test/test_b.py"], ["m/test/test_b.py"])
+    old, closed, latest = land_isolation.rows(pair)
+    ancestor = land_isolation._ancestor
+    calls = []
+
+    def checked(a_pair, a, b):
+        calls.append((a, b))
+        return ancestor(a_pair, a, b)
+
+    monkeypatch.setattr(land_isolation, "_ancestor", checked)
+    now = latest["t"] + land_isolation.OPEN_AFTER_S + 1
+    assert land_isolation.open_entries(pair, now) == [(latest, ["m/test/test_b.py"])]
+    assert calls == [(old["candidate"], "main"), (old["candidate"], closed["candidate"]),
+                     (latest["candidate"], "main")]
+
+
 def test_turn_reruns_alone_only_tests_whose_referenced_file_main_changed(pair, monkeypatch):
     ident = ["-c", "user.name=t", "-c", "user.email=t@t"]
     git(pair, *ident, "commit", "-q", "-m", "init")

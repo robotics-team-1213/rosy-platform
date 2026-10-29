@@ -353,6 +353,8 @@ class Session:
             if self.chunks:
                 command = [sys.executable, str(Path(__file__).resolve().with_name("chunk_runner.py")),
                            f"--config={config_path}", f"--library={self.chunks['library']}", f"--io={self.chunks['io']}"]
+                if self.chunks.get("params"):
+                    command.append(f"--params={self.chunks['params']}")
                 record["source_mode"] = "scripted_teacher"
                 record["chunks"] = self.chunks
             else:
@@ -478,6 +480,7 @@ def main(argv=None):
     parser.add_argument("--task-card", type=Path, help="task design card to embed in session.json")
     parser.add_argument("--replay", type=Path, help="teach_trajectory.py output: a scripted teacher replaces the leader")
     parser.add_argument("--chunks", type=Path, help="chunk library: chunk_runner.py holds the arm and takes judge commands")
+    parser.add_argument("--params", type=Path, help="--chunks: cell-params.json for the runner (default: built-in values)")
     parser.add_argument("--io", type=Path, default=Path("chunk-io"), help="--chunks: command FIFO and status directory")
     args = parser.parse_args(argv)
     if args.body_only and not args.teleop_only:
@@ -543,7 +546,8 @@ def main(argv=None):
         from chunk_runner import load_library
         load_library(args.chunks)  # refuse a bad library before any cap is raised
         chunks = {"library": str(args.chunks.resolve()), "io": str(args.io.resolve()),
-                  "sha256": hashlib.sha256(args.chunks.read_bytes()).hexdigest()}
+                  "sha256": hashlib.sha256(args.chunks.read_bytes()).hexdigest(),
+                  **({"params": str(args.params.resolve())} if args.params else {})}
     session = Session(open_bus=lambda which: SerialBus(ports[which], 0), systemctl=systemctl, run=run, log=log,
                       replay=replay, chunks=chunks)
     lock = session_lock()

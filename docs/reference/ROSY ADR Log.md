@@ -11,6 +11,7 @@
 | ID | 제목 | Status |
 |---|---|---|
 | D-908 | 업무 앱의 중립 이송 제안과 별도 운영자 승인. [전문](../adr/D-908-neutral-trip-proposal.md) | Accepted (2026-10-28, 사용자 결정) |
+| D-904 | 공급암 S는 사람 손 없이 하나의 파이프라인으로 물체를 고르고 집어 놓는다. [전문](../adr/D-904-arm-s-autonomous-pick-place-pipeline.md) | Proposed (2026-10-28) |
 | D-903 | cmd_vel 정지 시 50Hz 영(zero) 발행 억제 — 안전 검토 요건. [전문](../adr/D-903-cmdvel-zero-suppression.md) | Proposed (2026-10-28) |
 | D-912 | Signed OS transport maintenance with independent authority and durable recovery. [전문](../adr/D-912-signed-os-transport-maintenance.md) | Proposed |
 | D-911 | OMX native 셀의 검증된 작업 범위와 현재 실행 조건을 구분한다. [전문](../adr/D-911-omx-native-reviewed-operating-envelope.md) | Accepted (2026-10-28, 구현 승인; 장치 수용 별도) |
