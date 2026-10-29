@@ -4077,12 +4077,7 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - gate 변화: 없음. 소비자 선행 착지·통합·서명 native/SDK 배포와 실물 수용은 아직 남았다.
 - CE: 해당 없음 — 손상/누락의 구분과 close 감독 경계는 코드·회귀 시험으로 재현된다.
 
-## 2026-10-30 · b830767991 · open AP 소비자 선행 착지 후 producer 통합
 
-- 변경: 소비자 commit fd2131fdcbec가 실제 main 조상이 된 뒤 main commit 9ecc9795e93c를 producer에 병합했다. peer LCD helper/compact renderer와 기존 기록을 유지했다. main에서 D-914 문서가 도착했으므로 그 번호의 낡은 adr_gaps 행만 제거했다.
-- 증거: 통합 commit b830767991의 원격 producer/consumer/설치 renderer 15개 시험 파일은 587 passed/2 skipped, 실제 opt-in 복구 브라우저는 3 passed/skip0이다. 첫 affected는 1426 passed/1 skipped와 D-914 stale-gap guard 2 failed였으며 이 실패가 단일 행 정리의 근거다. 최종 고정 head의 affected 결과와 독립 검토는 외부 통합 receipt로 확인한다.
-- gate 변화: 소비자 실제 main 조상 조건은 충족했다. 서명된 full native/SDK 빌드·OTA 적용과 실제 무선/복구 수용은 여전히 미수행이다. 기존 001 카드에 open fallback이 포함됐다고 간주하지 않는다.
-- CE: 해당 없음 — 병합된 ADR의 obsolete gap 제거는 기존 guard가 직접 검출하는 통상적인 통합 정리다.
 ## 2026-10-29 · 05f19a73ea · 팔 credential 및 signed candidate 집중 회귀
 
 - 변경: 관리자 전체 매핑 후보의 원격 집중 회귀 결과를 기록했다. 실행 코드·시험은 05f19a73ea와 같다.
@@ -4120,3 +4115,10 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: tests-only commit bc303cdb1b의 공식 원격 회귀는 7 failed/19 passed, known_failures NEW7이었다. 수정 commit 8a381b7f12의 land_prepare·land_queue·land_batch 집중 회귀는 85 passed, NEW0/known0/flaky0이다. 로그는 Git 밖 receipts/2026-10-29-queue-own-batch-slots/red 및 green에 보존한다.
 - gate 변화: 없음. 공식 affected 선택은 FULL이며 land_async의 전체 착지 검증을 유지한다. 이미 실행 중인 worker는 이 소스를 다시 읽지 않으므로 현재 큐 대기가 풀렸다고 주장하지 않는다. 공유 main 게시·장치 동작은 이 변경의 범위가 아니다.
 - CE: 해당 없음 — 전체 티켓으로 carried를 구한 뒤 자기 행만 제외해야 한다는 원인과 재현 조건은 최종 코드 및 k2/k4·다른 pending/preparing 예약을 검증하는 8개 회귀 시험에 직접 남는다. 별도 교훈 문서는 늘리지 않는다.
+
+## 2026-10-30 · b830767991 · open AP 소비자 선행 착지 후 producer 통합
+
+- 변경: 소비자 commit fd2131fdcbec가 실제 main 조상이 된 뒤 main commit 9ecc9795e93c를 producer에 병합했다. peer LCD helper/compact renderer와 기존 기록을 유지했다. main에서 D-914 문서가 도착했으므로 그 번호의 낡은 adr_gaps 행만 제거했다.
+- 증거: 통합 commit b830767991의 원격 producer/consumer/설치 renderer 15개 시험 파일은 587 passed/2 skipped, 실제 opt-in 복구 브라우저는 3 passed/skip0이다. 첫 affected는 1426 passed/1 skipped와 D-914 stale-gap guard 2 failed였으며 이 실패가 단일 행 정리의 근거다. 최종 고정 head의 affected 결과와 독립 검토는 외부 통합 receipt로 확인한다.
+- gate 변화: 소비자 실제 main 조상 조건은 충족했다. 서명된 full native/SDK 빌드·OTA 적용과 실제 무선/복구 수용은 여전히 미수행이다. 기존 001 카드에 open fallback이 포함됐다고 간주하지 않는다.
+- CE: 해당 없음 — 병합된 ADR의 obsolete gap 제거는 기존 guard가 직접 검출하는 통상적인 통합 정리다.
