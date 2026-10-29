@@ -327,9 +327,18 @@ function renderOffline(root, onConnect) {
   root.append(retry);
 }
 
-function emergencyRelease(role, state, onReleased) {
+function releaseContext(safety) {
+  if (safety?.estop !== true || typeof safety.source !== "string") return null;
+  if (safety.source !== "battery_policy" && safety.source !== "battery_deep") return {key: safety.source, detail: ""};
+  const battery = safety.battery, level = {ok: "정상", warning: "주의", critical: "부족", deep: "매우 부족"}[battery?.level];
+  if (battery?.evidence !== "fresh" || !level || !Number.isFinite(battery.percent)) return null;
+  return {key: `${safety.source}:${battery.level}`,
+    detail: `배터리 보호 정지 · 배터리 ${battery.percent}% · ${level} · 최신 표본. 보호 조건이 남아 있으면 다시 정지될 수 있습니다. `};
+}
+
+function emergencyRelease(role, safety, onReleased) {
   const release = el("ui-button", "비상 정지 해제", {type: "button", kind: "quiet", "data-estop-release": ""});
-  release.disabled = role !== "administrator" || !new HeadlessState(state).isFresh("safety");
+  release.disabled = role !== "administrator" || !releaseContext(safety);
   if (release.disabled) release.reason = role !== "administrator"
     ? "관리자 로그인 코드로 다시 연결해야 해제할 수 있습니다"
     : "최신 안전 상태를 확인한 뒤 해제할 수 있습니다";
@@ -339,15 +348,18 @@ function emergencyRelease(role, state, onReleased) {
     const credential = token(), identity = account;
     const current = () => release.isConnected && token() === credential && account === identity;
     try {
-      if (!await confirmIrreversible({message: "주변 안전을 확인했고 비상 정지를 해제할까요? 해제 후에도 주행은 별도로 시작해야 합니다.",
+      const before = await api("/api/v1/safety/state", {timeoutMs: 5000});
+      if (!current()) return;
+      const context = before.ok && releaseContext(before.body);
+      if (!context) { notice("비상 정지 해제 보류 · 현재 정지 사유와 배터리 상태를 확인할 수 없습니다."); return; }
+      if (!await confirmIrreversible({message: `${context.detail}주변 안전을 확인했고 비상 정지를 해제할까요? 해제 후에도 주행은 별도로 시작해야 합니다.`,
         action: "비상 정지 해제", opener: release}) || !current()) return;
       const [latest, me] = await Promise.all([
-        api("/api/v1/robot/state", {timeoutMs: 5000}), api("/api/v1/auth/whoami", {timeoutMs: 5000}),
+        api("/api/v1/safety/state", {timeoutMs: 5000}), api("/api/v1/auth/whoami", {timeoutMs: 5000}),
       ]);
       if (!current()) return;
       if (!latest.ok || !me.ok || me.body?.role !== "administrator"
-        || !new HeadlessState(latest.body).isFresh("safety")
-        || !(latest.body?.mode === "EMERGENCY" || latest.body?.safety?.estop === true)) {
+        || releaseContext(latest.body)?.key !== context.key) {
         notice("비상 정지 해제 보류 · 관리자 권한과 최신 안전 상태를 다시 확인하세요."); return;
       }
       const result = await postJson("/api/v1/safety/release", {}, {timeoutMs: 5000});
@@ -355,10 +367,12 @@ function emergencyRelease(role, state, onReleased) {
       if (!result.ok || result.body?.estop !== false) {
         notice("비상 정지 해제 요청이 거절되었거나 결과를 확인하지 못했습니다. 로봇 상태와 관리자 권한을 확인하세요."); return;
       }
-      const after = await api("/api/v1/robot/state", {timeoutMs: 5000});
+      const [after, owner] = await Promise.all([
+        api("/api/v1/robot/state", {timeoutMs: 5000}), api("/api/v1/safety/state", {timeoutMs: 5000}),
+      ]);
       if (!current()) return;
-      if (!after.ok || after.body?.safety?.estop !== false || after.body?.mode === "EMERGENCY"
-        || !new HeadlessState(after.body).isFresh("safety")) {
+      if (!after.ok || !owner.ok || owner.body?.estop !== false || after.body?.safety?.estop !== false
+        || after.body?.mode !== "IDLE") {
         notice("비상 정지 해제 결과 확인 불가 · 로봇 상태를 다시 확인하세요."); return;
       }
       await onReleased();
@@ -439,8 +453,11 @@ async function check(root, onReady, onEnter) {
   const enter = el("ui-button", "주행 시작", {type: "button", "data-drive-enter": ""});
   enter.setAttribute("kind", "primary");
   enter.addEventListener("click", () => onEnter?.({role: me.body?.role, capabilities: caps.body ?? {}}));
-  const state = await api("/api/v1/robot/state").catch(() => null);
-  const emergency = state?.body?.mode === "EMERGENCY" || state?.body?.safety?.estop === true;
+  const [state, safety] = await Promise.all([
+    api("/api/v1/robot/state", {timeoutMs: 5000}).catch(() => null),
+    api("/api/v1/safety/state", {timeoutMs: 5000}).catch(() => null),
+  ]);
+  const emergency = safety?.body?.estop === true || state?.body?.mode === "EMERGENCY" || state?.body?.safety?.estop === true;
   if (emergency) {
     enter.disabled = true;
     enter.reason = "비상 정지 중에는 주행을 시작할 수 없습니다";
@@ -452,7 +469,7 @@ async function check(root, onReady, onEnter) {
   actionIcon(camera, "fit");
   camera.addEventListener("click", () => showCamera(root, () => check(root, onReady, onEnter)));
   const actions = el("ui-actions"); actions.append(camera, enter);
-  if (emergency) actions.append(emergencyRelease(me.body?.role, state?.body, () => check(root, onReady, onEnter)));
+  if (emergency) actions.append(emergencyRelease(me.body?.role, safety?.ok ? safety.body : null, () => check(root, onReady, onEnter)));
   const summary = readoutPair([
     ["로봇 연결", "확인됨"],
     ...(robotId ? [["로봇", robotId]] : []),

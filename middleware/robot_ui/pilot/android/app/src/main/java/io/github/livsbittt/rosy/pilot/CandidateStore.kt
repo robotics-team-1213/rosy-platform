@@ -24,8 +24,8 @@ class CandidateStore {
         manual = row
         return true
     }
-    private fun current(): List<Candidate> = rows.filterKeys { fresh(it) }.values.map { it.first } + listOfNotNull(manual)
-    @Synchronized fun records(): List<Candidate> = current().distinct().sortedBy { it.name }
+    private fun current(): List<Candidate> = listOfNotNull(manual) + rows.filterKeys { fresh(it) }.values.map { it.first }
+    @Synchronized fun records(): List<Candidate> = current().distinctBy { Triple(it.host, it.port, it.secure) }.sortedBy { it.name }
     @Synchronized fun addresses(host: String, port: Int): List<String>? {
         val recent = current().filter { it.host == host }
         if (recent.isEmpty()) return null

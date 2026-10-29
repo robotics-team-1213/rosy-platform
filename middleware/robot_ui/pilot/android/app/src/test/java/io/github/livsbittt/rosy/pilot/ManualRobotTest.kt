@@ -47,4 +47,13 @@ class ManualRobotTest {
         repeat(63) { assertNotNull(manual.found("robot-$it")) }
         assertNull(manual.found("one-too-many"))
     }
+
+    @Test fun discoveryAndManualAddressStillCountAsOneRobot() {
+        val row = ManualRobot.parse("http://192.168.10.42:8080").copy(robotId = "rosy_42", name = "rosy_42")
+        val store = CandidateStore()
+        store.resolved("discovered", store.found("discovered")!!, row.copy(name = "Discovered robot", robotId = ""))
+        assertTrue(store.manual(row))
+        assertEquals(listOf(row), store.records())
+        assertTrue(store.matches(row, "rosy_42"))
+    }
 }
