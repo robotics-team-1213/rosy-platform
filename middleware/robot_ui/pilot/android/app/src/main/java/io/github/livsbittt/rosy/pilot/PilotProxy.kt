@@ -198,8 +198,16 @@ class PilotProxy(private val connection: PilotConnection, private val assets: Bu
         private var ready = false
         private val pending = ArrayDeque<String>()
         private var pendingBytes = 0
-        override fun onOpen() {
+        private var heartbeat: java.util.Timer? = null
+        @Synchronized override fun onOpen() {
             if (sockets.size > 4 || !handshakeRequest.uri.startsWith("/ws/")) { disconnect(); return }
+            if (closing) return
+            // Browser pongs keep receive-only state sockets alive under the bounded HTTP read timeout.
+            heartbeat = java.util.Timer(true).also { timer ->
+                timer.scheduleAtFixedRate(object : java.util.TimerTask() {
+                    override fun run() { runCatching { ping(ByteArray(0)) }.onFailure { disconnect() } }
+                }, 2000, 2000)
+            }
             val url = "${if (connection.secure) "wss" else "ws"}://${target.host}:${target.port}${handshakeRequest.uri}"
             upstream = client.newWebSocket(Request.Builder().url(url).apply {
                 if (connection.managed) header("Authorization", "Bearer ${connection.bearer()}")
@@ -241,10 +249,10 @@ class PilotProxy(private val connection: PilotConnection, private val assets: Bu
                 pending.add(text)
             }
         }
-        override fun onClose(code: WebSocketFrame.CloseCode, reason: String, remote: Boolean) { closing = true; upstream?.cancel(); sockets.remove(this) }
+        @Synchronized override fun onClose(code: WebSocketFrame.CloseCode, reason: String, remote: Boolean) { closing = true; heartbeat?.cancel(); upstream?.cancel(); sockets.remove(this) }
         override fun onPong(frame: WebSocketFrame) = Unit
-        override fun onException(error: IOException) { closing = true; upstream?.cancel(); sockets.remove(this) }
-        fun disconnect() { closing = true; upstream?.cancel(); runCatching { close(WebSocketFrame.CloseCode.GoingAway, "connection ended", false) }; sockets.remove(this) }
+        @Synchronized override fun onException(error: IOException) { closing = true; heartbeat?.cancel(); upstream?.cancel(); sockets.remove(this) }
+        @Synchronized fun disconnect() { closing = true; heartbeat?.cancel(); upstream?.cancel(); runCatching { close(WebSocketFrame.CloseCode.GoingAway, "connection ended", false) }; sockets.remove(this) }
     }
 }
 
