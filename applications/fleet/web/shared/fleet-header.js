@@ -21,6 +21,7 @@ export function linkState(now = Date.now()) {
 }
 function paintLink(now) {
   const tag = $("link-state"), state = linkState(now);
+  tag.title = LINK[state][0];
   if (tag.dataset.link === state) return;
   tag.dataset.link = state;
   tag.textContent = LINK[state][0];
@@ -91,28 +92,31 @@ export function bindTopbarToggle(listen = (node, type, fn) => node.addEventListe
 }
 
 // English role names and principal ids stay in title (D-540 2); a development session says so with its badge.
-export function showSession(identity) {
+export function showSession(identity, {credentialChange = false} = {}) {
   const tag = $("user-role"), title = `${identity.principal_id} · ${identity.role}`;
   const changed = tag.title !== title;
+  const returnFocus = $("topbar-extra").contains(document.activeElement);
   $('fleet-login').hidden = true;
   $('fleet-account').hidden = false;
   $('fleet-account-identity').textContent = `${identity.principal_id} · ${roleLabel(identity.role)}`;
   const token = $('token-access');
-  if (token && changed) token.open = false;
-  // A session is stated in words, so the row it was entered through folds again (D-741 3):
-  // one header line is what the operator reads after connecting.
-  if (changed) setTopbarOpen(false);
+  if (changed || credentialChange) {
+    if (token) token.open = false;
+    setTopbarOpen(false);
+    if (returnFocus) $("topbar-more").focus();
+  }
   const development = identity.principal_id.startsWith("development-");
   tag.textContent = roleLabel(identity.role);
   tag.title = title;
   tag.setAttribute("status", identity.role === "operator" ? "active" : "neutral");
-  if (development) $("development-badge").hidden = false;
+  $("development-badge").hidden = !development;
   gateEstop(identity);
 }
 
 // `refused` is false when the session probe failed for another reason (Fleet down): the words change,
 // the E-stop stays live. A lock never opens the account row (D-741 3): the guide strip's 관제 접속 does.
 export function showSignedOut({refused = true} = {}) {
+  $("development-badge").hidden = true;
   $('fleet-account').hidden = true;
   $('fleet-login').hidden = false;
   const tag = $("user-role");

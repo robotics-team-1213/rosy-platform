@@ -58,6 +58,165 @@ PROBE = """() => {
 }"""
 
 
+def test_fleet_initializes_with_cryptographic_ids_on_lan_http(tmp_path, monkeypatch):
+    import runpy
+
+    monkeypatch.syspath_prepend(str(ROOT / "shared/web/test"))
+    fixture = runpy.run_path(str(ROOT / "shared/web/test/test_theme_browser.py"))
+    monkeypatch.setitem(fixture["_serve"].__globals__, "HOST", "http://rosy.test")
+    with _fleet(tmp_path) as (browser, _):
+        page = browser.new_page(viewport={"width": 1366, "height": 768}, color_scheme="dark")
+        errors = []
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        page.route("http://rosy.test/**", fixture["_serve"])
+        response = page.goto("http://rosy.test/console", wait_until="domcontentloaded")
+        assert response.status == 200
+        page.wait_for_load_state("networkidle")
+        page.locator("#topbar-more").click()
+        page.locator("#fleet-theme").click()
+        assert page.evaluate("RosyTheme.get()") == "light"
+        result = page.evaluate('''async () => {
+            const {randomUUID} = await import('/console/assets/uuid.js');
+            const values = Array.from({length: 1000}, () => randomUUID());
+            return {secure: isSecureContext, native: typeof crypto.randomUUID,
+                unique: new Set(values).size,
+                valid: values.every(value => /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value))};
+        }''')
+        assert result == {"secure": False, "native": "undefined", "unique": 1000, "valid": True}
+        assert not errors
+        page.close()
+
+
+def test_fleet_uuid_preserves_native_crypto_on_trusted_localhost(tmp_path):
+    with _fleet(tmp_path) as (browser, origin):
+        page = browser.new_page()
+        page.goto(origin + "/console")
+        result = page.evaluate('''async () => {
+            const {randomUUID} = await import('/console/assets/uuid.js');
+            const native = crypto.randomUUID;
+            let calls = 0;
+            crypto.randomUUID = function () { calls++; return native.call(this); };
+            try {
+                const values = Array.from({length: 1000}, () => randomUUID());
+                return {secure: isSecureContext, calls, unique: new Set(values).size,
+                    valid: values.every(value => /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value))};
+            } finally { crypto.randomUUID = native; }
+        }''')
+        assert result == {"secure": True, "calls": 1000, "unique": 1000, "valid": True}
+        page.close()
+
+
+@pytest.mark.parametrize('name,path', DOCS)
+@pytest.mark.parametrize('width,height', [(320, 568), (390, 844), (1366, 768)])
+@pytest.mark.parametrize('theme', ['dark', 'light'])
+def test_header_stays_one_row_with_account_overlay_and_connection_exceptions(tmp_path, name, path, width, height, theme):
+    from playwright.sync_api import expect
+
+    with _fleet(tmp_path, console_token='registry-only', development_sessions=DevelopmentSessions()) as (browser, origin):
+        page = browser.new_page(viewport={'width': width, 'height': height}, color_scheme=theme)
+        page.add_init_script(f"localStorage.setItem('rosy.theme', '{theme}')")
+        page.goto(origin + path)
+        expect(page.locator('html')).to_have_attribute('data-theme', theme)
+        expect(page.locator('#user-role')).to_have_text('운영자', timeout=15000)
+        baseline = page.locator('.fleet-header').bounding_box()
+        main_y = page.locator('main').first.bounding_box()['y']
+
+        def shot(state):
+            if output := os.environ.get('ROSY_SHOT_DIR'):
+                target = Path(output) / f'fleet-header-{name}-{theme}-{state}-{width}x{height}.png'
+                target.parent.mkdir(parents=True, exist_ok=True)
+                page.screenshot(path=str(target))
+
+        def check_bar():
+            bar = page.locator('.fleet-header').bounding_box()
+            stop = page.locator('#estop').bounding_box()
+            assert bar['height'] == pytest.approx(baseline['height'], abs=1)
+            assert 64 <= bar['height'] <= 65
+            assert page.locator('main').first.bounding_box()['y'] == pytest.approx(main_y, abs=1)
+            assert 0 <= stop['x'] and stop['x'] + stop['width'] <= width
+            assert 0 <= stop['y'] and stop['y'] + stop['height'] <= bar['y'] + bar['height']
+
+        check_bar()
+        expect(page.locator('#topbar-extra')).to_be_hidden()
+        shot('closed')
+        page.evaluate('''async () => {
+            const header = await import('/console/assets/fleet-header.js');
+            header.noteLink({status: 503});
+        }''')
+        word = page.locator('#link-state')
+        expect(word).to_have_text('연결 끊김')
+        assert word.evaluate('node => node.scrollWidth <= node.clientWidth + 1')
+        check_bar()
+        shot('authenticated-link-down')
+        page.evaluate('''async () => {
+            const header = await import('/console/assets/fleet-header.js');
+            header.showSignedOut(); header.noteLink({status: 503});
+        }''')
+        expect(page.locator('#fleet-login')).to_be_visible()
+        expect(page.locator('#development-badge')).to_be_hidden()
+        expect(page.locator('#link-state')).to_contain_text('연결 끊김')
+        expect(page.locator('#topbar-extra')).to_be_hidden()
+        check_bar()
+        shot('auth-required')
+        page.locator('#topbar-more').click()
+        menu = page.locator('#topbar-extra')
+        expect(menu).to_be_visible()
+        check_bar()
+        bounds = menu.bounding_box()
+        assert bounds['y'] >= baseline['y'] + baseline['height']
+        assert bounds['x'] >= 0 and bounds['x'] + bounds['width'] <= width
+        assert bounds['y'] + bounds['height'] <= height
+        assert menu.evaluate('node => node.scrollHeight <= node.clientHeight || getComputedStyle(node).overflowY === "auto"')
+        shot('account-open')
+        page.locator('#fleet-theme').focus()
+        page.keyboard.press('Escape')
+        expect(page.locator('#topbar-more')).to_be_focused()
+        expect(menu).to_be_hidden()
+        check_bar()
+        page.close()
+
+
+@pytest.mark.parametrize('name,path', DOCS)
+def test_explicit_same_identity_connection_closes_preferences_after_success(tmp_path, name, path):
+    from playwright.sync_api import expect
+
+    with _fleet(tmp_path, console_token='header-token') as (browser, origin):
+        page = browser.new_page(viewport={'width': 390, 'height': 844})
+        page.goto(origin + path)
+        open_token_access(page)
+        token = page.locator('#console-token')
+        token.fill('header-token')
+        token.press('Enter')
+        expect(page.locator('#fleet-login')).to_be_hidden()
+        expect(page.locator('#topbar-extra')).to_be_hidden()
+        identity = page.locator('#user-role').get_attribute('title')
+
+        open_token_access(page)
+        token.focus()
+        token.press('Enter')
+        expect(page.locator('#topbar-extra')).to_be_hidden()
+        expect(page.locator('#token-access')).not_to_have_attribute('open', '')
+        expect(page.locator('#topbar-more')).to_be_focused()
+        expect(page.locator('#user-role')).to_have_attribute('title', identity)
+
+        open_token_access(page)
+        token.fill('refused-header-token')
+        token.press('Enter')
+        expect(page.locator('#user-role')).to_have_text('인증 필요')
+        expect(page.locator('#topbar-extra')).to_be_visible()
+        expect(token).to_be_focused()
+
+        page.locator('main').first.evaluate("node => { node.tabIndex = -1; node.focus(); }")
+        page.evaluate('''async () => {
+            const header = await import('/console/assets/fleet-header.js');
+            const response = await fetch('/api/fleet/session', {headers: {Authorization: 'Bearer header-token'}});
+            header.showSession(await response.json(), {credentialChange: true});
+        }''')
+        expect(page.locator('#topbar-extra')).to_be_hidden()
+        expect(page.locator('main').first).to_be_focused()
+        page.close()
+
+
 def _api():
     api = copy.deepcopy(tv.API)
     api.pop("/api/fleet/session")  # the real development session answers
@@ -367,12 +526,23 @@ def test_a_lost_link_is_readable_on_a_phone(tmp_path):
             page = browser.new_page(viewport={"width": 320, "height": 568})
             page.route("**/api/fleet/**", lambda route: route.fulfill(status=502, json={"detail": "bad gateway"}))
             page.goto(origin + path)
+            initial_bar = page.locator('.fleet-header').bounding_box()
+            initial_main_y = page.locator('main').first.bounding_box()['y']
             word = page.locator("#link-state")
             expect(word).to_have_text("연결 끊김", timeout=15000)
             expect(word).to_be_visible()
+            expect(word).to_have_attribute('title', '연결 끊김')
             box, stop = word.bounding_box(), page.locator("#estop").bounding_box()
             assert box["x"] >= 0 and box["x"] + box["width"] <= 320, (name, box)
-            assert box["y"] >= stop["y"] + stop["height"] - 1, (name, box, stop)  # its own row under the bar
+            bar = page.locator('.fleet-header').bounding_box()
+            assert bar['height'] == pytest.approx(initial_bar['height'], abs=1)
+            assert page.locator('main').first.bounding_box()['y'] == pytest.approx(initial_main_y, abs=1)
+            assert bar['y'] <= box['y'] and box['y'] + box['height'] <= bar['y'] + bar['height']
+            identity = page.locator('[data-header-region="identity"]').bounding_box()
+            actions = page.locator('[data-header-region="actions"]').bounding_box()
+            assert identity['x'] + identity['width'] <= box['x'] + 1
+            assert box['x'] + box['width'] <= min(actions['x'], stop['x']) + 1
+            assert word.evaluate('node => node.scrollWidth <= node.clientWidth + 1')
             expect(page.locator("#estop")).to_be_visible()
             assert page.evaluate("document.documentElement.scrollWidth - innerWidth") <= 0, name
             page.close()

@@ -595,3 +595,10 @@
 - 변경: 목록 갱신은 현재 초점을 GET 뒤 읽고 요청 ID로 복원한다. 삭제·조회 실패·상위 reset은 기존 상태 문구를 초점 대상으로 사용하며 목록 밖으로 이동한 초점은 유지한다. API·권한·명령 경로는 그대로다.
 - 증거: 수정 전18fail4pass, 최종 Chromium 파일 전체80pass/0skip, 공식 affected8004pass/631skip/NEW0. A source 검토·B 캡처16장 전수 직접 검토에서 해당 범위 추가 P1/P2 없음. frozen `docs/validation/fleet-request-focus-2026-10-29/`에 SHA/skip/hash/제한을 보존했다.
 - gate 변화: 없음. 실제 장치/정지·ARTIFACT/FIELD·착지·배포·공개 push/merge는 별도다. CE: 해당 없음 — 코드·회귀·기존 복원 패턴으로 설명된다.
+
+## 2026-10-29 · uncommitted · LAN HTTP의 암호학적 UUID와 헤더 초기화
+
+- 원인: 기존 `http://rosy.test` 제공자를 재사용한 원격 회귀에서 자산 오류 없이 `crypto.randomUUID is not a function`을 확인했다. Console은 작업 단위 생성의 초기 UUID에서 중단되어 계정 메뉴 리스너를 연결하지 못했다. 같은 실패 조건은 신뢰되지 않은 LAN HTTP에도 적용된다.
+- 변경: Fleet 내부 `shared/uuid.js`와 등록 자산은 native `crypto.randomUUID`가 있으면 그대로 사용하고, 없으면 `crypto.getRandomValues` 16바이트의 RFC UUIDv4 version·variant 비트를 지정한다. Fleet 11개 파일의 24개 호출을 이 함수로 모았다. 전역 덮어쓰기·비암호학적 난수·API·권한·idempotency 형식 변경은 없다.
+- 검증: 동일 insecure fixture의 실제 초기화·메뉴·테마와 UUID 1000개의 v4 형식·variant·중복 여부, 신뢰된 localhost native 경로의 실제 native 호출 1000회 회귀를 기존 헤더 브라우저 suite에 추가했다. 기존 작업 계약은 UUID 생성 함수 이름만 바꿨다. 원격 통합·변이·기존 known failure 해제는 대기다.
+- gate 변화: 없음. 로컬 시험·실제 장치·배포 수용을 수행하지 않았다. CE: 해당 없음 — HTTP 조건은 helper의 원인 주석과 동일 origin의 초기화 회귀가 보존한다.

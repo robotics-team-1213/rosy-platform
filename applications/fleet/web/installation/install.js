@@ -223,7 +223,7 @@ function saveToken() {
   mapFit.reset();
   startPoints.reset();
   relearn.reset();
-  refreshAuthorization();
+  refreshAuthorization(false, true);
   visionView.refreshSources();
 }
 pageScope.listen(el("token-save"), "click", saveToken);
@@ -300,7 +300,7 @@ async function refreshDiscovery() {
 }
 pageScope.listen(el("discovery-retry"), "click", () => { discoveryGate.reset(); return refreshDiscovery(); });
 
-async function refreshAuthorization(renewed = false) {
+async function refreshAuthorization(renewed = false, credentialChange = false) {
   const life = pageScope.capture();
   life.check();
   discoveryGate.reset();
@@ -313,7 +313,7 @@ async function refreshAuthorization(renewed = false) {
     auth.role = identity.role;
     auth.principal = identity.principal_id;
     loginForm.refresh(false);
-    showSession(identity);
+    showSession(identity, {credentialChange});
     applyRole();
     await Promise.allSettled([
       cameraPairing.refresh({ credentials: true }),
@@ -334,7 +334,7 @@ async function refreshAuthorization(renewed = false) {
         if (token && token !== auth.token) {
           auth.token = token;
           el("console-token").value = token;
-          await refreshAuthorization(true);
+          await refreshAuthorization(true, credentialChange);
           return;
         }
       } catch (_issueError) { /* Paired and unavailable consoles keep the token prompt. */ }

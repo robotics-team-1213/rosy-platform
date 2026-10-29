@@ -362,6 +362,10 @@
       "path": "sitemap/site-map.js",
       "media_type": "application/javascript"
     },
+    "site-map-sources.js": {
+      "path": "sitemap/site-map-sources.js",
+      "media_type": "application/javascript"
+    },
     "site-map-model.js": {
       "path": "shared/site-map-model.js",
       "media_type": "application/javascript"
@@ -500,6 +504,10 @@
     },
     "robot-profile-view.js": {
       "path": "devices/robot-profile-view.js",
+      "media_type": "text/javascript"
+    },
+    "uuid.js": {
+      "path": "shared/uuid.js",
       "media_type": "text/javascript"
     },
     "device-care.js": {

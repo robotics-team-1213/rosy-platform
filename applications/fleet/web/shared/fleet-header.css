@@ -4,7 +4,8 @@
 /* 머리는 창 모서리에 붙는다 — 현장 지도·Cell에 남아 있던 브라우저 기본 8px 여백이 비상 정지 자리를 옮기지 않게 한다. */
 body { margin: 0; }
 .fleet-header { position: sticky; top: 0; z-index: 10; }
-.fleet-header ui-topbar { box-sizing: border-box; }
+.fleet-header ui-topbar { box-sizing: border-box; block-size: var(--appbar-height); }
+#estop-feedback { margin: var(--inset-pane); margin-block-end: 0; }
 
 /* 관제 토큰 입력 — 얼굴은 공용 input.ui-field, 잠김은 aria-invalid다(D-359 §5.1). 여기는 폭만 정한다. */
 /* 현장 지도·Cell 시트의 전역 `input { width: 100% }`가 머리의 "이 브라우저 기억" 칸을 늘이지 않게 한다. */
@@ -40,8 +41,7 @@ ui-topbar input[type="checkbox"] { width: auto; }
 }
 #estop[disabled][reason] > small:not([data-reason]) { display: none; }
 
-/* D-741 3·5 — 앱 바는 모든 폭에서 한 줄이다: 맥락 | 연결 | 알림·나 | 정지. 계정 상세는 계정 쪽 메뉴로 펼친다(57행).
-   연결 칸이 남는 폭을 받는다. 48rem 아래에서 평상(실시간) 글은 접히고, 그 밖의 연결 글은 아래 자기 줄에 선다. */
+/* 앱 바는 연결 상태와 계정 메뉴에 관계없이 한 줄이다. 연결 칸은 남는 폭을 받는다. */
 ui-topbar {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) minmax(0, auto) auto;
@@ -71,17 +71,24 @@ ui-topbar {
 .fleet-header-safety { grid-area: safety; justify-self: end; }
 #topbar-more { display: inline-flex; flex: 0 1 auto; min-width: var(--target-secondary); max-width: 100%; }
 .header-status-item { display: inline-flex; align-items: center; gap: var(--space-1); min-width: 0; }
-/* D-741 3 — 화면 표시와 접속 토큰은 계정 단추 아래 메뉴에 둔다(57행). 닫혀 있으면 앱 바는 한 줄이고,
-   펼치면 앱 바 아래 제 줄을 받는다. 겹쳐 띄우지 않는 까닭은 잠금 띠의 관제 접속 단추를 메뉴가 덮지 않게 함이다. */
+/* 계정 메뉴는 앱 바 아래에 겹쳐 열린다. 정지와 본문 자리는 움직이지 않는다. */
 .topbar-extra {
   display: none;
-  grid-column: 1 / -1;
+  position: absolute;
+  inset-block-start: calc(100% + 1px);
+  inset-inline-end: var(--space-3);
+  box-sizing: border-box;
+  inline-size: min(var(--context-track), calc(100vw - 2 * var(--space-3)));
+  max-block-size: calc(100dvh - var(--appbar-height) - var(--space-4));
+  overflow: auto;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
   min-width: 0;
-  padding-top: var(--space-2);
-  border-top: 1px solid var(--border-subtle);
+  padding: var(--space-3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-panel);
+  background: var(--surface-chrome);
 }
 .topbar-extra[data-open="true"] { display: flex; }
 #console-token { flex: 1 1 var(--measure-credential-field); width: auto; min-width: 0; }
@@ -93,19 +100,20 @@ ui-topbar {
 @container (width < 48rem) {
   ui-topbar { gap: var(--space-2); padding: var(--space-1) var(--space-2); }
   ui-topbar ui-brand b { line-height: var(--leading-flat); }
-  /* 좁은 폭의 연결 자리는 평상시 비어 있다. 연결 대기·지연·연결 끊김은 남는 폭에 잘리지 않게 앱 바 아래 자기 줄에 선다. */
+  /* 좁은 폭에서도 예외 연결 상태는 같은 줄의 연결 칸에 남는다. */
   #clock, #link-state[data-link="live"] { display: none; }
-  .fleet-link-status:has(#link-state:not([data-link="live"])) { grid-area: auto; grid-column: 1 / -1; }
   #estop { gap: var(--space-1); }
   #estop .ui-icon { width: var(--space-5); height: var(--space-5); }
 }
 @container (width < 30rem) {
-  ui-topbar { gap: var(--space-1); }
+  ui-topbar { gap: var(--space-1); padding-inline: var(--space-1); }
   /* R 심볼만 남긴다. 링크의 접근 이름(Rosy Fleet 관제 홈)은 그대로다. */
   .fleet-wordmark { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   #fleet-login .ui-icon { display: none; }
   /* 역할 글은 접는다. 계정 단추의 접근 이름(계정과 접속 · 역할)과 툴팁이 역할을 말한다. */
   #user-role { display: none; }
   #fleet-inbox { gap: var(--space-1); }
+  #topbar-more { padding-inline: var(--space-1); }
+  #estop { gap: 0; padding-inline: var(--space-2); }
   #estop .ui-icon { width: var(--space-4); height: var(--space-4); }
 }

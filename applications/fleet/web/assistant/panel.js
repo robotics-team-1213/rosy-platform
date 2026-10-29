@@ -1,10 +1,11 @@
+import {randomUUID} from "/console/assets/uuid.js";
 // Console owns draft/display only; Fleet owns durable requests and all facts.
 import { createVoice } from './assistant-voice.js';
 import {voicePlatform} from '/console/assets/app-runtime.js';
 export function createDialogue() {
-  let identity = null, generation = 0, conversation = crypto.randomUUID(), pending = null;
+  let identity = null, generation = 0, conversation = randomUUID(), pending = null;
   const rows = [];
-  function reset() { generation++; conversation = crypto.randomUUID(); pending = null; rows.length = 0; }
+  function reset() { generation++; conversation = randomUUID(); pending = null; rows.length = 0; }
   return {
     rows,
     get busy() { return pending !== null; },
@@ -15,7 +16,7 @@ export function createDialogue() {
       if (!identity) throw new Error('ASSISTANT_IDENTITY_REQUIRED');
       if (pending) throw new Error('ASSISTANT_PENDING');
       if (!text.trim() || text.length > 2000) throw new Error('ASSISTANT_TEXT_INVALID');
-      pending = {generation, message:{conversation_id:conversation, request_id:crypto.randomUUID(), text,
+      pending = {generation, message:{conversation_id:conversation, request_id:randomUUID(), text,
         selected_robot_id:selectedRobot || null, locale}};
       return pending;
     },
