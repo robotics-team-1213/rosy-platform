@@ -5067,6 +5067,7 @@
 - 증거: 원격 시험 resource-bounds-2(AI PC) `test_server_console.py` 신규 2 시험 통과 — 하트비트 신선 대기 로봇 REST 0회·활동 로봇 REST 유지·낡은 하트비트 REST 폴백 각각 확인.
 - gate 변화: 없음. 실물·현장 수용은 별개다.
 - CE: 해당 없음.
+
 ## 2026-10-28 · 239740362c · 목표 어드미션 판정의 순수 모듈 분리 A단계 (계획 2026-10-28-fleet-traffic-arbitration-split)
 
 - 변경: `console.py`의 `_goal()`이 판정과 미션/응답 dict 조립을 다섯 곳에서 반복하며 D-766 래칫(1325)에 묶여 있었다. `fleet/traffic/goal_admission.py`(신규, 순수)이 대기열 보류를 frozen `QueueDecision`(yield_hold·untrusted_self_hold·route_conflict_hold·untrusted_blocker_hold·standing_hold)과 `mission_of`/`response_of`로 소유한다 — 키 순서 동결, reason으로 깃발 유도 금지(LOCALIZATION_UNTRUSTED는 양 단계에 존재), 전송 전 보류는 route 키 없음, `attempt_seq=0` 보존, 저장 미션과 응답은 독립 리스트. 콘솔은 상태 읽기·폐쇄 실패 사슬(`_seen.pop`→`_remember`→`_verdict`)과 전송 순서를 그대로 소유하고 판정 문자열만 넘긴다. `_task_mission`은 별칭 없이 이동, console.py 1325→1299(래칫 행 동락).
@@ -5080,3 +5081,10 @@
 - 증거: 예외를 제거한 원격 RED가 `console.py → fleet.server.observe`의 새 안전 경계 위반을 검출했다. 독립 검토가 내부 anchor와 실제 파일 분류 보존을 요구했으며 최종 manifest·소스·회귀는 공식 게이트에서 재검증한다.
 - gate 변화: 없음. 예외를 늘리거나 안전 검사를 약하게 하지 않는다.
 - CE: 해당 없음 — 분류·예외 제거·회귀 시험이 적용 조건을 설명한다.
+
+## 2026-10-29 · ccc8712ece · 이송 결과의 검수 패키지와 복구 root 분할 검사
+
+- 변경: OMX curation에 기존 export v2 원본 bytes·SHA·계보를 보존하는 오프라인 검수 패키지와 재검증 CLI를 추가했다. 같은 root 및 참조 자식의 분할 혼입·중복 미션·계보 충돌·비정상 JSON을 거절한다. Fleet 안내의 이미 연결된 HTTP·콘솔 상태를 바로잡고 curation 사용 경로를 연결했다.
+- 증거: [동결 검증 기록](../../docs/validation/transfer-review-package-2026-10-29/result.md). 원격 curation 전체 328 pass·10 skip, runner/classifier exit 0, NEW 0. 독립 검토의 root 별칭·숫자 overflow 문제를 각각 RED 재현 후 수정했고 최종 재검토에 주요 지적이 없다.
+- Gate: 실행·학습 수용 변화 없음. 검수 전 메타데이터와 behavior_training_eligible=false를 유지한다. 실제 라벨 검수·학습·장치 수용은 별도다.
+- CE: 해당 없음 — 판단과 거절 조건이 구현·회귀·사용 안내에 남는다.

@@ -100,6 +100,12 @@ def batchable(land, wt: Path, other: Path, name: str, tip: str) -> str | None:
     return _BATCHABLE[key]
 
 
+def plain_auto(args, extra) -> bool:
+    """Explicit checks or freshness requests run alone; only plain auto opts into batching."""
+    return (args.tests == "auto" and not extra and not getattr(args, "node", False)
+            and not getattr(args, "no_cache", False))
+
+
 def taken(tickets: list[dict]) -> set[str]:
     """Branches a live batch already carries (its leaders' ``batch`` lists): no second batch may take them."""
     return {name for r in tickets for name in (r.get("batch") or [])}
@@ -108,7 +114,8 @@ def taken(tickets: list[dict]) -> set[str]:
 def eligible(land, wt: Path, row: dict, kind: str = "affected", carried_now: set[str] = frozenset()) -> bool:
     """A waiting or pending ticket another landing may carry: this host, a clean branch at its worktree's HEAD."""
     other, name = Path(row.get("worktree") or "."), row.get("branch") or ""
-    if row.get("status") not in ("waiting", "pending") or row.get("host") != socket.gethostname():
+    if (row.get("batch_auto") is not True or row.get("status") not in ("waiting", "pending")
+            or row.get("host") != socket.gethostname()):
         return False
     if (row.get("batch") or name in carried_now or name in ("", "main", "HEAD") or not other.is_dir()
             or other.resolve() == wt.resolve()):
@@ -166,7 +173,7 @@ def queue(land, wt: Path, branch: str, args, python: str, qdir: Path, ticket: Pa
     """Wait for the turn. 0 when a batch landed this branch; None when it lands alone (``land.rounds``)."""
     kind = group_of(wt, branch)
     form, chosen, measured = former(land, wt, qdir, ticket, kind or "affected")
-    if args.tests != "auto" or safety(land, wt, branch) or kind is None:
+    if not plain_auto(args, land.EXTRA) or safety(land, wt, branch) or kind is None:
         form = None  # a batch is tested; safety branches and explicit --tests land alone (D-889 3)
     while True:
         got = land_queue.wait(qdir, ticket, args.queue_timeout * 60, check=land_prepare.watch(land, wt),
@@ -205,7 +212,7 @@ def early(land, wt: Path, branch: str, args, python: str, qdir: Path, ticket: Pa
     so they share one pretest. On 2026-10-28 every waiting ticket was FULL-class or unprepared, so the pending
     affected ones never found a leader and each waited for a pretest slot of its own. 0 when the batch landed
     this branch; None to go on alone (its own pretest, then ``queue``)."""
-    if ticket is None or args.tests != "auto":
+    if ticket is None or not plain_auto(args, land.EXTRA):
         return None  # a skipped or explicit run never leads
     tickets = land_queue.ahead(qdir, Path("~"))
     busy = taken(tickets)

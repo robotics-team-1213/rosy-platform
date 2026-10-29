@@ -23,6 +23,12 @@ print(json.dumps(dict(ok='true', release_id='2026.10.18-001',
     image='rosy-os-pinky-pro-2026.10.18-001-arm64.img.xz', sha256='a' * 64,
     source_revision='c' * 40)))
 '@
+Save-Fixture (Join-Path $sd "verify-operator-key.py") @'
+import json, os
+if os.environ.get('OPERATOR_KEY_REJECT') == '1':
+    raise SystemExit(2)
+print(json.dumps({'fingerprint': 'SHA256:' + 'A' * 43}))
+'@
 Save-Fixture (Join-Path $sd "imager.exe") "fixture executable, never run"
 Save-Fixture (Join-Path $sandbox "release\public-keys\rosy-release-2026-01.pem") "fixture public key"
 Save-Fixture (Join-Path $release "manifest.json") '{"release_id":"2026.10.18-001"}'
@@ -172,4 +178,10 @@ foreach ($missing in @($operatorPrivate, $operatorPublic)) {
     Save-Fixture $missing "fixture key, never read"
 }
 Write-Output "PASS: missing private or public operator key cannot create an inaccessible card"
-Write-Output "All 7 guided SD self-checks passed. Fixture files: $sandbox"
+$env:OPERATOR_KEY_REJECT = "1"
+$result = Invoke-Case @("-WriteCard")
+Remove-Item Env:OPERATOR_KEY_REJECT
+Assert ($result.Code -ne 0) "key verification failure must stop guided setup"
+Assert (-not (Test-Path -LiteralPath $planMarker) -and -not (Test-Path -LiteralPath $writerMarker)) "a mismatched key must fail before planning or writing"
+Write-Output "PASS: rejected operator key pair cannot reach card planning or writing"
+Write-Output "All 8 guided SD self-checks passed. Fixture files: $sandbox"
