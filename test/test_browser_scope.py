@@ -50,6 +50,7 @@ def test_pilot_and_shared_styles_select_moved_lobby_tests_without_widening_omx()
     lobby = "middleware/robot_ui/pilot/test/test_lobby_browser.py"
     for path in ("middleware/robot_ui/pilot/styles.css", "shared/web/components.css"):
         assert lobby in browser_scope.targets([path])
+        assert "middleware/robot_ui/pilot/test/test_recordings_browser.py" in browser_scope.targets([path])
     assert browser_scope.targets(["middleware/devices/omx/adapter/example.py"]) == [
         "middleware/devices/omx/adapter/test/test_pilot_sim_browser.py"
     ]

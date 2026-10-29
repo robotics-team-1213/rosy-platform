@@ -1003,3 +1003,15 @@
 - 변경: 프리셋·감도·반전은 기존 버튼의 pressed·라벨만 갱신한다. 패널을 열 때 현재 프리셋으로 초점을 옮기고 Escape는 도구로 복귀한다. 입력 매핑·주행 상한·명령 송신은 유지한다. cdbab06b42에서 셸 캐시 키를 갱신했고 서빙·설치 자산 검사7건이 통과했다.
 - 증거: 집중42 passed, 공식 영향3994 passed/601 skipped, 브라우저 선택은 교정한7번33건과 나머지392건으로425 passed/skip0/NEW0이다. 독립 검토가 최종41PNG 전체를 확인했다. 원본 SHA와 fixture 실패는 `docs/validation/learning-state-consistency-2026-10-28/result.md`에 구분한다.
 - gate 변화: 없음. 실제 장치·모델·사람 라벨·승격 수용·배포·merge/push는 수행하지 않았다. CE: 해당 없음 — 상태 수명·입력·초점 경계가 코드와 회귀에 남는다.
+
+## 2026-10-29 · da361c0aa0 · 녹화 브라우저 시험 분리
+
+- 변경: 기존 녹화 test11개를 별도286줄 module로 옮기고 browser scope에 등록했다. 기존 파일2554줄에 맞춰 ratchet을 낮추며 OMX 선택의 순서 의존 slice를 명시적 목록으로 교체했다. 제품 runtime은 그대로다.
+- 증거: 이동11개·유지89개 함수 AST 동일, 독립 A도 test11개 이동·70개 유지와 fixture를 확인. 실제 Chromium16+scope17=33pass/0skip, 공식 affected635pass/137skip/NEW0. 초기 selector 및 ratchet 실패도 `docs/validation/pilot-recording-browser-split-2026-10-29/`에 보존했다.
+- gate 변화: 없음. CE: 해당 없음 — 기계적 이동·회귀·측정값으로 설명된다. 제품 수정은 별도 브랜치다.
+
+## 2026-10-29 · d99e15a1e2 · 녹화 목록 초점과 시트 조회 소유권
+
+- 변경: 행 갱신/받기·취소 전환의 현재 초점을 ID로 복원하고 사용 불가·소실/오류는 facts/notice로 이동한다. 시트 객체로 GET 소유권을 지키며, 가려진 초점은 nearest scroll로 드러낸다. 목록 밖 초점·문서 스크롤·기존 제어 정책은 유지한다.
+- 증거: 초기 제품8반례와 fixture3실패를 구분하고 전체 drive의 clip2 RED도 확인했다. 최종 동일 runtime에서 전체39pass/0skip, 실제 키보드8pass·문서 스크롤8pass, 공식 affected609pass/189skip/NEW0. A source·B12+8장 전수 직접 검토. 지원 ratchet 누락과 종료143/미실행도 `docs/validation/pilot-recording-focus-2026-10-29/`에 보존했다.
+- gate 변화: 없음. 실제 녹화/파일 수신·정지 readback·장치·ARTIFACT/FIELD·배포·착지·공개 push/merge는 별도다. CE: 해당 없음 — 수명·초점·clip 판단은 코드·회귀·검증 기록으로 복원된다.
