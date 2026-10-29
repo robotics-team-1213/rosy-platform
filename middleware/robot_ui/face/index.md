@@ -36,8 +36,8 @@
 
 ## 최근 기록
 
+- 2026-10-29 · 28dc087ea6 · 복구 AP의 암호 없는 표시와 접속 QR
 - 2026-10-12 · uncommitted · uiux(face): D-719 기다림 입을 두껍게
 - 2026-10-12 · uncommitted · uiux(face): D-688 상황 줄, 충전 잔량, 표정, 부팅 ROSY
 - 2026-10-09 · uncommitted · fix(face): LCD 변경 영역만 SPI로 전송
 - 2026-10-09 · uncommitted · fix(face): Pair request 카드에 CA 줄 (D-483 보완)
-- 2026-10-07 · uncommitted · uiux(face): D-504 LCD 표정 가장자리 보정

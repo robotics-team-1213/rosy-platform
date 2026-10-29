@@ -4003,3 +4003,10 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 동일한 3490bddb9b의 canonical FULL 27개 invocation을 공식 remote_pytest.run으로 수행했다. 합계 37,581 passed/2,351 skipped, 각 명령 exit0, 모든 로그 비교 NEW0/known0/flaky0이다. 1~11번은 현장 PC에서 완료한 뒤 자원이 확보된 모델 PC에서 12~27번을 수행했다. 재배정 중 취소한 현장 12번과, 연결 복구 후 별도로 563 passed/1 skipped인 AI PC의 중복 마지막 묶음은 합계에서 제외했다. 수용한 27개 로그는 archive 내부 바이트를 원본 SHA-256과 대조해 보존했다.
 - gate 변화: 없음. monitoring 브라우저 묶음 16개는 모두 skip이며 브라우저 수용을 입증하지 않는다. 실제 Docker 연속성·CI dispatch·설치/운영 배포·실물 수용·main 착지/push는 수행하지 않았다.
 - CE: 해당 없음 — 판단 근거는 D-301·구성 해시·회귀 시험·기존 import 시험에 남긴다.
+
+## 2026-10-29 · 28dc087ea6 · fallback open AP 표시 소비자 호환
+
+- 변경: 공개 AP 상태의 security를 부팅 표시와 LCD로 전달하고 open일 때 저장된 AP 비밀번호를 읽거나 표시하지 않는다. 콘솔과 LCD는 No password를 표시하며 접속 QR은 키 필드 없는 nopass 형식이다. security가 없는 기존 상태와 WPA2 표시는 유지한다.
+- 증거: tests-only commit 38f4baf395의 공식 원격 실행은 open 표시·QR·비밀번호 읽기 차단 6 FAILED/기존 호환 2 PASS였다. commit 28dc087ea6의 집중 부팅·LCD·QR 회귀는 350 passed/1 skipped, NEW0/known0/flaky0이다. 신규 12개 사례에는 skip이 없다. 기존 frozen 파일 크기는 증가하지 않았다.
+- gate 변화: 없음. 이 변경은 향후 open 상태를 읽는 소비자 지원이다. fallback 정책·실제 AP·장치의 부팅·OTA 수용은 아직 바꾸거나 시험하지 않았다.
+- CE: 해당 없음 — 신규 상태와 자격 정보 차단 계약은 코드 및 회귀로 재현된다.
