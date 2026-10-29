@@ -198,11 +198,12 @@ def test_pipeline_failure_stops_the_session(rig):
 def test_negotiating_publisher_does_not_treat_the_primer_as_stale_video(rig):
     worker, _, publishers, step = rig
     step(0)
+    initial_rates = list(publishers[0].rates)
     publishers[0].connected = False
     publishers[0].queue_ms = 250
     step(1)
     assert not publishers[0].stopped
-    assert publishers[0].rates == []
+    assert publishers[0].rates == initial_rates
     publishers[0].connected = True
     step(2)
     assert publishers[0].stopped, 'connected video still enforces the encoded queue bound'
@@ -260,6 +261,19 @@ def test_priming_frames_do_not_reset_repeated_startup_backoff(rig):
     step(27)
     assert len(publishers) == 2 and publishers[-1].stopped
     assert first_delay < worker._retry_at - 27 <= 5
+
+
+def test_wire_budget_restart_uses_the_reduced_rate_before_the_first_frame(rig):
+    worker, _, publishers, step = rig
+    wire = [2_000_000]
+    worker._sampler = type('Sampler', (), {'sample': lambda self, **kwargs: wire[0]})()
+    step(0)
+    step(1)
+    assert publishers[0].stopped
+    wire[0] = 0
+    step(2)
+    assert len(publishers) == 2
+    assert publishers[1].rates[0] == (5, 300000)
 
 
 def test_start_failures_back_off_with_a_five_second_cap():
