@@ -78,6 +78,7 @@ def test_mapless_survey_elements_persist_and_stay_out_of_operations(page_site, w
     point(.8, .1)
     page.locator('#element-save').click()
     expect(page.locator('#site-map-svg .facility.traffic_signal')).to_have_count(1)
+    show_screen(page, "edit-heading")
     page.locator('#save-draft').click()
     expect(page.locator('#draft-status')).to_contain_text('저장된 초안')
     saved = store.draft_view()['map']
@@ -85,12 +86,14 @@ def test_mapless_survey_elements_persist_and_stay_out_of_operations(page_site, w
     assert saved['edges'][0]['evidence']['status'] == 'observed'
     assert saved['facilities'][0]['approaches'] == [{'edge_id': 'ab', 'forward': True, 'stop_s_m': .8}]
     assert store.active_view() is None
+    show_screen(page, "survey-heading")
     page.locator('#element-existing').select_option('facilities:sig')
     page.locator('#element-load').click()
     page.locator('#element-name').fill('Reviewed signal name')
     page.locator('#element-save').click()
     with page.expect_response(lambda response: response.request.method == 'PUT'
                              and response.url.endswith('/api/fleet/site-map/draft')) as saved_response:
+        show_screen(page, "edit-heading")
         page.locator('#save-draft').click()
     assert saved_response.value.ok
     expect(page.locator('#draft-status')).to_contain_text('저장된 초안')
@@ -354,6 +357,7 @@ def test_vision_map_plane_is_drawn_and_picked_by_its_scale_then_falls_back_on_40
     expect(page.locator("#plane-point")).to_contain_text("확인한 좌표 x")
     x, y = map(float, re.search(r"x ([\d.-]+) m, y ([\d.-]+) m", page.locator("#plane-point").inner_text()).groups())
     assert abs(x) <= 0.01 and abs(y - 0.5) <= 0.01, (x, y)
+    show_screen(page, "trip-heading")
     expect(page.locator("#trip-point")).to_contain_text("찍은 좌표 없음")
 
     # A plane made with another calibration revision is neither drawn nor picked.
@@ -443,12 +447,12 @@ def test_requested_recording_robot_never_falls_back_to_another_robot(page_site):
     from playwright.sync_api import expect
 
     page, store, robot = page_site
-    show_screen(page, "teach-heading")
     page.goto(page.url + '?robot=not-in-roster#teach-heading')
     open_token_access(page)
     page.locator('#console-token').fill('operator-token')
     page.locator('#token-save').click()
     expect(page.locator('#user-role')).to_have_attribute('title', 'bob · operator')
+    show_screen(page, "teach-heading")
     expect(page.locator('#teach-target')).to_contain_text('not-in-roster')
     expect(page.locator('#teach-robot')).to_have_value('')
     expect(page.locator('#teach-start')).to_be_disabled()
@@ -464,11 +468,11 @@ def test_recording_target_survives_refresh_and_names_offline_or_removed_robots(p
     recording = {'recording': None, 'pending': []}
     page.route('**/api/fleet/state', lambda route: route.fulfill(content_type='application/json', body=json.dumps(roster)))
     page.route('**/api/fleet/teach', lambda route: route.fulfill(content_type='application/json', body=json.dumps(recording)))
-    show_screen(page, "teach-heading")
     page.goto(page.url + '?robot=beta#teach-heading')
     open_token_access(page)
     page.locator('#console-token').fill('operator-token')
     page.locator('#token-save').click()
+    show_screen(page, "teach-heading")
     expect(page.locator('#teach-robot')).to_have_value('beta')
     page.locator('#teach-robot').select_option('alpha')
     open_token_access(page)
@@ -514,18 +518,15 @@ def test_view_edit_activate_and_preview_a_trip(page_site, width, height):
     expect(page.locator("#site-map-svg .arrow")).to_have_count(8)  # 4 one-way + 2 two-way edges
     positions = page.evaluate("""() => ({
       map: document.querySelector('#map-viewport').getBoundingClientRect().top,
-      trip: document.querySelector('[aria-labelledby=trip-heading]').getBoundingClientRect().top,
-      run: document.querySelector('[aria-labelledby=run-heading]').getBoundingClientRect().top,
-      edit: document.querySelector('[aria-labelledby=edit-heading]').getBoundingClientRect().top,
       plane: document.querySelector('.plane-tools summary').getBoundingClientRect().top,
     })""")
-    assert positions["map"] < positions["plane"] < positions["trip"] and positions["map"] < height + 1, positions
+    assert positions["map"] < positions["plane"] and positions["map"] < height + 1, positions
     expect(page.locator(".plane-tools")).not_to_have_attribute("open", "")
     expect(page.locator("#plane-source")).to_be_hidden()
-    if width < 1024:
-        assert positions["trip"] < positions["run"] < positions["edit"], positions
-    else:
-        assert abs(positions["trip"] - positions["edit"]) <= 1 and positions["trip"] < positions["run"], positions
+    # D-926 3: the first sub-nav screen is the map alone; each task opens from the sub-nav.
+    for heading in ("trip-heading", "run-heading", "edit-heading", "survey-heading", "teach-heading"):
+        expect(page.locator(f"[aria-labelledby={heading}]")).to_be_hidden()
+    expect(page.locator('.ui-subnav-item[href="#map-heading"]')).to_have_attribute("aria-current", "page")
     if output := os.environ.get("ROSY_SHOT_DIR"):
         page.screenshot(path=str(Path(output) / f"site-map-fresh-{width}x{height}.png"), full_page=True)
 
@@ -644,7 +645,7 @@ def test_site_map_body_keeps_usable_columns_beside_the_sub_nav(page_site, width,
         assert top["unreachable"] == [] and end["unreachable"] == [], (top, end)
     assert top["cut"] == [] and top["outside"] == [] and end["outside"] == [], (top, end)
     columns = {grid["name"]: grid["columns"] for grid in top["grids"]}
-    assert columns == {"map-workflow": panels, "place-form": fields, "form": fields,
+    assert columns == {"map-workflow": panels, "place-form": fields,  # D-926 3: other screens' forms are hidden
                        "actions draft-actions": 1 if width < 480 else 3}, top["grids"]
     assert all(grid["narrowest"] >= 144 for grid in top["grids"] if grid["columns"] > 1), top["grids"]
     assert label >= 12, label
@@ -1030,6 +1031,7 @@ def test_changed_draft_keeps_local_edits_and_conflict_after_reconnect(page_site,
     page.reload()
     expect(page.locator("#map-status")).to_contain_text("활성 지도 v1")
     page.locator('#site-map-svg [data-place="NW"]').click()
+    show_screen(page, "edit-heading")
     expect(page.locator("#place-name")).not_to_have_value("북서 정차")
     expect(page.locator("#draft-status")).not_to_contain_text("저장 안 된 초안")
 

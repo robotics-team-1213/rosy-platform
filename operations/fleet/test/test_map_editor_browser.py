@@ -33,12 +33,14 @@ def editor_site(drawing_assets, page_site):
     page.locator('#console-token').fill('operator-token')
     page.locator('#token-save').click()
     expect(page.locator('#map-status')).not_to_contain_text('조회 중')
+    show_screen(page, "survey-heading")
     page.locator('#drawing-tools > summary').click()
     yield page, store, robot
     assert not [call for call in robot.calls if call[0] in {'navigation_goal', 'estop', 'swarm_arm'}]
 
 
 def register(page, data=DATA):
+    show_screen(page, "survey-heading")
     page.locator('#drawing-file').set_input_files({'name': 'drawing.stl', 'mimeType': 'application/octet-stream', 'buffer': data})
     expect(page.locator('#drawing-status')).to_contain_text('원본 확인')
     page.locator('#drawing-description').fill('실측한 1 m 기준선, 동쪽 방향')
