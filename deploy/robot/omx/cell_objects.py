@@ -50,6 +50,8 @@ def foreground(img, roi, chroma: float | None = None, light: float | None = None
     lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB).astype(np.int16)[y0:y1, x0:x1]
     bg = np.median(lab.reshape(-1, 3), axis=0)
     far = (np.hypot(lab[..., 1] - bg[1], lab[..., 2] - bg[2]) > chroma) | (np.abs(lab[..., 0] - bg[0]) > light)
+    if prm.get(params, "objects.drop_shadow"):
+        far &= ~shadow_of(lab, bg, params)
     mask = far.astype(np.uint8) * 255
     if surface_px:
         keep = np.zeros_like(mask)
@@ -58,6 +60,23 @@ def foreground(img, roi, chroma: float | None = None, light: float | None = None
     o, c = (int(prm.get(params, f"objects.{k}")) for k in ("open_px", "close_px"))
     mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, np.ones((o, o), np.uint8))
     return cv2.morphologyEx(mask, cv2.MORPH_CLOSE, np.ones((c, c), np.uint8))
+
+
+def shadow_of(lab, bg, params=None):
+    """Pixels that are the surface's own colour, only darker: the chroma vector a shrunk copy of the surface's and the
+    lightness 45-100 % of it. On the yellow board a box's shadow (dark yellow) passed the chroma test and stood next to
+    the box as a fragment, so no finger gap was left (2026-10-29). A black object (darker than that) or another
+    colour is never a shadow."""
+    c0 = np.array([bg[1] - 128.0, bg[2] - 128.0])
+    c = np.stack([lab[..., 1] - 128.0, lab[..., 2] - 128.0], axis=-1)
+    tol, lo = prm.get(params, "objects.shadow_tol"), prm.get(params, "objects.shadow_min_light")
+    darker = (lab[..., 0] < bg[0]) & (lab[..., 0] >= lo * bg[0])
+    n2 = float(c0 @ c0)
+    if n2 < 64:  # a grey surface: its shadow is grey too
+        return darker & (np.hypot(c[..., 0], c[..., 1]) < tol)
+    k = (c @ c0) / n2
+    resid = np.hypot(*(c - k[..., None] * c0).transpose(2, 0, 1))
+    return darker & (k > 0.2) & (k < 1.15) & (resid < tol)
 
 
 def to_mm(pixels, record: dict, camera: dict, top_z: float):
