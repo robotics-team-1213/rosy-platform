@@ -5054,12 +5054,33 @@
 - Gate: 전체 착지 검증은 별도이며 실물·서비스 수용 근거가 아니다.
 - CE: 해당 없음 — 전용 앱이라는 적용 조건과 버전별 원인은 시험 주석·이 기록에서 복원할 수 있다.
 
+## 2026-10-28 · 1e6b5fdc0 · fix(fleet): hub 이벤트 메모리 3분리
+
+- 변경: `RobotRecord.events`가 받은 모든 CORE 사건을 영구로 쥐고 있었다(2026-10-28 자원 조사). 세 저장소로 나눴다: `events` deque(maxlen=500)은 /registry·events_since 공급, `stuck_events`는 (type, stuck_id) 인덱스로 막힘 복구 판정에 쓰고 퇴출하지 않는다, `seen_event_hashes`는 event_id→본문 sha256으로 개발 경로 중복 제거를 O(1)로 대신했다. StuckResolverLoop와 LineStuckBoard가 `stuck_event()`만 읽어 초당 전체 스캔을 없앴다. 연결이 끊길 때 창을 비우는 것은 링크 재접속 때 운영자 피드가 비워지는 계약 위반(1e6b5fdc0, test_console_hub_integration)이라 offline은 표시만 하고 창을 유지한다 — 재생 중복은 해시·스토어가 이미 차단한다.
+- 증거: 원격 시험 resource-bounds-1·2(AI PC) — run-1에서 창 폭·stuck 인덱스 생존·창 밖 재생 중복 제거를 확인하고, 창 유지로 바로잡은 회차(run-2)에서 test_hub·test_console_hub_integration·test_server_console known_failures NEW 0.
+- gate 변화: 없음.
+- CE: 해당 없음 — 설계는 독립 검토 2건을 거쳤고 계획 문서가 근거를 보존한다.
+
+## 2026-10-28 · 0268ab50f · fix(fleet): 목표 판정 때 대기 로봇은 hub 하트비트로 읽는다
+
+- 변경: `_observe()`가 목표를 내릴 때마다 전 로봇에 REST 상태 읽기를 폭격했다. 활동 로봇(목표·claim·양보)은 REST를 유지하고 대기 로봇은 `_gather_state`(D-447)를 탄다 — 하트비트 스냅샷(≤3s) 우선, 낡으면 REST 폴백. 모든 로봇의 `_verdict`는 매 목표마다 갱신되어 D-395 P2-2 불변식을 유지한다. console.py는 D-430 안전 태그라 Safety-Review 트레일러와 판정 분석을 커밋에 남겼다.
+- 증거: 원격 시험 resource-bounds-2(AI PC) `test_server_console.py` 신규 2 시험 통과 — 하트비트 신선 대기 로봇 REST 0회·활동 로봇 REST 유지·낡은 하트비트 REST 폴백 각각 확인.
+- gate 변화: 없음. 실물·현장 수용은 별개다.
+- CE: 해당 없음.
+
 ## 2026-10-28 · 239740362c · 목표 어드미션 판정의 순수 모듈 분리 A단계 (계획 2026-10-28-fleet-traffic-arbitration-split)
 
 - 변경: `console.py`의 `_goal()`이 판정과 미션/응답 dict 조립을 다섯 곳에서 반복하며 D-766 래칫(1325)에 묶여 있었다. `fleet/traffic/goal_admission.py`(신규, 순수)이 대기열 보류를 frozen `QueueDecision`(yield_hold·untrusted_self_hold·route_conflict_hold·untrusted_blocker_hold·standing_hold)과 `mission_of`/`response_of`로 소유한다 — 키 순서 동결, reason으로 깃발 유도 금지(LOCALIZATION_UNTRUSTED는 양 단계에 존재), 전송 전 보류는 route 키 없음, `attempt_seq=0` 보존, 저장 미션과 응답은 독립 리스트. 콘솔은 상태 읽기·폐쇄 실패 사슬(`_seen.pop`→`_remember`→`_verdict`)과 전송 순서를 그대로 소유하고 판정 문자열만 넘긴다. `_task_mission`은 별칭 없이 이동, console.py 1325→1299(래칫 행 동락).
 - 증거: 특성 시험(키 순서 `list(d.items())` 고정, 독립 리스트) + 검토가 요구한 두 미피복 동작 — goal 순간 빈 상태 읽기의 폐쇄 실패(TRUSTED 이력이 전송하지 않음)와 보류의 대기열 항목 무병합 교체. 원격 4 suite(신규·traffic·console·boundaries) green, known NEW 0. 변이 검증: 전송 전 untrusted 보류 비활성화 → 폐쇄 실패 시험 red(`6c6f45582b`), 복원 green(`239740362c`). 독립 검토 2건(codex·claude) 반영 — 단계 분리 판정, 깃발·route 부재 규칙, 판정 문자열만 경계 통과, 무병합 교체, attempt_seq=0.
 - Gate: 없음. B단계(전송 후 경로 충돌 판정)·C단계(_make_room/bays)는 별도 착지.
 - CE: 해당 없음 — 판정·모양이 특성 시험과 변이 이력으로 고정됐다.
+
+## 2026-10-29 · uncommitted · fix(fleet): 추출된 목표 판정 관측 helper의 안전 소유권을 보존한다
+
+- 변경: `server/console/observe.py`를 canonical safety module과 내부 anchor에 등록하고 frozen 안전 위반 목록에 더했던 예외를 제거했다. 원래 상태 읽기·freshness·REST fallback·판정 순서와 공개 안전 API는 바꾸지 않는다.
+- 증거: 예외를 제거한 원격 RED가 `console.py → fleet.server.observe`의 새 안전 경계 위반을 검출했다. 독립 검토가 내부 anchor와 실제 파일 분류 보존을 요구했으며 최종 manifest·소스·회귀는 공식 게이트에서 재검증한다.
+- gate 변화: 없음. 예외를 늘리거나 안전 검사를 약하게 하지 않는다.
+- CE: 해당 없음 — 분류·예외 제거·회귀 시험이 적용 조건을 설명한다.
 
 ## 2026-10-29 · ccc8712ece · 이송 결과의 검수 패키지와 복구 root 분할 검사
 
