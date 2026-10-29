@@ -5067,3 +5067,10 @@
 - 증거: 원격 baseline/RED/GREEN·source-order 변이·실제 HTTP/UDS와 Harbor 단계 확인·구형 Pydantic 호환을 검증했다. 정확한 source·계수·실패/skip·최종 FULL 결과는 [검증 정본](../../docs/validation/physical-evidence-export-2026-10-29/result.md)에 둔다.
 - Gate: 기존 module gate 변화 없음. G1c 원본 clock/전체 측정 생산자, 최종 업무 완료, 실물·운영·배포 수용은 별도다.
 - CE: 해당 없음 — 해결 판단은 D-915·회귀·검증 정본에 남고, 미해결 source clock은 해결 교훈으로 기록하지 않는다.
+
+## 2026-10-29 · f2af364bcf · AI fact 요청 제한 시험 시계 고정
+
+- 변경: 기존 FakeClock과 _app(clock=...)를 사용해 세 HTTP 요청의 실시간 처리 속도에 의존하던 시험을 수정했다. 기존 200/200/429와 .999초 거절/정확히 1초 허용을 검증하며 production 요청 제한은 바꾸지 않는다.
+- 증거: 공식 전체 행렬 최초 Fleet 실행에서 1 failed/7270 passed/413 skipped, NEW1. 변경 source의 원격 재검증은 별도이며 [D-916 검증 정본](../../docs/validation/joint-source-provenance-2026-10-29/result.md)에 남긴다. 독립 리뷰에서 정책 약화·P1/P2 없음.
+- Gate: 변화 없음. 최초 전체 행렬의 실패는 지우거나 quarantine하지 않는다.
+- CE: 해당 없음 — 이 시험 수정 판단은 코드·직접 회귀와 기존 가짜 시계 관례에 남는다. 별도 FULL 실행 범위 교훈은 docs 소유 기록을 따른다.

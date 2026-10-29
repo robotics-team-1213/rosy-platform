@@ -1,6 +1,8 @@
 # D-915 원본 물리 근거 인계 검증
 
-코드 기준: `66ba49bef84fb393b527ab9bde5903248c736cdc`, API reference v1.330. 이 기록은 소스·계약·합성 HTTP fixture 검증이다. 실물·운영 생산자·장치 수용·배포·착지·push를 수행하지 않았다.
+코드 기준 commit: `66ba49bef84fb393b527ab9bde5903248c736cdc`, API reference v1.330. 이 기록은 소스·계약·합성 HTTP fixture 검증이다. 실물·운영 생산자·장치 수용·배포·착지·push를 수행하지 않았다.
+
+검증 범위 정정: 당시 `remote_pytest.py --affected-json`이 실행한 네 묶음은 selector의 `local_invocations`였다. `mode=full`이어도 이 CLI는 별도의 `full_invocations` 27개를 실행하지 않는다. 아래 25,723 통과 결과는 유효한 로컬 회귀 범위이며 **공식 FULL 전체 행렬의 완료 근거가 아니다**. 후속 D-916 작업에서 실제 27개 행렬을 고정 source로 별도 실행한다. 원래 로그·hash는 보존한다.
 
 ## 결과와 범위
 
@@ -8,8 +10,8 @@
 |---|---|---|
 | 계약·World·observer·수출·기존 시간 초과 항목 | `ad164043f6` | 150 passed, skipped 0, NEW/known/flaky 0 |
 | 구형 SIM Pydantic 2.11.7 schema/직렬화 | `66ba49bef8` | JSON Schema 생성, absent/null 생략, JSON 왕복, 실제 측정값 보존 assertion 통과; terminal 0 |
-| 실제 Fleet HTTP·UDS와 Harbor 독립 소비자 | platform `66ba49bef8`, Harbor `ac2403834737f08363d99a33c5273b40a11cea05` | adapter 8 + HTTP 1 passed, terminal 0; SubmitAction 1/lookup 1, PRE/POST proof |
-| FULL 영향 선택 | `66ba49bef8` | 4개 묶음 모두 terminal 0; 25,723 passed/1,296 skipped, NEW/known/flaky 0 |
+| 실제 Fleet HTTP·UDS와 Harbor 독립 소비자 | platform commit `66ba49bef8`, Harbor commit `ac2403834737f08363d99a33c5273b40a11cea05` | adapter 8 + HTTP 1 passed, terminal 0; SubmitAction 1/lookup 1, PRE/POST proof |
+| FULL 판정의 local 회귀 선택 | `66ba49bef8` | 4개 묶음 모두 terminal 0; 25,723 passed/1,296 skipped, NEW/known/flaky 0; 공식 전체 27개 아님 |
 | Harness lint | `66ba49bef8` | exit 0, errors 0, warnings 41; 기존 module 검증 시점·작업 공간 관련 경고 |
 
 원본 proof는 변경되지 않은 receipt와 SHA로 결속되고 같은 read snapshot에서 반환된다. 기존 입력은 관절 사실이 없으면 원래 canonical bytes를 유지한다. 새로운 read는 관절 사실 없는 과거 receipt를 409로 거절한다. scope가 다른 service는 403이다. stale/future·partial·관절 순서 불일치·PRE source 재사용·stored proof 변조를 거절하며 추가 실행이나 claim 해제를 만들지 않는다.
@@ -33,10 +35,10 @@ Harbor는 원문을 조회할 뿐 관측을 제출하지 않는다. 실제 HTTP 
 최종 FULL 원본 `run-1.txt`~`run-4.txt`의 SHA-256:
 
 ```text
-1 a564733db0cac8a97bd0673f1d8ee91daab12dd5875f9843f1f442516b26fee8
-2 dd2d38de06508a7c5d2c03eaec67d6ea37c412571ec898b863342d539c218f62
-3 7e69240378c1db8cda0e1a1690fb8981d2b6004b7bae7d0baf2fc810994d96be
-4 057cd5a6b6e674df4e556e344036b0acb8811cc89d25c282879e471ff8e00ad1
+run-1.txt SHA-256: a564733db0cac8a97bd0673f1d8ee91daab12dd5875f9843f1f442516b26fee8
+run-2.txt SHA-256: dd2d38de06508a7c5d2c03eaec67d6ea37c412571ec898b863342d539c218f62
+run-3.txt SHA-256: 7e69240378c1db8cda0e1a1690fb8981d2b6004b7bae7d0baf2fc810994d96be
+run-4.txt SHA-256: 057cd5a6b6e674df4e556e344036b0acb8811cc89d25c282879e471ff8e00ad1
 ```
 
 독립 contract/Safety 검토와 최종 branch 검토에서 A/B owner 대응·legacy 빈 binding·optional wire 변환·Pydantic 호환 수정 후 남은 material finding은 없었다. 소스 검토는 장치 안전 인증이 아니다.
