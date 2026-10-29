@@ -44,6 +44,23 @@ def free_mm(mask, roi, pixel_fn, start, direction, across_offsets, reach_mm: flo
     return reach_mm
 
 
+def own_removed(mask, roi, pixel_fn, o: dict):
+    """The finger mask without the object's own pixels (its outline, or its blob): its sides are not a neighbour."""
+    import cv2
+
+    centre = pixel_fn(tuple(o["raw_m"]))
+    if o.get("hull_px"):  # only its own pixels: a box split from a touching neighbour (cell_split) must still see it
+        own = np.zeros(mask.shape, np.uint8)
+        cv2.fillPoly(own, [np.asarray(o["hull_px"], np.int32) - [roi[0], roi[1]]], 1)
+        mask = np.where(cv2.dilate(own, np.ones((5, 5), np.uint8)) > 0, 0, mask).astype(mask.dtype)
+    else:
+        n, labels = cv2.connectedComponents(mask)
+        c_col, c_row = round(centre[0]) - roi[0], round(centre[1]) - roi[1]
+        if 0 <= c_row < mask.shape[0] and 0 <= c_col < mask.shape[1] and labels[c_row, c_col]:
+            mask = np.where(labels == labels[c_row, c_col], 0, mask).astype(mask.dtype)  # its own blob (side faces) is not a neighbour
+    return mask
+
+
 def jaw_margin(mask, roi, pixel_fn, o: dict, closing_deg: float | None = None, params=None) -> dict:
     """{'margin_mm', 'free_mm': [side -, side +]} for the fingers closing across `o` (along closing_deg when given),
     margin None when either side has less than finger + min margin. The margin is as wide as the room and the jaws

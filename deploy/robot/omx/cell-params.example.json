@@ -415,6 +415,24 @@
    "source": "tuned",
    "evidence": "2026-10-30 00:40 lights off: top frame mean 1.4 and wrist 0.1 (top 1.4 even at 200 ms, gain 7); lit cell: top 139"
   },
+  "place.margin_mm": {
+   "value": 5.0,
+   "unit": "mm",
+   "source": "tuned",
+   "evidence": "2026-10-30: a 3-cell placed at the belt's configured point landed half off its near edge; the footprint keeps 5 mm inside the surface polygon (about the map's mean error)"
+  },
+  "place.search_mm": {
+   "value": 40.0,
+   "unit": "mm",
+   "source": "tuned",
+   "evidence": "2026-10-30: the belt point sat at the near edge; half a 3-cell's length (45 mm) inward reaches its middle, and the search stays near the reach already planned"
+  },
+  "place.step_mm": {
+   "value": 5.0,
+   "unit": "mm",
+   "source": "tuned",
+   "evidence": "2026-10-30: a top-view pixel is about 1 mm; 5 mm steps keep the search under a second"
+  },
   "gripper.gap_mm_per_unit": {
    "value": 10.4,
    "unit": "mm",

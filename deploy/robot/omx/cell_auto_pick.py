@@ -41,6 +41,7 @@ import cell_decisions as cd  # noqa: E402
 import cell_objects  # noqa: E402
 import cell_params as prm  # noqa: E402
 import cell_pivot  # noqa: E402
+import cell_place_fit  # noqa: E402
 import cell_diagnose  # noqa: E402
 import cell_hooks  # noqa: E402
 import cell_wrist_ref  # noqa: E402
@@ -188,28 +189,11 @@ def object_sized(mask, params=None):
     return out
 
 
-def own_removed(mask, roi, pixel_fn, o: dict):
-    """The finger mask without the object's own pixels (its outline, or its blob): its sides are not a neighbour."""
-    import cv2
-
-    centre = pixel_fn(tuple(o["raw_m"]))
-    if o.get("hull_px"):  # only its own pixels: a box split from a touching neighbour (cell_split) must still see it
-        own = np.zeros(mask.shape, np.uint8)
-        cv2.fillPoly(own, [np.asarray(o["hull_px"], np.int32) - [roi[0], roi[1]]], 1)
-        mask = np.where(cv2.dilate(own, np.ones((5, 5), np.uint8)) > 0, 0, mask).astype(mask.dtype)
-    else:
-        n, labels = cv2.connectedComponents(mask)
-        c_col, c_row = round(centre[0]) - roi[0], round(centre[1]) - roi[1]
-        if 0 <= c_row < mask.shape[0] and 0 <= c_col < mask.shape[1] and labels[c_row, c_col]:
-            mask = np.where(labels == labels[c_row, c_col], 0, mask).astype(mask.dtype)  # its own blob (side faces) is not a neighbour
-    return mask
-
-
 def finger_room(mask, roi, pixel_fn, o: dict, closing_deg: float | None = None, params=None) -> dict:
     """Free mm on each closing side and the jaw margin that fits (cell_finger_room); margin None means no room."""
-    import cell_finger_room
+    import cell_finger_room as fr
 
-    return cell_finger_room.jaw_margin(own_removed(mask, roi, pixel_fn, o), roi, pixel_fn, o, closing_deg, params)
+    return fr.jaw_margin(fr.own_removed(mask, roi, pixel_fn, o), roi, pixel_fn, o, closing_deg, params)
 
 def grasp_yaw(config: dict, site: str, o: dict, entry: dict, offset) -> float:
     """Tool yaw (deg) for a closing-axis candidate. The jaws close along tool y = yaw + offset, and must close
@@ -245,7 +229,7 @@ def reachable_ends(o: dict, entry: dict, params=None) -> list:
 
 
 def plan_pick(config: dict, site: str, dest_site: str, place_xy, o: dict, entry: dict, offset, bias_mm, work: Path,
-              yaw: float | None = None):
+              yaw: float | None = None, place_yaw: float | None = None):
     """Library for one candidate: grasp 15 mm below the top, approach 40 mm above it (else 20), the yaw and its
     180 degree twin tried in turn. Returns (library path, pick, place, approach_m, yaw) or an error string."""
     height = entry["top_height_mm"] / 1000 - prm.get(config.get("params"), "auto.grasp_depth_m", 0.015)
@@ -256,7 +240,8 @@ def plan_pick(config: dict, site: str, dest_site: str, place_xy, o: dict, entry:
             pick = {"x": round(x, 4), "y": round(y, 4), "z": round(surface_z(config, site) + height, 4), "yaw_deg": yaw}
             s = config["sites"][dest_site]
             place = {"x": place_xy[0], "y": place_xy[1],
-                     "z": round(surface_z(config, dest_site) + height + s.get("place_dz", 0.0), 4), "yaw_deg": s["yaw_deg"]}
+                     "z": round(surface_z(config, dest_site) + height + s.get("place_dz", 0.0), 4),
+                     "yaw_deg": s["yaw_deg"] if place_yaw is None else place_yaw}
             try:
                 jaws = jaw_open_for(entry["width_mm"], config.get("params"), o.get("jaw_margin_mm"))
                 # one file per object: two boxes on the floor planned into one name, and the arm went to the other one
@@ -298,7 +283,7 @@ def square_entry(entries: dict, o: dict) -> bool:
 
 
 def choose(cell, config, calibration, site, dest_site, place_xy, roi, objects, mask, catalog, bias_data, choices, work,
-           failed_yaws=()):
+           failed_yaws=(), dest_view=None):
     """Ordered usable targets: [{object, plan...}], and why the others were refused."""
     entries, usable, refused = {e["id"]: e for e in catalog}, [], []
     pixel_fn = lambda p: predicted_pixel(config, calibration, site, p)  # noqa: E731
@@ -339,13 +324,23 @@ def choose(cell, config, calibration, site, dest_site, place_xy, roi, objects, m
                 continue
         region = cell_pivot.bias_at(bias_data, site, o["raw_m"], params=p)
         bias = region["bias_mm"] if region else [0.0, 0.0]
-        o = dict(o, jaw_margin_mm=room["margin_mm"], free_mm=room["free_mm"])  # the jaws open only as far as fits
-        planned = plan_pick(config, site, dest_site, place_xy, o, entry, offset, bias, work, yaw)
-        for end in (reachable_ends(o, entry, p) if isinstance(planned, str) and "UNREACHABLE" in planned else []):
-            # a long box whose middle is out of reach is held nearer its end (2026-10-29: a 2-cell on the moved Pinky)
-            planned = plan_pick(config, site, dest_site, place_xy, end, entry, offset, bias, work, yaw)
+        # the whole footprint, turned the way the jaws hold it, must fit the destination (cell_place_fit)
+        held_axis = o["long_axis_deg"] - (yaw if yaw is not None else grasp_yaw(config, site, o, entry, offset))
+        places, why = cell_place_fit.options(config, dest_site, place_xy, held_axis, entry,
+                                             lambda q: predicted_pixel(config, calibration, dest_site, q), *(dest_view or (None, None)))
+        if why:
+            refused.append({"centre_mm": o["centre_mm"], "object": o["object"], "why": f"place: {why}"})
+            continue
+        o, planned = dict(o, jaw_margin_mm=room["margin_mm"], free_mm=room["free_mm"]), "no place"  # jaws open as far as fits
+        for xy, place_yaw in places:
+            planned = plan_pick(config, site, dest_site, xy, o, entry, offset, bias, work, yaw, place_yaw)
+            for end in (reachable_ends(o, entry, p) if isinstance(planned, str) and "UNREACHABLE" in planned else []):
+                # a long box whose middle is out of reach is held nearer its end (2026-10-29: a 2-cell on the moved Pinky)
+                planned = plan_pick(config, site, dest_site, xy, end, entry, offset, bias, work, yaw, place_yaw)
+                if not isinstance(planned, str):
+                    o = end
+                    break
             if not isinstance(planned, str):
-                o = end
                 break
         if isinstance(planned, str):
             refused.append({"centre_mm": o["centre_mm"], "object": o["object"], "why": f"planner: {planned}"})
@@ -408,14 +403,17 @@ def run_auto(cell, config, calibration, calibration_path, catalog, roi, source, 
     if guarded is not None and not cell.act("state").get("ok"):
         return {"result": "refused", "error": "start record_session.py --chunks first: no chunk_runner answers"}
     bias_data = cell_pivot.load_bias(cell_pivot.bias_path(calibration_path))
-    episode, failed_yaws = None, []
+    episode, failed_yaws, dest_view = None, [], None
+    if droi is not None and dest_site != source:  # what is already on the destination (cell_place_fit)
+        _, dmask, _, derr = observe(cell, config, calibration, dest_site, droi, catalog)
+        dest_view = None if derr else (dmask, droi)
     attempts = int(prm.get(config.get("params"), "auto.attempts")) if attempts is None else attempts
     try:
         for attempt in range(attempts):
             t0, tried = time.time(), {"locate": {"found": False}}
             img, mask, objects, error = observe(cell, config, calibration, source, roi, catalog)
             usable, refused = choose(cell, config, calibration, source, dest_site, place_xy, roi, objects, mask, catalog,
-                                     bias_data, choices, work, failed_yaws) if not error else ([], [])
+                                     bias_data, choices, work, failed_yaws, dest_view) if not error else ([], [])
             cd.target(objects, usable, refused)
             if usable and config.get("decision_model"):  # the model orders what the measurement kept, or vetoes all
                 import cell_pick_judge
@@ -449,7 +447,7 @@ def run_auto(cell, config, calibration, calibration_path, catalog, roi, source, 
                                                                       params=config.get("params")) \
                     != target["bias_region"]:  # a new region just measured: plan again with it
                 usable, refused = choose(cell, config, calibration, source, dest_site, place_xy, roi, objects, mask, catalog,
-                                         bias_data, choices, work, failed_yaws)
+                                         bias_data, choices, work, failed_yaws, dest_view)
                 if not usable:
                     row["error"] = "no usable object after the pivot"
                     return {**out, "result": "stopped: " + row["error"]}
@@ -499,6 +497,7 @@ def run_auto(cell, config, calibration, calibration_path, catalog, roi, source, 
                 choices.outcome(CLOSING, target["offset"], held, f"{moved['result']} at yaw {target['pick']['yaw_deg']}")
                 choices.save()
             if moved["result"] == "placed":
+                place_xy = (target["place"]["x"], target["place"]["y"])  # where it was put (cell_place_fit may move it)
                 tried["verify"] = verify_placed(guarded, config, calibration, dest_site, place_xy, droi, catalog,
                                                 bias_data, o["object"], held)
                 cd.emit("verify", dict(tried["verify"]), [True, False], tried["verify"]["inside"], "measurement",
