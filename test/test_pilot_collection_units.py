@@ -32,6 +32,7 @@ def test_receiver_uses_configured_url_and_signed_entry_with_shared_lock():
     assert "--config %h/.config/rosy/model-code.json exec dataset/fetch_http.py" in command
     assert "--ca-file" in command and "--token-file" in command
     assert "/usr/bin/flock --nonblock --conflict-exit-code 75 %t/rosy-pilot-collection.lock" in command
+    assert set(unit("rosy-pilot-fetch@.service")["Service"]["SuccessExitStatus"].split()) == {"3", "75"}
 
 
 def test_offline_pipeline_has_its_own_timer_and_no_robot_credentials():
@@ -43,7 +44,7 @@ def test_offline_pipeline_has_its_own_timer_and_no_robot_credentials():
     assert all(flag in command for flag in ["--raw-root", "--video-dir", "--out", "--classes", "--state"])
     assert "--token" not in command and "--ca-file" not in command
     assert service["EnvironmentFile"] == "%h/.config/rosy/pilot-process.env"
-    assert service["SuccessExitStatus"] == "75"
+    assert set(service["SuccessExitStatus"].split()) == {"3", "75"}
     timer = unit("rosy-pilot-process.timer")
     assert timer["Timer"]["OnUnitInactiveSec"] == "10min"
     assert timer["Timer"]["Unit"] == "rosy-pilot-process.service"
