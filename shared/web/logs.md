@@ -964,6 +964,13 @@
 - 증거: 원격 서버 시험 8f85ca2d0f 기준 shared/web·Robot·Fleet·Pilot 471 passed/0 NEW, Learning 브라우저 2456 passed/1 NEW(왼쪽 정렬 누락, 고친 뒤 89421d5732 해당 5묶음 210 passed/0 NEW). 이 커밋은 착지 시험(land.py --tests auto)이 다시 돈다.
 - gate 변화: 없음.
 
+## 2026-10-26 · 181f670b45 · Monitoring mount registration
+
+- 변경: Monitoring의 읽기 전용 표면·포트·계약을 UI 구현 전에 등록했다. 기준선과 G2/G3는 후속 UI 검증까지 보류한다.
+- 공용 control 모듈의 상대 import로 접두 경로에서도 같은 canonical 파일을 사용한다. 테마 검사는 `/common/`과 `./common/`의 동일 mount 쌍만 허용한다.
+- 검증: 원격 181f670b45의 registry·shared controls·typography 59 PASS, 0 SKIP, known_failures NEW 0. 상대 경로·잘못된 테마 mount 회귀 단언을 포함한다. 기존 제품·실물 gate는 올리지 않는다.
+- gate 변화: 없음. UI·실물 수용은 후속이다.
+
 ## 2026-10-28 · 2d96683c9c · Fleet 레이아웃 역할 토큰
 
 - 변경: 본문 최대 폭·안쪽 여백·묶음/동작 간격·탐색 크기·접속 입력/계정 글 폭의8개 역할을 `tokens.css`에 두고 Fleet 공통 컴포넌트가 소비한다. 갤러리는 계산된 값을 읽는다. 중복 본문 규칙과 쓰지 않는 입력 폭 규칙을 제거했다. D-906을 DESIGN에 연결했다.

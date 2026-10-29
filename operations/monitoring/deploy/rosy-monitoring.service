@@ -1,0 +1,35 @@
+[Unit]
+Description=ROSY independent read-only system monitoring
+After=network.target
+StartLimitIntervalSec=300
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User=rosy-monitoring
+Group=rosy-monitoring
+EnvironmentFile=/etc/rosy-monitoring/credentials.env
+ExecStart=/opt/rosy-monitoring/venv/bin/rosy-monitoring --config /etc/rosy-monitoring/monitoring.yaml --state-dir /var/lib/rosy-monitoring --web-root /opt/rosy-monitoring/web
+StateDirectory=rosy-monitoring
+StateDirectoryMode=0700
+UMask=0077
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=15
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+MemoryMax=256M
+TasksMax=64
+CPUWeight=20
+
+[Install]
+WantedBy=multi-user.target

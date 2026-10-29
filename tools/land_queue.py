@@ -68,19 +68,21 @@ def queue_dir(wt: Path) -> Path:
     return Path(common.stdout.strip()) / QUEUE
 
 
-def take(qdir: Path, branch: str, worktree: str = "", status: str = "waiting") -> Path:
+def take(qdir: Path, branch: str, worktree: str = "", status: str = "waiting", urgent: str = "", *,
+         batch_auto: bool = False) -> Path:
     """Write this process's ticket at the end of the queue and return its path.
 
     ``status``: ``pending`` (waiting for a preparation slot) or ``preparing`` (tests outside the lock: keeps its
     place, blocks no one; ``land_prepare.py``), ``waiting``,
-    or ``turn`` (merging, testing, landing). A ticket without one (an older land.py) counts as waiting."""
+    or ``turn`` (merging, testing, landing). A ticket without one (an older land.py) counts as waiting.
+    ``batch_auto`` explicitly opts an uncustomized automatic request into batch membership."""
     qdir.mkdir(parents=True, exist_ok=True)
     stamp = time.time_ns()
     while (qdir / f"{stamp:020d}-{os.getpid()}.json").exists():  # one process, one clock tick (Windows)
         stamp += 1
     name = f"{stamp:020d}-{os.getpid()}.json"
     info = {"pid": os.getpid(), "host": socket.gethostname(), "start": time.time(), "branch": branch,
-            "worktree": worktree, "status": status}
+            "worktree": worktree, "status": status, "batch_auto": batch_auto, **({"urgent": urgent} if urgent else {})}
     tmp = qdir / f".{name}.tmp"
     tmp.write_text(json.dumps(info), encoding="utf-8")
     os.replace(tmp, qdir / name)
@@ -111,10 +113,20 @@ def blockers(qdir: Path, ticket: Path, now: float | None = None) -> list[dict]:
     A FULL tier in the lock held every lander behind it for 40+ min (2026-10-26); a preparing ticket now
     runs it outside the lock and keeps its place."""
     rows = ahead(qdir, Path("~"), now)  # every live ticket ("~" sorts after the digits)
-    mine = next((r.get("branch") for r in rows if r["ticket"] == ticket.name), None)
+    me = next((r for r in rows if r["ticket"] == ticket.name), {})
+    mine, urgent = me.get("branch"), bool(me.get("urgent"))
+    # D-889 addendum 5: an urgent ticket (one at a time, the user's words as its reason) passes ordinary waiting
+    # tickets ahead of it, and a waiting urgent ticket anywhere holds every ordinary one; a turn is never cut short.
     return [r for r in rows if r["ticket"] != ticket.name and (
         r.get("status") == "turn" or (mine is not None and mine in (r.get("batch") or []))
-        or (r["ticket"] < ticket.name and r.get("status") not in ("preparing", "pending")))]
+        or (not urgent and r.get("urgent") and r.get("status") == "waiting")
+        or (r["ticket"] < ticket.name and r.get("status") not in ("preparing", "pending")
+            and (bool(r.get("urgent")) or not urgent)))]
+
+
+def urgent_holder(qdir: Path) -> dict | None:
+    """The live urgent ticket, if any: only one landing may jump the queue at a time."""
+    return next((r for r in ahead(qdir, Path("~")) if r.get("urgent")), None)
 
 
 def ahead(qdir: Path, ticket: Path, now: float | None = None) -> list[dict]:
@@ -188,10 +200,15 @@ def wait(qdir: Path, ticket: Path, timeout: float, clock=time.time, sleep=time.s
         sleep(POLL)
 
 
-def enter(wt: Path, branch: str, status: str = "waiting") -> tuple[Path, Path]:
+def enter(wt: Path, branch: str, status: str = "waiting", urgent: str = "", *,
+          batch_auto: bool = False) -> tuple[Path, Path]:
     """Take a ticket (its place in the queue) and release it at exit whatever happens; (queue dir, ticket)."""
     qdir = queue_dir(wt)
-    ticket = take(qdir, branch, str(wt), status)
+    if urgent and (holder := urgent_holder(qdir)):
+        raise QueueError(f"--urgent refused: {describe([holder])} is already urgent ({holder['urgent']}); one at a time")
+    ticket = take(qdir, branch, str(wt), status, urgent, batch_auto=batch_auto)
+    if urgent:
+        land_events.emit("urgent", ticket=ticket.name, reason=urgent)
     _held.append(ticket)
     atexit.register(leave)
     print(f"[queue] ticket {ticket.name} in {qdir}", flush=True)

@@ -167,7 +167,7 @@ def execute(store, binding_file, run_id, *, expected_binding_sha256=None):
                     env.update(PATH='/usr/local/bin:/usr/bin:/bin', LANG='C.UTF-8',
                                ROS_DOMAIN_ID='99', ROS_LOCALHOST_ONLY='1',
                                ROS_AUTOMATIC_DISCOVERY_RANGE='LOCALHOST', ROS_STATIC_PEERS='',
-                               PYTHONUNBUFFERED='1', ACCEPT_EULA='Y')
+                               PYTHONUNBUFFERED='1', ACCEPT_EULA='Y', OMNI_KIT_ACCEPT_EULA='YES')
                     argv = [binding['sdk_python'], str(Path(__file__).with_name('import_omx.py')),
                             '--model', 'omx_f', '--urdf', str(urdf), '--output-dir', str(directory / 'usd'),
                             '--headless', '--frames', '120', '--report', str(directory / 'import-report.json')]
@@ -208,8 +208,9 @@ def execute(store, binding_file, run_id, *, expected_binding_sha256=None):
                         else:
                             report = verify_report(report_path, model='omx_f', frames=120,
                                                    sdk_version=binding['sdk_version'])
-            except (OSError, ValueError, subprocess.SubprocessError):
+            except (OSError, ValueError, subprocess.SubprocessError) as exc:
                 outcome['reason'] = 'sdk_or_report_verification_failed'
+                outcome['error_type'] = type(exc).__name__
                 report = None
             try:
                 clean = _cleanup(owner)

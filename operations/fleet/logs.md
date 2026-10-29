@@ -5039,6 +5039,13 @@
 - Gate: 없음. 순수 이름 변경.
 - CE: 해당 없음.
 
+## 2026-10-27 · 477761474d · 인증된 simulation 복구 HTTP·현재 Account 권한
+
+- 변경: D-899 요청 원장을 공개 recovery 경로에 연결했다. observer 인증을 재사용하고 현재 제안자 권한은 자식 생성의 제공된 DB에서 조회한다. 원본·정지 fence·최신 근거를 검사하며 부모 실패, 단일 자식 한도와 역사적 정확 재조회를 보존한다. owner 결과·단계의 공개 요약은 물리 원인을 추정하지 않는다.
+- 증거: 신규/기존 auth 109 passed, HTTP/service 37 passed, API/auth 최종 18 passed/0 skipped(재시작·닫힌 fence·SDK offline·실제 Account disable/grant 변경 포함). 관련 broad 453 passed/35 skipped와 별도 실제 브라우저 14 passed/0 skipped. revision·실패 회차·명령은 docs/validation/transfer-recovery-public-2026-10-27/result.md에 구분했다.
+- gate 변화: 기존 gate 승격 없음. 공식 로컬 착지 별도 대기, push·실물·Gazebo producer·학습 수용 미수행.
+- CE: 새 교훈 기록 — 페이지 넘침 가드가 놓친 nested 식별자 잘림을 실제 캡처와 결정적 RED/GREEN으로 확인해 docs/solutions/logic-errors/page-overflow-guards-miss-clipped-child-identifiers-2026-10-27.md에 남겼다.
+
 ## 2026-10-28 · cdbd0c332e · 전용 앱 상태 시험의 pytest 9.2 종료 오류 수정
 
 - 변경: `test_work_sources.py`가 매번 새로 만드는 앱의 State 설정 4곳을 직접 대입한다. 실제 요청·작업 종류 판정 assertion은 유지한다. 생산 코드와 설정은 바꾸지 않는다.
@@ -5046,3 +5053,17 @@
 - 증거: 후보 `651ec7a06a`의 Fleet 전체·단독 재실행에서 종료 오류 RED, 기준 main의 pytest 9.1.1 환경에서는 단독 통과. 수정 커밋 `cdbd0c332e`는 같은 pytest 9.2.0 환경(`1fde7a90b47fe7fb`)에서 해당 파일 11 passed / 0 skipped / NEW 0. 독립 검토는 전용 앱 격리·검증 조건 유지를 확인했다. 원격 로그는 작업 공간의 native-cell-transport 실행 기록에 연결했다.
 - Gate: 전체 착지 검증은 별도이며 실물·서비스 수용 근거가 아니다.
 - CE: 해당 없음 — 전용 앱이라는 적용 조건과 버전별 원인은 시험 주석·이 기록에서 복원할 수 있다.
+
+## 2026-10-28 · 239740362c · 목표 어드미션 판정의 순수 모듈 분리 A단계 (계획 2026-10-28-fleet-traffic-arbitration-split)
+
+- 변경: `console.py`의 `_goal()`이 판정과 미션/응답 dict 조립을 다섯 곳에서 반복하며 D-766 래칫(1325)에 묶여 있었다. `fleet/traffic/goal_admission.py`(신규, 순수)이 대기열 보류를 frozen `QueueDecision`(yield_hold·untrusted_self_hold·route_conflict_hold·untrusted_blocker_hold·standing_hold)과 `mission_of`/`response_of`로 소유한다 — 키 순서 동결, reason으로 깃발 유도 금지(LOCALIZATION_UNTRUSTED는 양 단계에 존재), 전송 전 보류는 route 키 없음, `attempt_seq=0` 보존, 저장 미션과 응답은 독립 리스트. 콘솔은 상태 읽기·폐쇄 실패 사슬(`_seen.pop`→`_remember`→`_verdict`)과 전송 순서를 그대로 소유하고 판정 문자열만 넘긴다. `_task_mission`은 별칭 없이 이동, console.py 1325→1299(래칫 행 동락).
+- 증거: 특성 시험(키 순서 `list(d.items())` 고정, 독립 리스트) + 검토가 요구한 두 미피복 동작 — goal 순간 빈 상태 읽기의 폐쇄 실패(TRUSTED 이력이 전송하지 않음)와 보류의 대기열 항목 무병합 교체. 원격 4 suite(신규·traffic·console·boundaries) green, known NEW 0. 변이 검증: 전송 전 untrusted 보류 비활성화 → 폐쇄 실패 시험 red(`6c6f45582b`), 복원 green(`239740362c`). 독립 검토 2건(codex·claude) 반영 — 단계 분리 판정, 깃발·route 부재 규칙, 판정 문자열만 경계 통과, 무병합 교체, attempt_seq=0.
+- Gate: 없음. B단계(전송 후 경로 충돌 판정)·C단계(_make_room/bays)는 별도 착지.
+- CE: 해당 없음 — 판정·모양이 특성 시험과 변이 이력으로 고정됐다.
+
+## 2026-10-29 · ccc8712ece · 이송 결과의 검수 패키지와 복구 root 분할 검사
+
+- 변경: OMX curation에 기존 export v2 원본 bytes·SHA·계보를 보존하는 오프라인 검수 패키지와 재검증 CLI를 추가했다. 같은 root 및 참조 자식의 분할 혼입·중복 미션·계보 충돌·비정상 JSON을 거절한다. Fleet 안내의 이미 연결된 HTTP·콘솔 상태를 바로잡고 curation 사용 경로를 연결했다.
+- 증거: [동결 검증 기록](../../docs/validation/transfer-review-package-2026-10-29/result.md). 원격 curation 전체 328 pass·10 skip, runner/classifier exit 0, NEW 0. 독립 검토의 root 별칭·숫자 overflow 문제를 각각 RED 재현 후 수정했고 최종 재검토에 주요 지적이 없다.
+- Gate: 실행·학습 수용 변화 없음. 검수 전 메타데이터와 behavior_training_eligible=false를 유지한다. 실제 라벨 검수·학습·장치 수용은 별도다.
+- CE: 해당 없음 — 판단과 거절 조건이 구현·회귀·사용 안내에 남는다.

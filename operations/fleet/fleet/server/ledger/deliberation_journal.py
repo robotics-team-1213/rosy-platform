@@ -78,8 +78,10 @@ class DeliberationJournal:
 
     async def run(self, problem, supervisor, providers, *, current):
         policy_id = getattr(supervisor, 'policy_id', 'deliberation-v1')
-        if policy_id not in ('deliberation-v1', 'conditional-review-v1'):
+        if policy_id not in ('deliberation-v1', 'conditional-review-v1', 'conditional-cooperation-v1'):
             raise ValueError('unsupported evaluation policy')
+        evaluation_key = (supervisor.evaluation_key(problem, providers)
+                          if policy_id == 'conditional-cooperation-v1' else None)
         def fresh():
             try:
                 return current() is True and 0 <= supervisor.clock() - problem.observed_at <= 3
@@ -89,12 +91,18 @@ class DeliberationJournal:
             return {**result, 'state': 'HOLD', 'reason': 'STALE_OR_CHANGED', 'choice': None}
         previous = await asyncio.to_thread(self.begin, problem)
         if previous is not None:
+            if previous.get('reason') == 'RESTART_OR_INFLIGHT_UNKNOWN':
+                return previous if fresh() else stale(previous)
             if previous.get('policy_id', 'deliberation-v1') != policy_id:
                 return {**previous, 'state': 'HOLD', 'reason': 'EVALUATION_POLICY_CHANGED',
                         'choice': None, 'action_admissible': False}
+            if evaluation_key is not None and previous.get('evaluation_key') != evaluation_key:
+                return {**previous, 'state': 'HOLD', 'reason': 'EVALUATION_CONFIGURATION_CHANGED',
+                        'choice': None, 'action_admissible': False}
             return previous if fresh() else stale(previous)
         async def record(result):
-            await asyncio.to_thread(self.write, problem, {**result, 'policy_id': policy_id}, False)
+            await asyncio.to_thread(self.write, problem,
+                {**result, 'policy_id': policy_id, **({'evaluation_key': evaluation_key} if evaluation_key else {})}, False)
         try:
             result = await supervisor.run(problem, providers, current=current, record=record)
         except asyncio.CancelledError:
@@ -103,6 +111,8 @@ class DeliberationJournal:
         if not fresh():
             result = stale(result)
         result = {**result, 'policy_id': policy_id}
+        if evaluation_key is not None:
+            result['evaluation_key'] = evaluation_key
         await asyncio.to_thread(self.write, problem, result, True)
         await asyncio.to_thread(self._mirror, problem, result)
         return result if fresh() else stale(result)

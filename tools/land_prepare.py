@@ -40,11 +40,18 @@ def after_reboot(ticket: Path | None, sleep=time.sleep, clock=time.localtime) ->
         sleep(POLL)
 
 
-def slot(qdir: Path, ticket: Path, sleep=time.sleep) -> None:
-    """Wait (``pending``: blocks no one) until fewer than ``MAX_PREPARING`` other tickets are preparing."""
+def slot(qdir: Path, ticket: Path, sleep=time.sleep, held=None) -> None:
+    """Wait for a preparation slot, reserving capacity for older pending tickets, and while ``held()`` (a batch
+    carries this branch, ``land_batch.carried``: its pretest covers this one). A carried pending ticket reserves
+    no capacity: it never prepares on its own."""
     land_queue.set_status(ticket, "pending")
-    while sum(r.get("status") == "preparing" for r in land_queue.ahead(qdir, Path("~"))
-              if r["ticket"] != ticket.name) >= MAX_PREPARING:
+
+    def busy() -> int:
+        rows = [r for r in land_queue.ahead(qdir, Path("~")) if r["ticket"] != ticket.name]
+        carried = {name for r in rows for name in (r.get("batch") or [])}
+        return sum(r.get("status") == "preparing" or (r.get("status") == "pending" and r["ticket"] < ticket.name
+                                                      and r.get("branch") not in carried) for r in rows)
+    while (held and held()) or busy() >= MAX_PREPARING:
         land_queue.touch(ticket)
         sleep(POLL)
     land_queue.set_status(ticket, "preparing")
@@ -86,7 +93,7 @@ def watch(land, wt: Path):
             return size(tree.stdout.split()[0], main)
         if tree.returncode != 1:
             return None
-        manual = land.plan(wt, land.conflict_stages(tree.stdout))[1]
+        manual = land.plan(wt, land.conflict_stages(tree.stdout), ("HEAD", main))[1]
         return f"main {main[:10]} conflicts with this branch outside the auto-resolved records: {manual}" if manual else None
     return check
 
@@ -98,7 +105,10 @@ def prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, t
     A NEW failure stops here, before the turn; the ticket is released by ``land.main``."""
     after_reboot(ticket)
     if ticket is not None:
-        slot(qdir, ticket)
+        landed = lambda: land.land_batch.in_main(land, wt, branch)  # noqa: E731
+        slot(qdir, ticket, held=lambda: not landed() and land.land_batch.carried(qdir, branch))
+        if landed():
+            return  # a batch landed this branch while it waited for a slot: the turn's wait ends it as landed
     main_sha = land.out(wt, "rev-parse", "main")
     if land.git(wt, "merge-base", "--is-ancestor", main_sha, "HEAD", check=False).returncode != 0:
         land.merge(wt, main_sha, branch, python, False)

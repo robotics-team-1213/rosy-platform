@@ -21,7 +21,7 @@
 
 ## 교훈 (docs/solutions)
 
-- 없음
+- [A page overflow check can pass while a card clips a child identifier](../../../docs/solutions/logic-errors/page-overflow-guards-miss-clipped-child-identifiers-2026-10-27.md)
 
 ## 시험
 
@@ -34,5 +34,5 @@
 - 2026-10-28 · e68f63d769 · 나머지 절차 문서의 공통 배치와 긴 값 복구
 - 2026-10-28 · 2d96683c9c · 공통 컴포넌트와 역할 기반 본문 배치
 - 2026-10-28 · ae4771b936 · 계정·토큰 영역의 화면별 표시와 재조회 레이아웃 통일
-- 2026-10-27 · uncommitted · D-865 P3 승인 범위 readback과 자동 승인 배지
-- 2026-10-27 · uncommitted · feat: 로봇 정보 확인 후 조치하는 상세 프로필
+- 2026-10-28 · b948a23204 · 복구 버튼의 공용 계약·초기화·소진 사유
+- 2026-10-28 · ce1ef8ebb0 · 제안자 조회 입력과 요청 응답 유실 후 재조회
