@@ -4003,3 +4003,10 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 동일한 3490bddb9b의 canonical FULL 27개 invocation을 공식 remote_pytest.run으로 수행했다. 합계 37,581 passed/2,351 skipped, 각 명령 exit0, 모든 로그 비교 NEW0/known0/flaky0이다. 1~11번은 현장 PC에서 완료한 뒤 자원이 확보된 모델 PC에서 12~27번을 수행했다. 재배정 중 취소한 현장 12번과, 연결 복구 후 별도로 563 passed/1 skipped인 AI PC의 중복 마지막 묶음은 합계에서 제외했다. 수용한 27개 로그는 archive 내부 바이트를 원본 SHA-256과 대조해 보존했다.
 - gate 변화: 없음. monitoring 브라우저 묶음 16개는 모두 skip이며 브라우저 수용을 입증하지 않는다. 실제 Docker 연속성·CI dispatch·설치/운영 배포·실물 수용·main 착지/push는 수행하지 않았다.
 - CE: 해당 없음 — 판단 근거는 D-301·구성 해시·회귀 시험·기존 import 시험에 남긴다.
+
+## 2026-10-29 · uncommitted · 동결 UI 검증 기록의 커밋 출처 검토
+
+- 변경: 동결된 platform UI 통합 결과 본문을 유지하고, 실제 로컬 runtime commit 식별자 한 건의 path·UTF-8 행 해시·값을 독립 검토해 public provenance에 추가했다. 기존 267건과 순서, matcher·credential 검사·실패 baseline은 유지한다.
+- 증거: 기준 commit 8f4b634e51의 공식 FULL에서 secret guard NEW1, 단독 재현 실패, main commit 23633e759f의 동일 단독 시험은 1 passed였다. 해당 값 commit 42508b116e의 실제 Git 객체·조상 관계와 원본 행 해시를 독립 검토했다. 수정 뒤 원격 집중 guard 결과는 외부 ui-validation-provenance-20261029 로그에 남긴다.
+- gate 변화: 없음. 새 canonical FULL과 main ancestry가 남으며 공개 게시·장치 수용을 뜻하지 않는다.
+- CE: 해당 없음 — 기존 git-ids-in-validation-records 교훈의 동결 기록 절차를 적용했다. 새 정책이나 예외 범위 확대는 없다.
