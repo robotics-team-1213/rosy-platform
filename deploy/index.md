@@ -76,8 +76,8 @@
 
 ## 최근 기록
 
+- 2026-10-29 · c71326b078 · 승인된 Pilot 모델 PC 적용
 - 2026-10-29 · 66e86cb0fb · Pilot 수신과 오프라인 처리 unit 분리
 - 2026-10-29 · 2f88347d69 · SD 원격 fixture의 플랫폼 경계 검증
 - 2026-10-29 · 0ab037ed49 · SD mount의 native parameter set 수정
 - 2026-10-29 · uncommitted · Site readiness 게시 검사 출처 검토
-- 2026-10-29 · 05f19a73ea · 팔 credential 및 signed candidate 집중 회귀

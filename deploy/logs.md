@@ -4063,3 +4063,10 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - gate 변화: 없음. unit·환경 파일·서명 inbox·현재 운영 service는 배치하거나 재시작하지 않았다. 설치 전 승인 릴리스와 실제 workspace/classes 결속을 확인해야 한다.
 - CE: 해당 없음 — 실행/잠금/복구 조건을 코드·시험·운영 절차에 기록했다. 현재 로봇 이름 해석 실패는 별도 미해결이다.
 - 최종 확인: d2d68c3346 공식 affected 13,602 passed/1,285 skipped/NEW 0와 실제 자료 포함 집중 88 passed/skip0/NEW 0. 운영 venv 의존 import·FFmpeg는 확인했고 새 pipeline의 승인 릴리스 반영은 아직 없다. 생산 배포 수용으로 기록하지 않는다.
+
+## 2026-10-29 · c71326b078 · 승인된 Pilot 모델 PC 적용
+
+- 변경: 두 unit을 기존 signed model-code `exec` 소유자로 실행해 전환 잠금을 공유한다. 명시적인 작업 보류 3과 수집 잠금 충돌 75는 다음 타이머에서 재시도한다. 오류 1/2는 유지한다.
+- 증거: lock RED 3실패→GREEN 209 passed, busy RED 2실패→GREEN 209 passed, 모두 원격 실행. 최종 GREEN skip0/NEW0 및 독립 검토. sequence44/source709 서명 적용과 설치 unit 검증은 [기록](../docs/validation/pilot-learning-collection-2026-10-29/result.md)에 있다.
+- gate: 모델 PC 타이머·unit·실제 기존 workspace/classes 결속을 적용했다. 원래 53장 검수 digest 불변. GPU 보류와 로봇 DNS/SSH 장애로 신규 운영 프레임·새 실물 경로 수용은 아직 없다.
+- CE: 해당 없음 — 구현·회귀·운영 문서와 기존 exact-unit 복구 교훈에 있는 판단이다.

@@ -12,3 +12,8 @@ b3a982f935b311fe83ee6cae228a71296b50f6c4268b0751e5e1f42b243dcc7a  codec-red/run-
 76e4824dd7d4a4bacdae5f5a22202ce8c0ebda950ba3102b992c20819030cf7d  verified-affected-model/run-1.txt
 e979713b68b70a804966efe013eaedb2c081708c1213077cca52e81ee790fe21  verified-focused/run-1.txt
 5774d45659a67614e3e9329701ea8b0bdf61c953424e50e05af4309fd4ed5a51  record-contracts/run-1.txt
+dcd397135b57e0c1a869f235bd24b49c98ee5a6278b4ba59ee765cfca644d0f1  ../pilot-collection-deploy/lock-red/run-1.txt
+335443a394329e393ead62a1dfb579a3321ab277447bb85992c2228fe2233d41  ../pilot-collection-deploy/lock-green/run-1.txt
+69d4eec0bd3156729711d8ae018a30a814e3ac1d4f1ac994bdce342e8840c0f4  ../pilot-collection-deploy/busy-red/run-1.txt
+455472ba24c09241252b66948f5c76e3a4442af8da0fbc2a4c15dad731fc1c3d  ../pilot-collection-deploy/busy-green/run-1.txt
+7bb7d23cd32203b38d753d8eb4e1498ce7a052678e9651c72313177ae1b4f807  ../pilot-collection-deploy/rollout-verification.json

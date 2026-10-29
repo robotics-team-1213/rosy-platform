@@ -79,3 +79,20 @@ CE: 해당 없음 — 복구·무결성·중복 방지·fixture 시계 판단은
 ## 기록 정합성 후속 · `e0a68bef19c14f10d004c95dad40f6c2788e5db0`
 
 생산 코드와 시험은 `d2d68c3346` 그대로이고 운영 문서·검증 기록·생성 색인을 커밋한 뒤, 모델 PC에서 harness·문서 배치·폴더·host manifest·collection unit 계약을 **129 passed / 0 skipped, exit 0, NEW 0**으로 확인했다(`record-contracts/run-1.txt`). 로그 지문 14개를 다시 대조해 불일치 0건을 확인했다. 로컬 harness lint는 0 errors/38 warnings였다. 완료 시점의 모델 PC DNS 재확인에서도 두 등록 로봇 이름은 여전히 해석되지 않았다. 새 실물 수집과 운영 적용을 완료한 것으로 판정하지 않는다.
+
+## 승인된 운영 적용 후속 · 2026-10-29
+
+사용자의 “나머지도 처리해줄래” 승인으로 로컬 main 착지와 등록 모델 PC 배포를 진행했다. 앞 절의 미적용 판정은 그 시점의 기록이며, 아래 적용 결과로 갱신한다. GitHub push와 새 실물 동작은 수행하지 않았다.
+
+- D-446 정상 서명 경로로 sequence **44**, source **`709ebf8b8e293836c4dcb62a53e78c594f401a1f`**를 적용했다. 등록 공개키와 로컬 공개키의 SHA 일치를 확인했고, signature·archive·환경 지문·CUDA health 검사를 통과했다. archive SHA는 `942d0764689a784247d7125a8f4bdfa3d429dd5a8e8a4c28ba10f7f5a54b1e83`, 환경 지문은 `24eb783be68765fa71e753d940f1b93c2845ad721d3d96a19c9e47e838034933`이다. 기존 key/config와 Python 패키지는 유지했다.
+- 설치 전 별도 SQLite online backup과 unit/controller/config 백업을 `~/rosy-ml/pilot-collection-deploy/44-709ebf8b8e/backup/`에 보존했다. 자동 등록 대상은 기존 주행 workspace이며, 격리된 후보 Learning Center DB와 합치지 않았다. 실제 workspace의 클래스 SHA **`345815d706c5209e6e11adf5c572b5a4f6074af0451b5ef7fe4ff92d8f7e4f2f`**와 일치하는 기존 YAML을 사용했다. 저장소 기본 YAML로 기존 클래스 결속을 바꾸지 않았다.
+- 운영 설치 점검에서 unit의 직접 실행이 model-code work lock을 공유하지 않는 문제를 발견했다. `7b3f2d9db1`의 RED에서 3실패를 확인하고 `a017e601d5`에서 기존 `rosy_model_code.py ... exec dataset/...` 소유자를 사용하도록 수정했다. 네 파일 원격 회귀 **209 passed / 0 skipped, exit 0, NEW 0**(`lock-green/run-1.txt`)와 독립 검토를 확인한 뒤 설치했다. 설치된 controller 4파일도 승인 소스에서 공급해 새 job mapping을 포함했다.
+- 이어 GPU 작업이 있는 정상 `WorkBusy` 보류가 exit 3으로 반환됨을 실제 관측했다. 두 job의 helper는 exit 3을 반환하지 않는다. `0739f64d88`에서 2실패를 확인한 뒤 `c71326b078`의 unit은 명시적인 `3 75`만 정상 건너뛰기로 처리한다. 네 파일 원격 회귀 **209 passed / 0 skipped, exit 0, NEW 0**(`busy-green/run-1.txt`)와 독립 검토를 통과했다. 네트워크·무결성·설정 오류의 exit 1/2는 계속 실패다.
+- 설치된 unit은 `c71326b078`의 archive와 byte hash가 일치한다. archive의 CRLF를 LF로 정규화하면 Git blob과도 일치한다. fetch unit SHA `1da62485af97ee9d84d82c598a4e6b0d7bd1ed3dd16cb7526d7160c3cdbc8dbf`, process unit SHA `e61f1f3efa3406c2efe403ceb2af8fc1f0777ab7bc80a41b1203942a10e9a95a`이다. SSH 세션의 runtime dir 누락으로 최초 `systemd-analyze --user verify`가 실패했으나, 기존 UID의 runtime dir를 지정한 재검사는 exit 0이었다. 사용자 unit과 두 타이머를 활성화했다.
+- 운영 read-only 재검증에서 원래 53프레임의 review/status/version, mask, events, pixel_events digest가 모두 불변이었다. 두 기존 Learning 서비스는 active다. fetch는 수집 잠금 충돌(exit 75), process는 기존 GPU 작업(exit 3)으로 건너뛰었고 두 타이머는 active다. **운영 신규 프레임은 아직 0장**이며, 보류를 처리 성공으로 세지 않는다. 서명 current는 sequence 44를 유지하지만 updater의 최근 상태는 다른 GPU 작업 때문에 `held`다.
+- 후보 Center에 주행 workspace 탐색 링크를 추가하려던 시도는 exact-unit installer guard가 거절했다. 즉시 원래 unit을 복원하고 active를 확인했다. 새 링크 파일도 운영 state에서 백업 영역으로 옮겼다. 기존 [exact-unit 교훈](../../solutions/deployment/learning-center-upgrade-needs-the-identical-unit-first-2026-10-23.md)에 해당하며 guard를 우회하지 않았다.
+- 두 등록 로봇은 pinned SSH 재확인에서도 timeout, 모델 PC의 두 mDNS는 해석 실패다. 주소·CA·토큰을 추측하거나 교체하지 않았다. 모델 PC 설치는 완료했지만 **새 실물 조종 → 수신 → 운영 pending 등록 수용은 미확인**이다.
+
+후속 로그는 `C:/DevTemp/pilot-collection-deploy/` 아래에 보존했다. `rollout-verification.json`은 주소·자격·라벨 본문을 제외한 운영 관측 영수증이다. 착지는 기존 `tools/land_async.py --tests auto` 대기열로 진행하며, 통과·완료는 해당 gateway 로그에서 따로 확인한다.
+
+CE: 해당 없음 — 실행 소유자·보류 코드 판단은 수정 코드·회귀·README에, exact-unit 복구는 기존 교훈에 있다. 중복 교훈은 추가하지 않았다. GPU 보류와 로봇 접속 장애는 미해결 운영 상태로 남긴다.
