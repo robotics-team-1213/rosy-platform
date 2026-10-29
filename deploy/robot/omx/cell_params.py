@@ -35,7 +35,7 @@ DEFAULTS = {
     "auto.fold_before_transport": (1, "flag", 0, 1), "auto.bias_from_place": (1, "flag", 0, 1),
     "auto.bias_learn_max_mm": (15.0, "mm", 1, 50),
     "calibrate.max_shift_px": (6.0, "px", 1, 50), "calibrate.bias_near_mm": (30.0, "mm", 5, 120), "auto.attempts": (3, "count", 1, 6), "diagnose.top_band_mm": (4.0, "mm", 1, 30), "diagnose.surface_band_mm": (3.0, "mm", 0.5, 15),
-    "auto.jaw_margin_mm": (8.0, "mm", 2, 25), "auto.finger_pad_mm": (20.0, "mm", 5, 60), "auto.min_jaw_margin_mm": (2.0, "mm", 0.5, 10), "auto.own_side_mm": (6.0, "mm", 0, 15),
+    "auto.jaw_margin_mm": (8.0, "mm", 2, 25), "auto.finger_pad_mm": (20.0, "mm", 5, 60), "auto.min_jaw_margin_mm": (2.0, "mm", 0.5, 10), "auto.own_side_mm": (6.0, "mm", 0, 15), "auto.jaw_margin_max_mm": (16.0, "mm", 2, 25),
     "gripper.gap_mm_per_unit": (10.4, "mm", 3, 30),
     "gripper.held_30mm": (52.3, "gripper", 45, 60), "gripper.open_max": (56.0, "gripper", 50, 70),
     "reach.enabled": (1, "flag", 0, 1), "reach.tol_mm": (2.0, "mm", 0.5, 10), "reach.max_iter": (2, "count", 0, 5),

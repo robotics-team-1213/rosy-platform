@@ -193,9 +193,9 @@ def test_dry_run_only_observes_chooses_and_plans(tmp_path):
     row = result["attempts"][0]
     assert row["chosen"]["closing_axis_offset_deg"] == 90 and "needs a pivot" in row["pivot_needed"]
     assert row["plan"]["pick"]["z"] == pytest.approx(0.060, abs=1e-4) and json.dumps(result, default=str)
-    lib = json.loads(next(tmp_path.glob("auto-pinky-90-*.json")).read_text())  # the library opens just past 30 mm, not wide
+    lib = json.loads(next(tmp_path.glob("auto-pinky-90-*.json")).read_text())  # as wide as the clear room allows
     grip = [f[5] for f in lib["chunks"]["above_pick"]]
-    assert grip[0] == pytest.approx(auto.jaw_open_for(30), abs=0.01)
+    assert grip[0] == pytest.approx(auto.jaw_open_for(30, margin_mm=16.0), abs=0.01) and grip[0] <= 56.0
 
 
 def test_a_hot_motor_aborts_by_parking_and_stopping(tmp_path):
@@ -523,7 +523,7 @@ def test_a_square_box_closes_along_the_axis_whose_finger_sides_are_clear():
     roi = (0, 0, 200, 200)
     # closing along x (yaw 0 + 90 -> closing 90: fingers at +-x) meets the neighbour; closing along y is clear
     assert auto.finger_room(mask, roi, px, cube, 0.0)["margin_mm"] is None
-    assert auto.finger_room(mask, roi, px, cube, 90.0)["margin_mm"] == 8.0
+    assert auto.finger_room(mask, roi, px, cube, 90.0)["margin_mm"] == 16.0
     mask[121:140, 90:110] = 255  # and one on the +y side too: no clear axis
     assert auto.finger_room(mask, roi, px, cube, 90.0)["margin_mm"] is None
 
@@ -549,7 +549,7 @@ def test_the_boxs_own_side_face_past_its_outline_is_not_a_neighbour_but_a_touchi
            "hull_px": [[70, 85], [130, 85], [130, 115], [70, 115]]}
     mask[85:121, 70:131] = 255  # its top and, 5 mm past the outline on +y, its side face and shadow (2026-10-29 board)
     # the outline removal leaves a 1 mm gap before the strip: still the box's own
-    assert auto.finger_room(mask, (0, 0, 200, 200), px, box)["margin_mm"] == 8.0
+    assert auto.finger_room(mask, (0, 0, 200, 200), px, box)["margin_mm"] == 16.0
     mask[121:150, 70:131] = 255  # a second box touching it: the foreground runs on
     assert auto.finger_room(mask, (0, 0, 200, 200), px, box)["margin_mm"] is None
 
@@ -673,3 +673,17 @@ def test_flat_markings_are_no_obstacle_for_the_finger_mask(tmp_path):
     _, masked, _, _ = auto.observe(Cell([one, marking]), config, cal.load(path), "pinky", ROI, CATALOG)
     inside = (slice(280 - ROI[1], 380 - ROI[1]), slice(60 - ROI[0], 200 - ROI[0]))
     assert plain[inside].any() and not masked[inside].any()
+
+
+def test_the_margin_opens_as_wide_as_the_room_and_the_jaws_allow():
+    mask = np.zeros((200, 200), np.uint8)
+    px = lambda p: (100 + p[0] * 1000, 100 + (p[1] - 0.1) * 1000)  # noqa: E731  1 px per mm
+    box = {"raw_m": [0.0, 0.1], "width_mm": 30, "length_mm": 60, "long_axis_deg": 0.0}
+    mask[85:116, 70:131] = 255
+    assert auto.finger_room(mask, (0, 0, 200, 200), px, box)["margin_mm"] == 16.0  # clear: the cap, not 8
+    wide = dict(box, width_mm=40)  # a wider box: the jaws' own limit, (68.5 - 40) / 2
+    mask[80:121, 70:131] = 255
+    assert auto.finger_room(mask, (0, 0, 200, 200), px, wide)["margin_mm"] == pytest.approx(14.2, abs=0.1)
+    mask[138:150, 60:140] = 255  # a neighbour 18 mm off the 40 mm box's +y side: room, not the jaws, decides
+    assert auto.finger_room(mask, (0, 0, 200, 200), px, wide)["margin_mm"] < 14.0
+    assert auto.jaw_open_for(30, margin_mm=16.0) <= 56.0

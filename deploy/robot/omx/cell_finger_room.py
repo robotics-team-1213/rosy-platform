@@ -46,13 +46,18 @@ def free_mm(mask, roi, pixel_fn, start, direction, across_offsets, reach_mm: flo
 
 def jaw_margin(mask, roi, pixel_fn, o: dict, closing_deg: float | None = None, params=None) -> dict:
     """{'margin_mm', 'free_mm': [side -, side +]} for the fingers closing across `o` (along closing_deg when given),
-    margin None when either side has less than finger + min margin."""
+    margin None when either side has less than finger + min margin. The margin is as wide as the room and the jaws
+    allow (up to auto.jaw_margin_max_mm): the top map alone errs 6 mm mean, 14 mm worst, and with a fixed 8 mm
+    35 of 64 real attempts put a finger on the box (2026-10-30)."""
     finger, pad = prm.get(params, "auto.finger_mm"), prm.get(params, "auto.finger_pad_mm")
-    most, least = prm.get(params, "auto.jaw_margin_mm"), prm.get(params, "auto.min_jaw_margin_mm")
+    least = prm.get(params, "auto.min_jaw_margin_mm")
     own = prm.get(params, "auto.own_side_mm")
     u = math.radians(o["long_axis_deg"] if closing_deg is None else closing_deg - 90)
     across = np.array([-math.sin(u), math.cos(u)])
     half = (o["width_mm"] if closing_deg is None else max(o["width_mm"], o["length_mm"])) / 2
+    widest = 30.0 + (prm.get(params, "gripper.open_max") - prm.get(params, "gripper.held_30mm")) * prm.get(
+        params, "gripper.gap_mm_per_unit")  # the opening at open_max, from the 30 mm hold and the gap per unit
+    most = min(prm.get(params, "auto.jaw_margin_max_mm"), (widest - 2 * half) / 2)
     centre = np.asarray(o["raw_m"], float)
     free = [free_mm(mask, roi, pixel_fn, centre + side * half * across / 1000, side * across, (-pad / 2, 0.0, pad / 2),
                     most + finger + 2.0, own_mm=own) for side in (-1, 1)]

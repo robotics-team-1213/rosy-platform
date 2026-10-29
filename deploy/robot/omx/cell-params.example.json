@@ -403,6 +403,12 @@
    "source": "tuned",
    "evidence": "2026-10-29 top view of the board: a box's side face and shadow show about 5 px (~4.5 mm) past its top outline on the side away from the camera"
   },
+  "auto.jaw_margin_max_mm": {
+   "value": 16.0,
+   "unit": "mm",
+   "source": "tuned",
+   "evidence": "2026-10-30: 35 of 64 real attempts touched down on a box with the fixed 8 mm margin while the top map errs 6.3 mm mean, 13.6 mm worst; open_max 56 opens ~68 mm (19 mm each side of a 30 mm box); 16 keeps 3 mm short of that and finger_room narrows it near a neighbour"
+  },
   "gripper.gap_mm_per_unit": {
    "value": 10.4,
    "unit": "mm",
