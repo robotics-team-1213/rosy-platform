@@ -75,3 +75,7 @@ CE: 해당 없음 — 복구·무결성·중복 방지·fixture 시계 판단은
 - 기존 운영 Python과 현재 승인된 서명 코드의 의존 import, FFmpeg 가용성은 읽기 전용으로 확인했다(`model-preflight.txt`). 새 `pilot_review.py`가 현재 승인 릴리스에 없음을 확인했으며, 이를 우회해 운영 설치하지 않았다. main 착지와 D-446의 명시 커밋 승인·서명 후보 공급, 실제 workspace/classes 결속 및 서비스 적용은 별도 승인·후속 실행으로 남는다.
 
 최종 판정은 **코드·검증된 기존 자료의 pending 등록 연결 수용**이다. 새 실물 조종·수신과 운영 서비스 적용 수용은 아니다.
+
+## 기록 정합성 후속 · `e0a68bef19c14f10d004c95dad40f6c2788e5db0`
+
+생산 코드와 시험은 `d2d68c3346` 그대로이고 운영 문서·검증 기록·생성 색인을 커밋한 뒤, 모델 PC에서 harness·문서 배치·폴더·host manifest·collection unit 계약을 **129 passed / 0 skipped, exit 0, NEW 0**으로 확인했다(`record-contracts/run-1.txt`). 로그 지문 14개를 다시 대조해 불일치 0건을 확인했다. 로컬 harness lint는 0 errors/38 warnings였다. 완료 시점의 모델 PC DNS 재확인에서도 두 등록 로봇 이름은 여전히 해석되지 않았다. 새 실물 수집과 운영 적용을 완료한 것으로 판정하지 않는다.
