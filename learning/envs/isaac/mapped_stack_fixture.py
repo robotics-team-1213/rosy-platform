@@ -120,6 +120,13 @@ def cube_release_target(index, sample, source_z):
     return [sample['tcps'][arm][k]+desired[k]-box['position'][k] for k in range(3)]
 
 
+def cube_release_ready(index, sample, source_z):
+    command = cube_release_target(index, sample, source_z)
+    tcp = sample['tcps'][plan(True)[index]['arm']]
+    error = [command[k]-tcp[k] for k in range(3)]
+    return norm(error) <= .00005 and (index % 3 == 0 or error[1] <= .000001)
+
+
 def stable_box(box, index, cube=False):
     items = plan(cube)
     fixture = CUBE_FIXTURE if cube else FIXTURE

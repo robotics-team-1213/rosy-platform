@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 import subprocess
 
-from mapped_stack_fixture import CUBE_FIXTURE, DT, FIXTURE, PROFILE, ROOT, cube_release_target, free_lift, home, judge, plan, stable_box
+from mapped_stack_fixture import CUBE_FIXTURE, DT, FIXTURE, PROFILE, ROOT, cube_release_ready, cube_release_target, free_lift, home, judge, plan, stable_box
 
 
 class Planner:
@@ -244,6 +244,8 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
                     move(arm, [*item['target'][:2], item['target'][2]+.003])
                 if cube:
                     layer['release_sample'] = snapshot()
+                    if not cube_release_ready(index, layer['release_sample'], float(p[2])):
+                        raise ValueError('cube release correction did not converge; opening blocked')
                 grip(arm, initial['gripper']['release'])
                 if cube:
                     layer['opened_sample'] = snapshot()
