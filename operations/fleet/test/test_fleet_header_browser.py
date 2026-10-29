@@ -197,7 +197,7 @@ def test_account_escape_closes_menu_without_stealing_outside_focus(tmp_path, nam
             page.locator('main').first.evaluate("node => { node.tabIndex = -1; node.focus(); }")
         if focus_target == 'dialog':
             page.evaluate('''async () => {
-                const ui = await import('/console/assets/ui.js');
+                const ui = await import('/common/ui.js');
                 window.dialogResult = null;
                 void ui.confirmIrreversible({message: '초점 복원 확인', action: '실행'})
                     .then(result => { window.dialogResult = result; });

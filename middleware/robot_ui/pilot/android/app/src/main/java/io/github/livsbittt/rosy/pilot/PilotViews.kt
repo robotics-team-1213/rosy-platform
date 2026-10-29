@@ -29,20 +29,22 @@ class PilotViews(private val context: Context) {
     }
     private fun fill(color: Int, focus: Boolean = false) = GradientDrawable().apply {
         setColor(color); cornerRadius = dp(RosyMetrics.RadiusButton.toInt()).toFloat()
-        if (focus) setStroke(dp(RosyMetrics.FocusRingWidth.toInt()),
-            if (color == PilotColors.foreground) PilotColors.background else PilotColors.foreground)
+        if (focus) setStroke(dp(RosyMetrics.FocusRingWidth.toInt()), PilotColors.foreground)
     }
     fun button(text: String, primary: Boolean = false, action: () -> Unit) = Button(context).apply {
         this.text = text; isAllCaps = false; textSize = RosyMetrics.TextLabel; minimumHeight = dp(RosyMetrics.TargetSecondary.toInt())
         setPadding(dp(RosyMetrics.InsetButton.toInt()), dp(RosyMetrics.Space2.toInt()), dp(RosyMetrics.InsetButton.toInt()), dp(RosyMetrics.Space2.toInt()))
         val ink = if (primary) PilotColors.background else PilotColors.foreground
-        setTextColor(android.content.res.ColorStateList(arrayOf(intArrayOf(android.R.attr.state_enabled), intArrayOf()), intArrayOf(ink, PilotColors.muted)))
+        setTextColor(android.content.res.ColorStateList(arrayOf(
+            intArrayOf(android.R.attr.state_enabled, android.R.attr.state_focused),
+            intArrayOf(android.R.attr.state_enabled), intArrayOf()),
+            intArrayOf(PilotColors.foreground, ink, PilotColors.muted)))
         val icon = when (text) { "다시 찾기" -> R.drawable.ic_refresh; "로봇 목록" -> R.drawable.ic_back; "화면 끄기" -> R.drawable.ic_screen_off; "태블릿", "기기·연결" -> R.drawable.ic_tablet; else -> null }
         icon?.let { setCompoundDrawablesRelativeWithIntrinsicBounds(context.getDrawable(it)?.mutate()?.apply { setTint(ink) }, null, null, null) }
         compoundDrawablePadding = dp(RosyMetrics.Space2.toInt())
         background = StateListDrawable().apply {
             addState(intArrayOf(-android.R.attr.state_enabled), fill(PilotColors.disabled))
-            addState(intArrayOf(android.R.attr.state_focused), fill(if (primary) PilotColors.foreground else PilotColors.pressed, true))
+            addState(intArrayOf(android.R.attr.state_focused), fill(PilotColors.pressed, true))
             addState(intArrayOf(android.R.attr.state_pressed), fill(if (primary) PilotColors.muted else PilotColors.pressed))
             addState(intArrayOf(), fill(if (primary) PilotColors.foreground else PilotColors.background))
         }

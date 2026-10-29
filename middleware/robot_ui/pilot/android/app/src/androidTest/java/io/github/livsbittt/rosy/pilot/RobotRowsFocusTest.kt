@@ -112,30 +112,36 @@ class RobotRowsFocusTest {
             activity.outside.requestFocus()
         }
         visible { activity.outside }
-        assertEquals("primary default fill", PilotColors.foreground, edgeColor(primary))
+        assertEquals("primary default fill", PilotColors.foreground, backgroundColor(primary, center = true))
+        assertEquals(PilotColors.background, primary.currentTextColor)
         instrumentation.runOnMainSync { quiet.requestFocus() }
         instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_UP)
         instrumentation.waitForIdleSync()
         visible { primary }
-        assertEquals("primary focus ring must contrast with its light fill", PilotColors.background, edgeColor(primary))
+        assertEquals("primary focus ring", PilotColors.foreground, backgroundColor(primary))
+        assertEquals("focus changes the fill, not just its outer size", PilotColors.pressed, backgroundColor(primary, center = true))
+        assertEquals(PilotColors.foreground, primary.currentTextColor)
         instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN)
         instrumentation.waitForIdleSync()
         visible { quiet }
-        assertEquals("quiet focus ring", PilotColors.foreground, edgeColor(quiet))
+        assertEquals("quiet focus ring", PilotColors.foreground, backgroundColor(quiet))
+        assertEquals("blur restores primary fill", PilotColors.foreground, backgroundColor(primary, center = true))
+        assertEquals(PilotColors.background, primary.currentTextColor)
         instrumentation.runOnMainSync { primary.isEnabled = false }
         visible { quiet }
-        assertEquals("disabled fill keeps precedence", PilotColors.disabled, edgeColor(primary))
+        assertEquals("disabled fill keeps precedence", PilotColors.disabled, backgroundColor(primary))
+        assertEquals(PilotColors.muted, primary.currentTextColor)
         instrumentation.runOnMainSync { assertEquals(0, clicks) }
     }
 
-    private fun edgeColor(view: View): Int {
+    private fun backgroundColor(view: View, center: Boolean = false): Int {
         var color = 0
         instrumentation.runOnMainSync {
             assertTrue(view.width > 0 && view.height > 0)
             val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
             view.background.draw(Canvas(bitmap))
             val inset = maxOf(1, PilotViews(activity).dp(RosyMetrics.FocusRingWidth.toInt()) / 2)
-            color = bitmap.getPixel(inset, view.height / 2)
+            color = bitmap.getPixel(if (center) view.width / 2 else inset, view.height / 2)
             bitmap.recycle()
         }
         return color
