@@ -113,7 +113,7 @@ ui-topbar {
   /* 역할 글은 접는다. 계정 단추의 접근 이름(계정과 접속 · 역할)과 툴팁이 역할을 말한다. */
   #user-role { display: none; }
   #fleet-inbox { gap: var(--space-1); }
-  #topbar-more { padding-inline: var(--space-1); }
+  #topbar-more { flex-direction: column; gap: 0; }
   #estop { gap: 0; }
   #estop .ui-icon { width: var(--space-4); height: var(--space-4); }
 }

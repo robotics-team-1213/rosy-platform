@@ -38,7 +38,7 @@ def test_channel_request_poll_preserves_current_keyboard_target(site, size, them
             page.route('**' + target, lambda route: held.append(route))
             page.clock.run_for(5500)
             # An unrelated read keeps the browser pumping route callbacks without a wall-clock sleep.
-            page.wait_for_function('document.readyState === "complete"')
+            page.wait_for_function('() => document.readyState === "complete"')
             assert len(held) == 1
             if change == 'move-row':
                 buttons.nth(1).focus()
@@ -49,7 +49,7 @@ def test_channel_request_poll_preserves_current_keyboard_target(site, size, them
                 held[0].fulfill(status=int(change.rsplit('-', 1)[1]), json={'detail': 'fixture read failure'})
             else:
                 held[0].fulfill(json={'rows': remaining})
-            page.wait_for_function('!window.oldRequestButton.isConnected')
+            page.wait_for_function('() => !window.oldRequestButton.isConnected')
             if change in ['move-outside', 'no-focus']:
                 expect(outside).to_be_focused()
             elif change in ['removed', 'empty', 'request-404', 'request-403', 'request-503', 'work-503']:
