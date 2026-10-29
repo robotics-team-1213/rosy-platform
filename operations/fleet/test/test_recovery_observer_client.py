@@ -208,7 +208,7 @@ def test_cli_submits_saved_context_and_original_samples(module, failed_api, monk
 
 
 def test_cli_error_does_not_print_the_observer_secret(module, monkeypatch, capsys):
-    secret = TOKEN[:16]
+    secret = '<invalid-observer>'
     monkeypatch.setenv('ROSY_TRANSFER_OBSERVER_TOKEN', secret)
     with pytest.raises(SystemExit) as error:
         module.main(['--origin', 'https://example.invalid', 'context', '--out', 'unused.json'])
