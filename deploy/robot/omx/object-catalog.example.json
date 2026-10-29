@@ -2,10 +2,10 @@
   "schema": "rosy.omx-object-catalog.v1",
   "objects": [
     {"id": "container-1", "kind": "green shipping container", "cells": 1, "length_mm": 30, "width_mm": 30,
-     "top_height_mm": 30, "tolerance_mm": 9, "grasp": {"close_across": "short_side", "jaw_axis_deg_from_long": 90}},
+     "top_height_mm": 30, "tolerance_mm": 9, "length_tolerance_mm": 14, "grasp": {"close_across": "short_side", "jaw_axis_deg_from_long": 90}},
     {"id": "container-2", "kind": "green shipping container", "cells": 2, "length_mm": 60, "width_mm": 30,
-     "top_height_mm": 30, "tolerance_mm": 9, "grasp": {"close_across": "short_side", "jaw_axis_deg_from_long": 90}},
+     "top_height_mm": 30, "tolerance_mm": 9, "length_tolerance_mm": 14, "grasp": {"close_across": "short_side", "jaw_axis_deg_from_long": 90}},
     {"id": "container-3", "kind": "green shipping container", "cells": 3, "length_mm": 90, "width_mm": 30,
-     "top_height_mm": 30, "tolerance_mm": 9, "grasp": {"close_across": "short_side", "jaw_axis_deg_from_long": 90}}
+     "top_height_mm": 30, "tolerance_mm": 9, "length_tolerance_mm": 14, "grasp": {"close_across": "short_side", "jaw_axis_deg_from_long": 90}}
   ]
 }

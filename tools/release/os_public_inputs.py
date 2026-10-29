@@ -118,11 +118,10 @@ def serve_inputs(dist, snapshot, certificate):
         else:
             source, lock, identity = captured[route]
             with lock:
-                path = dist / route
-                for parent in reversed(path.parents):
-                    _plain(parent, directory=True)
-                if _identity(_plain(path)) != identity:
-                    raise ValueError('public input changed after capture')
+                with _open(dist / route, lookup[route]['size_bytes']) as current:
+                    # Windows path stat and fstat can report different ctime values for the same file.
+                    if _identity(os.fstat(current.fileno())) != identity:
+                        raise ValueError('public input changed after capture')
                 yield source
 
     class Handler(BaseHTTPRequestHandler):

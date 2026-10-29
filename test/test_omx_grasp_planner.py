@@ -93,3 +93,11 @@ def test_an_unreachable_target_is_refused_before_any_chunk_exists():
     plan = dict(PLAN, pick=dict(PLAN["pick"], x=0.30, y=0.20))
     with pytest.raises(SystemExit, match="IK"):
         m.Planner(plan).library()
+
+
+def test_the_release_lifts_by_its_own_height_while_the_pick_keeps_a_low_lift():
+    planner = m.Planner(dict(PLAN, lift_m=0.03, release_lift_m=0.07))
+    lib = planner.library()
+    rise = lambda name: fk(planner, lib["chunks"][name][-1]).z - fk(planner, lib["chunks"][name][0]).z  # noqa: E731
+    assert rise("lift_pick") == pytest.approx(0.03, abs=0.002)
+    assert rise("lift_place") == pytest.approx(0.07, abs=0.002)  # 3 cm let the park's closing jaws retake the box

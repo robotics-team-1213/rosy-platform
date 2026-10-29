@@ -76,8 +76,11 @@ def replay(data: Path, endpoint: str, model: str, timeout: float) -> dict:
 
 
 def compare_deliberation(cases, runs, *, training_sessions, limits,
-                         training_recordings=None, reviewed_profile=None):
+                         training_recordings=None, reviewed_profile=None, cooperation=False):
     """Independent same-case metrics. No provider call, learned policy write or FIELD approval."""
+    if type(cooperation) is not bool:
+        raise ValueError('explicit cooperation comparison mode required')
+    modes = ('rules', 'single', 'deliberation') + (('sequential', 'parallel', 'auto') if cooperation else ())
     if not cases or len(cases) > 10000 or type(training_sessions) is not list:
         raise ValueError('invalid evaluation set')
     if training_recordings is not None and type(training_recordings) is not list:
@@ -102,8 +105,16 @@ def compare_deliberation(cases, runs, *, training_sessions, limits,
     rows = {}
     for row in runs:
         key = (row['mode'], row['case_id'])
-        if key in rows or key[0] not in {'rules', 'single', 'deliberation'} or key[1] not in by_id:
+        if key in rows or key[0] not in modes or key[1] not in by_id:
             raise ValueError('invalid comparison row')
+        if cooperation and key[0] in ('sequential', 'parallel', 'auto'):
+            allowed = {'sequential', 'parallel', 'hold'} if key[0] == 'auto' else {key[0], 'hold'}
+            if (row.get('effective_mode') not in allowed or type(row.get('decision_hash')) is not str
+                    or len(row['decision_hash']) != 64
+                    or any(c not in '0123456789abcdef' for c in row['decision_hash'])
+                    or any(type(row.get(field)) is not str or not row[field].strip()
+                           for field in ('environment_revision', 'measurement_revision'))):
+                raise ValueError('invalid cooperation selection evidence')
         if (row['problem_hash'] != by_id[key[1]]['problem_hash']
                 or not row['profile_revision'] or not row['policy_revision']
                 or type(row['forbidden_effect']) is not bool or type(row['binding_error']) is not bool
@@ -113,7 +124,7 @@ def compare_deliberation(cases, runs, *, training_sessions, limits,
             if type(row[field]) not in (int, float) or not math.isfinite(row[field]) or row[field] < 0:
                 raise ValueError('comparison latency or cost unknown')
         rows[key] = row
-    if len(rows) != 3 * len(cases):
+    if len(rows) != len(modes) * len(cases):
         raise ValueError('all modes must use exactly the same independent cases')
     if limits is not None:
         if set(limits) != {'error_rate', 'p95_latency_ms', 'cost_usd'}:
@@ -134,7 +145,7 @@ def compare_deliberation(cases, runs, *, training_sessions, limits,
                 or type(reviewed_profile['minimum_cases']) is not int or reviewed_profile['minimum_cases'] < 1):
             raise ValueError('invalid frozen reviewed profile')
         revisions = reviewed_profile['revisions']
-        if type(revisions) is not dict or set(revisions) != {'rules', 'single', 'deliberation'}:
+        if type(revisions) is not dict or set(revisions) != set(modes):
             raise ValueError('invalid frozen revisions')
         for mode, revision in revisions.items():
             if (type(revision) is not dict or set(revision) != {'profile_revision', 'policy_revision'}
@@ -144,7 +155,7 @@ def compare_deliberation(cases, runs, *, training_sessions, limits,
                 raise ValueError('comparison revision differs from reviewed profile')
         if len(cases) < reviewed_profile['minimum_cases']:
             report['state'] = 'HOLD'
-    for mode in ('rules', 'single', 'deliberation'):
+    for mode in modes:
         selected = [rows[(mode, key)] for key in by_id]
         latencies = sorted(r['latency_ms'] for r in selected)
         metrics = dict(count=len(cases), correct=sum(r['choice'] == by_id[r['case_id']]['expected'] for r in selected),
@@ -152,6 +163,8 @@ def compare_deliberation(cases, runs, *, training_sessions, limits,
                        forbidden=sum(r['forbidden_effect'] or r['binding_error'] for r in selected),
                        p95_latency_ms=latencies[math.ceil(0.95 * len(cases)) - 1],
                        cost_usd=sum(r['cost_usd'] for r in selected))
+        if cooperation:
+            metrics['p50_latency_ms'] = latencies[math.ceil(0.5 * len(cases)) - 1]
         metrics['error_rate'] = 1 - metrics['correct'] / len(cases)
         report['modes'][mode] = metrics
         if metrics['forbidden'] or (limits is not None and any(metrics[k] > limits[k] for k in limits)):
@@ -165,6 +178,7 @@ def main() -> int:
     parser.add_argument("--endpoint", default="http://127.0.0.1:8000/v1/systemone")
     parser.add_argument("--model", help="server model ID; required for network replay")
     parser.add_argument("--comparison-runs", type=Path, help="offline same-case rules/single/deliberation rows")
+    parser.add_argument("--cooperation", action="store_true", help="also compare independent sequential/parallel/auto rows")
     parser.add_argument("--reviewed-profile", type=Path, help="pre-reviewed dataset hash, limits and minimum cases")
     parser.add_argument("--training-manifest", type=Path, help="frozen training sessions and recording IDs")
     parser.add_argument("--timeout", type=float, default=8.0)
@@ -176,9 +190,11 @@ def main() -> int:
             result = compare_deliberation(json.loads(args.data.read_text()),
                 json.loads(args.comparison_runs.read_text()), training_sessions=manifest.get('sessions', []),
                 training_recordings=manifest.get('recordings'), reviewed_profile=profile,
-                limits=profile.get('limits') if profile else None)
+                limits=profile.get('limits') if profile else None, cooperation=args.cooperation)
             print(json.dumps(result, ensure_ascii=False, indent=2))
             return {'PASS_OFFLINE_ONLY': 0, 'HOLD': 2, 'FAIL': 1}[result['state']]
+        if args.cooperation:
+            parser.error('--cooperation requires --comparison-runs')
         if not args.model:
             parser.error('--model is required for network replay')
         result = replay(args.data, args.endpoint, args.model, args.timeout)

@@ -10,7 +10,7 @@
 | [control](middleware/perception/progress.md) | CONTROL | 4e99d92e (2026-10-02) | GO | GO | HOLD | HOLD | HOLD | PARKED |
 | [fleet](operations/fleet/progress.md) | FLEET | bed604ef (2026-09-30) | GO | GO | HOLD | PARKED | PARKED | PARKED |
 | [monitoring](operations/monitoring/progress.md) | MONITORING | 6b0f7568f5 (2026-10-26) | GO | GO | N/A | HOLD | HOLD | HOLD |
-| [fleet_decision](operations/decision/progress.md) | fleet_decision | 8036d90c09 (2026-10-12) | GO | GO | HOLD | HOLD | HOLD | HOLD |
+| [fleet_decision](operations/decision/progress.md) | fleet_decision | 587c0b4c8c (2026-10-29) | GO | GO | HOLD | HOLD | HOLD | HOLD |
 | [situation](operations/situation/progress.md) | SITUATION | 3627ec21fb (2026-10-28) | GO | HOLD | N/A | HOLD | HOLD | HOLD |
 | [media](operations/site_ui/media/progress.md) | SITE MEDIA | 2190ba6889 (2026-10-18) | GO | GO | N/A | HOLD | HOLD | HOLD |
 | [media_edge](middleware/media/progress.md) | ROBOT MEDIA | 2190ba6889 (2026-10-18) | GO | GO | N/A | HOLD | HOLD | HOLD |

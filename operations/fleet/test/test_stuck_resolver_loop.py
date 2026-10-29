@@ -428,7 +428,7 @@ class _CountingConsole:
     def __init__(self):
         self.snapshots = 0
         self.hub = type("Hub", (), {"registry": type("Reg", (), {
-            "events_since": staticmethod(lambda _rid, _seq: ())})()})()
+            "stuck_event": staticmethod(lambda _rid, _type, _sid: None)})()})()
 
     async def snapshot(self):
         self.snapshots += 1

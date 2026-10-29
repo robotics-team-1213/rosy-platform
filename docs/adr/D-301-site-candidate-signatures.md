@@ -34,3 +34,12 @@
 
 - 결정 2의 "운영자가 승인한 manifest"를 D-441이 바꾼다. 서명 PC의 자동 서명기가 다음을 모두 확인한 main 빌드의 manifest만 서명한다. 이 저장소 `build-site-candidate.yml`의 `refs/heads/main` 출처 증명, 그 `release.json` subject digest와 받은 바이트의 SHA-256 일치, `source_commit`이 main에 있음, 태그와 커밋 일치, 기존 `sign_manifest_only`의 형식·기대 커밋·기대 해시 검사, 서명 덮어쓰기 없음. 사람이 커밋 내용을 본다는 뜻은 더 이상 없고, main에 합치는 리뷰가 그 자리를 맡는다.
 - 결정 2의 나머지(키는 서명 PC에만, 덮어쓰기 거부, 공개 키 자가 검증, 키 비포함)와 결정 3·4는 그대로다. 사이트 호스트의 자동 갱신기는 따로 설치한 검증기와 신뢰 키로 같은 순서(서명 → 해시 → `docker load` → 이미지 ID)를 거친 뒤에만 전환한다.
+
+### 2026-10-29 — 서비스 이미지 증분 후보
+
+- 전체 후보의 manifest version 1은 유지한다. version 2는 전체 목표 `images`와 기준 `base_commit`, 재사용 서비스별 Docker config/OCI manifest ID 목록 `reused_images`를 서명한다. `images.tar`에는 재사용하지 않는 서비스만 넣는다. 재사용 참조도 `rosy-site-<service>:<40자리 커밋>`으로 제한하며, 기준 후보의 서명·파일 해시·이미지 archive에서 검증한 신원을 이어받는다.
+- 빌더는 별도 신뢰 경로의 사이트 공개 키로 기준 후보를 먼저 인증하고 Git 조상 관계를 확인한다. 삭제·이름 변경·공유 COPY 입력·Dockerfile·ignore 규칙 변경을 감지한다. 해석할 수 없는 빌드 입력은 재사용하지 않는다. 기준 없는 전체 빌드가 외부 base image와 의존성 보안 갱신 경로다.
+- 새 후보의 Compose는 서비스별 이미지 참조를 고정한다. 검증기는 전달된 이미지와 재사용 이미지를 합쳐 전체 목표 신원·플랫폼·Compose 참조를 검사한다. 재사용 이미지가 호스트에 없거나 다르면 전환 전에 거부한다. 설정만 바뀐 후보는 빈 이미지 archive를 검증하고 Docker load를 생략한다.
+- 기본 Caddyfile과 Account Caddyfile의 내용 해시를 서로 다른 Compose label에 고정해 서명한다. 같은 bind 경로를 유지한 채 후보 symlink만 바꾸면 실행 중인 파일 bind는 이전 inode를 계속 볼 수 있으므로, 파일 내용이 바뀌면 proxy의 구성 해시도 달라져 교체되게 한다. Account overlay는 기본 파일의 변경 신호를 덮어쓰지 않는다.
+- 활성 스택에는 기존 방화벽·인증서 preflight 후 Compose `up -d --no-build`를 실행해 바뀐 서비스만 교체한다. 기존 전체 상태·기능 수용 검사와 durable switch journal·롤백을 유지한다. 보존한 모든 rollback 후보가 참조하는 재사용 이미지도 정리에서 보호한다.
+- version 2 첫 게시 전에 별도 설치한 서명기·검증기·업데이터를 함께 갱신한다. 이전 검증기는 version 2를 거부한다. 이 결정은 실서버 배포나 로봇 동작을 승인하지 않으며, 실제 컨테이너 연속성과 장애 복구 수용은 소스 시험과 별도로 확인한다.

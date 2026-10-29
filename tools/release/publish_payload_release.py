@@ -79,6 +79,8 @@ PublishError = inspection.PublishError
 _rejections = inspection._rejections
 read_tarball_identity = inspection.read_tarball_identity
 verify_tarball = inspection.verify_tarball
+build_rollout = inspection.build_rollout
+rollout_bytes = inspection.rollout_bytes
 
 
 class RolloutUnverified(PublishError):
@@ -99,19 +101,6 @@ def parse_stamp(value: object) -> dt.datetime | None:
     except ValueError:
         return None
     return moment if moment.tzinfo is not None else None
-
-
-def build_rollout(release_id: str, tarball_sha256: str, source_revision: str, published_at: str,
-                  canary: str, wave_delay_s: int) -> dict:
-    return {"schema": 1, "release_id": release_id, "tarball": f"{release_id}.tar.gz",
-            "tarball_sha256": tarball_sha256, "source_revision": source_revision,
-            "published_at": published_at, "canary": [canary], "canary_ok": False,
-            "wave_delay_s": wave_delay_s, "withdrawn": False, "reason": ""}
-
-
-def rollout_bytes(rollout: dict) -> bytes:
-    """The exact bytes that are signed: sorted keys, LF, UTF-8, no BOM."""
-    return (json.dumps(rollout, sort_keys=True, indent=2, ensure_ascii=True) + "\n").encode("utf-8")
 
 
 def sign_rollout(data: bytes, private_key: Path, public_key: Path,
@@ -201,8 +190,13 @@ class Publisher:
         sig.write_bytes(signature.encode("ascii"))
         return data, [path, sig]
 
-    def create(self, rollout: dict, tarball: Path, canary: str) -> None:
+    def create(self, rollout: dict, tarball: Path, canary: str, *, delta_asset: Path | None = None) -> None:
+        if delta_asset is not None:
+            self.work_dir.mkdir(parents=True, exist_ok=True)
+            inspection.verify_transport_delta(tarball, delta_asset, rollout["delta"], self.public_key, self.work_dir)
         data, files = self.write_signed(rollout)
+        if delta_asset is not None:
+            files.append(delta_asset)
         notes = (f"ROSY native payload {self.release_id} from {rollout['source_revision'][:12]}. "
                  f"Signed rollout (D-412): canary {canary} first, the rest after canary_ok.")
         self.gh("release", "create", self.tag, "--repo", self.repo, "--target", rollout["source_revision"],
@@ -501,7 +495,8 @@ def _matching(pattern: re.Pattern, what: str) -> Callable[[str], str]:
 
 def main(argv: list[str] | None = None, *, gh_runner: Runner = run_gh, ssh_runner: Runner | None = None,
          now: Callable[[], dt.datetime] = lambda: dt.datetime.now(dt.timezone.utc),
-         monotonic: Callable[[], float] = time.monotonic, sleep: Callable[[float], None] = time.sleep) -> int:
+         monotonic: Callable[[], float] = time.monotonic, sleep: Callable[[float], None] = time.sleep,
+         transport_delta: tuple[Path, dict] | None = None) -> int:
     for stream in (sys.stdout, sys.stderr):
         try:
             stream.reconfigure(errors="replace")
@@ -604,10 +599,15 @@ def main(argv: list[str] | None = None, *, gh_runner: Runner = run_gh, ssh_runne
             baseline = publisher.last_result(before) if (before or {}).get("hostname") == canary else None
             rollout = build_rollout(tarball_id, signing.sha256_file(tarball), revision,
                                     utc_stamp(now()), canary, args.wave_delay_s)
+            if transport_delta is not None:
+                rollout["delta"] = transport_delta[1]
             publisher.log("rollout", f"{rollout['tarball']} sha256 {rollout['tarball_sha256']}, "
                                      f"canary {canary}, wave delay {args.wave_delay_s}s, "
                                      f"canary last result before: {baseline}")
-            publisher.create(rollout, tarball, canary)
+            if transport_delta is None:
+                publisher.create(rollout, tarball, canary)
+            else:
+                publisher.create(rollout, tarball, canary, delta_asset=transport_delta[0])
 
         publisher.log("canary-watch", f"watching {canary} ({args.canary}) every {POLL_S}s "
                                       f"for up to {args.canary_timeout_min} min")

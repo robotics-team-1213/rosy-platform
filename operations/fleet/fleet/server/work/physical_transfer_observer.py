@@ -6,6 +6,9 @@ from hashlib import sha256
 import hmac
 
 from core_common.protocol.arm_transfer import FleetArmTransferGrant
+from core_common.protocol.arm_transfer_evidence import (
+    ArmTransferEvidenceDocument, ArmTransferPhysicalEvidenceResponse,
+)
 from .mission_store import MissionConflict, _json
 from .physical_transfer_evidence import TransferEvidenceContext
 from .physical_transfer_io import physical_io
@@ -98,17 +101,36 @@ class PhysicalObservationService:
 
     def receipt(self, mission_id):
         with closing(self.store._journal._connect()) as connection:
-            job = self._job(connection, mission_id)
-            proof = connection.execute("SELECT * FROM fleet_physical_transfer_observations "
-                "WHERE mission_id=? AND phase='POST_ACTION'", (mission_id,)).fetchone()
-            if proof is None or job["status"] != "GOAL_CONFIRMED":
+            connection.execute("BEGIN")
+            closed = self._closed_proof(connection, mission_id)
+            return None if closed is None else self.execution._physical_receipt(*closed)
+
+    def _closed_proof(self, connection, mission_id):
+        job = self._job(connection, mission_id)
+        proof = connection.execute("SELECT * FROM fleet_physical_transfer_observations "
+            "WHERE mission_id=? AND phase='POST_ACTION'", (mission_id,)).fetchone()
+        if proof is None or job["status"] != "GOAL_CONFIRMED":
+            return None
+        state = self.execution._state(connection, mission_id)
+        grant = FleetArmTransferGrant.model_validate(state["grant"])
+        if (proof["request_digest"] != grant.request_digest
+                or sha256(proof["evidence_json"].encode()).hexdigest() != proof["evidence_digest"]):
+            raise MissionConflict("physical receipt evidence changed")
+        return proof, grant
+
+    def evidence(self, mission_id):
+        with closing(self.store._journal._connect()) as connection:
+            connection.execute("BEGIN")
+            closed = self._closed_proof(connection, mission_id)
+            if closed is None:
                 return None
-            state = self.execution._state(connection, mission_id)
-            grant = FleetArmTransferGrant.model_validate(state["grant"])
-            if (proof["request_digest"] != grant.request_digest
-                    or sha256(proof["evidence_json"].encode()).hexdigest() != proof["evidence_digest"]):
-                raise MissionConflict("physical receipt evidence changed")
-            return self.execution._physical_receipt(proof, grant)
+            row, grant = closed
+            proof = ArmTransferEvidenceDocument.model_validate_json(row["evidence_json"])
+            if any(owner.joints is None for sample in proof.samples for owner in sample.owners):
+                return None
+            result = dict(receipt=self.execution._physical_receipt(row, grant),
+                evidence_document=row["evidence_json"], released_zone_ids=self.store.installation.policy.zone_resource_ids)
+            return ArmTransferPhysicalEvidenceResponse.model_validate(result).model_dump(mode="json")
 
     def observe(self, mission_id, body):
         samples = world_observations(body.observations)

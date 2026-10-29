@@ -12622,6 +12622,12 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 공식 선행 계약/제품 로컬 착지 도구 결과는 별도 후속 기록한다.
 - CE: 새 교훈 기록 — page/element scrollWidth만으로 nested card clipping을 검출할 수 없는 실제 반례와 ancestor-bounds 회귀를 solutions/logic-errors/page-overflow-guards-miss-clipped-child-identifiers-2026-10-27.md에 남겼다. Frontmatter parser 통과, local-only commit 인용 2건은 미게시·착지 대기로 명시해 의도 확인했다.
 
+## 2026-10-27 · uncommitted · feat(perception): Fleet 승인을 모델 PC 레지스트리에 반영(D-898)
+
+- 변경: Fleet `GET /api/fleet/perception-promotions/{sha}/decision.signed`(viewer)가 정본 결정과 새 역할 키 `perception-decision`의 Ed25519 서명을 돌려준다(키 없음 503, 미결정 409). 모델 PC `approval_import.py`가 서명·APPROVED·묶음 해시·revision·files·결과 폴더·제안자≠승인자를 확인한 뒤 model-watch와 같은 work.lock 아래 `accepted/`와 `models/approvals/<sha>/`에 기록한다. 활성 포인터·shadow·배포는 건드리지 않는다. contracts 0.1.15(`decision_encoded`·`sign`·`verify`), 상태 행 조회는 `promotion_request.ready_rows`로 공유.
+- 증거: 거절 사유별 시험과 정상 경로·잠금·Fleet 경로 시험이 원격에서 통과했다. 실물 모델 PC 반영과 키 운영은 확인하지 못했다. CE: 해당 없음 — 새 기능의 계약과 회귀로 기록했다.
+- gate 변화: 모델 PC 반영은 서명 결정 파일을 사람이 옮겨 실행할 때만 일어난다. 실물 반영·키 발급은 HOLD다. 배포·활성화는 이 변경 밖이다.
+
 ## 2026-10-28 · uncommitted · perf(remote): per-invocation timing and D-889 addendum 3
 - 변경: `rosy-pytest-memory.jsonl` 행에 호출별 `queued_s`·`job_s`·`pytest_s`를 남긴다(`memory_history.timing`, `work_queue.Work.began`). D-889 추가 3에 차례 튕김 측정과 B·A·C 규칙을 적었다.
 - 증거: 10-27 00:00~10-28 01:40 차례 119번 가운데 착지 46, 한도 초과 44, main delta FULL 12, 멈춤 12. 잠금 시간의 56%가 튕긴 차례. 원격 `test_remote_pytest_memory.py`·`test_remote_pytest.py`·`test_remote_test_tools.py`·`test_harness_contracts.py` exit 0. `pytest_s`를 cpu 사용량 칸에서 읽는 변이를 새 시험이 잡았다.
@@ -12840,3 +12846,77 @@ osy-d395-s1d\`.
 - 증거: 원격 영향 선택 affected/no escalation 3059 passed /352 skipped /NEW0. 공식17개 Chromium 파일 최초262 passed/1 failed, 실패한 로딩 대기 시험을 보강한 두 파일 전체19 passed/skip0/NEW0. 릴리스·비밀값·배치108 passed. 캡처·원본별 SHA와 실패 이력을 결과 기록에 구분했다.
 - gate 변화: 없음. 실물·실제 HF·reader·학습 품질·설치/배포·merge/push는 별도 수용이다.
 - CE: 해당 없음. 판단 근거가 최종 코드·회귀·기존 문서에 남는다.
+
+## 2026-10-28 · uncommitted · docs: GPT 용량 재배치 뒤 SD 검증 복구 교훈
+
+- 변경: GPT primary 용량 필드 변경을 카드 고장으로 단정하지 않고 읽기 전용 원시 증거와 표준 resume로 판별하는 교훈을 추가했다.
+- 검증: 원격 SD 도구 94 passed/0 skipped/0 NEW와 독립 검토 후 실제 31,138,512,896바이트 전체 읽기 검증·개별 설정·최종 GPT 확인·등록·receipt 완료(exit 0). 기존 FAT Windows metadata 허용 범위와 raw digest 차이도 구분했다.
+- gate 변화: 없음 — 개별 engineering 카드의 MEDIA만 확인했으며 배포 모듈 전체의 수용을 올리지 않았다.
+- 한계: MEDIA만 확인했다. 첫 부팅·실물 OTA·롤백은 미검증이며 제품 main 착지·공개 게시를 주장하지 않는다.
+- CE: 새 교훈 기록 — 일회성 헤더 복구 후 재발한 실제 저장 장치 조회 순서와 증거를 보존했다. Frontmatter 통과, claims의 미게시 commit 참조 1개는 pending 표기와 함께 판정했다.
+
+## 2026-10-28 · uncommitted · docs(reference): 문서로 남긴 작업 기록을 Jira 이슈에 짧은 코멘트로 연결한다
+
+- 변경: `docs/reference/atlassian-integration.md` §4 첫 항목에 기록 연결 규칙 추가. 작업의 기록·결과·결정을 Confluence 문서로 남긴 뒤 그 일을 추적하는 Jira 이슈에 짧은 코멘트와 문서 링크를 남기고, 상태·담당자·기한은 바꾸지 않는다. Notion 등 다른 문서 도구 기록도 같다. 3장의 스마트 커밋 금지와 충돌하지 않게 코멘트는 Atlassian 연결 도구(MCP·API)로 남긴다고 명시했고, 머리 갱신 날짜를 2026-10-28로 올렸다.
+- 근거: 2026-10-28 사용자 결정. 같은 규칙을 작업 공간 내부 스킬(`.agents/skills/rosy-confluence`·`rosy-notion`)의 절차와 우산 `Rosy/AGENTS.md` 「Jira 이슈와 문서 기록 연결」 절에도 반영했고, 이 문서 4장을 정본으로 지정했다.
+- 증거: `python tools/harness/rosy_harness.py generate`·`lint` 통과(이 항목 추가 뒤 실행). 코멘트 규칙 문구는 기존 §3 스마트 커밋 금지와 주체를 구분해 충돌하지 않는다.
+- gate 변화: 없음.
+- CE: 해당 없음 — 문서 관례 추가이며 코드·장치·시험 경로 변경이 없다.
+
+## 2026-10-29 · uncommitted · deploy: GitHub OS 전송과 부분 업데이트 정책 연결
+
+- 변경: D-912(Proposed)에 고정 세 파일의 별도 OS 유지보수 소유권, Ed25519와 OS CMS 이중 권한, 정책 freeze와 중단 복구 경계를 기록했다. 다른 세션의 D-903~D-911 예약은 gap ledger에 보존했다.
+- 검증: OS publisher 54 passed, consumer 초기 79 passed, 잔여 부분파일 공간 복구 39 passed, 실제 publisher→HTTP→서명 canary staging 연결 5 passed(각 0 skipped/0 NEW). 실제 173 원본의 분할 게시 dry-run도 통과했다. 후속 bridge 보강과 부분 delta 연결의 최종 검증은 진행 중이다.
+- gate 변화: 없음 — 실제 Pinky boot·GitHub OTA·rollback은 아직 미검증이고 OS 유지보수 결정은 Proposed다.
+- CE: 해당 없음 — 현재 새 코드의 계약과 회귀로 판별할 수 있는 구현 내용이다. 해결이 검증되지 않은 후속 항목은 작업 기록에 남긴다.
+
+## 2026-10-29 · uncommitted · docs(reference): 기록 코멘트는 이슈마다 하나로 이어 붙인다
+
+- 변경: `docs/reference/atlassian-integration.md` §4 기록 연결 규칙을 다듬었다. 문서마다 새 코멘트를 만들지 않고 이슈 하나에 기록용 코멘트 하나를 두고, 새 기록(문서 링크·한두 문장 요약)을 그 코멘트에 이어 붙인다. KAN-61 댓글10020에서 하던 방식과 같은 형태다. 머리 갱신 날짜를 2026-10-29로 올렸다.
+- 근거: 2026-10-29 사용자 결정 — 댓글이 이슈마다 흩어지지 않게 스레드 하나로 이어 붙이고, 문서는 링크로 건다.
+- 증거: `python tools/harness/rosy_harness.py generate`·`lint` 통과(이 항목 추가 뒤 실행). 작업 공간 스킬(`.agents/skills/rosy-confluence`·`rosy-notion`)과 우산 `Rosy/AGENTS.md` 「Jira 이슈와 문서 기록 연결」 절의 같은 규칙 문구도 같은 날 함께 고쳤다.
+- gate 변화: 없음.
+- CE: 해당 없음 — 문서 관례 다듬기이며 코드·장치·시험 경로 변경이 없다.
+
+## 2026-10-29 · uncommitted · docs(reference): 연결 안내 행에 §4 기록 코멘트 규칙을 넣는다
+
+- 변경: `docs/reference/AGENTS.md`의 `atlassian-integration.md` 행 설명에 「문서 기록을 이슈의 기록용 코멘트 하나에 링크로 이어 붙이는 규칙(§4)」을 넣고, 문서 갱신 날짜를 2026-10-29로 올렸다.
+- 근거: 같은 날 확정한 §4 규칙을 이 목차만 읽는 세션도 찾을 수 있게 한다.
+- 증거: `python tools/harness/rosy_harness.py generate`·`lint` 통과(이 항목 추가 뒤 실행).
+- gate 변화: 없음.
+- CE: 해당 없음 — 문서 요약 갱신이다.
+
+## 2026-10-29 · uncommitted · docs(reference): 기록용 Jira 코멘트 예외를 기존 사람 작업 규칙에 명시한다
+
+- 변경: `atlassian-integration.md` §3의 사람 작업 규칙에서 §4 문서 기록용 코멘트의 연결 도구 갱신을 예외로 명시한다. 다른 댓글과 상태 변경은 기존대로 사람이 한다.
+- 근거: 독립 검토에서 §3과 §4의 댓글 작성 주체가 충돌함을 확인했다. 기존 사용자 결정과 우산 지침에 있는 기록용 코멘트 범위만 연결했다.
+- 검증: 공식 착지 도구의 문서 lint·원격 게이트로 확인한다. 외부 Jira 변경은 실행하지 않았다.
+- gate 변화: 없음.
+- CE: 해당 없음 — 정본 문구가 충돌과 해결 범위를 설명한다.
+
+## 2026-10-29 · ccc8712ece · 이송 결과 검수 패키지 검증 기록
+
+- 변경: `validation/transfer-review-package-2026-10-29/result.md`에 export 원본 보존·root/자식 분할 검사·재조회 해시의 범위, 실제 RED/GREEN과 독립 검토 결과를 동결했다.
+- 증거: 원격 curation 전체 328 pass·10 skip·NEW 0. 분할 별칭 두 사례와 숫자 overflow를 실제 실패로 먼저 확인했으며 최종 구현에서 통과했다. 이전 실패를 최초 통과로 바꾸지 않았다.
+- Gate: 없음. metadata 검수 준비이며 사람 정답·ACT/VLA 수용·장치 수용은 아니다.
+- CE: 해당 없음 — 재현과 최종 판단을 코드·시험·결과 기록에서 복원할 수 있다.
+
+## 2026-10-29 · 535d81ae8b · D-301 서버 서비스 이미지 증분 형식
+
+- 변경: D-301에 전체 목표를 서명하는 manifest v2, 재사용 Docker/OCI 신원, 빌드 입력 비교, 선택 교체와 rollback 이미지 보존을 추가 결정으로 기록했다. 기본/Account Caddyfile의 서로 다른 내용 해시 label로 기존 파일 bind inode가 남는 경우를 예방한다. 운영 절차는 deploy/site/README.md가 소유한다.
+- 증거: 공식 원격 집중 회귀 205 passed/skip0/NEW0, 별도 source 재검토 통과. workflow 변경에 필요한 FULL은 별도로 기록한다.
+- gate 변화: 없음. source/원격 계약 시험은 실제 Docker·서버 설치·현장 수용을 대신하지 않는다. CE: 해당 없음 — 판단은 결정·구현·회귀에 남는다.
+
+## 2026-10-29 · 66ba49bef8 · D-915 원문 물리 근거와 Harbor 연결 기록
+
+- 변경: D-915/API v1.330과 live version pins, 지원표, [소유 저장소 검증 기록](validation/physical-evidence-export-2026-10-29/result.md)을 정렬했다. 새 read 계약은 원문 증거의 조회이며 명령·관측 쓰기·업무 완료 권한을 추가하지 않는다.
+- 증거: 원격 고정 source, 독립 contract/Safety·최종 branch 검토, 실제 HTTP/UDS, 구형 SIM 직렬화와 FULL의 실패/skip·격리 재검증을 정본에서 구분한다.
+- Gate: 기존 module gate 변화 없음. 실제 source-clock/전체 측정·실물·배포·착지/push는 수용하지 않았다.
+- CE: 해당 없음 — 판단은 ADR·직접 회귀·검증 정본에 보존하며, unresolved producer를 해결된 통합으로 기록하지 않는다.
+
+## 2026-10-29 · 724ecfbff1 · D-916 원본 시각 검증과 FULL 범위 정정
+
+- 변경: D-916 내부 metadata의 source/실제 ROS/수동 Gazebo 근거를 [검증 정본](validation/joint-source-provenance-2026-10-29/result.md)에 기록했다. 이전 D-915의 25,723 passed는 FULL 판정 아래 local_invocations 네 묶음이었음을 추가 정정하고 원래 결과는 보존했다. 공식 27개 행렬은 별도로 실행·기록한다.
+- 증거: native CLI가 소비하는 배열과 selector의 full_invocations를 독립 대조했다. 실제 Gazebo 63 entities의 원문과 SDK type 등록명을 비교하여 누락한 각속도·접촉·대상 속도를 확인했다. 관측된 값을 source-clock/전체 물리 수용으로 바꾸지 않는다.
+- Gate: 변화 없음. G1c 전체와 G2–G6, 실물·운영·배포·착지/push는 미완료다.
+- CE: 새 교훈 기록 — [FULL JSON과 실제 행렬 구분](solutions/workflow-issues/full-mode-json-does-not-prove-full-matrix-execution-2026-10-29.md). 정본 함수·배열·원격 실행 로그가 근거이며 claims/frontmatter 검사를 통과했다.

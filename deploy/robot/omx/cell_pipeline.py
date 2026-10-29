@@ -1,41 +1,24 @@
 #!/usr/bin/env python3
-"""One-arm cell pipeline: find the box with the top camera, plan, move it, check where it landed (D-872).
+"""One-arm native cell: locate -> plan -> reviewed transfer -> verify (D-872, D-911).
 
-`run` (the default) goes through everything in one go and stops at the first check that fails:
-calibrate the Pinky tray if it has no map, carry the box to the belt, calibrate the belt if it has no
-map, then repeat the self-resetting cycle A (Pinky -> belt) and B (belt -> Pinky), each as locate ->
-transfer -> verify. The stages stay separate inside it because each is a check between motions: an
-empty grasp, a box landed out of reach or a fault stops the run where the arm is safe, with a receipt.
-Each stage can also be run alone:
+Automatic `run` requires existing calibration and reviewed evidence for every exact task;
+it holds before motion on missing or changed evidence. `transfer` performs one attempt.
+Supervised `--commissioning --person-at-switch` is for individual stages, never `run`:
+  calibrate  fit camera -> arm maps from placements at known points
+  reset      return the box to the start, with a coarse jaw map if needed
+  survey     mark the jaws above the box without descending
+  record     record one A/B replay; no chunk session may hold the arm
+`locate` and `verify` observe without moving. `recover` requires a person at the switch.
+Receipts and attempts retain checks, interrupted work and phase-specific failures.
 
-  calibrate  carry the box over a grid of known arm points on one surface, measure each landing with the
-             top camera, fit that surface's pixel -> arm map (cell_calibration). Starts with the box at a
-             known arm point (the taught pick); after that no one touches the box.
-  reset      put the box back at the start (the taught pick) from wherever it is on the tray; with no map
-             yet, the empty jaws first visit known points high up and the top camera marks them by the
-             fingers opening (coarse map, parallax to the box height).
-  locate     top camera -> box pixel -> arm x, y on that surface; yaw from the box edges.
-  transfer   plan a top-down pick at the located box and a place on the target surface (grasp_planner),
-             load it into the running chunk_runner, then above -> descend -> grasp (jaw position and
-             current) -> lift -> travel high -> descend -> release -> lift -> park. An empty grasp lifts
-             and parks.
-  verify     after the release, is the box where the next grasp on that surface reaches (place_check)?
-  record     one A/B cycle recorded as two training episodes through record_session --replay, labelled
-             held/empty from the recorded jaws (cell_record.py); no chunk session may be running.
-  survey     above the box, never descending: the jaws' offset from it (cell_survey.py). Rows: cell_attempts.py.
-
-The arm is moved only by the chunk_runner session already running under record_session.py --chunks
-(the guard's teacher mode owns the bus). This pipeline sends it commands; it never opens a port.
-
-  cell_pipeline.py --config cell-pipeline.json --cycles 3          # everything, in one go
-  cell_pipeline.py --config cell-pipeline.json --stage transfer --from pinky --to belt
+The existing guarded chunk_runner session owns the actuator bus. This pipeline only sends
+commands; it never opens a serial port. Configuration and review procedure: README.md.
 """
 from __future__ import annotations
 
 import argparse
 import json
 import math
-import os
 import sys
 import time
 from datetime import datetime, timezone
@@ -43,6 +26,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cell_calibration as cal  # noqa: E402
+from cell_pipeline_io import FifoCell, write_receipt  # noqa: E402
 from cell_observe import (  # noqa: E402
     KEEP, fixed_cameras, grid_points, hover_check, keep, locate, on_flat, predicted_pixel, record_key, see, wrap90,
 )
@@ -72,30 +56,57 @@ STEP_KEYS = ("ok", "error", "holding", "gripper_current_ma", "settled", "fault",
              "paced_ticks")
 
 
-def transfer(cell, library: Path, hover=None) -> dict:
+def transfer(cell, library: Path, hover=None, *, config=None, calibration=None, before_motion=None) -> dict:
     """`hover()` runs right above the box; a hover that is not aligned stops before the descent."""
+    from cell_envelope import assess, same_session
+
+    assessment = assess(config or {}, calibration or {}, json.loads(library.read_text()), cell.act("state"))
+    if not assessment["allowed"]:
+        return {"result": "held", "at": "preflight", "steps": [], "envelope": assessment}
+    try:
+        if before_motion is not None:
+            before_motion(assessment)
+        elif assessment["mode"] == "automatic":
+            raise OSError("automatic transfer requires a durable attempt intent")
+    except OSError:
+        return {"result": "held", "at": "preflight", "steps": [],
+                "envelope": {**assessment, "allowed": False, "reason": "audit_unavailable"}}
     steps, seen = [], None
+    def act(command):
+        return cell.checked(command, assessment)
+
     for command in (f"load {library}", *SEQUENCE):
-        status = cell.act(command)
+        state = cell.act("state")
+        if (not same_session(state, assessment)
+                or (steps and state.get("library_sha256") != assessment["library_sha256"])):
+            return {"result": "held", "at": command, "steps": steps,
+                    "envelope": {**assessment, "allowed": False, "reason": "session_changed"}}
+        status = act(command)
         steps.append({"command": command, **{k: status.get(k) for k in STEP_KEYS}})
+        if command == f"load {library}" and status.get("library_sha256") != assessment["library_sha256"]:
+            return {"result": "held", "at": command, "steps": steps,
+                    "envelope": {**assessment, "allowed": False, "reason": "library_changed"}}
         if status.get("contact"):  # the runner held with torque on: back up the same path, fold home
             for after in ("retreat", "park"):
-                steps.append({"command": after, "ok": cell.act(after).get("ok")})
-            return {"result": "contact", "at": command, "steps": steps, "error": status.get("error")}
+                steps.append({"command": after, "ok": act(after).get("ok")})
+            return {"result": "contact", "at": command, "steps": steps, "error": status.get("error"),
+                    "envelope": assessment}
         if not status.get("ok"):
             if not status.get("fault") and command not in ("park", f"load {library}"):
-                cell.act("park")  # a refused step leaves the arm holding: fold it, never stop mid-air
-            return {"result": "fault" if status.get("fault") else "refused", "at": command, "steps": steps}
+                act("park")  # preserve the checked library even on the existing recovery path
+            return {"result": "fault" if status.get("fault") else "refused", "at": command, "steps": steps,
+                    "envelope": assessment}
         if command == "goto above_pick" and hover is not None:
             seen = hover()
             if seen.get("aligned") is False:
-                cell.act("park")
-                return {"result": "misaligned", "at": command, "hover": seen, "steps": steps}
+                act("park")
+                return {"result": "misaligned", "at": command, "hover": seen, "steps": steps,
+                        "envelope": assessment}
         if command == "run grasp_pick" and not status.get("holding"):
             for after in ("run lift_pick", "park"):
-                steps.append({"command": after, "ok": cell.act(after).get("ok")})
-            return {"result": "empty", "at": command, "hover": seen, "steps": steps}
-    return {"result": "placed", "hover": seen, "steps": steps}
+                steps.append({"command": after, "ok": act(after).get("ok")})
+            return {"result": "empty", "at": command, "hover": seen, "steps": steps, "envelope": assessment}
+    return {"result": "placed", "hover": seen, "steps": steps, "envelope": assessment}
 
 
 def verify(cell, config: dict, site: str, calibration: dict | None = None, intended=None) -> dict:
@@ -118,6 +129,8 @@ def verify(cell, config: dict, site: str, calibration: dict | None = None, inten
 def calibrate(cell, config: dict, site: str, work: Path, log=print, calibration: dict | None = None) -> dict:
     """Carry the box from the start through grid points on `site`; return the fitted records. Points whose
     box would not sit on the flat zone are skipped before the arm goes there."""
+    if config.get("_commissioning") != {"person_at_switch": True}:
+        return {"result": "held: supervised commissioning required"}
     calibration = calibration or {"sites": {}}
     import cell_perception as cp
 
@@ -157,7 +170,7 @@ def calibrate(cell, config: dict, site: str, work: Path, log=print, calibration:
         except SystemExit as exc:  # IK refused this grid point: skip it, keep the box where it is
             results.append({"point": point, "skipped": str(exc)[:160]})
             continue
-        moved = transfer(cell, library, hover)
+        moved = transfer(cell, library, hover, config=config, calibration=calibration)
         results.append({"point": point, "transfer": moved["result"], "at": moved.get("at")})
         if moved["result"] != "placed":
             return {"result": "stopped", "transfers": results}
@@ -227,6 +240,8 @@ def coarse_map(cell, config: dict, site: str, work: Path, choices, log=print) ->
     """A first map before any box has been carried: the empty jaws visit known arm points high above the
     surface; at each, the top camera sees only the fingers change when they open, which marks the jaws.
     The fit is for the viewing height; locate() shifts a box pixel to that height by parallax."""
+    if config.get("_commissioning") != {"person_at_switch": True}:
+        return {"result": "held: supervised commissioning required"}
     c, s = config["coarse"], config["sites"][site]  # the top camera marks the jaws
     closed_name = "gripper.closed@follower"
     choices.offer(closed_name, float(config["plan"]["grip_closed"]), "taught: plan grip_closed (leader units)")
@@ -395,8 +410,17 @@ def move(cell, config: dict, calibration: dict, source: str, dest: str, work: Pa
         if "plan_error" in tried:
             facts = {"box_found": True, "next": "grasp", "aligned": False, "check": f"plan refused: {tried['plan_error']}"}
         elif found["found"]:
-            tried["transfer"] = transfer(cell, library, lambda: hover_check(cell, config, calibration, source))
+            def before_motion(assessment):
+                tried["envelope"] = assessment
+                cell_attempts.begin(config, assessment)
+
+            tried["transfer"] = transfer(cell, library, lambda: hover_check(cell, config, calibration, source),
+                                         config=config, calibration=calibration, before_motion=before_motion)
+            tried["envelope"] = tried["transfer"]["envelope"]
             moved = tried["transfer"]["result"]
+            if moved == "held":
+                cell_attempts.record(config, calibration, source, dest, attempt, tried, t_start, choices)
+                return {**out, "result": f"held: {tried['envelope']['reason']}"}
             if choices is not None and moved in ("placed", "empty", "fault", "refused", "contact"):
                 held = moved == "placed" or any(s.get("holding") for s in tried["transfer"]["steps"])
                 choices.outcome(f"{source}.grasp_yaw@topdown", yaw_pick, held, f"{moved} at yaw {yaw}")
@@ -444,6 +468,8 @@ def run(cell, config: dict, calibration_path: Path, work: Path, cycles: int, log
     steps = []
     choices = choices or cell_choices.Choices(Path(work) / "choices.json")
     calibration = cal.load(calibration_path) if Path(calibration_path).exists() else {"schema": cal.SCHEMA, "sites": {}}
+    if not config.get("_commissioning") and not {"pinky", "belt"} <= set(calibration["sites"]):
+        return {"result": "held: commissioning required for calibration", "steps": []}
     if "pinky" not in calibration["sites"]:
         homed = reset(cell, config, calibration, "pinky", work, choices, seat, log)  # the box may be anywhere on the tray
         if homed.get("coarse_record"):
@@ -487,58 +513,24 @@ def run(cell, config: dict, calibration_path: Path, work: Path, cycles: int, log
     return {"result": "done", "cycles": cycles, "steps": steps}
 
 
-class FifoCell:
-    """The running chunk_runner (command FIFO + status file) and the read-only camera viewer."""
-
-    def __init__(self, io: Path, cameras: dict, timeout_s: float = 300):
-        self.io, self.cameras, self.timeout_s = io, cameras, timeout_s
-
-    def act(self, command: str) -> dict:
-        status_path = self.io / "chunk-status.jsonl"
-        start = status_path.stat().st_size if status_path.exists() else 0
-        try:  # non-blocking: with no runner reading, fail now instead of handing the command to the next one
-            fd = os.open(self.io / "chunk-cmd", os.O_WRONLY | os.O_NONBLOCK)
-        except OSError:
-            return {"ok": False, "error": "chunk_runner is not running", "fault": "no runner"}
-        os.write(fd, (command + "\n").encode())
-        os.close(fd)
-        deadline = time.monotonic() + self.timeout_s
-        while time.monotonic() < deadline:
-            with status_path.open() as f:
-                f.seek(start)
-                for line in f:
-                    row = json.loads(line)
-                    if row.get("command") in (command, "run " + command) or row.get("fault"):
-                        return row
-            time.sleep(0.1)  # the next step should follow the last without a visible pause
-        return {"ok": False, "error": f"no status within {self.timeout_s} s"}
-
-    def frame(self, camera: str):
-        import urllib.request
-
-        import cv2
-
-        with urllib.request.urlopen(self.cameras[camera]["url"], timeout=10) as reply:
-            return cv2.imdecode(np.frombuffer(reply.read(), np.uint8), cv2.IMREAD_COLOR)
-
-
-def write_receipt(directory: Path, stage: str, payload: dict) -> Path:
-    directory.mkdir(parents=True, exist_ok=True)
-    path = directory / f"{datetime.now(timezone.utc):%Y%m%dT%H%M%SZ}-{stage}.json"
-    path.write_text(json.dumps({"stage": stage, **payload}, indent=1, default=str))
-    return path
-
-
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--config", required=True, type=Path)
     parser.add_argument("--stage", default="run", choices=STAGES)
     parser.add_argument("--cycles", type=int, default=1, help="run: A/B cycles after calibration")
     parser.add_argument("--person-at-switch", action="store_true", help="recover: a person is at the power switch")
+    parser.add_argument("--commissioning", action="store_true", help="supervised evidence collection; never enables run")
     parser.add_argument("--from", dest="source", default="pinky")
     parser.add_argument("--to", default="belt")
     args = parser.parse_args(argv)
     config = json.loads(args.config.read_text())
+    config.pop("_commissioning", None)  # a stored config cannot attest a person's presence
+    if args.commissioning:
+        if not args.person_at_switch or args.stage == "run":
+            parser.error("--commissioning requires --person-at-switch and an individual stage, not run")
+        config["_commissioning"] = {"person_at_switch": True}
+    if args.stage in ("calibrate", "reset", "survey", "record") and not args.commissioning:
+        parser.error(f"{args.stage} requires supervised --commissioning --person-at-switch")
     import cell_perception as cp
 
     config["profiles"] = {camera: cp.load_profile(Path(spec.get("profile_path", config["profile_path"])).expanduser())
@@ -556,11 +548,11 @@ def main(argv=None):
     if config.get("decision_model"):  # e.g. {"url": "http://127.0.0.1:11434", "model": "qwen3-vl:8b-instruct"}
         import judge_seat
 
-        seat = judge_seat.Seat(judge_seat.ollama(**config["decision_model"]))
+        seat = judge_seat.Seat(judge_seat.ollama(**config["decision_model"]), knowledge=config.get("knowledge"), params=config.get("params_path"), context=config.get("decision_context"))
     KEEP["dir"] = work / "frames"
     import cell_attempts
 
-    cell_attempts.start(work / "attempts.jsonl")
+    cell_attempts.start(work / "attempts.jsonl", knowledge=config.get("knowledge"), params=config.get("params_path"))
     if args.stage == "record":
         import cell_record
 
@@ -588,7 +580,7 @@ def main(argv=None):
 
         result = cell_survey.stage(cell, config, calibration_path, args.source, work)
     elif args.stage == "transfer":
-        result = move(cell, config, cal.load(calibration_path), args.source, args.to, work, seat)
+        result = move(cell, config, cal.load(calibration_path), args.source, args.to, work, seat, attempts=1)
     else:
         result = verify(cell, config, args.to)
     path = write_receipt(work / "receipts", args.stage, result)

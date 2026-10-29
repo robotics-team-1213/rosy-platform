@@ -76,8 +76,17 @@ def test_three_side_by_side_rotated():
 
 
 def test_non_catalogue_blob_is_never_a_target():
-    found = seen(scene([(0, 0, 45, 45, 10), (80, 60, 40, 40, 0)]))
+    found = seen(scene([(0, 0, 45, 45, 10), (80, 60, 52, 52, 0)]))  # no side faces drawn here, so the edge piece is shrunk
     assert found and not any(o["matched"] or o["grasp"] for o in found)
+
+
+def test_a_container_read_short_still_matches_its_cell_count_but_never_a_neighbour():
+    # the real top camera read the isolated 60 x 30 container as 47 x 34 mm after the top-face cut (2026-10-28)
+    assert co.match({"length_mm": 47.0, "width_mm": 34.0}, CATALOG)["id"] == "container-2"
+    assert co.match({"length_mm": 98.0, "width_mm": 32.0}, CATALOG)["id"] == "container-3"
+    assert co.match({"length_mm": 45.0, "width_mm": 30.0}, CATALOG) is None  # half way between 1 and 2 cells
+    assert co.match({"length_mm": 47.0, "width_mm": 34.0}, CATALOG, strict=True) is None  # a split piece stays strict
+    assert co.match({"length_mm": 60.0, "width_mm": 40.0}, CATALOG) is None  # the width stays strict
 
 
 def test_small_fragment_is_unmatched():

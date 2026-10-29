@@ -17,6 +17,7 @@ from os_update_manifest import release_id, verify_metadata
 from os_update_policy import _Policy
 import os_update_rollout as rollout
 from os_update_stage import stage
+from os_update_transport import bundle_assets
 from os_update_state import read_state
 import os_update_controller as lifecycle
 
@@ -27,6 +28,10 @@ CACHE_FIELDS = {"schema_version", "repo", "api_base", "fetched_at", "etag", "rel
 
 class Withdrawn(ValueError):
     """A verified publisher withdrawal, not an unauthenticated network/parser error."""
+
+
+class EngineeringDeferred(ValueError):
+    """Engineering releases require explicit membership in the signed canary list."""
 
 
 class Feed:
@@ -60,7 +65,7 @@ class Feed:
                 or value["etag"] is not None and (not isinstance(value["etag"], str) or len(value["etag"]) > 512)
                 or any(value[key] is not None and parse_z(value[key]) is None for key in ("fetched_at", "backoff_until"))):
             raise ValueError("OS_FEED_CACHE: invalid cache fields")
-        for item in value["releases"]: self._cached_entry(item)
+        value["releases"] = [self._cached_entry(item) for item in value["releases"]]
         return value
 
     def _save(self, value):
@@ -71,7 +76,9 @@ class Feed:
     def _url(self, url, identity, name):
         if not isinstance(url, str) or len(url) > 4096: raise ValueError("OS_FEED_URL: invalid asset URL")
         parsed = urlsplit(url)
-        if parsed.username or parsed.password or parsed.fragment or parsed.query:
+        if (parsed.username or parsed.password or parsed.fragment or parsed.query
+                or "%" in parsed.path or "\\" in parsed.path or parsed.path.rsplit("/", 1)[-1] != name
+                or any(part in (".", "..") for part in parsed.path.split("/"))):
             raise ValueError("OS_FEED_URL: credentials/fragment/query not allowed")
         if self.api == API_BASE:
             expected = f"https://github.com/{self.config['repo']}/releases/download/{TAG + identity}/{name}"
@@ -86,30 +93,35 @@ class Feed:
         return {f"rosy-os-pinky-pro-{identity}-arm64.raucb", "os-update.json", "os-update.json.sig", "os-rollout.json", "os-rollout.json.sig"}
 
     def _cached_entry(self, item):
-        if not isinstance(item, dict) or set(item) != {"release_id", "assets"}: raise ValueError("OS_FEED_CACHE: invalid entry")
+        if (not isinstance(item, dict) or set(item) not in ({"release_id", "assets"}, {"release_id", "assets", "prerelease"})
+                or type(item.get("prerelease", False)) is not bool): raise ValueError("OS_FEED_CACHE: invalid entry")
         identity = release_id(item["release_id"])
-        if not isinstance(item["assets"], dict) or set(item["assets"]) != self._names(identity):
+        assets = item["assets"]
+        base = f"rosy-os-pinky-pro-{identity}-arm64.raucb"
+        sidecars = self._names(identity) - {base}
+        if not isinstance(assets, dict): raise ValueError("OS_FEED_CACHE: invalid asset set")
+        bundles = set(assets) - sidecars
+        if (not sidecars <= set(assets) or not (bundles == {base} or
+                1 <= len(bundles) <= 16 and bundles == {f"{base}.part{i:03d}" for i in range(len(bundles))})):
             raise ValueError("OS_FEED_CACHE: invalid asset set")
-        for name, url in item["assets"].items(): self._url(url, identity, name)
-        return item
+        for name, url in assets.items(): self._url(url, identity, name)
+        return dict(release_id=identity, assets=assets, prerelease=item.get("prerelease", False))
 
     def _entry(self, item):
-        if not isinstance(item, dict) or item.get("draft") is not False or item.get("prerelease") is not False: return None
+        if not isinstance(item, dict) or item.get("draft") is not False or type(item.get("prerelease")) is not bool: return None
         tag = item.get("tag_name")
         if not isinstance(tag, str) or not tag.startswith(TAG): return None
         try: identity = release_id(tag[len(TAG):])
         except ValueError: return None
-        wanted = self._names(identity)
         assets = item.get("assets")
         if not isinstance(assets, list) or len(assets) > 256: raise ValueError("OS_FEED: invalid asset inventory")
         found = {}
         for asset in assets:
-            if not isinstance(asset, dict) or asset.get("name") not in wanted: continue
+            if not isinstance(asset, dict) or not isinstance(asset.get("name"), str): raise ValueError("OS_FEED: invalid OS asset")
             name = asset["name"]
             if name in found: raise ValueError("OS_FEED: duplicate OS asset")
             found[name] = self._url(asset.get("browser_download_url"), identity, name)
-        if set(found) != wanted: return None
-        return dict(release_id=identity, assets=found)
+        return self._cached_entry(dict(release_id=identity, assets=found, prerelease=item["prerelease"]))
 
     def _get(self, url, limit):
         code, _, raw = self.http.get(url, {"Accept": "application/octet-stream", "Cache-Control": "no-cache"}, limit)
@@ -166,10 +178,14 @@ class Feed:
 
     def _admit_entry(self, entry, metadata):
         urls = entry["assets"]
+        expected = (self._names(metadata["release_id"]) - {metadata["bundle"]["filename"]}) | {name for name, _ in bundle_assets(metadata["bundle"])}
+        if set(urls) != expected: raise ValueError("OS_FEED: assets differ from signed bundle transport")
         raw = self._get(urls["os-rollout.json"], 16384)
         sig = self._get(urls["os-rollout.json.sig"], 512).decode("ascii").strip()
         policy = rollout.verify(raw, sig, _path(self.root, PUBLIC_KEY), metadata)
         if policy["withdrawn"]: raise Withdrawn("OS_ROLLOUT_WITHDRAWN: " + metadata["release_id"])
+        if entry["prerelease"] and self.host.hostname() not in policy["canary"]:
+            raise EngineeringDeferred("OS_ROLLOUT_ENGINEERING: host is not a signed canary")
         rollout.authorize(policy, self.host.hostname(), self.host.now())
 
     def admit(self, metadata):
@@ -192,8 +208,9 @@ class Feed:
                 if identity <= state["committed"]["release_id"] or identity in state["failed_versions"]: continue
                 metadata, raw, signature = self._metadata(entry)
                 try: self._admit_entry(entry, metadata)
-                except Withdrawn: continue
-                bundle = stage(self.root, metadata, raw, signature, entry["assets"][metadata["bundle"]["filename"]], host=self.host, http=self.http)
+                except (Withdrawn, EngineeringDeferred): continue
+                urls = [entry["assets"][name] for name, _ in bundle_assets(metadata["bundle"])]
+                bundle = stage(self.root, metadata, raw, signature, urls, host=self.host, http=self.http)
                 break
             else: return dict(outcome="no-update")
         if not apply: return dict(outcome="staged", release_id=identity)
