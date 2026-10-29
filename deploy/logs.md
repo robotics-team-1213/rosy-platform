@@ -4055,3 +4055,10 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: path-only 2f88347d69 원격은 30 passed / 4 failed로 다음 경계를 드러냈다. 명시 승인된 Windows 격리 PowerShell 실행은 원래 세 사례의 모든 assertion을 그대로 실행해 3 passed였다. 4개 하위 호출 모두 non-admin을 먼저 확인하고 native Start-Process/Storage 호출을 가로채 0회를 확인했다. local pytest·실제 UAC·카드 접근은 하지 않았다. Linux의 세 skip과 이 별도 native Windows 증거는 구분하며 최종 원격 결과는 완료 기록을 따른다.
 - gate 변화: 없음. 세 native Windows fixture의 별도 성공을 Linux 실행으로 세지 않으며 새 소스의 실물 수용을 주장하지 않는다.
 - CE: 기존 교훈 갱신 결과 유지. parameter-set·metadata autoload 판단은 기존 fake-surface 교훈에 남겼고, 단순 fixture 경로/표시 형식 수정을 별도 교훈으로 늘리지 않았다.
+
+## 2026-10-29 · 2062ed7219 · test(storage): 브라우저 quota 측정과 서버 fixture 시계 정렬
+- 변경: `fix/storage-browser-clock`, 기준 local main `3f2fafd23a`. `test_storage_setup_http.py`의 Date.now만 고정 backend fixture 시각에 맞추고 320/light/60초 lag 사례를 추가했다. 기존 두 화면 크기·검증·타이머·reload·15초 제한은 유지한다.
+- 증거: RED `17e6b9c5bb` 공식 원격 model PC, browser opt-in 새 사례 1 failed. backend 1793280602초, browser 1793280662241ms, quota measured_at 1793280660초로 58초 미래였다. `storage_operation_failed`, result null, mock remote commits 0; known_failures 1 NEW. GREEN `2062ed7219` 공식 원격 AI PC에서 새 사례 1 passed (9.06초), 파일 전체 6 passed (29.20초), 각각 0 skipped·0 NEW·0 known·0 flaky. 외부 로그는 시스템 임시 폴더 `storage-browser-clock-{red,green-exact,green-file}/run-1.txt`. harness lint 0 errors, 기존 39 warnings.
+- 범위: 위 RED는 통제된 시계 불일치의 인과 증거다. 기존 source075 FULL의 단발 320/light 실패 원인은 미확정이며, baseline 실패나 이 원인의 확정 사례로 분류하지 않는다. 호스트 시험이며 장치·이미지·현장 수용 증거는 아니다.
+- gate 변화: 없음. 제품 동작 변경 없음.
+- CE: 해당 없음 — 최종 시험의 60초 경계 사례와 공유 시계 주석으로 원인·예방을 알 수 있어 별도 교훈 문서를 늘리지 않는다. 기존 unread-fetch-body/networkidle 교훈과 다른 원인이다.
