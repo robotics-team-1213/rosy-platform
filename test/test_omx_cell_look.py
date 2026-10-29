@@ -21,33 +21,37 @@ def test_the_tcp_is_the_mark_minus_the_circle_radius_along_yaw_plus_phase():
 
 
 class Arm:
-    """The arm stands where the last loaded library sent it; the map reads everything `error` off."""
+    """The arm stands `droop` short of the last loaded library's pick; the map reads everything `error` off."""
 
-    def __init__(self, at):
-        self.at, self.commands = at, []
+    def __init__(self, cmd, droop):
+        self.cmd, self.droop, self.commands = cmd, droop, []
+
+    @property
+    def at(self):
+        return self.cmd[0] + self.droop[0], self.cmd[1] + self.droop[1]
 
     def act(self, command):
         self.commands.append(command)
-        return {"ok": True, "state": [0] * 6}
+        return {"ok": True, "state": "measured", "target": "commanded"}
 
 
-def test_one_look_moves_the_target_onto_the_box_and_the_next_passes(tmp_path, monkeypatch):
+def test_looks_move_the_command_onto_the_box_despite_map_error_and_droop(tmp_path, monkeypatch):
     box_true, error, yaw = (0.100, 0.200), (0.012, -0.008), -77.8  # a 14 mm local map error, the pick 1 cm off
-    arm = Arm((0.092, 0.206))
+    arm = Arm((0.092, 0.206), droop=(0.0, -0.0025))  # gravity: the arm stands 2.5 mm short in y
     libraries = {}
 
     def write(config, pick, place, path):
         libraries[str(path)] = (pick["x"], pick["y"])
         return path
 
-    def act(command):  # a load sends the arm to that library's pick (cell_reach is not in this test)
+    def act(command):
         if command.startswith("load "):
-            arm.at = libraries[command[5:]]
+            arm.cmd = libraries[command[5:]]
         return Arm.act(arm, command)
 
     arm.act = act
     monkeypatch.setattr(cell_pivot, "mark_jaws", lambda cell, config, sleep: (1.0, 1.0))
-    monkeypatch.setattr(cell_pivot, "joints_tcp", lambda state: (*arm.at, 0.08, yaw))
+    monkeypatch.setattr(cell_pivot, "joints_tcp", lambda joints: (*(arm.at if joints == "measured" else arm.cmd), 0.08, yaw))
 
     def mark_to_arm(record, config, site, pixel, z):
         a = math.radians(yaw + REGION["phase_deg"])
@@ -58,8 +62,8 @@ def test_one_look_moves_the_target_onto_the_box_and_the_next_passes(tmp_path, mo
               "object": {"raw_m": [box_true[0] + error[0], box_true[1] + error[1]]}, "bias_region": REGION}
     out = cell_look.look(arm, {"params": None}, {}, "floor", target, write, tmp_path, sleep=lambda s: None)
     assert out["verdict"] == "pass" and len(out["looks"]) == 2
-    assert (target["pick"]["x"], target["pick"]["y"]) == pytest.approx(box_true, abs=1e-4)
-    assert out["looks"][0]["box_minus_tcp_mm"] == pytest.approx([8.0, -6.0], abs=0.2)
+    assert arm.at == pytest.approx(box_true, abs=1e-4)  # the arm, not just the command, is over the box
+    assert out["looks"][0]["box_minus_tcp_mm"] == pytest.approx([8.0, -3.5], abs=0.2)
 
 
 def test_no_hook_without_a_pivot_circle_or_when_off():

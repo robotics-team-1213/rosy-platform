@@ -6,8 +6,9 @@ Picks near the board missed by about 1 cm because the map bias changes with posi
 the jaw mark is found by opening and closing the jaws (cell_pivot.mark_jaws, any background); the pivot circle of the
 nearest region gives the mark's radius and phase around the TCP, so the TCP in the map's raw frame is the mark minus
 that radius along yaw + phase. The box's raw position comes from the same map in the same patch of image, so the map's
-local error is in both and cancels: box - TCP is the move. The target becomes the arm's FK position plus that move,
-so cell_reach (run after this) brings the arm there; up to look.max_iter looks. Every look is kept in the attempt row.
+local error is in both and cancels: box - TCP is the move. The new command is the runner's own command (FK of its
+target joints) plus that move, so the arm's droop is corrected too: a first field run that set FK + move left y 4.4 mm
+short three times (2026-10-29). Run last among the position hooks; up to look.max_iter looks, every one kept.
 """
 from __future__ import annotations
 
@@ -33,9 +34,10 @@ def look(cell, config: dict, record: dict, site: str, target: dict, write_librar
     box = target["object"]["raw_m"]
     rows, total = [], 0.0
     for i in range(int(prm.get(params, "look.max_iter")) + 1):
-        state = cell.act("state").get("state")
+        status = cell.act("state")
+        state, commanded = status.get("state"), status.get("target")
         pixel = cell_pivot.mark_jaws(cell, config, sleep)
-        if state is None or pixel is None:
+        if state is None or commanded is None or pixel is None:
             rows.append({"look": i, "seen": False})
             return {"verdict": "pass", "why": "jaw mark not seen: the plan stands", "looks": rows, "total_mm": round(total, 1)}
         x, y, z, yaw = cell_pivot.joints_tcp(state)
@@ -49,7 +51,8 @@ def look(cell, config: dict, record: dict, site: str, target: dict, write_librar
         if i == int(prm.get(params, "look.max_iter")) or total + off > prm.get(params, "look.max_total_mm"):
             return {"verdict": "refuse", "why": f"box still {off:.0f} mm from the jaws", "looks": rows, "total_mm": round(total, 1)}
         total += off
-        target["pick"] = dict(target["pick"], x=round(x + d[0], 4), y=round(y + d[1], 4))  # where the arm must be
+        cx, cy, _, _ = cell_pivot.joints_tcp(commanded)  # what the runner was told; the arm stands short of it
+        target["pick"] = dict(target["pick"], x=round(cx + d[0], 4), y=round(cy + d[1], 4))
         library = write_library(config, target["pick"], target["place"], work / name)
         if not all(cell.act(c).get("ok") for c in (f"load {library}", goto)):
             return {"verdict": "refuse", "why": "re-plan refused", "looks": rows, "total_mm": round(total, 1)}
