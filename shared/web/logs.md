@@ -998,3 +998,10 @@
 - 증거: 최종 source 원격 집중 78 passed·사전 계약 861 passed, 각각 skip 0/NEW 0. runtime 동일 source의 실제 두 소비자 Chromium 18 passed/skip 0/NEW 0. 변경 전 발견 5 실패/1 통과·consumer 3 실패·리뷰 주석 오인 2 실패를 보존했다. `docs/validation/ui-standardization-foundation-2026-10-29/` 참조.
 - gate 변화: 없음. selector FULL의 공식 원격 사전 계약이며 전체 FULL/CI·제품 전체 렌더·native/실물·배포 수용과 구분한다.
 - CE: 해당 없음 — 판단이 발견 함수·Git/부정 fixture·검증 기록에 남는다.
+
+## 2026-10-30 · uncommitted · 아이콘 표시 속성과 공용 탐색 계약
+
+- 변경: Learning 탐색 검사에서 기존 이름·URL·현재 선택 상태·순서는 유지하며 추가 아이콘 표시 속성을 허용한다. 공용 runtime·토큰·제품 HTML은 바꾸지 않는다.
+- 증거: 이전 UI source의 공식 영향 검사에서 이 계약이 NEW였고 같은 ID는 main에서 통과했다. 검토된 foundation patch를 제품 정본 수정과 별도 branch로 적용했으며 커밋된 원격 결과를 이어 기록한다.
+- gate 변화: 없음. 표시 정책의 제품 수용과 native main 반영은 별도다.
+- CE: 해당 없음 — 기존 의미 계약을 유지하는 matcher 수정이며 원인과 허용 범위가 검사에 남는다.
