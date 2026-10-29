@@ -608,3 +608,9 @@
 - 변경: 계정 메뉴를 한행 앱 바 아래 overlay로 열고 연결 예외도 같은 행에 유지한다. semantic measure·수동 token 접근·공통 Stop padding과 권한 규칙은 보존한다. 명시적 성공만 메뉴를 닫고 자동 재조회는 입력/펼침을 유지한다. Cell은 입력 잠금 전 초점과 재활성화 후 초점을 연결한다.
 - 증거: 동일 identity RED4건 뒤 핵심29pass, 현재425의 셸42pass/134PNG 독립 전수검토 범위 P1/P2없음. LAN UUID는 trusted native와 암호학적 fallback을 함께 검증했다. Map 지원분리의 free-variable 오류는 실제 편집 오류로 재현해 반환값으로 수정했고 전체125pass로 확인했다. 새 canvas/HTTP 소비자와 Node 대역은0bc55pass로 검증했다.
 - gate 변화: 없음. 전체 플랫폼·실제 명령/정지·장치·배포·착지·게시 수용과 구분한다. 자세한 source/실패/skip/진행 상태는 docs/validation/platform-ui-integration-2026-10-29/result.md 참조. CE: 해당 없음 — 코드·회귀·기존 clipping 교훈이 판단을 보존한다.
+
+## 2026-10-29 · a82292062e · 공통 계정 표적과 Escape 우선순위
+
+- 변경: 좁은 헤더의 공통 padding12를 유지하면서 아이콘/개발 배지만 세로 배치한다. 계정 메뉴의 Escape는 문서에서 받고 메뉴가 열렸을 때만 닫는다. dialog가 처리한 이벤트와 외부 초점을 존중한다.
+- 증거: 전체 browser1794 중10실패의 padding2·재접속안내1·CSP predicate7을817의72pass/0skip으로 수정 검증했다. trigger Escape 실제 RED 뒤 a822의16초점/24기하/Node gate41pass,473c의실제 dialog4pass와공통/Node48pass. 새96PNG 전수 독립 검토에서 새 P1/P2 없음. CSP·통제 권한·정지 정책은 유지한다.
+- gate 변화: 없음. 최종 SHA 전체1794 재실행·실제 명령·실물·배포·공개 게시 수용이 아니다. 정본 증거는 docs/validation/platform-ui-integration-2026-10-29/result.md. CE: 해당 없음 — 이벤트 우선순위·초점 경계와 형상은 회귀가 설명한다.

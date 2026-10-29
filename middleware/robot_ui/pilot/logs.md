@@ -1027,3 +1027,9 @@
 - 변경: 회귀 준비. 밝은 primary fill에 동일 foreground stroke를 사용하는 공용 PilotViews가 다시 찾기·함께 조종에서 쓰인다. 기존 목록/상태22PNG를 이 primary 수용 근거로 확대하지 않는다.
 - 증거: 기존 무동작 RobotRows fixture에 주요/보조 버튼의 DPAD 초점·실제 drawable edge·disabled 우선순위·callback0회 회귀를 추가했다. 제품 fill 로직은 아직 수정하지 않았고 SDK/실행 RED·수정 후 검증은 대기다. token exporter와 APK layout.css 소비도 구분해 확인한다.
 - gate 변화: 없음. 실제 로봇 연결·조종·배포·실물 수용은 수행하지 않았다. docs/validation/platform-ui-integration-2026-10-29/result.md 참조. CE: 미해결 — 새 primary 렌더 수용은 아직 증명하지 않았다.
+
+## 2026-10-29 · 473c39803f · 주요 조작의 보이는 초점과 아이콘 대비
+
+- 변경: primary/quiet 초점을 같은 pressed fill·foreground 테두리/글자로 통일하고 아이콘도 상태별 글자색을 따른다. 기본·blur·disabled·pressed 순서와 콜백은 보존한다.
+- 증거: dab8 AVD6건 중 primary1실패를 재현했다.42c의 edge 검사 통과 뒤 독립 이미지 검토에서 약한 구별을 P2로 확인해 center fill·focus/blur 글자·아이콘 tint·disabled 회귀를 보강했다.473c SDK35 debug/test APK 성공, JVM110pass/1skip(ShellPageProbe), 동일 APK의600×1000/font1.3와1280×800/font1.0에서 각각6pass. 최종30PNG 전수 독립 검토로 P2 해결·새 P1/P2 없음을 확인했으며 첫 수정30장과 구분한다.
+- gate 변화: 없음. 무동작 debug fixture이며 실제 연결·운전·TalkBack·실물·release 수용이 아니다. 정본: docs/validation/platform-ui-integration-2026-10-29/result.md. CE: 해당 없음 — 실제 상태 차이와 시험의 보강 기준을 코드·회귀·이미지 기록이 보존한다.
