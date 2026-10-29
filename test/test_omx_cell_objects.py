@@ -127,7 +127,7 @@ def test_a_box_shadow_on_the_yellow_board_is_dropped_but_a_black_plate_stays():
     img = scene([(0, 0, 60, 30, 20)], surface=yellow,
                 patches=[((10, 22, 60, 16, 20), shade), ((-80, -60, 50, 40, 0), black)])
     found = seen(img)
-    assert [o["object"] for o in found if o["matched"]] == ["container-2"]
+    assert [o["object"] for o in found if o["matched"]] == ["container-2"], [(o["object"], o["centre_mm"], o["length_mm"], o["width_mm"]) for o in found]
     assert not any(not o["matched"] and abs(o["centre_mm"][1] - 22) < 8 for o in found)  # no shadow fragment
     mask = co.foreground(img, ROI)
     bx, by = 320 + 2 * -80 - ROI[0], 240 + 2 * -60 - ROI[1]
