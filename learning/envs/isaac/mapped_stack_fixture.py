@@ -146,7 +146,7 @@ def judge(trial, cube=False):
             for sample in lifts:
                 box = sample['boxes'][i]
                 forces = box['forces']
-                arm = i % 2
+                arm = plan(cube)[i]['arm']
                 if not free_lift(box, arm, layer['source_center_z']):
                     failures.append(f'layer_{i+1}:no_bilateral_free_lift')
                     break
