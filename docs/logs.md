@@ -12997,3 +12997,9 @@ osy-d395-s1d\`.
 - 변경: `validation/pilot-native-focus-2026-10-29/result.md`에 endpoint 초점 복구와 공통 Android 루트 여백의 실제 RED/GREEN, 빌드·JVM·에뮬레이터·독립22장 검토를 구분해 보존했다.
 - 증거: 최종 Android 각5 pass, JVM110 pass/1 skip, 영향 pytest615 pass/166 skip/NEW0. 보고서27개와 캡처22개 해시를 남겼으며 이전 촬영을 최종 근거와 혼합하지 않았다.
 - gate 변화: 없음. 실제 연결·실물·FIELD·서명 release·배포는 수용하지 않았다. CE: 해당 없음 — 코드·시험·결과 기록에서 판단을 복원할 수 있다.
+
+## 2026-10-29 · 5bd25af46e · Cam LAN 목록 렌더 검증 기록
+
+- 변경: `validation/cam-lan-guidance-2026-10-29/result.md`에 비활성 사유·endpoint key·실제 Keyboard fixture의 RED/GREEN과 초기 시험 설정 실패를 구분해 동결했다.
+- 증거: native 두 밀도 각4 pass, JVM443 pass/0 skip, 원격 affected517 pass/NEW0. source와 최종24장 독립 검토 범위에서 추가P1/P2없음. 보고서97개·PNG24개 해시를 보존했다.
+- gate 변화: 없음. 실제 발견·승인·촬영·실물·FIELD·서명 release·배포는 수용하지 않았다. CE: 해당 없음 — 코드·시험·검증 기록으로 판단을 복원할 수 있다.
