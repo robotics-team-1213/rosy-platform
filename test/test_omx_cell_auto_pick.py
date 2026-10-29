@@ -613,8 +613,9 @@ def test_two_candidates_keep_their_own_libraries(tmp_path):
     """2026-10-29: two square boxes on the floor were planned into one file; the first candidate's library held the
     second one's pick and the arm went to the wrong box."""
     path = biased_map(tmp_path)
-    second = dict(CONT2, x=CONT2["x"] - 0.05)
-    _, mask, objects, error = auto.observe(Cell([CONT2, second]), CONFIG, cal.load(path), "pinky", ROI, CATALOG)
+    one = {"x": 0.080, "y": 0.120, "long": 0.0, "length": 30, "width": 30}  # two square 1-cells, offset None for both
+    other = dict(one, x=0.030, y=0.090)
+    _, mask, objects, error = auto.observe(Cell([one, other]), CONFIG, cal.load(path), "pinky", ROI, CATALOG)
     assert error is None and len(objects) == 2
     usable, refused = auto.choose(None, CONFIG, cal.load(path), "pinky", "pinky", (0.06, 0.09), ROI, objects, mask,
                                   CATALOG, {"regions": []}, cell_choices.Choices(tmp_path / "choices.json"), tmp_path)
