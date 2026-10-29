@@ -42,7 +42,8 @@ import cell_objects  # noqa: E402
 import cell_params as prm  # noqa: E402
 import cell_pivot  # noqa: E402
 import cell_diagnose  # noqa: E402
-import cell_wrist  # noqa: E402
+import cell_hooks  # noqa: E402
+import cell_wrist_ref  # noqa: E402
 from cell_calibrate import learn_bias, self_calibrate  # noqa: E402,F401  (calibration lives there)
 import cell_pipeline as cp  # noqa: E402
 from cell_observe import keep, predicted_pixel, wrap90  # noqa: E402
@@ -442,7 +443,7 @@ def run_auto(cell, config, calibration, calibration_path, catalog, roi, source, 
                 close_episode(cell, episode, False, f"held: {held['reason']}")
                 cell_attempts.record(config, calibration, source, dest, attempt, tried, t0, choices)
                 return {**out, "result": f"held: {held['reason']}"}
-            wrist, capture, pinch, feel = cell_wrist.pick_hooks(same, gate, target, cp.write_library, source, dest_site, cd.emit)
+            wrist, capture, pinch, feel = cell_hooks.pick_hooks(same, gate, target, cp.write_library, source, dest_site, cd.emit)
             moved = transfer_folded(gate, target["library"], wrist=wrist, after_place=capture,
                                     pinch=pinch, feel=feel, sequence=FOLDED if folded else cp.SEQUENCE)
             tried["envelope"] = gate.assessment
@@ -467,10 +468,10 @@ def run_auto(cell, config, calibration, calibration_path, catalog, roi, source, 
                 cd.emit("verify", dict(tried["verify"]), [True, False], tried["verify"]["inside"], "measurement",
                         f"placement seen on the {tried['verify']['basis']}")
                 tried["learned_bias"] = learn_bias(config, calibration_path, dest_site, place_xy, tried["verify"])
-                pending = cell_wrist.ref_path(work, config.get("arm_id", "arm_s"), dest_site).with_suffix(".pending.json")
+                pending = cell_wrist_ref.ref_path(work, config.get("arm_id", "arm_s"), dest_site).with_suffix(".pending.json")
                 if pending.exists():  # the wrist reference counts only for a place the top camera confirmed
                     if tried["verify"].get("inside"):
-                        pending.replace(cell_wrist.ref_path(work, config.get("arm_id", "arm_s"), dest_site))
+                        pending.replace(cell_wrist_ref.ref_path(work, config.get("arm_id", "arm_s"), dest_site))
                     else:
                         pending.unlink()
             # only a carry the camera confirmed becomes training data
