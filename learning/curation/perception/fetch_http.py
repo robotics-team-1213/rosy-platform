@@ -48,6 +48,7 @@ from pathlib import Path, PurePosixPath
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'tools'))
 from data_paths import data_root  # noqa: E402
+from pilot_conversion import default_convert  # noqa: E402
 
 EXIT_NOT_IDLE = 4
 EXIT_TOKEN = 2
@@ -251,18 +252,6 @@ def pair_counts(rows) -> dict:
         out["paired"] += cmd and has_intent
         out["paired_accepted"] += cmd and isinstance(intent, dict) and intent.get("accepted") is True
     return out
-
-
-def default_convert(folder: Path, out: Path, codec: str) -> tuple[int, Path | None]:
-    import bag_to_video
-    try:
-        rc = bag_to_video.main([str(folder), "--out", str(out), "--codec", codec])
-    except SystemExit as exc:   # bag_to_video stops on ffmpeg or session faults
-        print(f"{folder.name}: bag_to_video: {exc}", file=sys.stderr)
-        return 1, None
-    meta_path = folder / "session.json"
-    meta = json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.is_file() else {}
-    return rc, out / f"{bag_to_video.output_stem(folder, meta)}.jsonl"
 
 
 def _remove(path: Path) -> None:
