@@ -36,8 +36,7 @@ asserted from this observation alone.
 
 Registered snapshot: `Rosy/artifacts/isaac/omx-opposed-floor-20261029/`
 `3c2016972fc05704a1e30382efb37133-780cd59e10cf449db3609358875dedc5/`.
-Report SHA-256:
-`119cab4bc340c10f70537b3790a71e4594ca827d8788a52170ca5809eb97f723`.
+Report sha256: `119cab4bc340c10f70537b3790a71e4594ca827d8788a52170ca5809eb97f723`.
 
 Remote validation for that source: 13 focused planning/acceptance tests passed;
 broader Isaac/remote/OMX-owner/document regression: 514 passed and one ROS
