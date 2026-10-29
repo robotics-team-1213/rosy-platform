@@ -4003,3 +4003,11 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 동일한 3490bddb9b의 canonical FULL 27개 invocation을 공식 remote_pytest.run으로 수행했다. 합계 37,581 passed/2,351 skipped, 각 명령 exit0, 모든 로그 비교 NEW0/known0/flaky0이다. 1~11번은 현장 PC에서 완료한 뒤 자원이 확보된 모델 PC에서 12~27번을 수행했다. 재배정 중 취소한 현장 12번과, 연결 복구 후 별도로 563 passed/1 skipped인 AI PC의 중복 마지막 묶음은 합계에서 제외했다. 수용한 27개 로그는 archive 내부 바이트를 원본 SHA-256과 대조해 보존했다.
 - gate 변화: 없음. monitoring 브라우저 묶음 16개는 모두 skip이며 브라우저 수용을 입증하지 않는다. 실제 Docker 연속성·CI dispatch·설치/운영 배포·실물 수용·main 착지/push는 수행하지 않았다.
 - CE: 해당 없음 — 판단 근거는 D-301·구성 해시·회귀 시험·기존 import 시험에 남긴다.
+
+## 2026-10-29 · 0ab037ed49 · SD mount의 native parameter set 수정
+
+- 변경: legacy/GPT 두 Add-PartitionAccessPath ByNumber 호출을 DiskNumber·PartitionNumber·AccessPath로 맞췄다. signed provision partition·FAT32·GUID·offset·size·serial·full readback·UID 경계는 유지한다.
+- 원인: 기존 fake가 native에 없는 DiskNumber/PartitionNumber/DriveLetter 조합을 허용했다. native metadata와 같은 제한 set으로 GPT/legacy·기존 mount 유무를 검사하며, metadata auto-import를 먼저 끝내 fake가 native 명령으로 덮이지 않게 했다.
+- 증거: tests-only 9db5428541 원격 SD profile은 4 failed / 4 passed의 정확한 no-letter RED다. 승인된 Windows binding fixture는 corrected tests-only 64fa4f33fa에서 같은 RED, 수정 후 8 passed였다. 공식 변경 SHA 원격 GREEN·착지와 새 코드의 실물 수용은 별도 기록이다.
+- gate 변화: 없음. 이전 카드의 MEDIA 복구는 frozen 1d816 소스에서 native premount + 공식 ResumeAfterWrite로 완료했으며 이 새 소스의 장치 수용으로 세지 않는다. 이 작업은 실제 카드·프로세스·queue를 수정하지 않았다.
+- CE: 기존 교훈 갱신 — [가짜와 실제 API 표면의 일치](../docs/solutions/workflow-issues/fake-with-a-method-the-real-class-lacks-hid-a-shutdown-bug.md)에 parameter-set 불일치, metadata autoload 순서, 재flash 없는 별도 복구와 검증 범위를 보강했다.

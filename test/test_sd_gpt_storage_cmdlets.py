@@ -47,6 +47,7 @@ $data = Get-Content -LiteralPath $Fixture -Raw | ConvertFrom-Json
 $imageLayout = $data.layout
 $script:volumes = @()
 $script:mounted = @()
+# Storage auto-import must finish before the mocks replace its commands.
 $nativeCommand = Get-Command Add-PartitionAccessPath -ErrorAction SilentlyContinue
 if ($nativeCommand) {
     $byNumber = @($nativeCommand.ParameterSets | Where-Object { $_.Name -eq 'ByNumber' })

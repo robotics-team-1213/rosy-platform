@@ -14,7 +14,8 @@ resolution_type: code_fix
 severity: high
 related_components:
   - testing_framework
-tags: [fakes, test-doubles, surface-parity, event-bus, fleet-agent, d-382]
+tags: [fakes, test-doubles, surface-parity, event-bus, fleet-agent, d-382, powershell, parameter-sets, sd-writer]
+last_updated: 2026-10-29
 ---
 
 # 가짜 협력 객체가 진짜에 없는 메서드를 가지면, 시험은 가짜를 증명할 뿐이다
@@ -118,3 +119,15 @@ def test_fake_bus_matches_real_surface():
 - [A fixture written from the same model as the code is one belief, not two](a-fixture-from-the-same-model-is-one-belief-not-two.md)
 - [test/conftest.py silently repaired PATH, so signing tests stayed green while the real writer failed](conftest-openssl-path-masked-a-production-defect-2026-09-24.md) — 시험 뼈대가 운영에 없는 것을 대신 채워 준 경우.
 - [D-382](../../adr/D-382-robot-site-console-protocol-conformance.md) 발견 10, 즉시 처리 I4.
+
+## 2026-10-29 재발: PowerShell fake는 parameter set도 일치해야 한다
+
+Pinky SD의 full readback 뒤 bundle mount 단계에서 `Add-PartitionAccessPath`가 `AmbiguousParameterSet`으로 실패했다. legacy `prepare-rosy-sd.ps1`과 GPT `media-layout.ps1` 두 호출이 `-DiskNumber -PartitionNumber -DriveLetter`를 함께 넘겼고, 기존 fake도 그 세 인자를 허용했다. 실제 native `Get-Command` metadata에서는 ByNumber가 DiskNumber/PartitionNumber/**AccessPath**를 받고 DriveLetter는 별도 ByDriveLetter set이었다. 이름·인자 목록만 확인하는 이전 표면 검사는 서로 함께 쓸 수 없는 인자 조합까지 보장하지 않는다.
+
+두 호출을 `-AccessPath "${letter}:\"`로 수정했다(소스 `0ab037ed493086cc116567084e40fc72c4799d99`). 기존 storage-cmdlet 회귀에 native와 같은 parameter set을 가진 advanced-function fake를 넣고 GPT/legacy, partition 1/2, 기존 letter 유무를 실제 binder로 검사한다. native metadata를 조회할 수 있으면 ByNumber 표면도 확인한다. **native module의 metadata/autoload를 먼저 끝낸 뒤 모든 fake를 정의해야 한다.** 뒤에서 Storage를 auto-import하면 native 명령이 fake를 덮어써 실제 CIM 접근을 시도할 수 있다. 최초 그 fixture 오류는 제품 binding 결함의 RED로 세지 않았다.
+
+증거: tests-only `9db54285411f7b9d81c3172fdc017470f2f29c54` 원격 SD profile은 no-letter 네 사례가 실패하고 기존 mount 네 사례가 통과했다. metadata 순서를 고친 tests-only `64fa4f33fa`의 명시 승인된 Windows PowerShell fixture도 같은 causal RED였고, 두 행을 고친 뒤 같은 8개 fixture가 disk/partition/AccessPath assertion까지 통과했다. 이 Windows 검사는 실제 Storage 호출을 fake로 대체한 binding 검사이며 laptop pytest가 아니다. 수정 소스의 공식 원격 GREEN과 착지 증거는 해당 완료 기록에서 별도로 확인한다.
+
+실제 복구는 새 소스와 별개다. frozen `1d8166cf59551f9669dd9ae5be120ef550ad1aec` 경로에서 운영자가 올바른 AccessPath로 먼저 mount한 뒤 공식 ResumeAfterWrite를 실행해 31,138,512,896 bytes의 GPT/FAT-aware image-prefix readback과 wrapper exit 0을 확인했다. resume receipt의 writer_exit_code는 null이 맞다. 이 기록은 재flash 없이 끝낸 MEDIA 복구이며 `0ab037ed49`를 카드에서 수용한 근거가 아니다. 원문은 Git 밖 `Rosy/artifacts/receipts/2026-10-29-image-001-fast/sd-001-recovery-attempt3/`와 `2026-10-29-sd-access-path/`에 보존한다.
+
+다음 적용 조건: Storage 등 overload/parameter-set API를 fake로 바꿀 때는 native metadata와 허용 조합을 묶고, 실제 parameter binder가 잘못된 조합을 거부하는 RED를 남긴다. 장치가 없어도 같은 함수와 binding을 안전하게 실행할 수 있다. 단순 `param(...)`에 원하는 인자를 모두 나열하는 fake로 되돌리지 않는다.
