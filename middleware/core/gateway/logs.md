@@ -2034,3 +2034,10 @@ clpy.duration을 추가했다(bridge AGENTS의 두 파일 함께 갱신 규칙).
 - 증거: 게시 fa3aeeed4d92의 CI run40819077121 attempt1은 ordinary renewal의 실제 1.5초 제한이 AnyIO dependency scheduling 도중 만료돼 SIM103.2에서 CHARGE_DEPARTURE_UNVERIFIED로 먼저 HOLD했고, 그 뒤 races=[] assertion이 실패했다. CPU 부하와 thread limiter 중 어느 것이 지연 원인인지는 이 로그만으로 확정하지 않는다. RED33ffa6e6a2의 원격 실행은 16 passed/2 NEW: 별도 예산 회귀는 의도한 controlled scheduling TimeoutError이고, 새 기본 제한 단위 시험은 pipeline_sources 누락으로 import 실패했다. fixture 의존성을 바로잡았으며 수정 후보의 GREEN은 아직 미실행이다.
 - gate 변화: 없음. 실제 RPC 제한을 늘리거나 오류를 성공으로 바꾸지 않았으며 물리 장치 수용을 입증하지 않는다. 기존 후보의 실패 CI 작업도 동일 SHA로 한 번 재실행 요청했고 결과는 아직 진행 중이다.
 - CE: 미해결 — 기존 attribute-intermittent-failure-by-line-then-interleaved-comparison 교훈을 적용했다. GREEN·운영 수용 전에는 해결된 교훈을 추가하지 않는다.
+
+## 2026-10-29 · 7608139018 · Station SIM ASGI 회귀와 운영 제한 변이 검증
+
+- 변경: 앞선 fixture 수정의 원격 GREEN, 운영 1.5초 제한 검사의 변이 대조, 기존 게시 후보 CI 재실행 결과를 기록했다. 실행 코드·시험은 7608139018과 같다.
+- 증거: 해당 HTTP/native SIM 모듈 전체18 passed/skip0, known_failures NEW0/known0/flaky0이다. 별도 비반영 변이44e06cad2d는 production timeout1.5→1.0만 바꾸었고, 새 deadline guard가 `[1.0,1.0,1.0] != [1.5,1.5,1.5]`로 의도대로 실패했다(1 NEW, 2.40s). 실제760 source로 복귀해 같은 guard를 원격 재실행했으며 1 passed/NEW0이다. 변이는 실제 branch의 조상이 아니고 운영 source diff는 없다. 로그는 각각 외부 rosy-station-http-green, rosy-station-deadline-mutation, rosy-station-deadline-restored/run-1.txt다.
+- 증거 범위: 기존 게시 SHA fa3aeeed4d92의 GitHub CI run40819077121 attempt2는 전체 success로 끝났고, 설치 signer dry-run도 해당 후보의 would-sign을 반환했다. 이는 새 fixture 수정 SHA의 GitHub CI 결과가 아니다. 새 source의 게시·실물 수용은 수행하지 않았다.
+- gate 변화: 없음. 실제 1.5초 제한과 fail-closed HOLD/claim 경계는 유지했다. 새 교훈은 추가하지 않으며, 기존 오류 지점별 분류 교훈과 코드·회귀 시험을 근거로 남긴다.
