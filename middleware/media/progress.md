@@ -2,12 +2,12 @@
 module: media_edge
 logical_modules: []
 owner: ROBOT MEDIA
-last_verified: {commit: "2190ba6889", date: 2026-10-18}
+last_verified: {commit: "93d04a2b2e", date: 2026-10-29}
 gates:
   SOURCE:
     state: GO
     cmd: "python tools/remote/remote_pytest.py -- middleware/media/test"
-    evidence: "Passed at 327f750d8a (with test_module_structure and camera detection suites): camera tap (one request, lores for perception, native 640x480 main only, real mailbox round trip), WHIP worker demand/renewal/backoff, policy, feedback, watermark and WHIP clients."
+    evidence: "93d04a2b2e: official remote media/shared WHEP/native probe contracts 83 passed. Negotiation primer, startup timeout, binding teardown, downshift-before-primer, continuous idle NIC sampling and playback cleanup regressions covered. 1c8923b441 affected selection: 4311 passed, 156 skipped; source/device limits in docs/validation/robot-local-video-recovery-2026-10-29/result.md."
   LOCAL:
     state: GO
     cmd: "ROSY_TEST_HOSTS=ai@<ai-pc> python tools/remote/remote_pytest.py -- ROSY_RUN_MEDIA_TESTS=1 ROSY_RUN_BROWSER_TESTS=1 test/test_webrtc_loopback.py"
@@ -19,7 +19,7 @@ gates:
     blocker: "measurement skipped by user decision 2026-10-18; the payload now installs rosy-media-edge and rosy-media.service but no signed ARM64 payload was built or its GStreamer closure probed"
   DEVICE:
     state: HOLD
-    blocker: "measurement skipped by user decision 2026-10-18; no Pinky ran the camera tap, rosy-media.service limits or a real camera stream"
+    blocker: "Native ARM64 preflight and diagnostic 640x480 watermark rendering observed; final continuous-sampling patch deployment and production automatic playback remain unverified after device connectivity loss. See docs/validation/robot-local-video-recovery-2026-10-29/result.md."
   FIELD:
     state: HOLD
     blocker: "measurement skipped by user decision 2026-10-18; six physical robots have not run D-789 acceptance"
