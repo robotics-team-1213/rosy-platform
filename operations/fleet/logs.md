@@ -5131,6 +5131,31 @@
 - Gate: 공식 재착지는 별도 확인한다. 실제 관측 생산자·장치·학습 수용 변화는 없다.
 - CE: 해당 없음 — 기존 검사기의 명시적 자리표시자 규칙과 이번 회귀·수정 기록에서 이유를 복원한다.
 
+## 2026-10-29 · uncommitted · 좁은 화면의 연결 상태 글·점 폭 보존
+
+- 원인: PR220 a985의 실제 CI는320px Console에서 연결 끊김 tag의 scrollWidth/clientWidth assertion에 실패했다. 진단 source8ccebf6878 원격은 authored1 passed/accessibility-spacing1 failed(NEW1)로 재현했다. font ready와2frames 전후가 같았고, client65/scroll71/text66.53px, 점0px였다. 기본 글 간격에서도 점은 nominal8px 대신5.22px로 압축됐다. CI의 실제 fallback font는 미측정이며 loading race로 단정하지 않는다.
+- 변경: status grid의 최소 폭을 max-content로 잡고 tag·점을 줄이지 않는다. compact header의 바깥 gap/inset20px를 반환하되 action 내부 간격·버튼 padding·48px 누름 면·접근 이름·E-stop 동작을 유지한다. 기존 가시성·경계·순서·페이지 overflow 검사를 보존하고 점8px/조작48x48 assertion을 추가했다.
+- 증거: 원격 RED의 PNG와 실제 CDP font/즉시·안정화 DOM metrics를 보존·육안 확인했다. 독립 contract review는 권한·안전 행동 변경이 없음을 확인했다. 수동 Impeccable detector는0 findings였다. 전체 header browser/static GREEN은 아직 대기 중이며 부분 재현을 완료로 쓰지 않는다.
+- gate 변화: 없음. skip·quarantine 추가·폰트 축소·문구 숨김·검사 완화는 없다. status만의 text-spacing 검사를 전체 WCAG 수용으로 주장하지 않는다.
+- CE: 미해결 — 기존 child-clipping 교훈 보완 필요성은 GREEN 이후 실제 증거로 판정한다.
+
+## 2026-10-29 · uncommitted · 헤더 outage 시험의 정상 응답 경합 제거
+
+- 원인: source3657의 Model browser/static84 passed/NEW0와 달리 이미 실행 중이던 AI 검사는83 passed/1 NEW였다. 실패는 geometry가 아니라 signed-out 뒤 연결 끊김 기대에 실제 실시간이 온 것이었다. 시험은 noteLink503만 직접 호출하고 정상 API 주기 응답을 허용했으며, 실제 client는 성공 응답마다 연결 복구를 알린다.
+- 변경: outage 단계에서 Fleet API를 실제503으로 응답시키고 앞선 network activity를 기다린 뒤 실패 fetch의 status를 기존 header handler에 전달한다. signed-out 단계는 오류를 재주입하지 않고 기존 outage 상태가 유지되는지 확인한다. production JS·타이머·모든 기존 상태/기하 assertion과 timeout을 유지한다.
+- 증거: 읽기전용 producer/consumer 추적과 scoped 독립 검토를 받았다. 새로운 원격 matrix 검증은 아직 대기이며 실제 API200 뒤 UI가 실시간으로 복구하는 동작을 막지 않는다.
+- gate 변화: 없음. 성공 응답을 오류로 표시하는 제품 변경이나 skip/quarantine은 없다.
+- CE: 미해결 — 재현과 source 교정은 확인했으나 수정된 matrix의 실행 결과가 필요하다.
+
+## 2026-10-29 · uncommitted · outage 시험에서 대기할 요청 범위 제한
+
+- gate 변화: 제품 JS·CSS·assertion·실패 기준선은 바꾸지 않는다.
+- 원인: source d9daf10d9e의 등록된 보조 시험 PC matrix는 14 passed / 12 NEW였다. Console·Cell의 모든 실패는 추가한 networkidle 대기의 30초 timeout이며 상태·기하 assertion 실패가 아니다. 특정 연결 종류가 원인이라고 단정하지 않는다.
+- 변경: 탐색 전부터 진행 중인 Fleet fetch를 추적하고, 503 route를 설치한 시점의 요청만 finished/failed event로 기다린다. 이후 요청은 503으로 처리한다. 독립 검토에서 지적한 response API의 무제한 대기를 피하고 기존30초 총 제한과 남은 URL 진단을 유지했다. 제품 JS·CSS·assertion·실패 기준선은 바꾸지 않는다.
+- 검증: syntax·diff 검사와 독립 검토 뒤 커밋 SHA로 원격 matrix를 다시 확인한다. 실패한 d9 FULL 대기는 중단했으며 hidden snapshot·로그를 보존했다. 다른 작업·잠금은 수정하지 않았다.
+- CE: 미해결 — 새 대기 방식의 원격 결과를 아직 확인하지 않았다.
+- 추가 검증·교정: source866c871876의 원격26case는24 NEW/2 passed였다. 탐색 전 Playwright가 builtin set.discard handler에 내부 속성을 붙일 수 없어 실패했다. 두 event callback을 일반 Python lambda로 감싸고 나머지 대기/상태/기하 검사를 유지한다. 재검증은 새 커밋에서 수행한다.
+
 ## 2026-10-30 · uncommitted · fix(fleet): 관측 기록 행 상한 정리를 MAX(id) 경계로
 
 - 변경: `ObservationStore`가 스냅샷마다 쓰기 트랜잭션 안에서 `ORDER BY observation_id DESC LIMIT 1 OFFSET 100000`으로 10만 행(로봇 JSON 본문이 든 rowid leaf)을 훑던 정리를 `MAX(observation_id) - max_rows` 경계로 바꿨다. AUTOINCREMENT id는 다시 쓰이지 않으므로 상한(최대 `max_rows`행)은 그대로이고, id가 이어져 있으면 남는 행도 같다.
@@ -5154,3 +5179,11 @@
 - 증거: 같은 계측기(SHA-256 `c4d2a93bfbc1…`)를 9f68096560에 원격으로 다시 실행했다(1 passed, 17 trial). 3회 중앙값 마지막 발행: 정상 8대 1.813→0.049초, 32대 8.053→0.181초, 느린 수락 응답 2.815→1.064초, 쓰기 경합 2.347→0.581초. 정상 조건의 루프 최대 지연은 8→23ms(32대 18→18ms)이고, `/healthz` 예약 지연 최대는 11~28ms에서 41~56ms로 늘었다(연속 발행 구간 동안 대기). 쓰기 잠금의 루프 정지(약 0.57초)와 timeout 3회의 `UNKNOWN`은 그대로다. 원격 회귀: loop supervision·queue wait 19 passed, fleet task/CLI 관련 94 passed, NEW 0.
 - Gate: 교통·안전·명령 소유권 변화 없음. 느린 장비의 head-of-line 지연과 이벤트 루프의 동기 SQLite 대기는 그대로이며 별도 설계 대상이다. 실제 장치·현장 수용을 수행하지 않았다.
 - CE: 해당 없음 — 원인과 경계(직렬 발행이 교통 검사를 지킨다)는 코드 주석·회귀 시험·이 기록에 남는다.
+
+## 2026-10-30 · f10444d3af · 헤더 CI 교정 원격 검증
+
+- 변경: 시험 코드만 후속 수정했으며 CSS는 그대로다.
+- 증거: source3657의 Model 전체 header browser/static84 passed / skip0 / NEW0. sourcef104의 등록 보조 시험 PC outage·모바일 집중26case는26 passed / skip0 / NEW0이며 runner·known_failures exit0이다. 본래 AI의 정상 응답 경합, d9 global-idle timeout,866 callback 등록 실패를 실제 로그로 구분하고 보존했다.
+- 시각 확인: source3657의320px authored/accessibility-spacing와390·1440px PNG/JSON을 보존·육안 확인했다. 점8px·조작48px 이상·내용 비잘림을 확인했다. 시험 코드만 후속 수정했으며 CSS는 그대로다. CI의 실제 fallback font는 미측정이고 전체 WCAG 수용으로 주장하지 않는다.
+- Gate: 독립 source 검토와 집중 검증 완료. 새 적격 FULL 착지·GitHub CI·게시·운영 전환은 별도 확인한다. skip/quarantine·production 연결 상태 처리·timeout 완화는 없다.
+- CE: 해당 없음 — 기존 child-clipping 교훈을 적용했고 추가 판단은 회귀·대기 제한·정확한 원인과 실패 기록에서 복원할 수 있다. 최초 운영 전환은 아직 미해결이다.

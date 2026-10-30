@@ -349,3 +349,11 @@
 - 변경: 작업 cap과 별도 padding을 기존 inset 토큰으로 정리했다. pixel 승인 영역은 같은 DOM으로 compact 도구 뒤/wide 원위치를 왕복하며 체크값·초점을 보존한다. 초점 대상의 scroll margin은 appbar 높이를 반영한다. h3 전용 행·클래스/라벨·승인·저장·비동기 수명은 유지한다.
 - 증거: 기존 폭/배치 RED5fail3pass 뒤425의 실제8pass/0skip·20PNG 검토. 좌표만으로 놓친 sticky header 가림은 실제 hit-test로 찾아 수정했다. 이후 도구 리본의 top12 문제를 두 테마2RED로 추가 확인했고 c380에서 공용 리본 top을 appbar/space 토큰으로 통일했다. 마지막 GREEN/캡처는 현재 대기이며 완료로 세지 않는다.
 - gate 변화: 없음. 실제 사람 정답·승인·학습/HF 쓰기·실물·배포 수용이 아니다. docs/validation/platform-ui-integration-2026-10-29/result.md 참조. CE: 해당 없음 — 기존 clipping 교훈과 회귀로 원인·해결/미완료를 구분한다.
+
+## 2026-10-29 · 66e86cb0fb · Pilot 로컬 복구와 Learning 검수 대기 연결
+
+- 변경: 네트워크 없이 기존 Pilot 원본을 검증·변환하고, 기존 PNG/video 준비기와 catalog-relative importer로 pending 입력을 만든다. 변경된 영수증·출력은 덮어쓰지 않으며 중단된 변환 파일을 보존한다. 실제 수신·로컬 처리·사람 승인을 구분한다.
+- 증거: 최종 소스의 모델 PC pinned raw/실제 FFmpeg 집중 시험 55 passed/1 opt-in skipped, 기존 녹화의 별도 검수 작업 공간 등록 시험 1 passed(19장 pending, 재실행 추가 0장). 전체 영향 선택과 RED/검토 근거는 `docs/validation/pilot-learning-collection-2026-10-29/result.md`에 기록한다.
+- gate 변화: 없음. 운영 검수 DB·사람 정답·학습·모델 활성화·실물 동작은 변경하지 않았다. 새 로봇 녹화·실제 서비스 설치·착지/push는 별도다.
+- CE: 해당 없음 — 복구·무결성·중복 방지 판단은 코드·회귀·운영 문서에 남는다. 로봇 접속 실패는 해결된 사실로 기록하지 않는다.
+- 후속 검증: d2d68c3346의 공식 affected 전체 13,602 passed/1,285 skipped/NEW 0, 실제 기존 녹화와 pinned raw 집중 88 passed/skip0/NEW 0. 생산 코드는 66e86cb0fb와 같으며, 중간 전체 회귀의 OMX 합성 시계 실패 두 건은 기존 시계 fixture를 공유해 보완했다. 원본 실패·대조·취소·skip은 검증 정본에 보존했다.

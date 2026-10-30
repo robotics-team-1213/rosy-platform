@@ -1160,7 +1160,9 @@ adapter의 시뮬레이션 preflight 통과는 실물 인양 근거가 아니다
 공통 모델의 최대 도달거리를 모든 장치의 안전 반경으로 사용하지 않는다.
 
 설정의 `operating_conditions`에는 확인한 `installation_revision`, `object_revision`,
-실측 `payload_kg`, 세 축의 `object_dimensions_m`, `environment_revision`을 넣는다.
+사람이 검증한 무게 상한 `payload_max_kg`, 세 축의 `object_dimensions_m`, `environment_revision`을 넣는다.
+운반마다 실제 짐(`_payload`: 카탈로그의 등록 무게, 또는 파이프라인 설정에 선언한 `payload`)이 이 상한, 팔의 `auto.max_gross_kg`,
+물체의 `max_gross_kg` 중 가장 작은 값 이하여야 한다. 모르거나 넘으면 감독 시험도 열지 않는다(D-935).
 팔·그리퍼의 실제 설정/보정과 코드 문맥은 현재 chunk session이 별도 SHA로 보고한다.
 장치 readback으로 알 수 없는 베이스·작업대 이동과 물체 교체는 운영자가 revision을 바꿔야 한다.
 완성된 실물 설정과 자료는 공개 저장소에 넣지 않는다. 예제의 null은 직접 측정하기 전까지 유지한다.
