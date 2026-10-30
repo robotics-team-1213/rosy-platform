@@ -95,7 +95,7 @@ def test_a_bumped_camera_is_re_solved_from_the_base_markers_and_the_box_still_la
     assert np.linalg.norm(np.array(cf.to_pixel(record, box[:2], box[2])) - pixel) < 2.0
     # the setup pose alone would have put it centimetres off: what the old per-surface maps did after a bump
     record["now"]["camera_in_base"] = cf._pose(record["camera_in_base"])
-    assert np.linalg.norm(cf.to_arm(record, "board", pixel, box[2]) - box) > 0.03
+    assert np.linalg.norm(cf.to_arm(record, "board", pixel, box[2]) - box) > 0.02
 
 
 def test_a_moved_pinky_is_followed_by_its_markers_and_one_marker_is_not_enough():

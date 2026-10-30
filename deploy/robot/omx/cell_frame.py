@@ -180,7 +180,8 @@ def to_arm(record: dict, site: str, pixel, z: float):
 def yaw_sign(record: dict, site: str, pixel, z: float) -> int:
     """+1 when a turn in the image is the same turn about the arm's z axis, -1 when the view mirrors it."""
     o, ex, ey = (to_arm(record, site, (pixel[0] + du, pixel[1] + dv), z)[:2] for du, dv in ((0, 0), (1, 0), (0, 1)))
-    return 1 if float(np.cross(ex - o, ey - o)) > 0 else -1
+    (ax, ay), (bx, by) = ex - o, ey - o
+    return 1 if ax * by - ay * bx > 0 else -1
 
 
 def to_pixel(record: dict, point, z: float):
