@@ -1,5 +1,9 @@
 # Independent Monitoring deployment
 
+관제 PC에서는 이 native 경로 대신 서명 사이트 스택의 선택 overlay로 실행한다
+([D-936](../../../docs/adr/D-936-monitoring-site-stack-service.md), [사이트 안내](../../../deploy/site/README.md#rosy-monitoring-d-936)).
+아래 native 절차는 사이트 스택이 없는 중앙·별도 호스트용이다.
+
 이 디렉터리는 검토·시험할 배포 입력이다. 설치·서비스 활성화·실제 LAN/TLS 수용을 수행한 기록은 아니다.
 Linux/POSIX, Python 3.12 이상을 대상으로 한다. Windows PC는 TLS 브라우저로 조회한다.
 

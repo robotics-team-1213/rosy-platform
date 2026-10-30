@@ -26,6 +26,11 @@ LAST_POLL = 0.0  # monotonic time of the latest poll in this process (land_watch
 BACKOFF = (5, 10, 20, 30)
 RECONNECT_S = float(os.environ.get("ROSY_TEST_RECONNECT", "600"))
 CALL_TIMEOUT = 60
+# ADMIT's line once a job that waited for host room starts: run() starts the job's deadline over. 2026-10-30 a
+# Gazebo suite waited 100 min behind 6 jobs and was killed at its 60-min deadline (exit 124) before running a test.
+ROOM = b"[remote-pytest] host room after waiting"
+WAIT = b"[remote-pytest] waiting for host room"  # ADMIT's first line while it waits: the deadline waits too
+WAIT_CAP = 3  # timeout_s multiples a job may wait for room; new jobs stay out meanwhile, so the host empties
 
 # Admission (2026-10-28, several main workers per run): a job starts only within the host's cores and GB (every
 # live lock and unexpired reservation, of any run), never beside an alone job (ROSY_JOB_ALONE=1: timing-sensitive
@@ -59,6 +64,7 @@ while :; do
   [ -n "${said:-}" ] || { echo "[remote-pytest] waiting for host room ($others job(s), ${uc}c ${ug}GB in use)"; said=1; }
   sleep 5
 done
+[ -n "${said:-}" ] && echo "[remote-pytest] host room after waiting"
 exec 9>&-"""
 
 # $1 run, $2 deps, $3 CPUQuota ('' = none), $4 job k, $5 timeout s, then [ROSY_*=value ...] pytest args.
@@ -282,7 +288,7 @@ def run(host: str, name: str, k: int, log: Path, job_args: list[str], pytest_arg
         if started.returncode != 0:
             log.write_bytes(started.stdout + started.stderr)
             return started.returncode
-        deadline = clock() + timeout_s + 120  # the job's own timeout fires first
+        deadline, tail, waiting = clock() + timeout_s + 120, b"", False  # the job's own timeout fires first
         with log.open("ab") as out:
             while True:
                 global LAST_POLL
@@ -294,6 +300,11 @@ def run(host: str, name: str, k: int, log: Path, job_args: list[str], pytest_arg
                 rc, alive, data = got
                 out.write(data)
                 out.flush()
+                tail = tail[-len(ROOM):] + data
+                if ROOM in tail:  # admitted: the job's own deadline from now on, once
+                    deadline, tail = clock() + timeout_s + 120, b""
+                elif WAIT in tail and not waiting:
+                    waiting, deadline = True, clock() + WAIT_CAP * timeout_s + 120
                 offset += len(data)
                 if rc is not None:
                     return rc

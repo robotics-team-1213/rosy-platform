@@ -12,6 +12,11 @@ sys.path.insert(0, str(ROOT / "tools" / "remote"))
 import lab_hosts  # noqa: E402
 
 
+@pytest.fixture(autouse=True)
+def no_sd_registry(monkeypatch, tmp_path):
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "appdata"))
+
+
 def test_missing_file_loads_nothing(monkeypatch):
     monkeypatch.delenv("ROSY_LAB_HOSTS", raising=False)
     monkeypatch.setattr(lab_hosts, "host_file", lambda: None)
@@ -32,6 +37,18 @@ def test_override_path_is_the_only_source(monkeypatch, tmp_path):
     assert lab_hosts.test_hosts() == ["model@lab", "ai@lab"]
     assert lab_hosts.site_host() == "site@lab"
     assert lab_hosts.robots() == {"aa": "10.0.0.8"}
+
+
+def test_sd_registered_robots_join_by_mdns_name_and_listed_entries_win(monkeypatch, tmp_path):
+    registry = tmp_path / "appdata" / "Rosy" / "device-registry.json"
+    registry.parent.mkdir(parents=True)
+    # The SD writer is PowerShell 5.1, which writes a BOM.
+    registry.write_text(json.dumps({"robot_numbers": [40, 41], "device_names": [
+        "rosy-pinky-aa11", "rosy-pinky-bb22", "not-a-robot"], "device_uids": []}), encoding="utf-8-sig")
+    path = tmp_path / "lab-hosts.json"
+    path.write_text(json.dumps({"robots": {"bb22": "10.0.0.9"}}), encoding="utf-8")
+    monkeypatch.setenv("ROSY_LAB_HOSTS", str(path))
+    assert lab_hosts.robots() == {"aa11": "rosy-pinky-aa11.local", "bb22": "10.0.0.9"}
 
 
 def test_example_file_has_placeholders_only():
