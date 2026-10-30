@@ -158,9 +158,17 @@ def auto_pivot_point(cell, config, calibration, site, target_xy):
     return clear_point(target_xy, mask, big, inside, lambda q: predicted_pixel(config, calibration, site, q))
 
 
+def carried(region: dict) -> bool:
+    """A region copied from another site or point, never measured where it stands."""
+    return bool(region.get("carried_from")) or str(region.get("source", "")).startswith("carried")
+
+
 def self_calibrate(cell, config, calibration, calibration_path, site, target_xy, objects, work, bias_data, sleep, log):
-    """The bias region near `target_xy`: saved, or a pivot circle at a clear configured point (not in dry runs)."""
+    """The bias region near `target_xy`: saved, or a pivot circle at a clear configured point (not in dry runs).
+    A carried region never stands in for a measurement: the Pinky tray's, copied from the floor, skipped the pivot
+    and the 22:29 pick came down on the box top, >= 16 mm off with the arm within 4 mm of its plan (2026-10-30)."""
     p = config.get("params")
+    bias_data = {**bias_data, "regions": [r for r in bias_data["regions"] if not carried(r)]}
     # a region this close is accurate enough to pick with; a farther one was 8-10 mm off (2026-10-29)
     if cell_pivot.bias_at(bias_data, site, target_xy, reach_mm=prm.get(p, "calibrate.bias_near_mm"), params=p):
         return bias_data, None
