@@ -83,3 +83,44 @@ def test_train_writes_a_pinned_model_and_its_evidence_from_reports(tmp_path):
     assert json.loads((tmp_path / 'out' / 'release-corrector.json').read_text()) == meta
     assert model.predict([meta and [0.] * rc.FEATURES]).shape == (1, 3)
     assert meta['scope'] == 'SIM_IK_TEACHER_BC_NOT_RL_NOT_HARDWARE'
+
+
+BC_V0 = '85713c8ec54190e53729d6df73d5d59f3e6e7d715058bfb7698b3793042b9294'
+
+
+@pytest.mark.parametrize('case', ['nominal-estimate', 'nominal-bc-v0'])
+def test_evaluation_cases_see_a_noisy_held_box_and_pin_the_model(case):
+    fixture = f.container_fixture(layers=3, case=case)
+    nominal = f.container_fixture(layers=3, case='nominal')
+    assert fixture['release_estimate_noise_m'] == [.002, .005]
+    assert fixture['revision'] != nominal['revision']
+    assert {k: v for k, v in fixture.items() if k not in ('revision', 'case', 'release_estimate_noise_m',
+                                                          'release_corrector')} == \
+        {k: v for k, v in nominal.items() if k not in ('revision', 'case')}
+    if case == 'nominal-bc-v0':
+        assert fixture['release_corrector'] == dict(file='release-corrector-bc-v0.npz', sha256=BC_V0)
+        assert rc.load_corrector(fixture) is not None
+    else:
+        assert 'release_corrector' not in fixture and rc.load_corrector(fixture) is None
+
+
+def test_estimate_moves_only_the_held_box_by_two_to_five_millimetres():
+    fixture = f.container_fixture(layers=3, case='nominal-estimate')
+    sample = held_scene(fixture, 1)
+    rng = np.random.default_rng(5)
+    for _ in range(50):
+        estimate = rc.estimate(sample, 1, fixture, rng)
+        moved = np.linalg.norm(np.subtract(estimate['boxes'][1]['position'], sample['boxes'][1]['position']))
+        assert .002 - 1e-12 <= moved <= .005 + 1e-12
+        assert estimate['boxes'][0] == sample['boxes'][0] and estimate['tcps'] == sample['tcps']
+
+
+def test_corrector_command_is_the_tcp_plus_the_predicted_correction():
+    fixture = f.container_fixture(layers=3, case='nominal-bc-v0')
+    model = rc.load_corrector(fixture)
+    sample = held_scene(fixture, 1)
+    command = rc.corrector_command(model, sample, 1, fixture, 2)
+    expected = np.add(sample['tcps'][0], model.predict([rc.observation(sample, 1, fixture, 2)])[0])
+    assert command == pytest.approx(expected.tolist())
+    teacher = f.cube_release_target(1, sample, .05, fixture=fixture)
+    assert np.abs(np.subtract(command, teacher)).max() < .003  # the pinned BC model tracks the IK teacher
