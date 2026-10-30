@@ -13,7 +13,7 @@ LABELS = ["관제", "작업", "기록", "지도", "설치"]
 NAMES = [None, None, None, "현장 지도", "설치·보정"]
 # D-741 6: 화면 안 이동은 공용 하위 탐색 자리에 선다. 가로 앵커 줄은 없다.
 SUBNAV = {"site-map.html": ("현장 지도 작업", ["map", "survey", "profile", "trip", "run", "edit", "teach"]),
-          "cell.html": ("작업 화면", ["recipe", "cell", "preview", "proposal", "mission", "saved"])}
+          "cell.html": ("작업 화면", ["saved", "recipe", "cell", "preview", "proposal", "mission"])}
 
 
 def _page(name):

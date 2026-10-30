@@ -150,14 +150,19 @@ def test_cell_document_preview_admission_and_terminal_read(sample_site):
                     if '/api/fleet/cell-jobs/' in response.url or '/api/fleet/dispatch-control' in response.url else None)
             page.goto(origin + '/console/cell')
             for kind in ('recipe', 'cell'):
+                page.locator(f'.ui-subnav a[href="#{kind}-heading"]').click()  # D-926 3: one step screen at a time
                 page.locator(f'#{kind}-id').fill('sample')
                 page.locator(f'#{kind}-load').click()
                 expect(page.locator(f'#{kind}-revision')).to_contain_text('저장된 버전')
+            page.locator('.ui-subnav a[href="#preview-heading"]').click()
             page.locator('#compile').click()
             expect(page.locator('#summary')).to_contain_text('18회 전송')
+            page.locator('.ui-subnav a[href="#proposal-heading"]').click()
             page.locator('#workcell').fill('sample-cell')
             page.locator('#instance').fill('sample-arm')
             page.locator('#propose').click()
+            expect(page.locator('#proposal')).to_contain_text('운영자 별도 승인 대기')
+            page.locator('.ui-subnav a[href="#mission-heading"]').click()
             page.locator('#read-job').click()
             expect(page.locator('#job-summary')).to_contain_text('승인 대기')
             response = context.request.post(origin + '/api/fleet/missions/sample-cell-job-1/admit',
