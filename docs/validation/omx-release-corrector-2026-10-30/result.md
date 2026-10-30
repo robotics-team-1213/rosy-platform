@@ -92,3 +92,14 @@ More rl0 data before the next update:
 | `65e5fb1d70395a2d857f5cd04c861b43` | Short episodes, rl0, seed 44 | 22 episodes, **16 settled and stable**, position error 0.24–1.11 mm (median 0.50 mm). 4 opening blocked, 2 settle windows not reached. 66 decisions. |
 
 rl0 settles about 75–80% of episodes across seeds 42 and 44.
+
+| Run | Setup | Result |
+|---|---|---|
+| `b31ed89c5f625916930d04462b1cfff9` | Short episodes, rl0, seed 45 | 20 episodes, **19 settled and stable**, median position error 0.65 mm. 1 opening blocked. |
+| `dbf5fd6bc6a25a6ca01839ef2578bf19` | Short episodes, rl3, seed 44 | 22 episodes, **19 settled and stable**, median position error 0.48 mm. |
+
+rl3 is one trust-region REINFORCE step from rl0 on all 261 decisions of runs 29b7, 1f81, 65e5 and b31e
+(`release-episodes-rl3`, sha256 `cde882834ab9f110d954c990eae4795446851924dcbe1a88822560358577febc`, commit
+`d2465280d7`). On the same 22 layouts as rl0 run 65e5: rl3 settled 3 layouts that rl0 did not, and lost none; where
+both settled (16), position error was about the same (rl3 closer in 7, mean −0.06 mm). Three discordant layouts out of
+22 are not yet distinguishable from chance (two-sided sign test p = 0.25). A paired run on seed 42 is the next check.
