@@ -153,6 +153,26 @@ def test_a_darker_side_face_of_the_same_green_is_left_out_by_relative_lightness(
     assert merged[0]["width_mm"] > 36 and tops[0]["object"] == "container-2" and tops[0]["width_mm"] == pytest.approx(30, abs=3)
 
 
+def test_with_top_v_frac_off_an_unmatched_blob_is_measured_again_on_its_top_face():
+    """2026-10-30: top_v_frac 0 on the site; a 2-cell across the Pinky tray read 56 x 41.5 mm with its side face."""
+    top, side = (60, 200, 60), (35, 105, 35)  # the side about 0.52 of the top's lightness, as measured
+    img = scene([(0, -40, 60, 30, 0)], colour=top, patches=[((0, -21, 60, 14, 0), side)])
+    hsv = [[50, 80, 25], [95, 255, 255]]
+    off = co.detect(img, ROI, RECORD, CAMERA, CATALOG, params={"objects.top_v_frac": 0, "objects.side_retry_v_frac": 0}, object_hsv=hsv)
+    (o,) = co.detect(img, ROI, RECORD, CAMERA, CATALOG, params={"objects.top_v_frac": 0}, object_hsv=hsv)
+    assert not off[0]["matched"] and off[0]["width_mm"] > 39
+    assert o["object"] == "container-2" and o["width_mm"] == pytest.approx(30, abs=3) and o["top_retry"] == 0.75
+    assert o["centre_mm"] == pytest.approx([0, -40], abs=2)
+    hull = np.asarray(o["hull_px"])
+    assert hull[:, 1].max() > 240 - 2 * 25  # the outline still takes in the side face, toward the centre
+
+
+def test_a_blob_that_matches_is_never_measured_again():
+    hsv = [[50, 80, 25], [95, 255, 255]]
+    (o,) = co.detect(scene([(20, -10, 60, 30, 30)]), ROI, RECORD, CAMERA, CATALOG, params={"objects.top_v_frac": 0}, object_hsv=hsv)
+    assert o["matched"] and "top_retry" not in o
+
+
 def test_an_objects_outline_takes_in_the_side_faces_the_camera_sees():
     """Top-face detection left a box's own side face out of its outline, and the finger check called it a neighbour."""
     px = np.array([[100.0, 100.0], [140.0, 100.0], [140.0, 130.0], [100.0, 130.0]])  # a top face up and left of the centre
