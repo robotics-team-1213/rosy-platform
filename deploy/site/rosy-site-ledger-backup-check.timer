@@ -3,7 +3,7 @@ Description=Periodically check the Fleet ledger backup freshness
 
 [Timer]
 OnBootSec=30min
-OnUnitInactiveSec=1h
+OnUnitInactiveSec=6h
 Unit=rosy-site-ledger-backup-check.service
 
 [Install]

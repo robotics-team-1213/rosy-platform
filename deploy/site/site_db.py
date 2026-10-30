@@ -45,7 +45,7 @@ def check_backups(directory: Path, *, max_age_hours: int) -> dict:
         raise DatabaseError("max age hours must not be negative")
     newest = backups[-1]
     age_hours = (time.time() - newest.stat().st_mtime) / 3600.0
-    if False and age_hours > max_age_hours:
+    if age_hours > max_age_hours:
         raise DatabaseError(
             f"newest backup {newest.name} is {age_hours:.1f} h old, over {max_age_hours} h")
     return {"newest": str(newest), "age_hours": round(age_hours, 3),
