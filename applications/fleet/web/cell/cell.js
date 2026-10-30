@@ -9,11 +9,12 @@ import {renderStructuredDocument} from '/console/assets/cell-document-editor.js'
 import {createCellObservation} from '/console/assets/cell-observation.js';
 import {bindScreens} from '/console/assets/subnav-screens.js';
 import '/console/assets/file-picker.js';
+import {bindPrintSheets} from '/console/assets/cell-print-sheets.js';
 
 const $ = id => document.getElementById(id);
-// D-926 3: each Cell step is its own screen; the first one shows the live cell beside the saved documents.
+// D-926 3: each Cell step is its own screen; the first one shows the live cell, its calibration printouts and the saved documents.
 bindScreens({nav: document.querySelector('.ui-subnav-nav'), home: 'saved-heading', mark: 'step',
-  groups: {'saved-heading': ['observation-heading', 'saved-heading']}});
+  groups: {'saved-heading': ['observation-heading', 'print-heading', 'saved-heading']}});
 const channelQuery = new URL(location.href).searchParams, channelRequested = channelQuery.has('channel_request');
 const channelId = channelQuery.get('channel_request'), channelPath = `/api/fleet/channel-requests/${encodeURIComponent(channelId)}`;
 let channelReceipt = null, channelReview = null;
@@ -41,6 +42,7 @@ const stored = sessionStorage.getItem('rosy-console-token') || '';
 $('console-token').value = stored;
 const request = createFleetClient({credential: () => $('console-token').value, origin: location.origin});
 const observations = createCellObservation({request, root: $('workcell-observations')});
+bindPrintSheets({request, $});
 window.addEventListener('pagehide', event => event.persisted ? observations.clear() : observations.dispose());
 window.addEventListener('pageshow', event => { if (event.persisted) connect(); });
 bindEstop(request);

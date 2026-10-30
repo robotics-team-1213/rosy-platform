@@ -112,6 +112,7 @@ OWN = {
         "cell-observation.js",
         "subnav-screens.js",  # D-926 3: each Cell step is its own screen
         "file-picker.js",  # D-926 C7: one Korean file picker
+        "cell-print-sheets.js",  # 보정 인쇄물 PDF 내려받기
     },
     "site-map.js": {
         "map-authoring.js", "map-editor.js", "drawing-import.js", "geometry-edit.js", "edit-history.js",

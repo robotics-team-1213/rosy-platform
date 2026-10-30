@@ -827,6 +827,14 @@
       ],
       "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
     },
+    "GET:/api/fleet/cell-app/print-sheets/{kind}": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_cell_print_sheets.py",
+        "test_a_viewer_downloads_a_sheet_and_bad_parameters_are_refused"
+      ],
+      "source_revision": "8a9be8f198d8ebd6ad4af13666cb04e350a65a26"
+    },
     "GET:/api/fleet/cell-app/documents": {
       "status": 200,
       "test": [
