@@ -4236,6 +4236,18 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - gate 변화: native source 회귀 범위만 확인했다. 실제 장치 수용·적격 FULL·GitHub CI·게시·운영 서버 전환은 아직 미완료이며 도구 설치 상태와 구분한다. 이전 FULL129576은 새 안전 수정 때문에 원격 시험 시작 전 소유자 확인 후 종료했고 snapshot을 보존했다.
 - CE: 해당 없음 — 새 wrapper의 누락과 필요한 profile/supervision 경계는 정본 D-911/D-914, 기존 FifoCell 구현과 이번 실제 전송 회귀·mutation에서 복원된다. 문서에 없는 장치 성질을 새로 추정하거나 실물 동작을 관측한 결과는 아니다.
 
+## 2026-10-30 · 6302fcb63c · 선택 Monitoring overlay를 서명 후보와 업데이트기에 등록 (D-936)
+
+- 변경: `compose.monitoring.yaml`·`Caddyfile.monitoring`을 후보 배포 파일 한 쌍으로 등록했다. 검증기는 manifest `monitoring`을 내고, 업데이트기는 overlay가 켜졌을 때만 `monitoring` 서비스를 후보 Fleet 이미지로 허용하며 drift 검사에 넣는다. 건강·롤백 관문에는 넣지 않는다. Fleet 이미지는 Monitoring 소스와 화면 묶음을 함께 싣고 Fleet의 PYTHONPATH는 바꾸지 않았다.
+- 증거: 원격 겨냥 시험 통과(NEW/KNOWN/FLAKY0). 관제 PC에서 실제 site.env 렌더링과 운영 프록시 이미지의 `caddy validate`를 overlay 켬·끔으로 확인했다.
+- gate 변화: 없음. 새 서명 후보·관제 PC 설정·실제 열람 수용은 남았다. 관제 PC 자동 업데이트는 기존 ARM-S overlay 거절이 먼저 풀려야 한다.
+
+## 2026-10-30 · uncommitted · 관제 PC Monitoring 설정 예시 (D-936)
+
+- 변경: `deploy/site/monitoring.yaml.example`을 더했다. Fleet, host-state, 관제·AI·모델 PC guard 원천과 overlay의 키 이름·마운트 경로를 그대로 쓴다. 로봇 이름은 공개 예시에 넣지 않고 추가 방법만 적었다.
+- 증거: `operations/monitoring/test/test_deployment.py`가 예시를 실제 설정 로더로 읽고, 키 이름·CA·마운트가 overlay와 같은지 확인한다(원격 결과는 커밋 후 기록).
+- gate 변화: 없음. 관제 PC 설정·키 준비는 ARM-S 전환 뒤에 한다.
+
 ## 2026-10-30 · 796fbe489c · D-871 가드 수집 관제 PC 적용과 `rosy-update-report` 선언
 
 - 변경: 공통 host-state 매니페스트에 `rosy-update-report`를 `approval=recovery`로 더했다. 관제 PC에 origin/main 판 가드·원격 스크립트·`site updates` 줄을 설치하고, `rosy-host-state install site`로 승인 사본을 갱신했다(야간 재부팅 세션 잠금 조건도 함께 적용).
