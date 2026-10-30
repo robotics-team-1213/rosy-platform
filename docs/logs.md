@@ -13119,3 +13119,10 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: D-931 Accepted, D-932 Accepted, D-933 Proposed
 - 교훈: 기존 사례 8·9(`shared-arm-cell-hand-back-checks`)를 근거로 인용, 새 교훈 없음
+
+## 2026-10-30 · uncommitted · omx: cell scale reader and D-934 object mass
+- 변경: `deploy/robot/omx/cell_scale.py`(7-세그먼트 저울 판독, 안정값, 카탈로그 `mass_kg` 기록, `--conditions`), `scale.*` 파라미터 3개, `test/test_omx_cell_scale.py`, `docs/adr/D-934`
+- 증거: 원격 `test_omx_cell_scale.py`·`test_omx_cell_params.py` 27 passed. 합성 표시창 숫자 높이 9~40 px, 잡음 σ 4에서 20/20. 실제 저울 판독은 아직
+- gate 변화: 없음
+- 결정: D-934 Proposed
+- 교훈: 얇은 획은 세그먼트 칸 평균으로 판정하면 크기가 커질수록 실패(18 px 0/20), 길이 덮임 비율로 바꿔 해결 — 코드 주석에 둠
