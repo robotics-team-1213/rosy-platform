@@ -59,7 +59,7 @@ def ready(frame, config: dict, run=subprocess.run, wait=time.sleep) -> list:
     params = config.get("params")
     for name, camera in config["cameras"].items():
         if camera.get("device"):
-            print(json.dumps({"exposure": name, **expose(camera["device"], lambda: frame(name), params, run, wait)}),
+            print(json.dumps({"camera": name, **expose(camera["device"], lambda: frame(name), params, run, wait)}),
                   file=sys.stderr)
     return [f"{name}: {why}" for name, ok, why in lights({c: frame(c) for c in config["cameras"]}, params) if not ok]
 
