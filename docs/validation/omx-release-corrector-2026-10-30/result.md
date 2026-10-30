@@ -120,3 +120,15 @@ BC v0 with a zero residual remains the reference; rl3 is a candidate.
 On the 20 layouts shared with rl0 run b31e (19/20): each settled one layout the other did not; where both settled (18),
 rl3 was closer in 9 (mean +0.04 mm). Over seeds 42, 44 and 45: rl3 alone 6, rl0 alone 2 (sign test p = 0.29), and the
 same position error. Still not established.
+
+| Run | Setup | Result |
+|---|---|---|
+| `1cb11cf3625a58408fb1e163377d2dee` | Short episodes, rl0, seed 46 | 21 episodes, **16 settled and stable**, median position error 0.59 mm. |
+| `a509456b33dd575f8fa8ec7c1e6dd30a` | Short episodes, rl3, seed 46 | 20 episodes, **17 settled and stable**, median position error 0.69 mm. |
+
+On the 20 shared layouts: rl3 alone 2, rl0 alone 1; where both settled (15), the same error (mean −0.003 mm).
+
+**Four seeds (42, 44, 45, 46), 82 paired layouts:** rl3 settled 8 layouts that rl0 did not and lost 3 (two-sided sign
+test p = 0.23). Where both settled, position error is the same. rl3 is no worse than rl0 and may settle a few more,
+but one REINFORCE step does not give an established gain at this sample size. rl0 stays the reference and rl3 a
+candidate. Two seed-46 starts failed on a transient model-PC connection error and were rerun; they are not counted.
