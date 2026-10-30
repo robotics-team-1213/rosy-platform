@@ -205,7 +205,7 @@ class Residual:
         return np.c_[x, np.ones(len(x))] @ self.weights
 
     @classmethod
-    def update(cls, residual, observations, noises, rewards, *, lr):
+    def update(cls, residual, observations, noises, rewards, *, lr, max_change_m=.0002):
         """One policy-gradient step: move the mean correction along noise that earned above-average reward.
 
         For a Gaussian policy the score of the mean is noise/sigma; scaling the step by sigma**2 leaves
@@ -214,7 +214,12 @@ class Residual:
         x = np.c_[np.asarray(observations, float), np.ones(len(observations))]
         advantage = np.asarray(rewards, float) - np.mean(rewards)
         gradient = x.T @ (advantage[:, None] * np.asarray(noises, float)) / len(x)
-        return cls(residual.weights + lr * gradient)
+        step = lr * gradient
+        # Trust region: an unbounded step moved the correction up to 2.76 mm on the data (run 9968, all blocked).
+        change = np.abs(x @ step).max()
+        if change > max_change_m:
+            step *= max_change_m / change
+        return cls(residual.weights + step)
 
     def save(self, path):
         buffer = io.BytesIO()
@@ -302,7 +307,7 @@ if __name__ == '__main__':
         if not rows:
             sys.exit('rl-update: no explored decision has a settled outcome in these reports; nothing to learn')
         before = Residual.load(sys.argv[3], sys.argv[4])
-        after = Residual.update(before, *zip(*rows), lr=float(os.environ.get('RL_LR', '.0002')))
+        after = Residual.update(before, *zip(*rows), lr=float(os.environ.get('RL_LR', '.00002')))
         print(json.dumps(dict(decisions=len(rows), mean_reward=float(np.mean([r[2] for r in rows])),
                               sha256=after.save(sys.argv[2])), sort_keys=True))
     else:

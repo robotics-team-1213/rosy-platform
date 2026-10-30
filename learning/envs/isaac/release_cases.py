@@ -17,3 +17,7 @@ RL_RESIDUALS['release-episodes-rl1'] = dict(file='release-residual-rl1.npz',
     sha256='cf84c0a0d2a878eb072b37b2f2428a315e54899887db583314fbe878739036ed', sigma_m=.0002)
 # 0.5 mm exploration on top of the v0 model's ~1 mm residual error pushed the first release past the 1.5 mm
 # convergence tolerance (run 3d52), so no decision was recorded.
+# rl2: rl1's data again from rl0 inside a 0.2 mm trust region (rl1 itself blocked 31 of 32 episodes, run 9968).
+EVALUATION_CASES['release-episodes-rl2'] = EVALUATION_CASES['nominal-bc-v0']
+RL_RESIDUALS['release-episodes-rl2'] = dict(file='release-residual-rl2.npz',
+    sha256='bb424ece0730ab37b16a8e5dcc43febfeb45070fcd5e3f255eb36680f070c935', sigma_m=.0002)
