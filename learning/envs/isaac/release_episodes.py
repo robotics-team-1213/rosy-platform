@@ -7,7 +7,7 @@ A failed episode is recorded and the next one starts. The nine-container flow in
 import math
 import time
 
-from mapped_stack_fixture import (cube_release_ready, free_lift, home, measured_motion, plan, prefix_held, row_gaps,
+from mapped_stack_fixture import (cube_release_ready, cube_release_target, free_lift, home, measured_motion, plan, prefix_held, row_gaps,
                                   stable_box)
 from release_corrector import BLOCKED_REWARD, estimate, observation, policy_command, release_reward
 
@@ -20,8 +20,9 @@ def layout(fixture, rng):
     """Episode start: which cell to place, the prior stack poses and the held box pose on the table."""
     items = plan(True, fixture=fixture)
     index = int(rng.integers(0, len(items)))
+    # 0.5 mm above the target: exact touching heights made a six-box prior stack pop apart (run 8e96).
     prior = [([items[j]['target'][0]+rng.uniform(-.001, .001), items[j]['target'][1]+rng.uniform(-.001, .001),
-               items[j]['target'][2]], float(rng.uniform(-.01, .01))) for j in range(index)]
+               items[j]['target'][2]+.0005], float(rng.uniform(-.01, .01))) for j in range(index)]
     centre = fixture['leveling_center_m']
     held = ([centre[0]+rng.uniform(-.005, .005), centre[1]+rng.uniform(-.005, .005), centre[2]+.015],
             float(rng.uniform(-.05, .05)))
@@ -85,7 +86,10 @@ def run(t, fixture, cargo, initial, corrector, residual, seed, *, budget_s=1800.
                                                     noise=noise))
                 t.move(arm, command)
             packing_target(index, t.snapshot, t.step, float(p[2]), fixture)  # measured prior-stack check
-            if not cube_release_ready(index, t.snapshot(), float(p[2]), fixture=fixture):
+            ready = t.snapshot()
+            truth = cube_release_target(index, ready, float(p[2]), fixture=fixture)
+            record['release_error_mm'] = 1000*math.dist(truth, ready['tcps'][arm])
+            if not cube_release_ready(index, ready, float(p[2]), fixture=fixture):
                 raise ValueError('cube release correction did not converge; opening blocked')
             t.grip(arm, initial['gripper']['release'], release=True)
             t.move(arm, [*item['target'][:2], carry])

@@ -323,6 +323,7 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
                 robot.set_joint_velocities(np.zeros(robot.num_dof))
             hold(120)
         tools = SimpleNamespace(step=step, hold=hold, snapshot=snapshot, samples=samples, move=move, grip=grip, reset=reset)
+        trial = dict(seed=args.seed, layers=[])  # move() records tracking failures here (run 8e96 crashed without it)
         reset()
         photo('mapped-overview.png', True)
         photo('mapped-initial.png')  # the report verifier requires both starting views
@@ -331,7 +332,7 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
         if recording is not None:
             hold((-tick) % fixture['recording']['every_control_ticks'])
             recording.write(tick, robots[0].get_joint_positions()[joints[0]], final=True)
-        trial = dict(seed=args.seed, layers=[], episodes=episodes)
+        trial.update(episodes=episodes)
         trial.update(judge(trial, cube, fixture=fixture))  # no full stack: the verifier recomputes this failure
         return dict(schema='rosy.omx-container-stack/1', fixture=fixture, seed=args.seed, task_success=False,
                     trials=[trial], controller=FIXTURE['controller'], attachment_aid=False, images=images)
