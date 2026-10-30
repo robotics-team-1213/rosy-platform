@@ -13126,3 +13126,10 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: D-934 Proposed
 - 교훈: 얇은 획은 세그먼트 칸 평균으로 판정하면 크기가 커질수록 실패(18 px 0/20), 길이 덮임 비율로 바꿔 해결 — 코드 주석에 둠
+
+## 2026-10-30 · uncommitted · omx: D-935 payload bound on the D-911 gate
+- 변경: `cell_envelope.payload_check`, 운영 조건 `payload_max_kg`, `auto.max_gross_kg` 0.08(theory), `cell_objects.payload`, `cell_auto_pick`이 운반마다 `_payload`를 붙이고 `task.json`에 남김, `cell_scale --conditions`는 상한을 쓰지 않음, README·예제·시험 갱신, `docs/adr/D-935`
+- 증거: 원격 `test/test_omx_*.py` 1756 passed, 36 skipped. 실물 실측과 운반은 아직
+- gate 변화: 없음
+- 결정: D-935 Accepted(사용자 결정)
+- 교훈: 없음
