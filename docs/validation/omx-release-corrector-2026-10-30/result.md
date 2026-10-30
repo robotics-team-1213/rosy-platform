@@ -112,3 +112,11 @@ On the 20 layouts shared with rl0 run 1f81: rl3 alone settled 2, rl0 alone 1; wh
 in 6 (mean +0.05 mm). Over both seeds rl3 settled 5 layouts that rl0 did not and lost 1 (sign test p = 0.22), with
 the same position error. rl3 does not make releases worse and may settle a few more, but the gain is not established.
 BC v0 with a zero residual remains the reference; rl3 is a candidate.
+
+| Run | Setup | Result |
+|---|---|---|
+| `71833be57ef150e98506ea5f2e4f7afa` | Short episodes, rl3, seed 45 | 22 episodes, **20 settled and stable**, median position error 0.63 mm. |
+
+On the 20 layouts shared with rl0 run b31e (19/20): each settled one layout the other did not; where both settled (18),
+rl3 was closer in 9 (mean +0.04 mm). Over seeds 42, 44 and 45: rl3 alone 6, rl0 alone 2 (sign test p = 0.29), and the
+same position error. Still not established.
