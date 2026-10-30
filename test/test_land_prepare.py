@@ -52,6 +52,19 @@ def test_waiting_landing_previews_the_size_ratchet_of_mains_merge(repos):
     assert check() is None, "once per main"
 
 
+def test_behavior_ownership_failure_is_checked_before_the_selected_tests(repos, monkeypatch, tmp_path):
+    _, wt = repos
+    guard = "test/test_behavior_test_ownership.py"
+    commit(wt, {guard: "def test_ownership():\n    assert False\n"}, "invalid behavior test ownership")
+    real, calls = land.remote_pytest.run, []
+    monkeypatch.setattr(land.remote_pytest, "run", lambda inv, *a, **k: calls.append(inv) or real(inv, *a, **k))
+    args = land.argparse.Namespace(tests="auto", node=False, no_cache=True)
+    with pytest.raises(land.Stop, match="NEW failure"):
+        land.land_guards.first(wt, args, [["pkg/test"]], tmp_path / "logs", "pre", land.run_tests)
+    assert calls[0] == [[guard]]
+    assert all("pkg/test" not in inv for batch in calls for inv in batch)
+
+
 def test_a_landing_whose_test_hosts_give_up_leaves_a_stop(repos, monkeypatch):
     """2026-10-27: a venv-setup ssh timeout ended a landing with no stop event, invisible to land_stats."""
     main, wt = repos
@@ -64,6 +77,25 @@ def test_a_landing_whose_test_hosts_give_up_leaves_a_stop(repos, monkeypatch):
         land.main(["--tests", "auto"])
     events = [json.loads(line) for line in (main / ".git" / land.land_events.EVENTS).read_text(encoding="utf-8").splitlines()]
     assert [e["reason"] for e in events if e["event"] == "stop"] == ["[remote-pytest] venv setup on h failed"]
+
+
+def test_a_lost_queue_ticket_leaves_a_stop_without_recreating_its_place(repos, monkeypatch):
+    main, wt = repos
+    commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")
+    before = git(main, "rev-parse", "HEAD")
+    enter = land.land_queue.enter
+
+    def lost(*args, **kwargs):
+        qdir, ticket = enter(*args, **kwargs)
+        ticket.unlink()
+        return qdir, ticket
+
+    monkeypatch.setattr(land.land_queue, "enter", lost)
+    assert land.main(["--tests", "auto"]) == 1
+    events = [json.loads(line) for line in (main / ".git" / land.land_events.EVENTS).read_text().splitlines()]
+    assert any(e["event"] == "stop" and "ticket disappeared" in e["reason"] for e in events)
+    assert git(main, "rev-parse", "HEAD") == before
+    assert not list((main / ".git" / land.land_queue.QUEUE).glob("*.json"))
 
 
 @pytest.fixture
@@ -171,3 +203,50 @@ def test_failed_affected_reprepare_cannot_create_a_publishable_landing(full_anch
     assert land.land_record.read(main, git(wt, "rev-parse", "HEAD")) is None
     if failure == "head_move":
         assert land.land_full.restore(wt, "feat/x") is None
+
+
+@pytest.mark.parametrize("batch_size", [2, 4])
+@pytest.mark.parametrize("busy_count", [0, 2])
+def test_batch_leader_counts_own_carried_members_before_reserving_capacity(tmp_path, batch_size, busy_count):
+    queue = land.land_queue
+    for n in range(busy_count):
+        queue.take(tmp_path, f"feat/busy-{n}", status="preparing")
+    members = [f"feat/member-{n}" for n in range(batch_size - 1)]
+    for branch in members:
+        queue.take(tmp_path, branch, status="pending")
+    leader = queue.take(tmp_path, "feat/leader", status="pending")
+    queue.set_status(leader, "pending", batch=members)
+
+    land.land_prepare.slot(tmp_path, leader,
+                           sleep=lambda _: pytest.fail("own carried members reserved preparation slots"))
+
+    assert json.loads(leader.read_text())["status"] == "preparing"
+    assert json.loads(leader.read_text())["batch"] == members
+
+
+@pytest.mark.parametrize("batch_size", [2, 4])
+@pytest.mark.parametrize("older_status", ["pending", "preparing"])
+def test_batch_leader_preserves_other_preparing_and_older_pending_claims(tmp_path, batch_size, older_status):
+    queue = land.land_queue
+    for n in range(2):
+        queue.take(tmp_path, f"feat/busy-{n}", status="preparing")
+    older = queue.take(tmp_path, "feat/older", status=older_status)
+    members = [f"feat/member-{n}" for n in range(batch_size - 1)]
+    for branch in members:
+        queue.take(tmp_path, branch, status="pending")
+    leader = queue.take(tmp_path, "feat/leader", status="pending")
+    queue.set_status(leader, "pending", batch=members)
+    later = queue.take(tmp_path, "feat/later", status="pending")
+    naps = []
+
+    def release_older(seconds):
+        naps.append(seconds)
+        assert len(naps) == 1, "own carried members still consume capacity after a peer releases it"
+        assert json.loads(leader.read_text())["status"] == "pending"
+        older.unlink()
+
+    land.land_prepare.slot(tmp_path, leader, sleep=release_older)
+
+    assert len(naps) == 1
+    assert json.loads(leader.read_text())["status"] == "preparing"
+    assert json.loads(later.read_text())["status"] == "pending"

@@ -14,6 +14,8 @@ from omx_adapter.chunk_library import NAMES as COMMAND_NAMES
 
 SCHEMA = "rosy.omx-cell-envelope.v1"
 NAMES = tuple(name.removesuffix(".pos") for name in COMMAND_NAMES)
+SEQUENCE = ("goto above_pick", "run descend_pick", "run grasp_pick", "run lift_pick", "goto above_place",
+            "run descend_place", "run release_place", "run lift_place", "park")
 
 
 def digest(value) -> str:
@@ -26,15 +28,24 @@ def _code_digest() -> str:
 
     root = Path(__file__).resolve().parent
     files = {name: root / name for name in (
-        "cell_envelope.py", "cell_pipeline.py", "cell_pipeline_io.py", "cell_attempts.py",
+        "cell_envelope.py", "cell_robot_profile.py", "cell_params.py", "cell_pipeline.py", "cell_pipeline_io.py", "cell_attempts.py",
+        "cell_auto_pick.py", "cell_transfer.py",
         "guarded_native.py", "chunk_runner.py", "grasp_planner.py", "motion_profile.py", "teach_trajectory.py")}
     files.update({module.__name__: Path(module.__file__) for module in (chunk_library, motion_profile)})
     return digest({name: hashlib.sha256(path.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
                    for name, path in files.items()})
 
 
-def runtime_context(robot_config: dict, bus, fps: int) -> dict:
+def runtime_context(robot_config: dict, bus, fps: int, *, operating_profile=None, params=None) -> dict:
     """Read before the control loop starts; the session owns this bus without hot reconfiguration."""
+    binding = operating_profile["binding"] if operating_profile is not None else None
+    if binding is not None and (robot_config.get("id") != binding["instance_id"]
+                                or digest(robot_config) != binding["robot_config_sha256"]):
+        raise ValueError("runtime follower does not match its operating profile")
+    if params is None:
+        from cell_params import load
+
+        params = load()["values"]
     motors = {}
     for name in NAMES:
         motor = bus.motors[name]
@@ -45,8 +56,9 @@ def runtime_context(robot_config: dict, bus, fps: int) -> dict:
         motors[name] = {"id": motor.id, "model": motor.model,
                         "calibration": asdict(bus.calibration[name]),
                         "registers": {key: bus.read(key, name) for key in registers}}
-    return {"scope": "hardware", "session_id": uuid.uuid4().hex,
-            "sha256": digest({"robot": robot_config, "motors": motors, "fps": fps, "code": _code_digest()})}
+    return {"scope": "hardware", "session_id": uuid.uuid4().hex, "operating_profile": binding,
+            "sha256": digest({"robot": robot_config, "motors": motors, "fps": fps,
+                              "operating_profile": binding, "params": params, "code": _code_digest()})}
 
 
 def _sha(value) -> bool:
@@ -55,6 +67,13 @@ def _sha(value) -> bool:
 
 def _number(value) -> bool:
     return type(value) in (int, float) and math.isfinite(value)
+
+
+def verification_tolerance(config: dict) -> float:
+    value = config.get("verify_tol_mm", 10.0)
+    if not _number(value) or value < 0:
+        raise ValueError("verify_tol_mm must be finite and nonnegative")
+    return float(value)
 
 
 def _state_current(state: dict, now: float) -> bool:
@@ -77,14 +96,32 @@ def _conditions(config: dict) -> dict:
         if not isinstance(values.get(name), str) or not values[name].strip():
             raise ValueError(f"operating_conditions.{name} is required")
     dimensions = values.get("object_dimensions_m")
-    if (not _number(values.get("payload_kg")) or values["payload_kg"] <= 0
+    if (not _number(values.get("payload_max_kg")) or values["payload_max_kg"] <= 0
             or not isinstance(dimensions, list) or len(dimensions) != 3
             or any(not _number(v) or v <= 0 for v in dimensions)):
-        raise ValueError("measured payload_kg and three positive object_dimensions_m are required")
+        raise ValueError("a verified payload_max_kg and three positive object_dimensions_m are required")
     return values
 
 
-def assess(config: dict, calibration: dict, library: dict, state: dict, *, now=None) -> dict:
+def payload_check(config: dict, conditions: dict) -> tuple[dict | None, str | None]:
+    """This carry's payload against its bound (D-935): the smallest of the verified payload_max_kg, the arm's
+    auto.max_gross_kg and the object's own max_gross_kg. The payload is outside the task identity, so a carry
+    within the bound stays the reviewed task; an unknown payload is refused like an unknown object."""
+    import cell_params
+
+    p = config.get("_payload") or config.get("payload")  # _payload: set per carry from the catalogue; payload: declared
+    if (not isinstance(p, dict) or not _number(p.get("kg")) or p["kg"] <= 0
+            or not isinstance(p.get("source"), str) or not p["source"].strip()):
+        return None, "payload_unknown"
+    limits = [conditions["payload_max_kg"], cell_params.get(config.get("params"), "auto.max_gross_kg")]
+    if _number(p.get("max_gross_kg")) and p["max_gross_kg"] > 0:
+        limits.append(p["max_gross_kg"])
+    facts = {"kg": p["kg"], "source": p["source"], "bound_kg": min(limits),
+             **({"object": p["object"]} if isinstance(p.get("object"), str) else {})}
+    return facts, (None if p["kg"] <= facts["bound_kg"] else "payload_over_bound")
+
+
+def assess(config: dict, calibration: dict, library: dict, state: dict, *, now=None, sequence=SEQUENCE) -> dict:
     """Exact paths only: no radius shrink, spatial interpolation or automatic promotion from success."""
     out = {"schema": SCHEMA, "mode": "automatic", "status": "unverified", "allowed": False,
            "reason": "not_reviewed"}
@@ -93,15 +130,31 @@ def assess(config: dict, calibration: dict, library: dict, state: dict, *, now=N
         return {**out, "reason": "state_unavailable"}
     context = state["operating_context"]
     try:
+        from cell_robot_profile import load
+
+        profile = load(config["operating_profile_path"])
+        if context.get("operating_profile") != profile["binding"]:
+            return {**out, "reason": "profile_mismatch"}
+        if any(Path(config[key]).expanduser().resolve() != Path(profile[key])
+               for key in ("work_dir", "operating_envelope_path")):
+            return {**out, "reason": "profile_paths_changed"}
         conditions = _conditions(config)
+        import cell_params
+
         conditions_sha = digest({"conditions": conditions, "calibration": calibration,
                                   "profiles": config.get("profiles"), "cameras": config.get("cameras"),
-                                  "sites": config.get("sites"), "plan": config.get("plan")})
+                                  "sites": config.get("sites"), "plan": config.get("plan"),
+                                  "verify_tol_mm": verification_tolerance(config), "sequence": list(sequence),
+                                  "params": {name: cell_params.get(config.get("params"), name)
+                                             for name in cell_params.DEFAULTS}})
         out.update(scope=context["scope"], runtime_sha256=context["sha256"], session_id=context["session_id"],
-                   conditions=conditions,
+                   conditions=conditions, operating_profile=profile["binding"],
                    conditions_sha256=conditions_sha, library_sha256=digest(library), client_code_sha256=_code_digest())
         out["task_sha256"] = digest({key: out[key] for key in (
-            "scope", "runtime_sha256", "conditions_sha256", "library_sha256", "client_code_sha256")})
+            "scope", "runtime_sha256", "conditions_sha256", "library_sha256", "client_code_sha256", "operating_profile")})
+        out["payload"], over = payload_check(config, conditions)
+        if over:  # supervised trials too: a person at the switch does not make an unknown or heavy load safe
+            return {**out, "reason": over}
         if "_commissioning" in config:
             trial = config["_commissioning"]
             if (not isinstance(trial, dict) or set(trial) != {"person_at_switch"}
@@ -115,6 +168,8 @@ def assess(config: dict, calibration: dict, library: dict, state: dict, *, now=N
                 or not isinstance(document.get("reviews"), list)
                 or any(not isinstance(r, dict) for r in document["reviews"])):
             raise ValueError("invalid operating envelope")
+        if any(document.get(key) != profile["binding"][key] for key in ("device_id", "instance_id", "profile_sha256")):
+            return {**out, "reason": "review_profile_mismatch"}
         matching = [r for r in document["reviews"] if r["task_sha256"] == out["task_sha256"]]
         if not matching:
             return out
@@ -178,7 +233,8 @@ def same_session(state: dict, assessment: dict, *, now=None) -> bool:
     return (_number(now) and _state_current(state, now)
             and state["operating_context"] == {"scope": assessment.get("scope"),
                                                 "sha256": assessment.get("runtime_sha256"),
-                                                "session_id": assessment.get("session_id")})
+                                                "session_id": assessment.get("session_id"),
+                                                "operating_profile": assessment.get("operating_profile")})
 
 
 def review_candidates(rows: list[dict]) -> dict:
@@ -190,6 +246,7 @@ def review_candidates(rows: list[dict]) -> dict:
         if not key:
             continue
         candidate = tasks.setdefault(key, {"status": "unreviewed", "scope": facts.get("scope"),
+            "operating_profile": facts.get("operating_profile"),
             "conditions": facts.get("conditions"), "runtime_sha256": facts.get("runtime_sha256"),
             "library_sha256": facts.get("library_sha256"), "trials": [], "automatic_failures": 0})
         if facts.get("mode") == "commissioning":

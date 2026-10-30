@@ -375,6 +375,51 @@
       ]
     },
     {
+      "id": "trip_proposal_handoff",
+      "title": "외부 앱 중립 이송 제안 인계",
+      "entrypoints": ["applications/fleet/web/index.html"],
+      "consumers": ["applications/fleet/web/work/trip-proposal-view.js"],
+      "availability": "Installed simulation trip proposal API; known proposal ID; independent named Fleet operator. Admission creates the transport job only; no cargo arrival or application completion evidence.",
+      "calls": [
+        {"consumer": "applications/fleet/web/work/trip-proposal-view.js", "expression": "/api/fleet/trip-proposals/${encodeURIComponent(id)}", "resolution": "literal-or-template", "request_ids": ["GET:/api/fleet/trip-proposals/{proposal_id}"]},
+        {"consumer": "applications/fleet/web/work/trip-proposal-view.js", "expression": "/api/fleet/dispatch-control", "resolution": "literal-or-template", "request_ids": ["GET:/api/fleet/dispatch-control"]},
+        {"consumer": "applications/fleet/web/work/trip-proposal-view.js", "expression": "/api/fleet/trip-proposals/${encodeURIComponent(snapshot.proposal_id)}/admit", "resolution": "literal-or-template", "request_ids": ["POST:/api/fleet/trip-proposals/{proposal_id}/admit"]}
+      ],
+      "requests": [
+        {
+          "id": "GET:/api/fleet/trip-proposals/{proposal_id}",
+          "method": "GET",
+          "path": "/api/fleet/trip-proposals/{proposal_id}",
+          "implementation": "operations/fleet/fleet/server/trips/trip_proposal_routes.py",
+          "handler": "read_id",
+          "expected_statuses": [200],
+          "status": "verified",
+          "verification_scope": "Real HTTP read by the creator and by a different named operator with real SQLite; no lease, claim or robot motion before admission.",
+          "contract_tests": ["operations/fleet/test/test_trip_proposal_console_browser.py", "operations/fleet/test/test_trip_proposals.py"],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/trip-proposals/{proposal_id}"
+        },
+        {
+          "id": "POST:/api/fleet/trip-proposals/{proposal_id}/admit",
+          "method": "POST",
+          "path": "/api/fleet/trip-proposals/{proposal_id}/admit",
+          "implementation": "operations/fleet/fleet/server/trips/trip_proposal_routes.py",
+          "handler": "admit",
+          "expected_statuses": [200],
+          "status": "verified",
+          "verification_scope": "Real HTTP admission by a named operator other than the proposer with the read digest and current dispatch generation; the TRIP job creator is a recording stub here, the real ledger row is covered by a step-ledger test.",
+          "contract_tests": ["operations/fleet/test/test_trip_proposal_console_browser.py", "operations/fleet/test/test_trip_proposals.py"],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/trip-proposals/{proposal_id}/admit"
+        }
+      ],
+      "flows": [
+        {"id": "trip_proposal_handoff.happy", "kind": "happy", "steps": [{"request_ids": ["GET:/api/fleet/trip-proposals/{proposal_id}", "GET:/api/fleet/dispatch-control", "POST:/api/fleet/trip-proposals/{proposal_id}/admit"], "screen_assertion": "독립 Fleet 운영자의 명시적 확인 후 승인된 제안을 다시 조회한다"}], "scenario_id": "trip_proposal_handoff.happy", "browser_test": "operations/fleet/test/test_trip_proposal_console_browser.py::test_deep_link_reads_and_explicit_confirmation_admits_the_saved_proposal", "sample_status": "verified", "test_scope": "Fixture API browser responses; no robot or execution owner", "source_revision": "d6d5feea75e1bc4b059a396943b83b409dfa1582"},
+        {"id": "trip_proposal_handoff.refused", "kind": "refused", "steps": [{"request_ids": ["POST:/api/fleet/trip-proposals/{proposal_id}/admit"], "screen_assertion": "403·409·503 응답 후 자동 재전송을 막고 원본 재조회를 요구한다"}], "scenario_id": "trip_proposal_handoff.refused", "browser_test": "operations/fleet/test/test_trip_proposal_console_browser.py::test_rejection_and_unknown_response_require_read_without_automatic_retry", "sample_status": "verified", "test_scope": "Fixture API browser responses; refusal presentation and no retry, not server authorization evidence", "source_revision": "d6d5feea75e1bc4b059a396943b83b409dfa1582"},
+        {"id": "trip_proposal_handoff.terminal", "kind": "terminal", "steps": [{"request_ids": ["GET:/api/fleet/trip-proposals/{proposal_id}"], "screen_assertion": "제안자 본인이거나 조회 전용이면 승인 단추를 잠그고 작업 생성과 화물 도착을 구별한다"}], "scenario_id": "trip_proposal_handoff.terminal", "browser_test": "operations/fleet/test/test_trip_proposal_console_browser.py::test_self_admission_or_viewer_is_read_only", "sample_status": "verified", "test_scope": "Read-only approval UI stage; ADMITTED is a created transport job, not cargo arrival", "source_revision": "d6d5feea75e1bc4b059a396943b83b409dfa1582"}
+      ]
+    },
+    {
       "id": "control_units",
       "title": "관제 간 작업 위임",
       "entrypoints": [
@@ -3153,7 +3198,9 @@
         "applications/fleet/web/cell/cell.html"
       ],
       "consumers": [
-        "applications/fleet/web/cell/cell.js"
+        "applications/fleet/web/cell/cell.js",
+        "applications/fleet/web/cell/cell-print-sheets.js",
+        "applications/fleet/web/cell/cell-object-catalog.js"
       ],
       "availability": "configured capability and authorized role; see backend contract",
       "calls": [
@@ -3198,9 +3245,59 @@
           "request_ids": [
             "POST:/api/fleet/cell-app/proposals"
           ]
+        },
+        {
+          "consumer": "applications/fleet/web/cell/cell-print-sheets.js",
+          "expression": "/api/fleet/cell-app/print-sheets/${encodeURIComponent(sheet.kind)}?${sheet.query}",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/cell-app/print-sheets/{kind}"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/cell/cell-object-catalog.js",
+          "expression": "/api/fleet/cell-app/object-catalog",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/cell-app/object-catalog"
+          ]
         }
       ],
       "requests": [
+        {
+          "id": "GET:/api/fleet/cell-app/object-catalog",
+          "method": "GET",
+          "path": "/api/fleet/cell-app/object-catalog",
+          "implementation": "operations/fleet/fleet/server/cell/cell_app_routes.py",
+          "handler": "object_catalog",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; read-only object catalogue for a viewer, unmeasured mass shown blocked, 401 without login, 503 unconfigured, 422 wrong schema",
+          "contract_tests": [
+            "operations/fleet/test/test_cell_object_catalog.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/cell-app/object-catalog"
+        },
+        {
+          "id": "GET:/api/fleet/cell-app/print-sheets/{kind}",
+          "method": "GET",
+          "path": "/api/fleet/cell-app/print-sheets/{kind}",
+          "implementation": "operations/fleet/fleet/server/cell/cell_app_routes.py",
+          "handler": "print_sheet",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; real-size calibration PDF for a viewer, 401 without login, 422 on bad parameters",
+          "contract_tests": [
+            "operations/fleet/test/test_cell_print_sheets.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/cell-app/print-sheets/{kind}"
+        },
         {
           "id": "GET:/api/fleet/cell-app/documents",
           "method": "GET",
@@ -3517,6 +3614,7 @@
         "applications/fleet/web/sitemap/site-map-camera.js",
         "applications/fleet/web/sitemap/site-map-teach.js",
         "applications/fleet/web/sitemap/site-map.js",
+        "applications/fleet/web/sitemap/site-map-sources.js",
         "applications/fleet/web/sitemap/drawing-import.js",
         "applications/fleet/web/sitemap/extraction-review.js",
         "applications/fleet/web/sitemap/map-authoring.js"
@@ -3607,7 +3705,7 @@
           ]
         },
         {
-          "consumer": "applications/fleet/web/sitemap/site-map.js",
+          "consumer": "applications/fleet/web/sitemap/site-map-sources.js",
           "expression": "/api/fleet/site-map/profiles",
           "resolution": "literal-or-template",
           "request_ids": [
@@ -5717,6 +5815,7 @@
         "applications/fleet/web/shared/robot-video.js",
         "applications/fleet/web/shared/vision-view.js",
         "applications/fleet/web/sitemap/site-map.js",
+        "applications/fleet/web/sitemap/site-map-sources.js",
         "applications/fleet/web/cell/cell-observation.js"
       ],
       "availability": "configured capability and authorized role; see backend contract",
@@ -5788,7 +5887,7 @@
           ]
         },
         {
-          "consumer": "applications/fleet/web/sitemap/site-map.js",
+          "consumer": "applications/fleet/web/sitemap/site-map-sources.js",
           "expression": "/api/fleet/vision/lease",
           "resolution": "literal-or-template",
           "request_ids": [

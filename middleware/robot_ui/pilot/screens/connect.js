@@ -52,7 +52,7 @@ function setTag(word) {
 
 function notice(text) {
   const node = document.querySelector("#pilot-notice");
-  if (node) node.textContent = text;
+  if (node) { node.removeAttribute("data-stop-state"); node.textContent = text; }
 }
 
 function appendAccountLogout(actions) {

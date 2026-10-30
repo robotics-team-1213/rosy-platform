@@ -146,7 +146,10 @@ def test_a_role_names_the_preview_unit_that_owns_its_camera(monkeypatch, tmp_pat
     monkeypatch.setattr(runtime, 'identity', lambda device: {'rdev': device})
     monkeypatch.setattr(runtime, 'producer', lambda unit, device, wait_s=15.0: asked.append(unit) or {})
     monkeypatch.setattr(runtime, 'get_controls', lambda device, names: {'auto_exposure': 3, 'gain': 4})
-    monkeypatch.setattr(runtime, 'command', lambda args: 'exposure_time_absolute 0x9a0902 (int) : min=1 max=5000 step=1\n')
+    monkeypatch.setattr(runtime, 'command', lambda args: (
+        'exposure_time_absolute 0x9a0902 (int) : min=1 max=5000 step=1\n'
+        'auto_exposure 0x9a0901 (menu) : min=0 max=3\n 1: Manual\n 3: Auto\n'
+        'gain 0x00980913 (int) : min=0 max=7 step=1\n'))
     monkeypatch.setattr(runtime, 'write_control', lambda device, name, value: None)
     baseline = runtime.prepare(profile(unit='arm_a_wrist'), tmp_path, 'p')
     assert baseline['cameras']['front']['unit'] == 'arm_a_wrist' and asked == ['top', 'arm_a_wrist']
@@ -273,7 +276,7 @@ def test_producer_waits_for_the_preview_to_open_the_camera_at_boot(monkeypatch):
 def test_producer_still_refuses_a_missing_or_shared_owner_after_the_wait(monkeypatch, owners):
     runtime = load('camera_readiness')
     _producer_world(runtime, monkeypatch, [owners])
-    with pytest.raises(RuntimeError, match='sole camera owner'):
+    with pytest.raises(OSError if owners is None else RuntimeError, match='sole camera owner'):
         runtime.producer('top', '/dev/video0', wait_s=2.0)
 
 
@@ -288,9 +291,24 @@ def test_a_reused_baseline_guards_the_current_preview_not_the_one_that_recorded_
     monkeypatch.setattr(runtime, 'identity', lambda device: {'rdev': 1})
     monkeypatch.setattr(runtime, 'producer', lambda role, device, wait_s=15.0: now)
     monkeypatch.setattr(runtime, 'get_controls', lambda device, names: dict(original))
-    baseline = runtime.prepare({}, tmp_path, 'p')
+    monkeypatch.setattr(runtime, 'command', lambda args: (
+        'auto_exposure 0x9a0901 (menu) : min=0 max=3\n 1: Manual\n 3: Auto\n'
+        'exposure_time_absolute 0x9a0902 (int) : min=1 max=5000 step=1\n'
+        'gain 0x00980913 (int) : min=0 max=7 step=1\n'))
+    profile = dict(cameras={'top': dict(candidates=[dict(auto_exposure=1, exposure_time_absolute=400)])})
+    baseline = runtime.prepare(profile, tmp_path, 'p')
     assert baseline['cameras']['top']['producer'] == now
     assert json.loads((tmp_path/'baseline.json').read_text())['cameras']['top']['producer'] == old  # file unchanged
+
+
+def test_active_preview_without_a_camera_owner_is_retryable_but_another_owner_is_not(monkeypatch):
+    runtime = load('camera_readiness')
+    _producer_world(runtime, monkeypatch, [None])
+    with pytest.raises(OSError):
+        runtime.producer('top', '/dev/v4l/by-id/top', wait_s=1)
+    _producer_world(runtime, monkeypatch, ['4243'])
+    with pytest.raises(RuntimeError, match='sole camera owner'):
+        runtime.producer('top', '/dev/v4l/by-id/top', wait_s=1)
 
 
 def test_viewer_receive_profile_is_the_measured_4mib_udp_buffer_only():

@@ -113,3 +113,37 @@ def test_missing_exempt_table_exits_1(tmp_path):
     with pytest.raises(SystemExit) as stop:
         safety_review.load_exempt(tmp_path / "safety_review_exempt.json")
     assert "cannot load" in str(stop.value.code)
+
+
+def test_manifest_read_error_fails_without_poisoning_the_commit_cache(repo, monkeypatch):
+    changed = repo.commit({"pkg/x.py": "a = 2\n"}, "control-only edit")
+    safety_review._manifest_at.cache_clear()
+    parent = safety_review._manifest(repo.base)
+    real_run = subprocess.run
+    failed = False
+
+    def fail_one_lookup(args, *positional, **kwargs):
+        nonlocal failed
+        if (not failed and args[:2] in (["git", "rev-parse"], ["git", "ls-tree"])
+                and str(args[-1]).endswith(safety_review.MANIFEST)):
+            failed = True
+            result = subprocess.CompletedProcess(args, 128, "", "simulated manifest I/O failure")
+            if kwargs.get("check"):
+                result.check_returncode()
+            return result
+        return real_run(args, *positional, **kwargs)
+
+    monkeypatch.setattr(subprocess, "run", fail_one_lookup)
+    with pytest.raises(subprocess.CalledProcessError) as error:
+        safety_review.needs_review(changed, (parent,), [repo.base])
+    assert error.value.stderr == "simulated manifest I/O failure"
+    assert safety_review.needs_review(changed, (parent,), [repo.base]) == []
+    assert safety_review._manifest(changed) == parent
+
+
+def test_only_a_successful_absent_manifest_lookup_returns_empty(repo):
+    repo("rm", safety_review.MANIFEST)
+    missing = repo.commit({}, "historical manifest absence")
+    assert safety_review._manifest(missing) == {}
+    with pytest.raises(subprocess.CalledProcessError):
+        safety_review._manifest("f" * 40)

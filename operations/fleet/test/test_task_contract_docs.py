@@ -24,7 +24,7 @@ def test_task_contract_is_versioned_documented_and_wired_to_the_site_stack():
     web_contract = web + roster
     compose = (ROOT / "deploy/site/compose.yaml").read_text(encoding="utf-8")
 
-    assert "**Version:** v1.328" in reference
+    assert "**Version:** v1.331" in reference
     assert "## 10.16 Fleet goal-evidence producer contract (D-348)" in reference
     assert "`/api/fleet/goal-evidence`" in reference
     assert "X-Goal-Evidence-Token" in reference
@@ -63,7 +63,7 @@ def test_task_contract_is_versioned_documented_and_wired_to_the_site_stack():
     assert 'alias="Idempotency-Key"' in intent
     assert 'await execution.step(call, principal, idempotency_key' in intent
     assert 'call.verb == "navigate"' in execution
-    assert '"Idempotency-Key": crypto.randomUUID()' in web
+    assert '"Idempotency-Key": randomUUID()' in web
     assert 'task.status === "QUEUED"' in web_contract
     assert 'task.status === "UNKNOWN"' in web_contract
     assert '`/api/fleet/tasks/${encodeURIComponent(pending.task_id)}/cancel`' in web_contract
@@ -91,7 +91,7 @@ def test_site_fleet_intent_and_message_boundaries_are_governed_together():
     adr = (ROOT / "docs/adr/D-293-site-fleet-intent-api-contracts.md").read_text(
         encoding="utf-8")
 
-    assert "**Version:** v1.328" in reference
+    assert "**Version:** v1.331" in reference
     assert "X-Frame-Width" in reference and "X-Frame-Height" in reference
     assert "X-Frame-Rotation-Deg" in reference
     assert (
