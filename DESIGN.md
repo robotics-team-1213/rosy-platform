@@ -271,7 +271,7 @@ Fleet 앱 바의 오른쪽은 연결·알림·나·정지 순서다. 연결은 `
 - **바탕 사다리** (`ground-deep` → `ground` → `ground-raise` → `ground-soft` → `ground-card` → `ground-card-2`): `deep`에서 `card-2`로 갈수록 잉크 쪽이다. 상단바는 `ground-deep`, 페이지는 `ground`, 평평한 면은 `ground-soft`, 솟은 면은 `ground-card`, 눌림은 `ground-card-2`다.
 - **잉크** (`ink`, `ink-quiet`): 글자. `ink`는 정상 값·주 명령 채움, `ink-quiet`는 라벨·단위·보조.
 - **지도 래스터** (`raster-*`): 무채색, 밝기가 미지 → 비어 있음 → 불확실 → 점유 순으로 단조다.
-- **그림자 바탕** (`shadow-base`): 음영 `--shade-14/28`의 원천.
+- **그림자 바탕** (`shadow-base`): 팔레트 닫힌 키로 남긴다. 지금 화면에 그림자는 없다(D-926 6: 쓰지 않는 음영 토큰 삭제).
 
 ### 세 층 토큰
 
@@ -378,7 +378,6 @@ D-741(Accepted)이 정한, 모든 웹 표면이 같이 쓸 자리다. Rosy Fleet
 - **솟은 면** (`--surface-raised` = `ground-card`): 조작을 품은 면.
 - **선** (`--surface-line` = ink 14%, `--surface-sheen` = ink 6%): 면 경계.
 - **장막** (`--scrim`, `--scrim-raise`, `--scrim-top`, `--scrim-solid`, `--panel-fill`): 지도·영상 위에 얹는 글자의 바탕. 바탕 색의 알파다.
-- **음영** (`--shade-14`, `--shade-28`): `shadow-base`의 알파. 떠 있는 대화상자에만 쓴다.
 
 **The Stillness Rule.** 장식 움직임은 없다([D-220](docs/adr/D-220-stillness-contract-zero-motion-budget.md)). hover·active·눌림은 선과 면만 바꾼다. 전환 애니메이션을 더하지 않는다.
 

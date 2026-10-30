@@ -5,7 +5,8 @@ from pathlib import Path
 
 WEB = Path(__file__).resolve().parents[3] / 'applications/fleet/web'
 DOCS = {"index.html": "/console", "install.html": "/console/install",
-        "site-map.html": "/console/site-map", "cell.html": "/console?view=work"}  # D-741 7: Cell은 작업 영역이다
+        "site-map.html": "/console/site-map", "cell.html": "/console?view=work",  # D-741 7: Cell은 작업 영역이다
+        "policy.html": "/console?view=work"}  # D-926 2: 학습 정책 승인도 작업 영역이다
 ORDER = ["/console", "/console?view=work", "/console?view=records", "/console/site-map", "/console/install"]
 ICONS = ["fleet", "list", "history", "map", "install"]
 # D-741 2·6: 아이콘 아래에 짧은 이름을 적는다. 긴 이름은 접근 이름에 남고 보이는 글을 품는다(WCAG 2.5.3).
@@ -17,7 +18,7 @@ SUBNAV = {"site-map.html": ("현장 지도 작업", ["map", "survey", "profile",
 
 
 def _page(name):
-    for folder in ("cell", "installation", "sitemap"):
+    for folder in ("cell", "installation", "sitemap", "work"):
         path = WEB / folder / name
         if path.is_file():
             return path
@@ -65,7 +66,8 @@ def test_work_area_screens_are_the_same_subnav_in_the_console_and_cell():
                ("/console?view=work&amp;show=done", "끝난 작업"), ("/console?view=work&amp;show=new", "새 작업"),
                ("/console/learning", "학습")]
     for name, opening, current in (("index.html", '<div class="ui-subnav" data-area="work" hidden>', []),
-                                   ("cell.html", '<div class="ui-subnav">', ["/console?view=work&amp;show=new"])):
+                                   ("cell.html", '<div class="ui-subnav">', ["/console?view=work&amp;show=new"]),
+                                   ("policy.html", '<div class="ui-subnav">', ["/console/learning"])):
         page = _page(name).read_text(encoding="utf-8")
         seat = re.search(re.escape(opening) + r'<nav class="ui-subnav-nav" aria-label="작업 화면">(.*?)</nav></div>', page, re.S)
         assert seat, name

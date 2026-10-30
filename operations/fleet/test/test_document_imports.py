@@ -92,6 +92,7 @@ OWN = {
     },
     "install.js": {
         "device-profiles.js", "device-care.js",  # Metadata and care editing stay in Installation.
+        "file-picker.js",  # D-926 C7: one Korean file picker
         "enrollment.js",
         "camera-pairing.js",
         "camera-peer.js",
@@ -110,6 +111,7 @@ OWN = {
         "cell-document-editor.js",
         "cell-observation.js",
         "subnav-screens.js",  # D-926 3: each Cell step is its own screen
+        "file-picker.js",  # D-926 C7: one Korean file picker
     },
     "site-map.js": {
         "map-authoring.js", "map-editor.js", "drawing-import.js", "geometry-edit.js", "edit-history.js",
@@ -120,6 +122,7 @@ OWN = {
         "site-map-sources.js",  # Map profile selection and read-only camera-plane presentation.
         "site-map-edit.js",  # D-655: pure draft edits belong to the map editor document
         "subnav-screens.js",  # D-926 3: sub-nav moves between screens
+        "file-picker.js",  # D-926 C7: one Korean file picker
     },
 }
 

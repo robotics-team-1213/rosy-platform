@@ -19,7 +19,7 @@ def test_four_static_documents_match_canonical_components():
 
 def test_lightweight_documents_use_one_canonical_header_without_consuming_server_slots(tmp_path):
     api = component_api()
-    assert len(api['DOCUMENT_PAGES']) == 5
+    assert len(api['DOCUMENT_PAGES']) == 4  # D-926 2: policy moved to the work shell
     shutil.copytree(WEB, tmp_path/'web')
     root = tmp_path/'web'
     source = root/'shared/fleet-document-header.html.inc'
@@ -79,6 +79,6 @@ def test_layout_values_have_one_role_owner_and_no_per_page_duplicates():
     document = (WEB/'shared/fleet-document.css').read_text(encoding='utf-8')
     policy = (WEB/'work/policy.css').read_text(encoding='utf-8')
     for role, sheet in [('content-auth-max', document), ('content-learning-max', document),
-                        ('content-policy-max', document), ('content-policy-form-max', policy),
+                        ('content-policy-form-max', policy),
                         ('block-policy-evidence-max', policy), ('measure-login-identity', login)]:
         assert f'--{role}:' in tokens and f'var(--{role})' in sheet

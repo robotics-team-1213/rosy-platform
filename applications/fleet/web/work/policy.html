@@ -6,16 +6,80 @@
   <link rel="icon" type="image/svg+xml" href="/common/icons/console.svg">
   <link rel="stylesheet" href="/common/tokens.css"><script src="/common/theme.js"></script>
   <link rel="stylesheet" href="/common/components.css">
-  <link rel="stylesheet" href="/console/assets/fleet-document.css">
+  <link rel="stylesheet" href="/common/motor-health.css">
+  <link rel="stylesheet" href="/common/app-shell.css">
   <link rel="stylesheet" href="/console/assets/policy.css">
+  <link rel="stylesheet" href="/console/assets/doc-tabs.css">
+  <link rel="stylesheet" href="/console/assets/fleet-header.css">
+  <link rel="stylesheet" href="/console/assets/password-login.css">
   <script type="module" src="/common/ui.js"></script>
   <script type="module" src="/console/assets/policy-page.js"></script>
 </head>
-<body><ui-shell grammar="procedure">
-  <!-- fleet:document-header:start -->
-<ui-topbar><ui-brand href="/console"><b>Rosy Fleet</b><small>학습 정책 승인</small></ui-brand><span data-spacer></span><ui-button kind="quiet" data-theme-cycle="" data-icon-only="" type="button" aria-label="테마 변경" data-action-icon="theme-dark"></ui-button></ui-topbar>
-<!-- fleet:document-header:end -->
-  <main class="policy-main fleet-document">
+<body>
+<ui-shell grammar="procedure" class="fleet-shell">
+  <a class="skip-link" href="#policy-main">본문으로 건너뛰기</a>
+  <!-- D-926 2: 실물 실행을 여는 화면이라 다른 작업 화면과 같은 머리(비상 정지·계정)와 레일을 쓴다. -->
+  <header class="fleet-header">
+  <!-- fleet:header:start -->
+<ui-topbar>
+    <div class="fleet-header-identity" data-header-region="identity" role="group" aria-label="제품과 현장">
+    <ui-brand href="/console" aria-label="Rosy Fleet 관제 홈"><b><span class="fleet-wordmark">Fleet</span></b><small id="fleet-name">사이트</small></ui-brand>
+    </div>
+    <div class="fleet-link-status" data-header-region="status" role="group" aria-label="연결 상태와 시각">
+      <ui-tag id="link-state" variant="inline" status="neutral" data-link="wait">연결 대기</ui-tag>
+      <ui-text id="clock" scale="value">--:--:--</ui-text>
+    </div>
+    <div id="fleet-header-actions" class="fleet-header-actions" data-header-region="actions" role="group" aria-label="알림과 계정">
+    <ui-button kind="quiet" id="fleet-inbox" type="button" aria-label="알림 창"><span data-action-icon="notification" data-icon-only="" aria-label="알림"></span><span id="header-unread" hidden></span></ui-button>
+    <a id="fleet-login" class="ui-disclosure-row" href="/console/login" data-action-icon="login">로그인</a>
+    <!-- D-473 — 개발 접속 경고는 닫힌 계정 단추에서도 보인다. -->
+    <ui-button kind="quiet" id="topbar-more" type="button" aria-expanded="false" aria-controls="topbar-extra" aria-label="계정과 접속">
+      <span class="header-status-item"><span data-action-icon="account" data-icon-only="" aria-label="계정"></span><ui-tag id="user-role" variant="inline" status="neutral">인증 필요</ui-tag></span>
+      <ui-tag id="development-badge" variant="inline" status="warn" hidden aria-label="개발 연결 모드: 같은 망 PC에 1시간 운영자 세션 제공" title="같은 망 PC 누구나 1시간 운영자 세션을 받는다 (D-473)">개발</ui-tag>
+    </ui-button>
+    </div>
+    <div class="fleet-header-safety" data-header-region="safety" role="group" aria-label="안전 조작">
+    <ui-button kind="irreversible" id="estop" data-always-live class="estop" type="button" data-action-icon="estop"><span>비상 정지</span><small>래치 · 로봇별 관리자 해제</small></ui-button>
+    </div>
+    <div id="topbar-extra" class="topbar-extra" data-open="false" role="region" aria-label="계정과 접속 상세">
+      <div id="fleet-account" class="fleet-account-panel" hidden>
+        <p id="fleet-account-identity"></p>
+        <a id="fleet-profile" href="/console/profile" hidden>내 계정</a>
+        <div id="password-login" class="password-login" hidden></div>
+      </div>
+      <ui-button kind="quiet" id="fleet-theme" data-theme-cycle="" data-icon-only="" type="button" aria-label="테마 변경" data-action-icon="theme-dark"></ui-button>
+      <!-- D-519 — 사람은 /console/login에서 로그인한다. 토큰 접속은 계정 단추 아래에 남는다. -->
+
+      <details id="token-access" class="token-access">
+        <summary>토큰으로 접속</summary>
+        <input id="console-token" class="ui-field" type="password" placeholder="관제 토큰"
+               autocomplete="off" aria-label="관제 토큰">
+        <ui-button kind="quiet" id="token-save" type="button">접속</ui-button>
+      </details>
+    </div>
+  </ui-topbar>
+<!-- fleet:header:end -->
+  </header>
+  <div class="fleet-body">
+  <!-- fleet:nav:start -->
+<nav class="doc-tabs" aria-label="Rosy Fleet 문서">
+    <a href="/console" data-action-icon="fleet">관제</a>
+    <a href="/console?view=work" aria-current="page" data-action-icon="list">작업</a>
+    <a href="/console?view=records" data-action-icon="history">기록</a>
+    <a href="/console/site-map" data-action-icon="map" aria-label="현장 지도">지도</a>
+    <a href="/console/install" data-action-icon="install" aria-label="설치·보정">설치</a>
+  </nav>
+<!-- fleet:nav:end -->
+  <div class="ui-subnav"><nav class="ui-subnav-nav" aria-label="작업 화면">
+    <a class="ui-subnav-item" href="/console?view=work">전체 작업</a>
+    <a class="ui-subnav-item" href="/console?view=work&amp;show=pending">승인 대기</a>
+    <a class="ui-subnav-item" href="/console?view=work&amp;show=done">끝난 작업</a>
+    <a class="ui-subnav-item" href="/console?view=work&amp;show=new">새 작업</a>
+    <a class="ui-subnav-item" href="/console/learning" aria-current="page">학습</a>
+  </nav></div>
+  <div class="fleet-workspace">
+  <ui-status id="estop-feedback" hidden></ui-status>
+  <main id="policy-main" class="policy-main fleet-task-page" tabindex="-1">
     <h1 class="ui-page-heading">학습 정책 승인</h1>
     <p>새로 학습한 정책은 0단계로 등록되고 실물을 움직이지 않습니다. 단계는 관리자 승인으로 하나씩 오르고,
       실물을 움직이는 단계(3단계·제한 사용)는 제안한 사람과 다른 관리자가 승인합니다. 실물 실행은 승인 창이
@@ -27,24 +91,24 @@
     <ui-status id="policy-message" role="alert" hidden></ui-status>
 
     <div id="policy-content" hidden>
-    <section aria-labelledby="policy-incidents-heading">
-      <h2 id="policy-incidents-heading">사고 잠금</h2>
+    <ui-section aria-labelledby="policy-incidents-heading">
+      <ui-head><h2 class="ui-section-heading" id="policy-incidents-heading">사고 잠금</h2></ui-head>
       <ul id="policy-incidents" class="policy-list"></ul>
       <form id="policy-incident-form" class="ui-form">
         <label for="policy-incident-text" class="ui-field-label">사고·파손 신고 — 이 작업셀의 승인 창을 모두 닫습니다</label>
         <textarea id="policy-incident-text" class="ui-field" maxlength="1000" required></textarea>
         <ui-actions><ui-button id="policy-incident-report" kind="quiet">사고 신고…</ui-button></ui-actions>
       </form>
-    </section>
+    </ui-section>
 
-    <section aria-labelledby="policy-confirmations-heading">
-      <h2 id="policy-confirmations-heading">확인 요청</h2>
+    <ui-section aria-labelledby="policy-confirmations-heading">
+      <ui-head><h2 class="ui-section-heading" id="policy-confirmations-heading">확인 요청</h2></ui-head>
       <ui-actions><ui-button id="policy-sync-owner" kind="quiet">팔 제어 보류 가져오기</ui-button></ui-actions>
       <ul id="policy-confirmations" class="policy-list"></ul>
-    </section>
+    </ui-section>
 
-    <section aria-labelledby="policy-windows-heading">
-      <h2 id="policy-windows-heading">승인 창</h2>
+    <ui-section aria-labelledby="policy-windows-heading">
+      <ui-head><h2 class="ui-section-heading" id="policy-windows-heading">승인 창</h2></ui-head>
       <ul id="policy-windows" class="policy-list"></ul>
       <form id="policy-window-form" class="ui-form">
         <label for="policy-window-policy" class="ui-field-label">정책 버전</label>
@@ -57,10 +121,10 @@
         <input id="policy-window-scope" class="ui-field" maxlength="500" required>
         <ui-actions><ui-button id="policy-window-request" kind="quiet">승인 창 요청</ui-button></ui-actions>
       </form>
-    </section>
+    </ui-section>
 
-    <section aria-labelledby="policy-stages-heading">
-      <h2 id="policy-stages-heading">정책 단계</h2>
+    <ui-section aria-labelledby="policy-stages-heading">
+      <ui-head><h2 class="ui-section-heading" id="policy-stages-heading">정책 단계</h2></ui-head>
       <ul id="policy-stages" class="policy-list"></ul>
       <h3>대기 중인 단계 제안</h3>
       <ul id="policy-proposals" class="policy-list"></ul>
@@ -77,8 +141,11 @@
         <input id="policy-proposal-note" class="ui-field" maxlength="500" required>
         <ui-actions><ui-button id="policy-proposal-submit" kind="quiet">다음 단계 제안</ui-button></ui-actions>
       </form>
-    </section>
+    </ui-section>
     </div>
-    <p><a href="/console">관제로 돌아가기</a></p>
   </main>
-</ui-shell></body></html>
+  </div>
+  </div>
+</ui-shell>
+</body>
+</html>

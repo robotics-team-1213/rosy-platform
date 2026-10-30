@@ -1,12 +1,19 @@
 // D-793 /console/policy: 학습 정책 단계·승인 창·확인 요청·사고 잠금. 규칙은 서버가 판단한다.
 import {createFleetClient} from '/common/fleet-client.js';
 import {confirmIrreversible} from '/common/ui.js';
+import {bindEstop, bindTopbarToggle, showSession, showSignedOut, tickClock, watchFleet} from '/console/assets/fleet-header.js';
 import {
   ADMIN_REASON, OPERATOR_REASON, REASON_LABELS, RESOLUTION_LABELS, STAGE_LABELS, WINDOW_LABELS,
   errorText, executionVerdict, incidentLock, nextStage, proposalLock, remaining, roles, windowLock,
 } from '/console/assets/policy-model.js';
 
 const request = createFleetClient(), $ = id => document.getElementById(id);
+// D-926 2: the same app bar as the other work screens, so the emergency stop and account stay in reach here.
+bindEstop(request);
+bindTopbarToggle();
+tickClock();
+setInterval(tickClock, 1000);
+watchFleet(request);
 let who = roles(null), state = null, busy = false;
 const workcell = () => $('policy-workcell').value;
 const base = () => `/api/fleet/workcells/${encodeURIComponent(workcell())}/policy`;
@@ -188,7 +195,9 @@ $('policy-workcell').addEventListener('change', refresh);
 
 async function start() {
   try {
-    who = roles(await request('/api/fleet/auth/session'));
+    const session = await request('/api/fleet/auth/session');
+    who = roles(session);
+    showSession(session);
     const {workcells} = await request('/api/fleet/policy-governance/workcells');
     $('policy-workcell').replaceChildren(...workcells.map(id => element('option', id, {value: id})));
     $('policy-workcell').hidden = !workcells.length;
@@ -202,6 +211,7 @@ async function start() {
   } catch (error) {
     $('policy-verdict').textContent = errorText(error); $('policy-verdict').setAttribute('state', 'unavailable');
     $('policy-login').hidden = error.status !== 401;
+    if (error.status === 401) showSignedOut();
   }
 }
 start();

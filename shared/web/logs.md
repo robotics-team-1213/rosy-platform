@@ -1012,3 +1012,9 @@
 - 증거: 이전 UI source의 공식 영향 검사에서 이 계약이 NEW였고 같은 ID는 main에서 통과했다. 검토된 foundation patch를 제품 정본 수정과 별도 branch로 적용했다. source `8c6786e348`의 원격 공용 셸 검사10건이 exit0으로 통과했다. 외부 `rosy-ui-canonical/foundation/run-1.txt`에 원문을 보존하며 제품의 icon-only 형식도 제품 source에서 별도 재검증한다.
 - gate 변화: 없음. 표시 정책의 제품 수용과 native main 반영은 별도다.
 - CE: 해당 없음 — 기존 의미 계약을 유지하는 matcher 수정이며 원인과 허용 범위가 검사에 남는다.
+
+## 2026-10-30 · uncommitted · D-926 6: 쓰지 않는 토큰 정리
+
+- 변경: 어디서도 읽지 않는 `--flag-line`·`--ground-grad-2`·`--line-015`·`--shade-14`·`--shade-28`과 정책 문서 폭 `--content-policy-max`를 지웠다. `--ground-grad-1`은 색 섞기 해석 시험의 기준으로 남는다. `DESIGN.md` 음영 항목과 부품 견본의 폭 줄을 같이 정리했다.
+- 증거: `git grep`으로 소비처 없음 확인, 대비 시험은 `--surface-line`만 본다.
+- gate 변화: 없음. CE: 해당 없음.

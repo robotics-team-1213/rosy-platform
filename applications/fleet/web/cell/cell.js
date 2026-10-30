@@ -8,6 +8,7 @@ import {bindEstop, bindTopbarToggle, showSession, showSignedOut, tickClock, watc
 import {renderStructuredDocument} from '/console/assets/cell-document-editor.js';
 import {createCellObservation} from '/console/assets/cell-observation.js';
 import {bindScreens} from '/console/assets/subnav-screens.js';
+import '/console/assets/file-picker.js';
 
 const $ = id => document.getElementById(id);
 // D-926 3: each Cell step is its own screen; the first one shows the live cell beside the saved documents.
@@ -309,7 +310,6 @@ for (const kind of ['recipe', 'cell']) {
   });
   $(kind + '-file').addEventListener('change', async () => {
     const file = $(kind + '-file').files[0];
-    $(kind + '-file-name').textContent = file?.name || '선택한 파일 없음';
     if (!file || busy) return;
     editEpoch++; invalidate(); const epoch = editEpoch;
     await action(async () => {
