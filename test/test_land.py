@@ -109,8 +109,25 @@ def test_local_size_check_failure_stops_before_any_test_host(repos, monkeypatch)
     assert git(main, "rev-parse", "HEAD") == before
 
 
+@pytest.mark.parametrize("cause", ["lint", "conflict"])
+def test_admission_lint_or_conflict_stops_before_a_ticket(repos, monkeypatch, cause):
+    """D-889 S0: the branch's own lint error and a conflict with main stop before the queue, not after the wait."""
+    main, wt = repos
+    if cause == "lint":
+        commit(wt, {land.HARNESS: "import sys\nsys.exit(1 if sys.argv[1:] == ['lint'] else 0)\n"}, "bad record")
+    else:
+        commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")
+        commit(main, {"pkg/a.py": "x = 3\n"}, "peer")
+    monkeypatch.setattr(land.land_queue, "enter", lambda *a, **k: pytest.fail("ticket taken"))
+    monkeypatch.setattr(land.remote_pytest, "run", lambda *a, **k: pytest.fail("test host reached"))
+    before = git(main, "rev-parse", "HEAD")
+    assert land.main(["--tests", "auto"]) == 1
+    assert git(main, "rev-parse", "HEAD") == before
+    assert git(wt, "status", "--porcelain") == ""
+
+
 @pytest.mark.parametrize("peer_path, second_round", [
-    ("docs/adr/D-9.md", []),             # records only: module suite skipped
+    ("docs/adr/D-9.md", []),            # records only: module suite skipped
     ("lib/util.py", [["pkg/test"]]),     # code the tests may import: full rerun
 ])
 def test_main_moved_retests_unless_records_only(repos, monkeypatch, peer_path, second_round):
