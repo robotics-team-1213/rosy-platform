@@ -1012,3 +1012,10 @@
 - 증거: 이전 UI source의 공식 영향 검사에서 이 계약이 NEW였고 같은 ID는 main에서 통과했다. 검토된 foundation patch를 제품 정본 수정과 별도 branch로 적용했다. source `8c6786e348`의 원격 공용 셸 검사10건이 exit0으로 통과했다. 외부 `rosy-ui-canonical/foundation/run-1.txt`에 원문을 보존하며 제품의 icon-only 형식도 제품 source에서 별도 재검증한다.
 - gate 변화: 없음. 표시 정책의 제품 수용과 native main 반영은 별도다.
 - CE: 해당 없음 — 기존 의미 계약을 유지하는 matcher 수정이며 원인과 허용 범위가 검사에 남는다.
+
+## 2026-10-31 · uncommitted · capture-wall 표면 등록과 캔버스 계약 준수
+
+- 변경: `surfaces.yaml`에 다중 녹화 벽(`tools/capture/multi_record.html`)을 `capture-wall`(dev)로 등록하고 캔버스 팔레트 계약 목록에 올렸다. 페이지는 참조 `./` 접두, 범위 제목 `Rosy 개발 — 함께 녹화`, 캔버스 색·글꼴을 `window.RosyPalette`로 읽도록 바뀌었고 `multi_record.py`는 `ui.js`와 의존 모듈 셋을 세션 `common/`에 복사한다(D-937).
+- 증거: 원격 영향 선택 923 passed. 첫 돌림의 2 failed(캔버스 팔레트·제목 계약)는 같은 커밋에서 계약 준수로 해소했고 `tools/capture/test/test_multi_record.py` 10 passed, `test/known_failures.py` 0 new다. 브라우저 화면 검증·실물 녹화 세션 수용은 별개다.
+- gate 변화: 없음. 토큰·테마 계약의 선택 범위가 이 페이지로 늘었다.
+- CE: 해당 없음 — 기존 교훈(2026-10-18 미등록 표면)의 적용이며 원인·해결이 레지스트리와 계약 시험에 남는다.

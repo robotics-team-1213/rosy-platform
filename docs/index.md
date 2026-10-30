@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-10-31 · uncommitted · docs: D-937 제품 앱 입사 문법과 capture-wall 표면 등록
 - 2026-10-30 · uncommitted · omx: D-935 payload bound on the D-911 gate
 - 2026-10-30 · uncommitted · omx: cell scale reader and D-934 object mass
 - 2026-10-30 · uncommitted · docs(adr): D-931..D-933 arm S measured checks, one field revision, cell coordinate frame
 - 2026-10-30 · 08b6c8c362 · 새 장치 수집과 mDNS 진단 기록
-- 2026-10-30 · fd11d5158a · D-926 운용 화면의 읽는 순서·깊이·말의 규칙
