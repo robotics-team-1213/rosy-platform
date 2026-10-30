@@ -18,19 +18,24 @@ from run_store import RunConflict, TERMINAL, input_snapshot, requested
 from run_system import System
 
 
-def _budget(directory):
+def _budget(directory, found=None):
+    """`found` receives the unsafe entry, its mode and link count, so a transient one is still on record."""
     if shutil.disk_usage(directory).free < 1024 ** 3:
         return 'insufficient_space'
     count, size = 0, 0
     for base, dirs, files in os.walk(directory, followlinks=False):
         for name in dirs + files:
             path = Path(base) / name
-            info = path.lstat()
-            if stat.S_ISLNK(info.st_mode) or not (stat.S_ISREG(info.st_mode) or stat.S_ISDIR(info.st_mode)):
+            try:
+                info = path.lstat()
+            except FileNotFoundError:
+                continue
+            if (stat.S_ISLNK(info.st_mode) or not (stat.S_ISREG(info.st_mode) or stat.S_ISDIR(info.st_mode))
+                    or stat.S_ISREG(info.st_mode) and info.st_nlink != 1):
+                if found is not None:
+                    found.append(f'{path.relative_to(directory)} mode {oct(info.st_mode)} nlink {info.st_nlink}')
                 return 'unsafe_output'
             if stat.S_ISREG(info.st_mode):
-                if info.st_nlink != 1:
-                    return 'unsafe_output'
                 count += 1
                 size += info.st_size
                 if info.st_size > 128 * 1024 * 1024:
@@ -73,7 +78,10 @@ def supervise(argv, *, cwd, env, descriptors, output, stop_requested, timeout=16
                 elif time.monotonic() >= deadline:
                     reason = 'runtime_limit'
                 else:
-                    reason = _budget(output)
+                    found = []
+                    reason = _budget(output, found)
+                    for entry in found:
+                        log.write(f'\nSUPERVISOR unsafe_output {entry}\n'.encode())
                 if reason:
                     break
                 if selector.select(0.05):
@@ -173,8 +181,9 @@ def execute(store, binding_file, run_id, *, expected_binding_sha256=None):
                             '--headless', '--frames', '120', '--report', str(directory / 'import-report.json')]
                     contact_task = row['input']['scenario_id'] == 'pinky-conveyor-roundtrip'
                     arm_task = row['input']['scenario_id'].startswith('arm-s-cell-')
-                    mapped_cube = row['input']['scenario_id'] == 'omx-map-cube-stack'
-                    mapped_task = row['input']['scenario_id'] in ('omx-map-long-stack', 'omx-map-cube-stack')
+                    container_task = row['input']['scenario_id'] == 'omx-map-container-stack'
+                    mapped_cube = row['input']['scenario_id'] in ('omx-map-cube-stack', 'omx-map-container-stack')
+                    mapped_task = row['input']['scenario_id'] in ('omx-map-long-stack', 'omx-map-cube-stack', 'omx-map-container-stack')
                     mapped_rl = row['input']['scenario_id'] == 'omx-map-stacking-rl'
                     stacking_task = row['input']['scenario_id'] == 'omx-stacking-rl' or mapped_task or mapped_rl
                     report_path = directory / ('contact-report.json' if contact_task else
@@ -187,7 +196,13 @@ def execute(store, binding_file, run_id, *, expected_binding_sha256=None):
                         if mapped_task:
                             report_path = directory / 'mapped-stack-report.json'
                             argv[argv.index('--report')+1] = str(report_path)
-                            argv.append('--mapped-cube-stack' if mapped_cube else '--mapped-long-stack')
+                            if container_task:
+                                if not all(shutil.which(tool) for tool in ('ffmpeg', 'ffprobe')):
+                                    raise ValueError('Continuous recording requires ffmpeg and ffprobe')
+                                argv.extend(['--mapped-container-stack', '--layers', str(row['input']['config']['layers']),
+                                             '--container-case', row['input']['config']['case']])
+                            else:
+                                argv.append('--mapped-cube-stack' if mapped_cube else '--mapped-long-stack')
                         elif mapped_rl:
                             argv.append('--mapped-rl')
                     if arm_task:  # the real cell's chunk frames for this scenario (system python: the planner)
@@ -210,12 +225,13 @@ def execute(store, binding_file, run_id, *, expected_binding_sha256=None):
                                 '--report', str(report_path)]
                     outcome = supervise(argv, cwd=directory, env=env, descriptors=descriptors,
                                         output=directory, stop_requested=stopped,
-                                        **({'timeout': 870} if stacking_task else {}))
+                                        **({'timeout': 2310 if container_task else 870} if stacking_task else {}))
                     if outcome['exit_code'] == 0 and outcome['reason'] == 'process_exited':
                         if mapped_task:
                             from mapped_stack_report import verify_report as verify_mapped
                             report = verify_mapped(report_path, sdk_version=binding['sdk_version'],
-                                                   seed=row['input']['config']['seed'], cube=mapped_cube)
+                                                   seed=row['input']['config']['seed'], cube=mapped_cube,
+                                                   **({'container': row['input']['config']} if container_task else {}))
                         elif stacking_task:
                             from stacking_report import verify_report as verify_stacking
                             report = verify_stacking(report_path, sdk_version=binding['sdk_version'],
@@ -240,15 +256,20 @@ def execute(store, binding_file, run_id, *, expected_binding_sha256=None):
                 clean = _cleanup(owner)
             except OSError:
                 clean = False
-            until = time.monotonic() + 3
+            # Bound retry starts; in-flight GPU probes retain their subprocess timeouts.
+            until = time.monotonic() + 15
             observed_gpu = gpu_state()
-            while clean and not observed_gpu['ready'] and time.monotonic() < until:
+            while clean and observed_gpu['ready'] is not True and time.monotonic() < until:
                 time.sleep(0.2)
+                if time.monotonic() >= until:
+                    break
                 observed_gpu = gpu_state()
-            if not clean or not observed_gpu['ready']:
+            if not clean or observed_gpu['ready'] is not True:
                 current = store.get(run_id)
                 store.update(run_id, current['revision'], {'status': 'UNKNOWN',
-                             'cleanup': 'UNCONFIRMED', 'error': 'owned cleanup or GPU release unconfirmed'})
+                             'cleanup': 'UNCONFIRMED', 'error': 'owned cleanup or GPU release unconfirmed',
+                             'runtime': dict(current['runtime'], cleanup_observation={
+                                 'owned_processes_exited': clean, 'gpu': observed_gpu})})
                 return 2
             if report is not None:
                 raw = report_path.read_bytes()
@@ -269,6 +290,8 @@ def execute(store, binding_file, run_id, *, expected_binding_sha256=None):
                         raise ValueError('Invalid task image')
                     artifacts.append(dict(id=Path(name).stem, name=name, bytes=len(data),
                                           sha256=hashlib.sha256(data).hexdigest(), media_type='image/png'))
+                if row['input']['scenario_id'] == 'omx-map-container-stack':
+                    artifacts.extend(report['video']['artifacts'])
             return _finish(store, run_id, outcome, report, artifacts, stopped(), gpu=admitted_gpu)
     except (OSError, ValueError, subprocess.SubprocessError):
         if leased:
@@ -283,8 +306,9 @@ def _finish(store, run_id, outcome, report, artifacts, stopped, *, gpu=None,
     current = store.get(run_id)
     contact_task = current['input']['scenario_id'] == 'pinky-conveyor-roundtrip'
     arm_task = current['input']['scenario_id'].startswith('arm-s-cell-')
-    mapped_cube = current['input']['scenario_id'] == 'omx-map-cube-stack'
-    mapped_task = current['input']['scenario_id'] in ('omx-map-long-stack', 'omx-map-cube-stack')
+    container_task = current['input']['scenario_id'] == 'omx-map-container-stack'
+    mapped_cube = current['input']['scenario_id'] in ('omx-map-cube-stack', 'omx-map-container-stack')
+    mapped_task = current['input']['scenario_id'] in ('omx-map-long-stack', 'omx-map-cube-stack', 'omx-map-container-stack')
     passed = report is not None and (not (contact_task or arm_task or mapped_task) or report['task_success'] is True)
     status = 'STOPPED' if stopped else ('SUCCEEDED' if passed else 'FAILED')
     result = dict(outcome, status=status, stage='model_import', task_success=None,
@@ -293,10 +317,14 @@ def _finish(store, run_id, outcome, report, artifacts, stopped, *, gpu=None,
                   completed_frames=report.get('completed_frames') if report else None,
                   cleanup=cleanup, gpu=gpu, video_unavailable_reason='model_import_does_not_record_video')
     if mapped_task:
-        result.update(stage='mapped_cube_stack' if mapped_cube else 'mapped_long_stack', task_success=bool(report and report['task_success']),
+        result.update(stage='mapped_container_stack' if container_task else 'mapped_cube_stack' if mapped_cube else 'mapped_long_stack', task_success=bool(report and report['task_success']),
             successful_trials=sum(t['task_success'] for t in report['trials']) if report else 0,
             coordinate_scope='CONFLUENCE_CAD_WITH_NOMINAL_PHOTO_CELL',
             controller='NOMINAL_IK_REFERENCE_NOT_LEARNED_POLICY', video_unavailable_reason='phase_pngs_only_no_video')
+        if container_task:
+            result['coordinate_scope'] = current['input']['scene']['coordinate_scope']
+            result.pop('video_unavailable_reason')
+            result['video_verified'] = bool(report and report.get('video'))
     if contact_task:
         result.update(stage='contact_roundtrip', task_success=bool(report and report['task_success']),
             evidence_class=report['judgement']['evidence_class'] if report else 'INCOMPLETE_CONTACT_TASK',

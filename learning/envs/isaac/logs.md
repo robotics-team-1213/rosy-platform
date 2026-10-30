@@ -418,3 +418,82 @@
 - 증거: `c1786ef9d6` / `254a87c630f8581dbdc53a5218438a36`에서 세 화물이 놓였지만 마지막 기울어진 면이 허용 경계를.420896mm 넘어서 물리 과제 실패로 보존했다. SDKexit0·import·소유 프로세스/GPU 해제는 확인했다. 앞선 `edbf49d6e0` 실행은 원시 보고서 검증과 별개로 종료 정리 UNKNOWN을 유지한다. `5c89f3d1f3` 첫 행 개방 -.6mm 보정은32원격 검사 통과·신규 실패0, 실제 재실행은 다른 GPU compute 점유로 승인 대기다.
 - gate 변화: SOURCE 근거만 갱신하며 기존 ROS-SIM HOLD를 유지한다. 한 층 물리 성공·수정 맵 학습 숙련·실물·현장 수용은 미검증이다. 실행별 실패와 종료 정리 상태는 검증 기록에서 구분했다.
 - CE: 미해결 — 보정의 물리 검증과 간헐적 종료 정리 UNKNOWN 원인이 남아 있어 해결 교훈을 쓰지 않았다.
+
+## 2026-10-29 · uncommitted · 컨테이너 외형·접촉 실험과 실물 포함 개선 목표
+
+- 변경: 현재 한 층 시나리오에 초록/주황 컨테이너 시각 주름·문을 추가하고 충돌 박스·질량을 유지했다.8mm 개방 접촉을 확인한 뒤15mm로 복원했고, 낮은 파지 힘 가설은 수렴 거절 후 기존.2Nm로 복원했다. actual effort readback과 기존 접촉/추종/개방 거절은 유지했다.
+- 증거: source23dd5d14ef/run604342a0af85564c84d2e4c3039ca088, SDKexit0/import/ownedcleanup 확인·물리FAILED(두 번째 개방 전 수렴 거절). full Isaac/transport463통과1건너뜀0NEW.754c3a8db6 원복·문서 배치·릴리스 guard122통과0NEW. source0fc776e21a의 실제 초록/주황 SDK 이미지를 확인했다. 어떤 실행도 ACT/RL 숙련이나 실물 수용으로 승격하지 않았다.
+- 목표/계획: Confluence13336578의 ACT50k/100k 비교·실물 양팔 적재 계획은 독립 구조/비평 검토3회 후 승인됐다. 원래 단암 과제8paired조건 비교, 성공 시연 보강, 독립8pair 재평가, 실제 양팔1층3/3 수용을 필수 단계로 둔다. 모형·정규화·두 카메라/native admission·HIL/현장 준비 gate가 남아 있다. 기존 모델 파일은 확인한 문서 경로에서 미확보다.
+- gate 변화: SOURCE 기록을 갱신하고 기존 ROS-SIM HOLD를 유지한다. 물리 한 층·ACT비교·실물/현장 수용은 미완료이며 현재 원시 실패와 계획의 완료 조건을 구분한다.
+- CE: 미해결 — 물리 적재와 모델 파일/native 실행 검증은 남아 있다. 계획·검토 승인을 실행 성공 교훈으로 작성하지 않았다.
+
+## 2026-10-29 · d7ffc7d77d · bounded slower container release
+
+- 변경: 개방 가속도만0.4→0.1rad/s²로 낮췄다. quintic 속도/가속도 경계를 계산하고 관측 플래그와 모션 선택을 분리했다.15mm개방 높이·기존 파지 힘·접촉/추종/안정성 판정을 유지했다.
+- 증거: RED4개 실패 후 focused36통과, full Isaac/transport467통과1건너뜀0NEW. seed42run a6d51484942553919af9f9119b080747 및 seed43run4a717f4ed20957e3a84e622650e4b787은 물리SUCCEEDED/SDKexit0/import검증/소유프로세스종료·GPU반환 확인. 실제 최종 이미지를 검사했다. 독립 읽기 전용 구현 검토APPROVE. 보고서 지문과 전체 제한은 검증 정본에 기록했다.
+- gate 변화: G1은 seed44 관측을 기다린다. 이 실험은 IK 기준선이며 기존 ROS-SIM HOLD·ACT비교·RL학습·실물/현장 수용 상태를 올리지 않는다.
+- CE: 미해결 — 첫 두 조건 성공과 남은 수용 단계를 구분한다. 개방 변위 관측과 판단은 검증 정본에서 재구성할 수 있어 별도 해결 교훈을 중복 작성하지 않았다.
+
+### Same-source G1 final observation
+
+- 변경: 동일source d7ffc7d77d에서 seed44를 추가 실행하고 최종 G1 기록을 갱신했다. 코드·물리 판정을 추가 변경하지 않았다.
+- 증거: seed44run99bc2112cf2451d6b1c4ae820b36dc50, task_success=true/실패없음/SDKexit0/import검증/소유프로세스종료·GPU반환 확인. 세 조건의 실제 최종 이미지를 검사했다. source 동일한42/43/44 전체3/3이며 각 보고서SHA와 초기조건 범위는 검증 정본에 있다.
+- gate 변화: 현재맵1층 IK 기준선G1만 수용했다. 목표90mm3층·ACT/RL·실물은 미완료이며 기존 ROS-SIM HOLD를 유지한다.
+- CE: 미해결 — 실물·모델 접근·native admission이 남아 있다. 이 개방 실험의 판단은 코드·시험·검증 정본에 이미 있어 별도 해결 교훈을 늘리지 않았다.
+
+## 2026-10-30 · 2fa51ef713 · native video, actual-map CAD and tabletop regrasp
+
+- 변경: 기존 맵에 별도 immutable container scenario와9개/3층 계획·실제800×600/10fps 연속 녹화·native ReferenceTime·등록 해시·전체 영상 디코드를 연결했다. 기존1층 fixture와 최종 물리 판정은 보존했다. 정지한 GPU readback은 최대8회 실제 렌더 갱신으로 확인하며, 신선한 native 시간 없이 프레임을 합성하지 않는다. 큰 등록 산출물만 회수 제한을180초로 늘렸다.
+- 증거: 녹화 포함1층run e64626136b965d3296768110654bbf82는 물리·영상·import·SDKexit0·소유 프로세스 종료/GPU반환을 통과했다.1595frames/159.5s MP4 전체 디코드와3/80/158초 실제 프레임, Confluence 업로드/다운로드SHA를 확인했다. d517d88d7d 전체 원격526통과1건너뜀0NEW, 읽기 전용 구현 검토APPROVE. 상세 수치·SHA·실패 실행은 검증 정본에 있다.
+- gate 변화:3층v1-v6는 중간 접촉·착지 외곽·중간 간격·각속도 검사로 실패했다. V3의8개 안정 결과도9개 성공으로 올리지 않았다. V6은2층6개 완료 후7번째 안정화에서 중단했고381.4s 영상을 보존했다. 새 실제 CAD13205531과 비교하자 판/팔 간격/벨트 높이가 달라 기존 nominal 수용을 새 맵에 재사용하지 않았다. Stage1603×760×18mm·대향 조립 원점330mm·기울어진 낮은 벨트 평면을 반영했다. SIM 안의 지정된 벨트 구간에만 낮은 IK를 허용하고 모든 샘플과 scene/base/yaw를 확인한다. 공유 프로필·실물 owner는 유지했다. 새 소스 전체637통과1건너뜀0NEW/읽기 전용 검토APPROVE이며 새 CAD1층 실행을 시작한다. ACT/RL·실물·현장·기존 ROS-SIM HOLD는 승격하지 않는다.
+- CE: 새 교훈 기록 — 실제 native readback 정체 재현과1층 녹화 수용으로 검증한 복구를 `docs/solutions/runtime-errors/isaac62-native-recording-stale-reference-time-2026-10-29.md`에 기록했다.3층 착지 안정성은 아직 해결 교훈으로 쓰지 않았다.
+
+### Actual-map first attempt and leveling preflight
+
+- 새 CAD 첫 실행868ccb4935795d9a8b9c7c384e28c24a는 벨트 기울기−4.63°를 유지한 바가X80→82.0501mm에 착지해 물리 실패했다. 별도로 supervisor cleanup gate가 UNKNOWN을 기록했다. 원본13파일·56.4s 영상의 읽기 전용 해시/전체 디코드 검증과 나중의 소유 unit/cgroup/GPU 확인을 분리했고, 등록 상태를 승격하지 않았다.
+- 기존 판의120×100mm 영역에서 실제 내려놓기·수평 지지·안정화·같은 팔 재집기·두 번째 free lift를 추가했다. 팔별 중간 yaw±pi/2로 기존 손목 한계를 유지했다. 최초 리프트부터 적재 개방/안정화까지 관측 순서를 검증하며, 최종 허용 오차·물리 파지 조건은 유지한다.
+- Source609 전체669통과1건너뜀0NEW/읽기 전용 검토APPROVE. 실제 첫 재시도3c61은 표시용 USD 이름의 음수 기호 때문에 물리 실행 전에 실패했다. 위치를 바꾸지 않고 식별자를 고친2fa는 장면 생성 회귀를 포함한38검사0NEW/읽기 전용 검토APPROVE. 새 물리 재시도는 공유 실행 admission을 기다린다.1층 성공·3층 성공·학습/실물 수용을 선언하지 않는다.
+- CE: 기존 교훈 갱신 — `isaac-run-unknown-was-a-worker-crash-not-the-gpu-2026-10-26.md`의 exit2 조언을 수정하고 UNKNOWN에서 cleanup/GPU 관측을 보존했다. Worker/control32검사0NEW로 진단 보존을 확인했으며, 과거 cleanup 하위 원인이 해결됐다고 쓰지 않았다. 표시 이름 수정은 코드와 장면 생성 회귀에서 재구성되므로 별도 교훈을 만들지 않았다.
+
+### Actual CAD one-floor result at ff4474dc63
+
+- 변경: 실제 요청에서 드러난 손목 반회전 분기 실패를 회귀로 고정했다. 기존 선호 경로가 실패할 때만 동등한 끝 각도를 시험하며 모든 관절·작업공간·속도·가속도·프레임 제한을 유지한다. GPU 반환은 제한된 재검사 시작 구간과 관측 보존을 적용하며 과거 UNKNOWN은 바꾸지 않는다.
+- 증거: 정확한 sourceff4474dc63 전체 원격677통과1건너뜀0NEW. 새 CAD runbb4db64f1fc55bb78b67f3e0f5b5ab76은 수평화·재파지·두 번째 리프트 및3개 적재 안정화 전부 통과했다. SUCCEEDED/SDKexit0/import/video/소유종료·GPU반환 확인. 실제 최종 프레임과3807frames/380.6s 연속 영상을 확인했다. 상세 SHA와 snapshot은 검증 정본에 있다.
+- gate 변화: 새 CAD nominal42 1층 IK 기준선만 통과했다.3층·다양한 투입·ACT/RL·실물 수용은 미완료다. 기존 PPO 구동 시험32updates/1024transitions는 평가1회 중0회 성공이며 현재 맵의 학습 성공으로 쓰지 않는다.9개 영상 추정93.3MB가64MiB를 넘으므로 container 전용 encoder 제한을 검증한 뒤 실행한다.
+- CE: 기존 교훈 갱신/새 교훈 기록은 위 경로와 증거를 따른다. 이번 손목 분기 수정의 판단은 회귀와 검증 정본에서 재구성되므로 추가 교훈을 중복 작성하지 않는다.
+
+## 2026-10-30 · 4f63cd5992 · actual CAD three-floor column acceptance
+
+- 변경:9개 긴 컨테이너를90mm정육면체에 채우는 시험은 첫층 양옆 경계에서 계속 중단했다. 잡힌 물체의 각속도에 최종 안정 기준을 적용한 실험과 고정 중심 보정은 실제 실행에서 실패해 되돌렸고 이력을 보존했다. 사용자가 허용한 명시적column 대안은90×30×30mm 바를 층당1개씩 총3개로90×30×90mm에 쌓으며 두팔0→1→0이 교대한다. 계획·아래층 지지·최종 사진 게이트를 실제 행 수에 맞췄다. 사라진 임시 파일만 예산 검사에서 건너뛰며 다른 오류·안전 한도는 유지한다.
+- 증거:Column RED5개/최종사진 RED2개 후 전체606통과1건너뜀0NEW. 첫 실제58f는 세 물체를 쌓았지만 마지막 각속도 표본3개가.1rad/s를 넘어FAILED로 보존했다. 원래1.1초 연속 안정 구간을 최대10초 기다리도록 바꾸고, 어떤 물체든 기준 초과 시 구간을 다시 시작한다. RED3개 후 최종 source4f63 전체609통과1건너뜀0NEW/읽기 전용 검토APPROVE. Run8858bf075b975578aa490ae91bb32820은3층SUCCEEDED/SDKexit0/import/video/소유종료·GPU반환 확인. 마지막 안정구간 최대 각속도.089140rad/s이며 원래 접촉·위치·외곽·안정 기준을 모두 통과했다.3880frames/6분28초 영상·실제 최종 화면·15개 등록 산출물 해시를 확인했다.
+- gate 변화:새 실제CAD의단일column42 3층 IK기준선만 수용했다.9개 긴 컨테이너90×90×90mm 적재·다양한 투입 검증·ACT/RL·실물·현장은 미완료다. ROS-SIM HOLD 등 별도 게이트는 유지한다.
+- CE:해당 없음 — 시간 구간·행 수·최종 산출물 게이트와 예산 검사 수정은 코드·회귀 시험·검증 정본에서 재구성된다. 과거 준비 오류의 정확한 원인과9화물 정밀 포장 문제는 해결된 사실로 기록하지 않는다.
+
+## 2026-10-30 · c8fbb61dc7 · nine-container packing reaches seven
+
+- 변경: 동작마다 남던 계획 교환 파일(요청·프레임JSON)을 받아들인 뒤 지운다. 거절된 교환은 진단용으로 남긴다. 감독자256파일 상한은 그대로다.
+- 증거: 70762 run2e8b는 바깥 줄 차단을 넘어5개를 놓았지만259파일로output_limit 중단. RED1개 후 전체571통과1건너뜀. run42a8은 두 층 전부와 3층 가운데까지7개를 놓았다(위치 오차 최대.82mm). 8번째 수평화 직전 3층 가운데 상자의 각속도.1004rad/s가 기준.1을 넘어 중단, SDKexit0/import/video/소유종료·GPU반환 확인.
+- gate 변화: 없음. 9개 수용 미달. 속도만 넘는 이전 더미 흔들림을 기존1.1초 안정 구간까지 기다릴지는 결정이 필요하다.
+- CE: 해당 없음 — 파일 예산 원인은 코드·회귀 시험·검증 정본에서 재구성된다. 기둥 꼭대기 흔들림은 미해결로 검증 정본에 증상·측정값만 남겼다.
+
+## 2026-10-30 · 684618d077 · D-929 gapped nine-container packing
+
+- 변경: D-929(줄 간격2~5mm, 이전 더미 속도만 넘으면1.1초 안정 구간 대기)를 시뮬레이션 기준에 적용했다. 9개 실행 예산을 SDK2310초/서비스2520초로, 영상 상한을220kb/s로 바꿔64MiB를 유지했다. 잠든 물체가 PhysX에서 마지막 속도를 계속 내는 문제는 앞 표본과 자세가 같으면 정지로 판정해 해결했다. 모델·AI PC host-state의 sim apt에 ffmpeg를 넣고, check가 녹화 도구 없이는 준비 안 됨을 낸다.
+- 증거: 812a는8개 후 예산 종료(UNKNOWN). ce56은9개 모두 놓고 간격2.74~3.68mm였으나 잠든 상자의 고정 속도로 최종 구간 실패. fa6f는8개 후 바깥 row0 기둥의 실제 미세 흔들림으로 이전 더미 구간 실패. 각 단계 RED 후 원격 Isaac/host-state 629통과1건너뜀0실패.
+- gate 변화: 없음. 9개 수용 미달. 독립 바깥 기둥의 PhysX 접촉 흔들림을 줄이는 물리 설정 변경은 사용자 결정 대기다. AI PC ffmpeg 실제 설치는 sudo 비밀번호가 필요해 미실행이다.
+- CE: 새 교훈 기록 — `docs/solutions/runtime-errors/isaac-sleeping-cargo-reports-stale-velocity-2026-10-30.md`(ce56 자세1um 고정·속도.014m/s26초 지속 증거, 회귀 시험). 바깥 기둥 흔들림은 미해결로 검증 정본에 증상만 남겼다.
+
+## 2026-10-30 · ed340a9d8a · cargo-only physics attempts reverted
+
+- 변경: 화물만 대상으로 한 장면 안정화(`062ab8ec76`)와 놓인 화물 sleep 임계(`a6733a6076`)를 시험한 뒤 지웠다. 간격 fixture는 `gap-v1` 물리로 돌아갔다.
+- 증거: b7b7은 원래 꺼져 있던 장면 안정화를 켜자 잡힌 상자가 움직여 첫 수평화 놓기가 수렴하지 않았다. 39be는 화물 sleep 임계가0.0이었고5e-5로 올려도 fa6f와 프레임까지 같은 결과였다(UNKNOWN은 정리 시점 다른 작업의 GPU 사용). 5ae3은 USD32비트 값의 정확 비교로 준비 중 실패해 근사 비교로 고쳤다.
+- gate 변화: 없음. 9개 수용 미달, 독립 바깥 기둥 흔들림 미해결.
+- CE: 기존 교훈 갱신 — 앞 항목의 교훈은 `isaac-cargo-reports-velocity-at-fixed-pose-2026-10-30.md`로 이름을 바꾸고, PhysX sleep 원인 설명이 틀렸음(임계0.0, 변경 무효)을 정정했다. 현상과 자세 기준 보정은 유효하다.
+
+## 2026-10-30 · bb39f438a5 · nine-container 3×3×3 gapped packing accepted
+
+- 변경: 안정 판정의 속도를 Isaac 순간 속도 대신 표본 사이(0.1초) 실제 자세 변화로 계산한다(`67c54a1913`, 기준값 그대로, 검증기 재계산). 안정 구간 실패 시 상자별 실패 수·속도·자세 변화를, 감독자 unsafe_output 시 해당 경로를 기록한다. 파이프라인: `remote_isaac.py run`(준비 확인→한 번 시작→끊김 견딘 대기→fetch→요약), Isaac GPU 예약 중 원격 pytest의 CUDA 숨김, `mapped_stack_report.py summary`.
+- 증거: b326 진단에서 막던 상자들이 0.1초에 6µm 이하로 움직이며 .10~.18rad/s를 보고했다. run2cdbdd56df3851aeb9ff2701e2014bdd SUCCEEDED: 9개 모두 놓음, 최종 간격3.22~4.00mm, 불안정 상자 없음, SDKexit0/import/video11674frames/소유종료·GPU반환. 원격 Isaac596개 중594통과2건너뜀, remote_isaac46통과, admission/remote160통과.
+- gate 변화: SOURCE GO 유지, 증거를 9개 간격 적재로 갱신. offset/reverse·ACT/RL·실물·현장은 미완료.
+- CE: 기존 교훈 갱신 — `isaac-cargo-reports-velocity-at-fixed-pose-2026-10-30.md`에 순간 속도가 접촉 떨림이라는 b326 증거와 자세 변화 기반 판정, 2cdb 수용을 기록하고, fa6f를 '실제 미세 운동'으로 본 해석을 정정했다.
+

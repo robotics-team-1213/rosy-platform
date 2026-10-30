@@ -32,8 +32,8 @@
 
 ## 최근 기록
 
-- 2026-10-29 · uncommitted · 판 끝 직각 컨베이어와 개방 후 행 누적 오차
-- 2026-10-29 · uncommitted · 수정 맵의 실제 SDK 화면과 한 층 실패 보존
-- 2026-10-29 · uncommitted · Rosy Cam 기준 마주보는 두 암과 한 층 배치 정정
-- 2026-10-29 · uncommitted · OMX 맵 3단 적재와 PPO 재실행 결과
-- 2026-10-29 · uncommitted · OMX 오프라인 계획 경계와 물리 시간 간격 검증
+- 2026-10-30 · bb39f438a5 · nine-container 3×3×3 gapped packing accepted
+- 2026-10-30 · ed340a9d8a · cargo-only physics attempts reverted
+- 2026-10-30 · 684618d077 · D-929 gapped nine-container packing
+- 2026-10-30 · c8fbb61dc7 · nine-container packing reaches seven
+- 2026-10-30 · 4f63cd5992 · actual CAD three-floor column acceptance
