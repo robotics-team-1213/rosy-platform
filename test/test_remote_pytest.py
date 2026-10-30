@@ -703,6 +703,16 @@ class FakeJobHost:
         return subprocess.CompletedProcess([], 0, b"Welcome\nROSYJOB " + rc + b" 1\n" + self.log[int(args[2]):], b"")
 
 
+def test_a_jobs_deadline_starts_over_once_it_gets_host_room(tmp_path):
+    """2026-10-30: a Gazebo suite waited 100 min for the host and was killed (124) before its first test."""
+    wait = [rj.WAIT + b" (6 job(s), 18c 22GB in use)\n"] + [b""] * 20  # 210 s: past a 60 s job's 180 s deadline
+    for room, code in ((rj.ROOM[:9], rj.ROOM[9:] + b"\n1 passed\n"), (b"", b"")):
+        fake = FakeJobHost(wait + [room, code] + [b""] * 10 + [b"done\n"], 0)
+        now, sleep, clock = _clock()
+        got = rj.run("h", "r", 0, tmp_path / "1.txt", ["r", "d", ""], [], 60, [], call=fake, sleep=sleep, clock=clock)
+        assert got == (0 if room else 124)  # the marker counts split across polls; never admitted: the wait cap
+
+
 def _clock():
     now = [0.0]
     return now, (lambda s: now.__setitem__(0, now[0] + s)), (lambda: now[0])
