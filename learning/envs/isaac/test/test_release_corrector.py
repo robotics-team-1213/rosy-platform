@@ -65,3 +65,21 @@ def test_bc_model_beats_the_mean_and_survives_save_and_load(tmp_path):
     assert np.allclose(again.predict(x[600:]), model.predict(x[600:]))
     with pytest.raises(ValueError, match='sha256'):
         rc.MLP.load(tmp_path / 'corrector.npz', '0' * 64)
+
+
+def test_train_writes_a_pinned_model_and_its_evidence_from_reports(tmp_path):
+    import json
+    fixture = f.container_fixture(layers=3, case='nominal')
+    paths = []
+    for index in (1, 2):
+        path = tmp_path / f'report-{index}.json'
+        path.write_text(json.dumps(released_report(fixture, index)))
+        paths.append(path)
+    paths.append(paths[0])  # a repeated deterministic run adds no new release
+    meta = rc.train(paths, tmp_path / 'out', per_snapshot=150, seed=0, epochs=300)
+    assert meta['releases'] == 2 and meta['snapshots'] == 4
+    assert meta['holdout_mean_abs_error_mm'] < meta['holdout_mean_baseline_mm']
+    model = rc.MLP.load(tmp_path / 'out' / 'release-corrector.npz', meta['sha256'])
+    assert json.loads((tmp_path / 'out' / 'release-corrector.json').read_text()) == meta
+    assert model.predict([meta and [0.] * rc.FEATURES]).shape == (1, 3)
+    assert meta['scope'] == 'SIM_IK_TEACHER_BC_NOT_RL_NOT_HARDWARE'
