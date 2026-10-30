@@ -726,3 +726,33 @@ def test_the_margin_opens_as_wide_as_the_room_and_the_jaws_allow():
     mask[138:150, 60:140] = 255  # a neighbour 18 mm off the 40 mm box's +y side: room, not the jaws, decides
     assert auto.finger_room(mask, (0, 0, 200, 200), px, wide)["margin_mm"] < 14.0
     assert auto.jaw_open_for(30, margin_mm=16.0) <= 56.0
+
+
+def test_after_a_contact_the_gate_still_lets_the_arm_retreat_and_park_but_nothing_else(tmp_path):
+    """2026-10-30: descend_pick touched the container top; retreat and park were held 'session_changed' (the runner's
+    latched fault) and the arm stayed out over the Pinky tray until the idle watchdog folded it."""
+    import cell_transfer
+
+    class Faulted(Cell):
+        fault, session = None, None
+
+        def act(self, command):
+            status = super().act(command)
+            if command == "state":
+                status["fault"] = self.fault
+                if self.session:
+                    status["operating_context"] = {**status["operating_context"], "session_id": self.session}
+            return status
+
+    cell = Faulted([CONT2])
+    gate = cell_transfer.Gate(cell, {**CONFIG, "_payload": cell_objects.payload(CATALOG, "container-2")}, {})
+    lib = tmp_path / "lib.json"
+    lib.write_text(json.dumps({"chunks": {"home": [[0] * 6]}}))
+    assert gate.open(lib, lambda a: None) is None
+    cell.fault = "contact in descend_pick: a joint lagged the command by 1.6 units"
+    assert gate.act("goto above_place") == {"ok": False, "error": "held: fault"} and "goto above_place" not in cell.commands
+    for verb in ("retreat", "park"):
+        gate.act(verb)
+        assert cell.commands[-1] == verb  # sent in the Gate's checked form (the fake asserts its session)
+    cell.session = "replacement-session"  # another owner: recovery is not this gate's to send
+    assert gate.act("park") == {"ok": False, "error": "held: session_changed"}
