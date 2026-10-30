@@ -23,6 +23,7 @@ import sys
 
 HOLDER = "rosy-land-wt"
 PREFIX = "land/"
+NO_WINDOW = 0x08000000  # subprocess.CREATE_NO_WINDOW, named here so the module imports off Windows too
 
 
 def git(cwd: Path, *args: str, check: bool = True) -> str:
@@ -66,8 +67,10 @@ def supervise(tree: Path, snap: str, land_args: list[str], run=subprocess.call) 
     """Run land.py in ``tree``; clean up when the snapshot landed, keep it and mark it stopped otherwise."""
     # land.py's own lines (the STOP reason) into the .log, appended: the inherited handle lost them (2026-10-28)
     with open(tree.parent / (tree.name + ".log"), "a", encoding="utf-8") as log:
+        # CREATE_NO_WINDOW: under the detached supervisor land.py got a new console, a tab of the default terminal;
+        # closing that window killed every lander at once (exit 0xC000013A: 8 on 10-28, 12 on 10-30 18:58).
         code = run([sys.executable, "-X", "utf8", "tools/land.py", *land_args], cwd=str(tree), stdout=log,
-                   stderr=subprocess.STDOUT)
+                   stderr=subprocess.STDOUT, **({"creationflags": NO_WINDOW} if os.name == "nt" else {}))
     landed = subprocess.run(["git", "-C", str(tree), "merge-base", "--is-ancestor", snap, "main"]).returncode == 0
     if landed:
         main = git(tree, "rev-parse", "--path-format=absolute", "--git-common-dir")

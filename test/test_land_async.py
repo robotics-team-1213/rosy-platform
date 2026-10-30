@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import importlib.util
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -75,7 +76,8 @@ def test_supervise_cleans_up_only_a_landed_snapshot(repo, lands):
     snap, log = tool.start(dev, [], NOW, lambda *a: None)
     tree = log.parent / log.name.removesuffix(".log")
 
-    def fake_land(argv, cwd, stdout, stderr):
+    def fake_land(argv, cwd, stdout, stderr, **kw):
+        assert kw == ({"creationflags": tool.NO_WINDOW} if os.name == "nt" else {})  # no window to close
         stdout.write("[land] STOP: merge aborted\n")  # what the owner must find in the .log
         if lands:
             _git(main, "merge", "-q", "--ff-only", snap)
