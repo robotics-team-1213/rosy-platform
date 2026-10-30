@@ -66,19 +66,7 @@ def grip_duration(start, value, acceleration=.4):
     return max(.8, 1.875*delta/.4, math.sqrt(5.774*delta/acceleration))
 
 
-EVALUATION_CASES = {  # nominal geometry; the release feedback sees a 2-5 mm held-box estimate error
-    'nominal-estimate': None,
-    'nominal-bc-v0': dict(file='release-corrector-bc-v0.npz',
-                          sha256='85713c8ec54190e53729d6df73d5d59f3e6e7d715058bfb7698b3793042b9294'),
-    'nominal-bc-v0-rl0': dict(file='release-corrector-bc-v0.npz',
-                              sha256='85713c8ec54190e53729d6df73d5d59f3e6e7d715058bfb7698b3793042b9294')}
-EVALUATION_CASES['release-episodes-rl0'] = EVALUATION_CASES['nominal-bc-v0']
-# RL iterations add a pinned residual and Gaussian exploration (metres) to the BC corrector.
-RL_RESIDUALS = {'nominal-bc-v0-rl0': dict(file='release-residual-rl0.npz',
-    sha256='c44398fffbefca6bba7ec6e7c7d16895dcab272c6394d4d9e16ea00f66ea0f72', sigma_m=.0002)}
-RL_RESIDUALS['release-episodes-rl0'] = RL_RESIDUALS['nominal-bc-v0-rl0']
-# 0.5 mm exploration on top of the v0 model's ~1 mm residual error pushed the first release past the 1.5 mm
-# convergence tolerance (run 3d52), so no decision was recorded.
+from release_cases import EVALUATION_CASES, RL_RESIDUALS  # noqa: E402  (pinned model and residual files)
 
 
 def container_fixture(*, layers, case):
