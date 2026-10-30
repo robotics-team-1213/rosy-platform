@@ -15,6 +15,21 @@ import sys
 import urllib.request
 from pathlib import Path
 
+import cell_params as prm
+
+
+def lights(frames: dict, params=None) -> list:
+    """(name, ok, why) per camera frame. A frame this dark means the room lights are off or the lens is covered, and
+    no detection, look or place check works (2026-10-30 00:40: top mean 1.4, wrist 0.1, still 1.4 at 200 ms exposure
+    and gain 7 - not the camera)."""
+    floor, out = prm.get(params, "preflight.min_mean"), []
+    for name, img in frames.items():
+        mean = None if img is None else float(img.mean())
+        ok = mean is not None and mean >= floor
+        why = "no frame" if mean is None else f"mean {mean:.1f}" + ("" if ok else f" < {floor}: the room lights are off or the lens is covered - a person turns them on")
+        out.append((f"light {name}", ok, why))
+    return out
+
 
 def camera_shift_px(reference, current) -> dict:
     """Largest displacement of the image grid between the map's reference frame and now (ORB + RANSAC homography)."""
@@ -52,10 +67,14 @@ def checks(config: dict, viewer: str, max_shift_px: float, fetch=None, run=subpr
         fresh = bool(state.get(label, {}).get("fresh"))
         out.append((f"camera {label}", fresh, "fresh" if fresh else
                     "not fresh: check the camera's USB device (by-path ports change) and which channel the viewer reads"))
-    ref_path = (config.get("preflight") or {}).get("reference_top")
-    if ref_path and Path(ref_path).expanduser().exists():
-        ref = cv2.imread(str(Path(ref_path).expanduser()), cv2.IMREAD_GRAYSCALE)
+    try:
         cur = cv2.imdecode(np.frombuffer(fetch(f"{viewer}/frame/top.jpg"), np.uint8), cv2.IMREAD_GRAYSCALE)
+    except OSError:
+        cur = None
+    out += lights({"top": cur}, config.get("params"))
+    ref_path = (config.get("preflight") or {}).get("reference_top")
+    if cur is not None and ref_path and Path(ref_path).expanduser().exists():
+        ref = cv2.imread(str(Path(ref_path).expanduser()), cv2.IMREAD_GRAYSCALE)
         shift = camera_shift_px(ref, cur)
         ok = shift["ok"] and shift["max_px"] <= max_shift_px
         out.append(("top camera pose", ok, f"{shift}" + ("" if ok else ": the map is stale - remap (layout_map) and re-pivot before any motion")))

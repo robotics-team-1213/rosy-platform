@@ -13084,3 +13084,24 @@ osy-d395-s1d\`.
 - 증거: 원격 client/정확 secret guard exit 0, skip 0, classifier NEW 0. 원래 실패 로그와 최종 검증 로그는 외부 TEMP의 SHA-256으로 결속했다.
 - Gate: 없음. 실패 이력을 최초 완전 통과로 바꾸거나 예외로 숨기지 않았다.
 - CE: 해당 없음 — 해결 판단을 기존 검사기 규칙·최종 시험·수정 기록에서 복원한다.
+
+## 2026-10-29 · uncommitted · 자체 중복 lander의 완료 FULL 보존과 소유 취소
+
+- 변경: `solutions/workflow-issues/owned-duplicate-landers-keep-completed-full-2026-10-29.md`에 완료된 정식 FULL을 보존하고 supervisor부터 자체 중복의 추가 배정을 멈춘 뒤 원격 job 신원을 다시 확인하는 복구 판단을 기록했다.
+- 증거: 실제 FULL 27 invocations·guards·isolation 기록과 byte hash를 보존했다. 신원 재확인 뒤 기존 KILL로 해당 job만 TERM했고 rc 143·process group 잔존 0·lock 해제·양쪽 참조 보존을 확인했다. 다른 세션·queue marker·cache·검증 기준은 변경하지 않았다.
+- Gate: 없음. 정리 수용은 main 병합·공개 게시·Pinky 부팅·OTA 수용과 구분한다. 문서 frontmatter 검사 통과, mechanical claim의 외부 receipt 경로 한 건은 Git 밖 실제 파일 존재와 명시된 범위로 확인했다.
+- CE: 새 교훈 기록 — 최종 제품 코드만으로 알기 어려운 supervisor 정리 순서와 살아 있는 remote cohort의 소유 재확인이 재조사·참조 손실을 막는다. Vocabulary는 일반 작업 용어만 있어 변경하지 않았고 지침은 기존 solutions 경로를 이미 안내한다.
+
+## 2026-10-30 · 40449ecfdf · 카메라 자동 복구를 실제 제어값과 복원 기록에 결속
+
+- 변경: 같은 방향의 적용된 후보를 되감지 않고, baseline으로 돌아온 카메라는 실제 readback·지원값 재확인 후 재조정한다. 일시적 읽기 실패와 active preview의 재오픈 대기는 쓰기 없이 UNAVAILABLE로 기다리며 다른 owner는 거부한다. 후보·복원 intent는 baseline/장치/producer/run에 결속해 알 수 없는 설정을 덮지 않는다.
+- 증거: 초기 RED 13 실패, 추가 targeted RED 5 실패 및 producer 경로 1 실패를 각각 확인 후 수정했다. 최종 camera environment/readiness/adaptive/native snapshot 원격 시험 107 passed, skip 0, NEW 0. 독립 검토의 중간 manual 모드와 실제 producer 부재 경로 지적을 해결했고 최종 추가 finding 없음.
+- Gate: 소스·원격 host 검증 및 유휴 hotfix. 01:06 녹화/chunk 부재와 cell/update 잠금 아래 기존 복구기의 원본 복원·백업 후 적용했다. baseline과 camera/arm-status producer invocation은 보존했고 fresh 평가·동일 readiness invocation을 12초 뒤 확인했다. front NORMAL, top UNDEREXPOSED/EXHAUSTED여서 전체 INSUFFICIENT·motion_admitted false를 유지했다. 새 release 전환·통제된 실물 조명 복구·물리 수용을 주장하지 않는다. 공개 push 없음.
+- CE: 기존 camera readiness 교훈 갱신. 같은 PID로 카메라가 재오픈해도 실제 제어값은 baseline으로 돌아갈 수 있었던 운영 증거와 원본/intent 보존·업그레이드 순서를 기록했다.
+
+## 2026-10-30 · uncommitted · docs(fleet): 로봇별 동시 작업 발행 ADR(D-928, Proposed)과 실행 계획, 양보 없는 가짜의 동시성 교훈
+
+- 변경: D-928(Proposed)은 발행 루프를 로봇마다 백그라운드로 진행하고 교통 판정만 `_traffic_lock`으로 직렬화하며, 발행 중인 로봇에 직선 임시 점유를 두고 스냅샷 정리에서 빼는 설계를 정한다. `plans/2026-10-30-fleet-concurrent-task-dispatch.md`는 실패 시험 먼저 6단계 실행 계획이다. `solutions/workflow-issues/fakes-that-never-suspend-hide-check-then-act-races.md`는 await에서 멈추지 않는 가짜 로봇이 확인-후-기록 경쟁을 숨긴 교훈이다.
+- 증거: D-271 Gate A 후속 측정(드레인 32대 마지막 발행 8.053 → 0.181초, 느린 수락 1.064초는 남음)과 교통 경쟁 외부 계측기(main `46b23e565a` RED, 수정 `1bf26403ce` GREEN), 원격 교통 시험군 333 passed·NEW 0. rosy-contract-review 독립 검토의 차단 없음·지적 8건(종료 취소 경로, 모호한 전송 결과의 점유, 빈 경로 교체, snapshot 잠금 대기, 우선순위 퇴행, D-12 오인용, 가용 집합 설명, 명단 정리)을 모두 설계에 반영했다.
+- Gate: 없음. 설계 문서이며 구현·Gazebo·장비/현장 수용은 별도다. 공개 push 없음.
+- CE: 새 교훈 기록 — 가짜 로봇이 await에서 멈추지 않아 교통 판정 경쟁이 시험에 보이지 않았다. 기존 가짜 표면 교훈·await 재확인 교훈과 구분된다.

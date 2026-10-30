@@ -15,7 +15,7 @@
   "gstreamer": {
     "required_series": "1.24",
     "distribution": "Ubuntu 24.04",
-    "plugins": ["webrtcbin", "x264enc", "nicesrc", "rtph264pay", "appsrc", "videoconvert", "h264parse", "appsink", "avdec_h264"],
+    "plugins": ["webrtcbin", "x264enc", "nicesrc", "rtph264pay", "appsrc", "videoconvert", "h264parse", "appsink", "avdec_h264", "dtlssrtpenc", "dtlssrtpdec", "srtpenc", "srtpdec"],
     "package_lock": null,
     "package_lock_reason": "Native ARM64 dependency closure must be verified before product installation"
   },
