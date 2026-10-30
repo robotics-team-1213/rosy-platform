@@ -44,6 +44,7 @@ CANVAS_FILES = [
     SRC.parent / "learning/curation/perception/review_app_web/pixels.js",
     SRC.parent / "learning/curation/perception/review_app_web/versions.js",
     SRC.parent / "learning/curation/perception/review_app_web/camera.js",
+    SRC.parent / "tools/capture/multi_record.html",
 ]
 HEX_LITERAL = re.compile(r"#[0-9a-fA-F]{6}\b|[\"'`]#[0-9a-fA-F]{3,8}[\"'`]")
 FONT_ASSIGN = re.compile(r"\.font\s*=\s*([^;]+);")

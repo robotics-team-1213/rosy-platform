@@ -18,7 +18,7 @@
 | 계산호스트형 | Learning (D-874·D-891) | 계산 호스트 도구 + 콘솔 허브 진입(`learning_entry`) + 승인은 Fleet. `applications/` 홀더를 만들지 않는다 |
 | 외부업무형 | Harbor (D-836) | 별도 저장소, Fleet HTTP 소비, candidate admission |
 
-3. **웹 표면 전체 등록.** 모든 웹 표면은 `surfaces.yaml`에 등록한다. `tools/`의 로컬 페이지도 포함한다. 첫 적용으로 `capture-wall`(다중 녹화 벽, `tools/capture/multi_record.html`)을 등록하고 페이지의 tokens.css·theme.js 참조에 `./` 접두를 맞춘다(등록 계약 정규식. 해석 변화 없음).
+3. **웹 표면 전체 등록.** 모든 웹 표면은 `surfaces.yaml`에 등록한다. `tools/`의 로컬 페이지도 포함한다. 첫 적용으로 `capture-wall`(다중 녹화 벽, `tools/capture/multi_record.html`)을 등록하고 페이지를 표면 계약에 맞춘다 — 참조 `./` 접두(해석 변화 없음), 범위 제목, 캔버스 색·글꼴을 공용 팔레트(`window.RosyPalette`)로 읽기. `multi_record.py`는 `ui.js`와 의존 모듈 셋을 세션 `common/`에 함께 복사한다.
 4. **Learning 웹 carve 조건.** `learning/curation/perception`의 기능 라우트 모듈(`*_web.py`)이 하나 더 늘거나 등록 파일이 600줄에 근접하면 D-750식 server carve를 적용한다. 지금 옮기지 않는다.
 5. **불변.** `platform_parts.yaml` 소유권, 설치 신원, 권한 경계는 그대로다. 이 ADR은 새 표면·제품의 입사 판별과 등록만 정한다.
 

@@ -181,7 +181,7 @@ class Session:
         # The wall takes its colours and theme from the shared tokens, copied beside it (served from this folder).
         common = self.out / "common"
         common.mkdir(exist_ok=True)
-        for name in ("tokens.css", "theme.js"):
+        for name in ("tokens.css", "theme.js", "ui.js", "confirmation.js", "live-dialog-geometry.js", "ui-wiring.js"):
             (common / name).write_bytes((SHARED_WEB / name).read_bytes())
         self.publish()
 
