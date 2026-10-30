@@ -96,3 +96,5 @@ D-924 reserved in another in-flight branch (refs/adr/D-924), absent from this D-
 D-925 reserved in another in-flight branch (refs/adr/D-925), absent from this D-927 branch; remove when its ADR lands
 D-917 reserved in another in-flight branch (refs/adr/D-917), absent from this D-919 branch; remove when its ADR lands
 D-918 reserved in another in-flight branch (refs/adr/D-918), absent from this D-919 branch; remove when its ADR lands
+D-929 pending: reserved for the packing row gap ADR (commit d6796f635d), not on main when D-931..933 landed
+D-930 pending: reserved for the ARM transfer recheck ADR (commit 800aec0d82), not on main when D-931..933 landed

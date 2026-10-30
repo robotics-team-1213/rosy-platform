@@ -38,6 +38,7 @@ DEFAULTS = {
     "auto.jaw_margin_mm": (8.0, "mm", 2, 25), "auto.finger_pad_mm": (20.0, "mm", 5, 60), "auto.min_jaw_margin_mm": (2.0, "mm", 0.5, 10), "auto.own_side_mm": (6.0, "mm", 0, 15), "auto.jaw_margin_max_mm": (16.0, "mm", 2, 25), "preflight.min_mean": (15.0, "grey", 0, 255),
     "place.margin_mm": (5.0, "mm", 0, 30), "place.search_mm": (40.0, "mm", 0, 120), "place.step_mm": (5.0, "mm", 1, 20),
     "track.around_px": (60, "px", 0, 300), "track.reach_px": (120, "px", 0, 400), "track.min_inliers": (25, "count", 6, 1000),
+    "auto.max_gross_kg": (0.08, "kg", 0.01, 0.5), "scale.repeats": (5, "count", 2, 30), "scale.timeout_s": (120.0, "s", 5, 600), "scale.segment_fill": (0.5, "ratio", 0.2, 0.9),
     "track.roi_pad_px": (8, "px", 0, 100), "preflight.target_mean": (140.0, "grey", 30, 230), "preflight.mean_band": (15.0, "grey", 5, 100),
     "preflight.max_exposure": (33000, "v4l2", 80, 100000), "preflight.exposure_steps": (4, "count", 1, 10), "preflight.settle_s": (1.0, "s", 0.1, 5),
     "gripper.gap_mm_per_unit": (10.4, "mm", 3, 30),
