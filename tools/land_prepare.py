@@ -6,8 +6,10 @@ candidate, so a delta that touches this branch's paths reruns their suites and o
 guards only. Until 2026-10-26 only a FULL tier prepared, and only with someone ahead: a FULL lander first in
 line held everyone 40+ min, and every affected tier ran inside the lock (4-13 min a turn).
 
-At most ``MAX_PREPARING`` landings prepare at once: the model and AI PCs take one invocation each, and timing
-tests fail falsely under load. ``land`` is the calling ``land`` module (run as a script it is ``__main__``),
+At most ``MAX_PREPARING`` landings prepare at once. It was 3 while each lab PC took one invocation at a time; since
+2026-10-28 each PC admits jobs only within its own free cores and GB (remote_job.ADMIT), so the hosts, not this
+count, hold the load. On 10-30..31 landings waited p50 52 / p90 239 min for one of 3 slots (prepare itself p50 23
+min, the turn p50 6 min) while the model and AI PCs ran at load ~2-3 of 24 cores. ``land`` is the calling ``land`` module (run as a script it is ``__main__``),
 passed in so its ``Stop`` is the one the caller catches.
 """
 
@@ -20,7 +22,7 @@ from pathlib import Path
 
 import land_queue
 
-MAX_PREPARING = 3
+MAX_PREPARING = 6
 POLL = 15.0
 # D-889 7: the test PCs clean up at 05:30 and reboot at 06:00; a pretest started in between dies (2026-10-27 06:00,
 # exit 143). Minutes after midnight, local time: no pretest starts inside, it waits for the hosts to come back.
