@@ -17,9 +17,9 @@
 <!-- fleet:document-header:end -->
   <main class="policy-main fleet-document">
     <h1 class="ui-page-heading">학습 정책 승인</h1>
-    <p>학습을 마친 정책은 L0으로만 등록되고 실물을 움직이지 않습니다. 단계는 관리자 승인으로 하나씩 오르고,
-      실물을 움직이는 단계(L3·제한 사용)는 제안한 사람과 다른 관리자가 승인합니다. 실행은 승인 창 안에서
-      1–2초 lease로만 이어지며, 확인 요청이나 사고가 열리면 다음 갱신에서 멈춥니다(D-793).</p>
+    <p>새로 학습한 정책은 0단계로 등록되고 실물을 움직이지 않습니다. 단계는 관리자 승인으로 하나씩 오르고,
+      실물을 움직이는 단계(3단계·제한 사용)는 제안한 사람과 다른 관리자가 승인합니다. 실물 실행은 승인 창이
+      열린 동안에만 이어지고, 확인 요청이나 사고가 생기면 1–2초 안에 멈춥니다.</p>
     <label for="policy-workcell" class="ui-field-label" hidden>작업셀</label>
     <select id="policy-workcell" class="ui-field" aria-describedby="policy-verdict" hidden></select>
     <ui-status id="policy-verdict" state="pending" role="status">상태를 확인하고 있습니다.</ui-status>
@@ -39,7 +39,7 @@
 
     <section aria-labelledby="policy-confirmations-heading">
       <h2 id="policy-confirmations-heading">확인 요청</h2>
-      <ui-actions><ui-button id="policy-sync-owner" kind="quiet">owner HOLD 가져오기</ui-button></ui-actions>
+      <ui-actions><ui-button id="policy-sync-owner" kind="quiet">팔 제어 보류 가져오기</ui-button></ui-actions>
       <ul id="policy-confirmations" class="policy-list"></ul>
     </section>
 
@@ -47,7 +47,7 @@
       <h2 id="policy-windows-heading">승인 창</h2>
       <ul id="policy-windows" class="policy-list"></ul>
       <form id="policy-window-form" class="ui-form">
-        <label for="policy-window-policy" class="ui-field-label">정책 revision</label>
+        <label for="policy-window-policy" class="ui-field-label">정책 버전</label>
         <select id="policy-window-policy" class="ui-field"></select>
         <label for="policy-window-kind" class="ui-field-label">종류</label>
         <select id="policy-window-kind" class="ui-field"></select>
@@ -65,13 +65,13 @@
       <h3>대기 중인 단계 제안</h3>
       <ul id="policy-proposals" class="policy-list"></ul>
       <form id="policy-proposal-form" class="ui-form">
-        <label for="policy-proposal-revision" class="ui-field-label">정책 revision (새 학습 결과는 L0 등록)</label>
+        <label for="policy-proposal-revision" class="ui-field-label">정책 버전 (새 학습 결과는 0단계로 등록)</label>
         <input id="policy-proposal-revision" class="ui-field" maxlength="128" required>
-        <label for="policy-proposal-rig" class="ui-field-label">rig revision</label>
+        <label for="policy-proposal-rig" class="ui-field-label">작업대 버전</label>
         <input id="policy-proposal-rig" class="ui-field" maxlength="128" required>
-        <label for="policy-proposal-cal" class="ui-field-label">보정 revision</label>
+        <label for="policy-proposal-cal" class="ui-field-label">보정 버전</label>
         <input id="policy-proposal-cal" class="ui-field" maxlength="128" required>
-        <label for="policy-proposal-evidence" class="ui-field-label">근거 receipt SHA-256</label>
+        <label for="policy-proposal-evidence" class="ui-field-label">근거 기록 식별값(64자리)</label>
         <input id="policy-proposal-evidence" class="ui-field" pattern="[0-9a-f]{64}" required>
         <label for="policy-proposal-note" class="ui-field-label">근거 설명</label>
         <input id="policy-proposal-note" class="ui-field" maxlength="500" required>
