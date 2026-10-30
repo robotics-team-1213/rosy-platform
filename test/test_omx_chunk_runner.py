@@ -177,7 +177,11 @@ def test_slower_transit_speed_rises_at_that_fraction_and_bad_values_are_refused(
     fast, slow = m.park_path(start, HOME, 46.6, fps=30), m.park_path(start, HOME, 46.6, fps=30, speed=0.4)
     step = 0.4 * m.PARK_SPEED / 30 + 1e-9
     assert all(max(abs(b - a) for a, b in zip(p, q)) <= step for p, q in zip([start] + slow, slow))
-    assert len(slow) > 1.8 * len(fast) and slow[-1][:5] == pytest.approx(HOME[:5])
+    assert slow[-1][:5] == pytest.approx(HOME[:5])
+    # the fraction shows on a move without a lift change: a rising lift is capped at RISE_SPEED at either speed
+    level, home = [35.0, -27.0, 9.0, 41.0, 71.0, 46.6], [0.0, -27.0, 50.0, 45.0, 10.0, 46.6]
+    fast, slow = m.park_path(level, home, 46.6, fps=30), m.park_path(level, home, 46.6, fps=30, speed=0.4)
+    assert len(slow) > 1.8 * len(fast)
     for bad in (0.95, 0, "slow", True):
         path = tmp_path / "lib.json"
         path.write_text(json.dumps(dict(library(), fps=30, chunks={"home": [HOME]}, transit_speed=bad)))
@@ -411,7 +415,8 @@ class SlowWrist(Robot):
         return action
 
 
-def test_pacing_and_idle_thresholds_come_from_the_params_a_runner_is_given():
+def test_pacing_and_idle_thresholds_come_from_the_params_a_runner_is_given(monkeypatch):
+    monkeypatch.setattr(m, "STRAIN_LAG", 99.0)  # without pacing or the strain hold, the guard stops it
     lift = library()
     lift["chunks"]["approach_pinky"] = [[0.0, -60.0, 50.0, 45.0 + 0.15 * k, 10.0, 46.6] for k in range(1, 101)]
     robot, status, clock, queue = SlowWrist(), [], [0.0], ["run approach_pinky", "stop"]
@@ -430,8 +435,9 @@ def test_pacing_and_idle_thresholds_come_from_the_params_a_runner_is_given():
 
 @pytest.mark.parametrize("paced", [True, False])
 def test_a_lagging_joint_holds_the_next_frame_until_it_catches_up_before_the_guard_stops(monkeypatch, paced):
-    if not paced:
+    if not paced:  # neither pacing nor the strain hold: the guard stops it
         monkeypatch.setattr(m, "PACE_LAG", 99.0)
+        monkeypatch.setattr(m, "STRAIN_LAG", 99.0)
     lift = library()
     lift["chunks"]["approach_pinky"] = [[0.0, -60.0, 50.0, 45.0 + 0.15 * k, 10.0, 46.6] for k in range(1, 101)]
     robot, status, clock, queue = SlowWrist(), [], [0.0], ["run approach_pinky", "stop"]

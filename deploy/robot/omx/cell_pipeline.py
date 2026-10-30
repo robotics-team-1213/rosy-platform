@@ -396,7 +396,7 @@ def move(cell, config: dict, calibration: dict, source: str, dest: str, work: Pa
                 tried["plan_error"] = str(exc)[:200]
         if "plan_error" in tried:
             facts = {"box_found": True, "next": "grasp", "aligned": False, "check": f"plan refused: {tried['plan_error']}"}
-        elif found["found"]:
+        elif found["found"] and off_map is None:
             def before_motion(assessment):
                 tried["envelope"] = assessment
                 cell_attempts.begin(config, assessment)
