@@ -13110,6 +13110,6 @@ osy-d395-s1d\`.
 
 - 변경: 모든 세션이 통째로 읽는 루트 `AGENTS.md`를 39.3 KB에서 14.5 KB로 줄였다. 「같이 하는 깃」 전문(워크트리 청소·소유자·`landed-dirty`/`stale-history`·스냅샷·스테이징·ADR 선점·착지 대기열·`LOAD-FLAKY`·`MAIN-RED`·게시)은 `docs/reference/shared-checkout.md`가 정본으로 맡고, AGENTS에는 모든 세션이 지킬 6항 요약·멈추는 신호·읽을 때를 남겼다. Testing Requirements의 FULL 전환 목록·`gh run` 명령·colcon 재현은 `developer-guide.md`「테스트와 CI」로 옮겼다. Key Files·Dependencies·스킬 목록·중복된 D-23 줄은 각 폴더 `AGENTS.md`와 하네스가 이미 가진 내용이라 뺐다. 안전·권한 규칙(D-2, D-516, D-315, D-430 §5, D-226, D-33, D-584, D-868)은 문장 그대로 남겼다.
 - 어긋남 정리: 네 사본이 서로 달랐다. 기본 착지 명령을 `land_async.py`로 맞췄고(AGENTS는 `land.py`), `rosy-land-on-main` 스킬의 "at most 10"·"50-directory"를 15·14(D-886)로 고쳤다.
-- 시험: `test/test_readme_agent_start.py`의 세부 문구 단언을 지우지 않고 `shared-checkout.md` 쪽으로 옮겼고, AGENTS 쪽은 안전 요약 문구와 4,000자 상한을 단언한다. `rosy_harness.py lint` 0 error.
+- 증거: `test/test_readme_agent_start.py`의 세부 문구 단언을 지우지 않고 `shared-checkout.md` 쪽으로 옮겼고, AGENTS 쪽은 안전 요약 문구와 4,000자 상한을 단언한다. `rosy_harness.py lint` 0 error.
 - Gate: 없음. 문서·시험 변경이며 장치·현장 수용과 무관하다. 공개 push 없음.
 - CE: 해당 없음 — 사본이 어긋나 있던 사실은 이 기록과 정본 하나로 줄인 구조로 남는다.
