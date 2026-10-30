@@ -62,11 +62,11 @@ def run(t, fixture, cargo, initial, corrector, residual, seed, *, budget_s=1800.
             UsdGeom.Imageable(box.prim).MakeVisible()
         t.hold(240)
         try:
-            start = t.snapshot()
-            if not prefix_held(start, index, fixture):
-                record['prior_failures'] = [dict(box=j, error_mm=[round(1000*(start['boxes'][j]['position'][k]
+            first = t.snapshot()  # not `start`: that is the wall-clock budget origin (run a3b1 crashed on it)
+            if not prefix_held(first, index, fixture):
+                record['prior_failures'] = [dict(box=j, error_mm=[round(1000*(first['boxes'][j]['position'][k]
                     - items[j]['target'][k]), 3) for k in range(3)]) for j in range(index)
-                    if not stable_box(start['boxes'][j], j, True, fixture=fixture, speed=False)]
+                    if not stable_box(first['boxes'][j], j, True, fixture=fixture, speed=False)]
                 raise ValueError('initialised prior stack did not hold')
             p, q = cargo[index].get_world_pose()
             yaw = math.atan2(2*(q[0]*q[3]+q[1]*q[2]), 1-2*(q[2]**2+q[3]**2))
