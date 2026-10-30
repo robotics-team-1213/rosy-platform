@@ -206,6 +206,7 @@ def _apply(root: Path, run: Runner, updates) -> dict:
 
     ap = merged.get("ap", {})
     policy = {"mode": ap.get("mode", "fallback"), "grace_seconds": ap.get("grace_seconds", 120),
+              "fallback_security": ap.get("fallback_security", "open"),
               "hold_seconds": ap.get("hold_seconds", 600), "country": merged.get("country", "KR")}
     if "ssid" in ap:
         policy["ssid"] = ap["ssid"]
