@@ -446,3 +446,26 @@ def test_run_stops_polling_on_unknown_and_on_too_many_lost_replies(tmp_path):
     with pytest.raises(ConnectionError):
         mod.run_experiment('omx-f-import', {'seed': 0}, SHA, tmp_path / 'b', remote, max_errors=3,
                            sleep=lambda s: None, fetch=None)
+
+
+class Refusing(Pipeline):
+    """The first start is refused at admission (GPU taken between check and start); the retry runs."""
+
+    def __init__(self):
+        super().__init__([True, True], ['FAILED', 'SUCCEEDED'])
+        self.refused = False
+
+    def call(self, sha, payload):
+        row = super().call(sha, payload)
+        if payload['action'] == 'status' and row['status'] == 'FAILED' and not self.refused:
+            self.refused = True
+            row['result'] = {'reason': 'admission_refused'}
+        return row
+
+
+def test_run_retries_a_start_refused_at_admission_with_a_new_request(tmp_path):
+    remote = Refusing()
+    result = module().run_experiment('omx-f-import', {'seed': 0}, SHA, tmp_path / 'run', remote,
+                                     sleep=lambda s: None, fetch=lambda r, rem, dest: dest)
+    assert remote.calls.count('start') == 2 and result['status'] == 'SUCCEEDED'
+    assert (tmp_path / 'run' / 'attempt-1' / 'receipt.json').is_file()  # the refused attempt is kept
