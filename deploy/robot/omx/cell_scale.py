@@ -7,7 +7,8 @@ accepts a value only after it repeats (`scale.repeats`), and writes `mass_kg` in
 --conditions it also copies mass and size into a cell config's `operating_conditions`.
 
   "scale": {"camera": "top", "display_px": [[x, y] top-left, top-right, bottom-right, bottom-left],
-            "digits": 5, "decimals": 2, "unit": "g", "dark_digits": true}
+            "digits": 5, "decimals": 2, "unit": "g", "dark_digits": true,
+            "digit_frac": 0.75}   (display_px spans whole digit pitches; a digit is digit_frac of its pitch wide)
   cell_scale.py read  --config cell.json
   cell_scale.py enrol --config cell.json --catalog catalog.json --object container-2 [--conditions cell.json]
 
@@ -30,10 +31,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cell_params as prm  # noqa: E402
 
 CELL_W, CELL_H = 40, 70  # one digit after rectifying, px
-# segment boxes in a digit cell as fractions (x0, y0, x1, y1): a top, b top-right, c bottom-right, d bottom,
-# e bottom-left, f top-left, g middle
-SEGMENTS = ((0.25, 0.02, 0.75, 0.14), (0.72, 0.12, 0.92, 0.45), (0.72, 0.55, 0.92, 0.88), (0.25, 0.86, 0.75, 0.98),
-            (0.08, 0.55, 0.28, 0.88), (0.08, 0.12, 0.28, 0.45), (0.25, 0.44, 0.75, 0.56))
+# segment bands in a digit as fractions (x0, y0, x1, y1, horizontal): a top, b top-right, c bottom-right, d bottom,
+# e bottom-left, f top-left, g middle. A band is wider than the stroke; what counts is how much of its length a
+# stroke covers, so stroke width and a small offset do not matter (thin 18 px strokes half-filled a tight box).
+SEGMENTS = ((0.25, 0.0, 0.75, 0.16, True), (0.7, 0.12, 1.0, 0.45, False), (0.7, 0.55, 1.0, 0.88, False),
+            (0.25, 0.84, 0.75, 1.0, True), (0.0, 0.55, 0.3, 0.88, False), (0.0, 0.12, 0.3, 0.45, False),
+            (0.25, 0.42, 0.75, 0.58, True))
 PATTERNS = {(1, 1, 1, 1, 1, 1, 0): "0", (0, 1, 1, 0, 0, 0, 0): "1", (1, 1, 0, 1, 1, 0, 1): "2",
             (1, 1, 1, 1, 0, 0, 1): "3", (0, 1, 1, 0, 0, 1, 1): "4", (1, 0, 1, 1, 0, 1, 1): "5",
             (1, 0, 1, 1, 1, 1, 1): "6", (0, 0, 1, 1, 1, 1, 1): "6", (1, 1, 1, 0, 0, 0, 0): "7",
@@ -52,12 +55,12 @@ def read_display(img, spec: dict, params=None) -> float | None:
     flat = cv2.GaussianBlur(cv2.warpPerspective(grey, M, (w, h), flags=cv2.INTER_CUBIC), (3, 3), 0)
     _, on = cv2.threshold(flat, 0, 1, (cv2.THRESH_BINARY_INV if spec.get("dark_digits", True) else cv2.THRESH_BINARY)
                           + cv2.THRESH_OTSU)
-    fill = prm.get(params, "scale.segment_fill")
+    fill, wide = prm.get(params, "scale.segment_fill"), CELL_W * float(spec.get("digit_frac", 0.75))
     text = ""
-    for i in range(digits):
+    for i in range(digits):  # a digit takes digit_frac of its pitch; the rest is the gap to the next one
         cell = on[:, i * CELL_W:(i + 1) * CELL_W]
-        lit = tuple(int(cell[int(y0 * h):int(y1 * h), int(x0 * CELL_W):int(x1 * CELL_W)].mean() >= fill)
-                    for x0, y0, x1, y1 in SEGMENTS)
+        lit = tuple(int(cell[int(y0 * h):int(y1 * h), int(x0 * wide):int(x1 * wide)].any(axis=0 if across else 1).mean()
+                        >= fill) for x0, y0, x1, y1, across in SEGMENTS)
         if lit not in PATTERNS:
             return None
         text += PATTERNS[lit]

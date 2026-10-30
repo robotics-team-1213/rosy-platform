@@ -43,12 +43,13 @@ def frame(text, digit_px=12, seed=0):
     corners = [[1, 2], [len(text) * 13, 2], [len(text) * 13, 20], [1, 20]]
     M = cv2.getPerspectiveTransform(src, dst)
     pts = cv2.perspectiveTransform(np.float32([[[x * 6 * k, y * 6 * k] for x, y in corners]]), M)[0]
-    return img, {"display_px": pts.tolist(), "digits": len(text), "decimals": 2, "unit": "g", "dark_digits": True}
+    return img, {"display_px": pts.tolist(), "digits": len(text), "decimals": 2, "unit": "g", "dark_digits": True, "digit_frac": 10 / 13}
 
 
-@pytest.mark.parametrize("text, value", [("  4823", 48.23), ("   000", 0.0), (" 12305", 123.05)])
-def test_digits_twelve_pixels_tall_are_read(text, value):
-    hits = sum(sc.read_display(*frame(text, seed=s)) == pytest.approx(value) for s in range(20))
+@pytest.mark.parametrize("digit_px", [9, 12, 18, 40])  # the top camera sees a 1 cm digit as about 11 px
+@pytest.mark.parametrize("text, value", [("  4823", 48.23), ("   000", 0.0), (" 96711", 967.11)])
+def test_digits_from_nine_to_forty_pixels_tall_are_read(text, value, digit_px):
+    hits = sum(sc.read_display(*frame(text, digit_px, seed=s)) == pytest.approx(value) for s in range(20))
     assert hits == 20
 
 

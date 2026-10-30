@@ -461,7 +461,7 @@
    "value": 0.5,
    "unit": "ratio",
    "source": "tuned",
-   "evidence": "2026-10-30 D-934: half of a segment box dark counts it lit; synthetic 12 px digits with noise read 20/20"
+   "evidence": "2026-10-30 D-934: a segment is lit when strokes cover half of its length; synthetic digits 9-40 px tall with noise read 20/20"
   },
   "place.margin_mm": {
    "value": 5.0,
