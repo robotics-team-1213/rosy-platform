@@ -381,7 +381,8 @@ def open_episode(cell, config: dict, source: str, dest: str, object_id: str):
     folder = Path(spec["root"]).expanduser() / f"{time.strftime('%Y%m%d-%H%M%S')}-{source}-to-{dest}"
     folder.mkdir(parents=True, exist_ok=True)
     task = spec.get("tasks", {}).get(f"{source}->{dest}") or f"Pick the green container from the {source} and place it on the {dest}."
-    (folder / "task.json").write_text(json.dumps({"task": task, "object": object_id, "cameras": spec["cameras"]}))
+    (folder / "task.json").write_text(json.dumps({"task": task, "object": object_id, "cameras": spec["cameras"],
+                                                  "payload": config.get("_payload")}))  # D-935: the load, for learning
     if not cell.act(f"episode start {folder}").get("ok"):
         return None
     import episode_recorder
@@ -474,6 +475,7 @@ def run_auto(cell, config, calibration, calibration_path, catalog, roi, source, 
                 return {**out, "result": "planned"}
             folded = prm.get(config.get("params"), "auto.fold_before_transport")
             sequence = FOLDED if folded else cp.SEQUENCE
+            config = dict(config, _payload=cell_objects.payload(catalog, o["object"]))  # D-935: this carry's load
             episode = open_episode(cell, config, source, dest, o["object"])
             # a hover re-plan keeps the pick's own plan values (jaw opening, approach): the default 62 opening came back
             # through the reach re-plan and the fingers met the board again (2026-10-29)

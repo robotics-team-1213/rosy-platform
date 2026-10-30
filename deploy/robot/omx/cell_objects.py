@@ -39,6 +39,14 @@ def load_catalog(path) -> list:
     return data["objects"]
 
 
+def payload(catalog: list, object_id: str) -> dict:
+    """This carry's payload from the catalogue (D-935): the enrolled mass of an empty object (cell_scale), so a
+    filled container is not covered; no measured mass means an unknown payload."""
+    entry = next((o for o in catalog if o["id"] == object_id), {})
+    return {"kg": entry.get("mass_kg"), "source": "catalogue mass of the empty object", "object": object_id,
+            **({"max_gross_kg": entry["max_gross_kg"]} if "max_gross_kg" in entry else {})}
+
+
 def foreground(img, roi, chroma: float | None = None, light: float | None = None, params=None, surface_px=None,
                surface_lab=None):
     """Mask (ROI-sized) of pixels far from the surface's median colour; a shadow moves lightness only a little.

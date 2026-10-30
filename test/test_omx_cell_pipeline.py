@@ -33,7 +33,8 @@ CONFIG["profiles"] = {name: PROFILE for name in CONFIG["cameras"]}
 CONFIG["plan"] = json.loads((OMX / "grasp-plan.example.json").read_text())
 CONFIG["_commissioning"] = {"person_at_switch": True}  # simulated calibration/transfer trials, not field acceptance
 CONFIG["operating_conditions"] = {"installation_revision": "sim-install-1", "object_revision": "sim-object-1",
-    "payload_kg": 0.05, "object_dimensions_m": [0.03, 0.03, 0.03], "environment_revision": "sim-scene-1"}
+    "payload_max_kg": 0.05, "object_dimensions_m": [0.03, 0.03, 0.03], "environment_revision": "sim-scene-1"}
+CONFIG["payload"] = {"kg": 0.03, "source": "simulated declared load"}  # D-935: the pipeline carries a declared load
 START = (0.072, 0.106)
 
 
