@@ -21,3 +21,7 @@ RL_RESIDUALS['release-episodes-rl1'] = dict(file='release-residual-rl1.npz',
 EVALUATION_CASES['release-episodes-rl2'] = EVALUATION_CASES['nominal-bc-v0']
 RL_RESIDUALS['release-episodes-rl2'] = dict(file='release-residual-rl2.npz',
     sha256='bb424ece0730ab37b16a8e5dcc43febfeb45070fcd5e3f255eb36680f070c935', sigma_m=.0002)
+# rl3: four rl0 episode runs (29b7, 1f81, 65e5, b31e; 261 decisions) from rl0 inside the same trust region.
+EVALUATION_CASES['release-episodes-rl3'] = EVALUATION_CASES['nominal-bc-v0']
+RL_RESIDUALS['release-episodes-rl3'] = dict(file='release-residual-rl3.npz',
+    sha256='cde882834ab9f110d954c990eae4795446851924dcbe1a88822560358577febc', sigma_m=.0002)

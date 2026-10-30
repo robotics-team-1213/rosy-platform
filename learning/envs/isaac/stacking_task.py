@@ -563,7 +563,7 @@ def main():
     parser.add_argument('--layers', type=int, choices=(1, 3), default=3)
     parser.add_argument('--container-case', choices=('nominal', 'offset', 'reverse', 'column', 'nominal-estimate', 'nominal-bc-v0',
                                  'nominal-bc-v0-rl0', 'release-episodes-rl0', 'release-episodes-rl1',
-                                 'release-episodes-rl2'),
+                                 'release-episodes-rl2', 'release-episodes-rl3'),
                         default='nominal')
     args = parser.parse_args()
     check_vendor_manifest()
