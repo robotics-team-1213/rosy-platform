@@ -3,13 +3,14 @@
 // The client parses JSON, so the PDF comes base64-encoded and is saved here as a file.
 
 export const PRINT_SHEETS = [
-  {id: 'print-arm-markers', kind: 'arm-markers', query: 'arm=1', label: '팔 마커', arm: true},
+  {id: 'print-arm-markers', kind: 'arm-markers', query: '', label: '팔 마커', arm: true},
   {id: 'print-charuco', kind: 'charuco', query: '', label: 'ChArUco 보정판'},
   {id: 'print-checkerboard', kind: 'checkerboard', query: 'cols=8&rows=6&square_mm=15', label: '체커보드'},
 ];
 
-export function sheetPath(sheet) {
-  return `/api/fleet/cell-app/print-sheets/${encodeURIComponent(sheet.kind)}?${sheet.query}`;
+export function sheetPath(sheet, arm = '1') {
+  const query = sheet.arm ? `arm=${encodeURIComponent(arm)}` : sheet.query;
+  return `/api/fleet/cell-app/print-sheets/${encodeURIComponent(sheet.kind)}?${query}`;
 }
 
 export function pdfBytes(base64) {
@@ -25,8 +26,7 @@ export function bindPrintSheets({request, $}) {
     $(sheet.id).addEventListener('click', async () => {
       status.textContent = `${sheet.label} PDF를 만드는 중입니다.`;
       try {
-        const slot = $('print-arm').value;
-        const body = await request(sheetPath(sheet.arm ? {...sheet, query: `arm=${encodeURIComponent(slot)}`} : sheet));
+        const body = await request(sheetPath(sheet, $('print-arm').value));
         const url = URL.createObjectURL(new Blob([pdfBytes(body.pdf_base64)], {type: body.media_type}));
         const link = document.createElement('a');
         link.href = url; link.download = body.filename;
