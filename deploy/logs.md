@@ -4247,3 +4247,10 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 변경: `deploy/site/monitoring.yaml.example`을 더했다. Fleet, host-state, 관제·AI·모델 PC guard 원천과 overlay의 키 이름·마운트 경로를 그대로 쓴다. 로봇 이름은 공개 예시에 넣지 않고 추가 방법만 적었다.
 - 증거: `operations/monitoring/test/test_deployment.py`가 예시를 실제 설정 로더로 읽고, 키 이름·CA·마운트가 overlay와 같은지 확인한다(원격 결과는 커밋 후 기록).
 - gate 변화: 없음. 관제 PC 설정·키 준비는 ARM-S 전환 뒤에 한다.
+
+## 2026-10-30 · 796fbe489c · D-871 가드 수집 관제 PC 적용과 `rosy-update-report` 선언
+
+- 변경: 공통 host-state 매니페스트에 `rosy-update-report`를 `approval=recovery`로 더했다. 관제 PC에 origin/main 판 가드·원격 스크립트·`site updates` 줄을 설치하고, `rosy-host-state install site`로 승인 사본을 갱신했다(야간 재부팅 세션 잠금 조건도 함께 적용).
+- 근거: 설치 뒤 `site` 줄에 `updates`가 들어왔고, host-state `check`는 fixed·drift·errors 0이다. 기록은 D-871 적용 기록 2026-10-30.
+- gate 변화: D-871 DEVICE 관제 PC 수집 경로 적용. AI·모델 PC는 sudo 비밀번호가 필요해 남았다.
+- CE: 새 교훈 — `docs/solutions/deployment/host-guard-files-update-through-host-state-install-2026-10-30.md`.
