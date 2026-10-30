@@ -148,7 +148,7 @@ def test_reinforce_moves_the_residual_toward_better_rewarded_noise(tmp_path):
     # Reward is higher when the x noise was positive: the update should raise the mean x correction.
     rewards = [n[0] for n in noise]
     residual = rc.Residual.zero()
-    updated = rc.Residual.update(residual, obs, noise, rewards, sigma=.0005, lr=.0002)
+    updated = rc.Residual.update(residual, obs, noise, rewards, lr=.0002)
     assert updated.predict(np.zeros((1, rc.FEATURES)))[0][0] > 0
     assert abs(updated.predict(np.zeros((1, rc.FEATURES)))[0][1]) < updated.predict(np.zeros((1, rc.FEATURES)))[0][0]
     digest = updated.save(tmp_path / 'residual.npz')
@@ -162,3 +162,14 @@ def test_release_reward_prefers_small_error_band_gaps_and_stability():
     unstable = dict(position_error_mm=.3, stable=False, gaps_mm=[3.5])
     reward = rc.release_reward
     assert reward(good) > reward(worse) > reward(out_of_band) and reward(good) > reward(unstable)
+
+
+def test_rl_rows_pair_each_explored_decision_with_its_release_reward():
+    fixture = f.container_fixture(layers=3, case='nominal-bc-v0-rl0')
+    assert fixture['release_exploration_sigma_m'] == .0005
+    assert rc.load_residual(fixture).weights.shape == (rc.FEATURES+1, 3) and not rc.load_residual(fixture).weights.any()
+    report = released_report(fixture)
+    layer = report['trials'][0]['layers'][1]
+    layer['release_exploration'] = [dict(iteration=1, observation=[0.]*rc.FEATURES, noise=[1., 0., 0.])]
+    rows = rc.rl_rows(report)
+    assert rows == [([0.]*rc.FEATURES, [1., 0., 0.], rc.release_reward(rc.release_demonstrations(report)[0]['outcome']))]
