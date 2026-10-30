@@ -32,8 +32,8 @@
 
 ## 최근 기록
 
+- 2026-10-31 · d2465280d7 · rl3 from four rl0 runs settles 19/22 on seed 44
+- 2026-10-31 · ce819f6f55 · rl0 data collection, seed 44
+- 2026-10-31 · a081e4067f · rl2 is not better than rl0
+- 2026-10-31 · f157285389 · rl1 blocked every release; REINFORCE step bounded to 0.2 mm
 - 2026-10-31 · 259df0b57b · release episodes settle 16/20; first RL residual pinned
-- 2026-10-30 · 7d4d028071 · release corrector BC and first RL environment
-- 2026-10-30 · bb39f438a5 · nine-container 3×3×3 gapped packing accepted
-- 2026-10-30 · ed340a9d8a · cargo-only physics attempts reverted
-- 2026-10-30 · 684618d077 · D-929 gapped nine-container packing
