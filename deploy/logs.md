@@ -4235,3 +4235,10 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: source69bbc19002의 field/profile/pipeline/Runner/envelope 5file suite174passed/skip0/96warnings/NEW0. 별도 mutant aa51c31e5d는 FIFO binding과 marks/CLI admission 4줄만 무력화해14failed/4passed/skip0/14NEW를 보였고 TypeError가 아닌 실제 assertion으로 실패했다. 정상69bbc branch 복귀 뒤18passed/skip0/NEW0을 확인했다. mutant는 정상 이력에 포함되지 않으며 착지·게시·설치 금지다. 독립 source 검토와 local lint0errors/39warnings도 확인했다.
 - gate 변화: native source 회귀 범위만 확인했다. 실제 장치 수용·적격 FULL·GitHub CI·게시·운영 서버 전환은 아직 미완료이며 도구 설치 상태와 구분한다. 이전 FULL129576은 새 안전 수정 때문에 원격 시험 시작 전 소유자 확인 후 종료했고 snapshot을 보존했다.
 - CE: 해당 없음 — 새 wrapper의 누락과 필요한 profile/supervision 경계는 정본 D-911/D-914, 기존 FifoCell 구현과 이번 실제 전송 회귀·mutation에서 복원된다. 문서에 없는 장치 성질을 새로 추정하거나 실물 동작을 관측한 결과는 아니다.
+
+## 2026-10-31 · uncommitted · fix(site): Tailscale 대역에서도 천장 카메라 미리보기
+
+- 변경: 사이트 Caddy의 토큰 없는 카메라 보기 예외(`@lan_camera`, Fleet `vision/sources`·`vision/lease` 두 경로)에 Tailscale tailnet `100.64.0.0/10`을 더한다. 기존 `private_ranges`는 CGNAT 대역을 포함하지 않아 tailnet 브라우저가 401을 받았다. D-473 개발 세션이 이미 같은 대역을 사설망으로 받는 것과 맞춘다. 허가 범위(소스 목록·60초 source 한정 lease)와 다른 Fleet 경로의 토큰 요구는 그대로다.
+- 증거: 사이트·Fleet 관련 원격 pytest(커밋 뒤 실행). Caddy 2.10.2 adapt는 이 노트북에서 실행 허가를 받지 못해 확인 못 함 — 현장 proxy healthcheck(`caddy validate`)가 첫 확인이다.
+- gate 변화: 없음. 현장 PC 오프라인으로 tailnet 실제 영상 readback은 미확인이며, 현장의 `ROSY_SITE_LAN_IFACE`에 `tailscale0`이 없으면 방화벽이 포트를 열지 않는다.
+- CE: 해당 없음 — 대역 누락은 이 기록과 Caddyfile 주석으로 복원된다.
