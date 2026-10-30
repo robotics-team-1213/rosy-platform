@@ -85,7 +85,7 @@ def test_train_writes_a_pinned_model_and_its_evidence_from_reports(tmp_path):
     assert meta['scope'] == 'SIM_IK_TEACHER_BC_NOT_RL_NOT_HARDWARE'
 
 
-BC_V0 = '85713c8ec54190e53729d6df73d5d59f3e6e7d715058bfb7698b3793042b9294'
+BC_V0_SHA256 = '85713c8ec54190e53729d6df73d5d59f3e6e7d715058bfb7698b3793042b9294'
 
 
 @pytest.mark.parametrize('case', ['nominal-estimate', 'nominal-bc-v0'])
@@ -99,7 +99,7 @@ def test_evaluation_cases_see_a_noisy_held_box_and_pin_the_model(case):
                                                           'release_corrector', 'release_convergence_m')} == \
         {k: v for k, v in nominal.items() if k not in ('revision', 'case')}
     if case == 'nominal-bc-v0':
-        assert fixture['release_corrector'] == dict(file='release-corrector-bc-v0.npz', sha256=BC_V0)
+        assert fixture['release_corrector'] == dict(file='release-corrector-bc-v0.npz', sha256=BC_V0_SHA256)
         assert rc.load_corrector(fixture) is not None
     else:
         assert 'release_corrector' not in fixture and rc.load_corrector(fixture) is None
