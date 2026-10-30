@@ -52,13 +52,20 @@ On 2026-10-28 another person used the cell between our runs. Afterwards, every p
      - Until the first pass on a correctly mounted camera, only a person can confirm the mount.
    - Rule: after another person or session has used the cell, look at one wrist frame before turning on any wrist-based alignment (`wrist.ref_servo`, `pinch.enabled`). Both fingers must be visible at the bottom of the image. If they are not, turn those off and fix the mount first.
 
+8. **The room lights were off (2026-10-30, 00:40).** Every top frame was black. Raising the exposure to 200 ms and the gain to 7 changed nothing (mean 1.4), and the wrist camera read 0.1. So it was the room, not the camera.
+   - It looked like a camera fault: the top camera had also been left in manual exposure. Setting it back to auto changed nothing either.
+   - Fix in code: `cell_preflight.lights` checks each frame's mean against `preflight.min_mean` (15; a lit cell reads about 140). `cell_auto_pick` runs it before observing and refuses with "the room lights are off or the lens is covered".
+   - Verified on the real cell: in the dark, a board → belt dry run was refused with that reason, before any motion.
+   - To tell a dark room from a stuck exposure: set manual exposure high (`v4l2-ctl -c auto_exposure=1 -c exposure_time_absolute=2000 -c gain=7`) and grab a frame. A dark room stays black. Set it back to `auto_exposure=3` afterwards.
+
 ## The rule (code, not memory)
 
 Run `cell_preflight.py --config <cell config>` before an autonomous run. It is read only. It fails if:
 
 - a camera label is not fresh,
 - the top view moved more than `--max-shift-px` against the map's saved reference frame (`preflight.reference_top`; save one right after mapping),
-- or another arm session is running.
+- or another arm session is running,
+- or a frame is darker than `preflight.min_mean`.
 
 Caps are left to `record_session`'s own refusal, and the fix is printed.
 

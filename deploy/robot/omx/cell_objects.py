@@ -39,35 +39,6 @@ def load_catalog(path) -> list:
     return data["objects"]
 
 
-def side_clear(mask, roi, pixel_fn, o: dict, finger_mm: float, closing_deg: float | None = None) -> bool:
-    """Mask beside the object on both closing sides, a finger's width out: clear of other foreground. The closing
-    direction defaults to across the long axis; a square object passes the one its candidate yaw closes along."""
-    import cv2
-
-    centre = pixel_fn(tuple(o["raw_m"]))
-    if o.get("hull_px"):  # only its own pixels: a box split from a touching neighbour (cell_split) must still see it
-        own = np.zeros(mask.shape, np.uint8)
-        cv2.fillPoly(own, [np.asarray(o["hull_px"], np.int32) - [roi[0], roi[1]]], 1)
-        mask = np.where(cv2.dilate(own, np.ones((5, 5), np.uint8)) > 0, 0, mask).astype(mask.dtype)
-    else:
-        n, labels = cv2.connectedComponents(mask)
-        c_col, c_row = round(centre[0]) - roi[0], round(centre[1]) - roi[1]
-        if 0 <= c_row < mask.shape[0] and 0 <= c_col < mask.shape[1] and labels[c_row, c_col]:
-            mask = np.where(labels == labels[c_row, c_col], 0, mask).astype(mask.dtype)  # its own blob (side faces) is not a neighbour
-    u = math.radians(o["long_axis_deg"] if closing_deg is None else closing_deg - 90)
-    along, across = np.array([math.cos(u), math.sin(u)]), np.array([-math.sin(u), math.cos(u)])
-    half_across = o["width_mm"] / 2 if closing_deg is None else max(o["width_mm"], o["length_mm"]) / 2
-    for side in (-1, 1):
-        for out in (0.5, 1.0, 2.0):  # an open finger spans from the box edge to about two finger widths out
-            for s in (-0.3, 0.0, 0.3):
-                p = np.array(o["raw_m"]) + (side * (half_across + out * finger_mm) * across + s * min(o["length_mm"], 2 * half_across) * along) / 1000
-                px = pixel_fn(tuple(p))
-                col, row = round(px[0]) - roi[0], round(px[1]) - roi[1]
-                if 1 <= row < mask.shape[0] - 1 and 1 <= col < mask.shape[1] - 1 and mask[row - 1:row + 2, col - 1:col + 2].any():
-                    return False
-    return True
-
-
 def foreground(img, roi, chroma: float | None = None, light: float | None = None, params=None, surface_px=None,
                surface_lab=None):
     """Mask (ROI-sized) of pixels far from the surface's median colour; a shadow moves lightness only a little.
@@ -253,6 +224,19 @@ def object_mask(img, roi, hsv, surface_px=None, params=None):
     return cv2.morphologyEx(mask, cv2.MORPH_CLOSE, np.ones((c, c), np.uint8))
 
 
+def outline(px, results: list, catalog: list, camera: dict, surface_z: float):
+    """Convex outline of an object's own image area: the pixels found plus where their tops meet the surface, so the
+    side faces the camera sees belong to the object. With detection on the top face only (objects.hsv,
+    top_v_frac) a 2-cell's own side face read as a neighbour and closed the finger gap (2026-10-29)."""
+    pts = np.asarray(px, float)
+    heights = [o["top_height_mm"] for o in catalog if o["id"] in {r.get("object") for r in results}] or [o["top_height_mm"] for o in catalog]
+    if "center_px" in camera and "height_m" in camera:
+        c, big_h = np.asarray(camera["center_px"], float), camera["height_m"] - surface_z
+        base = c + (pts - c) * (big_h - max(heights) / 1000.0) / big_h
+        pts = np.vstack([pts, base])
+    return cv2.convexHull(pts.astype(np.int32)).reshape(-1, 2)
+
+
 def detect(img, roi, record: dict, camera: dict, catalog: list, surface_z: float = 0.0, params=None,
            surface_px=None, surface_lab=None, object_hsv=None) -> list:
     """All objects in the ROI. A blob that matches nothing is tried as boxes that only touch (cell_split); each piece
@@ -280,10 +264,10 @@ def detect(img, roi, record: dict, camera: dict, catalog: list, surface_z: float
             if parts and any(r["matched"] for res in measured for r in res):
                 pieces, found = parts, None
                 for q, res in zip(parts, measured):
-                    hull = cv2.convexHull(np.column_stack(np.nonzero(q))[:, ::-1].astype(np.int32) + [x0, y0]).reshape(-1, 2)
+                    hull = outline(np.column_stack(np.nonzero(q))[:, ::-1] + [x0, y0], res, catalog, camera, surface_z)
                     out += [{**r, "split_from": "touching", "hull_px": hull.tolist()} for r in res]
         if found is not None:
-            hull = cv2.convexHull(np.column_stack(np.nonzero(pieces[0]))[:, ::-1].astype(np.int32) + [x0, y0]).reshape(-1, 2)
+            hull = outline(np.column_stack(np.nonzero(pieces[0]))[:, ::-1] + [x0, y0], found, catalog, camera, surface_z)
             out += [{**r, "hull_px": hull.tolist()} for r in found]
     return out
 
