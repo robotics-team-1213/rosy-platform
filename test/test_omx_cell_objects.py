@@ -151,3 +151,11 @@ def test_a_darker_side_face_of_the_same_green_is_left_out_by_relative_lightness(
     merged = co.detect(img, ROI, RECORD, CAMERA, CATALOG, params={"objects.top_v_frac": 0}, object_hsv=hsv)
     tops = co.detect(img, ROI, RECORD, CAMERA, CATALOG, params={"objects.top_v_frac": 0.8}, object_hsv=hsv)
     assert merged[0]["width_mm"] > 36 and tops[0]["object"] == "container-2" and tops[0]["width_mm"] == pytest.approx(30, abs=3)
+
+
+def test_an_objects_outline_takes_in_the_side_faces_the_camera_sees():
+    """Top-face detection left a box's own side face out of its outline, and the finger check called it a neighbour."""
+    px = np.array([[100.0, 100.0], [140.0, 100.0], [140.0, 130.0], [100.0, 130.0]])  # a top face up and left of the centre
+    hull = co.outline(px, [{"object": "container-1"}], CATALOG, CAMERA, 0.0)
+    assert cv2.contourArea(hull.astype(np.float32)) > cv2.contourArea(px.astype(np.float32))
+    assert hull[:, 0].max() > 140 and hull[:, 1].max() > 130  # extended toward the principal point (320, 240)

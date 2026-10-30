@@ -224,6 +224,19 @@ def object_mask(img, roi, hsv, surface_px=None, params=None):
     return cv2.morphologyEx(mask, cv2.MORPH_CLOSE, np.ones((c, c), np.uint8))
 
 
+def outline(px, results: list, catalog: list, camera: dict, surface_z: float):
+    """Convex outline of an object's own image area: the pixels found plus where their tops meet the surface, so the
+    side faces the camera sees belong to the object. With detection on the top face only (objects.hsv,
+    top_v_frac) a 2-cell's own side face read as a neighbour and closed the finger gap (2026-10-29)."""
+    pts = np.asarray(px, float)
+    heights = [o["top_height_mm"] for o in catalog if o["id"] in {r.get("object") for r in results}] or [o["top_height_mm"] for o in catalog]
+    if "center_px" in camera and "height_m" in camera:
+        c, big_h = np.asarray(camera["center_px"], float), camera["height_m"] - surface_z
+        base = c + (pts - c) * (big_h - max(heights) / 1000.0) / big_h
+        pts = np.vstack([pts, base])
+    return cv2.convexHull(pts.astype(np.int32)).reshape(-1, 2)
+
+
 def detect(img, roi, record: dict, camera: dict, catalog: list, surface_z: float = 0.0, params=None,
            surface_px=None, surface_lab=None, object_hsv=None) -> list:
     """All objects in the ROI. A blob that matches nothing is tried as boxes that only touch (cell_split); each piece
@@ -251,10 +264,10 @@ def detect(img, roi, record: dict, camera: dict, catalog: list, surface_z: float
             if parts and any(r["matched"] for res in measured for r in res):
                 pieces, found = parts, None
                 for q, res in zip(parts, measured):
-                    hull = cv2.convexHull(np.column_stack(np.nonzero(q))[:, ::-1].astype(np.int32) + [x0, y0]).reshape(-1, 2)
+                    hull = outline(np.column_stack(np.nonzero(q))[:, ::-1] + [x0, y0], res, catalog, camera, surface_z)
                     out += [{**r, "split_from": "touching", "hull_px": hull.tolist()} for r in res]
         if found is not None:
-            hull = cv2.convexHull(np.column_stack(np.nonzero(pieces[0]))[:, ::-1].astype(np.int32) + [x0, y0]).reshape(-1, 2)
+            hull = outline(np.column_stack(np.nonzero(pieces[0]))[:, ::-1] + [x0, y0], found, catalog, camera, surface_z)
             out += [{**r, "hull_px": hull.tolist()} for r in found]
     return out
 

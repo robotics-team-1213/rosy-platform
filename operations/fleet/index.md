@@ -105,7 +105,7 @@
 ## 최근 기록
 
 - 2026-10-30 · f10444d3af · 헤더 CI 교정 원격 검증
+- 2026-10-30 · uncommitted · fix(fleet): 작업 발행 루프의 연속 발행과 발행 시간 기록
+- 2026-10-30 · uncommitted · fix(fleet): 교통 판정 구간을 콘솔 잠금 하나로 직렬화
+- 2026-10-30 · uncommitted · fix(fleet): 관측 기록 행 상한 정리를 MAX(id) 경계로
 - 2026-10-29 · uncommitted · outage 시험에서 대기할 요청 범위 제한
-- 2026-10-29 · uncommitted · 헤더 outage 시험의 정상 응답 경합 제거
-- 2026-10-29 · uncommitted · 좁은 화면의 연결 상태 글·점 폭 보존
-- 2026-10-29 · 8728fc6eb7 · observer CLI 시험 입력의 비밀값 검사 호환

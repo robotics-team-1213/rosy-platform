@@ -13,7 +13,7 @@
 | [fleet_decision](operations/decision/progress.md) | fleet_decision | 587c0b4c8c (2026-10-29) | GO | GO | HOLD | HOLD | HOLD | HOLD |
 | [situation](operations/situation/progress.md) | SITUATION | 3627ec21fb (2026-10-28) | GO | HOLD | N/A | HOLD | HOLD | HOLD |
 | [media](operations/site_ui/media/progress.md) | SITE MEDIA | 2190ba6889 (2026-10-18) | GO | GO | N/A | HOLD | HOLD | HOLD |
-| [media_edge](middleware/media/progress.md) | ROBOT MEDIA | 2190ba6889 (2026-10-18) | GO | GO | N/A | HOLD | HOLD | HOLD |
+| [media_edge](middleware/media/progress.md) | ROBOT MEDIA | abd6ce7cab (2026-10-30) | GO | GO | N/A | HOLD | HOLD | HOLD |
 | [console_source](applications/fleet/web/progress.md) | console_source | d4988bffba (2026-10-11) | GO | GO | HOLD | HOLD | HOLD | HOLD |
 | [fleet_app_dev](applications/fleet/dev/progress.md) | fleet_app_dev | c000a57004 (2026-10-21) | GO | GO | HOLD | HOLD | HOLD | HOLD |
 | [perception_curation](learning/curation/perception/progress.md) | perception_curation | d4988bffba (2026-10-11) | GO | GO | HOLD | HOLD | HOLD | HOLD |
@@ -38,7 +38,7 @@
 | [core_events](middleware/core/events/progress.md) | CORE | bed604ef (2026-09-30) | GO | GO | N/A | N/A | N/A | N/A |
 | [core_features](middleware/core/services/progress.md) | CORE | 4e99d92e (2026-10-02) | GO | GO | N/A | N/A | N/A | N/A |
 | [core_api_web](middleware/core/api/progress.md) | CORE | 4e99d92e (2026-10-02) | GO | GO | N/A | N/A | N/A | N/A |
-| [web_common](shared/web/progress.md) | CORE | 0409c371 (2026-09-30) | GO | GO | N/A | N/A | N/A | N/A |
+| [web_common](shared/web/progress.md) | CORE | 1c8923b441 (2026-10-29) | GO | GO | N/A | N/A | N/A | N/A |
 | [dashboard](middleware/robot_ui/robot/progress.md) | 화면 | e7cdf490 (2026-09-29) | GO | GO | N/A | HOLD | N/A | N/A |
 | [pilot](middleware/robot_ui/pilot/progress.md) | 화면 | 10daaae5 (2026-10-02) | GO | HOLD | HOLD | HOLD | GO | N/A |
 | [omx_transfer](integrations/robots/omx/progress.md) | OMX workcell | uncommitted (2026-10-27) | GO | PARKED | PARKED | PARKED | PARKED | PARKED |
@@ -82,7 +82,7 @@
 - media DEVICE: measurement skipped by user decision 2026-10-18; no robot, Android device or production site installation
 - media FIELD: measurement skipped by user decision 2026-10-18; six physical robots never ran the 30-minute bandwidth/latency/control scenario
 - media_edge ARTIFACT: measurement skipped by user decision 2026-10-18; the payload now installs rosy-media-edge and rosy-media.service but no signed ARM64 payload was built or its GStreamer closure probed
-- media_edge DEVICE: measurement skipped by user decision 2026-10-18; no Pinky ran the camera tap, rosy-media.service limits or a real camera stream
+- media_edge DEVICE: Native ARM64 preflight and diagnostic 640x480 watermark rendering observed; final continuous-sampling patch deployment and production automatic playback remain unverified after device connectivity loss. See docs/validation/robot-local-video-recovery-2026-10-29/result.md.
 - media_edge FIELD: measurement skipped by user decision 2026-10-18; six physical robots have not run D-789 acceptance
 - console_source ROS-SIM: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
 - console_source ARTIFACT: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
