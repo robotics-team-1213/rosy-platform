@@ -39,7 +39,7 @@ def test_the_session_starts_in_its_own_process_session_and_is_reused(tmp_path):
         "with (io / 'chunk-status.jsonl').open('a') as f:\n"
         "    f.write(json.dumps({'command': 'start', 'ok': True, 'sid': os.getsid(0)}) + '\\n')\n"
         "time.sleep(30)\n")
-    env = {**os.environ, "OMX": str(omx), "OMX_PYTHON": sys.executable, "OMX_SESSION_ARGS": "", "OMX_SESSION_WAIT_S": "20"}
+    env = {**os.environ, "OMX": str(omx), "OMX_PYTHON": sys.executable, "OMX_SESSION_ARGS": "--io chunk-io", "OMX_SESSION_WAIT_S": "20"}
     script = str(OMX / "omx_session.sh")
     try:
         first = subprocess.run(["bash", script, sys.executable, "-c", "import os; print(os.getsid(0))"], cwd=tmp_path,
