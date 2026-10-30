@@ -497,3 +497,10 @@
 - gate 변화: SOURCE GO 유지, 증거를 9개 간격 적재로 갱신. offset/reverse·ACT/RL·실물·현장은 미완료.
 - CE: 기존 교훈 갱신 — `isaac-cargo-reports-velocity-at-fixed-pose-2026-10-30.md`에 순간 속도가 접촉 떨림이라는 b326 증거와 자세 변화 기반 판정, 2cdb 수용을 기록하고, fa6f를 '실제 미세 운동'으로 본 해석을 정정했다.
 
+
+## 2026-10-30 · 7d4d028071 · release corrector BC and first RL environment
+
+- 변경: 놓기 보정 모델(`release_corrector.py`)을 추가했다. IK 놓기 기록을 증강해 정답 IK를 흉내 내는 BC v0(sha `85713c8e…`)을 고정했다. 추정 오차 평가 조건(`nominal-estimate`, `nominal-bc-v0`), 탐색 잔차와 REINFORCE `rl-update`, 짧은 놓기 에피소드(`release_episodes.py`)를 넣었다. 9개 흐름은 바꾸지 않았다.
+- 증거: 2~5 mm 추정 오차에서 IK 0/9(b0cc), BC v0 8/9(ebdd). ebdd의 실패는 열기 때 1.1 mm 밀림이다. RL은 아직 개선 데이터가 없다(3d52·d63e·8e96·e48a). 원격 Isaac 616통과1건너뜀. 상세: `docs/validation/omx-release-corrector-2026-10-30/result.md`.
+- gate 변화: 없음. 시뮬레이션 실험이며 학습 정책 수용·실물 수용이 아니다.
+- CE: 해당 없음 — 아직 해결된 교훈이 없다. 결정성 때문에 반복 실행이 같은 데이터를 준다는 점과 에피소드 시작 자세 문제는 검증 기록에 증상·조치로 남겼다.

@@ -32,8 +32,8 @@
 
 ## 최근 기록
 
+- 2026-10-30 · 7d4d028071 · release corrector BC and first RL environment
 - 2026-10-30 · bb39f438a5 · nine-container 3×3×3 gapped packing accepted
 - 2026-10-30 · ed340a9d8a · cargo-only physics attempts reverted
 - 2026-10-30 · 684618d077 · D-929 gapped nine-container packing
 - 2026-10-30 · c8fbb61dc7 · nine-container packing reaches seven
-- 2026-10-30 · 4f63cd5992 · actual CAD three-floor column acceptance
