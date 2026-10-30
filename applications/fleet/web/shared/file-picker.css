@@ -1,6 +1,7 @@
-/* D-926 C7 — 파일 고르기는 한 모양이다. 브라우저 기본 입력(로캘마다 영어로 보이는 글)은 투명하게 덮어 두고, 단추와 고른 이름을 한국어로 보인다. */
+/* D-926 C7 — 파일 고르기는 한 모양이다. 브라우저 기본 입력(로캘마다 영어로 보이는 글)은 투명하게 덮어 두고, 단추와 고른 이름을 한국어로 보인다.
+   label 안이면 단추를 눌러도 label이 입력을 연다. div 안(Cell)이면 입력이 맨 위 단추 자리를 덮는다. */
 .file-picker { position: relative; display: grid; gap: var(--space-2); min-width: 0; }
-.file-picker > input[type="file"] { position: absolute; inset: 0; width: 100%; height: 100%; padding: 0; opacity: 0; cursor: pointer; }
+.file-picker > input[type="file"] { position: absolute; inset: 0 auto auto 0; width: 100%; min-height: var(--target-secondary); padding: 0; opacity: 0; cursor: pointer; }
 .file-picker > input[type="file"]:disabled { cursor: not-allowed; }
 .file-picker-button { box-sizing: border-box; display: flex; align-items: center; justify-content: center; min-height: var(--target-secondary); border: 1px solid var(--field-line); border-radius: var(--radius-control); background: var(--surface-raised); }
 .file-picker > input:disabled + .file-picker-button { border-style: dashed; color: var(--nominal-quiet); }
