@@ -1,5 +1,6 @@
 """cell_wrist_ref: the reference-pixel servo probes J, converges, Broyden learns a rotated camera; the estimated
 reference is the fingertip point plus the height shift."""
+import json
 import sys
 from pathlib import Path
 
@@ -80,3 +81,42 @@ def test_an_estimated_reference_is_the_fingertip_point_plus_the_height_shift():
     ref = cr.estimate_reference(Cam(), "wrist", HSV, hover_up, {"wrist.tip_to_top_mm": 25.0})
     assert ref["tip"] == pytest.approx([320.0, 400.0], abs=1) and ref["per_mm"][1] == pytest.approx(-2.0, abs=0.2)
     assert ref["u"] == pytest.approx(320.0, abs=2) and ref["v"] == pytest.approx(400 - 50, abs=6) and state["up"] == 0.0
+
+
+def test_the_hover_height_comes_from_the_shrink_on_a_known_rise_and_a_lower_top_shows_as_an_offset():
+    area = lambda d: (140 * 150 / d) ** 2  # noqa: E731  a square's image side is inverse to its distance
+    assert cr.scale_height(area(150), area(165), 15) == pytest.approx(150, abs=0.5)
+    assert cr.scale_height(area(150), area(150.5), 15) is None  # too small a shrink to measure
+    ref = {"area": area(150), "scale_mm": 150.0, "footprint_mm2": 900}
+    assert cr.top_offset_mm(ref, area(155), 900) == pytest.approx(5, abs=0.2)
+    assert cr.top_offset_mm(ref, 2 * area(150), 1800) == pytest.approx(0, abs=0.2)  # a two-cell container, same height
+    assert cr.top_offset_mm(ref, area(150), None) is None and cr.top_offset_mm({"area": 1.0}, 1.0) is None
+
+
+def test_a_saved_reference_gets_its_height_scale_from_one_rise_probe_and_the_pick_records_the_top_offset(tmp_path):
+    state = {"dz": 0.0}
+
+    def frame():
+        side = 21000 / (155 + state["dz"])  # the top is 5 mm lower than at the reference (140 px at 150)
+        img = np.full((480, 640, 3), 170, np.uint8)
+        cv2.rectangle(img, (int(320 - side / 2), int(240 - side / 2)), (int(320 + side / 2) - 1, int(240 + side / 2) - 1), (40, 190, 50), -1)
+        return img
+
+    class Cam:
+        def frame(self, camera):
+            return frame()
+
+        def act(self, command):
+            return {"ok": True}
+
+    def write_library(config, pick, place, path):
+        state["dz"] = (pick["z"] - 0.05) * 1000
+        return "lib.json"
+
+    path = cr.ref_path(tmp_path, "arm_s")
+    path.write_text('{"u": 320.0, "v": 240.0, "area": 19600, "footprint_mm2": 900, "J": [[2, 0], [0, 2]]}')
+    config = {"params": {"wrist.ref_servo": 1}, "wrist": {"hsv_min": HSV[0], "hsv_max": HSV[1]}, "work_dir": str(tmp_path)}
+    target = {"pick": {"x": 0.1, "y": 0.2, "z": 0.05, "yaw_deg": 0.0}, "place": {}, "entry": {"length_mm": 30, "width_mm": 30}}
+    out = cr.ref_hook(config, Cam(), target, write_library, "any")()
+    assert out["verdict"] == "pass" and out["top_offset_mm"] == pytest.approx(5, abs=2) and state["dz"] == 0.0
+    assert json.loads(path.read_text())["scale_mm"] == pytest.approx(155, abs=10)
