@@ -148,7 +148,7 @@ def test_a_darker_side_face_of_the_same_green_is_left_out_by_relative_lightness(
     top, side = (60, 170, 60), (40, 115, 40)  # the side about 0.68 of the top's lightness
     img = scene([(0, 0, 60, 30, 0)], colour=top, patches=[((0, 21, 60, 12, 0), side)])
     hsv = [[50, 80, 50], [95, 255, 255]]
-    merged = co.detect(img, ROI, RECORD, CAMERA, CATALOG, params={"objects.top_v_frac": 0}, object_hsv=hsv)
+    merged = co.detect(img, ROI, RECORD, CAMERA, CATALOG, params={"objects.top_v_frac": 0, "objects.side_retry_v_frac": 0}, object_hsv=hsv)
     tops = co.detect(img, ROI, RECORD, CAMERA, CATALOG, params={"objects.top_v_frac": 0.8}, object_hsv=hsv)
     assert merged[0]["width_mm"] > 36 and tops[0]["object"] == "container-2" and tops[0]["width_mm"] == pytest.approx(30, abs=3)
 
