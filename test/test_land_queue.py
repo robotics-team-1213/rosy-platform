@@ -93,9 +93,9 @@ def test_a_preparing_ticket_keeps_its_place_without_blocking_and_a_turn_blocks_e
         "feat/full"], "done preparing, the FULL lander is first again"
 
 
-def test_at_most_three_landings_prepare_at_once_and_a_pending_one_blocks_no_one(tmp_path):
+def test_at_most_max_preparing_landings_prepare_at_once_and_a_pending_one_blocks_no_one(tmp_path):
     import land_prepare
-    busy = [queue.take(tmp_path, f"feat/p{n}", status="preparing") for n in range(3)]
+    busy = [queue.take(tmp_path, f"feat/p{n}", status="preparing") for n in range(land_prepare.MAX_PREPARING)]
     mine = queue.take(tmp_path, "feat/mine")
     later = queue.take(tmp_path, "feat/later")
     naps = []
@@ -118,7 +118,7 @@ def test_who_is_ahead_shows_each_tickets_status(tmp_path):
 
 def test_preparation_slot_reserves_capacity_for_older_pending_ticket(tmp_path):
     import land_prepare
-    busy = [queue.take(tmp_path, f"feat/p{n}", status="preparing") for n in range(2)]
+    busy = [queue.take(tmp_path, f"feat/p{n}", status="preparing") for n in range(land_prepare.MAX_PREPARING - 1)]
     older = queue.take(tmp_path, "feat/older", status="pending")
     mine = queue.take(tmp_path, "feat/mine", status="pending")
     naps = []
