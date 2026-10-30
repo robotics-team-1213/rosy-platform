@@ -71,3 +71,9 @@
 - 변경: 실행기에 `--host`(IP 리터럴, 기본 loopback)를 더했다. 관제 PC는 서명 Fleet 이미지를 쓰는 별도 `monitoring` 서비스를 `compose.monitoring.yaml`로 켜고, 프록시 site 블록 안에서 `/monitoring/`·`/api/monitoring/`·`/monitoring-health`를 전달한다. 업데이트기는 서명된 overlay 한 쌍과 후보 Fleet 이미지일 때만 이 서비스를 허용한다.
 - 증거: 원격 겨냥 시험(monitoring·site 후보/검증기/업데이트기·배포·harness·구조) 통과, 비교 NEW/KNOWN/FLAKY0. 시험 PC에 docker compose가 없어 compose 렌더링 1건은 건너뛰었다. 대신 관제 PC에서 실제 site.env로 `docker compose config`를 렌더링해 5개 서비스, 공개 포트 없음, `site_backend` 단독을 확인했다. 운영 프록시 이미지로 `caddy validate`를 overlay 켬·끔 두 경우 모두 통과했다. 운영 스택은 바꾸지 않았다.
 - gate 변화: SOURCE GO 유지. ARTIFACT/DEVICE/FIELD HOLD, 이유를 D-936 경로로 갱신했다. 관제 PC 자동 업데이트는 서명되지 않은 ARM-S overlay 때문에 거절 중이다(기존 기록 `Rosy/docs/workspace-records/2026-10-29/site-update-readiness.md`). CE 해당 없음 — 그 차단 원인과 전환 조건은 기존 작업 기록에 있고, 이번 변경의 판단은 D-936과 계약 시험에 남는다.
+
+## 2026-10-30 · 324eb4010f · PC별 업데이트 상태 (D-871)
+
+- 변경: host_guard 원천이 가드 줄의 `updates` 보고를 읽어 PC마다 `<PC> 업데이트` 노드를 하나 더 낸다. 판정은 Fleet `/api/fleet/updates`와 같다. 켜진 타이머가 6시간 안에 정상 판정이 없으면 ERROR, 동결이면 WARNING, 보고가 깨졌으면 UNKNOWN이다. 사유·릴리스 문자열은 그래프에 복사하지 않는다. `updates`가 없는 줄(로봇·예전 가드)은 노드를 만들지 않는다.
+- 증거: 원격 `operations/monitoring/test` 전체 통과(1 skip), 비교 NEW/KNOWN/FLAKY0.
+- gate 변화: 없음. 관제 PC 적용은 D-936 활성화와 함께한다. CE 해당 없음 — 판정 규칙은 코드와 회귀 시험에 남는다.
