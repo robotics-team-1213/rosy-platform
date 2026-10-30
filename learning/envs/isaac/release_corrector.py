@@ -145,8 +145,48 @@ class MLP:
         return cls([[data[f'w_{i}'], data[f'b_{i}']] for i in range(count)], data['mean'], data['scale'], data['linear'])
 
 
-def describe(model_sha256, rows, holdout_error_mm):
-    """Artifact metadata kept beside the weights."""
-    return json.dumps(dict(schema='rosy.omx-release-corrector/1', sha256=model_sha256, features=FEATURES,
-                           rows=rows, holdout_mean_abs_error_mm=holdout_error_mm,
-                           scope='SIM_IK_TEACHER_BC_NOT_RL_NOT_HARDWARE'), sort_keys=True)
+def train(report_paths, out_dir, *, per_snapshot=400, seed=0, epochs=400):
+    """Fit the corrector on augmented release snapshots; keep weights, sha256 and holdout evidence together.
+
+    The simulation is deterministic per seed, so repeated runs repeat releases; they are counted once. Each
+    release's last pre-command snapshot is held out, the earlier ones train.
+    """
+    rng = np.random.default_rng(seed)
+    seen, train_rows, hold_rows, snapshots, sources = set(), [], [], 0, []
+    for path in report_paths:
+        raw = Path(path).read_bytes()
+        report = json.loads(raw)
+        fixture = report['fixture']
+        for index, layer in enumerate(report['trials'][0].get('layers', [])):
+            if not layer.get('release_commands') or not layer.get('release_samples'):
+                continue
+            key = json.dumps([fixture.get('revision'), index, layer['release_commands']])
+            if key in seen:
+                continue
+            seen.add(key)
+            sources.append(hashlib.sha256(raw).hexdigest())
+            group = [layer['carry_sample']] + layer['release_samples'][:-1]
+            snapshots += len(group)
+            for k, sample in enumerate(group):
+                rows = [r for r in (augment(sample, index, fixture, rng) for _ in range(per_snapshot)) if r]
+                (hold_rows if k == len(group)-1 else train_rows).extend(rows)
+    x, y = np.array([r[0] for r in train_rows]), np.array([r[2] for r in train_rows])
+    hx, hy = np.array([r[0] for r in hold_rows]), np.array([r[2] for r in hold_rows])
+    model = MLP.fit(x, y, epochs=epochs, seed=seed)
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    meta = dict(schema='rosy.omx-release-corrector/1', sha256=model.save(out/'release-corrector.npz'),
+                features=FEATURES, releases=len(seen), snapshots=snapshots, train_rows=len(x), holdout_rows=len(hx),
+                holdout_mean_abs_error_mm=float(np.abs(model.predict(hx)-hy).mean()*1000),
+                holdout_mean_baseline_mm=float(np.abs(y.mean(0)-hy).mean()*1000),
+                source_report_sha256=sorted(set(sources)), seed=seed, epochs=epochs,
+                scope='SIM_IK_TEACHER_BC_NOT_RL_NOT_HARDWARE')
+    (out/'release-corrector.json').write_text(json.dumps(meta, sort_keys=True), encoding='utf-8')
+    return meta
+
+
+if __name__ == '__main__':
+    import sys
+    if len(sys.argv) < 4 or sys.argv[1] != 'train':
+        sys.exit('usage: release_corrector.py train OUT_DIR REPORT.json [REPORT.json ...]')
+    print(json.dumps(train(sys.argv[3:], sys.argv[2]), sort_keys=True))
