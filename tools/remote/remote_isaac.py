@@ -136,11 +136,27 @@ def observe(receipt_file, remote, *, stop=False):
 
 
 def run_experiment(scenario, config, sha, directory, remote, *, parent=None, sleep=None, fetch=None,
-                   attempts=20, interval=30, max_polls=240, max_errors=10):
+                   attempts=20, interval=30, max_polls=240, max_errors=10, admissions=3):
     """check until ready -> start once -> wait (riding out lost replies) -> fetch a terminal run.
 
-    Hand-rolled loops started a run while the model PC was busy and stopped waiting on one lost reply.
+    Hand-rolled loops started a run while the model PC was busy and stopped waiting on one lost reply. A start
+    refused at admission (the GPU taken between check and start, run 991a) is kept under attempt-N/ and retried
+    from the readiness check with a new request, at most `admissions` times.
     """
+    for refused in range(1, admissions+1):
+        result = _run_once(scenario, config, sha, directory, remote, parent=parent, sleep=sleep, fetch=fetch,
+                           attempts=attempts, interval=interval, max_polls=max_polls, max_errors=max_errors)
+        if result['status'] != 'FAILED' or (result.get('result') or {}).get('reason') != 'admission_refused':
+            return result
+        kept = directory / f'attempt-{refused}'
+        kept.mkdir()
+        for name in ('request.json', 'receipt.json'):
+            (directory / name).rename(kept / name)
+    return result
+
+
+def _run_once(scenario, config, sha, directory, remote, *, parent, sleep, fetch, attempts, interval, max_polls,
+              max_errors):
     import time
     sleep = sleep or time.sleep
     fetch = fetch or fetch_snapshot
@@ -171,7 +187,8 @@ def run_experiment(scenario, config, sha, directory, remote, *, parent=None, sle
                 raise
     else:
         raise ValueError('Run still active; continue with status --receipt')
-    snapshot = fetch(read_receipt(receipt), remote, directory / 'snapshots') if row['status'] in TERMINAL else None
+    refused = (row.get('result') or {}).get('reason') == 'admission_refused'  # nothing ran; keep snapshots/ for the retry
+    snapshot = fetch(read_receipt(receipt), remote, directory / 'snapshots') if row['status'] in TERMINAL and not refused else None
     return {'run_id': row['run_id'], 'status': row['status'], 'result': row.get('result'),
             'snapshot_directory': str(snapshot) if snapshot else None}
 
