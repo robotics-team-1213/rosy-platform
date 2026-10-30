@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 import time
@@ -26,6 +27,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import land_events  # noqa: E402
 
 WINDOW = 6 * 3600  # seconds within which one id failing for two branches counts as shared
+REPEAT_ROWS = 10
 
 
 def percentile(values: list[float], q: float) -> float | None:
@@ -49,6 +51,27 @@ def causes(rows: list[dict]) -> list[tuple[float, str]]:
         else:
             out.append((t, "branch"))
     return out
+
+
+def repeat(rows: list[dict], candidates: str, quarantine: str) -> list[dict]:
+    """Confirmed failed ids that stopped two or more branches, most branches first: the decisions (fix main, own
+    it, or move a reviewed LOAD-FLAKY candidate into test/flaky_quarantine.txt) nobody took. 10-28..30 one id
+    stopped 14 branches over 45 h while its flaky candidates piled up unread."""
+    seen: dict[str, dict] = {}
+    for r in rows:
+        if r["event"] == "failure" and r.get("confirmed"):
+            branch = re.sub(r"^land/|-\d{14}.*$", "", r.get("branch") or "")
+            for nodeid in r.get("failed", []):
+                s = seen.setdefault(nodeid, {"id": nodeid, "branches": set(), "hosts": set(), "last": 0})
+                s["branches"].add(branch)
+                s["hosts"].add(r.get("host"))
+                s["last"] = max(s["last"], r["t"])
+    flaky = [line.split("  #")[0].strip() for line in candidates.splitlines()]
+    held = {line.split("  #")[0].strip() for line in quarantine.splitlines()}
+    out = [{**s, "branches": len(s["branches"]), "hosts": sorted(h for h in s["hosts"] if h),
+            "flaky_candidates": flaky.count(s["id"]), "quarantined": s["id"] in held}
+           for s in seen.values() if len(s["branches"]) > 1]
+    return sorted(out, key=lambda s: (-s["branches"], -s["last"]))
 
 
 def daily(rows: list[dict]) -> dict[str, dict]:
@@ -95,7 +118,8 @@ def main(argv=None) -> int:
     common = subprocess.run(["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
                             capture_output=True, text=True, check=True).stdout.strip()
     since = time.time() - args.days * 86400
-    stats = daily([r for r in land_events.read(Path(common) / land_events.EVENTS) if r["t"] >= since])
+    rows = [r for r in land_events.read(Path(common) / land_events.EVENTS) if r["t"] >= since]
+    stats = daily(rows)
     if args.json:
         print(json.dumps(stats, indent=1))
         return 0
@@ -107,6 +131,15 @@ def main(argv=None) -> int:
               f"  {fmt(d['turn_p50_min']):>6}/{fmt(d['turn_p90_min']):<8}  {d['invocations']:3}  {fmt(d['new_share']):5}"
               f" {fmt(d['flaky_share']):5} {fmt(d['unusable_share']):8}"
               f"  {d['failed_shared']}/{d['failed_host']}/{d['failed_branch']}")
+    read = lambda path: path.read_text(encoding="utf-8") if path.is_file() else ""  # noqa: E731
+    top = repeat(rows, read(Path(common) / "rosy-flaky-candidates.txt"), read(Path(common).parent / "test/flaky_quarantine.txt"))
+    if top:
+        print("\nids that stopped 2+ branches (fix main, own it: tools/land_mainred.py own, or review the"
+              " LOAD-FLAKY candidates into test/flaky_quarantine.txt)")
+        print("branches  flaky-cand  quarantined  last         hosts      id")
+        for s in top[:REPEAT_ROWS]:
+            print(f"{s['branches']:8}  {s['flaky_candidates']:10}  {'yes' if s['quarantined'] else 'no':11}"
+                  f"  {time.strftime('%m-%d %H:%M', time.localtime(s['last']))}  {','.join(s['hosts']):9}  {s['id']}")
     return 0
 
 
