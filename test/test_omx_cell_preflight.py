@@ -74,7 +74,7 @@ class Camera:
 def test_a_dim_top_camera_is_exposed_into_the_band_and_a_lit_one_is_left_alone():
     cam = Camera()  # mean 13: the dim room
     report = pf.expose("/dev/video2", cam.frame, run=cam.run, wait=lambda s: None)
-    assert report["set"] and report["ok"] and abs(report["mean"] - 130) <= 35
+    assert report["set"] and report["ok"] and abs(report["mean"] - 140) <= 15
     assert cam.writes[0][:2] == ["-c", "auto_exposure=1"] and len(cam.writes) <= 4
     lit = Camera(exposure=29000)
     assert not pf.expose("/dev/video2", lit.frame, run=lit.run, wait=lambda s: None)["set"] and lit.writes == []
