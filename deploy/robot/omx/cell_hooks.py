@@ -40,6 +40,7 @@ def pick_hooks(config: dict, cell, target: dict, write_library, source: str, des
     if prm.get(params, "wrist.ref_servo") and spec.get("hsv_min"):
         work, arm = Path(config["work_dir"]).expanduser(), config.get("arm_id", "arm_s")
         capture = lambda: cell.act("goto above_place").get("ok") and cell_wrist_ref.capture_reference(  # noqa: E731
-            cell, spec.get("camera", "wrist"), (spec["hsv_min"], spec["hsv_max"]), work, arm, dest_site, params)
+            cell, spec.get("camera", "wrist"), (spec["hsv_min"], spec["hsv_max"]), work, arm, dest_site, params,
+            target["entry"]["length_mm"] * target["entry"]["width_mm"])
     return (wrist, capture, cell_pinch.hook(config, cell, target, write_library, gap, target["entry"]["width_mm"]),
             cell_feel.feel_hook(config, cell, target, write_library))

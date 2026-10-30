@@ -8,6 +8,7 @@ import {bindEstop, bindTopbarToggle, showSession, showSignedOut, tickClock, watc
 import {renderStructuredDocument} from '/console/assets/cell-document-editor.js';
 import {createCellObservation} from '/console/assets/cell-observation.js';
 import {bindPrintSheets} from '/console/assets/cell-print-sheets.js';
+import {showObjectCatalog} from '/console/assets/cell-object-catalog.js';
 
 const $ = id => document.getElementById(id);
 const revealStage = hash => $(hash.slice(1))?.closest('details')?.setAttribute('open', '');
@@ -353,7 +354,7 @@ function connect(credentialChange = false) {
   return action(async () => {
   const session = await api('/api/fleet/session'); role = session.role;
   showSession(session, {credentialChange, focusOrigin});
-  observations.clear(); void observations.refresh();
+  observations.clear(); void observations.refresh(); void showObjectCatalog({request, $});
   loginForm.refresh(false);
   await list();
   if (channelRequested) {
