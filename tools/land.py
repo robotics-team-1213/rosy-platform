@@ -65,6 +65,7 @@ import worktree_rules  # noqa: E402  (D-790: stale-history refusal)
 HARNESS = "tools/harness/rosy_harness.py"
 HARNESS_TRIGGER = ": harness configuration or the selector itself"  # affected_tests.FULL_TRIGGERS
 SIZE_RANGE = "tools/harness/size_range.py"  # D-766: git-only, seconds; the FULL tier would only find it after the remote round trip
+SCANNER_DIR = "deploy/robot/pinky_pro/release"  # its scanner; admission runs it on changed files
 SAFETY = "tools/harness/safety_review.py"  # D-430 5: the rule CI's scope job enforces
 # Every child gets UTF-8 stdio (Korean paths and log text on a cp949 console).
 ENV = {**os.environ, "PYTHONUTF8": "1"}
@@ -237,6 +238,27 @@ def admit(wt: Path, branch: str, main_sha: str, python: str) -> None:
         merge(wt, main_sha, branch, python, False)
     if (wt / HARNESS).is_file():
         step(wt, [python, HARNESS, "lint"], None, "lint")
+    secret_scan(wt, main_sha)
+
+
+def secret_scan(wt: Path, main_sha: str) -> None:
+    """test_no_secrets_in_tracked_files over the branch's own files: on 10-29..30 full SHAs in a branch's validation
+    records stopped 19 landings only after the 12-min FULL round. The whole tree takes ~45 s; the changed files take
+    seconds."""
+    release = wt / SCANNER_DIR
+    if not (release / "secret_scan.py").is_file():
+        return
+    sys.path.insert(0, str(release))
+    try:
+        import secret_scan as scanner
+    finally:
+        sys.path.remove(str(release))
+    changed = out(wt, "diff", "--name-only", "--diff-filter=d", main_sha, "HEAD").splitlines()
+    findings = scanner.scan_files([wt / p for p in changed], root=wt, public_provenance=scanner.load_public_provenance(
+        release / "public_provenance.json"))
+    if findings:
+        raise Stop("secret scan (test_no_secrets_in_tracked_files) failed; a git id needs the word `commit` before it"
+                   " on its line, or 10 characters:\n" + "\n".join(str(f) for f in findings[:20]))
 
 
 def record_only(path: str) -> bool:
