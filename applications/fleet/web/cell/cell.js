@@ -7,6 +7,8 @@ import {confirmIrreversible} from '/common/ui.js';
 import {bindEstop, bindTopbarToggle, showSession, showSignedOut, tickClock, watchFleet} from '/console/assets/fleet-header.js';
 import {renderStructuredDocument} from '/console/assets/cell-document-editor.js';
 import {createCellObservation} from '/console/assets/cell-observation.js';
+import {bindPrintSheets} from '/console/assets/cell-print-sheets.js';
+import {showObjectCatalog} from '/console/assets/cell-object-catalog.js';
 
 const $ = id => document.getElementById(id);
 const revealStage = hash => $(hash.slice(1))?.closest('details')?.setAttribute('open', '');
@@ -41,6 +43,7 @@ const stored = sessionStorage.getItem('rosy-console-token') || '';
 $('console-token').value = stored;
 const request = createFleetClient({credential: () => $('console-token').value, origin: location.origin});
 const observations = createCellObservation({request, root: $('workcell-observations')});
+bindPrintSheets({request, $});
 window.addEventListener('pagehide', event => event.persisted ? observations.clear() : observations.dispose());
 window.addEventListener('pageshow', event => { if (event.persisted) connect(); });
 bindEstop(request);
@@ -351,7 +354,7 @@ function connect(credentialChange = false) {
   return action(async () => {
   const session = await api('/api/fleet/session'); role = session.role;
   showSession(session, {credentialChange, focusOrigin});
-  observations.clear(); void observations.refresh();
+  observations.clear(); void observations.refresh(); void showObjectCatalog({request, $});
   loginForm.refresh(false);
   await list();
   if (channelRequested) {

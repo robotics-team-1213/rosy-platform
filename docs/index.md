@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
-- 2026-10-30 · uncommitted · docs: 게시용 FULL 근거 착지 기록
-- 2026-10-30 · uncommitted · docs(fleet): 로봇별 동시 작업 발행 ADR(D-928, Proposed)과 실행 계획, 양보 없는 가짜의 동시성 교훈
-- 2026-10-30 · 40449ecfdf · 카메라 자동 복구를 실제 제어값과 복원 기록에 결속
-- 2026-10-29 · uncommitted · 자체 중복 lander의 완료 FULL 보존과 소유 취소
-- 2026-10-29 · 8728fc6eb7 · observer 검수 시험의 native guard 실패·수정 근거
+- 2026-10-30 · uncommitted · omx: D-935 payload bound on the D-911 gate
+- 2026-10-30 · uncommitted · omx: cell scale reader and D-934 object mass
+- 2026-10-30 · uncommitted · docs(adr): D-931..D-933 arm S measured checks, one field revision, cell coordinate frame
+- 2026-10-30 · 08b6c8c362 · 새 장치 수집과 mDNS 진단 기록
+- 2026-10-30 · fd11d5158a · D-926 운용 화면의 읽는 순서·깊이·말의 규칙

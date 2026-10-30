@@ -62,6 +62,14 @@
       "path": "cell/cell-observation.js",
       "media_type": "application/javascript"
     },
+    "cell-print-sheets.js": {
+      "path": "cell/cell-print-sheets.js",
+      "media_type": "application/javascript"
+    },
+    "cell-object-catalog.js": {
+      "path": "cell/cell-object-catalog.js",
+      "media_type": "application/javascript"
+    },
     "motor-health-view.js": {
       "path": "motor-health-view.js",
       "media_type": "application/javascript"
@@ -396,6 +404,10 @@
     },
     "edit-history.js": {
       "path": "sitemap/edit-history.js",
+      "media_type": "application/javascript"
+    },
+    "subnav-screens.js": {
+      "path": "shared/subnav-screens.js",
       "media_type": "application/javascript"
     },
     "geometry-edit.js": {
