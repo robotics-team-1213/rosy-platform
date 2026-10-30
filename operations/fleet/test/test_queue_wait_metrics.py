@@ -123,3 +123,7 @@ def test_dispatch_claim_logs_both_waits_once(tmp_path, caplog):
     assert "queue_wait_s=" in lines[0]
     assert "total_queue_wait_s=" in lines[0]
     assert "total_queue_wait_s=None" not in lines[0]
+    assert "claim_s=" in lines[0]
+    answered = [record.getMessage() for record in caplog.records
+                if "fleet task dispatch answered" in record.getMessage()]
+    assert len(answered) == 1 and "send_s=" in answered[0]

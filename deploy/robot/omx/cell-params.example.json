@@ -385,6 +385,108 @@
    "source": "tuned",
    "evidence": "2026-10-29 wrist view at home: pad gap 7/62/201/319/445 px at jaws 48.8/50.1/51.9/53.6/55.6 (about 70 px per unit); a 30 mm box is held at 52.3 -> about 10.4 mm of gap per unit; 56 opened ~67 mm, 62 over 110 mm and put the fingers on the neighbours"
   },
+  "auto.finger_pad_mm": {
+   "value": 20.0,
+   "unit": "mm",
+   "source": "tuned",
+   "evidence": "2026-10-29 wrist view: the finger pad is about 20 mm wide; room beside a box is measured across this width only, not +-30 % of the box length"
+  },
+  "auto.min_jaw_margin_mm": {
+   "value": 2.0,
+   "unit": "mm",
+   "source": "tuned",
+   "evidence": "2026-10-29: jaws open the box width + margin each side; under 2 mm the fingers land on the box edge (about one top-view pixel of error)"
+  },
+  "auto.own_side_mm": {
+   "value": 6.0,
+   "unit": "mm",
+   "source": "tuned",
+   "evidence": "2026-10-29 top view of the board: a box's side face and shadow show about 5 px (~4.5 mm) past its top outline on the side away from the camera"
+  },
+  "auto.jaw_margin_max_mm": {
+   "value": 16.0,
+   "unit": "mm",
+   "source": "tuned",
+   "evidence": "2026-10-30: 35 of 64 real attempts touched down on a box with the fixed 8 mm margin while the top map errs 6.3 mm mean, 13.6 mm worst; open_max 56 opens ~68 mm (19 mm each side of a 30 mm box); 16 keeps 3 mm short of that and finger_room narrows it near a neighbour"
+  },
+  "preflight.min_mean": {
+   "value": 15.0,
+   "unit": "grey",
+   "source": "tuned",
+   "evidence": "2026-10-30 00:40 lights off: top frame mean 1.4 and wrist 0.1 (top 1.4 even at 200 ms, gain 7); lit cell: top 139"
+  },
+  "preflight.target_mean": {
+   "value": 140.0,
+   "unit": "grey",
+   "source": "tuned",
+   "evidence": "2026-10-30 dim room: top auto exposure stuck at 3000, mean 21, wrist 145; manual 10000/20000/33000 at gain 7 gave 61/105/148; at mean 106 the board box split in two and matched no catalogue entry, at 156 it matched: detection was tuned near 140"
+  },
+  "preflight.mean_band": {
+   "value": 15.0,
+   "unit": "grey",
+   "source": "tuned",
+   "evidence": "2026-10-30 dim room: top auto exposure stuck at 3000, mean 21, wrist 145; manual 10000/20000/33000 at gain 7 gave 61/105/148; at mean 106 the board box split in two and matched no catalogue entry, at 156 it matched: detection was tuned near 140"
+  },
+  "preflight.max_exposure": {
+   "value": 33000,
+   "unit": "v4l2",
+   "source": "tuned",
+   "evidence": "2026-10-30 dim room: top auto exposure stuck at 3000, mean 21, wrist 145; manual 10000/20000/33000 at gain 7 gave 61/105/148; at mean 106 the board box split in two and matched no catalogue entry, at 156 it matched: detection was tuned near 140"
+  },
+  "preflight.exposure_steps": {
+   "value": 4,
+   "unit": "count",
+   "source": "tuned",
+   "evidence": "2026-10-30 dim room: top auto exposure stuck at 3000, mean 21, wrist 145; manual 10000/20000/33000 at gain 7 gave 61/105/148; at mean 106 the board box split in two and matched no catalogue entry, at 156 it matched: detection was tuned near 140"
+  },
+  "preflight.settle_s": {
+   "value": 1.0,
+   "unit": "s",
+   "source": "tuned",
+   "evidence": "2026-10-30 dim room: top auto exposure stuck at 3000, mean 21, wrist 145; manual 10000/20000/33000 at gain 7 gave 61/105/148; at mean 106 the board box split in two and matched no catalogue entry, at 156 it matched: detection was tuned near 140"
+  },
+  "place.margin_mm": {
+   "value": 5.0,
+   "unit": "mm",
+   "source": "tuned",
+   "evidence": "2026-10-30: a 3-cell placed at the belt's configured point landed half off its near edge; the footprint keeps 5 mm inside the surface polygon (about the map's mean error)"
+  },
+  "place.search_mm": {
+   "value": 40.0,
+   "unit": "mm",
+   "source": "tuned",
+   "evidence": "2026-10-30: the belt point sat at the near edge; half a 3-cell's length (45 mm) inward reaches its middle, and the search stays near the reach already planned"
+  },
+  "place.step_mm": {
+   "value": 5.0,
+   "unit": "mm",
+   "source": "tuned",
+   "evidence": "2026-10-30: a top-view pixel is about 1 mm; 5 mm steps keep the search under a second"
+  },
+  "track.around_px": {
+   "value": 60,
+   "unit": "px",
+   "source": "tuned",
+   "evidence": "2026-10-30: the Pinky robot moved ~45 px between 20:30 and 23:04 and its tray polygon sat on its body; the robot body around the tray polygon carries the features (lidar, labels, edges)"
+  },
+  "track.reach_px": {
+   "value": 120,
+   "unit": "px",
+   "source": "tuned",
+   "evidence": "2026-10-30: the Pinky robot moved ~45 px between 20:30 and 23:04 and its tray polygon sat on its body; how far the robot is looked for in the current frame; it moved ~45 px in one evening"
+  },
+  "track.min_inliers": {
+   "value": 25,
+   "unit": "count",
+   "source": "tuned",
+   "evidence": "2026-10-30: the Pinky robot moved ~45 px between 20:30 and 23:04 and its tray polygon sat on its body; fewer matching features than this is not the robot"
+  },
+  "track.roi_pad_px": {
+   "value": 8,
+   "unit": "px",
+   "source": "tuned",
+   "evidence": "2026-10-30: the Pinky robot moved ~45 px between 20:30 and 23:04 and its tray polygon sat on its body; the moved ROI is the polygon's box plus this"
+  },
   "gripper.gap_mm_per_unit": {
    "value": 10.4,
    "unit": "mm",
@@ -631,6 +733,18 @@
   "unit": "mm",
   "source": "measured",
   "evidence": "2026-10-29: a push keeps push.gap_mm (20) from the box; 6 mm off still meets it"
+ },
+ "look.other_finger_deg": {
+  "value": 229.5,
+  "unit": "deg",
+  "source": "tuned",
+  "evidence": "2026-10-29 board pivot point, jaws marked at fk yaw 3.2/12.5/30.2: the mark at yaw + 288.8/284.8/280.6 deg about the circle fitted on the other finger (phase 55.2): 284.7 - 55.2"
+ },
+ "look.other_finger_mm": {
+  "value": 34.4,
+  "unit": "mm",
+  "source": "tuned",
+  "evidence": "2026-10-29 board pivot point, the same marks: 31.7/33.1/38.3 mm from the circle's centre"
  },
  "look.near_px": {
   "value": 40.0,
