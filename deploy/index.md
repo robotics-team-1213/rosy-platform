@@ -76,8 +76,8 @@
 
 ## 최근 기록
 
+- 2026-10-30 · 6302fcb63c · 선택 Monitoring overlay를 서명 후보와 업데이트기에 등록 (D-936)
 - 2026-10-30 · uncommitted · field marks admission의 원격 GREEN·mutation·복귀 검증
 - 2026-10-30 · uncommitted · field marks를 선택 프로필과 감독 절차에 연결
 - 2026-10-30 · uncommitted · 새 field marks 호출의 프로필·감독 거부 회귀
 - 2026-10-30 · uncommitted · 게시 준비 기록의 필수 표기 정정
-- 2026-10-30 · uncommitted · 게시 범위의 역사적 비밀값 오탐 검토

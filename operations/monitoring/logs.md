@@ -65,3 +65,9 @@
 - 변경: CI가 시스템 Python에 wheel을 설치하는 경로와 실험실 venv 경로를 함께 따르도록 sysconfig의 scripts 경로에서 실행 파일을 찾는다. 파일 존재·실행 권한·실제 systemd 파서 검사는 유지한다.
 - 증거: 원격 native unit1 PASS/0 SKIP, NEW/KNOWN/FLAKY0. 기존 c22e9bc8b3의 TLS·unit·Chromium18 PASS/0 SKIP 근거와 함께 적용한다. CI의 실제 시스템 설치 단계는 .github/workflows/ci.yml에 있다.
 - gate 변화: 없음. 실제 배포 대상 지정·권한·LAN/TLS 수용은 별도다. CE 해당 없음 — 표준 설치 scheme과 기존 CI 설정이 이유를 직접 설명한다.
+
+## 2026-10-30 · 6302fcb63c · 관제 PC 사이트 스택 선택 서비스 (D-936)
+
+- 변경: 실행기에 `--host`(IP 리터럴, 기본 loopback)를 더했다. 관제 PC는 서명 Fleet 이미지를 쓰는 별도 `monitoring` 서비스를 `compose.monitoring.yaml`로 켜고, 프록시 site 블록 안에서 `/monitoring/`·`/api/monitoring/`·`/monitoring-health`를 전달한다. 업데이트기는 서명된 overlay 한 쌍과 후보 Fleet 이미지일 때만 이 서비스를 허용한다.
+- 증거: 원격 겨냥 시험(monitoring·site 후보/검증기/업데이트기·배포·harness·구조) 통과, 비교 NEW/KNOWN/FLAKY0. 시험 PC에 docker compose가 없어 compose 렌더링 1건은 건너뛰었다. 대신 관제 PC에서 실제 site.env로 `docker compose config`를 렌더링해 5개 서비스, 공개 포트 없음, `site_backend` 단독을 확인했다. 운영 프록시 이미지로 `caddy validate`를 overlay 켬·끔 두 경우 모두 통과했다. 운영 스택은 바꾸지 않았다.
+- gate 변화: SOURCE GO 유지. ARTIFACT/DEVICE/FIELD HOLD, 이유를 D-936 경로로 갱신했다. 관제 PC 자동 업데이트는 서명되지 않은 ARM-S overlay 때문에 거절 중이다(기존 기록 `Rosy/docs/workspace-records/2026-10-29/site-update-readiness.md`). CE 해당 없음 — 그 차단 원인과 전환 조건은 기존 작업 기록에 있고, 이번 변경의 판단은 D-936과 계약 시험에 남는다.
