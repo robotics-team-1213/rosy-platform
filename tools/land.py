@@ -39,6 +39,7 @@ from pathlib import Path, PurePosixPath
 sys.path.insert(0, str(Path(__file__).resolve().parent / "remote"))
 import remote_pytest  # noqa: E402  (tools/remote: pytest on the model/AI/site PC, D-568)
 import browser_scope  # noqa: E402  (test/, on sys.path through remote_pytest)
+from xdist_plan import TURN_ENV  # noqa: E402  (a turn's jobs skip the hosts' queues)
 sys.path.insert(0, str(Path(__file__).resolve().parent / "hooks"))
 import land_record  # noqa: E402  (D-553 addendum 3: pre-push reuses these results)
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -264,8 +265,15 @@ def step(wt: Path, command: list[str], log: Path | None, label: str, env: dict =
 
 
 def run_tests(wt: Path, args, invocations: list[list[str]], logdir: Path, round_no: int) -> list[str]:
-    """Run lint + pytest (+ node); return a summary line per step. Stop on any NEW failure."""
-    return land_checks.run_tests(sys.modules[__name__], wt, args, invocations, logdir, round_no)
+    """Run lint + pytest (+ node); return a summary line per step. Stop on any NEW failure.
+
+    A turn's rounds (``1``, ``g1``; not ``pre``) mark their jobs (xdist_plan.TURN_ENV) to skip the hosts' queues."""
+    turn = str(round_no).removeprefix("g").isdigit()
+    os.environ[TURN_ENV] = "1" if turn else ""
+    try:
+        return land_checks.run_tests(sys.modules[__name__], wt, args, invocations, logdir, round_no)
+    finally:
+        os.environ[TURN_ENV] = ""
 
 
 def main_checkout(wt: Path) -> Path:

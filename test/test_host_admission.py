@@ -110,3 +110,35 @@ def test_an_alone_job_waits_for_the_host_to_empty_and_nothing_starts_beside_it(t
     finally:
         for name in ("first", "alone", "later"):
             (home / f"release.{name}").touch()
+
+
+def test_only_a_turn_holders_jobs_carry_the_turn_word(monkeypatch):
+    monkeypatch.setenv(xp.TURN_ENV, "1")
+    assert xp.TURN_JOB in xp.plan(["pkg/test"], FULL, [])[0]
+    monkeypatch.setenv(xp.TURN_ENV, "")
+    assert xp.TURN_JOB not in xp.plan(["pkg/test"], FULL, [])[0]
+
+
+@pytest.mark.skipif(not LINUX, reason="Linux setsid/flock are required")
+def test_a_turn_holders_job_starts_on_a_full_host_but_never_beside_an_alone_job(tmp_path):
+    """2026-10-31: a turn's guard job waited 75 min for room behind other landings' prepare jobs; the queue stopped."""
+    home, env = _job_env(tmp_path, HOLD)
+    env = {**env, "ROSY_HOST_CORES": "1", "ROSY_HOST_GB": "64"}
+    words = ("ROSY_JOB_RESERVE_CORES=1", "ROSY_JOB_RESERVE_GB=1")
+    try:
+        _start(env, home, "full", 0, *words)
+        assert _settled(home, 1) == 1
+        _start(env, home, "prep", 0, *words)
+        assert _settled(home, 1) == 1, "an ordinary job waits for room"
+        _start(env, home, "turn", 0, *words, "ROSY_JOB_TURN=1")
+        assert _settled(home, 2) == 2, "the turn's job starts at once"
+    finally:
+        (home / "release").touch()
+    alone_home, env = _job_env(tmp_path / "alone", HOLD)
+    try:
+        _start(env, alone_home, "alone", 0, "ROSY_JOB_ALONE=1")
+        assert _settled(alone_home, 1) == 1
+        _start(env, alone_home, "turn", 0, "ROSY_JOB_TURN=1")
+        assert _settled(alone_home, 1) == 1, "never beside an alone job"
+    finally:
+        (alone_home / "release").touch()

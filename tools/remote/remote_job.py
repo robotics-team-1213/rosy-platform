@@ -52,6 +52,8 @@ while :; do
     [ "$p" != $$ ] && kill -0 "$p" 2>/dev/null && pending=1
   done
   if [ "$AL" = 1 ]; then ok=$((others == 0))
+  # ROSY_JOB_TURN=1 (xdist_plan.TURN_JOB): the landing holding the turn; never beside an alone job, else at once.
+  elif [ "${ROSY_JOB_TURN:-}" = 1 ]; then ok=$((held == 0))
   else ok=$((held == 0 && pending == 0 && (others == 0 || (uc + RC <= CAPC && ug + G <= CAPG)))); fi
   if [ $ok = 1 ]; then echo "$$ $X $RC $G" > "$L"; rm -f ~/rosy-jobs/$$.alone-wait; flock -u 9; break; fi
   [ "$AL" = 1 ] && echo $$ > ~/rosy-jobs/$$.alone-wait
