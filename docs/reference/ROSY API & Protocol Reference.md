@@ -5,9 +5,37 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.331
+**Version:** v1.334
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.334 ARM transfer recheck of a confirmed attempt (D-930)
+
+`POST /api/fleet/arm-transfers/jobs/{mission_id}/rechecks` lets the job's creator or a
+permitted named operator (same scope and present-Origin check as cancel) ask for fresh
+measured facts about a `GOAL_CONFIRMED` job. The closed body `ArmTransferRecheckCreate`
+has only `recheck_key` (request-key rules). Repeating a key returns the same record; a
+second key while one recheck of the job is still waiting is409 `ARM_TRANSFER_RECHECK_CONFLICT`,
+as is a job that is not confirmed or has no closure proof. `GET .../rechecks/{recheck_key}`
+uses the physical-receipt read scope; an unknown key is404 `ARM_TRANSFER_RECHECK_NOT_FOUND`.
+
+Both return `ArmTransferRecheckResponse.recheck`: `mission_id`, `recheck_key`, the original
+`action_id`/`attempt_id`, server `requested_at_ns`, `status`
+(`WAITING_OBSERVATIONS`/`CONFIRMED`), and, only when confirmed, the exact canonical
+`evidence_document`, its SHA-256 `evidence_digest` and `validated_at_ns`, plus the installed
+`zone_ids`. The document has `context` (`phase=RECHECK`, `not_before_ns` = request time,
+original attempt and owner identities) and exactly two `samples` in the existing
+`ArmTransferObservation` shape, each owner with measured `joints`.
+
+The observer receives a waiting recheck from the existing observation context only when no
+attempt needs facts: `phase=RECHECK`, `status=GOAL_CONFIRMED`, `capture_deadline=null`. It
+submits through the existing observations route with `phase=RECHECK`. Fleet applies the
+POST_ACTION target-pose, rest, gripper and zone-clearance checks with source times after the
+request and requires measured joints; any failure is409 and leaves the recheck waiting.
+
+A recheck submits no Action, takes or releases no claim and never changes the job status,
+physical receipt or v1.330 evidence. It is a fresh simulation-or-installed fact for an
+application's own completion rule, not business completion and not current availability.
 
 ### v1.331 Neutral trip proposals and separate operator admission (D-908)
 
@@ -431,6 +459,7 @@ for the observer. Default and production execution stay closed.
 | `POST /api/fleet/arm-transfers/jobs/{mission_id}/observations` | Same independent observer credential and present-Origin check. Closed `ArmTransferObservationRequest`: `phase` (`PRE_DISPATCH` or `POST_ACTION`), `expected_request_digest`, exactly two `observations`. Returns `ArmTransferObservationReply` with `job` and nullable `receipt`. |
 | `GET /api/fleet/arm-transfers/jobs/{mission_id}/physical-receipt` | Creator or permitted named operator, same scoped read rule as the job. Returns `{receipt: ArmTransferPhysicalReceipt}`. Known job with no receipt is409 `ARM_TRANSFER_PHYSICAL_RECEIPT_PENDING`, unknown job404. |
 | `GET /api/fleet/arm-transfers/jobs/{mission_id}/physical-evidence` | v1.330 scoped immutable proof export (D-915); requires complete source joint facts. Does not refresh measurements or change claims. |
+| `POST /api/fleet/arm-transfers/jobs/{mission_id}/rechecks`, `GET .../rechecks/{recheck_key}` | v1.334 fresh measured facts for a confirmed attempt (D-930). No Action, claim, status or receipt change. |
 | `POST /api/fleet/arm-transfers/jobs/{mission_id}/cancel` | Creator service/operator or permitted named operator, same scoped job access and present-Origin check. Closed `ArmTransferCancelRequest` has only trimmed nonempty `reason` (max192). Returns the job snapshot; cancellation ACK is not stop/clearance proof. |
 
 With an execution profile, admission also prepares stable step/action/attempt and

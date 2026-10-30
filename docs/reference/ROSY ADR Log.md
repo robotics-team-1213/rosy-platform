@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-930 | 확인된 ARM 시도의 재관측(새 측정 사실만, 실행·claim·완료 권한 없음, API v1.334). [전문](../adr/D-930-arm-transfer-recheck-of-confirmed-attempt.md) | Accepted (2026-10-30, 계약·simulation 구현 결정; 실물 수용 별도) |
 | D-928 | Fleet 작업 발행은 로봇마다 따로 진행하고 교통 판정만 한 줄로 세운다. [전문](../adr/D-928-fleet-per-robot-dispatch-serial-traffic.md) | Proposed (2026-10-30; 구현·수용 별도) |
 | D-927 | Harbor 첫 흐름 시연 경계와 자동 시뮬 회귀(MuJoCo OMX·Gazebo Pinky, 독립 시뮬 관측). [전문](../adr/D-927-harbor-first-flow-demo-seams-and-automated-sim.md) | Accepted (2026-10-30, 경계·자동화 결정; 구현·수용 별도) |
 | D-919 | Passwordless fallback AP with authenticated Wi-Fi recovery. [전문](../adr/D-919-open-fallback-ap.md) | Accepted (2026-10-29, user-authorized; device acceptance separate) |

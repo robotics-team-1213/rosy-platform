@@ -57,6 +57,8 @@ class PhysicalObservationService:
     def __init__(self, dispatcher, observer):
         self.dispatcher, self.observer = dispatcher, observer
         self.execution, self.store = dispatcher.execution, dispatcher.execution.store
+        from .physical_transfer_rechecks import PhysicalTransferRechecks
+        self.rechecks = PhysicalTransferRechecks(self)
 
     def _job(self, connection, mission_id):
         job = self.store._read(connection, mission_id)
@@ -80,24 +82,34 @@ class PhysicalObservationService:
                     self._job(connection, row["mission_id"])
                 except PermissionError:
                     continue
-                state = self.execution._state(connection, row["mission_id"])
-                grant = FleetArmTransferGrant.model_validate(state["grant"])
-                policy = self.store.installation.policy
-                caps = {(c.workcell_id, c.instance_id): c for c in self.store.installation.capabilities}
-                owners = [dict(workcell_id=p.workcell_id, instance_id=p.instance_id,
-                    journal_id=caps[p.workcell_id, p.instance_id].journal_id,
-                    owner_session_id=caps[p.workcell_id, p.instance_id].owner_session_id,
-                    model_digest=p.geometry.model_digest, calibration_revision=p.calibration_revision,
-                    transform_revision=p.transform_revision) for p in policy.participants]
-                return dict(mission_id=row["mission_id"], request_digest=grant.request_digest,
-                    action_id=grant.action_id, attempt_id=grant.attempt_id, status=state["status"],
-                    phase=state["context"]["phase"], not_before_ns=state["context"]["not_before_ns"],
-                    capture_deadline=grant.expires_at if state["context"]["phase"] == "PRE_DISPATCH" else None,
-                    producer_id=policy.producer_id, evaluator_revision=policy.evaluator_revision, frame_id=policy.frame_id,
-                    policy_digest=policy.digest, catalog_digest=policy.catalog_digest, bindings_digest=policy.bindings_digest,
-                    object_ref=policy.object_ref, object_origin_id=policy.object_origin_id,
-                    min_separation_ns=policy.min_separation_ns, max_age_ns=policy.max_age_ns, owners=owners)
+                return self._context(connection, row["mission_id"])
+            # D-930: a waiting recheck is observed only when no attempt needs facts.
+            pending = self.rechecks.pending(connection)
+            if pending is not None:
+                return self._context(connection, pending[0], recheck_not_before_ns=pending[1])
         return None
+
+    def _context(self, connection, mission_id, *, recheck_not_before_ns=None):
+        state = self.execution._state(connection, mission_id)
+        grant = FleetArmTransferGrant.model_validate(state["grant"])
+        policy = self.store.installation.policy
+        caps = {(c.workcell_id, c.instance_id): c for c in self.store.installation.capabilities}
+        owners = [dict(workcell_id=p.workcell_id, instance_id=p.instance_id,
+            journal_id=caps[p.workcell_id, p.instance_id].journal_id,
+            owner_session_id=caps[p.workcell_id, p.instance_id].owner_session_id,
+            model_digest=p.geometry.model_digest, calibration_revision=p.calibration_revision,
+            transform_revision=p.transform_revision) for p in policy.participants]
+        recheck = recheck_not_before_ns is not None
+        phase = "RECHECK" if recheck else state["context"]["phase"]
+        return dict(mission_id=mission_id, request_digest=grant.request_digest,
+            action_id=grant.action_id, attempt_id=grant.attempt_id,
+            status="GOAL_CONFIRMED" if recheck else state["status"], phase=phase,
+            not_before_ns=recheck_not_before_ns if recheck else state["context"]["not_before_ns"],
+            capture_deadline=grant.expires_at if phase == "PRE_DISPATCH" else None,
+            producer_id=policy.producer_id, evaluator_revision=policy.evaluator_revision, frame_id=policy.frame_id,
+            policy_digest=policy.digest, catalog_digest=policy.catalog_digest, bindings_digest=policy.bindings_digest,
+            object_ref=policy.object_ref, object_origin_id=policy.object_origin_id,
+            min_separation_ns=policy.min_separation_ns, max_age_ns=policy.max_age_ns, owners=owners)
 
     def receipt(self, mission_id):
         with closing(self.store._journal._connect()) as connection:
@@ -136,6 +148,8 @@ class PhysicalObservationService:
         samples = world_observations(body.observations)
         if any(s.producer_id != self.observer.producer_id for s in samples):
             raise PermissionError("physical sample producer is outside the authenticated scope")
+        if body.phase == "RECHECK":
+            return self.rechecks.observe(mission_id, body.expected_request_digest, samples)
         with physical_io(self.store._journal.path):
             with closing(self.store._journal._connect()) as connection:
                 self._job(connection, mission_id)

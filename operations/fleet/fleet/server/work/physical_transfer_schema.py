@@ -34,6 +34,18 @@ def ensure(connection):
         validated_at_ns INTEGER NOT NULL CHECK(validated_at_ns>=0),
         PRIMARY KEY(mission_id,phase)
     )""")
+    # D-930: fresh facts after confirmation; a row grants no execution, claim or completion.
+    connection.execute("""CREATE TABLE IF NOT EXISTS fleet_physical_transfer_rechecks (
+        mission_id TEXT NOT NULL REFERENCES fleet_physical_transfer_attempts(mission_id),
+        recheck_key TEXT NOT NULL,
+        requested_by TEXT NOT NULL,
+        requested_at_ns INTEGER NOT NULL CHECK(requested_at_ns>=0),
+        evidence_digest TEXT CHECK(evidence_digest IS NULL OR length(evidence_digest)=64),
+        evidence_json TEXT,
+        validated_at_ns INTEGER CHECK(validated_at_ns IS NULL OR validated_at_ns>=requested_at_ns),
+        CHECK((evidence_json IS NULL)=(evidence_digest IS NULL) AND (evidence_json IS NULL)=(validated_at_ns IS NULL)),
+        PRIMARY KEY(mission_id,recheck_key)
+    )""")
 
 
 def hold_for_site_stop(connection, *, now, reason, event):
