@@ -13105,3 +13105,11 @@ osy-d395-s1d\`.
 - 증거: D-271 Gate A 후속 측정(드레인 32대 마지막 발행 8.053 → 0.181초, 느린 수락 1.064초는 남음)과 교통 경쟁 외부 계측기(main `46b23e565a` RED, 수정 `1bf26403ce` GREEN), 원격 교통 시험군 333 passed·NEW 0. rosy-contract-review 독립 검토의 차단 없음·지적 8건(종료 취소 경로, 모호한 전송 결과의 점유, 빈 경로 교체, snapshot 잠금 대기, 우선순위 퇴행, D-12 오인용, 가용 집합 설명, 명단 정리)을 모두 설계에 반영했다.
 - Gate: 없음. 설계 문서이며 구현·Gazebo·장비/현장 수용은 별도다. 공개 push 없음.
 - CE: 새 교훈 기록 — 가짜 로봇이 await에서 멈추지 않아 교통 판정 경쟁이 시험에 보이지 않았다. 기존 가짜 표면 교훈·await 재확인 교훈과 구분된다.
+
+## 2026-10-30 · uncommitted · docs(agents): 루트 AGENTS.md를 안전 요약과 포인터로 줄이고 같이 하는 깃 전문을 shared-checkout.md로 모음
+
+- 변경: 모든 세션이 통째로 읽는 루트 `AGENTS.md`를 39.3 KB에서 14.5 KB로 줄였다. 「같이 하는 깃」 전문(워크트리 청소·소유자·`landed-dirty`/`stale-history`·스냅샷·스테이징·ADR 선점·착지 대기열·`LOAD-FLAKY`·`MAIN-RED`·게시)은 `docs/reference/shared-checkout.md`가 정본으로 맡고, AGENTS에는 모든 세션이 지킬 6항 요약·멈추는 신호·읽을 때를 남겼다. Testing Requirements의 FULL 전환 목록·`gh run` 명령·colcon 재현은 `developer-guide.md`「테스트와 CI」로 옮겼다. Key Files·Dependencies·스킬 목록·중복된 D-23 줄은 각 폴더 `AGENTS.md`와 하네스가 이미 가진 내용이라 뺐다. 안전·권한 규칙(D-2, D-516, D-315, D-430 §5, D-226, D-33, D-584, D-868)은 문장 그대로 남겼다.
+- 어긋남 정리: 네 사본이 서로 달랐다. 기본 착지 명령을 `land_async.py`로 맞췄고(AGENTS는 `land.py`), `rosy-land-on-main` 스킬의 "at most 10"·"50-directory"를 15·14(D-886)로 고쳤다.
+- 시험: `test/test_readme_agent_start.py`의 세부 문구 단언을 지우지 않고 `shared-checkout.md` 쪽으로 옮겼고, AGENTS 쪽은 안전 요약 문구와 4,000자 상한을 단언한다. `rosy_harness.py lint` 0 error.
+- Gate: 없음. 문서·시험 변경이며 장치·현장 수용과 무관하다. 공개 push 없음.
+- CE: 해당 없음 — 사본이 어긋나 있던 사실은 이 기록과 정본 하나로 줄인 구조로 남는다.
