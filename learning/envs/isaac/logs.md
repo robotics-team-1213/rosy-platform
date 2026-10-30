@@ -504,3 +504,10 @@
 - 증거: 2~5 mm 추정 오차에서 IK 0/9(b0cc), BC v0 8/9(ebdd). ebdd의 실패는 열기 때 1.1 mm 밀림이다. RL은 아직 개선 데이터가 없다(3d52·d63e·8e96·e48a). 원격 Isaac 616통과1건너뜀. 상세: `docs/validation/omx-release-corrector-2026-10-30/result.md`.
 - gate 변화: 없음. 시뮬레이션 실험이며 학습 정책 수용·실물 수용이 아니다.
 - CE: 해당 없음 — 아직 해결된 교훈이 없다. 결정성 때문에 반복 실행이 같은 데이터를 준다는 점과 에피소드 시작 자세 문제는 검증 기록에 증상·조치로 남겼다.
+
+## 2026-10-31 · 259df0b57b · release episodes settle 16/20; first RL residual pinned
+
+- 변경: 짧은 놓기 에피소드의 시작 자세를 학습 데이터와 맞췄다(팔별 쿼터니언 부호, 이전 더미 흔들림 축소). `remote_isaac.py run`은 admission에서 거절되면 준비 확인부터 다시 시도한다. 첫 REINFORCE 잔차 rl1(sha256 `cf84c0a0…`)을 고정했다. 조건 표는 `release_cases.py`로 옮겼다.
+- 증거: rl0 에피소드 run1f81에서 20개 중 16개 안정, 위치 오차 0.24~1.07 mm. 원격 Isaac 616통과1건너뜀. 상세: `docs/validation/omx-release-corrector-2026-10-30/result.md`.
+- gate 변화: 없음. 시뮬레이션 학습 실험이다.
+- CE: 해당 없음 — 시작 자세 불일치와 admission 경합은 코드·회귀 시험·검증 기록으로 재구성된다.

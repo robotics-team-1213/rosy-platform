@@ -57,4 +57,12 @@ unstable. A release that never settles gets −20.
 | `8e96d62e6c315a0cba14acad00e66f27` | Short episodes (`release_episodes.py`) | Crashed after 3 episodes: `move()` wrote to an undefined trial. Fixed. |
 | `e48ad54e227352d8b86623b277d6e93d` | Short episodes | 40/40 failed, 0 settled. Held box started at yaw 0, while the BC data is at yaw π after leveling. Release error 20–26 mm; tracking losses 11; prior stack did not hold 12. Start yaw fixed in `7d4d028071`. |
 
-No residual update has improved on BC yet. The next run checks the yaw fix and records why the prior stack fails.
+| `a3b1e094a6bd582d81b00ff8fb0f4382` | Short episodes | Crashed after one episode: a diagnostic sample shadowed the wall-clock origin. Fixed in commit `5ad9fd9b42`. |
+| `29b768d927225c6cbb4fd92332d3f15e` | Short episodes | 37 episodes, 8 settled and stable (0.59–1.19 mm). Every arm-1 centre-row episode ended 18–27 mm off: the BC data holds arm-1 boxes at quaternion (0,0,0,−1) and the episodes started at +1. Prior jitter of ±1 mm / ±0.01 rad broke the envelope (12 prior failures). Both fixed in commit `44d0f7ef7b`. |
+| `991a5a7a4321561ba33709dbd0f24a2e` | Short episodes | Refused at admission: another job took the GPU between check and start. `run` now retries from the check (commit `4d1f24b1a7`). |
+| `1f81cfd4c3395478ab03f15c803b7fa3` | Short episodes, rl0 (BC + zero residual, 0.2 mm noise) | **20 episodes, 16 settled and stable (80%)**, position error 0.24–1.07 mm (median ≈0.55 mm). 2 opening blocked, 2 settle windows not reached. |
+
+The first REINFORCE step on 135 decisions (runs 29b7 and 1f81, mean reward −9.7) gave residual rl1, pinned as
+`release-episodes-rl1` (sha256 `cf84c0a0d2a878eb072b37b2f2428a315e54899887db583314fbe878739036ed`, commit `259df0b57b`).
+Its episode run uses seed 43, so episode layouts differ from rl0. With 20 episodes per run, small differences in
+success rate are not distinguishable from chance; several iterations are needed before claiming an improvement.
