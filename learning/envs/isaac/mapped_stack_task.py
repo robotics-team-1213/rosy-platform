@@ -177,6 +177,8 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
     targets = [np.zeros(r.num_dof) for r in robots]
     tick = 0
     images, trials = [], []
+    from release_corrector import corrector_command, estimate, load_corrector
+    corrector = load_corrector(fixture) if cube else None
     print('MAPPED_AFTER_RESET', [r.get_joint_positions().tolist() for r in robots], flush=True)
     for i, robot in enumerate(robots):
         controller = robot.get_articulation_controller()
@@ -306,6 +308,7 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
         trial = dict(seed=args.seed+trial_index, layers=[])
         trials.append(trial)
         rng = np.random.default_rng(trial['seed'])
+        estimate_rng = np.random.default_rng(trial['seed']+7919)  # keeps the infeed draws equal across cases
         for i, box in enumerate(cargo):
             parked = fixture.get('parking_origin_m',[-.45,.4,.016])
             box.set_world_pose(np.array([parked[0], parked[1]+i*fixture.get('parking_step_y_m',.065), parked[2]]), np.array([1., 0., 0., 0.]))
@@ -410,9 +413,14 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
                     layer['release_samples'] = []
                     layer['release_commands'] = []
                     release_command = None
-                    for _ in range(fixture['release_feedback_iterations']):
-                        if fixture.get('leveling_protocol'):
-                            release_command=packing_target(index,snapshot,step,float(p[2]),fixture,release_command)
+                    observe = ((lambda: estimate(snapshot(), index, fixture, estimate_rng))
+                               if fixture.get('release_estimate_noise_m') else snapshot)
+                    layer['release_controller'] = 'bc' if corrector else 'ik-estimate' if observe is not snapshot else 'ik'
+                    for k in range(fixture['release_feedback_iterations']):
+                        if corrector and k:  # the IK teacher descends; the model owns the later corrections
+                            release_command = corrector_command(corrector, observe(), index, fixture, k)
+                        elif fixture.get('leveling_protocol'):
+                            release_command=packing_target(index,observe,step,float(p[2]),fixture,release_command)
                         else:
                             release_command = cube_release_target(index, snapshot(), float(p[2]), commanded_tcp=release_command, fixture=fixture)
                         layer['release_commands'].append(release_command)

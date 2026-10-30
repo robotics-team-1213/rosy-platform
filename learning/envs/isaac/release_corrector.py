@@ -145,6 +145,34 @@ class MLP:
         return cls([[data[f'w_{i}'], data[f'b_{i}']] for i in range(count)], data['mean'], data['scale'], data['linear'])
 
 
+def load_corrector(fixture):
+    """The pinned model of an evaluation case, or None when the IK teacher keeps the command."""
+    spec = fixture.get('release_corrector')
+    return MLP.load(Path(__file__).with_name('models') / spec['file'], spec['sha256']) if spec else None
+
+
+def estimate(sample, index, fixture, rng):
+    """The sample as a 2-5 mm held-box position estimate would report it; everything else stays measured."""
+    value = copy.deepcopy(sample)
+    low, high = fixture['release_estimate_noise_m']
+    error = rng.normal(0., 1., 3)
+    error *= rng.uniform(low, high) / max(np.linalg.norm(error), 1e-12)
+    box = value['boxes'][index]
+    box['position'] = np.add(box['position'], error).tolist()
+    return value
+
+
+def corrector_command(model, sample, index, fixture, iteration, *, max_step_m=.005):
+    """TCP command: the measured TCP plus the model's correction, clipped to max_step_m per axis.
+
+    Out-of-distribution input made the v0 model extrapolate by ~25 cm in a synthetic hold; the clip bounds any
+    such step, and cube_release_ready on the measured pose still decides whether the gripper opens.
+    """
+    arm = plan(True, fixture=fixture)[index]['arm']
+    correction = np.clip(model.predict([observation(sample, index, fixture, iteration)])[0], -max_step_m, max_step_m)
+    return np.add(sample['tcps'][arm], correction).tolist()
+
+
 def train(report_paths, out_dir, *, per_snapshot=400, seed=0, epochs=400):
     """Fit the corrector on augmented release snapshots; keep weights, sha256 and holdout evidence together.
 

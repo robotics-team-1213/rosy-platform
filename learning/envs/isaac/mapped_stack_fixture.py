@@ -66,7 +66,19 @@ def grip_duration(start, value, acceleration=.4):
     return max(.8, 1.875*delta/.4, math.sqrt(5.774*delta/acceleration))
 
 
+EVALUATION_CASES = {  # nominal geometry; the release feedback sees a 2-5 mm held-box estimate error
+    'nominal-estimate': None,
+    'nominal-bc-v0': dict(file='release-corrector-bc-v0.npz',
+                          sha256='85713c8ec54190e53729d6df73d5d59f3e6e7d715058bfb7698b3793042b9294')}
+
+
 def container_fixture(*, layers, case):
+    if case in EVALUATION_CASES:
+        value = container_fixture(layers=layers, case='nominal')
+        value.update(revision=value['revision']+'-'+case, case=case, release_estimate_noise_m=[.002, .005])
+        if EVALUATION_CASES[case]:
+            value['release_corrector'] = dict(EVALUATION_CASES[case])
+        return value
     if (type(layers) is not int or layers not in (1, 3) or case not in ('nominal', 'offset', 'reverse','column')
             or case=='column' and layers!=3):
         raise ValueError('container settings require layers1/3 and nominal/offset/reverse, or layers3/column')

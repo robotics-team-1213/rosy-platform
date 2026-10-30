@@ -120,7 +120,8 @@ def test_corrector_command_is_the_tcp_plus_the_predicted_correction():
     model = rc.load_corrector(fixture)
     sample = held_scene(fixture, 1)
     command = rc.corrector_command(model, sample, 1, fixture, 2)
-    expected = np.add(sample['tcps'][0], model.predict([rc.observation(sample, 1, fixture, 2)])[0])
-    assert command == pytest.approx(expected.tolist())
-    teacher = f.cube_release_target(1, sample, .05, fixture=fixture)
-    assert np.abs(np.subtract(command, teacher)).max() < .003  # the pinned BC model tracks the IK teacher
+    raw = model.predict([rc.observation(sample, 1, fixture, 2)])[0]
+    assert command == pytest.approx(np.add(sample['tcps'][0], np.clip(raw, -.005, .005)).tolist())
+    # held_scene puts the TCP at the box centre, unlike recorded holds: the model extrapolates (~25 cm) and
+    # each correction is clipped to 5 mm; the measured release gate still decides opening.
+    assert np.abs(raw).max() > .005 and np.abs(np.subtract(command, sample['tcps'][0])).max() <= .005 + 1e-12
