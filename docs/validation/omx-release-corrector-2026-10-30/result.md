@@ -76,3 +76,11 @@ changes by at most 0.2 mm on the update data (trust region), with learning rate 
 residual rl2 (`release-episodes-rl2`, sha256 `bb424ece0730ab37b16a8e5dcc43febfeb45070fcd5e3f255eb36680f070c935`,
 commit `f157285389`, largest output change 0.197 mm). Its episode run uses seed 42, the same layouts as rl0 run 1f81,
 so the two runs can be compared episode by episode.
+
+| Run | Setup | Result |
+|---|---|---|
+| `36f78c79402e5d7f93a907b511b53545` | Short episodes, rl2, seed 42 | 21 episodes, **15 settled and stable**, median position error 0.60 mm. |
+
+Against rl0 run 1f81 on the same 20 layouts: 12 settled in both, and rl2 was closer to the target in only 4 of them
+(mean +0.18 mm worse). rl0 alone settled 4 layouts, rl2 alone 2. rl2 is not an improvement. One REINFORCE step on
+about 135 noisy decisions does not carry enough signal; BC v0 with a zero residual stays the reference.
