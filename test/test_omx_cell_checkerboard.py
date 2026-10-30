@@ -100,7 +100,9 @@ def test_top_down_hand_eye_from_moves_and_yaws_where_tsai_cannot():
 
 def test_intrinsics_from_hand_tilted_charuco_views():
     ppm = 4000  # board image pixels per metre
-    art = cb.charuco_board().generateImage((int(0.175 * ppm), int(0.125 * ppm)), marginSize=0, borderBits=1)
+    board_obj = cb.charuco_board()
+    render = getattr(board_obj, "generateImage", None) or board_obj.draw
+    art = render((int(0.175 * ppm), int(0.125 * ppm)), marginSize=0, borderBits=1)
     art = cv2.copyMakeBorder(art, 40, 40, 40, 40, cv2.BORDER_CONSTANT, value=255)
     to_m = np.array([[1 / ppm, 0, -40 / ppm - 0.0875], [0, 1 / ppm, -40 / ppm - 0.0625], [0, 0, 1]])  # centred on the board
 

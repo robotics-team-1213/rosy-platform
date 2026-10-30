@@ -128,7 +128,10 @@ def page(kind: str) -> np.ndarray:
         label = "checkerboard 7x5 inner corners, 15 mm squares"
     else:
         cols, rows, sq = 7, 5, 25
-        board = charuco_board().generateImage((cols * sq * PX_PER_MM, rows * sq * PX_PER_MM), marginSize=0, borderBits=1)
+        # OpenCV 4.7+ generateImage, 4.6-era draw (same gap as rosy_vision.detect)
+        board_obj = charuco_board()
+        render = getattr(board_obj, "generateImage", None) or board_obj.draw
+        board = render((cols * sq * PX_PER_MM, rows * sq * PX_PER_MM), marginSize=0, borderBits=1)
         label = "ChArUco 7x5 squares, 25 mm, markers 18 mm, DICT_4X4_50"
     y, x = 30 * PX_PER_MM, (W - board.shape[1]) // 2
     img[y:y + board.shape[0], x:x + board.shape[1]] = board
