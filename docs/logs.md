@@ -13092,6 +13092,13 @@ osy-d395-s1d\`.
 - Gate: 없음. 정리 수용은 main 병합·공개 게시·Pinky 부팅·OTA 수용과 구분한다. 문서 frontmatter 검사 통과, mechanical claim의 외부 receipt 경로 한 건은 Git 밖 실제 파일 존재와 명시된 범위로 확인했다.
 - CE: 새 교훈 기록 — 최종 제품 코드만으로 알기 어려운 supervisor 정리 순서와 살아 있는 remote cohort의 소유 재확인이 재조사·참조 손실을 막는다. Vocabulary는 일반 작업 용어만 있어 변경하지 않았고 지침은 기존 solutions 경로를 이미 안내한다.
 
+## 2026-10-29 · 66e86cb0fb · Pilot 수집 연결 검증
+
+- 변경: [검증 기록](validation/pilot-learning-collection-2026-10-29/result.md)에 소스·원격 회귀·실제 기존 녹화의 pending 등록과 운영 적용 한계를 분리한다.
+- 증거: 모델 PC 집중 55 passed/1 opt-in skipped, 별도 실제 자료 시험 1 passed(19장 pending, 재등록 0장). 운영 검수 DB·실물·서명 배포 수용으로 확대하지 않는다.
+- Gate: 변화 없음. CE: 해당 없음 — 판단은 구현·회귀·기존 운영 문서에서 확인할 수 있다.
+- 최종 검증: d2d68c3346 공식 affected 13,602 passed/1,285 skipped/NEW 0, pinned raw·실제 자료·OMX fixture 집중 88 passed/skip0/NEW 0. 중간 회귀 실패와 합성 시계 보완, skip·취소·운영 미적용을 같은 정본의 추가 기록으로 구분했다.
+
 ## 2026-10-30 · 40449ecfdf · 카메라 자동 복구를 실제 제어값과 복원 기록에 결속
 
 - 변경: 같은 방향의 적용된 후보를 되감지 않고, baseline으로 돌아온 카메라는 실제 readback·지원값 재확인 후 재조정한다. 일시적 읽기 실패와 active preview의 재오픈 대기는 쓰기 없이 UNAVAILABLE로 기다리며 다른 owner는 거부한다. 후보·복원 intent는 baseline/장치/producer/run에 결속해 알 수 없는 설정을 덮지 않는다.
@@ -13112,6 +13119,13 @@ osy-d395-s1d\`.
 - 증거: publish_main의 게시 SHA 선택은 해당 SHA의 green FULL 착지 기록을 요구한다(기존 최신 full 기록 c44859256f에는 패키징 수정이 없다). 이 착지가 만드는 full 기록의 base는 패키징 커밋(8dcc1f51ad)을 포함한 main이다.
 - gate 변화: 없음.
 - CE: 해당 없음 — 게시 절차 기록이다.
+
+## 2026-10-30 · 08b6c8c362 · 새 장치 수집과 mDNS 진단 기록
+
+- 변경: 새 dated 검증 기록에 geg6 수신 두 건과 운영 pending 925장, 총6007장, 재등록0, 원본·검수 정보 보존과 현재 단절을 구분했다. 오래된 접속 목록과 실제 서비스 광고를 구분하는 CE 교훈을 추가했다.
+- 증거: 준비 파일6355개·신규 검수 사본5954개의 해시 일치, 기존53장 검수/마스크/이벤트 불변. 구성된 HTTPS 수신 exit0와 정상 재실행2회 exit0. CE 기계검사0flags/문법검사OK. 이전 추가 기록333passed/skip0/NEW0는 해당 소스의 증거다.
+- Gate: 운영 원본·영상·검수 대기 연결 수용. 현재 장치 가용성·물리 이동·G4·main 착지·push는 완료 증거가 없다.
+- CE: 새 교훈 기록. 현재 단절과 예전362행 신원 충돌은 미해결로 유지한다.
 
 ## 2026-10-30 · uncommitted · docs(adr): D-931..D-933 arm S measured checks, one field revision, cell coordinate frame
 - 변경: `docs/adr/D-931`·`D-932`·`D-933` 추가, ADR Log 행 3개, `tools/harness/adr_gaps.txt`에 다른 브랜치가 예약한 D-929·D-930 대기 선언
