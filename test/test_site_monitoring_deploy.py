@@ -35,11 +35,11 @@ def test_monitoring_service_is_hardened_unpublished_and_reuses_the_fleet_image()
     assert command[command.index("--state-dir") + 1] == "/var/lib/rosy-monitoring"
     environment = service["environment"]
     assert "fleet" not in environment["PYTHONPATH"]
-    secrets = json.loads(environment["ROSY_CREDENTIAL_PATHS"])
-    assert set(secrets) == {"MONITORING_SITE_READ", "MONITORING_FLEET_UPSTREAM"}
+    credential_paths = json.loads(environment["ROSY_CREDENTIAL_PATHS"])
+    assert set(credential_paths) == {"MONITORING_SITE_READ", "MONITORING_FLEET_UPSTREAM"}
     binds = [v for v in service["volumes"] if isinstance(v, dict)]
     assert all(v["type"] == "bind" and v["read_only"] and not v["bind"]["create_host_path"] for v in binds)
-    assert {Path(p).parent.as_posix() for p in secrets.values()} == {"/run/rosy-monitoring-secrets"}
+    assert {Path(p).parent.as_posix() for p in credential_paths.values()} == {"/run/rosy-monitoring-secrets"}
     assert "/var/lib/rosy-host-guard:/var/lib/rosy-host-guard:ro" in service["volumes"]
     assert "/var/lib/rosy-host-state:/var/lib/rosy-host-state:ro" in service["volumes"]
     assert "monitoring_state:/var/lib/rosy-monitoring" in service["volumes"]
@@ -91,7 +91,7 @@ def test_compose_renders_monitoring_only_with_its_overlay(tmp_path):
     shutil.copy(SITE / "compose.monitoring.yaml", overlay)
     env_file = tmp_path / "site.env"
     env_file.write_text(f"ROSY_SITE_MONITORING_CONFIG={tmp_path / 'monitoring.yaml'}\n"
-                        f"ROSY_SITE_MONITORING_SECRETS_DIR={tmp_path / 'secrets'}\n"
+                        f"ROSY_SITE_MONITORING_SECRETS_DIR={tmp_path}/keys\n"
                         "ROSY_SITE_IMAGE_TAG=" + "a" * 40 + "\n", encoding="utf-8")
     env = {k: v for k, v in os.environ.items() if not k.startswith("ROSY_")}
 
