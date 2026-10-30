@@ -68,9 +68,10 @@ def jaw_blobs(closed, opened, params=None) -> list:
 
 
 def mark_jaws(cell, config: dict, sleep=time.sleep, clock=time.monotonic, max_marks: int = 6, near=None):
-    """The jaw mark in the top view as (cx, cy), or None when no two marks agree. `near` = (pixel, radius_px): only
-    blobs that close to where the jaws should be count, nearest first - with the arm stretched out, opening the jaws
-    shook the whole link and the largest changed blob was not the jaws (2026-10-29, a look 30 mm off)."""
+    """The jaw mark in the top view as (cx, cy), or None when no two marks agree. `near` = ([pixel, ...], radius_px):
+    only blobs that close to one of the places the jaws should show count, nearest first - with the arm stretched out,
+    opening the jaws shook the whole link and the largest changed blob was not the jaws (2026-10-29, a look 30 mm off).
+    Several places: either finger can be the one the camera sees (cell_look)."""
     import cell_pipeline as cp
 
     plan, mark_cfg = config["plan"], config.get("jaw_mark", {})
@@ -90,8 +91,10 @@ def mark_jaws(cell, config: dict, sleep=time.sleep, clock=time.monotonic, max_ma
             blobs = [b for b in blobs if math.dist(b[:2], marks[-1]) <= follow]
             pick = min(blobs, key=lambda b: math.dist(b[:2], marks[-1]), default=None)
         elif near is not None:
-            blobs = [b for b in blobs if math.dist(b[:2], near[0]) <= near[1]]
-            pick = min(blobs, key=lambda b: math.dist(b[:2], near[0]), default=None)
+            def gap(b):
+                return min(math.dist(b[:2], q) for q in near[0])
+            blobs = [b for b in blobs if gap(b) <= near[1]]
+            pick = min(blobs, key=gap, default=None)
         else:
             pick = max(blobs, key=lambda b: b[2], default=None)
         if pick is None:
@@ -130,6 +133,17 @@ def mark_pixel(record: dict, config: dict, site: str, raw, jaw_z: float):
     return cal.parallax(cal.to_pixel(record["homography"], raw), fit_z, jaw_z, config["cameras"]["top"])
 
 
+def pivot_z_view(config: dict, site: str) -> float:
+    """The TCP height the jaws are marked at: the configured view height, but never closer to the site's surface than
+    pivot.clear_above_m. The view height was one absolute number tuned on the floor (0.08); over the Pinky tray
+    (surface 0.0467) the jaws swung 3 mm above a box's top and knocked it off the tray (2026-10-29)."""
+    z_view = config.get("pivot", {}).get("z_view", config["coarse"]["z_view"])
+    surface = config["sites"][site].get("surface_z")
+    if surface is None:
+        return z_view
+    return round(max(z_view, surface + prm.get(config.get("params"), "pivot.clear_above_m")), 4)
+
+
 def joints_tcp(state):
     """FK of the measured joints (planner units): x, y, z in metres and the FK yaw in degrees."""
     import grasp_planner as gp
@@ -148,7 +162,7 @@ def pivot_calibrate(cell, config: dict, point, yaws, calibration: dict, site: st
     record = map_record(calibration, site)
     if record is None:
         return {"result": "no map for the site"}
-    z_view = config.get("pivot", {}).get("z_view", config["coarse"]["z_view"])
+    z_view = pivot_z_view(config, site)
     view = {"x": point[0], "y": point[1], "z": round(z_view - config["plan"]["approach_m"], 4)}
     marks, tcps = [], []
     try:

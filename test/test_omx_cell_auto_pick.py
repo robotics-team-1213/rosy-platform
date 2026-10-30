@@ -210,9 +210,9 @@ def test_dry_run_only_observes_chooses_and_plans(tmp_path):
     row = result["attempts"][0]
     assert row["chosen"]["closing_axis_offset_deg"] == 90 and "needs a pivot" in row["pivot_needed"]
     assert row["plan"]["pick"]["z"] == pytest.approx(0.060, abs=1e-4) and json.dumps(result, default=str)
-    lib = json.loads(next(tmp_path.glob("auto-pinky-90-*.json")).read_text())  # the library opens just past 30 mm, not wide
+    lib = json.loads(next(tmp_path.glob("auto-pinky-90-*.json")).read_text())  # as wide as the clear room allows
     grip = [f[5] for f in lib["chunks"]["above_pick"]]
-    assert grip[0] == pytest.approx(auto.jaw_open_for(30), abs=0.01)
+    assert grip[0] == pytest.approx(auto.jaw_open_for(30, margin_mm=16.0), abs=0.01) and grip[0] <= 56.0
 
 
 def test_a_hot_motor_aborts_by_parking_and_stopping(tmp_path):
@@ -536,12 +536,39 @@ def test_a_square_box_closes_along_the_axis_whose_finger_sides_are_clear():
     px = lambda p: (100 + p[0] * 1000, 100 + (p[1] - 0.1) * 1000)  # noqa: E731  1 px per mm
     cube = {"raw_m": [0.0, 0.1], "width_mm": 30, "length_mm": 30, "long_axis_deg": 0.0}
     mask[85:116, 85:116] = 255  # the cube itself
-    mask[90:110, 128:140] = 255  # a 2-cell beside it on the next surface, +x side (2026-10-29: jaws landed on it)
+    mask[90:110, 121:140] = 255  # a 2-cell 6 mm beside it, +x side (2026-10-29: jaws landed on it)
+    roi = (0, 0, 200, 200)
     # closing along x (yaw 0 + 90 -> closing 90: fingers at +-x) meets the neighbour; closing along y is clear
-    assert not auto.side_clear(mask, (0, 0, 200, 200), px, cube, 8, closing_deg=0.0)
-    assert auto.side_clear(mask, (0, 0, 200, 200), px, cube, 8, closing_deg=90.0)
-    mask[128:140, 90:110] = 255  # and one on the +y side too: no clear axis
-    assert not auto.side_clear(mask, (0, 0, 200, 200), px, cube, 8, closing_deg=90.0)
+    assert auto.finger_room(mask, roi, px, cube, 0.0)["margin_mm"] is None
+    assert auto.finger_room(mask, roi, px, cube, 90.0)["margin_mm"] == 16.0
+    mask[121:140, 90:110] = 255  # and one on the +y side too: no clear axis
+    assert auto.finger_room(mask, roi, px, cube, 90.0)["margin_mm"] is None
+
+
+def test_a_box_with_a_narrow_gap_is_taken_with_the_jaws_opened_less_not_refused():
+    mask = np.zeros((200, 200), np.uint8)
+    px = lambda p: (100 + p[0] * 1000, 100 + (p[1] - 0.1) * 1000)  # noqa: E731  1 px per mm
+    box = {"raw_m": [0.0, 0.1], "width_mm": 30, "length_mm": 60, "long_axis_deg": 0.0}
+    mask[85:116, 70:131] = 255  # the 2-cell
+    mask[128:140, 60:140] = 255  # a neighbour 12 mm past its +y side; the old check refused this (4/8/16 mm samples)
+    room = auto.finger_room(mask, (0, 0, 200, 200), px, box)
+    assert room["margin_mm"] is not None and 2.0 <= room["margin_mm"] < 8.0
+    assert room["free_mm"][0] > room["free_mm"][1]
+    assert auto.jaw_open_for(30, margin_mm=room["margin_mm"]) < auto.jaw_open_for(30)
+    mask[85:116, 135:200] = 255  # a neighbour 4 mm past its end: outside the pad, not in the fingers' way
+    assert auto.finger_room(mask, (0, 0, 200, 200), px, box)["margin_mm"] == room["margin_mm"]
+
+
+def test_the_boxs_own_side_face_past_its_outline_is_not_a_neighbour_but_a_touching_box_is():
+    mask = np.zeros((200, 200), np.uint8)
+    px = lambda p: (100 + p[0] * 1000, 100 + (p[1] - 0.1) * 1000)  # noqa: E731  1 px per mm
+    box = {"raw_m": [0.0, 0.1], "width_mm": 30, "length_mm": 60, "long_axis_deg": 0.0,
+           "hull_px": [[70, 85], [130, 85], [130, 115], [70, 115]]}
+    mask[85:121, 70:131] = 255  # its top and, 5 mm past the outline on +y, its side face and shadow (2026-10-29 board)
+    # the outline removal leaves a 1 mm gap before the strip: still the box's own
+    assert auto.finger_room(mask, (0, 0, 200, 200), px, box)["margin_mm"] == 16.0
+    mask[121:150, 70:131] = 255  # a second box touching it: the foreground runs on
+    assert auto.finger_room(mask, (0, 0, 200, 200), px, box)["margin_mm"] is None
 
 
 def test_a_whole_surface_in_view_is_not_a_finger_obstacle_but_a_box_is():
@@ -640,3 +667,40 @@ def test_two_candidates_keep_their_own_libraries(tmp_path):
     for u in usable:
         lib = json.loads(Path(u["library"]).read_text())
         assert lib["source"]["pick"]["x"] == u["pick"]["x"] and lib["source"]["pick"]["y"] == u["pick"]["y"]
+
+
+def test_a_long_box_out_of_reach_at_its_middle_offers_grasp_points_toward_the_base_first():
+    """2026-10-29: a 2-cell on the moved Pinky was out of reach at its middle (planar wrist 0.286 m)."""
+    o = {"raw_m": [0.10, 0.24], "long_axis_deg": 90.0, "object": "container-2"}
+    ends = auto.reachable_ends(o, {"length_mm": 60, "width_mm": 30}, None)
+    assert [e["grasp_shift_mm"] for e in ends] == [-10.5, 10.5]  # 0.7 of the 15 mm from the middle to the jaws' end
+    assert ends[0]["raw_m"] == pytest.approx([0.10, 0.2295]) and math.hypot(*ends[0]["raw_m"]) < math.hypot(*o["raw_m"])
+    assert auto.reachable_ends(o, {"length_mm": 30, "width_mm": 30}, None) == []  # a square box has no end to move to
+
+
+def test_flat_markings_are_no_obstacle_for_the_finger_mask(tmp_path):
+    """2026-10-29: the board's white line beside a 2-cell closed its finger gap; a site lists such flat markings."""
+    path = biased_map(tmp_path)
+    one = {"x": 0.080, "y": 0.120, "long": 0.0, "length": 30, "width": 30}
+    marking = dict(one, x=0.030, y=0.090)  # stands in for a flat line the colour test calls foreground
+    poly = [[60, 280], [200, 280], [200, 380], [60, 380]]
+    config = copy.deepcopy(CONFIG)
+    _, plain, _, _ = auto.observe(Cell([one, marking]), config, cal.load(path), "pinky", ROI, CATALOG)
+    config["sites"]["pinky"]["markings_px"] = [poly]
+    _, masked, _, _ = auto.observe(Cell([one, marking]), config, cal.load(path), "pinky", ROI, CATALOG)
+    inside = (slice(280 - ROI[1], 380 - ROI[1]), slice(60 - ROI[0], 200 - ROI[0]))
+    assert plain[inside].any() and not masked[inside].any()
+
+
+def test_the_margin_opens_as_wide_as_the_room_and_the_jaws_allow():
+    mask = np.zeros((200, 200), np.uint8)
+    px = lambda p: (100 + p[0] * 1000, 100 + (p[1] - 0.1) * 1000)  # noqa: E731  1 px per mm
+    box = {"raw_m": [0.0, 0.1], "width_mm": 30, "length_mm": 60, "long_axis_deg": 0.0}
+    mask[85:116, 70:131] = 255
+    assert auto.finger_room(mask, (0, 0, 200, 200), px, box)["margin_mm"] == 16.0  # clear: the cap, not 8
+    wide = dict(box, width_mm=40)  # a wider box: the jaws' own limit, (68.5 - 40) / 2
+    mask[80:121, 70:131] = 255
+    assert auto.finger_room(mask, (0, 0, 200, 200), px, wide)["margin_mm"] == pytest.approx(14.2, abs=0.1)
+    mask[138:150, 60:140] = 255  # a neighbour 18 mm off the 40 mm box's +y side: room, not the jaws, decides
+    assert auto.finger_room(mask, (0, 0, 200, 200), px, wide)["margin_mm"] < 14.0
+    assert auto.jaw_open_for(30, margin_mm=16.0) <= 56.0

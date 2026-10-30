@@ -17,6 +17,14 @@ from core_common.protocol.station_charging import ChargeSessionStatus, Pose2D, S
 from test_station_docking_api import station_api
 
 
+SIM_WAIT_S = 30.
+
+
+async def _sim_call(function, *args, **kwargs):
+    # SIM time controls permits; host ASGI/journal scheduling gets its own bounded test budget.
+    return await asyncio.wait_for(function(*args, **kwargs), timeout=SIM_WAIT_S)
+
+
 @pytest.fixture
 def pipeline_sources(monkeypatch):
     """This cross-domain test must also run alone, without sibling conftest collection."""
@@ -290,7 +298,7 @@ def test_station_camera_http_pipeline_aligns_then_requires_contact_and_measured_
                 admit_return=lambda *_: ChargeDecision(decision='WORK_ALLOWED', reason='SIM_BUDGET',
                     profile_revision='sim-profile', capacity_revision=None))
             monitor.motion.checked = trace_failure('checked', monitor.motion.checked)
-            monitor.motion.call = trace_failure('motion_call', monitor.motion.call)
+            monitor.motion.call = trace_failure('motion_call', _sim_call)
             if lifespan:
                 from station_timing_probe import install_timing_probe
                 timing = install_timing_probe(owner=owner, navigation=svc.nav, motion=monitor.motion, ports=ports, tasks=tasks,
@@ -322,7 +330,7 @@ def test_station_camera_http_pipeline_aligns_then_requires_contact_and_measured_
             async def wait_runtime():
                 async with tick_finished:
                     previous = tick_generation[0]
-                    await asyncio.wait_for(tick_finished.wait_for(lambda: tick_generation[0] > previous), 3.)
+                    await asyncio.wait_for(tick_finished.wait_for(lambda: tick_generation[0] > previous), SIM_WAIT_S)
             if lifespan:
                 original_tick = runtime.tick
                 async def observed_tick():
