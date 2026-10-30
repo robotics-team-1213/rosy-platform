@@ -4,7 +4,8 @@ import re
 
 import pytest
 
-from fleet.server.cell_print_sheets import DICT_4X4_50, PT_PER_MM, checkerboard_pdf, marker_cells, markers_pdf, sheet
+from fleet.server.cell_print_sheets import (A4_MM, DICT_4X4_50, PT_PER_MM, charuco_pdf, checkerboard_pdf, marker_cells,
+                                            markers_pdf, sheet)
 from test_cell_job_api import _setup
 
 
@@ -58,3 +59,37 @@ def test_a_viewer_downloads_a_sheet_and_bad_parameters_are_refused(tmp_path):
     assert client.get("/api/fleet/cell-app/print-sheets/checkerboard").status_code == 401
     bad = client.get("/api/fleet/cell-app/print-sheets/gripper-markers?ids=0&sizes_mm=200", headers=viewer)
     assert bad.status_code == 422 and bad.json()["detail"]["code"] == "CELL_PRINT_SHEET_INVALID"
+
+
+def raster(pdf: bytes, px_per_mm: float = 300 / 25.4):
+    """The filled boxes of a sheet drawn at 300 dpi: what a 100 % print shows (white paper, black boxes)."""
+    np = pytest.importorskip("numpy")
+    img = np.full((round(A4_MM[1] * px_per_mm), round(A4_MM[0] * px_per_mm)), 255, np.uint8)
+    for x, y, w, h in boxes(pdf):
+        top = A4_MM[1] - y - h  # PDF y grows up from the bottom edge
+        img[round(top * px_per_mm):round((top + h) * px_per_mm), round(x * px_per_mm):round((x + w) * px_per_mm)] = 0
+    return img
+
+
+def test_the_charuco_sheet_is_the_opencv_board_at_true_size():
+    cv2 = pytest.importorskip("cv2")
+    np = pytest.importorskip("numpy")
+    aruco = cv2.aruco
+    board = aruco.CharucoBoard((7, 10), 0.020, 0.015, aruco.getPredefinedDictionary(aruco.DICT_4X4_50))
+    corners, ids, _, _ = aruco.CharucoDetector(board).detectBoard(raster(charuco_pdf()))
+    assert ids is not None and len(ids) == 54  # every inner corner, so the layout and id order are OpenCV's
+    pts = {int(i): p for i, p in zip(ids.ravel(), corners.reshape(-1, 2))}
+    pitch = np.linalg.norm(pts[5] - pts[0]) / 5 / (300 / 25.4)  # corners 0..5 run along the first row
+    assert pitch == pytest.approx(20.0, abs=0.1)
+
+
+def test_surface_markers_are_ids_35_to_48_at_25_mm():
+    cv2 = pytest.importorskip("cv2")
+    np = pytest.importorskip("numpy")
+    name, pdf = sheet("surface-markers", ids=range(35, 49))
+    assert name == "rosy-surface-markers-25mm.pdf"
+    detector = cv2.aruco.ArucoDetector(cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50))
+    corners, ids, _ = detector.detectMarkers(raster(pdf))
+    assert sorted(ids.ravel().tolist()) == list(range(35, 49))
+    sides = [np.linalg.norm(c[0][1] - c[0][0]) / (300 / 25.4) for c in corners]
+    assert all(s == pytest.approx(25.0, abs=0.2) for s in sides)

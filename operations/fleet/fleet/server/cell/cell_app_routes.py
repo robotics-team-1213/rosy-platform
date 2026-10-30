@@ -88,7 +88,7 @@ def install_cell_app_routes(app, *, mission_service, compiler, service_id, princ
     @app.get("/api/fleet/cell-app/print-sheets/{kind}", dependencies=[Depends(require_viewer)])
     def print_sheet(kind: str, ids: str = "0,1", sizes_mm: str = "20,25", cols: int = 8, rows: int = 6,
                     square_mm: float = 15.0):
-        """A real-size calibration sheet (gripper markers, checkerboard) as base64 PDF; read only."""
+        """A real-size calibration sheet (gripper/surface markers, checkerboard, ChArUco) as base64 PDF; read only."""
         from fleet.server.cell_print_sheets import sheet
 
         try:
