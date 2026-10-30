@@ -858,8 +858,8 @@ def test_structured_layer_edit_retains_canonical_errors_and_has_no_dispatch(brow
     show_screen(page, "proposal-heading")
     assert page.locator("#propose").get_attribute("disabled") is not None
     assert not execution_requests
-    page.locator('[data-remove-layer="2"]').click()
     show_screen(page, "recipe-heading")
+    page.locator('[data-remove-layer="2"]').click()
     page.locator("#recipe-save").click()
     expect(page.locator("#notice")).to_contain_text("문서 저장 완료")
     show_screen(page, "preview-heading")
