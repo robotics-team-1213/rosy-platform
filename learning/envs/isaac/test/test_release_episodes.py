@@ -30,11 +30,12 @@ def test_layout_puts_the_prior_stack_near_its_targets_and_the_held_box_flat_on_t
         seen.add(index)
         assert len(layout['prior']) == index
         for j, (position, yaw) in enumerate(layout['prior']):
-            assert np.abs(np.subtract(position[:2], items[j]['target'][:2])).max() <= .001 + 1e-12
-            assert position[2] == pytest.approx(items[j]['target'][2]+.0005) and abs(yaw-math.pi) <= .01
+            assert np.abs(np.subtract(position[:2], items[j]['target'][:2])).max() <= .0005 + 1e-12
+            assert position[2] == pytest.approx(items[j]['target'][2]+.0005) and abs(yaw-math.pi) <= .003
         position, yaw = layout['held']
         centre, size = fixture['leveling_center_m'], fixture['leveling_size_m']
-        assert abs(position[0]-centre[0]) <= .005 and abs(position[1]-centre[1]) <= .005 and abs(yaw-math.pi) <= .05
+        turn = math.pi if items[index]['arm'] == 0 else -math.pi  # recorded quaternion sign per arm
+        assert abs(position[0]-centre[0]) <= .005 and abs(position[1]-centre[1]) <= .005 and abs(yaw-turn) <= .05
         assert position[2] == pytest.approx(centre[2]+.015)
         assert abs(position[0]-centre[0]) + .045 <= size[0]/2  # stays on the leveling table
     assert seen == set(range(9))

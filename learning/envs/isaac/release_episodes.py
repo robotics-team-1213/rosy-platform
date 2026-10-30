@@ -23,11 +23,15 @@ def layout(fixture, rng):
     # 0.5 mm above the target: exact touching heights made a six-box prior stack pop apart (run 8e96).
     # Yaw pi as after tabletop leveling: a yaw-0 start was outside the BC data and needed a half-turn wrist
     # path, and run e48a ended 20-26 mm off the release target or lost arm tracking.
-    prior = [([items[j]['target'][0]+rng.uniform(-.001, .001), items[j]['target'][1]+rng.uniform(-.001, .001),
-               items[j]['target'][2]+.0005], math.pi+float(rng.uniform(-.01, .01))) for j in range(index)]
+    # Prior jitter +-0.5 mm / +-0.003 rad: +-1 mm with +-0.01 rad swung a 90 mm corner past the 1 mm envelope
+    # tolerance (run 29b7, 12 prior failures). Arm 1 boxes are recorded at quaternion (0,0,0,-1) after leveling,
+    # so they start at -pi: +pi put the BC model 18-27 mm off for every arm-1 centre-row episode in that run.
+    prior = [([items[j]['target'][0]+rng.uniform(-.0005, .0005), items[j]['target'][1]+rng.uniform(-.0005, .0005),
+               items[j]['target'][2]+.0005], math.pi+float(rng.uniform(-.003, .003))) for j in range(index)]
     centre = fixture['leveling_center_m']
+    turn = math.pi if items[index]['arm'] == 0 else -math.pi
     held = ([centre[0]+rng.uniform(-.005, .005), centre[1]+rng.uniform(-.005, .005), centre[2]+.015],
-            math.pi+float(rng.uniform(-.05, .05)))
+            turn+float(rng.uniform(-.05, .05)))
     return dict(index=index, prior=prior, held=held)
 
 
