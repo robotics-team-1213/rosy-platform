@@ -32,11 +32,13 @@ REQUIRED_DEPLOYMENT_FILES = (
     "rosy-site-firewall-check.timer",
     "discovery-token.template.txt", "site_db.py", "site_users.py", "candidate_signing.py",
     "compose.pairing.yaml", "compose.omx.yaml", "compose.workcell.yaml", "pairing-sync-token.template.txt",
+    "compose.monitoring.yaml", "Caddyfile.monitoring",
     "compose.account.yaml", "Caddyfile.account",
     "sign_candidate.py", "verify_candidate.py",
 )
 REQUIRED_DOCUMENT_FILES = ("docs/reference/site-lan-discovery-profile.md",)
 ACCOUNT_DEPLOYMENT_FILES = ("compose.account.yaml", "Caddyfile.account")
+MONITORING_DEPLOYMENT_FILES = ("compose.monitoring.yaml", "Caddyfile.monitoring")  # D-936
 SERVICES = ("fleet", "vision", "proxy", "postgres")
 _COMMIT = re.compile(r"^[0-9a-f]{40}$")
 Runner = Callable[..., subprocess.CompletedProcess]
@@ -124,6 +126,8 @@ def _verify_candidate_content(candidate_dir: Path, *, manifest_bytes: bytes | No
         required.discard("compose.omx.yaml")
     if "compose.workcell.yaml" not in hashes:
         required.discard("compose.workcell.yaml")
+    if not set(hashes) & set(MONITORING_DEPLOYMENT_FILES):
+        required.difference_update(MONITORING_DEPLOYMENT_FILES)
     unsupported = set(hashes) - required
     if unsupported:
         raise CandidateVerificationError("unsupported deployment file path")
@@ -205,6 +209,7 @@ def _verify_candidate_content(candidate_dir: Path, *, manifest_bytes: bytes | No
         "account_https": set(ACCOUNT_DEPLOYMENT_FILES) <= set(hashes),
         "omx": "compose.omx.yaml" in hashes,
         "workcell": "compose.workcell.yaml" in hashes,
+        "monitoring": set(MONITORING_DEPLOYMENT_FILES) <= set(hashes),
         "image_archive_sha256": archive_hash,
     }
 
@@ -368,6 +373,7 @@ def verify_candidate(
             "account_https": summary["account_https"],
             "omx": summary["omx"],
             "workcell": summary["workcell"],
+            "monitoring": summary["monitoring"],
             "image_archive_sha256": summary["image_archive_sha256"],
             "manifest_image_ids": summary["image_ids"],
             "verified_images": summary["verified_images"],
