@@ -45,14 +45,16 @@ def after_reboot(ticket: Path | None, sleep=time.sleep, clock=time.localtime) ->
 def slot(qdir: Path, ticket: Path, sleep=time.sleep, held=None) -> None:
     """Wait for a preparation slot, reserving capacity for older pending tickets, and while ``held()`` (a batch
     carries this branch, ``land_batch.carried``: its pretest covers this one). A carried pending ticket reserves
-    no capacity: it never prepares on its own."""
+    no capacity: it never prepares on its own. An urgent ticket (D-889 addendum 5) reserves nothing for older
+    pending ones: behind their reservations an urgent landing still waited hours for a slot (2026-10-31)."""
     land_queue.set_status(ticket, "pending")
 
     def busy() -> int:
         rows = land_queue.ahead(qdir, Path("~"))
         carried = {name for r in rows for name in (r.get("batch") or [])}
+        urgent = any(r["ticket"] == ticket.name and r.get("urgent") for r in rows)
         return sum(r.get("status") == "preparing" or (r.get("status") == "pending" and r["ticket"] < ticket.name
-                                                      and r.get("branch") not in carried)
+                                                      and r.get("branch") not in carried and not urgent)
                    for r in rows if r["ticket"] != ticket.name)
     while (held and held()) or busy() >= MAX_PREPARING:
         land_queue.touch(ticket)

@@ -110,6 +110,15 @@ def test_at_most_max_preparing_landings_prepare_at_once_and_a_pending_one_blocks
     assert len(naps) == 1 and json.loads(mine.read_text())["status"] == "preparing"
 
 
+def test_an_urgent_ticket_prepares_without_waiting_behind_older_pending_ones(tmp_path):
+    import land_prepare
+    for n in range(land_prepare.MAX_PREPARING + 2):
+        queue.take(tmp_path, f"feat/older{n}", status="pending")
+    mine = queue.take(tmp_path, "feat/urgent", status="pending", urgent="the user's words")
+    land_prepare.slot(tmp_path, mine, sleep=lambda s: pytest.fail("urgent waited behind pending reservations"))
+    assert json.loads(mine.read_text())["status"] == "preparing"
+
+
 def test_who_is_ahead_shows_each_tickets_status(tmp_path):
     queue.take(tmp_path, "feat/full", status="preparing")
     mine = queue.take(tmp_path, "feat/mine")
