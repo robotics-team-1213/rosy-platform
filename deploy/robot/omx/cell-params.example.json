@@ -175,7 +175,13 @@
    "source": "measured",
    "evidence": "2026-10-28 facts 5: park then stop on real arm S"
   },
-  "runner.idle_stop_s": {
+  "safety.bus_watchdog_ms": {
+  "value": 0.0,
+  "unit": "ms",
+  "source": "default",
+  "evidence": "2026-10-31: the site PC dropped off mid-carry; the motors' own link check (Dynamixel Bus Watchdog) stops a motor with no packet for this long. 0 = off until its trip in position mode is observed on arm S (supervised, arm folded)"
+ },
+ "runner.idle_stop_s": {
    "value": 180.0,
    "unit": "s",
    "source": "measured",

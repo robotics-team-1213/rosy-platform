@@ -71,7 +71,7 @@ DEFAULTS = {
     "push.gap_mm": (10.0, "mm", 3, 40),
     "runner.pace_lag": (1.6, "joint_unit", 0.1, 5), "runner.pace_rise": (0.3, "joint_unit", 0, 5),
     "runner.pace_max_s": (3.0, "s", 0.1, 30), "runner.idle_park_s": (180.0, "s", 5, 7200),
-    "runner.idle_stop_s": (180.0, "s", 5, 7200), "runner.contact_lag": (1.5, "joint_unit", 0.1, 5),
+    "runner.idle_stop_s": (180.0, "s", 5, 7200), "safety.bus_watchdog_ms": (0.0, "ms", 0, 2540), "runner.contact_lag": (1.5, "joint_unit", 0.1, 5),
     "runner.contact_ticks": (2, "count", 1, 30), "runner.contact_rise": (0.6, "joint_unit", 0.1, 1.5),
     "runner.contact_loaded_max": (2.2, "joint_unit", 1.5, 2.3),
 }

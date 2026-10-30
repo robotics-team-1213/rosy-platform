@@ -539,6 +539,9 @@ def main(argv=None):
     motion = NativeJointMotion(robot.bus, None, teacher=True, monitor=MotorHealth())
     guarded = Guarded(robot, motion)
     try:
+        import bus_watchdog  # the motors stop by themselves if this PC goes silent (off unless the params set it)
+
+        print(json.dumps({"bus_watchdog": bus_watchdog.arm(robot.bus, prm.get(params, "safety.bus_watchdog_ms"))}), flush=True)
         live_path = args.io / "live.json"
 
         def live(row):  # replaced atomically so a reader never sees half a file
