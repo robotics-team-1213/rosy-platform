@@ -13127,3 +13127,10 @@ osy-d395-s1d\`.
 - 증거: 2026-10-30 Fleet 샘플 서버 운영자 접속 캡처 13장과 토큰 사용 집계(작업 공간 계획 `2026-10-30-ui-hierarchy-foundation.md`). `rosy_harness.py lint`에서 D-926 오류 없음.
 - Gate: 없음. 화면별 적용은 단계별 브랜치로 따로 기록한다.
 - CE: 해당 없음 — 결정과 근거는 ADR이 담는다.
+
+## 2026-10-30 · uncommitted · docs(adr): D-931..D-933 arm S measured checks, one field revision, cell coordinate frame
+- 변경: `docs/adr/D-931`·`D-932`·`D-933` 추가, ADR Log 행 3개, `tools/harness/adr_gaps.txt`에 다른 브랜치가 예약한 D-929·D-930 대기 선언
+- 증거: `python tools/harness/rosy_harness.py lint` 0 errors. D-933 근거의 OpenCV 4.12 ChArUco API와 1.1 px/mm 합성 검출 20/20은 Fleet PC에서 확인(실물 인쇄물 검출은 아직)
+- gate 변화: 없음
+- 결정: D-931 Accepted, D-932 Accepted, D-933 Proposed
+- 교훈: 기존 사례 8·9(`shared-arm-cell-hand-back-checks`)를 근거로 인용, 새 교훈 없음
