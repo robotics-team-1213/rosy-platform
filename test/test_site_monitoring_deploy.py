@@ -90,9 +90,9 @@ def test_compose_renders_monitoring_only_with_its_overlay(tmp_path):
     overlay = tmp_path / "compose.monitoring.yaml"
     shutil.copy(SITE / "compose.monitoring.yaml", overlay)
     env_file = tmp_path / "site.env"
-    env_file.write_text(f"ROSY_SITE_MONITORING_CONFIG={tmp_path / 'monitoring.yaml'}\n"
-                        f"ROSY_SITE_MONITORING_SECRETS_DIR={tmp_path}/keys\n"
-                        "ROSY_SITE_IMAGE_TAG=" + "a" * 40 + "\n", encoding="utf-8")
+    site_env = {"ROSY_SITE_MONITORING_CONFIG": tmp_path / "monitoring.yaml",
+                "ROSY_SITE_MONITORING_SECRETS_DIR": tmp_path / "keys", "ROSY_SITE_IMAGE_TAG": "a" * 40}
+    env_file.write_text("".join(f"{k}={v}\n" for k, v in site_env.items()), encoding="utf-8")
     env = {k: v for k, v in os.environ.items() if not k.startswith("ROSY_")}
 
     def services(*files):
