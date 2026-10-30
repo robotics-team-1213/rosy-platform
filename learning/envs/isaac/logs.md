@@ -511,3 +511,10 @@
 - 증거: rl0 에피소드 run1f81에서 20개 중 16개 안정, 위치 오차 0.24~1.07 mm. 원격 Isaac 616통과1건너뜀. 상세: `docs/validation/omx-release-corrector-2026-10-30/result.md`.
 - gate 변화: 없음. 시뮬레이션 학습 실험이다.
 - CE: 해당 없음 — 시작 자세 불일치와 admission 경합은 코드·회귀 시험·검증 기록으로 재구성된다.
+
+## 2026-10-31 · f157285389 · rl1 blocked every release; REINFORCE step bounded to 0.2 mm
+
+- 변경: `Residual.update`가 갱신 데이터에서 잔차 출력 변화가 0.2 mm를 넘지 않도록 걸음을 줄인다(trust region, 학습률 2e-5). 같은 데이터(29b7·1f81)로 rl0에서 다시 갱신해 rl2(sha256 `bb424ece…`)를 고정했다. rl1은 실패 기록으로 남긴다.
+- 증거: rl1 에피소드 run 9968(seed 43) 32개 중 안정 0, 31개 열기 차단. rl1 출력 변화가 최대 2.76 mm로 1.5 mm 수렴 판정을 넘었다. rl2의 최대 출력 변화 0.197 mm. 원격 Isaac 617통과1건너뜀. rl2 비교는 rl0과 같은 seed 42로 진행 중.
+- gate 변화: 없음. 시뮬레이션 학습 실험이다.
+- CE: 해당 없음 — 걸음 제한은 코드와 회귀 시험(`test_reinforce_step_stays_inside_the_trust_region_on_the_data`)으로 남았다.

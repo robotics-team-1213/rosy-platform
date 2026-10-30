@@ -66,3 +66,13 @@ The first REINFORCE step on 135 decisions (runs 29b7 and 1f81, mean reward −9.
 `release-episodes-rl1` (sha256 `cf84c0a0d2a878eb072b37b2f2428a315e54899887db583314fbe878739036ed`, commit `259df0b57b`).
 Its episode run uses seed 43, so episode layouts differ from rl0. With 20 episodes per run, small differences in
 success rate are not distinguishable from chance; several iterations are needed before claiming an improvement.
+
+| Run | Setup | Result |
+|---|---|---|
+| `9968d1b9` | Short episodes, rl1, seed 43 | **0/32 settled**; 31 opening blocked. The unbounded REINFORCE step moved the residual output by up to 2.76 mm, past the 1.5 mm convergence check. |
+
+rl1 is kept pinned as a failed step, not used further. `Residual.update` now scales each step so the residual output
+changes by at most 0.2 mm on the update data (trust region), with learning rate 2e-5. The same data from rl0 gave
+residual rl2 (`release-episodes-rl2`, sha256 `bb424ece0730ab37b16a8e5dcc43febfeb45070fcd5e3f255eb36680f070c935`,
+commit `f157285389`, largest output change 0.197 mm). Its episode run uses seed 42, the same layouts as rl0 run 1f81,
+so the two runs can be compared episode by episode.
