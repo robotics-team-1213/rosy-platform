@@ -13,6 +13,15 @@ import uuid
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 LIMIT = 1024 * 1024
+CONTAINER_ARTIFACTS = {
+    'mapped-stack-report': ('mapped-stack-report.json', 16 * LIMIT),
+    'mapped-video': ('mapped-video.mp4', 64 * LIMIT),
+    'mapped-video-frames': ('mapped-video.frames.jsonl', 16 * LIMIT),
+    'mapped-video-encoder': ('mapped-video.encoder.log', LIMIT),
+}
+# Base64 expansion plus a bounded allowance for the artifact metadata.
+ARTIFACT_RPC_LIMITS = {key: (size + 2) // 3 * 4 + LIMIT
+                       for key, (_, size) in CONTAINER_ARTIFACTS.items()}
 TERMINAL = {'SUCCEEDED', 'FAILED', 'STOPPED'}  # learning/envs/isaac/run_store.py
 
 
@@ -126,6 +135,64 @@ def observe(receipt_file, remote, *, stop=False):
     return row
 
 
+def run_experiment(scenario, config, sha, directory, remote, *, parent=None, sleep=None, fetch=None,
+                   attempts=20, interval=30, max_polls=240, max_errors=10, admissions=3):
+    """check until ready -> start once -> wait (riding out lost replies) -> fetch a terminal run.
+
+    Hand-rolled loops started a run while the model PC was busy and stopped waiting on one lost reply. A start
+    refused at admission (the GPU taken between check and start, run 991a) is kept under attempt-N/ and retried
+    from the readiness check with a new request, at most `admissions` times.
+    """
+    for refused in range(1, admissions+1):
+        result = _run_once(scenario, config, sha, directory, remote, parent=parent, sleep=sleep, fetch=fetch,
+                           attempts=attempts, interval=interval, max_polls=max_polls, max_errors=max_errors)
+        if result['status'] != 'FAILED' or (result.get('result') or {}).get('reason') != 'admission_refused':
+            return result
+        kept = directory / f'attempt-{refused}'
+        kept.mkdir()
+        for name in ('request.json', 'receipt.json'):
+            (directory / name).rename(kept / name)
+    return result
+
+
+def _run_once(scenario, config, sha, directory, remote, *, parent, sleep, fetch, attempts, interval, max_polls,
+              max_errors):
+    import time
+    sleep = sleep or time.sleep
+    fetch = fetch or fetch_snapshot
+    remote.prepare(_sha(sha))
+    for attempt in range(attempts):
+        checked = remote.call(sha, {'action': 'check', 'scenario_id': scenario, 'config': config, 'source_sha': sha})
+        if checked.get('ready') is True:
+            break
+        if attempt + 1 < attempts:
+            sleep(interval)
+    else:
+        raise ValueError(f"Model PC not ready after {attempts} checks: {checked.get('reason')}")
+    request = {'request_id': uuid.uuid4().hex, 'scenario_id': scenario, 'config': config, 'source_sha': sha,
+               'expected_input_sha256': checked['input_sha256'], **({'parent_run_id': parent} if parent else {})}
+    directory.mkdir(parents=True, exist_ok=True)
+    _save(directory / 'request.json', request)
+    receipt = directory / 'receipt.json'
+    row, errors = start(request, receipt, remote), 0
+    for _ in range(max_polls):
+        if row['status'] in TERMINAL or row['status'] == 'UNKNOWN':
+            break
+        sleep(interval)
+        try:
+            row, errors = observe(receipt, remote), 0
+        except (ConnectionError, OSError):
+            errors += 1
+            if errors > max_errors:
+                raise
+    else:
+        raise ValueError('Run still active; continue with status --receipt')
+    refused = (row.get('result') or {}).get('reason') == 'admission_refused'  # nothing ran; keep snapshots/ for the retry
+    snapshot = fetch(read_receipt(receipt), remote, directory / 'snapshots') if row['status'] in TERMINAL and not refused else None
+    return {'run_id': row['run_id'], 'status': row['status'], 'result': row.get('result'),
+            'snapshot_directory': str(snapshot) if snapshot else None}
+
+
 def _name(value):
     if (not isinstance(value, str) or len(value) > 180 or not re.fullmatch('[A-Za-z0-9_.-]+', value)
             or value in {'.', '..'} or value.endswith('.')
@@ -154,7 +221,13 @@ def fetch_snapshot(receipt, remote, destination):
     for item in items:
         name = _name(item['name'])
         total += item['bytes']
-        limit = 2*LIMIT if row.get('input', {}).get('scenario_id') == 'omx-map-cube-stack' and name == 'mapped-stack-report.json' else LIMIT
+        scenario = row.get('input', {}).get('scenario_id')
+        registered_name, registered_limit = CONTAINER_ARTIFACTS.get(item['id'], (None, LIMIT))
+        limit = LIMIT
+        if scenario == 'omx-map-container-stack' and name == registered_name:
+            limit = registered_limit
+        elif scenario == 'omx-map-cube-stack' and name == registered_name == 'mapped-stack-report.json':
+            limit = 2 * LIMIT
         if name.casefold() in names or not 0 <= item['bytes'] <= limit or total > 256 * LIMIT:
             raise ValueError('Snapshot artifact size/name conflict')
         names.add(name.casefold())
@@ -175,7 +248,7 @@ def fetch_snapshot(receipt, remote, destination):
     return snapshot
 
 
-BOOTSTRAP = r'''
+BOOTSTRAP = 'ARTIFACT_RPC_LIMITS = ' + repr(ARTIFACT_RPC_LIMITS) + '\n' + r'''
 import json,subprocess,sys
 from pathlib import Path
 value=json.loads(sys.stdin.buffer.read(1048577)); sha=value['sha']
@@ -185,7 +258,8 @@ binding=json.loads(config.read_text())
 source=Path(binding['source_root'])/'learning/envs/isaac/run_control.py'
 result=subprocess.run(['/usr/bin/python3',str(source),'--binding',str(config)],
  input=json.dumps(value['payload']).encode(),capture_output=True,timeout=35)
-limit=3145728 if value['payload'].get('action')=='artifact' and value['payload'].get('artifact_id')=='mapped-stack-report' else 2097152
+payload=value['payload']
+limit=ARTIFACT_RPC_LIMITS.get(payload.get('artifact_id'),2097152) if payload.get('action')=='artifact' else 2097152
 if result.returncode or len(result.stdout)>limit:
  print(json.dumps({'error':'model-PC operation refused or unavailable'}));sys.exit(2)
 json.loads(result.stdout)
@@ -247,10 +321,13 @@ class SSH:
         self.target_id = hashlib.sha256(self.host.encode()).hexdigest()
 
     def _invoke(self, script, value):
-        result = self.runner.remote(self.host, 'exec /usr/bin/python3 -c ' + shlex.quote(script),
-            input=json.dumps(value).encode(), capture_output=True, timeout=50)
         payload = value.get('payload', {})
-        limit = 3*LIMIT if payload.get('action') == 'artifact' and payload.get('artifact_id') == 'mapped-stack-report' else 2*LIMIT
+        timeout = (180 if payload.get('action') == 'artifact' and payload.get('artifact_id') in
+                   {'mapped-video', 'mapped-video-frames', 'mapped-stack-report'} else 50)
+        result = self.runner.remote(self.host, 'exec /usr/bin/python3 -c ' + shlex.quote(script),
+            input=json.dumps(value).encode(), capture_output=True, timeout=timeout)
+        limit = (ARTIFACT_RPC_LIMITS.get(payload.get('artifact_id'), 2 * LIMIT)
+                 if payload.get('action') == 'artifact' else 2 * LIMIT)
         if result.returncode or len(result.stdout) > limit:
             raise ConnectionError('Model-PC operation refused or disconnected; retain the receipt')
         value = json.loads(result.stdout)
@@ -275,10 +352,16 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest='action', required=True)
     check = commands.add_parser('check')
-    check.add_argument('--scenario', required=True, choices=['omx-f-import', 'omx-stacking-rl', 'omx-map-long-stack', 'omx-map-stacking-rl', 'omx-map-cube-stack', 'pinky-conveyor-roundtrip',
+    check.add_argument('--scenario', required=True, choices=['omx-f-import', 'omx-stacking-rl', 'omx-map-long-stack', 'omx-map-stacking-rl', 'omx-map-cube-stack', 'omx-map-container-stack', 'pinky-conveyor-roundtrip',
                        'arm-s-cell-nominal', 'arm-s-cell-overhang', 'arm-s-cell-wrong-yaw', 'arm-s-cell-case'])
     check.add_argument('--config', required=True, type=Path)
     check.add_argument('--sha', required=True)
+    run_command = commands.add_parser('run', help='check until ready, start, wait, fetch')
+    run_command.add_argument('--scenario', required=True, choices=check._actions[1].choices)
+    run_command.add_argument('--config', required=True, type=Path)
+    run_command.add_argument('--sha', required=True)
+    run_command.add_argument('--out', required=True, type=Path, help='new directory for request, receipt and snapshots')
+    run_command.add_argument('--parent-run-id')
     start_command = commands.add_parser('start')
     start_command.add_argument('--request', required=True, type=Path)
     start_command.add_argument('--receipt', required=True, type=Path)
@@ -290,6 +373,16 @@ def main():
         remote.prepare(_sha(args.sha))
         result = remote.call(args.sha, {'action': 'check', 'scenario_id': args.scenario,
                                        'config': _json(args.config), 'source_sha': args.sha})
+    elif args.action == 'run':
+        result = run_experiment(args.scenario, _json(args.config), args.sha, args.out, remote,
+                                parent=args.parent_run_id)
+        report = Path(result['snapshot_directory'] or '.') / 'mapped-stack-report.json'
+        if result['snapshot_directory'] and report.is_file():
+            import subprocess
+            summary = subprocess.run([sys.executable, str(Path(__file__).resolve().parents[2] /
+                                      'learning/envs/isaac/mapped_stack_report.py'), 'summary', str(report)],
+                                     capture_output=True, text=True, encoding='utf-8', timeout=120)
+            result['summary'] = json.loads(summary.stdout) if summary.returncode == 0 else {'error': summary.stderr[-500:]}
     elif args.action == 'start':
         result = start(_json(args.request), args.receipt, remote)
     elif args.action == 'fetch':

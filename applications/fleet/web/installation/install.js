@@ -275,12 +275,15 @@ async function refreshDiscovery() {
     discoveryState(`${snapshot.devices.length}대 발견`, "아직 발견된 로봇이 없습니다. 로봇 전원과 같은 현장 네트워크인지 확인하고 다시 시도하세요.");
     // D-413 — 발견(mDNS) 장치는 이 화면의 주인공이다: 이름·주소·단계·상태와
     // 곧바로 누르는 등록 버튼(enrollment.decorateDiscoveryRow).
+    // 릴리스(YYYY.MM.DD-NNN)는 글자 순서가 곧 날짜 순서다. 발견된 로봇 중 가장 새것보다 낮으면 표시한다.
+    const newest = snapshot.devices.reduce((top, device) => (device.release > top ? device.release : top), "");
     const rows = snapshot.devices.map((device) => {
       const item = document.createElement("li");
       const label = document.createElement("b");
       label.textContent = device.name;
       const detail = document.createElement("small");
-      detail.textContent = `${device.address}:${device.port} · ${device.stage || "부팅 중"}`;
+      const release = device.release ? ` · ${device.release}${device.release < newest ? " (다른 로봇보다 이전)" : ""}` : "";
+      detail.textContent = `${device.address}:${device.port} · ${device.stage || "부팅 중"}${release}`;
       const state = document.createElement("span");
       state.textContent = DISCOVERY_LABELS[device.status] || "확인 필요";
       state.className = `discovery-state ${device.status}`;

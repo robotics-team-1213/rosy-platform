@@ -197,3 +197,16 @@ def test_system_stop_pins_worker_instead_of_signalling_reused_unit(monkeypatch):
     assert calls[0] == ('open', 1234)
     assert calls[1][0:2] == ('signal', 99)
     assert calls[-1] == ('close', 99)
+
+
+@pytest.mark.parametrize('missing', [None, 'ffmpeg', 'ffprobe'])
+def test_container_check_refuses_before_launch_without_recording_tools(setup, monkeypatch, missing):
+    mod, runner, system, _ = setup
+    monkeypatch.setattr(mod.shutil, 'which', lambda tool: None if tool == missing else '/usr/bin/'+tool)
+    config = {'seed': 42, 'layers': 3, 'case': 'nominal'}
+    checked = runner.check('omx-map-container-stack', config, SHA)
+    assert checked['ready'] is (missing is None)
+    if missing:
+        assert 'ffmpeg' in checked['reason'] and '--approve sim' in checked['reason']
+    # Scenarios without continuous film do not need the tools.
+    assert runner.check('omx-f-import', {'seed': 0}, SHA)['ready'] is True

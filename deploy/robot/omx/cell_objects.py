@@ -274,6 +274,18 @@ def detect(img, roi, record: dict, camera: dict, catalog: list, surface_z: float
                 for q, res in zip(parts, measured):
                     hull = outline(np.column_stack(np.nonzero(q))[:, ::-1] + [x0, y0], res, catalog, camera, surface_z)
                     out += [{**r, "split_from": "touching", "hull_px": hull.tolist()} for r in res]
+        retry = prm.get(params, "objects.side_retry_v_frac")
+        if found is not None and not all(r["matched"] for r in found) and object_hsv is not None and retry:
+            # top_v_frac off for the whole site (it thinned a belt box at the frame edge) let a 2-cell lying across
+            # the Pinky tray read 56 x 41.5 mm with its side face (2026-10-30); only a blob that matches nothing is
+            # measured again on its brighter part, and kept only when that matches
+            v = cv2.cvtColor(img[y0:roi[3], x0:roi[2]], cv2.COLOR_BGR2HSV)[..., 2]
+            top = (blob & (v >= retry * np.percentile(v[blob], 90))).astype(np.uint8)
+            top = cv2.morphologyEx(top, cv2.MORPH_OPEN, np.ones((int(prm.get(params, "objects.open_px")),) * 2, np.uint8))
+            if top.sum() >= prm.get(params, "objects.min_px", MIN_PX):
+                again = _measure_blob(np.column_stack(np.nonzero(top))[:, ::-1] + [x0, y0], record, camera, catalog, surface_z, params)
+                if all(r["matched"] for r in again):
+                    found = [{**r, "top_retry": retry} for r in again]
         if found is not None:
             hull = outline(np.column_stack(np.nonzero(pieces[0]))[:, ::-1] + [x0, y0], found, catalog, camera, surface_z)
             out += [{**r, "hull_px": hull.tolist()} for r in found]

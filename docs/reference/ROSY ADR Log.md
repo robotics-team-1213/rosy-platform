@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-936 | ROSY Monitoring은 관제 PC에서 서명 사이트 스택의 선택 서비스로 실행한다 (D-876 배치 보충). [전문](../adr/D-936-monitoring-site-stack-service.md) | Accepted (2026-10-30, 사용자 결정; 관제 PC 반영·수용 별도) |
 | D-935 | 공급암 S 운반 무게는 검증한 상한으로 묶고, 운반마다 실제 짐을 확인해 기록한다 (D-911 보충). [전문](../adr/D-935-arm-s-payload-bound-amends-d911.md) | Accepted (2026-10-30, 사용자 결정; 실측·실물 수용 별도) |
 | D-934 | 물체 무게는 카탈로그의 실측값이며, 셀 카메라로 저울을 읽어 기록하고 ROSY에 보여 준다. [전문](../adr/D-934-arm-s-object-mass-by-cell-scale.md) | Proposed (2026-10-30; 실제 저울 판독·Fleet 표시 별도) |
 | D-933 | 공급암 S 셀은 면마다 그린 지도 대신 카메라 모델 하나와 인쇄 마커로 좌표를 잡는다. [전문](../adr/D-933-arm-s-cell-coordinate-frame-markers.md) | Proposed (2026-10-30; 구현·실물 수용 별도) |
@@ -29,6 +30,7 @@
 | D-912 | Signed OS transport maintenance with independent authority and durable recovery. [전문](../adr/D-912-signed-os-transport-maintenance.md) | Proposed |
 | D-911 | OMX native 셀의 검증된 작업 범위와 현재 실행 조건을 구분한다. [전문](../adr/D-911-omx-native-reviewed-operating-envelope.md) | Accepted (2026-10-28, 구현 승인; 장치 수용 별도) |
 | D-898 | Fleet 인식 모델 승인을 모델 PC 레지스트리에 반영 — 사람이 나르는 Ed25519 서명 결정 파일 | Proposed (2026-10-27) |
+| D-929 | 적재 줄 간격 2~5 mm와 이전 더미 안정 구간. [전문](../adr/D-929-packing-row-gap-band-and-prior-stack-window.md) | Accepted (2026-10-30) |
 | D-897 | AI PC와 모델 PC에서 격리된 시뮬레이션 학습 작업을 병렬 실행한다 | Accepted (2026-10-27, 사용자 요청; 운영 권한·승격 별도) |
 | D-902 | Pilot real OMX teleop and recording through Fleet and the CORE manual arm path. [전문](../adr/D-902-pilot-real-omx-teleop-and-recording.md) | Proposed (2026-10-28) |
 | D-901 | Native workcell observation communication isolation. [전문](../adr/D-901-native-workcell-observation-isolation.md) | Accepted (2026-10-28) |
