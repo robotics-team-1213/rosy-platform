@@ -103,3 +103,12 @@ rl3 is one trust-region REINFORCE step from rl0 on all 261 decisions of runs 29b
 `d2465280d7`). On the same 22 layouts as rl0 run 65e5: rl3 settled 3 layouts that rl0 did not, and lost none; where
 both settled (16), position error was about the same (rl3 closer in 7, mean −0.06 mm). Three discordant layouts out of
 22 are not yet distinguishable from chance (two-sided sign test p = 0.25). A paired run on seed 42 is the next check.
+
+| Run | Setup | Result |
+|---|---|---|
+| `99941e72624956f5928f4672ea658312` | Short episodes, rl3, seed 42 | 23 episodes, **19 settled and stable**, median position error 0.59 mm. |
+
+On the 20 layouts shared with rl0 run 1f81: rl3 alone settled 2, rl0 alone 1; where both settled (15), rl3 was closer
+in 6 (mean +0.05 mm). Over both seeds rl3 settled 5 layouts that rl0 did not and lost 1 (sign test p = 0.22), with
+the same position error. rl3 does not make releases worse and may settle a few more, but the gain is not established.
+BC v0 with a zero residual remains the reference; rl3 is a candidate.
