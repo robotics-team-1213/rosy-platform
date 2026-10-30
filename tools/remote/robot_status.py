@@ -6,7 +6,8 @@ Browses ``_rosy._tcp`` with avahi on a lab PC on the robot LAN (``--via``, defau
 which runs Fleet's scanner; the model and AI PCs have no avahi-utils) and lists every robot this
 PC knows (``lab_hosts.robots()``) and every other robot found, with the release, stage and tls each
 advertises. A robot older than the newest one found is BEHIND. The newest published ``payload-*``
-release (gh) is printed too: a robot already past it gets no update from the channel. Exit 1 when a known robot is not found. Nothing on a robot is touched.
+release (gh) is printed too: a robot already past it gets no update from the channel. Exit 1 when a
+known robot is not found. Nothing on a robot is touched.
 """
 from __future__ import annotations
 
