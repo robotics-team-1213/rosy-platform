@@ -85,4 +85,4 @@ def test_ready_exposes_only_cameras_with_a_device_and_still_refuses_a_dark_room(
     config = {"cameras": {"top": {"url": "u", "device": "/dev/video2"}, "wrist": {"url": "w"}}}
     frames = {"top": cam.frame, "wrist": lambda name="wrist": np.full((48, 64), 140, np.uint8)}
     dark = pf.ready(lambda c: frames[c](), config, run=cam.run, wait=lambda s: None)
-    assert cam.exposure == 33000 and len(dark) == 1 and dark[0].startswith("top:")
+    assert cam.exposure == 33000 and len(dark) == 1 and dark[0].startswith("light top:")
