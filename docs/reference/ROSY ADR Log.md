@@ -10,6 +10,11 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-935 | 공급암 S 운반 무게는 검증한 상한으로 묶고, 운반마다 실제 짐을 확인해 기록한다 (D-911 보충). [전문](../adr/D-935-arm-s-payload-bound-amends-d911.md) | Accepted (2026-10-30, 사용자 결정; 실측·실물 수용 별도) |
+| D-934 | 물체 무게는 카탈로그의 실측값이며, 셀 카메라로 저울을 읽어 기록하고 ROSY에 보여 준다. [전문](../adr/D-934-arm-s-object-mass-by-cell-scale.md) | Proposed (2026-10-30; 실제 저울 판독·Fleet 표시 별도) |
+| D-933 | 공급암 S 셀은 면마다 그린 지도 대신 카메라 모델 하나와 인쇄 마커로 좌표를 잡는다. [전문](../adr/D-933-arm-s-cell-coordinate-frame-markers.md) | Proposed (2026-10-30; 구현·실물 수용 별도) |
+| D-932 | 공급암 S 현장은 로컬 main에 착지한 리비전 하나로만 실행한다. [전문](../adr/D-932-field-runs-one-landed-revision.md) | Accepted (2026-10-30; 현장 코드 통합 진행 중) |
+| D-931 | 공급암 S는 움직이기 전에 잰 값으로 집기·놓기·보기를 판정한다. [전문](../adr/D-931-arm-s-measured-checks-before-motion.md) | Accepted (2026-10-30; 실물 운반 수용 별도) |
 | D-926 | 운용 화면의 읽는 순서·깊이·말의 규칙. [전문](../adr/D-926-ui-reading-order-depth-and-wording.md) | Accepted (2026-10-30, 사용자 결정; 화면 적용은 단계별) |
 | D-928 | Fleet 작업 발행은 로봇마다 따로 진행하고 교통 판정만 한 줄로 세운다. [전문](../adr/D-928-fleet-per-robot-dispatch-serial-traffic.md) | Proposed (2026-10-30; 구현·수용 별도) |
 | D-927 | Harbor 첫 흐름 시연 경계와 자동 시뮬 회귀(MuJoCo OMX·Gazebo Pinky, 독립 시뮬 관측). [전문](../adr/D-927-harbor-first-flow-demo-seams-and-automated-sim.md) | Accepted (2026-10-30, 경계·자동화 결정; 구현·수용 별도) |

@@ -96,11 +96,29 @@ def _conditions(config: dict) -> dict:
         if not isinstance(values.get(name), str) or not values[name].strip():
             raise ValueError(f"operating_conditions.{name} is required")
     dimensions = values.get("object_dimensions_m")
-    if (not _number(values.get("payload_kg")) or values["payload_kg"] <= 0
+    if (not _number(values.get("payload_max_kg")) or values["payload_max_kg"] <= 0
             or not isinstance(dimensions, list) or len(dimensions) != 3
             or any(not _number(v) or v <= 0 for v in dimensions)):
-        raise ValueError("measured payload_kg and three positive object_dimensions_m are required")
+        raise ValueError("a verified payload_max_kg and three positive object_dimensions_m are required")
     return values
+
+
+def payload_check(config: dict, conditions: dict) -> tuple[dict | None, str | None]:
+    """This carry's payload against its bound (D-935): the smallest of the verified payload_max_kg, the arm's
+    auto.max_gross_kg and the object's own max_gross_kg. The payload is outside the task identity, so a carry
+    within the bound stays the reviewed task; an unknown payload is refused like an unknown object."""
+    import cell_params
+
+    p = config.get("_payload") or config.get("payload")  # _payload: set per carry from the catalogue; payload: declared
+    if (not isinstance(p, dict) or not _number(p.get("kg")) or p["kg"] <= 0
+            or not isinstance(p.get("source"), str) or not p["source"].strip()):
+        return None, "payload_unknown"
+    limits = [conditions["payload_max_kg"], cell_params.get(config.get("params"), "auto.max_gross_kg")]
+    if _number(p.get("max_gross_kg")) and p["max_gross_kg"] > 0:
+        limits.append(p["max_gross_kg"])
+    facts = {"kg": p["kg"], "source": p["source"], "bound_kg": min(limits),
+             **({"object": p["object"]} if isinstance(p.get("object"), str) else {})}
+    return facts, (None if p["kg"] <= facts["bound_kg"] else "payload_over_bound")
 
 
 def assess(config: dict, calibration: dict, library: dict, state: dict, *, now=None, sequence=SEQUENCE) -> dict:
@@ -134,6 +152,9 @@ def assess(config: dict, calibration: dict, library: dict, state: dict, *, now=N
                    conditions_sha256=conditions_sha, library_sha256=digest(library), client_code_sha256=_code_digest())
         out["task_sha256"] = digest({key: out[key] for key in (
             "scope", "runtime_sha256", "conditions_sha256", "library_sha256", "client_code_sha256", "operating_profile")})
+        out["payload"], over = payload_check(config, conditions)
+        if over:  # supervised trials too: a person at the switch does not make an unknown or heavy load safe
+            return {**out, "reason": over}
         if "_commissioning" in config:
             trial = config["_commissioning"]
             if (not isinstance(trial, dict) or set(trial) != {"person_at_switch"}

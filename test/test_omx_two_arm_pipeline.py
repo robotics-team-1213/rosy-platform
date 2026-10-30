@@ -136,7 +136,7 @@ class Bus:
         elif register == "Position_I_Gain":
             self.gains[motor]["i"] = value
 
-    def sync_read(self, register, motors=None, *, normalize=True):
+    def sync_read(self, register, motors=None, *, normalize=True, num_retry=0):
         assert register in ("Present_Position", "Goal_Position")
         source = self.present if register == "Present_Position" else self.goals
         values = {n: source[n] for n in (motors or NAMES)}
