@@ -60,3 +60,4 @@ deploy/hosts/common/host-state/** text eol=lf
 docs/validation/**/evidence/*batch*.txt text eol=lf
 tools/hooks/pre-push text eol=lf
 deploy/hosts/** text eol=lf
+learning/envs/isaac/models/*.npz binary
