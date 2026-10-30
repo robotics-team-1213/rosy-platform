@@ -249,10 +249,12 @@ def secret_scan(wt: Path, main_sha: str) -> None:
     if not (release / "secret_scan.py").is_file():
         return
     sys.path.insert(0, str(release))
+    sys.dont_write_bytecode, kept = True, sys.dont_write_bytecode  # no __pycache__ left in the landing worktree
     try:
         import secret_scan as scanner
     finally:
         sys.path.remove(str(release))
+        sys.dont_write_bytecode = kept
     changed = out(wt, "diff", "--name-only", "--diff-filter=d", main_sha, "HEAD").splitlines()
     findings = scanner.scan_files([wt / p for p in changed], root=wt, public_provenance=scanner.load_public_provenance(
         release / "public_provenance.json"))
