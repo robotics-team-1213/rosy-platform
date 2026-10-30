@@ -4241,3 +4241,9 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 변경: `compose.monitoring.yaml`·`Caddyfile.monitoring`을 후보 배포 파일 한 쌍으로 등록했다. 검증기는 manifest `monitoring`을 내고, 업데이트기는 overlay가 켜졌을 때만 `monitoring` 서비스를 후보 Fleet 이미지로 허용하며 drift 검사에 넣는다. 건강·롤백 관문에는 넣지 않는다. Fleet 이미지는 Monitoring 소스와 화면 묶음을 함께 싣고 Fleet의 PYTHONPATH는 바꾸지 않았다.
 - 증거: 원격 겨냥 시험 통과(NEW/KNOWN/FLAKY0). 관제 PC에서 실제 site.env 렌더링과 운영 프록시 이미지의 `caddy validate`를 overlay 켬·끔으로 확인했다.
 - gate 변화: 없음. 새 서명 후보·관제 PC 설정·실제 열람 수용은 남았다. 관제 PC 자동 업데이트는 기존 ARM-S overlay 거절이 먼저 풀려야 한다.
+
+## 2026-10-30 · uncommitted · 관제 PC Monitoring 설정 예시 (D-936)
+
+- 변경: `deploy/site/monitoring.yaml.example`을 더했다. Fleet, host-state, 관제·AI·모델 PC guard 원천과 overlay의 키 이름·마운트 경로를 그대로 쓴다. 로봇 이름은 공개 예시에 넣지 않고 추가 방법만 적었다.
+- 증거: `operations/monitoring/test/test_deployment.py`가 예시를 실제 설정 로더로 읽고, 키 이름·CA·마운트가 overlay와 같은지 확인한다(원격 결과는 커밋 후 기록).
+- gate 변화: 없음. 관제 PC 설정·키 준비는 ARM-S 전환 뒤에 한다.

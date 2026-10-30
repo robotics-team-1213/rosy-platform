@@ -2219,6 +2219,7 @@ Vision의 카메라 매핑과 secret mount는 그대로다. 별도 미서명 Com
 | `ROSY_SITE_MONITORING_CONFIG` | [Monitoring 설정](../../operations/monitoring/README.md) YAML. root 소유, 그룹 10001, 0640 |
 | `ROSY_SITE_MONITORING_SECRETS_DIR` | `site_read`(열람자 조회 키), `fleet_upstream`(Fleet viewer 키). root 소유 0700/0600 |
 
+[monitoring.yaml.example](monitoring.yaml.example)을 복사하고 Fleet 포트가 다르면 그것만 고친다.
 설정의 키 이름은 `MONITORING_SITE_READ`(reader `token_env`)와 `MONITORING_FLEET_UPSTREAM`(Fleet 원천 `token_env`)로 맞춘다.
 두 키는 서로 다른 32자 이상 ASCII 값이다. 등록할 원천은 다음이다.
 
