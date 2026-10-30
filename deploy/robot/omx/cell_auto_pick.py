@@ -583,8 +583,7 @@ def main(argv=None):
         cd.start(work / "decisions.jsonl", knowledge=config.get("knowledge"))
     import cell_preflight
 
-    dark = [f"{name}: {why}" for name, ok, why in cell_preflight.lights({c: cell.frame(c) for c in config["cameras"]},
-                                                                         config.get("params")) if not ok]
+    dark = cell_preflight.ready(cell.frame, config)
     if dark:  # nothing is seen in the dark: no observe, no motion
         print(json.dumps({"from": args.source, "to": args.dest, "result": "refused", "error": "; ".join(dark)}, indent=1))
         return 1
