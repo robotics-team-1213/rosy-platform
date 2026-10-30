@@ -139,6 +139,8 @@ class FleetConsole(TripAware):
         #: blocked obstacle in traffic, alarmed when they were moving.
         self._held: dict[str, dict] = {}
         self._goal_busy: set[str] = set()
+        #: 경로 확인부터 점유 기록까지는 한 미션씩 지난다 - 동시에 검사하면 서로의 점유를 못 봐 마주 오는 두 대가 함께 나간다.
+        self._traffic_lock = asyncio.Lock()
         #: 열려 있는 대형 세션. 한 사이트에 하나다 - 같은 로봇이 두 대형에 들어가면
         #: 어느 리더를 따라야 하는지 로봇 쪽에서 정할 방법이 없다.
         self._formation = None
@@ -475,62 +477,60 @@ class FleetConsole(TripAware):
         self._goals[robot_id] = {"x": x, "y": y, "yaw": yaw}
         self._queued.pop(robot_id, None)
 
-        try:
-            route = await self._route_of(robot_id)
-            self.goal_leases.check_stop(robot_id, stop)
-            blocker = traffic.blocking_robot(route, self._claims, self._clearance_m, skip=(robot_id,))
-            if blocker is not None:
-                stop = (stop[0], stop[1] + 1)  # Only this traffic cancel may advance the token.
-                cancel_receipt = await self.goal_leases.cancel(robot_id, self._client(robot_id))
+        async with self._traffic_lock:
+            try:
+                route = await self._route_of(robot_id)
                 self.goal_leases.check_stop(robot_id, stop)
-                if not self._cancel_confirmed(cancel_receipt):
-                    raise RuntimeError("navigation goal cancellation was not confirmed")
-                self._goals.pop(robot_id, None)
-                self._claims.pop(robot_id, None)
-                decision = goal_admission.route_conflict_hold(blocker, route)
-                # 선착 순서(누가 공유 충돌 지점에 먼저 도달하나)는 이 경로 위의 남은
-                # 거리로 재 단다. 취소하면 로봇이 경로를 잃으므로 미션에 묻어 둔다.
-                self._queued[robot_id] = goal_admission.mission_of(
-                    decision, x, y, yaw, task_id=task_id, attempt_id=attempt_id,
-                    attempt_seq=attempt_seq)
-                return goal_admission.response_of(decision)
+                blocker = traffic.blocking_robot(route, self._claims, self._clearance_m, skip=(robot_id,))
+                if blocker is not None:
+                    stop = (stop[0], stop[1] + 1)  # Only this traffic cancel may advance the token.
+                    cancel_receipt = await self.goal_leases.cancel(robot_id, self._client(robot_id))
+                    self.goal_leases.check_stop(robot_id, stop)
+                    if not self._cancel_confirmed(cancel_receipt):
+                        raise RuntimeError("navigation goal cancellation was not confirmed")
+                    self._goals.pop(robot_id, None)
+                    self._claims.pop(robot_id, None)
+                    decision = goal_admission.route_conflict_hold(blocker, route)
+                    # 선착 순서(누가 공유 충돌 지점에 먼저 도달하나)는 이 경로 위의 남은
+                    # 거리로 재 단다. 취소하면 로봇이 경로를 잃으므로 미션에 묻어 둔다.
+                    self._queued[robot_id] = goal_admission.mission_of(
+                        decision, x, y, yaw, task_id=task_id, attempt_id=attempt_id,
+                        attempt_seq=attempt_seq)
+                    return goal_admission.response_of(decision)
 
-            await self._observe()
-            self.goal_leases.check_stop(robot_id, stop)
-            intended = self._intended_route(robot_id, route, x, y)
-            untrusted = next((rid for rid in self._order
-                              if rid != robot_id and self._untrusted_blocks(rid, intended)), None)
-            if untrusted is not None:
-                # D-395 P2-2: an unlocalized robot is a wide obstacle, never sent to a bay.
-                stop = (stop[0], stop[1] + 1)
-                cancel_receipt = await self.goal_leases.cancel(robot_id, self._client(robot_id))
+                await self._observe()
                 self.goal_leases.check_stop(robot_id, stop)
-                if not self._cancel_confirmed(cancel_receipt):
-                    raise RuntimeError("navigation goal cancellation was not confirmed")
-                self._goals.pop(robot_id, None)
-                self._claims.pop(robot_id, None)
-                decision = goal_admission.untrusted_blocker_hold(untrusted, intended)
-                self._queued[robot_id] = goal_admission.mission_of(
-                    decision, x, y, yaw, task_id=task_id, attempt_id=attempt_id,
-                    attempt_seq=attempt_seq)
-                return goal_admission.response_of(decision)
-            grid = bays.Grid.from_payload(await self.map())
-            self.goal_leases.check_stop(robot_id, stop)
-            standing = self._standing_in_the_way(robot_id, intended, grid, (x, y))
-            if standing:
-                return await self._make_room(
-                    robot_id, x, y, yaw, intended, standing,
-                    task_id=task_id, attempt_id=attempt_id, attempt_seq=attempt_seq,
-                )
-            self._claims[robot_id] = route
-            return result
-        except (HubError, RobotApiError) as exc:
-            raise RuntimeError("traffic refusal after mover dispatch; result remains unknown") from exc
+                intended = self._intended_route(robot_id, route, x, y)
+                untrusted = next((rid for rid in self._order
+                                  if rid != robot_id and self._untrusted_blocks(rid, intended)), None)
+                if untrusted is not None:
+                    # D-395 P2-2: an unlocalized robot is a wide obstacle, never sent to a bay.
+                    stop = (stop[0], stop[1] + 1)
+                    cancel_receipt = await self.goal_leases.cancel(robot_id, self._client(robot_id))
+                    self.goal_leases.check_stop(robot_id, stop)
+                    if not self._cancel_confirmed(cancel_receipt):
+                        raise RuntimeError("navigation goal cancellation was not confirmed")
+                    self._goals.pop(robot_id, None)
+                    self._claims.pop(robot_id, None)
+                    decision = goal_admission.untrusted_blocker_hold(untrusted, intended)
+                    self._queued[robot_id] = goal_admission.mission_of(
+                        decision, x, y, yaw, task_id=task_id, attempt_id=attempt_id,
+                        attempt_seq=attempt_seq)
+                    return goal_admission.response_of(decision)
+                grid = bays.Grid.from_payload(await self.map())
+                self.goal_leases.check_stop(robot_id, stop)
+                standing = self._standing_in_the_way(robot_id, intended, grid, (x, y))
+                if standing:
+                    return await self._make_room(
+                        robot_id, x, y, yaw, intended, standing,
+                        task_id=task_id, attempt_id=attempt_id, attempt_seq=attempt_seq,
+                    )
+                self._claims[robot_id] = route
+                return result
+            except (HubError, RobotApiError) as exc:
+                raise RuntimeError("traffic refusal after mover dispatch; result remains unknown") from exc
 
-    @staticmethod
-    def _cancel_confirmed(receipt: Any) -> bool:
-        return (isinstance(receipt, dict)
-                and (receipt.get("canceled") is True or receipt.get("navigation") == "CANCELED"))
+    _cancel_confirmed = staticmethod(goal_admission.cancel_confirmed)
 
     def _intended_route(self, mover: str, route: Sequence, x: float, y: float) -> list:
         """계획 경로. 아직 없으면 지금 자리에서 목표까지 직선으로 대신한다.
@@ -618,9 +618,9 @@ class FleetConsole(TripAware):
         yielded, no_space = [], []
         for robot_id in standing:
             pose = self._pose_of(robot_id)
-            # 거리장 계산은 순수 계산이고 맵이 커지면 몇백 ms 가 된다(40x40 m, 20 m 경로에서
-            # 0.38 s). 이벤트 루프에서 돌리면 그동안 다른 로봇의 폴링까지 같이 멈춘다.
-            bay = None if pose is None or self.trip_busy(robot_id) else await asyncio.to_thread(
+            # 거리장 계산은 맵이 크면 몇백 ms(40x40 m, 20 m 경로에서 0.38 s)라 이벤트 루프 밖에서 돈다.
+            # 제 목표를 받고 교통 판정을 기다리는 로봇은 비켜세울 수 없다(_send_to_bay 거절) - 자리 없음으로 기다린다.
+            bay = None if pose is None or self.trip_busy(robot_id) or robot_id in self._goal_busy else await asyncio.to_thread(
                 bays.best_bay, grid, route, pose, keep_out_m=self._yield_keep_out_m)
             self.goal_leases.check_stop(mover, stop)
             if bay is None:
