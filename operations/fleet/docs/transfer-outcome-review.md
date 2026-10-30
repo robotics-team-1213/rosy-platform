@@ -139,6 +139,19 @@ origin은 실제 구성값으로 바꾼다. HTTPS는 기본 인증서 검증을 
 
 현재 `g2_observer.py`의 물체 pose·집게 위치·simulation clock·수신 wall time만으로는 이 시료를 만들 수 없다. 기존 수신 시각을 원본 UTC capture 시각으로 바꾸거나 현재 action ID를 과거 프레임에 붙이지 않는다. 실제 관측 생산자는 필요한 링크별 경계·속도, source 시각과 owner journal/session·보정·frame 결속을 제공해야 한다. 이 클라이언트의 시험은 그 생산자 설치나 실제 Gazebo·실물 관측 수용을 증명하지 않는다.
 
+## 시뮬 정상 단계 관측자 (D-927 결정 3)
+
+`tools/sim/transfer_observer.py`는 같은 독립 observer 자격으로 `observation-context`를 읽고, 문맥의 phase(PRE_DISPATCH·POST_ACTION, D-930 뒤에는 RECHECK)마다 시료 두 개를 제출한다. 승인·Action 제출은 하지 않는다.
+
+- 입력: 시뮬 owner가 쓰는 상태 파일(`rosy.sim-transfer-state/1`: owner별 측정 관절·관절 속도·sequence·capture 시각·그리퍼, 물체 자세·시각)과 팔 기준 자세 파일.
+- 링크 경계는 측정 관절의 URDF FK로 각 메시 상자를 world로 옮긴 것이고, 링크 속도는 관절 속도로 FK를 미분한 값이다. 끝점은 `omx_adapter` TCP FK와 같다(시험으로 고정).
+- 상태가 not_before 뒤로, 두 번째가 첫 번째보다 min_separation 뒤로 새로 바뀔 때까지 기다린다. 제출 전에 문맥을 다시 대조하고, 거절되면 다음 조회에서 새 시료로 다시 낸다. 접수 여부는 문맥 변화로 판단한다.
+- 결과는 시뮬 관측이며 물리 근거가 아니다. 팔 기준 자세 파일은 S4 설치 profile이 생길 때까지의 지름길이다.
+
+```text
+ROSY_TRANSFER_OBSERVER_TOKEN=<configured> python tools/sim/transfer_observer.py --origin http://127.0.0.1:<port>     --assets learning/envs/isaac/assets/open_manipulator_description --bases <scratch>/bases.json --state <scratch>/state.json run
+```
+
 ## 다음 구현과 검증
 
 - 파지·들기·운반 단계의 관측을 결속한 뒤 헛잡음·낙하를 구분한다.

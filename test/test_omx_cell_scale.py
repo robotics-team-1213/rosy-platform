@@ -80,6 +80,7 @@ def test_enrol_writes_the_catalogue_and_conditions_and_refuses_an_unknown_object
     assert entry["mass_kg"] == 0.04823 and entry["mass_measured"]["source"] == "cell_scale"
     assert json.loads(cat.read_text())["objects"][0]["mass_kg"] == 0.04823
     cond = json.loads(cell.read_text())["operating_conditions"]
-    assert cond["payload_kg"] == 0.04823 and cond["object_dimensions_m"] == [0.06, 0.03, 0.03] and cond["installation_revision"] == "x"
+    assert cond["payload_kg"] is None and cond["object_dimensions_m"] == [0.06, 0.03, 0.03] and cond["installation_revision"] == "x"
+    assert cond["object_revision"] == "container-2"  # the reviewed bound (payload_max_kg) is never set from a reading
     with pytest.raises(SystemExit):
         sc.enrol(cat, "mystery-box", 0.01, "10.00 g")
