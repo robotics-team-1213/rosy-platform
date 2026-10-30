@@ -4,6 +4,8 @@
 export const PRINT_SHEETS = [
   {id: 'print-markers', kind: 'gripper-markers', query: 'ids=0,1&sizes_mm=20,25', label: '그리퍼 마커'},
   {id: 'print-checkerboard', kind: 'checkerboard', query: 'cols=8&rows=6&square_mm=15', label: '체커보드'},
+  {id: 'print-charuco', kind: 'charuco', query: '', label: 'ChArUco 보정판'},
+  {id: 'print-surface-markers', kind: 'surface-markers', query: 'ids=35,36,37,38,39,40,41,42,43,44,45,46,47,48', label: '면 마커'},
 ];
 
 export function sheetPath(sheet) {
