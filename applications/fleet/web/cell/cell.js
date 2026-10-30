@@ -10,6 +10,7 @@ import {createCellObservation} from '/console/assets/cell-observation.js';
 import {bindScreens} from '/console/assets/subnav-screens.js';
 import '/console/assets/file-picker.js';
 import {bindPrintSheets} from '/console/assets/cell-print-sheets.js';
+import {showObjectCatalog} from '/console/assets/cell-object-catalog.js';
 
 const $ = id => document.getElementById(id);
 // D-926 3: each Cell step is its own screen; the first one shows the live cell, its calibration printouts and the saved documents.
@@ -362,7 +363,7 @@ function connect(credentialChange = false) {
   return action(async () => {
   const session = await api('/api/fleet/session'); role = session.role;
   showSession(session, {credentialChange, focusOrigin});
-  observations.clear(); void observations.refresh();
+  observations.clear(); void observations.refresh(); void showObjectCatalog({request, $});
   loginForm.refresh(false);
   await list();
   if (channelRequested) {
