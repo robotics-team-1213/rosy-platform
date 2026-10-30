@@ -125,3 +125,40 @@ def test_corrector_command_is_the_tcp_plus_the_predicted_correction():
     # held_scene puts the TCP at the box centre, unlike recorded holds: the model extrapolates (~25 cm) and
     # each correction is clipped to 5 mm; the measured release gate still decides opening.
     assert np.abs(raw).max() > .005 and np.abs(np.subtract(command, sample['tcps'][0])).max() <= .005 + 1e-12
+
+
+def test_exploring_policy_adds_the_residual_and_records_its_noise():
+    fixture = f.container_fixture(layers=3, case='nominal-bc-v0')
+    model = rc.load_corrector(fixture)
+    residual = rc.Residual.zero()
+    sample = held_scene(fixture, 1)
+    command, noise = rc.policy_command(model, residual, sample, 1, fixture, 2, np.random.default_rng(0), sigma=.0005)
+    greedy = rc.corrector_command(model, sample, 1, fixture, 2, max_step_m=1.)
+    tcp = np.array(sample['tcps'][0])
+    assert np.subtract(command, tcp) == pytest.approx(np.clip(np.subtract(greedy, tcp) + np.multiply(noise, .0005),
+                                                               -.005, .005))
+    again = rc.policy_command(model, residual, sample, 1, fixture, 2, np.random.default_rng(0), sigma=.0005)
+    assert again == (command, noise)
+
+
+def test_reinforce_moves_the_residual_toward_better_rewarded_noise(tmp_path):
+    rng = np.random.default_rng(0)
+    obs = rng.normal(size=(400, rc.FEATURES)).tolist()
+    noise = rng.normal(size=(400, 3)).tolist()
+    # Reward is higher when the x noise was positive: the update should raise the mean x correction.
+    rewards = [n[0] for n in noise]
+    residual = rc.Residual.zero()
+    updated = rc.Residual.update(residual, obs, noise, rewards, sigma=.0005, lr=.0002)
+    assert updated.predict(np.zeros((1, rc.FEATURES)))[0][0] > 0
+    assert abs(updated.predict(np.zeros((1, rc.FEATURES)))[0][1]) < updated.predict(np.zeros((1, rc.FEATURES)))[0][0]
+    digest = updated.save(tmp_path / 'residual.npz')
+    assert np.allclose(rc.Residual.load(tmp_path / 'residual.npz', digest).weights, updated.weights)
+
+
+def test_release_reward_prefers_small_error_band_gaps_and_stability():
+    good = dict(position_error_mm=.3, stable=True, gaps_mm=[3.5])
+    worse = dict(position_error_mm=1.2, stable=True, gaps_mm=[3.5])
+    out_of_band = dict(position_error_mm=.3, stable=True, gaps_mm=[1.5])
+    unstable = dict(position_error_mm=.3, stable=False, gaps_mm=[3.5])
+    reward = rc.release_reward
+    assert reward(good) > reward(worse) > reward(out_of_band) and reward(good) > reward(unstable)
