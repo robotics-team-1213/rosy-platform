@@ -159,13 +159,12 @@ def load_residual(fixture):
 
 
 def rl_rows(report):
-    """(observation, noise, reward) for every explored decision; the reward is its layer's settled outcome."""
+    """(observation, noise, reward) for every explored decision: its layer's settled reward, or BLOCKED_REWARD."""
     outcomes = {r['index']: r['outcome'] for r in release_demonstrations(report)}
     rows = []
     for index, layer in enumerate(report['trials'][0].get('layers', [])):
-        for decision in layer.get('release_exploration', []):
-            if index in outcomes:
-                rows.append((decision['observation'], decision['noise'], release_reward(outcomes[index])))
+        reward = release_reward(outcomes[index]) if index in outcomes else BLOCKED_REWARD
+        rows.extend((d['observation'], d['noise'], reward) for d in layer.get('release_exploration', []))
     return rows
 
 
@@ -241,6 +240,9 @@ def policy_command(model, residual, sample, index, fixture, iteration, rng, *, s
     return (tcp + np.clip(mean + sigma*noise, -max_step_m, max_step_m)).tolist(), noise.tolist()
 
 
+BLOCKED_REWARD = -20.  # an explored release that never settled (opening blocked or the run stopped there)
+
+
 def release_reward(outcome):
     """Higher is better: settled position error (mm), distance outside the 2-5 mm gap band (x3), instability (-10)."""
     gaps = outcome.get('gaps_mm') or []
@@ -295,6 +297,8 @@ if __name__ == '__main__':
     elif len(sys.argv) >= 6 and sys.argv[1] == 'rl-update':
         # rl-update OUT.npz RESIDUAL.npz RESIDUAL_SHA256 REPORT.json ...
         rows = [row for path in sys.argv[5:] for row in rl_rows(json.loads(Path(path).read_text(encoding='utf-8')))]
+        if not rows:
+            sys.exit('rl-update: no explored decision has a settled outcome in these reports; nothing to learn')
         before = Residual.load(sys.argv[3], sys.argv[4])
         after = Residual.update(before, *zip(*rows), lr=float(os.environ.get('RL_LR', '.0002')))
         print(json.dumps(dict(decisions=len(rows), mean_reward=float(np.mean([r[2] for r in rows])),

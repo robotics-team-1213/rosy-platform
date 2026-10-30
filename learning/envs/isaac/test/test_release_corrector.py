@@ -167,7 +167,7 @@ def test_release_reward_prefers_small_error_band_gaps_and_stability():
 
 def test_rl_rows_pair_each_explored_decision_with_its_release_reward():
     fixture = f.container_fixture(layers=3, case='nominal-bc-v0-rl0')
-    assert fixture['release_exploration_sigma_m'] == .0005
+    assert fixture['release_exploration_sigma_m'] == .0002
     assert rc.load_residual(fixture).weights.shape == (rc.FEATURES+1, 3) and not rc.load_residual(fixture).weights.any()
     report = released_report(fixture)
     layer = report['trials'][0]['layers'][1]
@@ -191,3 +191,12 @@ def test_estimate_cases_accept_a_tcp_within_the_final_tolerance_but_keep_the_saf
     sample['tcps'][0][0] += .001
     sample['boxes'][0]['position'][0] += .001
     assert not f.cube_release_ready(0, sample, .05, fixture=fixture)  # 2 mm stays blocked
+
+
+def test_a_blocked_or_unsettled_explored_release_still_teaches_with_a_penalty():
+    fixture = f.container_fixture(layers=3, case='nominal-bc-v0-rl0')
+    decision = dict(iteration=1, observation=[0.]*rc.FEATURES, noise=[0., 1., 0.])
+    report = dict(fixture=fixture, trials=[dict(layers=[dict(release_exploration=[decision])],
+                                                error='cube release correction did not converge; opening blocked')])
+    assert rc.rl_rows(report) == [([0.]*rc.FEATURES, [0., 1., 0.], rc.BLOCKED_REWARD)]
+    assert rc.BLOCKED_REWARD < rc.release_reward(dict(position_error_mm=1.5, stable=False, gaps_mm=[1.]))

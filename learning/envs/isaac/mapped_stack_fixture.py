@@ -74,7 +74,9 @@ EVALUATION_CASES = {  # nominal geometry; the release feedback sees a 2-5 mm hel
                               sha256='85713c8ec54190e53729d6df73d5d59f3e6e7d715058bfb7698b3793042b9294')}
 # RL iterations add a pinned residual and Gaussian exploration (metres) to the BC corrector.
 RL_RESIDUALS = {'nominal-bc-v0-rl0': dict(file='release-residual-rl0.npz',
-    sha256='c44398fffbefca6bba7ec6e7c7d16895dcab272c6394d4d9e16ea00f66ea0f72', sigma_m=.0005)}
+    sha256='c44398fffbefca6bba7ec6e7c7d16895dcab272c6394d4d9e16ea00f66ea0f72', sigma_m=.0002)}
+# 0.5 mm exploration on top of the v0 model's ~1 mm residual error pushed the first release past the 1.5 mm
+# convergence tolerance (run 3d52), so no decision was recorded.
 
 
 def container_fixture(*, layers, case):
