@@ -13112,3 +13112,17 @@ osy-d395-s1d\`.
 - 증거: publish_main의 게시 SHA 선택은 해당 SHA의 green FULL 착지 기록을 요구한다(기존 최신 full 기록 c44859256f에는 패키징 수정이 없다). 이 착지가 만드는 full 기록의 base는 패키징 커밋(8dcc1f51ad)을 포함한 main이다.
 - gate 변화: 없음.
 - CE: 해당 없음 — 게시 절차 기록이다.
+
+## 2026-10-30 · uncommitted · docs(adr): D-931..D-933 arm S measured checks, one field revision, cell coordinate frame
+- 변경: `docs/adr/D-931`·`D-932`·`D-933` 추가, ADR Log 행 3개, `tools/harness/adr_gaps.txt`에 다른 브랜치가 예약한 D-929·D-930 대기 선언
+- 증거: `python tools/harness/rosy_harness.py lint` 0 errors. D-933 근거의 OpenCV 4.12 ChArUco API와 1.1 px/mm 합성 검출 20/20은 Fleet PC에서 확인(실물 인쇄물 검출은 아직)
+- gate 변화: 없음
+- 결정: D-931 Accepted, D-932 Accepted, D-933 Proposed
+- 교훈: 기존 사례 8·9(`shared-arm-cell-hand-back-checks`)를 근거로 인용, 새 교훈 없음
+
+## 2026-10-30 · uncommitted · omx: cell scale reader and D-934 object mass
+- 변경: `deploy/robot/omx/cell_scale.py`(7-세그먼트 저울 판독, 안정값, 카탈로그 `mass_kg` 기록, `--conditions`), `scale.*` 파라미터 3개, `test/test_omx_cell_scale.py`, `docs/adr/D-934`
+- 증거: 원격 `test_omx_cell_scale.py`·`test_omx_cell_params.py` 27 passed. 합성 표시창 숫자 높이 9~40 px, 잡음 σ 4에서 20/20. 실제 저울 판독은 아직
+- gate 변화: 없음
+- 결정: D-934 Proposed
+- 교훈: 얇은 획은 세그먼트 칸 평균으로 판정하면 크기가 커질수록 실패(18 px 0/20), 길이 덮임 비율로 바꿔 해결 — 코드 주석에 둠
