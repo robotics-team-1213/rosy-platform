@@ -560,6 +560,8 @@ def test_host_alone_suites_go_to_the_first_configured_host_and_fall_back_without
     assert rp.workers(["ai"], [gz], {}, order) == [("ai", "any")]  # model PC not placed: as before
     assert rp.workers(["site", "ai"], [gz], {"site": {"site": True}}, ["site", "ai"]) == [("ai", "any")]
     assert wq.guard(None, "main" + wq.SKIP_ALONE, gz) is not None
+    work = wq.Work([0, 1, 2])  # largest first: 2 is the smallest, a light host's pick unless it is host-alone
+    assert work.take_small(lambda i: i != 2) == 1 and work.take_small() == 2
 
 
 def test_browser_lanes_run_beside_main_capped_per_host_and_an_alone_chunk_runs_without_them(monkeypatch, tmp_path):

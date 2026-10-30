@@ -153,12 +153,16 @@ class Work:
                     return i
         return None
 
-    def take_small(self) -> int | None:
-        """The last queued index (the smallest, largest-first order): a light host's pick."""
+    def take_small(self, wanted=None) -> int | None:
+        """The last queued index (the smallest, largest-first order) wanted(index) accepts: a light host's pick."""
         if self.stop.is_set():
             return None
         with self._queue:
-            return self.todo.pop() if self.todo else None
+            for i in reversed(self.todo):
+                if wanted is None or wanted(i):
+                    self.todo.remove(i)
+                    return i
+        return None
 
     def give_back(self, i: int) -> None:
         """i first in line again: its host failed mid-run, so another host (or run()'s fallback) runs it."""
