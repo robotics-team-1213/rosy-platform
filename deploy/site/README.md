@@ -2206,6 +2206,40 @@ Vision의 카메라 매핑과 secret mount는 그대로다. 별도 미서명 Com
 유지한다. 기능 도입 전 candidate로 되돌릴 때는 백업된 site.env에서도 오버레이가 꺼져 있어야 한다.
 실제 장비 관측과 브라우저 미리보기 확인은 별도 검증 기록으로 남긴다.
 
+## ROSY Monitoring (D-936)
+
+관제 PC의 시스템 상태 화면은 선택 오버레이 `compose.monitoring.yaml`로 켠다.
+서명된 Fleet 이미지를 쓰지만 Fleet과 다른 프로세스·상태 볼륨·키로 돈다. Fleet이 멈춰도 계속 조회되고,
+프록시는 이 서비스를 기다리지 않는다. 화면은 읽기 전용이며 재시작·재부팅은 Fleet 설치 화면의 운영자 제어로 한다.
+
+사이트 관리자는 `ROSY_SITE_CONFIG_DIR` 밖에 아래 입력을 준비한다. 예를 들어 `/etc/rosy/monitoring/` 아래에 둔다.
+
+| 입력 | 내용 |
+|---|---|
+| `ROSY_SITE_MONITORING_CONFIG` | [Monitoring 설정](../../operations/monitoring/README.md) YAML. root 소유, 그룹 10001, 0640 |
+| `ROSY_SITE_MONITORING_SECRETS_DIR` | `site_read`(열람자 조회 키), `fleet_upstream`(Fleet viewer 키). root 소유 0700/0600 |
+
+설정의 키 이름은 `MONITORING_SITE_READ`(reader `token_env`)와 `MONITORING_FLEET_UPSTREAM`(Fleet 원천 `token_env`)로 맞춘다.
+두 키는 서로 다른 32자 이상 ASCII 값이다. 등록할 원천은 다음이다.
+
+- Fleet: `kind: fleet`, `url: https://fleet:<ROSY_FLEET_PORT>`, 최상위 `ca_bundle: /run/secrets/site_ca`
+- 호스트 상태: `kind: host_state`, `path: /var/lib/rosy-host-state/status.json`
+- PC·로봇 guard: `kind: host_guard`, `path: /var/lib/rosy-host-guard/status.json`, `selector`는 `site`·`ai`·`model` 등 guard 역할 이름
+
+Fleet은 `fleet_upstream` 키를 viewer로 등록해야 읽기를 허락한다. 키는 stdin으로만 넣는다.
+
+```sh
+python3 /opt/rosy/candidate/deploy/site/site_users.py add <site-users.yaml> --principal monitoring --role viewer --token-stdin < <fleet_upstream 파일>
+```
+
+`/etc/rosy/site/site.env`의 두 경로를 채우고 `ROSY_SITE_PAIRING_COMPOSE`에
+`-f /opt/rosy/candidate/deploy/site/compose.monitoring.yaml`을 더한다. 순서는 pairing → omx → workcell → monitoring → Account다.
+열람은 Fleet 화면의 "시스템 상태" 링크 또는 `https://<site>/monitoring/`에서 `site_read` 키를 넣는다.
+서비스 확인은 `https://<site>/monitoring-health`다. 이 응답은 수집기 자신의 생존만 뜻한다.
+
+이 기능에는 overlay 한 쌍을 포함한 새 서명 candidate와 이를 아는 host verifier·updater가 필요하다.
+기능 도입 전 candidate로 되돌릴 때는 백업된 site.env에서도 오버레이가 꺼져 있어야 한다.
+
 ## 시뮬레이션은 돌리지 않는다 (D-571)
 
 관제 PC는 운영 전용이다. 사용자 결정(2026-10-09, "관제 PC는 시뮬레이션에서 제외")에 따라 Gazebo나 다른 시뮬레이션을 이 PC에서 돌리지 않고, ROS나 시뮬 이미지도 설치하지 않는다. `tools/remote/remote_sim.py`는 이 PC를 후보에 넣지 않고 `--host site`를 거절하며, `~/rosy-jobs/site` 표시가 있는 호스트(D-568 3항)도 쓰지 않는다. 호스트 pytest는 D-568대로 맨 뒤 순서로 받는다. 시뮬레이션은 모델 PC와, 소유자가 동의한 뒤의 AI PC에서 돈다.

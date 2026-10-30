@@ -124,8 +124,9 @@ class FakeHost:
     """systemctl + docker; the running tag follows site.env at each restart."""
 
     def __init__(self, paths: upd.Paths, *, unit: str = UNIT, healthy_tags=None,
-                 config_image=None):
+                 config_image=None, monitoring_image=None):
         self.paths = paths
+        self.monitoring_image = monitoring_image
         self.unit = unit
         self.healthy_tags = healthy_tags  # None: every tag is healthy
         self.config_image = config_image
@@ -152,6 +153,8 @@ class FakeHost:
                 services = {s: {"image": f"rosy-site-{s}:{tag}"} for s in upd.SERVICES}
                 if self.config_image:
                     services["fleet"]["image"] = self.config_image
+                if "compose.monitoring.yaml" in upd.read_env(self.paths.site_env).get("ROSY_SITE_PAIRING_COMPOSE", ""):
+                    services["monitoring"] = {"image": self.monitoring_image or f"rosy-site-fleet:{tag}"}
                 return self._ok(json.dumps({"services": services}))
             if "ps" in args:
                 healthy = self.healthy_tags is None or self.running in self.healthy_tags
@@ -189,6 +192,7 @@ def _verifier(calls):
         manifest.setdefault('account_https', True)
         manifest.setdefault('omx', True)
         manifest.setdefault('workcell', True)
+        manifest.setdefault('monitoring', True)
         manifest['verified_images'] = list(upd.SERVICES)
         manifest['accepted_image_ids'] = {s: [_image_id(manifest['source_commit'], s)] for s in upd.SERVICES}
         return manifest
@@ -594,6 +598,57 @@ def test_signed_workcell_overlay_composes_with_existing_optional_overlays(host, 
         stream.write(f"ROSY_SITE_PAIRING_COMPOSE={overlay}\n")
     releases, blobs = _world((NEW, "2026-10-04T02:00:00Z"))
     assert _updater(host, FakeHttp(releases, blobs), FakeHost(host.paths)).run() == upd.EXIT_OK
+
+
+@pytest.mark.parametrize("workcell", [False, True])
+@pytest.mark.parametrize("account", [False, True])
+def test_signed_monitoring_overlay_runs_only_the_candidate_fleet_image(host, workcell, account):
+    names = ["pairing", "omx"] + (["workcell"] if workcell else []) + ["monitoring"]
+    names += ["account"] if account else []
+    overlay = " ".join(f"-f /opt/rosy/candidate/deploy/site/compose.{name}.yaml" for name in names)
+    with host.paths.site_env.open("a", encoding="utf-8") as stream:
+        stream.write(f"ROSY_SITE_PAIRING_COMPOSE={overlay}
+")
+    releases, blobs = _world((NEW, "2026-10-04T02:00:00Z"))
+    assert _updater(host, FakeHttp(releases, blobs), FakeHost(host.paths)).run() == upd.EXIT_OK
+
+
+@pytest.mark.parametrize("image", ["rosy-site-vision:{tag}", "python:3.12"])
+def test_monitoring_overlay_cannot_pin_another_image(host, image):
+    with host.paths.site_env.open("a", encoding="utf-8") as stream:
+        stream.write("ROSY_SITE_PAIRING_COMPOSE=-f /opt/rosy/candidate/deploy/site/compose.monitoring.yaml
+")
+    fake = FakeHost(host.paths, monitoring_image=image.format(tag=NEW))
+    env = upd.read_env(host.paths.site_env)
+
+    def compose(env, *args, tag=None, **kwargs):
+        return fake(["docker", "compose", *args], env={"ROSY_SITE_IMAGE_TAG": tag})
+    with pytest.raises(upd.Refused, match="Compose resolves monitoring"):
+        upd.check_overrides(env, NEW, fake, compose)
+
+
+def test_monitoring_service_without_its_overlay_is_refused(host):
+    fake = FakeHost(host.paths)
+    env = upd.read_env(host.paths.site_env)
+
+    def compose(env, *args, tag=None, **kwargs):
+        out = json.loads(fake(["docker", "compose", *args], env={"ROSY_SITE_IMAGE_TAG": tag}).stdout)
+        out["services"]["monitoring"] = {"image": f"rosy-site-fleet:{tag}"}
+        return SimpleNamespace(stdout=json.dumps(out))
+    with pytest.raises(upd.Refused, match="service set differs"):
+        upd.check_overrides(env, NEW, fake, compose)
+
+
+@pytest.mark.parametrize("loaded", [False, True])
+def test_legacy_candidate_cannot_enable_unsigned_monitoring_overlay(host, loaded):
+    old = host.paths.candidates / OLD
+    (old / "release.json").write_text(json.dumps({"source_commit": OLD, "monitoring": False}))
+    (old / "deploy/site/compose.monitoring.yaml").write_text("services: {}
+")
+    updater = _updater(host, FakeHttp([], {}), FakeHost(host.paths))
+    env = {"ROSY_SITE_PAIRING_COMPOSE": "-f /opt/rosy/candidate/deploy/site/compose.monitoring.yaml"}
+    with pytest.raises(upd.Rejected, match="not covered by this signed candidate"):
+        updater._verify(old, loaded=loaded, env=env)
 
 
 @pytest.mark.parametrize("loaded", [False, True])
