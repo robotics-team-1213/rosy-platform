@@ -67,6 +67,17 @@ done
 [ -n "${said:-}" ] && echo "[remote-pytest] host room after waiting"
 exec 9>&-"""
 
+# A live Isaac run (remote_isaac HOLD writes ~/rosy-jobs/isaac-<run>.resv "<until> gpu 6 8") owns the GPU:
+# test venvs holding CUDA beside it made its GPU check fail (runs 39be, a4e9, 2026-10-30). Tests run on CI
+# without a GPU, so hiding CUDA only skips GPU-only cases on this host for this job.
+ISAAC_GPU_GUARD = r"""for f in ~/rosy-jobs/isaac-*.resv; do
+  [ -e "$f" ] || continue; read -r t k _ < "$f" || true
+  if [ "$k" = gpu ] && [[ $t =~ ^[0-9]+$ ]] && [ "$t" -gt "$(date +%s)" ]; then
+    export CUDA_VISIBLE_DEVICES=; echo "[remote-pytest] Isaac holds the GPU: this job runs without CUDA"; break
+  fi
+done
+"""
+
 # $1 run, $2 deps, $3 CPUQuota ('' = none), $4 job k, $5 timeout s, then [ROSY_*=value ...] pytest args.
 # The lock pid is this shell's: it lives until pytest ends (the trap keeps bash from exec'ing).
 JOB = r"""R=~/rosy-test; V=$R/venvs/$2; CPU=$3; D=$R/runs/$1.jobs; K=$4; T=$5; L=~/rosy-jobs/$1.$4.lock
@@ -86,7 +97,7 @@ while [ $# -gt 0 ] && [[ $1 =~ ^ROSY_[A-Z0-9_]*= ]]; do export "$1"; shift; done
 C=${ROSY_JOB_CORES:-2}; M=${ROSY_JOB_MEM_GB:-6}; G=${ROSY_JOB_RESERVE_GB:-$M}; RC=${ROSY_JOB_RESERVE_CORES:-$C}
 [[ $C$M$G$RC =~ ^[0-9]+$ ]] || { echo "[remote-pytest] ROSY_JOB_CORES/_MEM_GB/_RESERVE_* must be whole numbers"; exit 2; }
 X=pytest; [ "${ROSY_RUN_BROWSER_TESTS:-}" = 1 ] && X=browser  # PROBE counts browser locks per host
-""" + ADMIT + r"""
+""" + ADMIT + "\n" + ISAAC_GPU_GUARD + r"""
 # Browser jobs: Chromium for the venv's playwright into the shared ~/.cache/ms-playwright (a no-op when present).
 [ "${ROSY_RUN_BROWSER_TESTS:-}" = 1 ] && { timeout 900 nice -n 15 "$V/bin/python" -m playwright install chromium \
   > /dev/null || echo "[remote-pytest] playwright install chromium failed; browser tests will error"; }

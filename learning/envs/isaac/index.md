@@ -32,8 +32,8 @@
 
 ## 최근 기록
 
-- 2026-10-29 · uncommitted · 판 끝 직각 컨베이어와 개방 후 행 누적 오차
-- 2026-10-29 · uncommitted · 수정 맵의 실제 SDK 화면과 한 층 실패 보존
-- 2026-10-29 · uncommitted · Rosy Cam 기준 마주보는 두 암과 한 층 배치 정정
-- 2026-10-29 · uncommitted · OMX 맵 3단 적재와 PPO 재실행 결과
-- 2026-10-29 · uncommitted · OMX 오프라인 계획 경계와 물리 시간 간격 검증
+- 2026-10-31 · d2465280d7 · rl3 from four rl0 runs settles 19/22 on seed 44
+- 2026-10-31 · ce819f6f55 · rl0 data collection, seed 44
+- 2026-10-31 · a081e4067f · rl2 is not better than rl0
+- 2026-10-31 · f157285389 · rl1 blocked every release; REINFORCE step bounded to 0.2 mm
+- 2026-10-31 · 259df0b57b · release episodes settle 16/20; first RL residual pinned
