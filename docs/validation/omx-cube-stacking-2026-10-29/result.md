@@ -1,7 +1,7 @@
 # OMX opposing-arm stacking — measured execution entries
 
 Latest actual CAD result: **nine-container 3×3×3 gapped packing PASS**, run
-`2cdbdd56df3851aeb9ff2701e2014bdd` at `bb39f438a5e1df2ae23da08eb356e0627a1d5360`
+`2cdbdd56df3851aeb9ff2701e2014bdd` at commit `bb39f438a5e1df2ae23da08eb356e0627a1d5360`
 (D-929: rows3.5mm apart, band2-5mm, envelope90×97×90mm). All nine released,
 final measured gaps3.22-4.00mm, no unstable box, strict whole-stack stability
 (speed from the pose change per0.1s step), SDKexit0, import, continuous native
@@ -11,7 +11,7 @@ acceptance are not covered.
 
 Earlier actual CAD result: **three-bar, three-floor column PASS**, run
 `8858bf075b975578aa490ae91bb32820` at
-`4f63cd59923b14be4b98b9c0f01e4a2314358054`. This is the authorized3×1×3
+commit `4f63cd59923b14be4b98b9c0f01e4a2314358054`. This is the authorized3×1×3
 fallback: one90×30×30mm long container per floor in90×30×90mm, arms0→1→0.
 All three released floors, whole-stack stability, continuous native video and
 owned shutdown/GPU release passed. Nine-container90×90×90mm packing remains
@@ -92,7 +92,7 @@ was recovered. Original partial snapshots remain identifiable as partial.
 V3's ninth held center already reachedY31.3316mm before opening and settled
 at31.5662mm: accumulated neighbor/held-width correction exhausted the original
 envelope. Its4986-frame498.6s failed film remains preserved. V4 source
-`cc55059b7d18d7a7b0bc6a87da77334a166022a4` changed to outer-first and measured
+commit `cc55059b7d18d7a7b0bc6a87da77334a166022a4` changed to outer-first and measured
 gap, preserving acceptance. Its first two commandsY±30.5mm settled at
 −30.0198/+30.0891mm; the tilted held middle could not fit that measured gap.
 The pre-opening interlock stopped it, with1419frames141.9s of native video.
@@ -136,9 +136,9 @@ v1, modified2026-10-29T10:57:09.401Z. Its original World STL(att12681256),
 World STEP(att12583007), SolidWorks ZIP(att12550209) and DWG(att12550203)
 were downloaded read-only. STEP explicitly defines millimetres; STL itself
 has no unit declaration. Original STL sha256:
-`dd91457a4a8d17d7fbb4fbfdb12dff9c2ae98e92e74760231c9ec08aa377f3cc`.
+sha256 `dd91457a4a8d17d7fbb4fbfdb12dff9c2ae98e92e74760231c9ec08aa377f3cc`.
 STEP sha256:
-`c455f11ab450cfcb9633a58387b0c0ec56f56727d23b4736ba5853334708f891`.
+sha256 `c455f11ab450cfcb9633a58387b0c0ec56f56727d23b4736ba5853334708f891`.
 
 This source is distinct from derived simulation record12615681 and older
 photo/CAD source8683759. The STEP root contains three instances of the same
@@ -226,7 +226,7 @@ Source609 passed669remote checks,1skip,0NEW and read-only review. Its first
 SDK attempt3c61 failed during scene construction because a negative sign in a
 marker name was invalid USD syntax. No physical leveling happened; exit1 and
 owned cleanup were recorded. Source
-`2fa51ef713dfa5cc02f8db3c1ba1c1a711cb0909` changes only marker identifiers,
+commit `2fa51ef713dfa5cc02f8db3c1ba1c1a711cb0909` changes only marker identifiers,
 preserves positions and adds a scene-construction regression through the actual
 map builder. Its38focused remote checks passed with0NEW, and read-only review
 approved retry. The next run53dd failed before leveling: a near-zero wrist
@@ -252,9 +252,9 @@ hardware claim. Three-layer and varied-infeed acceptance remain pending.
 Snapshot `bb4db64f1fc55bb78b67f3e0f5b5ab76-128c7070db3342468bc75bee608879a7`
 contains the native final frame and3807 continuous frames at10fps/380.6s.
 MP4:31,108,854bytes, sha256
-`976547460ff451a6c5123ef0984fac757e0b44b12d1dd1eaa57528001ba98b5e`.
+sha256 `976547460ff451a6c5123ef0984fac757e0b44b12d1dd1eaa57528001ba98b5e`.
 Report:1,404,060bytes, sha256
-`d00fff7844f0e48e3c357285298612a4cdc0267abdfa5ee81e4103ddc1520aac`.
+sha256 `d00fff7844f0e48e3c357285298612a4cdc0267abdfa5ee81e4103ddc1520aac`.
 The final native frame was visually inspected. A simple nine-bar extrapolation
 is1141.8s and93,326,562bytes: time is below the existing1590s SDK budget,
 but this encoder would exceed64MiB. Container-only bounded encoding must be
@@ -277,7 +277,7 @@ from15.089837mm during carry to15.530232mm after descent. Angular velocity
 was[-.262677,-.725640,.324395]rad/s, approximately.8rad/s; the held footprint
 could not fit the original envelope beside the settled center row. The film
 contains2413frames/241.2s,9,684,827bytes, sha256
-`0e35b4758ab334019cea9a6192b3c02bb4cc7b45b83c1a64d7953742ce5e2762`.
+sha256 `0e35b4758ab334019cea9a6192b3c02bb4cc7b45b83c1a64d7953742ce5e2762`.
 Three-floor success was not reached. The supervisor recordedUNKNOWN with
 owned processes exited and GPU readiness false. Later exact unit/invocation,
 MainPID0, empty cgroup and fresh GPU readiness released only the client hold;
@@ -285,7 +285,7 @@ the stored result remainsUNKNOWN. Thirteen source-bound files were preserved
 read-only under `recovered-unknown-c89ae2f181a55710a4431510ecd2bf6c`,
 without an official snapshot.json.
 
-Rejected candidate `f18b37ebb01d97ad15232834320a3ffec07ee509` waited at most5s
+Rejected candidate commit `f18b37ebb01d97ad15232834320a3ffec07ee509` waited at most5s
 before each packing correction and final opening for three consecutive quiet
 held-body observations spaced12control ticks apart. It immediately rejects
 loss of bilateral unsupported hold or prior-stack stability; persistent tilt
@@ -336,7 +336,7 @@ and physical failure were preserved separately from later ownership/GPU
 reconciliation. Sixteen bounded files were copied read-only with SHA verification;
 no official accepted snapshot was created.
 
-Rejected experimentd056db1f20ce9dc758084699f6a457cfeb22cfba added a+.3mm
+Rejected experiment commit d056db1f20ce9dc758084699f6a457cfeb22cfba added a+.3mm
 center release-command offset against that observed negative drift. Plan targets,
 1.5mm final position and1mm envelope tolerances, support, contact and stability
 gates remain unchanged. Three RED bias cases preceded598remote passes,1skip,
@@ -368,7 +368,7 @@ three-floor acceptance. Official snapshot
 `58f406305b1554a29a3f5ef17dfe1e01-e8c37d3c23ea41d0bb3690ee943f2d35`
 recordsFAILED/SDKexit0/import/video/owned cleanup. The3855frame/385.4s film
 is15,456,885bytes, sha256
-`b5bbebee312bdc2c8f629844e0affdb78be920178c1ef079ce2260442f5609bd`.
+sha256 `b5bbebee312bdc2c8f629844e0affdb78be920178c1ef079ce2260442f5609bd`.
 
 Source `4f63cd59923b14be4b98b9c0f01e4a2314358054` changes only column
 settling observation: wait at most10s for12consecutive observations, spaced12
@@ -393,7 +393,7 @@ frame was visually inspected. The full H.264 film has3880frames/10fps,
 388.0s playback, ending at387.9s physics time; full decoding and frame receipts
 passed the registered verifier.
 
-| Evidence | Bytes | SHA256 |
+| Evidence | Bytes | SHA-256 |
 | --- | ---: | --- |
 | mapped-video.mp4 |15553280|`1c12473d45316561b1b32c9a04f4a160ef8f78d3bc9a7e3ed3b939807c4264a8`|
 | mapped-stack-report.json |1474793|`bde6a84f7311a77a4a486b13a4dfe99f8c37b0104aaa5b142d28fa85ce4e7642`|
@@ -414,7 +414,7 @@ released-body gates are unchanged. Remote Isaac suite570passed,2skip.
 Run2e8b passed the earlier second-footprint block and placed five
 containers, then the supervisor stopped the SDK at259output files: every
 planned motion left a request and frame JSON. The256-file bound was kept.
-`c8fbb61dc7654799806661064b29281b1b107ddb` deletes only accepted plan
+commit `c8fbb61dc7654799806661064b29281b1b107ddb` deletes only accepted plan
 exchanges and keeps refused ones; one RED preceded571passed,1skip.
 
 Run42a8 at that source placed seven containers: both lower floors full and
@@ -446,7 +446,7 @@ original1.1s window when a placed box exceeds only the speed limits.
   stayed fixed to1um. The reported velocity was not motion; its cause is
   unverified (cargo sleep threshold reads0.0, so it is not PhysX sleep).
   11856frames, MP4 sha256
-  `518741d14bdcffc5e109b265070f1233b70a65e6dcfab9ab333a755b1b2790c4`.
+  sha256 `518741d14bdcffc5e109b265070f1233b70a65e6dcfab9ab333a755b1b2790c4`.
 - `684618d077` judges a box whose pose is unchanged since the previous sample
   as at rest; each window keeps that reference sample and the verifier recomputes
   it. Limits are unchanged. Remote Isaac suite629passed,1skip.
@@ -454,7 +454,7 @@ original1.1s window when a placed box exceeds only the speed limits.
   prior stack never held twelve consecutive stable samples in10s. At the
   failure sample all eight were stable; the outer row0 column (boxes4,7) had
   moved18um since the last window with.06-.07rad/s. 10898frames, MP4 sha256
-  `4589dbeb7e6466a3ab9102638c6b20759e4b375f5cd33c5749e59eacd444c2d1`.
+  sha256 `4589dbeb7e6466a3ab9102638c6b20759e4b375f5cd33c5749e59eacd444c2d1`.
 
 Gapped outer rows stand as30mm-wide,90mm-high free columns, and PhysX keeps
 them in small contact sway. Two cargo-only physics attempts did not help:
@@ -462,7 +462,7 @@ scene stabilization (`062ab8ec76`, prior flag off) moved the held box in the
 fingers so the first leveling release never converged (run b7b7), and raising
 settled cargo's sleep threshold from0.0 to5e-5 (`a6733a6076`) reproduced run
 fa6f frame for frame (run39be,10898frames, MP4 sha256
-`d822bcc731ef22b8e97e3e6fb7f88dbabab9bfe94e3b901a3e76290ae79c1ab2`). Both were
+sha256 `d822bcc731ef22b8e97e3e6fb7f88dbabab9bfe94e3b901a3e76290ae79c1ab2`). Both were
 removed; the gapped fixture is back to `gap-v1` physics.
 
 Run b326 (`28d32c8615`, refusal now lists per-box failures) showed the boxes
