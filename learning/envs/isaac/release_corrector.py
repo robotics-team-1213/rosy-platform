@@ -296,7 +296,9 @@ if __name__ == '__main__':
         print(json.dumps(train(sys.argv[3:], sys.argv[2]), sort_keys=True))
     elif len(sys.argv) >= 6 and sys.argv[1] == 'rl-update':
         # rl-update OUT.npz RESIDUAL.npz RESIDUAL_SHA256 REPORT.json ...
-        rows = [row for path in sys.argv[5:] for row in rl_rows(json.loads(Path(path).read_text(encoding='utf-8')))]
+        from release_episodes import episode_rows
+        reports = [json.loads(Path(path).read_text(encoding='utf-8')) for path in sys.argv[5:]]
+        rows = [row for report in reports for row in rl_rows(report) + episode_rows(report)]
         if not rows:
             sys.exit('rl-update: no explored decision has a settled outcome in these reports; nothing to learn')
         before = Residual.load(sys.argv[3], sys.argv[4])

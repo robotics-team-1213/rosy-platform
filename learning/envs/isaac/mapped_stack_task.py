@@ -305,6 +305,36 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
                 observations.append(snapshot())
         return observations
 
+    if fixture.get('release_episodes'):
+        from types import SimpleNamespace
+        from release_episodes import run as run_episodes
+
+        def reset():
+            for i, box in enumerate(cargo):
+                parked = fixture['parking_origin_m']
+                box.set_world_pose(np.array([parked[0], parked[1]+i*fixture['parking_step_y_m'], parked[2]]),
+                                   np.array([1., 0., 0., 0.]))
+                box.set_linear_velocity(np.zeros(3)); box.set_angular_velocity(np.zeros(3))
+                UsdGeom.Imageable(box.prim).MakeInvisible()
+            for i, robot in enumerate(robots):
+                targets[i][joints[i]] = initial['homes'][i]
+                targets[i][fingers[i]] = [.6, -.6]
+                robot.set_joint_positions(targets[i])
+                robot.set_joint_velocities(np.zeros(robot.num_dof))
+            hold(120)
+        tools = SimpleNamespace(step=step, hold=hold, snapshot=snapshot, samples=samples, move=move, grip=grip, reset=reset)
+        reset()
+        photo('mapped-overview.png', True)
+        photo('mapped-initial.png')  # the report verifier requires both starting views
+        episodes = run_episodes(tools, fixture, cargo, initial, corrector, residual, args.seed)
+        photo('mapped-trial-1.png')
+        if recording is not None:
+            hold((-tick) % fixture['recording']['every_control_ticks'])
+            recording.write(tick, robots[0].get_joint_positions()[joints[0]], final=True)
+        trial = dict(seed=args.seed, layers=[], episodes=episodes)
+        trial.update(judge(trial, cube, fixture=fixture))  # no full stack: the verifier recomputes this failure
+        return dict(schema='rosy.omx-container-stack/1', fixture=fixture, seed=args.seed, task_success=False,
+                    trials=[trial], controller=FIXTURE['controller'], attachment_aid=False, images=images)
     for trial_index in range(fixture['trials']):
         trial = dict(seed=args.seed+trial_index, layers=[])
         trials.append(trial)
