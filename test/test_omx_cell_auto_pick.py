@@ -247,6 +247,15 @@ def test_a_runner_that_does_not_answer_refuses_to_start(tmp_path):
     assert result["result"] == "refused"
 
 
+def test_a_site_without_a_place_spot_is_refused_as_a_destination_before_anything_runs(tmp_path):
+    config = copy.deepcopy(CONFIG)
+    config["sites"]["board"] = {k: v for k, v in config["sites"]["belt"].items() if k != "place"}  # 2026-10-30: KeyError
+    path, cell = biased_map(tmp_path), Cell([CONT2])
+    result = auto.run_auto(cell, config, cal.load(path), path, CATALOG, ROI, "pinky", "board", tmp_path,
+                           cell_choices.Choices(tmp_path / "choices.json"))
+    assert result["result"] == "refused: board is not a destination (its site has no 'place')" and cell.commands == []
+
+
 REAL_CAPS = {"11": {"pwm": 300}, "12": {"pwm": 600}, "13": {"pwm": 600}, "14": {"pwm": 300}, "15": {"pwm": 300}, "16": {"pwm": 300}}
 
 
