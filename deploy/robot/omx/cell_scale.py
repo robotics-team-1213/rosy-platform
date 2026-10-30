@@ -4,7 +4,8 @@
 D-911 refuses even a supervised trial without a measured payload, and per-object facts belong in the catalogue. A
 person zeroes the scale and puts the object on it; this reads the scale's 7-segment display in a camera frame,
 accepts a value only after it repeats (`scale.repeats`), and writes `mass_kg` into that catalogue entry. With
---conditions it also copies mass and size into a cell config's `operating_conditions`.
+--conditions it also writes the object and its size into a cell config's `operating_conditions`; the payload bound
+there (`payload_max_kg`) is a person's reviewed decision (D-935), never this reading.
 
   "scale": {"camera": "top", "display_px": [[x, y] top-left, top-right, bottom-right, bottom-left],
             "digits": 5, "decimals": 2, "unit": "g", "dark_digits": true,
@@ -99,7 +100,7 @@ def enrol(catalog_path: Path, object_id: str, mass_kg: float, reading: str, cond
     if conditions_path:
         config = json.loads(conditions_path.read_text(encoding="utf-8"))
         conditions = config.setdefault("operating_conditions", {})
-        conditions.update(payload_kg=mass_kg, object_revision=object_id, object_dimensions_m=[
+        conditions.update(object_revision=object_id, object_dimensions_m=[  # payload_max_kg is a reviewed bound (D-935)
             entry["length_mm"] / 1000, entry["width_mm"] / 1000, entry["top_height_mm"] / 1000])
         conditions_path.write_text(json.dumps(config, indent=1) + "\n", encoding="utf-8")
     return entry
