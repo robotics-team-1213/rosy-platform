@@ -5,9 +5,11 @@ The look found the jaws by differencing frames while they opened and closed: the
 yaws (the mark jumped to the other finger, 70 mm off), opening shook the link into the blob, and a small opening left
 none. A marker gives the gripper's position and yaw from one still frame. Measured at the top camera's 1.1 px/mm with
 blur and JPEG: 15 mm and up were found 20/20 with a centre within 0.4 px, 12 mm 16/20. The finger top is 8 mm wide,
-so the marker goes on the gripper body's top face, 20 mm (it shows ~1.2x larger at hover height).
+so the marker goes on the gripper body's top face, 20 mm (it shows ~1.2x larger at hover height). Each arm slot has
+its own ids in DICT_4X4_100 (D-933: slot n's gripper is 35 + 15 (n - 1)); ids 0-49 are DICT_4X4_50's, so the ChArUco
+board still reads.
 
-  cell_marks.py sheet OUT.png [--mm 20 25] [--ids 0 1]    print at 100 %, cut out with the white margin
+  cell_marks.py sheet OUT.png [--mm 20 25] [--ids 35]     print at 100 %, cut out with the white margin
   cell_marks.py find FRAME.jpg                           list markers seen: id, centre px, yaw deg, side px
 """
 from __future__ import annotations
@@ -25,10 +27,10 @@ DPI = 300
 def _dictionary():
     import cv2
 
-    return cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
+    return cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_100)
 
 
-def sheet(sizes_mm=(20, 25), ids=(0, 1), dpi: int = DPI):
+def sheet(sizes_mm=(20, 25), ids=(35,), dpi: int = DPI):
     """A printable page (A4 at dpi) with each id at each size, a white margin of one cell and a size label."""
     import cv2
 
@@ -70,7 +72,7 @@ def main(argv=None):
     s = sub.add_parser("sheet")
     s.add_argument("out")
     s.add_argument("--mm", type=float, nargs="+", default=[20, 25])
-    s.add_argument("--ids", type=int, nargs="+", default=[0, 1])
+    s.add_argument("--ids", type=int, nargs="+", default=[35])
     f = sub.add_parser("find")
     f.add_argument("frame")
     args = ap.parse_args(argv)

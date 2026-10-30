@@ -4,7 +4,7 @@ import re
 
 import pytest
 
-from fleet.server.cell_print_sheets import (A4_MM, DICT_4X4_50, PT_PER_MM, charuco_pdf, checkerboard_pdf, marker_cells,
+from fleet.server.cell_print_sheets import (A4_MM, DICT_4X4_100, PT_PER_MM, arm_ids, charuco_pdf, checkerboard_pdf, marker_cells,
                                             markers_pdf, sheet)
 from test_cell_job_api import _setup
 
@@ -27,8 +27,8 @@ def test_the_pdf_is_well_formed_with_a_true_a4_page():
 
 def test_marker_cells_follow_the_dictionary_bits_and_the_print_is_to_size():
     cells = marker_cells(0)
-    assert len(cells) == 20 + 16 - bin(DICT_4X4_50[0]).count("1")  # border + the bits that are black
-    assert (1, 1) in cells if not DICT_4X4_50[0] >> 15 & 1 else (1, 1) not in cells
+    assert len(cells) == 20 + 16 - bin(DICT_4X4_100[0]).count("1")  # border + the bits that are black
+    assert (1, 1) in cells if not DICT_4X4_100[0] >> 15 & 1 else (1, 1) not in cells
     printed = [b for b in boxes(markers_pdf([0], [20])) if b[2] < 10]  # marker cells (the scale bar is 50 mm)
     assert len(printed) == len(cells) and all(b[2] == pytest.approx(20 / 6, abs=1e-3) for b in printed)
     xs, ys = [b[0] for b in printed], [b[1] for b in printed]
@@ -41,7 +41,9 @@ def test_checkerboard_squares_and_bad_input():
     squares = [b for b in boxes(checkerboard_pdf(8, 6, 15)) if b[2] == pytest.approx(15.0, abs=1e-3)]
     assert len(squares) == 24
     with pytest.raises(ValueError):
-        markers_pdf([50], [20])
+        markers_pdf([100], [20])
+    with pytest.raises(ValueError):
+        sheet("arm-markers", arm=5)
     with pytest.raises(ValueError):
         checkerboard_pdf(20, 6, 15)  # 300 mm wide does not fit A4
     with pytest.raises(ValueError):
@@ -83,13 +85,24 @@ def test_the_charuco_sheet_is_the_opencv_board_at_true_size():
     assert pitch == pytest.approx(20.0, abs=0.1)
 
 
-def test_surface_markers_are_ids_35_to_48_at_25_mm():
+def test_arm_slots_own_disjoint_id_blocks_outside_the_charuco_board():
+    blocks = [arm_ids(n) for n in range(1, 5)]
+    flat = [[b["gripper"], *b["base"], *[i for ids in b["surfaces"] for i in ids]] for b in blocks]
+    every = [i for ids in flat for i in ids]
+    assert len(every) == len(set(every)) == 60 and min(every) == 35 and max(every) < len(DICT_4X4_100)
+    assert [b["gripper"] for b in blocks] == [35, 50, 65, 80]
+
+
+@pytest.mark.parametrize("slot", [1, 4])
+def test_an_arm_sheet_reads_back_as_its_block_at_true_size(slot):
     cv2 = pytest.importorskip("cv2")
     np = pytest.importorskip("numpy")
-    name, pdf = sheet("surface-markers", ids=range(35, 49))
-    assert name == "rosy-surface-markers-25mm.pdf"
-    detector = cv2.aruco.ArucoDetector(cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50))
+    name, pdf = sheet("arm-markers", arm=slot)
+    assert name == f"rosy-arm-{slot}-markers.pdf"
+    block = arm_ids(slot)
+    detector = cv2.aruco.ArucoDetector(cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_100))
     corners, ids, _ = detector.detectMarkers(raster(pdf))
-    assert sorted(ids.ravel().tolist()) == list(range(35, 49))
-    sides = [np.linalg.norm(c[0][1] - c[0][0]) / (300 / 25.4) for c in corners]
-    assert all(s == pytest.approx(25.0, abs=0.2) for s in sides)
+    assert sorted(ids.ravel().tolist()) == list(range(block["gripper"], block["gripper"] + 15))
+    sides = {int(i): np.linalg.norm(c[0][1] - c[0][0]) / (300 / 25.4) for c, i in zip(corners, ids.ravel())}
+    assert sides.pop(block["gripper"]) == pytest.approx(20.0, abs=0.2)
+    assert all(s == pytest.approx(25.0, abs=0.2) for s in sides.values())

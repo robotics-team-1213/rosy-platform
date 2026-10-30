@@ -3,18 +3,37 @@
 The arm cell needs printed targets: an ArUco marker on the gripper (the top camera finds it in one frame, 15 mm and up
 measured 20/20 within 0.4 px at 1.1 px/mm) and a checkerboard for the cameras' geometry. A raster image printed
 through a viewer's "fit to page" comes out scaled; here every square is a PDF rectangle in millimetres on an A4 page,
-with a 50 mm bar to check the print with a ruler. No dependency: the ArUco DICT_4X4_50 bit patterns are a table
-(extracted from OpenCV 4.12 ``generateImageMarker``; bit 1 = white, row-major from the top-left).
+with a 50 mm bar to check the print with a ruler. No dependency: the ArUco DICT_4X4_100 bit patterns are a table
+(extracted from OpenCV 4.10/4.12 ``generateImageMarker``; bit 1 = white, row-major from the top-left).
 """
 
 from __future__ import annotations
 
 A4_MM = (210.0, 297.0)
 PT_PER_MM = 72 / 25.4
-DICT_4X4_50 = (
+DICT_4X4_100 = (  # ids 0-49 are DICT_4X4_50's markers, so the ChArUco board (ids 0-34) reads the same
     46386, 3994, 13101, 39238, 21662, 31181, 40494, 50418, 65242, 53078, 63889, 4519, 3767, 10767, 9393, 9790, 18021,
     26112, 27742, 30383, 34443, 45099, 52437, 56706, 65095, 38001, 44260, 42324, 8483, 13423, 17429, 22450, 40655,
-    61643, 2222, 2345, 6261, 1279, 3574, 7258, 5912, 10792, 12940, 14514, 9448, 12011, 11583, 19300, 20526, 20499)
+    61643, 2222, 2345, 6261, 1279, 3574, 7258, 5912, 10792, 12940, 14514, 9448, 12011, 11583, 19300, 20526, 20499,
+    20884, 21864, 23873, 24471, 26625, 26727, 24868, 25065, 27410, 28645, 26591, 32283, 32928, 33604, 35746, 37754,
+    33900, 34090, 34204, 40073, 40865, 47996, 48132, 46683, 49096, 47019, 51743, 51554, 55640, 54229, 52376, 51104,
+    50487, 59741, 63781, 64443, 60970, 63309, 13685, 35501, 30231, 2767, 1611, 11713, 18904, 17396, 20278, 20435,
+    27108, 28871)
+# D-933 marker ids: 0-34 the ChArUco board; arm slot n (1-4) owns 15 ids from 35 + 15 (n - 1): its gripper, its two
+# base markers, then three surfaces of four. 95-99 are spare. Every arm's markers differ, so cameras that see two arms
+# never mix them up.
+ARM_SLOTS, ARM_BLOCK, FIRST_ARM_ID = 4, 15, 35
+
+
+def arm_ids(slot: int) -> dict:
+    """{"gripper": id, "base": [2 ids], "surfaces": [[4 ids] x 3]} for arm slot 1-4 (D-933)."""
+    if not 1 <= int(slot) <= ARM_SLOTS:
+        raise ValueError(f"the arm slot is 1-{ARM_SLOTS}")
+    first = FIRST_ARM_ID + ARM_BLOCK * (int(slot) - 1)
+    return {"gripper": first, "base": [first + 1, first + 2],
+            "surfaces": [list(range(first + 3 + 4 * k, first + 7 + 4 * k)) for k in range(3)]}
+
+
 MARGIN_MM, GAP_MM = 15.0, 12.0
 
 
@@ -61,28 +80,46 @@ class Page:
 
 def marker_cells(marker_id: int) -> list[tuple[int, int]]:
     """Black cells (row, col) of a 6 x 6 marker: the 1-cell black border plus the 4 x 4 bits that are 0."""
-    bits = DICT_4X4_50[marker_id]
+    bits = DICT_4X4_100[marker_id]
     inner = [(1 + k // 4, 1 + k % 4) for k in range(16) if not (bits >> (15 - k)) & 1]
     return [(r, c) for r in range(6) for c in range(6) if r in (0, 5) or c in (0, 5)] + inner
 
 
-GRIPPER = ("ROSY gripper markers - ArUco DICT_4X4_50",
-           "Cut on the dashed line, keep the white edge. Glue flat on the gripper body's top face (id 0, 20 mm).")
-SURFACE = ("ROSY surface markers - ArUco DICT_4X4_50 (D-933)",
-           "Arm base: ids 35-36. Each surface: 4 markers, at least 150 mm apart, not in one line. Glue flat.")
+GRIPPER = ("ROSY gripper markers - ArUco DICT_4X4_100",
+           "Cut on the dashed line, keep the white edge. Glue flat on the gripper body's top face (20 mm).")
 
 
 def markers_pdf(ids, sizes_mm, words=GRIPPER) -> bytes:
+    """Each id at each size."""
     ids, sizes = [int(i) for i in ids], [float(s) for s in sizes_mm]
-    if not ids or not sizes or any(not 0 <= i < len(DICT_4X4_50) for i in ids) or any(not 10 <= s <= 80 for s in sizes):
-        raise ValueError("ids are 0-49 and sizes 10-80 mm")
+    if not ids or not sizes:
+        raise ValueError("give at least one id and one size")
+    return _markers_page([(ids, s, {}) for s in sizes], words)
+
+
+def arm_pdf(slot: int) -> bytes:
+    """One arm slot's page (D-933): its gripper marker at 20 mm, then base and surface markers at 25 mm, labelled."""
+    block = arm_ids(slot)
+    names = {block["gripper"]: "gripper", **{i: f"base {k + 1}" for k, i in enumerate(block["base"])},
+             **{i: f"surface {k + 1}" for k, ids in enumerate(block["surfaces"]) for i in ids}}
+    words = (f"ROSY arm {int(slot)} markers - ArUco DICT_4X4_100 (D-933)",
+             f"Arm slot {int(slot)} of {ARM_SLOTS}: ids {block['gripper']}-{block['surfaces'][-1][-1]}. Gripper on its top "
+             "face; 2 on the arm base; each surface 4, at least 150 mm apart, not in one line. Glue flat.")
+    rest = block["base"] + [i for ids in block["surfaces"] for i in ids]
+    return _markers_page([([block["gripper"]], 20.0, names), (rest, 25.0, names)], words)
+
+
+def _markers_page(groups, words) -> bytes:
+    """groups: (ids, size mm, {id: label}); each group starts a new row."""
+    if any(not 0 <= i < len(DICT_4X4_100) for ids, _, _ in groups for i in ids) or             any(not 10 <= size <= 80 for _, size, _ in groups):
+        raise ValueError(f"ids are 0-{len(DICT_4X4_100) - 1} and sizes 10-80 mm")
     page, y = Page(), MARGIN_MM
     page.text(MARGIN_MM, y + 5, 14, words[0])
     page.text(MARGIN_MM, y + 11, 9, words[1])
     y += 18
     page.scale_bar(y)
     y += 16
-    for size in sizes:
+    for ids, size, names in groups:
         quiet = size / 6  # one cell of white around the black border, inside the cut line
         x = MARGIN_MM
         for marker_id in ids:
@@ -94,7 +131,8 @@ def markers_pdf(ids, sizes_mm, words=GRIPPER) -> bytes:
             for r, c in marker_cells(marker_id):
                 page.box(x + quiet + c * cell, y + quiet + r * cell, cell, cell)
             page.box(x, y, size + 2 * quiet, size + 2 * quiet, fill=False, dash=True)
-            page.text(x, y + size + 2 * quiet + 5, 9, f"id {marker_id}  {size:g} mm")
+            label = f"id {marker_id}  {size:g} mm" + (f"  {names[marker_id]}" if marker_id in names else "")
+            page.text(x, y + size + 2 * quiet + 5, 9, label)
             x += size + 2 * quiet + GAP_MM
         y += size + 2 * quiet + GAP_MM
     return page.pdf(words[0].split(" - ")[0])
@@ -145,17 +183,17 @@ def checkerboard_pdf(cols: int = 8, rows: int = 6, square_mm: float = 15.0) -> b
 
 
 SHEETS = {"gripper-markers": "ArUco markers for the gripper", "checkerboard": "checkerboard for camera calibration",
-          "charuco": "ChArUco board for lens calibration", "surface-markers": "ArUco markers for the arm base and surfaces"}
+          "charuco": "ChArUco board for lens calibration", "arm-markers": "one arm slot's gripper, base and surface markers"}
 
 
-def sheet(kind: str, ids=(0, 1), sizes_mm=(20, 25), cols: int = 8, rows: int = 6, square_mm: float = 15.0):
+def sheet(kind: str, ids=(35,), sizes_mm=(20, 25), cols: int = 8, rows: int = 6, square_mm: float = 15.0, arm: int = 1):
     """(file name, PDF bytes) for one kind in SHEETS."""
     if kind == "gripper-markers":
         return "rosy-gripper-markers.pdf", markers_pdf(ids, sizes_mm)
     if kind == "charuco":
         return "rosy-charuco-7x10-20mm.pdf", charuco_pdf()
-    if kind == "surface-markers":
-        return "rosy-surface-markers-25mm.pdf", markers_pdf(ids, (25,), SURFACE)
+    if kind == "arm-markers":
+        return f"rosy-arm-{int(arm)}-markers.pdf", arm_pdf(arm)
     if kind == "checkerboard":
         return f"rosy-checkerboard-{cols}x{rows}-{square_mm:g}mm.pdf", checkerboard_pdf(cols, rows, square_mm)
     raise ValueError(f"unknown sheet {kind}: one of {', '.join(SHEETS)}")

@@ -37,3 +37,8 @@ def test_the_print_sheet_holds_each_id_at_each_size_and_reads_back():
     page = cell_marks.sheet((20,), (0, 3), dpi=150)
     assert page.shape == (round(297 * 150 / 25.4), round(210 * 150 / 25.4))
     assert set(cell_marks.find(page)) == {0, 3}
+
+
+def test_every_arm_slots_gripper_id_is_found_and_distinct_from_the_charuco_board():
+    page = cell_marks.sheet((20,), (35, 50, 65, 80), dpi=150)  # D-933 gripper ids of arm slots 1-4
+    assert set(cell_marks.find(page)) == {35, 50, 65, 80}

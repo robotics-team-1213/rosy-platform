@@ -102,8 +102,9 @@
     </ui-section>
     <ui-section aria-labelledby="print-heading">
       <ui-head><h2 class="ui-section-heading" id="print-heading">보정 인쇄물</h2></ui-head>
-      <ui-text>실제 크기 PDF입니다. 100%(맞춤 없이)로 인쇄하고 종이의 50 mm 막대를 자로 확인하세요. 그리퍼 마커는 20 mm id 0을 그리퍼 몸체 윗면에 붙입니다.</ui-text>
-      <div class="actions"><ui-button id="print-markers" kind="quiet">그리퍼 마커 PDF</ui-button><ui-button id="print-checkerboard" kind="quiet">체커보드 PDF</ui-button><ui-button id="print-charuco" kind="quiet">ChArUco 보정판 PDF</ui-button><ui-button id="print-surface-markers" kind="quiet">면 마커 PDF</ui-button></div>
+      <ui-text>실제 크기 PDF입니다. 100%(맞춤 없이)로 인쇄하고 종이의 50 mm 막대를 자로 확인하세요. 팔마다 마커 번호가 다릅니다(D-933). 팔 번호를 골라 그 팔의 그리퍼 · 받침대 · 면 마커를 한 장으로 받습니다.</ui-text>
+      <label for="print-arm">팔 번호</label><select class="ui-field" id="print-arm" aria-label="마커를 인쇄할 팔 번호"><option value="1">팔 1 (마커 35~49)</option><option value="2">팔 2 (마커 50~64)</option><option value="3">팔 3 (마커 65~79)</option><option value="4">팔 4 (마커 80~94)</option></select>
+      <div class="actions"><ui-button id="print-arm-markers" kind="quiet">팔 마커 PDF</ui-button><ui-button id="print-charuco" kind="quiet">ChArUco 보정판 PDF</ui-button><ui-button id="print-checkerboard" kind="quiet">체커보드 PDF</ui-button></div>
       <ui-text id="print-status" role="status" aria-live="polite"></ui-text>
     </ui-section>
     <ui-section aria-labelledby="saved-heading"><ui-head><h2 class="ui-section-heading" id="saved-heading">저장된 문서</h2></ui-head><ui-text>저장된 레시피와 셀을 선택하거나 아래에서 새 문서를 준비하세요.</ui-text><ui-status id="saved-status" state="unavailable">접속하면 저장된 문서를 확인할 수 있습니다.</ui-status><ul id="saved" hidden></ul></ui-section>

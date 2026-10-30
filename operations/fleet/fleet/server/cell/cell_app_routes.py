@@ -85,15 +85,15 @@ def install_cell_app_routes(app, *, mission_service, compiler, service_id, princ
         return {"documents": store.list()}
 
     @app.get("/api/fleet/cell-app/print-sheets/{kind}", dependencies=[Depends(require_viewer)])
-    def print_sheet(kind: str, ids: str = "0,1", sizes_mm: str = "20,25", cols: int = 8, rows: int = 6,
-                    square_mm: float = 15.0):
-        """A real-size calibration sheet (gripper/surface markers, checkerboard, ChArUco) as base64 PDF; read only."""
+    def print_sheet(kind: str, ids: str = "35", sizes_mm: str = "20,25", cols: int = 8, rows: int = 6,
+                    square_mm: float = 15.0, arm: int = 1):
+        """A real-size calibration sheet (gripper or one arm slot's markers, checkerboard, ChArUco) as base64 PDF."""
         from fleet.server.cell_print_sheets import sheet
 
         try:
             name, pdf = sheet(kind, ids=[int(v) for v in ids.split(",") if v.strip()],
                               sizes_mm=[float(v) for v in sizes_mm.split(",") if v.strip()],
-                              cols=cols, rows=rows, square_mm=square_mm)
+                              cols=cols, rows=rows, square_mm=square_mm, arm=arm)
         except ValueError as exc:
             raise HTTPException(422, detail={"code": "CELL_PRINT_SHEET_INVALID", "message": str(exc)}) from exc
         return {"filename": name, "media_type": "application/pdf", "pdf_base64": base64.b64encode(pdf).decode()}

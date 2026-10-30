@@ -13155,3 +13155,10 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: D-934 Proposed
 - 교훈: 얇은 획은 세그먼트 칸 평균으로 판정하면 크기가 커질수록 실패(18 px 0/20), 길이 덮임 비율로 바꿔 해결 — 코드 주석에 둠
+
+## 2026-10-30 · uncommitted · fleet/omx: per-arm marker id blocks for up to four arms (D-933 보충)
+- 변경: `cell_print_sheets`를 `DICT_4X4_100`으로 넓히고 팔 번호별 15개 묶음(`arm_ids`, `arm-markers` 시트)을 더함, Cell 화면 「보정 인쇄물」에 팔 번호 선택, `cell_marks` 사전·기본 ID, D-933 8항(번호 표)
+- 증거: 원격 `test_cell_print_sheets.py`·`test_omx_cell_marks.py`(팔 1·4 시트를 OpenCV로 되읽음), 브라우저 Cell 화면
+- gate 변화: 없음
+- 결정: D-933 Proposed 그대로, 8항 추가. 집게 마커는 0 → 팔 1의 35로(ChArUco 0~34와 겹침 해소)
+- 교훈: 없음
