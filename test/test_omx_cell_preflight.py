@@ -52,3 +52,37 @@ def test_a_dark_frame_says_the_lights_are_off_and_a_lit_one_passes():
     rows = pf.lights({"top": np.full((480, 640), 1, np.uint8), "wrist": scene(), "front": None})
     assert [ok for _, ok, _ in rows] == [False, True, False]
     assert "lights are off" in rows[0][2] and rows[2][2] == "no frame"
+
+
+class Camera:
+    """A v4l2 camera whose frame mean grows with exposure like the top camera (2026-10-30: 10000 -> 61, 33000 -> 148)."""
+
+    def __init__(self, exposure=3000, per_unit=0.0045, cap=33000):
+        self.exposure, self.per_unit, self.cap, self.writes = exposure, per_unit, cap, []
+
+    def run(self, cmd, **kw):
+        if "-C" in cmd:
+            return type("R", (), {"stdout": f"exposure_time_absolute: {self.exposure}\n"})()
+        self.writes.append(cmd[3:])
+        self.exposure = int(cmd[-1].split("=")[1])
+        return type("R", (), {"stdout": ""})()
+
+    def frame(self, name="top"):
+        return np.full((48, 64), min(255.0, self.exposure * self.per_unit), np.uint8)
+
+
+def test_a_dim_top_camera_is_exposed_into_the_band_and_a_lit_one_is_left_alone():
+    cam = Camera()  # mean 13: the dim room
+    report = pf.expose("/dev/video2", cam.frame, run=cam.run, wait=lambda s: None)
+    assert report["set"] and report["ok"] and abs(report["mean"] - 130) <= 35
+    assert cam.writes[0][:2] == ["-c", "auto_exposure=1"] and len(cam.writes) <= 4
+    lit = Camera(exposure=29000)
+    assert not pf.expose("/dev/video2", lit.frame, run=lit.run, wait=lambda s: None)["set"] and lit.writes == []
+
+
+def test_ready_exposes_only_cameras_with_a_device_and_still_refuses_a_dark_room():
+    cam = Camera(per_unit=0.0002)  # lights off: even the longest exposure stays dark
+    config = {"cameras": {"top": {"url": "u", "device": "/dev/video2"}, "wrist": {"url": "w"}}}
+    frames = {"top": cam.frame, "wrist": lambda name="wrist": np.full((48, 64), 140, np.uint8)}
+    dark = pf.ready(lambda c: frames[c](), config, run=cam.run, wait=lambda s: None)
+    assert cam.exposure == 33000 and len(dark) == 1 and dark[0].startswith("top:")
