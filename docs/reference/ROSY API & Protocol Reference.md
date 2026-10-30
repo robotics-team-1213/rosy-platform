@@ -4386,6 +4386,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.334 | 2026-10-30 | D-930: fresh measured recheck of a confirmed ARM transfer attempt (`POST/GET .../arm-transfers/jobs/{mission_id}/rechecks`); the physical observer answers in a RECHECK phase. No Action, claim, job status or receipt change. Envelope 1.0 unchanged. |
 | v1.331 | 2026-10-28 | D-908: closed simulation neutral TRIP proposal/read/admit HTTP; the proposer (service or operator) supplies candidates, request key and steps, a different named operator admits with digest and generation, and admission makes the existing TRIP step-ledger job. No cargo fields; operator trip-jobs POST unchanged. Envelope 1.0 unchanged. |
 | v1.330 | 2026-10-29 | D-915: optional measured source joint facts in physical observations and scoped immutable closure proof readback; legacy canonical bytes, writer/admission boundaries and envelope1.0 preserved. Independent SIM/hardware/field acceptance remains separate. |
 | v1.328 | 2026-10-28 | Learning registered OMX dataset discovery and fixed-revision archive preparation on existing host paths. Separate verified copy, explicit consent and original preservation; byte archival only. CORE envelope1.0 unchanged. |
