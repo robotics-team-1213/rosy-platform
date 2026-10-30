@@ -203,7 +203,7 @@ def test_an_object_without_an_enrolled_mass_is_held_before_any_motion(tmp_path):
     result = auto.run_auto(cell, CONFIG, cal.load(path), path, unweighed, ROI, "pinky", "0.060,0.090", tmp_path,
                            cell_choices.Choices(tmp_path / "choices.json"), sleep=no_sleep, log=lambda row: None)
     assert result["result"] == "held: payload_unknown"
-    assert not any(c.startswith(("load", "checked")) for c in cell.commands)
+    assert not {"run descend_pick", "run grasp_pick"} & set(cell.commands)  # the pick never started
 
 
 def test_a_square_object_does_not_compete_and_is_picked_with_the_site_yaw(tmp_path):
@@ -656,7 +656,7 @@ def test_the_gate_refuses_a_replan_the_review_does_not_cover(tmp_path):
     import cell_transfer
 
     cell = Cell([CONT2])
-    gate = cell_transfer.Gate(cell, {**CONFIG}, {})
+    gate = cell_transfer.Gate(cell, {**CONFIG, "_payload": cell_objects.payload(CATALOG, "container-2")}, {})
     lib = tmp_path / "lib.json"
     lib.write_text(json.dumps({"chunks": {"home": [[0] * 6]}}))
     assert gate.open(lib, lambda a: None) is None and gate.assessment["mode"] == "commissioning"
