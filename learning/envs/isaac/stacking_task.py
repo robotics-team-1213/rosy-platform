@@ -561,7 +561,8 @@ def main():
     modes.add_argument('--mapped-container-stack', action='store_true')
     modes.add_argument('--mapped-rl', action='store_true')
     parser.add_argument('--layers', type=int, choices=(1, 3), default=3)
-    parser.add_argument('--container-case', choices=('nominal', 'offset', 'reverse', 'column', 'nominal-estimate', 'nominal-bc-v0'),
+    parser.add_argument('--container-case', choices=('nominal', 'offset', 'reverse', 'column', 'nominal-estimate', 'nominal-bc-v0',
+                                 'nominal-bc-v0-rl0'),
                         default='nominal')
     args = parser.parse_args()
     check_vendor_manifest()

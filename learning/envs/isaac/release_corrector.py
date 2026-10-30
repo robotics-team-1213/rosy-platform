@@ -8,6 +8,7 @@ import hashlib
 import io
 import json
 import math
+import os
 from pathlib import Path
 
 import numpy as np
@@ -151,6 +152,23 @@ def load_corrector(fixture):
     return MLP.load(Path(__file__).with_name('models') / spec['file'], spec['sha256']) if spec else None
 
 
+def load_residual(fixture):
+    """The pinned RL residual of an exploring case, or None."""
+    spec = fixture.get('release_residual')
+    return Residual.load(Path(__file__).with_name('models') / spec['file'], spec['sha256']) if spec else None
+
+
+def rl_rows(report):
+    """(observation, noise, reward) for every explored decision; the reward is its layer's settled outcome."""
+    outcomes = {r['index']: r['outcome'] for r in release_demonstrations(report)}
+    rows = []
+    for index, layer in enumerate(report['trials'][0].get('layers', [])):
+        for decision in layer.get('release_exploration', []):
+            if index in outcomes:
+                rows.append((decision['observation'], decision['noise'], release_reward(outcomes[index])))
+    return rows
+
+
 def estimate(sample, index, fixture, rng):
     """The sample as a 2-5 mm held-box position estimate would report it; everything else stays measured."""
     value = copy.deepcopy(sample)
@@ -171,6 +189,63 @@ def corrector_command(model, sample, index, fixture, iteration, *, max_step_m=.0
     arm = plan(True, fixture=fixture)[index]['arm']
     correction = np.clip(model.predict([observation(sample, index, fixture, iteration)])[0], -max_step_m, max_step_m)
     return np.add(sample['tcps'][arm], correction).tolist()
+
+
+class Residual:
+    """Linear correction added to the BC command, learned from release outcomes (REINFORCE between runs)."""
+
+    def __init__(self, weights):
+        self.weights = np.asarray(weights, float)
+
+    @classmethod
+    def zero(cls):
+        return cls(np.zeros((FEATURES+1, 3)))
+
+    def predict(self, x):
+        x = np.asarray(x, float)
+        return np.c_[x, np.ones(len(x))] @ self.weights
+
+    @classmethod
+    def update(cls, residual, observations, noises, rewards, *, lr):
+        """One policy-gradient step: move the mean correction along noise that earned above-average reward.
+
+        For a Gaussian policy the score of the mean is noise/sigma; scaling the step by sigma**2 leaves
+        advantage x noise x sigma, and `lr` absorbs sigma so it is in metres per unit of reward and noise.
+        """
+        x = np.c_[np.asarray(observations, float), np.ones(len(observations))]
+        advantage = np.asarray(rewards, float) - np.mean(rewards)
+        gradient = x.T @ (advantage[:, None] * np.asarray(noises, float)) / len(x)
+        return cls(residual.weights + lr * gradient)
+
+    def save(self, path):
+        buffer = io.BytesIO()
+        np.savez(buffer, weights=self.weights)
+        Path(path).write_bytes(buffer.getvalue())
+        return hashlib.sha256(buffer.getvalue()).hexdigest()
+
+    @classmethod
+    def load(cls, path, sha256):
+        raw = Path(path).read_bytes()
+        if hashlib.sha256(raw).hexdigest() != sha256:
+            raise ValueError('release residual sha256 differs from the pinned file')
+        return cls(np.load(io.BytesIO(raw))['weights'])
+
+
+def policy_command(model, residual, sample, index, fixture, iteration, rng, *, sigma, max_step_m=.005):
+    """Exploring command: BC correction + residual + Gaussian noise (sigma metres), clipped; returns the noise too."""
+    arm = plan(True, fixture=fixture)[index]['arm']
+    tcp = np.array(sample['tcps'][arm])
+    obs = [observation(sample, index, fixture, iteration)]
+    mean = model.predict(obs)[0] + residual.predict(obs)[0]
+    noise = rng.normal(size=3)
+    return (tcp + np.clip(mean + sigma*noise, -max_step_m, max_step_m)).tolist(), noise.tolist()
+
+
+def release_reward(outcome):
+    """Higher is better: settled position error (mm), distance outside the 2-5 mm gap band (x3), instability (-10)."""
+    gaps = outcome.get('gaps_mm') or []
+    outside = sum(max(2.-g, 0., g-5.) for g in gaps)
+    return -outcome['position_error_mm'] - 3*outside - (0. if outcome['stable'] else 10.)
 
 
 def train(report_paths, out_dir, *, per_snapshot=400, seed=0, epochs=400):
@@ -215,6 +290,14 @@ def train(report_paths, out_dir, *, per_snapshot=400, seed=0, epochs=400):
 
 if __name__ == '__main__':
     import sys
-    if len(sys.argv) < 4 or sys.argv[1] != 'train':
-        sys.exit('usage: release_corrector.py train OUT_DIR REPORT.json [REPORT.json ...]')
-    print(json.dumps(train(sys.argv[3:], sys.argv[2]), sort_keys=True))
+    if len(sys.argv) >= 4 and sys.argv[1] == 'train':
+        print(json.dumps(train(sys.argv[3:], sys.argv[2]), sort_keys=True))
+    elif len(sys.argv) >= 6 and sys.argv[1] == 'rl-update':
+        # rl-update OUT.npz RESIDUAL.npz RESIDUAL_SHA256 REPORT.json ...
+        rows = [row for path in sys.argv[5:] for row in rl_rows(json.loads(Path(path).read_text(encoding='utf-8')))]
+        before = Residual.load(sys.argv[3], sys.argv[4])
+        after = Residual.update(before, *zip(*rows), lr=float(os.environ.get('RL_LR', '.0002')))
+        print(json.dumps(dict(decisions=len(rows), mean_reward=float(np.mean([r[2] for r in rows])),
+                              sha256=after.save(sys.argv[2])), sort_keys=True))
+    else:
+        sys.exit('usage: release_corrector.py train OUT_DIR REPORT.json ... | rl-update OUT.npz RESIDUAL.npz SHA REPORT.json ...')

@@ -177,8 +177,9 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
     targets = [np.zeros(r.num_dof) for r in robots]
     tick = 0
     images, trials = [], []
-    from release_corrector import corrector_command, estimate, load_corrector
+    from release_corrector import corrector_command, estimate, load_corrector, load_residual, observation, policy_command
     corrector = load_corrector(fixture) if cube else None
+    residual = load_residual(fixture) if cube else None
     print('MAPPED_AFTER_RESET', [r.get_joint_positions().tolist() for r in robots], flush=True)
     for i, robot in enumerate(robots):
         controller = robot.get_articulation_controller()
@@ -417,7 +418,13 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
                                if fixture.get('release_estimate_noise_m') else snapshot)
                     layer['release_controller'] = 'bc' if corrector else 'ik-estimate' if observe is not snapshot else 'ik'
                     for k in range(fixture['release_feedback_iterations']):
-                        if corrector and k:  # the IK teacher descends; the model owns the later corrections
+                        if corrector and k and residual:  # RL: explore around BC + residual, record the noise
+                            seen = observe()
+                            release_command, noise = policy_command(corrector, residual, seen, index, fixture, k,
+                                estimate_rng, sigma=fixture['release_exploration_sigma_m'])
+                            layer.setdefault('release_exploration', []).append(
+                                dict(iteration=k, observation=observation(seen, index, fixture, k), noise=noise))
+                        elif corrector and k:  # the IK teacher descends; the model owns the later corrections
                             release_command = corrector_command(corrector, observe(), index, fixture, k)
                         elif fixture.get('leveling_protocol'):
                             release_command=packing_target(index,observe,step,float(p[2]),fixture,release_command)

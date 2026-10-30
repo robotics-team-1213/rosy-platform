@@ -69,7 +69,12 @@ def grip_duration(start, value, acceleration=.4):
 EVALUATION_CASES = {  # nominal geometry; the release feedback sees a 2-5 mm held-box estimate error
     'nominal-estimate': None,
     'nominal-bc-v0': dict(file='release-corrector-bc-v0.npz',
-                          sha256='85713c8ec54190e53729d6df73d5d59f3e6e7d715058bfb7698b3793042b9294')}
+                          sha256='85713c8ec54190e53729d6df73d5d59f3e6e7d715058bfb7698b3793042b9294'),
+    'nominal-bc-v0-rl0': dict(file='release-corrector-bc-v0.npz',
+                              sha256='85713c8ec54190e53729d6df73d5d59f3e6e7d715058bfb7698b3793042b9294')}
+# RL iterations add a pinned residual and Gaussian exploration (metres) to the BC corrector.
+RL_RESIDUALS = {'nominal-bc-v0-rl0': dict(file='release-residual-rl0.npz',
+    sha256='c44398fffbefca6bba7ec6e7c7d16895dcab272c6394d4d9e16ea00f66ea0f72', sigma_m=.0005)}
 
 
 def container_fixture(*, layers, case):
@@ -78,6 +83,10 @@ def container_fixture(*, layers, case):
         value.update(revision=value['revision']+'-'+case, case=case, release_estimate_noise_m=[.002, .005])
         if EVALUATION_CASES[case]:
             value['release_corrector'] = dict(EVALUATION_CASES[case])
+        if case in RL_RESIDUALS:
+            spec = dict(RL_RESIDUALS[case])
+            value['release_exploration_sigma_m'] = spec.pop('sigma_m')
+            value['release_residual'] = spec
         return value
     if (type(layers) is not int or layers not in (1, 3) or case not in ('nominal', 'offset', 'reverse','column')
             or case=='column' and layers!=3):
