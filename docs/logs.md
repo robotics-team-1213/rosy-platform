@@ -13092,6 +13092,13 @@ osy-d395-s1d\`.
 - Gate: 없음. 정리 수용은 main 병합·공개 게시·Pinky 부팅·OTA 수용과 구분한다. 문서 frontmatter 검사 통과, mechanical claim의 외부 receipt 경로 한 건은 Git 밖 실제 파일 존재와 명시된 범위로 확인했다.
 - CE: 새 교훈 기록 — 최종 제품 코드만으로 알기 어려운 supervisor 정리 순서와 살아 있는 remote cohort의 소유 재확인이 재조사·참조 손실을 막는다. Vocabulary는 일반 작업 용어만 있어 변경하지 않았고 지침은 기존 solutions 경로를 이미 안내한다.
 
+## 2026-10-29 · 66e86cb0fb · Pilot 수집 연결 검증
+
+- 변경: [검증 기록](validation/pilot-learning-collection-2026-10-29/result.md)에 소스·원격 회귀·실제 기존 녹화의 pending 등록과 운영 적용 한계를 분리한다.
+- 증거: 모델 PC 집중 55 passed/1 opt-in skipped, 별도 실제 자료 시험 1 passed(19장 pending, 재등록 0장). 운영 검수 DB·실물·서명 배포 수용으로 확대하지 않는다.
+- Gate: 변화 없음. CE: 해당 없음 — 판단은 구현·회귀·기존 운영 문서에서 확인할 수 있다.
+- 최종 검증: d2d68c3346 공식 affected 13,602 passed/1,285 skipped/NEW 0, pinned raw·실제 자료·OMX fixture 집중 88 passed/skip0/NEW 0. 중간 회귀 실패와 합성 시계 보완, skip·취소·운영 미적용을 같은 정본의 추가 기록으로 구분했다.
+
 ## 2026-10-30 · 40449ecfdf · 카메라 자동 복구를 실제 제어값과 복원 기록에 결속
 
 - 변경: 같은 방향의 적용된 후보를 되감지 않고, baseline으로 돌아온 카메라는 실제 readback·지원값 재확인 후 재조정한다. 일시적 읽기 실패와 active preview의 재오픈 대기는 쓰기 없이 UNAVAILABLE로 기다리며 다른 owner는 거부한다. 후보·복원 intent는 baseline/장치/producer/run에 결속해 알 수 없는 설정을 덮지 않는다.
@@ -13112,3 +13119,46 @@ osy-d395-s1d\`.
 - 증거: publish_main의 게시 SHA 선택은 해당 SHA의 green FULL 착지 기록을 요구한다(기존 최신 full 기록 c44859256f에는 패키징 수정이 없다). 이 착지가 만드는 full 기록의 base는 패키징 커밋(8dcc1f51ad)을 포함한 main이다.
 - gate 변화: 없음.
 - CE: 해당 없음 — 게시 절차 기록이다.
+
+## 2026-10-30 · uncommitted · docs(agents): 루트 AGENTS.md를 안전 요약과 포인터로 줄이고 같이 하는 깃 전문을 shared-checkout.md로 모음
+
+- 변경: 모든 세션이 통째로 읽는 루트 `AGENTS.md`를 39.3 KB에서 14.5 KB로 줄였다. 「같이 하는 깃」 전문(워크트리 청소·소유자·`landed-dirty`/`stale-history`·스냅샷·스테이징·ADR 선점·착지 대기열·`LOAD-FLAKY`·`MAIN-RED`·게시)은 `docs/reference/shared-checkout.md`가 정본으로 맡고, AGENTS에는 모든 세션이 지킬 6항 요약·멈추는 신호·읽을 때를 남겼다. Testing Requirements의 FULL 전환 목록·`gh run` 명령·colcon 재현은 `developer-guide.md`「테스트와 CI」로 옮겼다. Key Files·Dependencies·스킬 목록·중복된 D-23 줄은 각 폴더 `AGENTS.md`와 하네스가 이미 가진 내용이라 뺐다. 안전·권한 규칙(D-2, D-516, D-315, D-430 §5, D-226, D-33, D-584, D-868)은 문장 그대로 남겼다.
+- 어긋남 정리: 네 사본이 서로 달랐다. 기본 착지 명령을 `land_async.py`로 맞췄고(AGENTS는 `land.py`), `rosy-land-on-main` 스킬의 "at most 10"·"50-directory"를 15·14(D-886)로 고쳤다.
+- 증거: `test/test_readme_agent_start.py`의 세부 문구 단언을 지우지 않고 `shared-checkout.md` 쪽으로 옮겼고, AGENTS 쪽은 안전 요약 문구와 4,000자 상한을 단언한다. `rosy_harness.py lint` 0 error.
+- Gate: 없음. 문서·시험 변경이며 장치·현장 수용과 무관하다. 공개 push 없음.
+- CE: 해당 없음 — 사본이 어긋나 있던 사실은 이 기록과 정본 하나로 줄인 구조로 남는다.
+
+## 2026-10-30 · fd11d5158a · D-926 운용 화면의 읽는 순서·깊이·말의 규칙
+
+- 변경: D-926을 추가하고 Log 행·D-641 대체 주석을 붙였다. `DESIGN.md` 맨 앞에 읽는 순서·깊이·말·부품 모양·확인 항목 절을 두고 맥락 탭 아이콘 단독 문단을 고쳤다.
+- 증거: 2026-10-30 Fleet 샘플 서버 운영자 접속 캡처 13장과 토큰 사용 집계(작업 공간 계획 `2026-10-30-ui-hierarchy-foundation.md`). `rosy_harness.py lint`에서 D-926 오류 없음.
+- Gate: 없음. 화면별 적용은 단계별 브랜치로 따로 기록한다.
+- CE: 해당 없음 — 결정과 근거는 ADR이 담는다.
+
+## 2026-10-30 · 08b6c8c362 · 새 장치 수집과 mDNS 진단 기록
+
+- 변경: 새 dated 검증 기록에 geg6 수신 두 건과 운영 pending 925장, 총6007장, 재등록0, 원본·검수 정보 보존과 현재 단절을 구분했다. 오래된 접속 목록과 실제 서비스 광고를 구분하는 CE 교훈을 추가했다.
+- 증거: 준비 파일6355개·신규 검수 사본5954개의 해시 일치, 기존53장 검수/마스크/이벤트 불변. 구성된 HTTPS 수신 exit0와 정상 재실행2회 exit0. CE 기계검사0flags/문법검사OK. 이전 추가 기록333passed/skip0/NEW0는 해당 소스의 증거다.
+- Gate: 운영 원본·영상·검수 대기 연결 수용. 현재 장치 가용성·물리 이동·G4·main 착지·push는 완료 증거가 없다.
+- CE: 새 교훈 기록. 현재 단절과 예전362행 신원 충돌은 미해결로 유지한다.
+
+## 2026-10-30 · uncommitted · docs(adr): D-931..D-933 arm S measured checks, one field revision, cell coordinate frame
+- 변경: `docs/adr/D-931`·`D-932`·`D-933` 추가, ADR Log 행 3개, `tools/harness/adr_gaps.txt`에 다른 브랜치가 예약한 D-929·D-930 대기 선언
+- 증거: `python tools/harness/rosy_harness.py lint` 0 errors. D-933 근거의 OpenCV 4.12 ChArUco API와 1.1 px/mm 합성 검출 20/20은 Fleet PC에서 확인(실물 인쇄물 검출은 아직)
+- gate 변화: 없음
+- 결정: D-931 Accepted, D-932 Accepted, D-933 Proposed
+- 교훈: 기존 사례 8·9(`shared-arm-cell-hand-back-checks`)를 근거로 인용, 새 교훈 없음
+
+## 2026-10-30 · uncommitted · omx: cell scale reader and D-934 object mass
+- 변경: `deploy/robot/omx/cell_scale.py`(7-세그먼트 저울 판독, 안정값, 카탈로그 `mass_kg` 기록, `--conditions`), `scale.*` 파라미터 3개, `test/test_omx_cell_scale.py`, `docs/adr/D-934`
+- 증거: 원격 `test_omx_cell_scale.py`·`test_omx_cell_params.py` 27 passed. 합성 표시창 숫자 높이 9~40 px, 잡음 σ 4에서 20/20. 실제 저울 판독은 아직
+- gate 변화: 없음
+- 결정: D-934 Proposed
+- 교훈: 얇은 획은 세그먼트 칸 평균으로 판정하면 크기가 커질수록 실패(18 px 0/20), 길이 덮임 비율로 바꿔 해결 — 코드 주석에 둠
+
+## 2026-10-30 · uncommitted · omx: D-935 payload bound on the D-911 gate
+- 변경: `cell_envelope.payload_check`, 운영 조건 `payload_max_kg`, `auto.max_gross_kg` 0.08(theory), `cell_objects.payload`, `cell_auto_pick`이 운반마다 `_payload`를 붙이고 `task.json`에 남김, `cell_scale --conditions`는 상한을 쓰지 않음, README·예제·시험 갱신, `docs/adr/D-935`
+- 증거: 원격 `test/test_omx_*.py` 1756 passed, 36 skipped. 실물 실측과 운반은 아직
+- gate 변화: 없음
+- 결정: D-935 Accepted(사용자 결정)
+- 교훈: 없음
