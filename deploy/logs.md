@@ -4063,6 +4063,21 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - gate 변화: 없음. 새 canonical FULL과 main ancestry가 남으며 공개 게시·장치 수용을 뜻하지 않는다.
 - CE: 해당 없음 — 기존 git-ids-in-validation-records 교훈의 동결 기록 절차를 적용했다. 새 정책이나 예외 범위 확대는 없다.
 
+## 2026-10-29 · 28d229d44f · fallback 전용 open AP 정책
+
+- 변경: D-919에 따라 fallback만 암호 없는 AP를 기본으로 선택하고 relay는 WPA2를 유지한다. open은 기존 장치 신원 또는 명시된 SSID를 쓰며 AP 자격 증명 저장소를 읽거나 표시용 키 파일을 만들지 않는다. 상태에 실제 security를 담고 설정 검증·적용에서 fallback_security를 전달한다. AP 시간·무선 claim/lock·HTTPS 복구 코드와 CORE 인증은 유지했다.
+- 증거: tests-only commit 51227e5510은 원격 16 failed/273 passed/1 skipped였다. 검토로 찾은 malformed defaults의 open 강등과 off 우회는 commit b88181b986에서 원격 4 FAILED로 재현했다. commit 28d229d44f는 정책·설정·기존 보호 AP·agent·transaction·recovery·handoff 집중 회귀 391 passed/1 skipped, 실제 opt-in 복구 브라우저 3 passed/skip0이며 각 NEW0/known0/flaky0이다. 독립 검토의 새 P0/P1은 0이다.
+- gate 변화: 없음. 소비자 main 조상 관계와 최종 통합 검증·착지·서명된 full native/SDK 빌드·OTA·실물 연결은 아직 남았다. 기존 001을 수정하거나 지원하지 않는 키를 카드에 넣지 않는다. 첫 오프라인 부팅부터 open이 필요하면 정식 새 factory/native 기준이 필요하다.
+- CE: 해당 없음 — 실패 시 mode off 반환과 기존 close 감독 유지는 실제 소비 경로 회귀와 D-919에서 복원할 수 있다.
+
+## 2026-10-29 · a9e26eb7e039 · 손상된 기존 네트워크 정책의 open 강등 차단
+
+- 변경: network-policy.json이 없으면 정상 기본 정책을 사용하되, 존재하는 파일의 읽기 실패·잘못된 JSON·객체가 아닌 값은 mode off로 반환한다. 기존 AP의 close 감독과 누락 파일·빈 객체의 정상 open 동작은 유지한다.
+- 증거: tests-only commit 3ca84b0fa525의 원격 회귀는 오류 6 failed/정상 2 passed였다. commit a9e26eb7e039는 집중 8개 시험 파일 399 passed/1 skipped, 실제 opt-in 복구 브라우저 3 passed/skip0이다. 독립 고정 diff 검토 CLEAR, size-range/safety 통과. 최종 affected와 소비자 main 통합은 별도 확인한다.
+- gate 변화: 없음. 소비자 선행 착지·통합·서명 native/SDK 배포와 실물 수용은 아직 남았다.
+- CE: 해당 없음 — 손상/누락의 구분과 close 감독 경계는 코드·회귀 시험으로 재현된다.
+
+
 ## 2026-10-29 · 05f19a73ea · 팔 credential 및 signed candidate 집중 회귀
 
 - 변경: 관리자 전체 매핑 후보의 원격 집중 회귀 결과를 기록했다. 실행 코드·시험은 05f19a73ea와 같다.
@@ -4130,6 +4145,13 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - gate 변화: 없음. 이력 판정의 재사용은 FULL·동일 SHA CI·실물 ABI 및 native canary 검증을 대신하지 않는다.
 - CE: 해당 없음 — 기존 역사 검사 처리 절차를 적용했으며 별도 교훈을 늘리지 않는다.
 - 통합: main commit 3f2fafd23a에는 위 8행이 모두 이미 있어 그대로 보존했다. main의 schema·reviewer·157행 순서를 유지하고 독립 검토된 c7행 하나만 덧붙여 158행으로 병합 충돌을 해결했다.
+
+## 2026-10-30 · b830767991 · open AP 소비자 선행 착지 후 producer 통합
+
+- 변경: 소비자 commit fd2131fdcbec가 실제 main 조상이 된 뒤 main commit 9ecc9795e93c를 producer에 병합했다. peer LCD helper/compact renderer와 기존 기록을 유지했다. main에서 D-914 문서가 도착했으므로 그 번호의 낡은 adr_gaps 행만 제거했다.
+- 증거: 통합 commit b830767991의 원격 producer/consumer/설치 renderer 15개 시험 파일은 587 passed/2 skipped, 실제 opt-in 복구 브라우저는 3 passed/skip0이다. 첫 affected는 1426 passed/1 skipped와 D-914 stale-gap guard 2 failed였으며 이 실패가 단일 행 정리의 근거다. 최종 고정 head의 affected 결과와 독립 검토는 외부 통합 receipt로 확인한다.
+- gate 변화: 소비자 실제 main 조상 조건은 충족했다. 서명된 full native/SDK 빌드·OTA 적용과 실제 무선/복구 수용은 여전히 미수행이다. 기존 001 카드에 open fallback이 포함됐다고 간주하지 않는다.
+- CE: 해당 없음 — 병합된 ADR의 obsolete gap 제거는 기존 guard가 직접 검출하는 통상적인 통합 정리다.
 
 ## 2026-10-30 · cd343694f9 · exclusive 입장 정책과 pytest 호스트 배치 일치
 

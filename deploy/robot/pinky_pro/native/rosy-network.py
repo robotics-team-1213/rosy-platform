@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """Fallback AP controller (D-176).
 
-Opens the per-card `rosy-pinky-xxxx` AP (WPA2, NetworkManager shared mode,
+Opens the per-card `rosy-pinky-xxxx` AP (NetworkManager shared mode,
 10.42.0.1) only while the robot has no uplink, so a person can always reach
 it. Pi 5 has one radio: while the AP is up the site Wi-Fi cannot be seen, so
 after `hold_seconds` the AP steps aside and the site Wi-Fi gets a fresh grace
 period. `relay` keeps the AP up (D-26 RELAY_AP_STA); `off` never opens it
-(D-26/D-154 NETWORK_HOLD). Runs as root outside CORE (D-161).
+(D-26/D-154 NETWORK_HOLD). D-919 defaults fallback to open security; relay
+remains WPA2. Runs as root outside CORE (D-161).
 
 D-190: while the AP is up it also hands the LCD what to show. The boot display
 runs unprivileged (rosy-display) and cannot read the root-only credentials, so
@@ -43,7 +44,7 @@ STATUS = "run/rosy-boot/network.json"
 DISPLAY_AP = "run/rosy-boot/ap-display.txt"
 DISPLAY_GROUP = "rosy-display"
 POLL_SECONDS = 10
-DEFAULT_POLICY = {"mode": "fallback", "grace_seconds": 120, "hold_seconds": 600}
+DEFAULT_POLICY = {"mode": "fallback", "fallback_security": "open", "grace_seconds": 120, "hold_seconds": 600}
 
 
 @dataclass(frozen=True)
@@ -112,10 +113,19 @@ def load_policy(root: Path) -> dict:
             import rosy_config
 
             policy.update(rosy_config.load_defaults(defaults).get("ap", {}))
-        except Exception:  # a broken defaults file must not stop the controller
-            pass
-    policy.update({key: value for key, value in _read_json(root / "etc/rosy/network-policy.json").items()
-                   if key in {"mode", "grace_seconds", "hold_seconds", "ssid", "country"}})
+        except Exception:
+            # Keep close supervision alive without downgrading malformed defaults to an open AP.
+            return {**policy, "mode": "off"}
+    try:
+        override = json.loads((root / "etc/rosy/network-policy.json").read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        override = {}
+    except (OSError, ValueError):
+        return {**policy, "mode": "off"}
+    if not isinstance(override, dict):
+        return {**policy, "mode": "off"}
+    policy.update({key: value for key, value in override.items()
+                   if key in {"mode", "fallback_security", "grace_seconds", "hold_seconds", "ssid", "country"}})
     return policy
 
 
@@ -138,22 +148,27 @@ def _write(path: Path, content: str, mode: int, group: int | None = None) -> Non
         raise
 
 
-def _profile(ssid: str, secret: str, country: str) -> str:
-    return "\n".join([
+def _profile(ssid: str, secret: str | None, country: str, *, security: str = "wpa2") -> str:
+    lines = [
         "[connection]", f"id={PROFILE}", "type=wifi", "autoconnect=false", "interface-name=wlan0", "",
         "[wifi]", "mode=ap", "band=bg", f"ssid={ssid}", "",
-        "[wifi-security]", "key-mgmt=wpa-psk", "proto=rsn", "pairwise=ccmp", "group=ccmp",
-        "=".join(("psk", secret)), "",  # NM stores the AP passphrase; root-only 0600
+    ]
+    if security == "wpa2":
+        lines += ["[wifi-security]", "key-mgmt=wpa-psk", "proto=rsn", "pairwise=ccmp", "group=ccmp",
+                  "=".join(("psk", secret)), ""]  # stored root-only 0600
+    elif security != "open":
+        raise ValueError("unsupported AP security")
+    return "\n".join(lines + [
         "[ipv4]", "method=shared", f"address1={AP_ADDRESS}/24", "",
         "[ipv6]", "method=ignore", "",
         f"# regulatory domain {country}", "",
     ])
 
 
-def _status(root: Path, mode: str, ssid: str | None = None) -> None:
+def _status(root: Path, mode: str, ssid: str | None = None, *, security: str = "wpa2") -> None:
     status = {"mode": mode}
     if mode == "ap":
-        status.update(ssid=ssid, address=AP_ADDRESS, epoch=str(time.monotonic_ns()))
+        status.update(ssid=ssid, address=AP_ADDRESS, security=security, epoch=str(time.monotonic_ns()))
     else:
         clear_display_ap(root)
     _write(root / STATUS, json.dumps(status, sort_keys=True) + "\n", 0o644)
@@ -190,16 +205,33 @@ def clear_display_ap(root: Path) -> None:
 def perform(root: Path, action: str, run: Runner) -> bool:
     """Carry out the action; False when the AP did not come up."""
     if action == "open":
-        credentials = _read_json(root / "etc/rosy/ap-credentials.json")
         policy = load_policy(root)
-        secret = credentials.get("pass" + "word")
-        ssid = policy.get("ssid") or credentials.get("ssid")
-        if not secret or not ssid:
+        if policy.get("mode") == "off":
+            _status(root, "none")
+            return False
+        security = policy.get("fallback_security", "open") if policy.get("mode") == "fallback" else "wpa2"
+        if security not in ("open", "wpa2"):
+            print("rosy-network: invalid fallback security; AP not opened", file=sys.stderr)
+            _status(root, "none")
+            return False
+        if security == "open":
+            identity = _read_json(root / "etc/rosy/device-identity.json")
+            name = identity.get("device_name")
+            if not isinstance(name, str) or not name:
+                print("rosy-network: no device identity; fallback AP not opened", file=sys.stderr)
+                _status(root, "none")
+                return False
+            ssid, secret = policy.get("ssid") or name, None
+        else:
+            credentials = _read_json(root / "etc/rosy/ap-credentials.json")
+            secret = credentials.get("pass" + "word")
+            ssid = policy.get("ssid") or credentials.get("ssid")
+        if not ssid or (security == "wpa2" and not secret):
             print("rosy-network: no AP credentials; fallback AP not opened", file=sys.stderr)
             _status(root, "none")
             return False
         _write(root / f"etc/NetworkManager/system-connections/{PROFILE}.nmconnection",
-               _profile(ssid, secret, policy.get("country", "KR")), 0o600)
+               _profile(ssid, secret, policy.get("country", "KR"), security=security), 0o600)
         run(["nmcli", "connection", "reload"])
         run(["nmcli", "connection", "up", PROFILE])
         if "activated" not in run(["nmcli", "-t", "-f", "GENERAL.STATE", "connection", "show", PROFILE]):
@@ -207,8 +239,11 @@ def perform(root: Path, action: str, run: Runner) -> bool:
             print("rosy-network: fallback AP did not activate", file=sys.stderr)
             _status(root, "none")
             return False
-        _status(root, "ap", ssid)
-        display_ap(root, ssid, secret)
+        _status(root, "ap", ssid, security=security)
+        if security == "open":
+            clear_display_ap(root)
+        else:
+            display_ap(root, ssid, secret)
     elif action == "close":
         run(["nmcli", "connection", "down", PROFILE])
         # Ask NM to pick the best site profile now rather than wait out its retry timer.
