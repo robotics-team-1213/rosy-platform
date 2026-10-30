@@ -66,6 +66,10 @@
       "path": "cell/cell-print-sheets.js",
       "media_type": "application/javascript"
     },
+    "cell-object-catalog.js": {
+      "path": "cell/cell-object-catalog.js",
+      "media_type": "application/javascript"
+    },
     "motor-health-view.js": {
       "path": "motor-health-view.js",
       "media_type": "application/javascript"
