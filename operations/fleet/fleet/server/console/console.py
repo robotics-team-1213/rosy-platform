@@ -34,6 +34,7 @@ from fleet.hub.hub import HubError, SiteHub
 from fleet.localization import trust
 from fleet.server import bays, goal_admission, goal_lease, traffic
 from fleet.server.observe import observe_states  # SERVER_HOLDERS composes console/*.py as fleet.server.<name>
+from fleet.server.degraded_reroute import reroute_degraded
 from fleet.server.console_view import (
     CapabilityDisplay, TripAware, _error_of, _formation_stream_evidence, _shown,
     _stream_evidence,  # noqa: F401
@@ -809,32 +810,7 @@ class FleetConsole(TripAware):
 
     async def _run_traffic(self, robots: list) -> None:
         """스냅샷마다 한 번: 끝난 로봇의 점유를 풀고, 풀린 자리의 대기 미션을 내려보낸다."""
-        # ADR-1000: Mission Re-routing (MSN-004) - check for degraded capabilities
-        for row in list(robots):
-            state = row.get("state") or {}
-            robot_id = row["robot_id"]
-            if state.get("capabilities_degraded"):
-                if robot_id in self._goals or robot_id in self._queued:
-                    # Cancel the current mission
-                    mission = self._queued.pop(robot_id, None)
-                    goal = self._goals.pop(robot_id, None)
-                    self._claims.pop(robot_id, None)
-                    target = mission or goal
-                    if target:
-                        if target.get("task_id") is not None:
-                            self._queued[robot_id] = target
-                            continue
-                        # Find an idle alternative
-                        for alt_row in robots:
-                            alt_id = alt_row["robot_id"]
-                            alt_state = alt_row.get("state") or {}
-                            busy = alt_id in self._goals or alt_id in self._queued or self.trip_busy(alt_id)
-                            if (alt_id != robot_id and alt_row.get("online")
-                                    and not alt_state.get("capabilities_degraded")
-                                    and not busy):
-                                # Re-assign to alternative
-                                self._queued[alt_id] = target
-                                break
+        degraded = await reroute_degraded(self, robots)  # ADR-1000 MSN-004
 
         for row in robots:
             state = row.get("state") or {}
@@ -852,6 +828,9 @@ class FleetConsole(TripAware):
             if self._still_blocked(mission):
                 if mission.get("reason") == "YIELDING":
                     self._check_yield_worked(mission)
+                continue
+            # 저하 로봇에게 즉석 목표를 다시 보내지 않는다. 작업 목표는 작업 대기열로 돌아가 재배정된다.
+            if robot_id in degraded and mission.get("task_id") is None:
                 continue
             release_candidates.append(robot_id)
         # 한 번에 여러 대가 풀리면 순서를 정한다 — 로터리 선착. 점유 클레임은 상한선으로

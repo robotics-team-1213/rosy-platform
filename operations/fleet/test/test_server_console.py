@@ -254,3 +254,85 @@ def test_observe_falls_back_to_rest_when_the_hub_heartbeat_is_stale():
     run(console._observe())
 
     assert ("state",) in idle_stale.calls
+
+
+
+def _localized(robot_id, *, degraded=False, navigation="NAVIGATING"):
+    return {"robot_id": robot_id, "navigation": navigation,
+            "localization": {"state": "LOCALIZED", "pose_frame": "map"},
+            "capabilities_degraded": ["vision"] if degraded else []}
+
+
+def _degraded_console(*, alternative: bool):
+    slow = FakeRobot("rosy_01", state=_localized("rosy_01", degraded=True))
+    robots = [slow] + ([FakeRobot("rosy_02", state=_localized("rosy_02", navigation="IDLE"))]
+                       if alternative else [])
+    console = _console(*robots)
+    console._goals["rosy_01"] = {"x": 1.0, "y": 0.0, "yaw": 0.0}
+    return console, robots
+
+
+def _goals_sent(robot) -> list:
+    return [call[1:4] for call in robot.calls if call[0] == "navigation_goal"]
+
+
+def test_degraded_robot_is_stopped_before_its_goal_moves_on():
+    """MSN-004: 저하 로봇의 목표를 옮길 때 그 로봇을 먼저 세운다. 점유만 지우면
+    달리는 로봇이 다른 로봇의 경로 판단에서 사라진다."""
+    console, (slow, idle) = _degraded_console(alternative=True)
+    run(console.snapshot())
+    assert ("navigation_cancel",) in slow.calls
+    assert "rosy_01" not in console._goals
+    assert _goals_sent(slow) == []
+    assert _goals_sent(idle) == [(1.0, 0.0, 0.0)]
+
+
+def test_degraded_goal_without_alternative_stays_queued_until_recovery():
+    console, (slow,) = _degraded_console(alternative=False)
+    run(console.snapshot())
+    run(console.snapshot())
+    assert console._queued["rosy_01"]["x"] == 1.0
+    assert _goals_sent(slow) == []
+    # 회복하면 같은 로봇으로 다시 나간다(대기 필드가 없어 KeyError가 나던 자리).
+    slow._state = _localized("rosy_01", navigation="IDLE")
+    run(console.snapshot())
+    assert "rosy_01" not in console._queued
+    assert _goals_sent(slow) == [(1.0, 0.0, 0.0)]
+
+
+def test_unconfirmed_cancel_keeps_the_degraded_goal_and_claim():
+    console, (slow,) = _degraded_console(alternative=False)
+
+    async def _no_confirm():
+        return {"canceled": False}
+
+    slow.navigation_cancel = _no_confirm
+    console._claims["rosy_01"] = [(1.0, 0.0)]
+    run(console.snapshot())
+    assert "rosy_01" in console._goals and "rosy_01" in console._claims
+
+
+def test_raising_cancel_keeps_the_degraded_goal():
+    console, (slow,) = _degraded_console(alternative=False)
+
+    async def _boom():
+        raise OSError("robot unreachable")
+
+    slow.navigation_cancel = _boom
+    run(console.snapshot())
+    assert "rosy_01" in console._goals and "rosy_01" not in console._queued
+
+
+def test_degraded_task_goal_returns_to_the_task_queue_not_another_robot():
+    console, (slow, idle) = _degraded_console(alternative=True)
+    console.goal_leases["rosy_01"] = {"state": "leased", "correlation_id": "c1", "ttl_s": 5.0,
+                                      "source": "dispatch", "task_id": "task-1"}
+    released: list = []
+
+    async def _release(mission):
+        released.append(mission["task_id"])
+
+    console.set_task_queue_release_callback(_release)
+    run(console.snapshot())
+    assert released == ["task-1"]
+    assert _goals_sent(idle) == []
