@@ -35,10 +35,11 @@ def sheet(sizes_mm=(20, 25), ids=(0, 1), dpi: int = DPI):
     px_per_mm = dpi / 25.4
     page = np.full((round(297 * px_per_mm), round(210 * px_per_mm)), 255, np.uint8)
     y = round(15 * px_per_mm)
+    draw_marker = getattr(cv2.aruco, "generateImageMarker", None) or cv2.aruco.drawMarker
     for mm in sizes_mm:
         side, x = round(mm * px_per_mm), round(15 * px_per_mm)
         for i in ids:
-            page[y:y + side, x:x + side] = cv2.aruco.generateImageMarker(_dictionary(), int(i), side)
+            page[y:y + side, x:x + side] = draw_marker(_dictionary(), int(i), side)
             cv2.putText(page, f"id {i}  {mm} mm", (x, y + side + round(5 * px_per_mm)), cv2.FONT_HERSHEY_SIMPLEX,
                         0.9, 0, 2)
             x += side + round(20 * px_per_mm)
