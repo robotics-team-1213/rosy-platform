@@ -21,11 +21,13 @@ def layout(fixture, rng):
     items = plan(True, fixture=fixture)
     index = int(rng.integers(0, len(items)))
     # 0.5 mm above the target: exact touching heights made a six-box prior stack pop apart (run 8e96).
+    # Yaw pi as after tabletop leveling: a yaw-0 start was outside the BC data and needed a half-turn wrist
+    # path, and run e48a ended 20-26 mm off the release target or lost arm tracking.
     prior = [([items[j]['target'][0]+rng.uniform(-.001, .001), items[j]['target'][1]+rng.uniform(-.001, .001),
-               items[j]['target'][2]+.0005], float(rng.uniform(-.01, .01))) for j in range(index)]
+               items[j]['target'][2]+.0005], math.pi+float(rng.uniform(-.01, .01))) for j in range(index)]
     centre = fixture['leveling_center_m']
     held = ([centre[0]+rng.uniform(-.005, .005), centre[1]+rng.uniform(-.005, .005), centre[2]+.015],
-            float(rng.uniform(-.05, .05)))
+            math.pi+float(rng.uniform(-.05, .05)))
     return dict(index=index, prior=prior, held=held)
 
 
@@ -60,7 +62,11 @@ def run(t, fixture, cargo, initial, corrector, residual, seed, *, budget_s=1800.
             UsdGeom.Imageable(box.prim).MakeVisible()
         t.hold(240)
         try:
-            if not prefix_held(t.snapshot(), index, fixture):
+            start = t.snapshot()
+            if not prefix_held(start, index, fixture):
+                record['prior_failures'] = [dict(box=j, error_mm=[round(1000*(start['boxes'][j]['position'][k]
+                    - items[j]['target'][k]), 3) for k in range(3)]) for j in range(index)
+                    if not stable_box(start['boxes'][j], j, True, fixture=fixture, speed=False)]
                 raise ValueError('initialised prior stack did not hold')
             p, q = cargo[index].get_world_pose()
             yaw = math.atan2(2*(q[0]*q[3]+q[1]*q[2]), 1-2*(q[2]**2+q[3]**2))
