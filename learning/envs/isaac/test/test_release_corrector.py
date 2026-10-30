@@ -173,3 +173,20 @@ def test_rl_rows_pair_each_explored_decision_with_its_release_reward():
     layer['release_exploration'] = [dict(iteration=1, observation=[0.]*rc.FEATURES, noise=[1., 0., 0.])]
     rows = rc.rl_rows(report)
     assert rows == [([0.]*rc.FEATURES, [1., 0., 0.], rc.release_reward(rc.release_demonstrations(report)[0]['outcome']))]
+
+
+@pytest.mark.parametrize('case,converged', [('nominal', False), ('nominal-estimate', True), ('nominal-bc-v0', True)])
+def test_estimate_cases_accept_a_tcp_within_the_final_tolerance_but_keep_the_safety_checks(case, converged):
+    """Runs 74cd/1196: estimate-only control ended 2.29/1.03 mm from the true-pose target, never within 50 um."""
+    fixture = f.container_fixture(layers=3, case=case)
+    sample = held_scene(fixture, 0)
+    target = f.cube_release_target(0, sample, .05, fixture=fixture)
+    sample['tcps'][0] = target[:]
+    sample['boxes'][0]['position'] = [sample['boxes'][0]['position'][k] for k in range(3)]
+    assert f.cube_release_ready(0, sample, .05, fixture=fixture)
+    sample['tcps'][0] = [target[0]+.001, target[1], target[2]]
+    sample['boxes'][0]['position'][0] += .001
+    assert f.cube_release_ready(0, sample, .05, fixture=fixture) is converged
+    sample['boxes'][0]['forces'][0] = [0., 0., 0.]  # the hold itself still has to be bilateral
+    with pytest.raises(ValueError, match='bilateral'):
+        f.cube_release_ready(0, sample, .05, fixture=fixture)
