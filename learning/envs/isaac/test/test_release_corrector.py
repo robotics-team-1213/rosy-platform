@@ -200,3 +200,16 @@ def test_a_blocked_or_unsettled_explored_release_still_teaches_with_a_penalty():
                                                 error='cube release correction did not converge; opening blocked')])
     assert rc.rl_rows(report) == [([0.]*rc.FEATURES, [0., 1., 0.], rc.BLOCKED_REWARD)]
     assert rc.BLOCKED_REWARD < rc.release_reward(dict(position_error_mm=1.5, stable=False, gaps_mm=[1.]))
+
+
+def test_reinforce_step_stays_inside_the_trust_region_on_the_data():
+    """Run 9968: an unbounded step moved the correction up to 2.76 mm and every episode was blocked."""
+    rng = np.random.default_rng(1)
+    obs = rng.normal(size=(200, rc.FEATURES)).tolist()
+    noise = rng.normal(size=(200, 3)).tolist()
+    rewards = [10*n[0] for n in noise]
+    updated = rc.Residual.update(rc.Residual.zero(), obs, noise, rewards, lr=.01, max_change_m=.0002)
+    change = np.abs(updated.predict(obs)).max()
+    assert .0002 - 1e-9 <= change <= .0002 + 1e-9  # the large step is scaled down to the 0.2 mm bound
+    small = rc.Residual.update(rc.Residual.zero(), obs, noise, rewards, lr=1e-7, max_change_m=.0002)
+    assert np.abs(small.predict(obs)).max() < .0002  # a small step is left as it is
