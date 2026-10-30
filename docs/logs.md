@@ -13120,6 +13120,21 @@ osy-d395-s1d\`.
 - gate 변화: 없음.
 - CE: 해당 없음 — 게시 절차 기록이다.
 
+## 2026-10-30 · uncommitted · docs(agents): 루트 AGENTS.md를 안전 요약과 포인터로 줄이고 같이 하는 깃 전문을 shared-checkout.md로 모음
+
+- 변경: 모든 세션이 통째로 읽는 루트 `AGENTS.md`를 39.3 KB에서 14.5 KB로 줄였다. 「같이 하는 깃」 전문(워크트리 청소·소유자·`landed-dirty`/`stale-history`·스냅샷·스테이징·ADR 선점·착지 대기열·`LOAD-FLAKY`·`MAIN-RED`·게시)은 `docs/reference/shared-checkout.md`가 정본으로 맡고, AGENTS에는 모든 세션이 지킬 6항 요약·멈추는 신호·읽을 때를 남겼다. Testing Requirements의 FULL 전환 목록·`gh run` 명령·colcon 재현은 `developer-guide.md`「테스트와 CI」로 옮겼다. Key Files·Dependencies·스킬 목록·중복된 D-23 줄은 각 폴더 `AGENTS.md`와 하네스가 이미 가진 내용이라 뺐다. 안전·권한 규칙(D-2, D-516, D-315, D-430 §5, D-226, D-33, D-584, D-868)은 문장 그대로 남겼다.
+- 어긋남 정리: 네 사본이 서로 달랐다. 기본 착지 명령을 `land_async.py`로 맞췄고(AGENTS는 `land.py`), `rosy-land-on-main` 스킬의 "at most 10"·"50-directory"를 15·14(D-886)로 고쳤다.
+- 증거: `test/test_readme_agent_start.py`의 세부 문구 단언을 지우지 않고 `shared-checkout.md` 쪽으로 옮겼고, AGENTS 쪽은 안전 요약 문구와 4,000자 상한을 단언한다. `rosy_harness.py lint` 0 error.
+- Gate: 없음. 문서·시험 변경이며 장치·현장 수용과 무관하다. 공개 push 없음.
+- CE: 해당 없음 — 사본이 어긋나 있던 사실은 이 기록과 정본 하나로 줄인 구조로 남는다.
+
+## 2026-10-30 · fd11d5158a · D-926 운용 화면의 읽는 순서·깊이·말의 규칙
+
+- 변경: D-926을 추가하고 Log 행·D-641 대체 주석을 붙였다. `DESIGN.md` 맨 앞에 읽는 순서·깊이·말·부품 모양·확인 항목 절을 두고 맥락 탭 아이콘 단독 문단을 고쳤다.
+- 증거: 2026-10-30 Fleet 샘플 서버 운영자 접속 캡처 13장과 토큰 사용 집계(작업 공간 계획 `2026-10-30-ui-hierarchy-foundation.md`). `rosy_harness.py lint`에서 D-926 오류 없음.
+- Gate: 없음. 화면별 적용은 단계별 브랜치로 따로 기록한다.
+- CE: 해당 없음 — 결정과 근거는 ADR이 담는다.
+
 ## 2026-10-30 · 08b6c8c362 · 새 장치 수집과 mDNS 진단 기록
 
 - 변경: 새 dated 검증 기록에 geg6 수신 두 건과 운영 pending 925장, 총6007장, 재등록0, 원본·검수 정보 보존과 현재 단절을 구분했다. 오래된 접속 목록과 실제 서비스 광고를 구분하는 CE 교훈을 추가했다.
