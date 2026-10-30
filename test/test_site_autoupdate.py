@@ -607,8 +607,7 @@ def test_signed_monitoring_overlay_runs_only_the_candidate_fleet_image(host, wor
     names += ["account"] if account else []
     overlay = " ".join(f"-f /opt/rosy/candidate/deploy/site/compose.{name}.yaml" for name in names)
     with host.paths.site_env.open("a", encoding="utf-8") as stream:
-        stream.write(f"ROSY_SITE_PAIRING_COMPOSE={overlay}
-")
+        stream.write(f"ROSY_SITE_PAIRING_COMPOSE={overlay}\n")
     releases, blobs = _world((NEW, "2026-10-04T02:00:00Z"))
     assert _updater(host, FakeHttp(releases, blobs), FakeHost(host.paths)).run() == upd.EXIT_OK
 
@@ -616,8 +615,7 @@ def test_signed_monitoring_overlay_runs_only_the_candidate_fleet_image(host, wor
 @pytest.mark.parametrize("image", ["rosy-site-vision:{tag}", "python:3.12"])
 def test_monitoring_overlay_cannot_pin_another_image(host, image):
     with host.paths.site_env.open("a", encoding="utf-8") as stream:
-        stream.write("ROSY_SITE_PAIRING_COMPOSE=-f /opt/rosy/candidate/deploy/site/compose.monitoring.yaml
-")
+        stream.write("ROSY_SITE_PAIRING_COMPOSE=-f /opt/rosy/candidate/deploy/site/compose.monitoring.yaml\n")
     fake = FakeHost(host.paths, monitoring_image=image.format(tag=NEW))
     env = upd.read_env(host.paths.site_env)
 
@@ -643,8 +641,7 @@ def test_monitoring_service_without_its_overlay_is_refused(host):
 def test_legacy_candidate_cannot_enable_unsigned_monitoring_overlay(host, loaded):
     old = host.paths.candidates / OLD
     (old / "release.json").write_text(json.dumps({"source_commit": OLD, "monitoring": False}))
-    (old / "deploy/site/compose.monitoring.yaml").write_text("services: {}
-")
+    (old / "deploy/site/compose.monitoring.yaml").write_text("services: {}\n")
     updater = _updater(host, FakeHttp([], {}), FakeHost(host.paths))
     env = {"ROSY_SITE_PAIRING_COMPOSE": "-f /opt/rosy/candidate/deploy/site/compose.monitoring.yaml"}
     with pytest.raises(upd.Rejected, match="not covered by this signed candidate"):
