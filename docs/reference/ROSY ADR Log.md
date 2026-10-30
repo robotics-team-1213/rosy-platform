@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-936 | ROSY Monitoring은 관제 PC에서 서명 사이트 스택의 선택 서비스로 실행한다 (D-876 배치 보충). [전문](../adr/D-936-monitoring-site-stack-service.md) | Accepted (2026-10-30, 사용자 결정; 관제 PC 반영·수용 별도) |
 | D-935 | 공급암 S 운반 무게는 검증한 상한으로 묶고, 운반마다 실제 짐을 확인해 기록한다 (D-911 보충). [전문](../adr/D-935-arm-s-payload-bound-amends-d911.md) | Accepted (2026-10-30, 사용자 결정; 실측·실물 수용 별도) |
 | D-934 | 물체 무게는 카탈로그의 실측값이며, 셀 카메라로 저울을 읽어 기록하고 ROSY에 보여 준다. [전문](../adr/D-934-arm-s-object-mass-by-cell-scale.md) | Proposed (2026-10-30; 실제 저울 판독·Fleet 표시 별도) |
 | D-933 | 공급암 S 셀은 면마다 그린 지도 대신 카메라 모델 하나와 인쇄 마커로 좌표를 잡는다. [전문](../adr/D-933-arm-s-cell-coordinate-frame-markers.md) | Proposed (2026-10-30; 구현·실물 수용 별도) |
