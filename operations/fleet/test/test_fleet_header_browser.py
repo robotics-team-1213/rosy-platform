@@ -438,10 +438,14 @@ def test_four_documents_draw_one_header_and_one_estop(tmp_path):
                 inbox_text = page.locator("#fleet-inbox").text_content().strip()
                 assert not inbox_text or inbox_text.isdecimal(), inbox_text
                 expect(page.locator("#fleet-inbox")).to_have_attribute("aria-label", re.compile("알림 창"))
+                # D-926: context tabs show icon above a one-line name, like the rail.
                 for tab in page.locator(".context-tabs [role=tab]").all():
-                    assert tab.locator(".ui-icon-label").bounding_box()["width"] <= 1
+                    tab_label = tab.locator(".ui-icon-label")
+                    expect(tab_label).to_be_visible()
+                    assert tab.get_attribute("data-icon-only") is None, (name, width)
+                    assert tab_label.evaluate("n => n.getClientRects().length === 1"), (name, width)
+                    assert tab.evaluate("n => n.scrollWidth <= n.clientWidth + 1"), (name, width)
                     assert tab.bounding_box()["height"] == 48
-                    expect(tab).to_have_attribute("data-ui-tooltip", tab.text_content().strip())
                 if width >= 1024:
                     assert nav["x"] + nav["width"] <= main["x"] + 1, (name, width, nav, main)
                 else:

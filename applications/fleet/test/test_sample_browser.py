@@ -210,6 +210,7 @@ def test_assistant_synthetic_voice_receipt_and_camera_panel(sample_site):
                                  data={'login':'sample', 'password':'CHANGE_ME'})
             page = context.new_page()
             page.goto(origin + '/console')
+            page.locator('#context-tools-tab').click()  # D-926: AI lives in the tools tab
             page.locator('#assistant-toggle').click()
             expect(page.locator('#assistant-send')).to_be_enabled()
             page.locator('#assistant-dictate').click()
