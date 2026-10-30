@@ -12,7 +12,7 @@
   "operating_conditions": {
     "installation_revision": null,
     "object_revision": null,
-    "payload_kg": null,
+    "payload_max_kg": null,
     "object_dimensions_m": null,
     "environment_revision": null
   },
