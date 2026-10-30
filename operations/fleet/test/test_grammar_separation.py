@@ -39,6 +39,7 @@ def test_fleet_links_only_its_own_sheet_and_the_single_tokens_file():
         # D-540: fleet-header.css is the one header sheet of the four documents.
         # D-741 6: app-shell.css is the shared seat sheet; Fleet uses its sub-nav seat.
         # Motor health is the shared evidence component, not Robot console layout grammar.
+        # D-926 C7: file-picker.css is Fleet's own Korean file picker, shared by install, Cell and site map.
         "index.html": [*shared_sheets, "/common/motor-health.css", "/common/app-shell.css", "/console/assets/styles.css",
                        "/console/assets/roster.css",
                        "/common/component-controls.css", "/console/assets/doc-tabs.css",
@@ -46,7 +47,7 @@ def test_fleet_links_only_its_own_sheet_and_the_single_tokens_file():
                        "/console/assets/fleet-header.css", "/console/assets/password-login.css",
                        "/console/assets/device-watch.css", "/console/assets/work.css"],
         "installation/install.html": [*shared_sheets, "/common/task-chooser.css",
-                         "/console/assets/styles.css", "/console/assets/doc-tabs.css",
+                         "/console/assets/styles.css", "/console/assets/file-picker.css", "/console/assets/doc-tabs.css",
                          "/console/assets/fleet-header.css", "/console/assets/password-login.css",
                          "/console/assets/measured-calibration.css"],
     }
