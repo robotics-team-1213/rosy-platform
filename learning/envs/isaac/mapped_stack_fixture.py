@@ -80,7 +80,8 @@ RL_RESIDUALS = {'nominal-bc-v0-rl0': dict(file='release-residual-rl0.npz',
 def container_fixture(*, layers, case):
     if case in EVALUATION_CASES:
         value = container_fixture(layers=layers, case='nominal')
-        value.update(revision=value['revision']+'-'+case, case=case, release_estimate_noise_m=[.002, .005])
+        value.update(revision=value['revision']+'-'+case, case=case, release_estimate_noise_m=[.002, .005],
+                     release_convergence_m=.0015)
         if EVALUATION_CASES[case]:
             value['release_corrector'] = dict(EVALUATION_CASES[case])
         if case in RL_RESIDUALS:
@@ -510,7 +511,9 @@ def cube_release_ready(index, sample, source_z, *, fixture=None):
             clear = (direction*(box['position'][1]-face)-y_extent >= margin
                 and release_footprint_fits(box,items[index]['size'],box['position'][1],fixture)
                 and tcp[2]+pad_sweep_bottom_relative_tcp(sample['wrist_orientations'][items[index]['arm']]) >= top+vertical)
-        return norm(error) <= .00005 and clear and prefix_held(sample, index, fixture)
+        # Estimate-only control converges to its estimate, not the true pose: estimate cases accept the final
+        # position tolerance here; clearance, footprint and prior-stack checks stay on the measured pose.
+        return norm(error) <= fixture.get('release_convergence_m', .00005) and clear and prefix_held(sample, index, fixture)
     direction = 1 if index % 3 == 0 or items[index-1]['cell'][1] < items[index]['cell'][1] else -1
     return (norm(error) <= .00005 and (index % 3 == 0 or direction*error[1] <= .000001)
             and all(stable_box(sample['boxes'][j], j, True, fixture=fixture) for j in range(index)))

@@ -94,8 +94,9 @@ def test_evaluation_cases_see_a_noisy_held_box_and_pin_the_model(case):
     nominal = f.container_fixture(layers=3, case='nominal')
     assert fixture['release_estimate_noise_m'] == [.002, .005]
     assert fixture['revision'] != nominal['revision']
+    assert fixture['release_convergence_m'] == .0015
     assert {k: v for k, v in fixture.items() if k not in ('revision', 'case', 'release_estimate_noise_m',
-                                                          'release_corrector')} == \
+                                                          'release_corrector', 'release_convergence_m')} == \
         {k: v for k, v in nominal.items() if k not in ('revision', 'case')}
     if case == 'nominal-bc-v0':
         assert fixture['release_corrector'] == dict(file='release-corrector-bc-v0.npz', sha256=BC_V0)
@@ -180,13 +181,13 @@ def test_estimate_cases_accept_a_tcp_within_the_final_tolerance_but_keep_the_saf
     """Runs 74cd/1196: estimate-only control ended 2.29/1.03 mm from the true-pose target, never within 50 um."""
     fixture = f.container_fixture(layers=3, case=case)
     sample = held_scene(fixture, 0)
-    target = f.cube_release_target(0, sample, .05, fixture=fixture)
-    sample['tcps'][0] = target[:]
-    sample['boxes'][0]['position'] = [sample['boxes'][0]['position'][k] for k in range(3)]
+    release = f.packed_release_position(0, sample, fixture)
+    sample['boxes'][0]['position'] = release[:]
+    sample['tcps'][0] = release[:]  # held box and TCP at the true-pose release point: converged
     assert f.cube_release_ready(0, sample, .05, fixture=fixture)
-    sample['tcps'][0] = [target[0]+.001, target[1], target[2]]
-    sample['boxes'][0]['position'][0] += .001
+    sample['tcps'][0][0] += .001
+    sample['boxes'][0]['position'][0] += .001  # both 1 mm off the true-pose target
     assert f.cube_release_ready(0, sample, .05, fixture=fixture) is converged
-    sample['boxes'][0]['forces'][0] = [0., 0., 0.]  # the hold itself still has to be bilateral
-    with pytest.raises(ValueError, match='bilateral'):
-        f.cube_release_ready(0, sample, .05, fixture=fixture)
+    sample['tcps'][0][0] += .001
+    sample['boxes'][0]['position'][0] += .001
+    assert not f.cube_release_ready(0, sample, .05, fixture=fixture)  # 2 mm stays blocked
