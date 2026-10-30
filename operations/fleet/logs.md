@@ -5154,3 +5154,10 @@
 - 증거: 같은 계측기(SHA-256 `c4d2a93bfbc1…`)를 9f68096560에 원격으로 다시 실행했다(1 passed, 17 trial). 3회 중앙값 마지막 발행: 정상 8대 1.813→0.049초, 32대 8.053→0.181초, 느린 수락 응답 2.815→1.064초, 쓰기 경합 2.347→0.581초. 정상 조건의 루프 최대 지연은 8→23ms(32대 18→18ms)이고, `/healthz` 예약 지연 최대는 11~28ms에서 41~56ms로 늘었다(연속 발행 구간 동안 대기). 쓰기 잠금의 루프 정지(약 0.57초)와 timeout 3회의 `UNKNOWN`은 그대로다. 원격 회귀: loop supervision·queue wait 19 passed, fleet task/CLI 관련 94 passed, NEW 0.
 - Gate: 교통·안전·명령 소유권 변화 없음. 느린 장비의 head-of-line 지연과 이벤트 루프의 동기 SQLite 대기는 그대로이며 별도 설계 대상이다. 실제 장치·현장 수용을 수행하지 않았다.
 - CE: 해당 없음 — 원인과 경계(직렬 발행이 교통 검사를 지킨다)는 코드 주석·회귀 시험·이 기록에 남는다.
+
+## 2026-10-30 · uncommitted · feat(sim): 정상 단계 시뮬 관측자 transfer_observer (D-927 결정 3)
+
+- 변경: `tools/sim/transfer_observer.py` 추가. 독립 observer 자격으로 관측 문맥을 읽고 시뮬 상태 파일(측정 관절·속도·그리퍼·물체 자세)에서 URDF FK 링크 경계·속도를 계산해 시료 두 개를 제출한다. 승인·Action 제출 없음. 사용법은 `docs/transfer-outcome-review.md`.
+- 증거: `operations/fleet/test/test_transfer_observer_client.py` 원격 4 passed — 실제 Fleet 앱에서 PRE_DISPATCH·POST_ACTION으로 GOAL_CONFIRMED, 팔이 zone 안·회전 중이면 거절, 끝점이 `omx_adapter` TCP FK와 일치.
+- Gate: Fleet 검증 규칙·API 변화 없음. 시뮬 관측이며 물리 근거·현장 수용이 아니다. 팔 기준 자세 파일은 S4 설치 profile 전까지의 지름길이다.
+- CE: 해당 없음 — 새 도구와 시험이 계약을 보여 준다.
