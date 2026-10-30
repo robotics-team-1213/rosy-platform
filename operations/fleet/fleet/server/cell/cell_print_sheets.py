@@ -43,11 +43,11 @@ class Page:
     def __init__(self):
         self.ops = []
 
-    def box(self, x, y, w, h, fill=True, dash=False):
+    def box(self, x, y, w, h, fill=True):
+        """A filled box, or (fill=False) a cut line: thin (0.25 pt) solid, centred on the exact cut edge."""
         X, Y = x * PT_PER_MM, (A4_MM[1] - y - h) * PT_PER_MM
-        stroke = "[2 2] 0 d 0.3 w" if dash else "[] 0 d 0.5 w"
         self.ops.append(f"{X:.3f} {Y:.3f} {w * PT_PER_MM:.3f} {h * PT_PER_MM:.3f} re f" if fill else
-                        f"{stroke} {X:.3f} {Y:.3f} {w * PT_PER_MM:.3f} {h * PT_PER_MM:.3f} re S")
+                        f"q [] 0 d 0.25 w {X:.3f} {Y:.3f} {w * PT_PER_MM:.3f} {h * PT_PER_MM:.3f} re S Q")
 
     def text(self, x, y, size_pt, s):
         s = s.encode("ascii", "replace").decode().replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
@@ -86,7 +86,7 @@ def marker_cells(marker_id: int) -> list[tuple[int, int]]:
 
 
 GRIPPER = ("ROSY gripper markers - ArUco DICT_4X4_100",
-           "Cut on the dashed line, keep the white edge. Glue flat on the gripper body's top face (20 mm).")
+           "Cut on the thin line, keep the white edge. Glue flat on the gripper body's top face (20 mm).")
 
 
 def markers_pdf(ids, sizes_mm, words=GRIPPER) -> bytes:
@@ -118,7 +118,10 @@ def _markers_page(groups, words) -> bytes:
     page.text(MARGIN_MM, y + 11, 9, words[1])
     y += 18
     page.scale_bar(y)
-    y += 16
+    sizes = sorted({size for _, size, _ in groups})
+    page.text(MARGIN_MM, y + 12, 9, "Cut exactly on the thin line; keep the white edge. Cut squares: " +
+              ", ".join(f"{s:g} mm marker {s * 4 / 3:.1f} mm" for s in sizes) + ".")
+    y += 21
     for ids, size, names in groups:
         quiet = size / 6  # one cell of white around the black border, inside the cut line
         x = MARGIN_MM
@@ -130,7 +133,7 @@ def _markers_page(groups, words) -> bytes:
             cell = size / 6
             for r, c in marker_cells(marker_id):
                 page.box(x + quiet + c * cell, y + quiet + r * cell, cell, cell)
-            page.box(x, y, size + 2 * quiet, size + 2 * quiet, fill=False, dash=True)
+            page.box(x, y, size + 2 * quiet, size + 2 * quiet, fill=False)
             label = f"id {marker_id}  {size:g} mm" + (f"  {names[marker_id]}" if marker_id in names else "")
             page.text(x, y + size + 2 * quiet + 5, 9, label)
             x += size + 2 * quiet + GAP_MM
@@ -147,8 +150,12 @@ def charuco_pdf() -> bytes:
     page.text(MARGIN_MM, y + 11, 9, "squares 20 mm, markers 15 mm, DICT_4X4_50 ids 0-34. Matte paper on a flat rigid board; tilt it 20-40 deg.")
     y += 18
     page.scale_bar(y)
-    y += 16
+    y += 21
     x, marker_id, cell = (A4_MM[0] - cols * square) / 2, 0, side / 6
+    edge = 5.0  # white edge kept around the board when it is cut out and glued to a rigid board
+    page.box(x - edge, y - edge, cols * square + 2 * edge, rows * square + 2 * edge, fill=False)
+    page.text(x - edge, y + rows * square + edge + 5, 9, f"Cut on the thin line: {cols * square + 2 * edge:g} x "
+              f"{rows * square + 2 * edge:g} mm, a {edge:g} mm white edge around the squares.")
     for r in range(rows):
         for c in range(cols):
             if (r + c) % 2 == 0:

@@ -105,4 +105,6 @@ def test_an_arm_sheet_reads_back_as_its_block_at_true_size(slot):
     assert sorted(ids.ravel().tolist()) == list(range(block["gripper"], block["gripper"] + 15))
     sides = {int(i): np.linalg.norm(c[0][1] - c[0][0]) / (300 / 25.4) for c, i in zip(corners, ids.ravel())}
     assert sides.pop(block["gripper"]) == pytest.approx(20.0, abs=0.2)
+    cuts = [float(v) / PT_PER_MM for v in re.findall(rb"[\d.]+ [\d.]+ ([\d.]+) [\d.]+ re S", pdf)]
+    assert sorted(cuts) == pytest.approx([20 * 4 / 3] + [25 * 4 / 3] * 14, abs=1e-3)  # one cut square per marker
     assert all(s == pytest.approx(25.0, abs=0.2) for s in sides.values())
