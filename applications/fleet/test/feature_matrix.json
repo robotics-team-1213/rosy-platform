@@ -3199,7 +3199,8 @@
       ],
       "consumers": [
         "applications/fleet/web/cell/cell.js",
-        "applications/fleet/web/cell/cell-print-sheets.js"
+        "applications/fleet/web/cell/cell-print-sheets.js",
+        "applications/fleet/web/cell/cell-object-catalog.js"
       ],
       "availability": "configured capability and authorized role; see backend contract",
       "calls": [
@@ -3252,9 +3253,34 @@
           "request_ids": [
             "GET:/api/fleet/cell-app/print-sheets/{kind}"
           ]
+        },
+        {
+          "consumer": "applications/fleet/web/cell/cell-object-catalog.js",
+          "expression": "/api/fleet/cell-app/object-catalog",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/cell-app/object-catalog"
+          ]
         }
       ],
       "requests": [
+        {
+          "id": "GET:/api/fleet/cell-app/object-catalog",
+          "method": "GET",
+          "path": "/api/fleet/cell-app/object-catalog",
+          "implementation": "operations/fleet/fleet/server/cell/cell_app_routes.py",
+          "handler": "object_catalog",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; read-only object catalogue for a viewer, unmeasured mass shown blocked, 401 without login, 503 unconfigured, 422 wrong schema",
+          "contract_tests": [
+            "operations/fleet/test/test_cell_object_catalog.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/cell-app/object-catalog"
+        },
         {
           "id": "GET:/api/fleet/cell-app/print-sheets/{kind}",
           "method": "GET",

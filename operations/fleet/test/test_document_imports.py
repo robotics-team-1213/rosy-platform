@@ -110,6 +110,7 @@ OWN = {
         "cell-document-editor.js",
         "cell-observation.js",
         "cell-print-sheets.js",  # 보정 인쇄물 PDF 내려받기
+        "cell-object-catalog.js",  # 물체 카탈로그(무게) 읽기 전용
     },
     "site-map.js": {
         "map-authoring.js", "map-editor.js", "drawing-import.js", "geometry-edit.js", "edit-history.js",
