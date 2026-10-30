@@ -4161,6 +4161,14 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - gate: 모델 PC 타이머·unit·실제 기존 workspace/classes 결속을 적용했다. 원래 53장 검수 digest 불변. GPU 보류와 로봇 DNS/SSH 장애로 신규 운영 프레임·새 실물 경로 수용은 아직 없다.
 - CE: 해당 없음 — 구현·회귀·운영 문서와 기존 exact-unit 복구 교훈에 있는 판단이다.
 
+## 2026-10-29 · uncommitted · ChArUco OpenCV 4.6 API 호환
+
+- 원인: PR220 sourcea985의 실제 GitHub root-test-1of3는 apt OpenCV4.6.0을 사용하며 보드 page 생성과 calibration fixture의 generateImage 호출에서 2 failed/4655 passed/339 skipped였다. 새 API만 가정한 검출·좌표 matching 경로도 함께 확인했다. 실물 보드나 장치는 실행하지 않았다.
+- 변경: 기존 factory가 있으면 CharucoBoard_create를 사용하고, 렌더링은 generateImage/draw를 지원한다. 구버전 검출은 detectMarkers/interpolateCornersCharuco, object point는 검출 corner ID 순서대로 chessboardCorners를 선택한다. 보드7x5·square0.025m·marker0.018m·float32 shape와 기존 실제 검출/보정 수치 assertion을 유지했다. calibration fixture도 같은 렌더 helper를 쓴다.
+- 증거: legacy fake 회귀는 비연속·재정렬 ID, 최소 corner 수, 누락 검출을 검사한다. 독립 contract review는 좌표 대응·단위·기존 소비자 page/solve/camera capture 경계를 확인했고 motion/admission 변경이 없었다. 원격 실행 및 실제 OpenCV4.6 CI는 아직 미완료이며 fake 시험을 native 수용으로 주장하지 않는다.
+- gate 변화: 없음. 버전 pin 변경·새 skip·quarantine·검사 완화는 없다.
+- CE: 해당 없음 — 기존 OpenCV4.6 aruco API 교훈을 적용했다. 구현·회귀·기존 문서에 없는 새 판단은 확인되지 않았다.
+
 ## 2026-10-30 · b830767991 · open AP 소비자 선행 착지 후 producer 통합
 
 - 변경: 소비자 commit fd2131fdcbec가 실제 main 조상이 된 뒤 main commit 9ecc9795e93c를 producer에 병합했다. peer LCD helper/compact renderer와 기존 기록을 유지했다. main에서 D-914 문서가 도착했으므로 그 번호의 낡은 adr_gaps 행만 제거했다.
@@ -4191,3 +4199,39 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 분리 source 351d048c15의 공식 원격 auto_pick·objects·params·wrist 회귀는 78 passed/0 skipped, NEW0이다. 함수 signature·docstring·본문의 AST 일치와 두 파일 diff는 독립 계약 검토를 받았다. raw 보고는 Git 밖 omx-end-clearance-20261030/split/run-1.txt에 보존한다.
 - gate 변화: 없음. 이 분리는 끝 집기점의 view/clearance/bias 재승인 누락을 고치지 않는다. 별도 회귀 a567069cea는 실제 mask 전제를 통과한 뒤 선택·bias assertion 네 곳에서 실패했다. 분리가 main에 착지한 뒤 그 수정을 이어 검증한다. 실물 동작·배포·수용은 하지 않았다.
 - CE: 해당 없음 — 함수의 동등 이동과 alias 보존은 최종 diff·기존 회귀·독립 AST 비교로 설명된다. 아직 고치지 않은 끝 집기점 누락은 미해결 기록으로 유지한다.
+
+## 2026-10-30 · uncommitted · 게시 범위의 역사적 비밀값 오탐 검토
+
+- 원인: sourcee5와현main9b424의 게시 전 검사는 새5 hits/정확3 tuples를 거절했다. main 쪽479개 커밋을 검사했으며 기존157개 검토 기록에는 이 세 항목이 없었다.
+- 증거: 독립 검토자는 문서c7b9의3개 후보가 각각 실제 Git commit object임을 확인했다. testc157은 고정 합성 fixture의16자 slice이고 testa6은 CLI 거절·stderr 비노출 시험의 고정22자 입력이었다. 실제 환경·private 입력으로부터 읽은 값이 아니며 후보 값·발췌문을 출력하거나 기준선에 넣지 않았다.
+- 변경: 해당 commit/path/rule 세 조합과 검토일·agent provenance만 기존 기준선에 추가한다. scanner·규칙·기존157항목·새 커밋/다른 규칙 거절은 유지한다. 수정 파일에서의 실제 게시 검사와 새 커밋 원격 publisher 회귀를 확인한 뒤 최종 FULL source에 포함한다.
+- Gate: 아직 새 최종 FULL·CI·게시·운영 전환 완료가 아니다. source 변경에 맞춰 공식 snapshot과 검증을 갱신하며 대기 중인 hidden branch를 몰래 바꾸지 않는다.
+- CE: 해당 없음 — 기존 exact-tuple 역사적 오탐 검토 절차를 적용했고 추가 판단은 기준선 metadata·회귀·증거 기록에서 복원한다.
+
+## 2026-10-30 · uncommitted · 게시 준비 기록의 필수 표기 정정
+
+- 변경: 이미 커밋된 세 기록에서 기존 문장에 필수 증거·변경·gate 표기만 붙인다. 정확한 정규화 블록의 전후 SHA256 쌍을 기존 정정 자료에 등록하고 원래 문장·실행 결과·다른 기록은 보존한다.
+- 증거: source046299191f의 공식 FULL은 사전 lint의 누락3건에서 멈췄으며 원격 pytest는 시작하지 않았다. 정정 범위는 독립 검토와 최종 lint에서 확인한다. 앞선 부분 회귀 결과를 FULL 결과로 바꾸지 않는다.
+- gate 변화: 없음. 필수 필드와 추가 전용 이력 검사를 유지하며, 새 FULL·CI·게시·운영 전환은 아직 완료되지 않았다.
+- CE: 해당 없음 — 기존 정확 해시 정정 절차를 적용하며 일반 기록 형식 수정의 원인은 검사 오류와 원문에서 복원한다.
+
+## 2026-10-30 · uncommitted · 새 field marks 호출의 프로필·감독 거부 회귀
+
+- 변경: 게시 통합 범위의 새 cell_field 호출에서 선택 프로필 바인딩과 감독 admission 누락을 독립 검토로 찾았다. 실제 FIFO 검증 경로를 사용하는 회귀를 먼저 추가하며 운영 구현은 아직 바꾸지 않는다.
+- 증거: Field 생성자는 profile을 FIFO에 전달하지 않고 marks는 raw load/goto/grip/park를 전송한다. 새 시험은 실제 FifoCell.act와 시험용 전송을 연결해 대상 불일치·오래된 상태·저장된 가짜 binding·감독 플래그 누락·실패 시 park 경로를 구분한다. 수정 전 원격 RED는 이 커밋 이후 실행하며 실물 접근은 없다.
+- gate 변화: 없음. marks admission은 미해결이며 SOURCE 통과나 현장 수용을 주장하지 않는다. 기존 증분 도구 설치·사이트 운영 상태도 바꾸지 않는다.
+- CE: 미해결 — 공개 통합 범위의 새 native 호출 경계 결함이며 회귀 재현과 수정 검증 후 기존 교훈 기준으로 판단한다.
+
+## 2026-10-30 · uncommitted · field marks를 선택 프로필과 감독 절차에 연결
+
+- 변경: 저장된 가짜 binding을 버리고 실제 선택 프로필과 증거 경로를 FIFO client에 바인딩한다. marks의 직접 호출과 CLI 모두 명시적인 commissioning·person-at-switch를 요구하며 profile/감독 거절은 try/finally park 전에 끝난다. gripper 명령이 거절되면 반복을 중단하고 기존 검증된 park 경로는 보존한다.
+- 증거: 수정 전 커밋67e700358d의 원격 회귀17건은12failed/5passed/skip0이며 known_failures는12NEW를 확인했다. 독립 검토에서 실제 FIFO 검증 경로와 library digest 전이의 fixture 정합성을 확인했다. 구현 수정본 GREEN은 이 커밋 이후 실행하며 실물·시리얼·로봇 SSH 접근은 없다.
+- gate 변화: 없음. 이 기록은 수정 전 RED와 source 검토만 증명하며 원격 GREEN·적격 FULL·CI·현장 수용을 대신하지 않는다. 실패를 기존 quarantine에 추가하지 않는다.
+- CE: 미해결 — 회귀 수정 검증 뒤 기존 교훈과 최종 코드·시험만으로 판단을 복원할 수 있는지 평가한다.
+
+## 2026-10-30 · uncommitted · field marks admission의 원격 GREEN·mutation·복귀 검증
+
+- 변경: 새 field marks의 선택 프로필·감독 admission 수정을 실제 원격 회귀와 격리된 negative mutation으로 검증했다. 기존 FIFO/Runner 권한과 사이트 이미지 구성은 바꾸지 않는다.
+- 증거: source69bbc19002의 field/profile/pipeline/Runner/envelope 5file suite174passed/skip0/96warnings/NEW0. 별도 mutant aa51c31e5d는 FIFO binding과 marks/CLI admission 4줄만 무력화해14failed/4passed/skip0/14NEW를 보였고 TypeError가 아닌 실제 assertion으로 실패했다. 정상69bbc branch 복귀 뒤18passed/skip0/NEW0을 확인했다. mutant는 정상 이력에 포함되지 않으며 착지·게시·설치 금지다. 독립 source 검토와 local lint0errors/39warnings도 확인했다.
+- gate 변화: native source 회귀 범위만 확인했다. 실제 장치 수용·적격 FULL·GitHub CI·게시·운영 서버 전환은 아직 미완료이며 도구 설치 상태와 구분한다. 이전 FULL129576은 새 안전 수정 때문에 원격 시험 시작 전 소유자 확인 후 종료했고 snapshot을 보존했다.
+- CE: 해당 없음 — 새 wrapper의 누락과 필요한 profile/supervision 경계는 정본 D-911/D-914, 기존 FifoCell 구현과 이번 실제 전송 회귀·mutation에서 복원된다. 문서에 없는 장치 성질을 새로 추정하거나 실물 동작을 관측한 결과는 아니다.

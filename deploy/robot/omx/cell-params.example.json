@@ -445,6 +445,12 @@
    "source": "tuned",
    "evidence": "2026-10-30 dim room: top auto exposure stuck at 3000, mean 21, wrist 145; manual 10000/20000/33000 at gain 7 gave 61/105/148; at mean 106 the board box split in two and matched no catalogue entry, at 156 it matched: detection was tuned near 140"
   },
+  "auto.max_gross_kg": {
+   "value": 0.08,
+   "unit": "kg",
+   "source": "theory",
+   "evidence": "2026-10-30 D-935, user approved: 0.23 m reach used 78 % of PWM 300 at the shoulder (10-26); with the 600 cap about 0.47 N m is left at 0.30 m, about 160 g, halved for acceleration, strain and heat. Estimate before measurement: replace with 10 g step trials"
+  },
   "scale.repeats": {
    "value": 5,
    "unit": "count",
