@@ -1621,6 +1621,20 @@ The timer keeps only the operational SQLite ledger; keep transferring copies
 to the approved encrypted target as above — the retention here bounds disk
 use on the site host, it is not an off-site backup.
 
+#### Backup freshness check (ledger check timer)
+
+The `rosy-site-ledger-backup-check.service`/`.timer` pair re-verifies the
+newest `fleet-backup-*.sqlite3` every 6 hours: it must be younger than
+`--max-age-hours 48` (the backup timer is daily) and pass `integrity_check`.
+A failed, disabled, or long-stalled backup timer therefore surfaces as a
+failed unit in `systemctl --failed`, next to the firewall check. The check
+runs the candidate's `site_db.py` on the host against the same
+`ROSY_SITE_BACKUP_DIR` bind. Enable it once:
+
+```sh
+sudo systemctl enable --now rosy-site-ledger-backup-check.timer
+```
+
 Before relying on recovery, test the backup against a separate Compose project
 so it receives a different named `sighting_data` volume. The installed site
 configuration and secret files must be available to Compose, but this one-off

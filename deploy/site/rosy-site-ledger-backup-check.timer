@@ -1,0 +1,10 @@
+[Unit]
+Description=Periodically check the Fleet ledger backup freshness
+
+[Timer]
+OnBootSec=30min
+OnUnitInactiveSec=6h
+Unit=rosy-site-ledger-backup-check.service
+
+[Install]
+WantedBy=timers.target

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+import time
 from contextlib import closing
 from pathlib import Path
 
@@ -115,6 +116,48 @@ def test_cli_backup_rejects_ambiguous_or_empty_targets(tmp_path):
     with pytest.raises(SystemExit):
         site_db.main(["backup", "--source", str(source), "--dest-dir", str(tmp_path),
                       "--prune", "0"])
+
+
+def test_cli_check_accepts_a_fresh_intact_backup(tmp_path, capsys):
+    source = tmp_path / "fleet.sqlite3"
+    _database(source, "check")
+    dest_dir = tmp_path / "nightly"
+    assert site_db.main(["backup", "--source", str(source), "--dest-dir", str(dest_dir)]) == 0
+    capsys.readouterr()  # 백업 보고를 비우고 check 출력만 본다
+
+    code = site_db.main(["check", "--dest-dir", str(dest_dir), "--max-age-hours", "48"])
+
+    assert code == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["integrity"] == "ok"
+    assert report["age_hours"] < 1
+    assert Path(report["newest"]).is_file()
+
+
+def test_cli_check_fails_when_no_backup_exists(tmp_path):
+    with pytest.raises(SystemExit):
+        site_db.main(["check", "--dest-dir", str(tmp_path)])
+
+
+def test_cli_check_fails_when_the_newest_backup_is_stale(tmp_path):
+    dest_dir = tmp_path / "nightly"
+    dest_dir.mkdir()
+    stale = dest_dir / "fleet-backup-20260101-000000.sqlite3"
+    _database(stale, "stale")
+    old = time.time() - 72 * 3600
+    os.utime(stale, (old, old))
+
+    with pytest.raises(SystemExit):
+        site_db.main(["check", "--dest-dir", str(dest_dir), "--max-age-hours", "48"])
+
+
+def test_cli_check_fails_when_the_newest_backup_is_corrupt(tmp_path):
+    dest_dir = tmp_path / "nightly"
+    dest_dir.mkdir()
+    (dest_dir / "fleet-backup-20260101-000000.sqlite3").write_bytes(b"not sqlite")
+
+    with pytest.raises(SystemExit):
+        site_db.main(["check", "--dest-dir", str(dest_dir), "--max-age-hours", "48"])
 
 
 def test_restore_requires_stopped_assertion_and_keeps_pre_restore_snapshot(tmp_path):

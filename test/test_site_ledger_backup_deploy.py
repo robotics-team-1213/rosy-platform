@@ -46,3 +46,20 @@ def test_compose_backup_command_keeps_fourteen_backups():
         (SITE / "compose.yaml").read_text(encoding="utf-8"))["services"]["fleet-backup"]
     command = service["command"]
     assert command[command.index("--prune") + 1] == "14"
+
+
+def test_backup_check_service_runs_site_db_check_on_the_host_backup_dir():
+    text = (SITE / "rosy-site-ledger-backup-check.service").read_text(encoding="utf-8")
+    assert "Type=oneshot" in text
+    assert "site_db.py check --dest-dir ${ROSY_SITE_BACKUP_DIR}" in text
+    assert "--max-age-hours 48" in text
+    assert "Environment=ROSY_SITE_BACKUP_DIR=/var/backups/rosy-site" in text
+    assert "EnvironmentFile=-/etc/rosy/site/site.env" in text  # site.env 값이 기본값을 덮어쓴다
+
+
+def test_backup_check_timer_rechecks_periodically():
+    text = (SITE / "rosy-site-ledger-backup-check.timer").read_text(encoding="utf-8")
+    assert "OnBootSec=30min" in text
+    assert "OnUnitInactiveSec=6h" in text
+    assert "Unit=rosy-site-ledger-backup-check.service" in text
+    assert "WantedBy=timers.target" in text

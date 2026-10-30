@@ -17,6 +17,7 @@ from itertools import zip_longest
 from pathlib import Path
 
 DEFAULT_DATABASE = Path("/var/lib/rosy/fleet.sqlite3")
+DEFAULT_BACKUP_DIR = Path("/var/backups/rosy-site")
 BACKUP_PREFIX = "fleet-backup-"
 
 
@@ -28,6 +29,27 @@ def _prune_backups(directory: Path, keep: int) -> list[str]:
     for stale in backups[:-keep]:
         stale.unlink(missing_ok=True)
     return removed
+
+
+def check_backups(directory: Path, *, max_age_hours: int) -> dict:
+    """Newest backup must exist, be fresh, and pass integrity_check.
+
+    The daily timer writes fleet-backup-*.sqlite3; a failed, disabled, or
+    long-stalled timer surfaces here so the check unit fails visibly.
+    """
+    backups = sorted(path for path in directory.glob(f"{BACKUP_PREFIX}*.sqlite3")
+                     if path.is_file())
+    if not backups:
+        raise DatabaseError(f"no {BACKUP_PREFIX}*.sqlite3 backups in {directory}")
+    if max_age_hours < 0:
+        raise DatabaseError("max age hours must not be negative")
+    newest = backups[-1]
+    age_hours = (time.time() - newest.stat().st_mtime) / 3600.0
+    if age_hours > max_age_hours:
+        raise DatabaseError(
+            f"newest backup {newest.name} is {age_hours:.1f} h old, over {max_age_hours} h")
+    return {"newest": str(newest), "age_hours": round(age_hours, 3),
+            "integrity": verify_database(newest)}
 
 
 #: 2026-10-28 자원 경계: 무한히 쌓이던 원장 행의 보존 기간(일).
@@ -338,6 +360,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                              "backup (default 90; 0 disables)")
     verify = commands.add_parser("verify", help="run SQLite integrity_check")
     verify.add_argument("--path", type=Path, required=True)
+    check = commands.add_parser(
+        "check", help="verify the newest dest-dir backup is fresh and passes integrity_check")
+    check.add_argument("--dest-dir", type=Path, default=DEFAULT_BACKUP_DIR,
+                       help="backup directory the daily timer writes (default %(default)s)")
+    check.add_argument("--max-age-hours", type=int, default=48,
+                       help="fail when the newest backup is older (default 48; the timer is daily)")
     restore = commands.add_parser("restore", help="restore after stopping the site services")
     restore.add_argument("--source", type=Path, required=True)
     restore.add_argument("--destination", type=Path, default=DEFAULT_DATABASE)
@@ -373,6 +401,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             checkpointed = checkpoint_wal(args.source)
         elif args.command == "verify":
             print(json.dumps({"path": str(args.path), "integrity": verify_database(args.path)}))
+            return 0
+        elif args.command == "check":
+            print(json.dumps(check_backups(args.dest_dir,
+                                           max_age_hours=args.max_age_hours)))
             return 0
         else:
             result = restore_database(args.source, args.destination,
