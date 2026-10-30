@@ -558,6 +558,7 @@ def test_host_alone_suites_go_to_the_first_configured_host_and_fall_back_without
     assert wq.wanted("any" + wq.SKIP_ALONE, [["t"], gz])(1) is False
     assert wq.wanted("any" + wq.SKIP_ALONE, [["t"], gz])(0) is True
     assert rp.workers(["ai"], [gz], {}, order) == [("ai", "any")]  # model PC not placed: as before
+    assert rp.workers(["ai", "model"], [gz], {"model": {"sim_held": 1}}, order) == [("ai", "any")]  # sim on it
     assert rp.workers(["site", "ai"], [gz], {"site": {"site": True}}, ["site", "ai"]) == [("ai", "any")]
     assert wq.guard(None, "main" + wq.SKIP_ALONE, gz) is not None
     work = wq.Work([0, 1, 2])  # largest first: 2 is the smallest, a light host's pick unless it is host-alone
