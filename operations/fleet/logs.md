@@ -5130,3 +5130,27 @@
 - 증거: [별도 수정 검증](../../docs/validation/recovery-observer-client-2026-10-29/guard-correction.md). 해당 커밋에서 원격 client 전체와 정확 secret guard 36 pass·skip 0·NEW 0. 독립 검토는 32자 미만 거절·출력 미노출 의도가 유지됨을 확인했다.
 - Gate: 공식 재착지는 별도 확인한다. 실제 관측 생산자·장치·학습 수용 변화는 없다.
 - CE: 해당 없음 — 기존 검사기의 명시적 자리표시자 규칙과 이번 회귀·수정 기록에서 이유를 복원한다.
+
+## 2026-10-30 · uncommitted · fix(fleet): 관측 기록 행 상한 정리를 MAX(id) 경계로
+
+- 변경: `ObservationStore`가 스냅샷마다 쓰기 트랜잭션 안에서 `ORDER BY observation_id DESC LIMIT 1 OFFSET 100000`으로 10만 행(로봇 JSON 본문이 든 rowid leaf)을 훑던 정리를 `MAX(observation_id) - max_rows` 경계로 바꿨다. AUTOINCREMENT id는 다시 쓰이지 않으므로 상한(최대 `max_rows`행)은 그대로이고, id가 이어져 있으면 남는 행도 같다.
+- 증거: 저장소 밖 측정(워크스페이스 조사 기록 `Rosy/docs/research/d271-gate-a-2026-10-30/sqlite-prune/`, 원격 시험 PC, 1.5KB 행 10만, 스냅샷 1회 = 8행 삽입+8행 정리, 40회): 쓰기 트랜잭션 p50 66→37ms, p95 98→83ms, max 136→236ms(잡음). 대부분은 `synchronous=FULL` 커밋이며 그대로 둔다. 이 정리는 Gate A의 0.5초 잠금의 원인이 아니다. 같은 패턴의 `observe/rules.py`는 측정하지 않아 바꾸지 않았다.
+- Gate: 보존 상한·보존 기간·공개 필드 변화 없음. 실제 현장 DB 크기와 잠금 시간은 발행 로그 `claim_s`로 따로 본다.
+- CE: 해당 없음 — 이유는 코드 주석과 이 기록, 측정 원본에 남는다.
+
+## 2026-10-30 · uncommitted · fix(fleet): 교통 판정 구간을 콘솔 잠금 하나로 직렬화
+
+- 변경: `FleetConsole._goal`에서 경로 확인부터 점유(`_claims`) 기록·비켜세우기까지를 `asyncio.Lock` 하나로 묶었다. 목표 전송과 그 앞 확인은 잠금 밖에 그대로 두고, 정지 경로(`cancel`, `estop_all`, 위치 신뢰 보류)는 잠금을 잡지 않는다.
+- 원인: `console.goal`은 작업 발행 루프, `/api/fleet/do`, 직접 goal·lane route, 교통 대기 해제, trip에서 동시에 불린다. 경로 확인과 점유 기록 사이에 await가 여러 번 있어, 동시에 검사한 두 미션은 서로의 점유를 보지 못하고 함께 나갔다. 저장소 밖 재현 시험이 main `46b23e565a`에서 마주 오는 두 미션이 모두 accepted, 점유 2개가 되는 것을 확인했다(워크스페이스 조사 기록 `Rosy/docs/research/d271-gate-a-2026-10-30/traffic-race/`).
+- 증거: 회귀 `test_concurrent_head_on_missions_let_exactly_one_through`(경로를 읽을 때 한 번 양보하는 가짜 로봇 두 대가 정면 경로로 동시에 goal)는 수정 전 구조에서 두 미션이 모두 나가고, 수정 뒤 두 번째가 `blocked_by=rosy_01`로 대기한다. D-766 상한을 넘은 `console.py`가 늘지 않도록 `_cancel_confirmed` 본문을 `goal_admission.cancel_confirmed`로 옮겼다. 저장소 밖 재현 시험은 수정 커밋에서 두 번째 미션이 `blocked_by=rosy_01` 대기, 점유 1개였다. 원격 교통·goal admission·lease·trip·priority·handover·recovery 회귀 291 passed, NEW 0.
+- 독립 검토(작성 세션 밖 읽기 전용 리뷰어, D-430 5): 잠금·재진입·정지 경로·`_cancel_confirmed` 이동은 문제없음. 지적 1(중간): 잠금을 기다리는 로봇은 이미 `_goal_busy`라 잠금을 쥔 미션의 `_make_room`이 그 로봇을 비켜세우면 `_send_to_bay`가 거절하고 mover가 점유 없이 `UNKNOWN`이 된다 → 발행 중인 로봇을 trip 로봇처럼 "비켜설 자리 없음"으로 다루게 고치고 회귀 `test_a_robot_waiting_for_its_own_traffic_check_is_not_ordered_to_yield`를 더했다. 남긴 한계: 잠금 대기 중 호출이 취소되면 목표는 살아 있고 판정·점유가 없다(전에도 await 사이 같은 창이 있었고 대기만큼 길어졌다). 스냅샷의 `_run_traffic`은 잠금 없이 NAVIGATING 아닌 로봇의 점유를 지운다. 방금 기록한 점유를 아직 NAVIGATING이 아닌 낡은 상태로 지우면 좁은 창에서 같은 race가 다시 생길 수 있다(바꾸지 않음). 또 대기 해제의 `goal`이 잠금을 기다리면 스냅샷이 그만큼 늦는다. 한 미션의 최악 대기는 앞선 미션들의 경로 읽기·observe·map·비켜세우기 합이다.
+- Gate: D-12의 "나중에 내려온 미션이 양보" 의미를 동시 호출에서도 지키게 하는 수정이며 공개 필드·명령 권한 변화 없음. 실제 장치·현장 수용을 수행하지 않았다. 스냅샷의 `_run_traffic`이 NAVIGATING 아닌 로봇의 점유를 지우는 기존 동작은 바꾸지 않았다.
+- CE: 해결 후 판단 — 하네스(가짜 로봇이 양보하지 않음)가 놓친 동시성 결함이므로 교훈 기록 대상이다.
+
+## 2026-10-30 · uncommitted · fix(fleet): 작업 발행 루프의 연속 발행과 발행 시간 기록
+
+- 변경: 발행에 성공한 사이클 뒤에는 0.25초 휴지 없이 다음 사이클을 시작한다(사이클 사이에 `sleep(0)`으로 루프를 양보하고, 로봇 수만큼 연속하면 한 번 쉰다). 양보가 없을 때 같은 계측기에서 정상 조건의 루프 최대 지연이 약 8ms에서 41~50ms로 늘었다. 발행은 계속 한 번에 하나다. `console.goal`의 교통 검사는 await를 사이에 두고 claims를 읽고 쓰므로 직렬 발행에 기댄다. 발행 로그에 `claim_s`(이벤트 루프에서 SQLite 대기 포함)와 `send_s`(로봇 응답까지)를 더했다.
+- 근거: D-271 Gate A 합성 측정(워크스페이스 조사 기록 `Rosy/docs/research/d271-gate-a-2026-10-30/result.md`)에서 정상 발행 간격 중앙값 258.5ms, 32대 마지막 발행 8.053초였다.
+- 증거: 같은 계측기(SHA-256 `c4d2a93bfbc1…`)를 9f68096560에 원격으로 다시 실행했다(1 passed, 17 trial). 3회 중앙값 마지막 발행: 정상 8대 1.813→0.049초, 32대 8.053→0.181초, 느린 수락 응답 2.815→1.064초, 쓰기 경합 2.347→0.581초. 정상 조건의 루프 최대 지연은 8→23ms(32대 18→18ms)이고, `/healthz` 예약 지연 최대는 11~28ms에서 41~56ms로 늘었다(연속 발행 구간 동안 대기). 쓰기 잠금의 루프 정지(약 0.57초)와 timeout 3회의 `UNKNOWN`은 그대로다. 원격 회귀: loop supervision·queue wait 19 passed, fleet task/CLI 관련 94 passed, NEW 0.
+- Gate: 교통·안전·명령 소유권 변화 없음. 느린 장비의 head-of-line 지연과 이벤트 루프의 동기 SQLite 대기는 그대로이며 별도 설계 대상이다. 실제 장치·현장 수용을 수행하지 않았다.
+- CE: 해당 없음 — 원인과 경계(직렬 발행이 교통 검사를 지킨다)는 코드 주석·회귀 시험·이 기록에 남는다.

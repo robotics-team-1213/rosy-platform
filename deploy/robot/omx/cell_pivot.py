@@ -68,9 +68,10 @@ def jaw_blobs(closed, opened, params=None) -> list:
 
 
 def mark_jaws(cell, config: dict, sleep=time.sleep, clock=time.monotonic, max_marks: int = 6, near=None):
-    """The jaw mark in the top view as (cx, cy), or None when no two marks agree. `near` = (pixel, radius_px): only
-    blobs that close to where the jaws should be count, nearest first - with the arm stretched out, opening the jaws
-    shook the whole link and the largest changed blob was not the jaws (2026-10-29, a look 30 mm off)."""
+    """The jaw mark in the top view as (cx, cy), or None when no two marks agree. `near` = ([pixel, ...], radius_px):
+    only blobs that close to one of the places the jaws should show count, nearest first - with the arm stretched out,
+    opening the jaws shook the whole link and the largest changed blob was not the jaws (2026-10-29, a look 30 mm off).
+    Several places: either finger can be the one the camera sees (cell_look)."""
     import cell_pipeline as cp
 
     plan, mark_cfg = config["plan"], config.get("jaw_mark", {})
@@ -90,8 +91,10 @@ def mark_jaws(cell, config: dict, sleep=time.sleep, clock=time.monotonic, max_ma
             blobs = [b for b in blobs if math.dist(b[:2], marks[-1]) <= follow]
             pick = min(blobs, key=lambda b: math.dist(b[:2], marks[-1]), default=None)
         elif near is not None:
-            blobs = [b for b in blobs if math.dist(b[:2], near[0]) <= near[1]]
-            pick = min(blobs, key=lambda b: math.dist(b[:2], near[0]), default=None)
+            def gap(b):
+                return min(math.dist(b[:2], q) for q in near[0])
+            blobs = [b for b in blobs if gap(b) <= near[1]]
+            pick = min(blobs, key=gap, default=None)
         else:
             pick = max(blobs, key=lambda b: b[2], default=None)
         if pick is None:

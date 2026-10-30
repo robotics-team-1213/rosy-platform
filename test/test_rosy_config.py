@@ -190,3 +190,35 @@ def test_a_yaml_error_never_quotes_the_line_it_failed_on():
 
     assert "Secr" not in str(error.value)
     assert "line 4" in str(error.value)
+
+
+@pytest.mark.parametrize("security", ["open", "wpa2"])
+def test_fallback_security_is_an_explicit_configurable_policy(security):
+    module = _module()
+    assert module.validate({"ap": {"fallback_security": security}}) == {
+        "ap": {"fallback_security": security}}
+
+
+@pytest.mark.parametrize("security", [None, True, "invalid", {}, []])
+def test_fallback_security_rejects_unknown_or_malformed_values(security):
+    module = _module()
+    with pytest.raises(module.ConfigError):
+        module.validate({"ap": {"fallback_security": security}})
+
+
+def test_old_and_new_image_defaults_select_open_fallback(tmp_path):
+    module = _module()
+    assert module.load_defaults(NATIVE / "defaults.yaml")["ap"]["fallback_security"] == "open"
+    legacy = tmp_path / "defaults.yaml"
+    legacy.write_text("schema_version: 1\nap:\n  mode: fallback\n", encoding="utf-8")
+    assert module.load_defaults(legacy)["ap"]["fallback_security"] == "open"
+
+
+@pytest.mark.parametrize("security", [None, "invalid"])
+def test_image_defaults_reject_invalid_fallback_security(tmp_path, security):
+    module = _module()
+    defaults = tmp_path / "defaults.yaml"
+    value = "null" if security is None else security
+    defaults.write_text(f"schema_version: 1\nap:\n  fallback_security: {value}\n", encoding="utf-8")
+    with pytest.raises(module.ConfigError):
+        module.load_defaults(defaults)

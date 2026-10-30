@@ -11,6 +11,9 @@
 | ID | 제목 | Status |
 |---|---|---|
 | D-926 | 운용 화면의 읽는 순서·깊이·말의 규칙. [전문](../adr/D-926-ui-reading-order-depth-and-wording.md) | Accepted (2026-10-30, 사용자 결정; 화면 적용은 단계별) |
+| D-928 | Fleet 작업 발행은 로봇마다 따로 진행하고 교통 판정만 한 줄로 세운다. [전문](../adr/D-928-fleet-per-robot-dispatch-serial-traffic.md) | Proposed (2026-10-30; 구현·수용 별도) |
+| D-927 | Harbor 첫 흐름 시연 경계와 자동 시뮬 회귀(MuJoCo OMX·Gazebo Pinky, 독립 시뮬 관측). [전문](../adr/D-927-harbor-first-flow-demo-seams-and-automated-sim.md) | Accepted (2026-10-30, 경계·자동화 결정; 구현·수용 별도) |
+| D-919 | Passwordless fallback AP with authenticated Wi-Fi recovery. [전문](../adr/D-919-open-fallback-ap.md) | Accepted (2026-10-29, user-authorized; device acceptance separate) |
 | D-914 | 장치별 프로필과 native 운용범위 근거를 연결한다. [전문](../adr/D-914-omx-per-device-operating-profile-binding.md) | Accepted (2026-10-29, 구현·머지 승인; 실물 수용 별도) |
 | D-910 | Learning 검수 문서의 정적 공통 셸. [전문](../adr/D-910-learning-static-shell-components.md) | Accepted (2026-10-28) |
 | D-909 | Fleet 절차 문서의 경량 헤더와 배치 역할. [전문](../adr/D-909-fleet-procedure-document-components.md) | Accepted (2026-10-28) |
@@ -1367,3 +1370,8 @@ Fleet device ID, 실제 follower 설정, 장치별 검증·기록 경로를 별�
 **Status:** Accepted (2026-10-30). 사용자 결정이며 화면 적용은 단계별 착지로 따로 기록한다.
 
 운용 화면을 안전·지금 상태·할 일·근거·진단 순서, 앱·영역·화면·대상·확인의 다섯 깊이, 네 글자 역할로 닫는다. 하위 탐색은 이동이고 접힘은 한 겹이며 앱 바는 한 줄이다. D-641 4항의 맥락 탭 아이콘 단독을 대체한다. 전문은 [D-926](../adr/D-926-ui-reading-order-depth-and-wording.md).
+## D-928 Fleet 작업 발행은 로봇마다 따로 진행하고 교통 판정만 한 줄로 세운다
+
+**Status:** Proposed (2026-10-30). 설계만 정하며 구현·Gazebo·장비/현장 수용은 별도다.
+
+발행 루프는 로봇마다 작업 하나를 claim해 백그라운드로 보내고, 교통 판정만 콘솔 잠금 하나로 직렬화한다. 발행 중인 로봇은 claim 순서대로 기록한 직선 임시 점유를 갖고, 판정은 그 순서를 따라 우선순위를 지킨다. 스냅샷 정리는 임시 점유를 지우지 않고 잠금을 기다리지 않는다. 취소된 발행은 로봇 취소와 `UNKNOWN`으로 스스로 정리한다. 전문은 [D-928](../adr/D-928-fleet-per-robot-dispatch-serial-traffic.md).

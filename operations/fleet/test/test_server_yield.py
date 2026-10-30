@@ -126,6 +126,18 @@ def test_the_robot_in_the_way_is_sent_to_a_bay_and_the_mission_waits():
     assert ("navigation_cancel",) in left.calls
 
 
+def test_a_robot_waiting_for_its_own_traffic_check_is_not_ordered_to_yield():
+    """제 목표를 받고 교통 판정을 기다리는 로봇은 비켜세울 수 없다. 미션이 UNKNOWN 대신 기다린다."""
+    left, right, console = _corridor()
+    console._goal_busy.add("rosy_02")             # rosy_02 의 goal 파이프라인이 진행 중이다
+
+    result = run(console.goal("rosy_01", 2.2, 0.6))
+
+    assert result["queued"] is True and result["reason"] == "NO_YIELD_SPACE"
+    assert result["no_space"] == ["rosy_02"] and _goals(right) == []
+    assert ("navigation_cancel",) in left.calls and "rosy_01" not in console._claims
+
+
 def test_the_mission_goes_out_once_the_other_robot_has_reached_its_bay():
     left, right, console = _corridor()
     run(console.goal("rosy_01", 2.2, 0.6))
