@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-10-31 · uncommitted · omx: D-933 camera model from printed markers (cell_frame)
 - 2026-10-30 · uncommitted · fleet/omx: per-arm marker id blocks for up to four arms (D-933 보충)
 - 2026-10-30 · uncommitted · omx: D-935 payload bound on the D-911 gate
 - 2026-10-30 · uncommitted · omx: cell scale reader and D-934 object mass
 - 2026-10-30 · uncommitted · docs(adr): D-931..D-933 arm S measured checks, one field revision, cell coordinate frame
-- 2026-10-30 · 08b6c8c362 · 새 장치 수집과 mDNS 진단 기록

@@ -1,6 +1,6 @@
 ## D-933 공급암 S 셀은 면마다 그린 지도 대신 카메라 모델 하나와 인쇄 마커로 좌표를 잡는다
 
-**Status:** Proposed (2026-10-30). 설계만 정한다. 구현, 인쇄물 부착, 실물 정확도 수용은 별도다.
+**Status:** Proposed (2026-10-30). 구현은 2026-10-31 `cell_frame`(아래 9항)으로 들어갔다. 인쇄물 부착, 실측 보정, 실물 정확도 수용은 별도다.
 
 ### Context
 
@@ -61,6 +61,15 @@
    - 95~99는 예비다. 팔 번호와 실제 팔(S, A, B)의 대응은 셀 설정에 둔다.
    - 한 카메라가 두 팔과 그 면을 함께 봐도 번호가 겹치지 않는다. ChArUco 판도 어떤 팔의 마커와도 겹치지 않으므로, 보정할 때 그리퍼를 화면 밖으로 뺄 필요가 없다.
    - 인쇄물 생성기(`cell_print_sheets.arm_ids`)가 이 표의 정본이다. 바꾸려면 새 ADR로 한다. 이미 붙인 마커가 다른 뜻이 되기 때문이다.
+
+9. **구현 (2026-10-31)**: `deploy/robot/omx/cell_frame.py`.
+   - 순서:
+     1. `cell_checkerboard intrinsics --camera top`이 인쇄한 ChArUco 판(`PRINTED`, 7×10, 20/15 mm)으로 `K`와 왜곡을 잰다.
+     2. `cell_checkerboard capture --camera top`이 그리퍼를 FK 점들로 옮기며 위 카메라 사진을 남긴다.
+     3. `cell_frame learn`이 그리퍼 마커로 카메라 자세를 풀고(`seed`), 같은 사진에서 그 팔의 받침대·면 마커 네 모서리를 터치로 잰 면 높이(`markers.z_m`) 위로 올려 팔 좌표로 저장한다. 보정 파일의 `cameras.top`에 둔다.
+   - 매 관측: `cell_observe.locate`가 같은 프레임의 받침대 마커로 카메라 자세를 다시 풀고, 면 마커가 2개 이상 보이면 그 면의 움직임을 구해 광선을 그 면에 맞춘다. `predicted_pixel`은 모델로 투영한다. 받침대 마커가 안 보이면 지도가 있을 때 지도로 물러난다.
+   - 설정: `markers: {"slot", "gripper_offset_m"(그리퍼 좌표계에서 TCP→마커 중심, 자로 잼), "z_m": {"base", <면>}, "surfaces": [면 1~3 이름]}`.
+   - 지도 생성기(`coarse_map`, `remap`, `pivot_calibrate`)와 `cell_survey`·`cell_pivot`의 지도 사용은 아직 그대로다. 실측 정확도를 확인한 뒤 은퇴 여부를 정한다.
 
 ### Consequences
 
