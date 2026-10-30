@@ -3948,7 +3948,7 @@
 - gate 변화: 없음.
 - CE: 해당 없음 — 호스트 정리 기록.
 
-## 2026-10-30 · D-871 가드 수집 관제 PC 적용과 `rosy-update-report` 선언
+## 2026-10-30 · 796fbe489c · D-871 가드 수집 관제 PC 적용과 `rosy-update-report` 선언
 
 - 변경: 공통 host-state 매니페스트에 `rosy-update-report`를 `approval=recovery`로 더했다. 관제 PC에 origin/main 판 가드·원격 스크립트·`site updates` 줄을 설치하고, `rosy-host-state install site`로 승인 사본을 갱신했다(야간 재부팅 세션 잠금 조건도 함께 적용).
 - 근거: 설치 뒤 `site` 줄에 `updates`가 들어왔고, host-state `check`는 fixed·drift·errors 0이다. 기록은 D-871 적용 기록 2026-10-30.

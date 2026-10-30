@@ -76,8 +76,8 @@
 
 ## 최근 기록
 
+- 2026-10-30 · 796fbe489c · D-871 가드 수집 관제 PC 적용과 `rosy-update-report` 선언
 - 2026-10-29 · uncommitted · fix(deploy): 관제 PC front 카메라 인스턴스 선언 정리
 - 2026-10-29 · 8704f12108 · 운영 키 조합 검사와 접속 복구 중단 상태
 - 2026-10-29 · uncommitted · deploy: GitHub OS 전송과 서명된 부분 갱신
 - 2026-10-28 · 8c3a60f344 · Pinky 접속 복구와 운영 키 누락 차단
-- 2026-10-28 · 0f76cb9a4e · Learning 인계 런타임의 필수 파일 closure
