@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "deploy/robot/omx"))
@@ -91,3 +92,13 @@ def test_look_first_moves_the_push_start_by_the_measured_offset_and_keeps_the_sl
     assert set(library["chunks"]) >= {"above_push", "descend_push", "slide_push", "lift_push"}
     assert cpu.look_first(Cell(), {"params": {"look.enabled": 0}, "plan": PLAN}, {}, "floor", {"radius_mm": 30.0},
                           start, slide, np.zeros(2), 0.0, 0.024, 0.01, tmp_path / "lib.json", tmp_path)["verdict"] == "pass"
+
+
+def test_a_push_moves_only_as_a_supervised_trial():
+    """2026-10-31: a push sends its commands straight to the runner, outside the D-911 gate."""
+    cell_push = cpu
+
+    base = ["--config", "missing.json", "--roi", "0", "0", "1", "1", "--px", "1,1", "--dir", "0,1"]
+    for extra, why in (([], "outside the D-911 gate"), (["--commissioning"], "needs --person-at-switch")):
+        with pytest.raises(SystemExit, match=why):
+            cell_push.main(base + extra)

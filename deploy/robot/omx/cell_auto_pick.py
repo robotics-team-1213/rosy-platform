@@ -246,8 +246,7 @@ def plan_pick(config: dict, site: str, dest_site: str, place_xy, o: dict, entry:
                      "yaw_deg": s["yaw_deg"] if place_yaw is None else place_yaw}
             try:
                 jaws = jaw_open_for(entry["width_mm"], config.get("params"), o.get("jaw_margin_mm"))
-                # one file per object: two boxes on the floor planned into one name, and the arm went to the other one
-                # (2026-10-29, the second candidate overwrote the first's library)
+                # one file per object: two boxes on the floor planned into one name, and the arm went to the other one (2026-10-29)
                 lib = cp.write_library(dict(config, plan=dict(config["plan"], approach_m=approach, grip_open=jaws)), pick,
                                        place, work / f"auto-{site}-{offset}-{round(1000 * o['raw_m'][0])}_{round(1000 * o['raw_m'][1])}.json")
                 return lib, pick, place, approach, yaw, {"approach_m": approach, "grip_open": jaws}
@@ -400,6 +399,8 @@ def run_auto(cell, config, calibration, calibration_path, catalog, roi, source, 
              dry_run=False, sleep=time.sleep, log=print, attempts=None) -> dict:
     """One object from `source` to `dest`; up to `attempts` grasps (the second with the better candidate)."""
     work, out = Path(work), {"from": source, "to": dest, "attempts": []}
+    if dest in config["sites"] and "place" not in config["sites"][dest]:  # the board: taken from, never put on
+        return {**out, "result": f"refused: {dest} is not a destination (its site has no 'place')"}
     for site in {source, dest} & {k for k, v in config["sites"].items() if v.get("track")}:  # a robot that moves
         config, out[f"track_{site}"] = cell_site_track.follow(config, site, cell.frame("top"),
                                                               lambda q, s=site: predicted_pixel(config, calibration, s, q), work)
