@@ -1,0 +1,9 @@
+[Unit]
+Description=Recover local Pilot recordings and register pending Learning inputs
+
+[Service]
+Type=oneshot
+EnvironmentFile=%h/.config/rosy/pilot-process.env
+ExecStartPre=/usr/bin/test -f %h/.local/share/rosy/model-code/current/learning/curation/perception/pilot_review.py
+ExecStart=/usr/bin/flock --nonblock --conflict-exit-code 75 %t/rosy-pilot-collection.lock %h/rosy-ml/.venv/bin/python -I %h/.local/lib/rosy-model-code/rosy_model_code.py --config %h/.config/rosy/model-code.json exec dataset/pilot_review.py --raw-root ${RAW_ROOT} --video-dir ${VIDEO_ROOT} --out ${REVIEW_ROOT} --classes ${REVIEW_CLASSES} --state ${REVIEW_STATE}
+SuccessExitStatus=3 75

@@ -5054,6 +5054,20 @@
 - Gate: 전체 착지 검증은 별도이며 실물·서비스 수용 근거가 아니다.
 - CE: 해당 없음 — 전용 앱이라는 적용 조건과 버전별 원인은 시험 주석·이 기록에서 복원할 수 있다.
 
+## 2026-10-28 · 1e6b5fdc0 · fix(fleet): hub 이벤트 메모리 3분리
+
+- 변경: `RobotRecord.events`가 받은 모든 CORE 사건을 영구로 쥐고 있었다(2026-10-28 자원 조사). 세 저장소로 나눴다: `events` deque(maxlen=500)은 /registry·events_since 공급, `stuck_events`는 (type, stuck_id) 인덱스로 막힘 복구 판정에 쓰고 퇴출하지 않는다, `seen_event_hashes`는 event_id→본문 sha256으로 개발 경로 중복 제거를 O(1)로 대신했다. StuckResolverLoop와 LineStuckBoard가 `stuck_event()`만 읽어 초당 전체 스캔을 없앴다. 연결이 끊길 때 창을 비우는 것은 링크 재접속 때 운영자 피드가 비워지는 계약 위반(1e6b5fdc0, test_console_hub_integration)이라 offline은 표시만 하고 창을 유지한다 — 재생 중복은 해시·스토어가 이미 차단한다.
+- 증거: 원격 시험 resource-bounds-1·2(AI PC) — run-1에서 창 폭·stuck 인덱스 생존·창 밖 재생 중복 제거를 확인하고, 창 유지로 바로잡은 회차(run-2)에서 test_hub·test_console_hub_integration·test_server_console known_failures NEW 0.
+- gate 변화: 없음.
+- CE: 해당 없음 — 설계는 독립 검토 2건을 거쳤고 계획 문서가 근거를 보존한다.
+
+## 2026-10-28 · 0268ab50f · fix(fleet): 목표 판정 때 대기 로봇은 hub 하트비트로 읽는다
+
+- 변경: `_observe()`가 목표를 내릴 때마다 전 로봇에 REST 상태 읽기를 폭격했다. 활동 로봇(목표·claim·양보)은 REST를 유지하고 대기 로봇은 `_gather_state`(D-447)를 탄다 — 하트비트 스냅샷(≤3s) 우선, 낡으면 REST 폴백. 모든 로봇의 `_verdict`는 매 목표마다 갱신되어 D-395 P2-2 불변식을 유지한다. console.py는 D-430 안전 태그라 Safety-Review 트레일러와 판정 분석을 커밋에 남겼다.
+- 증거: 원격 시험 resource-bounds-2(AI PC) `test_server_console.py` 신규 2 시험 통과 — 하트비트 신선 대기 로봇 REST 0회·활동 로봇 REST 유지·낡은 하트비트 REST 폴백 각각 확인.
+- gate 변화: 없음. 실물·현장 수용은 별개다.
+- CE: 해당 없음.
+
 ## 2026-10-28 · 239740362c · 목표 어드미션 판정의 순수 모듈 분리 A단계 (계획 2026-10-28-fleet-traffic-arbitration-split)
 
 - 변경: `console.py`의 `_goal()`이 판정과 미션/응답 dict 조립을 다섯 곳에서 반복하며 D-766 래칫(1325)에 묶여 있었다. `fleet/traffic/goal_admission.py`(신규, 순수)이 대기열 보류를 frozen `QueueDecision`(yield_hold·untrusted_self_hold·route_conflict_hold·untrusted_blocker_hold·standing_hold)과 `mission_of`/`response_of`로 소유한다 — 키 순서 동결, reason으로 깃발 유도 금지(LOCALIZATION_UNTRUSTED는 양 단계에 존재), 전송 전 보류는 route 키 없음, `attempt_seq=0` 보존, 저장 미션과 응답은 독립 리스트. 콘솔은 상태 읽기·폐쇄 실패 사슬(`_seen.pop`→`_remember`→`_verdict`)과 전송 순서를 그대로 소유하고 판정 문자열만 넘긴다. `_task_mission`은 별칭 없이 이동, console.py 1325→1299(래칫 행 동락).
@@ -5061,9 +5075,122 @@
 - Gate: 없음. B단계(전송 후 경로 충돌 판정)·C단계(_make_room/bays)는 별도 착지.
 - CE: 해당 없음 — 판정·모양이 특성 시험과 변이 이력으로 고정됐다.
 
+## 2026-10-29 · uncommitted · fix(fleet): 추출된 목표 판정 관측 helper의 안전 소유권을 보존한다
+
+- 변경: `server/console/observe.py`를 canonical safety module과 내부 anchor에 등록하고 frozen 안전 위반 목록에 더했던 예외를 제거했다. 원래 상태 읽기·freshness·REST fallback·판정 순서와 공개 안전 API는 바꾸지 않는다.
+- 증거: 예외를 제거한 원격 RED가 `console.py → fleet.server.observe`의 새 안전 경계 위반을 검출했다. 독립 검토가 내부 anchor와 실제 파일 분류 보존을 요구했으며 최종 manifest·소스·회귀는 공식 게이트에서 재검증한다.
+- gate 변화: 없음. 예외를 늘리거나 안전 검사를 약하게 하지 않는다.
+- CE: 해당 없음 — 분류·예외 제거·회귀 시험이 적용 조건을 설명한다.
+
+## 2026-10-29 · 66ba49bef8 · D-915 원본 물리 근거의 읽기 인계
+
+- 변경: 선택형 측정 관절을 원래 canonical proof에 결속하고 creator-scoped physical-evidence GET을 추가했다. 원문·receipt·원래 released zone을 같은 read snapshot에서 읽으며, 누락된 관절·과거 receipt에 현재 pose를 보충하지 않는다. nested PRE/POST source 재사용을 shared guard에서 거절한다.
+- 증거: 원격 baseline/RED/GREEN·source-order 변이·실제 HTTP/UDS와 Harbor 단계 확인·구형 Pydantic 호환을 검증했다. 정확한 source·계수·실패/skip·최종 FULL 결과는 [검증 정본](../../docs/validation/physical-evidence-export-2026-10-29/result.md)에 둔다.
+- Gate: 기존 module gate 변화 없음. G1c 원본 clock/전체 측정 생산자, 최종 업무 완료, 실물·운영·배포 수용은 별도다.
+- CE: 해당 없음 — 해결 판단은 D-915·회귀·검증 정본에 남고, 미해결 source clock은 해결 교훈으로 기록하지 않는다.
+
+## 2026-10-29 · f2af364bcf · AI fact 요청 제한 시험 시계 고정
+
+- 변경: 기존 FakeClock과 _app(clock=...)를 사용해 세 HTTP 요청의 실시간 처리 속도에 의존하던 시험을 수정했다. 기존 200/200/429와 .999초 거절/정확히 1초 허용을 검증하며 production 요청 제한은 바꾸지 않는다.
+- 증거: 공식 전체 행렬 최초 Fleet 실행에서 1 failed/7270 passed/413 skipped, NEW1. 변경 source의 원격 재검증은 별도이며 [D-916 검증 정본](../../docs/validation/joint-source-provenance-2026-10-29/result.md)에 남긴다. 독립 리뷰에서 정책 약화·P1/P2 없음.
+- Gate: 변화 없음. 최초 전체 행렬의 실패는 지우거나 quarantine하지 않는다.
+- CE: 해당 없음 — 이 시험 수정 판단은 코드·직접 회귀와 기존 가짜 시계 관례에 남는다. 별도 FULL 실행 범위 교훈은 docs 소유 기록을 따른다.
+
+## 2026-10-29 · uncommitted · fix(fleet): Trip 제안 승인과 실제 작업 admission을 원자적으로 결속한다
+
+- 변경: 원래 proposal ID·digest·generation을 최종 작업 생성 트랜잭션까지 전달한다. creator·request key·본문·선택 robot·steps·현재 dispatch를 확인한 뒤 job·steps·claims·승인 event·proposal ADMITTED를 함께 commit한다. 별도의 ADMITTED writer를 제거하고 조회·멱등 재시도는 같은 read snapshot에서 원래 승인 event와 실제 작업 결속을 검증한다. 기존 direct-trip 경로와 실패 시 lease cleanup, SIM 한정·자기 승인 거절은 유지한다.
+- 증거: 가짜 principal·simulated trip ports와 실제 HTTP·SQLite 경로에서 오래된 generation 승인, 부분 job commit, actor 불일치, 기존 direct job 재표기를 4 failed로 확인했다. 승인 기록 변조와 중단 후 재시도를 추가한 확장 RED는 8 failed / 1 passed다. 독립 계약 검토는 원자성·원래 actor·generation·멱등 shortcut 결속을 확인했으며 GREEN·현 main 통합은 별도다.
+- gate 변화: 없음. 추가 로봇 명령이나 새 공개 필드를 열지 않고 기존 승인 계약을 보존한다. 실제 장치·현장 수용을 수행하지 않았다.
+- CE: 미해결 — 회귀 GREEN과 실제 착지 확인 전이며 해결 판단은 통합 시험과 원자 결속 구현에 연결한다.
+
 ## 2026-10-29 · ccc8712ece · 이송 결과의 검수 패키지와 복구 root 분할 검사
 
 - 변경: OMX curation에 기존 export v2 원본 bytes·SHA·계보를 보존하는 오프라인 검수 패키지와 재검증 CLI를 추가했다. 같은 root 및 참조 자식의 분할 혼입·중복 미션·계보 충돌·비정상 JSON을 거절한다. Fleet 안내의 이미 연결된 HTTP·콘솔 상태를 바로잡고 curation 사용 경로를 연결했다.
 - 증거: [동결 검증 기록](../../docs/validation/transfer-review-package-2026-10-29/result.md). 원격 curation 전체 328 pass·10 skip, runner/classifier exit 0, NEW 0. 독립 검토의 root 별칭·숫자 overflow 문제를 각각 RED 재현 후 수정했고 최종 재검토에 주요 지적이 없다.
 - Gate: 실행·학습 수용 변화 없음. 검수 전 메타데이터와 behavior_training_eligible=false를 유지한다. 실제 라벨 검수·학습·장치 수용은 별도다.
 - CE: 해당 없음 — 판단과 거절 조건이 구현·회귀·사용 안내에 남는다.
+
+## 2026-10-29 · uncommitted · fix(fleet): proposal admission 회귀 검증과 현 main 통합
+
+- 검증: `commit db140ac411`의 원격 승인·제안·후보·TRIP ledger·조회 회귀는 97 passed / 0 skipped, NEW·known·flaky 0이다. 이 증거는 병합 전 revision에 속한다.
+- 변경: 별도 예약 API v1.331로 live pin을 갱신하고 main의 v1.328 OMX archive 계약과 양쪽 이력을 함께 보존했다. 존재하는 D-908의 gap 선언만 제거했다. 합성·FULL 및 실제 main 착지는 별도 확인한다.
+- Gate: 추가 실행 권한이나 공개 필드 변경 없음. 실제 장치·현장 수용은 수행하지 않았다.
+- CE: 해당 없음 — 원래 generation과 승인자의 원자 결속, 재시도 검증 기준이 구현·실제 HTTP/SQLite 회귀에 남는다. 별도 교훈이 없으면 재발할 추가 환경 제약은 확인하지 않았다.
+
+## 2026-10-29 · afa10f26b2 · 독립 복구 관측 제출용 호스트 클라이언트
+
+- 변경: 기존 API v1.327의 독립 관측 문맥 조회·시료 POST를 연결했다. 현재 문맥·원본 ID·UTC·시료/관절 순서를 검사하고 한 번만 제출하며 응답 유실은 미확인으로 남긴다. 복구 요청·운영자 승인·정상 PRE_DISPATCH 제출은 호출하지 않는다.
+- 증거: [동결 검증](../../docs/validation/recovery-observer-client-2026-10-29/result.md). 원격 client/API/auth 53 pass·skip 0, runner/classifier exit 0, NEW 0. 기존 실제 API와 loopback HTTP·권한·응답 유실·프록시/리다이렉트·CLI를 검증했다. 관절 짝 4건을 RED 재현한 뒤 POST 전 거절로 보강했고 독립 계약 재검토에 주요 지적이 없다.
+- Gate: 실행·학습·생산자 수용 변화 없음. 실제 Gazebo의 링크별 측정과 source UTC 결속은 별도 수집기 요구사항으로 안내했다.
+- CE: 해당 없음 — 코드·회귀·사용 안내로 판단을 복원할 수 있으며 source 측정 공백은 미해결 요구사항이다.
+
+## 2026-10-29 · 8728fc6eb7 · observer CLI 시험 입력의 비밀값 검사 호환
+
+- 변경: 비정상 입력의 오류 출력 검사를 명시적 짧은 자리표시자로 고쳤다. 고정 입력과 중간 참조식 수정이 원격 secret guard에 걸린 이력을 보존했다. 제품 코드·스캐너·예외·실패 기준선은 바꾸지 않았다.
+- 증거: [별도 수정 검증](../../docs/validation/recovery-observer-client-2026-10-29/guard-correction.md). 해당 커밋에서 원격 client 전체와 정확 secret guard 36 pass·skip 0·NEW 0. 독립 검토는 32자 미만 거절·출력 미노출 의도가 유지됨을 확인했다.
+- Gate: 공식 재착지는 별도 확인한다. 실제 관측 생산자·장치·학습 수용 변화는 없다.
+- CE: 해당 없음 — 기존 검사기의 명시적 자리표시자 규칙과 이번 회귀·수정 기록에서 이유를 복원한다.
+
+## 2026-10-29 · uncommitted · 좁은 화면의 연결 상태 글·점 폭 보존
+
+- 원인: PR220 a985의 실제 CI는320px Console에서 연결 끊김 tag의 scrollWidth/clientWidth assertion에 실패했다. 진단 source8ccebf6878 원격은 authored1 passed/accessibility-spacing1 failed(NEW1)로 재현했다. font ready와2frames 전후가 같았고, client65/scroll71/text66.53px, 점0px였다. 기본 글 간격에서도 점은 nominal8px 대신5.22px로 압축됐다. CI의 실제 fallback font는 미측정이며 loading race로 단정하지 않는다.
+- 변경: status grid의 최소 폭을 max-content로 잡고 tag·점을 줄이지 않는다. compact header의 바깥 gap/inset20px를 반환하되 action 내부 간격·버튼 padding·48px 누름 면·접근 이름·E-stop 동작을 유지한다. 기존 가시성·경계·순서·페이지 overflow 검사를 보존하고 점8px/조작48x48 assertion을 추가했다.
+- 증거: 원격 RED의 PNG와 실제 CDP font/즉시·안정화 DOM metrics를 보존·육안 확인했다. 독립 contract review는 권한·안전 행동 변경이 없음을 확인했다. 수동 Impeccable detector는0 findings였다. 전체 header browser/static GREEN은 아직 대기 중이며 부분 재현을 완료로 쓰지 않는다.
+- gate 변화: 없음. skip·quarantine 추가·폰트 축소·문구 숨김·검사 완화는 없다. status만의 text-spacing 검사를 전체 WCAG 수용으로 주장하지 않는다.
+- CE: 미해결 — 기존 child-clipping 교훈 보완 필요성은 GREEN 이후 실제 증거로 판정한다.
+
+## 2026-10-29 · uncommitted · 헤더 outage 시험의 정상 응답 경합 제거
+
+- 원인: source3657의 Model browser/static84 passed/NEW0와 달리 이미 실행 중이던 AI 검사는83 passed/1 NEW였다. 실패는 geometry가 아니라 signed-out 뒤 연결 끊김 기대에 실제 실시간이 온 것이었다. 시험은 noteLink503만 직접 호출하고 정상 API 주기 응답을 허용했으며, 실제 client는 성공 응답마다 연결 복구를 알린다.
+- 변경: outage 단계에서 Fleet API를 실제503으로 응답시키고 앞선 network activity를 기다린 뒤 실패 fetch의 status를 기존 header handler에 전달한다. signed-out 단계는 오류를 재주입하지 않고 기존 outage 상태가 유지되는지 확인한다. production JS·타이머·모든 기존 상태/기하 assertion과 timeout을 유지한다.
+- 증거: 읽기전용 producer/consumer 추적과 scoped 독립 검토를 받았다. 새로운 원격 matrix 검증은 아직 대기이며 실제 API200 뒤 UI가 실시간으로 복구하는 동작을 막지 않는다.
+- gate 변화: 없음. 성공 응답을 오류로 표시하는 제품 변경이나 skip/quarantine은 없다.
+- CE: 미해결 — 재현과 source 교정은 확인했으나 수정된 matrix의 실행 결과가 필요하다.
+
+## 2026-10-29 · uncommitted · outage 시험에서 대기할 요청 범위 제한
+
+- gate 변화: 제품 JS·CSS·assertion·실패 기준선은 바꾸지 않는다.
+- 원인: source d9daf10d9e의 등록된 보조 시험 PC matrix는 14 passed / 12 NEW였다. Console·Cell의 모든 실패는 추가한 networkidle 대기의 30초 timeout이며 상태·기하 assertion 실패가 아니다. 특정 연결 종류가 원인이라고 단정하지 않는다.
+- 변경: 탐색 전부터 진행 중인 Fleet fetch를 추적하고, 503 route를 설치한 시점의 요청만 finished/failed event로 기다린다. 이후 요청은 503으로 처리한다. 독립 검토에서 지적한 response API의 무제한 대기를 피하고 기존30초 총 제한과 남은 URL 진단을 유지했다. 제품 JS·CSS·assertion·실패 기준선은 바꾸지 않는다.
+- 검증: syntax·diff 검사와 독립 검토 뒤 커밋 SHA로 원격 matrix를 다시 확인한다. 실패한 d9 FULL 대기는 중단했으며 hidden snapshot·로그를 보존했다. 다른 작업·잠금은 수정하지 않았다.
+- CE: 미해결 — 새 대기 방식의 원격 결과를 아직 확인하지 않았다.
+- 추가 검증·교정: source866c871876의 원격26case는24 NEW/2 passed였다. 탐색 전 Playwright가 builtin set.discard handler에 내부 속성을 붙일 수 없어 실패했다. 두 event callback을 일반 Python lambda로 감싸고 나머지 대기/상태/기하 검사를 유지한다. 재검증은 새 커밋에서 수행한다.
+
+## 2026-10-30 · uncommitted · fix(fleet): 관측 기록 행 상한 정리를 MAX(id) 경계로
+
+- 변경: `ObservationStore`가 스냅샷마다 쓰기 트랜잭션 안에서 `ORDER BY observation_id DESC LIMIT 1 OFFSET 100000`으로 10만 행(로봇 JSON 본문이 든 rowid leaf)을 훑던 정리를 `MAX(observation_id) - max_rows` 경계로 바꿨다. AUTOINCREMENT id는 다시 쓰이지 않으므로 상한(최대 `max_rows`행)은 그대로이고, id가 이어져 있으면 남는 행도 같다.
+- 증거: 저장소 밖 측정(워크스페이스 조사 기록 `Rosy/docs/research/d271-gate-a-2026-10-30/sqlite-prune/`, 원격 시험 PC, 1.5KB 행 10만, 스냅샷 1회 = 8행 삽입+8행 정리, 40회): 쓰기 트랜잭션 p50 66→37ms, p95 98→83ms, max 136→236ms(잡음). 대부분은 `synchronous=FULL` 커밋이며 그대로 둔다. 이 정리는 Gate A의 0.5초 잠금의 원인이 아니다. 같은 패턴의 `observe/rules.py`는 측정하지 않아 바꾸지 않았다.
+- Gate: 보존 상한·보존 기간·공개 필드 변화 없음. 실제 현장 DB 크기와 잠금 시간은 발행 로그 `claim_s`로 따로 본다.
+- CE: 해당 없음 — 이유는 코드 주석과 이 기록, 측정 원본에 남는다.
+
+## 2026-10-30 · uncommitted · fix(fleet): 교통 판정 구간을 콘솔 잠금 하나로 직렬화
+
+- 변경: `FleetConsole._goal`에서 경로 확인부터 점유(`_claims`) 기록·비켜세우기까지를 `asyncio.Lock` 하나로 묶었다. 목표 전송과 그 앞 확인은 잠금 밖에 그대로 두고, 정지 경로(`cancel`, `estop_all`, 위치 신뢰 보류)는 잠금을 잡지 않는다.
+- 원인: `console.goal`은 작업 발행 루프, `/api/fleet/do`, 직접 goal·lane route, 교통 대기 해제, trip에서 동시에 불린다. 경로 확인과 점유 기록 사이에 await가 여러 번 있어, 동시에 검사한 두 미션은 서로의 점유를 보지 못하고 함께 나갔다. 저장소 밖 재현 시험이 main `46b23e565a`에서 마주 오는 두 미션이 모두 accepted, 점유 2개가 되는 것을 확인했다(워크스페이스 조사 기록 `Rosy/docs/research/d271-gate-a-2026-10-30/traffic-race/`).
+- 증거: 회귀 `test_concurrent_head_on_missions_let_exactly_one_through`(경로를 읽을 때 한 번 양보하는 가짜 로봇 두 대가 정면 경로로 동시에 goal)는 수정 전 구조에서 두 미션이 모두 나가고, 수정 뒤 두 번째가 `blocked_by=rosy_01`로 대기한다. D-766 상한을 넘은 `console.py`가 늘지 않도록 `_cancel_confirmed` 본문을 `goal_admission.cancel_confirmed`로 옮겼다. 저장소 밖 재현 시험은 수정 커밋에서 두 번째 미션이 `blocked_by=rosy_01` 대기, 점유 1개였다. 원격 교통·goal admission·lease·trip·priority·handover·recovery 회귀 291 passed, NEW 0.
+- 독립 검토(작성 세션 밖 읽기 전용 리뷰어, D-430 5): 잠금·재진입·정지 경로·`_cancel_confirmed` 이동은 문제없음. 지적 1(중간): 잠금을 기다리는 로봇은 이미 `_goal_busy`라 잠금을 쥔 미션의 `_make_room`이 그 로봇을 비켜세우면 `_send_to_bay`가 거절하고 mover가 점유 없이 `UNKNOWN`이 된다 → 발행 중인 로봇을 trip 로봇처럼 "비켜설 자리 없음"으로 다루게 고치고 회귀 `test_a_robot_waiting_for_its_own_traffic_check_is_not_ordered_to_yield`를 더했다. 남긴 한계: 잠금 대기 중 호출이 취소되면 목표는 살아 있고 판정·점유가 없다(전에도 await 사이 같은 창이 있었고 대기만큼 길어졌다). 스냅샷의 `_run_traffic`은 잠금 없이 NAVIGATING 아닌 로봇의 점유를 지운다. 방금 기록한 점유를 아직 NAVIGATING이 아닌 낡은 상태로 지우면 좁은 창에서 같은 race가 다시 생길 수 있다(바꾸지 않음). 또 대기 해제의 `goal`이 잠금을 기다리면 스냅샷이 그만큼 늦는다. 한 미션의 최악 대기는 앞선 미션들의 경로 읽기·observe·map·비켜세우기 합이다.
+- Gate: D-12의 "나중에 내려온 미션이 양보" 의미를 동시 호출에서도 지키게 하는 수정이며 공개 필드·명령 권한 변화 없음. 실제 장치·현장 수용을 수행하지 않았다. 스냅샷의 `_run_traffic`이 NAVIGATING 아닌 로봇의 점유를 지우는 기존 동작은 바꾸지 않았다.
+- CE: 해결 후 판단 — 하네스(가짜 로봇이 양보하지 않음)가 놓친 동시성 결함이므로 교훈 기록 대상이다.
+
+## 2026-10-30 · uncommitted · fix(fleet): 작업 발행 루프의 연속 발행과 발행 시간 기록
+
+- 변경: 발행에 성공한 사이클 뒤에는 0.25초 휴지 없이 다음 사이클을 시작한다(사이클 사이에 `sleep(0)`으로 루프를 양보하고, 로봇 수만큼 연속하면 한 번 쉰다). 양보가 없을 때 같은 계측기에서 정상 조건의 루프 최대 지연이 약 8ms에서 41~50ms로 늘었다. 발행은 계속 한 번에 하나다. `console.goal`의 교통 검사는 await를 사이에 두고 claims를 읽고 쓰므로 직렬 발행에 기댄다. 발행 로그에 `claim_s`(이벤트 루프에서 SQLite 대기 포함)와 `send_s`(로봇 응답까지)를 더했다.
+- 근거: D-271 Gate A 합성 측정(워크스페이스 조사 기록 `Rosy/docs/research/d271-gate-a-2026-10-30/result.md`)에서 정상 발행 간격 중앙값 258.5ms, 32대 마지막 발행 8.053초였다.
+- 증거: 같은 계측기(SHA-256 `c4d2a93bfbc1…`)를 9f68096560에 원격으로 다시 실행했다(1 passed, 17 trial). 3회 중앙값 마지막 발행: 정상 8대 1.813→0.049초, 32대 8.053→0.181초, 느린 수락 응답 2.815→1.064초, 쓰기 경합 2.347→0.581초. 정상 조건의 루프 최대 지연은 8→23ms(32대 18→18ms)이고, `/healthz` 예약 지연 최대는 11~28ms에서 41~56ms로 늘었다(연속 발행 구간 동안 대기). 쓰기 잠금의 루프 정지(약 0.57초)와 timeout 3회의 `UNKNOWN`은 그대로다. 원격 회귀: loop supervision·queue wait 19 passed, fleet task/CLI 관련 94 passed, NEW 0.
+- Gate: 교통·안전·명령 소유권 변화 없음. 느린 장비의 head-of-line 지연과 이벤트 루프의 동기 SQLite 대기는 그대로이며 별도 설계 대상이다. 실제 장치·현장 수용을 수행하지 않았다.
+- CE: 해당 없음 — 원인과 경계(직렬 발행이 교통 검사를 지킨다)는 코드 주석·회귀 시험·이 기록에 남는다.
+
+## 2026-10-30 · f10444d3af · 헤더 CI 교정 원격 검증
+
+- 변경: 시험 코드만 후속 수정했으며 CSS는 그대로다.
+- 증거: source3657의 Model 전체 header browser/static84 passed / skip0 / NEW0. sourcef104의 등록 보조 시험 PC outage·모바일 집중26case는26 passed / skip0 / NEW0이며 runner·known_failures exit0이다. 본래 AI의 정상 응답 경합, d9 global-idle timeout,866 callback 등록 실패를 실제 로그로 구분하고 보존했다.
+- 시각 확인: source3657의320px authored/accessibility-spacing와390·1440px PNG/JSON을 보존·육안 확인했다. 점8px·조작48px 이상·내용 비잘림을 확인했다. 시험 코드만 후속 수정했으며 CSS는 그대로다. CI의 실제 fallback font는 미측정이고 전체 WCAG 수용으로 주장하지 않는다.
+- Gate: 독립 source 검토와 집중 검증 완료. 새 적격 FULL 착지·GitHub CI·게시·운영 전환은 별도 확인한다. skip/quarantine·production 연결 상태 처리·timeout 완화는 없다.
+- CE: 해당 없음 — 기존 child-clipping 교훈을 적용했고 추가 판단은 회귀·대기 제한·정확한 원인과 실패 기록에서 복원할 수 있다. 최초 운영 전환은 아직 미해결이다.
+
+## 2026-10-30 · uncommitted · feat(sim): 정상 단계 시뮬 관측자 transfer_observer (D-927 결정 3)
+
+- 변경: `tools/sim/transfer_observer.py` 추가. 독립 observer 자격으로 관측 문맥을 읽고 시뮬 상태 파일(측정 관절·속도·그리퍼·물체 자세)에서 URDF FK 링크 경계·속도를 계산해 시료 두 개를 제출한다. 승인·Action 제출 없음. 사용법은 `docs/transfer-outcome-review.md`.
+- 증거: `operations/fleet/test/test_transfer_observer_client.py` 원격 4 passed — 실제 Fleet 앱에서 PRE_DISPATCH·POST_ACTION으로 GOAL_CONFIRMED, 팔이 zone 안·회전 중이면 거절, 끝점이 `omx_adapter` TCP FK와 일치.
+- Gate: Fleet 검증 규칙·API 변화 없음. 시뮬 관측이며 물리 근거·현장 수용이 아니다. 팔 기준 자세 파일은 S4 설치 profile 전까지의 지름길이다.
+- CE: 해당 없음 — 새 도구와 시험이 계약을 보여 준다.

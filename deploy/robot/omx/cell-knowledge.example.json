@@ -1,0 +1,299 @@
+{
+ "schema": "rosy.omx-cell-knowledge.v1",
+ "entries": [
+  {
+   "id": "wrist-flex-guard",
+   "topic": "arm",
+   "statement": "wrist_flex error grows from 0.2 to 5 degrees after lift or goto starts and the guard then cuts torque; stopped 12 sessions on 10/25-27.",
+   "status": "verified",
+   "evidence": [
+    "guard session logs",
+    "chunk-status.jsonl"
+   ],
+   "date": "2026-10-28",
+   "applies_when": [
+    "lift",
+    "grasp",
+    "idle"
+   ]
+  },
+  {
+   "id": "wrist-sag-extended",
+   "topic": "arm",
+   "statement": "Extended over the conveyor the wrist sags about 2 units at rest, so waiting on a fixed delay crawls; hold only while the delay is shrinking.",
+   "status": "verified",
+   "evidence": [
+    "1c34f07b87",
+    "real lap lift_place"
+   ],
+   "date": "2026-10-28",
+   "applies_when": [
+    "lift",
+    "approach"
+   ]
+  },
+  {
+   "id": "arm-own-error",
+   "topic": "arm",
+   "statement": "The arm own error going down is about 2.7 mm horizontally, not the main cause of misses by position.",
+   "status": "verified",
+   "evidence": [
+    "cell_attempts.arm_error_mm"
+   ],
+   "date": "2026-10-28",
+   "applies_when": [
+    "grasp",
+    "map"
+   ]
+  },
+  {
+   "id": "runner-death-fault-line",
+   "topic": "arm",
+   "statement": "A runner that dies on a tick exception now writes a fault line first; no status line means a 300 s wait.",
+   "status": "verified",
+   "evidence": [
+    "f30534dd94"
+   ],
+   "date": "2026-10-28",
+   "applies_when": [
+    "any"
+   ]
+  },
+  {
+   "id": "idle-park-then-off",
+   "topic": "operations",
+   "statement": "With no command for 3 minutes the arm parks, 3 more minutes at home ends the session with torque off.",
+   "status": "verified",
+   "evidence": [
+    "aeda5e719a",
+    "real session log"
+   ],
+   "date": "2026-10-28",
+   "applies_when": [
+    "idle"
+   ]
+  },
+  {
+   "id": "joint4-limit-far-grasp",
+   "topic": "arm",
+   "statement": "The planner joint4 limit (106.6 deg) blocks a far vertical descent; the Pinky plate centre is out of reach for a 4 cm approach, 2 cm works to 0.21 m.",
+   "status": "verified",
+   "evidence": [
+    "grasp_planner joint limits"
+   ],
+   "date": "2026-10-28",
+   "applies_when": [
+    "approach",
+    "grasp"
+   ]
+  },
+  {
+   "id": "nightly-reboot-skips-lock",
+   "topic": "operations",
+   "statement": "The nightly reboot once rebooted the Fleet PC mid-move; it now skips while the session lock is held, but this is not applied on the Fleet PC yet.",
+   "status": "verified",
+   "evidence": [
+    "9e0a75971d"
+   ],
+   "date": "2026-10-28",
+   "applies_when": [
+    "idle",
+    "any"
+   ]
+  },
+  {
+   "id": "camera-restart-after-boot",
+   "topic": "operations",
+   "statement": "After a reboot the gripper camera preview shows no fresh frame until its user service is restarted.",
+   "status": "verified",
+   "evidence": [
+    "omx camera service restart"
+   ],
+   "date": "2026-10-28",
+   "applies_when": [
+    "idle"
+   ]
+  },
+  {
+   "id": "top-view-noise",
+   "topic": "camera",
+   "statement": "Top camera frame noise of about 200 px is gone after a 3x3 opening; a stop is under 40 px after opening.",
+   "status": "verified",
+   "evidence": [
+    "cell_observe motion check"
+   ],
+   "date": "2026-10-28",
+   "applies_when": [
+    "map",
+    "approach"
+   ]
+  },
+  {
+   "id": "jaw-close-limit",
+   "topic": "camera",
+   "statement": "Closing the jaws to the mechanical end twists the extended wrist and shifts the arm between photos; close only to 50.5.",
+   "status": "verified",
+   "evidence": [
+    "cell_calibration jaw marking"
+   ],
+   "date": "2026-10-28",
+   "applies_when": [
+    "map"
+   ]
+  },
+  {
+   "id": "jaw-marker-offset",
+   "topic": "map",
+   "statement": "The part that changes when the jaws move is a joint about 29 mm beside the TCP, so a map made at one yaw shifts at another (44 mm for 96.5 deg).",
+   "status": "verified",
+   "evidence": [
+    "pivot measurement notes"
+   ],
+   "date": "2026-10-28",
+   "applies_when": [
+    "map",
+    "grasp"
+   ]
+  },
+  {
+   "id": "jaw-yaw-origin",
+   "topic": "map",
+   "statement": "Jaw closing direction is yaw + 90 deg with a wrist-origin error within about 7 deg; being confirmed by a pivot measurement.",
+   "status": "partial",
+   "evidence": [
+    "pivot measurement in progress"
+   ],
+   "date": "2026-10-28",
+   "applies_when": [
+    "map",
+    "grasp"
+   ]
+  },
+  {
+   "id": "wrist-camera-oblique",
+   "topic": "camera",
+   "statement": "The gripper camera looks obliquely forward, not down, so it cannot judge alignment directly.",
+   "status": "verified",
+   "evidence": [
+    "wrist camera frames"
+   ],
+   "date": "2026-10-28",
+   "applies_when": [
+    "grasp",
+    "approach"
+   ]
+  },
+  {
+   "id": "map-loo-error",
+   "topic": "map",
+   "statement": "Leave-one-out map error: Pinky plate mean 3.95 mm (max 8.76), container area mean 5.8 mm (max 11.4), without the jaw-offset correction.",
+   "status": "verified",
+   "evidence": [
+    "cell_calibration loo_error_mm"
+   ],
+   "date": "2026-10-28",
+   "applies_when": [
+    "map",
+    "grasp"
+   ]
+  },
+  {
+   "id": "lower-edge-unreachable",
+   "topic": "map",
+   "statement": "Near the lower screen edge the jaws leave the view and cannot be marked; work from the upper container as the user directed.",
+   "status": "verified",
+   "evidence": [
+    "user instruction"
+   ],
+   "date": "2026-10-28",
+   "applies_when": [
+    "map"
+   ]
+  },
+  {
+   "id": "container-size",
+   "topic": "objects",
+   "statement": "Green containers are 30 mm square in section, 30/60/90 mm long, top about 0.036 m above the floor.",
+   "status": "verified",
+   "evidence": [
+    "object-catalog.example.json",
+    "user supplied"
+   ],
+   "date": "2026-10-28",
+   "applies_when": [
+    "grasp",
+    "approach"
+   ]
+  },
+  {
+   "id": "catalog-match-limit",
+   "topic": "objects",
+   "statement": "Catalogue matching split touching 2- and 3-cell containers and dropped a 22x13 fragment, but two touching 1-cell containers look like one 2-cell.",
+   "status": "verified",
+   "evidence": [
+    "dc1dfdf9ba",
+    "test_omx_cell_objects"
+   ],
+   "date": "2026-10-28",
+   "applies_when": [
+    "grasp",
+    "approach"
+   ]
+  },
+  {
+   "id": "container-true-centre",
+   "topic": "objects",
+   "statement": "Corrected true centres are about (-87.9, 206.1) mm for the 3-cell and (-57.5, 230.9) mm for the 2-cell container.",
+   "status": "unverified",
+   "evidence": [
+    "pending pivot measurement"
+   ],
+   "date": "2026-10-28",
+   "applies_when": [
+    "map",
+    "grasp"
+   ]
+  },
+  {
+   "id": "policy-measure-first",
+   "topic": "policy",
+   "statement": "Measurement decides first and the model only picks among what is left; touching or unlisted objects are not grasped.",
+   "status": "verified",
+   "evidence": [
+    "D-872",
+    "user instruction"
+   ],
+   "date": "2026-10-28",
+   "applies_when": [
+    "any"
+   ]
+  },
+  {
+   "id": "policy-safety",
+   "topic": "safety",
+   "statement": "Watch 55 C and 80% PWM, never cut torque mid-move (fold home, then off), idle ends at home with torque off, minimise motor strain.",
+   "status": "verified",
+   "evidence": [
+    "user instruction",
+    "aeda5e719a"
+   ],
+   "date": "2026-10-28",
+   "applies_when": [
+    "any"
+   ]
+  },
+  {
+   "id": "policy-self-resolve",
+   "topic": "policy",
+   "statement": "Prefer solving it with cameras and measurement without a person hand, and run the simulator in parallel.",
+   "status": "verified",
+   "evidence": [
+    "user instruction"
+   ],
+   "date": "2026-10-28",
+   "applies_when": [
+    "any"
+   ]
+  }
+ ]
+}

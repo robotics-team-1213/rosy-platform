@@ -38,7 +38,7 @@ export function mountRobotRecording({toggle, detail, openButton, sheetHost, anch
   let segment = 1;
   let sheet = null;
   let stopSheetRefresh = null;
-  let refreshing = false;
+  let refreshing = null;
   let download = null;         // {id, controller}
   let lastListing = null;      // 마지막 목록과 실패 글자 — 받기가 끝나면 바로 다시 그린다
   let lastFailure = "";
@@ -140,7 +140,6 @@ export function mountRobotRecording({toggle, detail, openButton, sheetHost, anch
     stopResize?.();
     stopResize = null;
     document.removeEventListener("keydown", onKey);
-    // 목록을 다시 그리면 초점 둔 버튼이 바뀌므로 "시트 안"을 따지지 않고 여는 버튼으로 돌려준다.
     sheet.remove();
     sheet = null;
     openButton.setAttribute("aria-pressed", "false");
@@ -157,12 +156,14 @@ export function mountRobotRecording({toggle, detail, openButton, sheetHost, anch
     if (state === shown) return;   // 3 s 새로 읽기가 같은 목록을 가져왔다: 버튼·초점을 그대로 둔다
     shown = state;
     const noticeNode = sheet.querySelector("[data-recordings-notice]");
-    noticeNode.textContent = message;
-    noticeNode.hidden = !message;
     const list = sheet.querySelector("[data-recordings-list]");
+    const focused = list.contains(document.activeElement) ? document.activeElement?.closest("[data-recording-id]")?.dataset.recordingId : null;
+    noticeNode.textContent = message || (document.activeElement === noticeNode ? "녹화본 목록이 갱신되었습니다." : "");
+    noticeNode.hidden = !noticeNode.textContent;
+    let restoreFocus;
     list.replaceChildren(...rows.map((row) => {
       const item = el("div", null, {"data-recording-id": row.id});
-      const facts = el("div", null, {"data-recording-facts": ""});
+      const facts = el("div", null, {"data-recording-facts": "", tabindex: "-1"});
       facts.append(el("ui-text", row.title, {scale: "value"}), el("ui-text", row.detail, {scale: "label"}));
       const busy = download?.id === row.id;
       const status = busy ? "받는 중…" : (rowStatus.get(row.id) ?? "");
@@ -188,16 +189,27 @@ export function mountRobotRecording({toggle, detail, openButton, sheetHost, anch
       }
       action.setAttribute("kind", "quiet");
       item.append(facts, action);
+      if (focused === row.id) restoreFocus = action.disabled ? facts : action;
       return item;
     }));
+    if (focused) {
+      if (!restoreFocus) {
+        noticeNode.textContent = message || "선택한 녹화본이 현재 목록에 없습니다.";
+        noticeNode.hidden = false;
+        restoreFocus = noticeNode;
+      }
+      restoreFocus.focus({preventScroll: true});
+      restoreFocus.scrollIntoView({block: "nearest", inline: "nearest"});
+    }
   }
 
   async function refreshSheet() {
-    if (refreshing || !sheet) return;
-    refreshing = true;
+    if (!sheet || refreshing === sheet) return;
+    const owner = sheet;
+    refreshing = owner;
     const response = await request("/api/v1/recordings", {timeoutMs: REQUEST_TIMEOUT_MS}).catch(() => null);
-    refreshing = false;
-    if (disposed || !sheet) return;
+    if (refreshing === owner) refreshing = null;
+    if (disposed || sheet !== owner) return;
     placeSheet();
     if (response?.status === 200) renderRows(response.body, "");
     else renderRows(null, response ? errorText(response.body?.error?.code, "fetch") : "");
@@ -237,7 +249,7 @@ export function mountRobotRecording({toggle, detail, openButton, sheetHost, anch
                              tabindex: "-1"});
     const head = el("ui-head", "녹화본");
     const noticeNode = el("ui-text", "", {scale: "label", "data-recordings-notice": "", role: "status",
-                                          "aria-live": "polite"});
+                                          "aria-live": "polite", tabindex: "-1"});
     noticeNode.hidden = true;
     const list = el("div", null, {"data-recordings-list": ""});
     const actions = el("ui-actions");

@@ -42,5 +42,7 @@ def test_unit_reads_code_folder_and_hostname_from_its_environment_file():
 
 def test_pilot_fetch_imports_from_the_signed_model_code_release():
     unit = (ROOT / 'deploy/model_pc/rosy-pilot-fetch@.service').read_text(encoding='utf-8')
-    path = next(line for line in unit.splitlines() if line.startswith('Environment=PYTHONPATH='))
-    assert all(part.startswith('%h/.local/share/rosy/model-code/current/') for part in path.split('=', 2)[2].split(':'))
+    command = next(line for line in unit.splitlines() if line.startswith('ExecStart='))
+    assert '-I %h/.local/lib/rosy-model-code/rosy_model_code.py' in command
+    assert '--config %h/.config/rosy/model-code.json exec dataset/fetch_http.py' in command
+    assert 'Environment=PYTHONPATH=' not in unit

@@ -57,7 +57,8 @@ def allowed_overlays(env: dict[str, str]) -> list[str]:
     return shlex.split(env.get("ROSY_SITE_PAIRING_COMPOSE", ""))
 
 
-def check_overrides(env: dict[str, str], commit: str, run, compose, services=SERVICES) -> None:
+def check_overrides(env: dict[str, str], commit: str, run, compose, services=SERVICES,
+                    image_references: dict | None = None) -> None:
     """Refuse when anything could pin a site image other than the candidate's."""
     allowed_overlays(env)
     link_compose = "/opt/rosy/candidate/deploy/site/compose.yaml"
@@ -88,7 +89,8 @@ def check_overrides(env: dict[str, str], commit: str, run, compose, services=SER
         raise Refused("Compose service set differs from the signed candidate")
     for service in services:
         image = (configured.get(service) or {}).get("image")
-        if image != f"rosy-site-{service}:{commit}":
+        expected = (image_references or {}).get(service, f"rosy-site-{service}:{commit}")
+        if image != expected:
             raise Refused(f"Compose resolves {service} to {image!r}, not the candidate "
                           f"image; remove the image override first")
 
@@ -412,7 +414,8 @@ def runtime_reason(rows, hashes: dict, run) -> str:
     return ''
 
 
-def containers_reason(rows, commit: str, accepted: dict, run, services=SERVICES) -> str:
+def containers_reason(rows, commit: str, accepted: dict, run, services=SERVICES,
+                      image_references: dict | None = None) -> str:
     if not isinstance(rows, list):
         return 'docker compose ps output is not a list'
     if any(isinstance(row, dict) and row.get('Service') in SERVICES
@@ -423,7 +426,7 @@ def containers_reason(rows, commit: str, accepted: dict, run, services=SERVICES)
         if len(matches) != 1:
             return f'{service} needs exactly one running container'
         row = matches[0]
-        if row.get('Image') != f'rosy-site-{service}:{commit}':
+        if row.get('Image') != (image_references or {}).get(service, f'rosy-site-{service}:{commit}'):
             return f"{service} runs {row.get('Image')!r}"
         if row.get('State') != 'running' or row.get('Health') != 'healthy':
             return f"{service} is {row.get('State')}/{row.get('Health') or 'no health'}"

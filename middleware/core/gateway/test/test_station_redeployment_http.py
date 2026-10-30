@@ -121,10 +121,119 @@ async def configured(station_api, tmp_path):
     enabled = [True]
     service = ChargeService(ledger, stations=stations, ports=port, clock=lambda: now[0],
         policy_enabled=lambda: enabled[0], admit_return=policy)
+
+    async def asgi_call(function, *args, **kwargs):
+        # SIM time controls permits; in-process ASGI scheduling has a separate bounded harness budget.
+        return await asyncio.wait_for(function(*args, **kwargs), timeout=30.)
+
+    service.motion.call = asgi_call
     install_hold_probe(service.motion, lambda: now[0])
     runtime = ChargeRuntime(service, robot_id='robot-1', station_id='charger-1', admission=policy,
         monotonic=lambda: now[0], period_s=.1)
     return runtime, service, ledger, tasks, client, http, owner, manager, now, sample, enabled
+
+
+def test_motion_keeps_production_deadline_and_transport_failures(pipeline_sources, monkeypatch):
+    from fleet.server import charge_motion
+
+    deadlines = []
+
+    async def wait_for(awaitable, *, timeout):
+        deadlines.append(timeout)
+        return await awaitable
+
+    monkeypatch.setattr(charge_motion, 'asyncio', SimpleNamespace(wait_for=wait_for))
+
+    async def answer(value, *, suffix):
+        return value + suffix
+
+    async def failure(error):
+        raise error
+
+    async def run():
+        motion = charge_motion.ChargeMotion(SimpleNamespace())
+        assert await motion.call(answer, 'proof', suffix='-bound') == 'proof-bound'
+        with pytest.raises(TimeoutError, match='unknown renewal'):
+            await motion.call(failure, TimeoutError('unknown renewal'))
+        with pytest.raises(asyncio.CancelledError):
+            await motion.call(failure, asyncio.CancelledError())
+        assert deadlines == [1.5, 1.5, 1.5]
+
+    asyncio.run(run())
+
+
+def test_sim_http_fixture_has_separate_bounded_asgi_budget(station_api, pipeline_sources, tmp_path, monkeypatch):
+    import sys
+    from fleet.server import charge_motion
+
+    real_asyncio, deadlines = asyncio, []
+
+    async def scheduled(awaitable, *, timeout):
+        deadlines.append(timeout)
+        if timeout <= 1.5:
+            awaitable.close()
+            raise TimeoutError('controlled in-process ASGI scheduling exceeds the native RPC budget')
+        assert timeout <= 30.
+        return await awaitable
+
+    async def response():
+        return 'scheduled-http-response'
+
+    async def run():
+        _, service, _, _, _, http, _, _, _, _, _ = await configured(station_api, tmp_path)
+        proxy = SimpleNamespace(wait_for=scheduled)
+        monkeypatch.setattr(charge_motion, 'asyncio', proxy)
+        monkeypatch.setattr(sys.modules[__name__], 'asyncio', proxy)
+        try:
+            assert await service.motion.call(response) == 'scheduled-http-response'
+            assert deadlines == [30.]
+        finally:
+            await http.aclose()
+
+    real_asyncio.run(run())
+
+
+def test_unknown_renewal_before_native_finish_holds_and_retains_claims(station_api, pipeline_sources, tmp_path):
+    async def run():
+        runtime, _, ledger, tasks, client, http, owner, manager, now, sample, _ = await configured(
+            station_api, tmp_path)
+        starts, renewals = [], []
+        original_start, original_renew = client.station_undock, client.station_departure
+
+        async def start(permission):
+            starts.append(permission)
+            return await original_start(permission)
+
+        async def renew(permission):
+            if starts:
+                assert abs(manager.executor.travelled_m()) < owner.departure.feed.profile.reverse_distance_m
+                renewals.append(permission)
+                raise TimeoutError('unknown renewal before native completion')
+            return await original_renew(permission)
+
+        client.station_undock, client.station_departure = start, renew
+        try:
+            await runtime.tick()
+            for _ in range(140):
+                manager.executor.step(.05)
+                now[0] += .05
+                sample(load_present=False, measured_linear_m_s=manager.executor.command[0])
+                owner.tick()
+                await runtime.tick()
+                current = ledger.get('charge-1')
+                if current.state == 'HOLD':
+                    break
+            assert current.state == 'HOLD' and current.reason == 'CHARGE_DEPARTURE_UNVERIFIED'
+            assert len(starts) == len(renewals) == 1
+            assert manager.executor.command == (0., 0.)
+            assert tasks.resource_claims(resource_kind='robot', resource_id='robot-1')
+            assert tasks.resource_claims(resource_kind='station', resource_id='charger-1')
+            await runtime.tick()
+            assert len(starts) == len(renewals) == 1
+        finally:
+            await http.aclose()
+
+    asyncio.run(run())
 
 
 @pytest.mark.parametrize('lost_finish', [False, True])

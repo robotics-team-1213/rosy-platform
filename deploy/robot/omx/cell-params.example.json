@@ -1,0 +1,821 @@
+{
+ "schema": "rosy.omx-cell-params.v1",
+ "params": {
+  "objects.chroma": {
+   "value": 25.0,
+   "unit": "lab",
+   "source": "tuned",
+   "evidence": "2026-10-28 real top camera: green container vs grey pinky board (value as shipped in code)"
+  },
+  "objects.light": {
+   "value": 60.0,
+   "unit": "lab",
+   "source": "default",
+   "evidence": "2026-10-28 real top camera: green container vs grey pinky board (value as shipped in code)"
+  },
+  "objects.min_px": {
+   "value": 150,
+   "unit": "px",
+   "source": "tuned",
+   "evidence": "2026-10-28 real top camera: green container vs grey pinky board (value as shipped in code)"
+  },
+  "objects.split_fill": {
+   "value": 0.8,
+   "unit": "ratio",
+   "source": "tuned",
+   "evidence": "2026-10-28 real top camera: green container vs grey pinky board (value as shipped in code)"
+  },
+  "objects.split_axis_deg": {
+   "value": 12.0,
+   "unit": "deg",
+   "source": "tuned",
+   "evidence": "2026-10-28 real top camera: green container vs grey pinky board (value as shipped in code)"
+  },
+  "objects.open_px": {
+   "value": 3,
+   "unit": "px",
+   "source": "measured",
+   "evidence": "2026-10-28 facts 11: ~200 px frame noise vanishes after a 3x3 opening"
+  },
+  "objects.close_px": {
+   "value": 5,
+   "unit": "px",
+   "source": "default",
+   "evidence": "2026-10-28 real top camera: green container vs grey pinky board (value as shipped in code)"
+  },
+  "pivot.still_px": {
+   "value": 40,
+   "unit": "px",
+   "source": "measured",
+   "evidence": "2026-10-28 real arm: pivot circle from gripper open/close, 2 agreeing marks (value as shipped in code)"
+  },
+  "pivot.diff_px": {
+   "value": 30,
+   "unit": "gray",
+   "source": "default",
+   "evidence": "2026-10-28 real arm: pivot circle from gripper open/close, 2 agreeing marks (value as shipped in code)"
+  },
+  "pivot.min_blob": {
+   "value": 300,
+   "unit": "px",
+   "source": "default",
+   "evidence": "2026-10-28 real arm: pivot circle from gripper open/close, 2 agreeing marks (value as shipped in code)"
+  },
+  "pivot.max_blob": {
+   "value": 90,
+   "unit": "px",
+   "source": "default",
+   "evidence": "2026-10-28 real arm: pivot circle from gripper open/close, 2 agreeing marks (value as shipped in code)"
+  },
+  "pivot.follow_px": {
+   "value": 60,
+   "unit": "px",
+   "source": "default",
+   "evidence": "2026-10-28 real arm: pivot circle from gripper open/close, 2 agreeing marks (value as shipped in code)"
+  },
+  "pivot.agree_px": {
+   "value": 3.0,
+   "unit": "px",
+   "source": "default",
+   "evidence": "2026-10-28 real arm: pivot circle from gripper open/close, 2 agreeing marks (value as shipped in code)"
+  },
+  "pivot.bias_reach_mm": {
+   "value": 80.0,
+   "unit": "mm",
+   "source": "tuned",
+   "evidence": "2026-10-28 real arm: pivot circle from gripper open/close, 2 agreeing marks (value as shipped in code)"
+  },
+  "pivot.settle_limit_s": {
+   "value": 5.0,
+   "unit": "s",
+   "source": "default",
+   "evidence": "2026-10-28 real arm: pivot circle from gripper open/close, 2 agreeing marks (value as shipped in code)"
+  },
+  "pivot.settle_step_s": {
+   "value": 0.4,
+   "unit": "s",
+   "source": "default",
+   "evidence": "2026-10-28 real arm: pivot circle from gripper open/close, 2 agreeing marks (value as shipped in code)"
+  },
+  "pivot.grip_closed": {
+   "value": 50.5,
+   "unit": "gripper",
+   "source": "measured",
+   "evidence": "2026-10-28 facts 12: closing to 48.5 twisted the extended wrist; 50.5 stops short"
+  },
+  "auto.temp_stop_c": {
+   "value": 55,
+   "unit": "C",
+   "source": "theory",
+   "evidence": "2026-10-28 facts 23: user safety rule 55 C / PWM 80 %"
+  },
+  "auto.pwm_fraction": {
+   "value": 0.8,
+   "unit": "ratio",
+   "source": "theory",
+   "evidence": "2026-10-28 facts 23: user safety rule, 80 % of the joint's own session cap; applied per joint after shoulder_lift read 325 of 600 (54 %) and was judged against one cap"
+  },
+  "auto.approach_near_m": {
+   "value": 0.02,
+   "unit": "m",
+   "source": "measured",
+   "evidence": "2026-10-28 real arm S: 2-cell container picked and placed (value as shipped in code)"
+  },
+  "auto.grasp_depth_m": {
+   "value": 0.015,
+   "unit": "m",
+   "source": "measured",
+   "evidence": "2026-10-28 facts 19: 30 mm container, jaws 15 mm below the top"
+  },
+  "auto.clear_mm": {
+   "value": 55.0,
+   "unit": "mm",
+   "source": "default",
+   "evidence": "2026-10-28 real arm S: 2-cell container picked and placed (value as shipped in code)"
+  },
+  "auto.finger_mm": {
+   "value": 8.0,
+   "unit": "mm",
+   "source": "default",
+   "evidence": "2026-10-28 real arm S: 2-cell container picked and placed (value as shipped in code)"
+  },
+  "auto.closing_theory_deg": {
+   "value": 90,
+   "unit": "deg",
+   "source": "theory",
+   "evidence": "2026-10-28 facts 26: yaw+90 held the 2-cell container, 215 mA"
+  },
+  "auto.closing_alt_deg": {
+   "value": 0,
+   "unit": "deg",
+   "source": "theory",
+   "evidence": "2026-10-28 real arm S: 2-cell container picked and placed (value as shipped in code)"
+  },
+  "runner.pace_lag": {
+   "value": 1.6,
+   "unit": "joint_unit",
+   "source": "measured",
+   "evidence": "2026-10-28 facts 1,2: wrist_flex lag 1.6 units = 2.9 of guard 5 deg"
+  },
+  "runner.pace_rise": {
+   "value": 0.3,
+   "unit": "joint_unit",
+   "source": "tuned",
+   "evidence": "2026-10-28 real arm S: guard/pacing diagnosis (value as shipped in code)"
+  },
+  "runner.pace_max_s": {
+   "value": 3.0,
+   "unit": "s",
+   "source": "tuned",
+   "evidence": "2026-10-28 real arm S: guard/pacing diagnosis (value as shipped in code)"
+  },
+  "runner.idle_park_s": {
+   "value": 180.0,
+   "unit": "s",
+   "source": "measured",
+   "evidence": "2026-10-28 facts 5: park then stop on real arm S"
+  },
+  "runner.idle_stop_s": {
+   "value": 180.0,
+   "unit": "s",
+   "source": "measured",
+   "evidence": "2026-10-28 real arm S: guard/pacing diagnosis (value as shipped in code)"
+  },
+  "runner.contact_lag": {
+   "value": 1.5,
+   "unit": "joint_unit",
+   "source": "measured",
+   "evidence": "2026-10-28 real arm S: guard/pacing diagnosis (value as shipped in code)"
+  },
+  "runner.contact_ticks": {
+   "value": 2,
+   "unit": "count",
+   "source": "default",
+   "evidence": "2026-10-28 real arm S: guard/pacing diagnosis (value as shipped in code)"
+  },
+  "auto.pwm_window_s": {
+   "value": 1.5,
+   "unit": "s",
+   "source": "tuned",
+   "evidence": "2026-10-28: at the cap alone is normal while lifting (elbow saturates leaving home, 10/25); a joint near its cap AND not moving this long is blocked. Not yet measured on a stall"
+  },
+  "auto.pwm_move_units": {
+   "value": 0.3,
+   "unit": "joint_unit",
+   "source": "tuned",
+   "evidence": "same threshold as chunk_runner STALL_MOVE: less motion between two checks counts as not moving"
+  },
+  "auto.fold_before_transport": {
+   "value": 1,
+   "unit": "flag",
+   "source": "measured",
+   "evidence": "2026-10-28 facts 30-31: lifting a held box from the reach straight to transit took shoulder_lift to 525/600 and the strain hold stopped it; folding home first then placing from home succeeded twice"
+  },
+  "push.height_m": {
+   "value": 0.012,
+   "unit": "m",
+   "source": "measured",
+   "evidence": "2026-10-28 facts 27: closed jaws 12 mm above the floor at 1 cm/s moved a 1-cell 5 cm, no guard stop"
+  },
+  "push.speed_m_s": {
+   "value": 0.01,
+   "unit": "m/s",
+   "source": "measured",
+   "evidence": "2026-10-28 facts 27: closed jaws 12 mm above the floor at 1 cm/s moved a 1-cell 5 cm, no guard stop"
+  },
+  "push.gap_mm": {
+   "value": 10.0,
+   "unit": "mm",
+   "source": "tuned",
+   "evidence": "jaws go down this far behind the object's face so the descent does not land on it"
+  },
+  "auto.bias_from_place": {
+   "value": 1,
+   "unit": "flag",
+   "source": "measured",
+   "evidence": "2026-10-28: the Pinky tray reused a bias measured at 0.118 m; the camera saw the placed box 7.4 mm from where the arm set it, and the next pick from the tray landed on the box's top edge"
+  },
+  "auto.bias_learn_max_mm": {
+   "value": 15.0,
+   "unit": "mm",
+   "source": "tuned",
+   "evidence": "twice the 7.4 mm seen; a larger jump means the box slid or another object was seen"
+  },
+  "wrist.enabled": {
+   "value": 0,
+   "unit": "flag",
+   "source": "default",
+   "evidence": "assumed in Rosy/docs/superpowers/plans/2026-10-28-arm-s-wrist-final-alignment.md section 7; set from the real-arm stages B-E"
+  },
+  "wrist.tol_mm": {
+   "value": 3.0,
+   "unit": "mm",
+   "source": "default",
+   "evidence": "assumed in Rosy/docs/superpowers/plans/2026-10-28-arm-s-wrist-final-alignment.md section 7; set from the real-arm stages B-E"
+  },
+  "wrist.max_step_mm": {
+   "value": 25.0,
+   "unit": "mm",
+   "source": "default",
+   "evidence": "assumed in Rosy/docs/superpowers/plans/2026-10-28-arm-s-wrist-final-alignment.md section 7; set from the real-arm stages B-E"
+  },
+  "wrist.max_total_mm": {
+   "value": 30.0,
+   "unit": "mm",
+   "source": "default",
+   "evidence": "assumed in Rosy/docs/superpowers/plans/2026-10-28-arm-s-wrist-final-alignment.md section 7; set from the real-arm stages B-E"
+  },
+  "wrist.max_iter": {
+   "value": 2,
+   "unit": "count",
+   "source": "default",
+   "evidence": "assumed in Rosy/docs/superpowers/plans/2026-10-28-arm-s-wrist-final-alignment.md section 7; set from the real-arm stages B-E"
+  },
+  "wrist.topmap_disagree_mm": {
+   "value": 35.0,
+   "unit": "mm",
+   "source": "default",
+   "evidence": "assumed in Rosy/docs/superpowers/plans/2026-10-28-arm-s-wrist-final-alignment.md section 7; set from the real-arm stages B-E"
+  },
+  "wrist.edge_margin_px": {
+   "value": 12,
+   "unit": "px",
+   "source": "default",
+   "evidence": "assumed in Rosy/docs/superpowers/plans/2026-10-28-arm-s-wrist-final-alignment.md section 7; set from the real-arm stages B-E"
+  },
+  "wrist.area_lo": {
+   "value": 0.6,
+   "unit": "ratio",
+   "source": "default",
+   "evidence": "assumed in Rosy/docs/superpowers/plans/2026-10-28-arm-s-wrist-final-alignment.md section 7; set from the real-arm stages B-E"
+  },
+  "wrist.area_hi": {
+   "value": 1.6,
+   "unit": "ratio",
+   "source": "default",
+   "evidence": "assumed in Rosy/docs/superpowers/plans/2026-10-28-arm-s-wrist-final-alignment.md section 7; set from the real-arm stages B-E"
+  },
+  "wrist.fill_min": {
+   "value": 0.7,
+   "unit": "ratio",
+   "source": "default",
+   "evidence": "assumed in Rosy/docs/superpowers/plans/2026-10-28-arm-s-wrist-final-alignment.md section 7; set from the real-arm stages B-E"
+  },
+  "wrist.axis_tol_deg": {
+   "value": 15.0,
+   "unit": "deg",
+   "source": "default",
+   "evidence": "assumed in Rosy/docs/superpowers/plans/2026-10-28-arm-s-wrist-final-alignment.md section 7; set from the real-arm stages B-E"
+  },
+  "wrist.fit_rms_max_px": {
+   "value": 4.0,
+   "unit": "px",
+   "source": "default",
+   "evidence": "assumed in Rosy/docs/superpowers/plans/2026-10-28-arm-s-wrist-final-alignment.md section 7; set from the real-arm stages B-E"
+  },
+  "wrist.cal_offset_mm": {
+   "value": 8.0,
+   "unit": "mm",
+   "source": "default",
+   "evidence": "assumed in Rosy/docs/superpowers/plans/2026-10-28-arm-s-wrist-final-alignment.md section 7; set from the real-arm stages B-E"
+  },
+  "pivot.max_rms_mm": {
+   "value": 5.0,
+   "unit": "mm",
+   "source": "measured",
+   "evidence": "2026-10-28: good circles had rms 2.5-3.8 mm and radius 18.8-27.6 mm; marks beside the Pinky body gave radius 70.4 mm, rms 13.6 mm and a 6 cm bias that was saved"
+  },
+  "pivot.radius_lo_mm": {
+   "value": 12.0,
+   "unit": "mm",
+   "source": "measured",
+   "evidence": "2026-10-28: good circles had rms 2.5-3.8 mm and radius 18.8-27.6 mm; marks beside the Pinky body gave radius 70.4 mm, rms 13.6 mm and a 6 cm bias that was saved"
+  },
+  "pivot.radius_hi_mm": {
+   "value": 40.0,
+   "unit": "mm",
+   "source": "measured",
+   "evidence": "2026-10-28: good circles had rms 2.5-3.8 mm and radius 18.8-27.6 mm; marks beside the Pinky body gave radius 70.4 mm, rms 13.6 mm and a 6 cm bias that was saved"
+  },
+  "runner.contact_rise": {
+   "value": 0.6,
+   "unit": "joint_unit",
+   "source": "tuned",
+   "evidence": "2026-10-28: a held box left the elbow 1.5-2.0 units behind at the hover (empty 0.6-0.8); only such a loaded joint gets start + rise, capped well under the guard's ~2.8; unloaded joints keep 1.5 (the 23:59 incident came from raising every joint)"
+  },
+  "runner.contact_loaded_max": {
+   "value": 2.2,
+   "unit": "joint_unit",
+   "source": "tuned",
+   "evidence": "2026-10-28: a held box left the elbow 1.5-2.0 units behind at the hover (empty 0.6-0.8); only such a loaded joint gets start + rise, capped well under the guard's ~2.8; unloaded joints keep 1.5 (the 23:59 incident came from raising every joint)"
+  },
+  "reach.enabled": {
+   "value": 1,
+   "unit": "flag",
+   "source": "measured",
+   "evidence": "2026-10-29: over a floor 1-cell 0.17 m out the arm hovered 8 mm short of the command, repeatably; the open jaws landed on the box top (contact z 0.037) twice"
+  },
+  "reach.tol_mm": {
+   "value": 2.0,
+   "unit": "mm",
+   "source": "tuned",
+   "evidence": "2026-10-29: over a floor 1-cell 0.17 m out the arm hovered 8 mm short of the command, repeatably; the open jaws landed on the box top (contact z 0.037) twice"
+  },
+  "reach.max_iter": {
+   "value": 2,
+   "unit": "count",
+   "source": "tuned",
+   "evidence": "2026-10-29: over a floor 1-cell 0.17 m out the arm hovered 8 mm short of the command, repeatably; the open jaws landed on the box top (contact z 0.037) twice"
+  },
+  "reach.max_mm": {
+   "value": 20.0,
+   "unit": "mm",
+   "source": "tuned",
+   "evidence": "2026-10-29: over a floor 1-cell 0.17 m out the arm hovered 8 mm short of the command, repeatably; the open jaws landed on the box top (contact z 0.037) twice"
+  },
+  "objects.surface_min_px": {
+   "value": 12000,
+   "unit": "px",
+   "source": "tuned",
+   "evidence": "2026-10-29 top view: a 3-cell is about 6000 px, the orange board far above 20000; a blob this large is a surface, not something a finger meets"
+  },
+  "auto.jaw_margin_mm": {
+   "value": 8.0,
+   "unit": "mm",
+   "source": "tuned",
+   "evidence": "2026-10-29 wrist view at home: pad gap 7/62/201/319/445 px at jaws 48.8/50.1/51.9/53.6/55.6 (about 70 px per unit); a 30 mm box is held at 52.3 -> about 10.4 mm of gap per unit; 56 opened ~67 mm, 62 over 110 mm and put the fingers on the neighbours"
+  },
+  "auto.finger_pad_mm": {
+   "value": 20.0,
+   "unit": "mm",
+   "source": "tuned",
+   "evidence": "2026-10-29 wrist view: the finger pad is about 20 mm wide; room beside a box is measured across this width only, not +-30 % of the box length"
+  },
+  "auto.min_jaw_margin_mm": {
+   "value": 2.0,
+   "unit": "mm",
+   "source": "tuned",
+   "evidence": "2026-10-29: jaws open the box width + margin each side; under 2 mm the fingers land on the box edge (about one top-view pixel of error)"
+  },
+  "auto.own_side_mm": {
+   "value": 6.0,
+   "unit": "mm",
+   "source": "tuned",
+   "evidence": "2026-10-29 top view of the board: a box's side face and shadow show about 5 px (~4.5 mm) past its top outline on the side away from the camera"
+  },
+  "auto.jaw_margin_max_mm": {
+   "value": 16.0,
+   "unit": "mm",
+   "source": "tuned",
+   "evidence": "2026-10-30: 35 of 64 real attempts touched down on a box with the fixed 8 mm margin while the top map errs 6.3 mm mean, 13.6 mm worst; open_max 56 opens ~68 mm (19 mm each side of a 30 mm box); 16 keeps 3 mm short of that and finger_room narrows it near a neighbour"
+  },
+  "preflight.min_mean": {
+   "value": 15.0,
+   "unit": "grey",
+   "source": "tuned",
+   "evidence": "2026-10-30 00:40 lights off: top frame mean 1.4 and wrist 0.1 (top 1.4 even at 200 ms, gain 7); lit cell: top 139"
+  },
+  "preflight.target_mean": {
+   "value": 140.0,
+   "unit": "grey",
+   "source": "tuned",
+   "evidence": "2026-10-30 dim room: top auto exposure stuck at 3000, mean 21, wrist 145; manual 10000/20000/33000 at gain 7 gave 61/105/148; at mean 106 the board box split in two and matched no catalogue entry, at 156 it matched: detection was tuned near 140"
+  },
+  "preflight.mean_band": {
+   "value": 15.0,
+   "unit": "grey",
+   "source": "tuned",
+   "evidence": "2026-10-30 dim room: top auto exposure stuck at 3000, mean 21, wrist 145; manual 10000/20000/33000 at gain 7 gave 61/105/148; at mean 106 the board box split in two and matched no catalogue entry, at 156 it matched: detection was tuned near 140"
+  },
+  "preflight.max_exposure": {
+   "value": 33000,
+   "unit": "v4l2",
+   "source": "tuned",
+   "evidence": "2026-10-30 dim room: top auto exposure stuck at 3000, mean 21, wrist 145; manual 10000/20000/33000 at gain 7 gave 61/105/148; at mean 106 the board box split in two and matched no catalogue entry, at 156 it matched: detection was tuned near 140"
+  },
+  "preflight.exposure_steps": {
+   "value": 4,
+   "unit": "count",
+   "source": "tuned",
+   "evidence": "2026-10-30 dim room: top auto exposure stuck at 3000, mean 21, wrist 145; manual 10000/20000/33000 at gain 7 gave 61/105/148; at mean 106 the board box split in two and matched no catalogue entry, at 156 it matched: detection was tuned near 140"
+  },
+  "preflight.settle_s": {
+   "value": 1.0,
+   "unit": "s",
+   "source": "tuned",
+   "evidence": "2026-10-30 dim room: top auto exposure stuck at 3000, mean 21, wrist 145; manual 10000/20000/33000 at gain 7 gave 61/105/148; at mean 106 the board box split in two and matched no catalogue entry, at 156 it matched: detection was tuned near 140"
+  },
+  "auto.max_gross_kg": {
+   "value": 0.08,
+   "unit": "kg",
+   "source": "theory",
+   "evidence": "2026-10-30 D-935, user approved: 0.23 m reach used 78 % of PWM 300 at the shoulder (10-26); with the 600 cap about 0.47 N m is left at 0.30 m, about 160 g, halved for acceleration, strain and heat. Estimate before measurement: replace with 10 g step trials"
+  },
+  "scale.repeats": {
+   "value": 5,
+   "unit": "count",
+   "source": "tuned",
+   "evidence": "2026-10-30 D-934: a scale display settles over about a second at 5 fps of reads; 5 equal reads in a row"
+  },
+  "scale.timeout_s": {
+   "value": 120.0,
+   "unit": "s",
+   "source": "tuned",
+   "evidence": "2026-10-30 D-934: time for a person to zero the scale and put the object on it"
+  },
+  "scale.segment_fill": {
+   "value": 0.5,
+   "unit": "ratio",
+   "source": "tuned",
+   "evidence": "2026-10-30 D-934: a segment is lit when strokes cover half of its length; synthetic digits 9-40 px tall with noise read 20/20"
+  },
+  "place.margin_mm": {
+   "value": 5.0,
+   "unit": "mm",
+   "source": "tuned",
+   "evidence": "2026-10-30: a 3-cell placed at the belt's configured point landed half off its near edge; the footprint keeps 5 mm inside the surface polygon (about the map's mean error)"
+  },
+  "place.search_mm": {
+   "value": 40.0,
+   "unit": "mm",
+   "source": "tuned",
+   "evidence": "2026-10-30: the belt point sat at the near edge; half a 3-cell's length (45 mm) inward reaches its middle, and the search stays near the reach already planned"
+  },
+  "place.step_mm": {
+   "value": 5.0,
+   "unit": "mm",
+   "source": "tuned",
+   "evidence": "2026-10-30: a top-view pixel is about 1 mm; 5 mm steps keep the search under a second"
+  },
+  "track.around_px": {
+   "value": 60,
+   "unit": "px",
+   "source": "tuned",
+   "evidence": "2026-10-30: the Pinky robot moved ~45 px between 20:30 and 23:04 and its tray polygon sat on its body; the robot body around the tray polygon carries the features (lidar, labels, edges)"
+  },
+  "track.reach_px": {
+   "value": 120,
+   "unit": "px",
+   "source": "tuned",
+   "evidence": "2026-10-30: the Pinky robot moved ~45 px between 20:30 and 23:04 and its tray polygon sat on its body; how far the robot is looked for in the current frame; it moved ~45 px in one evening"
+  },
+  "track.min_inliers": {
+   "value": 25,
+   "unit": "count",
+   "source": "tuned",
+   "evidence": "2026-10-30: the Pinky robot moved ~45 px between 20:30 and 23:04 and its tray polygon sat on its body; fewer matching features than this is not the robot"
+  },
+  "track.roi_pad_px": {
+   "value": 8,
+   "unit": "px",
+   "source": "tuned",
+   "evidence": "2026-10-30: the Pinky robot moved ~45 px between 20:30 and 23:04 and its tray polygon sat on its body; the moved ROI is the polygon's box plus this"
+  },
+  "gripper.gap_mm_per_unit": {
+   "value": 10.4,
+   "unit": "mm",
+   "source": "measured",
+   "evidence": "2026-10-29 wrist view at home: pad gap 7/62/201/319/445 px at jaws 48.8/50.1/51.9/53.6/55.6 (about 70 px per unit); a 30 mm box is held at 52.3 -> about 10.4 mm of gap per unit; 56 opened ~67 mm, 62 over 110 mm and put the fingers on the neighbours"
+  },
+  "gripper.held_30mm": {
+   "value": 52.3,
+   "unit": "gripper",
+   "source": "measured",
+   "evidence": "2026-10-28: 2-cell and 1-cell (30 mm across) held at 52.3-52.6"
+  },
+  "gripper.open_max": {
+   "value": 56.0,
+   "unit": "gripper",
+   "source": "measured",
+   "evidence": "2026-10-29 wrist view at home: pad gap 7/62/201/319/445 px at jaws 48.8/50.1/51.9/53.6/55.6 (about 70 px per unit); a 30 mm box is held at 52.3 -> about 10.4 mm of gap per unit; 56 opened ~67 mm, 62 over 110 mm and put the fingers on the neighbours"
+  },
+  "auto.attempts": {
+   "value": 3,
+   "unit": "count",
+   "source": "tuned",
+   "evidence": "2026-10-29: two attempts repeated the same yaw and contact; each retry now changes the failed yaw, so a third attempt has something new to try"
+  },
+  "diagnose.top_band_mm": {
+   "value": 4.0,
+   "unit": "mm",
+   "source": "measured",
+   "evidence": "2026-10-29 contacts: z 0.037-0.041 on the box top (top 0.036 + finger), 0.030 on a box edge, 0.022-0.026 on the board/surface"
+  },
+  "diagnose.surface_band_mm": {
+   "value": 3.0,
+   "unit": "mm",
+   "source": "measured",
+   "evidence": "2026-10-29 contacts: z 0.037-0.041 on the box top (top 0.036 + finger), 0.030 on a box edge, 0.022-0.026 on the board/surface"
+  },
+  "calibrate.max_shift_px": {
+   "value": 6.0,
+   "unit": "px",
+   "source": "tuned",
+   "evidence": "2026-10-29: the re-mounted top camera moved 20-45 px (every map stale); a still camera matches its reference within ~1 px"
+  },
+  "calibrate.bias_near_mm": {
+   "value": 30.0,
+   "unit": "mm",
+   "source": "measured",
+   "evidence": "2026-10-29: with the nearest pivot 44 mm from a floor 1-cell, every descent met the box (estimate 8-10 mm off)"
+  },
+  "wrist.finger_servo": {
+   "value": 0,
+   "unit": "flag",
+   "source": "default",
+   "evidence": "2026-10-29: with the map 1-2 cm off beside the board, the wrist view at the hover showed the open pads straddling bare floor and the container just outside the right pad; off until the target choice is checked on the recorded failure frames (the nearest green blob on one real frame was a neighbour 2-cell, not the target)"
+  },
+  "wrist.neutral_ring_chroma": {
+   "value": 20.0,
+   "unit": "lab",
+   "source": "measured",
+   "evidence": "2026-10-29, 13 recorded hover frames: the target container's surrounding ring chroma 6.3-19.8 (floor, white line, tray), containers on the orange board 21.2-52.7"
+  },
+  "wrist.min_blob_px": {
+   "value": 3000,
+   "unit": "px",
+   "source": "tuned",
+   "evidence": "2026-10-29, 13 recorded hover frames: the target container's surrounding ring chroma 6.3-19.8 (floor, white line, tray), containers on the orange board 21.2-52.7"
+  },
+  "wrist.servo_gain": {
+   "value": 0.5,
+   "unit": "ratio",
+   "source": "tuned",
+   "evidence": "2026-10-29: recorded hover frames read along +35 / across -46 mm for a container about 2-3 cm off (the pads' scale overstates distances ahead in the oblique view); move half the way, look again"
+  },
+  "wrist.servo_iter": {
+   "value": 4,
+   "unit": "count",
+   "source": "tuned",
+   "evidence": "2026-10-29: recorded hover frames read along +35 / across -46 mm for a container about 2-3 cm off (the pads' scale overstates distances ahead in the oblique view); move half the way, look again"
+  },
+  "wrist.servo_total_mm": {
+   "value": 60.0,
+   "unit": "mm",
+   "source": "tuned",
+   "evidence": "2026-10-29: recorded hover frames read along +35 / across -46 mm for a container about 2-3 cm off (the pads' scale overstates distances ahead in the oblique view); move half the way, look again"
+  },
+  "wrist.servo_across": {
+   "value": 0,
+   "unit": "flag",
+   "source": "theory",
+   "evidence": "the pads lie on the closing axis (exact reference there); across, the centred row in the oblique wrist view is not the pads' row and is not yet calibrated"
+  },
+  "wrist.ref_servo": {
+   "value": 1,
+   "unit": "flag",
+   "source": "theory",
+   "evidence": "2026-10-29: the pads' line is not the closing axis in the oblique wrist view; a reference pixel recorded by the arm's own confirmed place and a probed, Broyden-updated image Jacobian replace it"
+  },
+  "wrist.probe_mm": {
+   "value": 6.0,
+   "unit": "mm",
+   "source": "tuned",
+   "evidence": "2026-10-29: the pads' line is not the closing axis in the oblique wrist view; a reference pixel recorded by the arm's own confirmed place and a probed, Broyden-updated image Jacobian replace it"
+  },
+  "wrist.ref_tol_px": {
+   "value": 12.0,
+   "unit": "px",
+   "source": "tuned",
+   "evidence": "about 2 mm at the 0.16-0.20 mm/px seen at the hover"
+  },
+  "wrist.ref_estimate": {
+   "value": 1,
+   "unit": "flag",
+   "source": "theory",
+   "evidence": "2026-10-29: no confirmed place yet to record a reference; estimate from the fingertip point and a 10 mm height probe until the first confirmed place"
+  },
+  "wrist.z_probe_mm": {
+   "value": 10.0,
+   "unit": "mm",
+   "source": "tuned",
+   "evidence": "a height probe small enough to keep the container in view"
+  },
+  "wrist.tip_to_top_mm": {
+   "value": 25.0,
+   "unit": "mm",
+   "source": "theory",
+   "evidence": "hover = grasp z + approach 40 mm; grasp z = container top - 15 mm: the fingertips hover 25 mm above the top"
+  }
+ },
+ "pinch.enabled": {
+  "value": 1,
+  "unit": "flag",
+  "source": "default",
+  "evidence": "2026-10-29 Rosy/docs/workspace-records/2026-10-28/arm-s-pick-place-diagnosis/facts-2026-10-29.md 17: lower then look (cell_pinch); default until the real arm passes"
+ },
+ "pinch.band_px": {
+  "value": 40,
+  "unit": "px",
+  "source": "default",
+  "evidence": "2026-10-29 Rosy/docs/workspace-records/2026-10-28/arm-s-pick-place-diagnosis/facts-2026-10-29.md 17: lower then look (cell_pinch); default until the real arm passes"
+ },
+ "pinch.min_gap_mm": {
+  "value": 2.0,
+  "unit": "mm",
+  "source": "default",
+  "evidence": "2026-10-29 Rosy/docs/workspace-records/2026-10-28/arm-s-pick-place-diagnosis/facts-2026-10-29.md 17: lower then look (cell_pinch); default until the real arm passes"
+ },
+ "pinch.width_tol": {
+  "value": 0.35,
+  "unit": "ratio",
+  "source": "default",
+  "evidence": "2026-10-29 Rosy/docs/workspace-records/2026-10-28/arm-s-pick-place-diagnosis/facts-2026-10-29.md 17: lower then look (cell_pinch); default until the real arm passes"
+ },
+ "pinch.max_iter": {
+  "value": 3,
+  "unit": "count",
+  "source": "default",
+  "evidence": "2026-10-29 Rosy/docs/workspace-records/2026-10-28/arm-s-pick-place-diagnosis/facts-2026-10-29.md 17: lower then look (cell_pinch); default until the real arm passes; 3: with the sign still unknown one step goes the wrong way and the 20 mm cap needs two more"
+ },
+ "pinch.max_step_mm": {
+  "value": 20.0,
+  "unit": "mm",
+  "source": "default",
+  "evidence": "2026-10-29 Rosy/docs/workspace-records/2026-10-28/arm-s-pick-place-diagnosis/facts-2026-10-29.md 17: lower then look (cell_pinch); default until the real arm passes"
+ },
+ "pinch.mount_tol_px": {
+  "value": 40.0,
+  "unit": "px",
+  "source": "default",
+  "evidence": "2026-10-29 Rosy/docs/workspace-records/2026-10-28/arm-s-pick-place-diagnosis/facts-2026-10-29.md 17: lower then look (cell_pinch); default until the real arm passes"
+ },
+ "feel.enabled": {
+  "value": 1,
+  "unit": "flag",
+  "source": "default",
+  "evidence": "2026-10-29 facts-2026-10-29.md 18: empty floor 1-cell grasps were 1-2 cm off along the closing axis; feel there instead of looking"
+ },
+ "feel.step_mm": {
+  "value": 12.0,
+  "unit": "mm",
+  "source": "default",
+  "evidence": "2026-10-29 facts-2026-10-29.md 18: empty floor 1-cell grasps were 1-2 cm off along the closing axis; feel there instead of looking"
+ },
+ "feel.tries": {
+  "value": 4,
+  "unit": "count",
+  "source": "default",
+  "evidence": "2026-10-29 facts-2026-10-29.md 18: empty floor 1-cell grasps were 1-2 cm off along the closing axis; feel there instead of looking"
+ },
+ "pivot.over_target": {
+  "value": 0,
+  "unit": "flag",
+  "source": "default",
+  "evidence": "2026-10-29 facts-2026-10-29.md 22-23: with biases varying 12.7 mm over 4.7 cm, pivot right over the target; off until a real run saves a region there (the first ran 5 of 6 yaws, then motor 16 stopped answering)"
+ },
+ "pivot.over_top_mm": {
+  "value": 30.0,
+  "unit": "mm",
+  "source": "default",
+  "evidence": "2026-10-29 facts-2026-10-29.md 22-23: with biases varying 12.7 mm over 4.7 cm, pivot right over the target; off until a real run saves a region there (the first ran 5 of 6 yaws, then motor 16 stopped answering)"
+ },
+ "pivot.over_clear_mm": {
+  "value": 30.0,
+  "unit": "mm",
+  "source": "default",
+  "evidence": "2026-10-29 facts-2026-10-29.md 22-23: with biases varying 12.7 mm over 4.7 cm, pivot right over the target; off until a real run saves a region there (the first ran 5 of 6 yaws, then motor 16 stopped answering)"
+ },
+ "objects.split_touching": {
+  "value": 1,
+  "unit": "flag",
+  "source": "default",
+  "evidence": "2026-10-29 facts-2026-10-29.md 28: a 1-cell and a 2-cell lying corner to corner made one unmatched blob and no push could part them; boxes that only touch are separated by a distance-transform watershed, each piece must match"
+ },
+ "objects.split_peak_frac": {
+  "value": 0.6,
+  "unit": "ratio",
+  "source": "default",
+  "evidence": "2026-10-29 facts-2026-10-29.md 28: a 1-cell and a 2-cell lying corner to corner made one unmatched blob and no push could part them; boxes that only touch are separated by a distance-transform watershed, each piece must match"
+ },
+ "look.enabled": {
+  "value": 0,
+  "unit": "flag",
+  "source": "default",
+  "evidence": "2026-10-29 facts-2026-10-29.md 30: biases changed 12.7 mm over 4.7 cm, so a carried bias is a guess; jaws and box in one top image cancel the map's local error. Off until the real arm passes"
+ },
+ "look.tol_mm": {
+  "value": 3.0,
+  "unit": "mm",
+  "source": "default",
+  "evidence": "2026-10-29 facts-2026-10-29.md 30: biases changed 12.7 mm over 4.7 cm, so a carried bias is a guess; jaws and box in one top image cancel the map's local error. Off until the real arm passes"
+ },
+ "look.max_iter": {
+  "value": 4,
+  "unit": "count",
+  "source": "default",
+  "evidence": "2026-10-29 facts-2026-10-29.md 30: biases changed 12.7 mm over 4.7 cm, so a carried bias is a guess; jaws and box in one top image cancel the map's local error. Off until the real arm passes; field looks shrank the offset about 35 % each (9.6 -> 6.8 -> 4.3 mm, backlash): four looks"
+ },
+ "look.max_total_mm": {
+  "value": 30.0,
+  "unit": "mm",
+  "source": "default",
+  "evidence": "2026-10-29 facts-2026-10-29.md 30: biases changed 12.7 mm over 4.7 cm, so a carried bias is a guess; jaws and box in one top image cancel the map's local error. Off until the real arm passes"
+ },
+ "push.look_tol_mm": {
+  "value": 6.0,
+  "unit": "mm",
+  "source": "measured",
+  "evidence": "2026-10-29: a push keeps push.gap_mm (20) from the box; 6 mm off still meets it"
+ },
+ "look.other_finger_deg": {
+  "value": 229.5,
+  "unit": "deg",
+  "source": "tuned",
+  "evidence": "2026-10-29 board pivot point, jaws marked at fk yaw 3.2/12.5/30.2: the mark at yaw + 288.8/284.8/280.6 deg about the circle fitted on the other finger (phase 55.2): 284.7 - 55.2"
+ },
+ "look.other_finger_mm": {
+  "value": 34.4,
+  "unit": "mm",
+  "source": "tuned",
+  "evidence": "2026-10-29 board pivot point, the same marks: 31.7/33.1/38.3 mm from the circle's centre"
+ },
+ "look.near_px": {
+  "value": 40.0,
+  "unit": "px",
+  "source": "measured",
+  "evidence": "2026-10-29: with the arm stretched out the open/close shook the link; 3-5 blobs, the largest 120 px from the jaws"
+ },
+ "objects.drop_shadow": {
+  "value": 1,
+  "unit": "flag",
+  "source": "default",
+  "evidence": "2026-10-29 facts-2026-10-29.md 32: a box's dark-yellow shadow on the board stood beside it as a fragment and closed the finger gap"
+ },
+ "objects.shadow_tol": {
+  "value": 12.0,
+  "unit": "lab",
+  "source": "default",
+  "evidence": "2026-10-29 facts-2026-10-29.md 32: a box's dark-yellow shadow on the board stood beside it as a fragment and closed the finger gap"
+ },
+ "objects.shadow_min_light": {
+  "value": 0.45,
+  "unit": "ratio",
+  "source": "default",
+  "evidence": "2026-10-29 facts-2026-10-29.md 32: a box's dark-yellow shadow on the board stood beside it as a fragment and closed the finger gap"
+ },
+ "pivot.grip_open": {
+  "value": 62.0,
+  "unit": "gripper",
+  "source": "measured",
+  "evidence": "2026-10-29: the plan's 62 left two stable jaw blobs over the floor 2-cell; the pick's 53.84 left none"
+ },
+ "objects.top_v_frac": {
+  "value": 0.8,
+  "unit": "ratio",
+  "source": "measured",
+  "evidence": "2026-10-29: top faces V 186 against side faces 137 by day; at night (exposure at its 80 ms cap) a 2-cell read 58 x 51 mm with its side; 0 = off"
+ },
+ "grasp.end_frac": {
+  "value": 0.7,
+  "unit": "ratio",
+  "source": "default",
+  "evidence": "2026-10-29: a 2-cell on the moved Pinky was out of reach at its middle (planar wrist 0.286 m); 0 = only the middle"
+ },
+ "pivot.clear_above_m": {
+  "value": 0.074,
+  "unit": "m",
+  "source": "measured",
+  "evidence": "2026-10-29: the floor's 0.08 view is 0.074 above its surface; over the Pinky tray an absolute 0.08 knocked a box off"
+ }
+}

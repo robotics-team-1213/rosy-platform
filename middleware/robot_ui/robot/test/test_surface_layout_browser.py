@@ -97,13 +97,14 @@ def test_mobile_topbar_is_one_row_above_the_navigation_rail(width, height):
     assert result["topbar"]["height"] + result["rail"]["height"] <= 0.2 * height, result
 
 
-def test_desktop_navigation_is_a_rail_beside_the_three_columns():
+@pytest.mark.parametrize("width", [1366, 2000])
+def test_desktop_navigation_is_a_rail_beside_the_three_columns(width):
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
-        page = _page(browser, 1366, 768)
+        page = _page(browser, width, 768)
         result = page.evaluate("""() => {
           const rect = (selector) => document.querySelector(selector).getBoundingClientRect().toJSON();
-          return {rail: rect('.ui-rail'), topbar: rect('ui-topbar'), sense: rect('[data-slot=sense]'),
+          return {rail: rect('.ui-rail'), topbar: rect('ui-topbar'), main: rect('.surface-main'), sense: rect('[data-slot=sense]'),
             items: [...document.querySelectorAll('.ui-rail-item')].map(node => node.getBoundingClientRect().toJSON())};
         }""")
         browser.close()
@@ -111,6 +112,8 @@ def test_desktop_navigation_is_a_rail_beside_the_three_columns():
     assert result["rail"]["x"] == 0 and abs(result["rail"]["width"] - 72) <= 1, result
     assert result["rail"]["y"] >= result["topbar"]["bottom"] and abs(result["rail"]["bottom"] - 768) <= 1, result
     assert result["rail"]["right"] <= result["sense"]["x"], result
+    assert result["main"]["x"] == pytest.approx(result["rail"]["right"], abs=1), result
+    assert result["main"]["right"] == pytest.approx(width, abs=1), result
     items = result["items"]
     assert len(items) == 3 and all(above["bottom"] <= below["y"] for above, below in zip(items, items[1:])), items
 

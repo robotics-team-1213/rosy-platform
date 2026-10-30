@@ -120,7 +120,7 @@ def sign_manifest_only(
     except (UnicodeDecodeError, json.JSONDecodeError):
         raise CandidateVerificationError("release.json is not valid JSON") from None
     if (not isinstance(manifest, dict) or type(manifest.get("manifest_version")) is not int
-            or manifest.get("manifest_version") != 1):
+            or manifest.get("manifest_version") not in (1, 2)):
         raise CandidateVerificationError("unsupported release manifest")
     commit = manifest.get("source_commit")
     if not isinstance(commit, str) or not _COMMIT.fullmatch(commit):

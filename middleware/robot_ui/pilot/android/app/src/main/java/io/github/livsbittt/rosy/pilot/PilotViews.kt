@@ -13,9 +13,18 @@ import android.widget.TextView
 
 /** Tablet navigation and device rows share the established Pilot palette and 48dp targets. */
 class PilotViews(private val context: Context) {
+    fun surface() = LinearLayout(context).apply {
+        orientation = LinearLayout.VERTICAL
+        setBackgroundColor(PilotColors.background)
+        fitsSystemWindows = true
+    }
     fun dp(value: Int) = (value * context.resources.displayMetrics.density).toInt()
     fun label(text: String, size: Float = RosyMetrics.TextBody, quiet: Boolean = false) = TextView(context).apply {
         this.text = text; textSize = size; setTextColor(if (quiet) PilotColors.muted else PilotColors.foreground)
+        background = StateListDrawable().apply {
+            addState(intArrayOf(android.R.attr.state_focused), fill(PilotColors.pressed, true))
+            addState(intArrayOf(), fill(android.graphics.Color.TRANSPARENT))
+        }
         setPadding(0, dp(RosyMetrics.Space1.toInt()), 0, dp(RosyMetrics.Space1.toInt()))
     }
     private fun fill(color: Int, focus: Boolean = false) = GradientDrawable().apply {
@@ -26,19 +35,37 @@ class PilotViews(private val context: Context) {
         this.text = text; isAllCaps = false; textSize = RosyMetrics.TextLabel; minimumHeight = dp(RosyMetrics.TargetSecondary.toInt())
         setPadding(dp(RosyMetrics.InsetButton.toInt()), dp(RosyMetrics.Space2.toInt()), dp(RosyMetrics.InsetButton.toInt()), dp(RosyMetrics.Space2.toInt()))
         val ink = if (primary) PilotColors.background else PilotColors.foreground
-        setTextColor(android.content.res.ColorStateList(arrayOf(intArrayOf(android.R.attr.state_enabled), intArrayOf()), intArrayOf(ink, PilotColors.muted)))
+        setTextColor(android.content.res.ColorStateList(arrayOf(
+            intArrayOf(android.R.attr.state_enabled, android.R.attr.state_focused),
+            intArrayOf(android.R.attr.state_enabled), intArrayOf()),
+            intArrayOf(PilotColors.foreground, ink, PilotColors.muted)))
+        compoundDrawableTintList = textColors
         val icon = when (text) { "다시 찾기" -> R.drawable.ic_refresh; "로봇 목록" -> R.drawable.ic_back; "화면 끄기" -> R.drawable.ic_screen_off; "태블릿", "기기·연결" -> R.drawable.ic_tablet; else -> null }
         icon?.let { setCompoundDrawablesRelativeWithIntrinsicBounds(context.getDrawable(it)?.mutate()?.apply { setTint(ink) }, null, null, null) }
         compoundDrawablePadding = dp(RosyMetrics.Space2.toInt())
         background = StateListDrawable().apply {
             addState(intArrayOf(-android.R.attr.state_enabled), fill(PilotColors.disabled))
-            addState(intArrayOf(android.R.attr.state_focused), fill(if (primary) PilotColors.foreground else PilotColors.pressed, true))
+            addState(intArrayOf(android.R.attr.state_focused), fill(PilotColors.pressed, true))
             addState(intArrayOf(android.R.attr.state_pressed), fill(if (primary) PilotColors.muted else PilotColors.pressed))
             addState(intArrayOf(), fill(if (primary) PilotColors.foreground else PilotColors.background))
         }
         setOnClickListener { action() }
     }
+    fun replaceRobots(container: LinearLayout, status: View, content: () -> Unit) {
+        val focused = (0 until container.childCount).map(container::getChildAt).firstOrNull { it.hasFocus() }?.tag
+        container.removeAllViews()
+        content()
+        if (focused != null) {
+            val replacement = (0 until container.childCount).map(container::getChildAt)
+                .firstOrNull { it.tag == focused && it.isEnabled }
+            if (replacement?.requestFocus() != true) {
+                status.isFocusableInTouchMode = true
+                status.requestFocus()
+            }
+        }
+    }
     fun robot(candidate: Candidate, enabled: Boolean, action: () -> Unit): View = LinearLayout(context).apply {
+        tag = Triple(candidate.host, candidate.port, candidate.secure)
         orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
         setPadding(dp(RosyMetrics.Space4.toInt()), dp(RosyMetrics.Space4.toInt()), dp(RosyMetrics.Space4.toInt()), dp(RosyMetrics.Space4.toInt())); minimumHeight = dp(RosyMetrics.TargetSecondary.toInt())
         background = StateListDrawable().apply {

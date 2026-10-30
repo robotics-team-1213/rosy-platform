@@ -24,6 +24,7 @@ SHARED = {
     "address-drift.js",
     "authorization.js",
     "poll-gate.js",
+    "uuid.js",  # DOM-free CSPRNG identifiers shared by Console, Cell and site-map documents.
     "development-auth.js",
     "password-login.js",
     "account-permissions.js",  # D-757: shared read-only session capability predicates
@@ -50,6 +51,7 @@ OWN = {
         "channel-request-view.js",  # D-680: named review and existing navigation submission
         "control-unit-view.js",  # D-855: delegation review belongs to Console.
         "arm-transfer-view.js",  # Neutral ARM admission belongs to Console, never install or Cell.
+        "trip-proposal-view.js",  # D-908: neutral trip admission belongs to Console.
         "integrated-control-view.js",  # D-862: unit information and stop requests belong to Console.
         "inbox.js",  # D-632: console notification and context view owner
         "incident-view.js",  # D-362/D-641: incident evidence, review and export view
@@ -107,6 +109,8 @@ OWN = {
     "cell.js": {
         "cell-document-editor.js",
         "cell-observation.js",
+        "cell-print-sheets.js",  # 보정 인쇄물 PDF 내려받기
+        "cell-object-catalog.js",  # 물체 카탈로그(무게) 읽기 전용
     },
     "site-map.js": {
         "map-authoring.js", "map-editor.js", "drawing-import.js", "geometry-edit.js", "edit-history.js",
@@ -114,7 +118,9 @@ OWN = {
         "site-map-teach.js",
         "site-map-survey.js",
         "site-map-camera.js",
+        "site-map-sources.js",  # Map profile selection and read-only camera-plane presentation.
         "site-map-edit.js",  # D-655: pure draft edits belong to the map editor document
+        "subnav-screens.js",  # D-926 3: sub-nav moves between screens
     },
 }
 

@@ -1,0 +1,18 @@
+/* Fleet procedure documents share geometry; their task-specific widths keep distinct roles. */
+body { margin: 0; }
+.fleet-document {
+  box-sizing: border-box;
+  container-type: inline-size;
+  inline-size: 100%;
+  max-inline-size: var(--content-auth-max);
+  min-inline-size: 0;
+  margin: var(--space-5) auto;
+  padding: var(--inset-task-page);
+  display: grid;
+  gap: var(--gap-section);
+  overflow-wrap: anywhere;
+}
+.fleet-document > * { min-inline-size: 0; }
+.fleet-document.learning-main { max-inline-size: var(--content-learning-max); }
+.fleet-document.policy-main { max-inline-size: var(--content-policy-max); }
+.fleet-document #account-list ui-button { min-inline-size: 0; max-inline-size: 100%; overflow-wrap: anywhere; }

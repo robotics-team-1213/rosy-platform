@@ -1,10 +1,12 @@
 """Measurement decides before the decision model; the model only picks among what the measurement allows."""
 import importlib.util
+import sys
 from pathlib import Path
 
 import pytest
 
 OMX = Path(__file__).parents[1] / "deploy/robot/omx"
+sys.path.insert(0, str(OMX))
 spec = importlib.util.spec_from_file_location("judge_seat", OMX / "judge_seat.py")
 m = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(m)
@@ -63,3 +65,41 @@ def test_no_parseable_object_reply_is_vetoed_to_abort(backend):
 def test_the_model_chooses_when_the_measurement_allows_it():
     row = m.Seat(Model("proceed")).decide({"box_found": True, "next": "grasp", "aligned": True})
     assert row["decision"] == "proceed" and row["by"] == "model"
+
+
+def test_knowledge_ids_in_row_and_prompt_but_unverified_never(tmp_path):
+    import json
+    seen = []
+    path = tmp_path / "k.json"
+
+    def entry(i, st, w):
+        return {"id": i, "topic": "arm", "statement": f"s-{i}", "status": st, "evidence": [], "date": "d", "applies_when": w}
+
+    path.write_text(json.dumps({"schema": "rosy.omx-cell-knowledge.v1", "entries": [
+        entry("a", "verified", ["lift"]), entry("b", "unverified", ["lift"]), entry("c", "partial", ["map"])]}))
+    model = Model("proceed")
+    row = m.Seat(lambda p, i, s: seen.append(p) or model(p, i, s), knowledge=str(path)).decide(
+        {"box_found": True, "next": "lift", "holding": True})
+    assert row["knowledge_ids"] == ["a"] and row["knowledge_sha"] and "s-a" in seen[0]
+    assert "s-b" not in seen[0] and "s-c" not in seen[0] and row["decision"] == "proceed"
+
+
+def test_no_knowledge_keeps_old_row():
+    row = m.Seat(Model("proceed")).decide({"box_found": True, "next": "lift", "holding": True})
+    assert "knowledge_ids" not in row and "Cell knowledge" not in m.prompt({}, ["proceed"])
+
+
+def test_remap_is_offered_only_when_the_measurement_blames_the_map():
+    model = Model("remap")
+    row = m.Seat(model).decide({"box_found": True, "next": "grasp", "aligned": True})
+    assert row["decision"] == "abort" and row["by"] == "veto" and "remap" not in model.asked[0]
+    row = m.Seat(model).decide({"box_found": True, "next": "grasp", "aligned": False, "remap": True})
+    assert row["decision"] == "remap" and "proceed" not in model.asked[1]
+    row = m.Seat(model).decide({"box_found": False, "next": "grasp", "remap": True})  # no map: nothing to grasp yet
+    assert row["decision"] == "remap" and set(model.asked[2]) == {"remap", "park", "abort"}
+
+
+def test_without_a_model_the_rules_take_the_remap_when_offered_else_retry():
+    off_map = {"box_found": True, "next": "grasp", "aligned": False}
+    assert m.Seat(m.rules).decide(dict(off_map, remap=True))["decision"] == "remap"
+    assert m.Seat(m.rules).decide(off_map)["decision"] == "retry"
