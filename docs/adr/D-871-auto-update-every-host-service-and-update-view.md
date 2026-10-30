@@ -77,4 +77,11 @@
 - **수집.** 각 PC의 `rosy-update-report`가 보고하고, 가드가 강제 명령 `updates`로 모은다. 관제 PC 자신은 `updates` 줄로 읽는다. 이 줄은 복구 사다리를 돌리지 않는다.
 - **트리.** 화면은 가드가 보고한 PC를 모두 그린다(셀 관제 PC N대). 운영자 동작("지금 확인"·"이전 버전으로")은 특권 helper 허용 목록을 바꾸는 일이라 별도 변경으로 남긴다.
 
+### 적용 기록 2026-10-30 (관제 PC, 수집 경로)
+
+- 발견: 관제 PC의 가드 본체와 원격 스크립트가 10-26 이전 판이어서, 어느 PC 줄에도 `updates`가 없었다. 그래서 Fleet 업데이트 화면이 비어 있었다. `rosy-update-report`는 host-state 매니페스트에 없어 drift로 잡히지 않았다. 가드 본체는 `safe` 줄이지만, host-state가 비교하는 승인 사본이 10-26 판이었다.
+- 적용(origin/main 판): `install-host-guard.sh`, `install-guard-remote.sh --site-key`, `hosts.conf`에 `site updates <user>@127.0.0.1` 한 줄을 넣었다. 이어서 `rosy-host-state install site`로 승인 사본을 갱신했다. 가드 본체를 손으로만 바꾸면 다음 `check`가 `safe` 줄을 옛 사본으로 되돌린다. 이전 파일은 `/var/backups/*.20261030`과 host-state backup에 있다.
+- 확인: 가드 1회 실행 뒤 `site` 줄에 `updates`(gate open, 업데이터 3개, 사이트 스택 상태)가 들어왔다. host-state `check`는 fixed·drift·errors가 모두 0이다.
+- 남은 일: AI·모델 PC는 sudo에 비밀번호가 필요해 `install-guard-remote.sh`를 아직 실행하지 못했다. 그동안 두 줄의 `updates`는 null이고, 화면에는 `unknown`으로 보인다. 매니페스트에 `rosy-update-report`를 `approval=recovery`로 더했으므로, 두 PC에서 `install <role> --approve recovery`를 하면 함께 설치된다.
+
 **References:** D-805, D-852, D-530, D-441, D-446, D-454, D-270, D-757, D-785.
