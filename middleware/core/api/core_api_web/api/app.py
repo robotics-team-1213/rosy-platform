@@ -1,4 +1,4 @@
-"""core_api_web.api.app — FastAPI 팩토리 (P1-9, API-101). 계약: ROSY-API-REF-001 v1.328."""
+"""core_api_web.api.app — FastAPI 팩토리 (P1-9, API-101). 계약: ROSY-API-REF-001 v1.331."""
 
 from __future__ import annotations
 
@@ -120,7 +120,7 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
     app = FastAPI(
         title="ROSY CORE API",
         version="1.20.0",
-        description="로봇 미들웨어 API — 계약: ROSY-API-REF-001 (v1.328)",
+        description="로봇 미들웨어 API — 계약: ROSY-API-REF-001 (v1.331)",
     )
     app.state.core = services
     arm_policy = getattr(services, 'arm_policy', None)
@@ -283,6 +283,7 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
     pilot_assets = {
         # 이 allowlist도 {asset_name:path}의 경로 순회 방어다. 모듈이 늘 때마다 여기에 등록.
         "styles.css": "text/css",
+        "layout.css": "text/css",
         "stick.js": "application/javascript",
         "link.js": "application/javascript",
         "app.js": "application/javascript",

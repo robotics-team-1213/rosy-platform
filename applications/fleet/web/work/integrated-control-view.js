@@ -1,3 +1,4 @@
+import {randomUUID} from "/console/assets/uuid.js";
 // Read projections and explicit stop requests share the Work area's existing authentication and lifetime.
 import {fitView} from "/console/assets/site-map-model.js";
 import {EVIDENCE_LABEL, MODE_LABEL, evidenceAgeText} from "/common/core_ui_logic.js";
@@ -263,7 +264,7 @@ export function createIntegratedControlView({scope, call, anchor, active, approv
     if (busy || pending || approveReason() || !overview || !target) return;
     const fences = stopControls(overview, target, elapsed());
     if (!Object.hasOwn(fences, target)) { controls(); return; }
-    pending = {origin: overview.unit_id, body: {stop_id: crypto.randomUUID(), target_unit: target,
+    pending = {origin: overview.unit_id, body: {stop_id: randomUUID(), target_unit: target,
       config_revision: overview.config_revision, expected_controls: fences}};
     reference = null; snapshot = null; results.replaceChildren(); controls();
     stopIdentity.textContent = "정지 요청 " + pending.origin + " / " + pending.body.stop_id;

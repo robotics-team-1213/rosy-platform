@@ -21,6 +21,11 @@ on:
         required: false
         default: ""
         type: string
+      base_commit:
+        description: Full source SHA of a signed site release to reuse (empty = full build)
+        required: false
+        default: ""
+        type: string
   push:
     branches: [main]
     paths:
@@ -41,6 +46,7 @@ on:
       - contracts/foundation/core_common/**
       - contracts/learning/src/**
       - contracts/skill/src/**
+      - contracts/motion/src/**
       - operations/processes/palletizing/src/**
       - applications/fleet/gateway/**
       - shared/web/**
@@ -198,15 +204,31 @@ jobs:
         shell: bash
         env:
           COMMIT: ${{ steps.source.outputs.commit }}
+          BASE_COMMIT: ${{ inputs.base_commit }}
+          SITE_REPO: ${{ github.repository }}
+          SITE_KEY_ID: ${{ vars.ROSY_SITE_SIGNING_KEY_ID }}
+          SITE_PUBLIC_KEY_PEM: ${{ vars.ROSY_SITE_SIGNING_PUBLIC_KEY_PEM }}
         run: |
           set -euo pipefail
           # Docker, syft and build output must not be able to issue workflow
           # commands (e.g. a fake notice or summary): pause command parsing.
           token="$(openssl rand -hex 16)"
           echo "::stop-commands::${token}"
+          base_args=()
+          if [[ -n "$BASE_COMMIT" ]]; then
+            [[ "$BASE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+            test -n "$SITE_KEY_ID"
+            test -n "$SITE_PUBLIC_KEY_PEM"
+            key_file="$RUNNER_TEMP/site-base-public.pem"
+            printf '%s\n' "$SITE_PUBLIC_KEY_PEM" >"$key_file"
+            bash deploy/site/fetch_candidate.sh --repo "$SITE_REPO" --commit "$BASE_COMMIT" \
+              --staging "$RUNNER_TEMP/site-base"
+            base_args=(--base-candidate "$RUNNER_TEMP/site-base/site-${BASE_COMMIT:0:12}/candidate/$BASE_COMMIT"
+                       --trusted-key-id "$SITE_KEY_ID" --trusted-public-key "$key_file")
+          fi
           python3 deploy/site/build_candidate.py \
             --output-dir "$CANDIDATE_ROOT/$COMMIT" \
-            --sbom-tool syft
+            --sbom-tool syft "${base_args[@]}"
           test ! -e "$CANDIDATE_ROOT/$COMMIT/release.json.sig"
           echo "::${token}::"
 

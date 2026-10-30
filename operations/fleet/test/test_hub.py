@@ -229,7 +229,7 @@ def test_memory_event_replayed_after_a_lost_ack_is_kept_once():
     replay = hub.handle(message)
 
     assert replay.payload == {"accepted": True}
-    assert hub.registry.record("rosy_01").events == [event]
+    assert list(hub.registry.record("rosy_01").events) == [event]
 
 
 def test_memory_event_identity_reused_with_changed_content_is_rejected():
@@ -243,7 +243,7 @@ def test_memory_event_identity_reused_with_changed_content_is_rejected():
 
     assert refused.type is EnvelopeType.ERROR
     assert refused.payload["code"] == "EVENT_NOT_AUDITABLE"
-    assert hub.registry.record("rosy_01").events == [event]
+    assert list(hub.registry.record("rosy_01").events) == [event]
 
 
 def test_durable_event_replayed_after_reconnect_has_one_audit_row_and_projection(tmp_path):
@@ -262,7 +262,7 @@ def test_durable_event_replayed_after_reconnect_has_one_audit_row_and_projection
 
     assert replay.payload == {"accepted": True}
     assert len(store.read_events()) == 1
-    assert hub.registry.record("rosy_01").events == [event]
+    assert list(hub.registry.record("rosy_01").events) == [event]
     assert projected == [event.model_dump(mode="json")]
 
 
@@ -311,6 +311,74 @@ def test_event_robot_id_mismatch_after_hello_is_pairing_invalid():
     reply = hub.handle(Envelope(type=EnvelopeType.EVENT, payload=event.model_dump(mode="json")))
     assert reply.type is EnvelopeType.ERROR
     assert reply.payload["code"] == "PAIRING_INVALID"
+
+
+def _send_event(hub: SiteHub, event: EventMessage):
+    return hub.handle(Envelope(type=EnvelopeType.EVENT, payload=event.model_dump(mode="json")))
+
+
+def test_event_feed_is_bounded_and_stuck_events_survive_the_window():
+    """2026-10-28 자원 경계 3분리: 최근 창은 고정 폭, stuck 인덱스는 창 밖에서도 산다."""
+    from fleet.hub.registry import EVENT_FEED_MAX
+
+    hub = SiteHub([_ep()])
+    hub.handle(_hello())
+    for seq in range(1, EVENT_FEED_MAX + 3):
+        assert _send_event(hub, EventMessage(
+            seq=seq, robot_id="rosy_01", type="nav.completed")).type is EnvelopeType.EVENT
+    row = hub.registry.record("rosy_01")
+    assert len(row.events) == EVENT_FEED_MAX          # 창을 넘지 않는다
+    assert row.events[0].seq == 3                     # 가장 오래된 행이 밀려났다
+    opened = EventMessage(seq=EVENT_FEED_MAX + 3, robot_id="rosy_01", type="nav.line_stuck_opened",
+                          data={"stuck_id": "stuck-9"})
+    assert _send_event(hub, opened).type is EnvelopeType.EVENT
+    assert row.stuck_event("nav.line_stuck_opened", "stuck-9") == opened
+    closed = EventMessage(seq=EVENT_FEED_MAX + 4, robot_id="rosy_01", type="nav.line_stuck_closed",
+                          data={"stuck_id": "stuck-9"})
+    assert _send_event(hub, closed).type is EnvelopeType.EVENT
+    assert row.stuck_event("nav.line_stuck_closed", "stuck-9") == closed
+    assert hub.registry.stuck_event("rosy_01", "nav.line_stuck_closed", "stuck-9") == closed
+
+
+def test_offline_keeps_the_recent_window_and_replay_stays_deduped():
+    """연결이 끊겨도 최근 창은 남는다(운영자 피드) — 재생은 중복으로 걸러진다."""
+    from fleet.hub.hub import HubSession
+
+    hub, session = SiteHub([_ep()]), HubSession()
+    hub.handle(_hello(), session=session)
+    event = EventMessage(seq=1, robot_id="rosy_01", type="nav.line_stuck_opened",
+                         data={"stuck_id": "stuck-1"})
+    assert _send_event(hub, event).type is EnvelopeType.EVENT
+    row = hub.registry.record("rosy_01")
+
+    hub.close_session(session)                       # 소켓 종료가 offline을 표시한다
+
+    assert row.online is False
+    assert list(row.events) == [event]               # 창은 비워지지 않는다
+    assert row.stuck_event("nav.line_stuck_opened", "stuck-1") == event
+    hub.handle(_hello(), session=session)            # 같은 세션 재접속
+    replay = _send_event(hub, event)
+    assert replay.payload == {"accepted": True}      # 재생이 여전히 중복으로 걸러진다
+    assert list(row.events) == [event]               # 두 번 쌓이지도 않는다
+
+
+def test_event_hash_dedup_survives_the_feed_window():
+    """창을 넘어 밀려난 사건의 event_id 재생도 중복 제거가 성립한다(개발 경로)."""
+    from fleet.hub.registry import EVENT_FEED_MAX
+
+    hub = SiteHub([_ep()])
+    hub.handle(_hello())
+    early = EventMessage(seq=1, robot_id="rosy_01", type="nav.completed")
+    assert _send_event(hub, early).type is EnvelopeType.EVENT
+    for seq in range(2, EVENT_FEED_MAX + 5):         # early를 창 밖으로 밀어낸다
+        _send_event(hub, EventMessage(seq=seq, robot_id="rosy_01", type="nav.completed"))
+    row = hub.registry.record("rosy_01")
+    assert all(e.event_id != early.event_id for e in row.events)
+
+    replay = _send_event(hub, early)
+
+    assert replay.payload == {"accepted": True}
+    assert all(e.event_id != early.event_id for e in row.events)
 
 
 def test_inbound_command_envelope_is_role_violation():

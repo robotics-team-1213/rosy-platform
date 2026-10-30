@@ -1,3 +1,4 @@
+import {randomUUID} from "/console/assets/uuid.js";
 import {OPERATOR_REASON} from "/console/assets/authorization.js";
 import {createFleetClient} from '/common/fleet-client.js';
 import {developmentToken} from '/console/assets/development-auth.js';
@@ -6,6 +7,8 @@ import {confirmIrreversible} from '/common/ui.js';
 import {bindEstop, bindTopbarToggle, showSession, showSignedOut, tickClock, watchFleet} from '/console/assets/fleet-header.js';
 import {renderStructuredDocument} from '/console/assets/cell-document-editor.js';
 import {createCellObservation} from '/console/assets/cell-observation.js';
+import {bindPrintSheets} from '/console/assets/cell-print-sheets.js';
+import {showObjectCatalog} from '/console/assets/cell-object-catalog.js';
 
 const $ = id => document.getElementById(id);
 const revealStage = hash => $(hash.slice(1))?.closest('details')?.setAttribute('open', '');
@@ -40,8 +43,9 @@ const stored = sessionStorage.getItem('rosy-console-token') || '';
 $('console-token').value = stored;
 const request = createFleetClient({credential: () => $('console-token').value, origin: location.origin});
 const observations = createCellObservation({request, root: $('workcell-observations')});
+bindPrintSheets({request, $});
 window.addEventListener('pagehide', event => event.persisted ? observations.clear() : observations.dispose());
-window.addEventListener('pageshow', event => { if (event.persisted) $('token-save').click(); });
+window.addEventListener('pageshow', event => { if (event.persisted) connect(); });
 bindEstop(request);
 bindTopbarToggle();
 tickClock();
@@ -137,6 +141,7 @@ function refreshControls() {
 }
 async function action(fn) {
   if (busy) return;
+  const focused = document.activeElement;
   busy = true; refreshControls();
   $('notice').textContent = '요청 처리 중 · 입력 잠시 잠금';
   try { await fn(); } catch (error) {
@@ -155,7 +160,11 @@ async function action(fn) {
         : error.message;
     if (error.status === 401 || error.status === 403) $('notice').scrollIntoView({block: 'center'});
   }
-  finally { busy = false; refreshControls(); }
+  finally {
+    busy = false; refreshControls();
+    if (document.activeElement === document.body && focused?.isConnected && !focused.disabled
+        && focused.getClientRects().length) focused.focus({preventScroll: true});
+  }
 }
 function post(path, body) { return api(path, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)}); }
 function references() {
@@ -340,10 +349,12 @@ $('console-token').addEventListener('input', () => {
   editEpoch++; clearSession();
   $('notice').textContent = '운영자 계정으로 접속해 저장된 레시피와 셀을 준비하세요.';
 });
-$('token-save').addEventListener('click', () => action(async () => {
+function connect(credentialChange = false) {
+  const focusOrigin = document.activeElement;
+  return action(async () => {
   const session = await api('/api/fleet/session'); role = session.role;
-  showSession(session);
-  observations.clear(); void observations.refresh();
+  showSession(session, {credentialChange, focusOrigin});
+  observations.clear(); void observations.refresh(); void showObjectCatalog({request, $});
   loginForm.refresh(false);
   await list();
   if (channelRequested) {
@@ -359,10 +370,12 @@ $('token-save').addEventListener('click', () => action(async () => {
     $('proposal-stage').open = true;
   }
   $('notice').textContent = '접속 완료 · 문서를 준비하세요.';
-}));
+  });
+}
+$('token-save').addEventListener('click', () => connect(true));
 // D-519 — login and logout change the cookie; drop any token so the cookie (or a 401) decides.
 const loginForm = createPasswordLogin($('password-login'), {onChange: () => {
-  $('console-token').value = ''; editEpoch++; clearSession(); $('token-save').click();
+  $('console-token').value = ''; editEpoch++; clearSession(); connect(true);
 }});
 $('compile').addEventListener('click', () => action(async () => {
   invalidate();
@@ -392,7 +405,7 @@ $('compile').addEventListener('click', () => action(async () => {
   }));
   $('layout-preview').hidden = !groups.length;
   renderLayout();
-  if (!$('request-key').value) $('request-key').value = crypto.randomUUID();
+  if (!$('request-key').value) $('request-key').value = randomUUID();
   $('notice').textContent = '미리보기 완료 · 내용을 확인하고 작업 범위를 입력하세요.';
   $('proposal-stage').open = true;
 }));
@@ -481,7 +494,7 @@ $('mission-id').addEventListener('input', () => { editEpoch++; clearJobSnapshot(
 $('read-job').addEventListener('click', () => action(readJob));
 $('new-proposal').addEventListener('click', () => {
   if (busy) return;
-  $('request-key').value = crypto.randomUUID(); $('proposal').textContent = '';
+  $('request-key').value = randomUUID(); $('proposal').textContent = '';
   $('notice').textContent = '새 요청 키를 준비했습니다. 앞선 요청의 결과가 불명확하면 먼저 작업 ID로 상태를 확인하세요.';
 });
 for (const command of ['admit', 'resume', 'reconcile', 'cancel']) {
@@ -519,10 +532,10 @@ for (const command of ['admit', 'resume', 'reconcile', 'cancel']) {
 }
 refreshControls();
 developmentToken($('console-token').value).then(token => {
-  if (token) { $('console-token').value = token; $('token-access').hidden = true; $('token-save').click(); }
+  if (token) { $('console-token').value = token; connect(); }
   // D-540 2 — a stored token (another Fleet tab) or a login cookie connects at once; neither means signed out.
   else loginForm.refresh(true).then(cookie => {
-    if (cookie || stored) $('token-save').click();
+    if (cookie || stored) connect();
     else if (!role && !busy) showSignedOut();  // not if someone connected meanwhile
   });
 }).catch(() => {});

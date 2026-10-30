@@ -59,6 +59,21 @@ def test_confirmed_failures_split_into_shared_host_and_branch_causes():
     assert (day["failed_shared"], day["failed_host"], day["failed_branch"]) == (2, 2, 2)
 
 
+def test_ids_that_stopped_several_branches_list_their_flaky_candidates_and_quarantine():
+    """The same id stopping branch after branch is a decision nobody took; landing snapshots count once per branch."""
+    fail = lambda t, branch, host, *ids: {  # noqa: E731
+        "t": t, "event": "failure", "branch": branch, "host": host, "failed": list(ids), "confirmed": True}
+    rows = [fail(1, "land/fix/a-20261029143227", "ai", "test/x.py::t", "test/q.py::t"),
+            fail(2, "fix/a", "ai", "test/x.py::t"),  # the same branch landed directly: still one branch
+            fail(3, "land/feat/b-20261029150000-batch220728-k2", "rosy", "test/x.py::t", "test/q.py::t"),
+            fail(4, "feat/c", "ai", "test/x.py::t"),
+            fail(5, "feat/c", "ai", "test/once.py::t")]
+    candidates = "test/x.py::t  # LOAD-FLAKY 1\ntest/x.py::t  # LOAD-FLAKY 2\n"
+    top = land_stats.repeat(rows, candidates, "test/q.py::t  # reviewed\n")
+    assert [(s["id"], s["branches"], s["flaky_candidates"], s["quarantined"], s["hosts"]) for s in top] == [
+        ("test/x.py::t", 3, 2, False, ["ai", "rosy"]), ("test/q.py::t", 2, 0, True, ["ai", "rosy"])]
+
+
 def test_a_judged_failure_leaves_its_ids_and_host_user_never_the_address(tmp_path, monkeypatch):
     import land_checks
     sys.path.insert(0, str(ROOT / "tools" / "remote"))

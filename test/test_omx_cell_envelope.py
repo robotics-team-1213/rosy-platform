@@ -23,22 +23,31 @@ def envelope():
 
 @pytest.fixture
 def task(tmp_path, envelope):
+    from cell_robot_profile import load
+
+    profile_path = tmp_path / "robot-profile.json"
+    profile_path.write_text(json.dumps({"schema": "rosy.omx-cell-robot-profile.v1",
+        "device_id": "fixture-device", "instance_id": "fixture-arm", "robot_config_sha256": "c" * 64,
+        "operating_envelope_path": "review.json", "work_dir": "."}))
     config = {"plan": {"lift_m": 0.04}, "profiles": {}, "sites": {}, "cameras": {},
               "operating_conditions": {"installation_revision": "fixture-install-1",
-                  "object_revision": "fixture-object-1", "payload_kg": 0.05,
+                  "object_revision": "fixture-object-1", "payload_max_kg": 0.05,
                   "object_dimensions_m": [0.03, 0.03, 0.03], "environment_revision": "fixture-scene-1"},
-              "operating_envelope_path": str(tmp_path / "review.json"), "work_dir": str(tmp_path)}
+              "payload": {"kg": 0.03, "source": "fixture scale"},
+              "operating_envelope_path": str(tmp_path / "review.json"), "work_dir": str(tmp_path),
+              "operating_profile_path": str(profile_path)}
     calibration = {"sites": {"tray": {"revision": "fixture-map-1"}}}
     library = {"fps": 30, "chunks": {"home": [[0, 0, 0, 0, 0, 47]],
                                     "lift_pick": [[0, 1, 2, 3, 4, 49]]}}
     state = {"ok": True, "fault": None, "t": 100.0, "state": [0, 0, 0, 0, 0, 47],
-             "operating_context": {"scope": "hardware", "sha256": "a" * 64, "session_id": "fixture-session"}}
+             "operating_context": {"scope": "hardware", "sha256": "a" * 64, "session_id": "fixture-session",
+                                   "operating_profile": load(profile_path)["binding"]}}
     return config, calibration, library, state
 
 
-def approve(tmp_path, envelope, task, outcomes=("placed", "placed")):
+def approve(tmp_path, envelope, task, outcomes=("placed", "placed"), *, sequence=None):
     config, calibration, library, state = task
-    result = envelope.assess(*task, now=100.01)
+    result = envelope.assess(*task, now=100.01, **({"sequence": sequence} if sequence is not None else {}))
     rows = [{"schema": "rosy.omx-cell-attempt.v1", "attempt_id": f"trial-{i}",
              "envelope": {**result, "mode": "commissioning", "status": "commissioning", "allowed": True},
              "outcome": outcome,
@@ -50,7 +59,9 @@ def approve(tmp_path, envelope, task, outcomes=("placed", "placed")):
               "reviewed_by": "fixture-reviewer", "evidence_ref": "fixture-physical-checks",
               "attempts_sha256": envelope.digest(rows), "min_attempts": 2,
               "min_success_rate": 1.0, "home_tolerance_units": 0.5}
-    document = {"schema": envelope.SCHEMA, "attempts_path": str(attempts), "reviews": [review]}
+    binding = state["operating_context"]["operating_profile"]
+    document = {"schema": envelope.SCHEMA, "attempts_path": str(attempts), "reviews": [review],
+                **{key: binding[key] for key in ("device_id", "instance_id", "profile_sha256")}}
     Path(config["operating_envelope_path"]).write_text(json.dumps(document), encoding="utf-8")
     return attempts, document
 
@@ -68,6 +79,105 @@ def test_reviewed_identical_full_task_can_proceed(tmp_path, task, envelope):
     assert result["attempts"] == result["successes"] == 2
 
 
+def test_changed_client_carry_params_cannot_reuse_a_review(tmp_path, task, envelope):
+    approve(tmp_path, envelope, task)
+    task[0]["params"] = {"auto.fold_before_transport": 0}
+    assert not envelope.assess(*task, now=100.01)["allowed"]
+
+
+def test_explicit_default_client_params_keep_task_identity(tmp_path, task, envelope):
+    import cell_params
+
+    approve(tmp_path, envelope, task)
+    task[0]["params"] = cell_params.load()["values"]
+    assert envelope.assess(*task, now=100.01)["allowed"]
+
+
+def test_straight_review_cannot_authorize_the_folded_executor(tmp_path, task, envelope):
+    from cell_transfer import FOLDED
+
+    approve(tmp_path, envelope, task)
+    straight = envelope.assess(*task, now=100.01)
+    folded = envelope.assess(*task, now=100.01, sequence=FOLDED)
+    assert folded["task_sha256"] != straight["task_sha256"] and not folded["allowed"]
+
+
+@pytest.mark.parametrize("folded", [False, True])
+def test_reviewed_gate_load_keeps_its_own_durable_intent(tmp_path, task, envelope, monkeypatch, folded):
+    import cell_attempts
+    from cell_transfer import FOLDED, Gate, transfer_folded
+
+    monkeypatch.setattr(envelope.time, "time", lambda: 100.01)
+    monkeypatch.setattr(cell_attempts, "RUN", dict(cell_attempts.RUN))
+    sequence = FOLDED if folded else envelope.SEQUENCE
+    attempts, _ = approve(tmp_path, envelope, task, sequence=sequence)
+    config, calibration, library, state = task
+    path = tmp_path / "library.json"
+    path.write_text(json.dumps(library))
+    commands = []
+    def act(command):
+        commands.append(command)
+        return copy.deepcopy(state) if command == "state" else {"ok": True, "holding": True}
+    cell = SimpleNamespace(act=act)
+    cell_attempts.start(attempts, run_id="current")
+    gate = Gate(cell, config, calibration, sequence=sequence)
+    assert gate.open(path, lambda a: cell_attempts.begin(config, a)) is None
+    pending = attempts.with_suffix(".pending.json")
+    original = pending.read_bytes()
+    assert gate.act(f"load {path}")["ok"]
+    state["operating_context"]["session_id"] = "other-session"
+    assert not gate.act(f"load {path}")["ok"]
+    state["operating_context"]["session_id"] = "fixture-session"
+    config["verify_tol_mm"] = 1000
+    assert not gate.act(f"load {path}")["ok"]
+    del config["verify_tol_mm"]
+    assert transfer_folded(gate, path, sequence=sequence)["result"] == "placed"
+    assert gate.act(f"load {path}")["ok"] and pending.read_bytes() == original
+    assert Gate(cell, config, calibration, sequence=sequence).open(path, lambda a: None)["reason"] == "incomplete_attempt"
+    path.write_text(json.dumps({**library, "fps": 25}))
+    assert not gate.act(f"load {path}")["ok"] and pending.read_bytes() == original
+    assert all(c == "state" or c.startswith("checked ") for c in commands)
+    cell_attempts.record(config, calibration, "tray", "belt", 1, {
+        "locate": {"found": True}, "transfer": {"result": "placed"}, "verify": {"inside": True},
+        "envelope": gate.assessment}, 100)
+    assert not pending.exists()
+
+
+def test_changed_verification_tolerance_cannot_reuse_a_review(tmp_path, task, envelope):
+    approve(tmp_path, envelope, task)
+    task[0]["verify_tol_mm"] = 1000
+    assert not envelope.assess(*task, now=100.01)["allowed"]
+
+
+def test_explicit_default_verification_tolerance_keeps_task_identity(tmp_path, task, envelope):
+    approve(tmp_path, envelope, task)
+    task[0]["verify_tol_mm"] = 10.0
+    assert envelope.assess(*task, now=100.01)["allowed"]
+
+
+@pytest.mark.parametrize("value", [True, -1, float("nan"), float("inf"), "10", None])
+def test_invalid_verification_tolerance_cannot_use_a_review(tmp_path, task, envelope, value):
+    approve(tmp_path, envelope, task)
+    task[0]["verify_tol_mm"] = value
+    assert not envelope.assess(*task, now=100.01)["allowed"]
+
+
+def test_an_unbound_or_different_device_profile_cannot_use_even_commissioning(task, envelope):
+    config, calibration, library, state = copy.deepcopy(task)
+    config["_commissioning"] = {"person_at_switch": True}
+    state["operating_context"]["operating_profile"]["device_id"] = "other-device"
+    assert envelope.assess(config, calibration, library, state, now=100.01)["reason"] == "profile_mismatch"
+    state["operating_context"]["operating_profile"] = None
+    assert not envelope.assess(config, calibration, library, state, now=100.01)["allowed"]
+
+
+def test_a_review_manifest_from_another_profile_is_rejected(tmp_path, task, envelope):
+    _, document = approve(tmp_path, envelope, task)
+    document["device_id"] = "other-device"
+    Path(task[0]["operating_envelope_path"]).write_text(json.dumps(document))
+    assert envelope.assess(*task, now=100.01)["reason"] == "review_profile_mismatch"
+
+
 @pytest.mark.parametrize("changed", ["arm", "scope", "map", "height", "payload", "installation", "speed"])
 def test_changed_conditions_cannot_reuse_a_review(tmp_path, task, envelope, changed):
     approve(tmp_path, envelope, task)
@@ -81,7 +191,7 @@ def test_changed_conditions_cannot_reuse_a_review(tmp_path, task, envelope, chan
     elif changed == "height":
         library["chunks"]["lift_pick"][0][1] += 1
     elif changed == "payload":
-        config["operating_conditions"]["payload_kg"] += 0.01
+        config["operating_conditions"]["payload_max_kg"] += 0.01
     elif changed == "installation":
         config["operating_conditions"]["installation_revision"] = "other-install"
     else:
@@ -185,11 +295,68 @@ def test_runtime_fingerprint_uses_real_calibration_and_readback_including_xl330_
     assert envelope.runtime_context(config, bus, 30)["sha256"] != first["sha256"]
 
 
+@pytest.fixture
+def runner_context(envelope):
+    @dataclass
+    class Calibration:
+        range_min: int = 0
+
+    bus = SimpleNamespace(
+        motors={name: SimpleNamespace(id=i, model="xl430-w250") for i, name in enumerate(envelope.NAMES)},
+        calibration={name: Calibration() for name in envelope.NAMES}, read=lambda *args: 20)
+    return lambda **kwargs: envelope.runtime_context({"id": "fixture-arm"}, bus, 30, **kwargs)
+
+
+@pytest.mark.parametrize("name,value", [("runner.pace_lag", 1.7), ("runner.contact_ticks", 3),
+                                       ("runner.contact_loaded_max", 2.1)])
+def test_changed_runner_params_cannot_reuse_a_review(tmp_path, task, envelope, runner_context, name, value):
+    import cell_params
+
+    params = cell_params.load()["values"]
+    task[3]["operating_context"]["sha256"] = runner_context(params=params)["sha256"]
+    approve(tmp_path, envelope, task)
+    assert envelope.assess(*task, now=100.01)["allowed"]
+    task[3]["operating_context"]["sha256"] = runner_context(params={**params, name: value})["sha256"]
+    assert not envelope.assess(*task, now=100.01)["allowed"]
+
+
+def test_explicit_default_params_keep_runtime_identity(tmp_path, envelope, runner_context):
+    import cell_params
+
+    path = tmp_path / "params.json"
+    path.write_text(json.dumps({"schema": cell_params.SCHEMA, "params": {
+        "runner.pace_lag": {"value": cell_params.default("runner.pace_lag"), "unit": "joint_unit",
+                            "source": "default", "evidence": "fixture-default"}}}))
+    assert runner_context(params=cell_params.load(path)["values"])["sha256"] == runner_context()["sha256"]
+
+
 @pytest.mark.parametrize("value", [None, True, float("nan"), 0, -1])
 def test_invalid_payload_never_reaches_approval(task, envelope, value):
     config, calibration, library, state = copy.deepcopy(task)
-    config["operating_conditions"]["payload_kg"] = value
+    config["operating_conditions"]["payload_max_kg"] = value
     assert not envelope.assess(config, calibration, library, state, now=100.01)["allowed"]
+
+
+@pytest.mark.parametrize("payload, reason", [(None, "payload_unknown"), ({"kg": None, "source": "catalogue"}, "payload_unknown"),
+                                             ({"kg": 0.03, "source": ""}, "payload_unknown"),
+                                             ({"kg": 0.06, "source": "scale"}, "payload_over_bound"),
+                                             ({"kg": 0.04, "source": "scale", "max_gross_kg": 0.035}, "payload_over_bound")])
+def test_an_unknown_or_heavy_payload_is_held_even_in_a_supervised_trial(task, envelope, payload, reason):
+    config, calibration, library, state = copy.deepcopy(task)
+    config["payload"] = payload
+    config["_commissioning"] = {"person_at_switch": True}
+    result = envelope.assess(config, calibration, library, state, now=100.01)
+    assert not result["allowed"] and result["reason"] == reason
+
+
+def test_a_payload_within_the_bound_keeps_the_reviewed_task(tmp_path, task, envelope):
+    approve(tmp_path, envelope, task)
+    config, calibration, library, state = copy.deepcopy(task)
+    config["payload"] = {"kg": 0.045, "source": "scale"}  # not the trials' 0.03 kg, still under the 0.05 bound
+    result = envelope.assess(config, calibration, library, state, now=100.01)
+    assert result["allowed"] and result["payload"] == {"kg": 0.045, "source": "scale", "bound_kg": 0.05}
+    config["params"] = {"auto.max_gross_kg": 0.04}  # the arm's own limit is lower than the reviewed bound
+    assert envelope.assess(config, calibration, library, state, now=100.01)["reason"] == "payload_over_bound"
 
 
 def test_fifo_checked_command_accepts_the_runners_inner_command_ack(tmp_path, envelope, monkeypatch):
@@ -213,6 +380,37 @@ def test_fifo_checked_command_accepts_the_runners_inner_command_ack(tmp_path, en
         "session_id": "fixture-session", "library_sha256": "a" * 64})
     assert result["ok"]
     assert sent == [f"checked fixture-session {'a' * 64} load plan.json"]
+
+
+@pytest.mark.parametrize("wrong_device", [False, True])
+def test_supervised_fifo_motion_cannot_bypass_the_selected_device(tmp_path, task, envelope, monkeypatch, wrong_device):
+    import time
+
+    transport = importlib.import_module("cell_pipeline_io")
+    state = copy.deepcopy(task[3])
+    selected = copy.deepcopy(state["operating_context"]["operating_profile"])
+    state.update(t=time.time(), command="state", library_sha256="a" * 64)
+    if wrong_device:
+        state["operating_context"]["operating_profile"]["device_id"] = "other-device"
+    status = tmp_path / "chunk-status.jsonl"
+    status.write_text("")
+    sent = []
+    def write(fd, payload):
+        line = payload.decode().strip()
+        sent.append(line)
+        row = state if line == "state" else {"command": "jog shoulder_pan.pos 1", "ok": True}
+        with status.open("a") as stream:
+            stream.write(json.dumps(row) + "\n")
+        return len(payload)
+    monkeypatch.setattr(transport.os, "open", lambda *a, **kw: 42)
+    monkeypatch.setattr(transport.os, "write", write)
+    monkeypatch.setattr(transport.os, "close", lambda fd: None)
+    cell = transport.FifoCell(tmp_path, {}, operating_profile=selected)
+    result = cell.act("jog shoulder_pan.pos 1")
+    if wrong_device:
+        assert not result["ok"] and result["fault"] == "profile_mismatch" and sent == ["state"]
+    else:
+        assert result["ok"] and sent == ["state", f"checked fixture-session {'a' * 64} jog shoulder_pan.pos 1"]
 
 
 def test_shipped_envelope_and_condition_templates_cannot_enable_automatic_motion(task, envelope):

@@ -229,6 +229,16 @@ def size_check(wt: Path, base: str, head: str, python: str) -> None:
                        f" raise a row. Check with: python {SIZE_RANGE} main HEAD")
 
 
+def admit(wt: Path, branch: str, main_sha: str, python: str) -> None:
+    """D-889 S0: merge main and lint before taking a ticket. On 10-26..30 lint errors in a branch's own records
+    stopped 10 landings 12-152 min in, after the prepare slot wait. Only here: once a ticket exists a batch may carry
+    the branch, and moving its tip then would hide that it landed."""
+    if git(wt, "merge-base", "--is-ancestor", main_sha, "HEAD", check=False).returncode != 0:
+        merge(wt, main_sha, branch, python, False)
+    if (wt / HARNESS).is_file():
+        step(wt, [python, HARNESS, "lint"], None, "lint")
+
+
 def record_only(path: str) -> bool:
     """Records no module test reads. Root test/ guards do read docs, so they rerun anyway."""
     name = PurePosixPath(path).name
@@ -309,6 +319,7 @@ def land(args) -> int:
         before = out(wt, "rev-parse", "main")
         safety_review(wt, before, "HEAD", python)  # seconds each: fail before a long wait, not after it
         size_check(wt, before, "HEAD", python)
+        admit(wt, branch, before, python)
         qdir, ticket = land_queue.enter(wt, branch, "preparing", args.urgent,
                                         batch_auto=land_batch.plain_auto(args, EXTRA))
         if (code := land_batch.early(sys.modules[__name__], wt, branch, args, python, qdir, ticket, main_co)) is not None:

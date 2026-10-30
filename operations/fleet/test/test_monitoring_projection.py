@@ -47,7 +47,7 @@ def seeded(rows=None):
         counters["flush"] += 1
 
     console = SimpleNamespace(snapshot=snapshot, _clock=clock,
-                              hub=SimpleNamespace(registry=SimpleNamespace(events_since=lambda *_: ())))
+                              hub=SimpleNamespace(registry=SimpleNamespace(stuck_event=lambda *_: None)))
     gather = SharedGather(console, SimpleNamespace(observe=observe, flush=flush), clock=clock)
     run(gather())
     return gather, clock, counters, body

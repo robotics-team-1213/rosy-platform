@@ -231,7 +231,7 @@ def read_view(root: Path, battery: tuple[float, float] | None) -> dict:
     """What the card shows, from the indicator files and the last battery reading."""
     status = _read_json(root / STATUS_DIR / "boot-status.json")
     network = {key: value for key, value in _read_json(root / STATUS_DIR / "network.json").items()
-               if key in {"mode", "ssid", "address", "epoch"}}
+               if key in {"mode", "ssid", "address", "epoch", "security"}}
     view = {
         "stage": status.get("stage") or "BOOTING",
         "failed_unit": status.get("failed_unit"),
@@ -247,7 +247,7 @@ def read_view(root: Path, battery: tuple[float, float] | None) -> dict:
         "battery_percent": None if battery is None else round(battery[0]),
         "battery_voltage": None if battery is None else round(battery[1], 2),
     }
-    if network.get("mode") == "ap":
+    if network.get("mode") == "ap" and network.get("security") != "open":
         try:
             lines = (root / STATUS_DIR / "ap-display.txt").read_text(encoding="utf-8").splitlines()
         except (OSError, UnicodeDecodeError):

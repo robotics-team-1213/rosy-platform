@@ -34,6 +34,10 @@
     }
   },
   "assets": {
+    "fleet-document.css": {
+      "path": "shared/fleet-document.css",
+      "media_type": "text/css"
+    },
     "app-runtime.js": {
       "path": "runtime.js",
       "media_type": "application/javascript"
@@ -56,6 +60,14 @@
     },
     "cell-observation.js": {
       "path": "cell/cell-observation.js",
+      "media_type": "application/javascript"
+    },
+    "cell-print-sheets.js": {
+      "path": "cell/cell-print-sheets.js",
+      "media_type": "application/javascript"
+    },
+    "cell-object-catalog.js": {
+      "path": "cell/cell-object-catalog.js",
       "media_type": "application/javascript"
     },
     "motor-health-view.js": {
@@ -358,6 +370,10 @@
       "path": "sitemap/site-map.js",
       "media_type": "application/javascript"
     },
+    "site-map-sources.js": {
+      "path": "sitemap/site-map-sources.js",
+      "media_type": "application/javascript"
+    },
     "site-map-model.js": {
       "path": "shared/site-map-model.js",
       "media_type": "application/javascript"
@@ -388,6 +404,10 @@
     },
     "edit-history.js": {
       "path": "sitemap/edit-history.js",
+      "media_type": "application/javascript"
+    },
+    "subnav-screens.js": {
+      "path": "shared/subnav-screens.js",
       "media_type": "application/javascript"
     },
     "geometry-edit.js": {
@@ -494,8 +514,16 @@
       "path": "work/arm-transfer-view.js",
       "media_type": "application/javascript"
     },
+    "trip-proposal-view.js": {
+      "path": "work/trip-proposal-view.js",
+      "media_type": "application/javascript"
+    },
     "robot-profile-view.js": {
       "path": "devices/robot-profile-view.js",
+      "media_type": "text/javascript"
+    },
+    "uuid.js": {
+      "path": "shared/uuid.js",
       "media_type": "text/javascript"
     },
     "device-care.js": {

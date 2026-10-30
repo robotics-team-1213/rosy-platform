@@ -213,3 +213,44 @@ def test_failing_auto_reform_is_logged_and_survives():
     finally:
         logger.removeHandler(handler)
     assert any("auto speed reform failed" in r.getMessage() for r in records)
+
+
+def test_observe_serves_idle_robots_from_a_fresh_hub_heartbeat():
+    """2026-10-28 자원 경계: 목표 판정 때 대기 로봇은 hub 하트비트 스냅샷으로 답해
+    REST를 쏘지 않는다. 활동(목표 보유) 로봇은 판정 순간의 REST를 유지하고,
+    대기 로봇의 판정(`_verdict`)도 어느 쪽이든 갱신된다(D-395 P2-2 불변식)."""
+    from core_common.protocol.schemas import StateSnapshot
+
+    idle_hub = FakeRobot("rosy_01")
+    moving = FakeRobot("rosy_02", state={"robot_id": "rosy_02", "mode": "NAVIGATION"})
+    clock = FakeClock()
+    console = _console(idle_hub, moving, clock=clock)
+    row = console.hub.registry.record("rosy_01")
+    row.online = True
+    row.snapshot = StateSnapshot(robot_id="rosy_01", seq=7, mode="IDLE")
+    row.last_heartbeat_monotonic = clock()          # 하트비트가 신선하다
+    console._goals["rosy_02"] = {"x": 1.0, "y": 0.0, "yaw": 0.0}   # rosy_02는 활동 중
+
+    run(console._observe())
+
+    assert idle_hub.calls == []                      # 대기 로봇: REST 없음
+    assert ("state",) in moving.calls                # 활동 로봇: REST 유지
+    assert console._verdict("rosy_01") is not None   # 판정 갱신 — 하트비트 경로
+
+
+def test_observe_falls_back_to_rest_when_the_hub_heartbeat_is_stale():
+    """하트비트가 오래된 대기 로봇은 기존대로 REST 폴백을 읽는다."""
+    from core_common.protocol.schemas import StateSnapshot
+
+    idle_stale = FakeRobot("rosy_01")
+    clock = FakeClock()
+    console = _console(idle_stale, clock=clock)
+    row = console.hub.registry.record("rosy_01")
+    row.online = True
+    row.snapshot = StateSnapshot(robot_id="rosy_01", seq=7, mode="IDLE")
+    row.last_heartbeat_monotonic = clock()
+    clock.advance(30.0)                              # _hub_state_max_age_s(3s) 초과
+
+    run(console._observe())
+
+    assert ("state",) in idle_stale.calls

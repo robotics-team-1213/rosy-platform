@@ -82,6 +82,27 @@ class LinkPhysicalState:
 
 
 @dataclass(frozen=True)
+class JointPhysicalState:
+    sample_id: str
+    sequence: int
+    observed_at_ns: int
+    joint_names: tuple[str, ...]
+    positions_rad: tuple[float, ...]
+
+    def __post_init__(self):
+        _reference(self.sample_id)
+        _counter(self.sequence)
+        _counter(self.observed_at_ns)
+        if (not isinstance(self.joint_names, (tuple, list)) or not 1 <= len(self.joint_names) <= 32
+                or len(set(self.joint_names)) != len(self.joint_names)):
+            raise ValueError("joint measurements require unique ordered joint names")
+        for name in self.joint_names:
+            _reference(name)
+        object.__setattr__(self, "joint_names", tuple(self.joint_names))
+        object.__setattr__(self, "positions_rad", _vector(self.positions_rad, len(self.joint_names)))
+
+
+@dataclass(frozen=True)
 class ArmPhysicalState:
     workcell_id: str
     instance_id: str
@@ -96,6 +117,7 @@ class ArmPhysicalState:
     gripper_state: str
     held_state: str
     held_object_ref: str | None
+    joints: JointPhysicalState | None = None
 
     def __post_init__(self):
         for value in (self.workcell_id, self.instance_id, self.owner_session_id,
@@ -120,6 +142,8 @@ class ArmPhysicalState:
             _reference(self.held_object_ref)
         if self.held_state == "NONE" and self.held_object_ref is not None:
             raise ValueError("an empty gripper cannot report a held object reference")
+        if self.joints is not None and not isinstance(self.joints, JointPhysicalState):
+            raise ValueError("joint state must be measured or explicitly absent")
 
 
 @dataclass(frozen=True)
@@ -163,4 +187,5 @@ class TransferObservation:
     def sample_times_ns(self):
         return (self.object_observed_at_ns,) + tuple(
             timestamp for owner in self.owners
-            for timestamp in (owner.links_observed_at_ns, owner.gripper_observed_at_ns))
+            for timestamp in (owner.links_observed_at_ns, owner.gripper_observed_at_ns)) + tuple(
+            owner.joints.observed_at_ns for owner in self.owners if owner.joints is not None)

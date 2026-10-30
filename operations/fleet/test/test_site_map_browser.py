@@ -13,6 +13,11 @@ from browser_harness import BODY_FIT, browser_tests_enabled, open_token_access, 
 
 from test_site_map_trip import _app, _on_ring_s
 
+def show_screen(page, heading):
+    """D-926 3: the site-map sub-nav shows one screen at a time; the map stays above it."""
+    page.evaluate("heading => { location.hash = heading }", "#" + heading)
+
+
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(),
                                 reason="opt-in real Chromium browser scenario")
 ROOT = Path(__file__).resolve().parents[3]
@@ -33,6 +38,7 @@ def test_mapless_survey_elements_persist_and_stay_out_of_operations(page_site, w
     page.locator('#console-token').fill('operator-token')
     page.locator('#token-save').click()
     expect(page.locator('#map-status')).to_contain_text('활성 지도 없음')
+    show_screen(page, "survey-heading")
     page.locator('#survey-setup > summary').click()
     page.locator('#survey-description').fill('Start mark facing east, calibrated wheel odom')
     page.locator('#survey-new').click()
@@ -52,6 +58,7 @@ def test_mapless_survey_elements_persist_and_stay_out_of_operations(page_site, w
         page.locator('#element-kind').select_option('park')
         point(x, y)
         page.locator('#element-save').click()
+        expect(page.locator('#survey-status')).to_have_text('요소를 초안에 반영했습니다. 저장·검토·활성화는 각각 별도입니다.')
     expect(page.locator('#site-map-svg [data-place]')).to_have_count(2)
     page.locator('#element-id').fill('ab')
     page.locator('#element-name').fill('Road')
@@ -71,6 +78,7 @@ def test_mapless_survey_elements_persist_and_stay_out_of_operations(page_site, w
     point(.8, .1)
     page.locator('#element-save').click()
     expect(page.locator('#site-map-svg .facility.traffic_signal')).to_have_count(1)
+    show_screen(page, "edit-heading")
     page.locator('#save-draft').click()
     expect(page.locator('#draft-status')).to_contain_text('저장된 초안')
     saved = store.draft_view()['map']
@@ -78,12 +86,14 @@ def test_mapless_survey_elements_persist_and_stay_out_of_operations(page_site, w
     assert saved['edges'][0]['evidence']['status'] == 'observed'
     assert saved['facilities'][0]['approaches'] == [{'edge_id': 'ab', 'forward': True, 'stop_s_m': .8}]
     assert store.active_view() is None
+    show_screen(page, "survey-heading")
     page.locator('#element-existing').select_option('facilities:sig')
     page.locator('#element-load').click()
     page.locator('#element-name').fill('Reviewed signal name')
     page.locator('#element-save').click()
     with page.expect_response(lambda response: response.request.method == 'PUT'
                              and response.url.endswith('/api/fleet/site-map/draft')) as saved_response:
+        show_screen(page, "edit-heading")
         page.locator('#save-draft').click()
     assert saved_response.value.ok
     expect(page.locator('#draft-status')).to_contain_text('저장된 초안')
@@ -115,8 +125,10 @@ def test_mapless_driven_survey_records_unknown_robot_and_confirms_only_a_draft(p
     open_token_access(page)
     page.locator('#console-token').fill('operator-token')
     page.locator('#token-save').click()
+    show_screen(page, "edit-heading")
     expect(page.locator('#draft-status')).to_contain_text('초안')
     page.locator('#map-source').select_option('draft')
+    show_screen(page, "teach-heading")
     page.locator('#teach-frame').select_option('survey')
     expect(page.locator('#teach-start')).to_be_disabled()
     expect(page.locator('#teach-start')).to_have_attribute('reason', re.compile('시작점'))
@@ -153,6 +165,7 @@ def test_soccer_profile_basic_information_and_template(page_site, width):
     page.locator('#token-save').click()
     expect(page.locator('#map-status')).to_contain_text('활성 지도')
     before = store.active_view()
+    show_screen(page, "profile-heading")
     page.locator('#profile-kind').select_option('soccer')
     page.locator('#profile-description').fill('실측 연습 경기장')
     page.locator('#profile-length').fill('3')
@@ -192,6 +205,7 @@ def test_profiles_rules_import_preview_and_draft_stay_separate(page_site, width)
     page.locator('#token-save').click()
     expect(page.locator('#map-status')).to_contain_text('활성 지도')
     before = store.active_view()
+    show_screen(page, "profile-heading")
     page.locator('#profile-new').click()
     page.locator('#profile-id').fill('training')
     page.locator('#profile-name').fill('연습장')
@@ -250,6 +264,7 @@ def test_rectangular_camera_coordinates_are_display_only(page_site):
     page.locator("#plane-load").click()
     expect(page.locator("#plane-status")).to_contain_text("불러온 평면 영상")
     expect(page.locator("#site-map-svg image")).to_be_visible()
+    show_screen(page, "trip-heading")
     page.locator("#trip-pick").check()
     page.locator("#plane-pick").check()
     expect(page.locator("#trip-pick")).not_to_be_checked()
@@ -342,6 +357,7 @@ def test_vision_map_plane_is_drawn_and_picked_by_its_scale_then_falls_back_on_40
     expect(page.locator("#plane-point")).to_contain_text("확인한 좌표 x")
     x, y = map(float, re.search(r"x ([\d.-]+) m, y ([\d.-]+) m", page.locator("#plane-point").inner_text()).groups())
     assert abs(x) <= 0.01 and abs(y - 0.5) <= 0.01, (x, y)
+    show_screen(page, "trip-heading")
     expect(page.locator("#trip-point")).to_contain_text("찍은 좌표 없음")
 
     # A plane made with another calibration revision is neither drawn nor picked.
@@ -373,6 +389,7 @@ def test_import_camera_map_draft_never_activates(page_site):
     camera_fixture = os.environ.get("ROSY_CAMERA_MAP_FIXTURE")
     draft = json.loads(Path(camera_fixture).read_text(encoding="utf-8")) if camera_fixture \
         else {"schema": "rosy.site_map/1", **_line()}
+    show_screen(page, "edit-heading")
     page.locator("#camera-map-file").set_input_files({
         "name": "camera-draft.json", "mimeType": "application/json",
         "buffer": json.dumps(draft).encode()})
@@ -435,6 +452,7 @@ def test_requested_recording_robot_never_falls_back_to_another_robot(page_site):
     page.locator('#console-token').fill('operator-token')
     page.locator('#token-save').click()
     expect(page.locator('#user-role')).to_have_attribute('title', 'bob · operator')
+    show_screen(page, "teach-heading")
     expect(page.locator('#teach-target')).to_contain_text('not-in-roster')
     expect(page.locator('#teach-robot')).to_have_value('')
     expect(page.locator('#teach-start')).to_be_disabled()
@@ -454,6 +472,7 @@ def test_recording_target_survives_refresh_and_names_offline_or_removed_robots(p
     open_token_access(page)
     page.locator('#console-token').fill('operator-token')
     page.locator('#token-save').click()
+    show_screen(page, "teach-heading")
     expect(page.locator('#teach-robot')).to_have_value('beta')
     page.locator('#teach-robot').select_option('alpha')
     open_token_access(page)
@@ -499,21 +518,19 @@ def test_view_edit_activate_and_preview_a_trip(page_site, width, height):
     expect(page.locator("#site-map-svg .arrow")).to_have_count(8)  # 4 one-way + 2 two-way edges
     positions = page.evaluate("""() => ({
       map: document.querySelector('#map-viewport').getBoundingClientRect().top,
-      trip: document.querySelector('[aria-labelledby=trip-heading]').getBoundingClientRect().top,
-      run: document.querySelector('[aria-labelledby=run-heading]').getBoundingClientRect().top,
-      edit: document.querySelector('[aria-labelledby=edit-heading]').getBoundingClientRect().top,
       plane: document.querySelector('.plane-tools summary').getBoundingClientRect().top,
     })""")
-    assert positions["map"] < positions["plane"] < positions["trip"] and positions["map"] < height + 1, positions
+    assert positions["map"] < positions["plane"] and positions["map"] < height + 1, positions
     expect(page.locator(".plane-tools")).not_to_have_attribute("open", "")
     expect(page.locator("#plane-source")).to_be_hidden()
-    if width < 1024:
-        assert positions["trip"] < positions["run"] < positions["edit"], positions
-    else:
-        assert abs(positions["trip"] - positions["edit"]) <= 1 and positions["trip"] < positions["run"], positions
+    # D-926 3: the first sub-nav screen is the map alone; each task opens from the sub-nav.
+    for heading in ("trip-heading", "run-heading", "edit-heading", "survey-heading", "teach-heading"):
+        expect(page.locator(f"[aria-labelledby={heading}]")).to_be_hidden()
+    expect(page.locator('.ui-subnav-item[href="#map-heading"]')).to_have_attribute("aria-current", "page")
     if output := os.environ.get("ROSY_SHOT_DIR"):
         page.screenshot(path=str(Path(output) / f"site-map-fresh-{width}x{height}.png"), full_page=True)
 
+    show_screen(page, "trip-heading")
     page.select_option("#trip-place", "NW")
     page.locator("#trip-plan").click()
     expect(page.locator("#trip-summary")).to_contain_text("3개 차로")
@@ -524,6 +541,7 @@ def test_view_edit_activate_and_preview_a_trip(page_site, width, height):
         page.screenshot(path=str(Path(output) / f"site-map-preview-{width}x{height}.png"), full_page=True)
 
     page.locator('#site-map-svg [data-place="NW"]').click()
+    show_screen(page, "edit-heading")
     page.locator("#place-name").fill("A동 입구")
     page.select_option("#place-kind", "stop")
     page.locator("#apply-edit").click()
@@ -532,6 +550,7 @@ def test_view_edit_activate_and_preview_a_trip(page_site, width, height):
     page.locator("#apply-edit").click()
     page.locator("#save-draft").click()
     expect(page.locator("#draft-status")).to_contain_text("저장된 초안")
+    expect(page.locator("#draft-status")).not_to_contain_text("undefined")  # D-926: no raw JS values
     page.locator("#activate").click()
     if output := os.environ.get("ROSY_SHOT_DIR"):
         page.screenshot(path=str(Path(output) / f"site-map-confirm-{width}x{height}.png"), full_page=True)
@@ -541,6 +560,7 @@ def test_view_edit_activate_and_preview_a_trip(page_site, width, height):
     assert next(p for p in active.places if p.id == "NW").name == "A동 입구"
     assert next(e for e in active.edges if e.id == "ring_n").direction == "two_way"
 
+    show_screen(page, "trip-heading")
     page.locator("#trip-pick").check()
     page.locator(".map-viewport").evaluate("element => element.scrollLeft = 0")
     page.locator(".map-viewport").click(position={"x": 5, "y": 5})
@@ -590,13 +610,13 @@ def test_site_map_fits_declared_widths(page_site, width, height):
         assert sizes["mapWindow"] <= width and sizes["mapContent"] > sizes["mapWindow"], sizes
     if width < 480:
         assert sizes["header"] <= height * 0.2, sizes  # D-540 2: identity folds behind 설정
-    assert abs(sizes["edit"] - sizes["trip"]) <= 1, sizes
+    assert sizes["edit"] == sizes["trip"] == 0, sizes  # D-926 3: the first screen is the map alone
     assert sizes["stop"] <= width, sizes
 
 
 # The wide layout stands from a 60rem body: a 1296px shell. 1349 is a 1366 laptop window with a classic scrollbar.
 @pytest.mark.parametrize("width,height,panels,fields", [(360, 740, 1, 1), (1024, 768, 1, 1), (1100, 800, 1, 1),
-                                                       (1349, 768, 2, 3), (1366, 768, 2, 3)])
+                                                       (1349, 768, 1, 3), (1366, 768, 1, 3)])
 def test_site_map_body_keeps_usable_columns_beside_the_sub_nav(page_site, width, height, panels, fields):
     """D-741 2: the rail and the sub-nav take 304px. The body picks its columns from its own width: one panel column
     and one-column forms until the body has 60rem, then two and three. There is no sideways overflow, no control
@@ -610,6 +630,7 @@ def test_site_map_body_keeps_usable_columns_beside_the_sub_nav(page_site, width,
     page.locator("#token-save").click()
     expect(page.locator("#map-status")).to_contain_text("활성 지도 v1")
     page.locator('#site-map-svg [data-place="NW"]').click()
+    show_screen(page, "edit-heading")
     expect(page.locator("#place-form")).to_be_visible()
     page.set_viewport_size({"width": width, "height": height})
     top = page.evaluate(BODY_FIT)
@@ -624,7 +645,7 @@ def test_site_map_body_keeps_usable_columns_beside_the_sub_nav(page_site, width,
         assert top["unreachable"] == [] and end["unreachable"] == [], (top, end)
     assert top["cut"] == [] and top["outside"] == [] and end["outside"] == [], (top, end)
     columns = {grid["name"]: grid["columns"] for grid in top["grids"]}
-    assert columns == {"map-workflow": panels, "place-form": fields, "form": fields,
+    assert columns == {"map-workflow": panels, "place-form": fields,  # D-926 3: other screens' forms are hidden
                        "actions draft-actions": 1 if width < 480 else 3}, top["grids"]
     assert all(grid["narrowest"] >= 144 for grid in top["grids"] if grid["columns"] > 1), top["grids"]
     assert label >= 12, label
@@ -638,6 +659,7 @@ def test_first_boot_explains_access_before_any_map_evidence(page_site, width, he
     page.set_viewport_size({"width": width, "height": height})
     expect(page.locator("#map-status")).to_contain_text("관제 접속 필요")
     expect(page.locator("#map-viewport")).to_be_hidden()
+    show_screen(page, "trip-heading")
     expect(page.locator("#trip-plan")).to_be_disabled()
     expect(page.locator("#estop")).to_be_disabled()
     assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
@@ -660,6 +682,7 @@ def test_robot_safety_is_named_during_plan_only_preview(page_site, width, height
     page.locator("#console-token").fill("operator-token")
     page.locator("#token-save").click()
     expect(page.locator("#map-status")).to_contain_text("활성 지도 v1")
+    show_screen(page, "trip-heading")
     expect(page.locator("#trip-robot option")).to_contain_text(label)
     expect(page.locator("#trip-summary")).to_contain_text("실행은 하지 않습니다")
     expect(page.locator("#estop")).to_be_enabled()
@@ -676,6 +699,7 @@ def test_changing_trip_target_clears_old_plan_evidence(page_site):
     page.locator("#console-token").fill("operator-token")
     page.locator("#token-save").click()
     expect(page.locator("#map-status")).to_contain_text("활성 지도 v1")
+    show_screen(page, "trip-heading")
     page.select_option("#trip-place", "NW")
     page.locator("#trip-plan").click()
     expect(page.locator("#trip-summary")).to_contain_text("3개 차로")
@@ -696,6 +720,7 @@ def test_late_trip_response_cannot_restore_old_target(page_site):
     expect(page.locator("#map-status")).to_contain_text("활성 지도 v1")
     pending = []
     page.route("**/api/fleet/robots/rosy_60/trip", lambda route: pending.append(route))
+    show_screen(page, "trip-heading")
     page.select_option("#trip-place", "NW")
     page.locator("#trip-plan").click()
     page.wait_for_timeout(200)
@@ -722,6 +747,7 @@ def test_viewer_cannot_be_offered_operator_actions(page_site, width, height):
     expect(page.locator("#map-status")).to_contain_text("활성 지도 v1")
     expect(page.locator("#map-viewport")).to_be_visible()
     page.locator('#site-map-svg [data-place="NW"]').click()
+    show_screen(page, "edit-heading")
     for selector in ("#apply-edit", "#save-draft", "#activate", "#trip-plan", "#estop"):
         expect(page.locator(selector)).to_be_disabled()
         expect(page.locator(selector)).to_have_attribute("reason", "운영자 권한이 필요합니다")
@@ -748,6 +774,7 @@ def test_failed_reconnect_clears_old_map_and_actions(page_site, width, height):
     expect(page.locator("#notice")).to_contain_text("토큰을 확인하고 다시 접속")
     expect(page.locator("#map-status")).to_contain_text("관제 접속 필요")
     expect(page.locator("#map-viewport")).to_be_hidden()
+    show_screen(page, "edit-heading")
     expect(page.locator("#draft-status")).to_contain_text("관제 접속 필요")
     expect(page.locator("#site-map-svg [data-place]")).to_have_count(0)
     expect(page.locator("#estop")).to_be_disabled()
@@ -776,8 +803,11 @@ def test_site_map_server_error_has_recovery_and_no_stale_controls(page_site, wid
     expect(page.locator("#notice")).to_contain_text("잠시 뒤 다시 접속")
     expect(page.locator("#map-status")).to_contain_text("지도 조회 실패")
     expect(page.locator("#map-viewport")).to_be_hidden()
+    show_screen(page, "edit-heading")
     expect(page.locator("#draft-status")).to_contain_text("초안 확인 불가")
+    show_screen(page, "trip-heading")
     expect(page.locator("#trip-plan")).to_be_disabled()
+    show_screen(page, "edit-heading")
     expect(page.locator("#apply-edit")).to_be_disabled()
     assert page.evaluate("document.documentElement.scrollWidth <= innerWidth && document.querySelector('#estop').getBoundingClientRect().right <= innerWidth")
     if output := os.environ.get("ROSY_SHOT_DIR"):
@@ -821,6 +851,7 @@ def test_pending_map_read_then_disconnect(page_site, width, height):
     page.locator("#token-save").click()
     expect(page.locator("#map-status")).to_contain_text("지도 조회 중")
     expect(page.locator("#map-viewport")).to_be_hidden()
+    show_screen(page, "edit-heading")
     expect(page.locator("#draft-status")).to_contain_text("초안 조회 중")
     expect(page.locator("#notice")).to_contain_text(re.compile(r"[1-9]초 경과"), timeout=4000)
     expect(page.locator("#token-save")).to_be_disabled()
@@ -849,10 +880,13 @@ def test_empty_site_map_names_the_next_step(page_site, width, height):
     page.locator("#token-save").click()
     expect(page.locator("#map-status")).to_contain_text("활성 지도 없음")
     expect(page.locator("#notice")).to_contain_text("지도 만들기에서 기준을 정하거나")
+    show_screen(page, "survey-heading")
     expect(page.locator("#survey-new")).to_be_enabled()
     expect(page.locator("#map-viewport")).to_be_hidden()
+    show_screen(page, "edit-heading")
     expect(page.locator("#save-draft")).to_be_disabled()
     expect(page.locator("#activate")).to_be_disabled()
+    show_screen(page, "trip-heading")
     expect(page.locator("#trip-plan")).to_be_disabled()
     expect(page.locator("#estop")).to_be_enabled()
     assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
@@ -873,6 +907,7 @@ def test_offline_robot_cannot_be_offered_for_trip_preview(page_site, width, heig
     page.locator("#console-token").fill("operator-token")
     page.locator("#token-save").click()
     expect(page.locator("#map-status")).to_contain_text("활성 지도 v1")
+    show_screen(page, "trip-heading")
     expect(page.locator("#trip-robot option")).to_have_text("rosy_60 · 연결 끊김")
     expect(page.locator("#trip-robot")).to_have_value("rosy_60")
     expect(page.locator("#trip-plan")).to_be_disabled()
@@ -895,6 +930,7 @@ def test_connected_robot_can_be_selected_after_offline_robot(page_site):
     open_token_access(page)
     page.locator("#console-token").fill("operator-token")
     page.locator("#token-save").click()
+    show_screen(page, "trip-heading")
     expect(page.locator("#trip-plan")).to_be_disabled()
     expect(page.locator("#trip-plan")).to_have_attribute("reason", "선택한 로봇의 연결을 확인하세요")
     page.select_option("#trip-robot", "rosy_60")
@@ -913,6 +949,7 @@ def test_no_robot_explains_why_trip_preview_is_unavailable(page_site, width, hei
     page.locator("#console-token").fill("operator-token")
     page.locator("#token-save").click()
     expect(page.locator("#map-status")).to_contain_text("활성 지도 v1")
+    show_screen(page, "trip-heading")
     expect(page.locator("#trip-summary")).to_contain_text("등록된 로봇이 없습니다")
     expect(page.locator("#trip-plan")).to_be_disabled()
     expect(page.locator("#estop")).to_be_enabled()
@@ -934,6 +971,7 @@ def test_robot_state_failure_keeps_loaded_map_and_names_missing_evidence(page_si
     page.locator("#token-save").click()
     expect(page.locator("#map-status")).to_contain_text("활성 지도 v1")
     expect(page.locator("#map-viewport")).to_be_visible()
+    show_screen(page, "trip-heading")
     expect(page.locator("#trip-summary")).to_contain_text("로봇 상태 확인 불가")
     expect(page.locator("#trip-plan")).to_be_disabled()
     expect(page.locator("#estop")).to_be_enabled()
@@ -954,6 +992,7 @@ def test_robot_state_auth_failure_removes_operator_controls(page_site, status):
     page.locator("#token-save").click()
     expect(page.locator("#map-status")).to_contain_text("관제 접속 필요" if status == 401 else "지도 조회 실패")
     expect(page.locator("#estop")).to_be_disabled()
+    show_screen(page, "trip-heading")
     expect(page.locator("#trip-plan")).to_be_disabled()
 
 
@@ -969,6 +1008,7 @@ def test_changed_draft_keeps_local_edits_and_conflict_after_reconnect(page_site,
     page.locator("#token-save").click()
     expect(page.locator("#map-status")).to_contain_text("활성 지도 v1")
     page.locator('#site-map-svg [data-place="NW"]').click()
+    show_screen(page, "edit-heading")
     page.locator("#place-name").fill("북서 정차")
     page.locator("#apply-edit").click()
     store.save_draft(SiteMap.model_validate(store.active_view()["map"]), expected_revision=None, principal_id="alice")
@@ -991,6 +1031,7 @@ def test_changed_draft_keeps_local_edits_and_conflict_after_reconnect(page_site,
     page.reload()
     expect(page.locator("#map-status")).to_contain_text("활성 지도 v1")
     page.locator('#site-map-svg [data-place="NW"]').click()
+    show_screen(page, "edit-heading")
     expect(page.locator("#place-name")).not_to_have_value("북서 정차")
     expect(page.locator("#draft-status")).not_to_contain_text("저장 안 된 초안")
 
@@ -1010,6 +1051,7 @@ def test_crosswalk_waiting_band_is_drawn_saved_and_deleted_on_the_draft(page_sit
     page.locator("#map-viewport").scroll_into_view_if_needed()
     zone = page.locator('#site-map-svg [data-crosswalk="cw2"]')
     zone.dispatch_event("click")  # the east lane line runs over the polygon's centre
+    show_screen(page, "edit-heading")
     expect(page.locator("#selection")).to_contain_text("횡단보도 cw2")
     expect(page.locator("#crosswalk-form")).to_be_visible()
     expect(page.locator("#crosswalk-lanes")).to_contain_text("east")
@@ -1048,6 +1090,7 @@ def test_viewer_sees_crosswalks_without_band_tools(page_site):
     expect(page.locator("#site-map-svg [data-crosswalk]")).to_have_count(2)
     page.locator("#map-viewport").scroll_into_view_if_needed()
     page.locator('#site-map-svg [data-crosswalk="cw1"]').dispatch_event("click")
+    show_screen(page, "edit-heading")
     expect(page.locator("#selection")).to_contain_text("횡단보도 cw1")
     expect(page.locator("#crosswalk-form")).to_be_hidden()
     expect(page.locator("#import-crosswalks")).to_be_disabled()
@@ -1068,6 +1111,7 @@ def test_normal_teach_preview_disappears_on_an_unrelated_profile(page_site, widt
     page.locator('#console-token').fill('operator-token')
     page.locator('#token-save').click()
     expect(page.locator('#site-map-svg polyline.teach')).to_have_count(1)
+    show_screen(page, "profile-heading")
     page.locator('#profile-new').click()
     page.locator('#profile-id').fill('other-frame')
     page.locator('#profile-save').click()
@@ -1077,6 +1121,50 @@ def test_normal_teach_preview_disappears_on_an_unrelated_profile(page_site, widt
     assert not [call for call in robot.calls if call[0] not in
         {'state', 'power_health', 'motor_health', 'map', 'swarm_state', 'navigation_path', 'events'}]
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+
+
+@pytest.mark.parametrize('first', ['idle', 'recording', 'pending'])
+def test_teach_poll_keeps_idle_map_labels_and_draws_then_clears_previews(page_site, first):
+    from playwright.sync_api import expect
+
+    page, store, robot = page_site
+    replies = []
+    page.route('**/api/fleet/teach', lambda route: replies.append(route))
+    teach_request = re.compile(r'/api/fleet/teach$')
+    open_token_access(page)
+    page.locator('#console-token').fill('operator-token')
+    with page.expect_request(teach_request):
+        page.locator('#token-save').click()
+    expect(page.locator('#map-status')).to_contain_text('활성 지도')
+    label = page.locator('#site-map-svg .label').first.element_handle()
+    assert label is not None and label.evaluate('node => node.isConnected')
+    active = {'teach_id': 'preview', 'robot_id': 'rosy_60',
+              'map_id': store.active_view()['map']['map_id'],
+              'points': [[0, 0], [0.2, 0]], 'started_by': 'bob'}
+    pending = {**active, 'polyline': active['points'], 'points': 2,
+               'expires_at': time.time() + 600, 'from_candidates': [], 'to_candidates': []}
+    idle = {'recording': None, 'pending': []}
+    view = {'recording': active if first == 'recording' else None,
+            'pending': [pending] if first == 'pending' else []}
+    # The next real timer request proves the prior poll finished, without a timing sleep.
+    with page.expect_request(teach_request):
+        replies.pop(0).fulfill(json=view)
+    if first == 'idle':
+        assert label.evaluate('node => node.isConnected'), 'an empty teach poll replaced the map labels'
+        assert label.evaluate('node => node.getBoundingClientRect().height') >= 12
+        expect(page.locator('#site-map-svg polyline.teach')).to_have_count(0)
+        with page.expect_request(teach_request):
+            replies.pop(0).fulfill(json={'recording': active, 'pending': []})
+    else:
+        assert not label.evaluate('node => node.isConnected')
+    expect(page.locator('#site-map-svg polyline.teach')).to_have_count(1)
+    with page.expect_request(teach_request):
+        replies.pop(0).fulfill(json=idle)
+    expect(page.locator('#site-map-svg polyline.teach')).to_have_count(0)
+    show_screen(page, "teach-heading")
+    expect(page.locator('#teach-status')).to_have_text('기록 없음')
+    assert not [call for call in robot.calls if call[0] not in
+                {'state', 'power_health', 'motor_health', 'map', 'swarm_state', 'navigation_path', 'events'}]
 
 
 @pytest.mark.parametrize('width', [1440, 390])
@@ -1100,6 +1188,7 @@ def test_camera_observation_accumulates_without_replacing_operator_features(page
     open_token_access(page)
     page.locator('#console-token').fill('operator-token')
     page.locator('#token-save').click()
+    show_screen(page, "edit-heading")
     expect(page.locator('#merge-camera-map')).to_be_disabled()
     page.locator('#camera-map-file').set_input_files({'name': 'observation.json',
         'mimeType': 'application/json', 'buffer': json.dumps(observation).encode()})
@@ -1145,12 +1234,14 @@ def test_camera_road_review_without_survey_keeps_lineage_and_requires_recheck(pa
     page.locator('#console-token').fill('operator-token')
     page.locator('#token-save').click()
     page.locator('#map-source').select_option('draft')
+    show_screen(page, "survey-heading")
     expect(page.locator('#survey-review')).to_be_enabled()
     page.locator('details').filter(has=page.locator('#survey-review-note')).locator('summary').click()
     page.locator('#survey-review-note').fill('Measured calibration and road directions checked')
     page.locator('#survey-review').click()
     with page.expect_response(lambda response: response.url.endswith('/api/fleet/site-map/draft')
                               and response.request.method == 'PUT') as saved_response:
+        show_screen(page, "edit-heading")
         page.locator('#save-draft').click()
     assert saved_response.value.ok
     expect(page.locator('#draft-status')).to_contain_text('저장된 초안')
@@ -1202,6 +1293,7 @@ def test_camera_connections_require_review_before_extending_the_saved_map(page_s
     open_token_access(page)
     page.locator('#console-token').fill('operator-token')
     page.locator('#token-save').click()
+    show_screen(page, "edit-heading")
     page.locator('#camera-map-file').set_input_files({'name': 'branch.json', 'mimeType': 'application/json',
         'buffer': json.dumps(observation).encode()})
     page.locator('#preview-camera-connections').click()
@@ -1268,6 +1360,7 @@ def test_reconnect_preserves_unapplied_and_applied_map_edits(page_site):
     expect(page.locator('#site-map-svg [data-place="NW"]')).to_be_visible()
     page.locator('#map-source').select_option('draft')
     page.locator('#site-map-svg [data-place="NW"]').click()
+    show_screen(page, "edit-heading")
     page.locator('#place-name').fill('Unsaved local name')
     open_token_access(page)
     page.locator('#token-save').click()

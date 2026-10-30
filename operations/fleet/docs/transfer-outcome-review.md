@@ -121,6 +121,37 @@ export v2의 추가 `recovery_lineage`에는 root/parent/child 미션과 `attemp
 
 자식을 만들면 공개 상태는 `CHILD_CREATED`다. 성공을 뜻하지 않으며 자식은 기존 새 PRE_DISPATCH·POST_ACTION 절차를 거친다. 자식 조회가 실패해도 알고 있는 ID와 소비한 복구 횟수를 보존한다. 자식에서 다시 복구를 요청할 수 없다. 정확한 과거 승인 재조회는 재시작·정지 fence·SDK 연결 실패나 제안자 권한 철회 뒤에도 같은 자식을 읽으며 새로운 실행을 승인하지 않는다.
 
+## 독립 관측 제출용 호스트 클라이언트
+
+`tools/sim/recovery_observer.py`는 이미 설치한 독립 observer의 문맥 조회와 복구 시료 제출만 연결한다. 복구 요청·운영자 승인·자식 실행을 호출하지 않는다. 토큰은 기존 설치의 독립 자격을 `ROSY_TRANSFER_OBSERVER_TOKEN` 환경변수로 제공하며 문맥 파일·출력·명령행 인자에 저장하지 않는다.
+
+```text
+python tools/sim/recovery_observer.py --origin https://fleet.example.invalid context --out <external-scratch>/reset-context.json
+python tools/sim/recovery_observer.py --origin https://fleet.example.invalid submit --context <external-scratch>/reset-context.json --samples <external-scratch>/reset-samples.json
+```
+
+origin은 실제 구성값으로 바꾼다. HTTPS는 기본 인증서 검증을 사용하며, 명시적 포트의 HTTP loopback은 로컬 시험에만 허용한다. 리다이렉트와 환경 프록시를 사용하지 않는다. 문맥 출력은 소스 체크아웃 밖의 새 파일이어야 하며 기존 파일을 덮어쓰지 않는다. 입력과 응답은 각각 4 MiB로 제한한다.
+
+1. 원래 제안자가 콘솔에서 복구 관측을 요청한 뒤 생산자가 문맥을 저장한다. 대기 중인 요청이 없으면 출력 파일을 만들지 않는다.
+2. 독립 수집기가 문맥을 확인한 뒤 새 시료 두 개를 확보한다. `reset-samples.json`은 기존 [ArmTransferObservation](../../../contracts/foundation/core_common/protocol/arm_transfer_observations.py) 객체 두 개의 JSON 배열이다. source가 이미 결속한 action/attempt, producer·정책·좌표계·object·owner ID와 원본 UTC capture 시각을 보존한다. 관절 자료가 있으면 그 source ID·sequence·이름도 보존한다.
+3. 제출 시 현재 대기 문맥을 다시 대조한다. 문맥·주체·실행 ID·owner·시각·시료/관절 순서가 달라지면 POST 전에 거절한다. 실제 필요한 링크 coverage·속도 한도·보정·현재 권한과 fence·물체 source pose는 기존 Fleet이 최종 검증한다.
+4. 정상 응답의 `evidence_digest`는 관측 접수 결과다. 콘솔의 다른 기명 운영자가 별도로 검토·승인해야 자식이 생긴다. POST 응답 유실이나 비정상 응답은 결과 미확인으로 끝나며 자동 재전송하지 않는다. 운영자가 기존 복구 상세에서 접수 상태를 확인한 뒤 다음 행동을 정한다.
+
+현재 `g2_observer.py`의 물체 pose·집게 위치·simulation clock·수신 wall time만으로는 이 시료를 만들 수 없다. 기존 수신 시각을 원본 UTC capture 시각으로 바꾸거나 현재 action ID를 과거 프레임에 붙이지 않는다. 실제 관측 생산자는 필요한 링크별 경계·속도, source 시각과 owner journal/session·보정·frame 결속을 제공해야 한다. 이 클라이언트의 시험은 그 생산자 설치나 실제 Gazebo·실물 관측 수용을 증명하지 않는다.
+
+## 시뮬 정상 단계 관측자 (D-927 결정 3)
+
+`tools/sim/transfer_observer.py`는 같은 독립 observer 자격으로 `observation-context`를 읽고, 문맥의 phase(PRE_DISPATCH·POST_ACTION, D-930 뒤에는 RECHECK)마다 시료 두 개를 제출한다. 승인·Action 제출은 하지 않는다.
+
+- 입력: 시뮬 owner가 쓰는 상태 파일(`rosy.sim-transfer-state/1`: owner별 측정 관절·관절 속도·sequence·capture 시각·그리퍼, 물체 자세·시각)과 팔 기준 자세 파일.
+- 링크 경계는 측정 관절의 URDF FK로 각 메시 상자를 world로 옮긴 것이고, 링크 속도는 관절 속도로 FK를 미분한 값이다. 끝점은 `omx_adapter` TCP FK와 같다(시험으로 고정).
+- 상태가 not_before 뒤로, 두 번째가 첫 번째보다 min_separation 뒤로 새로 바뀔 때까지 기다린다. 제출 전에 문맥을 다시 대조하고, 거절되면 다음 조회에서 새 시료로 다시 낸다. 접수 여부는 문맥 변화로 판단한다.
+- 결과는 시뮬 관측이며 물리 근거가 아니다. 팔 기준 자세 파일은 S4 설치 profile이 생길 때까지의 지름길이다.
+
+```text
+ROSY_TRANSFER_OBSERVER_TOKEN=<configured> python tools/sim/transfer_observer.py --origin http://127.0.0.1:<port>     --assets learning/envs/isaac/assets/open_manipulator_description --bases <scratch>/bases.json --state <scratch>/state.json run
+```
+
 ## 다음 구현과 검증
 
 - 파지·들기·운반 단계의 관측을 결속한 뒤 헛잡음·낙하를 구분한다.

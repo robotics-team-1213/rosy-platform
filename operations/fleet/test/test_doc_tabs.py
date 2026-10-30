@@ -48,7 +48,7 @@ def test_every_document_has_the_same_tabs_and_marks_itself():
 
 def test_in_page_anchors_sit_in_the_shared_subnav_seat():
     for name, (label, targets) in SUBNAV.items():
-        page = _page(name).read_text(encoding="utf-8")
+        page = re.sub(r'<!--.*?-->', '', _page(name).read_text(encoding="utf-8"), flags=re.S)
         seat = re.search(r'</nav>\s*<div class="ui-subnav"><nav class="ui-subnav-nav" aria-label="%s">(.*?)</nav></div>\s*'
                          r'<div class="fleet-workspace">' % label, page, re.S)
         assert seat, f"{name}: the sub-nav seat stands between the rail and the workspace"

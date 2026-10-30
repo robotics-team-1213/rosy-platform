@@ -10,7 +10,7 @@ the code, config, map and choices it ran with. Receipts, cases and frames stay w
 names its attempt_id, and case rows carry the same id.
 
   rosy.omx-cell-attempt.v1: {"schema", "attempt_id", "run_id", "t_start", "t_end", "from", "to", "attempt",
-      "context": {"code", "config_sha", "plan_sha", "calibration", "choices_used", "choices_sha"},
+      "context": {"code", "config_sha", "plan_sha", "calibration", "choices_used", "choices_sha", "knowledge_sha"},
       "locate", "grasp_yaw", "plan", "transfer", "verify", "outcome", "fail_stage", "fail_class"}
 
   cell_attempts.py summary attempts.jsonl [--bin-mm 10]     # success by box position, map and failure
@@ -27,11 +27,22 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 SCHEMA = "rosy.omx-cell-attempt.v1"
-RUN = {"path": None, "run_id": None, "n": 0, "pending": None}  # one run per pipeline process
+RUN = {"path": None, "run_id": None, "n": 0, "pending": None, "knowledge_sha": None, "params_sha": None, "arm_id": "arm_s"}  # set by cell_pipeline.main(): one run per pipeline process
 
 
-def start(path: Path, run_id: str | None = None) -> None:
-    RUN.update(path=Path(path), run_id=run_id or time.strftime("%Y%m%dT%H%M%SZ", time.gmtime()), n=0, pending=None)
+def start(path: Path, run_id: str | None = None, knowledge: str | None = None, params: str | None = None,
+          arm_id: str = "arm_s") -> None:
+    """knowledge: the cell-knowledge file this run's seat reads; params: the cell-params file (None = the shipped
+    defaults). Both digests go into every row's context."""
+    import cell_params
+
+    sha = None
+    if knowledge:
+        import cell_knowledge
+
+        sha = cell_knowledge.load(knowledge)["sha"]
+    RUN.update(path=Path(path), run_id=run_id or time.strftime("%Y%m%dT%H%M%SZ", time.gmtime()), n=0, pending=None,
+               knowledge_sha=sha, params_sha=cell_params.load(params)["sha"], arm_id=arm_id)  # two arms will share a cell
 
 
 def begin(config: dict, envelope: dict) -> None:
@@ -60,7 +71,7 @@ def context(config: dict, calibration: dict, site: str, choices=None) -> dict:
     return {
         # the cell runs from a test copy named after its commit (~/rosy-test/omx-tools-<sha>)
         "code": Path(__file__).resolve().parents[3].name,
-        "config_sha": digest({k: v for k, v in config.items() if k not in ("profiles", "plan")}),
+        "config_sha": digest({k: v for k, v in config.items() if k not in ("profiles", "plan", "params")}),
         "plan_sha": digest(config.get("plan")),
         "calibration": None if record is None else {
             "key": site, "coarse": "z_view" in record, "loo_error_mm": record.get("loo_error_mm"),
@@ -68,11 +79,16 @@ def context(config: dict, calibration: dict, site: str, choices=None) -> dict:
         "choices_used": None if choices is None else
         {name: choices.best(name) for name in sorted(choices.data["values"])},
         "choices_sha": None if choices is None else digest(choices.data["values"]),
+        "knowledge_sha": RUN["knowledge_sha"],
+        "params_sha": RUN["params_sha"],
+        "arm_id": RUN["arm_id"],
     }
 
 
 def classify(tried: dict) -> tuple[str, str | None, str | None]:
     """(outcome, the stage it failed at, why) from one move() attempt."""
+    if tried.get("fail"):  # a stage outside move() (cell_auto_pick: calibrate, choose) names its own failure
+        return "failed", tried["fail"]["stage"], tried["fail"]["class"]
     if not tried["locate"].get("found"):
         return "failed", "locate", "box not seen"
     if "plan_error" in tried:

@@ -826,6 +826,30 @@ process-death handover while unpowered; a powered stop remains unverified.
 See [source, tests and actual stop-only execution](../../../docs/validation/omx-independent-stop-2026-10-16/result.md).
 ## Environment-aware camera readiness
 
+Recovery reads the live controls every five seconds and again before a write.
+Returning to the saved baseline with the same device and producer clears that
+camera's old best settings and candidate progress, then waits for fresh settled
+frames. Other changes are refused. A temporary control-read failure reports
+`UNAVAILABLE` and retries without writing; ownership changes still stop recovery.
+Within each direction, candidates through the currently applied candidate are
+skipped. Equal quality scores keep the latest settings. The existing exposure,
+settling and rolling write limits remain in force.
+
+Control ranges, integer steps and exposure menus are checked on startup,
+baseline reuse, baseline reset and before writes. Restore also checks its
+intermediate manual mode. `control-run.json` and per-role `control-intent-*.json`
+bind partial writes to the baseline, device, producer and run. Preserve these
+records with the baseline: unknown settings or invalid records cause restoration
+to refuse overwriting the device. An interrupted restore keeps its own intent
+for the independent stop handler.
+
+When upgrading an older installation, first stop the old readiness service while
+the cell is idle and verify that it restored both original settings. Back up the
+state and source before installing the new version. Do not erase the baseline or
+invent ownership records to bypass a refusal. The new restore cannot establish
+ownership from an older `changes.json` alone. No upgrade or restart belongs in
+an active recording/chunk session.
+
 `rosy-omx-camera-view.service` subscribes to the existing camera topics and serves
 the original frames and their quality on localhost port8767. It opens no camera
 device. `rosy-omx-camera-readiness.service` reads that viewer and adjusts only
@@ -847,6 +871,23 @@ in `~/.config/rosy/omx-camera-readiness.env`; that directory must contain
 `camera-view-receive.xml`, a Fast DDS profile with a 4 MiB UDP receive buffer. On 2026-10-17 it
 kept 236 of 236 top/front samples fresh (maximum source age 0.107 s) without any device command.
 Keep the existing two preview environment files and producers.
+
+Viewer label-to-source overrides belong in the optional private
+`~/.config/rosy/omx-camera-view.env`, rather than an `ExecStart` drop-in. For a
+front view supplied by the arm S wrist producer, keep the existing source keys:
+
+```ini
+ROSY_VIEW_ARGS="--camera-topic top=/top_camera/image_raw --camera-topic front=/arm_a_wrist_camera/image_raw"
+```
+
+These are native snapshot keys (D-901). Arguments are whitespace-separated;
+use plain labels and keys without spaces or shell glob characters. Keep the
+file mode 0600. Back up the environment and drop-in, wait until no recording or
+chunk owner is running, then move the overriding drop-in out of systemd's
+directory, install the matching release unit, reload and restart the viewer.
+Check advancing fresh top/front frames before restarting readiness. A host on
+an older unit without this optional environment file must keep its working
+drop-in until the updated unit is deployed.
 
 Install the two user units in `~/.config/systemd/user/`, then run:
 
@@ -1119,7 +1160,9 @@ adapter의 시뮬레이션 preflight 통과는 실물 인양 근거가 아니다
 공통 모델의 최대 도달거리를 모든 장치의 안전 반경으로 사용하지 않는다.
 
 설정의 `operating_conditions`에는 확인한 `installation_revision`, `object_revision`,
-실측 `payload_kg`, 세 축의 `object_dimensions_m`, `environment_revision`을 넣는다.
+사람이 검증한 무게 상한 `payload_max_kg`, 세 축의 `object_dimensions_m`, `environment_revision`을 넣는다.
+운반마다 실제 짐(`_payload`: 카탈로그의 등록 무게, 또는 파이프라인 설정에 선언한 `payload`)이 이 상한, 팔의 `auto.max_gross_kg`,
+물체의 `max_gross_kg` 중 가장 작은 값 이하여야 한다. 모르거나 넘으면 감독 시험도 열지 않는다(D-935).
 팔·그리퍼의 실제 설정/보정과 코드 문맥은 현재 chunk session이 별도 SHA로 보고한다.
 장치 readback으로 알 수 없는 베이스·작업대 이동과 물체 교체는 운영자가 revision을 바꿔야 한다.
 완성된 실물 설정과 자료는 공개 저장소에 넣지 않는다. 예제의 null은 직접 측정하기 전까지 유지한다.
@@ -1127,7 +1170,7 @@ adapter의 시뮬레이션 preflight 통과는 실물 인양 근거가 아니다
 현장 승인과 준비가 끝난 시험만 개별 stage로 수집한다. 아래는 사용 형식이며 자동 실행 지시가 아니다.
 
 ```bash
-python deploy/robot/omx/cell_pipeline.py --config <private-cell-config.json> --stage transfer --from pinky --to belt --commissioning --person-at-switch
+python deploy/robot/omx/cell_pipeline.py --config <private-cell-config.json> --operating-profile <private-robot-profile.json> --stage transfer --from pinky --to belt --commissioning --person-at-switch
 python deploy/robot/omx/cell_attempts.py summary <work-dir>/attempts.jsonl
 ```
 
@@ -1171,6 +1214,45 @@ park나 torque-off를 새로 시도하지 않는다. 기존 guard/정지 정책�
 
 이 범위는 native 셀 자동 파지에 대한 추가 검사다. 다른 low-level 수동 도구나 Fleet 제품 경로의
 활성화를 승인하지 않으며, 사람과 함께 작업하는 안전 인증이나 실물 장치 수용을 대신하지 않는다.
+
+### 로봇별 프로필 연계 (D-914)
+
+로봇마다 `cell-robot-profile.example.json`의 별도 로컬 사본을 둔다. Fleet 장치 정보의 안정된
+`device_id`, 기존 recorder `robot.id`인 `instance_id`, recorder 전체 `robot` 객체의 SHA를
+지정한다. 로봇 이름이나 USB 개수로 선택을 추측하지 않는다. Fleet의 장치 정보 저장은 접속·동작
+승인이 아니고, 이 파일은 D-907의 signed software component profile과도 별개다.
+
+설정의 SHA를 구하거나 작성한 프로필이 해당 recorder와 맞는지 검사하는 읽기 전용 명령이다.
+어느 명령도 포트를 열거나 동작을 허용하지 않는다.
+
+```bash
+python deploy/robot/omx/cell_robot_profile.py <private-record-config.json>
+python deploy/robot/omx/cell_robot_profile.py <private-record-config.json> --profile <private-robot-profile.json>
+```
+
+프로필의 `operating_envelope_path`와 `work_dir`는 그 로봇의 검토 파일·실제 시도 장부를 선택한다.
+상대 경로는 프로필 파일 위치 기준이다. 실제 해석한 경로를 profile SHA에 포함하므로 프로필을
+다른 폴더로 복사해 다른 장부를 고르면 재검증이 필요하다. 같은 경로의 `./` 별칭은 동일하다.
+검토 내용은 profile SHA에 넣지 않으므로 검토 파일을 쓰는 작업과 task SHA 사이의 순환은 없다.
+
+실제로 승인된 실행을 준비할 때 parent session과 pipeline 양쪽에서 **같은 프로필**을 고른다.
+다음은 사용 형식이며 장치 시작 지시가 아니다.
+
+```bash
+python deploy/robot/omx/record_session.py --config <private-record-config.json> --caps <private-caps.json> --chunks <library.json> --io <chunk-io> --operating-profile <private-robot-profile.json>
+python deploy/robot/omx/cell_pipeline.py --config <private-cell-config.json> --operating-profile <private-robot-profile.json> --stage transfer --from pinky --to belt
+```
+
+pipeline 설정의 `operating_profile_path`로 선택을 저장할 수도 있다. 선택하면 프로필이 work/review
+경로의 정본이며 옛 전역 경로로 다른 장부를 고르지 않는다. 같은 Fleet 장치에 팔이 둘이면 각
+`instance_id`·설정 SHA·장부 경로를 따로 둔다. manifest 상단의 `device_id`, `instance_id`,
+`profile_sha256`는 inspector/summary의 binding과 같아야 한다. 기존 검토를 다른 로봇 파일로
+복사해도 허용되지 않는다. summary의 `operating_profile`로 장치와 프로필을 확인할 수 있다.
+
+감독 survey·coarse/reset도 실제 FIFO의 profile이 다른 경우 이동을 보내지 않는다. 녹화 replay는
+실제 recorder robot을 검사하고 같은 선택을 parent에 전달한다. 프로필 없는 기존 수동 세션은
+자동 파지에 사용할 수 없다. 카메라/좌표 보정·높이·물체·경로는 task 조건으로 계속 검사하며,
+이 소프트웨어 연계가 각 실물의 설치·최대 도달범위·인양 능력을 측정한 것은 아니다.
 
 ## Fleet PC의 상시 관측과 기존 Cell 화면
 

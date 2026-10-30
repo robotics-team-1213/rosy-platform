@@ -12863,6 +12863,39 @@ osy-d395-s1d\`.
 - gate 변화: 없음.
 - CE: 해당 없음 — 문서 관례 추가이며 코드·장치·시험 경로 변경이 없다.
 
+## 2026-10-28 · ae4771b936 · Fleet 계정 영역의 레이아웃 일관성
+
+- 변경: 사용자 제보의 토큰 영역 출현 원인을 공통 인증 표시 정책과 동일 identity 재조회 상태 보존으로 수정하고 `docs/validation/fleet-account-layout-2026-10-28/`에 기록했다.
+- 증거: 원격 Chromium RED8 뒤 공통 헤더/세션14, 비밀번호 로그인1 passed/skip0/NEW0. 공식 영향53대상8043 passed/757 skipped/NEW0. 실제8PNG·독립 소스/화면 검토 완료.
+- gate 변화: 없음. 운영 배포·실물 비상 정지·현장 수용은 별도다.
+- CE: 해당 없음. 원인과 거부/표시 조건이 코드·시험에 남는다.
+
+## 2026-10-28 · 2d96683c9c · D-906 Fleet 공통 컴포넌트·레이아웃 역할
+
+- 변경: 정적 컴포넌트 정본2개·생성 산출물4개·역할 토큰8개의 소유권을 D-906과 DESIGN/Fleet README에 기록했다. 명시적 토큰 전환을 유지하고 재조회 중 배치를 보존한다. 검증 정본은 `validation/fleet-components-layout-tokens-2026-10-28/result.md`다.
+- 증거: 원격 정본/등록/헤더90 passed·추가 거버넌스607 passed. 넓은 브라우저 선택과 후속 수정은 위 기록에서 source와 실행 범위를 분리한다. ADR Log·예약 gap 반영 뒤 lint 오류0.
+- gate 변화: 없음. 배포·실물·현장 수용·추가 병합은 별도다.
+- CE: 해당 없음. 원인과 소유권 판단을 최종 코드·시험·ADR에서 복원할 수 있다.
+
+## 2026-10-28 · e68f63d769 · D-909와 나머지 UI 레이아웃 점검
+
+- 변경: 기존 컴포넌트/토큰 개선을 나머지 Fleet 절차5문서에 적용하고 D-909에 정본·폭별 역할·기존 owner 관계를 기록했다. impeccable의 독립 소스/기계 평가와 실제 캡처 검토를 분리했다. Robot/Pilot의 관측/조작 기하를 화면 간격 토큰으로 일괄 치환하지 않았다.
+- 증거: 긴 값 RED26→84 passed, 정책 상태 RED3→39 passed, 공식 영향8898 passed/760 skipped/NEW0,102파일 브라우저1510 passed/skip0/NEW0. 정책 후속·독립 시각 검토는 `validation/remaining-ui-layout-2026-10-28/result.md`에 source별로 보존한다. detector0건은 stylesheet 해석 경고가 있는 제한된 기계 근거다.
+- gate 변화: 없음. 배포·실물·현장 수용·추가 병합 없음.
+- CE: 해당 없음. 판단 근거가 코드·회귀·ADR에 남는다.
+
+## 2026-10-28 · fce9c60216 · D-910 Learning 정적 셸과 UI 검증 기록
+
+- 변경: D-910과 ADR Log·DESIGN에 Learning의 정적 헤더/메뉴 원본 및 생성·드리프트 검사를 기록했다.
+- 증거: 날짜별 검증 기록 `docs/validation/robot-pilot-learning-ux-2026-10-28/result.md`에 RED·고정 SHA·원격 영향/브라우저 결과·독립 소스/실제 화면 검토를 구분했다. 설치 자산·라우트 회귀 fce9c60216은20 passed, skip0이다.
+- gate 변화: 없음. 실제 장치·APK/ARM64 빌드·현장 수용은 별도다. CE: 해당 없음 — 기존 크기 이력 교훈을 적용하고 이번 경계의 판단을 코드·회귀·D-910에 남겼다.
+
+## 2026-10-28 · f7eaca4b3b · Learning·Pilot 일관성 검증 기록
+
+- 변경: 설계/검출·화면 독립 검토와 카메라 입력/응답·조회 복구·Pilot 키보드 회귀를 날짜별 검증 기록에 결속했다. 최초 이미지/접힌 폼 fixture 실패를 정상 RED·최종 성공과 구분했다.
+- 증거: 집중42 passed, 공식 영향3994 passed/601 skipped, 브라우저 선택은 교정한7번33건과 나머지392건으로425 passed/skip0/NEW0이다. 독립 검토가 최종41PNG 전체를 확인했다. 원본 SHA와 fixture 실패는 `docs/validation/learning-state-consistency-2026-10-28/result.md`에 구분한다.
+- gate 변화: 없음. 실제 장치·모델·사람 라벨·승격 수용·배포·merge/push는 수행하지 않았다. CE: 해당 없음 — 상태 수명·입력·초점 경계가 코드와 회귀에 남는다.
+
 ## 2026-10-29 · uncommitted · deploy: GitHub OS 전송과 부분 업데이트 정책 연결
 
 - 변경: D-912(Proposed)에 고정 세 파일의 별도 OS 유지보수 소유권, Ed25519와 OS CMS 이중 권한, 정책 freeze와 중단 복구 경계를 기록했다. 다른 세션의 D-903~D-911 예약은 gap ledger에 보존했다.
@@ -12900,3 +12933,232 @@ osy-d395-s1d\`.
 - 증거: 원격 curation 전체 328 pass·10 skip·NEW 0. 분할 별칭 두 사례와 숫자 overflow를 실제 실패로 먼저 확인했으며 최종 구현에서 통과했다. 이전 실패를 최초 통과로 바꾸지 않았다.
 - Gate: 없음. metadata 검수 준비이며 사람 정답·ACT/VLA 수용·장치 수용은 아니다.
 - CE: 해당 없음 — 재현과 최종 판단을 코드·시험·결과 기록에서 복원할 수 있다.
+
+## 2026-10-29 · 03d493964c · Learning 자료 복구와 공용 버튼 검증 기록
+
+- 변경: 권한/작업 상태의 producer-consumer, 자동 조회·명시적 요청 분리, 계정 선택·초점·공용 버튼의 실제 화면/키보드 회귀를 소유 검증 기록과 해시에 결속했다. 첫 실패·교정한 selector·재검증을 분리했다.
+- 증거: 초기 브라우저18파일300 passed, 최종 변경 범위9파일은 교정한49건과 나머지216건으로265 passed/skip0/NEW0이다. 영향3012 passed/439 skipped. 소스·캡처·fixture 실패와 실제 초점 실패는 `docs/validation/learning-data-recovery-2026-10-28/result.md`에 구분했다. 두 테마·세 폭의 공용 버튼 표적/넘침6건도 통과했다.
+- gate 변화: 없음. 실제 HF·사람 라벨·모델·장치·배포·merge/push 수용은 별도다. CE: 해당 없음 — 기존 클라이언트/guard 교훈을 적용하고 상태·잠금·초점 판단을 코드·회귀·검증 기록에 남겼다.
+
+## 2026-10-29 · bc25167b00 · 플랫폼 UI 표면 발견·회귀 기반 검증
+
+- 변경: 현재 제품 holder의 신규 화면 발견, 진입 module의 공용 UI 로드 판정, Monitoring·SIM 레인 뷰어의 공용 변경 회귀 선택을 보강하고 frozen 결과·로그 SHA를 `docs/validation/ui-standardization-foundation-2026-10-29/`에 남긴다.
+- 증거: 원격 집중 78 passed·공식 영향 사전 계약 861 passed·두 실제 소비자 Chromium 18 passed, 각 skip 0/NEW 0. 기존 실패와 리뷰로 찾은 주석 오인을 실제 RED 후 수정했다.
+- gate 변화: 없음. 전체 UI 표준화는 후속 앱 이행·렌더·native 검증이 남는다. FULL selector의 사전 계약을 전체 FULL/CI나 장치 수용으로 쓰지 않는다. 배포·착지·push·merge 미수행.
+- CE: 해당 없음 — 원인·복구 조건이 최종 코드·회귀·이 검증 기록에 남는다.
+
+## 2026-10-29 · 06c40584b3 · Learning 저장 공간 UI 이행 검증
+
+- 변경: 일반 버튼2개와 폼 제목 배치를 기존 공용 부품·배치 규칙으로 이행하고 frozen 결과·원본4로그/24캡처 SHA를 `docs/validation/learning-storage-controls-2026-10-29/`에 보존한다.
+- 증거: 최종 실제 HTTP/Chromium9 passed/skip0, 공식 영향2880 passed/358 skipped/NEW0. 4폭×2테마의24장을 독립 검토했다. TEMP 정리로 소실된 초기 캡처와 이전 제목 배치16장은 최종 시각 수용으로 사용하지 않았다.
+- gate 변화: 없음. 전체 플랫폼 UI·native/실물/현장·실제 HF·배포/착지/push/merge 수용과 분리한다.
+- CE: 해당 없음 — 부품/제출/geometry·증거 수명의 이유가 코드·회귀·이 기록에 남는다.
+
+## 2026-10-29 · 8e084f3e59 · 검수 클래스 선택 부품 이행 검증
+
+- 변경: 객체·픽셀의 class-chip을 기존 공용 segment로 통일하고 중복 painting을 지웠다. frozen 결과·로그5개/캡처16장 SHA를 `docs/validation/learning-class-controls-2026-10-29/`에 보존한다.
+- 증거: 기존 두 Chromium 전체220 passed, 강화 부분집합32 passed, 정적 계약80 passed, 공식 영향2880 passed/384 skipped, NEW0. 최초 object locator 오류와 실제 pixel kind 누락을 구분하고 실패·통과 원본을 보존했다. A source/B16장 직접 검토를 수행했다.
+- gate 변화: 없음. 전체 UI 통합·native/실물·진짜 라벨·배포/착지/push/merge 수용과 구분한다.
+- CE: 해당 없음 — attribute·상태·데이터/승인 경계가 코드·회귀·이 기록에 남는다.
+
+## 2026-10-29 · 068aa03060 · Games 수신 신선도와 복구 UI 검증
+
+- 변경: GET/JSON 대기·늦은 응답·시각 근거 부재에서 current/last 상태를 구분하고 frozen 결과·로그8개/캡처18장 SHA를 `docs/validation/games-receipt-freshness-2026-10-29/`에 보존한다.
+- 증거: 전체 board Chromium61 passed, 강화부분16 passed, 공식 영향641 passed/61 skipped와 overhead785 passed, NEW0. A source/B18장 직접 검토를 수행했다. 초기50 통과 뒤 발견한 늦은 응답 역전도 RED4→수정했고 실패 원본을 유지했다.
+- gate 변화: 없음. 실제 정지 전달/readback·FIELD·전체 G2/G3·배포/착지/push/merge 수용과 분리한다.
+- CE: 해당 없음 — 시간/상태·권한 경계의 이유가 코드·회귀·이 기록에 남는다.
+
+## 2026-10-29 · 70d4a0e579 · Robot SSH 작업 결과 UI 검증
+
+- 변경: `validation/robot-ssh-action-status-2026-10-29/`에 작업/조회 상태 분리·초기/상호 잠금·화면 수명의 원격 RED/GREEN, 실제 실패 복구와 캡처32장 hash를 동결했다.
+- 증거: 최종 browser47pass/0skip, 공식 affected593pass/189skip/NEW0. 독립 A source 검토의 초기 P2를 해결했고 B는32/32장 직접 확인했다. 전체 셸·실제 장치 수용과 단독 패널 근거를 구분한다.
+- gate 변화: 없음. CE: 해당 없음 — 코드·회귀·frozen 기록으로 설명되는 수정이다.
+
+## 2026-10-29 · b90b4569bc · Fleet 대화 요청 초점 회귀 증거
+
+- 변경: `validation/fleet-request-focus-2026-10-29/`에 갱신·삭제·오류·사용자 초점 이동의 RED/GREEN, 공식 영향 검사와 캡처16장 hash를 동결했다.
+- 증거: 최종 browser80pass/0skip, affected8004pass/631skip/NEW0. 독립 A source·B16장 직접 검토와 root2장 관측을 구분했다. 전체 CI/FULL·native·실물 수용으로 확대하지 않는다.
+- gate 변화: 없음. CE: 해당 없음 — 코드·회귀와 frozen 기록으로 복원되는 수정이다.
+
+## 2026-10-29 · da361c0aa0 · Pilot 녹화 시험 경계 분리 근거
+
+- 변경: `validation/pilot-recording-browser-split-2026-10-29/`에 AST 동일성·fixture 재사용·OMX 선택 범위·ratchet 감소와 원격 검증을 동결했다. runtime 변경은 없다.
+- 증거: browser16+scope17=33pass/0skip, 공식 affected635pass/137skip/NEW0. 선택 확대 및 ratchet 갱신 누락 실패를 숨기지 않았다. mapped full preflight를 전체 CI/FULL로 간주하지 않는다.
+- gate 변화: 없음. CE: 해당 없음 — 최종 코드·guard·측정·기록으로 복원된다.
+
+## 2026-10-29 · d99e15a1e2 · Pilot 녹화 목록 초점·시트 수명 검증
+
+- 변경: `validation/pilot-recording-focus-2026-10-29/`에 현재 초점·fallback·시트 객체 소유권·스크롤 반례와 실제 RED/GREEN을 동결했다. fixture 실패와 실제 제품 반례를 분리했다.
+- 증거: 전체 browser39pass/0skip, 실제 키보드/문서 스크롤 부분8건씩, affected609pass/189skip/NEW0. 같은39건의 반복과 부분8건은 합산하지 않는다. A source 검토·B12+8장 직접 관측과 hash를 기록했다.
+- gate 변화: 없음. CE: 해당 없음 — 최종 코드·회귀·검증 기록으로 설명되는 수정이다.
+
+## 2026-10-29 · 177706a581 · Pilot 네이티브 초점·안전 여백 검증 기록
+
+- 변경: `validation/pilot-native-focus-2026-10-29/result.md`에 endpoint 초점 복구와 공통 Android 루트 여백의 실제 RED/GREEN, 빌드·JVM·에뮬레이터·독립22장 검토를 구분해 보존했다.
+- 증거: 최종 Android 각5 pass, JVM110 pass/1 skip, 영향 pytest615 pass/166 skip/NEW0. 보고서27개와 캡처22개 해시를 남겼으며 이전 촬영을 최종 근거와 혼합하지 않았다.
+- gate 변화: 없음. 실제 연결·실물·FIELD·서명 release·배포는 수용하지 않았다. CE: 해당 없음 — 코드·시험·결과 기록에서 판단을 복원할 수 있다.
+
+## 2026-10-29 · 5bd25af46e · Cam LAN 목록 렌더 검증 기록
+
+- 변경: `validation/cam-lan-guidance-2026-10-29/result.md`에 비활성 사유·endpoint key·실제 Keyboard fixture의 RED/GREEN과 초기 시험 설정 실패를 구분해 동결했다.
+- 증거: native 두 밀도 각4 pass, JVM443 pass/0 skip, 원격 affected517 pass/NEW0. source와 최종24장 독립 검토 범위에서 추가P1/P2없음. 보고서97개·PNG24개 해시를 보존했다.
+- gate 변화: 없음. 실제 발견·승인·촬영·실물·FIELD·서명 release·배포는 수용하지 않았다. CE: 해당 없음 — 코드·시험·검증 기록으로 판단을 복원할 수 있다.
+
+## 2026-10-29 · 61f475246c · SIM 뷰어 토큰·결과 배치 검증 기록
+
+- 변경: `validation/sim-viewer-spacing-2026-10-29/result.md`에 공용 간격 이행·긴 결과 wrapping, 실제 자산 fixture·RED/GREEN·별도 skip·도메인 예외의 SIM owner를 기록했다.
+- 증거: browser26 pass/0 skip와 카드 경계8 pass, 영향833 pass/28 skip·NEW0. 최종32장 독립 검토와 source 범위 P1/P2없음. detector exit0/advisory4의 데이터 도형·stale 표식 및 CSS 해석 한계를 구분했다.
+- gate 변화: 없음. 실제 ROS·Gazebo·CORE·장치·FIELD·설치/배포·공개 push/merge 수용이 아니다. CE: 해당 없음 — 기존 교훈 적용과 회귀로 판단을 복원할 수 있다.
+
+## 2026-10-29 · 75d706130a · LCD 부품 분리 검증 기록
+
+- 변경: `validation/lcd-primitives-2026-10-29/result.md`에 크기 한도 복귀·기존 API/팔레트·AST/픽셀 불변과 격리 build_py cold import를 구분해 보존했다.
+- 증거: 지원 코드의 영향1307 pass/1 skip·NEW0, 독립 source 검토 범위 추가P1/P2없음. 보고서4개·캡처7개 해시를 기록했다.
+- gate 변화: 없음. 기존 잘림·실물·FIELD·릴리스 이미지 수용이 아니다. CE: 해당 없음 — 소스·시험·검증 기록으로 복원한다.
+
+## 2026-10-29 · 928ff48d14 · LCD 카드 배치·소비 경로 검증 기록
+
+- 변경: `validation/lcd-card-layout-2026-10-29/result.md`에 실제native overlay의 잘림 원인, size/profile·208px 배치, 지원 분리와 build_py cold import·합성/RGB565·skip 세부를 구분해 동결했다.
+- 증거: 실제4 RED→11 layout pass, 최종208 pass/4 skip·5subtests, native token exporter1 pass. 선택 회귀1353 pass/2 skip·NEW0, 독립34장 검토 범위 추가P1/P2없음. reports16·최종PNG34·RED PNG2 해시를 보존했다.
+- gate 변화: 없음. 실제장치·거리·FIELD·배포·공개push/merge 수용이 아니다. CE: 해당 없음 — 코드·회귀·검증 기록으로 복원한다.
+
+## 2026-10-29 · dab8ddacf2 · 플랫폼 UI 통합 검증과 미완료 수용
+
+- 변경: 정본 topic을 uiux/platform-ui-consistency로 구성하고 분리 단위 refs를 포함했다. 중간 UUID 증가의 per-commit 한도 문제는 기존 이력을 보존하고 지원 분리와 호출 추가를 같은 commit에 반영해 정리했다. 검사 한도와 baseline은 완화하지 않았다.
+- 근거: 공용137·Map125·핵심헤더29·소유등록55·현행셸42·폭/초점8의 SHA별 실제 원격 결과와134+20PNG 독립 검토를 `docs/validation/platform-ui-integration-2026-10-29/result.md`에 연결했다. 겹치는 검사를 고유 합계로 쓰지 않는다.
+- gate 변화: 없음. 미완료: 전체108 browser 회차는 진행 중이며 실패 표시를 포함한다. 리본 sticky 후속 GREEN·native exporter·primary focus의 실제 SDK/DPAD RED/수정·최종 소비자 수용은 남는다. 전체 목표 완료·배포·FIELD를 주장하지 않는다.
+- CE: 해당 없음 — 기존 clipping 교훈과 코드·회귀·검증 기록으로 판단을 보존한다. 미해결 항목은 해결 교훈으로 쓰지 않는다.
+
+## 2026-10-29 · 535d81ae8b · D-301 서버 서비스 이미지 증분 형식
+
+- 변경: D-301에 전체 목표를 서명하는 manifest v2, 재사용 Docker/OCI 신원, 빌드 입력 비교, 선택 교체와 rollback 이미지 보존을 추가 결정으로 기록했다. 기본/Account Caddyfile의 서로 다른 내용 해시 label로 기존 파일 bind inode가 남는 경우를 예방한다. 운영 절차는 deploy/site/README.md가 소유한다.
+- 증거: 공식 원격 집중 회귀 205 passed/skip0/NEW0, 별도 source 재검토 통과. workflow 변경에 필요한 FULL은 별도로 기록한다.
+- gate 변화: 없음. source/원격 계약 시험은 실제 Docker·서버 설치·현장 수용을 대신하지 않는다. CE: 해당 없음 — 판단은 결정·구현·회귀에 남는다.
+
+## 2026-10-29 · 66ba49bef8 · D-915 원문 물리 근거와 Harbor 연결 기록
+
+- 변경: D-915/API v1.330과 live version pins, 지원표, [소유 저장소 검증 기록](validation/physical-evidence-export-2026-10-29/result.md)을 정렬했다. 새 read 계약은 원문 증거의 조회이며 명령·관측 쓰기·업무 완료 권한을 추가하지 않는다.
+- 증거: 원격 고정 source, 독립 contract/Safety·최종 branch 검토, 실제 HTTP/UDS, 구형 SIM 직렬화와 FULL의 실패/skip·격리 재검증을 정본에서 구분한다.
+- Gate: 기존 module gate 변화 없음. 실제 source-clock/전체 측정·실물·배포·착지/push는 수용하지 않았다.
+- CE: 해당 없음 — 판단은 ADR·직접 회귀·검증 정본에 보존하며, unresolved producer를 해결된 통합으로 기록하지 않는다.
+
+## 2026-10-29 · 724ecfbff1 · D-916 원본 시각 검증과 FULL 범위 정정
+
+- 변경: D-916 내부 metadata의 source/실제 ROS/수동 Gazebo 근거를 [검증 정본](validation/joint-source-provenance-2026-10-29/result.md)에 기록했다. 이전 D-915의 25,723 passed는 FULL 판정 아래 local_invocations 네 묶음이었음을 추가 정정하고 원래 결과는 보존했다. 공식 27개 행렬은 별도로 실행·기록한다.
+- 증거: native CLI가 소비하는 배열과 selector의 full_invocations를 독립 대조했다. 실제 Gazebo 63 entities의 원문과 SDK type 등록명을 비교하여 누락한 각속도·접촉·대상 속도를 확인했다. 관측된 값을 source-clock/전체 물리 수용으로 바꾸지 않는다.
+- Gate: 변화 없음. G1c 전체와 G2–G6, 실물·운영·배포·착지/push는 미완료다.
+- CE: 새 교훈 기록 — [FULL JSON과 실제 행렬 구분](solutions/workflow-issues/full-mode-json-does-not-prove-full-matrix-execution-2026-10-29.md). 정본 함수·배열·원격 실행 로그가 근거이며 claims/frontmatter 검사를 통과했다.
+
+## 2026-10-29 · 071d9941bf · OMX 관제 PC 후속 복구
+
+- 변경: 관측 화면 유닛이 선택적 `omx-camera-view.env`의 `ROSY_VIEW_ARGS`를 받아 소스 키를 설정한다. ExecStart drop-in 없이 front 역할과 wrist producer를 연결하는 절차를 배포 안내에 추가했다.
+- 검증: 원격 user systemd 실행으로 기본값·별도 소스 키 인자 누락을 먼저 재현(2 failed, 3 passed)한 뒤 수정본 `071d9941bf`에서 관측·카메라·arm-status·업데이터·harness 247 passed, 4 skipped. 브라우저 검사는 이 실행의 수용 근거가 아니다.
+- 운영: 호스트 업데이터 설정을 백업하고 기존 Arm S 유닛을 units/unit_files에 추가했다. 두 카메라는 fresh. 관측기 설정의 예전 장치 ID와 현재 연결된 장치가 다름을 확인했다. 녹화/chunk owner가 실행 중이어서 카메라 drop-in 이관·관측기 장치 선택 변경·다음 업데이트 전환 검증은 보류했다.
+- gate 변화: 없음. 호스트 카메라 이관과 업데이트 전환 수용은 셀이 쉰 뒤 별도 확인한다.
+- CE: 기존 교훈 갱신 — [카메라 readiness와 업데이트 복구](solutions/runtime-errors/omx-camera-readiness-preview-active-before-owning-camera-2026-10-23.md). 호스트 journal의 sole-owner 거부·core_common import 실패·rolled_back/known_bad/switched 및 보존된 baseline 디렉터리를 대조했다. 실물 이동 수용은 수행하지 않았다.
+
+## 2026-10-29 · 37eba1b6e7 · OMX 재조정 중 camera unit 매핑 보존
+
+- 변경: `camera_environment.monitor`가 baseline에 저장한 preview unit으로 소유자를 조회한다. 기존 role fallback, 장치·producer identity 검사와 제어 budget은 유지한다.
+- 증거: 원격 RED 2 failed/2 passed로 wrist 매핑 누락을 재현한 뒤 수정본에서 관련 61 passed, NEW 0. 유휴 cell/update 잠금 아래 예상 원본 해시 확인·백업 후 호스트에 적용했고, READY·advancing fresh 3회 및 12초 뒤 동일 invocation을 확인했다. 새 릴리스 전환은 수행하지 않았다.
+- gate 변화: 없음. READY는 photometric 근거이며 팔 동작이나 물리 조명 변화 수용을 뜻하지 않는다.
+- CE: 기존 교훈 갱신 — [초기 READY와 재조정 소유권의 차이](solutions/runtime-errors/omx-camera-readiness-preview-active-before-owning-camera-2026-10-23.md). 초기 준비/복원만 unit을 반영하고 실행 중 재조정은 role을 쓴 누락과 기존 mock이 놓친 경로를 보완했다.
+
+## 2026-10-29 · uncommitted · docs: 관제 유닛 첫 배치 확정(R·CELL-A)으로 N1 마감
+
+- 변경: 독립·상하위 관제 후속 목표의 N1을 닫았다. 관제 유닛 첫 배치 확정 문서(R=통합관제+현장 주행, CELL-A=OMX 셀 관제, 현장 PC 동거 격리)를 추가하고 후속 목표의 N1 행을 근거와 함께 갱신했다.
+- 증거: 2026-10-29 현장 PC 읽기 조사(단일 Fleet·관제 계층 미배포·셀 도구 세션 단위 확인)와 D-850·D-855·D-862·D-893 계약 대조. 문서 변경이므로 harness lint·생성 문서 대조로 확인한다. 설치·연결 수용은 N2·N3 그대로 열려 있다.
+- gate 변화: 없음. 배치 정의 완료이며 실제 설치·PC 간 TLS 연결·장애 수용은 미실행이다.
+- CE: 해당 없음 — 배치 정의 문서이며 장애 원인·복구를 새로 검증한 사례가 아니다.
+
+## 2026-10-29 · afa10f26b2 · 복구 관측 클라이언트 검증 범위와 생산자 공백
+
+- 변경: `validation/recovery-observer-client-2026-10-29/result.md`에 committed RED/GREEN·독립 계약 검토·기존 승인 경로 보존과 실제 수집기의 미충족 입력을 구분해 기록했다.
+- 증거: 원격 client/API/auth 53 pass·skip 0·NEW 0. 실제 HTTP 전송과 기존 API fixture를 포함하며 fake owner·합성 시료를 실제 Gazebo나 장치 수용으로 해석하지 않는다.
+- Gate: 없음. 실제 source 시계·링크별 측정·사람 라벨·학습·배포·실물 수용은 별도다.
+- CE: 해당 없음 — solved infrastructure/producer 주장은 없으며 구현된 거절 조건은 시험에 남는다.
+
+## 2026-10-29 · 8728fc6eb7 · observer 검수 시험의 native guard 실패·수정 근거
+
+- 변경: 기존 53-case 기능 기록을 보존하고 `validation/recovery-observer-client-2026-10-29/guard-correction.md`에 공식 native 중단·단독 재현·main 통과·중간 실패와 최종 36 pass를 추가했다.
+- 증거: 원격 client/정확 secret guard exit 0, skip 0, classifier NEW 0. 원래 실패 로그와 최종 검증 로그는 외부 TEMP의 SHA-256으로 결속했다.
+- Gate: 없음. 실패 이력을 최초 완전 통과로 바꾸거나 예외로 숨기지 않았다.
+- CE: 해당 없음 — 해결 판단을 기존 검사기 규칙·최종 시험·수정 기록에서 복원한다.
+
+## 2026-10-29 · uncommitted · 자체 중복 lander의 완료 FULL 보존과 소유 취소
+
+- 변경: `solutions/workflow-issues/owned-duplicate-landers-keep-completed-full-2026-10-29.md`에 완료된 정식 FULL을 보존하고 supervisor부터 자체 중복의 추가 배정을 멈춘 뒤 원격 job 신원을 다시 확인하는 복구 판단을 기록했다.
+- 증거: 실제 FULL 27 invocations·guards·isolation 기록과 byte hash를 보존했다. 신원 재확인 뒤 기존 KILL로 해당 job만 TERM했고 rc 143·process group 잔존 0·lock 해제·양쪽 참조 보존을 확인했다. 다른 세션·queue marker·cache·검증 기준은 변경하지 않았다.
+- Gate: 없음. 정리 수용은 main 병합·공개 게시·Pinky 부팅·OTA 수용과 구분한다. 문서 frontmatter 검사 통과, mechanical claim의 외부 receipt 경로 한 건은 Git 밖 실제 파일 존재와 명시된 범위로 확인했다.
+- CE: 새 교훈 기록 — 최종 제품 코드만으로 알기 어려운 supervisor 정리 순서와 살아 있는 remote cohort의 소유 재확인이 재조사·참조 손실을 막는다. Vocabulary는 일반 작업 용어만 있어 변경하지 않았고 지침은 기존 solutions 경로를 이미 안내한다.
+
+## 2026-10-29 · 66e86cb0fb · Pilot 수집 연결 검증
+
+- 변경: [검증 기록](validation/pilot-learning-collection-2026-10-29/result.md)에 소스·원격 회귀·실제 기존 녹화의 pending 등록과 운영 적용 한계를 분리한다.
+- 증거: 모델 PC 집중 55 passed/1 opt-in skipped, 별도 실제 자료 시험 1 passed(19장 pending, 재등록 0장). 운영 검수 DB·실물·서명 배포 수용으로 확대하지 않는다.
+- Gate: 변화 없음. CE: 해당 없음 — 판단은 구현·회귀·기존 운영 문서에서 확인할 수 있다.
+- 최종 검증: d2d68c3346 공식 affected 13,602 passed/1,285 skipped/NEW 0, pinned raw·실제 자료·OMX fixture 집중 88 passed/skip0/NEW 0. 중간 회귀 실패와 합성 시계 보완, skip·취소·운영 미적용을 같은 정본의 추가 기록으로 구분했다.
+
+## 2026-10-30 · 40449ecfdf · 카메라 자동 복구를 실제 제어값과 복원 기록에 결속
+
+- 변경: 같은 방향의 적용된 후보를 되감지 않고, baseline으로 돌아온 카메라는 실제 readback·지원값 재확인 후 재조정한다. 일시적 읽기 실패와 active preview의 재오픈 대기는 쓰기 없이 UNAVAILABLE로 기다리며 다른 owner는 거부한다. 후보·복원 intent는 baseline/장치/producer/run에 결속해 알 수 없는 설정을 덮지 않는다.
+- 증거: 초기 RED 13 실패, 추가 targeted RED 5 실패 및 producer 경로 1 실패를 각각 확인 후 수정했다. 최종 camera environment/readiness/adaptive/native snapshot 원격 시험 107 passed, skip 0, NEW 0. 독립 검토의 중간 manual 모드와 실제 producer 부재 경로 지적을 해결했고 최종 추가 finding 없음.
+- Gate: 소스·원격 host 검증 및 유휴 hotfix. 01:06 녹화/chunk 부재와 cell/update 잠금 아래 기존 복구기의 원본 복원·백업 후 적용했다. baseline과 camera/arm-status producer invocation은 보존했고 fresh 평가·동일 readiness invocation을 12초 뒤 확인했다. front NORMAL, top UNDEREXPOSED/EXHAUSTED여서 전체 INSUFFICIENT·motion_admitted false를 유지했다. 새 release 전환·통제된 실물 조명 복구·물리 수용을 주장하지 않는다. 공개 push 없음.
+- CE: 기존 camera readiness 교훈 갱신. 같은 PID로 카메라가 재오픈해도 실제 제어값은 baseline으로 돌아갈 수 있었던 운영 증거와 원본/intent 보존·업그레이드 순서를 기록했다.
+
+## 2026-10-30 · uncommitted · docs(fleet): 로봇별 동시 작업 발행 ADR(D-928, Proposed)과 실행 계획, 양보 없는 가짜의 동시성 교훈
+
+- 변경: D-928(Proposed)은 발행 루프를 로봇마다 백그라운드로 진행하고 교통 판정만 `_traffic_lock`으로 직렬화하며, 발행 중인 로봇에 직선 임시 점유를 두고 스냅샷 정리에서 빼는 설계를 정한다. `plans/2026-10-30-fleet-concurrent-task-dispatch.md`는 실패 시험 먼저 6단계 실행 계획이다. `solutions/workflow-issues/fakes-that-never-suspend-hide-check-then-act-races.md`는 await에서 멈추지 않는 가짜 로봇이 확인-후-기록 경쟁을 숨긴 교훈이다.
+- 증거: D-271 Gate A 후속 측정(드레인 32대 마지막 발행 8.053 → 0.181초, 느린 수락 1.064초는 남음)과 교통 경쟁 외부 계측기(main `46b23e565a` RED, 수정 `1bf26403ce` GREEN), 원격 교통 시험군 333 passed·NEW 0. rosy-contract-review 독립 검토의 차단 없음·지적 8건(종료 취소 경로, 모호한 전송 결과의 점유, 빈 경로 교체, snapshot 잠금 대기, 우선순위 퇴행, D-12 오인용, 가용 집합 설명, 명단 정리)을 모두 설계에 반영했다.
+- Gate: 없음. 설계 문서이며 구현·Gazebo·장비/현장 수용은 별도다. 공개 push 없음.
+- CE: 새 교훈 기록 — 가짜 로봇이 await에서 멈추지 않아 교통 판정 경쟁이 시험에 보이지 않았다. 기존 가짜 표면 교훈·await 재확인 교훈과 구분된다.
+
+## 2026-10-30 · uncommitted · docs: 게시용 FULL 근거 착지 기록
+
+- 변경: 관제 유닛 첫 배치 확정(N1)과 사이트 fleet 이미지 패키징 수정(contracts/motion)을 포함한 tip에 full-tier 착지 기록을 만들기 위한 작업 행이다. 내용 변경은 이 행뿐이다.
+- 증거: publish_main의 게시 SHA 선택은 해당 SHA의 green FULL 착지 기록을 요구한다(기존 최신 full 기록 c44859256f에는 패키징 수정이 없다). 이 착지가 만드는 full 기록의 base는 패키징 커밋(8dcc1f51ad)을 포함한 main이다.
+- gate 변화: 없음.
+- CE: 해당 없음 — 게시 절차 기록이다.
+
+## 2026-10-30 · uncommitted · docs(agents): 루트 AGENTS.md를 안전 요약과 포인터로 줄이고 같이 하는 깃 전문을 shared-checkout.md로 모음
+
+- 변경: 모든 세션이 통째로 읽는 루트 `AGENTS.md`를 39.3 KB에서 14.5 KB로 줄였다. 「같이 하는 깃」 전문(워크트리 청소·소유자·`landed-dirty`/`stale-history`·스냅샷·스테이징·ADR 선점·착지 대기열·`LOAD-FLAKY`·`MAIN-RED`·게시)은 `docs/reference/shared-checkout.md`가 정본으로 맡고, AGENTS에는 모든 세션이 지킬 6항 요약·멈추는 신호·읽을 때를 남겼다. Testing Requirements의 FULL 전환 목록·`gh run` 명령·colcon 재현은 `developer-guide.md`「테스트와 CI」로 옮겼다. Key Files·Dependencies·스킬 목록·중복된 D-23 줄은 각 폴더 `AGENTS.md`와 하네스가 이미 가진 내용이라 뺐다. 안전·권한 규칙(D-2, D-516, D-315, D-430 §5, D-226, D-33, D-584, D-868)은 문장 그대로 남겼다.
+- 어긋남 정리: 네 사본이 서로 달랐다. 기본 착지 명령을 `land_async.py`로 맞췄고(AGENTS는 `land.py`), `rosy-land-on-main` 스킬의 "at most 10"·"50-directory"를 15·14(D-886)로 고쳤다.
+- 증거: `test/test_readme_agent_start.py`의 세부 문구 단언을 지우지 않고 `shared-checkout.md` 쪽으로 옮겼고, AGENTS 쪽은 안전 요약 문구와 4,000자 상한을 단언한다. `rosy_harness.py lint` 0 error.
+- Gate: 없음. 문서·시험 변경이며 장치·현장 수용과 무관하다. 공개 push 없음.
+- CE: 해당 없음 — 사본이 어긋나 있던 사실은 이 기록과 정본 하나로 줄인 구조로 남는다.
+
+## 2026-10-30 · fd11d5158a · D-926 운용 화면의 읽는 순서·깊이·말의 규칙
+
+- 변경: D-926을 추가하고 Log 행·D-641 대체 주석을 붙였다. `DESIGN.md` 맨 앞에 읽는 순서·깊이·말·부품 모양·확인 항목 절을 두고 맥락 탭 아이콘 단독 문단을 고쳤다.
+- 증거: 2026-10-30 Fleet 샘플 서버 운영자 접속 캡처 13장과 토큰 사용 집계(작업 공간 계획 `2026-10-30-ui-hierarchy-foundation.md`). `rosy_harness.py lint`에서 D-926 오류 없음.
+- Gate: 없음. 화면별 적용은 단계별 브랜치로 따로 기록한다.
+- CE: 해당 없음 — 결정과 근거는 ADR이 담는다.
+
+## 2026-10-30 · 08b6c8c362 · 새 장치 수집과 mDNS 진단 기록
+
+- 변경: 새 dated 검증 기록에 geg6 수신 두 건과 운영 pending 925장, 총6007장, 재등록0, 원본·검수 정보 보존과 현재 단절을 구분했다. 오래된 접속 목록과 실제 서비스 광고를 구분하는 CE 교훈을 추가했다.
+- 증거: 준비 파일6355개·신규 검수 사본5954개의 해시 일치, 기존53장 검수/마스크/이벤트 불변. 구성된 HTTPS 수신 exit0와 정상 재실행2회 exit0. CE 기계검사0flags/문법검사OK. 이전 추가 기록333passed/skip0/NEW0는 해당 소스의 증거다.
+- Gate: 운영 원본·영상·검수 대기 연결 수용. 현재 장치 가용성·물리 이동·G4·main 착지·push는 완료 증거가 없다.
+- CE: 새 교훈 기록. 현재 단절과 예전362행 신원 충돌은 미해결로 유지한다.
+
+## 2026-10-30 · uncommitted · docs(adr): D-931..D-933 arm S measured checks, one field revision, cell coordinate frame
+- 변경: `docs/adr/D-931`·`D-932`·`D-933` 추가, ADR Log 행 3개, `tools/harness/adr_gaps.txt`에 다른 브랜치가 예약한 D-929·D-930 대기 선언
+- 증거: `python tools/harness/rosy_harness.py lint` 0 errors. D-933 근거의 OpenCV 4.12 ChArUco API와 1.1 px/mm 합성 검출 20/20은 Fleet PC에서 확인(실물 인쇄물 검출은 아직)
+- gate 변화: 없음
+- 결정: D-931 Accepted, D-932 Accepted, D-933 Proposed
+- 교훈: 기존 사례 8·9(`shared-arm-cell-hand-back-checks`)를 근거로 인용, 새 교훈 없음
+
+## 2026-10-30 · uncommitted · omx: cell scale reader and D-934 object mass
+- 변경: `deploy/robot/omx/cell_scale.py`(7-세그먼트 저울 판독, 안정값, 카탈로그 `mass_kg` 기록, `--conditions`), `scale.*` 파라미터 3개, `test/test_omx_cell_scale.py`, `docs/adr/D-934`
+- 증거: 원격 `test_omx_cell_scale.py`·`test_omx_cell_params.py` 27 passed. 합성 표시창 숫자 높이 9~40 px, 잡음 σ 4에서 20/20. 실제 저울 판독은 아직
+- gate 변화: 없음
+- 결정: D-934 Proposed
+- 교훈: 얇은 획은 세그먼트 칸 평균으로 판정하면 크기가 커질수록 실패(18 px 0/20), 길이 덮임 비율로 바꿔 해결 — 코드 주석에 둠
+
+## 2026-10-30 · uncommitted · omx: D-935 payload bound on the D-911 gate
+- 변경: `cell_envelope.payload_check`, 운영 조건 `payload_max_kg`, `auto.max_gross_kg` 0.08(theory), `cell_objects.payload`, `cell_auto_pick`이 운반마다 `_payload`를 붙이고 `task.json`에 남김, `cell_scale --conditions`는 상한을 쓰지 않음, README·예제·시험 갱신, `docs/adr/D-935`
+- 증거: 원격 `test/test_omx_*.py` 1756 passed, 36 skipped. 실물 실측과 운반은 아직
+- gate 변화: 없음
+- 결정: D-935 Accepted(사용자 결정)
+- 교훈: 없음
