@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-10-30 · uncommitted · docs: 게시용 FULL 근거 착지 기록
 - 2026-10-30 · uncommitted · docs(fleet): 로봇별 동시 작업 발행 ADR(D-928, Proposed)과 실행 계획, 양보 없는 가짜의 동시성 교훈
 - 2026-10-30 · 40449ecfdf · 카메라 자동 복구를 실제 제어값과 복원 기록에 결속
 - 2026-10-29 · uncommitted · 자체 중복 lander의 완료 FULL 보존과 소유 취소
 - 2026-10-29 · 8728fc6eb7 · observer 검수 시험의 native guard 실패·수정 근거
-- 2026-10-29 · afa10f26b2 · 복구 관측 클라이언트 검증 범위와 생산자 공백
