@@ -267,7 +267,9 @@ def test_cell_saved_documents_show_readable_kind_and_local_time(browser_site, wi
         assert "T" in row.locator("time").get_attribute("datetime")
     assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
     # D-926: a saved row opens its document on the step that edits it.
+    show_screen(page, "recipe-heading")
     page.locator("#recipe-id").fill("other")
+    show_screen(page, "saved-heading")
     rows.nth(1).get_by_role("button", name="열기").click()
     expect(page).to_have_url(re.compile(r"#recipe-heading$"))
     expect(page.locator("#recipe-id")).to_have_value("recipe-demo")
@@ -532,7 +534,7 @@ def test_cell_preview_unavailable_clears_old_result_and_recovers(browser_site, w
     expect(summary).to_contain_text("미리보기 결과 확인 불가")
     expect(summary).to_contain_text("다시 확인")
     expect(page.locator("#layout-preview")).to_be_hidden()
-    panel = page.locator("main > ui-section").first.bounding_box()
+    panel = page.locator('ui-section[aria-labelledby="preview-heading"]').bounding_box()
     status_box = summary.bounding_box()
     assert abs(panel["x"] - status_box["x"]) <= 1
     assert abs(panel["width"] - status_box["width"]) <= 1
@@ -736,8 +738,8 @@ def test_manual_sheet_choice_preserves_thickness_and_requires_operator_barrier(b
 
     page, _, _ = browser_site
     _prepare(page)
-    page.locator("#recipe-sheet-handling").select_option("operator")
     show_screen(page, "recipe-heading")
+    page.locator("#recipe-sheet-handling").select_option("operator")
     draft = json.loads(page.locator("#recipe-document").input_value())
     assert draft["schema"] == "rosy_cell.recipe/2"
     assert draft["slip_sheet"] == {"handling": "operator", "thickness": 0.002}
@@ -845,8 +847,8 @@ def test_structured_layer_edit_retains_canonical_errors_and_has_no_dispatch(brow
     execution_requests = []
     page.on("request", lambda request: execution_requests.append(request.url)
             if request.url.endswith(("/proposals", "/admit")) else None)
-    page.locator("#recipe-layer-add").click()
     show_screen(page, "recipe-heading")
+    page.locator("#recipe-layer-add").click()
     expect(page.locator('#recipe-structure [data-path="layers.2.pattern"]')).to_have_value("grid")
     page.locator("#recipe-save").click()
     expect(page.locator("#notice")).to_contain_text("문서 저장 완료")
@@ -874,9 +876,7 @@ def test_saved_structured_controls_stay_locked_until_list_read_finishes(browser_
 
     def delayed_list(route):
         response = route.fetch()
-        show_screen(page, "saved-heading")
         assert page.locator("#saved-status").get_attribute("state") == "pending"
-        show_screen(page, "recipe-heading")
         locked.append(page.evaluate("""() => {
             const fields = [...document.querySelectorAll('#recipe-structure input, #recipe-structure select')];
             const before = document.getElementById('recipe-document').value;
@@ -888,6 +888,7 @@ def test_saved_structured_controls_stay_locked_until_list_read_finishes(browser_
         route.fulfill(response=response)
 
     page.route("**/api/fleet/cell-app/documents", delayed_list)
+    show_screen(page, "recipe-heading")
     page.locator("#recipe-save").click()
     expect(page.locator("#notice")).to_contain_text("문서 저장 완료")
     assert locked == [True]

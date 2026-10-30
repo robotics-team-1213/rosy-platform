@@ -373,7 +373,8 @@ function connect(credentialChange = false) {
     $('cell-channel-request').hidden = false;
     $('request-key').value = channelReview.request_key; $('request-key').readOnly = true;
     if (channelReview.work_kind === 'cell_job') $('mission-id').value = channelReview.work_id;
-    location.hash = channelReview.work_kind === 'cell_job' ? '#mission-heading' : '#proposal-heading';
+    // Opened from a chat request: start on the step it needs unless the operator already chose one.
+    if (!location.hash) location.hash = channelReview.work_kind === 'cell_job' ? '#mission-heading' : '#proposal-heading';
   }
   $('notice').textContent = '접속 완료 · 문서를 준비하세요.';
   });
