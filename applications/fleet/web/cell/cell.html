@@ -106,6 +106,12 @@
       <div class="actions"><ui-button id="print-markers" kind="quiet">그리퍼 마커 PDF</ui-button><ui-button id="print-checkerboard" kind="quiet">체커보드 PDF</ui-button></div>
       <ui-text id="print-status" role="status" aria-live="polite"></ui-text>
     </ui-section>
+    <ui-section aria-labelledby="catalog-heading">
+      <ui-head><h2 class="ui-section-heading" id="catalog-heading">물체 카탈로그</h2></ui-head>
+      <ui-text>무게는 운반 무게 상한(D-911·D-935), 팔을 뻗었을 때의 힘 여유, 처짐과 놓는 높이, 학습 기록의 기준입니다. 잰 무게가 없는 물체는 운반하지 않습니다.</ui-text>
+      <div class="ui-table-scroll"><table id="catalog-table" aria-label="물체 카탈로그" hidden><thead><tr><th scope="col">물체</th><th scope="col">크기 mm</th><th scope="col">빈 무게</th><th scope="col">잰 시각·출처</th><th scope="col">운반</th></tr></thead><tbody id="catalog-rows"></tbody></table></div>
+      <ui-text id="catalog-status" role="status" aria-live="polite">접속하면 물체 카탈로그를 확인할 수 있습니다.</ui-text>
+    </ui-section>
     <ui-section aria-labelledby="saved-heading"><ui-head><h2 class="ui-section-heading" id="saved-heading">저장된 문서</h2></ui-head><ui-text>저장된 레시피와 셀을 선택하거나 아래에서 새 문서를 준비하세요.</ui-text><ui-status id="saved-status" state="unavailable">접속하면 저장된 문서를 확인할 수 있습니다.</ui-status><ul id="saved" hidden></ul></ui-section>
     <div class="documents">
       <ui-section aria-labelledby="recipe-heading">
