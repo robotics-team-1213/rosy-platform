@@ -661,5 +661,23 @@
   "unit": "gripper",
   "source": "measured",
   "evidence": "2026-10-29: the plan's 62 left two stable jaw blobs over the floor 2-cell; the pick's 53.84 left none"
+ },
+ "objects.top_v_frac": {
+  "value": 0.8,
+  "unit": "ratio",
+  "source": "measured",
+  "evidence": "2026-10-29: top faces V 186 against side faces 137 by day; at night (exposure at its 80 ms cap) a 2-cell read 58 x 51 mm with its side; 0 = off"
+ },
+ "grasp.end_frac": {
+  "value": 0.7,
+  "unit": "ratio",
+  "source": "default",
+  "evidence": "2026-10-29: a 2-cell on the moved Pinky was out of reach at its middle (planar wrist 0.286 m); 0 = only the middle"
+ },
+ "pivot.clear_above_m": {
+  "value": 0.074,
+  "unit": "m",
+  "source": "measured",
+  "evidence": "2026-10-29: the floor's 0.08 view is 0.074 above its surface; over the Pinky tray an absolute 0.08 knocked a box off"
  }
 }
