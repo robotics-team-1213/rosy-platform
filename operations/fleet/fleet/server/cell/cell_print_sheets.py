@@ -66,13 +66,19 @@ def marker_cells(marker_id: int) -> list[tuple[int, int]]:
     return [(r, c) for r in range(6) for c in range(6) if r in (0, 5) or c in (0, 5)] + inner
 
 
-def markers_pdf(ids, sizes_mm) -> bytes:
+GRIPPER = ("ROSY gripper markers - ArUco DICT_4X4_50",
+           "Cut on the dashed line, keep the white edge. Glue flat on the gripper body's top face (id 0, 20 mm).")
+SURFACE = ("ROSY surface markers - ArUco DICT_4X4_50 (D-933)",
+           "Arm base: ids 35-36. Each surface: 4 markers, at least 150 mm apart, not in one line. Glue flat.")
+
+
+def markers_pdf(ids, sizes_mm, words=GRIPPER) -> bytes:
     ids, sizes = [int(i) for i in ids], [float(s) for s in sizes_mm]
     if not ids or not sizes or any(not 0 <= i < len(DICT_4X4_50) for i in ids) or any(not 10 <= s <= 80 for s in sizes):
         raise ValueError("ids are 0-49 and sizes 10-80 mm")
     page, y = Page(), MARGIN_MM
-    page.text(MARGIN_MM, y + 5, 14, "ROSY gripper markers - ArUco DICT_4X4_50")
-    page.text(MARGIN_MM, y + 11, 9, "Cut on the dashed line, keep the white edge. Glue flat on the gripper body's top face (id 0, 20 mm).")
+    page.text(MARGIN_MM, y + 5, 14, words[0])
+    page.text(MARGIN_MM, y + 11, 9, words[1])
     y += 18
     page.scale_bar(y)
     y += 16
@@ -91,7 +97,30 @@ def markers_pdf(ids, sizes_mm) -> bytes:
             page.text(x, y + size + 2 * quiet + 5, 9, f"id {marker_id}  {size:g} mm")
             x += size + 2 * quiet + GAP_MM
         y += size + 2 * quiet + GAP_MM
-    return page.pdf("ROSY gripper markers")
+    return page.pdf(words[0].split(" - ")[0])
+
+
+def charuco_pdf() -> bytes:
+    """OpenCV 4.12 CharucoBoard((7, 10), 0.020, 0.015, DICT_4X4_50), 140 x 200 mm: the top-left square black,
+    markers centred on the white squares with ids 0-34 row by row from the top-left (D-933 lens calibration)."""
+    cols, rows, square, side = 7, 10, 20.0, 15.0
+    page, y = Page(), MARGIN_MM
+    page.text(MARGIN_MM, y + 5, 14, "ROSY ChArUco board - 7 x 10 squares (D-933)")
+    page.text(MARGIN_MM, y + 11, 9, "squares 20 mm, markers 15 mm, DICT_4X4_50 ids 0-34. Matte paper on a flat rigid board; tilt it 20-40 deg.")
+    y += 18
+    page.scale_bar(y)
+    y += 16
+    x, marker_id, cell = (A4_MM[0] - cols * square) / 2, 0, side / 6
+    for r in range(rows):
+        for c in range(cols):
+            if (r + c) % 2 == 0:
+                page.box(x + c * square, y + r * square, square, square)
+                continue
+            mx, my = x + c * square + (square - side) / 2, y + r * square + (square - side) / 2
+            for mr, mc in marker_cells(marker_id):
+                page.box(mx + mc * cell, my + mr * cell, cell, cell)
+            marker_id += 1
+    return page.pdf("ROSY ChArUco board")
 
 
 def checkerboard_pdf(cols: int = 8, rows: int = 6, square_mm: float = 15.0) -> bytes:
@@ -115,13 +144,18 @@ def checkerboard_pdf(cols: int = 8, rows: int = 6, square_mm: float = 15.0) -> b
     return page.pdf("ROSY checkerboard")
 
 
-SHEETS = {"gripper-markers": "ArUco markers for the gripper", "checkerboard": "checkerboard for camera calibration"}
+SHEETS = {"gripper-markers": "ArUco markers for the gripper", "checkerboard": "checkerboard for camera calibration",
+          "charuco": "ChArUco board for lens calibration", "surface-markers": "ArUco markers for the arm base and surfaces"}
 
 
 def sheet(kind: str, ids=(0, 1), sizes_mm=(20, 25), cols: int = 8, rows: int = 6, square_mm: float = 15.0):
     """(file name, PDF bytes) for one kind in SHEETS."""
     if kind == "gripper-markers":
         return "rosy-gripper-markers.pdf", markers_pdf(ids, sizes_mm)
+    if kind == "charuco":
+        return "rosy-charuco-7x10-20mm.pdf", charuco_pdf()
+    if kind == "surface-markers":
+        return "rosy-surface-markers-25mm.pdf", markers_pdf(ids, (25,), SURFACE)
     if kind == "checkerboard":
         return f"rosy-checkerboard-{cols}x{rows}-{square_mm:g}mm.pdf", checkerboard_pdf(cols, rows, square_mm)
     raise ValueError(f"unknown sheet {kind}: one of {', '.join(SHEETS)}")
