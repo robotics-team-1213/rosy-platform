@@ -11,6 +11,7 @@
 | ID | 제목 | Status |
 |---|---|---|
 | D-928 | Fleet 작업 발행은 로봇마다 따로 진행하고 교통 판정만 한 줄로 세운다. [전문](../adr/D-928-fleet-per-robot-dispatch-serial-traffic.md) | Proposed (2026-10-30; 구현·수용 별도) |
+| D-927 | Harbor 첫 흐름 시연 경계와 자동 시뮬 회귀(MuJoCo OMX·Gazebo Pinky, 독립 시뮬 관측). [전문](../adr/D-927-harbor-first-flow-demo-seams-and-automated-sim.md) | Accepted (2026-10-30, 경계·자동화 결정; 구현·수용 별도) |
 | D-914 | 장치별 프로필과 native 운용범위 근거를 연결한다. [전문](../adr/D-914-omx-per-device-operating-profile-binding.md) | Accepted (2026-10-29, 구현·머지 승인; 실물 수용 별도) |
 | D-910 | Learning 검수 문서의 정적 공통 셸. [전문](../adr/D-910-learning-static-shell-components.md) | Accepted (2026-10-28) |
 | D-909 | Fleet 절차 문서의 경량 헤더와 배치 역할. [전문](../adr/D-909-fleet-procedure-document-components.md) | Accepted (2026-10-28) |
