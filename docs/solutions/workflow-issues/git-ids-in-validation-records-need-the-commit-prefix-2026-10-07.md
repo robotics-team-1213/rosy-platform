@@ -1,7 +1,7 @@
 ---
 title: A bare 40-digit git id in a validation record reads as a high-entropy token and blocks every push
 date: 2026-10-07
-last_updated: 2026-10-27
+last_updated: 2026-10-30
 category: workflow-issues
 module: docs/validation, test/test_release_boundary_guards.py, tools/hooks/pre-push
 problem_type: workflow_issue
@@ -34,6 +34,7 @@ push를 막는다** — 2026-10-07 오전(`db006d7cf`로 고침, uiux-site-g3-re
 - 허용 단어는 **같은 줄**에 있어야 한다. 원본 해시를 표로 적을 때 머리글(`| 파일 | sha256 |`)만으로는
   통과하지 않는다 — 각 행 셀에 `` sha256 `<64-hex>` ``로 적는다(2026-10-23 vlm-question-bench 회차가
   머리글만 적어 9행이 걸렸고 착지가 멈췄다).
+- 접두어는 단어 경계로 맞는 단수 `commit`이어야 한다. `test/flaky_quarantine.txt`에 "passed alone on unchanged commits <40-hex> and <40-hex>"처럼 복수형 뒤에 두 SHA를 적은 두 항목이 걸려 격리 착지가 멈췄다(2026-10-30, 단독 재실행도 실패, main에서는 통과). 10자리 SHA로 바꾸고 `scan_text`로 파일 전체가 빈 목록인 것을 확인한 뒤 다시 착지했다. 이 파일은 시험 id와 증거를 한 줄에 몰아 적으므로 SHA는 짧게 쓴다.
 - 9자리 단축 SHA(`961b5d654`)는 매처에 걸리지 않는다 — 접두어 없이 써도 된다.
 - CLI 코드블록도 검사 대상이다. `--sha` 값에 설명용 `commit`을 끼우지 말고, 전체 SHA는 본문에서 `commit` 접두어로 기록한다. 실행 예시에는 같은 객체로 해석되는 짧은 revision을 쓰고 축약 예시임을 밝힌다. 실제 명령·결과 원본은 그대로 보존한다.
 - 회차 문서를 착지하기 전에 확인하라. pytest는 노트북에서 돌리지 않으므로(D-584) 원격으로
