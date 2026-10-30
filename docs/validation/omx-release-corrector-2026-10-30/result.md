@@ -84,3 +84,11 @@ so the two runs can be compared episode by episode.
 Against rl0 run 1f81 on the same 20 layouts: 12 settled in both, and rl2 was closer to the target in only 4 of them
 (mean +0.18 mm worse). rl0 alone settled 4 layouts, rl2 alone 2. rl2 is not an improvement. One REINFORCE step on
 about 135 noisy decisions does not carry enough signal; BC v0 with a zero residual stays the reference.
+
+More rl0 data before the next update:
+
+| Run | Setup | Result |
+|---|---|---|
+| `65e5fb1d70395a2d857f5cd04c861b43` | Short episodes, rl0, seed 44 | 22 episodes, **16 settled and stable**, position error 0.24–1.11 mm (median 0.50 mm). 4 opening blocked, 2 settle windows not reached. 66 decisions. |
+
+rl0 settles about 75–80% of episodes across seeds 42 and 44.
