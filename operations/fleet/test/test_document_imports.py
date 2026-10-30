@@ -109,6 +109,7 @@ OWN = {
     "cell.js": {
         "cell-document-editor.js",
         "cell-observation.js",
+        "cell-print-sheets.js",  # 보정 인쇄물 PDF 내려받기
     },
     "site-map.js": {
         "map-authoring.js", "map-editor.js", "drawing-import.js", "geometry-edit.js", "edit-history.js",
@@ -118,6 +119,7 @@ OWN = {
         "site-map-camera.js",
         "site-map-sources.js",  # Map profile selection and read-only camera-plane presentation.
         "site-map-edit.js",  # D-655: pure draft edits belong to the map editor document
+        "subnav-screens.js",  # D-926 3: sub-nav moves between screens
     },
 }
 

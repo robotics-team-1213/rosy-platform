@@ -445,6 +445,24 @@
    "source": "tuned",
    "evidence": "2026-10-30 dim room: top auto exposure stuck at 3000, mean 21, wrist 145; manual 10000/20000/33000 at gain 7 gave 61/105/148; at mean 106 the board box split in two and matched no catalogue entry, at 156 it matched: detection was tuned near 140"
   },
+  "scale.repeats": {
+   "value": 5,
+   "unit": "count",
+   "source": "tuned",
+   "evidence": "2026-10-30 D-934: a scale display settles over about a second at 5 fps of reads; 5 equal reads in a row"
+  },
+  "scale.timeout_s": {
+   "value": 120.0,
+   "unit": "s",
+   "source": "tuned",
+   "evidence": "2026-10-30 D-934: time for a person to zero the scale and put the object on it"
+  },
+  "scale.segment_fill": {
+   "value": 0.5,
+   "unit": "ratio",
+   "source": "tuned",
+   "evidence": "2026-10-30 D-934: a segment is lit when strokes cover half of its length; synthetic digits 9-40 px tall with noise read 20/20"
+  },
   "place.margin_mm": {
    "value": 5.0,
    "unit": "mm",
