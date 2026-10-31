@@ -9,24 +9,32 @@ grip_open 100 = 1.0 rad and the grasp closes to the cell's width-matched target,
 """
 from __future__ import annotations
 
+import json
 import math
+from pathlib import Path
 from types import SimpleNamespace
 
-from chunk_runner import transit_path
-from grasp_planner import NAMES, Planner, norm_to_rad, rad_to_norm
+from grasp_planner import Planner, norm_to_rad, rad_to_norm
 
 PHASES = ("approach", "grasp", "transfer", "release")  # manipulation_plan.MOTION_PHASES
-REAL = {"descend_m_s": 0.020, "lift_m_s": 0.030, "grip_s": 1.5, "settle_s": 0.5}  # grasp-plan.example.json
+REAL_PLAN = Path(__file__).resolve().parent / "grasp-plan.example.json"
+# How arm S moves, taken from the real plan unchanged; a sim cell only supplies where (sites, home, transit,
+# limits) and its own gripper's units. keep_out is the real cell's wall, not a motion value.
+MOTION = ("approach_m", "lift_m", "release_lift_m", "descend_m_s", "lift_m_s", "grip_s", "settle_s",
+          "transit_speed")
 
 
-def sim_plan(*, home_q, transit_q, pick, place, approach_m, grip_open, grip_close, limits, fps=30) -> dict:
-    """home_q/transit_q: joint1..5 rad; pick/place: (x, y, z, yaw_rad) of the grasp TCP; grips in rad."""
+def sim_plan(*, home_q, transit_q, pick, place, grip_open, grip_close, limits, fps=30, real: dict | None = None) -> dict:
+    """home_q/transit_q: joint1..5 rad; pick/place: (x, y, z, yaw_rad) of the grasp TCP; grips in rad.
+    ``real``: the real cell's plan (default grasp-plan.example.json), whose motion values the sim keeps."""
+    real = real or json.loads(REAL_PLAN.read_text())
+
     def site(pose):
         x, y, z, yaw = pose
         return {"x": x, "y": y, "z": z, "yaw_deg": math.degrees(yaw)}
 
     return {"fps": fps, "home": [round(rad_to_norm(q), 3) for q in home_q], "pick": site(pick),
-            "place": site(place), "approach_m": approach_m, "lift_m": approach_m, **REAL,
+            "place": site(place), **{k: real[k] for k in MOTION if k in real},
             "grip_open": round(grip_open * 100, 3), "grip_closed": round(grip_close * 100, 3),
             "transit": {name: round(rad_to_norm(transit_q[i]), 3)
                         for i, name in ((1, "shoulder_lift.pos"), (2, "elbow_flex.pos"), (3, "wrist_flex.pos"))},
@@ -44,15 +52,9 @@ def thin(frames, step):
 
 
 def phases(planner: Planner, joint_names, gripper_joint, step) -> list:
-    p, c = planner.plan, planner.library()["chunks"]
-    fps, opened, closed = planner.fps, p["grip_open"], p["grip_closed"]
-    transit = {NAMES.index(k): float(v) for k, v in p["transit"].items()}
-    home = list(p["home"]) + [opened]
-    travel = lambda start, goal, grip: transit_path(start, goal, grip, fps, transit)  # noqa: E731
-    approach = travel(home, c["above_pick"][0], opened) + c["descend_pick"]
-    grasp = c["grasp_pick"]
-    transfer = c["lift_pick"] + travel(c["lift_pick"][-1], c["above_place"][0], closed) + c["descend_place"]
-    release = c["release_place"] + c["lift_place"] + travel(c["lift_place"][-1], home, opened)
+    """The teacher's four phases from what chunk_runner would stream (Planner.stream), thinned to ``step``."""
+    p = planner.plan
+    home = list(p["home"]) + [p["grip_open"]]
     order = list(joint_names)
     index = {**{f"joint{i + 1}": i for i in range(5)}, gripper_joint: 5}
 
@@ -61,7 +63,7 @@ def phases(planner: Planner, joint_names, gripper_joint, step) -> list:
         return tuple(values[index[n]] for n in order)
 
     result, start = [], rad(home)
-    for phase_id, frames in zip(PHASES, (approach, grasp, transfer, release)):
+    for phase_id, frames in planner.stream(planner.library(), home):
         points = thin([rad(f) for f in frames], step)
         result.append(SimpleNamespace(phase_id=phase_id, joint_names=tuple(order), start_state_positions=start,
                                       points=tuple(SimpleNamespace(positions=q) for q in points)))
