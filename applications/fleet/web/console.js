@@ -188,6 +188,10 @@ const { cancelAllNotice, refreshDispatchControl, pathSample, paintSitePath, refr
 // --- 로봇 목록 --------------------------------------------------------------
 
 function render() {
+  // 지도 캔버스는 무장(목표 선택·위치 찍기)했을 때만 누를 수 있는 단추다 — role이 상태를 따라간다(WCAG 4.1.2, 재비평 P2).
+  const goalCanvas = el("map-canvas");
+  if (view.selected || view.pinning) goalCanvas.setAttribute("role", "button");
+  else goalCanvas.removeAttribute("role");
   const rosterBox = el("roster");
   const focused = document.activeElement;
   const focusedCard = focused?.closest?.("#roster article, #robot-workspace article");
