@@ -13219,6 +13219,20 @@ osy-d395-s1d\`.
 - 결정: D-940 Accepted(사용자 "바로 처리" 지시, 워크트리 슬롯 1회 force-over-cap 승인 기록 포함)
 - 교훈: 없음(신규 게이트 제도화)
 
+## 2026-11-01 · uncommitted · docs(adr): 착지 처리량은 시험 PC 용량이 정한다
+- 변경: D-889 추가 10(통째 점유 제거·변화분 겹침 판정·입력 해시 결과 재사용·문서 전용 빠른 길 보류·사후 검증 채택 안 함, 성공 기준과 측정)
+- 근거: 사전 시험 슬롯 대기 p50 66분, 시험 실행 p50 1분, 배치 시도 73% 자리 없음, 착지당 사전 시험 p50 2·p90 5회, 문서 전용 착지 7%; 사례 조사(Chromium CQ, Bazel 캐시, Uber SubmitQueue, bors·Zuul·Tide, Google TAP)
+- 증거: `Rosy/docs/research/2026-11-01-merge-queue-bottleneck-cases.md`, `Rosy/docs/workspace-records/2026-10-31/landing-throughput-before-after.md`
+- gate 변화: 없음
+- 결정: D-889 추가 10(사용자 결정 2026-11-01)
+- 교훈: 없음
+
+## 2026-11-01 · uncommitted · feat(land): 한 표 묶음(rollup)
+- 변경: `tools/land_rollup.py`(plan·apply·split), `test/test_land_rollup.py`, `tools/AGENTS.md`, D-889 추가 11
+- 근거: 표 단위 자동 묶음은 교착으로 꺼졌다(추가 9). 같은 날 손으로 일곱 착지를 한 브랜치·한 표로 묶어 FULL 한 번으로 시험했다(사용자 지시)
+- 증거: 원격 `test/test_land_rollup.py`·`test/test_land_queue.py`·`test/test_harness_contracts.py`
+- gate 변화: 없음
+- 결정: D-889 추가 11(사용자 지시 2026-11-01)
 ## 2026-11-01 · uncommitted · fix: 로봇-사이트 링크 견고성 (조사 1순위 4건 + D-944)
 - 변경: 허브가 본문 검증 실패에 `PAYLOAD_INVALID`로 답하고 Agent는 세션을 유지(이벤트는 재전송 없이 버림), API v1.336. CORE `/ws/events` 소켓 8개·소켓당 미전송 1000개 상한(넘으면 1013, `since_seq`로 갭 보정)과 스레드 안전한 큐 적재. Pinky 런타임 세 곳에 `ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST`(D-795 1)와 존재 검사. fallback AP는 열린 뒤 받은 패킷이 없으면 `idle_hold_seconds`(120 s)에 물러나 사이트 Wi-Fi를 다시 시도. D-944: LCD 코드 페어링·도달 확인 읽기에 팀 tailnet 허용(개발 세션·peer 승인은 LAN 전용), API v1.337
 - 증거: 원격 시험은 착지 기록에 남긴다. AP 유휴 판정(wlan0 rx_packets)과 공유기 재부팅 복귀는 장치 미확인
