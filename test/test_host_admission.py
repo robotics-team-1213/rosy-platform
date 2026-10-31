@@ -165,3 +165,16 @@ def test_jobs_hide_cuda_while_an_isaac_run_holds_the_gpu(tmp_path, resv, hidden)
     assert ("cuda=\n" in out.stdout) is hidden and ("cuda=unset" in out.stdout) is not hidden, out.stdout
     assert ("Isaac holds the GPU" in out.stdout) is hidden
     assert rj.ISAAC_GPU_GUARD in rj.JOB
+
+
+@pytest.mark.parametrize("round_no, urgent, marked", [(1, "", "1"), ("g1", "", "1"), ("pre", "", ""),
+                                                      ("pre", "the user's words", "1")])
+def test_turn_rounds_and_urgent_landings_mark_their_jobs_to_skip_host_queues(monkeypatch, round_no, urgent, marked):
+    """2026-10-31: an urgent landing's pretest got 'no host' behind six others' pretests on full hosts."""
+    sys.path.insert(0, str(ROOT / "tools"))
+    import argparse
+    import land
+    seen = []
+    monkeypatch.setattr(land.land_checks, "run_tests", lambda *a, **k: seen.append(land.os.environ[land.TURN_ENV]))
+    land.run_tests(Path("."), argparse.Namespace(urgent=urgent), [], Path("."), round_no)
+    assert seen == [marked] and land.os.environ[land.TURN_ENV] == ""

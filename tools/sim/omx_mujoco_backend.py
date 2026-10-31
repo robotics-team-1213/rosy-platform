@@ -98,6 +98,8 @@ def main():
     parser.add_argument('--shape', required=True, metavar='HxW')
     parser.add_argument('--camera-hz', type=float, required=True)
     parser.add_argument('--real-time-factor', type=float, default=1.0)
+    parser.add_argument('--initial', action='append', default=[], metavar='JOINT=RAD',
+                        help='scene staging: start a joint (and its actuator target) here')
     args = parser.parse_args()
     shape = tuple(int(v) for v in args.shape.lower().split('x'))
     import mujoco
@@ -121,6 +123,12 @@ def main():
     qvel = {name: model.joint(name).dofadr[0] for name in joints}
     actuator = {name: model.actuator(name).id for name in JOINTS}
     movable = [box['name'] for box in boxes() if not box['static']]
+    for item in args.initial:
+        name, value = item.split('=')
+        data.qpos[qpos[name]] = data.ctrl[actuator[name]] = float(value)
+        if name == 'gripper_joint_1':
+            data.qpos[qpos['gripper_joint_2']] = -float(value)  # the mimic equality, already satisfied
+    mujoco.mj_forward(model, data)
 
     rclpy.init()
     node = Node('omx_mujoco_backend')
