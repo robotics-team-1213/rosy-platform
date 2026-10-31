@@ -532,6 +532,14 @@ def test_a_slow_host_does_not_hold_back_queued_invocations(monkeypatch, tmp_path
     assert [h for h, _ in seen].count("slow@2") == 1 and sorted(p for _, p in seen) == list("01234")
 
 
+def test_a_full_hosts_default_lanes_take_four_of_a_full_rounds_browser_chunks():
+    """2026-10-31: the per-host cap counts every run's browser jobs; 2 left 4 slots for all preparing landings."""
+    room = {"cores": 18, "mem": 18, "site": False, "light": False}
+    b = [rp.BROWSER_ENV, "t/a_browser.py"]
+    assert wq.workers(["a"], [["t"], *[b] * 12], {"a": dict(room)}).count(("a", "lane")) == 4
+    assert wq.workers(["a"], [["t"], *[b] * 12], {"a": {**room, "browser_jobs": 3}}).count(("a", "lane")) == 1
+
+
 def test_full_lab_hosts_get_browser_lanes_and_light_site_or_sim_holding_hosts_do_not(monkeypatch):
     monkeypatch.setattr(wq, "BROWSER_PER_HOST", 2)
     room = {"cores": 14, "mem": 15, "site": False, "light": False}
