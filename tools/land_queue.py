@@ -27,6 +27,7 @@ from pathlib import Path
 QUEUE = "rosy-land-queue"
 STALE_AFTER = 3 * 3600  # seconds without a refresh; one FULL round takes 30-90 min, the holder refreshes per round
 POLL = 10.0
+TICKET_ENV = "ROSY_LAND_TICKET"  # land_prepare.relaunch hands its ticket to main's land.py in a child process
 REPORT_EVERY = 300.0  # seconds between unchanged position lines
 # A waiting ticket tested over the current main passes an earlier waiting one tested over an older main (that one
 # re-runs its tier anyway; turning it first made the fresh one re-run too: ~984 min/day of FULL re-runs before the
@@ -228,9 +229,14 @@ def enter(wt: Path, branch: str, status: str = "waiting", urgent: str = "", *,
           batch_auto: bool = False) -> tuple[Path, Path]:
     """Take a ticket (its place in the queue) and release it at exit whatever happens; (queue dir, ticket)."""
     qdir = queue_dir(wt)
-    if urgent and (holder := urgent_holder(qdir)):
+    adopted = Path(os.environ.pop(TICKET_ENV, "") or "~")  # land_prepare.relaunch: keep the parent's place
+    if adopted.is_file():
+        ticket = adopted
+        set_status(ticket, status)
+    elif urgent and (holder := urgent_holder(qdir)):
         raise QueueError(f"--urgent refused: {describe([holder])} is already urgent ({holder['urgent']}); one at a time")
-    ticket = take(qdir, branch, str(wt), status, urgent, batch_auto=batch_auto)
+    else:
+        ticket = take(qdir, branch, str(wt), status, urgent, batch_auto=batch_auto)
     if urgent:
         land_events.emit("urgent", ticket=ticket.name, reason=urgent)
     _held.append(ticket)
