@@ -2,6 +2,7 @@
 import argparse
 import json
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 
@@ -29,6 +30,11 @@ class Runner:
             readiness = self.system.check(binding)
         except (OSError, ValueError, subprocess.SubprocessError):
             readiness = {'ready': False, 'reason': 'GPU가 사용 중이거나 SDK 확인에 실패했습니다.'}
+        film = 'ffmpeg/ffprobe' in next(e for e in catalog() if e['id'] == scenario_id)['requirements']
+        if readiness.get('ready') and film and not all(shutil.which(t) for t in ('ffmpeg', 'ffprobe')):
+            # The worker refuses the same way after launch; say it here, before a run is reserved.
+            readiness = {'ready': False, 'reason': '연속 녹화에 ffmpeg/ffprobe가 필요합니다. '
+                         'sudo python3 deploy/hosts/common/rosy-host-state install <model|ai> --approve sim'}
         return dict(snapshot, **readiness)
 
     def start(self, request):

@@ -10,6 +10,10 @@ shortcut: the pixel and direction come from the caller (Claude reading the frame
 outline automatically once more than one cluster shape has been pushed.
 
   cell_push.py --config cell-auto.json --site floor --px 228,330 --dir 0,-1 --mm 35 [--half-mm 15] [--dry-run]
+               [--commissioning --person-at-switch]
+
+A push moves the arm outside any reviewed carry and its commands do not pass the D-911 gate, so it moves only as a
+supervised trial (--commissioning --person-at-switch), like a pivot; without them it plans and stops (2026-10-31).
 """
 from __future__ import annotations
 
@@ -140,7 +144,13 @@ def main(argv=None):
     ap.add_argument("--mm", type=float, default=35.0)
     ap.add_argument("--half-mm", type=float, default=15.0, help="object half-extent along the push")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--commissioning", action="store_true", help="a supervised trial of this one push (D-911)")
+    ap.add_argument("--person-at-switch", action="store_true", help="with --commissioning: a person is at the power switch")
     args = ap.parse_args(argv)
+    if args.commissioning != args.person_at_switch:
+        raise SystemExit("--commissioning needs --person-at-switch (and the other way round)")
+    if not (args.dry_run or args.commissioning):
+        raise SystemExit("a push moves the arm outside the D-911 gate: --dry-run, or --commissioning --person-at-switch")
     config = json.loads(args.config.read_text(encoding="utf-8"))
     params = config["params"] = prm.load(config.get("params_path"))["values"]
     plan = json.loads(Path(config["plan_path"]).expanduser().read_text())
