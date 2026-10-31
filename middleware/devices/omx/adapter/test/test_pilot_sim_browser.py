@@ -127,7 +127,7 @@ def _paired_page(runtime):
                                common_root=ROOT / "shared/web", pairing_code="ABCD-EFGH")
     listener = safe_listener()
     port = listener.getsockname()[1]
-    server = uvicorn.Server(uvicorn.Config(app, log_level="error"))
+    server = uvicorn.Server(uvicorn.Config(app, log_level="error", log_config=None))
     thread = threading.Thread(target=server.run, kwargs={"sockets": [listener]}, daemon=True)
     thread.start()
     try:

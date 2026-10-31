@@ -49,7 +49,7 @@ def browser_site(tmp_path):
     origin = f"http://127.0.0.1:{listener.getsockname()[1]}"
     server = uvicorn.Server(uvicorn.Config(
         client.app, log_level="error", timeout_graceful_shutdown=3,
-        timeout_keep_alive=1))
+        timeout_keep_alive=1, log_config=None))
     worker = threading.Thread(target=server.run, kwargs={"sockets": [listener]}, daemon=True)
     worker.start()
     try:
