@@ -1,0 +1,44 @@
+# D-936 site Monitoring configuration template. Copy outside ROSY_SITE_CONFIG_DIR
+# (for example /etc/rosy/monitoring/monitoring.yaml, root:10001 0640); change the Fleet port if needed.
+# Keys never go here: token_env names map to files in ROSY_SITE_MONITORING_SECRETS_DIR.
+collector_id: site-monitoring
+site_id: site
+# The site CA the Fleet container certificate chains to (the stack's site_ca secret).
+ca_bundle: /run/secrets/site_ca
+readers:
+  - principal_id: site-operator
+    token_env: MONITORING_SITE_READ
+    sites: [site]
+sources:
+  - id: fleet
+    site_id: site
+    kind: fleet
+    label: Fleet
+    # https://fleet:<ROSY_FLEET_PORT>; the certificate names "fleet".
+    url: https://fleet:8090
+    token_env: MONITORING_FLEET_UPSTREAM
+  - id: site-host-state
+    site_id: site
+    kind: host_state
+    label: 관제 PC 설정 상태
+    path: /var/lib/rosy-host-state/status.json
+  - id: site-pc
+    site_id: site
+    kind: host_guard
+    label: 관제 PC
+    path: /var/lib/rosy-host-guard/status.json
+    selector: site
+  - id: ai-pc
+    site_id: site
+    kind: host_guard
+    label: AI PC
+    path: /var/lib/rosy-host-guard/status.json
+    selector: ai
+  - id: model-pc
+    site_id: site
+    kind: host_guard
+    label: 모델 PC
+    path: /var/lib/rosy-host-guard/status.json
+    selector: model
+  # Robots appear in the same guard file under their host name; add one host_guard source
+  # per robot with that name as selector. Robot names stay in the private copy only.

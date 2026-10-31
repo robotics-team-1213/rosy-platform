@@ -66,6 +66,10 @@
       "path": "cell/cell-print-sheets.js",
       "media_type": "application/javascript"
     },
+    "cell-object-catalog.js": {
+      "path": "cell/cell-object-catalog.js",
+      "media_type": "application/javascript"
+    },
     "motor-health-view.js": {
       "path": "motor-health-view.js",
       "media_type": "application/javascript"
@@ -80,6 +84,14 @@
     },
     "cell-document-editor.js": {
       "path": "cell/cell-document-editor.js",
+      "media_type": "application/javascript"
+    },
+    "file-picker.css": {
+      "path": "shared/file-picker.css",
+      "media_type": "text/css"
+    },
+    "file-picker.js": {
+      "path": "shared/file-picker.js",
       "media_type": "application/javascript"
     },
     "cell.css": {

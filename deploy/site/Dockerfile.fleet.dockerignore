@@ -20,6 +20,8 @@
 !operations/processes/palletizing/src/**
 !applications/fleet/gateway/src/**
 !shared/web/**
+!operations/monitoring/src/**
+!applications/monitoring/web/**
 !deploy/site/requirements-fleet.txt
 !deploy/site/secret_exec.py
 !deploy/site/site_db.py

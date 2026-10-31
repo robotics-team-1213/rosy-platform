@@ -566,3 +566,26 @@ def test_archive_is_not_parsed_before_its_signed_hash_matches(candidate, monkeyp
     monkeypatch.setattr(verifier, "_archive_image_ids", must_not_parse)
     with pytest.raises(ValueError, match="image archive hash mismatch"):
         _verify(candidate)
+
+
+def test_monitoring_overlay_pair_has_signed_coverage(candidate):
+    assert _verify(candidate)["monitoring"] is True
+    (candidate[0] / "deploy/site/Caddyfile.monitoring").write_text("tampered", encoding="utf-8")
+    with pytest.raises(_load_verifier().CandidateVerificationError, match="deployment file hash mismatch"):
+        _verify(candidate)
+
+
+@pytest.mark.parametrize("removed", [("compose.monitoring.yaml", "Caddyfile.monitoring"),
+                                     ("Caddyfile.monitoring",)])
+def test_pre_monitoring_candidate_verifies_but_half_pair_does_not(candidate, removed):
+    root = candidate[0]
+    manifest = json.loads((root / "release.json").read_text())
+    for name in removed:
+        del manifest["deployment_file_sha256"][name]
+        (root / "deploy/site" / name).unlink()
+    (root / "release.json").write_text(json.dumps(manifest), encoding="utf-8")
+    if len(removed) == 2:
+        assert _verify(candidate)["monitoring"] is False
+    else:
+        with pytest.raises(_load_verifier().CandidateVerificationError, match="required deployment file"):
+            _verify(candidate)

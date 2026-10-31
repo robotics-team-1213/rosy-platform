@@ -51,8 +51,10 @@ class Gate:
                     return {"ok": False, "error": f"held: {fresh['reason']}", "envelope": fresh}
                 fresh["session_id"] = self.assessment["session_id"]
                 self.assessment = fresh
-        if not same_session(self.cell.act("state"), self.assessment):
-            return {"ok": False, "error": "held: session_changed"}
+        state, recovering = self.cell.act("state"), command.split()[0] in ("retreat", "park")
+        if not same_session(state, self.assessment, recovering=recovering):
+            faulted = state.get("fault") and same_session(state, self.assessment, recovering=True)
+            return {"ok": False, "error": "held: fault" if faulted else "held: session_changed"}
         a = self.assessment
         return self.cell.act(f"checked {a['session_id']} {a['library_sha256']} {command}")
 

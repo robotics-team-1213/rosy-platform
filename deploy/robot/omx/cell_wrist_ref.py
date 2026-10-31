@@ -9,6 +9,7 @@ image Jacobian J (px per arm mm) is measured with two small probe moves, then re
 from __future__ import annotations
 
 import json
+import math
 import time
 from pathlib import Path
 
@@ -29,6 +30,28 @@ def broyden(J, d_arm, d_px):
     J, d_arm, d_px = np.asarray(J, float), np.asarray(d_arm, float), np.asarray(d_px, float)
     denom = float(d_arm @ d_arm)
     return J if denom < 1e-9 else J + np.outer(d_px - J @ d_arm, d_arm) / denom
+
+
+def scale_height(area_low: float, area_high: float, rise_mm: float):
+    """The hover's height above the container top from how much the container shrinks when the hover rises a known
+    rise_mm: sqrt(area ratio) = (D + rise) / D, no lens calibration. For the oblique wrist view D is a scaled height
+    (a depth change along the view is rise x cos tilt), but differences of D are true vertical mm. None when the
+    shrink is under 2 % (lost in the blob edge's pixel noise)."""
+    s = math.sqrt(area_low / area_high) if area_high > 0 else 0.0
+    return None if s < 1.02 else round(rise_mm / (s - 1), 1)
+
+
+def top_offset_mm(ref: dict, area: float, footprint_mm2: float | None = None):
+    """How much lower (+) or higher (-) the container top is than at the reference, from its area at the same hover
+    pixel; another catalogue footprint scales the reference area. None without a scale or a footprint to compare."""
+    if not ref.get("scale_mm") or not area:
+        return None
+    ratio = 1.0
+    if footprint_mm2 or ref.get("footprint_mm2"):
+        if not (footprint_mm2 and ref.get("footprint_mm2")):
+            return None
+        ratio = footprint_mm2 / ref["footprint_mm2"]
+    return round(ref["scale_mm"] * (math.sqrt(ref["area"] * ratio / area) - 1), 1)
 
 
 def ref_servo(cell, camera: str, hsv, ref: dict, replan, params=None, J=None) -> dict:
@@ -99,30 +122,59 @@ def ref_hook(config: dict, cell, target: dict, write_library, site: str):
                     z=round(target["pick"]["z"] + dz_mm / 1000, 4))
         return write_library(config, pick, target["place"], work / "ref-replan.json")
 
-    def hover_up(mm):
-        return all(cell.act(c).get("ok") for c in (f"load {replan(0.0, 0.0, mm)}", "goto above_pick"))
+    def hover(dx_mm, dy_mm, dz_mm=0.0):
+        return all(cell.act(c).get("ok") for c in (f"load {replan(dx_mm, dy_mm, dz_mm)}", "goto above_pick"))
+
+    camera, entry = spec.get("camera", "wrist"), target.get("entry") or {}
+    footprint = entry.get("length_mm", 0) * entry.get("width_mm", 0) or None
+
+    def height_check(ref, out):
+        """At the reference pixel: the container top's height offset from its area, recorded only (the descent is
+        unchanged). A saved reference without a scale gets one from a single rise probe, kept with J."""
+        b0 = on_surface_blob(cell.frame(camera), hsv, params)
+        if b0 is None:
+            return ref
+        if "scale_mm" not in ref and path.exists():
+            up = prm.get(params, "wrist.z_probe_mm")
+            b1 = on_surface_blob(cell.frame(camera), hsv, params) if hover(out["dx_mm"], out["dy_mm"], up) else None
+            if not hover(out["dx_mm"], out["dy_mm"]):
+                out.update(verdict="refuse", why="not back at the hover after the height probe")
+                return ref
+            ref = dict(ref, scale_mm=b1 and scale_height(b0[2], b1[2], up))
+        out["top_offset_mm"] = top_offset_mm(ref, b0[2], footprint)
+        return ref
 
     def run():
-        ref = json.loads(path.read_text()) if path.exists() else estimate_reference(cell, spec.get("camera", "wrist"), hsv, hover_up, params)
+        ref = json.loads(path.read_text()) if path.exists() else estimate_reference(cell, camera, hsv, lambda mm: hover(0.0, 0.0, mm), params)
         if ref is None:
             return {"verdict": "refuse", "why": "no wrist reference (estimate failed)", "dx_mm": 0.0, "dy_mm": 0.0, "total_mm": 0.0}
-        out = ref_servo(cell, spec.get("camera", "wrist"), hsv, ref, replan, params, ref.get("J"))
+        if not path.exists():
+            ref["footprint_mm2"] = footprint
+        out = ref_servo(cell, camera, hsv, ref, replan, params, ref.get("J"))
         out["reference"] = ref.get("source", "confirmed place")
+        if out["verdict"] == "pass":
+            ref = height_check(ref, out)
         if out["verdict"] == "pass" and out.get("J") and path.exists():
             path.write_text(json.dumps(dict(ref, J=out["J"])))  # a J that led to a pass is kept for the next pick
         return {**out, "total_mm": round(float(np.hypot(out["dx_mm"], out["dy_mm"])), 1)}
     return run
 
 
-def capture_reference(cell, camera: str, hsv, work: Path, arm: str, site: str, params=None) -> dict | None:
-    """Right after the arm itself placed a container and hovers above it again: where it appears = 'centred'."""
+def capture_reference(cell, camera: str, hsv, work: Path, arm: str, site: str, params=None,
+                      footprint_mm2: float | None = None) -> dict | None:
+    """Right after the arm itself placed a container and hovers above it again: where it appears = 'centred'.
+    J and the hover's height scale belong to the arm and the hover, not the container, so they carry over."""
     b = on_surface_blob(cell.frame(camera), hsv, params)
     if b is None:
         return None
-    ref = {"u": round(b[0], 1), "v": round(b[1], 1), "area": b[2], "measured": time.strftime("%Y-%m-%dT%H:%M:%S")}
+    ref = {"u": round(b[0], 1), "v": round(b[1], 1), "area": b[2], "footprint_mm2": footprint_mm2,
+           "measured": time.strftime("%Y-%m-%dT%H:%M:%S")}
     old = ref_path(work, arm, site)
     if old.exists():
-        ref["J"] = json.loads(old.read_text()).get("J")
+        prev = json.loads(old.read_text())
+        ref["J"] = prev.get("J")
+        if "scale_mm" in prev:
+            ref["scale_mm"] = prev["scale_mm"]
     pending = old.with_suffix(".pending.json")
     pending.write_text(json.dumps(ref))
     return ref
@@ -163,4 +215,4 @@ def estimate_reference(cell, camera: str, hsv, hover_up, params=None) -> dict | 
     per_mm = (np.array(box1[:2]) - np.array(box0[:2])) / up
     ref = tip + per_mm * prm.get(params, "wrist.tip_to_top_mm")
     return {"u": round(float(ref[0]), 1), "v": round(float(ref[1]), 1), "area": box0[2], "source": "estimated",
-            "tip": tip.round(1).tolist(), "per_mm": per_mm.round(2).tolist()}
+            "tip": tip.round(1).tolist(), "per_mm": per_mm.round(2).tolist(), "scale_mm": scale_height(box0[2], box1[2], up)}

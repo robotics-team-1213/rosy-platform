@@ -46,6 +46,28 @@ def why_not(points, pixel_fn, polygon_px, occupied=None, roi=None) -> str | None
     return None
 
 
+def along_yaw(polygon_px, xy, held_axis_deg: float, base_yaw: float, pixel_fn, ratio: float = 2.0) -> float | None:
+    """The place yaw that lays the box along a long surface's long side, judged in the top view (nearest the site's
+    yaw among equals); None for a surface that is not long (a tray) or with no map there."""
+    import cv2
+
+    (_, _), (w, h), ang = cv2.minAreaRect(np.asarray(polygon_px, np.float32))
+    if min(w, h) <= 0 or max(w, h) < ratio * min(w, h):
+        return None
+    side = math.radians(ang if w >= h else ang + 90)
+    target = np.array([math.cos(side), math.sin(side)])
+
+    def misfit(yaw):
+        u = math.radians(yaw + held_axis_deg)
+        a, b = pixel_fn(xy), pixel_fn((xy[0] + 0.01 * math.cos(u), xy[1] + 0.01 * math.sin(u)))
+        d = None if a is None or b is None else np.subtract(b, a)
+        return None if d is None or not np.linalg.norm(d) else 1 - abs(float(d @ target)) / float(np.linalg.norm(d))
+
+    scored = [(round(m, 3), abs(y - base_yaw), float(y)) for y in np.arange(base_yaw - 90, base_yaw + 90.01, 5.0)
+              if (m := misfit(float(y))) is not None]
+    return round(min(scored)[2], 1) if scored else None
+
+
 def options(config: dict, dest_site: str, place_xy, held_axis_deg: float, entry: dict, pixel_fn, occupied=None,
             roi=None) -> tuple[list, str | None]:
     """([(xy, place_yaw_deg), ...] nearest first, None) or ([], why). held_axis_deg: the box's long axis relative to
@@ -59,13 +81,16 @@ def options(config: dict, dest_site: str, place_xy, held_axis_deg: float, entry:
     length, width = entry["length_mm"] + 2 * margin, entry["width_mm"] + 2 * margin
     offsets = sorted(((dx, dy) for dx in np.arange(-reach, reach + 1e-9, step) for dy in np.arange(-reach, reach + 1e-9, step)
                       if math.hypot(dx, dy) <= reach + 1e-9), key=lambda d: math.hypot(*d))
-    found, reasons = [], set()
-    for yaw in (base_yaw, base_yaw + 90.0, base_yaw - 90.0):
+    found, reasons, yaws = [], set(), [base_yaw, base_yaw + 90.0, base_yaw - 90.0]
+    along = along_yaw(polygon, place_xy, held_axis_deg, base_yaw, pixel_fn)
+    if along is not None:  # 2026-10-30 dry run: a 2-cell planned diagonally across the belt, which it also fits
+        yaws = [along] + [y for y in yaws if abs((y - along + 90) % 180 - 90) > 5.0]
+    for yaw in yaws:
         for dx, dy in offsets:
             xy = (round(place_xy[0] + dx / 1000, 4), round(place_xy[1] + dy / 1000, 4))
             why = why_not(footprint(xy, yaw + held_axis_deg, length, width), pixel_fn, polygon, occupied, roi)
             if why is None:
-                found.append((xy, yaw, math.hypot(dx, dy) + (0 if yaw == base_yaw else 1000)))
+                found.append((xy, yaw, math.hypot(dx, dy) + (0 if yaw == yaws[0] else 1000)))
                 break  # the nearest point for this yaw is enough
             reasons.add(why)
     if not found:

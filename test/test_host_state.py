@@ -141,7 +141,8 @@ def test_recovery_install_is_a_single_explicit_approval_group():
     lines = (ROOT / "deploy/hosts/common/host-state/manifest").read_text().splitlines()
     for target in ("/usr/local/sbin/rosy-ssh-watchdog", "enabled rosy-ssh-watchdog.timer",
                    "/etc/systemd/system/rosy-watchdog-load.service", "enabled rosy-watchdog-load.service",
-                   "/etc/systemd/system.conf.d/rosy-watchdog.conf", "/etc/sysctl.d/90-rosy-hang.conf"):
+                   "/etc/systemd/system.conf.d/rosy-watchdog.conf", "/etc/sysctl.d/90-rosy-hang.conf",
+                   "/usr/local/sbin/rosy-host-guard-remote", "/usr/local/sbin/rosy-update-report"):
         assert any(line.startswith("approval=recovery ") and target in line for line in lines), target
 
 

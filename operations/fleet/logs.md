@@ -5187,3 +5187,10 @@
 - 시각 확인: source3657의320px authored/accessibility-spacing와390·1440px PNG/JSON을 보존·육안 확인했다. 점8px·조작48px 이상·내용 비잘림을 확인했다. 시험 코드만 후속 수정했으며 CSS는 그대로다. CI의 실제 fallback font는 미측정이고 전체 WCAG 수용으로 주장하지 않는다.
 - Gate: 독립 source 검토와 집중 검증 완료. 새 적격 FULL 착지·GitHub CI·게시·운영 전환은 별도 확인한다. skip/quarantine·production 연결 상태 처리·timeout 완화는 없다.
 - CE: 해당 없음 — 기존 child-clipping 교훈을 적용했고 추가 판단은 회귀·대기 제한·정확한 원인과 실패 기록에서 복원할 수 있다. 최초 운영 전환은 아직 미해결이다.
+
+## 2026-10-30 · uncommitted · feat(sim): 정상 단계 시뮬 관측자 transfer_observer (D-927 결정 3)
+
+- 변경: `tools/sim/transfer_observer.py` 추가. 독립 observer 자격으로 관측 문맥을 읽고 시뮬 상태 파일(측정 관절·속도·그리퍼·물체 자세)에서 URDF FK 링크 경계·속도를 계산해 시료 두 개를 제출한다. 승인·Action 제출 없음. 사용법은 `docs/transfer-outcome-review.md`.
+- 증거: `operations/fleet/test/test_transfer_observer_client.py` 원격 4 passed — 실제 Fleet 앱에서 PRE_DISPATCH·POST_ACTION으로 GOAL_CONFIRMED, 팔이 zone 안·회전 중이면 거절, 끝점이 `omx_adapter` TCP FK와 일치.
+- Gate: Fleet 검증 규칙·API 변화 없음. 시뮬 관측이며 물리 근거·현장 수용이 아니다. 팔 기준 자세 파일은 S4 설치 profile 전까지의 지름길이다.
+- CE: 해당 없음 — 새 도구와 시험이 계약을 보여 준다.

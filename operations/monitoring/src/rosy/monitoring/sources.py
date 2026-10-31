@@ -20,6 +20,20 @@ from .store import StoreUnavailable
 
 
 BODY_LIMIT = 1024 * 1024
+UPDATE_STUCK_AFTER_S = 6 * 3600  # the same bound as Fleet's D-871 update_summary
+
+
+def _update_health(report, now):
+    """D-871 update report in a guard row, judged like Fleet's /api/fleet/updates: no reasons copied."""
+    if not isinstance(report, dict) or not isinstance(report.get('updaters'), list):
+        return 'UNKNOWN'
+    for item in report['updaters']:
+        if not isinstance(item, dict) or item.get('timer') != 'enabled':
+            continue
+        healthy = item.get('healthy_at')
+        if type(healthy) not in (int, float) or not math.isfinite(healthy) or now - healthy > UPDATE_STUCK_AFTER_S:
+            return 'ERROR'
+    return 'WARNING' if report.get('gate') == 'frozen' else 'OK'
 
 
 class SourceFailure(ValueError):
@@ -196,7 +210,12 @@ class SourceReader:
                               target_id=node.id, kind='reported', expected=True, reachable=reachable,
                               failure_stage='none' if reachable is True else 'unknown', duration_ms=None,
                               **metadata)
-        return [node], [link]
+        if 'updates' not in row:
+            return [node], [link]
+        updates = MonitoringNode(id=f'{node.id}:updates', kind='host', label=f'{node.label[:70]} 업데이트',
+                                 reported_health=_update_health(row['updates'], self.cache._wall().timestamp()),
+                                 **metadata)
+        return [node, updates], [link]
 
     def _fleet(self, source, data):
         value = FleetMonitoringRead.model_validate(data)

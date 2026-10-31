@@ -13,7 +13,8 @@ import cell_marks  # noqa: E402
 
 
 def scene_with(marker_id: int, mm: float, angle: float, centre=(320.0, 240.0), px_per_mm: float = 1.1):
-    big = cv2.aruco.generateImageMarker(cell_marks._dictionary(), marker_id, 600)
+    draw_marker = getattr(cv2.aruco, "generateImageMarker", None) or cv2.aruco.drawMarker
+    big = draw_marker(cell_marks._dictionary(), marker_id, 600)
     big = cv2.copyMakeBorder(big, 100, 100, 100, 100, cv2.BORDER_CONSTANT, value=255)
     M = cv2.getRotationMatrix2D((400, 400), angle, px_per_mm * mm / 600)
     M[:, 2] += (centre[0] - 400, centre[1] - 400)
