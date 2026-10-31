@@ -391,7 +391,7 @@ def test_the_service_talks_to_a_real_fleet_as_ai_observer_and_moves_nothing(tmp_
                      start_task_dispatcher=False,
                      site_users={sha256(b"ai-token").hexdigest(): {"principal_id": "ai-pc", "role": "ai_observer"}})
     listener = safe_listener()
-    server = uvicorn.Server(uvicorn.Config(app, log_level="error"))
+    server = uvicorn.Server(uvicorn.Config(app, log_level="error", log_config=None))
     worker = threading.Thread(target=server.run, kwargs={"sockets": [listener]}, daemon=True)
     worker.start()
     try:

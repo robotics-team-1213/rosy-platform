@@ -33,7 +33,7 @@ def test_console_login_survives_reload_and_new_tab_then_logs_out(tmp_path):
     listener = safe_listener()
     # Chromium keeps Secure cookies from http://localhost (a potentially trustworthy origin).
     origin = f"http://localhost:{listener.getsockname()[1]}"
-    server = uvicorn.Server(uvicorn.Config(app, log_level="error", timeout_graceful_shutdown=3))
+    server = uvicorn.Server(uvicorn.Config(app, log_level="error", timeout_graceful_shutdown=3, log_config=None))
     worker = threading.Thread(target=server.run, kwargs={"sockets": [listener]}, daemon=True)
     worker.start()
     try:

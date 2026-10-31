@@ -81,7 +81,7 @@ def test_real_plugin_socket_to_native_ros_and_stop(tmp_path):
                 with socket.socket() as listener:
                     listener.bind(('127.0.0.1', 0))
                     listener.listen()
-                    server = uvicorn.Server(uvicorn.Config(trace, log_level='warning', lifespan='off'))
+                    server = uvicorn.Server(uvicorn.Config(trace, log_level='warning', lifespan='off', log_config=None))
                     worker = threading.Thread(target=server.run, kwargs={'sockets': [listener]})
                     worker.start()
                     try:

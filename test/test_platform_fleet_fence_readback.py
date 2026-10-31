@@ -43,7 +43,7 @@ def _serve(app):
     listener = socket.socket()
     listener.bind(("127.0.0.1", 0))
     port = listener.getsockname()[1]
-    server = uvicorn.Server(uvicorn.Config(app, log_level="critical", access_log=False, lifespan="off"))
+    server = uvicorn.Server(uvicorn.Config(app, log_level="critical", access_log=False, lifespan="off", log_config=None))
     thread = threading.Thread(target=lambda: server.run(sockets=[listener]), daemon=True)
     thread.start()
     try:

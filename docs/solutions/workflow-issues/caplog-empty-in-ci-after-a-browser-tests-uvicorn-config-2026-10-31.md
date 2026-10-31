@@ -46,12 +46,14 @@ The test attaches `caplog.handler` to `uvicorn.error` itself for the call and re
 builds `uvicorn.Config(app, log_level="error")` at configure time fails the old test in exactly the two CI cases and
 passes the new one.
 
-The 35 test files that build `uvicorn.Config` without `log_config=None` were left as they are; changing them was
-outside the publish fix.
+All 37 `uvicorn.Config` calls in 35 test files then got `log_config=None`, and
+`test/test_uvicorn_test_servers_keep_logging.py` fails when a test's `uvicorn.Config` call lacks it (checked by
+reverting one file: the guard failed).
 
 ## Prevention
 
-- A new live server in a test passes `log_config=None`, so it does not reconfigure process logging for later tests.
+- A new live server in a test passes `log_config=None`, so it does not reconfigure process logging for later tests
+  (the guard above enforces it).
 - A test that reads a uvicorn logger record attaches `caplog.handler` to that logger rather than relying on root
   propagation.
 - To reproduce a CI-only logging failure locally, use pytest 7.4.4 and set up the earlier test's logging state in a
