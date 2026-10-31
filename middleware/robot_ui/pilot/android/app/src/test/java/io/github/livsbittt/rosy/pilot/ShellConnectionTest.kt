@@ -2,6 +2,9 @@
 
 import java.io.File
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicInteger
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -15,6 +18,52 @@ import org.junit.Test
 
 /** Each bundled Pilot page receives its selected robot session. */
 class ShellConnectionTest {
+    @Test fun receiveOnlyStateSocketSurvivesTwoHttpReadTimeouts() {
+        MockWebServer().use { remote ->
+            remote.start()
+            val row = Candidate("127.0.0.1", remote.port, listOf("127.0.0.1"), "Robot", "rosy_01", false)
+            val store = CandidateStore().apply { resolved("robot", found("robot")!!, row) }
+            val proxy = PilotProxy(LobbySession(RobotTarget("rosy_01", row.host, row.port, "fixture-session-token"),
+                false, java.time.Instant.now().plusSeconds(60), row, store), failure = {})
+            val stream = Executors.newSingleThreadScheduledExecutor()
+            val authenticated = CountDownLatch(1); val closed = CountDownLatch(1)
+            val frames = AtomicInteger(); val messages = AtomicInteger()
+            remote.enqueue(MockResponse().withWebSocketUpgrade(object : okhttp3.WebSocketListener() {
+                override fun onOpen(socket: okhttp3.WebSocket, response: okhttp3.Response) {
+                    stream.scheduleAtFixedRate({ socket.send("{\"type\":\"state\"}") }, 0, 100, TimeUnit.MILLISECONDS)
+                }
+                override fun onMessage(socket: okhttp3.WebSocket, text: String) {
+                    messages.incrementAndGet(); authenticated.countDown()
+                }
+            }))
+            val browser = OkHttpClient.Builder().pingInterval(0, TimeUnit.SECONDS).build()
+            var socket: okhttp3.WebSocket? = null
+            try {
+                proxy.start(5000, false)
+                socket = browser.newWebSocket(Request.Builder().url("${proxy.origin}/ws/state")
+                    .header("Cookie", "${proxy.cookieName}=${proxy.capability}").header("Origin", proxy.origin).build(),
+                    object : okhttp3.WebSocketListener() {
+                        override fun onOpen(socket: okhttp3.WebSocket, response: okhttp3.Response) {
+                            socket.send("{\"type\":\"auth\",\"token\":\"fixture-session-token\"}")
+                        }
+                        override fun onMessage(socket: okhttp3.WebSocket, text: String) { frames.incrementAndGet() }
+                        override fun onClosing(socket: okhttp3.WebSocket, code: Int, reason: String) { closed.countDown(); socket.close(code, reason) }
+                        override fun onClosed(socket: okhttp3.WebSocket, code: Int, reason: String) { closed.countDown() }
+                        override fun onFailure(socket: okhttp3.WebSocket, error: Throwable, response: okhttp3.Response?) { closed.countDown() }
+                    })
+                assertTrue(authenticated.await(3, TimeUnit.SECONDS))
+                assertFalse("receive-only telemetry must not hit the HTTP socket idle timeout", closed.await(12, TimeUnit.SECONDS))
+                assertTrue(frames.get() >= 100)
+                assertEquals("keepalive must not add application or motion messages", 1, messages.get())
+                proxy.disconnect()
+                assertTrue(closed.await(2, TimeUnit.SECONDS))
+            } finally {
+                stream.shutdownNow(); socket?.cancel(); proxy.stop()
+                browser.dispatcher.cancelAll(); browser.connectionPool.evictAll(); browser.dispatcher.executorService.shutdown()
+            }
+        }
+    }
+
     @Test fun twoRobotViewsKeepCameraAndTeleopOnTheirOwnRobot() {
         MockWebServer().use { a -> MockWebServer().use { b ->
             a.start(); b.start()
