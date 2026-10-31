@@ -90,6 +90,27 @@ def test_supervise_cleans_up_only_a_landed_snapshot(repo, lands):
     assert (tree.parent / (tree.name + ".stopped")).exists() is not lands
 
 
+@pytest.mark.parametrize("room", [True, False])
+def test_a_landing_refused_only_by_a_full_queue_waits_for_room(repo, room):
+    """start() saw room, another session took the last slot first: wait and run land.py again, not stop."""
+    main, dev = repo
+    snap, log = tool.start(dev, [], NOW, lambda *a: None)
+    tree = log.parent / log.name.removesuffix(".log")
+    runs = []
+
+    def fake_land(argv, cwd, stdout, stderr, **kw):
+        runs.append(argv)
+        if len(runs) == 1:
+            stdout.write(f"[land] STOP: {tool.QUEUE_FULL} (12/12 tickets)\n")
+            return 1
+        _git(main, "merge", "-q", "--ff-only", snap)
+        return 0
+    code = tool.supervise(tree, snap, [], run=fake_land, room=lambda t, d: room)
+    assert len(runs) == (2 if room else 1)
+    assert code == (0 if room else 1)
+    assert (tree.parent / (tree.name + ".stopped")).exists() is not room
+
+
 def test_the_supervisor_never_holds_the_callers_worktree(tmp_path, monkeypatch):
     """Windows cannot delete a folder that a live process has as its cwd (2026-10-28: freed worktrees stayed)."""
     caller = tmp_path / "worktree"
