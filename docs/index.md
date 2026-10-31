@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-11-01 · uncommitted · omx: 공유 동작 공간 cell_space, 팔이 쓸 통로를 예약하고 다른 팔의 살아 있는 예약과 겹치면 거절
 - 2026-11-01 · uncommitted · feat(land): 한 표 묶음(rollup)
 - 2026-11-01 · uncommitted · docs(adr): 착지 처리량은 시험 PC 용량이 정한다
 - 2026-11-01 · uncommitted · docs: D-940 중복 정의 게이트와 등록부
 - 2026-10-31 · uncommitted · omx: 재배선 뒤 장치 식별 교훈
-- 2026-10-31 · uncommitted · fix(land): 자동 묶음 착지를 끈다
