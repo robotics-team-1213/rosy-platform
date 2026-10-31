@@ -263,7 +263,9 @@ def test_observer_unit_restarts_only_into_an_idle_cell():
     assert service['Restart'] == 'on-failure' and int(service['RestartSec']) >= 10
     assert unit['Unit']['StartLimitIntervalSec'] == '0'
     guard = service['ExecStartPre']
-    assert 'flock -n 9' in guard and '%h/rosy-omx/session.lock' in guard  # the lock joint_tune.session_lock takes
+    # shared on the cell lock (a whole-cell holder keeps it out), exclusive on its own arm's lock (session_lock(arm))
+    assert 'flock -n -s 9' in guard and '%h/rosy-omx/session.lock' in guard
+    assert 'flock -n 8' in guard and '%h/rosy-omx/session-%i.lock' in guard
     assert 'fuser "$ROSY_OBSERVER_DEVICE"' in guard and 'exit 1' in guard
 
 
