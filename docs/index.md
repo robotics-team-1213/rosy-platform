@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-11-01 · uncommitted · omx: cell_depth, 깊이 카메라로 셀의 높이를 자르고 컬러 화면에 맞춤(자·접촉 없이)
 - 2026-11-01 · uncommitted · feat(land): 한 표 묶음(rollup)
 - 2026-11-01 · uncommitted · docs(adr): 착지 처리량은 시험 PC 용량이 정한다
 - 2026-11-01 · uncommitted · docs: D-940 중복 정의 게이트와 등록부
 - 2026-10-31 · uncommitted · omx: 재배선 뒤 장치 식별 교훈
-- 2026-10-31 · uncommitted · fix(land): 자동 묶음 착지를 끈다
