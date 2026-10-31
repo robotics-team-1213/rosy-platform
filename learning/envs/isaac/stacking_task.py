@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 
 from stacking_fixture import BELT_TOP, DT, FIXTURE, PROFILE, UNIT, advance_joint, placed, stack_plan, target
+import stacking_scene as scene
 from importer_compat import import_model, reference_model
 from model_checks import check_urdf, check_vendor_manifest
 from run_omx_backend import (PAD_RADIUS, PAD_HALF_LENGTH, PAD_CONTACT_OFFSET_M, PAD_REST_OFFSET_M,
@@ -15,6 +16,9 @@ from run_omx_backend import (PAD_RADIUS, PAD_HALF_LENGTH, PAD_CONTACT_OFFSET_M, 
 
 def run(args):
     global FIXTURE
+    container = getattr(args, 'mapped_container_stack', False)
+    if container:
+        args.mapped_cube_stack = True
     mapped = args.mapped_long_stack or args.mapped_rl or args.mapped_cube_stack
     if mapped:
         from mapped_stack_fixture import FIXTURE
@@ -22,6 +26,9 @@ def run(args):
             from mapped_stack_fixture import RL_FIXTURE as FIXTURE
         elif args.mapped_cube_stack:
             from mapped_stack_fixture import CUBE_FIXTURE as FIXTURE
+            if container:
+                from mapped_stack_fixture import container_fixture
+                FIXTURE = container_fixture(layers=args.layers, case=args.container_case)
     import numpy as np
     import torch
     import yaml
@@ -32,12 +39,10 @@ def run(args):
     from pxr import Gf, Sdf, Usd, UsdGeom, UsdLux, UsdPhysics, UsdShade, PhysxSchema
     from isaacsim.core.api import World
     from isaacsim.core.api.robots import Robot
-    from isaacsim.core.api.objects import DynamicCuboid, FixedCuboid, VisualCuboid
+    from isaacsim.core.api.objects import FixedCuboid, VisualCuboid
     from isaacsim.core.api.materials import PhysicsMaterial
-    from isaacsim.core.prims import RigidPrim
     from isaacsim.core.utils.types import ArticulationAction
     from isaacsim.sensors.camera import Camera
-    from PIL import Image
     from rsl_rl.runners import OnPolicyRunner
 
     torch.manual_seed(args.seed)
@@ -63,14 +68,21 @@ def run(args):
     world = World(physics_dt=FIXTURE.get('physics_dt_s', DT), rendering_dt=DT, stage_units_in_meters=1.)
     mat = PhysicsMaterial('/World/GripMaterial', static_friction=1., dynamic_friction=1., restitution=0.)
 
-    def fixed(name, position, size, color):
-        return world.scene.add(FixedCuboid('/World/'+name, name=name, size=1.,
-            position=np.array(position), scale=np.array(size), color=np.array(color), physics_material=mat))
+    def fixed(name, position, size, color, pitch=0.):
+        orientation = np.array([math.cos(pitch/2),0.,-math.sin(pitch/2),0.]) if pitch else None
+        obj = world.scene.add(FixedCuboid('/World/'+name, name=name, size=1.,
+            position=np.array(position), scale=np.array(size), color=np.array(color), physics_material=mat,
+            orientation=orientation))
+        if pitch:
+            measured = obj.get_world_pose()[1]
+            if not np.isfinite(measured).all() or abs(float(np.dot(measured,orientation))) < 1-1e-6:
+                raise RuntimeError('Sloped conveyor orientation readback differs')
+        return obj
 
     fixed('Table', FIXTURE.get('workplate_center_m', [0., -.20, -.025] if mapped else [0., 0., -.025]),
           FIXTURE.get('workplate_size_m', [.9, .8, .05] if mapped else [1.8, 1.8, .05]),
           [.85, .66, .05] if mapped else [.30, .32, .34])
-    belt = fixed('Conveyor', FIXTURE.get('belt_center_m', [.16 if mapped else .20, -.28, .0125]), FIXTURE['belt_size_m'], [.12, .15, .18])
+    belt = fixed('Conveyor', FIXTURE.get('belt_center_m', [.16 if mapped else .20, -.28, .0125]), FIXTURE['belt_size_m'], [.12, .15, .18], FIXTURE.get('belt_pitch_rad',0.))
     UsdPhysics.RigidBodyAPI.Apply(belt.prim).CreateKinematicEnabledAttr(True)
     surface = PhysxSchema.PhysxSurfaceVelocityAPI.Apply(belt.prim)
     surface.CreateSurfaceVelocityEnabledAttr(True)
@@ -81,7 +93,12 @@ def run(args):
             center = FIXTURE['belt_center_m'][:]
             center[1] += sign*(FIXTURE['belt_size_m'][1]/2+.002)
             center[2] = .027
-            fixed('BeltRail'+str(i), center, [FIXTURE['belt_size_m'][0], .004, .005], [.65, .65, .65])
+            pitch = FIXTURE.get('belt_pitch_rad',0.)
+            if pitch:
+                center[0] -= math.sin(pitch)*.0045
+                center[2] = FIXTURE['belt_center_m'][2]+math.cos(pitch)*.0045
+            fixed('BeltRail'+str(i), center, [FIXTURE['belt_size_m'][0], .004, .005], [.65, .65, .65], pitch)
+    if args.mapped_cube_stack and 'upstream_belt_center_m' in FIXTURE:
         upstream = fixed('UpstreamConveyor', FIXTURE['upstream_belt_center_m'], FIXTURE['upstream_belt_size_m'], [.12, .15, .18])
         UsdPhysics.RigidBodyAPI.Apply(upstream.prim).CreateKinematicEnabledAttr(True)
         surface = PhysxSchema.PhysxSurfaceVelocityAPI.Apply(upstream.prim)
@@ -184,7 +201,7 @@ def run(args):
                 drive.CreateTypeAttr('force')
                 drive.CreateStiffnessAttr(math.radians(30. if finger else FIXTURE['arm_stiffness_si']) if mapped else (30. if finger else 5000.))
                 drive.CreateDampingAttr(math.radians(2. if finger else FIXTURE['arm_damping_si']) if mapped else (2. if finger else 100.))
-                drive.CreateMaxForceAttr(.2 if finger else (FIXTURE['arm_max_effort_nm'] if mapped else 30.))
+                drive.CreateMaxForceAttr(FIXTURE.get('finger_max_efforts_nm', [.2, 2.])[0] if finger else (FIXTURE['arm_max_effort_nm'] if mapped else 30.))
                 if prim.GetName() == 'gripper_joint_2':
                     drive.CreateStiffnessAttr(math.radians(FOLLOWER_STIFFNESS) if mapped else FOLLOWER_STIFFNESS)
                     drive.CreateDampingAttr(math.radians(FOLLOWER_DAMPING) if mapped else FOLLOWER_DAMPING)
@@ -229,46 +246,13 @@ def run(args):
         robots.append(robot)
     if mapped:
         from mapped_stack_fixture import plan as mapped_plan
-        plan = mapped_plan(args.mapped_cube_stack)
+        plan = mapped_plan(args.mapped_cube_stack, fixture=FIXTURE)
     else:
         plan = stack_plan()
-    colors = {1: [.03, .08, .24], 2: [.15, .65, .25], 3: [.95, .4, .08]}
-    cargo, contacts = [], []
-    filters = [link[key] for link in links for key in ('link6', 'link7')]
-    for i, item in enumerate(plan):
-        box = world.scene.add(DynamicCuboid('/World/Cargo'+str(i), name='cargo'+str(i), size=1.,
-            scale=np.array([UNIT*item['cells'], UNIT, UNIT]), mass=.02*item['cells'],
-            position=np.array([.7, -.5+i*.065, .015]), color=np.array(colors[item['cells']]), physics_material=mat))
-        cargo.append(box)
-        if mapped:
-            # Resolve the small stacked contacts with the same solver budget as the arms.
-            body = PhysxSchema.PhysxRigidBodyAPI.Apply(box.prim)
-            body.CreateSolverPositionIterationCountAttr(64)
-            body.CreateSolverVelocityIterationCountAttr(16)
-            assert body.GetSolverVelocityIterationCountAttr().Get() == 16
-        contacts.append(world.scene.add(RigidPrim('/World/Cargo'+str(i), name='contact'+str(i),
-            track_contact_forces=True, contact_filter_prim_paths_expr=filters+['/World/Bin']+(['/World/Conveyor'] if mapped else [])+
-            ['/World/Cargo'+str(j) for j in range(len(plan)) if j != i], max_contact_count=512 if args.mapped_cube_stack else 128)))
+    cargo, contacts = scene.add_cargo(world, stage, plan, links, mat, FIXTURE, mapped=mapped, cube=args.mapped_cube_stack)
     eye = Gf.Vec3d(.60, -.62, .48)
-    wrist_views = []
-    if mapped:
-        for i, link in enumerate(links):
-            path = stage.GetPrimAtPath(link['end_effector_link']).GetParent().GetPath()
-            wrist_views.append(world.scene.add(RigidPrim(str(path), name='wrist_pose'+str(i))))
-    grasp_probes = []
-    probe_filters = ['/World/Table', '/World/PlywoodMap', '/World/Conveyor', '/World/BeltStop', '/World/Bin']+[
-        '/World/Cargo'+str(i) for i in range(len(plan))]
-    if args.mapped_long_stack or args.mapped_cube_stack:
-        body_paths = [[str(p.GetPath()) for p in Usd.PrimRange(root) if p.HasAPI(UsdPhysics.RigidBodyAPI)]
-                      for root in (first, second)]
-        for i in range(2):
-            views = []
-            filters = probe_filters+body_paths[1-i]
-            for j, path in enumerate(body_paths[i][1:]):
-                view = world.scene.add(RigidPrim(path, name=f'grasp_probe_{i}_{j}', track_contact_forces=True,
-                    contact_filter_prim_paths_expr=filters, max_contact_count=128))
-                views.append((path, view))
-            grasp_probes.append((filters, views))
+    wrist_views, grasp_probes = scene.add_probes(world, stage, links, plan, (first, second), mapped=mapped,
+                                                 probed=args.mapped_long_stack or args.mapped_cube_stack)
     look = Gf.Matrix4d().SetLookAt(eye, Gf.Vec3d(.13, -.10, .12), Gf.Vec3d(0., 0., 1.)).GetInverse()
     rotation = look.ExtractRotationQuat()
     camera = Camera('/World/Observer', position=np.array(eye), resolution=(800, 600))
@@ -286,29 +270,15 @@ def run(args):
             raise RuntimeError('Mapped OMX requires a native fixed base')
 
     def capture(name, overview=False):
-        position = Gf.Vec3d(2.2, -2.2, 3.) if overview else eye
-        focus = Gf.Vec3d(0., 1.1, 0.) if overview else Gf.Vec3d(.13, -.10, .12)
-        up = Gf.Vec3d(0., 0., 1.)
-        if name == 'mapped-top.png':
-            position, focus, up = Gf.Vec3d(.16, .10, 1.25), Gf.Vec3d(.16, .10, 0.), Gf.Vec3d(0., 1., 0.)
-        elif name == 'mapped-side.png':
-            position, focus = Gf.Vec3d(.8, -.05, .16), Gf.Vec3d(.03, 0., .08)
-        rotation = Gf.Matrix4d().SetLookAt(position, focus, up).GetInverse().ExtractRotationQuat()
-        camera.set_world_pose(np.array(position), np.array([rotation.GetReal(), *rotation.GetImaginary()]), camera_axes='usd')
-        for _ in range(8):
-            world.render()
-        rgba = camera.get_rgba()
-        if rgba is None or rgba.shape != (600, 800, 4):
-            raise RuntimeError('Actual SDK image unavailable')
-        Image.fromarray(rgba.astype(np.uint8)).save(args.report.parent/name)
+        scene.capture(world, camera, eye, args.report.parent/name, container=container, overview=overview)
 
     if mapped:
         from mapped_stack_fixture import free_lift, home, stable_box, tcp_from_wrist
         from mapped_stack_task import Planner, apply_servo
-        planner = Planner(args.report.parent)
+        planner = Planner(args.report.parent,scene=FIXTURE.get('planning_scene'))
         initial = planner.request('homes', bases=FIXTURE['arm_bases_m'],
             base_yaws=FIXTURE.get('arm_base_yaws_rad', [0., 0.]),
-            points=[home(0, args.mapped_cube_stack), home(1, args.mapped_cube_stack)])
+            points=[home(0, args.mapped_cube_stack, fixture=FIXTURE), home(1, args.mapped_cube_stack, fixture=FIXTURE)])
 
     def tcp_position(arm):
         positions, quaternions = wrist_views[arm].get_world_poses()
@@ -316,8 +286,42 @@ def run(args):
 
     if args.mapped_long_stack or args.mapped_cube_stack:
         from mapped_stack_task import execute
-        return execute(args, world, stage, robots, joint_indices, fingers, cargo, contacts, capture, grasp_probes,
-                       planner, initial, tcp_position)
+        recording = None
+        if container:
+            from container_recording import ContainerRecording
+            import omni.replicator.core as rep
+            import omni.graph.core as og
+            config = FIXTURE['recording']
+            position, focus = Gf.Vec3d(*config['eye']), Gf.Vec3d(*config['focus'])
+            rotation = Gf.Matrix4d().SetLookAt(position, focus, Gf.Vec3d(0., 0., 1.)).GetInverse().ExtractRotationQuat()
+            video_camera = Camera('/World/Recording', position=np.array(position), resolution=(config['width'], config['height']))
+            video_camera.initialize()
+            video_camera.set_world_pose(np.array(position), np.array([rotation.GetReal(), *rotation.GetImaginary()]), camera_axes='usd')
+            video_camera.set_clipping_range(.01, 10.)
+            for name, value in (('focalLength', 35.), ('horizontalAperture', 36.), ('verticalAperture', 27.)):
+                video_camera.prim.GetAttribute(name).Set(value)
+            reference = rep.AnnotatorRegistry.get_annotator('ReferenceTime')
+            reference.attach([video_camera.get_render_product_path()])
+            graph = og.Controller.graph('/Render/PostProcess/SDGPipeline')
+            def reference_time():
+                og.Controller.evaluate_sync(graph_id=graph)
+                return reference.get_data()
+            for _ in range(20):
+                world.render()
+            print('CONTAINER_RENDER_RECEIPT', type(video_camera.get_current_frame().get('rendering_frame')).__name__, reference_time(), flush=True)
+            recording = ContainerRecording(args.report.parent, world, video_camera, config, reference_time)
+        try:
+            if recording is not None:
+                recording.write(0, robots[0].get_joint_positions()[joint_indices[0]])
+            report = execute(args, world, stage, robots, joint_indices, fingers, cargo, contacts, capture, grasp_probes,
+                planner, initial, tcp_position, fixture=FIXTURE, recording=recording,
+                wrists=wrist_views if container else None)
+        finally:
+            if recording is not None:
+                recording.close()
+        if recording is not None:
+            report['video'] = recording.manifest()
+        return report
 
     def goal(item):
         return item['target'] if mapped else target(item)
@@ -554,10 +558,16 @@ def main():
     modes = parser.add_mutually_exclusive_group()
     modes.add_argument('--mapped-long-stack', action='store_true')
     modes.add_argument('--mapped-cube-stack', action='store_true')
+    modes.add_argument('--mapped-container-stack', action='store_true')
     modes.add_argument('--mapped-rl', action='store_true')
+    parser.add_argument('--layers', type=int, choices=(1, 3), default=3)
+    parser.add_argument('--container-case', choices=('nominal', 'offset', 'reverse', 'column', 'nominal-estimate', 'nominal-bc-v0',
+                                 'nominal-bc-v0-rl0', 'release-episodes-rl0', 'release-episodes-rl1',
+                                 'release-episodes-rl2', 'release-episodes-rl3'),
+                        default='nominal')
     args = parser.parse_args()
     check_vendor_manifest()
-    if args.mapped_long_stack or args.mapped_rl or args.mapped_cube_stack:
+    if args.mapped_long_stack or args.mapped_rl or args.mapped_cube_stack or args.mapped_container_stack:
         from mapped_stack_fixture import physical_model
         # The original remains unchanged; the visual-only TCP is restored as a nonphysical USD child of link5.
         model = physical_model(args.urdf)

@@ -1,12 +1,12 @@
 ---
 module: isaac_sim
 owner: sim
-last_verified: { commit: "5c89f3d1f3", date: 2026-10-29 }
+last_verified: { commit: "bb39f438a5", date: 2026-10-30 }
 gates:
   SOURCE:
     state: GO
     cmd: "python tools/remote/remote_pytest.py --log-dir X:/DevTemp/isaac-source -- learning/envs/isaac/test"
-    evidence: "5c89f3d1f3 remote terminal/lift/retention/near-arm/reference regression:32 passed,0NEW. edbf49d6e0 broad checks:807 passed,1 skip,1 public-checksum entropy finding; metadata972f2ae2d1 fixed its integrity label and all80release-boundary checks then passed0NEW. Latest accepted runtime record c1786ef9d6/254a87c630f8581dbdc53a5218438a36 has SDKexit0 and confirmed owned cleanup but physicalFAILED on third-bar envelope. New bias physics is pending GPU admission. See docs/validation/omx-cube-stacking-2026-10-29/result.md. Source checks do not establish physical, learned-policy or hardware acceptance. Earlier CORE/Drive evidence remains in docs/validation/isaac-map-rl-2026-10-11/result.md."
+    evidence: "bb39f438a5 remote Isaac596tests594passed2skip0fail; remote_isaac/admission160passed. Actual CAD13205531 Stage1 workcell. Run2cdbdd56df3851aeb9ff2701e2014bdd SUCCEEDED: nine90x30x30mm containers packed3x3x3 with D-929 row gaps (target3.5mm, measured3.22-4.00mm, band2-5mm, envelope90x97x90mm), arms0/1, physical tabletop leveling/regrasp, original support/position/stability limits with speed taken from the pose change per0.1s sample (Isaac instantaneous cargo velocity is solver chatter, run b326). SDKexit0/import/video11674frames/owned shutdown/GPU return confirmed; hashes in docs/validation/omx-cube-stacking-2026-10-29/result.md. Earlier: column42 3x1x3 run8858 accepted at4f63cd5992. Single seed42 nominal IK-reference only: offset/reverse, varied infeed, ACT/RL, hardware and field acceptance are not established. SOURCE GO does not change separate ROS-SIM/HIL gates."
   LOCAL:
     state: GO
     cmd: "python tools/remote/remote_pytest.py --log-dir X:/DevTemp/isaac-core -- learning/envs/isaac/test middleware/core/gateway/test middleware/core/services/test test/test_structure_installed_packages.py"

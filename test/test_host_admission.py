@@ -142,3 +142,20 @@ def test_a_turn_holders_job_starts_on_a_full_host_but_never_beside_an_alone_job(
         assert _settled(alone_home, 1) == 1, "never beside an alone job"
     finally:
         (alone_home / "release").touch()
+
+
+@pytest.mark.skipif(not LINUX, reason="Linux bash is required")
+@pytest.mark.parametrize("resv,hidden", [(None, False), ("gpu", True), ("expired", False), ("pytest", False)])
+def test_jobs_hide_cuda_while_an_isaac_run_holds_the_gpu(tmp_path, resv, hidden):
+    """Runs 39be/a4e9 lost GPU checks to test venvs holding CUDA beside a live Isaac run (2026-10-30)."""
+    import subprocess
+    (tmp_path / "rosy-jobs").mkdir()
+    if resv:
+        until = int(time.time()) + (-10 if resv == "expired" else 3600)
+        kind = "gpu" if resv in ("gpu", "expired") else "pytest"
+        (tmp_path / "rosy-jobs" / "isaac-abc.resv").write_text(f"{until} {kind} 6 8\n")
+    out = subprocess.run(["bash", "-c", rj.ISAAC_GPU_GUARD + 'echo "cuda=${CUDA_VISIBLE_DEVICES-unset}"'],
+                         env={"HOME": str(tmp_path), "PATH": "/usr/bin:/bin"}, capture_output=True, text=True)
+    assert ("cuda=\n" in out.stdout) is hidden and ("cuda=unset" in out.stdout) is not hidden, out.stdout
+    assert ("Isaac holds the GPU" in out.stdout) is hidden
+    assert rj.ISAAC_GPU_GUARD in rj.JOB
