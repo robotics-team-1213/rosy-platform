@@ -181,3 +181,24 @@ def test_an_older_pending_ticket_a_batch_carries_reserves_no_preparation_slot(tm
     mine = queue.take(tmp_path, "feat/mine", status="pending")
     land_prepare.slot(tmp_path, mine, sleep=lambda _: pytest.fail("a carried ticket kept the slot"))
     assert json.loads(mine.read_text())["status"] == "preparing"
+
+
+def test_a_ticket_tested_on_the_current_main_passes_an_earlier_stale_waiting_one(tmp_path, monkeypatch):
+    """2026-10-30..31: turning a stale ticket first made the fresh one behind it re-run FULL (~984 min/day)."""
+    monkeypatch.setattr(queue, "current_main", lambda qdir: "m")
+    older = queue.take(tmp_path, "feat/older")
+    mine = queue.take(tmp_path, "feat/mine")
+    queue.set_status(mine, "waiting", tested="m", waiting_since=time.time())
+
+    def blocked_by(status="waiting", tested="old", since=0.0, **extra) -> bool:
+        queue.set_status(older, status, tested=tested, waiting_since=time.time() - since, **extra)
+        return [r["branch"] for r in queue.blockers(tmp_path, mine)] == ["feat/older"]
+
+    assert not blocked_by(), "stale and young: passed"
+    assert blocked_by(tested="m"), "both fresh: order holds"
+    assert blocked_by(since=queue.PASS_CAP_S + 1), "waited past the cap: order holds"
+    assert blocked_by(status="turn"), "a turn is never cut short"
+    queue.set_status(mine, "waiting", tested="x", waiting_since=time.time())
+    assert blocked_by(), "only a ticket tested on the current main passes"
+    queue.set_status(mine, "waiting", tested="m", waiting_since=time.time())
+    assert blocked_by(urgent="the user's words"), "urgent is never passed (last: the field stays)"
