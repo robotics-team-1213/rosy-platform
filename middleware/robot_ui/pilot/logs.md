@@ -1067,3 +1067,10 @@
 - 변경: `connect.js`의 연동 코드 보여주기(`mountShowCode`)를 `screens/show-code.js`로 그대로 옮겼다. 착지가 D-766 600줄 규칙(`c9cc22a986` 632줄)에 막혀 그 앞에 분리 커밋을 두고 이후 커밋을 다시 쌓았다. 서빙 목록·OMX SIM·dev_server·서비스워커 SHELL에 등록하고 캐시 키를 올렸다.
 - 증거: `tools/harness/size_range.py main HEAD` 16커밋 통과, 최종 `connect.js` 586줄. 동작 변경 없음. 실제 시험은 착지 auto 선택에 맡긴다.
 - gate 변화: 없음. CE: 해당 없음 — 기계적 이동이며 규칙은 기존 착지 교훈에 있다.
+
+
+## 2026-11-01 · uncommitted · skip link 추가 (D-945)
+
+- 변경: `index.html` 본문 앞에 공용 `skip-link`(본문으로 건너뛰기, #pilot-main)를 넣었다. focal 문법이라 자리를 비우는 것은 합법이지만 건너뛰기는 표면 공통 의무다.
+- 증거: `test_layout_canon.py` focal 표면 검사 통과(순서·skip link). 원격 시험은 착지 전 기록.
+- Gate: 없음. CE: 해당 없음.

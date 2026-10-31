@@ -1039,3 +1039,10 @@
 - 변경: `test/test_layout_canon.py` — Fleet 아홉 문서·로봇 셸·학습 검수 화면의 자리 순서, 문서 h1 하나(경로 줄), 표식 어휘(page·step)를 검사한다. 시험이 첫 이탈을 잡아 검수 화면 여섯의 낡은 `aria-current="true"`를 `page`로 통일했다.
 - 증거: 정적 단정 전 통과(로컬 파일 검사). 원격 pytest는 착지 전 기록.
 - Gate: 없음. CE: 해당 없음.
+
+
+## 2026-11-01 · uncommitted · D-945 focal 표면 검사 추가
+
+- 변경: `test_layout_canon.py`에 focal 문법(Pilot)의 순서·skip link 검사와 로봇 대시보드의 topbar-first·skip link 검사를 넣었다(대시보드 경로 줄 이행 유예의 근거를 주석으로 남김).
+- 증거: 정적 단정 전 통과. 원격 pytest는 착지 전 기록.
+- Gate: 없음. CE: 해당 없음.

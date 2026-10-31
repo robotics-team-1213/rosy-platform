@@ -54,6 +54,18 @@ def test_robot_shell_keeps_the_seat_order():
     assert order == sorted(order), "robot shell seat order"
 
 
+def test_focal_surfaces_keep_topbar_first_main_and_a_skip_link():
+    """D-945 — focal 문법(Pilot)은 자리를 아래부터 비우는 게 합법이지만, 건너뛰기와 순서는 지킨다.
+    로봇 대시보드(/dashboard)는 공간 문법의 hero-strip이 제목 줄 역할을 하고 고정 프레임 예산을
+    지키므로(D-201·test_console_layout) 경로 줄 이행은 그 화면을 고치는 변경에 따른다."""
+    pilot = _page(ROOT / "middleware/robot_ui/pilot", "index.html")
+    body = pilot[pilot.index("<body"):]
+    assert body.index('class="skip-link"') < body.index("<ui-topbar") < body.index("<main")
+    dashboard = _page(ROBOT, "index.html")
+    dbody = dashboard[dashboard.index("<body"):]
+    assert dbody.index("<ui-topbar") < dbody.index("<main") and 'class="skip-link"' in dashboard
+
+
 def test_review_pages_head_the_body_with_one_pathbar_h1():
     for path in sorted(REVIEW.glob("*.html")):
         page = path.read_text(encoding="utf-8")
