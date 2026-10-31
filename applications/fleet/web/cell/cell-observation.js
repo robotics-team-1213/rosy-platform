@@ -71,7 +71,7 @@ export function createCellObservation({request, root}) {
         image.onerror = () => staleCamera(entry);
         card.title = '눌러서 크게 보기'; card.addEventListener('click', () => card.classList.toggle('focused'));
         staleCamera(entry); cameras.set(camera.source_id, entry);
-        card.append(element('h4', camera.label), element('ui-text', camera.role === 'overhead'
+        card.append(element('h4', camera.stream === 'depth' ? `${camera.label} · 깊이` : camera.label), element('ui-text', camera.role === 'overhead'
           ? '공용 상단 카메라' : camera.role === 'side' ? '공용 측면 카메라' : `설정된 팔: ${camera.arm_id}`), status, image); wall.append(card);
       }
       section.append(wall, grid); root.append(section);
