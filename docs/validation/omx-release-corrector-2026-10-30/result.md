@@ -144,3 +144,13 @@ under the same 2–5 mm held-box estimate (commit `2d63c2518a`, seed 42). BC v0 
 | `7f51cec419c75d1080ba866ee5a869e6` | BC v0 | FAILED, 8/9. Box 7 did not settle within ten seconds, as in run ebdd. |
 
 On this seed rl3 removes the one failure BC v0 had. It is one seed of a deterministic simulation; seed 43 is next.
+
+| Run | Condition | Result |
+|---|---|---|
+| `d37dbf0849905a1e94ad407f4f52200e` | BC v0, seed 43 | FAILED, 2/9. Box 1 did not settle; first row gap 5.44 mm, outside the 2–5 mm band. |
+| `f3eb4b1d19565533aecad14a568166af` | BC v0 + rl3, seed 43 | Stopped by the run supervisor after six placements: a plan-request file being deleted was read as unsafe output. Not a task result. Fixed in `run_worker.py` (see `docs/solutions/runtime-errors/isaac-run-supervisor-flagged-a-file-being-deleted-2026-10-31.md`). |
+| `103846424e4b5571888b0f68bf49d936` | BC v0 + rl3, seed 43 (fixed supervisor) | **SUCCEEDED, 9/9.** Row gaps 2.65–4.82 mm, no unstable box. |
+
+**Two seeds:** BC v0 + rl3 placed all nine containers on both seeds; BC v0 alone placed 8 and 2. In the short
+episodes rl3 was only a candidate (p = 0.23); in the nine-container flow it is the better model on both seeds tried.
+This is still simulation under an assumed 2–5 mm estimate error, not hardware acceptance.

@@ -96,7 +96,7 @@
 
 ## 교훈 (docs/solutions)
 
-- 없음
+- [로봇이 틀린 코드에 401을 주면 Fleet은 자기 등록 자격이 죽은 줄 안다](../../docs/solutions/logic-errors/robot-401-for-a-wrong-code-drops-fleets-enrolled-credential-2026-10-31.md)
 
 ## 시험
 
