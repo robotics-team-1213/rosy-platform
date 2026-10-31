@@ -46,7 +46,10 @@ def corners(img) -> dict:
     import cv2
 
     grey = img if img.ndim == 2 else cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    found, ids, _ = cv2.aruco.ArucoDetector(cell_marks._dictionary(), cv2.aruco.DetectorParameters()).detectMarkers(grey)
+    if hasattr(cv2.aruco, "ArucoDetector"):
+        found, ids, _ = cv2.aruco.ArucoDetector(cell_marks._dictionary(), cv2.aruco.DetectorParameters()).detectMarkers(grey)
+    else:  # OpenCV 4.6 (CI's Ubuntu python3-opencv), as cell_marks.find
+        found, ids, _ = cv2.aruco.detectMarkers(grey, cell_marks._dictionary())
     return {} if ids is None else {int(i): c.reshape(4, 2).astype(np.float64) for c, i in zip(found, ids.flatten())}
 
 

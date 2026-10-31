@@ -8,7 +8,8 @@ safe enabled rosy-model-watch.timer
 # D-571 headless Gazebo bench: gz_sim's dependency closure (package.xml files up to gz_sim). Only with
 # --approve sim; the timer reports. Not listed: sllidar_ros2 (no Jazzy deb, device only), tf_transformations
 # and joint_state_publisher_gui (not on the bench path). CORE's pip pins come from tools/remote/remote_sim.py.
-approval=sim apt ros-jazzy-ros-gz ros-jazzy-gz-ros2-control ros-jazzy-navigation2 ros-jazzy-nav2-bringup ros-jazzy-slam-toolbox ros-jazzy-rosbag2-storage-mcap ros-jazzy-realtime-tools ros-jazzy-xacro ros-jazzy-robot-state-publisher ros-jazzy-joint-state-publisher python3-opencv python3-numpy python3-colcon-common-extensions
+# ffmpeg: Isaac container runs record native film (container_recording.py); ffprobe ships in it.
+approval=sim apt ros-jazzy-ros-gz ros-jazzy-gz-ros2-control ros-jazzy-navigation2 ros-jazzy-nav2-bringup ros-jazzy-slam-toolbox ros-jazzy-rosbag2-storage-mcap ros-jazzy-realtime-tools ros-jazzy-xacro ros-jazzy-robot-state-publisher ros-jazzy-joint-state-publisher python3-opencv python3-numpy python3-colcon-common-extensions ffmpeg
 # D-805 update gate: skip updaters while updates are frozen (ops-update-freeze tag or a local freeze file).
 safe file /etc/systemd/system/rosy-nightly-reboot.service.d/10-update-gate.conf common/10-update-gate.conf
 safe file /etc/systemd/system/rosy-model-watch.service.d/10-update-gate.conf common/10-update-gate.conf

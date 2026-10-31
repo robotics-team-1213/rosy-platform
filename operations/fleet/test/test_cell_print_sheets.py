@@ -73,12 +73,26 @@ def raster(pdf: bytes, px_per_mm: float = 300 / 25.4):
     return img
 
 
+def find_markers(aruco, img):
+    """(corners, ids) for DICT_4X4_100 (ids 0-49 are DICT_4X4_50's) with OpenCV's 4.7+ detector or the 4.6 function."""
+    dictionary = aruco.getPredefinedDictionary(aruco.DICT_4X4_100)
+    if hasattr(aruco, "ArucoDetector"):
+        return aruco.ArucoDetector(dictionary).detectMarkers(img)[:2]
+    return aruco.detectMarkers(img, dictionary)[:2]
+
+
 def test_the_charuco_sheet_is_the_opencv_board_at_true_size():
     cv2 = pytest.importorskip("cv2")
     np = pytest.importorskip("numpy")
     aruco = cv2.aruco
-    board = aruco.CharucoBoard((7, 10), 0.020, 0.015, aruco.getPredefinedDictionary(aruco.DICT_4X4_50))
-    corners, ids, _, _ = aruco.CharucoDetector(board).detectBoard(raster(charuco_pdf()))
+    dictionary, img = aruco.getPredefinedDictionary(aruco.DICT_4X4_50), raster(charuco_pdf())
+    if hasattr(aruco, "CharucoDetector"):  # OpenCV >= 4.7; CI's Ubuntu python3-opencv is 4.6
+        board = aruco.CharucoBoard((7, 10), 0.020, 0.015, dictionary)
+        corners, ids, _, _ = aruco.CharucoDetector(board).detectBoard(img)
+    else:
+        board = aruco.CharucoBoard_create(7, 10, 0.020, 0.015, dictionary)
+        markers, marker_ids, _ = aruco.detectMarkers(img, dictionary)
+        _, corners, ids = aruco.interpolateCornersCharuco(markers, marker_ids, img, board)
     assert ids is not None and len(ids) == 54  # every inner corner, so the layout and id order are OpenCV's
     pts = {int(i): p for i, p in zip(ids.ravel(), corners.reshape(-1, 2))}
     pitch = np.linalg.norm(pts[5] - pts[0]) / 5 / (300 / 25.4)  # corners 0..5 run along the first row
@@ -100,8 +114,7 @@ def test_an_arm_sheet_reads_back_as_its_block_at_true_size(slot):
     name, pdf = sheet("arm-markers", arm=slot)
     assert name == f"rosy-arm-{slot}-markers.pdf"
     block = arm_ids(slot)
-    detector = cv2.aruco.ArucoDetector(cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_100))
-    corners, ids, _ = detector.detectMarkers(raster(pdf))
+    corners, ids = find_markers(cv2.aruco, raster(pdf))
     assert sorted(ids.ravel().tolist()) == list(range(block["gripper"], block["gripper"] + 15))
     sides = {int(i): np.linalg.norm(c[0][1] - c[0][0]) / (300 / 25.4) for c, i in zip(corners, ids.ravel())}
     assert sides.pop(block["gripper"]) == pytest.approx(20.0, abs=0.2)

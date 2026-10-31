@@ -34,6 +34,9 @@ COPY contracts/motion/src/ /opt/rosy/src/contracts/motion/
 COPY operations/processes/palletizing/src/ /opt/rosy/src/processes/palletizing/
 COPY applications/fleet/gateway/src/ /opt/rosy/apps/gateway/src/
 COPY shared/web/ /opt/rosy/web-common/
+# D-936: the independent Monitoring service reuses this signed image; Fleet's PYTHONPATH never imports it.
+COPY operations/monitoring/src/ /opt/rosy/src/operations/monitoring/
+COPY applications/monitoring/web/ /opt/rosy/monitoring-source/applications/monitoring/web/
 # D-375 console map-fit overlay: site lane geometry, display only (--site-lane-graph/--site-lane-paint).
 COPY middleware/perception/map/map_v2_fleet/lane_graph.yaml middleware/perception/map/map_v2_fleet/meshes/road_lines.stl /opt/rosy/maps/map_v2_fleet/
 
@@ -41,6 +44,12 @@ RUN python3 -m venv /opt/rosy-venv \
     && /opt/rosy-venv/bin/pip install --no-cache-dir -r /opt/rosy/requirements.txt \
     && /opt/rosy-venv/bin/python -c "from zeroconf import ServiceBrowser, Zeroconf" \
     && /opt/rosy-venv/bin/python /opt/rosy/fleet_import_check.py \
+    && install -d -m 0755 /opt/rosy/monitoring-source/shared \
+    && ln -s /opt/rosy/web-common /opt/rosy/monitoring-source/shared/web \
+    && PYTHONPATH=/opt/rosy/src/operations/monitoring:/opt/rosy/src/contracts/foundation \
+       /opt/rosy-venv/bin/python -m rosy.monitoring.web_assets --repo /opt/rosy/monitoring-source --output /opt/rosy/monitoring-web \
+    && rm -r /opt/rosy/monitoring-source \
+    && install -d -o 10001 -g 10001 -m 0700 /var/lib/rosy-monitoring \
     && rm /opt/rosy/requirements.txt
 
 WORKDIR /opt/rosy

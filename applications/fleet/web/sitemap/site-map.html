@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="/common/app-shell.css">
   <link rel="stylesheet" href="/console/assets/site-map.css">
 <link rel="stylesheet" href="/console/assets/map-editor.css">
+  <link rel="stylesheet" href="/console/assets/file-picker.css">
   <link rel="stylesheet" href="/console/assets/doc-tabs.css">
   <link rel="stylesheet" href="/console/assets/fleet-header.css">
   <link rel="stylesheet" href="/console/assets/password-login.css">
@@ -123,7 +124,7 @@
         <summary class="ui-disclosure-row">도면 가져오기·좌표 맞춤</summary>
         <div class="drawing-tools-body">
           <ui-text>STL 또는 PNG/JPEG 평면 도면 위에 직접 그립니다. 이미지 좌표는 방향을 바로잡은 그림의 왼쪽 위가 원점이며 오른쪽·아래로 증가합니다. 실제 기준 두 점과 거리를 확인하세요. 사진의 원근은 자동 보정하지 않습니다.</ui-text>
-          <label>도면 원본 · 최대 16 MiB<input class="ui-field" id="drawing-file" type="file" accept=".stl,.png,.jpg,.jpeg,application/octet-stream,image/png,image/jpeg"></label>
+          <label class="file-picker">도면 원본 · 최대 16 MiB<input class="ui-field" id="drawing-file" type="file" accept=".stl,.png,.jpg,.jpeg,application/octet-stream,image/png,image/jpeg"><span class="file-picker-button" aria-hidden="true">파일 선택</span><span data-file-name aria-live="polite">선택한 파일 없음</span></label>
           <div class="form">
             <label>투영 평면<select class="ui-field" id="drawing-plane"><option value="xy">XY</option><option value="xz">XZ</option><option value="yz">YZ</option></select></label>
             <label>원본 좌표 단위<select class="ui-field" id="drawing-unit"><option value="m">m</option><option value="cm">cm</option><option value="mm">mm</option></select></label>
@@ -273,7 +274,7 @@
       </fieldset>
       <details>
         <summary class="ui-disclosure-row">파일 가져오기 · 좌표와 차로 규칙</summary>
-        <label>지도 JSON 파일<input class="ui-field" id="profile-file" type="file" accept="application/json,.json"></label>
+        <label class="file-picker">지도 JSON 파일<input class="ui-field" id="profile-file" type="file" accept="application/json,.json"><span class="file-picker-button" aria-hidden="true">파일 선택</span><span data-file-name aria-live="polite">선택한 파일 없음</span></label>
         <label>지도 규칙 JSON<textarea class="ui-field" id="profile-rules" rows="14" spellcheck="false" aria-describedby="profile-rule-hint"></textarea></label>
         <ui-text id="profile-rule-hint">rosy.site_map/1 형식: x·y는 공유 map 좌표(m), yaw는 rad입니다. places는 장소, edges의 polyline은 차로 선입니다. direction·width_m·speed_cap_mps·turn_bans로 통행 규칙을 정합니다. 저장할 때 좌표·연결·규칙을 검증한 뒤 2D로 그립니다.</ui-text>
       </details>
@@ -298,7 +299,7 @@
       </ui-section>
       <ui-section aria-labelledby="edit-heading">
         <ui-head><h2 class="ui-section-heading" id="edit-heading">초안 편집</h2></ui-head>
-        <label>카메라에서 생성한 지도 초안<input class="ui-field" id="camera-map-file" type="file" accept="application/json,.json"></label>
+        <label class="file-picker">카메라에서 생성한 지도 초안<input class="ui-field" id="camera-map-file" type="file" accept="application/json,.json"><span class="file-picker-button" aria-hidden="true">파일 선택</span><span data-file-name aria-live="polite">선택한 파일 없음</span></label>
         <ui-button id="import-camera-map" kind="quiet" disabled>카메라 지도 초안 가져오기</ui-button>
         <ui-button id="preview-camera-connections" kind="quiet" disabled>연결 후보 보기</ui-button>
         <div id="camera-connections" class="form" aria-live="polite"></div>

@@ -54,7 +54,10 @@ def find(img) -> dict:
     import cv2
 
     grey = img if img.ndim == 2 else cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    corners, ids, _ = cv2.aruco.ArucoDetector(_dictionary(), cv2.aruco.DetectorParameters()).detectMarkers(grey)
+    if hasattr(cv2.aruco, "ArucoDetector"):
+        corners, ids, _ = cv2.aruco.ArucoDetector(_dictionary(), cv2.aruco.DetectorParameters()).detectMarkers(grey)
+    else:  # OpenCV 4.6 (Ubuntu 24.04's python3-opencv)
+        corners, ids, _ = cv2.aruco.detectMarkers(grey, _dictionary())
     out = {}
     for c, i in zip(corners if ids is not None else [], ids.flatten() if ids is not None else []):
         q = c[0]

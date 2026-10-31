@@ -177,3 +177,22 @@ def test_existing_shared_state_directory_is_rejected(tmp_path, monkeypatch, caps
     assert cli.main(['--config', str(path), '--state-dir', str(state)]) == 1
     assert 'MONITORING_STARTUP_FAILED' in capsys.readouterr().err
     assert not calls and not (state / 'monitoring.sqlite3').exists()
+
+
+def test_listen_address_defaults_to_loopback_and_accepts_only_ip_literals(tmp_path, monkeypatch):
+    from rosy.monitoring import __main__ as cli
+    path = tmp_path / 'site.yaml'
+    path.write_text(json.dumps(configuration('collector-a', 'site-a')))
+    hosts = []
+    monkeypatch.setenv('READ', READER)
+    monkeypatch.setattr(cli.uvicorn, 'run', lambda *args, **kwargs: hosts.append(kwargs['host']))
+    assert cli.main(['--config', str(path), '--state-dir', str(tmp_path / 'a')]) == 0
+    assert cli.main(['--config', str(path), '--state-dir', str(tmp_path / 'b'), '--host', '0.0.0.0']) == 0
+    assert hosts == ['127.0.0.1', '0.0.0.0']
+    try:
+        cli.main(['--config', str(path), '--state-dir', str(tmp_path / 'c'), '--host', 'fleet'])
+    except SystemExit as exit:
+        assert exit.code == 2
+    else:
+        raise AssertionError('a hostname listen address was accepted')
+    assert not (tmp_path / 'c').exists()

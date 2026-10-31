@@ -32,8 +32,8 @@
 
 ## 최근 기록
 
-- 2026-10-29 · uncommitted · 판 끝 직각 컨베이어와 개방 후 행 누적 오차
-- 2026-10-29 · uncommitted · 수정 맵의 실제 SDK 화면과 한 층 실패 보존
-- 2026-10-29 · uncommitted · Rosy Cam 기준 마주보는 두 암과 한 층 배치 정정
-- 2026-10-29 · uncommitted · OMX 맵 3단 적재와 PPO 재실행 결과
-- 2026-10-29 · uncommitted · OMX 오프라인 계획 경계와 물리 시간 간격 검증
+- 2026-10-31 · 2d63c2518a · rl3 places all nine containers under the 2-5 mm estimate
+- 2026-10-31 · e72e07e856 · rl3 vs rl0 over four seeds
+- 2026-10-31 · ade501751f · rl3 on seed 45
+- 2026-10-31 · 11e0eaafc9 · rl3 on seed 42: no clear gain over rl0
+- 2026-10-31 · d2465280d7 · rl3 from four rl0 runs settles 19/22 on seed 44

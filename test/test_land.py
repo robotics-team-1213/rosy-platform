@@ -109,11 +109,17 @@ def test_local_size_check_failure_stops_before_any_test_host(repos, monkeypatch)
     assert git(main, "rev-parse", "HEAD") == before
 
 
-@pytest.mark.parametrize("cause", ["lint", "conflict"])
+@pytest.mark.parametrize("cause", ["lint", "conflict", "secret"])
 def test_admission_lint_or_conflict_stops_before_a_ticket(repos, monkeypatch, cause):
-    """D-889 S0: the branch's own lint error and a conflict with main stop before the queue, not after the wait."""
+    """D-889 S0: the branch's own lint error, secret-scan finding or a conflict with main stop before the queue."""
     main, wt = repos
-    if cause == "lint":
+    if cause == "secret":
+        release = ROOT / land.SCANNER_DIR
+        commit(main, {f"{land.SCANNER_DIR}/{n}": (release / n).read_bytes()
+                      for n in ("secret_scan.py", "public_provenance.json")}, "scanner")
+        git(wt, "merge", "-q", "main")
+        commit(wt, {"docs/result.md": "tested `" + "c6659107f9afd6" * 3 + "` today\n"}, "record")
+    elif cause == "lint":
         commit(wt, {land.HARNESS: "import sys\nsys.exit(1 if sys.argv[1:] == ['lint'] else 0)\n"}, "bad record")
     else:
         commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")
