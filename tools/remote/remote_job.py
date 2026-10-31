@@ -30,6 +30,7 @@ CALL_TIMEOUT = 60
 # Gazebo suite waited 100 min behind 6 jobs and was killed at its 60-min deadline (exit 124) before running a test.
 ROOM = b"[remote-pytest] host room after waiting"
 WAIT = b"[remote-pytest] waiting for host room"  # ADMIT's first line while it waits: the deadline waits too
+TIMING = "[remote-pytest] timing"  # run()'s last line: host, start epoch, host-room wait, run time
 WAIT_CAP = 3  # timeout_s multiples a job may wait for room; new jobs stay out meanwhile, so the host empties
 
 # Admission (2026-10-28, several main workers per run): a job starts only within the host's cores and GB (every
@@ -302,6 +303,7 @@ def run(host: str, name: str, k: int, log: Path, job_args: list[str], pytest_arg
             log.write_bytes(started.stdout + started.stderr)
             return started.returncode
         deadline, tail, waiting = clock() + timeout_s + 120, b"", False  # the job's own timeout fires first
+        start_at, admitted, wait_from = time.time(), clock(), clock()
         with log.open("ab") as out:
             while True:
                 global LAST_POLL
@@ -315,11 +317,14 @@ def run(host: str, name: str, k: int, log: Path, job_args: list[str], pytest_arg
                 out.flush()
                 tail = tail[-len(ROOM):] + data
                 if ROOM in tail:  # admitted: the job's own deadline from now on, once
-                    deadline, tail = clock() + timeout_s + 120, b""
+                    deadline, tail, admitted = clock() + timeout_s + 120, b"", clock()
                 elif WAIT in tail and not waiting:
-                    waiting, deadline = True, clock() + WAIT_CAP * timeout_s + 120
+                    waiting, deadline, wait_from = True, clock() + WAIT_CAP * timeout_s + 120, clock()
                 offset += len(data)
-                if rc is not None:
+                if rc is not None:  # land_checks.timing reads this line into the tests event
+                    wait = max(0.0, admitted - wait_from) if waiting else 0.0  # user@address: only the user part
+                    out.write(f"\n{TIMING} host={host.split('@')[0]} start={start_at:.0f} wait_s={wait:.0f}"
+                              f" run_s={clock() - admitted:.0f}\n".encode())
                     return rc
                 gone = 0 if alive else gone + 1  # twice: the launch or the exit trap may be mid-way
                 if gone == 2:

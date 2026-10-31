@@ -749,8 +749,20 @@ def test_polls_that_fail_then_recover_give_the_real_code_and_the_whole_log(tmp_p
     log = tmp_path / "run-1.txt"
     assert rj.run("h", "r", 0, log, ["r", "d", ""], ["test/x.py"], 60, [], call=fake, sleep=sleep, clock=clock) == 1
     # Byte-identical: a stuck offset would duplicate a chunk, an early advance would drop one.
-    assert log.read_bytes() == fake.log == b"".join(chunks)
+    body, timing = log.read_bytes().split(b"\n" + rj.TIMING.encode())
+    assert body == fake.log == b"".join(chunks)
     assert fake.scripts[0] == rj.START and fake.polls == 6
+    assert timing.startswith(b" host=h start=") and b" wait_s=0 run_s=" in timing  # land_checks.timing's line
+
+
+def test_the_timing_line_splits_host_room_wait_from_run_time(tmp_path):
+    chunks = [rj.WAIT + b" (2 job(s))\n", b"", b"", rj.ROOM + b"\n", b"", b"1 passed\n"]
+    fake = FakeJobHost(chunks, 0)
+    now, sleep, clock = _clock()
+    log = tmp_path / "run-1.txt"
+    assert rj.run("rosy@10.0.0.9", "r", 0, log, ["r", "d", ""], [], 60, [], call=fake, sleep=sleep, clock=clock) == 0
+    line = log.read_text().splitlines()[-1]
+    assert " host=rosy " in line and "10.0.0.9" not in line and " wait_s=30 run_s=20" in line, line
 
 
 def test_polls_failing_past_the_budget_raise_lost_and_run_on_leaves_the_job(tmp_path, monkeypatch, capsys):
