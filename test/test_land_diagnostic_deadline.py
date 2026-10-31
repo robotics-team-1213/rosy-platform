@@ -31,6 +31,7 @@ def test_diagnostic_expiry_releases_the_turn_without_starting_another_check(
             self.cancelled = True
 
     monkeypatch.setattr(threading, "Timer", ClockTimer)
+    monkeypatch.setattr(land.land_checks, "turn_wanted", lambda *a: True)  # a landing waits for the turn
     monkeypatch.setattr(land.time, "monotonic", lambda: now[0])
     monkeypatch.setattr(land.remote_pytest, "run", REMOTE_RUN)
     monkeypatch.setattr(land.remote_pytest, "HEADROOM", {})
