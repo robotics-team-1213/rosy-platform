@@ -51,11 +51,15 @@ def test_header_regions_keep_identity_status_actions_and_safety_separate():
     assert re.findall(r'data-header-region="([^"]+)"', header) == [
         "identity", "status", "actions", "safety"]
     assert 'id="fleet-header-actions"' in header
-    # D-741 3: 연결 자리에는 조작이 없다. 알림, 로그인, 나(계정 단추) 순서로 정지 앞에 선다.
+    # D-741 3: 연결 자리에는 조작이 없다. 알림, 로그인, 테마, 나(계정 단추) 순서로 정지 앞에 선다.
     status = header.split('data-header-region="status"', 1)[1].split('data-header-region="actions"', 1)[0]
     assert 'id="link-state"' in status and 'id="clock"' in status and "<ui-button" not in status
     actions = header.split('data-header-region="actions"', 1)[1].split('data-header-region="safety"', 1)[0]
     assert actions.index('id="fleet-inbox"') < actions.index('id="fleet-login"') < actions.index('id="topbar-more"')
+    # 테마는 표시 선택이지 계정 상세가 아니다 — 머리 줄의 공용 아이콘 단추 하나(사용자 결정 2026-11-01).
+    assert actions.index('id="fleet-login"') < actions.index('id="fleet-theme"') < actions.index('id="topbar-more"')
+    assert header.count('data-theme-cycle') == 1 and 'data-icon-only' in re.search(
+        r'<ui-button[^>]*id="fleet-theme".*?</ui-button>', header, re.S).group(0)
     inbox = re.search(r'<ui-button[^>]*id="fleet-inbox".*?</ui-button>', header, re.S).group(0)
     assert 'id="header-unread"' in inbox and 'data-action-icon="notification"' in inbox
     entry = re.search(r'<ui-button[^>]*id="topbar-more".*?</ui-button>', header, re.S).group(0)
@@ -65,8 +69,9 @@ def test_header_regions_keep_identity_status_actions_and_safety_separate():
     assert 'aria-controls="topbar-extra"' in entry
     assert header.index('data-header-region="safety"') < header.index('id="topbar-extra"')
     menu = header.split('id="topbar-extra"', 1)[1]
-    for element_id in ("fleet-account", "password-login", "fleet-theme", "token-access", "console-token", "token-save"):
+    for element_id in ("fleet-account", "password-login", "token-access", "console-token", "token-save"):
         assert f'id="{element_id}"' in menu, element_id
+    assert 'id="fleet-theme"' not in menu, "테마 단추는 계정 접힘이 아니라 머리 줄에 있다"
     assert "<details id=\"fleet-account\"" not in header, "계정 정보는 계정 단추 하나 아래에 있다"
     controller = (WEB / "shared/fleet-header.js").read_text(encoding="utf-8")
     assert "createElement(\"ui-button\")" not in controller, "알림 단추는 정적 마크업이다(D-658 5항)"

@@ -104,8 +104,8 @@
 
 ## 최근 기록
 
+- 2026-11-01 · uncommitted · uiux(fleet): 테마 자리 계약 정정
 - 2026-11-01 · uncommitted · uiux(fleet): 소속 표시 계약 재정정
 - 2026-11-01 · uncommitted · uiux(fleet): policy 현재 표시 계약 정정
 - 2026-11-01 · uncommitted · uiux(fleet): 경로 줄 계약 시험
 - 2026-11-01 · uncommitted · uiux(fleet): 설치 문서 하위 탐색 계약 시험
-- 2026-10-31 · uncommitted · feat(fleet): D-938 팔 이송 정책 승인
