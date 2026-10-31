@@ -92,11 +92,11 @@ def formats(node: str) -> list:
     return [line.split("'")[1].strip() for line in out.splitlines() if line.strip().startswith("[") and "'" in line]
 
 
-def inventory(registry: dict | None, facts: dict, names: dict, ask=formats) -> list:
+def inventory(registry: dict | None, facts: dict, names: dict, ask=formats, realpath=os.path.realpath) -> list:
     """One row per capture node: facts, every persistent name, offered formats and the registered role."""
     by_node = {}
     for camera in (registry or {}).get("cameras", []):
-        by_node.setdefault(os.path.realpath(camera["device"]), []).append(camera["role"])
+        by_node.setdefault(realpath(camera["device"]), []).append(camera["role"])
     return [{"node": node, **fact, "names": sorted(names.get(node, [])), "formats": ask(node),
              "roles": by_node.get(node, [])} for node, fact in sorted(facts.items())]
 

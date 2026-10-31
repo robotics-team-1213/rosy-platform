@@ -71,6 +71,7 @@ def test_init_adopts_the_role_env_files_in_use(tmp_path):
 
 def test_inventory_names_every_node_and_its_role():
     facts = {"/dev/video12": {"id": "8086:0b07", "usb": "3-4", "serial": "1", "speed_mbps": 480, "interface": "3-4:1.3"}}
-    rows = oc.inventory({"cameras": [TOP]}, facts, {"/dev/video12": [TOP["device"]]}, ask=lambda node: ["YUYV"])
-    assert rows[0]["roles"] == [] or rows[0]["roles"] == ["top"]  # realpath of a test path is itself
+    rows = oc.inventory({"cameras": [TOP]}, facts, {"/dev/video12": [TOP["device"]]}, ask=lambda node: ["YUYV"],
+                        realpath=lambda device: "/dev/video12")
+    assert rows[0]["roles"] == ["top"]
     assert rows[0]["formats"] == ["YUYV"] and rows[0]["names"] == [TOP["device"]]
