@@ -43,7 +43,7 @@ function renderBundle(bundle){
   if(bundle.error)section.append(el('p',`실패 사유: ${bundle.error}`));
   if(bundle.receipt)section.append(el('p',`커밋 ${bundle.receipt.revision} · 다시 내려받아 해시 일치 확인됨`));
   if(['prepared','failed'].includes(bundle.state)){
-    const upload=el('ui-button','이 파일들을 HF에 업로드');upload.type='button';upload.disabled=$('hub-connection').disabled;
+    const upload=el('ui-button','이 파일들을 HF에 업로드');upload.type='button';upload.setAttribute('kind','quiet');upload.disabled=$('hub-connection').disabled;
     upload.onclick=async()=>{upload.disabled=true;
       try{await request('/api/learning/omx/center/hub-upload',{bundle_id:bundle.bundle_id,connection_id:$('hub-connection').value});await refreshHub();}
       catch(exc){section.append(el('p',`업로드 요청 실패: ${exc.message}`));upload.disabled=false;}};
