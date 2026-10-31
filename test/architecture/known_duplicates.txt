@@ -1,0 +1,56 @@
+# D-940 등록부: 두 파트 이상에 동일한 정의가 살 때의 판정 기록.
+# 형식: <경로> <경로>|<이름>  <갈래> <사유>  (경로 구분은 공백; '+'는 비밀 스캔이 토큰으로 본다)
+# 갈래 — ① 정본 소비 전환 후보(이미 contracts에 정본이 있다)
+#        ② 소유 범위 내 통합 후보(같은 파트·배포 단위 안에서 합친다)
+#        ③ 보호된 의도 중복(배포 경계·문서화된 미러, 드리프트 시험을 함께 둔다)
+#        ④ 이름 분리·관습 고정(같은 이름의 다른 불변식, 합치지 않는다)
+# 행은 줄어들기만 한다. 등록된 사본 한쪽이 먼저 바뀌면 그 행이 빨간불이 된다.
+# 재생성: python test/architecture/test_duplicate_definitions.py
+contracts/foundation/core_common/protocol/localization.py middleware/perception/sensors/sensing/loc_state.py|LocState  ① 후보 contracts 정본 소비
+middleware/core/api/core_api_web/api/peer_pairing/peer_crypto.py operations/fleet/fleet/server/peer/camera_peer_crypto.py|PeerIdentity  ③ D-841 Dec.8 의도 복제, test_peer_proof_ownership.py가 고정
+contracts/foundation/core_common/protocol/camera_peer.py contracts/foundation/core_common/protocol/peer_pairing.py operations/decision/src/rosy/decision/conversation/codec.py|Strict  ③ 계약 오류형 3중, ② 후보(decision codec이 core_common 소비)
+contracts/foundation/core_common/protocol/arm_transfer_observations.py contracts/foundation/core_common/protocol/arm_transfer_recovery.py operations/fleet/fleet/server/evidence/physical_transfer_evidence.py|_Closed  ③ 계약 오류형 미러
+contracts/foundation/core_common/protocol/account_client.py deploy/robot/omx/load_report_bridge.py deploy/robot/omx/workcell_observation_bridge.py integrations/robots/omx/src/rosy/integrations/robots/omx/core_arm_client.py middleware/media/src/rosy_media_edge/whip.py operations/site_ui/media/src/rosy_media/backend.py operations/site_ui/media/src/rosy_media/main.py tools/release/download_artifact.py|_NoRedirect  ③ 독립 실행 HTTP 클라이언트들, contracts 사본이 정본(① 후보)
+middleware/drive/behaviors/line_follow/recovery/lane_return.py tools/sim/native_gazebo_map_pose.py|_angle  ④ 각도 wrap 관습, 경계 거동 핀 후속
+contracts/foundation/core_common/protocol/site_link.py deploy/site/site_preflight.py|_children  ③ deploy/site 미러, site_link가 정본
+contracts/motion/src/rosy/contracts/motion/characteristics.py middleware/devices/omx/adapter/omx_adapter/contracts/hardware_profile.py|_fields  ① 후보 contracts/motion 정본 소비(장치 payload 의존 확인 후)
+middleware/skills/manipulation/src/rosy/skills/manipulation/transfer.py operations/processes/palletizing/src/rosy/processes/palletizing/submission.py|_finite  ③ 소형 헬퍼
+contracts/learning/src/rosy/contracts/learning/prediction.py integrations/simulation/gazebo/scripts/command_watchdog.py|_finite  ③ 소형 헬퍼
+operations/fleet/fleet/localization/stuck_heading.py tools/sim/native_gazebo_map_pose.py|_finite  ③ 소형 헬퍼
+contracts/learning/src/rosy/contracts/learning/omx.py middleware/devices/omx/adapter/omx_adapter/demonstration.py|_finite  ③ 로봇 payload에 계약 wheel이 없다, writer-검증자 시험 후속
+contracts/foundation/core_common/face_screen.py middleware/core/gateway/core/system/host_hardware.py|_flag  ③ 소형 헬퍼
+deploy/hosts/common/release/signing.py deploy/site/candidate_signing.py middleware/perception/front_camera/perception/learned/signature.py|_git_for_windows_dirs  ③ deploy 서명 스크립트 경계
+contracts/foundation/core_common/observation.py contracts/skill/src/rosy/contracts/skill/invocation.py contracts/skill/src/rosy/contracts/skill/receipts.py middleware/skills/api/src/rosy/skills/api/contracts.py operations/site_execution/src/rosy/execution/api/plan.py|_identifier  ① 후보 contracts 정본 소비(reexport 규칙 확인 후)
+learning/curation/pinky/fleet_observations.py learning/curation/pinky/fleet_rules.py learning/curation/pinky/pinky_episode.py learning/curation/pinky/prepare_behavior.py learning/curation/pinky/verify_raw.py learning/training/omx/act_inference_replay.py learning/training/omx/act_job.py learning/training/pinky/artifact_export.py learning/training/pinky/comparison_job.py middleware/robot_execution/local/src/rosy/execution/local/policy_episode.py operations/fleet/fleet/server/evidence/learning_receiver.py|_in_checkout  ③ D-841 Dec.4가 공인한 소유 모듈 내 복제(in_source_checkout)
+middleware/core/gateway/core/trip_lease.py middleware/core/services/core_features/calibration/session.py operations/fleet/fleet/server/auth/password_session.py|_iso  ③ 타임스탬프 소형 헬퍼, 출력 포맷 통일은 별도 감사 항목
+contracts/learning/src/rosy/contracts/learning/omx.py middleware/devices/omx/adapter/omx_adapter/demonstration.py|_json  ③ 로봇 payload에 계약 wheel이 없다, writer-검증자 시험 후속
+contracts/foundation/core_common/protocol/discovery_txt.py deploy/site/fleet-mdns.py|_lan_ipv4  ③ deploy/site mDNS 미러
+contracts/learning/src/rosy/contracts/learning/inference.py learning/training/omx/act_inference.py|_ns  ① 후보 training이 contracts/learning 소비
+contracts/motion/src/rosy/contracts/motion/characteristics.py middleware/devices/omx/adapter/omx_adapter/contracts/hardware_profile.py|_number  ① 후보 contracts/motion 정본 소비(장치 payload 의존 확인 후)
+contracts/learning/src/rosy/contracts/learning/pinky.py contracts/learning/src/rosy/contracts/learning/promotion_request.py learning/curation/omx/collection_intake.py learning/curation/omx/native_environment.py middleware/drive/recovery/execution_escape.py|_number  ③ 소형 헬퍼
+middleware/core/api/core_api_web/api/peer_pairing/peer_crypto.py operations/fleet/fleet/server/peer/camera_peer_crypto.py|_public  ③ D-841 Dec.8 의도 복제, test_peer_proof_ownership.py가 고정
+contracts/motion/src/rosy/contracts/motion/characteristics.py middleware/devices/omx/adapter/omx_adapter/contracts/hardware_profile.py|_range  ① 후보 contracts/motion 정본 소비(장치 payload 의존 확인 후)
+contracts/foundation/core_common/calibration_store.py middleware/perception/front_camera/perception/lane_containment.py|_real  ③ 동명 소형 헬퍼
+deploy/robot/pinky_pro/native/os_transport_repair.py learning/curation/perception/review_authority.py learning/curation/perception/review_eval_package.py learning/evaluation/perception/road_observation_replay.py learning/training/perception/review_migration.py|_sha  ③ 소형 파일해시 헬퍼
+contracts/learning/src/rosy/contracts/learning/omx.py middleware/devices/omx/adapter/omx_adapter/demonstration.py|_sha  ③ 로봇 payload에 계약 wheel이 없다, writer-검증자 시험 후속
+contracts/learning/src/rosy/contracts/learning/inference.py learning/training/omx/act_inference.py|_text  ① 후보 training이 contracts/learning 소비
+contracts/foundation/core_common/protocol/site_link.py deploy/site/site_preflight.py|_tlv  ③ deploy/site 미러, site_link가 정본
+contracts/motion/src/rosy/contracts/motion/characteristics.py middleware/devices/omx/adapter/omx_adapter/contracts/hardware_profile.py|_vector  ① 후보 contracts/motion 정본 소비(장치 payload 의존 확인 후)
+contracts/learning/src/rosy/contracts/learning/inference.py learning/training/omx/act_inference.py|_vector  ① 후보 training이 contracts/learning 소비
+middleware/drive/behaviors/line_follow/arc/lane_arc.py middleware/drive/behaviors/line_follow/recovery/junction/turn.py operations/overhead/rosy_vision/station_observation.py|_wrap  ④ 각도 wrap 관습, 경계 거동 핀 후속
+middleware/drive/behaviors/localization/mission.py middleware/perception/front_camera/perception/route_camera.py tools/calibration/ceiling_marker_yaw.py|_wrap  ④ 각도 wrap 관습, 경계 거동 핀 후속
+learning/curation/perception/autolabel.py middleware/perception/nodes/road_state_node.py|_yaw  ④ yaw wrap 관습, 경계 거동 핀 후속
+deploy/robot/pinky_pro/release/native_tls_provision.py learning/curation/perception/edge_review.py|digest  ③ 소형 해시 헬퍼
+deploy/ai_pc/deliberation_glm_receipt.py operations/decision/src/rosy/decision/conversation/codec.py operations/decision/src/rosy/decision/deliberation/contracts/billing.py operations/fleet/fleet/incidents/automation/operating/state.py|digest  ③ 소형 해시 헬퍼, AI PC 독립 스크립트 포함
+contracts/learning/src/rosy/contracts/learning/fleet_export.py middleware/devices/omx/adapter/omx_adapter/policy_parent.py|encoded  ③ 소형 헬퍼
+contracts/learning/src/rosy/contracts/learning/promotion_request.py learning/curation/perception/review_evidence.py|encoded  ③ 소형 헬퍼
+middleware/core/api/core_api_web/api/peer_pairing/peer_crypto.py operations/fleet/fleet/server/peer/camera_peer_crypto.py|fingerprint  ③ D-841 Dec.8 의도 복제, test_peer_proof_ownership.py가 고정
+middleware/perception/sensors/sensing/battery.py operations/fleet/fleet/stuck/realign.py|finite  ③ 소형 헬퍼
+deploy/robot/pinky_pro/native/rosy-login-code.py middleware/core/api/core_api_web/api/v1/auth.py|format_code  ③ deploy 독립 스크립트(② 후보, 등록코드 규칙 동치시험 후속)
+contracts/foundation/core_common/protocol/discovery_txt.py deploy/site/fleet-mdns.py|parse_txt_pairs  ③ deploy/site mDNS 미러, D-841 Dec.8 계열
+middleware/core/api/core_api_web/api/peer_pairing/peer_crypto.py operations/fleet/fleet/server/peer/camera_peer_crypto.py|public_key  ③ D-841 Dec.8 의도 복제, test_peer_proof_ownership.py가 고정
+deploy/site/install_conversation_broker.py learning/curation/perception/review_evidence.py learning/curation/perception/vision_review_drafts.py|sha  ③ 소형 해시 헬퍼, deploy 독립 스크립트 포함
+middleware/core/api/core_api_web/api/peer_pairing/peer_crypto.py operations/fleet/fleet/server/peer/camera_peer_crypto.py|transcript  ③ D-841 Dec.8 의도 복제, test_peer_proof_ownership.py가 고정
+middleware/core/api/core_api_web/api/peer_pairing/peer_crypto.py operations/fleet/fleet/server/peer/camera_peer_crypto.py|verify  ③ D-841 Dec.8 의도 복제, test_peer_proof_ownership.py가 고정
+middleware/perception/sensors/sensing/odometry_fit.py tools/device_test/tether.py tools/sim/gazebo/driver.py|wrap  ④ 각도 wrap 관습, 경계 거동 핀 후속
+integrations/simulation/gazebo/scripts/map_v2_runner.py middleware/drive/behaviors/docking/parking.py operations/fleet/fleet/localization/cues.py tools/sim/d395_truth.py|wrap  ④ 각도 wrap 관습, 경계 거동 핀 후속
