@@ -245,3 +245,96 @@ def test_recent_metadata_cannot_break_gate_or_offer_another_robot_as_this_origin
     assert page.locator("[data-recent-connect]").count() == 0
     assert "legacy-secret" not in page.evaluate("localStorage.getItem('rosy.pilot.recent') || ''")
     assert errors == [], errors
+
+
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
+@pytest.mark.parametrize("role,live", [("administrator", True), ("operator", True), ("administrator", False)])
+def test_emergency_release_requires_admin_and_live_safety(tablet_page, role, live):
+    base_url, page, errors = tablet_page
+    token = "devadmintoken" if role == "administrator" else "devtoken"
+    page.add_init_script(f"sessionStorage.setItem('rosy.pilot.token', {json.dumps(token)})")
+    page.route("**/api/v1/robot/state", lambda route: route.fulfill(json={
+        "mode": "EMERGENCY", "safety": {"estop": True},
+        "velocity": {"linear": 0, "angular": 0},
+        "evidence": {"safety": {"evidence": "delayed"}},
+    }))
+    page.route("**/api/v1/safety/state", lambda route: route.fulfill(
+        status=200 if live else 503, json={"estop": True, "source": "api"}))
+    page.goto(f"{base_url}/pilot")
+    release = page.locator("[data-estop-release]")
+    release.wait_for(state="visible")
+    assert release.evaluate("el => el.disabled") is not (role == "administrator" and live)
+    assert page.locator("[data-drive-enter]").evaluate("el => el.disabled")
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
+@pytest.mark.parametrize("outcome", ["released", "stale", "refused"])
+def test_emergency_release_confirms_rechecks_and_never_starts_motion(tablet_page, outcome):
+    base_url, page, errors = tablet_page
+    state = {"mode": "EMERGENCY", "safety": {"estop": True},
+             "velocity": {"linear": 0, "angular": 0},
+             "evidence": {"safety": {"evidence": "delayed"}}}
+    safety = {"estop": True, "source": "api"}
+    requests = []
+    page.add_init_script("sessionStorage.setItem('rosy.pilot.token', 'devadmintoken')")
+    page.route("**/api/v1/robot/state", lambda route: route.fulfill(json=state))
+    page.route("**/api/v1/safety/state", lambda route: route.fulfill(json=safety))
+
+    def release(route):
+        requests.append(route.request.method)
+        if outcome == "refused":
+            route.fulfill(status=403, json={"detail": "administrator required"})
+        else:
+            state.update(mode="IDLE", safety={"estop": False})
+            safety["estop"] = False
+            route.fulfill(json={"estop": False})
+
+    page.route("**/api/v1/safety/release", release)
+    motion = []
+    page.on("request", lambda request: motion.append(request.url)
+            if request.method == "POST" and request.url.endswith(("/teleop", "/mode")) else None)
+    page.goto(f"{base_url}/pilot")
+    page.locator("[data-estop-release]").click()
+    page.get_by_role("dialog").get_by_text("취소", exact=True).click()
+    assert requests == []
+    page.locator("[data-estop-release]").click()
+    if outcome == "stale":
+        safety["source"] = "battery_policy"
+    page.get_by_role("dialog").get_by_text("비상 정지 해제", exact=True).click()
+    if outcome == "released":
+        playwright_sync.expect(page.locator("[data-drive-enter]")).to_be_enabled()
+        assert requests == ["POST"]
+    else:
+        playwright_sync.expect(page.locator("#pilot-notice")).to_contain_text("해제")
+        assert page.locator("[data-drive-enter]").evaluate("el => el.disabled")
+        assert requests == ([] if outcome == "stale" else ["POST"])
+    assert motion == []
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
+def test_emergency_release_shows_battery_context_and_rechecks_its_level(tablet_page):
+    base_url, page, errors = tablet_page
+    safety = {"estop": True, "source": "battery_policy",
+              "battery": {"evidence": "fresh", "level": "critical", "percent": 12}}
+    page.add_init_script("sessionStorage.setItem('rosy.pilot.token', 'devadmintoken')")
+    page.route("**/api/v1/robot/state", lambda route: route.fulfill(json={
+        "mode": "EMERGENCY", "safety": {"estop": True},
+        "evidence": {"safety": {"evidence": "fresh"}},
+    }))
+    page.route("**/api/v1/safety/state", lambda route: route.fulfill(json=safety))
+    calls = []
+    page.route("**/api/v1/safety/release", lambda route: (
+        calls.append(route.request.method), route.fulfill(json={"estop": False})))
+    page.goto(f"{base_url}/pilot")
+    page.locator("[data-estop-release]").click()
+    dialog = page.get_by_role("dialog")
+    playwright_sync.expect(dialog).to_contain_text("배터리")
+    playwright_sync.expect(dialog).to_contain_text("12%")
+    playwright_sync.expect(dialog).to_contain_text("부족")
+    safety["battery"]["level"] = "deep"
+    dialog.get_by_text("비상 정지 해제", exact=True).click()
+    playwright_sync.expect(page.locator("#pilot-notice")).to_contain_text("해제")
+    assert calls == []
+    assert errors == [], errors

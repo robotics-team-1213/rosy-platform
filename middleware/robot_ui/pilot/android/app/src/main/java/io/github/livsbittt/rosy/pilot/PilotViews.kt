@@ -78,7 +78,7 @@ class PilotViews(private val context: Context) {
         }
         val title = candidate.name.ifBlank { candidate.robotId.ifBlank { "Rosy" } }
         val copy = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
-        copy.addView(label(title, RosyMetrics.TextTitle).apply { typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL); breakStrategy = android.text.Layout.BREAK_STRATEGY_BALANCED })
+        copy.addView(label(title, RosyMetrics.TextTitle).apply { typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL); breakStrategy = android.graphics.text.LineBreaker.BREAK_STRATEGY_BALANCED })
         copy.addView(label(if (!enabled) "연결 보류 · 목록을 다시 찾거나 태블릿 상태를 확인하세요" else candidate.robotId.ifBlank { "로봇 · 같은 Wi-Fi" }, RosyMetrics.TextLabel, true))
         addView(copy, LinearLayout.LayoutParams(0, -2, 1f))
         addView(label(if (enabled) "연결" else "보류", RosyMetrics.TextBody).apply { setPadding(dp(RosyMetrics.Space4.toInt()), 0, 0, 0) })
