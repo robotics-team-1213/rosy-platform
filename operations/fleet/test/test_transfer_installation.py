@@ -37,6 +37,9 @@ def test_the_policy_seals_the_owner_catalog_and_the_digest_is_stable(tool, writt
     assert tool.document(tool.load())['policy_digest'] == written['policy_digest']
     assert set(installed.catalog.poses) == {'source', 'target'}
     assert written['bases'] == {'omx_cell_sim_01': {'position_m': [0, 0, 0], 'orientation_xyzw': [0, 0, 0, 1]}}
+    # The sim starts here: the planner refuses any start but the taught home (HOME_DEVIATION, 2026-10-31).
+    assert set(written['home_joints']) == {'joint1', 'joint2', 'joint3', 'joint4', 'joint5', 'gripper_joint_1'}
+    assert written['home_joints']['gripper_joint_1'] == 1.0
 
 
 def test_the_source_pose_is_where_the_sim_world_puts_the_block(written):
