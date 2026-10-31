@@ -19,8 +19,6 @@ class MediaAuthority:
         self._validate_online, self._kick = validate_online, kick
         self._intents, self._sessions = {}, {}
         self._lock = threading.RLock()
-        # Positive re-checks only, per (jti, token), valid < 1 s and never past the token's own exp.
-        self._fresh = {}
         # tick re-checks run here, never under self._lock; the peers' own timeouts bound each call.
         self._pool = ThreadPoolExecutor(max_workers=16, thread_name_prefix='media-recheck')
 
@@ -42,17 +40,6 @@ class MediaAuthority:
         return claims if claims.iss == self.audience and claims.action == 'read' else None
 
     def _online(self, token, claims, now):
-        key = (claims.jti, token)
-        if now < self._fresh.get(key, 0):
-            return True
-        ok = self._recheck(token, claims, now)
-        if ok:
-            self._fresh[key] = min(now + 1, claims.exp)
-        else:
-            self._fresh.pop(key, None)
-        return ok
-
-    def _recheck(self, token, claims, now):
         try:
             result = self._validate_online(claims.robot_id, token, now)
             return (result.get('active') is True and result.get('grant_id') == claims.jti
@@ -149,12 +136,10 @@ class MediaAuthority:
         self._sessions.pop(session_id, None)
 
     def tick(self, *, now):
-        """Revocation bound: a revoke ends the session at the first tick at least 1 s (cache) after the
-        last positive check, plus one re-check round (<= ~1.5 s per worker batch), so under 5 s at the
-        usual 1 s tick. No network I/O runs while self._lock is held."""
+        """Revocation bound: a revoke ends the session at the next tick plus one re-check round
+        (<= ~1.5 s per worker batch). No network I/O runs while self._lock is held."""
         with self._lock:
             self._intents = {k: v for k, v in self._intents.items() if v['expires'] > now}
-            self._fresh = {k: v for k, v in self._fresh.items() if v > now}
             intents = list(self._intents.items())
             sessions = {sid: (rec, rec['token']) for sid, rec in self._sessions.items()
                         if not (rec.get('closing') or rec['expires'] <= now or rec['claims'].exp <= now)}
