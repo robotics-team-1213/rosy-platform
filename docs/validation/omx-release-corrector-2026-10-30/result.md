@@ -132,3 +132,15 @@ On the 20 shared layouts: rl3 alone 2, rl0 alone 1; where both settled (15), the
 test p = 0.23). Where both settled, position error is the same. rl3 is no worse than rl0 and may settle a few more,
 but one REINFORCE step does not give an established gain at this sample size. rl0 stays the reference and rl3 a
 candidate. Two seed-46 starts failed on a transient model-PC connection error and were rerun; they are not counted.
+
+## Nine-container flow with rl3
+
+Case `nominal-bc-v0-rl3` runs the accepted nine-container flow with BC v0 plus the rl3 residual and no exploration,
+under the same 2–5 mm held-box estimate (commit `2d63c2518a`, seed 42). BC v0 was rerun on the same commit.
+
+| Run | Condition | Result |
+|---|---|---|
+| `b872ef38379f5a769351a2ee143c0b18` | BC v0 + rl3 | **SUCCEEDED, 9/9.** Row gaps 3.42–4.43 mm, no unstable box. |
+| `7f51cec419c75d1080ba866ee5a869e6` | BC v0 | FAILED, 8/9. Box 7 did not settle within ten seconds, as in run ebdd. |
+
+On this seed rl3 removes the one failure BC v0 had. It is one seed of a deterministic simulation; seed 43 is next.

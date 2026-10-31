@@ -560,3 +560,10 @@
 - 증거: seed 46 rl0(1cb1) 16/21, rl3(a509) 17/20. 네 seed(42·44·45·46) 짝 배치 82개에서 rl3만 안정 8개, rl0만 3개(부호 검정 p=0.23), 둘 다 안정인 경우 위치 오차 같음. seed 46 첫 시작 두 번은 일시 연결 오류로 실패해 다시 돌렸고 집계에 넣지 않았다.
 - gate 변화: 없음. 기준 rl0, rl3는 나쁘지 않은 후보.
 - CE: 해당 없음 — 학습 실험 기록이다.
+
+## 2026-10-31 · 2d63c2518a · rl3 places all nine containers under the 2-5 mm estimate
+
+- 변경: 9개 흐름에 rl3를 탐색 없이 넣는 평가 조건 `nominal-bc-v0-rl3`. `remote_isaac.py run`은 시작 전 확인과 fetch에서 잃은 SSH 응답을 다시 시도한다. 실물 측정 세션 분석 도구 `release_measurement.py`.
+- 증거: seed 42에서 rl3 run b872 SUCCEEDED 9/9(간격 3.42~4.43 mm), 같은 커밋 BC v0 run 7f51 8/9(7번 상자 안정 구간 실패, ebdd와 같음). 원격 Isaac 시험·remote_isaac·측정 도구 시험 통과.
+- gate 변화: 없음. 한 seed 결과이며 seed 43 짝 실행 중. 시뮬레이션이며 실물 수용이 아니다.
+- CE: 해당 없음 — 일시 연결 재시도는 코드와 회귀 시험으로 남았다.
