@@ -5,9 +5,13 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.337
+**Version:** v1.338
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.338 `/ws/teleop` 조종 소켓
+
+Pilot hold-to-drive 를 위한 WebSocket 채널을 더한다(additive). REST `POST /api/v1/teleop` 은 그대로이며 소켓이 닫혀 있을 때의 대체 경로다. 자세한 계약은 §6.3.
 
 ### v1.337 팀 tailnet LCD 코드 페어링 (D-944)
 
@@ -1338,7 +1342,7 @@ SOURCE 계약 검토 중이다. 배포·장치 수용과 구분한다. CORE의 �
 | POST `/api/v1/docking/dock` | 기존 dock + `correlation_id?: string(1..128)` | 기존 DockingStatus + captured `operation` |
 | POST `/api/v1/docking/undock` | `{correlation_id?: string(1..128)}`; 본문 생략 유지 | 기존 DockingStatus + captured `operation` |
 | POST `/api/v1/swarm/follow` | 기존 SwarmFollowParams + `correlation_id?: string(1..128)` | 기존 응답 + captured `operation` |
-| POST `/api/v1/teleop` | 기존 linear/angular + `correlation_id?: string(1..128)` | 기존 accepted + captured `operation`; 단발 watchdog pulse이며 거리 달성은 아님 |
+| POST `/api/v1/teleop` (스트림은 §6.3 `/ws/teleop`) | 기존 linear/angular + `correlation_id?: string(1..128)` | 기존 accepted + captured `operation`; 단발 watchdog pulse이며 거리 달성은 아님 |
 
 `operation`은 CORE 생성 UUID `run_id`, process UUID `boot_id`, kind(navigate/home/dock/undock/follow/teleop), 선택적 correlation_id, phase(SUBMITTED/RUNNING/TERMINAL), result(null/SUCCEEDED/FAILED/CANCELED/PREEMPTED/EXPIRED), reason(null 또는 최대64자 고정 uppercase machine code)를 갖는다. SUBMITTED/RUNNING은 result=null, TERMINAL은 result 필수다. admission 거절은 기존 오류이며 operation을 생성하지 않는다. CID 재사용도 새 native run이다. CID는 admission·멱등·retry 권한이 아니다. API는 잠금 밖 최신 상태를 재조회하여 원래 RPC receipt를 만들지 않는다.
 
@@ -2329,6 +2333,19 @@ WS Teleop에도 Watchdog·감사 로그가 동일 적용된다(SAF-002).
 구독 필터: `?types=nav.*,safety.estop` (콤마 구분, `*` 와일드카드).
 
 서버 메시지는 EVT-001 이벤트 모델 그대로 전송한다. 연결 끊김 후 재구독 시 `since_seq`로 갭을 보정한다(EVT-003). 한 로봇은 동시에 소켓 8개(`events.max_clients`)까지 받고, 더 오면 1013으로 닫는다. 소켓 하나가 보내지 못한 이벤트가 1000개(`events.max_backlog`)를 넘으면 메모리를 늘리지 않고 1013 `event backlog full`로 닫는다 — 클라이언트는 다시 붙어 `since_seq`로 갭을 채운다.
+
+## 6.3 `/ws/teleop` — 조종 스트림 (v1.338)
+
+Operator 권한. 인증은 `/ws/state` 와 같다(연결 뒤 첫 메시지 `{"type":"auth","token":"..."}`, 토큰 회수·만료 시 4401, 권한 부족 4403). 인증 뒤 서버는 먼저 보내지 않는다.
+
+클라이언트→서버: `{"type":"teleop","seq":int>=0,"linear":float,"angular":float}` (`correlation_id`·`expected_*` 는 `POST /teleop` 과 같은 선택 필드). 서버는 `POST /api/v1/teleop` 과 같은 검사를 프레임마다 거친다(trip lease, capability, 보정 소유, 보류, 모드, 정지 세대).
+
+서버→클라이언트: `{"type":"ack","seq":n,"accepted":bool,"code":str|null}`. REST 가 409·400 으로 답하는 거절(`MODE_CONFLICT`, `EMERGENCY_ACTIVE`, `OWNER_GENERATION_CHANGED`, `CALIBRATION_ACTIVE`, `TRIP_LEASED`, `CAPABILITY_WITHHELD`, `CAPABILITY_NOT_SUPPORTED` 등)는 소켓을 닫지 않고 `accepted:false` 와 같은 `code` 의 ack 이다. 형식이 틀린 프레임은 `seq:null`, `code:"BAD_FRAME"` ack 이며 연속 20개면 1008 로 닫는다.
+
+- 서버는 최신 명령만 적용한다(latest-wins). 적용이 느려 앞선 프레임이 아직 대기 중일 때 더 새 프레임이 오면 대기 프레임은 적용하지 않고 `accepted:false`, `code:"SUPERSEDED"` ack 로 답한다. 닫힐 때까지 적용되지 못한 대기 프레임은 버린다.
+- `seq` 가 마지막으로 처리한 값보다 크지 않은 프레임은 답 없이 버린다(늦게 온 프레임이 새 명령을 덮지 않는다). 새 소켓은 `seq` 를 0 부터 다시 시작해도 된다.
+- 마지막으로 수락한 명령이 움직임이면 소켓이 닫힐 때 서버가 0 명령을 적용한다(fail-safe). CORE 워치독(SAF-002)은 그대로 둘째 방어선이다.
+- 같은 토큰의 새 소켓은 이전 소켓을 4409 로 닫고 대신한다(이때 이전 소켓의 0 명령은 적용하지 않는다). 소켓 수 상한은 `teleop.max_ws_clients`(기본 2)이고 넘으면 1013 이다.
 
 ---
 
@@ -4378,6 +4395,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.338 | 2026-11-01 | Additive: `/ws/teleop` (operator) streams teleop commands with per-frame `seq` and an `ack` answer; same checks as `POST /api/v1/teleop`; stale `seq` dropped; a motion command is zeroed when the socket closes. REST teleop unchanged. |
 | v1.337 | 2026-11-01 | D-944: LCD code pairing and the reachability read accept the team tailnet (100.64.0.0/10, fd7a:115c:a1e0::/48); development session and first peer approval stay robot-LAN only. |
 | v1.336 | 2026-11-01 | Corrective: Fleet hub answers a `heartbeat`/`event` payload it cannot validate with `PAYLOAD_INVALID` (was `SESSION_NOT_PAIRED`); the robot agent keeps the session on a heartbeat answer and drops the event without retry. Envelope 1.0 unchanged. |
 | v1.335 | 2026-10-31 | D-938: policy admission scope accepts `arm_transfer` (ARM_TRANSFER jobs only) with required `proposers` and `valid_until`; status reads back `enabled_by`; expired scopes close every kind. Same admission checks as a human admit; simulation arm transfer HTTP only. |

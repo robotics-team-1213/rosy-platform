@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-948 | 사람 조종은 `/ws/teleop` 스트림으로 보내고 REST `/teleop`은 대체 경로로 남긴다. [전문](../adr/D-948-teleop-websocket-stream.md) | Accepted (2026-11-01, 사용자 지시; 장치·현장 수용 별도) |
 | D-944 | 팀 tailnet에서도 LCD 코드로 CORE에 페어링한다. [전문](../adr/D-944-tailnet-code-pairing.md) | Accepted (2026-11-01, 사용자 결정; 코드 없는 개발 세션·peer 승인은 LAN 전용 유지) |
 | D-940 | 중복 정의 게이트와 의도 중복 등록부를 둔다. [전문](../adr/D-940-duplicate-definitions-gate.md) | Accepted (2026-11-01, 사용자 결정; 원격 시험·착지는 파이프라인 기록) |
 | D-938 | 팔 이송 정책 승인 — D-865 승인 범위를 ARM_TRANSFER로 확장. [전문](../adr/D-938-arm-transfer-policy-admission.md) | Accepted (2026-10-31, 사용자 결정; simulation 팔 이송 HTTP 전용, 현장 범위 설정·수용 별도) |
@@ -1397,3 +1398,9 @@ Fleet device ID, 실제 follower 설정, 장치별 검증·기록 경로를 별�
 **Status:** Accepted (2026-11-01). D-193 4의 출발지 조건만 넓히며 원격 시험·착지는 착지 기록이 증거를 가진다.
 
 LCD 코드 페어링과 도달 확인 읽기는 Tailscale tailnet(`100.64.0.0/10`, `fd7a:115c:a1e0::/48`)도 받는다. 코드 없는 개발 세션과 최초 peer 승인은 D-477 4대로 로봇 LAN 전용이다. 전문은 [D-944](../adr/D-944-tailnet-code-pairing.md).
+
+## D-948 사람 조종은 `/ws/teleop` 스트림으로 보내고 REST `/teleop`은 대체 경로로 남긴다
+
+**Status:** Accepted (2026-11-01). 장치·현장 수용은 별도다.
+
+프레임마다 REST와 같은 검사(`apply_teleop`)를 하고, 최신 seq만 적용하며, 움직이던 소켓이 끊기면 0을 적용한다. Pilot은 소켓이 없거나 ack가 1 s 넘게 없으면 REST로 보낸다. 전문은 [D-948](../adr/D-948-teleop-websocket-stream.md).
