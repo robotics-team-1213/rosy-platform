@@ -82,6 +82,8 @@ PER_IP_LIMIT = 5
 GLOBAL_LIMIT = 30
 RATE_WINDOW_S = 60.0
 MAX_WRONG_ATTEMPTS = 5
+#: v1.337: the screen code root shows while the robot is latched; it can only release (safety.py).
+RELEASE_ROLE = "estop_release"
 ENROLLMENT_TTL_S = 300.0
 MAX_ENROLLMENT_CODES = 8
 DEFAULT_LIFETIME_HOURS = {"viewer": 168.0, "stuck_resolver": 168.0, "operator": 168.0,
@@ -183,8 +185,12 @@ class PairingState:
         except OSError:
             return None
 
-    def physical_code(self) -> Optional[dict[str, Any]]:
-        """root가 쓴 검증자. 매번 새로 읽는다(캐시 없음). 쓸 수 없으면 None."""
+    def physical_code(self, roles=ROLE_RANK) -> Optional[dict[str, Any]]:
+        """root가 쓴 검증자. 매번 새로 읽는다(캐시 없음). 쓸 수 없으면 None.
+
+        `roles`: login roles by default; the e-stop release endpoint asks for RELEASE_ROLE only,
+        so a release code never logs anyone in and a login code never releases.
+        """
         flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0) \
             | getattr(os, "O_CLOEXEC", 0)
         try:
@@ -220,7 +226,7 @@ class PairingState:
         except (UnicodeDecodeError, ValueError, KeyError, TypeError, AttributeError):
             return None
         if (not params_ok or not CODE_ID_RE.fullmatch(code["code_id"])
-                or code["role"] not in ROLE_RANK or code["source"] != "pair-physical"
+                or code["role"] not in roles or code["source"] != "pair-physical"
                 or len(code["digest"]) != SCRYPT_DKLEN or not code["salt"]):
             return None
         if code["code_id"] in self.spent:

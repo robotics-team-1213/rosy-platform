@@ -5,10 +5,14 @@ from __future__ import annotations
 import logging
 import math
 
-from fastapi import APIRouter, Depends
+import hmac
+
+from fastapi import APIRouter, Depends, Request
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field, field_validator
 
-from core_api_web.api.v1.common import admin, battery_health, require_calibration_owner, viewer
+from core_api_web.api.v1 import auth as login
+from core_api_web.api.v1.common import admin, battery_health, operator, require_calibration_owner, viewer
 from core_api_web.api.deps import AuthContext, get_services, CoreServicesLike
 from core_api_web.api.errors import ApiError
 from core_api_web.api.deps import Mode
@@ -53,6 +57,10 @@ def safety_stop(auth: AuthContext = Depends(viewer), svc: CoreServicesLike = Dep
 
 @safety_router.post("/release")
 def safety_release(auth: AuthContext = Depends(admin), svc: CoreServicesLike = Depends(get_services)):
+    return _release(svc, f"api:{auth.role}")
+
+
+def _release(svc: CoreServicesLike, by: str) -> dict:
     ok_mode, reason = svc.modes.release_emergency()
     # Desync recovery: a latch left in IDLE (before v1.196, POST /mode IDLE left
     # EMERGENCY with the latch set) is still the administrator's to release.
@@ -60,9 +68,63 @@ def safety_release(auth: AuthContext = Depends(admin), svc: CoreServicesLike = D
         if not (svc.safety.estop and svc.modes.mode is Mode.IDLE):
             raise ApiError("MODE_CONFLICT", 409, reason)
         svc.docking.on_estop()  # D-502, as the EMERGENCY exit listener does
-    svc.safety.release(by=f"api:{auth.role}")
+    svc.safety.release(by=by)
     svc.state.set_estop(False)
     return {"estop": False}
+
+
+class ReleaseCodeRequest(BaseModel):
+    code: str = Field(min_length=1, max_length=32)
+
+
+def _match_release(state: "login.PairingState", code: str) -> tuple[bool, bool]:
+    """(matched, burned) against root's live release code; a miss counts toward burning it."""
+    physical = state.physical_code(roles={login.RELEASE_ROLE})
+    if physical is None:
+        return False, False
+    with login.SCRYPT_SLOTS:
+        presented = login.scrypt_digest(code, physical["salt"])
+    code_id = physical["code_id"]
+    with state.lock:
+        if code_id in state.spent:
+            return False, False
+        if hmac.compare_digest(presented, physical["digest"]):
+            state.spent.add(code_id)
+            matched, burned, attempts = True, False, None
+        else:
+            attempts = state.failures[code_id] = state.failures.get(code_id, 0) + 1
+            matched, burned = False, attempts >= login.MAX_WRONG_ATTEMPTS
+            if burned:
+                state.spent.add(code_id)
+    state.signal_root(code_id, "used" if matched else "burned" if burned else "failing",
+                      None if matched or burned else attempts)
+    return matched, burned
+
+
+@safety_router.post("/release-code")
+async def safety_release_code(body: ReleaseCodeRequest, request: Request,
+                              auth: AuthContext = Depends(operator),
+                              svc: CoreServicesLike = Depends(get_services)):
+    """v1.337: release with the one-time code the robot's own screen shows while latched.
+
+    The code proves a person read this robot's LCD; it releases once and logs nobody in.
+    The administrator release above is unchanged.
+    """
+    host = request.client.host if request.client else ""
+    if not login.client_allowed(host):
+        raise ApiError("FORBIDDEN", 403, "release codes are accepted only from the robot LAN")
+    if not svc.safety.estop:
+        raise ApiError("NOT_LATCHED", 409, "the robot is not in emergency stop; the code was not used")
+    if login._pairing(request).admit(host) is not None:
+        raise ApiError("RATE_LIMITED", 429, "too many release attempts")
+    code = login.normalize_code(body.code)
+    if not login.CODE_RE.fullmatch(code):
+        raise ApiError("VALIDATION_ERROR", 400, "a release code is 8 characters like ABCD-EFGH")
+    matched, burned = await run_in_threadpool(_match_release, login._pairing(request), code)
+    if not matched:
+        raise ApiError("UNAUTHORIZED", 401, "invalid or expired release code",
+                       detail={"burned": True} if burned else None)
+    return _release(svc, f"screen_code:{auth.role}")
 
 
 _FLEET_LOSS_POLICIES = {"STOP", "HOLD", "RETURN_HOME", "CONTINUE"}
