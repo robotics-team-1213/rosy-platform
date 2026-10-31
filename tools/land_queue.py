@@ -134,7 +134,10 @@ def blockers(qdir: Path, ticket: Path, now: float | None = None) -> list[dict]:
         r.get("status") == "turn" or (mine is not None and mine in (r.get("batch") or []))
         or (not urgent and r.get("urgent") and r.get("status") == "waiting")
         or (r["ticket"] < ticket.name and r.get("status") not in ("preparing", "pending")
-            and (bool(r.get("urgent")) or not urgent) and not passed(r)))]
+            and (bool(r.get("urgent")) or not urgent) and not passed(r)
+            # A member this ticket's batch carries waits for this leader, so it must not block it back: on
+            # 2026-10-31 three leader/member pairs each waited on the other and main stood still 2 h 15 min.
+            and r.get("branch") not in (me.get("batch") or [])))]
 
 
 def current_main(qdir: Path) -> str | None:
