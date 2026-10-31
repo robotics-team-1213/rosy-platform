@@ -166,11 +166,20 @@ def fleet_installation(written, socket_root):
     return TransferInstallation(policy=installed, source='source', target='target', capabilities=capabilities)
 
 
+def home_joints(spec):
+    """The taught home as joints, open gripper included: the planner refuses any other start (HOME_DEVIATION)."""
+    from omx_adapter.kinematics import ARM_JOINTS, OmxKinematics, TopDownPose
+    from omx_adapter.pose_plan import CellPlanningProfile
+    profile = CellPlanningProfile.load(ROOT / 'deploy/robot/omx/sim/cell_profile.yaml')
+    joints = OmxKinematics.load().solve_top_down(TopDownPose(*_home(spec)), profile.ik_limits()).joints
+    return {**dict(zip(ARM_JOINTS, joints)), profile.gripper_joint: profile.gripper_open}
+
+
 def document(spec):
     installed = policy(spec, bindings(spec))
     return {'schema': 'rosy.sim-transfer-installation-written/1', 'policy': installed.model_dump(mode='json'),
             'policy_digest': installed.digest, 'bases': {spec['instance_id']: spec['base']},
-            'object': spec['object']}
+            'object': spec['object'], 'home_joints': home_joints(spec)}
 
 
 def check(written, socket_root, state):

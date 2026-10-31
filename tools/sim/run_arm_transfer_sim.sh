@@ -18,11 +18,15 @@ pids=()
 trap 'kill "${pids[@]}" 2>/dev/null || true; wait 2>/dev/null || true' EXIT
 mkdir -p "$OUT/journal" "$SOCKETS"
 python3 "$here/transfer_installation.py" write --out "$OUT/installation.json"
-python3 "$here/omx_topic_backend.py" --out "$OUT/layer" --initial gripper_joint_1=1.0 >"$OUT/layer.log" 2>&1 &
+# Scene staging: the arm starts at the catalog's taught home with the gripper open (ros2_control and MuJoCo alike).
+read -ra initial < <(python3 -c "import json,sys
+print(' '.join(f'--initial {k}={v}' for k, v in json.load(open(sys.argv[1]))['home_joints'].items()))" \
+  "$OUT/installation.json")
+python3 "$here/omx_topic_backend.py" --out "$OUT/layer" "${initial[@]}" >"$OUT/layer.log" 2>&1 &
 pids+=($!)
 until [[ -s "$OUT/layer/omx_f_topic.urdf" ]]; do sleep 0.5; done
 MUJOCO_GL=egl "${SIM_MUJOCO_PYTHON:-$HOME/rosy-test/venvs/sim-mujoco/bin/python}" "$here/omx_mujoco_backend.py" \
-  --urdf "$OUT/layer/omx_f_topic.urdf" --shape 240x320 --camera-hz 1 --initial gripper_joint_1=1.0 >"$OUT/backend.log" 2>&1 &
+  --urdf "$OUT/layer/omx_f_topic.urdf" --shape 240x320 --camera-hz 1 "${initial[@]}" >"$OUT/backend.log" 2>&1 &
 pids+=($!)
 for _ in $(seq 240); do grep -q OMX_TOPIC_BACKEND_READY "$OUT/layer.log" && break; sleep 0.5; done
 grep -q OMX_TOPIC_BACKEND_READY "$OUT/layer.log" || { tail -n 20 "$OUT/layer.log" "$OUT/backend.log"; exit 1; }
