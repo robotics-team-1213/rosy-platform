@@ -6,7 +6,7 @@
 // `운행 취소` stays on roster.js: it is a stop, open to every operator.
 import {convoyLeaders, loopCapacityText, oneLapBody, oneLapReason, planSummaryText, planTrip, repeatTripBody, repeatTripReason, startTrip, trafficCardLine, tripRefusalText, tripStartReason, tripPoseReason} from "/console/assets/site-map-model.js";
 import {tripWaitText} from "/console/assets/trip-display.js";
-import { chooseConvoyLeader, motionCommandReason } from "./motion-readiness.js";
+import { chooseConvoyLeader, estopText, motionCommandReason } from "./motion-readiness.js";
 import { robotMapPose } from "./localization-badge.js";
 import { endedTripText, openTrip, primaryButton, quietButton, setReason } from "./queues.js";
 
@@ -24,7 +24,7 @@ export function tripReason(robot, { view, operator, named }) {
     : !operator ? "운영자 권한이 필요합니다"
       : named || (!robot ? "로봇을 고르세요"
         : !robot.online ? "로봇 오프라인"
-          : estop === true ? "비상정지 중"
+          : estop === true ? estopText(robot.state)
             : estop !== false ? "안전 상태 확인 불가"
               : motionCommandReason(view, robot.robot_id, 'trip')
                 || (view.activeSiteMap ? "" : "활성 현장 지도 없음"));
