@@ -63,7 +63,7 @@
 
 ## 6. 누가 무엇을
 
-담당이 정해져 있지 않다. [팀 가이드](team-guide.md) §5.1 영역 표의 담당 칸이 비어 있고 `.github/CODEOWNERS`는 `* @livsbittt` 하나다. 담당이 정해지면 그 표와 `CODEOWNERS`를 같은 PR에서 고친다.
+역할 Epic 담당은 [팀 가이드](team-guide.md) §5.1 표대로 정해져 있고 `.github/CODEOWNERS`도 Epic 담당표별로 확장돼 있으며 `test/architecture/test_capability_owners.py`가 정합을 고정한다(2026-10-27). 담당이 바뀌면 그 표와 `CODEOWNERS`를 같은 PR에서 고친다. 사람 결정으로 남은 것은 제2관리자 지정뿐이다([git-workflow](git-workflow.md) §8, 완주 후).
 
 ## 7. 새 컴퓨터·새 사람 체크리스트
 
