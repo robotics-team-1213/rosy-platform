@@ -123,6 +123,26 @@ def test_an_unused_ap_steps_aside_early_so_a_returning_site_router_is_rejoined()
     assert module.decide(used, 1500.0, policy, uplink=False, ap_idle=False)[0] is None
 
 
+def test_grace_offset_staggers_robots_and_delays_the_open(tmp_path):
+    """Robots behind one rebooted router do not all open their APs in the same poll."""
+    module = _module()
+    assert module.grace_offset(tmp_path) == 0                       # no identity: no offset
+    offsets = set()
+    for name in ("rosy-pinky-e4us", "rosy-pinky-a1b2", "rosy-pinky-zz09", "rosy-pinky-q7k3"):
+        root = tmp_path / name
+        (root / "etc/rosy").mkdir(parents=True)
+        (root / "etc/rosy/device-identity.json").write_text(json.dumps({"device_name": name}), encoding="utf-8")
+        offset = module.grace_offset(root)
+        assert offset == module.grace_offset(root) and 0 <= offset < module.GRACE_JITTER_SECONDS
+        assert module.load_policy(root)["grace_offset_seconds"] == offset
+        offsets.add(offset)
+    assert len(offsets) > 1
+    policy = {**POLICY, "grace_offset_seconds": 7}
+    state = _state(module, no_uplink_since=1000.0)
+    assert module.decide(state, 1126.0, policy, uplink=False)[0] is None
+    assert module.decide(state, 1127.0, policy, uplink=False)[0] == "open"
+
+
 def test_idle_mark_counts_only_packets_since_the_ap_opened():
     module = _module()
     assert module.idle_mark(False, 50, 60) == (False, None)

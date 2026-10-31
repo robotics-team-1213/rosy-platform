@@ -165,7 +165,12 @@ ROSY_IMAGE_MOUNT=/mnt/rosy ./deploy/robot/pinky_pro/image/verify-artifacts.sh di
 ### 5.4 복구 AP
 
 - [ ] 이미 프로비저닝된 장비가 **짧은 WLAN 단절만으로** recovery AP를 열지 않는가
-      (`NETWORK_HOLD`에 머물러야 한다)
+      (recovery AP는 마커·예약으로만 열린다)
+- [ ] fallback AP(D-176·D-919)는 업링크가 120 s(`grace_seconds`) 없을 때만 열리는가 —
+      그 전의 짧은 단절에는 열리지 않아야 한다
+- [ ] 열린 fallback AP에 아무도 붙지 않으면 120 s(`idle_hold_seconds`) 뒤 닫고
+      사이트 Wi-Fi에 다시 붙는가, 누가 붙어 있으면 600 s(`hold_seconds`)까지 유지하는가
+      (공유기 재부팅 시나리오로 기록)
 - [ ] 대시보드에서 다음 재부팅의 recovery mode를 예약하면 동작하는가
 - [ ] 전원이 꺼진 장비의 FAT boot partition에 빈 `rosy-recovery` marker를 넣으면
       동작하는가

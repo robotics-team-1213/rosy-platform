@@ -246,7 +246,7 @@
 | D-121 | Cyclone 적용은 CORE 기동 전이고 웹은 보고만 한다 | Accepted |
 | D-122 | 잘못된 RMW는 다음 CORE 기동에서 Cyclone으로 고친다. OS reboot가 아니다 | Accepted |
 | D-123 | 웹은 Cyclone을 오버레이에 저장한 뒤 Host Agent 재부팅을 요청한다 | Accepted |
-| D-124 | 대시보드는 AP on/off와 Wi-Fi 연결을 Host Agent로 확인하고 적용한다 | Accepted |
+| D-124 | 대시보드는 AP on/off와 Wi-Fi 연결을 Host Agent로 확인하고 적용한다 | Accepted (업링크 손실 AP 금지 문장은 D-176·D-919가 대체) |
 | D-125 | Core 패키지를 논리적 도메인 라이브러리로 분할 (Option A) | Accepted |
 | D-126 | 완전 모듈 분리 — CORE는 슬라이스 코드를 import하지 않는다 | Accepted |
 | D-127 | 276커밋 백로그는 직접 FF 푸시하지 않고 슬라이스별 단계 통합한다 | Accepted |

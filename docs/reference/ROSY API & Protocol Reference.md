@@ -2440,6 +2440,8 @@ Fleet 추적 타임아웃(기본 10초) 내 ack 없으면 Fleet 기록에 `COMMA
 
 `MAJOR.MINOR`. MINOR는 추가 전용. Fleet이 로봇보다 낮은 버전만 지원하면 Fleet 지원 최고 MINOR로 통신한다.
 
+허브는 하트비트를 `extra=forbid`·닫힌 enum 스키마로 검증한다. 그래서 새 CORE의 스냅샷 필드나 enum 값(`RobotMode`·`NavigationState` 등)은 Fleet이 따라오기 전까지 `PAYLOAD_INVALID`(v1.336)를 받는다. 링크와 SAF-003 판정은 유지되고, 그동안 그 로봇의 상태는 하트비트 대신 REST gather(D-447)로 읽힌다. 스냅샷을 넓히는 변경은 Fleet을 먼저 배포한다. 스키마를 모르는 값 허용으로 바꾸지 않는 이유: Fleet 판단이 이 enum으로 갈라지므로, 모르는 값을 조용히 통과시키면 오판이 되고 한 계층 느린 읽기는 틀린 판단보다 안전하다(2026-11-01).
+
 ## 7.8 Leader Pose Stream (Swarm, SWM-003)
 
 Leader 로봇 → Fleet ≥10 Hz, Fleet → Follower 릴레이 ≥5 Hz. envelope `type: "pose"`(v1.1 추가).

@@ -13225,3 +13225,9 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: D-944 Accepted(사용자 결정), 워크트리 슬롯 1회 force-over-cap 승인(2026-11-01)
 - 교훈: 없음
+
+## 2026-11-01 · uncommitted · fix: 링크 조사 후속 (문서 정리·AP 지터·enum 판단)
+- 변경: D-124 Status와 ADR Log 행에 "업링크 손실 AP 금지 문장은 D-176·D-919가 대체" 표기, Pi5 수용 체크리스트 §5.4에 fallback AP grace·유휴 복귀 항목, 통신 평가 보고서(2026-09-22) 머리에 이후 변경 표기. fallback AP 열림 시점에 기기 이름별 0~29 s 고정 지터(`grace_offset_seconds`). API §7.7에 새 CORE 스냅샷 필드·enum은 Fleet이 따라올 때까지 `PAYLOAD_INVALID`→REST gather로 읽히며 Fleet 먼저 배포한다는 규칙과 스키마를 관용으로 바꾸지 않는 이유
+- 증거: 원격 시험은 착지 기록에 남긴다. 지터·유휴 복귀는 장치 미확인
+- gate 변화: 없음
+- 교훈: 없음

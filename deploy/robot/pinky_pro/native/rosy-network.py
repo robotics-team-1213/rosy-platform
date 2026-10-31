@@ -21,6 +21,7 @@ whenever the AP is not up. Nothing here prints the key.
 from __future__ import annotations
 
 import argparse
+import hashlib
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
 import json
@@ -49,6 +50,8 @@ POLL_SECONDS = 10
 DEFAULT_POLICY = {"mode": "fallback", "fallback_security": "open", "grace_seconds": 120, "hold_seconds": 600,
                   "idle_hold_seconds": 120}
 RX_PACKETS = "sys/class/net/wlan0/statistics/rx_packets"
+#: Robots that lose one site router together do not all open their APs in the same poll.
+GRACE_JITTER_SECONDS = 30
 
 
 @dataclass(frozen=True)
@@ -82,7 +85,7 @@ def decide(state: LinkState, now: float, policy: dict, *, uplink: bool,
     if uplink:
         return None, LinkState()
     since = state.no_uplink_since if state.no_uplink_since is not None else now
-    if now - since >= policy.get("grace_seconds", 120):
+    if now - since >= policy.get("grace_seconds", 120) + policy.get("grace_offset_seconds", 0):
         return "open", LinkState(ap_active=True, ap_since=now)
     return None, replace(state, no_uplink_since=since)
 
@@ -131,8 +134,16 @@ def _read_json(path: Path) -> dict:
     return data if isinstance(data, dict) else {}
 
 
+def grace_offset(root: Path) -> int:
+    """0..GRACE_JITTER_SECONDS-1, fixed per device name (0 without an identity)."""
+    name = _read_json(root / "etc/rosy/device-identity.json").get("device_name")
+    if not isinstance(name, str) or not name:
+        return 0
+    return int(hashlib.sha256(name.encode("utf-8")).hexdigest(), 16) % GRACE_JITTER_SECONDS
+
+
 def load_policy(root: Path) -> dict:
-    policy = dict(DEFAULT_POLICY)
+    policy = {**DEFAULT_POLICY, "grace_offset_seconds": grace_offset(root)}
     defaults = root / "etc/rosy/defaults.yaml"
     if defaults.is_file():
         try:
