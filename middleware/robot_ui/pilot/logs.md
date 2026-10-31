@@ -1061,3 +1061,9 @@
 - 변경: 앱 처리와 upstream 첫 응답 시간을 고정 네 종류로 집계한다. 오류·영상 본문 읽기 실패·조회 거절·소켓 종료 코드를 기기·연결에서 확인하고 최대 5초당 한 번 기록한다. URL·주소·토큰·명령 본문·원격 사유를 저장하지 않는다. upstream 시간은 네트워크와 서버의 합산이며 CORE 단독 시간이 아니다.
 - 증거: 종료 사유 전달, 조회 과부하, 진단 누락 RED를 먼저 확인했다. 독립 검토의 로컬 자산 503 지적을 보정했다. 실제 프록시에서 WS4+정체 조회4+거절 조회4 상태의 번들·bootstrap·zero·비상정지·lease 재사용을 확인한다. whoami resolved401/403/503 회귀는 1195e30b0b의 공식 현장/모델 PC에서 RETRYING·retry1로 실패했고 349509dd9a의 공식 현장 PC link/shell/browser 회귀 94 pass, NEW 0. 최종 JVM 124 pass/1 skip(ShellPageProbe), assembleRelease·lintRelease 성공, lint 오류 0. 독립 최종 검토의 추가 중요 지적 없음. 실제 장치 시험은 포함하지 않는다.
 - gate 변화: 앱 수정·서명 APK 준비 범위다. 태블릿 무선 ADB 부재로 설치·연속 실주행은 대기다. 업데이트 점검은 CORE와 OS/native 활성화 간 원자적인 동작 예약이 없음을 확인했으나 새 소유권 계약이나 제품 안전 코드는 적용하지 않았다. root-owned 안정 inode와 모든 설치 owner의 shared/exclusive gate가 필요한 설계·검증안을 작업 공간 계획에 남겼다. CE: 미해결 — 앱 판단은 코드·회귀에 보존했고 업데이트 경쟁의 제품 수정·실물 수용은 남아 있다. 이를 해결 교훈으로 쓰지 않았다.
+
+## 2026-10-31 · 754e2bb1da · 연동 코드 화면 분리
+
+- 변경: `connect.js`의 연동 코드 보여주기(`mountShowCode`)를 `screens/show-code.js`로 그대로 옮겼다. 착지가 D-766 600줄 규칙(`c9cc22a986` 632줄)에 막혀 그 앞에 분리 커밋을 두고 이후 커밋을 다시 쌓았다. 서빙 목록·OMX SIM·dev_server·서비스워커 SHELL에 등록하고 캐시 키를 올렸다.
+- 증거: `tools/harness/size_range.py main HEAD` 16커밋 통과, 최종 `connect.js` 586줄. 동작 변경 없음. 실제 시험은 착지 auto 선택에 맡긴다.
+- gate 변화: 없음. CE: 해당 없음 — 기계적 이동이며 규칙은 기존 착지 교훈에 있다.
