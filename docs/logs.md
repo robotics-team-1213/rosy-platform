@@ -13218,3 +13218,8 @@ osy-d395-s1d\`.
 - 변경: `docs/solutions/runtime-errors/omx-cell-device-identity-after-rewiring-2026-10-31.md` (동일 시리얼 Innomaker는 by-path, RealSense 노드는 USB 인터페이스 udev 이름, 팔 좌우는 LED 차분, 확인은 `omx_devices.py scan`)
 - 증거: 현장 PC 실측(PING·LED·udev 링크·영상). depth(USB 2.0)는 미해결로 남김
 - gate 변화: 없음
+
+## 2026-10-31 · uncommitted · tools: 워크트리 .git 유실 재발 교훈 갱신
+- 변경: `docs/solutions/workflow-issues/empty-worktree-folder-runs-git-on-the-shared-main-2026-10-25.md`에 재발(파일 남은 폴더·묘비 없음·land_async 재사용) 추가
+- 증거: 공유 체크아웃 reflog의 `checkout: moving from main to feat/omx-devices-scan`, 2분 뒤 `git switch main`로 복구
+- gate 변화: 없음
