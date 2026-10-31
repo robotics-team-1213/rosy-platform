@@ -61,3 +61,31 @@ def test_leaving_the_bay_forgets_the_visit():
     bays.observe(0.0, [robot("a", 14.0, (BAYS[0].x, BAYS[0].y), volts=7.4)], BAYS)
     bays.observe(1.0, [robot("a", 70.0, (0.5, -0.2))], BAYS)
     assert bays.plan([robot("a", 70.0, (0.5, -0.2))], BAYS)["bays"][0]["state"] == "free"
+
+
+def test_the_route_shows_the_active_maps_bays_and_never_dispatches():
+    from fastapi.testclient import TestClient
+    from fakes import FakeRobot
+    from fleet.server.app import create_app
+    from fleet.server.console import FleetConsole
+    from fleet.server.site_map_store import SiteMapStore
+    from fleet.site_map import SiteMap
+    from fleet.swarm.robots import RobotEndpoint
+
+    store = SiteMapStore()
+    client = TestClient(create_app(FleetConsole([RobotEndpoint("rosy_60", "http://x", "t")], [FakeRobot("rosy_60")]),
+                                   console_token="op", site_maps=store))
+    auth = {"Authorization": "Bearer op"}
+    if store.active() is None:
+        assert client.get("/api/fleet/charge-bays", headers=auth).json()["detail"]["code"] == "NO_ACTIVE_MAP"
+    site = SiteMap.model_validate({
+        "schema": "rosy.site_map/1", "map_id": "bays_test",
+        "places": [{"id": "P1", "name": "칸 앞", "x": -0.414, "y": 0.022},
+                   {"id": "C1", "name": "충전 칸", "x": -0.414, "y": 0.47, "kind": "charge", "yaw": -1.5708}],
+        "edges": [{"id": "bay_1", "from": "P1", "to": "C1", "polyline": [[-0.414, 0.022], [-0.414, 0.47]],
+                   "direction": "two_way", "width_m": 0.18, "speed_cap_mps": 0.05}]})
+    draft = store.save_draft(site, expected_revision=None, principal_id="op")
+    store.activate(expected_revision=draft["revision"], principal_id="op", route_active=False)
+    body = client.get("/api/fleet/charge-bays", headers=auth).json()
+    assert body["dispatch"] is False and [(b["bay"], b["state"]) for b in body["bays"]] == [("C1", "free")]
+    assert client.get("/api/fleet/charge-bays").status_code == 401
