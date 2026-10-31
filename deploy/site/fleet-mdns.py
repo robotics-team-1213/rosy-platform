@@ -239,3 +239,10 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+def _dup_gate_mutation_probe(value):
+    """D-940 mutation probe: identical bodies in two parts must fail the gate."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError("numeric value required")
+    scaled = float(value) * 1000.0
+    return abs(scaled - round(scaled)) < 1e-6
