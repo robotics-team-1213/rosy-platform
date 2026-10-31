@@ -286,3 +286,4 @@ def test_cuda_training_holds_the_shared_gpu_lease_and_refuses_a_busy_gpu(tmp_pat
                 pass
     with experiment_train.gpu_lease('cuda', run=idle):
         pass
+    assert lock.stat().st_mode & 0o077 == 0  # Isaac run_admission rejects a group/other-accessible lock

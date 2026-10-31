@@ -281,9 +281,13 @@ def gpu_lease(device, *, run=subprocess.run):
         yield
         return
     import fcntl
+    import os
     path = Path.home() / '.cache/rosy-learning/gpu.lock'
     path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-    with path.open('a+b') as lock:
+    # Same no-follow 0600 lock as Isaac run_admission, which rejects a group-writable lock file.
+    fd = os.open(path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    os.fchmod(fd, 0o600)
+    with os.fdopen(fd, 'r+b') as lock:
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except OSError as exc:

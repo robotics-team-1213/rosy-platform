@@ -95,3 +95,11 @@ def test_upload_route_requires_a_project_hf_connection(tmp_path):
     with pytest.raises(ValueError, match='HF'):
         omx_center_web.post(handler, omx_center_web.PREFIX + '/hub-upload',
                             {'bundle_id': str(uuid.uuid4()), 'connection_id': 'c'}, c, None, None)
+
+
+def test_missing_hub_library_fails_the_upload_instead_of_hanging(tmp_path, monkeypatch):
+    hub = center(tmp_path).hub
+    bid = hub.prepare(dict(run_id=str(uuid.uuid4()), repo_id='team/omx-act', request_id=str(uuid.uuid4())))['bundle_id']
+    monkeypatch.setitem(sys.modules, 'huggingface_hub', None)
+    state = wait(hub, hub.upload(bid, TOKEN)['bundle_id'])
+    assert state['state'] == 'failed'

@@ -82,13 +82,14 @@ class Hub:
                 return self.status(bid)
             self.active.add(bid)
             (bundle / 'error.json').unlink(missing_ok=True)
-        if api is None:
-            from functools import partial
-            from huggingface_hub import CommitOperationAdd, HfApi, snapshot_download
-            api, operation, downloader = HfApi(token=token), CommitOperationAdd, partial(snapshot_download, token=token)
 
-        def run():
+        def run(api=api, operation=operation, downloader=downloader):
             try:
+                if api is None:  # inside the try: an import failure must not leave the bundle "uploading"
+                    from functools import partial
+                    from huggingface_hub import CommitOperationAdd, HfApi, snapshot_download
+                    api, operation = HfApi(token=token), CommitOperationAdd
+                    downloader = partial(snapshot_download, token=token)
                 _hub_sync().upload_bundle(bundle, api=api, operation=operation, downloader=downloader)
             except Exception as exc:  # the public reason only; provider bodies may echo request details
                 write_json(bundle / 'error.json', {'error': str(exc) if isinstance(exc, ValueError) else type(exc).__name__})

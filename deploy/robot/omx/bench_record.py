@@ -45,7 +45,8 @@ class Bench:
     def __init__(self, config, *, run=systemctl, popen=subprocess.Popen, clock=time.time):
         self.python, self.prep = config["python"], Path(config["prep_root"]).expanduser()
         self.run, self.popen, self.clock = run, popen, clock
-        self.lock, self.child, self.state = threading.Lock(), None, {"status": "idle"}
+        self.lock, self.child, self.abort, self.state = threading.Lock(), None, False, {"status": "idle"}
+        self.pending = self.prep / ".bench-stopped-units.json"
 
     def choices(self):
         pick = lambda pattern: sorted(p.name for p in self.prep.glob(pattern))
@@ -60,6 +61,9 @@ class Bench:
         return str(self.prep / name)
 
     def start(self, body):
+        if not isinstance(body, dict) or any(not isinstance(body.get(k, ""), str)
+                                             for k in ("name", "rig_revision", "config", "caps", "task")):
+            raise ValueError("JSON object with text fields required")
         if body.get("at_bench") is not True:
             raise ValueError("confirm that a person is at the bench with a hand on the follower power switch")
         choices = self.choices()
@@ -78,6 +82,7 @@ class Bench:
             folder = self.prep / "sessions" / f"{time.strftime('%Y%m%d-%H%M%S')}-{body['name']}"
             folder.mkdir(parents=True)
             self.state = {"status": "handing_over", "name": body["name"], "folder": str(folder), "started": self.clock()}
+            self.child, self.abort = None, False
         seal = [self.python, str(HERE / "record_seal.py"), "--session-dir", str(folder), "--name", body["name"],
                 "--rig-revision", body["rig_revision"], *[a for c in calibrations for a in ("--calibration", c)]]
         threading.Thread(target=self._session, args=(command, seal, folder), daemon=True).start()
@@ -87,41 +92,70 @@ class Bench:
         with self.lock:
             self.state.update(values)
 
+    def _remember(self, stopped):
+        # A bench restart mid-session must still restore what it stopped (see restore_leftovers).
+        self.pending.write_text(json.dumps(stopped)) if stopped else self.pending.unlink(missing_ok=True)
+
+    def restore_leftovers(self):
+        if self.pending.is_file():
+            for unit in reversed(json.loads(self.pending.read_text())):
+                self.run("start", unit)
+            self.pending.unlink()
+
     def _session(self, command, seal, folder):
-        stopped = []
+        stopped, code = [], None
         try:
             for unit in active_handover_units(self.run):
+                stopped.append(unit)  # before the call: a timed-out stop still gets restored
+                self._remember(stopped)
                 self.run("stop", unit)
-                stopped.append(unit)
-            self._set(status="recording", stopped=stopped)
-            with (folder / "bench.log").open("ab") as log:
-                self.child = self.popen(command, cwd=folder, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
-                code = self.child.wait()
+            with self.lock:
+                if self.abort:
+                    raise RuntimeError("stopped before recording started")
+                self.state.update(status="recording", stopped=stopped)
+                with (folder / "bench.log").open("ab") as log:
+                    self.child = self.popen(command, cwd=folder, stdout=log, stderr=subprocess.STDOUT,
+                                            start_new_session=True)
+            code = self.child.wait()
         except Exception as exc:
-            code = None
             self._set(error=f"{type(exc).__name__}: {exc}")
         finally:
             self._set(status="restoring")
-            errors = [u for u in reversed(stopped) if self.run("start", u).returncode != 0]
+            errors = []
+            for unit in reversed(stopped):
+                try:
+                    if self.run("start", unit).returncode != 0:
+                        errors.append(unit)
+                except Exception:
+                    errors.append(unit)
+            self._remember(errors)
             self._set(restored=[u for u in stopped if u not in errors], restore_errors=errors)
-        session = folder / "session.json"
-        record = json.loads(session.read_text()) if session.is_file() else {}
-        safe = code == 0 and record.get("safe_end") is True
-        self._set(exit_code=code, safe_end=record.get("safe_end"),
-                  manual_attention=record.get("manual_attention_required"))
-        if not safe:
-            self._set(status="unsafe_or_failed" if code is not None else "failed")
-            return
-        self._set(status="sealing")
-        with (folder / "bench.log").open("ab") as log:
-            sealed = self.popen(seal, cwd=folder, stdout=log, stderr=subprocess.STDOUT).wait()
-        self._set(status="sealed" if sealed == 0 else "seal_failed", seal_exit=sealed)
+        try:
+            session = folder / "session.json"
+            record = json.loads(session.read_text()) if session.is_file() else {}
+            self._set(exit_code=code, safe_end=record.get("safe_end"),
+                      manual_attention=record.get("manual_attention_required"))
+            if record.get("interrupted"):  # record_seal refuses interrupted sessions; keep the raw recording
+                return self._set(status="stopped_not_sealed")
+            if not (code == 0 and record.get("safe_end") is True):
+                return self._set(status="unsafe_or_failed" if code is not None else "failed")
+            self._set(status="sealing")
+            with (folder / "bench.log").open("ab") as log:
+                sealed = self.popen(seal, cwd=folder, stdout=log, stderr=subprocess.STDOUT).wait()
+            self._set(status="sealed" if sealed == 0 else "seal_failed", seal_exit=sealed)
+        except Exception as exc:
+            self._set(status="failed", error=f"{type(exc).__name__}: {exc}")
 
     def stop(self):
-        child = self.child
-        if child is None or child.poll() is not None:
-            raise ValueError("no recording is running")
-        child.send_signal(signal.SIGINT)  # record_session ends the episode and does its own torque-OFF ending
+        with self.lock:
+            if self.state["status"] == "handing_over":
+                self.abort = True
+                return dict(self.state)
+            child = self.child
+            if child is None or child.poll() is not None:
+                raise ValueError("no recording is running")
+        # SIGTERM: record_session maps it to the same clean ending, and it is not ignored under nohup.
+        child.send_signal(signal.SIGTERM)
         return self.status()
 
     def status(self):
@@ -184,7 +218,10 @@ def make_server(bench, port):
             if not self.local() or self.headers.get("X-Bench") != "1":
                 return self.reply(403, {"error": "local bench only"})
             try:
-                body = json.loads(self.rfile.read(min(int(self.headers.get("Content-Length", 0)), 65536)) or b"{}")
+                length = int(self.headers.get("Content-Length", 0))
+                if not 0 <= length <= 65536:
+                    raise ValueError("bounded JSON body required")
+                body = json.loads(self.rfile.read(length) or b"{}")
                 if self.path == "/start":
                     return self.reply(200, bench.start(body))
                 if self.path == "/stop":
@@ -204,7 +241,9 @@ def main(argv=None):
     parser.add_argument("--config", type=Path, default=Path("~/.config/rosy/omx-bench-record.json").expanduser())
     parser.add_argument("--port", type=int, default=8771)
     args = parser.parse_args(argv)
-    make_server(Bench(json.loads(args.config.read_text())), args.port).serve_forever()
+    bench = Bench(json.loads(args.config.read_text()))
+    bench.restore_leftovers()
+    make_server(bench, args.port).serve_forever()
 
 
 if __name__ == "__main__":

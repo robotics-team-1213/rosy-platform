@@ -45,7 +45,7 @@ def inventory(config_dir: Path, by_id: Path, calibration: Path) -> dict:
              "cameras": []}
     for camera in cameras:
         role = camera["role"]
-        arm = next((a for a in arms if role.startswith(a + "_")), None)
+        arm = next((a for a in arms if role == a + "_wrist"), None)  # only the <arm>_wrist role convention
         draft["cameras"].append({"id": role, "input_key": f"observation.images.{role}", "arm_id": arm,
                                  "role": "wrist" if arm else role, "source_identity": camera["device"],
                                  "placement": "arm_mounted" if arm else "fixed", "shape": list(DEFAULT_SHAPE),
