@@ -49,12 +49,12 @@ def test_the_source_pose_is_where_the_sim_world_puts_the_block(written):
 
 
 def test_the_arm_at_home_leaves_both_zones_clear(tool, written):
-    from fleet.server.evidence.physical_transfer_evidence import PhysicalTransferPolicy, _outside
+    from fleet.server.physical_transfer_evidence import PhysicalTransferPolicy, _outside
     from omx_adapter.kinematics import ARM_JOINTS, OmxKinematics, TopDownPose
     from omx_adapter.pose_plan import CellPlanningProfile
     from rosy.world.state.projections.physical_transfer import Bounds3
     observer = _load('transfer_observer')
-    policy = PhysicalTransferPolicy.model_validate(written['policy'])
+    policy = PhysicalTransferPolicy.model_validate_json(json.dumps(written['policy']))
     profile = CellPlanningProfile.load(ROOT / 'deploy/robot/omx/sim/cell_profile.yaml')
     kin = OmxKinematics.load()
     home = TopDownPose(*tool._home(tool.load()))

@@ -71,9 +71,10 @@ def _home(spec):
     return home.x, home.y, home.z, home.yaw
 
 
-def object_pose(spec, step, height):
-    """World pose of the box centre under a step's top-face TCP target (base = world, D-877 world)."""
-    (x, y, z), w = _world(spec, (step.target.x, step.target.y, step.target.z - height / 2)), step.target.yaw
+def object_pose(spec, step, box):
+    """World pose of the box centre under a step's TCP target, grasp_depth below the top face."""
+    (x, y, z), w = _world(spec, (step.target.x, step.target.y,
+                                 step.target.z + box.grasp_depth - box.height / 2)), step.target.yaw
     base = spec['base']['orientation_xyzw']
     return (x, y, z), _qmul(base, (0.0, 0.0, math.sin(w / 2), math.cos(w / 2)))
 
@@ -98,7 +99,7 @@ def zones(spec, recipe, source, target):
     hx, hy = spec['zone_half_m']
     out = []
     for step in (source, target):
-        (x, y, z), _ = object_pose(spec, step, recipe.box.height)
+        (x, y, z), _ = object_pose(spec, step, recipe.box)
         top = z + recipe.box.height / 2 + spec['zone_clearance_above_m']
         out.append(Bounds3((x - hx, y - hy, 0.0), (x + hx, y + hy, top)))
     return tuple(out)
@@ -106,7 +107,7 @@ def zones(spec, recipe, source, target):
 
 def policy(spec, installed):
     """The Fleet policy over the owner catalog and bindings digests."""
-    from fleet.server.evidence.physical_transfer_evidence import PhysicalTransferPolicy, TransferParticipant
+    from fleet.server.physical_transfer_evidence import PhysicalTransferPolicy, TransferParticipant
     from rosy.world.state.projections.omx_geometry import load_omx_geometry
     from rosy.world.state.projections.physical_transfer import PhysicalPose
     recipe, _, source, target = _job(spec)
@@ -118,7 +119,7 @@ def policy(spec, installed):
         workcell_id=workcell, instance_id=instance, arm_resource_id=f'{workcell}.{instance}',
         geometry=load_omx_geometry(urdf, meshes), calibration_revision=spec['calibration_revision'],
         transform_revision=spec['transform_revision'])
-    pose = {name: PhysicalPose(*object_pose(spec, step, recipe.box.height))
+    pose = {name: PhysicalPose(*object_pose(spec, step, recipe.box))
             for name, step in (('source', source), ('target', target))}
     return PhysicalTransferPolicy(
         participants=(participant,), primary=(workcell, instance), zones=zones(spec, recipe, source, target),
@@ -153,10 +154,10 @@ def owner_installation_from_environment():
 
 def fleet_installation(written, socket_root):
     """Fleet's TransferInstallation: the written policy plus the running owner's own capability."""
-    from fleet.server.evidence.physical_transfer_evidence import PhysicalTransferPolicy
+    from fleet.server.physical_transfer_evidence import PhysicalTransferPolicy
     from fleet.server.local_action_transport import UnixLocalActionTransport
-    from fleet.server.work.physical_transfer_store import TransferInstallation
-    installed = PhysicalTransferPolicy.model_validate(written['policy'])
+    from fleet.server.physical_transfer_store import TransferInstallation
+    installed = PhysicalTransferPolicy.model_validate_json(json.dumps(written['policy']))
     if installed.digest != written['policy_digest']:
         raise ValueError('policy digest does not match the written policy')
     transport = UnixLocalActionTransport(socket_root)
