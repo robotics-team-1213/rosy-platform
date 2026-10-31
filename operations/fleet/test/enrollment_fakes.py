@@ -57,6 +57,8 @@ class FakeCore:
         self.known = set(known)
         self.device_uid = device_uid
         self.logged_out: list[str] = []
+        self.estop = False
+        self.released: list[str] = []
 
     def handle(self, request: httpx.Request) -> httpx.Response:
         path = request.url.path
@@ -93,7 +95,13 @@ class FakeCore:
             return httpx.Response(200, json={"robot_id": self.robot_id, "navigation": self.navigation,
                                              "localization": {"state": "LOCALIZED", "pose_frame": "map"},
                                              "pose": {"x": self.pose[0], "y": self.pose[1],
-                                                      "yaw": 0.0}})
+                                                      "yaw": 0.0}, "safety": {"estop": self.estop}})
+        if path == "/api/v1/safety/release":
+            if self.role != "administrator":
+                return httpx.Response(403, json={"error": {"code": "FORBIDDEN", "message": "admin"}})
+            self.released.append(bearer)
+            self.estop = False
+            return httpx.Response(200, json={"estop": False})
         if path == "/api/v1/navigation/path":
             return httpx.Response(200, json={"poses": [{"x": x, "y": y} for x, y in self.path]})
         if path == "/api/v1/map":

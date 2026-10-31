@@ -57,6 +57,7 @@ export const MESSAGES = {
   robot_error: "로봇이 예상하지 못한 답을 했습니다.",
   not_enrollable: "이 행은 등록 대기 상태가 아닙니다(이미 등록됐거나 파일 로봇).",
   not_enrolled: "등록된 로봇이 아닙니다.",
+  not_latched: "이 로봇은 비상정지 상태가 아닙니다 — 코드를 쓰지 않았습니다.",
   address_unchanged: "주소가 바뀐 로봇이 아닙니다.",
   no_new_address: "새 주소가 하나로 보이지 않습니다 — 발견 목록을 확인하세요.",
   still_at_pinned_address: "로봇이 아직 원래 주소에서 응답합니다 — 옮길 필요가 없습니다.",
@@ -88,6 +89,9 @@ export const CONSUMED_REASONS = {
   robot_id_conflict: "원인: 같은 robot_id가 이미 로스터에 있습니다.",
   store_failed: "원인: 자격을 저장하지 못했습니다.",
   verify_failed: "원인: 로봇 신원을 읽지 못했습니다.",
+  admin_required: "원인: 비상정지 해제는 관리자 역할 코드가 필요합니다(카드 login.boot_code=administrator 또는 관리자 등록 코드).",
+  release_refused: "원인: 로봇이 해제를 거절했습니다 — 로봇 화면에서 정지 원인을 확인하세요.",
+  release_unreachable: "원인: 해제 요청 중 로봇 연결이 끊겼습니다.",
 };
 
 export const AVAHI_HINT = "같은 이름의 기기가 둘이면 Avahi가 한쪽을 <이름>-2.local로 바꿉니다 — 발견 목록에 -2가 붙은 행이 있으면 그 기기부터 확인하세요.";
@@ -155,7 +159,7 @@ const HUB_STATE_TEXT = {
 };
 
 const ACTION_LABELS = {
-  move: "새 주소로 옮기기…", unenroll: "등록 해제…", "hub-link": "허브 연결", "hub-unlink": "허브 연결 해제",
+  move: "새 주소로 옮기기…", unenroll: "등록 해제…", "estop-release": "비상정지 해제…", "hub-link": "허브 연결", "hub-unlink": "허브 연결 해제",
 };
 
 export function canManage(identity) {
@@ -171,6 +175,7 @@ export function rowActions(row, manage) {
   if (row.state === "address_changed") actions.push("move");
   if (row.hub_linked) actions.push("hub-unlink");
   else if (row.hub_linkable && row.state === "active") actions.push("hub-link");
+  if (row.state === "active") actions.push("estop-release");
   actions.push("unenroll");
   return actions;
 }
@@ -182,6 +187,7 @@ export function discoveryActions(device, manage, blockedUntil, now) {
 export const HELP = [
   "운영자 동작: 로봇 전원 켜기 → 등록 → 로봇 화면의 8자 입력. SSH·파일 편집·재시작이 없습니다.",
   "LCD가 있고 카드 login.boot_code가 기본(operator)인 로봇만 이렇게 됩니다. 그 밖에는 관리자 등록 코드나 SSH rosy-login-code가 코드의 출처입니다.",
+  "비상정지 해제: 행의 '비상정지 해제…' → 그 로봇 화면의 관리자 코드. Fleet은 한 번 해제하고 토큰을 버립니다. 정지 중이 아니면 코드를 쓰지 않습니다.",
   "새 화면 코드는 부팅마다 하나입니다: 첫 등록, 토큰 만료(현 이미지 7일), 코드를 소모한 실패 뒤마다 전원 재투입이나 관리자 코드가 필요합니다.",
 ];
 
@@ -256,6 +262,18 @@ export function createEnrollmentPanel({ scope, headers, identity, log, dialogs, 
     state.busy = true;
     el("enroll-submit").disabled = true;
     try {
+      if (target.release) {
+        // 사용자 결정 2026-10-31: 관리자 코드는 로봇 화면에서만 온다. Fleet은 해제 한 번 뒤 토큰을 버린다.
+        await call(`/api/fleet/robots/${encodeURIComponent(target.release)}/estop-release`, {
+          method: "POST", body: { code: input.value },
+        });
+        life.check();
+        input.value = "";
+        el("enroll-dialog")?.close?.();
+        showResult([`${target.release} 비상정지 해제됨`], false);
+        log?.(`${target.release} 비상정지 해제`, "good");
+        return;
+      }
       if (target.move) {
         // D-361 2026-10-01: 새 주소는 평문이라 인증할 수 없다 — 화면 코드로 그 주소에서 다시 페어링한다.
         const path = `/api/fleet/enrollment/robots/${encodeURIComponent(target.move)}/move-address`;
@@ -304,7 +322,7 @@ export function createEnrollmentPanel({ scope, headers, identity, log, dialogs, 
     cancelCandidate();
     state.target = target;
     el("enroll-target").textContent = label;
-    el("enroll-submit").textContent = target.move ? "옮기기" : "등록";
+    el("enroll-submit").textContent = target.release ? "해제" : target.move ? "옮기기" : "등록";
     const check = el("enroll-move-check");
     if (check) {
       check.hidden = !target.move;
@@ -337,6 +355,11 @@ export function createEnrollmentPanel({ scope, headers, identity, log, dialogs, 
       } finally { if (life.current() && candidateEpoch === state.candidateEpoch) state.candidatePending = false; }
       if (!life.current() || candidateEpoch !== state.candidateEpoch || !canManage(identity())) return;
       openMove(row.robot_id, address);
+      return;
+    }
+    if (action === "estop-release") {
+      if (!canManage(identity())) return;
+      openDialog({ release: row.robot_id }, `${row.robot_id} 비상정지 해제 — 로봇 화면의 관리자 코드`);
       return;
     }
     if (action === "hub-link" || action === "hub-unlink") {
