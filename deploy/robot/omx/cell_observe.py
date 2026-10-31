@@ -11,6 +11,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cell_calibration as cal  # noqa: E402
+import cell_frame  # noqa: E402
 from cell_scene import scene_check  # noqa: E402
 
 def wrap90(deg: float) -> float:
@@ -96,12 +97,14 @@ def save_maps(calibration_path: Path, result: dict) -> bool:
 def locate(cell, config: dict, calibration: dict, site: str) -> dict:
     """Every fixed camera with a map for `site` estimates the box, weighted by its map's leave-one-out
     error. One camera that cannot see the box does not stop the others. Each camera uses the first of its
-    maps whose fitted points the box lies within (map_extent_mm), else its best map, marked as outside."""
+    maps whose fitted points the box lies within (map_extent_mm), else its best map, marked as outside.
+    A camera with a model (cell_frame, D-933) re-solves its pose from the base markers in the same frame and
+    uses the ray instead of the maps; with no base marker in view it falls back to the maps when there are any."""
     estimates, missing = [], []
     limit = config.get("map_extent_mm", 10.0)
     for camera in fixed_cameras(config):
-        options = maps(calibration, site, camera)
-        if not options:
+        options, model = maps(calibration, site, camera), (calibration.get("cameras") or {}).get(camera)
+        if not options and model is None:
             missing.append(f"{camera}: no map")
             continue
         img = cell.frame(camera)
@@ -109,6 +112,13 @@ def locate(cell, config: dict, calibration: dict, site: str) -> dict:
         frame = keep(f"locate-{site}-{camera}", img)
         if not box.get("found"):
             missing.append(f"{camera}: box not seen")
+            continue
+        if model is not None and (cell_frame.refresh(model, img)["base_seen"] or not options):
+            seen = model_estimate(config, model, site, box)
+            if seen is None:
+                missing.append(f"{camera}: the ray misses the {site} plane")
+            else:
+                estimates.append({**seen, "camera": camera, "frame": frame})
             continue
         fits = []
         for key, record in options:
@@ -136,6 +146,19 @@ def locate(cell, config: dict, calibration: dict, site: str) -> dict:
             "turn_deg": round(turn, 1),
             "yaw_deg": round(config["sites"][site]["yaw_deg"] + turn, 1),
             "sigma_mm": round(1 / math.sqrt(sum(weights)), 2), "estimates": estimates, "missing": missing}
+
+
+def model_estimate(config: dict, model: dict, site: str, box: dict) -> dict | None:
+    """One camera's estimate through its model: the box pixel's ray on the site's box height, moved with the site."""
+    pixel, z = (box["cx"], box["cy"]), config["sites"][site]["z"]
+    arm = cell_frame.to_arm(model, site, pixel, z)
+    if arm is None:
+        return None
+    now = model.get("now") or {}
+    return {"pixel": list(pixel), "arm_m": [float(arm[0]), float(arm[1])],
+            "turn": cell_frame.yaw_sign(model, site, pixel, z) * wrap90(box["yaw"]),
+            "sigma_mm": config.get("model_sigma_mm", 3.0), "map": "model", "outside_mm": None, "residual_mm": None,
+            "base_seen": now.get("base_seen"), "surface_moved": site in (now.get("motion") or {})}
 
 
 def map_check(config: dict, found: dict, calibration: dict | None = None) -> str | None:
@@ -176,7 +199,10 @@ def hover_check(cell, config: dict, calibration: dict, site: str) -> dict:
 
 
 def predicted_pixel(config: dict, calibration: dict, site: str, point):
-    """Where a box at arm `point` on `site` would show in the top view, from the best map there is."""
+    """Where a box at arm `point` on `site` would show in the top view: the camera model, else the best map."""
+    model = (calibration.get("cameras") or {}).get("top")
+    if model is not None:
+        return cell_frame.to_pixel(model, point, config["sites"][site]["z"])
     record = calibration["sites"].get(record_key(site, "top")) or calibration["sites"].get(f"{site}~coarse")
     if record is None:
         return None

@@ -1093,6 +1093,7 @@ safety_modules:
   - operations/fleet/fleet/server/ledger/charge_motion.py
   - operations/fleet/fleet/server/ledger/charge_service.py
   - operations/fleet/fleet/server/ledger/charge_policy_admission.py
+  - operations/fleet/fleet/server/work/arm_transfer_policy_admission.py
   - operations/fleet/fleet/server/ledger/charge_source.py
   - operations/fleet/fleet/server/ledger/charge_work_selection.py
   - operations/fleet/fleet/server/pose/map_pose_scope.py
@@ -1333,6 +1334,8 @@ safety_anchors:
   - {string: StopLocal, in: omx_adapter.action_api.LocalStopApi.dispatch, public: true}
   - {string: RearmLocal, in: omx_adapter.action_api.LocalStopApi.dispatch, public: true}
   - {symbol: fleet.server.dispatch_admission.reserve, public: true}
+  - {symbol: fleet.server.arm_transfer_policy_admission.ArmTransferPolicyWorker, public: true}
+  - {symbol: fleet.server.arm_transfer_policy_admission.arm_transfer_policy_loop, public: true}
   - {symbol: fleet.server.dispatch_admission.release, public: true}
   - {symbol: fleet.server.action_claims.release_keys, public: true}  # D-779 per-Action arm/zone release
   - {symbol: fleet.server.action_claims.release_held_keys, public: true}  # D-779 §5/§6

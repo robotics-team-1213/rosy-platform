@@ -1,0 +1,11 @@
+[Unit]
+Description=Check the daily Fleet ledger backup is fresh and passes integrity_check
+Documentation=file:/opt/rosy/candidate/deploy/site/README.md
+# A failed, disabled, or long-stalled backup timer leaves this unit failed
+# next to the firewall check in systemctl --failed.
+
+[Service]
+Type=oneshot
+Environment=ROSY_SITE_BACKUP_DIR=/var/backups/rosy-site
+EnvironmentFile=-/etc/rosy/site/site.env
+ExecStart=/usr/bin/python3 /opt/rosy/candidate/deploy/site/site_db.py check --dest-dir ${ROSY_SITE_BACKUP_DIR} --max-age-hours 48

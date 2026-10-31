@@ -202,3 +202,15 @@ def test_a_ticket_tested_on_the_current_main_passes_an_earlier_stale_waiting_one
     assert blocked_by(), "only a ticket tested on the current main passes"
     queue.set_status(mine, "waiting", tested="m", waiting_since=time.time())
     assert blocked_by(urgent="the user's words"), "urgent is never passed (last: the field stays)"
+
+
+def test_a_waiting_member_never_blocks_the_leader_that_carries_it(tmp_path):
+    """2026-10-31: a member that had prepared on its own waited for its leader, and the leader for it (earlier and
+    waiting); three such pairs stopped main for 2 h 15 min."""
+    member = queue.take(tmp_path, "land/docs/member", status="waiting")
+    leader = queue.take(tmp_path, "land/feat/leader", status="waiting")
+    queue.set_status(leader, "waiting", batch=["land/docs/member"])
+    assert queue.blockers(tmp_path, leader) == [], "the leader turns and lands its member"
+    assert [r["branch"] for r in queue.blockers(tmp_path, member)] == ["land/feat/leader"]
+    other = queue.take(tmp_path, "land/fix/other", status="waiting")
+    assert [r["branch"] for r in queue.blockers(tmp_path, other)] == ["land/docs/member", "land/feat/leader"]
