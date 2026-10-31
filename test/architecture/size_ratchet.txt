@@ -13,7 +13,6 @@
 862 deploy/robot/pinky_pro/native/rosy-ssh-access.py
 1014 deploy/robot/pinky_pro/native/sync-image-layer.py
 686 deploy/robot/pinky_pro/release/updater.py
-1132 devices/omx/adapter/omx_adapter/action_store.py
 771 drive/behaviors/docking/manager.py
 822 drive/behaviors/line_follow/manager.py
 630 drive/behaviors/traffic_policy/manager.py
