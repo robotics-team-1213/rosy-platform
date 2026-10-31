@@ -470,3 +470,31 @@ def test_run_retries_a_start_refused_at_admission_with_a_new_request(tmp_path):
     assert remote.calls.count('start') == 2 and result['status'] == 'SUCCEEDED'
     assert fetched == [result['run_id']]  # only the run that actually ran is fetched
     assert (tmp_path / 'run' / 'attempt-1' / 'receipt.json').is_file()  # the refused attempt is kept
+
+
+class Flaky(Pipeline):
+    """The first check and the first fetch lose their SSH reply."""
+
+    def __init__(self):
+        super().__init__([True], ['SUCCEEDED'])
+        self.lost_check = False
+
+    def call(self, sha, payload):
+        if payload['action'] == 'check' and not self.lost_check:
+            self.lost_check = True
+            raise ConnectionError('lost')
+        return super().call(sha, payload)
+
+
+def test_run_retries_a_lost_check_and_a_lost_fetch(tmp_path):
+    remote, fetched = Flaky(), []
+
+    def fetch(receipt, rem, dest):
+        fetched.append(receipt['run_id'])
+        if len(fetched) == 1:
+            raise OSError('cut off')
+        return dest / 'snap'
+    result = module().run_experiment('omx-f-import', {'seed': 0}, SHA, tmp_path / 'run', remote,
+                                     sleep=lambda s: None, fetch=fetch)
+    assert remote.calls.count('start') == 1 and result['status'] == 'SUCCEEDED'
+    assert len(fetched) == 2 and result['snapshot_directory'].endswith('snap')
