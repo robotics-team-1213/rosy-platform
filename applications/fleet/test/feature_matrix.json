@@ -3247,7 +3247,7 @@
         },
         {
           "consumer": "applications/fleet/web/cell/cell-print-sheets.js",
-          "expression": "/api/fleet/cell-app/print-sheets/${encodeURIComponent(sheet.kind)}?${sheet.query}",
+          "expression": "/api/fleet/cell-app/print-sheets/${encodeURIComponent(sheet.kind)}?${query}",
           "resolution": "literal-or-template",
           "request_ids": [
             "GET:/api/fleet/cell-app/print-sheets/{kind}"
