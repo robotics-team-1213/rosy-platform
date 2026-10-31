@@ -356,5 +356,5 @@
 - 2026-11-01 · uncommitted · feat(land): 한 표 묶음(rollup)
 - 2026-11-01 · uncommitted · docs(adr): 착지 처리량은 시험 PC 용량이 정한다
 - 2026-11-01 · uncommitted · docs: D-940 중복 정의 게이트와 등록부
+- 2026-10-31 · uncommitted · sim/omx: D-927 C2~C4 시뮬 ARM_TRANSFER를 실제 셀 소유자로 끝까지 돌림
 - 2026-10-31 · uncommitted · omx: 재배선 뒤 장치 식별 교훈
-- 2026-10-31 · uncommitted · fix(land): 자동 묶음 착지를 끈다

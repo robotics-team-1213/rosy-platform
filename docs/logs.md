@@ -13212,6 +13212,14 @@ osy-d395-s1d\`.
 - 증거: 현장 PC 실측(PING·LED·udev 링크·영상). depth(USB 2.0)는 미해결로 남김
 - gate 변화: 없음
 
+## 2026-10-31 · uncommitted · sim/omx: D-927 C2~C4 시뮬 ARM_TRANSFER를 실제 셀 소유자로 끝까지 돌림
+- 변경: `tools/sim/transfer_state_writer.py`(C2), `deploy/robot/omx/sim/transfer_installation.yaml`·`tools/sim/transfer_installation.py`(C3: catalog·binding → Fleet policy·digest → bases, 홈 관절), `tools/sim/run_arm_transfer_sim.sh`·`without_devices.sh`(C4: MuJoCo+설치된 소유자+기록기, 장치 없는 namespace), `omx_topic_backend.py`·`omx_mujoco_backend.py` `--initial` 시작 조건, `run_cell_owner.py`가 `ROSY_ARM_TRANSFER_INSTALLATION`을 설치하고 fence 거절 이유(상태·숫자만)를 남김. 소유자 고침: receipt `observed_at`이 보고하는 모든 phase 시각을 덮음(`policy_parent.projection`), phase 시작·dispatch 실패 예외를 로그로 남김
+- 증거: 원격 설치·기록기·셀 소유자·receipt 시험 통과(102 등). AI PC에서 Harbor `real_fleet_http --arm-only --sim-arm`(Harbor `feat/sim-arm-harness`)이 approach·grasp·transfer·release를 MuJoCo로 진행하고 독립 관찰자가 PRE_DISPATCH·POST_ACTION을 증명, 연속 4회 OK(각 약 52 s). 그 전 1회는 grasp가 `cancel_during_action_unknown`으로 실패(원인 미확인)
+- 미해결: ① Fleet ARM grant TTL 15 s(D-778)인데 소유자가 phase마다 grant를 다시 확인하고 한 이송이 약 30 s라 기본값으로는 끝까지 못 감. 하네스만 허용 최대 60 s로 돌림, 플랫폼 결정 필요 ② Fleet→소유자 UDS 응답 창 250 ms가 SubmitAction 안에서 계획하는 실제 소유자에 짧음(바쁜 PC에서 결과 불명 HOLD). 하네스는 G2처럼 2 s, 운영 기본값 결정 필요 ③ 위 grasp 1회 실패
+- gate 변화: 없음. 시뮬 계약 검증이며 실물·현장 수용 아님
+- 결정: 없음(①② 결정 요청)
+- 교훈: `docs/solutions/logic-errors/owner-receipt-time-must-cover-its-phases-2026-10-31.md`, `docs/solutions/deployment/sim-cell-owner-on-a-lab-pc-needs-a-device-free-namespace-2026-10-31.md`, 홈 교훈 갱신
+
 ## 2026-11-01 · uncommitted · docs: D-940 중복 정의 게이트와 등록부
 - 변경: `docs/adr/D-940`, ADR Log 행, `test/architecture/test_duplicate_definitions.py`와 `known_duplicates.txt`(초기 47 그룹), `test/architecture/AGENTS.md` 행 2건, `platform-folder-responsibilities.md` 3건(D-940 갈래 안내, Situation 섀도 모듈 목록 5개로 정정, 보정 저장 계층 병립 명시)
 - 증거: 로컬 `--scan` 재생성이 등록부와 집합 일치(2026-11-01). 원격 시험·mutation 증명은 착지 기록에 남긴다
