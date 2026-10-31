@@ -103,3 +103,44 @@ rl3 is one trust-region REINFORCE step from rl0 on all 261 decisions of runs 29b
 `d2465280d7`). On the same 22 layouts as rl0 run 65e5: rl3 settled 3 layouts that rl0 did not, and lost none; where
 both settled (16), position error was about the same (rl3 closer in 7, mean −0.06 mm). Three discordant layouts out of
 22 are not yet distinguishable from chance (two-sided sign test p = 0.25). A paired run on seed 42 is the next check.
+
+| Run | Setup | Result |
+|---|---|---|
+| `99941e72624956f5928f4672ea658312` | Short episodes, rl3, seed 42 | 23 episodes, **19 settled and stable**, median position error 0.59 mm. |
+
+On the 20 layouts shared with rl0 run 1f81: rl3 alone settled 2, rl0 alone 1; where both settled (15), rl3 was closer
+in 6 (mean +0.05 mm). Over both seeds rl3 settled 5 layouts that rl0 did not and lost 1 (sign test p = 0.22), with
+the same position error. rl3 does not make releases worse and may settle a few more, but the gain is not established.
+BC v0 with a zero residual remains the reference; rl3 is a candidate.
+
+| Run | Setup | Result |
+|---|---|---|
+| `71833be57ef150e98506ea5f2e4f7afa` | Short episodes, rl3, seed 45 | 22 episodes, **20 settled and stable**, median position error 0.63 mm. |
+
+On the 20 layouts shared with rl0 run b31e (19/20): each settled one layout the other did not; where both settled (18),
+rl3 was closer in 9 (mean +0.04 mm). Over seeds 42, 44 and 45: rl3 alone 6, rl0 alone 2 (sign test p = 0.29), and the
+same position error. Still not established.
+
+| Run | Setup | Result |
+|---|---|---|
+| `1cb11cf3625a58408fb1e163377d2dee` | Short episodes, rl0, seed 46 | 21 episodes, **16 settled and stable**, median position error 0.59 mm. |
+| `a509456b33dd575f8fa8ec7c1e6dd30a` | Short episodes, rl3, seed 46 | 20 episodes, **17 settled and stable**, median position error 0.69 mm. |
+
+On the 20 shared layouts: rl3 alone 2, rl0 alone 1; where both settled (15), the same error (mean −0.003 mm).
+
+**Four seeds (42, 44, 45, 46), 82 paired layouts:** rl3 settled 8 layouts that rl0 did not and lost 3 (two-sided sign
+test p = 0.23). Where both settled, position error is the same. rl3 is no worse than rl0 and may settle a few more,
+but one REINFORCE step does not give an established gain at this sample size. rl0 stays the reference and rl3 a
+candidate. Two seed-46 starts failed on a transient model-PC connection error and were rerun; they are not counted.
+
+## Nine-container flow with rl3
+
+Case `nominal-bc-v0-rl3` runs the accepted nine-container flow with BC v0 plus the rl3 residual and no exploration,
+under the same 2–5 mm held-box estimate (commit `2d63c2518a`, seed 42). BC v0 was rerun on the same commit.
+
+| Run | Condition | Result |
+|---|---|---|
+| `b872ef38379f5a769351a2ee143c0b18` | BC v0 + rl3 | **SUCCEEDED, 9/9.** Row gaps 3.42–4.43 mm, no unstable box. |
+| `7f51cec419c75d1080ba866ee5a869e6` | BC v0 | FAILED, 8/9. Box 7 did not settle within ten seconds, as in run ebdd. |
+
+On this seed rl3 removes the one failure BC v0 had. It is one seed of a deterministic simulation; seed 43 is next.

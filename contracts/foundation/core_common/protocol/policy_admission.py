@@ -4,6 +4,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 RobotId = Annotated[str, Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]*$")]
+PrincipalId = Annotated[str, Field(min_length=1, max_length=96, pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:@-]*$")]
 ScopeRevision = Annotated[str, Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]*$")]
 
 POLICY_ADMISSION_PRINCIPAL = "fleet-policy-admission"
@@ -14,7 +15,9 @@ class PolicyAdmissionScope(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     enabled: bool = False
     robots: list[RobotId] = Field(default_factory=list, max_length=32)
-    step_approval_kinds: list[Literal["one_person"]] = Field(default_factory=list)
+    step_approval_kinds: list[Literal["one_person", "arm_transfer"]] = Field(default_factory=list)
+    # D-938: principals whose ARM_TRANSFER proposals may be policy-admitted; empty for drive-only scopes.
+    proposers: list[PrincipalId] = Field(default_factory=list, max_length=16)
     max_admits: int = Field(default=1, ge=1)
     valid_until: str | None = None
     scope_revision: ScopeRevision
@@ -28,6 +31,8 @@ class PolicyAdmissionScope(BaseModel):
                 raise ValueError("An enabled scope must name at least one approval kind")
             if len(set(self.robots)) != len(self.robots):
                 raise ValueError("Scope robots must be unique")
+            if "arm_transfer" in self.step_approval_kinds and (not self.proposers or self.valid_until is None):
+                raise ValueError("An enabled arm_transfer scope must name proposers and valid_until")
         return self
 
 
@@ -38,6 +43,8 @@ class PolicyAdmissionStatus(BaseModel):
     admits_issued: int = Field(default=0, ge=0)
     admits_remaining: int = Field(default=0, ge=0)
     reason: str | None = None
+    # D-938: the named operator who switched the scope on in this Fleet process (None: config default only).
+    enabled_by: PrincipalId | None = None
 
 
 class PolicyAdmissionAuditEntry(BaseModel):

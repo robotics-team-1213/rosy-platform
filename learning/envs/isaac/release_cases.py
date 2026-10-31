@@ -25,3 +25,6 @@ RL_RESIDUALS['release-episodes-rl2'] = dict(file='release-residual-rl2.npz',
 EVALUATION_CASES['release-episodes-rl3'] = EVALUATION_CASES['nominal-bc-v0']
 RL_RESIDUALS['release-episodes-rl3'] = dict(file='release-residual-rl3.npz',
     sha256='cde882834ab9f110d954c990eae4795446851924dcbe1a88822560358577febc', sigma_m=.0002)
+# Nine-container check of rl3 without exploration: the same flow as nominal-bc-v0 (run ebdd, 8/9).
+EVALUATION_CASES['nominal-bc-v0-rl3'] = EVALUATION_CASES['nominal-bc-v0']
+RL_RESIDUALS['nominal-bc-v0-rl3'] = dict(RL_RESIDUALS['release-episodes-rl3'], sigma_m=0.)
