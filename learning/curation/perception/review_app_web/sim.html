@@ -25,5 +25,10 @@
 <section class="learning-section" aria-labelledby="sim-detail-title"><h2 id="sim-detail-title">3 · 결과 확인</h2>
 <pre id="sim-selected">기록을 선택하세요.</pre><div class="ui-workspace-bar"><ui-button id="sim-stop" data-action-icon="close" kind="quiet" disabled>이 실험 중지 요청</ui-button><ui-button id="sim-replay" data-action-icon="refresh" kind="quiet" disabled>새 실험으로 다시 실행</ui-button></div>
 <p>모델 검사 성공은 물리 집기·팔레타이징 성공이나 학습 수용을 뜻하지 않습니다. 기본 검사에는 영상이 없습니다.</p>
-<pre id="sim-result" class="quiet"></pre><div id="sim-artifacts"></div></section>
+<p id="sim-summary" role="status" hidden></p><div id="sim-artifacts" class="omx-review-gallery"></div><pre id="sim-result" class="quiet"></pre></section>
+<section class="learning-section" aria-labelledby="sim-inventory-title"><h2 id="sim-inventory-title">4 · 셀 모델 대장</h2>
+<p class="quiet">시뮬레이션 셀이 무엇으로 만들어졌고 실물과 어디가 다른지 보여 줍니다. 고칠 때는 저장소의 <code>learning/envs/isaac/cell_model_inventory.yaml</code>을 커밋하세요.</p><div id="sim-inventory"></div></section>
+<section class="learning-section" aria-labelledby="sim-compare-title"><h2 id="sim-compare-title">5 · 실물과 나란히</h2>
+<p class="quiet">등록한 실물 사진과, 선택한 실행에서 같은 방향으로 찍은 시뮬레이션 그림을 나란히 놓습니다. 실시간 영상이 아닙니다.</p><div id="sim-compare"></div></section>
+<section class="learning-section" aria-labelledby="sim-tasks-title"><h2 id="sim-tasks-title">6 · 사람이 할 일</h2><ul id="sim-tasks"></ul></section>
 </main></div></div></ui-shell></body></html>

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import math
 import threading
 import time
@@ -26,6 +27,8 @@ from ..phase_recorder import ActionPhaseRecorder
 from ..transfer_motion import (ArmPlanningProfile as CellPlanningProfile, TransferMotionPlan as CellTransferPlan,
                               validate_transfer_motion_plan as validate_cell_transfer_plan)
 from ..ros_goal_contract import RosGoalEvent
+
+_LOG = logging.getLogger(__name__)
 
 
 # CELL_TRANSFER phases whose gripper start value is not compared (object in hand).
@@ -330,6 +333,8 @@ class PickPlaceRunner:
                     command, on_goal_event=self.on_ros_goal_event,
                 )
             except Exception:
+                # The journal says only LOCAL_DISPATCH_UNKNOWN; the cause must still reach the owner's log.
+                _LOG.exception("phase %s dispatch outcome unknown", phase.phase_id)
                 response = PhaseDispatch(dispatched=None)
             finally:
                 del self._submission.current
