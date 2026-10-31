@@ -4,9 +4,8 @@ from pathlib import Path
 import re
 
 PAGES = {'index.html': 'console', 'installation/install.html': 'install',
-         'sitemap/site-map.html': 'map', 'cell/cell.html': 'work'}
-DOCUMENT_PAGES = {'accounts.html': '계정 관리', 'profile.html': '내 계정', 'login.html': '관제 로그인',
-                  'work/policy.html': '학습 정책 승인', 'learning.html': '학습'}
+         'sitemap/site-map.html': 'map', 'cell/cell.html': 'work', 'work/policy.html': 'work'}
+DOCUMENT_PAGES = {'accounts.html': '계정 관리', 'profile.html': '내 계정', 'login.html': '관제 로그인', 'learning.html': '학습'}
 
 
 def render(root, name):

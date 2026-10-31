@@ -1,12 +1,19 @@
 // D-793 /console/policy: 학습 정책 단계·승인 창·확인 요청·사고 잠금. 규칙은 서버가 판단한다.
 import {createFleetClient} from '/common/fleet-client.js';
 import {confirmIrreversible} from '/common/ui.js';
+import {bindEstop, bindTopbarToggle, showSession, showSignedOut, tickClock, watchFleet} from '/console/assets/fleet-header.js';
 import {
   ADMIN_REASON, OPERATOR_REASON, REASON_LABELS, RESOLUTION_LABELS, STAGE_LABELS, WINDOW_LABELS,
   errorText, executionVerdict, incidentLock, nextStage, proposalLock, remaining, roles, windowLock,
 } from '/console/assets/policy-model.js';
 
 const request = createFleetClient(), $ = id => document.getElementById(id);
+// D-926 2: the same app bar as the other work screens, so the emergency stop and account stay in reach here.
+bindEstop(request);
+bindTopbarToggle();
+tickClock();
+setInterval(tickClock, 1000);
+watchFleet(request);
 let who = roles(null), state = null, busy = false;
 const workcell = () => $('policy-workcell').value;
 const base = () => `/api/fleet/workcells/${encodeURIComponent(workcell())}/policy`;
@@ -74,7 +81,7 @@ function renderConfirmation(item) {
     for (const resolution of state.rules.resolutions) {
       actions.append(button(`${RESOLUTION_LABELS[resolution]}…`, who.admin ? '' : ADMIN_REASON, node => confirmed(node,
         `"${REASON_LABELS[item.reason] || item.reason}" 확인 요청을 ${RESOLUTION_LABELS[resolution]}으로 처리할까요?`
-          + (resolution === 'resume' ? ' owner HOLD는 관제의 owner 복구로 따로 풉니다.' : ' 열린 승인 창이 닫힙니다.'),
+          + (resolution === 'resume' ? ' 팔 제어 보류는 관제의 팔 복구에서 따로 풉니다.' : ' 열린 승인 창이 닫힙니다.'),
         RESOLUTION_LABELS[resolution], `/confirmations/${item.confirmation_id}/resolve`,
         {operator_confirmed: true, resolution, note: `${RESOLUTION_LABELS[resolution]} (콘솔)`}, '확인 요청을 처리했습니다.')));
     }
@@ -102,14 +109,14 @@ function renderWindow(item) {
 }
 
 function renderStage(item) {
-  return element('li', `${item.policy_revision} — ${STAGE_LABELS[item.stage]} · rig ${item.rig_revision} · 보정 ${item.calibration_revision}`);
+  return element('li', `${item.policy_revision} — ${STAGE_LABELS[item.stage]} · 작업대 ${item.rig_revision} · 보정 ${item.calibration_revision}`);
 }
 
 function renderProposal(item) {
   const row = element('li');
   row.append(element('ui-tag', item.state === 'PENDING' ? '대기' : item.state === 'APPROVED' ? '승인됨' : '거절됨',
     {status: item.state === 'PENDING' ? 'warn' : 'neutral'}),
-  element('span', ` ${item.policy_revision}: ${item.from_stage || '미등록'} → ${STAGE_LABELS[item.to_stage]} — 제안 ${item.proposed_by} · ${item.note}`));
+  element('span', ` ${item.policy_revision}: ${STAGE_LABELS[item.from_stage] || '미등록'} → ${STAGE_LABELS[item.to_stage]} — 제안 ${item.proposed_by} · ${item.note}`));
   if (item.state === 'PENDING') {
     row.append(button('승인…', proposalLock(item, state.rules, who), node => confirmed(node,
       `${item.policy_revision}을(를) ${STAGE_LABELS[item.to_stage]}로 올릴까요? 근거 ${item.evidence_sha256.slice(0, 12)}…`,
@@ -128,10 +135,10 @@ function render() {
   list('policy-incidents', state.incidents, renderIncident, '사고 기록이 없습니다.');
   list('policy-confirmations', state.confirmations, renderConfirmation, '확인 요청이 없습니다.');
   list('policy-windows', state.windows, renderWindow, '승인 창 기록이 없습니다.');
-  list('policy-stages', state.policies, renderStage, '등록된 정책이 없습니다. 학습 결과를 L0으로 등록하세요.');
+  list('policy-stages', state.policies, renderStage, '등록된 정책이 없습니다. 학습 결과를 0단계로 등록하세요.');
   list('policy-proposals', state.proposals, renderProposal, '단계 제안 기록이 없습니다.');
   const policies = $('policy-window-policy'), chosen = policies.value;
-  policies.replaceChildren(...state.policies.map(item => element('option', `${item.policy_revision} (${item.stage})`, {value: item.policy_revision})));
+  policies.replaceChildren(...state.policies.map(item => element('option', `${item.policy_revision} (${STAGE_LABELS[item.stage] || item.stage})`, {value: item.policy_revision})));
   if (chosen) policies.value = chosen;
   if (!$('policy-window-kind').options.length) {
     for (const [kind, rule] of Object.entries(state.rules.windows)) {
@@ -162,7 +169,7 @@ $('policy-incident-report').addEventListener('click', async () => {
     '/incidents', {operator_confirmed: true, description: text}, '사고를 신고했습니다. 승인 창이 닫혔습니다.');
   $('policy-incident-text').value = '';
 });
-$('policy-sync-owner').addEventListener('click', () => post('/confirmations/sync-owner', undefined, 'owner 상태를 가져왔습니다.'));
+$('policy-sync-owner').addEventListener('click', () => post('/confirmations/sync-owner', undefined, '팔 제어 상태를 가져왔습니다.'));
 $('policy-window-request').addEventListener('click', () => {
   const minutes = $('policy-window-minutes').value, policy = state?.policies.find(item => item.policy_revision === $('policy-window-policy').value);
   if (!policy || !$('policy-window-scope').value.trim()) { message('정책과 허용 범위를 고르세요.'); return; }
@@ -188,7 +195,9 @@ $('policy-workcell').addEventListener('change', refresh);
 
 async function start() {
   try {
-    who = roles(await request('/api/fleet/auth/session'));
+    const session = await request('/api/fleet/auth/session');
+    who = roles(session);
+    showSession(session);
     const {workcells} = await request('/api/fleet/policy-governance/workcells');
     $('policy-workcell').replaceChildren(...workcells.map(id => element('option', id, {value: id})));
     $('policy-workcell').hidden = !workcells.length;
@@ -202,6 +211,7 @@ async function start() {
   } catch (error) {
     $('policy-verdict').textContent = errorText(error); $('policy-verdict').setAttribute('state', 'unavailable');
     $('policy-login').hidden = error.status !== 401;
+    if (error.status === 401) showSignedOut();
   }
 }
 start();

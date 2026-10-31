@@ -57,6 +57,12 @@ On 2026-10-28 another person used the cell between our runs. Afterwards, every p
    - Fix in code: `cell_preflight.lights` checks each frame's mean against `preflight.min_mean` (15; a lit cell reads about 140). `cell_auto_pick` runs it before observing and refuses with "the room lights are off or the lens is covered".
    - Verified on the real cell: in the dark, a board → belt dry run was refused with that reason, before any motion.
    - To tell a dark room from a stuck exposure: set manual exposure high (`v4l2-ctl -c auto_exposure=1 -c exposure_time_absolute=2000 -c gain=7`) and grab a frame. A dark room stays black. Set it back to `auto_exposure=3` afterwards.
+9. **A dim room, and the top camera's own auto exposure stopped short (2026-10-30, 12:20).** The top frame read mean 21 with the camera in auto at exposure 3000, while the wrist camera read 145. So the room was lit enough and the top camera was not using it.
+   - The camera's exposure is near linear in its own units: manual 10000, 20000 and 33000 at gain 7 gave 61, 105 and 148. Its auto mode did not go past 3000. Switching to manual and back to auto once un-stuck it (33000, mean 156), so auto is not reliable either way.
+   - Mean 21 passed the lights check (15), and detection on it was not trustworthy. A wide band is not enough either: at mean 106 the board box split in two and matched nothing; detection was tuned near 140.
+   - Fix in code: `cell_preflight.expose` sets manual exposure for a camera that names its `device` in the config (use the `/dev/v4l/by-id/` path: `/dev/videoN` numbers change). Each step scales exposure by `preflight.target_mean / mean` (140 ± `preflight.mean_band` 15), up to `preflight.max_exposure`. Then the lights check runs. `cell_auto_pick` calls `cell_preflight.ready`.
+   - Verified on the real cell: from manual 3000 (mean 28), one step reached mean 104 with the first band and 129 with the second (exposure 18180), about 1 s.
+   - A box the catalogue matched at one brightness and not at another is a sign it is not a catalogue object. The square board box (about 45 × 50 px) read as `container-2` at mean 156 and as nothing at 106 and 129.
 
 ## The rule (code, not memory)
 
@@ -66,6 +72,8 @@ Run `cell_preflight.py --config <cell config>` before an autonomous run. It is r
 - the top view moved more than `--max-shift-px` against the map's saved reference frame (`preflight.reference_top`; save one right after mapping),
 - or another arm session is running,
 - or a frame is darker than `preflight.min_mean`.
+
+`cell_auto_pick` first sets the exposure of each camera with a `device` (`cell_preflight.ready`), then runs the lights check.
 
 Caps are left to `record_session`'s own refusal, and the fix is printed.
 

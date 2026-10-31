@@ -10,7 +10,7 @@ from test_fleet_header_browser import _fleet
 
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason='opt-in Chromium layout scenario')
 WIDTHS = [320, 390, 480, 768, 1440]
-DOCS = ['login', 'profile', 'accounts', 'policy', 'learning']
+DOCS = ['login', 'profile', 'accounts', 'learning']  # D-926 2: policy moved to the work shell
 HOST = '.'.join(['a' * 60] * 3 + ['example'])
 IDENTITY = 'operator-' + 'a' * 87
 GRANTS = [{'resource': 'site:layout', 'capabilities': ['accounts.manage']}]
@@ -87,8 +87,6 @@ def test_procedures_share_inset_and_keep_account_values_reachable(tmp_path, widt
                 expect(page.locator('#account-heading')).to_contain_text(IDENTITY)
             elif name == 'profile':
                 expect(page.locator('#profile-content')).to_be_visible()
-            elif name == 'policy':
-                expect(page.locator('#policy-verdict')).to_contain_text('설정된 OMX 작업셀이 없습니다')
             capture(page, f'{name}-{theme}-{width}')
             fits(page)
             assert page.locator('main').evaluate("n => getComputedStyle(n).paddingLeft === getComputedStyle(document.documentElement).getPropertyValue('--inset-task-page').trim()")

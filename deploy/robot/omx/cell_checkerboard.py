@@ -100,7 +100,16 @@ A4_MM = (210, 297)
 def charuco_board(cols: int = 7, rows: int = 5, square_m: float = 0.025, marker_m: float = 0.018):
     import cv2
 
-    return cv2.aruco.CharucoBoard((cols, rows), square_m, marker_m, cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50))
+    dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
+    create = getattr(cv2.aruco, "CharucoBoard_create", None)
+    return create(cols, rows, square_m, marker_m, dictionary) if create else cv2.aruco.CharucoBoard((cols, rows), square_m, marker_m, dictionary)
+
+
+def charuco_image(size: tuple) -> np.ndarray:
+    """Render the calibration board with either OpenCV's 4.6 or 4.7+ API."""
+    board = charuco_board()
+    draw = getattr(board, "generateImage", None) or board.draw
+    return draw(size, marginSize=0, borderBits=1)
 
 
 def find_charuco(img, board, min_corners: int = 6):
@@ -108,10 +117,19 @@ def find_charuco(img, board, min_corners: int = 6):
     import cv2
 
     gray = img if img.ndim == 2 else cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    corners, ids, _, _ = cv2.aruco.CharucoDetector(board).detectBoard(gray)
+    if hasattr(cv2.aruco, "CharucoDetector"):
+        corners, ids, _, _ = cv2.aruco.CharucoDetector(board).detectBoard(gray)
+    else:
+        markers, marker_ids, _ = cv2.aruco.detectMarkers(gray, board.dictionary)
+        if marker_ids is None:
+            return None
+        _, corners, ids = cv2.aruco.interpolateCornersCharuco(markers, marker_ids, gray, board)
     if ids is None or len(ids) < min_corners:
         return None
-    obj, pix = board.matchImagePoints(corners, ids)
+    if hasattr(board, "matchImagePoints"):
+        obj, pix = board.matchImagePoints(corners, ids)
+    else:
+        obj, pix = board.chessboardCorners[ids.reshape(-1)], corners
     return obj.reshape(-1, 3).astype(np.float32), pix.reshape(-1, 1, 2).astype(np.float32)
 
 
@@ -128,7 +146,7 @@ def page(kind: str) -> np.ndarray:
         label = "checkerboard 7x5 inner corners, 15 mm squares"
     else:
         cols, rows, sq = 7, 5, 25
-        board = charuco_board().generateImage((cols * sq * PX_PER_MM, rows * sq * PX_PER_MM), marginSize=0, borderBits=1)
+        board = charuco_image((cols * sq * PX_PER_MM, rows * sq * PX_PER_MM))
         label = "ChArUco 7x5 squares, 25 mm, markers 18 mm, DICT_4X4_50"
     y, x = 30 * PX_PER_MM, (W - board.shape[1]) // 2
     img[y:y + board.shape[0], x:x + board.shape[1]] = board

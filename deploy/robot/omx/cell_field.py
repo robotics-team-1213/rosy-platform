@@ -11,7 +11,7 @@ recovery rules; this tool sequences, waits, collects and ranks. It runs on the a
   cell_field.py --config C --catalog K carry --from floor --dest pinky [--roi x0 y0 x1 y1] [--dry-run]
   cell_field.py --config C --catalog K push-search --site floor --px 228,358 --away 1,1 [--radius 12 --step 6] [--top 5]
   cell_field.py --config C --catalog K push --site floor --px 228,358 --away 1,1
-  cell_field.py --config C --catalog K marks --library L [--goto "goto above_pick"]
+  cell_field.py --config C --catalog K marks --library L --commissioning --person-at-switch [--goto "goto above_pick"]
   cell_field.py --config C --catalog K recover --site floor --person-at-switch
 """
 from __future__ import annotations
@@ -81,7 +81,13 @@ class Field:
 
         self.config_path, self.catalog = config_path, catalog
         self.config = json.loads(config_path.read_text())
-        self.cell = cp.FifoCell(Path(self.config["io"]).expanduser(), self.config["cameras"])
+        self.config.pop("_operating_profile_binding", None)
+        if self.config.get("operating_profile_path"):
+            from cell_robot_profile import bind_pipeline
+
+            self.config = bind_pipeline(self.config)
+        self.cell = cp.FifoCell(Path(self.config["io"]).expanduser(), self.config["cameras"],
+                                operating_profile=self.config.get("_operating_profile_binding"))
         self.work = Path(self.config["work_dir"]).expanduser()
         self.dir = self.work / "field"
         self.dir.mkdir(parents=True, exist_ok=True)
@@ -149,7 +155,9 @@ class Field:
                         candidates.append({"px": p, "dir": d, "half_mm": half, "mm": mm, "blocked": out.get("blocked", ["no plan"])})
         return rank_pushes(candidates, away)[:top]
 
-    def push(self, site: str, px, away, roi=None) -> dict:
+    def push(self, site: str, px, away, roi=None, *, person_at_switch=False) -> dict:
+        if person_at_switch is not True:  # a push moves outside the D-911 gate: supervised only (cell_push)
+            return self.report("push", {"site": site, "result": "held: supervised --person-at-switch required"})
         best = self.push_search(site, px, away, 12, 6, 1, roi)
         if not best:
             return self.report("push", {"site": site, "result": "no clear push"})
@@ -159,12 +167,16 @@ class Field:
         code, out, err = self.run("cell_push.py", ["--config", self.config_path, "--site", site, "--roi", *roi,
                                                    f"--px={c['px'][0]},{c['px'][1]}", f"--dir={c['dir'][0]},{c['dir'][1]}",
                                                    "--mm", c["mm"], "--half-mm", c["half_mm"],
-                                                   "--catalog", self.catalog])
+                                                   "--catalog", self.catalog, "--commissioning", "--person-at-switch"])
         after, _ = self.snapshot(f"push-{site}-after")
         return self.report("push", {"site": site, "chosen": c, "exit": code, "result": out.get("result"), "look": out.get("look"),
                                     "after_objects": out.get("after"), "stderr": err if code not in (0, 1) else ""}, before, after)
 
-    def marks(self, library: str, goto: str) -> dict:
+    def marks(self, library: str, goto: str, *, commissioning=False, person_at_switch=False) -> dict:
+        if self.cell.operating_profile is None:
+            return self.report("marks", {"result": "held: select a per-device operating profile"})
+        if not (commissioning is True and person_at_switch is True):
+            return self.report("marks", {"result": "held: supervised commissioning required"})
         import cv2
 
         import cell_params as prm
@@ -178,9 +190,11 @@ class Field:
                 if not self.cell.act(c).get("ok"):
                     return self.report("marks", {"result": f"refused at {c}"})
             for k in range(3):
-                cp.grip_to(self.cell, self.config.get("jaw_mark", {}).get("closed", prm.get(params, "pivot.grip_closed")))
+                if not cp.grip_to(self.cell, self.config.get("jaw_mark", {}).get("closed", prm.get(params, "pivot.grip_closed"))):
+                    return self.report("marks", {"result": "refused at grip closed"})
                 closed = cell_pivot.settled_frame(self.cell, params=params)
-                cp.grip_to(self.cell, prm.get(params, "pivot.grip_open", 62.0))
+                if not cp.grip_to(self.cell, prm.get(params, "pivot.grip_open", 62.0)):
+                    return self.report("marks", {"result": "refused at grip open"})
                 opened = cell_pivot.settled_frame(self.cell, params=params)
                 blobs = cell_pivot.jaw_blobs(closed, opened, params)
                 cv2.imwrite(str(self.dir / f"{self.stamp}-marks-{k}.jpg"), side_by_side(closed, opened, ("closed", "open"), 1.0))
@@ -216,6 +230,8 @@ def main(argv=None) -> int:
         p.add_argument("--px", required=True, help="x,y top-camera pixel on the object to push")
         p.add_argument("--away", required=True, help="dx,dy image direction away from the neighbour")
         p.add_argument("--roi", type=int, nargs=4)
+        if verb == "push":
+            p.add_argument("--person-at-switch", action="store_true")
         if verb == "push-search":
             p.add_argument("--radius", type=int, default=12)
             p.add_argument("--step", type=int, default=6)
@@ -223,10 +239,14 @@ def main(argv=None) -> int:
     m = sub.add_parser("marks")
     m.add_argument("--library", required=True)
     m.add_argument("--goto", default="goto above_pick")
+    m.add_argument("--commissioning", action="store_true")
+    m.add_argument("--person-at-switch", action="store_true")
     r = sub.add_parser("recover")
     r.add_argument("--site", required=True)
     r.add_argument("--person-at-switch", action="store_true")
     args = ap.parse_args(argv)
+    if args.verb == "marks" and not (args.commissioning and args.person_at_switch):
+        ap.error("marks requires supervised --commissioning --person-at-switch")
     field = Field(args.config, args.catalog)
     xy = lambda s: tuple(int(v) for v in s.split(","))  # noqa: E731
     if args.verb == "snapshot":
@@ -236,9 +256,10 @@ def main(argv=None) -> int:
     elif args.verb == "push-search":
         out = {"candidates": field.push_search(args.site, xy(args.px), xy(args.away), args.radius, args.step, args.top, args.roi)}
     elif args.verb == "push":
-        out = field.push(args.site, xy(args.px), xy(args.away), args.roi)
+        out = field.push(args.site, xy(args.px), xy(args.away), args.roi, person_at_switch=args.person_at_switch)
     elif args.verb == "marks":
-        out = field.marks(args.library, args.goto)
+        out = field.marks(args.library, args.goto, commissioning=args.commissioning,
+                          person_at_switch=args.person_at_switch)
     else:
         out = field.recover(args.site, args.person_at_switch)
     print(json.dumps(out, indent=1, default=str))

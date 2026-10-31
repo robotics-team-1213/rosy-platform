@@ -532,13 +532,21 @@ def test_a_slow_host_does_not_hold_back_queued_invocations(monkeypatch, tmp_path
     assert [h for h, _ in seen].count("slow@2") == 1 and sorted(p for _, p in seen) == list("01234")
 
 
+def test_a_full_hosts_default_lanes_take_four_of_a_full_rounds_browser_chunks():
+    """2026-10-31: the per-host cap counts every run's browser jobs; 2 left 4 slots for all preparing landings."""
+    room = {"cores": 18, "mem": 18, "site": False, "light": False}
+    b = [rp.BROWSER_ENV, "t/a_browser.py"]
+    assert wq.workers(["a"], [["t"], *[b] * 12], {"a": dict(room)}).count(("a", "lane")) == 4
+    assert wq.workers(["a"], [["t"], *[b] * 12], {"a": {**room, "browser_jobs": 3}}).count(("a", "lane")) == 1
+
+
 def test_full_lab_hosts_get_browser_lanes_and_light_site_or_sim_holding_hosts_do_not(monkeypatch):
     monkeypatch.setattr(wq, "BROWSER_PER_HOST", 2)
     room = {"cores": 14, "mem": 15, "site": False, "light": False}
     headroom = {"a": room, "light": {**room, "light": True}, "site": {**room, "site": True},
                 "gz": {**room, "sim_held": 1}}
     b, alone = [rp.BROWSER_ENV, "t/a_browser.py"], [rp.BROWSER_ENV, rp.ALONE_ENV, "t/b_browser.py"]
-    assert rp.workers(["a", "light", "site", "gz", "unmeasured"], [["t"], b, b, b], headroom) == [
+    assert rp.workers(["a", "light", "site", "gz", "unmeasured"], [["t"], b, b, b, b], headroom) == [
         ("a", "main"), ("a", "lane"), ("a", "lane"), ("light", "any"), ("site", "any"), ("gz", "any"),
         ("unmeasured", "any")]
     assert rp.workers(["a"], [b], headroom) == [("a", "lane")]  # no main run without its own work
@@ -547,6 +555,22 @@ def test_full_lab_hosts_get_browser_lanes_and_light_site_or_sim_holding_hosts_do
     assert rp.workers(["a"], [["t"], alone], headroom) == [("a", "any")]  # an alone chunk is no lane job
     monkeypatch.setattr(wq, "BROWSER_PER_HOST", 0)
     assert rp.workers(["a"], [["t"], b], headroom) == [("a", "any")]
+
+
+def test_host_alone_suites_go_to_the_first_configured_host_and_fall_back_without_it():
+    """Gazebo/Isaac drain the host they run on: only the model PC (first configured) takes them (2026-10-30)."""
+    gz, order = ["integrations/simulation/gazebo/test"], ["model", "ai", "site"]
+    assert rp.workers(["ai", "model"], [gz], {}, order) == [("model", "any")]
+    plan = rp.workers(["ai", "model"], [["t"], gz], {}, order)
+    assert plan == [("model", "any"), ("ai", "any" + wq.SKIP_ALONE)]
+    assert wq.wanted("any" + wq.SKIP_ALONE, [["t"], gz])(1) is False
+    assert wq.wanted("any" + wq.SKIP_ALONE, [["t"], gz])(0) is True
+    assert rp.workers(["ai"], [gz], {}, order) == [("ai", "any")]  # model PC not placed: as before
+    assert rp.workers(["ai", "model"], [gz], {"model": {"sim_held": 1}}, order) == [("ai", "any")]  # sim on it
+    assert rp.workers(["site", "ai"], [gz], {"site": {"site": True}}, ["site", "ai"]) == [("ai", "any")]
+    assert wq.guard(None, "main" + wq.SKIP_ALONE, gz) is not None
+    work = wq.Work([0, 1, 2])  # largest first: 2 is the smallest, a light host's pick unless it is host-alone
+    assert work.take_small(lambda i: i != 2) == 1 and work.take_small() == 2
 
 
 def test_browser_lanes_run_beside_main_capped_per_host_and_an_alone_chunk_runs_without_them(monkeypatch, tmp_path):
@@ -703,6 +727,16 @@ class FakeJobHost:
         return subprocess.CompletedProcess([], 0, b"Welcome\nROSYJOB " + rc + b" 1\n" + self.log[int(args[2]):], b"")
 
 
+def test_a_jobs_deadline_starts_over_once_it_gets_host_room(tmp_path):
+    """2026-10-30: a Gazebo suite waited 100 min for the host and was killed (124) before its first test."""
+    wait = [rj.WAIT + b" (6 job(s), 18c 22GB in use)\n"] + [b""] * 20  # 210 s: past a 60 s job's 180 s deadline
+    for room, code in ((rj.ROOM[:9], rj.ROOM[9:] + b"\n1 passed\n"), (b"", b"")):
+        fake = FakeJobHost(wait + [room, code] + [b""] * 10 + [b"done\n"], 0)
+        now, sleep, clock = _clock()
+        got = rj.run("h", "r", 0, tmp_path / "1.txt", ["r", "d", ""], [], 60, [], call=fake, sleep=sleep, clock=clock)
+        assert got == (0 if room else 124)  # the marker counts split across polls; never admitted: the wait cap
+
+
 def _clock():
     now = [0.0]
     return now, (lambda s: now.__setitem__(0, now[0] + s)), (lambda: now[0])
@@ -715,8 +749,20 @@ def test_polls_that_fail_then_recover_give_the_real_code_and_the_whole_log(tmp_p
     log = tmp_path / "run-1.txt"
     assert rj.run("h", "r", 0, log, ["r", "d", ""], ["test/x.py"], 60, [], call=fake, sleep=sleep, clock=clock) == 1
     # Byte-identical: a stuck offset would duplicate a chunk, an early advance would drop one.
-    assert log.read_bytes() == fake.log == b"".join(chunks)
+    body, timing = log.read_bytes().split(b"\n" + rj.TIMING.encode())
+    assert body == fake.log == b"".join(chunks)
     assert fake.scripts[0] == rj.START and fake.polls == 6
+    assert timing.startswith(b" host=h start=") and b" wait_s=0 run_s=" in timing  # land_checks.timing's line
+
+
+def test_the_timing_line_splits_host_room_wait_from_run_time(tmp_path):
+    chunks = [rj.WAIT + b" (2 job(s))\n", b"", b"", rj.ROOM + b"\n", b"", b"1 passed\n"]
+    fake = FakeJobHost(chunks, 0)
+    now, sleep, clock = _clock()
+    log = tmp_path / "run-1.txt"
+    assert rj.run("rosy@10.0.0.9", "r", 0, log, ["r", "d", ""], [], 60, [], call=fake, sleep=sleep, clock=clock) == 0
+    line = log.read_text().splitlines()[-1]
+    assert " host=rosy " in line and "10.0.0.9" not in line and " wait_s=30 run_s=20" in line, line
 
 
 def test_polls_failing_past_the_budget_raise_lost_and_run_on_leaves_the_job(tmp_path, monkeypatch, capsys):

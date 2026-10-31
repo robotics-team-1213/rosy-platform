@@ -1,0 +1,81 @@
+# Optional independent ROSY Monitoring (D-876, D-936). Append after pairing/omx/workcell and
+# before Account. It reuses the signed Fleet image but runs its own process, state and keys:
+# Fleet stopping never stops it, and the proxy never waits for it.
+# Configuration and keys are private host files outside the candidate/config tree.
+x-rosy-site:
+  monitoring: "1"
+
+services:
+  monitoring:
+    image: rosy-site-fleet:${ROSY_SITE_IMAGE_TAG:-local}
+    command:
+      - --
+      - python3
+      - -m
+      - rosy.monitoring
+      - --config
+      - /run/rosy-monitoring/monitoring.yaml
+      - --state-dir
+      - /var/lib/rosy-monitoring
+      - --web-root
+      - /opt/rosy/monitoring-web
+      # Unpublished internal network only; readers arrive through the TLS proxy.
+      - --host
+      - 0.0.0.0
+    environment:
+      PYTHONPATH: /opt/rosy/src/operations/monitoring:/opt/rosy/src/contracts/foundation
+      ROSY_CREDENTIAL_PATHS: '{"MONITORING_SITE_READ":"/run/rosy-monitoring-secrets/site_read","MONITORING_FLEET_UPSTREAM":"/run/rosy-monitoring-secrets/fleet_upstream"}'
+    volumes:
+      - type: bind
+        source: "${ROSY_SITE_MONITORING_CONFIG:?set ROSY_SITE_MONITORING_CONFIG}"
+        target: /run/rosy-monitoring/monitoring.yaml
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: "${ROSY_SITE_MONITORING_SECRETS_DIR:?set ROSY_SITE_MONITORING_SECRETS_DIR}"
+        target: /run/rosy-monitoring-secrets
+        read_only: true
+        bind:
+          create_host_path: false
+      # Same read-only host reports Fleet reads; directories keep atomic replacement visible.
+      - /var/lib/rosy-host-guard:/var/lib/rosy-host-guard:ro
+      - /var/lib/rosy-host-state:/var/lib/rosy-host-state:ro
+      - monitoring_state:/var/lib/rosy-monitoring
+    secrets:
+      - site_ca
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    cap_add: [SETUID, SETGID]
+    mem_limit: 256m
+    pids_limit: 64
+    restart: unless-stopped
+    healthcheck:
+      test: [CMD, python3, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8786/health', timeout=2).read()"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 15s
+    networks: [site_backend]
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
+  proxy:
+    labels:
+      org.rosy.site-monitoring-caddy-sha256: unbuilt
+    volumes:
+      - type: bind
+        source: ./Caddyfile.monitoring
+        target: /etc/caddy/monitoring/routes.caddy
+        read_only: true
+        bind:
+          create_host_path: false
+
+volumes:
+  monitoring_state:

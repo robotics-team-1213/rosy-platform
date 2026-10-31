@@ -1,6 +1,7 @@
 ---
 title: Every arm S Isaac run ended UNKNOWN; the worker crashed on a missing report field, not a shared GPU
 date: 2026-10-26
+last_updated: 2026-10-30
 category: runtime-errors
 module: learning/envs/isaac (run_worker.py, run_store.py), tools/remote/remote_isaac.py, deploy/robot/omx/cell_case_suite.py
 problem_type: runtime_error
@@ -46,9 +47,44 @@ Three separate faults, found once the GPU was idle and the runs still failed:
 
 ## Next time
 
-- UNKNOWN: read the unit's exit code first (`journalctl --user -u rosy-isaac-<run>.service`). Exit 1 or 2 is
-  the worker's own error; only exit 0 with a residual GPU owner is the cleanup check.
-- A complete report in the run folder with UNKNOWN means the failure is after the SDK: verification or `_finish`.
+- UNKNOWN: read the unit exit status together with the raw run state. Exit 2 can be the worker's explicit
+  cleanup/GPU confirmation failure or a `ValueError`/`OSError` caught by `run_control.main`'s wrapper.
+  `cleanup=UNCONFIRMED` identifies the worker's cleanup-gate update; exit status alone does not.
+- A complete report with UNKNOWN does not prove terminal completion. Verification, owned-process cleanup,
+  GPU readiness, artifact checks, or final record publication may still have failed.
+- The transient unit discards stdout/stderr, so journal output need not contain Python diagnostics.
 - remote_isaac's generic error hides the exception; call `remote_isaac.main()` from Python to see it.
 - A new run kind needs one worker-level test through `execute`/`_finish`, not only catalog tests: the catalog
   tests passed while faults 1 and 2 stopped every real run.
+
+
+## Cleanup observations must survive polling (2026-10-30)
+
+A later container run at source `556cb7720a` left a complete report and video but no terminal result or
+registered artifacts. Raw state retained `cleanup=UNCONFIRMED`; events showed revision 3 becoming UNKNOWN
+before revision 4 replaced the worker error with the generic inactive-unit error. This proves the worker's
+cleanup gate was reached. It does not prove whether owned-process cleanup or GPU readiness failed then.
+Later empty cgroups and external GPU activity cannot reconstruct those historical observations. Independent
+CPU verification of the report, complete video, and nine-artifact manifest established task failure, not
+cleanup completion or a recoverable terminal checkpoint.
+
+`run_worker.execute` now retains `runtime.cleanup_observation` in that UNKNOWN update: the boolean
+`owned_processes_exited` and the returned `gpu_state()` observation. It preserves the existing unit,
+invocation, process, cgroup, and admission GPU keys. `Runner.status` may still replace `error` when the unit
+is inactive, but it preserves runtime. The regression
+`learning/envs/isaac/test/test_run_worker.py::test_worker_needs_report_and_cleanup_before_success` covers
+both cleanup-false/GPU-ready and cleanup-true/GPU-not-ready, then calls the real controller status path and
+checks that the original runtime observations survive. The cleanup checks and bounded GPU-release retry window remain.
+A false GPU observation still conflates occupancy, insufficient memory, and observation failure; do not
+claim a more specific cause than the captured evidence supports. This change preserves future evidence;
+it cannot reconstruct the missing observation in the earlier run.
+
+For read-only recovery, capture bounded regular-file copies of input, state, events, SDK log, report, video,
+and frame receipts, together with unit identity and exit observations. Reject symlinks, unexpected link
+counts, changed sizes, and digest mismatches. Verify copied evidence using the original source and input.
+Do not use status/list/fetch to preserve original diagnostics: controller observation can update UNKNOWN,
+and the remote status client renews its reservation for a nonterminal run. Even `RunStore.get` can publish
+derived result/artifact exports from an existing terminal checkpoint; raw file reads avoid that side effect.
+Without a verified terminal checkpoint, copied files remain forensic evidence: retain UNKNOWN, do not
+register artifacts or claim cleanup completion, and do not stop external processes or clear a reservation
+without separate ownership and cleanup proof.

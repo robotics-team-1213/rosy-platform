@@ -44,6 +44,7 @@ rosy-monitoring --config /etc/rosy-monitoring/monitoring.yaml --state-dir /var/l
 ```
 
 기본 수신은 `127.0.0.1:8786`이다. 원격 조회는 인증서를 검증하는 TLS 프록시를 거친다.
+관제 PC의 사이트 스택 컨테이너만 `--host 0.0.0.0`으로 공개하지 않은 내부 망에서 받는다([D-936](../../docs/adr/D-936-monitoring-site-stack-service.md)).
 `--port`는 1–65535, `--web-root`는 검증된 상태 화면 묶음의 경로다. 원천과 자격·상태 경로를
 안전하게 준비할 수 없으면 `MONITORING_STARTUP_FAILED`로 종료하며 원문 예외·설정을 출력하지 않는다.
 하나의 실행기가 등록 입력에 따라 개별 사이트, peer 통합 집계, peer 없는 중앙 직접 수집을 맡는다.

@@ -8,6 +8,11 @@ abort) and explains failures. Measured facts veto: a runner fault forces park, a
 abort, and proceed is refused when the next chunk's precondition is not measured (aligned before a
 grasp, holding before a lift). The model never sees a choice the measurement already ruled out.
 
+`remap` (mark the jaws again around the box and refit the camera map there) is offered only when the
+measurement says the map is the problem (`facts["remap"]`: no map, the box outside the map's fitted points,
+or a map error too large). It is a proposal (D-328, D-785): cell_pipeline carries it out, and only with a
+person at the switch.
+
 The backend is any callable(prompt, images_b64, schema) -> dict. `ollama()` talks to an Ollama
 /api/chat (loopback on the AI PC, or through an SSH tunnel); a Fleet route needs an ADR first.
 """
@@ -18,7 +23,7 @@ import time
 import urllib.request
 from pathlib import Path
 
-DECISIONS = ("proceed", "retry", "park", "abort")
+DECISIONS = ("proceed", "retry", "remap", "park", "abort")
 PRECONDITION = {"grasp": "aligned", "lift": "holding"}  # next chunk kind -> measured fact it needs
 
 
@@ -26,10 +31,18 @@ def measured(facts: dict):
     """(forced decision or None, decisions the measurement forbids)."""
     if facts.get("fault"):
         return "park", set()
-    if not facts.get("box_found"):
-        return "abort", set()
+    forbidden = set() if facts.get("remap") else {"remap"}
+    if not facts.get("box_found"):  # with no box seen only a new map may help; nothing is grasped
+        return (None, forbidden | {"proceed", "retry"}) if facts.get("remap") else ("abort", set())
     need = PRECONDITION.get(facts.get("next"))
-    return None, ({"proceed"} if need and not facts.get(need) else set())
+    return None, forbidden | ({"proceed"} if need and not facts.get(need) else set())
+
+
+def rules(prompt, images, schema):
+    """No decision model configured: re-map when the measurement offers it, retry while allowed, else stop."""
+    allowed = schema["properties"]["decision"]["enum"]
+    pick = next((d for d in ("remap", "retry") if d in allowed), "abort")
+    return {"decision": pick, "reason": "rule: no decision model"}
 
 
 def ollama(url="http://127.0.0.1:11434", model="qwen3-vl:8b-instruct", timeout=90):
@@ -103,6 +116,7 @@ def prompt(facts, allowed, notes=(), context=""):
     return (background + "You decide the next step of a robot arm moving a box between taught chunks. "
             f"Measured now: {json.dumps(facts)}. "
             "proceed = run the next taught chunk; retry = redo the last correction and chunk; "
+            "remap = mark the jaws again around the box and refit the camera map there; "
             "park = return home slowly; abort = stop and ask a person. "
             f"Allowed now: {allowed}. Images, if any: wrist camera then top camera. "
             "Explain in one sentence what you see that supports the choice. Reply with JSON only.")

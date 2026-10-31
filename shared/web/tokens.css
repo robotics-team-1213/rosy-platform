@@ -156,7 +156,6 @@
 :root {
   /* ground 파생 — 바탕 사이 단계 */
   --ground-grad-1: color-mix(in oklab, var(--ground) 71%, var(--ground-deep));
-  --ground-grad-2: color-mix(in oklab, var(--ground-raise) 51%, var(--ground));
 
   /* brand 파생 — 현재 위치 표식의 옅은 바탕. 가장 깊은 바탕과 섞어야
    * 옛 손 고른 값(#221620)에 가장 가깝다(ΔE_OK 0.008). */
@@ -168,11 +167,8 @@
   --scrim-raise: color-mix(in oklab, var(--ground) 90%, transparent);
   --scrim-top: color-mix(in oklab, var(--ground) 82%, transparent);
   --scrim-solid: color-mix(in oklab, var(--ground-deep) 96%, transparent);
-  --shade-14: color-mix(in oklab, var(--shadow-base) 14%, transparent);
-  --shade-28: color-mix(in oklab, var(--shadow-base) 28%, transparent);
 
   /* ground 파생 — 선과 표면 결 (잉크 알파) */
-  --line-015: color-mix(in oklab, var(--ink) 1.5%, transparent);
   --line-06: color-mix(in oklab, var(--ink) 6%, transparent);
   --line-10: color-mix(in oklab, var(--ink) 10%, transparent);
   --line-14: color-mix(in oklab, var(--ink) 14%, transparent);
@@ -274,7 +270,6 @@
   --measure-account-label: 12rem;
   --content-auth-max: 32rem;
   --content-learning-max: 48rem;
-  --content-policy-max: 56rem;
   --content-policy-form-max: 36rem;
   --block-policy-evidence-max: 12rem;
   --measure-login-identity: 10rem;
@@ -327,7 +322,6 @@
   /* 포커스는 상태가 아니라 상호작용이다 — status 색을 쓰지 않는다. */
   --focus-ring: var(--series-primary);
 
-  --flag-line: var(--border-default);
   --flag-caution: var(--status-warn);
   --flag-danger-bg: var(--status-crit);
   --flag-danger-ink: var(--text-on-danger);

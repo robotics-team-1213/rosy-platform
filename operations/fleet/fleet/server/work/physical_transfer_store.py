@@ -20,6 +20,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from core_common.protocol.arm_transfer import ArmTransferCapability
 from core_common.protocol.arm_transfer_jobs import ArmTransferRequest as PhysicalTransferRequest
 from core_common.protocol.arm_transfer_preflight import ArmPhysicalRef
+from core_common.protocol.policy_admission import POLICY_ADMISSION_PRINCIPAL
 from .cell_job_store import CellJobStore
 from .dispatch_admission import reserve
 from core_common.resource_keys import normalize_resources
@@ -203,9 +204,53 @@ class PhysicalTransferStore:
             connection.commit()
             return result
 
-    def _admit(self, connection, mission_id, *, principal, expected_proposal_digest, expected_generation,
-               capabilities, capabilities_observed_at_ns):
-        actor = _principal(principal, operator=True)
+    def proposed_ids(self, *, limit=20):
+        """(mission_id, proposer) of PROPOSED physical operations, oldest first; D-938 policy candidates."""
+        with closing(self._journal._connect()) as connection:
+            rows = connection.execute("SELECT mission_id,proposal_principal_id FROM fleet_cell_jobs "
+                                      "WHERE provenance_kind='physical' AND status='PROPOSED' ORDER BY rowid LIMIT ?",
+                                      (int(limit),)).fetchall()
+        return [(row["mission_id"], row["proposal_principal_id"]) for row in rows]
+
+    def admit_by_policy(self, mission_id, *, scope_revision, enabled_by, proposers,
+                        capabilities, capabilities_observed_at_ns, recheck=None):
+        """D-938: the human admit's checks under the policy principal, in one transaction.
+
+        The scope's enabling named operator stands for the second person: the proposer must be a
+        scoped principal other than that operator. Digest and generation are the values current
+        inside this transaction; snapshot, stop generation, capability freshness and claims are
+        then checked exactly as for a human admit. ``recheck`` re-judges the live scope just before
+        commit; any reason rolls the whole admission back.
+        """
+        _nonempty("scope_revision", scope_revision, limit=64)
+        _nonempty("enabled_by", enabled_by, limit=96)
+        with closing(self._journal._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            current = self._read(connection, mission_id)
+            if current is None:
+                raise KeyError(mission_id)
+            if current["status"] != "PROPOSED":
+                raise MissionConflict("physical operation was already admitted or held")
+            proposer = current["proposal_principal_id"]
+            if proposer not in proposers or proposer == enabled_by:
+                raise PermissionError("proposal principal is outside the policy admission scope")
+            control = connection.execute("SELECT generation FROM fleet_dispatch_control WHERE control_id=1").fetchone()
+            result = self._admit(connection, mission_id, actor=POLICY_ADMISSION_PRINCIPAL,
+                expected_proposal_digest=current["proposal_digest"], expected_generation=control["generation"],
+                capabilities=capabilities, capabilities_observed_at_ns=capabilities_observed_at_ns,
+                event_extra={"policy_scope_revision": scope_revision, "policy_enabled_by": enabled_by})
+            reason = recheck() if recheck is not None else None
+            if reason is not None:
+                raise MissionConflict(f"policy admission scope changed before commit: {reason}")
+            connection.commit()
+            return result
+
+    def _admit(self, connection, mission_id, *, principal=None, actor=None, expected_proposal_digest,
+               expected_generation, capabilities, capabilities_observed_at_ns, event_extra=None):
+        if actor is None:
+            actor = _principal(principal, operator=True)
+        elif actor != POLICY_ADMISSION_PRINCIPAL or principal is not None:
+            raise PermissionError("only the policy admission principal may skip the named operator check")
         if actor == self.installation.policy.producer_id:
             raise PermissionError("physical observer cannot approve an operation")
         if (not isinstance(expected_proposal_digest, str) or not re.fullmatch(r"[0-9a-f]{64}", expected_proposal_digest)
@@ -251,5 +296,5 @@ class PhysicalTransferStore:
                            datetime.fromtimestamp(boundary / 1e9, timezone.utc).isoformat(), mission_id))
         self._journal._event(connection, mission_id, None, "PHYSICAL_TRANSFER_ADMITTED", actor,
             {"proposal_digest": expected_proposal_digest, "authority_epoch": control["authority_epoch"],
-             "dispatch_generation": expected_generation, "claims_acquired_at_ns": boundary})
+             "dispatch_generation": expected_generation, "claims_acquired_at_ns": boundary, **(event_extra or {})})
         return self._read(connection, mission_id)

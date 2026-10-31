@@ -36,7 +36,7 @@ CONFIG["plan"] = json.loads((OMX / "grasp-plan.example.json").read_text())
 CONFIG["pivot"] = {"points": [[0.072, 0.055]]}
 CONFIG["_commissioning"] = {"person_at_switch": True}  # simulated supervised trials (D-911), not field acceptance
 CONFIG["operating_conditions"] = {"installation_revision": "sim-install-1", "object_revision": "sim-object-1",
-    "payload_kg": 0.05, "object_dimensions_m": [0.03, 0.03, 0.03], "environment_revision": "sim-scene-1"}
+    "payload_max_kg": 0.05, "object_dimensions_m": [0.03, 0.03, 0.03], "environment_revision": "sim-scene-1"}
 SESSION = {"scope": "simulation", "sha256": "a" * 64, "session_id": "fixture-session"}
 
 
@@ -56,6 +56,8 @@ def simulated_operating_profile(tmp_path, monkeypatch):
 
 
 CATALOG = cell_objects.load_catalog(OMX / "object-catalog.example.json")
+for _entry in CATALOG:  # D-935: as if each object had been enrolled on the cell scale
+    _entry["mass_kg"] = 0.03
 CAMERA = CONFIG["cameras"]["top"]
 ROI = (40, 205, 300, 420)
 BIAS = (-0.0133, 0.0029)  # the map reads true + BIAS
@@ -191,6 +193,17 @@ def test_hidden_closing_axis_candidates_compete_and_every_attempt_is_a_row(tmp_p
     assert rows[1]["auto"]["bias_mm"] == pytest.approx([1000 * BIAS[0], 1000 * BIAS[1]], abs=1.5)
     assert rows[1]["verify"]["basis"] == "map" and rows[1]["verify"]["inside"]
     assert cell_pivot.bias_path(path).exists() and cell.commands.count("park") >= 2 and cell.commands[-1] == "park"
+    assert rows[1]["envelope"]["payload"] == {"kg": 0.03, "source": "catalogue mass of the empty object",
+                                             "object": "container-2", "bound_kg": 0.05}  # D-935: kept for learning
+
+
+def test_an_object_without_an_enrolled_mass_is_held_before_any_motion(tmp_path):
+    path, cell = biased_map(tmp_path), Cell([CONT2])
+    unweighed = [dict(e, mass_kg=None) for e in CATALOG]  # D-935: an unknown payload, like an unknown object
+    result = auto.run_auto(cell, CONFIG, cal.load(path), path, unweighed, ROI, "pinky", "0.060,0.090", tmp_path,
+                           cell_choices.Choices(tmp_path / "choices.json"), sleep=no_sleep, log=lambda row: None)
+    assert result["result"] == "held: payload_unknown"
+    assert not {"run descend_pick", "run grasp_pick"} & set(cell.commands)  # the pick never started
 
 
 def test_a_square_object_does_not_compete_and_is_picked_with_the_site_yaw(tmp_path):
@@ -232,6 +245,15 @@ def test_a_runner_that_does_not_answer_refuses_to_start(tmp_path):
     result = auto.run_auto(Dead([CONT2]), CONFIG, cal.load(path), path, CATALOG, ROI, "pinky", "belt", tmp_path,
                            cell_choices.Choices(tmp_path / "choices.json"))
     assert result["result"] == "refused"
+
+
+def test_a_site_without_a_place_spot_is_refused_as_a_destination_before_anything_runs(tmp_path):
+    config = copy.deepcopy(CONFIG)
+    config["sites"]["board"] = {k: v for k, v in config["sites"]["belt"].items() if k != "place"}  # 2026-10-30: KeyError
+    path, cell = biased_map(tmp_path), Cell([CONT2])
+    result = auto.run_auto(cell, config, cal.load(path), path, CATALOG, ROI, "pinky", "board", tmp_path,
+                           cell_choices.Choices(tmp_path / "choices.json"))
+    assert result["result"] == "refused: board is not a destination (its site has no 'place')" and cell.commands == []
 
 
 REAL_CAPS = {"11": {"pwm": 300}, "12": {"pwm": 600}, "13": {"pwm": 600}, "14": {"pwm": 300}, "15": {"pwm": 300}, "16": {"pwm": 300}}
@@ -643,7 +665,7 @@ def test_the_gate_refuses_a_replan_the_review_does_not_cover(tmp_path):
     import cell_transfer
 
     cell = Cell([CONT2])
-    gate = cell_transfer.Gate(cell, {**CONFIG}, {})
+    gate = cell_transfer.Gate(cell, {**CONFIG, "_payload": cell_objects.payload(CATALOG, "container-2")}, {})
     lib = tmp_path / "lib.json"
     lib.write_text(json.dumps({"chunks": {"home": [[0] * 6]}}))
     assert gate.open(lib, lambda a: None) is None and gate.assessment["mode"] == "commissioning"
@@ -704,3 +726,33 @@ def test_the_margin_opens_as_wide_as_the_room_and_the_jaws_allow():
     mask[138:150, 60:140] = 255  # a neighbour 18 mm off the 40 mm box's +y side: room, not the jaws, decides
     assert auto.finger_room(mask, (0, 0, 200, 200), px, wide)["margin_mm"] < 14.0
     assert auto.jaw_open_for(30, margin_mm=16.0) <= 56.0
+
+
+def test_after_a_contact_the_gate_still_lets_the_arm_retreat_and_park_but_nothing_else(tmp_path):
+    """2026-10-30: descend_pick touched the container top; retreat and park were held 'session_changed' (the runner's
+    latched fault) and the arm stayed out over the Pinky tray until the idle watchdog folded it."""
+    import cell_transfer
+
+    class Faulted(Cell):
+        fault, session = None, None
+
+        def act(self, command):
+            status = super().act(command)
+            if command == "state":
+                status["fault"] = self.fault
+                if self.session:
+                    status["operating_context"] = {**status["operating_context"], "session_id": self.session}
+            return status
+
+    cell = Faulted([CONT2])
+    gate = cell_transfer.Gate(cell, {**CONFIG, "_payload": cell_objects.payload(CATALOG, "container-2")}, {})
+    lib = tmp_path / "lib.json"
+    lib.write_text(json.dumps({"chunks": {"home": [[0] * 6]}}))
+    assert gate.open(lib, lambda a: None) is None
+    cell.fault = "contact in descend_pick: a joint lagged the command by 1.6 units"
+    assert gate.act("goto above_place") == {"ok": False, "error": "held: fault"} and "goto above_place" not in cell.commands
+    for verb in ("retreat", "park"):
+        gate.act(verb)
+        assert cell.commands[-1] == verb  # sent in the Gate's checked form (the fake asserts its session)
+    cell.session = "replacement-session"  # another owner: recovery is not this gate's to send
+    assert gate.act("park") == {"ok": False, "error": "held: session_changed"}

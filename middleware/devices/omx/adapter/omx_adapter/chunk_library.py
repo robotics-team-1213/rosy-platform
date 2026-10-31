@@ -5,7 +5,7 @@ import json
 import math
 from pathlib import Path
 
-from .motion_profile import smooth
+from .motion_profile import flow
 
 # The guard streams at most 10 deg/s; 5 native units/s keeps every joint under 9 deg/s.
 GUARD_UNITS_PER_S = 5.0
@@ -14,6 +14,11 @@ NAMES = ["shoulder_pan.pos", "shoulder_lift.pos", "elbow_flex.pos", "wrist_flex.
 # Taught carry height: turning low first scraped the jaws on the table on 2026-10-24.
 TRANSIT = {1: -27.0, 2: 18.0, 3: 46.0}
 PARK_SPEED = GUARD_UNITS_PER_S
+# shoulder_lift moving negative lifts the arm's weight (rise from a reach). Guard logs 2026-10-26/27: its lag
+# behind the command was median/p90/max 1.8/3.5/4.75 deg at 6-8 deg/s and 1.0/1.8/3.0 deg at 4-6 deg/s; the
+# guard stops at 5 (a rise from x 0.24 m did on 2026-10-27). 2 units/s is 3.6 deg/s: at 3 (5.4 deg/s) a rise
+# from the container reach lagged 1.8 units and set off the strain hold every time, at P 1200 and 1600 alike.
+RISE_SPEED = 2.0
 SCHEMA = "rosy.omx-chunk-library.v1"
 
 
@@ -35,11 +40,11 @@ def transit_path(start: list, goal: list, grip_transit: float, fps: int, transit
     waypoints.append([goal[i] if i in (0, 4) else v for i, v in enumerate(waypoints[-1])])
     waypoints.append(list(goal[:5]) + [grip_transit])
     waypoints.append(list(goal[:6]))
-    # One flowing move: the turn starts as the rise ends and the descent as the turn ends (blended corners);
-    # the jaws' changes and the goal are reached at rest. 85 % of the guard speed leaves room for the moment
-    # two blended segments overlap on one joint.
-    # The overlap is capped at 0.6 s: the rise has at most 0.5 * 5 * 0.6^2 = 0.9 units left when the turn begins.
-    return smooth(waypoints, fps, speed * PARK_SPEED, blend=[False, False, True, True, False, False], blend_s=0.6)
+    # One flowing move, eased in and out (no jerk step), the lift rising no faster than RISE_SPEED: the turn
+    # starts as the rise ends and the descent as the turn ends (blended corners); the jaws' changes and the goal
+    # are reached at rest. The overlap is capped at 0.6 s: the rise has about 0.4 units left when the turn begins.
+    return flow(waypoints, fps, speed * PARK_SPEED, blend=[False, False, True, True, False, False], blend_s=0.6,
+                rise_speed=RISE_SPEED)
 
 
 def park_path(start: list, home: list, closed: float, fps: int, transit: dict | None = None,

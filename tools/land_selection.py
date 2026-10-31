@@ -46,9 +46,11 @@ def select(land, wt: Path, base: str, python: str, head: str | None = None,
             # D-889 3 (combined affected, not FULL per cycle): a delta that escalated landed on main with its own
             # FULL tier, and this branch passed its own tier before the turn. Repeating FULL for every lander
             # behind a FULL landing was 35 % of pretest time on 2026-10-26; what is left is both changes' own
-            # suites on the merged tree. Safety paths on either side keep FULL (D-889 6).
+            # suites on the merged tree. A safety path in this branch keeps FULL (D-889 6). One in main's delta
+            # no longer does (D-889 addendum 8): a branch touching a safety path lands only through its own FULL
+            # tier, and the delta's selection keeps the suites mapped to those safety paths.
             own = _affected(land, wt, python, head, None) if landed and head and sel["escalations"] else None
-            if own is not None and not any(e.endswith(SAFETY_TRIGGER) for e in sel["escalations"] + own["escalations"]):
+            if own is not None and not any(e.endswith(SAFETY_TRIGGER) for e in own["escalations"]):
                 print("[tests] main's delta escalated but landed with its own FULL tier: its mapped suites and"
                       " this branch's own selection on the merged tree")
                 mine = own["local_invocations"] if own["mode"] == "full" else own["invocations"]

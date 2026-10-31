@@ -228,7 +228,7 @@ def test_batch_leader_counts_own_carried_members_before_reserving_capacity(tmp_p
 @pytest.mark.parametrize("older_status", ["pending", "preparing"])
 def test_batch_leader_preserves_other_preparing_and_older_pending_claims(tmp_path, batch_size, older_status):
     queue = land.land_queue
-    for n in range(2):
+    for n in range(land.land_prepare.MAX_PREPARING - 1):
         queue.take(tmp_path, f"feat/busy-{n}", status="preparing")
     older = queue.take(tmp_path, "feat/older", status=older_status)
     members = [f"feat/member-{n}" for n in range(batch_size - 1)]

@@ -82,6 +82,9 @@ def test_station_camera_http_pipeline_aligns_then_requires_contact_and_measured_
         binding['target']['approach_pose'] = dict(x=1., y=0., yaw=0.)
     svc.docking.executor = world
     svc.state._clock = svc.state._monotonic = lambda: now[0]
+    # Its 3 s stale window on wall time expired during the scheduling test's 3.2 s journal stall (2026-10-30);
+    # ros_bridge binds it to the line clock, which is the SIM clock here.
+    svc.localization.bind_clock(lambda: now[0])
     binding['session']['robot_id'] = binding['observation_scope']['robot_id'] = robot_id
     binding['observation_scope']['odom_epoch'] = '0'
     # The full return must outlive its initial lease using distinct SIM global observations.

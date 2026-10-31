@@ -4,6 +4,49 @@
 
 `pinky-conveyor-roundtrip`은 별도의 고정 접촉 실험이다. 정지한 Pinky 적재면 proxy에서 컨베이어 proxy로 한 물체를 옮긴 뒤 원위치로 되돌린다. OMX-F CAD 집게와 동적 물체를 사용하며, 실제 카메라 좌표 정합·Pinky 전체 모델·주행·학습 정책 수용은 포함하지 않는다. 실행 가능한 코드와 실제 과제 성공은 별개이며, 실행 결과의 `task_success`와 실패 근거를 확인한다.
 
+## 현재 맵 컨테이너 적재와 연속 영상
+
+`omx-map-container-stack`은 공통 노란 판과 마주보는 두 팔의 접촉 기준
+실험이다. 설정은 `{"seed":42,"layers":3,"case":"nominal"}`처럼 세 항목을
+모두 넣는다. `layers`는1또는3이며, 층당90×30×30mm 컨테이너3개를 놓는다.
+`case`는 nominal(XY±1mm/yaw±.01rad), offset(X±5mm/Y±8mm/yaw±.08rad),
+reverse(offset범위와 반대 양옆 순서)다. 현재 계획은 층마다 가운데부터
+nominal/offset행1→0→2, reverse행1→2→0으로 놓는다. 양옆은 실제 가운데
+면에서 독립 계산하고, 실제 투영 폭·원래 외곽·집게 sweep 여유를 확인한다.
+줄 사이는 D-929에 따라 측정한 가운데 면에서 2~5mm(목표3.5mm) 띄우고,
+외곽은90×97mm다. 최종 판정은 측정 간격이 모두 이 띠 안이어야 한다.
+놓은 물체가 속도만 기준을 넘으면 다음 놓기 전에1.1초 안정 구간을 최대10초 기다린다.
+SDK6.2.0.0에서 실행한 경로이며3층 물리 성공 여부는 검증 정본을 따른다.
+기존 `omx-map-cube-stack`의1층 설정과 결과는 유지한다.
+
+명시적인 `{"seed":42,"layers":3,"case":"column"}`은 사용자가 허용한
+3×1×3 대안이다.90×30×30mm 긴 컨테이너를 한 층에1개씩 총3개 놓아
+90×30×90mm를 만들며 팔0→1→0이 교대한다. 기존 nominal/offset/reverse의
+층당3개·총9개 조건과 구분한다. 같은 실제 CAD맵·벨트·수평화·물리 접촉·
+최종 안정성·연속 영상·종료 정리 기준을 적용한다. column은layers3만 허용한다.
+
+현재 container fixture는 실제 맵 자료 Confluence13205531의 Stage1 대향 두
+조립체를 선택한다. 판603×760×18mm·CAD 원점 간330mm·기울어진 낮은 벨트
+평면을 사용하며, 나머지 전체 기계 형상과 현장 모터축 등록은 미검증이다.
+적재 구역과 판 앞 집기 stop은 시험 설정이다. 기본 SIM 프로필은 유지하고
+해당 CAD 벨트의 지정된 외부 구간에만 낮은 목표를 허용하는 offline scene을
+쓴다. 실물 제어를 허용하지 않는다. 새 CAD 맵의 수용은 별도 기록하며
+기존 사진 기반1층 성공을 재사용하지 않는다.
+
+고정 실제 카메라800×600/10fps로 준비·집기·놓기·퇴피·안정화를 연속 녹화한다.
+Container 시나리오만220kb/s 최대 비트율·1초 VBV를 사용한다. 다른 녹화기의
+기본값은 유지하며, 총 길이와 무관한 파일 크기 보장은 아니다. 최종64MiB
+등록 검사를 통과해야 한다. 프레임·해상도·물리시간 검사는 동일하다.
+FFmpeg/ffprobe가 필요하다. 실행기는 설치하지 않으며, 모델·AI PC는 host-state의
+`approval=sim apt ffmpeg` 줄로 받는다(`sudo python3 deploy/hosts/common/rosy-host-state install <model|ai> --approve sim`).
+없으면 check가 준비 안 됨으로 거절한다. native 렌더
+영수증·물리 tick·MP4/보고서 해시와 전체 디코딩을 확인한 뒤 등록한다.
+MP4최대64MiB, 보고서/프레임 영수증 각각16MiB, 전체 산출물256MiB다.
+SDK2310초와 후처리를 포함한 소유 서비스2520초 예산을 사용한다. 간격 실행812a는8개까지1,606초에서 이전 예산에 걸렸고9개는 약1,750초로 추정한다. 이 예산과 비트율로 MP4는64MiB 안에 든다.
+각 조건의 실제 성공 여부와 남은 한계는
+[검증 기록](../validation/omx-cube-stacking-2026-10-29/result.md)을 확인한다.
+이 시나리오는 IK 기준 제어이며 ACT/RL·실물 수용을 뜻하지 않는다.
+
 ## 운영 binding
 
 실험 요청에는 경로·명령·호스트를 넣지 않는다. 운영자가 별도 JSON binding으로 승인 source checkout, SDK Python, 설치된 model-code root와 외부 run 데이터 루트를 고정한다. 모든 경로는 해당 모델 PC의 값이며 공개 문서에는 실제 계정·주소를 쓰지 않는다.
@@ -35,7 +78,15 @@ python tools/remote/remote_isaac.py start --request request.json --receipt recei
 python tools/remote/remote_isaac.py status --receipt receipt.json
 python tools/remote/remote_isaac.py stop --receipt receipt.json
 python tools/remote/remote_isaac.py fetch --receipt receipt.json
+python tools/remote/remote_isaac.py run --scenario omx-map-container-stack --config config.json --sha FULL_SHA --out NEW_DIR [--parent-run-id RUN_ID]
 ```
+
+`run`은 위 단계를 한 번에 한다. check가 준비될 때까지 30초 간격으로 최대 20번 기다리고, 끝내 준비되지 않으면
+start를 보내지 않는다. 준비되면 `NEW_DIR`에 request·receipt를 남기고 한 번만 시작한다. 이후 status 응답이
+끊겨도 연속 10번까지는 계속 기다린다. 끝난 run만 `NEW_DIR/snapshots`로 fetch하고, UNKNOWN은 fetch하지 않고 돌려준다.
+중간에 끊기면 남은 receipt로 status·fetch를 이어서 한다. 받은 snapshot에 적재 보고서가 있으면 결과의 `summary`에
+놓은 개수·오류·줄 간격·불안정 상자를 붙인다. 따로 볼 때는
+`python learning/envs/isaac/mapped_stack_report.py summary SNAPSHOT/mapped-stack-report.json`.
 
 `config.json`은 `{"seed":0}`이다. check가 돌려준 입력 지문으로 아래 start 요청을 만든다. CLI는 네트워크 시작 전에 run ID·입력 지문·요청 지문·모델 PC 식별 해시를 receipt에 게시한다. 연결이 끊기면 같은 request·receipt로 재시도하거나 status를 조회한다. 다른 요청·다른 모델 PC로 바뀐 receipt는 거절한다.
 

@@ -122,6 +122,22 @@ def added_known(wt: Path, inv: list[str]) -> list[str]:
                   if any(i.split("::")[0] == p or i.startswith(p.rstrip("/") + "/") for p in inv))
 
 
+TIMING = re.compile(r"\[remote-pytest\] timing host=(\S+) start=(\d+) wait_s=(\d+) run_s=(\d+)")
+
+
+def timing(log, began_at: float) -> dict:
+    """An invocation's host, queued_s (round start to its job's start), wait_s (host room) and run_s, from the line
+    remote_job.run ends its log with; {} for a log without one (cancelled, lost, reused). seconds stays the round's."""
+    try:
+        found = TIMING.findall(Path(log).read_text(encoding="utf-8", errors="replace"))
+    except OSError:
+        return {}
+    if not found:
+        return {}
+    host, start, wait, run = found[-1]
+    return {"host": host, "queued_s": max(0, int(start) - round(began_at)), "wait_s": int(wait), "run_s": int(run)}
+
+
 def verdict(wt: Path, inv: list[str], log: Path, logdir: Path, tag: str, python: str, run,
             tested_sha: str) -> tuple[int, list[str], str]:
     """test/known_failures.py on ``log``, then the rerun alone for its NEW ids: (exit, load-flaky ids, why).
@@ -299,7 +315,7 @@ def run_tests(land, wt: Path, args, invocations: list[list[str]], logdir: Path, 
     def batch(part: list[tuple[int, list[str]]]) -> list[str]:
         todo = [inv for _, inv in part]
         logs = [logdir / f"run-{round_no}-{n}.txt" for n, _ in part]
-        began, seen = land.time.monotonic(), {}
+        began, began_at, seen = land.time.monotonic(), land.time.time(), {}
 
         def diagnostic_run(*positional, **kwargs):
             if stop.is_set():
@@ -342,7 +358,7 @@ def run_tests(land, wt: Path, args, invocations: list[list[str]], logdir: Path, 
                 raise land.Stop(f"HEAD changed before verdict; {head[:10]} was tested; retry the landing")
             if code == land.remote_pytest.CANCELLED:  # never ran to a verdict: not kept, not a failure of its own
                 cancelled.append(inv)
-                land.land_events.emit("tests", round=round_no, argv=inv, verdict="cancelled", seconds=secs)
+                land.land_events.emit("tests", round=round_no, argv=inv, verdict="cancelled", seconds=secs, **timing(log, began_at))
                 continue
             why = land.land_cache.unusable(code, log) or land.land_browser.vacuous(inv, log)
             if why == land.land_cache.NO_EVIDENCE:
@@ -356,14 +372,14 @@ def run_tests(land, wt: Path, args, invocations: list[list[str]], logdir: Path, 
                     cancelled.append(inv)
                     continue
                 if rerun == [0]:
-                    land.land_events.emit("tests", round=round_no, argv=inv, verdict="flaky", seconds=secs)
+                    land.land_events.emit("tests", round=round_no, argv=inv, verdict="flaky", seconds=secs, **timing(log, began_at))
                     done.append(f"pytest {' '.join(inv)} ok on one rerun ({again.name}); the first exited 1 "
                                 f"without failures ({log.name})")
                     continue
                 why = f"{why}, rerun exit {rerun[0] if rerun else '?'} (log {again})"
             if why:
                 stops.append(f"pytest {' '.join(inv)} {why} (log {log}); not landing")
-                land.land_events.emit("tests", round=round_no, argv=inv, verdict="unusable", seconds=secs)
+                land.land_events.emit("tests", round=round_no, argv=inv, verdict="unusable", seconds=secs, **timing(log, began_at))
                 continue
             failed, flaky, why = seen.get(str(log)) or judge(inv, log, f"{round_no}-{n}")
             if land.out(wt, "rev-parse", "HEAD") != head:
@@ -371,11 +387,11 @@ def run_tests(land, wt: Path, args, invocations: list[list[str]], logdir: Path, 
             if failed and not flaky:
                 stops.append(f"NEW failure in {' '.join(inv)} (log {log}); {why}; not landing")
                 land.land_cache.failed(wt, inv, True)
-                land.land_events.emit("tests", round=round_no, argv=inv, verdict="new", seconds=secs)
+                land.land_events.emit("tests", round=round_no, argv=inv, verdict="new", seconds=secs, **timing(log, began_at))
                 continue
             land.land_cache.failed(wt, inv, False)
             carried = why.startswith("main-red")
-            land.land_events.emit("tests", round=round_no, argv=inv, seconds=secs,
+            land.land_events.emit("tests", round=round_no, argv=inv, seconds=secs, **timing(log, began_at),
                                   verdict="carried" if carried else "flaky" if flaky else "pass")
             if not failed:
                 keep(inv, log)

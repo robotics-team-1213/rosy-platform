@@ -50,6 +50,8 @@ on:
       - operations/processes/palletizing/src/**
       - applications/fleet/gateway/**
       - shared/web/**
+      - operations/monitoring/src/**
+      - applications/monitoring/web/**
       - middleware/perception/map/map_v2_fleet/lane_graph.yaml
       - middleware/perception/map/map_v2_fleet/meshes/road_lines.stl
       - docs/reference/site-lan-discovery-profile.md

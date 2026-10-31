@@ -2,6 +2,7 @@
 then maps to the floor point within a millimetre - the depth-aware geometry the 2-D map and Jacobian lacked."""
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -68,6 +69,51 @@ def test_charuco_page_detects_whole_and_half_view():
     assert cb.find_corners(cb.page("checker"), 7, 5) is not None  # the plain page is found by the plain detector
 
 
+def test_charuco_legacy_api_keeps_corner_ids_and_rejects_missing_detections(monkeypatch):
+    """Exercise the 4.6 API even on test PCs with newer OpenCV."""
+    image = np.full((50, 70), 255, np.uint8)
+    points = np.arange(72, dtype=np.float32).reshape(24, 3)
+    ids = np.array([[22], [1], [17], [3], [8], [12]], np.int32)
+    corners = np.arange(12, dtype=np.float32).reshape(6, 1, 2)
+    dictionary = object()
+    marker_ids = np.array([[4]], np.int32)
+
+    def draw(size, *, marginSize, borderBits):
+        assert size == (70, 50) and marginSize == 0 and borderBits == 1
+        return image
+
+    board = SimpleNamespace(dictionary=dictionary, chessboardCorners=points, draw=draw)
+
+    def create(cols, rows, square, marker, selected):
+        assert (cols, rows, square, marker) == (7, 5, 0.025, 0.018)
+        assert selected is dictionary
+        return board
+
+    def detect(gray, selected):
+        assert gray is image and selected is dictionary
+        return [corners], marker_ids, []
+
+    def interpolate(markers, detected_ids, gray, selected):
+        assert markers[0] is corners and detected_ids is marker_ids
+        assert gray is image and selected is board
+        return len(ids) if ids is not None else 0, corners, ids
+
+    monkeypatch.setattr(cv2, "aruco", SimpleNamespace(
+        DICT_4X4_50=0, getPredefinedDictionary=lambda _: dictionary,
+        CharucoBoard_create=create, detectMarkers=detect, interpolateCornersCharuco=interpolate,
+    ))
+    assert cb.charuco_image((70, 50)) is image
+    obj, pix = cb.find_charuco(image, cb.charuco_board())
+    np.testing.assert_array_equal(obj, points[ids.ravel()])
+    np.testing.assert_array_equal(pix, corners)
+    assert obj.dtype == pix.dtype == np.float32
+    assert cb.find_charuco(image, board, min_corners=7) is None
+    ids = None
+    assert cb.find_charuco(image, board) is None
+    marker_ids = None
+    assert cb.find_charuco(image, board) is None
+
+
 def test_top_down_hand_eye_from_moves_and_yaws_where_tsai_cannot():
     board = cb.board_points(7, 5, 0.015)
     board_in_base = (rot(0, 0, 0.3), np.array([0.05, 0.15, 0.006]))
@@ -100,7 +146,7 @@ def test_top_down_hand_eye_from_moves_and_yaws_where_tsai_cannot():
 
 def test_intrinsics_from_hand_tilted_charuco_views():
     ppm = 4000  # board image pixels per metre
-    art = cb.charuco_board().generateImage((int(0.175 * ppm), int(0.125 * ppm)), marginSize=0, borderBits=1)
+    art = cb.charuco_image((int(0.175 * ppm), int(0.125 * ppm)))
     art = cv2.copyMakeBorder(art, 40, 40, 40, 40, cv2.BORDER_CONSTANT, value=255)
     to_m = np.array([[1 / ppm, 0, -40 / ppm - 0.0875], [0, 1 / ppm, -40 / ppm - 0.0625], [0, 0, 1]])  # centred on the board
 

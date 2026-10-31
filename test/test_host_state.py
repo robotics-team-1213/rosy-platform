@@ -141,7 +141,8 @@ def test_recovery_install_is_a_single_explicit_approval_group():
     lines = (ROOT / "deploy/hosts/common/host-state/manifest").read_text().splitlines()
     for target in ("/usr/local/sbin/rosy-ssh-watchdog", "enabled rosy-ssh-watchdog.timer",
                    "/etc/systemd/system/rosy-watchdog-load.service", "enabled rosy-watchdog-load.service",
-                   "/etc/systemd/system.conf.d/rosy-watchdog.conf", "/etc/sysctl.d/90-rosy-hang.conf"):
+                   "/etc/systemd/system.conf.d/rosy-watchdog.conf", "/etc/sysctl.d/90-rosy-hang.conf",
+                   "/usr/local/sbin/rosy-host-guard-remote", "/usr/local/sbin/rosy-update-report"):
         assert any(line.startswith("approval=recovery ") and target in line for line in lines), target
 
 
@@ -513,3 +514,11 @@ def test_the_installed_copy_tells_install_to_run_from_the_repo(tmp_path):
     result = subprocess.run([sys.executable, str(copy), "install", "model", "--dry-run"],
                             capture_output=True, text=True, timeout=60)
     assert result.returncode != 0 and "install reads the repo" in result.stderr
+
+
+@pytest.mark.parametrize("role", ["model_pc", "ai_pc"])
+def test_isaac_sim_hosts_get_the_film_tools_with_the_sim_approval(role):
+    """Isaac container runs record native film; both sim hosts install ffmpeg (ffprobe ships in it)."""
+    lines = (ROOT / "deploy" / role / "host-state" / "manifest").read_text().splitlines()
+    apt = [line.split() for line in lines if line.startswith("approval=sim apt ")]
+    assert any("ffmpeg" in words for words in apt)

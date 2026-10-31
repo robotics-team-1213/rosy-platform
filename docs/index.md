@@ -354,7 +354,7 @@
 ## 최근 기록
 
 - 2026-10-30 · uncommitted · feat(fleet): 확인된 ARM 시도의 재관측 계약(D-930, API v1.334)
-- 2026-10-30 · uncommitted · docs(fleet): 로봇별 동시 작업 발행 ADR(D-928, Proposed)과 실행 계획, 양보 없는 가짜의 동시성 교훈
-- 2026-10-30 · 40449ecfdf · 카메라 자동 복구를 실제 제어값과 복원 기록에 결속
-- 2026-10-29 · uncommitted · 자체 중복 lander의 완료 FULL 보존과 소유 취소
-- 2026-10-29 · 8728fc6eb7 · observer 검수 시험의 native guard 실패·수정 근거
+- 2026-10-31 · uncommitted · fleet: D-938 팔 이송 정책 승인
+- 2026-10-31 · uncommitted · fix(land): main 변화분의 safety 경로는 FULL 재실행을 부르지 않는다
+- 2026-10-30 · uncommitted · omx: D-935 payload bound on the D-911 gate
+- 2026-10-30 · uncommitted · omx: cell scale reader and D-934 object mass

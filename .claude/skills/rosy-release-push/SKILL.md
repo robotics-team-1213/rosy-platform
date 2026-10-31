@@ -23,7 +23,7 @@ Verified twice on 2026-09-26: releases 013 and 014 on a Pinky Pro running image 
 ## Steps
 
 1. **Get the commit onto origin/main.** The runner builds origin's `main`. Since D-868 it
-   moves only through the publish PR (`AGENTS.md` 「같이 하는 깃」 6), never `git push origin main`;
+   moves only through the publish PR (`docs/reference/shared-checkout.md` 「같이 하는 깃」 6), never `git push origin main`;
    the shared clone's pre-push refuses that (`rosy.publishOnly`). Local uncommitted files from
    other sessions do not matter; only the merged commit does.
 2. **Pick the release id and build.** The format is `YYYY.MM.DD-NNN`. `NNN` continues

@@ -12,6 +12,7 @@ import argparse
 import json
 import subprocess
 import sys
+import time
 import urllib.request
 from pathlib import Path
 
@@ -29,6 +30,38 @@ def lights(frames: dict, params=None) -> list:
         why = "no frame" if mean is None else f"mean {mean:.1f}" + ("" if ok else f" < {floor}: the room lights are off or the lens is covered - a person turns them on")
         out.append((f"light {name}", ok, why))
     return out
+
+
+def expose(device: str, grab, params=None, run=subprocess.run, wait=time.sleep) -> dict:
+    """Bring a camera's frame mean into preflight.target_mean +- preflight.mean_band with manual exposure. The top
+    camera's own auto exposure stops at 3000 in a dim room (2026-10-30: mean 21 while the wrist camera read 145);
+    exposure in this camera's units is near linear (10000 -> 61, 20000 -> 105, 33000 -> 148), so each step scales
+    it by target / mean, within 80..preflight.max_exposure (one 30 fps frame). Gain is left as it is."""
+    target, band = prm.get(params, "preflight.target_mean"), prm.get(params, "preflight.mean_band")
+    mean = float(grab().mean())
+    if abs(mean - target) <= band:
+        return {"device": device, "set": False, "mean": round(mean, 1)}
+    got = run(["v4l2-ctl", "-d", device, "-C", "exposure_time_absolute"], capture_output=True, text=True).stdout
+    exposure = int(got.split(":")[-1]) if ":" in got else 3000
+    for _ in range(int(prm.get(params, "preflight.exposure_steps"))):
+        exposure = int(min(prm.get(params, "preflight.max_exposure"), max(80, exposure * target / max(mean, 1.0))))
+        run(["v4l2-ctl", "-d", device, "-c", "auto_exposure=1", "-c", f"exposure_time_absolute={exposure}"], check=True)
+        wait(prm.get(params, "preflight.settle_s"))  # the viewer still serves frames taken before the change
+        mean = float(grab().mean())
+        if abs(mean - target) <= band or exposure >= prm.get(params, "preflight.max_exposure"):
+            break
+    return {"device": device, "set": True, "exposure": exposure, "mean": round(mean, 1), "ok": abs(mean - target) <= band}
+
+
+def ready(frame, config: dict, run=subprocess.run, wait=time.sleep) -> list:
+    """Set the exposure of each camera with a `device` in the config, then the lights check: the refusals, empty when
+    the cell can be seen."""
+    params = config.get("params")
+    for name, camera in config["cameras"].items():
+        if camera.get("device"):
+            print(json.dumps({"camera": name, **expose(camera["device"], lambda: frame(name), params, run, wait)}),
+                  file=sys.stderr)
+    return [f"{name}: {why}" for name, ok, why in lights({c: frame(c) for c in config["cameras"]}, params) if not ok]
 
 
 def camera_shift_px(reference, current) -> dict:

@@ -31,8 +31,9 @@ def task(tmp_path, envelope):
         "operating_envelope_path": "review.json", "work_dir": "."}))
     config = {"plan": {"lift_m": 0.04}, "profiles": {}, "sites": {}, "cameras": {},
               "operating_conditions": {"installation_revision": "fixture-install-1",
-                  "object_revision": "fixture-object-1", "payload_kg": 0.05,
+                  "object_revision": "fixture-object-1", "payload_max_kg": 0.05,
                   "object_dimensions_m": [0.03, 0.03, 0.03], "environment_revision": "fixture-scene-1"},
+              "payload": {"kg": 0.03, "source": "fixture scale"},
               "operating_envelope_path": str(tmp_path / "review.json"), "work_dir": str(tmp_path),
               "operating_profile_path": str(profile_path)}
     calibration = {"sites": {"tray": {"revision": "fixture-map-1"}}}
@@ -190,7 +191,7 @@ def test_changed_conditions_cannot_reuse_a_review(tmp_path, task, envelope, chan
     elif changed == "height":
         library["chunks"]["lift_pick"][0][1] += 1
     elif changed == "payload":
-        config["operating_conditions"]["payload_kg"] += 0.01
+        config["operating_conditions"]["payload_max_kg"] += 0.01
     elif changed == "installation":
         config["operating_conditions"]["installation_revision"] = "other-install"
     else:
@@ -332,8 +333,30 @@ def test_explicit_default_params_keep_runtime_identity(tmp_path, envelope, runne
 @pytest.mark.parametrize("value", [None, True, float("nan"), 0, -1])
 def test_invalid_payload_never_reaches_approval(task, envelope, value):
     config, calibration, library, state = copy.deepcopy(task)
-    config["operating_conditions"]["payload_kg"] = value
+    config["operating_conditions"]["payload_max_kg"] = value
     assert not envelope.assess(config, calibration, library, state, now=100.01)["allowed"]
+
+
+@pytest.mark.parametrize("payload, reason", [(None, "payload_unknown"), ({"kg": None, "source": "catalogue"}, "payload_unknown"),
+                                             ({"kg": 0.03, "source": ""}, "payload_unknown"),
+                                             ({"kg": 0.06, "source": "scale"}, "payload_over_bound"),
+                                             ({"kg": 0.04, "source": "scale", "max_gross_kg": 0.035}, "payload_over_bound")])
+def test_an_unknown_or_heavy_payload_is_held_even_in_a_supervised_trial(task, envelope, payload, reason):
+    config, calibration, library, state = copy.deepcopy(task)
+    config["payload"] = payload
+    config["_commissioning"] = {"person_at_switch": True}
+    result = envelope.assess(config, calibration, library, state, now=100.01)
+    assert not result["allowed"] and result["reason"] == reason
+
+
+def test_a_payload_within_the_bound_keeps_the_reviewed_task(tmp_path, task, envelope):
+    approve(tmp_path, envelope, task)
+    config, calibration, library, state = copy.deepcopy(task)
+    config["payload"] = {"kg": 0.045, "source": "scale"}  # not the trials' 0.03 kg, still under the 0.05 bound
+    result = envelope.assess(config, calibration, library, state, now=100.01)
+    assert result["allowed"] and result["payload"] == {"kg": 0.045, "source": "scale", "bound_kg": 0.05}
+    config["params"] = {"auto.max_gross_kg": 0.04}  # the arm's own limit is lower than the reviewed bound
+    assert envelope.assess(config, calibration, library, state, now=100.01)["reason"] == "payload_over_bound"
 
 
 def test_fifo_checked_command_accepts_the_runners_inner_command_ack(tmp_path, envelope, monkeypatch):

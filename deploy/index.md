@@ -76,8 +76,8 @@
 
 ## 최근 기록
 
-- 2026-10-30 · 351d048c15 · 끝 집기점 수정 전 손가락 여유 검사 분리
-- 2026-10-30 · e45f4eb60e · native 진단 묶음의 로컬 mDNS 일치 증거
-- 2026-10-30 · cd343694f9 · exclusive 입장 정책과 pytest 호스트 배치 일치
-- 2026-10-30 · b830767991 · open AP 소비자 선행 착지 후 producer 통합
-- 2026-10-29 · uncommitted · 기존 게시 검토 판정 재사용
+- 2026-10-30 · 796fbe489c · D-871 가드 수집 관제 PC 적용과 `rosy-update-report` 선언
+- 2026-10-30 · uncommitted · 관제 PC Monitoring 설정 예시 (D-936)
+- 2026-10-30 · 6302fcb63c · 선택 Monitoring overlay를 서명 후보와 업데이트기에 등록 (D-936)
+- 2026-10-30 · uncommitted · field marks admission의 원격 GREEN·mutation·복귀 검증
+- 2026-10-30 · uncommitted · field marks를 선택 프로필과 감독 절차에 연결

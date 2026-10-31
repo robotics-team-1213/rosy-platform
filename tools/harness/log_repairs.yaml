@@ -35,3 +35,10 @@
 
 # 9c8dbc22d0 provenance journal: rename the confirmation label to the required evidence label; prose and outcomes unchanged.
 "aa3a02dd581162c79e25104aad77f11c2220a27e4aeaf21cc793b53a000b1195": "40ed93cdc4bd535efec83aa97ed02b98009b47b25dd61436349e2368e94f7a18" # SHA256 normalized journal block pair
+
+# Site CI record 1: field labels from existing prose only; execution evidence unchanged (046299191f).
+"5534f6337d60df54796953e0a810251860b343f501d62421cba5a5c28c389c75": "f36cbbf3d1b938852032c0a8e21b1a581e4d523ae3efebf31f7c16307da3fcdf" # SHA256 normalized journal block pair
+# Site CI record 2: field labels from existing prose only; execution evidence unchanged (046299191f).
+"b531ce8335125b13d4eb31dcf41c8e064bf7d645c1d7e10fe534ce55f5f7a0ef": "75e01869a01d4ae8e8f30ad747025e73d34013750d1b294aca7a5614d5402fa3" # SHA256 normalized journal block pair
+# Site CI record 3: field labels from existing prose only; execution evidence unchanged (046299191f).
+"4fa1b7023f35c3872b84d58ac0d07b42e8c6f83a31018ab12aefe2a86a2f05d2": "82013747b910016dd488b2f35325c4b40a9c99b2131e414f7294d4104214c08f" # SHA256 normalized journal block pair

@@ -10,10 +10,18 @@ from pathlib import Path
 import numpy as np
 
 
+def case(work: Path, row: dict) -> None:
+    """One line per check that did not simply pass, and the outcome that followed: new failure cases to fix
+    and turn into tests, and the decision model's training data (it learns before any VLA, D-872)."""
+    work.mkdir(parents=True, exist_ok=True)
+    with (work / "cases.jsonl").open("a") as f:
+        f.write(json.dumps({"t": round(time.time(), 3), **row}, default=str) + "\n")
+
+
 def write_library(config: dict, pick: dict, place: dict, path: Path) -> Path:
     from grasp_planner import Planner
 
-    library = Planner(dict(config["plan"], pick=pick, place=place)).library()
+    library = Planner(dict(config["plan"], pick=pick, place=place, keep_out=config.get("keep_out"))).library()
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps({k: v for k, v in library.items() if v is not None}))
     return path

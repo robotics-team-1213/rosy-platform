@@ -1086,3 +1086,10 @@
 - 증거: 원격 contract RED/GREEN, absent/null DTO→World 원문 왕복, 측정값 보존과 별도 2.11.7 JSON Schema assertion을 확인했다. [검증 정본](../../docs/validation/physical-evidence-export-2026-10-29/result.md)이 source별 결과와 FULL·HTTP 수용 범위를 구분한다.
 - Gate: 기존 module gate 변화 없음. 원본 capture UTC를 수신 시각이나 sim tick으로 대체하지 않으며, simulation clock mapping/실물 수용을 계약 시험으로 대신하지 않는다.
 - CE: 해당 없음 — 호환성 선택과 실패 재현을 D-915·시험·검증 정본에 기록했다.
+
+## 2026-10-31 · uncommitted · D-938 정책 승인 범위의 arm_transfer
+
+- 변경: `PolicyAdmissionScope`에 `arm_transfer` 종류와 `proposers`를 추가했다. `arm_transfer` 활성 범위는 `proposers`·`valid_until`이 필수다. `PolicyAdmissionStatus.enabled_by`를 추가했다. API v1.335.
+- 증거: Fleet `test_arm_transfer_policy_admission.py`의 계약 시험(원격).
+- Gate: 변화 없음.
+- CE: 해당 없음.

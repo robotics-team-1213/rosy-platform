@@ -110,3 +110,52 @@ def test_an_alone_job_waits_for_the_host_to_empty_and_nothing_starts_beside_it(t
     finally:
         for name in ("first", "alone", "later"):
             (home / f"release.{name}").touch()
+
+
+def test_only_a_turn_holders_jobs_carry_the_turn_word(monkeypatch):
+    monkeypatch.setenv(xp.TURN_ENV, "1")
+    assert xp.TURN_JOB in xp.plan(["pkg/test"], FULL, [])[0]
+    monkeypatch.setenv(xp.TURN_ENV, "")
+    assert xp.TURN_JOB not in xp.plan(["pkg/test"], FULL, [])[0]
+
+
+@pytest.mark.skipif(not LINUX, reason="Linux setsid/flock are required")
+def test_a_turn_holders_job_starts_on_a_full_host_but_never_beside_an_alone_job(tmp_path):
+    """2026-10-31: a turn's guard job waited 75 min for room behind other landings' prepare jobs; the queue stopped."""
+    home, env = _job_env(tmp_path, HOLD)
+    env = {**env, "ROSY_HOST_CORES": "1", "ROSY_HOST_GB": "64"}
+    words = ("ROSY_JOB_RESERVE_CORES=1", "ROSY_JOB_RESERVE_GB=1")
+    try:
+        _start(env, home, "full", 0, *words)
+        assert _settled(home, 1) == 1
+        _start(env, home, "prep", 0, *words)
+        assert _settled(home, 1) == 1, "an ordinary job waits for room"
+        _start(env, home, "turn", 0, *words, "ROSY_JOB_TURN=1")
+        assert _settled(home, 2) == 2, "the turn's job starts at once"
+    finally:
+        (home / "release").touch()
+    alone_home, env = _job_env(tmp_path / "alone", HOLD)
+    try:
+        _start(env, alone_home, "alone", 0, "ROSY_JOB_ALONE=1")
+        assert _settled(alone_home, 1) == 1
+        _start(env, alone_home, "turn", 0, "ROSY_JOB_TURN=1")
+        assert _settled(alone_home, 1) == 1, "never beside an alone job"
+    finally:
+        (alone_home / "release").touch()
+
+
+@pytest.mark.skipif(not LINUX, reason="Linux bash is required")
+@pytest.mark.parametrize("resv,hidden", [(None, False), ("gpu", True), ("expired", False), ("pytest", False)])
+def test_jobs_hide_cuda_while_an_isaac_run_holds_the_gpu(tmp_path, resv, hidden):
+    """Runs 39be/a4e9 lost GPU checks to test venvs holding CUDA beside a live Isaac run (2026-10-30)."""
+    import subprocess
+    (tmp_path / "rosy-jobs").mkdir()
+    if resv:
+        until = int(time.time()) + (-10 if resv == "expired" else 3600)
+        kind = "gpu" if resv in ("gpu", "expired") else "pytest"
+        (tmp_path / "rosy-jobs" / "isaac-abc.resv").write_text(f"{until} {kind} 6 8\n")
+    out = subprocess.run(["bash", "-c", rj.ISAAC_GPU_GUARD + 'echo "cuda=${CUDA_VISIBLE_DEVICES-unset}"'],
+                         env={"HOME": str(tmp_path), "PATH": "/usr/bin:/bin"}, capture_output=True, text=True)
+    assert ("cuda=\n" in out.stdout) is hidden and ("cuda=unset" in out.stdout) is not hidden, out.stdout
+    assert ("Isaac holds the GPU" in out.stdout) is hidden
+    assert rj.ISAAC_GPU_GUARD in rj.JOB

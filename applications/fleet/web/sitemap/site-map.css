@@ -1,9 +1,7 @@
 /* D-741 2 — 본문은 칸이다. 아래 60rem 접힘은 뷰포트가 아니라 레일과 하위 탐색(304px)을 뺀 본문 폭에 답한다(D-359 §6.3). 값의 이유는 surfaces.yaml에 있다. */
 main { word-break: keep-all; overflow-wrap: break-word; }
-.map-workflow { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: "trip edit" "run edit"; gap: var(--space-4); align-items: start; }
-.map-workflow > [aria-labelledby="trip-heading"] { grid-area: trip; }
-.map-workflow > [aria-labelledby="run-heading"] { grid-area: run; }
-.map-workflow > [aria-labelledby="edit-heading"] { grid-area: edit; }
+/* D-926 3: one sub-nav screen shows at a time, so trip, run and edit stack in one column. */
+.map-workflow { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
 .plane-tools { min-width: 0; }
 .survey-form { margin-block: var(--space-3); }
 .survey-elements { max-height: 16rem; overflow-y: auto; padding-inline-start: var(--space-5); }
@@ -60,7 +58,6 @@ a { color: var(--text-primary); }
 #robot-layer .robot-label { fill: var(--ink); font: var(--text-micro) var(--mono); text-anchor: middle; paint-order: stroke; stroke: var(--surface-flat); stroke-width: 3px; }
 #trip-actions { margin: 0; padding-inline-start: var(--space-5); }
 @container (width < 60rem) {
-  .map-workflow { grid-template-columns: minmax(0, 1fr); grid-template-areas: "trip" "run" "edit"; }
   .form { grid-template-columns: 1fr; }
   .map-viewport { overflow-x: auto; }
   .map-scroll-hint { display: block; }
