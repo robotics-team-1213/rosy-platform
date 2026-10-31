@@ -164,3 +164,13 @@ def test_native_camera_encodes_once_without_ros_and_releases_device(monkeypatch,
     sample = SnapshotChannel('/top_camera/image_raw').read()
     assert sample['payload'] == b'jpeg' and sample['quality'] == {'source': 'original'}
     assert events == ['watchdog', 'quality', 'encode', 'release']
+
+
+def test_a_raw_format_is_used_only_when_the_camera_role_names_it(camera):
+    """2026-10-31: the RealSense D435 colour node offers no MJPEG; its role sets ROSY_CAMERA_FOURCC=YUYV."""
+    cv, cap = camera
+    cv.VideoWriter_fourcc = lambda *chars: {"MJPG": 1196444237, "YUYV": 1448695129}["".join(chars)]
+    assert open_capture(cv, "/dev/v4l/by-id/selected-camera", "YUYV") is cap and cap.values[6] == 1448695129
+    cap.get = lambda key: 1448695129 if key == cv.CAP_PROP_FOURCC else cap.values[key]
+    with pytest.raises(OSError, match="differs from MJPG"):  # the default still refuses a raw stream
+        open_capture(cv, "/dev/v4l/by-id/selected-camera")

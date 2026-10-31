@@ -13199,6 +13199,14 @@ osy-d395-s1d\`.
 - 결정: 없음
 - 교훈: 기존 교훈 갱신
 
+## 2026-10-31 · uncommitted · fix(land): 자동 묶음 착지를 끈다
+- 변경: `tools/land_batch.py`(`AUTO` 기본 거짓, `ROSY_LAND_BATCH=1`로 다시 켬), `test/test_land_batch.py`(묶음 시험은 `AUTO`를 켜고 돎, 꺼짐 시험 추가), D-889 추가 9
+- 근거: 48시간 자동 묶음 97번 중 착지 28·멈춤 43, 착지 87건 중 묶음 4건, 10-31 대기열 정지가 모두 묶음에서 나옴(사용자 결정)
+- 증거: 원격 `test/test_land_batch.py`·`test/test_land.py`·`test/test_land_queue.py`·`test/test_land_prepare.py`·`test/test_harness_contracts.py`
+- gate 변화: 없음
+- 결정: D-889 추가 9(사용자 결정 2026-10-31)
+- 교훈: 없음
+
 ## 2026-10-31 · uncommitted · omx: 재배선 뒤 장치 식별 교훈
 - 변경: `docs/solutions/runtime-errors/omx-cell-device-identity-after-rewiring-2026-10-31.md` (동일 시리얼 Innomaker는 by-path, RealSense 노드는 USB 인터페이스 udev 이름, 팔 좌우는 LED 차분, 확인은 `omx_devices.py scan`)
 - 증거: 현장 PC 실측(PING·LED·udev 링크·영상). depth(USB 2.0)는 미해결로 남김
