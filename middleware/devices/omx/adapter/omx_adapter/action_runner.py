@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Callable, Mapping, Protocol
@@ -15,6 +16,7 @@ from .local_stop import LocalStopBlocked
 from .managed_transfer_scope import validate_transfer_owner
 from .phase_recorder import ActionPhaseRecorder
 
+_LOG = logging.getLogger(__name__)
 
 # Kinds the ordered phase runner may execute, and the only kind the direct
 # driver path admits. CELL_TRANSFER runs through the phase runner only (D-402 §3).
@@ -274,6 +276,8 @@ class ActionRunner:
                 self._phase_runners[identity] = phase_runner
                 start()
             except Exception:
+                # The receipt says only START_UNKNOWN; the cause must still reach the owner's log.
+                _LOG.exception("phase runner start failed for %s", grant.action_id)
                 current = self.store.get_action(grant.action_id)
                 if current is not None and current["state"] in {
                     "SUBMITTING", "ACCEPTED", "RUNNING", "CANCEL_REQUESTED", "UNKNOWN",
