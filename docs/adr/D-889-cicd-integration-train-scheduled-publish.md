@@ -331,3 +331,14 @@
 4. safety 경로를 건드린 브랜치와 `--tests`를 직접 준 착지는 지금처럼 혼자 간다(이 ADR 3). `affected` 묶음이 main과 합친 뒤 FULL을 고르면 지금처럼 멈추고 무리별로 다시 묶인다.
 
 **구현.** `tools/land_batch.py`(`group_of`, `batchable`이 무리를 돌려줌, `eligible`·`former`·`lead`의 `kind`, `KFULL`), `test/test_land_batch.py`.
+
+### 추가 7 (2026-10-31): 지금 main에서 시험한 표가 먼저 (사용자 결정 2026-10-31)
+
+**왜.** 10-30~31 24시간 동안 착지 53건 중 24건이 차례 전 시험을 두 번 이상 돌렸다. 다시 돈 35번 중 30번은 기다리는 동안 main이 움직인 경우였다(`land_prepare.again`). 약 984분이 그렇게 사라졌다. 앞 표가 오래된 main에서 시험한 채로 먼저 차례를 받으면, 그 표는 어차피 main의 변경분을 다시 시험해야 하고, 뒤에서 지금 main으로 이미 시험을 마친 표도 main이 움직이니 다시 시험해야 했다. safety 경로가 끼면 이 ADR 6에 따라 매번 FULL이다.
+
+**결정.**
+1. `waiting` 표가 시험한 main(`land_full.restore`, 표의 `tested`)이 지금 main과 같으면, 그보다 앞서 `waiting`이면서 오래된 main에서 시험한 표를 기다리지 않는다(`land_queue.blockers`).
+2. 시험 범위는 바뀌지 않는다. 차례 순서만 바뀐다. 차례를 쥔 표와 급한 표(추가 5)는 지금처럼 늘 막는다.
+3. 공정성: 앞지를 수 있는 것은 그 표가 `waiting`이 된 지 `PASS_CAP_S`(1시간)가 안 됐을 때뿐이다. 그 뒤로는 순서대로 간다. 이 규칙 전의 land.py가 만든 표(`waiting_since` 없음)는 앞지르지 않는다.
+
+**구현.** `tools/land_queue.py`(`blockers`, `current_main`, `PASS_CAP_S`, `wait(tested=)`), `tools/land_prepare.py`·`tools/land_batch.py`(대기 때 `tested` 전달), `test/test_land_queue.py`. 착지 코드는 main의 것으로 돌므로(`land_checks.landed_copy`) 이 규칙은 main에 들어간 뒤 시작한 착지부터 적용된다.
