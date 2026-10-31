@@ -114,8 +114,9 @@ def taken(tickets: list[dict]) -> set[str]:
 def eligible(land, wt: Path, row: dict, kind: str = "affected", carried_now: set[str] = frozenset()) -> bool:
     """A waiting or pending ticket another landing may carry: this host, a clean branch at its worktree's HEAD."""
     other, name = Path(row.get("worktree") or "."), row.get("branch") or ""
+    # An urgent ticket (D-889 addendum 5) lands on its own: carried, it waited on an ordinary leader (2026-10-31).
     if (row.get("batch_auto") is not True or row.get("status") not in ("waiting", "pending")
-            or row.get("host") != socket.gethostname()):
+            or row.get("host") != socket.gethostname() or row.get("urgent")):
         return False
     if (row.get("batch") or name in carried_now or name in ("", "main", "HEAD") or not other.is_dir()
             or other.resolve() == wt.resolve()):
