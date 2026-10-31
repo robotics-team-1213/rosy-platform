@@ -97,6 +97,13 @@ class WorkcellCamera(_StrictModel):
     # depth: the topic carries a colour-mapped preview and `<topic>:depth16` the raw 16-bit depth (camera_source)
     stream: Literal["color", "depth", "ir"] = "color"
 
+    @model_serializer(mode='wrap')
+    def omit_default_stream(self, handler):  # a colour camera's manifest round-trips unchanged
+        result = handler(self)
+        if self.stream == "color":
+            result.pop("stream", None)
+        return result
+
 
 class WorkcellObservation(_StrictModel):
     workcell_id: Identifier
