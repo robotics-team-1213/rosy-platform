@@ -1156,6 +1156,7 @@ safety_modules:
   - operations/fleet/fleet/server/console/console.py
   - operations/fleet/fleet/server/console/observe.py  # D-430 admission observation extracted from console
   - operations/fleet/fleet/server/console/goal_admission.py  # D-430 pure goal-admission hold shapes (console helper)
+  - operations/fleet/fleet/server/console/degraded_reroute.py  # ADR-1000 MSN-004 stop-then-reroute of degraded robots (console helper)
   - operations/fleet/fleet/server/goal_lease.py
   - operations/fleet/fleet/server/tether_watch.py
 
@@ -1171,6 +1172,7 @@ safety_anchors:
   - {symbol: fleet.server.observe.observe_states}  # Internal admission observation helper
   - {symbol: fleet.server.goal_admission.QueueDecision}  # D-430 frozen hold shapes (console helper)
   - {symbol: fleet.server.goal_admission.response_of}
+  - {symbol: fleet.server.degraded_reroute.reroute_degraded}  # ADR-1000 MSN-004 stop-then-reroute (console helper)
   - {symbol: fleet.swarm.session_lifecycle.FormationLifecycle, public: true}
   - {symbol: fleet.swarm.session_lifecycle.EVENT_TYPES, public: true}
   - {symbol: fleet.swarm.session_lifecycle.TRIGGERS, public: true}

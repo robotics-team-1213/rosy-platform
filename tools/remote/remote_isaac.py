@@ -160,9 +160,13 @@ def _run_once(scenario, config, sha, directory, remote, *, parent, sleep, fetch,
     import time
     sleep = sleep or time.sleep
     fetch = fetch or fetch_snapshot
-    remote.prepare(_sha(sha))
+    _sha(sha)
     for attempt in range(attempts):
-        checked = remote.call(sha, {'action': 'check', 'scenario_id': scenario, 'config': config, 'source_sha': sha})
+        try:  # nothing has started yet, so a lost SSH reply here is retried (2026-10-31: two runs lost at the check)
+            remote.prepare(sha)
+            checked = remote.call(sha, {'action': 'check', 'scenario_id': scenario, 'config': config, 'source_sha': sha})
+        except (ConnectionError, OSError) as exc:
+            checked = {'reason': f'model PC unreachable: {exc}'}
         if checked.get('ready') is True:
             break
         if attempt + 1 < attempts:
@@ -188,7 +192,15 @@ def _run_once(scenario, config, sha, directory, remote, *, parent, sleep, fetch,
     else:
         raise ValueError('Run still active; continue with status --receipt')
     refused = (row.get('result') or {}).get('reason') == 'admission_refused'  # nothing ran; keep snapshots/ for the retry
-    snapshot = fetch(read_receipt(receipt), remote, directory / 'snapshots') if row['status'] in TERMINAL and not refused else None
+    snapshot = None
+    for tries in range(3 if row['status'] in TERMINAL and not refused else 0):
+        try:  # each fetch writes a new snapshot directory, so a fetch cut off midway (run 65e5) is simply redone
+            snapshot = fetch(read_receipt(receipt), remote, directory / 'snapshots')
+            break
+        except (ConnectionError, OSError):
+            if tries == 2:
+                raise
+            sleep(interval)
     return {'run_id': row['run_id'], 'status': row['status'], 'result': row.get('result'),
             'snapshot_directory': str(snapshot) if snapshot else None}
 
