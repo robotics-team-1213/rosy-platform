@@ -16,6 +16,7 @@ following-error, stall and grasp checks as any taught chunk. Everything tunable 
 from __future__ import annotations
 
 import argparse
+from dataclasses import replace
 import json
 import math
 import sys
@@ -68,8 +69,18 @@ class Planner:
         self.fps = plan["fps"]
         self.kinematics_root = kinematics_root
 
+    def limits_at(self, x, y):
+        """The IK limits at (x, y). A ``limits.low_zones`` rectangle {"x": [lo, hi], "y": [lo, hi], "z_min_m": z}
+        lowers the floor only there: the left arm's belt end lies below the table it stands on (2026-11-01), and a
+        floor low enough for the belt everywhere would let the jaws into the table."""
+        for zone in self.plan["limits"].get("low_zones", ()):
+            if zone["x"][0] <= x <= zone["x"][1] and zone["y"][0] <= y <= zone["y"][1]:
+                floor = min(zone["z_min_m"], self.limits.workspace_min_m[2])
+                return replace(self.limits, workspace_min_m=(*self.limits.workspace_min_m[:2], floor))
+        return self.limits
+
     def solve(self, x, y, z, yaw_deg, reference_q5):
-        result = self.kin.solve_top_down(self.TopDownPose(x, y, z, math.radians(yaw_deg)), self.limits,
+        result = self.kin.solve_top_down(self.TopDownPose(x, y, z, math.radians(yaw_deg)), self.limits_at(x, y),
                                          reference_q5=reference_q5)
         if not result.ok:
             raise SystemExit(f"IK {result.reason} at ({x:.3f}, {y:.3f}, {z:.3f}) yaw {yaw_deg}: {result.detail}")
@@ -100,7 +111,7 @@ class Planner:
         S's wrist stops at 1.89 rad (2026-10-27), so its lifts shorten here instead of failing at the guard."""
         if self.reach_margin(x, y, z, yaw_deg) < REACH_MARGIN_M:
             return False
-        return self.kin.solve_top_down(self.TopDownPose(x, y, z, math.radians(yaw_deg)), self.limits).ok
+        return self.kin.solve_top_down(self.TopDownPose(x, y, z, math.radians(yaw_deg)), self.limits_at(x, y)).ok
 
     def line(self, start, end, speed_m_s, yaw_deg, grip, reference_q5):
         """Frames along a straight Cartesian line at `speed_m_s`, one IK solve per frame."""
