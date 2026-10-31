@@ -1033,3 +1033,9 @@
 - 변경: primary/quiet 초점을 같은 pressed fill·foreground 테두리/글자로 통일하고 아이콘도 상태별 글자색을 따른다. 기본·blur·disabled·pressed 순서와 콜백은 보존한다.
 - 증거: dab8 AVD6건 중 primary1실패를 재현했다.42c의 edge 검사 통과 뒤 독립 이미지 검토에서 약한 구별을 P2로 확인해 center fill·focus/blur 글자·아이콘 tint·disabled 회귀를 보강했다.473c SDK35 debug/test APK 성공, JVM110pass/1skip(ShellPageProbe), 동일 APK의600×1000/font1.3와1280×800/font1.0에서 각각6pass. 최종30PNG 전수 독립 검토로 P2 해결·새 P1/P2 없음을 확인했으며 첫 수정30장과 구분한다.
 - gate 변화: 없음. 무동작 debug fixture이며 실제 연결·운전·TalkBack·실물·release 수용이 아니다. 정본: docs/validation/platform-ui-integration-2026-10-29/result.md. CE: 해당 없음 — 실제 상태 차이와 시험의 보강 기준을 코드·회귀·이미지 기록이 보존한다.
+
+## 2026-10-31 · uncommitted · 피어 공통 소스로 이동(D-939)
+
+- 변경: 이름만 다른 피어 서명·첫 접촉 CA 고정·Keystore 신원 사본(Pilot `PeerProof`/`PeerTls`/`AndroidPeerIdentity`, Cam `CameraProof`/`CameraTls`/`AndroidCameraIdentity`)을 `shared/android/peer` 한 곳으로 모았다. 두 앱이 `srcDir`로 함께 컴파일한다. 신원은 `AndroidPeerIdentity(context, app)`이고 기존 키 별칭·표시 파일·client id 접두어를 그대로 쓴다. 세션·보관소는 앱에 남긴다.
+- 증거: 새 구조 시험 `test/architecture/test_app_shared_sources.py` 3건이 main 배치에서 RED(빌드 미포함·12개 다시 선언·사본 4쌍), 이 브랜치에서 GREEN이다. 로컬 SDK35 빌드: Cam JVM 443 pass/0 skip, Pilot JVM 110 pass/1 skip(기존 ShellPageProbe), 두 앱 assembleDebug 성공. lint 0 error.
+- gate 변화: 없음. 실제 태블릿·휴대폰에서 기존 승인 관계 유지는 설치 후 확인한다. CE: 해당 없음 — 규칙은 D-939와 구조 시험에 있다.

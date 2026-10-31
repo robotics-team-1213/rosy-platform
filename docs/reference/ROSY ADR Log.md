@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-939 | 앱 연동 코드는 한 곳에 둔다 — 앱 사이 사본 금지. [전문](../adr/D-939-app-link-shared-sources.md) | Accepted (2026-10-31, 사용자 결정; Android peer 공통 소스·구조 시험, 기기 수용 별도) |
 | D-938 | 팔 이송 정책 승인 — D-865 승인 범위를 ARM_TRANSFER로 확장. [전문](../adr/D-938-arm-transfer-policy-admission.md) | Accepted (2026-10-31, 사용자 결정; simulation 팔 이송 HTTP 전용, 현장 범위 설정·수용 별도) |
 | D-936 | ROSY Monitoring은 관제 PC에서 서명 사이트 스택의 선택 서비스로 실행한다 (D-876 배치 보충). [전문](../adr/D-936-monitoring-site-stack-service.md) | Accepted (2026-10-30, 사용자 결정; 관제 PC 반영·수용 별도) |
 | D-935 | 공급암 S 운반 무게는 검증한 상한으로 묶고, 운반마다 실제 짐을 확인해 기록한다 (D-911 보충). [전문](../adr/D-935-arm-s-payload-bound-amends-d911.md) | Accepted (2026-10-30, 사용자 결정; 실측·실물 수용 별도) |

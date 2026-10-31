@@ -1,5 +1,6 @@
 package io.github.livsbittt.rosy.pilot
 
+import io.github.livsbittt.rosy.peer.AndroidPeerIdentity
 import io.github.livsbittt.rosy.cam.account.AndroidAccount
 import android.app.Activity
 import android.app.AlertDialog
@@ -95,7 +96,7 @@ class MainActivity : Activity() {
     }
     private val vault by lazy { PairingVault(this) }
     private val peerVault by lazy { PeerRelationshipVault(this) }
-    private val peerUi by lazy { PeerApprovalUi(this, { AndroidPeerIdentity(this) }, peerVault) }
+    private val peerUi by lazy { PeerApprovalUi(this, { AndroidPeerIdentity(this, "pilot") }, peerVault) }
     private var candidates = CandidateStore()
     private var discovery: RobotDiscovery? = null
     private var proxy: PilotProxy? = null
