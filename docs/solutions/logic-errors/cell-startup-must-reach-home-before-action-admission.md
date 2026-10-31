@@ -101,3 +101,17 @@ g2-box16-41d9b51e0-r5/evidence/run/startup-home.json, owner.log, result.json에 
 새 시뮬 fixture는 서버 준비, 시작 자세 준비, 실행 admission을 각각 확인한다.
 첫 Action 전에 단일 owner 경로의 홈 복귀와 전진하는 실제 joint readback을 증명하고,
 준비 실패 원문을 저장해 다음 조사에서 예외를 추정하지 않게 한다.
+
+## 2026-10-31 갱신: ARM_TRANSFER와 MuJoCo 시뮬
+
+D-927 C4에서 Fleet가 관리하는 ARM_TRANSFER를 MuJoCo 시뮬 소유자로 처음 돌렸을 때 같은 전제가 다시 걸렸다.
+이번에는 `ActionRunner`가 시작 예외를 로그로 남기게 고친 뒤(`phase runner start failed for ...`) 원인을 추정하지 않고
+`TransferPlanRejected: HOME_DEVIATION`을 직접 확인했다. 영점 관절로 시작한 시뮬은 카탈로그 홈과 달랐다.
+
+- 시뮬의 해결은 시작 조건이다: `tools/sim/transfer_installation.py`가 소유자와 같은 IK로 카탈로그 홈 관절과 열린
+  그리퍼(`home_joints`)를 설치 문서에 적고, `run_arm_transfer_sim.sh`가 ros2_control `initial_value`와 MuJoCo
+  `qpos`를 같은 값으로 시작한다(`--initial`). 명령을 내는 두 번째 발행자가 아니며 계획기 검사는 그대로다.
+- ros2_control 쪽만 주면 명령 인터페이스 초기값이 상태와 어긋나고, MuJoCo 쪽만 주면 컨트롤러가 0을 보낸다.
+  두 곳을 함께 준다. 실물 장비의 시작 경로(owner 단일 경로 홈 복귀)는 이 변경과 무관하게 위 결정을 따른다.
+- 증거: AI PC `CHECK=1 tools/sim/run_arm_transfer_sim.sh`에서 PRE_DISPATCH 조건 통과, 이어 Harbor
+  `real_fleet_http --arm-only --sim-arm`에서 approach·grasp·transfer·release가 MuJoCo에서 진행됐다.
