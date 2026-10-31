@@ -24,6 +24,7 @@ Runner = Callable[..., subprocess.CompletedProcess]
 SERVICES = ("fleet", "vision", "proxy", "postgres")
 PROJECT = "rosy-site"
 STACK_UNIT = "rosy-site-stack.service"
+MONITORING_OVERLAY = ["-f", "/opt/rosy/candidate/deploy/site/compose.monitoring.yaml"]
 SIGNATURE = "release.json.sig"
 EXIT_OK = 0
 EXIT_FAILED = 1
@@ -49,9 +50,10 @@ def allowed_overlays(env: dict[str, str]) -> list[str]:
     allowed = [[], pairing, omx, pairing + omx]  # D-785; Account is appended last.
     workcell = ["-f", "/opt/rosy/candidate/deploy/site/compose.workcell.yaml"]
     allowed += [base + workcell for base in allowed]
+    allowed += [base + MONITORING_OVERLAY for base in allowed]  # D-936
     if shlex.split(env.get("ROSY_SITE_PAIRING_COMPOSE", "")) not in allowed + [base + account for base in allowed]:
         raise Refused("ROSY_SITE_PAIRING_COMPOSE adds a Compose file other than "
-                      "the candidate's pairing, omx, workcell and Account overlays")
+                      "the candidate's pairing, omx, workcell, monitoring and Account overlays")
     if env.get("COMPOSE_FILE") or env.get("COMPOSE_PROFILES"):
         raise Refused("site.env sets COMPOSE_FILE/COMPOSE_PROFILES")
     return shlex.split(env.get("ROSY_SITE_PAIRING_COMPOSE", ""))
@@ -60,7 +62,7 @@ def allowed_overlays(env: dict[str, str]) -> list[str]:
 def check_overrides(env: dict[str, str], commit: str, run, compose, services=SERVICES,
                     image_references: dict | None = None) -> None:
     """Refuse when anything could pin a site image other than the candidate's."""
-    allowed_overlays(env)
+    overlays = allowed_overlays(env)
     link_compose = "/opt/rosy/candidate/deploy/site/compose.yaml"
     unit = run(["systemctl", "cat", STACK_UNIT]).stdout
     for line in unit.splitlines():
@@ -85,11 +87,14 @@ def check_overrides(env: dict[str, str], commit: str, run, compose, services=SER
         configured = json.loads(result.stdout).get("services") or {}
     except (json.JSONDecodeError, AttributeError):
         raise Transient("docker compose config output is not JSON") from None
-    if not isinstance(configured, dict) or set(configured) != set(services):
+    # D-936: Monitoring is no candidate image; it may only run the candidate's Fleet image.
+    companions = {"monitoring": "fleet"} if MONITORING_OVERLAY[1] in overlays and "fleet" in services else {}
+    if not isinstance(configured, dict) or set(configured) != set(services) | set(companions):
         raise Refused("Compose service set differs from the signed candidate")
-    for service in services:
+    for service in (*services, *companions):
         image = (configured.get(service) or {}).get("image")
-        expected = (image_references or {}).get(service, f"rosy-site-{service}:{commit}")
+        owner = companions.get(service, service)
+        expected = (image_references or {}).get(owner, f"rosy-site-{owner}:{commit}")
         if image != expected:
             raise Refused(f"Compose resolves {service} to {image!r}, not the candidate "
                           f"image; remove the image override first")
@@ -399,7 +404,7 @@ def runtime_reason(rows, hashes: dict, run) -> str:
         if not isinstance(row, dict):
             continue
         service = row.get('Service')
-        if service not in SERVICES:
+        if service not in (*SERVICES, 'monitoring'):
             continue
         try:
             details = json.loads(run(['docker', 'container', 'inspect', row['ID']]).stdout)[0]

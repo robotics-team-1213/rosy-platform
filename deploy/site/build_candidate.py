@@ -25,6 +25,7 @@ DEPLOY_FILES = (
     "rosy-site-firewall-check.timer",
     "discovery-token.template.txt", "site_db.py", "site_users.py", "candidate_signing.py",
     "compose.pairing.yaml", "compose.omx.yaml", "compose.workcell.yaml", "pairing-sync-token.template.txt",
+    "compose.monitoring.yaml", "Caddyfile.monitoring",
     "compose.account.yaml", "Caddyfile.account",
     "sign_candidate.py", "verify_candidate.py",
 )
@@ -294,7 +295,8 @@ def build_candidate(root: Path, output_dir: Path, *, runner: Runner = subprocess
 
     for name, config, label in (
             ("compose.yaml", "Caddyfile", "org.rosy.site-caddy-sha256"),
-            ("compose.account.yaml", "Caddyfile.account", "org.rosy.site-account-caddy-sha256")):
+            ("compose.account.yaml", "Caddyfile.account", "org.rosy.site-account-caddy-sha256"),
+            ("compose.monitoring.yaml", "Caddyfile.monitoring", "org.rosy.site-monitoring-caddy-sha256")):
         path = deploy_dir / name
         text = path.read_text(encoding="utf-8")
         text = text.replace(f"{label}: unbuilt", f'{label}: "{_sha256(deploy_dir / config)}"')
