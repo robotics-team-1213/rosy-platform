@@ -25,11 +25,18 @@ pids+=($!)
 for _ in $(seq 240); do grep -q OMX_TOPIC_BACKEND_READY "$OUT/layer.log" && break; sleep 0.5; done
 grep -q OMX_TOPIC_BACKEND_READY "$OUT/layer.log" || { tail -n 20 "$OUT/layer.log" "$OUT/backend.log"; exit 1; }
 instance=$(python3 -c "import json,sys; print(next(iter(json.load(open(sys.argv[1])))))" "$OUT/installation.bases.json")
-ROSY_SIM_REPO="$repo" ROSY_FLEET_PEER_UID="${ROSY_FLEET_PEER_UID:-$(id -u)}" ROSY_CELL_OWNER_JOURNAL="$OUT/journal" \
-  ROSY_OMX_SOCKET_ROOT="$OUT/sockets" ROSY_ARM_TRANSFER_INSTALLATION="$OUT/installation.json" \
-  ROSY_FLEET_FENCE_URL="${ROSY_FLEET_FENCE_URL:-http://127.0.0.1:9/api/fleet/dispatch-control}" \
-  ROSY_FLEET_FENCE_TOKEN="${ROSY_FLEET_FENCE_TOKEN:-no-fleet-yet}" \
-  python3 "$repo/deploy/robot/omx/run_cell_owner.py" >"$OUT/owner.log" 2>&1 &
+# The owner refuses to start where it can see camera or serial nodes; on such a test PC it gets a private /dev.
+isolate=()
+if compgen -G '/dev/video*' >/dev/null || [[ -e /dev/serial/by-id ]]; then
+  isolate=("$here/without_devices.sh" "$OUT/owner.env")
+fi
+(export ROSY_SIM_REPO="$repo" ROSY_FLEET_PEER_UID="${ROSY_FLEET_PEER_UID:-$(id -u)}" \
+   ROSY_CELL_OWNER_JOURNAL="$OUT/journal" ROSY_OMX_SOCKET_ROOT="$OUT/sockets" \
+   ROSY_ARM_TRANSFER_INSTALLATION="$OUT/installation.json" \
+   ROSY_FLEET_FENCE_URL="${ROSY_FLEET_FENCE_URL:-http://127.0.0.1:9/api/fleet/dispatch-control}" \
+   ROSY_FLEET_FENCE_TOKEN="${ROSY_FLEET_FENCE_TOKEN:-no-fleet-yet}"
+ export -p >"$OUT/owner.env"; chmod 600 "$OUT/owner.env"
+ exec "${isolate[@]}" python3 "$repo/deploy/robot/omx/run_cell_owner.py") >"$OUT/owner.log" 2>&1 &
 pids+=($!)
 python3 "$here/transfer_state_writer.py" --assets "$repo/learning/envs/isaac/assets/open_manipulator_description" \
   --bases "$OUT/installation.bases.json" --instance "$instance" --state "$OUT/sim-state.json" \
