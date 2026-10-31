@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-940 | 중복 정의 게이트와 의도 중복 등록부를 둔다. [전문](../adr/D-940-duplicate-definitions-gate.md) | Accepted (2026-11-01, 사용자 결정; 원격 시험·착지는 파이프라인 기록) |
 | D-938 | 팔 이송 정책 승인 — D-865 승인 범위를 ARM_TRANSFER로 확장. [전문](../adr/D-938-arm-transfer-policy-admission.md) | Accepted (2026-10-31, 사용자 결정; simulation 팔 이송 HTTP 전용, 현장 범위 설정·수용 별도) |
 | D-936 | ROSY Monitoring은 관제 PC에서 서명 사이트 스택의 선택 서비스로 실행한다 (D-876 배치 보충). [전문](../adr/D-936-monitoring-site-stack-service.md) | Accepted (2026-10-30, 사용자 결정; 관제 PC 반영·수용 별도) |
 | D-935 | 공급암 S 운반 무게는 검증한 상한으로 묶고, 운반마다 실제 짐을 확인해 기록한다 (D-911 보충). [전문](../adr/D-935-arm-s-payload-bound-amends-d911.md) | Accepted (2026-10-30, 사용자 결정; 실측·실물 수용 별도) |
@@ -1383,3 +1384,9 @@ Fleet device ID, 실제 follower 설정, 장치별 검증·기록 경로를 별�
 **Status:** Proposed (2026-10-30). 설계만 정하며 구현·Gazebo·장비/현장 수용은 별도다.
 
 발행 루프는 로봇마다 작업 하나를 claim해 백그라운드로 보내고, 교통 판정만 콘솔 잠금 하나로 직렬화한다. 발행 중인 로봇은 claim 순서대로 기록한 직선 임시 점유를 갖고, 판정은 그 순서를 따라 우선순위를 지킨다. 스냅샷 정리는 임시 점유를 지우지 않고 잠금을 기다리지 않는다. 취소된 발행은 로봇 취소와 `UNKNOWN`으로 스스로 정리한다. 전문은 [D-928](../adr/D-928-fleet-per-robot-dispatch-serial-traffic.md).
+
+## D-940 중복 정의 게이트와 의도 중복 등록부를 둔다
+
+**Status:** Accepted (2026-11-01). 등록·구현 지시는 사용자 결정이며 원격 시험·착지는 파이프라인 기록이 증거를 가진다.
+
+두 파트 이상에 동일하게 살아 있는 최상위 정의를 AST로 그룹 지어 `known_duplicates.txt`에 갈래(정본 소비·소유 통합·보호된 의도 중복·이름 분리)와 사유로 등록하고, 미등록 신규 그룹과 사라진 행 둘 다 빨간불로 막는다. 전역 utils 신설과 관습이 다른 정의의 강제 통합은 하지 않는다(D-841 계승). 전문은 [D-940](../adr/D-940-duplicate-definitions-gate.md).
