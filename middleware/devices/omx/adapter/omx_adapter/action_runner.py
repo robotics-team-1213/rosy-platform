@@ -197,6 +197,7 @@ class ActionRunner:
         payload = request.get("payload", {}) if isinstance(request, Mapping) else {}
         if not isinstance(payload, Mapping):
             payload = {}
+        projected = projection(snapshot) if action.get('attempt_id') else None
         return {
             "mission_id": payload.get("mission_id"),
             "step_id": payload.get("step_id"),
@@ -207,9 +208,9 @@ class ActionRunner:
             "dispatch_generation": payload.get("dispatch_generation"),
             "state": action["state"], "driver_goal_id": action.get("driver_goal_id"),
             "journal_event_id": action["journal_event_id"],
-            "observed_at": action["updated_at"],
+            "observed_at": projected["observed_at"] if projected else action["updated_at"],
             "reason": reason or action.get("reason"), "created": created,
-            "phase_summaries": projection(snapshot)['phase_summaries'] if action.get('attempt_id') else [],
+            "phase_summaries": projected["phase_summaries"] if projected else [],
             **({"journal_id": snapshot["journal_id"]} if action["action_kind"] == "ARM_TRANSFER" else {}),
         }
 
