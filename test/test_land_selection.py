@@ -514,9 +514,9 @@ def test_a_landed_delta_repeats_its_browser_tests_only_for_a_branch_that_changes
     selection = load_selection()
     land, payload, _ = caller
     ui = ["ROSY_RUN_BROWSER_TESTS=1", "browser/test"]
-    land.browser_tier = lambda wt, base, head=None: ui if head else []  # own change (base=main tip): no UI
+    land.browser_tier = lambda wt, base, head=None: [ui] if head else []  # own change (base=main tip): no UI
     assert selection.select(land, tmp_path, "base", "python", head="main", landed=True)[0] == [["selected/test"]]
-    land.browser_tier = lambda wt, base, head=None: ui  # this branch changes UI too: both run
+    land.browser_tier = lambda wt, base, head=None: [ui]  # this branch changes UI too: both run
     assert ui in selection.select(land, tmp_path, "base", "python", head="main", landed=True)[0]
     assert ui in selection.select(land, tmp_path, "base", "python")[0], "a pretest keeps its own browser tier"
 
