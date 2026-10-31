@@ -26,7 +26,7 @@ def _beat():
 
 
 def _event(event_id="e1", seq=1, **data):
-    ev = EventMessage(event_id=event_id, seq=seq, robot_id="rosy_01", type="nav.completed", data=data or None)
+    ev = EventMessage(event_id=event_id, seq=seq, robot_id="rosy_01", type="nav.completed", data=data)
     return Envelope(type=EnvelopeType.EVENT, payload=ev.model_dump(mode="json"))
 
 
