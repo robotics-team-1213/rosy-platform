@@ -54,7 +54,8 @@ def explained_refusals(readback):
             seen = type(error).__name__
         finally:
             connection.close()
-        print(f"fence refused for epoch {epoch} generation {generation}; a 2 s read saw {seen}", flush=True)
+        print(f"fence refused for epoch {epoch} generation {generation}; a 2 s read of port {readback._port} saw {seen}",
+              flush=True)
         return False
     return current
 
