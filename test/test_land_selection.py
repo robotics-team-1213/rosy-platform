@@ -96,7 +96,7 @@ def test_landed_full_delta_runs_both_changes_own_suites_unless_safety(caller, tm
 
 
 def test_a_safety_path_in_mains_landed_delta_keeps_only_its_mapped_suites(caller, tmp_path):
-    """D-889 addendum 7: a safety change in main's delta landed with its own FULL; it no longer makes every
+    """D-889 addendum 8: a safety change in main's delta landed with its own FULL; it no longer makes every
     landing behind it repeat FULL (~745 min/day on 2026-10-30..31). This branch's own safety path still does."""
     selection = load_selection()
     land, _, calls = caller

@@ -13168,5 +13168,5 @@ osy-d395-s1d\`.
 - 근거: 10-30~31 24시간 재실행 35번 약 984분, 그중 safety 경로로 인한 FULL 재실행 약 745분(사용자 결정 "A+B 둘 다").
 - 증거: 원격 `test/test_land_selection.py`·`test/test_land.py`·`test/test_land_speculate.py`.
 - gate 변화: 없음
-- 결정: D-889 추가 7(사용자 승인 2026-10-31)
+- 결정: D-889 추가 8(사용자 승인 2026-10-31)
 - 교훈: 없음
