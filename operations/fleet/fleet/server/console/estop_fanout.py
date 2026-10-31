@@ -5,7 +5,8 @@ console.py 본체가 D-766 크기 래칫에 묶여 2026-11-01 이 판단과 함�
 
 - 한 번의 긴 대기(5 s) 대신 1.5 s 시도를 세 번 한다. Wi-Fi가 한 번 튀어도 정지를 잃지 않는다.
   `POST /safety/stop` 은 래치라 다시 보내도 같은 결과다. 로봇이 오류로 답했으면(RobotApiError)
-  그 답은 바뀌지 않으므로 다시 묻지 않는다.
+  그 답은 바뀌지 않으므로 다시 묻지 않는다. 허브 오류(모르는 로봇)는 즉시 나므로 다시 시도해도
+  기다림이 없다 — 비safety 모듈 `fleet.hub.hub` 를 import 하지 않으려고 따로 잡지 않는다(D-430 §3).
 - 대형 해제(팔로워 swarm/cancel, 대당 시한)는 정지와 나란히 돈다. 해제를 먼저 기다리면 닿지
   않는 팔로워 하나 때문에 모든 로봇의 정지가 늦는다. 릴레이는 해제의 첫 단계(로컬)라 곧 멈추고,
   늦게 닿은 참조는 EMERGENCY 래치가 막는다.
@@ -17,7 +18,6 @@ import asyncio
 import logging
 from typing import Awaitable, Callable, Optional, Sequence
 
-from fleet.hub.hub import HubError
 from fleet.swarm.api.ports import RobotApiError
 
 logger = logging.getLogger("fleet.console")
@@ -32,7 +32,7 @@ async def deliver(scatter: Callable[[str], Awaitable[dict]], robot_id: str) -> d
     for attempt in range(1, ESTOP_ATTEMPTS + 1):
         try:
             return await asyncio.wait_for(scatter(robot_id), ESTOP_ATTEMPT_S)
-        except (RobotApiError, HubError):
+        except RobotApiError:
             raise
         except Exception:
             if attempt == ESTOP_ATTEMPTS:

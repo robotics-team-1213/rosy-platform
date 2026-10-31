@@ -51,12 +51,18 @@ def test_a_robot_that_never_answers_ends_after_the_last_attempt():
     assert scatter.calls.count("rosy_01") == estop_fanout.ESTOP_ATTEMPTS
 
 
-@pytest.mark.parametrize("error", [RobotApiError("rosy_01", 409, "MODE_CONFLICT", "no"),
-                                   HubError("UNKNOWN_ROBOT", "rosy_01")])
-def test_an_answered_refusal_is_not_asked_again(error):
+def test_an_answered_refusal_is_not_asked_again():
+    error = RobotApiError("rosy_01", 409, "MODE_CONFLICT", "no")
     scatter = Scatter(error=error)
     [result] = run(estop_fanout.stop_robots(scatter, ["rosy_01"]))
     assert result is error and scatter.calls == ["rosy_01"]
+
+
+def test_an_unknown_robot_fails_without_waiting():
+    error = HubError("UNKNOWN_ROBOT", "rosy_99")
+    scatter = Scatter(error=error)
+    [result] = run(estop_fanout.stop_robots(scatter, ["rosy_99"]))
+    assert result is error and len(scatter.calls) == estop_fanout.ESTOP_ATTEMPTS
 
 
 def test_formation_release_runs_beside_the_stop_not_before_it():
