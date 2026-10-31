@@ -5194,3 +5194,10 @@
 - 증거: `operations/fleet/test/test_transfer_observer_client.py` 원격 4 passed — 실제 Fleet 앱에서 PRE_DISPATCH·POST_ACTION으로 GOAL_CONFIRMED, 팔이 zone 안·회전 중이면 거절, 끝점이 `omx_adapter` TCP FK와 일치.
 - Gate: Fleet 검증 규칙·API 변화 없음. 시뮬 관측이며 물리 근거·현장 수용이 아니다. 팔 기준 자세 파일은 S4 설치 profile 전까지의 지름길이다.
 - CE: 해당 없음 — 새 도구와 시험이 계약을 보여 준다.
+
+## 2026-10-31 · uncommitted · feat(fleet): D-938 팔 이송 정책 승인
+
+- 변경: `work/arm_transfer_policy_admission.py`(한 틱 1건, 범위 안 제안자만)와 `PhysicalTransferStore.admit_by_policy`·`proposed_ids`를 추가했다. 사람 admit과 정책 admit은 같은 `_admit`과 capability 읽기 함수를 쓴다. `PolicyAdmissionCore`에 `arm_transfer`·`proposers`·켠 운영자(`enabled_by`)를 더했고, `valid_until` 만료를 모든 종류에 적용한다. 그전에는 읽기만 하고 판정에 쓰지 않았다.
+- 증거: `test/test_arm_transfer_policy_admission.py` 원격 실행은 착지 전에 기록한다.
+- Gate: simulation 팔 이송 HTTP에서만 동작한다. 범위 설정·첫 자동 admit의 원장 대조는 현장 수용으로 따로 남긴다.
+- CE: 해당 없음 — 만료 미적용은 D-938과 회귀 시험이 보여 준다.

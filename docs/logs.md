@@ -13162,3 +13162,18 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: D-935 Accepted(사용자 결정)
 - 교훈: 없음
+
+## 2026-10-31 · uncommitted · fix(land): main 변화분의 safety 경로는 FULL 재실행을 부르지 않는다
+- 변경: `tools/land_selection.py`. 차례 전 main 변화분에 safety 경로가 있어도 이 브랜치 자신에 safety 경로가 없으면 FULL 대신 변화분과 이 브랜치의 선택을 합친 트리에서 돌린다. D-889 추가 7.
+- 근거: 10-30~31 24시간 재실행 35번 약 984분, 그중 safety 경로로 인한 FULL 재실행 약 745분(사용자 결정 "A+B 둘 다").
+- 증거: 원격 `test/test_land_selection.py`·`test/test_land.py`·`test/test_land_speculate.py`.
+- gate 변화: 없음
+- 결정: D-889 추가 8(사용자 승인 2026-10-31)
+- 교훈: 없음
+
+## 2026-10-31 · uncommitted · fleet: D-938 팔 이송 정책 승인
+- 변경: `docs/adr/D-938`, ADR Log 행, API Reference v1.335 절과 변경 이력, `platform_parts.yaml` safety 모듈 등록
+- 증거: Fleet 원격 회귀(착지 기록에 남김). 실물·현장 수용은 아직
+- gate 변화: 없음
+- 결정: D-938 Accepted(사용자 결정)
+- 교훈: D-865 `valid_until` 미적용을 함께 고침

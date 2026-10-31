@@ -532,6 +532,14 @@ def test_a_slow_host_does_not_hold_back_queued_invocations(monkeypatch, tmp_path
     assert [h for h, _ in seen].count("slow@2") == 1 and sorted(p for _, p in seen) == list("01234")
 
 
+def test_a_full_hosts_default_lanes_take_four_of_a_full_rounds_browser_chunks():
+    """2026-10-31: the per-host cap counts every run's browser jobs; 2 left 4 slots for all preparing landings."""
+    room = {"cores": 18, "mem": 18, "site": False, "light": False}
+    b = [rp.BROWSER_ENV, "t/a_browser.py"]
+    assert wq.workers(["a"], [["t"], *[b] * 12], {"a": dict(room)}).count(("a", "lane")) == 4
+    assert wq.workers(["a"], [["t"], *[b] * 12], {"a": {**room, "browser_jobs": 3}}).count(("a", "lane")) == 1
+
+
 def test_full_lab_hosts_get_browser_lanes_and_light_site_or_sim_holding_hosts_do_not(monkeypatch):
     monkeypatch.setattr(wq, "BROWSER_PER_HOST", 2)
     room = {"cores": 14, "mem": 15, "site": False, "light": False}
@@ -558,8 +566,11 @@ def test_host_alone_suites_go_to_the_first_configured_host_and_fall_back_without
     assert wq.wanted("any" + wq.SKIP_ALONE, [["t"], gz])(1) is False
     assert wq.wanted("any" + wq.SKIP_ALONE, [["t"], gz])(0) is True
     assert rp.workers(["ai"], [gz], {}, order) == [("ai", "any")]  # model PC not placed: as before
+    assert rp.workers(["ai", "model"], [gz], {"model": {"sim_held": 1}}, order) == [("ai", "any")]  # sim on it
     assert rp.workers(["site", "ai"], [gz], {"site": {"site": True}}, ["site", "ai"]) == [("ai", "any")]
     assert wq.guard(None, "main" + wq.SKIP_ALONE, gz) is not None
+    work = wq.Work([0, 1, 2])  # largest first: 2 is the smallest, a light host's pick unless it is host-alone
+    assert work.take_small(lambda i: i != 2) == 1 and work.take_small() == 2
 
 
 def test_browser_lanes_run_beside_main_capped_per_host_and_an_alone_chunk_runs_without_them(monkeypatch, tmp_path):
@@ -738,8 +749,20 @@ def test_polls_that_fail_then_recover_give_the_real_code_and_the_whole_log(tmp_p
     log = tmp_path / "run-1.txt"
     assert rj.run("h", "r", 0, log, ["r", "d", ""], ["test/x.py"], 60, [], call=fake, sleep=sleep, clock=clock) == 1
     # Byte-identical: a stuck offset would duplicate a chunk, an early advance would drop one.
-    assert log.read_bytes() == fake.log == b"".join(chunks)
+    body, timing = log.read_bytes().split(b"\n" + rj.TIMING.encode())
+    assert body == fake.log == b"".join(chunks)
     assert fake.scripts[0] == rj.START and fake.polls == 6
+    assert timing.startswith(b" host=h start=") and b" wait_s=0 run_s=" in timing  # land_checks.timing's line
+
+
+def test_the_timing_line_splits_host_room_wait_from_run_time(tmp_path):
+    chunks = [rj.WAIT + b" (2 job(s))\n", b"", b"", rj.ROOM + b"\n", b"", b"1 passed\n"]
+    fake = FakeJobHost(chunks, 0)
+    now, sleep, clock = _clock()
+    log = tmp_path / "run-1.txt"
+    assert rj.run("rosy@10.0.0.9", "r", 0, log, ["r", "d", ""], [], 60, [], call=fake, sleep=sleep, clock=clock) == 0
+    line = log.read_text().splitlines()[-1]
+    assert " host=rosy " in line and "10.0.0.9" not in line and " wait_s=30 run_s=20" in line, line
 
 
 def test_polls_failing_past_the_budget_raise_lost_and_run_on_leaves_the_job(tmp_path, monkeypatch, capsys):
