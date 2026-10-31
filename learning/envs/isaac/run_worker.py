@@ -30,6 +30,8 @@ def _budget(directory, found=None):
                 info = path.lstat()
             except FileNotFoundError:
                 continue
+            if stat.S_ISREG(info.st_mode) and info.st_nlink == 0:
+                continue  # being deleted: run f3eb stopped on a plan-request file the task was removing
             if (stat.S_ISLNK(info.st_mode) or not (stat.S_ISREG(info.st_mode) or stat.S_ISDIR(info.st_mode))
                     or stat.S_ISREG(info.st_mode) and info.st_nlink != 1):
                 if found is not None:
