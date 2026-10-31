@@ -13233,3 +13233,10 @@ osy-d395-s1d\`.
 - 결정: 없음
 - 교훈: 없음
 
+## 2026-11-01 · uncommitted · omx: 통로 점검은 보이는 표면 밖이면 거절(낡은 surface_px), 카메라 교체 교훈 갱신
+- 변경: `cell_corridor.check`에 `surface_px` 밖 통로 픽셀 `off_surface` → 거절. `omx-cell-device-identity-after-rewiring-2026-10-31.md`에 카메라 교체 뒤 surface_px·surface_lab 무효 절 추가
+- 증거: 현장 실 프레임(읽기 전용, 팔 정지) — 낡은 폴리곤은 전경 0 px로 컨테이너 위 놓기를 통과시켰고, 수정 후 off_surface 10844 px로 거절. 현재 표면 색 3개로는 차 있는 칸 놓기 거절, `--stack`이면 통과
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 기존 교훈 갱신(카메라 교체 시 이미지 좌표 설정도 무효)
+

@@ -70,3 +70,11 @@ def test_a_blob_well_off_the_path_is_not_in_the_way():
 
 def test_a_path_off_the_map_is_not_clear():
     assert not cc.check(leg(), empty(), ROI, lambda p: None)["clear"]
+
+
+def test_a_corridor_beyond_the_seen_surface_is_not_clear():
+    whole = [[0, 0], [399, 0], [399, 399], [0, 399]]
+    assert cc.check(leg(), empty(), ROI, to_px, surface_px=whole)["clear"]
+    sliver = [[380, 380], [399, 380], [399, 399]]  # a polygon left from another camera
+    out = cc.check(leg(), empty(), ROI, to_px, surface_px=sliver)
+    assert not out["clear"] and out["off_surface"]

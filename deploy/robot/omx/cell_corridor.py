@@ -86,9 +86,13 @@ def hits(inside, roi=(0, 0), min_px: int = MIN_PX) -> list[dict]:
             for k in range(1, n) if stats[k][cv2.CC_STAT_AREA] >= min_px]
 
 
-def check(tcp, mask, roi, to_px, pick_xy=None, known=None, stack_xy=None, params=None) -> dict:
-    """The verdict for one planned leg (TCP points in metres): {"clear", "low", "high", "off_map"}.
-    `known`: 0/1 mask of catalogue objects, which may pass under high travel."""
+def check(tcp, mask, roi, to_px, pick_xy=None, known=None, stack_xy=None, params=None, surface_px=None) -> dict:
+    """The verdict for one planned leg (TCP points in metres): {"clear", "low", "high", "off_map", "off_surface"}.
+    `known`: 0/1 mask of catalogue objects, which may pass under high travel. `surface_px`: the polygon the mask
+    covers; corridor pixels beyond it are unseen, not clear (2026-11-01: polygons left from the camera before the
+    RealSense were slivers, the mask was empty and a leg over three containers read clear)."""
+    import cv2
+
     get = lambda k, d: prm.get(params, k, d)  # noqa: E731
     low, high = runs(tcp, get("corridor.clear_z_m", CLEAR_Z_M), get("corridor.base_m", BASE_M))
     off_map = sum(to_px(p) is None for run in low + high for p in run)
@@ -96,9 +100,15 @@ def check(tcp, mask, roi, to_px, pick_xy=None, known=None, stack_xy=None, params
     mask = without_blobs(mask, roi, work) > 0
     half, min_px = get("corridor.half_width_mm", HALF_WIDTH_MM), get("corridor.min_px", MIN_PX)
     unknown = mask & ~(known > 0) if known is not None else mask
-    found_low = hits(mask & (corridor(low, to_px, mask.shape, roi, half) > 0), roi, min_px)
-    found_high = hits(unknown & (corridor(high, to_px, mask.shape, roi, half) > 0), roi, min_px)
-    return {"clear": not (found_low or found_high or off_map), "low": found_low, "high": found_high, "off_map": off_map}
+    lanes = [corridor(path, to_px, mask.shape, roi, half) > 0 for path in (low, high)]
+    off_surface = 0
+    if surface_px:
+        seen = np.zeros(mask.shape, np.uint8)
+        cv2.fillPoly(seen, [np.asarray(surface_px, np.int32) - [roi[0], roi[1]]], 1)
+        off_surface = int(((lanes[0] | lanes[1]) & (seen == 0)).sum())
+    found_low, found_high = hits(mask & lanes[0], roi, min_px), hits(unknown & lanes[1], roi, min_px)
+    return {"clear": not (found_low or found_high or off_map or off_surface), "low": found_low, "high": found_high,
+            "off_map": off_map, "off_surface": off_surface}
 
 
 def known_mask(objects, shape, roi) -> np.ndarray:
@@ -148,7 +158,7 @@ def main(argv=None) -> int:
     to_px = lambda p: predicted_pixel(config, calibration, args.site, p)  # noqa: E731
     pick, place = source["pick"], source["place"]
     out = check([cell_pivot.joints_tcp(f)[:3] for f in frames], mask, args.roi, to_px, (pick["x"], pick["y"]), known,
-                (place["x"], place["y"]) if args.stack else None, params)
+                (place["x"], place["y"]) if args.stack else None, params, site.get("surface_px"))
     print(json.dumps(out))
     return 0 if out["clear"] else 3
 
