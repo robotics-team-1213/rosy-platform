@@ -231,7 +231,7 @@ def prove(out, runtime, camera, controllers, calibration):
         began = runtime.monotonic()
         closed_services = SimpleNamespace(arm_policy=None,safety=SimpleNamespace(estop=False,estop_listeners=[]))
         closed_app = create_app({},closed_services)
-        uvicorn.Config(closed_app,log_level='warning',lifespan='off').load()
+        uvicorn.Config(closed_app,log_level='warning',lifespan='off', log_config=None).load()
         preparation['closed_core_preparation_seconds'] = runtime.monotonic()-began
         for label, operation in (
             ('stdlib_process',lambda:subprocess.run([sys.executable,'-I','-S','-c',

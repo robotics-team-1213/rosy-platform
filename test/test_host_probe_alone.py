@@ -65,6 +65,16 @@ def test_exclusive_host_never_reenters_through_pytest_floor_fallback(tmp_path, m
     assert runner.placed_hosts('pytest', hosts=['fixture']) == []
 
 
+@pytest.mark.parametrize('marker', ['alone', 'wait'])
+def test_only_the_turn_holders_jobs_take_an_exclusive_host_through_the_fallback(tmp_path, monkeypatch, marker):
+    """ADMIT starts a turn job beside an alone waiter (ROSY_JOB_TURN); placement must let it reach the host (2026-10-31)."""
+    probe, _ = measured(tmp_path, marker)
+    monkeypatch.setattr(runner, 'probe', lambda host: probe)
+    monkeypatch.setattr(runner, 'SITES', set())
+    monkeypatch.setenv(runner.xdist_plan.TURN_ENV, '1')
+    assert runner.placed_hosts('pytest', hosts=['fixture']) == ['fixture']
+
+
 def test_idle_alternative_wins_over_more_free_capacity_on_exclusive_host(tmp_path):
     blocked, _ = measured(tmp_path / 'blocked', 'alone')
     available, _ = measured(tmp_path / 'available')
