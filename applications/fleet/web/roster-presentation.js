@@ -111,7 +111,9 @@ export function createRosterSummary({scope, view, openCard, render, attentionIte
     const facts = nodeWithText("div", "robot-summary-status");
     facts.append(tag(status, view.stateUnavailable || !robot.online ? "warn" : ""),
       tag(safety, estop === true ? "crit" : safety === "안전 정상" ? "" : "warn"));
-    const battery = nodeWithText("span", "robot-line-battery", `배터리 ${powerHealthView(robot, view.receivedAtMs, Date.now()).battery}`);
+    // D-926: every fact on the card is the one chip shape; an unread battery is not an attention item.
+    const power = powerHealthView(robot, view.receivedAtMs, Date.now());
+    const battery = tag(`배터리 ${power.battery}`, power.problem ? "warn" : "");
     battery.dataset.fact = "battery";
     facts.append(battery, motorHealth.summary(robot));
     const guideRow = (view.guide?.robots || []).find(row => row.robot_id === robot.robot_id);
@@ -128,8 +130,9 @@ export function createRosterSummary({scope, view, openCard, render, attentionIte
     const lane = state.line_follow;
     const mode = lane?.mode === "CAMERA_LINE" || lane?.mode === "IR_LINE"
       ? `${enumLabel(LINE_FOLLOW_MODE_LABEL, lane.mode)} · ${enumLabel(LINE_STATE_LABEL, lane.state)}` : navTag(state).text;
-    node.append(nodeWithText("p", "trip-line", view.stateUnavailable ? "운행 확인 불가"
-      : cardTripLine(view, robot.robot_id) || (robot.yielding ? "비켜서는 중" : robot.queued ? "출발 대기" : mode)));
+    const trip = view.stateUnavailable ? "운행 확인 불가"
+      : cardTripLine(view, robot.robot_id) || (robot.yielding ? "비켜서는 중" : robot.queued ? "출발 대기" : mode);
+    if (trip !== "—") node.append(nodeWithText("p", "trip-line", trip)); // no navigation state: no placeholder line
     const evidence = [];
     if (view.stateUnavailable) evidence.push("Fleet 상태를 확인할 수 없습니다. 연결을 확인하세요.");
     else {

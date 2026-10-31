@@ -622,7 +622,9 @@ main {
 .site-path { margin: var(--space-2) 0; }
 .site-path > summary span { color: var(--text-secondary); }
 .site-path > summary span[data-kind="warn"] { color: var(--status-warn); }
-.site-path > summary span[data-kind="crit"] { color: var(--text-on-danger); background: var(--status-crit); padding: var(--space-1) var(--space-2); border-radius: var(--radius-control); }
+/* D-926: a folded diagnostic has nothing to do here, so no danger fill; the D-668 inline mark (dot + plain text) says crit. */
+.site-path > summary span[data-kind="crit"] { color: var(--text-primary); }
+.site-path > summary span[data-kind="crit"]::before { content: ""; display: inline-block; width: var(--space-2); height: var(--space-2); margin-inline-end: var(--space-1); border-radius: var(--radius-flag); background: var(--status-crit); }
 .site-path[open] ul { margin-top: var(--space-2); }
 .site-path ul { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
 .site-path li { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); }
