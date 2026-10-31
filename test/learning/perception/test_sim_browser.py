@@ -152,6 +152,10 @@ def test_container_run_shows_pictures_video_summary_ledger_and_real_photos(tmp_p
                 expect(ceiling.locator('img')).to_have_js_property('naturalWidth', 1)
                 expect(page.locator('#sim-compare figure').nth(1).locator('img')).to_have_count(1)  # mapped-overview
                 expect(page.locator('#sim-compare')).to_contain_text('실물 사진이 아직 등록되지 않았습니다.')
+                if width == 1280:  # each real photo shares a row with its own SIM view
+                    pairs = page.locator('#sim-compare > div')
+                    assert all(len({round(f.bounding_box()['y']) for f in pairs.nth(i).locator('figure').all()}) == 1
+                               for i in range(pairs.count()))
                 assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
                 assert errors == []
             finally:

@@ -80,7 +80,7 @@ function compare(runId,ids){
       view.src=`/api/learning/sim/runs/${runId}/artifacts/${photo.sim_view}`;sim.append(view);
     }else sim.append(el('p',runId?'이 실행에는 같은 방향 시뮬레이션 그림이 없습니다.':'실행 기록을 선택하면 같은 방향 시뮬레이션 그림을 놓습니다.'));
     sim.append(el('figcaption','시뮬레이션 · '+(photo.sim_view?artifactLabel(photo.sim_view):'같은 방향 없음')));
-    $('sim-compare').append(real,sim);
+    const pair=el('div');pair.className='omx-review-gallery';pair.style.marginBlockEnd='var(--space-3)';pair.append(real,sim);$('sim-compare').append(pair);
   }
 }
 function ledger(value){
