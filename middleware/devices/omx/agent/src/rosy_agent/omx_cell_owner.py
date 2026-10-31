@@ -17,7 +17,7 @@ owner (Pilot simulation server or the C3 probe; D-390 §3, D-282 §3).
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 import logging
 import threading
 from pathlib import Path
@@ -142,8 +142,21 @@ def build_cell_owner(settings: CellOwnerSettings, *,
                      refuse_second_owner: Callable[[], None],
                      gripper_readback: Callable[[Any], Any],
                      fleet_fence_current: Callable[[int, int], bool],
-                     transfer_catalog=None) -> CellOwner:
+                     transfer_catalog=None, arm_transfer=None) -> CellOwner:
+    """``arm_transfer`` (an ``ArmTransferInstallation``) also installs Fleet-managed ARM_TRANSFER
+    beside CELL_TRANSFER and binds the owner to its policy, which excludes Pilot seats (D-927 C)."""
     refuse_second_owner()
+    if arm_transfer is not None:
+        if settings.coordinator_peer_uids:
+            raise ValueError("ARM_TRANSFER is installed on a one-arm owner only")
+        catalog = arm_transfer.bindings.catalog
+        if ((catalog.workcell_id, catalog.instance_id, catalog.calibration_revision, catalog.transform_revision)
+                != (settings.workcell_id, settings.instance_id, settings.calibration_revision,
+                    settings.transform_revision)):
+            raise ValueError("the ARM transfer catalog was installed for another owner")
+        if transfer_catalog is not None and transfer_catalog != catalog:
+            raise ValueError("one physical catalog serves preflight and ARM_TRANSFER")
+        transfer_catalog = catalog
     kinematics = OmxKinematics.load()
     profile = CellPlanningProfile.load(settings.profile_path)
     if profile.kinematics_revision != kinematics.revision:
@@ -225,12 +238,39 @@ def build_cell_owner(settings: CellOwnerSettings, *,
         with execution_lock:
             executions[grant.action_id] = (grant, execution)
         return execution
+    factories, capability_current = {"CELL_TRANSFER": phase_factory}, acceptance.capability_current
+    if arm_transfer is not None:
+        from rosy.integrations.robots.omx.arm_transfer import create_arm_transfer_phase_factory
+        arm_grant = []  # the gripper port has no grant argument; one arm runs one Action at a time
+        installed = create_arm_transfer_phase_factory(
+            installation=arm_transfer, profile=profile, kinematics=kinematics, execution_state=execution_state,
+            command_for_phase=command_for_phase, goal_port=goal_port_factory(runtime), submission_fence=stop,
+            phase_gate=lambda accepted, phase: True, current_fence=current_fence,
+            gripper_readback=lambda: gripper_readback(arm_grant[-1]),
+            gripper_sensor_revision=GRIPPER_SENSOR_REVISION, monotonic=runtime.monotonic,
+            control_admission=admission)
+
+        def arm_create(grant, recorder):
+            arm_grant[:] = [grant]
+            execution = installed.create(grant, recorder)
+            with execution_lock:
+                executions[grant.action_id] = (grant, execution)
+            return execution
+        # The installed object itself stays in the runner: GetTransferCapability checks that identity.
+        factories["ARM_TRANSFER"] = replace(installed, create=arm_create)
+
+        def capability_current(grant):
+            if getattr(grant, "action_kind", None) == "ARM_TRANSFER":
+                return arm_transfer.capability_current(grant)
+            return acceptance.capability_current(grant)
     runner = ActionRunner(
         store, _NoDirectDriver(), workcell_id=settings.workcell_id, instance_id=settings.instance_id,
         principal_for_peer=lambda uid: f"fleet-uid-{uid}", allowed_peer_uids={settings.fleet_peer_uid},
-        current_fence=current_fence, capability_current=acceptance.capability_current,
-        submission_fence=stop, phase_runner_factories={"CELL_TRANSFER": phase_factory},
+        current_fence=current_fence, capability_current=capability_current,
+        submission_fence=stop, phase_runner_factories=factories,
         control_admission=admission, enabled=True)
+    if arm_transfer is not None:
+        admission.enable_managed_transfers(arm_transfer.resource_policy_digest)
     sources = {settings.fleet_peer_uid: StopRequestSource.FLEET}
     sources.update({uid: StopRequestSource.COORDINATOR for uid in settings.coordinator_peer_uids})
     # A coordinator stop cancels the Fleet principal's Actions; the Fleet path is unchanged.
@@ -289,11 +329,18 @@ def _build_coordination(settings: CellOwnerSettings, store: ActionStore, stop: L
 def sim_gripper_observation(owner: CellOwner, state: Any, grant: Any) -> GripperObservation:
     """SIM GRIPPER SENSOR (labelled, as in the C3b probe): finger angle against the width of the
     item in the recipe the grant names (1b C2), never another accepted recipe."""
-    transfer = grant.cell_transfer
-    geometry = owner.acceptance.accepted_item_geometry(transfer.recipe_sha256, transfer.item_key)
-    if geometry is None:
-        raise RuntimeError("the grant's recipe/item is not accepted on this owner")
-    width = geometry["grasp_width_m"]
+    if getattr(grant, "action_kind", None) == "ARM_TRANSFER":
+        # ARM_TRANSFER: the installed object binding names the width and the held object.
+        body = grant.arm_transfer
+        width = owner.runner.phase_runner_factories["ARM_TRANSFER"].bindings.resolve(
+            body.object_ref, catalog_digest=body.catalog_digest, bindings_digest=body.bindings_digest).grasp_width_m
+        item = body.object_ref
+    else:
+        transfer = grant.cell_transfer
+        geometry = owner.acceptance.accepted_item_geometry(transfer.recipe_sha256, transfer.item_key)
+        if geometry is None:
+            raise RuntimeError("the grant's recipe/item is not accepted on this owner")
+        width, item = geometry["grasp_width_m"], transfer.item
     close_q = owner.profile.gripper_close_for_width(width)
     threshold = (owner.profile.gripper_contact_for_width(width) - close_q) / 2
     q = state.positions[owner.profile.gripper_joint]
@@ -303,7 +350,7 @@ def sim_gripper_observation(owner: CellOwner, state: Any, grant: Any) -> Gripper
     readback_state = "OPEN" if opened else ("CLOSED" if q <= contact_q + threshold else "UNKNOWN")
     return GripperObservation(owner.settings.workcell_id, owner.settings.instance_id,
                               GRIPPER_SENSOR_REVISION, state.sequence, state.received_at,
-                              readback_state, present, transfer.item if present else None,
+                              readback_state, present, item if present else None,
                               grant.dispatch_generation)
 
 

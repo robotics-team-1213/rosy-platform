@@ -24,6 +24,10 @@ ALONE = "ROSY_BROWSER_ALONE=1"  # work_queue.ALONE_ENV: a timing-sensitive brows
 # tools line (home-directory tools, collect_alone one file per process) and browser or node-id jobs are admitted
 # normally. land_isolation runs its timing files one at a time inside its own job.
 HOST_ALONE = ("integrations/simulation/gazebo/test", "learning/envs/isaac/test")
+# land.py sets TURN_ENV while it holds the turn; its jobs then carry TURN_JOB, which remote_job.ADMIT starts without
+# waiting for room. 2026-10-31 a turn's guard job waited 75 min behind other landings' prepare jobs on the site PC,
+# and the whole queue (34 tickets) waited behind the turn.
+TURN_ENV, TURN_JOB = "ROSY_LAND_TURN", "ROSY_JOB_TURN=1"
 JOB_MEM_GB = 6  # remote_job.JOB MemoryMax default (D-568 2)
 GB_PER_WORKER = 1.0  # shortcut: a guess, not measured; lower it once the measurement plan shows per-worker RSS
 MAX_WORKERS = int(JOB_MEM_GB // GB_PER_WORKER)
@@ -81,6 +85,7 @@ def plan(inv: list[str], headroom: dict | None, serial: list[str] | None = None)
     paths = [w.replace("\\", "/") for w in inv if not ENV_WORD.match(w) and not w.startswith("-")]
     alone = ["ROSY_JOB_ALONE=1"] if ALONE in inv or any(p == a or p.startswith(a + "/") or a.startswith(p + "/")
                                                         for p in paths for a in HOST_ALONE) else []
+    alone += [TURN_JOB] if os.environ.get(TURN_ENV) == "1" else []  # a turn holder's job skips the host's queue
     if headroom["light"]:  # below the pytest memory floor: cap the job at what the host has free
         mem = max(1, int(headroom["mem"]))
         return [f"ROSY_JOB_MEM_GB={mem}", *alone], [], f"serial: light host, MemoryMax {mem} GB"
