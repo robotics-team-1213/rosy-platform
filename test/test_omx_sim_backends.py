@@ -41,8 +41,10 @@ def test_initial_staging_seeds_the_ros2_control_position_state():
                         '<command_interface name="position"/><state_interface name="position"/></joint>')
     out = mod.with_initial(urdf, {"joint1": "1.0"})
     assert '<state_interface name="position"><param name="initial_value">1.0</param></state_interface>' in out
+    # The vendor URDF names a joint outside ros2_control too; staging must not run on into the next joint.
+    elsewhere = urdf.replace("<ros2_control", '<joint name="gripper_joint_1"></joint><ros2_control', 1)
     with pytest.raises(ValueError):
-        mod.with_initial(urdf, {"gripper_joint_1": "1.0"})
+        mod.with_initial(elsewhere, {"gripper_joint_1": "1.0"})
 
 
 def test_mujoco_urdf_drops_ros_blocks_and_resolves_meshes():

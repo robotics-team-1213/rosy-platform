@@ -40,7 +40,8 @@ def with_topic_hardware(urdf):
 def with_initial(urdf, initial):
     """Scene staging: ros2_control starts a joint's state and command here, as the simulator does (--initial)."""
     for name, value in initial.items():
-        urdf, count = re.subn(rf'(<joint name="{re.escape(name)}">.*?<state_interface name="position")\s*/>',
+        # Within one <joint> element: the vendor URDF names the joint elsewhere too (2026-10-31 it seeded joint1).
+        urdf, count = re.subn(rf'(<joint name="{re.escape(name)}">(?:(?!</joint>).)*?<state_interface name="position")\s*/>',
                               rf'\1><param name="initial_value">{float(value)}</param></state_interface>',
                               urdf, count=1, flags=re.S)
         if count != 1:
