@@ -679,3 +679,10 @@
 - 변경: 네 가벼운 문서의 머리가 `header.fleet-document-header`로 랜드마크를 얻고(정본 inc + 재생성), 계정 관리·내 계정에 skip link와 main id·tabindex를 더했다(9문서 전부 skip link 보유). 좁은 컨테이너에서 app-shell이 지우던 `ui-subnav-head`를 Fleet 좌석에서 유지해 Cell 적재 단계·AI 판단 묶음 구분이 390px에서도 산다. 관제·설치의 `관제 카메라` 제목이 패널 제목 h2 안의 h2가 아니라 h3로 섰다.
 - 증거: 작업 세션 Fleet 샘플 서버(4173) Chromium — accounts/profile/login skip link 1개·header 랜드마크 1개·main id 확인, Cell 390px에서 "Cell 적재 단계" 머리글 표시, 두 문서 vision-heading H3, 페이지 오류 없음. node --test 403 passed. 원격 시험은 착지 전 기록.
 - gate 변화: 없음. CE: 해당 없음.
+
+
+## 2026-11-01 · uncommitted · 비평 후속: 호스트 안내 문장 줄이기, 실측 블록 흰 채움 하나, estop 폭 정합 확인
+
+- 변경: 호스트 서비스 안내 hint를 4문장에서 2문장으로 줄였다(사실 30초 갱신·점검 10분/30분·재부팅 10분·비상 정지 모두 보존). 실측 교정 블록의 `현재 조건 확인 후 미리보기` 단추가 primary→quiet로, 블록의 흰 채움은 `실측 교정 승인 저장` 하나다(D-926 7).
+- 증거: Chromium — 안내 문구·단추 kind 확인, 페이지 오류 없음. `#estop-feedback`는 1440·1920에서 main 본문과 픽셀 정렬(x·폭 일치) — 비평의 미실측 우려 종결, 수정 불필요. 원격 시험은 착지 전 기록.
+- gate 변화: 없음. CE: 해당 없음.

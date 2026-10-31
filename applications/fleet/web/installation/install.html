@@ -364,7 +364,7 @@
           </ui-actions>
           <label class="ui-check"><input class="ui-field" id="measured-conditions" type="checkbox" disabled>현재 렌즈·초점·줌·영상 크롭 조건이 이 교정의 촬영 조건과 같음을 확인했습니다.</label>
           <ui-actions>
-            <ui-button id="measured-confirm" kind="primary" disabled>현재 조건 확인 후 미리보기</ui-button>
+            <ui-button id="measured-confirm" kind="quiet" disabled>현재 조건 확인 후 미리보기</ui-button>
             <ui-button id="measured-read" kind="quiet" disabled>확인된 미리보기 읽기</ui-button>
           </ui-actions>
           <p id="measured-state" class="hint" role="status">저장 기록 확인 중</p>
@@ -428,7 +428,7 @@
 
     <section id="host-services" class="panel install-task" aria-labelledby="host-services-heading" data-role-lock>
       <div class="robot-head"><h2 id="host-services-heading">호스트 서비스</h2><ui-tag id="host-services-status" status="neutral">확인 전</ui-tag></div>
-      <p class="hint">PC별 메모리·부하와 자동 복구 상태입니다. 원격 자원은 10분, 복구 설정은 30분마다 점검하며 이 화면은 30초마다 갱신합니다. 재부팅은 10분 뒤입니다. 로봇을 멈추려면 비상 정지를 씁니다.</p>
+      <p class="hint">PC별 메모리·부하와 자동 복구 상태를 30초마다 보여 줍니다(점검: 원격 자원 10분, 복구 설정 30분). 재부팅은 10분 뒤에 이뤄지며, 로봇을 멈추려면 비상 정지를 씁니다.</p>
       <div id="host-services-report"></div>
       <ui-status id="host-services-role-lock" class="role-lock-note" state="forbidden" hidden>운영자 권한이 필요합니다</ui-status>
       <div id="host-services-commands"></div>
