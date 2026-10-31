@@ -1,5 +1,6 @@
 """Real child execution is bounded independently of SDK availability."""
 import importlib
+import os
 from pathlib import Path
 import sys
 import time
@@ -266,3 +267,18 @@ def test_unsafe_output_names_the_entry_for_the_sdk_log(tmp_path, kind):
     found = []
     assert module()._budget(tmp_path, found) == 'unsafe_output'
     assert len(found) == 1 and found[0].startswith(('output ', 'second ')) and ('nlink 2' in found[0] or 'mode 0o12' in found[0])
+
+
+def test_a_file_being_deleted_is_not_unsafe_output(tmp_path, monkeypatch):
+    # Run f3eb (2026-10-31) was stopped on plan-request-122.json seen with nlink 0 while the task deleted it.
+    (tmp_path / 'plan-request-122.json').write_bytes(b'{}')
+    real = Path.lstat
+
+    def lstat(self):
+        info = real(self)
+        if self.name != 'plan-request-122.json':
+            return info
+        return os.stat_result((info.st_mode, info.st_ino, info.st_dev, 0, *tuple(info)[4:10]))
+    monkeypatch.setattr(Path, 'lstat', lstat)
+    found = []
+    assert module()._budget(tmp_path, found) is None and found == []
