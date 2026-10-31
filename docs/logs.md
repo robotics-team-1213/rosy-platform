@@ -13192,6 +13192,13 @@ osy-d395-s1d\`.
 - 결정: D-938 Accepted(사용자 결정)
 - 교훈: D-865 `valid_until` 미적용을 함께 고침
 
+## 2026-10-31 · uncommitted · docs(solutions): version pins grew, use api_reserve bump
+- 변경: `solutions/workflow-issues/a-contract-version-bump-is-three-pins-not-one.md`에 2026-10-31 갱신 절. 버전 고정값이 Fleet 계약 시험 4개 파일까지 늘었고, 손으로 고치지 말고 `api_reserve.py bump`를 쓴다
+- 증거: D-938 착지 때 Fleet 시험 5개가 `v1.331` 고정값으로 실패했다(착지 기록). `git grep '"\*\*Version:\*\* v1\.'`로 고정값 목록을 확인했다
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 기존 교훈 갱신
+
 ## 2026-10-31 · uncommitted · omx: 재배선 뒤 장치 식별 교훈
 - 변경: `docs/solutions/runtime-errors/omx-cell-device-identity-after-rewiring-2026-10-31.md` (동일 시리얼 Innomaker는 by-path, RealSense 노드는 USB 인터페이스 udev 이름, 팔 좌우는 LED 차분, 확인은 `omx_devices.py scan`)
 - 증거: 현장 PC 실측(PING·LED·udev 링크·영상). depth(USB 2.0)는 미해결로 남김
