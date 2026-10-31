@@ -22,6 +22,7 @@ from experiment_scope import select_dataset
 from experiment_reviews import Reviews
 from experiment_profiles import Profiles
 from experiment_owner_status import OwnerStatus
+from experiment_hub import Hub
 
 
 class Center:
@@ -53,6 +54,7 @@ class Center:
         self.inbox = Inbox(self.root)
         self.reviews = Reviews(self.root, self.connect, self.lock)
         self.profiles = Profiles(self.connect, self.lock)
+        self.hub = Hub(self)
         with self.connect() as db:
             db.execute('CREATE TABLE IF NOT EXISTS datasets (id TEXT PRIMARY KEY, document TEXT NOT NULL)')
             db.execute('CREATE TABLE IF NOT EXISTS runs (id TEXT PRIMARY KEY, request_id TEXT UNIQUE NOT NULL,'
