@@ -154,6 +154,7 @@ def test_eligible_wants_a_member_at_its_worktree_head_judged_by_its_tier_or_sele
     assert not land_batch.eligible(land, wt, row), "no prepared tier: its selection is FULL"
     assert land_batch.eligible(land, wt, row, "full"), "a pending FULL-class ticket joins a FULL batch"
     assert not land_batch.eligible(land, wt, {**row, "status": "preparing"}), "a pretest under way is not carried"
+    assert not land_batch.eligible(land, wt, {**row, "urgent": "the user's words"}, "full"), "urgent lands alone"
     member = Path(row["worktree"])
     land.land_full.save(member, "feat/m", git(member, "rev-parse", "HEAD"), git(main, "rev-parse", "HEAD"), "affected", [])
     assert land_batch.eligible(land, wt, row) and not land_batch.eligible(land, wt, row, "full")
