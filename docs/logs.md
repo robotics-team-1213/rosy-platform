@@ -13170,3 +13170,10 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: D-889 추가 8(사용자 승인 2026-10-31)
 - 교훈: 없음
+
+## 2026-10-31 · uncommitted · fleet: D-938 팔 이송 정책 승인
+- 변경: `docs/adr/D-938`, ADR Log 행, API Reference v1.335 절과 변경 이력, `platform_parts.yaml` safety 모듈 등록
+- 증거: Fleet 원격 회귀(착지 기록에 남김). 실물·현장 수용은 아직
+- gate 변화: 없음
+- 결정: D-938 Accepted(사용자 결정)
+- 교훈: D-865 `valid_until` 미적용을 함께 고침

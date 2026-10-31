@@ -5,9 +5,20 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.331
+**Version:** v1.335
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.335 팔 이송 정책 승인 범위 (D-938)
+
+[D-938](../adr/D-938-arm-transfer-policy-admission.md)은 v1.314 정책 승인 계약에 additive로 붙는다. 정의는 `protocol/policy_admission.py`다.
+
+- `PolicyAdmissionScope.step_approval_kinds`가 `arm_transfer`를 받는다. 이 값은 `/api/fleet/arm-transfers/jobs`의 `ARM_TRANSFER` 작업만 뜻하며 `two_person` `CELL_TRANSFER`는 계속 닫혀 있다.
+- `PolicyAdmissionScope.proposers`(최대 16): 자동 승인을 받을 수 있는 제안 principal 목록이다. 활성 범위가 `arm_transfer`를 담으면 `proposers`와 `valid_until`이 필수다.
+- `PolicyAdmissionStatus.enabled_by`: 그 Fleet 프로세스에서 `POST /api/fleet/policy-admission`으로 범위를 켠 기명 운영자다. 사이트 설정만으로 켜진 상태면 `null`이고, 이때 팔 작업은 자동 승인하지 않는다.
+- `valid_until`이 지나면 모든 종류가 닫히고 readback은 `reason=EXPIRED`, `admits_remaining=0`이다.
+
+자동 admit은 사람 admit과 같은 검사를 전부 거친다. 검사는 snapshot, 정지 세대, capability 신선도, 자원 claim이다. 원장 actor는 `fleet-policy-admission`이고, 이벤트에 `policy_scope_revision`·`policy_enabled_by`가 붙는다. HTTP 경로와 오류 코드는 v1.314와 같다. 이 계약 등록은 현장 활성화를 뜻하지 않는다.
 
 ### v1.331 Neutral trip proposals and separate operator admission (D-908)
 
@@ -4357,6 +4368,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.335 | 2026-10-31 | D-938: policy admission scope accepts `arm_transfer` (ARM_TRANSFER jobs only) with required `proposers` and `valid_until`; status reads back `enabled_by`; expired scopes close every kind. Same admission checks as a human admit; simulation arm transfer HTTP only. |
 | v1.331 | 2026-10-28 | D-908: closed simulation neutral TRIP proposal/read/admit HTTP; the proposer (service or operator) supplies candidates, request key and steps, a different named operator admits with digest and generation, and admission makes the existing TRIP step-ledger job. No cargo fields; operator trip-jobs POST unchanged. Envelope 1.0 unchanged. |
 | v1.330 | 2026-10-29 | D-915: optional measured source joint facts in physical observations and scoped immutable closure proof readback; legacy canonical bytes, writer/admission boundaries and envelope1.0 preserved. Independent SIM/hardware/field acceptance remains separate. |
 | v1.328 | 2026-10-28 | Learning registered OMX dataset discovery and fixed-revision archive preparation on existing host paths. Separate verified copy, explicit consent and original preservation; byte archival only. CORE envelope1.0 unchanged. |
