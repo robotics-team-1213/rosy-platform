@@ -47,3 +47,22 @@ def test_native_unit_does_not_couple_lifecycle_to_fleet():
     assert 'ProtectSystem=strict' in unit and 'CapabilityBoundingSet=\n' in unit
     assert 'Requires=' not in unit and 'PartOf=' not in unit
     assert '--web-root /opt/rosy-monitoring/web' in unit
+
+
+def test_site_stack_example_matches_the_compose_overlay_keys_and_mounts():
+    import json
+    import yaml
+    config = load_config(ROOT / 'deploy/site/monitoring.yaml.example')
+    service = yaml.safe_load((ROOT / 'deploy/site/compose.monitoring.yaml').read_text(encoding='utf-8'))['services']['monitoring']
+    mounted = set(json.loads(service['environment']['ROSY_CREDENTIAL_PATHS']))
+    references = {r.token_env for r in config.readers} | {s.token_env for s in config.sources if s.token_env}
+    assert references == mounted
+    assert load_credentials(config, {ref: f'{index:032d}' for index, ref in enumerate(sorted(references), 1)})
+    assert str(config.ca_bundle) == '/run/secrets/site_ca' and 'site_ca' in service['secrets']
+    volumes = ' '.join(v for v in service['volumes'] if isinstance(v, str))
+    for source in config.sources:
+        if source.path is not None:
+            assert f'{source.path.parent.as_posix()}:{source.path.parent.as_posix()}:ro' in volumes
+        else:
+            assert source.url.startswith('https://fleet:')
+    assert {s.selector for s in config.sources if s.kind == 'host_guard'} == {'site', 'ai', 'model'}

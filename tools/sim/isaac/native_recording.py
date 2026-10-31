@@ -5,7 +5,13 @@ import subprocess
 
 
 class NativeRecorder:
-    def __init__(self, path, *, width=960, height=540):
+    def __init__(self, path, *, width=960, height=540, fps=25, max_bitrate_kbps=None):
+        if type(fps) is not int or not 1 <= fps <= 60:
+            raise ValueError('fps must be an integer from 1 to 60')
+        if max_bitrate_kbps is not None and (type(max_bitrate_kbps) is not int or max_bitrate_kbps <= 0):
+            raise ValueError('maximum bitrate must be a positive integer in kbps')
+        rate_limit = ([] if max_bitrate_kbps is None else
+                      ['-maxrate', f'{max_bitrate_kbps}k', '-bufsize', f'{max_bitrate_kbps}k'])
         self.path = path
         self.width, self.height = width, height
         self.frames = 0
@@ -17,8 +23,8 @@ class NativeRecorder:
             self.process = subprocess.Popen([
                 'ffmpeg', '-nostdin', '-hide_banner', '-loglevel', 'error', '-n',
                 '-f', 'rawvideo', '-pixel_format', 'rgb24', '-video_size', f'{width}x{height}',
-                '-framerate', '25', '-i', 'pipe:0', '-an', '-c:v', 'libx264',
-                '-preset', 'ultrafast', '-threads', '1', '-crf', '20', '-pix_fmt', 'yuv420p',
+                '-framerate', str(fps), '-i', 'pipe:0', '-an', '-c:v', 'libx264',
+                '-preset', 'ultrafast', '-threads', '1', '-crf', '20', *rate_limit, '-pix_fmt', 'yuv420p',
                 '-movflags', '+faststart', str(path)], stdin=subprocess.PIPE,
                 stdout=subprocess.DEVNULL, stderr=self.errors)
         except Exception:

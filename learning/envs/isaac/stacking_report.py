@@ -10,11 +10,11 @@ from model_checks import EXPECTED_JOINTS
 from stacking_fixture import FIXTURE
 
 
-def read_regular(path, limit=1024*1024):
+def read_regular(path, limit=1024*1024, *, allow_empty=False):
     fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     with os.fdopen(fd, 'rb') as stream:
         info = os.fstat(stream.fileno())
-        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or not 0 < info.st_size <= limit:
+        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or not (0 if allow_empty else 1) <= info.st_size <= limit:
             raise ValueError('Unsafe stacking evidence')
         return stream.read(limit+1)
 

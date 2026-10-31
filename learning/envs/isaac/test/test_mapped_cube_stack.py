@@ -107,6 +107,7 @@ def test_planning_refusal_keeps_the_partial_physical_report_possible(tmp_path, m
     monkeypatch.setattr(subprocess, 'run', refused)
     with pytest.raises(ValueError, match='SIM planning refused: ValueError: target outside workspace'):
         Planner(tmp_path).request('move')
+    assert (tmp_path/'plan-request-1.json').is_file()
 
 
 def test_first_layer_judgement_requires_support_and_stable_prefix():
@@ -265,7 +266,8 @@ def test_cube_feedback_accumulates_loaded_arm_tracking_error():
 def test_lowering_for_release_keeps_the_lift_proof_separate_from_retention():
     sample = trial()['layers'][0]['lift_samples'][0]
     body = sample['boxes'][0]
-    body['position'] = [.13, -.03+f.CUBE_FIXTURE['first_row_release_bias_m'], .062]
+    body['position'] = [.13, -.03+f.CUBE_FIXTURE['first_row_release_bias_m'],
+                        f.plan(True)[0]['target'][2]+f.CUBE_FIXTURE['release_clearance_m']]
     assert not f.free_lift(body, 0, .04)
     assert f.unsupported_hold(body, 0)
     assert f.cube_release_target(0, sample, .04) == pytest.approx(sample['tcps'][0])
@@ -301,6 +303,22 @@ def test_first_row_release_compensation_does_not_move_the_acceptance_target():
     assert predicted[1] == pytest.approx(nominal[1]-.0006)
     assert f.plan(True)[0]['target'] == nominal
     assert abs(predicted[1]-nominal[1]) < f.FIXTURE['xy_tolerance_m']
+
+
+def test_slow_release_retains_quintic_velocity_and_acceleration_limits():
+    for delta in (.02, .10, .40):
+        fast = f.grip_duration(.3, .3+delta, acceleration=.4)
+        slow = f.grip_duration(.3, .3+delta, acceleration=.1)
+        assert slow >= fast >= .8
+        assert 1.875*delta/slow <= .4+1e-10
+        assert 5.774*delta/slow**2 <= .1+1e-10
+    assert f.grip_duration(.3, .4, acceleration=.1) == pytest.approx(2*f.grip_duration(.3, .4, acceleration=.4))
+
+
+@pytest.mark.parametrize('acceleration', [0., -.1, float('nan')])
+def test_release_timing_rejects_invalid_acceleration(acceleration):
+    with pytest.raises(ValueError):
+        f.grip_duration(.3, .4, acceleration=acceleration)
 
 
 def test_world_rotation_preserves_owner_joint_trajectory(tmp_path):

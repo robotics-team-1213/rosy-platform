@@ -20,6 +20,7 @@ import time
 from pathlib import Path
 
 from remote_job import CANCELLED
+from xdist_plan import HOST_ALONE
 
 
 BROWSER_ENV = "ROSY_RUN_BROWSER_TESTS=1"
@@ -32,6 +33,7 @@ ENV_WORD = re.compile(r"^ROSY_[A-Z0-9_]*=")
 BROWSER_PER_HOST = int(os.environ.get("ROSY_BROWSER_PER_HOST", "2"))
 MAX_MAIN = 4  # main workers one run may ask of a full host (1 restores one-at-a-time)
 MAIN_CORES, MAIN_GB = 2, 2  # headroom one more main worker needs
+SKIP_ALONE = "!"  # workers(): a worker kind on a host other than the host_alone suites' one
 
 
 def cancelled(invocations: list[list[str]], codes: list) -> list[int | str]:
@@ -48,10 +50,27 @@ def lane_job(inv: list[str]) -> bool:
     return BROWSER_ENV in env and ALONE_ENV not in env
 
 
-def workers(hosts: list[str], invocations: list[list[str]], headroom: dict) -> list[tuple[str, str]]:
+def host_alone(inv: list[str]) -> bool:
+    """An invocation of a suite that takes the whole host (xdist_plan.HOST_ALONE: Gazebo, Isaac)."""
+    paths = [w.replace("\\", "/") for w in inv if not ENV_WORD.match(w) and not w.startswith("-")]
+    return any(p == a or p.startswith(a + "/") or a.startswith(p + "/") for p in paths for a in HOST_ALONE)
+
+
+def workers(hosts: list[str], invocations: list[list[str]], headroom: dict,
+            order: list[str] = ()) -> list[tuple[str, str]]:
     """(host, kind) per worker thread. "any" takes everything one at a time (light, site, sim-holding or unmeasured
     hosts, no lane jobs, or the host already runs BROWSER_PER_HOST browser jobs of any run); otherwise "main" takes
-    all but lane jobs and each "lane" only lane jobs."""
+    all but lane jobs and each "lane" only lane jobs. A kind ending in SKIP_ALONE never takes a host_alone one.
+
+    host_alone suites go to the first host of ``order`` (the configured list: the model PC) when it was placed:
+    each one waits for its host to empty, and on 2026-10-30 70 of them (34-40 min each, 10 s-3.5 min of tests)
+    kept the AI PC from new jobs, so 44 of 143 placements found no host. Without that host they run as before."""
+    pin = next((h for h in order if h in hosts and not (headroom.get(h) or {}).get("site")), None)
+    if pin and any(map(host_alone, invocations)):
+        hosts = [pin] if all(map(host_alone, invocations)) else [pin, *(h for h in hosts if h != pin)]
+    else:
+        pin = None
+    hosts = hosts[:len(invocations)]
     lanes = sum(map(lane_job, invocations))
     rest = len(invocations) - lanes
     plan = []
@@ -64,7 +83,7 @@ def workers(hosts: list[str], invocations: list[list[str]], headroom: dict) -> l
         if room is not None and mains > 1:
             room["share"] = mains  # xdist_plan sizes each job's -n from its share, never the whole host
         plan += [(host, "any")] * mains if n == 0 else [(host, "main")] * (mains if rest else 0) + [(host, "lane")] * n
-    return plan
+    return [(h, k if pin in (None, h) or k == "lane" else k + SKIP_ALONE) for h, k in plan]
 
 
 def main_workers(room: dict, jobs: int) -> int:
@@ -77,13 +96,15 @@ def main_workers(room: dict, jobs: int) -> int:
 
 def wanted(kind: str, invocations: list[list[str]]):
     """The Work.take filter of a worker kind (None: anything)."""
+    skip, kind = kind.endswith(SKIP_ALONE), kind.removesuffix(SKIP_ALONE)
     if kind == "any":
-        return None
-    return lambda i: lane_job(invocations[i]) == (kind == "lane")
+        return (lambda i: not host_alone(invocations[i])) if skip else None
+    return lambda i: lane_job(invocations[i]) == (kind == "lane") and not (skip and host_alone(invocations[i]))
 
 
 def guard(gate, kind: str, inv: list[str]):
     """The context one job runs in: a lane slot, the host to itself for an alone job beside lanes, else nothing."""
+    kind = kind.removesuffix(SKIP_ALONE)
     if gate is None or kind == "any":
         return contextlib.nullcontext()
     return gate.lane() if kind == "lane" else gate.alone() if ALONE_ENV in inv else contextlib.nullcontext()
