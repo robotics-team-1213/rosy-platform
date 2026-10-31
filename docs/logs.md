@@ -13233,4 +13233,10 @@ osy-d395-s1d\`.
 - 증거: 원격 `test/test_land_rollup.py`·`test/test_land_queue.py`·`test/test_harness_contracts.py`
 - gate 변화: 없음
 - 결정: D-889 추가 11(사용자 지시 2026-11-01)
+## 2026-11-01 · uncommitted · fix(land): 브라우저·시뮬레이션 시험은 필요할 때만, 전체는 밤에
+- 변경: `tools/land_selection.py`(`browsers()`·`without_sim`), `tools/land_nightly.py`(새 파일), `test/test_land_selection.py`, `test/test_land_nightly.py`, D-889 추가 12
+- 근거: 12.2시간 시험 실행 3,405분 중 브라우저 50%(사전 시험 1,085·투기 471·차례 147분), 문서 착지가 변화분 브라우저로 착지마다 50~80분
+- 증거: 원격 `test/test_land_selection.py`·`test/test_land_nightly.py`·`test/test_affected_tests.py`·`test/test_harness_contracts.py`
+- gate 변화: 없음
+- 결정: D-889 추가 12(사용자 결정 2026-11-01)
 - 교훈: 없음
