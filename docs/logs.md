@@ -13192,6 +13192,13 @@ osy-d395-s1d\`.
 - 결정: D-938 Accepted(사용자 결정)
 - 교훈: D-865 `valid_until` 미적용을 함께 고침
 
+## 2026-10-31 · uncommitted · docs(solutions): version pins grew, use api_reserve bump
+- 변경: `solutions/workflow-issues/a-contract-version-bump-is-three-pins-not-one.md`에 2026-10-31 갱신 절. 버전 고정값이 Fleet 계약 시험 4개 파일까지 늘었고, 손으로 고치지 말고 `api_reserve.py bump`를 쓴다
+- 증거: D-938 착지 때 Fleet 시험 5개가 `v1.331` 고정값으로 실패했다(착지 기록). `git grep '"\*\*Version:\*\* v1\.'`로 고정값 목록을 확인했다
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 기존 교훈 갱신
+
 ## 2026-10-31 · uncommitted · fix(land): 자동 묶음 착지를 끈다
 - 변경: `tools/land_batch.py`(`AUTO` 기본 거짓, `ROSY_LAND_BATCH=1`로 다시 켬), `test/test_land_batch.py`(묶음 시험은 `AUTO`를 켜고 돎, 꺼짐 시험 추가), D-889 추가 9
 - 근거: 48시간 자동 묶음 97번 중 착지 28·멈춤 43, 착지 87건 중 묶음 4건, 10-31 대기열 정지가 모두 묶음에서 나옴(사용자 결정)
