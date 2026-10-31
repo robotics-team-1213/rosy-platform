@@ -13233,4 +13233,10 @@ osy-d395-s1d\`.
 - 증거: 원격 `test/test_land_rollup.py`·`test/test_land_queue.py`·`test/test_harness_contracts.py`
 - gate 변화: 없음
 - 결정: D-889 추가 11(사용자 지시 2026-11-01)
+
+## 2026-11-01 · uncommitted · refactor: D-940 후속 1 — 정본 소비·REST 미러 핀·PR 템플릿
+- 변경: `learning/registry/perception/store.py`(content_sha에 manifest_bytes 이식), `learning/curation/perception/build.py`(로컬 stand-in 삭제·정본 import), `test/architecture/test_rest_model_mirror.py`(신규, Fleet⊆CORE 필드 핀, KNOWN_DRIFT 3건), `.github/pull_request_template.md`(재사용 경로 칸 한 줄), 두 모듈 `logs.md`
+- 증거: 로컬 py_compile·필드 집합 추출이 KNOWN_DRIFT와 일치(2026-11-01). 원격 시험 3359 passed/485 skipped(초록 `6aa4000879`)·mutation 빨강 `78e7a05dde`(probe_field 지목)·revert `cb59bedf6f`
+- gate 변화: 없음
+- 결정: D-940 갈래 ① 소비 1건, ③ 핀 1건
 - 교훈: 없음

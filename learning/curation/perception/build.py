@@ -38,6 +38,8 @@ import sys as _source_sys
 _source_sys.path[:0] = [str(_SourcePath(__file__).resolve().parents[3] / p)
                         for p in ('learning/registry/perception',)]
 
+from store import content_sha  # noqa: E402  # D-940: the registry store owns the D-373 layout
+
 
 
 import argparse
@@ -336,26 +338,6 @@ def build_dataset(export, frame_dirs, classes, out, deleted_indexes=(), exclude_
         manifest["disjoint_from"] = disjoint
     (out / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     return manifest
-
-
-def content_sha(folder, *, manifest_bytes=None) -> str:
-    """D-373 decision 8 store version: sha256 over sorted "relpath\\0filesha256\\n" lines.
-
-    Minimal stand-in until learning/registry/perception/store.py (feat/d373-learning-loop-lap2)
-    lands on main; switch to it then and keep this layout."""
-    folder = Path(folder)
-    lines = []
-    for p in folder.rglob("*"):
-        if p.is_file():
-            h = hashlib.sha256()
-            if manifest_bytes is not None and p.relative_to(folder).as_posix() == "manifest.json":
-                h.update(manifest_bytes)
-            else:
-                with open(p, "rb") as fh:
-                    for chunk in iter(lambda: fh.read(1 << 20), b""):
-                        h.update(chunk)
-            lines.append(f"{p.relative_to(folder).as_posix()}\0{h.hexdigest()}\n")
-    return hashlib.sha256("".join(sorted(lines)).encode("utf-8")).hexdigest()
 
 
 def read_eval_set(folder, *, with_manifest=False) -> tuple:
