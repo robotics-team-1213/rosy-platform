@@ -94,6 +94,8 @@ class WorkcellCamera(_StrictModel):
     device_path: DevicePath
     token_env: TokenEnv
     credential_sha256: CredentialSha256
+    # depth: the topic carries a colour-mapped preview and `<topic>:depth16` the raw 16-bit depth (camera_source)
+    stream: Literal["color", "depth", "ir"] = "color"
 
 
 class WorkcellObservation(_StrictModel):

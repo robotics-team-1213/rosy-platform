@@ -174,3 +174,31 @@ def test_a_raw_format_is_used_only_when_the_camera_role_names_it(camera):
     cap.get = lambda key: 1448695129 if key == cv.CAP_PROP_FOURCC else cap.values[key]
     with pytest.raises(OSError, match="differs from MJPG"):  # the default still refuses a raw stream
         open_capture(cv, "/dev/v4l/by-id/selected-camera")
+
+
+def test_a_depth_role_reads_raw_frames_and_keeps_both_a_preview_and_the_lossless_depth():
+    """2026-10-31: OpenCV opened no Z16 node of the RealSense D435; v4l2-ctl streams it raw."""
+    np = pytest.importorskip("numpy")
+    cv2 = pytest.importorskip("cv2")
+    from omx_adapter.camera_source import DepthCapture, depth_outputs
+
+    depth = np.full((480, 640), 611, np.uint16)
+    depth[:10] = 0  # no reading
+    frames = [depth.tobytes(), b"short"]
+    calls = []
+
+    class Process:
+        stdout = SimpleNamespace(read=lambda size: frames.pop(0)[:size])
+        kill, wait = (lambda self: calls.append("kill")), (lambda self, timeout: None)
+
+    capture = DepthCapture("/dev/v4l/by-id/rosy-realsense-d435-depth", "Z16",
+                           popen=lambda argv, **kw: calls.append(argv) or Process())
+    assert "--set-fmt-video=width=640,height=480,pixelformat=Z16 " in calls[0] and "--stream-to=-" in calls[0]
+    frame = capture.read(np)
+    assert frame.shape == (480, 640) and frame[100, 100] == 611
+    with pytest.raises(OSError, match="depth frame"):
+        capture.read(np)  # a cut stream is a lost frame and a reopen, never a shifted picture
+    assert calls[-1] == "kill"
+    preview, png, facts = depth_outputs(frame, cv2, np, 0.001, (300, 1200))
+    assert preview[:2] == b"\xff\xd8" and facts == {"unit_m": 0.001, "valid_fraction": round(470 / 480, 3)}
+    assert np.array_equal(cv2.imdecode(np.frombuffer(png, np.uint8), cv2.IMREAD_UNCHANGED), frame)  # lossless

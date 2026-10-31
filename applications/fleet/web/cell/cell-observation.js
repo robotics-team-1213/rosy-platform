@@ -67,7 +67,7 @@ export function createCellObservation({request, root}) {
         const entry = {image, status, expires: 0, pending: false, lease: null, identity: null, url: null};
         image.onerror = () => staleCamera(entry);
         staleCamera(entry); cameras.set(camera.source_id, entry);
-        card.append(element('h4', camera.label), element('ui-text', camera.role === 'overhead'
+        card.append(element('h4', camera.stream === 'depth' ? `${camera.label} · 깊이` : camera.label), element('ui-text', camera.role === 'overhead'
           ? '공용 상단 카메라' : `설정된 팔: ${camera.arm_id}`), status, image); grid.append(card);
       }
       section.append(grid); root.append(section);
