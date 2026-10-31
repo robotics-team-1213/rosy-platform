@@ -28,6 +28,7 @@ ROOT = Path(__file__).resolve().parents[3]
     ("/console/install", "#user-role"),
     ("/console/site-map", "#user-role"),
     ("/console/cell", "#user-role"),
+    ("/console/policy", "#user-role"),  # field 2026-10-31: no token → signed out → login bounced to /console
 ])
 def test_direct_development_entry_needs_no_operator_token(tmp_path, path, identity):
     from playwright.sync_api import expect, sync_playwright
