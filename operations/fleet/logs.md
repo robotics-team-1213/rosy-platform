@@ -5215,3 +5215,10 @@
 - 변경: `test/test_doc_tabs.py`에 다섯 영역 문서의 경로 줄 계약을 추가했다(본문 머리에 문서 제목 h1 하나 + 현재 화면 strong, site-map 첫 구획은 h2).
 - 증거: 원격 시험은 착지 전 기록한다.
 - Gate: 없음. CE: 해당 없음.
+
+
+## 2026-11-01 · uncommitted · uiux(fleet): policy 현재 표시 계약 정정
+
+- 변경: `test/test_doc_tabs.py`의 작업 영역 검사에서 policy가 `학습` 링크에 현재 표시를 두지 않는다고 정정했다(거짓 `aria-current="page"` 제거 반영).
+- 증거: 원격 시험은 착지 전 기록한다.
+- Gate: 없음. CE: 해당 없음.

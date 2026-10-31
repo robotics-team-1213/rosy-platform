@@ -61,13 +61,14 @@ def test_in_page_anchors_sit_in_the_shared_subnav_seat():
 
 
 def test_work_area_screens_are_the_same_subnav_in_the_console_and_cell():
-    """D-741 7 / D-763 9 — 전체 작업·승인 대기·끝난 작업·새 작업. 새 작업은 종류 목록이고 Cell 문서는 그 아래에 놓인다."""
+    """D-741 7 / D-763 9 — 전체 작업·승인 대기·끝난 작업·새 작업. 새 작업은 종류 목록이고 Cell 문서는 그 아래에 놓인다.
+    policy는 남의 문서(학습)에 거짓 현재 표시를 두지 않는다 — 화면 이름은 경로 줄이 말한다."""
     screens = [("/console?view=work", "전체 작업"), ("/console?view=work&amp;show=pending", "승인 대기"),
                ("/console?view=work&amp;show=done", "끝난 작업"), ("/console?view=work&amp;show=new", "새 작업"),
                ("/console/learning", "학습")]
     for name, opening, current in (("index.html", '<div class="ui-subnav" data-area="work" hidden>', []),
-                                   ("cell.html", '<div class="ui-subnav">', ["/console?view=work&amp;show=new"]),
-                                   ("policy.html", '<div class="ui-subnav">', ["/console/learning"])):
+                                    ("cell.html", '<div class="ui-subnav">', ["/console?view=work&amp;show=new"]),
+                                    ("policy.html", '<div class="ui-subnav">', [])):
         page = _page(name).read_text(encoding="utf-8")
         seat = re.search(re.escape(opening) + r'<nav class="ui-subnav-nav" aria-label="작업 화면">(.*?)</nav></div>', page, re.S)
         assert seat, name

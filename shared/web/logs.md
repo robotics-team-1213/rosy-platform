@@ -1025,3 +1025,10 @@
 - 변경: `createTaskChooser`에 선택적 `onSelect(id)` 콜백을 더했다(선택 확정 직후 한 번). 기존 호출처(robot_ui mount.js)는 무변경. Fleet 설치 문서의 경로 줄 화면 이름이 이 콜백을 쓴다. `test_chrome_layout.py`의 Fleet 사이드바 고정을 D-741 6 좌석 통일에 맞게 바로잡았다(설치 문서는 이제 자기 열이 없다).
 - 증거: node --test 403 passed, robot_ui 호출처 무변경. 원격 시험은 착지 전 기록.
 - gate 변화: 없음. CE: 해당 없음.
+
+
+## 2026-11-01 · uncommitted · step 자리 표식
+
+- 변경: `app-shell.css`의 하위 탐색 현재 표식이 `aria-current="step"`(같은 문서 안 현재 단계, D-926 3)도 `page`와 같은 장미색 wash로 그린다. 빈 표식으로 단계가 보이지 않던 Cell 화면이 시각 표시를 얻는다.
+- 증거: Fleet Cell 화면 Chromium 실측(단계 배경 렌더 확인). 원격 시험은 착지 전 기록.
+- gate 변화: 없음. CE: 해당 없음.

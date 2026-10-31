@@ -665,3 +665,10 @@
 - 변경: 다섯 영역 문서가 본문 머리에 경로 줄(`ui-pathbar`, 부품은 app-shell.css)을 단다 — h1은 문서 제목 하나뿐이고 strong이 현재 화면을 따라온다(install은 task-chooser 새 `onSelect`, 지도·Cell은 `bindScreens` 새 `label`, 관제는 `area-nav`, 정책은 고정). site-map의 첫 구획 제목 "지도 보기"는 h2로 낮추고 관제·설치의 sr-only h1을 걷었다. 비평 P0도 고쳤다: `#camera-calibration`이 닫히지 않아 `#host-services`·설치 기록이 그 안에 중첩돼 호스트 서비스 탭이 빈 화면이던 잠복 결함(`</section>` 1줄).
 - 증거: 작업 세션 Fleet 샘플 서버(4173) Chromium — 호스트 서비스 탭 패널 표시·설치 기록 모든 탭에서 표시, 경로 줄 화면 이름이 chooser·해시·view를 따라감("카메라 설치·보정"·"초안 편집"·"레시피"·"작업"), site-map main h1 0개·map-heading H2, 페이지 오류 없음. node --test 403 passed. 원격 시험은 착지 전 기록.
 - gate 변화: 없음. CE: 해당 없음.
+
+
+## 2026-11-01 · uncommitted · 비평 P1: 현재 표시 어휘 통일, 설치 작업 주소 보존, policy 거짓 표시 제거
+
+- 변경: `aria-current="step"`(문서 안 현재 단계)이 `page`와 같은 장미색 자리 표식을 받는다(app-shell.css, Cell 단계가 처음으로 보인다). install 작업 선택이 `history.replaceState(#작업-id)`로 주소에 남고 첫 로드가 해시를 일반화해 읽어 새로고침·공유가 작업을 보존한다(기존 `#device-profiles` 특수 처리 제거). policy 좌석의 `학습` 링크에서 남의 문서를 가리키던 거짓 `aria-current="page"`를 뺐다 — 화면 이름은 경로 줄 strong이 말한다.
+- 증거: 작업 세션 Fleet 샘플 서버(4173) Chromium — Cell 현재 단계 표식 배경 확인, 탭 클릭 → `#hosts` → 새로고침 후 같은 작업 복원, 신규 로드 `#device-profiles` → 해당 패널, policy 현재 표시 0개, 페이지 오류 없음. node --test 403 passed. 원격 시험은 착지 전 기록.
+- gate 변화: 없음. CE: 해당 없음.

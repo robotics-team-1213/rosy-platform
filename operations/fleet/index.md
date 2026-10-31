@@ -104,8 +104,8 @@
 
 ## 최근 기록
 
+- 2026-11-01 · uncommitted · uiux(fleet): policy 현재 표시 계약 정정
 - 2026-11-01 · uncommitted · uiux(fleet): 경로 줄 계약 시험
 - 2026-11-01 · uncommitted · uiux(fleet): 설치 문서 하위 탐색 계약 시험
 - 2026-10-31 · uncommitted · feat(fleet): D-938 팔 이송 정책 승인
 - 2026-10-30 · uncommitted · feat(sim): 정상 단계 시뮬 관측자 transfer_observer (D-927 결정 3)
-- 2026-10-30 · f10444d3af · 헤더 CI 교정 원격 검증
