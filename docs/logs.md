@@ -13163,6 +13163,13 @@ osy-d395-s1d\`.
 - 결정: D-935 Accepted(사용자 결정)
 - 교훈: 없음
 
+## 2026-10-30 · uncommitted · feat(fleet): 확인된 ARM 시도의 재관측 계약(D-930, API v1.334)
+
+- 변경: `POST/GET /api/fleet/arm-transfers/jobs/{id}/rechecks`를 추가했다. 기다리는 재관측은 기존 observation context에 `phase=RECHECK`로 나오고 같은 observations 경로로 받는다. 검사는 POST_ACTION과 같고 요청 뒤 시각·측정 관절을 요구한다. Action·claim·작업 상태·영수증·v1.330 근거는 바뀌지 않는다(`work/physical_transfer_rechecks.py`, `fleet_physical_transfer_rechecks` 테이블).
+- 증거: 원격 `test_physical_transfer_recheck.py`와 관측자·v1.330·관측 계약·holder import 시험 58 passed. Harbor 전체 흐름 회귀(D-927)의 ⑤가 이 계약을 쓴다.
+- Gate: 없음. simulation 계약 구현이며 실물 관측자·현장 수용은 별도다. 공개 push 없음.
+- CE: 해당 없음 — 설계 결정과 계약 추가이며 해결한 장애가 아니다.
+
 ## 2026-10-30 · uncommitted · fleet/omx: per-arm marker id blocks for up to four arms (D-933 보충)
 - 변경: `cell_print_sheets`를 `DICT_4X4_100`으로 넓히고 팔 번호별 15개 묶음(`arm_ids`, `arm-markers` 시트)을 더함, Cell 화면 「보정 인쇄물」에 팔 번호 선택, `cell_marks` 사전·기본 ID, D-933 8항(번호 표)
 - 증거: 원격 `test_cell_print_sheets.py`·`test_omx_cell_marks.py`(팔 1·4 시트를 OpenCV로 되읽음), 브라우저 Cell 화면
