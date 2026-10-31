@@ -49,8 +49,8 @@
 
 ## 최근 기록
 
+- 2026-11-01 · uncommitted · D-945 레이아웃 계약 시험
 - 2026-11-01 · uncommitted · step 자리 표식
 - 2026-11-01 · uncommitted · task-chooser onSelect 선택 알림
 - 2026-10-30 · uncommitted · D-926 6: 쓰지 않는 토큰 정리
 - 2026-10-30 · uncommitted · 아이콘 표시 속성과 공용 탐색 계약
-- 2026-10-29 · 1c8923b441 · 숨겨진 WHEP video 재생 시작

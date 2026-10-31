@@ -1,0 +1,60 @@
+"""D-945 — 어느 표면을 열어도 같은 뼈대: 자리 순서, 제목 하나, 표식 어휘 셋."""
+
+from pathlib import Path
+import re
+
+ROOT = Path(__file__).resolve().parents[3]
+WEB = ROOT / "applications/fleet/web"
+ROBOT = ROOT / "middleware/robot_ui/robot"
+REVIEW = ROOT / "learning/curation/perception/review_app_web"
+
+AREA_DOCS = ["index.html", "installation/install.html", "sitemap/site-map.html", "cell/cell.html", "work/policy.html"]
+LIGHT_DOCS = ["login.html", "profile.html", "accounts.html", "learning.html"]
+
+
+def _page(base, name):
+    return (base / name).read_text(encoding="utf-8")
+
+
+def test_fleet_area_documents_keep_the_seat_order_and_one_h1():
+    """앱 바 → 레일 → 하위 탐색 → 경로 줄 → 본문. h1은 경로 줄의 문서 제목 하나뿐이다."""
+    for name in AREA_DOCS:
+        page = _page(WEB, name)
+        body = page[page.index("<body"):]
+        order = [body.index(marker) for marker in
+                 ("<ui-topbar", 'class="doc-tabs"', 'class="ui-subnav"', 'class="ui-pathbar"', "<main")]
+        assert order == sorted(order), f"{name}: seat order"
+        assert page.count("<h1") == 1 and '<div class="ui-pathbar"><h1>' in page, f"{name}: one h1, in the path bar"
+
+
+def test_fleet_light_documents_are_header_then_main_with_one_h1():
+    """가벼운 문서는 머리 랜드마크 → 본문. 레일·하위 탐색 자리는 아예 없다(비움은 아래부터)."""
+    for name in LIGHT_DOCS:
+        page = _page(WEB, name)
+        body = page[page.index("<body"):]
+        assert body.index("<ui-topbar") < body.index("<main"), name
+        assert 'class="fleet-document-header"' in page and page.count("<h1") == 1, name
+        assert 'class="doc-tabs"' not in page and 'class="ui-subnav"' not in page, name
+
+
+def test_current_markers_use_only_the_three_agreed_words():
+    """표식 어휘는 page·step뿐이다(셋째는 탭의 aria-selected). 다른 값은 새 어휘의 탄생이다."""
+    for base, names in ((WEB, AREA_DOCS + LIGHT_DOCS),
+                        (REVIEW, [path.name for path in REVIEW.glob("*.html")])):
+        for name in names:
+            for value in re.findall(r'aria-current="([^"]+)"', _page(base, name)):
+                assert value in ("page", "step"), (name, value)
+
+
+def test_robot_shell_keeps_the_seat_order():
+    surface = _page(ROBOT, "surface.html")
+    body = surface[surface.index("<body"):]
+    order = [body.index(marker) for marker in
+             ("<ui-topbar", 'class="ui-rail"', 'class="ui-subnav"', "<main")]
+    assert order == sorted(order), "robot shell seat order"
+
+
+def test_review_pages_head_the_body_with_one_pathbar_h1():
+    for path in sorted(REVIEW.glob("*.html")):
+        page = path.read_text(encoding="utf-8")
+        assert page.count("<h1") == 1 and '<div class="ui-pathbar"><h1>' in page, path.name

@@ -1032,3 +1032,10 @@
 - 변경: `app-shell.css`의 하위 탐색 현재 표식이 `aria-current="step"`(같은 문서 안 현재 단계, D-926 3)도 `page`와 같은 장미색 wash로 그린다. 빈 표식으로 단계가 보이지 않던 Cell 화면이 시각 표시를 얻는다.
 - 증거: Fleet Cell 화면 Chromium 실측(단계 배경 렌더 확인). 원격 시험은 착지 전 기록.
 - gate 변화: 없음. CE: 해당 없음.
+
+
+## 2026-11-01 · uncommitted · D-945 레이아웃 계약 시험
+
+- 변경: `test/test_layout_canon.py` — Fleet 아홉 문서·로봇 셸·학습 검수 화면의 자리 순서, 문서 h1 하나(경로 줄), 표식 어휘(page·step)를 검사한다. 시험이 첫 이탈을 잡아 검수 화면 여섯의 낡은 `aria-current="true"`를 `page`로 통일했다.
+- 증거: 정적 단정 전 통과(로컬 파일 검사). 원격 pytest는 착지 전 기록.
+- Gate: 없음. CE: 해당 없음.

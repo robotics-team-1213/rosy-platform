@@ -357,3 +357,10 @@
 - gate 변화: 없음. 운영 검수 DB·사람 정답·학습·모델 활성화·실물 동작은 변경하지 않았다. 새 로봇 녹화·실제 서비스 설치·착지/push는 별도다.
 - CE: 해당 없음 — 복구·무결성·중복 방지 판단은 코드·회귀·운영 문서에 남는다. 로봇 접속 실패는 해결된 사실로 기록하지 않는다.
 - 후속 검증: d2d68c3346의 공식 affected 전체 13,602 passed/1,285 skipped/NEW 0, 실제 기존 녹화와 pinned raw 집중 88 passed/skip0/NEW 0. 생산 코드는 66e86cb0fb와 같으며, 중간 전체 회귀의 OMX 합성 시계 실패 두 건은 기존 시계 fixture를 공유해 보완했다. 원본 실패·대조·취소·skip은 검증 정본에 보존했다.
+
+
+## 2026-11-01 · uncommitted · 레일 현재 표식 어휘 통일
+
+- 변경: 검수 화면 여섯(camera·pixels·omx·vlm·workspaces·sim)의 레일 항목이 쓰던 `aria-current="true"`를 표준 어휘 `page`로 바꿨다(D-945 계약 시험이 이탈로 지목).
+- 증거: `test_layout_canon.py` 통과. 원격 시험은 착지 전 기록.
+- Gate: 없음. CE: 해당 없음.
