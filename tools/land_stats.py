@@ -28,6 +28,7 @@ import land_events  # noqa: E402
 
 WINDOW = 6 * 3600  # seconds within which one id failing for two branches counts as shared
 REPEAT_ROWS = 10
+TIMING_KEYS = ("queued_s", "wait_s", "run_s")
 
 
 def percentile(values: list[float], q: float) -> float | None:
@@ -77,7 +78,7 @@ def repeat(rows: list[dict], candidates: str, quarantine: str) -> list[dict]:
 def daily(rows: list[dict]) -> dict[str, dict]:
     days: dict[str, dict] = defaultdict(lambda: {"landed": 0, "stopped": 0, "waits": [], "turns": [],
                                                  "tests": defaultdict(int), "prepares": [],
-                                                 "causes": defaultdict(int)})
+                                                 "causes": defaultdict(int), "timing": defaultdict(list)})
     turn_at: dict[int, float] = {}
     for row in rows:
         day = days[time.strftime("%Y-%m-%d", time.localtime(row["t"]))]
@@ -93,6 +94,9 @@ def daily(rows: list[dict]) -> dict[str, dict]:
             day["prepares"].append(row.get("seconds", 0) / 60)
         elif event == "tests":
             day["tests"][row.get("verdict", "?")] += 1
+            for key in TIMING_KEYS:  # land_checks.timing: per invocation, absent before 2026-10-31
+                if key in row:
+                    day["timing"][key].append(row[key])
     for t, cause in causes(rows):
         days[time.strftime("%Y-%m-%d", time.localtime(t))]["causes"][cause] += 1
     out = {}
@@ -106,7 +110,9 @@ def daily(rows: list[dict]) -> dict[str, dict]:
                      "prepare_p90_min": percentile(day["prepares"], .9),
                      "invocations": judged, "new_share": share("new"), "flaky_share": share("flaky"),
                      "unusable_share": share("unusable"),
-                     **{f"failed_{c}": day["causes"][c] for c in ("shared", "host", "branch")}}
+                     **{f"failed_{c}": day["causes"][c] for c in ("shared", "host", "branch")},
+                     **{f"{k}_{q}": percentile(day["timing"][k], v) for k in TIMING_KEYS
+                        for q, v in (("p50", .5), ("p90", .9))}}
     return out
 
 
@@ -131,6 +137,11 @@ def main(argv=None) -> int:
               f"  {fmt(d['turn_p50_min']):>6}/{fmt(d['turn_p90_min']):<8}  {d['invocations']:3}  {fmt(d['new_share']):5}"
               f" {fmt(d['flaky_share']):5} {fmt(d['unusable_share']):8}"
               f"  {d['failed_shared']}/{d['failed_host']}/{d['failed_branch']}")
+    timed = {name: d for name, d in stats.items() if d["run_s_p50"] is not None}
+    if timed:
+        print("\nper invocation s p50/p90   queued (round start->job start)  wait (host room)  run")
+        for name, d in timed.items():
+            print(f"{name}  " + "  ".join(f"{fmt(d[k + '_p50']):>6}/{fmt(d[k + '_p90']):<6}" for k in TIMING_KEYS))
     read = lambda path: path.read_text(encoding="utf-8") if path.is_file() else ""  # noqa: E731
     top = repeat(rows, read(Path(common) / "rosy-flaky-candidates.txt"), read(Path(common).parent / "test/flaky_quarantine.txt"))
     if top:
