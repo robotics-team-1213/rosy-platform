@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
-- 2026-10-30 · uncommitted · feat(fleet): 확인된 ARM 시도의 재관측 계약(D-930, API v1.334)
 - 2026-10-31 · uncommitted · fleet: D-938 팔 이송 정책 승인
 - 2026-10-31 · uncommitted · fix(land): main 변화분의 safety 경로는 FULL 재실행을 부르지 않는다
+- 2026-10-30 · uncommitted · feat(fleet): 확인된 ARM 시도의 재관측 계약(D-930, API v1.334)
 - 2026-10-30 · uncommitted · omx: D-935 payload bound on the D-911 gate
 - 2026-10-30 · uncommitted · omx: cell scale reader and D-934 object mass
