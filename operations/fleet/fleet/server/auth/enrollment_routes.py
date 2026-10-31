@@ -82,6 +82,16 @@ def install_enrollment_routes(app: FastAPI, enrollment: EnrollmentService, *,
             raise _refusal(exc) from None
         return result
 
+    release_guard = named_operator("releasing a robot's emergency stop")
+
+    # User decision 2026-10-31: the administrator code comes off the robot's own screen; Fleet keeps nothing.
+    @app.post("/api/fleet/robots/{robot_id}/estop-release", tags=["fleet-enrollment"])
+    async def estop_release(robot_id: str, body: MoveRequest, principal=Depends(release_guard)) -> dict:
+        try:
+            return await enrollment.release_estop(robot_id, code=body.code, principal_id=principal.principal_id)
+        except (EnrollmentError, HubError) as exc:
+            raise _refusal(exc) from None
+
     hub_guard = named_operator("linking a robot to the site hub")
 
     # D-555: one hub credential per enrolled robot, delivered only over a TLS-bound enrollment.

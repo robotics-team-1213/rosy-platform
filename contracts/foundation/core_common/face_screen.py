@@ -368,7 +368,8 @@ def screen_for(*, stage: Any = None, state: Any = None, todo: Optional[str] = No
                core: Optional[Mapping[str, Any]] = None, update: Optional[Mapping[str, Any]] = None,
                test: Optional[str] = None, shutting_down: bool = False,
                drive_since: Optional[float] = None, now: float = 0.0,
-               light_assist: bool = False, peer: Optional[Mapping[str, Any]] = None) -> dict:
+               light_assist: bool = False, peer: Optional[Mapping[str, Any]] = None,
+               release_code: Optional[str] = None) -> dict:
     """The one answer for the LCD (D-433 decision 2). Higher rows win.
 
     ``stage``: boot-status stage; ``state``: ``robot_state.evaluate``'s state;
@@ -379,7 +380,8 @@ def screen_for(*, stage: Any = None, state: Any = None, todo: Optional[str] = No
     activation runs; ``test``: ``"buzzer"``/``"lamp"`` while a D-247 test plays,
     or ``"identify_blue"``/``"identify_amber"`` during a fleet call;
     ``drive_since``: when the current operating mode began (monotonic);
-    ``peer``: ``read_peer_approval``'s answer while a D-456 request waits (D-483).
+    ``peer``: ``read_peer_approval``'s answer while a D-456 request waits (D-483);
+    ``release_code``: root's e-stop release code (v1.337), drawn on the stopped card only.
 
     The answer: ``kind`` (one of KINDS), ``row`` (the table row id), ``face``,
     ``overlay`` (``{"kind": "drive"|"wake", "payload": {...}}``), ``strip`` and
@@ -402,7 +404,7 @@ def screen_for(*, stage: Any = None, state: Any = None, todo: Optional[str] = No
         return {**answer, "kind": UPDATE, "row": "update", "release": update.get("release")}
     if core is not None and (core.get("estop") or core.get("robot_mode") == "EMERGENCY"):
         return {**answer, "kind": STOPPED, "row": "stopped", "cause": _stopped_cause(core),
-                "release": STOP_RELEASE}
+                "release": f"Release code {release_code}" if release_code else STOP_RELEASE}
     if ap_mode:
         return status("ap")
     if kind != "CORE_READY":

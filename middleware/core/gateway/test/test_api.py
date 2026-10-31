@@ -416,8 +416,12 @@ def test_safety_stop_release_cycle(client):
     assert tc.post("/api/v1/safety/stop", headers=VIEWER).status_code == 200   # 누구나 (SAF-001)
     assert svc.safety.estop is True
     assert svc.command.teleop(0.1, 0.0)[0] is False                            # 차단 확인
+    # v1.336: the snapshot says who latched it, so Fleet and screens can show why.
+    source = tc.get("/api/v1/robot/state", headers=VIEWER).json()["safety"]["source"]
+    assert source == svc.safety.estop_source and source.startswith("api:")
     assert tc.post("/api/v1/safety/release", headers=ADMIN).status_code == 200
     assert svc.safety.estop is False
+    assert tc.get("/api/v1/robot/state", headers=VIEWER).json()["safety"]["source"] == ""
     types = [e.type for e in svc.events.history()]
     assert "safety.estop" in types and "safety.estop_released" in types
 
@@ -920,6 +924,7 @@ def test_battery_policy_estop_enters_emergency_so_admin_release_works(client):
     assert svc.safety.estop and svc.safety.estop_source == "battery_policy"
     assert svc.modes.mode is Mode.EMERGENCY
     assert svc.state.snapshot().safety.estop
+    assert svc.state.snapshot().safety.source == "battery_policy"
     assert tc.post("/api/v1/safety/release", headers=OPERATOR).status_code == 403
     assert tc.post("/api/v1/safety/release", headers=ADMIN).status_code == 200
     assert not svc.safety.estop and svc.modes.mode is Mode.IDLE

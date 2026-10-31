@@ -217,7 +217,7 @@ def test_power_health_card_keeps_stale_evidence_unknown_and_safety_latched(conso
         robot["state"]["safety"]["estop"] = True
         page.wait_for_function("() => document.querySelector('#robot-workspace [data-fact=safety]')?.textContent.includes('비상 정지')")
         assert "충전 확인" in card.locator('[data-charging]').inner_text()
-        assert "관리자:" in card.inner_text()
+        assert "비상정지 해제…" in card.inner_text()
         assert not errors
         browser.close()
 

@@ -16,7 +16,10 @@ The daemon (`--daemon`, rosy-login-code.service) issues one code after the
 first CORE_READY of a boot, as `login.boot_code` says (off | operator |
 administrator), then clears the three files when CORE signals that the code
 was used or burned (/run/rosy/login-code-state.json, read strictly) or when it
-expires. It never prints a code. The command `sudo rosy-login-code [--role R]
+expires. While CORE reports an e-stop latch (/run/rosy/face-inputs.json, fresh)
+it shows a release-only code instead (role estop_release, API v1.337): CORE
+accepts it only at POST /api/v1/safety/release-code, never as a login. A live
+CLI code is left alone. It never prints a code. The command `sudo rosy-login-code [--role R]
 [--minutes N]` issues a code on demand and prints it only to its own terminal.
 """
 
@@ -54,6 +57,7 @@ LOCK_FILE = f"{STATUS_DIR}/.login.lock"
 BOOT_MARK = f"{STATUS_DIR}/.login-boot-issued"
 BOOT_STATUS = f"{STATUS_DIR}/boot-status.json"
 CORE_STATE = "run/rosy/login-code-state.json"
+FACE_INPUTS = "run/rosy/face-inputs.json"
 BOOT_ID = "proc/sys/kernel/random/boot_id"
 DEFAULTS = "etc/rosy/defaults.yaml"
 POLICY = "etc/rosy/login-policy.json"
@@ -67,6 +71,11 @@ MAX_MINUTES = 60
 MAX_STATE_BYTES = 256
 STATE_CODE_ID = re.compile(r"^[0-9a-f]{16}$")
 POLL_S = 1.0
+RELEASE_ROLE = "estop_release"
+RELEASE_MINUTES = 10
+#: CORE rewrites face-inputs.json every second; older than this is no latch reading.
+FACE_FRESH_S = 5.0
+MAX_FACE_BYTES = 16384
 #: How long the LCD says the code was burned before the line goes away.
 BURNED_NOTICE_S = 60.0
 BURNED_MARK = "BURNED"
@@ -154,6 +163,39 @@ def load_policy(root: Path) -> dict:
     return policy
 
 
+def _read_strict(path: Path, cap: int) -> tuple[bytes, float] | None:
+    """(content, mtime) of a regular file no larger than `cap`, never through a symlink or FIFO."""
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0) \
+        | getattr(os, "O_CLOEXEC", 0)
+    try:
+        descriptor = os.open(path, flags)
+    except OSError:
+        return None
+    try:
+        info = os.fstat(descriptor)
+        if not stat.S_ISREG(info.st_mode) or info.st_size > cap:
+            return None
+        raw = os.read(descriptor, cap + 1)
+    except OSError:
+        return None
+    finally:
+        os.close(descriptor)
+    return None if len(raw) > cap else (raw, info.st_mtime)
+
+
+def core_latched(root: Path, now: Callable[[], float] = time.time, newer_than: float = 0.0) -> bool:
+    """CORE's own fresh word that it is latched. CORE is untrusted (D-161), but a false latch
+    only shows a code that can do nothing except release a latch CORE does not hold."""
+    read = _read_strict(root / FACE_INPUTS, MAX_FACE_BYTES)
+    if read is None or not 0 <= now() - read[1] <= FACE_FRESH_S or read[1] <= newer_than:
+        return False
+    try:
+        data = json.loads(read[0].decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
+        return False
+    return isinstance(data, dict) and data.get("estop") is True
+
+
 def read_core_state(root: Path) -> dict | None:
     """CORE's used/burned signal, or None. CORE is untrusted here (D-161).
 
@@ -161,23 +203,10 @@ def read_core_state(root: Path) -> dict | None:
     MAX_STATE_BYTES, a well-formed code id and a known state; anything else is
     ignored as if the file were not there.
     """
-    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0) \
-        | getattr(os, "O_CLOEXEC", 0)
-    try:
-        descriptor = os.open(root / CORE_STATE, flags)
-    except OSError:
+    read = _read_strict(root / CORE_STATE, MAX_STATE_BYTES)
+    if read is None:
         return None
-    try:
-        info = os.fstat(descriptor)
-        if not stat.S_ISREG(info.st_mode) or info.st_size > MAX_STATE_BYTES:
-            return None
-        raw = os.read(descriptor, MAX_STATE_BYTES + 1)
-    except OSError:
-        return None
-    finally:
-        os.close(descriptor)
-    if len(raw) > MAX_STATE_BYTES:
-        return None
+    raw = read[0]
     try:
         data = json.loads(raw.decode("ascii"))
     except (UnicodeDecodeError, ValueError):
@@ -192,6 +221,9 @@ def read_core_state(root: Path) -> dict | None:
 
 def render_issue(formatted: str, role: str, minutes: int) -> str:
     # agetty expands backslash escapes in issue files; this text has none.
+    if role == RELEASE_ROLE:
+        return (f"\n  ROSY e-stop release code {formatted}  (valid {minutes} min, one use)\n"
+                "  Enter it in the site console: robot row > release e-stop.\n\n")
     return (f"\n  ROSY dashboard login code {formatted}  ({role}, valid {minutes} min, one use)\n"
             "  Open the dashboard on the robot LAN and choose 'robot screen code'.\n\n")
 
@@ -207,6 +239,8 @@ class Issuer:
         self.run = run or (lambda command: _run(command))
         self.group = group or (lambda name: group_id(name))
         self.burned_until: float | None = None
+        #: Wall time a code was last used: a latch reading from before it is the old latch.
+        self.used_wall = 0.0
 
     @contextmanager
     def lock(self):
@@ -282,6 +316,8 @@ class Issuer:
         """Remove the verifier, the display line and the banner. A burned code leaves a short notice."""
         (self.root / CODE_FILE).unlink(missing_ok=True)
         (self.root / ISSUE_FILE).unlink(missing_ok=True)
+        if reason == "used":
+            self.used_wall = time.time()
         if reason == "burned":
             self._display(f"{BURNED_MARK}\n")
             self.burned_until = self.clock() + BURNED_NOTICE_S
@@ -338,6 +374,22 @@ def boot_step(issuer: Issuer) -> str | None:
     return action
 
 
+def release_step(issuer: Issuer, now: Callable[[], float] = time.time) -> str | None:
+    """Show a release code while CORE is latched; take it away when the latch is gone."""
+    latched = core_ready(issuer.root) and core_latched(issuer.root, now, issuer.used_wall)
+    code = issuer.current()
+    if code is not None and code.get("role") == RELEASE_ROLE:
+        if latched:
+            return None
+        with issuer.lock():
+            issuer.clear("unlatched")
+        return "release-cleared"
+    # A burned code waits out its notice (no instant reissue to guess against); a CLI code stays.
+    if not latched or issuer.burned_until is not None or (code is not None and code.get("issued_by") == "cli"):
+        return None
+    return "release-issued" if issuer.issue(RELEASE_ROLE, RELEASE_MINUTES, "estop") else "release-not-issued"
+
+
 def daemon(issuer: Issuer, *, once: bool = False, sleep: Callable[[float], None] = time.sleep) -> int:
     # A restarted daemon has lost its burned-notice timer; a notice with no code behind it goes.
     with issuer.lock():
@@ -349,6 +401,9 @@ def daemon(issuer: Issuer, *, once: bool = False, sleep: Callable[[float], None]
             if action is not None:
                 # Never the code: only what happened.
                 print(json.dumps({"boot_code": action}), flush=True)
+            action = release_step(issuer)
+            if action is not None:
+                print(json.dumps({"release_code": action}), flush=True)
             cleared = issuer.poll()
             if cleared is not None:
                 print(json.dumps({"cleared": cleared}), flush=True)
