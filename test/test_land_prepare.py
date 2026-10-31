@@ -151,8 +151,11 @@ def test_again_retains_original_full_base_when_main_moves_during_preparation(ful
 
     monkeypatch.setattr(land, "run_tests", check)
     monkeypatch.setattr(land.land_queue, "wait", lambda *a, **k: None)
+    emitted = []
+    monkeypatch.setattr(land.land_events, "emit", lambda event, **f: emitted.append(event))
     restored = land.land_prepare.again(land, wt, "feat/x", args, sys.executable, None, None,
                                        [["pkg/test"]], "")
+    assert emitted[0] == "released", "the turn's lock ends where the work moves outside"
     assert restored == base and path.read_bytes() == original
     assert set(git(main, "diff", "--name-only", restored, "main").splitlines()) == {"lib/peer.py", "lib/later.py"}
 
