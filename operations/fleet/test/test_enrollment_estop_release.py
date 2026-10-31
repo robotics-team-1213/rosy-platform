@@ -59,6 +59,14 @@ def test_robot_refusals_are_classified_and_audited(tmp_path, setup, expected):
     assert any(row["action"] == "estop_release" and row["outcome"] == expected for row in store.audit_rows())
 
 
+def test_a_mistyped_code_keeps_the_robot_enrolled(tmp_path):
+    """Review 2026-10-31: a wrong code must not read as Fleet's credential dying (401)."""
+    service, _, _, store = latched(tmp_path)
+
+    assert refused(service, code=CODE).code == "code_rejected"
+    assert store.get("rosy_09")["state"] == "active"
+
+
 def test_a_malformed_code_never_reaches_the_robot(tmp_path):
     service, network, core, _ = latched(tmp_path)
 

@@ -183,11 +183,11 @@ def _read_strict(path: Path, cap: int) -> tuple[bytes, float] | None:
     return None if len(raw) > cap else (raw, info.st_mtime)
 
 
-def core_latched(root: Path, now: Callable[[], float] = time.time) -> bool:
+def core_latched(root: Path, now: Callable[[], float] = time.time, newer_than: float = 0.0) -> bool:
     """CORE's own fresh word that it is latched. CORE is untrusted (D-161), but a false latch
     only shows a code that can do nothing except release a latch CORE does not hold."""
     read = _read_strict(root / FACE_INPUTS, MAX_FACE_BYTES)
-    if read is None or not 0 <= now() - read[1] <= FACE_FRESH_S:
+    if read is None or not 0 <= now() - read[1] <= FACE_FRESH_S or read[1] <= newer_than:
         return False
     try:
         data = json.loads(read[0].decode("utf-8"))
@@ -239,6 +239,8 @@ class Issuer:
         self.run = run or (lambda command: _run(command))
         self.group = group or (lambda name: group_id(name))
         self.burned_until: float | None = None
+        #: Wall time a code was last used: a latch reading from before it is the old latch.
+        self.used_wall = 0.0
 
     @contextmanager
     def lock(self):
@@ -314,6 +316,8 @@ class Issuer:
         """Remove the verifier, the display line and the banner. A burned code leaves a short notice."""
         (self.root / CODE_FILE).unlink(missing_ok=True)
         (self.root / ISSUE_FILE).unlink(missing_ok=True)
+        if reason == "used":
+            self.used_wall = time.time()
         if reason == "burned":
             self._display(f"{BURNED_MARK}\n")
             self.burned_until = self.clock() + BURNED_NOTICE_S
@@ -372,7 +376,7 @@ def boot_step(issuer: Issuer) -> str | None:
 
 def release_step(issuer: Issuer, now: Callable[[], float] = time.time) -> str | None:
     """Show a release code while CORE is latched; take it away when the latch is gone."""
-    latched = core_ready(issuer.root) and core_latched(issuer.root, now)
+    latched = core_ready(issuer.root) and core_latched(issuer.root, now, issuer.used_wall)
     code = issuer.current()
     if code is not None and code.get("role") == RELEASE_ROLE:
         if latched:

@@ -106,7 +106,7 @@ class FakeCore:
             if not self.estop:
                 return httpx.Response(409, json={"error": {"code": "NOT_LATCHED", "message": "not latched"}})
             if body.get("code") != self.release_code:
-                return httpx.Response(401, json={"error": {"code": "UNAUTHORIZED", "message": "bad code"}})
+                return httpx.Response(403, json={"error": {"code": "CODE_REJECTED", "message": "bad code"}})
             self.release_code = None
             if self.release_status != 200:
                 return httpx.Response(self.release_status,

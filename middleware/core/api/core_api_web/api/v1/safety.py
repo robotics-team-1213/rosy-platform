@@ -122,7 +122,8 @@ async def safety_release_code(body: ReleaseCodeRequest, request: Request,
         raise ApiError("VALIDATION_ERROR", 400, "a release code is 8 characters like ABCD-EFGH")
     matched, burned = await run_in_threadpool(_match_release, login._pairing(request), code)
     if not matched:
-        raise ApiError("UNAUTHORIZED", 401, "invalid or expired release code",
+        # 403, not 401: the caller's token is fine, and a 401 tells Fleet its credential died.
+        raise ApiError("CODE_REJECTED", 403, "invalid or expired release code",
                        detail={"burned": True} if burned else None)
     return _release(svc, f"screen_code:{auth.role}")
 

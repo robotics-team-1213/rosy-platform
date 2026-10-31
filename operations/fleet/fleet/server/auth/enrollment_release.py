@@ -18,7 +18,9 @@ from fleet.swarm.transport import RobotApiError
 #: CORE's answer -> (Fleet code, HTTP status, message). Anything else is robot_error.
 _REFUSALS = {
     "NOT_LATCHED": ("not_latched", 409, "the robot is not in emergency stop; the code was not used"),
-    "UNAUTHORIZED": ("code_rejected", 401, "the release code is wrong, used or expired"),
+    "CODE_REJECTED": ("code_rejected", 401, "the release code is wrong, used or expired"),
+    # Fleet's own robot credential failed (the transport already marked it for a new code).
+    "UNAUTHORIZED": ("robot_auth", 409, "Fleet's credential for this robot is no longer valid; re-enroll it"),
     "RATE_LIMITED": ("rate_limited", 429, "too many attempts at this robot"),
     "FORBIDDEN": ("lan_forbidden", 403, "the robot sees this server as outside its LAN"),
     "MODE_CONFLICT": ("release_refused", 409, "the robot used the code but refused to leave emergency"),

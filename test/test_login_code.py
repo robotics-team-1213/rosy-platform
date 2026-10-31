@@ -448,3 +448,18 @@ def test_a_burned_release_code_is_not_reissued_during_its_notice(issuer_module, 
     issuer.clock.now += issuer_module.BURNED_NOTICE_S
     issuer.poll()
     assert issuer_module.release_step(issuer) == "release-issued"
+
+
+def test_no_new_release_code_from_the_latch_reading_before_the_release(issuer_module, tmp_path):
+    root = _root(tmp_path)
+    issuer, _ = _issuer(issuer_module, root)
+    _core_ready(root)
+    (root / "run/rosy-boot/.login-boot-issued").write_text(BOOT_ID + "\n", encoding="ascii")
+    _latch(root, age_s=1.0)
+    assert issuer_module.release_step(issuer) == "release-issued"
+
+    _signal(root, issuer.current()["code_id"], "used")
+    assert issuer.poll() == "used"
+    assert issuer_module.release_step(issuer) is None  # CORE has not rewritten the hand-over yet
+    _latch(root)  # a fresh reading that still says latched: the release was refused
+    assert issuer_module.release_step(issuer) == "release-issued"
