@@ -244,7 +244,7 @@ class FirstBootProvisioner:
         owner = (account["uid"], account["gid"]) if account and account.get("uid") is not None else None
         if not _NOFOLLOW_FS:
             # Fixture hosts without O_NOFOLLOW/dir_fd (Windows); the device never takes this path.
-            self._core_api_by_path(record, fleet_bootstrap)
+            self._core_api_by_path(record, fleet_bootstrap, owner)
             return
         opened: list[int] = []
         try:
@@ -286,7 +286,8 @@ class FirstBootProvisioner:
             for fd in reversed(opened):
                 os.close(fd)
 
-    def _core_api_by_path(self, record: dict, fleet_bootstrap: dict | None = None) -> None:
+    def _core_api_by_path(self, record: dict, fleet_bootstrap: dict | None = None,
+                          owner: tuple[int, int] | None = None) -> None:
         path = self._inside(CORE_OVERLAY)
         home = self._inside(CORE_HOME)
         for candidate in (*reversed(path.relative_to(self.root).parents), path.relative_to(self.root)):
@@ -308,6 +309,9 @@ class FirstBootProvisioner:
                 handle.flush()
                 os.fsync(handle.fileno())
             os.chmod(temporary, 0o600)
+            if owner is not None:
+                for target in (home, path.parent, Path(temporary)):
+                    os.chown(target, *owner)
             os.replace(temporary, path)
         except BaseException:
             Path(temporary).unlink(missing_ok=True)

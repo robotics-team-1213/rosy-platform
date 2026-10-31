@@ -13163,6 +13163,20 @@ osy-d395-s1d\`.
 - 결정: D-935 Accepted(사용자 결정)
 - 교훈: 없음
 
+## 2026-10-30 · uncommitted · fleet/omx: per-arm marker id blocks for up to four arms (D-933 보충)
+- 변경: `cell_print_sheets`를 `DICT_4X4_100`으로 넓히고 팔 번호별 15개 묶음(`arm_ids`, `arm-markers` 시트)을 더함, Cell 화면 「보정 인쇄물」에 팔 번호 선택, `cell_marks` 사전·기본 ID, D-933 8항(번호 표)
+- 증거: 원격 `test_cell_print_sheets.py`·`test_omx_cell_marks.py`(팔 1·4 시트를 OpenCV로 되읽음), 브라우저 Cell 화면
+- gate 변화: 없음
+- 결정: D-933 Proposed 그대로, 8항 추가. 집게 마커는 0 → 팔 1의 35로(ChArUco 0~34와 겹침 해소)
+- 교훈: 없음
+
+## 2026-10-31 · uncommitted · omx: D-933 camera model from printed markers (cell_frame)
+- 변경: `cell_frame`(그리퍼 마커로 위 카메라 자세, 받침대·면 마커 학습, 매 프레임 카메라 재해석, 면 움직임, 광선→면), `cell_observe.locate`·`predicted_pixel`이 보정 파일 `cameras.top`이 있으면 모델 사용(받침대 마커가 안 보이면 지도로), `cell_checkerboard intrinsics`가 인쇄 ChArUco 판(7×10) 사용, 파이프라인 예시 `markers`, D-933 9항
+- 증거: 원격 `test_omx_cell_frame.py` 등 7개 파일 108 passed. 합성 장면에서 카메라 7도 밀림·핑키 6도/40 mm 이동 뒤에도 상자 3 mm 이내. 실물 내부 파라미터·마커 학습·정확도는 아직
+- gate 변화: 없음
+- 결정: D-933 Proposed 그대로, 9항(구현) 추가
+- 교훈: 없음
+
 ## 2026-10-31 · uncommitted · fix(land): main 변화분의 safety 경로는 FULL 재실행을 부르지 않는다
 - 변경: `tools/land_selection.py`. 차례 전 main 변화분에 safety 경로가 있어도 이 브랜치 자신에 safety 경로가 없으면 FULL 대신 변화분과 이 브랜치의 선택을 합친 트리에서 돌린다. D-889 추가 7.
 - 근거: 10-30~31 24시간 재실행 35번 약 984분, 그중 safety 경로로 인한 FULL 재실행 약 745분(사용자 결정 "A+B 둘 다").
@@ -13177,6 +13191,26 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: D-938 Accepted(사용자 결정)
 - 교훈: D-865 `valid_until` 미적용을 함께 고침
+
+## 2026-10-31 · uncommitted · docs(solutions): version pins grew, use api_reserve bump
+- 변경: `solutions/workflow-issues/a-contract-version-bump-is-three-pins-not-one.md`에 2026-10-31 갱신 절. 버전 고정값이 Fleet 계약 시험 4개 파일까지 늘었고, 손으로 고치지 말고 `api_reserve.py bump`를 쓴다
+- 증거: D-938 착지 때 Fleet 시험 5개가 `v1.331` 고정값으로 실패했다(착지 기록). `git grep '"\*\*Version:\*\* v1\.'`로 고정값 목록을 확인했다
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 기존 교훈 갱신
+
+## 2026-10-31 · uncommitted · fix(land): 자동 묶음 착지를 끈다
+- 변경: `tools/land_batch.py`(`AUTO` 기본 거짓, `ROSY_LAND_BATCH=1`로 다시 켬), `test/test_land_batch.py`(묶음 시험은 `AUTO`를 켜고 돎, 꺼짐 시험 추가), D-889 추가 9
+- 근거: 48시간 자동 묶음 97번 중 착지 28·멈춤 43, 착지 87건 중 묶음 4건, 10-31 대기열 정지가 모두 묶음에서 나옴(사용자 결정)
+- 증거: 원격 `test/test_land_batch.py`·`test/test_land.py`·`test/test_land_queue.py`·`test/test_land_prepare.py`·`test/test_harness_contracts.py`
+- gate 변화: 없음
+- 결정: D-889 추가 9(사용자 결정 2026-10-31)
+- 교훈: 없음
+
+## 2026-10-31 · uncommitted · omx: 재배선 뒤 장치 식별 교훈
+- 변경: `docs/solutions/runtime-errors/omx-cell-device-identity-after-rewiring-2026-10-31.md` (동일 시리얼 Innomaker는 by-path, RealSense 노드는 USB 인터페이스 udev 이름, 팔 좌우는 LED 차분, 확인은 `omx_devices.py scan`)
+- 증거: 현장 PC 실측(PING·LED·udev 링크·영상). depth(USB 2.0)는 미해결로 남김
+- gate 변화: 없음
 
 ## 2026-10-31 · uncommitted · sim/omx: D-927 C2~C4 시뮬 ARM_TRANSFER를 실제 셀 소유자로 끝까지 돌림
 - 변경: `tools/sim/transfer_state_writer.py`(C2), `deploy/robot/omx/sim/transfer_installation.yaml`·`tools/sim/transfer_installation.py`(C3: catalog·binding → Fleet policy·digest → bases, 홈 관절), `tools/sim/run_arm_transfer_sim.sh`·`without_devices.sh`(C4: MuJoCo+설치된 소유자+기록기, 장치 없는 namespace), `omx_topic_backend.py`·`omx_mujoco_backend.py` `--initial` 시작 조건, `run_cell_owner.py`가 `ROSY_ARM_TRANSFER_INSTALLATION`을 설치하고 fence 거절 이유(상태·숫자만)를 남김. 소유자 고침: receipt `observed_at`이 보고하는 모든 phase 시각을 덮음(`policy_parent.projection`), phase 시작·dispatch 실패 예외를 로그로 남김

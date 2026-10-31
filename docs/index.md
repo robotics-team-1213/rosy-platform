@@ -354,7 +354,7 @@
 ## 최근 기록
 
 - 2026-10-31 · uncommitted · sim/omx: D-927 C2~C4 시뮬 ARM_TRANSFER를 실제 셀 소유자로 끝까지 돌림
+- 2026-10-31 · uncommitted · omx: 재배선 뒤 장치 식별 교훈
+- 2026-10-31 · uncommitted · fix(land): 자동 묶음 착지를 끈다
+- 2026-10-31 · uncommitted · docs(solutions): version pins grew, use api_reserve bump
 - 2026-10-31 · uncommitted · fleet: D-938 팔 이송 정책 승인
-- 2026-10-31 · uncommitted · fix(land): main 변화분의 safety 경로는 FULL 재실행을 부르지 않는다
-- 2026-10-30 · uncommitted · omx: D-935 payload bound on the D-911 gate
-- 2026-10-30 · uncommitted · omx: cell scale reader and D-934 object mass
