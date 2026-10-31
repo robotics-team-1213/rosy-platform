@@ -35,6 +35,16 @@ def test_vendor_mock_hardware_becomes_the_topic_bridge():
         mod.with_topic_hardware(URDF.replace("<hardware>", "<hardware/><x>", 1))
 
 
+def test_initial_staging_seeds_the_ros2_control_position_state():
+    mod = _mod("omx_topic_backend")
+    urdf = URDF.replace('<command_interface name="position"/></joint>',
+                        '<command_interface name="position"/><state_interface name="position"/></joint>')
+    out = mod.with_initial(urdf, {"joint1": "1.0"})
+    assert '<state_interface name="position"><param name="initial_value">1.0</param></state_interface>' in out
+    with pytest.raises(ValueError):
+        mod.with_initial(urdf, {"gripper_joint_1": "1.0"})
+
+
 def test_mujoco_urdf_drops_ros_blocks_and_resolves_meshes():
     mod = _mod("omx_mujoco_backend")
     out = mod.mjcf_urdf(URDF, "/share/meshes/omx_f")
