@@ -7,8 +7,9 @@ After=rosy-omx-camera@top.service rosy-omx-camera@front.service
 Type=simple
 EnvironmentFile=%h/.config/rosy/omx-camera-top.env
 EnvironmentFile=%h/.config/rosy/omx-camera-readiness.env
+EnvironmentFile=-%h/.config/rosy/omx-camera-view.env
 Environment=ROSY_OBSERVATION_DIR=%t/rosy-observations
-ExecStart=:/bin/bash -c 'export PYTHONPATH="$ROSY_CAMERA_PIPELINE_ROOT/../../../contracts/foundation${PYTHONPATH:+:$PYTHONPATH}"; exec /usr/bin/python3 "$ROSY_CAMERA_PIPELINE_ROOT/commissioning_view.py" --port 8767'
+ExecStart=:/bin/bash -c 'export PYTHONPATH="$ROSY_CAMERA_PIPELINE_ROOT/../../../contracts/foundation${PYTHONPATH:+:$PYTHONPATH}"; exec /usr/bin/python3 "$ROSY_CAMERA_PIPELINE_ROOT/commissioning_view.py" --port 8767 $ROSY_VIEW_ARGS'
 Restart=on-failure
 RestartSec=2
 TimeoutStopSec=5

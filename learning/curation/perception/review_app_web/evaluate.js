@@ -66,39 +66,68 @@ async function sim(){
       '/learning/sim?run='+encodeURIComponent(run.run_id));
   }
 }
-let token='';
-async function promotion(){
+let token='', refreshing=false, requesting=false, actionError='', refreshError='';
+function fail(error,owner='action'){
+  const message=error?(error.message||String(error)):'';
+  if(owner==='refresh')refreshError=message;else actionError=message;
+  $('evaluate-error').textContent=[refreshError,actionError].filter(Boolean).join('\n');
+  $('evaluate-error').hidden=!$('evaluate-error').textContent;
+}
+async function promotion(keep){
   // Only the server decides who qualifies; this page shows its reasons and never calls Fleet (D-874).
   const data=await read('/api/learning/promotion-requests');
   $('promote-candidates').replaceChildren();$('promote-requests').replaceChildren();
   for(const row of data.candidates)text($('promote-candidates'),'li',`${row.name} · ${row.qualified?'요청 가능 · '+row.model_revision:row.reason}`).dataset.state=row.qualified?'done':'blocked';
   const ready=data.candidates.filter(row=>row.qualified);
   $('promote-candidate').replaceChildren(...ready.map(row=>{const option=document.createElement('option');option.value=row.id;option.textContent=`${row.name} · ${row.model_revision}`;return option;}));
+  if(ready.some(row=>row.id===keep))$('promote-candidate').value=keep;
   const reason=ready.length?'':data.candidates.length?'확정 정답 평가를 통과한 후보가 없습니다. 위 거절 이유를 확인하세요.':'등록된 인식 학습 결과가 없습니다. 홈에서 결과 폴더를 등록하세요.';
-  $('promote-pick').hidden=!ready.length;$('promote-request').disabled=!!reason;$('promote-request').setAttribute('reason',reason);
+  $('promote-pick').hidden=!ready.length;
+  $('promote-request').setAttribute('reason',reason||'평가 근거를 확인하는 중입니다.');
   $('promote-status').textContent=reason||`요청 가능한 후보 ${ready.length}개`;
   for(const row of data.requests)text($('promote-requests'),'li',`${row.sha256} · ${row.model_revision} · ${row.requester} · ${row.created_at}`);
   if(!data.requests.length)text($('promote-requests'),'li','아직 없습니다.');
+  return reason;
 }
 $('promote-request').onclick=async()=>{
-  $('promote-request').disabled=true;
+  if(refreshing||requesting)return;
+  requesting=true;$('promote-request').disabled=true;$('evaluate-refresh').disabled=true;
+  fail(null);$('promote-result').hidden=true;
   try{
     const response=await accountFetch('/api/learning/promotion-requests',{method:'POST',headers:{'Content-Type':'application/json','X-Pinky-Token':token},body:JSON.stringify({id:$('promote-candidate').value})});
     const value=await response.json();
     if(!response.ok)throw new Error(value.error||'승격 요청을 만들지 못했습니다.');
     $('promote-result').textContent=`요청 해시 ${value.sha256} · Fleet에서 승인권자가 이 해시로 제안을 만든다(D-793).`;$('promote-result').hidden=false;
-  }catch(error){$('evaluate-error').textContent=error.message;$('evaluate-error').hidden=false;}
-  await promotion();
+  }catch(error){fail(error);}
+  finally{requesting=false;}
+  await load();
 };
 async function load(){
+  if(refreshing||requesting)return;
+  refreshing=true;$('evaluate-refresh').disabled=true;fail(null,'refresh');
+  const keep=$('promote-candidate').value;
+  $('evaluate-sources').replaceChildren();$('promote-candidates').replaceChildren();$('promote-requests').replaceChildren();
+  $('promote-pick').hidden=true;$('promote-request').disabled=true;
+  $('promote-status').textContent='승격 요청 후보를 확인하는 중입니다.';
+  $('promote-request').setAttribute('reason',$('promote-status').textContent);
+  let promotionReason=null;
+  try{
   $('evaluate-filter').textContent=domain?`${DOMAINS[domain]}만 보는 중`:'모든 도메인';
   if(domain){const all=go($('evaluate-filter'),' · 전체 보기','/learning/evaluate');all.classList.remove('workspace-link');}
   const workspace=await read('/api/learning');
   token=workspace.token;  // the server swaps in the account CSRF token in collaboration mode
-  await promotion();
+  promotionReason=await promotion(keep);
   stages(workspace);
   if(!domain||domain==='vlm')await vlm(workspace);
   if(!domain||domain==='sim')await sim();
   if(!$('evaluate-sources').children.length)text($('evaluate-sources'),'p','이 도메인에는 아직 Learning에 연결된 평가 근거가 없습니다.');
+  }catch(error){
+    fail(error,'refresh');$('evaluate-filter').textContent='평가 근거를 읽지 못했습니다. 다시 확인을 눌러 주세요.';
+    if(promotionReason===null){$('promote-status').textContent='승격 후보를 읽지 못했습니다. 다시 확인을 눌러 주세요.';$('promote-request').setAttribute('reason',$('promote-status').textContent);}
+  }finally{
+    refreshing=false;$('evaluate-refresh').disabled=requesting;
+    if(promotionReason!==null){$('promote-request').disabled=!!promotionReason||requesting;$('promote-request').setAttribute('reason',promotionReason);}
+  }
 }
-load().catch(error=>{$('evaluate-error').textContent=error.message;$('evaluate-error').hidden=false;$('evaluate-filter').textContent='';});
+$('evaluate-refresh').onclick=load;
+load();

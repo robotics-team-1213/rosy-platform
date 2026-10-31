@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import hmac
-import json
 import logging
 import sqlite3
 import time
@@ -23,7 +22,7 @@ from core_common.protocol.schemas import (
     SwarmReferenceSource,
     WelcomePayload,
 )
-from fleet.hub.registry import RobotRegistry
+from fleet.hub.registry import RobotRegistry, event_content_hash
 from fleet.swarm.robots import RobotEndpoint
 from fleet.swarm.transport import RobotClient
 from fleet.server.core_event_store import CoreEventStore, EventRejected
@@ -110,7 +109,7 @@ class SiteHub:
         # Revoked or rotated: a socket welcomed with the old credential is no longer paired.
         self._paired.discard(robot_id)
         if self._sessions.pop(robot_id, None) is not None:
-            self.registry.record(robot_id).online = False
+            self.registry.mark_offline(robot_id)
 
     def drop(self, robot_id: str) -> None:
         """SiteRoster only: forget the robot's client, pairing and live session."""
@@ -119,7 +118,7 @@ class SiteHub:
         self._digests.pop(robot_id, None)
         self._paired.discard(robot_id)
         self._sessions.pop(robot_id, None)
-        self.registry.record(robot_id).online = False
+        self.registry.mark_offline(robot_id)
 
     def open_session(self) -> HubSession:
         return HubSession()
@@ -131,7 +130,7 @@ class SiteHub:
             return
         del self._sessions[robot_id]
         self._paired.discard(robot_id)
-        self.registry.record(robot_id).online = False
+        self.registry.mark_offline(robot_id)
 
     def handle(self, envelope: Envelope, *, session: HubSession | None = None) -> Envelope:
         """Route one envelope.
@@ -281,20 +280,18 @@ class SiteHub:
                 return _error("EVENT_STORAGE_UNAVAILABLE", "event was not durably accepted")
         else:
             # Match CoreEventStore's normalized JSON comparison, including data value types.
-            encode = json.JSONEncoder(ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode
-            for previous in row.events:
-                if previous.event_id == event.event_id:
-                    try:
-                        if encode(previous.model_dump(mode="json")) != encode(event.model_dump(mode="json")):
-                            return _error("EVENT_NOT_AUDITABLE", "event identity was reused with different content")
-                    except (TypeError, ValueError):
-                        return _error("EVENT_NOT_AUDITABLE", "event is outside the safe audit contract")
-                    is_new = False
-                    break
+            previous_hash = row.seen_event_hash(event)
+            if previous_hash is not None:
+                try:
+                    if previous_hash != event_content_hash(event):
+                        return _error("EVENT_NOT_AUDITABLE", "event identity was reused with different content")
+                except (TypeError, ValueError):
+                    return _error("EVENT_NOT_AUDITABLE", "event is outside the safe audit contract")
+                is_new = False
         if self.event_callback is not None and not self._recover_event_projections():
             return _error("TASK_PROJECTION_UNAVAILABLE", "event task projection is pending")
         if is_new:
-            row.events.append(event)
+            row.note_event(event)
         row.last_event_seq = max(row.last_event_seq, event.seq)
         return Envelope(type=EnvelopeType.EVENT, payload={"accepted": True})
 

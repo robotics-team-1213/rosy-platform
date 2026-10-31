@@ -1999,6 +1999,14 @@
 - gate 변화: 없음. 실제 eligible FULL·착지·게시·배포는 아직 대기하며 재발하면 추가 반복을 멈추고 관측된 최초 원인을 조사한다.
 - CE: 미해결 — 계측은 작동을 확인했으나 이전 charging 지연의 원인은 미확정이다.
 
+## 2026-10-28 · feb1cd65c · fix(core): tf2 Buffer 변환 캐시를 명시적 10초로
+
+- 변경: 
+os_bridge.py의 Buffer()를 Buffer(cache_time=Duration(seconds=10.0))로 바꿔다. 2026-10-28 자원 조사는 tf2 캐시가 “무제한”이라 봤으나 ROS 2 Jazzy 기본값은 이미 10초다(tf2_ros_py 문서·공식 listener 튜토리얼 확인). 60초로 올리면 매모리 6배 증가였다. 동작은 그대로 드늤고 경계만 코드에 명시했다. 	est_bridge_timers.py 스템에 
+clpy.duration을 추가했다(bridge AGENTS의 두 파일 함께 갱신 규칙).
+- 증거: 원격 시험 resource-bounds-1(AI PC, run-1) middleware/core/gateway/test/test_bridge_timers.py 통과 — 구조 계약 불변.
+- gate 변화: 없음. ROS 그래프 동작은 호스트 시험이 본래부터 못 본다.
+- CE: 해당 없음 — 정정 사실(기본값 10초)과 근거를 이 기록과 계획 문서가 보존한다.
 ## 2026-10-28 · uncommitted · CORE host-file owner 위임 RED 준비
 
 - 변경: 독립 검토된 v3 테스트 6파일을 적용한다. API 2·connection 1·node 1·bridge 1 위임 동작을 실제 기존 경로에서 확인하며 제품 소스는 바꾸지 않는다. 승인 패치의 새 EOF 빈 줄 2개만 제거했고 전체 AST·assertion·parameter는 보존했다.
@@ -2019,3 +2027,26 @@
 - Evidence: committed 50ba472d focused preservation has 246 PASS; its broader mapped run has 5285 PASS, one C6 registry failure, and 186 summary skips (180 attributed nodes; six unbound skip events). This candidate has no remote result yet; static per-commit preflight and independent SOURCE/safety review precede its normal commit.
 - gate 변화: none. No installed/device/field acceptance or C6 GREEN is claimed.
 - CE: unresolved; existing folder-move-widens-path-scoped-contract-tests-2026-09-25.md applies. No solved lesson is added before verification.
+
+## 2026-10-29 · 33ffa6e6a2 · Station SIM HTTP 시험의 실제 RPC 시간 예산 분리
+
+- 변경: SIM charge/departure 통합 시험의 service instance에만 제한된 30초 ASGI 호출 예산을 주입한다. 운영 `ChargeMotion.call`의 1.5초 제한·예외 처리·HOLD 및 claim 유지 경로는 바꾸지 않는다. 기존 세대/receipt 경합 시나리오를 유지하고 운영 기본 제한·예외 전달, 별도 bounded harness 예산, native 완료 전 갱신 실패의 HOLD/claim 보존 회귀를 추가했다.
+- 증거: 게시 fa3aeeed4d92의 CI run40819077121 attempt1은 ordinary renewal의 실제 1.5초 제한이 AnyIO dependency scheduling 도중 만료돼 SIM103.2에서 CHARGE_DEPARTURE_UNVERIFIED로 먼저 HOLD했고, 그 뒤 races=[] assertion이 실패했다. CPU 부하와 thread limiter 중 어느 것이 지연 원인인지는 이 로그만으로 확정하지 않는다. RED33ffa6e6a2의 원격 실행은 16 passed/2 NEW: 별도 예산 회귀는 의도한 controlled scheduling TimeoutError이고, 새 기본 제한 단위 시험은 pipeline_sources 누락으로 import 실패했다. fixture 의존성을 바로잡았으며 수정 후보의 GREEN은 아직 미실행이다.
+- gate 변화: 없음. 실제 RPC 제한을 늘리거나 오류를 성공으로 바꾸지 않았으며 물리 장치 수용을 입증하지 않는다. 기존 후보의 실패 CI 작업도 동일 SHA로 한 번 재실행 요청했고 결과는 아직 진행 중이다.
+- CE: 미해결 — 기존 attribute-intermittent-failure-by-line-then-interleaved-comparison 교훈을 적용했다. GREEN·운영 수용 전에는 해결된 교훈을 추가하지 않는다.
+
+## 2026-10-29 · 7608139018 · Station SIM ASGI 회귀와 운영 제한 변이 검증
+
+- 변경: 앞선 fixture 수정의 원격 GREEN, 운영 1.5초 제한 검사의 변이 대조, 기존 게시 후보 CI 재실행 결과를 기록했다. 실행 코드·시험은 7608139018과 같다.
+- 증거: 해당 HTTP/native SIM 모듈 전체18 passed/skip0, known_failures NEW0/known0/flaky0이다. 별도 비반영 변이44e06cad2d는 production timeout1.5→1.0만 바꾸었고, 새 deadline guard가 `[1.0,1.0,1.0] != [1.5,1.5,1.5]`로 의도대로 실패했다(1 NEW, 2.40s). 실제760 source로 복귀해 같은 guard를 원격 재실행했으며 1 passed/NEW0이다. 변이는 실제 branch의 조상이 아니고 운영 source diff는 없다. 로그는 각각 외부 rosy-station-http-green, rosy-station-deadline-mutation, rosy-station-deadline-restored/run-1.txt다.
+- 증거 범위: 기존 게시 SHA fa3aeeed4d92의 GitHub CI run40819077121 attempt2는 전체 success로 끝났고, 설치 signer dry-run도 해당 후보의 would-sign을 반환했다. 이는 새 fixture 수정 SHA의 GitHub CI 결과가 아니다. 새 source의 게시·실물 수용은 수행하지 않았다.
+- gate 변화: 없음. 실제 1.5초 제한과 fail-closed HOLD/claim 경계는 유지했다. 새 교훈은 추가하지 않으며, 기존 오류 지점별 분류 교훈과 코드·회귀 시험을 근거로 남긴다.
+
+## 2026-10-29 · 512bf77f89 · 카메라 SIM scheduling 선행 복구
+
+- 변경: 안전 수정의 FULL에서 드러난 MAIN-RED를 먼저 고치기 위해 기존 StationCamera test scheduling 수정 네 커밋(ec9e7ed905, 37b254f565, 9d8c5b0a6f, d98681cb84)의 두 시험 파일만 재사용했다. 결과 blob은 원본 d986과 같고 독립 검토했다. 다른 OMX·boundary 변경이 있는 peer branch 전체를 가져오지 않았다.
+- 원인 근거: 안전 후보 e73e0c425a의 FULL에서 continuous/composed/lifespan 세 사례가 실패했고, 같은 실패를 baseline main3f2fafd23a에서 다시 확인해 둘은 MAIN-RED였다. 로그의 취소 지점은 in-process ASGI dependency 또는 journal renewal 처리였다. 호스트 CPU와 thread limiter 중 어느 것이 원인인지는 단정하지 않는다.
+- 경계: 운영 ChargeMotion.call의 1.5초 제한은 유지한다. SIM fixture의 해당 service instance에만 bounded 30초 호출·tick 대기 예산을 쓰고, 실제 세대 조건과 receipt 검사를 유지한다. 별도 회귀는 controlled 3.2초 journal 지연, 원래 운영 제한, 예외·취소 전달을 검사한다.
+- 검증: committed512bf77f89의 pipeline/continuous/lifespan/scheduling/redeployment HTTP 다섯 모듈을 정식 원격 runner로 실행해 31 passed/skip0, known_failures NEW0/known0/flaky0이다. double quiet 출력의 완료 glyph 31개로 실행 수를 확인했다. 외부 rosy-fleet-station-camera-site-fallback/run-1.txt, run512bf77f89-92a705. 두 우선 시험 PC의 alone fence로 대기한 자체 요청만 취소하고 마지막 대상인 현장 PC에서 ROS-free API 시험을 실행했다. 장치·운영 API·물리 시뮬레이터는 호출하지 않았다. 이는 착지·CI 성공을 뜻하지 않는다.
+- gate 변화: 없음. 운영 RPC 제한, fail-closed HOLD/claim, 단독 실행 fence, FULL 요구를 완화하지 않는다. 정상 착지는 별도로 검증한다.
+- CE: 해당 없음 — 기존 오류 지점별 분류 교훈을 적용했고, 이번 최소 교정의 판단은 시험·기존 기록에 남아 새 교훈을 추가하지 않는다. 운영·물리 수용은 별도다.

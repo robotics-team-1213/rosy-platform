@@ -2,12 +2,12 @@
 module: palletizing
 logical_modules: []
 owner: PROCESS
-last_verified: { commit: "d9e70f71", date: 2026-10-02 }
+last_verified: { commit: "0e808cd6be", date: 2026-10-29 }
 gates:
   SOURCE:
     state: GO
-    evidence: "11 compatibility tests and 143 legacy Cell tests pass through rosy-palletizing 0.1.0 installed wheel; API mapping 7, architecture 81/1 skipped, and quick tier 95 pass; known-failure comparisons 0 new/0 known"
-    cmd: "python -m pytest test/test_platform_palletizing_compat.py -q; python -m pytest src/site/cell/test -q"
+    evidence: "Shared app/Fleet compilation: complete affected selection 12598 passed, 641 skipped, 5 subtests passed; installed gateway manual-sheet wheel/sdist 2 cases pass at test-only followup 171d88d7fa; all known-failure comparisons 0 new/known/flaky. See docs/validation/cell-compilation-boundary-2026-10-29/result.md"
+    cmd: "python tools/harness/rosy_harness.py affected --base f05af505153522ceaaa81b6a89146c8078bfaec7 --json | python tools/remote/remote_pytest.py --affected-json - --log-dir <external-log-dir>"
   LOCAL:
     state: N/A
   ROS-SIM:

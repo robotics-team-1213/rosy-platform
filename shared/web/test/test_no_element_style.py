@@ -29,7 +29,8 @@ def test_product_scripts_do_not_write_element_style():
 
 
 def test_measured_geometry_is_declared_with_typed_attr():
-    pilot = (REPO / 'middleware' / 'robot_ui' / "pilot" / "styles.css").read_text(encoding="utf-8")
+    pilot = ''.join((REPO / 'middleware' / 'robot_ui' / 'pilot' / name).read_text(encoding='utf-8')
+                    for name in ('styles.css', 'layout.css'))
     robot = (REPO / 'middleware' / 'robot_ui' / "robot" / "console-detail.css").read_text(encoding="utf-8")
     shared = (REPO / "shared" / "web" / "components.css").read_text(encoding="utf-8")
     assert "attr(data-knob-x type(<length>), 0px)" in pilot

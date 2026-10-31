@@ -827,6 +827,22 @@
       ],
       "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
     },
+    "GET:/api/fleet/cell-app/print-sheets/{kind}": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_cell_print_sheets.py",
+        "test_a_viewer_downloads_a_sheet_and_bad_parameters_are_refused"
+      ],
+      "source_revision": "8a9be8f198d8ebd6ad4af13666cb04e350a65a26"
+    },
+    "GET:/api/fleet/cell-app/object-catalog": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_cell_object_catalog.py",
+        "test_a_viewer_sees_masses_and_an_unmeasured_object_is_blocked"
+      ],
+      "source_revision": "f471adcb257056d2d01975707f64556ceb70ec5d"
+    },
     "GET:/api/fleet/cell-app/documents": {
       "status": 200,
       "test": [
@@ -1609,6 +1625,22 @@
         "test_real_http_console_admits_external_proposal_with_independent_identity"
       ],
       "source_revision": "915a46da52e14032671d3ecd4a360b60d3ea586f"
+    },
+    "GET:/api/fleet/trip-proposals/{proposal_id}": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_trip_proposals.py",
+        "test_proposal_is_durable_scoped_idempotent_and_claims_nothing"
+      ],
+      "source_revision": "d6d5feea75e1bc4b059a396943b83b409dfa1582"
+    },
+    "POST:/api/fleet/trip-proposals/{proposal_id}/admit": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_trip_proposals.py",
+        "test_a_different_named_operator_admits_once_and_a_lost_response_is_recoverable"
+      ],
+      "source_revision": "d6d5feea75e1bc4b059a396943b83b409dfa1582"
     },
     "GET:/api/fleet/policy-admission": {
       "status": 200,

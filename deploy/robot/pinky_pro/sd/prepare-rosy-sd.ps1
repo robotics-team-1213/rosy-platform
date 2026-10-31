@@ -526,7 +526,7 @@ function Resolve-BootMount([int]$Number, [string]$ExplicitPath, [bool]$FixtureMo
             $used = @((Get-Volume).DriveLetter | Where-Object { $_ })
             $letter = [char[]]([char]'Z'..[char]'D') | Where-Object { $used -notcontains $_ } | Select-Object -First 1
             if (-not $letter) { Fail "no drive letter is available for the SD boot partition" }
-            Add-PartitionAccessPath -DiskNumber $Number -PartitionNumber $partition.PartitionNumber -DriveLetter $letter
+            Add-PartitionAccessPath -DiskNumber $Number -PartitionNumber $partition.PartitionNumber -AccessPath "${letter}:\"
         }
         else {
             $letter = $partition.DriveLetter

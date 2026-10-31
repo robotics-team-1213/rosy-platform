@@ -7,6 +7,7 @@ import time
 from fastapi import Depends, Header, HTTPException, Request
 
 from core_common.protocol.arm_transfer import ArmActionId
+from core_common.protocol.arm_transfer_evidence import ArmTransferPhysicalEvidenceResponse
 from core_common.protocol.arm_transfer_jobs import ArmTransferJobResponse
 from core_common.protocol.arm_transfer_observations import (
     ArmTransferObservationContextResponse, ArmTransferObservationRequest, ArmTransferObservationReply,
@@ -92,5 +93,17 @@ def install_physical_observer_routes(app, *, service, task_store, job_view, requ
             current.dispatcher.cancel(mission_id, reason=body.reason)
             return job_view(current.store.get(mission_id, principal=principal))
         return await call(withdraw)
+
+    @app.get(path + "/physical-evidence", response_model=ArmTransferPhysicalEvidenceResponse, tags=["fleet-work"])
+    async def evidence(mission_id: ArmActionId, principal=Depends(require_viewer)):
+        current = installed()
+        def read():
+            if current.store.get(mission_id, principal=principal) is None:
+                raise KeyError(mission_id)
+            result = current.evidence(mission_id)
+            if result is None:
+                raise HTTPException(409, detail={"code": "ARM_TRANSFER_PHYSICAL_EVIDENCE_UNAVAILABLE"})
+            return result
+        return await call(read)
 
     return authenticate

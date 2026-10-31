@@ -11,10 +11,17 @@
 .fleet-body { display: grid; grid-template-columns: var(--rail-track) minmax(0, 1fr); min-width: 0; min-height: 0; }
 .fleet-workspace { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .fleet-workspace > main { box-sizing: border-box; width: 100%; min-width: 0; }
+.fleet-workspace main { gap: var(--gap-task-page); padding: var(--inset-task-page); }
+.fleet-task-page { container-type: inline-size; display: grid; max-inline-size: var(--content-task-max); margin: 0 auto; }
+:where(.fleet-task-page) ui-section { display: grid; gap: var(--gap-section); }
+:where(.fleet-task-page) label { display: grid; gap: var(--gap-form); }
+:where(.fleet-task-page .actions) { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap-task-actions); }
+.fleet-workspace > #estop-feedback { inline-size: calc(100% - 2 * var(--inset-task-page)); margin: var(--space-2) auto 0; }
+.fleet-workspace:has(> .fleet-task-page) > #estop-feedback { max-inline-size: calc(var(--content-task-max) - 2 * var(--inset-task-page)); }
 /* D-741 2·6 — 탐색 레일: 아이콘 아래에 짧은 이름. 치수는 공용 자리 토큰(--rail-track 72px)을 쓴다.
    72px 자리에서 안쪽 여백과 오른쪽 선을 뺀 칸은 55px이라, 세로 레일의 항목은 그 칸 폭까지만 넓다. */
 .fleet-body > .doc-tabs { display: flex; flex-direction: column; align-items: center; gap: var(--gap-rail); margin: 0; padding: var(--inset-rail); border-right: 1px solid var(--border-subtle); background: var(--surface-canvas); scrollbar-width: thin; }
-.fleet-body > .doc-tabs a { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--gap-rail); box-sizing: border-box; flex: 0 0 auto; inline-size: 3.5rem; max-inline-size: 100%; min-width: var(--target-secondary); min-block-size: 3.5rem; padding: 0; border-inline-start: 2px solid transparent; color: var(--text-secondary); font: var(--weight-label) var(--text-micro)/var(--leading-control) var(--body); text-decoration: none; white-space: nowrap; }
+.fleet-body > .doc-tabs a { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--gap-rail); box-sizing: border-box; flex: 0 0 auto; inline-size: var(--size-rail-item); max-inline-size: 100%; min-width: var(--target-secondary); min-block-size: var(--size-rail-item); padding: 0; border-inline-start: 2px solid transparent; color: var(--text-secondary); font: var(--weight-label) var(--text-micro)/var(--leading-control) var(--body); text-decoration: none; white-space: nowrap; }
 .fleet-body > .doc-tabs a:hover { color: var(--text-primary); }
 .fleet-body > .doc-tabs a:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
 .fleet-body > .doc-tabs a[aria-current="page"] { color: var(--text-primary); font-weight: var(--weight-strong); border-inline-start-color: var(--ink); background: var(--surface-raised); }

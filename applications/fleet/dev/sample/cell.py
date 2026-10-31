@@ -56,6 +56,15 @@ class Cell:
         return {'proposal': {'proposal_id': job['mission_id']}, 'mission': self.mission(job)}
 
     def handle(self, method, path, body, actor='sample'):
+        if (method, path) == ('GET', '/cell-app/object-catalog'):  # D-934: one measured, one not yet weighed
+            return reply({'objects': [
+                {'id': 'container-2', 'kind': 'green shipping container', 'length_mm': 60, 'width_mm': 30,
+                 'top_height_mm': 30, 'mass_kg': 0.048, 'mass_measured': {'at': '2026-10-30T12:00:00+00:00',
+                 'source': 'cell_scale', 'reading': '48.0 g'}, 'max_gross_kg': None,
+                 'carry': 'ok: the gate checks it against the reviewed bound'},
+                {'id': 'container-3', 'kind': 'green shipping container', 'length_mm': 90, 'width_mm': 30,
+                 'top_height_mm': 30, 'mass_kg': None, 'mass_measured': None, 'max_gross_kg': None,
+                 'carry': 'blocked: no measured mass (D-935)'}]})
         if (method, path) == ('GET', '/cell-app/documents'):
             return reply({'documents': [{k: v for k, v in row.items() if k != 'document'}
                                         for _, row in sorted(self.documents.items())]})

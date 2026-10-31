@@ -23,6 +23,7 @@ from core_common.protocol.omx_sim import OmxSimRecordStart, OmxSimRecordStop, Om
 PREFIX = "/api/v1/sim/omx"
 SEAT_TTL_S = 10
 PILOT_ASSETS = {
+    "layout.css": "text/css",
     "styles.css": "text/css", "app.js": "application/javascript",
     "client.js": "application/javascript", "stick.js": "application/javascript",
     "link.js": "application/javascript", "autonomy.js": "application/javascript",
@@ -41,6 +42,7 @@ PILOT_ASSETS = {
     "screens/drive-video.js": "application/javascript",
     "screens/inputs.js": "application/javascript",
     "screens/robot-recording.js": "application/javascript",
+    "screens/show-code.js": "application/javascript",
     "screens/arm.js": "application/javascript",
     "screens/compose.js": "application/javascript", "widgets/joint_jog.js": "application/javascript",
     "widgets/gripper.js": "application/javascript",

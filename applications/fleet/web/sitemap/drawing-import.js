@@ -1,3 +1,4 @@
+import {randomUUID} from "/console/assets/uuid.js";
 // STL is one input adapter; registration retains edited geometry and resets site review.
 const clone = value => JSON.parse(JSON.stringify(value));
 
@@ -10,7 +11,7 @@ export function rasterMapPoint([u, v], t) {
   return point;
 }
 
-export function copyMapTemplate(map, mapId = crypto.randomUUID()) {
+export function copyMapTemplate(map, mapId = randomUUID()) {
   if (!map) throw new Error('복사할 지도를 먼저 고르세요');
   const next = {...clone(map), map_id: mapId};
   if (next.survey) next.survey = {...next.survey, reviewed: false, review_note: ''};
@@ -57,7 +58,7 @@ export function createDrawingImport({request, map, replaceDraft, confirmDiscard}
       if (current !== generation || attempt !== registrationGeneration || map() !== before)
         throw new Error('초안이 바뀌었습니다. 도면 맞춤을 다시 확인하세요');
       const next = before ? clone(before) : {schema: 'rosy.site_map/1', places: [], edges: []};
-      if (next.drawing?.projection_sha256 !== result.projection_sha256) next.map_id = crypto.randomUUID();
+      if (next.drawing?.projection_sha256 !== result.projection_sha256) next.map_id = randomUUID();
       next.drawing = {asset_sha256: result.asset_sha256, projection_sha256: result.projection_sha256};
       next.survey = {revision: result.projection_sha256, origin: [...transform.map_origin_m],
         heading_rad: transform.heading_rad, scale_source: 'measured',

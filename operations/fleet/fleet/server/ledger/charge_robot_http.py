@@ -125,18 +125,28 @@ class ChargeRobotHttp:
         if self.observation_scope is None:
             raise ValueError('CHARGE_SOURCE_ADAPTER_REQUIRED')
         scope = await self.observation_scope(session, target)
-        generation = self._owner(await client.docking_status(), session)
-        await self._admitted(session, states)
-        latest = await self._target(session)
-        immutable = {'captured_at', 'valid_until', 'uncertainty_m', 'uncertainty_rad'}
-        if latest.model_dump(exclude=immutable) != target.model_dump(exclude=immutable):
-            raise ValueError('CHARGE_RETURN_TARGET_CHANGED')
-        # Both original leases must still be live after source/native/database I/O.
-        StationPoseRecord.model_validate(target.model_dump(), context={'now': self.clock()})
-        StationTargetStatus.model_validate(live.model_dump(), context={'now': self.clock()})
-        scope = StationObservation.model_validate(scope.model_dump(), context={'now': self.clock()})
-        await client.station_bind(StationTargetBinding(session=session, target=target, observation_scope=scope,
-            expected_boot_id=session.boot_id, expected_owner_generation=generation))
+        for attempt in (1, 2):
+            generation = self._owner(await client.docking_status(), session)
+            await self._admitted(session, states)
+            latest = await self._target(session)
+            immutable = {'captured_at', 'valid_until', 'uncertainty_m', 'uncertainty_rad'}
+            if latest.model_dump(exclude=immutable) != target.model_dump(exclude=immutable):
+                raise ValueError('CHARGE_RETURN_TARGET_CHANGED')
+            # Both original leases must still be live after source/native/database I/O.
+            StationPoseRecord.model_validate(target.model_dump(), context={'now': self.clock()})
+            StationTargetStatus.model_validate(live.model_dump(), context={'now': self.clock()})
+            scope = StationObservation.model_validate(scope.model_dump(), context={'now': self.clock()})
+            try:
+                await client.station_bind(StationTargetBinding(session=session, target=target,
+                    observation_scope=scope, expected_boot_id=session.boot_id, expected_owner_generation=generation))
+                break
+            except Exception as exc:
+                # A native run may advance the owner generation between the read above and CORE's compare-and-set
+                # (an undock phase under load: CHARGE_DEPARTURE_UNVERIFIED stops, 2026-10-30). Re-read it once and
+                # repeat every check; a stale generation is never sent and a second refusal still propagates.
+                if (attempt == 2 or getattr(exc, 'status', None) != 409
+                        or getattr(exc, 'code', None) != 'OWNER_GENERATION_CHANGED'):
+                    raise
         await self._admitted(session, states)
         body = await client.station_target()
         StationPoseRecord.model_validate(target.model_dump(), context={'now': self.clock()})

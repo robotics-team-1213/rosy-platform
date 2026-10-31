@@ -70,7 +70,8 @@ class JointStateIntake:
             raise ValueError("joint state positions must be finite")
         snapshot = JointStateSnapshot(
             positions=values, sequence=self._sequence + 1, received_at=received_at - age_s,
-            calibration_revision=self.config.calibration_revision)
+            calibration_revision=self.config.calibration_revision,
+            source_stamp_ns=stamp_ns, source_now_ns=source_now_ns)
         # Variable source delay can regress the age-adjusted receipt even when both clocks advance.
         if self._last_received_at is not None and snapshot.received_at < self._last_received_at:
             raise ValueError("joint state age-adjusted receipt regressed")

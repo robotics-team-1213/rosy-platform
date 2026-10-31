@@ -8,14 +8,17 @@
   <link rel="stylesheet" href="/common/tokens.css">
   <script src="/common/theme.js"></script>
   <link rel="stylesheet" href="/common/components.css">
+  <link rel="stylesheet" href="/console/assets/fleet-document.css">
   <link rel="stylesheet" href="/console/assets/learning.css">
   <script type="module" src="/common/ui.js"></script>
 </head>
 <body>
   <a class="skip-link" href="#learning-main">학습 호스트 선택으로 이동</a>
   <ui-shell grammar="procedure">
-    <ui-topbar><ui-brand href="/console"><b>Rosy Fleet</b><small>학습</small></ui-brand><span data-spacer></span><ui-button kind="quiet" data-theme-cycle="" data-icon-only="" type="button" aria-label="테마 변경" data-action-icon="theme-dark"></ui-button></ui-topbar>
-    <main id="learning-main" class="learning-main" data-host-focus="{{focus}}" tabindex="-1">
+    <!-- fleet:document-header:start -->
+<ui-topbar><ui-brand href="/console"><b>Rosy Fleet</b><small>학습</small></ui-brand><span data-spacer></span><ui-button kind="quiet" data-theme-cycle="" data-icon-only="" type="button" aria-label="테마 변경" data-action-icon="theme-dark"></ui-button></ui-topbar>
+<!-- fleet:document-header:end -->
+    <main id="learning-main" class="learning-main fleet-document" data-host-focus="{{focus}}" tabindex="-1">
       <ui-section aria-labelledby="learning-title">
         <h1 id="learning-title" class="ui-page-heading">로봇 학습 센터</h1>
         <p class="learning-hub-note">하나의 Learning 프로젝트에서 로봇별 과제·자료·학습 작업을 관리합니다. 계산 호스트는 담당자가 운영 연결로 등록하는 대로 아래 카드에 나타납니다.</p>
@@ -28,10 +31,7 @@
             <ui-tag status="{{model_state}}">{{model_status}}</ui-tag>
           </div>
           <p>검수 · 자료 등록 · 학습 작업을 실행하는 계산 호스트.</p>
-          <div class="learning-host-readout">
-            <ui-text scale="label">운영 원본</ui-text>
-            <ui-text scale="value">{{model_origin}}</ui-text>
-          </div>
+          <dl class="learning-host-readout ui-readout"><dt>운영 원본</dt><dd>{{model_origin}}</dd></dl>
           <ui-actions><a class="ui-disclosure-row" href="/console/learning/model">Model PC 학습 열기</a></ui-actions>
           <p class="learning-host-hint">운영 원본 등록 전에는 학습 열기에서 준비 안내를 보여 줍니다.</p>
         </ui-section>
@@ -41,10 +41,7 @@
             <ui-tag status="{{ai_state}}">{{ai_status}}</ui-tag>
           </div>
           <p>운영 추론과 분리된 실험실 오프라인 학습을 실행하는 계산 호스트.</p>
-          <div class="learning-host-readout">
-            <ui-text scale="label">운영 원본</ui-text>
-            <ui-text scale="value">{{ai_origin}}</ui-text>
-          </div>
+          <dl class="learning-host-readout ui-readout"><dt>운영 원본</dt><dd>{{ai_origin}}</dd></dl>
           <ui-actions><a class="ui-disclosure-row" href="/console/learning/ai">AI PC 학습 열기</a></ui-actions>
           <p class="learning-host-hint">운영 원본 등록 전에는 학습 열기에서 준비 안내를 보여 줍니다.</p>
         </ui-section>
@@ -52,9 +49,9 @@
       <ui-section class="learning-steps" aria-labelledby="how-title">
         <h2 id="how-title" class="ui-section-heading">사용 순서</h2>
         <ol class="learning-steps-list">
-          <li><b>로그인</b> — Rosy Account로 Fleet 콘솔에 로그인합니다.</li>
-          <li><b>호스트 열기</b> — 카드의 학습 열기로 보호된 Learning 화면으로 이동합니다.</li>
-          <li><b>작업</b> — 기존 프로젝트에서 로봇별 과제 · 자료 · 학습을 진행합니다.</li>
+          <li><span><b>로그인</b> — Rosy Account로 Fleet 콘솔에 로그인합니다.</span></li>
+          <li><span><b>호스트 열기</b> — 카드의 학습 열기로 보호된 Learning 화면으로 이동합니다.</span></li>
+          <li><span><b>작업</b> — 기존 프로젝트에서 로봇별 과제 · 자료 · 학습을 진행합니다.</span></li>
         </ol>
       </ui-section>
       <ui-section class="learning-prep" aria-labelledby="setup-title">

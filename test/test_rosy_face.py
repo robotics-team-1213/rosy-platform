@@ -493,7 +493,7 @@ def _ap_device(tmp_path: Path) -> Path:
     (root / "etc/rosy/ap-credentials.json").write_text(
         json.dumps({"ssid": "rosy-pinky-e4us", PW: AP_VALUE}), encoding="utf-8")
     (root / "etc/rosy/network-policy.json").write_text(
-        json.dumps({"mode": "fallback", "grace_seconds": 120, "hold_seconds": 600}), encoding="utf-8")
+        json.dumps({"mode": "fallback", "fallback_security": "wpa2"}), encoding="utf-8")
     (root / "etc/NetworkManager/system-connections").mkdir(parents=True)
     return root
 

@@ -39,6 +39,7 @@ from pathlib import Path, PurePosixPath
 sys.path.insert(0, str(Path(__file__).resolve().parent / "remote"))
 import remote_pytest  # noqa: E402  (tools/remote: pytest on the model/AI/site PC, D-568)
 import browser_scope  # noqa: E402  (test/, on sys.path through remote_pytest)
+from xdist_plan import TURN_ENV  # noqa: E402  (a turn's jobs skip the hosts' queues)
 sys.path.insert(0, str(Path(__file__).resolve().parent / "hooks"))
 import land_record  # noqa: E402  (D-553 addendum 3: pre-push reuses these results)
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -65,6 +66,7 @@ import worktree_rules  # noqa: E402  (D-790: stale-history refusal)
 HARNESS = "tools/harness/rosy_harness.py"
 HARNESS_TRIGGER = ": harness configuration or the selector itself"  # affected_tests.FULL_TRIGGERS
 SIZE_RANGE = "tools/harness/size_range.py"  # D-766: git-only, seconds; the FULL tier would only find it after the remote round trip
+SCANNER_DIR = "deploy/robot/pinky_pro/release"  # its scanner; admission runs it on changed files
 SAFETY = "tools/harness/safety_review.py"  # D-430 5: the rule CI's scope job enforces
 # Every child gets UTF-8 stdio (Korean paths and log text on a cp949 console).
 ENV = {**os.environ, "PYTHONUTF8": "1"}
@@ -229,6 +231,39 @@ def size_check(wt: Path, base: str, head: str, python: str) -> None:
                        f" raise a row. Check with: python {SIZE_RANGE} main HEAD")
 
 
+def admit(wt: Path, branch: str, main_sha: str, python: str) -> None:
+    """D-889 S0: merge main and lint before taking a ticket. On 10-26..30 lint errors in a branch's own records
+    stopped 10 landings 12-152 min in, after the prepare slot wait. Only here: once a ticket exists a batch may carry
+    the branch, and moving its tip then would hide that it landed."""
+    if git(wt, "merge-base", "--is-ancestor", main_sha, "HEAD", check=False).returncode != 0:
+        merge(wt, main_sha, branch, python, False)
+    if (wt / HARNESS).is_file():
+        step(wt, [python, HARNESS, "lint"], None, "lint")
+    secret_scan(wt, main_sha)
+
+
+def secret_scan(wt: Path, main_sha: str) -> None:
+    """test_no_secrets_in_tracked_files over the branch's own files: on 10-29..30 full SHAs in a branch's validation
+    records stopped 19 landings only after the 12-min FULL round. The whole tree takes ~45 s; the changed files take
+    seconds."""
+    release = wt / SCANNER_DIR
+    if not (release / "secret_scan.py").is_file():
+        return
+    sys.path.insert(0, str(release))
+    sys.dont_write_bytecode, kept = True, sys.dont_write_bytecode  # no __pycache__ left in the landing worktree
+    try:
+        import secret_scan as scanner
+    finally:
+        sys.path.remove(str(release))
+        sys.dont_write_bytecode = kept
+    changed = out(wt, "diff", "--name-only", "--diff-filter=d", main_sha, "HEAD").splitlines()
+    findings = scanner.scan_files([wt / p for p in changed], root=wt, public_provenance=scanner.load_public_provenance(
+        release / "public_provenance.json"))
+    if findings:
+        raise Stop("secret scan (test_no_secrets_in_tracked_files) failed; a git id needs the word `commit` before it"
+                   " on its line, or 10 characters:\n" + "\n".join(str(f) for f in findings[:20]))
+
+
 def record_only(path: str) -> bool:
     """Records no module test reads. Root test/ guards do read docs, so they rerun anyway."""
     name = PurePosixPath(path).name
@@ -254,8 +289,16 @@ def step(wt: Path, command: list[str], log: Path | None, label: str, env: dict =
 
 
 def run_tests(wt: Path, args, invocations: list[list[str]], logdir: Path, round_no: int) -> list[str]:
-    """Run lint + pytest (+ node); return a summary line per step. Stop on any NEW failure."""
-    return land_checks.run_tests(sys.modules[__name__], wt, args, invocations, logdir, round_no)
+    """Run lint + pytest (+ node); return a summary line per step. Stop on any NEW failure.
+
+    A turn's rounds (``1``, ``g1``; not ``pre``) mark their jobs (xdist_plan.TURN_ENV) to skip the hosts' queues, and
+    so does every round of an urgent landing: its pretest got 'no host' behind six others' on full hosts (2026-10-31)."""
+    turn = str(round_no).removeprefix("g").isdigit() or bool(getattr(args, "urgent", ""))
+    os.environ[TURN_ENV] = "1" if turn else ""
+    try:
+        return land_checks.run_tests(sys.modules[__name__], wt, args, invocations, logdir, round_no)
+    finally:
+        os.environ[TURN_ENV] = ""
 
 
 def main_checkout(wt: Path) -> Path:
@@ -309,6 +352,7 @@ def land(args) -> int:
         before = out(wt, "rev-parse", "main")
         safety_review(wt, before, "HEAD", python)  # seconds each: fail before a long wait, not after it
         size_check(wt, before, "HEAD", python)
+        admit(wt, branch, before, python)
         qdir, ticket = land_queue.enter(wt, branch, "preparing", args.urgent,
                                         batch_auto=land_batch.plain_auto(args, EXTRA))
         if (code := land_batch.early(sys.modules[__name__], wt, branch, args, python, qdir, ticket, main_co)) is not None:

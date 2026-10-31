@@ -41,6 +41,15 @@ def test_default_recipe_changes_only_pytest_pin_and_rekeys_the_environment(monke
     old = base_recipe()
     pinned = old.replace('"$N/site-extra.txt" pytest setuptools',
                          '"$N/site-extra.txt" pytest==9.1.1 setuptools')
+    # 2026-10-31: pip's cache stays on and each build logs its wall time (and nothing else changes).
+    pinned = pinned.replace('(CI install inputs changed)"\nrm -rf', '(CI install inputs changed)"\nB=$SECONDS\nrm -rf')
+    pinned = pinned.replace('P="$N/bin/python -m pip -q --disable-pip-version-check --no-cache-dir"',
+                            "# pip's cache stays on: ~13-14 rebuilds a host a day re-downloaded every wheel (2026-10-31);"
+                            " hashes still pin what\n# installs, and the host storage timer prunes the cache (rosy-ops"
+                            ' lab-host-storage rule 5).\nP="$N/bin/python -m pip -q --disable-pip-version-check"')
+    pinned = pinned.replace('echo "[remote] ready $V"\n', 'echo "[remote] ready $V"\necho "[remote-pytest] venv built'
+                            ' $DEPS in $((SECONDS - B))s (pip cache $(du -sm ~/.cache/pip 2>/dev/null | cut -f1 ||'
+                            ' true) MB)"\n')
     assert pinned != old
     assert rp.VENV == pinned
     assert tools().render_setup(rp.VENV, None) == pinned

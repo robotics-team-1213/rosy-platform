@@ -80,6 +80,17 @@ def test_native_snapshot_preserves_group_and_measured_fault_torque_fields(tmp_pa
     assert all(m['hardware_error'] == 0 and m['torque_enabled'] is True for m in snapshot['motors'])
 
 
+@pytest.mark.parametrize('cap,admitted', [(600, True), (601, False)])
+def test_a_reach_cap_the_guard_admitted_is_admitted_by_the_monitor(tmp_path, cap, admitted):
+    monitor, arm = monitor_type()(tmp_path / 'health.jsonl'), motion()
+    arm.pwm_limits['shoulder_lift'] = cap
+    if admitted:
+        monitor.admit(arm)
+    else:
+        with pytest.raises(ValueError, match='configured limits'):
+            monitor.admit(arm)
+
+
 @pytest.mark.parametrize('register,value,stops', [('Present_Temperature', 65, False),
     ('Present_Temperature', 70, True), ('Present_Input_Voltage', 59, True),
     ('Present_Input_Voltage', 141, True), ('Present_Input_Voltage', 60, False),

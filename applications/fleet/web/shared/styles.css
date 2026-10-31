@@ -6,7 +6,6 @@
 .connection-guide p { margin: 0; color: var(--text-secondary); }
 .connection-guide a { display: inline-flex; align-items: center; gap: var(--space-1); white-space: nowrap; }
 .connection-guide a:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
-#estop-feedback { margin: var(--space-2) var(--space-5) 0; }
 .start-point-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); margin: var(--space-3) 0; }
 .start-point-fields label { display: grid; gap: var(--space-2); min-width: 0; }
 .start-point-fields .ui-field { width: 100%; min-width: 0; }
@@ -15,7 +14,7 @@
 .install-step h3 { margin: 0; font-size: var(--text-label); font-weight: var(--weight-label); }
 .field-rectified canvas.picking { cursor: crosshair; outline: var(--focus-ring-width) solid var(--focus-ring); }
 @media (width < 64rem) {
-  .connection-guide, #estop-feedback { margin-inline: var(--space-3); }
+  .connection-guide { margin-inline: var(--space-3); }
 }
 
 /* Fleet task owners remain mounted; visibility is navigation-owned. */
@@ -38,7 +37,8 @@
 .console-primary, .console-secondary { min-width: 0; display: grid; gap: var(--space-4); }
 .console-context, .context-panel { min-width: 0; display: grid; gap: var(--space-3); align-content: start; }
 .context-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-1); }
-.context-tabs ui-button { min-width: 0; white-space: normal; }
+/* D-926: tabs read like the rail — icon above a visible name that never breaks mid-word; two rows on phones */
+.context-tabs ui-button { min-width: 0; flex-direction: column; gap: var(--gap-rail); padding-inline: var(--space-1); white-space: nowrap; }
 .context-panel > .panel { padding: var(--space-3) 0; border: 0; border-radius: 0; background: transparent; }
 .context-panel > .panel + .panel { border-top: 1px solid var(--border-subtle); }
 .context-panel .panel h2 { font-size: var(--text-body); font-weight: var(--weight-label); }
@@ -169,8 +169,6 @@ body {
 main {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-4);
-  padding: var(--space-4) var(--space-5) var(--space-6);
   align-items: start;
 }
 
@@ -179,7 +177,7 @@ main {
 @media (width >= 64rem) {
   /* D-493 — 지도가 주인공이다: 왼쪽 3, 오른쪽 열 2. 오른쪽 열은 발행·예외·로봇·카메라·대형·기록을 쌓는다.
      지도는 첫 화면 높이를 채운다(D-201: 1920×1080에서 문서가 스크롤되지 않는다). */
-  main { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); padding-bottom: var(--space-1); }
+  main { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
   .console-primary { grid-column: 1; }
   .console-secondary { grid-column: 2; }
   .map-stage #map-canvas, .map-birdseye { height: max(20rem, calc(100dvh - 20rem)); }
@@ -457,13 +455,9 @@ main {
 }
 
 
-@media (30rem <= width < 64rem) {
-  main { gap: var(--space-3); padding: var(--space-3); }
-}
 
 @media (width < 30rem) {
-  .context-tabs { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  main { gap: var(--space-3); padding: var(--space-3); }
+  .context-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .dispatch-control:not(:is(:not([data-state]), [data-state="absent"])) { align-items: flex-start; flex-direction: column; padding: var(--space-3); }
   .panel { padding: var(--space-3); }
   .map-stage #map-canvas { height: min(150vw, 30rem); }

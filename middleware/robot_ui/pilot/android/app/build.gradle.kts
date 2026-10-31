@@ -32,7 +32,7 @@ val shared = tasks.register<Sync>("sharedContracts") {
     include("**/account/*.kt", "**/settings/LinkPolicy.kt", "**/settings/DiscoveryBudget.kt", "**/settings/SiteLink.kt",
         "**/settings/SiteLinkRecord.kt", "**/settings/PairingUri.kt", "**/settings/OverheadServiceRecord.kt",
         "**/pairing/Pairing.kt", "**/link/PinnedTrust.kt", "**/link/Protocol.kt",
-        "**/health/DeviceHealth.kt", "**/health/PhoneHeat.kt", "**/health/ScreenCoolingPolicy.kt", "**/health/ScreenPower.kt")
+        "**/health/DeviceHealth.kt", "**/health/ScreenPower.kt")
     into(layout.buildDirectory.dir("generated/shared-contracts"))
 }
 val sharedScreenResources = tasks.register<Sync>("sharedScreenResources") {
@@ -42,7 +42,7 @@ val sharedScreenResources = tasks.register<Sync>("sharedScreenResources") {
 val sharedAssetNames = ((groovy.json.JsonSlurper().parse(file("../../../../../shared/web/shared-assets.json")) as Map<*, *>)["shared_assets"] as Map<*, *>).keys.map { it.toString() }
 val screens = tasks.register<Sync>("bundleScreens") {
     from("../../../../../middleware/robot_ui/pilot") {
-        include("index.html", "styles.css", "manifest.webmanifest", "*.js", "drivers/**/*.js", "screens/**/*.js", "widgets/**/*.js")
+        include("index.html", "styles.css", "layout.css", "manifest.webmanifest", "*.js", "drivers/**/*.js", "screens/**/*.js", "widgets/**/*.js")
         into("pilot")
     }
     from("../../../../../shared/web") { include(sharedAssetNames); into("common") }
@@ -55,6 +55,7 @@ android {
         applicationId = "io.github.livsbittt.rosy.pilot"
         minSdk = 26; targetSdk = 35
         versionCode = 1; versionName = "0.1.0"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = "17" }
@@ -88,6 +89,8 @@ dependencies {
     implementation("org.nanohttpd:nanohttpd:2.3.1")
     implementation("org.nanohttpd:nanohttpd-websocket:2.3.1")
     testImplementation("junit:junit:4.13.2")
+    androidTestImplementation("junit:junit:4.13.2")
+    androidTestImplementation("androidx.test:runner:1.6.2")
     testImplementation("org.json:json:20240303")
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
     testImplementation("com.squareup.okhttp3:okhttp-tls:4.12.0")

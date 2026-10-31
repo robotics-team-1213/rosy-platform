@@ -23,7 +23,7 @@ def test_backup_timer_is_daily_and_catches_up_after_downtime():
     assert "WantedBy=timers.target" in text
 
 
-def test_compose_backup_service_is_isolated_profiled_and_read_only():
+def test_compose_backup_service_is_isolated_with_read_only_rootfs_and_writable_ledger():
     service = yaml.safe_load(
         (SITE / "compose.yaml").read_text(encoding="utf-8"))["services"]["fleet-backup"]
     assert service["profiles"] == ["backup"]  # 평소 `up`에 끼지 않는다
@@ -32,8 +32,12 @@ def test_compose_backup_service_is_isolated_profiled_and_read_only():
     assert service["command"][:2] == ["/opt/rosy/site_db.py", "backup"]
     assert service["network_mode"] == "none"
     assert service["read_only"] is True
+    assert service["user"] == "10001:10001"
+    assert service["cap_drop"] == ["ALL"]
+    assert "no-new-privileges:true" in service["security_opt"]
+    assert "--prune-history" in service["command"] and "--prune-audit" in service["command"]
     volumes = service["volumes"]
-    assert "sighting_data:/var/lib/rosy:ro" in volumes  # 원장은 읽기 전용
+    assert "sighting_data:/var/lib/rosy:rw" in volumes  # 백업 후 정리·checkpoint에만 필요
     assert any(str(volume).endswith(":/backup") for volume in volumes)
 
 
@@ -42,3 +46,20 @@ def test_compose_backup_command_keeps_fourteen_backups():
         (SITE / "compose.yaml").read_text(encoding="utf-8"))["services"]["fleet-backup"]
     command = service["command"]
     assert command[command.index("--prune") + 1] == "14"
+
+
+def test_backup_check_service_runs_site_db_check_on_the_host_backup_dir():
+    text = (SITE / "rosy-site-ledger-backup-check.service").read_text(encoding="utf-8")
+    assert "Type=oneshot" in text
+    assert "site_db.py check --dest-dir ${ROSY_SITE_BACKUP_DIR}" in text
+    assert "--max-age-hours 48" in text
+    assert "Environment=ROSY_SITE_BACKUP_DIR=/var/backups/rosy-site" in text
+    assert "EnvironmentFile=-/etc/rosy/site/site.env" in text  # site.env 값이 기본값을 덮어쓴다
+
+
+def test_backup_check_timer_rechecks_periodically():
+    text = (SITE / "rosy-site-ledger-backup-check.timer").read_text(encoding="utf-8")
+    assert "OnBootSec=30min" in text
+    assert "OnUnitInactiveSec=6h" in text
+    assert "Unit=rosy-site-ledger-backup-check.service" in text
+    assert "WantedBy=timers.target" in text

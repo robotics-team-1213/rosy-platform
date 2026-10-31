@@ -276,7 +276,7 @@ def test_shared_gather_hands_each_rows_read_time_to_tracking():
             pass
 
     gather = SharedGather(_Console(), _Board(), tracking=service)
-    gather._console.hub = type("H", (), {"registry": type("R", (), {"events_since": None})()})()
+    gather._console.hub = type("H", (), {"registry": type("R", (), {"stuck_event": None})()})()
     asyncio.run(gather())
     assert service.robot_state("rosy_01") is not None   # read 0.1 s before the gather ended
 

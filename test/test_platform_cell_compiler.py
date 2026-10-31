@@ -7,7 +7,7 @@ import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-for relative in ("contracts/skill/src", "applications/fleet/gateway/src", "operations/processes/palletizing/src", "operations/site_execution/src", "middleware/skills/api/src"):
+for relative in ("contracts/skill/src", "applications/fleet/gateway/src", "operations/processes/palletizing/src", "operations/site_execution/src", "middleware/skills/api/src", "operations/fleet", "contracts/foundation"):
     sys.path.insert(0, str(ROOT / relative))
 
 from rosy_gateway.cell_compiler import PalletizingCellCompiler
@@ -17,6 +17,31 @@ from rosy.processes.palletizing.submission import compile_cell_submission
 def documents():
     root = ROOT / "operations/processes/cell/examples/omx_sim"
     return tuple(yaml.safe_load((root / name).read_text(encoding="utf-8")) for name in ("recipe.yaml", "cell.yaml"))
+
+
+@pytest.mark.parametrize("manual_sheet", [False, True])
+def test_gateway_and_fleet_preserve_the_same_complete_compilation(manual_sheet):
+    from fleet.server.cell_compiler import PalletizingCellJobCompiler
+
+    recipe, cell = documents()
+    if manual_sheet:
+        recipe["schema"] = "rosy_cell.recipe/2"
+        recipe["slip_sheet"] = {"handling": "operator", "thickness": .002}
+        del cell["stations"]["sheets"]
+    before = deepcopy((recipe, cell))
+    fleet = PalletizingCellJobCompiler(tol_m=.001)
+    gateway = PalletizingCellCompiler(process_artifact_digest=fleet.process_artifact_digest, tol_m=.001)
+    expected, actual = fleet.compile(recipe, cell), gateway.compile(recipe, cell)
+    if manual_sheet:
+        assert len(expected.operator_checkpoints) == 2
+    assert actual.operator_checkpoints == expected.operator_checkpoints
+    assert actual == expected
+    assert gateway.item_geometry(recipe) == fleet.item_geometry(recipe)
+    candidate = dict(kind="cell_job", recipe=recipe, cell=cell, job=actual.job,
+                     recipe_sha256=actual.plan_bundle.recipe_digest, cell_sha256=actual.plan_bundle.cell_digest)
+    assert gateway.compile_submission(candidate, workcell_id="omx_sim", instance_id="omx_sim_01") == (
+        fleet.compile_submission(candidate, workcell_id="omx_sim", instance_id="omx_sim_01"))
+    assert (recipe, cell) == before
 
 
 def test_real_demo_compiler_preserves_two_layers_sheet_and_both_pallet_markers():

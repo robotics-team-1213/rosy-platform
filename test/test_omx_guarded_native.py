@@ -31,6 +31,7 @@ class Bus:
         self.torque = dict.fromkeys(NAMES, 0)
         self.events = []
         self.fail_write = False
+        self.bad_reads = 0  # corrupt status packets before a good one
         self.goals = {}
         self.profiles = {(n, register): 1 for n in NAMES
                          for register in ('Profile_Velocity', 'Profile_Acceleration')}
@@ -68,8 +69,13 @@ class Bus:
             return self.profiles[motor, register]
         raise AssertionError(register)
 
-    def sync_read(self, register, motors=None, *, normalize=True):
+    def sync_read(self, register, motors=None, *, normalize=True, num_retry=0):
         assert register in ("Present_Position", "Goal_Position")
+        if self.bad_reads:  # like lerobot: retries consume bad packets, then the read fails
+            used = min(self.bad_reads, num_retry + 1)
+            self.bad_reads -= used
+            if used == num_retry + 1:
+                raise ConnectionError("Failed to sync read 'Present_Position' [TxRxResult] Incorrect status packet!")
         source = self.raw if register == "Present_Position" else self.goals
         values = {n: source[n] for n in (motors or NAMES)}
         return self.norm(values) if normalize else values
@@ -141,6 +147,33 @@ def test_streaming_profile_must_read_back_zero_before_enabling(guard, register):
     with pytest.raises(ValueError, match=register + ' readback mismatch'):
         guard.connect_passive(device, follower=True)
     assert ('on',) not in device.bus.events and not device.bus.is_connected
+
+
+@pytest.mark.parametrize("acc, vel, drive_mode, kept", [
+    (8, 20, 0, True),     # record_session's session profile: the servo ramps between whole-tick goals
+    (1, 1, 0, False),     # joint_tune's resting 1/1 would crawl at 1.4 deg/s
+    (8, 0, 0, False),     # velocity 0 is a step profile; half a profile is not admitted
+    (200, 20, 0, False),  # above the admitted acceleration
+    (8, 20, 4, False),    # time-based drive mode: the same numbers mean milliseconds
+])
+def test_a_session_profile_within_the_lag_budget_is_kept_and_anything_else_cleared(guard, acc, vel, drive_mode, kept):
+    device = SimpleNamespace(bus=Bus(), cameras={})
+    for name in NAMES:
+        device.bus.profiles[name, "Profile_Acceleration"], device.bus.profiles[name, "Profile_Velocity"] = acc, vel
+    read = device.bus.read
+    device.bus.read = lambda register, motor, **kw: drive_mode if register == "Drive_Mode" else read(register, motor, **kw)
+    guard.connect_passive(device, follower=True)
+    expected = {(acc, vel) if kept else (0, 0)}
+    assert {(device.bus.profiles[n, "Profile_Acceleration"], device.bus.profiles[n, "Profile_Velocity"])
+            for n in NAMES} == expected
+    assert not any(device.bus.torque.values())
+
+
+def test_the_admitted_profile_never_limits_the_stream_and_lags_well_inside_the_bound(guard):
+    deg_s2, deg_s = 214.577 * 360 / 3600, 0.229 * 360 / 60  # X-series raw units
+    stream = 10.0  # deg/s: the guard's tracking limit in _body_command
+    assert guard.PROFILE_VEL[0] * deg_s >= 2 * stream
+    assert stream ** 2 / (2 * guard.PROFILE_ACC[0] * deg_s2) <= 0.5 < 5  # added lag vs the following-error bound
 
 
 @pytest.mark.parametrize("problem", ["calibration", "mode", "camera"])
@@ -224,6 +257,21 @@ def test_elapsed_rate_bound_caps_long_pause_and_does_not_accumulate_motion(guard
     assert abs(goals[-1]["wrist_roll"] - 2028) <= 4096 / 360 * 0.1
     motion.send(action(leader))
     assert [e[1] for e in follower.events if e[0] == "goal"][-1] == goals[-1]
+
+
+@pytest.mark.parametrize("bad, survives", [(1, True), (2, True), (3, False)])
+def test_a_corrupt_status_packet_is_read_again_and_a_dead_bus_still_stops(guard, bad, survives):
+    motion, follower, leader, clock = pair(guard)
+    motion.send(action(leader))
+    clock[0] += 0.1
+    follower.bad_reads = bad
+    if survives:
+        motion.send(action(leader))
+        assert all(follower.torque[n] for n in guard.BODY)
+    else:
+        with pytest.raises(OSError):
+            motion.send(action(leader))
+        assert not any(follower.torque.values())
 
 
 @pytest.mark.parametrize("problem", ["nan", "missing", "range", "write", "stale", "gap"])
@@ -745,6 +793,24 @@ def test_body_invalid_actual_pwm_limit_refuses_before_enable(guard, limit):
     with pytest.raises(ValueError, match='PWM_Limit'):
         motion.send(action(leader))
     assert ('on',) not in follower.events
+
+
+def test_xl430_joints_admit_600_and_the_xl330_wrist_still_refuses_above_400(guard):
+    for limits, admitted in (({'shoulder_lift': 600, 'elbow_flex': 600}, True), ({'shoulder_lift': 601}, False),
+                             ({'shoulder_lift': 600, 'wrist_flex': 401}, False)):
+        follower, leader, clock = Bus(), Bus(leader=True), [10.0]
+        effort_read(follower)
+        read = follower.read
+        follower.read = lambda register, motor, _read=read, _l=limits, **kw: (
+            _l.get(motor, 330) if register == 'PWM_Limit' else _read(register, motor, **kw))
+        motion = guard.NativeJointMotion(follower, leader, body_only=True, clock=lambda: clock[0])
+        if admitted:
+            motion.send(action(leader))
+            assert motion.pwm_limits['shoulder_lift'] == 600
+        else:
+            with pytest.raises(ValueError, match='PWM_Limit'):
+                motion.send(action(leader))
+            assert ('on',) not in follower.events
 
 
 def test_initial_alignment_deadline_is_fixed_by_admitted_gap_not_later_targets(guard):

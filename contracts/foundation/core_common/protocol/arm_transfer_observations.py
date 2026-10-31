@@ -2,7 +2,7 @@
 from datetime import datetime
 from typing import Annotated, Literal
 
-from pydantic import AwareDatetime, BaseModel, BeforeValidator, ConfigDict, Field, model_validator
+from pydantic import AwareDatetime, BaseModel, BeforeValidator, ConfigDict, Field, model_serializer, model_validator
 
 from .arm_transfer import ArmActionId, ArmJournalId, ArmScopeId
 from .arm_transfer_jobs import ArmTransferJobSnapshot
@@ -66,6 +66,21 @@ class ArmTransferOwnerContext(_Closed):
     transform_revision: ArmPhysicalRef
 
 
+class ArmJointObservation(_Closed):
+    """Source UTC capture time and measured radians; never a command target."""
+    sample_id: ArmPhysicalRef
+    sequence: _Counter
+    observed_at_ns: _Counter
+    joint_names: Annotated[tuple[ArmPhysicalRef, ...], BeforeValidator(_sequence), Field(min_length=1, max_length=32)]
+    positions_rad: Annotated[tuple[_Number, ...], BeforeValidator(_sequence), Field(min_length=1, max_length=32)]
+
+    @model_validator(mode="after")
+    def _joint_order(self):
+        if len(set(self.joint_names)) != len(self.joint_names) or len(self.joint_names) != len(self.positions_rad):
+            raise ValueError("joint measurements require unique ordered names and matching radians")
+        return self
+
+
 class ArmOwnerObservation(ArmTransferOwnerContext):
     links_observed_at_ns: _Counter
     links: Annotated[dict[ArmPhysicalRef, ArmLinkObservation], Field(max_length=128)]
@@ -73,6 +88,14 @@ class ArmOwnerObservation(ArmTransferOwnerContext):
     gripper_state: Literal["OPEN", "CLOSED", "MOVING", "UNKNOWN"]
     held_state: Literal["NONE", "HELD", "UNKNOWN"]
     held_object_ref: ArmPhysicalRef | None
+    joints: ArmJointObservation | None = None
+
+    @model_serializer(mode="wrap")
+    def _legacy_optional_joints(self, handler):
+        document = handler(self)
+        if self.joints is None:
+            document.pop("joints", None)
+        return document
 
     @model_validator(mode="after")
     def _held_reference(self):

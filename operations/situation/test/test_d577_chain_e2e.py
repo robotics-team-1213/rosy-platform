@@ -69,7 +69,7 @@ def test_lane_lost_stuck_goes_robot_fleet_ai_pc_operator(tmp_path):
     app.state.stuck_resolver.run_once = counted
 
     listener = safe_listener()
-    server = uvicorn.Server(uvicorn.Config(app, log_level="error"))
+    server = uvicorn.Server(uvicorn.Config(app, log_level="error", log_config=None))
     worker = threading.Thread(target=server.run, kwargs={"sockets": [listener]}, daemon=True)
     worker.start()
     try:

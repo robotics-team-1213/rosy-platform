@@ -23,6 +23,7 @@ Never resets or force-deletes: a stopped batch branch is kept for its log; a lan
 
 from __future__ import annotations
 
+import os
 import socket
 import sys
 import time
@@ -100,9 +101,13 @@ def batchable(land, wt: Path, other: Path, name: str, tip: str) -> str | None:
     return _BATCHABLE[key]
 
 
+# D-889 addendum 9 (2026-10-31): automatic batching is off; ROSY_LAND_BATCH=1 turns it back on for a lander.
+AUTO = os.environ.get("ROSY_LAND_BATCH") == "1"
+
+
 def plain_auto(args, extra) -> bool:
-    """Explicit checks or freshness requests run alone; only plain auto opts into batching."""
-    return (args.tests == "auto" and not extra and not getattr(args, "node", False)
+    """Explicit checks or freshness requests run alone; only plain auto opts into batching, and only while AUTO."""
+    return (AUTO and args.tests == "auto" and not extra and not getattr(args, "node", False)
             and not getattr(args, "no_cache", False))
 
 
@@ -114,8 +119,9 @@ def taken(tickets: list[dict]) -> set[str]:
 def eligible(land, wt: Path, row: dict, kind: str = "affected", carried_now: set[str] = frozenset()) -> bool:
     """A waiting or pending ticket another landing may carry: this host, a clean branch at its worktree's HEAD."""
     other, name = Path(row.get("worktree") or "."), row.get("branch") or ""
+    # An urgent ticket (D-889 addendum 5) lands on its own: carried, it waited on an ordinary leader (2026-10-31).
     if (row.get("batch_auto") is not True or row.get("status") not in ("waiting", "pending")
-            or row.get("host") != socket.gethostname()):
+            or row.get("host") != socket.gethostname() or row.get("urgent")):
         return False
     if (row.get("batch") or name in carried_now or name in ("", "main", "HEAD") or not other.is_dir()
             or other.resolve() == wt.resolve()):
@@ -177,7 +183,8 @@ def queue(land, wt: Path, branch: str, args, python: str, qdir: Path, ticket: Pa
         form = None  # a batch is tested; safety branches and explicit --tests land alone (D-889 3)
     while True:
         got = land_queue.wait(qdir, ticket, args.queue_timeout * 60, check=land_prepare.watch(land, wt),
-                              done=lambda: in_main(land, wt, branch), form=form)
+                              done=lambda: in_main(land, wt, branch), form=form,
+                              tested=land_full.restore(wt, branch))
         if got == "landed":
             land_full.forget(wt, branch)
             print(f"== landed in a batch (not pushed): main {land.out(wt, 'rev-parse', 'main')[:10]} holds {branch}\n"
@@ -266,7 +273,8 @@ def lead(land, wt: Path, branch: str, args, python: str, qdir: Path, ticket: Pat
         if kind == "affected" and land.select(wt, main_sha, python)[1]:
             raise land.Stop("the affected batch selects the FULL tier: it re-forms by group (D-889 addendum 6)")
         land_prepare.prepare(land, wt, name, args, python, qdir, ticket)
-        land_queue.wait(qdir, ticket, args.queue_timeout * 60, check=land_prepare.watch(land, wt))
+        land_queue.wait(qdir, ticket, args.queue_timeout * 60, check=land_prepare.watch(land, wt),
+                        tested=land_full.restore(wt, name))
         code = land.rounds(args, wt, name, main_co, python, qdir, ticket)
     except (land.Stop, land_queue.QueueError) as stop:
         land_full.forget(wt, name)

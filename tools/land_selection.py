@@ -24,6 +24,14 @@ def _affected(land, wt: Path, python: str, base: str, head: str | None, full: bo
     return json.loads(result.stdout)
 
 
+def overlaps(delta: list[list[str]], mine: list[list[str]], ignore=()) -> bool:
+    """Whether any test path of ``mine`` is, contains or sits in one of ``delta`` (node ids by file), ``ignore`` aside."""
+    def paths(invs):
+        return {w.replace("\\", "/").split("::")[0].rstrip("/") for inv in invs for w in inv
+                if not w.startswith(("ROSY_", "-"))} - set(ignore)
+    return any(a == b or a.startswith(b + "/") or b.startswith(a + "/") for a in paths(delta) for b in paths(mine))
+
+
 def _unique(invocations: list[list[str]]) -> list[list[str]]:
     return [list(inv) for inv in dict.fromkeys(map(tuple, invocations))]
 
@@ -46,12 +54,20 @@ def select(land, wt: Path, base: str, python: str, head: str | None = None,
             # D-889 3 (combined affected, not FULL per cycle): a delta that escalated landed on main with its own
             # FULL tier, and this branch passed its own tier before the turn. Repeating FULL for every lander
             # behind a FULL landing was 35 % of pretest time on 2026-10-26; what is left is both changes' own
-            # suites on the merged tree. Safety paths on either side keep FULL (D-889 6).
+            # suites on the merged tree. A safety path in this branch keeps FULL (D-889 6). One in main's delta
+            # no longer does (D-889 addendum 8): a branch touching a safety path lands only through its own FULL
+            # tier, and the delta's selection keeps the suites mapped to those safety paths.
             own = _affected(land, wt, python, head, None) if landed and head and sel["escalations"] else None
-            if own is not None and not any(e.endswith(SAFETY_TRIGGER) for e in sel["escalations"] + own["escalations"]):
+            if own is not None and not any(e.endswith(SAFETY_TRIGGER) for e in own["escalations"]):
                 print("[tests] main's delta escalated but landed with its own FULL tier: its mapped suites and"
                       " this branch's own selection on the merged tree")
                 mine = own["local_invocations"] if own["mode"] == "full" else own["invocations"]
+                # D-889 addendum 10 item 2: this branch's suites passed its pretest, and main's delta reaches none of
+                # them (guards aside, which the delta's run carries): only the delta's suites. FULL-mode own: re-run.
+                if own["mode"] != "full" and not overlaps(sel["local_invocations"], mine,
+                                                          getattr(getattr(land, "land_guards", None), "GUARDS", ())):
+                    print("[tests] main's delta reaches none of this branch's suites: the delta's suites only")
+                    return _unique(sel["local_invocations"] + land.browser_tier(wt, base, head)), None
                 return _unique(sel["local_invocations"] + mine + land.browser_tier(wt, base, head)
                                + land.browser_tier(wt, head)), None
             if sel["mode"] == "full":

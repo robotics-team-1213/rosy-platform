@@ -164,7 +164,7 @@ class TestRender:
     def test_the_renderer_carries_no_font_dependency(self):
         # D-221 — 폰트 후보는 DejaVu 둘뿐. CJK 경로가 들어오는 것은 이미지에
         # 폰트를 싣는 ADR 와 같은 커밋에서만 일어날 수 있다.
-        source = (ROOT / "emotion" / "info_screen.py").read_text(encoding="utf-8")
+        source = (ROOT / "emotion" / "lcd_primitives.py").read_text(encoding="utf-8")
         assert source.count("_FONT_CANDIDATES") >= 1
         assert "noto" not in source.lower()
         assert "nanum" not in source.lower()

@@ -438,3 +438,9 @@
 - 변경: `lane_live_view.html`이 `/common/tokens.css`·`theme.js`·`components.css`·`ui.js`를 싣고, 자기 팔레트(주황 강조·회색 단계·웹폰트 이름) 대신 역할 변수가 공용 토큰만 가리킨다. 원시 색은 CSS·JS·인라인 style 어디에도 없다. 지도·궤적 그림은 SVG style의 CSS 변수로 칠해 테마가 바뀌면 다시 그리지 않아도 따라간다. `data-theme-pin`을 지워 사용자 테마를 따른다. 장식 glow·blur·맥동·흐름·전환 효과를 지웠고 탭은 공용 `ui-button kind="segment"`다. 오버레이 범례는 서버가 영상에 그린 고정 색이라 견본 대신 색 이름으로 적는다. `lane_live_view.py`는 `/common/<name>`을 web_common의 `shared-assets.json` 목록으로만 내준다(폴더를 훑지 않는다, 없으면 404).
 - 증거: 정적 검사만 했다. 원시 색 정규식 0건, 인라인 스크립트 `node --check` 통과, 서버 `/common/` 허용·404(목록 밖 이름, `..`, `%2e%2e`)를 cv2를 대신한 평범한 Python으로 확인. pytest·브라우저·Gazebo는 이 노트북에서 돌리지 않았다(D-584).
 - gate 변화: 없음. 화면 G2 확인과 원격 회귀가 남았다.
+
+## 2026-10-29 · 61f475246c · 라이브 뷰어 간격과 긴 결과 배치
+
+- 변경: 일반 간격·tag corner·행 focus를 기존 공용 토큰으로 정리하고 긴 결과의 표/상세 wrapping을 보완했다. 실제 handler와 공용 자산을 사용하는 합성 브라우저 fixture로 바꿨다. script/body·SVG style22개·데이터 기하는 유지한다.
+- 증거: 긴 결과8 RED 후 전체26 browser pass/0 skip, 카드 경계8 pass. 공식 affected833 pass/28 skip·NEW0, 최종32장 독립 검토 범위 P1/P2없음. 정본: `docs/validation/sim-viewer-spacing-2026-10-29/result.md`. 실제 Gazebo 미션 실행과 구분한다.
+- gate 변화: 없음. ROS·CORE·장치·FIELD·설치/배포 수용은 아니다. CE: 해당 없음 — 기존 clipping 교훈을 적용했으며 원인과 해결이 코드·회귀·검증 기록에 드러난다.

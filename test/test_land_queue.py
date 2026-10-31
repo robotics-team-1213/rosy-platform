@@ -93,9 +93,9 @@ def test_a_preparing_ticket_keeps_its_place_without_blocking_and_a_turn_blocks_e
         "feat/full"], "done preparing, the FULL lander is first again"
 
 
-def test_at_most_three_landings_prepare_at_once_and_a_pending_one_blocks_no_one(tmp_path):
+def test_at_most_max_preparing_landings_prepare_at_once_and_a_pending_one_blocks_no_one(tmp_path):
     import land_prepare
-    busy = [queue.take(tmp_path, f"feat/p{n}", status="preparing") for n in range(3)]
+    busy = [queue.take(tmp_path, f"feat/p{n}", status="preparing") for n in range(land_prepare.MAX_PREPARING)]
     mine = queue.take(tmp_path, "feat/mine")
     later = queue.take(tmp_path, "feat/later")
     naps = []
@@ -110,6 +110,15 @@ def test_at_most_three_landings_prepare_at_once_and_a_pending_one_blocks_no_one(
     assert len(naps) == 1 and json.loads(mine.read_text())["status"] == "preparing"
 
 
+def test_an_urgent_ticket_prepares_without_waiting_behind_older_pending_ones(tmp_path):
+    import land_prepare
+    for n in range(land_prepare.MAX_PREPARING + 2):
+        queue.take(tmp_path, f"feat/older{n}", status="pending")
+    mine = queue.take(tmp_path, "feat/urgent", status="pending", urgent="the user's words")
+    land_prepare.slot(tmp_path, mine, sleep=lambda s: pytest.fail("urgent waited behind pending reservations"))
+    assert json.loads(mine.read_text())["status"] == "preparing"
+
+
 def test_who_is_ahead_shows_each_tickets_status(tmp_path):
     queue.take(tmp_path, "feat/full", status="preparing")
     mine = queue.take(tmp_path, "feat/mine")
@@ -118,7 +127,7 @@ def test_who_is_ahead_shows_each_tickets_status(tmp_path):
 
 def test_preparation_slot_reserves_capacity_for_older_pending_ticket(tmp_path):
     import land_prepare
-    busy = [queue.take(tmp_path, f"feat/p{n}", status="preparing") for n in range(2)]
+    busy = [queue.take(tmp_path, f"feat/p{n}", status="preparing") for n in range(land_prepare.MAX_PREPARING - 1)]
     older = queue.take(tmp_path, "feat/older", status="pending")
     mine = queue.take(tmp_path, "feat/mine", status="pending")
     naps = []
@@ -172,3 +181,56 @@ def test_an_older_pending_ticket_a_batch_carries_reserves_no_preparation_slot(tm
     mine = queue.take(tmp_path, "feat/mine", status="pending")
     land_prepare.slot(tmp_path, mine, sleep=lambda _: pytest.fail("a carried ticket kept the slot"))
     assert json.loads(mine.read_text())["status"] == "preparing"
+
+
+def test_a_ticket_tested_on_the_current_main_passes_an_earlier_stale_waiting_one(tmp_path, monkeypatch):
+    """2026-10-30..31: turning a stale ticket first made the fresh one behind it re-run FULL (~984 min/day)."""
+    monkeypatch.setattr(queue, "current_main", lambda qdir: "m")
+    older = queue.take(tmp_path, "feat/older")
+    mine = queue.take(tmp_path, "feat/mine")
+    queue.set_status(mine, "waiting", tested="m", waiting_since=time.time())
+
+    def blocked_by(status="waiting", tested="old", since=0.0, **extra) -> bool:
+        queue.set_status(older, status, tested=tested, waiting_since=time.time() - since, **extra)
+        return [r["branch"] for r in queue.blockers(tmp_path, mine)] == ["feat/older"]
+
+    assert not blocked_by(), "stale and young: passed"
+    assert blocked_by(tested="m"), "both fresh: order holds"
+    assert blocked_by(since=queue.PASS_CAP_S + 1), "waited past the cap: order holds"
+    assert blocked_by(status="turn"), "a turn is never cut short"
+    queue.set_status(mine, "waiting", tested="x", waiting_since=time.time())
+    assert blocked_by(), "only a ticket tested on the current main passes"
+    queue.set_status(mine, "waiting", tested="m", waiting_since=time.time())
+    assert blocked_by(urgent="the user's words"), "urgent is never passed (last: the field stays)"
+
+
+def test_a_waiting_member_never_blocks_the_leader_that_carries_it(tmp_path):
+    """2026-10-31: a member that had prepared on its own waited for its leader, and the leader for it (earlier and
+    waiting); three such pairs stopped main for 2 h 15 min."""
+    member = queue.take(tmp_path, "land/docs/member", status="waiting")
+    leader = queue.take(tmp_path, "land/feat/leader", status="waiting")
+    queue.set_status(leader, "waiting", batch=["land/docs/member"])
+    assert queue.blockers(tmp_path, leader) == [], "the leader turns and lands its member"
+    assert [r["branch"] for r in queue.blockers(tmp_path, member)] == ["land/feat/leader"]
+    other = queue.take(tmp_path, "land/fix/other", status="waiting")
+    assert [r["branch"] for r in queue.blockers(tmp_path, other)] == ["land/feat/leader"], "a carried member: no one"
+    queue.set_status(leader, "preparing", batch=["land/docs/member"])
+    assert queue.blockers(tmp_path, other) == [], "behind a leader still preparing, its waiting member holds no one"
+
+
+def test_a_full_queue_refuses_an_ordinary_ticket_but_not_an_urgent_or_adopted_one(tmp_path, monkeypatch):
+    """2026-10-31: 34 tickets at ~2 landings/h meant ~15 h of waiting; past CAP a landing is refused at once."""
+    monkeypatch.setattr(queue, "CAP", 2)
+    monkeypatch.setattr(queue, "queue_dir", lambda wt: tmp_path)
+    monkeypatch.setattr(queue, "_held", [])
+    first = queue.take(tmp_path, "feat/a")
+    assert queue.full(tmp_path) is None
+    queue.take(tmp_path, "feat/b")
+    assert "landing queue full (2/2" in queue.full(tmp_path)
+    with pytest.raises(queue.QueueError, match="queue full"):
+        queue.enter(tmp_path, "feat/c")
+    _, urgent = queue.enter(tmp_path, "feat/u", urgent="the user's words")
+    assert urgent.exists()
+    monkeypatch.setenv(queue.TICKET_ENV, str(first))
+    _, adopted = queue.enter(tmp_path, "feat/a")
+    assert adopted == first, "a relaunched lander keeps its own ticket even when the queue is full"

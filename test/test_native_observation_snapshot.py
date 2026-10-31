@@ -105,8 +105,11 @@ def test_operational_entry_points_cannot_import_ros_even_lazily():
                            for name in names), relative
 
 
-@pytest.mark.parametrize('unit_name', ['camera@', 'camera-view', 'observer@', 'observation-bridge'])
-def test_native_units_preserve_shell_paths_through_systemd(tmp_path, unit_name):
+@pytest.mark.parametrize('unit_name,view_args', [
+    ('camera@', ''), ('camera-view', ''), ('observer@', ''), ('observation-bridge', ''),
+    ('camera-view', '--camera-topic top=/top_camera/image_raw --camera-topic front=/arm_a_wrist_camera/image_raw'),
+])
+def test_native_units_preserve_shell_paths_through_systemd(tmp_path, unit_name, view_args):
     import os
     import shlex
     import shutil
@@ -133,7 +136,7 @@ def test_native_units_preserve_shell_paths_through_systemd(tmp_path, unit_name):
     variables = dict(PYTHONPATH='', ROSY_CAMERA_SOURCE=str(camera), ROSY_CAMERA_PIPELINE_ROOT=str(pipeline),
         ROSY_OBSERVER_SOURCE=str(pipeline / 'hardware_observer.py'), ROSY_OBSERVER_PYTHON=sys.executable,
         ROSY_OBSERVATION_SOURCE=str(pipeline / 'workcell_observation_bridge.py'),
-        ROSY_OBSERVATION_PYTHON=sys.executable)
+        ROSY_OBSERVATION_PYTHON=sys.executable, ROSY_VIEW_ARGS=view_args)
     arguments = shlex.split(command[1:].replace('%h', str(tmp_path)).replace('%i', 'arm_a'))
     environment = dict(os.environ, XDG_RUNTIME_DIR=str(runtime),
                        DBUS_SESSION_BUS_ADDRESS=f'unix:path={runtime}/bus')
@@ -144,3 +147,6 @@ def test_native_units_preserve_shell_paths_through_systemd(tmp_path, unit_name):
     result = json.loads(run.stdout)
     assert Path(result['path'].split(':')[0]).resolve() == release / 'contracts/foundation'
     assert result['args'][0].startswith(str(release))
+    if unit_name == 'camera-view':
+        assert result['args'][1:] == ['--port', '8767', *shlex.split(view_args)]
+        assert 'EnvironmentFile=-%h/.config/rosy/omx-camera-view.env' in unit.read_text()

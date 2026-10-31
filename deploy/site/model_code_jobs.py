@@ -15,7 +15,7 @@ JOB_ENTRY_POINTS.update({'dataset/' + name: 'learning/curation/perception/' + na
                              'incident_feedback.py', 'labels.py', 'lane_derived_drivable.py',
                              'lane_failure.py', 'lane_failure_loop.py', 'learning_workspace.py',
                              'map_projected_drivable.py', 'mcap_proof.py', 'media_pipeline.py', 'object_boxes.py',
-                             'pixel_label_job.py', 'prelabel.py', 'publish.py', 'qwen_points.py',
+                             'pilot_review.py', 'pixel_label_job.py', 'prelabel.py', 'publish.py', 'qwen_points.py',
                              'qwen_review_completion.py', 'reclaim.py', 'review_app.py', 'review_eval_bootstrap.py',
                              'review_evidence.py', 'review_ingest.py', 'review_masks.py', 'review_pack.py',
                              'review_quality.py', 'review_return.py', 'road_draft.py', 'sam3_road_draft.py',

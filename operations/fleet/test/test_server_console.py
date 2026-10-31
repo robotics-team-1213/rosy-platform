@@ -213,3 +213,126 @@ def test_failing_auto_reform_is_logged_and_survives():
     finally:
         logger.removeHandler(handler)
     assert any("auto speed reform failed" in r.getMessage() for r in records)
+
+
+def test_observe_serves_idle_robots_from_a_fresh_hub_heartbeat():
+    """2026-10-28 자원 경계: 목표 판정 때 대기 로봇은 hub 하트비트 스냅샷으로 답해
+    REST를 쏘지 않는다. 활동(목표 보유) 로봇은 판정 순간의 REST를 유지하고,
+    대기 로봇의 판정(`_verdict`)도 어느 쪽이든 갱신된다(D-395 P2-2 불변식)."""
+    from core_common.protocol.schemas import StateSnapshot
+
+    idle_hub = FakeRobot("rosy_01")
+    moving = FakeRobot("rosy_02", state={"robot_id": "rosy_02", "mode": "NAVIGATION"})
+    clock = FakeClock()
+    console = _console(idle_hub, moving, clock=clock)
+    row = console.hub.registry.record("rosy_01")
+    row.online = True
+    row.snapshot = StateSnapshot(robot_id="rosy_01", seq=7, mode="IDLE")
+    row.last_heartbeat_monotonic = clock()          # 하트비트가 신선하다
+    console._goals["rosy_02"] = {"x": 1.0, "y": 0.0, "yaw": 0.0}   # rosy_02는 활동 중
+
+    run(console._observe())
+
+    assert idle_hub.calls == []                      # 대기 로봇: REST 없음
+    assert ("state",) in moving.calls                # 활동 로봇: REST 유지
+    assert console._verdict("rosy_01") is not None   # 판정 갱신 — 하트비트 경로
+
+
+def test_observe_falls_back_to_rest_when_the_hub_heartbeat_is_stale():
+    """하트비트가 오래된 대기 로봇은 기존대로 REST 폴백을 읽는다."""
+    from core_common.protocol.schemas import StateSnapshot
+
+    idle_stale = FakeRobot("rosy_01")
+    clock = FakeClock()
+    console = _console(idle_stale, clock=clock)
+    row = console.hub.registry.record("rosy_01")
+    row.online = True
+    row.snapshot = StateSnapshot(robot_id="rosy_01", seq=7, mode="IDLE")
+    row.last_heartbeat_monotonic = clock()
+    clock.advance(30.0)                              # _hub_state_max_age_s(3s) 초과
+
+    run(console._observe())
+
+    assert ("state",) in idle_stale.calls
+
+
+
+def _localized(robot_id, *, degraded=False, navigation="NAVIGATING"):
+    return {"robot_id": robot_id, "navigation": navigation,
+            "localization": {"state": "LOCALIZED", "pose_frame": "map"},
+            "capabilities_degraded": ["vision"] if degraded else []}
+
+
+def _degraded_console(*, alternative: bool):
+    slow = FakeRobot("rosy_01", state=_localized("rosy_01", degraded=True))
+    robots = [slow] + ([FakeRobot("rosy_02", state=_localized("rosy_02", navigation="IDLE"))]
+                       if alternative else [])
+    console = _console(*robots)
+    console._goals["rosy_01"] = {"x": 1.0, "y": 0.0, "yaw": 0.0}
+    return console, robots
+
+
+def _goals_sent(robot) -> list:
+    return [call[1:4] for call in robot.calls if call[0] == "navigation_goal"]
+
+
+def test_degraded_robot_is_stopped_before_its_goal_moves_on():
+    """MSN-004: 저하 로봇의 목표를 옮길 때 그 로봇을 먼저 세운다. 점유만 지우면
+    달리는 로봇이 다른 로봇의 경로 판단에서 사라진다."""
+    console, (slow, idle) = _degraded_console(alternative=True)
+    run(console.snapshot())
+    assert ("navigation_cancel",) in slow.calls
+    assert "rosy_01" not in console._goals
+    assert _goals_sent(slow) == []
+    assert _goals_sent(idle) == [(1.0, 0.0, 0.0)]
+
+
+def test_degraded_goal_without_alternative_stays_queued_until_recovery():
+    console, (slow,) = _degraded_console(alternative=False)
+    run(console.snapshot())
+    run(console.snapshot())
+    assert console._queued["rosy_01"]["x"] == 1.0
+    assert _goals_sent(slow) == []
+    # 회복하면 같은 로봇으로 다시 나간다(대기 필드가 없어 KeyError가 나던 자리).
+    slow._state = _localized("rosy_01", navigation="IDLE")
+    run(console.snapshot())
+    assert "rosy_01" not in console._queued
+    assert _goals_sent(slow) == [(1.0, 0.0, 0.0)]
+
+
+def test_unconfirmed_cancel_keeps_the_degraded_goal_and_claim():
+    console, (slow,) = _degraded_console(alternative=False)
+
+    async def _no_confirm():
+        return {"canceled": False}
+
+    slow.navigation_cancel = _no_confirm
+    console._claims["rosy_01"] = [(1.0, 0.0)]
+    run(console.snapshot())
+    assert "rosy_01" in console._goals and "rosy_01" in console._claims
+
+
+def test_raising_cancel_keeps_the_degraded_goal():
+    console, (slow,) = _degraded_console(alternative=False)
+
+    async def _boom():
+        raise OSError("robot unreachable")
+
+    slow.navigation_cancel = _boom
+    run(console.snapshot())
+    assert "rosy_01" in console._goals and "rosy_01" not in console._queued
+
+
+def test_degraded_task_goal_returns_to_the_task_queue_not_another_robot():
+    console, (slow, idle) = _degraded_console(alternative=True)
+    console.goal_leases["rosy_01"] = {"state": "leased", "correlation_id": "c1", "ttl_s": 5.0,
+                                      "source": "dispatch", "task_id": "task-1"}
+    released: list = []
+
+    async def _release(mission):
+        released.append(mission["task_id"])
+
+    console.set_task_queue_release_callback(_release)
+    run(console.snapshot())
+    assert released == ["task-1"]
+    assert _goals_sent(idle) == []

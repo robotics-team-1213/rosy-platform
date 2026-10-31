@@ -118,9 +118,13 @@ class LineStuckBoard:
         return round(max(0.0, self._clock() - self._observed_at), 2)
 
     def observe(self, robots: Iterable[dict],
-                events_of: Callable[[str, int], Iterable] = lambda _rid, _seq: ()) -> None:
+                stuck_event: Callable[[str, str, str], object] = lambda _rid, _type, _sid: None) -> None:
         """One gathered snapshot. A robot that did not answer keeps its last stuck, marked
-        unreachable: the operator must still see it, and CORE refuses an answer it cannot take."""
+        unreachable: the operator must still see it, and CORE refuses an answer it cannot take.
+
+        ``stuck_event(robot_id, event_type, stuck_id)`` returns the robot's latest event of
+        that stuck case (or None) from the hub's stuck index (2026-10-28 resource bounds:
+        no full event scan)."""
         now = self._observed_at = self._clock()
         seen = set()
         robots = list(robots)
@@ -155,7 +159,7 @@ class LineStuckBoard:
             if previous is None or previous["stuck_id"] != entry["stuck_id"]:
                 self._open_episode(row, stuck, robots)
             self._peak(robot_id, stuck)
-            entry.update(self._opened(robot_id, entry["stuck_id"], previous, events_of))
+            entry.update(self._opened(robot_id, entry["stuck_id"], previous, stuck_event))
             if isinstance(stuck.get("inquiry"), dict):
                 entry["inquiry"] = stuck["inquiry"]
             self._open[robot_id] = entry
@@ -270,23 +274,21 @@ class LineStuckBoard:
             held_s_max=peak["held_s_max"], attempts_max=peak["attempts_max"]))
 
     @staticmethod
-    def _opened(robot_id: str, stuck_id: str, previous: Optional[dict], events_of) -> dict:
+    def _opened(robot_id: str, stuck_id: str, previous: Optional[dict], stuck_event) -> dict:
         if previous is not None and previous["stuck_id"] == stuck_id and previous["opened_event"]:
             return {k: previous[k] for k in (*_OPENED_KEYS, "opened_event")}
         found = {k: None for k in _OPENED_KEYS}
         found["opened_event"] = False
         try:
-            events = list(events_of(robot_id, 0))
+            opened = stuck_event(robot_id, "nav.line_stuck_opened", stuck_id)
         except Exception:  # noqa: BLE001 - enrichment only; the stuck itself is from state
-            events = []
-        for event in reversed(events):
-            body = _event_dict(event)
+            opened = None
+        if opened is not None:
+            body = _event_dict(opened)
             data = body.get("data") or {}
-            if body.get("type") == "nav.line_stuck_opened" and data.get("stuck_id") == stuck_id:
-                found.update({k: data.get(k) for k in _OPENED_KEYS})
-                found["inquiry_observed_at"] = body.get("ts")
-                found["opened_event"] = True
-                break
+            found.update({k: data.get(k) for k in _OPENED_KEYS})
+            found["inquiry_observed_at"] = body.get("ts")
+            found["opened_event"] = True
         return found
 
     def view(self, robot_id: str) -> Optional[dict]:

@@ -9,6 +9,8 @@ const MOUNT=[['height_cm','높이','cm'],['distance_cm','거리','cm'],['tilt_de
 const VERDICT={ok:['ready','맞음 — 이 위치로 녹화할 수 있습니다.'],adjust:['warning','조정 필요 — 점선에 실선이 겹치도록 카메라를 옮기세요.'],
   unmeasurable:['error','측정 불가 — 너무 어둡거나 장면이 많이 바뀌어 기준과 맞출 수 없습니다(마커 방식은 마커 3개 이상). 손목 카메라는 팔을 확인 자세로 보냈는지, 교정 지문과 해상도도 확인하세요.']};
 let token, references=[], still=null, photo=null, result=null;
+let checkGeneration=0, refreshing=false, actionError='', refreshError='';
+const checkButton=$('check-form').querySelector('ui-button[type=submit]');
 
 document.addEventListener('rosy:theme',draw);
 $('intrinsics').value=JSON.stringify({camera_info_sha256:'',revision:'',k:[600,600,320,240],dist:[0,0,0,0,0]});
@@ -19,7 +21,23 @@ $('check-pose').value=JSON.stringify({joint_names:['joint1','joint2','joint3','j
 $('camera-role').onchange=()=>{$('check-pose-field').hidden=$('camera-role').value!=='front';};
 $('camera-role').onchange();
 
-function fail(error){$('camera-error').hidden=false;$('camera-error').textContent=error.message||String(error);}
+function fail(error,owner='action'){
+  const message=error?(error.message||String(error)):'';
+  if(owner==='refresh')refreshError=message;else actionError=message;
+  $('camera-error').textContent=[refreshError,actionError].filter(Boolean).join('\n');
+  $('camera-error').hidden=!$('camera-error').textContent;
+}
+function checking(active){
+  $('check-form').setAttribute('aria-busy',String(active));
+  checkButton.disabled=active||refreshing||!selected();
+  checkButton.setAttribute('reason',active?'사진을 판정하는 중입니다.':refreshing?'촬영 기준을 확인하는 중입니다.':!selected()?'촬영 기준을 먼저 만드세요.':'');
+}
+function invalidate(message){
+  checkGeneration++;result=null;checking(false);
+  $('verdict').setAttribute('state',selected()?'pending':'empty');
+  $('verdict').textContent=message||(selected()?'입력이 바뀌었습니다. 지금 사진과 교정값으로 다시 판정하세요.':'촬영 기준이 없습니다. 아래에서 먼저 만드세요.');
+  $('numbers').replaceChildren();draw();
+}
 async function request(path,body){
   const response=await accountFetch(path,body?{method:'POST',headers:{'Content-Type':'application/json','X-Pinky-Token':token},body:JSON.stringify(body)}:{});
   const value=await response.json();
@@ -34,20 +52,20 @@ async function jpeg(file){
 }
 function selected(){return references.find(r=>r.revision===$('reference').value);}
 async function loadReferences(keep){
-  references=(await request('/api/learning/camera/references')).references;
+  const data=await request('/api/learning/camera/references'),previous=$('reference').value;
+  references=data.references;
   $('reference').replaceChildren(...references.map(r=>{const o=document.createElement('option');o.value=r.revision;
     o.textContent=`${r.camera_role} · ${r.camera_identity} · ${r.method==='markers'?'마커':'마커 없음'} · ${r.created_at} · ${r.revision.slice(0,8)}`;return o;}));
-  if(keep)$('reference').value=keep;
-  await pick();
+  const wanted=keep||previous;
+  if(references.some(r=>r.revision===wanted))$('reference').value=wanted;
+  await pick(!keep&&previous===$('reference').value);
 }
-async function pick(){
-  const ref=selected();result=null;still=null;
-  $('fingerprint').value=ref?.intrinsics.camera_info_sha256||'';
-  $('verdict').setAttribute('state',ref?'pending':'empty');
-  $('verdict').textContent=ref?'지금 사진을 고르고 판정을 누르세요.':'촬영 기준이 없습니다. 아래에서 먼저 만드세요.';
-  $('numbers').replaceChildren();
+async function pick(preserve=false){
+  const ref=selected();still=null;
+  if(!preserve)$('fingerprint').value=ref?.intrinsics.camera_info_sha256||'';
+  invalidate(ref?'지금 사진과 교정값으로 판정을 누르세요.':null);
   $('joints-field').hidden=!ref?.check_pose;
-  if(ref?.check_pose)$('joints').value=JSON.stringify(Object.fromEntries(ref.check_pose.joint_names.map((n,i)=>[n,ref.check_pose.positions_rad[i]])));
+  if(ref?.check_pose&&!preserve)$('joints').value=JSON.stringify(Object.fromEntries(ref.check_pose.joint_names.map((n,i)=>[n,ref.check_pose.positions_rad[i]])));
   if(ref){still=new Image();still.onload=draw;still.src='/api/learning/camera/stills/'+ref.revision;}
   draw();
 }
@@ -107,18 +125,26 @@ function show(check){
 
 $('reference').onchange=()=>pick().catch(fail);
 $('onion').oninput=()=>{$('onion-value').textContent=$('onion').value+'%';draw();};
-$('check-photo').onchange=async()=>{photo=null;result=null;draw();};
+$('check-photo').onchange=()=>{photo=null;invalidate();};
+for(const id of ['fingerprint','joints'])$(id).oninput=()=>invalidate();
 $('check-form').onsubmit=async event=>{
-  event.preventDefault();$('camera-error').hidden=true;
+  event.preventDefault();fail(null);invalidate('사진을 판정하는 중입니다.');
+  const generation=checkGeneration;checking(true);
   try{
-    const image=await jpeg($('check-photo').files[0]);photo=image.bitmap;
-    result=await request('/api/learning/camera/check',{reference_revision:$('reference').value,image_jpeg:image.base64,camera_info_sha256:$('fingerprint').value,
-      joints:selected()?.check_pose?JSON.parse($('joints').value):null});
+    const file=$('check-photo').files[0],body={reference_revision:$('reference').value,camera_info_sha256:$('fingerprint').value,
+      joints:selected()?.check_pose?JSON.parse($('joints').value):null};
+    const image=await jpeg(file);
+    if(generation!==checkGeneration){image.bitmap.close();return;}
+    photo=image.bitmap;draw();
+    const value=await request('/api/learning/camera/check',{...body,image_jpeg:image.base64});
+    if(generation!==checkGeneration)return;
+    result=value;
     show(result.check);draw();
-  }catch(error){fail(error);}
+  }catch(error){if(generation===checkGeneration){fail(error);$('verdict').setAttribute('state','error');$('verdict').textContent='판정하지 못했습니다. 입력을 확인하고 다시 판정하세요.';}}
+  finally{if(generation===checkGeneration)checking(false);}
 };
 $('reference-form').onsubmit=async event=>{
-  event.preventDefault();$('camera-error').hidden=true;
+  event.preventDefault();fail(null);
   try{
     const image=await jpeg($('reference-photo').files[0]),method=$('method').value;
     const measured=Object.fromEntries(MOUNT.map(([key])=>[key,$('m-'+key).value]).filter(([,v])=>v!=='').map(([k,v])=>[k,Number(v)]));
@@ -132,4 +158,12 @@ $('reference-form').onsubmit=async event=>{
   }catch(error){fail(error);}
 };
 
-(async()=>{token=(await request('/api/workspace')).token;await loadReferences();})().catch(fail);
+async function refresh(){
+  if(refreshing)return;
+  refreshing=true;$('camera-refresh').disabled=true;fail(null,'refresh');invalidate('촬영 기준을 확인하는 중입니다.');
+  try{token=(await request('/api/workspace')).token;await loadReferences();}
+  catch(error){fail(error,'refresh');$('verdict').setAttribute('state','error');$('verdict').textContent='촬영 기준을 읽지 못했습니다. 다시 확인을 눌러 주세요.';}
+  finally{refreshing=false;$('camera-refresh').disabled=false;checking(false);}
+}
+$('camera-refresh').onclick=refresh;
+refresh();

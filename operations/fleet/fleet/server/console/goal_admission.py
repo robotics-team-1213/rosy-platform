@@ -89,3 +89,9 @@ def response_of(decision: QueueDecision) -> dict:
             "blocked_by": decision.blocked_by,
             "waiting_on": list(decision.waiting_on),
             "reason": decision.reason}
+
+
+def cancel_confirmed(receipt) -> bool:
+    """로봇이 취소를 확인했는가. 확인 없이 대기열에 넣으면 목표가 살아 있는 채로 기다린다."""
+    return (isinstance(receipt, dict)
+            and (receipt.get("canceled") is True or receipt.get("navigation") == "CANCELED"))

@@ -1,3 +1,4 @@
+import {randomUUID} from "/console/assets/uuid.js";
 import {OPERATOR_REASON} from "/console/assets/authorization.js";
 import {createFleetClient} from '/common/fleet-client.js';
 import {developmentToken} from '/console/assets/development-auth.js';
@@ -6,13 +7,15 @@ import {confirmIrreversible} from '/common/ui.js';
 import {bindEstop, bindTopbarToggle, showSession, showSignedOut, tickClock, watchFleet} from '/console/assets/fleet-header.js';
 import {renderStructuredDocument} from '/console/assets/cell-document-editor.js';
 import {createCellObservation} from '/console/assets/cell-observation.js';
+import {bindScreens} from '/console/assets/subnav-screens.js';
+import '/console/assets/file-picker.js';
+import {bindPrintSheets} from '/console/assets/cell-print-sheets.js';
+import {showObjectCatalog} from '/console/assets/cell-object-catalog.js';
 
 const $ = id => document.getElementById(id);
-const revealStage = hash => $(hash.slice(1))?.closest('details')?.setAttribute('open', '');
-for (const link of document.querySelectorAll('.ui-subnav a[href^="#"]'))
-  link.addEventListener('click', () => revealStage(link.hash));
-window.addEventListener('hashchange', () => revealStage(location.hash));
-revealStage(location.hash);
+// D-926 3: each Cell step is its own screen; the first one shows the live cell, its calibration printouts and the saved documents.
+bindScreens({nav: document.querySelector('.ui-subnav-nav'), home: 'saved-heading', mark: 'step',
+  groups: {'saved-heading': ['observation-heading', 'print-heading', 'saved-heading']}});
 const channelQuery = new URL(location.href).searchParams, channelRequested = channelQuery.has('channel_request');
 const channelId = channelQuery.get('channel_request'), channelPath = `/api/fleet/channel-requests/${encodeURIComponent(channelId)}`;
 let channelReceipt = null, channelReview = null;
@@ -40,8 +43,9 @@ const stored = sessionStorage.getItem('rosy-console-token') || '';
 $('console-token').value = stored;
 const request = createFleetClient({credential: () => $('console-token').value, origin: location.origin});
 const observations = createCellObservation({request, root: $('workcell-observations')});
+bindPrintSheets({request, $});
 window.addEventListener('pagehide', event => event.persisted ? observations.clear() : observations.dispose());
-window.addEventListener('pageshow', event => { if (event.persisted) $('token-save').click(); });
+window.addEventListener('pageshow', event => { if (event.persisted) connect(); });
 bindEstop(request);
 bindTopbarToggle();
 tickClock();
@@ -137,6 +141,7 @@ function refreshControls() {
 }
 async function action(fn) {
   if (busy) return;
+  const focused = document.activeElement;
   busy = true; refreshControls();
   $('notice').textContent = '요청 처리 중 · 입력 잠시 잠금';
   try { await fn(); } catch (error) {
@@ -155,7 +160,11 @@ async function action(fn) {
         : error.message;
     if (error.status === 401 || error.status === 403) $('notice').scrollIntoView({block: 'center'});
   }
-  finally { busy = false; refreshControls(); }
+  finally {
+    busy = false; refreshControls();
+    if (document.activeElement === document.body && focused?.isConnected && !focused.disabled
+        && focused.getClientRects().length) focused.focus({preventScroll: true});
+  }
 }
 function post(path, body) { return api(path, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)}); }
 function references() {
@@ -192,7 +201,17 @@ async function list() {
     const date = new Date(item.updated_at);
     time.textContent = Number.isNaN(date.getTime()) ? '수정 시각 확인 불가'
       : `수정 ${date.toLocaleString('ko-KR', {dateStyle: 'medium', timeStyle: 'short'})}`;
-    li.append(name, time);
+    const open = document.createElement('ui-button');
+    open.setAttribute('kind', 'quiet');
+    open.textContent = '열기';
+    open.addEventListener('click', () => {
+      $(item.kind + '-id').value = item.id;
+      location.hash = `#${item.kind}-heading`;
+      $(item.kind + '-load').click();
+    });
+    const label = document.createElement('div');
+    label.append(name, time);
+    li.append(label, open);
     return li;
   }));
   saved.hidden = result.documents.length === 0;
@@ -294,7 +313,6 @@ for (const kind of ['recipe', 'cell']) {
   });
   $(kind + '-file').addEventListener('change', async () => {
     const file = $(kind + '-file').files[0];
-    $(kind + '-file-name').textContent = file?.name || '선택한 파일 없음';
     if (!file || busy) return;
     editEpoch++; invalidate(); const epoch = editEpoch;
     await action(async () => {
@@ -340,10 +358,12 @@ $('console-token').addEventListener('input', () => {
   editEpoch++; clearSession();
   $('notice').textContent = '운영자 계정으로 접속해 저장된 레시피와 셀을 준비하세요.';
 });
-$('token-save').addEventListener('click', () => action(async () => {
+function connect(credentialChange = false) {
+  const focusOrigin = document.activeElement;
+  return action(async () => {
   const session = await api('/api/fleet/session'); role = session.role;
-  showSession(session);
-  observations.clear(); void observations.refresh();
+  showSession(session, {credentialChange, focusOrigin});
+  observations.clear(); void observations.refresh(); void showObjectCatalog({request, $});
   loginForm.refresh(false);
   await list();
   if (channelRequested) {
@@ -355,14 +375,17 @@ $('token-save').addEventListener('click', () => action(async () => {
     $('cell-channel-original').textContent = channelReceipt.content;
     $('cell-channel-request').hidden = false;
     $('request-key').value = channelReview.request_key; $('request-key').readOnly = true;
-    if (channelReview.work_kind === 'cell_job') { $('mission-id').value = channelReview.work_id; $('mission-stage').open = true; }
-    $('proposal-stage').open = true;
+    if (channelReview.work_kind === 'cell_job') $('mission-id').value = channelReview.work_id;
+    // Opened from a chat request: start on the step it needs unless the operator already chose one.
+    if (!location.hash) location.hash = channelReview.work_kind === 'cell_job' ? '#mission-heading' : '#proposal-heading';
   }
   $('notice').textContent = '접속 완료 · 문서를 준비하세요.';
-}));
+  });
+}
+$('token-save').addEventListener('click', () => connect(true));
 // D-519 — login and logout change the cookie; drop any token so the cookie (or a 401) decides.
 const loginForm = createPasswordLogin($('password-login'), {onChange: () => {
-  $('console-token').value = ''; editEpoch++; clearSession(); $('token-save').click();
+  $('console-token').value = ''; editEpoch++; clearSession(); connect(true);
 }});
 $('compile').addEventListener('click', () => action(async () => {
   invalidate();
@@ -392,9 +415,8 @@ $('compile').addEventListener('click', () => action(async () => {
   }));
   $('layout-preview').hidden = !groups.length;
   renderLayout();
-  if (!$('request-key').value) $('request-key').value = crypto.randomUUID();
-  $('notice').textContent = '미리보기 완료 · 내용을 확인하고 작업 범위를 입력하세요.';
-  $('proposal-stage').open = true;
+  if (!$('request-key').value) $('request-key').value = randomUUID();
+  $('notice').textContent = '미리보기 완료 · 내용을 확인한 뒤 작업 제안으로 넘어가세요.';
 }));
 $('propose').addEventListener('click', () => action(async () => {
   if (!previewRefs) throw new Error('미리보기를 먼저 확인하세요.');
@@ -412,7 +434,6 @@ $('propose').addEventListener('click', () => action(async () => {
   const proposalId = result.work_id || result.proposal.proposal_id;
   $('proposal').textContent = `제안 ${proposalId}\n상태 ${jobStatusLabel(result.work_status || result.mission?.status || result.proposal.state)}\n운영자 별도 승인 대기`;
   $('mission-id').value = proposalId;
-  $('mission-stage').open = true;
   clearJobSnapshot();
   $('notice').textContent = '제안 완료 · 승인·진행에서 운영자 승인과 진행 상태를 확인하세요.';
 }));
@@ -481,7 +502,7 @@ $('mission-id').addEventListener('input', () => { editEpoch++; clearJobSnapshot(
 $('read-job').addEventListener('click', () => action(readJob));
 $('new-proposal').addEventListener('click', () => {
   if (busy) return;
-  $('request-key').value = crypto.randomUUID(); $('proposal').textContent = '';
+  $('request-key').value = randomUUID(); $('proposal').textContent = '';
   $('notice').textContent = '새 요청 키를 준비했습니다. 앞선 요청의 결과가 불명확하면 먼저 작업 ID로 상태를 확인하세요.';
 });
 for (const command of ['admit', 'resume', 'reconcile', 'cancel']) {
@@ -519,10 +540,10 @@ for (const command of ['admit', 'resume', 'reconcile', 'cancel']) {
 }
 refreshControls();
 developmentToken($('console-token').value).then(token => {
-  if (token) { $('console-token').value = token; $('token-access').hidden = true; $('token-save').click(); }
+  if (token) { $('console-token').value = token; connect(); }
   // D-540 2 — a stored token (another Fleet tab) or a login cookie connects at once; neither means signed out.
   else loginForm.refresh(true).then(cookie => {
-    if (cookie || stored) $('token-save').click();
+    if (cookie || stored) connect();
     else if (!role && !busy) showSignedOut();  // not if someone connected meanwhile
   });
 }).catch(() => {});

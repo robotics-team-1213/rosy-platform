@@ -10,16 +10,47 @@ from pathlib import Path
 import numpy as np
 
 
+def case(work: Path, row: dict) -> None:
+    """One line per check that did not simply pass, and the outcome that followed: new failure cases to fix
+    and turn into tests, and the decision model's training data (it learns before any VLA, D-872)."""
+    work.mkdir(parents=True, exist_ok=True)
+    with (work / "cases.jsonl").open("a") as f:
+        f.write(json.dumps({"t": round(time.time(), 3), **row}, default=str) + "\n")
+
+
+def write_library(config: dict, pick: dict, place: dict, path: Path) -> Path:
+    from grasp_planner import Planner
+
+    library = Planner(dict(config["plan"], pick=pick, place=place, keep_out=config.get("keep_out"))).library()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({k: v for k, v in library.items() if v is not None}))
+    return path
+
+
 class FifoCell:
     """The running chunk_runner (command FIFO + status file) and the read-only camera viewer."""
 
-    def __init__(self, io: Path, cameras: dict, timeout_s: float = 300):
+    def __init__(self, io: Path, cameras: dict, timeout_s: float = 300, *, operating_profile=None):
         self.io, self.cameras, self.timeout_s = io, cameras, timeout_s
+        self.operating_profile = operating_profile
 
     def checked(self, command: str, assessment: dict) -> dict:
         return self.act(f"checked {assessment['session_id']} {assessment['library_sha256']} {command}")
 
     def act(self, command: str) -> dict:
+        if self.operating_profile is not None and command not in ("state", "stop") and not command.startswith("checked "):
+            from cell_envelope import _state_current, digest
+
+            state = self.act("state")
+            context = state.get("operating_context") or {}
+            if not _state_current(state, time.time()) or context.get("operating_profile") != self.operating_profile:
+                return {"ok": False, "fault": "profile_mismatch", "error": "live follower differs from selected profile"}
+            try:
+                revision = (digest(json.loads(Path(command.split(" ", 1)[1]).read_text()))
+                            if command.startswith("load ") else state["library_sha256"])
+            except (OSError, ValueError, KeyError):
+                return {"ok": False, "fault": "profile_library_unavailable", "error": "cannot bind this command library"}
+            command = f"checked {context['session_id']} {revision} {command}"
         expected = command.split(" ", 3)[-1] if command.startswith("checked ") else command
         status_path = self.io / "chunk-status.jsonl"
         start = status_path.stat().st_size if status_path.exists() else 0

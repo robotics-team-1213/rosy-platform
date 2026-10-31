@@ -20,6 +20,13 @@ const armRoot = document.querySelector('[data-screen="arm"]');
 const brandHome = document.querySelector("[data-pilot-home]");
 let simTarget = null;
 let leaveDrive = null;
+let stopGeneration = 0;
+
+function generalNotice(message) {
+  stopGeneration++;
+  const notice = document.querySelector("#pilot-notice");
+  if (notice) { notice.removeAttribute("data-stop-state"); notice.textContent = message; }
+}
 
 function showConnect() {
   brandHome.removeAttribute("aria-disabled");
@@ -33,18 +40,19 @@ function showConnect() {
 brandHome.addEventListener("click", (event) => {
   if (simTarget) {
     event.preventDefault();
-    document.querySelector("#pilot-notice").textContent = "Gazebo 연습에서 진행 중 명령을 취소한 뒤 화면을 종료하세요.";
+    generalNotice("Gazebo 연습에서 진행 중 명령을 취소한 뒤 화면을 종료하세요.");
     return;
   }
   if (!leaveDrive) return;
   event.preventDefault();
-  document.querySelector("#pilot-notice").textContent = "조종을 종료하고 접속 화면으로 돌아가는 중입니다.";
+  generalNotice("조종을 종료하고 접속 화면으로 돌아가는 중입니다.");
   leaveDrive(() => location.assign("/pilot"));
 });
 
 // D-411 B: the device's rosy.controls/1 decides the drive profile. No `controls` field = an
 // old CORE → the legacy Pinky profile; an empty list = no drive control right now.
 function showDrive({capabilities} = {}) {
+  generalNotice("");
   document.body.dataset.pilotScreen = "drive";
   connectRoot.hidden = true;
   driveRoot.hidden = false;
@@ -76,13 +84,25 @@ function showDrive({capabilities} = {}) {
 // (triage 규칙: 전원 차단이라 말하지 않는다).
 for (const button of document.querySelectorAll("[data-estop]")) {
   button.addEventListener("click", async () => {
-    const notice = document.querySelector("#pilot-notice");
-    if (notice) notice.textContent = "정지 요청을 보냈습니다";
     if (simTarget) {
       // The arm screen owns cancellation; this Pinky stop control is hidden in SIM mode.
       return;
     }
-    await pinkyCore.stop(postJson);
+    const notice = document.querySelector("#pilot-notice"), generation = ++stopGeneration;
+    const paint = (state, message) => {
+      if (!notice || generation !== stopGeneration || simTarget || (state !== "pending" && !notice.hasAttribute("data-stop-state"))) return;
+      notice.dataset.stopState = state; notice.textContent = message;
+    };
+    const unknown = () => paint("unknown", "비상 정지 결과 확인 불가 · 로봇 상태와 연결을 즉시 확인하세요.");
+    paint("pending", "비상 정지 요청 중…");
+    try {
+      const result = await pinkyCore.stop((path, body) => postJson(path, body, {timeoutMs: 5000}));
+      if (result.ok && result.body?.estop === true) {
+        paint("received", "비상 정지 요청 접수 · 실제 정지는 로봇 상태에서 확인하세요.");
+      } else if (result.status >= 400 && result.status < 500) {
+        paint("refused", `비상 정지 요청 거절 (${result.status}) · 접속과 권한을 확인하세요.`);
+      } else unknown();
+    } catch (_error) { unknown(); }
   });
 }
 
@@ -97,8 +117,7 @@ for (const button of document.querySelectorAll("[data-goto]")) {
       location.assign(button.dataset.goto);
     };
     if (leaveDrive) {
-      const notice = document.querySelector("#pilot-notice");
-      if (notice) notice.textContent = "조종을 종료하고 지도를 여는 중입니다.";
+      generalNotice("조종을 종료하고 지도를 여는 중입니다.");
       leaveDrive(navigate);
     } else navigate();
   });
@@ -119,12 +138,13 @@ async function start() {
   const retry = connectRoot.querySelector("[data-discovery-retry]");
   if (retry) retry.disabled = true;
   const notice = document.querySelector("#pilot-notice");
-  if (notice) notice.textContent = "조종 대상을 확인하고 있습니다.";
+  generalNotice("조종 대상을 확인하고 있습니다.");
   try {
     const target = await omxSim.discover();
-    if (notice?.textContent === "조종 대상을 확인하고 있습니다.") notice.textContent = "";
+    if (notice?.textContent === "조종 대상을 확인하고 있습니다.") generalNotice("");
     if (target === null) { showConnect(); return; }
     simTarget = target;
+    generalNotice("");
     brandHome.setAttribute("aria-disabled", "true");
     document.body.dataset.pilotScreen = "arm";
     connectRoot.hidden = true;
@@ -133,7 +153,7 @@ async function start() {
     document.querySelectorAll("[data-estop], [data-goto]").forEach((button) => { button.hidden = true; });
     mountArm(armRoot, target, omxSim);
   } catch (_error) {
-    if (notice?.textContent === "조종 대상을 확인하고 있습니다.") notice.textContent = "";
+    if (notice?.textContent === "조종 대상을 확인하고 있습니다.") generalNotice("");
     const heading = Object.assign(document.createElement("h2"), {id: "pilot-gate-heading", textContent: "조종 대상 확인"});
     const message = Object.assign(document.createElement("ui-empty"), {textContent: "조종 대상을 확인하지 못했습니다. 연결과 대상 정보를 확인한 뒤 다시 시도하세요."});
     const retry = document.createElement("ui-button");

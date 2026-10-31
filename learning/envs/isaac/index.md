@@ -32,8 +32,8 @@
 
 ## 최근 기록
 
-- 2026-10-27 · uncommitted · AI 추가 ROS 거절 근거 보충
-- 2026-10-27 · uncommitted · SDK 6.2 운영 연결과 ROS 제어 검증
-- 2026-10-25 · uncommitted · 접촉 왕복 producer·판정기의 공개 소스 포트
-- 2026-10-25 · uncommitted · 고정 Isaac 실행 관리자의 공개 소스 포트
-- 2026-10-25 · uncommitted · OMX import 보고서의 공개 소스 포트
+- 2026-10-31 · 7d26c6aef8 · rl3 places all nine on seed 43; supervisor deletion race fixed
+- 2026-10-31 · 2d63c2518a · rl3 places all nine containers under the 2-5 mm estimate
+- 2026-10-31 · e72e07e856 · rl3 vs rl0 over four seeds
+- 2026-10-31 · ade501751f · rl3 on seed 45
+- 2026-10-31 · 11e0eaafc9 · rl3 on seed 42: no clear gain over rl0

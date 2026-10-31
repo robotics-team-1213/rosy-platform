@@ -81,7 +81,9 @@ class TripJobRows:
                     "steps": steps, "reason": row["reason"], "updated_at": row["updated_at"]}
 
     def create(self, mission_id: str, robot_id: str, principal_id: str, steps: list, *,
-               request_key: str | None = None, request_digest: str | None = None) -> dict:
+               request_key: str | None = None, request_digest: str | None = None,
+               approved_by: str | None = None, proposal_id: str | None = None,
+               expected_proposal_digest: str | None = None, expected_generation: int | None = None) -> dict:
         body = _json({"robot_id": robot_id, "steps": steps})
         digest, now = hashlib.sha256(body.encode()).hexdigest(), _now()
         with closing(self.store._connect()) as connection:
@@ -94,6 +96,28 @@ class TripJobRows:
                                          "fleet_dispatch_control WHERE control_id=1").fetchone()
             if control is None or not control["dispatch_enabled"]:
                 raise MissionConflict("dispatch is stopped (site stop latch)")
+            if any(value is not None for value in
+                   (approved_by, proposal_id, expected_proposal_digest, expected_generation)):
+                if (not proposal_id or not approved_by or approved_by == principal_id
+                        or not expected_proposal_digest or isinstance(expected_generation, bool)
+                        or not isinstance(expected_generation, int) or expected_generation != control["generation"]):
+                    raise MissionConflict("proposal approval generation or identity changed")
+                proposal = connection.execute("SELECT * FROM fleet_trip_proposals WHERE proposal_id=?",
+                                              (proposal_id,)).fetchone()
+                if (proposal is None or proposal["status"] != "PROPOSED"
+                        or proposal["principal_id"] != principal_id
+                        or request_key != "trip-pool:" + proposal["request_key"]
+                        or proposal["request_digest"] != request_digest
+                        or any(proposal[field] is not None for field in
+                               ("approved_by", "dispatch_generation", "mission_id"))):
+                    raise MissionConflict("trip proposal does not match this admission")
+                proposed = json.loads(proposal["body_json"])
+                document = {"proposal_id": proposal_id, "principal_id": principal_id,
+                            "request_key": proposal["request_key"], **proposed}
+                if (hashlib.sha256(_json(proposed).encode()).hexdigest() != proposal["request_digest"]
+                        or hashlib.sha256(_json(document).encode()).hexdigest() != expected_proposal_digest
+                        or robot_id not in proposed["candidates"] or steps != proposed["steps"]):
+                    raise MissionConflict("trip proposal content changed")
             connection.execute(
                 "INSERT INTO fleet_cell_jobs (mission_id, proposal_principal_id, request_key, request_digest, job_id, "
                 "workcell_id, instance_id, recipe_digest, cell_digest, process_artifact_digest, job_json, "
@@ -110,9 +134,16 @@ class TripJobRows:
             if not reserve_claims(connection, owner_kind="mission", owner_id=mission_id, phase="CLAIMED",
                                   generation=control["generation"], resources=[("robot", robot_id)]):
                 raise MissionConflict("another task or job claims this robot")
-            CellJobStore._event(connection, mission_id, None, "CELL_JOB_ADMITTED", principal_id, {
+            CellJobStore._event(connection, mission_id, None, "CELL_JOB_ADMITTED", approved_by or principal_id, {
                 "authority_epoch": control["authority_epoch"], "dispatch_generation": control["generation"],
-                "approval": "one_person"})
+                "approval": "one_person" if approved_by is None else "proposal", "proposed_by": principal_id})
+            if proposal_id is not None:
+                changed = connection.execute(
+                    "UPDATE fleet_trip_proposals SET status='ADMITTED', approved_by=?, dispatch_generation=?, "
+                    "mission_id=? WHERE proposal_id=? AND status='PROPOSED'",
+                    (approved_by, control["generation"], mission_id, proposal_id)).rowcount
+                if changed != 1:
+                    raise MissionConflict("trip proposal admission changed")
             job = CellJobStore._get(connection, mission_id)
             connection.commit()
             return job

@@ -121,5 +121,8 @@ const known = action("40% 진행 견본", () => progress.set(40)); known.id = "p
 const timeline = mount("timeline-mount", createTimeline({id: "timeline-example", label: "작업 이력 견본"}));
 timeline.set([{label: "접수", at: "2026-10-23T09:00:00+09:00"}, {label: "완료 미확인", detail: "현재 상태를 다시 조회해야 합니다"}]);
 mount("log-mount", createLogView({label: "공개 진단 견본", text: "task=sample-1\nstate=accepted\nresult=unknown\n실제 계정·토큰·장치 주소를 기록하지 않습니다."}));
+for (const value of document.querySelectorAll('[data-layout-token]')) {
+  value.textContent = getComputedStyle(document.documentElement).getPropertyValue(value.dataset.layoutToken).trim();
+}
 window.addEventListener("pagehide", () => mounted.forEach(component => component.dispose()), {once: true});
 el("kit-ready").setAttribute("state", "ready"); el("kit-ready").textContent = "견본 준비 완료";

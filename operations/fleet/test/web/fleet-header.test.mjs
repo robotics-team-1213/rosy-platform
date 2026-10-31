@@ -14,7 +14,9 @@ const {
 function fakeNode(id) {
   const attributes = new Map();
   return {
-    id, hidden: false, disabled: false, textContent: "", dataset: {}, listeners: {},
+    id, hidden: false, disabled: false, textContent: "", dataset: {}, listeners: {}, children: [],
+    contains(node) { return node === this || this.children.some(child => child.contains(node)); },
+    focus() { document.activeElement = this; },
     getAttribute: name => (attributes.has(name) ? attributes.get(name) : null),
     setAttribute: (name, value) => attributes.set(name, String(value)),
     removeAttribute: name => attributes.delete(name),
@@ -26,11 +28,16 @@ function fakeNode(id) {
 function fakeHeader() {
   const nodes = Object.fromEntries(["user-role", "development-badge", "estop", "estop-feedback", "topbar-more",
     "topbar-extra", "online-pill", "fleet-name", "clock", "fleet-inbox", "fleet-theme", "header-unread",
-    "fleet-login", "fleet-account", "fleet-account-identity", "link-state"].map(id => [id, fakeNode(id)]));
+    "fleet-login", "fleet-account", "fleet-account-identity", "link-state", "token-access",
+    "console-token", "token-save"].map(id => [id, fakeNode(id)]));
   nodes["development-badge"].hidden = true;
   nodes["topbar-more"].setAttribute("aria-expanded", "false");
   nodes["topbar-extra"].dataset.open = "false";  // the markup ships closed (D-741 3)
-  globalThis.document = {getElementById: id => nodes[id], addEventListener() {}};
+  nodes["topbar-extra"].children.push(nodes["fleet-account"], nodes["fleet-theme"], nodes["token-access"]);
+  nodes["token-access"].children.push(nodes["console-token"], nodes["token-save"]);
+  const body = fakeNode("body");
+  globalThis.document = {body, activeElement: body, listeners: {}, getElementById: id => nodes[id],
+    addEventListener(type, fn) { this.listeners[type] = fn; }};
   return nodes;
 }
 
@@ -45,9 +52,28 @@ test("one status click toggles once; the theme button is wired by the shared ui.
   assert.equal(nodes["topbar-extra"].dataset.open, "true");
   nodes["topbar-more"].listeners.click();
   assert.equal(nodes["topbar-extra"].dataset.open, "false");
-  nodes["topbar-more"].focus = () => {nodes["topbar-more"].focused = true;};
-  nodes["topbar-extra"].listeners.keydown({key: "Escape"});
-  assert.equal(nodes["topbar-more"].focused, true);
+  nodes["topbar-more"].listeners.click();
+  document.listeners.keydown({key: "Escape"});
+  assert.equal(document.activeElement, nodes["topbar-more"]);
+  assert.equal(nodes["topbar-extra"].dataset.open, "false");
+});
+
+test("Escape leaves a dialog-owned event and outside focus alone", () => {
+  const nodes = fakeHeader();
+  bindTopbarToggle();
+  nodes["topbar-more"].listeners.click();
+  nodes["fleet-theme"].focus();
+  document.listeners.keydown({key: "Escape", defaultPrevented: true});
+  assert.equal(nodes["topbar-extra"].dataset.open, "true");
+  assert.equal(document.activeElement, nodes["fleet-theme"]);
+  const outside = fakeNode("outside");
+  outside.focus();
+  document.listeners.keydown({key: "Escape"});
+  assert.equal(nodes["topbar-extra"].dataset.open, "false");
+  assert.equal(document.activeElement, outside);
+  document.body.focus();
+  document.listeners.keydown({key: "Escape"});
+  assert.equal(document.activeElement, document.body);
 });
 
 test("the E-stop locks only on a press the server would refuse", () => {
@@ -93,6 +119,7 @@ test("a session shows its Korean role and title identity; a development session 
   assert.equal(nodes["development-badge"].hidden, false);
 
   showSession({principal_id: "vic", role: "viewer"});
+  assert.equal(nodes["development-badge"].hidden, true);
   assert.equal(nodes["user-role"].textContent, "보기 전용");
   assert.equal(nodes["user-role"].title, "vic · viewer");
   assert.equal(nodes["user-role"].getAttribute("status"), "neutral");

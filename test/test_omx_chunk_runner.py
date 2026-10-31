@@ -1,5 +1,6 @@
 """Chunks play in order with torque held between them; the judge gets settled state and grasp outcome."""
 import importlib.util
+import json
 from pathlib import Path
 import sys
 
@@ -171,6 +172,23 @@ def test_park_closes_rises_turns_then_descends_slowly():
     assert path[-1][:5] == pytest.approx(HOME[:5])
 
 
+def test_slower_transit_speed_rises_at_that_fraction_and_bad_values_are_refused(tmp_path):
+    start = [35.0, -10.0, 9.0, 41.0, 71.0, 46.6]  # reached out low: the rise is a long shoulder move
+    fast, slow = m.park_path(start, HOME, 46.6, fps=30), m.park_path(start, HOME, 46.6, fps=30, speed=0.4)
+    step = 0.4 * m.PARK_SPEED / 30 + 1e-9
+    assert all(max(abs(b - a) for a, b in zip(p, q)) <= step for p, q in zip([start] + slow, slow))
+    assert slow[-1][:5] == pytest.approx(HOME[:5])
+    # the fraction shows on a move without a lift change: a rising lift is capped at RISE_SPEED at either speed
+    level, home = [35.0, -27.0, 9.0, 41.0, 71.0, 46.6], [0.0, -27.0, 50.0, 45.0, 10.0, 46.6]
+    fast, slow = m.park_path(level, home, 46.6, fps=30), m.park_path(level, home, 46.6, fps=30, speed=0.4)
+    assert len(slow) > 1.8 * len(fast)
+    for bad in (0.95, 0, "slow", True):
+        path = tmp_path / "lib.json"
+        path.write_text(json.dumps(dict(library(), fps=30, chunks={"home": [HOME]}, transit_speed=bad)))
+        with pytest.raises(SystemExit, match="transit_speed"):
+            m.load_library(path)
+
+
 def test_goto_reaches_a_chunk_start_by_rising_turning_and_descending():
     goal = [-3.0, -16.0, 9.0, 48.0, 5.0, 55.0]  # over the belt, jaws open
     path = m.transit_path(HOME, goal, 46.6, fps=30)
@@ -303,7 +321,7 @@ def test_the_live_state_is_published_about_twice_a_second():
     r = m.Runner(Robot(), library(), fps=10, status=lambda row: None, clock=lambda: clock[0],
                  sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 10), live=rows.append)
     r.run(lambda: [queue.pop(0)] if queue and not r.chunk else [])
-    assert rows and set(rows[-1]) == {"t", "state", "target", "chunk", "fault", "health"}
+    assert rows and set(rows[-1]) == {"t", "state", "target", "chunk", "fault", "health", "lag"}
     assert rows[-1]["state"][0] == 18.0  # held at the end of the approach chunk
 
 
@@ -397,10 +415,29 @@ class SlowWrist(Robot):
         return action
 
 
+def test_pacing_and_idle_thresholds_come_from_the_params_a_runner_is_given(monkeypatch):
+    monkeypatch.setattr(m, "STRAIN_LAG", 99.0)  # without pacing or the strain hold, the guard stops it
+    lift = library()
+    lift["chunks"]["approach_pinky"] = [[0.0, -60.0, 50.0, 45.0 + 0.15 * k, 10.0, 46.6] for k in range(1, 101)]
+    robot, status, clock, queue = SlowWrist(), [], [0.0], ["run approach_pinky", "stop"]
+    r = m.Runner(robot, lift, fps=30, status=status.append, clock=lambda: clock[0], params={"runner.pace_lag": 99.0},
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+    with pytest.raises(ValueError, match="following error"):  # the same run the PACE_LAG patch below lets fail
+        r.run(lambda: [queue.pop(0)] if queue and not r.chunk else [])
+    lib = library()
+    lib["chunks"]["home"] = [HOME]
+    status, clock, queue = [], [0.0], ["run approach_pinky"]
+    r = m.Runner(Robot(), lib, fps=30, status=status.append, clock=lambda: clock[0],
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30), params={"runner.idle_park_s": 7.0, "runner.idle_stop_s": 9.0})
+    r.run(lambda: [queue.pop(0)] if queue and not r.chunk else [])
+    assert 16.0 <= clock[0] < 100.0 and status[-1]["command"] == "stop"  # not the 360 s of the built-in values
+
+
 @pytest.mark.parametrize("paced", [True, False])
 def test_a_lagging_joint_holds_the_next_frame_until_it_catches_up_before_the_guard_stops(monkeypatch, paced):
-    if not paced:
+    if not paced:  # neither pacing nor the strain hold: the guard stops it
         monkeypatch.setattr(m, "PACE_LAG", 99.0)
+        monkeypatch.setattr(m, "STRAIN_LAG", 99.0)
     lift = library()
     lift["chunks"]["approach_pinky"] = [[0.0, -60.0, 50.0, 45.0 + 0.15 * k, 10.0, 46.6] for k in range(1, 101)]
     robot, status, clock, queue = SlowWrist(), [], [0.0], ["run approach_pinky", "stop"]
@@ -483,8 +520,10 @@ def test_a_new_library_loads_while_the_arm_holds_and_a_bad_one_is_refused(tmp_pa
     for name, lib in (("good", good), ("fast", fast), ("other_fps", other_fps)):
         paths[name] = tmp_path / f"{name}.json"
         paths[name].write_text(json.dumps(lib))
-    status = runner(Robot(), [f"load {paths['fast']}", f"load {paths['other_fps']}", f"load {paths['good']}",
-                              "run approach_pinky", "stop"])
+    missing = tmp_path / "gone.json"
+    status = runner(Robot(), [f"load {missing}", f"load {paths['fast']}", f"load {paths['other_fps']}",
+                              f"load {paths['good']}", "run approach_pinky", "stop"])
+    assert by_command(status, f"load {missing}")[0]["ok"] is False  # refused, the session goes on
     loads = by_command(status, f"load {paths['fast']}") + by_command(status, f"load {paths['other_fps']}")
     assert [s["ok"] for s in loads] == [False, False]
     assert "faster than the guard" in loads[0]["error"] and "fps" in loads[1]["error"]
@@ -544,7 +583,115 @@ def test_a_soft_contact_holds_with_torque_on_then_retreats_along_its_path_and_pa
     assert by_command(status, "run descend_pick")[1]["ok"] is True  # after park the next attempt may start
 
 
+
+def test_a_settled_retreat_clears_the_contact_so_the_next_point_needs_no_park():
+    robot = Pressing(after=8)
+    status, clock, queue = [], [0.0], ["run descend_pick", "retreat", "run descend_pick", "stop"]
+    r = m.Runner(robot, descend_library(), fps=30, status=status.append, clock=lambda: clock[0],
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+
+    def lines():
+        if queue and not r.chunk:
+            if queue[0] == "retreat":
+                robot.stuck = None
+            return [queue.pop(0)]
+        return []
+
+    r.run(lines)
+    assert by_command(status, "run descend_pick")[0]["contact"] is True
+    assert by_command(status, "run retreat")[0]["ok"] is True and by_command(status, "run retreat")[0]["fault"] is None
+    assert by_command(status, "run descend_pick")[1]["ok"] is True
+
+
 def test_normal_following_lag_is_not_a_contact():
     robot = Pressing(after=10**9)  # never stuck: the arm follows
     status = run_with(robot, descend_library(), ["run descend_pick", "stop"])
-    assert by_command(status, "run descend_pick")[0]["ok"] is True
+    done = by_command(status, "run descend_pick")[0]
+    assert done["ok"] is True
+    # the contact margin of the run: its largest lag behind the guard's sent command and ticks over the bound
+    assert 0 <= done["peak_lag"] <= m.CONTACT_LAG and done["over_ticks"] == 0
+
+
+def test_contact_limits_never_rise_for_an_unloaded_joint_and_stay_under_the_guard_for_a_loaded_one():
+    assert m.contact_limits([0.0, 0.3, 0.8, 0.4, 0.1]) == [1.5] * 5  # unloaded: exactly the old limit (incident 23:59)
+    loaded = m.contact_limits([0.4, 0.2, 2.0, 0.3, 0.1])  # a held box: the elbow starts 2.0 behind
+    assert loaded[2] == pytest.approx(2.2) and loaded[:2] + loaded[3:] == [1.5] * 4
+    assert max(m.contact_limits([2.6] * 5)) <= 2.2 < 2.8  # never toward the guard's ~2.8 units
+
+
+def test_a_transit_eases_in_and_out_and_lifts_the_arm_no_faster_than_it_follows():
+    start = [38.36, 17.26, -26.35, 59.9, 26.2, 50.94]  # the far pick lifted, near full reach (2026-10-27)
+    path = [start] + m.transit_path(start, [-3.0, -16.0, 9.0, 48.0, 5.0, 55.0], 46.6, 30, {1: -40.0, 2: 25.0, 3: 46.0})
+    v = [[(b - a) * 30 for a, b in zip(p, q)] for p, q in zip(path, path[1:])]
+    acc = [[(b - a) * 30 for a, b in zip(p, q)] for p, q in zip(v, v[1:])]
+    assert max(-s[1] for s in v) <= m.RISE_SPEED + 1e-6  # the lift rising against the arm's weight
+    assert max(max(abs(x) for x in s[:5]) for s in v) <= 0.85 * m.PARK_SPEED + 1e-6
+    assert max(max(abs(x) for x in s[:5]) for s in acc) <= m.GUARD_ACCEL_UNITS_S2 + 0.05
+    # acceleration never jumps: a trapezoid's 0 -> 5 units/s^2 step in one tick was jerk 110 units/s^3
+    jerk = max(max(abs(b - a) * 30 for a, b in zip(p[:5], q[:5])) for p, q in zip(acc, acc[1:]))
+    assert jerk < 20
+
+
+class Straining(Robot):
+    """Reports the commanded pose like the guard does; the lift's lag behind it is `lag(n)` at action n, and the
+    guard's last PWM sample sits on `motion` the way NativeJointMotion keeps it."""
+
+    def __init__(self, lag, pwm=500):
+        super().__init__()
+        self.lag, self.count = lag, 0
+        self.motion = type("Motion", (), {"effort_pwm": {"shoulder_lift": -pwm}, "pwm_limits": {"shoulder_lift": 600}})()
+
+    def send_action(self, action):
+        self.count += 1
+        super().send_action(action)
+        self.pos[1] = action["shoulder_lift.pos"] - self.lag(self.count)
+        return dict(action)
+
+
+def goto_library():
+    lib = library()
+    lib["chunks"]["home"] = [HOME]
+    return lib
+
+
+def test_a_lag_that_keeps_rising_while_the_joint_pushes_holds_with_torque_on_then_retreats():
+    robot = Straining(lambda n: min(2.6, max(0.0, 0.05 * (n - 30))))  # 2.4 -> 4.7 deg in 0.7 s, like the shoulder
+    status, clock, queue = [], [0.0], ["goto approach_pinky", "retreat", "park", "stop"]
+    r = m.Runner(robot, goto_library(), fps=30, status=status.append, clock=lambda: clock[0],
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+
+    def lines():
+        if queue and not r.chunk:
+            if queue[0] == "retreat":
+                robot.lag = lambda n: 0.0  # backing off: the joint follows again
+            return [queue.pop(0)]
+        return []
+
+    r.run(lines)
+    held = by_command(status, "run goto approach_pinky")[0]
+    assert held["ok"] is False and held["contact"] is True and "shoulder_lift" in held["fault"]
+    assert held["target"][1] == pytest.approx(held["state"][1], abs=0.01)  # held where it was, not pushed on
+    assert by_command(status, "run retreat")[0]["ok"] is True
+    assert by_command(status, "run park")[0]["ok"] is True and by_command(status, "run park")[0]["fault"] is None
+
+
+@pytest.mark.parametrize("lag, pwm", [
+    (lambda n: 2.0, 500),                                # a steady travel lag, even past STRAIN_LAG, is not strain
+    (lambda n: min(2.5, max(0.0, 0.05 * (n - 30))), 100),  # rising but hardly pushing: the guard's PWM is low
+    (lambda n: min(2.0, max(0.0, 0.05 * (n - 30))), 263),  # a park out of a sagged reach at 44 % (2026-10-27)
+    (lambda n: min(1.9, max(0.0, 0.05 * (n - 30))), 413),  # lifting the extended arm out of the container reach
+])
+def test_travel_lag_without_a_rising_push_is_not_strain(lag, pwm):
+    status = run_with(Straining(lag, pwm), goto_library(), ["goto approach_pinky", "stop"])
+    done = by_command(status, "run goto approach_pinky")[0]
+    assert done["ok"] is True and done["fault"] is None
+
+
+def test_the_trace_gets_one_row_per_tick():
+    rows, status, clock, queue = [], [], [0.0], ["run approach_pinky", "stop"]
+    r = m.Runner(Pressing(after=10**9), library(), fps=30, status=status.append, clock=lambda: clock[0],
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+    r.trace = rows.append
+    r.run(lambda: [queue.pop(0)] if queue and not r.chunk else [])
+    assert len(rows) == r.ticks
+    assert rows[1]["chunk"] == "approach_pinky" and len(rows[1]["sent"]) == 6 and len(rows[1]["present"]) == 6

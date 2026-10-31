@@ -39,7 +39,7 @@ def test_brand_names_the_robot_this_page_is_attached_to():
 
 
 def test_connect_bar_is_one_row_from_64rem_and_other_fold_rules_stay():
-    sheet = (PILOT / "styles.css").read_text(encoding="utf-8")
+    sheet = ''.join((PILOT / name).read_text(encoding="utf-8") for name in ('styles.css', 'layout.css'))
     one_row = ('html:not([data-pilot-shell="android"]) body[data-pilot-screen="connect"] ui-topbar '
                "{ align-items: center; min-height: var(--appbar-height); padding-block: var(--space-1); }")
     assert sheet.count("--appbar-height") == 1, "한 줄 높이는 접속 화면 한 규칙만 쓴다(주행·팔·Android 셸은 그대로)"

@@ -72,3 +72,19 @@ def test_a_site_record_needs_five_points_and_round_trips(tmp_path):
     m.save(path, "pinky", m.site_record(points, "2026-10-25T00:00:00+00:00"))
     record = m.load(path)["sites"]["pinky"]
     assert record["loo_error_mm"]["max"] < 0.01 and len(record["points"]) == 9
+
+
+def test_touched_heights_are_kept_beside_the_maps_and_unmeasured_ground_is_unknown(tmp_path):
+    path = tmp_path / "cal.json"
+    m.save(path, "pinky", m.site_record([(pixel(p), p) for p in m.grid((0.072, 0.106), 0.015)], "t0"))
+    m.save_surface(path, "pinky_tray", m.surface_record([(0.075, 0.211, 0.0779), (0.074, 0.224, 0.0777)], "fixture", "t1"))
+    m.save_surface(path, "container", m.surface_record([(0.053, 0.223, 0.0557)], "object", "t2"))
+    data = m.load(path)
+    assert "pinky" in data["sites"]  # the maps survive
+    assert m.surface_z(data, 0.076, 0.214) == (0.0779, "pinky_tray")
+    assert m.surface_z(data, 0.050, 0.223) == (0.0557, "container")
+    assert m.surface_z(data, 0.050, 0.223, kinds=("fixture",)) is None
+    assert m.surface_z(data, 0.120, -0.050) is None  # never touched: probe, do not guess
+    with pytest.raises(ValueError):
+        m.surface_record([], "fixture", "t3")
+

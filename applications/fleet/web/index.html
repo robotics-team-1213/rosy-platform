@@ -28,7 +28,8 @@
   <ui-shell grammar="exception" class="fleet-shell">
   <!-- D-540 2 — 네 문서가 같은 머리다(test_fleet_header.py가 글자 그대로 고정한다). 움직임은 web/shared/fleet-header.js 하나다. -->
   <header class="fleet-header">
-  <ui-topbar>
+  <!-- fleet:header:start -->
+<ui-topbar>
     <div class="fleet-header-identity" data-header-region="identity" role="group" aria-label="제품과 현장">
     <ui-brand href="/console" aria-label="Rosy Fleet 관제 홈"><b><span class="fleet-wordmark">Fleet</span></b><small id="fleet-name">사이트</small></ui-brand>
     </div>
@@ -59,22 +60,25 @@
 
       <details id="token-access" class="token-access">
         <summary>토큰으로 접속</summary>
-        <input id="console-token" class="ui-field token" type="password" placeholder="관제 토큰"
+        <input id="console-token" class="ui-field" type="password" placeholder="관제 토큰"
                autocomplete="off" aria-label="관제 토큰">
         <ui-button kind="quiet" id="token-save" type="button">접속</ui-button>
       </details>
     </div>
   </ui-topbar>
+<!-- fleet:header:end -->
   </header>
   <!-- D-741 2 — Fleet 문서 넷은 같은 탐색 레일을 쓴다. 영역은 관제·작업·기록·지도·설치 다섯이다. -->
   <div class="fleet-body">
-  <nav class="doc-tabs" aria-label="Rosy Fleet 문서">
-    <a href="/console" data-action-icon="fleet" aria-current="page">관제</a>
+  <!-- fleet:nav:start -->
+<nav class="doc-tabs" aria-label="Rosy Fleet 문서">
+    <a href="/console" aria-current="page" data-action-icon="fleet">관제</a>
     <a href="/console?view=work" data-action-icon="list">작업</a>
     <a href="/console?view=records" data-action-icon="history">기록</a>
     <a href="/console/site-map" data-action-icon="map" aria-label="현장 지도">지도</a>
     <a href="/console/install" data-action-icon="install" aria-label="설치·보정">설치</a>
   </nav>
+<!-- fleet:nav:end -->
   <!-- D-741 7 — 영역의 화면은 하위 탐색 자리에 선다. 주소의 view가 고른 영역 것만 보인다(console.js). -->
   <div class="ui-subnav" data-area="work" hidden><nav class="ui-subnav-nav" aria-label="작업 화면">
     <a class="ui-subnav-item" href="/console?view=work">전체 작업</a>
@@ -101,7 +105,6 @@
     <a id="connection-guide-action" class="ui-disclosure-row" href="#console-token" data-action-icon="login">관제 접속</a>
   </section>
 
-  <div class="assistant-tools"><a class="ui-subnav-item" href="/monitoring/" target="_blank" rel="noopener noreferrer">시스템 상태 · 별도 조회</a><ui-button id="assistant-toggle" data-work-read="" kind="quiet" type="button" aria-expanded="false" aria-controls="assistant-panel">관제 AI</ui-button></div>
   <div class="assistant-layout">
   <main id="fleet-main" tabindex="-1">
     <h1 class="sr-only">Rosy Fleet — 사이트 관제</h1>
@@ -124,7 +127,7 @@
         <div id="work-integrations-content"><span id="work-integrations-anchor" hidden></span></div>
       </details>
       <h3 id="channel-requests-heading">내 대화 요청</h3>
-      <p id="channel-requests-state" class="hint" role="status">접속 후 조회합니다.</p>
+      <p id="channel-requests-state" class="hint" role="status" tabindex="-1">접속 후 조회합니다.</p>
       <ul id="channel-requests" class="work-list" aria-labelledby="channel-requests-heading"></ul>
       <section id="channel-review" aria-labelledby="channel-review-heading" hidden>
         <h3 id="channel-review-heading">대화 요청 검토</h3>
@@ -301,10 +304,10 @@
           </section>
       <section class="console-context" aria-label="관제 상세">
         <div class="context-tabs" role="tablist" aria-label="관제 상세 보기">
-          <ui-button kind="segment" role="tab" id="context-status-tab" data-context-tab="status" data-icon-only="" data-action-icon="robot" aria-controls="context-status" aria-selected="true">로봇·작업</ui-button>
-          <ui-button kind="segment" role="tab" id="context-inbox-tab" data-context-tab="inbox" data-icon-only="" data-action-icon="notification" aria-controls="context-inbox" aria-selected="false" tabindex="-1">알림</ui-button>
-          <ui-button kind="segment" role="tab" id="context-evidence-tab" data-context-tab="evidence" data-icon-only="" data-action-icon="history" aria-controls="context-evidence" aria-selected="false" tabindex="-1">기록·근거</ui-button>
-          <ui-button kind="segment" role="tab" id="context-tools-tab" data-context-tab="tools" data-icon-only="" data-action-icon="tools" aria-controls="context-tools" aria-selected="false" tabindex="-1">운영 도구</ui-button>
+          <ui-button kind="segment" role="tab" id="context-status-tab" data-context-tab="status" data-action-icon="robot" aria-controls="context-status" aria-selected="true">로봇·작업</ui-button>
+          <ui-button kind="segment" role="tab" id="context-inbox-tab" data-context-tab="inbox" data-action-icon="notification" aria-controls="context-inbox" aria-selected="false" tabindex="-1">알림</ui-button>
+          <ui-button kind="segment" role="tab" id="context-evidence-tab" data-context-tab="evidence" data-action-icon="history" aria-controls="context-evidence" aria-selected="false" tabindex="-1">기록·근거</ui-button>
+          <ui-button kind="segment" role="tab" id="context-tools-tab" data-context-tab="tools" data-action-icon="tools" aria-controls="context-tools" aria-selected="false" tabindex="-1">운영 도구</ui-button>
         </div>
         <div class="context-panel" id="context-status" role="tabpanel" tabindex="0" aria-labelledby="context-status-tab">
       <section class="panel" id="work-context" aria-labelledby="work-detail-heading" hidden>
@@ -347,6 +350,7 @@
 
         </div>
         <div class="context-panel" id="context-tools" role="tabpanel" tabindex="0" aria-labelledby="context-tools-tab" hidden>
+      <ui-actions class="context-shortcuts"><ui-button id="assistant-toggle" data-work-read="" kind="quiet" type="button" aria-expanded="false" aria-controls="assistant-panel">관제 AI</ui-button><a class="ui-disclosure-row" href="/monitoring/" target="_blank" rel="noopener noreferrer">시스템 상태 · 새 창</a></ui-actions>
       <section class="panel vision-preview" aria-labelledby="vision-heading">
         <div class="map-head">
           <h2 id="vision-heading">관제 카메라</h2>

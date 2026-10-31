@@ -51,7 +51,7 @@ CONFIG_DIR = (Path(__file__).resolve().parents[4] / "contracts") / "foundation" 
 #: to resolve `Twist`, because `__init__` only ever passes these as type
 #: arguments and never constructs one.
 _ROS_MODULES = [
-    "rclpy", "rclpy.action", "rclpy.node", "rclpy.qos",
+    "rclpy", "rclpy.action", "rclpy.duration", "rclpy.node", "rclpy.qos",
     "geometry_msgs", "geometry_msgs.msg",
     "nav_msgs", "nav_msgs.msg",
     "nav2_msgs", "nav2_msgs.action", "nav2_msgs.msg",

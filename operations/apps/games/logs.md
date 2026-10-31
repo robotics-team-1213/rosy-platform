@@ -412,3 +412,10 @@
 - 변경: 점수판의 두 열을 같은 폭으로 줄일 수 있게 하고 긴 로봇 ID를 줄바꿈한다. ID 원문과 점수는 유지한다.
 - 증거: 시험만 추가한 `70087db1c9`에서 세 폭 모두 실패했고 320px에서 1001px 넘쳤다. 수정 `a4d2200d86`의 원격 Chromium Pilot·Games 전체 206 passed, skipped 0, NEW 0. 세 폭 캡처를 보존하고 320px에서 이름 줄바꿈과 점수를 확인했다.
 - gate 변화: 없음. 정지·인증·호스트·실물 수용은 변경하지 않았다. CE: 해당 없음 — 원인과 해결은 CSS 및 공개 payload를 이용한 브라우저 회귀 시험으로 설명된다.
+
+## 2026-10-29 · 068aa03060 · 지연·끝나지 않는 응답에서 마지막 경기 신선도 유지
+
+- 변경: 마지막 host age를 monotonic 경과로 만료시키고 GET/JSON body의5초 상한으로 polling을 복구한다. 늦은 응답은 요청 경과도 age 상한에 반영하고 시간 근거가 없으면 fresh를 표시하지 않는다. stop/account·점수/기하·host enum은 유지했다.
+- 증거: 최종 runtimefd770d8d36 board Chromium61 passed/skip0, test-only068의 부분16 passed·최종18PNG, 공식 영향641 passed/61 skipped 및 연결 overhead785 passed, NEW0. 무한 대기8·늦은 응답4·시각 근거1 RED를 실제 HTTP로 재현했고 최초50 통과의 범위 한계도 보존했다. `docs/validation/games-receipt-freshness-2026-10-29/` 참조.
+- gate 변화: 없음. DEVICE/FIELD와 G2/G3 HOLD·실제 정지/readback·운용 GO는 별도다. 배포·착지/push/merge 미수행.
+- CE: 해당 없음 — 시간 상한·UTC 비교 거부의 이유가 comment·회귀·검증 기록에 남는다.

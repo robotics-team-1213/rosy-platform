@@ -31,8 +31,8 @@
 
 ## 최근 기록
 
+- 2026-10-28 · fce9c60216 · 분리한 Pilot 배치 CSS 서빙
 - 2026-10-28 · uncommitted · host-file 실행을 CORE owner에 위임
 - 2026-10-27 · uncommitted · deepinit Dashboard 소스 링크 복구
 - 2026-10-26 · 959ec51bbf · D-890 navigation intent epoch preservation
 - 2026-10-26 · 62173b9899 · 모터 관측 없음 사유를 한국어로
-- 2026-10-25 · uncommitted · D-876 API reference v1.318 표시 정렬

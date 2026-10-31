@@ -177,6 +177,13 @@ def validate_transfer_bindings(policy, context, samples, *, now_ns, authenticate
                 raise PhysicalEvidenceRejected("PHYSICAL_OWNER_MISMATCH")
             if set(owner.links) != installed.geometry.required_links:
                 raise PhysicalEvidenceRejected("PHYSICAL_COVERAGE_INCOMPLETE")
+    previous = {(owner.workcell_id, owner.instance_id): owner.joints for owner in first.owners}
+    for owner in second.owners:
+        before, after = previous[owner.workcell_id, owner.instance_id], owner.joints
+        if ((before is None) != (after is None)
+                or (before is not None and (before.sample_id == after.sample_id
+                    or before.sequence >= after.sequence or before.joint_names != after.joint_names))):
+            raise PhysicalEvidenceRejected("PHYSICAL_JOINT_ORDER_INVALID")
     return policy, context
 
 

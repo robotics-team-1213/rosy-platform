@@ -94,6 +94,51 @@ def test_landed_full_delta_runs_both_changes_own_suites_unless_safety(caller, tm
     assert selection.select(land, tmp_path, "base", "python", head="main", landed=True)[1] is not None
 
 
+
+def test_a_safety_path_in_mains_landed_delta_keeps_only_its_mapped_suites(caller, tmp_path):
+    """D-889 addendum 8: a safety change in main's delta landed with its own FULL; it no longer makes every
+    landing behind it repeat FULL (~745 min/day on 2026-10-30..31). This branch's own safety path still does."""
+    selection = load_selection()
+    land, _, calls = caller
+    delta = dict(mode="full", escalations=["safe/x.py" + selection.SAFETY_TRIGGER],
+                 local_invocations=[["guard/test"], ["safe/test"]], full_invocations=[["test"]])
+    mine = dict(mode="affected", escalations=[], invocations=[["mine/test"]])
+    answers = [delta, mine]
+    land.subprocess = SimpleNamespace(run=lambda command, **kw: calls.append(command) or SimpleNamespace(
+        returncode=0, stdout=json.dumps(answers.pop(0)), stderr=""))
+    assert selection.select(land, tmp_path, "base", "python", head="main", landed=True) == (
+        [["guard/test"], ["safe/test"], ["ROSY_RUN_BROWSER_TESTS=1", "browser/test"]], None), "addendum 10: no overlap"
+    answers[:] = [delta, dict(mine, mode="full", escalations=["safe/y.py" + selection.SAFETY_TRIGGER],
+                              local_invocations=[["mine/test"]])]
+    assert selection.select(land, tmp_path, "base", "python", head="main", landed=True)[1] is not None
+    answers[:] = [delta]  # not a landed delta (no own FULL to stand on): FULL as before
+    assert selection.select(land, tmp_path, "base", "python", head="main")[1] is not None
+
+
+def test_a_landed_delta_reaching_none_of_this_branchs_suites_does_not_rerun_them(caller, tmp_path):
+    """D-889 addendum 10 item 2: own suites re-run only when main's delta reaches them (guards aside)."""
+    selection = load_selection()
+    land, _, _ = caller
+    land.land_guards = SimpleNamespace(GUARDS=("guard/test",))
+    delta = dict(mode="full", escalations=["conftest.py: pytest conftest"],
+                 local_invocations=[["guard/test"], ["fleet/test"]], full_invocations=[["test"]])
+    answers = []
+    land.subprocess = SimpleNamespace(run=lambda command, **kw: SimpleNamespace(
+        returncode=0, stdout=json.dumps(answers.pop(0)), stderr=""))
+    browser = ["ROSY_RUN_BROWSER_TESTS=1", "browser/test"]
+    for mine, rerun in ((dict(mode="affected", escalations=[], invocations=[["guard/test"], ["arm/test"]]), False),
+                        (dict(mode="affected", escalations=[], invocations=[["fleet/test/test_x.py::t"]]), True),
+                        (dict(mode="full", escalations=["tools/x.py: harness"], local_invocations=[["arm/test"]]),
+                         True)):
+        answers[:] = [delta, mine]
+        got = selection.select(land, tmp_path, "base", "python", head="main", landed=True)[0]
+        own = mine.get("invocations") or mine["local_invocations"]
+        assert got == ([["guard/test"], ["fleet/test"]] + ([inv for inv in own if inv != ["guard/test"]] if rerun
+                                                            else []) + [browser])
+    assert selection.overlaps([["a/test"]], [["ROSY_X=1", "a/test/test_b.py::c"]]) and not selection.overlaps(
+        [["a/test"]], [["b/test"]])
+
+
 def test_safety_trigger_is_the_selectors_text():
     selection = load_selection()
     text = (ROOT / "tools/harness/affected_tests.py").read_text(encoding="utf-8")

@@ -1,0 +1,4 @@
+2ee42368cbf2b00d5d1c8c0cfb0f4d8d0c88a84731d5ee0b549d1a0d43201072  lcd-primitives-support/run-1.txt
+063e58f0e50382d1939e0d6a905fa1af2b59803282a89fa2270e3933ebd31625  lcd-primitives-built/run-1.txt
+3df28778a3ce8d52defe80d3eaf3694327864d044ea5b87090f6f99d216e6c2c  lcd-primitives-affected/run-1.txt
+544e7573c7e6b63fa697b3b5a74b5152149bfeeabe6764660924f7f22949cd48  lcd-primitives-invariants.json

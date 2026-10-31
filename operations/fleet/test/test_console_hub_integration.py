@@ -76,7 +76,7 @@ def test_core_agent_hello_heartbeat_and_event_reach_console_app(tmp_path):
         port = listener.getsockname()[1]
 
         server = uvicorn.Server(uvicorn.Config(
-            app, log_level="critical", access_log=False, lifespan="off"))
+            app, log_level="critical", access_log=False, lifespan="off", log_config=None))
         server_task = asyncio.create_task(server.serve(sockets=[listener]))
         events = _EventBus()
         agent = FleetAgent(

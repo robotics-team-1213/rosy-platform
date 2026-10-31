@@ -19,6 +19,7 @@ def test_operator_can_select_english_text_and_voice_locale(site):
                 route.fulfill(status=202, json={**body, 'state':'ANSWERED', 'response':'Hello. Current Fleet observations.',
                     'facts':[], 'created_at':1000., 'completed_at':1000., 'reason':None, 'action_admissible':False})
             page.route('**/api/fleet/assistant/messages', answer)
+            page.locator('#context-tools-tab').click()  # D-926: AI lives in the tools tab
             page.locator('#assistant-toggle').click()
             page.locator('#assistant-locale').select_option('en-US')
             page.locator('#assistant-input').fill('What is the robot status?')
@@ -44,6 +45,7 @@ def test_assistant_panel_text_safe_account_scoped_and_safety_visible(site, size)
                     'facts':[{'ref':'robot:r1','text':'r1 온라인','observed_at':1000.}],
                     'created_at':1000., 'completed_at':1000., 'reason':None, 'action_admissible':False})
             page.route('**/api/fleet/assistant/messages', answer)
+            page.locator('#context-tools-tab').click()  # D-926: AI lives in the tools tab
             page.locator('#assistant-toggle').click()
             expect(page.locator('#assistant-panel')).to_be_visible()
             expect(page.locator('#assistant-send')).to_be_enabled()
@@ -81,6 +83,7 @@ def test_pending_result_resumes_after_same_account_page_restore(site):
             page.route('**/api/fleet/assistant/messages', submit)
             page.route('**/api/fleet/assistant/messages/*', lambda route: route.fulfill(json={
                 **body, 'state':'ANSWERED', 'response':'확인한 상태입니다.', 'facts':[], 'created_at':1000.}))
+            page.locator('#context-tools-tab').click()  # D-926: AI lives in the tools tab
             page.locator('#assistant-toggle').click()
             expect(page.locator('#assistant-send')).to_be_enabled()
             page.locator('#assistant-input').fill('상태 알려줘')
@@ -105,6 +108,7 @@ def test_credential_change_quarantines_old_conversation_before_session_returns(s
         try:
             page.route('**/api/fleet/assistant/messages', lambda route: route.fulfill(status=202, json={
                 **route.request.post_data_json, 'state':'ANSWERED', 'response':'Alice private answer', 'facts':[], 'created_at':1000.}))
+            page.locator('#context-tools-tab').click()  # D-926: AI lives in the tools tab
             page.locator('#assistant-toggle').click()
             expect(page.locator('#assistant-send')).to_be_enabled()
             page.locator('#assistant-input').fill('Alice private question')
@@ -144,6 +148,7 @@ def test_recording_is_cancelled_and_draft_reenabled_after_page_restore(site):
             }''')
             # Reload so the real panel captures the browser's injected recognizer.
             page.reload(); page.clock.run_for(2000)
+            page.locator('#context-tools-tab').click()  # D-926: AI lives in the tools tab
             page.locator('#assistant-toggle').click()
             page.locator('#assistant-dictate').click()
             expect(page.locator('#assistant-voice-state')).to_contain_text('듣고 있습니다')

@@ -143,6 +143,32 @@ quick 시험 목록은 [`tools/hooks/pre-push`](../../tools/hooks/pre-push)가 �
 python tools/harness/rosy_harness.py lint   # ADR 중복·mojibake·append-only·staleness
 ```
 
+### FULL 전환과 GitHub 결과
+
+2026-10-30 루트 `AGENTS.md`에서 옮긴 상세다. 규칙(노트북 pytest 금지, D-584)은 `AGENTS.md`에 남아 있다.
+
+PR CI runs affected and goes full by itself when the selector escalates (shared foundation `contracts/**` except Markdown records, `tools/harness/**` except `adr_gaps.txt`, the gap registries `sim2real_gaps.yaml`/`perception_gaps.yaml` and a `harness.yaml` change that only adds `modules` entries owning no existing path (`affected_narrow.harness_modules_added`), `conftest.py`, packaging/pytest config incl. `package.xml` and `_source_layout.py`, requirements pins, `test/architecture/**`, `test/known_failures.txt`, `.github/workflows/**`, a committed rename across folders or a removed Python module, or a file that maps to no module). The full suite runs on GitHub Actions runners as a parallel matrix: push to `main`, pull requests whose selection escalates, nightly schedule, `workflow_dispatch`, and before a release build. The arm64 payload builds on the GitHub ARM64 runner (`build-native-payload.yml`). `affected --run` on an escalated selection runs only the guards plus the suites mapped from the changed files (owning module, direct reverse dependents, referencing tests) and says the rest is on GitHub; `--full` requests the full selection; do not bypass the remote runner. A mapped affected run does not discharge the CI FULL requirement. `tools/land.py` does not land a FULL selection on that mapped run: it runs the lab full tier (`CI_FULL_MATRIX` unsharded, root `test/`, every registered module suite and the selection's own suites; `full_invocations`) on the lab PCs and lands only with 0 NEW. Later rounds of that landing, and a later `land.py` run while the branch adds nothing but merges of main to the FULL-tested commit, run only the selection of main's delta since the FULL-tested main (D-762 stage 0, D-803 6).
+
+GitHub results (the full tier is never re-run locally to "check"):
+
+```bash
+gh run list --branch <branch> -L 3                      # find the run for your push / PR
+gh run watch <run-id> --exit-status                     # wait; non-zero exit when it fails
+gh run view <run-id> --log-failed                       # only the failed steps' logs
+gh run view <run-id> --json jobs --jq '.jobs[] | select(.conclusion=="failure") | .name'
+```
+
+Reproduce only the failed matrix entry's pytest invocation on a remote test PC (the job name `test (<entry>)` maps to `CI_FULL_MATRIX` in `tools/harness/affected_tests.py`, or to the `affected-N` invocation printed by the `Test scope (D-436)` step). A local `main` that is not pushed has no CI evidence. The commands below are what a Linux/WSL test PC would run to reproduce one CI matrix entry, not a routine laptop step:
+
+```bash
+source env.sh
+colcon --log-base log build --symlink-install --base-paths $(python3 tools/harness/colcon_roots.py) --build-base build --install-base install
+python3 -m pytest middleware/core/gateway/test/ middleware/core/events/test/ middleware/core/services/test/ shared/web/test/ -v   # core
+python3 -m pytest operations/fleet/test/ -v   # Fleet formation/relay/session/console (no ROS)
+python3 -m pytest test/ -v                    # deploy, release, motor, Wi-Fi, host-agent contracts
+# CI also: flake8 (max 120), boot smoke without slam_toolbox
+```
+
 ### 브라우저 시험 (Chromium)
 
 실제 Chromium 시험은 옵트인이다. 정식 이름은 `ROSY_RUN_BROWSER_TESTS=1`이고, 예전 Fleet 이름 `ROSY_BROWSER_TESTS=1`도 받는다(`test/browser_harness.py`의 `browser_tests_enabled()`). 로컬 서버 포트는 `safe_listener()`/`free_port()`로 잡는다. Windows 동적 포트 범위가 1024부터면(`netsh int ipv4 show dynamicport tcp`) port 0이 Chromium 차단 포트(2049, 6000, 10080 등)를 주고 `net::ERR_UNSAFE_PORT`로 실패한다.

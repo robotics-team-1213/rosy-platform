@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
-- 2026-10-29 · ccc8712ece · 이송 결과 검수 패키지 검증 기록
-- 2026-10-29 · uncommitted · docs(reference): 기록용 Jira 코멘트 예외를 기존 사람 작업 규칙에 명시한다
-- 2026-10-29 · uncommitted · docs(reference): 연결 안내 행에 §4 기록 코멘트 규칙을 넣는다
-- 2026-10-29 · uncommitted · docs(reference): 기록 코멘트는 이슈마다 하나로 이어 붙인다
-- 2026-10-29 · uncommitted · deploy: GitHub OS 전송과 부분 업데이트 정책 연결
+- 2026-11-01 · uncommitted · feat(land): 한 표 묶음(rollup)
+- 2026-11-01 · uncommitted · docs(adr): 착지 처리량은 시험 PC 용량이 정한다
+- 2026-11-01 · uncommitted · docs: D-940 중복 정의 게이트와 등록부
+- 2026-10-31 · uncommitted · omx: 재배선 뒤 장치 식별 교훈
+- 2026-10-31 · uncommitted · fix(land): 자동 묶음 착지를 끈다

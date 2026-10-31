@@ -109,8 +109,31 @@ def test_local_size_check_failure_stops_before_any_test_host(repos, monkeypatch)
     assert git(main, "rev-parse", "HEAD") == before
 
 
+@pytest.mark.parametrize("cause", ["lint", "conflict", "secret"])
+def test_admission_lint_or_conflict_stops_before_a_ticket(repos, monkeypatch, cause):
+    """D-889 S0: the branch's own lint error, secret-scan finding or a conflict with main stop before the queue."""
+    main, wt = repos
+    if cause == "secret":
+        release = ROOT / land.SCANNER_DIR
+        commit(main, {f"{land.SCANNER_DIR}/{n}": (release / n).read_bytes()
+                      for n in ("secret_scan.py", "public_provenance.json")}, "scanner")
+        git(wt, "merge", "-q", "main")
+        commit(wt, {"docs/result.md": "tested `" + "c6659107f9afd6" * 3 + "` today\n"}, "record")
+    elif cause == "lint":
+        commit(wt, {land.HARNESS: "import sys\nsys.exit(1 if sys.argv[1:] == ['lint'] else 0)\n"}, "bad record")
+    else:
+        commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")
+        commit(main, {"pkg/a.py": "x = 3\n"}, "peer")
+    monkeypatch.setattr(land.land_queue, "enter", lambda *a, **k: pytest.fail("ticket taken"))
+    monkeypatch.setattr(land.remote_pytest, "run", lambda *a, **k: pytest.fail("test host reached"))
+    before = git(main, "rev-parse", "HEAD")
+    assert land.main(["--tests", "auto"]) == 1
+    assert git(main, "rev-parse", "HEAD") == before
+    assert git(wt, "status", "--porcelain") == ""
+
+
 @pytest.mark.parametrize("peer_path, second_round", [
-    ("docs/adr/D-9.md", []),             # records only: module suite skipped
+    ("docs/adr/D-9.md", []),            # records only: module suite skipped
     ("lib/util.py", [["pkg/test"]]),     # code the tests may import: full rerun
 ])
 def test_main_moved_retests_unless_records_only(repos, monkeypatch, peer_path, second_round):
@@ -1041,6 +1064,7 @@ def test_a_confirmed_new_failure_cancels_the_rest_and_the_cancelled_are_neither_
 def test_the_turns_time_cap_cancels_the_rest_as_overtime_and_a_prepare_round_has_no_cap(cached, monkeypatch):
     wt, run, calls = cached
     monkeypatch.setattr(land, "TURN_CAP_S", -1)
+    monkeypatch.setattr(land.land_checks, "turn_wanted", lambda *a: True)
     monkeypatch.setattr(land.remote_pytest, "run", _runner({"pkg/test": GREEN, "pkg/test/test_a.py": GREEN}))
     with pytest.raises(land.Overtime):
         land.run_tests(wt, land.argparse.Namespace(tests="auto", node=False, no_cache=False),

@@ -83,6 +83,12 @@ def _boot_code(value: object, where: str) -> str:
     return str(value)
 
 
+def _fallback_security(value: object, where: str) -> str:
+    if value not in ("open", "wpa2"):
+        raise ConfigError(f"{where} must be open or wpa2")
+    return value
+
+
 def validate(document: object) -> dict:
     if document is None:
         return {}
@@ -123,8 +129,8 @@ def validate(document: object) -> dict:
             config["wifi"].append(entry)
     if "ap" in document:
         ap = document["ap"] or {}
-        if not isinstance(ap, dict) or set(ap) - {"mode", "ssid", "password"}:
-            raise ConfigError("ap: allowed keys are mode, ssid, password")
+        if not isinstance(ap, dict) or set(ap) - {"mode", "ssid", "password", "fallback_security"}:
+            raise ConfigError("ap: allowed keys are mode, ssid, password, fallback_security")
         config["ap"] = {}
         if "mode" in ap:
             if ap["mode"] is False:  # YAML 1.1 reads a bare `off` as false
@@ -136,6 +142,8 @@ def validate(document: object) -> dict:
             config["ap"]["ssid"] = _ssid(ap["ssid"], "ap")
         if "password" in ap:
             config["ap"]["password"] = _password(ap["password"], "ap.password")
+        if "fallback_security" in ap:
+            config["ap"]["fallback_security"] = _fallback_security(ap["fallback_security"], "ap.fallback_security")
     if "fleet" in document:
         fleet = document["fleet"] or {}
         if not isinstance(fleet, dict) or set(fleet) - {"endpoint", "trust_profile"}:
@@ -188,6 +196,8 @@ def load_defaults(path: Path) -> dict:
     login = document.pop("login", {}) or {}
     config = validate({key: value for key, value in document.items() if key in TOP_KEYS})
     config["ap"] = {"mode": ap.get("mode", "fallback"),
+                    "fallback_security": _fallback_security(ap.get("fallback_security", "open"),
+                                                            "defaults: ap.fallback_security"),
                     "grace_seconds": int(ap.get("grace_seconds", 120)),
                     "hold_seconds": int(ap.get("hold_seconds", 600))}
     if config["ap"]["mode"] not in AP_MODES:

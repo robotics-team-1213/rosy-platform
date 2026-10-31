@@ -1319,3 +1319,9 @@
 - 증거: commit `2249cc5130c37c37b501501d64584367235b2661`의 공식 원격 RED에서 API 2·connection 1·node 1·bridge 1이 기존 경로의 미위임 assertion으로 실패했다. private fact 반환과 fixture 대상 이동은 미커밋 SOURCE 검토 대상이며 GREEN·설치본 검증은 대기한다.
 - gate 변화: 없음. API 경로·스키마·ADR 버전·권한이나 장치 수용을 바꾸지 않는다.
 - CE: 해당 없음 — 보존 조건과 경계 판단을 코드·시험·검토 기록으로 확인하는 단계다.
+
+## 2026-10-28 · fce9c60216 · 분리한 Pilot 배치 CSS 서빙
+
+- 변경: 기존 Pilot allowlist에 layout.css만 추가했다. 경로 방어·인증·API·정지 명령 owner는 유지한다.
+- 증거: 날짜별 검증 기록 `docs/validation/robot-pilot-learning-ux-2026-10-28/result.md`에 RED·고정 SHA·원격 영향/브라우저 결과·독립 소스/실제 화면 검토를 구분했다. 설치 자산·라우트 회귀 fce9c60216은20 passed, skip0이다.
+- gate 변화: 없음. 실제 장치·APK/ARM64 빌드·현장 수용은 별도다. CE: 해당 없음 — 기존 크기 이력 교훈을 적용하고 이번 경계의 판단을 코드·회귀·D-910에 남겼다.

@@ -86,9 +86,8 @@ def _manifest(commit: str) -> dict:
 
 @functools.cache  # full SHAs only: a ref such as HEAD moves
 def _manifest_at(commit: str) -> dict:
-    oid = subprocess.run(["git", "rev-parse", "-q", "--verify", f"{commit}:{MANIFEST}"],
-                         capture_output=True, text=True).stdout.strip()
-    return _parse(oid) if oid else {}
+    entry = _git("ls-tree", "-z", commit, "--", MANIFEST)
+    return _parse(entry.split()[2]) if entry else {}
 
 
 @functools.cache

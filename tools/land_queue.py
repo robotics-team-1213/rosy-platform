@@ -27,7 +27,12 @@ from pathlib import Path
 QUEUE = "rosy-land-queue"
 STALE_AFTER = 3 * 3600  # seconds without a refresh; one FULL round takes 30-90 min, the holder refreshes per round
 POLL = 10.0
+TICKET_ENV = "ROSY_LAND_TICKET"  # land_prepare.relaunch hands its ticket to main's land.py in a child process
 REPORT_EVERY = 300.0  # seconds between unchanged position lines
+# A waiting ticket tested over the current main passes an earlier waiting one tested over an older main (that one
+# re-runs its tier anyway; turning it first made the fresh one re-run too: ~984 min/day of FULL re-runs before the
+# turn, 2026-10-30..31). Only while the passed one has waited less than this; then order holds again.
+PASS_CAP_S = 3600
 _held: list[Path] = []
 
 
@@ -100,7 +105,10 @@ def _stale(info: dict | None, age: float) -> str | None:
 
 def set_status(ticket: Path, status: str, **fields) -> None:
     """Rewrite a held ticket's status (and ``fields``, e.g. ``batch``) by rename (also refreshes it)."""
-    info = json.loads(ticket.read_text(encoding="utf-8"))
+    try:
+        info = json.loads(ticket.read_text(encoding="utf-8"))
+    except FileNotFoundError as error:
+        raise QueueError(f"landing ticket disappeared: {ticket.name}; run land.py again to rejoin the queue") from error
     tmp = ticket.with_name(f".{ticket.name}.tmp")
     tmp.write_text(json.dumps({**info, **fields, "status": status}), encoding="utf-8")
     os.replace(tmp, ticket)
@@ -115,13 +123,31 @@ def blockers(qdir: Path, ticket: Path, now: float | None = None) -> list[dict]:
     rows = ahead(qdir, Path("~"), now)  # every live ticket ("~" sorts after the digits)
     me = next((r for r in rows if r["ticket"] == ticket.name), {})
     mine, urgent = me.get("branch"), bool(me.get("urgent"))
+    carried = {name for r in rows for name in (r.get("batch") or [])}
+    main = current_main(qdir) if me.get("tested") else None
+    now = time.time() if now is None else now
+
+    def passed(r: dict) -> bool:  # stale and young enough to pass; never a turn or an urgent ticket
+        return (bool(main) and me.get("tested") == main and r.get("status") == "waiting" and not r.get("urgent")
+                and r.get("tested") != main and now - r.get("waiting_since", 0) < PASS_CAP_S)  # 0: an older land.py
     # D-889 addendum 5: an urgent ticket (one at a time, the user's words as its reason) passes ordinary waiting
     # tickets ahead of it, and a waiting urgent ticket anywhere holds every ordinary one; a turn is never cut short.
     return [r for r in rows if r["ticket"] != ticket.name and (
         r.get("status") == "turn" or (mine is not None and mine in (r.get("batch") or []))
         or (not urgent and r.get("urgent") and r.get("status") == "waiting")
         or (r["ticket"] < ticket.name and r.get("status") not in ("preparing", "pending")
-            and (bool(r.get("urgent")) or not urgent)))]
+            and (bool(r.get("urgent")) or not urgent) and not passed(r)
+            # A member any live batch carries lands with its leader and waits for it, so it blocks no one: on
+            # 2026-10-31 three leader/member pairs each waited on the other (main still 2 h 15 min), and members
+            # waiting for preparing leaders held every later ticket.
+            and r.get("branch") not in carried))]
+
+
+def current_main(qdir: Path) -> str | None:
+    """main's commit in the clone this queue belongs to (``qdir`` sits in its git common dir), or None."""
+    result = subprocess.run(["git", "--git-dir", str(qdir.parent), "rev-parse", "-q", "--verify", "refs/heads/main"],
+                            capture_output=True, text=True)
+    return result.stdout.strip() or None
 
 
 def urgent_holder(qdir: Path) -> dict | None:
@@ -168,12 +194,13 @@ def touch(ticket: Path | None = None) -> None:
 
 
 def wait(qdir: Path, ticket: Path, timeout: float, clock=time.time, sleep=time.sleep, check=None,
-         done=None, form=None) -> str | None:
+         done=None, form=None, tested: str | None = None) -> str | None:
     """Mark ``ticket`` waiting; return None once nothing blocks it (``blockers``), marked as in its turn;
     QueueError after ``timeout`` seconds (0: no limit), or as soon as ``check()`` names a reason to stop.
     ``"landed"`` as soon as ``done()`` is true (a batch landed this branch), ``"batch"`` when ``form(rows)``
-    made this ticket a batch leader while ``rows`` blocked it (``land_batch.py``)."""
-    set_status(ticket, "waiting")
+    made this ticket a batch leader while ``rows`` blocked it (``land_batch.py``). ``tested``: the main this
+    ticket's green tier passed over (``land_full.restore``), for ``blockers``' fresh-first order."""
+    set_status(ticket, "waiting", tested=tested or "", waiting_since=clock())
     began, said, last = clock(), None, 0.0
     while True:
         if done and done():
@@ -200,13 +227,34 @@ def wait(qdir: Path, ticket: Path, timeout: float, clock=time.time, sleep=time.s
         sleep(POLL)
 
 
+# Backpressure: at most CAP live tickets. A queue of 34 (2026-10-31, ~2 landings/h) meant ~15 h of waiting, every
+# landing ahead moved main under the rest, and old lander code lingered for hours; past CAP a landing is refused.
+CAP = int(os.environ.get("ROSY_LAND_QUEUE_CAP", "12"))
+
+
+def full(qdir: Path) -> str | None:
+    """Why a new ordinary ticket is refused, or None while the queue has room."""
+    rows = ahead(qdir, Path("~"))
+    if len(rows) < CAP:
+        return None
+    return (f"landing queue full ({len(rows)}/{CAP} tickets): combine related branches into one landing or retry"
+            " later; --urgent with the user's words still passes (ROSY_LAND_QUEUE_CAP sets the cap)")
+
+
 def enter(wt: Path, branch: str, status: str = "waiting", urgent: str = "", *,
           batch_auto: bool = False) -> tuple[Path, Path]:
     """Take a ticket (its place in the queue) and release it at exit whatever happens; (queue dir, ticket)."""
     qdir = queue_dir(wt)
-    if urgent and (holder := urgent_holder(qdir)):
+    adopted = Path(os.environ.pop(TICKET_ENV, "") or "~")  # land_prepare.relaunch: keep the parent's place
+    if adopted.is_file():
+        ticket = adopted
+        set_status(ticket, status)
+    elif urgent and (holder := urgent_holder(qdir)):
         raise QueueError(f"--urgent refused: {describe([holder])} is already urgent ({holder['urgent']}); one at a time")
-    ticket = take(qdir, branch, str(wt), status, urgent, batch_auto=batch_auto)
+    elif not urgent and (why := full(qdir)):
+        raise QueueError(why)
+    else:
+        ticket = take(qdir, branch, str(wt), status, urgent, batch_auto=batch_auto)
     if urgent:
         land_events.emit("urgent", ticket=ticket.name, reason=urgent)
     _held.append(ticket)

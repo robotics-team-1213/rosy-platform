@@ -31,3 +31,11 @@ def test_core_revocation_terminates_actual_mediamtx_and_browser_video(tmp_path):
     module = runpy.run_path(str(ROOT / 'test/webrtc_loopback_harness.py'))
     assert 'run_secure_loopback' in module, 'D-789 needs real session termination evidence'
     module['run_secure_loopback'](ROOT, tmp_path)
+
+
+@pytest.mark.skipif(os.environ.get('ROSY_RUN_MEDIA_TESTS') != '1',
+                    reason='requires isolated media runtime on remote test PC')
+def test_shared_client_starts_hidden_video_and_releases_real_session(tmp_path):
+    import runpy
+    module = runpy.run_path(str(ROOT / 'test/webrtc_loopback_harness.py'))
+    module['run_loopback'](ROOT, tmp_path, shared_client=True)

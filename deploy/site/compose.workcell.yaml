@@ -4,7 +4,7 @@ services:
   fleet:
     environment:
       ROSY_WORKCELL_OBSERVATIONS: /run/rosy-workcell/observations.yaml
-      ROSY_ADDITIONAL_CREDENTIAL_PATHS: '{"ROSY_ARM_A_TOKEN":"/run/rosy-workcell-arm-secrets/arm_a_token","ROSY_ARM_B_TOKEN":"/run/rosy-workcell-arm-secrets/arm_b_token"}'
+      ROSY_ADDITIONAL_CREDENTIAL_PATHS: '${ROSY_SITE_WORKCELL_ARM_CREDENTIAL_PATHS:-{"ROSY_ARM_A_TOKEN":"/run/rosy-workcell-arm-secrets/arm_a_token","ROSY_ARM_B_TOKEN":"/run/rosy-workcell-arm-secrets/arm_b_token"}}'
     volumes:
       - type: bind
         source: "${ROSY_SITE_WORKCELL_MANIFEST:?set ROSY_SITE_WORKCELL_MANIFEST}"

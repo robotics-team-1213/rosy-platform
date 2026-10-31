@@ -6,13 +6,16 @@ candidate, so a delta that touches this branch's paths reruns their suites and o
 guards only. Until 2026-10-26 only a FULL tier prepared, and only with someone ahead: a FULL lander first in
 line held everyone 40+ min, and every affected tier ran inside the lock (4-13 min a turn).
 
-At most ``MAX_PREPARING`` landings prepare at once: the model and AI PCs take one invocation each, and timing
-tests fail falsely under load. ``land`` is the calling ``land`` module (run as a script it is ``__main__``),
+At most ``MAX_PREPARING`` landings prepare at once. It was 3 while each lab PC took one invocation at a time; since
+2026-10-28 each PC admits jobs only within its own free cores and GB (remote_job.ADMIT), so the hosts, not this
+count, hold the load. On 10-30..31 landings waited p50 52 / p90 239 min for one of 3 slots (prepare itself p50 23
+min, the turn p50 6 min) while the model and AI PCs ran at load ~2-3 of 24 cores. ``land`` is the calling ``land`` module (run as a script it is ``__main__``),
 passed in so its ``Stop`` is the one the caller catches.
 """
 
 from __future__ import annotations
 
+import subprocess
 import sys
 import threading
 import time
@@ -20,7 +23,7 @@ from pathlib import Path
 
 import land_queue
 
-MAX_PREPARING = 3
+MAX_PREPARING = 6
 POLL = 15.0
 # D-889 7: the test PCs clean up at 05:30 and reboot at 06:00; a pretest started in between dies (2026-10-27 06:00,
 # exit 143). Minutes after midnight, local time: no pretest starts inside, it waits for the hosts to come back.
@@ -40,19 +43,53 @@ def after_reboot(ticket: Path | None, sleep=time.sleep, clock=time.localtime) ->
         sleep(POLL)
 
 
-def slot(qdir: Path, ticket: Path, sleep=time.sleep, held=None) -> None:
+def rules() -> str | None:
+    """main's landing code: its tools/land*.py and tools/remote/*.py blob ids, or None when git cannot tell."""
+    try:
+        top = subprocess.run(["git", "ls-tree", "main", "tools/"], capture_output=True, text=True, check=True).stdout
+        remote = subprocess.run(["git", "ls-tree", "-r", "main", "tools/remote/"], capture_output=True, text=True,
+                                check=True).stdout
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    return "".join(line for line in top.splitlines(True) if "\ttools/land" in line) + remote
+
+
+STARTED = rules()  # the rules this process runs: a landing loads main's copy once (land_checks.landed_copy)
+
+
+def relaunch(land, qdir: Path, ticket: Path, run=None) -> int | None:
+    """While pending: when main's landing code changed since this process started, run main's land.py on the same
+    ticket and return its exit code. This process stays alive, so the ticket's pid holds its place.
+
+    2026-10-31: fixes to the queue (batch deadlock, turn priority) never reached landers already waiting; they
+    deadlocked and bounced until each was restarted by hand in queue order."""
+    if STARTED is None or rules() in (None, STARTED):
+        return None
+    print("[land] main's landing code changed while this landing waited: continuing with it", flush=True)
+    argv = [sys.executable, "-X", "utf8", str(qdir.parent.parent / "tools" / "land.py"), *sys.argv[1:]]
+    env = {**land.ENV, land_queue.TICKET_ENV: str(ticket), land.land_checks.OWN_COPY: "1"}
+    run = run or (lambda a, e: land.remote_pytest.remote_job.step(a, env=e).returncode)  # beats for the watchdog
+    return run(argv, env)
+
+
+def slot(qdir: Path, ticket: Path, sleep=time.sleep, held=None, changed=None) -> None:
     """Wait for a preparation slot, reserving capacity for older pending tickets, and while ``held()`` (a batch
     carries this branch, ``land_batch.carried``: its pretest covers this one). A carried pending ticket reserves
-    no capacity: it never prepares on its own."""
+    no capacity: it never prepares on its own. An urgent ticket (D-889 addendum 5) reserves nothing for older
+    pending ones: behind their reservations an urgent landing still waited hours for a slot (2026-10-31)."""
     land_queue.set_status(ticket, "pending")
 
     def busy() -> int:
-        rows = [r for r in land_queue.ahead(qdir, Path("~")) if r["ticket"] != ticket.name]
+        rows = land_queue.ahead(qdir, Path("~"))
         carried = {name for r in rows for name in (r.get("batch") or [])}
+        urgent = any(r["ticket"] == ticket.name and r.get("urgent") for r in rows)
         return sum(r.get("status") == "preparing" or (r.get("status") == "pending" and r["ticket"] < ticket.name
-                                                      and r.get("branch") not in carried) for r in rows)
+                                                      and r.get("branch") not in carried and not urgent)
+                   for r in rows if r["ticket"] != ticket.name)
     while (held and held()) or busy() >= MAX_PREPARING:
         land_queue.touch(ticket)
+        if changed and (code := changed()) is not None:
+            raise SystemExit(code)  # main's land.py ran this landing to its end on this ticket
         sleep(POLL)
     land_queue.set_status(ticket, "preparing")
 
@@ -60,8 +97,11 @@ def slot(qdir: Path, ticket: Path, sleep=time.sleep, held=None) -> None:
 def again(land, wt: Path, branch: str, args, python: str, qdir: Path, ticket: Path, invocations, note) -> str | None:
     """Mid-turn work too long for the lock (a FULL delta, or the turn's time cap): prepare it outside, wait again,
     and give back the main it now passed over."""
+    # The lock's end, so a turn's real length is measurable (turn -> released), not turn -> landed/stop (2026-10-31).
+    land.land_events.emit("released", note=note)
     prepare(land, wt, branch, args, python, qdir, ticket, invocations, note)
-    land_queue.wait(qdir, ticket, args.queue_timeout * 60, check=watch(land, wt))
+    land_queue.wait(qdir, ticket, args.queue_timeout * 60, check=watch(land, wt),
+                    tested=land.land_full.restore(wt, branch))
     return land.land_full.restore(wt, branch)
 
 
@@ -106,7 +146,8 @@ def prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, t
     after_reboot(ticket)
     if ticket is not None:
         landed = lambda: land.land_batch.in_main(land, wt, branch)  # noqa: E731
-        slot(qdir, ticket, held=lambda: not landed() and land.land_batch.carried(qdir, branch))
+        slot(qdir, ticket, held=lambda: not landed() and land.land_batch.carried(qdir, branch),
+             changed=lambda: relaunch(land, qdir, ticket))
         if landed():
             return  # a batch landed this branch while it waited for a slot: the turn's wait ends it as landed
     main_sha = land.out(wt, "rev-parse", "main")

@@ -47,7 +47,9 @@ class StuckResolverLoop:
         self.ai_facts: Callable[[str], list] = lambda _robot_id: []
         #: D-577 개정 2026-10-10: the AI PC proposal board (`AiFactsBoard`; app.py sets it). None = no AI.
         self.ai_board = None
-        self.events_since = lambda _robot_id, _seq: ()
+        #: 2026-10-28 자원 경계: closed 사건 판정은 hub의 stuck 인덱스만 읽는다
+        #: (app.py가 registry.stuck_event를 넣는다). 전체 이벤트 스캔은 없다.
+        self.stuck_event = lambda _robot_id, _event_type, _stuck_id: None
         #: D-610 2·9: the closed loop and the problem record (app.py sets ``episodes``; None = not kept).
         self.outcomes, self.episodes, self.problems = Outcomes(), None, None
         self._rows: dict[str, dict] = {}
@@ -68,8 +70,7 @@ class StuckResolverLoop:
         now = self._clock()
         self._rows = {str(row["robot_id"]): row for row in robots}
         for rid, sid in tuple(getattr(self._resolver, "_uncertain", ())):
-            events = self.events_since(rid, 0)
-            if any(event.type == "nav.line_stuck_closed" and event.data.get("stuck_id") == sid for event in events):
+            if self.stuck_event(rid, "nav.line_stuck_closed", sid) is not None:
                 await self._reconcile(rid, sid, "owner_case_closed")
                 chain = self._resolver._chains.get(rid)
                 if chain and chain.observing == "core:STUCK_DECISION_OUTCOME_UNKNOWN":

@@ -36,6 +36,7 @@ CANVAS_FILES = [
     FLEET / "calibration" / "map-fit-view.js",
     FLEET / "shared" / "field-warp.js",
     FLEET / "sitemap" / "site-map.js",
+    FLEET / "sitemap" / "site-map-sources.js",
     FLEET / "console.js",
     FLEET / "console-auth.js",  # D-798 3.2: clears the map canvas on lock
     GAMES / "board.js",

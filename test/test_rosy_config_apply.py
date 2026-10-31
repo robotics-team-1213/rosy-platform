@@ -254,3 +254,16 @@ def test_a_skipped_network_keeps_the_existing_profiles(tmp_path):
 
     after = sorted(p.name for p in (root / "etc/NetworkManager/system-connections").glob("rosy-wifi-*"))
     assert set(before) <= set(after)
+
+
+@pytest.mark.parametrize("security", [None, "open", "wpa2"])
+def test_config_apply_carries_fallback_security_into_the_network_policy(tmp_path, security):
+    module = _module()
+    config = "schema_version: 1\n"
+    if security is not None:
+        config += f"ap:\n  fallback_security: {security}\n"
+    root = _device(tmp_path, config)
+    result, _calls = _apply(module, root)
+    assert result["state"] == "applied"
+    policy = json.loads((root / "etc/rosy/network-policy.json").read_text())
+    assert policy["fallback_security"] == (security or "open")

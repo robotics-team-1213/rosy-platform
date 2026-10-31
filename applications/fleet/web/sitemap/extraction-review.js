@@ -1,3 +1,4 @@
+import {randomUUID} from "/console/assets/uuid.js";
 // Candidate review only; accepting changes a local draft after server geometry validation.
 import {appendSurveyElement} from '/console/assets/site-map-edit.js';
 import {rasterMapPoint} from '/console/assets/drawing-import.js';
@@ -56,7 +57,7 @@ export function createExtractionReview({request, context, changed}) {
     async accept(item) {
       check(snapshot);
       if (!selected || !['road', 'stop_line', 'exclusion'].includes(item.kind)) throw new Error('후보와 용도를 고르세요');
-      const before = snapshot, attempt = generation, id = `e_${crypto.randomUUID().replaceAll('-', '').slice(0, 12)}`;
+      const before = snapshot, attempt = generation, id = `e_${randomUUID().replaceAll('-', '').slice(0, 12)}`;
       const next = appendSurveyElement(before.draft, {...item, id,
         geometry: geometry.map(p => rasterMapPoint(p, before.projection.transform))});
       const row = item.kind === 'road' ? next.edges.find(e => e.id === id) : next.facilities.find(f => f.id === id);

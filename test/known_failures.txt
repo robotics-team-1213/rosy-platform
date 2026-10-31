@@ -6,4 +6,3 @@
 # Remove a line in the same commit that makes the test pass. Never add a line to hide
 # a failure your branch introduced. Verified failing on main 986a81ca (2026-09-26, CI run 213).
 # 2026-10-02: the D-260 and ui_registry entries were removed - both tests pass in CI runs 36906795766 onward (fixed by their owners in parallel work).
-shared/web/test/test_theme_browser.py::test_the_fleet_topbar_selector_switches_the_theme_live  # #fleet-theme stays not visible after #topbar-more opens (30 s click timeout); fails on main 3dcb328895 and 26499b1f51 (land MAIN-RED rerun on main, 2026-10-25) and on the merge branch alike; Fleet topbar owner to fix; remove in the commit that makes it pass

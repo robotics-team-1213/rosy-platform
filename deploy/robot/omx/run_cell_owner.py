@@ -19,7 +19,7 @@ from pathlib import Path
 REPO = Path(os.environ.get("ROSY_SIM_REPO", "/repo"))
 for _part in ("contracts/foundation", "contracts/skill/src", "middleware/devices/omx/adapter", "middleware/devices/omx/agent/src",
               "operations/site_execution/src", "operations/processes/palletizing/src", "middleware/skills/api/src",
-              "middleware/skills/manipulation/src", "integrations/robots/omx/src", "deploy/robot/omx"):
+              "middleware/skills/manipulation/src", "integrations/robots/omx/src", "deploy/robot/omx", "tools/sim"):
     sys.path.append(str(REPO / _part))
 
 from cell_sim_tools import refuse_second_owner  # noqa: E402
@@ -56,6 +56,7 @@ def main() -> None:
     from omx_adapter.pilot_sim.runtime import PilotSimRuntime
     from omx_adapter.ros_runtime import RosArmCommandRuntime, RosArmPhaseGoalPort
     from rosy_agent.omx_cell_owner import CellOwnerSettings, build_cell_owner, sim_gripper_observation
+    from transfer_installation import owner_installation_from_environment
 
     rclpy.init()
     node = Node("rosy_omx_cell_owner", parameter_overrides=[Parameter("use_sim_time", value=True)])
@@ -87,6 +88,7 @@ def main() -> None:
         refuse_second_owner=lambda: None,  # checked above, before rclpy
         gripper_readback=gripper_readback,
         fleet_fence_current=fleet_fence,
+        arm_transfer=owner_installation_from_environment(),  # D-927 C3; unset keeps CELL_TRANSFER only
     )
     holder["owner"] = owner
     workflow_timer = node.create_timer(0.05, owner.advance_pending)

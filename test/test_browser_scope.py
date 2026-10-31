@@ -30,7 +30,8 @@ def test_fleet_web_change_selects_fleet_browser_tests():
 def test_shared_web_change_reaches_every_surface_family():
     found = browser_scope.targets(["shared/web/components.css"])
     for expected in ("shared/web/test/test_theme_browser.py", "test/test_dashboard_browser.py",
-                     "test/test_fleet_console_browser.py", "middleware/robot_ui/pilot/test/test_pilot_browser.py"):
+                     "test/test_fleet_console_browser.py", "middleware/robot_ui/pilot/test/test_pilot_browser.py",
+                     "test/test_monitoring_browser.py", "integrations/simulation/gazebo/test/test_lane_live_view_browser.py"):
         assert expected in found
 
 
@@ -49,6 +50,7 @@ def test_pilot_and_shared_styles_select_moved_lobby_tests_without_widening_omx()
     lobby = "middleware/robot_ui/pilot/test/test_lobby_browser.py"
     for path in ("middleware/robot_ui/pilot/styles.css", "shared/web/components.css"):
         assert lobby in browser_scope.targets([path])
+        assert "middleware/robot_ui/pilot/test/test_recordings_browser.py" in browser_scope.targets([path])
     assert browser_scope.targets(["middleware/devices/omx/adapter/example.py"]) == [
         "middleware/devices/omx/adapter/test/test_pilot_sim_browser.py"
     ]

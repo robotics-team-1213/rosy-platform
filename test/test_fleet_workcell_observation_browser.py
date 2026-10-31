@@ -23,7 +23,7 @@ def cell_url():
                      web_common=Path(__file__).resolve().parents[1] / "shared" / "web")
     listener = safe_listener()
     port = listener.getsockname()[1]
-    server = uvicorn.Server(uvicorn.Config(app, log_level="error"))
+    server = uvicorn.Server(uvicorn.Config(app, log_level="error", log_config=None))
     worker = threading.Thread(target=lambda: server.run(sockets=[listener]), daemon=True)
     worker.start()
     try:

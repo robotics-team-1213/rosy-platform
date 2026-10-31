@@ -55,11 +55,12 @@ API_WEB = [
     "middleware/robot_ui/robot/test/test_surface_viewport_budget_browser.py",
     "middleware/robot_ui/robot/test/test_dashboard_entry_browser.py",
 ]
+OMX_PILOT = ["middleware/devices/omx/adapter/test/test_pilot_sim_browser.py"]
 PILOT = [
     "middleware/robot_ui/pilot/test/test_pilot_browser.py",
+    "middleware/robot_ui/pilot/test/test_recordings_browser.py",
     "middleware/robot_ui/pilot/test/test_lobby_browser.py",
-    "middleware/devices/omx/adapter/test/test_pilot_sim_browser.py",
-]
+] + OMX_PILOT
 GAMES = ["test/test_games_board_browser.py"]
 REVIEW = [
     "test/learning/perception/test_sim_browser.py",
@@ -99,7 +100,7 @@ SCOPE: dict[str, list[str]] = {
     "middleware/robot_ui/robot/": ROBOT,
     "middleware/core/api/": API_WEB,
     "middleware/robot_ui/pilot/": PILOT,
-    "middleware/devices/omx/adapter/": PILOT[2:],
+    "middleware/devices/omx/adapter/": OMX_PILOT,
     "operations/apps/games/": GAMES,
     "learning/curation/perception/": REVIEW,
     "learning/curation/perception/review_app.py": LEARNING,
@@ -141,7 +142,7 @@ SCOPE: dict[str, list[str]] = {
     "integrations/simulation/gazebo/scripts/": GAZEBO,
     "deploy/robot/omx/commissioning_view.py": COMMISSIONING,
     # Every surface loads /common (ui.js, components.css, tokens.css).
-    "shared/web/": SHARED + FLEET + ROBOT + API_WEB[:1] + PILOT + GAMES + REVIEW + LEARNING,
+    "shared/web/": SHARED + FLEET + ROBOT + API_WEB[:1] + PILOT + GAMES + REVIEW + LEARNING + MONITORING + GAZEBO,
     "test/browser_harness.py": EVERYTHING,
 }
 

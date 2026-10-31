@@ -13,6 +13,10 @@ export const AI_FACT_LABEL = {
 };
 
 export const TRIP_ERROR_LABEL = {
+  TRIP_PROPOSAL_NOT_FOUND: '해당 이송 제안을 찾을 수 없습니다 · 제안 식별자를 확인하세요',
+  TRIP_PROPOSAL_FORBIDDEN: '이 이송 제안을 읽거나 승인할 권한이 없습니다 · 제안자와 다른 기명 운영자가 승인해야 합니다',
+  TRIP_PROPOSAL_CONFLICT: '이송 제안이나 실행 세대가 바뀌었습니다 · 원본을 다시 조회하세요',
+  TRIP_PROPOSAL_UNAVAILABLE: '이송 제안 API를 쓸 수 없습니다 · 시뮬레이션 설치와 연결 상태를 확인하세요',
   TRIP_START_CANCELED: '출발 준비 중 정지 요청을 받았습니다 · 상태를 확인한 뒤 다시 시작하세요',
   TRIP_START_PLACE_MISMATCH: '선택한 출발 장소에 로봇이 없습니다 · 실제 위치를 확인하세요',
   TRIP_START_PLACE_MOVED: '그 장소에서는 안전하게 정지할 수 없습니다 · 다른 장소를 고르세요',

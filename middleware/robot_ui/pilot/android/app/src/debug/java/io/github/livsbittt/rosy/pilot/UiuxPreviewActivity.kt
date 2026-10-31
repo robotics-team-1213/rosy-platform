@@ -12,7 +12,7 @@ class UiuxPreviewActivity : Activity() {
         super.onCreate(savedInstanceState)
         val views = PilotViews(this)
         val compact = resources.configuration.screenWidthDp < 720
-        val root = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setBackgroundColor(PilotColors.background) }
+        val root = views.surface().apply { orientation = LinearLayout.HORIZONTAL }
         if (!compact) root.addView(View(this), LinearLayout.LayoutParams(views.dp(260), -1))
         val list = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
