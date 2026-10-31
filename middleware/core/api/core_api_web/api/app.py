@@ -304,6 +304,7 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
         "screens/drive-video.js": "application/javascript",
         "screens/inputs.js": "application/javascript",
         "screens/robot-recording.js": "application/javascript",
+        "screens/show-code.js": "application/javascript",
         "screens/arm.js": "application/javascript",
         "screens/compose.js": "application/javascript",
         "widgets/joint_jog.js": "application/javascript",

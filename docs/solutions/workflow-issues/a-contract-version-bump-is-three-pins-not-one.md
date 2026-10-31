@@ -58,6 +58,21 @@ not on the two code-level mirrors of a number they just changed. The
 checklist is easy to know and easy to skip — which is why the gate, not the
 memory, is the control.
 
+## Update 2026-10-31: the pin set grew, use `bump`
+
+"Three pins" is no longer the whole set. Fleet contract tests also assert
+`**Version:** v1.NNN` against the reference (`test_development_session.py`,
+`test_lane_route.py`, `test_mission_progress.py`, `test_task_contract_docs.py`
+under `operations/fleet/test/`). D-938 (v1.331 → v1.335) moved the header,
+`app.py` and the line-follow literal by hand. The full land round then
+stopped on those five Fleet assertions, a land round lost to a mechanical edit.
+
+Do not hand-edit pins. After `api_reserve.py next`, run
+`python tools/harness/api_reserve.py bump v1.NNN`: it rewrites every tracked
+line that pins the live version, including the ones above. Rename your own
+`### v1.NNN` changelog row by hand. Then run the tripwires below plus a
+`git grep -n '"\*\*Version:\*\* v1\.'` that should show only the new version.
+
 ## Procedure
 
 Before committing an API Reference MINOR bump, run the two tripwires:

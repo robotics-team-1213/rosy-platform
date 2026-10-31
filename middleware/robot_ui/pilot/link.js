@@ -94,7 +94,10 @@ export function createDeviceSession({
         // 토큰이 회수·만료됐다. 재확인 없이 재접속하면 4401 이 반복된다.
         Promise.resolve()
           .then(() => whoami())
-          .then(() => retry())
+          .then((identity) => {
+            if (identity?.status !== 200) { setState("OFFLINE"); return; }
+            retry();
+          })
           .catch(() => setState("OFFLINE"));
         return;
       }
