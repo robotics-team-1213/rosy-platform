@@ -13211,6 +13211,14 @@ osy-d395-s1d\`.
 - 변경: `docs/solutions/runtime-errors/omx-cell-device-identity-after-rewiring-2026-10-31.md` (동일 시리얼 Innomaker는 by-path, RealSense 노드는 USB 인터페이스 udev 이름, 팔 좌우는 LED 차분, 확인은 `omx_devices.py scan`)
 - 증거: 현장 PC 실측(PING·LED·udev 링크·영상). depth(USB 2.0)는 미해결로 남김
 - gate 변화: 없음
+
+## 2026-11-01 · uncommitted · docs: D-940 중복 정의 게이트와 등록부
+- 변경: `docs/adr/D-940`, ADR Log 행, `test/architecture/test_duplicate_definitions.py`와 `known_duplicates.txt`(초기 47 그룹), `test/architecture/AGENTS.md` 행 2건, `platform-folder-responsibilities.md` 3건(D-940 갈래 안내, Situation 섀도 모듈 목록 5개로 정정, 보정 저장 계층 병립 명시)
+- 증거: 로컬 `--scan` 재생성이 등록부와 집합 일치(2026-11-01). 원격 시험·mutation 증명은 착지 기록에 남긴다
+- gate 변화: 없음
+- 결정: D-940 Accepted(사용자 "바로 처리" 지시, 워크트리 슬롯 1회 force-over-cap 승인 기록 포함)
+- 교훈: 없음(신규 게이트 제도화)
+
 ## 2026-11-01 · uncommitted · docs(adr): 착지 처리량은 시험 PC 용량이 정한다
 - 변경: D-889 추가 10(통째 점유 제거·변화분 겹침 판정·입력 해시 결과 재사용·문서 전용 빠른 길 보류·사후 검증 채택 안 함, 성공 기준과 측정)
 - 근거: 사전 시험 슬롯 대기 p50 66분, 시험 실행 p50 1분, 배치 시도 73% 자리 없음, 착지당 사전 시험 p50 2·p90 5회, 문서 전용 착지 7%; 사례 조사(Chromium CQ, Bazel 캐시, Uber SubmitQueue, bors·Zuul·Tide, Google TAP)
