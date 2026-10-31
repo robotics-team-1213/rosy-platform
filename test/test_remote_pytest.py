@@ -538,7 +538,7 @@ def test_full_lab_hosts_get_browser_lanes_and_light_site_or_sim_holding_hosts_do
     headroom = {"a": room, "light": {**room, "light": True}, "site": {**room, "site": True},
                 "gz": {**room, "sim_held": 1}}
     b, alone = [rp.BROWSER_ENV, "t/a_browser.py"], [rp.BROWSER_ENV, rp.ALONE_ENV, "t/b_browser.py"]
-    assert rp.workers(["a", "light", "site", "gz", "unmeasured"], [["t"], b, b, b], headroom) == [
+    assert rp.workers(["a", "light", "site", "gz", "unmeasured"], [["t"], b, b, b, b], headroom) == [
         ("a", "main"), ("a", "lane"), ("a", "lane"), ("light", "any"), ("site", "any"), ("gz", "any"),
         ("unmeasured", "any")]
     assert rp.workers(["a"], [b], headroom) == [("a", "lane")]  # no main run without its own work
@@ -547,6 +547,19 @@ def test_full_lab_hosts_get_browser_lanes_and_light_site_or_sim_holding_hosts_do
     assert rp.workers(["a"], [["t"], alone], headroom) == [("a", "any")]  # an alone chunk is no lane job
     monkeypatch.setattr(wq, "BROWSER_PER_HOST", 0)
     assert rp.workers(["a"], [["t"], b], headroom) == [("a", "any")]
+
+
+def test_host_alone_suites_go_to_the_first_configured_host_and_fall_back_without_it():
+    """Gazebo/Isaac drain the host they run on: only the model PC (first configured) takes them (2026-10-30)."""
+    gz, order = ["integrations/simulation/gazebo/test"], ["model", "ai", "site"]
+    assert rp.workers(["ai", "model"], [gz], {}, order) == [("model", "any")]
+    plan = rp.workers(["ai", "model"], [["t"], gz], {}, order)
+    assert plan == [("model", "any"), ("ai", "any" + wq.SKIP_ALONE)]
+    assert wq.wanted("any" + wq.SKIP_ALONE, [["t"], gz])(1) is False
+    assert wq.wanted("any" + wq.SKIP_ALONE, [["t"], gz])(0) is True
+    assert rp.workers(["ai"], [gz], {}, order) == [("ai", "any")]  # model PC not placed: as before
+    assert rp.workers(["site", "ai"], [gz], {"site": {"site": True}}, ["site", "ai"]) == [("ai", "any")]
+    assert wq.guard(None, "main" + wq.SKIP_ALONE, gz) is not None
 
 
 def test_browser_lanes_run_beside_main_capped_per_host_and_an_alone_chunk_runs_without_them(monkeypatch, tmp_path):
