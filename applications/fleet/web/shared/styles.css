@@ -21,6 +21,8 @@
 #install-main { grid-template-columns: minmax(0, 1fr); }
 .install-tasks { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
 .install-workspace, .install-task { min-width: 0; }
+#install-chooser { padding: var(--inset-subnav); }
+@media (width < 64rem) { #install-chooser { padding: var(--space-3) var(--space-4); } }
 .install-task > h2 { margin-top: 0; }
 .peer-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
 .peer-toolbar select { min-width: 0; max-width: 100%; }
@@ -50,10 +52,6 @@
 .ops-block { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
 .ops-block > h2, .ops-block > .console-diagnostics { grid-column: 1 / -1; margin: 0; }
 .ops-block > .formation, .ops-block > .signals { margin: 0; }
-@media (width >= 64rem) {
-  .install-tasks { grid-template-columns: var(--sidebar-track) minmax(0, 1fr); }
-  #install-chooser { position: sticky; top: var(--space-4); }
-}
 @media (width >= 110rem) {
   .ops-block { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

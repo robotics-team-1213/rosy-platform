@@ -76,6 +76,8 @@
     <a href="/console/install" aria-current="page" data-action-icon="install" aria-label="설치·보정">설치</a>
   </nav>
 <!-- fleet:nav:end -->
+  <!-- D-926: the install task chooser sits in the shared sub-nav seat, like every Fleet page's own steps. -->
+  <div class="ui-subnav"><nav id="install-chooser" aria-label="설치 작업"></nav></div>
   <div class="fleet-workspace">
   <ui-status id="estop-feedback" hidden></ui-status>
 
@@ -83,7 +85,6 @@
     <h1 class="sr-only">Rosy Fleet — 설치·보정</h1>
     <!-- D-410 — 설치 화면. 운용(감시·목표·정지)은 /console에 있다. -->
     <div class="install-tasks">
-      <nav id="install-chooser" aria-label="설치 작업"></nav>
       <div class="install-workspace">
         <section id="peer-picker" class="panel install-task" aria-labelledby="peer-heading">
           <div class="robot-head"><h2 id="peer-heading">장비 찾기</h2><ui-tag id="peer-status" status="neutral">접속 대기</ui-tag></div>
