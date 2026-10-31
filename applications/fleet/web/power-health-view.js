@@ -4,7 +4,7 @@ export function powerHealthView(robot, receivedAtMs, nowMs) {
   const unknown = { battery: "확인 불가", voltage: null, charging: "확인 불가",
     problem: "배터리 근거 확인 불가 — 센서/CORE 확인" };
   const safetyRelease = robot.online && robot.state?.safety?.estop === true
-    ? "로봇 안전 확인 후: 로봇 등록 목록 → 비상정지 해제… → 그 로봇 화면의 관리자 코드" : "";
+    ? "로봇 안전 확인 후: 로봇 등록 목록 → 비상정지 해제… → 그 로봇 정지 화면의 Release code" : "";
   const age = robot.power_health_age_s;
   const health = robot.power_health;
   const battery = health?.battery;

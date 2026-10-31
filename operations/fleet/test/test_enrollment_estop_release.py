@@ -1,4 +1,4 @@
-"""E-stop release with the robot's administrator screen code (user decision 2026-10-31)."""
+"""E-stop release with the robot's screen release code (user decision 2026-10-31, API v1.337)."""
 
 from __future__ import annotations
 
@@ -8,87 +8,59 @@ from enrollment_fakes import CODE, ISSUED, NAME, PINNED, FakeCore, build, scan_r
 from fakes import run
 from fleet.server.enrollment import EnrollmentError
 
-ADMIN = "admin-" + "tok-" + "Xq20"
+#: What the latched robot's screen shows (a different code from the enrollment one).
+SCREEN = "HJKM" + "NPQR"
 
 
-def latched(tmp_path, *, role="administrator", **core_fields):
+def latched(tmp_path):
     core = FakeCore()
     service, network, console, discovery, store, _ = build(tmp_path, {PINNED: core})
     discovery.replace_scan([scan_row()])
     run(service.enroll(code=CODE, principal_id="alice", discovery_name=NAME))
-    # The robot now shows a new code of `role`; the enrolled operator token still works.
-    core.role, core.token, core.known, core.estop = role, ADMIN, {ISSUED}, True
-    for key, value in core_fields.items():
-        setattr(core, key, value)
+    core.estop, core.release_code = True, SCREEN
     network.clear()
     return service, network, core, store
 
 
-def refused(service) -> EnrollmentError:
+def refused(service, code=SCREEN) -> EnrollmentError:
     with pytest.raises(EnrollmentError) as caught:
-        run(service.release_estop("rosy_09", code=CODE, principal_id="alice"))
+        run(service.release_estop("rosy_09", code=code, principal_id="alice"))
     return caught.value
 
 
-def test_admin_screen_code_releases_once_and_the_token_is_logged_out(tmp_path):
+def test_the_screen_code_releases_over_the_enrolled_operator_connection(tmp_path):
     service, network, core, store = latched(tmp_path)
 
-    answer = run(service.release_estop("rosy_09", code=CODE, principal_id="alice"))
+    answer = run(service.release_estop("rosy_09", code="hjkm-npqr", principal_id="alice"))
 
-    assert answer == {"robot_id": "rosy_09", "estop": False}
-    assert core.released == [ADMIN] and core.estop is False
-    assert core.logged_out == [ADMIN]
-    assert network.paths(PINNED)[-4:] == ["/api/v1/auth/pair", "/api/v1/system/info",
-                                          "/api/v1/safety/release", "/api/v1/auth/logout"]
+    assert answer == {"robot_id": "rosy_09", "estop": False} and core.estop is False
+    assert core.release_calls == [{"code": SCREEN}]
+    calls = [r for where, r in network.raw if r.url.path == "/api/v1/safety/release-code"]
+    assert [r.headers["Authorization"] for r in calls] == [f"Bearer {ISSUED}"]
+    assert "/api/v1/auth/pair" not in network.paths()
     assert any(row["action"] == "estop_release" and row["outcome"] == "released"
                and row["principal_id"] == "alice" for row in store.audit_rows())
     for text in (repr(answer), repr(store.rows()), repr(store.audit_rows())):
-        assert ADMIN not in text and CODE not in text
+        assert SCREEN not in text
 
 
-def test_a_robot_not_in_estop_is_refused_before_the_code_is_used(tmp_path):
-    service, network, core, _ = latched(tmp_path)
-    core.estop = False
-
-    assert refused(service).code == "not_latched"
-    assert "/api/v1/auth/pair" not in network.paths()
-
-
-def test_an_operator_code_is_refused_and_its_token_logged_out(tmp_path):
-    service, network, core, _ = latched(tmp_path, role="operator")
-
-    error = refused(service)
-
-    assert (error.code, error.reason) == ("code_consumed", "admin_required")
-    assert core.estop is True and core.released == []
-    assert core.logged_out == [ADMIN]
-    assert "/api/v1/safety/release" not in network.paths()
-
-
-def test_a_different_robot_behind_the_address_is_not_released(tmp_path):
-    service, network, core, _ = latched(tmp_path, robot_id="rosy_77")
-
-    error = refused(service)
-
-    assert (error.code, error.reason) == ("code_consumed", "wrong_robot")
-    assert core.released == [] and core.logged_out == [ADMIN]
-
-
-def test_core_refusing_the_release_still_logs_the_token_out(tmp_path):
-    service, _, core, _ = latched(tmp_path)
-    core.release_status = 409
-
-    error = refused(service)
-
-    assert (error.code, error.reason) == ("code_consumed", "release_refused")
-    assert core.estop is True and core.logged_out == [ADMIN]
-
-
-def test_a_failed_logout_is_audited(tmp_path):
+@pytest.mark.parametrize("setup, expected", [
+    (lambda core: setattr(core, "estop", False), "not_latched"),
+    (lambda core: None, "code_rejected"),
+    (lambda core: setattr(core, "release_status", 409), "release_refused"),
+])
+def test_robot_refusals_are_classified_and_audited(tmp_path, setup, expected):
     service, _, core, store = latched(tmp_path)
-    core.logout_status = 500
+    setup(core)
 
-    run(service.release_estop("rosy_09", code=CODE, principal_id="alice"))
+    error = refused(service, code=CODE if expected == "code_rejected" else SCREEN)
 
-    assert any(row["action"] == "estop_release" and row["outcome"] == "admin_token_not_revoked"
-               for row in store.audit_rows())
+    assert error.code == expected
+    assert any(row["action"] == "estop_release" and row["outcome"] == expected for row in store.audit_rows())
+
+
+def test_a_malformed_code_never_reaches_the_robot(tmp_path):
+    service, network, core, _ = latched(tmp_path)
+
+    assert refused(service, code="0000").code == "bad_format"
+    assert core.release_calls == [] and network.paths() == []

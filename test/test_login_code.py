@@ -377,3 +377,74 @@ def test_rosy_config_apply_hands_the_login_policy_to_the_issuer(tmp_path):
 
     assert apply.apply(root, lambda command: "")["state"] == "applied"
     assert json.loads((root / "etc/rosy/login-policy.json").read_text(encoding="utf-8")) == {"boot_code": "off"}
+
+
+# --- v1.337: the e-stop release code ---------------------------------------------
+
+
+def _latch(root: Path, estop: bool = True, age_s: float = 0.0) -> None:
+    path = root / "run/rosy/face-inputs.json"
+    path.write_text(json.dumps({"schema": 1, "estop": estop}), encoding="utf-8")
+    stamp = path.stat().st_mtime - age_s
+    os.utime(path, (stamp, stamp))
+
+
+def _display(root: Path) -> list[str]:
+    return (root / "run/rosy-boot/login-display.txt").read_text(encoding="utf-8").splitlines()
+
+
+def test_a_latch_replaces_the_boot_code_with_a_release_code_and_unlatching_clears_it(issuer_module, tmp_path, capsys):
+    root = _root(tmp_path)
+    issuer, _ = _issuer(issuer_module, root)
+    _core_ready(root)
+    issuer_module.daemon(issuer, once=True)
+    assert _display(root)[1] == "operator"
+
+    _latch(root)
+    issuer_module.daemon(issuer, once=True)
+    line = _display(root)
+    record = json.loads((root / "run/rosy-boot/login-code.json").read_text(encoding="utf-8"))
+    assert FORMATTED.fullmatch(line[0]) and line[1] == "estop_release"
+    assert record["role"] == "estop_release" and record["issued_by"] == "estop"
+    issuer_module.daemon(issuer, once=True)  # still latched: the same code stays
+    assert _display(root) == line
+
+    _latch(root, estop=False)
+    issuer_module.daemon(issuer, once=True)
+    assert not any(_files(root).values())
+    output = capsys.readouterr()
+    assert not FORMATTED.search(output.out + output.err)
+    assert '{"release_code": "release-issued"}' in output.out and '{"release_code": "release-cleared"}' in output.out
+
+
+def test_a_stale_hand_over_or_a_cli_code_gets_no_release_code(issuer_module, tmp_path):
+    root = _root(tmp_path)
+    issuer, _ = _issuer(issuer_module, root)
+    _core_ready(root)
+    (root / "run/rosy-boot/.login-boot-issued").write_text(BOOT_ID + "\n", encoding="ascii")
+
+    _latch(root, age_s=30.0)
+    assert issuer_module.release_step(issuer) is None and not _files(root)["login-code.json"]
+
+    issuer.issue("administrator", 10, "cli")
+    _latch(root)
+    assert issuer_module.release_step(issuer) is None
+    assert _display(root)[1] == "administrator"
+
+
+def test_a_burned_release_code_is_not_reissued_during_its_notice(issuer_module, tmp_path):
+    root = _root(tmp_path)
+    issuer, _ = _issuer(issuer_module, root)
+    _core_ready(root)
+    (root / "run/rosy-boot/.login-boot-issued").write_text(BOOT_ID + "\n", encoding="ascii")
+    _latch(root)
+    assert issuer_module.release_step(issuer) == "release-issued"
+    code_id = issuer.current()["code_id"]
+
+    _signal(root, code_id, "burned")
+    assert issuer.poll() == "burned"
+    assert issuer_module.release_step(issuer) is None and _display(root) == ["BURNED"]
+
+    issuer.clock.now += issuer_module.BURNED_NOTICE_S
+    issuer.poll()
+    assert issuer_module.release_step(issuer) == "release-issued"

@@ -58,6 +58,9 @@ export const MESSAGES = {
   not_enrollable: "이 행은 등록 대기 상태가 아닙니다(이미 등록됐거나 파일 로봇).",
   not_enrolled: "등록된 로봇이 아닙니다.",
   not_latched: "이 로봇은 비상정지 상태가 아닙니다 — 코드를 쓰지 않았습니다.",
+  release_refused: "로봇이 코드를 받았지만 해제를 거절했습니다 — 로봇 화면의 정지 원인을 확인하세요. 새 코드가 곧 화면에 나옵니다.",
+  release_burned: "틀린 입력이 많아 해제 코드가 폐기됐습니다 — 1분 뒤 로봇 화면에 새 코드가 나옵니다.",
+  robot_too_old: "이 로봇의 CORE가 해제 코드를 모릅니다(업데이트 필요) — 로봇 대시보드에서 관리자로 해제하세요.",
   address_unchanged: "주소가 바뀐 로봇이 아닙니다.",
   no_new_address: "새 주소가 하나로 보이지 않습니다 — 발견 목록을 확인하세요.",
   still_at_pinned_address: "로봇이 아직 원래 주소에서 응답합니다 — 옮길 필요가 없습니다.",
@@ -89,9 +92,6 @@ export const CONSUMED_REASONS = {
   robot_id_conflict: "원인: 같은 robot_id가 이미 로스터에 있습니다.",
   store_failed: "원인: 자격을 저장하지 못했습니다.",
   verify_failed: "원인: 로봇 신원을 읽지 못했습니다.",
-  admin_required: "원인: 비상정지 해제는 관리자 역할 코드가 필요합니다(카드 login.boot_code=administrator 또는 관리자 등록 코드).",
-  release_refused: "원인: 로봇이 해제를 거절했습니다 — 로봇 화면에서 정지 원인을 확인하세요.",
-  release_unreachable: "원인: 해제 요청 중 로봇 연결이 끊겼습니다.",
 };
 
 export const AVAHI_HINT = "같은 이름의 기기가 둘이면 Avahi가 한쪽을 <이름>-2.local로 바꿉니다 — 발견 목록에 -2가 붙은 행이 있으면 그 기기부터 확인하세요.";
@@ -187,7 +187,7 @@ export function discoveryActions(device, manage, blockedUntil, now) {
 export const HELP = [
   "운영자 동작: 로봇 전원 켜기 → 등록 → 로봇 화면의 8자 입력. SSH·파일 편집·재시작이 없습니다.",
   "LCD가 있고 카드 login.boot_code가 기본(operator)인 로봇만 이렇게 됩니다. 그 밖에는 관리자 등록 코드나 SSH rosy-login-code가 코드의 출처입니다.",
-  "비상정지 해제: 행의 '비상정지 해제…' → 그 로봇 화면의 관리자 코드. Fleet은 한 번 해제하고 토큰을 버립니다. 정지 중이 아니면 코드를 쓰지 않습니다.",
+  "비상정지 해제: 로봇 앞에서 안전을 확인 → 행의 '비상정지 해제…' → 그 로봇 정지 화면의 'Release code' 8자. 해제만 하는 코드라 로그인은 되지 않습니다.",
   "새 화면 코드는 부팅마다 하나입니다: 첫 등록, 토큰 만료(현 이미지 7일), 코드를 소모한 실패 뒤마다 전원 재투입이나 관리자 코드가 필요합니다.",
 ];
 
@@ -263,7 +263,7 @@ export function createEnrollmentPanel({ scope, headers, identity, log, dialogs, 
     el("enroll-submit").disabled = true;
     try {
       if (target.release) {
-        // 사용자 결정 2026-10-31: 관리자 코드는 로봇 화면에서만 온다. Fleet은 해제 한 번 뒤 토큰을 버린다.
+        // 사용자 결정 2026-10-31(v1.337): 정지 화면의 해제 전용 코드. 로그인 권한은 없다.
         await call(`/api/fleet/robots/${encodeURIComponent(target.release)}/estop-release`, {
           method: "POST", body: { code: input.value },
         });
@@ -360,7 +360,7 @@ export function createEnrollmentPanel({ scope, headers, identity, log, dialogs, 
     }
     if (action === "estop-release") {
       if (!canManage(identity())) return;
-      openDialog({ release: row.robot_id }, `${row.robot_id} 비상정지 해제 — 로봇 화면의 관리자 코드`);
+      openDialog({ release: row.robot_id }, `${row.robot_id} 비상정지 해제 — 로봇 정지 화면의 Release code`);
       return;
     }
     if (action === "hub-link" || action === "hub-unlink") {
