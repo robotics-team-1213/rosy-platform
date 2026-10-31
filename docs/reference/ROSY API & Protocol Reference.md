@@ -5,9 +5,14 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.335
+**Version:** v1.336
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.336 상태 스냅샷의 비상정지 원인
+
+- 로봇 상태 스냅샷 `safety`에 `source`(문자열)를 더한다. 래치를 건 쪽이며 `GET /api/v1/safety/state`의 `source`와 같은 값이다: `api:<role>`(정지 API), `battery_policy`·`battery_deep`(배터리 정책), `control:<사유>`(제어 정책). 래치가 없으면 빈 문자열이다. 이미 래치된 뒤의 정지 요청은 처음 원인을 바꾸지 않는다.
+- additive다. 이전 CORE는 이 필드를 보내지 않으며 소비자는 없음을 원인 미상으로 읽는다. Rosy Fleet 화면은 "비상정지 중 · 배터리 보호"처럼 원인을 함께 보인다.
 
 ### v1.335 팔 이송 정책 승인 범위 (D-938)
 
@@ -2022,7 +2027,7 @@ v1.70 추가 경로(모두 Bearer 인증):
   "pose": { "x": 1.82, "y": 3.21, "yaw": 0.73 },
   "velocity": { "linear": 0.12, "angular": 0.0 },
   "battery": { "percent": 81 },
-  "safety": { "estop": false },
+  "safety": { "estop": false, "source": "" },
   "power": {
     "mode": "STANDBY",
     "presence": "none",

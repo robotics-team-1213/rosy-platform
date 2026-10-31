@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 const { register } = await import('node:module');
 register('./resolve-console-assets.mjs', import.meta.url);
 const {
-  capabilityReason, chooseConvoyLeader, chooseLeader, motionCommandReason, formationReason, leaderPathKind, noRobotServesGrid,
+  capabilityReason, chooseConvoyLeader, chooseLeader, estopCause, estopText, motionCommandReason, formationReason, leaderPathKind,
+  noRobotServesGrid,
 } = await import('../../../../applications/fleet/web/motion-readiness.js');
 
 test('motor runtime explains why autonomous actions are unavailable', () => {
@@ -125,4 +126,14 @@ test('the console skips the map request only when every robot says it serves no 
   assert.equal(noRobotServesGrid([]), false);
   assert.equal(noRobotServesGrid([manual, {capabilities: null}]), false);  // unknown robot: keep asking
   assert.equal(noRobotServesGrid([manual, {capabilities: {runtime: {maps: {occupancy: true}}}}]), false);
+});
+
+test('an e-stop names its cause when CORE reports one (v1.336)', () => {
+  assert.equal(estopCause('battery_policy'), '배터리 보호');
+  assert.equal(estopCause('battery_deep'), '배터리 과방전');
+  assert.equal(estopCause('api:operator'), 'API 정지(operator)');
+  assert.equal(estopCause('control:policy_failed'), '제어 정책(policy_failed)');
+  assert.equal(estopText({safety: {estop: true, source: 'battery_policy'}}), '비상정지 중 · 배터리 보호');
+  // An older CORE sends no source: the label stays as it was.
+  assert.equal(estopText({safety: {estop: true}}, '비상 정지'), '비상 정지');
 });
