@@ -91,8 +91,9 @@ def test_async_event_replay_and_reuse_semantics_match_sync():
         hub = _hub(event_store=store)
         session = hub.open_session()
         await hub.handle_async(_hello(), session=session)
-        first = await hub.handle_async(_event(), session=session)
-        replay = await hub.handle_async(_event(), session=session)
+        original = _event()                  # a replay re-sends the original bytes, ts included (D-869)
+        first = await hub.handle_async(original, session=session)
+        replay = await hub.handle_async(original, session=session)
         reused = await hub.handle_async(_event(x=1), session=session)
         assert first.payload == replay.payload == {"accepted": True}
         assert reused.payload["code"] == "EVENT_NOT_AUDITABLE"
