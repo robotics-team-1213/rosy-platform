@@ -353,6 +353,7 @@
 
 ## 최근 기록
 
+- 2026-10-31 · uncommitted · tools: 워크트리 .git 유실 재발 교훈 갱신
 - 2026-11-01 · uncommitted · docs: D-940 중복 정의 게이트와 등록부
 - 2026-10-31 · uncommitted · omx: 재배선 뒤 장치 식별 교훈
 - 2026-10-31 · uncommitted · fix(land): 자동 묶음 착지를 끈다

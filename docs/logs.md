@@ -13218,3 +13218,8 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: D-940 Accepted(사용자 "바로 처리" 지시, 워크트리 슬롯 1회 force-over-cap 승인 기록 포함)
 - 교훈: 없음(신규 게이트 제도화)
+
+## 2026-10-31 · uncommitted · tools: 워크트리 .git 유실 재발 교훈 갱신
+- 변경: `docs/solutions/workflow-issues/empty-worktree-folder-runs-git-on-the-shared-main-2026-10-25.md`에 재발(파일 남은 폴더·묘비 없음·land_async 재사용) 추가
+- 증거: 공유 체크아웃 reflog의 `checkout: moving from main to feat/omx-devices-scan`, 2분 뒤 `git switch main`로 복구
+- gate 변화: 없음
