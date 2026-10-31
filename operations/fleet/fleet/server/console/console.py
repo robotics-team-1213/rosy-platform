@@ -35,6 +35,7 @@ from fleet.localization import trust
 from fleet.server import bays, goal_admission, goal_lease, traffic
 from fleet.server.observe import observe_states  # SERVER_HOLDERS composes console/*.py as fleet.server.<name>
 from fleet.server.degraded_reroute import reroute_degraded
+from fleet.server.estop_fanout import stop_robots
 from fleet.server.console_view import (
     CapabilityDisplay, TripAware, _error_of, _formation_stream_evidence, _shown,
     _stream_evidence,  # noqa: F401
@@ -1045,23 +1046,16 @@ class FleetConsole(TripAware):
         무관하게 살아 있다(설계 §3).
         """
         self.goal_leases.clear()  # D-550 10: a leased goal is never renewed past an E-stop
-        # 대형이 살아 있으면 먼저 푼다. 릴레이가 참조를 계속 밀어 넣는 채로 로봇만 세우면,
-        # e-stop 을 푸는 순간 팔로워가 밀린 참조를 향해 달려나간다.
-        if self._formation is not None and self._formation_members():
-            try:
-                await self._formation.stop()
-            except Exception:
-                pass
-            self._formation_leader = None
         # 신호등의 all_red 는 로봇 정지와 병렬이다 — 순서를 정하는 동안 한쪽이 늦게
         # 간다. 어느 쪽이 실패했는지는 본문이 대신 말한다.
         signals_task = (asyncio.ensure_future(self._signals.all_red())
                         if self._signals is not None else None)
         order = list(self._order)
-        results = await asyncio.gather(
-            *(self._hub.scatter_estop(rid) for rid in order),
-            return_exceptions=True,
-        )
+        # 전달(동시·짧은 재시도)과 대형 해제(정지와 나란히)는 estop_fanout 이 맡는다.
+        formation = self._formation if self._formation_members() else None
+        results = await stop_robots(self._hub.scatter_estop, order, formation and formation.stop)
+        if formation is not None:
+            self._formation_leader = None
         rows = []
         for robot_id, result in zip(order, results):
             if isinstance(result, BaseException):

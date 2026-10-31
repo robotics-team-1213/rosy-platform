@@ -19,6 +19,7 @@ Fleet 쪽에 남는다(D-12): 하달한 목표를 기억하는 곳은 여기지 
 | `ledger/deliberation_journal.py` | D-640 durable advisory runs in the existing DB; current-case fence, bounded replay and asynchronous database work. No automatic model activation |
 | `ledger/context_log.py`, `ledger/context_options.py` | D-796 site-host Postgres mirror of terminal advisory runs (`ContextLog`, `rosy_deliberation_run`) and its `--context-db-*` console surface (`add_cli_arguments`/`activate_from_args` → the process-wide active sink the journal defaults to). Best-effort only; a failure is a warning and never touches the SQLite ledger |
 | `console.py` | `FleetConsole` — gather(snapshot/map)와 scatter(goal/cancel/estop), 그리고 경로 충돌 시 미션 대기열 |
+| `console/estop_fanout.py` | 전체 비상정지 전달만 맡는다(safety): 모든 로봇에 동시에, 응답 없으면 1.5 s 시도 3번, 대형 해제는 정지와 나란히. 목표·점유 정리는 콘솔 |
 | `signals.py` | 신호등(ROSY-SIGNAL-001) gather/scatter — `SignalConsole`(재단언·all_red·3자 교차 검증 verify), `HttpSignalClient`, `HttpSignalObserver`. `swarm/` 로봇 계약과 섞지 않는다 |
 | `signal_config.py` | signals.yaml 로더·라이터와 신호등 endpoint 검증 |
 | `traffic.py` | 경로 충돌 판정(순수 기하). 전송도 asyncio 도 없다 |
@@ -61,8 +62,9 @@ Fleet 쪽에 남는다(D-12): 하달한 목표를 기억하는 곳은 여기지 
   따로 내리면 로봇 안에서 추종과 항법이 같은 바퀴를 두고 다툰다.
 - 대형은 사이트에 하나다. 이미 열려 있으면 거절한다 — 조용히 갈아치우면 앞 세션의
   팔로워가 무장된 채 남아 아무도 보내지 않는 참조를 기다린다.
-- e-stop 은 로봇을 세우기 **전에** 대형을 푼다. 릴레이가 참조를 계속 밀어 넣는 채로 세우면
-  e-stop 을 푸는 순간 팔로워가 밀린 참조를 향해 달려나간다.
+- e-stop 은 대형을 **함께** 푼다. 풀지 않으면 e-stop 을 푸는 순간 팔로워가 밀린 참조를 향해
+  달려나간다. 다만 해제(팔로워 swarm/cancel, 대당 시한)를 기다린 뒤 세우지 않는다 — 닿지 않는
+  팔로워 하나가 모든 로봇의 정지를 늦춘다. 전달은 `console/estop_fanout.py`(동시, 1.5 s 시도 3번)다.
 - 해제는 거절하지 않는다. 대형을 못 푸는 화면은 대형을 여는 화면보다 나쁘다.
 - 로봇 로컬 대시보드를 대체하지 않는다. 한 대의 현장 화면·수동 조작·비상정지는 CORE
   `/dashboard` 에 그대로 있다(D-23).
