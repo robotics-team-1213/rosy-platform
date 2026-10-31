@@ -46,7 +46,7 @@ def _serve(tmp_path):
     store.propose(workcell_id="cell-1", policy_revision="act-r1", to_stage="L3", evidence_sha256="b" * 64,
                   note="shadow agreement", principal_id="alice", **REV)
     listener = safe_listener()
-    server = uvicorn.Server(uvicorn.Config(app, log_level="error", timeout_graceful_shutdown=3))
+    server = uvicorn.Server(uvicorn.Config(app, log_level="error", timeout_graceful_shutdown=3, log_config=None))
     worker = threading.Thread(target=server.run, kwargs={"sockets": [listener]}, daemon=True)
     worker.start()
     deadline = time.monotonic() + 20

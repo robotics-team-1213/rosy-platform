@@ -74,7 +74,7 @@ def monitoring_backend(tmp_path, request):
             return await Response(status_code=404)(scope, receive, send)
         await app(scope, receive, send)
     server = uvicorn.Server(uvicorn.Config(prefix_gateway if mode == 'prefix' else app, log_level='error', access_log=False,
-                                         proxy_headers=False, timeout_graceful_shutdown=3))
+                                         proxy_headers=False, timeout_graceful_shutdown=3, log_config=None))
     worker = threading.Thread(target=server.run, kwargs={'sockets': [listener]}, daemon=True)
     worker.start()
     try:

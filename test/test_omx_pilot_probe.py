@@ -165,7 +165,7 @@ def _server(arm):
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
         port = sock.getsockname()[1]
-    server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="error"))
+    server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="error", log_config=None))
     thread = threading.Thread(target=server.run, daemon=True)
     thread.start()
     try:
