@@ -300,6 +300,7 @@ def test_resume_cannot_reopen_a_lost_socket_after_zero_conflict():
 def _timed_session():
     """시계·타이머·지연 응답을 손으로 돌리는 세션(송신 타이밍 시험용)."""
     return """
+let clock = 0;
 const timers = [];
 const posts = [];
 const inflight = [];
@@ -525,6 +526,6 @@ def test_ws_without_acks_is_abandoned_for_rest():
     await h.session.command({linear: 0.1, angular: 0});      // never acked
     await new Promise(r => setTimeout(r, 1100));
     await h.session.command({linear: 0.1, angular: 0});
-    console.log(JSON.stringify({posts: h.posts.length, failed: h.latencies.at(-1)?.failed}));
+    console.log(JSON.stringify({posts: h.posts.length, failed: h.latencies.some(l => l.failed)}));
     """)
     assert out["posts"] == 1 and out["failed"] is True
