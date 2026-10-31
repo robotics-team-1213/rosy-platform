@@ -114,6 +114,23 @@ def test_install_task_list_sits_in_the_shared_subnav_seat():
     assert 'el("install-chooser").append(taskChooser.element);' in entry, "install: the shared chooser fills the seat"
 
 
+def test_every_area_document_heads_the_workspace_with_one_pathbar():
+    """D-926 2 — 경로 줄이 문서 제목(h1)과 현재 화면(strong)을 본문 머리에 보인다. h1은 문서에 이 하나뿐이다."""
+    docs = {"index.html": ("사이트 관제", '<strong id="console-screen" hidden></strong>'),
+            "install.html": ("설치·보정", '<strong id="install-screen">장비 찾기</strong>'),
+            "site-map.html": ("현장 지도", '<strong id="site-map-screen">지도 보기</strong>'),
+            "cell.html": ("팔레타이징 작업 준비", '<strong id="cell-screen">저장된 문서</strong>'),
+            "policy.html": ("학습 정책 승인", "<strong>학습</strong>")}
+    for name, (title, screen) in docs.items():
+        page = re.sub(r'<!--.*?-->', '', _page(name).read_text(encoding="utf-8"), flags=re.S)
+        assert page.count("<h1") == 1, f"{name}: one h1 only, and it lives in the path bar"
+        bar = re.search(r'<div class="fleet-workspace">\s*<ui-status id="estop-feedback" hidden></ui-status>\s*'
+                        r'<div class="ui-pathbar"><h1>([^<]+)</h1>' + re.escape(screen) + r'</div>', page)
+        assert bar and bar.group(1) == title, f"{name}: the path bar heads the workspace with the document title"
+    # 사이트 지도의 첫 구획 제목은 이제 화면 이름 h2다(경로 줄 h1과 겹치지 않는다).
+    assert '<h2 class="ui-section-heading" id="map-heading">지도 보기</h2>' in _page("site-map.html").read_text(encoding="utf-8")
+
+
 def test_no_back_link_sentences_remain():
     for name in DOCS:
         page = _page(name).read_text(encoding="utf-8")

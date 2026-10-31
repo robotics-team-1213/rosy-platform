@@ -82,8 +82,10 @@
   <div class="fleet-workspace">
   <ui-status id="estop-feedback" hidden></ui-status>
 
+  <!-- D-926 2 — 경로 줄: 문서 제목과 현재 화면을 본문 머리에도 보인다(부품은 app-shell.css). -->
+  <div class="ui-pathbar"><h1>설치·보정</h1><strong id="install-screen">장비 찾기</strong></div>
+
   <main id="install-main" class="fleet-task-page" tabindex="-1">
-    <h1 class="sr-only">Rosy Fleet — 설치·보정</h1>
     <!-- D-410 — 설치 화면. 운용(감시·목표·정지)은 /console에 있다. -->
         <section id="peer-picker" class="panel install-task" aria-labelledby="peer-heading">
           <div class="robot-head"><h2 id="peer-heading">장비 찾기</h2><ui-tag id="peer-status" status="neutral">접속 대기</ui-tag></div>
@@ -421,6 +423,7 @@
             <ui-button kind="quiet" id="vision-reset-adjustments" type="button">조정 초기화</ui-button>
           </div>
         </details>
+    </section>
     </section>
 
     <section id="host-services" class="panel install-task" aria-labelledby="host-services-heading" data-role-lock>

@@ -556,7 +556,7 @@ tickClock();
 setInterval(tickClock, 1000);
 watchFleet(request);
 const screens = bindScreens({nav: document.querySelector('.ui-subnav-nav'), home: 'map-heading', stage: 'map-heading',
-  groups: {'survey-heading': ['survey-heading', 'drawing-heading']}});
+  groups: {'survey-heading': ['survey-heading', 'drawing-heading']}, label: document.getElementById('site-map-screen')});
 // The map legend promises that picking a place or lane on the view screen opens it for editing.
 $('site-map-svg').addEventListener('click', event => {
   if (screens.current() === 'map-heading' && event.target.closest('[data-place], [data-edge], [data-crosswalk]')) location.hash = '#edit-heading';

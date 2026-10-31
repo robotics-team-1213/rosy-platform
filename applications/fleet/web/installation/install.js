@@ -131,18 +131,22 @@ deviceProfiles = createDeviceProfiles({root: el('device-profiles'), scope: pageS
   identity: () => ({role: auth.role, principal_id: auth.principal})});
 
 // Task navigation preserves mounted owners and drafts across auth/page epochs.
-const taskChooser = createTaskChooser({beforeSelect: from => {
-  if (from === "calibration") visionView.pausePreview();
-  if (from === 'calibration') measuredCalibration?.pause();
-  return true;
-}, tasks: [
+const installTasks = [
   {id: "peers", title: "장비 찾기", panel: el("peer-picker")},
   {id: "robots", title: "로봇 등록", panel: el("robot-enrollment")},
   {id: "device-profiles", title: "장치 정보", panel: el("device-profiles")},
   {id: "cameras", title: "카메라 연결 승인", panel: el("camera-link")},
   {id: "calibration", title: "카메라 설치·보정", panel: el("camera-calibration")},
   {id: "hosts", title: "호스트 서비스", panel: el("host-services")},
-]});
+];
+const taskChooser = createTaskChooser({beforeSelect: from => {
+  if (from === "calibration") visionView.pausePreview();
+  if (from === 'calibration') measuredCalibration?.pause();
+  return true;
+}, tasks: installTasks, onSelect: id => {
+  // D-926 2 — 경로 줄의 현재 화면. 선택은 chooser가 이미 바꿨다.
+  el("install-screen").textContent = installTasks.find(task => task.id === id)?.title ?? "";
+}});
 el("install-chooser").append(taskChooser.element);
 taskChooser.setReady();
 if (location.hash === '#device-profiles') void taskChooser.choose('device-profiles');

@@ -5208,3 +5208,10 @@
 - 변경: `test/test_doc_tabs.py`에 설치 문서의 화면 안 이동이 공용 하위 탐색 자리에 서는지 검사를 추가했다(사이드바 배치 잔여 없음, app-shell 시트 링크, install.js가 자리를 채움). `test/test_grammar_separation.py`의 install.html 시트 목록에 `/common/app-shell.css`를 반영했다.
 - 증거: node --test 403 passed, 원격 pytest는 착지 전에 기록한다.
 - Gate: 없음. CE: 해당 없음.
+
+
+## 2026-11-01 · uncommitted · uiux(fleet): 경로 줄 계약 시험
+
+- 변경: `test/test_doc_tabs.py`에 다섯 영역 문서의 경로 줄 계약을 추가했다(본문 머리에 문서 제목 h1 하나 + 현재 화면 strong, site-map 첫 구획은 h2).
+- 증거: 원격 시험은 착지 전 기록한다.
+- Gate: 없음. CE: 해당 없음.

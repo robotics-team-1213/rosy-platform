@@ -1018,3 +1018,10 @@
 - 변경: 어디서도 읽지 않는 `--flag-line`·`--ground-grad-2`·`--line-015`·`--shade-14`·`--shade-28`과 정책 문서 폭 `--content-policy-max`를 지웠다. `--ground-grad-1`은 색 섞기 해석 시험의 기준으로 남는다. `DESIGN.md` 음영 항목과 부품 견본의 폭 줄을 같이 정리했다.
 - 증거: `git grep`으로 소비처 없음 확인, 대비 시험은 `--surface-line`만 본다.
 - gate 변화: 없음. CE: 해당 없음.
+
+
+## 2026-11-01 · uncommitted · task-chooser onSelect 선택 알림
+
+- 변경: `createTaskChooser`에 선택적 `onSelect(id)` 콜백을 더했다(선택 확정 직후 한 번). 기존 호출처(robot_ui mount.js)는 무변경. Fleet 설치 문서의 경로 줄 화면 이름이 이 콜백을 쓴다. `test_chrome_layout.py`의 Fleet 사이드바 고정을 D-741 6 좌석 통일에 맞게 바로잡았다(설치 문서는 이제 자기 열이 없다).
+- 증거: node --test 403 passed, robot_ui 호출처 무변경. 원격 시험은 착지 전 기록.
+- gate 변화: 없음. CE: 해당 없음.

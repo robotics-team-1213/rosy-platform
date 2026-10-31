@@ -658,3 +658,10 @@
 - 변경: `doc-tabs.css`의 `@container (width < 64rem)` 안에서 설치 자리의 task-chooser도 같은 컨테이너 기준으로 세로 레일을 숨기고 콤팩트 선택을 띄운다. `task-chooser.css`의 전환은 뷰포트 기준이라 고전 스크롤바 창(뷰포트 64rem 이상·컨테이너 미만)에서 레일이 세로로 남던 창을 메운다. 공용 시트는 그대로 두고 Fleet 표면이 자기 컨테이너 기준만 더한다.
 - 증거: 작업 세션 Fleet 샘플 서버(4173) Chromium 1440에서 컨테이너만 1000px로 줄인 경우 레일 숨김·콤팩트 선택 표시·탭 전환 정상, 1440 기본·480 좁은 폭은 기존과 같음, 페이지 오류 없음. 원격 브라우저 시험은 아래 착지 전 기록 참조.
 - gate 변화: 없음. CE: 해당 없음.
+
+
+## 2026-11-01 · uncommitted · D-926 2·비평 P0: 경로 줄 도입, 설치 문서 죽은 탭 수리, h1 모델 통일
+
+- 변경: 다섯 영역 문서가 본문 머리에 경로 줄(`ui-pathbar`, 부품은 app-shell.css)을 단다 — h1은 문서 제목 하나뿐이고 strong이 현재 화면을 따라온다(install은 task-chooser 새 `onSelect`, 지도·Cell은 `bindScreens` 새 `label`, 관제는 `area-nav`, 정책은 고정). site-map의 첫 구획 제목 "지도 보기"는 h2로 낮추고 관제·설치의 sr-only h1을 걷었다. 비평 P0도 고쳤다: `#camera-calibration`이 닫히지 않아 `#host-services`·설치 기록이 그 안에 중첩돼 호스트 서비스 탭이 빈 화면이던 잠복 결함(`</section>` 1줄).
+- 증거: 작업 세션 Fleet 샘플 서버(4173) Chromium — 호스트 서비스 탭 패널 표시·설치 기록 모든 탭에서 표시, 경로 줄 화면 이름이 chooser·해시·view를 따라감("카메라 설치·보정"·"초안 편집"·"레시피"·"작업"), site-map main h1 0개·map-heading H2, 페이지 오류 없음. node --test 403 passed. 원격 시험은 착지 전 기록.
+- gate 변화: 없음. CE: 해당 없음.

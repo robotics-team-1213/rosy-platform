@@ -10,3 +10,10 @@ if (areaNav) {
     else link.removeAttribute("aria-current");
   }
 }
+// D-926 2 — 경로 줄: 주소가 고른 영역을 본문 머리에도 쓴다. 기본 관제 화면이면 문서 제목이 곧 화면이다.
+const screenLabel = document.getElementById("console-screen");
+const currentArea = [...document.querySelectorAll(".doc-tabs a")].find(link => link.getAttribute("aria-current") === "page");
+if (screenLabel) {
+  screenLabel.hidden = !areaNav;
+  if (areaNav) screenLabel.textContent = (currentArea?.textContent ?? "").trim();
+}
