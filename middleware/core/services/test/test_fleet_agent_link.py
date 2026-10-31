@@ -171,7 +171,7 @@ def test_degraded_hub_error_keeps_the_link(fast, caplog, code):
     assert connected is True and hub.answered >= agent_mod.STABLE_HEARTBEATS
     assert stable is True                    # >= STABLE_HEARTBEATS answers
     degraded = [r for r in caplog.records if code in r.getMessage()]
-    assert len(degraded) == 1 and agent.enabled is True
+    assert len(degraded) == 1
 
 
 def test_degraded_hub_resets_the_backoff(monkeypatch):

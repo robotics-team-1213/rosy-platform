@@ -617,7 +617,8 @@ def test_event_socket_refuses_past_the_client_cap(robot, monkeypatch):
     import core_api_web.api.ws as ws_module
 
     monkeypatch.setattr(ws_module, "MAX_EVENT_CLIENTS", 1)
-    tc, _svc, _state, events = robot()
+    tc, svc, _state, _events = robot()
+    events = svc.events
     url = "/ws/events?token=rosy-dev-" + "viewer"
     with tc.websocket_connect(url) as socket:
         with pytest.raises(WebSocketDisconnect) as closed:
@@ -649,7 +650,8 @@ def test_a_slow_event_reader_is_closed_instead_of_growing_core_memory(robot, mon
         await asyncio.sleep(0.05)
         await send_json(self, data, mode)
     monkeypatch.setattr(WebSocket, "send_json", slow_send)
-    tc, _svc, _state, events = robot()
+    tc, svc, _state, _events = robot()
+    events = svc.events
     with pytest.raises(WebSocketDisconnect) as closed:
         with tc.websocket_connect("/ws/events?token=rosy-dev-" + "viewer") as socket:
             for i in range(20):
