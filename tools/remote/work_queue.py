@@ -69,6 +69,8 @@ def workers(hosts: list[str], invocations: list[list[str]], headroom: dict,
     each one waits for its host to empty, and on 2026-10-30 70 of them (34-40 min each, 10 s-3.5 min of tests)
     kept the AI PC from new jobs, so 44 of 143 placements found no host. Without that host they run as before."""
     pin = next((h for h in order if h in hosts and not (headroom.get(h) or {}).get("site")), None)
+    if (headroom.get(pin) or {}).get("sim_held"):  # Gazebo/Isaac hold it: they would wait there behind the sim
+        pin = None
     if pin and any(map(host_alone, invocations)):
         hosts = [pin] if all(map(host_alone, invocations)) else [pin, *(h for h in hosts if h != pin)]
     else:
@@ -156,12 +158,16 @@ class Work:
                     return i
         return None
 
-    def take_small(self) -> int | None:
-        """The last queued index (the smallest, largest-first order): a light host's pick."""
+    def take_small(self, wanted=None) -> int | None:
+        """The last queued index (the smallest, largest-first order) wanted(index) accepts: a light host's pick."""
         if self.stop.is_set():
             return None
         with self._queue:
-            return self.todo.pop() if self.todo else None
+            for i in reversed(self.todo):
+                if wanted is None or wanted(i):
+                    self.todo.remove(i)
+                    return i
+        return None
 
     def give_back(self, i: int) -> None:
         """i first in line again: its host failed mid-run, so another host (or run()'s fallback) runs it."""
