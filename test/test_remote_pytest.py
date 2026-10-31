@@ -347,6 +347,12 @@ def test_matching_venv_does_not_wait_for_active_pytest(tmp_path):
         holder.wait(timeout=2)
 
 
+def test_the_venv_build_keeps_pips_cache_and_logs_its_wall_time():
+    """2026-10-31: ~13-14 rebuilds a host a day re-downloaded every wheel under --no-cache-dir."""
+    assert "--no-cache-dir" not in rp.VENV and "--require-hashes" in rp.VENV
+    assert '[remote-pytest] venv built $DEPS in $((SECONDS - B))s' in rp.VENV
+
+
 def test_pytest_uses_the_same_dependency_environment_as_setup():
     assert 'V=$R/venvs/$DEPS' in rp.VENV
     assert 'V=$R/venvs/$DEPS' in rj.START and 'V=$R/venvs/$2' in rj.JOB
