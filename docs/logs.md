@@ -13218,3 +13218,10 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: D-940 Accepted(사용자 "바로 처리" 지시, 워크트리 슬롯 1회 force-over-cap 승인 기록 포함)
 - 교훈: 없음(신규 게이트 제도화)
+
+## 2026-11-01 · uncommitted · omx: 계획 경로 통로 점검(cell_corridor), 경로에 물체·다른 팔이 있으면 움직이기 전에 거절
+- 변경: `deploy/robot/omx/cell_corridor.py`(계획 프레임 FK → 낮은 TCP 구간을 상단 뷰 통로로 그리고 전경 덩어리를 찾음, 집을 물체·놓을 칸·팔 기부는 제외), `cell_params.py`에 `corridor.*` 5개
+- 증거: `test/test_omx_cell_corridor.py` 원격 실행
+- gate 변화: 없음(읽기 전용 점검, 움직임 없음)
+- 결정: 사용자 2026-11-01 "팔의 경로에 있다면 정지하거나 안전처리" — 1단계는 움직이기 전 정적 점검
+- 교훈: 없음

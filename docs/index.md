@@ -353,6 +353,7 @@
 
 ## 최근 기록
 
+- 2026-11-01 · uncommitted · omx: 계획 경로 통로 점검(cell_corridor), 경로에 물체·다른 팔이 있으면 움직이기 전에 거절
 - 2026-11-01 · uncommitted · docs: D-940 중복 정의 게이트와 등록부
 - 2026-10-31 · uncommitted · omx: 재배선 뒤 장치 식별 교훈
 - 2026-10-31 · uncommitted · fix(land): 자동 묶음 착지를 끈다
