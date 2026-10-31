@@ -28,9 +28,12 @@ ALONE_ENV = "ROSY_BROWSER_ALONE=1"  # a timing-sensitive browser chunk: no lane 
 ENV_WORD = re.compile(r"^ROSY_[A-Z0-9_]*=")
 # Browser jobs per host beside main. Measured 2026-10-26 on the model PC, 3 chunks, no other job: 1/2/3 at once
 # = 1053/632/449 s wall, each chunk within 1% of its serial time, 0 failures, peak <= 751 MiB each. 2, not 3: main's
-# xdist job and up to 3 preparing landings share the host, and load-flaky browser ids exist.
+# xdist job and up to 3 preparing landings share the host, and load-flaky browser ids exist. 4 since 2026-10-31:
+# the cap counts every run's browser jobs, so 2 per host left 4 browser slots for all preparing landings while a
+# FULL round carried 60-163 min of browser chunks and the hosts ran at load ~5 of 24 cores; each PC's JOB
+# admission (remote_job.ADMIT, since 10-28) now holds the cores and GB, and LOAD-FLAKY ids keep their ALONE chunk.
 # ROSY_BROWSER_PER_HOST overrides it to measure.
-BROWSER_PER_HOST = int(os.environ.get("ROSY_BROWSER_PER_HOST", "2"))
+BROWSER_PER_HOST = int(os.environ.get("ROSY_BROWSER_PER_HOST", "4"))
 MAX_MAIN = 4  # main workers one run may ask of a full host (1 restores one-at-a-time)
 MAIN_CORES, MAIN_GB = 2, 2  # headroom one more main worker needs
 SKIP_ALONE = "!"  # workers(): a worker kind on a host other than the host_alone suites' one
