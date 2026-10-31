@@ -88,7 +88,7 @@ class WorkcellArm(_StrictModel):
 class WorkcellCamera(_StrictModel):
     source_id: SourceId
     label: Label
-    role: Literal["overhead", "wrist"]
+    role: Literal["overhead", "side", "wrist"]  # side: a fixed view across the cell (2026-10-31), no arm of its own
     arm_id: Identifier | None
     image_topic: ImageTopic
     device_path: DevicePath
@@ -106,7 +106,7 @@ class WorkcellObservation(_StrictModel):
     def camera_arm_binding(self):
         arms = {arm.arm_id for arm in self.arms}
         for camera in self.cameras:
-            if ((camera.role == "overhead" and camera.arm_id is not None)
+            if ((camera.role in ("overhead", "side") and camera.arm_id is not None)
                     or (camera.role == "wrist" and camera.arm_id not in arms)):
                 raise ValueError("camera role requires a matching local arm binding")
         return self
