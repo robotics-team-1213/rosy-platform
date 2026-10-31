@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="/common/components.css">
   <link rel="stylesheet" href="/common/task-chooser.css">
   <link rel="stylesheet" href="/console/assets/styles.css">
+  <link rel="stylesheet" href="/console/assets/file-picker.css">
   <link rel="stylesheet" href="/console/assets/doc-tabs.css">
   <link rel="stylesheet" href="/console/assets/fleet-header.css">
   <link rel="stylesheet" href="/console/assets/password-login.css">
@@ -175,7 +176,7 @@
             <div class="ui-form">
               <label class="ui-field-label">로봇·팔 관측원 연결<select class="ui-field" data-care="source"><option value="">연결 안 함</option></select></label>
               <label class="ui-field-label">항상 표시할 주의사항<textarea class="ui-field" data-care="caution" maxlength="2000" rows="3"></textarea></label>
-              <label class="ui-field-label">측정 특성 JSON 가져오기<input class="ui-field" data-care="file" type="file" accept="application/json,.json"></label>
+              <label class="ui-field-label file-picker">측정 특성 JSON 가져오기<input class="ui-field" data-care="file" type="file" accept="application/json,.json"><span class="file-picker-button" aria-hidden="true">파일 선택</span><span data-file-name aria-live="polite">선택한 파일 없음</span></label>
             </div>
             <p class="hint" data-care="document">특성 JSON 미등록</p>
             <ui-actions>
@@ -348,7 +349,7 @@
         <section id="measured-calibration" class="install-step measured-calibration" aria-labelledby="measured-heading">
           <h3 id="measured-heading">실측 카메라 교정</h3>
           <p class="hint">촬영·독립 측량 결과를 확인해 지도 미리보기에 적용합니다. 승인 저장과 영상 적용 상태를 따로 확인하세요.</p>
-          <label>교정 묶음 <input class="ui-field" id="measured-bundle" type="file" accept="application/json,.json" disabled></label>
+          <label class="file-picker">교정 묶음 <input class="ui-field" id="measured-bundle" type="file" accept="application/json,.json" disabled><span class="file-picker-button" aria-hidden="true">파일 선택</span><span data-file-name aria-live="polite">선택한 파일 없음</span></label>
           <p id="measured-summary" class="hint"></p>
           <div class="measured-limits">
             <label>허용 p95 오차 (m) <input class="ui-field" id="measured-p95" type="number" min="0" step="0.001" required disabled></label>
