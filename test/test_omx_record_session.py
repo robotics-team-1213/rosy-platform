@@ -785,3 +785,16 @@ def test_main_binds_unique_child_monitor_path_to_receipt(tmp_path, monkeypatch, 
     assert receipt['motor_health_owner'] == captured['env']['ROSY_OMX_MONITOR_OWNER']
     assert receipt['motor_health_session'] == captured['env']['ROSY_OMX_MONITOR_SESSION']
     assert receipt['motor_health_state'] == captured['env']['ROSY_OMX_MONITOR_STATE']
+
+
+def test_a_session_may_give_a_joint_an_i_gain_and_restores_it(tmp_path):
+    """2026-11-01: both arms' wrists stopped short under load with PWM to spare; the session ran them with no I gain."""
+    path = tmp_path / "caps.json"
+    path.write_text('{"11": {"pwm": 300}, "12": {"pwm": 600, "p": 1600}, "13": {"pwm": 600}, '
+                    '"14": {"pwm": 300, "current": 250, "p": 800, "i": 200}, "15": {"pwm": 300, "current": 250}, '
+                    '"16": {"pwm": 300, "current": 250}}')
+    assert m.load_caps(path)[14] == {"pwm_limit": 300, "current_limit": 250, "p_gain": 800, "i_gain": 200}
+    assert "i_gain" in m.SESSION_ONLY  # put back to the value found, like the P gain
+    path.write_text(path.read_text().replace('"i": 200', '"i": 5000'))
+    with pytest.raises(SystemExit, match="i 0..1600"):
+        m.load_caps(path)

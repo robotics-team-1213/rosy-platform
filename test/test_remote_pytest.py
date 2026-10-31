@@ -347,6 +347,12 @@ def test_matching_venv_does_not_wait_for_active_pytest(tmp_path):
         holder.wait(timeout=2)
 
 
+def test_the_venv_build_keeps_pips_cache_and_logs_its_wall_time():
+    """2026-10-31: ~13-14 rebuilds a host a day re-downloaded every wheel under --no-cache-dir."""
+    assert "--no-cache-dir" not in rp.VENV and "--require-hashes" in rp.VENV
+    assert '[remote-pytest] venv built $DEPS in $((SECONDS - B))s' in rp.VENV
+
+
 def test_pytest_uses_the_same_dependency_environment_as_setup():
     assert 'V=$R/venvs/$DEPS' in rp.VENV
     assert 'V=$R/venvs/$DEPS' in rj.START and 'V=$R/venvs/$2' in rj.JOB
@@ -557,8 +563,9 @@ def test_full_lab_hosts_get_browser_lanes_and_light_site_or_sim_holding_hosts_do
     assert rp.workers(["a"], [["t"], b], headroom) == [("a", "any")]
 
 
-def test_host_alone_suites_go_to_the_first_configured_host_and_fall_back_without_it():
-    """Gazebo/Isaac drain the host they run on: only the model PC (first configured) takes them (2026-10-30)."""
+def test_host_alone_suites_go_to_the_first_configured_host_and_fall_back_without_it(monkeypatch):
+    """A host-alone suite drains the host it runs on: only the model PC (first configured) takes it (2026-10-30)."""
+    monkeypatch.setattr(wq, "HOST_ALONE", ("integrations/simulation/gazebo/test",))  # none is listed since 10-31
     gz, order = ["integrations/simulation/gazebo/test"], ["model", "ai", "site"]
     assert rp.workers(["ai", "model"], [gz], {}, order) == [("model", "any")]
     plan = rp.workers(["ai", "model"], [["t"], gz], {}, order)

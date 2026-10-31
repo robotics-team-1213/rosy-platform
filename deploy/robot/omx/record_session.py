@@ -58,7 +58,7 @@ SERVICES = ("rosy-omx-camera@top.service", "rosy-omx-camera@front.service",
 LEADER_GRIPPER = 6
 LEADER = range(1, 7)
 TORQUE_OFF_DEADLINE_S = 30.0
-SESSION_ONLY = ("p_gain", "profile_acc", "profile_vel")  # not commissioning caps: restored to the value found
+SESSION_ONLY = ("p_gain", "i_gain", "profile_acc", "profile_vel")  # not commissioning caps: restored to the value found
 
 
 def interrupt_on_parent_death() -> None:

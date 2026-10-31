@@ -24,7 +24,7 @@ def base_url():
     import dev_server
 
     listener = safe_listener()
-    server = uvicorn.Server(uvicorn.Config(dev_server.app, log_level="warning"))
+    server = uvicorn.Server(uvicorn.Config(dev_server.app, log_level="warning", log_config=None))
     thread = threading.Thread(target=server.run, kwargs={"sockets": [listener]}, daemon=True)
     thread.start()
     while not server.started:

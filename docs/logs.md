@@ -13163,13 +13163,6 @@ osy-d395-s1d\`.
 - 결정: D-935 Accepted(사용자 결정)
 - 교훈: 없음
 
-## 2026-10-30 · uncommitted · feat(fleet): 확인된 ARM 시도의 재관측 계약(D-930, API v1.334)
-
-- 변경: `POST/GET /api/fleet/arm-transfers/jobs/{id}/rechecks`를 추가했다. 기다리는 재관측은 기존 observation context에 `phase=RECHECK`로 나오고 같은 observations 경로로 받는다. 검사는 POST_ACTION과 같고 요청 뒤 시각·측정 관절을 요구한다. Action·claim·작업 상태·영수증·v1.330 근거는 바뀌지 않는다(`work/physical_transfer_rechecks.py`, `fleet_physical_transfer_rechecks` 테이블).
-- 증거: 원격 `test_physical_transfer_recheck.py`와 관측자·v1.330·관측 계약·holder import 시험 58 passed. Harbor 전체 흐름 회귀(D-927)의 ⑤가 이 계약을 쓴다.
-- Gate: 없음. simulation 계약 구현이며 실물 관측자·현장 수용은 별도다. 공개 push 없음.
-- CE: 해당 없음 — 설계 결정과 계약 추가이며 해결한 장애가 아니다.
-
 ## 2026-10-30 · uncommitted · fleet/omx: per-arm marker id blocks for up to four arms (D-933 보충)
 - 변경: `cell_print_sheets`를 `DICT_4X4_100`으로 넓히고 팔 번호별 15개 묶음(`arm_ids`, `arm-markers` 시트)을 더함, Cell 화면 「보정 인쇄물」에 팔 번호 선택, `cell_marks` 사전·기본 ID, D-933 8항(번호 표)
 - 증거: 원격 `test_cell_print_sheets.py`·`test_omx_cell_marks.py`(팔 1·4 시트를 OpenCV로 되읽음), 브라우저 Cell 화면
@@ -13199,3 +13192,66 @@ osy-d395-s1d\`.
 - 결정: D-938 Accepted(사용자 결정)
 - 교훈: D-865 `valid_until` 미적용을 함께 고침
 
+## 2026-10-31 · uncommitted · docs(solutions): version pins grew, use api_reserve bump
+- 변경: `solutions/workflow-issues/a-contract-version-bump-is-three-pins-not-one.md`에 2026-10-31 갱신 절. 버전 고정값이 Fleet 계약 시험 4개 파일까지 늘었고, 손으로 고치지 말고 `api_reserve.py bump`를 쓴다
+- 증거: D-938 착지 때 Fleet 시험 5개가 `v1.331` 고정값으로 실패했다(착지 기록). `git grep '"\*\*Version:\*\* v1\.'`로 고정값 목록을 확인했다
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 기존 교훈 갱신
+
+## 2026-10-31 · uncommitted · fix(land): 자동 묶음 착지를 끈다
+- 변경: `tools/land_batch.py`(`AUTO` 기본 거짓, `ROSY_LAND_BATCH=1`로 다시 켬), `test/test_land_batch.py`(묶음 시험은 `AUTO`를 켜고 돎, 꺼짐 시험 추가), D-889 추가 9
+- 근거: 48시간 자동 묶음 97번 중 착지 28·멈춤 43, 착지 87건 중 묶음 4건, 10-31 대기열 정지가 모두 묶음에서 나옴(사용자 결정)
+- 증거: 원격 `test/test_land_batch.py`·`test/test_land.py`·`test/test_land_queue.py`·`test/test_land_prepare.py`·`test/test_harness_contracts.py`
+- gate 변화: 없음
+- 결정: D-889 추가 9(사용자 결정 2026-10-31)
+- 교훈: 없음
+
+## 2026-10-31 · uncommitted · omx: 재배선 뒤 장치 식별 교훈
+- 변경: `docs/solutions/runtime-errors/omx-cell-device-identity-after-rewiring-2026-10-31.md` (동일 시리얼 Innomaker는 by-path, RealSense 노드는 USB 인터페이스 udev 이름, 팔 좌우는 LED 차분, 확인은 `omx_devices.py scan`)
+- 증거: 현장 PC 실측(PING·LED·udev 링크·영상). depth(USB 2.0)는 미해결로 남김
+- gate 변화: 없음
+
+## 2026-10-31 · uncommitted · sim/omx: D-927 C2~C4 시뮬 ARM_TRANSFER를 실제 셀 소유자로 끝까지 돌림
+- 변경: `tools/sim/transfer_state_writer.py`(C2), `deploy/robot/omx/sim/transfer_installation.yaml`·`tools/sim/transfer_installation.py`(C3: catalog·binding → Fleet policy·digest → bases, 홈 관절), `tools/sim/run_arm_transfer_sim.sh`·`without_devices.sh`(C4: MuJoCo+설치된 소유자+기록기, 장치 없는 namespace), `omx_topic_backend.py`·`omx_mujoco_backend.py` `--initial` 시작 조건, `run_cell_owner.py`가 `ROSY_ARM_TRANSFER_INSTALLATION`을 설치하고 fence 거절 이유(상태·숫자만)를 남김. 소유자 고침: receipt `observed_at`이 보고하는 모든 phase 시각을 덮음(`policy_parent.projection`), phase 시작·dispatch 실패 예외를 로그로 남김
+- 증거: 원격 설치·기록기·셀 소유자·receipt 시험 통과(102 등). AI PC에서 Harbor `real_fleet_http --arm-only --sim-arm`(Harbor `feat/sim-arm-harness`)이 approach·grasp·transfer·release를 MuJoCo로 진행하고 독립 관찰자가 PRE_DISPATCH·POST_ACTION을 증명, 연속 4회 OK(각 약 52 s). 그 전 1회는 grasp가 `cancel_during_action_unknown`으로 실패(원인 미확인)
+- 미해결: ① Fleet ARM grant TTL 15 s(D-778)인데 소유자가 phase마다 grant를 다시 확인하고 한 이송이 약 30 s라 기본값으로는 끝까지 못 감. 하네스만 허용 최대 60 s로 돌림, 플랫폼 결정 필요 ② Fleet→소유자 UDS 응답 창 250 ms가 SubmitAction 안에서 계획하는 실제 소유자에 짧음(바쁜 PC에서 결과 불명 HOLD). 하네스는 G2처럼 2 s, 운영 기본값 결정 필요 ③ 위 grasp 1회 실패
+- gate 변화: 없음. 시뮬 계약 검증이며 실물·현장 수용 아님
+- 결정: 없음(①② 결정 요청)
+- 교훈: `docs/solutions/logic-errors/owner-receipt-time-must-cover-its-phases-2026-10-31.md`, `docs/solutions/deployment/sim-cell-owner-on-a-lab-pc-needs-a-device-free-namespace-2026-10-31.md`, 홈 교훈 갱신
+
+## 2026-11-01 · uncommitted · docs: D-940 중복 정의 게이트와 등록부
+- 변경: `docs/adr/D-940`, ADR Log 행, `test/architecture/test_duplicate_definitions.py`와 `known_duplicates.txt`(초기 47 그룹), `test/architecture/AGENTS.md` 행 2건, `platform-folder-responsibilities.md` 3건(D-940 갈래 안내, Situation 섀도 모듈 목록 5개로 정정, 보정 저장 계층 병립 명시)
+- 증거: 로컬 `--scan` 재생성이 등록부와 집합 일치(2026-11-01). 원격 시험·mutation 증명은 착지 기록에 남긴다
+- gate 변화: 없음
+- 결정: D-940 Accepted(사용자 "바로 처리" 지시, 워크트리 슬롯 1회 force-over-cap 승인 기록 포함)
+- 교훈: 없음(신규 게이트 제도화)
+
+## 2026-11-01 · uncommitted · docs(adr): 착지 처리량은 시험 PC 용량이 정한다
+- 변경: D-889 추가 10(통째 점유 제거·변화분 겹침 판정·입력 해시 결과 재사용·문서 전용 빠른 길 보류·사후 검증 채택 안 함, 성공 기준과 측정)
+- 근거: 사전 시험 슬롯 대기 p50 66분, 시험 실행 p50 1분, 배치 시도 73% 자리 없음, 착지당 사전 시험 p50 2·p90 5회, 문서 전용 착지 7%; 사례 조사(Chromium CQ, Bazel 캐시, Uber SubmitQueue, bors·Zuul·Tide, Google TAP)
+- 증거: `Rosy/docs/research/2026-11-01-merge-queue-bottleneck-cases.md`, `Rosy/docs/workspace-records/2026-10-31/landing-throughput-before-after.md`
+- gate 변화: 없음
+- 결정: D-889 추가 10(사용자 결정 2026-11-01)
+- 교훈: 없음
+
+## 2026-11-01 · uncommitted · feat(land): 한 표 묶음(rollup)
+- 변경: `tools/land_rollup.py`(plan·apply·split), `test/test_land_rollup.py`, `tools/AGENTS.md`, D-889 추가 11
+- 근거: 표 단위 자동 묶음은 교착으로 꺼졌다(추가 9). 같은 날 손으로 일곱 착지를 한 브랜치·한 표로 묶어 FULL 한 번으로 시험했다(사용자 지시)
+- 증거: 원격 `test/test_land_rollup.py`·`test/test_land_queue.py`·`test/test_harness_contracts.py`
+- gate 변화: 없음
+- 결정: D-889 추가 11(사용자 지시 2026-11-01)
+
+## 2026-11-01 · uncommitted · refactor: D-940 후속 1 — 정본 소비·REST 미러 핀·PR 템플릿
+- 변경: `learning/registry/perception/store.py`(content_sha에 manifest_bytes 이식), `learning/curation/perception/build.py`(로컬 stand-in 삭제·정본 import), `test/architecture/test_rest_model_mirror.py`(신규, Fleet⊆CORE 필드 핀, KNOWN_DRIFT 3건), `.github/pull_request_template.md`(재사용 경로 칸 한 줄), 두 모듈 `logs.md`
+- 증거: 로컬 py_compile·필드 집합 추출이 KNOWN_DRIFT와 일치(2026-11-01). 원격 시험 3359 passed/485 skipped(초록 `6aa4000879`)·mutation 빨강 `78e7a05dde`(probe_field 지목)·revert `cb59bedf6f`
+- gate 변화: 없음
+- 결정: D-940 갈래 ① 소비 1건, ③ 핀 1건
+- 교훈: 없음
+
+## 2026-10-30 · uncommitted · feat(fleet): 확인된 ARM 시도의 재관측 계약(D-930, API v1.334)
+
+- 변경: `POST/GET /api/fleet/arm-transfers/jobs/{id}/rechecks`를 추가했다. 기다리는 재관측은 기존 observation context에 `phase=RECHECK`로 나오고 같은 observations 경로로 받는다. 검사는 POST_ACTION과 같고 요청 뒤 시각·측정 관절을 요구한다. Action·claim·작업 상태·영수증·v1.330 근거는 바뀌지 않는다(`work/physical_transfer_rechecks.py`, `fleet_physical_transfer_rechecks` 테이블).
+- 증거: 원격 `test_physical_transfer_recheck.py`와 관측자·v1.330·관측 계약·holder import 시험 58 passed. Harbor 전체 흐름 회귀(D-927)의 ⑤가 이 계약을 쓴다.
+- Gate: 없음. simulation 계약 구현이며 실물 관측자·현장 수용은 별도다. 공개 push 없음.
+- CE: 해당 없음 — 설계 결정과 계약 추가이며 해결한 장애가 아니다.

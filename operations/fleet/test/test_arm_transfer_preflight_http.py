@@ -71,7 +71,7 @@ def _probe(root):
             listener.bind(("127.0.0.1", 0))
             listener.listen(8)
             url = f"http://127.0.0.1:{listener.getsockname()[1]}/api/fleet/arm-transfers/preflight"
-            server = uvicorn.Server(uvicorn.Config(app, log_level="critical", lifespan="on"))
+            server = uvicorn.Server(uvicorn.Config(app, log_level="critical", lifespan="on", log_config=None))
             http_thread = threading.Thread(target=lambda: server.run(sockets=[listener]), daemon=True)
             http_thread.start()
             deadline = time.monotonic() + 10
