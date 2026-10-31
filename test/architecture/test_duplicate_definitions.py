@@ -138,8 +138,10 @@ def _known_groups() -> dict[str, set[tuple[str, ...]]]:
         fields = head.strip().split("|")
         if len(fields) != 2:
             raise AssertionError(
-                f"known_duplicates.txt: expected 'path+path|name  reason': {line!r}")
-        group = tuple(sorted(p for p in fields[0].split("+") if p))
+                f"known_duplicates.txt: expected '<path> <path>|name  reason' "
+                f"(space-separated paths: a '+' joins them into one token the "
+                f"secret scan reports): {line!r}")
+        group = tuple(sorted(p for p in fields[0].split() if p))
         if len(group) < 2:
             raise AssertionError(f"known_duplicates.txt: group needs 2+ paths: {line!r}")
         result.setdefault(fields[1].strip(), set()).add(group)
@@ -160,7 +162,7 @@ def test_identical_definitions_are_registered():
             stale.append(f"{'+'.join(paths)}|{name}")
     assert not missing, (
         "identical definition in two parts without a known_duplicates.txt row "
-        "(add 'path+path|name  <갈래 ①-④>  <reason>' and, for an intentional "
+        "(add '<path> <path>|name  <갈래 ①-④>  <reason>' and, for an intentional "
         "duplicate, its guard test):\n" + "\n".join(sorted(missing))
     )
     assert not stale, (
@@ -173,5 +175,5 @@ def test_identical_definitions_are_registered():
 
 if __name__ == "__main__":
     for (name, _n), paths in sorted(scan().items()):
-        print(f"{'+'.join(paths)}|{name}  <갈래> <reason>")
+        print(f"{' '.join(paths)}|{name}  <갈래> <reason>")
     sys.exit(0)
