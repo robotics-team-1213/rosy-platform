@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-11-01 · uncommitted · docs(adr): 착지 처리량은 시험 PC 용량이 정한다
 - 2026-10-31 · uncommitted · fix(land): 자동 묶음 착지를 끈다
 - 2026-10-31 · uncommitted · docs(solutions): version pins grew, use api_reserve bump
 - 2026-10-31 · uncommitted · fleet: D-938 팔 이송 정책 승인
 - 2026-10-31 · uncommitted · fix(land): main 변화분의 safety 경로는 FULL 재실행을 부르지 않는다
-- 2026-10-31 · uncommitted · omx: D-933 camera model from printed markers (cell_frame)
