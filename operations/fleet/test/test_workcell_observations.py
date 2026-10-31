@@ -232,3 +232,17 @@ def test_ingest_and_snapshot_own_their_data(setup):
     state["workcells"][0]["cameras"][0]["label"] = "changed"
     assert arms(service)["feedback_a"]["positions"]["joint0"] == 0.25
     assert service.snapshot()["workcells"][0]["cameras"][0]["label"] == "Top"
+
+
+def test_a_side_camera_is_a_shared_view_with_no_arm_of_its_own(setup):
+    """2026-10-31: a side camera across the cell joined the overhead and the two wrists."""
+    _, _, manifest, _ = setup
+    document = manifest.model_dump(by_alias=True)
+    side = {"source_id": "side", "label": "Side", "role": "side", "arm_id": None, "image_topic": "/side_camera/image_raw",
+            "device_path": "/dev/v4l/by-id/example-side", "token_env": "EXAMPLE_SIDE",
+            "credential_sha256": sha256(b"side-secret").hexdigest()}
+    document["workcells"][0]["cameras"].append(side)
+    assert WorkcellObservationManifest.model_validate(document).workcells[0].cameras[-1].role == "side"
+    document["workcells"][0]["cameras"][-1] = dict(side, arm_id="arm_a")
+    with pytest.raises(ValueError, match="matching local arm binding"):
+        WorkcellObservationManifest.model_validate(document)
