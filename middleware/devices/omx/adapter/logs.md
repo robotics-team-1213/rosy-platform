@@ -841,3 +841,9 @@
 - 증거: tests-only RED 11 failed/19 passed, focused GREEN 139 passed/skip0. 실제 native ROS RED 1 failed/1 passed에서 GREEN 2 passed/skip0. 수동 Gazebo에서 원본 metadata와 증가하는 state 시각을 관측했다. 공식 행렬의 실행 범위·실패·skip과 측정 누락은 [검증 정본](../../../../docs/validation/joint-source-provenance-2026-10-29/result.md)에 구분한다. 독립 contract/Safety 및 최종 소스 리뷰에서 추가 P1/P2 없음.
 - Gate: 변화 없음. 전체 source-clock/물리 producer·장치·현장 수용은 열려 있다.
 - CE: 새 교훈 기록 — FULL 판정과 실제 실행 행렬을 혼동한 원인·정정·배열 대조 기준을 소유 저장소 solutions에 기록했다.
+
+## 2026-11-01 · d16cecb42b · 직선 IK 경로 하나로, 링크 캡슐 금지선, 안쪽 transit 후보
+
+- 변경: 실제 팔 청크 계획기(`deploy/robot/omx/grasp_planner.py`)와 SIM 이송 계획기(`transfer_planner.py`)가 각자 갖던 Cartesian 직선 IK를 `OmxKinematics.solve_line` 하나로 합쳤다. 표본마다 FK 확인, yaw 쌍둥이 뒤집힘(관절 튐) 거절은 이제 실제 팔 경로에도 적용된다. 캡슐 모델을 `test/g1_layout.py`에서 `omx_adapter/swept_volume.py`로 옮겨 `keep_out`이 TCP·손목 점 대신 어깨~그리퍼 링크 캡슐 전체를 본다. 가르친 transit의 이동이 금지선을 넘으면 같은 높이 이상에서 기저 쪽으로 당긴 tool-down transit 후보를 차례로 보고 처음 통과한 것을 쓴다. 모두 넘으면 예전처럼 거절한다.
+- 증거: 예시 plan의 청크가 변경 전후 바이트 단위로 같다(노트북에서 계획기 CLI 비교, pytest 아님). 원격 pytest 결과는 착지 기록에 남긴다.
+- gate 변화: 없음. 실물 셀의 `BODY_MARGIN_M`·금지선 값 측정과 실제 팔 수용은 별도다.
