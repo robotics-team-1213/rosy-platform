@@ -367,8 +367,15 @@ def test_fleet_checks_usage_binding_and_logs_no_original_text_or_identity(monkey
         with pytest.raises(ValueError, match='PREPARATION_CHANGED'):
             asyncio.run(adapter(*args))
     else:
-        with caplog.at_level(logging.INFO, logger='uvicorn.error'):
-            result = asyncio.run(adapter(*args))
+        # An in-process uvicorn.Config in an earlier test applies uvicorn's logging config
+        # ('uvicorn' propagate=False), so listen on the logger itself, not through root.
+        target = logging.getLogger('uvicorn.error')
+        target.addHandler(caplog.handler)
+        try:
+            with caplog.at_level(logging.INFO, logger='uvicorn.error'):
+                result = asyncio.run(adapter(*args))
+        finally:
+            target.removeHandler(caplog.handler)
         assert result['kind'] == 'CHAT' and 'usage' not in result
         assert '"input_tokens": 100' in caplog.text
         assert 'private utterance sentinel' not in caplog.text and 'alice' not in caplog.text
