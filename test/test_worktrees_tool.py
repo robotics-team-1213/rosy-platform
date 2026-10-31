@@ -356,6 +356,15 @@ def test_the_worktree_the_tool_runs_in_is_never_removed(main, monkeypatch):
     assert refs(main, "refs/heads/feat") == ["refs/heads/feat/mine"]
 
 
+def test_status_prints_a_korean_owner_note_on_a_cp1252_console(main):
+    """2026-10-31: status raised UnicodeEncodeError on a Windows console for a Korean owner note."""
+    add(main, "note", owner="세션 메모")
+    run = subprocess.run([sys.executable, worktrees.__file__, "status"], cwd=main, capture_output=True,
+                         env={**os.environ, "PYTHONIOENCODING": "cp1252"})
+    assert run.returncode == 0, run.stderr.decode(errors="replace")
+    assert "세션 메모" in run.stdout.decode("utf-8")
+
+
 def test_status_names_a_verdict_per_worktree(main, capsys):
     add(main, "done", commit=True, merge=True, owner=PEER)
     add(main, "open", commit=True)
