@@ -1,0 +1,13 @@
+# D-936: imported inside the site route before the Fleet catch-all. Reader keys stay
+# in the Authorization header; this proxy adds no credential and Monitoring stays unpublished.
+redir /monitoring /monitoring/ 308
+handle_path /monitoring/* {
+	reverse_proxy monitoring:8786
+}
+handle /api/monitoring/* {
+	reverse_proxy monitoring:8786
+}
+handle /monitoring-health {
+	rewrite * /health
+	reverse_proxy monitoring:8786
+}

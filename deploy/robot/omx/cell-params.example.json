@@ -175,7 +175,13 @@
    "source": "measured",
    "evidence": "2026-10-28 facts 5: park then stop on real arm S"
   },
-  "runner.idle_stop_s": {
+  "safety.bus_watchdog_ms": {
+  "value": 0.0,
+  "unit": "ms",
+  "source": "default",
+  "evidence": "2026-10-31: the site PC dropped off mid-carry; the motors' own link check (Dynamixel Bus Watchdog) stops a motor with no packet for this long. 0 = off until its trip in position mode is observed on arm S (supervised, arm folded)"
+ },
+ "runner.idle_stop_s": {
    "value": 180.0,
    "unit": "s",
    "source": "measured",
@@ -805,6 +811,12 @@
   "unit": "ratio",
   "source": "measured",
   "evidence": "2026-10-29: top faces V 186 against side faces 137 by day; at night (exposure at its 80 ms cap) a 2-cell read 58 x 51 mm with its side; 0 = off"
+ },
+ "objects.side_retry_v_frac": {
+  "value": 0.75,
+  "unit": "ratio",
+  "source": "measured",
+  "evidence": "2026-10-30 22:03: top_v_frac 0 on the site; a 2-cell lying across the Pinky tray read 56 x 41.5 mm with its side face (top V 205, side 107); only an unmatched blob is retried on its top face; 0 = off"
  },
  "grasp.end_frac": {
   "value": 0.7,

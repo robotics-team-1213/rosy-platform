@@ -1,6 +1,7 @@
-"""Run one unprivileged, loopback-only Monitoring process."""
+"""Run one unprivileged Monitoring process, loopback-only unless a container network is named."""
 
 import argparse
+from ipaddress import ip_address
 import os
 from pathlib import Path
 import sys
@@ -17,6 +18,8 @@ def main(argv=None):
     parser.add_argument('--config', type=Path, required=True)
     parser.add_argument('--state-dir', type=Path, required=True)
     parser.add_argument('--port', type=int, default=8786)
+    # D-936: the site container listens on its unpublished internal Compose network only.
+    parser.add_argument('--host', type=ip_address, default=ip_address('127.0.0.1'))
     parser.add_argument('--web-root', type=Path)
     options = parser.parse_args(argv)
     if not 1 <= options.port <= 65535:
@@ -42,7 +45,7 @@ def main(argv=None):
         print('MONITORING_STARTUP_FAILED', file=sys.stderr)
         return 1
     try:
-        uvicorn.run(app, host='127.0.0.1', port=options.port, workers=1, access_log=False,
+        uvicorn.run(app, host=str(options.host), port=options.port, workers=1, access_log=False,
                     limit_concurrency=32, timeout_graceful_shutdown=5)
     finally:
         store.close()

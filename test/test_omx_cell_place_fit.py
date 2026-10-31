@@ -35,6 +35,19 @@ def test_a_box_longer_than_the_tray_is_refused_and_a_turned_one_is_tried():
     assert why is None and fits[0][1] in (90.0, -90.0)
 
 
+def test_a_box_lies_along_a_long_belt_even_where_a_diagonal_would_fit():
+    # 2026-10-30 dry run: site yaw -14.4 with the jaws across the box put a 2-cell diagonally on the belt
+    belt = [[-50, 35], [250, 35], [250, 165], [-50, 165]]  # 300 x 130 mm along x: the diagonal fits too
+    fits, why = pf.options(config(belt, yaw=-14.4), "dest", (0.0, 0.0), 90.0, {"length_mm": 60, "width_mm": 30}, PX)
+    assert why is None
+    assert abs((fits[0][1] + 90.0 + 90) % 180 - 90) <= 2.5  # the box's long axis along x
+    assert -92.5 <= fits[0][1] <= -87.5 and fits[0][0] == (0.0, 0.0)  # nearest the site's yaw, not +90
+
+
+def test_a_tray_is_not_a_long_surface():
+    assert pf.along_yaw([[70, 70], [130, 70], [130, 130], [70, 130]], (0.0, 0.0), 0.0, 0.0, PX) is None
+
+
 def test_an_occupied_tray_is_refused():
     tray = [[60, 60], [140, 60], [140, 140], [60, 140]]
     occupied = np.zeros((100, 100), np.uint8)
