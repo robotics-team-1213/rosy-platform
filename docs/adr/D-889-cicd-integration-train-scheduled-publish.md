@@ -331,3 +331,27 @@
 4. safety 경로를 건드린 브랜치와 `--tests`를 직접 준 착지는 지금처럼 혼자 간다(이 ADR 3). `affected` 묶음이 main과 합친 뒤 FULL을 고르면 지금처럼 멈추고 무리별로 다시 묶인다.
 
 **구현.** `tools/land_batch.py`(`group_of`, `batchable`이 무리를 돌려줌, `eligible`·`former`·`lead`의 `kind`, `KFULL`), `test/test_land_batch.py`.
+
+### 추가 7 (2026-10-31): 지금 main에서 시험한 표가 먼저 (사용자 결정 2026-10-31)
+
+**왜.** 10-30~31 24시간 동안 착지 53건 중 24건이 차례 전 시험을 두 번 이상 돌렸다. 다시 돈 35번 중 30번은 기다리는 동안 main이 움직인 경우였다(`land_prepare.again`). 약 984분이 그렇게 사라졌다. 앞 표가 오래된 main에서 시험한 채로 먼저 차례를 받으면, 그 표는 어차피 main의 변경분을 다시 시험해야 하고, 뒤에서 지금 main으로 이미 시험을 마친 표도 main이 움직이니 다시 시험해야 했다. safety 경로가 끼면 이 ADR 6에 따라 매번 FULL이다.
+
+**결정.**
+1. `waiting` 표가 시험한 main(`land_full.restore`, 표의 `tested`)이 지금 main과 같으면, 그보다 앞서 `waiting`이면서 오래된 main에서 시험한 표를 기다리지 않는다(`land_queue.blockers`).
+2. 시험 범위는 바뀌지 않는다. 차례 순서만 바뀐다. 차례를 쥔 표와 급한 표(추가 5)는 지금처럼 늘 막는다.
+3. 공정성: 앞지를 수 있는 것은 그 표가 `waiting`이 된 지 `PASS_CAP_S`(1시간)가 안 됐을 때뿐이다. 그 뒤로는 순서대로 간다. 이 규칙 전의 land.py가 만든 표(`waiting_since` 없음)는 앞지르지 않는다.
+
+**구현.** `tools/land_queue.py`(`blockers`, `current_main`, `PASS_CAP_S`, `wait(tested=)`), `tools/land_prepare.py`·`tools/land_batch.py`(대기 때 `tested` 전달), `test/test_land_queue.py`. 착지 코드는 main의 것으로 돌므로(`land_checks.landed_copy`) 이 규칙은 main에 들어간 뒤 시작한 착지부터 적용된다.
+
+### 추가 8 (2026-10-31): main 변화분의 안전 경로는 FULL 재실행을 부르지 않는다 (사용자 승인 2026-10-31)
+
+**왜.** 10-30~31 24시간 동안 착지 53건 중 24건이 사전 시험을 두 번 넘게 돌렸고(최대 4번), 재실행 35번이 약 984분을 썼다. 30번은 차례 전에 main이 움직여 다시 준비한 경우이고, 이때 FULL로 간 이유에 "main 변화분에 다른 착지의 safety 경로"가 38번 나왔다(FULL 재실행 약 745분). 6항 "안전 경로는 양쪽 어디에 있어도 FULL"이 추가 3의 "합친 affected"를 막아, safety 경로를 건드린 착지 하나가 들어갈 때마다 뒤의 모든 착지가 FULL을 다시 돌렸다. 사용자가 "A+B 둘 다"(이 추가는 A)로 승인했다.
+
+**결정.**
+1. 차례 전 main 변화분(`land_selection.select(landed=True)`)에 safety 경로가 있어도, **이 브랜치 자신**의 선택에 safety 경로가 없으면 FULL을 다시 돌리지 않는다. 대신 변화분의 선택(그 safety 경로에 매핑된 모듈 시험·참조 시험·역의존 시험과 guard 묶음)과 이 브랜치의 선택, 양쪽 브라우저 묶음을 합친 트리에서 돌린다(추가 3과 같은 모양).
+2. 근거: safety 경로를 건드린 브랜치는 자기 선택이 FULL이고 6항 그대로 FULL을 통과해야만 착지한다(묶음이면 병합한 트리에서 FULL 한 번, 추가 6). 그래서 main 변화분 속 safety 변경은 모두 자기 FULL을 이미 통과했다.
+3. 그대로 FULL인 경우: 이 브랜치가 safety 경로를 건드릴 때, `landed`가 아닌 선택(시험한 main 기록이 없는 첫 준비 등), 명시 `--tests full`. 그 밖의 FULL 트리거(하네스·선택기, CI workflow, core_common, 패키징)는 이 추가 전과 같다.
+
+**위험과 보완.** 두 착지의 조합이 safety 경로에 매핑되지 않은 시험에서만 드러나는 결함은 이제 차례 전에 잡히지 않을 수 있다. 보완: 변화분의 safety 경로에 매핑된 시험과 guard 묶음(`test/architecture` 포함)은 항상 돌고, 게시 PR의 CI 전체 행렬과 이 브랜치 자신의 safety 변경 FULL은 그대로다. 이 완화 뒤 MAIN-RED가 늘면 되돌린다.
+
+**구현.** `tools/land_selection.py`(`select`: 이 브랜치 쪽 safety 트리거만 FULL을 지킨다), `test/test_land_selection.py::test_a_safety_path_in_mains_landed_delta_keeps_only_its_mapped_suites`.
