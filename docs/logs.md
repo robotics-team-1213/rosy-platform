@@ -13218,3 +13218,11 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: D-889 추가 10(사용자 결정 2026-11-01)
 - 교훈: 없음
+
+## 2026-11-01 · uncommitted · feat(land): 한 표 묶음(rollup)
+- 변경: `tools/land_rollup.py`(plan·apply·split), `test/test_land_rollup.py`, `tools/AGENTS.md`, D-889 추가 11
+- 근거: 표 단위 자동 묶음은 교착으로 꺼졌다(추가 9). 같은 날 손으로 일곱 착지를 한 브랜치·한 표로 묶어 FULL 한 번으로 시험했다(사용자 지시)
+- 증거: 원격 `test/test_land_rollup.py`·`test/test_land_queue.py`·`test/test_harness_contracts.py`
+- gate 변화: 없음
+- 결정: D-889 추가 11(사용자 지시 2026-11-01)
+- 교훈: 없음
