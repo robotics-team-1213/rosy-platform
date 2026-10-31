@@ -32,8 +32,8 @@
 
 ## 최근 기록
 
+- 2026-10-31 · 2d63c2518a · rl3 places all nine containers under the 2-5 mm estimate
+- 2026-10-31 · e72e07e856 · rl3 vs rl0 over four seeds
+- 2026-10-31 · ade501751f · rl3 on seed 45
+- 2026-10-31 · 11e0eaafc9 · rl3 on seed 42: no clear gain over rl0
 - 2026-10-31 · d2465280d7 · rl3 from four rl0 runs settles 19/22 on seed 44
-- 2026-10-31 · ce819f6f55 · rl0 data collection, seed 44
-- 2026-10-31 · a081e4067f · rl2 is not better than rl0
-- 2026-10-31 · f157285389 · rl1 blocked every release; REINFORCE step bounded to 0.2 mm
-- 2026-10-31 · 259df0b57b · release episodes settle 16/20; first RL residual pinned
