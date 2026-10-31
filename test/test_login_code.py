@@ -461,5 +461,7 @@ def test_no_new_release_code_from_the_latch_reading_before_the_release(issuer_mo
     _signal(root, issuer.current()["code_id"], "used")
     assert issuer.poll() == "used"
     assert issuer_module.release_step(issuer) is None  # CORE has not rewritten the hand-over yet
-    _latch(root)  # a fresh reading that still says latched: the release was refused
-    assert issuer_module.release_step(issuer) == "release-issued"
+    # A reading CORE wrote after the use still says latched (the release was refused): a new code.
+    later = issuer.used_wall + 1.0
+    os.utime(root / "run/rosy/face-inputs.json", (later, later))
+    assert issuer_module.release_step(issuer, now=lambda: later + 0.5) == "release-issued"

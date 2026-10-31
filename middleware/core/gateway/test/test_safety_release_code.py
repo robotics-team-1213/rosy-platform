@@ -67,9 +67,8 @@ def test_five_wrong_codes_burn_the_release_code(robot):
 
 
 def test_release_codes_are_refused_outside_the_robot_lan(robot):
-    tc, svc, _ = robot(client=("8.8.8.8", 50000))
+    tc, svc, *_ = robot(client=("8.8.8.8", 50000))
     write_code(robot.boot, role="estop_release")
     tc.post("/api/v1/safety/stop", headers=DEV_VIEWER)
     assert tc.post(RELEASE, json={"code": CODE}, headers=DEV_OPERATOR).status_code == 403
-    assert svc.safety.estop is True
     assert svc.safety.estop is True
