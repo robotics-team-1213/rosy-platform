@@ -291,6 +291,17 @@ def test_journald_keeps_a_bounded_persistent_ledger():
     assert 'journald-60-rosy.conf" "$OVERLAY/etc/systemd/journald.conf.d/60-rosy.conf"' in payload
 
 
+def test_wifi_power_save_is_off_for_teleop_latency():
+    # Teleop watchdog is 500 ms; brcmfmac power save alone can spend most of it.
+    conf = (ROOT / "deploy/robot/pinky_pro/native/networkmanager-60-rosy-wifi.conf").read_text(encoding="utf-8")
+    payload = (ROOT / "deploy/robot/pinky_pro/image/build-native-payload.sh").read_text(encoding="utf-8")
+    first_boot = (ROOT / "deploy/robot/pinky_pro/image/first-boot/rosy-first-boot.py").read_text(encoding="utf-8")
+
+    assert "[connection]" in conf and "wifi.powersave = 2" in conf
+    assert 'networkmanager-60-rosy-wifi.conf" "$OVERLAY/etc/NetworkManager/conf.d/60-rosy-wifi.conf"' in payload
+    assert '"powersave=2"' in first_boot
+
+
 def test_ros_log_directories_are_aged_out():
     # Review M9: ROS writes new files on every start, outside journald's cap.
     rules = (ROOT / "deploy/robot/pinky_pro/native/tmpfiles-rosy-logs.conf").read_text(encoding="utf-8")

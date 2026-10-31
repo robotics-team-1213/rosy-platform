@@ -395,6 +395,7 @@ class FirstBootProvisioner:
             "",
             "[wifi]",
             "mode=infrastructure",
+            "powersave=2",  # power save adds 100-500 ms spikes; image NM conf.d says the same
             f"ssid={network['ssid']}",
             "",
             "[wifi-security]",
