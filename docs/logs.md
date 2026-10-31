@@ -13218,3 +13218,11 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: D-940 Accepted(사용자 "바로 처리" 지시, 워크트리 슬롯 1회 force-over-cap 승인 기록 포함)
 - 교훈: 없음(신규 게이트 제도화)
+
+## 2026-11-01 · uncommitted · learning/omx: D-943 GPU 학습·장치 초안·작업대 녹화·HF 업로드 버튼
+- 변경: OMX 학습 센터가 CUDA를 보고하는 학습기에서 ACT에 `cuda`를 제공하고 작업자는 `~/.cache/rosy-learning/gpu.lock`을 학습 내내 잡는다(`experiment_center/jobs/train`, 학습 화면 장치 선택). HF 업로드 버튼(`experiment_hub.py`, `omx-hub.js`, 센터 `hub`·`hub-prepare`·`hub-upload`, `publish` 권한·`write-repos` 연결). 작업대 장치 목록(`deploy/robot/omx/device_inventory.py`, 뷰어 `/inventory.json`, 프로필 화면 불러오기). 작업대 녹화 화면(`deploy/robot/omx/bench_record.py`). D-943, ADR Log 행, `adr_gaps` D-941·D-942
+- 증거: 원격 pytest — `learning/training/omx/test` 전체 exit 0, HF·센터·Learning 웹·협업·구조 93건 exit 0, 장치 목록·작업대 녹화·뷰어 exit 0. 관제 PC에서 장치 목록을 읽기 전용으로 실행해 follower 2대(arm_a·arm_b)·미지정 보드 2개·카메라 4대 확인
+- gate 변화: 없음. 실물 녹화·GPU 실학습·HF 실계정 왕복은 미수용(작업대 인원·팀 HF 연결 필요)
+- 결정: D-943 Accepted(사용자 지시)
+- 교훈: `record_session.py`의 고정 서비스 목록(`camera@top/front`)은 10-31 카메라 역할 변경(`arm_a_wrist`·`arm_b_wrist`·`side`)과 토크 OFF observer를 놓쳐 녹화가 장치를 열지 못한다. 작업대 화면이 실행 중 유닛에서 인계 목록을 만든다
+

@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-11-01 · uncommitted · learning/omx: D-943 GPU 학습·장치 초안·작업대 녹화·HF 업로드 버튼
 - 2026-11-01 · uncommitted · docs: D-940 중복 정의 게이트와 등록부
 - 2026-10-31 · uncommitted · omx: 재배선 뒤 장치 식별 교훈
 - 2026-10-31 · uncommitted · fix(land): 자동 묶음 착지를 끈다
 - 2026-10-31 · uncommitted · docs(solutions): version pins grew, use api_reserve bump
-- 2026-10-31 · uncommitted · fleet: D-938 팔 이송 정책 승인
