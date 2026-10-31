@@ -7,6 +7,8 @@ test("each print sheet asks the cell-app print route with its own parameters", (
   assert.deepEqual(PRINT_SHEETS.map(sheetPath), [
     "/api/fleet/cell-app/print-sheets/gripper-markers?ids=0,1&sizes_mm=20,25",
     "/api/fleet/cell-app/print-sheets/checkerboard?cols=8&rows=6&square_mm=15",
+    "/api/fleet/cell-app/print-sheets/charuco?",
+    "/api/fleet/cell-app/print-sheets/surface-markers?ids=35,36,37,38,39,40,41,42,43,44,45,46,47,48",
   ]);
 });
 

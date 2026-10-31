@@ -1,6 +1,7 @@
 ---
 title: 시뮬 결과는 두 시계로 읽는다 — WSL 벽시계 점프는 재실행 대상이고, CORE 선 추종 신선도는 sim 시계로 잰다
 date: 2026-09-24
+last_updated: 2026-10-30
 category: logic-errors
 module: sim/gz_sim harness + core bridge (차선 교차로 시나리오)
 problem_type: logic_error
@@ -98,6 +99,15 @@ tick, 트래픽 게이트 `now`에 쓴다. 선 추종 manager와 docking에도 `
 - 하네스 결과에는 판정만이 아니라 인프라 상태(`clock_step_s`, `real_time_factor`)와
   시스템 자신의 상태(`core_status.jsonl`)를 함께 남긴다. 정지를 CORE의 말로 설명할 수 있어야 한다.
 - WSL에서 Docker Desktop 같은 VM 사건이 시나리오와 겹치면 시계 점프를 의심한다.
+- **시험 fixture가 시계를 SIM으로 묶을 때는 모든 신선도 판정을 같이 묶는다(2026-10-30).**
+  `middleware/core/gateway/test/test_station_camera_pipeline.py` fixture는 상태·도킹 시계만 SIM으로
+  묶었다. CORE 위치 추정 보조(`LocalizationAssist`, `STATE_STALE_S = 3.0`)는 벽시계에 남았다.
+  운영 경로에서는 `ros_bridge.py`가 `bind_clock()`으로 이 시계를 line clock에 묶는다. 스케줄링 시험이
+  저널 쓰기를 벽시계로 3.2 s 멈추자 위치가 오래된 것으로 판정됐다. 그러자 콘솔이 복귀 목표를
+  `LOCALIZATION_UNTRUSTED`로 보류했고, 충전이 `CHARGE_RETURN_NOT_ARRIVED` HOLD가 됐다. 하루에 착지
+  14건이 멈췄다. 같은 fixture에 `svc.localization.bind_clock(lambda: now[0])`를 더하자, 5개 파일을
+  3번 동시에 돌리는 조건에서 실패가 3번 중 2번에서 0번이 됐다. SIM 시계를 쓰는 fixture를 새로 만들면
+  운영 경로의 `bind_clock` 호출을 grep해 fixture에도 같은 묶음이 있는지 확인한다.
 
 ## Related Issues
 

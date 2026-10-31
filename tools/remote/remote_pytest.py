@@ -392,7 +392,7 @@ def run(invocations: list[list[str]], logs: list[Path], sha: str = "HEAD", repo:
         print(f"[remote-pytest] no test host reachable; retrying in {poll:.0f} s (D-584)", file=sys.stderr, flush=True)
         sleep(poll)
         hosts = placed_hosts("pytest", cores=cores)
-    plan = workers(hosts[:len(invocations)], invocations, HEADROOM)  # (host, kind): browser lanes beside main
+    plan = workers(hosts, invocations, HEADROOM, os.environ.get("ROSY_TEST_HOSTS", DEFAULT_HOSTS).split())
     if len(plan) == 1:
         codes = run_on(plan[0][0], invocations, logs, sha, repo, label,
                        **({"test_tools": test_tools} if test_tools else {}), **({"on_done": on_done} if on_done else {}),
