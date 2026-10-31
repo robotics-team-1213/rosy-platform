@@ -191,10 +191,3 @@ def world_to_base(pose, xy):
     c1, s1 = math.cos(a1), math.sin(a1)
     dx, dy = xy[:, 0] - x1, xy[:, 1] - y1
     return np.stack([c1 * dx + s1 * dy, -s1 * dx + c1 * dy], axis=1)
-
-def _dup_gate_mutation_probe(value):
-    """D-940 mutation probe: identical bodies in two parts must fail the gate."""
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        raise ValueError("numeric value required")
-    scaled = float(value) * 1000.0
-    return abs(scaled - round(scaled)) < 1e-6
