@@ -44,6 +44,10 @@ REVALIDATE_S = 30.0
 #: Network load: /ws/state sockets one robot serves at once (config `state.max_clients`).
 #: One more is closed with 1013 and a reason; every open socket shares one serialized frame per tick.
 MAX_STATE_CLIENTS = 4
+#: /ws/events sockets one robot serves at once (config `events.max_clients`), and the
+#: undelivered events one socket may hold (`events.max_backlog`) before it is closed with 1013.
+MAX_EVENT_CLIENTS = 8
+EVENT_BACKLOG_MAX = 1000
 ACCOUNT_REVALIDATE_S = 5.0
 
 
@@ -146,27 +150,50 @@ async def ws_events(websocket: WebSocket):
     if svc is None:
         return
     patterns = [p.strip() for p in websocket.query_params.get("types", "").split(",") if p.strip()]
+    config = svc.config.get("events", {})
+    limit = int(config.get("max_clients", MAX_EVENT_CLIENTS))
+    app_state = websocket.app.state
+    open_now = getattr(app_state, "ws_event_clients", 0)
+    if open_now >= limit:
+        await websocket.close(code=1013, reason=f"event stream full: {limit} clients already connected")
+        return
+    app_state.ws_event_clients = open_now + 1
 
-    queue: asyncio.Queue = asyncio.Queue()
+    loop = asyncio.get_running_loop()
+    queue: asyncio.Queue = asyncio.Queue(maxsize=int(config.get("max_backlog", EVENT_BACKLOG_MAX)))
+    overflowed = asyncio.Event()
 
-    def _on_event(event) -> None:
+    def _enqueue(event) -> None:
         try:
             queue.put_nowait(event)
-        except Exception:
-            pass
+        except asyncio.QueueFull:
+            overflowed.set()
+
+    def _on_event(event) -> None:
+        # The bus publishes from ROS and worker threads; asyncio.Queue is loop-only.
+        if _match_type(event.type, patterns):
+            try:
+                loop.call_soon_threadsafe(_enqueue, event)
+            except RuntimeError:  # loop already closed
+                pass
 
     unsubscribe = svc.events.subscribe(_on_event)
     try:
         while True:
             event = await queue.get()
-            if _match_type(event.type, patterns):
-                await websocket.send_json(event.model_dump())
+            if overflowed.is_set():
+                # A slow reader would otherwise grow CORE memory without bound; it
+                # reconnects and fills the gap with since_seq (EVT-003).
+                await websocket.close(code=1013, reason="event backlog full: reconnect with since_seq")
+                return
+            await websocket.send_json(event.model_dump())
     except WebSocketDisconnect:
         pass
     except Exception:
         pass
     finally:
         unsubscribe()
+        app_state.ws_event_clients -= 1
 
 
 async def _first_message_token(websocket: WebSocket) -> str:

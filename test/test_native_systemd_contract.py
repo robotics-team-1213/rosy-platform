@@ -174,7 +174,7 @@ def test_runtime_environment_contains_no_secret_and_preserves_dds_isolation():
 
     for name in (
         "ROS_DOMAIN_ID=", "ROSY_NAMESPACE=", "RMW_IMPLEMENTATION=rmw_cyclonedds_cpp",
-        "CYCLONEDDS_URI=file:///etc/rosy/cyclonedds.xml",
+        "CYCLONEDDS_URI=file:///etc/rosy/cyclonedds.xml", "ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST",
         "ROSY_CMD_VEL_TIMEOUT_S=0.5", "ROSY_RUNTIME_MODE=core",
     ):
         assert name in env

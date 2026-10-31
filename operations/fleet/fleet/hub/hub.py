@@ -233,7 +233,8 @@ class SiteHub:
             if session is not None and session.robot_id is not None:
                 # A refused heartbeat ends the last good one's freshness: the gather reads REST (D-447).
                 self.registry.record(session.robot_id).last_heartbeat_monotonic = None
-            return _error("SESSION_NOT_PAIRED", "hello first")
+            # Not a pairing failure: a newer CORE's additive field must not end the session.
+            return _error("PAYLOAD_INVALID", "heartbeat payload failed validation")
         robot_id = payload.state_snapshot.robot_id
         if session is not None and session.robot_id is None:
             return _error("SESSION_NOT_PAIRED", "hello first")
@@ -264,7 +265,7 @@ class SiteHub:
         try:
             event = EventMessage.model_validate(envelope.payload)
         except Exception:
-            return _error("SESSION_NOT_PAIRED", "hello first")
+            return _error("PAYLOAD_INVALID", "event payload failed validation")
         if not self._paired or (session is not None and session.robot_id is None):
             return _error("SESSION_NOT_PAIRED", "hello first")
         if not self._bound(event.robot_id, session):

@@ -5,9 +5,17 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.335
+**Version:** v1.337
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.337 팀 tailnet LCD 코드 페어링 (D-944)
+
+`POST /api/v1/auth/pair`와 `GET /api/v1/auth/connection`의 출발지에 팀 tailnet(`100.64.0.0/10`, `fd7a:115c:a1e0::/48`)을 더한다. `POST /api/v1/auth/development-session`과 최초 peer 승인은 로봇 LAN 전용 그대로다.
+
+### v1.336 허브 본문 검증 실패 코드 `PAYLOAD_INVALID`
+
+Fleet 허브는 검증하지 못한 `heartbeat`·`event` 본문에 `SESSION_NOT_PAIRED` 대신 `PAYLOAD_INVALID` 로 답한다. 새 CORE 의 additive 필드나 enum 값이 먼저 배포돼도 로봇 Agent 가 세션을 영구히 끄지 않게 하기 위해서다. Agent 는 하트비트에 대한 이 답을 살아 있는 허브의 답으로 보고 링크를 유지하며, 이벤트에 대한 이 답은 재전송해도 같은 결과이므로 바로 버린다. envelope 1.0 은 그대로다.
 
 ### v1.335 팔 이송 정책 승인 범위 (D-938)
 
@@ -1737,7 +1745,7 @@ config `control.sensor_adapter.mode` 와 같은 문자열이다(D-400). 일반 �
 | POST | `/api/v1/system/tokens` | Admin | SEC-101 (payload: `{role, label?, token?}`) — `token` 을 비우면 서버가 생성해 응답에 **단 한 번** 싣는다. 직접 정하면 16자 이상. 응답은 `Cache-Control: no-store`. 만료가 있는 호출자(페어링 세션)는 403 — 만료 없는 토큰을 만들 수 없다(D-193 보안 리뷰) |
 | DELETE | `/api/v1/system/tokens/{id}` | Admin | SEC-101 — 호출자 자신의 토큰(400)과 만료 없는 마지막 administrator(409) 는 거부. 만료가 있는 administrator 는 세지 않는다(D-193). 만료가 있는 호출자가 만료 없는 administrator 를 지우려 하면 403 |
 | PATCH | `/api/v1/system/tokens/{id}` | Admin | SEC-101 (payload: `{label}`, 64자 이하) — 이름표만 바꾼다. 응답은 목록 항목 한 개. 없거나 만료된 id 는 404 (v1.19) |
-| POST | `/api/v1/auth/pair` | 없음 | D-193 (payload: `{code, label?}`, 본문 1 KiB 이하, 넘으면 413) — 로그인 코드 `ABCD-EFGH`(하이픈·대소문자 무시) → `201 {id, token, role, label, source, expires_at}`, `Cache-Control: no-store`. 원문 토큰은 이때 한 번만 싣는다. 출발지는 RFC 1918·루프백만(그 밖 403), IP 마다 60 s 5회·전체 60 s 30회(넘으면 429 + `Retry-After`). 형식이 아닌 코드는 400, 틀리거나 만료·사용된 코드와 발급된 코드가 없는 경우는 모두 같은 401 이다. 한 코드에 틀린 시도가 5회 쌓이면 코드를 폐기하고, 그 5번째 요청의 401 만 `error.detail = {"burned": true}` 를 싣는다(대시보드가 새 코드를 받으라고 안내한다) 토큰 수명은 `auth.pairing.token_lifetime_hours`(기본 operator·viewer 168 h, administrator 24 h, 설정해도 168 h 를 넘지 않는다) — 만료 없는 토큰은 나오지 않는다 |
+| POST | `/api/v1/auth/pair` | 없음 | D-193 (payload: `{code, label?}`, 본문 1 KiB 이하, 넘으면 413) — 로그인 코드 `ABCD-EFGH`(하이픈·대소문자 무시) → `201 {id, token, role, label, source, expires_at}`, `Cache-Control: no-store`. 원문 토큰은 이때 한 번만 싣는다. 출발지는 RFC 1918·루프백과 팀 tailnet(`100.64.0.0/10`, `fd7a:115c:a1e0::/48`, D-944)만(그 밖 403), IP 마다 60 s 5회·전체 60 s 30회(넘으면 429 + `Retry-After`). 형식이 아닌 코드는 400, 틀리거나 만료·사용된 코드와 발급된 코드가 없는 경우는 모두 같은 401 이다. 한 코드에 틀린 시도가 5회 쌓이면 코드를 폐기하고, 그 5번째 요청의 401 만 `error.detail = {"burned": true}` 를 싣는다(대시보드가 새 코드를 받으라고 안내한다) 토큰 수명은 `auth.pairing.token_lifetime_hours`(기본 operator·viewer 168 h, administrator 24 h, 설정해도 168 h 를 넘지 않는다) — 만료 없는 토큰은 나오지 않는다 |
 | GET | `/api/v1/auth/whoami` | Viewer | D-193 — `{id, role, label, source, created_at, expires_at}`. 대시보드가 역할을 추측하지 않고 묻는다 |
 | GET | `/api/v1/ui/surfaces/{surface}` | Viewer+ | D-263/D-265/D-283 — 역할별 화면 매니페스트. `console`/`setup`/`device`; 해당 화면 최소 역할보다 낮으면 403, 인증 실패 401, 미등록 화면 404. 응답은 현재 역할이 열 수 있는 기반 화면 목록과 현재 화면의 CAP-001·inventory 필터 패널, 구조 revision이다. console act 패널은 선택형 `action_group` (`drive`, `docking`, `line_follow`)을 담을 수 있으며, capability가 없거나 `not_provided` inventory인 panel과 그룹은 응답에서 생략한다. 메뉴는 패널 수와 독립이다. REST 응답 모델 `UiSurfaceManifest`; Fleet envelope `protocol_version`은 1.0 유지 |
 | POST | `/api/v1/auth/logout` | Viewer | D-193 — 호출자 자신의 `pair-*` 토큰을 지운다(204). 다른 출처의 토큰은 409 — 설정 화면에서 회수한다 |
@@ -2320,7 +2328,7 @@ WS Teleop에도 Watchdog·감사 로그가 동일 적용된다(SAF-002).
 
 구독 필터: `?types=nav.*,safety.estop` (콤마 구분, `*` 와일드카드).
 
-서버 메시지는 EVT-001 이벤트 모델 그대로 전송한다. 연결 끊김 후 재구독 시 `since_seq`로 갭을 보정한다(EVT-003).
+서버 메시지는 EVT-001 이벤트 모델 그대로 전송한다. 연결 끊김 후 재구독 시 `since_seq`로 갭을 보정한다(EVT-003). 한 로봇은 동시에 소켓 8개(`events.max_clients`)까지 받고, 더 오면 1013으로 닫는다. 소켓 하나가 보내지 못한 이벤트가 1000개(`events.max_backlog`)를 넘으면 메모리를 늘리지 않고 1013 `event backlog full`로 닫는다 — 클라이언트는 다시 붙어 `since_seq`로 갭을 채운다.
 
 ---
 
@@ -2426,7 +2434,7 @@ Fleet 추적 타임아웃(기본 10초) 내 ack 없으면 Fleet 기록에 `COMMA
 - Exponential backoff: 1s → 2s → 4s → ... 최대 30s
 - `fleet.discovery`를 설정한 로봇은 재접속마다 예상 `.local` 호스트의 `_rosy-fleet._tcp` 광고를 조회하고 별도 설치된 사이트 CA로 TLS health를 확인한다. mDNS 광고만으로 토큰을 발급하거나 연결 대상을 바꾸지 않는다. 승인된 `fleet.pairing_token`이 없으면 Agent를 시작하지 않는다.
 - 재접속 즉시 `hello` → 개별 정상 응답을 받지 못한 이벤트를 원본 ID·내용·seq로 재전송한다(D-869). 큰 seq가 더 작은 seq의 저장 성공을 증명하지 않으며, WELCOME scalar로 버퍼를 삭제하지 않는다.
-- 접속 단절 시 SAF-003 정책 적용 (D-419, v1.86): Agent 가 돌고 있고, 링크가 끊긴 순간 Fleet 주행 목표(`correlation_id` 가 있는 `POST /navigation/goal`)가 진행 중이었으며, 그 목표가 그대로인 채로 `safety.fleet_loss_timeout_s` 동안 계속 끊겨 있으면 한 번 적용한다. 로컬 목표·teleop·swarm follow(SWM-004 가 따로 지킴)·끊긴 뒤 들어온 목표는 대상이 아니다. `STOP` 은 그 목표 취소(e-stop 아님), `HOLD` 는 같은 정지에 재개용 목표 기록(자동 재개 없음), `RETURN_HOME` 은 취소 뒤 `__home__` 귀환(home 이 없거나 `LOCALIZED` 가 아니면 선 채로 `applied: STOP`), `CONTINUE` 는 이벤트만. 재접속은 아무것도 재개하지 않는다. 링크가 살아 있다는 것은 허브 `welcome` 을 받은 뒤이고 마지막 허브 수신이 링크 신선도(1 s 하트비트 주기 + `fleet.heartbeat_reply_timeout_s` + 0.5 s) 이내라는 뜻이다 — 판정 시간과 따로다(설정 여부는 기동 설정으로 정하고, 뒤에 Agent 가 hello 거부·중지로 꺼져도 끊긴 링크로 본다). 하트비트 답이 `fleet.heartbeat_reply_timeout_s`(기본 2 s) 안에 오지 않으면 로봇이 소켓을 끊는다(반쯤 열린 TCP). 하트비트에 대한 `error` 답(예: `TASK_PROJECTION_UNAVAILABLE`)도 답이라 링크를 유지하고, `PAIRING_INVALID`·`SESSION_NOT_PAIRED`·`DUPLICATE_IDENTITY`·`IDENTITY_DRIFT`·`PROTOCOL_UNSUPPORTED` 가 하트비트에 대한 답이면 세션을 즉시 끝낸다(`PAIRING_INVALID` 는 언제나). `event` 에 대한 `error` 는 이벤트 거부로 기록하고 세션을 유지한다. SAF-003 은 허브 건강이 아니라 링크 생존을 판정한다. hello 답 시한은 D-407 의 5 s(링크는 `welcome` 전까지 끊긴 것이라 SAF-003 판정에 영향 없음). `event` 에 대한 `error` 는 D-407 규칙대로 `EVENT_NOT_AUDITABLE` 이면 버리고, 다른 코드면 최대 3 번까지 다시 보낸다. 답을 기다리는 `event` 는 한 번에 8 개까지만 보낸다 — 재접속 뒤 밀린 이벤트가 하트비트 답을 시한 밖으로 밀어내지 않게. 단절은 마지막 허브 수신부터 잰다 — 답 하나를 놓친 기본 설정에서 정책은 마지막 수신 뒤 5 s. 재접속 backoff 는 세션이 하트비트 답 3 개를 받은 뒤에만 1 s 로 돌아간다. 취소가 그 목표를 찾지 못하면 `applied: NONE`·`reason: goal_changed`
+- 접속 단절 시 SAF-003 정책 적용 (D-419, v1.86): Agent 가 돌고 있고, 링크가 끊긴 순간 Fleet 주행 목표(`correlation_id` 가 있는 `POST /navigation/goal`)가 진행 중이었으며, 그 목표가 그대로인 채로 `safety.fleet_loss_timeout_s` 동안 계속 끊겨 있으면 한 번 적용한다. 로컬 목표·teleop·swarm follow(SWM-004 가 따로 지킴)·끊긴 뒤 들어온 목표는 대상이 아니다. `STOP` 은 그 목표 취소(e-stop 아님), `HOLD` 는 같은 정지에 재개용 목표 기록(자동 재개 없음), `RETURN_HOME` 은 취소 뒤 `__home__` 귀환(home 이 없거나 `LOCALIZED` 가 아니면 선 채로 `applied: STOP`), `CONTINUE` 는 이벤트만. 재접속은 아무것도 재개하지 않는다. 링크가 살아 있다는 것은 허브 `welcome` 을 받은 뒤이고 마지막 허브 수신이 링크 신선도(1 s 하트비트 주기 + `fleet.heartbeat_reply_timeout_s` + 0.5 s) 이내라는 뜻이다 — 판정 시간과 따로다(설정 여부는 기동 설정으로 정하고, 뒤에 Agent 가 hello 거부·중지로 꺼져도 끊긴 링크로 본다). 하트비트 답이 `fleet.heartbeat_reply_timeout_s`(기본 2 s) 안에 오지 않으면 로봇이 소켓을 끊는다(반쯤 열린 TCP). 하트비트에 대한 `error` 답(예: `TASK_PROJECTION_UNAVAILABLE`)도 답이라 링크를 유지하고, `PAIRING_INVALID`·`SESSION_NOT_PAIRED`·`DUPLICATE_IDENTITY`·`IDENTITY_DRIFT`·`PROTOCOL_UNSUPPORTED` 가 하트비트에 대한 답이면 세션을 즉시 끝낸다(`PAIRING_INVALID` 는 언제나). `event` 에 대한 `error` 는 이벤트 거부로 기록하고 세션을 유지한다. 허브는 검증하지 못한 `heartbeat`·`event` 본문에 `PAYLOAD_INVALID` 로 답한다(v1.336) — 하트비트 답이어도 세션 종료 코드가 아니다(그 하트비트의 신선도만 끊긴다, D-447). 이전 허브는 같은 경우 `SESSION_NOT_PAIRED` 로 답했으므로 `event` 에 대한 그 코드는 계속 이벤트 거부로 읽는다. SAF-003 은 허브 건강이 아니라 링크 생존을 판정한다. hello 답 시한은 D-407 의 5 s(링크는 `welcome` 전까지 끊긴 것이라 SAF-003 판정에 영향 없음). `event` 에 대한 `error` 는 D-407 규칙대로 `EVENT_NOT_AUDITABLE`·`PAYLOAD_INVALID` 이면 버리고, 다른 코드면 최대 3 번까지 다시 보낸다. 답을 기다리는 `event` 는 한 번에 8 개까지만 보낸다 — 재접속 뒤 밀린 이벤트가 하트비트 답을 시한 밖으로 밀어내지 않게. 단절은 마지막 허브 수신부터 잰다 — 답 하나를 놓친 기본 설정에서 정책은 마지막 수신 뒤 5 s. 재접속 backoff 는 세션이 하트비트 답 3 개를 받은 뒤에만 1 s 로 돌아간다. 취소가 그 목표를 찾지 못하면 `applied: NONE`·`reason: goal_changed`
 
 ## 7.7 프로토콜 버저닝 (PRT-006)
 
@@ -4368,6 +4376,8 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.337 | 2026-11-01 | D-944: LCD code pairing and the reachability read accept the team tailnet (100.64.0.0/10, fd7a:115c:a1e0::/48); development session and first peer approval stay robot-LAN only. |
+| v1.336 | 2026-11-01 | Corrective: Fleet hub answers a `heartbeat`/`event` payload it cannot validate with `PAYLOAD_INVALID` (was `SESSION_NOT_PAIRED`); the robot agent keeps the session on a heartbeat answer and drops the event without retry. Envelope 1.0 unchanged. |
 | v1.335 | 2026-10-31 | D-938: policy admission scope accepts `arm_transfer` (ARM_TRANSFER jobs only) with required `proposers` and `valid_until`; status reads back `enabled_by`; expired scopes close every kind. Same admission checks as a human admit; simulation arm transfer HTTP only. |
 | v1.331 | 2026-10-28 | D-908: closed simulation neutral TRIP proposal/read/admit HTTP; the proposer (service or operator) supplies candidates, request key and steps, a different named operator admits with digest and generation, and admission makes the existing TRIP step-ledger job. No cargo fields; operator trip-jobs POST unchanged. Envelope 1.0 unchanged. |
 | v1.330 | 2026-10-29 | D-915: optional measured source joint facts in physical observations and scoped immutable closure proof readback; legacy canonical bytes, writer/admission boundaries and envelope1.0 preserved. Independent SIM/hardware/field acceptance remains separate. |
@@ -4700,7 +4710,7 @@ Pilot은 같은 LAN에서 발견한 장비 목록으로 시작한다. 설정 파
 
 | Method/path | Admission | Response |
 |---|---|---|
-| `GET /api/v1/auth/connection` | LAN peer, 인증 불필요, `no-store`; D-535부터 출발지별 30회/분(넘으면 429 `RATE_LIMITED` + `Retry-After`), LAN 밖 403 `LAN_REQUIRED` | 200 `{mode: paired|development, robot_id: string, transport: http|https}` (`ConnectionInfo`). D-535 (v1.155) 추가: `connect_contract`(정수, 1), `api`(`v1`), `core_ready`(부팅 단계가 `CORE_READY`; 표시 파일이 없으면 CORE가 답하므로 true), `stage`, `release`(없으면 null), `tls_hostname`(TLS일 때 `<host>.local`, 아니면 null), `pairing`(`open`\|`console_only`(LCD가 화면 코드를 보일 수 없음 — 관제 승인)\|`full`(대기 요청 3개)\|`unavailable`(HTTP이거나 수신 초기화 불가)). mDNS TXT가 이미 광고하는 값과 개수·가능 여부뿐이며 신뢰 앵커가 아니다 |
+| `GET /api/v1/auth/connection` | LAN 또는 팀 tailnet peer(D-944), 인증 불필요, `no-store`; D-535부터 출발지별 30회/분(넘으면 429 `RATE_LIMITED` + `Retry-After`), LAN 밖 403 `LAN_REQUIRED` | 200 `{mode: paired|development, robot_id: string, transport: http|https}` (`ConnectionInfo`). D-535 (v1.155) 추가: `connect_contract`(정수, 1), `api`(`v1`), `core_ready`(부팅 단계가 `CORE_READY`; 표시 파일이 없으면 CORE가 답하므로 true), `stage`, `release`(없으면 null), `tls_hostname`(TLS일 때 `<host>.local`, 아니면 null), `pairing`(`open`\|`console_only`(LCD가 화면 코드를 보일 수 없음 — 관제 승인)\|`full`(대기 요청 3개)\|`unavailable`(HTTP이거나 수신 초기화 불가)). mDNS TXT가 이미 광고하는 값과 개수·가능 여부뿐이며 신뢰 앵커가 아니다 |
 | `POST /api/v1/auth/development-session` | 아래 개발 조건, LAN peer, 허용 Host와 같은 Origin 또는 Origin 없음 | 201 `{id, token, role: operator, label, source: pair-development, expires_at}` |
 
 개발 자동 접속은 장비의 `network.connection_mode=development`와 `ROSY_DEPLOYMENT=development`가
