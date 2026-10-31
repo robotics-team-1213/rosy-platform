@@ -113,9 +113,10 @@
 <label id="arm-target-field" class="ui-field-label" hidden>학습할 개별 팔 <select id="arm-target" class="ui-field" disabled><option value="">학습 팔을 선택하세요</option></select></label><p id="arm-target-status" role="status"></p>
 <label class="ui-field-label">방법 <select id="method" class="ui-field"><option value="act">ACT · 시범/교정 학습</option><option value="hilserl">HIL-SERL SAC · 오프라인 경험 재학습</option></select></label>
 <p id="method-status" role="status"></p>
+<label class="ui-field-label">장치 <select id="device" class="ui-field"><option value="cpu">CPU</option></select></label>
 <label class="ui-field-label">학습 단계 <input id="steps" class="ui-field" type="number" min="1" max="100000" value="100" required></label>
 <label class="ui-field-label">배치 크기 <input id="batch-size" class="ui-field" type="number" min="1" max="64" value="8" required></label>
-<p id="execution-description" class="quiet">저장된 시범·교정·전이를 CPU로 재학습합니다.</p>
+<p id="execution-description" class="quiet">저장된 시범·교정·전이를 선택한 장치로 재학습합니다. GPU는 다른 GPU 작업이 없을 때만 시작합니다.</p>
 <p class="quiet">현장 actor 미연결 · 호스트 학습기에서만 실행합니다. 학습 결과는 실물 과제 성공이나 정책 배포 승인을 뜻하지 않습니다.</p>
 <ui-button kind="quiet" id="start" class="ui-field" type="submit" disabled>학습 시작</ui-button></form>
 <form id="experience-form" class="ui-form learning-form"><label class="ui-field-label">경험을 받을 지속 SAC 작업 <select id="experience-run" class="ui-field" disabled><option value="">실행 중인 지속 SAC 작업 없음</option></select></label>

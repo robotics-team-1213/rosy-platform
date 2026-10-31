@@ -4,10 +4,12 @@ API reference: huggingface/lerobot v0.4.4 policies/{act,sac} and rl/learner.py.
 No live actor, policy activation, or physical success is implied by this job.
 """
 import argparse
+from contextlib import contextmanager
 import hashlib
 import importlib.metadata
 import json
 from pathlib import Path
+import subprocess
 
 import numpy as np
 
@@ -268,6 +270,31 @@ def train_dataset(dataset, output, *, method, steps, batch_size, device, seed,
     return result
 
 
+class GpuBusy(RuntimeError):
+    pass
+
+
+@contextmanager
+def gpu_lease(device, *, run=subprocess.run):
+    """Hold the shared learning gpu.lock (also taken by Isaac admission) for the whole cuda run."""
+    if device != 'cuda':
+        yield
+        return
+    import fcntl
+    path = Path.home() / '.cache/rosy-learning/gpu.lock'
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    with path.open('a+b') as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError as exc:
+            raise GpuBusy('another learning or Isaac GPU job holds the lease') from exc
+        owners = run(['nvidia-smi', '--query-compute-apps=pid', '--format=csv,noheader,nounits'],
+                     capture_output=True, text=True, timeout=10, check=True).stdout.split()
+        if owners:
+            raise GpuBusy('GPU already has another compute process')
+        yield
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--request', type=Path, required=True)
@@ -283,7 +310,8 @@ def main(argv=None):
             raise ValueError('training request fields differ from schema')
         if 'learning_task' in request:
             check_learning_task(request['learning_task'])
-        train(output=args.out, **request)
+        with gpu_lease(request['device']):
+            train(output=args.out, **request)
     except Exception as error:
         args.out.mkdir(parents=True, exist_ok=True)
         # Server-visible diagnostics never expose arbitrary host paths or credentials.

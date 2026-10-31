@@ -252,3 +252,37 @@ def test_model_export_requires_completed_run_and_verified_weights(tmp_path, monk
     weights.write_bytes(b'changed')
     with pytest.raises(ValueError, match='changed'):
         c.artifact(rid)
+
+
+def test_cuda_is_offered_to_act_only_when_the_learner_reports_it(tmp_path, monkeypatch):
+    import experiment_center
+    monkeypatch.setattr(experiment_center.os, 'name', 'posix')
+    monkeypatch.setattr(experiment_center.subprocess, 'run',
+                        lambda *a, **k: SimpleNamespace(returncode=0, stdout=b'True\n'))
+    c = center(tmp_path, monkeypatch)
+    assert c.methods['act']['devices'] == ['cpu', 'cuda']
+    assert c.methods['hilserl']['devices'] == ['cpu']  # continuous SAC stays on CPU
+    monkeypatch.setattr(experiment_center.subprocess, 'run',
+                        lambda *a, **k: SimpleNamespace(returncode=0, stdout=b'False\n'))
+    assert center(tmp_path, monkeypatch).methods['act']['devices'] == ['cpu']
+
+
+def test_cuda_training_holds_the_shared_gpu_lease_and_refuses_a_busy_gpu(tmp_path, monkeypatch):
+    fcntl = pytest.importorskip('fcntl')
+    import experiment_train
+    monkeypatch.setenv('HOME', str(tmp_path))
+    monkeypatch.setattr(experiment_train.Path, 'home', lambda: tmp_path)
+    idle = lambda *a, **k: SimpleNamespace(stdout='')
+    with experiment_train.gpu_lease('cpu', run=None):
+        pass  # CPU never touches the GPU lease
+    with pytest.raises(experiment_train.GpuBusy):
+        with experiment_train.gpu_lease('cuda', run=lambda *a, **k: SimpleNamespace(stdout='4242\n')):
+            pass
+    lock = tmp_path / '.cache/rosy-learning/gpu.lock'
+    with lock.open('a+b') as other:
+        fcntl.flock(other, fcntl.LOCK_EX | fcntl.LOCK_NB)  # e.g. an Isaac run holds it
+        with pytest.raises(experiment_train.GpuBusy):
+            with experiment_train.gpu_lease('cuda', run=idle):
+                pass
+    with experiment_train.gpu_lease('cuda', run=idle):
+        pass

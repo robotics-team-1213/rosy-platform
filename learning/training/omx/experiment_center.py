@@ -65,12 +65,14 @@ class Center:
             try:
                 check = subprocess.run([python, '-c',
                     'import importlib.metadata as m; import torch; import lerobot; '
-                    'assert m.version("lerobot")=="0.4.4"; print(torch.__version__)'],
+                    'assert m.version("lerobot")=="0.4.4"; print(torch.cuda.is_available())'],
                     capture_output=True, timeout=30, check=False)
                 available = check.returncode == 0 and os.name == 'posix'
+                cuda = available and check.stdout.strip().endswith(b'True')
             except (OSError, subprocess.TimeoutExpired):
-                available = False
-            self.methods[method] = {'available': available, 'devices': ['cpu'],
+                available = cuda = False
+            # SAC continuous learning stays CPU; a cuda run still needs the shared GPU lease at start.
+            self.methods[method] = {'available': available, 'devices': ['cpu', 'cuda'] if cuda and method == 'act' else ['cpu'],
                 'execution_mode': 'offline_replay',
                 'reason': None if available else 'Pinned LeRobot 0.4.4 Linux learner environment unavailable'}
 
