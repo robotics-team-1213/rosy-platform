@@ -13206,3 +13206,8 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: D-889 추가 9(사용자 결정 2026-10-31)
 - 교훈: 없음
+
+## 2026-10-31 · uncommitted · omx: 재배선 뒤 장치 식별 교훈
+- 변경: `docs/solutions/runtime-errors/omx-cell-device-identity-after-rewiring-2026-10-31.md` (동일 시리얼 Innomaker는 by-path, RealSense 노드는 USB 인터페이스 udev 이름, 팔 좌우는 LED 차분, 확인은 `omx_devices.py scan`)
+- 증거: 현장 PC 실측(PING·LED·udev 링크·영상). depth(USB 2.0)는 미해결로 남김
+- gate 변화: 없음
