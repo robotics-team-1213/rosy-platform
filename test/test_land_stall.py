@@ -51,3 +51,10 @@ def test_a_healthy_queue_has_no_cause(tmp_path):
     rows = queue(tmp_path, {"branch": "land/a", "status": "turn", "worktree": "wt-a"},
                  {"branch": "land/b", "status": "waiting"}, {"branch": "land/c", "status": "preparing"})
     assert land_stall.diagnose(rows, [], {"wt-a": ("running\n", NOW)}, 0, NOW) == []
+
+
+def test_a_member_whose_leader_is_gone_must_not_be_stopped(tmp_path):
+    rows = queue(tmp_path, {"branch": "land/m", "status": "waiting"},
+                 {"branch": "land/l", "status": "waiting", "batch": ["land/m"], "alive": False})
+    found = land_stall.diagnose(rows, [], {}, 0, NOW)
+    assert len(found) == 1 and found[0].startswith("orphaned-member: land/m") and "do NOT stop" in found[0]

@@ -28,6 +28,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import land_events  # noqa: E402
+import land_queue  # noqa: E402  (pid_alive only; ahead() would delete stale tickets)
 
 LOG_IDLE_S = 15 * 60  # a turn holder's log quiet this long while waiting for host room counts as stuck
 BOUNCE_WINDOW_S = 3 * 3600
@@ -76,6 +77,10 @@ def diagnose(rows: list[dict], events: list[dict], logs: dict[str, tuple[str, fl
         member = by_branch.get(name)
         if member is None or member.get("status") != "waiting":
             continue
+        if leader.get("alive") is False:  # 2026-10-31: a member was stopped "to ride" with a leader already gone
+            found.append(f"orphaned-member: {name} is carried by {leader['branch']}, whose land.py is gone; remedy: "
+                         "do NOT stop the member, it must land on its own (or resume the leader)")
+            continue
         if member["ticket"] < leader["ticket"] and leader.get("status") == "waiting":
             found.append(f"batch-deadlock: member {name} (earlier, waiting) and leader {leader['branch']} wait on "
                          f"each other; remedy: stop member's land.py (pid {member.get('pid')}); its commits ride in "
@@ -116,7 +121,7 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
     common = Path(_git("rev-parse", "--path-format=absolute", "--git-common-dir"))
     now = time.time()
-    rows = tickets(common / "rosy-land-queue")
+    rows = [{**r, "alive": land_queue.pid_alive(int(r.get("pid") or 0))} for r in tickets(common / "rosy-land-queue")]
     main_t = float(_git("log", "-1", "--format=%ct", "main") or now)
     idle = (now - main_t) / 60
     if not rows or idle < args.minutes:
