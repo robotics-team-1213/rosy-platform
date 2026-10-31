@@ -32,4 +32,4 @@ def test_assigned_followers_become_arms_and_other_boards_stay_unassigned(tmp_pat
     draft = result['draft']
     assert [arm['id'] for arm in draft['arms']] == ['arm_a', 'arm_b']
     assert {c['id']: c['arm_id'] for c in draft['cameras']} == {'arm_a_wrist': 'arm_a', 'side': None}
-    validate_profile(dict(draft, name='bench draft', task='pick', mode='leader'))
+    validate_profile(dict(draft, name='bench draft', task='pick', mode='independent'))
