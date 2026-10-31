@@ -101,6 +101,19 @@ def test_records_area_screens_and_the_judgment_seat():
     assert 'querySelectorAll(".incident-row > details[open]")) if (other !== detail) other.open = false;' in view
 
 
+def test_install_task_list_sits_in_the_shared_subnav_seat():
+    """D-741 6 — 설치 문서의 화면 안 이동도 같은 자리에 선다. 공용 task-chooser가 채우고 사이드바 자체 배치는 남지 않는다."""
+    page = re.sub(r'<!--.*?-->', '', _page("install.html").read_text(encoding="utf-8"), flags=re.S)
+    seat = re.search(r'</nav>\s*<div class="ui-subnav" id="install-chooser" aria-label="설치 작업"></div>\s*'
+                     r'<div class="fleet-workspace">', page)
+    assert seat, "install: the task list stands in the shared sub-nav seat between the rail and the workspace"
+    assert "install-tasks" not in page and "install-workspace" not in page, "install: no bespoke sidebar layout remains"
+    assert '<link rel="stylesheet" href="/common/app-shell.css">' in page
+    assert 'class="fleet-task-page"' in page
+    entry = (WEB / "installation" / "install.js").read_text(encoding="utf-8")
+    assert 'el("install-chooser").append(taskChooser.element);' in entry, "install: the shared chooser fills the seat"
+
+
 def test_no_back_link_sentences_remain():
     for name in DOCS:
         page = _page(name).read_text(encoding="utf-8")

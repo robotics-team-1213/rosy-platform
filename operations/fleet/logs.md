@@ -5201,3 +5201,10 @@
 - 증거: `test/test_arm_transfer_policy_admission.py` 원격 실행은 착지 전에 기록한다.
 - Gate: simulation 팔 이송 HTTP에서만 동작한다. 범위 설정·첫 자동 admit의 원장 대조는 현장 수용으로 따로 남긴다.
 - CE: 해당 없음 — 만료 미적용은 D-938과 회귀 시험이 보여 준다.
+
+
+## 2026-11-01 · uncommitted · uiux(fleet): 설치 문서 하위 탐색 계약 시험
+
+- 변경: `test/test_doc_tabs.py`에 설치 문서의 화면 안 이동이 공용 하위 탐색 자리에 서는지 검사를 추가했다(사이드바 배치 잔여 없음, app-shell 시트 링크, install.js가 자리를 채움). `test/test_grammar_separation.py`의 install.html 시트 목록에 `/common/app-shell.css`를 반영했다.
+- 증거: node --test 403 passed, 원격 pytest는 착지 전에 기록한다.
+- Gate: 없음. CE: 해당 없음.
