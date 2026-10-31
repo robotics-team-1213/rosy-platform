@@ -708,8 +708,10 @@ def test_largest_test_files_are_queued_first(tmp_path):
     (tmp_path / "d").mkdir()
     (tmp_path / "d" / "a.py").write_text("x" * 30)
     (tmp_path / "d" / "b.py").write_text("x" * 30)
-    assert rp.cost(tmp_path, [rp.BROWSER_ENV, "big.py::test_t", "-q"]) == 100
-    assert rp.cost(tmp_path, ["d"]) == 60 and rp.cost(tmp_path, ["missing.py"]) == 0
+    b = wq.BYTES_PER_S
+    assert rp.cost(tmp_path, [rp.BROWSER_ENV, "big.py::test_t", "-q"], {}) == 100 / b
+    assert rp.cost(tmp_path, ["d"], {}) == 60 / b and rp.cost(tmp_path, ["missing.py"], {}) == 0
+    assert rp.cost(tmp_path, ["d"], {("d",): 300.0}) == 300.0, "measured history wins over file size"
 
 
 class FakeJobHost:
