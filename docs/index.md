@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-11-01 · uncommitted · docs: D-940 중복 정의 게이트와 등록부
 - 2026-10-31 · uncommitted · docs(solutions): version pins grew, use api_reserve bump
 - 2026-10-31 · uncommitted · fleet: D-938 팔 이송 정책 승인
 - 2026-10-31 · uncommitted · fix(land): main 변화분의 safety 경로는 FULL 재실행을 부르지 않는다
 - 2026-10-31 · uncommitted · omx: D-933 camera model from printed markers (cell_frame)
-- 2026-10-30 · uncommitted · fleet/omx: per-arm marker id blocks for up to four arms (D-933 보충)

@@ -13198,3 +13198,10 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: 없음
 - 교훈: 기존 교훈 갱신
+
+## 2026-11-01 · uncommitted · docs: D-940 중복 정의 게이트와 등록부
+- 변경: `docs/adr/D-940`, ADR Log 행, `test/architecture/test_duplicate_definitions.py`와 `known_duplicates.txt`(초기 47 그룹), `test/architecture/AGENTS.md` 행 2건, `platform-folder-responsibilities.md` 3건(D-940 갈래 안내, Situation 섀도 모듈 목록 5개로 정정, 보정 저장 계층 병립 명시)
+- 증거: 로컬 `--scan` 재생성이 등록부와 집합 일치(2026-11-01). 원격 시험·mutation 증명은 착지 기록에 남긴다
+- gate 변화: 없음
+- 결정: D-940 Accepted(사용자 "바로 처리" 지시, 워크트리 슬롯 1회 force-over-cap 승인 기록 포함)
+- 교훈: 없음(신규 게이트 제도화)
