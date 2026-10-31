@@ -40,7 +40,7 @@ def test_direct_development_entry_needs_no_operator_token(tmp_path, path, identi
                      start_task_dispatcher=False)
     listener = safe_listener()
     origin = f"http://127.0.0.1:{listener.getsockname()[1]}"
-    server = uvicorn.Server(uvicorn.Config(app, log_level="error", timeout_graceful_shutdown=3))
+    server = uvicorn.Server(uvicorn.Config(app, log_level="error", timeout_graceful_shutdown=3, log_config=None))
     worker = threading.Thread(target=server.run, kwargs={"sockets": [listener]}, daemon=True)
     worker.start()
     try:

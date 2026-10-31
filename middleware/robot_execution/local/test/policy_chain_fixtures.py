@@ -43,7 +43,7 @@ class HttpServer:
             self.listener.bind(('127.0.0.1', 0))
             self.listener.listen()
             self.url = 'http://127.0.0.1:'+str(self.listener.getsockname()[1])
-            self.server = uvicorn.Server(uvicorn.Config(self.app, log_level='warning', lifespan='off'))
+            self.server = uvicorn.Server(uvicorn.Config(self.app, log_level='warning', lifespan='off', log_config=None))
             self.worker = threading.Thread(target=self.server.run, kwargs={'sockets':[self.listener]})
             self.worker.start()
             deadline = time.monotonic()+10

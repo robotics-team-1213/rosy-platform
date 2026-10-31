@@ -81,7 +81,7 @@ def persisted_cell(tmp_path, request):
     # A new app and store reopen the database before any browser requests.
     listener = safe_listener()
     origin = f'http://127.0.0.1:{listener.getsockname()[1]}'
-    server = uvicorn.Server(uvicorn.Config(application(), log_level='error', timeout_graceful_shutdown=3))
+    server = uvicorn.Server(uvicorn.Config(application(), log_level='error', timeout_graceful_shutdown=3, log_config=None))
     worker = threading.Thread(target=server.run, kwargs={'sockets': [listener]}, daemon=True)
     worker.start()
     try:
