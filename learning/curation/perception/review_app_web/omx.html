@@ -34,6 +34,7 @@
 <label class="ui-field-label">저장 프로필 <select id="profile-record" class="ui-field" disabled></select></label>
 <ui-button kind="quiet" id="profiles-refresh" class="ui-field" type="button">프로필 목록 다시 확인</ui-button><ui-button kind="quiet" id="profile-clone" class="ui-field" type="button" disabled>선택 프로필 복사·새 버전 편집</ui-button>
 <ui-button kind="quiet" id="profile-new" class="ui-field" type="button">빈 프로필 작성</ui-button><ui-button kind="quiet" id="profile-import-dataset" class="ui-field" type="button" disabled>현재 데이터 프로필 가져오기</ui-button>
+<label class="ui-field-label">작업대 장치 목록으로 초안 채우기 <input id="profile-bench" class="ui-field" type="file" accept="application/json,.json"></label><p id="profile-bench-status" class="quiet" role="status">작업대 화면의 inventory.json(관찰 서비스가 맡은 팔, 카메라 설정)을 불러옵니다. 역할을 모르는 보드는 채우지 않고 알려 줍니다.</p>
 <p id="profiles-status" role="status"></p><details><summary>저장 설정의 식별자·검증 범위</summary><p id="profile-record-meta" class="quiet"></p></details>
 <a id="profile-download" class="ui-field" aria-disabled="true">저장 JSON 내려받기</a><ui-button kind="quiet" id="profile-use" class="ui-field" type="button" disabled>이 저장 프로필로 학습·변환 준비</ui-button>
 <form id="profile-form"><fieldset id="profile-fields"><legend>새 불변 버전의 입력</legend>
