@@ -1,0 +1,8 @@
+[Unit]
+Description=ROSY OMX cameras: bind each registered role to its camera (omx-cameras.json)
+
+[Service]
+Type=oneshot
+# the deployed tools; a camera plugged in, moved or brought back gets its role's env and unit
+ExecStart=/usr/bin/python3 %h/.local/share/rosy/omx-devices/current/deploy/robot/omx/omx_cameras.py bind --apply
+Nice=10
