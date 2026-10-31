@@ -337,7 +337,8 @@ function releaseContext(safety) {
 }
 
 function emergencyRelease(role, safety, onReleased) {
-  const release = el("ui-button", "비상 정지 해제", {type: "button", kind: "quiet", "data-estop-release": ""});
+  const release = el("ui-button", "비상 정지 해제", {type: "button", "data-estop-release": ""});
+  release.setAttribute("kind", "quiet");
   release.disabled = role !== "administrator" || !releaseContext(safety);
   if (release.disabled) release.reason = role !== "administrator"
     ? "관리자 로그인 코드로 다시 연결해야 해제할 수 있습니다"
