@@ -21,6 +21,16 @@ from test_land import commit, git, repos  # noqa: E402,F401  (land.py's fixture 
 @pytest.fixture(autouse=True)
 def fresh_selection_cache(monkeypatch):
     monkeypatch.setattr(land_batch, "_BATCHABLE", {})  # fixture commits repeat their SHAs across tests
+    monkeypatch.setattr(land_batch, "AUTO", True)  # these tests exercise batching itself, off by default (addendum 9)
+
+
+def test_automatic_batching_is_off_unless_turned_back_on(monkeypatch):
+    """D-889 addendum 9: 97 batches formed in 48 h, 28 landed, 43 stopped, and every 10-31 queue stall came from one."""
+    plain = type("Args", (), {"tests": "auto", "node": False, "no_cache": False})()
+    monkeypatch.setattr(land_batch, "AUTO", False)
+    assert not land_batch.plain_auto(plain, [])
+    monkeypatch.setattr(land_batch, "AUTO", True)
+    assert land_batch.plain_auto(plain, [])
 
 
 def info(ticket: Path) -> dict:
@@ -33,7 +43,8 @@ def test_a_batch_leader_holds_its_members_wherever_it_stands_and_releases_them_w
     queue.set_status(member, "turn")  # even a member that would be first stays behind its leader
     queue.set_status(member, "waiting")
     assert [r["branch"] for r in queue.blockers(tmp_path, member)] == ["feat/l"]
-    assert [r["branch"] for r in queue.blockers(tmp_path, other)] == ["feat/m"], "a preparing leader blocks no one else"
+    # Neither does its carried member: it lands with the leader (2026-10-31: such members held every later ticket).
+    assert queue.blockers(tmp_path, other) == [], "a preparing leader blocks no one else"
     queue.set_status(leader, "waiting", batch=[])
     assert info(leader)["batch"] == [] and info(leader)["status"] == "waiting"
 
@@ -153,6 +164,7 @@ def test_eligible_wants_a_member_at_its_worktree_head_judged_by_its_tier_or_sele
     assert not land_batch.eligible(land, wt, row), "no prepared tier: its selection is FULL"
     assert land_batch.eligible(land, wt, row, "full"), "a pending FULL-class ticket joins a FULL batch"
     assert not land_batch.eligible(land, wt, {**row, "status": "preparing"}), "a pretest under way is not carried"
+    assert not land_batch.eligible(land, wt, {**row, "urgent": "the user's words"}, "full"), "urgent lands alone"
     member = Path(row["worktree"])
     land.land_full.save(member, "feat/m", git(member, "rev-parse", "HEAD"), git(main, "rev-parse", "HEAD"), "affected", [])
     assert land_batch.eligible(land, wt, row) and not land_batch.eligible(land, wt, row, "full")

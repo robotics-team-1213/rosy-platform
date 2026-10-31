@@ -146,7 +146,8 @@ flowchart TD
    새 실패율에 맞춘 크기로 묶어 한 차례에 착지한다(D-889 추가 3·4). 진전 없이 30분이면 감시자가 스택을 남기고
    멈춘다. 사용자가 급하다고 한 착지만 `--urgent "<사용자 말>"`을 붙인다. 그 표는 기다리는 일반 표를 앞지르고
    (진행 중인 차례는 끊지 않는다), 한 번에 하나만 허용되며 `urgent` 사건으로 남는다. 남의 `land.py`를 멈춰
-   순서를 바꾸지 않는다. 결과를 바로 지켜보며 착지할 때만 아래 `land.py`를 직접 쓴다.
+   순서를 바꾸지 않는다. 결과를 바로 지켜보며 착지할 때만 아래 `land.py`를 직접 쓴다. main이 오래 멈춰 있으면
+   `python tools/land_stall.py`가 알려진 원인과 안전한 해결을 읽기 전용으로 짚는다.
    - **`land.py` 대기열과 재시험.** `python tools/land.py --tests auto`는 시험 회차 전에 착지 대기열(`<git-common-dir>/rosy-land-queue/`, D-803)에서 표를 받고, 앞선 착지가 끝날 때까지 순번과 앞선 브랜치를 찍으며 기다린다. `--queue-timeout` 분(기본 180)을 넘으면 아무것도 병합·시험하지 않고 멈춘다. 맨 앞이 되면 `main`을 한 번 병합하고 시험한다. 표는 끝날 때(오류와 Ctrl-C 포함) 풀리고, 죽은 프로세스의 표(같은 호스트에서 pid 없음, 또는 3시간 동안 새로 고쳐지지 않음)는 다음 세션이 지운다. `--no-queue`는 사고 대응 때만 쓴다. FULL 티어가 통과한 뒤 `main`이 움직이면 다음 회차는 그 뒤 `main` 변경분의 선택만 돈다. 실행이 끊겨(시험 PC 끊김, Ctrl-C, 회차 상한) `land.py`를 다시 돌려도, 브랜치가 그때 시험한 변경과 `main` 병합만 가지고 있으면 같은 규칙을 쓴다(`<git-common-dir>/rosy-land-full/`, D-803 6). 브랜치에 자기 커밋이 더해졌으면 FULL을 다시 돈다. 같은 git 트리·명령·시험 환경(`remote_pytest.deps`)에서 이미 통과한 pytest 호출은 다시 돌리지 않고, 셀렉터가 차이에 고르지 않은 호출도 조상 커밋의 통과를 쓴다(`tools/land_cache.py`, 공통 git 디렉터리의 `rosy-land-cache.jsonl`). 모두 다시 돌리려면 `--no-cache`.
    - **두 단계.** 이 도구는 아래 두 단계를 main이 멈출 때까지 되풀이하고, 테스트나 lint가 실패하면 착지하지 않으며, 푸시하지 않는다. (1) 워크트리에서 `git merge main`을 하고 관련 테스트를 다시 돌린 다음 `known_failures`와 비교한다. `NEW`가 있으면 브랜치에서 고치고 이 단계를 반복한다. (2) `main` 체크아웃에서 `git merge --ff-only <브랜치>`를 한다. 그 사이에 main에 새 커밋이 있으면 (1)부터 다시 한다. 착지는 `--ff-only`만 한다. `--ff-only`가 동료의 미커밋 파일을 덮어써서 거절되면 그 파일을 그대로 두고 거절 문구를 알린다. stash, checkout, 삭제로 치운 뒤 다시 시도하지 않는다.
    - **크기와 이력.** `tools/land.py`는 옛 이력 브랜치(`stale-history`)를 착지하지 않고, 원격 시험 전에 `tools/harness/size_range.py`로 D-766 크기를 본다. 착지 전에 `python tools/harness/size_range.py main HEAD`로 직접 볼 수 있다.
