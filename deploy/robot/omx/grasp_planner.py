@@ -197,15 +197,26 @@ class Planner:
                          f"{bound} m with the taught transit, and no pulled-in transit stays inside")
 
     def travel(self, chunks, transit: dict) -> list:
-        """The frames goto and park would play between the chunks with this transit."""
+        """Every frame of one leg from home with this transit, the travel included."""
+        library = {"chunks": chunks, "gripper_closed": self.plan["grip_closed"], "transit": transit,
+                   "transit_speed": self.plan.get("transit_speed", 0.85)}
+        home = list(self.plan["home"]) + [self.plan["grip_closed"]]
+        return [f for _, frames in self.stream(library, home) for f in frames]
+
+    def stream(self, library, home) -> list[tuple[str, list]]:
+        """What chunk_runner plays for one leg from ``home``, as the teacher's four phases: its goto travel (jaws at
+        the library's gripper_closed, its transit and transit_speed) and the chunks. The recorded cycle, the keep-out
+        check, the native SIM teacher and Isaac all replay this, so no simulation runs another motion than the cell."""
         from chunk_runner import transit_path
 
-        p = self.plan
-        index = {NAMES.index(k): float(v) for k, v in transit.items()} or None
-        home = list(p["home"]) + [p["grip_closed"]]
-        return (transit_path(home, chunks["above_pick"][0], p["grip_closed"], self.fps, index)
-                + transit_path(chunks["lift_pick"][-1], chunks["above_place"][0], p["grip_closed"], self.fps, index)
-                + transit_path(chunks["lift_place"][-1], home, p["grip_closed"], self.fps, index))
+        c = library["chunks"]
+        transit = {NAMES.index(k): float(v) for k, v in library.get("transit", {}).items()} or None
+        travel = lambda start, goal: transit_path(start, goal, library["gripper_closed"], self.fps,  # noqa: E731
+                                                  transit, library.get("transit_speed", 0.85))
+        return [("approach", travel(home, c["above_pick"][0]) + c["descend_pick"]),
+                ("grasp", c["grasp_pick"]),
+                ("transfer", c["lift_pick"] + travel(c["lift_pick"][-1], c["above_place"][0]) + c["descend_place"]),
+                ("release", c["release_place"] + c["lift_place"] + travel(c["lift_place"][-1], home))]
 
     def pulled_in_transits(self, taught: dict) -> list[dict]:
         """Tool-down transits 1 cm apart from the taught one's reach toward the base, the TCP no lower than the
@@ -236,17 +247,8 @@ class Planner:
     def leg(self, library):
         """One recordable leg from home: travel to above pick, pick, travel to above place, place, travel home.
         Travel uses chunk_runner's rise-turn-descend path, the same one goto and park take."""
-        from chunk_runner import transit_path
-
-        c, p = library["chunks"], self.plan
-        transit = {NAMES.index(k): float(v) for k, v in library.get("transit", {}).items()} or None
-        home = list(p["home"]) + [p["grip_closed"]]
-        frames = transit_path(home, c["above_pick"][0], p["grip_closed"], self.fps, transit)
-        frames += c["descend_pick"] + c["grasp_pick"] + c["lift_pick"]
-        frames += transit_path(frames[-1], c["above_place"][0], p["grip_closed"], self.fps, transit)
-        frames += c["descend_place"] + c["release_place"] + c["lift_place"]
-        frames += transit_path(frames[-1], home, p["grip_closed"], self.fps, transit)
-        return [[round(v, 3) for v in f] for f in frames]
+        home = list(self.plan["home"]) + [self.plan["grip_closed"]]
+        return [[round(v, 3) for v in f] for _, frames in self.stream(library, home) for f in frames]
 
     def cycle_trajectory(self, reset_s: float = 2.0) -> dict:
         """A self-resetting cycle for record_session --replay: A carries pick -> place, B carries it back."""
