@@ -13163,6 +13163,20 @@ osy-d395-s1d\`.
 - 결정: D-935 Accepted(사용자 결정)
 - 교훈: 없음
 
+## 2026-10-30 · uncommitted · fleet/omx: per-arm marker id blocks for up to four arms (D-933 보충)
+- 변경: `cell_print_sheets`를 `DICT_4X4_100`으로 넓히고 팔 번호별 15개 묶음(`arm_ids`, `arm-markers` 시트)을 더함, Cell 화면 「보정 인쇄물」에 팔 번호 선택, `cell_marks` 사전·기본 ID, D-933 8항(번호 표)
+- 증거: 원격 `test_cell_print_sheets.py`·`test_omx_cell_marks.py`(팔 1·4 시트를 OpenCV로 되읽음), 브라우저 Cell 화면
+- gate 변화: 없음
+- 결정: D-933 Proposed 그대로, 8항 추가. 집게 마커는 0 → 팔 1의 35로(ChArUco 0~34와 겹침 해소)
+- 교훈: 없음
+
+## 2026-10-31 · uncommitted · omx: D-933 camera model from printed markers (cell_frame)
+- 변경: `cell_frame`(그리퍼 마커로 위 카메라 자세, 받침대·면 마커 학습, 매 프레임 카메라 재해석, 면 움직임, 광선→면), `cell_observe.locate`·`predicted_pixel`이 보정 파일 `cameras.top`이 있으면 모델 사용(받침대 마커가 안 보이면 지도로), `cell_checkerboard intrinsics`가 인쇄 ChArUco 판(7×10) 사용, 파이프라인 예시 `markers`, D-933 9항
+- 증거: 원격 `test_omx_cell_frame.py` 등 7개 파일 108 passed. 합성 장면에서 카메라 7도 밀림·핑키 6도/40 mm 이동 뒤에도 상자 3 mm 이내. 실물 내부 파라미터·마커 학습·정확도는 아직
+- gate 변화: 없음
+- 결정: D-933 Proposed 그대로, 9항(구현) 추가
+- 교훈: 없음
+
 ## 2026-10-31 · uncommitted · fix(land): main 변화분의 safety 경로는 FULL 재실행을 부르지 않는다
 - 변경: `tools/land_selection.py`. 차례 전 main 변화분에 safety 경로가 있어도 이 브랜치 자신에 safety 경로가 없으면 FULL 대신 변화분과 이 브랜치의 선택을 합친 트리에서 돌린다. D-889 추가 7.
 - 근거: 10-30~31 24시간 재실행 35번 약 984분, 그중 safety 경로로 인한 FULL 재실행 약 745분(사용자 결정 "A+B 둘 다").
