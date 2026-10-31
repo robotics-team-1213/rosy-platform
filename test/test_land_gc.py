@@ -22,7 +22,7 @@ def hidden(repo, holder, branch, extra=False, log_age=OLD):
     name = branch.replace("/", "-")
     git(repo, "worktree", "add", "-q", "-b", branch, str(holder / name), "main")
     if extra:
-        (holder / name / "x.txt").write_text("unlanded\n")
+        (holder / name / "x.txt").write_text(f"{branch}\n")  # same content and second would share one SHA
         git(holder / name, "add", "x.txt")
         git(holder / name, "commit", "-q", "-m", "unlanded")
     for suffix in (".log", ".stopped", ".land_async.py"):
