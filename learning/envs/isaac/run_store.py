@@ -172,7 +172,8 @@ def _write(fd, name, value, *, exclusive=False):
 
 def requested(config: dict) -> dict:
     """The request's settings back from a normalized config: the seed, and the case of an arm S case run."""
-    return {'seed': config['seed'], **({'case': config['case']} if 'case' in config else {})}
+    return {'seed': config['seed'], **({'case': config['case']} if 'case' in config else {}),
+            **({'layers': config['layers']} if 'layers' in config else {})}
 
 
 def input_snapshot(scenario_id: str, config: dict, source_sha: str) -> dict:
@@ -194,8 +195,11 @@ def input_snapshot(scenario_id: str, config: dict, source_sha: str) -> dict:
         from conveyor_fixture import FIXTURE, fixture_sha256
         value.update(scene=FIXTURE, scene_sha256=fixture_sha256(), scene_not_applicable_reason=None,
             verifier_sha256=hashlib.sha256(Path(__file__).with_name('conveyor_report.py').read_bytes()).hexdigest())
-    if scenario_id in ('omx-map-long-stack', 'omx-map-cube-stack'):
-        if scenario_id == 'omx-map-cube-stack':
+    if scenario_id in ('omx-map-long-stack', 'omx-map-cube-stack', 'omx-map-container-stack'):
+        if scenario_id == 'omx-map-container-stack':
+            from mapped_stack_fixture import container_fixture
+            MAPPED = container_fixture(layers=normalized['layers'], case=normalized['case'])
+        elif scenario_id == 'omx-map-cube-stack':
             from mapped_stack_fixture import CUBE_FIXTURE as MAPPED
         else:
             from mapped_stack_fixture import FIXTURE as MAPPED
@@ -381,6 +385,11 @@ class RunStore:
             if parts == ['mapped-stack-report.json'] and self._get(run_id)['input']['scenario_id'] == 'omx-map-cube-stack':
                 from mapped_stack_fixture import CUBE_REPORT_BYTES
                 limit = CUBE_REPORT_BYTES
+            if self._get(run_id)['input']['scenario_id'] == 'omx-map-container-stack':
+                limit = {'mapped-stack-report.json': 16*1024*1024,
+                         'mapped-video.mp4': 64*1024*1024,
+                         'mapped-video.frames.jsonl': 16*1024*1024,
+                         'mapped-video.encoder.log': 1024*1024}.get(item['name'], limit)
             total += item['bytes']
             if item['bytes'] > limit or total > RUN_BYTES:
                 raise ValueError('artifact size exceeds limit')
@@ -397,7 +406,18 @@ class RunStore:
                 raise ValueError('a terminal result is required')
             value = self._change(row, expected_revision, {'status': result['status']})
             if result['status'] == 'SUCCEEDED':
-                if row['input']['scenario_id'] in ('omx-map-long-stack', 'omx-map-cube-stack'):
+                if row['input']['scenario_id'] == 'omx-map-container-stack':
+                    from mapped_stack_fixture import plan
+                    count=len(plan(True,fixture=row['input']['scene']))
+                    required = {'mapped-stack-report', 'mapped-video', 'mapped-video-frames', 'mapped-video-encoder',
+                                'mapped-layer-'+str(count), 'mapped-trial-1'}
+                    if (result.get('stage') != 'mapped_container_stack' or result.get('task_success') is not True
+                            or result.get('successful_trials') != 1 or result.get('video_verified') is not True
+                            or result.get('import_verified') is not True or result.get('exit_code') != 0
+                            or result.get('cleanup') != 'OWNED_PROCESSES_EXITED_GPU_RELEASED'
+                            or not required <= {item.get('id') for item in artifacts}):
+                        raise ValueError('Layered container contacts and continuous video are required')
+                elif row['input']['scenario_id'] in ('omx-map-long-stack', 'omx-map-cube-stack'):
                     cube = row['input']['scenario_id'] == 'omx-map-cube-stack'
                     required = {'mapped-stack-report', 'mapped-overview', 'mapped-initial',
                                 'mapped-layer-3',
