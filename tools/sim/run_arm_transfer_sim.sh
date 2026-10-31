@@ -25,6 +25,7 @@ pids+=($!)
 for _ in $(seq 240); do grep -q OMX_TOPIC_BACKEND_READY "$OUT/layer.log" && break; sleep 0.5; done
 grep -q OMX_TOPIC_BACKEND_READY "$OUT/layer.log" || { tail -n 20 "$OUT/layer.log" "$OUT/backend.log"; exit 1; }
 instance=$(python3 -c "import json,sys; print(next(iter(json.load(open(sys.argv[1])))))" "$OUT/installation.bases.json")
+mkdir -m 0750 "$OUT/sockets/$instance"  # the service manager's job on a device; the owner only binds in it
 # The owner refuses to start where it can see camera or serial nodes; on such a test PC it gets a private /dev.
 isolate=()
 if compgen -G '/dev/video*' >/dev/null || [[ -e /dev/serial/by-id ]]; then
