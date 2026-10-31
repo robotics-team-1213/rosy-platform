@@ -48,6 +48,11 @@ def start(cwd: Path, land_args: list[str], now: datetime, launch) -> tuple[str, 
         raise SystemExit(f"[land-async] run it from a topic branch's worktree, not {branch!r}")
     if git(cwd, "status", "--porcelain", "--untracked-files=no"):
         raise SystemExit("[land-async] uncommitted changes: commit them first (a landing takes only commits)")
+    if "--urgent" not in land_args:  # refused before a snapshot or hidden worktree exists
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import land_queue
+        if why := land_queue.full(land_queue.queue_dir(cwd)):
+            raise SystemExit(f"[land-async] {why}")
     snap = snapshot_name(branch, now)
     place = holder(cwd)
     place.mkdir(exist_ok=True)
