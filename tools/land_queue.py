@@ -28,6 +28,10 @@ QUEUE = "rosy-land-queue"
 STALE_AFTER = 3 * 3600  # seconds without a refresh; one FULL round takes 30-90 min, the holder refreshes per round
 POLL = 10.0
 REPORT_EVERY = 300.0  # seconds between unchanged position lines
+# A waiting ticket tested over the current main passes an earlier waiting one tested over an older main (that one
+# re-runs its tier anyway; turning it first made the fresh one re-run too: ~984 min/day of FULL re-runs before the
+# turn, 2026-10-30..31). Only while the passed one has waited less than this; then order holds again.
+PASS_CAP_S = 3600
 _held: list[Path] = []
 
 
@@ -118,13 +122,26 @@ def blockers(qdir: Path, ticket: Path, now: float | None = None) -> list[dict]:
     rows = ahead(qdir, Path("~"), now)  # every live ticket ("~" sorts after the digits)
     me = next((r for r in rows if r["ticket"] == ticket.name), {})
     mine, urgent = me.get("branch"), bool(me.get("urgent"))
+    main = current_main(qdir) if me.get("tested") else None
+    now = time.time() if now is None else now
+
+    def passed(r: dict) -> bool:  # stale and young enough to pass; never a turn or an urgent ticket
+        return (bool(main) and me.get("tested") == main and r.get("status") == "waiting" and not r.get("urgent")
+                and r.get("tested") != main and now - r.get("waiting_since", 0) < PASS_CAP_S)  # 0: an older land.py
     # D-889 addendum 5: an urgent ticket (one at a time, the user's words as its reason) passes ordinary waiting
     # tickets ahead of it, and a waiting urgent ticket anywhere holds every ordinary one; a turn is never cut short.
     return [r for r in rows if r["ticket"] != ticket.name and (
         r.get("status") == "turn" or (mine is not None and mine in (r.get("batch") or []))
         or (not urgent and r.get("urgent") and r.get("status") == "waiting")
         or (r["ticket"] < ticket.name and r.get("status") not in ("preparing", "pending")
-            and (bool(r.get("urgent")) or not urgent)))]
+            and (bool(r.get("urgent")) or not urgent) and not passed(r)))]
+
+
+def current_main(qdir: Path) -> str | None:
+    """main's commit in the clone this queue belongs to (``qdir`` sits in its git common dir), or None."""
+    result = subprocess.run(["git", "--git-dir", str(qdir.parent), "rev-parse", "-q", "--verify", "refs/heads/main"],
+                            capture_output=True, text=True)
+    return result.stdout.strip() or None
 
 
 def urgent_holder(qdir: Path) -> dict | None:
@@ -171,12 +188,13 @@ def touch(ticket: Path | None = None) -> None:
 
 
 def wait(qdir: Path, ticket: Path, timeout: float, clock=time.time, sleep=time.sleep, check=None,
-         done=None, form=None) -> str | None:
+         done=None, form=None, tested: str | None = None) -> str | None:
     """Mark ``ticket`` waiting; return None once nothing blocks it (``blockers``), marked as in its turn;
     QueueError after ``timeout`` seconds (0: no limit), or as soon as ``check()`` names a reason to stop.
     ``"landed"`` as soon as ``done()`` is true (a batch landed this branch), ``"batch"`` when ``form(rows)``
-    made this ticket a batch leader while ``rows`` blocked it (``land_batch.py``)."""
-    set_status(ticket, "waiting")
+    made this ticket a batch leader while ``rows`` blocked it (``land_batch.py``). ``tested``: the main this
+    ticket's green tier passed over (``land_full.restore``), for ``blockers``' fresh-first order."""
+    set_status(ticket, "waiting", tested=tested or "", waiting_since=clock())
     began, said, last = clock(), None, 0.0
     while True:
         if done and done():
