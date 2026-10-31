@@ -122,6 +122,7 @@ def blockers(qdir: Path, ticket: Path, now: float | None = None) -> list[dict]:
     rows = ahead(qdir, Path("~"), now)  # every live ticket ("~" sorts after the digits)
     me = next((r for r in rows if r["ticket"] == ticket.name), {})
     mine, urgent = me.get("branch"), bool(me.get("urgent"))
+    carried = {name for r in rows for name in (r.get("batch") or [])}
     main = current_main(qdir) if me.get("tested") else None
     now = time.time() if now is None else now
 
@@ -135,9 +136,10 @@ def blockers(qdir: Path, ticket: Path, now: float | None = None) -> list[dict]:
         or (not urgent and r.get("urgent") and r.get("status") == "waiting")
         or (r["ticket"] < ticket.name and r.get("status") not in ("preparing", "pending")
             and (bool(r.get("urgent")) or not urgent) and not passed(r)
-            # A member this ticket's batch carries waits for this leader, so it must not block it back: on
-            # 2026-10-31 three leader/member pairs each waited on the other and main stood still 2 h 15 min.
-            and r.get("branch") not in (me.get("batch") or [])))]
+            # A member any live batch carries lands with its leader and waits for it, so it blocks no one: on
+            # 2026-10-31 three leader/member pairs each waited on the other (main still 2 h 15 min), and members
+            # waiting for preparing leaders held every later ticket.
+            and r.get("branch") not in carried))]
 
 
 def current_main(qdir: Path) -> str | None:

@@ -33,7 +33,8 @@ def test_a_batch_leader_holds_its_members_wherever_it_stands_and_releases_them_w
     queue.set_status(member, "turn")  # even a member that would be first stays behind its leader
     queue.set_status(member, "waiting")
     assert [r["branch"] for r in queue.blockers(tmp_path, member)] == ["feat/l"]
-    assert [r["branch"] for r in queue.blockers(tmp_path, other)] == ["feat/m"], "a preparing leader blocks no one else"
+    # Neither does its carried member: it lands with the leader (2026-10-31: such members held every later ticket).
+    assert queue.blockers(tmp_path, other) == [], "a preparing leader blocks no one else"
     queue.set_status(leader, "waiting", batch=[])
     assert info(leader)["batch"] == [] and info(leader)["status"] == "waiting"
 

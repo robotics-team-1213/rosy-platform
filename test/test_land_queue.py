@@ -213,4 +213,6 @@ def test_a_waiting_member_never_blocks_the_leader_that_carries_it(tmp_path):
     assert queue.blockers(tmp_path, leader) == [], "the leader turns and lands its member"
     assert [r["branch"] for r in queue.blockers(tmp_path, member)] == ["land/feat/leader"]
     other = queue.take(tmp_path, "land/fix/other", status="waiting")
-    assert [r["branch"] for r in queue.blockers(tmp_path, other)] == ["land/docs/member", "land/feat/leader"]
+    assert [r["branch"] for r in queue.blockers(tmp_path, other)] == ["land/feat/leader"], "a carried member: no one"
+    queue.set_status(leader, "preparing", batch=["land/docs/member"])
+    assert queue.blockers(tmp_path, other) == [], "behind a leader still preparing, its waiting member holds no one"
