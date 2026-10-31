@@ -95,6 +95,72 @@ def test_contact_run_exposes_report_and_phase_evidence_without_promotion(tmp_pat
 
 
 @pytest.mark.parametrize('width', [1280, 390])
+def test_container_run_shows_pictures_video_summary_ledger_and_real_photos(tmp_path, width):
+    import json
+    import sys
+    import sim_web
+    from test_sim_web import blob
+    playwright = pytest.importorskip('playwright.sync_api')
+    sys.path.append(str(sim_web.ISAAC))
+    from mapped_stack_fixture import container_fixture
+    report = {'fixture': container_fixture(layers=3, case='nominal'), 'trials': [{'layers': []}], 'task_success': False}
+    runs = SharedRuns()
+    runs.photos = tmp_path / 'cell-photos'
+    runs.photos.mkdir()
+    import struct
+    import zlib
+    def chunk(kind, data):
+        return struct.pack('>I', len(data)) + kind + data + struct.pack('>I', zlib.crc32(kind + data))
+    png = (b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', 1, 1, 8, 0, 0, 0, 0))
+           + chunk(b'IDAT', zlib.compress(b'\x00\x00')) + chunk(b'IEND', b''))
+    (runs.photos / 'ceiling.jpg').write_bytes(png)  # the browser sniffs the bytes; only presence matters here
+    row = runs.rows['b' * 32]
+    row['input']['scenario_id'] = 'omx-map-container-stack'
+    ids = ['mapped-stack-report', 'mapped-video', 'mapped-video-frames', 'mapped-overview', 'mapped-initial', 'mapped-layer-1']
+    row['artifacts'] = {'files': [{'id': name} for name in ids]}
+    def call(payload):
+        if payload['action'] == 'artifact':
+            if payload['artifact_id'] == 'mapped-stack-report':
+                return blob(json.dumps(report).encode(), 'application/json')
+            return blob(b'', 'video/mp4') if payload['artifact_id'] == 'mapped-video' else blob(png, 'image/png')
+        return SharedRuns.call(runs, payload)
+    runs.call = call
+    server = make_server(open_store(tmp_path), 0, accounts=Accounts(), sim_runs=runs)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base = f'http://127.0.0.1:{server.server_port}'
+    try:
+        with playwright.sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page(viewport={'width': width, 'height': 900})
+            errors = []
+            page.on('pageerror', lambda error: errors.append(str(error)))
+            browser.contexts[0].add_cookies([{'name': 'rosy_learning_session', 'value': 'reader', 'url': base}])
+            try:
+                expect = playwright.expect
+                page.goto(base + '/learning/sim?run=' + 'b' * 32, wait_until='networkidle')
+                expect(page.locator('#sim-artifacts img')).to_have_count(3)
+                expect(page.locator('#sim-artifacts video')).to_have_count(1)
+                expect(page.locator('#sim-artifacts')).to_contain_text('1번째 놓기 후')
+                expect(page.locator('#sim-artifacts')).not_to_contain_text('frames')
+                expect(page.locator('#sim-summary')).to_contain_text('놓은 상자 0/9 · 불안정 상자 0개')
+                expect(page.locator('#sim-inventory tbody tr')).to_have_count(len(sim_web.yaml.safe_load(
+                    sim_web.INVENTORY.read_text(encoding='utf-8'))['models']))
+                expect(page.locator('#sim-inventory')).to_contain_text('대용')
+                expect(page.locator('#sim-tasks li').first).to_contain_text('배 모양 판')
+                ceiling = page.locator('#sim-compare figure').nth(0)
+                expect(ceiling.locator('img')).to_have_js_property('naturalWidth', 1)
+                expect(page.locator('#sim-compare figure').nth(1).locator('img')).to_have_count(1)  # mapped-overview
+                expect(page.locator('#sim-compare')).to_contain_text('실물 사진이 아직 등록되지 않았습니다.')
+                assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+                assert errors == []
+            finally:
+                browser.close()
+    finally:
+        server.shutdown(); server.server_close(); thread.join()
+
+
+@pytest.mark.parametrize('width', [1280, 390])
 def test_sim_shared_runs_replay_stop_and_disabled_scenarios(tmp_path, width):
     playwright = pytest.importorskip('playwright.sync_api')
     runs = SharedRuns()
