@@ -307,7 +307,8 @@ def test_solve_line_refuses_a_joint_jump_and_an_unreachable_sample(kin):
         kin.solve_line(first, start, (0.18, 0.0, 0.04), limits, count=1, max_joint_step_rad=0.01)
     assert (jump.value.reason, jump.value.sample) == (WAYPOINT_DISCONTINUITY, 1)
     with pytest.raises(LineRejected) as far:
-        kin.solve_line(first, start, (0.39, 0.0, 0.10), limits, count=10, max_joint_step_rad=0.25)
+        # coarse steps near full stretch would trip the jump check first; this one looks at reach alone
+        kin.solve_line(first, start, (0.39, 0.0, 0.10), limits, count=10, max_joint_step_rad=math.pi)
     assert far.value.reason == IK_UNREACHABLE
 
 
