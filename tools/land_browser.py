@@ -17,8 +17,9 @@ from pathlib import Path
 from known_failures import RERUN_MARKER
 from remote_pytest import ALONE_ENV, BROWSER_ENV
 
-# 2026-10-26 FULL: 4 chunks took 878/772/536/487 s (2673 s); 8 bring a chunk near 5 min.
-CHUNKS = 8
+# 2026-10-26 FULL: 4 chunks took 878/772/536/487 s (2673 s); 8 bring a chunk near 5 min. 12 since 2026-10-31: FULL
+# rounds' 8 chunks ran up to 14 min each (60-163 min in all), the tail of the round; 12 spread over the wider lanes.
+CHUNKS = 12
 # Load-sensitive: their ids failed under load and passed alone (test/flaky_quarantine.txt LOAD-FLAKY rows), so
 # they run in one chunk with no lane job of the same run beside it.
 ALONE = frozenset({
