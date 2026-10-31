@@ -5,9 +5,16 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.337
+**Version:** v1.338
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.338 충전 칸 계획 보기 (D-941)
+
+- 새 엔드포인트 `GET /api/fleet/charge-bays`(읽기 권한). 활성 지도의 `charge` 장소를 충전 칸으로 보고, 로봇마다 배터리(`power_health.battery`, `evidence: fresh`일 때만)와 지도 자세(`LOCALIZED`일 때만)로 계획을 계산해 보여 준다.
+- 응답 `{map_version, thresholds:{go_percent, leave_percent, rate_pct_per_min}, bays:[{bay, x, y, state, robot_id}], actions:[{robot_id, action, reason, bay?, …}], dispatch:false}`. 칸 `state`는 `free`·`planned`·`arrived`·`charging`. `action`은 `go`(15 % 이하, 빈 칸 배정, 배터리 낮은 순)·`after_trip`·`wait`(`battery_unknown`·`no_free_bay`)·`stay`(`connecting`·`charging`·`charge_rate_not_measured`)·`reseat`(칸에 30 s 있었는데 전압 상승 없음, `usb_not_connected`)·`leave`(도착 % + 측정 충전 속도 × 연결 시간 ≥ 80 %).
+- 칸 연결은 걸러진 팩 전압이 20 s 안에 0.05 V 이상 오른 것이다(마그네틱 USB에는 보고 장치가 없다). 연결 중 CORE의 퍼센트는 충전기 전압이므로 나가는 판단에 쓰지 않는다. 충전 속도를 재기 전에는 `leave`를 내지 않는다.
+- 보여 주기만 한다(`dispatch: false`). Fleet은 이 계획으로 trip을 보내지 않는다. 활성 지도가 없으면 404 `NO_ACTIVE_MAP`. additive다.
 
 ### v1.337 정지 화면의 해제 전용 코드
 
@@ -3166,6 +3173,7 @@ Vision `vision --track`은 모서리 마커 보정 우선, 없으면 승인 사�
 | POST | `/api/fleet/tracking/relearn` | operator | `{source_id}`의 배경 재학습 번호 증가. v1.186(D-600): 응답 `{source_id, relearn_seq, occupied, unlocated:[robot_id]}` — 로봇은 그대로 두고, `occupied` 자리는 배우지 않으며, `unlocated` 로봇은 배경이 될 수 있다 |
 | GET | `/api/fleet/calibrations` | viewer 이상 | 승인 기록 목록과 `use: display-only` |
 | POST | `/api/fleet/robots/{robot_id}/identify` | named `operator` (D-540 9, v1.161) | D-472, v1.130; v1.185(D-596). 본문 생략 또는 `{color?:"blue"\|"amber"}`(생략 = 파랑, 파랑이 그 로봇을 보는 source에서 쓰이는 중이면 주황. 주황은 주의(caution) 램프와 같은 점멸이라 자동 요청은 파랑만 쓴다). 자동 요청은 CORE에 `?quiet=true`(호출음 없음, 이전 payload는 이 값을 무시하고 소리를 낸다), 마커가 계속 안 보이는 로봇은 30 s → 2 min → 5 min 간격. Vision의 `matched`는 그 로봇의 예상 자리 안이어야 하고(v1.191: Fleet 지도 자세, 반경 `auto_near_m` + 앵커 뒤 odom 1 m마다 0.15 m·최대 1.0 m; 지도 자세가 없으면 마지막 천장 마커 자리·`auto_near_m`; 아니면 UNKNOWN `far_from_robot`; v1.193부터 파랑 점멸 판정은 예상 자리 밖에서도 받는다, 주황과 정색 표시는 아님), 예상 자리를 모르는 주황 요청은 UNKNOWN `no_prediction`. 신원 미확인 등록 로봇에 서 있든 움직이든(로봇을 움직이지 않는다) CORE `POST /host/lamp/identify`를 전달하고 그 로봇을 보는 Vision source에 6 s 창을 연다. 동시에 source마다 색 하나씩(최대 2대): 같은 로봇이 이미 확인 중이거나 요청한 색이 쓰이는 중이거나 두 색 모두 쓰이는 중이면 창+2 s 동안 409 `IDENTIFY_BUSY`, 확인된 로봇 409 `IDENTIFY_ALREADY_CONFIRMED`, 로봇 거절(또는 쓰이는 색으로 답함) 502 `IDENTIFY_NOT_ACCEPTED`. 로봇이 주의 표시 중(차선 HOLD, 도킹 실패)이면 409 `IDENTIFY_ROBOT_CAUTION`(v1.191, 자동 요청은 묻지 않는다). v1.195: 요청 뒤 창이 열린 동안 Fleet은 로봇 CORE `GET /host/lamp/identify/{request_id}`를 1 s마다 묻고, `refused`면 창을 닫고 UNKNOWN `lamp_refused`(`last.lamp_reason`에 로봇의 이유)로 남긴다; 404(이전 CORE)면 그 요청은 다시 묻지 않는다. `IDENTIFY_NOT_MOVING`은 없어졌다. 응답 `{robot_id, request_id, color, not_after, sources, state:"pending_visual_confirmation", trigger:"operator"}`는 카메라 신원 확정이 아니다. 사이트 YAML `identity.auto_request`(기본 true, v1.185)면 Fleet이 스스로 요청한다: 마커를 본 로봇의 마커가 `auto_marker_missing_s`(3 s) 넘게 안 보이고 마지막 마커 자리(없으면 로봇 지도 자세) `auto_near_m`(0.5 m) 안에 익명 blob이 있을 때(`marker_missing`), 겹침으로 풀린 확인 트랙 근처 blob이 다시 혼자일 때(`split`), 로봇 자세가 odom 원점으로 뛴 뒤 익명 blob이 있을 때(`odom_reset`). 로봇마다 `auto_min_interval_s`(30 s)에 한 번, 상태가 신선하고 `safety.estop`이 정확히 false일 때만 |
+| GET | `/api/fleet/charge-bays` | 읽기 | D-941 5/7 (v1.338): 활성 지도 충전 칸과 로봇별 충전 계획(`go`·`stay`·`reseat`·`leave` 등). 보여 주기만 하며 trip을 보내지 않는다(`dispatch: false`). 활성 지도 없음 404 `NO_ACTIVE_MAP` |
 | POST | `/api/fleet/robots/{robot_id}/power` | named `operator` (D-540 9) | D-440 6 (v1.222): `{action: sleep\|wake}`, 다른 값·다른 필드는 422. `sleep` 은 그 로봇의 `POST /api/v1/power/mode {"mode":"STANDBY"}`, `wake` 는 `POST /api/v1/power/wake` 로 로봇 자격으로 그대로 보낸다 — CORE 인터록(IDLE 이 아닌 로봇은 ACTIVE 유지)은 CORE 가 판정하므로, 거절된 절전은 200 과 `result.mode: "ACTIVE"` 로 돌아온다. 200 `{robot_id, actor_id, result}`(`result` 는 CORE 의 `PowerStatus`), 모르는 로봇 404 `UNKNOWN_ROBOT`, 전송 실패 502. 전원 상태는 `GET /api/fleet/state` 행의 `state.power` 그대로다 |
 | POST | `/api/fleet/calibrations` | operator | source_id/map_id, map_to_image(9), image(width,height), track_bounds_m, fit_score, lens 또는 null, frame_seq 또는 null을 승인·영속 기록 |
 | DELETE | `/api/fleet/calibrations/{source_id}` | operator | 승인 기록 철회·감사 |
@@ -4382,6 +4390,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.338 | 2026-11-01 | additive (D-941): `GET /api/fleet/charge-bays` — 활성 지도 충전 칸 계획 보기(전압 상승으로 연결, 도착 % + 측정 충전 속도로 나감), 보내기 없음 |
 | v1.337 | 2026-10-31 | additive (SAF-001, Safety-Review 대상): `POST /api/v1/safety/release-code` — 래치 중 정지 화면의 일회용 해제 코드(역할 `estop_release`, root 발급)로 해제한다. 로그인 토큰을 주지 않고 로그인 코드로는 해제할 수 없다. Fleet `POST /api/fleet/robots/{robot_id}/estop-release` |
 | v1.336 | 2026-10-31 | additive: 상태 스냅샷 `safety.source`(래치 원인) |
 | v1.335 | 2026-10-31 | D-938: policy admission scope accepts `arm_transfer` (ARM_TRANSFER jobs only) with required `proposers` and `valid_until`; status reads back `enabled_by`; expired scopes close every kind. Same admission checks as a human admit; simulation arm transfer HTTP only. |
