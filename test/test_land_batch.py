@@ -21,6 +21,16 @@ from test_land import commit, git, repos  # noqa: E402,F401  (land.py's fixture 
 @pytest.fixture(autouse=True)
 def fresh_selection_cache(monkeypatch):
     monkeypatch.setattr(land_batch, "_BATCHABLE", {})  # fixture commits repeat their SHAs across tests
+    monkeypatch.setattr(land_batch, "AUTO", True)  # these tests exercise batching itself, off by default (addendum 9)
+
+
+def test_automatic_batching_is_off_unless_turned_back_on(monkeypatch):
+    """D-889 addendum 9: 97 batches formed in 48 h, 28 landed, 43 stopped, and every 10-31 queue stall came from one."""
+    plain = type("Args", (), {"tests": "auto", "node": False, "no_cache": False})()
+    monkeypatch.setattr(land_batch, "AUTO", False)
+    assert not land_batch.plain_auto(plain, [])
+    monkeypatch.setattr(land_batch, "AUTO", True)
+    assert land_batch.plain_auto(plain, [])
 
 
 def info(ticket: Path) -> dict:

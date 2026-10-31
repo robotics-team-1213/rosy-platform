@@ -23,6 +23,7 @@ Never resets or force-deletes: a stopped batch branch is kept for its log; a lan
 
 from __future__ import annotations
 
+import os
 import socket
 import sys
 import time
@@ -100,9 +101,13 @@ def batchable(land, wt: Path, other: Path, name: str, tip: str) -> str | None:
     return _BATCHABLE[key]
 
 
+# D-889 addendum 9 (2026-10-31): automatic batching is off; ROSY_LAND_BATCH=1 turns it back on for a lander.
+AUTO = os.environ.get("ROSY_LAND_BATCH") == "1"
+
+
 def plain_auto(args, extra) -> bool:
-    """Explicit checks or freshness requests run alone; only plain auto opts into batching."""
-    return (args.tests == "auto" and not extra and not getattr(args, "node", False)
+    """Explicit checks or freshness requests run alone; only plain auto opts into batching, and only while AUTO."""
+    return (AUTO and args.tests == "auto" and not extra and not getattr(args, "node", False)
             and not getattr(args, "no_cache", False))
 
 
