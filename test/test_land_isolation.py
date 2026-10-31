@@ -307,6 +307,7 @@ def test_turn_stale_reruns_ride_the_turns_round_its_cap_and_overtime_path(repos,
     monkeypatch.setattr(land_isolation, "alone_files", lambda wt_, sel: ([], set()))
     monkeypatch.setattr(land_isolation, "gate", lambda wt_, sel: [])
     monkeypatch.setattr(land, "TURN_CAP_S", -1)
+    monkeypatch.setattr(land.land_checks, "turn_wanted", lambda *a: True)
     real, calls, again = _runner({"pkg/test": GREEN, "pkg/test/test_a.py": GREEN}), [], []
     monkeypatch.setattr(land.remote_pytest, "run", lambda inv, *a, **k: calls.append([list(i) for i in inv]) or real(inv, *a, **k))
     real_again = land.land_prepare.again

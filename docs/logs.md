@@ -13211,3 +13211,10 @@ osy-d395-s1d\`.
 - 변경: `docs/solutions/runtime-errors/omx-cell-device-identity-after-rewiring-2026-10-31.md` (동일 시리얼 Innomaker는 by-path, RealSense 노드는 USB 인터페이스 udev 이름, 팔 좌우는 LED 차분, 확인은 `omx_devices.py scan`)
 - 증거: 현장 PC 실측(PING·LED·udev 링크·영상). depth(USB 2.0)는 미해결로 남김
 - gate 변화: 없음
+## 2026-11-01 · uncommitted · docs(adr): 착지 처리량은 시험 PC 용량이 정한다
+- 변경: D-889 추가 10(통째 점유 제거·변화분 겹침 판정·입력 해시 결과 재사용·문서 전용 빠른 길 보류·사후 검증 채택 안 함, 성공 기준과 측정)
+- 근거: 사전 시험 슬롯 대기 p50 66분, 시험 실행 p50 1분, 배치 시도 73% 자리 없음, 착지당 사전 시험 p50 2·p90 5회, 문서 전용 착지 7%; 사례 조사(Chromium CQ, Bazel 캐시, Uber SubmitQueue, bors·Zuul·Tide, Google TAP)
+- 증거: `Rosy/docs/research/2026-11-01-merge-queue-bottleneck-cases.md`, `Rosy/docs/workspace-records/2026-10-31/landing-throughput-before-after.md`
+- gate 변화: 없음
+- 결정: D-889 추가 10(사용자 결정 2026-11-01)
+- 교훈: 없음
