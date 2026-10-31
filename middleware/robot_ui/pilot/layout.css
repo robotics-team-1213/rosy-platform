@@ -280,7 +280,7 @@ body[data-pilot-screen="arm"] ui-topbar [data-gate-state] { display: none; }
 [data-screen="arm"] textarea { display: block; width: 100%; resize: vertical; }
 .arm-step-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .arm-record-status { margin: 0; font-family: var(--mono); font-variant-numeric: tabular-nums; }
-.arm-record-status[data-state="recording"] { color: var(--status-crit); font-weight: 600; }
+.arm-record-status[data-state="recording"] { color: var(--status-crit); font-weight: var(--weight-label); }
 
 /* D-411 C 그리퍼 — 오른손 칸: 상태 배지, 열기/반/닫기, 열림 % 슬라이더(놓을 때 한 번 보낸다). */
 .gripper-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); }
