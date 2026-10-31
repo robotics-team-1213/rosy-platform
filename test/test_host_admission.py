@@ -40,7 +40,7 @@ def test_only_gazebo_isaac_and_alone_browser_chunks_ask_the_host_for_it_alone():
     """robot-08: serial (no -n) and alone on the host are different needs; an alone job empties a host."""
     serial = ["integrations/simulation/gazebo/test", "learning/envs/isaac/test", "tools"]
     alone = lambda inv: "ROSY_JOB_ALONE=1" in xp.plan(inv, FULL, serial)[0]  # noqa: E731
-    assert alone(["integrations/simulation/gazebo/test/test_x.py"]) and alone(["learning/envs/isaac/test"])
+    assert alone(["integrations/simulation/gazebo/test/test_x.py"]) and not alone(["learning/envs/isaac/test"])
     assert alone(["integrations"]), "a parent directory runs the gazebo suites too"
     assert alone(["ROSY_RUN_BROWSER_TESTS=1", "ROSY_BROWSER_ALONE=1", "a/test/test_b_browser.py"])
     assert not alone(["ROSY_JOB_CORES=6", "tools/collect_alone.py"]), "the isolation gate: serial, admitted normally"

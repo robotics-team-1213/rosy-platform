@@ -23,7 +23,9 @@ ALONE = "ROSY_BROWSER_ALONE=1"  # work_queue.ALONE_ENV: a timing-sensitive brows
 # Suites that need the host to themselves (ROS_DOMAIN_ID, ports, subprocesses), not merely no -n: serial_suites.txt's
 # tools line (home-directory tools, collect_alone one file per process) and browser or node-id jobs are admitted
 # normally. land_isolation runs its timing files one at a time inside its own job.
-HOST_ALONE = ("integrations/simulation/gazebo/test", "learning/envs/isaac/test")
+# Isaac left 2026-10-31: its tests point HOME at tmp_path and mock GPU/subprocess, run serial (serial_suites.txt) beside
+# others; as an alone job each of its 21 runs in 3.3 h drained a whole host for a 0.6-min suite.
+HOST_ALONE = ("integrations/simulation/gazebo/test",)
 # land.py sets TURN_ENV while it holds the turn; its jobs then carry TURN_JOB, which remote_job.ADMIT starts without
 # waiting for room. 2026-10-31 a turn's guard job waited 75 min behind other landings' prepare jobs on the site PC,
 # and the whole queue (34 tickets) waited behind the turn.
