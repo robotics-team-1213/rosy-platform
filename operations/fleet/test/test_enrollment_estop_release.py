@@ -72,3 +72,23 @@ def test_a_different_robot_behind_the_address_is_not_released(tmp_path):
 
     assert (error.code, error.reason) == ("code_consumed", "wrong_robot")
     assert core.released == [] and core.logged_out == [ADMIN]
+
+
+def test_core_refusing_the_release_still_logs_the_token_out(tmp_path):
+    service, _, core, _ = latched(tmp_path)
+    core.release_status = 409
+
+    error = refused(service)
+
+    assert (error.code, error.reason) == ("code_consumed", "release_refused")
+    assert core.estop is True and core.logged_out == [ADMIN]
+
+
+def test_a_failed_logout_is_audited(tmp_path):
+    service, _, core, store = latched(tmp_path)
+    core.logout_status = 500
+
+    run(service.release_estop("rosy_09", code=CODE, principal_id="alice"))
+
+    assert any(row["action"] == "estop_release" and row["outcome"] == "admin_token_not_revoked"
+               for row in store.audit_rows())

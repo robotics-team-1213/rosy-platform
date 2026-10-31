@@ -59,6 +59,7 @@ class FakeCore:
         self.logged_out: list[str] = []
         self.estop = False
         self.released: list[str] = []
+        self.release_status = 200
 
     def handle(self, request: httpx.Request) -> httpx.Response:
         path = request.url.path
@@ -97,8 +98,9 @@ class FakeCore:
                                              "pose": {"x": self.pose[0], "y": self.pose[1],
                                                       "yaw": 0.0}, "safety": {"estop": self.estop}})
         if path == "/api/v1/safety/release":
-            if self.role != "administrator":
-                return httpx.Response(403, json={"error": {"code": "FORBIDDEN", "message": "admin"}})
+            if self.role != "administrator" or self.release_status != 200:
+                return httpx.Response(403 if self.role != "administrator" else self.release_status,
+                                      json={"error": {"code": "REFUSED", "message": "refused"}})
             self.released.append(bearer)
             self.estop = False
             return httpx.Response(200, json={"estop": False})

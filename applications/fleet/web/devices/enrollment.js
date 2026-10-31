@@ -272,6 +272,7 @@ export function createEnrollmentPanel({ scope, headers, identity, log, dialogs, 
         el("enroll-dialog")?.close?.();
         showResult([`${target.release} 비상정지 해제됨`], false);
         log?.(`${target.release} 비상정지 해제`, "good");
+        onMoved?.();  // 셸이 로봇 상태를 다시 읽는다
         return;
       }
       if (target.move) {

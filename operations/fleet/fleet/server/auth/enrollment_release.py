@@ -4,11 +4,18 @@ CORE keeps `/api/v1/safety/release` administrator-only. Fleet does not gain that
 exchanges a code read off the robot's own screen once, releases, and logs the token out at
 once. The token is never stored, logged or returned. A robot that is not latched is refused
 before the code leaves Fleet, so a stray click does not burn it.
+
+shortcut: a robot without a TLS binding gets the code and the short-lived administrator token
+over plain HTTP on the LAN (revoked right after); require a TLS binding here once every robot has one.
 """
 
 from __future__ import annotations
 
+import asyncio
+
 import httpx
+
+from fleet.hub.hub import HubError
 
 from fleet.server.enrollment_errors import EnrollmentError
 from fleet.swarm.transport import RobotApiError
@@ -26,8 +33,12 @@ class SafetyReleaseMixin:
             raise EnrollmentError("not_enrolled", 404, "that robot is not an active enrolled robot")
         self._tls_fence(row)
         try:
-            state = await self._console()._client(robot_id).state()
-        except (RobotApiError, httpx.HTTPError, Exception):  # HubError when off the roster
+            client = self._console()._client(robot_id)
+        except HubError:
+            raise EnrollmentError("not_enrolled", 404, "that robot is not on the roster") from None
+        try:
+            state = await client.state()
+        except (RobotApiError, httpx.HTTPError, OSError, ValueError):
             self._store.audit(action="estop_release", outcome="unreachable", principal_id=principal_id,
                               target=robot_id)
             raise EnrollmentError("unreachable", 502, "the robot is not reachable") from None
@@ -36,7 +47,13 @@ class SafetyReleaseMixin:
                               target=robot_id)
             raise EnrollmentError("not_latched", 409, "the robot is not in emergency stop; the code was not used")
         async with self._http(row["address"]) as http:
-            paired = await self._exchange(http, normalized, principal_id, robot_id, action="estop_release")
+            try:
+                paired = await self._exchange(http, normalized, principal_id, robot_id, action="estop_release")
+            except ValueError:  # EnrollmentTlsError: the robot did not prove its binding; the code never left
+                self._store.audit(action="estop_release", outcome="tls_binding_mismatch",
+                                  principal_id=principal_id, target=robot_id)
+                raise EnrollmentError("tls_binding_mismatch", 409,
+                                      "the robot does not prove its approved TLS binding") from None
             try:
                 answer = await self._release_with(http, paired, row)
             except EnrollmentError as exc:
@@ -44,7 +61,8 @@ class SafetyReleaseMixin:
                                   principal_id=principal_id, target=robot_id)
                 raise
             finally:
-                if not await self._logout(http, paired["token"]):
+                # Shielded: a cancelled request must not leave an administrator token alive.
+                if not await asyncio.shield(self._logout(http, paired["token"])):
                     self._store.audit(action="estop_release", outcome="admin_token_not_revoked",
                                       principal_id=principal_id, target=robot_id)
         self._store.audit(action="estop_release", outcome="released", principal_id=principal_id,
@@ -65,7 +83,7 @@ class SafetyReleaseMixin:
             raise self._consumed("wrong_robot")
         try:
             response = await http.post("/api/v1/safety/release", headers=headers)
-        except httpx.HTTPError:
+        except (httpx.HTTPError, ValueError):
             raise self._consumed("release_unreachable") from None
         if response.status_code != 200:
             try:
