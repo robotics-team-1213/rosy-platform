@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-951 | ROSY Calibration 앱을 두고, 두 팔 셀의 보정·높이·공간 점검을 코드 한 경로로 돌린다. 집게는 D-933 마커, 면 높이는 깊이(`cell_depth`, D-933 3항 터치 대신), 테이블보다 낮은 면은 승인된 `low_zones` 사각형에서만, 하중 관절 I 게인, 팔별 세션 잠금과 통로 예약(`cell_space`). [전문](../adr/D-951-rosy-calibration-application.md) | Accepted (2026-11-01, 사용자 결정; 앱 화면 없음, 부품 착지 대기, 현장 수용 없음) |
 | D-941 | 261026 트랙 운행: 우측통행 순환로에서 차선 진행 거리로 앞차를 따라가고, 줄무늬는 감속·관제 정지점, 주차장 세 칸은 후진 진입 충전 칸. [전문](../adr/D-941-track-platoon-hold-points-charge-bays.md) | Proposed (2026-11-01, 사용자 결정; 설계만) |
 | D-940 | 중복 정의 게이트와 의도 중복 등록부를 둔다. [전문](../adr/D-940-duplicate-definitions-gate.md) | Accepted (2026-11-01, 사용자 결정; 원격 시험·착지는 파이프라인 기록) |
 | D-938 | 팔 이송 정책 승인 — D-865 승인 범위를 ARM_TRANSFER로 확장. [전문](../adr/D-938-arm-transfer-policy-admission.md) | Accepted (2026-10-31, 사용자 결정; simulation 팔 이송 HTTP 전용, 현장 범위 설정·수용 별도) |

@@ -688,6 +688,15 @@ roots:
     note: D-876 independent Monitoring application boundary and backend browser contracts; visual UI acceptance follows separately. Static artifacts consume canonical shared web assets.
     concern: other
     capability: fleet
+  - path: applications/calibration
+    layout_target: applications/calibration
+    part: operations
+    d427_target: operations/ui/calibration
+    wave: none
+    import_prefix: []
+    note: D-951 ROSY Calibration application boundary; the calibration engine stays in deploy/robot/omx cell tools and arm motion stays under D-911.
+    concern: other
+    capability: omx
   - path: operations/processes/palletizing
     part: operations
     d427_target: operations/processes/palletizing

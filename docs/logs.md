@@ -13234,3 +13234,10 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: D-889 추가 11(사용자 지시 2026-11-01)
 - 교훈: 없음
+
+## 2026-11-01 · uncommitted · docs: D-951 ROSY Calibration 앱과 rosy-calibration 스킬
+- 변경: `docs/adr/D-951-rosy-calibration-application.md`(그림 5장 `docs/assets/omx-calibration-2026-11-01-*`), ADR Log, `applications/calibration/{README,AGENTS}.md`, `platform_parts.yaml` 등록, `.claude/skills/rosy-calibration`
+- 증거: 2026-11-01 현장 기록(왼팔 벨트 끝 높이·터치 실패·I 게인 12.3→3.3 mm, 깊이 표식 LOO 62~355 px, 경로 점검 거절)
+- gate 변화: 없음(결정·문서·경계)
+- 결정: D-951 Accepted(사용자 "rosy calibration 이라고 하나 만들어", "코드적으로", 벨트 사각형 바닥 승인). D-933 3항(높이는 터치)을 깊이로 고침
+- 교훈: 없음
