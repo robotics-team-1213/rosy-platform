@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 
 from fakes import FakeRobot, run
@@ -97,6 +99,34 @@ def test_a_conflicting_mission_is_cancelled_and_queued():
     row = [r for r in run(console.snapshot())["robots"] if r["robot_id"] == "rosy_02"][0]
     assert row["queued"]["blocked_by"] == "rosy_01"
     assert row["goal"] is None          # 아직 가지 않는 곳을 목표로 그리지 않는다
+
+
+class _NetworkRobot(FakeRobot):
+    """실제 HTTP 는 경로를 읽는 동안 한 번은 양보한다. 가짜는 양보하지 않아 겹침을 숨긴다."""
+
+    async def navigation_path(self):
+        await asyncio.sleep(0)
+        return await super().navigation_path()
+
+
+def test_concurrent_head_on_missions_let_exactly_one_through():
+    """두 미션이 동시에 경로를 확인해도 마주 오는 둘 중 하나는 기다린다(2026-10-30 재현)."""
+    first = _NetworkRobot("rosy_01", state=_navigating("rosy_01"))
+    first._path = _line(-2.0, 0, 2.0, 0)
+    second = _NetworkRobot("rosy_02", state=_navigating("rosy_02"))
+    second._path = _line(2.0, 0.1, -2.0, 0.1)
+    console = _console(first, second)
+
+    async def both():
+        return await asyncio.gather(console.goal("rosy_01", 2.0, 0.0),
+                                    console.goal("rosy_02", -2.0, 0.1))
+
+    results = run(both())
+
+    assert [r.get("queued") is True for r in results] == [False, True]
+    assert results[1]["blocked_by"] == "rosy_01"
+    assert list(console._claims) == ["rosy_01"]
+    assert ("navigation_cancel",) in second.calls
 
 
 def test_task_traffic_queue_preserves_task_attempt_and_waits_for_scheduler_release():

@@ -214,7 +214,8 @@ def place(cls: str, hosts: list[str], probes: list[dict | None], cores: int = 0)
         site = host in SITES or p.get("site", False)
         cores = p["nproc"] - max(p["load1"], p["lock_cores"]) - (SITE_RESERVE[0] if site else 0)
         mem = min(p["avail_gb"], p["total_gb"] - p["lock_gb"]) - (SITE_RESERVE[1] if site else 0)
-        why = ("marked busy (~/rosy-jobs/busy)" if p["busy"] else f"no {cls} capability" if not p[cls]
+        why = ("marked busy (~/rosy-jobs/busy)" if p["busy"] else "alone job running or waiting"
+               if cls == "pytest" and p.get("pytest_blocked") else f"no {cls} capability" if not p[cls]
                else f"below disk floor {DISK_FLOOR_GB} GB" if disk_full(p)
                else f"below {cls} floor {need_c} cores/{floor_m} GB" if cores < need_c or mem < floor_m
                else f"light (under {need_m} GB): serial, smallest invocations" if mem < need_m else "ok")
@@ -286,7 +287,8 @@ def placed_hosts(cls: str = "pytest", hosts: list[str] | None = None, cores: int
     if not chosen and cls == "pytest" and cores <= NEEDS[cls][0]:  # a job's own core need waits instead
         # D-568 7: busy hosts must not stop the gate; the site PC and a full disk never take this fallback.
         chosen = [h for h, p in zip(hosts, probes)
-                  if p and p["pytest"] and not p["busy"] and not disk_full(p) and h not in SITES]
+                  if p and p["pytest"] and not p.get("pytest_blocked") and not p["busy"]
+                  and not disk_full(p) and h not in SITES]
         if chosen:
             print("[remote-pytest] WARNING: no host above the pytest floor; using the reachable ones anyway",
                   file=sys.stderr, flush=True)
@@ -390,7 +392,7 @@ def run(invocations: list[list[str]], logs: list[Path], sha: str = "HEAD", repo:
         print(f"[remote-pytest] no test host reachable; retrying in {poll:.0f} s (D-584)", file=sys.stderr, flush=True)
         sleep(poll)
         hosts = placed_hosts("pytest", cores=cores)
-    plan = workers(hosts[:len(invocations)], invocations, HEADROOM)  # (host, kind): browser lanes beside main
+    plan = workers(hosts, invocations, HEADROOM, os.environ.get("ROSY_TEST_HOSTS", DEFAULT_HOSTS).split())
     if len(plan) == 1:
         codes = run_on(plan[0][0], invocations, logs, sha, repo, label,
                        **({"test_tools": test_tools} if test_tools else {}), **({"on_done": on_done} if on_done else {}),
@@ -464,7 +466,7 @@ def run_on(host: str, invocations: list[list[str]], logs: list[Path], sha: str, 
         cpu = SITE_CPU_QUOTA if host in SITES else ""
         k = 0  # job number on this host's run dir
         pick = wanted(kind, invocations)
-        take = work.take_small if HEADROOM.get(host, {}).get("light") else lambda: work.take(pick)
+        take = (lambda: work.take_small(pick)) if HEADROOM.get(host, {}).get("light") else lambda: work.take(pick)
         while not (lost and shared) and (i := take()) is not None:
             inv, log, queued = invocations[i], logs[i], round(time.monotonic() - work.began)
             print(f"[remote-pytest] pytest {' '.join(inv)}  -> {log}", flush=True)

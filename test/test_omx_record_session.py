@@ -42,6 +42,8 @@ class Arm:
         return self.read(name)
 
     def cleanup_write(self, name, value):
+        if name not in ("torque", "pwm_limit", "current_limit"):  # as joint_tune.SerialBus.cleanup_write
+            raise ValueError("cleanup permits only torque OFF and baseline caps")
         self.write(name, value)
 
     def alert(self):
@@ -118,6 +120,37 @@ def session(arm, leader, *, active=("rosy-omx-camera@top.service",), activating=
 
 def leader_arm(**state):
     return Arm({motor: {"torque": 0, "hw_error": 0, **state} for motor in m.LEADER})
+
+
+def test_chunk_profile_is_validated_before_bus_work_and_forwarded_to_the_child(tmp_path, monkeypatch):
+    monkeypatch.syspath_prepend(str(DIRECTORY))
+    from cell_robot_profile import SCHEMA, digest, load
+
+    path = config(tmp_path)
+    robot = json.loads(path.read_text())["robot"]
+    profile = tmp_path / "operating-profile.json"
+    document = {"schema": SCHEMA, "device_id": "fixture-device", "instance_id": robot["id"],
+        "robot_config_sha256": digest(robot), "work_dir": "work", "operating_envelope_path": "work/review.json"}
+    profile.write_text(json.dumps(document))
+    arm, leader, seen = follower(), leader_arm(), []
+    s, _ = session(arm, leader, run=lambda command: seen.append(command) or 0)
+    s.chunks = {"library": str(tmp_path / "lib.json"), "io": str(tmp_path / "io"), "sha256": "fixture"}
+    original_path = m.Path
+    class TildeProfile:
+        def expanduser(self):
+            return profile
+    monkeypatch.setattr(m, "Path", lambda value: TildeProfile() if str(value) == "~/fixture-profile.json" else original_path(value))
+    s.operating_profile = "~/fixture-profile.json"
+    record = s.execute(path, CAPS, teleop_only=False)
+    assert record["safe_end"] and record["operating_profile"] == load(profile)["binding"]
+    assert f"--operating-profile={profile.resolve()}" in seen[0]
+    profile.write_text(json.dumps({**document, "instance_id": "other-arm"}))
+    arm, leader = follower(), leader_arm()
+    s, _ = session(arm, leader)
+    s.operating_profile = profile
+    with pytest.raises(ValueError):
+        s.execute(path, CAPS, teleop_only=False)
+    assert arm.writes == leader.writes == []
 
 
 @pytest.mark.parametrize("moving, marked", [((), True), ((1,), False)])
@@ -199,6 +232,33 @@ def test_a_session_raises_the_caps_only_while_recording_and_restores_everything(
     assert ("stop", "rosy-omx-camera@front.service") not in calls  # was not running: left alone
 
 
+def test_a_session_gain_is_written_for_the_session_and_restored_to_the_value_found(tmp_path):
+    """2026-10-26: the wrist at its factory P 400 trailed 4.8 deg under load; the guard stops at 5."""
+    arm, leader = follower({14: {"p_gain": 380}}), leader_arm()
+    s, calls = session(arm, leader)
+    caps = {**CAPS, 14: {**CAPS[14], "p_gain": 800}}
+    record = s.execute(config(tmp_path), caps, teleop_only=False)
+    assert record["caps_restored"] is True and record["safe_end"] is True and (14, "p_gain", 800) in arm.writes
+    assert arm.motors[14]["p_gain"] == 380, "back to what the motor had, not a constant"
+    assert arm.motors[13]["p_gain"] == 400 and (13, "p_gain", 400) not in arm.writes
+
+
+def test_a_session_profile_is_written_for_the_session_and_restored_to_the_value_found(tmp_path):
+    """2026-10-27: the servo snapped to each whole-tick goal; a session profile ramps between them."""
+    found = {"profile_acc": 0, "profile_vel": 0}
+    arm, leader = follower({motor: dict(found) for motor in m.FOLLOWER}), leader_arm()
+    path = tmp_path / "caps.json"
+    path.write_text(json.dumps({str(k): (dict(v, acc=8, vel=20) if k in (12, 13) else v) for k, v in CAPS_FILE.items()}))
+    caps = m.load_caps(path)
+    assert caps[12] == {"pwm_limit": 300, "profile_acc": 8, "profile_vel": 20}
+    s, calls = session(arm, leader)
+    record = s.execute(config(tmp_path), caps, teleop_only=False)
+    assert record["caps_restored"] is True and record["safe_end"] is True
+    assert (12, "profile_acc", 8) in arm.writes and (13, "profile_vel", 20) in arm.writes
+    assert all(arm.motors[motor]["profile_acc"] == 0 and arm.motors[motor]["profile_vel"] == 0 for motor in m.FOLLOWER)
+    assert not any(motor not in (12, 13) and name.startswith("profile") for motor, name, _ in arm.writes)
+
+
 def test_chunk_mode_runs_the_chunk_runner_and_keeps_the_cameras_for_the_judge(tmp_path):
     seen = []
     arm, leader = follower(), leader_arm()
@@ -273,8 +333,13 @@ def test_teleop_only_runs_teleoperate_on_the_robot_and_teleop_part(tmp_path):
     {k: v for k, v in CAPS_FILE.items() if k != 13},                 # a motor missing
     {**CAPS_FILE, 12: {"pwm": 300, "current": 100}},                 # XL430 has no Current Limit
     {**CAPS_FILE, 15: {"pwm": 900}},                                 # above the PWM range
-    {**CAPS_FILE, 11: {"pwm": 500}},                                 # above the first-session ceiling
+    {**CAPS_FILE, 11: {"pwm": 700}},                                 # above the XL430 ceiling (600)
+    {**CAPS_FILE, 14: {"pwm": 500, "current": 250}},                 # above the XL330 ceiling (400)
     {**CAPS_FILE, 16: {"current": 250}},                             # no pwm
+    {**CAPS_FILE, 14: {"pwm": 300, "current": 250, "p": 5000}},      # a gain above its ceiling
+    {**CAPS_FILE, 12: {"pwm": 300, "acc": 8}},                       # a profile needs both acc and vel
+    {**CAPS_FILE, 12: {"pwm": 300, "acc": 1, "vel": 20}},            # acceleration below the guard's lag budget
+    {**CAPS_FILE, 12: {"pwm": 300, "acc": 8, "vel": 5}},             # velocity that would slow the guard's stream
 ])
 def test_caps_files_must_cover_every_motor_within_range(tmp_path, caps):
     good = tmp_path / "good.json"
@@ -284,6 +349,22 @@ def test_caps_files_must_cover_every_motor_within_range(tmp_path, caps):
     path.write_text(json.dumps({str(k): v for k, v in caps.items()}))
     with pytest.raises(SystemExit):
         m.load_caps(path)
+
+
+def test_the_xl430_shoulder_and_elbow_may_run_at_600_for_reach(tmp_path):
+    path = tmp_path / "caps.json"
+    path.write_text(json.dumps({str(k): (dict(v, pwm=600) if k in (12, 13) else v) for k, v in CAPS_FILE.items()}))
+    assert m.load_caps(path)[12]["pwm_limit"] == 600 and m.load_caps(path)[13]["pwm_limit"] == 600
+
+
+def test_the_arm_s_field_caps_file_is_accepted(tmp_path):
+    """The caps.json arm S runs on (2026-10-30): main must start the same session as the field copy."""
+    path = tmp_path / "caps.json"
+    path.write_text('{"11": {"pwm": 300}, "12": {"pwm": 600, "p": 1600}, "13": {"pwm": 600}, '
+                    '"14": {"pwm": 300, "current": 250, "p": 800}, "15": {"pwm": 300, "current": 250}, '
+                    '"16": {"pwm": 300, "current": 250}}')
+    caps = m.load_caps(path)
+    assert caps[12] == {"pwm_limit": 600, "p_gain": 1600} and caps[14] == {"pwm_limit": 300, "current_limit": 250, "p_gain": 800}
 
 
 CARD = """schema: rosy.omx-task-card.v1

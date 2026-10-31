@@ -39,6 +39,14 @@ def load_catalog(path) -> list:
     return data["objects"]
 
 
+def payload(catalog: list, object_id: str) -> dict:
+    """This carry's payload from the catalogue (D-935): the enrolled mass of an empty object (cell_scale), so a
+    filled container is not covered; no measured mass means an unknown payload."""
+    entry = next((o for o in catalog if o["id"] == object_id), {})
+    return {"kg": entry.get("mass_kg"), "source": "catalogue mass of the empty object", "object": object_id,
+            **({"max_gross_kg": entry["max_gross_kg"]} if "max_gross_kg" in entry else {})}
+
+
 def foreground(img, roi, chroma: float | None = None, light: float | None = None, params=None, surface_px=None,
                surface_lab=None):
     """Mask (ROI-sized) of pixels far from the surface's median colour; a shadow moves lightness only a little.
@@ -206,7 +214,15 @@ def object_mask(img, roi, hsv, surface_px=None, params=None):
     surface, its shadows, white lines and belts do not matter. On the board the green boxes read hue 78-80, the board
     20, a box's shadow 34 and the white line saturation 25 (2026-10-29)."""
     x0, y0, x1, y1 = roi
-    mask = cv2.inRange(cv2.cvtColor(img[y0:y1, x0:x1], cv2.COLOR_BGR2HSV), np.array(hsv[0]), np.array(hsv[1]))
+    hsv_img = cv2.cvtColor(img[y0:y1, x0:x1], cv2.COLOR_BGR2HSV)
+    mask = cv2.inRange(hsv_img, np.array(hsv[0]), np.array(hsv[1]))
+    frac = prm.get(params, "objects.top_v_frac")
+    if frac and mask.any():  # top faces only: a side face is the same green, darker by the same ratio in any light
+        n, labels = cv2.connectedComponents(mask)  # (day: top V 186, side 137; at night, V capped by the exposure limit: 59 / ~40)
+        v = hsv_img[..., 2]
+        for i in range(1, n):
+            blob = labels == i
+            mask[blob & (v < frac * np.percentile(v[blob], 90))] = 0
     if surface_px:
         keep = np.zeros_like(mask)
         cv2.fillPoly(keep, [np.asarray(surface_px, np.int32) - [x0, y0]], 255)
@@ -214,6 +230,19 @@ def object_mask(img, roi, hsv, surface_px=None, params=None):
     o, c = (int(prm.get(params, f"objects.{k}")) for k in ("open_px", "close_px"))
     mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, np.ones((o, o), np.uint8))
     return cv2.morphologyEx(mask, cv2.MORPH_CLOSE, np.ones((c, c), np.uint8))
+
+
+def outline(px, results: list, catalog: list, camera: dict, surface_z: float):
+    """Convex outline of an object's own image area: the pixels found plus where their tops meet the surface, so the
+    side faces the camera sees belong to the object. With detection on the top face only (objects.hsv,
+    top_v_frac) a 2-cell's own side face read as a neighbour and closed the finger gap (2026-10-29)."""
+    pts = np.asarray(px, float)
+    heights = [o["top_height_mm"] for o in catalog if o["id"] in {r.get("object") for r in results}] or [o["top_height_mm"] for o in catalog]
+    if "center_px" in camera and "height_m" in camera:
+        c, big_h = np.asarray(camera["center_px"], float), camera["height_m"] - surface_z
+        base = c + (pts - c) * (big_h - max(heights) / 1000.0) / big_h
+        pts = np.vstack([pts, base])
+    return cv2.convexHull(pts.astype(np.int32)).reshape(-1, 2)
 
 
 def detect(img, roi, record: dict, camera: dict, catalog: list, surface_z: float = 0.0, params=None,
@@ -243,10 +272,22 @@ def detect(img, roi, record: dict, camera: dict, catalog: list, surface_z: float
             if parts and any(r["matched"] for res in measured for r in res):
                 pieces, found = parts, None
                 for q, res in zip(parts, measured):
-                    hull = cv2.convexHull(np.column_stack(np.nonzero(q))[:, ::-1].astype(np.int32) + [x0, y0]).reshape(-1, 2)
+                    hull = outline(np.column_stack(np.nonzero(q))[:, ::-1] + [x0, y0], res, catalog, camera, surface_z)
                     out += [{**r, "split_from": "touching", "hull_px": hull.tolist()} for r in res]
+        retry = prm.get(params, "objects.side_retry_v_frac")
+        if found is not None and not all(r["matched"] for r in found) and object_hsv is not None and retry:
+            # top_v_frac off for the whole site (it thinned a belt box at the frame edge) let a 2-cell lying across
+            # the Pinky tray read 56 x 41.5 mm with its side face (2026-10-30); only a blob that matches nothing is
+            # measured again on its brighter part, and kept only when that matches
+            v = cv2.cvtColor(img[y0:roi[3], x0:roi[2]], cv2.COLOR_BGR2HSV)[..., 2]
+            top = (blob & (v >= retry * np.percentile(v[blob], 90))).astype(np.uint8)
+            top = cv2.morphologyEx(top, cv2.MORPH_OPEN, np.ones((int(prm.get(params, "objects.open_px")),) * 2, np.uint8))
+            if top.sum() >= prm.get(params, "objects.min_px", MIN_PX):
+                again = _measure_blob(np.column_stack(np.nonzero(top))[:, ::-1] + [x0, y0], record, camera, catalog, surface_z, params)
+                if all(r["matched"] for r in again):
+                    found = [{**r, "top_retry": retry} for r in again]
         if found is not None:
-            hull = cv2.convexHull(np.column_stack(np.nonzero(pieces[0]))[:, ::-1].astype(np.int32) + [x0, y0]).reshape(-1, 2)
+            hull = outline(np.column_stack(np.nonzero(pieces[0]))[:, ::-1] + [x0, y0], found, catalog, camera, surface_z)
             out += [{**r, "hull_px": hull.tolist()} for r in found]
     return out
 

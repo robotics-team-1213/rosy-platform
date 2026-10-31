@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
-- 2026-10-29 · 071d9941bf · OMX 관제 PC 후속 복구
-- 2026-10-29 · 724ecfbff1 · D-916 원본 시각 검증과 FULL 범위 정정
-- 2026-10-29 · 66ba49bef8 · D-915 원문 물리 근거와 Harbor 연결 기록
-- 2026-10-29 · 535d81ae8b · D-301 서버 서비스 이미지 증분 형식
-- 2026-10-29 · dab8ddacf2 · 플랫폼 UI 통합 검증과 미완료 수용
+- 2026-10-31 · uncommitted · fleet: D-938 팔 이송 정책 승인
+- 2026-10-31 · uncommitted · fix(land): main 변화분의 safety 경로는 FULL 재실행을 부르지 않는다
+- 2026-10-30 · uncommitted · omx: D-935 payload bound on the D-911 gate
+- 2026-10-30 · uncommitted · omx: cell scale reader and D-934 object mass
+- 2026-10-30 · uncommitted · docs(adr): D-931..D-933 arm S measured checks, one field revision, cell coordinate frame

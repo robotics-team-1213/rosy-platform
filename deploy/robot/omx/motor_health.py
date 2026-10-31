@@ -105,7 +105,8 @@ class MotorHealth:
             cap = (motion.pwm_limits[name] if name in motion.pwm_limits
                    else bus.read("PWM_Limit", name, normalize=False))
             row["pwm_limit"] = self.number(cap, "PWM_Limit")
-            if (not 0 < row["temperature_limit_c"] <= 100 or not 0 < row["pwm_limit"] <= 400
+            ceiling = 600 if name in motion.pwm_limits else 400  # body caps already passed guarded_native.PWM_ADMIT_MAX
+            if (not 0 < row["temperature_limit_c"] <= 100 or not 0 < row["pwm_limit"] <= ceiling
                     or not 0 < row["min_voltage_raw"] <= row["max_voltage_raw"]):
                 raise ValueError(f"{name}: invalid motor health configured limits {row}")
             _, _, violations = self.health(bus, name, row)

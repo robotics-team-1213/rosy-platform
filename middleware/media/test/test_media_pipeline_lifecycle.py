@@ -69,3 +69,26 @@ def test_rate_controls_are_available_without_importing_gstreamer():
         'https://media.example/robots/r1/front/whip', 'scoped-token')
     assert hasattr(publisher, 'set_rate'), 'D-789 encoder rate controls are missing'
     assert hasattr(publisher, 'stats'), 'D-789 real transport statistics are missing'
+
+
+def test_only_one_priming_frame_is_queued_before_transport_is_connected(monkeypatch):
+    module = importlib.import_module('rosy_media_edge.pipeline')
+    publisher = module.MediaPublisher('https://media.example/robots/r1/front/whip', 'scoped-token')
+    states, pushed = ['connecting'], []
+    clock = iter([1., 2., 3.])
+    monkeypatch.setattr(module.time, 'monotonic', lambda: next(clock))
+    monkeypatch.setattr(module, 'stamp_rgb', lambda *args, **kwargs: None)
+    publisher._pipeline = object()
+    publisher._rtc = SimpleNamespace(get_property=lambda name: states[0])
+    publisher._webrtc = SimpleNamespace(WebRTCPeerConnectionState=SimpleNamespace(CONNECTED='connected', FAILED='failed'))
+    publisher._gst = SimpleNamespace(
+        Buffer=SimpleNamespace(new_allocate=lambda *args: SimpleNamespace(fill=lambda *args: None)),
+        FlowReturn=SimpleNamespace(OK='ok'))
+    publisher._source = SimpleNamespace(emit=lambda name, buffer: pushed.append(buffer) or 'ok')
+    assert publisher.push_rgb(b'frame', epoch=1, sequence=1, captured_ms=1)
+    assert not publisher.push_rgb(b'frame', epoch=1, sequence=2, captured_ms=2)
+    assert len(pushed) == 1
+    states[0] = 'connected'
+    publisher._connected.set()
+    assert publisher.push_rgb(b'frame', epoch=1, sequence=3, captured_ms=3)
+    assert len(pushed) == 2

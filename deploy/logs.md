@@ -3941,6 +3941,14 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - gate 변화: 없음. 카드 마운트·실물 키 변경·장치 등록·모터 활성화·배포·착지는 수행하지 않았다. 유지보수용 관리자 웹 endpoint를 새로 열지 않는다.
 - CE: 미해결 — 실제 장치의 인증 장애 원인과 실물 복구는 확인하지 못했다. 코드의 복구 거절·원본 보존과 장치 수용을 구분한다.
 
+## 2026-10-29 · uncommitted · feat(omx): 로봇별 프로필과 운용범위 근거 연계 (D-914)
+
+- 변경: Fleet의 설명용 device ID와 native follower instance/config SHA를 장치별 sidecar로 연결한다. 실제로 해석한 work/review 경로를 profile SHA에 포함하고 parent→runner→pipeline과 시도 장부에서 같은 binding을 확인한다. 기존 vendor JSON과 Fleet의 접속/동작 권한 필드는 바꾸지 않는다.
+- 보호: 자동 작업 외에 감독 이동도 다른 profile의 FIFO로 보내지 않는다. recorder는 bus 접근 전에 설정을 검증하고 replay도 같은 선택을 받는다. 다른 디렉터리의 옛 장부 복사·프로필 없는 자동 세션·잘못된 manifest·quoted tilde 경로를 회귀 검증한다.
+- 검증: tests-only b07574fbac 원격 실행에서 새 loader 부재로 RED를 확인했다. a93a18e8d1 및 보강한 aa62d0f5a8의 관련 원격 호출은 exit 0이며, 최종 변경 범위의 공식 원격 검증과 merge는 별도 작업 기록에 연결한다. 실제 장치·서명/배포·가동범위 수용은 하지 않았다.
+- gate 변화: 실물 활성화/수용 변화 없음. 프로필 연관 관계는 설명용 ID와 실제 설정의 일치 검사이며, 이름·모델명이나 JSON 저장이 동작 승인을 만들지 않는다.
+- CE: 해당 없음 — 기존 설정/보정·import/장부 교훈을 새 계약과 회귀 시험에 반영했다. 새 실물 장애의 원인·복구를 검증한 작업은 아니다.
+
 ## 2026-10-29 · uncommitted · deploy: GitHub OS 전송과 서명된 부분 갱신
 
 - 변경: OS bundle의 staged 분할 게시와 전체 해시 재조립, 서명된 engineering canary 제한, 독립 OS CMS가 필요한 전송기 유지보수 및 durable recovery, 기존 전체 파일을 보존하는 native delta 전송 정책을 연결했다. OS·부팅 변경과 알 수 없는 기준은 native 델타로 처리하지 않는다.
@@ -4004,6 +4012,36 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - gate 변화: 없음. monitoring 브라우저 묶음 16개는 모두 skip이며 브라우저 수용을 입증하지 않는다. 실제 Docker 연속성·CI dispatch·설치/운영 배포·실물 수용·main 착지/push는 수행하지 않았다.
 - CE: 해당 없음 — 판단 근거는 D-301·구성 해시·회귀 시험·기존 import 시험에 남긴다.
 
+## 2026-10-29 · cd4e1752c8 · fix(omx): 프로필 recording 회귀의 단독 import 경로
+
+- 변경: 테스트가 필요한 OMX 디렉터리를 monkeypatch 범위에서 명시한다. main 통합은 runner의 params와 operating-profile 인자 및 자식 전달을 모두 보존한다.
+- 검증: 이전 canonical 단독 실행은 cell_robot_profile import 누락으로 1 failed/56 passed/2 skipped였다. 수정 커밋의 공식 원격 단독 실행과 통합 착지 게이트는 진행 중이며 이전 SHA의 통과를 새 SHA 검증으로 세지 않는다.
+- gate 변화: 없음. 장치 접근·배포·push는 하지 않는다.
+- CE: 해당 없음 — 기존 shared-pytest-process-masks-path-dependent-import-2026-10-26 교훈과 한 줄 수정이 원인·재발 조건을 설명한다.
+
+## 2026-10-29 · uncommitted · fix(omx): 실제 runner 매개변수를 운용 근거에 결합
+
+- 변경: main의 params 전달을 보존한 통합 검토에서 실제 pacing·접촉·idle 값이 runtime SHA에 빠진 것을 찾았다. runner가 검증한 값을 한 번 읽어 실행기와 runtime SHA에 함께 전달하고 cell_params.py를 코드 SHA에 포함한다. 물리 동작·기본값·기존 가드는 바꾸지 않는다.
+- 검증: tests-only e4abf6ee1e의 공식 원격 실행은 새 매개변수 결합 부재로 4 failed다. 수정 SHA의 원격 GREEN과 canonical 착지는 별도 확인하며, 이전 단독 import 수정 cd4e1752c8은 exit0/NEW0이다.
+- gate 변화: 없음. 발견 직후 a1f16be836의 pending 착지만 중단했다. 실물 접근·배포·push는 하지 않는다.
+- CE: 해당 없음 — 증거의 적용 범위는 D-914와 실행 값 변경을 검증하는 회귀에 남긴다. 새 장치 장애의 원인·복구를 관측한 작업은 아니다.
+- 추가 검토: 배치 성공 판정의 verify_tol_mm도 task 조건 SHA에 넣고 판정과 같은 유한·비음수 검증을 쓴다. tests-only 7a7e61df27의 공식 원격 실행은 변경/잘못된 허용값으로 기존 검토가 유지되는 7 failed를 재현했다. 누락과 명시적 10.0 mm의 기본값 동치는 유지한다.
+
+## 2026-10-29 · uncommitted · fix(omx): 자동 운반 순서와 현재 시도의 근거 유지
+
+- 변경: main의 새 Gate consumer를 합친 canonical 후보는 합성 auto-pick fixture의 프로필 누락으로 7 failed였고, unchanged main의 같은 7개는 통과했다. fixture만 장치별 합성 프로필과 맞춘 c40c821f5b는 공식 원격 단독 37 passed/0 skipped/NEW0이다.
+- 추가 보호: 실제 선택한 straight/folded 순서와 client 유효 params를 task에 고정한다. 현재 시도의 pending intent 때문에 첫 unchanged-library load가 막히던 경로는 config·보정·순서·library·라이브 세션이 그대로일 때만 기존 검토로 checked 전송한다. unknown pending과 변경된 경로를 허용하는 전역 예외는 만들지 않는다.
+- 검증: tests-only 987b545071은 공식 원격 3 failed/1 passed로 설정·순서 누락과 첫 load 거절을 재현했다. 실제 검토 문서와 시도 장부를 사용해 straight/folded 각각의 pending 생성→동일 load→현재 시도 완료, 새 Gate의 pending 거절, 다른 library·세션·조건 거절을 회귀한다. 새 소스의 원격 GREEN과 canonical 착지는 별도 확인한다.
+- gate 변화: 없음. 물리 동작·기본값·가드·장치 상태는 바꾸지 않았고 배포·push하지 않았다.
+- CE: 해당 없음 — main 통합의 producer/consumer와 증거 적용 조건은 D-914·회귀·기존 import/장부 교훈으로 복원할 수 있다.
+
+## 2026-10-29 · 28dc087ea6 · fallback open AP 표시 소비자 호환
+
+- 변경: 공개 AP 상태의 security를 부팅 표시와 LCD로 전달하고 open일 때 저장된 AP 비밀번호를 읽거나 표시하지 않는다. 콘솔과 LCD는 No password를 표시하며 접속 QR은 키 필드 없는 nopass 형식이다. security가 없는 기존 상태와 WPA2 표시는 유지한다.
+- 증거: tests-only commit 38f4baf395의 공식 원격 실행은 open 표시·QR·비밀번호 읽기 차단 6 FAILED/기존 호환 2 PASS였다. commit 28dc087ea6의 집중 부팅·LCD·QR 회귀는 350 passed/1 skipped, NEW0/known0/flaky0이다. 신규 12개 사례에는 skip이 없다. 기존 frozen 파일 크기는 증가하지 않았다.
+- gate 변화: 없음. 이 변경은 향후 open 상태를 읽는 소비자 지원이다. fallback 정책·실제 AP·장치의 부팅·OTA 수용은 아직 바꾸거나 시험하지 않았다.
+- CE: 해당 없음 — 신규 상태와 자격 정보 차단 계약은 코드 및 회귀로 재현된다.
+
 ## 2026-10-29 · uncommitted · workcell 팔 자격 증명 전체 매핑 설정
 
 - 변경: 서명된 workcell Compose에서 관리자 설정 `ROSY_SITE_WORKCELL_ARM_CREDENTIAL_PATHS`로 Fleet 팔 credential 전체 매핑을 지정한다. 기본 A/B와 Vision 매핑, 역할별 mount, 기존 bootstrap 거부 규칙은 유지했다. A/B/S 렌더링과 누락 S 거부 시험 및 마이그레이션 설명을 추가했다.
@@ -4024,6 +4062,21 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 기준 commit 8f4b634e51의 공식 FULL에서 secret guard NEW1, 단독 재현 실패, main commit 23633e759f의 동일 단독 시험은 1 passed였다. 해당 값 commit 42508b116e의 실제 Git 객체·조상 관계와 원본 행 해시를 독립 검토했다. 수정 뒤 원격 집중 guard 결과는 외부 ui-validation-provenance-20261029 로그에 남긴다.
 - gate 변화: 없음. 새 canonical FULL과 main ancestry가 남으며 공개 게시·장치 수용을 뜻하지 않는다.
 - CE: 해당 없음 — 기존 git-ids-in-validation-records 교훈의 동결 기록 절차를 적용했다. 새 정책이나 예외 범위 확대는 없다.
+
+## 2026-10-29 · 28d229d44f · fallback 전용 open AP 정책
+
+- 변경: D-919에 따라 fallback만 암호 없는 AP를 기본으로 선택하고 relay는 WPA2를 유지한다. open은 기존 장치 신원 또는 명시된 SSID를 쓰며 AP 자격 증명 저장소를 읽거나 표시용 키 파일을 만들지 않는다. 상태에 실제 security를 담고 설정 검증·적용에서 fallback_security를 전달한다. AP 시간·무선 claim/lock·HTTPS 복구 코드와 CORE 인증은 유지했다.
+- 증거: tests-only commit 51227e5510은 원격 16 failed/273 passed/1 skipped였다. 검토로 찾은 malformed defaults의 open 강등과 off 우회는 commit b88181b986에서 원격 4 FAILED로 재현했다. commit 28d229d44f는 정책·설정·기존 보호 AP·agent·transaction·recovery·handoff 집중 회귀 391 passed/1 skipped, 실제 opt-in 복구 브라우저 3 passed/skip0이며 각 NEW0/known0/flaky0이다. 독립 검토의 새 P0/P1은 0이다.
+- gate 변화: 없음. 소비자 main 조상 관계와 최종 통합 검증·착지·서명된 full native/SDK 빌드·OTA·실물 연결은 아직 남았다. 기존 001을 수정하거나 지원하지 않는 키를 카드에 넣지 않는다. 첫 오프라인 부팅부터 open이 필요하면 정식 새 factory/native 기준이 필요하다.
+- CE: 해당 없음 — 실패 시 mode off 반환과 기존 close 감독 유지는 실제 소비 경로 회귀와 D-919에서 복원할 수 있다.
+
+## 2026-10-29 · a9e26eb7e039 · 손상된 기존 네트워크 정책의 open 강등 차단
+
+- 변경: network-policy.json이 없으면 정상 기본 정책을 사용하되, 존재하는 파일의 읽기 실패·잘못된 JSON·객체가 아닌 값은 mode off로 반환한다. 기존 AP의 close 감독과 누락 파일·빈 객체의 정상 open 동작은 유지한다.
+- 증거: tests-only commit 3ca84b0fa525의 원격 회귀는 오류 6 failed/정상 2 passed였다. commit a9e26eb7e039는 집중 8개 시험 파일 399 passed/1 skipped, 실제 opt-in 복구 브라우저 3 passed/skip0이다. 독립 고정 diff 검토 CLEAR, size-range/safety 통과. 최종 affected와 소비자 main 통합은 별도 확인한다.
+- gate 변화: 없음. 소비자 선행 착지·통합·서명 native/SDK 배포와 실물 수용은 아직 남았다.
+- CE: 해당 없음 — 손상/누락의 구분과 close 감독 경계는 코드·회귀 시험으로 재현된다.
+
 
 ## 2026-10-29 · 05f19a73ea · 팔 credential 및 signed candidate 집중 회귀
 
@@ -4055,3 +4108,149 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: path-only 2f88347d69 원격은 30 passed / 4 failed로 다음 경계를 드러냈다. 명시 승인된 Windows 격리 PowerShell 실행은 원래 세 사례의 모든 assertion을 그대로 실행해 3 passed였다. 4개 하위 호출 모두 non-admin을 먼저 확인하고 native Start-Process/Storage 호출을 가로채 0회를 확인했다. local pytest·실제 UAC·카드 접근은 하지 않았다. Linux의 세 skip과 이 별도 native Windows 증거는 구분하며 최종 원격 결과는 완료 기록을 따른다.
 - gate 변화: 없음. 세 native Windows fixture의 별도 성공을 Linux 실행으로 세지 않으며 새 소스의 실물 수용을 주장하지 않는다.
 - CE: 기존 교훈 갱신 결과 유지. parameter-set·metadata autoload 판단은 기존 fake-surface 교훈에 남겼고, 단순 fixture 경로/표시 형식 수정을 별도 교훈으로 늘리지 않았다.
+
+## 2026-10-29 · 8a381b7f12 · 자기 배치의 준비 슬롯 중복 예약 수정
+
+- 변경: carried 집합을 자기 leader를 포함한 전체 티켓에서 먼저 계산하고 busy 합계에서만 자기 행을 제외한다. k2의 슬롯 낭비와 k4의 자체 정체를 막으며 FIFO·urgent·stale·held 처리와 MAX_PREPARING=3은 유지한다.
+- 증거: tests-only commit bc303cdb1b의 공식 원격 회귀는 7 failed/19 passed, known_failures NEW7이었다. 수정 commit 8a381b7f12의 land_prepare·land_queue·land_batch 집중 회귀는 85 passed, NEW0/known0/flaky0이다. 로그는 Git 밖 receipts/2026-10-29-queue-own-batch-slots/red 및 green에 보존한다.
+- gate 변화: 없음. 공식 affected 선택은 FULL이며 land_async의 전체 착지 검증을 유지한다. 이미 실행 중인 worker는 이 소스를 다시 읽지 않으므로 현재 큐 대기가 풀렸다고 주장하지 않는다. 공유 main 게시·장치 동작은 이 변경의 범위가 아니다.
+- CE: 해당 없음 — 전체 티켓으로 carried를 구한 뒤 자기 행만 제외해야 한다는 원인과 재현 조건은 최종 코드 및 k2/k4·다른 pending/preparing 예약을 검증하는 8개 회귀 시험에 직접 남는다. 별도 교훈 문서는 늘리지 않는다.
+
+## 2026-10-29 · 8f43faac07 · 첫 빈 가르치기 poll의 불필요한 지도 재생성 방지
+
+- 변경: recording과 pending이 모두 없으면 처음 drawn 값과 같은 빈 키를 유지한다. 첫 active preview와 active→idle 정리는 계속 다시 그리며, poll 타이머·인증·오류 처리·가르치기 API·로봇 명령 권한은 바꾸지 않는다.
+- 증거: tests-only commit e7839c8382의 실제 Chromium 회귀는 idle에서 기존 SVG label이 분리되어 1 failed/2 passed(NEW1)였다. 수정 commit 8f43faac07의 세 회귀와 기존 높이 경계·profile·대상 유지·survey 경로는 9 passed/0 skipped, NEW0/known0/flaky0이다. 외부 receipts/2026-10-29-site-map-idle-redraw/red 및 green에 보존한다.
+- 증거 범위: 첫 빈 poll의 불필요한 render와 label 분리는 재현했지만, 앞선 별도 FULL의 간헐적 높이 0 발생 원인이라고 확정하지 않는다. 기존 height>=12 시험·baseline은 유지한다.
+- gate 변화: 없음. 공식 affected 선택은 affected이며 Fleet·공유 UI guard와 browser scope를 그대로 유지한다. 별도 착지 검증·공유 main 게시·운영 수용은 이 집중 회귀와 구분한다.
+- CE: 해당 없음 — 초기 idle·첫 recording/pending·active→idle의 DOM 수명은 최종 코드와 실제 poll 회귀 세 경우에 직접 남는다. 기존 간헐 실패의 줄별 귀속 교훈을 적용하며, 미확정 원인을 해결 교훈으로 쓰지 않는다.
+
+## 2026-10-29 · 2062ed7219 · test(storage): 브라우저 quota 측정과 서버 fixture 시계 정렬
+- 변경: `fix/storage-browser-clock`, 기준 local main `3f2fafd23a`. `test_storage_setup_http.py`의 Date.now만 고정 backend fixture 시각에 맞추고 320/light/60초 lag 사례를 추가했다. 기존 두 화면 크기·검증·타이머·reload·15초 제한은 유지한다.
+- 증거: RED `17e6b9c5bb` 공식 원격 model PC, browser opt-in 새 사례 1 failed. backend 1793280602초, browser 1793280662241ms, quota measured_at 1793280660초로 58초 미래였다. `storage_operation_failed`, result null, mock remote commits 0; known_failures 1 NEW. GREEN `2062ed7219` 공식 원격 AI PC에서 새 사례 1 passed (9.06초), 파일 전체 6 passed (29.20초), 각각 0 skipped·0 NEW·0 known·0 flaky. 외부 로그는 시스템 임시 폴더 `storage-browser-clock-{red,green-exact,green-file}/run-1.txt`. harness lint 0 errors, 기존 39 warnings.
+- 범위: 위 RED는 통제된 시계 불일치의 인과 증거다. 기존 source075 FULL의 단발 320/light 실패 원인은 미확정이며, baseline 실패나 이 원인의 확정 사례로 분류하지 않는다. 호스트 시험이며 장치·이미지·현장 수용 증거는 아니다.
+- gate 변화: 없음. 제품 동작 변경 없음.
+- CE: 해당 없음 — 최종 시험의 60초 경계 사례와 공유 시계 주석으로 원인·예방을 알 수 있어 별도 교훈 문서를 늘리지 않는다. 기존 unread-fetch-body/networkidle 교훈과 다른 원인이다.
+
+## 2026-10-29 · uncommitted · SD 교훈 기록의 역사 비밀 검사 판정
+
+- 변경: commit c7b9b53a57의 기존 fake-surface 교훈에 추가된 Git 식별자 세 개를 독립 검토해 정확한 commit/path/rule baseline 한 건만 등록했다. 각 값이 실제 Git commit 객체임을 확인했으며 사람 승인으로 표시하지 않는다. 기존 baseline 행과 순서, 스캐너와 임계값을 유지한다.
+- 증거: 현재 본문은 commit 16871f72d4에서 문맥을 보강해 실제 scanner 0건을 확인했다. 이 수정은 불변 c7의 추가 줄을 지우지 않으므로 게시 이력 검사는 별도 판정이 필요하다. 제품·UAC·카드 동작은 바꾸지 않았다. 커밋된 후보의 게시 검사와 원격 회귀는 후속 실제 결과로 확인한다.
+- gate 변화: 없음. Git 객체 판정은 FULL 착지·공개 게시·현장 수용을 대신하지 않는다.
+- CE: 해당 없음 — 기존 git-ids-in-validation-records 교훈의 본문 검사와 역사 검사 구분을 적용했다.
+
+## 2026-10-29 · uncommitted · 기존 게시 검토 판정 재사용
+
+- 변경: 이미 독립 검토된 이력 baseline 8행을 원래 commit/path/rule/판정/날짜 그대로 재사용했다. 기존 150행은 순서와 필드를 유지한다. scanner·임계값·현재 고정 기록은 바꾸지 않는다.
+- 증거: commit ca2359d85a, db543919cd, 325890486d의 원래 검토와 정확한 8튜플을 대조했다. 새로 값을 재분류하거나 사람 승인으로 바꾸지 않았다. 같은 저장소의 다른 주제 branch에 보존돼 있던 판정을 가져왔으며 해당 branch의 실행 코드는 가져오지 않았다. 실제 게시 이력 검사는 커밋 뒤 결과로 확인한다.
+- gate 변화: 없음. 이력 판정의 재사용은 FULL·동일 SHA CI·실물 ABI 및 native canary 검증을 대신하지 않는다.
+- CE: 해당 없음 — 기존 역사 검사 처리 절차를 적용했으며 별도 교훈을 늘리지 않는다.
+- 통합: main commit 3f2fafd23a에는 위 8행이 모두 이미 있어 그대로 보존했다. main의 schema·reviewer·157행 순서를 유지하고 독립 검토된 c7행 하나만 덧붙여 158행으로 병합 충돌을 해결했다.
+
+## 2026-10-29 · 66e86cb0fb · Pilot 수신과 오프라인 처리 unit 분리
+
+- 변경: 수신 entry도 승인된 서명 model-code에서 실행하고 private 설정의 승인 URL을 사용한다. 로컬 복구·Learning pending 등록 timer를 추가하며 수신과 같은 flock을 사용한다. 기존 TLS·Operator·정지 검사는 유지한다.
+- 증거: unit/서명 실행 경로 시험을 포함한 최종 집중 55 passed/1 skipped와 실제 기존 녹화→별도 pending 작업 공간 시험 1 passed. 전체 결과와 파일 지문은 `docs/validation/pilot-learning-collection-2026-10-29/result.md`.
+- gate 변화: 없음. unit·환경 파일·서명 inbox·현재 운영 service는 배치하거나 재시작하지 않았다. 설치 전 승인 릴리스와 실제 workspace/classes 결속을 확인해야 한다.
+- CE: 해당 없음 — 실행/잠금/복구 조건을 코드·시험·운영 절차에 기록했다. 현재 로봇 이름 해석 실패는 별도 미해결이다.
+- 최종 확인: d2d68c3346 공식 affected 13,602 passed/1,285 skipped/NEW 0와 실제 자료 포함 집중 88 passed/skip0/NEW 0. 운영 venv 의존 import·FFmpeg는 확인했고 새 pipeline의 승인 릴리스 반영은 아직 없다. 생산 배포 수용으로 기록하지 않는다.
+
+## 2026-10-29 · c71326b078 · 승인된 Pilot 모델 PC 적용
+
+- 변경: 두 unit을 기존 signed model-code `exec` 소유자로 실행해 전환 잠금을 공유한다. 명시적인 작업 보류 3과 수집 잠금 충돌 75는 다음 타이머에서 재시도한다. 오류 1/2는 유지한다.
+- 증거: lock RED 3실패→GREEN 209 passed, busy RED 2실패→GREEN 209 passed, 모두 원격 실행. 최종 GREEN skip0/NEW0 및 독립 검토. sequence44/source709 서명 적용과 설치 unit 검증은 [기록](../docs/validation/pilot-learning-collection-2026-10-29/result.md)에 있다.
+- gate: 모델 PC 타이머·unit·실제 기존 workspace/classes 결속을 적용했다. 원래 53장 검수 digest 불변. GPU 보류와 로봇 DNS/SSH 장애로 신규 운영 프레임·새 실물 경로 수용은 아직 없다.
+- CE: 해당 없음 — 구현·회귀·운영 문서와 기존 exact-unit 복구 교훈에 있는 판단이다.
+
+## 2026-10-29 · uncommitted · ChArUco OpenCV 4.6 API 호환
+
+- 원인: PR220 sourcea985의 실제 GitHub root-test-1of3는 apt OpenCV4.6.0을 사용하며 보드 page 생성과 calibration fixture의 generateImage 호출에서 2 failed/4655 passed/339 skipped였다. 새 API만 가정한 검출·좌표 matching 경로도 함께 확인했다. 실물 보드나 장치는 실행하지 않았다.
+- 변경: 기존 factory가 있으면 CharucoBoard_create를 사용하고, 렌더링은 generateImage/draw를 지원한다. 구버전 검출은 detectMarkers/interpolateCornersCharuco, object point는 검출 corner ID 순서대로 chessboardCorners를 선택한다. 보드7x5·square0.025m·marker0.018m·float32 shape와 기존 실제 검출/보정 수치 assertion을 유지했다. calibration fixture도 같은 렌더 helper를 쓴다.
+- 증거: legacy fake 회귀는 비연속·재정렬 ID, 최소 corner 수, 누락 검출을 검사한다. 독립 contract review는 좌표 대응·단위·기존 소비자 page/solve/camera capture 경계를 확인했고 motion/admission 변경이 없었다. 원격 실행 및 실제 OpenCV4.6 CI는 아직 미완료이며 fake 시험을 native 수용으로 주장하지 않는다.
+- gate 변화: 없음. 버전 pin 변경·새 skip·quarantine·검사 완화는 없다.
+- CE: 해당 없음 — 기존 OpenCV4.6 aruco API 교훈을 적용했다. 구현·회귀·기존 문서에 없는 새 판단은 확인되지 않았다.
+
+## 2026-10-30 · b830767991 · open AP 소비자 선행 착지 후 producer 통합
+
+- 변경: 소비자 commit fd2131fdcbec가 실제 main 조상이 된 뒤 main commit 9ecc9795e93c를 producer에 병합했다. peer LCD helper/compact renderer와 기존 기록을 유지했다. main에서 D-914 문서가 도착했으므로 그 번호의 낡은 adr_gaps 행만 제거했다.
+- 증거: 통합 commit b830767991의 원격 producer/consumer/설치 renderer 15개 시험 파일은 587 passed/2 skipped, 실제 opt-in 복구 브라우저는 3 passed/skip0이다. 첫 affected는 1426 passed/1 skipped와 D-914 stale-gap guard 2 failed였으며 이 실패가 단일 행 정리의 근거다. 최종 고정 head의 affected 결과와 독립 검토는 외부 통합 receipt로 확인한다.
+- gate 변화: 소비자 실제 main 조상 조건은 충족했다. 서명된 full native/SDK 빌드·OTA 적용과 실제 무선/복구 수용은 여전히 미수행이다. 기존 001 카드에 open fallback이 포함됐다고 간주하지 않는다.
+- CE: 해당 없음 — 병합된 ADR의 obsolete gap 제거는 기존 guard가 직접 검출하는 통상적인 통합 정리다.
+
+## 2026-10-30 · cd343694f9 · exclusive 입장 정책과 pytest 호스트 배치 일치
+
+- 변경: PROBE가 실제 ADMIT 형식의 live alone lock과 live PID alone-wait를 확인하고 별도 pytest_blocked 상태를 전달한다. private py=2는 Python capability를 참으로 유지하며 기존 17개 필드 위치와 0/1·SIM 의미를 보존한다. 일반 place와 floor fallback은 blocked 호스트를 제외하고 실제 사유를 표시한다. ADMIT·용량 한도·busy/site/reservation 정책·기존 pruning은 바꾸지 않는다.
+- 원인: 여유 CPU·메모리가 표시돼도 exclusive 작업이나 그 대기자가 있으면 ADMIT는 일반 pytest를 받지 않는다. 기존 배치 측정은 이 조건을 놓쳤다. 이는 관측된 placement/admission 불일치이며 전체 큐 deadlock이나 현재 실행 중인 worker의 자동 교정을 주장하지 않는다.
+- 증거: tests-only commit fe03e9a573의 공식 원격 RED는 5 failed/6 passed(NEW5), 수정 commit cd343694f9의 관련 여섯 시험 파일은 178 passed/0 skipped, NEW0/known0/flaky0이다. 실제 시험 배치는 trusted main commit c44859256f의 runner와 승인된 AI host만 사용했다. 후보 PROBE는 임시 J/HOME와 통제된 kill -0 fixture에서만 실행했으며 live 호스트에 읽기 전용이라고 주장하는 probe를 실행하지 않았다. 외부 receipts/2026-10-30-host-probe-alone/red 및 green에 보존한다.
+- gate 변화: 없음. 공식 affected 선택은 FULL이며 독립 검토 뒤 정상 gateway의 정본 FULL 한 회를 유지한다. 수동 광역 FULL·urgent·no-queue·queue/cache/land record 변경·게시를 하지 않았다.
+- CE: 해당 없음 — private wire 주석과 13개 행동 회귀가 capability·exclusive·fallback·dead marker·일반 병렬·SIM·legacy decode 경계를 직접 남긴다. 기존 bookkeeping 진단 교훈을 확인했으며 별도 교훈 문서는 늘리지 않는다.
+
+## 2026-10-30 · e45f4eb60e · native 진단 묶음의 로컬 mDNS 일치 증거
+
+- 변경: 기존 native rosy-diag collect에 network/mdns.json을 더한다. device identity·설정/실행 hostname·Avahi 상태·ROSY service XML의 이름/종류/허용 TXT/port/TLS를 비교한다. %h/%H house alias를 허용하고 missing·invalid·mismatch 사유를 분리한다. identity/status/XML은 parse 전에 32KiB로 제한하며 raw TXT나 추가 identity 필드는 내보내지 않는다. 모든 출력은 기존 redaction·archive cap·manifest hash 경로를 따른다.
+- 경계: 로컬 hostname·systemctl 조회만 추가한다. network_advertisement는 not_tested로 남으며 daemon·프로토콜·네트워크 설정·인증·모터·gate는 바꾸지 않는다. container 중심의 예전 device_readback은 확장하지 않았다.
+- 증거: tests-only commit d652c9e8bb의 새 진단/입력 제한 회귀는 원격 RED19 failed, 추가 malformed TLS metadata는 commit 11977af9f0에서 TypeError RED1이었다. 최종 commit e45f4eb60e의 collector·redaction·installed native contract 및 정본 affected 묶음은 656 passed/0 skipped, NEW0/known0/flaky0이다. hostname -s의 short-name 조회만 기존 secret flag 금지 시험에서 정확히 구분했다. 외부 receipts/2026-10-30-pinky-mdns-readback에 보존한다.
+- 검증 한계: 초기 파일명 오타/명령 인수 문제로 collection되지 않은 실행은 통과 근거에서 제외했다. 현재 43호기의 LAN 광고 미발견 원인·현장 Avahi 상태·SSH 신뢰는 아직 확인하지 않았다. 서명된 001 producer와 현재 main의 광고 경로는 기존 조사에서 동일했다.
+- gate 변화: 없음. 실제 로봇 접속·네트워크 query·재시작·설정 변경·게시를 수행하지 않았다. 정상 gateway의 추가 검증과 실물 수용은 별도다.
+- CE: 해당 없음 — 새 로컬 진단 계약과 malformed/bounded/secret 회귀가 구현 판단을 직접 보존한다. 미확정 현장 원인을 해결 교훈으로 기록하지 않는다.
+
+## 2026-10-30 · 351d048c15 · 끝 집기점 수정 전 손가락 여유 검사 분리
+
+- 변경: 600줄 한도의 95%를 넘은 cell_auto_pick에서 side_clear를 기존 foreground·물체 mask 소유자인 cell_objects로 그대로 옮겼다. 기존 auto.side_clear 호출은 import alias로 유지한다. orchestrator는 581줄에서 553줄로 줄며 새 의존성·명령 경로는 없다.
+- 증거: 분리 source 351d048c15의 공식 원격 auto_pick·objects·params·wrist 회귀는 78 passed/0 skipped, NEW0이다. 함수 signature·docstring·본문의 AST 일치와 두 파일 diff는 독립 계약 검토를 받았다. raw 보고는 Git 밖 omx-end-clearance-20261030/split/run-1.txt에 보존한다.
+- gate 변화: 없음. 이 분리는 끝 집기점의 view/clearance/bias 재승인 누락을 고치지 않는다. 별도 회귀 a567069cea는 실제 mask 전제를 통과한 뒤 선택·bias assertion 네 곳에서 실패했다. 분리가 main에 착지한 뒤 그 수정을 이어 검증한다. 실물 동작·배포·수용은 하지 않았다.
+- CE: 해당 없음 — 함수의 동등 이동과 alias 보존은 최종 diff·기존 회귀·독립 AST 비교로 설명된다. 아직 고치지 않은 끝 집기점 누락은 미해결 기록으로 유지한다.
+
+## 2026-10-30 · uncommitted · 게시 범위의 역사적 비밀값 오탐 검토
+
+- 원인: sourcee5와현main9b424의 게시 전 검사는 새5 hits/정확3 tuples를 거절했다. main 쪽479개 커밋을 검사했으며 기존157개 검토 기록에는 이 세 항목이 없었다.
+- 증거: 독립 검토자는 문서c7b9의3개 후보가 각각 실제 Git commit object임을 확인했다. testc157은 고정 합성 fixture의16자 slice이고 testa6은 CLI 거절·stderr 비노출 시험의 고정22자 입력이었다. 실제 환경·private 입력으로부터 읽은 값이 아니며 후보 값·발췌문을 출력하거나 기준선에 넣지 않았다.
+- 변경: 해당 commit/path/rule 세 조합과 검토일·agent provenance만 기존 기준선에 추가한다. scanner·규칙·기존157항목·새 커밋/다른 규칙 거절은 유지한다. 수정 파일에서의 실제 게시 검사와 새 커밋 원격 publisher 회귀를 확인한 뒤 최종 FULL source에 포함한다.
+- Gate: 아직 새 최종 FULL·CI·게시·운영 전환 완료가 아니다. source 변경에 맞춰 공식 snapshot과 검증을 갱신하며 대기 중인 hidden branch를 몰래 바꾸지 않는다.
+- CE: 해당 없음 — 기존 exact-tuple 역사적 오탐 검토 절차를 적용했고 추가 판단은 기준선 metadata·회귀·증거 기록에서 복원한다.
+
+## 2026-10-30 · uncommitted · 게시 준비 기록의 필수 표기 정정
+
+- 변경: 이미 커밋된 세 기록에서 기존 문장에 필수 증거·변경·gate 표기만 붙인다. 정확한 정규화 블록의 전후 SHA256 쌍을 기존 정정 자료에 등록하고 원래 문장·실행 결과·다른 기록은 보존한다.
+- 증거: source046299191f의 공식 FULL은 사전 lint의 누락3건에서 멈췄으며 원격 pytest는 시작하지 않았다. 정정 범위는 독립 검토와 최종 lint에서 확인한다. 앞선 부분 회귀 결과를 FULL 결과로 바꾸지 않는다.
+- gate 변화: 없음. 필수 필드와 추가 전용 이력 검사를 유지하며, 새 FULL·CI·게시·운영 전환은 아직 완료되지 않았다.
+- CE: 해당 없음 — 기존 정확 해시 정정 절차를 적용하며 일반 기록 형식 수정의 원인은 검사 오류와 원문에서 복원한다.
+
+## 2026-10-30 · uncommitted · 새 field marks 호출의 프로필·감독 거부 회귀
+
+- 변경: 게시 통합 범위의 새 cell_field 호출에서 선택 프로필 바인딩과 감독 admission 누락을 독립 검토로 찾았다. 실제 FIFO 검증 경로를 사용하는 회귀를 먼저 추가하며 운영 구현은 아직 바꾸지 않는다.
+- 증거: Field 생성자는 profile을 FIFO에 전달하지 않고 marks는 raw load/goto/grip/park를 전송한다. 새 시험은 실제 FifoCell.act와 시험용 전송을 연결해 대상 불일치·오래된 상태·저장된 가짜 binding·감독 플래그 누락·실패 시 park 경로를 구분한다. 수정 전 원격 RED는 이 커밋 이후 실행하며 실물 접근은 없다.
+- gate 변화: 없음. marks admission은 미해결이며 SOURCE 통과나 현장 수용을 주장하지 않는다. 기존 증분 도구 설치·사이트 운영 상태도 바꾸지 않는다.
+- CE: 미해결 — 공개 통합 범위의 새 native 호출 경계 결함이며 회귀 재현과 수정 검증 후 기존 교훈 기준으로 판단한다.
+
+## 2026-10-30 · uncommitted · field marks를 선택 프로필과 감독 절차에 연결
+
+- 변경: 저장된 가짜 binding을 버리고 실제 선택 프로필과 증거 경로를 FIFO client에 바인딩한다. marks의 직접 호출과 CLI 모두 명시적인 commissioning·person-at-switch를 요구하며 profile/감독 거절은 try/finally park 전에 끝난다. gripper 명령이 거절되면 반복을 중단하고 기존 검증된 park 경로는 보존한다.
+- 증거: 수정 전 커밋67e700358d의 원격 회귀17건은12failed/5passed/skip0이며 known_failures는12NEW를 확인했다. 독립 검토에서 실제 FIFO 검증 경로와 library digest 전이의 fixture 정합성을 확인했다. 구현 수정본 GREEN은 이 커밋 이후 실행하며 실물·시리얼·로봇 SSH 접근은 없다.
+- gate 변화: 없음. 이 기록은 수정 전 RED와 source 검토만 증명하며 원격 GREEN·적격 FULL·CI·현장 수용을 대신하지 않는다. 실패를 기존 quarantine에 추가하지 않는다.
+- CE: 미해결 — 회귀 수정 검증 뒤 기존 교훈과 최종 코드·시험만으로 판단을 복원할 수 있는지 평가한다.
+
+## 2026-10-30 · uncommitted · field marks admission의 원격 GREEN·mutation·복귀 검증
+
+- 변경: 새 field marks의 선택 프로필·감독 admission 수정을 실제 원격 회귀와 격리된 negative mutation으로 검증했다. 기존 FIFO/Runner 권한과 사이트 이미지 구성은 바꾸지 않는다.
+- 증거: source69bbc19002의 field/profile/pipeline/Runner/envelope 5file suite174passed/skip0/96warnings/NEW0. 별도 mutant aa51c31e5d는 FIFO binding과 marks/CLI admission 4줄만 무력화해14failed/4passed/skip0/14NEW를 보였고 TypeError가 아닌 실제 assertion으로 실패했다. 정상69bbc branch 복귀 뒤18passed/skip0/NEW0을 확인했다. mutant는 정상 이력에 포함되지 않으며 착지·게시·설치 금지다. 독립 source 검토와 local lint0errors/39warnings도 확인했다.
+- gate 변화: native source 회귀 범위만 확인했다. 실제 장치 수용·적격 FULL·GitHub CI·게시·운영 서버 전환은 아직 미완료이며 도구 설치 상태와 구분한다. 이전 FULL129576은 새 안전 수정 때문에 원격 시험 시작 전 소유자 확인 후 종료했고 snapshot을 보존했다.
+- CE: 해당 없음 — 새 wrapper의 누락과 필요한 profile/supervision 경계는 정본 D-911/D-914, 기존 FifoCell 구현과 이번 실제 전송 회귀·mutation에서 복원된다. 문서에 없는 장치 성질을 새로 추정하거나 실물 동작을 관측한 결과는 아니다.
+
+## 2026-10-30 · 6302fcb63c · 선택 Monitoring overlay를 서명 후보와 업데이트기에 등록 (D-936)
+
+- 변경: `compose.monitoring.yaml`·`Caddyfile.monitoring`을 후보 배포 파일 한 쌍으로 등록했다. 검증기는 manifest `monitoring`을 내고, 업데이트기는 overlay가 켜졌을 때만 `monitoring` 서비스를 후보 Fleet 이미지로 허용하며 drift 검사에 넣는다. 건강·롤백 관문에는 넣지 않는다. Fleet 이미지는 Monitoring 소스와 화면 묶음을 함께 싣고 Fleet의 PYTHONPATH는 바꾸지 않았다.
+- 증거: 원격 겨냥 시험 통과(NEW/KNOWN/FLAKY0). 관제 PC에서 실제 site.env 렌더링과 운영 프록시 이미지의 `caddy validate`를 overlay 켬·끔으로 확인했다.
+- gate 변화: 없음. 새 서명 후보·관제 PC 설정·실제 열람 수용은 남았다. 관제 PC 자동 업데이트는 기존 ARM-S overlay 거절이 먼저 풀려야 한다.
+
+## 2026-10-30 · uncommitted · 관제 PC Monitoring 설정 예시 (D-936)
+
+- 변경: `deploy/site/monitoring.yaml.example`을 더했다. Fleet, host-state, 관제·AI·모델 PC guard 원천과 overlay의 키 이름·마운트 경로를 그대로 쓴다. 로봇 이름은 공개 예시에 넣지 않고 추가 방법만 적었다.
+- 증거: `operations/monitoring/test/test_deployment.py`가 예시를 실제 설정 로더로 읽고, 키 이름·CA·마운트가 overlay와 같은지 확인한다(원격 결과는 커밋 후 기록).
+- gate 변화: 없음. 관제 PC 설정·키 준비는 ARM-S 전환 뒤에 한다.
+
+## 2026-10-30 · 796fbe489c · D-871 가드 수집 관제 PC 적용과 `rosy-update-report` 선언
+
+- 변경: 공통 host-state 매니페스트에 `rosy-update-report`를 `approval=recovery`로 더했다. 관제 PC에 origin/main 판 가드·원격 스크립트·`site updates` 줄을 설치하고, `rosy-host-state install site`로 승인 사본을 갱신했다(야간 재부팅 세션 잠금 조건도 함께 적용).
+- 근거: 설치 뒤 `site` 줄에 `updates`가 들어왔고, host-state `check`는 fixed·drift·errors 0이다. 기록은 D-871 적용 기록 2026-10-30.
+- gate 변화: D-871 DEVICE 관제 PC 수집 경로 적용. AI·모델 PC는 sudo 비밀번호가 필요해 남았다.
+- CE: 새 교훈 — `docs/solutions/deployment/host-guard-files-update-through-host-state-install-2026-10-30.md`.

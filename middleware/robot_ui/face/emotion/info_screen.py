@@ -364,8 +364,8 @@ def boot_lines(payload: dict) -> list[tuple[str, str, tuple[int, int, int]]]:
     if ap_mode:
         lines.append(("ap_ssid", f"Wi-Fi {network.get('ssid') or '?'}", _FG))
         login = payload.get("ap_login")
-        if login:
-            lines.append(("ap_login", f"PW {login}", _FG))
+        if login or network.get("security") == "open":
+            lines.append(("ap_login", "No password" if network.get("security") == "open" else f"PW {login}", _FG))
         else:
             lines.append(("ap_login", "PW: see the operator AP store", _MUTED))
 

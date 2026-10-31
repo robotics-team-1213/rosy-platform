@@ -2041,3 +2041,12 @@ clpy.duration을 추가했다(bridge AGENTS의 두 파일 함께 갱신 규칙).
 - 증거: 해당 HTTP/native SIM 모듈 전체18 passed/skip0, known_failures NEW0/known0/flaky0이다. 별도 비반영 변이44e06cad2d는 production timeout1.5→1.0만 바꾸었고, 새 deadline guard가 `[1.0,1.0,1.0] != [1.5,1.5,1.5]`로 의도대로 실패했다(1 NEW, 2.40s). 실제760 source로 복귀해 같은 guard를 원격 재실행했으며 1 passed/NEW0이다. 변이는 실제 branch의 조상이 아니고 운영 source diff는 없다. 로그는 각각 외부 rosy-station-http-green, rosy-station-deadline-mutation, rosy-station-deadline-restored/run-1.txt다.
 - 증거 범위: 기존 게시 SHA fa3aeeed4d92의 GitHub CI run40819077121 attempt2는 전체 success로 끝났고, 설치 signer dry-run도 해당 후보의 would-sign을 반환했다. 이는 새 fixture 수정 SHA의 GitHub CI 결과가 아니다. 새 source의 게시·실물 수용은 수행하지 않았다.
 - gate 변화: 없음. 실제 1.5초 제한과 fail-closed HOLD/claim 경계는 유지했다. 새 교훈은 추가하지 않으며, 기존 오류 지점별 분류 교훈과 코드·회귀 시험을 근거로 남긴다.
+
+## 2026-10-29 · 512bf77f89 · 카메라 SIM scheduling 선행 복구
+
+- 변경: 안전 수정의 FULL에서 드러난 MAIN-RED를 먼저 고치기 위해 기존 StationCamera test scheduling 수정 네 커밋(ec9e7ed905, 37b254f565, 9d8c5b0a6f, d98681cb84)의 두 시험 파일만 재사용했다. 결과 blob은 원본 d986과 같고 독립 검토했다. 다른 OMX·boundary 변경이 있는 peer branch 전체를 가져오지 않았다.
+- 원인 근거: 안전 후보 e73e0c425a의 FULL에서 continuous/composed/lifespan 세 사례가 실패했고, 같은 실패를 baseline main3f2fafd23a에서 다시 확인해 둘은 MAIN-RED였다. 로그의 취소 지점은 in-process ASGI dependency 또는 journal renewal 처리였다. 호스트 CPU와 thread limiter 중 어느 것이 원인인지는 단정하지 않는다.
+- 경계: 운영 ChargeMotion.call의 1.5초 제한은 유지한다. SIM fixture의 해당 service instance에만 bounded 30초 호출·tick 대기 예산을 쓰고, 실제 세대 조건과 receipt 검사를 유지한다. 별도 회귀는 controlled 3.2초 journal 지연, 원래 운영 제한, 예외·취소 전달을 검사한다.
+- 검증: committed512bf77f89의 pipeline/continuous/lifespan/scheduling/redeployment HTTP 다섯 모듈을 정식 원격 runner로 실행해 31 passed/skip0, known_failures NEW0/known0/flaky0이다. double quiet 출력의 완료 glyph 31개로 실행 수를 확인했다. 외부 rosy-fleet-station-camera-site-fallback/run-1.txt, run512bf77f89-92a705. 두 우선 시험 PC의 alone fence로 대기한 자체 요청만 취소하고 마지막 대상인 현장 PC에서 ROS-free API 시험을 실행했다. 장치·운영 API·물리 시뮬레이터는 호출하지 않았다. 이는 착지·CI 성공을 뜻하지 않는다.
+- gate 변화: 없음. 운영 RPC 제한, fail-closed HOLD/claim, 단독 실행 fence, FULL 요구를 완화하지 않는다. 정상 착지는 별도로 검증한다.
+- CE: 해당 없음 — 기존 오류 지점별 분류 교훈을 적용했고, 이번 최소 교정의 판단은 시험·기존 기록에 남아 새 교훈을 추가하지 않는다. 운영·물리 수용은 별도다.

@@ -46,6 +46,29 @@ The arm rests where it stopped, torque off. With a person at the power switch:
 
 A command client that opens the FIFO blocking (`open(fifo, "w")`) waits forever once the runner is gone, and hands its command to the next runner that opens the FIFO. A stale `park` sat waiting this way. Open with `O_WRONLY | O_NONBLOCK` so it fails at once, and kill any waiting writer before starting a runner.
 
+## Same hub, second failure: one corrupt status packet (2026-10-27)
+
+The guard's per-cycle `sync_read("Present_Position")` raised `ConnectionError: Failed to sync read 'Present_Position' ... after 1 tries. [TxRxResult] Incorrect status packet!`, and the session ended with torque off. On 2026-10-27 this happened in three arm S sessions (02:41, 03:19, 13:5x). Twice the arm was parked; the third time it was 2 cm above the floor during a touch survey and dropped onto it. The read had no retry, so one bad packet ended the session.
+
+The fix is `READ_RETRY = 2` on the guard's leader and follower position reads. A read is safe to repeat, and a bus that is really gone still fails closed after the retries. `test_a_corrupt_status_packet_is_read_again_and_a_dead_bus_still_stops` checks it: 1 or 2 bad packets pass, 3 stop with torque off. The writes are not retried; a failed write is still a fault.
+
+The device-side cause is the same unpowered hub. Retries hide single packets, not a dying link. If `Incorrect status packet` or comm -3001 shows up in several sessions a day, fix the hub or the cable instead of raising the retry count.
+
+Recovery from a low pose that worked: start a new session; the guard seeds at the present pose. Then `park`. It folded home slowly from 2 cm above the floor.
+
+## Same hub, third failure: every device dropped at once (2026-10-27 19:22)
+
+The hub lost all its devices together. The session ended `UNSAFE_END`: torque off was not confirmed (`Port is in use`) and the follower caps stayed raised in the boards. The gripper camera came back on another USB port, so a camera config that named the port (by-path) stopped working; the host now names it by-id. Retries cannot help here: the port itself is gone.
+
+Recovery order that worked (resolved, nothing left open for this failure):
+
+1. Wait until both follower boards and the camera show up again under `/dev/serial/by-id` and `/dev/v4l/by-id`. The session refuses to start until both by-id boards exist; do not work around that.
+2. Per follower, `commissioning_limits.py --baseline` to put the caps back (see `omx-follower-caps-left-raised-in-eeprom-2026-10-24.md`).
+3. Start a new session, check the cameras by id, then `park` and `stop`.
+4. Before any pick, observe the scene again: someone touched the cell while the hub was being reconnected (see `omx-arm-s-stale-scene-and-wrist-view-2026-10-27.md`).
+
+Three hub failures in four days (2026-10-24, 10-27 corrupt packets, 10-27 19:22) make the powered hub or a direct cable the real fix; it is still not done.
+
 ## Next time
 
 - Before a long hold over an object, expect that the guard may drop the arm; keep holds short or hold at transit height.

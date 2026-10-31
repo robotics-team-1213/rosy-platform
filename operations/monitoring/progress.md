@@ -15,14 +15,14 @@ gates:
     state: N/A
   ARTIFACT:
     state: HOLD
-    blocker: CLI wheel·UI 묶음·3프로필·시험 PC unit 파서와 실제 Caddy 격리 HTTPS 검증은 통과했다. 배포 대상 PC 고정 경로·계정·권한 확인은 미수행이며 실제 설치·LAN/TLS 수용은 별도다.
+    blocker: 관제 PC는 D-936 사이트 스택 overlay로 싣는다. 소스·후보 검증·관제 PC compose 렌더링·Caddy 검사는 통과했다. overlay를 포함한 서명 후보가 아직 없고, 관제 PC 자동 업데이트는 서명되지 않은 ARM-S overlay 때문에 거절 중이다.
   DEVICE:
     state: HOLD
-    blocker: 실제 관제 PC의 네이티브 설치·프로세스 수명 검증을 수행하지 않았다.
+    blocker: 관제 PC에 Monitoring 설정·키·Fleet viewer 계정을 준비하지 않았고 overlay를 켜지 않았다.
   FIELD:
     state: HOLD
     blocker: 실 PC 배치·LAN/TLS 단절 및 복구·시각·제어 영향 수용이 남아 있다.
-adrs: [D-876]
+adrs: [D-876, D-936]
 ---
 
 ## 지금 상태

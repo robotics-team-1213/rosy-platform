@@ -10,6 +10,18 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-938 | 팔 이송 정책 승인 — D-865 승인 범위를 ARM_TRANSFER로 확장. [전문](../adr/D-938-arm-transfer-policy-admission.md) | Accepted (2026-10-31, 사용자 결정; simulation 팔 이송 HTTP 전용, 현장 범위 설정·수용 별도) |
+| D-936 | ROSY Monitoring은 관제 PC에서 서명 사이트 스택의 선택 서비스로 실행한다 (D-876 배치 보충). [전문](../adr/D-936-monitoring-site-stack-service.md) | Accepted (2026-10-30, 사용자 결정; 관제 PC 반영·수용 별도) |
+| D-935 | 공급암 S 운반 무게는 검증한 상한으로 묶고, 운반마다 실제 짐을 확인해 기록한다 (D-911 보충). [전문](../adr/D-935-arm-s-payload-bound-amends-d911.md) | Accepted (2026-10-30, 사용자 결정; 실측·실물 수용 별도) |
+| D-934 | 물체 무게는 카탈로그의 실측값이며, 셀 카메라로 저울을 읽어 기록하고 ROSY에 보여 준다. [전문](../adr/D-934-arm-s-object-mass-by-cell-scale.md) | Proposed (2026-10-30; 실제 저울 판독·Fleet 표시 별도) |
+| D-933 | 공급암 S 셀은 면마다 그린 지도 대신 카메라 모델 하나와 인쇄 마커로 좌표를 잡는다. [전문](../adr/D-933-arm-s-cell-coordinate-frame-markers.md) | Proposed (2026-10-30; 구현·실물 수용 별도) |
+| D-932 | 공급암 S 현장은 로컬 main에 착지한 리비전 하나로만 실행한다. [전문](../adr/D-932-field-runs-one-landed-revision.md) | Accepted (2026-10-30; 현장 코드 통합 진행 중) |
+| D-931 | 공급암 S는 움직이기 전에 잰 값으로 집기·놓기·보기를 판정한다. [전문](../adr/D-931-arm-s-measured-checks-before-motion.md) | Accepted (2026-10-30; 실물 운반 수용 별도) |
+| D-926 | 운용 화면의 읽는 순서·깊이·말의 규칙. [전문](../adr/D-926-ui-reading-order-depth-and-wording.md) | Accepted (2026-10-30, 사용자 결정; 화면 적용은 단계별) |
+| D-928 | Fleet 작업 발행은 로봇마다 따로 진행하고 교통 판정만 한 줄로 세운다. [전문](../adr/D-928-fleet-per-robot-dispatch-serial-traffic.md) | Proposed (2026-10-30; 구현·수용 별도) |
+| D-927 | Harbor 첫 흐름 시연 경계와 자동 시뮬 회귀(MuJoCo OMX·Gazebo Pinky, 독립 시뮬 관측). [전문](../adr/D-927-harbor-first-flow-demo-seams-and-automated-sim.md) | Accepted (2026-10-30, 경계·자동화 결정; 구현·수용 별도) |
+| D-919 | Passwordless fallback AP with authenticated Wi-Fi recovery. [전문](../adr/D-919-open-fallback-ap.md) | Accepted (2026-10-29, user-authorized; device acceptance separate) |
+| D-914 | 장치별 프로필과 native 운용범위 근거를 연결한다. [전문](../adr/D-914-omx-per-device-operating-profile-binding.md) | Accepted (2026-10-29, 구현·머지 승인; 실물 수용 별도) |
 | D-910 | Learning 검수 문서의 정적 공통 셸. [전문](../adr/D-910-learning-static-shell-components.md) | Accepted (2026-10-28) |
 | D-909 | Fleet 절차 문서의 경량 헤더와 배치 역할. [전문](../adr/D-909-fleet-procedure-document-components.md) | Accepted (2026-10-28) |
 | D-906 | Fleet 정적 공통 컴포넌트와 레이아웃 역할 토큰. [전문](../adr/D-906-fleet-static-components-layout-roles.md) | Accepted (2026-10-28) |
@@ -19,6 +31,7 @@
 | D-912 | Signed OS transport maintenance with independent authority and durable recovery. [전문](../adr/D-912-signed-os-transport-maintenance.md) | Proposed |
 | D-911 | OMX native 셀의 검증된 작업 범위와 현재 실행 조건을 구분한다. [전문](../adr/D-911-omx-native-reviewed-operating-envelope.md) | Accepted (2026-10-28, 구현 승인; 장치 수용 별도) |
 | D-898 | Fleet 인식 모델 승인을 모델 PC 레지스트리에 반영 — 사람이 나르는 Ed25519 서명 결정 파일 | Proposed (2026-10-27) |
+| D-929 | 적재 줄 간격 2~5 mm와 이전 더미 안정 구간. [전문](../adr/D-929-packing-row-gap-band-and-prior-stack-window.md) | Accepted (2026-10-30) |
 | D-897 | AI PC와 모델 PC에서 격리된 시뮬레이션 학습 작업을 병렬 실행한다 | Accepted (2026-10-27, 사용자 요청; 운영 권한·승격 별도) |
 | D-902 | Pilot real OMX teleop and recording through Fleet and the CORE manual arm path. [전문](../adr/D-902-pilot-real-omx-teleop-and-recording.md) | Proposed (2026-10-28) |
 | D-901 | Native workcell observation communication isolation. [전문](../adr/D-901-native-workcell-observation-isolation.md) | Accepted (2026-10-28) |
@@ -1353,3 +1366,20 @@ Fleet stores editable device names, models, declared arm counts and hardware ide
 **Status:** Accepted (2026-10-28). 사용자 구현 지시이며 실물 운용·배포·현장 수용은 별도다.
 
 전체 경로·장치 readback·설치/물체/환경 조건과 감독 시험의 검토 근거를 묶어 native 셀의 자동 작업을 판정한다. 미검증·중간 개입·미완료·실패는 기존 근거만으로 재실행하지 않는다. 전문은 [D-911](../adr/D-911-omx-native-reviewed-operating-envelope.md).
+
+## D-914 장치별 프로필과 native 운용범위 근거를 연결한다
+
+**Status:** Accepted (2026-10-29). 사용자 구현·커밋·머지 지시이며 장치 배포와 수용은 별도다.
+
+Fleet device ID, 실제 follower 설정, 장치별 검증·기록 경로를 별도 native 운용 프로필로 묶는다. parent/runner/pipeline이 같은 binding을 확인하며 감독 이동·녹화도 다른 팔로 넘기지 않는다. 전문은 [D-914](../adr/D-914-omx-per-device-operating-profile-binding.md).
+
+## D-926 운용 화면의 읽는 순서·깊이·말의 규칙
+
+**Status:** Accepted (2026-10-30). 사용자 결정이며 화면 적용은 단계별 착지로 따로 기록한다.
+
+운용 화면을 안전·지금 상태·할 일·근거·진단 순서, 앱·영역·화면·대상·확인의 다섯 깊이, 네 글자 역할로 닫는다. 하위 탐색은 이동이고 접힘은 한 겹이며 앱 바는 한 줄이다. D-641 4항의 맥락 탭 아이콘 단독을 대체한다. 전문은 [D-926](../adr/D-926-ui-reading-order-depth-and-wording.md).
+## D-928 Fleet 작업 발행은 로봇마다 따로 진행하고 교통 판정만 한 줄로 세운다
+
+**Status:** Proposed (2026-10-30). 설계만 정하며 구현·Gazebo·장비/현장 수용은 별도다.
+
+발행 루프는 로봇마다 작업 하나를 claim해 백그라운드로 보내고, 교통 판정만 콘솔 잠금 하나로 직렬화한다. 발행 중인 로봇은 claim 순서대로 기록한 직선 임시 점유를 갖고, 판정은 그 순서를 따라 우선순위를 지킨다. 스냅샷 정리는 임시 점유를 지우지 않고 잠금을 기다리지 않는다. 취소된 발행은 로봇 취소와 `UNKNOWN`으로 스스로 정리한다. 전문은 [D-928](../adr/D-928-fleet-per-robot-dispatch-serial-traffic.md).

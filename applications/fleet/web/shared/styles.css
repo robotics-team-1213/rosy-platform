@@ -37,7 +37,8 @@
 .console-primary, .console-secondary { min-width: 0; display: grid; gap: var(--space-4); }
 .console-context, .context-panel { min-width: 0; display: grid; gap: var(--space-3); align-content: start; }
 .context-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-1); }
-.context-tabs ui-button { min-width: 0; white-space: normal; }
+/* D-926: tabs read like the rail — icon above a visible name that never breaks mid-word; two rows on phones */
+.context-tabs ui-button { min-width: 0; flex-direction: column; gap: var(--gap-rail); padding-inline: var(--space-1); white-space: nowrap; }
 .context-panel > .panel { padding: var(--space-3) 0; border: 0; border-radius: 0; background: transparent; }
 .context-panel > .panel + .panel { border-top: 1px solid var(--border-subtle); }
 .context-panel .panel h2 { font-size: var(--text-body); font-weight: var(--weight-label); }
@@ -456,7 +457,7 @@ main {
 
 
 @media (width < 30rem) {
-  .context-tabs { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .context-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .dispatch-control:not(:is(:not([data-state]), [data-state="absent"])) { align-items: flex-start; flex-direction: column; padding: var(--space-3); }
   .panel { padding: var(--space-3); }
   .map-stage #map-canvas { height: min(150vw, 30rem); }

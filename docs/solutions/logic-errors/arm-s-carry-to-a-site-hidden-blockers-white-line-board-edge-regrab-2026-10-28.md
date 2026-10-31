@@ -61,6 +61,20 @@ The grasp itself had worked many times. The first full carry, with no person hel
    - Verified on the real arm: after the fix, the plan went to the box that had just been pivoted, and the feel search ran four descents without a contact.
    - Check when a pick misses: compare the pan of the `goto` the runner received with the pan of the pivot or the plan. A different pan means the arm went somewhere else.
 
+10. **Finger room was sampled, not measured, and the box's own side read as a neighbour (2026-10-29).** Boxes on the board with clear space beside them were refused with "no finger gap".
+    - Cause 1: `side_clear` tested fixed points 4, 8 and 16 mm out and ±30 % along the box. With the jaws 8 mm past each side, the 4 mm point is space no finger enters, and the length points reach well past the ~20 mm pad.
+    - Cause 2: the top camera sees a box's side face and shadow about 5 px past its top outline. That strip read as a neighbour 0–1 mm away. On a slightly skewed outline it starts one step out after a 1 mm gap.
+    - Fix: `cell_finger_room` marches 1 mm steps along the closing axis across the pad width, and opens the jaws only as far as the nearer side allows (`auto.min_jaw_margin_mm` 2 at least). Foreground running on from the edge up to `auto.own_side_mm` (6), with a gap of up to 1 mm, is the box's own. Past that it is a touching neighbour.
+    - Verified on the real cell: both board boxes went from 0–1 mm free to 18/18 mm (margin 8), and the board → belt carry was planned and run.
+    - Check when a box is refused for room: draw the mask after `own_removed` with the sample lines (the probe in the 2026-10-29 workspace record) before loosening any number.
+
+11. **The jaw mark is either finger (2026-10-29).** A look over the board 3-cell refused with "jaw mark not seen". It had searched 70 mm from where the jaws were.
+    - Cause: the pivot circle follows the finger the camera saw when it was measured. At yaw 3–31 the arm link hid that finger and the other one showed: the mark sat at yaw + 285°, the circle said yaw + 55°.
+    - How it was found: a yaw sweep at the pivot point (`goto` at each yaw, `mark_jaws`, the mark's angle about the circle centre minus the FK yaw). FK yaw itself is continuous in the wrist roll, so the yaw was not the fault.
+    - Fix: both fingers turn about the TCP, so the second is a fixed angle and radius from the first (`look.other_finger_deg` 229.5, `look.other_finger_mm` 34.4, measured). The look searches near both expected places and takes the TCP through the finger it saw (`finger` in the look row).
+    - Verified on the real arm: the next board → belt carry's look passed (2.7 mm correction), the 3-cell was gripped, lifted, carried and released.
+    - Not verified: the two constants come from one pivot point. If a look's `finger: 1` rows disagree with the fitted circle elsewhere, measure the second finger per region in the pivot.
+
 ## Recovery when a box stays in the jaws
 
 From home, run a place again with the same library. Make sure the lift after the release is 7 cm or more before the park.

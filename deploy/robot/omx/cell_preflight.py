@@ -12,8 +12,56 @@ import argparse
 import json
 import subprocess
 import sys
+import time
 import urllib.request
 from pathlib import Path
+
+import cell_params as prm
+
+
+def lights(frames: dict, params=None) -> list:
+    """(name, ok, why) per camera frame. A frame this dark means the room lights are off or the lens is covered, and
+    no detection, look or place check works (2026-10-30 00:40: top mean 1.4, wrist 0.1, still 1.4 at 200 ms exposure
+    and gain 7 - not the camera)."""
+    floor, out = prm.get(params, "preflight.min_mean"), []
+    for name, img in frames.items():
+        mean = None if img is None else float(img.mean())
+        ok = mean is not None and mean >= floor
+        why = "no frame" if mean is None else f"mean {mean:.1f}" + ("" if ok else f" < {floor}: the room lights are off or the lens is covered - a person turns them on")
+        out.append((f"light {name}", ok, why))
+    return out
+
+
+def expose(device: str, grab, params=None, run=subprocess.run, wait=time.sleep) -> dict:
+    """Bring a camera's frame mean into preflight.target_mean +- preflight.mean_band with manual exposure. The top
+    camera's own auto exposure stops at 3000 in a dim room (2026-10-30: mean 21 while the wrist camera read 145);
+    exposure in this camera's units is near linear (10000 -> 61, 20000 -> 105, 33000 -> 148), so each step scales
+    it by target / mean, within 80..preflight.max_exposure (one 30 fps frame). Gain is left as it is."""
+    target, band = prm.get(params, "preflight.target_mean"), prm.get(params, "preflight.mean_band")
+    mean = float(grab().mean())
+    if abs(mean - target) <= band:
+        return {"device": device, "set": False, "mean": round(mean, 1)}
+    got = run(["v4l2-ctl", "-d", device, "-C", "exposure_time_absolute"], capture_output=True, text=True).stdout
+    exposure = int(got.split(":")[-1]) if ":" in got else 3000
+    for _ in range(int(prm.get(params, "preflight.exposure_steps"))):
+        exposure = int(min(prm.get(params, "preflight.max_exposure"), max(80, exposure * target / max(mean, 1.0))))
+        run(["v4l2-ctl", "-d", device, "-c", "auto_exposure=1", "-c", f"exposure_time_absolute={exposure}"], check=True)
+        wait(prm.get(params, "preflight.settle_s"))  # the viewer still serves frames taken before the change
+        mean = float(grab().mean())
+        if abs(mean - target) <= band or exposure >= prm.get(params, "preflight.max_exposure"):
+            break
+    return {"device": device, "set": True, "exposure": exposure, "mean": round(mean, 1), "ok": abs(mean - target) <= band}
+
+
+def ready(frame, config: dict, run=subprocess.run, wait=time.sleep) -> list:
+    """Set the exposure of each camera with a `device` in the config, then the lights check: the refusals, empty when
+    the cell can be seen."""
+    params = config.get("params")
+    for name, camera in config["cameras"].items():
+        if camera.get("device"):
+            print(json.dumps({"camera": name, **expose(camera["device"], lambda: frame(name), params, run, wait)}),
+                  file=sys.stderr)
+    return [f"{name}: {why}" for name, ok, why in lights({c: frame(c) for c in config["cameras"]}, params) if not ok]
 
 
 def camera_shift_px(reference, current) -> dict:
@@ -52,10 +100,14 @@ def checks(config: dict, viewer: str, max_shift_px: float, fetch=None, run=subpr
         fresh = bool(state.get(label, {}).get("fresh"))
         out.append((f"camera {label}", fresh, "fresh" if fresh else
                     "not fresh: check the camera's USB device (by-path ports change) and which channel the viewer reads"))
-    ref_path = (config.get("preflight") or {}).get("reference_top")
-    if ref_path and Path(ref_path).expanduser().exists():
-        ref = cv2.imread(str(Path(ref_path).expanduser()), cv2.IMREAD_GRAYSCALE)
+    try:
         cur = cv2.imdecode(np.frombuffer(fetch(f"{viewer}/frame/top.jpg"), np.uint8), cv2.IMREAD_GRAYSCALE)
+    except OSError:
+        cur = None
+    out += lights({"top": cur}, config.get("params"))
+    ref_path = (config.get("preflight") or {}).get("reference_top")
+    if cur is not None and ref_path and Path(ref_path).expanduser().exists():
+        ref = cv2.imread(str(Path(ref_path).expanduser()), cv2.IMREAD_GRAYSCALE)
         shift = camera_shift_px(ref, cur)
         ok = shift["ok"] and shift["max_px"] <= max_shift_px
         out.append(("top camera pose", ok, f"{shift}" + ("" if ok else ": the map is stale - remap (layout_map) and re-pivot before any motion")))

@@ -49,7 +49,38 @@ def test_over_target_pivots_right_above_the_box_only_when_the_jaws_clear_its_top
                                    tmp_path, far, None, None)
     assert seen == [(0.0, 0.2)] and problem == "pivot: stopped"  # right over the target, even with the box there
     config["pivot"]["z_view"] = 0.06  # jaws 24 mm over a 30 mm box top on a 6 mm floor: below the 30 mm clearance
+    config["params"]["pivot.clear_above_m"] = 0.05  # (the default would raise the view to 0.08 by itself)
     seen.clear()
     cc.self_calibrate(object(), config, {}, tmp_path / "cal.json", "floor", (0.0, 0.2), [{"raw_m": [0.0, 0.2]}],
                       tmp_path, far, None, None)
     assert (0.0, 0.2) not in seen
+
+
+def test_the_pivot_view_height_follows_each_sites_surface():
+    """2026-10-29: an absolute 0.08 m view (tuned on the floor) swung the jaws 3 mm over a box on the Pinky tray."""
+    import cell_pivot
+
+    config = {"params": None, "pivot": {"z_view": 0.08}, "coarse": {"z_view": 0.118},
+              "sites": {"floor": {"surface_z": 0.006}, "pinky": {"surface_z": 0.0467}, "odd": {}}}
+    assert cell_pivot.pivot_z_view(config, "floor") == 0.08
+    assert cell_pivot.pivot_z_view(config, "pinky") == pytest.approx(0.1207)
+    assert cell_pivot.pivot_z_view(config, "odd") == 0.08  # no surface known: as configured
+
+
+def test_a_region_carried_from_another_site_does_not_skip_the_pivot(tmp_path, monkeypatch):
+    """2026-10-30: the Pinky tray's region was the floor's bias copied over; the pivot was skipped and the pick came
+    down on the box top."""
+    import cell_pivot
+
+    seen = []
+    monkeypatch.setattr(cell_pivot, "pivot_calibrate", lambda cell, config, point, *a: seen.append(point) or {"result": "stopped"})
+    config = {"params": {"pivot.over_target": 1}, "pivot": {}, "coarse": {"z_view": 0.08},
+              "sites": {"pinky": {"yaw_deg": -67.8, "surface_z": 0.0467}}}
+    region = {"site": "pinky", "point_m": [0.05, 0.2], "bias_mm": [4.2, -2.5], "measured": "2026-10-29",
+              "source": "carried from the floor pivot on the same remapped top camera map"}
+    args = ({}, tmp_path / "cal.json", "pinky", (0.0694, 0.2137), [{"raw_m": [0.0694, 0.2137]}], tmp_path)
+    _, problem = cc.self_calibrate(object(), config, *args, {"regions": [region]}, None, None)
+    assert seen == [(0.0694, 0.2137)] and problem == "pivot: stopped"
+    fitted = {k: v for k, v in region.items() if k != "source"}  # the same region measured there: no pivot
+    seen.clear()
+    assert cc.self_calibrate(object(), config, *args, {"regions": [fitted]}, None, None)[1] is None and seen == []

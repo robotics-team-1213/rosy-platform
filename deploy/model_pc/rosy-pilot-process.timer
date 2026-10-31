@@ -1,0 +1,11 @@
+[Unit]
+Description=Prepare and register local Pilot recordings independently of robot connectivity
+
+[Timer]
+OnBootSec=3min
+OnUnitInactiveSec=10min
+Persistent=true
+Unit=rosy-pilot-process.service
+
+[Install]
+WantedBy=timers.target

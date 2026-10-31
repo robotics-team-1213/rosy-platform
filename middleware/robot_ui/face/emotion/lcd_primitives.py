@@ -65,17 +65,17 @@ _QR_DARK = (0, 0, 0)          # token-exempt: QR modules need full black/white c
 _QR_LIGHT = (255, 255, 255)   # token-exempt: QR quiet zone
 
 def ap_qr(payload: dict) -> list[list[bool]] | None:
-    """The AP's Wi-Fi join matrix, only while the AP is open and its SSID and key are known.
+    """The AP join matrix; only explicit open security may omit the key.
 
-    None otherwise, and for a payload too long for the encoder (the text rows
-    still show it). Holds the key: drawn, never logged.
+    Keys in a matrix are drawn only, never logged; oversized payloads give None.
     """
     network = payload.get("network") or {}
     login, ssid = payload.get("ap_login"), network.get("ssid")
-    if network.get("mode") != "ap" or not login or not ssid:
+    if network.get("mode") != "ap" or not ssid or (not login and network.get("security") != "open"):
         return None
     try:
-        return wifi_qr.encode(wifi_qr.wifi_payload(str(ssid), str(login)))
+        return wifi_qr.encode(wifi_qr.wifi_payload(str(ssid), str(login or ""),
+                                                security=network.get("security", "wpa2")))
     except ValueError:
         return None
 

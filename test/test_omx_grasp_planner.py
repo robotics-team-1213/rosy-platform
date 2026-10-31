@@ -101,3 +101,44 @@ def test_the_release_lifts_by_its_own_height_while_the_pick_keeps_a_low_lift():
     rise = lambda name: fk(planner, lib["chunks"][name][-1]).z - fk(planner, lib["chunks"][name][0]).z  # noqa: E731
     assert rise("lift_pick") == pytest.approx(0.03, abs=0.002)
     assert rise("lift_place") == pytest.approx(0.07, abs=0.002)  # 3 cm let the park's closing jaws retake the box
+
+
+def test_a_far_target_keeps_its_grasp_and_travel_ends_where_the_arm_still_has_margin():
+    """2026-10-26: a container 0.24 m out was graspable top-down; only the 7 cm lift point above it was not."""
+    far = dict(PLAN["pick"], x=0.078, y=0.229, z=0.050)
+    planner = m.Planner(dict(PLAN, pick=far))
+    library = planner.library()
+    reach = library["source"]["reach"]["pick"]
+    assert m.MIN_STANDOFF_M <= reach["approach_m"] < PLAN["approach_m"] + 1e-6 and reach["margin_m"] > 0
+    grasp = fk(planner, library["chunks"]["descend_pick"][-1])
+    assert math.dist((grasp.x, grasp.y, grasp.z), (far["x"], far["y"], far["z"])) < 0.002
+    lifted = fk(planner, library["chunks"]["lift_pick"][-1])
+    assert planner.reach_margin(lifted.x, lifted.y, lifted.z, far["yaw_deg"]) >= m.REACH_MARGIN_M - 1e-4
+    assert lifted.z - far["z"] >= m.MIN_STANDOFF_M - 0.002, "it still lifts clear of the tray"
+
+
+def test_a_path_past_the_keep_out_line_is_refused_before_any_chunk_exists():
+    with pytest.raises(SystemExit, match="keep_out"):
+        m.Planner(dict(PLAN, keep_out={"x_max_m": 0.10})).library()
+    assert m.Planner(dict(PLAN, keep_out={"x_max_m": 0.30})).library()["chunks"]
+
+
+def test_keep_out_counts_the_gripper_body_not_only_the_tool_tip():
+    """2026-10-27: the TCP stayed 2 cm inside the line while the wrist and gripper hit the wall behind the belt."""
+    planner = m.Planner(PLAN)
+    library = planner.library()
+    tip = max(fk(planner, f).x for frames in library["chunks"].values() for f in frames)
+    with pytest.raises(SystemExit, match="wrist or gripper"):
+        m.Planner(dict(PLAN, keep_out={"x_max_m": round(tip + m.BODY_MARGIN_M / 2, 3)})).library()
+
+
+def test_a_lift_the_wrist_cannot_reach_is_shortened_inside_the_joint_limit():
+    """2026-10-27: the arm S wrist stops at 1.89 rad; a 7 cm top-down lift needed more and ran into it."""
+    planner = m.Planner(PLAN)
+    library = planner.library()
+    top = PLAN["limits"]["joints_rad"]["joint4"][1]
+    q4 = [m.norm_to_rad(f[3]) for frames in library["chunks"].values() for f in frames]
+    assert max(q4) <= top + 1e-3
+    wide = m.Planner(dict(PLAN, limits=dict(PLAN["limits"], joints_rad=dict(PLAN["limits"]["joints_rad"], joint4=[-0.3, 2.3]))))
+    lifted = lambda p: p.height(p.library()["chunks"]["lift_pick"][-1])
+    assert lifted(planner) <= lifted(wide) + 1e-6

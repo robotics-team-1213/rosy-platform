@@ -32,8 +32,10 @@ roles:
     rosy-model-code-watch.service: {run: "off", channel: retired, doc: docs/adr/D-446-model-pc-code-auto-update.md}
     rosy-model-code-watch.timer: {run: "off", channel: retired, doc: docs/adr/D-446-model-pc-code-auto-update.md}
     rosy-ollama.service: {run: active, channel: host, doc: deploy/model_pc/README.md}
-    rosy-pilot-fetch@.service: {run: oneshot, channel: copy, template: deploy/model_pc/rosy-pilot-fetch@.service, copies: {rosy-ml/bin/fetch_http.py: learning/curation/perception/fetch_http.py}, note: "modules from the signed model-code release", doc: deploy/model_pc/README.md}
+    rosy-pilot-fetch@.service: {run: oneshot, channel: signed, template: deploy/model_pc/rosy-pilot-fetch@.service, note: "entry and modules from the signed model-code release", doc: deploy/model_pc/README.md}
     rosy-pilot-fetch@.timer: {run: timer, instances: [9dfk], channel: copy, template: deploy/model_pc/rosy-pilot-fetch@.timer, doc: deploy/model_pc/README.md}
+    rosy-pilot-process.service: {run: oneshot, channel: signed, template: deploy/model_pc/rosy-pilot-process.service, doc: deploy/model_pc/README.md}
+    rosy-pilot-process.timer: {run: timer, channel: signed, template: deploy/model_pc/rosy-pilot-process.timer, doc: deploy/model_pc/README.md}
     rosy-review-bridge.service: {run: oneshot, channel: signed, template: deploy/model_pc/rosy-review-bridge.service, doc: deploy/model_pc/README.md}
     rosy-review-bridge.timer: {run: timer, channel: signed, template: deploy/model_pc/rosy-review-bridge.timer, doc: deploy/model_pc/README.md}
     rosy-review-pipeline.service: {run: oneshot, channel: signed, template: deploy/model_pc/rosy-review-pipeline.service, doc: deploy/model_pc/README.md}

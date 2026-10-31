@@ -105,7 +105,6 @@
     <a id="connection-guide-action" class="ui-disclosure-row" href="#console-token" data-action-icon="login">관제 접속</a>
   </section>
 
-  <div class="assistant-tools"><a class="ui-subnav-item" href="/monitoring/" target="_blank" rel="noopener noreferrer">시스템 상태 · 별도 조회</a><ui-button id="assistant-toggle" data-work-read="" kind="quiet" type="button" aria-expanded="false" aria-controls="assistant-panel">관제 AI</ui-button></div>
   <div class="assistant-layout">
   <main id="fleet-main" tabindex="-1">
     <h1 class="sr-only">Rosy Fleet — 사이트 관제</h1>
@@ -305,10 +304,10 @@
           </section>
       <section class="console-context" aria-label="관제 상세">
         <div class="context-tabs" role="tablist" aria-label="관제 상세 보기">
-          <ui-button kind="segment" role="tab" id="context-status-tab" data-context-tab="status" data-icon-only="" data-action-icon="robot" aria-controls="context-status" aria-selected="true">로봇·작업</ui-button>
-          <ui-button kind="segment" role="tab" id="context-inbox-tab" data-context-tab="inbox" data-icon-only="" data-action-icon="notification" aria-controls="context-inbox" aria-selected="false" tabindex="-1">알림</ui-button>
-          <ui-button kind="segment" role="tab" id="context-evidence-tab" data-context-tab="evidence" data-icon-only="" data-action-icon="history" aria-controls="context-evidence" aria-selected="false" tabindex="-1">기록·근거</ui-button>
-          <ui-button kind="segment" role="tab" id="context-tools-tab" data-context-tab="tools" data-icon-only="" data-action-icon="tools" aria-controls="context-tools" aria-selected="false" tabindex="-1">운영 도구</ui-button>
+          <ui-button kind="segment" role="tab" id="context-status-tab" data-context-tab="status" data-action-icon="robot" aria-controls="context-status" aria-selected="true">로봇·작업</ui-button>
+          <ui-button kind="segment" role="tab" id="context-inbox-tab" data-context-tab="inbox" data-action-icon="notification" aria-controls="context-inbox" aria-selected="false" tabindex="-1">알림</ui-button>
+          <ui-button kind="segment" role="tab" id="context-evidence-tab" data-context-tab="evidence" data-action-icon="history" aria-controls="context-evidence" aria-selected="false" tabindex="-1">기록·근거</ui-button>
+          <ui-button kind="segment" role="tab" id="context-tools-tab" data-context-tab="tools" data-action-icon="tools" aria-controls="context-tools" aria-selected="false" tabindex="-1">운영 도구</ui-button>
         </div>
         <div class="context-panel" id="context-status" role="tabpanel" tabindex="0" aria-labelledby="context-status-tab">
       <section class="panel" id="work-context" aria-labelledby="work-detail-heading" hidden>
@@ -351,6 +350,7 @@
 
         </div>
         <div class="context-panel" id="context-tools" role="tabpanel" tabindex="0" aria-labelledby="context-tools-tab" hidden>
+      <ui-actions class="context-shortcuts"><ui-button id="assistant-toggle" data-work-read="" kind="quiet" type="button" aria-expanded="false" aria-controls="assistant-panel">관제 AI</ui-button><a class="ui-disclosure-row" href="/monitoring/" target="_blank" rel="noopener noreferrer">시스템 상태 · 새 창</a></ui-actions>
       <section class="panel vision-preview" aria-labelledby="vision-heading">
         <div class="map-head">
           <h2 id="vision-heading">관제 카메라</h2>

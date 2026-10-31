@@ -269,6 +269,13 @@
 - gate 변화: 없음. SOURCE 후보이다. DEVICE 거리 판독은 하지 않았다.
 - 결정: D-719
 
+## 2026-10-29 · 28dc087ea6 · 복구 AP의 암호 없는 표시와 접속 QR
+
+- 변경: 명시적 open AP는 ASCII LCD에 No password로 표시하고 비밀번호 없는 접속 QR을 그린다. 남아 있는 옛 키를 표시하거나 QR에 넣지 않는다. WPA2와 security 필드가 없는 기존 payload는 기존 키 안내를 유지한다.
+- 증거: commit 38f4baf395의 원격 RED 6 failed/2 passed, commit 28dc087ea6의 부팅·LCD·QR 집중 회귀 350 passed/1 skipped 및 NEW0. 새 모듈 소유 시험은 escape·stale key·누락/잘못된 security·native 표시 전달을 검증한다. info_screen.py는 frozen 676줄을 유지했다.
+- gate 변화: 없음. 호스트 렌더·프로토콜 검증이며 실물 LCD 판독·휴대폰 접속·AP 무선 수용은 하지 않았다.
+- CE: 해당 없음 — 표시와 QR 계약을 직접 검증하는 회귀가 예방 근거다.
+
 ## 2026-10-29 · 75d706130a · LCD 기본 그리기 부품 분리
 
 - 변경: font/fitting·측정값·QR·패널 packing을 lcd_primitives에 모으고 기존 이름을 re-export했다. info_screen은676→560줄이며 팔레트 정본·등록 경로를 유지했다.

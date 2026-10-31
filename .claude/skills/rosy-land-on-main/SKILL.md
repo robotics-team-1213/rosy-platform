@@ -1,24 +1,23 @@
 ---
 name: rosy-land-on-main
-description: Use when starting, committing, or merging work in rosy-platform while other agent sessions share the checkout — creating a branch or worktree, staging files, picking an ADR number, adding an ADR Log row, fast-forwarding local main, or when git status shows files you did not touch, a merge is blocked by someone else's uncommitted file, or a test fails and you cannot tell whether your change caused it. The full record is AGENTS.md section 「같이 하는 깃」. docs/reference/shared-checkout.md has the same start order.
+description: Use when starting, committing, or merging work in rosy-platform while other agent sessions share the checkout — creating a branch or worktree, staging files, picking an ADR number, adding an ADR Log row, fast-forwarding local main, or when git status shows files you did not touch, a merge is blocked by someone else's uncommitted file, or a test fails and you cannot tell whether your change caused it. The full record is docs/reference/shared-checkout.md section 「같이 하는 깃」; AGENTS.md keeps its safety summary.
 ---
 
 # Landing work on local main in a shared checkout
 
 ## Overview
 
-The full record is `AGENTS.md` section 「같이 하는 깃」.
-`docs/reference/shared-checkout.md` section 「같이 하는 깃」 is the same start order.
-This file repeats those commands. A wording change updates `AGENTS.md` and `docs/reference/shared-checkout.md` in one commit.
-The lab umbrella `..\AGENTS.md` (the folder above the repo, outside git) records the same procedure.
+The full record is `docs/reference/shared-checkout.md` section 「같이 하는 깃」.
+`AGENTS.md` section 「같이 하는 깃」 is the safety summary every session reads; it points here and there.
+This file repeats the commands. A rule change edits `docs/reference/shared-checkout.md`, and the summary in `AGENTS.md` only when its wording changes.
 The repo is the `rosy-platform` folder under that umbrella; the drive differs per machine. One `.git/index` serves the
 shared `main` checkout. A path you did not write belongs to another session.
 
 ## Before you start
 
 First apply the operating budget in `docs/reference/shared-checkout.md` section 「워크트리 한도와 슬롯 운영」:
-at most 10 total worktrees including main. Count locked, waiting and orphan worktrees too; free a slot before starting another task.
-The gateway's 50-directory refusal below is a mechanical backstop, not permission to exceed that operating budget.
+at most 15 total worktrees including main (the gateway refuses at 14 under `.worktrees/`, D-886). Count locked, waiting and orphan worktrees too; free a slot before starting another task.
+The gateway's 14-directory refusal below is a mechanical backstop, not permission to exceed that operating budget.
 
 ```bash
 cd <umbrella>/rosy-platform        # the shared main checkout

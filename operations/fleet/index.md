@@ -104,8 +104,8 @@
 
 ## 최근 기록
 
-- 2026-10-29 · uncommitted · fix(fleet): proposal admission 회귀 검증과 현 main 통합
-- 2026-10-29 · ccc8712ece · 이송 결과의 검수 패키지와 복구 root 분할 검사
-- 2026-10-29 · uncommitted · fix(fleet): Trip 제안 승인과 실제 작업 admission을 원자적으로 결속한다
-- 2026-10-29 · f2af364bcf · AI fact 요청 제한 시험 시계 고정
-- 2026-10-29 · 66ba49bef8 · D-915 원본 물리 근거의 읽기 인계
+- 2026-10-31 · uncommitted · feat(fleet): D-938 팔 이송 정책 승인
+- 2026-10-30 · uncommitted · feat(sim): 정상 단계 시뮬 관측자 transfer_observer (D-927 결정 3)
+- 2026-10-30 · f10444d3af · 헤더 CI 교정 원격 검증
+- 2026-10-30 · uncommitted · fix(fleet): 작업 발행 루프의 연속 발행과 발행 시간 기록
+- 2026-10-30 · uncommitted · fix(fleet): 교통 판정 구간을 콘솔 잠금 하나로 직렬화

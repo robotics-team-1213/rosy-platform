@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="/common/motor-health.css">
   <link rel="stylesheet" href="/common/app-shell.css">
   <link rel="stylesheet" href="/console/assets/cell.css">
+  <link rel="stylesheet" href="/console/assets/file-picker.css">
   <link rel="stylesheet" href="/console/assets/doc-tabs.css">
   <link rel="stylesheet" href="/console/assets/fleet-header.css">
   <link rel="stylesheet" href="/console/assets/password-login.css">
@@ -80,12 +81,12 @@
     <a class="ui-subnav-item" href="/console?view=work&amp;show=new" aria-current="page">새 작업</a>
     <a class="ui-subnav-item" href="/console/learning">학습</a>
     <span class="ui-subnav-head">Cell 적재 단계</span>
+    <a class="ui-subnav-item" href="#saved-heading">저장된 문서</a>
     <a class="ui-subnav-item" href="#recipe-heading">레시피</a>
     <a class="ui-subnav-item" href="#cell-heading">셀 설정</a>
     <a class="ui-subnav-item" href="#preview-heading">적재 계획</a>
     <a class="ui-subnav-item" href="#proposal-heading">작업 제안</a>
     <a class="ui-subnav-item" href="#mission-heading">승인·진행</a>
-    <a class="ui-subnav-item" href="#saved-heading">저장된 문서</a>
   </nav></div>
   <div class="fleet-workspace">
   <ui-status id="estop-feedback" hidden></ui-status>
@@ -100,12 +101,24 @@
       <ui-text>읽기 전용 · 엔코더 각도와 원본 영상입니다. 팔과 카메라의 대응은 설정 기준이며 보정·동작 수용과 별개입니다.</ui-text>
       <div id="workcell-observations"></div>
     </ui-section>
+    <ui-section aria-labelledby="print-heading">
+      <ui-head><h2 class="ui-section-heading" id="print-heading">보정 인쇄물</h2></ui-head>
+      <ui-text>실제 크기 PDF입니다. 100%(맞춤 없이)로 인쇄하고 종이의 50 mm 막대를 자로 확인하세요. 그리퍼 마커는 20 mm id 0을 그리퍼 몸체 윗면에 붙입니다.</ui-text>
+      <div class="actions"><ui-button id="print-markers" kind="quiet">그리퍼 마커 PDF</ui-button><ui-button id="print-checkerboard" kind="quiet">체커보드 PDF</ui-button><ui-button id="print-charuco" kind="quiet">ChArUco 보정판 PDF</ui-button><ui-button id="print-surface-markers" kind="quiet">면 마커 PDF</ui-button></div>
+      <ui-text id="print-status" role="status" aria-live="polite"></ui-text>
+    </ui-section>
+    <ui-section aria-labelledby="catalog-heading">
+      <ui-head><h2 class="ui-section-heading" id="catalog-heading">물체 카탈로그</h2></ui-head>
+      <ui-text>무게는 운반 무게 상한(D-911·D-935), 팔을 뻗었을 때의 힘 여유, 처짐과 놓는 높이, 학습 기록의 기준입니다. 잰 무게가 없는 물체는 운반하지 않습니다.</ui-text>
+      <div class="ui-table-scroll"><table id="catalog-table" aria-label="물체 카탈로그" hidden><thead><tr><th scope="col">물체</th><th scope="col">크기 mm</th><th scope="col">빈 무게</th><th scope="col">잰 시각·출처</th><th scope="col">운반</th></tr></thead><tbody id="catalog-rows"></tbody></table></div>
+      <ui-text id="catalog-status" role="status" aria-live="polite">접속하면 물체 카탈로그를 확인할 수 있습니다.</ui-text>
+    </ui-section>
     <ui-section aria-labelledby="saved-heading"><ui-head><h2 class="ui-section-heading" id="saved-heading">저장된 문서</h2></ui-head><ui-text>저장된 레시피와 셀을 선택하거나 아래에서 새 문서를 준비하세요.</ui-text><ui-status id="saved-status" state="unavailable">접속하면 저장된 문서를 확인할 수 있습니다.</ui-status><ul id="saved" hidden></ul></ui-section>
     <div class="documents">
       <ui-section aria-labelledby="recipe-heading">
         <ui-head><h2 class="ui-section-heading" id="recipe-heading">레시피</h2></ui-head>
         <label for="recipe-id">문서 이름</label><input class="ui-field" id="recipe-id" value="recipe-demo" maxlength="64">
-        <label for="recipe-file">레시피 JSON 파일 불러오기</label><div class="file-picker"><input class="ui-field" id="recipe-file" type="file" accept=".json,application/json" aria-describedby="recipe-file-name"><span class="file-picker-button" aria-hidden="true">JSON 파일 선택</span><span id="recipe-file-name" aria-live="polite">선택한 파일 없음</span></div>
+        <label for="recipe-file">레시피 JSON 파일 불러오기</label><div class="file-picker"><input class="ui-field" id="recipe-file" type="file" accept=".json,application/json" aria-describedby="recipe-file-name"><span class="file-picker-button" aria-hidden="true">JSON 파일 선택</span><span id="recipe-file-name" data-file-name aria-live="polite">선택한 파일 없음</span></div>
         <div id="recipe-fields" class="scope" aria-label="박스와 적재 간격 편집"></div>
         <div id="recipe-structure" aria-label="팔레트와 층 설정 편집"></div>
         <details><summary class="ui-disclosure-row">레시피 문서 편집 · JSON</summary><label for="recipe-document">레시피 문서</label><textarea class="ui-field" id="recipe-document" rows="14" spellcheck="false"></textarea></details>
@@ -115,7 +128,7 @@
       <ui-section aria-labelledby="cell-heading">
         <ui-head><h2 class="ui-section-heading" id="cell-heading">셀 설정</h2></ui-head>
         <label for="cell-id">문서 이름</label><input class="ui-field" id="cell-id" value="cell-demo" maxlength="64">
-        <label for="cell-file">티칭된 셀 JSON 파일 불러오기</label><div class="file-picker"><input class="ui-field" id="cell-file" type="file" accept=".json,application/json" aria-describedby="cell-file-name"><span class="file-picker-button" aria-hidden="true">JSON 파일 선택</span><span id="cell-file-name" aria-live="polite">선택한 파일 없음</span></div>
+        <label for="cell-file">티칭된 셀 JSON 파일 불러오기</label><div class="file-picker"><input class="ui-field" id="cell-file" type="file" accept=".json,application/json" aria-describedby="cell-file-name"><span class="file-picker-button" aria-hidden="true">JSON 파일 선택</span><span id="cell-file-name" data-file-name aria-live="polite">선택한 파일 없음</span></div>
         <ui-text>프레임·스테이션·home은 승인된 장치 티칭값을 사용하세요. 파일을 불러온 뒤 설정과 미리보기를 확인합니다.</ui-text>
         <div id="cell-fields" class="scope" aria-label="셀 home과 도구 설정 편집"></div>
         <ui-text>아래 좌표 입력은 셀 문서 초안입니다. 장치의 현재 좌표 측정이나 티칭 수락을 대신하지 않습니다.</ui-text>
@@ -134,8 +147,8 @@
         <svg id="layout" viewBox="0 0 800 320" role="img" aria-label="적재 위치 평면도 · base 좌표"></svg>
       </div>
     </ui-section>
-    <details id="proposal-stage" class="cell-stage">
-      <summary class="ui-disclosure-row"><h2 class="ui-section-heading" id="proposal-heading">작업 제안</h2></summary>
+    <ui-section aria-labelledby="proposal-heading">
+      <ui-head><h2 class="ui-section-heading" id="proposal-heading">작업 제안</h2></ui-head>
       <ui-text>문서를 저장하고 적재 계획을 미리 본 뒤 작업 범위를 입력하세요.</ui-text>
       <div id="cell-channel-request" hidden>
         <h3>Discord 대화 요청</h3><p id="cell-channel-original"></p>
@@ -151,9 +164,9 @@
       <ui-text>작업을 제안한 뒤 승인·진행에서 운영자가 승인합니다. 통신 오류가 나면 같은 요청 키로 결과를 확인하세요.</ui-text>
       <div class="actions"><ui-button id="propose" kind="primary" disabled>작업 제안</ui-button><ui-button id="new-proposal" kind="quiet">새 작업 준비</ui-button></div>
       <pre id="proposal" aria-label="작업 제안 결과"></pre>
-    </details>
-    <details id="mission-stage" class="cell-stage">
-      <summary class="ui-disclosure-row"><h2 class="ui-section-heading" id="mission-heading">승인·진행</h2></summary>
+    </ui-section>
+    <ui-section aria-labelledby="mission-heading">
+      <ui-head><h2 class="ui-section-heading" id="mission-heading">승인·진행</h2></ui-head>
       <label>제안 / 작업 ID<input class="ui-field" id="mission-id" autocomplete="off"></label>
       <ui-text>작업과 정지 세대를 다시 확인한 뒤 운영자가 승인합니다. 보류 사유가 해결됐는지 확인하고 복구하세요.</ui-text>
       <ui-text>작업 취소는 실행 중인 장치를 정지하지 않습니다. 실행 중인 작업이나 실제 상태가 확인되지 않은 작업은 취소할 수 없습니다.</ui-text>
@@ -162,7 +175,7 @@
       <ul id="step-progress" aria-label="단계별 실행과 목표 확인"></ul>
       <ul id="sheet-progress" aria-label="작업자 슬립시트 삽입 확인"></ul>
       <details><summary class="ui-disclosure-row">진행 원장 상세</summary><pre id="job-state" aria-label="작업 상태와 진행 원장"></pre></details>
-    </details>
+    </ui-section>
   </main>
   </div>
   </div>

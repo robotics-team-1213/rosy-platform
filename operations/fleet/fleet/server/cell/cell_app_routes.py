@@ -5,6 +5,9 @@ same, and ``summary.multi_arm`` lists the arms and each step's placement. recipe
 no ``multi_arm`` key and are unchanged.
 """
 
+import base64
+import os
+
 from fastapi import Depends, HTTPException
 
 from core_common.protocol.schemas import (
@@ -81,6 +84,35 @@ def install_cell_app_routes(app, *, mission_service, compiler, service_id, princ
     def documents():
         unavailable()
         return {"documents": store.list()}
+
+    @app.get("/api/fleet/cell-app/print-sheets/{kind}", dependencies=[Depends(require_viewer)])
+    def print_sheet(kind: str, ids: str = "0,1", sizes_mm: str = "20,25", cols: int = 8, rows: int = 6,
+                    square_mm: float = 15.0):
+        """A real-size calibration sheet (gripper/surface markers, checkerboard, ChArUco) as base64 PDF; read only."""
+        from fleet.server.cell_print_sheets import sheet
+
+        try:
+            name, pdf = sheet(kind, ids=[int(v) for v in ids.split(",") if v.strip()],
+                              sizes_mm=[float(v) for v in sizes_mm.split(",") if v.strip()],
+                              cols=cols, rows=rows, square_mm=square_mm)
+        except ValueError as exc:
+            raise HTTPException(422, detail={"code": "CELL_PRINT_SHEET_INVALID", "message": str(exc)}) from exc
+        return {"filename": name, "media_type": "application/pdf", "pdf_base64": base64.b64encode(pdf).decode()}
+
+    @app.get("/api/fleet/cell-app/object-catalog", dependencies=[Depends(require_viewer)])
+    def object_catalog():
+        """The arm's object catalogue with measured masses (D-934, D-935); read only, from this host's file."""
+        from fleet.server.cell_object_catalog import ENV, view
+
+        path = os.environ.get(ENV)
+        try:
+            if not path:
+                raise OSError(f"{ENV} is not set")
+            return view(path)
+        except OSError as exc:
+            raise HTTPException(503, detail={"code": "CELL_OBJECT_CATALOG_UNAVAILABLE", "message": str(exc)}) from exc
+        except ValueError as exc:
+            raise HTTPException(422, detail={"code": "CELL_OBJECT_CATALOG_INVALID", "message": str(exc)}) from exc
 
     @app.get("/api/fleet/cell-app/documents/{kind}/{identifier}", dependencies=[Depends(require_viewer)])
     def document_read(kind: str, identifier: str):

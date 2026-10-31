@@ -76,8 +76,8 @@
 
 ## 최근 기록
 
-- 2026-10-29 · 2f88347d69 · SD 원격 fixture의 플랫폼 경계 검증
-- 2026-10-29 · 0ab037ed49 · SD mount의 native parameter set 수정
-- 2026-10-29 · uncommitted · Site readiness 게시 검사 출처 검토
-- 2026-10-29 · 05f19a73ea · 팔 credential 및 signed candidate 집중 회귀
-- 2026-10-29 · uncommitted · 동결 UI 검증 기록의 커밋 출처 검토
+- 2026-10-30 · 796fbe489c · D-871 가드 수집 관제 PC 적용과 `rosy-update-report` 선언
+- 2026-10-30 · uncommitted · 관제 PC Monitoring 설정 예시 (D-936)
+- 2026-10-30 · 6302fcb63c · 선택 Monitoring overlay를 서명 후보와 업데이트기에 등록 (D-936)
+- 2026-10-30 · uncommitted · field marks admission의 원격 GREEN·mutation·복귀 검증
+- 2026-10-30 · uncommitted · field marks를 선택 프로필과 감독 절차에 연결

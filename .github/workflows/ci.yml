@@ -175,6 +175,10 @@ jobs:
       - name: Install Fleet browser verification tools
         if: contains(toJSON(matrix.invocations), 'operations/fleet/test') || contains(toJSON(matrix.invocations), 'applications/fleet/test') || contains(toJSON(matrix.invocations), 'test_account_pipeline.py') || contains(toJSON(matrix.invocations), 'test_monitoring_browser.py')
         run: |
+          # The console is Korean: without fonts-noto-cjk, headless Chromium renders
+          # Hangul through Playwright's wide Unifont fallback and 320px layout-fit
+          # assertions (fleet header link tag) see overflow that real browsers do not.
+          apt-get update -qq && apt-get install -y -qq fonts-noto-cjk
           python3 -m playwright install --with-deps chromium
 
       - name: Install Pinky raw verification tools

@@ -223,9 +223,9 @@ def gather(root: Path, run: Runner) -> dict:
         **(_core_inputs(root, datetime.now(timezone.utc))
            or {"battery_warning_percent": None, "devices": _device_states(root),
                "robot_mode": None, "nav_state": None, "swarm_role": None}),
-        # D-176: written by rosy-network.py; mode/ssid/address only, never a secret.
+        # Written by rosy-network.py; only public AP connection information.
         "network": {key: value for key, value in (_read_json(root / STATUS_DIR / "network.json") or {}).items()
-                    if key in {"mode", "ssid", "address"}},
+                    if key in {"mode", "ssid", "address", "security"}},
     }
 
 
@@ -272,7 +272,9 @@ def render_issue(record: dict, ap_secret: str | None = None) -> str:
     network = record.get("network") or {}
     if network.get("mode") == "ap":
         # Local, physical access only: the console is where a person reads this.
-        lines.append(f"  Wi-Fi AP {network.get('ssid')}  password {ap_secret or '(see operator AP store)'}"
+        access = ("No password" if network.get("security") == "open"
+                  else f"password {ap_secret or '(see operator AP store)'}")
+        lines.append(f"  Wi-Fi AP {network.get('ssid')}  {access}"
                      f"  -> ssh rosy@{network.get('address')}")
     if str(record["stage"]).startswith("FAILED"):
         lines.append(f"  see: journalctl -b -u {record.get('failed_unit')}")
@@ -375,7 +377,8 @@ def apply(root: Path, record: dict, stage: Stage, run: Runner) -> list[str]:
 
     def issue() -> None:
         ap_login = None
-        if (record.get("network") or {}).get("mode") == "ap":
+        network = record.get("network") or {}
+        if network.get("mode") == "ap" and network.get("security") != "open":
             ap_login = (_read_json(root / "etc/rosy/ap-credentials.json") or {}).get("pass" + "word")
         # 0600: agetty reads it as root; CORE and other users must not.
         if _write_atomic(root / STATUS_DIR / "issue", render_issue(record, ap_login), 0o600):

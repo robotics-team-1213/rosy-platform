@@ -103,6 +103,120 @@ def _paired_convert(folder, out, codec):
     return 0, path
 
 
+def _local_main(tmp_path, convert, *extra):
+    return fetch_http.main(["--local-only", "--dest", str(tmp_path / "raw"),
+                            "--video-out", str(tmp_path / "video"), *extra], convert=convert)
+
+
+def test_local_only_recovers_without_robot_credentials_or_network(tmp_path, monkeypatch):
+    fetch_http.safe_extract(_write_archive(tmp_path), tmp_path / "raw", RID)
+    monkeypatch.setattr(fetch_http, "list_recordings", lambda *a: pytest.fail("robot contacted"))
+    assert _local_main(tmp_path, _paired_convert) == 0
+    assert fetch_http._paired_receipt_valid(tmp_path / "raw", RID)
+    assert _local_main(tmp_path, lambda *a: pytest.fail("already converted")) == 0
+
+
+def _write_archive(tmp_path):
+    path = tmp_path / "recording.tar"
+    path.write_bytes(_recording())
+    return path
+
+
+def test_local_only_rechecks_raw_even_after_conversion(tmp_path):
+    fetch_http.safe_extract(_write_archive(tmp_path), tmp_path / "raw", RID)
+    assert _local_main(tmp_path, _paired_convert) == 0
+    bag = tmp_path / "raw" / RID / "bag" / "bag_0.mcap"
+    bag.write_bytes(b"changed")
+    assert _local_main(tmp_path, lambda *a: pytest.fail("corrupt raw converted")) == 1
+    assert bag.read_bytes() == b"changed"
+
+
+def test_local_only_filters_and_retries_failed_conversion(tmp_path):
+    fetch_http.safe_extract(_write_archive(tmp_path), tmp_path / "raw", RID)
+    assert _local_main(tmp_path, lambda *a: (1, None), "--only", RID) == 1
+    assert not fetch_http._receipt_path(tmp_path / "raw", RID).exists()
+    assert _local_main(tmp_path, _paired_convert, "--only", RID) == 0
+    assert _local_main(tmp_path, lambda *a: pytest.fail("wrong session"), "--only", RID2) == 1
+    assert _local_main(tmp_path, lambda *a: pytest.fail("before boundary"), "--since-id", RID2) == 0
+
+
+def test_missing_video_cannot_create_a_success_receipt(server, tmp_path):
+    def missing_video(folder, out, codec):
+        rc, sidecar = _paired_convert(folder, out, codec)
+        sidecar.with_suffix(".mp4").unlink()
+        return rc, sidecar
+
+    assert _main(server[0], tmp_path, missing_video) == 1
+    assert not fetch_http._receipt_path(tmp_path / "raw", RID).exists()
+
+
+@pytest.mark.parametrize("suffix", [".mp4", ".jsonl"])
+def test_changed_paired_bytes_are_not_blessed_again(server, tmp_path, suffix):
+    import bag_to_video
+
+    def canonical(folder, out, codec):
+        rc, rows = _paired_convert(folder, out, codec)
+        target = out / (bag_to_video.output_stem(folder, {"device": "rosy_01"}) + ".jsonl")
+        rows.with_suffix(".mp4").rename(target.with_suffix(".mp4"))
+        rows.rename(target)
+        return rc, target
+
+    assert _main(server[0], tmp_path, canonical) == 0
+    receipt = fetch_http._receipt_path(tmp_path / "raw", RID)
+    before = receipt.read_bytes()
+    output = next((tmp_path / "video").glob("*" + suffix))
+    output.write_bytes(output.read_bytes() + (b"\n" if suffix == ".jsonl" else b"changed"))
+    assert _main(server[0], tmp_path, lambda *a: pytest.fail("changed evidence overwritten")) == 1
+    assert receipt.read_bytes() == before
+
+
+def test_interrupted_conversion_keeps_partial_outputs_and_recovers(tmp_path):
+    import bag_to_video
+    from test_bag_to_video import _write_session
+    session = _write_session(tmp_path)
+    out = tmp_path / "video"
+    out.mkdir()
+    meta = json.loads((session / "session.json").read_text())
+    partial = out / (bag_to_video.output_stem(session, meta) + ".mp4")
+    partial.write_bytes(b"interrupted encoder output")
+    rc, sidecar = fetch_http.default_convert(session, out, "h264")
+    assert rc == 0 and sidecar.is_file()
+    assert partial.read_bytes() != b"interrupted encoder output"
+    assert any(p.read_bytes() == b"interrupted encoder output" for p in out.rglob("*.mp4"))
+
+
+def test_video_without_source_metadata_is_not_adopted(tmp_path):
+    import bag_to_video
+    from types import SimpleNamespace
+    session, out = tmp_path / RID, tmp_path / "video"
+    session.mkdir()
+    (session / "session.json").write_text(json.dumps({"device": "rosy_01"}))
+    _, rows = _paired_convert(session, out, "h264")
+    canonical = out / (bag_to_video.output_stem(session, {"device": "rosy_01"}) + ".jsonl")
+    rows.with_suffix(".mp4").rename(canonical.with_suffix(".mp4"))
+    rows.rename(canonical)
+    assert fetch_http._existing_video(SimpleNamespace(video_out=out), session) is None
+
+
+def test_interrupted_publication_does_not_publish_the_completion_marker(tmp_path, monkeypatch):
+    import pilot_conversion
+    from test_bag_to_video import _write_session
+    session = _write_session(tmp_path)
+    out = tmp_path / "video"
+    rename = pilot_conversion.os.rename
+
+    def interrupted(source, target):
+        if target.parent == out and target.suffix == ".json":
+            raise OSError("interrupted metadata publication")
+        return rename(source, target)
+
+    monkeypatch.setattr(pilot_conversion.os, "rename", interrupted)
+    with pytest.raises(OSError, match="interrupted metadata"):
+        fetch_http.default_convert(session, out, "h264")
+    assert list(out.glob("*.mp4"))
+    assert not list(out.glob("*.jsonl"))
+
+
 def test_fetch_verifies_extracts_converts_and_pair_checks(server, tmp_path, capsys):
     base, state = server
     assert _main(base, tmp_path, _paired_convert) == 0
@@ -155,6 +269,7 @@ def test_preexisting_paired_video_is_adopted_without_overwrite(server, tmp_path)
     stem = "teleop_rosy_01_20261002T101500Z"
     (video_dir / f"{RID}.jsonl").rename(video_dir / f"{stem}.jsonl")
     (video_dir / f"{RID}.mp4").rename(video_dir / f"{stem}.mp4")
+    (video_dir / f"{stem}.json").write_text(json.dumps({"source": {"session": RID}, "video": {"frames": 2}}))
     state["paths"].clear()
     assert _main(base, tmp_path, lambda *a: pytest.fail("must not overwrite")) == 0
     assert state["paths"] == ["/api/v1/recordings"]

@@ -44,7 +44,7 @@ ui-topbar input[type="checkbox"] { width: auto; }
 /* 앱 바는 연결 상태와 계정 메뉴에 관계없이 한 줄이다. 연결 칸은 남는 폭을 받는다. */
 ui-topbar {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) minmax(0, auto) auto;
+  grid-template-columns: auto minmax(max-content, 1fr) minmax(0, auto) auto;
   grid-template-areas: "identity status actions safety";
   align-items: center;
   gap: var(--space-4);
@@ -52,7 +52,8 @@ ui-topbar {
 }
 .fleet-header-identity { grid-area: identity; min-width: 0; }
 .fleet-link-status { grid-area: status; display: flex; align-items: center; justify-content: flex-end; flex-wrap: nowrap; gap: var(--space-1); min-width: 0; overflow: hidden; }
-.fleet-link-status ui-tag { box-sizing: border-box; flex: 0 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; }
+.fleet-link-status ui-tag { box-sizing: border-box; flex: none; min-width: 0; overflow: hidden; white-space: nowrap; }
+.fleet-link-status ui-tag::before { flex: none; }
 #clock { flex: none; white-space: nowrap; }
 #development-badge { flex: none; min-width: max-content; overflow: visible; }
 #user-role { min-width: 0; max-width: var(--measure-account-label); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -106,7 +107,8 @@ ui-topbar {
   #estop .ui-icon { width: var(--space-5); height: var(--space-5); }
 }
 @container (width < 30rem) {
-  ui-topbar { gap: var(--space-1); padding-inline: var(--space-1); }
+  /* 연결 글과 점의 고유 폭을 확보한다. 조작의 공용 여백과 48px 누름 면은 유지한다. */
+  ui-topbar { gap: 0; padding-inline: 0; }
   /* R 심볼만 남긴다. 링크의 접근 이름(Rosy Fleet 관제 홈)은 그대로다. */
   .fleet-wordmark { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   #fleet-login .ui-icon { display: none; }

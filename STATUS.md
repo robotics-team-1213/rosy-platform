@@ -13,7 +13,7 @@
 | [fleet_decision](operations/decision/progress.md) | fleet_decision | 587c0b4c8c (2026-10-29) | GO | GO | HOLD | HOLD | HOLD | HOLD |
 | [situation](operations/situation/progress.md) | SITUATION | 3627ec21fb (2026-10-28) | GO | HOLD | N/A | HOLD | HOLD | HOLD |
 | [media](operations/site_ui/media/progress.md) | SITE MEDIA | 2190ba6889 (2026-10-18) | GO | GO | N/A | HOLD | HOLD | HOLD |
-| [media_edge](middleware/media/progress.md) | ROBOT MEDIA | 2190ba6889 (2026-10-18) | GO | GO | N/A | HOLD | HOLD | HOLD |
+| [media_edge](middleware/media/progress.md) | ROBOT MEDIA | abd6ce7cab (2026-10-30) | GO | GO | N/A | HOLD | HOLD | HOLD |
 | [console_source](applications/fleet/web/progress.md) | console_source | d4988bffba (2026-10-11) | GO | GO | HOLD | HOLD | HOLD | HOLD |
 | [fleet_app_dev](applications/fleet/dev/progress.md) | fleet_app_dev | c000a57004 (2026-10-21) | GO | GO | HOLD | HOLD | HOLD | HOLD |
 | [perception_curation](learning/curation/perception/progress.md) | perception_curation | d4988bffba (2026-10-11) | GO | GO | HOLD | HOLD | HOLD | HOLD |
@@ -38,7 +38,7 @@
 | [core_events](middleware/core/events/progress.md) | CORE | bed604ef (2026-09-30) | GO | GO | N/A | N/A | N/A | N/A |
 | [core_features](middleware/core/services/progress.md) | CORE | 4e99d92e (2026-10-02) | GO | GO | N/A | N/A | N/A | N/A |
 | [core_api_web](middleware/core/api/progress.md) | CORE | 4e99d92e (2026-10-02) | GO | GO | N/A | N/A | N/A | N/A |
-| [web_common](shared/web/progress.md) | CORE | 0409c371 (2026-09-30) | GO | GO | N/A | N/A | N/A | N/A |
+| [web_common](shared/web/progress.md) | CORE | 1c8923b441 (2026-10-29) | GO | GO | N/A | N/A | N/A | N/A |
 | [dashboard](middleware/robot_ui/robot/progress.md) | 화면 | e7cdf490 (2026-09-29) | GO | GO | N/A | HOLD | N/A | N/A |
 | [pilot](middleware/robot_ui/pilot/progress.md) | 화면 | 10daaae5 (2026-10-02) | GO | HOLD | HOLD | HOLD | GO | N/A |
 | [omx_transfer](integrations/robots/omx/progress.md) | OMX workcell | uncommitted (2026-10-27) | GO | PARKED | PARKED | PARKED | PARKED | PARKED |
@@ -55,7 +55,7 @@
 | [dock](operations/site_devices/dock/progress.md) | 도킹 | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | HOLD | PARKED |
 | [signal](operations/site_devices/signal/progress.md) | 사이트 인프라 | uncommitted (2026-09-22) | GO | GO | PARKED | HOLD | HOLD | PARKED |
 | [docs](docs/progress.md) | 거버넌스 | bed604ef (2026-09-30) | GO | GO | N/A | N/A | N/A | N/A |
-| [isaac_sim](learning/envs/isaac/progress.md) | sim | 5c89f3d1f3 (2026-10-29) | GO | GO | HOLD | N/A | N/A | N/A |
+| [isaac_sim](learning/envs/isaac/progress.md) | sim | bb39f438a5 (2026-10-30) | GO | GO | HOLD | N/A | N/A | N/A |
 
 ## HOLD blockers
 
@@ -67,8 +67,8 @@
 - control ARTIFACT: 서명된 ARM64 manifest·immutable digest 발행 전. 흡수된 코드는 deploy가 소유하는 OS 이미지에 번들된다
 - control DEVICE: Pi bench Device 설치와 device-readback.sh --json 증거 없음. Control sensor adapter 활성화는 Device 보정 generation에 묶인다(D-47)
 - fleet ROS-SIM: D-87: 현재 트리의 colcon install/setup.bash가 없다. 2026-09-17 WSL Task 14 로그는 설계 입력이며 GO가 아니다 (D-89)
-- monitoring ARTIFACT: CLI wheel·UI 묶음·3프로필·시험 PC unit 파서와 실제 Caddy 격리 HTTPS 검증은 통과했다. 배포 대상 PC 고정 경로·계정·권한 확인은 미수행이며 실제 설치·LAN/TLS 수용은 별도다.
-- monitoring DEVICE: 실제 관제 PC의 네이티브 설치·프로세스 수명 검증을 수행하지 않았다.
+- monitoring ARTIFACT: 관제 PC는 D-936 사이트 스택 overlay로 싣는다. 소스·후보 검증·관제 PC compose 렌더링·Caddy 검사는 통과했다. overlay를 포함한 서명 후보가 아직 없고, 관제 PC 자동 업데이트는 서명되지 않은 ARM-S overlay 때문에 거절 중이다.
+- monitoring DEVICE: 관제 PC에 Monitoring 설정·키·Fleet viewer 계정을 준비하지 않았고 overlay를 켜지 않았다.
 - monitoring FIELD: 실 PC 배치·LAN/TLS 단절 및 복구·시각·제어 영향 수용이 남아 있다.
 - fleet_decision ROS-SIM: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
 - fleet_decision ARTIFACT: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
@@ -82,7 +82,7 @@
 - media DEVICE: measurement skipped by user decision 2026-10-18; no robot, Android device or production site installation
 - media FIELD: measurement skipped by user decision 2026-10-18; six physical robots never ran the 30-minute bandwidth/latency/control scenario
 - media_edge ARTIFACT: measurement skipped by user decision 2026-10-18; the payload now installs rosy-media-edge and rosy-media.service but no signed ARM64 payload was built or its GStreamer closure probed
-- media_edge DEVICE: measurement skipped by user decision 2026-10-18; no Pinky ran the camera tap, rosy-media.service limits or a real camera stream
+- media_edge DEVICE: Native ARM64 preflight and diagnostic 640x480 watermark rendering observed; final continuous-sampling patch deployment and production automatic playback remain unverified after device connectivity loss. See docs/validation/robot-local-video-recovery-2026-10-29/result.md.
 - media_edge FIELD: measurement skipped by user decision 2026-10-18; six physical robots have not run D-789 acceptance
 - console_source ROS-SIM: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
 - console_source ARTIFACT: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.

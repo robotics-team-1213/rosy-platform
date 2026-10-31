@@ -158,9 +158,17 @@ def auto_pivot_point(cell, config, calibration, site, target_xy):
     return clear_point(target_xy, mask, big, inside, lambda q: predicted_pixel(config, calibration, site, q))
 
 
+def carried(region: dict) -> bool:
+    """A region copied from another site or point, never measured where it stands."""
+    return bool(region.get("carried_from")) or str(region.get("source", "")).startswith("carried")
+
+
 def self_calibrate(cell, config, calibration, calibration_path, site, target_xy, objects, work, bias_data, sleep, log):
-    """The bias region near `target_xy`: saved, or a pivot circle at a clear configured point (not in dry runs)."""
+    """The bias region near `target_xy`: saved, or a pivot circle at a clear configured point (not in dry runs).
+    A carried region never stands in for a measurement: the Pinky tray's, copied from the floor, skipped the pivot
+    and the 22:29 pick came down on the box top, >= 16 mm off with the arm within 4 mm of its plan (2026-10-30)."""
     p = config.get("params")
+    bias_data = {**bias_data, "regions": [r for r in bias_data["regions"] if not carried(r)]}
     # a region this close is accurate enough to pick with; a farther one was 8-10 mm off (2026-10-29)
     if cell_pivot.bias_at(bias_data, site, target_xy, reach_mm=prm.get(p, "calibrate.bias_near_mm"), params=p):
         return bias_data, None
@@ -169,7 +177,7 @@ def self_calibrate(cell, config, calibration, calibration_path, site, target_xy,
     points = [q for q in pivot.get("points", [])
               if 1000 * math.dist(q, target_xy) <= 0.9 * prm.get(p, "pivot.bias_reach_mm", cell_pivot.BIAS_REACH_MM)
               and all(1000 * math.dist(q, o["raw_m"]) >= clear_mm for o in objects)]
-    z_view, s_z = pivot.get("z_view", config["coarse"]["z_view"]), config["sites"][site].get("surface_z")
+    z_view, s_z = cell_pivot.pivot_z_view(config, site), config["sites"][site].get("surface_z")
     if (prm.get(p, "pivot.over_target") and cell is not None and s_z is not None
             and 1000 * (z_view - s_z) - prm.get(p, "pivot.over_top_mm") >= prm.get(p, "pivot.over_clear_mm")):
         # 2026-10-29: floor biases 3.5-5.7 cm apart read 16.9, 6.1 and 4.2 mm and every pick missed; the jaws hover
