@@ -190,7 +190,12 @@ def check(written, socket_root, state):
                          held_object_ref=arm['held_object_ref'], links={name: NS(
                              bounds=NS(**link['bounds']), linear_velocity_m_s=link['linear_velocity_m_s'],
                              angular_velocity_rad_s=link['angular_velocity_rad_s']) for name, link in links.items()}))
-    validate_transfer_clearance(policy, [NS(owners=owners)])
+    try:
+        validate_transfer_clearance(policy, [NS(owners=owners)])
+    except ValueError as exc:
+        arms = {i: (dict(zip(a['joint_names'], a['positions_rad'])), a['gripper_state'], a['held_state'])
+                for i, a in state['owners'].items()}
+        raise ValueError(f'{exc}: {arms}') from exc
     return {'policy_digest': policy.digest, 'journal_ids': [c.journal_id for c in installed.capabilities],
             'object_position_m': state['object']['position_m']}
 

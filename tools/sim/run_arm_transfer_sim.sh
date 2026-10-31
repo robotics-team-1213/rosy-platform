@@ -20,7 +20,7 @@ python3 "$here/omx_topic_backend.py" --out "$OUT/layer" >"$OUT/layer.log" 2>&1 &
 pids+=($!)
 until [[ -s "$OUT/layer/omx_f_topic.urdf" ]]; do sleep 0.5; done
 MUJOCO_GL=egl "${SIM_MUJOCO_PYTHON:-$HOME/rosy-test/venvs/sim-mujoco/bin/python}" "$here/omx_mujoco_backend.py" \
-  --urdf "$OUT/layer/omx_f_topic.urdf" --shape 240x320 --camera-hz 1 >"$OUT/backend.log" 2>&1 &
+  --urdf "$OUT/layer/omx_f_topic.urdf" --shape 240x320 --camera-hz 1 --initial gripper_joint_1=1.0 >"$OUT/backend.log" 2>&1 &
 pids+=($!)
 for _ in $(seq 240); do grep -q OMX_TOPIC_BACKEND_READY "$OUT/layer.log" && break; sleep 0.5; done
 grep -q OMX_TOPIC_BACKEND_READY "$OUT/layer.log" || { tail -n 20 "$OUT/layer.log" "$OUT/backend.log"; exit 1; }
