@@ -161,8 +161,11 @@ OPERATOR_USER = "rosy"
 CORE_USER = "rosy-core"
 CORE_HOME = "var/lib/rosy/core"
 CORE_OVERLAY = f"{CORE_HOME}/.rosy/rosy.yaml"
+# os.replace takes src_dir_fd/dst_dir_fd through renameat like os.rename, but CPython lists only
+# os.rename in supports_dir_fd. Testing os.replace sent every device to the path fallback,
+# which left CORE's overlay root-owned and CORE in a restart loop (2026-10-31, nsfh and b8xy).
 _NOFOLLOW_FS = (hasattr(os, "O_NOFOLLOW") and hasattr(os, "O_DIRECTORY")
-                and os.open in os.supports_dir_fd and os.replace in os.supports_dir_fd)
+                and os.open in os.supports_dir_fd and os.rename in os.supports_dir_fd)
 
 
 def _open_directory(name: str, parent: int, *, create_mode: int) -> int:

@@ -4254,3 +4254,10 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 근거: 설치 뒤 `site` 줄에 `updates`가 들어왔고, host-state `check`는 fixed·drift·errors 0이다. 기록은 D-871 적용 기록 2026-10-30.
 - gate 변화: D-871 DEVICE 관제 PC 수집 경로 적용. AI·모델 PC는 sudo 비밀번호가 필요해 남았다.
 - CE: 새 교훈 — `docs/solutions/deployment/host-guard-files-update-through-host-state-install-2026-10-30.md`.
+
+## 2026-10-31 · a517780fbc · feat(model-pc): one Learning center follows the signed release; retire the candidates (D-857)
+- 변경: 리뷰 릴리스 업데이터가 8768(`rosy-edge-review`, D-857의 유일한 Learning 센터)도 갱신. 모델 PC 8769·AI PC 8770 `rosy-learning-center` 후보와 그 업데이트 timer를 끄고 `services.yaml`에 retired로 표시
+- 증거: 두 후보의 검수 자료 0장, OMX 자료는 전부 `synthetic_smoke`(모델 15·AI 14 데이터셋, 10-24 이후 파일 없음). 각 PC `~/rosy-learning-candidate-retired-20261031/`에 자료·유닛 백업 뒤 stop+disable. 9444~9448 HTTPS 프록시·Fleet 코드에 두 후보 포트 연결 없음. 원격 pytest 100 passed(host services·review autoupdate·release·update status·gate)
+- gate 변화: 없음. 8768 갱신은 모델 PC `work.lock`(학습 작업) 해제 뒤 업데이터가 적용
+- 결정: D-857
+- 교훈: 없음
