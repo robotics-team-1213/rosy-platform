@@ -166,19 +166,61 @@ def fleet_installation(written, socket_root):
     return TransferInstallation(policy=installed, source='source', target='target', capabilities=capabilities)
 
 
+def home_joints(spec):
+    """The taught home as joints, open gripper included: the planner refuses any other start (HOME_DEVIATION)."""
+    from omx_adapter.kinematics import ARM_JOINTS, OmxKinematics, TopDownPose
+    from omx_adapter.pose_plan import CellPlanningProfile
+    profile = CellPlanningProfile.load(ROOT / 'deploy/robot/omx/sim/cell_profile.yaml')
+    joints = OmxKinematics.load().solve_top_down(TopDownPose(*_home(spec)), profile.ik_limits()).joints
+    return {**dict(zip(ARM_JOINTS, joints)), profile.gripper_joint: profile.gripper_open}
+
+
 def document(spec):
     installed = policy(spec, bindings(spec))
     return {'schema': 'rosy.sim-transfer-installation-written/1', 'policy': installed.model_dump(mode='json'),
             'policy_digest': installed.digest, 'bases': {spec['instance_id']: spec['base']},
-            'object': spec['object']}
+            'object': spec['object'], 'home_joints': home_joints(spec)}
+
+
+def check(written, socket_root, state):
+    """C4 bring-up: the live owner completes Fleet's installation and the sim scene meets PRE_DISPATCH."""
+    from types import SimpleNamespace as NS
+    from fleet.server.physical_transfer_evidence import _pose_matches, validate_transfer_clearance
+    from transfer_observer import ArmModel
+    installed = fleet_installation(written, socket_root)
+    policy = installed.policy
+    if not _pose_matches(NS(**state['object']), policy.source_pose, policy):
+        raise ValueError(f"object {state['object']} is not at the source pose {policy.source_pose}")
+    model, owners = ArmModel.load(ASSETS), []
+    for instance, arm in state['owners'].items():
+        links = model.links(dict(zip(arm['joint_names'], arm['positions_rad'])),
+                            dict(zip(arm['joint_names'], arm['velocities_rad_s'])), written['bases'][instance])
+        owners.append(NS(gripper_state=arm['gripper_state'], held_state=arm['held_state'],
+                         held_object_ref=arm['held_object_ref'], links={name: NS(
+                             bounds=NS(**link['bounds']), linear_velocity_m_s=link['linear_velocity_m_s'],
+                             angular_velocity_rad_s=link['angular_velocity_rad_s']) for name, link in links.items()}))
+    try:
+        validate_transfer_clearance(policy, [NS(owners=owners)])
+    except ValueError as exc:
+        arms = {i: (dict(zip(a['joint_names'], a['positions_rad'])), a['gripper_state'], a['held_state'])
+                for i, a in state['owners'].items()}
+        raise ValueError(f'{exc}: {arms}') from exc
+    return {'policy_digest': policy.digest, 'journal_ids': [c.journal_id for c in installed.capabilities],
+            'object_position_m': state['object']['position_m']}
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument('command', choices=('write',))
+    parser.add_argument('command', choices=('write', 'check'))
     parser.add_argument('--spec', type=Path, default=SPEC)
     parser.add_argument('--out', type=Path, required=True)
+    parser.add_argument('--sockets', type=Path)
+    parser.add_argument('--state', type=Path)
     args = parser.parse_args(argv)
+    if args.command == 'check':
+        print(json.dumps(check(json.loads(args.out.read_text(encoding='utf-8')), args.sockets,
+                               json.loads(args.state.read_text(encoding='utf-8')))))
+        return
     written = document(load(args.spec))
     args.out.write_text(json.dumps(written, indent=1, sort_keys=True), encoding='utf-8')
     args.out.with_name(args.out.stem + '.bases.json').write_text(json.dumps(written['bases']), encoding='utf-8')
