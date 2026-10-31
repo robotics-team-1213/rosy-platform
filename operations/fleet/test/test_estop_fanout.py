@@ -1,9 +1,10 @@
-"""전체 비상정지 전달: 짧은 재시도와 대형 해제를 기다리지 않는 정지."""
+"""전체 비상정지 전달: 닿지 않은 요청만 다시 보내고, 대형 해제를 기다리지 않는 정지."""
 
 from __future__ import annotations
 
 import asyncio
 
+import httpx
 import pytest
 
 from fakes import run
@@ -14,55 +15,62 @@ from fleet.swarm.api.ports import RobotApiError
 
 @pytest.fixture(autouse=True)
 def fast(monkeypatch):
-    monkeypatch.setattr(estop_fanout, "ESTOP_ATTEMPT_S", 0.05)
+    monkeypatch.setattr(estop_fanout, "ESTOP_BUDGET_S", 0.2)
 
 
 class Scatter:
-    """Per robot, how many first attempts hang before one answers."""
+    """Per robot, the outcomes of its attempts in order: an exception to raise, "hang", or an answer."""
 
-    def __init__(self, hangs: dict[str, int] | None = None, error: BaseException | None = None):
-        self.hangs = dict(hangs or {})
-        self.error = error
+    def __init__(self, plans: dict[str, list] | None = None):
+        self.plans = {robot: list(plan) for robot, plan in (plans or {}).items()}
         self.calls: list[str] = []
         self.at: dict[str, float] = {}
 
     async def __call__(self, robot_id: str) -> dict:
         self.calls.append(robot_id)
         self.at.setdefault(robot_id, asyncio.get_running_loop().time())
-        if self.error is not None:
-            raise self.error
-        if self.hangs.get(robot_id, 0) > 0:
-            self.hangs[robot_id] -= 1
+        plan = self.plans.get(robot_id) or []
+        step = plan.pop(0) if len(plan) > 1 else (plan[0] if plan else None)
+        if isinstance(step, BaseException):
+            raise step
+        if step == "hang":
             await asyncio.sleep(10)
         return {"estop": True}
 
 
-def test_an_unanswered_stop_is_sent_again_and_lands():
-    scatter = Scatter({"rosy_02": 1})
+def _connect_error():
+    return httpx.ConnectError("connection refused")
+
+
+def test_a_stop_that_never_connected_is_sent_again_and_lands():
+    scatter = Scatter({"rosy_02": [_connect_error(), None]})
     results = run(estop_fanout.stop_robots(scatter, ["rosy_01", "rosy_02"]))
     assert results == [{"estop": True}, {"estop": True}]
     assert scatter.calls.count("rosy_02") == 2 and scatter.calls.count("rosy_01") == 1
 
 
-def test_a_robot_that_never_answers_ends_after_the_last_attempt():
-    scatter = Scatter({"rosy_01": 99})
+def test_a_robot_that_never_connects_ends_after_the_last_attempt():
+    scatter = Scatter({"rosy_01": [_connect_error()]})
     [result] = run(estop_fanout.stop_robots(scatter, ["rosy_01"]))
-    assert isinstance(result, asyncio.TimeoutError)
+    assert isinstance(result, httpx.ConnectError)
     assert scatter.calls.count("rosy_01") == estop_fanout.ESTOP_ATTEMPTS
 
 
-def test_an_answered_refusal_is_not_asked_again():
-    error = RobotApiError("rosy_01", 409, "MODE_CONFLICT", "no")
-    scatter = Scatter(error=error)
+@pytest.mark.parametrize("outcome", [httpx.ReadError("reply lost after CORE latched"), "hang"])
+def test_a_stop_that_may_have_reached_core_is_not_sent_again(outcome):
+    """D-271 5: a lost reply or a read timeout may already have latched CORE; it stays UNKNOWN."""
+    scatter = Scatter({"rosy_01": [outcome]})
+    [result] = run(estop_fanout.stop_robots(scatter, ["rosy_01"]))
+    assert isinstance(result, (httpx.ReadError, TimeoutError))
+    assert scatter.calls == ["rosy_01"]
+
+
+@pytest.mark.parametrize("error", [RobotApiError("rosy_01", 409, "MODE_CONFLICT", "no"),
+                                   HubError("UNKNOWN_ROBOT", "rosy_01")])
+def test_an_answered_refusal_is_not_asked_again(error):
+    scatter = Scatter({"rosy_01": [error]})
     [result] = run(estop_fanout.stop_robots(scatter, ["rosy_01"]))
     assert result is error and scatter.calls == ["rosy_01"]
-
-
-def test_an_unknown_robot_fails_without_waiting():
-    error = HubError("UNKNOWN_ROBOT", "rosy_99")
-    scatter = Scatter(error=error)
-    [result] = run(estop_fanout.stop_robots(scatter, ["rosy_99"]))
-    assert result is error and len(scatter.calls) == estop_fanout.ESTOP_ATTEMPTS
 
 
 def test_formation_release_runs_beside_the_stop_not_before_it():
