@@ -7,15 +7,15 @@ import {confirmIrreversible} from '/common/ui.js';
 import {bindEstop, bindTopbarToggle, showSession, showSignedOut, tickClock, watchFleet} from '/console/assets/fleet-header.js';
 import {renderStructuredDocument} from '/console/assets/cell-document-editor.js';
 import {createCellObservation} from '/console/assets/cell-observation.js';
+import {bindScreens} from '/console/assets/subnav-screens.js';
+import '/console/assets/file-picker.js';
 import {bindPrintSheets} from '/console/assets/cell-print-sheets.js';
 import {showObjectCatalog} from '/console/assets/cell-object-catalog.js';
 
 const $ = id => document.getElementById(id);
-const revealStage = hash => $(hash.slice(1))?.closest('details')?.setAttribute('open', '');
-for (const link of document.querySelectorAll('.ui-subnav a[href^="#"]'))
-  link.addEventListener('click', () => revealStage(link.hash));
-window.addEventListener('hashchange', () => revealStage(location.hash));
-revealStage(location.hash);
+// D-926 3: each Cell step is its own screen; the first one shows the live cell, its calibration printouts and the saved documents.
+bindScreens({nav: document.querySelector('.ui-subnav-nav'), home: 'saved-heading', mark: 'step',
+  groups: {'saved-heading': ['observation-heading', 'print-heading', 'saved-heading']}});
 const channelQuery = new URL(location.href).searchParams, channelRequested = channelQuery.has('channel_request');
 const channelId = channelQuery.get('channel_request'), channelPath = `/api/fleet/channel-requests/${encodeURIComponent(channelId)}`;
 let channelReceipt = null, channelReview = null;
@@ -201,7 +201,17 @@ async function list() {
     const date = new Date(item.updated_at);
     time.textContent = Number.isNaN(date.getTime()) ? '수정 시각 확인 불가'
       : `수정 ${date.toLocaleString('ko-KR', {dateStyle: 'medium', timeStyle: 'short'})}`;
-    li.append(name, time);
+    const open = document.createElement('ui-button');
+    open.setAttribute('kind', 'quiet');
+    open.textContent = '열기';
+    open.addEventListener('click', () => {
+      $(item.kind + '-id').value = item.id;
+      location.hash = `#${item.kind}-heading`;
+      $(item.kind + '-load').click();
+    });
+    const label = document.createElement('div');
+    label.append(name, time);
+    li.append(label, open);
     return li;
   }));
   saved.hidden = result.documents.length === 0;
@@ -303,7 +313,6 @@ for (const kind of ['recipe', 'cell']) {
   });
   $(kind + '-file').addEventListener('change', async () => {
     const file = $(kind + '-file').files[0];
-    $(kind + '-file-name').textContent = file?.name || '선택한 파일 없음';
     if (!file || busy) return;
     editEpoch++; invalidate(); const epoch = editEpoch;
     await action(async () => {
@@ -366,8 +375,9 @@ function connect(credentialChange = false) {
     $('cell-channel-original').textContent = channelReceipt.content;
     $('cell-channel-request').hidden = false;
     $('request-key').value = channelReview.request_key; $('request-key').readOnly = true;
-    if (channelReview.work_kind === 'cell_job') { $('mission-id').value = channelReview.work_id; $('mission-stage').open = true; }
-    $('proposal-stage').open = true;
+    if (channelReview.work_kind === 'cell_job') $('mission-id').value = channelReview.work_id;
+    // Opened from a chat request: start on the step it needs unless the operator already chose one.
+    if (!location.hash) location.hash = channelReview.work_kind === 'cell_job' ? '#mission-heading' : '#proposal-heading';
   }
   $('notice').textContent = '접속 완료 · 문서를 준비하세요.';
   });
@@ -406,8 +416,7 @@ $('compile').addEventListener('click', () => action(async () => {
   $('layout-preview').hidden = !groups.length;
   renderLayout();
   if (!$('request-key').value) $('request-key').value = randomUUID();
-  $('notice').textContent = '미리보기 완료 · 내용을 확인하고 작업 범위를 입력하세요.';
-  $('proposal-stage').open = true;
+  $('notice').textContent = '미리보기 완료 · 내용을 확인한 뒤 작업 제안으로 넘어가세요.';
 }));
 $('propose').addEventListener('click', () => action(async () => {
   if (!previewRefs) throw new Error('미리보기를 먼저 확인하세요.');
@@ -425,7 +434,6 @@ $('propose').addEventListener('click', () => action(async () => {
   const proposalId = result.work_id || result.proposal.proposal_id;
   $('proposal').textContent = `제안 ${proposalId}\n상태 ${jobStatusLabel(result.work_status || result.mission?.status || result.proposal.state)}\n운영자 별도 승인 대기`;
   $('mission-id').value = proposalId;
-  $('mission-stage').open = true;
   clearJobSnapshot();
   $('notice').textContent = '제안 완료 · 승인·진행에서 운영자 승인과 진행 상태를 확인하세요.';
 }));
