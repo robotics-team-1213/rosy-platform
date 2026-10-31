@@ -567,3 +567,10 @@
 - 증거: seed 42에서 rl3 run b872 SUCCEEDED 9/9(간격 3.42~4.43 mm), 같은 커밋 BC v0 run 7f51 8/9(7번 상자 안정 구간 실패, ebdd와 같음). 원격 Isaac 시험·remote_isaac·측정 도구 시험 통과.
 - gate 변화: 없음. 한 seed 결과이며 seed 43 짝 실행 중. 시뮬레이션이며 실물 수용이 아니다.
 - CE: 해당 없음 — 일시 연결 재시도는 코드와 회귀 시험으로 남았다.
+
+## 2026-10-31 · 7d26c6aef8 · rl3 places all nine on seed 43; supervisor deletion race fixed
+
+- 변경: `run_worker._budget`가 지워지는 중인 파일(nlink 0)을 건너뛴다. 하드링크·심볼릭 링크 거부는 그대로다.
+- 증거: seed 43 BC v0 run d37d 2/9(1번 상자 안정 실패, 간격 5.44 mm). 같은 조건 rl3 run f3eb는 6개 놓은 뒤 감시가 지워지는 plan-request 파일(nlink 0)을 unsafe_output으로 보고 종료. 수정 뒤 rl3 run 1038 SUCCEEDED 9/9(간격 2.65~4.82 mm). 두 seed에서 rl3 9/9·9/9, BC v0 8/9·2/9. 원격 run_worker 시험 통과.
+- gate 변화: 없음. 시뮬레이션(가정한 2~5 mm 추정 오차)이며 실물 수용이 아니다.
+- CE: 새 교훈 기록 — `docs/solutions/runtime-errors/isaac-run-supervisor-flagged-a-file-being-deleted-2026-10-31.md`(a4e9·10-30·f3eb 반복, 감시 로그로 원인 확인, 1038로 검증).

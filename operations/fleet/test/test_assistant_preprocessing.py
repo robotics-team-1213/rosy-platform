@@ -367,15 +367,16 @@ def test_fleet_checks_usage_binding_and_logs_no_original_text_or_identity(monkey
         with pytest.raises(ValueError, match='PREPARATION_CHANGED'):
             asyncio.run(adapter(*args))
     else:
-        # Directly on the logger: a ROS/uvicorn logging setup earlier in the CI shard can stop it propagating to root.
-        uvicorn_error = logging.getLogger('uvicorn.error')
-        monkeypatch.setattr(uvicorn_error, 'disabled', False)
-        uvicorn_error.addHandler(caplog.handler)
+        # CI ran this after a test that started uvicorn, whose logging config stops 'uvicorn' propagating to the
+        # root caplog handler: the log read '' there and passed alone (2026-10-31, publish PR #223 failed 4 times)
+        monkeypatch.setattr(logging.getLogger('uvicorn'), 'propagate', False)
+        log = logging.getLogger('uvicorn.error')
+        log.addHandler(caplog.handler)  # read the logger itself, whatever an earlier config did to propagation
         try:
             with caplog.at_level(logging.INFO, logger='uvicorn.error'):
                 result = asyncio.run(adapter(*args))
         finally:
-            uvicorn_error.removeHandler(caplog.handler)
+            log.removeHandler(caplog.handler)
         assert result['kind'] == 'CHAT' and 'usage' not in result
         assert '"input_tokens": 100' in caplog.text
         assert 'private utterance sentinel' not in caplog.text and 'alice' not in caplog.text

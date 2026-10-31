@@ -24,19 +24,22 @@ def selected_device(value):
     return str(path)
 
 
-def open_capture(cv, device):
+FORMATS = ('MJPG', 'YUYV')  # YUYV only when a camera's role names it: a RealSense D435 colour node has no MJPEG
+
+
+def open_capture(cv, device, fourcc='MJPG'):
     capture = cv.VideoCapture(device, cv.CAP_V4L2)
     try:
         if not capture.isOpened():
             raise OSError('camera open failed')
-        mjpeg = cv.VideoWriter_fourcc(*'MJPG')
-        for key, value in ((cv.CAP_PROP_FOURCC, mjpeg), (cv.CAP_PROP_FRAME_WIDTH, 640),
+        code = cv.VideoWriter_fourcc(*fourcc)
+        for key, value in ((cv.CAP_PROP_FOURCC, code), (cv.CAP_PROP_FRAME_WIDTH, 640),
                            (cv.CAP_PROP_FRAME_HEIGHT, 480), (cv.CAP_PROP_BUFFERSIZE, 1)):
             capture.set(key, value)
-        if (int(capture.get(cv.CAP_PROP_FOURCC)) != mjpeg
+        if (int(capture.get(cv.CAP_PROP_FOURCC)) != code
                 or capture.get(cv.CAP_PROP_FRAME_WIDTH) != 640
                 or capture.get(cv.CAP_PROP_FRAME_HEIGHT) != 480):
-            raise OSError('camera capture format differs from MJPEG 640x480')
+            raise OSError(f'camera capture format differs from {fourcc} 640x480')
         if capture.get(cv.CAP_PROP_BUFFERSIZE) != 1:
             raise OSError('camera driver did not accept a one-frame buffer')
         return capture
@@ -76,6 +79,9 @@ def main():
     # Missing USB devices are retried, but numeric or unstable selectors never start.
     if Path(args.device).parent not in PERSISTENT_CAMERA_DIRECTORIES:
         parser.error(PERSISTENT_CAMERA_ERROR)
+    fourcc = os.environ.get('ROSY_CAMERA_FOURCC', 'MJPG')  # raw USB bandwidth is an explicit per-camera choice
+    if fourcc not in FORMATS:
+        parser.error(f'ROSY_CAMERA_FOURCC must be one of {FORMATS}')
     import cv2
     from core_common.observation_snapshot import SnapshotChannel, interrupt_on_termination
     from camera_quality import frame_quality
@@ -88,8 +94,8 @@ def main():
             notify_watchdog()
             try:
                 if capture is None:
-                    capture = open_capture(cv2, selected_device(args.device))
-                    print('native MJPEG 640x480 preview; calibration=unverified', flush=True)
+                    capture = open_capture(cv2, selected_device(args.device), fourcc)
+                    print(f'native {fourcc} 640x480 preview; calibration=unverified', flush=True)
                 frame = read_frame(capture)
                 captured_at = time.time()
                 # shortcut: receipt time only; use exposure timestamps before calibrated control or recording.
