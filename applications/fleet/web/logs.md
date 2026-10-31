@@ -651,3 +651,10 @@
 - 변경: 설치 문서(`installation/install.html`)가 본문 안 사이드바(`install-tasks`·`install-workspace`, `styles.css` 전용 배치)를 버리고 다른 네 문서와 같은 공용 하위 탐색 자리(`ui-subnav`)에 섰다. 작업 목록은 기존 공용 task-chooser가 같은 자리를 채운다(robot_ui shell과 같은 규칙, `install.js` 무변경). `app-shell.css`(자리 시트)를 문서에 넣고 `main`에 `fleet-task-page`를 달았으며 `doc-tabs.css`가 자리 안 여백만 준다. 이제 다섯 영역 문서 모두 레일(관제·작업·기록·지도·설치) + 하위 탐색 자리의 같은 구조다.
 - 증거: 작업 세션 Fleet 샘플 서버(4173) Chromium에서 세 문서(설치·지도·관제 작업 화면)의 자리 위치가 같다(레일 0·72px, 자리 x=72·232px, 본문 x=304). 탭 여섯 전환·tabpanel 라벨·좁은 화면 콤팩트 선택 유지, 페이지 오류 없음. node --test 403 passed. 원격 pytest는 착지 전에 기록한다.
 - gate 변화: 없음. CE: 해당 없음 — 화면 규칙은 D-741 6이 담는다.
+
+
+## 2026-11-01 · uncommitted · D-741 6 보강: 좁은 컨테이너에서 콤팩트 선택 기준 통일
+
+- 변경: `doc-tabs.css`의 `@container (width < 64rem)` 안에서 설치 자리의 task-chooser도 같은 컨테이너 기준으로 세로 레일을 숨기고 콤팩트 선택을 띄운다. `task-chooser.css`의 전환은 뷰포트 기준이라 고전 스크롤바 창(뷰포트 64rem 이상·컨테이너 미만)에서 레일이 세로로 남던 창을 메운다. 공용 시트는 그대로 두고 Fleet 표면이 자기 컨테이너 기준만 더한다.
+- 증거: 작업 세션 Fleet 샘플 서버(4173) Chromium 1440에서 컨테이너만 1000px로 줄인 경우 레일 숨김·콤팩트 선택 표시·탭 전환 정상, 1440 기본·480 좁은 폭은 기존과 같음, 페이지 오류 없음. 원격 브라우저 시험은 아래 착지 전 기록 참조.
+- gate 변화: 없음. CE: 해당 없음.

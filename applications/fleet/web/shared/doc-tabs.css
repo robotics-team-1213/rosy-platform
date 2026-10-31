@@ -38,4 +38,7 @@
   .fleet-body > .doc-tabs { flex-direction: row; justify-content: flex-start; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--border-subtle); }
   .fleet-body > .doc-tabs a { border-inline-start: 0; border-bottom: 2px solid transparent; }
   .fleet-body > .doc-tabs a[aria-current="page"] { border-bottom-color: var(--ink); }
+  /* task-chooser의 레일/콤팩트 전환은 뷰포트 기준이라 컨테이너 경계와 어긋나는 창이 있다 — 레일과 같은 컨테이너 기준으로 맞춘다. */
+  .fleet-body > .ui-subnav > .ui-task-chooser .ui-task-rail { display: none; }
+  .fleet-body > .ui-subnav > .ui-task-chooser .ui-task-compact { display: grid; }
 }
