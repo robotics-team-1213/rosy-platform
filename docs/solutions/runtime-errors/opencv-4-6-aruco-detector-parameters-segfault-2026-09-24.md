@@ -89,6 +89,10 @@ device's OpenCV 4.6"). 한 번 만난 사람만 아는 함정이라는 뜻이다
   모양을 흉내 내는 가짜 모듈로 그 경로를 호스트에서 한 번은 지나게 한다.
 - 모듈 import 시점에 네이티브 객체를 만드는 코드는 자식 인터프리터에서 import하는 테스트로 지킨다.
   exit -11은 in-process 테스트로 잡히지 않는다.
+- 2026-10-31 재발: 새 셀 마커 코드(`deploy/robot/omx/cell_marks.py`)와 인쇄 시트 시험이
+  `ArucoDetector`·`CharucoDetector`만 써서 시험 PC(4.7+)는 통과하고 GitHub CI(Ubuntu apt 4.6)에서
+  깨져 게시 PR 222를 막았다. 새 aruco 코드는 이 절의 `hasattr` 분기를 처음부터 쓰고,
+  `opencv-contrib-python-headless==4.6.0.66` venv로 4.6 경로를 한 번 돌린다(그냥 headless 휠에는 aruco가 없다).
 
 ## Related Issues
 
