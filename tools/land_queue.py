@@ -227,6 +227,20 @@ def wait(qdir: Path, ticket: Path, timeout: float, clock=time.time, sleep=time.s
         sleep(POLL)
 
 
+# Backpressure: at most CAP live tickets. A queue of 34 (2026-10-31, ~2 landings/h) meant ~15 h of waiting, every
+# landing ahead moved main under the rest, and old lander code lingered for hours; past CAP a landing is refused.
+CAP = int(os.environ.get("ROSY_LAND_QUEUE_CAP", "12"))
+
+
+def full(qdir: Path) -> str | None:
+    """Why a new ordinary ticket is refused, or None while the queue has room."""
+    rows = ahead(qdir, Path("~"))
+    if len(rows) < CAP:
+        return None
+    return (f"landing queue full ({len(rows)}/{CAP} tickets): combine related branches into one landing or retry"
+            " later; --urgent with the user's words still passes (ROSY_LAND_QUEUE_CAP sets the cap)")
+
+
 def enter(wt: Path, branch: str, status: str = "waiting", urgent: str = "", *,
           batch_auto: bool = False) -> tuple[Path, Path]:
     """Take a ticket (its place in the queue) and release it at exit whatever happens; (queue dir, ticket)."""
@@ -237,6 +251,8 @@ def enter(wt: Path, branch: str, status: str = "waiting", urgent: str = "", *,
         set_status(ticket, status)
     elif urgent and (holder := urgent_holder(qdir)):
         raise QueueError(f"--urgent refused: {describe([holder])} is already urgent ({holder['urgent']}); one at a time")
+    elif not urgent and (why := full(qdir)):
+        raise QueueError(why)
     else:
         ticket = take(qdir, branch, str(wt), status, urgent, batch_auto=batch_auto)
     if urgent:

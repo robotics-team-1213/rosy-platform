@@ -216,3 +216,21 @@ def test_a_waiting_member_never_blocks_the_leader_that_carries_it(tmp_path):
     assert [r["branch"] for r in queue.blockers(tmp_path, other)] == ["land/feat/leader"], "a carried member: no one"
     queue.set_status(leader, "preparing", batch=["land/docs/member"])
     assert queue.blockers(tmp_path, other) == [], "behind a leader still preparing, its waiting member holds no one"
+
+
+def test_a_full_queue_refuses_an_ordinary_ticket_but_not_an_urgent_or_adopted_one(tmp_path, monkeypatch):
+    """2026-10-31: 34 tickets at ~2 landings/h meant ~15 h of waiting; past CAP a landing is refused at once."""
+    monkeypatch.setattr(queue, "CAP", 2)
+    monkeypatch.setattr(queue, "queue_dir", lambda wt: tmp_path)
+    monkeypatch.setattr(queue, "_held", [])
+    first = queue.take(tmp_path, "feat/a")
+    assert queue.full(tmp_path) is None
+    queue.take(tmp_path, "feat/b")
+    assert "landing queue full (2/2" in queue.full(tmp_path)
+    with pytest.raises(queue.QueueError, match="queue full"):
+        queue.enter(tmp_path, "feat/c")
+    _, urgent = queue.enter(tmp_path, "feat/u", urgent="the user's words")
+    assert urgent.exists()
+    monkeypatch.setenv(queue.TICKET_ENV, str(first))
+    _, adopted = queue.enter(tmp_path, "feat/a")
+    assert adopted == first, "a relaunched lander keeps its own ticket even when the queue is full"
