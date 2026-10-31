@@ -130,7 +130,8 @@ def apply(plan: dict, env_dir: Path, units_running, run=subprocess.run) -> list:
         tmp.write_text("".join(f"{k}={v}\n" for k, v in env.items()), encoding="utf-8")
         os.replace(tmp, path)
         done.append(f"wrote {path.name}")
-    for role in plan["restart"] + [r for r in plan.get("present", []) if not units_running(r)]:
+    down = [r for r in plan.get("present", []) if r not in plan["restart"] and not units_running(r)]
+    for role in plan["restart"] + down:
         unit = f"rosy-omx-camera@{role}.service"
         run(["systemctl", "--user", "enable", unit], check=False, capture_output=True)
         run(["systemctl", "--user", "restart", unit], check=False, capture_output=True)
