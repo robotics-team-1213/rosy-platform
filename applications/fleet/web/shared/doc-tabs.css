@@ -45,4 +45,6 @@
   /* task-chooser의 레일/콤팩트 전환은 뷰포트 기준이라 컨테이너 경계와 어긋나는 창이 있다 — 레일과 같은 컨테이너 기준으로 맞춘다. */
   .fleet-body > .ui-subnav > .ui-task-chooser .ui-task-rail { display: none; }
   .fleet-body > .ui-subnav > .ui-task-chooser .ui-task-compact { display: grid; }
+  /* app-shell이 좁은 뷰포트에서 지우는 머리글을 Fleet 좌석에서는 유지한다 — 단계 구분(Cell 적재 단계·AI 판단)이 사라지지 않게. */
+  .fleet-body > .ui-subnav .ui-subnav-head { display: block; }
 }

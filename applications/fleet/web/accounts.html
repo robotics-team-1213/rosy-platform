@@ -11,11 +11,11 @@
   <script type="module" src="/common/ui.js"></script>
   <script type="module" src="/console/assets/account-page.js"></script>
 </head>
-<body><ui-shell grammar="procedure">
+<body><a class="skip-link" href="#accounts-main">본문으로 건너뛰기</a><ui-shell grammar="procedure">
   <!-- fleet:document-header:start -->
-<ui-topbar><ui-brand href="/console"><b>Rosy Fleet</b><small>계정 관리</small></ui-brand><span data-spacer></span><ui-button kind="quiet" data-theme-cycle="" data-icon-only="" type="button" aria-label="테마 변경" data-action-icon="theme-dark"></ui-button></ui-topbar>
+<header class="fleet-document-header"><ui-topbar><ui-brand href="/console"><b>Rosy Fleet</b><small>계정 관리</small></ui-brand><span data-spacer></span><ui-button kind="quiet" data-theme-cycle="" data-icon-only="" type="button" aria-label="테마 변경" data-action-icon="theme-dark"></ui-button></ui-topbar></header>
 <!-- fleet:document-header:end -->
-  <main class="fleet-login-main fleet-document">
+  <main id="accounts-main" class="fleet-login-main fleet-document" tabindex="-1">
     <h1 class="ui-page-heading">계정 관리</h1>
     <ui-status id="account-status" state="pending" role="status">관리 권한을 확인하고 있습니다.</ui-status>
     <a id="account-login" href="/console/login?return=%2Fconsole%2Faccounts" hidden>로그인</a>

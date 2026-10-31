@@ -672,3 +672,10 @@
 - 변경: `aria-current="step"`(문서 안 현재 단계)이 `page`와 같은 장미색 자리 표식을 받는다(app-shell.css, Cell 단계가 처음으로 보인다). install 작업 선택이 `history.replaceState(#작업-id)`로 주소에 남고 첫 로드가 해시를 일반화해 읽어 새로고침·공유가 작업을 보존한다(기존 `#device-profiles` 특수 처리 제거). policy 좌석의 `학습` 링크에서 남의 문서를 가리키던 거짓 `aria-current="page"`를 뺐다 — 화면 이름은 경로 줄 strong이 말한다.
 - 증거: 작업 세션 Fleet 샘플 서버(4173) Chromium — Cell 현재 단계 표식 배경 확인, 탭 클릭 → `#hosts` → 새로고침 후 같은 작업 복원, 신규 로드 `#device-profiles` → 해당 패널, policy 현재 표시 0개, 페이지 오류 없음. node --test 403 passed. 원격 시험은 착지 전 기록.
 - gate 변화: 없음. CE: 해당 없음.
+
+
+## 2026-11-01 · uncommitted · 비평 사소한 관찰: 절차 문서 skip link·header 랜드마크, 좁은 좌석 단계 머리글, 영상 제목 층위
+
+- 변경: 네 가벼운 문서의 머리가 `header.fleet-document-header`로 랜드마크를 얻고(정본 inc + 재생성), 계정 관리·내 계정에 skip link와 main id·tabindex를 더했다(9문서 전부 skip link 보유). 좁은 컨테이너에서 app-shell이 지우던 `ui-subnav-head`를 Fleet 좌석에서 유지해 Cell 적재 단계·AI 판단 묶음 구분이 390px에서도 산다. 관제·설치의 `관제 카메라` 제목이 패널 제목 h2 안의 h2가 아니라 h3로 섰다.
+- 증거: 작업 세션 Fleet 샘플 서버(4173) Chromium — accounts/profile/login skip link 1개·header 랜드마크 1개·main id 확인, Cell 390px에서 "Cell 적재 단계" 머리글 표시, 두 문서 vision-heading H3, 페이지 오류 없음. node --test 403 passed. 원격 시험은 착지 전 기록.
+- gate 변화: 없음. CE: 해당 없음.
