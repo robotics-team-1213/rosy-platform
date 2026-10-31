@@ -35,6 +35,30 @@ def forward_pilot_event(holder, event):
         pilot.on_goal_event(event)
 
 
+def explained_refusals(readback):
+    """Simulation only: say why the fail-closed readback refused (status and fence numbers, never the token or body)."""
+    def current(epoch, generation):
+        if readback(epoch, generation):
+            return True
+        import http.client
+        import json
+        connection = http.client.HTTPConnection(readback._host, readback._port, timeout=2)
+        try:
+            connection.request("GET", "/api/fleet/dispatch-control",
+                               headers={"Authorization": "Bearer " + readback._token})
+            response = connection.getresponse()
+            control = json.loads(response.read(8192)) if response.status == 200 else {}
+            seen = (response.status, control.get("authority_epoch"), control.get("generation"),
+                    control.get("dispatch_enabled"))
+        except Exception as error:
+            seen = type(error).__name__
+        finally:
+            connection.close()
+        print(f"fence refused for epoch {epoch} generation {generation}; a 2 s read saw {seen}", flush=True)
+        return False
+    return current
+
+
 def main() -> None:
     if os.environ.get("ROS_AUTOMATIC_DISCOVERY_RANGE") != "LOCALHOST":
         raise RuntimeError("the cell owner requires localhost-only ROS discovery")
@@ -42,7 +66,7 @@ def main() -> None:
         raise RuntimeError("the simulation cell owner refuses hardware device grants")
     fleet_uid = int(os.environ["ROSY_FLEET_PEER_UID"])
     from rosy_agent.fleet_fence import fleet_fence_from_environment
-    fleet_fence = fleet_fence_from_environment()
+    fleet_fence = explained_refusals(fleet_fence_from_environment())
     names = names_from_environment()
     refuse_second_owner(namespace=names.namespace)
 
