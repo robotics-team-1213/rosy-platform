@@ -48,7 +48,8 @@ def test_vault_signed_grants_are_site_scoped_without_inheritance(capability):
             AccountGrant(resource=resource, capabilities=[capability])
 
 
-@pytest.mark.parametrize('resource,capability', [('robot:*', 'robot.read'), ('robot:r1', '*'),
+# D-955 allows robot:* and project:* in stored grants; every site and capability wildcards stay refused.
+@pytest.mark.parametrize('resource,capability', [('site:*', 'fleet.read'), ('robot:r1', '*'),
                                                ('site:local', 'robot.admin'), ('project:p', 'accounts.manage')])
 def test_grants_reject_wildcards_and_wrong_resource_kind(resource, capability):
     with pytest.raises(ValidationError):
@@ -106,5 +107,6 @@ def test_wildcard_resolves_to_one_concrete_resource_and_never_enters_a_token():
     assert grants_for(stored, 'site:s1') == []
     private, _ = keys()
     with pytest.raises(ValueError):
-        sign_access(claims(aud='robot:*', grants=[{'resource': 'robot:*', 'capabilities': ['robot.read']}]),
+        sign_access({**claims(), 'aud': 'robot:*',
+                     'grants': [{'resource': 'robot:*', 'capabilities': ['robot.read']}]},
                     private, key_id='key-1')

@@ -232,7 +232,7 @@ def test_family_context_and_logout_share_authority_transaction(tmp_path):
     [{"resource": "robot:r1", "capabilities": ["accounts.manage"]}],
     [{"resource": "site:s1", "capabilities": ["robot.operate"]}],
     [{"resource": "project:p1", "capabilities": []}],
-    [{"resource": "project:*", "capabilities": ["learning.view"]}],
+    [{"resource": "site:*", "capabilities": ["fleet.read"]}],  # D-955: only robot:* and project:* are allowed
 ])
 def test_grants_reject_capability_resource_mismatch(tmp_path, grants):
     sessions = activated(tmp_path)
