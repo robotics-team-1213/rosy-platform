@@ -1,0 +1,10 @@
+{
+  "source_sha256": "dd91457a4a8d17d7fbb4fbfdb12dff9c2ae98e92e74760231c9ec08aa377f3cc",
+  "mat_size_m": [
+    2.44,
+    1.22
+  ],
+  "mat_height_mm": 33.7,
+  "paint_area_m2": 0.2598,
+  "paint_triangles": 171
+}

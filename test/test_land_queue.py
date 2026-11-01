@@ -234,3 +234,18 @@ def test_a_full_queue_refuses_an_ordinary_ticket_but_not_an_urgent_or_adopted_on
     monkeypatch.setenv(queue.TICKET_ENV, str(first))
     _, adopted = queue.enter(tmp_path, "feat/a")
     assert adopted == first, "a relaunched lander keeps its own ticket even when the queue is full"
+
+
+def test_a_held_ticket_stays_fresh_while_its_process_lives(tmp_path, monkeypatch):
+    """2026-11-01: a pretest past STALE_AFTER let others reclaim a live landing's ticket."""
+    import time as _t
+    monkeypatch.setattr(queue, "KEEPALIVE_S", 0.05)
+    monkeypatch.setattr(queue, "_alive", [])
+    ticket = queue.take(tmp_path, "feat/long")
+    old = _t.time() - 4 * 3600
+    import os as _os
+    _os.utime(ticket, (old, old))
+    monkeypatch.setattr(queue, "_held", [ticket])
+    queue._keepalive()
+    _t.sleep(0.3)
+    assert _t.time() - ticket.stat().st_mtime < 60

@@ -3,6 +3,8 @@ import importlib.util
 import json
 import math
 from pathlib import Path
+import shutil
+import subprocess
 import sys
 import threading
 import time
@@ -12,8 +14,8 @@ import pytest
 ROOT = Path(__file__).resolve().parents[3]
 
 
-def _load(name):
-    spec = importlib.util.spec_from_file_location(name, ROOT / f'tools/sim/{name}.py')
+def _load(name, path):
+    spec = importlib.util.spec_from_file_location(name, ROOT / path)
     module = importlib.util.module_from_spec(spec)
     sys.modules.setdefault(name, module)
     spec.loader.exec_module(module)
@@ -22,7 +24,14 @@ def _load(name):
 
 @pytest.fixture(scope='module')
 def tool():
-    return _load('transfer_installation')
+    # The path is literal so the affected-test selector maps edits of it here (an f-string is invisible to it).
+    return _load('transfer_installation', 'tools/sim/transfer_installation.py')
+
+
+@pytest.mark.skipif(shutil.which('bash') is None, reason='needs bash')
+@pytest.mark.parametrize('script', ['tools/sim/run_arm_transfer_sim.sh', 'tools/sim/without_devices.sh'])
+def test_sim_run_scripts_parse(script):
+    subprocess.run(['bash', '-n', str(ROOT / script)], check=True)
 
 
 @pytest.fixture(scope='module')
@@ -37,10 +46,13 @@ def test_the_policy_seals_the_owner_catalog_and_the_digest_is_stable(tool, writt
     assert tool.document(tool.load())['policy_digest'] == written['policy_digest']
     assert set(installed.catalog.poses) == {'source', 'target'}
     assert written['bases'] == {'omx_cell_sim_01': {'position_m': [0, 0, 0], 'orientation_xyzw': [0, 0, 0, 1]}}
+    # The sim starts here: the planner refuses any start but the taught home (HOME_DEVIATION, 2026-10-31).
+    assert set(written['home_joints']) == {'joint1', 'joint2', 'joint3', 'joint4', 'joint5', 'gripper_joint_1'}
+    assert written['home_joints']['gripper_joint_1'] == 1.0
 
 
 def test_the_source_pose_is_where_the_sim_world_puts_the_block(written):
-    world = _load('omx_cell_world')
+    world = _load('omx_cell_world', 'tools/sim/omx_cell_world.py')
     block = next(box for box in world.boxes() if box['name'] == 'infeed_block')
     source = written['policy']['source_pose']
     assert math.dist(source['position_m'], block['pos']) < 1e-6
@@ -53,7 +65,7 @@ def test_the_arm_at_home_leaves_both_zones_clear(tool, written):
     from omx_adapter.kinematics import ARM_JOINTS, OmxKinematics, TopDownPose
     from omx_adapter.pose_plan import CellPlanningProfile
     from rosy.world.state.projections.physical_transfer import Bounds3
-    observer = _load('transfer_observer')
+    observer = _load('transfer_observer', 'tools/sim/transfer_observer.py')
     policy = PhysicalTransferPolicy.model_validate_json(json.dumps(written['policy']))
     profile = CellPlanningProfile.load(ROOT / 'deploy/robot/omx/sim/cell_profile.yaml')
     kin = OmxKinematics.load()
