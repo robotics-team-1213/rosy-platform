@@ -562,3 +562,11 @@
 **결정.** exit 5라도 로그 요약 줄이 건너뜀뿐(`N skipped in Xs`, 실패·오류 없음)이면 exit 0과 같이 판정으로 본다. 아무것도 수집하지 못한 경우(`no tests ran`, 경로 잘못)는 지금처럼 멈춘다.
 
 **되돌림.** 건너뜀만으로 통과한 호출이 실제 시험 누락을 가린 일이 생기면 되돌린다.
+
+### 추가 21 (2026-11-02): 같은 폴더 안 import 사슬을 따라 시험을 찾는다 (사용자 지시 2026-11-02 "더 개선하고 빠르게 적용")
+
+**왜.** `learning/training/omx/experiment_hub.py`는 11-01에 17개 착지 로그에서 "unknown -> full"이었다. 시험(`test_experiment_hub.py`)은 `experiment_center`를 import하고, `experiment_center`가 `experiment_hub`를 import한다. 선택기(`affected_repo.referencing_tests`)는 시험이 직접 import한 모듈만 보았다. 그래서 매핑이 없다고 판정해 FULL로 올렸다. 같은 꼴의 모듈이 learning 아래에만 9개 이상 있었다.
+
+**결정.** 시험이 import한 모듈 외에, 같은 폴더의 시험 아닌 모듈이 바뀐 파일을 직·간접으로 import하면 그 모듈의 stem도 찾는다(`local_importers`). 폴더 밖으로는 따라가지 않는다. 잘못 고르면 시험이 더 늘어날 뿐이다(보수적).
+
+**되돌림.** 이 규칙 때문에 착지 선택이 눈에 띄게 커지면(같은 이름 모듈 오인) 폴더 범위를 더 좁힌다.

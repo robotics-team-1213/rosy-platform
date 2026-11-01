@@ -13477,3 +13477,10 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: 없음
 - 교훈: 새 교훈 기록
+
+## 2026-11-02 · uncommitted · fix(harness): 같은 폴더 import 사슬로 시험을 찾는다 (D-889 추가 21)
+- 변경: `affected_repo.local_importers`. `referencing_tests`가 같은 폴더에서 바뀐 파일을 직·간접 import하는 모듈의 stem도 본다. 실제 저장소 시험 `test_real_repo_module_reached_through_a_sibling_import_maps_to_its_tests`.
+- 증거: 11-01 `experiment_hub.py` "unknown -> full" 17회. 원격 시험은 착지 기록에 남긴다.
+- gate 변화: 없음
+- 결정: D-889 추가 21(사용자 지시 2026-11-02)
+- 교훈: 없음
