@@ -13368,6 +13368,11 @@ osy-d395-s1d\`.
 - 결정: D-889 추가 15(사용자 목표 2026-11-01)
 - 교훈: 없음
 
+## 2026-11-01 · uncommitted · tools: 워크트리 .git 유실 재발 교훈 갱신
+- 변경: `docs/solutions/workflow-issues/empty-worktree-folder-runs-git-on-the-shared-main-2026-10-25.md`에 재발(파일 남은 폴더·묘비 없음·land_async 재사용) 추가
+- 증거: 공유 체크아웃 reflog의 `checkout: moving from main to feat/omx-devices-scan`, 2분 뒤 `git switch main`로 복구
+- gate 변화: 없음
+
 ## 2026-11-01 · f2333e8aea · API v1.339 OMX SIM 시연 기본값
 
 - 변경: `GET /api/v1/sim/omx/target`에 `start_pose`·`task`(additive)를 적었다. 값은 `deploy/robot/omx/sim/pilot_demonstration.yaml`에서 온다. 버전 고정 시험·`app.py` 문자열을 v1.339로 올렸다.
