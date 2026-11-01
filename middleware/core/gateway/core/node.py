@@ -292,7 +292,11 @@ class RosyCoreNode(Node):
                 executor.remove_node(self)
             finally:
                 if events:
-                    executor.shutdown(timeout_sec=0)
+                    try:
+                        executor.shutdown(timeout_sec=0)
+                    except Exception as exc:
+                        self.get_logger().warning(
+                            f"executor shutdown raised during teardown: {exc!r}")
                 elif not _stop_executor(executor, EXECUTOR_DRAIN_TIMEOUT_S,
                                         self.get_logger()):
                     self.get_logger().warning(

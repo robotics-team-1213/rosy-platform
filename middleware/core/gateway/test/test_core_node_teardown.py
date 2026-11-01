@@ -259,12 +259,34 @@ def test_teardown_bounds_fit_inside_systemd_stop_timeout(node_module):
 # service reply (wait=True) run on API threads, never on an executor thread.
 
 def test_core_callbacks_never_rely_on_a_reentrant_group():
+    # Everything that shares CORE's executor: the core package, its services and API, and the
+    # safety_node control_adapter attaches (middleware/drive/motion_limits/adapter).
     import pathlib
-    root = pathlib.Path(__file__).resolve().parents[1] / "core"
-    offenders = [str(p.relative_to(root)) for p in root.rglob("*.py")
-                 if "callback_group" in p.read_text(encoding="utf-8")
-                 or "ReentrantCallbackGroup" in p.read_text(encoding="utf-8")]
+    middleware = pathlib.Path(__file__).resolve().parents[3]
+    roots = [middleware / "core", middleware / "drive" / "motion_limits" / "adapter"]
+    offenders = [str(p) for root in roots for p in root.rglob("*.py")
+                 if "/test/" not in p.as_posix()
+                 and ("callback_group" in p.read_text(encoding="utf-8")
+                      or "ReentrantCallbackGroup" in p.read_text(encoding="utf-8"))]
+    assert all(root.is_dir() for root in roots), roots
     assert offenders == [], offenders
+
+
+def test_events_executor_shutdown_error_is_logged_not_raised(node_module, monkeypatch):
+    calls: list[str] = []
+
+    class Failing(_EventsExecutor):
+        def shutdown(self, timeout_sec=None) -> bool:
+            raise RuntimeError("boom")
+
+    experimental = types.ModuleType("rclpy.experimental")
+    experimental.EventsExecutor = lambda: Failing(calls)
+    monkeypatch.setitem(sys.modules, "rclpy.experimental", experimental)
+    monkeypatch.setenv("ROSY_CORE_EXECUTOR", "events")
+    node = _bare_node(node_module, calls)
+    node.run()
+    assert any("executor shutdown raised during teardown" in w
+               for w in node.get_logger().warnings)
 
 
 class _EventsExecutor:
