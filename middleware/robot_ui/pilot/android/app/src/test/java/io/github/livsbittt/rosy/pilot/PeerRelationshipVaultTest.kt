@@ -1,5 +1,6 @@
 package io.github.livsbittt.rosy.pilot
 
+import io.github.livsbittt.rosy.peer.PeerProof
 import org.junit.Assert.*
 import org.junit.Test
 import java.time.Instant

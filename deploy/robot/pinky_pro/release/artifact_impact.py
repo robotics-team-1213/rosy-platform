@@ -86,7 +86,7 @@ class ImpactSelectionError(RuntimeError):
 def _ota_units() -> set[str]:
     native = Path(__file__).resolve().parent.parent / 'native'
     units = set()
-    for filename, variable in (('sync-image-layer.py', 'UNITS'), ('image_layer_boot.py', 'FEATURE_UNITS')):
+    for filename, variable in (('image_layer_plan.py', 'UNITS'), ('image_layer_boot.py', 'FEATURE_UNITS')):
         tree = ast.parse((native / filename).read_text(encoding='utf-8'))
         for node in tree.body:
             if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == variable for t in node.targets):

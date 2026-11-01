@@ -13,6 +13,7 @@ import time
 
 MAX_PAYLOAD = 1024 * 1024
 MAX_HEADER = 16384
+KINDS = ('jpeg', 'joints', 'depth16')  # depth16: a lossless 16-bit PNG depth frame (2026-10-31)
 
 
 def interrupt_on_termination(signum, frame):
@@ -30,7 +31,7 @@ class SnapshotChannel:
         self.path = root / (sha256(channel.encode()).hexdigest() + '.snapshot')
 
     def write(self, kind, payload, *, captured_at, quality=None):
-        if (kind not in ('jpeg', 'joints') or not isinstance(payload, bytes)
+        if (kind not in KINDS or not isinstance(payload, bytes)
                 or not 0 < len(payload) <= MAX_PAYLOAD
                 or type(captured_at) not in (int, float)
                 or not math.isfinite(captured_at) or captured_at <= 0):
@@ -60,7 +61,7 @@ class SnapshotChannel:
                 header = json.loads(source.read(size))
                 payload = source.read(MAX_PAYLOAD + 1)
             if (header['schema'] != 'rosy.local-observation.v1'
-                    or header['channel'] != self.channel or header['kind'] not in ('jpeg', 'joints')
+                    or header['channel'] != self.channel or header['kind'] not in KINDS
                     or not 0 < len(payload) <= MAX_PAYLOAD):
                 return None
             stamp, receipt = header['captured_at'], header['monotonic']

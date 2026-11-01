@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
-- 2026-11-01 · uncommitted · feat(land): 한 표 묶음(rollup)
-- 2026-11-01 · uncommitted · docs(adr): 착지 처리량은 시험 PC 용량이 정한다
-- 2026-11-01 · uncommitted · docs: D-940 중복 정의 게이트와 등록부
-- 2026-10-31 · uncommitted · omx: 재배선 뒤 장치 식별 교훈
-- 2026-10-31 · uncommitted · fix(land): 자동 묶음 착지를 끈다
+- 2026-11-01 · uncommitted · fix(omx): ROS 전용 시험 파일만 돌 때 건너뜀은 판정이다 (D-889 추가 20)
+- 2026-11-01 · uncommitted · tools: 정책 화면 수정 게시용 FULL 착지
+- 2026-11-01 · uncommitted · D-954 현장 마커 프로필과 팔 마커 50번부터
+- 2026-11-01 · 093ef30c2b · docs: autocrlf=false commit -a 교훈
+- 2026-11-01 · uncommitted · fix(land): main이 FULL로 넣은 변경은 지난 통과를 버리게 하지 않는다 (D-889 추가 17)

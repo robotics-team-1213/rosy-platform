@@ -101,7 +101,7 @@ export function drawTraffic(ctx, toPoint, pxPerM, { view, el, css, colorOf, draw
     for (const zone of drawing.zones) {
       if (!zone.anchor) continue;
       const p = toPoint(zone.anchor.x, zone.anchor.y);
-      drawChip(ctx, null, p.x, p.y, zone.label);
+      drawChip(ctx, null, p.x, p.y, `${zone.unit} · ${zone.label}`);  // equal sentences on two zones need their names
     }
   }
   window.__trafficLayer = { bands: drawing.bands.length, zones: drawing.zones.length, ticks: drawing.ticks.length,

@@ -1,5 +1,6 @@
 package io.github.livsbittt.rosy.pilot
 
+import io.github.livsbittt.rosy.peer.PeerProof
 import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties

@@ -100,14 +100,16 @@ def test_the_charuco_sheet_is_the_opencv_board_at_true_size():
 
 
 def test_arm_slots_own_disjoint_id_blocks_outside_the_charuco_board():
-    blocks = [arm_ids(n) for n in range(1, 5)]
+    blocks = [arm_ids(n) for n in range(1, 4)]
     flat = [[b["gripper"], *b["base"], *[i for ids in b["surfaces"] for i in ids]] for b in blocks]
     every = [i for ids in flat for i in ids]
-    assert len(every) == len(set(every)) == 60 and min(every) == 35 and max(every) < len(DICT_4X4_100)
-    assert [b["gripper"] for b in blocks] == [35, 50, 65, 80]
+    assert len(every) == len(set(every)) == 45 and min(every) == 50 and max(every) < len(DICT_4X4_100)
+    assert [b["gripper"] for b in blocks] == [50, 65, 80]
+    with pytest.raises(ValueError):
+        arm_ids(4)  # D-954: three slots fit past the site's ids
 
 
-@pytest.mark.parametrize("slot", [1, 4])
+@pytest.mark.parametrize("slot", [1, 3])
 def test_an_arm_sheet_reads_back_as_its_block_at_true_size(slot):
     cv2 = pytest.importorskip("cv2")
     np = pytest.importorskip("numpy")

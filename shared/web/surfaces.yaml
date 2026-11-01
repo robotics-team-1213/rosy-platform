@@ -146,7 +146,7 @@ surfaces:
     baseline: docs/validation/uiux-surfaces-2026-09-26/captures/games-play-1280x800.png
 
   - id: control-diagnostic
-    path: middleware/perception/web/diagnostic.html
+    path: middleware/perception/web
     themes: [dark]
     theme_reason: PARKED(D-266) 진단 한 파일 — 해제 회차 전까지 테마 도입 대상이 아니다(D-359 §3.3)
     surface: robot
@@ -165,7 +165,7 @@ surfaces:
       - value: 900px
         reason: PARKED(D-266) 한 파일 진단 표면(D-150)의 원래 배치 값 — 해제 회차에서 세 단으로 옮긴다
     raw_colours:
-      - file: diagnostic.html
+      - file: diagnostic.css
         block: ":root"
         reason: PARKED(D-266) 진단 표면의 역할 블록 — 다른 역할은 tokens.css를 참조하고, 토큰이 없는 지도 래스터(render_png와 같은 값)와 대안 경로·핀 색만 여기에 둔다
     contract_reason: >

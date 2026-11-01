@@ -112,6 +112,8 @@ class PilotSimRuntime:
         self._gripper_samples: collections.deque = collections.deque(maxlen=32)
         self.camera_available = False
         self.capture = None
+        self.start_pose: dict[str, float] | None = None   # demonstration defaults (load_demonstration)
+        self.task: str | None = None
         self._lock = threading.RLock()
         self._goals: dict[str, dict] = {}
         self._active: str | None = None
@@ -213,6 +215,27 @@ class PilotSimRuntime:
                 presets=GripperPresets(open=open_, half=(open_ + closed) / 2, close=closed),
                 max_velocity=self.gripper_velocity))
         return ControlsDescriptor(items=tuple(items)).model_dump(by_alias=True, mode="json")
+
+    def load_demonstration(self, document: Mapping) -> None:
+        """Start pose and default task from ``rosy.omx-sim-demonstration.v1``.
+
+        Refuses a pose Pilot could not reach by jogging: unknown or non-jog joints, or a value
+        outside the offered range. Checked at start-up so a range change fails before a demo.
+        """
+        if document.get("schema") != "rosy.omx-sim-demonstration.v1":
+            raise ValueError("demonstration profile schema differs")
+        pose = {str(name): float(value) for name, value in (document.get("start_pose") or {}).items()}
+        for name, value in pose.items():
+            if name not in self._jog_joints():
+                raise ValueError(f"{name}: start pose names a joint Pilot does not jog")
+            lower, upper = self._offered[name]
+            if not lower <= value <= upper:
+                raise ValueError(f"{name}: start pose lies outside the offered range")
+        task = document.get("task")
+        if task is not None and not (isinstance(task, str) and 1 <= len(task) <= 300):
+            raise ValueError("task must be 1-300 characters")
+        self.start_pose = pose or None
+        self.task = task
 
     def _jog_joints(self) -> tuple[str, ...]:
         if self._gripper_spec is None:
