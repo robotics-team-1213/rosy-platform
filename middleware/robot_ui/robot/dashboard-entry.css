@@ -20,9 +20,8 @@ body[data-dashboard-entry] .auth-drawer label { font: var(--weight-label) var(--
 body[data-dashboard-entry] .auth-drawer .bench-confirmation { font-weight: var(--weight-regular); align-items: start; }
 #entry-destinations { display: grid; gap: var(--space-3); }
 #entry-identity { overflow-wrap: anywhere; }
-#entry-navigation { display: grid; }
-#entry-navigation a { display: flex; align-items: center; gap: var(--space-3); min-height: var(--target-primary); padding: var(--space-3) 0; border-bottom: 1px solid var(--surface-line); color: var(--text-primary); text-decoration: none; font-weight: var(--weight-label); }
-#entry-navigation a:hover { text-decoration: underline; text-underline-offset: var(--space-1); }
+#entry-navigation { display: flex; flex-direction: column; align-items: stretch; gap: var(--gap-rail); padding: var(--inset-rail); border: 1px solid var(--border-subtle); border-radius: var(--radius-panel); background: var(--surface-canvas); }
+/* D-945 — 링크 얼굴은 공용 ui-rail-item(app-shell.css)이 그린다; 여기는 배치만. */
 #entry-navigation a:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 @media (width < 30rem) {
   .entry-main { padding: var(--space-4); }
