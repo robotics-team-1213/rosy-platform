@@ -572,3 +572,21 @@ def test_an_automatic_full_tier_runs_simulation_suites_only_for_a_simulation_cha
     land.lines = lambda *a: ["integrations/simulation/gazebo/launch/x.py"]
     assert ["integrations/simulation/gazebo/test"] in selection.select(land, tmp_path, "base", "python")[0]
     assert selection.without_sim([["a/test", "learning/envs/isaac/test/test_x.py"]], []) == [["a/test"]]
+
+
+def test_own_browser_chunks_rerun_only_where_the_deltas_browser_chunks_reach(caller, tmp_path):
+    """D-889 24, 11-02 03:32: the delta's suite folder holds the browser files, so every own chunk counted as reached
+    and a 6-invocation turn ran 7 serial browser chunks for 34 min."""
+    selection = load_selection()
+    land, _, _ = caller
+    ui = ["ROSY_RUN_BROWSER_TESTS=1", "fleet/test/test_panel_browser.py"]
+    delta = dict(mode="full", escalations=["tools/land.py: harness"], local_invocations=[["fleet/test"]],
+                 full_invocations=[["test"]])
+    mine = dict(mode="affected", escalations=[], invocations=[["fleet/test/test_panel.py"]])
+    for delta_ui, want in (([], []), ([ui], [ui])):
+        answers = [delta, mine]
+        land.subprocess = SimpleNamespace(run=lambda command, **kw: SimpleNamespace(
+            returncode=0, stdout=json.dumps(answers.pop(0)), stderr=""))
+        land.browser_tier = lambda *args, _d=delta_ui: [ui] if len(args) == 2 else _d  # (wt, head): own
+        got = selection.select(land, tmp_path, "base", "python", head="main", landed=True)[0]
+        assert [inv for inv in got if inv[0].startswith("ROSY_RUN_BROWSER")] == want

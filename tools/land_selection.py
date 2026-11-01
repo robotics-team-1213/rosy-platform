@@ -75,9 +75,11 @@ def select(land, wt: Path, base: str, python: str, head: str | None = None,
         delta = land.browser_tier(wt, base, head)
         if reach is None:
             return _unique(own + delta)
-        # D-889 19: like the own pytest invocations (18), only the own browser chunks the delta (its suites or its
-        # browser chunks) reaches; 11-01 a foundation landing's turn ran its whole browser tier serially.
-        return _unique(delta + [inv for inv in own if overlaps(reach + delta, [inv])])
+        # D-889 19/24: like the own pytest invocations (18), only the own browser chunks the delta's browser chunks
+        # reach. Not its suites: a suite folder (operations/fleet/test) holds the browser files, so every chunk
+        # counted as reached (11-02 03:32, a 6-invocation turn ran 7 serial browser chunks for 34 min). The
+        # nightly full run covers browser tests (addendum 12).
+        return _unique(delta + [inv for inv in own if overlaps(delta, [inv])])
 
     if (wt / "tools/harness/affected_tests.py").is_file():
         try:
