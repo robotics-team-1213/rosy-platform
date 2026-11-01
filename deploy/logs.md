@@ -4335,3 +4335,10 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: test-only8658211939와 동결된 취약 생산 bytes의 unreferenced 후보bf952ea992에서 실제 서명 검증 뒤 manifest/identity 교체 두 시험이 모두 DID NOT RAISE로 원격 RED였다(2 failed/skip0/setup0/collection0, comparator2NEW). 현재 수정은 독립 검토 전이며 GREEN은 아직 없다.
 - gate 변화: 없음. 실제 설치·native closure·활성화·장치 권한을 검증한 결과가 아니다.
 - CE: 미해결 — 실제 RED는 확인했으며 수정 검증 후 trust-boundary 교훈 기록 필요성을 판단한다.
+
+## 2026-11-02 · 97da913f85 · OMX record_session이 켜진 카메라 단위 전부를 넘겨받음
+
+- 변경: `record_session.py`가 top/front 고정 목록 대신 `systemctl list-units rosy-omx-camera@*`로 켜진 카메라 단위를 모두 찾아 멈추고 끝나면 다시 켠다(camera-view·readiness는 전처럼 먼저 멈춤). 10-31 레지스트리로 늘어난 side·두 번째 손목 카메라가 V4L 장치를 쥔 채 남지 않는다. 벤치 녹화 페이지(D-943)는 이미 같은 패턴을 쓴다.
+- 증거: `test/test_omx_record_session.py` 원격 시험(새 시험: side·arm_a_wrist 단위가 멈췄다 다시 켜짐)
+- gate 변화: 없음. 실물 작업대 녹화로 확인한 결과가 아니다.
+- CE: 해당 없음
