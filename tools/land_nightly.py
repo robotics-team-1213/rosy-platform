@@ -32,6 +32,11 @@ def _json(*command: str) -> list | dict:
     return json.loads(result.stdout)
 
 
+def _main_sha() -> str:
+    return subprocess.run(["git", "-C", str(ROOT), "rev-parse", "main"], capture_output=True, text=True,
+                          check=True).stdout.strip()
+
+
 def plan() -> list[list[str]]:
     """The canonical FULL tier plus every registered browser suite (the explicit FULL a publish landing runs)."""
     full = _json("tools/harness/rosy_harness.py", "affected", "--base", "main", "--json", "--full")
@@ -46,8 +51,7 @@ def main(argv: list[str] | None = None) -> int:
     if opts.plan:
         print(json.dumps(invocations))
         return 0
-    main_sha = subprocess.run(["git", "-C", str(ROOT), "rev-parse", "main"], capture_output=True, text=True,
-                              check=True).stdout.strip()
+    main_sha = _main_sha()
     logdir = land_checks.tmp_dir(f"nightly-{main_sha[:10]}")
     logs = [logdir / f"nightly-{n}.txt" for n in range(len(invocations))]
     remote_pytest.run(invocations, logs, main_sha, repo=ROOT, label="nightly")

@@ -36,12 +36,13 @@ def main(argv=None):
         if args.out.exists():
             raise ValueError('output exists; choose a new directory')
         if args.command == 'rehearsal-suite':
-            from collection_rehearsal import profile, teacher, RehearsalBackend
+            from collection_rehearsal import profile, teacher, RehearsalBackend, SimulatedClock
             args.out.mkdir(parents=True)
             rows = []
             for fault in ('none', 'dark', 'disconnect', 'stale_reference', 'reject', 'terminal_failure', 'no_motion'):
-                fake = RehearsalBackend(profile(), fault=fault)
-                result = run_session(profile(), teacher(), args.out/fault, fake)
+                clock = SimulatedClock()
+                fake = RehearsalBackend(profile(), fault=fault, clock=clock)
+                result = run_session(profile(), teacher(), args.out/fault, fake, clock=clock)
                 complete = bool(result['episodes']) and result['episodes'][0]['complete']
                 rows.append(dict(fault=fault, correct=complete == (fault == 'none') and fake.stopped,
                                  hardware_connections=fake.hardware_connections,
