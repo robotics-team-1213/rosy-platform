@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-957 | 업데이트 운영 CLI: 운영자의 즉시 시도·홀드·해제를 하나의 명령으로 구조화한다. 게이트(유휴·배터리·서명·freeze) 우회는 없다. [전문](../adr/D-957-update-ops-cli.md) | Accepted (2026-11-02, 사용자 결정; 호스트 코드 불변, 원격 시험·착지는 파이프라인 기록) |
 | D-907 | Native v2 read-only signed component profile contract. [전문](../adr/D-907-native-v2-readonly-profile-contract.md) | Accepted (2026-10-28) |
 | D-950 | 도킹 진입 방향은 후면(후진)이다 — 짐칸 USB 코를 충전소 깔때기에 후진으로 꽂는다. [전문](../adr/D-950-docking-direction-rear-entry.md) | Accepted (2026-11-01, 사용자 결정; 방향만, 구현·실물 수용·후속 결정 별도) |
 | D-955 | Rosy를 연동 허브로 두고, 팀원은 로그인하면 기본 권한 묶음으로 바로 쓴다 | Accepted (2026-11-01) |
