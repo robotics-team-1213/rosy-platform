@@ -281,7 +281,7 @@ def test_readyz_without_lifespan_stays_ready_with_declared_names(tmp_path):
 # --- 전체 옵션 구성: 선택 분기의 언랩 (계획 2026-10-27 후속) ---
 
 def test_start_fleet_loops_enumerates_every_loop_when_all_services_are_configured(monkeypatch):
-    """모든 선택 서비스가 켜진 구성에서 23개 루프 전부가 running으로 언랩되는지.
+    """모든 선택 서비스가 켜진 구성에서 24개 루프 전부가 running으로 언랩되는지.
 
     루프 몸체는 각자의 시험이 소유한다 — 여기서는 스폰 배선(supervised/attach)만
     검증한다. 팩토리를 영원히 대기하는 코루틴으로 바꿔 몸체를 걸어 뺀다.
@@ -304,13 +304,13 @@ def test_start_fleet_loops_enumerates_every_loop_when_all_services_are_configure
         app = SimpleNamespace(state=SimpleNamespace(
             arm_transfer_dispatcher=Service(), stuck_resolver=Service(),
             trip_runner=Service(), charge_runtime=Service(), job_trips=Service(),
-            tether_watch=Tether(), paths=Service(), lane_compliance=object()))
+            tether_watch=Tether(), paths=Service(), lane_compliance=object(), charge_bays_tick=hang))
         console = SimpleNamespace(
             _signals=Service(), goal_leases=SimpleNamespace(ttl_s=4.0),
             prune_task_queue_entries=lambda ids: None)
 
         # 루프 몸체 걸어 빼기: 스폰 배선이 부르는 모든 팩토리를 대기 코루틴으로.
-        for factory in ("goal_evidence_expiry_loop", "lane_compliance_loop",
+        for factory in ("goal_evidence_expiry_loop", "lane_compliance_loop", "charge_bays_loop",
                         "goal_lease_renew_loop", "proposal_expiry_loop",
                         "mission_dispatch_loop", "mission_feedback_schedule_loop",
                         "_task_dispatch_loop", "_mission_model_turn_worker_loop"):
