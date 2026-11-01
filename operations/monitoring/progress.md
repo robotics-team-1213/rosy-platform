@@ -5,23 +5,23 @@ last_verified: {commit: 6b0f7568f5, date: 2026-10-26}
 gates:
   SOURCE:
     state: GO
-    evidence: 독립 수집·집계·읽기 API와 POSIX CLI의 원격98시험 및247구조검사 통과. UI와 native 배포는 별도 gate다.
+    evidence: "독립 수집·집계·읽기 API와 POSIX CLI의 원격98시험 및247구조검사 통과. UI와 native 배포는 별도 gate다."
     cmd: python tools/remote/remote_pytest.py --log-dir "$env:TEMP/rosy-monitoring-launcher-accepted-green" -- operations/monitoring/test -q
   LOCAL:
     state: GO
-    evidence: 실제 backend Chromium16+G1 총151 PASS, scope 거부 상태6 PASS, G2 40셀 캡처와 G3 대표 검토 차단 없음. docs/validation/uiux-surfaces-2026-10-26/monitoring/README.md 참조.
+    evidence: "실제 backend Chromium16+G1 총151 PASS, scope 거부 상태6 PASS, G2 40셀 캡처와 G3 대표 검토 차단 없음. docs/validation/uiux-surfaces-2026-10-26/monitoring/README.md 참조."
     cmd: python tools/remote/remote_pytest.py --log-dir "$env:TEMP/rosy-monitoring-ui-canonical-green" -- ROSY_RUN_BROWSER_TESTS=1 test/test_monitoring_browser.py shared/web/test/test_surface_registry.py shared/web/test/test_shared_controls.py shared/web/test/test_surface_typography_focus_contracts.py shared/web/test/test_ui_token_contracts.py shared/web/test/test_palette_gates.py -q
   ROS-SIM:
     state: N/A
   ARTIFACT:
     state: GO
-    evidence: overlay 쌍(monitoring·account)을 포함한 서명 후보 site-2ba97ac2c346(PR #224 merge)가 2026-11-01 발행·설치됐다. 관제 PC 자동 업데이트 수용.
+    evidence: "overlay 쌍(monitoring·account)을 포함한 서명 후보 site-2ba97ac2c346(PR #224 merge)가 2026-11-01 발행·설치됐다. 관제 PC 자동 업데이트 수용."
   DEVICE:
     state: GO
-    evidence: 관제(사이트) 호스트 입력 완료·Fleet viewer 'monitoring' 등록·overlay 활성(2026-11-01). rosy-site-monitoring-1 healthy. 현장 수용 기록 참조.
+    evidence: "관제(사이트) 호스트 입력 완료·Fleet viewer 'monitoring' 등록·overlay 활성(2026-11-01). rosy-site-monitoring-1 healthy. 현장 수용 기록 참조."
   FIELD:
     state: GO
-    evidence: 실제 단절·거부·TLS 수용 2026-11-01 — 401(무자격·용도 불일치 키)·403(범위 밖)·Fleet 정지 중 수집기 독립(200)과 fleet 노드 신선도 구별(age_s 9.19/valid 15s)·모니터링 정지 시 Fleet 무영향(502/200)·원격 클라이언트 CA 신뢰 TLS 200(콘솔 로그인 포함). 한계: 로봇 오프라인(2026-10-10~)으로 로봇 원천 단절 관측은 연결 뒤 보강. [현장 수용 기록](../../docs/validation/monitoring-site-overlay-2026-11-01/result.md)
+    evidence: "실제 단절·거부·TLS 수용 2026-11-01 — 401(무자격·용도 불일치 키)·403(범위 밖)·Fleet 정지 중 수집기 독립(200)과 fleet 노드 신선도 구별(age_s 9.19/valid 15s)·모니터링 정지 시 Fleet 무영향(502/200)·원격 클라이언트 CA 신뢰 TLS 200(콘솔 로그인 포함). 한계: 로봇 오프라인(2026-10-10~)으로 로봇 원천 단절 관측은 연결 뒤 보강. [현장 수용 기록](../../docs/validation/monitoring-site-overlay-2026-11-01/result.md)"
 adrs: [D-876, D-936]
 ---
 
