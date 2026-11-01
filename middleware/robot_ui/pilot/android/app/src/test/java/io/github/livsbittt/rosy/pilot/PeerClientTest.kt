@@ -1,5 +1,7 @@
 package io.github.livsbittt.rosy.pilot
 
+import io.github.livsbittt.rosy.peer.PeerProof
+import io.github.livsbittt.rosy.peer.PeerSigner
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.Dispatcher
 import okhttp3.mockwebserver.MockResponse
@@ -29,6 +31,7 @@ class PeerClientTest {
         val key = KeyPairGenerator.getInstance("EC").apply { initialize(ECGenParameterSpec("secp256r1")) }.generateKeyPair()
         override val publicKey = PeerProof.encodeKey(key.public)
         override fun sign(context: String, fields: JSONObject) = PeerProof.sign(key.private, context, fields)
+        override val clientId get() = "pilot_" + PeerProof.fingerprint(publicKey).take(32)
     }
     private class Fixture : AutoCloseable {
         val receiver = Signer(); val mobile = Signer(); val memory = Memory()

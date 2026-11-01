@@ -1,5 +1,6 @@
 package io.github.livsbittt.rosy.pilot
 
+import io.github.livsbittt.rosy.peer.PeerSigner
 import android.app.Activity
 import android.app.AlertDialog
 import android.os.Handler
