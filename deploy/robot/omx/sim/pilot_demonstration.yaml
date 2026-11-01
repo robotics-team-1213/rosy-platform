@@ -1,0 +1,15 @@
+# OMX Pilot SIM demonstration defaults (Gazebo only). One file per workcell: another machine
+# brings its own file with its own joints. Pilot shows these on the recording steps; the
+# operator may still edit the task text per try.
+schema: rosy.omx-sim-demonstration.v1
+# SRDF group_state "home" (0, -1.57, 1.57, 1.57, 0): the folded rest pose, inside every
+# cell_profile.yaml range less start_state_tolerance_rad. The server refuses a pose outside
+# the offered range, so a range change that excludes it fails at start-up, not mid-demo.
+start_pose:
+  joint1: 0.0
+  joint2: -1.57
+  joint3: 1.57
+  joint4: 1.57
+  joint5: 0.0
+# The Pilot world has no objects: the default demonstration is a reach.
+task: "시작 자세에서 팔 끝을 작업대 위 목표 위치로 옮긴 뒤 멈추기 · 성공: 목표 위에서 멈춤 · 실패: 범위 밖, 다른 곳에서 멈춤"

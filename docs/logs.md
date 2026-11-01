@@ -13367,3 +13367,9 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: D-889 추가 15(사용자 목표 2026-11-01)
 - 교훈: 없음
+
+## 2026-11-01 · f2333e8aea · API v1.339 OMX SIM 시연 기본값
+
+- 변경: `GET /api/v1/sim/omx/target`에 `start_pose`·`task`(additive)를 적었다. 값은 `deploy/robot/omx/sim/pilot_demonstration.yaml`에서 온다. 버전 고정 시험·`app.py` 문자열을 v1.339로 올렸다.
+- 증거: 계약 시험 `test_omx_sim_pilot_contract.py`, 버전 고정 시험(원격).
+- gate 변화: 없음. CE: 해당 없음.

@@ -847,3 +847,9 @@
 - 변경: 실제 팔 청크 계획기(`deploy/robot/omx/grasp_planner.py`)와 SIM 이송 계획기(`transfer_planner.py`)가 각자 갖던 Cartesian 직선 IK를 `OmxKinematics.solve_line` 하나로 합쳤다. 표본마다 FK 확인, yaw 쌍둥이 뒤집힘(관절 튐) 거절은 이제 실제 팔 경로에도 적용된다. 캡슐 모델을 `test/g1_layout.py`에서 `omx_adapter/swept_volume.py`로 옮겨 `keep_out`이 TCP·손목 점 대신 어깨~그리퍼 링크 캡슐 전체를 본다. 가르친 transit의 이동이 금지선을 넘으면 같은 높이 이상에서 기저 쪽으로 당긴 tool-down transit 후보를 차례로 보고 처음 통과한 것을 쓴다. 모두 넘으면 예전처럼 거절한다.
 - 증거: 예시 plan의 청크가 변경 전후 바이트 단위로 같다(노트북에서 계획기 CLI 비교, pytest 아님). 원격 pytest 결과는 착지 기록에 남긴다.
 - gate 변화: 없음. 실물 셀의 `BODY_MARGIN_M`·금지선 값 측정과 실제 팔 수용은 별도다.
+
+## 2026-11-01 · f2333e8aea · Pilot SIM 시연 기본값 프로파일
+
+- 변경: `deploy/robot/omx/sim/pilot_demonstration.yaml`(`rosy.omx-sim-demonstration.v1`: `start_pose`·`task`)을 SIM 서버가 읽어 `/target`에 싣는다. `PilotSimRuntime.load_demonstration`이 조그 관절이 아니거나 알린 범위 밖인 자세, 1–300자가 아닌 과제를 기동 때 거절한다. 파일은 시연 출처 해시에 들어간다. 기계마다 이 파일 하나로 시작 자세·기본 과제를 정한다.
+- 증거: `test_pilot_sim_demonstration.py`(동봉 파일이 셀 프로파일 범위 안, 거절 7종). 원격 결과는 착지 기록에 남긴다. Gazebo 실행 확인은 하지 않았다.
+- gate 변화: 없음.

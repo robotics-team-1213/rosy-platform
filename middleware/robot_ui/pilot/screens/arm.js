@@ -43,8 +43,10 @@ export function mountArm(root, target, driver) {
   const listeners = new Set();
   const homeKey = `rosy.pilot.omx-sim.home.${target.instance_id ?? "sim"}`;
   const taskKey = `rosy.pilot.omx-sim.task.${location.origin}`;
-  let home = null;
-  try { home = JSON.parse(stored("localStorage", homeKey) ?? "null"); } catch { home = null; }
+  // The machine's demonstration profile owns the start pose; older servers fall back to this tablet.
+  const profileHome = target.start_pose ?? null;
+  let home = profileHome;
+  if (!home) try { home = JSON.parse(stored("localStorage", homeKey) ?? "null"); } catch { home = null; }
 
   root.innerHTML = `<header class="arm-head"><h2>OMX-AI Gazebo 연습</h2>
       <p>시뮬레이션 전용 · 실제 로봇과 연결되지 않습니다.</p></header>
@@ -80,8 +82,9 @@ export function mountArm(root, target, driver) {
         <ol class="arm-steps">
           <li data-sim-step="home"><h4>시작 자세</h4>
             <p class="arm-hint" data-sim-home-status role="status">저장된 시작 자세가 없습니다. 팔을 원하는 자세로 옮긴 뒤 저장하세요.</p>
+            <p class="arm-hint" data-sim-home-source ${profileHome ? "" : "hidden"}>이 기계의 시연 프로파일에 정해진 시작 자세입니다.</p>
             <div class="arm-step-actions">
-              <ui-button kind="quiet" type="button" data-sim-home-save>현재 자세를 시작 자세로 저장</ui-button>
+              <ui-button kind="quiet" type="button" data-sim-home-save ${profileHome ? "hidden" : ""}>현재 자세를 시작 자세로 저장</ui-button>
               <ui-button kind="primary" type="button" data-sim-home-go disabled>시작 자세로 이동</ui-button>
             </div></li>
           <li data-sim-step="task" ${target.recording ? "" : "hidden"}><h4>과제 설명</h4>
@@ -364,7 +367,7 @@ export function mountArm(root, target, driver) {
     }
   }
   const task = $("[data-sim-task]");
-  task.value = stored("sessionStorage", taskKey) ?? "";
+  task.value = stored("sessionStorage", taskKey) ?? target.task ?? "";
   const countTask = () => { $("[data-sim-task-count]").textContent = `${task.value.length} / 300 · 다음 기록에도 그대로 남습니다`; };
   countTask();
   task.addEventListener("input", () => {
