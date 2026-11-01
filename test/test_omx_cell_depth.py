@@ -58,3 +58,13 @@ def test_a_ring_with_no_plate_reads_none():
     depth, _ = scene()
     heights = cd.height_map(depth, cd.table_plane(depth))
     assert cd.plate_top(heights, np.float32([[SCALE, 0, SHIFT[0]], [0, SCALE, SHIFT[1]]]), (500, 120)) is None
+
+
+def test_the_edges_put_the_colour_view_onto_the_depth_view_even_with_objects_in_one_row():
+    depth, colour = scene()
+    heights = cd.height_map(depth, cd.table_plane(depth))
+    m, edge_px = cd.align_edges(colour, heights)
+    assert edge_px < 2.0
+    assert m[0, 0] == pytest.approx(SCALE, abs=0.02)
+    assert (m[0, 2], m[1, 2]) == pytest.approx(SHIFT, abs=4.0)
+    assert cd.height_at(heights, m, (315, 210)) == pytest.approx(76.0, abs=3.0)
