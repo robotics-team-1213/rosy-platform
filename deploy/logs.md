@@ -3902,3 +3902,17 @@
 - 검증: 검토 기준 14680235에서 b58162a6까지 관련 common signing/Pinky release/native verifier/test seam diff 없음. 현재는 test/doc 후보이며 pytest·생산 구현은 검토 뒤 진행한다.
 - gate 변화: 없음. readonly metadata 검증은 consumer 설치·native closure·활성화·실물 권한 증거가 아니다.
 - CE: 해당 없음 — 새 계약 단위의 test-first 후보이며 해결·검증한 비문서화 장애가 없다.
+
+## 2026-10-28 · uncommitted · D-907 readonly native v2 verifier
+
+- 변경: common release owner에 native_profiles.py를 추가했다. 기존 Ed25519/SHA256SUMS를 먼저 검증한 뒤 v2 exact JSON·inventory·독립 설치 policy·unit digest·runtime identity/fingerprint·lock bytes hash를 대조한다. Pinky v1과 updater/consumer/activation은 바꾸지 않는다.
+- 증거: test-first 2f01b94b901a0d363ccacb49bf3ecd0934d5b47e의 공식 원격 집중 실행은 v1 corpus 1 passed, 새 interface 부재 94 failed, skip0·setup/collection0이었다. 현재 생산 후보는 정적 검사와 독립 SOURCE 검토를 앞두며 GREEN·실물 수용은 아직 없다.
+- gate 변화: 없음. 성공 반환은 서명 metadata/policy 일치이며 실제 native closure·실행 가능성·arm readiness·권한·업데이트 transaction의 인증이 아니다.
+- CE: 해당 없음 — 새 metadata 계약 구현이며 해결한 비문서화 운영 장애가 없다.
+
+## 2026-10-28 · uncommitted · D-907 authenticated metadata read repair
+
+- 변경: 실제 common 서명 검증이 반환한 digest map으로 각 metadata의 한 번 읽은 bytes를 다시 인증하고, 그 bytes를 그대로 JSON 파싱·fingerprint/marker/revision 대조에 쓴다. 서명 검사 뒤 재개방한 다른 내용을 신뢰하는 공백을 닫는다.
+- 증거: test-only8658211939와 동결된 취약 생산 bytes의 unreferenced 후보bf952ea992에서 실제 서명 검증 뒤 manifest/identity 교체 두 시험이 모두 DID NOT RAISE로 원격 RED였다(2 failed/skip0/setup0/collection0, comparator2NEW). 현재 수정은 독립 검토 전이며 GREEN은 아직 없다.
+- gate 변화: 없음. 실제 설치·native closure·활성화·장치 권한을 검증한 결과가 아니다.
+- CE: 미해결 — 실제 RED는 확인했으며 수정 검증 후 trust-boundary 교훈 기록 필요성을 판단한다.
