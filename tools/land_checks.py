@@ -312,11 +312,25 @@ def turn_wanted(land, wt: Path) -> bool:
         return True
 
 
+def overtimed(land, args) -> bool:
+    """Whether the turn cap sent this landing back once: in this process, or before a relaunch on main's new
+    landing code (the ticket keeps it; 11-01 13:26 the rest bundle relaunched and went back once more)."""
+    if getattr(args, "_overtime", False):
+        return True
+    for ticket in land.land_queue._held:
+        try:
+            if json.loads(ticket.read_text(encoding="utf-8")).get("overtime"):
+                return True
+        except (OSError, ValueError):
+            pass
+    return False
+
+
 def run_tests(land, wt: Path, args, invocations: list[list[str]], logdir: Path, round_no: int) -> list[str]:
     """Run lint + pytest (+ node); return a summary line per step. Stop on any NEW failure."""
     # D-889 15: a landing the cap already sent back once keeps its next turn. 11-01: big FULL landings went back
     # 3-6 times, 12-13 min of main each, because every turn reran their own FULL past the cap.
-    capped = isinstance(round_no, int) and not getattr(args, "_overtime", False)
+    capped = isinstance(round_no, int) and not overtimed(land, args)
     deadline = land.time.monotonic() + land.TURN_CAP_S if capped else None
     python = land.sys.executable
     done = []

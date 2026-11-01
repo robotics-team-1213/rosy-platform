@@ -128,7 +128,10 @@ def test_a_landed_delta_reaching_none_of_this_branchs_suites_does_not_rerun_them
     browser = ["ROSY_RUN_BROWSER_TESTS=1", "browser/test"]
     for mine, rerun in ((dict(mode="affected", escalations=[], invocations=[["guard/test"], ["arm/test"]]), False),
                         (dict(mode="affected", escalations=[], invocations=[["fleet/test/test_x.py::t"]]), True),
+                        # D-889 16: a FULL-mode own follows the same rule; re-run every turn, it never landed (11-01)
                         (dict(mode="full", escalations=["tools/x.py: harness"], local_invocations=[["arm/test"]]),
+                         False),
+                        (dict(mode="full", escalations=["tools/x.py: harness"], local_invocations=[["fleet/test/test_y.py"]]),
                          True)):
         answers[:] = [delta, mine]
         got = selection.select(land, tmp_path, "base", "python", head="main", landed=True)[0]

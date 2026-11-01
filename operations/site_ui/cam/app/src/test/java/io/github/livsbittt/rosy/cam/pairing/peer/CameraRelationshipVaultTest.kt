@@ -1,5 +1,6 @@
 package io.github.livsbittt.rosy.cam.pairing.peer
 
+import io.github.livsbittt.rosy.peer.PeerProof
 import io.github.livsbittt.rosy.cam.pairing.PairableSite
 import okhttp3.tls.HeldCertificate
 import org.junit.Assert.*
@@ -17,11 +18,11 @@ class CameraRelationshipVaultTest {
         override fun write(id: String, value: String, remove: Set<String>) { rows[id] = value; remove.forEach { rows.remove(it) } }
     }
     private val aes = KeyGenerator.getInstance("AES").apply { init(256) }.generateKey()
-    private val publicKey = CameraProof.encodeKey(KeyPairGenerator.getInstance("EC").apply { initialize(ECGenParameterSpec("secp256r1")) }.generateKeyPair().public)
+    private val publicKey = PeerProof.encodeKey(KeyPairGenerator.getInstance("EC").apply { initialize(ECGenParameterSpec("secp256r1")) }.generateKeyPair().public)
     private val ca = HeldCertificate.Builder().certificateAuthority(0).commonName("fixture CA").build().certificatePem()
     private val site = PairableSite("Fixture site", "fleet.local", 8443, "192.168.1.10")
     private fun row(expiry: Instant? = null) = CameraRelationship(CameraRelationshipVault.origin(site), "fleet-test", publicKey,
-        "cam_test", CameraProof.fingerprint(publicKey), "A".repeat(32), 0, "ceiling_north", expiry == null, expiry, ca)
+        "cam_test", PeerProof.fingerprint(publicKey), "A".repeat(32), 0, "ceiling_north", expiry == null, expiry, ca)
 
     @Test fun encryptedApprovalAndSourceSurviveOfflineDhcpAndFiniteCredentialExpiry() {
         val memory = Memory(); val vault = CameraRelationshipVault(memory) { aes }

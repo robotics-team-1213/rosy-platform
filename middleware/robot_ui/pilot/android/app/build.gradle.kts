@@ -60,6 +60,7 @@ android {
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = "17" }
     sourceSets.getByName("main").java.srcDir(layout.buildDirectory.dir("generated/shared-contracts"))
+    sourceSets.getByName("main").java.srcDir("../../../../../shared/android/peer")  // D-939 shared Android sources
     sourceSets.getByName("main").java.srcDir(layout.buildDirectory.dir("generated/pilot-palette"))
     sourceSets.getByName("main").assets.srcDir(layout.buildDirectory.dir("generated/pilot-assets"))
     sourceSets.getByName("main").res.srcDir(layout.buildDirectory.dir("generated/screen-resources"))

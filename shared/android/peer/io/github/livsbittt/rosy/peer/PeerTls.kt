@@ -1,4 +1,4 @@
-package io.github.livsbittt.rosy.pilot
+package io.github.livsbittt.rosy.peer
 
 import okhttp3.OkHttpClient
 import java.security.KeyStore
