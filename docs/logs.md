@@ -13430,6 +13430,13 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 교훈: 없음
 
+## 2026-11-01 · uncommitted · feat: Rosy 허브 1단계 — 모든 로봇·프로젝트 grant와 팀원 기본 묶음 (D-955)
+- 변경: `account_access.py`에 `robot:*`·`project:*` grant와 `grants_for`, Authority 발급·허가 네 곳이 `grants_for`를 사용, 계정 화면이 새 계정을 팀원 기본 묶음으로 채우고 버튼 제공, D-955
+- 증거: 계약·Authority·Chromium 계정 시험 갱신(원격 결과는 커밋 기록)
+- gate 변화: 없음
+- 결정: D-955 추가(사용자 지시 2026-11-01)
+- 교훈: 없음
+
 ## 2026-11-01 · uncommitted · native v2 readonly profile contract
 
 - 변경: D-907·ADR Log와 test/test_native_profile_manifest.py 초안. 기존 v1 producer/validator를 보존하고 v2 서명·형식·inventory·독립 policy·runtime identity 계약을 시험한다.
