@@ -87,8 +87,9 @@ def test_landed_full_delta_runs_both_changes_own_suites_unless_safety(caller, tm
     answers = [delta, mine]
     land.subprocess = SimpleNamespace(run=lambda command, **kw: calls.append(command) or SimpleNamespace(
         returncode=0, stdout=json.dumps(answers.pop(0)), stderr=""))
+    # D-889 18: the delta reaches guard/test only, so mine/test keeps its pretest pass
     assert selection.select(land, tmp_path, "base", "python", head="main", landed=True) == (
-        [["guard/test"], ["mine/test"], ["ROSY_RUN_BROWSER_TESTS=1", "browser/test"]], None)
+        [["guard/test"], ["ROSY_RUN_BROWSER_TESTS=1", "browser/test"]], None)
     assert calls[-1] == ["python", land.HARNESS, "affected", "--base", "main", "--json"]  # this branch on the merge
     answers[:] = [delta, dict(mine, escalations=["safe/x.py" + selection.SAFETY_TRIGGER])]
     assert selection.select(land, tmp_path, "base", "python", head="main", landed=True)[1] is not None
