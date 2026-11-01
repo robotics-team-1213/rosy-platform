@@ -1,5 +1,5 @@
 ---
-title: Landings gave the turn back over and over and reran every suite; five causes behind a 783 min p90
+title: Landings gave the turn back over and over and reran every suite; eight causes behind a 783 min p90
 date: 2026-11-01
 category: workflow-issues
 module: tools/land.py, tools/land_checks.py, tools/land_selection.py, tools/land_cache.py, tools/land_prepare.py, tools/remote/host_probe.py, tools/harness/affected_tests.py
@@ -22,7 +22,7 @@ applies_when:
 tags: [land-py, turn-cap, turn-bounce, land-cache, affected-tier, reboot-window, main-red, measurement]
 ---
 
-# Landings gave the turn back over and over and reran every suite; five causes behind a 783 min p90
+# Landings gave the turn back over and over and reran every suite; eight causes behind a 783 min p90
 
 ## Context
 
@@ -57,6 +57,23 @@ reruns. Each cause below was found from `.git/rosy-land-events.jsonl` and `.git/
    before its own `rosy-nightly-reboot.timer` and the model PC moved to 05:00 (D-889 13). A pretest on a
    66 min old main stopped on a MAIN-RED that main fixed meanwhile; it now re-prepares once on the new
    main (D-889 14).
+
+## Later the same evening
+
+6. **All-or-nothing overlap.** Even with the overlap rule, one reached suite reran *every* own invocation:
+   a shared-foundation landing's uncapped turn reran 485 invocations plus its browser tier serially and held
+   main ~100 min (18:01-19:45, stopped by hand with the user's approval). Fix: filter per invocation and per
+   browser chunk (D-889 18, 19), and grow the cap per send-back (10 min, 30 min, then none) instead of
+   lifting it after one (D-889 19). Addendum 15's "no cap after one send-back" was the wrong bound.
+7. **Exit 5 of a file run alone.** Splitting long invocations put
+   `middleware/devices/omx/adapter/test/test_omx_fleet_ros_actionserver.py` in its own invocation. Without
+   rclpy it skips at import, pytest collects nothing and exits 5, and `land_cache.unusable` called that no
+   verdict: four turns stopped in an hour and main stood 85 min. Fix: the directory's conftest turns a
+   skip-only exit 5 into 0, and `land_cache` reads a skip-only summary as a verdict (D-889 20).
+8. **A landing-code fix cannot rescue its own landing.** `land.py` always runs main's copy
+   (`land_checks.landed_copy`), so the exit-5 fix in `land_cache` hit the same exit 5 in its own turn. When
+   the blocker is in the judging code, put a fix in the tested tree first (here the conftest), land that,
+   then land the tooling change.
 
 ## Measurement trap
 
