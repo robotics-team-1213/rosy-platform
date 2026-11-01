@@ -4,6 +4,8 @@
 
 Python 3.10 이상과 기존 receiver 의존성 `numpy`, `opencv-python`이 필요하다. 서버·SQLite는 Python 표준 라이브러리이며 Node 빌드가 필요하지 않다. 브라우저 자동 검증은 별도 개발 의존성 Playwright/Chromium을 쓴다.
 
+12개 문서의 공통 헤더·전역 메뉴는 `review_app_web/components/`에서 편집한다([D-910](../../../../docs/adr/D-910-learning-static-shell-components.md)). 저장소 루트에서 `python learning/curation/perception/review_shell.py`로 정적 HTML을 갱신하고 `--check`로 사본 일치를 확인한다. 화면별 폼과 로컬 메뉴는 각 문서가 소유한다.
+
 다중 HF 저장 대상, 완료된 Isaac 자료 보관과 로컬 사본 회수는 [저장 공간 운영 안내](storage-pool.md)를 따른다. 선택적 보관 기능은 기존 계정 연결과 별도 host 의존성·private 설정을 사용하며 기본값은 비활성이다.
 
 첫 실행은 저장소 루트에서 한다. `--images`는 source JSONL의 상대 image 경로가 시작하는 디렉터리다. 아래 경로는 자신의 저장 위치로 바꾼다. 실험실 PC의 일회성 상태·로그·증거는 X 드라이브에 둔다.
@@ -517,6 +519,8 @@ SIM 웹 어댑터와 화면은 조건 확인·실행 요청을 위한 준비 경
 작업 목록의 **SIM 실험**에서 조건 확인·실행·목록·상세·중지 요청·새 run 재실행을 사용한다. 기존 isaac 결과 폴더 연결과 `state.json`/`summary.json`·JPG 열람은 유지한다. 같은 모델 PC의 CLI와 불변 입력·run ID·결과·보고서를 공유한다. 모델 검사 통과를 물리 팔레타이징·학습 수용으로 표시하지 않는다. `?run=<run_id>`로 열면 목록을 읽은 뒤 그 run을 클릭과 같은 방법으로 선택한다. SIM 판정과 과제 성공은 평가 근거일 뿐 승인·승격이 아니다(D-793, D-857). 혼합 적층·회수·협응 복구는 선행 검증 사유와 함께 비활성이다.
 
 서버는 선택적 `--sim-config PRIVATE.json`을 사용한다. 설정이 없으면 SIM 연결 미설정으로 응답하고 기존 검수는 계속 동작한다. 이 파일은 현재 계정 소유·0600이며 검수 state의 workspace_id와 결속한다.
+
+SIM 실험의 셀 모델 대장·사람 할 일은 저장소의 `learning/envs/isaac/cell_model_inventory.yaml`을 읽기만 한다. 실물 사진은 공개 저장소에 넣지 않는다. 대장 `photos`의 파일 이름으로 이 설정 파일 옆 `cell-photos/`에 두면 화면이 같은 방향 시뮬레이션 그림과 나란히 보여 준다. 컨테이너 적층 실행의 그림·영상(64 MiB 이하)·적층 요약도 같은 화면에서 본다.
 
 ```json
 {

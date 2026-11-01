@@ -808,3 +808,48 @@
 - 변경: 기존 chunk 파서·transit/park·속도 검사·motion profile을 설치된 OMX 모듈로 옮기고, 기존 스크립트는 같은 함수를 내보낸다. 기존 검증 오류와 계산·명목 상수를 유지하며 실행자·버스는 바꾸지 않는다.
 - 증거: tests-only `9a2a504f02` 원격 RED에서 모듈 부재·네이티브 import 의존 파일 누락 10개 실패를 관측했다. 독립 검토 뒤 소스 `752c9b0aed`에서 설치·네이티브 배포 시험 62 passed, 기존 스크립트 별도 시험 113 passed/2 skipped, NEW 0. 옮긴 여덟 함수의 AST가 원본과 일치한다. 건너뛴 두 시험은 녹화 데이터의 leader 활동 검사이며, 설치 파서·경로·배포 import 검사는 모두 실행했다.
 - gate 변화: 없음. 새 명령 권한·서비스·실물 수용은 없다. CE: 해당 없음 — 코드 이동·기존 회귀·네이티브 import 시험으로 설명된다.
+
+## 2026-10-27 · uncommitted · refactor(omx): extract legacy motion thread unchanged
+
+- 변경: moved _Hold and seven legacy motion-thread methods literally into internal real/dynamixel_motion.py. DynamixelPort retains every state field, bus, lock, commissioning/admission gate, stop/rearm and lifecycle method. Preserved _Hold catch identity, imported symbols, dynamic self._move dispatch, global legacy cancel and one-turn jaw behavior. Registered the sibling safety module and private anchor inside the existing real size unit; no payload expansion is needed.
+- Static evidence: compared with 0ac56f85accf34e3ae357d2c6edacadf556d485d. Seven moved methods match in source and AST; _Hold, all retained port methods and open_real_port match in AST. Port 568 to 439 lines; new motion 145; real unit 1333 to 1349. Independent omx_motion_loop_review accepted frozen tree cd7f97e1939c73ac2451b7b999d44cdcd41b9077 / patch SHA-256 555f0857a7392e914cd4dace1cd2658f5706b3f5c0b2eab84fcbadea8487a513; source e6106a0b99923aa6aa1bde7b0e8d951440a582bd carries its Safety-Review trailer. Both branch commits pass size-range and safety-review.
+- 증거: test-only af2b53429376f4fb1e2d134fa3211aefc1294ed0 produced 1 NEW at function-level missing-module lookup, without collection error. Explicit committed source e6106a0b99923aa6aa1bde7b0e8d951440a582bd passed complete test_omx_dynamixel_port.py, test_omx_dynamixel_stop_test.py, test_omx_dynamixel_motion.py, architecture test_platform_parts.py, test_module_structure.py and test_safety_separation.py: 151 PASS, 0 FAIL, 0 SKIP; wrapper exit 0; comparison 0 NEW, 0 known, 0 flaky. Remote worktree job e6106a0b99-c485ab; 6 workers; env 0ea5ea768e512705 / freeze 279c2df20eca6924; peak 740 MiB. Raw run-1.txt SHA-256 6d77f6c72ac2689090428e65fca16e25856f52fc3542e68cd811713f3b75ec38.
+- Receipts: external scratch directories omx-motion-loop-red-20261027, omx-motion-loop-green-20261027 and omx-motion-loop-static-20261027 preserve actual argv, full source SHA, wrapper/raw/known reports, hashes and literal/size/safety/lint evidence. generate and lint pass with 0 errors / 37 existing warnings; diff-check passes. These are fake bus/clock and structural checks.
+- gate 변화: none. No manual feature, compiler/profile dependency, new bus owner, deployment or device access. Mandatory shared-harness FULL and formal prerequisite landing remain controller gates; host tests do not establish physical acceptance. CE: not applicable; the literal seam and compatibility are visible in code/tests, and safety-anchor coverage is already documented by the structural-guards lesson.
+
+## 2026-10-27 · uncommitted · refactor(omx): align five literal value-contract families
+
+- 변경: moved profile declarations, ROS goal events, watchdog/intake observations, hardware document validators and five kinematic value classes to the existing contracts owner. Explicit legacy aliases preserve identity; the hardware CLI and solver/resource loader stay at their original paths. Transfer contracts now import the kinematic values directly. No new size unit, limit, driver, motion policy or safety classification.
+- 증거: reviewed tests-only commit `13eee434c6d6a194aa9b4f873c6b3232c7208d13`, official remote job `13eee434c6-4835e1`: 1 failed, 33 passed, no errors/skips. The installed canonical-first probe fails because adapter_profile is absent. Moved AST/global/import closure and static checks accompany the source freeze; independent source review and committed compatibility GREEN remain pending. No local product imports or pytest.
+- gate 변화: none. No runtime, ROS-SIM, DEVICE or FIELD acceptance. CE: not applicable; existing installed-layout and isolated-import lessons apply.
+
+## 2026-10-28 · ed77a021dc · test(omx): record literal value-contract compatibility
+
+- 변경: verification record only for commit `ed77a021dc396e7296141609957fecc4af082d35`, tree oid `4714c995793b4ad2cd883665f3992cd029d6c16d`. Production and test content is unchanged. All inherited log entries, including pending markers, are preserved.
+- 증거: existing committed-source job ed77a021dc-eee696 reported 1106 passed, 9 skipped and 12 dependency deprecation warnings with pinned comparison 0 NEW. Scope was the complete adapter suite plus installed-package/offline-client, hardware-owner, transfer/watchdog/updater/Fleet-preflight/training-parent and selected local event/journal regressions. Verbose worker output contains 1106 unique named passed node IDs. This records that source run, not a new integration run.
+- gate 변화: no ROS-SIM, DEVICE, FIELD or native-consumer readiness. Five named skip events cover three optional Chromium cases and two actual_cpu_synthetic cases; four additional collection/import skip records have no emitted runtime reason/node ID. Existing ROS guards and torch/lerobot requirements are prerequisites, not observed passes. Corrective committed release-boundary verification and formal landing remain pending. CE: existing Git-ID and Windows-parent-UTF8 lessons apply; no new lesson recorded.
+
+## 2026-10-28 · fce9c60216 · SIM Pilot의 배치 자산 일치
+
+- 변경: SIM Pilot allowlist에 layout.css를 추가해 CORE·개발 서버와 같은 자산을 제공한다. 시뮬레이션 명령·latch·소유권은 변경하지 않는다.
+- 증거: 날짜별 검증 기록 `docs/validation/robot-pilot-learning-ux-2026-10-28/result.md`에 RED·고정 SHA·원격 영향/브라우저 결과·독립 소스/실제 화면 검토를 구분했다. 설치 자산·라우트 회귀 fce9c60216은20 passed, skip0이다.
+- gate 변화: 없음. 실제 장치·APK/ARM64 빌드·현장 수용은 별도다. CE: 해당 없음 — 기존 크기 이력 교훈을 적용하고 이번 경계의 판단을 코드·회귀·D-910에 남겼다.
+
+## 2026-10-29 · 724ecfbff1 · D-916 원본 joint 시각 보존
+
+- 변경: intake가 검증한 원본 stamp/source-now를 같은 frozen JointStateSnapshot에 보존한다. 기존 네 인수·sequence·freshness·거절·owner 권한·public projection은 유지한다. metadata를 UTC/domain/epoch나 owner admission 근거로 쓰지 않는다.
+- 증거: tests-only RED 11 failed/19 passed, focused GREEN 139 passed/skip0. 실제 native ROS RED 1 failed/1 passed에서 GREEN 2 passed/skip0. 수동 Gazebo에서 원본 metadata와 증가하는 state 시각을 관측했다. 공식 행렬의 실행 범위·실패·skip과 측정 누락은 [검증 정본](../../../../docs/validation/joint-source-provenance-2026-10-29/result.md)에 구분한다. 독립 contract/Safety 및 최종 소스 리뷰에서 추가 P1/P2 없음.
+- Gate: 변화 없음. 전체 source-clock/물리 producer·장치·현장 수용은 열려 있다.
+- CE: 새 교훈 기록 — FULL 판정과 실제 실행 행렬을 혼동한 원인·정정·배열 대조 기준을 소유 저장소 solutions에 기록했다.
+
+## 2026-11-01 · d16cecb42b · 직선 IK 경로 하나로, 링크 캡슐 금지선, 안쪽 transit 후보
+
+- 변경: 실제 팔 청크 계획기(`deploy/robot/omx/grasp_planner.py`)와 SIM 이송 계획기(`transfer_planner.py`)가 각자 갖던 Cartesian 직선 IK를 `OmxKinematics.solve_line` 하나로 합쳤다. 표본마다 FK 확인, yaw 쌍둥이 뒤집힘(관절 튐) 거절은 이제 실제 팔 경로에도 적용된다. 캡슐 모델을 `test/g1_layout.py`에서 `omx_adapter/swept_volume.py`로 옮겨 `keep_out`이 TCP·손목 점 대신 어깨~그리퍼 링크 캡슐 전체를 본다. 가르친 transit의 이동이 금지선을 넘으면 같은 높이 이상에서 기저 쪽으로 당긴 tool-down transit 후보를 차례로 보고 처음 통과한 것을 쓴다. 모두 넘으면 예전처럼 거절한다.
+- 증거: 예시 plan의 청크가 변경 전후 바이트 단위로 같다(노트북에서 계획기 CLI 비교, pytest 아님). 원격 pytest 결과는 착지 기록에 남긴다.
+- gate 변화: 없음. 실물 셀의 `BODY_MARGIN_M`·금지선 값 측정과 실제 팔 수용은 별도다.
+
+## 2026-11-01 · f2333e8aea · Pilot SIM 시연 기본값 프로파일
+
+- 변경: `deploy/robot/omx/sim/pilot_demonstration.yaml`(`rosy.omx-sim-demonstration.v1`: `start_pose`·`task`)을 SIM 서버가 읽어 `/target`에 싣는다. `PilotSimRuntime.load_demonstration`이 조그 관절이 아니거나 알린 범위 밖인 자세, 1–300자가 아닌 과제를 기동 때 거절한다. 파일은 시연 출처 해시에 들어간다. 기계마다 이 파일 하나로 시작 자세·기본 과제를 정한다.
+- 증거: `test_pilot_sim_demonstration.py`(동봉 파일이 셀 프로파일 범위 안, 거절 7종). 원격 결과는 착지 기록에 남긴다. Gazebo 실행 확인은 하지 않았다.
+- gate 변화: 없음.

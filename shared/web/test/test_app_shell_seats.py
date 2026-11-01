@@ -126,12 +126,12 @@ def test_review_documents_share_the_app_bar_and_the_screen_rail():
         rail = re.search(rf'<div class="ui-app-body"{seats}><div class="ui-rail">'
                          r'<nav class="ui-rail-nav workspace-tabs" aria-label="학습 화면">(.*?)</nav></div>', body, re.S).group(1)
         items = re.findall(r'<a class="ui-rail-item" data-action-icon="(\w+)" href="([^"]+)" aria-label="([^"]+)"'
-                           r'(?: aria-current="(page|true)")?>([^<]+)</a>', rail)
+                           r'(?: aria-current="(page|true)")?(?: data-icon-only="")?>([^<]+)</a>', rail)
         assert [(icon, href, full, short) for icon, href, full, _, short in items] == stages, name
         # "page" only on the link to this very page; a stage that merely holds it is "true".
         assert [(href, current) for _, href, _, current, _ in items if current] == [
             (stage, 'page' if here in (None, stage) else 'true')], name
-        assert all(short in full for _, _, full, _, short in items), 'the visible label is part of the name'
+        assert all(short in full for _, _, full, _, short in items), 'the stored label is part of the accessible name'
         sub = (re.search(r'<div class="ui-pathbar"><h1>[^<]+</h1>(?:<span data-spacer></span><ui-button [^>]*>[^<]*</ui-button>)?</div>'
                          r'<nav class="review-kinds" aria-label="정답 하위 메뉴">(.*?)</nav>', body, re.S) if merged else
                re.search(r'</nav></div><div class="ui-subnav"><nav class="ui-subnav-nav" aria-label="[^"]+ 하위 메뉴">'
@@ -139,7 +139,7 @@ def test_review_documents_share_the_app_bar_and_the_screen_rail():
         assert (sub is None) == (subs[stage] is None), name
         assert merged or '<div class="ui-subnav">' in body or subs[stage] is None, name
         if sub:
-            links = re.findall(r'<a class="ui-subnav-item" href="([^"]+)"( aria-current="page")?>[^<]+</a>', sub.group(1))
+            links = re.findall(r'<a class="ui-subnav-item" href="([^"]+)"( aria-current="page")?[^>]*>[^<]+</a>', sub.group(1))
             assert [href for href, _ in links] == subs[stage], name
             assert [href for href, current in links if current] == [here], name
         assert re.search(r'<div class="ui-app-main"><div class="ui-pathbar"><h1>[^<]+</h1>', body)

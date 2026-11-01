@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
-- 2026-10-28 · uncommitted · D-907 source review R1 corrections
-- 2026-10-28 · uncommitted · native v2 readonly profile contract
-- 2026-10-28 · uncommitted · docs(adr): D-902 Pilot 실물 OMX 조종·녹화는 Fleet과 CORE 수동 팔 경로로
-- 2026-10-28 · uncommitted · docs(landing): land_async is the default landing; publish push reuses its own record (D-889 addendum 5)
-- 2026-10-28 · uncommitted · docs(adr): D-889 addendum 3 follow-up, speculative prepare and measurements
+- 2026-11-01 · uncommitted · D-907 source review R1 corrections
+- 2026-11-01 · uncommitted · native v2 readonly profile contract
+- 2026-11-01 · uncommitted · fix(omx): ROS 전용 시험 파일만 돌 때 건너뜀은 판정이다 (D-889 추가 20)
+- 2026-11-01 · uncommitted · tools: 정책 화면 수정 게시용 FULL 착지
+- 2026-11-01 · uncommitted · D-954 현장 마커 프로필과 팔 마커 50번부터

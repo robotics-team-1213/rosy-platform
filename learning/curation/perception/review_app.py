@@ -106,7 +106,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
         omx_center.tasks = tasks
     if storage and storage.project_id != project:
         raise ValueError('storage project must match workspace project')
-    storage_web = StorageWeb(storage, accounts, storage_jobs, store.db, sim_runs=sim_runs)
+    storage_web = StorageWeb(storage, accounts, storage_jobs, store.db, sim_runs=sim_runs, omx_center=omx_center)
     if accounts:
         from learning_collaboration import Collaboration
         if not ipaddress.ip_address(host).is_loopback:

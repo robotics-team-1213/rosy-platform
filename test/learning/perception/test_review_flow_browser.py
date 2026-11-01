@@ -65,23 +65,33 @@ def test_owned_pipeline_controls_work_from_keyboard_search(tmp_path, width):
     target = Control(file, before['workspace_id'], home=home, runner=runner)
     Workspace(store.db).register({'kind': 'perception', 'name': '자동 학습', 'path': str(out)})
     with serve(store, target) as (page, _, expect):
+        page.add_init_script("""const send=window.fetch;
+          window.fetch=async (...args)=>{
+            const response=await send(...args);
+            if(String(args[0]).includes('/api/learning/storage/settings'))
+              await new Promise(resolve=>setTimeout(resolve,1000));
+            return response;
+          };""")
         page.set_viewport_size({'width': width, 'height': 844})
         page.goto(page.url.split('?')[0].rstrip('/') + '/learning', wait_until='networkidle')
         expect(page.get_by_role('button', name='학습 시작', exact=True)).to_be_enabled()
         for action in ['학습 시작', '학습 중지', '학습 재시도']:
+            # Status renders before storage refresh releases the controls.
+            expect(page.get_by_role('button', name=action, exact=True)).to_be_enabled()
             page.keyboard.press('Control+k')
             page.get_by_role('textbox', name='기능 검색어').fill(action)
             page.keyboard.press('Enter')
             expect(page.locator('#owner-control-status')).to_contain_text(
                 '실행기 처리 중' if action != '학습 중지' else '자동 확인 중지됨')
         assert runner.active and not runner.automatic
+        expect(page.get_by_role('button', name='학습 중지', exact=True)).to_be_enabled()
         page.keyboard.press('Control+k')
         runner.active = False
         runner.invocation = 'd' * 32
         (out / 'state.json').write_text(json.dumps({'review_autobuild': {
             'status': 'request_published', 'cycle_keys': ['current']},
             'cycles': {'current': {'status': 'candidate', 'attempts': 1}}}))
-        expect(page.locator('#owner-control-status')).to_contain_text('자동 확인 중지됨')
+        expect(page.locator('#owner-control-status')).to_contain_text('자동 확인 중지됨', timeout=8000)
         expect(page.get_by_role('dialog', name='기능 검색')).to_be_visible()
         page.keyboard.press('Escape')
         expect(page.get_by_text('학습 후보 저장됨', exact=True)).to_be_visible(timeout=8000)
@@ -472,13 +482,13 @@ def test_object_filter_uses_photo_strip_width_on_phone(browser_workspace, width)
     assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
 
 
-@pytest.mark.parametrize('width', [1440, 800, 390])
+@pytest.mark.parametrize('width', [2000, 1440, 800, 390])
 def test_empty_review_can_recover_at_declared_widths(browser_workspace, width):
     page, _, expect = browser_workspace
     page.set_viewport_size({'width': width, 'height': 844})
     workspace = page.locator('.workspace')
     # D-857 §3: the 정답 sub-menu takes its own column beside the rail on wide screens.
-    assert workspace.bounding_box()['width'] == min(page.locator('.ui-app-main').bounding_box()['width'], workspace.evaluate('(node) => parseFloat(getComputedStyle(node).maxWidth)'))
+    assert workspace.bounding_box()['width'] == pytest.approx(page.locator('.ui-app-main').bounding_box()['width'], abs=1)
     # D-741: the path row (page heading) sits between the app bar and the work area.
     pathbar = page.locator('.ui-pathbar').bounding_box()
     assert page.locator('.workspace').bounding_box()['y'] == pathbar['y'] + pathbar['height']
@@ -1285,10 +1295,10 @@ def test_class_select_lists_the_workspace_class_set(browser_workspace):
 
 def test_object_ribbon_class_click_saves_selected_box_only(browser_workspace):
     page, store, expect = browser_workspace
-    chip = page.locator('#object-quick-classes button[value="obstacle_box"]')
+    chip = page.locator('#object-quick-classes ui-button[value="obstacle_box"]')
     expect(chip).to_be_disabled()
     expect(page.locator('#object-quick-classes .ui-icon')).to_have_count(
-        page.locator('#object-quick-classes button').count())
+        page.locator('#object-quick-classes ui-button').count())
     assert page.locator('.review-editor-tools').bounding_box()['x'] < page.locator('#canvas').bounding_box()['x']
     assert page.locator('.review-editor-tools').bounding_box()['y'] < page.locator('#canvas').bounding_box()['y'] + 1
     expect(page.locator('#view-original .ui-icon')).to_have_count(1)
@@ -1344,7 +1354,7 @@ def test_object_zoom_pan_and_draw_keep_source_coordinates(browser_workspace):
 
 def test_custom_class_set_names_and_saves(custom_class_workspace):
     page, store, expect = custom_class_workspace
-    icon = page.locator('#object-quick-classes button[value="car"] .ui-icon')
+    icon = page.locator('#object-quick-classes ui-button[value="car"] .ui-icon')
     assert icon.evaluate('node => getComputedStyle(node).color') == 'rgb(12, 34, 56)'
     select = page.locator('#boxes .box-top select').first
     expect(select.locator('option')).to_have_text(['클래스 선택 필요', '자동차', '신호등'])

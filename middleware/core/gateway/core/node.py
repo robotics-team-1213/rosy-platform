@@ -202,7 +202,7 @@ class RosyCoreNode(Node):
         self._start_events()
         # D-260: hand the boot display the inputs only CORE knows (SAF-005 warning,
         # overlaid device states) so the LCD, lamp and buzzer say what the dashboard says.
-        from core_api_web.api.v1.host import STATUS_INPUTS_PERIOD_S
+        from core.system.host_files import STATUS_INPUTS_PERIOD_S
         self._status_inputs_failed = False
         self._status_inputs_timer = self.create_timer(STATUS_INPUTS_PERIOD_S, self._write_status_inputs)
         self._write_status_inputs()
@@ -212,10 +212,8 @@ class RosyCoreNode(Node):
         self._start_api()
 
     def _write_status_inputs(self) -> None:
-        from core_api_web.api.v1.host import write_status_inputs
-
         try:
-            write_status_inputs(self.core)
+            self.core.host_files.write_status_inputs(self.core)
         except Exception as exc:  # noqa: BLE001 - an indicator input must never stop the node
             if not self._status_inputs_failed:
                 self.get_logger().warning(f"status inputs not written: {type(exc).__name__}: {exc}")

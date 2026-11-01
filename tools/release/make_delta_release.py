@@ -64,7 +64,7 @@ GENERATED = {"install/.rosy-release", "source-revision.txt", "source-ref.txt"}
 MODES_FILE = ".modes.json"  # beside a delta's files, never packed: exec bits for the next delta
 
 
-class DeltaError(Exception):
+class DeltaError(ValueError):
     pass
 
 
@@ -197,6 +197,79 @@ def pack_delta(release_dir: Path, members: list[str], modes: dict[str, int], mar
         info.size, info.mtime, info.mode, info.uname, info.gname = len(marker), FIXED_MTIME, 0o644, "root", "root"
         tar.addfile(info, io.BytesIO(marker))
     os.replace(temporary, out)
+
+
+def transport_delta(base_tarball: Path, full_tarball: Path, public_key: Path, out_dir: Path,
+                    changes=None, blob=None, *, source_diff=None) -> tuple[Path, dict] | None:
+    """Use authenticated full targets unchanged; unsupported plans return None.
+
+    Authentication failures are errors, never reasons to silently fall back.
+    Target manifests and signatures are copied byte for byte, without signing.
+    """
+    from signing import sha256_file, verify_release_files
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix=".transport-", dir=out_dir) as temporary:
+        roots, modes, digests = [], [], []
+        for label, source in (("base", base_tarball), ("target", full_tarball)):
+            root = Path(temporary) / label
+            root.mkdir()
+            captured = Path(temporary) / f"{label}.tar.gz"
+            shutil.copyfile(source, captured)
+            digests.append(sha256_file(captured))
+            member_modes = {}
+            with tarfile.open(captured, "r:gz") as archive:
+                for member in archive:
+                    name = PurePosixPath(member.name).as_posix()
+                    if (not (member.isfile() or member.isdir()) or name.startswith("/")
+                            or ".." in PurePosixPath(name).parts or name == DELTA_MARKER
+                            or (member.isfile() and name in member_modes)):
+                        raise DeltaError(f"{label} archive cannot verify: unsafe or duplicate entry")
+                    if member.isfile():
+                        member_modes[name] = 0o755 if member.mode & 0o111 else 0o644
+                archive.extractall(root, filter="data")
+            rejected = verify_release_files(root, public_key)
+            if rejected:
+                raise DeltaError(f"{label} release does not verify: {rejected[0].code}")
+            roots.append(root)
+            modes.append(member_modes)
+        base, target = roots
+        base_sums, base_manifest = signed_metadata(base, public_key)
+        target_sums, target_manifest = signed_metadata(target, public_key)
+        base_id, target_id = base_manifest["release_id"], target_manifest["release_id"]
+        if not RELEASE_ID.fullmatch(base_id) or not RELEASE_ID.fullmatch(target_id) or base_id == target_id:
+            raise DeltaError("base/target release identity cannot verify")
+        if source_diff is not None:
+            changes, blob = source_diff(base_manifest["git_revision"], target_manifest["git_revision"])
+        if changes is None or blob is None:
+            return None
+        if set(base_sums) != set(target_sums) or modes[0] != modes[1]:
+            return None
+        files = {entry["path"]: entry["sha256"] for entry in base_manifest["files"]}
+        try:
+            replacements, _ = plan_delta(files, changes, blob, [], twins=lambda _: 2)
+        except DeltaError:
+            return None
+        changed = {name for name in base_sums if base_sums[name] != target_sums[name]}
+        if not changed <= set(replacements) | GENERATED | {MANIFEST_FILENAME}:
+            return None
+        if any(target_sums[name] != hashlib.sha256(data).hexdigest()
+               for name, data in replacements.items()):
+            return None
+        members = sorted(changed | {MANIFEST_FILENAME, CHECKSUM_FILENAME, SIGNATURE_FILENAME})
+        name = f"{target_id}.delta.tar.gz"
+        result = out_dir / name
+        marker_hash = sha256_file(base / CHECKSUM_FILENAME)
+        marker = f"{base_id}\n{marker_hash}\n".encode("ascii")
+        pack_delta(target, members, modes[1], marker, result)
+        binding = {"schema": 1, "tarball": name, "sha256": sha256_file(result), "size": result.stat().st_size,
+                   "base_release_id": base_id, "base_sums_sha256": marker_hash,
+                   "target_sums_sha256": sha256_file(target / CHECKSUM_FILENAME),
+                   "full_tarball_sha256": digests[1]}
+        if binding["size"] >= full_tarball.stat().st_size:
+            result.unlink()
+            return None
+        return result, binding
 
 
 def main(argv: list[str] | None = None) -> int:

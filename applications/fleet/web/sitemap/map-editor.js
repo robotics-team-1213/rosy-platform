@@ -1,3 +1,4 @@
+import {randomUUID} from "/console/assets/uuid.js";
 // Fleet adapter: generic point edits enter the existing draft validators here.
 import {appendSurveyElement, editSurveyElement, removeSurveyElement} from '/console/assets/site-map-edit.js';
 import {replaceVertex, removeVertex, mapPoint, nearestVertex} from '/console/assets/geometry-edit.js';
@@ -66,7 +67,7 @@ export function createMapEditor({svg, map, view, changed, reason}) {
   }
   function finish() {
     const kind = $('editor-kind').value;
-    const id = `e_${crypto.randomUUID().replaceAll('-', '').slice(0, 12)}`;
+    const id = `e_${randomUUID().replaceAll('-', '').slice(0, 12)}`;
     const element = {id, kind, name: $('editor-name').value, geometry: points,
       from: $('editor-from').value, to: $('editor-to').value,
       width_m: Number($('editor-width').value), direction: $('editor-direction').value};
@@ -204,7 +205,7 @@ export function createMapEditor({svg, map, view, changed, reason}) {
   $('editor-split').addEventListener('click', () => act(() => {
     const row = current();
     if (row?.kind !== 'road') throw new Error('분할할 도로를 고르세요');
-    const id = () => `e_${crypto.randomUUID().replaceAll('-', '').slice(0, 12)}`;
+    const id = () => `e_${randomUUID().replaceAll('-', '').slice(0, 12)}`;
     const next = splitRoad(map(), row.id, selectedVertex, id(), id());
     selectedVertex = 0; changed(next); message('도로와 새 분할점을 초안에 만들었습니다. 검토 후 저장하세요');
   }));

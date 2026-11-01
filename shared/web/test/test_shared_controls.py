@@ -493,16 +493,61 @@ def test_measure_comes_from_the_scale():
 
 
 def test_diagnostic_palette_references_the_tokens():
-    page = (ROOT / "middleware" / "perception" / "web" / "diagnostic.html").read_text(encoding="utf-8")
-    declared = dict(re.findall(r"--([a-z0-9-]+):\s*([^;]+);", page.split("<style>", 1)[1].split("}", 1)[0]))
+    page = (ROOT / "middleware" / "perception" / "web" / "diagnostic.css").read_text(encoding="utf-8")
+    declared = dict(re.findall(r"--([a-z0-9-]+):\s*([^;]+);", page.split("}", 1)[0]))
     mismatch = [f"--{local}: {declared.get(local)} != var({token})" for local, token in _DIAGNOSTIC_ROLES.items()
                 if declared.get(local, "").strip() != f"var({token})"]
     assert not mismatch, mismatch
     raw = {name for name, value in declared.items() if RAW_COLOR.search(value)}
     assert raw == _DIAGNOSTIC_LOCAL, raw ^ _DIAGNOSTIC_LOCAL
     assert "--ink:" not in page and "--ink-quiet:" not in page, "the page must not redefine a shared token"
-    rest = page.split("<style>", 1)[1].split("}", 1)[1]
+    rest = page.split("}", 1)[1]
     assert not RAW_COLOR.findall(rest), "colours past the role block come from a role, not a literal"
+
+
+def loads_shared_ui(page, text):
+    text = re.sub(r"<!--.*?-->", "", text, flags=re.S)
+    for attrs in re.findall(r"<script\b([^>]*)>", text):
+        if 'type="module"' not in attrs:
+            continue
+        source = re.search(r'\bsrc="([^"]+)"', attrs)
+        if not source:
+            continue
+        if source[1] in ("/common/ui.js", "./common/ui.js"):
+            return True
+        entry = page.parent / source[1].lstrip("/")
+        if not entry.is_file():
+            continue
+        code = re.sub(
+            r'''("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')|`(?:\\.|[^`\\])*`|/\*.*?\*/|//[^\n]*''',
+            lambda match: match[1] or "", entry.read_text(encoding="utf-8"), flags=re.S,
+        )
+        if re.search(
+            r'''^\s*import\s+(?:[^;]*?\s+from\s+)?['"]/common/ui\.js['"]''',
+            code, re.M,
+        ):
+            return True
+    return False
+
+
+@pytest.mark.parametrize("statement", ["import '/common/ui.js';", 'import {cssColor} from "/common/ui.js";'])
+def test_shell_recognizes_entry_module_loading_shared_controls(tmp_path, statement):
+    page = tmp_path / "index.html"
+    markup = '<script type="module" src="/app.js"></script>'
+    (tmp_path / "app.js").write_text(statement, encoding="utf-8")
+    assert loads_shared_ui(page, markup)
+    (tmp_path / "app.js").write_text("const unused = '/common/ui.js';", encoding="utf-8")
+    assert not loads_shared_ui(page, markup)
+    (tmp_path / "app.js").write_text(f"/*\n{statement}\n*/", encoding="utf-8")
+    assert not loads_shared_ui(page, markup)
+    (tmp_path / "app.js").write_text(f"const example = `\n{statement}\n`;", encoding="utf-8")
+    assert not loads_shared_ui(page, markup)
+    (tmp_path / "app.js").write_text("const delimiter = '/*';\n" + statement, encoding="utf-8")
+    assert loads_shared_ui(page, markup)
+    assert not loads_shared_ui(page, markup.replace('type="module"', 'type="text/javascript"'))
+    assert not loads_shared_ui(page, '<script type="module" src="/missing.js"></script>')
+    assert loads_shared_ui(page, '<script type="module" src="/common/ui.js"></script>')
+    assert not loads_shared_ui(page, '<!-- <script type="module" src="/common/ui.js"></script> -->')
 
 
 def test_a_browser_page_starts_from_the_shell():
@@ -520,10 +565,12 @@ def test_a_browser_page_starts_from_the_shell():
         text = page.read_text(encoding="utf-8")
         for bit in (
             "<ui-shell", "<ui-topbar", 'grammar="',
-            "/common/tokens.css", "/common/components.css", "/common/ui.js",
+            "/common/tokens.css", "/common/components.css",
         ):
             if bit not in text:
                 missing.append(f"{page.relative_to(ROOT)} 에 {bit} 이 없다")
+        if not loads_shared_ui(page, text):
+            missing.append(f"{page.relative_to(ROOT)} 에 공용 UI를 읽는 module이 없다")
     template = (COMMON / "template.html").read_text(encoding="utf-8")
     for bit in (
         "<ui-shell", "<ui-topbar", "<ui-brand", "<ui-section", "<ui-empty",

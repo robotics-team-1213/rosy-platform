@@ -192,6 +192,7 @@ retry.addEventListener("click", () => {
 });
 
 document.getElementById("shell-estop").addEventListener("click", async () => {
+  notice.tabIndex = 0;
   window.dispatchEvent(new Event("rosy:stop-motion"));
   try {
     await api("/api/v1/safety/stop", { method: "POST" });

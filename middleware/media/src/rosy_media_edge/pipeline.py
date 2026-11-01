@@ -129,6 +129,16 @@ class MediaPublisher:
         if self._failure:
             raise self._failure
 
+    def ready(self):
+        if self._failure:
+            raise self._failure
+        if self._pipeline is None or self._stopping.is_set():
+            return False
+        state = self._rtc.get_property('connection-state')
+        if state == self._webrtc.WebRTCPeerConnectionState.FAILED:
+            raise RuntimeError('media transport failed')
+        return state == self._webrtc.WebRTCPeerConnectionState.CONNECTED
+
     def push_rgb(self, rgb, *, epoch, sequence, captured_ms):
         if self._stopping.is_set() or self._pipeline is None:
             return False
@@ -136,6 +146,9 @@ class MediaPublisher:
             raise self._failure
         now = time.monotonic()
         with self._lock:
+            # One primer exposes codec caps; negotiation must not accumulate encoded video.
+            if self._last_push is not None and not self.ready():
+                return False
             if self._last_push is not None and now - self._last_push < 1 / self._fps:
                 return False
             self._last_push = now

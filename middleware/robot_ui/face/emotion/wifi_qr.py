@@ -30,15 +30,19 @@ _FORMAT_POLY = 0x537
 _ESCAPED = '\\;,:"'
 
 
-def wifi_payload(ssid: str, passphrase: str) -> str:
-    """The ``WIFI:T:WPA;S:<ssid>;P:<psk>;;`` join string phones read (WPA2 personal).
+def wifi_payload(ssid: str, passphrase: str = "", *, security: str = "wpa2") -> str:
+    """The Wi-Fi join string; explicit open security omits the key entirely.
 
     ``\\ ; , : "`` are backslash-escaped in both fields, as the format asks.
     """
     def escape(value: str) -> str:
         return "".join("\\" + char if char in _ESCAPED else char for char in value)
 
-    fields = (("T", "WPA"), ("S", escape(ssid)), ("P", escape(passphrase)))
+    if security not in ("open", "wpa2"):
+        raise ValueError("unsupported Wi-Fi security")
+    fields = (("T", "nopass" if security == "open" else "WPA"), ("S", escape(ssid)))
+    if security == "wpa2":
+        fields += (("P", escape(passphrase)),)
     return "WIFI:" + "".join(f"{name}:{value};" for name, value in fields) + ";"
 
 

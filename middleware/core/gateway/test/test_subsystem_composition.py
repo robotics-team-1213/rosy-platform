@@ -62,3 +62,27 @@ def test_line_follow_constructor_keeps_the_live_manual_angular_provider():
     assert manager._angular_ceiling() == .3
     safety.limits.manual_angular = .15
     assert manager._angular_ceiling() == .15
+
+
+def test_service_build_shares_real_host_owner_across_api_and_status_publication(core_client, tmp_path, monkeypatch):
+    from core.system.host_files import HostFileExchange
+
+    path = tmp_path / "status-inputs.json"
+    client, svc = core_client(config_overrides={"hardware_probe": {
+        "result_path": str(tmp_path / "missing-hardware.json"), "status_inputs_path": str(path)}})
+    owner = svc.host_files
+    assert isinstance(owner, HostFileExchange)
+    readers = []
+    original = HostFileExchange.hardware
+
+    def hardware(actual_owner, actual_svc):
+        readers.append((actual_owner, actual_svc))
+        return original(actual_owner, actual_svc)
+
+    monkeypatch.setattr(HostFileExchange, "hardware", hardware)
+    for _ in range(2):
+        response = client.get("/api/v1/host/hardware", headers={"Authorization": "Bearer rosy-dev-viewer"})
+        assert response.status_code == 200, response.text
+    assert readers == [(owner, svc)] * 2
+    owner.write_status_inputs(svc)
+    assert path.is_file() and svc.host_files is owner

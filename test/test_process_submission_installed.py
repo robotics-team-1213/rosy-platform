@@ -87,6 +87,16 @@ except ValueError as exc:
     assert 'differs from the recompiled Job' in str(exc)
 else:
     raise AssertionError('installed compiler accepted tampered Job')
+recipe['schema'] = 'rosy_cell.recipe/2'
+recipe['slip_sheet'] = {'handling': 'operator', 'thickness': .002}
+del cell['stations']['sheets']
+manual = compiler.compile(recipe, cell)
+assert len(manual.operator_checkpoints) == 2
+candidate = dict(kind='cell_job', recipe=recipe, cell=cell, job=manual.job,
+                 recipe_sha256=manual.plan_bundle.recipe_digest, cell_sha256=manual.plan_bundle.cell_digest)
+document = compiler.compile_submission(candidate, workcell_id='cell-1', instance_id='arm-1')
+assert document['operator_checkpoints'] == list(manual.operator_checkpoints)
+assert len(document['steps']) == 16
 '''
     for order in ("plan_bundle,submission", "submission,plan_bundle"):
         _run(["-I", "-c", probe, str(installed), str(documents), order], tmp_path)

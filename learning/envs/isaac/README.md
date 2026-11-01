@@ -1,5 +1,53 @@
 # Isaac Sim 5.1/6.x integration
 
+## Confluence 맵에서 긴 컨테이너 3단 적재
+
+`omx-map-long-stack`은 합판 CAD(1.22×2.44 m)와 현장 사진을 참고한 맵 안의
+작업부에 OMX-F 두 대, 50 cm 이동 벨트, 90×30×90 mm 적재 공간을 구성한다.
+90×30×30 mm 화물 세 개를 A/B/A가 순서대로 처리한다. 작업대 위치는 실측 보정이
+없는 사진 기반 시뮬레이션 좌표다. 설정은 정수 `seed` 하나만 받는다.
+
+실행은 `tools/remote/remote_isaac.py`의 check/start/status/fetch 경로를 따른다.
+결과는 원시 접촉·위치 표본과 맵 전체/작업부 PNG로 남긴다. 성공 판정은
+양손가락 접촉으로 들어 올림, 외부 지지 없는 유지, 놓은 뒤 아래층 지지,
+양팔 후퇴와 세 번의 시드 시험을 요구한다. IK 기준 동작이며 학습 정책이 아니다.
+시드 42/43/44의 3단 적재 기준 동작은 3/3 통과했다. [실행 기록](../../../docs/validation/omx-map-stacking-2026-10-29/result.md)을 따른다.
+
+`omx-map-stacking-rl`은 같은 맵·고정 받침·질량·접촉 패드를 사용하는 직접 관절 제어
+PPO 시나리오다. 정책은 두 팔의 12개 입력으로 집기·운반·놓기·후퇴를 수행하며,
+고정 IK 동작을 재생하지 않는다. 관측은 시뮬레이터의 관절·화물 상태다. 32 update /
+1,024 transition의 구동 검사 뒤 별도 시드로 최대 6,000 제어 스텝(200 s)을 평가한다.
+이동 속도가 제한된 세 층 작업을 위해 기존 합성 셀보다 긴 에피소드를 사용한다.
+학습 파라미터 변화와 실제 적재 성공은 보고서에서 따로 판정한다.
+
+IK는 OMX 소유의 `deploy/robot/omx/isaac_stack_plan.py`가 JSON pose case를 받아
+관절 프레임으로 계산한다. 이 오프라인 계산기는 SIM 프로파일만 읽으며 장치를 열지
+않는다. SDK는 프로파일 해시와 궤적을 받아 실행하고, TCP는 실제 link5 자세와 고정
+오프셋으로 관측한다. 내보내는 모든 프레임의 속도·가속도 제한도 계산기에서 확인한다.
+
+## OMX 두 팔 적재 강화학습 구동 검사
+
+`omx-stacking-rl`은 기존 실행기의 고정 PPO 시나리오다. 공식 OMX-F CAD 두 대,
+접촉 표면 속도 0.02 m/s의 50 cm 벨트, 90×90×90 mm 열린 적재 공간과
+30/60/90 mm 화물 15개(27개 단위 셀)를 구성한다. 설치 좌표는 합성이며 현장 맵 정합이 아니다.
+노란 선은 화물 외곽 부피의 시각 안내이며 물리 벽이 아니다.
+
+`tools/remote/remote_isaac.py check --scenario omx-stacking-rl --config CONFIG.json --sha FULL_SHA`
+에서 설정은 `{"seed":42}`만 받는다. 기존 `start/status/stop/fetch`와 receipt를 사용한다.
+설치된 RSL-RL 5.5의 PPO로 한 환경에서 32회 갱신(1024 제어 스텝)하며, seed+10000의
+평가 회차를 별도로 실행한다. 900초 unit과 870초 자식 감독, 같은 work/GPU 잠금을 사용한다.
+새 의존성을 설치하거나 실제 팔에 정책을 배포하지 않는다.
+
+최종 산출물은 보고서, 실제 SDK의 초기·평가 PNG, 해시 검증한 `stacking-policy.pt`다.
+SDK 서버 run에는 USD 장면과 학습 로그도 남는다. `training_verified`는 유한한 관측·PPO 실행·
+실제 파라미터 변화와 체크포인트 연결을 의미하고, `task_success`는 별도 평가의 전체 적재 결과다.
+적재 성공 0회인 구동 검사도 그대로 기록한다. 32회 갱신으로 적재 숙련·일반화를 주장하지 않는다.
+
+물체 자세 이동은 reset/새 투입 시에만 사용한다. 정책은 활성 팔의 관절·그리퍼를 제어하고,
+화물은 접촉으로 운반한다. 양측 손가락 접촉 lift, 지지면·선행 화물의 위쪽 지지,
+해제 후 안정과 외곽 부피를 확인하며 선행 적재물이 밀리면 성공으로 세지 않는다.
+동일 공간을 두 팔이 동시에 쓰는 협응 학습이나 대규모 병렬 학습은 포함하지 않는다.
+
 `middleware/devices/pinky/description/` remains the robot model source. `prepare_urdf.py` renders its xacro with the simulation collision geometry and without Gazebo plugins. `run_rosy.py` selects the installed 5.1 legacy or 6.x modern importer and creates ROS 2 graphs for one robot: `/rosy_01/cmd_vel` subscription, `/rosy_01/odom`, `/rosy_01/joint_states`, global `/tf`, and one global `/clock` publisher. The USD and URDF are generated artifacts, not repository source.
 
 D-434 keeps the model PC on Isaac Sim 5.1. Its bounded diagnostic runs headless at 640×480 with anti-aliasing disabled. The runner excludes the GUI menu during initial startup; the importer can enable that dependency later. Keep normal extension shutdown so exceptions and failed cleanup remain visible. The SDK repair pins in `requirements-sdk-5.1.txt` apply to a separate SDK environment, not Isaac Lab.

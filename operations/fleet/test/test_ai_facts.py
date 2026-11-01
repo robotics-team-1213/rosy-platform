@@ -13,7 +13,7 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from fakes import FakeRobot
+from fakes import FakeClock, FakeRobot
 from fleet.stuck import ai_facts
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
@@ -143,11 +143,16 @@ def test_count_and_body_size_are_bounded(tmp_path):
 
 
 def test_more_than_two_fact_posts_a_second_is_429(tmp_path):
-    client = TestClient(_app(tmp_path)[0])
+    clock = FakeClock()
+    client = TestClient(_app(tmp_path, clock=clock)[0])
     _beat(client)
     codes = [client.post("/api/fleet/ai/facts", headers=_auth(AI), json={"facts": [_fact()]}).status_code
              for _ in range(3)]
     assert codes == [200, 200, 429]
+    clock.advance(0.999)
+    assert client.post("/api/fleet/ai/facts", headers=_auth(AI), json={"facts": [_fact()]}).status_code == 429
+    clock.advance(0.001)
+    assert client.post("/api/fleet/ai/facts", headers=_auth(AI), json={"facts": [_fact()]}).status_code == 200
 
 
 def test_facts_while_absent_or_owner_busy_are_ignored_and_six_silent_seconds_mean_absent(tmp_path):

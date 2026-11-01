@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass
+from datetime import datetime
 
 from core_common.protocol.policy_admission import (
     POLICY_ADMISSION_PRINCIPAL,
@@ -24,7 +25,8 @@ from core_common.protocol.policy_admission import (
     PolicyAdmissionStatus,
 )
 
-ALLOWED_STEP_APPROVAL_KINDS = frozenset({"one_person"})
+# D-938: arm_transfer is the PhysicalTransferStore ARM_TRANSFER job, never two_person CELL_TRANSFER.
+ALLOWED_STEP_APPROVAL_KINDS = frozenset({"one_person", "arm_transfer"})
 AUDIT_LIMIT = 100
 
 
@@ -37,6 +39,7 @@ class PolicyAdmissionSettings:
     max_admits: int = 1
     valid_until: str | None = None
     scope_revision: str = "none"
+    proposers: frozenset[str] = frozenset()
 
     @classmethod
     def from_config(cls, section: object) -> "PolicyAdmissionSettings":
@@ -54,17 +57,32 @@ class PolicyAdmissionSettings:
         if type(max_admits) is not int or max_admits < 1:
             raise ValueError("max_admits must be an integer >= 1")
         valid_until = section.get("valid_until")
-        if valid_until is not None and not isinstance(valid_until, str):
-            raise ValueError("valid_until must be an ISO-8601 string or null")
+        if valid_until is not None:
+            _instant(valid_until)
+        proposers = section.get("proposers") or []
+        if not isinstance(proposers, list) or any(not isinstance(p, str) or not p for p in proposers):
+            raise ValueError("proposers must be a list of principal ids")
         scope_revision = section.get("scope_revision", "none")
         if not isinstance(scope_revision, str) or not scope_revision:
             raise ValueError("scope_revision must be a non-empty string")
         enabled = bool(section.get("enabled", False))
         if enabled and (not robots or not kinds):
             raise ValueError("an enabled scope must name robots and approval kinds")
+        if "arm_transfer" in kinds and (not proposers or valid_until is None):
+            raise ValueError("an arm_transfer scope must name proposers and valid_until")
         return cls(enabled=enabled, robots=robots, step_approval_kinds=kinds,
                    max_admits=max_admits, valid_until=valid_until,
-                   scope_revision=scope_revision)
+                   scope_revision=scope_revision, proposers=frozenset(proposers))
+
+
+def _instant(value: object) -> datetime:
+    """Timezone-aware ISO-8601 instant; anything else fails closed."""
+    if not isinstance(value, str):
+        raise ValueError("valid_until must be an ISO-8601 string or null")
+    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        raise ValueError("valid_until must carry a timezone")
+    return parsed
 
 
 class PolicyAdmissionCore:
@@ -77,6 +95,7 @@ class PolicyAdmissionCore:
         self._settings = settings
         self._now = now  # callable -> ISO-8601 UTC string
         self._switch = settings.enabled
+        self._enabled_by: str | None = None  # D-938: named operator who switched it on at runtime
         self._audit: deque[PolicyAdmissionAuditEntry] = deque(maxlen=AUDIT_LIMIT)
         self._issued_provider = issued_provider
 
@@ -87,7 +106,12 @@ class PolicyAdmissionCore:
             step_approval_kinds=sorted(self._settings.step_approval_kinds),
             max_admits=self._settings.max_admits,
             valid_until=self._settings.valid_until,
-            scope_revision=self._settings.scope_revision)
+            scope_revision=self._settings.scope_revision,
+            proposers=sorted(self._settings.proposers))
+
+    def _expired(self) -> bool:
+        until = self._settings.valid_until
+        return until is not None and _instant(self._now()) >= _instant(until)
 
     def _issued(self) -> int:
         if self._issued_provider is not None:
@@ -105,31 +129,46 @@ class PolicyAdmissionCore:
             reason = "NOT_CONFIGURED"
         elif not self._switch:
             reason = "DISABLED"
+        elif self._expired():
+            reason, remaining = "EXPIRED", 0
         elif remaining == 0:
             reason = "EXHAUSTED"
         return PolicyAdmissionStatus(scope=self.scope(), admits_issued=issued,
-                                     admits_remaining=remaining, reason=reason)
+                                     admits_remaining=remaining, reason=reason,
+                                     enabled_by=self._enabled_by)
 
-    def toggle(self, *, enabled: bool) -> PolicyAdmissionStatus:
+    def toggle(self, *, enabled: bool, actor: str | None = None) -> PolicyAdmissionStatus:
         """기명 운영자 전환. 전환은 스위치만 바꾸고 범위 내용은 사이트 설정만 정한다."""
         if enabled and not self._settings.enabled:
             raise ValueError("cannot enable an unconfigured scope")
         self._switch = bool(enabled)
+        self._enabled_by = actor if enabled else None
         return self.status()
 
     def audit(self) -> PolicyAdmissionAuditResponse:
         return PolicyAdmissionAuditResponse(entries=list(self._audit)[::-1])
 
-    def hold_reason(self, *, robot_id: str, approval_rule: str) -> str | None:
+    def hold_reason(self, *, robot_id: str, approval_rule: str,
+                    proposer: str | None = None) -> str | None:
         """범위 밖이면 그 사유, 범위 안이면 None(자동 승인 후보)."""
         if not self._settings.enabled:
             return "NOT_CONFIGURED"
         if not self._switch:
             return "DISABLED"
+        if self._expired():
+            return "EXPIRED"
         if approval_rule not in self._settings.step_approval_kinds:
             return "APPROVAL_RULE_OUT_OF_SCOPE"
         if robot_id not in self._settings.robots:
             return "ROBOT_OUT_OF_SCOPE"
+        if approval_rule == "arm_transfer":
+            # D-938: the second person of two_person is the named operator who switched the scope on.
+            if self._enabled_by is None:
+                return "SCOPE_NOT_ACKNOWLEDGED"
+            if proposer not in self._settings.proposers:
+                return "PROPOSER_OUT_OF_SCOPE"
+            if proposer == self._enabled_by:
+                return "PROPOSER_IS_ENABLER"
         if self._issued() >= self._settings.max_admits:
             return "EXHAUSTED"
         return None

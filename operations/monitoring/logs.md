@@ -1,4 +1,4 @@
-# monitoring 작업 기록
+﻿# monitoring 작업 기록
 
 ## 2026-10-26 · uncommitted · 독립 관측 기반과 모듈 등록
 
@@ -35,3 +35,51 @@
 - 변경: `applications/monitoring`의 소유·표면·상태/뷰포트 기준을 기록하고 source part·측정·browser scope·CI 실행 경로를 등록했다. 원격 Chromium은 실제 독립 backend의 인증·사이트 범위·이력 API를 읽으며 API를 가로채지 않는다.
 - 증거: `1a9cd5b164` 실제 Chromium3 PASS/0 SKIP, 구조/harness/affected/browser-scope262 PASS/0 SKIP, 두 비교 NEW/KNOWN/FLAKY0. 화면 HTML/JS·G1/G2/G3는 아직 구현/수용하지 않았다.
 - gate 변화: 없음. UI와 배포·DEVICE/FIELD HOLD를 유지한다. CE: 해당 없음 — 등록과 실제 경로 시험에 직접 기록했다.
+
+## 2026-10-26 · 42404e6d6c · 독립 상태 화면과 실제 근거 검증
+
+- 변경: canonical shell/control/theme/evidence 어휘로 scoped 항목·연결·이력 화면을 구현했다. 키는 메모리만 사용하며 epoch 격리와 자체 만료로 이전 로그인 응답·API 단절을 처리한다. prefixed common 자산도 Fleet와 독립이다.
+- 증거: 실제 backend Chromium16+G1 원격151 PASS/0 SKIP, scope 거부 포함 상태 회차8e92f7f658 원격6 PASS/0 SKIP, 비교 NEW/KNOWN/FLAKY0. 40 PNG와 G3 차단 없음 검토를 docs/validation/uiux-surfaces-2026-10-26/monitoring에 보존했다. detector []이나 배포 common 해석 제한은 검증 기록에 명시했다.
+- gate 변화: LOCAL GO. ARTIFACT/DEVICE/FIELD HOLD. CE 해당 없음 — 판단 근거는 코드·회귀·검증 기록에 직접 남는다.
+
+## 2026-10-26 · 7a699b1e25 · 독립 native 배포 입력과 canonical UI 묶음
+
+- 변경: 고정 allowlist의 새 UI 묶음 builder, 전용 사용자 systemd unit, 개별·peer집계·중앙직접 설정과 독립 TLS proxy 예시/운영 절차를 추가했다. 기존 출력 덮어쓰기와 누락 자산의 부분 게시를 거부한다.
+- 증거: 원격 Monitoring104 PASS/0 SKIP, NEW/KNOWN/FLAKY0. 3프로필의 scope·분리 자격과 bundle byte 일치·기존 출력 보호를 검사했다. 9174fdaeb5에서 실제 배포 builder로 만든 묶음의 Chromium16 PASS/0 SKIP, NEW/KNOWN/FLAKY0이다. 읽기 전용 계약 검토 차단 없음. 실제 설치·활성화·대상 systemd 검사·LAN/TLS는 수행하지 않았다.
+- gate 변화: SOURCE/LOCAL GO, ARTIFACT/DEVICE/FIELD HOLD. CE 해당 없음 — 경계와 한계는 코드·시험·배포 절차에 직접 남는다.
+
+## 2026-10-26 · 96f995a996 · native unit 파서 검증
+
+- 변경: 설치된 wheel 실행 파일로 경로만 치환한 unit을 실제 systemd-analyze verify로 검사한다. 서비스 설치·활성화는 하지 않는다. 실행 파일은 PATH 가정 대신 시험 Python 환경에서 찾아 설치 누락을 거부한다.
+- 증거: 원격 native unit1 PASS/0 SKIP, NEW/KNOWN/FLAKY0. 최초 PATH 조회 실패는 7c1c35d4a9의 RED로 보존했다. 설치 위치 검증과 systemd 오류 판정은 유지했다. 두 승인 시험 PC에 Caddy가 없어 Caddy 검증은 미수행이다.
+- gate 변화: 없음. 시험 PC의 parser 검증은 실제 PC 고정 경로·계정·권한·TLS·LAN 수용을 대신하지 않는다. CE 해당 없음 — 시험의 환경 선택은 해당 코드에 직접 드러난다.
+
+## 2026-10-26 · c22e9bc8b3 · 격리 native HTTPS 경로 수용
+
+- 변경: 공식 Caddy 시험 도구의 크기·SHA256을 고정하고 실제 배포 예시의 UI/API 경로를 임시 loopback TLS 서버로 검증한다. 신뢰 저장소·실제 서비스는 변경하지 않으며 프로세스는 시험 종료 시 회수한다. 응답 지연 fixture는 명시적인 키가 설정된 경우에만 동작하게 고쳤다.
+- 증거: TLS flag·browser flag를 켠 원격18 PASS/0 SKIP(native proxy1·unit1·Chromium16), 비교 NEW/KNOWN/FLAKY0. 인증401·scope403·CA 검증·미신뢰 인증서의 CERTIFICATE_VERIFY_FAILED·canonical UI 자산과 API 전달·backend 중단502를 확인했다. 최초6eaf164261의 비인증 응답 지연 RED를 보존했다. 읽기 전용 검토 차단 없음.
+- gate 변화: SOURCE/LOCAL GO, ARTIFACT/DEVICE/FIELD HOLD. 대상 PC·운영 담당자가 지정되지 않아 실제 배포 경로·계정·권한·LAN/TLS는 확인하지 않았다. CE 해당 없음 — fixture 조건과 검증 범위는 코드·회귀·배포 안내에 직접 남는다.
+
+## 2026-10-26 · 50ea4a90f2 · native 시험의 설치 scheme 적용
+
+- 변경: CI가 시스템 Python에 wheel을 설치하는 경로와 실험실 venv 경로를 함께 따르도록 sysconfig의 scripts 경로에서 실행 파일을 찾는다. 파일 존재·실행 권한·실제 systemd 파서 검사는 유지한다.
+- 증거: 원격 native unit1 PASS/0 SKIP, NEW/KNOWN/FLAKY0. 기존 c22e9bc8b3의 TLS·unit·Chromium18 PASS/0 SKIP 근거와 함께 적용한다. CI의 실제 시스템 설치 단계는 .github/workflows/ci.yml에 있다.
+- gate 변화: 없음. 실제 배포 대상 지정·권한·LAN/TLS 수용은 별도다. CE 해당 없음 — 표준 설치 scheme과 기존 CI 설정이 이유를 직접 설명한다.
+
+## 2026-10-30 · 6302fcb63c · 관제 PC 사이트 스택 선택 서비스 (D-936)
+
+- 변경: 실행기에 `--host`(IP 리터럴, 기본 loopback)를 더했다. 관제 PC는 서명 Fleet 이미지를 쓰는 별도 `monitoring` 서비스를 `compose.monitoring.yaml`로 켜고, 프록시 site 블록 안에서 `/monitoring/`·`/api/monitoring/`·`/monitoring-health`를 전달한다. 업데이트기는 서명된 overlay 한 쌍과 후보 Fleet 이미지일 때만 이 서비스를 허용한다.
+- 증거: 원격 겨냥 시험(monitoring·site 후보/검증기/업데이트기·배포·harness·구조) 통과, 비교 NEW/KNOWN/FLAKY0. 시험 PC에 docker compose가 없어 compose 렌더링 1건은 건너뛰었다. 대신 관제 PC에서 실제 site.env로 `docker compose config`를 렌더링해 5개 서비스, 공개 포트 없음, `site_backend` 단독을 확인했다. 운영 프록시 이미지로 `caddy validate`를 overlay 켬·끔 두 경우 모두 통과했다. 운영 스택은 바꾸지 않았다.
+- gate 변화: SOURCE GO 유지. ARTIFACT/DEVICE/FIELD HOLD, 이유를 D-936 경로로 갱신했다. 관제 PC 자동 업데이트는 서명되지 않은 ARM-S overlay 때문에 거절 중이다(기존 기록 `Rosy/docs/workspace-records/2026-10-29/site-update-readiness.md`). CE 해당 없음 — 그 차단 원인과 전환 조건은 기존 작업 기록에 있고, 이번 변경의 판단은 D-936과 계약 시험에 남는다.
+
+## 2026-10-30 · 324eb4010f · PC별 업데이트 상태 (D-871)
+
+- 변경: host_guard 원천이 가드 줄의 `updates` 보고를 읽어 PC마다 `<PC> 업데이트` 노드를 하나 더 낸다. 판정은 Fleet `/api/fleet/updates`와 같다. 켜진 타이머가 6시간 안에 정상 판정이 없으면 ERROR, 동결이면 WARNING, 보고가 깨졌으면 UNKNOWN이다. 사유·릴리스 문자열은 그래프에 복사하지 않는다. `updates`가 없는 줄(로봇·예전 가드)은 노드를 만들지 않는다.
+- 증거: 원격 `operations/monitoring/test` 전체 통과(1 skip), 비교 NEW/KNOWN/FLAKY0.
+- gate 변화: 없음. 관제 PC 적용은 D-936 활성화와 함께한다. CE 해당 없음 — 판정 규칙은 코드와 회귀 시험에 남는다.
+
+## 2026-11-01 · ea45e0c79f · 관제 PC Monitoring 입력 staging (D-936)
+
+- 변경: 사이트 호스트에 `/etc/rosy/monitoring/monitoring.yaml`(root:10001 0640, 예제 복사·Fleet 포트 무수정)과 조회/원천 키 2개(root 0600, 미출력)를 두고, `site_users.py`(main ea45e0c79f 사본)로 Fleet viewer `monitoring` 계정을 등록했다(도구 JSON 응답·yaml 행 확인).
+- 근거: 호스트 읽기 전용 조사로 candidate c47d7c3e78c9(2026-10-26 서명분) 가동·account 디렉터리 staging 확인. overlay 활성은 compose.monitoring.yaml 포함 서명 후보 적용 뒤 site.env 단계와 함께 별도 수행한다.
+- gate 변화: DEVICE blocker 문구 갱신(입력 준비 완료, 활성 대기). ARTIFACT/FIELD HOLD 유지.

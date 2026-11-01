@@ -36,6 +36,7 @@ safety plan (D-246).
 | `pinky-release-artifact-selection.md` | D-325 path selector: none, native payload, flashable image, or fail-closed review |
 | `github-updates.md` | Legacy container-bundle updater for development/compatibility. Start product deployment with `pinky-release-artifact-selection.md` |
 | `site-ceiling-camera-console-runbook.md` | 현장 천장 카메라(Rosy Cam)·관제 운영: CA 고정 페어링, mDNS 사이트 찾기(D-391), 카메라 위치, 맵 자동 맞춤(D-375), 로봇 등록·모드, 규칙 점검, 문제 해결 |
+| `site-map-change-and-robot-recognition-runbook.md` | 트랙이 바뀔 때: CAD 페인트 추출, 카메라 정합 판정(흰 선만), 사이트 반영, 배경 다시 학습·LED로 로봇 인식, 증상별 원인 |
 | `pinky-pro-ir-line-calibration-runbook.md` | D-344 §12 IR line calibration with the read-only tool: four placements, checks, sign check, where the YAML and CORE revision go |
 | `pinky-pro-commissioning-body-templates.md` | Exact operator-attested G3-G5 JSON bodies; G5 binds MCAP and generated YAML/PGM hashes; invalid until physically measured |
 | `learned-perception-operators.md` | D-373 operator guide: `rosy_ml` setup and doctor, shadow deliver/rollback/harvest, lock and history, site auto-delivery install |

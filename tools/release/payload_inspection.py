@@ -81,3 +81,48 @@ def verify_tarball(tarball: Path, public_key: Path, work_dir: Path) -> bool:
         return bool(catalog_entries(temporary / "deploy/robot/native"))
     finally:
         prepare._remove_tree(temporary)
+
+
+def build_rollout(release_id: str, tarball_sha256: str, source_revision: str, published_at: str,
+                  canary: str, wave_delay_s: int) -> dict:
+    return {"schema": 1, "release_id": release_id, "tarball": f"{release_id}.tar.gz",
+            "tarball_sha256": tarball_sha256, "source_revision": source_revision,
+            "published_at": published_at, "canary": [canary], "canary_ok": False,
+            "wave_delay_s": wave_delay_s, "withdrawn": False, "reason": ""}
+
+
+def rollout_bytes(rollout: dict) -> bytes:
+    """The exact bytes that are signed: sorted keys, LF, UTF-8, no BOM."""
+    return (json.dumps(rollout, sort_keys=True, indent=2, ensure_ascii=True) + "\n").encode("utf-8")
+
+
+def verify_transport_delta(full: Path, delta: Path, binding: dict, public_key: Path, work_dir: Path) -> None:
+    """Authenticate the optional transport against the already verified full target."""
+    if (binding.get("full_tarball_sha256") != signing.sha256_file(full)
+            or binding.get("sha256") != signing.sha256_file(delta)
+            or binding.get("size") != delta.stat().st_size or binding.get("tarball") != delta.name):
+        raise PublishError("delta transport bytes differ from the signed full target binding")
+    temporary = Path(tempfile.mkdtemp(prefix=".delta-verify-", dir=work_dir))
+    try:
+        with tarfile.open(delta, "r:gz") as archive:
+            names = set()
+            for member in archive:
+                name = PurePosixPath(member.name).as_posix()
+                if not (member.isfile() or member.isdir()) or name in names:
+                    raise PublishError("delta archive contains a link or duplicate member")
+                names.add(name)
+            archive.extractall(temporary, filter="data")
+        rejected = signing.verify_delta_files(temporary, public_key)
+        if rejected:
+            raise PublishError("delta signature does not verify: " + _rejections(rejected))
+        marker = f"{binding['base_release_id']}\n{binding['base_sums_sha256']}\n".encode("ascii")
+        if (temporary / signing.DELTA_MARKER).read_bytes() != marker:
+            raise PublishError("delta marker differs from its rollout binding")
+        if signing.sha256_file(temporary / "SHA256SUMS") != binding.get("target_sums_sha256"):
+            raise PublishError("delta target checksum identity differs")
+        with tarfile.open(full, "r:gz") as archive:
+            for name in ("manifest.json", "SHA256SUMS", "SHA256SUMS.sig"):
+                if archive.extractfile(name).read() != (temporary / name).read_bytes():
+                    raise PublishError("delta metadata differs from signed full target")
+    finally:
+        prepare._remove_tree(temporary)

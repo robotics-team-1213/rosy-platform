@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime as _dt
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -37,7 +38,8 @@ class UpdaterStage:
     def _releases(self, state: dict, repo: str) -> list[dict]:
         headers = {"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
         # Legacy engines must never consume feature entries from our cache after downgrade.
-        if state.get("etag_v2") and isinstance(state.get("releases_v2"), list):
+        if (state.get("etag_v2") and isinstance(state.get("releases_v2"), list)
+                and all(isinstance(entry, dict) and "delta" in entry for entry in state["releases_v2"])):
             headers["If-None-Match"] = state["etag_v2"]
         status, found, body = self.http.get(
             f"{self.api_base}/repos/{repo}/releases?per_page=20", headers, MAX_LIST_BYTES)
@@ -70,7 +72,8 @@ class UpdaterStage:
             size = next((asset.get("size") for asset in item.get("assets") or []
                          if isinstance(asset, dict) and asset.get("name") == wanted["tarball"]), None)
             releases.append({"release_id": release_id, **{key: urls[name] for key, name in wanted.items()},
-                             "size": size if _number(size) and size >= 0 else None})
+                             "size": size if _number(size) and size >= 0 else None,
+                             "delta": urls.get(f"{release_id}.delta.tar.gz")})
         state["etag_v2"] = found.get("etag")
         state["releases_v2"] = releases
         return releases
@@ -111,6 +114,19 @@ class UpdaterStage:
         )
         if not all(checks):
             raise Definitive("ROLLOUT_INVALID: fields do not match the contract or this release")
+        delta = rollout.get("delta")
+        if delta is not None:
+            hashes = ("sha256", "base_sums_sha256", "target_sums_sha256", "full_tarball_sha256")
+            if (not isinstance(delta, dict) or delta.get("schema") != 1
+                    or delta.get("tarball") != f"{release_id}.delta.tar.gz"
+                    or not isinstance(delta.get("base_release_id"), str)
+                    or re.fullmatch(r"\d{4}\.\d{2}\.\d{2}-\d{3}", delta["base_release_id"]) is None
+                    or delta["base_release_id"] == release_id
+                    or type(delta.get("size")) is not int or not 0 < delta["size"] <= MAX_TARBALL_BYTES
+                    or any(not isinstance(delta.get(key), str)
+                           or re.fullmatch(r"[0-9a-f]{64}", delta[key]) is None for key in hashes)
+                    or delta["full_tarball_sha256"] != rollout["tarball_sha256"]):
+                raise Definitive("ROLLOUT_DELTA_INVALID: signed transport binding is invalid")
         return rollout
 
     # staging --------------------------------------------------------------------------
@@ -160,9 +176,39 @@ class UpdaterStage:
             raise UpdateError(f"DOWNLOADS_UNCLEAN: cannot clear {downloads}: {exc}") from exc
         return downloads
 
+    def _delta_transport(self, release: dict, rollout: dict) -> dict | None:
+        delta = rollout.get("delta")
+        if delta is None:
+            return None
+        base_id = delta["base_release_id"]
+        # A different/missing normal version uses the complete authenticated asset.
+        if self.host.current_release() != base_id:
+            return None
+        base = Path(self.release_path(base_id))
+        if not base.exists() and not base.is_symlink():
+            return None
+        if base.is_symlink() or not base.is_dir():
+            raise Definitive("DELTA_BASE_INVALID: current base is not a plain release")
+        checked = self.host.run(["python3", "-B", self._native("native_release.py"), "--root", str(self.root),
+                                 "--public-key", self._dev(TRUSTED_KEY), "verify", "--release-id", base_id],
+                                VERIFY_TIMEOUT_S)
+        kind, error = _outcome(checked)
+        if kind != "ok":
+            raise Definitive(f"DELTA_BASE_UNVERIFIED: {error}") if kind == "definitive" else UpdateError(
+                f"DELTA_BASE_VERIFY_TRANSIENT: {error}")
+        if hashlib.sha256((base / "SHA256SUMS").read_bytes()).hexdigest() != delta["base_sums_sha256"]:
+            raise Definitive("DELTA_BASE_MISMATCH: current base checksum identity differs")
+        if self.host.current_release() != base_id:
+            raise UpdateError("DELTA_BASE_CHANGED: current moved while verifying")
+        if not isinstance(release.get("delta"), str):
+            raise Definitive("DELTA_ASSET_MISSING: signed transport asset is absent")
+        return delta
+
     def _stage_once(self, state: dict, release: dict, rollout: dict) -> None:
         release_id = release["release_id"]
+        delta = None
         if not Path(self.release_path(release_id)).is_dir():
+            delta = self._delta_transport(release, rollout)
             size = release.get("size") or 0
             need = 2 * size + DISK_MARGIN_BYTES
             free = self.host.free_bytes(self.root / RELEASES)
@@ -172,15 +218,20 @@ class UpdaterStage:
             part = downloads / f"{release_id}.tar.gz.part"
             tarball = downloads / f"{release_id}.tar.gz"
             try:
-                digest = self.http.download(release["tarball"], part, MAX_TARBALL_BYTES)
+                digest = self.http.download(release["delta"] if delta else release["tarball"], part,
+                                            delta["size"] if delta else MAX_TARBALL_BYTES)
             except UpdateError:
                 part.unlink(missing_ok=True)
                 raise
-            if digest != rollout["tarball_sha256"]:
+            if digest != (delta["sha256"] if delta else rollout["tarball_sha256"]) or (
+                    delta and part.stat().st_size != delta["size"]):
                 part.unlink(missing_ok=True)
                 raise Definitive(f"TARBALL_SHA256_MISMATCH: {release_id} got {digest}")
             os.replace(part, tarball)
-            unpacked = self.host.run(["bash", self._native("rosy-release-unpack.sh"), release_id,
+            environment = (["env", f"ROSY_DELTA_BASE_ID={delta['base_release_id']}",
+                            f"ROSY_DELTA_BASE_SUMS={delta['base_sums_sha256']}",
+                            f"ROSY_DELTA_TARGET_SUMS={delta['target_sums_sha256']}"] if delta else [])
+            unpacked = self.host.run([*environment, "bash", self._native("rosy-release-unpack.sh"), release_id,
                                       str(tarball), self._dev(RELEASES)], UNPACK_TIMEOUT_S)
             tarball.unlink(missing_ok=True)  # the script removes it on success
             if unpacked.returncode != 0:
@@ -196,6 +247,10 @@ class UpdaterStage:
             raise UpdateError(f"VERIFY_FAILED: {release_id}: {error}")
         if kind != "ok":
             raise UpdateError(f"VERIFY_TRANSIENT: {release_id}: {error}")
+        if rollout.get("delta") is not None:
+            sums = Path(self.release_path(release_id)) / "SHA256SUMS"
+            if hashlib.sha256(sums.read_bytes()).hexdigest() != rollout["delta"]["target_sums_sha256"]:
+                raise Definitive("DELTA_TARGET_MISMATCH: full target checksum identity differs")
 
     def _gate(self, rollout: dict) -> str | None:
         if self.host.hostname() in rollout["canary"]:

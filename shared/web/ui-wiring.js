@@ -1,6 +1,6 @@
 // 문서 단위 공용 배선 — 요소 하나가 아니라 문서 전체에 거는 동작이다. ui.js가 싣는다.
 
-import { actionIcon } from "/common/ui.js";
+import { actionIcon } from "./ui.js";
 
 // D-405: `[data-theme-cycle]` 아이콘 단추 하나가 RosyTheme 선택지를 차례로 돈다. 얼굴은 지금 선택이다.
 // 모든 앱이 이 배선을 쓴다 — 표면마다 테마 select·저장 코드를 따로 두지 않는다.

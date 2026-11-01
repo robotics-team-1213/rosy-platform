@@ -10,9 +10,11 @@ their own D-412 eligibility, canary and rollback gates.
 from __future__ import annotations
 
 import argparse
+import base64
 import contextlib
 from datetime import datetime, timezone
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -22,6 +24,7 @@ import sys
 import tarfile
 import tempfile
 import time
+from urllib.parse import quote
 
 ROOT = Path(__file__).resolve().parents[2]
 SHA = re.compile(r"[0-9a-f]{40}")
@@ -139,6 +142,12 @@ class Coordinator:
         self.folder.mkdir(parents=True, exist_ok=True)
         self.state_path = self.folder / "state.json"
         self.state = json.loads(self.state_path.read_text()) if self.state_path.exists() else {}
+        supplied_base = config.get("base_source_revision")
+        if "base_source_revision" in config and (not isinstance(supplied_base, str) or not SHA.fullmatch(supplied_base)):
+            raise ValueError("base_source_revision must be an operator-verified full source revision")
+        self.baseline_initialized = bool(supplied_base and not self.state.get("deployed_sha"))
+        if self.baseline_initialized:
+            self.state.update(deployed_sha=supplied_base, delivery_base_sha=supplied_base)
         self.gh = gh or self.command
 
     def command(self, *args):
@@ -188,6 +197,62 @@ class Coordinator:
             argv = argv[:1] + ["-J", self.config["ssh_jump"]] + argv[1:]
         return prepare.run_ssh(argv)
 
+    def source_changes(self, base, head):
+        if not SHA.fullmatch(base) or not SHA.fullmatch(head):
+            raise ValueError("delivery source identity is not a full commit")
+        comparison = self.api(f"compare/{base}...{head}")
+        files = comparison.get("files")
+        # GitHub's comparison inventory is limited to 300 files. Never classify
+        # a possibly truncated list as harmless or delta eligible.
+        if comparison.get("status") not in ("ahead", "identical") or not isinstance(files, list) or len(files) >= 300:
+            return None
+        return files
+
+    def delivery_plan(self, head):
+        # Attempt sha is not a deployment baseline: a failed native attempt may
+        # be followed by docs-only commits while its robot change is undelivered.
+        deployed = self.state.get("deployed_sha")
+        if not deployed:
+            return "review", "no accepted source baseline; configure operator-verified base_source_revision"
+        base = self.state.get("delivery_base_sha") or deployed
+        files = self.source_changes(base, head)
+        if files is None:
+            return "review", "source comparison is incomplete or not an advance"
+        paths = []
+        for item in files:
+            if not isinstance(item, dict) or not isinstance(item.get("filename"), str):
+                return "review", "source comparison has an invalid path"
+            paths.append(item["filename"])
+            if item.get("previous_filename"):
+                paths.append(item["previous_filename"])
+        path = ROOT / "deploy/robot/pinky_pro/release/artifact_impact.py"
+        spec = importlib.util.spec_from_file_location("cd_artifact_impact", path)
+        policy = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = policy
+        spec.loader.exec_module(policy)
+        route = policy.delivery_policy(paths)
+        return route, f"trusted policy selected {route} from {len(files)} changed paths"
+
+    def delta_sources(self, base, head):
+        files = self.source_changes(base, head)
+        if files is None:
+            return [], lambda *_: b""
+        statuses = {"modified": "M", "added": "A", "removed": "D"}
+        changes = [(statuses.get(item.get("status"), "unsupported"), item["filename"]) for item in files]
+
+        def blob(side, path):
+            revision = base if side == "old" else head
+            data = self.api(f"contents/{quote(path, safe='/')}?ref={revision}")
+            if data.get("encoding") != "base64" or not isinstance(data.get("content"), str):
+                raise ValueError("source blob is unavailable; delivery held")
+            raw = base64.b64decode(data["content"], validate=False)
+            actual = hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\0" + raw).hexdigest()
+            if actual != data.get("sha") or len(raw) > 1024 * 1024:
+                raise ValueError("source blob identity or size differs; delivery held")
+            return raw
+
+        return changes, blob
+
     def tick(self):
         latest = self.api("git/ref/heads/main")["object"]["sha"]
         if not SHA.fullmatch(latest):
@@ -200,8 +265,17 @@ class Coordinator:
         if not active:
             if ci == "failed":
                 return self.audit("ci_failed")
-            if self.state.get("sha") == sha:
+            if self.state.get("sha") == sha and not self.baseline_initialized:
                 return self.audit(self.state["phase"])
+            policy, reason = self.delivery_plan(sha)
+            self.baseline_initialized = False
+            if policy in ("none", "os-image", "review"):
+                comparison_base = self.state.get("delivery_base_sha") or self.state.get("deployed_sha")
+                self.save(sha=sha, phase="done" if policy == "none" else "failed",
+                          delivery_base_sha=sha if policy == "none" else comparison_base,
+                          delivery_policy=policy, reason=reason + (
+                              "; OS publication requires separate approval" if policy == "os-image" else ""))
+                return self.audit("no_robot_changes" if policy == "none" else "delivery_held")
             # Completed signed rollouts are not recreated; unfinished ones need
             # their existing rollout watcher, not a second release with the same SHA.
             releases = self.api("releases?per_page=100")
@@ -225,9 +299,16 @@ class Coordinator:
                     "-f", f"ref=refs/tags/payload-reserved-{release_id}", "-f", f"sha={sha}")
             if self.state:
                 self.audit("previous_transaction")
+            previous = self.state.get("payload_tarball")
+            if (previous is None and self.state.get("phase") == "done"
+                    and self.state.get("work_dir") and self.state.get("release_id")):
+                previous = str(Path(self.state["work_dir"]) / f"{self.state['release_id']}.tar.gz")
+            baseline = {key: self.state[key] for key in ("deployed_sha", "delivery_base_sha", "payload_tarball")
+                        if key in self.state}
             self.state = {}  # attempt budget, canary and PID belong to one release only
             self.save(sha=sha, release_id=release_id, phase="dispatching",
-                      dispatched_at=datetime.now(timezone.utc).isoformat())
+                      dispatched_at=datetime.now(timezone.utc).isoformat(),
+                      delivery_policy=policy, reason=reason, base_tarball=previous, **baseline)
             self.gh("workflow", "run", "build-native-payload.yml", "--repo", self.repo,
                     "--ref", "main", "-f", f"release_id={release_id}")
             self.save(phase="building")
@@ -278,7 +359,25 @@ class Coordinator:
                     if prepare.main(args, ssh_runner=self.ssh):
                         raise RuntimeError("payload preparation refused; preserve work folder for review")
                 verify_source(signed, sha)
+                if "delta_prepared" not in self.state:
+                    base = self.state.get("base_tarball")
+                    delta = None
+                    if base and Path(base).is_file():
+                        import make_delta_release as delta_builder
+                        public_key = ROOT / "deploy/robot/pinky_pro/release/public-keys" / f'{self.config["key_name"]}.pem'
+                        delta = delta_builder.transport_delta(Path(base), signed, public_key, work / "transport",
+                                                               source_diff=self.delta_sources)
+                    if delta is not None:
+                        self.save(delta_prepared=True, delta_path=str(delta[0]), delta_binding=delta[1],
+                                  delivery_policy="delta", reason="verified same-base verbatim transport; full asset retained")
+                    else:
+                        self.save(delta_prepared=True, delivery_policy="full-payload",
+                                  reason="base absent or transport plan unsupported; complete signed payload retained")
             except (OSError, ValueError, RuntimeError, subprocess.SubprocessError, tarfile.TarError) as error:
+                if type(error).__name__ == "DeltaError":
+                    self.save(phase="failed", reason="authenticated delta preparation failed; review required",
+                              last_error=f"DeltaError: {error}")
+                    return self.audit("delivery_held")
                 # D-553 3: a refusal used to retry every tick forever, unlogged.
                 failures = self.state.get("prepare_failures", 0) + 1
                 self.save(prepare_failures=failures, last_error=f"{type(error).__name__}: {error}")
@@ -299,14 +398,14 @@ class Coordinator:
             for robot in self.config["robots"]:
                 if robot != self.config["canary"]:
                     args += ["--robot", robot]
-            existing = self.api(f"git/matching-refs/tags/payload-{release_id}")
             local = Path(os.environ["LOCALAPPDATA"])
             publisher = publish.Publisher(
                 release_id=release_id, repo=self.repo, work_dir=work / f"publish-{release_id}",
                 key_name=self.config["key_name"],
                 private_key=local / "Rosy/signing" / f'{self.config["key_name"]}.private.pem',
                 public_key=ROOT / "deploy/robot/pinky_pro/release/public-keys" / f'{self.config["key_name"]}.pem',
-                local_appdata=local, evidence_dir=self.folder / "rollouts", gh=publish.run_gh,
+                local_appdata=local, evidence_dir=self.folder / "rollouts",
+                gh=lambda argv: (0, self.gh(*argv[1:]), ""),
                 ssh=self.ssh, now=lambda: datetime.now(timezone.utc),
                 monotonic=time.monotonic, sleep=time.sleep)
             if "canary_name" not in self.state:
@@ -316,7 +415,9 @@ class Coordinator:
                 pid = int(lock.read_text(encoding="ascii").strip())
                 if pid == self.state.get("publisher_pid") and not publish.pid_alive(pid):
                     lock.unlink()  # this transaction's dead process only; coordinator lock is held
+            existing = publisher.existing_tag()
             if existing:
+                publisher.tag = existing
                 remote, _ = publisher.download()  # public-key verification precedes identity checks
                 check_resume_identity(remote, self.state)
                 if remote["withdrawn"]:
@@ -324,9 +425,14 @@ class Coordinator:
                     return self.audit("withdrawn")
                 args += ["--resume"]
             self.save(publisher_pid=os.getpid())
-            result = publish.main(args, ssh_runner=self.ssh)
+            delta = ((Path(self.state["delta_path"]), self.state["delta_binding"])
+                     if self.state.get("delta_binding") else None)
+            result = (publish.main(args, ssh_runner=self.ssh, transport_delta=delta) if delta is not None
+                      else publish.main(args, ssh_runner=self.ssh))
             if result == 0:
-                self.save(phase="done", reason="rollout approved")
+                self.baseline_initialized = False
+                self.save(phase="done", reason="rollout approved", payload_tarball=str(signed),
+                          deployed_sha=sha, delivery_base_sha=sha)
                 return self.audit("done")
             # A transport failure must not masquerade as policy rejection. Keep
             # this transaction pending; the next tick verifies its remote signed
@@ -338,8 +444,11 @@ class Coordinator:
 def load_config(path):
     config = json.loads(Path(path).read_text(encoding="utf-8"))
     required = {"repo", "repo_id", "state_dir", "robots", "canary", "key_name", "trusted_root"}
-    if set(config) - required - {"ssh_jump"} or not required <= set(config):
+    if set(config) - required - {"ssh_jump", "base_source_revision"} or not required <= set(config):
         raise ValueError("invalid robot CD configuration fields")
+    if "base_source_revision" in config and (not isinstance(config["base_source_revision"], str)
+                                             or not SHA.fullmatch(config["base_source_revision"])):
+        raise ValueError("base_source_revision must be an operator-verified full source revision")
     if not re.fullmatch(r"[\w-]+/[\w.-]+", config["repo"]) or type(config["repo_id"]) is not int:
         raise ValueError("invalid repository identity")
     if (not isinstance(config["robots"], list) or not config["robots"]

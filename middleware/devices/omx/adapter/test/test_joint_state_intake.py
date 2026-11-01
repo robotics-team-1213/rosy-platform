@@ -1,5 +1,6 @@
 """Source age must survive transport; malformed/replayed data gives no new credit."""
 import pytest
+from dataclasses import FrozenInstanceError
 
 from omx_adapter.command_owner import ArmCommandConfig
 from omx_adapter.joint_state_intake import JointStateIntake
@@ -23,6 +24,44 @@ def test_transport_delay_is_deducted_from_owner_freshness():
     snapshot = sample(intake())
     assert snapshot.received_at == pytest.approx(9.8)
     assert dict(snapshot.positions) == {"joint1": .1, "joint2": .2}
+
+
+def test_source_stamps_remain_bound_to_the_accepted_snapshot_after_rejection():
+    reader = intake()
+    first = sample(reader)
+    assert (first.source_stamp_ns, first.source_now_ns) == (1_000_000_000, 1_200_000_000)
+    with pytest.raises(ValueError):
+        sample(reader, stamp_ns=1_300_000_000)
+    reader.last_attempt['stamp_ns'] = 9
+    reader.last_attempt['source_now_ns'] = 10
+    assert (first.source_stamp_ns, first.source_now_ns, first.sequence) == (1_000_000_000, 1_200_000_000, 1)
+    assert first.received_at == pytest.approx(9.8)
+    with pytest.raises(FrozenInstanceError):
+        first.source_stamp_ns = 9
+    second = sample(reader, stamp_ns=1_100_000_000, received_at=10.1)
+    assert (second.source_stamp_ns, second.source_now_ns, second.sequence) == (1_100_000_000, 1_200_000_000, 2)
+    assert second.received_at == pytest.approx(10.)
+
+
+def test_legacy_snapshot_has_no_invented_source_time():
+    from omx_adapter.command_owner import JointStateSnapshot
+    state = JointStateSnapshot({'joint1': .1}, 1, 10., 'cal')
+    assert state.source_stamp_ns is None and state.source_now_ns is None
+    assert state.received_at == 10.
+
+
+@pytest.mark.parametrize('stamp,now', [(None, 2), (1, None), (True, 2), (1, True),
+                                       (0, 2), (-1, 2), (2, 1), (1., 2)])
+def test_partial_or_invalid_source_metadata_cannot_be_attached_to_a_snapshot(stamp, now):
+    from omx_adapter.command_owner import JointStateSnapshot
+    with pytest.raises(ValueError):
+        JointStateSnapshot({'joint1': .1}, 1, 10., 'cal', source_stamp_ns=stamp, source_now_ns=now)
+
+
+def test_metadata_preserves_source_integers_without_adding_a_new_intake_range_gate():
+    stamp = 2**80
+    state = sample(intake(), stamp_ns=stamp, source_now_ns=stamp)
+    assert (state.source_stamp_ns, state.source_now_ns, state.received_at) == (stamp, stamp, 10.)
 
 
 @pytest.mark.parametrize("changes", [

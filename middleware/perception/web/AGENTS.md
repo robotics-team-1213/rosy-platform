@@ -20,6 +20,7 @@ only when its gen counter changes; posts to `/cmd`, `/wander`, `/estop`,
 | File | Description |
 |---|---|
 | `diagnostic.html` | diagnostic surface: three regions (감지 / 관측 / 조작), map canvas with overlays, lidar dial, clearance gauges, safety flags, camera, and every control |
+| `diagnostic.css`, `diagnostic-core.js`, `diagnostic-map.js`, `diagnostic-input.js` | D-766 split of the page's old inline style/script: load in this order as classic scripts sharing one global scope (the old IIFE body, cut at section boundaries); served by `web_http` from `/diagnostic/<name>` (fixed allowlist `DIAGNOSTIC_ASSETS`) and installed by `setup.py`; the backend port reaches the JS through `<meta name="backend-port">` |
 
 ## Subdirectories
 
@@ -29,7 +30,7 @@ None.
 
 ### Working In This Directory
 - Dependency-free on purpose: no framework, no build step, no webfonts — one
-  HTML file, one IIFE, served straight from the robot's share dir with no
+  HTML file plus three classic scripts (no module, no build), served straight from the robot's share dir with no
   internet. Personality comes from scale/weight/spacing, not typeface.
 - **Three regions, not a card stack.** `감지` (sense) reports, `관측`
   (observe) is the map hero, `조작` (act) is the only place that moves the
@@ -79,7 +80,7 @@ Dashboard IIFE tests (when present) in `tools/test_dashboard_*.cjs`. Host browse
 
 ### Common Patterns
 
-One HTML file, one IIFE, `data-post` / `data-hold` / `data-view`. No build step.
+One HTML file + ordered classic scripts, `data-post` / `data-hold` / `data-view`. No build step.
 
 ## Dependencies
 

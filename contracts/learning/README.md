@@ -19,6 +19,8 @@ D-727의 0.1.11은 `incident_operation`에 별도 운영 수용·폐기 receipt�
 
 0.1.14는 D-891로 `promotion_request`에 D-874 승격 요청 묶음의 `SCHEMA`·`FORBIDDEN`·`validate`와 정본 인코더 `encoded`(비ASCII 유지, 끝 줄바꿈, `fleet_export.encoded`와 다름)를 둔다. Learning이 만들고 Fleet이 다시 검사하는 바이트가 하나다. 모양만 검사하며 승인·배포 권한이 아니다.
 
+0.1.15는 D-898로 `promotion_request`에 Fleet의 승인·거절 결정 기록 `decision_encoded`(정본 바이트)와 Ed25519 `sign`/`verify`를 둔다. 서명 메시지에 key id와 고정 라벨이 들어가 다른 역할 키로 옮길 수 없다. `cryptography`는 호출할 때만 가져오며 선언 의존성이 아니다. 서명은 결정 기록의 출처만 증명하고 배포 권한이 아니다.
+
 [D-854](../../docs/adr/D-854-omx-policy-runner-and-action-space.md)의 `action_space`는 OMX 데이터셋·정책이 선언하는 행동 단위
 (`lerobot_norm_v1`, `dynamixel_rad_v1`)와 버전이 붙은 순수 변환기다. 식은 lerobot 0.4.4 `omx_follower`
 (`use_degrees: false`) 정규화와 같고, 범위 밖 값은 잘라 맞추되 `convert()`가 잘린 개수를 돌려준다. lerobot

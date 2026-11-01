@@ -33,7 +33,7 @@ LEARNING_WEB = SRC.parent / "learning" / "curation" / "perception" / "review_app
 
 def test_the_shared_cycle_button_is_wired_once_from_the_single_source():
     source = (SRC.parent / "shared" / "web" / "ui-wiring.js").read_text(encoding="utf-8")
-    assert 'import "/common/ui-wiring.js"' in (SRC.parent / "shared" / "web" / "ui.js").read_text(encoding="utf-8")
+    assert 'import "./ui-wiring.js"' in (SRC.parent / "shared" / "web" / "ui.js").read_text(encoding="utf-8")
     assert source.count('closest("[data-theme-cycle]")') == 1
     assert 'window.RosyTheme' in source and 'theme.choices' in source
     assert 'theme.get()' in source and 'window.RosyTheme.set(themeCycleStep()[1].value)' in source

@@ -6,10 +6,12 @@ $sandbox = Join-Path ([IO.Path]::GetTempPath()) ("rosy sd settings " + [guid]::N
 $sd = Join-Path $sandbox "sd"
 $release = Join-Path $sandbox "release"
 $local = Join-Path $sandbox "local"
-foreach ($path in @($sd, $release, "$sandbox\release\public-keys", "$local\Rosy\credentials", "$sandbox\scratch")) {
+foreach ($path in @($sd, $release, "$sandbox\release\public-keys", "$local\Rosy\credentials", "$local\Rosy\ssh", "$sandbox\scratch")) {
     New-Item -ItemType Directory -Path $path -Force | Out-Null
 }
 function Save([string]$Path, [string]$Text) { [IO.File]::WriteAllText($Path, $Text, (New-Object Text.UTF8Encoding($true))) }
+Save "$local\Rosy\ssh\rosy-operator-ed25519" "fixture private key, never read"
+Save "$local\Rosy\ssh\rosy-operator-ed25519.pub" "fixture public key, passed to fixture writers only"
 Copy-Item -LiteralPath $Source -Destination "$sd\setup-moved-device.ps1"
 foreach ($helper in @("sd-setup-settings.ps1", "sd-card-completion.ps1", "sd-batch-state.ps1")) {
     $path = Join-Path (Split-Path -Parent $Source) $helper
@@ -38,11 +40,15 @@ print(json.dumps(dict(ok='true', release_id='2026.10.19-001',
     image='rosy-os-pinky-pro-2026.10.19-001-arm64.img.xz', sha256='a' * 64,
     source_revision='c' * 40)))
 '@
+Save "$sd\verify-operator-key.py" @'
+import json
+print(json.dumps({'fingerprint': 'SHA256:' + 'A' * 43}))
+'@
 Save "$sd\prepare-rosy-sd.ps1" @'
 param([string]$PlanPath, [string]$ReceiptPath, [string]$RegistryJson, [int]$DiskNumber,
       [string]$Preset, [string]$WifiProfile, [string]$WifiSsid, [string]$ImagePath,
       [string]$ImageSha256, [string]$ImageSignaturePath, [string]$ReleasePublicKey,
-      [string]$ReleaseId, [string]$RpiImager, [switch]$PlanOnly, [switch]$SetWifiCredential)
+      [string]$ReleaseId, [string]$RpiImager, [string]$OperatorPublicKey, [switch]$PlanOnly, [switch]$SetWifiCredential)
 if ($SetWifiCredential) {
     New-Item -ItemType Directory -Path "$env:LOCALAPPDATA\Rosy\credentials" -Force | Out-Null
     $secure = ConvertTo-SecureString "fixture only" -AsPlainText -Force
@@ -68,7 +74,7 @@ $plan | ConvertTo-Json
 '@
 Save "$sd\write-card.ps1" @'
 param([string]$PlanPath, [string]$ReleaseDir, [string]$WifiProfile, [string]$RpiImager,
-      [string]$EvidenceDir, [string]$LogPath, [switch]$Detach)
+      [string]$EvidenceDir, [string]$LogPath, [string]$OperatorPublicKey, [switch]$Detach)
 if (-not $Detach -or -not $LogPath) { throw "expected the existing detached writer with a pinned log" }
 Add-Content -LiteralPath $env:SD_EVENTS -Value "write"
 @{plan=$PlanPath;log=$LogPath} | ConvertTo-Json | Set-Content -LiteralPath "$EvidenceDir\pending.json"
@@ -101,6 +107,7 @@ param([switch]$PrepareOnly, [switch]$Configure, [int]$CardCount, [string]$Releas
 $ErrorActionPreference = "Stop"
 $env:LOCALAPPDATA = "$env:SD_SANDBOX\local"
 $env:ROSY_SCRATCH = "$env:SD_SANDBOX\scratch"
+$env:USERPROFILE = "$env:SD_SANDBOX\scratch"
 function Get-Disk {
     Add-Content -LiteralPath $env:SD_EVENTS -Value "disk"
     [pscustomobject]@{Number=7;BusType="USB";Size=34359738368;IsBoot=$false;IsSystem=$false;FriendlyName="fixture";SerialNumber="FIXTURE-7"}

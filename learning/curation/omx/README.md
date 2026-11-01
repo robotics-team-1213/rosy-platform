@@ -1,5 +1,20 @@
 # OMX 실물 모방학습 준비
 
+## 이송 실패·복구 결과를 검수용으로 모으기
+
+Fleet의 `export_transfer_outcomes()`가 만든 `rosy.transfer-outcome-export/2` 파일을 사용한다. 원래 실패와 복구 자식은 같은 `root_mission_id`를 공유하므로 같은 분할에 넣는다. 이 명령의 train/eval은 **결과 판정·복구 선택 자료를 나중에 검수하기 위한 분할**이며 ACT/VLA 시연 수용이 아니다.
+
+```text
+python learning/curation/omx/transfer_review.py <new-external-package> --train <parent-export.json> <child-export.json> --eval <independent-root-export.json>
+python learning/curation/omx/transfer_review.py --verify <existing-package>
+```
+
+새 패키지에는 원본 JSON bytes 그대로의 사본과 각 SHA-256·미션·root·명시적 분할을 담은 `manifest.json`이 생긴다. 재조회는 파일 해시, 분할과 계보를 다시 검증한다. 같은 root의 train/eval 혼입, 중복 미션, 상충하는 부모·자식 선언은 거절한다. 한쪽 export가 없는 계보도 검수할 수 있지만 누락된 자료를 추정해 만들지 않는다. root 분리는 session·장비·환경 독립성을 보장하지 않는다.
+
+입력은 파일당 8 MiB, 최대 1,000개·합계 128 MiB다. JSON 중복 키·NaN, 링크, 출처 체크아웃 안의 출력과 기존 출력 덮어쓰기는 거절한다. 중간 실패로 폴더가 남아도 완전한 manifest가 없으면 유효한 패키지가 아니다. 다시 만들 때에는 새 출력 경로를 사용한다.
+
+`unreviewed_metadata_only`, `raw_camera_bytes_available=false`, `behavior_training_eligible=false`는 유지한다. 원래 unknown 원인이나 owner reason을 사람이 확인한 라벨로 바꾸지 않는다. 파일 해시는 복사 뒤 변경을 찾는 근거이며, 패키지와 해시를 함께 다시 쓴 자료나 원본 DB를 인증하지 않는다. 다음 단계는 사람이 결과·원인·복구 선택을 검수하고, 행동 학습에는 별도 원본 영상·실제 적용 행동·시간 정렬·개입 기록을 확보하는 것이다. 이 도구는 학습·등록·업로드·로봇 명령을 수행하지 않는다.
+
 ## 필요한 파지 구간만 검수·학습하기
 
 `/learning/omx`에서 등록한 intake의 「파지 구간 검수」를 연다. 원본 카메라 프레임을 확인하고 시작(포함)·끝(제외), 대상 물체, 실제 관찰 결과, 개입 여부, 검수자·근거와 분할을 기록한다. 저장은 review DB에 새 검수 revision을 추가하고 원본 `decisions.json`을 유지한다. 프로젝트 계정에서는 manage 권한이 필요하고 인증된 사용자를 검수자로 기록한다. 원본 확인에는 모델 PC의 LeRobot 0.4.4 환경이 필요하다.

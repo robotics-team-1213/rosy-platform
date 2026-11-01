@@ -29,12 +29,14 @@ function removeRecentEntry(host) {
   localStorage.setItem(RECENT_KEY, JSON.stringify(getRecent().filter((r) => r.host !== host)));
 }
 
-import {token, setToken, clearToken, whoami, fetchCapabilities, LOGIN_CODE, pairWithCode, requestEnrollmentCode, connectionOffer, developmentSession, api, authHeaders, inPilotApp, postJson} from "../client.js";
+import {token, setToken, clearToken, whoami, fetchCapabilities, LOGIN_CODE, pairWithCode, connectionOffer, developmentSession, api, authHeaders, inPilotApp, postJson} from "../client.js";
 import {account, authenticated, restoreAccount, accountLogout} from '../client.js';
 import {driverFor} from "../drivers/registry.js";
+import {mountShowCode} from "./show-code.js";
 import {createVisionPreview, createWhepView} from "../vision.js";
 import {mountDriveView, actionIcon} from "./drive-view.js";
 import {HeadlessState, EVIDENCE_LABEL} from "/common/core_ui_logic.js";
+import {confirmIrreversible} from "/common/ui.js";
 
 const DRIVER_KIND = "pinky_core";
 
@@ -52,7 +54,7 @@ function setTag(word) {
 
 function notice(text) {
   const node = document.querySelector("#pilot-notice");
-  if (node) node.textContent = text;
+  if (node) { node.removeAttribute("data-stop-state"); node.textContent = text; }
 }
 
 function appendAccountLogout(actions) {
@@ -302,70 +304,6 @@ function renderTokenForm(root, onConnect, message) {
   refreshLobby(lobby);
 }
 
-// --- 연동 코드 보여주기 (D-193 §5 등록 코드) ---
-// 화면이 없는 상대 기기와 연동할 때: 이 태블릿이 코드를 보여 주고 상대 기기에서
-// 입력한다. 반대 방향(상대 화면 코드 → 이 태블릿 입력)은 접속 폼의 pairWithCode.
-// 발급은 관리자만(CORE 403) — 운영자 화면에서는 항목을 보여 주되, 발급 거절 시
-// 관리자 코드로 전환하는 길(기존 토큰 폼)을 바로 제공한다.
-function mountShowCode(root, onSwitchCredential) {
-  const section = el("div", null, {"data-enroll-section": ""});
-  section.append(el("ui-text", "연동 코드 보여주기", {scale: "label"}));
-  section.append(el("p", "입력 화면이 있는 상대 기기는 이 코드를 보고 그 화면에서 입력합니다. " +
-    "입력 수단이 없는 로봇은 로봇 화면의 코드를 이 태블릿 접속 폼에 입력하세요.",
-    {"data-enroll-guidance": ""}));
-  const button = el("ui-button", "코드 발급", {type: "button", "data-show-code": ""});
-  button.setAttribute("kind", "segment");
-  const status = el("ui-status", "", {role: "status", "data-enroll-status": ""});
-  const timer = el("ui-text", "", {scale: "value", "data-enroll-timer": "", hidden: ""});
-  let tick = null;
-  const stopTick = () => { if (tick) { clearInterval(tick); tick = null; } };
-  button.addEventListener("click", async () => {
-    button.disabled = true;
-    status.textContent = "코드 발급 중…";
-    section.querySelector("[data-enroll-code]")?.remove();
-    let result = null;
-    try { result = await requestEnrollmentCode("operator"); }
-    catch { result = null; }
-    button.disabled = false;
-    if (!result || result.status !== 201 || typeof result.body?.code !== "string") {
-      stopTick(); timer.hidden = true;
-      if (result?.status === 403) {
-        status.textContent = "발급은 관리자 권한이 필요합니다.";
-        section.querySelector("[data-enroll-upgrade]")?.remove();
-        const upgrade = el("ui-button", "관리자 코드로 전환", {type: "button", "data-enroll-upgrade": ""});
-        upgrade.setAttribute("kind", "quiet");
-        upgrade.addEventListener("click", () => onSwitchCredential?.());
-        section.insertBefore(upgrade, timer);
-      } else {
-        status.textContent = "코드를 발급할 수 없습니다. 연결을 확인하세요.";
-      }
-      return;
-    }
-    section.querySelector("[data-enroll-upgrade]")?.remove();
-    const code = el("ui-text", result.body.code, {scale: "display", "data-enroll-code": ""});
-    const role = {viewer: "조회용", operator: "운전자용"}[result.body.role] ?? `${result.body.role}용`;
-    status.textContent = `${role} 코드입니다. 상대 기기에서 입력하세요.`;
-    section.append(code);
-    // 남은 유효 시간 표시(D-193 등록 코드 수명). 0 이되면 갱신 안내만 하고 자동 재발급하지 않는다.
-    stopTick();
-    const deadline = Date.now() + (result.body.expires_in_s ?? 300) * 1000;
-    timer.hidden = false;
-    const render = () => {
-      const left = Math.max(0, Math.round((deadline - Date.now()) / 1000));
-      timer.textContent = `유효 ${String(Math.floor(left / 60)).padStart(2, "0")}:${String(left % 60).padStart(2, "0")}`;
-      if (left <= 0) {
-        stopTick();
-        status.textContent = "코드가 만료됐습니다. 다시 발급해 주세요.";
-      }
-    };
-    render();
-    tick = setInterval(render, 1000);
-  });
-  section.append(button, status, timer);
-  root.append(section);
-  root.__enrollDispose = stopTick;
-}
-
 function renderAppSession(root) {
   setTag("앱");
   notice("");
@@ -387,6 +325,65 @@ function renderOffline(root, onConnect) {
   retry.setAttribute("kind", "quiet");
   retry.addEventListener("click", () => onConnect());
   root.append(retry);
+}
+
+function releaseContext(safety) {
+  if (safety?.estop !== true || typeof safety.source !== "string") return null;
+  if (safety.source !== "battery_policy" && safety.source !== "battery_deep") return {key: safety.source, detail: ""};
+  const battery = safety.battery, level = {ok: "정상", warning: "주의", critical: "부족", deep: "매우 부족"}[battery?.level];
+  if (battery?.evidence !== "fresh" || !level || !Number.isFinite(battery.percent)) return null;
+  return {key: `${safety.source}:${battery.level}`,
+    detail: `배터리 보호 정지 · 배터리 ${battery.percent}% · ${level} · 최신 표본. 보호 조건이 남아 있으면 다시 정지될 수 있습니다. `};
+}
+
+function emergencyRelease(role, safety, onReleased) {
+  const release = el("ui-button", "비상 정지 해제", {type: "button", "data-estop-release": ""});
+  release.setAttribute("kind", "quiet");
+  release.disabled = role !== "administrator" || !releaseContext(safety);
+  if (release.disabled) release.reason = role !== "administrator"
+    ? "관리자 로그인 코드로 다시 연결해야 해제할 수 있습니다"
+    : "최신 안전 상태를 확인한 뒤 해제할 수 있습니다";
+  release.addEventListener("click", async () => {
+    if (release.disabled) return;
+    release.disabled = true;
+    const credential = token(), identity = account;
+    const current = () => release.isConnected && token() === credential && account === identity;
+    try {
+      const before = await api("/api/v1/safety/state", {timeoutMs: 5000});
+      if (!current()) return;
+      const context = before.ok && releaseContext(before.body);
+      if (!context) { notice("비상 정지 해제 보류 · 현재 정지 사유와 배터리 상태를 확인할 수 없습니다."); return; }
+      if (!await confirmIrreversible({message: `${context.detail}주변 안전을 확인했고 비상 정지를 해제할까요? 해제 후에도 주행은 별도로 시작해야 합니다.`,
+        action: "비상 정지 해제", opener: release}) || !current()) return;
+      const [latest, me] = await Promise.all([
+        api("/api/v1/safety/state", {timeoutMs: 5000}), api("/api/v1/auth/whoami", {timeoutMs: 5000}),
+      ]);
+      if (!current()) return;
+      if (!latest.ok || !me.ok || me.body?.role !== "administrator"
+        || releaseContext(latest.body)?.key !== context.key) {
+        notice("비상 정지 해제 보류 · 관리자 권한과 최신 안전 상태를 다시 확인하세요."); return;
+      }
+      const result = await postJson("/api/v1/safety/release", {}, {timeoutMs: 5000});
+      if (!current()) return;
+      if (!result.ok || result.body?.estop !== false) {
+        notice("비상 정지 해제 요청이 거절되었거나 결과를 확인하지 못했습니다. 로봇 상태와 관리자 권한을 확인하세요."); return;
+      }
+      const [after, owner] = await Promise.all([
+        api("/api/v1/robot/state", {timeoutMs: 5000}), api("/api/v1/safety/state", {timeoutMs: 5000}),
+      ]);
+      if (!current()) return;
+      if (!after.ok || !owner.ok || owner.body?.estop !== false || after.body?.safety?.estop !== false
+        || after.body?.mode !== "IDLE") {
+        notice("비상 정지 해제 결과 확인 불가 · 로봇 상태를 다시 확인하세요."); return;
+      }
+      await onReleased();
+    } catch {
+      if (current()) notice("비상 정지 해제 결과 확인 불가 · 로봇 상태와 연결을 확인하세요.");
+    } finally {
+      if (current()) release.disabled = false;
+    }
+  });
+  return release;
 }
 
 async function check(root, onReady, onEnter) {
@@ -457,8 +454,11 @@ async function check(root, onReady, onEnter) {
   const enter = el("ui-button", "주행 시작", {type: "button", "data-drive-enter": ""});
   enter.setAttribute("kind", "primary");
   enter.addEventListener("click", () => onEnter?.({role: me.body?.role, capabilities: caps.body ?? {}}));
-  const state = await api("/api/v1/robot/state").catch(() => null);
-  const emergency = state?.body?.mode === "EMERGENCY";
+  const [state, safety] = await Promise.all([
+    api("/api/v1/robot/state", {timeoutMs: 5000}).catch(() => null),
+    api("/api/v1/safety/state", {timeoutMs: 5000}).catch(() => null),
+  ]);
+  const emergency = safety?.body?.estop === true || state?.body?.mode === "EMERGENCY" || state?.body?.safety?.estop === true;
   if (emergency) {
     enter.disabled = true;
     enter.reason = "비상 정지 중에는 주행을 시작할 수 없습니다";
@@ -470,6 +470,7 @@ async function check(root, onReady, onEnter) {
   actionIcon(camera, "fit");
   camera.addEventListener("click", () => showCamera(root, () => check(root, onReady, onEnter)));
   const actions = el("ui-actions"); actions.append(camera, enter);
+  if (emergency) actions.append(emergencyRelease(me.body?.role, safety?.ok ? safety.body : null, () => check(root, onReady, onEnter)));
   const summary = readoutPair([
     ["로봇 연결", "확인됨"],
     ...(robotId ? [["로봇", robotId]] : []),

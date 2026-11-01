@@ -1,5 +1,52 @@
 # Ubuntu site server: Fleet and camera middleware
 
+## Incremental service image updates
+
+Full candidates remain the default. To build an incremental candidate, supply a
+previous **signed** candidate and the independently enrolled site public key:
+
+```bash
+python3 deploy/site/build_candidate.py --output-dir /tmp/site-candidate-new \
+  --base-candidate /path/to/verified-base-candidate \
+  --trusted-key-id <site-key-id> --trusted-public-key /path/to/site-public.pem
+```
+
+The builder authenticates the base and requires its commit to be an ancestor of
+HEAD. Dockerfile/COPY inputs, including deleted files and ignore rules, determine
+which services rebuild. Unchanged images retain their exact signed references and
+SBOMs. The version 2 manifest signs the complete desired service set, but
+`images.tar` carries only changed images. Configuration-only candidates carry no
+images. Ambiguous build inputs disable reuse; existing ignored-file guards can
+reject unsafe mappings. Builder or candidate-workflow changes rebuild every
+image, so the first rollout may carry full images even with a base. A full build
+without `--base-candidate` refreshes upstream base images and dependencies; run
+that path for security/base-image refreshes, not just when application code changes.
+
+Before publishing the first version 2 candidate, update the independently installed
+signer, verifier and updater from this reviewed revision. An older verifier refuses
+version 2. Keep the offline signing key out of the build host and CI. The same
+signature, full desired-state image checks, firewall/certificate preflight,
+functional health gate and durable rollback journal still apply.
+
+On an active stack, version 2 application reconciles Compose without `down` or
+`systemctl restart`: only services whose image or configuration changed are
+recreated. The service set is still validated as a whole. A missing or mismatched
+reused image fails before the active candidate is switched; use a full candidate
+for a new server or to recover missing images. Retained rollback candidates protect
+their reused image references from pruning.
+
+Generated Compose pins separate content-digest labels for the base and Account
+Caddyfiles: a stable file-bind path alone cannot refresh the running file after a
+candidate switch. Changing either file recreates proxy without rebuilding its
+image. This uses [Compose's configuration-change reconciliation](https://docs.docker.com/reference/cli/docker/compose/up/).
+
+CI dispatch can set `base_commit` to the full source commit of a signed site release.
+Configure repository variables `ROSY_SITE_SIGNING_KEY_ID` and
+`ROSY_SITE_SIGNING_PUBLIC_KEY_PEM` through the trusted administrator path first.
+The build fetches that base through the existing guarded fetcher and authenticates
+it before reuse. Empty `base_commit` keeps full delivery. No private key is needed
+in CI. Source tests do not establish live Docker continuity or field acceptance.
+
 This Compose stack is the site control-plane host. It provides Fleet's browser
 console and display-only sightings ingestion, plus camera frame reception and
 ArUco projection. It does not replace the ROS 2 Jazzy/Pi product runtime. Fleet
@@ -1574,6 +1621,20 @@ The timer keeps only the operational SQLite ledger; keep transferring copies
 to the approved encrypted target as above — the retention here bounds disk
 use on the site host, it is not an off-site backup.
 
+#### Backup freshness check (ledger check timer)
+
+The `rosy-site-ledger-backup-check.service`/`.timer` pair re-verifies the
+newest `fleet-backup-*.sqlite3` every 6 hours: it must be younger than
+`--max-age-hours 48` (the backup timer is daily) and pass `integrity_check`.
+A failed, disabled, or long-stalled backup timer therefore surfaces as a
+failed unit in `systemctl --failed`, next to the firewall check. The check
+runs the candidate's `site_db.py` on the host against the same
+`ROSY_SITE_BACKUP_DIR` bind. Enable it once:
+
+```sh
+sudo systemctl enable --now rosy-site-ledger-backup-check.timer
+```
+
 Before relying on recovery, test the backup against a separate Compose project
 so it receives a different named `sighting_data` volume. The installed site
 configuration and secret files must be available to Compose, but this one-off
@@ -2137,12 +2198,62 @@ pairing → omx → workcell → Account이며 사용하지 않는 항목은 생
 `ROSY_ADDITIONAL_CREDENTIAL_PATHS`로 역할별 토큰 파일을 기존 secret bootstrap에 추가한다.
 기존 자격 증명 이름을 덮어쓰는 추가 매핑은 거절한다.
 
+기본 팔 매핑은 A/B다. 추가 팔의 관측 자격 증명이 필요하면 관리자가 `site.env`의
+`ROSY_SITE_WORKCELL_ARM_CREDENTIAL_PATHS`에 **전체 교체 매핑**을 JSON으로 지정한다.
+예를 들어 A/B/S를 함께 유지하려면 다음처럼 세 항목을 모두 넣고 같은 Fleet 전용
+secret 디렉터리에 세 파일을 준비한다. 값은 컨테이너 안의 파일 경로이며 토큰 원문이 아니다.
+
+```sh
+ROSY_SITE_WORKCELL_ARM_CREDENTIAL_PATHS='{"ROSY_ARM_A_TOKEN":"/run/rosy-workcell-arm-secrets/arm_a_token","ROSY_ARM_B_TOKEN":"/run/rosy-workcell-arm-secrets/arm_b_token","ROSY_ARM_S_TOKEN":"/run/rosy-workcell-arm-secrets/arm_s_token"}'
+```
+
+변수를 생략하거나 빈 값으로 두면 기존 A/B 매핑을 유지한다. 모든 manifest `token_env`는
+해당 매핑에 있어야 하며 파일이 없거나 기존 자격 증명 이름을 덮어쓰면 시작을 거절한다.
+Vision의 카메라 매핑과 secret mount는 그대로다. 별도 미서명 Compose 오버레이로
+자격 증명을 덧붙이지 않는다. 기존 추가 팔 오버레이를 쓰는 현장은 이 변수를 지원하는
+새 서명 candidate로 전환할 때 전체 매핑을 보존하고 추가 오버레이를 함께 제거한다.
+
 이 기능에는 변경 소스로 다시 빌드한 Fleet·Vision 이미지와 오버레이 해시를 포함한
 새 서명 candidate가 필요하다. 새 오버레이와 서명 coverage를 지원하는 host verifier·updater를
 신뢰한 관리 경로로 먼저 갱신한다. 기존 candidate 안의 파일이나 이미지를 직접 수정하지 않는다.
 자동 갱신은 현재·staged·loaded candidate의 서명 coverage를 확인하며 이전 candidate 검증은
 유지한다. 기능 도입 전 candidate로 되돌릴 때는 백업된 site.env에서도 오버레이가 꺼져 있어야 한다.
 실제 장비 관측과 브라우저 미리보기 확인은 별도 검증 기록으로 남긴다.
+
+## ROSY Monitoring (D-936)
+
+관제 PC의 시스템 상태 화면은 선택 오버레이 `compose.monitoring.yaml`로 켠다.
+서명된 Fleet 이미지를 쓰지만 Fleet과 다른 프로세스·상태 볼륨·키로 돈다. Fleet이 멈춰도 계속 조회되고,
+프록시는 이 서비스를 기다리지 않는다. 화면은 읽기 전용이며 재시작·재부팅은 Fleet 설치 화면의 운영자 제어로 한다.
+
+사이트 관리자는 `ROSY_SITE_CONFIG_DIR` 밖에 아래 입력을 준비한다. 예를 들어 `/etc/rosy/monitoring/` 아래에 둔다.
+
+| 입력 | 내용 |
+|---|---|
+| `ROSY_SITE_MONITORING_CONFIG` | [Monitoring 설정](../../operations/monitoring/README.md) YAML. root 소유, 그룹 10001, 0640 |
+| `ROSY_SITE_MONITORING_SECRETS_DIR` | `site_read`(열람자 조회 키), `fleet_upstream`(Fleet viewer 키). root 소유 0700/0600 |
+
+[monitoring.yaml.example](monitoring.yaml.example)을 복사하고 Fleet 포트가 다르면 그것만 고친다.
+설정의 키 이름은 `MONITORING_SITE_READ`(reader `token_env`)와 `MONITORING_FLEET_UPSTREAM`(Fleet 원천 `token_env`)로 맞춘다.
+두 키는 서로 다른 32자 이상 ASCII 값이다. 등록할 원천은 다음이다.
+
+- Fleet: `kind: fleet`, `url: https://fleet:<ROSY_FLEET_PORT>`, 최상위 `ca_bundle: /run/secrets/site_ca`
+- 호스트 상태: `kind: host_state`, `path: /var/lib/rosy-host-state/status.json`
+- PC·로봇 guard: `kind: host_guard`, `path: /var/lib/rosy-host-guard/status.json`, `selector`는 `site`·`ai`·`model` 등 guard 역할 이름
+
+Fleet은 `fleet_upstream` 키를 viewer로 등록해야 읽기를 허락한다. 키는 stdin으로만 넣는다.
+
+```sh
+python3 /opt/rosy/candidate/deploy/site/site_users.py add <site-users.yaml> --principal monitoring --role viewer --token-stdin < <fleet_upstream 파일>
+```
+
+`/etc/rosy/site/site.env`의 두 경로를 채우고 `ROSY_SITE_PAIRING_COMPOSE`에
+`-f /opt/rosy/candidate/deploy/site/compose.monitoring.yaml`을 더한다. 순서는 pairing → omx → workcell → monitoring → Account다.
+열람은 Fleet 화면의 "시스템 상태" 링크 또는 `https://<site>/monitoring/`에서 `site_read` 키를 넣는다.
+서비스 확인은 `https://<site>/monitoring-health`다. 이 응답은 수집기 자신의 생존만 뜻한다.
+
+이 기능에는 overlay 한 쌍을 포함한 새 서명 candidate와 이를 아는 host verifier·updater가 필요하다.
+기능 도입 전 candidate로 되돌릴 때는 백업된 site.env에서도 오버레이가 꺼져 있어야 한다.
 
 ## 시뮬레이션은 돌리지 않는다 (D-571)
 

@@ -46,7 +46,7 @@ def _serve(tmp_path):
     store.propose(workcell_id="cell-1", policy_revision="act-r1", to_stage="L3", evidence_sha256="b" * 64,
                   note="shadow agreement", principal_id="alice", **REV)
     listener = safe_listener()
-    server = uvicorn.Server(uvicorn.Config(app, log_level="error", timeout_graceful_shutdown=3))
+    server = uvicorn.Server(uvicorn.Config(app, log_level="error", timeout_graceful_shutdown=3, log_config=None))
     worker = threading.Thread(target=server.run, kwargs={"sockets": [listener]}, daemon=True)
     worker.start()
     deadline = time.monotonic() + 20
@@ -84,14 +84,14 @@ def test_two_people_approve_and_anyone_can_lock(tmp_path, size):
                 alice, alice_errors = _login(browser, origin, "alice", size)
                 verdict = alice.locator("#policy-verdict")
                 expect(verdict).to_contain_text("열린 승인 창이 없습니다")
-                own = alice.locator("#policy-proposals li", has_text="L3").locator("ui-button", has_text="승인…")
+                own = alice.locator("#policy-proposals li", has_text="3단계 · 입회 시험").locator("ui-button", has_text="승인…")
                 expect(own).to_be_disabled()
                 expect(own).to_have_attribute("reason", "제안한 사람과 다른 관리자가 승인해야 합니다")
 
                 bob, bob_errors = _login(browser, origin, "bob", size)
-                bob.locator("#policy-proposals li", has_text="L3").locator("ui-button", has_text="승인…").click()
+                bob.locator("#policy-proposals li", has_text="3단계 · 입회 시험").locator("ui-button", has_text="승인…").click()
                 _confirm(bob)
-                expect(bob.locator("#policy-stages")).to_contain_text("L3 입회 시험")
+                expect(bob.locator("#policy-stages")).to_contain_text("3단계 · 입회 시험")
                 bob.locator("#policy-window-kind").select_option("supervised")
                 bob.locator("#policy-window-scope").fill("strawberry pick")
                 bob.locator("#policy-window-request").click()

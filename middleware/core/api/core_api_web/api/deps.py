@@ -104,6 +104,7 @@ class CoreServicesLike(Protocol):
     events: Any
     fleet_agent: Any
     fleet_loss: Any
+    host_files: Any
     identity: Any
     inventory: Any
     maps: Any

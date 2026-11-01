@@ -165,12 +165,32 @@ class PasswordSessions:
     def list_account_audit(self, value: str):
         return self._ledger.list_audit(value)
 
-    def migrated_principal(self, principal_id: str) -> bool:
-        self._refresh_authority()
-        if not self._ledger.active:
-            return False
-        with self._ledger.db() as db:
+    def _authority_site(self, db):
+        row = db.execute("SELECT site_id FROM rosy_account_authority WHERE singleton=1").fetchone()
+        return row[0] if row else self._ledger.site_id
+
+    def migrated_principal(self, principal_id: str, *, db=None) -> bool:
+        if db is None:
+            self._refresh_authority()
+            with self._ledger.db() as current:
+                return self.migrated_principal(principal_id, db=current)
+        if self._authority_site(db) is not None:
             return db.execute("SELECT 1 FROM rosy_accounts WHERE principal_id=?", (principal_id,)).fetchone() is not None
+        return False
+
+    def principal_by_id(self, principal_id: str, *, db=None):
+        if db is None:
+            with self._ledger.db() as current:
+                return self.principal_by_id(principal_id, db=current)
+        site_id = self._authority_site(db)
+        if site_id is not None:
+            row = db.execute("SELECT * FROM rosy_accounts WHERE principal_id=? AND enabled=1",
+                             (principal_id,)).fetchone()
+            return self._ledger.principal_for(row, site_id=site_id) if row else None
+        for login, account in self._logins.items():
+            if account["principal_id"] == principal_id:
+                return SitePrincipal(principal_id, account["role"], self._required[login], grants=legacy_grants(account))
+        return None
 
     def create_account(self, value: str, **fields):
         return self._ledger.create(value, **fields)

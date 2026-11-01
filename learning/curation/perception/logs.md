@@ -292,3 +292,74 @@
 - 증거: 같은 pytest 9.2 환경 1fde7a90b47fe7fb의 RED/GREEN이며, 독립 검토가 import 우선순위·모든 고유 경로와 복구 검증 조건 보존을 확인했다. 원본 로그는 native-cell-transport 작업 기록에 연결했다. 기존 일괄 감사는 29묶음 중 ROOT 1건만 비정상이었으며 공식 착지 FULL 영수증이 아니다.
 - gate 변화: 없음. 기록된 skip은 대용량 실제 실험을 실행했다는 뜻이 아니며 실물·현장·학습 승격 수용은 별도다.
 - CE: 해당 없음 — 전체 문맥과 단독 결과의 차이, 재현 조건과 경계 수정의 이유를 회귀 시험·이 기록에 남겼다.
+
+## 2026-10-28 · 5404b15e21 · 녹화·검수·변환에서 고정 HF 보관으로 인계
+
+- 변경: 미저장 native 검수의 자료 변경·재조회·이탈을 보호하고, 선택한 저장 검수는 실패·원본 버전 변경 뒤에도 명시적 복구 전까지 원본 판단으로 자동 전환하지 않는다. 변환 상태와 오류는 4단계에 표시하며 완료 데이터 ID/revision을 학습 또는 명시적 HF 보관 준비로 넘긴다. 서버는 현재 프로젝트의 등록 데이터만 검증·별도 복사하고 원본을 보존한다. 저장 동의 버튼의 상태는 홈의 일괄 busy 해제로 덮어쓰지 않는다.
+- 증거: f836d5f7e2 원격 Chromium/HTTP 16 passed, skip0, NEW0. 29046060c7의 320px 밝게·1440px 어둡게 보관/설정 회귀 9 passed, skip0. 0f76cb9a4e의 저장·필수 런타임 파일 부정 회귀 255 passed, skip0. 각 실패 재현과 최종 영향·브라우저 선택은 날짜별 검증 기록에서 분리한다.
+- gate 변화: 장치·모델·현장 gate 변화 없음. 실제 HF 쓰기·정책 학습·배포는 실행하지 않았다. 보관 바이트 검증과 LeRobot reader/형식 게시·정책 수용은 별개다. CE: 해당 없음 — 판단과 거부 조건을 코드·계약·실제 Chromium 회귀에 보존했다.
+
+## 2026-10-28 · 95b205573f · 녹화 인계의 단계·키보드 초점·오류 표시 보완
+
+- 변경: 전체 도구임을 명시하고 잘못된 단계 강조를 없애며 내부 대상의 초점·스크롤과 view 외 query를 유지한다. 변환 폴링은 같은 결과의 DOM을 보존하고 변경 때 작업/동작 초점을 복구한다. 중지 요청 대기와 거절은 새 목록에도 유지한다. 공통 조회 오류는 숨긴 학습 단계 밖에서 표시하고 회복 시 지운다. 검수 설명·한국어 필드 이름을 연결하고 명시적 보관 링크의 도착 초점은 한 번만 준다.
+- 증거: 원격 RED 7/4/1건 재현 뒤 관련 전체 회귀 16/19/17 passed, skip0, NEW0. 공식 브라우저 선택 17파일의 최초 결과는 262 passed / 1 failed였고, 기존 메뉴 이동 시험의 로딩 대기를 보강한 뒤 해당 두 파일 전체 19 passed / skip0 / NEW0. 저장 검수 캡처 2건과 오류 crop 1건도 실제 Chromium으로 재검증했다. 최종 영향 선택과 원본별 SHA는 `docs/validation/recording-handoff-ui-followup-2026-10-28/`에 분리한다.
+- gate 변화: 없음. 실제 HF 쓰기·실물 녹화/행동·reader 수용·배포·merge/push는 수행하지 않았다. 앞선 전체26 시험은 이전 소스의 기록이며 새 main 통합 이후의 수용으로 재사용하지 않는다.
+- CE: 해당 없음. 상태·거부·초점 경계와 동기화 판단이 코드·회귀·날짜별 검증 기록에 남는다.
+
+## 2026-10-28 · fce9c60216 · 정적 셸 원본과 자동 갱신의 작업 문맥 보존
+
+- 변경: 12문서의 헤더·전역 메뉴를 D-910의 정적 원본으로 모았다. 조회 오류는 회복 시 지우되 실패한 저장 오류는 유지하고 실행 갱신에서 자료 선택·초점을 보존한다.
+- 증거: 날짜별 검증 기록 `docs/validation/robot-pilot-learning-ux-2026-10-28/result.md`에 RED·고정 SHA·원격 영향/브라우저 결과·독립 소스/실제 화면 검토를 구분했다. 설치 자산·라우트 회귀 fce9c60216은20 passed, skip0이다.
+- gate 변화: 없음. 실제 장치·APK/ARM64 빌드·현장 수용은 별도다. CE: 해당 없음 — 기존 크기 이력 교훈을 적용하고 이번 경계의 판단을 코드·회귀·D-910에 남겼다.
+
+## 2026-10-28 · f7eaca4b3b · 카메라 판정과 평가 조회·요청의 상태 일관성
+
+- 변경: 입력 변경과 새 기준은 이전 판정·수치를 무효화한다. 판정 입력을 await 전에 묶고 현재 generation만 반영한다. 카메라·평가는 다시 확인과 조회/요청 오류 수명을 구분하며 최신 입력을 보존한다. 승격 자격·판정 알고리즘·라벨 owner는 바꾸지 않았다.
+- 증거: 집중42 passed, 공식 영향3994 passed/601 skipped, 브라우저 선택은 교정한7번33건과 나머지392건으로425 passed/skip0/NEW0이다. 독립 검토가 최종41PNG 전체를 확인했다. 원본 SHA와 fixture 실패는 `docs/validation/learning-state-consistency-2026-10-28/result.md`에 구분한다.
+- gate 변화: 없음. 실제 장치·모델·사람 라벨·승격 수용·배포·merge/push는 수행하지 않았다. CE: 해당 없음 — 상태 수명·입력·초점 경계가 코드와 회귀에 남는다.
+
+## 2026-10-29 · eca72bf579 · feat(learning): media 영수증에 sidecar shadow 증거 수 포함
+
+- 변경: `media_pipeline.py` 영수증(`rosy.learning.media/1`)의 각 세션 행이 sidecar의 `sidecar_rows`, `shadow_live_rows`(로봇이 녹화한 payload), `shadow_backfill_rows`(오프라인 재실행 `"backfill": true` 표시)를 센다. sidecar가 없으면 세 값 모두 null. `trainer_recordings()`와 녹화 잡의 입력은 그대로다. 배경: 녹화 시 shadow 모델이 올라가 있지 않은 세션이 대부분이라(2026-10-28 실험, 모델 PC 학습 mp4에서 shadow 증거 세션 1개) 선택 전략 재료가 있는 세션이 영수증에서 보이지 않았다.
+- 증거: `test_media_pipeline.py` 12 passed(live 1·backfill 1·null payload·빈 side를 구분하는 새 시험 2건 포함), AI PC 원격 실행 exit 0, `known_failures.py` 0 NEW.
+- gate 변화: 없음. 세기만 하고 판정하지 않는다. shadow_live_rows 0인 세션의 백필 여부·선택 전략 채택·로봇 녹화 절차 변경은 별개 결정이다.
+
+## 2026-10-29 · 03d493964c · 자료·계정·작업 공간의 공용 조작과 오류 복구
+
+- 변경: Catalog는 실제 HF 상태와 조회 실패를 표시하고 권한·목록 갱신까지 인계를 잠근다. Accounts는 선택 ID·오류·직렬 잠금·초점을 보존하며 정적/동적 버튼을 공용 부품으로 통일했다. Workspaces는 재시도·빈 상태·이전 링크 제거·조건부 초점 복구를 제공한다.
+- 증거: 초기 브라우저18파일300 passed, 최종 변경 범위9파일은 교정한49건과 나머지216건으로265 passed/skip0/NEW0이다. 영향3012 passed/439 skipped. 소스·캡처·fixture 실패와 실제 초점 실패는 `docs/validation/learning-data-recovery-2026-10-28/result.md`에 구분했다. 두 테마·세 폭의 공용 버튼 표적/넘침6건도 통과했다.
+- gate 변화: 없음. 실제 HF·사람 라벨·모델·장치·배포·merge/push 수용은 별도다. CE: 해당 없음 — 기존 클라이언트/guard 교훈을 적용하고 상태·잠금·초점 판단을 코드·회귀·검증 기록에 남겼다.
+
+## 2026-10-29 · 06c40584b3 · 저장 공간의 공용 버튼과 제목 배치
+
+- 변경: 저장 재조회·공간 추정 버튼을 공용 quiet로 이행하고 submit caller·native 유효성/Enter 배선을 유지했다. 폼 제목은 전용 행에 둔다. 기존 busy/epoch·권한·인증 취소·데이터 계산은 보존한다.
+- 증거: 최종 원격 실제 HTTP/Chromium9 passed/skip0와 공식 영향2880 passed/358 skipped, 각각 NEW0. 4폭×2테마의 ready/form/error24장과 독립 화면 검토를 `docs/validation/learning-storage-controls-2026-10-29/`에 고정했다. 최초 일반 버튼8 실패와 제목 geometry2 실패 원본도 보존했다.
+- gate 변화: 없음. 전체 UI·모델·실물·실제 HF·배포·착지/push/merge 수용과 구분한다.
+- CE: 해당 없음 — 부품/폼/임시 증거 경로의 판단은 코드·회귀·검증 기록에 남는다.
+
+## 2026-10-29 · 8e084f3e59 · 객체·픽셀의 공용 클래스 선택
+
+- 변경: class-chip을 공용 segment/type=button과 명시 value attribute로 이행하고 enable·pressed·test selector를 함께 고쳤다. 화면별 painting을 제거하며 데이터 색·클래스/index·권한·저장/승인·canvas 복귀를 유지했다.
+- 증거: runtime b3b265f7e8의 기존 두 Chromium 파일 전체220 passed/skip0, 최종 test-only8e의 강화32 passed·16PNG, 계약80 passed와 공식 영향2880 passed/384 skipped, 모두 NEW0. 중복 subset을 합산하지 않는다. 독립 source/화면 검토와 hash는 `docs/validation/learning-class-controls-2026-10-29/` 참조.
+- gate 변화: 없음. 실물·실제 라벨·전체 통합·native·배포/착지/push/merge 수용과 별도다.
+- CE: 해당 없음 — attribute·상태·데이터 경계 판단이 코드·회귀·검증 기록에 남는다.
+
+## 2026-10-29 · c38009ec42 · 작업 폭과 픽셀 승인 영역의 반응형 문맥
+
+- 변경: 작업 cap과 별도 padding을 기존 inset 토큰으로 정리했다. pixel 승인 영역은 같은 DOM으로 compact 도구 뒤/wide 원위치를 왕복하며 체크값·초점을 보존한다. 초점 대상의 scroll margin은 appbar 높이를 반영한다. h3 전용 행·클래스/라벨·승인·저장·비동기 수명은 유지한다.
+- 증거: 기존 폭/배치 RED5fail3pass 뒤425의 실제8pass/0skip·20PNG 검토. 좌표만으로 놓친 sticky header 가림은 실제 hit-test로 찾아 수정했다. 이후 도구 리본의 top12 문제를 두 테마2RED로 추가 확인했고 c380에서 공용 리본 top을 appbar/space 토큰으로 통일했다. 마지막 GREEN/캡처는 현재 대기이며 완료로 세지 않는다.
+- gate 변화: 없음. 실제 사람 정답·승인·학습/HF 쓰기·실물·배포 수용이 아니다. docs/validation/platform-ui-integration-2026-10-29/result.md 참조. CE: 해당 없음 — 기존 clipping 교훈과 회귀로 원인·해결/미완료를 구분한다.
+
+## 2026-10-29 · 66e86cb0fb · Pilot 로컬 복구와 Learning 검수 대기 연결
+
+- 변경: 네트워크 없이 기존 Pilot 원본을 검증·변환하고, 기존 PNG/video 준비기와 catalog-relative importer로 pending 입력을 만든다. 변경된 영수증·출력은 덮어쓰지 않으며 중단된 변환 파일을 보존한다. 실제 수신·로컬 처리·사람 승인을 구분한다.
+- 증거: 최종 소스의 모델 PC pinned raw/실제 FFmpeg 집중 시험 55 passed/1 opt-in skipped, 기존 녹화의 별도 검수 작업 공간 등록 시험 1 passed(19장 pending, 재실행 추가 0장). 전체 영향 선택과 RED/검토 근거는 `docs/validation/pilot-learning-collection-2026-10-29/result.md`에 기록한다.
+- gate 변화: 없음. 운영 검수 DB·사람 정답·학습·모델 활성화·실물 동작은 변경하지 않았다. 새 로봇 녹화·실제 서비스 설치·착지/push는 별도다.
+- CE: 해당 없음 — 복구·무결성·중복 방지 판단은 코드·회귀·운영 문서에 남는다. 로봇 접속 실패는 해결된 사실로 기록하지 않는다.
+- 후속 검증: d2d68c3346의 공식 affected 전체 13,602 passed/1,285 skipped/NEW 0, 실제 기존 녹화와 pinned raw 집중 88 passed/skip0/NEW 0. 생산 코드는 66e86cb0fb와 같으며, 중간 전체 회귀의 OMX 합성 시계 실패 두 건은 기존 시계 fixture를 공유해 보완했다. 원본 실패·대조·취소·skip은 검증 정본에 보존했다.
+
+## 2026-11-01 · uncommitted · curation/perception: content_sha stand-in을 정본 소비로 대체
+
+- 변경: `build.py`의 로컬 `content_sha` stand-in 제거(D-373 정본 착지 후에도 남아 있던 사본)하고 `learning/registry/perception/store.py` 정본을 import로 소비(D-940 ①갈래). `manifest_bytes` 옵션은 정본으로 이식했다.
+- 증거: test/learning/perception 원격 실행·mutation은 착지 기록에 남긴다(2026-11-01).
+- gate 변화: 없음

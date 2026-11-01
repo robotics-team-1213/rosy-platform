@@ -60,7 +60,7 @@ import remote_job  # noqa: E402
 import remote_test_tools  # noqa: E402
 from host_probe import DISK_FLOOR_GB, PROBE, disk_full, parse_probe  # noqa: E402,F401
 import xdist_plan  # noqa: E402
-from work_queue import ALONE_ENV, BROWSER_ENV, Gate, Work, cancelled, cost, guard, wanted, workers  # noqa: E402,F401
+from work_queue import ALONE_ENV, BROWSER_ENV, Gate, Work, cancelled, cost, guard, history, wanted, workers  # noqa: E402,F401
 
 CANCELLED = remote_job.CANCELLED
 
@@ -152,7 +152,7 @@ VENV = remote_test_tools.VENV
 RESERVE = r"""mkdir -p ~/rosy-jobs; echo "$(( $(date +%s) + $4 )) $1 $2 $3" > ~/rosy-jobs/pick-$(date +%s%N).resv"""
 
 CLEANUP = r"""R=~/rosy-test
-rm -f ~/rosy-jobs/"$1".lock ~/rosy-jobs/"$1".resv
+rm -f ~/rosy-jobs/"$1".lock ~/rosy-jobs/"$1".*.lock ~/rosy-jobs/"$1".resv
 # Release/rollback tests leave read-only dirs (product behaviour); without u+w rm -rf leaves them behind.
 chmod -R u+rwX -- "$R/runs/$1" "$R/runs/$1.jobs" 2>/dev/null || true
 git -C "$R/repo" worktree remove --force "$R/runs/$1" 2>/dev/null || rm -rf "$R/runs/$1"
@@ -214,7 +214,8 @@ def place(cls: str, hosts: list[str], probes: list[dict | None], cores: int = 0)
         site = host in SITES or p.get("site", False)
         cores = p["nproc"] - max(p["load1"], p["lock_cores"]) - (SITE_RESERVE[0] if site else 0)
         mem = min(p["avail_gb"], p["total_gb"] - p["lock_gb"]) - (SITE_RESERVE[1] if site else 0)
-        why = ("marked busy (~/rosy-jobs/busy)" if p["busy"] else f"no {cls} capability" if not p[cls]
+        why = ("marked busy (~/rosy-jobs/busy)" if p["busy"] else "alone job running or waiting"
+               if cls == "pytest" and p.get("pytest_blocked") else f"no {cls} capability" if not p[cls]
                else f"below disk floor {DISK_FLOOR_GB} GB" if disk_full(p)
                else f"below {cls} floor {need_c} cores/{floor_m} GB" if cores < need_c or mem < floor_m
                else f"light (under {need_m} GB): serial, smallest invocations" if mem < need_m else "ok")
@@ -286,10 +287,11 @@ def placed_hosts(cls: str = "pytest", hosts: list[str] | None = None, cores: int
     if not chosen and cls == "pytest" and cores <= NEEDS[cls][0]:  # a job's own core need waits instead
         # D-568 7: busy hosts must not stop the gate; the site PC and a full disk never take this fallback.
         chosen = [h for h, p in zip(hosts, probes)
-                  if p and p["pytest"] and not p["busy"] and not disk_full(p) and h not in SITES]
+                  if p and p["pytest"] and (not p.get("pytest_blocked") or os.environ.get(xdist_plan.TURN_ENV) == "1")
+                  and not p["busy"]
+                  and not disk_full(p) and h not in SITES]
         if chosen:
-            print("[remote-pytest] WARNING: no host above the pytest floor; using the reachable ones anyway",
-                  file=sys.stderr, flush=True)
+            print("[remote-pytest] WARNING: no host above the pytest floor; using the reachable ones", file=sys.stderr, flush=True)
     print(f"[remote-pytest] {cls} -> {' '.join(chosen) or 'no host'}", file=sys.stderr, flush=True)
     return chosen
 
@@ -390,14 +392,14 @@ def run(invocations: list[list[str]], logs: list[Path], sha: str = "HEAD", repo:
         print(f"[remote-pytest] no test host reachable; retrying in {poll:.0f} s (D-584)", file=sys.stderr, flush=True)
         sleep(poll)
         hosts = placed_hosts("pytest", cores=cores)
-    plan = workers(hosts[:len(invocations)], invocations, HEADROOM)  # (host, kind): browser lanes beside main
+    plan = workers(hosts, invocations, HEADROOM, os.environ.get("ROSY_TEST_HOSTS", DEFAULT_HOSTS).split())
     if len(plan) == 1:
         codes = run_on(plan[0][0], invocations, logs, sha, repo, label,
                        **({"test_tools": test_tools} if test_tools else {}), **({"on_done": on_done} if on_done else {}),
                        **({"stop": stop} if stop is not None else {}))
         return cancelled(invocations, codes) if on_done or stop is not None else codes
     # D-553 4: every host ships and builds its venv once, then takes the next invocation when free.
-    work = Work(sorted(range(len(invocations)), key=lambda i: -cost(repo, invocations[i])), on_done, stop=stop)
+    work = Work(sorted(range(len(invocations)), key=lambda i, s=history(repo): -cost(repo, invocations[i], s)), on_done, stop=stop)
     gates = {host: Gate() for host, _ in plan}
 
     def attempt(slot):
@@ -464,7 +466,7 @@ def run_on(host: str, invocations: list[list[str]], logs: list[Path], sha: str, 
         cpu = SITE_CPU_QUOTA if host in SITES else ""
         k = 0  # job number on this host's run dir
         pick = wanted(kind, invocations)
-        take = work.take_small if HEADROOM.get(host, {}).get("light") else lambda: work.take(pick)
+        take = (lambda: work.take_small(pick)) if HEADROOM.get(host, {}).get("light") else lambda: work.take(pick)
         while not (lost and shared) and (i := take()) is not None:
             inv, log, queued = invocations[i], logs[i], round(time.monotonic() - work.began)
             print(f"[remote-pytest] pytest {' '.join(inv)}  -> {log}", flush=True)

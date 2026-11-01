@@ -188,11 +188,11 @@ def test_restart_freeze_requires_exact_owner_case_closure(tmp_path):
     loop, _board, robot = _setup(log=journal)
     loop._resolver.autonomous_robots = frozenset({"rosy_01"})
     assert loop._resolver._uncertain == {("rosy_01", "stuck-abc")}
-    events = [SimpleNamespace(type="nav.line_stuck_closed", data={"stuck_id": "another-case"})]
-    loop.events_since = lambda *_: events
+    closed = SimpleNamespace(type="nav.line_stuck_closed", data={"stuck_id": "another-case"})
+    loop.stuck_event = lambda _rid, _type, sid: closed if closed.data["stuck_id"] == sid else None
     asyncio.run(loop.run_once())
     assert robot.calls == [] and journal.uncertain_motion()
-    events[0].data["stuck_id"] = "stuck-abc"
+    closed.data["stuck_id"] = "stuck-abc"
     original = loop._snapshot
 
     async def closed_snapshot():

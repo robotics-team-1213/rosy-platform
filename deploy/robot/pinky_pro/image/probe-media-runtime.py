@@ -10,11 +10,20 @@ import subprocess
 
 
 PLUGINS = ('webrtcbin', 'x264enc', 'nicesrc', 'rtph264pay', 'appsrc',
-           'videoconvert', 'h264parse', 'appsink', 'avdec_h264')
+           'videoconvert', 'h264parse', 'appsink', 'avdec_h264',
+           'dtlssrtpenc', 'dtlssrtpdec', 'srtpenc', 'srtpdec')
 
 
 def probe():
     machine = platform.machine()
+    core_version = ()
+    try:
+        import gi
+        gi.require_version('Gst', '1.0')
+        from gi.repository import Gst
+        core_version = tuple(Gst.version())
+    except (ImportError, ValueError):
+        pass
     inspect = shutil.which('gst-inspect-1.0')
     missing, versions = [], {}
     for plugin in PLUGINS:
@@ -33,8 +42,8 @@ def probe():
     checks = {
         'native_arm64': {'ok': platform.system() == 'Linux' and machine == 'aarch64'},
         'plugins': {'ok': not missing, 'missing': missing, 'versions': versions},
-        'gstreamer_series': {'ok': bool(versions) and all(
-            value.startswith('1.24.') for value in versions.values())},
+        'gstreamer_series': {'ok': core_version[:2] == (1, 24),
+                             'version': '.'.join(map(str, core_version[:3]))},
         'end_to_end': {'ok': False, 'reason': 'not run; WHIP/WHEP render evidence required'},
     }
     return {

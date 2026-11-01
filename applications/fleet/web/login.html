@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="/common/tokens.css">
   <script src="/common/theme.js"></script>
   <link rel="stylesheet" href="/common/components.css">
+  <link rel="stylesheet" href="/console/assets/fleet-document.css">
   <link rel="stylesheet" href="/console/assets/password-login.css">
   <script type="module" src="/common/ui.js"></script>
   <script type="module" src="/console/assets/login-page.js"></script>
@@ -15,8 +16,10 @@
 <body>
   <a class="skip-link" href="#login-main">로그인 입력으로 이동</a>
   <ui-shell grammar="procedure">
-    <ui-topbar><ui-brand href="/console"><b>Rosy Fleet</b><small>관제 로그인</small></ui-brand><span data-spacer></span><ui-button kind="quiet" data-theme-cycle="" data-icon-only="" type="button" aria-label="테마 변경" data-action-icon="theme-dark"></ui-button></ui-topbar>
-    <main id="login-main" class="fleet-login-main" tabindex="-1">
+    <!-- fleet:document-header:start -->
+<ui-topbar><ui-brand href="/console"><b>Rosy Fleet</b><small>관제 로그인</small></ui-brand><span data-spacer></span><ui-button kind="quiet" data-theme-cycle="" data-icon-only="" type="button" aria-label="테마 변경" data-action-icon="theme-dark"></ui-button></ui-topbar>
+<!-- fleet:document-header:end -->
+    <main id="login-main" class="fleet-login-main fleet-document" tabindex="-1">
       <ui-section aria-labelledby="login-title">
       <h1 id="login-title" class="ui-page-heading">관제 로그인</h1>
       <p>이 현장의 계정으로 로그인하세요.</p>

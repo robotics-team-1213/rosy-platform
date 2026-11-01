@@ -10,6 +10,7 @@
 | ID | 제목 |
 |---|---|
 | D-876 | ROSY Monitoring — 사이트 독립 감시와 통합 집계 |
+| D-936 | ROSY Monitoring은 관제 PC에서 서명 사이트 스택의 선택 서비스로 실행한다 (D-876 배치 보충). [전문](../adr/D-936-monitoring-site-stack-service.md) |
 
 ## 계획·결과 문서
 
@@ -25,8 +26,8 @@
 
 ## 최근 기록
 
-- 2026-10-26 · uncommitted · 독립 앱 경계와 실제 backend 브라우저 경로 등록
-- 2026-10-26 · bc730ac631 · 후속 원천 시험의 초기화 훅 호환성
-- 2026-10-26 · uncommitted · 독립 실행기와 프로세스 경계
-- 2026-10-26 · 8f2cd35b06 · pytest 초기화 훅 이름 충돌 수정
-- 2026-10-26 · uncommitted · 기존 원천 수집과 독립 읽기 API
+- 2026-11-01 · ea45e0c79f · 관제 PC Monitoring 입력 staging (D-936)
+- 2026-10-30 · 324eb4010f · PC별 업데이트 상태 (D-871)
+- 2026-10-30 · 6302fcb63c · 관제 PC 사이트 스택 선택 서비스 (D-936)
+- 2026-10-26 · 50ea4a90f2 · native 시험의 설치 scheme 적용
+- 2026-10-26 · c22e9bc8b3 · 격리 native HTTPS 경로 수용

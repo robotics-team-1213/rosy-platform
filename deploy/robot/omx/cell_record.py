@@ -49,6 +49,14 @@ def record_cycle(cell, config: dict, calibration: dict, work: Path, source: str 
     """One recorded A/B cycle. No chunk session may be running: record_session takes the arm."""
     from cell_pipeline import target
     from grasp_planner import Planner
+    from cell_robot_profile import load
+
+    try:
+        rec = config["record"]
+        record_config = json.loads(Path(rec["config"]).expanduser().read_text())
+        load(config["operating_profile_path"], robot_config=record_config["robot"])
+    except (OSError, ValueError, KeyError, TypeError):
+        return {"result": "held: recorder profile mismatch"}
 
     found = locate(cell, config, calibration, source)
     if not found["found"]:
@@ -60,14 +68,13 @@ def record_cycle(cell, config: dict, calibration: dict, work: Path, source: str 
     place = target(config, dest, config["sites"][dest]["place"], place=True)
     trajectory = Planner(dict(config["plan"], pick=pick, place=place)).cycle_trajectory()
     (folder / "cycle.json").write_text(json.dumps(trajectory))
-    rec = config["record"]
-    record_config = json.loads(Path(rec["config"]).expanduser().read_text())
     root = Path(record_config["dataset"]["root"])
     record_config["dataset"]["root"] = str(root.with_name(f"{root.name}-{stamp}"))  # LeRobot wants a new root
     (folder / "record-config.json").write_text(json.dumps(record_config, indent=2))
     tool = rec.get("session_tool", str(Path(__file__).resolve().with_name("record_session.py")))
     command = [rec.get("python", sys.executable), tool, "--config", str(folder / "record-config.json"),
-               "--caps", str(Path(rec["caps"]).expanduser()), "--replay", str(folder / "cycle.json")]
+               "--caps", str(Path(rec["caps"]).expanduser()), "--replay", str(folder / "cycle.json"),
+               "--operating-profile", str(Path(config["operating_profile_path"]).expanduser().resolve())]
     finished = run(command, cwd=folder)
     session_path = folder / "session.json"
     if not session_path.exists():

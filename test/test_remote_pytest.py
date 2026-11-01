@@ -347,6 +347,12 @@ def test_matching_venv_does_not_wait_for_active_pytest(tmp_path):
         holder.wait(timeout=2)
 
 
+def test_the_venv_build_keeps_pips_cache_and_logs_its_wall_time():
+    """2026-10-31: ~13-14 rebuilds a host a day re-downloaded every wheel under --no-cache-dir."""
+    assert "--no-cache-dir" not in rp.VENV and "--require-hashes" in rp.VENV
+    assert '[remote-pytest] venv built $DEPS in $((SECONDS - B))s' in rp.VENV
+
+
 def test_pytest_uses_the_same_dependency_environment_as_setup():
     assert 'V=$R/venvs/$DEPS' in rp.VENV
     assert 'V=$R/venvs/$DEPS' in rj.START and 'V=$R/venvs/$2' in rj.JOB
@@ -477,6 +483,7 @@ def test_timeout_is_a_failed_step(monkeypatch):
 def _fake_hosts(monkeypatch, tmp_path, hosts, job, venv_fails=()):
     """run() over fake hosts: setup succeeds (venv fails on venv_fails), job(host, inv) is one pytest."""
     seen = []
+    monkeypatch.setattr(wq, "MAX_MAIN", 1)  # one main worker per host; several: test_host_admission.py
     monkeypatch.delenv("ROSY_TEST_LOCAL", raising=False)
     monkeypatch.setattr(rp, "git", lambda repo, *args: str(tmp_path) if "--show-toplevel" in args else "ab" * 20)
     monkeypatch.setattr(rp, "probe", lambda h: None if h.startswith("down") else host())
@@ -531,13 +538,21 @@ def test_a_slow_host_does_not_hold_back_queued_invocations(monkeypatch, tmp_path
     assert [h for h, _ in seen].count("slow@2") == 1 and sorted(p for _, p in seen) == list("01234")
 
 
+def test_a_full_hosts_default_lanes_take_four_of_a_full_rounds_browser_chunks():
+    """2026-10-31: the per-host cap counts every run's browser jobs; 2 left 4 slots for all preparing landings."""
+    room = {"cores": 18, "mem": 18, "site": False, "light": False}
+    b = [rp.BROWSER_ENV, "t/a_browser.py"]
+    assert wq.workers(["a"], [["t"], *[b] * 12], {"a": dict(room)}).count(("a", "lane")) == 4
+    assert wq.workers(["a"], [["t"], *[b] * 12], {"a": {**room, "browser_jobs": 3}}).count(("a", "lane")) == 1
+
+
 def test_full_lab_hosts_get_browser_lanes_and_light_site_or_sim_holding_hosts_do_not(monkeypatch):
     monkeypatch.setattr(wq, "BROWSER_PER_HOST", 2)
     room = {"cores": 14, "mem": 15, "site": False, "light": False}
     headroom = {"a": room, "light": {**room, "light": True}, "site": {**room, "site": True},
                 "gz": {**room, "sim_held": 1}}
     b, alone = [rp.BROWSER_ENV, "t/a_browser.py"], [rp.BROWSER_ENV, rp.ALONE_ENV, "t/b_browser.py"]
-    assert rp.workers(["a", "light", "site", "gz", "unmeasured"], [["t"], b, b, b], headroom) == [
+    assert rp.workers(["a", "light", "site", "gz", "unmeasured"], [["t"], b, b, b, b], headroom) == [
         ("a", "main"), ("a", "lane"), ("a", "lane"), ("light", "any"), ("site", "any"), ("gz", "any"),
         ("unmeasured", "any")]
     assert rp.workers(["a"], [b], headroom) == [("a", "lane")]  # no main run without its own work
@@ -546,6 +561,23 @@ def test_full_lab_hosts_get_browser_lanes_and_light_site_or_sim_holding_hosts_do
     assert rp.workers(["a"], [["t"], alone], headroom) == [("a", "any")]  # an alone chunk is no lane job
     monkeypatch.setattr(wq, "BROWSER_PER_HOST", 0)
     assert rp.workers(["a"], [["t"], b], headroom) == [("a", "any")]
+
+
+def test_host_alone_suites_go_to_the_first_configured_host_and_fall_back_without_it(monkeypatch):
+    """A host-alone suite drains the host it runs on: only the model PC (first configured) takes it (2026-10-30)."""
+    monkeypatch.setattr(wq, "HOST_ALONE", ("integrations/simulation/gazebo/test",))  # none is listed since 10-31
+    gz, order = ["integrations/simulation/gazebo/test"], ["model", "ai", "site"]
+    assert rp.workers(["ai", "model"], [gz], {}, order) == [("model", "any")]
+    plan = rp.workers(["ai", "model"], [["t"], gz], {}, order)
+    assert plan == [("model", "any"), ("ai", "any" + wq.SKIP_ALONE)]
+    assert wq.wanted("any" + wq.SKIP_ALONE, [["t"], gz])(1) is False
+    assert wq.wanted("any" + wq.SKIP_ALONE, [["t"], gz])(0) is True
+    assert rp.workers(["ai"], [gz], {}, order) == [("ai", "any")]  # model PC not placed: as before
+    assert rp.workers(["ai", "model"], [gz], {"model": {"sim_held": 1}}, order) == [("ai", "any")]  # sim on it
+    assert rp.workers(["site", "ai"], [gz], {"site": {"site": True}}, ["site", "ai"]) == [("ai", "any")]
+    assert wq.guard(None, "main" + wq.SKIP_ALONE, gz) is not None
+    work = wq.Work([0, 1, 2])  # largest first: 2 is the smallest, a light host's pick unless it is host-alone
+    assert work.take_small(lambda i: i != 2) == 1 and work.take_small() == 2
 
 
 def test_browser_lanes_run_beside_main_capped_per_host_and_an_alone_chunk_runs_without_them(monkeypatch, tmp_path):
@@ -676,8 +708,10 @@ def test_largest_test_files_are_queued_first(tmp_path):
     (tmp_path / "d").mkdir()
     (tmp_path / "d" / "a.py").write_text("x" * 30)
     (tmp_path / "d" / "b.py").write_text("x" * 30)
-    assert rp.cost(tmp_path, [rp.BROWSER_ENV, "big.py::test_t", "-q"]) == 100
-    assert rp.cost(tmp_path, ["d"]) == 60 and rp.cost(tmp_path, ["missing.py"]) == 0
+    b = wq.BYTES_PER_S
+    assert rp.cost(tmp_path, [rp.BROWSER_ENV, "big.py::test_t", "-q"], {}) == 100 / b
+    assert rp.cost(tmp_path, ["d"], {}) == 60 / b and rp.cost(tmp_path, ["missing.py"], {}) == 0
+    assert rp.cost(tmp_path, ["d"], {("d",): 300.0}) == 300.0, "measured history wins over file size"
 
 
 class FakeJobHost:
@@ -702,6 +736,16 @@ class FakeJobHost:
         return subprocess.CompletedProcess([], 0, b"Welcome\nROSYJOB " + rc + b" 1\n" + self.log[int(args[2]):], b"")
 
 
+def test_a_jobs_deadline_starts_over_once_it_gets_host_room(tmp_path):
+    """2026-10-30: a Gazebo suite waited 100 min for the host and was killed (124) before its first test."""
+    wait = [rj.WAIT + b" (6 job(s), 18c 22GB in use)\n"] + [b""] * 20  # 210 s: past a 60 s job's 180 s deadline
+    for room, code in ((rj.ROOM[:9], rj.ROOM[9:] + b"\n1 passed\n"), (b"", b"")):
+        fake = FakeJobHost(wait + [room, code] + [b""] * 10 + [b"done\n"], 0)
+        now, sleep, clock = _clock()
+        got = rj.run("h", "r", 0, tmp_path / "1.txt", ["r", "d", ""], [], 60, [], call=fake, sleep=sleep, clock=clock)
+        assert got == (0 if room else 124)  # the marker counts split across polls; never admitted: the wait cap
+
+
 def _clock():
     now = [0.0]
     return now, (lambda s: now.__setitem__(0, now[0] + s)), (lambda: now[0])
@@ -714,8 +758,20 @@ def test_polls_that_fail_then_recover_give_the_real_code_and_the_whole_log(tmp_p
     log = tmp_path / "run-1.txt"
     assert rj.run("h", "r", 0, log, ["r", "d", ""], ["test/x.py"], 60, [], call=fake, sleep=sleep, clock=clock) == 1
     # Byte-identical: a stuck offset would duplicate a chunk, an early advance would drop one.
-    assert log.read_bytes() == fake.log == b"".join(chunks)
+    body, timing = log.read_bytes().split(b"\n" + rj.TIMING.encode())
+    assert body == fake.log == b"".join(chunks)
     assert fake.scripts[0] == rj.START and fake.polls == 6
+    assert timing.startswith(b" host=h start=") and b" wait_s=0 run_s=" in timing  # land_checks.timing's line
+
+
+def test_the_timing_line_splits_host_room_wait_from_run_time(tmp_path):
+    chunks = [rj.WAIT + b" (2 job(s))\n", b"", b"", rj.ROOM + b"\n", b"", b"1 passed\n"]
+    fake = FakeJobHost(chunks, 0)
+    now, sleep, clock = _clock()
+    log = tmp_path / "run-1.txt"
+    assert rj.run("rosy@10.0.0.9", "r", 0, log, ["r", "d", ""], [], 60, [], call=fake, sleep=sleep, clock=clock) == 0
+    line = log.read_text().splitlines()[-1]
+    assert " host=rosy " in line and "10.0.0.9" not in line and " wait_s=30 run_s=20" in line, line
 
 
 def test_polls_failing_past_the_budget_raise_lost_and_run_on_leaves_the_job(tmp_path, monkeypatch, capsys):
@@ -746,7 +802,7 @@ def test_exit_code_counts_only_when_complete_and_chatter_is_ignored():
     assert 'mv -f "$D/$K.rc.tmp" "$D/$K.rc"' in rj.JOB
     assert '[ -f "$D/$2.rc" ]' in rj.POLL and rj.POLL.index(".rc") < rj.POLL.index("tail")
     assert 'rm -f "$L"' in rj.JOB.split("trap '", 1)[1].split("' EXIT", 1)[0]
-    assert 'echo "$$ pytest 2 6" > "$L"' in rj.JOB  # the lock pid is the detached job's own
+    assert 'echo $$ > "$D/$K.pid"' in rj.JOB and 'L=~/rosy-jobs/$1.$4.lock' in rj.JOB  # one lock per job
     assert 'X=browser' in rj.JOB and 'echo "$$ $X $RC $G" > "$L"' in rj.JOB  # PROBE counts browser jobs per host
 
 
@@ -782,6 +838,12 @@ def test_a_dropped_link_reruns_only_steps_given_tries(monkeypatch):
     assert rp.remote("h", rp.CLEANUP, "run1", timeout=1).returncode == 255 and len(calls) == 1
     src = inspect.getsource(rp.run_on)
     assert 'STEP_TIMEOUT["venv"], tries=3' in src, "venv setup reruns (its recipe locks and rebuilds from scratch)"
+
+
+@pytest.fixture(autouse=True)
+def _one_main_worker(monkeypatch):
+    """These tests pin one main worker per host; several workers and host admission: test_host_admission.py."""
+    monkeypatch.setattr(wq, "MAX_MAIN", 1)
 
 
 def _job_env(tmp_path, python_body):
@@ -840,7 +902,7 @@ def test_detached_job_holds_its_own_lock_and_writes_the_code_atomically(tmp_path
                                    'sleep 2; echo "args $* mode $(stat -c %a "$4")"; exit 3\n')
     start = _sh(rj.START, env, "r", "d", "", "0", "60", rj.JOB, "test/x.py", "-q")
     assert start.returncode == 0, start.stderr
-    lock, jobs = home / "rosy-jobs" / "r.lock", home / "rosy-test" / "runs" / "r.jobs"
+    lock, jobs = home / "rosy-jobs" / "r.0.lock", home / "rosy-test" / "runs" / "r.jobs"
     pid = _wait_for_lock(lock)
     assert lock.read_text().split()[1:] == ["pytest", "2", "6"]
     assert os.getpgid(pid) == pid  # KILL's process-group target
@@ -908,9 +970,9 @@ def test_kill_stops_the_detached_job_and_its_trap_still_runs(tmp_path):
     move.chmod(0o755)
     try:
         assert _sh(rj.START, env, "r", "d", "", "0", "60", rj.JOB).returncode == 0
-        lock = home / "rosy-jobs" / "r.lock"
+        lock = home / "rosy-jobs" / "r.0.lock"
         _wait_for_lock(lock)
-        _sh(rj.KILL, env, "r")
+        _sh(rj.KILL, env, "r", "0")
         assert _poll_until_done(env) == 143 and not lock.exists()
     finally:
         (home / "release").touch()
@@ -980,7 +1042,7 @@ def test_killed_job_shows_no_live_pid_and_no_code_and_start_does_not_rerun_a_fin
         pytest.skip("Linux setsid/timeout/ionice are required")
     home, env = _job_env(tmp_path, "sleep 30\n")
     assert _sh(rj.START, env, "r", "d", "", "0", "60", rj.JOB).returncode == 0
-    pid = _wait_for_lock(home / "rosy-jobs" / "r.lock")
+    pid = _wait_for_lock(home / "rosy-jobs" / "r.0.lock")
     assert rj.parse_poll(_sh(rj.POLL, env, "r", "0", "0").stdout)[:2] == (None, True)
     os.killpg(pid, 9)  # host reboot / OOM kill: no trap, no exit code
     for _ in range(50):
@@ -1250,7 +1312,7 @@ def test_plan_gives_xdist_words_and_args_only_to_safe_invocations_on_full_hosts(
     full = {"cores": 14.0, "mem": 10.0, "site": False, "light": False}
     words, extra, note = xp.plan(GROUP, full, [])
     assert (words, extra, note) == (["ROSY_JOB_CORES=6"], ["-n", "6", "--dist", "loadfile"], "xdist: 6 workers")
-    assert xp.plan(["test"], full, ["test"])[:2] == ([], [])
+    assert xp.plan(["test"], full, ["test"])[:2] == ([], [])  # serial (no -n), not alone on the host
     assert xp.plan(GROUP, None, [])[:2] == ([], [])  # D-568 7 fallback host: unmeasured, serial
     assert xp.plan(GROUP, {**full, "light": True, "mem": 4.7}, [])[:2] == (["ROSY_JOB_MEM_GB=4"], [])
 
@@ -1298,7 +1360,7 @@ def test_venv_installs_pinned_xdist_so_its_hash_rebuilds_the_venv():
 def test_job_records_its_xdist_budget_in_the_lock_and_caps_memory(tmp_path, words, lock, mem):
     if not shutil.which("setsid") or sys.platform == "win32":
         pytest.skip("Linux setsid/timeout/ionice are required")
-    home, env = _job_env(tmp_path, 'cat "$HOME/rosy-jobs/r.lock"\n')
+    home, env = _job_env(tmp_path, 'cat "$HOME/rosy-jobs/r.0.lock"\n')
     (tmp_path / "bin" / "systemd-run").write_text(
         '#!/bin/bash\necho "$*" > "$HOME/scope"\nwhile [ "$1" != -- ]; do shift; done; shift; exec "$@"\n')
     start = _sh(rj.START, env, "r", "d", "", "0", "60", rj.JOB, *words, "x.py")

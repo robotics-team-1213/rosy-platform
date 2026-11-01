@@ -268,3 +268,22 @@
 - 증거: 로컬 GIF 측정에서 운용 실루엣 최악은 fun/bored 49/768(6.38%)이고, 20프레임 잉크는 y 16 이상 224 미만이다. 원격 pytest와 1.5 m LCD는 아직이다.
 - gate 변화: 없음. SOURCE 후보이다. DEVICE 거리 판독은 하지 않았다.
 - 결정: D-719
+
+## 2026-10-29 · 28dc087ea6 · 복구 AP의 암호 없는 표시와 접속 QR
+
+- 변경: 명시적 open AP는 ASCII LCD에 No password로 표시하고 비밀번호 없는 접속 QR을 그린다. 남아 있는 옛 키를 표시하거나 QR에 넣지 않는다. WPA2와 security 필드가 없는 기존 payload는 기존 키 안내를 유지한다.
+- 증거: commit 38f4baf395의 원격 RED 6 failed/2 passed, commit 28dc087ea6의 부팅·LCD·QR 집중 회귀 350 passed/1 skipped 및 NEW0. 새 모듈 소유 시험은 escape·stale key·누락/잘못된 security·native 표시 전달을 검증한다. info_screen.py는 frozen 676줄을 유지했다.
+- gate 변화: 없음. 호스트 렌더·프로토콜 검증이며 실물 LCD 판독·휴대폰 접속·AP 무선 수용은 하지 않았다.
+- CE: 해당 없음 — 표시와 QR 계약을 직접 검증하는 회귀가 예방 근거다.
+
+## 2026-10-29 · 75d706130a · LCD 기본 그리기 부품 분리
+
+- 변경: font/fitting·측정값·QR·패널 packing을 lcd_primitives에 모으고 기존 이름을 re-export했다. info_screen은676→560줄이며 팔레트 정본·등록 경로를 유지했다.
+- 증거: 함수/클래스 AST24개·기존7PNG bytes 동일. 전체193 pass/6 skip, 격리 build_py cold import와 캡처3 pass, 영향1307 pass/1 skip·NEW0. 정본: `docs/validation/lcd-primitives-2026-10-29/result.md`.
+- gate 변화: 없음. 기존 overlay clipping은 별도 수정 단위이며 이 분리로 해결했다고 보지 않는다. CE: 해당 없음 — 소스·시험·픽셀 불변 기록에서 판단을 복원한다.
+
+## 2026-10-29 · 928ff48d14 · 상태바 아래 카드의 크기와 행 배치
+
+- 변경: 명시 size를 profile보다 우선하고208px 내부의 정보 행·주소·주행/목표/배터리를 분리했다. 기본 그리기 부품 분리는 지원 ref를 통합했다. 팔레트·기존 기본 크기·producer·명령/승인 규칙을 유지한다.
+- 증거: clipping4 RED 후 최종LCD208 pass/4 skip·5subtests, native exporter 별도1 pass. 영향1318 pass/2 skip, 지원문서 merge 뒤1353 pass/2 skip·NEW0. build_py밖 실제native 분기·RGB565 검사, 최종34장 독립 검토 범위 P1/P2없음. 정본: `docs/validation/lcd-card-layout-2026-10-29/result.md`.
+- gate 변화: 없음. ROS 린터·root AP handoff·실물 LCD·거리 판독·QR 현장 스캔·FIELD 수용과 구분한다. CE: 해당 없음 — 기존 설치 교훈 적용과 size/부분영역 회귀에서 판단을 복원한다.

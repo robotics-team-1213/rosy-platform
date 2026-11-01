@@ -85,8 +85,8 @@ def _row(client) -> dict:
 def test_the_state_row_carries_the_open_stuck_with_clearances_from_the_opened_event(tmp_path):
     robot = FakeRobot("rosy_01", state=_state())
     console = _console(robot)
-    console.hub.registry.record("rosy_01").events.extend(
-        [_opened_event("stuck-old", 2), _opened_event()])
+    console.hub.registry.record("rosy_01").note_event(_opened_event("stuck-old", 2))
+    console.hub.registry.record("rosy_01").note_event(_opened_event())
     client, _ = _named_app(console, tmp_path)
 
     stuck = _row(client)["line_stuck"]
@@ -539,7 +539,7 @@ def test_the_shared_gather_flushes_episode_writes_in_a_worker_thread(tmp_path, m
     class Console:
         class hub:
             class registry:
-                events_since = staticmethod(lambda _rid, _seq: ())
+                stuck_event = staticmethod(lambda _rid, _type, _sid: None)
 
         async def snapshot(self):
             return {"robots": [_online()]}

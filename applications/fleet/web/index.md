@@ -21,7 +21,7 @@
 
 ## 교훈 (docs/solutions)
 
-- 없음
+- [A page overflow check can pass while a card clips a child identifier](../../../docs/solutions/logic-errors/page-overflow-guards-miss-clipped-child-identifiers-2026-10-27.md)
 
 ## 시험
 
@@ -31,8 +31,8 @@
 
 ## 최근 기록
 
-- 2026-10-27 · uncommitted · D-865 P3 승인 범위 readback과 자동 승인 배지
-- 2026-10-27 · uncommitted · feat: 로봇 정보 확인 후 조치하는 상세 프로필
-- 2026-10-27 · uncommitted · 모바일 관제와 작업 화면 위계 개선
-- 2026-10-26 · 62173b9899 · 앱 바 높이 덧쓰기 정리
-- 2026-10-25 · uncommitted · 통합 재시운전 확인 입력의 공유 UI 적용
+- 2026-11-01 · uncommitted · 지도 장소 라벨은 장소 ID, 구역 칩에 구역 이름
+- 2026-10-31 · uncommitted · 학습 정책 승인이 탭의 토큰을 읽는다
+- 2026-10-30 · uncommitted · D-926 C7·2·4: 파일 고르기 한 모양, 학습 정책 승인을 작업 셸로
+- 2026-10-30 · uncommitted · D-926 3: Cell 적재 단계를 화면 이동으로
+- 2026-10-30 · 8910b32ff3 · D-926 3: 지도 하위 탐색을 화면 이동으로

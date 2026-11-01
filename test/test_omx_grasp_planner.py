@@ -93,3 +93,105 @@ def test_an_unreachable_target_is_refused_before_any_chunk_exists():
     plan = dict(PLAN, pick=dict(PLAN["pick"], x=0.30, y=0.20))
     with pytest.raises(SystemExit, match="IK"):
         m.Planner(plan).library()
+
+
+def test_the_release_lifts_by_its_own_height_while_the_pick_keeps_a_low_lift():
+    planner = m.Planner(dict(PLAN, lift_m=0.03, release_lift_m=0.07))
+    lib = planner.library()
+    rise = lambda name: fk(planner, lib["chunks"][name][-1]).z - fk(planner, lib["chunks"][name][0]).z  # noqa: E731
+    assert rise("lift_pick") == pytest.approx(0.03, abs=0.002)
+    assert rise("lift_place") == pytest.approx(0.07, abs=0.002)  # 3 cm let the park's closing jaws retake the box
+
+
+def test_a_far_target_keeps_its_grasp_and_travel_ends_where_the_arm_still_has_margin():
+    """2026-10-26: a container 0.24 m out was graspable top-down; only the 7 cm lift point above it was not."""
+    far = dict(PLAN["pick"], x=0.078, y=0.229, z=0.050)
+    planner = m.Planner(dict(PLAN, pick=far))
+    library = planner.library()
+    reach = library["source"]["reach"]["pick"]
+    assert m.MIN_STANDOFF_M <= reach["approach_m"] < PLAN["approach_m"] + 1e-6 and reach["margin_m"] > 0
+    grasp = fk(planner, library["chunks"]["descend_pick"][-1])
+    assert math.dist((grasp.x, grasp.y, grasp.z), (far["x"], far["y"], far["z"])) < 0.002
+    lifted = fk(planner, library["chunks"]["lift_pick"][-1])
+    assert planner.reach_margin(lifted.x, lifted.y, lifted.z, far["yaw_deg"]) >= m.REACH_MARGIN_M - 1e-4
+    assert lifted.z - far["z"] >= m.MIN_STANDOFF_M - 0.002, "it still lifts clear of the tray"
+
+
+def test_a_path_past_the_keep_out_line_is_refused_before_any_chunk_exists():
+    with pytest.raises(SystemExit, match="keep_out"):
+        m.Planner(dict(PLAN, keep_out={"x_max_m": 0.10})).library()
+    assert m.Planner(dict(PLAN, keep_out={"x_max_m": 0.30})).library()["chunks"]
+
+
+def test_keep_out_counts_the_gripper_body_not_only_the_tool_tip():
+    """2026-10-27: the TCP stayed 2 cm inside the line while the wrist and gripper hit the wall behind the belt."""
+    planner = m.Planner(PLAN)
+    library = planner.library()
+    tip = max(fk(planner, f).x for frames in library["chunks"].values() for f in frames)
+    with pytest.raises(SystemExit, match="wrist or gripper"):
+        m.Planner(dict(PLAN, keep_out={"x_max_m": round(tip + m.BODY_MARGIN_M / 2, 3)})).library()
+
+
+def test_a_lift_the_wrist_cannot_reach_is_shortened_inside_the_joint_limit():
+    """2026-10-27: the arm S wrist stops at 1.89 rad; a 7 cm top-down lift needed more and ran into it."""
+    planner = m.Planner(PLAN)
+    library = planner.library()
+    top = PLAN["limits"]["joints_rad"]["joint4"][1]
+    q4 = [m.norm_to_rad(f[3]) for frames in library["chunks"].values() for f in frames]
+    assert max(q4) <= top + 1e-3
+    wide = m.Planner(dict(PLAN, limits=dict(PLAN["limits"], joints_rad=dict(PLAN["limits"]["joints_rad"], joint4=[-0.3, 2.3]))))
+    lifted = lambda p: p.height(p.library()["chunks"]["lift_pick"][-1])
+    assert lifted(planner) <= lifted(wide) + 1e-6
+
+
+def test_a_low_zone_lowers_the_floor_only_inside_its_rectangle():
+    """2026-11-01: the left arm's belt end lies below the table; only there may the jaws go under the normal floor."""
+    low = dict(PLAN, pick=dict(PLAN["pick"], z=-0.02))
+    with pytest.raises(SystemExit, match="OUTSIDE_WORKSPACE"):
+        m.Planner(low).library()
+    zone = {"x": [0.06, 0.09], "y": [0.09, 0.12], "z_min_m": -0.03}
+    planner = m.Planner(dict(low, limits=dict(PLAN["limits"], low_zones=[zone])))
+    lib = planner.library()
+    assert min(fk(planner, f).z for f in lib["chunks"]["descend_pick"]) == pytest.approx(-0.02, abs=2e-3)
+    outside = dict(low, pick=dict(low["pick"], x=0.10))  # the same height just past the rectangle
+    with pytest.raises(SystemExit, match="OUTSIDE_WORKSPACE"):
+        m.Planner(dict(outside, limits=dict(PLAN["limits"], low_zones=[zone]))).library()
+    with pytest.raises(SystemExit, match="IK"):  # a line leaving the zone keeps the floor of its outside end
+        planner.line((0.075, 0.105, -0.02), (0.12, 0.105, -0.02), 0.05, 0.0, 0.0, 0.0)
+    above = dict(zone, z_min_m=0.05)  # a zone never raises the floor
+    assert planner.limits_at(0.07, 0.10).workspace_min_m[2] == -0.03
+    assert m.Planner(dict(PLAN, limits=dict(PLAN["limits"], low_zones=[above]))).limits_at(0.07, 0.10).workspace_min_m[2] == 0.005
+
+
+def test_keep_out_counts_the_elbow_capsule_not_only_the_gripper(planned):
+    planner, library = planned
+    from omx_adapter.swept_volume import LINK_RADIUS_M
+
+    for frame in library["chunks"]["above_pick"] + library["chunks"]["home"]:
+        points, _ = planner.kin.link_points([m.norm_to_rad(v) for v in frame[:5]])
+        assert planner.body_x(frame) >= max(points[0][0], points[1][0], points[2][0]) + LINK_RADIUS_M - 1e-12
+
+
+FAR_TRANSIT = {"shoulder_lift.pos": -15.0, "elbow_flex.pos": 5.0, "wrist_flex.pos": 46.0}
+
+
+def test_a_taught_transit_past_the_line_gives_way_to_a_pulled_in_one_no_lower():
+    planner = m.Planner(dict(PLAN, transit=FAR_TRANSIT, keep_out={"x_max_m": 0.20}))
+    library = planner.library()
+    assert library["transit"] != FAR_TRANSIT and library["source"]["transit"] == "pulled in for keep_out"
+    assert max(planner.body_x(f) for f in planner.travel(library["chunks"], FAR_TRANSIT)) > 0.20
+    assert max(planner.body_x(f) for f in planner.travel(library["chunks"], library["transit"])) <= 0.20
+
+    def lowest(transit):
+        q = [0.0] + [m.norm_to_rad(transit[n]) for n in m.NAMES[1:4]] + [0.0]
+        return min(z for _, _, z in planner.kin.link_points(q)[0])
+
+    assert lowest(library["transit"]) >= lowest(FAR_TRANSIT) - 1e-3  # rounded to 0.001 units
+    assert m.Planner(dict(PLAN, keep_out={"x_max_m": 0.30})).library()["source"]["transit"] == "taught"
+
+
+def test_travel_no_pulled_in_transit_can_keep_inside_is_refused():
+    plan = dict(PLAN, transit={"shoulder_lift.pos": 5.0, "elbow_flex.pos": 18.0, "wrist_flex.pos": 46.0},
+                keep_out={"x_max_m": 0.20})
+    with pytest.raises(SystemExit, match="no pulled-in transit"):
+        m.Planner(plan).library()

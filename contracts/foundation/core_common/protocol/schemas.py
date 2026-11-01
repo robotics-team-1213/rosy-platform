@@ -17,10 +17,13 @@ from .arm_transfer_jobs import (  # noqa: F401
     ArmTransferJobSnapshot, ArmTransferJobResponse)
 from .wire_status import RobotMode, NavigationState, HealthState, Severity, AckStatus
 from .arm_transfer_observations import (  # noqa: F401
-    ArmObservationPose, ArmObservationBounds, ArmLinkObservation, ArmOwnerObservation,
+    ArmObservationPose, ArmObservationBounds, ArmLinkObservation, ArmJointObservation, ArmOwnerObservation,
     ArmTransferObservation, ArmTransferObservationRequest, ArmTransferOwnerContext,
     ArmTransferObservationContext, ArmTransferObservationContextResponse, ArmTransferPhysicalReceipt,
     ArmTransferPhysicalReceiptResponse, ArmTransferObservationReply, ArmTransferCancelRequest)
+from .arm_transfer_evidence import (  # noqa: F401
+    ArmTransferEvidenceOwner, ArmTransferEvidenceContext, ArmTransferEvidenceDocument,
+    ArmTransferPhysicalEvidenceResponse)
 from .arm_transfer_recovery import (  # noqa: F401
     ArmTransferRecoveryCreate, ArmTransferRecoveryApprove, ArmTransferRecoveryRequestSnapshot,
     ArmTransferRecoveryRequestResponse, ArmTransferRecoveryPreview, ArmTransferRecoveryPreviewResponse,
@@ -34,6 +37,8 @@ from .account_access import AccountAccess, AccountGrant  # noqa: F401
 from .monitoring import FleetLinkObservation, FleetMonitoringRead  # noqa: F401
 from .trip_jobs import (TripJobRequest, TripJobStep, TripJobSnapshot, TripJobStepSnapshot,
                         TripJobReadResponse, TripRequestKey)  # noqa: F401
+from .trip_proposals import (  # noqa: F401
+    TripProposalAdmit, TripProposalCreate, TripProposalResponse, TripProposalSnapshot)
 from .policy_admission import (  # noqa: F401
     POLICY_ADMISSION_PRINCIPAL, PolicyAdmissionAuditEntry, PolicyAdmissionAuditResponse,
     PolicyAdmissionReadResponse, PolicyAdmissionScope, PolicyAdmissionStatus,

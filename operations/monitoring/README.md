@@ -4,7 +4,8 @@ ROSY 시스템 모니터링의 독립 Python wheel은 `rosy-monitoring`, import�
 소유권과 배치 결정은 [D-876](../../docs/adr/D-876-rosy-monitoring-independent-site-and-aggregate.md)을 따른다.
 
 관측 모델·설정·자격·사이트별 캐시, 원천 수집과 읽기 API를 제공한다.
-독립 실행 CLI를 제공한다. 상태 화면·native 배포 묶음은 후속 단계다.
+독립 실행 CLI와 별도 [상태 화면](../../applications/monitoring/README.md)을 제공한다.
+native 서비스·설정·TLS 프록시 입력은 [배포 안내](deploy/README.md)를 따른다.
 실행 중인 Fleet 프로세스나 ROS를 import하지 않는다.
 HTTP 경로·인증·시간 전달·보존 한도는 [Monitoring API](../../docs/reference/rosy-monitoring-api.md)가 정본이다.
 
@@ -43,6 +44,7 @@ rosy-monitoring --config /etc/rosy-monitoring/monitoring.yaml --state-dir /var/l
 ```
 
 기본 수신은 `127.0.0.1:8786`이다. 원격 조회는 인증서를 검증하는 TLS 프록시를 거친다.
+관제 PC의 사이트 스택 컨테이너만 `--host 0.0.0.0`으로 공개하지 않은 내부 망에서 받는다([D-936](../../docs/adr/D-936-monitoring-site-stack-service.md)).
 `--port`는 1–65535, `--web-root`는 검증된 상태 화면 묶음의 경로다. 원천과 자격·상태 경로를
 안전하게 준비할 수 없으면 `MONITORING_STARTUP_FAILED`로 종료하며 원문 예외·설정을 출력하지 않는다.
 하나의 실행기가 등록 입력에 따라 개별 사이트, peer 통합 집계, peer 없는 중앙 직접 수집을 맡는다.

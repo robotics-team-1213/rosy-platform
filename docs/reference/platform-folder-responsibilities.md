@@ -66,6 +66,8 @@ D-747 S2: 위치 보조·상태는 `middleware/perception/localization`, graph �
 
 규칙은 여섯 가지다. 디렉터리의 마지막 이름은 권한 하나다. import와 ROS 패키지 이름은 유지한다. 같은 입력과 같은 출력은 한 기능 폴더에 둔다. 사실, 명령, 원장, 임대, 후보 검사는 나눈다. 경로는 실행 PC가 아니다. 한 커밋에 한 단계만 착지한다.
 
+같은 정의가 둘 이상의 파트에 동일하게 살면 [D-940](../adr/D-940-duplicate-definitions-gate.md)의 네 갈래(① 정본 소비, ② 소유 범위 내 통합, ③ 보호된 의도 중복, ④ 이름 분리·관습 고정)로 판정해 `test/architecture/known_duplicates.txt`에 등록한다. 등록 없는 신규 복제는 구조 시험이 막는다.
+
 | 단계 | 목표 | 소스 착지 |
 |---|---|---|
 | 1 | `middleware/drive` | D-743. 설치 이름은 유지한다. 원격 검사·배포·장치는 그 검증 기록 |
@@ -225,7 +227,7 @@ CORE의 공통 Safety와 최종 Base 명령 선택은 `core_features.safety`, `c
 | `tools` | 최상위 loose 개발 CLI | 유지 — 하위 도구는 각 manifest root로 구분. product algorithm 공통함으로 사용하지 않음 |
 | `tools/packaging` | build-time source composition | 분리 완료 — D-652 Fleet 소스 구성·wheel/sdist 빌드. sdist는 자체 `_build` helper를 포함하며 설치 runtime에는 helper 없음 |
 | `tools/validation` | host Fleet/Gazebo conformance CLI | 유지 — preflight·run planning, 장치에 설치하지 않음 |
-| `tools/calibration` | offline per-robot fit/store CLI | 유지 — 측정 calibration 처리. runtime sensor/drive calibration 알고리즘과 구분 |
+| `tools/calibration` | offline per-robot fit/store CLI | 유지 — 측정 calibration 처리. runtime sensor/drive calibration 알고리즘과 구분. 버전화 보정 저장 계층은 D-47 `core_common/calibration_store.py`(오프라인·런타임 공용)와 OS 런타임 `middleware/perception/nodes`의 보정 기록 저장이 병립한다(형식·페이로드 상이, D-940 등록부 참조) |
 | `tools/capture` | operator capture CLI | 유지 — CORE API를 통한 supervised capture. 자체 cmd_vel writer나 autonomous admission 없음 |
 | `tools/device_test` | operator device test CLI | 유지 — preflight·temporary overlay·readback/restore·recording. 실행·장치 수용 증거를 단계별 보존 |
 | `tools/device_twin` | development twin test CLI | 유지 — 검증 도구, 제품/장치 payload 아님 |
@@ -252,7 +254,7 @@ Gazebo의 launch와 script는 manifest에서 각각 별도 concern을 갖지만 
 
 ## 현재 상태와 미래 행동 예측
 
-D-652 공통 필요성 평가는 Situation의 순수 모듈에 있고 Fleet는 현장 상태 수집·사건 연결·기존 resolver를 소유한다. Fleet wheel과 현장 source image에는 `__init__.py`, `assessment.py`, `snapshot_assessment.py`만 포함한다. 빌드 조합은 `tools/packaging/fleet_sources.py`가 소유하고 source archive의 `_build` 사본으로 checkout 밖 재빌드를 지원한다. 이 내부 shadow 구현은 D-648 전체 목표 구조의 수용과 구분한다.
+D-652 공통 필요성 평가는 Situation의 순수 모듈에 있고 Fleet는 현장 상태 수집·사건 연결·기존 resolver를 소유한다. Fleet wheel과 현장 source image에는 `__init__.py`, `assessment.py`, `snapshot_assessment.py`, `wait_graph.py`, `fact_rules.py` 다섯 모듈이 포함된다(`tools/packaging/fleet_sources.py`의 `ASSESSMENT_MODULES`). 빌드 조합은 `tools/packaging/fleet_sources.py`가 소유하고 source archive의 `_build` 사본으로 checkout 밖 재빌드를 지원한다. 이 내부 shadow 구현은 D-648 전체 목표 구조의 수용과 구분한다.
 
 D-657은 D-648 단계 2와 단계 3의 첫 계산 단위만 수용한다. 실제 원장 모델 도구 구현은 `fleet.server.model_feedback_dispatch`, 순수 목표 검증은 `rosy.execution.site.goal_evidence`, 기존 시각·신선도·step 상태 투영은 `rosy.execution.site.workflow`가 소유한다. D-656 후속 통합은 Fleet가 제공하는 일관된 snapshot의 읽기 진행 계산 전체를 같은 workflow의 `project_progress`에 둔다. DB 전이·auth·claim·admission·transport는 Fleet에 남긴다. Fleet는 기존 execution wheel dependency를 사용하고 execution 파일을 중복 포장하지 않는다. site source image도 해당 source closure를 포함한다. 다른 Mission 전이·복구 규칙 및 D-648 단계 4는 후속으로 유지한다. 소스/설치 검증과 실제 이미지 빌드·배포·현장 정확도는 별도다.
 

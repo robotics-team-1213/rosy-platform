@@ -30,6 +30,33 @@
 
 ## 완료된 입력 만들기
 
+### OMX 변환 결과에서 이어가기
+
+로봇암 시범 검수의 4단계에서 변환을 마치면 **이 데이터 HF 보관 준비**를 선택한다.
+Learning 홈은 해당 등록 데이터 ID와 고정 revision을 보여준다. 링크를 여는 것만으로
+복사·업로드·학습을 시작하지 않는다. 저장 대상 설정·private 연결 검증·활성화가 끝난 뒤,
+자료와 버전을 확인하고 완료 동의를 선택해 **준비하고 보관**을 누른다.
+요청한 버전이 없으면 다른 자료를 대신 선택하지 않는다. 다른 버전을 직접 고르면
+완료 동의를 다시 확인해야 한다.
+
+내부 `GET /api/learning/storage/sources`는 기존 `folders` 외에 `omx_configured`와
+등록 데이터의 `datasets` 목록(id/name/revision/source)을 반환한다. 실행기 상태 갱신이나
+변환 결과 이동 없이 등록 원장만 읽으며 호스트 경로를 반환하지 않는다.
+기존 `POST /api/learning/storage/sources/prepare`는 `kind=omx`, `dataset_id`(canonical UUID),
+`revision`(64자리 SHA), `confirm_completed=true`, `archive`(boolean)를 받는다.
+현재 프로젝트의 등록 데이터와 정확한 버전만 서버에서 해석한다.
+
+서버는 NPZ·설명·변환/분할 receipt의 전체 파일 목록과 해시를 확인하고, 등록 exports 아래
+별도 폴더에 복사한 뒤 원본과 등록 버전을 다시 대조한다. 원본과 승인된 검수는 바꾸지 않는다.
+부분 복사는 동일한 바이트만 재개하며 충돌 파일은 덮어쓰지 않는다. 완료 목록 게시 뒤의 재시도도
+기존 provenance와 전체 파일을 다시 검사하고 같은 보관 작업을 재사용한다.
+프로젝트·관리/게시 권한·CSRF·동의·private 대상·용량·정리 가드는 그대로 적용한다.
+
+이 자료는 ROSY ACT 학습 형식이다. `bytes_verified`는 고정 HF commit의 파일 바이트 검증이며,
+저장소 루트의 LeRobot 형식 게시나 LeRobot reader·정책 품질·현장 수용을 뜻하지 않는다.
+LeRobot 데이터셋의 형식 게시·reader 왕복은 기존 `learning/registry/policy/hub_sync.py`의
+명시적 선택·private 전송·재다운로드·reader 검증 경로를 따른다.
+
 실행/episode 단위의 고정된 **별도 export 폴더**에 데이터만 둔다. 기존 content-addressed store 버전·검수 state·운영 원본에 marker를 덧붙이지 않는다. `storage-source.json`은 파일 전체의 bytes/SHA와 출처를 기록하는 보관 선언이며, 학습·시뮬레이션·실물 성공 승인이 아니다.
 
 일반 dataset/model은 생산자가 파일 쓰기를 끝낸 뒤 다음 명령으로 완료 목록을 만든다. provenance JSON에는 출처·라이선스·고정 revision을 기록하며 비밀값은 넣지 않는다.

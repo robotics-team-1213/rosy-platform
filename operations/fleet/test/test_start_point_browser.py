@@ -57,7 +57,7 @@ def browser_site(tmp_path):
                    sightings=sightings,tracking=tracking,start_task_dispatcher=False)
     listener=safe_listener()
     origin=f'http://127.0.0.1:{listener.getsockname()[1]}'
-    server=uvicorn.Server(uvicorn.Config(app,log_level='error',timeout_graceful_shutdown=3,timeout_keep_alive=1))
+    server=uvicorn.Server(uvicorn.Config(app,log_level='error',timeout_graceful_shutdown=3,timeout_keep_alive=1, log_config=None))
     worker=threading.Thread(target=server.run,kwargs={'sockets':[listener]},daemon=True);worker.start()
     try:
         deadline=time.monotonic()+20
@@ -271,6 +271,10 @@ def test_console_has_no_setup_tools_and_connection_guide_recovers(browser_site):
     expect(page.locator('#map-empty-title')).to_have_text('관제 접속 필요')
     expect(page.locator('#dispatch-control')).to_be_hidden()  # D-487: one lock banner
     capture_console(page, 'connection-desktop.png')
+    expect(page.locator('#fleet-login')).to_be_visible()
+    page.keyboard.press('Escape')
+    expect(page.locator('#topbar-extra')).to_be_hidden()
+    expect(page.locator('#topbar-more')).to_be_focused()
     page.locator('#connection-guide-action').click()
     expect(page).to_have_url(page.origin + '/console/login?return=%2Fconsole')
     expect(page.get_by_role('heading', name='관제 로그인')).to_be_visible()

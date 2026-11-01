@@ -49,8 +49,8 @@
 
 ## 최근 기록
 
-- 2026-10-27 · 752c9b0aed · 순수 chunk 파서와 경로 계산을 설치 패키지로 추출
-- 2026-10-27 · uncommitted · fix(omx): restore accepted real-driver size registration
-- 2026-10-27 · aec7f05a35 · measured load-domain analysis
-- 2026-10-26 · uncommitted · neutral ARM forward-port contracts holder
-- 2026-10-24 · uncommitted · fix(omx): D-858 S3 독립 안전 검토 지적 반영 (H1, H2, M1-M3, L1)
+- 2026-11-01 · f2333e8aea · Pilot SIM 시연 기본값 프로파일
+- 2026-11-01 · d16cecb42b · 직선 IK 경로 하나로, 링크 캡슐 금지선, 안쪽 transit 후보
+- 2026-10-29 · 724ecfbff1 · D-916 원본 joint 시각 보존
+- 2026-10-28 · fce9c60216 · SIM Pilot의 배치 자산 일치
+- 2026-10-28 · ed77a021dc · test(omx): record literal value-contract compatibility

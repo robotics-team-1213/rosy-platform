@@ -10,14 +10,17 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import re
 import sqlite3
 from contextlib import closing
 from typing import Literal
 
 from fastapi import Depends, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
-from rosy.contracts.learning.promotion_request import encoded, validate
+from rosy.contracts.learning.promotion_request import decision_encoded, encoded, sign, validate
 
+from fleet.server.account_config import _protected
 from fleet.server.policy_governance import GovernanceError, PolicyGovernanceStore
 from fleet.server.policy_governance_routes import _Confirmed
 
@@ -106,6 +109,38 @@ class PerceptionPromotionStore:
                 f"SELECT {_LIST} FROM fleet_perception_proposal ORDER BY proposed_ns DESC LIMIT ?", (limit,))]
 
 
+def decision_key() -> tuple[str, bytes]:
+    """(key id, private PEM) of the `perception-decision` role key (D-898), or a 503: never an unsigned decision.
+
+    ROSY_PERCEPTION_DECISION_KEY names an owner-only JSON file outside the repo:
+    {"key_id": ..., "private_key_file": <name beside it>}. No other role's key is read."""
+    path = os.environ.get("ROSY_PERCEPTION_DECISION_KEY")
+    if not path:
+        raise _refuse(503, "DECISION_KEY_NOT_CONFIGURED")
+    try:
+        config = _protected(path)
+        doc = json.loads(config.read_text(encoding="utf-8"))
+        key_id, name = doc["key_id"], doc["private_key_file"]
+        if set(doc) != {"key_id", "private_key_file"} or not re.fullmatch(r"[A-Za-z0-9._-]{1,96}", key_id):
+            raise ValueError
+        pem = _protected(config.parent / name).read_bytes()
+        sign(b"", pem, key_id)  # fails on a key that is not a usable Ed25519 private key
+    except Exception:  # noqa: BLE001 - any config fault is one fixed code; nothing about the key is echoed
+        raise _refuse(503, "DECISION_KEY_INVALID") from None
+    return key_id, pem
+
+
+def signed_decision(row: dict) -> dict:
+    """The decided row as Fleet's canonical decision bytes plus an Ed25519 signature (D-898)."""
+    if row["state"] == "PENDING":
+        raise _refuse(409, "PROPOSAL_NOT_DECIDED")
+    key_id, pem = decision_key()
+    raw = decision_encoded({"bundle_sha256": row["bundle_sha256"], "model_revision": row["model_revision"],
+                            "files": row["files"], "proposed_by": row["proposed_by"],
+                            "decided_by": row["decided_by"], "decided_ns": row["decided_ns"], "state": row["state"]})
+    return {"key_id": key_id, "decision": raw.decode("utf-8"), "signature": sign(raw, pem, key_id)}
+
+
 class PerceptionDecision(_Confirmed):
     decision: Literal["APPROVED", "REJECTED"]
 
@@ -148,6 +183,13 @@ def install_perception_promotion_routes(app, *, store: PerceptionPromotionStore,
         if row is None:
             raise _refuse(404, "PROPOSAL_NOT_FOUND")
         return row
+
+    @app.get(base + "/{bundle_sha256}/decision.signed", tags=["fleet-policy"])
+    def perception_decision_signed(bundle_sha256: str, principal=Depends(require_viewer)) -> dict:
+        row = store.get(bundle_sha256)
+        if row is None:
+            raise _refuse(404, "PROPOSAL_NOT_FOUND")
+        return signed_decision(row)
 
     @app.post(base, tags=["fleet-policy"])
     async def propose_perception(request: Request, sha256: str, principal=Depends(require_viewer)) -> dict:

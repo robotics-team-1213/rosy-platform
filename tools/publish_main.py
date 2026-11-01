@@ -358,7 +358,15 @@ def merge_when_green(repo: Path, pr: str, apply: bool, now: datetime) -> str:
         raise Stop(5, f"ci-result is {state} on PR {pr}; retry later")
     if not apply:
         return f"dry run: PR {pr} is mergeable and ci-result is green; would merge {head[:10]} with --apply"
-    run_gh(repo, "pr", "merge", pr, "--merge", "--match-head-commit", head)
+    try:
+        run_gh(repo, "pr", "merge", pr, "--merge", "--match-head-commit", head)
+    except Stop as refused:
+        if "merge queue" not in str(refused):
+            raise
+        # D-905 pilot (2026-10-28): main requires the merge queue; enqueue, the merge group reruns ci-result first
+        run_gh(repo, "pr", "merge", pr, "--auto", "--match-head-commit", head)
+        return (f"queued PR {pr} at {head[:10]} in the merge queue; it merges after the merge group's ci-result."
+                f" Sync origin/main back into local main once it merged:" + sync_commands(now))
     git(repo, "fetch", "origin")
     merged = f"merged PR {pr} at {head[:10]} (merge commit)"
     if ancestor(repo, "origin/main", "main"):

@@ -47,7 +47,9 @@ export function mount(root, ctx) {
   safetySection.append(safetyForm, safetyReadStatus, safetyActionStatus);
   const sshSection = el("section", "ui-readback"); sshSection.append(el("h3", "", "임시 SSH 비밀번호"));
   const sshStatus = el("ui-status", "", "SSH 비밀번호 상태를 불러오는 중입니다.");
+  const sshActionStatus = el("ui-status");
   const sshCredential = el("ui-status"); sshCredential.hidden = true;
+  let sshPending = false;
   const sshForm = el("form", "ui-form");
   const minutesLabel = el("label", "ui-field-label", "유효 시간 (분, 1~60)");
   const minutes = el("input", "ui-field"); minutes.type = "number"; minutes.min = "1"; minutes.max = "60"; minutes.step = "1"; minutes.value = "30"; minutes.name = "minutes";
@@ -56,16 +58,19 @@ export function mount(root, ctx) {
   sshForm.append(minutesLabel, sshIssue);
   const sshOff = el("ui-button", "", "지금 끄기"); sshOff.setAttribute("kind", "quiet"); sshOff.type = "button";
   const sshNote = el("p", "form-message", "발급된 비밀번호는 이 화면에 한 번만 보이고 저장되지 않습니다. rosy 계정, 사설 대역에서만, 최대 60분.");
-  sshSection.append(sshForm, sshOff, sshNote, sshCredential, sshStatus);
+  sshSection.append(sshForm, sshOff, sshNote, sshActionStatus, sshCredential, sshStatus);
   async function loadSshStatus() {
     if (disposed) return;
+    setOff(sshIssue, true, "상태 확인 중"); setOff(sshOff, true, "상태 확인 중");
     try {
       const status = await ctx.api("/api/v1/host/ssh/password", {signal: lifetime.signal});
+      if (disposed) return;
       setOff(sshIssue, false, ""); setOff(sshOff, !status.enabled, "발급된 임시 비밀번호가 없습니다.");
       setStatus(sshStatus, status.enabled
         ? `임시 비밀번호 켜짐 · 만료 ${status.expires_at ?? "알 수 없음"}${status.lock_pending ? " · 잠금 지연 중" : ""}`
         : "임시 비밀번호는 꺼져 있습니다(키 로그인만 가능).");
     } catch (error) {
+      if (disposed) return;
       setStatus(sshStatus, "SSH 비밀번호 상태를 가져오지 못했습니다. 호스트 에이전트를 확인하세요.");
       setOff(sshIssue, true, "상태를 확인할 수 없습니다.");
       setOff(sshOff, true, "상태를 확인할 수 없습니다.");
@@ -73,30 +78,38 @@ export function mount(root, ctx) {
   }
   sshForm.addEventListener("submit", async (event) => {
     event.preventDefault();
-    if (sshIssue.disabled) return;
+    if (disposed || sshPending || sshIssue.disabled) return;
     const value = Math.round(Number(minutes.value));
-    if (!Number.isFinite(value) || value < 1 || value > 60) { setStatus(sshStatus, "유효 시간은 1~60분입니다."); return; }
+    if (!Number.isFinite(value) || value < 1 || value > 60) { setStatus(sshActionStatus, "유효 시간은 1~60분입니다."); return; }
+    sshPending = true;
     setOff(sshIssue, true, "요청 진행 중");
+    setOff(sshOff, true, "요청 진행 중");
+    setStatus(sshActionStatus, "임시 비밀번호를 발급하는 중입니다.");
     try {
       const issued = await ctx.api("/api/v1/host/ssh/password", {method: "POST", body: JSON.stringify({minutes: value}), signal: lifetime.signal});
+      if (disposed) return;
       // 비밀번호는 이 응답에만 실린다(No-Store) — 화면에 한 번 보이고 지운다.
       sshCredential.hidden = false;
       sshCredential.textContent = `rosy 계정 비밀번호: ${issued.password} · ${issued.expires_at}까지`;
-      setStatus(sshStatus, `임시 비밀번호가 발급되었습니다(rosy@로봇, ${issued.expires_at}까지).`);
+      setStatus(sshActionStatus, `임시 비밀번호가 발급되었습니다(rosy@로봇, ${issued.expires_at}까지).`);
     } catch (error) {
-      setStatus(sshStatus, error.message || "발급에 실패했습니다.");
-    } finally { setOff(sshIssue, false, ""); await loadSshStatus(); }
+      setStatus(sshActionStatus, `발급에 실패했습니다: ${error.message || "호스트 에이전트를 확인하세요."}`);
+    } finally { await loadSshStatus(); sshPending = false; }
   });
   sshOff.addEventListener("click", async () => {
-    if (sshOff.disabled) return;
+    if (disposed || sshPending || sshOff.disabled) return;
+    sshPending = true;
+    setOff(sshIssue, true, "요청 진행 중");
     setOff(sshOff, true, "요청 진행 중");
+    setStatus(sshActionStatus, "임시 비밀번호를 끄는 중입니다.");
     try {
       await ctx.api("/api/v1/host/ssh/password", {method: "DELETE", signal: lifetime.signal});
+      if (disposed) return;
       sshCredential.hidden = true; sshCredential.textContent = "";
-      setStatus(sshStatus, "임시 비밀번호를 껐습니다(키 로그인만 가능).");
+      setStatus(sshActionStatus, "임시 비밀번호를 껐습니다(키 로그인만 가능).");
     } catch (error) {
-      setStatus(sshStatus, error.message || "끄지 못했습니다.");
-    } finally { await loadSshStatus(); }
+      setStatus(sshActionStatus, `끄지 못했습니다: ${error.message || "호스트 에이전트를 확인하세요."}`);
+    } finally { await loadSshStatus(); sshPending = false; }
   });
   loadSshStatus();
 

@@ -191,6 +191,30 @@ def test_host_guard_retains_owner_capture_and_does_not_invent_network_stage(tmp_
     assert 'secret' not in second.model_dump_json()
 
 
+@pytest.mark.parametrize('updates, expected', [
+    ({'gate': 'open', 'updaters': [{'unit': 'a', 'timer': 'enabled', 'healthy_at': -60, 'last': {'reason': 'secret-why'}},
+                                   {'unit': 'b', 'timer': 'disabled'}]}, 'OK'),
+    ({'gate': 'frozen', 'updaters': []}, 'WARNING'),
+    ({'gate': 'open', 'updaters': [{'unit': 'a', 'timer': 'enabled', 'healthy_at': -7 * 3600}]}, 'ERROR'),
+    ({'gate': 'open', 'updaters': [{'unit': 'a', 'timer': 'enabled'}]}, 'ERROR'),
+    ('broken', 'UNKNOWN'),
+])
+def test_host_guard_update_report_becomes_its_own_node(tmp_path, updates, expected):
+    path = tmp_path / 'status.json'
+    cfg, cache, creds, clock = source_context({'kind': 'host_guard', 'path': str(path), 'selector': 'ai'})
+    now = int(clock.utcnow().timestamp())
+    if isinstance(updates, dict):
+        for item in updates['updaters']:
+            if 'healthy_at' in item:
+                item['healthy_at'] += now
+    path.write_text(json.dumps({'ai': {'time': now, 'state': 'ok', 'updates': updates}}))
+    asyncio.run(SourceReader(cache, creds).poll(cfg.sources[0]))
+    value = cache.snapshot(frozenset({'site-a'}))
+    hosts = {n.id: n.reported_health for n in value.nodes if n.kind == 'host'}
+    assert len(hosts) == 2 and [v for k, v in hosts.items() if k.endswith(':updates')] == [expected]
+    assert 'secret-why' not in value.model_dump_json()
+
+
 def test_host_state_missing_required_results_is_not_healthy(tmp_path):
     path = tmp_path / 'status.json'
     cfg, cache, creds, clock = source_context({'kind': 'host_state', 'path': str(path)})

@@ -16,7 +16,7 @@ from typing import Mapping
 import yaml
 
 from .command_types import ArmCommandConfig
-from ..kinematics import ARM_JOINTS, IkLimits, TopDownPose
+from .kinematic_types import ARM_JOINTS, IkLimits, TopDownPose
 from .manipulation_plan import MOTION_PHASES, PlannedMotionPhase
 
 PLANNER_REVISION = "omx-analytic-top-down-v1"

@@ -164,3 +164,46 @@ def test_cli_writes_receipt_without_deleting(tmp_path, capsys):
     doc = json.loads(out.read_text(encoding="utf-8"))
     assert doc["stages"] == list(media.STAGES)
     assert "trainable=1" in capsys.readouterr().out
+
+
+def _shadow_video(video: Path, rows: list[str]) -> None:
+    video.mkdir(parents=True, exist_ok=True)
+    payload = b"v" * 8
+    (video / f"{STEM}.mp4").write_bytes(payload)
+    (video / f"{STEM}.jsonl").write_text("\n".join(rows) + "\n", encoding="utf-8")
+    (video / f"{STEM}.json").write_text(json.dumps({
+        "schema": "rosy.teleop.video/1",
+        "video": {"file": f"{STEM}.mp4", "frames": len(rows), "bytes": len(payload)},
+    }), encoding="utf-8")
+
+
+def test_receipt_counts_live_and_backfilled_shadow_evidence(tmp_path):
+    _session(tmp_path)
+    video = tmp_path / "video"
+    live = {"schema": "rosy.perception.learned_shadow/1", "error_delta": 0.1}
+    _shadow_video(video, [
+        json.dumps({"t": 1.0, "side": {"perception/learned/shadow": dict(live)}}),
+        json.dumps({"t": 1.5, "side": {"perception/learned/shadow": {**live, "backfill": True}}}),
+        json.dumps({"t": 2.0, "side": {"perception/learned/shadow": None}}),
+        json.dumps({"t": 2.5, "side": {}}),
+    ])
+    code, doc = media.run(tmp_path / "raw", video, shrink=False, apply=False,
+                          probe=lambda _p: 4, encode=lambda *_a: 1, compact=lambda _s: (False, _s))
+    assert code == 0
+    row = doc["sessions"][0]
+    assert row["sidecar_rows"] == 4
+    assert row["shadow_live_rows"] == 1
+    assert row["shadow_backfill_rows"] == 1
+
+
+def test_receipt_shadow_counts_are_null_without_a_sidecar(tmp_path):
+    _session(tmp_path)
+    video = tmp_path / "video"
+    code, doc = media.run(tmp_path / "raw", video, shrink=False, apply=False,
+                          probe=lambda _p: 2, encode=lambda *_a: 1, compact=lambda _s: (False, _s))
+    assert code == 1
+    row = doc["sessions"][0]
+    assert row["status"] == "missing"
+    assert row["sidecar_rows"] is None
+    assert row["shadow_live_rows"] is None
+    assert row["shadow_backfill_rows"] is None

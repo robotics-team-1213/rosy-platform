@@ -8,6 +8,71 @@ from test_console_queue_inline_browser import API, ON_TOP, _open, _shot, site  #
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason="opt-in real Chromium scenario")
 
 
+@pytest.mark.parametrize('size', [(320, 568), (1440, 900)])
+@pytest.mark.parametrize('theme', ['dark', 'light'])
+@pytest.mark.parametrize('change', ['same', 'reorder', 'removed', 'empty', 'request-404', 'request-403', 'request-503', 'work-503', 'move-row', 'move-outside', 'no-focus'])
+def test_channel_request_poll_preserves_current_keyboard_target(site, size, theme, change):
+    from playwright.sync_api import expect, sync_playwright
+
+    receipts = [{'request_id': key, 'content': key, 'received_at': '2026-10-12T00:00:00+00:00'}
+                for key in ['request-a', 'request-b']]
+    api = {**API, '/api/fleet/channel-requests': {'rows': receipts},
+           '/api/fleet/work': {'rows': [], 'observed_at': receipts[0]['received_at'],
+               'tasks_available': True, 'missions_available': True, 'truncated_sources': []}}
+    with sync_playwright() as playwright:
+        posts = []
+        browser, page, errors = _open(playwright, site, api, posts, size=size)
+        try:
+            page.goto(site + '/console?view=work')
+            page.clock.run_for(2000)
+            page.evaluate('(theme) => document.documentElement.dataset.theme = theme', theme)
+            buttons = page.locator('#channel-requests ui-button')
+            expect(buttons).to_have_count(2)
+            buttons.first.focus()
+            outside = page.locator('#work-refresh')
+            if change == 'no-focus':
+                outside.focus()
+            page.evaluate("window.oldRequestButton = document.querySelector('#channel-requests ui-button')")
+            held = []
+            target = '/api/fleet/work' if change == 'work-503' else '/api/fleet/channel-requests'
+            page.route('**' + target, lambda route: held.append(route))
+            page.clock.run_for(5500)
+            # An unrelated read keeps the browser pumping route callbacks without a wall-clock sleep.
+            page.wait_for_function('() => document.readyState === "complete"')
+            assert len(held) == 1
+            if change == 'move-row':
+                buttons.nth(1).focus()
+            elif change == 'move-outside':
+                outside.focus()
+            remaining = [] if change == 'empty' else receipts[1:] if change == 'removed' else list(reversed(receipts)) if change == 'reorder' else receipts
+            if change.startswith('request-') or change == 'work-503':
+                held[0].fulfill(status=int(change.rsplit('-', 1)[1]), json={'detail': 'fixture read failure'})
+            else:
+                held[0].fulfill(json={'rows': remaining})
+            page.wait_for_function('() => !window.oldRequestButton.isConnected')
+            if change in ['move-outside', 'no-focus']:
+                expect(outside).to_be_focused()
+            elif change in ['removed', 'empty', 'request-404', 'request-403', 'request-503', 'work-503']:
+                expect(page.locator('#channel-requests-state')).to_be_focused()
+            else:
+                wanted = 'request-b' if change == 'move-row' else 'request-a'
+                expect(page.locator('#channel-requests li').filter(has_text=wanted).locator('ui-button')).to_be_focused()
+            assert posts == []
+            assert errors == []
+            if change in ['reorder', 'removed', 'move-outside', 'request-503']:
+                import os
+                from pathlib import Path
+                from uuid import uuid4
+                from browser_harness import save_temp_screenshot
+                capture_dir = os.environ.get('ROSY_UI_CAPTURE_DIR')
+                if capture_dir:
+                    destination = Path(capture_dir) / f'fleet-focus-{change}-{size[0]}-{theme}-{uuid4().hex}.png'
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    save_temp_screenshot(page, str(destination))
+        finally:
+            browser.close()
+
+
 @pytest.mark.parametrize("size", [(1366, 768), (320, 568)])
 def test_discord_current_incident_requires_separate_named_confirmation(site, size):
     from playwright.sync_api import expect, sync_playwright

@@ -140,6 +140,9 @@ class JointStateSnapshot:
     sequence: int
     received_at: float
     calibration_revision: str
+    # Raw intake clock values; not UTC or an authenticated clock identity.
+    source_stamp_ns: int | None = None
+    source_now_ns: int | None = None
 
     def __post_init__(self) -> None:
         if type(self.sequence) is not int or self.sequence < 0:
@@ -164,6 +167,10 @@ class JointStateSnapshot:
             normalized[name] = number
         object.__setattr__(self, "positions", MappingProxyType(normalized))
         _nonempty("calibration_revision", self.calibration_revision)
+        if self.source_stamp_ns is not None or self.source_now_ns is not None:
+            if (type(self.source_stamp_ns) is not int or type(self.source_now_ns) is not int
+                    or not 0 < self.source_stamp_ns <= self.source_now_ns):
+                raise ValueError("joint-state source metadata requires a positive ordered integer pair")
 
 
 @dataclass(frozen=True)

@@ -130,7 +130,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--base", required=True, help="base release id the robots hold (prepared on this PC)")
     parser.add_argument("--robots", required=True,
-                        help="comma-separated robot ids from private/lab-hosts.json, or IPv4 addresses")
+                        help="comma-separated robot ids (this PC's SD registry or private/lab-hosts.json), or IPv4 addresses")
     parser.add_argument("--release-id", help="already reserved id (default: reserve the next one)")
     parser.add_argument("--revision", default="HEAD")
     parser.add_argument("--not-shipped", action="append", default=[])
@@ -148,7 +148,7 @@ def main(argv: list[str] | None = None) -> int:
         elif _IPV4.fullmatch(name):
             address = name
         else:
-            parser.error(f"unknown robot {name!r}: add it under robots in private/lab-hosts.json "
+            parser.error(f"unknown robot {name!r}: not in this PC's SD registry; add it under robots in private/lab-hosts.json "
                          "(copy tools/remote/hosts.example.json) or pass an IPv4 address")
         if not re.fullmatch(r"[0-9.]+|[A-Za-z0-9.-]+", address):
             parser.error(f"address for {name!r} in private/lab-hosts.json is not a host token")

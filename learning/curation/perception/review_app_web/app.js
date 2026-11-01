@@ -89,9 +89,9 @@ function enable() {
   $('reopen').disabled = locked;
   $('draw').disabled = $('add').disabled = locked || frame?.status === 'excluded';
   $('delete-selected').disabled = locked || frame?.status === 'excluded' || selected===null;
-  for (const button of $('object-quick-classes').querySelectorAll('button')) {
+  for (const button of $('object-quick-classes').querySelectorAll('ui-button')) {
     button.disabled = locked || frame?.status === 'excluded' || selected===null;
-    button.setAttribute('aria-pressed', String(selected!==null && frame.review.boxes[selected]?.label===button.value));
+    button.setAttribute('aria-pressed', String(selected!==null && frame.review.boxes[selected]?.label===button.getAttribute('value')));
   }
   $('candidates').disabled = locked || frame?.status === 'excluded' || !sourceCandidates().length;
   $('source-preview').disabled = !ready || !sourceCandidates().length;
@@ -322,8 +322,8 @@ function quickClasses() {
   const row=$('object-quick-classes'); row.replaceChildren();
   const icons={robot:'robot',obstacle_box:'box',cone:'cone',traffic_light:'traffic-light',sign:'sign',person:'person',obstacle:'obstacle'};
   for (const cls of workspace.object_class_set.classes) {
-    const button=document.createElement('button'), icon=document.createElement('span'), label=document.createElement('span'), key=document.createElement('kbd');
-    button.type='button'; button.value=cls.name; button.className='review-class-chip';
+    const button=document.createElement('ui-button'), icon=document.createElement('span'), label=document.createElement('span'), key=document.createElement('kbd');
+    button.setAttribute('kind','segment'); button.setAttribute('type','button'); button.setAttribute('value',cls.name); button.className='review-class-chip';
     button.setAttribute('aria-label',`${cls.display} 클래스 지정${cls.hotkey ? ` · ${cls.hotkey.toUpperCase()}` : ''}`);
     icon.setAttribute('aria-hidden','true');
     actionIcon(icon,icons[cls.name]||'box');

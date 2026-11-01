@@ -35,6 +35,8 @@ approval=recovery file /etc/systemd/system/rosy-ssh-watchdog.service deploy/host
 approval=recovery file /etc/systemd/system/rosy-ssh-watchdog.timer deploy/hosts/common/rosy-ssh-watchdog.timer
 approval=recovery enabled rosy-ssh-watchdog.timer
 approval=recovery file /usr/local/sbin/rosy-host-guard-remote deploy/hosts/common/rosy-host-guard-remote 0755
+# D-871: the forced command `updates` runs this; undeclared, a stale copy went unnoticed (2026-10-30).
+approval=recovery file /usr/local/sbin/rosy-update-report deploy/hosts/common/rosy-update-report 0755
 approval=recovery file /etc/systemd/system/rosy-watchdog-load.service common/rosy-watchdog-load.service
 approval=recovery enabled rosy-watchdog-load.service
 approval=recovery file /etc/systemd/system.conf.d/rosy-watchdog.conf common/rosy-watchdog.conf

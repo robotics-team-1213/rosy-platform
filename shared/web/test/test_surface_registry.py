@@ -7,6 +7,7 @@
 """
 
 import re
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -14,6 +15,41 @@ import pytest
 import surface_registry as registry
 
 REPO = registry.REPO
+
+
+@pytest.mark.parametrize("holder", ["applications", "middleware", "learning", "integrations", "operations", "shared"])
+def test_discovery_sees_new_and_tracked_pages_in_current_source_holders(tmp_path, holder):
+    subprocess.run(["git", "init", "--quiet", str(tmp_path)], check=True)
+    (tmp_path / ".gitignore").write_text("ignored.html\n", encoding="utf-8")
+    source = tmp_path / holder / "web"
+    source.mkdir(parents=True)
+    for name in ("tracked.html", "new.html", "ignored.html", "notes.txt"):
+        (source / name).write_text("fixture", encoding="utf-8")
+    subprocess.run(["git", "add", "--", f"{holder}/web/tracked.html"], cwd=tmp_path, check=True)
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "report.html").write_text("report", encoding="utf-8")
+
+    assert {page.relative_to(tmp_path).as_posix() for page in registry.discover_html(tmp_path)} == {
+        f"{holder}/web/tracked.html", f"{holder}/web/new.html",
+    }
+
+
+@pytest.mark.parametrize("prefix", ["/", "./"])
+def test_canonical_theme_assets_share_the_same_mount(prefix):
+    html = (f'<link rel="stylesheet" href="{prefix}common/tokens.css">'
+            f'<script src="{prefix}common/theme.js"></script>')
+    assert registry._THEME_JS.search(html)
+    assert not registry._THEME_JS.search(html.replace('src="' + prefix, 'src="../'))
+    assert not registry._THEME_JS.search(html.replace("common/theme.js", "other/theme.js"))
+
+
+def test_shared_control_modules_resolve_within_their_own_mount():
+    for name in ("ui.js", "ui-wiring.js"):
+        source = (REPO / "shared/web" / name).read_text(encoding="utf-8")
+        assert '"/common/' not in source
+        for imported in re.findall(r'from "(\./[^"]+)"|import "(\./[^"]+)"', source):
+            assert (REPO / "shared/web" / next(value for value in imported if value)).is_file()
 
 
 def test_duplicate_registry_keys_cannot_silently_replace_a_contract(tmp_path):
@@ -77,7 +113,7 @@ def test_declared_baselines_are_tracked():
     assert _under("baseline") == []
 
 
-def test_every_html_under_src_is_registered():
+def test_every_product_html_is_registered():
     """추적 파일과 아직 add하지 않은 파일을 모두 잡는다.
 
     파일시스템 `rglob`을 쓰면 `.gitignore`된 빌드 산출물이 들어오고,
@@ -93,7 +129,7 @@ def test_every_html_under_src_is_registered():
         if not any(here == path or here.startswith(path.rstrip("/") + "/") for path in registered):
             orphans.append(here)
     assert orphans == [], (
-        "src/의 HTML이 레지스트리에 없다 — 표면을 등록하거나 이 파일에서 제외 사유를 적어라:\n"
+        "제품 HTML이 레지스트리에 없다 — 표면을 등록하거나 이 파일에서 제외 사유를 적어라:\n"
         + "\n".join(orphans)
     )
 
@@ -124,12 +160,16 @@ def test_for_contract_returns_registered_paths_in_order():
     assert [path.relative_to(REPO).as_posix() for path in dialog] == registered
 
 
-def test_a_file_surface_is_returned_as_a_file_not_walked():
-    """진단 표면은 파일 하나다 — 로더가 폴더로 착각해 안을 훑지 않는다."""
-    diagnostic = registry.for_contract(REPO, "shared_controls")
-    file_surfaces = [path for path in diagnostic if path.suffix == ".html"]
-    assert file_surfaces, "파이 경로 표면이 등록돼 있지 않다"
-    assert all(path.is_file() for path in file_surfaces)
+def test_a_file_surface_is_returned_as_a_file_not_walked(tmp_path):
+    """파일 표면은 그 파일 하나다 — 로더가 폴더로 착각해 옆 파일까지 훑지 않는다.
+
+    D-949로 진단 화면이 html·css·js로 나뉘어 폴더 표면이 됐으므로, 등록부 대신 임시 파일로 본다."""
+    (tmp_path / "a").mkdir()
+    page = tmp_path / "a" / "page.html"
+    page.write_text("<!doctype html>", encoding="utf-8")
+    (tmp_path / "a" / "other.html").write_text("<!doctype html>", encoding="utf-8")
+    assert registry._pages(tmp_path, "a/page.html") == [page]
+    assert registry._pages(tmp_path, "a/page.html", ".css") == []
 
 
 def test_registered_ports_match_their_source_and_do_not_collide():

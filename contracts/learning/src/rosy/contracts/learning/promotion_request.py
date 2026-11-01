@@ -79,3 +79,59 @@ def validate(bundle):
         if (not (training['commit'] is None or re.fullmatch(r'[0-9a-f]{40}', str(training['commit'])))
                 or not _text(training['python'], 32) or not (training['torch'] is None or _text(training['torch'], 32))):
             raise ValueError('학습 commit·Python·torch 기록 형식이 맞지 않습니다.')
+
+
+# D-898: Fleet's signed record of one decided promotion, carried by a person to the model PC.
+DECISION_SCHEMA = 'rosy.fleet.perception-decision/1'
+DECISION_KEYS = {'bundle_sha256', 'model_revision', 'files', 'proposed_by', 'decided_by', 'decided_ns', 'state'}
+
+
+def _check_decision(doc):
+    if (not isinstance(doc, dict) or set(doc) != DECISION_KEYS | {'schema'} or doc['schema'] != DECISION_SCHEMA
+            or not _SHA.fullmatch(str(doc['bundle_sha256'])) or not _text(doc['model_revision'], 128)
+            or not _text(doc['proposed_by'], 256) or not _text(doc['decided_by'], 256)
+            or not _count(doc['decided_ns']) or doc['state'] not in ('APPROVED', 'REJECTED')
+            or not isinstance(doc['files'], list) or not doc['files']):
+        raise ValueError('결정 기록의 형식이 맞지 않습니다.')
+    for item in doc['files']:
+        _fields(item, {'name', 'sha256'}, 'files')
+        if not _text(item['name'], 255) or not _SHA.fullmatch(str(item['sha256'])):
+            raise ValueError('결정 기록의 파일 이름 또는 sha256 형식이 맞지 않습니다.')
+
+
+def decision_encoded(record):
+    """The one byte form of a decision: `encoded` of the record plus its schema."""
+    doc = dict(record, schema=DECISION_SCHEMA)
+    _check_decision(doc)
+    return encoded(doc)
+
+
+def _message(raw, key_id):
+    # The key id and a fixed label are signed too, so a signature cannot move to another key role or format.
+    return b'rosy-perception-decision/1\0' + key_id.encode('utf-8') + b'\0' + raw
+
+
+def sign(raw, private_pem, key_id):
+    """Base64 Ed25519 signature of `raw`; the private key stays with Fleet's `perception-decision` role."""
+    import base64
+    from cryptography.hazmat.primitives import serialization
+    key = serialization.load_pem_private_key(private_pem, None)
+    return base64.b64encode(key.sign(_message(raw, key_id))).decode('ascii')
+
+
+def verify(raw, signature, public_pem, key_id):
+    """The decision dict if `raw` is the canonical encoding Fleet signed under `key_id`; else ValueError."""
+    import base64
+    import binascii
+    from cryptography.exceptions import InvalidSignature
+    from cryptography.hazmat.primitives import serialization
+    try:
+        key = serialization.load_pem_public_key(public_pem)
+        key.verify(base64.b64decode(signature, validate=True), _message(raw, key_id))
+        doc = json.loads(raw)
+    except (InvalidSignature, binascii.Error, TypeError, AttributeError) as exc:
+        raise ValueError('결정 서명이 고정한 공개 키로 검증되지 않습니다.') from exc
+    _check_decision(doc)
+    if encoded(doc) != raw:
+        raise ValueError('결정이 정본 인코딩이 아닙니다.')
+    return doc

@@ -1,5 +1,6 @@
 package io.github.livsbittt.rosy.cam.pairing.peer
 
+import io.github.livsbittt.rosy.peer.PeerProof
 import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
@@ -30,7 +31,7 @@ data class CameraRelationship(val origin: String, val receiverId: String, val re
     init {
         require(Regex("https://[a-z0-9-]+\\.local:[0-9]{1,5}").matches(origin))
         require(Regex("[a-z0-9][a-z0-9_-]{0,63}").matches(receiverId))
-        CameraProof.publicKey(receiverPublicKey)
+        PeerProof.publicKey(receiverPublicKey)
         require(Regex("[a-z0-9][a-z0-9_-]{0,63}").matches(clientId) && Regex("[0-9a-f]{64}").matches(clientKeySha256))
         require(Regex("[A-Za-z0-9_-]{32}").matches(id) && generation >= 0)
         require(Regex("[A-Za-z0-9_-]{1,32}").matches(sourceId) && persistent == (authorizationExpiresAt == null))
@@ -91,7 +92,7 @@ class CameraRelationshipVault internal constructor(private val storage: CameraVa
             require(SiteLink.isTlsHost(host) && site.port in 1..65535)
             return "https://$host:${site.port}"
         }
-        private fun slot(site: PairableSite) = CameraProof.hash(origin(site).toByteArray(Charsets.US_ASCII))
+        private fun slot(site: PairableSite) = PeerProof.hash(origin(site).toByteArray(Charsets.US_ASCII))
         private fun preferences(context: Context): CameraVaultStorage {
             val prefs = context.applicationContext.getSharedPreferences("cam-peer-relationships", Context.MODE_PRIVATE)
             return object : CameraVaultStorage {

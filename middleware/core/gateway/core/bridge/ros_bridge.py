@@ -19,6 +19,7 @@ from typing import Optional
 
 import rclpy
 from rclpy.action import ActionClient
+from rclpy.duration import Duration
 from rclpy.node import Node
 
 from geometry_msgs.msg import PoseWithCovarianceStamped, Twist
@@ -89,11 +90,10 @@ class RosBridge:
         self._state_hz = float(cfg.get("state", {}).get("rate_hz", 10.0))
 
         self.cmd_vel_pub = node.create_publisher(Twist, "cmd_vel", 10)
-        self.initialpose_pub = node.create_publisher(
-            PoseWithCovarianceStamped, "initialpose", 10)
+        self.initialpose_pub = node.create_publisher(PoseWithCovarianceStamped, "initialpose", 10)
 
         self.nav_client = ActionClient(node, NavigateToPose, "navigate_to_pose")
-        self.tf_buffer = Buffer()
+        self.tf_buffer = Buffer(cache_time=Duration(seconds=10.0))  # 자원 경계: tf2 Jazzy 기본값=10s 명시
         self.tf_listener = TransformListener(self.tf_buffer, node)
 
         node.create_subscription(Odometry, "odom", self._on_odom, 10)
@@ -621,10 +621,7 @@ class RosBridge:
                                        self._face_inputs_at, FACE_INPUTS_PERIOD_S):
             return
         try:
-            # Inside the try: an import failure must not stop the bridge tick either.
-            from core_api_web.api.v1.host import write_face_inputs
-
-            write_face_inputs(self._svc, content)
+            self._svc.host_files.write_face_inputs(self._svc, content)
         except Exception as exc:  # noqa: BLE001 - an indicator input must never stop the bridge
             if not self._face_inputs_failed:
                 self._node.get_logger().warning(f"face inputs not written: {type(exc).__name__}: {exc}")

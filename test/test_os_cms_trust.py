@@ -3,6 +3,8 @@ import hashlib
 import importlib.util
 from pathlib import Path
 import shutil
+import subprocess
+import sys
 
 import pytest
 import yaml
@@ -11,6 +13,15 @@ from test_ab_image_layout import IMAGE, module as image_module
 from os_rauc_fakes import signer, run, expired_pem
 
 CERTIFICATE = "deploy/robot/pinky_pro/release/public-keys/rosy-os-cms-2026-01.pem"
+
+
+def test_cli_imports_without_pytest_paths(tmp_path):
+    result = subprocess.run(
+        [sys.executable, "-I", str(IMAGE / "os_cms_trust.py"), "--help"],
+        cwd=tmp_path, capture_output=True, text=True, timeout=30,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "--source-tree" in result.stdout
 
 
 def module():

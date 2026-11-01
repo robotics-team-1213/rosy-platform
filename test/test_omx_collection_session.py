@@ -75,8 +75,22 @@ def teacher():
     return dict(schema='rosy.omx-collection-teacher.v1', steps=[dict(positions=[.1]*6, duration_s=.2)])
 
 
+@pytest.fixture
+def rehearsal_clock(module, monkeypatch):
+    # Share simulated time between producer and consumer; real fsync latency is not fixture image age.
+    clock_ns = [1_000_000_000]
+    def now():
+        clock_ns[0] += 1_000_000
+        return clock_ns[0]
+    def sleep(seconds):
+        clock_ns[0] += int(seconds * 1e9)
+    clock = SimpleNamespace(time_ns=now, monotonic=lambda: clock_ns[0] / 1e9, sleep=sleep)
+    monkeypatch.setattr(module, 'time', clock)
+    return clock
+
+
 @pytest.mark.parametrize('storage_delay', [0, .6])
-def test_rehearsal_records_windows_original_images_and_never_claims_hardware(module, tmp_path, monkeypatch, storage_delay):
+def test_rehearsal_records_windows_original_images_and_never_claims_hardware(module, tmp_path, monkeypatch, storage_delay, rehearsal_clock):
     original = module.RawCollection.environment
     receipts = 0
     def environment(store, receipt):
@@ -87,16 +101,7 @@ def test_rehearsal_records_windows_original_images_and_never_claims_hardware(mod
         return original(store, receipt)
     monkeypatch.setattr(module.RawCollection, 'environment', environment)
     backend = Backend()
-    # Advance rehearsal time explicitly so host fsync latency cannot age fixture images.
-    clock_ns = [1_000_000_000]
-    def now():
-        clock_ns[0] += 1_000_000
-        return clock_ns[0]
-    def sleep(seconds):
-        clock_ns[0] += int(seconds * 1e9)
-    clock = SimpleNamespace(time_ns=now, monotonic=lambda: clock_ns[0] / 1e9, sleep=sleep)
-    backend.clock = clock
-    monkeypatch.setattr(module, 'time', clock)
+    backend.clock = rehearsal_clock
     result = module.run_session(profile(), teacher(), tmp_path/'capture', backend)
     assert result['mode'] == 'rehearsal' and result['source_mode'] == 'simulation'
     assert result['episodes'][0]['complete'] is True
@@ -128,8 +133,10 @@ def test_successful_terminal_without_reaching_the_target_holds_and_records_no_re
     assert 'TERMINAL' in kinds and 'REACHED' not in kinds and kinds[-1] == 'ABORT'
 
 
-def test_reached_step_records_measured_errors(module, tmp_path):
-    module.run_session(profile(), teacher(), tmp_path/'ok', Backend())
+def test_reached_step_records_measured_errors(module, tmp_path, rehearsal_clock):
+    backend = Backend()
+    backend.clock = rehearsal_clock
+    module.run_session(profile(), teacher(), tmp_path/'ok', backend)
     text = (tmp_path/'ok'/'events.jsonl').read_text()
     assert '"kind": "REACHED"' in text and '"errors_rad": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]' in text
 
@@ -227,9 +234,11 @@ class IntrinsicsBackend(Backend):
         return sample
 
 
-def test_published_camera_models_are_hashed_raw_evidence_only_when_changed(module, tmp_path):
+def test_published_camera_models_are_hashed_raw_evidence_only_when_changed(module, tmp_path, rehearsal_clock):
     import json
-    result = module.run_session(profile(), teacher(), tmp_path/'capture', IntrinsicsBackend())
+    backend = IntrinsicsBackend()
+    backend.clock = rehearsal_clock
+    result = module.run_session(profile(), teacher(), tmp_path/'capture', backend)
     assert result['episodes'][0]['complete'] is True and 'camera_info.jsonl' in result['files']
     rows = [json.loads(line) for line in (tmp_path/'capture/camera_info.jsonl').read_text().splitlines()]
     assert [row['cameras']['top']['k'][0] for row in rows] == [1., 2.]

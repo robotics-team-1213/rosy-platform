@@ -1,6 +1,7 @@
 ---
 title: 합성 픽스처에서만 검증한 가드는 실제 파이프라인의 가장 비싼 지점에서 깨진다
 date: 2026-09-23
+last_updated: 2026-10-29
 category: workflow-issues
 module: deploy/robot/pinky_pro/image + deploy/robot/pinky_pro/sd (Pinky Pro release 003·004)
 problem_type: workflow_issue
@@ -60,6 +61,29 @@ $operatorFingerprint = ($operatorKey | & $PythonExe -c $fingerprintCode)   # 실
 `create-provision-bundle.py` 호출처럼 `$OutputEncoding`과 `PYTHONUTF8`를 함께 고정한 곳에서만 쓴다.
 
 ## Guidance
+
+### 실물 진단 import도 서명 트리를 바꿀 수 있다 (2026-10-29)
+
+로봇의 서명 릴리스 안에 있는 Python 모듈을 root 진단 스크립트에서 import한 뒤,
+다음 부팅의 릴리스 검증이 `CHECKSUM_UNLISTED_FILE`로 막혔다. 진단 당시 서비스가
+정상이어도 다음 부팅 검증까지 안전하다는 뜻은 아니다. 서명 manifest에는 정상 빌드
+산출물인 bytecode 1,302개가 있었고, 진단 시간대에 생성된 미등록 bytecode 59개가 별도로 있었다.
+
+복구는 manifest의 파일 집합과 실제 파일 집합의 차이를 먼저 계산하고, 이번 진단이
+생성한 것으로 소유자·시각·확장자·경로를 확인한 59개만 릴리스 밖의 root 전용 백업으로
+격리했다. 원래 상대 경로와 SHA-256을 receipt에 남겼다. 기존 manifest·서명·등록된
+bytecode는 바꾸지 않았다. 같은 native verifier가 통과한 뒤 복구 서비스와 runtime target을
+시작해 CORE·카메라의 정상 실행을 확인했다. 전체 `__pycache__` 삭제는 복구 방법이 아니다.
+
+다음 실물 조사에서는 첫 import부터 `python3 -B`를 사용한다. 스크립트 안에서도
+서명된 패키지 import 전에 `sys.dont_write_bytecode = True`를 설정한다. 특히 `-I`는
+`PYTHONDONTWRITEBYTECODE` 같은 환경 설정을 무시하므로 환경 변수 하나에 의존하지 않는다.
+진단 뒤에는 동일 verifier로 미등록 파일이 없는지 확인한다. 이 규칙은 설치된 모듈이나
+네이티브 런타임을 직접 import하는 운영·복구 스크립트에도 적용한다.
+
+근거: 현장 manifest 차이 59개 → 경로·해시 receipt를 남긴 가역 격리 → 동일 verifier 성공 →
+부팅 복구 서비스 성공 및 CORE·카메라 active. 새 ARM64 이미지 구축·OS 슬롯 전환 수용은
+이 복구 확인에 포함되지 않는다.
 
 1. **가드는 위험이 생기는 경로에만 건다.** "어디에도 X가 없어야 한다"는 규칙을 쓰기 전에, X가 정상적으로 존재하는
    위치를 먼저 센다. 정상 산출물을 막는 가드는 결국 꺼지고, 그때 진짜 위험까지 같이 꺼진다.

@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 """Fallback AP controller (D-176).
 
-Opens the per-card `rosy-pinky-xxxx` AP (WPA2, NetworkManager shared mode,
+Opens the per-card `rosy-pinky-xxxx` AP (NetworkManager shared mode,
 10.42.0.1) only while the robot has no uplink, so a person can always reach
 it. Pi 5 has one radio: while the AP is up the site Wi-Fi cannot be seen, so
 after `hold_seconds` the AP steps aside and the site Wi-Fi gets a fresh grace
-period. `relay` keeps the AP up (D-26 RELAY_AP_STA); `off` never opens it
-(D-26/D-154 NETWORK_HOLD). Runs as root outside CORE (D-161).
+period. An AP nobody has used (no packets received since it opened) steps aside
+already after `idle_hold_seconds`, so a site router that comes back is rejoined
+within minutes instead of a full hold. `relay` keeps the AP up
+(D-26 RELAY_AP_STA); `off` never opens it (D-26/D-154 NETWORK_HOLD). D-919 defaults fallback to open security; relay
+remains WPA2. Runs as root outside CORE (D-161).
 
 D-190: while the AP is up it also hands the LCD what to show. The boot display
 runs unprivileged (rosy-display) and cannot read the root-only credentials, so
@@ -18,6 +21,7 @@ whenever the AP is not up. Nothing here prints the key.
 from __future__ import annotations
 
 import argparse
+import hashlib
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
 import json
@@ -43,7 +47,11 @@ STATUS = "run/rosy-boot/network.json"
 DISPLAY_AP = "run/rosy-boot/ap-display.txt"
 DISPLAY_GROUP = "rosy-display"
 POLL_SECONDS = 10
-DEFAULT_POLICY = {"mode": "fallback", "grace_seconds": 120, "hold_seconds": 600}
+DEFAULT_POLICY = {"mode": "fallback", "fallback_security": "open", "grace_seconds": 120, "hold_seconds": 600,
+                  "idle_hold_seconds": 120}
+RX_PACKETS = "sys/class/net/wlan0/statistics/rx_packets"
+#: Robots that lose one site router together do not all open their APs in the same poll.
+GRACE_JITTER_SECONDS = 30
 
 
 @dataclass(frozen=True)
@@ -53,8 +61,12 @@ class LinkState:
     ap_since: float | None = None
 
 
-def decide(state: LinkState, now: float, policy: dict, *, uplink: bool) -> tuple[str | None, LinkState]:
-    """Return ("open" | "close" | None, next state)."""
+def decide(state: LinkState, now: float, policy: dict, *, uplink: bool,
+           ap_idle: bool = False) -> tuple[str | None, LinkState]:
+    """Return ("open" | "close" | None, next state).
+
+    `ap_idle`: no client has sent a packet since the AP opened.
+    """
     mode = policy.get("mode", "fallback")
     if mode == "off":
         return ("close", LinkState()) if state.ap_active else (None, LinkState())
@@ -65,19 +77,37 @@ def decide(state: LinkState, now: float, policy: dict, *, uplink: bool) -> tuple
     if state.ap_active:
         if uplink:  # a wired uplink appeared: no need for the fallback AP
             return "close", LinkState()
-        if now - (state.ap_since or now) >= policy.get("hold_seconds", 600):
+        held = now - (state.ap_since or now)
+        if held >= policy.get("hold_seconds", 600) or (
+                ap_idle and held >= policy.get("idle_hold_seconds", 120)):
             return "close", LinkState(no_uplink_since=now)
         return None, state
     if uplink:
         return None, LinkState()
     since = state.no_uplink_since if state.no_uplink_since is not None else now
-    if now - since >= policy.get("grace_seconds", 120):
+    if now - since >= policy.get("grace_seconds", 120) + policy.get("grace_offset_seconds", 0):
         return "open", LinkState(ap_active=True, ap_since=now)
     return None, replace(state, no_uplink_since=since)
 
 
 def _run(command: list[str]) -> str:
     return subprocess.run(command, capture_output=True, text=True, timeout=45, check=False).stdout
+
+
+def rx_packets(root: Path) -> int | None:
+    """wlan0 received-packet counter; None where it cannot be read (then the AP is never idle)."""
+    try:
+        return int((root / RX_PACKETS).read_text(encoding="ascii").strip())
+    except (OSError, ValueError):
+        return None
+
+
+def idle_mark(ap_active: bool, mark: int | None, rx: int | None) -> tuple[bool, int | None]:
+    """(ap_idle, next mark): the counter at the first poll with the AP up is the "no client" mark."""
+    if not ap_active:
+        return False, None
+    mark = rx if mark is None else mark
+    return rx is not None and rx == mark, mark
 
 
 def has_uplink(run: Runner) -> bool:
@@ -104,18 +134,36 @@ def _read_json(path: Path) -> dict:
     return data if isinstance(data, dict) else {}
 
 
+def grace_offset(root: Path) -> int:
+    """0..GRACE_JITTER_SECONDS-1, fixed per device name (0 without an identity)."""
+    name = _read_json(root / "etc/rosy/device-identity.json").get("device_name")
+    if not isinstance(name, str) or not name:
+        return 0
+    return int(hashlib.sha256(name.encode("utf-8")).hexdigest(), 16) % GRACE_JITTER_SECONDS
+
+
 def load_policy(root: Path) -> dict:
-    policy = dict(DEFAULT_POLICY)
+    policy = {**DEFAULT_POLICY, "grace_offset_seconds": grace_offset(root)}
     defaults = root / "etc/rosy/defaults.yaml"
     if defaults.is_file():
         try:
             import rosy_config
 
             policy.update(rosy_config.load_defaults(defaults).get("ap", {}))
-        except Exception:  # a broken defaults file must not stop the controller
-            pass
-    policy.update({key: value for key, value in _read_json(root / "etc/rosy/network-policy.json").items()
-                   if key in {"mode", "grace_seconds", "hold_seconds", "ssid", "country"}})
+        except Exception:
+            # Keep close supervision alive without downgrading malformed defaults to an open AP.
+            return {**policy, "mode": "off"}
+    try:
+        override = json.loads((root / "etc/rosy/network-policy.json").read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        override = {}
+    except (OSError, ValueError):
+        return {**policy, "mode": "off"}
+    if not isinstance(override, dict):
+        return {**policy, "mode": "off"}
+    policy.update({key: value for key, value in override.items()
+                   if key in {"mode", "fallback_security", "grace_seconds", "hold_seconds",
+                              "idle_hold_seconds", "ssid", "country"}})
     return policy
 
 
@@ -138,22 +186,27 @@ def _write(path: Path, content: str, mode: int, group: int | None = None) -> Non
         raise
 
 
-def _profile(ssid: str, secret: str, country: str) -> str:
-    return "\n".join([
+def _profile(ssid: str, secret: str | None, country: str, *, security: str = "wpa2") -> str:
+    lines = [
         "[connection]", f"id={PROFILE}", "type=wifi", "autoconnect=false", "interface-name=wlan0", "",
         "[wifi]", "mode=ap", "band=bg", f"ssid={ssid}", "",
-        "[wifi-security]", "key-mgmt=wpa-psk", "proto=rsn", "pairwise=ccmp", "group=ccmp",
-        "=".join(("psk", secret)), "",  # NM stores the AP passphrase; root-only 0600
+    ]
+    if security == "wpa2":
+        lines += ["[wifi-security]", "key-mgmt=wpa-psk", "proto=rsn", "pairwise=ccmp", "group=ccmp",
+                  "=".join(("psk", secret)), ""]  # stored root-only 0600
+    elif security != "open":
+        raise ValueError("unsupported AP security")
+    return "\n".join(lines + [
         "[ipv4]", "method=shared", f"address1={AP_ADDRESS}/24", "",
         "[ipv6]", "method=ignore", "",
         f"# regulatory domain {country}", "",
     ])
 
 
-def _status(root: Path, mode: str, ssid: str | None = None) -> None:
+def _status(root: Path, mode: str, ssid: str | None = None, *, security: str = "wpa2") -> None:
     status = {"mode": mode}
     if mode == "ap":
-        status.update(ssid=ssid, address=AP_ADDRESS, epoch=str(time.monotonic_ns()))
+        status.update(ssid=ssid, address=AP_ADDRESS, security=security, epoch=str(time.monotonic_ns()))
     else:
         clear_display_ap(root)
     _write(root / STATUS, json.dumps(status, sort_keys=True) + "\n", 0o644)
@@ -190,16 +243,33 @@ def clear_display_ap(root: Path) -> None:
 def perform(root: Path, action: str, run: Runner) -> bool:
     """Carry out the action; False when the AP did not come up."""
     if action == "open":
-        credentials = _read_json(root / "etc/rosy/ap-credentials.json")
         policy = load_policy(root)
-        secret = credentials.get("pass" + "word")
-        ssid = policy.get("ssid") or credentials.get("ssid")
-        if not secret or not ssid:
+        if policy.get("mode") == "off":
+            _status(root, "none")
+            return False
+        security = policy.get("fallback_security", "open") if policy.get("mode") == "fallback" else "wpa2"
+        if security not in ("open", "wpa2"):
+            print("rosy-network: invalid fallback security; AP not opened", file=sys.stderr)
+            _status(root, "none")
+            return False
+        if security == "open":
+            identity = _read_json(root / "etc/rosy/device-identity.json")
+            name = identity.get("device_name")
+            if not isinstance(name, str) or not name:
+                print("rosy-network: no device identity; fallback AP not opened", file=sys.stderr)
+                _status(root, "none")
+                return False
+            ssid, secret = policy.get("ssid") or name, None
+        else:
+            credentials = _read_json(root / "etc/rosy/ap-credentials.json")
+            secret = credentials.get("pass" + "word")
+            ssid = policy.get("ssid") or credentials.get("ssid")
+        if not ssid or (security == "wpa2" and not secret):
             print("rosy-network: no AP credentials; fallback AP not opened", file=sys.stderr)
             _status(root, "none")
             return False
         _write(root / f"etc/NetworkManager/system-connections/{PROFILE}.nmconnection",
-               _profile(ssid, secret, policy.get("country", "KR")), 0o600)
+               _profile(ssid, secret, policy.get("country", "KR"), security=security), 0o600)
         run(["nmcli", "connection", "reload"])
         run(["nmcli", "connection", "up", PROFILE])
         if "activated" not in run(["nmcli", "-t", "-f", "GENERAL.STATE", "connection", "show", PROFILE]):
@@ -207,8 +277,11 @@ def perform(root: Path, action: str, run: Runner) -> bool:
             print("rosy-network: fallback AP did not activate", file=sys.stderr)
             _status(root, "none")
             return False
-        _status(root, "ap", ssid)
-        display_ap(root, ssid, secret)
+        _status(root, "ap", ssid, security=security)
+        if security == "open":
+            clear_display_ap(root)
+        else:
+            display_ap(root, ssid, secret)
     elif action == "close":
         run(["nmcli", "connection", "down", PROFILE])
         # Ask NM to pick the best site profile now rather than wait out its retry timer.
@@ -232,20 +305,22 @@ def _radio_lock(root: Path):
         rosy_claim.release(root, holder)
 
 
-def step(state: LinkState, now: float, policy: dict, uplink: bool, root: Path, run: Runner) -> LinkState:
+def step(state: LinkState, now: float, policy: dict, uplink: bool, root: Path, run: Runner,
+         ap_idle: bool = False) -> LinkState:
     with _radio_lock(root) as acquired:
         if not acquired:
             return state
-        return _step_locked(state, now, policy, uplink, root, run)
+        return _step_locked(state, now, policy, uplink, root, run, ap_idle)
 
 
-def _step_locked(state: LinkState, now: float, policy: dict, uplink: bool, root: Path, run: Runner) -> LinkState:
+def _step_locked(state: LinkState, now: float, policy: dict, uplink: bool, root: Path, run: Runner,
+                 ap_idle: bool = False) -> LinkState:
     request = root / 'var/lib/rosy/network/recovery-request.json'
     if _read_json(request).get('source') == 'network-transaction':
         from network_runtime import maintenance_ready
         if maintenance_ready(root):
             state = LinkState(no_uplink_since=now - policy.get('grace_seconds', 120))
-    action, following = decide(state, now, policy, uplink=uplink)
+    action, following = decide(state, now, policy, uplink=uplink, ap_idle=ap_idle)
     if action and not perform(root, action, run) and action == "open":
         # Not up: fallback waits another grace period, relay retries next poll.
         return LinkState(no_uplink_since=now)
@@ -262,6 +337,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--once", action="store_true", help="evaluate one step (for diagnostics)")
     args = parser.parse_args(argv)
     state = LinkState()
+    rx_at_open: int | None = None
     # A restart loses the in-memory state; start from a known "AP down".
     with _radio_lock(args.root) as acquired:
         if acquired:
@@ -271,8 +347,9 @@ def main(argv: list[str] | None = None) -> int:
         try:
             with _radio_lock(args.root) as acquired:
                 if acquired:
+                    ap_idle, rx_at_open = idle_mark(state.ap_active, rx_at_open, rx_packets(args.root))
                     state = _step_locked(state, time.monotonic(), load_policy(args.root),
-                                         has_uplink(_run), args.root, _run)
+                                         has_uplink(_run), args.root, _run, ap_idle)
         except Exception as exc:  # keep supervising; the next poll retries
             print(f"rosy-network: {type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
         if args.once:

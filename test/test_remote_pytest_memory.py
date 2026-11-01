@@ -127,7 +127,7 @@ def test_job_prints_the_scope_memory_peak_and_keeps_the_exit_code(tmp_path, peak
                                               (["ROSY_JOB_CORES=6", "ROSY_JOB_RESERVE_GB=3"], "6 3", "6G"),
                                               (["ROSY_JOB_CORES=6", "ROSY_JOB_RESERVE_CORES=2"], "2 6", "6G")])
 def test_job_lock_takes_the_reservation_and_memory_max_the_cap(tmp_path, words, lock, mem):
-    home, env = _job_env(tmp_path, 'cat "$HOME/rosy-jobs/r.lock"\n')
+    home, env = _job_env(tmp_path, 'cat "$HOME/rosy-jobs/r.0.lock"\n')
     (tmp_path / "bin" / "systemd-run").write_text(
         '#!/bin/bash\necho "$*" > "$HOME/scope"\nwhile [ "$1" != -- ]; do shift; done; shift; exec "$@"\n')
     assert _sh(rj.START, env, "r", "d", "", "0", "60", rj.JOB, *words, "x.py").returncode == 0

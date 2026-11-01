@@ -1,0 +1,241 @@
+{
+  "base_commit": "2631515ea7",
+  "source_commit": "030c2fb110",
+  "mode": "affected",
+  "changed": [
+    "docs/validation/recording-learning-handoff-2026-10-28/evidence/full-selection.json",
+    "docs/validation/recording-learning-handoff-2026-10-28/result.md",
+    "learning/curation/perception/review_app_web/omx-export.js",
+    "learning/curation/perception/review_app_web/omx-review.js",
+    "learning/curation/perception/review_app_web/omx.html",
+    "learning/curation/perception/review_app_web/omx.js",
+    "learning/curation/perception/review_app_web/storage-settings.js",
+    "test/learning/perception/test_omx_owner_status_browser.py",
+    "test/learning/perception/test_omx_review_playback_browser.py",
+    "test/learning/perception/test_storage_omx_http.py"
+  ],
+  "escalations": [],
+  "unmapped": [],
+  "reasons": {
+    "test/test_release_boundary_guards.py": [
+      "guard set (D-436 1)"
+    ],
+    "test/architecture/test_module_structure.py": [
+      "guard set (D-436 1)"
+    ],
+    "test/test_harness_contracts.py": [
+      "guard set (D-436 1)",
+      "module docs (docs/validation/recording-learning-handoff-2026-10-28/evidence/full-selection.json)"
+    ],
+    "test/test_secret_public_provenance.py": [
+      "guard set (D-436 1)"
+    ],
+    "middleware/core/gateway/test/test_protocol_version_alignment.py": [
+      "guard set (D-436 1)"
+    ],
+    "test/test_robot_literals.py": [
+      "guard set (D-436 1)"
+    ],
+    "test/architecture/test_platform_parts.py": [
+      "guard set (D-436 1)"
+    ],
+    "test/architecture/test_document_placement.py": [
+      "guard set (D-436 1)"
+    ],
+    "test/test_network_topology_contracts.py": [
+      "module docs (docs/validation/recording-learning-handoff-2026-10-28/evidence/full-selection.json)"
+    ],
+    "test/test_browser_scope.py": [
+      "references learning/curation/perception/review_app_web/omx-export.js",
+      "references learning/curation/perception/review_app_web/storage-settings.js"
+    ],
+    "test/test_model_pc_autoupdate.py": [
+      "references learning/curation/perception/review_app_web/omx-export.js",
+      "references learning/curation/perception/review_app_web/omx.html",
+      "references learning/curation/perception/review_app_web/storage-settings.js"
+    ],
+    "shared/web/test/test_baseline_matrix.py": [
+      "references learning/curation/perception/review_app_web/omx-export.js",
+      "references learning/curation/perception/review_app_web/omx-review.js",
+      "references learning/curation/perception/review_app_web/omx.html",
+      "references learning/curation/perception/review_app_web/omx.js",
+      "references learning/curation/perception/review_app_web/storage-settings.js"
+    ],
+    "shared/web/test/test_canvas_palette_contract.py": [
+      "references learning/curation/perception/review_app_web/omx-export.js",
+      "references learning/curation/perception/review_app_web/omx-review.js",
+      "references learning/curation/perception/review_app_web/omx.html",
+      "references learning/curation/perception/review_app_web/omx.js",
+      "references learning/curation/perception/review_app_web/storage-settings.js"
+    ],
+    "shared/web/test/test_content_vocabulary.py": [
+      "references learning/curation/perception/review_app_web/omx-export.js",
+      "references learning/curation/perception/review_app_web/omx-review.js",
+      "references learning/curation/perception/review_app_web/omx.html",
+      "references learning/curation/perception/review_app_web/omx.js",
+      "references learning/curation/perception/review_app_web/storage-settings.js"
+    ],
+    "shared/web/test/test_design_scope_gates.py": [
+      "references learning/curation/perception/review_app_web/omx-export.js",
+      "references learning/curation/perception/review_app_web/omx-review.js",
+      "references learning/curation/perception/review_app_web/omx.html",
+      "references learning/curation/perception/review_app_web/omx.js",
+      "references learning/curation/perception/review_app_web/storage-settings.js"
+    ],
+    "shared/web/test/test_palette_gates.py": [
+      "references learning/curation/perception/review_app_web/omx-export.js",
+      "references learning/curation/perception/review_app_web/omx-review.js",
+      "references learning/curation/perception/review_app_web/omx.html",
+      "references learning/curation/perception/review_app_web/omx.js",
+      "references learning/curation/perception/review_app_web/storage-settings.js"
+    ],
+    "shared/web/test/test_responsive_tiers.py": [
+      "references learning/curation/perception/review_app_web/omx-export.js",
+      "references learning/curation/perception/review_app_web/omx-review.js",
+      "references learning/curation/perception/review_app_web/omx.html",
+      "references learning/curation/perception/review_app_web/omx.js",
+      "references learning/curation/perception/review_app_web/storage-settings.js"
+    ],
+    "shared/web/test/test_shared_controls.py": [
+      "references learning/curation/perception/review_app_web/omx-export.js",
+      "references learning/curation/perception/review_app_web/omx-review.js",
+      "references learning/curation/perception/review_app_web/omx.html",
+      "references learning/curation/perception/review_app_web/omx.js",
+      "references learning/curation/perception/review_app_web/storage-settings.js"
+    ],
+    "shared/web/test/test_single_language.py": [
+      "references learning/curation/perception/review_app_web/omx-export.js",
+      "references learning/curation/perception/review_app_web/omx-review.js",
+      "references learning/curation/perception/review_app_web/omx.html",
+      "references learning/curation/perception/review_app_web/omx.js",
+      "references learning/curation/perception/review_app_web/storage-settings.js"
+    ],
+    "shared/web/test/test_surface_icons.py": [
+      "references learning/curation/perception/review_app_web/omx-export.js",
+      "references learning/curation/perception/review_app_web/omx-review.js",
+      "references learning/curation/perception/review_app_web/omx.html",
+      "references learning/curation/perception/review_app_web/omx.js",
+      "references learning/curation/perception/review_app_web/storage-settings.js"
+    ],
+    "shared/web/test/test_surface_registry.py": [
+      "references learning/curation/perception/review_app_web/omx-export.js",
+      "references learning/curation/perception/review_app_web/omx-review.js",
+      "references learning/curation/perception/review_app_web/omx.html",
+      "references learning/curation/perception/review_app_web/omx.js",
+      "references learning/curation/perception/review_app_web/storage-settings.js"
+    ],
+    "shared/web/test/test_surface_titles.py": [
+      "references learning/curation/perception/review_app_web/omx-export.js",
+      "references learning/curation/perception/review_app_web/omx-review.js",
+      "references learning/curation/perception/review_app_web/omx.html",
+      "references learning/curation/perception/review_app_web/omx.js",
+      "references learning/curation/perception/review_app_web/storage-settings.js"
+    ],
+    "shared/web/test/test_surface_typography_focus_contracts.py": [
+      "references learning/curation/perception/review_app_web/omx-export.js",
+      "references learning/curation/perception/review_app_web/omx-review.js",
+      "references learning/curation/perception/review_app_web/omx.html",
+      "references learning/curation/perception/review_app_web/omx.js",
+      "references learning/curation/perception/review_app_web/storage-settings.js"
+    ],
+    "shared/web/test/test_token_parity.py": [
+      "references learning/curation/perception/review_app_web/omx-export.js",
+      "references learning/curation/perception/review_app_web/omx-review.js",
+      "references learning/curation/perception/review_app_web/omx.html",
+      "references learning/curation/perception/review_app_web/omx.js",
+      "references learning/curation/perception/review_app_web/storage-settings.js"
+    ],
+    "shared/web/test/test_ui_token_contracts.py": [
+      "references learning/curation/perception/review_app_web/omx-export.js",
+      "references learning/curation/perception/review_app_web/omx-review.js",
+      "references learning/curation/perception/review_app_web/omx.html",
+      "references learning/curation/perception/review_app_web/omx.js",
+      "references learning/curation/perception/review_app_web/storage-settings.js"
+    ],
+    "test/learning/perception": [
+      "module perception_curation (learning/curation/perception/review_app_web/omx-export.js)",
+      "module perception_curation (learning/curation/perception/review_app_web/omx-review.js)",
+      "module perception_curation (learning/curation/perception/review_app_web/omx.html)",
+      "module perception_curation (learning/curation/perception/review_app_web/omx.js)",
+      "module perception_curation (learning/curation/perception/review_app_web/storage-settings.js)"
+    ],
+    "shared/web/test/test_app_shell_seats.py": [
+      "references learning/curation/perception/review_app_web/omx.html"
+    ],
+    "test/learning/perception/test_omx_web.py": [
+      "references learning/curation/perception/review_app_web/omx.js"
+    ],
+    "test/learning/perception/test_omx_owner_status_browser.py": [
+      "changed test file test/learning/perception/test_omx_owner_status_browser.py"
+    ],
+    "test/learning/perception/test_omx_review_playback_browser.py": [
+      "changed test file test/learning/perception/test_omx_review_playback_browser.py"
+    ],
+    "test/learning/perception/test_storage_omx_http.py": [
+      "changed test file test/learning/perception/test_storage_omx_http.py"
+    ]
+  },
+  "invocations": [
+    [
+      "middleware/core/gateway/test/test_protocol_version_alignment.py",
+      "shared/web/test/test_app_shell_seats.py",
+      "shared/web/test/test_baseline_matrix.py",
+      "shared/web/test/test_canvas_palette_contract.py",
+      "shared/web/test/test_content_vocabulary.py",
+      "shared/web/test/test_design_scope_gates.py",
+      "shared/web/test/test_palette_gates.py",
+      "shared/web/test/test_responsive_tiers.py",
+      "shared/web/test/test_shared_controls.py",
+      "shared/web/test/test_single_language.py",
+      "shared/web/test/test_surface_icons.py",
+      "shared/web/test/test_surface_registry.py",
+      "shared/web/test/test_surface_titles.py",
+      "shared/web/test/test_surface_typography_focus_contracts.py",
+      "shared/web/test/test_token_parity.py",
+      "shared/web/test/test_ui_token_contracts.py",
+      "test/architecture/test_document_placement.py",
+      "test/architecture/test_module_structure.py",
+      "test/architecture/test_platform_parts.py",
+      "test/learning/perception",
+      "test/test_browser_scope.py",
+      "test/test_harness_contracts.py",
+      "test/test_model_pc_autoupdate.py",
+      "test/test_network_topology_contracts.py",
+      "test/test_release_boundary_guards.py",
+      "test/test_robot_literals.py",
+      "test/test_secret_public_provenance.py"
+    ]
+  ],
+  "local_invocations": [
+    [
+      "middleware/core/gateway/test/test_protocol_version_alignment.py",
+      "shared/web/test/test_app_shell_seats.py",
+      "shared/web/test/test_baseline_matrix.py",
+      "shared/web/test/test_canvas_palette_contract.py",
+      "shared/web/test/test_content_vocabulary.py",
+      "shared/web/test/test_design_scope_gates.py",
+      "shared/web/test/test_palette_gates.py",
+      "shared/web/test/test_responsive_tiers.py",
+      "shared/web/test/test_shared_controls.py",
+      "shared/web/test/test_single_language.py",
+      "shared/web/test/test_surface_icons.py",
+      "shared/web/test/test_surface_registry.py",
+      "shared/web/test/test_surface_titles.py",
+      "shared/web/test/test_surface_typography_focus_contracts.py",
+      "shared/web/test/test_token_parity.py",
+      "shared/web/test/test_ui_token_contracts.py",
+      "test/architecture/test_document_placement.py",
+      "test/architecture/test_module_structure.py",
+      "test/architecture/test_platform_parts.py",
+      "test/learning/perception",
+      "test/test_browser_scope.py",
+      "test/test_harness_contracts.py",
+      "test/test_model_pc_autoupdate.py",
+      "test/test_network_topology_contracts.py",
+      "test/test_release_boundary_guards.py",
+      "test/test_robot_literals.py",
+      "test/test_secret_public_provenance.py"
+    ]
+  ],
+  "full_invocations": []
+}

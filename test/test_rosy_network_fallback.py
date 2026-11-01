@@ -110,6 +110,57 @@ def test_the_ap_steps_aside_after_the_hold_so_site_wifi_can_be_retried():
     assert action == "close" and state.no_uplink_since == 1600.0  # a fresh grace before reopening
 
 
+def test_an_unused_ap_steps_aside_early_so_a_returning_site_router_is_rejoined():
+    """Router reboot: every robot opened its AP; nobody joined, so none waits the full hold."""
+    module = _module()
+    policy = {**POLICY, "idle_hold_seconds": 120}
+    state = _state(module, ap_active=True, ap_since=1000.0)
+
+    assert module.decide(state, 1119.0, policy, uplink=False, ap_idle=True)[0] is None
+    action, state = module.decide(state, 1120.0, policy, uplink=False, ap_idle=True)
+    assert action == "close" and state.no_uplink_since == 1120.0
+    used = _state(module, ap_active=True, ap_since=1000.0)   # someone is on the AP: full hold
+    assert module.decide(used, 1500.0, policy, uplink=False, ap_idle=False)[0] is None
+
+
+def test_grace_offset_staggers_robots_and_delays_the_open(tmp_path):
+    """Robots behind one rebooted router do not all open their APs in the same poll."""
+    module = _module()
+    assert module.grace_offset(tmp_path) == 0                       # no identity: no offset
+    offsets = set()
+    for name in ("rosy-pinky-e4us", "rosy-pinky-a1b2", "rosy-pinky-zz09", "rosy-pinky-q7k3"):
+        root = tmp_path / name
+        (root / "etc/rosy").mkdir(parents=True)
+        (root / "etc/rosy/device-identity.json").write_text(json.dumps({"device_name": name}), encoding="utf-8")
+        offset = module.grace_offset(root)
+        assert offset == module.grace_offset(root) and 0 <= offset < module.GRACE_JITTER_SECONDS
+        assert module.load_policy(root)["grace_offset_seconds"] == offset
+        offsets.add(offset)
+    assert len(offsets) > 1
+    policy = {**POLICY, "grace_offset_seconds": 7}
+    state = _state(module, no_uplink_since=1000.0)
+    assert module.decide(state, 1126.0, policy, uplink=False)[0] is None
+    assert module.decide(state, 1127.0, policy, uplink=False)[0] == "open"
+
+
+def test_idle_mark_counts_only_packets_since_the_ap_opened():
+    module = _module()
+    assert module.idle_mark(False, 50, 60) == (False, None)
+    assert module.idle_mark(True, None, 50) == (True, 50)      # first poll with the AP up
+    assert module.idle_mark(True, 50, 50) == (True, 50)
+    assert module.idle_mark(True, 50, 53) == (False, 50)       # a client sent something
+    assert module.idle_mark(True, None, None) == (False, None)  # unreadable counter: never idle
+
+
+def test_rx_packets_reads_the_wlan0_counter(tmp_path):
+    module = _module()
+    assert module.rx_packets(tmp_path) is None
+    counter = tmp_path / module.RX_PACKETS
+    counter.parent.mkdir(parents=True)
+    counter.write_text("1234\n", encoding="ascii")
+    assert module.rx_packets(tmp_path) == 1234
+
+
 @pytest.mark.parametrize(("mode", "ap_active", "expected"),
                          [("off", True, "close"), ("off", False, None),
                           ("relay", False, "open"), ("relay", True, None)])
@@ -125,6 +176,8 @@ def test_off_and_relay_modes(mode, ap_active, expected):
 def _device(tmp_path: Path) -> Path:
     root = tmp_path / "device"
     (root / "etc/rosy").mkdir(parents=True)
+    (root / "etc/rosy/device-identity.json").write_text(
+        json.dumps({"device_name": "rosy-pinky-e4us"}), encoding="utf-8")
     (root / "etc/rosy/ap-credentials.json").write_text(
         json.dumps({"ssid": "rosy-pinky-e4us", PW: AP_VALUE}), encoding="utf-8")
     (root / "etc/rosy/network-policy.json").write_text(json.dumps({**POLICY, "country": "KR"}), encoding="utf-8")
@@ -168,6 +221,8 @@ def test_without_ap_credentials_the_ap_is_not_opened(tmp_path):
     module = _module()
     root = _device(tmp_path)
     (root / "etc/rosy/ap-credentials.json").unlink()
+    (root / "etc/rosy/network-policy.json").write_text(
+        json.dumps({"mode": "fallback", "fallback_security": "wpa2"}), encoding="utf-8")
     calls: list[list[str]] = []
 
     module.perform(root, "open", lambda command: calls.append(command) or "")
@@ -317,3 +372,177 @@ def test_fallback_holds_claim_before_radio_lock_and_releases_it(tmp_path, monkey
         assert holders[0] != holders[1], "each radio ownership must use a unique claim holder"
     assert calls
     assert rosy_claim.check(tmp_path) is None
+
+
+@pytest.mark.parametrize("configured, expected", [(None, "open"), ("open", "open"), ("wpa2", "wpa2")])
+def test_fallback_security_controls_profile_and_public_status(tmp_path, monkeypatch, configured, expected):
+    module = _module()
+    monkeypatch.setattr(module, "_display_gid", lambda: None)
+    root = _device(tmp_path)
+    policy = dict(POLICY)
+    if configured is not None:
+        policy["fallback_security"] = configured
+    (root / "etc/rosy/network-policy.json").write_text(json.dumps(policy), encoding="utf-8")
+    handoff = root / module.DISPLAY_AP
+    handoff.parent.mkdir(parents=True)
+    handoff.write_text(AP_VALUE, encoding="utf-8")
+
+    assert module.perform(root, "open", _activated)
+
+    profile = (root / f"etc/NetworkManager/system-connections/{module.PROFILE}.nmconnection").read_text()
+    status = json.loads((root / module.STATUS).read_text())
+    assert status["security"] == expected
+    assert ("[wifi-security]" in profile) == (expected == "wpa2")
+    assert (AP_VALUE in profile) == (expected == "wpa2")
+    assert AP_VALUE not in json.dumps(status)
+    if expected == "open":
+        assert not handoff.exists()
+
+
+def test_open_fallback_does_not_read_its_unused_credential_store(tmp_path, monkeypatch):
+    module = _module()
+    root = _device(tmp_path)
+    original = module._read_json
+
+    def read(path):
+        assert path.name != "ap-credentials.json", "an open AP must not read its unused key store"
+        return original(path)
+
+    monkeypatch.setattr(module, "_read_json", read)
+    assert module.perform(root, "open", _activated)
+
+
+def test_open_fallback_only_needs_a_known_ssid(tmp_path):
+    module = _module()
+    root = _device(tmp_path)
+    (root / "etc/rosy/ap-credentials.json").unlink()
+    assert module.perform(root, "open", _activated)
+    status = json.loads((root / module.STATUS).read_text())
+    assert status["security"] == "open" and status["ssid"] == "rosy-pinky-e4us"
+
+
+def test_relay_keeps_wpa2_even_when_fallback_is_open(tmp_path, monkeypatch):
+    module = _module()
+    monkeypatch.setattr(module, "_display_gid", lambda: None)
+    root = _device(tmp_path)
+    (root / "etc/rosy/network-policy.json").write_text(
+        json.dumps({"mode": "relay", "fallback_security": "open"}), encoding="utf-8")
+    assert module.perform(root, "open", _activated)
+    profile = (root / f"etc/NetworkManager/system-connections/{module.PROFILE}.nmconnection").read_text()
+    assert "[wifi-security]" in profile and AP_VALUE in profile
+    (root / "etc/rosy/ap-credentials.json").write_text(json.dumps({"ssid": "fixture-ap"}), encoding="utf-8")
+    assert not module.perform(root, "open", _activated)
+
+
+@pytest.mark.parametrize("security", [None, "invalid", {}, []])
+def test_invalid_fallback_security_does_not_open_an_ap(tmp_path, security):
+    module = _module()
+    root = _device(tmp_path)
+    (root / "etc/rosy/network-policy.json").write_text(
+        json.dumps({"mode": "fallback", "fallback_security": security}), encoding="utf-8")
+    calls = []
+    assert not module.perform(root, "open", lambda command: calls.append(command) or _activated(command))
+    assert calls == []
+
+
+@pytest.mark.parametrize("defaults", ["ap: [broken", "ap:\n  fallback_security: invalid\n",
+                                      "ap:\n  fallback_security: null\n"])
+def test_invalid_defaults_refuse_ap_open_but_keep_close_supervision(tmp_path, defaults):
+    module = _module()
+    root = _device(tmp_path)
+    (root / "etc/rosy/defaults.yaml").write_text(defaults, encoding="utf-8")
+    policy = module.load_policy(root)
+    assert policy["mode"] == "off"
+    calls = []
+    run = lambda command: calls.append(command) or _activated(command)
+    assert not module.perform(root, "open", run)
+    assert calls == []
+    active = _state(module, ap_active=True, ap_since=100)
+    following = module.step(active, 200, policy, False, root, run)
+    assert not following.ap_active
+    assert ["nmcli", "connection", "down", module.PROFILE] in calls
+    assert ["nmcli", "connection", "up", module.PROFILE] not in calls
+
+
+def test_off_policy_cannot_be_opened_by_the_action_handler(tmp_path):
+    module = _module()
+    root = _device(tmp_path)
+    (root / "etc/rosy/network-policy.json").write_text(json.dumps({"mode": "off"}))
+    calls = []
+    assert not module.perform(root, "open", lambda command: calls.append(command) or _activated(command))
+    assert calls == []
+
+
+def test_default_fallback_security_is_open(tmp_path):
+    module = _module()
+    assert module.load_policy(tmp_path)["fallback_security"] == "open"
+
+
+@pytest.mark.parametrize("device_name", ["rosy-pinky-geg6", "rosy-pinky-nsfh"])
+@pytest.mark.parametrize("override", [None, "fixture-recovery"])
+def test_open_ap_keeps_each_device_name_unless_ssid_is_explicit(tmp_path, device_name, override):
+    module = _module()
+    root = _device(tmp_path)
+    (root / "etc/rosy/device-identity.json").write_text(json.dumps({"device_name": device_name}))
+    policy = {"mode": "fallback"}
+    if override is not None:
+        policy["ssid"] = override
+    (root / "etc/rosy/network-policy.json").write_text(json.dumps(policy))
+    assert module.perform(root, "open", _activated)
+    assert json.loads((root / module.STATUS).read_text())["ssid"] == (override or device_name)
+
+
+@pytest.mark.parametrize("override", [None, "fixture-recovery"])
+def test_open_ap_does_not_invent_an_identity_when_the_canonical_one_is_absent(tmp_path, override):
+    module = _module()
+    root = _device(tmp_path)
+    (root / "etc/rosy/device-identity.json").unlink()
+    policy = {"mode": "fallback"}
+    if override is not None:
+        policy["ssid"] = override
+    (root / "etc/rosy/network-policy.json").write_text(json.dumps(policy))
+    calls = []
+    assert not module.perform(root, "open", lambda command: calls.append(command) or _activated(command))
+    assert calls == []
+
+
+@pytest.mark.parametrize("content", ["{broken", "", "[]", "null", '"text"', "unreadable"])
+def test_bad_existing_policy_refuses_open_but_keeps_close_supervision(tmp_path, monkeypatch, content):
+    module = _module()
+    root = _device(tmp_path)
+    path = root / "etc/rosy/network-policy.json"
+    if content == "unreadable":
+        read_text = Path.read_text
+
+        def denied(candidate, *args, **kwargs):
+            if candidate == path:
+                raise PermissionError("fixture")
+            return read_text(candidate, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "read_text", denied)
+    else:
+        path.write_text(content, encoding="utf-8")
+    policy = module.load_policy(root)
+    assert policy["mode"] == "off"
+    calls = []
+    run = lambda command: calls.append(command) or _activated(command)
+    assert not module.perform(root, "open", run)
+    assert calls == []
+    following = module.step(_state(module, ap_active=True, ap_since=100), 200, policy, False, root, run)
+    assert not following.ap_active
+    assert ["nmcli", "connection", "down", module.PROFILE] in calls
+    assert ["nmcli", "connection", "up", module.PROFILE] not in calls
+
+
+@pytest.mark.parametrize("missing", [True, False])
+def test_missing_or_empty_mapping_policy_keeps_the_default_open_behavior(tmp_path, missing):
+    module = _module()
+    root = _device(tmp_path)
+    path = root / "etc/rosy/network-policy.json"
+    if missing:
+        path.unlink()
+    else:
+        path.write_text("{}", encoding="utf-8")
+    assert module.load_policy(root)["fallback_security"] == "open"
+    assert module.perform(root, "open", _activated)
+    assert json.loads((root / module.STATUS).read_text())["security"] == "open"

@@ -88,3 +88,62 @@ def retime(frames: list, fps: int, vmax: float, amax: float = GUARD_ACCEL_UNITS_
         out.append([p + (q - p) * w for p, q in zip(path[i], path[i + 1])])
     out[-1] = list(path[-1])
     return out
+
+
+def eased(distance: float, vmax: float, amax: float) -> tuple[float, float]:
+    """(duration, ramp time) of a rest-to-rest move whose speed rises and falls along a half cosine: the
+    acceleration starts and ends at zero and peaks at `amax`. A trapezoid's acceleration steps from 0 to amax in
+    one tick (jerk 110 units/s^3 at 30 fps, 12 here), a kick the guard's chaser and the servo both answer."""
+    if distance <= 0:
+        return 0.0, 0.0
+    ramp = math.pi / 2 * vmax / amax
+    if distance < vmax * ramp:  # never reaches vmax: peak speed sqrt(2 d a / pi)
+        ramp = math.pi / 2 * math.sqrt(2 * distance * amax / math.pi) / amax
+        return 2 * ramp, ramp
+    return distance / vmax + ramp, ramp
+
+
+def eased_progress(t: float, duration: float, ramp: float) -> float:
+    """0..1 along an `eased` move at time `t`."""
+    if duration <= 0 or t >= duration:
+        return 1.0
+    if t <= 0:
+        return 0.0
+    peak = 1.0 / (duration - ramp)
+
+    def ramped(x):  # distance covered x seconds into a ramp
+        return 0.5 * peak * (x - ramp / math.pi * math.sin(math.pi * x / ramp))
+    if t < ramp:
+        return ramped(t)
+    if t > duration - ramp:
+        return 1.0 - ramped(duration - t)
+    return 0.5 * peak * ramp + peak * (t - ramp)
+
+
+def flow(waypoints: list, fps: int, vmax: float, blend: list, blend_s: float,
+         amax: float = GUARD_ACCEL_UNITS_S2, rise_speed: float | None = None) -> list:
+    """Frames at `fps` through `waypoints` (the first excluded, the last exact). Each segment is synchronised
+    to its slowest joint, shoulder_lift (index 1) rising at most `rise_speed`; a blended segment begins while the
+    previous one eases out (at most `blend_s`, never before the one before that has ended, so at most two
+    segments move at once). Unblended waypoints are passed at rest."""
+    segments, start = [], 0.0
+    for i, (a, b) in enumerate(zip(waypoints, waypoints[1:])):
+        delta = [y - x for x, y in zip(a, b)]
+        # stretch the rising lift's distance so the shared profile moves it no faster than rise_speed
+        span = max(abs(d) * (vmax / rise_speed if rise_speed and j == 1 and d < 0 and vmax > rise_speed else 1.0)
+                   for j, d in enumerate(delta))
+        duration, ramp = eased(span, vmax, amax)
+        if segments and blend[i]:
+            start -= min(segments[-1][3], ramp, blend_s)
+            if len(segments) > 1:
+                start = max(start, segments[-2][0] + segments[-2][1])
+        segments.append((start, duration, delta, ramp))
+        start += duration
+    end = max((s + d for s, d, _, _ in segments), default=0.0)
+    frames = []
+    for k in range(1, max(1, math.ceil(end * fps)) + 1):
+        t = min(k / fps, end)
+        frames.append([w + sum(delta[j] * eased_progress(t - s, d, r) for s, d, delta, r in segments)
+                       for j, w in enumerate(waypoints[0])])
+    frames[-1] = list(waypoints[-1])
+    return frames

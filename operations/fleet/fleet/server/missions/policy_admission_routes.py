@@ -42,7 +42,8 @@ def install_policy_admission_routes(app, *, core, read_guard, operator_guard,
                                 principal: object = Depends(
                                     require_named_operator)) -> dict:
         try:
-            status = core.toggle(enabled=body.enabled)
+            status = core.toggle(enabled=body.enabled,
+                                 actor=getattr(principal, "principal_id", None))
         except ValueError as exc:
             raise HTTPException(status_code=409, detail={
                 "code": "POLICY_ADMISSION_SCOPE_NOT_CONFIGURED",

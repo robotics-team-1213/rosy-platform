@@ -1,12 +1,12 @@
 ---
 module: isaac_sim
 owner: sim
-last_verified: { commit: "764b591ed6", date: 2026-10-11 }
+last_verified: { commit: "bb39f438a5", date: 2026-10-30 }
 gates:
   SOURCE:
     state: GO
     cmd: "python tools/remote/remote_pytest.py --log-dir X:/DevTemp/isaac-source -- learning/envs/isaac/test"
-    evidence: "CORE final port and existing Drive reused by D-638 diagnostic. 764b591ed6 tools/sim/isaac ownership fix and Isaac/architecture/release/harness remote regression exit 0, 0 NEW; independent source review approved placement, native recording and frozen policy restore. Runtime revisions and source hash readback are separate in docs/validation/isaac-map-rl-2026-10-11/result.md."
+    evidence: "bb39f438a5 remote Isaac596tests594passed2skip0fail; remote_isaac/admission160passed. Actual CAD13205531 Stage1 workcell. Run2cdbdd56df3851aeb9ff2701e2014bdd SUCCEEDED: nine90x30x30mm containers packed3x3x3 with D-929 row gaps (target3.5mm, measured3.22-4.00mm, band2-5mm, envelope90x97x90mm), arms0/1, physical tabletop leveling/regrasp, original support/position/stability limits with speed taken from the pose change per0.1s sample (Isaac instantaneous cargo velocity is solver chatter, run b326). SDKexit0/import/video11674frames/owned shutdown/GPU return confirmed; hashes in docs/validation/omx-cube-stacking-2026-10-29/result.md. Earlier: column42 3x1x3 run8858 accepted at4f63cd5992. Single seed42 nominal IK-reference only: offset/reverse, varied infeed, ACT/RL, hardware and field acceptance are not established. SOURCE GO does not change separate ROS-SIM/HIL gates."
   LOCAL:
     state: GO
     cmd: "python tools/remote/remote_pytest.py --log-dir X:/DevTemp/isaac-core -- learning/envs/isaac/test middleware/core/gateway/test middleware/core/services/test test/test_structure_installed_packages.py"

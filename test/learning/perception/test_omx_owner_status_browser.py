@@ -1,5 +1,7 @@
 """Real Chromium checks observer selection, failure clearing and no control claim."""
 import threading
+import os
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -7,6 +9,13 @@ from browser_harness import browser_tests_enabled, free_port
 from review_app import ReviewStore, make_server
 
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason='requires explicit Chromium run')
+
+
+def capture(page, name, selector=None):
+    if root := os.environ.get('ROSY_SCREENSHOT_DIR'):
+        target = Path(root).expanduser() / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        (page.locator(selector) if selector else page).screenshot(path=str(target))
 
 
 @pytest.fixture
@@ -25,6 +34,153 @@ def empty_learning_center(tmp_path):
         server.shutdown()
         server.server_close()
         thread.join(timeout=5)
+
+
+@pytest.mark.parametrize('width', [320, 1440])
+def test_all_tools_has_no_false_step_and_reveals_nested_keyboard_target(empty_learning_center, width):
+    playwright = pytest.importorskip('playwright.sync_api')
+    with playwright.sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(viewport={'width': width, 'height': 1000})
+            expect = playwright.expect
+            page.goto(empty_learning_center+'/learning/omx?view=all', wait_until='networkidle')
+            expect(page.locator('#stage-question')).to_have_text('전체 도구')
+            expect(page.locator('#omx-sections [aria-current]')).to_have_count(0)
+            capture(page, f'omx-all-tools-{width}.png')
+            page.goto(empty_learning_center+'/learning/omx?view=all#native-review-heading', wait_until='networkidle')
+            target = page.locator('#native-review-heading')
+            expect(target).to_be_focused()
+            assert target.evaluate('el=>{const r=el.getBoundingClientRect();return r.top>=document.querySelector("ui-topbar").getBoundingClientRect().bottom-1&&r.bottom<=innerHeight;}')
+            assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
+            capture(page, f'omx-nested-review-{width}.png')
+        finally:
+            browser.close()
+
+
+def test_view_toggle_changes_only_view_and_retains_history_context(empty_learning_center):
+    playwright = pytest.importorskip('playwright.sync_api')
+    with playwright.sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        try:
+            page = browser.new_page()
+            expect = playwright.expect
+            page.goto(empty_learning_center+'/learning/omx?source=fixed-context#dataset-section', wait_until='networkidle')
+            page.locator('#workflow-view').click()
+            assert page.evaluate('new URL(location.href).searchParams.get("source")') == 'fixed-context'
+            expect(page.locator('#train-section')).to_be_visible()
+            page.locator('#workflow-view').click()
+            assert page.evaluate('new URL(location.href).searchParams.get("source")') == 'fixed-context'
+            expect(page.locator('#train-section')).to_be_hidden()
+            expect(page).to_have_url(empty_learning_center+'/learning/omx?source=fixed-context#dataset-section')
+            page.go_back()
+            expect(page.locator('#train-section')).to_be_visible()
+        finally:
+            browser.close()
+
+
+def test_center_read_error_is_visible_from_conversion_stage_and_clears_on_recovery(empty_learning_center):
+    playwright = pytest.importorskip('playwright.sync_api')
+    failed = [True]
+    with playwright.sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        try:
+            page = browser.new_page()
+            def center(route):
+                route.fulfill(status=503 if failed[0] else 200, json={'error': 'fixture center unavailable'}
+                    if failed[0] else {'datasets': [], 'runs': [], 'methods': {}})
+            page.route('**/api/learning/omx/center', center)
+            page.goto(empty_learning_center+'/learning/omx#dataset-section', wait_until='networkidle')
+            expect = playwright.expect
+            alert = page.locator('#center-read-error')
+            expect(alert).to_be_visible()
+            expect(alert).to_have_attribute('role', 'alert')
+            expect(alert).to_contain_text('fixture center unavailable')
+            expect(page.locator('#center-status')).to_be_visible()
+            expect(page.locator('#train-section')).to_be_hidden()
+            page.evaluate('document.fonts.ready')
+            alert.evaluate('el=>el.scrollIntoView({block:"center"})')
+            assert alert.evaluate('el=>{const r=el.getBoundingClientRect();return r.top>=document.querySelector("ui-topbar").getBoundingClientRect().bottom&&r.bottom<=innerHeight;}')
+            capture(page, 'omx-center-read-failure.png', '#center-read-error')
+            failed[0] = False
+            page.locator('#refresh').click()
+            expect(alert).to_be_hidden()
+            expect(page.locator('#center-status')).to_have_attribute('state', 'ready')
+        finally:
+            browser.close()
+
+
+@pytest.mark.parametrize('action', ['이 데이터로 학습 준비', '이 데이터 HF 보관 준비', '이 변환 중지'])
+def test_conversion_poll_preserves_action_focus_and_falls_back_to_run_heading(empty_learning_center, action):
+    playwright = pytest.importorskip('playwright.sync_api')
+    run = {'id': 'conversion-fixture', 'name': 'Native conversion', 'prepared_id': 'prepared-fixture',
+           'execution_mode': 'native_export', 'method': 'act', 'status': 'running' if action=='이 변환 중지' else 'succeeded',
+           'progress': {'phase': 'verifying'},
+           'result': {'dataset_id': 'converted-data', 'dataset_revision': 'f'*64, 'act_only': True}}
+    snapshot = {'datasets': [], 'runs': [run], 'methods': {}}
+    with playwright.sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        try:
+            page = browser.new_page()
+            page.route('**/api/learning/omx/center', lambda route: route.fulfill(json=snapshot))
+            page.goto(empty_learning_center+'/learning/omx#dataset-section', wait_until='networkidle')
+            expect = playwright.expect
+            control = page.get_by_role('button' if action=='이 변환 중지' else 'link', name=action, exact=True)
+            control.focus()
+            before = page.locator('#center-status').inner_text()
+            with page.expect_response('**/api/learning/omx/center'):
+                pass
+            expect(page.locator('#center-status')).not_to_have_text(before)
+            expect(control).to_be_focused()
+            run['name'] = 'Updated conversion'
+            with page.expect_response('**/api/learning/omx/center'):
+                pass
+            expect(page.locator('#export-runs')).to_contain_text('Updated conversion')
+            expect(control).to_be_focused()
+            if action=='이 변환 중지':
+                run['status'] = 'succeeded'
+                with page.expect_response('**/api/learning/omx/center'):
+                    pass
+                heading = page.locator('#export-runs h3')
+                expect(heading).to_contain_text('완료')
+                expect(heading).to_be_focused()
+        finally:
+            browser.close()
+
+
+def test_conversion_poll_retains_pending_stop_and_its_rejection(empty_learning_center):
+    playwright = pytest.importorskip('playwright.sync_api')
+    run = {'id': 'conversion-pending', 'name': 'Pending conversion', 'prepared_id': 'prepared-fixture',
+           'execution_mode': 'native_export', 'method': 'act', 'status': 'running', 'progress': {}}
+    held = []
+    with playwright.sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        try:
+            page = browser.new_page()
+            page.route('**/api/learning/omx/center', lambda route: route.fulfill(json={'datasets': [], 'runs': [run], 'methods': {}}))
+            page.route('**/api/learning/omx/center/stop', lambda route: held.append(route))
+            page.goto(empty_learning_center+'/learning/omx#dataset-section', wait_until='networkidle')
+            expect = playwright.expect
+            stop = page.get_by_role('button', name='이 변환 중지', exact=True)
+            with page.expect_request('**/api/learning/omx/center/stop'):
+                stop.click()
+            expect(stop).to_be_disabled()
+            run['name'] = 'Progress while stopping'
+            with page.expect_response('**/api/learning/omx/center'):
+                pass
+            expect(page.locator('#export-runs')).to_contain_text(run['name'])
+            expect(stop).to_be_disabled()
+            assert len(held) == 1
+            held.pop().fulfill(status=503, json={'error': 'fixture stop rejected'})
+            expect(page.locator('#export-runs [role="alert"]')).to_have_text('fixture stop rejected')
+            expect(stop).to_be_enabled()
+            run['name'] = 'Progress after rejection'
+            with page.expect_response('**/api/learning/omx/center'):
+                pass
+            expect(page.locator('#export-runs')).to_contain_text(run['name'])
+            expect(page.locator('#export-runs [role="alert"]')).to_have_text('fixture stop rejected')
+        finally:
+            browser.close()
 
 
 @pytest.mark.parametrize('width', [1440, 390])
@@ -201,6 +357,8 @@ def test_every_learning_rail_destination_renders_content(empty_learning_center):
                 playwright.expect(page.locator('main')).to_be_visible()
                 playwright.expect(page.locator('[data-learning-account-entry]')).to_have_attribute('href', '/accounts')
                 playwright.expect(page.locator('[data-learning-account-entry]')).to_be_visible()
+                if href=='/':
+                    playwright.expect(page.locator('#empty-review h2')).not_to_have_text('검수 내용을 확인하는 중')
                 assert len(page.locator('main').inner_text().strip()) > 40
                 assert page.url == empty_learning_center+href
             reached = set()

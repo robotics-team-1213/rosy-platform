@@ -243,6 +243,8 @@ def open_entries(wt: Path, now: float, age_s: float = OPEN_AFTER_S) -> list[tupl
         for later in all_rows[i + 1:]:
             if later.get("kind") in ("prepare", "done") and _ancestor(wt, rec["candidate"], later["candidate"]):
                 left = [f for f in left if f not in later.get("alone", []) or f in later.get("incomplete", [])]
+                if not left:
+                    break
         if left:
             found.append((rec, left))
     return found

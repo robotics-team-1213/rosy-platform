@@ -52,7 +52,7 @@ export function createConsoleAuth({ pageScope, el, view, auth, call, fleetClient
     el("console-token").removeAttribute("aria-invalid");
   }
 
-  async function refreshAuthorization() {
+  async function refreshAuthorization(credentialChange = false) {
     const life = pageScope.capture();
     life.check();
     // 로그인·토큰 저장마다 꺼진 기능을 한 번씩 다시 묻는다.
@@ -68,7 +68,7 @@ export function createConsoleAuth({ pageScope, el, view, auth, call, fleetClient
       auth.role = identity.role;
       auth.principal = identity.principal_id;
       assistant?.setIdentity(auth);
-      showSession(identity);
+      showSession(identity, {credentialChange});
       // The session already proves the token: unlock now. The state gather can take seconds
       // when a robot times out, and must not hold the operator's controls locked behind it.
       const pill = el("online-pill");
@@ -103,10 +103,10 @@ export function createConsoleAuth({ pageScope, el, view, auth, call, fleetClient
   // 토큰 입력 — Enter 와 버튼 모두 저장한다 (form 이 아니라 keydown 이다).
   el("console-token").value = auth.token;
   function saveToken() {
-    useToken(el("console-token").value.trim());
+    useToken(el("console-token").value.trim(), true);
   }
 
-  function useToken(token) {
+  function useToken(token, credentialChange = false) {
     workView.reset();
     stopNotice();
     cancelAllNotice();
@@ -124,14 +124,14 @@ export function createConsoleAuth({ pageScope, el, view, auth, call, fleetClient
     visionView.reset();
     trackingView.reset();
     trackingView.refresh();
-    refreshAuthorization();
+    refreshAuthorization(credentialChange);
     visionView.refreshSources();
   }
   pageScope.listen(el("token-save"), "click", saveToken);
   // D-519 — login and logout change the cookie; drop any token so the cookie (or the lock) decides.
   const loginForm = createPasswordLogin(el("password-login"), {onChange: () => {
     el("console-token").value = "";
-    useToken("");
+    useToken("", true);
   }});
   pageScope.listen(el("console-token"), "keydown", (event) => {
     if (event.key === "Enter") saveToken();
@@ -143,7 +143,6 @@ export function createConsoleAuth({ pageScope, el, view, auth, call, fleetClient
     try {
       const info = await fleetClient("/api/fleet/auth/connection");
       el("development-badge").hidden = info?.mode !== "development";
-      el("token-access").hidden = info?.mode === "development";
       return info?.mode === "development";
     } catch (_err) {
       return false;

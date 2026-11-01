@@ -6,6 +6,7 @@ import urllib.request
 import json
 import uuid
 import copy
+import subprocess
 
 CONDITIONS = {'NORMAL', 'UNDEREXPOSED', 'OVEREXPOSED', 'MIXED_LIGHTING',
               'LOW_CONTRAST', 'LOW_SPATIAL_SIGNAL', 'TEMPORAL_CHANGE'}
@@ -125,9 +126,44 @@ def monitor(profile, root, digest, duration, io):
     best, epochs = {}, {}
     changes = []
     run_id = uuid.uuid4().hex
+    checks = dict.fromkeys(plans, 0.)
+    resets = dict.fromkeys(plans, 0)
+    control_errors = {}
     signature = None
     began = time.monotonic()
+
+    def guard(role):
+        saved = baseline['cameras'][role]
+        device = profile['cameras'][role]['device']
+        if io.identity(device) != saved['identity'] or io.producer(saved.get('unit', role), device) != saved['producer']:
+            raise RuntimeError('camera producer changed during environmental recovery')
+
+    def read_live(role):
+        recovering = role in control_errors
+        try:
+            guard(role)
+            actual = io.get_controls(profile['cameras'][role]['device'], current[role])
+            guard(role)
+        except (OSError, subprocess.SubprocessError) as exc:
+            control_errors[role] = repr(exc)
+            checks[role] = time.monotonic()+5
+            best.pop(role, None)
+            return None
+        control_errors.pop(role, None)
+        if recovering:
+            plans[role].settle_until = time.monotonic()+1
+            plans[role].source_after = time.time()+1
+        return actual
+
+    def unavailable(role, assessment):
+        plan = plans[role]
+        plan.state, plan.pending, plan.confirmations = 'UNAVAILABLE', None, 0
+        plan.intensities.clear()
+        gate.counts[role] = 0
+        assessment['photometric_ready'] = False
+
     try:
+        io.save(root/'control-run.json', dict(run_id=run_id))
         while duration == 0 or time.monotonic()-began < duration:
             try:
                 with urllib.request.urlopen(profile['viewer_url']+'/state.json', timeout=2) as response:
@@ -142,6 +178,9 @@ def monitor(profile, root, digest, duration, io):
                 plan = plans[role]
                 item = state.get(role, {})
                 quality = item.get('quality') or {}
+                if role in control_errors and time.monotonic() < checks[role]:
+                    unavailable(role, assessment)
+                    continue
                 if same_fresh_frame(item, previous[role], previous_quality.get(role)):
                     plan.state = 'WAITING_FRAME'
                     continue
@@ -150,6 +189,28 @@ def monitor(profile, root, digest, duration, io):
                 if valid:
                     previous[role] = (stamp, item['sequence'])
                     previous_quality[role] = copy.deepcopy(quality)
+                    now = time.monotonic()
+                    if now >= checks[role]:
+                        actual = read_live(role)
+                        if actual is None:
+                            unavailable(role, assessment)
+                            continue
+                        checks[role] = now+5
+                        if actual != current[role]:
+                            if actual != baseline['cameras'][role]['original']:
+                                raise RuntimeError('unowned camera controls changed during recovery')
+                            io.validate_device_controls(spec['device'],
+                                spec['candidates']+spec.get('bright_candidates', [])+[actual])
+                            old = plan
+                            plan = plans[role] = ExposureRecovery(dark_count=old.sizes['dark'], bright_count=old.sizes['bright'])
+                            plan.epoch, plan.generation = old.epoch+1, old.generation
+                            plan.next_change, plan.settle_until = old.next_change, now+1
+                            plan.source_after = time.time()+1
+                            current[role] = dict(actual)
+                            best.pop(role, None)
+                            gate.counts[role] = 0
+                            resets[role] += 1
+                            assessment['photometric_ready'] = False
                 action = plan.observe(quality.get('condition') if valid else None, time.monotonic(),
                                       source_stamp=stamp, intensity=quality.get('mean_intensity') if valid else None)
                 if epochs.get(role) != plan.epoch:
@@ -159,7 +220,7 @@ def monitor(profile, root, digest, duration, io):
                                 and quality.get('condition') == plan.condition)
                 if attributable:
                     score = quality['spatial_contrast']*(1-quality['clipped_fraction'])
-                    if role not in best or score > best[role]['score']:
+                    if role not in best or score >= best[role]['score']:
                         best[role] = dict(score=score, controls=dict(current[role]))
                 if action is None:
                     continue
@@ -170,17 +231,37 @@ def monitor(profile, root, digest, duration, io):
                         continue
                 else:
                     key = 'candidates' if action['kind'] == 'dark' else 'bright_candidates'
-                    selected = {**current[role], **spec[key][action['index']]}
+                    candidates = spec[key]
+                    completed = [i for i, candidate in enumerate(candidates)
+                                 if all(current[role].get(n) == v for n, v in candidate.items())]
+                    index = max(action['index'], max(completed, default=-1)+1)
+                    if index >= len(candidates):
+                        plan.attempts, plan.finished, plan.state = len(candidates), True, 'EXHAUSTED'
+                        continue
+                    action['index'], plan.attempts = index, index+1
+                    selected = {**current[role], **candidates[index]}
                 saved = baseline['cameras'][role]
                 device = spec['device']
-                if io.identity(device) != saved['identity'] or io.producer(role, device) != saved['producer']:
-                    raise RuntimeError('camera producer changed during environmental recovery')
+                before = read_live(role)
+                if before is None:
+                    plan.defer(action)
+                    unavailable(role, assessment)
+                    continue
+                if before != current[role]:
+                    if before != saved['original']:
+                        raise RuntimeError('unowned camera controls changed before write')
+                    plan.defer(action)
+                    checks[role] = 0
+                    continue
+                io.validate_device_controls(device, [before, selected])
                 try:
                     io.reserve_budget(root)
                 except io.BudgetExhausted:
                     plan.defer(action)
                     continue
                 entry = dict(run_id=run_id, role=role, action=action, requested=selected, time_ns=time.time_ns())
+                intent = io.control_intent(root, role, saved, digest, run_id, before, selected,
+                                           phase='restoring' if action['kind'] == 'finish' else 'applying')
                 changes.append(entry)
                 io.save(root/'changes.json', changes)
                 io.save(root/'readiness.json', dict(state='ADJUSTING', photometric_ready=False,
@@ -196,6 +277,8 @@ def monitor(profile, root, digest, duration, io):
                 io.save(root/'changes.json', changes)
                 if actual != selected:
                     raise RuntimeError('environmental recovery readback differs')
+                intent['actual'] = actual
+                io.save(root/f'control-intent-{role}.json', intent)
                 current[role] = dict(selected)
                 plan.applied(monotonic=time.monotonic(), wall=time.time())
                 gate.counts[role] = 0
@@ -205,7 +288,8 @@ def monitor(profile, root, digest, duration, io):
             assessment.update(state='READY' if ready else 'INSUFFICIENT', photometric_ready=ready,
                               recorded_ns=now_ns, expires_ns=now_ns+750_000_000, profile_sha256=digest,
                               run_id=run_id, environment=environment, observations=state,
-                              observation_error=observation_error)
+                              observation_error=observation_error, control_resets=dict(resets),
+                              control_errors=dict(control_errors))
             changed = tuple((r, p.condition, p.state, p.epoch, p.generation) for r, p in plans.items())
             if changed != signature:
                 io.append_event(root/'environment.jsonl', assessment)

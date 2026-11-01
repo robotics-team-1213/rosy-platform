@@ -90,6 +90,74 @@ ALLOWED = Counter({
     # counts the link, never motion.
     ("fleet_loss_wiring.py", "getattr", "fleet_agent", '"armed"'): 1,
     ("fleet_loss_wiring.py", "getattr", "fleet_agent", '"relinked_at"'): 1,
+    # Accepted (2026-10-28 host-file extraction): individually triaged public
+    # platform/config/partial-observation reads; see the canonical C6 criteria.
+    # C6-HOST-01: CONFIG_DISPATCH.
+    ('system/host_files.py', 'getattr', 'line_config', 'key'): 1,
+    # C6-HOST-02: PLATFORM_GUARD.
+    ('system/host_files.py', 'getattr', 'os', '"O_NOFOLLOW"'): 3,
+    # C6-HOST-03: PARTIAL_OBSERVATION.
+    ('system/host_files.py', 'getattr', 'snapshot', "'robot_id'"): 1,
+    # C6-HOST-04: OPTIONAL_SERVICE.
+    ('system/host_files.py', 'getattr', 'svc', '"calibration"'): 1,
+    # C6-HOST-06: OPTIONAL_SERVICE.
+    ('system/host_files.py', 'getattr', 'svc', "'line_follow'"): 1,
+    # C6-HOST-07: PLATFORM_GUARD.
+    ('system/host_files.py', 'hasattr', 'os', '"fchmod"'): 2,
+    # C6-HOST-08: NULLABLE_VALUE.
+    ('system/host_hardware.py', 'getattr', 'battery', '"percent"'): 1,
+    # C6-HOST-09: NULLABLE_VALUE.
+    ('system/host_hardware.py', 'getattr', 'battery', '"voltage"'): 1,
+    # C6-HOST-10: ENUM_OR_STRING.
+    ('system/host_hardware.py', 'getattr', 'judged', '"value"'): 1,
+    # C6-HOST-11: PARTIAL_OBSERVATION.
+    ('system/host_hardware.py', 'getattr', 'line_follow', '"mode"'): 1,
+    # C6-HOST-12: PARTIAL_OBSERVATION.
+    ('system/host_hardware.py', 'getattr', 'line_follow', '"state"'): 1,
+    # C6-HOST-13: ENUM_OR_STRING.
+    ('system/host_hardware.py', 'getattr', 'mode', '"value"'): 1,
+    # C6-HOST-14: ENUM_OR_STRING.
+    ('system/host_hardware.py', 'getattr', 'nav', '"value"'): 1,
+    # C6-HOST-15: PLATFORM_GUARD.
+    ('system/host_hardware.py', 'getattr', 'os', '"O_CLOEXEC"'): 2,
+    # C6-HOST-16: PLATFORM_GUARD.
+    ('system/host_hardware.py', 'getattr', 'os', '"O_NOFOLLOW"'): 2,
+    # C6-HOST-17: PLATFORM_GUARD.
+    ('system/host_hardware.py', 'getattr', 'os', '"O_NONBLOCK"'): 2,
+    # C6-HOST-19: NULLABLE_VALUE.
+    ('system/host_hardware.py', 'getattr', 'snapshot', '"activity"'): 1,
+    # C6-HOST-20: PARTIAL_OBSERVATION.
+    ('system/host_hardware.py', 'getattr', 'snapshot', '"battery"'): 2,
+    # C6-HOST-21: PARTIAL_OBSERVATION.
+    ('system/host_hardware.py', 'getattr', 'snapshot', '"battery_status"'): 1,
+    # C6-HOST-22: PARTIAL_OBSERVATION.
+    ('system/host_hardware.py', 'getattr', 'snapshot', '"docking"'): 1,
+    # C6-HOST-23: OPTIONAL_MAP_ENTRY.
+    ('system/host_hardware.py', 'getattr', 'snapshot', '"evidence"'): 1,
+    # C6-HOST-24: PARTIAL_OBSERVATION.
+    ('system/host_hardware.py', 'getattr', 'snapshot', '"line_follow"'): 1,
+    # C6-HOST-25: PARTIAL_OBSERVATION.
+    ('system/host_hardware.py', 'getattr', 'snapshot', '"mode"'): 1,
+    # C6-HOST-26: PARTIAL_OBSERVATION.
+    ('system/host_hardware.py', 'getattr', 'snapshot', '"navigation"'): 1,
+    # C6-HOST-27: PARTIAL_OBSERVATION.
+    ('system/host_hardware.py', 'getattr', 'snapshot', '"safety"'): 1,
+    # C6-HOST-28: PARTIAL_OBSERVATION.
+    ('system/host_hardware.py', 'getattr', 'snapshot', '"swarm"'): 2,
+    # C6-HOST-29: FRESHNESS_GATED_VALUE.
+    ('system/host_hardware.py', 'getattr', 'snapshot', '"velocity"'): 1,
+    # C6-HOST-30: OPTIONAL_SERVICE.
+    ('system/host_hardware.py', 'getattr', 'svc', '"safety"'): 1,
+    # C6-HOST-31: PARTIAL_OBSERVATION.
+    ('system/host_hardware.py', 'getattr', 'swarm', '"role"'): 1,
+    # C6-HOST-32: OPTIONAL_MAP_ENTRY.
+    ('system/host_hardware.py', 'getattr', 'value', '"evidence"'): 1,
+    # C6-HOST-33: ENUM_OR_STRING.
+    ('system/host_hardware.py', 'getattr', 'value', '"value"'): 1,
+    # C6-HOST-34: FRESHNESS_GATED_VALUE.
+    ('system/host_hardware.py', 'getattr', 'velocity', '"angular"'): 1,
+    # C6-HOST-35: FRESHNESS_GATED_VALUE.
+    ('system/host_hardware.py', 'getattr', 'velocity', '"linear"'): 1,
 })
 
 

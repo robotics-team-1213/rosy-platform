@@ -390,6 +390,42 @@ def test_the_overlay_belongs_to_rosy_core_and_is_private(tmp_path):
         assert directory.stat().st_uid == uid
 
 
+def _provision_with(module, tmp_path: Path, **options) -> None:
+    root = tmp_path / "root"
+    card = root / "boot/firmware/rosy-provision/provision.json"
+    card.parent.mkdir(parents=True, exist_ok=True)
+    card.write_text(json.dumps(_issued()), encoding="utf-8")
+    module.FirstBootProvisioner(
+        root=root, network_activate=lambda _p: True, hostname_apply=lambda _n: None,
+        operator_account=lambda _n: None, **options,
+    ).apply(bundle=card, hardware_serial="10000000abcdef01")
+
+
+@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="the device runs Linux")
+def test_linux_takes_the_descriptor_path_and_hands_the_overlay_to_rosy_core(tmp_path, monkeypatch):
+    """The ownership test above uses the test's own uid, so it passed with no chown at all.
+    os.replace is missing from os.supports_dir_fd; checking it sent every device to the path
+    fallback, which never chowned, and CORE looped on a root-owned rosy.yaml (2026-10-31)."""
+    module = _first_boot()
+    assert module._NOFOLLOW_FS
+    calls: list[tuple[int, int]] = []
+    monkeypatch.setattr(os, "fchown", lambda _fd, uid, gid: calls.append((uid, gid)))
+    _provision_with(module, tmp_path, core_lookup=lambda _name: {"uid": 960, "gid": 960})
+    assert calls.count((960, 960)) == 3  # CORE's HOME, .rosy and rosy.yaml
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX ownership")
+def test_the_path_fallback_also_hands_the_overlay_to_rosy_core(tmp_path, monkeypatch):
+    module = _first_boot()
+    monkeypatch.setattr(module, "_NOFOLLOW_FS", False)
+    calls: list[tuple[str, int, int]] = []
+    monkeypatch.setattr(os, "chown", lambda path, uid, gid: calls.append((Path(path).name, uid, gid)))
+    _provision_with(module, tmp_path, core_lookup=lambda _name: {"uid": 960, "gid": 960})
+    owned = {name for name, uid, gid in calls if (uid, gid) == (960, 960)}
+    assert {"core", ".rosy"} <= owned
+    assert any(name.startswith(".rosy.yaml.") for name in owned)
+
+
 @pytest.mark.skipif(os.name != "posix", reason="Path.home() follows HOME only on POSIX")
 def test_core_under_the_unit_environment_reads_the_installed_file(tmp_path):
     # rosy-core.service: HOME=/var/lib/rosy/core, ROSY_CONFIG unset (D-189).

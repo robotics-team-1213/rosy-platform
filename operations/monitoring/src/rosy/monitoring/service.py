@@ -133,17 +133,17 @@ def create_app(collector: Collector, *, web_root: Path | None = None):
         except ValueError:
             return _error(400, 'MONITORING_QUERY')
         try:
-            rows = collector.store.events(site_id, after=after, limit=limit)
-        except StoreUnavailable:
+            rows = collector.cache.events(site_id, after=after, limit=limit)
+        except (StoreUnavailable, ObservationRejected):  # a bad collector clock is unavailable storage too
             return _error(503, 'MONITORING_STORAGE')
         return {'events': rows, 'next_after': rows[-1]['sequence'] if rows else after}
 
     if web_root is not None:
         root = Path(web_root).resolve(strict=True)
-        assets = {'/': 'index.html', '/monitoring.js': 'monitoring.js', '/monitoring.css': 'monitoring.css'}
-        for route, name in assets.items():
+        from .web_assets import ASSETS
+        for route, name in ASSETS.items():
             path = (root / name).resolve(strict=True)
-            if path.parent != root or not path.is_file():
+            if not path.is_relative_to(root) or not path.is_file():
                 raise ValueError('monitoring web assets unavailable')
             def asset_handler(asset_path):
                 async def asset():

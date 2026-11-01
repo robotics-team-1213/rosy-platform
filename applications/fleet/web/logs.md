@@ -521,6 +521,12 @@
 - 증거: 원격 서버 시험 8f85ca2d0f 기준 shared/web·Robot·Fleet·Pilot 471 passed/0 NEW, Learning 브라우저 2456 passed/1 NEW(왼쪽 정렬 누락, 고친 뒤 89421d5732 해당 5묶음 210 passed/0 NEW). 이 커밋은 착지 시험(land.py --tests auto)이 다시 돈다.
 - gate 변화: 없음.
 
+## 2026-10-26 · 916a6b79bd · 독립 Monitoring 화면 진입
+
+- 변경: 관제 utility 영역에 `/monitoring/` 새 창 링크를 추가했다. Fleet 자격 전달·추가 polling·명령은 없다. 같은 TLS site의 독립 Monitoring proxy 경로가 배포 전제다.
+- 증거: 고정 topbar·5영역·정지 배선은 변경하지 않았다. b6e8620373의 Fleet header·grammar·shared controls 원격44 PASS/0 SKIP, NEW/KNOWN/FLAKY0이다. 별도 Monitoring의 실제 prefixed UI는 Chromium에서 독립 검증했다.
+- gate 변화: 기존 관제·장치 수용을 올리지 않는다. CE 해당 없음 — 단순 링크이며 별도 판단을 숨기지 않는다.
+
 ## 2026-10-27 · uncommitted · 모바일 관제와 작업 화면 위계 개선
 
 - 변경: 모바일 로봇 선택·상태·작업을 지도보다 먼저 배치하고 DOM 이동 순서도 D-892에 맞췄다. 로그인 도움말·계정 구획·작업 연동 접힘·Cell 단계 열기를 정리했다. 인증·승인·명령 경로와 넓은 화면 배치는 유지한다.
@@ -539,3 +545,114 @@
 - 변경: work 뷰가 `GET /api/fleet/policy-admission`을 함께 읽어 승인 대기 행에 범위 소속 배지(`자동 승인`)를 붙이고, work 개요에 범위 readback(로봇·종류·잔여 상한·revision·차단 사유)과 기명 운영자 전환 단추를 둔 `<details>` 패널을 추가했다. 판정·문구는 순수 함수(`autoAdmitScope`·`policyScopeText`·`autoAdmitDetail`)이고 readback이 없으면 fail-closed로 배지를 끈다. 범위 밖 로봇·`two_person`·상한 소진·전환 꺼짐은 배지 없이 사람 승인으로 남는다. 새 자산이 없어 allowlist·CSP는 그대로다.
 - 증거: node `work-view.test.mjs` 6 통과(범위 안·로봇 밖·two_person·소진·비활성·readback 문구). 모델 PC 원격 `ROSY_RUN_BROWSER_TESTS=1`로 `test_work_overview_browser.py` 36 통과·`test_console_palette`·`test_console_disabled_features`·`test_document_imports`·`test_doc_tabs` 포함 0 NEW, `test_server_app`·`test_remaining_platform_installed` 50 통과 0 NEW. 전체 affected/FULL 통과를 뜻하지 않는다.
 - gate 변화: 제품·장치·현장 수용 승격 없음. 자동 승인 활성화는 P5 현장 수용 기록이 별도다.
+
+## 2026-10-27 · 477761474d · 원래 실패와 별도 복구 시도의 관제 표시
+
+- 변경: 기존 ARM 작업 상세에 simulation 범위, owner가 보고한 실행·단계, 독립 관측 대기, 다른 운영자 승인과 별도 자식 결과를 연결했다. 응답 유실은 자동 재전송하지 않으며 자식 조회 실패에도 알고 있는 ID·소비한 복구 횟수를 보존한다. 원래 제안자의 관측 요청만 일반 운영자 잠금에서 제외하고 승인 제한은 유지한다. 기존 ui-actions·work-detail을 사용하며 새 자산·색·의존성은 없다.
+- 증거: 실제 HTTP/SQLite/Chromium 320·390·1920px, 정상/승인 응답 유실 및 자식 GET 실패를 포함한 최종 14 passed/0 skipped·NEW0. 원격 PNG 6개를 SHA-256 대조해 가져왔고 실제 3개 폭을 확인했다. 독립 시각 검토 disposition: ship, incumbent 디자인 보존. docs/validation/transfer-recovery-public-2026-10-27/result.md 참고.
+- gate 변화: 배포·장치·모델 수용 승격 없음. 합성 World/owner이며 공개 계약은 별도 선행 착지한다.
+- CE: 새 교훈 기록 — 넓은 UUID에서 보이는 카드 경계를 검사하는 회귀와 기존 상세 값 줄바꿈으로 nested clipping을 해결했다.
+
+## 2026-10-28 · ce1ef8ebb0 · 제안자 조회 입력과 요청 응답 유실 후 재조회
+
+- 변경: 기존 ARM GET 조회 단추에 data-work-read를 표시하고 작업 식별자 조회 입력만 일반 운영자 잠금에서 제외했다. 실행 승인·요청 자격과 backend 권한은 유지한다. 조회값을 바꾸면 기존 작업/승인 snapshot을 무효화한다.
+- 증거: 실제 요청 응답을 서버 commit 뒤 끊고 제안자가 재조회하는 반례에서 입력 disabled RED1을 확인했다. 수정 뒤 기존 승인 응답 유실·자식 GET503·단일 복구 한도·긴 ID 검사까지 actual Chromium 14 passed/0 skipped, NEW0. docs/validation/transfer-recovery-public-2026-10-28/result.md 참고.
+- gate 변화: 없음. 선행 계약 검증은 계속 진행하며 공개 source 착지는 별도다.
+- CE: 추가 교훈 없음 — 이 조회 수정은 selector와 회귀로 설명된다. 기존 clipping 교훈은 유지한다.
+
+## 2026-10-28 · b948a23204 · 복구 버튼의 공용 계약·초기화·소진 사유
+
+- 변경: 두 공용 버튼을 명시적으로 선언하고 종류·비활성 사유를 제공했다. 두 번째 승인 확인을 정확한 기존 inventory에 등록했다. 최초 render에서 인증 초기화 전 role 콜백을 읽지 않도록 기존 단락 평가 순서를 보존하고, 자식이 있으면 복구 횟수 소진을 표시한다.
+- 증거: native 후보 d01의 UI 계약 2개 wrapper 실패와 수정 중 초기화 회귀의 실제 browser 14 FAIL을 보존했다. af1b7ac467에서 공용 계약 37 PASS/0 skip와 browser 14 PASS/0 skip, 최신 b948a23204에서 소진 사유를 포함한 실제 browser 14 PASS/0 skip·NEW0. 독립 계약 재검토는 초기화 경로를 대조해 남은 회귀 없음. docs/validation/transfer-recovery-public-2026-10-28/ui-contract-correction.md 참고.
+- gate 변화: 없음. 합성 World/owner 검증이며 최종 공식 public 착지는 별도다.
+- CE: 추가 교훈 없음. 기존 clipping 교훈은 유지하며 초기화 판단은 source comment와 실제 회귀가 보존한다.
+
+## 2026-10-28 · ae4771b936 · 계정·토큰 영역의 화면별 표시와 재조회 레이아웃 통일
+
+- 변경: 관제·설치·지도·Cell의 토큰 접속 폼은 처음 숨기고, 인증된 세션에서는 공통 헤더가 숨김을 유지하며 접속 해제 시 복원한다. 페이지별 저장 토큰/development 조건의 별도 숨김을 없앴다. 같은 사용자·역할 확인은 사용자가 연 계정 영역을 닫지 않고 새 인증일 때만 접는다. 인증 전송·권한·비상 정지 규칙은 바꾸지 않았다.
+- 증거: 실제 Chromium 네 문서×320/1440 RED8건 뒤 공통 헤더/토큰 재인증/세션 만료/안전 표시14 passed 및 비밀번호 로그인1 passed, skip0/NEW0. 실제 PNG8장과 독립 소스/화면 검토 근거는 `docs/validation/fleet-account-layout-2026-10-28/`에 보존한다. 최종 영향 회귀는 같은 기록에서 별도 판정한다.
+- gate 변화: 없음. 실제 비상 정지 동작·운영 배포·현장 수용은 실행하지 않았다.
+- CE: 해당 없음. 표시 소유권과 반복 인증의 상태 유지 판단이 공통 코드·브라우저 회귀에 남는다.
+
+## 2026-10-28 · 2d96683c9c · 공통 컴포넌트와 역할 기반 본문 배치
+
+- 변경: 헤더·전역 탐색은 두 `.html.inc` 정본에서 네 HTML을 생성하고 `fleet_components.py --check`로 드리프트를 거절한다. 공통 본문·작업 동작·피드백 배치를 `doc-tabs.css`로 모으고 shared/web 역할 토큰을 소비한다. D-906과 Fleet README에 편집 절차를 연결했다.
+- 재접속 보강: 넓은 브라우저 회귀에서 인증된 사용자의 토큰 변경이 막힌 것을 확인했다. 토큰 접속은 명시적으로 연 계정 메뉴 안에서 사용할 수 있고 같은 identity 재조회가 열린 입력·메뉴를 접지 않는다. 새 identity만 접는다. 인증·권한·명령 API는 유지한다.
+- 증거: 정본/자산 등록/실제 헤더90 passed·NEW0, 추가 거버넌스607 passed. 전체 영향·브라우저의 실패와 후속 검증, 캡처·독립 리뷰는 `docs/validation/fleet-components-layout-tokens-2026-10-28/result.md`에 구분한다.
+- gate 변화: 없음. 운영 배포·실물 동작·현장 수용은 별도다.
+- CE: 해당 없음. 조각과 페이지 구분·토큰 전환·재조회 안정성이 생성기, 회귀, D-906에 남는다.
+
+## 2026-10-28 · e68f63d769 · 나머지 절차 문서의 공통 배치와 긴 값 복구
+
+- 변경: 계정 관리·내 계정·로그인·정책·학습 진입의 경량 헤더 정본을 기존 생성기로 합성하고 `fleet-document.css`가5문서 inset·grid·wrap·container를 소유한다. D-909의6개 역할을 소비하며 학습 호스트는 공용 readout, 번호 단계는 제목/설명 한 묶음을 쓴다. 기존 관제용4문서와 경량5문서를 구분한다.
+- 화면 후속: 작업셀 미등록·조회 거절·서버 오류에는 정책 폼과 빈 선택/라벨을 숨기고 설치 담당자 등록 안내를 제공한다. 성공 응답 뒤 기존 역할별 폼만 표시하며 입력 DOM·권한·API는 유지한다.
+- 증거: 실제 긴 값·5폭·2테마·첫 응답 RED26 뒤84 passed. 정책 빈 상태 RED3 뒤 실제 두 사람 승인·테마 포함39 passed/skip0/NEW0. 후속 비활성 사유 계약1실패는 빈 선택 제거 후83 passed, 마지막 상태3 passed로 확인했다. 공식 영향8898 passed/760 skipped/NEW0,102파일 브라우저1510 passed/skip0/NEW0. source별 결과는 `docs/validation/remaining-ui-layout-2026-10-28/result.md`에서 구분한다.
+- gate 변화: 없음. 실물·현장·배포 수용은 별도다.
+- CE: 해당 없음. 원인·레이아웃 소유·미확인 상태의 폼 조건이 최종 코드·회귀·ADR에 남는다.
+
+## 2026-10-29 · b90b4569bc · 대화 요청 목록의 키보드 초점 유지
+
+- 변경: 목록 갱신은 현재 초점을 GET 뒤 읽고 요청 ID로 복원한다. 삭제·조회 실패·상위 reset은 기존 상태 문구를 초점 대상으로 사용하며 목록 밖으로 이동한 초점은 유지한다. API·권한·명령 경로는 그대로다.
+- 증거: 수정 전18fail4pass, 최종 Chromium 파일 전체80pass/0skip, 공식 affected8004pass/631skip/NEW0. A source 검토·B 캡처16장 전수 직접 검토에서 해당 범위 추가 P1/P2 없음. frozen `docs/validation/fleet-request-focus-2026-10-29/`에 SHA/skip/hash/제한을 보존했다.
+- gate 변화: 없음. 실제 장치/정지·ARTIFACT/FIELD·착지·배포·공개 push/merge는 별도다. CE: 해당 없음 — 코드·회귀·기존 복원 패턴으로 설명된다.
+
+## 2026-10-29 · uncommitted · LAN HTTP의 암호학적 UUID와 헤더 초기화
+
+- 원인: 기존 `http://rosy.test` 제공자를 재사용한 원격 회귀에서 자산 오류 없이 `crypto.randomUUID is not a function`을 확인했다. Console은 작업 단위 생성의 초기 UUID에서 중단되어 계정 메뉴 리스너를 연결하지 못했다. 같은 실패 조건은 신뢰되지 않은 LAN HTTP에도 적용된다.
+- 변경: Fleet 내부 `shared/uuid.js`와 등록 자산은 native `crypto.randomUUID`가 있으면 그대로 사용하고, 없으면 `crypto.getRandomValues` 16바이트의 RFC UUIDv4 version·variant 비트를 지정한다. Fleet 11개 파일의 24개 호출을 이 함수로 모았다. 전역 덮어쓰기·비암호학적 난수·API·권한·idempotency 형식 변경은 없다.
+- 검증: 동일 insecure fixture의 실제 초기화·메뉴·테마와 UUID 1000개의 v4 형식·variant·중복 여부, 신뢰된 localhost native 경로의 실제 native 호출 1000회 회귀를 기존 헤더 브라우저 suite에 추가했다. 기존 작업 계약은 UUID 생성 함수 이름만 바꿨다. 원격 통합·변이·기존 known failure 해제는 대기다.
+- gate 변화: 없음. 로컬 시험·실제 장치·배포 수용을 수행하지 않았다. CE: 해당 없음 — HTTP 조건은 helper의 원인 주석과 동일 origin의 초기화 회귀가 보존한다.
+
+## 2026-10-29 · 6910f504b8 · 고정 헤더와 명시 인증의 초점 복원
+
+- 변경: 계정 메뉴를 한행 앱 바 아래 overlay로 열고 연결 예외도 같은 행에 유지한다. semantic measure·수동 token 접근·공통 Stop padding과 권한 규칙은 보존한다. 명시적 성공만 메뉴를 닫고 자동 재조회는 입력/펼침을 유지한다. Cell은 입력 잠금 전 초점과 재활성화 후 초점을 연결한다.
+- 증거: 동일 identity RED4건 뒤 핵심29pass, 현재425의 셸42pass/134PNG 독립 전수검토 범위 P1/P2없음. LAN UUID는 trusted native와 암호학적 fallback을 함께 검증했다. Map 지원분리의 free-variable 오류는 실제 편집 오류로 재현해 반환값으로 수정했고 전체125pass로 확인했다. 새 canvas/HTTP 소비자와 Node 대역은0bc55pass로 검증했다.
+- gate 변화: 없음. 전체 플랫폼·실제 명령/정지·장치·배포·착지·게시 수용과 구분한다. 자세한 source/실패/skip/진행 상태는 docs/validation/platform-ui-integration-2026-10-29/result.md 참조. CE: 해당 없음 — 코드·회귀·기존 clipping 교훈이 판단을 보존한다.
+
+## 2026-10-29 · a82292062e · 공통 계정 표적과 Escape 우선순위
+
+- 변경: 좁은 헤더의 공통 padding12를 유지하면서 아이콘/개발 배지만 세로 배치한다. 계정 메뉴의 Escape는 문서에서 받고 메뉴가 열렸을 때만 닫는다. dialog가 처리한 이벤트와 외부 초점을 존중한다.
+- 증거: 전체 browser1794 중10실패의 padding2·재접속안내1·CSP predicate7을817의72pass/0skip으로 수정 검증했다. trigger Escape 실제 RED 뒤 a822의16초점/24기하/Node gate41pass,473c의실제 dialog4pass와공통/Node48pass. 새96PNG 전수 독립 검토에서 새 P1/P2 없음. CSP·통제 권한·정지 정책은 유지한다.
+- gate 변화: 없음. 최종 SHA 전체1794 재실행·실제 명령·실물·배포·공개 게시 수용이 아니다. 정본 증거는 docs/validation/platform-ui-integration-2026-10-29/result.md. CE: 해당 없음 — 이벤트 우선순위·초점 경계와 형상은 회귀가 설명한다.
+
+## 2026-10-30 · fd11d5158a · D-926 첫 적용: 관제 맥락 탭 이름과 초안 표시
+
+- 변경: 관제 오른쪽 네 탭의 아이콘 단독을 풀고 레일처럼 아이콘 위 한 줄 이름으로 보인다(`shared/styles.css`). 지도 초안 상태가 저장자 없을 때 `undefined`를 쓰지 않는다.
+- 증거: 작업 세션의 Fleet 샘플 서버 Edge 캡처 1366·390·320에서 네 이름이 한 줄이고 칸을 넘지 않는다. 브라우저 시험 `test_fleet_header_browser.py`·`test_site_map_browser.py`가 이 규칙을 지킨다. 원격 시험 결과는 착지 기록에 따로 둔다.
+- gate 변화: 없음. CE: 해당 없음 — 규칙과 이유는 D-926과 시험이 담는다.
+
+## 2026-10-30 · fd7b1e69c2 · D-926: 앱 바 아래 떠 있던 줄 제거
+
+- 변경: 앱 바 아래의 `시스템 상태 · 별도 조회`·`관제 AI` 줄을 없애고 둘을 `운영 도구` 탭 맨 위로 옮겼다. 관제 화면의 머리가 앱 바 한 줄이 된다. 하위 탐색 부품을 쓰던 바깥 링크는 일반 링크 행이다.
+- 증거: 작업 세션 Fleet 샘플 서버 Edge 캡처 1366·390에서 앱 바 바로 아래가 지도·오른쪽 열이고 가로 넘침 없음, 관제 AI 패널 열림 확인. 브라우저 시험은 운영 도구 탭을 연 뒤 관제 AI를 누른다.
+- gate 변화: 없음. CE: 해당 없음 — 배치 이유는 D-926 5항이 담는다.
+
+## 2026-10-30 · 8910b32ff3 · D-926 3: 지도 하위 탐색을 화면 이동으로
+
+- 변경: 공용 `shared/subnav-screens.js`가 하위 탐색의 고른 화면 하나만 지도 아래에 보인다(지도는 공유 무대로 늘 보임, 도면 편집은 지도 만들기 화면). 선택 항목에 `aria-current`, 지도 보기에서 장소·차로를 누르면 초안 편집으로 간다. 경로·운행·초안 격자는 한 열이다.
+- 증거: 작업 세션 Fleet 샘플 서버 Edge 캡처에서 지도 화면 높이 3,541px → 1,121px(1366), 초안 편집·경로 미리보기 화면 전환과 지도 장소 선택 뒤 초안 편집 이동, 페이지 오류 없음. 지도 브라우저 시험 46개는 다른 화면의 요소를 쓰기 전에 그 화면으로 이동한다.
+- gate 변화: 없음. CE: 해당 없음 — 화면 규칙은 D-926 3항이 담는다.
+
+## 2026-10-30 · uncommitted · D-926 3: Cell 적재 단계를 화면 이동으로
+
+- 변경: Cell 하위 탐색이 `shared/subnav-screens.js`로 단계 화면을 하나씩 보인다. 첫 화면은 `저장된 문서`(작업 셀 관측과 함께)이고 레시피·셀 설정·적재 계획·작업 제안·승인·진행이 각각 한 화면이다. 저장된 문서 줄마다 `열기`가 그 문서를 해당 단계에서 불러온다. 작업 제안·승인·진행은 접는 상자 대신 다른 단계와 같은 구역 머리로 섰고, 두 문서 칸은 한 단계에 하나라 한 열이다. 같은 단계 링크를 다시 누르면 접은 화면을 다시 연다(공용 모듈).
+- 증거: 작업 세션 Fleet 샘플 서버(4175) Edge 캡처 1366·390에서 첫 화면 높이 1,026px(1366), 단계별 `aria-current="step"`·`새 작업`의 `page` 유지, 저장된 문서 2줄과 `열기`, 페이지 오류 없음. 브라우저 시험은 원격 PC에서 따로 돌린다.
+- gate 변화: 없음. CE: 해당 없음 — 화면 규칙은 D-926 3항이 담는다.
+
+## 2026-10-30 · uncommitted · D-926 C7·2·4: 파일 고르기 한 모양, 학습 정책 승인을 작업 셸로
+
+- 변경: `shared/file-picker.css`·`file-picker.js`가 브라우저 기본 파일 입력을 덮고 `파일 선택` 단추와 고른 이름을 한국어로 보인다. 지도(도면·지도 JSON·카메라 초안)·설치(측정 특성·교정 묶음)·Cell(레시피·셀)의 파일 입력 일곱이 같은 모양이다. 학습 정책 승인(`work/policy.html`)은 가벼운 문서 머리 대신 작업 화면과 같은 머리(비상 정지·계정·시계)·레일·작업 하위 탐색(`학습` 표시)을 쓰고 구역은 공용 `ui-section` 머리다. 단계·승인 창·사유는 `0단계 · 학습만 마침`, `따라 보기(명령 없음)`, `팔 제어 보류`, `작업대·보정 버전`처럼 읽고 lease·revision·owner HOLD·receipt·D-번호를 화면에서 뺐다. 정책 문서 폭 토큰 `--content-policy-max`는 쓰는 곳이 없어 지웠다(D-909 메모).
+- 증거: 작업 세션 Fleet 샘플 서버(4175) Edge 1366·390에서 정책 화면 머리·레일·비상 정지·`운영자` 표시, 지도 설정 화면 `파일 선택 · 선택한 파일 없음`, 가로 넘침·페이지 오류 없음. 브라우저 시험은 원격 PC에서 돌린다.
+- gate 변화: 없음. CE: 해당 없음 — 규칙은 D-926이 담는다.
+
+## 2026-10-31 · uncommitted · 학습 정책 승인이 탭의 토큰을 읽는다
+
+- 변경: `work/policy-page.js`가 다른 작업 화면처럼 `rosy-console-token`을 credential로 보내고 시작할 때 `developmentToken()`을 부른다. 전에는 개발 세션에서 이 화면만 `인증 필요`로 보였고, 머리의 `로그인`이 이미 로그인된 탭을 `/console`로 넘겨 "누르면 관제 홈으로 간다"로 보였다.
+- 증거: 실제 `create_app` 개발 모드 + Chromium에서 `/console?view=work&show=done` → 정책 링크 클릭 → `/console/policy`에 머물고 `운영자` 표시. `test_development_console_browser.py`에 `/console/policy`를 더했고 고치기 전 실패·후 통과를 확인했다.
+- gate 변화: 없음. CE: 새 교훈 `docs/solutions/logic-errors/fleet-page-without-tab-token-bounces-dev-login-to-console-2026-10-31.md`.
+
+## 2026-11-01 · uncommitted · 지도 장소 라벨은 장소 ID, 구역 칩에 구역 이름
+
+- 변경: `map/map-view.js`가 장소 점 옆에 목록 순번(`index + 1`) 대신 `place.id`를 쓴다. 순번은 지도를 고칠 때마다 바뀌고 trip·API·바닥 표시와 이어지지 않았다. `map/traffic-view.js` 구역 칩이 `<구역> · 점유 a/b · 대기 n`이라 같은 문장의 칩 여러 개를 구분한다. Cell 화면 팔 마커 목록은 D-954 번호(50~94, 팔 3개).
+- 증거: `node --test` traffic-view·traffic-layer·site-map 41 PASS(loader 포함).
+- gate 변화: 없음. CE: 해당 없음.

@@ -11,6 +11,17 @@ import sys
 from pathlib import Path
 
 SAFETY_TRIGGER = ": safety path (platform_parts concern: safety)"  # affected_tests.SAFETY_TRIGGER
+# D-889 addendum 12: simulation suites in an automatic FULL tier only when the change touches simulation.
+SIM_SUITES = ("integrations/simulation/gazebo/test", "learning/envs/isaac/test")
+SIM_PATHS = ("integrations/simulation/", "learning/envs/isaac/")
+
+
+def without_sim(invocations: list[list[str]], changed: list[str]) -> list[list[str]]:
+    """An automatic FULL tier without the simulation suites, unless a changed path is simulation's own."""
+    if any(p.startswith(SIM_PATHS) for p in changed):
+        return invocations
+    kept = [[w for w in inv if not any(w == s or w.startswith(s + "/") for s in SIM_SUITES)] for inv in invocations]
+    return [inv for inv in kept if any(not w.startswith(("ROSY_", "-")) for w in inv)]
 
 
 def _affected(land, wt: Path, python: str, base: str, head: str | None, full: bool = False) -> dict:
@@ -22,6 +33,14 @@ def _affected(land, wt: Path, python: str, base: str, head: str | None, full: bo
         raise land.Stop(f"affected selector failed (exit {result.returncode}); not guessing tests:\n"
                         f"{result.stdout}{result.stderr}".rstrip())
     return json.loads(result.stdout)
+
+
+def overlaps(delta: list[list[str]], mine: list[list[str]], ignore=()) -> bool:
+    """Whether any test path of ``mine`` is, contains or sits in one of ``delta`` (node ids by file), ``ignore`` aside."""
+    def paths(invs):
+        return {w.replace("\\", "/").split("::")[0].rstrip("/") for inv in invs for w in inv
+                if not w.startswith(("ROSY_", "-"))} - set(ignore)
+    return any(a == b or a.startswith(b + "/") or b.startswith(a + "/") for a in paths(delta) for b in paths(mine))
 
 
 def _unique(invocations: list[list[str]]) -> list[list[str]]:
@@ -36,6 +55,15 @@ def select(land, wt: Path, base: str, python: str, head: str | None = None,
     it adds the guard set and reverse dependents — otherwise the nearest test/ dir.
     ``landed``: base...head is main's delta, already on main with its own FULL tier when it escalated.
     """
+    def browsers() -> list[list[str]]:
+        """The changed paths' browser tier. D-889 addendum 12: main's landed delta passed its own browser tests,
+        so they repeat only when this branch changes UI too; on 2026-10-31 docs landings ran 50-80 browser
+        minutes each for other landings' UI, and speculation 471 of 1,703 browser minutes."""
+        if not (landed and head):
+            return land.browser_tier(wt, base, head)
+        own = land.browser_tier(wt, head)
+        return _unique(own + land.browser_tier(wt, base, head)) if own else []
+
     if (wt / "tools/harness/affected_tests.py").is_file():
         try:
             sel = _affected(land, wt, python, base, head, full)
@@ -46,21 +74,32 @@ def select(land, wt: Path, base: str, python: str, head: str | None = None,
             # D-889 3 (combined affected, not FULL per cycle): a delta that escalated landed on main with its own
             # FULL tier, and this branch passed its own tier before the turn. Repeating FULL for every lander
             # behind a FULL landing was 35 % of pretest time on 2026-10-26; what is left is both changes' own
-            # suites on the merged tree. Safety paths on either side keep FULL (D-889 6).
+            # suites on the merged tree. A safety path in this branch keeps FULL (D-889 6). One in main's delta
+            # no longer does (D-889 addendum 8): a branch touching a safety path lands only through its own FULL
+            # tier, and the delta's selection keeps the suites mapped to those safety paths.
             own = _affected(land, wt, python, head, None) if landed and head and sel["escalations"] else None
-            if own is not None and not any(e.endswith(SAFETY_TRIGGER) for e in sel["escalations"] + own["escalations"]):
+            if own is not None and not any(e.endswith(SAFETY_TRIGGER) for e in own["escalations"]):
                 print("[tests] main's delta escalated but landed with its own FULL tier: its mapped suites and"
                       " this branch's own selection on the merged tree")
                 mine = own["local_invocations"] if own["mode"] == "full" else own["invocations"]
-                return _unique(sel["local_invocations"] + mine + land.browser_tier(wt, base, head)
-                               + land.browser_tier(wt, head)), None
+                # D-889 addendum 10 item 2: this branch's suites passed its pretest, and main's delta reaches none of
+                # them (guards aside, which the delta's run carries): only the delta's suites. A FULL-mode own too
+                # (D-889 16): re-running it every turn ran past the 10 min cap, so it never landed (11-01).
+                # Browser chunks only where addendum 12 says (browsers()).
+                if not overlaps(sel["local_invocations"], mine, getattr(getattr(land, "land_guards", None), "GUARDS", ())):
+                    print("[tests] main's delta reaches none of this branch's suites: the delta's suites only")
+                    return _unique(sel["local_invocations"] + browsers()), None
+                return _unique(sel["local_invocations"] + mine + browsers()), None
             if sel["mode"] == "full":
                 # D-762 stage 0: a FULL-class landing runs the whole tier on the lab PCs, never
                 # guards alone; not via GitHub, which would publish unpushed main commits.
                 note = "selector escalated to FULL (" + "; ".join(sel["escalations"][:3]) + "): full tier on the lab PCs"
                 print(f"[tests] {note}")
-                return sel["full_invocations"] + land.browser_tier(wt, base, head), note
-            return sel["invocations"] + land.browser_tier(wt, base, head), None
+                changed = land.lines(wt, "diff", "--name-only", f"{base}...{head or 'HEAD'}")
+                if landed and head:
+                    changed += land.lines(wt, "diff", "--name-only", f"{head}...HEAD")
+                return without_sim(sel["full_invocations"], changed) + browsers(), note
+            return sel["invocations"] + browsers(), None
         except (ValueError, KeyError, TypeError) as exc:
             raise land.Stop(f"affected selector printed unusable JSON ({exc!r}); not guessing tests") from exc
     if full:

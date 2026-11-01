@@ -249,6 +249,205 @@ def test_transient_publish_failure_keeps_verified_transaction_pending(tmp_path, 
     assert json.loads((tmp_path / "state.json").read_text())["phase"] == "publishing"
 
 
+@pytest.mark.parametrize("variant", ["legacy", "feature", "digest-mismatch", "source-mismatch", "signature-invalid", "ambiguous"])
+def test_published_feature_rollout_resumes_without_republication(tmp_path, monkeypatch, variant):
+    """Use real publisher tag lookup, signed download and completed-rollout resume."""
+    tool = module()
+    monkeypatch.syspath_prepend(str(ROOT / "tools/release"))
+    import publish_payload_release as publish
+    operator = tmp_path / "operator"
+    monkeypatch.setenv("LOCALAPPDATA", str(operator))
+    private = operator / "Rosy/signing/release-key.private.pem"
+    private.parent.mkdir(parents=True)
+    trusted = tmp_path / "trusted"
+    public = trusted / "deploy/robot/pinky_pro/release/public-keys/release-key.pem"
+    public.parent.mkdir(parents=True)
+    subprocess.run(["openssl", "genpkey", "-algorithm", "ed25519", "-out", str(private)], check=True, capture_output=True)
+    subprocess.run(["openssl", "pkey", "-in", str(private), "-pubout", "-out", str(public)], check=True, capture_output=True)
+    monkeypatch.setattr(tool, "ROOT", trusted)
+    release_id = "2026.10.06-046"
+    work = tmp_path / "attempt-1"
+    work.mkdir()
+    signed = work / f"{release_id}.tar.gz"
+    artifact(signed)
+    digest = hashlib.sha256(signed.read_bytes()).hexdigest()
+    state = {"sha": SHA, "phase": "publishing", "release_id": release_id, "work_dir": str(work),
+             "tarball_sha256": digest, "canary_name": "rosy-test"}
+    tool.write_json(tmp_path / "state.json", state)
+    rollout = publish.build_rollout(release_id, digest, SHA, "2026-10-06T12:00:00Z", "rosy-test", 600)
+    rollout["canary_ok"] = True
+    if variant == "digest-mismatch":
+        rollout["tarball_sha256"] = "cd" * 32
+    if variant == "source-mismatch":
+        rollout["source_revision"] = "cd" * 20
+    raw = publish.rollout_bytes(rollout)
+    signature = publish.sign_rollout(raw, private, public)
+    if variant == "signature-invalid":
+        raw += b" "
+    tag = f"payload-{'v2-' if variant != 'legacy' else ''}{release_id}"
+    tags = {tag} if variant != "ambiguous" else {f"payload-{release_id}", f"payload-v2-{release_id}"}
+    calls = []
+
+    def github(*args):
+        calls.append(args)
+        if args[0] == "release":
+            assert args[1] == "download", "existing release must never be created or uploaded again"
+            assert args[2] in tags
+            target = Path(args[args.index("--dir") + 1])
+            target.mkdir(parents=True, exist_ok=True)
+            (target / "rollout.json").write_bytes(raw)
+            (target / "rollout.json.sig").write_text(signature)
+            return ""
+        assert args[0] == "api" and "--method" not in args
+        path = args[1]
+        if path.endswith("git/ref/heads/main"):
+            return json.dumps({"object": {"sha": SHA}})
+        if "compare/" in path:
+            return json.dumps({"status": "identical"})
+        if "matching-refs/tags/" in path:
+            requested = path.rsplit("/", 1)[1]
+            return json.dumps([{"ref": f"refs/tags/{requested}"}] if requested in tags else [])
+        if "/runs?" in path:
+            return json.dumps({"workflow_runs": [run()]})
+        return json.dumps({"id": 9})
+
+    runner = lambda argv: (0, github(*argv[1:]), "")
+    monkeypatch.setattr(publish, "run_gh", runner)
+    original_main = publish.main
+    resumed = []
+
+    def resume(args, **kwargs):
+        assert "--resume" in args, "coordinator lost the already published feature tag"
+        resumed.append(args)
+        return original_main([*args, "--public-key", str(public)], gh_runner=runner, **kwargs)
+
+    monkeypatch.setattr(publish, "main", resume)
+    config = {"repo": "team/robots", "repo_id": 7, "state_dir": tmp_path,
+              "robots": ["unused"], "canary": "unused", "key_name": "release-key"}
+    coordinator = tool.Coordinator(config, gh=github)
+    monkeypatch.setattr(coordinator, "ssh", lambda *_: (_ for _ in ()).throw(AssertionError("no device access")))
+    if variant in ("legacy", "feature"):
+        assert coordinator.tick() == "done"
+        assert len(resumed) == 1
+        assert coordinator.state["payload_tarball"] == str(signed)
+        assert coordinator.state["deployed_sha"] == coordinator.state["delivery_base_sha"] == SHA
+        assert len([args for args in calls if args[:2] == ("release", "download")]) == 2
+    else:
+        with pytest.raises((ValueError, publish.PublishError)):
+            coordinator.tick()
+        assert resumed == []
+        assert coordinator.state["phase"] == "publishing"
+
+
+@pytest.mark.parametrize("had_successful_baseline", [True, False])
+def test_failed_native_attempt_cannot_hide_undelivered_change_behind_docs(tmp_path, monkeypatch, had_successful_baseline):
+    tool = module()
+    monkeypatch.syspath_prepend(str(ROOT / "tools/release"))
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "operator"))
+    deployed, failed, docs = "cd" * 20, SHA, "ef" * 20
+    release_id = "2026.10.06-046"
+    state = {"sha": failed, "phase": "building", "release_id": release_id,
+             "dispatched_at": "2026-10-06T12:00:00+00:00"}
+    if had_successful_baseline:
+        state.update(deployed_sha=deployed, delivery_base_sha=deployed,
+                     payload_tarball=str(tmp_path / "prior-signed.tar.gz"))
+    tool.write_json(tmp_path / "state.json", state)
+    head = [failed]
+    comparisons, dispatches = [], []
+
+    def github(*args):
+        if args[0] == "workflow":
+            dispatches.append(args)
+            return ""
+        path = args[1]
+        if "--method" in args:
+            return "{}"
+        if path.endswith("git/ref/heads/main"):
+            return json.dumps({"object": {"sha": head[0]}})
+        if "compare/" in path:
+            comparison = path.split("compare/", 1)[1]
+            comparisons.append(comparison)
+            files = [{"filename": "docs/after-failure.md", "status": "modified"}]
+            if comparison.startswith(deployed):
+                files.append({"filename": "operations/pkg/node.py", "status": "modified"})
+            return json.dumps({"status": "identical" if comparison.endswith("...main") else "ahead", "files": files})
+        if "/workflows/build-native-payload.yml/runs?" in path:
+            return json.dumps({"workflow_runs": [run(conclusion="failure", event="workflow_dispatch",
+                display_title=f"Pinky payload {release_id}")]})
+        if "/runs?" in path:
+            return json.dumps({"workflow_runs": [run(head_sha=head[0])]})
+        if "releases?" in path or "matching-refs" in path:
+            return "[]"
+        return json.dumps({"id": 9})
+
+    config = {"repo": "team/robots", "repo_id": 7, "state_dir": tmp_path,
+              "robots": ["unused"], "canary": "unused", "key_name": "release-key"}
+    coordinator = tool.Coordinator(config, gh=github)
+    monkeypatch.setattr(coordinator, "ssh", lambda *_: (0, "/opt/rosy/releases/2026.10.05-043\n", ""))
+    assert coordinator.tick() == "build_refused"
+    head[0] = docs
+    assert coordinator.tick() == ("build_dispatched" if had_successful_baseline else "delivery_held")
+    assert coordinator.state["delivery_policy"] == ("full-payload" if had_successful_baseline else "review")
+    assert len(dispatches) == int(had_successful_baseline)
+    assert f"{failed}...{docs}" not in comparisons
+    if had_successful_baseline:
+        assert f"{deployed}...{docs}" in comparisons
+        assert coordinator.state["deployed_sha"] == deployed
+        assert coordinator.state["delivery_base_sha"] == deployed
+
+
+def test_unknown_baseline_holds_until_operator_verified_config_is_supplied(tmp_path):
+    tool = module()
+    calls = []
+
+    def github(*args):
+        calls.append(args)
+        assert args[0] == "api", "unknown baseline must not dispatch or publish"
+        if args[1].endswith("git/ref/heads/main"):
+            return json.dumps({"object": {"sha": SHA}})
+        if "compare/" in args[1]:
+            return json.dumps({"status": "ahead", "files": [{"filename": "docs/a.md", "status": "modified"}]})
+        raise AssertionError(args)
+
+    config = {"repo": "team/robots", "repo_id": 7, "state_dir": tmp_path,
+              "robots": [], "canary": "unused", "key_name": "release-key"}
+    coordinator = tool.Coordinator(config, gh=github)
+    coordinator.ci = lambda _: "success"
+    assert coordinator.tick() == "delivery_held"
+    assert coordinator.state["delivery_policy"] == "review"
+    assert "base_source_revision" in coordinator.state["reason"]
+    assert len(calls) == 1
+    verified = {**config, "base_source_revision": "cd" * 20}
+    coordinator = tool.Coordinator(verified, gh=github)
+    coordinator.ci = lambda _: "success"
+    assert coordinator.tick() == "no_robot_changes"
+    assert coordinator.state["deployed_sha"] == "cd" * 20
+    assert coordinator.state["delivery_base_sha"] == SHA
+    assert coordinator.tick() == "done"
+    reloaded = tool.Coordinator(verified, gh=github)
+    assert reloaded.state["delivery_base_sha"] == SHA, "config must never rewind an accepted checkpoint"
+    assert not reloaded.baseline_initialized
+
+
+@pytest.mark.parametrize("baseline", ["", "main", "AB" * 20, "ab" * 19, None, ["ab" * 20]])
+def test_config_rejects_unverified_baseline_shape(tmp_path, baseline):
+    tool = module()
+    path = tmp_path / "config.json"
+    tool.write_json(path, {**CONFIG, "state_dir": str(tmp_path), "trusted_root": str(ROOT),
+                          "base_source_revision": baseline})
+    with pytest.raises(ValueError, match="base_source_revision"):
+        tool.load_config(path)
+
+
+def test_config_accepts_the_single_explicit_verified_baseline(tmp_path, monkeypatch):
+    tool = module()
+    monkeypatch.setattr(tool, "MAX_STATE_DIR", 4096)
+    monkeypatch.setattr(tool, "verify_snapshot", lambda _: None)
+    path = tmp_path / "config.json"
+    tool.write_json(path, {**CONFIG, "state_dir": str(tmp_path), "trusted_root": str(ROOT)})
+    assert tool.load_config(path)["base_source_revision"] == "cd" * 20
+
+
 def test_signer_temporary_files_stay_in_managed_state(tmp_path, monkeypatch):
     import tempfile
     tool = module()
@@ -278,6 +477,9 @@ def test_next_release_has_independent_attempt_and_canary_state(tmp_path, monkeyp
         path = args[1]
         if "git/ref/heads/main" in path:
             return json.dumps({"object": {"sha": SHA}})
+        if "compare/" in path:
+            return json.dumps({"status": "ahead", "files": [
+                {"filename": "operations/pkg/node.py", "status": "modified"}]})
         if "/runs?" in path:
             return json.dumps({"workflow_runs": [run()]})
         if "releases?" in path or "matching-refs" in path:
@@ -285,10 +487,13 @@ def test_next_release_has_independent_attempt_and_canary_state(tmp_path, monkeyp
         return json.dumps({"id": 9})
 
     config = {"repo": "team/robots", "repo_id": 7, "state_dir": tmp_path,
-              "robots": ["robot-a"], "canary": "robot-a", "key_name": "release-key"}
+              "robots": ["robot-a"], "canary": "robot-a", "key_name": "release-key",
+              "base_source_revision": "cd" * 20}
     coordinator = tool.Coordinator(config, gh=github)
     monkeypatch.setattr(coordinator, "ssh", lambda *args: (0, "/opt/rosy/releases/2026.10.05-043\n", ""))
     assert coordinator.tick() == "build_dispatched"
+    assert coordinator.state["delivery_policy"] == "full-payload"
+    assert not coordinator.state.get("delta_binding"), "accepted source alone is not a signed delta base artifact"
     state = json.loads((tmp_path / "state.json").read_text())
     assert state["sha"] == SHA and state["phase"] == "building"
     assert not {"attempt", "work_dir", "canary_name", "publisher_pid", "tarball_sha256"} & state.keys()
@@ -298,7 +503,7 @@ def test_next_release_has_independent_attempt_and_canary_state(tmp_path, monkeyp
 # --- D-553: build beside CI, sign only after it, never retry forever --------------------
 
 CONFIG = {"repo": "team/robots", "repo_id": 7, "robots": ["robot-a"], "canary": "robot-a",
-          "key_name": "release-key"}
+          "key_name": "release-key", "base_source_revision": "cd" * 20}
 
 
 def github_for(ci_runs, tags=()):
@@ -309,7 +514,8 @@ def github_for(ci_runs, tags=()):
         if "git/ref/heads/main" in path:
             return json.dumps({"object": {"sha": SHA}})
         if "compare/" in path:
-            return json.dumps({"status": "identical"})
+            return json.dumps({"status": "identical" if f"compare/{SHA}...main" in path else "ahead",
+                               "files": [{"filename": "operations/pkg/node.py", "status": "modified"}]})
         if "ci.yml/runs?" in path:
             return json.dumps({"workflow_runs": ci_runs})
         if "matching-refs" in path:

@@ -18,6 +18,7 @@ from .policy import MediaPolicy
 RENEW_BEFORE_S = 40     # a 60 s grant is renewed every ~20 s
 DEMAND_STALE_S = 5
 MAX_BACKOFF_S = 5
+STARTUP_TIMEOUT_S = 12
 
 
 class MediaWorker:
@@ -30,6 +31,7 @@ class MediaWorker:
         self._demand, self._demand_at = None, None
         self._next_control, self._retry_at, self._failures = 0.0, 0.0, 0
         self._session_renewed = None
+        self._started_at = None
 
     def _control(self, now, wall):
         try:
@@ -55,6 +57,12 @@ class MediaWorker:
                 self.publisher.stop()
             except Exception:
                 pass
+            if self.grant is not None:
+                try:
+                    self._client.close_session(self.grant)
+                except MediaHTTPError:
+                    pass
+            self.grant = None
             self.publisher = None
             self._log('media publisher stopped: ' + reason)
         if failed:
@@ -62,9 +70,12 @@ class MediaWorker:
             delay = min(MAX_BACKOFF_S, 0.5 * 2 ** min(self._failures, 4))
             self._retry_at = self._now + delay * (0.5 + 0.5 * self._rng())
 
-    def _feedback(self, now):
+    def _feedback(self, now, wire):
+        if not self.publisher.ready():
+            if now - self._started_at >= STARTUP_TIMEOUT_S:
+                self._stop('startup timeout', failed=True)
+            return
         stats = self.publisher.stats()
-        wire = self._sampler.sample(now=now) if self._sampler else None
         # shortcut: an unreadable NIC counter disables only the wire guard; fix the interface name to restore it.
         decision = self._policy.update(demand_age_s=now - self._demand_at,
             queue_age_ms=stats['encoded_queue_ms'], loss_fraction=stats['loss_fraction'] or 0,
@@ -80,10 +91,11 @@ class MediaWorker:
         self._now = now
         if now >= self._next_control:
             self._next_control = now + 1
+            wire = self._sampler.sample(now=now) if self._sampler else None
             self._control(now, wall)
             if self.publisher is not None and self._demanded(now):
                 try:
-                    self._feedback(now)
+                    self._feedback(now, wire)
                 except Exception as exc:
                     self._stop('feedback ' + type(exc).__name__, failed=True)
         if not self._demanded(now):
@@ -95,7 +107,11 @@ class MediaWorker:
             try:
                 self._reader = self._reader or self._open_reader()  # mailbox may not exist yet
                 self.publisher = self._make_publisher(self._client.whip_endpoint(self.grant), self.grant.token)
+                self._started_at = now
                 self.publisher.start()
+                fps, bitrate = self._policy.current_rate()
+                self.publisher.set_rate(fps=min(fps, self._demand['fps']),
+                                        bitrate=min(bitrate, self._demand['target_bitrate']))
             except Exception as exc:
                 self._stop('start ' + type(exc).__name__, failed=True)
                 return
@@ -104,7 +120,7 @@ class MediaWorker:
             return
         try:
             if self.publisher.push_rgb(frame.rgb, epoch=frame.epoch, sequence=frame.sequence,
-                                       captured_ms=frame.captured_ms):
+                                       captured_ms=frame.captured_ms) and self.publisher.ready():
                 self._failures = 0
         except Exception as exc:
             self._stop('push ' + type(exc).__name__, failed=True)

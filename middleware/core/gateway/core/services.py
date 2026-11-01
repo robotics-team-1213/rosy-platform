@@ -78,6 +78,7 @@ from core_features.safety.fleet_loss import FleetLossMonitor
 from core_common.protocol.evidence import CHANNEL_STALE_AFTER_S
 from core_features.state.manager import StateManager
 from core.system.runtime import HostRuntimeProbe
+from core.system.host_files import HostFileExchange
 from core_features.waypoints.manager import WaypointManager
 
 
@@ -108,6 +109,7 @@ class CoreServices:
     docking: DockingManager
     swarm: SwarmManager
     runtime_probe: HostRuntimeProbe
+    host_files: HostFileExchange
     maps: MapSnapshotStore
     audit: FileAuditLog
     # D-321 addendum: attended calibration lease (visible on every screen, fences drive writes).
@@ -301,7 +303,7 @@ class CoreServices:
                    vision=vision,
                    readiness=readiness,
                    power=power, battery=battery, docking=docking, swarm=swarm,
-                   runtime_probe=runtime_probe, maps=MapSnapshotStore(),
+                   runtime_probe=runtime_probe, host_files=HostFileExchange(), maps=MapSnapshotStore(),
                    audit=audit, calibration=calibration, trip_lease=trip_lease,
                    adapter_registry=adapter_registry, pilot_recording=PilotRecordingGuard(events=events),
                    dock_feed=dock_feed, station_docking=station_docking, localization=localization, loc_mission=loc_mission,

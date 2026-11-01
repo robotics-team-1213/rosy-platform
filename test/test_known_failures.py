@@ -198,6 +198,10 @@ def test_an_xdist_session_that_collected_nothing_is_caught():
     assert known_failures.collected_nothing("6 workers [0 items]\n", paths)
     assert not known_failures.collected_nothing("2 workers [10 items]\n", paths)
     assert not known_failures.collected_nothing("2 workers [0 items]\n", paths[:1])
+    assert known_failures.collected_nothing("====== test session starts ======\ncollected 0 items\n", paths)
+    assert known_failures.collected_nothing("collecting ... collected 0 items / 1 skipped\n", paths)
+    passed_id = "t/test_h.py::test_log[collected 0 items\\nno tests ran-ddd] PASSED [ 54%]\n"  # a -v id holding the words
+    assert not known_failures.collected_nothing("collected 12 items\n" + passed_id + "12 passed\n", paths)
 
 
 # --- Design 0.7 rule 7: an id a landing adds to the list must fail on that run -----------------------

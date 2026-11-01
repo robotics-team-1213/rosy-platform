@@ -162,6 +162,7 @@ class FleetTaskService:
         self, available_robot_ids: set[str], *,
         dispatch: Callable[[dict], Awaitable[Mapping]],
     ) -> dict | None:
+        started = time.monotonic()
         if self.charge_admission is not None:
             available_robot_ids = {robot for robot in available_robot_ids if self.charge_admission(robot) is None}
         task = self.scheduler.claim_next(available_robot_ids)
@@ -176,12 +177,13 @@ class FleetTaskService:
                     reason=admission or "POLICY_NOT_ACCEPTED",
                 )
         attempt = self.scheduler.begin_dispatch(task["task_id"])
+        # D-271 Gate A: claim_s is blocking SQLite time on the event loop, incl. lock waits.
         _LOG.info(
             "fleet task dispatch claimed: task=%s robot=%s priority=%s queue_wait_s=%s "
-            "total_queue_wait_s=%s attempt_seq=%s",
+            "total_queue_wait_s=%s attempt_seq=%s claim_s=%.3f",
             task["task_id"], task["robot_id"], task.get("priority_class"),
             task.get("queue_wait_seconds"), task.get("total_queue_wait_seconds"),
-            attempt.get("attempt_seq"),
+            attempt.get("attempt_seq"), time.monotonic() - started,
         )
 
         try:
@@ -189,7 +191,13 @@ class FleetTaskService:
                 return self.store.abort_dispatch_before_send(
                     task["task_id"], attempt_id=attempt["attempt_id"],
                 )
-            raw_receipt = await dispatch(attempt)
+            sent = time.monotonic()
+            try:
+                raw_receipt = await dispatch(attempt)
+            finally:
+                # D-271 Gate A: the serial loop holds every other robot for this long.
+                _LOG.info("fleet task dispatch answered: task=%s robot=%s send_s=%.3f",
+                          task["task_id"], task["robot_id"], time.monotonic() - sent)
             if not isinstance(raw_receipt, Mapping):
                 raise RuntimeError("invalid robot receipt")
             self.bind_native_receipt(task['task_id'], attempt['attempt_id'], task['robot_id'], raw_receipt)

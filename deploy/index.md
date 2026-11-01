@@ -68,6 +68,7 @@
 ## 교훈 (docs/solutions)
 
 - [컨테이너에서 `kill -0`은 좀비를 산 것으로 본다](../docs/solutions/deployment/container-zombie-kill0-blindness.md)
+- [실험실 PC에서 시뮬 셀 소유자는 장치 없는 namespace와 짧은 소켓 경로로 띄운다](../docs/solutions/deployment/sim-cell-owner-on-a-lab-pc-needs-a-device-free-namespace-2026-10-31.md)
 - [Cell 시뮬레이터는 홈 복귀를 관측한 뒤 Action을 받는다](../docs/solutions/logic-errors/cell-startup-must-reach-home-before-action-admission.md)
 
 ## 시험
@@ -76,8 +77,8 @@
 
 ## 최근 기록
 
-- 2026-10-28 · uncommitted · D-907 authenticated metadata read repair
-- 2026-10-28 · uncommitted · D-907 readonly native v2 verifier
-- 2026-10-28 · uncommitted · native v2 readonly profile contract
-- 2026-10-28 · bc32cb9b41 · 정지 시험의 OS 가짜 호출 격리
-- 2026-10-28 · b3641b2165 · OMX 운영 관측의 native 통신 경계
+- 2026-11-01 · uncommitted · D-907 authenticated metadata read repair
+- 2026-11-01 · uncommitted · D-907 readonly native v2 verifier
+- 2026-11-01 · uncommitted · native v2 readonly profile contract
+- 2026-11-01 · uncommitted · fix(omx): 깊이 높이의 기준 평면이 프레임마다 바뀌지 않는다
+- 2026-11-01 · uncommitted · fix(omx): 피벗 측정점 찾기가 현장 바닥 색을 쓴다

@@ -6,14 +6,17 @@
   <link rel="icon" type="image/svg+xml" href="/common/icons/console.svg">
   <link rel="stylesheet" href="/common/tokens.css"><script src="/common/theme.js"></script>
   <link rel="stylesheet" href="/common/components.css">
+  <link rel="stylesheet" href="/console/assets/fleet-document.css">
   <link rel="stylesheet" href="/console/assets/password-login.css">
   <script type="module" src="/common/ui.js"></script>
   <script type="module" src="/console/assets/account-page.js"></script>
 </head>
 <body><ui-shell grammar="procedure">
-  <ui-topbar><ui-brand href="/console"><b>Rosy Fleet</b><small>계정 관리</small></ui-brand><span data-spacer></span><ui-button kind="quiet" data-theme-cycle="" data-icon-only="" type="button" aria-label="테마 변경" data-action-icon="theme-dark"></ui-button></ui-topbar>
-  <main class="fleet-login-main">
-    <h1>계정 관리</h1>
+  <!-- fleet:document-header:start -->
+<ui-topbar><ui-brand href="/console"><b>Rosy Fleet</b><small>계정 관리</small></ui-brand><span data-spacer></span><ui-button kind="quiet" data-theme-cycle="" data-icon-only="" type="button" aria-label="테마 변경" data-action-icon="theme-dark"></ui-button></ui-topbar>
+<!-- fleet:document-header:end -->
+  <main class="fleet-login-main fleet-document">
+    <h1 class="ui-page-heading">계정 관리</h1>
     <ui-status id="account-status" state="pending" role="status">관리 권한을 확인하고 있습니다.</ui-status>
     <a id="account-login" href="/console/login?return=%2Fconsole%2Faccounts" hidden>로그인</a>
     <section id="account-setup" hidden aria-labelledby="account-setup-heading">

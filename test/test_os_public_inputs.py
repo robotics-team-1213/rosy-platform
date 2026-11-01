@@ -115,6 +115,42 @@ def test_files_replaced_after_server_start_are_rechecked(distribution, tmp_path)
         with pytest.raises(HTTPError): urlopen(local_url(description, 'manifest.json'), timeout=3)
 
 
+def test_path_ctime_can_differ_from_the_same_open_file(distribution, monkeypatch):
+    dist, snapshot, certificate, contents = distribution
+    path = dist / 'manifest.json'
+    original_lstat = Path.lstat
+
+    def windows_lstat(candidate, *args, **kwargs):
+        info = original_lstat(candidate, *args, **kwargs)
+        if candidate == path:
+            fields = {name: getattr(info, name) for name in dir(info) if name.startswith('st_')}
+            fields['st_ctime_ns'] += 1_000_000_000
+            return SimpleNamespace(**fields)
+        return info
+
+    monkeypatch.setattr(Path, 'lstat', windows_lstat)
+    with module().serve_inputs(dist, snapshot, certificate) as description:
+        with urlopen(local_url(description, 'manifest.json'), timeout=3) as response:
+            assert response.read() == contents['manifest.json']
+
+
+def test_changed_descriptor_ctime_is_still_refused(distribution, monkeypatch):
+    dist, snapshot, certificate, _ = distribution
+    owner = module()
+    original_fstat = owner.os.fstat
+    with owner.serve_inputs(dist, snapshot, certificate) as description:
+        def changed_fstat(descriptor):
+            info = original_fstat(descriptor)
+            fields = {name: getattr(info, name) for name in dir(info) if name.startswith('st_')}
+            fields['st_ctime_ns'] += 1_000_000_000
+            return SimpleNamespace(**fields)
+
+        monkeypatch.setattr(owner.os, 'fstat', changed_fstat)
+        with pytest.raises(HTTPError) as error:
+            urlopen(local_url(description, 'manifest.json'), timeout=3)
+        assert error.value.code == 404
+
+
 def test_parent_swap_after_ancestor_checks_cannot_stream_an_outside_file(distribution, tmp_path, monkeypatch):
     dist, snapshot, certificate, contents = distribution
     route = 'factory-release/fixture/metadata.json'

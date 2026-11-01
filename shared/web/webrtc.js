@@ -146,6 +146,11 @@ export async function openCamera({
     }
     if (closed) return {close};
     await pc.setRemoteDescription({type: "answer", sdp: answer});
+    // Hidden viewers need playback before their first rendered freshness watermark.
+    await Promise.race([
+      video.play(),
+      wait(ICE_TIMEOUT_MS).then(() => { throw new Error("영상 재생 시작 시간 초과"); }),
+    ]);
   } catch (error) {
     close("failed");
     throw error;

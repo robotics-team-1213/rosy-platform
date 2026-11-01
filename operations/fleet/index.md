@@ -96,7 +96,7 @@
 
 ## 교훈 (docs/solutions)
 
-- 없음
+- [로봇이 틀린 코드에 401을 주면 Fleet은 자기 등록 자격이 죽은 줄 안다](../../docs/solutions/logic-errors/robot-401-for-a-wrong-code-drops-fleets-enrolled-credential-2026-10-31.md)
 
 ## 시험
 
@@ -104,8 +104,8 @@
 
 ## 최근 기록
 
-- 2026-10-28 · cdbd0c332e · 전용 앱 상태 시험의 pytest 9.2 종료 오류 수정
-- 2026-10-27 · 398b533c38 · 자동화 worker의 거절 증거 import 공개 이름 전환
-- 2026-10-27 · 441d50c066 · 재시작 lease 회수의 원장 기록 LEASE_RECLAIMED
-- 2026-10-27 · c36bfb48ad · feat: 인증된 복구 요청과 원본 결속
-- 2026-10-27 · uncommitted · D-865 P3 콘솔 표시 회귀
+- 2026-10-31 · uncommitted · feat(fleet): D-938 팔 이송 정책 승인
+- 2026-10-30 · uncommitted · feat(sim): 정상 단계 시뮬 관측자 transfer_observer (D-927 결정 3)
+- 2026-10-30 · f10444d3af · 헤더 CI 교정 원격 검증
+- 2026-10-30 · uncommitted · fix(fleet): 작업 발행 루프의 연속 발행과 발행 시간 기록
+- 2026-10-30 · uncommitted · fix(fleet): 교통 판정 구간을 콘솔 잠금 하나로 직렬화

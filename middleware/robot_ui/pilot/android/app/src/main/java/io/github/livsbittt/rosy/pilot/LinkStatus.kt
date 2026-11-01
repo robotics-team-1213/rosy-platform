@@ -12,8 +12,7 @@ enum class LinkReason {
 
 /** What the lobby says for each reason, with the next action, so it never shows a bare "cannot connect". */
 object LinkStatus {
-    fun groupHint(reachableRobots: Int, cooling: Boolean): String = when {
-        cooling -> "함께 조종 보류 · 태블릿이 식으면 로봇 두 대를 다시 선택하세요."
+    fun groupHint(reachableRobots: Int): String = when {
         reachableRobots < 2 -> "함께 조종에는 연결 가능한 로봇 두 대가 필요합니다. 같은 Wi-Fi와 로봇 전원을 확인한 뒤 다시 찾아주세요."
         else -> "로봇 두 대를 선택해 연결하세요. 카메라를 함께 보고 공용 조이스틱으로 같은 명령을 보냅니다."
     }

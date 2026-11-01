@@ -8,6 +8,8 @@ services:
     environment:
       ROSY_ACCOUNT_CONFIG: "${ROSY_ACCOUNT_CONFIG:?set ROSY_ACCOUNT_CONFIG}"
   proxy:
+    labels:
+      org.rosy.site-account-caddy-sha256: unbuilt
     networks:
       site_backend: {}
       site_edge:

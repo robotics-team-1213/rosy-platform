@@ -279,10 +279,16 @@ def test_discovery_empty_failure_unsupported_and_explicit_retry(console_url):
         page.locator('#discovery-retry').click()
         expect(page.locator('#discovery-empty')).to_contain_text('마지막 스캔 61초 전')
         api['/api/fleet/discovery'] = {'scanner_online': True, 'devices': [{
-            'name': 'fixture-robot', 'address': '192.0.2.8', 'port': 8080,
+            'name': 'fixture-robot', 'address': '192.0.2.8', 'port': 8080, 'release': '2026.10.19-168',
+            'stage': 'CORE_READY', 'status': 'registration_pending', 'enrollable': True}, {
+            'name': 'fixture-newer', 'address': '192.0.2.9', 'port': 8080, 'release': '2026.10.29-001',
             'stage': 'CORE_READY', 'status': 'registration_pending', 'enrollable': True}]}
         page.locator('#discovery-retry').click()
         expect(page.locator('#discovery-list')).to_contain_text('192.0.2.8')
+        rows = page.locator('#discovery-list li')
+        expect(rows.nth(0)).to_contain_text('2026.10.19-168 (다른 로봇보다 이전)')
+        expect(rows.nth(1)).to_contain_text('2026.10.29-001')
+        expect(rows.nth(1)).not_to_contain_text('이전')
         api['/api/fleet/discovery'] = (503, {'detail': {'code': 'SCANNER_UNAVAILABLE'}})
         page.locator('#discovery-retry').click()
         expect(page.locator('#discovery-list')).to_be_hidden()

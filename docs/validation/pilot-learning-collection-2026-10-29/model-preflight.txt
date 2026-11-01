@@ -1,0 +1,16 @@
+2026-10-29 model PC, read-only import check in the existing production venv
+PYTHONDONTWRITEBYTECODE=1, imports from the existing accepted signed model-code release
+cv2 import OK
+numpy import OK
+yaml import OK
+mcap import OK
+mcap_ros2 import OK
+pixel_label_job import OK
+review_ingest import OK
+review_store import OK
+ffmpeg available True
+new pipeline admitted False
+preflight exit 0
+
+This checks existing dependencies. It does not admit the new source, install units,
+alter a review workspace, run a model, or prove new physical recording acceptance.

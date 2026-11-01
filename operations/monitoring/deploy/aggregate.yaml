@@ -1,0 +1,13 @@
+collector_id: central-monitoring
+site_id: central
+readers:
+  - principal_id: central-operator
+    token_env: MONITORING_CENTRAL_READ
+    sites: [central, site-a]
+sources:
+  - id: site-a-monitoring
+    site_id: site-a
+    kind: peer
+    url: https://site-a.example.invalid
+    token_env: MONITORING_SITE_UPSTREAM
+    peer_sites: [site-a]

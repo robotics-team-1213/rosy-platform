@@ -1,8 +1,10 @@
 // Explicit human labels and source-bound frame reads; source recordings stay immutable.
 import {accountFetch} from '/account-session.js';
+import {confirmIrreversible} from '/common/ui.js';
 const $=id=>document.getElementById(id),API='/api/learning/omx/center';
 const OBJECT={moved_as_intended:'의도대로 이동',grasp_missed:'집기 실패',dropped:'낙하',displaced:'의도와 다르게 이동',untouched:'변화 없음',unknown:'미정'};
 let current=null,pending=null,token='',saving=false,loading=false,stale=false;
+let modified=false,editVersion=0,confirming=false;
 let generation=0,controller=null,playing=false,playTimer=null,frameBusy=false,shownFrame=-1,activeContext='',pendingPreview=false;
 function el(tag,text){const node=document.createElement(tag);if(text!=null)node.textContent=text;return node;}
 function uuid(){
@@ -20,18 +22,26 @@ async function request(path,body,signal){
   if(!response.ok)throw new Error(value.error||`요청 실패 (${response.status})`);
   return value;
 }
-function publishLoaded(reviewId){
+function publishLoaded(reviewId=current?.latest_review_id){
   document.dispatchEvent(new CustomEvent('omx-review-loaded',{detail:{prepared_id:current?.prepared_id,
-    source_revision:current?.source_revision,latest_review_id:reviewId??null}}));
+    source_revision:current?.source_revision,latest_review_id:reviewId??null,dirty:modified,saving:saving||loading||stale}}));
 }
 function saveReady(){
-  $('review-save').disabled=!current||saving||stale||!$('reviewer').value.trim()||!$('review-confirmed').checked;
+  $('review-save').disabled=!current||saving||loading||stale||!$('reviewer').value.trim()||!$('review-confirmed').checked;
 }
-function dirty(){pending=null;$('review-confirmed').checked=false;publishLoaded(null);saveReady();}
+function dirty(){modified=true;editVersion++;pending=null;$('review-confirmed').checked=false;publishLoaded();saveReady();}
+window.addEventListener('beforeunload',event=>{if(modified||saving){event.preventDefault();event.returnValue='';}});
+async function discardReview(action,opener){
+  if(saving||loading||confirming)return false;
+  if(!modified)return true;
+  const version=editVersion;confirming=true;
+  try{return await confirmIrreversible({message:'저장하지 않은 시도별 검수와 검수자 입력이 있습니다. 편집을 버릴까요?',action,opener})&&version===editVersion;}
+  finally{confirming=false;}
+}
 function identity(value){$('review-identity').textContent=value?`${value.kind} · ${value.id}`:'로컬 입력 검수자 · 신원 미검증. 계정 사용 시 서버가 검수자를 바인딩합니다.';}
 function choice(field,values,value,index){
   const select=el('select');select.className='ui-field';select.dataset.field=field;
-  select.setAttribute('aria-label',`시도 ${index} ${field}`);
+  select.setAttribute('aria-label',`시도 ${index} ${{outcome:'결과',object_result:'물체 결과',split:'분할'}[field]}`);
   for(const [key,label] of Object.entries(values)){const option=el('option',label);option.value=key;select.append(option);}
   select.value=value;select.onchange=dirty;return select;
 }
@@ -140,19 +150,33 @@ function togglePlayback(){
   if(!frameBusy){if(shownFrame===Number($('review-frame').value))scheduleNext();else preview(true);}
 }
 function preparedChanged(){
-  const selected=$('prepared-set').value;$('review-open').disabled=!selected||loading||saving;
+  const select=$('prepared-set');
+  if(current&&select.value!==current.prepared_id&&(modified||saving||loading)){
+    if(!Array.from(select.options).some(option=>option.value===current.prepared_id))select.add(new Option(current.name,current.prepared_id));
+    select.value=current.prepared_id;publishLoaded();
+  }
+  const selected=select.value;$('review-open').disabled=!selected||loading||saving;
   if(current&&current.prepared_id!==selected){cancelViewer();current=null;pending=null;stale=false;$('review-editor').hidden=true;$('review-status').textContent='선택한 자료의 검수를 명시적으로 불러오세요.';publishLoaded(null);}
 }
+$('prepared-set').addEventListener('change',async event=>{
+  const select=$('prepared-set'),selected=select.value;
+  if(!current||current.prepared_id===selected||(!modified&&!saving&&!loading))return;
+  event.stopImmediatePropagation();select.value=current.prepared_id;
+  if(await discardReview('편집 버리고 자료 바꾸기',select)){
+    modified=false;select.value=selected;select.dispatchEvent(new Event('change',{bubbles:true}));
+  }
+},true);
 $('review-open').onclick=async()=>{
   if(loading||saving||!$('prepared-set').value)return;
-  const selected=$('prepared-set').value;loading=true;cancelViewer();preparedChanged();
+  if(!await discardReview('편집 버리고 다시 불러오기',$('review-open')))return;
+  const selected=$('prepared-set').value;loading=true;$('review-fields').disabled=true;cancelViewer();preparedChanged();publishLoaded();
   try{
     const value=await request(API+'/review/'+encodeURIComponent(selected));
     if($('prepared-set').value!==selected)return;
-    current=value;pending=null;stale=false;loading=false;render();
+    current=value;pending=null;modified=false;stale=false;loading=false;render();
     $('review-status').textContent=(current.fixture_only?'시험 fixture · 현장 자료 수용 아님. ':'')+`검수 불러옴 · ${current.trainable?.ok?'학습 분할 준비됨':current.trainable?.reason||'학습 준비 안 됨'}`;
-  }catch(error){$('review-status').textContent=`검수 읽기 실패: ${error.message}`;stale=true;cancelViewer();saveReady();publishLoaded(null);}
-  finally{loading=false;preparedChanged();}
+  }catch(error){$('review-status').textContent=`검수 읽기 실패: ${error.message}`;stale=true;cancelViewer();saveReady();publishLoaded();}
+  finally{loading=false;$('review-fields').disabled=false;saveReady();preparedChanged();publishLoaded();}
 };
 $('review-episode').onchange=resetFrame;$('review-camera').onchange=()=>preview();$('review-frame').oninput=()=>preview();$('review-view').onchange=()=>preview();
 $('review-play').onclick=togglePlayback;$('review-rate').onchange=stopPlayback;
@@ -173,11 +197,11 @@ $('native-review-form').onsubmit=async event=>{
       for(const field of ['outcome','split','object_result','reason'])decision[field]=row.querySelector(`[data-field="${field}"]`).value;
       return decision;
     }),reviewer:$('reviewer').value.trim(),confirmed:true,request_id:uuid()};
-  saving=true;$('review-fields').disabled=true;saveReady();preparedChanged();
+  saving=true;$('review-fields').disabled=true;saveReady();preparedChanged();publishLoaded();
   try{
     const value=await request(API+'/review',pending);
     if(current!==source)return;
-    pending=null;current.latest_review_id=value.saved_review_id||value.latest_review_id;
+    pending=null;modified=false;current.latest_review_id=value.saved_review_id||value.latest_review_id;
     identity(value.reviewer_identity);publishLoaded(current.latest_review_id);
     $('review-status').textContent=`검수 스냅샷 저장됨 ${current.latest_review_id} · ${value.trainable?.ok?'학습 분할 준비됨':value.trainable?.reason||'학습 준비 판정은 자료 목록에서 확인하세요.'}`;
     document.dispatchEvent(new CustomEvent('omx-review-saved'));
@@ -186,7 +210,7 @@ $('native-review-form').onsubmit=async event=>{
     stale=/stale|revision|hash|changed|리비전|해시|원본.*변경/i.test(error.message);
     if(stale)cancelViewer();
     $('review-status').textContent=`검수 저장 응답: ${error.message}`+(stale?' · 원본을 명시적으로 다시 불러온 뒤 검수하세요.':' · 같은 입력으로 재시도할 수 있습니다.');
-  }finally{saving=false;$('review-fields').disabled=false;saveReady();preparedChanged();}
+  }finally{saving=false;$('review-fields').disabled=false;saveReady();preparedChanged();publishLoaded();}
 };
 $('prepared-set').addEventListener('change',preparedChanged);
 document.addEventListener('omx-prepared-loaded',preparedChanged);

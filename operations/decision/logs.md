@@ -79,3 +79,9 @@
 - 변경: fleet 자동화 worker가 `rosy.decision.billing`의 `_RejectedJudgment`를 분포 경계 너머 import·타입 검사하므로, 이름을 공개 `RejectedJudgment`로 바꾸고 패키지 안 provider 3곳·fleet worker(엄격 타입 검사 포함)·회귀 시험을 같은 커밋에 갱신했다. 순수 이름 변경이라 행동 변이 프로브는 해당 없음(누락 위치는 import 즉시 red).
 - 증거: 원격 5 suite(known-cost·deliberation 3종·installed wheel 검사) green, known NEW 0.
 - gate 변화: 없음. 거절 증거의 검증 규칙·엄격 타입 검사·설치 경계는 불변.
+
+## 2026-10-29 · 587c0b4c8c · 판단 난항의 조건부 독립 모델 협력
+
+- 변경: D-913 역할별 context, 측정·workload에 결속된 순차/병렬/auto 선택, 비용 예약·호출 중단·재사용과 후보 원장 policy/configuration fence를 구현했다. 기존 의존 검토·v2 사건 처리·장치 실행 권한은 유지한다.
+- 증거: 독립 소스 검토와 원격 핵심 회귀·설치 wheel/sdist 통과, NEW0. 여섯 정책의 동일 사건 비교 도구도 원격 검증했다. 상세: `docs/validation/conditional-model-cooperation-2026-10-29/result.md`.
+- gate 변화: SOURCE/LOCAL 근거 갱신. 실제 provider·GPU admission·독립 모델 품질·실물/현장 수용은 미검증이며 운영 활성화는 HOLD다.

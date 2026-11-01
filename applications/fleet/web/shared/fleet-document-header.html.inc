@@ -1,0 +1,1 @@
+<ui-topbar><ui-brand href="/console"><b>Rosy Fleet</b><small>{{document-title}}</small></ui-brand><span data-spacer></span><ui-button kind="quiet" data-theme-cycle="" data-icon-only="" type="button" aria-label="테마 변경" data-action-icon="theme-dark"></ui-button></ui-topbar>

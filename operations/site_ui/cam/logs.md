@@ -363,3 +363,15 @@
 - 변경: 관제 PC CLI `deploy/site/rosy_cam_screen.py`에 `stream-status`·`stream-start`·`stream-stop`·`snapshot`을 더했다(조명 버튼과 같은 신원·포커스·잠금·새 UI 덤프 검사). 멈춘 송출을 다시 켜는 사용자 타이머 `rosy-cam-stream.timer`. Vision `status`에 `field_state`를 싣고 field_boundary 소스는 `corners_needed` 0을 보낸다. 앱은 그때 코너 마커 대신 바닥 경계 상태(no_field/orientation_pending/calibrated/stale)를 보여준다. `field_state`가 없는 옛 수신기에서는 기존 코너 마커 안내 그대로다.
 - 증거: 현장 S21에서 CLI 정지·상태·캡처, 강제 종료 뒤 `stream-start` 약 10 s 확인. 새 APK(JDK 21, 노트북)는 `testDebugUnitTest assembleDebug` 443 passed, failures 0. Python `operations/overhead/test`·`test/test_site_cam_screen.py`는 원격 시험 PC 통과. 설치된 앱의 v2 서명자(다른 개발 PC 디버그 키)와 달라 재설치했고, 컨테이너 안에서 만든 고정 토큰 링크로 다시 연결해 `송출 중` 2.5 fps를 확인했다.
 - gate 변화: 없음. 현장 Vision은 아직 옛 이미지라 앱은 코너 마커 안내를 보인다. 바닥 경계 안내의 기기 확인은 서명 배포 뒤. 타이머는 설치하지 않았다.
+
+## 2026-10-29 · 5bd25af46e · LAN 목록의 비활성 사유와 초점
+
+- 변경: 주소 미확인·승인 방식 미확인·충돌 사유를 비활성 버튼 밖의 공용 서체·색으로 표시하고, 서비스 identity key로 목록 재정렬의 input focus를 유지했다. 기존 enabled·발견·승인·trust·촬영 정책은 유지했다.
+- 증거: 실제 SDK35 debug/test APK 빌드·JVM443 pass/0 skip, 두 밀도의 native 각4 pass. key만 제거한 동일 fixture에서 재정렬2 RED를 확인했다. Python affected517 pass/NEW0. 최종24장 독립 검토 및 보고서97개/캡처24개 해시는 `docs/validation/cam-lan-guidance-2026-10-29/result.md`를 따른다.
+- gate 변화: 없음. 합성 목록이며 실제 기기·발견·승인·촬영·TalkBack·FIELD 수용은 아니다. CE: 해당 없음 — 원인과 해결이 코드·회귀·검증 기록에서 드러난다.
+
+## 2026-10-31 · uncommitted · 피어 공통 소스로 이동(D-939)
+
+- 변경: 이름만 다른 피어 서명·첫 접촉 CA 고정·Keystore 신원 사본(Pilot `PeerProof`/`PeerTls`/`AndroidPeerIdentity`, Cam `CameraProof`/`CameraTls`/`AndroidCameraIdentity`)을 `shared/android/peer` 한 곳으로 모았다. 두 앱이 `srcDir`로 함께 컴파일한다. 신원은 `AndroidPeerIdentity(context, app)`이고 기존 키 별칭·표시 파일·client id 접두어를 그대로 쓴다. 세션·보관소는 앱에 남긴다.
+- 증거: 새 구조 시험 `test/architecture/test_app_shared_sources.py` 3건이 main 배치에서 RED(빌드 미포함·12개 다시 선언·사본 4쌍), 이 브랜치에서 GREEN이다. 로컬 SDK35 빌드: Cam JVM 443 pass/0 skip, Pilot JVM 110 pass/1 skip(기존 ShellPageProbe), 두 앱 assembleDebug 성공. lint 0 error.
+- gate 변화: 없음. 실제 태블릿·휴대폰에서 기존 승인 관계 유지는 설치 후 확인한다. CE: 해당 없음 — 규칙은 D-939와 구조 시험에 있다.

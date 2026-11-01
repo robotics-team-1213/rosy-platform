@@ -18,13 +18,13 @@ WEB = ROOT / 'middleware' / 'robot_ui' / "robot"
 def _module_page(playwright, modules: dict[str, Path], width: int = 390):
     browser, page, errors = open_page(playwright, width, 844)
     confirmation = ROOT / "shared" / "web" / "confirmation.js"
-    page.route("http://rosy.test/common/confirmation.js", lambda route: route.fulfill(
+    page.route("http://rosy.test/**/confirmation.js", lambda route: route.fulfill(
         status=200, content_type="application/javascript", body=confirmation.read_text(encoding="utf-8")))
     geometry = ROOT / "shared" / "web" / "live-dialog-geometry.js"
-    page.route("http://rosy.test/common/live-dialog-geometry.js", lambda route: route.fulfill(
+    page.route("http://rosy.test/**/live-dialog-geometry.js", lambda route: route.fulfill(
         status=200, content_type="application/javascript", body=geometry.read_text(encoding="utf-8")))
     wiring = ROOT / "shared" / "web" / "ui-wiring.js"
-    page.route("http://rosy.test/common/ui-wiring.js", lambda route: route.fulfill(
+    page.route("http://rosy.test/**/ui-wiring.js", lambda route: route.fulfill(
         status=200, content_type="application/javascript", body=wiring.read_text(encoding="utf-8")))
     page.route(
         "http://rosy.test/panel-test",

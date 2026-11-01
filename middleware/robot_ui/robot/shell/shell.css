@@ -22,16 +22,17 @@ body {
 .surface-auth-link:hover { color: var(--text-primary); background: var(--brand-rose-wash); }
 .surface-auth-link:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 #shell-estop { flex: none; white-space: nowrap; }
+#shell-notice { min-inline-size: 0; overflow-wrap: anywhere; max-block-size: calc(var(--text-label) * var(--leading-copy) * 2); overflow: auto; }
+ui-topbar > ui-brand { flex-shrink: 0; }
 .surface-main {
   box-sizing: border-box;
   width: 100%;
   display: grid;
   grid-auto-rows: min-content;
   gap: var(--space-5);
-  max-width: 96rem;
   min-width: 0;
-  margin-inline: auto;
-  padding: var(--space-5);
+  margin: 0;
+  padding: var(--inset-pane);
 }
 .surface-slot { display: grid; gap: var(--space-5); min-width: 0; }
 /* D-359 §6.3 — 공용 부품(ui-form·ui-readout·ui-actions)이 반응하는 칸은 표면이 정한다. */
@@ -76,7 +77,6 @@ body:is([data-surface="setup"], [data-surface="device"]) .procedure-panel {
       "sense observe act";
     align-items: start;
     gap: var(--space-3);
-    padding: var(--space-3);
   }
   body[data-surface="console"] #surface-status { grid-area: status; }
   body[data-surface="console"] .surface-slot[data-slot="banner"] { grid-area: banner; }
@@ -235,7 +235,7 @@ body:is([data-surface="setup"], [data-surface="device"]) .procedure-panel {
   #surface-switch { padding-block: 0; }
   #surface-switch .ui-rail-item:focus-visible { outline-offset: calc(0px - var(--focus-ring-width)); }
   #shell-estop { padding-inline: var(--space-3); }
-  .surface-main { gap: var(--space-4); padding: var(--space-3); }
+  .surface-main { gap: var(--space-4); }
   .surface-actions:is(.map-click-actions, .map-layer-actions) { flex-direction: row; width: 100%; }
   .surface-actions:is(.map-click-actions, .map-layer-actions) > ui-button { flex: 1; width: auto; min-width: 0; padding-inline: var(--inset-button); }
 }

@@ -475,8 +475,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     install_arm_transfer_preflight_routes(
         app, instances=configured_omx, deployment_profile=deployment_profile,
         transport=action_transport, socket_root=omx_socket_root, require_proposer=require_proposer)
-    install_arm_transfer_job_routes(
-        app, installation=arm_transfer_installation, deployment_profile=deployment_profile,
+    install_arm_transfer_job_routes(policy_admission_core=policy_admission_core,  # D-938
+        app=app, installation=arm_transfer_installation, deployment_profile=deployment_profile,
         task_store=task_service.store if mission_configured else None, transport=action_transport,
         socket_root=omx_socket_root, require_proposer=require_proposer, require_viewer=require_viewer,
         require_named_operator=require_named_operator, observer=arm_transfer_observer, console=console,
@@ -616,7 +616,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             clients=lambda: {**{rid: client for rid, client in console.clients().items()
                                 if rid in stuck_resolver_enrolled}, **stuck_resolver_clients})
         app.state.stuck_resolver.map_pose = map_pose.stuck_pose   # D-577 1: R3 pose freshness
-        app.state.stuck_resolver.events_since = console.hub.registry.events_since
+        app.state.stuck_resolver.stuck_event = console.hub.registry.stuck_event
         app.state.stuck_resolver.heading_review = app.state.lane_compliance.stuck_heading
         app.state.stuck_resolver.realign_evidence = app.state.lane_compliance.realign_evidence
         app.state.line_stuck.heading_review = app.state.lane_compliance.stuck_heading
@@ -781,7 +781,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     install_trip_job_routes(app, store=cell_job_store, runner=trip_runner, console=console,
                             deployment_profile=deployment_profile, episodes=app.state.ai_episodes,
                             require_named_operator=require_named_operator, operator_guard=operator_guard,
-                            require_viewer=require_viewer, read_guard=read_guard)
+                            require_viewer=require_viewer, read_guard=read_guard, require_proposer=require_proposer)
     from fleet.server.cell_app_routes import install_cell_app_routes
     cell_prepare = install_cell_app_routes(
         app, mission_service=mission_service, compiler=cell_job_compiler, service_id=cell_app_service_id,

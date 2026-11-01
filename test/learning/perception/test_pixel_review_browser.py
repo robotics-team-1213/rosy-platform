@@ -15,11 +15,107 @@ pytestmark = pytest.mark.skipif(not browser_tests_enabled(),
                                 reason='requires explicit local Chromium browser run')
 
 
+@pytest.mark.parametrize('theme', ['dark', 'light'])
+def test_pixel_decision_resize_preserves_checks_and_keyboard_focus(browser_workspace, theme):
+    page, store, expect = browser_workspace
+    open_pixels(page, store, expect)
+    page.evaluate("theme => RosyTheme.set(theme)", theme)
+    complete, background = page.locator('#pixel-complete'), page.locator('#pixel-background')
+    complete.check()
+    background.check()
+    complete.focus()
+    approve_disabled = page.locator('#pixel-approve').is_disabled()
+    for step, width in enumerate((390, 1440, 320, 1440)):
+        page.set_viewport_size({'width': width, 'height': 844})
+        page.evaluate("() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))")
+        expect(complete).to_be_focused()
+        expect(complete).to_be_checked()
+        expect(background).to_be_checked()
+        assert page.locator('#pixel-approve').is_disabled() == approve_disabled
+        assert page.locator('.pixel-decision-panel:has(#pixel-complete)').count() == 1
+        decision = page.locator('.pixel-decision-panel:has(#pixel-complete)').bounding_box()
+        if width < 1024:
+            tools = page.locator('.pixel-quick-tools').bounding_box()
+            assert tools['y'] + tools['height'] <= decision['y'] + 1
+            gap = page.evaluate("parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--space-4'))")
+            assert decision['y'] <= tools['y'] + tools['height'] + gap
+        else:
+            canvas = page.locator('#pixel-canvas').bounding_box()
+            assert decision['x'] >= canvas['x'] + canvas['width'] - 1
+        box = complete.bounding_box()
+        header = page.locator('ui-topbar').bounding_box()
+        assert max(0, header['y'] + header['height']) - 1 <= box['y']
+        assert box['y'] + box['height'] <= 845
+        if width >= 1024:
+            tools = page.locator('.pixel-quick-tools').bounding_box()
+            assert tools['y'] >= header['y'] + header['height'] - 1
+            assert page.locator('#pixel-next').evaluate('''node => {
+                const r = node.getBoundingClientRect();
+                return node.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2));
+            }''')
+        assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+        if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+            target = Path(output)
+            target.mkdir(parents=True, exist_ok=True)
+            name = f'pixel-decision-{theme}-{step}-{width}'
+            page.screenshot(path=str(target / f'{name}-viewport.png'))
+            page.screenshot(path=str(target / f'{name}-workspace.png'), full_page=True)
+        hit = complete.evaluate('''node => {
+            const r = node.getBoundingClientRect();
+            const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+            return {visible: node.contains(hit), hit: hit?.outerHTML.slice(0, 300),
+                box: r.toJSON(), scroll: window.scrollY};
+        }''')
+        assert hit['visible'], hit
+
+
 def open_pixels(page, store, expect, index=0):
     review_masks.bind_classes(store, CLASSES)
     base = page.url.split('?')[0].rstrip('/')
     page.goto(base + f'/pixels?frame={index}', wait_until='networkidle')
     expect(page.locator('#pixel-status')).to_contain_text('v0')
+
+
+@pytest.mark.parametrize('width', [320, 390, 768, 1440])
+@pytest.mark.parametrize('theme', ['dark', 'light'])
+@pytest.mark.parametrize('view', ['object', 'pixel'])
+@pytest.mark.parametrize('key', ['Enter', 'Space'])
+def test_class_choices_use_shared_controls_and_keep_keyboard_editing(browser_workspace, width, theme, view, key):
+    page, store, expect = browser_workspace
+    if view == 'pixel':
+        open_pixels(page, store, expect)
+    page.set_viewport_size({'width': width, 'height': 900})
+    page.evaluate('theme => document.documentElement.dataset.theme = theme', theme)
+    choices = page.locator(f'#{view}-quick-classes .review-class-chip')
+    chip = choices.nth(2) if view == 'pixel' else page.locator('#object-quick-classes .review-class-chip[value="obstacle_box"]')
+    expect(chip).to_have_attribute('kind', 'segment')
+    assert chip.evaluate('el => el.tagName') == 'UI-BUTTON'
+    assert chip.bounding_box()['height'] >= 48
+    if view == 'object':
+        expect(chip).to_be_disabled()
+        page.get_by_role('button', name='박스 1 선택', exact=True).click()
+    expect(chip).to_be_enabled()
+    value = chip.get_attribute('value')
+    if view == 'pixel':
+        expect(page.locator('#pixel-class')).not_to_have_value(value)
+    chip.focus()
+    chip.press(key)
+    expect(chip).to_have_attribute('aria-pressed', 'true')
+    expect(page.locator('#pixel-canvas' if view == 'pixel' else '#canvas')).to_be_focused()
+    if view == 'pixel':
+        expect(page.locator('#pixel-class')).to_have_value(value)
+        assert review_masks.get(store, 0)['version'] == 0
+    else:
+        expect(page.locator('#save-status')).to_contain_text('서버 저장됨')
+        assert store.get(0)['review']['boxes'][0]['label'] == value == 'obstacle_box'
+        assert store.get(0)['status'] == 'pending'
+        expect(page.locator('#approve')).to_be_disabled()
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth + 1')
+    if os.environ.get('ROSY_UI_CAPTURE_DIR') and key == 'Enter':
+        destination = Path(os.environ['ROSY_UI_CAPTURE_DIR'])
+        destination.mkdir(parents=True, exist_ok=True)
+        page.locator(f'#{view}-quick-classes').scroll_into_view_if_needed()
+        page.screenshot(path=str(destination / f'class-controls-{view}-{theme}-{width}.png'))
 
 
 def test_ai_context_is_cleared_on_empty_filter_and_reload_failure(browser_workspace):
@@ -136,7 +232,7 @@ def test_pixel_tools_are_readable_and_reachable_beside_photo(browser_workspace, 
     page, store, expect = browser_workspace
     page.set_viewport_size({'width': width, 'height': 900})
     open_pixels(page, store, expect)
-    page.locator('#pixel-quick-classes button').nth(1).click()
+    page.locator('#pixel-quick-classes ui-button').nth(1).click()
     actions = page.locator('.pixel-quick-actions')
     if width >= 1024:
         assert page.locator('.pixel-quick-tools').evaluate('el => el.scrollWidth <= el.clientWidth')
@@ -528,7 +624,7 @@ def test_drivable_class_can_be_selected_painted_and_saved(browser_workspace):
     review_masks.bind_classes(store, raw)
     page.goto(page.url.split('?')[0].rstrip('/') + '/pixels?frame=0', wait_until='networkidle')
     expect(page.locator('#pixel-status')).to_contain_text('v0')
-    chip = page.locator('#pixel-quick-classes button').nth(5)
+    chip = page.locator('#pixel-quick-classes ui-button').nth(5)
     expect(chip).to_contain_text('주행 가능 영역')
     chip.click()
     expect(page.locator('#pixel-class')).to_have_value('5')
@@ -592,7 +688,7 @@ def test_pixel_photo_picker_returns_to_canvas_and_quick_tools(browser_workspace)
     expect(page.locator('#pixel-canvas')).to_be_focused()
     page.keyboard.press('ArrowLeft')
     expect(page.locator('#pixel-title')).to_have_text('사진 1 픽셀 검수')
-    page.locator('#pixel-quick-classes button').nth(1).click()
+    page.locator('#pixel-quick-classes ui-button').nth(1).click()
     expect(page.locator('#pixel-class')).to_have_value('1')
     expect(page.locator('#pixel-canvas')).to_be_focused()
     page.keyboard.press('t')

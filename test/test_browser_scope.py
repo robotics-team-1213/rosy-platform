@@ -30,7 +30,8 @@ def test_fleet_web_change_selects_fleet_browser_tests():
 def test_shared_web_change_reaches_every_surface_family():
     found = browser_scope.targets(["shared/web/components.css"])
     for expected in ("shared/web/test/test_theme_browser.py", "test/test_dashboard_browser.py",
-                     "test/test_fleet_console_browser.py", "middleware/robot_ui/pilot/test/test_pilot_browser.py"):
+                     "test/test_fleet_console_browser.py", "middleware/robot_ui/pilot/test/test_pilot_browser.py",
+                     "test/test_monitoring_browser.py", "integrations/simulation/gazebo/test/test_lane_live_view_browser.py"):
         assert expected in found
 
 
@@ -49,6 +50,7 @@ def test_pilot_and_shared_styles_select_moved_lobby_tests_without_widening_omx()
     lobby = "middleware/robot_ui/pilot/test/test_lobby_browser.py"
     for path in ("middleware/robot_ui/pilot/styles.css", "shared/web/components.css"):
         assert lobby in browser_scope.targets([path])
+        assert "middleware/robot_ui/pilot/test/test_recordings_browser.py" in browser_scope.targets([path])
     assert browser_scope.targets(["middleware/devices/omx/adapter/example.py"]) == [
         "middleware/devices/omx/adapter/test/test_pilot_sim_browser.py"
     ]
@@ -116,6 +118,19 @@ def test_common_robot_tasks_select_real_browser_flow():
                    'review_app_web/tasks.js', 'review_app_web/tasks.html', 'review_app_web/learning.html'):
         assert expected in browser_scope.targets(['learning/curation/perception/' + source])
     assert expected in browser_scope.targets(['learning/training/omx/experiment_center.py'])
+
+
+def test_omx_archive_handoff_selects_http_named_browser_suites():
+    expected = {'test/learning/perception/test_storage_omx_http.py',
+                'test/learning/perception/test_storage_setup_http.py'}
+    root = 'learning/curation/perception/'
+    for source in ('storage_omx.py', 'storage_prepare.py', 'storage_web.py',
+                   'review_app_web/storage-settings.js', 'review_app_web/omx-export.js',
+                   'review_app_web/learning.html', 'review_app.py'):
+        assert expected <= set(browser_scope.targets([root + source])), source
+    assert expected <= set(browser_scope.targets(['learning/training/omx/experiment_catalog.py']))
+    for target in expected:
+        assert browser_scope.targets([target]) == [target]
 
 
 def test_all_json_expands_the_actual_browser_registry_without_fake_changed_paths(capsys):

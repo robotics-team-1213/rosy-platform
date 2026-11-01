@@ -1,5 +1,10 @@
 package io.github.livsbittt.rosy.cam.pairing.peer
 
+import io.github.livsbittt.rosy.peer.PeerProof
+import io.github.livsbittt.rosy.peer.PeerTls
+import io.github.livsbittt.rosy.peer.PeerCaOffer
+import io.github.livsbittt.rosy.peer.PeerFirstContact
+import io.github.livsbittt.rosy.peer.PeerSigner
 import io.github.livsbittt.rosy.cam.pairing.PairableSite
 import io.github.livsbittt.rosy.cam.settings.SiteLink
 import okhttp3.Dns
@@ -27,7 +32,7 @@ data class CameraPending(val code: String, val receiverId: String, val expiresAt
 
 /** One selected endpoint, one cancelable approval/renewal; never retries a positive session POST. */
 class CameraPeerClient internal constructor(private val candidate: PairableSite,
-    private val signer: CameraSigner, private val vault: CameraRelationshipVault,
+    private val signer: PeerSigner, private val vault: CameraRelationshipVault,
     private val current: () -> Boolean = { true }, private val now: () -> Instant = Instant::now,
     private val baseClient: OkHttpClient = cameraPeerHttp(candidate), private val pause: ((Long) -> Unit)? = null,
     private val monotonic: () -> Long = System::nanoTime) {
@@ -41,7 +46,7 @@ class CameraPeerClient internal constructor(private val candidate: PairableSite,
     private val attemptFence = vault.fence(candidate)
     private var client = baseClient.newBuilder().retryOnConnectionFailure(false).cache(null).build()
     private var trusted = true
-    private var firstContact: CameraFirstContact? = null
+    private var firstContact: PeerFirstContact? = null
     private var receiverId = ""
     private var identityLeaf: X509Certificate? = null
     private val clients = mutableSetOf(client)
@@ -50,36 +55,36 @@ class CameraPeerClient internal constructor(private val candidate: PairableSite,
     private fun checkAlive() { if (!alive()) throw PeerCanceled() }
 
     /** Explicit v2 discovery only: a failed v2 transaction never downgrades to the legacy flow. */
-    fun connect(onPending: (CameraPending) -> Unit, confirmCa: (CameraCaOffer) -> Boolean): CameraConnection {
+    fun connect(onPending: (CameraPending) -> Unit, confirmCa: (PeerCaOffer) -> Boolean): CameraConnection {
         val fence = attemptFence
         val remembered = vault.read(candidate)
         try {
             if (remembered != null) {
                 if (!remembered.validAt(now())) throw PeerApprovalExpired()
-                require(remembered.clientId == signer.clientId && remembered.clientKeySha256 == CameraProof.fingerprint(signer.publicKey)) { "client identity unavailable" }
-                client = CameraTls.pinned(client, remembered.caPem); clients.add(client)
+                require(remembered.clientId == signer.clientId && remembered.clientKeySha256 == PeerProof.fingerprint(signer.publicKey)) { "client identity unavailable" }
+                client = PeerTls.pinned(client, remembered.caPem); clients.add(client)
             }
             var identity: JSONObject
             try { identity = call("/identity", "GET") }
             catch (error: javax.net.ssl.SSLException) {
                 if (remembered != null) throw error
-                firstContact = CameraFirstContact(); trusted = false
-                client = CameraTls.firstContact(client, firstContact!!); clients.add(client)
+                firstContact = PeerFirstContact(); trusted = false
+                client = PeerTls.firstContact(client, firstContact!!); clients.add(client)
                 identity = call("/identity", "GET")
             }
             profile(identity)
             receiverId = string(identity, "receiver_id", 64)
             require(Regex("fleet-[0-9a-f]{32}").matches(receiverId))
             val receiverKey = string(identity, "receiver_public_key", 256)
-            val receiverFingerprint = CameraProof.fingerprint(receiverKey)
+            val receiverFingerprint = PeerProof.fingerprint(receiverKey)
             require(receiverFingerprint == string(identity, "receiver_key_sha256", 64))
             require(receiverId == "fleet-" + receiverFingerprint.take(32))
             if (remembered != null && (remembered.receiverId != receiverId || remembered.receiverPublicKey != receiverKey)) throw PeerKeyChanged()
             checkAlive()
-            val bootstrap = CameraCaOffer(string(identity, "tls_ca_pem", 8192), string(identity, "tls_ca_sha256", 64),
+            val bootstrap = PeerCaOffer(string(identity, "tls_ca_pem", 8192), string(identity, "tls_ca_sha256", 64),
                 string(identity, "tls_hostname", 253)).also {
-                    CameraTls.bind(it, identityLeaf ?: firstContact?.leaf ?: error("identity leaf unavailable"), candidate.tlsHost)
-                    if (remembered != null) require(CameraProof.hash(CameraTls.ca(remembered.caPem).encoded) == it.sha256) { "receiver CA changed" }
+                    PeerTls.bind(it, identityLeaf ?: firstContact?.leaf ?: error("identity leaf unavailable"), candidate.tlsHost)
+                    if (remembered != null) require(PeerProof.hash(PeerTls.ca(remembered.caPem).encoded) == it.sha256) { "receiver CA changed" }
                 }
             var caPem = remembered?.caPem ?: bootstrap.pem
             val relationship = remembered ?: run {
@@ -114,14 +119,14 @@ class CameraPeerClient internal constructor(private val candidate: PairableSite,
                     val offer = bootstrap
                     require(confirmCa(offer)) { "receiver fingerprint was not matched" }
                     checkAlive(); caPem = offer.pem
-                    client = CameraTls.pinned(baseClient.newBuilder().retryOnConnectionFailure(false).cache(null).build(), caPem); clients.add(client)
+                    client = PeerTls.pinned(baseClient.newBuilder().retryOnConnectionFailure(false).cache(null).build(), caPem); clients.add(client)
                     trusted = true
                 }
-                CameraRelationship(origin, receiverId, receiverKey, signer.clientId, CameraProof.fingerprint(signer.publicKey), requestId!!,
+                CameraRelationship(origin, receiverId, receiverKey, signer.clientId, PeerProof.fingerprint(signer.publicKey), requestId!!,
                     integer(state, "generation"), source(state), persistent, authorizationExpiry, caPem)
             }
             require(relationship.validAt(now())); require(trusted)
-            client = CameraTls.pinned(baseClient, caPem); clients.add(client)
+            client = PeerTls.pinned(baseClient, caPem); clients.add(client)
             // Preserve the authenticated decision before a transient challenge/session failure.
             // A stored approval never permits a session without the fresh signed challenge below.
             if (remembered == null) synchronized(lock) { checkAlive(); vault.remember(candidate, relationship, fence) }
@@ -135,7 +140,7 @@ class CameraPeerClient internal constructor(private val candidate: PairableSite,
             require(source(fields) == relationship.sourceId && integer(fields, "generation") == relationship.generation)
             require(Regex("[0-9a-f]{64}").matches(string(fields, "nonce", 64)))
             val nonceExpiry = expiry(fields, "expires_at"); require(nonceExpiry > now() && nonceExpiry <= now().plusSeconds(65))
-            CameraProof.verify(receiverKey, "receiver-challenge", fields, string(challenge, "receiver_signature", 128))
+            PeerProof.verify(receiverKey, "receiver-challenge", fields, string(challenge, "receiver_signature", 128))
             checkAlive()
             val issued = call("/session", "POST", signed("session-request", fields))
             profile(issued)
@@ -149,7 +154,7 @@ class CameraPeerClient internal constructor(private val candidate: PairableSite,
             require(sessionExpiry > now() && sessionExpiry <= now().plusSeconds(180L * 86400 + 5))
             relationship.authorizationExpiresAt?.let { require(sessionExpiry <= it) }
             checkAlive(); require(vault.fence(candidate) == fence)
-            val ca = CameraTls.ca(caPem)
+            val ca = PeerTls.ca(caPem)
             val pin = "sha256/" + java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(java.security.MessageDigest.getInstance("SHA-256").digest(ca.encoded))
             val link = SiteLink(candidate.serviceName, candidate.tlsHost, candidate.port, pin, accessToken, relationship.sourceId,
                 true, credentialId = credentialId, expiresAt = sessionExpiry.toString())

@@ -5,7 +5,8 @@ from pathlib import Path
 
 WEB = Path(__file__).resolve().parents[3] / 'applications/fleet/web'
 DOCS = {"index.html": "console.js", "installation/install.html": "installation/install.js",
-        "sitemap/site-map.html": "sitemap/site-map.js", "cell/cell.html": "cell/cell.js"}
+        "sitemap/site-map.html": "sitemap/site-map.js", "cell/cell.html": "cell/cell.js",
+        "work/policy.html": "work/policy-page.js"}  # D-926 2: policy opens real-arm windows, so it carries the E-stop
 
 
 def _header(name):
@@ -105,7 +106,8 @@ def test_app_bar_folds_by_the_shell_container_not_the_viewport():
         "width < 64rem", "width < 48rem", "width < 30rem"}
     assert "container-type" not in header_sheet, "칸은 셸 하나다"
     assert ".fleet-shell { container-type: inline-size;" in tabs_sheet
-    assert tabs_sheet.count("container-type") == 1
+    assert ".fleet-task-page { container-type: inline-size;" in tabs_sheet
+    assert tabs_sheet.count("container-type") == 2  # shell chrome and its nested task-page component
     assert re.findall(r"@media ([^{]+?)\s*\{", tabs_sheet) == ["(width >= 64rem) and (height >= 40rem)"]
     # The shared ui-topbar carries the D-741 app bar height; Fleet does not restate it.
     shared = (WEB.parents[2] / "shared/web/components.css").read_text(encoding="utf-8")

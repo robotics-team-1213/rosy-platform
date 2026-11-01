@@ -122,9 +122,10 @@ def test_temporal_brightness_changes_are_held_without_claiming_flicker_detection
     assert not plan.snapshot()['flicker_verified']
 
 
+@pytest.mark.parametrize('front_unit', [None, 'arm_a_wrist'])
 @pytest.mark.parametrize('repeated_frames', [False, True])
 def test_monitor_does_not_restore_a_previous_dark_epoch_best_into_a_bright_scene(monkeypatch, tmp_path,
-                                                                              repeated_frames):
+                                                                              repeated_frames, front_unit):
     import io
     import json
     from types import SimpleNamespace
@@ -140,6 +141,9 @@ def test_monitor_does_not_restore_a_previous_dark_epoch_best_into_a_bright_scene
     original = dict(auto_exposure=3, exposure_time_absolute=80)
     current = {role: dict(original) for role in cameras}
     baseline = {'cameras': {role: dict(original=dict(original), identity=role, producer={}) for role in cameras}}
+    if front_unit:
+        cameras['front']['unit'] = front_unit
+        baseline['cameras']['front']['unit'] = front_unit
     writes = []
 
     def response(*args, **kwargs):
@@ -164,11 +168,17 @@ def test_monitor_does_not_restore_a_previous_dark_epoch_best_into_a_bright_scene
         for role in cameras:
             current[role] = dict(original)
 
+    def producer(unit, device):
+        assert unit == cameras[device].get('unit', device)
+        return {}
+
     monkeypatch.setattr(env.urllib.request, 'urlopen', response)
     backend = SimpleNamespace(prepare=lambda *a: baseline, identity=lambda d: d,
-        producer=lambda *a: {}, get_controls=lambda d, names: {key: current[d][key] for key in names},
+        producer=producer, get_controls=lambda d, names: {key: current[d][key] for key in names},
         write_control=write, restore_controls=runtime.restore_controls, apply_candidate=runtime.apply_candidate,
         save=runtime.save, append_event=runtime.append_event, restore=restore,
+        control_intent=runtime.control_intent,
+        validate_device_controls=lambda *a: None,
         reserve_budget=lambda root: runtime.reserve_budget(root, now_ns=int((1000+clock[0])*1e9)),
         BudgetExhausted=runtime.BudgetExhausted)
     env.monitor(dict(viewer_url='http://127.0.0.1:8767', cameras=cameras), tmp_path, 'test-profile', 20, backend)

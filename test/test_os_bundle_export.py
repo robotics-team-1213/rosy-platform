@@ -14,6 +14,15 @@ from test_ab_image_layout import IMAGE, RELEASE_ID
 from test_sd_gpt_layout import _table_image
 
 
+def test_cli_imports_without_pytest_paths(tmp_path):
+    result = subprocess.run(
+        [sys.executable, "-I", str(IMAGE / "export-os-bundle-inputs.py"), "--help"],
+        cwd=tmp_path, capture_output=True, text=True, timeout=30,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "--factory" in result.stdout
+
+
 def module():
     spec = importlib.util.spec_from_file_location("os_bundle_export_test", IMAGE / "export-os-bundle-inputs.py")
     result = importlib.util.module_from_spec(spec)

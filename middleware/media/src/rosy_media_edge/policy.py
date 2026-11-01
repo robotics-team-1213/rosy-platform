@@ -19,6 +19,9 @@ class MediaPolicy:
     def __init__(self):
         self._level, self._healthy = 0, 0
 
+    def current_rate(self):
+        return self.LEVELS[self._level]
+
     def update(self, *, demand_age_s, queue_age_ms, loss_fraction, wire_bps):
         values = (demand_age_s, queue_age_ms, loss_fraction, wire_bps)
         valid = all(type(value) in (int, float) and math.isfinite(value) and value >= 0 for value in values)

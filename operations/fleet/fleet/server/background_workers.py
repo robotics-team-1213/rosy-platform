@@ -92,8 +92,15 @@ def attempt_open(store, task_id: str, attempt_id: str) -> bool:
 async def _task_dispatch_loop(console: FleetConsole, task_service: FleetTaskService,
                               drive_cancel: DriveCancelFence, supervisor=None,
                               clock=time.monotonic) -> None:
-    """Dispatch one eligible task at a time from the app-owned background worker."""
+    """Dispatch one eligible task at a time from the app-owned background worker.
+
+    After a dispatch the next cycle starts without the idle pause (D-271 Gate A: the pause
+    capped dispatch near 4 per second). Dispatch stays serial: console.goal's traffic check
+    reads and writes claims across awaits and relies on it.
+    """
+    drained = 0
     while True:
+        dispatched = None
         try:
             task_service.scheduler.expire_queued()
             from fleet.server.channel.execution.outcomes.reconcile import reconcile_tasks
@@ -110,7 +117,7 @@ async def _task_dispatch_loop(console: FleetConsole, task_service: FleetTaskServ
                 and not console.trip_busy(row["robot_id"])  # D-494 5: the trip loop drives it
                 and row["state"].get("safety", {}).get("estop") is False
             }
-            await task_service.dispatch_next(
+            dispatched = await task_service.dispatch_next(
                 available, dispatch=lambda task: drive_cancel.fenced_goal(console, task))
             if supervisor is not None:
                 supervisor.note_ok("task-dispatch")
@@ -122,7 +129,14 @@ async def _task_dispatch_loop(console: FleetConsole, task_service: FleetTaskServ
                 supervisor.note_failure("task-dispatch", error)
             else:
                 _LOG.error("Fleet task dispatch cycle failed", exc_info=error)
-        await asyncio.sleep(0.25)
+        drained = drained + 1 if dispatched is not None else 0
+        # One pause per robot count of back-to-back dispatches bounds any non-draining result.
+        if dispatched is None or drained >= len(task_service.robot_ids):
+            drained = 0
+            await asyncio.sleep(0.25)
+        else:
+            # Yield between drained cycles: ports that never suspend would hold the loop.
+            await asyncio.sleep(0)
 
 
 async def _mission_model_turn_worker_loop(worker) -> None:

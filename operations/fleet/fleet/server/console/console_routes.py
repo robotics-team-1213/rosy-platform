@@ -138,7 +138,7 @@ class SharedGather:
                 if self._tracking is not None:
                     self._tracking.observe_states(snapshot["robots"], now=gathered_at,
                                                   observed=self._observed_at(snapshot["robots"]))
-                self._board.observe(snapshot["robots"], self._console.hub.registry.events_since)
+                self._board.observe(snapshot["robots"], self._console.hub.registry.stuck_event)
                 await asyncio.to_thread(self._board.flush)   # episode SQLite off the loop
                 self._snapshot, self._at = snapshot, self._clock()
                 self.gathered_at = time.time()

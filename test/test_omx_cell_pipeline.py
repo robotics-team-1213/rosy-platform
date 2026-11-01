@@ -7,6 +7,7 @@ import json
 import math
 from pathlib import Path
 import sys
+import time
 
 import pytest
 
@@ -30,11 +31,40 @@ PROFILE = cell_perception.load_profile(OMX / "cell-profile.example.json")
 CONFIG = json.loads((OMX / "cell-pipeline.example.json").read_text())
 CONFIG["profiles"] = {name: PROFILE for name in CONFIG["cameras"]}
 CONFIG["plan"] = json.loads((OMX / "grasp-plan.example.json").read_text())
+CONFIG["_commissioning"] = {"person_at_switch": True}  # simulated calibration/transfer trials, not field acceptance
+CONFIG["operating_conditions"] = {"installation_revision": "sim-install-1", "object_revision": "sim-object-1",
+    "payload_max_kg": 0.05, "object_dimensions_m": [0.03, 0.03, 0.03], "environment_revision": "sim-scene-1"}
+CONFIG["payload"] = {"kg": 0.03, "source": "simulated declared load"}  # D-935: the pipeline carries a declared load
 START = (0.072, 0.106)
+
+
+@pytest.fixture(autouse=True)
+def simulated_operating_profile(tmp_path, monkeypatch):
+    path = tmp_path / "robot-profile.json"
+    path.write_text(json.dumps({"schema": "rosy.omx-cell-robot-profile.v1", "device_id": "sim-device",
+        "instance_id": "sim-arm", "robot_config_sha256": "c" * 64,
+        "operating_envelope_path": "review.json", "work_dir": "."}))
+    monkeypatch.setitem(CONFIG, "operating_profile_path", str(path))
+    monkeypatch.setitem(CONFIG, "work_dir", str(tmp_path))
+    monkeypatch.setitem(CONFIG, "operating_envelope_path", str(tmp_path / "review.json"))
 
 
 def tray_pixel(x, y):  # arm metres -> top-camera pixel at the box's height: turned and mirrored, ~0.9 px/mm
     return 134.5 - 900 * (y - 0.106), 239.5 - 900 * (x - 0.072)
+
+
+@pytest.mark.parametrize("tolerance,inside", [(None, False), (10, False), (20, True), (0, False)])
+def test_fine_map_verification_uses_the_effective_tolerance(monkeypatch, tolerance, inside):
+    monkeypatch.setattr(m, "locate", lambda *args: {"found": True, "arm_m": [0.015, 0]})
+    config = {} if tolerance is None else {"verify_tol_mm": tolerance}
+    calibration = {"sites": {m.record_key("pinky", "top"): {}}}
+    assert m.verify(object(), config, "pinky", calibration, intended=[0, 0])["inside"] is inside
+
+
+@pytest.mark.parametrize("value", [True, -1, float("nan"), float("inf"), "10", None])
+def test_invalid_verification_tolerance_is_rejected_before_observation(value):
+    with pytest.raises(ValueError, match="verify_tol_mm"):
+        m.verify(object(), {"verify_tol_mm": value}, "pinky")
 
 
 def belt_pixel(x, y):
@@ -56,6 +86,10 @@ class Cell:
         self.box, self.held, self.fail, self.slip, self.blind = list(box), False, fail, slip, set(blind)
         self.contact, self.current, self.reach = contact, current, reach  # reach: where the arm ends off its plan
         self.library, self.tcp, self.grip, self.commands = None, None, 56.0, []
+        self.library_sha256 = None
+
+    def checked(self, command, assessment):
+        return self.act(command)  # simulated atomic command boundary; real Runner checks both bindings
 
     def act(self, command):
         self.commands.append(command)
@@ -66,14 +100,24 @@ class Cell:
             return {"command": command, "ok": False, "contact": True, "fault": "contact in descend_pick",
                     "error": "contact in descend_pick: a joint lagged the command by 2.1 units"}
         if command.startswith("load "):
-            self.library = json.loads(Path(command.split(" ", 1)[1]).read_text())["source"]
+            library = json.loads(Path(command.split(" ", 1)[1]).read_text())
+            self.library = library["source"]
+            from cell_envelope import digest
+
+            self.library_sha256 = digest(library)
+            return {"command": command, "ok": True, "library_sha256": self.library_sha256}
         elif command == "goto above_pick":
             pick = self.library["pick"]
             self.tcp = (pick["x"] + self.reach[0], pick["y"] + self.reach[1], pick["z"] + CONFIG["plan"]["approach_m"])
         elif command.startswith("grip "):
             self.grip = max(48.5, float(command.split()[1]))  # the follower jaws end at 48.5
         elif command == "state":
+            from cell_robot_profile import load
+
             return {"command": "state", "ok": True, "state": [0, 0, 0, 0, 0, self.grip],
+                    "t": time.time(), "operating_context": {"scope": "simulation", "sha256": "a" * 64,
+                        "session_id": "fixture-session", "operating_profile": load(CONFIG["operating_profile_path"])["binding"]},
+                    "library_sha256": self.library_sha256,
                     "health": {"current_ma": [0, 0, 0, 0, 0, self.current]}}
         elif command == "park":
             self.tcp = None
@@ -109,13 +153,150 @@ class Cell:
             u, v = m.cal.parallax(tray_pixel(*self.tcp[:2]), CONFIG["sites"]["pinky"]["z"], self.tcp[2],
                                   CONFIG["cameras"]["top"])
             for side in (-1, 1):
-                x = round(u) + side * round(self.grip / 2)  # 47 -> 56 moves each finger ~4.5 px, both alike
+                x = round(u) + side * round(self.grip / 2)  # 47 -> 56 moves each finger ~4.5 px; symmetric
+                # about u, or rounding shifts the marked jaws by up to 4 px
                 cv2.rectangle(img, (x - 3, round(v) - 3), (x + 3, round(v) + 3), (20, 20, 20), -1)
         return img
 
 
 def quiet(row):
     pass
+
+
+def test_an_unreviewed_transfer_holds_before_loading_or_moving(tmp_path):
+    config = copy.deepcopy(CONFIG)
+    config.pop("_commissioning")
+    cell = Cell(START)
+    library = m.write_library(config, m.target(config, "pinky", START),
+                              m.target(config, "belt", config["sites"]["belt"]["place"]), tmp_path / "plan.json")
+    result = m.transfer(cell, library, config=config, calibration={"sites": {}})
+    assert result["result"] == "held" and not result["envelope"]["allowed"]
+    assert cell.commands == ["state"]
+
+
+def test_a_different_loaded_library_stops_before_the_first_motion(tmp_path):
+    class ChangedLibrary(Cell):
+        def act(self, command):
+            status = super().act(command)
+            return {**status, "library_sha256": "b" * 64} if command.startswith("load ") else status
+
+    cell = ChangedLibrary(START)
+    library = m.write_library(CONFIG, m.target(CONFIG, "pinky", START),
+                              m.target(CONFIG, "belt", CONFIG["sites"]["belt"]["place"]), tmp_path / "plan.json")
+    result = m.transfer(cell, library, config=CONFIG)
+    assert result["result"] == "held" and result["envelope"]["reason"] == "library_changed"
+    assert not any(c.startswith(("goto", "run", "park")) for c in cell.commands)
+
+
+def test_a_different_session_cannot_continue_a_checked_transfer(tmp_path):
+    class ChangedSession(Cell):
+        def act(self, command):
+            status = super().act(command)
+            if command == "state" and self.commands.count("state") >= 3:
+                status["operating_context"]["session_id"] = "replacement-session"
+            return status
+
+    cell = ChangedSession(START)
+    library = m.write_library(CONFIG, m.target(CONFIG, "pinky", START),
+                              m.target(CONFIG, "belt", CONFIG["sites"]["belt"]["place"]), tmp_path / "plan.json")
+    result = m.transfer(cell, library, config=CONFIG)
+    assert result["result"] == "held" and result["envelope"]["reason"] == "session_changed"
+    assert not any(c.startswith(("goto", "run", "park")) for c in cell.commands)
+
+
+def test_a_fault_after_lifting_is_an_interrupted_attempt_not_a_pre_motion_hold(tmp_path):
+    class Interrupted(Cell):
+        def act(self, command):
+            status = super().act(command)
+            if command == "state" and "run lift_pick" in self.commands:
+                status["fault"] = "guard stopped"
+            return status
+
+    cell = Interrupted(START)
+    library = m.write_library(CONFIG, m.target(CONFIG, "pinky", START),
+                              m.target(CONFIG, "belt", CONFIG["sites"]["belt"]["place"]), tmp_path / "plan.json")
+    result = m.transfer(cell, library, config=CONFIG)
+    outcome = cell_attempts.classify({"locate": {"found": True}, "transfer": result})
+    assert result["result"] == "held" and outcome[:2] == ("failed", "envelope")
+    assert "goto above_place" not in cell.commands
+
+
+def test_pending_intent_survives_a_restart_and_only_its_own_completion_clears_it(tmp_path, monkeypatch):
+    monkeypatch.setattr(cell_attempts, "RUN", dict(cell_attempts.RUN))
+    path = tmp_path / "attempts.jsonl"
+    cell_attempts.start(path, "first")
+    assessment = {"mode": "automatic", "allowed": True, "task_sha256": "a" * 64}
+    config = {**CONFIG, "work_dir": str(tmp_path)}
+    cell_attempts.begin(config, assessment)
+    pending = path.with_suffix(".pending.json")
+    assert pending.exists()
+    with pytest.raises(FileExistsError):
+        cell_attempts.begin(config, assessment)
+    tried = {"locate": {"found": True}, "envelope": assessment,
+             "transfer": {"result": "placed"}, "verify": {"inside": True}}
+    cell_attempts.record(config, {}, "pinky", "belt", 0, tried, time.time())
+    assert not pending.exists()
+    cell_attempts.begin(config, assessment)
+    cell_attempts.start(path, "second")
+    held = {"locate": {"found": True}, "envelope": {**assessment, "allowed": False, "reason": "incomplete_attempt"}}
+    cell_attempts.record(config, {}, "pinky", "belt", 0, held, time.time())
+    assert pending.exists()
+
+
+def test_reviewed_automatic_transfer_uses_live_ledger_and_a_failure_revokes_it(tmp_path, monkeypatch):
+    from cell_envelope import SCHEMA, digest
+
+    calibration = calibrated(tmp_path)
+    config = copy.deepcopy(CONFIG)
+    config.update(work_dir=str(tmp_path), operating_envelope_path=str(tmp_path / "review.json"))
+    monkeypatch.setattr(cell_attempts, "RUN", dict(cell_attempts.RUN))
+    cell_attempts.start(tmp_path / "attempts.jsonl", "trial")
+    assert m.move(Cell(START), config, calibration, "pinky", "belt", tmp_path, attempts=1)["result"] == "placed"
+    rows = attempt_rows(tmp_path)
+    task = rows[0]["envelope"]["task_sha256"]
+    review = {"schema": SCHEMA, "attempts_path": "attempts.jsonl", "reviews": [{
+        "task_sha256": task, "scope": "simulation", "reviewed_by": "fixture-reviewer",
+        "evidence_ref": "synthetic-cell-observations", "attempts_sha256": digest(rows),
+        "min_attempts": 1, "min_success_rate": 1.0, "home_tolerance_units": 0.5}]}
+    review.update({key: rows[0]["envelope"]["operating_profile"][key]
+                   for key in ("device_id", "instance_id", "profile_sha256")})
+    Path(config["operating_envelope_path"]).write_text(json.dumps(review))
+    config.pop("_commissioning")
+
+    class HomedCell(Cell):
+        def act(self, command):
+            status = super().act(command)
+            if command == "state" and self.tcp is None:
+                status["state"][:5] = config["plan"]["home"]
+            return status
+
+    cell_attempts.start(tmp_path / "attempts.jsonl", "automatic")
+    assert m.move(HomedCell(START), config, calibration, "pinky", "belt", tmp_path, attempts=1)["result"] == "placed"
+    assert not (tmp_path / "attempts.pending.json").exists()
+    assert m.move(HomedCell(START, slip=0.012), config, calibration, "pinky", "belt", tmp_path, attempts=1)["result"] != "placed"
+    cell = HomedCell(START)
+    result = m.move(cell, config, calibration, "pinky", "belt", tmp_path, attempts=1)
+    assert result["result"] == "held: runtime_failure"
+    assert not any(c.startswith(("load ", "goto ", "run ")) for c in cell.commands)
+
+
+def test_automatic_run_does_not_bootstrap_calibration_with_unreviewed_motion(tmp_path):
+    config = copy.deepcopy(CONFIG)
+    config.pop("_commissioning")
+    cell = Cell(START)
+    assert m.run(cell, config, tmp_path / "missing.json", tmp_path, 1)["result"].startswith("held:")
+    assert not cell.commands
+
+
+def test_commissioning_cannot_enable_automatic_cycles_or_be_claimed_by_config(tmp_path):
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps({"_commissioning": {"person_at_switch": True}}))
+    with pytest.raises(SystemExit) as error:
+        m.main(["--config", str(path), "--commissioning", "--person-at-switch", "--stage", "run"])
+    assert error.value.code == 2
+    with pytest.raises(SystemExit) as error:
+        m.main(["--config", str(path), "--stage", "calibrate"])
+    assert error.value.code == 2
 
 
 def test_one_run_calibrates_both_surfaces_then_cycles_and_ends_where_it_started(tmp_path):
@@ -178,7 +359,7 @@ def attempt_rows(tmp_path):
 def test_every_attempt_passed_or_not_is_one_row_with_its_context_and_its_case_names_it(tmp_path, monkeypatch):
     calibration = calibrated(tmp_path)
     monkeypatch.setattr(cell_attempts, "RUN", dict(cell_attempts.RUN))
-    cell_attempts.start(tmp_path / "attempts.jsonl", "run1")
+    cell_attempts.start(tmp_path / "attempts.jsonl", "run1", knowledge=str(m.Path(m.__file__).parent / "cell-knowledge.example.json"))
     moved = m.move(Cell((0.080, 0.100), slip=0.012), CONFIG, calibration, "pinky", "belt", tmp_path)
     assert moved["result"] == "placed"
     rows = attempt_rows(tmp_path)
@@ -186,7 +367,7 @@ def test_every_attempt_passed_or_not_is_one_row_with_its_context_and_its_case_na
     assert [r["attempt_id"] for r in rows] == ["run1-001", "run1-002"]
     context = rows[0]["context"]
     assert context["calibration"]["key"] == "pinky" and context["calibration"]["coarse"] is False
-    assert context["config_sha"] and context["plan_sha"]
+    assert context["config_sha"] and context["plan_sha"] and len(context["knowledge_sha"]) == 12
     assert rows[0]["plan"]["pick"]["x"] == rows[0]["locate"]["arm_m"][0]  # where it reached vs where it saw
     cases = [json.loads(line) for line in (tmp_path / "cases.jsonl").read_text().splitlines()]
     assert [c["attempt_id"] for c in cases] == ["run1-001", "run1-002"]
@@ -230,7 +411,7 @@ def test_receipts_written_before_the_attempt_log_still_give_rows_by_position(tmp
     report = cell_attempts.summary(cell_attempts.from_receipts(receipts))
     assert report["by_position"] == {"pinky x70 y110 mm": {"tried": 1, "placed": 1},
                                      "pinky x90 y90 mm": {"tried": 1, "placed": 0}}
-    assert report["failures"] == {"transfer: contact at run descend_pick": 1}
+    assert report["failures"] == {"approach: contact at run descend_pick": 1}
 
 
 @pytest.mark.parametrize("reach, expected", [((0.0, 0.0), (0.0, 0.0)), ((0.006, -0.004), (6.0, -4.0))])
@@ -381,3 +562,46 @@ def test_the_frames_a_decision_used_are_kept_with_the_receipts(tmp_path):
     finally:
         m.KEEP["dir"] = None
     assert Path(found["estimates"][0]["frame"]).is_file()
+
+
+def test_a_moved_box_outside_the_map_gets_a_remap_proposal_and_is_followed_once_a_person_is_at_the_switch(tmp_path):
+    calibration = calibrated(tmp_path)  # fine maps fitted around the start and the belt place
+    box = (0.080, 0.070)  # moved by hand 3.7 cm off the start, outside the points the tray map was fitted on
+    cell = Cell(box)
+    moved = m.move(cell, CONFIG, copy.deepcopy(calibration), "pinky", "belt", tmp_path / "a")
+    assert moved["result"].startswith("stopped: remap proposed")
+    assert not any(c.startswith(("load", "goto", "grip")) for c in cell.commands)  # a proposal moves nothing
+    row = json.loads((tmp_path / "a" / "cases.jsonl").read_text().splitlines()[0])
+    seen = row["detection"]["maps"][0]
+    assert row["decision"] == "remap" and row["facts"]["remap"] and seen["map"] == "pinky" and seen["outside_mm"] > 20
+    assert math.dist(row["detection"]["arm_m"], box) < 0.005
+
+    moved = m.move(cell, CONFIG, calibration, "pinky", "belt", tmp_path / "b", person_at_switch=True)
+    assert moved["result"] == "placed", json.dumps(moved["attempts"][1], default=str)[-900:]
+    assert set(moved["remapped"]) == {"pinky~local"} and "pinky~local" in calibration["sites"]
+    marked = [tuple(p["arm_m"]) for p in calibration["sites"]["pinky~local"]["points"]]
+    assert len(marked) >= 4 and box not in marked  # the jaws were marked around the box, never above it
+    used = moved["attempts"][1]["locate"]["estimates"][0]
+    assert used["map"] == "pinky~local" and used["outside_mm"] == 0.0
+    assert math.dist(cell.box, CONFIG["sites"]["belt"]["place"]) < 0.004
+
+
+def test_with_no_map_at_all_the_seat_proposes_a_remap_and_nothing_moves_without_a_person(tmp_path):
+    cell = Cell(START)
+    moved = m.move(cell, CONFIG, {"sites": {}}, "pinky", "belt", tmp_path)
+    assert moved["result"].startswith("stopped: remap proposed") and cell.commands == []
+    assert moved["decisions"][0]["facts"]["box_found"] is False
+
+
+def test_a_site_local_map_file_is_used_where_it_holds_the_box_and_the_fine_map_elsewhere(tmp_path):
+    calibrated(tmp_path)
+    near = [(round(0.080 + dx, 4), round(0.070 + dy, 4)) for dx in (-0.02, 0, 0.02) for dy in (-0.02, 0, 0.02)]
+    local = m.cal.site_record([(tray_pixel(*q), q) for q in near], "2026-10-27T00:00:00+00:00")
+    (tmp_path / "local-map.json").write_text(json.dumps(local))
+    config = copy.deepcopy(CONFIG)
+    config["sites"]["pinky"]["local_map"] = str(tmp_path / "local-map.json")
+    loaded = m.load_maps(tmp_path / "cal.json", config)
+    found = m.locate(Cell((0.080, 0.070)), config, loaded, "pinky")
+    assert found["estimates"][0]["map"] == "pinky~local" and m.map_check(config, found) is None
+    assert math.dist(found["arm_m"], (0.080, 0.070)) < 0.002
+    assert m.locate(Cell(START), config, loaded, "pinky")["estimates"][0]["map"] == "pinky"

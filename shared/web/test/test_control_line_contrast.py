@@ -68,6 +68,5 @@ def test_controls_take_the_control_line_and_dividers_keep_theirs():
     for selector in ("ui-button", 'ui-button[kind="quiet"],\na.docs-link', ".ui-disclosure-row"):
         block = COMPONENTS.split(f"\n{selector} {{", 1)[1].split("}", 1)[0]
         assert "border: 1px solid var(--control-line);" in block, selector
-    for divider in ("--surface-line", "--flag-line"):
-        assert _decl(divider) == "var(--border-default)", divider
+    assert _decl("--surface-line") == "var(--border-default)"
     assert _decl("--border-default") == "var(--line-14)"

@@ -45,7 +45,8 @@ def test_committed_review_archive_starts_without_checkout_imports(tmp_path):
 
 
 @pytest.mark.parametrize('name', ['storage_pool.py', 'storage_jobs.py', 'storage_files.py', 'storage_web.py', 'storage_hub.py',
-                                'storage_setup.py', 'storage_prepare.py', 'review_app_web/storage-settings.js'])
+                                'storage_setup.py', 'storage_prepare.py', 'storage_omx.py',
+                                'review_app_web/storage-settings.js', 'review_app_web/omx-export.js'])
 def test_incomplete_learning_storage_release_is_rejected(tmp_path, name):
     m = module()
     archive = tmp_path / 'missing-storage.tar'

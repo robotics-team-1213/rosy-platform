@@ -131,8 +131,17 @@ def file_hashes(folder) -> dict[str, str]:
     return out
 
 
-def content_sha(folder) -> str:
-    lines = sorted(f"{rel}\0{sha}\n".encode("utf-8") for rel, sha in file_hashes(folder).items())
+def content_sha(folder, *, manifest_bytes=None) -> str:
+    """sha256 over sorted "relpath\\0sha256(file)\\n" lines (D-373 decision 8).
+
+    ``manifest_bytes``: hash ``manifest.json`` from these bytes instead of the
+    disk copy, so curation can name a content-addressed output folder before
+    its manifest is final (build.py --eval-set, the former local stand-in).
+    """
+    hashes = file_hashes(folder)
+    if manifest_bytes is not None and "manifest.json" in hashes:
+        hashes["manifest.json"] = hashlib.sha256(manifest_bytes).hexdigest()
+    lines = sorted(f"{rel}\0{sha}\n".encode("utf-8") for rel, sha in hashes.items())
     return hashlib.sha256(b"".join(lines)).hexdigest()
 
 

@@ -75,3 +75,9 @@
 - 변경: 기존 `rosy.execution.site.cell_submission`의 타입·재컴파일·입력·marker·checkpoint 검증과 저장 문서를 `rosy.processes.palletizing.submission`으로 옮겼다. Fleet/gateway compiler의 `compile_submission`이 이를 연결하고 Fleet resolver는 주입된 제출 port를 소비한다. 옛 모듈·검증 사본은 제거하고 wire·원장·승인·장치 권한은 유지했다.
 - 증거: `24002a33cb`의 새 경계 시험 RED 3 failed/기존 13 passed 뒤 `48b843e0ab` 대상 회귀 347 passed. 독립 리뷰가 지적한 설치 Fleet 증거 공백은 `46e730cf51`에서 wheel/sdist RED 2 failed를 확인하고 `97d225c050`에서 설치 Fleet/gateway·기존 설치 probe·compiler 22 passed로 보완했다. 첫 FULL의 샘플 digest와 축소 size unit 회귀를 고친 최종 `a5ab652723` FULL은 11170 passed/545 skipped, 5 subtests passed이며 두 로그 모두 NEW/known/flaky 0이다. [검증 기록](../../../docs/validation/process-submission-ownership-2026-10-23/result.md)에 원본 로그 hash와 적용 범위를 둔다.
 - gate 변화: 없음. host 소스·설치 증거이며 ROS/Gazebo 동작·artifact·실물·현장 수용과 main 착지·push는 포함하지 않는다.
+
+## 2026-10-29 · 0e808cd6be · refactor(palletizing): 앱과 Fleet의 완전한 컴파일 결과 공유
+
+- 변경: 공정 소유 `compilation.py`가 단일 recipe의 문서 로딩·Job·PlanBundle·marker·operator checkpoint와 item geometry를 조립한다. gateway와 Fleet은 같은 계산을 호출한다. gateway가 누락하던 수동 간지 checkpoint 두 개를 보존한다. Fleet 설치 소스 digest·gateway 고정 digest·생성자 검증·carry_z 불일치 거절·recipe/3 경로·기존 제출 port는 유지했다. 기록 샘플의 process digest도 갱신했다.
+- 증거: `c8b708861d` 원격 RED에서 일반 recipe는 일치하고 수동 간지만 checkpoint 누락으로 실패했다. `0e808cd6be` 전체 affected 선택은 12,598 passed/641 skipped와 5 subtests passed, 로그 세 개 모두 NEW/known/flaky 0이다. 테스트만 추가한 `171d88d7fa`에서 checkout 밖 wheel/sdist 두 경로의 수동 checkpoint·저장 문서·16 transfer도 통과했다. 두 차례 별도 읽기 전용 리뷰에서 지적 없음. [검증 기록](../../../docs/validation/cell-compilation-boundary-2026-10-29/result.md)에 SHA·명령·로그 hash·한계를 기록했다.
+- gate 변화: SOURCE GO 유지. 선택 suite의 skip을 실행으로 세지 않으며 ROS-SIM/ARTIFACT HOLD, DEVICE/FIELD PARKED는 유지한다. main 착지·push·실물 수용은 포함하지 않는다.

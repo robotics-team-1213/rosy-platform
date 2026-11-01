@@ -17,11 +17,24 @@ TURN = 4096
 TICKS_PER_DEGREE = TURN / 360
 MAX_GAP_S = 0.5
 MAX_STEP_S = 0.1
+# one corrupt status packet on the shared hub ended three arm S sessions on 2026-10-27, once with the arm low;
+# a read is safe to repeat, and a bus that is really gone still fails after the retries
+READ_RETRY = 2
 #: A torque-off servo follows its Present_Position with Goal_Position, so a seed write is
 #: replaced within one sample and the readback can be one tick away from the next pose read.
 SEED_TOLERANCE_TICKS = 1
 BODY = ("shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll")
 NAMES = (*BODY, "gripper")
+#: PWM_Limit admitted per body joint: the XL430 base, shoulder and elbow carry the arm at reach up to
+#: record_session's XL430_PWM_MAX (2026-10-26: 78 % of 300 at 0.23 m); the XL330 wrist stays at 400.
+PWM_ADMIT_MAX = {"shoulder_pan": 600, "shoulder_lift": 600, "elbow_flex": 600, "wrist_flex": 400, "wrist_roll": 400}
+#: Session servo profile (record_session caps "acc"/"vel", raw X-series units: 21.46 deg/s^2, 1.374 deg/s) kept at
+#: connect so the servo ramps between the whole-tick goals instead of snapping to each (2026-10-27: arm S shook on
+#: 1-2 tick steps). Velocity >= 20.6 deg/s, twice the 10 deg/s this guard streams at most, so it never slows a stream;
+#: acceleration >= 107 deg/s^2 adds a steady lag of v^2/2a <= 0.47 deg at 10 deg/s (0.06 at RISE_SPEED 3.6 deg/s)
+#: against the 5 deg following-error bound. Anything else is cleared to 0 (step goals) as before.
+PROFILE_ACC, PROFILE_VEL = (5, 100), (15, 200)
+PROFILE = {"Profile_Acceleration": PROFILE_ACC, "Profile_Velocity": PROFILE_VEL}
 
 
 def torque_off(bus):
@@ -75,8 +88,9 @@ def connect_passive(device, *, follower):
                 raise ValueError(f"{name}: expected commissioned mode 4 body / 5 gripper")
             if bus.read("Hardware_Error_Status", name) or bus.read("Torque_Enable", name):
                 raise ValueError(f"{name}: error or torque is ON")
-            if follower:
-                for register in ("Profile_Velocity", "Profile_Acceleration"):
+            if follower and not (all(low <= bus.read(r, name) <= high for r, (low, high) in PROFILE.items())
+                                 and not bus.read("Drive_Mode", name) & 4):  # bit 2: time-based, other units
+                for register in PROFILE:
                     bus.write(register, name, 0)
                     if bus.read(register, name) != 0:
                         raise ValueError(f"{name}: {register} readback mismatch")
@@ -166,8 +180,8 @@ class NativeJointMotion:
             raw = self.follower._unnormalize({self.follower.motors[n].id: action[n + ".pos"] for n in NAMES})
             leader = {ids[i]: v for i, v in raw.items()}  # the teacher's target, in follower ticks
         else:
-            leader = self.leader.sync_read("Present_Position", normalize=False)
-        current = self.follower.sync_read("Present_Position", normalize=False)
+            leader = self.leader.sync_read("Present_Position", normalize=False, num_retry=READ_RETRY)
+        current = self.follower.sync_read("Present_Position", normalize=False, num_retry=READ_RETRY)
         finite_values(leader, NAMES)
         finite_values(current, NAMES)
         if self.body_only and self.follower.read("Torque_Enable", "gripper"):
@@ -214,7 +228,7 @@ class NativeJointMotion:
                 if self.follower.read("Torque_Enable", name):
                     raise ValueError(f"{name}: PWM_Limit admission requires torque OFF")
                 limit = self.follower.read("PWM_Limit", name)
-                if not isinstance(limit, (int, float)) or not math.isfinite(limit) or not 0 < limit <= 400:
+                if not isinstance(limit, (int, float)) or not math.isfinite(limit) or not 0 < limit <= PWM_ADMIT_MAX[name]:
                     raise ValueError(f"{name}: invalid PWM_Limit {limit}")
                 limits[name] = limit
             self.pwm_limits = limits

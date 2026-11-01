@@ -20,6 +20,8 @@
             "middleware/devices/omx/adapter/omx_adapter/manipulation_plan.py",
             "middleware/devices/omx/adapter/omx_adapter/watchdog_observation.py",
             "middleware/devices/omx/adapter/omx_adapter/contracts/__init__.py",
+            "middleware/devices/omx/adapter/omx_adapter/contracts/adapter_profile.py",
+            "middleware/devices/omx/adapter/omx_adapter/contracts/watchdog_observation.py",
             "middleware/devices/omx/adapter/omx_adapter/contracts/command_types.py",
             "middleware/devices/omx/adapter/omx_adapter/contracts/manipulation_plan.py", "contracts/foundation",
             "operations/overhead"],

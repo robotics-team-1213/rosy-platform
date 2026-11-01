@@ -353,6 +353,26 @@ def test_merge_when_green_merges_only_a_mergeable_green_pr_at_its_head(repo, mon
         assert "git merge origin/main" in out and "tools/land.py" in out and "ff-only" not in out
 
 
+def test_a_merge_queue_on_main_enqueues_the_pr_instead_of_merging(repo, monkeypatch, capsys):
+    """D-905 pilot: main requires the merge queue, so gh refuses --merge; publish_main enqueues with --auto."""
+    local, _ = repo
+    sha = _commit(local, "app.py", "1")
+    tool.land_record.write(local, sha, _git(local, "rev-parse", f"{sha}^"), FULL, [])
+    calls = []
+    inner = _merge_gh(local, sha, calls)
+
+    def gh(repo_path, *args):
+        if args[:2] == ("pr", "merge") and "--merge" in args:
+            calls.append(args)
+            raise tool.Stop(1, "gh pr merge 7 failed (1): ! The merge strategy for main is set by the merge queue")
+        return inner(repo_path, *args)
+    monkeypatch.setattr(tool, "run_gh", gh)
+    assert _run(local, "--merge-when-green", "7", "--apply") == 0
+    merges = [c for c in calls if c[:2] == ("pr", "merge")]
+    assert merges[-1] == ("pr", "merge", "7", "--auto", "--match-head-commit", sha)
+    assert "queued PR 7" in capsys.readouterr().out
+
+
 def test_after_the_merge_a_direct_code_push_to_origin_stops_the_sync_back(repo, monkeypatch, capsys):
     local, _ = repo
     sha = _commit(local, "app.py", "1")

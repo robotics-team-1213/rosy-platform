@@ -12,6 +12,14 @@ receipt is rosy.learning.media/1. trainer_recordings() turns each checked video
 into one recording-job row {"session", "video"}. A compact bag is not a
 training input.
 
+Each receipt session row also counts the sidecar's shadow evidence:
+sidecar_rows (non-empty lines), shadow_live_rows (a dict payload recorded on
+the robot, backfill flag absent or false) and shadow_backfill_rows (a payload
+marked "backfill": true by an offline re-run). A session with shadow_live_rows
+0 was recorded without the shadow model loaded — it is still trainable, but it
+carries no model-disagreement signal until backfilled. All three are null when
+the sidecar is absent.
+
 Does not harvest, label, train, or delete the robot copy. recording_job still
 does not delete raw: run this stage first, then point that job at the receipt.
 """
@@ -28,6 +36,34 @@ import reclaim
 SCHEMA = "rosy.learning.media/1"
 STAGES = ("scan", "video", "verify", "reclaim", "receipt")
 READY = frozenset({"ok", "compact_ok"})
+SHADOW_KEY = "perception/learned/shadow"
+
+
+def shadow_evidence(sidecar: Path) -> dict:
+    """Count shadow payloads in a bag_to_video sidecar, live vs backfilled.
+
+    Rows whose side[SHADOW_KEY] is a dict carry evidence; the offline backfill
+    tool marks its payloads with "backfill": true. Malformed lines count as
+    rows with no payload: the verify stage, not this counter, decides whether
+    the sidecar is trustworthy."""
+    counts = {"sidecar_rows": 0, "shadow_live_rows": 0, "shadow_backfill_rows": 0}
+    with open(sidecar, encoding="utf-8") as rows:
+        for line in rows:
+            if not line.strip():
+                continue
+            counts["sidecar_rows"] += 1
+            try:
+                side = (json.loads(line).get("side") or {})
+            except json.JSONDecodeError:
+                continue
+            payload = side.get(SHADOW_KEY)
+            if not isinstance(payload, dict):
+                continue
+            if payload.get("backfill") is True:
+                counts["shadow_backfill_rows"] += 1
+            else:
+                counts["shadow_live_rows"] += 1
+    return counts
 
 
 def trainer_recordings(doc: dict) -> list[dict]:
@@ -59,6 +95,9 @@ def build_receipt(rows: list[dict], video_dir: Path, *, applied: bool,
             compact_state = "kept"
         else:
             compact_state = "absent"
+        sidecar = video_dir / f"{row['stem']}.jsonl" if row["stem"] else None
+        counts = (shadow_evidence(sidecar)
+                  if sidecar is not None and sidecar.is_file() else None)
         sessions.append({
             "session": raw.name,
             "stem": row["stem"],
@@ -69,6 +108,8 @@ def build_receipt(rows: list[dict], video_dir: Path, *, applied: bool,
             "compact_state": compact_state,
             "video": str(video) if trainable else None,
             "trainable": trainable,
+            **(counts or {"sidecar_rows": None, "shadow_live_rows": None,
+                          "shadow_backfill_rows": None}),
         })
     compact_rows = []
     for path in compacts or []:

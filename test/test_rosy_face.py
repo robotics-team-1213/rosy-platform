@@ -493,7 +493,7 @@ def _ap_device(tmp_path: Path) -> Path:
     (root / "etc/rosy/ap-credentials.json").write_text(
         json.dumps({"ssid": "rosy-pinky-e4us", PW: AP_VALUE}), encoding="utf-8")
     (root / "etc/rosy/network-policy.json").write_text(
-        json.dumps({"mode": "fallback", "grace_seconds": 120, "hold_seconds": 600}), encoding="utf-8")
+        json.dumps({"mode": "fallback", "fallback_security": "wpa2"}), encoding="utf-8")
     (root / "etc/NetworkManager/system-connections").mkdir(parents=True)
     return root
 
@@ -1028,7 +1028,7 @@ def test_the_battery_the_display_reads_itself_feeds_the_state(tmp_path):
 def test_without_the_rule_table_the_card_and_the_stage_sounds_stay(tmp_path, monkeypatch):
     # An older release has no core_common.robot_state: no state rows, stage-only sounds.
     module = _display()
-    monkeypatch.setattr(module, "robot_state", None)
+    monkeypatch.setattr(sys.modules["rosy_face_display"], "robot_state", None)
     gpio = FakeGPIO()
     _status(tmp_path, "CORE_READY")
     display, _lamp, _clock, rendered, _lines = _state_loop(module, tmp_path, gpio=gpio)
@@ -1628,7 +1628,7 @@ def test_identity_pulse_has_a_hard_deadline_and_a_short_request_age(tmp_path, mo
     assert module.read_test_request(tmp_path / module.TEST_REQUEST, 1_000_000.0) is None
     _hand_over(tmp_path, "lamp", at=1_000_000.0 - 1.5)  # a bench test keeps its 30 s age
     assert module.read_test_request(tmp_path / module.TEST_REQUEST, 1_000_000.0) is not None
-    monkeypatch.setattr(module, "IDENTIFY_MAX_S", 0.05)
+    monkeypatch.setattr(sys.modules["rosy_face_parts"], "IDENTIFY_MAX_S", 0.05)
     state, detail = lamp.identify("blue", lambda: False)
     assert state == "failed" and "시간 초과" in detail
 
@@ -2273,7 +2273,7 @@ def test_an_identity_helper_that_survives_sigkill_is_logged_and_the_state_patter
     lines = []
     display, lamp, _clock, _rendered, _lines = _state_loop(module, tmp_path, spawn=spawn, logs=lines)
     display.step()
-    monkeypatch.setattr(module, "IDENTIFY_MAX_S", 0.05)
+    monkeypatch.setattr(sys.modules["rosy_face_parts"], "IDENTIFY_MAX_S", 0.05)
     state, detail = lamp.identify("blue", lambda: False)
     assert state == "failed" and "시간 초과" in detail
     assert spawn.processes[-1].killed and lamp.pattern is None
@@ -2423,7 +2423,7 @@ def test_a_muted_buzzer_makes_no_reversing_beep(tmp_path):
 
 def test_a_mixed_install_without_the_presentation_record_keeps_core_modes_and_faces(tmp_path, monkeypatch):
     module = _display()
-    monkeypatch.setattr(module, "presentation", None)
+    monkeypatch.setattr(sys.modules["rosy_face_display"], "presentation", None)
     view = {"robot_mode": "NAVIGATION", "nav_state": "IDLE"}
     assert module.FaceDisplay.lamp_pattern_for(view, "ready", {"recovery": "retrace"}) == "recovering"
     assert module.FaceDisplay.lamp_pattern_for(view, "ready", {"signal": "ask"}) == "ask"
