@@ -354,7 +354,7 @@
 ## 최근 기록
 
 - 2026-11-01 · uncommitted · fix(land): 차례 한도에 한 번 돌려보낸 착지는 다음 차례를 끝까지 쓴다 (D-889 추가 15)
+- 2026-11-01 · uncommitted · omx: cell_depth, 깊이 카메라로 셀의 높이를 자르고 컬러 화면에 맞춤(자·접촉 없이)
+- 2026-11-01 · uncommitted · omx: 공유 동작 공간 cell_space, 팔이 쓸 통로를 예약하고 다른 팔의 살아 있는 예약과 겹치면 거절
+- 2026-11-01 · uncommitted · omx: 팔별 세션 잠금, 한 팔이 작업해도 다른 팔 세션·관찰기는 돈다
 - 2026-11-01 · uncommitted · docs(solutions): mutation 증명 탐침은 safety 태그 경로 밖에서
-- 2026-11-01 · uncommitted · fix(land): main이 이미 고친 MAIN-RED로 멈추지 않는다 (D-889 추가 14)
-- 2026-11-01 · uncommitted · fix(land): 재부팅은 시험 PC별로 비킨다 (D-889 추가 13)
-- 2026-11-01 · uncommitted · omx: 계획기 low_zones, 바닥 높이를 지정한 사각형 안에서만 낮춤
