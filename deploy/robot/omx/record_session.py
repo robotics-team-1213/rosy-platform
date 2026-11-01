@@ -485,6 +485,7 @@ def main(argv=None):
     parser.add_argument("--params", type=Path, help="--chunks: cell-params.json for the runner (default: built-in values)")
     parser.add_argument("--io", type=Path, default=Path("chunk-io"), help="--chunks: command FIFO and status directory")
     parser.add_argument("--operating-profile", type=Path, help="--chunks/--replay: per-device operating profile")
+    parser.add_argument("--arm", help="lock only this arm (its observer's instance name), so the other arm can work too")
     args = parser.parse_args(argv)
     if args.operating_profile:
         if not (args.chunks or args.replay):
@@ -557,7 +558,7 @@ def main(argv=None):
                   **({"params": str(args.params.resolve())} if args.params else {})}
     session = Session(open_bus=lambda which: SerialBus(ports[which], 0), systemctl=systemctl, run=run, log=log,
                       replay=replay, chunks=chunks, operating_profile=args.operating_profile)
-    lock = session_lock()
+    lock = session_lock(args.arm)
     record = {}
     try:
         record = session.execute(args.config, caps, teleop_only=args.teleop_only, task_card=args.task_card,

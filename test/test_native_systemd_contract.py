@@ -670,6 +670,9 @@ PROGRAM_SOURCES = {
     # D-190 / D-433: the face loop, the emotion cards and LCD driver, rosylib.Battery.
     "rosy-face.service": ["deploy/robot/pinky_pro/native/rosy-face.py",
                           "deploy/robot/pinky_pro/native/face_card_renderer.py",
+                          "deploy/robot/pinky_pro/native/rosy_face_parts.py",
+                          "deploy/robot/pinky_pro/native/rosy_face_inputs.py",
+                          "deploy/robot/pinky_pro/native/rosy_face_display.py",
                           "deploy/robot/pinky_pro/native/recovery_display.py",
                           # D-260: the rule table it imports from the release.
                           "contracts/foundation/core_common/robot_state.py",
@@ -702,7 +705,8 @@ PROGRAM_SOURCES = {
                                  "deploy/robot/pinky_pro/native/rosy_transfer.py",
                                  "deploy/robot/pinky_pro/native/rosy-release-unpack.sh",
                                  "deploy/robot/pinky_pro/native/native_release.py",
-                                 "deploy/robot/pinky_pro/native/sync-image-layer.py"],
+                                 "deploy/robot/pinky_pro/native/sync-image-layer.py",
+                                 "deploy/robot/pinky_pro/native/image_layer_plan.py", "deploy/robot/pinky_pro/native/image_layer_records.py"],
 }
 
 DECLARED_READS["rosy-os-tailnet.service"] = DECLARED_READS["rosy-os-storage.service"]

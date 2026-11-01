@@ -175,7 +175,7 @@ def test_robot_media_unit_is_a_bounded_separate_cgroup_without_devices():
     assert 'rosy-media.service' in camera['Wants'] and '/run/rosy-media' in camera['ReadWritePaths']
     build = (ROOT / 'deploy/robot/pinky_pro/image/build-native-payload.sh').read_text(encoding='utf-8')
     assert 'cp "$NATIVE_RUNTIME_SOURCE/rosy-media.service" "$OVERLAY/etc/systemd/system/"' in build
-    assert '"rosy-media.service"' in (NATIVE / 'sync-image-layer.py').read_text(encoding='utf-8')
+    assert '"rosy-media.service"' in (NATIVE / 'image_layer_plan.py').read_text(encoding='utf-8')
     wheels = (ROOT / 'deploy/robot/pinky_pro/image/install-motion-contracts.sh').read_text(encoding='utf-8')
     assert 'rosy-media-edge==0.1.0' in wheels and 'middleware/media/src' in wheels
     rules = (NATIVE / 'tmpfiles-rosy-state.conf').read_text(encoding='utf-8')

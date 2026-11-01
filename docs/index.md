@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
-- 2026-11-01 · uncommitted · tools: 워크트리 .git 유실 재발 교훈 갱신
 - 2026-11-01 · uncommitted · feat(fleet): 확인된 ARM 시도의 재관측 계약(D-930, API v1.334)
-- 2026-11-01 · uncommitted · fix(monitoring): 이벤트 기록을 수집기 시계로 읽는다 (MAIN-RED)
-- 2026-11-01 · uncommitted · fix: 조종 끊김·정지 전파·링크 지연 (D-948)
-- 2026-11-01 · uncommitted · fix: 링크 조사 후속 (문서 정리·AP 지터·enum 판단)
+- 2026-11-01 · uncommitted · fix(land): FULL 착지도 겹침 판정, 돌려보낸 표시는 표에 (D-889 추가 16)
+- 2026-11-01 · f2333e8aea · API v1.339 OMX SIM 시연 기본값
+- 2026-11-01 · uncommitted · tools: 워크트리 .git 유실 재발 교훈 갱신
+- 2026-11-01 · uncommitted · fix(land): 차례 한도에 한 번 돌려보낸 착지는 다음 차례를 끝까지 쓴다 (D-889 추가 15)
