@@ -1067,3 +1067,10 @@
 - 변경: `test_layout_canon.py`의 focal 표면 검사가 로봇 대시보드의 상태 셸별 h1 하나(입장/공간)를 검사한다. D-945 웹 이행 완료를 못박는다.
 - 증거: 정적 단정 전 통과. 원격 pytest는 다음 착지 전 기록.
 - Gate: 없음. CE: 해당 없음.
+
+
+## 2026-11-02 · uncommitted · D-945 마무리 — 22rem 칸 경계 허가, 조작 표면 noscript·style 속성 계약
+
+- 변경: Fleet 좁은 좌석 하위 탐색 줄바꿈의 `@container (width >= 22rem)`를 `surfaces.yaml` console `container_breakpoints`에 근거와 함께 등록했다(`test_responsive_tiers`가 미허가 값으로 거절하던 것). `test_layout_canon.py`에 조작 표면 noscript 의무와 style 속성 금지 검사를 더했다.
+- 증거: 로컬 대조에서 main 대비 추가 실패가 `test_responsive_tiers` 하나였고 등록 뒤 통과. 원격 시험은 착지 기록.
+- Gate: 없음. CE: 해당 없음.

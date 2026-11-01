@@ -391,7 +391,7 @@ ui-topbar:has([data-learning-account-entry]) { flex-wrap: wrap; }
 .omx-episodes{border-collapse:collapse;font-variant-numeric:tabular-nums}
 .omx-episodes th,.omx-episodes td{padding:var(--space-1) var(--space-2);text-align:left;white-space:nowrap}
 .omx-review-gallery{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,16rem),1fr));gap:var(--space-3)}
-.omx-review-gallery figure{margin:0;min-width:0}.omx-review-gallery img{display:block;max-width:100%;height:auto}
+.omx-review-gallery figure{margin:0;min-width:0}.omx-review-gallery img,#review-image{display:block;max-width:100%;height:auto}
 .omx-review > summary,.omx-source-info > summary{padding-block:var(--space-3);min-block-size:var(--target-secondary);cursor:pointer}
 .omx-editor{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,28rem),1fr));gap:var(--gap-form);margin-block:var(--space-3)}
 .omx-editor fieldset{min-inline-size:0;border:1px solid var(--surface-line);padding:var(--space-3);margin:0}
