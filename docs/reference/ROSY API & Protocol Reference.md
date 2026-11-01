@@ -77,6 +77,34 @@ Fleet 허브는 검증하지 못한 `heartbeat`·`event` 본문에 `SESSION_NOT_
 
 자동 admit은 사람 admit과 같은 검사를 전부 거친다. 검사는 snapshot, 정지 세대, capability 신선도, 자원 claim이다. 원장 actor는 `fleet-policy-admission`이고, 이벤트에 `policy_scope_revision`·`policy_enabled_by`가 붙는다. HTTP 경로와 오류 코드는 v1.314와 같다. 이 계약 등록은 현장 활성화를 뜻하지 않는다.
 
+### v1.334 ARM transfer recheck of a confirmed attempt (D-930)
+
+`POST /api/fleet/arm-transfers/jobs/{mission_id}/rechecks` lets the job's creator or a
+permitted named operator (same scope and present-Origin check as cancel) ask for fresh
+measured facts about a `GOAL_CONFIRMED` job. The closed body `ArmTransferRecheckCreate`
+has only `recheck_key` (request-key rules). Repeating a key returns the same record; a
+second key while one recheck of the job is still waiting is409 `ARM_TRANSFER_RECHECK_CONFLICT`,
+as is a job that is not confirmed or has no closure proof. `GET .../rechecks/{recheck_key}`
+uses the physical-receipt read scope; an unknown key is404 `ARM_TRANSFER_RECHECK_NOT_FOUND`.
+
+Both return `ArmTransferRecheckResponse.recheck`: `mission_id`, `recheck_key`, the original
+`action_id`/`attempt_id`, server `requested_at_ns`, `status`
+(`WAITING_OBSERVATIONS`/`CONFIRMED`), and, only when confirmed, the exact canonical
+`evidence_document`, its SHA-256 `evidence_digest` and `validated_at_ns`, plus the installed
+`zone_ids`. The document has `context` (`phase=RECHECK`, `not_before_ns` = request time,
+original attempt and owner identities) and exactly two `samples` in the existing
+`ArmTransferObservation` shape, each owner with measured `joints`.
+
+The observer receives a waiting recheck from the existing observation context only when no
+attempt needs facts: `phase=RECHECK`, `status=GOAL_CONFIRMED`, `capture_deadline=null`. It
+submits through the existing observations route with `phase=RECHECK`. Fleet applies the
+POST_ACTION target-pose, rest, gripper and zone-clearance checks with source times after the
+request and requires measured joints; any failure is409 and leaves the recheck waiting.
+
+A recheck submits no Action, takes or releases no claim and never changes the job status,
+physical receipt or v1.330 evidence. It is a fresh simulation-or-installed fact for an
+application's own completion rule, not business completion and not current availability.
+
 ### v1.331 Neutral trip proposals and separate operator admission (D-908)
 
 Fleet adds simulation-only trip proposal/read/admit HTTP. Default, unbound and
@@ -499,6 +527,7 @@ for the observer. Default and production execution stay closed.
 | `POST /api/fleet/arm-transfers/jobs/{mission_id}/observations` | Same independent observer credential and present-Origin check. Closed `ArmTransferObservationRequest`: `phase` (`PRE_DISPATCH` or `POST_ACTION`), `expected_request_digest`, exactly two `observations`. Returns `ArmTransferObservationReply` with `job` and nullable `receipt`. |
 | `GET /api/fleet/arm-transfers/jobs/{mission_id}/physical-receipt` | Creator or permitted named operator, same scoped read rule as the job. Returns `{receipt: ArmTransferPhysicalReceipt}`. Known job with no receipt is409 `ARM_TRANSFER_PHYSICAL_RECEIPT_PENDING`, unknown job404. |
 | `GET /api/fleet/arm-transfers/jobs/{mission_id}/physical-evidence` | v1.330 scoped immutable proof export (D-915); requires complete source joint facts. Does not refresh measurements or change claims. |
+| `POST /api/fleet/arm-transfers/jobs/{mission_id}/rechecks`, `GET .../rechecks/{recheck_key}` | v1.334 fresh measured facts for a confirmed attempt (D-930). No Action, claim, status or receipt change. |
 | `POST /api/fleet/arm-transfers/jobs/{mission_id}/cancel` | Creator service/operator or permitted named operator, same scoped job access and present-Origin check. Closed `ArmTransferCancelRequest` has only trimmed nonempty `reason` (max192). Returns the job snapshot; cancellation ACK is not stop/clearance proof. |
 
 With an execution profile, admission also prepares stable step/action/attempt and
@@ -4454,6 +4483,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 | v1.337 | 2026-11-01 | D-944: LCD code pairing and the reachability read accept the team tailnet (100.64.0.0/10, fd7a:115c:a1e0::/48); development session and first peer approval stay robot-LAN only. |
 | v1.336 | 2026-11-01 | Corrective: Fleet hub answers a `heartbeat`/`event` payload it cannot validate with `PAYLOAD_INVALID` (was `SESSION_NOT_PAIRED`); the robot agent keeps the session on a heartbeat answer and drops the event without retry. Envelope 1.0 unchanged. |
 | v1.335 | 2026-10-31 | D-938: policy admission scope accepts `arm_transfer` (ARM_TRANSFER jobs only) with required `proposers` and `valid_until`; status reads back `enabled_by`; expired scopes close every kind. Same admission checks as a human admit; simulation arm transfer HTTP only. |
+| v1.334 | 2026-10-30 | D-930: fresh measured recheck of a confirmed ARM transfer attempt (`POST/GET .../arm-transfers/jobs/{mission_id}/rechecks`); the physical observer answers in a RECHECK phase. No Action, claim, job status or receipt change. Envelope 1.0 unchanged. |
 | v1.331 | 2026-10-28 | D-908: closed simulation neutral TRIP proposal/read/admit HTTP; the proposer (service or operator) supplies candidates, request key and steps, a different named operator admits with digest and generation, and admission makes the existing TRIP step-ledger job. No cargo fields; operator trip-jobs POST unchanged. Envelope 1.0 unchanged. |
 | v1.330 | 2026-10-29 | D-915: optional measured source joint facts in physical observations and scoped immutable closure proof readback; legacy canonical bytes, writer/admission boundaries and envelope1.0 preserved. Independent SIM/hardware/field acceptance remains separate. |
 | v1.328 | 2026-10-28 | Learning registered OMX dataset discovery and fixed-revision archive preparation on existing host paths. Separate verified copy, explicit consent and original preservation; byte archival only. CORE envelope1.0 unchanged. |
