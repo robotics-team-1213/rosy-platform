@@ -133,8 +133,8 @@ def create_app(collector: Collector, *, web_root: Path | None = None):
         except ValueError:
             return _error(400, 'MONITORING_QUERY')
         try:
-            rows = collector.store.events(site_id, after=after, limit=limit)
-        except StoreUnavailable:
+            rows = collector.events(site_id, after=after, limit=limit)
+        except (StoreUnavailable, ObservationRejected):  # a bad collector clock is unavailable storage too
             return _error(503, 'MONITORING_STORAGE')
         return {'events': rows, 'next_after': rows[-1]['sequence'] if rows else after}
 

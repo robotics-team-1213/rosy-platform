@@ -1,7 +1,7 @@
 """Owned SQLite observations, replay anchors and bounded public state-change history."""
 
 from contextlib import contextmanager
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import json
 import os
 from pathlib import Path
@@ -155,14 +155,14 @@ class MonitoringStore:
         db.execute('insert into events values (?,?,?,?)', (site, seq, wall.isoformat(), payload))
         db.execute('delete from events where site=? and seq<=?', (site, seq - 4096))
 
-    def events(self, site, *, after, limit):
+    def events(self, site, *, after, limit, now=None):
+        """Events of the last 7 days as of ``now`` (the caller's clock; the host's wall clock if omitted)."""
         if type(after) is not int or after < 0 or type(limit) is not int or not 1 <= limit <= 200:
             raise ValueError('invalid event cursor')
-        # Retention is save()/prune(wall) on the collector's clock; a second cut on the host's own
-        # wall clock here hid every event once that clock ran 7 days past the collector's (2026-11-01).
         with self._connection() as db:
+            cutoff = ((now or datetime.now(timezone.utc)) - timedelta(days=7)).isoformat()
             rows = db.execute('''select seq,time,payload from events where site=? and seq>?
-                              order by seq limit ?''', (site, after, limit)).fetchall()
+                              and time>=? order by seq limit ?''', (site, after, cutoff, limit)).fetchall()
         try:
             return [{'sequence': seq, 'time': wall, **json.loads(payload)} for seq, wall, payload in rows]
         except (ValueError, TypeError):
