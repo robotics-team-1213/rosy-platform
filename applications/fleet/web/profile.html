@@ -14,11 +14,12 @@
   <script type="module" src="/console/assets/profile-page.js"></script>
 </head>
 <body class="fleet-account-page">
+  <a class="skip-link" href="#profile-main">본문으로 건너뛰기</a>
   <ui-shell grammar="procedure">
     <!-- fleet:document-header:start -->
-<ui-topbar><ui-brand href="/console"><b>Rosy Fleet</b><small>내 계정</small></ui-brand><span data-spacer></span><ui-button kind="quiet" data-theme-cycle="" data-icon-only="" type="button" aria-label="테마 변경" data-action-icon="theme-dark"></ui-button></ui-topbar>
+<header class="fleet-document-header"><ui-topbar><ui-brand href="/console"><b>Rosy Fleet</b><small>내 계정</small></ui-brand><span data-spacer></span><ui-button kind="quiet" data-theme-cycle="" data-icon-only="" type="button" aria-label="테마 변경" data-action-icon="theme-dark"></ui-button></ui-topbar></header>
 <!-- fleet:document-header:end -->
-    <main class="fleet-login-main fleet-document">
+    <main id="profile-main" class="fleet-login-main fleet-document" tabindex="-1">
       <h1 class="ui-page-heading">내 계정</h1>
       <ui-status id="profile-status" state="pending">계정 상태를 확인하고 있습니다.</ui-status>
       <a id="profile-login" href="/console/login" hidden>로그인</a>

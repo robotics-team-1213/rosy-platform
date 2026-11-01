@@ -1018,3 +1018,38 @@
 - 변경: 어디서도 읽지 않는 `--flag-line`·`--ground-grad-2`·`--line-015`·`--shade-14`·`--shade-28`과 정책 문서 폭 `--content-policy-max`를 지웠다. `--ground-grad-1`은 색 섞기 해석 시험의 기준으로 남는다. `DESIGN.md` 음영 항목과 부품 견본의 폭 줄을 같이 정리했다.
 - 증거: `git grep`으로 소비처 없음 확인, 대비 시험은 `--surface-line`만 본다.
 - gate 변화: 없음. CE: 해당 없음.
+
+
+## 2026-11-01 · uncommitted · task-chooser onSelect 선택 알림
+
+- 변경: `createTaskChooser`에 선택적 `onSelect(id)` 콜백을 더했다(선택 확정 직후 한 번). 기존 호출처(robot_ui mount.js)는 무변경. Fleet 설치 문서의 경로 줄 화면 이름이 이 콜백을 쓴다. `test_chrome_layout.py`의 Fleet 사이드바 고정을 D-741 6 좌석 통일에 맞게 바로잡았다(설치 문서는 이제 자기 열이 없다).
+- 증거: node --test 403 passed, robot_ui 호출처 무변경. 원격 시험은 착지 전 기록.
+- gate 변화: 없음. CE: 해당 없음.
+
+
+## 2026-11-01 · uncommitted · step 자리 표식
+
+- 변경: `app-shell.css`의 하위 탐색 현재 표식이 `aria-current="step"`(같은 문서 안 현재 단계, D-926 3)도 `page`와 같은 장미색 wash로 그린다. 빈 표식으로 단계가 보이지 않던 Cell 화면이 시각 표시를 얻는다.
+- 증거: Fleet Cell 화면 Chromium 실측(단계 배경 렌더 확인). 원격 시험은 착지 전 기록.
+- gate 변화: 없음. CE: 해당 없음.
+
+
+## 2026-11-01 · uncommitted · D-945 레이아웃 계약 시험
+
+- 변경: `test/test_layout_canon.py` — Fleet 아홉 문서·로봇 셸·학습 검수 화면의 자리 순서, 문서 h1 하나(경로 줄), 표식 어휘(page·step)를 검사한다. 시험이 첫 이탈을 잡아 검수 화면 여섯의 낡은 `aria-current="true"`를 `page`로 통일했다.
+- 증거: 정적 단정 전 통과(로컬 파일 검사). 원격 pytest는 착지 전 기록.
+- Gate: 없음. CE: 해당 없음.
+
+
+## 2026-11-01 · uncommitted · D-945 focal 표면 검사 추가
+
+- 변경: `test_layout_canon.py`에 focal 문법(Pilot)의 순서·skip link 검사와 로봇 대시보드의 topbar-first·skip link 검사를 넣었다(대시보드 경로 줄 이행 유예의 근거를 주석으로 남김).
+- 증거: 정적 단정 전 통과. 원격 pytest는 착지 전 기록.
+- Gate: 없음. CE: 해당 없음.
+
+
+## 2026-11-01 · uncommitted · 착지 시험 반영: 표식 토큰 true 인정, 검수 페이지 원복
+
+- 변경: 착지 게이트가 잡은 대로 학습 검수의 `aria-current="true"`는 낡은 어휘가 아니라 정규약("현 페이지 링크=page, 현 페이지를 담은 상위 단계=true", test_app_shell_seats)이다. 검수 페이지 여섯의 `page` 통일을 원복하고 D-945·DESIGN.md·test_layout_canon의 표식 규칙을 표준 토큰 셋(page·step·true·aria-selected)으로 정정했다. test_site_map_api의 canvas role 검사도 무장 상태 추종(render) 소유로 바로잡았다.
+- 증거: test_layout_canon 전 통과, 검수 페이지 6건 완전 원복(net diff 0), node --test 403 passed. 원격 시험은 재착지 전 기록.
+- Gate: 없음. CE: 해당 없음 — 착지 시험이 계약 충돌을 잡은 사례로, 교훈은 아래 CE 판단 참조.

@@ -10,6 +10,7 @@
   <script src="/common/theme.js"></script>
   <link rel="stylesheet" href="/common/components.css">
   <link rel="stylesheet" href="/common/task-chooser.css">
+  <link rel="stylesheet" href="/common/app-shell.css">
   <link rel="stylesheet" href="/console/assets/styles.css">
   <link rel="stylesheet" href="/console/assets/file-picker.css">
   <link rel="stylesheet" href="/console/assets/doc-tabs.css">
@@ -76,15 +77,16 @@
     <a href="/console/install" aria-current="page" data-action-icon="install" aria-label="설치·보정">설치</a>
   </nav>
 <!-- fleet:nav:end -->
+  <!-- D-741 6 — 화면 안 이동은 공용 하위 탐색 자리에 선다. 설치 작업 목록은 install.js가 공용 task-chooser로 이 자리에 채운다(robot_ui와 같은 규칙). -->
+  <div class="ui-subnav" id="install-chooser" aria-label="설치 작업"></div>
   <div class="fleet-workspace">
   <ui-status id="estop-feedback" hidden></ui-status>
 
-  <main id="install-main" tabindex="-1">
-    <h1 class="sr-only">Rosy Fleet — 설치·보정</h1>
+  <!-- D-926 2 — 경로 줄: 문서 제목과 현재 화면을 본문 머리에도 보인다(부품은 app-shell.css). -->
+  <div class="ui-pathbar"><h1>설치·보정</h1><strong id="install-screen">장비 찾기</strong></div>
+
+  <main id="install-main" class="fleet-task-page" tabindex="-1">
     <!-- D-410 — 설치 화면. 운용(감시·목표·정지)은 /console에 있다. -->
-    <div class="install-tasks">
-      <nav id="install-chooser" aria-label="설치 작업"></nav>
-      <div class="install-workspace">
         <section id="peer-picker" class="panel install-task" aria-labelledby="peer-heading">
           <div class="robot-head"><h2 id="peer-heading">장비 찾기</h2><ui-tag id="peer-status" status="neutral">접속 대기</ui-tag></div>
           <p class="hint">장비 이름을 선택해 담당 화면으로 이동합니다. 검색된 장비의 연결 권한은 별도로 확인합니다.</p>
@@ -251,7 +253,7 @@
       <span class="hint layer-hint" id="map-layer-hint" role="status" hidden></span>
 <section class="vision-preview" aria-labelledby="vision-heading">
         <div class="map-head">
-          <h2 id="vision-heading">관제 카메라</h2>
+          <h3 id="vision-heading">관제 카메라</h3>
           <span class="spacer"></span>
           <ui-tag id="vision-state" status="neutral">인증 대기</ui-tag>
         </div>
@@ -362,7 +364,7 @@
           </ui-actions>
           <label class="ui-check"><input class="ui-field" id="measured-conditions" type="checkbox" disabled>현재 렌즈·초점·줌·영상 크롭 조건이 이 교정의 촬영 조건과 같음을 확인했습니다.</label>
           <ui-actions>
-            <ui-button id="measured-confirm" kind="primary" disabled>현재 조건 확인 후 미리보기</ui-button>
+            <ui-button id="measured-confirm" kind="quiet" disabled>현재 조건 확인 후 미리보기</ui-button>
             <ui-button id="measured-read" kind="quiet" disabled>확인된 미리보기 읽기</ui-button>
           </ui-actions>
           <p id="measured-state" class="hint" role="status">저장 기록 확인 중</p>
@@ -422,18 +424,16 @@
           </div>
         </details>
     </section>
+    </section>
 
     <section id="host-services" class="panel install-task" aria-labelledby="host-services-heading" data-role-lock>
       <div class="robot-head"><h2 id="host-services-heading">호스트 서비스</h2><ui-tag id="host-services-status" status="neutral">확인 전</ui-tag></div>
-      <p class="hint">PC별 메모리·부하와 자동 복구 상태입니다. 원격 자원은 10분, 복구 설정은 30분마다 점검하며 이 화면은 30초마다 갱신합니다. 재부팅은 10분 뒤입니다. 로봇을 멈추려면 비상 정지를 씁니다.</p>
+      <p class="hint">PC별 메모리·부하와 자동 복구 상태를 30초마다 보여 줍니다(점검: 원격 자원 10분, 복구 설정 30분). 재부팅은 10분 뒤에 이뤄지며, 로봇을 멈추려면 비상 정지를 씁니다.</p>
       <div id="host-services-report"></div>
       <ui-status id="host-services-role-lock" class="role-lock-note" state="forbidden" hidden>운영자 권한이 필요합니다</ui-status>
       <div id="host-services-commands"></div>
       <ui-status id="host-services-note" hidden></ui-status>
     </section>
-
-      </div>
-    </div>
 
     <section class="panel install-history" aria-labelledby="install-log-heading">
       <h2 id="install-log-heading">설치 기록</h2>
