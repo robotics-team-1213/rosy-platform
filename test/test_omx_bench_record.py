@@ -15,7 +15,7 @@ UNITS = ['rosy-omx-observer@arm_a.service', 'rosy-omx-camera@top.service', 'rosy
          'rosy-omx-camera-view.service', 'rosy-omx-arm-status.service']
 
 
-def setup(tmp_path, monkeypatch, *, safe=True, record=None):
+def _setup(tmp_path, monkeypatch, *, safe=True, record=None):
     prep = tmp_path / 'prep'
     (prep / 'tasks').mkdir(parents=True)
     for name in ('record-config.json', 'caps.json', 'tasks/teach.yaml'):
@@ -51,7 +51,7 @@ def finished(bench):
 
 
 def test_safe_session_hands_over_restores_in_reverse_and_seals(tmp_path, monkeypatch):
-    bench, body, calls, commands = setup(tmp_path, monkeypatch)
+    bench, body, calls, commands = _setup(tmp_path, monkeypatch)
     bench.start(body)
     state = finished(bench)
     stops = [c[1] for c in calls if c[0] == 'stop']
@@ -65,7 +65,7 @@ def test_safe_session_hands_over_restores_in_reverse_and_seals(tmp_path, monkeyp
 
 
 def test_unsafe_end_is_restored_but_never_sealed(tmp_path, monkeypatch):
-    bench, body, calls, commands = setup(tmp_path, monkeypatch, safe=False)
+    bench, body, calls, commands = _setup(tmp_path, monkeypatch, safe=False)
     bench.start(body)
     state = finished(bench)
     assert state['status'] == 'unsafe_or_failed' and len(commands) == 1
@@ -75,7 +75,7 @@ def test_unsafe_end_is_restored_but_never_sealed(tmp_path, monkeypatch):
 @pytest.mark.parametrize('change', [{'at_bench': False}, {'config': '../etc/passwd'}, {'calibrations': ['/tmp/x.json']},
                                     {'name': 'Bad Name'}])
 def test_start_refuses_without_presence_or_with_unlisted_inputs(tmp_path, monkeypatch, change):
-    bench, body, calls, commands = setup(tmp_path, monkeypatch)
+    bench, body, calls, commands = _setup(tmp_path, monkeypatch)
     with pytest.raises(ValueError):
         bench.start(dict(body, **change))
     assert not calls and not commands
@@ -83,14 +83,14 @@ def test_start_refuses_without_presence_or_with_unlisted_inputs(tmp_path, monkey
 
 def test_stopped_recording_is_restored_and_left_unsealed(tmp_path, monkeypatch):
     # record_session marks a Stop as interrupted; record_seal would refuse it.
-    bench, body, calls, commands = setup(tmp_path, monkeypatch, record={'safe_end': True, 'interrupted': True})
+    bench, body, calls, commands = _setup(tmp_path, monkeypatch, record={'safe_end': True, 'interrupted': True})
     bench.start(body)
     assert finished(bench)['status'] == 'stopped_not_sealed' and len(commands) == 1
     assert not bench.pending.exists()
 
 
 def test_stop_during_handover_never_launches_the_recorder(tmp_path, monkeypatch):
-    bench, body, calls, commands = setup(tmp_path, monkeypatch)
+    bench, body, calls, commands = _setup(tmp_path, monkeypatch)
     real_run = bench.run
     def slow_run(*args):
         if args[0] == 'stop':
@@ -104,7 +104,7 @@ def test_stop_during_handover_never_launches_the_recorder(tmp_path, monkeypatch)
 
 
 def test_a_restarted_bench_restores_units_a_dead_session_left_stopped(tmp_path, monkeypatch):
-    bench, body, calls, commands = setup(tmp_path, monkeypatch)
+    bench, body, calls, commands = _setup(tmp_path, monkeypatch)
     bench.pending.write_text(json.dumps(['rosy-omx-camera@top.service', 'rosy-omx-observer@arm_a.service']))
     bench.restore_leftovers()
     assert [c for c in calls if c[0] == 'start'] == [('start', 'rosy-omx-observer@arm_a.service'),
@@ -114,6 +114,6 @@ def test_a_restarted_bench_restores_units_a_dead_session_left_stopped(tmp_path, 
 
 @pytest.mark.parametrize('body', [[], {'name': 5}])
 def test_malformed_bodies_are_refused(tmp_path, monkeypatch, body):
-    bench, _, calls, commands = setup(tmp_path, monkeypatch)
+    bench, _, calls, commands = _setup(tmp_path, monkeypatch)
     with pytest.raises(ValueError):
         bench.start(body)
