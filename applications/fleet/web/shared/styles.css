@@ -19,9 +19,9 @@
 
 /* Fleet task owners remain mounted; visibility is navigation-owned (D-741 6 seat). */
 .install-task { min-width: 0; }
-/* D-926 7(2026-11-02) — 긴 안내의 접힘(대형 조작·배경 학습): 첫 문장은 보이고 세부 규칙은 접힌다. */
-.formation-more, .tracking-more { display: block; margin-block: var(--space-2); }
-.formation-more summary, .tracking-more summary { min-height: var(--target-secondary); }
+/* D-926 7(2026-11-02) — 긴 안내의 접힘(대형 조작·배경 학습·범례): 첫 문장은 보이고 세부 규칙은 접힌다. */
+.hint-more { display: block; margin-block: var(--space-2); }
+.hint-more summary { min-height: var(--target-secondary); }
 .install-task > h2 { margin-top: 0; }
 .peer-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
 .peer-toolbar select { min-width: 0; max-width: 100%; }
