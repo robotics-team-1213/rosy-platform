@@ -102,9 +102,9 @@ def test_registered_sources_are_visible_before_any_samples_without_private_bindi
         assert arm["sequence"] == 0
         assert all(arm[key] is None for key in ("epoch", "captured_at", "source_age_s", "receipt_age_s", "positions"))
     cameras = state["workcells"][0]["cameras"]
-    assert cameras == [{"source_id": "top", "label": "Top", "role": "overhead", "arm_id": None},
-                       {"source_id": "wrist_a", "label": "Wrist a", "role": "wrist", "arm_id": "arm_a"},
-                       {"source_id": "wrist_b", "label": "Wrist b", "role": "wrist", "arm_id": "arm_b"}]
+    assert cameras == [{"source_id": "top", "label": "Top", "role": "overhead", "arm_id": None, "stream": "color"},
+                       {"source_id": "wrist_a", "label": "Wrist a", "role": "wrist", "arm_id": "arm_a", "stream": "color"},
+                       {"source_id": "wrist_b", "label": "Wrist b", "role": "wrist", "arm_id": "arm_b", "stream": "color"}]
     rendered = json.dumps(state)
     assert not any(private in rendered for private in ("secret", "token_env", "board_id", "device_path", "/dev/",
                                                       "credential_sha256", sha256(b"top-secret").hexdigest()))
@@ -232,3 +232,29 @@ def test_ingest_and_snapshot_own_their_data(setup):
     state["workcells"][0]["cameras"][0]["label"] = "changed"
     assert arms(service)["feedback_a"]["positions"]["joint0"] == 0.25
     assert service.snapshot()["workcells"][0]["cameras"][0]["label"] == "Top"
+
+
+def test_a_side_camera_is_a_shared_view_with_no_arm_of_its_own(setup):
+    """2026-10-31: a side camera across the cell joined the overhead and the two wrists."""
+    _, _, manifest, _ = setup
+    document = manifest.model_dump(by_alias=True)
+    side = {"source_id": "side", "label": "Side", "role": "side", "arm_id": None, "image_topic": "/side_camera/image_raw",
+            "device_path": "/dev/v4l/by-id/example-side", "token_env": "EXAMPLE_SIDE",
+            "credential_sha256": sha256(b"side-secret").hexdigest()}
+    document["workcells"][0]["cameras"].append(side)
+    assert WorkcellObservationManifest.model_validate(document).workcells[0].cameras[-1].role == "side"
+    document["workcells"][0]["cameras"][-1] = dict(side, arm_id="arm_a")
+    with pytest.raises(ValueError, match="matching local arm binding"):
+        WorkcellObservationManifest.model_validate(document)
+
+
+def test_a_depth_camera_says_so_and_a_camera_without_a_stream_is_colour(setup):
+    _, _, manifest, _ = setup
+    document = manifest.model_dump(by_alias=True)
+    document["workcells"][0]["cameras"][0]["stream"] = "depth"
+    assert WorkcellObservationManifest.model_validate(document).workcells[0].cameras[0].stream == "depth"
+    document["workcells"][0]["cameras"][0].pop("stream")
+    assert WorkcellObservationManifest.model_validate(document).workcells[0].cameras[0].stream == "color"
+    document["workcells"][0]["cameras"][0]["stream"] = "thermal"
+    with pytest.raises(ValueError):
+        WorkcellObservationManifest.model_validate(document)
