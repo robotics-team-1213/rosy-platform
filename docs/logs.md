@@ -13284,6 +13284,13 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 교훈: 없음(시계 주입 원칙은 기존 코드에 있었고 한 경로만 빠졌다)
 
+## 2026-11-01 · uncommitted · refactor: D-949 줄 수 래칫을 리팩터링 대기열로
+- 변경: D-949와 `test/architecture/test_size_tiers.py`(1,000줄 이상 제품 행 금지, 800~999·시험 1,500 초과·단위 10,000 초과 대기열 집합은 줄어들기만). 1차 분리: `action_store.py` 1132→497, `diagnostic.html` 1857→288(+css·js 3), `rosy-face.py` 1235→221, `sync-image-layer.py` 1014→496. `console.py`는 fix/robot-site-link-robustness의 분리(634)가 착지하면 `TIER1_IN_FLIGHT`에서 빠진다
+- 증거: 옮긴 정의의 AST 동일성(에이전트 검사), 원격 시험은 착지 기록에 남긴다. 장치(LCD·이미지 층 갱신·진단 화면) 확인 안 함
+- gate 변화: 없음
+- 결정: D-949 Accepted(사용자 결정), 워크트리 슬롯 2번째 force-over-cap 승인(2026-11-01)
+- 교훈: 없음
+
 ## 2026-11-01 · uncommitted · omx: 계획 경로 통로 점검(cell_corridor), 경로에 물체·다른 팔이 있으면 움직이기 전에 거절
 - 변경: `deploy/robot/omx/cell_corridor.py`(계획 프레임 FK → 낮은 TCP 구간을 상단 뷰 통로로 그리고 전경 덩어리를 찾음, 집을 물체·놓을 칸·팔 기부는 제외), `cell_params.py`에 `corridor.*` 5개
 - 증거: `test/test_omx_cell_corridor.py` 원격 실행
@@ -13304,4 +13311,3 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: 없음
 - 교훈: 기존 교훈 갱신(카메라 교체 시 이미지 좌표 설정도 무효)
-
