@@ -67,3 +67,10 @@ a { color: var(--text-primary); }
   .actions { display: grid; grid-template-columns: minmax(0, 1fr); }
   .draft-actions { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* D-926 7(2026-11-02) — 범례: 첫 문장은 항상 보이고 나머지 기호 안내는 접힌다. */
+#map-legend .legend-more { margin-block: var(--space-2); }
+#map-legend .legend-more summary { min-height: var(--target-secondary); }
+#map-legend .legend-terms { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--space-1) var(--space-3); margin: var(--space-2) 0 0; }
+#map-legend .legend-terms dt { color: var(--text-secondary); font-weight: var(--weight-label); white-space: nowrap; }
+#map-legend .legend-terms dd { margin: 0; color: var(--text-primary); }
