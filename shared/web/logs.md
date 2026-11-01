@@ -1060,3 +1060,10 @@
 - 변경: `test_layout_canon.py`의 focal 표면 검사가 Pilot·경기 보드 모두의 순서·skip link·h1 하나(sr-only 허용)를 검사한다.
 - 증거: 정적 단정 전 통과. 원격 pytest는 다음 착지 전 기록.
 - Gate: 없음. CE: 해당 없음.
+
+
+## 2026-11-02 · uncommitted · 대시보드 두 상태 셸 h1 검사 추가
+
+- 변경: `test_layout_canon.py`의 focal 표면 검사가 로봇 대시보드의 상태 셸별 h1 하나(입장/공간)를 검사한다. D-945 웹 이행 완료를 못박는다.
+- 증거: 정적 단정 전 통과. 원격 pytest는 다음 착지 전 기록.
+- Gate: 없음. CE: 해당 없음.

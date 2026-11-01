@@ -1385,3 +1385,10 @@
 - 변경: `/dashboard` 인증 브리지의 작업 화면 목록(밑줄 텍스트 링크)이 역할 화면 셸·Fleet과 같은 레일 부품(`ui-rail-item`, 아이콘 아래 짧은 이름, 전체 이름은 접근 이름)로 그려진다. 레일 어휘(SURFACE_RAIL)를 surface-navigation.js 한 곳에 두고 셸 shell.js도 같은 정본을 쓴다. 대시보드에 app-shell.css를 더하고 목록 배치를 세로 레일로 바꿨다. 아이콘은 ui.js가 부팅 때만 훑으므로 dashboard-entry.js가 그린 뒤 다시 칠한다.
 - 증거: node --check 3파일, test_layout_canon 전 통과. 어휘 변화(전체 제목→짧은 이름)에 맞춰 test_surface_bridge·test_dashboard_entry_browser 기대치 갱신(접근 이름은 전체 제목 유지). 원격 시험은 착지 전 기록.
 - Gate: 없음. CE: 해당 없음.
+
+
+## 2026-11-02 · uncommitted · D-945 이행 완료 선언 — 대시보드 두 상태 셸 h1 규칙으로 준수
+
+- 변경: 대시보드 본문을 실측으로 재평가했다 — h1 정확히 1(hero-strip 제목 줄, 공간 문법), h2/h3 사다리 정돈, 단추 종류 전부 규격(ui-button kind 5종), ui-empty 12, skip link·app-shell 시트 ✓(입장 레일 통일 커밋에서 반영). `#triage-title` 빈 h2는 JS가 채우는 동적 제목으로 결함 아님. 따라서 본문을 ui-section로 재작성하지 않고, test_layout_canon이 두 상태 셸(입장 게이트·연결 후 공간 콘솔)의 h1 하나 규칙을 검사하게 했다. D-945 5항·DESIGN.md의 유예 목록을 닫는다(웹 표면 이행 완료, Cam은 네이티브라 밖).
+- 증거: test_layout_canon 전 통과·lint 무결. 원격 시험은 다음 착지 전 기록.
+- Gate: 없음 — 감지·관측·조작 본문 문법과 고정 프레임 예산(D-201·test_console_layout)은 보존. CE: 해당 없음.
