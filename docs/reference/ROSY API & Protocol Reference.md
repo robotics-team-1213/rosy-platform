@@ -5,9 +5,15 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.344
+**Version:** v1.345
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.345 대열 간격 보기 (D-941)
+
+- 새 엔드포인트 `GET /api/fleet/platoon`(읽기 권한). 활성 지도에서 가장 짧은 한 방향(`one_way`) 고리를 대열 고리로 보고, 지도 자세가 `LOCALIZED`인 온라인 로봇마다 고리 위 진행 거리 `s_m`, 바로 앞 로봇 `leader`, 간격 `gap_m = (s_앞 − s_나) mod 둘레`를 보인다.
+- 응답 `{map_version, loop:{edges, perimeter_m}, target_gap_m, min_gap_m, robots:[{robot_id, s_m, off_m, state, leader?, gap_m?}], dispatch:false}`. `state`는 `ok`(목표 간격 이상)·`close`(목표 미만)·`too_close`(`min_gap_m` 미만)·`alone`(고리에 혼자)·`off_loop`(차선에서 0.1 m 넘게 벗어남, `s_m` null).
+- 보여 주기만 한다(`dispatch: false`). 따라가기 속도 고리는 로봇 CORE의 몫이며 Fleet은 이 값으로 아무것도 보내지 않는다. 활성 지도가 없으면 404 `NO_ACTIVE_MAP`, 한 방향 고리가 없으면 404 `NO_LOOP`. additive다.
 
 ### v1.344 충전 칸 계획 보기 (D-941)
 
@@ -4420,6 +4426,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.345 | 2026-11-02 | additive (D-941): `GET /api/fleet/platoon` — 활성 지도의 가장 짧은 한 방향 고리 위 로봇 간격·앞차 보기, 보내기 없음 |
 | v1.344 | 2026-11-01 | additive (D-941): `GET /api/fleet/charge-bays` — 활성 지도 충전 칸 계획 보기(전압 상승으로 연결, 도착 % + 측정 충전 속도로 나감), 보내기 없음 |
 | v1.343 | 2026-10-31 | additive (SAF-001, Safety-Review 대상): `POST /api/v1/safety/release-code` — 래치 중 정지 화면의 일회용 해제 코드(역할 `estop_release`, root 발급)로 해제한다. 로그인 토큰을 주지 않고 로그인 코드로는 해제할 수 없다. Fleet `POST /api/fleet/robots/{robot_id}/estop-release` |
 | v1.342 | 2026-10-31 | additive: 상태 스냅샷 `safety.source`(래치 원인) |
