@@ -33,7 +33,7 @@ def test_a_full_range_through_mains_landed_commits_keeps_untouched_passes(repos,
         asked.append((b, head, landed))
         if landed:
             return delta_picks, None
-        if head == fix:
+        if head == fix and b == f"{fix}^":
             return [["fix/test"]], ("FULL" if own_full else None)
         return [["other/test"]], "FULL"  # base..head as a whole: FULL through main's landing tools
     args = land.argparse.Namespace(tests="auto", no_cache=False)
