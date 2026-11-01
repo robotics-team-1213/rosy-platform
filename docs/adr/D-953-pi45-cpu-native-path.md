@@ -61,6 +61,9 @@
 - 실행기 전환 전까지 Pi 4에서 control 노드를 모두 띄우면 CPU가 부족할 수 있다. 이 위험은 Pi 4 첫 실기 시험의 확인 항목이다.
 - 남은 측정은 다음과 같다. 모두 실기와 사람이 필요하다.
   - Pi 4·Pi 5에서 `hotpath_measure.py bench`와 `watch`
+  - Pi에서 `test_scan_motion_equivalence.py`
+    - 비트 동일은 x86 numpy로만 확인했다.
+    - Pi의 OpenBLAS·FMA에서 경계 입력이 1ulp 달라지면 이 시험이 잡는다.
   - 실행기 A/B
   - 기체 카메라(`rosy-camera`, 8 fps)와 `rosy-media`처럼 시뮬에 없는 서비스의 CPU
 - 관제 PC 서비스는 이 결정의 대상이 아니다. 줄일 여지는 OpenCV·numpy 호출 횟수와 해상도 쪽이다.
