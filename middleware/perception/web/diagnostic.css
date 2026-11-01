@@ -1,0 +1,278 @@
+:root {
+  color-scheme: dark;
+  /* Roles over tokens.css (change colours there). Surfaces split the page: observe/sense flat, act raised. */
+  --bg: var(--ground-deep); --observe: var(--ground); --act: var(--ground-card); --act-2: var(--ground-card-2);
+  --border: var(--line-10); --rule: var(--line-06); --ink-2: var(--ink-quiet);
+  --route: var(--series-primary); --goal: var(--series-goal); --hist: var(--ink-quiet); /* hist: de-emphasis, not a series */
+  --good: var(--status-good); --warn: var(--status-warn); --serious: var(--status-warn); --crit: var(--status-crit);
+  --gauge: var(--gauge-fill); --track: var(--gauge-track);
+  /* derived washes — alpha of a role, never a new colour */
+  --crit-line: color-mix(in oklab, var(--crit) 60%, transparent); --crit-wash: color-mix(in oklab, var(--crit) 10%, transparent);
+  --route-wash: color-mix(in oklab, var(--route) 14%, transparent); --route-line: color-mix(in oklab, var(--route) 55%, transparent);
+  --ink-wash: color-mix(in oklab, var(--ink) 3%, transparent); --warn-line: var(--status-warn-a45);
+  /* No shared token: map raster (= render_png in rosy_nodes/web_node.py) and the alt/pin overlays. */
+  --unk: #161615; --grid: #2c2c2a; --free: #232322; --wall: #e1e0d9; --alt: #d95926; --pin: #d55181;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; background:var(--bg); color:var(--ink-2);
+       font: 400 var(--text-body)/1.5 var(--body);
+       display:flex; flex-direction:column;
+       -webkit-font-smoothing:antialiased; }
+b, strong { font-weight:600; }
+
+/* ---- status bar --------------------------------------------------------- */
+header { flex:none; display:flex; align-items:center; gap: var(--space-4);
+         padding: var(--space-2) var(--space-4) var(--space-2); background:var(--observe);
+         border-bottom:1px solid var(--border); }
+.brand { font-size: var(--text-label); font-weight:600; color:var(--ink);
+         display:flex; align-items:center; gap: var(--space-2); letter-spacing:0.01em; }
+.dot { width:8px; height:8px; border-radius: var(--radius-flag); background:var(--ink-quiet);
+       flex:none; }
+.dot.live { background:var(--good); }
+.chips { margin-left: auto; display:flex; gap: var(--space-2); flex-wrap:wrap;
+         align-items:center; }
+.chip { display:inline-flex; align-items:baseline; gap: var(--space-1); font-size: var(--text-micro);
+        color:var(--ink-quiet); background:var(--bg);
+        border:1px solid var(--border); border-radius: var(--radius-flag); padding: var(--space-1) var(--space-3); }
+.chip b { color:var(--ink); font-weight:600; }
+.chip.crit { border-color:var(--crit-line); background:var(--crit-wash); }
+.chip.crit b { color:var(--crit); }
+
+/* ---- three regions: 감지 | 관측 | 조작 ----------------------------------- */
+main { flex:1; min-height:0; display:grid; gap: 0;
+       grid-template-columns:296px minmax(0,1fr) 322px;
+       grid-template-areas:"sense observe act"; }
+.region { min-height:0; min-width:0; display:flex; flex-direction:column; }
+.sense  { grid-area:sense;  background:var(--observe);
+          border-right:1px solid var(--rule); overflow-y:auto; }
+.observe{ grid-area:observe; background:var(--bg); }
+.act    { grid-area:act; background:var(--act);
+          border-left:1px solid var(--border); overflow-y:auto;
+          box-shadow:inset 1px 0 0 var(--line-06); }
+/* region caption: a heading plus a rule that runs to the edge — the rule is
+   the divider, so no boxes are needed to tell the regions apart. */
+.rhead { flex:none; display:flex; align-items:center; gap: var(--space-2);
+         padding: var(--space-3) var(--space-3) var(--space-2); }
+.rhead h2 { margin: 0; font-size: var(--text-micro); font-weight:600; color:var(--ink-2); }
+.rhead .gloss { font-size: var(--text-micro); color:var(--ink-quiet); }
+.rhead::after { content:""; flex:1; height:1px; background:var(--rule); }
+.rbody { flex:1; min-height:0; display:flex; flex-direction:column;
+         gap: var(--space-3); padding: 0 var(--space-3) var(--space-4); }
+.act .rbody { gap: var(--space-3); }
+
+/* ---- block (a grouped set inside a region) ------------------------------ */
+.block > h3 { margin: 0 0 var(--space-2); font-size: var(--text-micro); font-weight:600;
+              color:var(--ink-2); }
+.hint { margin: 0 0 var(--space-2); font-size: var(--text-micro); line-height:1.45; color:var(--ink-quiet); }
+.hint:empty { display:none; }
+
+/* ---- 감지: dial --------------------------------------------------------- */
+.dialwrap { display:flex; flex-direction:column; align-items:center; }
+#scan { display:block; width:100%; max-width:262px; height:auto; }
+.dialnote { margin-top: 0; text-align:center; font-size: var(--text-micro);
+            color:var(--ink-quiet); }
+/* ---- 감지: clearance gauges --------------------------------------------- */
+.gauge { display:grid; grid-template-columns:66px minmax(0,1fr) 58px;
+         align-items:center; gap: var(--space-2); padding: var(--space-1) 0; }
+.gauge .g-k { font-size: var(--text-micro); color:var(--ink-quiet); overflow:hidden;
+              text-overflow:ellipsis; white-space:nowrap; }
+.gauge .g-t { position:relative; height:9px; border-radius: var(--radius-control);
+              background:var(--track); overflow:hidden; }
+.gauge .g-f { position:absolute; inset:0 auto 0 0; width:0;
+              background:var(--gauge); border-radius: var(--radius-control);
+              transition:width .18s linear, background-color .18s linear; }
+.gauge .g-x { position:absolute; top:-2px; bottom:-2px; width:2px;
+              background:var(--line-50); }
+.gauge .g-v { text-align:right; font-size: var(--text-micro); font-weight:600;
+              color:var(--ink); font-variant-numeric:tabular-nums; }
+.gauge.lead .g-v { font-size: var(--text-body); }
+.gauge.lead .g-k { color:var(--ink-2); }
+.gauge.lead .g-t { height:12px; }
+.gauge.miss .g-v, .gauge.miss .g-k { color:var(--ink-quiet); font-weight:400; }
+.g-f.warn { background:var(--warn); }
+.g-f.crit { background:var(--crit); }
+.g-v.warn { color:var(--warn); }
+.g-v.crit { color:var(--crit); }
+/* ---- 감지: flags -------------------------------------------------------- */
+.flags { display:flex; flex-wrap:wrap; gap: var(--space-1); }
+.flag { font-size: var(--text-micro); color:var(--ink-quiet); background:var(--ink-wash);
+        border:1px solid var(--rule); border-radius: var(--radius-flag); padding: 0 var(--space-2);
+        white-space:nowrap; }
+.flag.hit { color:var(--crit); border-color:var(--crit-line);
+            background:var(--crit-wash); font-weight:600; }
+.flag.ok  { color:var(--ink-2); border-color:var(--border); }
+.flag.lost{ color:var(--warn); border-color:var(--warn-line); }
+/* ---- 감지: camera ------------------------------------------------------- */
+.camframe { position:relative; max-width:340px; border-radius: var(--radius-button); overflow:hidden;
+            background:var(--unk); border:1px solid var(--rule); }
+#camimg { width:100%; display:block; }
+#camimg.old { opacity:0.42; filter:saturate(0.4); }
+.camveil { position:absolute; inset:auto 0 0 0; padding: var(--space-1) var(--space-2);
+           font-size: var(--text-micro); color:var(--warn);
+           background:linear-gradient(transparent, var(--scrim)); }
+.camveil:empty { display:none; }
+#camnone { color:var(--ink-quiet); font-size: var(--text-micro); padding: var(--space-5) 0;
+           text-align:center; }
+.camcap { font-size: var(--text-micro); color:var(--ink-quiet); margin-top: var(--space-1);
+          overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.camcap:empty { display:none; }
+
+/* ---- 관측: map ---------------------------------------------------------- */
+.observe .rbody { gap: var(--space-2); padding: 0 var(--space-3) var(--space-3); }
+.maphead { flex:none; display:flex; align-items:center; gap: var(--space-3);
+           flex-wrap:wrap; }
+.legend { display:flex; gap: var(--space-3); flex-wrap:wrap; font-size: var(--text-micro);
+          color:var(--ink-quiet); }
+.key { display:inline-flex; align-items:center; gap: var(--space-1); }
+.sw { width:14px; height:3px; border-radius: var(--radius-control); flex:none; }
+.sw.route { background:var(--route); }
+.sw.alt { background:var(--alt); }
+.sw.hist { background:var(--hist); }
+.sw.goal { width:9px; height:9px; border-radius: var(--radius-control); background:var(--goal); }
+.pin { font-size: var(--text-micro); color:var(--pin); margin-left: auto;
+       font-variant-numeric:tabular-nums; }
+.mapwrap { position:relative; flex:1; min-height:180px;
+           background:var(--unk); border:1px solid var(--rule);
+           border-radius: var(--radius-button); overflow:hidden; cursor:crosshair; }
+.mapwrap.grabbing { cursor:grabbing; }
+#map { position:absolute; inset:0; width:100%; height:100%; display:block; }
+.coords:empty { display:none; }
+.coords { position:absolute; left:10px; bottom:8px; font-size: var(--text-micro);
+          color:var(--ink-2); background:var(--scrim-raise);
+          border:1px solid var(--border); border-radius: var(--radius-control);
+          padding: 0 var(--space-2); pointer-events:none;
+          font-variant-numeric:tabular-nums; }
+.viewbar { position:absolute; top:8px; right:8px; max-width:calc(100% - 16px); display:flex; flex-wrap:wrap; gap: var(--space-1);
+           justify-content:flex-end; align-items:center; }
+.viewbar ui-button { flex: none; }
+#zoompct { font-size: var(--text-micro); color:var(--ink-2); background:var(--scrim-raise);
+           border:1px solid var(--border); border-radius: var(--radius-control); padding: 0 var(--space-2);
+           font-variant-numeric:tabular-nums; }
+.stale { position:absolute; inset:0; display:flex; align-items:center;
+         justify-content:center; background:var(--scrim-top);
+         color:var(--warn); font-size: var(--text-label); pointer-events:none; }
+.empty-note { position:absolute; inset:0; display:flex; align-items:center;
+              justify-content:center; color:var(--ink-quiet); font-size: var(--text-label);
+              pointer-events:none; }
+.goal-state { flex:none; font-size: var(--text-micro); color:var(--ink-2);
+              overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+/* metrics strip: the map's own numbers, under the map, not in a far card */
+.strip { flex:none; display:grid; gap: 1px; background:var(--rule);
+         border:1px solid var(--rule); border-radius: var(--radius-button); overflow:hidden;
+         grid-template-columns:repeat(6, minmax(0,1fr)); }
+.cell { background:var(--observe); padding: var(--space-1) var(--space-2) var(--space-2); min-width:0; }
+.cell .lbl { font-size: var(--text-micro); color:var(--ink-quiet); overflow:hidden;
+             text-overflow:ellipsis; white-space:nowrap; }
+.cell .val { font-size: var(--text-label); font-weight:600; color:var(--ink); margin-top: 1px;
+             font-variant-numeric:tabular-nums; overflow:hidden;
+             text-overflow:ellipsis; white-space:nowrap; }
+.cell.warnval .val { color:var(--warn); font-size: var(--text-micro); font-weight:500; }
+
+/* ---- 조작: raised controls ---------------------------------------------- */
+.act .block { background:var(--ink-wash);
+              border:1px solid var(--border); border-radius: var(--radius-button);
+              padding: var(--space-3) var(--space-3) var(--space-3); }
+.act .block.estop { border-color:var(--status-crit-a45);
+                    background:var(--status-crit-a07); }
+.btnrow { display:flex; gap: var(--space-1); }
+.btnrow ui-button { flex:1; }
+.act label { display:block; margin: var(--space-2) 0 var(--space-1); }
+.act select, .act input[type="number"] { width:100%; box-sizing:border-box;
+  background:var(--act-2); color:var(--ink); border:1px solid var(--border);
+  border-radius: var(--radius-control); padding: var(--space-2); font:inherit; }
+#navsessionstart { margin-top: var(--space-2); width:100%; }
+.btnrow + .btnrow { margin-top: var(--space-1); }
+.sub { margin-top: var(--space-2); padding-top: var(--space-2); border-top:1px solid var(--rule); }
+.sub.first { margin-top: 0; padding-top: 0; border-top:0; }
+.sub > h4 { margin: 0 0 var(--space-1); font-size: var(--text-micro); font-weight:600;
+            color:var(--ink-2); }
+.mapping-error { color:var(--serious); font-size: var(--text-micro); margin-top: var(--space-2); }
+.mapping-error:empty { display:none; }
+.pad { display:grid; grid-template-columns:repeat(3,1fr); gap: var(--space-1); }
+
+.keys { display:grid; grid-template-columns:repeat(3,1fr); gap: var(--space-1);
+        margin-top: var(--space-1); }
+.keys span { display:flex; align-items:center; justify-content:center;
+             background:var(--ink-wash); border:1px solid var(--rule);
+             border-radius: var(--radius-control); padding: var(--space-1) 0; font-size: var(--text-micro);
+             color:var(--ink-quiet); user-select:none; }
+.keys span.on { border-color:var(--route); color:var(--ink);
+                background:var(--route-wash); }
+.srow { display:flex; justify-content:space-between; gap: var(--space-2);
+        font-size: var(--text-micro); padding: 0 0; }
+.srow .k { color:var(--ink-quiet); }
+.srow .v { color:var(--ink); font-weight:500;
+           font-variant-numeric:tabular-nums; overflow:hidden;
+           text-overflow:ellipsis; white-space:nowrap; }
+
+@media (width <= 1279px) {
+  main { grid-template-columns:minmax(0,1fr) 322px;
+         grid-template-areas:"observe act" "sense act";
+         grid-template-rows:minmax(54vh,1fr) auto; }
+  .sense { border-right:0; border-top:1px solid var(--rule); overflow:visible; }
+  .sense .rbody { flex-direction:row; flex-wrap:wrap; align-items:flex-start; }
+  .sense .block { flex:1 1 240px; }
+}
+@media (width <= 900px) {
+  main { grid-template-columns:minmax(0,1fr);
+         grid-template-areas:"observe" "sense" "act";
+         grid-template-rows:auto; }
+  body { height:auto; }
+  .observe .mapwrap { flex:none; height:58vh; }
+  .act { border-left:0; border-top:1px solid var(--border); }
+  .strip { grid-template-columns:repeat(3, minmax(0,1fr)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition:none !important; }
+}
+/* placement helpers — last so they win over the block rules above */
+.stack-top { margin-top: var(--space-2); } .flush-bottom { margin-bottom: 0; } .wrap-pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+/* Operations hierarchy: status first, map central, commands in the act region. */
+header { padding: var(--space-3) var(--space-4); gap: var(--space-4); }
+body { word-break:keep-all; overflow-wrap:anywhere; }
+.brand { font-size: var(--text-body); letter-spacing:-.03em; }
+.brand small { font-size: var(--text-micro); color:var(--ink-quiet); letter-spacing:.12em; margin-left: var(--space-1); }
+.statusline { display:grid; grid-template-columns:1.1fr 1fr 1fr 1.4fr; background:var(--observe); border-bottom:1px solid var(--border); flex:none; }
+.statusitem { padding: var(--space-3) var(--space-4); border-right:1px solid var(--rule); min-width:0; }
+.statusitem label { display:block; color:var(--ink-quiet); font-size: var(--text-micro); margin-bottom: var(--space-1); }
+.statusitem strong { display:block; color:var(--ink); font-size: var(--text-value); letter-spacing:-.025em; }
+.statusitem small { display:block; margin-top: var(--space-1); font-size: var(--text-micro); color:var(--ink-quiet); }
+.battery-track { width:72px; height:4px; background:var(--track); margin-top: var(--space-2); border-radius: var(--radius-control); overflow:hidden; }
+#batteryfill { height:100%; background:var(--ink-2); width:0; }
+main { grid-template-columns:250px minmax(0,1fr) 350px; }
+.rhead { padding-top: var(--space-4); padding-bottom: var(--space-3); }
+.rhead h2 { font-size: var(--text-label); }
+.rbody { gap: var(--space-4); }
+.act .block { border-radius: var(--radius-button); padding: var(--space-3); }
+.block > h3 { font-size: var(--text-label); color:var(--ink); }
+input:focus-visible, summary:focus-visible { outline:2px solid var(--focus-ring); outline-offset:3px; }
+.hint { line-height:1.6; }
+.estop .btnrow { display:inline-flex; width:calc(50% - 3px); margin-top: 0; vertical-align:top; }
+
+#mappingcard .btnrow { display:grid; grid-template-columns:1fr 1fr; }
+#mapsave { grid-column:1/-1; }
+.switchrow { display:flex; align-items:center; justify-content:space-between; gap: var(--space-4); padding: var(--space-2) 0; border-top:1px solid var(--rule); }
+.switchrow span { display:block; font-size: var(--text-micro); color:var(--ink); }
+.switchrow small { display:block; color:var(--ink-quiet); font-size: var(--text-micro); margin-top: var(--space-1); }
+.switchrow input { appearance:none; width:38px; height:22px; flex:none; border-radius: var(--radius-panel); border:1px solid var(--border); background:var(--act-2); position:relative; cursor:pointer; }
+.switchrow input::after { content:''; position:absolute; width:14px; height:14px; left:3px; top:3px; border-radius: var(--radius-flag); background:var(--ink-quiet); transition:transform .15s; }
+.switchrow input:checked { background:var(--route); }
+.switchrow input:checked::after { transform:translateX(16px); background:white; }
+.switchrow input:disabled { opacity:.35; cursor:not-allowed; }
+.command-status { padding: var(--space-2) var(--space-3); margin: 0; border-left:2px solid var(--route); background:var(--observe); font-size: var(--text-micro); }
+.procedure { margin: var(--space-2) 0; font-size: var(--text-micro); color:var(--ink-quiet); }
+.procedure summary { cursor:pointer; padding: var(--space-1) 0; }
+@media (width <= 1279px) { main { grid-template-columns:minmax(0,1fr) 350px; } }
+@media (width <= 900px) {
+ header { padding: var(--space-3); flex-wrap:wrap; gap: var(--space-2); }
+ .chips { margin-left: 0; gap: var(--space-1); }
+ .chip { font-size: var(--text-micro); padding: 0 var(--space-2); }
+ .statusline { grid-template-columns:1fr 1fr; }
+ .statusitem { padding: var(--space-2) var(--space-3); border-bottom:1px solid var(--rule); }
+ .statusitem strong { font-size: var(--text-body); }
+ main { grid-template-columns:minmax(0,1fr); grid-template-areas:'observe' 'act' 'sense'; }
+ .observe .mapwrap { height:42vh; min-height:260px; }
+ .act { overflow:visible; }
+ .act .rbody { padding-bottom: var(--space-5); }
+}

@@ -10,7 +10,7 @@
 
 **Spec:** [D-807](../adr/D-807-account-service-credential-ownership-and-acceptance.md), [D-757](../adr/D-757-rosy-account-unified-app-sessions.md), [Account protocol](../reference/rosy-account-protocol.md). 본 계획은 [기존 통합 계획](2026-10-14-rosy-account-completion.md)의 잔여 작업을 구체화하며 역사 검증 기록을 대체하지 않는다.
 
-**Status:** 사용자 계획 검토 완료, 현재 세션에서 직접 구현·검증 진행 승인(2026-10-19). 지속 목표는 active다. 설치·실사용 수용은 별도 증거로 판단한다.
+**Status:** 사용자 계획 검토 완료, 현재 세션에서 직접 구현·검증 진행 승인(2026-10-19). 지속 목표는 active다. 설치·실사용 수용은 별도 증거로 판단한다. 2026-10-20 배포·전환 실적은 [후속 기록](../validation/account-service-2026-10-20/result.md)이 잇는다(사람·단말 수용은 여전히 열림).
 
 ## Global Constraints
 

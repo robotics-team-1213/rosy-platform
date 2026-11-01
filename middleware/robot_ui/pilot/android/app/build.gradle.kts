@@ -32,7 +32,7 @@ val shared = tasks.register<Sync>("sharedContracts") {
     include("**/account/*.kt", "**/settings/LinkPolicy.kt", "**/settings/DiscoveryBudget.kt", "**/settings/SiteLink.kt",
         "**/settings/SiteLinkRecord.kt", "**/settings/PairingUri.kt", "**/settings/OverheadServiceRecord.kt",
         "**/pairing/Pairing.kt", "**/link/PinnedTrust.kt", "**/link/Protocol.kt",
-        "**/health/DeviceHealth.kt", "**/health/PhoneHeat.kt", "**/health/ScreenCoolingPolicy.kt", "**/health/ScreenPower.kt")
+        "**/health/DeviceHealth.kt", "**/health/ScreenPower.kt")
     into(layout.buildDirectory.dir("generated/shared-contracts"))
 }
 val sharedScreenResources = tasks.register<Sync>("sharedScreenResources") {
@@ -60,6 +60,7 @@ android {
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = "17" }
     sourceSets.getByName("main").java.srcDir(layout.buildDirectory.dir("generated/shared-contracts"))
+    sourceSets.getByName("main").java.srcDir("../../../../../shared/android/peer")  // D-939 shared Android sources
     sourceSets.getByName("main").java.srcDir(layout.buildDirectory.dir("generated/pilot-palette"))
     sourceSets.getByName("main").assets.srcDir(layout.buildDirectory.dir("generated/pilot-assets"))
     sourceSets.getByName("main").res.srcDir(layout.buildDirectory.dir("generated/screen-resources"))

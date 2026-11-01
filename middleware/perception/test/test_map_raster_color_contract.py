@@ -15,7 +15,8 @@ from pathlib import Path
 
 PACKAGE_ROOT = Path(__file__).resolve().parent.parent
 RASTER = PACKAGE_ROOT / 'sensors' / 'sensing' / 'map_raster.py'
-CONSOLE = PACKAGE_ROOT / 'web' / 'diagnostic.html'
+CONSOLE = PACKAGE_ROOT / 'web' / 'diagnostic.css'
+SCRIPT = PACKAGE_ROOT / 'web' / 'diagnostic-core.js'
 
 
 def server_rgb():
@@ -38,7 +39,7 @@ def console_tokens():
     found = {}
     for token in ('unk', 'free', 'wall'):
         match = re.search(rf'--{token}:\s*#([0-9a-fA-F]{{6}})', text)
-        assert match, f'diagnostic.html에 --{token} 토큰이 없다'
+        assert match, f'diagnostic.css에 --{token} 토큰이 없다'
         found[token] = match.group(1).lower()
     return found
 
@@ -72,10 +73,10 @@ class MapRasterColorContractTest(unittest.TestCase):
     def test_the_canvas_reads_its_colours_from_the_css_roles(self):
         """캔버스 색은 사본이 아니라 :root 속성 이름이다(D-77). 값은 그리는 순간 RosyPalette가 푼다."""
         text = CONSOLE.read_text(encoding='utf-8')
-        root = text.split('<style>', 1)[1].split('}', 1)[0]
+        root = text.split('}', 1)[0]
         declared = set(re.findall(r'--([a-z0-9-]+):', root))
-        block = re.search(r'const T_VARS = \{([^}]+)\}', text)
-        self.assertIsNotNone(block, 'diagnostic.html에 const T_VARS 표가 없다')
+        block = re.search(r'const T_VARS = \{([^}]+)\}', SCRIPT.read_text(encoding='utf-8'))
+        self.assertIsNotNone(block, 'diagnostic-core.js에 const T_VARS 표가 없다')
         self.assertNotRegex(block.group(1), r'#[0-9a-fA-F]{3,8}', 'T_VARS에 원시 색이 있다')
         names = re.findall(r"\w+:\s*'--([a-z0-9-]+)'", block.group(1))
         shared = {'ink', 'ink-quiet', 'line-06', 'line-50'}  # tokens.css, loaded before the page sheet

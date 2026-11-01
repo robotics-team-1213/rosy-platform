@@ -28,6 +28,8 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+    // Shared Android sources (D-939): one copy for every ROSY app, never an app-local duplicate.
+    sourceSets.getByName("main").java.srcDir("../../../../shared/android/peer")
 
     buildFeatures {
         compose = true

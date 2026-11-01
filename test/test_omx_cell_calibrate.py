@@ -84,3 +84,21 @@ def test_a_region_carried_from_another_site_does_not_skip_the_pivot(tmp_path, mo
     fitted = {k: v for k, v in region.items() if k != "source"}  # the same region measured there: no pivot
     seen.clear()
     assert cc.self_calibrate(object(), config, *args, {"regions": [fitted]}, None, None)[1] is None and seen == []
+
+
+def test_the_auto_pivot_point_judges_clutter_against_the_sites_measured_surface(monkeypatch):
+    pytest.importorskip("cv2")
+    import cell_objects
+    import cell_observe
+    seen = {}
+
+    def foreground(img, roi, **kw):
+        seen.update(kw)
+        return np.zeros((roi[3] - roi[1], roi[2] - roi[0]), np.uint8)
+
+    monkeypatch.setattr(cell_objects, "foreground", foreground)
+    monkeypatch.setattr(cell_observe, "predicted_pixel", lambda c, k, s, p: to_px(p))
+    cell = type("Cell", (), {"frame": lambda self, name: np.zeros((480, 640, 3), np.uint8)})()
+    site = {"surface_lab": [74, 135, 88], "surface_px": [[0, 0], [399, 0], [399, 399], [0, 399]], "auto_roi": [100, 100, 300, 300]}
+    assert cc.auto_pivot_point(cell, {"sites": {"pallet": site}}, {}, "pallet", (0.0, 0.2)) is not None
+    assert seen["surface_lab"] == [74, 135, 88] and seen["surface_px"] == site["surface_px"]

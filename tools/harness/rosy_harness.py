@@ -635,9 +635,8 @@ def _history_refs(repo: Path) -> tuple[list[str], str | None]:
             refs.append(requested)
         else:
             note = f"HARNESS_BASE_REF {requested[:12]} does not resolve; compared with the origin/main merge base"
-    merge_base = _git(repo, "merge-base", "HEAD", "origin/main")
-    if merge_base and merge_base.strip():
-        refs.append(merge_base.strip())
+    # Local main too: it runs ahead of origin/main between publishes (D-868), and an unpublished entry lost a line (2026-11-01)
+    refs += [b.strip() for t in ("origin/main", "main") if (b := _git(repo, "merge-base", "HEAD", t)) and b.strip()]
     if not refs:
         missing = "append-only base unavailable (no origin/main or shallow clone); compared with HEAD only"
         note = f"{note}; {missing}" if note else missing

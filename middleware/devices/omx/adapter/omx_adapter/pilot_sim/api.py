@@ -42,6 +42,7 @@ PILOT_ASSETS = {
     "screens/drive-video.js": "application/javascript",
     "screens/inputs.js": "application/javascript",
     "screens/robot-recording.js": "application/javascript",
+    "screens/show-code.js": "application/javascript",
     "screens/arm.js": "application/javascript",
     "screens/compose.js": "application/javascript", "widgets/joint_jog.js": "application/javascript",
     "widgets/gripper.js": "application/javascript",
@@ -212,7 +213,9 @@ def create_pilot_sim_app(*, runtime: Any, pilot_root: Path, common_root: Path,
                             gripper=runtime.gripper,
                             camera=bool(getattr(runtime, "camera_available", False)),
                             recording=getattr(runtime, "capture", None) is not None,
-                            controls=runtime.controls())
+                            controls=runtime.controls(),
+                            start_pose=getattr(runtime, "start_pose", None),
+                            task=getattr(runtime, "task", None))
 
     @app.post(f"{PREFIX}/pair", status_code=201)
     def pair(request: PairRequest) -> dict[str, str]:

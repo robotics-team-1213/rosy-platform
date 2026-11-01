@@ -194,15 +194,17 @@ def test_the_global_limit_holds_across_addresses(robot):
     assert statuses[:30] == [401] * 30 and statuses[30] == 429
 
 
-@pytest.mark.parametrize("host", ["8.8.8.8", "100.64.0.1", "169.254.1.1", "testclient", "2001:db8::1"])
+@pytest.mark.parametrize("host", ["8.8.8.8", "100.128.0.1", "169.254.1.1", "testclient", "2001:db8::1"])
 def test_pairing_is_refused_outside_the_robot_lan(robot, host):
     tc, _svc, _state, _events = robot(client=(host, 50000))
     write_code(robot.boot)
     assert _pair(tc).status_code == 403
 
 
-@pytest.mark.parametrize("host", ["127.0.0.1", "10.42.0.12", "172.20.1.1", "192.168.0.9", "::ffff:192.168.0.9"])
+@pytest.mark.parametrize("host", ["127.0.0.1", "10.42.0.12", "172.20.1.1", "192.168.0.9", "::ffff:192.168.0.9",
+                                  "100.64.0.1", "100.127.255.254", "fd7a:115c:a1e0::5"])
 def test_pairing_is_accepted_from_private_ap_and_loopback_addresses(robot, host):
+    """D-944: the team tailnet (100.64/10, Tailscale ULA) pairs with the same LCD code."""
     tc, _svc, _state, _events = robot(client=(host, 50000))
     write_code(robot.boot)
     assert _pair(tc).status_code == 201
@@ -607,6 +609,56 @@ def test_state_socket_refuses_past_the_client_cap_and_shares_one_frame(robot, mo
         assert closed.value.code == 1013 and "2 clients" in closed.value.reason
     with tc.websocket_connect(url) as socket:            # a closed socket frees its slot
         assert isinstance(socket.receive_json(), dict)
+
+
+def test_event_socket_refuses_past_the_client_cap(robot, monkeypatch):
+    """Network load: /ws/events has the same 1013 client cap as /ws/state."""
+    from starlette.websockets import WebSocketDisconnect
+    import core_api_web.api.ws as ws_module
+
+    monkeypatch.setattr(ws_module, "MAX_EVENT_CLIENTS", 1)
+    tc, svc, _state, _events = robot()
+    events = svc.events
+    url = "/ws/events?token=rosy-dev-" + "viewer"
+    with tc.websocket_connect(url) as socket:
+        with pytest.raises(WebSocketDisconnect) as closed:
+            with tc.websocket_connect(url) as extra:
+                extra.receive_json()
+        assert closed.value.code == 1013 and "1 clients" in closed.value.reason
+        events.publish("test.ping")                      # published off the server loop
+        assert _receive_type(socket, "test.ping")
+    with tc.websocket_connect(url) as socket:            # a closed socket frees its slot
+        events.publish("test.pong")
+        assert _receive_type(socket, "test.pong")
+
+
+def _receive_type(socket, type_: str, tries: int = 10) -> bool:
+    """Other events (config.changed, ...) may arrive first."""
+    return any(socket.receive_json()["type"] == type_ for _ in range(tries))
+
+
+def test_a_slow_event_reader_is_closed_instead_of_growing_core_memory(robot, monkeypatch):
+    """A reader that falls EVENT_BACKLOG_MAX behind gets 1013 and refills the gap with since_seq."""
+    import asyncio
+    from starlette.websockets import WebSocket, WebSocketDisconnect
+    import core_api_web.api.ws as ws_module
+
+    monkeypatch.setattr(ws_module, "EVENT_BACKLOG_MAX", 3)
+    send_json = WebSocket.send_json
+
+    async def slow_send(self, data, mode="text"):
+        await asyncio.sleep(0.05)
+        await send_json(self, data, mode)
+    monkeypatch.setattr(WebSocket, "send_json", slow_send)
+    tc, svc, _state, _events = robot()
+    events = svc.events
+    with pytest.raises(WebSocketDisconnect) as closed:
+        with tc.websocket_connect("/ws/events?token=rosy-dev-" + "viewer") as socket:
+            for i in range(20):
+                events.publish("test.flood", data={"i": i})
+            for _ in range(21):
+                socket.receive_json()
+    assert closed.value.code == 1013 and "since_seq" in closed.value.reason
 
 
 # --- 2026-09-24 security review ------------------------------------------------

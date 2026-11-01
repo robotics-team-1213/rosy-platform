@@ -85,7 +85,7 @@ def _pairing_word(request: Request, tls: bool) -> str:
 @connection_router.get('/connection', response_model=ConnectionInfo)
 def connection(request: Request, svc: CoreServicesLike = Depends(get_services)):
     host = request.client.host if request.client else ''
-    if not client_allowed(host):
+    if not client_allowed(host, tailnet=True):
         raise ReasonError(403, 'LAN_REQUIRED', None)
     _admit(request, host)
     tls = bool((svc.config.get('network') or {}).get('tls'))

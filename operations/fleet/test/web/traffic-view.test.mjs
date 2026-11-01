@@ -58,9 +58,9 @@ test('a zone occupancy sentence is a chip on the zone and stays in the list', ()
     }}, el: id => elements[id], css: token => token, colorOf: () => '',
       drawChip: (_ctx, _grid, _x, _y, text) => chips.push(text), on: true};
     drawTraffic(ctx, (x, y) => ({x, y}), 100, options);
-    assert.deepEqual(chips, ['점유 1/2 · 대기 1']);
-    assert.ok(elements['map-traffic-status'].rows.some(row => row.textContent.includes('점유 1/2 · 대기 1')));
+    assert.deepEqual(chips, ['yard · 점유 1/2 · 대기 1']);
+    assert.ok(elements['map-traffic-status'].rows.some(row => row.textContent.includes('yard · 점유 1/2 · 대기 1')));
     drawTraffic(ctx, (x, y) => ({x, y}), 100, {...options, on: false});
-    assert.deepEqual(chips, ['점유 1/2 · 대기 1']);
+    assert.deepEqual(chips, ['yard · 점유 1/2 · 대기 1']);
   } finally {globalThis.document = previous; globalThis.window = previousWindow;}
 });

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import threading
 from pathlib import Path
@@ -150,8 +151,11 @@ def test_again_retains_original_full_base_when_main_moves_during_preparation(ful
 
     monkeypatch.setattr(land, "run_tests", check)
     monkeypatch.setattr(land.land_queue, "wait", lambda *a, **k: None)
+    emitted = []
+    monkeypatch.setattr(land.land_events, "emit", lambda event, **f: emitted.append(event))
     restored = land.land_prepare.again(land, wt, "feat/x", args, sys.executable, None, None,
                                        [["pkg/test"]], "")
+    assert emitted[0] == "released", "the turn's lock ends where the work moves outside"
     assert restored == base and path.read_bytes() == original
     assert set(git(main, "diff", "--name-only", restored, "main").splitlines()) == {"lib/peer.py", "lib/later.py"}
 
@@ -250,3 +254,68 @@ def test_batch_leader_preserves_other_preparing_and_older_pending_claims(tmp_pat
     assert len(naps) == 1
     assert json.loads(leader.read_text())["status"] == "preparing"
     assert json.loads(later.read_text())["status"] == "pending"
+
+
+def test_a_pending_landing_continues_on_mains_new_landing_code_with_its_own_ticket(tmp_path, monkeypatch):
+    """2026-10-31: queue fixes never reached landers already waiting; they deadlocked until restarted by hand."""
+    prep, queue, q = land.land_prepare, land.land_queue, tmp_path / ".git" / "rosy-land-queue"
+    busy = [queue.take(q, f"feat/p{n}", status="preparing") for n in range(prep.MAX_PREPARING)]
+    mine = queue.take(q, "feat/mine", status="pending")
+    monkeypatch.setattr(prep, "STARTED", "old rules")
+    seen = []
+
+    def run(argv, env):
+        seen.append((argv, env))
+        return 7
+
+    monkeypatch.setattr(prep, "rules", lambda: "old rules")
+    assert prep.relaunch(land, q, mine, run) is None and not seen, "same rules: carry on"
+    monkeypatch.setattr(prep, "rules", lambda: "new rules")
+    with pytest.raises(SystemExit) as stopped:
+        prep.slot(q, mine, sleep=lambda s: pytest.fail("waited instead of relaunching"),
+                  changed=lambda: prep.relaunch(land, q, mine, run))
+    argv, env = seen[0]
+    assert stopped.value.code == 7 and argv[3] == str(tmp_path / "tools" / "land.py")
+    assert env[queue.TICKET_ENV] == str(mine) and env[land.land_checks.OWN_COPY] == "1"
+    busy.pop().unlink()  # a free slot: the landing prepares on its own rules, never relaunching mid-pretest
+    prep.slot(q, mine, changed=lambda: pytest.fail("relaunched with a slot free"))
+    assert json.loads(mine.read_text())["status"] == "preparing"
+
+
+def test_mains_land_py_adopts_the_parents_ticket(tmp_path, monkeypatch):
+    queue = land.land_queue
+    ahead = queue.take(tmp_path, "feat/ahead", status="waiting")
+    mine = queue.take(tmp_path, "feat/mine", status="pending")
+    monkeypatch.setattr(queue, "queue_dir", lambda wt: tmp_path)
+    monkeypatch.setattr(queue, "_held", [])
+    monkeypatch.setenv(queue.TICKET_ENV, str(mine))
+    qdir, ticket = queue.enter(tmp_path, "feat/mine", "preparing")
+    assert ticket == mine and sorted(tmp_path.glob("[0-9]*.json")) == [ahead, mine], "same place, no new ticket"
+    assert json.loads(mine.read_text())["status"] == "preparing" and queue.TICKET_ENV not in os.environ
+
+
+@pytest.mark.parametrize("main_moves,reds", [(True, 1), (True, 2), (False, 1)])
+def test_a_main_red_stop_prepares_once_more_only_when_main_moved(repos, monkeypatch, main_moves, reds):
+    """D-889 14, 11-01: a pretest on a 66 min old main stopped on a MAIN-RED test main had fixed meanwhile."""
+    main, wt = repos
+    merged = []
+    monkeypatch.setattr(land.land_guards, "first", lambda *a, **k: [])
+    monkeypatch.setattr(land.land_speculate, "prepare", lambda *a, **k: None)
+    monkeypatch.setattr(land, "select", lambda *a, **k: ([["pkg/test"]], "FULL tier (test)"))
+
+    def run(wt_, args, invocations, logdir, tag):
+        merged.append(land.land_mainred.merged_main(wt_))
+        if len(merged) == 1 and main_moves:
+            commit(main, {"fixed.txt": "x\n"}, "main fixes its red test")
+        if len(merged) <= reds:
+            raise land.Stop("NEW failure in pkg/test; MAIN-RED: 1 of 1 NEW id(s) also fail on main")
+        return []
+    monkeypatch.setattr(land, "run_tests", run)
+    args = land.argparse.Namespace(tests="auto", no_cache=True)
+    if main_moves and reds == 1:
+        land.land_prepare.prepare(land, wt, "feat/x", args, sys.executable, None, None)
+        assert len(merged) == 2 and merged[1] == git(main, "rev-parse", "HEAD") != merged[0]
+    else:
+        with pytest.raises(land.Stop, match="MAIN-RED"):
+            land.land_prepare.prepare(land, wt, "feat/x", args, sys.executable, None, None)
+        assert len(merged) == (2 if main_moves else 1), "once more at most, and only on a moved main"
