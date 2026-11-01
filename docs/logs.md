@@ -13413,7 +13413,6 @@ osy-d395-s1d\`.
 - 결정: 없음
 - 교훈: 새 교훈 1건
 
-<<<<<<< HEAD
 ## 2026-11-01 · uncommitted · D-954 현장 마커 프로필과 팔 마커 50번부터
 
 - 변경: D-954(D-933 8항 대체)와 로그 행. `deploy/site/marker-profile.json.example`(소유자별 번호 범위, 팔 슬롯↔팔 이름)과 `marker_profile.py check`(같은 계열 겹침 거절, ChArUco는 경고, `--site-cameras` 번호 소유 확인). 팔 슬롯을 35→50부터 3개로 옮김(`cell_print_sheets.arm_ids`, `cell_frame.slot_ids`, `cell_marks` 기본값, Cell 화면 목록). 천장 팔 마커 20~22 예약.
@@ -13424,7 +13423,7 @@ osy-d395-s1d\`.
 - 변경: 없음(기록만). origin/main 동기화(0699b12647) 뒤 게시할 커밋에 녹색 FULL 착지 기록이 없어 이 기록 커밋을 `--tests full`로 착지한다. 같은 main과 같은 브랜치는 batch로 흡수되어 시험이 돌지 않았다.
 - 증거: `publish_main.py` dry run이 "no commit past origin/main has a green FULL land record"
 - gate 변화: 없음
-=======
+
 ## 2026-11-01 · uncommitted · fix(land): 차례에서는 변화분이 닿는 자기 호출만 다시 돈다 (D-889 추가 18)
 - 변경: `land_selection.select`의 landed 경로가 자기 호출을 하나씩 `overlaps`로 거른다.
 - 증거: 11-01 17:48~18:45 main 57분 정지. arm-transfer-recheck 차례 2라운드가 자기 호출 485개를 다시 돌았다. 원격 시험은 착지 기록에 남긴다.
@@ -13438,7 +13437,6 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: D-889 추가 19(사용자 목표 2026-11-01)
 - 교훈: docs/solutions/workflow-issues/landings-gave-the-turn-back-and-reran-everything-2026-11-01.md에 이어 적는다
->>>>>>> fix/land-turn-graded-cap
 
 ## 2026-11-01 · uncommitted · fix(land): 모두 건너뛴 파일의 exit 5는 판정 (D-889 추가 20)
 - 변경: `land_cache.unusable`이 요약 줄이 건너뜀뿐인 exit 5를 판정으로 본다(`ALL_SKIPPED`).
