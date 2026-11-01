@@ -17,6 +17,10 @@ from concurrent.futures import ThreadPoolExecutor
 import pytest
 
 
+class _ExternalShutdown(Exception):
+    """Stand-in for rclpy.executors.ExternalShutdownException."""
+
+
 @pytest.fixture
 def node_module(monkeypatch):
     """rclpy 가 없어도(호스트) 있어도(ROS) 같은 가짜로 core.node 를 새로 읽는다."""
@@ -24,6 +28,7 @@ def node_module(monkeypatch):
     executors = types.ModuleType("rclpy.executors")
     node = types.ModuleType("rclpy.node")
     executors.MultiThreadedExecutor = object
+    executors.ExternalShutdownException = _ExternalShutdown
     node.Node = object
     rclpy.executors = executors
     rclpy.node = node
@@ -301,10 +306,6 @@ def test_events_executor_is_spun_natively_and_needs_no_pool_drain(node_module, m
     assert node.get_logger().warnings == []
 
 
-class _ExternalShutdown(Exception):
-    pass
-
-
 def test_events_spin_ending_on_context_shutdown_returns_like_threaded(node_module, monkeypatch):
     # Real EventsExecutor.spin() raises ExternalShutdownException when the context goes down.
     calls: list[str] = []
@@ -317,8 +318,6 @@ def test_events_spin_ending_on_context_shutdown_returns_like_threaded(node_modul
     experimental = types.ModuleType("rclpy.experimental")
     experimental.EventsExecutor = lambda: Raising(calls)
     monkeypatch.setitem(sys.modules, "rclpy.experimental", experimental)
-    monkeypatch.setattr(sys.modules["rclpy.executors"], "ExternalShutdownException",
-                        _ExternalShutdown, raising=False)
     monkeypatch.setenv("ROSY_CORE_EXECUTOR", "events")
     node = _bare_node(node_module, calls)
     node.run()
