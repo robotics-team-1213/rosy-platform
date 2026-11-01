@@ -650,3 +650,9 @@
 - 변경: `work/policy-page.js`가 다른 작업 화면처럼 `rosy-console-token`을 credential로 보내고 시작할 때 `developmentToken()`을 부른다. 전에는 개발 세션에서 이 화면만 `인증 필요`로 보였고, 머리의 `로그인`이 이미 로그인된 탭을 `/console`로 넘겨 "누르면 관제 홈으로 간다"로 보였다.
 - 증거: 실제 `create_app` 개발 모드 + Chromium에서 `/console?view=work&show=done` → 정책 링크 클릭 → `/console/policy`에 머물고 `운영자` 표시. `test_development_console_browser.py`에 `/console/policy`를 더했고 고치기 전 실패·후 통과를 확인했다.
 - gate 변화: 없음. CE: 새 교훈 `docs/solutions/logic-errors/fleet-page-without-tab-token-bounces-dev-login-to-console-2026-10-31.md`.
+
+## 2026-11-01 · uncommitted · 지도 장소 라벨은 장소 ID, 구역 칩에 구역 이름
+
+- 변경: `map/map-view.js`가 장소 점 옆에 목록 순번(`index + 1`) 대신 `place.id`를 쓴다. 순번은 지도를 고칠 때마다 바뀌고 trip·API·바닥 표시와 이어지지 않았다. `map/traffic-view.js` 구역 칩이 `<구역> · 점유 a/b · 대기 n`이라 같은 문장의 칩 여러 개를 구분한다. Cell 화면 팔 마커 목록은 D-954 번호(50~94, 팔 3개).
+- 증거: `node --test` traffic-view·traffic-layer·site-map 41 PASS(loader 포함).
+- gate 변화: 없음. CE: 해당 없음.

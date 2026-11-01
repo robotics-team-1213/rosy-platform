@@ -13220,6 +13220,12 @@ osy-d395-s1d\`.
 - 결정: 없음(①② 결정 요청)
 - 교훈: `docs/solutions/logic-errors/owner-receipt-time-must-cover-its-phases-2026-10-31.md`, `docs/solutions/deployment/sim-cell-owner-on-a-lab-pc-needs-a-device-free-namespace-2026-10-31.md`, 홈 교훈 갱신
 
+## 2026-10-31 · uncommitted · shared: D-939 앱 연동 공통 소스
+- 변경: 이름만 다른 피어 서명·첫 접촉 CA 고정·Keystore 신원 사본(Pilot `PeerProof`/`PeerTls`/`AndroidPeerIdentity`, Cam `CameraProof`/`CameraTls`/`AndroidCameraIdentity`)을 `shared/android/peer` 한 곳으로 모았다. 두 앱이 `srcDir`로 함께 컴파일한다. 신원은 `AndroidPeerIdentity(context, app)`이고 기존 키 별칭·표시 파일·client id 접두어를 그대로 쓴다. 세션·보관소는 앱에 남긴다.
+- 증거: 새 구조 시험 `test/architecture/test_app_shared_sources.py` 3건이 main 배치에서 RED(빌드 미포함·12개 다시 선언·사본 4쌍), 이 브랜치에서 GREEN이다. 로컬 SDK35 빌드: Cam JVM 443 pass/0 skip, Pilot JVM 110 pass/1 skip(기존 ShellPageProbe), 두 앱 assembleDebug 성공. lint 0 error.
+- gate 변화: 없음. 실제 태블릿·휴대폰에서 기존 승인 관계 유지는 설치 후 확인한다. CE: 해당 없음 — 규칙은 D-939와 구조 시험에 있다.
+- 결정: D-939 Accepted(사용자 결정)
+
 ## 2026-11-01 · uncommitted · docs: D-940 중복 정의 게이트와 등록부
 - 변경: `docs/adr/D-940`, ADR Log 행, `test/architecture/test_duplicate_definitions.py`와 `known_duplicates.txt`(초기 47 그룹), `test/architecture/AGENTS.md` 행 2건, `platform-folder-responsibilities.md` 3건(D-940 갈래 안내, Situation 섀도 모듈 목록 5개로 정정, 보정 저장 계층 병립 명시)
 - 증거: 로컬 `--scan` 재생성이 등록부와 집합 일치(2026-11-01). 원격 시험·mutation 증명은 착지 기록에 남긴다
@@ -13378,3 +13384,48 @@ osy-d395-s1d\`.
 - 변경: `GET /api/v1/sim/omx/target`에 `start_pose`·`task`(additive)를 적었다. 값은 `deploy/robot/omx/sim/pilot_demonstration.yaml`에서 온다. 버전 고정 시험·`app.py` 문자열을 v1.339로 올렸다.
 - 증거: 계약 시험 `test_omx_sim_pilot_contract.py`, 버전 고정 시험(원격).
 - gate 변화: 없음. CE: 해당 없음.
+
+## 2026-11-01 · uncommitted · fix(land): FULL 착지도 겹침 판정, 돌려보낸 표시는 표에 (D-889 추가 16)
+- 변경: `land_selection.select`의 겹침 생략을 자기 선택이 FULL인 착지에도 쓴다. `Overtime`은 표에 `overtime`을 남기고 `land_checks.overtimed`가 그것을 읽는다.
+- 증거: 11-01 13:13~13:26 rest 묶음이 추가 15 착지 뒤에도 차례를 반납했다(새 코드로 다시 떠 표시가 사라짐). FULL 자기 선택을 차례마다 다시 돌았다. 원격 시험은 착지 기록에 남긴다.
+- gate 변화: 없음
+- 결정: D-889 추가 16(사용자 목표 2026-11-01)
+- 교훈: 없음
+
+## 2026-11-01 · uncommitted · docs: D-951 ROSY Calibration 앱과 rosy-calibration 스킬
+- 변경: `docs/adr/D-951-rosy-calibration-application.md`(그림 5장 `docs/assets/omx-calibration-2026-11-01-*`), ADR Log, `applications/calibration/{README,AGENTS}.md`, `platform_parts.yaml` 등록, `.claude/skills/rosy-calibration`
+- 증거: 2026-11-01 현장 기록(왼팔 벨트 끝 높이·터치 실패·I 게인 12.3→3.3 mm, 깊이 표식 LOO 62~355 px, 경로 점검 거절)
+- gate 변화: 없음(결정·문서·경계)
+- 결정: D-951 Accepted(사용자 "rosy calibration 이라고 하나 만들어", "코드적으로", 벨트 사각형 바닥 승인). D-933 3항(높이는 터치)을 깊이로 고침
+- 교훈: 없음
+
+## 2026-11-01 · uncommitted · fix(land): main이 FULL로 넣은 변경은 지난 통과를 버리게 하지 않는다 (D-889 추가 17)
+- 변경: `land_cache._delta_paths`는 범위가 FULL이면, 이 브랜치의 새 commit을 하나씩 선택하고 main의 착지 commit은 차례 규칙(landed)으로 본다. 그 경로와 겹치지 않는 지난 통과만 재사용한다.
+- 증거: 11-01 12시간 시험 호출 약 4,700건 가운데 재사용 470건. narrow 시도 표본 40건 가운데 30건이 FULL(하네스 설정 43, 매핑 없음 16). 원격 시험은 착지 기록에 남긴다.
+- gate 변화: 없음
+- 결정: D-889 추가 17(사용자 지시 2026-11-01)
+- 교훈: 없음
+
+## 2026-11-01 · 093ef30c2b · docs: autocrlf=false commit -a 교훈
+- 변경: `docs/solutions/workflow-issues/autocrlf-false-commit-a-rewrites-tree-to-crlf-2026-11-01.md`
+- 증거: 11-01 `fix/pilot-record-bar` 커밋이 3,128파일을 CRLF로 바꿔 Safety-Review 검사에서 멈춤. 임시 저장소 재현(평범한 `commit -a`는 바뀐 것 없음, `-c core.autocrlf=false`는 속성 없는 파일을 `i/crlf`로 커밋). 다시 만든 가지는 093ef30c2b로 착지
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 새 교훈 1건
+
+## 2026-11-01 · uncommitted · D-954 현장 마커 프로필과 팔 마커 50번부터
+
+- 변경: D-954(D-933 8항 대체)와 로그 행. `deploy/site/marker-profile.json.example`(소유자별 번호 범위, 팔 슬롯↔팔 이름)과 `marker_profile.py check`(같은 계열 겹침 거절, ChArUco는 경고, `--site-cameras` 번호 소유 확인). 팔 슬롯을 35→50부터 3개로 옮김(`cell_print_sheets.arm_ids`, `cell_frame.slot_ids`, `cell_marks` 기본값, Cell 화면 목록). 천장 팔 마커 20~22 예약.
+- 증거: 현장 관제 PC 읽기 — `cameras.top` 기록 없음, `identity` 블록 없음(D-596 기본 켜짐), `field_boundary` 정합. 비트표 계산: 50~94번은 회전 포함 `DICT_4X4_50` 0~49와 최소 3비트 차(시험 고정). 예시 프로필 `check --site-cameras` ok. 원격 pytest는 아래 착지 전 실행.
+- gate 변화: 없음. CE: 해당 없음(새 설계·배정, 장애 해결 아님).
+
+## 2026-11-01 · uncommitted · tools: 정책 화면 수정 게시용 FULL 착지
+- 변경: 없음(기록만). origin/main 동기화(0699b12647) 뒤 게시할 커밋에 녹색 FULL 착지 기록이 없어 이 기록 커밋을 `--tests full`로 착지한다. 같은 main과 같은 브랜치는 batch로 흡수되어 시험이 돌지 않았다.
+- 증거: `publish_main.py` dry run이 "no commit past origin/main has a green FULL land record"
+- gate 변화: 없음
+
+## 2026-11-01 · uncommitted · fix(omx): ROS 전용 시험 파일만 돌 때 건너뜀은 판정이다 (D-889 추가 20)
+- 변경: `middleware/devices/omx/adapter/test/conftest.py`의 `pytest_sessionfinish`이 실패·오류 없이 건너뜀만 있는 exit 5를 0으로 바꾼다. 시험 `test_skip_only_exit.py`.
+- 증거: 11-01 20:04·20:17·20:30 세 착지가 차례에서 `test_omx_fleet_ros_actionserver.py exited 5`(rclpy 없는 PC, 1 skipped)로 멈췄다. 착지는 main의 착지 코드로 돌아서 `land_cache` 수정만으로는 자기 차례를 지나지 못한다. 그래서 시험 트리에도 고친다. 원격 시험은 착지 기록에 남긴다.
+- gate 변화: 없음
+- 교훈: 없음

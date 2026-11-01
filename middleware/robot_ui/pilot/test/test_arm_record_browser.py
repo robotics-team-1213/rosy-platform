@@ -88,6 +88,11 @@ def test_start_pose_task_recording_and_failure_case_flow(tablet_page):
     page.wait_for_function("document.querySelector('[data-sim-record-status]').dataset.state === 'recording'")
     assert text(page, "[data-sim-record-status]").startswith("● 녹화 중 · 00:0")
     assert page.locator("[data-sim-home-go]").get_attribute("reason") == "녹화 중에는 이동하지 않습니다"
+    # The stop card is pinned in view while recording, even scrolled to the stick at the top.
+    page.evaluate("window.scrollTo(0, 0)")
+    box = page.locator("[data-sim-record-stop='failure']").bounding_box()
+    assert box and box["y"] + box["height"] <= page.viewport_size["height"], box
+    assert text(page, "[data-sim-record-live]").startswith("● 녹화 중")
     if os.environ.get("ROSY_SHOT_DIR"):
         shots = Path(os.environ["ROSY_SHOT_DIR"])
         shots.mkdir(parents=True, exist_ok=True)
@@ -99,6 +104,7 @@ def test_start_pose_task_recording_and_failure_case_flow(tablet_page):
     page.wait_for_function("!document.querySelector('[data-sim-record-last]').hidden")
     assert "실패 사례" in text(page, "[data-sim-record-last]") and window_task(page) == "파란 상자를 벨트 표시 안에 놓기"
     assert page.locator("[data-sim-record-stop='success']").evaluate("b => b.disabled")
+    assert page.locator("[data-sim-step='stop']").evaluate("li => getComputedStyle(li).position") == "static"
 
     page.set_viewport_size({"width": 390, "height": 844})
     assert page.evaluate("document.documentElement.scrollWidth") <= 390

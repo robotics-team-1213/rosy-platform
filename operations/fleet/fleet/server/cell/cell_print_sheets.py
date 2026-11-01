@@ -19,10 +19,11 @@ DICT_4X4_100 = (  # ids 0-49 are DICT_4X4_50's markers, so the ChArUco board (id
     33900, 34090, 34204, 40073, 40865, 47996, 48132, 46683, 49096, 47019, 51743, 51554, 55640, 54229, 52376, 51104,
     50487, 59741, 63781, 64443, 60970, 63309, 13685, 35501, 30231, 2767, 1611, 11713, 18904, 17396, 20278, 20435,
     27108, 28871)
-# D-933 marker ids: 0-34 the ChArUco board; arm slot n (1-4) owns 15 ids from 35 + 15 (n - 1): its gripper, its two
+# D-933 marker ids: 0-34 the ChArUco board; arm slot n (1-3) owns 15 ids from 50 + 15 (n - 1): its gripper, its two
 # base markers, then three surfaces of four. 95-99 are spare. Every arm's markers differ, so cameras that see two arms
-# never mix them up.
-ARM_SLOTS, ARM_BLOCK, FIRST_ARM_ID = 4, 15, 35
+# never mix them up. D-954: arms start at 50, past the site's DICT_4X4_50 ids (robots 40-49 ride under the arm camera);
+# the whole table is deploy/site/marker-profile.json.example.
+ARM_SLOTS, ARM_BLOCK, FIRST_ARM_ID = 3, 15, 50
 
 
 def arm_ids(slot: int) -> dict:

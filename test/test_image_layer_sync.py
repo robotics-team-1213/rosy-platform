@@ -111,6 +111,9 @@ def _fresh_image_layer(device: Path, native: Path) -> None:
         (device / destination).mkdir(parents=True)
         for source in (native / "image-layer" / folder).iterdir():
             shutil.copy2(source, device / destination / source.name)
+    for name, destination in sync_mod.OVERLAY_CONFIGS:
+        (device / destination).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(native / name, device / destination)
 
 
 def _links(device: Path, release_id: str):
@@ -318,6 +321,26 @@ def test_udev_and_modprobe_allowlist_is_what_the_image_overlay_carries(tmp_path)
     assert confs and modprobe == confs
     for name in rules:
         assert (native / "image-layer/udev" / name).read_bytes() == (ROOT / "deploy/robot/pinky_pro/udev" / name).read_bytes()
+
+
+def test_overlay_configs_land_where_the_image_overlay_puts_them():
+    text = PAYLOAD_BUILDER.read_text(encoding="utf-8")
+    for name, destination in sync_mod.OVERLAY_CONFIGS:
+        assert f'"$NATIVE_RUNTIME_SOURCE/{name}" "$OVERLAY/{destination}"' in text
+        sync_mod.check_destination(destination)
+
+
+def test_an_image_without_the_wifi_config_gets_it_without_a_restart(device):
+    # Teleop stalls on Wi-Fi power save; robots flashed before 2026-11-01 lack this file.
+    wifi = device / "etc/NetworkManager/conf.d/60-rosy-wifi.conf"
+    wifi.unlink()
+    runner = Runner(active={"rosy-network.service"})
+
+    result = _sync(device, NEW_ID, runner, dry_run=False)
+
+    assert "/etc/NetworkManager/conf.d/60-rosy-wifi.conf" in result["new"]
+    assert "wifi.powersave = 2" in wifi.read_text(encoding="utf-8")
+    assert "rosy-network.service" not in result["restart_units"]
 
 
 @needs_bash
