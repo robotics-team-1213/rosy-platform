@@ -245,3 +245,41 @@ def test_public_fault_reason_distinguishes_read_failure_from_confirmed_limit(tmp
     snapshot = json.loads(monitor.state_path.read_text())
     assert snapshot['stop_reasons'] == [reason]
     assert '/dev/' not in json.dumps(snapshot)
+
+
+def test_a_guard_fault_keeps_its_own_record_and_the_local_camera_frames(tmp_path, monkeypatch):
+    import http.server
+    import threading
+    jpeg = b'\xff\xd8' + b'frame' * 10
+
+    class View(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(jpeg if self.path.endswith('top.jpg') else b'not an image')
+
+        def log_message(self, *args):
+            pass
+
+    server = http.server.HTTPServer(('127.0.0.1', 0), View)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    base = f'http://127.0.0.1:{server.server_port}/frame'
+    monkeypatch.setenv('ROSY_OMX_FAULT_FRAMES', f'top={base}/top.jpg,side={base}/side.jpg,far=http://example.com/x.jpg')
+    monitor = monitor_type()(tmp_path / 'health.jsonl')
+    arm = motion()
+    monitor.admit(arm)
+    monitor.sample(arm, dict.fromkeys(NAMES, 2028), dict.fromkeys(NAMES, 0), 10.0)
+    monitor.fault(arm, ValueError('wrist_roll: following error >5 motor degrees; command=2657, current=2714'))
+    for worker in [t for t in threading.enumerate() if t.name == 'fault-frames']:
+        worker.join(10)
+    server.shutdown()
+    records = list((tmp_path / 'faults').glob('*.json'))
+    assert len(records) == 1
+    record = json.loads(records[0].read_text())
+    assert record['schema_version'] == 'rosy.motor-fault.v1' and 'wrist_roll' in record['fault']
+    assert record['motors'][4]['joint'] == 'wrist_roll'  # every joint at the fault, not only the public reason
+    assert record['frames'] == {'top': records[0].stem + '-top.jpg'}  # not a jpeg and not local: skipped
+    assert (tmp_path / 'faults' / record['frames']['top']).read_bytes() == jpeg
+    # the next session overwrites the snapshot, never the fault record
+    monitor_type()(tmp_path / 'health2.jsonl').publish()
+    assert json.loads(records[0].read_text())['fault'] == record['fault']
