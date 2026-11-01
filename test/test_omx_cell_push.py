@@ -51,6 +51,9 @@ def test_a_neighbour_beside_the_jaws_lane_is_refused():
     packed[85:116, 119:150] = 255  # a neighbour 4 mm beside it
     assert cpu.path_clear(packed, ROI, to_px, (0.0, 0.1), d, 15, 35, 10) == []  # the old check: only its own width
     assert {w for w, _ in cpu.path_clear(packed, ROI, to_px, (0.0, 0.1), d, 15, 35, 10, lane_mm=21)} == {"beside"}
+    beyond = mask.copy()
+    beyond[85:116, 125:132] = 255  # a 7 mm piece 10-16 mm past the box's side, inside a 30 mm lane
+    assert {w for w, _ in cpu.path_clear(beyond, ROI, to_px, (0.0, 0.1), d, 15, 35, 10, lane_mm=30)} == {"beside"}
     apart = mask.copy()
     apart[85:116, 140:170] = 255  # one cell (25 mm) of room
     assert cpu.path_clear(apart, ROI, to_px, (0.0, 0.1), d, 15, 35, 10, lane_mm=21) == []
@@ -156,7 +159,7 @@ def test_the_lane_is_the_measured_jaw_face_and_a_real_push_leaves_its_decision(t
     monkeypatch.setattr(cpu.cell_pivot, "bias_at", lambda *a, **k: None)
     monkeypatch.setattr(cpu.cell_objects, "to_mm", lambda px, *a: np.array([[130.0, -20.0], [130.0, -60.0]]))
     monkeypatch.setattr(cpu.cell_objects, "foreground", lambda *a, **k: np.zeros((10, 10), np.uint8))
-    monkeypatch.setattr(cpu, "path_clear", lambda *a: seen.setdefault("lane", a[-2]) and [("beside", [150.0, -20.0])])
+    monkeypatch.setattr(cpu, "path_clear", lambda *a: seen.setdefault("lane", a[9]) and [("beside", [150.0, -20.0])])
     (tmp_path / "cal.json").write_text("{}")
     config = {"plan_path": str(ROOT / "deploy/robot/omx/grasp-plan.example.json"), "calibration_path": str(tmp_path / "cal.json"),
               "io": str(tmp_path / "io"), "work_dir": str(tmp_path / "work"), "arm_id": "arm_b",
@@ -175,3 +178,17 @@ def test_the_lane_is_the_measured_jaw_face_and_a_real_push_leaves_its_decision(t
     cpu.main(["--config", str(tmp_path / "cfg.json"), "--site", "pallet", "--roi", "0", "0", "10", "10",
               "--px", "312,201", "--dir", "0,1", "--mm", "80", "--half-mm", "50", "--dry-run"])
     assert seen["lane"] == pytest.approx(21.2 + 2.4)
+
+
+def test_a_narrow_push_leads_with_one_finger_pad_and_looks_behind_for_the_trailing_finger():
+    import cell_params as prm
+
+    face, back = cpu.jaw_shape(None, True)
+    assert face == 10.0 and back == pytest.approx(prm.jaw_face_half_mm(None) - 4.0)
+    assert cpu.jaw_shape(None, False) == (prm.jaw_face_half_mm(None), 0.0)
+    mask = np.zeros((200, 200), np.uint8)
+    mask[85:116, 85:116] = 255
+    mask[48:56, 95:105] = 255  # 45-52 mm behind the centre: past the lead finger, under the trailing one
+    d = np.array([0.0, 1.0])
+    assert cpu.path_clear(mask, ROI, to_px, (0.0, 0.1), d, 15, 35, 10) == []
+    assert {w for w, _ in cpu.path_clear(mask, ROI, to_px, (0.0, 0.1), d, 15, 35, 10 + back, tail_mm=2 * back)} == {"behind"}
