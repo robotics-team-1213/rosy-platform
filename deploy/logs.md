@@ -4272,3 +4272,9 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 현장 감독 시험(사람 스위치 옆) — 붙어 선 세 열 중 왼쪽 열을 밀자 이웃 두 열(중심에서 19 mm)이 함께 약 40 px 밀리고 shoulder lag 2.2로 접촉 정지·후퇴·귀환. 원격 `test_omx_cell_push.py` 새 회귀 시험
 - gate 변화: 없음
 - 교훈: 작업 기록 2026-10-31 §14
+
+## 2026-11-01 · uncommitted · feat(omx): 밀기도 판단·결과를 남기고, 집게 크기는 측정값 하나에서
+- 변경: `cell_params.jaw_face_half_mm`(손가락 간격 측정값 + 손가락) 하나를 밀기 통로 폭에 사용(`push.lane_half_mm` 제거). 감독 밀기는 `decisions.jsonl`에 `push`·`push_outcome` 행을 남긴다. `cell-knowledge.example.json`에 11-01 검증 사실 5건(붙어 선 줄, 표면 색 중앙값, 밀기 끌림, 판 높이 편차, I 게인)
+- 증거: 원격 `test_omx_cell_push.py` 8 passed(막힌 밀기는 움직이지 않고 거절 행을 남김), 지식 파일 검증 26건
+- gate 변화: 없음
+- 교훈: 작업 기록 2026-10-31 §14

@@ -77,8 +77,8 @@
 
 ## 최근 기록
 
+- 2026-11-01 · uncommitted · feat(omx): 밀기도 판단·결과를 남기고, 집게 크기는 측정값 하나에서
 - 2026-11-01 · uncommitted · fix(omx): 밀기 경로가 집게가 지나는 폭까지 본다
 - 2026-11-01 · a785121ef0 · sim/real 같은 동작: Planner.stream 하나
 - 2026-10-31 · a517780fbc · feat(model-pc): one Learning center follows the signed release; retire the candidates (D-857)
 - 2026-10-30 · 796fbe489c · D-871 가드 수집 관제 PC 적용과 `rosy-update-report` 선언
-- 2026-10-30 · uncommitted · 관제 PC Monitoring 설정 예시 (D-936)
