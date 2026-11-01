@@ -1081,3 +1081,10 @@
 - 변경: `index.html`에 Fleet 다섯 영역 문서와 같은 noscript `ui-status state="error"`를 넣었다 — 스크립트 없이 열린 조작 화면이 물리 정지 경로를 알린다.
 - 증거: `test_layout_canon.py` 새 검사(조작 표면 noscript·style 속성 금지)와 변이 증명.
 - Gate: 없음. CE: 해당 없음.
+
+
+## 2026-11-02 · uncommitted · sr-only 재정의 제거
+
+- 변경: `styles.css`의 `.sr-only`(clip-path 방식) 사본을 지우고 공용 규칙을 쓴다.
+- 증거: 원격 계약 시험.
+- Gate: 없음. CE: 해당 없음.

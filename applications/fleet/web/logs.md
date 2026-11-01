@@ -784,3 +784,10 @@
 - 변경: 다섯 영역 문서에 `<noscript>` 안내(ui-status error)를 추가했다 — 스크립트 없이 열면 「스크립트를 허용하세요 + 비상 정지는 로봇 본체 물리 스위치」를 보여준다. 4차 감사의 나머지 지표는 전부 해당 없음: 인쇄 스타일(운용 도구), prefers-reduced-motion(D-220 정지 계약으로 애니메이션 자체가 없음), 대화상자 포커스(showModal이 첫 포커스 요소에 자동).
 - 증거: fleet_components --check·test_layout_canon 전 통과·node --test 403 passed. 원격 시험은 다음 착지 전 기록.
 - gate 변화: 없음. CE: 해당 없음.
+
+
+## 2026-11-02 · uncommitted · 로그인 문서 skip-link 재정의 제거
+
+- 변경: `password-login.css`의 skip-link 사본을 지우고 공용 규칙을 쓴다.
+- 증거: 공용 덧칠 검사.
+- Gate: 없음. CE: 해당 없음.

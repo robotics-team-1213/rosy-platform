@@ -1399,3 +1399,10 @@
 - 변경: 대시보드 `index.html` 입장 셸에 Fleet·Pilot과 같은 noscript `ui-status state="error"`를 넣었다.
 - 증거: `test_layout_canon.py` 조작 표면 noscript 검사.
 - Gate: 없음. CE: 해당 없음.
+
+
+## 2026-11-02 · uncommitted · skip-link 재정의 제거
+
+- 변경: `styles.css`의 skip-link(주 단추 채움, z 20)를 지우고 공용 `components.css` 규칙을 쓴다.
+- 증거: 공용 덧칠 검사(skip-link 포함).
+- Gate: 없음. CE: 해당 없음.
