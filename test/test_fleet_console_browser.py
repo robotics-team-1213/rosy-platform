@@ -2508,7 +2508,7 @@ def test_formation_buttons_keep_their_reasons_readable(console_url, width):
 
 @pytest.mark.parametrize("width,height", [(390, 844), (320, 568)])
 def test_compact_header_budget_keeps_the_stop_in_view(console_url, width, height):
-    """접속 입력·현재 역할은 상태 센터 뒤로 접히고 테마 버튼 하나는 남는다(D-668). 머리는 창 높이의 20% 이하다.
+    """접속 입력·현재 역할은 접히고 테마 단추는 머리 줄에 남는다(2026-11-01). 머리는 창 높이의 20% 이하다.
 
     변이 증명: components.css `ui-topbar`에 `min-height: 300px`을 넣으면 빨갛다."""
     from playwright.sync_api import sync_playwright
@@ -2546,7 +2546,7 @@ def test_compact_header_budget_keeps_the_stop_in_view(console_url, width, height
     assert folded["sticky"] == "sticky", folded
     stop = folded["stop"]
     assert stop["top"] >= 0 and stop["left"] >= 0 and stop["bottom"] <= height and stop["right"] <= width, folded
-    assert folded["expanded"] == "false" and not folded["token"] and not folded["theme"], folded
+    assert folded["expanded"] == "false" and not folded["token"] and folded["theme"], folded
     # D-741 3: below 30rem the role text folds (fleet-header.css); the account button's name says the role.
     role_text_shown = width >= 480
     for state in (folded, opened):
@@ -2562,7 +2562,7 @@ def test_compact_header_budget_keeps_the_stop_in_view(console_url, width, height
 
 
 def test_wide_header_keeps_every_item_on_one_line(console_url):
-    """D-658 넓은 화면도 접속·화면 표시 상세는 접힌다. 네 영역과 비상 정지는 상단에 남는다."""
+    """D-658 넓은 화면도 접속 상세는 접힌다. 네 영역, 테마 단추와 비상 정지는 상단 한 줄에 남는다(2026-11-01 사용자 결정)."""
     from playwright.sync_api import sync_playwright
 
     results = {}
@@ -2571,8 +2571,8 @@ def test_wide_header_keeps_every_item_on_one_line(console_url):
         for width, height in ((1920, 1080), (1366, 768), (1280, 800)):
             page.set_viewport_size({"width": width, "height": height})
             page.goto(console_url, wait_until="networkidle")
-            # D-741 3: 화면 표시와 접속 상세는 계정 단추 아래에 접혀 있다.
-            assert page.locator('#fleet-theme').is_hidden()
+            # D-741 3: 접속 상세는 계정 단추 아래에 접혀 있다. 테마는 머리 줄 조작 칸에 있다.
+            assert page.locator('#fleet-theme').is_visible()
             assert page.locator('#topbar-extra').is_hidden()
             results[width] = page.evaluate("""() => {
               const more = document.querySelector('#topbar-more');
