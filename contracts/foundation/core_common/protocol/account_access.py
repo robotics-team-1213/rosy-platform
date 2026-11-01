@@ -14,6 +14,8 @@ CAPABILITIES = {
                           'learning.manage', 'learning.import', 'learning.publish'}),
 }
 RESOURCE_PATTERN = r'^(site|robot|project):[A-Za-z0-9._-]{1,96}$'
+# D-955: a stored grant may name every robot or project; issued tokens stay one concrete resource.
+GRANT_RESOURCE_PATTERN = r'^((site|robot|project):[A-Za-z0-9._-]{1,96}|(robot|project):\*)$'
 ACCESS_TTL_S = 300
 
 
@@ -23,7 +25,7 @@ class AccessRejected(ValueError):
 
 class AccountGrant(BaseModel):
     model_config = ConfigDict(extra='forbid', frozen=True, strict=True)
-    resource: str = Field(pattern=RESOURCE_PATTERN)
+    resource: str = Field(pattern=GRANT_RESOURCE_PATTERN)
     capabilities: list[str] = Field(min_length=1, max_length=16)
 
     @model_validator(mode='after')
@@ -57,6 +59,13 @@ class AccountAccess(BaseModel):
     def permits(self, resource: str, capability: str) -> bool:
         return resource == self.aud and any(
             grant.resource == resource and capability in grant.capabilities for grant in self.grants)
+
+
+def grants_for(grants, resource: str) -> list[dict]:
+    """Stored grants resolved to one concrete resource: its exact grant plus its kind's `*` grant."""
+    wildcard = resource.split(':', 1)[0] + ':*'
+    capabilities = sorted({c for g in grants if g['resource'] in (resource, wildcard) for c in g['capabilities']})
+    return [{'resource': resource, 'capabilities': capabilities}] if capabilities else []
 
 
 def sign_access(claims: Mapping, private_key: bytes, *, key_id: str) -> str:

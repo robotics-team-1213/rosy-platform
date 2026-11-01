@@ -151,7 +151,9 @@ def auto_pivot_point(cell, config, calibration, site, target_xy):
     img = cell.frame("top")
     roi = tuple(config["sites"][site].get("auto_roi") or (0, 0, img.shape[1], img.shape[0]))
     big = (max(0, roi[0] - 60), max(0, roi[1] - 60), min(img.shape[1], roi[2] + 60), min(img.shape[0], roi[3] + 60))
-    mask = cell_objects.foreground(img, big, params=config.get("params"))
+    site_cfg = config["sites"][site]  # its measured surface colour: the median alone called the pallet clutter (2026-11-01)
+    mask = cell_objects.foreground(img, big, params=config.get("params"), surface_px=site_cfg.get("surface_px"),
+                                   surface_lab=site_cfg.get("surface_lab"))
     inside = np.zeros(img.shape[:2], np.uint8)
     poly = config["sites"][site].get("surface_px") or [[0, 0], [img.shape[1] - 1, 0], [img.shape[1] - 1, img.shape[0] - 1], [0, img.shape[0] - 1]]
     cv2.fillPoly(inside, [np.asarray(poly, np.int32)], 1)
@@ -238,9 +240,7 @@ def main(argv=None):
     ap.add_argument("--person-at-switch", action="store_true", help="with --commissioning: a person is at the power switch")
     args = ap.parse_args(argv)
     import cv2
-    import cell_objects
     import cell_pipeline as cp
-    from cell_observe import predicted_pixel
 
     config = json.loads(args.config.read_text(encoding="utf-8"))
     config["params"] = prm.load(config.get("params_path"))["values"]
@@ -278,13 +278,7 @@ def main(argv=None):
         elif step.startswith("pivot-near"):
             site, xy = step.split()[1].split(":")
             near = tuple(float(v) for v in xy.split(","))
-            img = cell.frame("top")
-            roi = tuple(config["sites"][site].get("auto_roi") or (0, 0, 640, 480))
-            big = (max(0, roi[0] - 60), max(0, roi[1] - 60), min(640, roi[2] + 60), min(480, roi[3] + 60))
-            mask = cell_objects.foreground(img, big, params=config["params"])
-            inside = np.zeros(img.shape[:2], np.uint8)
-            cv2.fillPoly(inside, [np.asarray(config["sites"][site].get("surface_px") or [[0, 0], [639, 0], [639, 479], [0, 479]], np.int32)], 1)
-            point = clear_point(near, mask, big, inside, lambda p: predicted_pixel(config, calibration, site, p))
+            point = auto_pivot_point(cell, config, calibration, site, near)
             if point is None:
                 done.append({step: "no clear point near the target"})
                 continue

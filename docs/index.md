@@ -354,7 +354,7 @@
 ## 최근 기록
 
 - 2026-11-01 · uncommitted · feat(fleet): 확인된 ARM 시도의 재관측 계약(D-930, API v1.334)
-- 2026-11-01 · 093ef30c2b · docs: autocrlf=false commit -a 교훈
-- 2026-11-01 · uncommitted · fix(land): main이 FULL로 넣은 변경은 지난 통과를 버리게 하지 않는다 (D-889 추가 17)
-- 2026-11-01 · uncommitted · docs: D-951 ROSY Calibration 앱과 rosy-calibration 스킬
-- 2026-11-01 · uncommitted · fix(land): FULL 착지도 겹침 판정, 돌려보낸 표시는 표에 (D-889 추가 16)
+- 2026-11-01 · uncommitted · fix(land): 모두 건너뛴 파일의 exit 5는 판정 (D-889 추가 20)
+- 2026-11-01 · uncommitted · fix(land): 차례 한도는 돌려보낸 횟수만큼, 자기 브라우저 묶음도 닿는 것만 (D-889 추가 19)
+- 2026-11-01 · uncommitted · fix(land): 차례에서는 변화분이 닿는 자기 호출만 다시 돈다 (D-889 추가 18)
+- 2026-11-01 · uncommitted · learning/omx: D-943 GPU 학습·장치 초안·작업대 녹화·HF 업로드 버튼

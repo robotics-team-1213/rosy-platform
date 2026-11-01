@@ -13,8 +13,9 @@ import cell_depth as cd  # noqa: E402
 SCALE, SHIFT = 0.62, (106.0, 100.0)  # colour -> depth, as measured on the cell 2026-11-01
 
 
-def scene(tilt_deg=10.0):
-    """A table 620 mm away tilted about x, two 76 mm boxes and a plate 20 mm high; depth and colour views."""
+def scene(tilt_deg=10.0, floor_below_x=None):
+    """A table 620 mm away tilted about x, two 76 mm boxes and a plate 20 mm high; depth and colour views.
+    `floor_below_x`: depth columns left of it are a surface 60 mm under the table."""
     h, w = 480, 640
     ys, xs = np.mgrid[0:h, 0:w]
     rays = np.dstack([(xs - w / 2) / cd.FOCAL_PX, (ys - h / 2) / cd.FOCAL_PX, np.ones((h, w))])
@@ -30,6 +31,8 @@ def scene(tilt_deg=10.0):
         lift[(cxs >= x0) & (cxs < x1) & (cys >= y0) & (cys < y1)] = 76.0
     plate = (np.hypot(cxs - 150, cys - 380) < 60) & (np.hypot(cxs - 150, cys - 380) > 25)
     lift[plate] = 20.0
+    if floor_below_x is not None:
+        lift[:, :floor_below_x] = -60.0
     cv2.circle(colour, (150, 380), 60, (150, 150, 150), -1)  # the plate is seen in colour too (grey: not in the mask)
     cv2.circle(colour, (150, 380), 25, (0, 0, 0), -1)
     # depth along each ray to the plane n.p + 620 = lift (heights measured along the normal)
@@ -70,3 +73,10 @@ def test_the_edges_put_the_colour_view_onto_the_depth_view_even_with_objects_in_
     assert m[0, 0] == pytest.approx(SCALE, abs=0.02)
     assert (m[0, 2], m[1, 2]) == pytest.approx(SHIFT, abs=4.0)
     assert cd.height_at(heights, m, (315, 210)) == pytest.approx(76.0, abs=3.0)
+
+
+def test_a_larger_surface_under_the_table_does_not_become_the_table():
+    depth, _ = scene(floor_below_x=330)  # the lower surface holds more points than the table
+    heights = cd.height_map(depth, cd.table_plane(depth))
+    assert np.nanmedian(heights[400:470, 400:600]) == pytest.approx(0.0, abs=1.5)
+    assert np.nanmedian(heights[400:470, 50:300]) == pytest.approx(-60.0, abs=2.0)

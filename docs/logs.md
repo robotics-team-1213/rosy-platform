@@ -13413,6 +13413,64 @@ osy-d395-s1d\`.
 - 결정: 없음
 - 교훈: 새 교훈 1건
 
+## 2026-11-01 · uncommitted · D-954 현장 마커 프로필과 팔 마커 50번부터
+
+- 변경: D-954(D-933 8항 대체)와 로그 행. `deploy/site/marker-profile.json.example`(소유자별 번호 범위, 팔 슬롯↔팔 이름)과 `marker_profile.py check`(같은 계열 겹침 거절, ChArUco는 경고, `--site-cameras` 번호 소유 확인). 팔 슬롯을 35→50부터 3개로 옮김(`cell_print_sheets.arm_ids`, `cell_frame.slot_ids`, `cell_marks` 기본값, Cell 화면 목록). 천장 팔 마커 20~22 예약.
+- 증거: 현장 관제 PC 읽기 — `cameras.top` 기록 없음, `identity` 블록 없음(D-596 기본 켜짐), `field_boundary` 정합. 비트표 계산: 50~94번은 회전 포함 `DICT_4X4_50` 0~49와 최소 3비트 차(시험 고정). 예시 프로필 `check --site-cameras` ok. 원격 pytest는 아래 착지 전 실행.
+- gate 변화: 없음. CE: 해당 없음(새 설계·배정, 장애 해결 아님).
+
+## 2026-11-01 · uncommitted · tools: 정책 화면 수정 게시용 FULL 착지
+- 변경: 없음(기록만). origin/main 동기화(0699b12647) 뒤 게시할 커밋에 녹색 FULL 착지 기록이 없어 이 기록 커밋을 `--tests full`로 착지한다. 같은 main과 같은 브랜치는 batch로 흡수되어 시험이 돌지 않았다.
+- 증거: `publish_main.py` dry run이 "no commit past origin/main has a green FULL land record"
+- gate 변화: 없음
+
+## 2026-11-01 · uncommitted · fix(omx): ROS 전용 시험 파일만 돌 때 건너뜀은 판정이다 (D-889 추가 20)
+- 변경: `middleware/devices/omx/adapter/test/conftest.py`의 `pytest_sessionfinish`이 실패·오류 없이 건너뜀만 있는 exit 5를 0으로 바꾼다. 시험 `test_skip_only_exit.py`.
+- 증거: 11-01 20:04·20:17·20:30 세 착지가 차례에서 `test_omx_fleet_ros_actionserver.py exited 5`(rclpy 없는 PC, 1 skipped)로 멈췄다. 착지는 main의 착지 코드로 돌아서 `land_cache` 수정만으로는 자기 차례를 지나지 못한다. 그래서 시험 트리에도 고친다. 원격 시험은 착지 기록에 남긴다.
+- gate 변화: 없음
+- 교훈: 없음
+
+## 2026-11-01 · uncommitted · feat: Rosy 허브 1단계 — 모든 로봇·프로젝트 grant와 팀원 기본 묶음 (D-955)
+- 변경: `account_access.py`에 `robot:*`·`project:*` grant와 `grants_for`, Authority 발급·허가 네 곳이 `grants_for`를 사용, 계정 화면이 새 계정을 팀원 기본 묶음으로 채우고 버튼 제공, D-955
+- 증거: 계약·Authority·Chromium 계정 시험 갱신(원격 결과는 커밋 기록)
+- gate 변화: 없음
+- 결정: D-955 추가(사용자 지시 2026-11-01)
+- 교훈: 없음
+
+## 2026-11-01 · uncommitted · docs(solutions): 착지가 차례를 반납하고 모두 다시 돈 다섯 원인
+- 변경: `docs/solutions/workflow-issues/landings-gave-the-turn-back-and-reran-everything-2026-11-01.md` 새 교훈(D-889 추가 13~17의 원인·확인 방법·측정 함정)
+- 증거: 11-01 이벤트·착지 로그 분석(차례 반납, 매핑 안 된 경로 73회, 재사용 470/4,700, narrow 시도 표본 30/40 FULL)
+- gate 변화: 없음
+- 교훈: 이 항목 자체
+
+## 2026-11-01 · uncommitted · learning/omx: D-943 GPU 학습·장치 초안·작업대 녹화·HF 업로드 버튼
+- 변경: OMX 학습 센터가 CUDA를 보고하는 학습기에서 ACT에 `cuda`를 제공하고 작업자는 `~/.cache/rosy-learning/gpu.lock`을 학습 내내 잡는다(`experiment_center/jobs/train`, 학습 화면 장치 선택). HF 업로드 버튼(`experiment_hub.py`, `omx-hub.js`, 센터 `hub`·`hub-prepare`·`hub-upload`, `publish` 권한·`write-repos` 연결). 작업대 장치 목록(`deploy/robot/omx/device_inventory.py`, 뷰어 `/inventory.json`, 프로필 화면 불러오기). 작업대 녹화 화면(`deploy/robot/omx/bench_record.py`). D-943, ADR Log 행, `adr_gaps` D-941·D-942
+- 증거: 원격 pytest — `learning/training/omx/test` 전체 exit 0, HF·센터·Learning 웹·협업·구조 93건 exit 0, 장치 목록·작업대 녹화·뷰어 exit 0. 관제 PC에서 장치 목록을 읽기 전용으로 실행해 follower 2대(arm_a·arm_b)·미지정 보드 2개·카메라 4대 확인
+- gate 변화: 없음. 실물 녹화·GPU 실학습·HF 실계정 왕복은 미수용(작업대 인원·팀 HF 연결 필요)
+- 결정: D-943 Accepted(사용자 지시)
+- 교훈: `record_session.py`의 고정 서비스 목록(`camera@top/front`)은 10-31 카메라 역할 변경(`arm_a_wrist`·`arm_b_wrist`·`side`)과 토크 OFF observer를 놓쳐 녹화가 장치를 열지 못한다. 작업대 화면이 실행 중 유닛에서 인계 목록을 만든다
+
+## 2026-11-01 · uncommitted · fix(land): 차례에서는 변화분이 닿는 자기 호출만 다시 돈다 (D-889 추가 18)
+- 변경: `land_selection.select`의 landed 경로가 자기 호출을 하나씩 `overlaps`로 거른다.
+- 증거: 11-01 17:48~18:45 main 57분 정지. arm-transfer-recheck 차례 2라운드가 자기 호출 485개를 다시 돌았다. 원격 시험은 착지 기록에 남긴다.
+- gate 변화: 없음
+- 결정: D-889 추가 18(사용자 지시 2026-11-01)
+- 교훈: 없음(docs/solutions/workflow-issues/landings-gave-the-turn-back-and-reran-everything-2026-11-01.md의 연장)
+
+## 2026-11-01 · uncommitted · fix(land): 차례 한도는 돌려보낸 횟수만큼, 자기 브라우저 묶음도 닿는 것만 (D-889 추가 19)
+- 변경: `land_checks.overtimes`(횟수), 차례 한도 10→30분→없음, 표 `overtime` 정수. `land_selection.browsers(reach)`가 추가 18 경로에서 닿는 자기 브라우저 묶음만 고른다.
+- 증거: 11-01 18:01~19:2x arm-transfer-recheck의 한도 없는 차례가 main을 90분 넘게 잡았다(자기 호출 485개 + 브라우저 직렬). 원격 시험은 착지 기록에 남긴다.
+- gate 변화: 없음
+- 결정: D-889 추가 19(사용자 목표 2026-11-01)
+- 교훈: docs/solutions/workflow-issues/landings-gave-the-turn-back-and-reran-everything-2026-11-01.md에 이어 적는다
+
+## 2026-11-01 · uncommitted · fix(land): 모두 건너뛴 파일의 exit 5는 판정 (D-889 추가 20)
+- 변경: `land_cache.unusable`이 요약 줄이 건너뜀뿐인 exit 5를 판정으로 본다(`ALL_SKIPPED`).
+- 증거: 11-01 20:04·20:17 두 착지가 `test_omx_fleet_ros_actionserver.py exited 5`(1 skipped)로 차례에서 멈췄다. 원격 시험은 착지 기록에 남긴다.
+- gate 변화: 없음
+- 결정: D-889 추가 20(사용자 목표 2026-11-01)
+- 교훈: 없음
+
 ## 2026-11-01 · uncommitted · feat(fleet): 확인된 ARM 시도의 재관측 계약(D-930, API v1.334)
 
 - 변경: `POST/GET /api/fleet/arm-transfers/jobs/{id}/rechecks`를 추가했다. 기다리는 재관측은 기존 observation context에 `phase=RECHECK`로 나오고 같은 observations 경로로 받는다. 검사는 POST_ACTION과 같고 요청 뒤 시각·측정 관절을 요구한다. Action·claim·작업 상태·영수증·v1.330 근거는 바뀌지 않는다(`work/physical_transfer_rechecks.py`, `fleet_physical_transfer_rechecks` 테이블).
