@@ -354,7 +354,7 @@
 ## 최근 기록
 
 - 2026-11-01 · uncommitted · feat(fleet): 확인된 ARM 시도의 재관측 계약(D-930, API v1.334)
-- 2026-11-01 · uncommitted · sim/omx: D-927 C2~C4 시뮬 ARM_TRANSFER를 실제 셀 소유자로 끝까지 돌림
 - 2026-11-01 · uncommitted · fix(land): 브라우저·시뮬레이션 시험은 필요할 때만, 전체는 밤에
 - 2026-11-01 · uncommitted · refactor: D-940 후속 1 — 정본 소비·REST 미러 핀·PR 템플릿
 - 2026-11-01 · uncommitted · feat(land): 한 표 묶음(rollup)
+- 2026-11-01 · uncommitted · docs(adr): 착지 처리량은 시험 PC 용량이 정한다
