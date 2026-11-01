@@ -354,7 +354,7 @@
 ## 최근 기록
 
 - 2026-11-01 · uncommitted · tools: 워크트리 .git 유실 재발 교훈 갱신
-- 2026-11-01 · uncommitted · fix(monitoring): 이벤트 기록을 수집기 시계로 읽는다 (MAIN-RED)
-- 2026-11-01 · uncommitted · fix: 조종 끊김·정지 전파·링크 지연 (D-948)
-- 2026-11-01 · uncommitted · fix: 링크 조사 후속 (문서 정리·AP 지터·enum 판단)
-- 2026-11-01 · uncommitted · fix: 로봇-사이트 링크 견고성 (조사 1순위 4건 + D-944)
+- 2026-11-01 · uncommitted · omx: 통로 점검은 보이는 표면 밖이면 거절(낡은 surface_px), 카메라 교체 교훈 갱신
+- 2026-11-01 · uncommitted · omx: 통로 점검 규칙 수정, 낮은 구간은 집을 물체 말고 모두, 높은 이동은 모르는 덩어리만
+- 2026-11-01 · uncommitted · omx: 계획 경로 통로 점검(cell_corridor), 경로에 물체·다른 팔이 있으면 움직이기 전에 거절
+- 2026-11-01 · uncommitted · refactor: D-949 줄 수 래칫을 리팩터링 대기열로

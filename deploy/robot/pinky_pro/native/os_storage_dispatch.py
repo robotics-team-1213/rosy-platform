@@ -31,7 +31,7 @@ FIRST_BOOT_NATIVE = (*BOOTSTRAP_FILES, "first_boot_runtime.py", "first_boot_supp
                      "native_release.py", "native_release_links.py", "signing.py", "network_transaction.py", "network.py",
                      "nm_network.py", "rosy_claim.py", "rosy-os-firstboot.conf", "os_factory_release.py",
                      "os_boot_recover.py", "image-layer-reconcile.py", "sync-image-layer.py",
-                     "image_layer_boot.py", "image_layer_files.py", "rosy-os-recover.conf",
+                     "image_layer_boot.py", "image_layer_files.py", "image_layer_plan.py", "image_layer_records.py", "rosy-os-recover.conf",
                      "rosy-os-storage.conf", "rosy-os-projection.conf", "rosy-os-tailnet.conf", "os_payload_compatibility.py",
                      "os_slot_metadata.py", "media_layout.py", "os_media.py", "os_update_manifest.py", "os_rauc.py", "os_rauc_runtime.py", "os_update_state.py",
                      "os_bootloader.py", "rosy-os-bootloader", "os_rauc_service.py", "rosy-os-rauc.service", "rosy-rauc-dbus.conf",
