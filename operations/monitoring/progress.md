@@ -14,14 +14,14 @@ gates:
   ROS-SIM:
     state: N/A
   ARTIFACT:
-    state: HOLD
-    blocker: 관제 PC는 D-936 사이트 스택 overlay로 싣는다. 소스·후보 검증·관제 PC compose 렌더링·Caddy 검사는 통과했다. overlay를 포함한 서명 후보가 아직 없고, 관제 PC 자동 업데이트는 서명되지 않은 ARM-S overlay 때문에 거절 중이다.
+    state: GO
+    evidence: overlay 쌍(monitoring·account)을 포함한 서명 후보 site-2ba97ac2c346(PR #224 merge)가 2026-11-01 발행·설치됐다. 관제 PC 자동 업데이트 수용.
   DEVICE:
-    state: HOLD
-    blocker: 관제 PC 입력은 2026-11-01 staging 완료(설정 root:10001 0640, 키 2개 root 0600, Fleet viewer 'monitoring' 등록). overlay를 켜지 않았다 — 활성은 compose.monitoring.yaml 포함 서명 후보 적용 뒤 site.env 단계다.
+    state: GO
+    evidence: 관제(사이트) 호스트 입력 완료·Fleet viewer 'monitoring' 등록·overlay 활성(2026-11-01). rosy-site-monitoring-1 healthy. 현장 수용 기록 참조.
   FIELD:
-    state: HOLD
-    blocker: 실 PC 배치·LAN/TLS 단절 및 복구·시각·제어 영향 수용이 남아 있다.
+    state: GO
+    evidence: 실제 단절·거부·TLS 수용 2026-11-01 — 401(무자격·용도 불일치 키)·403(범위 밖)·Fleet 정지 중 수집기 독립(200)과 fleet 노드 신선도 구별(age_s 9.19/valid 15s)·모니터링 정지 시 Fleet 무영향(502/200)·원격 클라이언트 CA 신뢰 TLS 200(콘솔 로그인 포함). 한계: 로봇 오프라인(2026-10-10~)으로 로봇 원천 단절 관측은 연결 뒤 보강. [현장 수용 기록](../../docs/validation/monitoring-site-overlay-2026-11-01/result.md)
 adrs: [D-876, D-936]
 ---
 
