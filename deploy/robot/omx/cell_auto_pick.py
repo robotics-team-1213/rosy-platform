@@ -165,9 +165,9 @@ def observe(cell, config: dict, calibration: dict, site: str, roi, catalog: list
         return None, None, [], f"no map for {site}"
     img = cell.frame("top")
     cd.see(keep(f"auto-{site}-top", img))
-    poly, lab = config["sites"][site].get("surface_px"), config["sites"][site].get("surface_lab")
+    poly, lab, obj = config["sites"][site].get("surface_px"), config["sites"][site].get("surface_lab"), config.get("objects") or {}
     objects = cell_objects.detect(img, roi, record, config["cameras"]["top"], catalog, surface_z(config, site),
-                                  config.get("params"), poly, lab, (config.get("objects") or {}).get("hsv"))
+                                  config.get("params"), poly, lab, obj.get("hsv"))
     for o in objects:
         o["raw_m"] = [o["centre_mm"][0] / 1000, o["centre_mm"][1] / 1000]
     # the finger-side mask is not clipped to the site polygon: a container on the next surface (the board beside the
@@ -175,7 +175,7 @@ def observe(cell, config: dict, calibration: dict, site: str, roi, catalog: list
     near = cell_objects.foreground(img, roi, params=config.get("params"), surface_lab=lab)
     for poly in config["sites"][site].get("markings_px", []):  # flat floor markings (a white line) are no obstacle
         cv2.fillPoly(near, [np.asarray(poly, np.int32) - [roi[0], roi[1]]], 0)
-    return img, object_sized(near, config.get("params")), objects, None
+    return img, object_sized(near, config.get("params")) | cell_objects.colour_mask(img, roi, obj.get("hsv")), objects, None
 
 
 def object_sized(mask, params=None):

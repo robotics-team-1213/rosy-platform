@@ -354,7 +354,7 @@
 ## 최근 기록
 
 - 2026-11-01 · uncommitted · learning/omx: D-943 GPU 학습·장치 초안·작업대 녹화·HF 업로드 버튼
-- 2026-11-01 · uncommitted · fix(land): main이 이미 고친 MAIN-RED로 멈추지 않는다 (D-889 추가 14)
-- 2026-11-01 · uncommitted · fix(land): 재부팅은 시험 PC별로 비킨다 (D-889 추가 13)
-- 2026-11-01 · uncommitted · omx: 계획기 low_zones, 바닥 높이를 지정한 사각형 안에서만 낮춤
-- 2026-11-01 · uncommitted · omx: 통로 점검은 보이는 표면 밖이면 거절(낡은 surface_px), 카메라 교체 교훈 갱신
+- 2026-11-01 · uncommitted · tools: 정책 화면 수정 게시용 FULL 착지
+- 2026-11-01 · uncommitted · D-954 현장 마커 프로필과 팔 마커 50번부터
+- 2026-11-01 · 093ef30c2b · docs: autocrlf=false commit -a 교훈
+- 2026-11-01 · uncommitted · fix(land): main이 FULL로 넣은 변경은 지난 통과를 버리게 하지 않는다 (D-889 추가 17)

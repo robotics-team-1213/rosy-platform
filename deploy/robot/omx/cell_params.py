@@ -130,3 +130,10 @@ def load(path=None) -> dict:
 if __name__ == "__main__":
     loaded = load(sys.argv[1])
     print(len(loaded["values"]), "parameters ok, sha", loaded["sha"])
+
+
+def jaw_face_half_mm(params=None) -> float:
+    """Half the closed jaws' face across the fingers, from the measured finger spacing plus one finger: the one
+    gripper size every lane and room check uses (2026-11-01: about 42 mm across; a push lane taken as 20 mm wide
+    dragged both neighbouring columns along)."""
+    return (get(params, "look.other_finger_mm") + get(params, "auto.finger_mm")) / 2

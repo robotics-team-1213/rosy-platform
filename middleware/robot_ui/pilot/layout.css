@@ -273,6 +273,10 @@ body[data-pilot-screen="arm"] ui-topbar [data-gate-state] { display: none; }
 .arm-steps > li { counter-increment: arm-step; display: grid; gap: var(--space-2); align-content: start; min-width: 0;
   padding: var(--space-3); background: var(--surface-raised); border: 1px solid var(--border-subtle); border-radius: var(--radius-panel); }
 .arm-steps > li[data-state="current"] { border-color: var(--focus-ring); }
+[data-screen="arm"][data-recording] { padding-bottom: calc(var(--space-6) * 6); }
+[data-screen="arm"][data-recording] [data-sim-step="stop"] { position: fixed; z-index: 4;
+  inset: auto var(--space-3) calc(var(--space-3) + env(safe-area-inset-bottom, 0)); max-width: 40rem; margin-inline: auto;
+  border: 2px solid var(--focus-ring); }
 .arm-steps h4 { margin: 0; }
 .arm-steps h4::before { content: counter(arm-step) " · "; color: var(--text-secondary); }
 .arm-steps > li[data-state="done"] h4::after { content: " ✓"; color: var(--status-good); }

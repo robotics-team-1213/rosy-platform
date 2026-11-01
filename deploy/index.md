@@ -77,8 +77,8 @@
 
 ## 최근 기록
 
-- 2026-11-01 · a785121ef0 · sim/real 같은 동작: Planner.stream 하나
-- 2026-10-31 · a517780fbc · feat(model-pc): one Learning center follows the signed release; retire the candidates (D-857)
-- 2026-10-30 · 796fbe489c · D-871 가드 수집 관제 PC 적용과 `rosy-update-report` 선언
-- 2026-10-30 · uncommitted · 관제 PC Monitoring 설정 예시 (D-936)
-- 2026-10-30 · 6302fcb63c · 선택 Monitoring overlay를 서명 후보와 업데이트기에 등록 (D-936)
+- 2026-11-01 · uncommitted · fix(omx): 깊이 높이의 기준 평면이 프레임마다 바뀌지 않는다
+- 2026-11-01 · uncommitted · fix(omx): 피벗 측정점 찾기가 현장 바닥 색을 쓴다
+- 2026-11-01 · uncommitted · fix(omx): 팔 세션이 도는 동안 원격 시험을 관제 PC에서 뺀다
+- 2026-11-01 · uncommitted · feat(omx): 밀기도 판단·결과를 남기고, 집게 크기는 측정값 하나에서
+- 2026-11-01 · uncommitted · fix(omx): 밀기 경로가 집게가 지나는 폭까지 본다

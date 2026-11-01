@@ -1,0 +1,17 @@
+{
+  "schema": "rosy.marker-profile.v1",
+  "profile": "example",
+  "note": "Copy to /etc/rosy/site/marker-profile.json and edit for the site; check with deploy/site/marker_profile.py check. ids are [first, last] inclusive. DICT_4X4_50/_100 share ids 0-49 (same picture), so overlap is checked per family. use: calibration = a sheet held up only while calibrating.",
+  "allocations": [
+    {"owner": "charuco_board", "dictionary": "DICT_4X4_100", "ids": [0, 34], "use": "calibration", "decision": "D-933 1"},
+    {"owner": "dock_tag", "dictionary": "DICT_4X4_50", "ids": [7, 7], "decision": "D-562"},
+    {"owner": "arm_ceiling", "dictionary": "DICT_4X4_50", "ids": [20, 22], "decision": "D-954 3"},
+    {"owner": "field_corners", "dictionary": "DICT_4X4_50", "ids": [30, 33], "decision": "D-562"},
+    {"owner": "place_markers", "dictionary": "DICT_4X4_50", "ids": [34, 38], "decision": "D-564"},
+    {"owner": "robots", "dictionary": "DICT_4X4_50", "ids": [40, 49], "decision": "D-562"},
+    {"owner": "arm_slot_1", "dictionary": "DICT_4X4_100", "ids": [50, 64], "decision": "D-954 2"},
+    {"owner": "arm_slot_2", "dictionary": "DICT_4X4_100", "ids": [65, 79], "decision": "D-954 2"},
+    {"owner": "arm_slot_3", "dictionary": "DICT_4X4_100", "ids": [80, 94], "decision": "D-954 2"}
+  ],
+  "arms": {"1": "S", "2": "A", "3": "B"}
+}
