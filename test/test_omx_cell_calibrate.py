@@ -114,3 +114,23 @@ def test_a_pivot_near_a_packed_column_goes_over_it_only_when_the_jaws_clear_both
     assert cc.over_target(config, "pallet")
     config["params"]["pivot.over_target"] = 0
     assert not cc.over_target(config, "pallet")
+
+
+def test_a_jaw_mark_split_into_pieces_over_a_box_top_counts_once_merged_and_noise_does_not():
+    """2026-11-02: over a packed column the gripper body hid the fingers; the open-closed change came as 72, 165 and
+    260 px pieces a few px apart, each under min_blob 300, and the pivot marked nothing."""
+    pytest.importorskip("cv2")
+    import cell_pivot
+
+    closed = np.zeros((200, 200, 3), np.uint8)
+    opened = closed.copy()
+    opened[100:104, 80:104] = 255  # three pieces of one finger's change, 2-3 px apart
+    opened[106:114, 75:99] = 255
+    opened[116:131, 80:96] = 255
+    assert cell_pivot.jaw_blobs(closed, opened, {"pivot.merge_px": 0}) == []
+    merged = cell_pivot.jaw_blobs(closed, opened, {"pivot.merge_px": 3})
+    assert len(merged) == 1 and merged[0][2] >= 300
+    noise = closed.copy()
+    for x in range(10, 190, 20):  # scattered 4x4 specks, 16 px apart: not one mark at any merge
+        noise[50:54, x:x + 4] = 255
+    assert cell_pivot.jaw_blobs(closed, noise, {"pivot.merge_px": 3}) == []

@@ -75,15 +75,20 @@
     <a class="ui-subnav-item" href="/console?view=work&amp;show=pending">승인 대기</a>
     <a class="ui-subnav-item" href="/console?view=work&amp;show=done">끝난 작업</a>
     <a class="ui-subnav-item" href="/console?view=work&amp;show=new">새 작업</a>
+    <span class="ui-subnav-head">다른 문서</span>
     <a class="ui-subnav-item" href="/console/learning" aria-current="page">학습</a>
   </nav></div>
   <div class="fleet-workspace">
   <ui-status id="estop-feedback" hidden></ui-status>
+
+  <!-- D-926 2 — 경로 줄: 문서 제목과 현재 화면을 본문 머리에도 보인다. -->
+  <div class="ui-pathbar"><h1>학습 정책 승인</h1><strong>학습</strong></div>
+
   <main id="policy-main" class="policy-main fleet-task-page" tabindex="-1">
-    <h1 class="ui-page-heading">학습 정책 승인</h1>
-    <p>새로 학습한 정책은 0단계로 등록되고 실물을 움직이지 않습니다. 단계는 관리자 승인으로 하나씩 오르고,
-      실물을 움직이는 단계(3단계·제한 사용)는 제안한 사람과 다른 관리자가 승인합니다. 실물 실행은 승인 창이
-      열린 동안에만 이어지고, 확인 요청이나 사고가 생기면 1–2초 안에 멈춥니다.</p>
+    <p>새로 학습한 정책은 0단계로 등록되고 실물을 움직이지 않습니다.</p>
+    <details><summary class="ui-disclosure-row">단계와 승인 규칙</summary>
+      <p>단계는 관리자 승인으로 하나씩 오르고, 실물을 움직이는 단계(3단계·제한 사용)는 제안한 사람과 다른 관리자가 승인합니다.
+        실물 실행은 승인 창이 열린 동안에만 이어지고, 확인 요청이나 사고가 생기면 1–2초 안에 멈춥니다.</p></details>
     <label for="policy-workcell" class="ui-field-label" hidden>작업셀</label>
     <select id="policy-workcell" class="ui-field" aria-describedby="policy-verdict" hidden></select>
     <ui-status id="policy-verdict" state="pending" role="status">상태를 확인하고 있습니다.</ui-status>

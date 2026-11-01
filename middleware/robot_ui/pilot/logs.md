@@ -1099,3 +1099,9 @@
 - gate 변화: 없음
 - 결정: 없음
 - 교훈: 없음
+
+## 2026-11-01 · uncommitted · skip link 추가 (D-945)
+
+- 변경: `index.html` 본문 앞에 공용 `skip-link`(본문으로 건너뛰기, #pilot-main)를 넣었다. focal 문법이라 자리를 비우는 것은 합법이지만 건너뛰기는 표면 공통 의무다.
+- 증거: `test_layout_canon.py` focal 표면 검사 통과(순서·skip link). 원격 시험은 착지 전 기록.
+- Gate: 없음. CE: 해당 없음.
