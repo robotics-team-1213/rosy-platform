@@ -1068,6 +1068,12 @@
 - 증거: `tools/harness/size_range.py main HEAD` 16커밋 통과, 최종 `connect.js` 586줄. 동작 변경 없음. 실제 시험은 착지 auto 선택에 맡긴다.
 - gate 변화: 없음. CE: 해당 없음 — 기계적 이동이며 규칙은 기존 착지 교훈에 있다.
 
+## 2026-10-31 · uncommitted · 피어 공통 소스로 이동(D-939)
+
+- 변경: 이름만 다른 피어 서명·첫 접촉 CA 고정·Keystore 신원 사본(Pilot `PeerProof`/`PeerTls`/`AndroidPeerIdentity`, Cam `CameraProof`/`CameraTls`/`AndroidCameraIdentity`)을 `shared/android/peer` 한 곳으로 모았다. 두 앱이 `srcDir`로 함께 컴파일한다. 신원은 `AndroidPeerIdentity(context, app)`이고 기존 키 별칭·표시 파일·client id 접두어를 그대로 쓴다. 세션·보관소는 앱에 남긴다.
+- 증거: 새 구조 시험 `test/architecture/test_app_shared_sources.py` 3건이 main 배치에서 RED(빌드 미포함·12개 다시 선언·사본 4쌍), 이 브랜치에서 GREEN이다. 로컬 SDK35 빌드: Cam JVM 443 pass/0 skip, Pilot JVM 110 pass/1 skip(기존 ShellPageProbe), 두 앱 assembleDebug 성공. lint 0 error.
+- gate 변화: 없음. 실제 태블릿·휴대폰에서 기존 승인 관계 유지는 설치 후 확인한다. CE: 해당 없음 — 규칙은 D-939와 구조 시험에 있다.
+
 ## 2026-11-01 · f15a4cba63 · OMX SIM 시연 기록 순서·센서 값 화면
 
 - 변경: OMX SIM 화면의 시연 기록을 네 단계 카드로 바꿨다. (1) 시작 자세: 현재 관절 값을 시작 자세로 저장(이 기기의 localStorage, 인스턴스별)하고, 저장 자세까지 `max_step_rad` 이하 조그를 하나씩 보내 돌아간다(D-390 §2, `arm-stick.js` `homeStep`). 멈추면 보낸 한 걸음만 끝까지 간다. 녹화 중에는 이동하지 않는다. (2) 과제 설명: 여러 줄 입력, 300자 표시, 탭이 살아 있는 동안 다음 기록에 남긴다. 비어 있으면 녹화를 막는다(계약 `task` 최소 1자). (3) 녹화: 경과 시간(이 화면 기준)·프레임 수. (4) 결과 선택 select를 없애고 `성공으로 종료`·`실패 사례로 종료`·`결과 없이 종료` 버튼 하나로 정지와 결과를 함께 보낸다. 마지막 기록의 결과·프레임·episode를 남긴다.

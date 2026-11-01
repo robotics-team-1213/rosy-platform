@@ -18,7 +18,7 @@ colcon_roots: [learning, operations, middleware, contracts, integrations, shared
 # imported module can be traced back to its owner. Script folders that put
 # themselves on sys.path have none.
 
-parts: [middleware, operations, learning, contracts, integrations, shared_web, profiles, deploy, tools, test, docs]
+parts: [middleware, operations, learning, contracts, integrations, shared_web, shared_android, profiles, deploy, tools, test, docs]
 
 # D-427 §2. Same-part imports are always allowed. Parts not listed here
 # (profiles, deploy, tools, test, docs) are outside the import rules.
@@ -893,6 +893,14 @@ roots:
     d427_target: shared/web
     legacy: src/hmi/web_common
     wave: "4b"
+    concern: other
+    capability: platform
+
+  # --- shared android (D-939) -----------------------------------------------
+  - path: shared/android
+    part: shared_android
+    d427_target: shared/android
+    wave: none
     concern: other
     capability: platform
 

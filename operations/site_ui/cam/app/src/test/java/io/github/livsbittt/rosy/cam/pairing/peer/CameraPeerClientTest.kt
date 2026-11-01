@@ -1,5 +1,7 @@
 package io.github.livsbittt.rosy.cam.pairing.peer
 
+import io.github.livsbittt.rosy.peer.PeerProof
+import io.github.livsbittt.rosy.peer.PeerSigner
 import io.github.livsbittt.rosy.cam.pairing.PairableSite
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.Dispatcher
@@ -33,14 +35,15 @@ class CameraPeerClientTest {
         override fun endpointKeys() = rows.keys.map { it.removePrefix("fence|") }.toSet()
         override fun write(id: String, value: String, remove: Set<String>) { rows[id] = value; remove.forEach { rows.remove(it) } }
     }
-    private class Signer : CameraSigner {
+    private class Signer : PeerSigner {
         val key = KeyPairGenerator.getInstance("EC").apply { initialize(ECGenParameterSpec("secp256r1")) }.generateKeyPair()
-        override val publicKey = CameraProof.encodeKey(key.public)
-        override fun sign(context: String, fields: JSONObject) = CameraProof.sign(key.private, context, fields)
+        override val publicKey = PeerProof.encodeKey(key.public)
+        override fun sign(context: String, fields: JSONObject) = PeerProof.sign(key.private, context, fields)
+        override val clientId get() = "cam_" + PeerProof.fingerprint(publicKey).take(32)
     }
     private class Fixture : AutoCloseable {
         val receiver = Signer(); val mobile = Signer(); val memory = Memory()
-        val receiverId = "fleet-" + CameraProof.fingerprint(receiver.publicKey).take(32)
+        val receiverId = "fleet-" + PeerProof.fingerprint(receiver.publicKey).take(32)
         val ca = HeldCertificate.Builder().certificateAuthority(0).commonName("fixture CA").build()
         val leaf = HeldCertificate.Builder().commonName("site.local").addSubjectAlternativeName("site.local").signedBy(ca).build()
         val server = MockWebServer(); val requests = mutableListOf<RecordedRequest>()
@@ -61,15 +64,15 @@ class CameraPeerClientTest {
                     val path = request.path!!.removePrefix("/api/fleet/pairing/v2")
                     if (path == "/identity") {
                         val key = if (fault == "key") Signer().publicKey else receiver.publicKey
-                        return json(profile().put("receiver_id", receiverId).put("receiver_public_key", key).put("receiver_key_sha256", CameraProof.fingerprint(key))
-                            .put("tls_ca_pem", ca.certificatePem()).put("tls_ca_sha256", CameraProof.hash(ca.certificate.encoded)).put("tls_hostname", "site.local"))
+                        return json(profile().put("receiver_id", receiverId).put("receiver_public_key", key).put("receiver_key_sha256", PeerProof.fingerprint(key))
+                            .put("tls_ca_pem", ca.certificatePem()).put("tls_ca_sha256", PeerProof.hash(ca.certificate.encoded)).put("tls_hostname", "site.local"))
                     }
                     if (path == "/requests") {
                         assertNull(request.getHeader("Authorization"))
                         val proof = JSONObject(request.body.readUtf8()); val fields = proof.getJSONObject("fields")
                         assertEquals(mobile.publicKey, fields.getString("client_public_key")); assertEquals("camera", fields.getString("source_role"))
                         assertFalse(fields.has("role"))
-                        CameraProof.verify(mobile.publicKey, "request", fields, proof.getString("signature"))
+                        PeerProof.verify(mobile.publicKey, "request", fields, proof.getString("signature"))
                         return json(state("pending").put("request_secret", "S".repeat(43)))
                     }
                     if (path.startsWith("/requests/")) {
@@ -85,8 +88,8 @@ class CameraPeerClientTest {
                         if (fault == "challenge503") return MockResponse().setResponseCode(503)
                         if (fault == "revoked") return MockResponse().setResponseCode(409)
                         val fields = profile().put("relationship_id", "A".repeat(32)).put("challenge_id", "B".repeat(32))
-                            .put("nonce", "c".repeat(64)).put("receiver_id", receiverId).put("receiver_key_sha256", CameraProof.fingerprint(receiver.publicKey))
-                            .put("client_id", mobile.clientId).put("client_key_sha256", CameraProof.fingerprint(mobile.publicKey))
+                            .put("nonce", "c".repeat(64)).put("receiver_id", receiverId).put("receiver_key_sha256", PeerProof.fingerprint(receiver.publicKey))
+                            .put("client_id", mobile.clientId).put("client_key_sha256", PeerProof.fingerprint(mobile.publicKey))
                             .put("source_id", if (fault == "source") "other_camera" else "ceiling_north").put("generation", if (fault == "generation") 1 else 0)
                             .put("expires_at", Instant.now().plusSeconds(60).toString())
                         if (fault == "audience") fields.put("audience", "core-operator")
@@ -97,7 +100,7 @@ class CameraPeerClientTest {
                     if (path == "/session") {
                         assertNull(request.getHeader("Authorization"))
                         val proof = JSONObject(request.body.readUtf8())
-                        CameraProof.verify(mobile.publicKey, "session-request", proof.getJSONObject("fields"), proof.getString("signature"))
+                        PeerProof.verify(mobile.publicKey, "session-request", proof.getJSONObject("fields"), proof.getString("signature"))
                         if (fault == "retry503" && requests.count { it.path!!.endsWith("/session") } == 1)
                             return MockResponse().setResponseCode(503).setHeader("Retry-After", "0")
                         return json(profile().put("relationship_id", "A".repeat(32)).put("generation", 0).put("credential_id", "cam-peer-" + "C".repeat(24))
@@ -138,7 +141,7 @@ class CameraPeerClientTest {
             assertNull(f.vault.read(f.site)); assertEquals(0, f.requests.count { it.path!!.endsWith("/challenge") || it.path!!.endsWith("/session") })
         }
         Fixture().use { f ->
-            val result = f.flow(cameraPeerHttp(f.site)).connect({}, { assertEquals(CameraProof.hash(f.ca.certificate.encoded), it.sha256); true })
+            val result = f.flow(cameraPeerHttp(f.site)).connect({}, { assertEquals(PeerProof.hash(f.ca.certificate.encoded), it.sha256); true })
             assertEquals("ceiling_north", result.link.source)
             assertEquals("site.local", result.link.tlsHost); assertNotNull(result.link.caPin)
         }
