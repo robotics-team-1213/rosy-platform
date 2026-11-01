@@ -583,7 +583,8 @@ def test_own_browser_chunks_rerun_only_where_the_deltas_browser_chunks_reach(cal
     delta = dict(mode="full", escalations=["tools/land.py: harness"], local_invocations=[["fleet/test"]],
                  full_invocations=[["test"]])
     mine = dict(mode="affected", escalations=[], invocations=[["fleet/test/test_panel.py"]])
-    for delta_ui, want in (([], []), ([ui], [ui])):
+    other = ["ROSY_RUN_BROWSER_TESTS=1", "fleet/test/test_map_browser.py"]  # a delta chunk this branch does not touch
+    for delta_ui, want in (([], []), ([ui], [ui]), ([other], []), ([other, ui], [ui])):
         answers = [delta, mine]
         land.subprocess = SimpleNamespace(run=lambda command, **kw: SimpleNamespace(
             returncode=0, stdout=json.dumps(answers.pop(0)), stderr=""))

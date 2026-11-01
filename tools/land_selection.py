@@ -79,7 +79,9 @@ def select(land, wt: Path, base: str, python: str, head: str | None = None,
         # reach. Not its suites: a suite folder (operations/fleet/test) holds the browser files, so every chunk
         # counted as reached (11-02 03:32, a 6-invocation turn ran 7 serial browser chunks for 34 min). The
         # nightly full run covers browser tests (addendum 12).
-        return _unique(delta + [inv for inv in own if overlaps(delta, [inv])])
+        # The delta's own chunks too only where this branch's reach them (D-889 22's rule): 11-02 04:06 a turn reran
+        # 10 delta chunks of 8 min for a branch whose own chunks touched few of them.
+        return _unique([inv for inv in delta if overlaps(own, [inv])] + [inv for inv in own if overlaps(delta, [inv])])
 
     if (wt / "tools/harness/affected_tests.py").is_file():
         try:
