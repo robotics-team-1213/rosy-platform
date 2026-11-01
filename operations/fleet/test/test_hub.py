@@ -464,4 +464,16 @@ def test_a_refused_heartbeat_ends_the_last_good_snapshot_freshness():
     bad = {**good, "state_snapshot": {**good["state_snapshot"], "line_follow": {"crosswalk": "outside"}}}
     reply = hub.handle(Envelope(type=EnvelopeType.HEARTBEAT, payload=bad), session=session)
     assert reply.type is EnvelopeType.ERROR
+    # Not a pairing code: the robot agent must keep the session (fleet_agent SESSION_FATAL_ERRORS).
+    assert reply.payload["code"] == "PAYLOAD_INVALID"
     assert hub.registry.record("rosy_01").last_heartbeat_monotonic is None
+
+
+def test_a_malformed_event_is_payload_invalid_not_a_pairing_failure():
+    from fleet.hub.hub import HubSession
+
+    hub, session = SiteHub([_ep()]), HubSession()
+    hub.handle(_hello(), session=session)
+    reply = hub.handle(Envelope(type=EnvelopeType.EVENT, payload={"robot_id": "rosy_01"}), session=session)
+    assert reply.type is EnvelopeType.ERROR
+    assert reply.payload["code"] == "PAYLOAD_INVALID"

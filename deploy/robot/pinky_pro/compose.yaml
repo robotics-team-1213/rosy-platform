@@ -4,6 +4,7 @@ x-ros-environment: &ros-environment
   ROS_DOMAIN_ID: "${ROS_DOMAIN_ID:?ROS_DOMAIN_ID 미설정 — install-pi.sh 를 ROSY_ROBOT_NUMBER 와 함께 실행하라 (ADR D-33)}"
   RMW_IMPLEMENTATION: rmw_cyclonedds_cpp
   CYCLONEDDS_URI: file:///etc/rosy/cyclonedds.xml
+  ROS_AUTOMATIC_DISCOVERY_RANGE: LOCALHOST   # D-795 1
   ROS_LOG_DIR: /tmp/ros-logs
   ROSY_MOTION_PROFILE_FILE: /etc/rosy/motion_profiles.yaml
   ROSY_NAMESPACE: "${ROSY_NAMESPACE:?ROSY_NAMESPACE 미설정 — install-pi.sh 를 ROSY_ROBOT_NUMBER 와 함께 실행하라 (ADR D-33)}"

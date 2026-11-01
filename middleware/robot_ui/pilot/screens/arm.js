@@ -1,12 +1,26 @@
 // OMX-AI Gazebo practice (D-390, D-411 B). The target's rosy.controls/1 descriptor decides the
 // widgets; every input submits one bounded trajectory goal and the next only after it settles.
-import {readControls, fallbackOmxControls} from "../controls.js";
+import {readControls, fallbackOmxControls, gripperPercent, gripperStateLabel} from "../controls.js";
+import {homeStep} from "../arm-stick.js";
 import {composeControls} from "./compose.js";
 import {mountJointJog} from "../widgets/joint_jog.js";
 import {mountGripper} from "../widgets/gripper.js";
 
 const TERMINAL = ["SUCCEEDED", "REJECTED", "CANCELED", "UNKNOWN_HOLD"];
 const GOAL_POLL_MS = 250;   // a settled goal is seen before the 1 s heartbeat (sequential jog)
+const STALE_MS = 500;       // joint readback older than this is shown as stale
+const RECORD_LABEL = {idle: "기록 대기", recording: "녹화 중", complete: "기록 완료", incomplete: "기록 불완전"};
+const OUTCOME_LABEL = {success: "성공", failure: "실패 사례", unspecified: "결과 없음"};
+const deg = (rad) => `${(rad * 180 / Math.PI).toFixed(1)}°`;
+const clock = (ms) => { const s = Math.floor(ms / 1000); return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`; };
+function stored(name, key, value) {
+  try {
+    const storage = window[name];   // the getter itself throws when site data is blocked
+    if (value === undefined) return storage.getItem(key);
+    if (value === null) storage.removeItem(key); else storage.setItem(key, value);
+  } catch { /* private window or blocked storage: the screen works without it */ }
+  return null;
+}
 
 export function mountArm(root, target, driver) {
   const tokenKey = `rosy.pilot.omx-sim.${location.origin}`;
@@ -23,7 +37,16 @@ export function mountArm(root, target, driver) {
   let pollTimer = null;
   let pollWanted = false;
   let submitting = false;
+  let homing = false;
+  let homeNote = "";
+  let recordStartedAt = 0;
   const listeners = new Set();
+  const homeKey = `rosy.pilot.omx-sim.home.${target.instance_id ?? "sim"}`;
+  const taskKey = `rosy.pilot.omx-sim.task.${location.origin}`;
+  // The machine's demonstration profile owns the start pose; older servers fall back to this tablet.
+  const profileHome = target.start_pose ?? null;
+  let home = profileHome;
+  if (!home) try { home = JSON.parse(stored("localStorage", homeKey) ?? "null"); } catch { home = null; }
 
   root.innerHTML = `<header class="arm-head"><h2>OMX-AI Gazebo 연습</h2>
       <p>시뮬레이션 전용 · 실제 로봇과 연결되지 않습니다.</p></header>
@@ -36,9 +59,16 @@ export function mountArm(root, target, driver) {
           <img data-sim-camera alt="Gazebo 작업 공간" width="320" height="240" hidden>
           <figcaption data-sim-camera-status role="status">영상 확인 중</figcaption>
         </figure>
-        <details class="arm-state-details"><summary>관절 상태 상세</summary>
-          <pre data-sim-readback aria-label="관절 상태 상세"></pre>
-        </details>
+        <section class="arm-sensors" aria-labelledby="arm-sensors-head">
+          <div class="arm-sensors-head"><h3 id="arm-sensors-head">센서 값</h3>
+            <span class="arm-chip" data-sim-sensor-age data-state="stale">수신 대기</span></div>
+          <div class="ui-table-scroll"><table class="arm-sensor-table">
+            <thead><tr><th scope="col">관절</th><th scope="col">현재 각도</th><th scope="col">움직일 수 있는 범위 안 위치</th><th scope="col">시작 자세까지</th></tr></thead>
+            <tbody data-sim-sensors></tbody></table></div>
+          <details class="arm-state-details"><summary>원본 값 (JSON)</summary>
+            <pre data-sim-readback aria-label="관절 상태 원본"></pre>
+          </details>
+        </section>
       </section>
       <div class="arm-controls" data-sim-widgets></div>
       <div class="arm-actions">
@@ -46,15 +76,34 @@ export function mountArm(root, target, driver) {
           aria-describedby="arm-cancel-help">진행 중 명령 취소</ui-button>
         <p class="arm-hint" id="arm-cancel-help">취소하면 시뮬레이션 팔이 보류(HOLD) 상태가 됩니다. 평소에는 손을 떼면 됩니다.</p>
       </div>
-      <section data-sim-record-panel ${target.recording ? "" : "hidden"}>
-        <h3>시연 기록</h3>
-        <p>영상·관절 상태·수락된 조작 목표를 기록합니다. 결과는 직접 선택하세요.</p>
-        <label>연습 과제 <input class="ui-field" data-sim-task maxlength="300" placeholder="예: 물체를 향해 관절을 이동"></label>
-        <ui-button kind="primary" type="button" data-sim-record-start>기록 시작</ui-button>
-        <label>과제 결과 <select class="ui-field" data-sim-outcome><option value="unspecified">결과 선택</option>
-          <option value="success">성공</option><option value="failure">실패</option></select></label>
-        <ui-button kind="quiet" type="button" data-sim-record-stop disabled>기록 종료</ui-button>
-        <p data-sim-record-status role="status">기록 대기</p>
+      <section class="arm-record" data-sim-record-panel aria-labelledby="arm-record-head">
+        <h3 id="arm-record-head">시연 기록 순서</h3>
+        <p class="arm-hint">시작 자세로 맞추고, 과제를 적고, 녹화한 뒤 결과를 골라 끝냅니다. 영상·관절 값·수락된 조작 목표가 함께 남습니다.</p>
+        <ol class="arm-steps">
+          <li data-sim-step="home"><h4>시작 자세</h4>
+            <p class="arm-hint" data-sim-home-status role="status">저장된 시작 자세가 없습니다. 팔을 원하는 자세로 옮긴 뒤 저장하세요.</p>
+            <p class="arm-hint" data-sim-home-source ${profileHome ? "" : "hidden"}>이 기계의 시연 프로파일에 정해진 시작 자세입니다.</p>
+            <div class="arm-step-actions">
+              <ui-button kind="quiet" type="button" data-sim-home-save ${profileHome ? "hidden" : ""}>현재 자세를 시작 자세로 저장</ui-button>
+              <ui-button kind="primary" type="button" data-sim-home-go disabled>시작 자세로 이동</ui-button>
+            </div></li>
+          <li data-sim-step="task" ${target.recording ? "" : "hidden"}><h4>과제 설명</h4>
+            <label>무엇을 하는 시연인가요
+              <textarea class="ui-field" data-sim-task maxlength="300" rows="3"
+                placeholder="예: 파란 상자를 집어 벨트 표시 안에 놓기 · 성공: 표시 안에 놓임 · 실패: 떨어뜨림, 시간 초과"></textarea></label>
+            <p class="arm-hint" data-sim-task-count>0 / 300 · 다음 기록에도 그대로 남습니다</p></li>
+          <li data-sim-step="record" ${target.recording ? "" : "hidden"}><h4>녹화</h4>
+            <ui-button kind="primary" type="button" data-sim-record-start>녹화 시작</ui-button>
+            <p class="arm-record-status" data-sim-record-status role="status">기록 대기</p></li>
+          <li data-sim-step="stop" ${target.recording ? "" : "hidden"}><h4>종료하고 결과 남기기</h4>
+            <p class="arm-record-status" data-sim-record-live data-state="recording" aria-hidden="true" hidden></p>
+            <div class="arm-step-actions">
+              <ui-button kind="primary" type="button" data-sim-record-stop="success" disabled>성공으로 종료</ui-button>
+              <ui-button type="button" data-sim-record-stop="failure" disabled>실패 사례로 종료</ui-button>
+              <ui-button kind="quiet" type="button" data-sim-record-stop="unspecified" disabled>결과 없이 종료</ui-button>
+            </div>
+            <p class="arm-hint" data-sim-record-last hidden></p></li>
+        </ol>
       </section>
     </div>`;
   const $ = (selector) => root.querySelector(selector);
@@ -158,6 +207,8 @@ export function mountArm(root, target, driver) {
       }
       $("[data-sim-readback]").textContent = JSON.stringify({sequence: state.state_sequence,
         age_ms: state.joint_age_ms, joints: state.positions, goal: active || null}, null, 2);
+      renderSensors();
+      renderHome();
       notify({state, settled: null, error: null});
       if (target.recording && !goalOnly) await refreshRecording();
     } catch (error) { failed = true; state = null; showError(error); }
@@ -167,19 +218,151 @@ export function mountArm(root, target, driver) {
       if (!failed) schedulePoll();
     }
   }
+  const jogItem = () => items.find((item) => item.kind === "joint_jog");
+  const armJoints = () => target.joints.filter((name) => name !== target.gripper);
+  const maxStep = () => jogItem()?.max_step_rad ?? 0.02;
+  function setReason(button, reason) {
+    if (reason) button.setAttribute("reason", reason); else button.removeAttribute("reason");
+  }
+  function row(cells) {
+    const tr = document.createElement("tr");
+    cells.forEach((value, index) => {
+      const td = document.createElement(index ? "td" : "th");
+      if (!index) td.scope = "row";
+      td.append(value);
+      tr.append(td);
+    });
+    return tr;
+  }
+  function meter(value, low, high, label) {
+    if (![value, low, high].every(Number.isFinite) || !(low < high)) return "범위 정보 없음";
+    const node = document.createElement("meter");
+    Object.assign(node, {min: low, max: high, value, title: label});
+    node.setAttribute("aria-label", label);
+    return node;
+  }
+  // Every value comes from the readback; text only (no server string becomes HTML).
+  function renderSensors() {
+    const age = state?.joint_age_ms;
+    const chip = $("[data-sim-sensor-age]");
+    const fresh = Number.isFinite(age) && age <= STALE_MS;
+    chip.dataset.state = fresh ? "fresh" : "stale";
+    chip.textContent = Number.isFinite(age) ? `${fresh ? "수신 중" : "오래됨"} · ${age} ms 전` : "수신 없음";
+    const ranges = Object.fromEntries((jogItem()?.joints ?? []).map((joint) => [joint.name, joint]));
+    const rows = armJoints().map((name) => {
+      const value = state?.positions?.[name];
+      if (!Number.isFinite(value)) return row([name, "값 없음", "—", "—"]);
+      const range = ranges[name];
+      const goal = home?.[name];
+      const left = Number.isFinite(goal) ? goal - value : null;
+      return row([name, `${deg(value)} (${value.toFixed(3)} rad)`,
+                  meter(value, range?.lower, range?.upper, `${name} 범위 ${deg(range?.lower ?? 0)} ~ ${deg(range?.upper ?? 0)}`),
+                  left === null ? "—" : Math.abs(left) <= 0.01 ? "맞음" : `${left > 0 ? "+" : ""}${deg(left)}`]);
+    });
+    const g = state?.gripper;
+    if (g) {
+      const percent = gripperPercent(g.position, g);
+      rows.push(row([`${g.joint} (그리퍼)`, percent === null ? "값 없음" : `열림 ${percent}% · ${gripperStateLabel(g.state)}`,
+                     percent === null ? "—" : meter(percent, 0, 100, `그리퍼 열림 ${percent}%`), "—"]));
+    }
+    $("[data-sim-sensors]").replaceChildren(...rows);
+  }
+  function renderHome() {
+    const save = $("[data-sim-home-save]"), go = $("[data-sim-home-go]");
+    const positions = state?.positions ?? {};
+    const readable = armJoints().some((name) => Number.isFinite(positions[name]));
+    const recordingNow = recording?.status === "recording";
+    const step = home && homeStep(positions, home, maxStep());
+    save.disabled = homing || !readable;
+    setReason(save, homing ? "이동 중" : readable ? "" : "관절 값 수신 대기");
+    go.textContent = homing ? "이동 멈춤" : "시작 자세로 이동";
+    go.disabled = !homing && (!home || !seat || recordingNow || !step);
+    setReason(go, homing ? "" : !home ? "먼저 시작 자세를 저장하세요" : recordingNow ? "녹화 중에는 이동하지 않습니다"
+      : !step ? "이미 시작 자세입니다" : "");
+    const where = !home ? "저장된 시작 자세가 없습니다. 팔을 원하는 자세로 옮긴 뒤 저장하세요."
+      : step ? `시작 자세와 다릅니다 · ${step.joint} ${deg(step.remaining)} 남음` : "시작 자세에 있습니다";
+    $("[data-sim-home-status]").textContent = homing ? homeNote : [homeNote, where].filter(Boolean).join(" · ");
+    $("[data-sim-step='home']").dataset.state = home && !step ? "done" : homing ? "current" : "";
+  }
+  function nextUpdate(test) {
+    return new Promise((resolve) => {
+      const off = session.onUpdate((update) => { if (update.error || test(update)) { off(); resolve(update); } });
+    });
+  }
+  // One bounded jog at a time toward the saved pose (D-390 §2); stopping lets the last step finish.
+  async function goHome() {
+    if (homing) { homing = false; homeNote = "이동을 멈췄습니다. 이미 보낸 한 걸음은 끝까지 움직입니다."; renderHome(); return; }
+    homing = true;
+    homeNote = "";
+    while (homing && !disposed && seat) {
+      const step = homeStep(state?.positions, home, maxStep());
+      if (!step) { homeNote = ""; break; }
+      homeNote = `시작 자세로 이동 중 · ${step.joint} ${deg(step.remaining)} 남음`;
+      renderHome();
+      const id = await session.submitJog(step.joint, step.delta, jogItem()?.duration_s ?? 0.4);
+      if (id === false) { homeNote = "이동이 거절되었습니다. 위 상태 줄의 사유를 확인하세요."; break; }
+      if (id === null) {
+        session.requestPoll();
+        const ready = await nextUpdate((update) => update.state?.ready && !session.busy());
+        if (ready.error) { homeNote = `이동이 멈췄습니다 · ${ready.error.message}`; break; }
+        continue;
+      }
+      const done = await nextUpdate((update) => update.settled?.commandId === id);
+      if (done.settled?.state !== "SUCCEEDED") {
+        homeNote = `이동이 멈췄습니다 · ${done.settled?.state ?? done.error?.message ?? "확인 필요"}`;
+        break;
+      }
+      // The readback at the settle was taken while the goal ran: plan the next step from a fresh one.
+      const fresh = await nextUpdate((update) => !update.settled && update.state?.ready);
+      if (fresh.error) { homeNote = `이동이 멈췄습니다 · ${fresh.error.message}`; break; }
+    }
+    homing = false;
+    if (disposed) return;
+    renderHome();
+    if (target.recording) renderRecording();
+  }
+  let cameraFresh = false;
+  function renderRecording() {
+    const status = $("[data-sim-record-status]");
+    const now = recording?.status ?? "idle";
+    const task = $("[data-sim-task]").value.trim();
+    const issues = recording?.issues?.length ? ` · ${recording.issues.join(", ")}` : "";
+    status.dataset.state = now;
+    status.textContent = recordingError || (now === "recording"
+      ? `● 녹화 중 · ${clock(Date.now() - recordStartedAt)} · ${recording.frame_count} 프레임${issues}`
+      : `${RECORD_LABEL[now] ?? "기록 상태 확인 필요"} · ${recording?.frame_count ?? 0} 프레임${issues}`);
+    const start = $("[data-sim-record-start]");
+    start.disabled = now === "recording" || !state?.ready || !cameraFresh || homing || !task;
+    setReason(start, now === "recording" ? "녹화 중" : homing ? "시작 자세로 이동 중" : !task ? "과제 설명을 먼저 적으세요"
+      : !cameraFresh ? "영상 수신 대기" : !state?.ready ? "조작 준비 대기" : "");
+    root.querySelectorAll("[data-sim-record-stop]").forEach((button) => {
+      button.disabled = now !== "recording";
+      setReason(button, now === "recording" ? "" : "녹화 중일 때 누를 수 있습니다");
+    });
+    const last = $("[data-sim-record-last]");
+    last.hidden = !recording?.episode_id || now === "recording";
+    last.textContent = last.hidden ? "" : `마지막 기록 · ${OUTCOME_LABEL[recording.task_outcome] ?? "결과 없음"} · ${recording.frame_count} 프레임 · ${recording.episode_id}${issues}`;
+    $("[data-sim-step='task']").dataset.state = task ? "done" : "current";
+    $("[data-sim-step='record']").dataset.state = now === "recording" ? "current" : "";
+    $("[data-sim-step='stop']").dataset.state = now === "complete" ? "done" : now === "recording" ? "current" : "";
+    // While recording, the stop card is pinned to the viewport bottom: the stick and the stop stay in one view.
+    root.toggleAttribute("data-recording", now === "recording");
+    const live = $("[data-sim-record-live]");
+    live.hidden = now !== "recording";
+    live.textContent = live.hidden ? "" : status.textContent;
+  }
   async function refreshRecording() {
     recording = await request("/recordings");
     if (disposed) return;
-    const recordStatus = $("[data-sim-record-status]");
-    recordStatus.dataset.state = recording.status;
-    const recordLabel = {idle: "기록 대기", recording: "기록 중", complete: "기록 완료", error: "기록 오류"};
-    recordStatus.textContent = recordingError || `${recordLabel[recording.status] ?? "기록 상태 확인 필요"} · ${recording.frame_count} 프레임${recording.issues.length ? ` · ${recording.issues.join(", ")}` : ""}`;
-    $("[data-sim-record-start]").disabled = recording.status === "recording" || !state?.ready;
-    $("[data-sim-record-stop]").disabled = recording.status !== "recording";
+    if (recording.status !== "recording") recordStartedAt = 0;
+    else if (!recordStartedAt) recordStartedAt = Date.now();   // shortcut: counted from when this screen saw it start
+    renderRecording();
+    renderHome();
     const camera = await request("/camera");
     if (disposed) return;
+    cameraFresh = Boolean(camera.fresh);
     $("[data-sim-camera-status]").textContent = camera.fresh ? `영상 수신 · ${camera.age_ms} ms` : "영상 없음 또는 오래됨 · 기록 시작 보류";
-    $("[data-sim-record-start]").disabled ||= !camera.fresh;
+    renderRecording();
     $("[data-sim-camera]").hidden = !camera.fresh;
     if (camera.fresh) {
       const blob = await request("/camera/frame", {format: "blob"});
@@ -189,27 +372,49 @@ export function mountArm(root, target, driver) {
       $("[data-sim-camera]").src = previewUrl;
     }
   }
+  const task = $("[data-sim-task]");
+  task.value = stored("sessionStorage", taskKey) ?? target.task ?? "";
+  const countTask = () => { $("[data-sim-task-count]").textContent = `${task.value.length} / 300 · 다음 기록에도 그대로 남습니다`; };
+  countTask();
+  task.addEventListener("input", () => {
+    stored("sessionStorage", taskKey, task.value || null);
+    countTask();
+    if (target.recording) renderRecording();
+  });
+  $("[data-sim-home-save]").addEventListener("click", () => {
+    const positions = state?.positions ?? {};
+    const pose = Object.fromEntries(armJoints().filter((name) => Number.isFinite(positions[name]))
+      .map((name) => [name, positions[name]]));
+    if (!Object.keys(pose).length) return;
+    home = pose;
+    stored("localStorage", homeKey, JSON.stringify(pose));
+    homeNote = "";
+    renderHome();
+    renderSensors();
+  });
+  $("[data-sim-home-go]").addEventListener("click", goHome);
   $("[data-sim-record-start]").addEventListener("click", async () => {
     try {
-      recording = await request("/recordings", {method: "POST", body: JSON.stringify({seat_id: seat, task: $("[data-sim-task]").value.trim()})});
+      recording = await request("/recordings", {method: "POST", body: JSON.stringify({seat_id: seat, task: task.value.trim()})});
       recordingError = "";
+      recordStartedAt = Date.now();
       await refresh();
     } catch (error) {
       recordingError = `기록 시작 실패 · ${error.message}`;
       $("[data-sim-record-status]").textContent = recordingError;
     }
   });
-  $("[data-sim-record-stop]").addEventListener("click", async () => {
+  root.querySelectorAll("[data-sim-record-stop]").forEach((button) => button.addEventListener("click", async () => {
     if (recording?.status !== "recording") return;
     try {
-      recording = await request(`/recordings/${encodeURIComponent(recording.episode_id)}/stop`, {method: "POST", body: JSON.stringify({seat_id: seat, outcome: $("[data-sim-outcome]").value})});
+      recording = await request(`/recordings/${encodeURIComponent(recording.episode_id)}/stop`, {method: "POST", body: JSON.stringify({seat_id: seat, outcome: button.dataset.simRecordStop})});
       recordingError = "";
       await refresh();
     } catch (error) {
       recordingError = `기록 종료 실패 · ${error.message}`;
       $("[data-sim-record-status]").textContent = recordingError;
     }
-  });
+  }));
   function release(error = new Error("조작권을 반납했습니다")) {
     connectionGeneration++;
     const released = seat;
@@ -297,6 +502,7 @@ export function mountArm(root, target, driver) {
   const disposeWidgets = composeControls($("[data-sim-widgets]"), items,
                                         {joint_jog: mountJointJog, gripper: mountGripper}, session);
 
+  renderHome();
   $("[data-sim-connect]").addEventListener("click", connect);
   cancel.addEventListener("click", async () => {
     if (!active) return;
@@ -320,6 +526,7 @@ export function mountArm(root, target, driver) {
   if (token) connect();
   return () => {
     disposed = true;
+    homing = false;
     clearInterval(interval);
     clearTimeout(pollTimer);
     disposeWidgets();

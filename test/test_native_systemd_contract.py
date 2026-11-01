@@ -174,7 +174,7 @@ def test_runtime_environment_contains_no_secret_and_preserves_dds_isolation():
 
     for name in (
         "ROS_DOMAIN_ID=", "ROSY_NAMESPACE=", "RMW_IMPLEMENTATION=rmw_cyclonedds_cpp",
-        "CYCLONEDDS_URI=file:///etc/rosy/cyclonedds.xml",
+        "CYCLONEDDS_URI=file:///etc/rosy/cyclonedds.xml", "ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST",
         "ROSY_CMD_VEL_TIMEOUT_S=0.5", "ROSY_RUNTIME_MODE=core",
     ):
         assert name in env
@@ -289,6 +289,17 @@ def test_journald_keeps_a_bounded_persistent_ledger():
     for directive in ("[Journal]", "Storage=persistent", "SystemMaxUse=200M", "RuntimeMaxUse=32M"):
         assert directive in conf
     assert 'journald-60-rosy.conf" "$OVERLAY/etc/systemd/journald.conf.d/60-rosy.conf"' in payload
+
+
+def test_wifi_power_save_is_off_for_teleop_latency():
+    # Teleop watchdog is 500 ms; brcmfmac power save alone can spend most of it.
+    conf = (ROOT / "deploy/robot/pinky_pro/native/networkmanager-60-rosy-wifi.conf").read_text(encoding="utf-8")
+    payload = (ROOT / "deploy/robot/pinky_pro/image/build-native-payload.sh").read_text(encoding="utf-8")
+    first_boot = (ROOT / "deploy/robot/pinky_pro/image/first-boot/rosy-first-boot.py").read_text(encoding="utf-8")
+
+    assert "[connection]" in conf and "wifi.powersave = 2" in conf
+    assert 'networkmanager-60-rosy-wifi.conf" "$OVERLAY/etc/NetworkManager/conf.d/60-rosy-wifi.conf"' in payload
+    assert '"powersave=2"' in first_boot
 
 
 def test_ros_log_directories_are_aged_out():
@@ -659,6 +670,9 @@ PROGRAM_SOURCES = {
     # D-190 / D-433: the face loop, the emotion cards and LCD driver, rosylib.Battery.
     "rosy-face.service": ["deploy/robot/pinky_pro/native/rosy-face.py",
                           "deploy/robot/pinky_pro/native/face_card_renderer.py",
+                          "deploy/robot/pinky_pro/native/rosy_face_parts.py",
+                          "deploy/robot/pinky_pro/native/rosy_face_inputs.py",
+                          "deploy/robot/pinky_pro/native/rosy_face_display.py",
                           "deploy/robot/pinky_pro/native/recovery_display.py",
                           # D-260: the rule table it imports from the release.
                           "contracts/foundation/core_common/robot_state.py",
@@ -691,7 +705,8 @@ PROGRAM_SOURCES = {
                                  "deploy/robot/pinky_pro/native/rosy_transfer.py",
                                  "deploy/robot/pinky_pro/native/rosy-release-unpack.sh",
                                  "deploy/robot/pinky_pro/native/native_release.py",
-                                 "deploy/robot/pinky_pro/native/sync-image-layer.py"],
+                                 "deploy/robot/pinky_pro/native/sync-image-layer.py",
+                                 "deploy/robot/pinky_pro/native/image_layer_plan.py", "deploy/robot/pinky_pro/native/image_layer_records.py"],
 }
 
 DECLARED_READS["rosy-os-tailnet.service"] = DECLARED_READS["rosy-os-storage.service"]

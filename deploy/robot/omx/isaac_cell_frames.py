@@ -52,8 +52,8 @@ def frames_for(scenario, plan: dict | None = None) -> dict:
     transit_q = [norm_to_rad(transit.get(i, plan["home"][i])) for i in range(5)]
     arm = sim_plan(home_q=[norm_to_rad(v) for v in plan["home"]], transit_q=transit_q,
                    pick=(bx + ax, by + ay, grasp_z, site_yaw), place=(px, py, top + f.BOX - GRASP_DEPTH + RELEASE_DZ, place_yaw),
-                   approach_m=plan["approach_m"], grip_open=f.FIXTURE["gripper_open_rad"],
-                   grip_close=f.FIXTURE["gripper_closed_rad"], limits=plan["limits"], fps=f.FIXTURE["frame_fps"])
+                   grip_open=f.FIXTURE["gripper_open_rad"], grip_close=f.FIXTURE["gripper_closed_rad"],
+                   limits=plan["limits"], fps=f.FIXTURE["frame_fps"], real=plan)
     phases = chunk_phases(Planner(arm), JOINTS, "gripper_joint_1", 0.0)  # step 0: keep every frame
     return {"schema": SCHEMA, "scenario": scenario if isinstance(scenario, str) else "case",
             **({} if isinstance(scenario, str) else {"case": case}), "fps": f.FIXTURE["frame_fps"], "joints": list(JOINTS),

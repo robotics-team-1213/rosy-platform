@@ -68,6 +68,7 @@
 ## 교훈 (docs/solutions)
 
 - [컨테이너에서 `kill -0`은 좀비를 산 것으로 본다](../docs/solutions/deployment/container-zombie-kill0-blindness.md)
+- [실험실 PC에서 시뮬 셀 소유자는 장치 없는 namespace와 짧은 소켓 경로로 띄운다](../docs/solutions/deployment/sim-cell-owner-on-a-lab-pc-needs-a-device-free-namespace-2026-10-31.md)
 - [Cell 시뮬레이터는 홈 복귀를 관측한 뒤 Action을 받는다](../docs/solutions/logic-errors/cell-startup-must-reach-home-before-action-admission.md)
 
 ## 시험
@@ -76,8 +77,8 @@
 
 ## 최근 기록
 
+- 2026-11-01 · uncommitted · fix(omx): 손가락 여유 검사가 검출기가 물체라 부르는 것을 모두 본다
+- 2026-11-01 · a785121ef0 · sim/real 같은 동작: Planner.stream 하나
 - 2026-10-31 · a517780fbc · feat(model-pc): one Learning center follows the signed release; retire the candidates (D-857)
 - 2026-10-30 · 796fbe489c · D-871 가드 수집 관제 PC 적용과 `rosy-update-report` 선언
 - 2026-10-30 · uncommitted · 관제 PC Monitoring 설정 예시 (D-936)
-- 2026-10-30 · 6302fcb63c · 선택 Monitoring overlay를 서명 후보와 업데이트기에 등록 (D-936)
-- 2026-10-30 · uncommitted · field marks admission의 원격 GREEN·mutation·복귀 검증

@@ -98,4 +98,9 @@ D-917 reserved in another in-flight branch (refs/adr/D-917), absent from this D-
 D-918 reserved in another in-flight branch (refs/adr/D-918), absent from this D-919 branch; remove when its ADR lands
 D-930 pending: reserved for the ARM transfer recheck ADR (commit 800aec0d82), not on main when D-931..933 landed
 D-937 reserved in another in-flight branch (docs/app-surface-grammar), absent from this D-938 branch; remove when its ADR lands
-D-939 reserved in another in-flight branch (refs/adr/D-939), absent from this D-940 branch; remove when its ADR lands
+D-950 reserved in another in-flight branch (refs/adr/D-950), absent from this D-951 branch; remove when its ADR lands
+D-942 unused: no refs/adr/D-942 and no ADR file in any branch or worktree when D-944/D-948 landed (2026-11-01)
+D-943 reserved in another in-flight branch (worktree arm-recheck), absent from this D-944/D-948 branch; remove when its ADR lands
+D-945 reserved in another in-flight branch (worktree install-seat), absent from this D-944/D-948 branch; remove when its ADR lands
+D-946 reserved in another in-flight branch (worktree sim-parity), absent from this D-944/D-948 branch; remove when its ADR lands
+D-947 reserved in another in-flight branch (worktree release-corrector), absent from this D-944/D-948 branch; remove when its ADR lands

@@ -158,8 +158,35 @@ def _delta_paths(wt: Path, base: str, head: str, python: str, select) -> list[st
     except Exception as exc:  # a selector failure only means no narrow reuse
         print(f"[cache] selector failed ({exc}); no narrow reuse from {base[:10]}")
         return None
+    if full:
+        invocations = _landed_full(wt, base, head, python, select)
+        if invocations is None:
+            return None
     picked = [_paths(inv) for inv in invocations]
-    return None if full or None in picked else [p for paths in picked for p in paths]
+    return None if None in picked else [p for paths in picked for p in paths]
+
+
+def _landed_full(wt: Path, base: str, head: str, python: str, select) -> list[list[str]] | None:
+    """D-889 17: base..head is FULL only through commits main already landed with their own FULL tier, so it touches
+    their mapped suites (the turn's rule, land_selection) plus what each of this branch's new commits selects.
+    None when one of those own commits is FULL itself. 11-01: 30 of 40 sampled narrow tries were FULL, mostly
+    main's landing-tool and harness changes, and each re-prepare reran every passed suite."""
+    try:
+        own = _git(wt, "rev-list", "--no-merges", f"{base}..{head}", "--not", "main").stdout.split()
+        invocations = []
+        for commit in own:
+            mine, note = select(wt, f"{commit}^", python, head=commit)
+            if note:
+                return None
+            invocations += mine
+        delta, note = select(wt, base, python, head=head, landed=True)
+    except Exception as exc:  # noqa: BLE001 - a selector failure only means no narrow reuse
+        print(f"[cache] selector failed ({exc}); no narrow reuse from {base[:10]}")
+        return None
+    if note:
+        return None
+    print(f"[cache] {base[:10]}..{head[:10]} is FULL through main's landed commits only: their mapped suites", flush=True)
+    return invocations + delta
 
 
 def split(wt: Path, args, invocations: list[list[str]], head: str, python: str, select):

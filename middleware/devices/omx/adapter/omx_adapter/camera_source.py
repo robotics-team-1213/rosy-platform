@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import socket
 import signal
+import subprocess
 import time
 
 
@@ -25,6 +26,43 @@ def selected_device(value):
 
 
 FORMATS = ('MJPG', 'YUYV')  # YUYV only when a camera's role names it: a RealSense D435 colour node has no MJPEG
+# A depth role names its raw format; its frames are read through v4l2-ctl, as OpenCV 4.10 opened no Z16 node
+# (2026-10-31, RealSense D435). Bytes per pixel, little-endian.
+DEPTH_FORMATS = {'Z16': 2}
+
+
+class DepthCapture:
+    """Raw 640x480 frames of a depth node, one fixed-size frame per read, through `v4l2-ctl --stream-to=-`."""
+
+    def __init__(self, device, fourcc, popen=subprocess.Popen):
+        self.size = 640 * 480 * DEPTH_FORMATS[fourcc]
+        self.process = popen(['v4l2-ctl', '-d', device,
+                              f'--set-fmt-video=width=640,height=480,pixelformat={fourcc.ljust(4)}',
+                              '--stream-mmap', '--stream-to=-'], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+
+    def read(self, np):
+        data = self.process.stdout.read(self.size)
+        if len(data) != self.size:
+            self.release()
+            raise OSError('depth frame unavailable')
+        return np.frombuffer(data, '<u2').reshape(480, 640)
+
+    def release(self):
+        self.process.kill()
+        self.process.wait(timeout=5)
+
+
+def depth_outputs(depth, cv, np, unit_m, range_mm):
+    """(colour-mapped JPEG preview for people, lossless 16-bit PNG and its facts for learning and the cell)."""
+    lo, hi = range_mm
+    scaled = np.clip((depth.astype(np.float32) * unit_m * 1000 - lo) / (hi - lo) * 255, 0, 255).astype(np.uint8)
+    preview = cv.applyColorMap(255 - scaled, cv.COLORMAP_TURBO)  # near is warm
+    preview[depth == 0] = 0  # no depth reading
+    ok_jpeg, jpeg = cv.imencode('.jpg', preview, [cv.IMWRITE_JPEG_QUALITY, 80])
+    ok_png, png = cv.imencode('.png', depth)
+    if not (ok_jpeg and ok_png):
+        raise OSError('depth encoding failed')
+    return jpeg.tobytes(), png.tobytes(), {'unit_m': unit_m, 'valid_fraction': round(float((depth > 0).mean()), 3)}
 
 
 def open_capture(cv, device, fourcc='MJPG'):
@@ -80,13 +118,24 @@ def main():
     if Path(args.device).parent not in PERSISTENT_CAMERA_DIRECTORIES:
         parser.error(PERSISTENT_CAMERA_ERROR)
     fourcc = os.environ.get('ROSY_CAMERA_FOURCC', 'MJPG')  # raw USB bandwidth is an explicit per-camera choice
-    if fourcc not in FORMATS:
-        parser.error(f'ROSY_CAMERA_FOURCC must be one of {FORMATS}')
+    if fourcc not in FORMATS + tuple(DEPTH_FORMATS):
+        parser.error(f'ROSY_CAMERA_FOURCC must be one of {FORMATS + tuple(DEPTH_FORMATS)}')
+    depth = fourcc in DEPTH_FORMATS
+    try:
+        unit_m = float(os.environ.get('ROSY_DEPTH_UNIT_M', '0.001'))
+        range_mm = tuple(float(v) for v in os.environ.get('ROSY_DEPTH_RANGE_MM', '300,1200').split(','))
+    except ValueError:
+        parser.error('ROSY_DEPTH_UNIT_M is metres per count and ROSY_DEPTH_RANGE_MM is near,far')
+    if depth and not (0 < unit_m < 1 and len(range_mm) == 2 and 0 <= range_mm[0] < range_mm[1]):
+        parser.error('ROSY_DEPTH_UNIT_M is metres per count and ROSY_DEPTH_RANGE_MM is near,far')
     import cv2
+    import numpy as np
     from core_common.observation_snapshot import SnapshotChannel, interrupt_on_termination
     from camera_quality import frame_quality
 
+    # a depth role keeps its preview on the topic (viewer, bridge, Fleet unchanged) and the raw depth beside it
     channel, capture = SnapshotChannel(args.topic), None
+    raw = SnapshotChannel(args.topic + ':depth16') if depth else None
     previous = signal.signal(signal.SIGTERM, interrupt_on_termination)
     try:
         while True:
@@ -94,8 +143,16 @@ def main():
             notify_watchdog()
             try:
                 if capture is None:
-                    capture = open_capture(cv2, selected_device(args.device), fourcc)
+                    device = selected_device(args.device)
+                    capture = DepthCapture(device, fourcc) if depth else open_capture(cv2, device, fourcc)
                     print(f'native {fourcc} 640x480 preview; calibration=unverified', flush=True)
+                if depth:
+                    preview, png, facts = depth_outputs(capture.read(np), cv2, np, unit_m, range_mm)
+                    captured_at = time.time()
+                    raw.write('depth16', png, captured_at=captured_at, quality=facts)
+                    channel.write('jpeg', preview, captured_at=captured_at)
+                    time.sleep(max(0, 1/args.max_fps-(time.monotonic()-started)))
+                    continue
                 frame = read_frame(capture)
                 captured_at = time.time()
                 # shortcut: receipt time only; use exposure timestamps before calibrated control or recording.

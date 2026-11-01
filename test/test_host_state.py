@@ -172,7 +172,7 @@ def test_dry_run_prints_the_diff_and_changes_nothing(tmp_path):
     fake, bin_dir = _fakes(tmp_path)
     result = _run(tmp_path, bin_dir, fake, "install", "model", "--dry-run")
     assert result.returncode == 0, result.stderr
-    assert "+OnCalendar=*-*-* 06:03:00" in result.stdout
+    assert "+OnCalendar=*-*-* 04:58:00" in result.stdout
     assert "[approval=recovery] /etc/systemd/system.conf.d/rosy-watchdog.conf: missing: skip (needs --approve)" in result.stdout
     assert not (tmp_path / "host").exists()
     assert [c for c in _calls(fake) if not c.startswith(("systemctl is-", "nmcli -t"))] == []

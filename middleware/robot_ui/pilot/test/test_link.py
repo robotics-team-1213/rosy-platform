@@ -35,7 +35,7 @@ const states = [];
 const conflicts = [];
 function makeSession(overrides = {}) {
   // 세션마다 독립 배열 — 한 시험에서 여러 세션을 만들어도 오염되지 않는다.
-  const own = {sockets: [], timers: [], posts: [], whoamiCalls: [], states: [], conflicts: []};
+  const own = {sockets: [], timers: [], posts: [], whoamiCalls: [], states: [], conflicts: [], latencies: []};
   const openSocket = (url) => {
     const socket = {url, sent: [], closed: [], open: false};
     socket.send = (raw) => socket.sent.push(JSON.parse(raw));
@@ -51,12 +51,14 @@ function makeSession(overrides = {}) {
   return {
     session: link.createDeviceSession({
       token: 'T',
+      teleopUrl: overrides.teleopUrl ?? null,   // REST 시험 기본. WS 시험만 켠다
       openSocket,
       schedule,
       postJson,
       whoami: overrides.whoami || (async () => { own.whoamiCalls.push(1); return {status: 200, ok: true, body: {role: 'operator'}}; }),
       onState: (s) => own.states.push(s),
       onConflict: (c) => own.conflicts.push(c),
+      onLatency: (ms, failed) => own.latencies.push({ms, failed}),
     }),
     ...own,
   };
@@ -458,3 +460,72 @@ def test_rezero_waits_for_the_overlapping_motion_to_settle():
     console.log(JSON.stringify({afterZero, final: posts.map(p => p.body.linear)}));
     """)
     assert out == {"afterZero": [0.1, 0], "final": [0.1, 0, 0]}
+
+
+_WS_SETUP = """
+const h = makeSession({teleopUrl: '/ws/teleop'});
+h.session.open();
+connect(h.sockets[0]);
+const tws = h.sockets[1];
+tws.onopen?.();
+"""
+
+
+def test_ws_teleop_is_preferred_and_sends_increasing_seq_with_ack_latency():
+    out = _run_js(_harness() + _WS_SETUP + """
+    await h.session.command({linear: 0.1, angular: 0});
+    await new Promise(r => setTimeout(r, 120));
+    await h.session.command({linear: 0.2, angular: 0});
+    tws.onmessage({data: JSON.stringify({type: 'ack', seq: 1, accepted: true, code: null})});
+    console.log(JSON.stringify({url: tws.url, auth: tws.sent[0], frames: tws.sent.slice(1), posts: h.posts.length,
+      latency: h.latencies.length}));
+    """)
+    assert out["url"] == "/ws/teleop" and out["auth"] == {"type": "auth", "token": "T"}
+    assert out["frames"] == [{"type": "teleop", "seq": 1, "linear": 0.1, "angular": 0},
+                             {"type": "teleop", "seq": 2, "linear": 0.2, "angular": 0}]
+    assert out["posts"] == 0 and out["latency"] == 1
+
+
+def test_ws_closed_falls_back_to_rest_and_zeroes_after_motion():
+    out = _run_js(_harness() + _WS_SETUP + """
+    await h.session.command({linear: 0.1, angular: 0});
+    tws.onclose({code: 1006});
+    await h.session.zero();
+    console.log(JSON.stringify({posts: h.posts.map(p => p.body), retry: h.timers.some(t => t.ms === 2000)}));
+    """)
+    assert out["posts"][0] == {"linear": 0, "angular": 0}
+    assert out["retry"] is True
+
+
+def test_ws_before_open_uses_rest():
+    out = _run_js(_harness() + """
+    const h = makeSession({teleopUrl: '/ws/teleop'});
+    h.session.open();
+    connect(h.sockets[0]);          // teleop socket exists but never opened
+    await h.session.command({linear: 0.1, angular: 0});
+    console.log(JSON.stringify({posts: h.posts.length, sent: h.sockets[1].sent.length}));
+    """)
+    assert out["posts"] == 1 and out["sent"] == 0
+
+
+def test_ws_conflict_ack_blocks_driving_like_a_409():
+    out = _run_js(_harness() + _WS_SETUP + """
+    await h.session.command({linear: 0.1, angular: 0});
+    tws.onmessage({data: JSON.stringify({type: 'ack', seq: 1, accepted: false, code: 'TRIP_LEASED'})});
+    const sentBefore = tws.sent.length;
+    await h.session.command({linear: 0.2, angular: 0});
+    console.log(JSON.stringify({state: h.states.at(-1), conflicts: h.conflicts, blocked: h.session.blocked(),
+      extra: tws.sent.length - sentBefore}));
+    """)
+    assert out["state"] == "BLOCKED" and out["conflicts"] == [{"code": "TRIP_LEASED"}]
+    assert out["blocked"] is True and out["extra"] == 0
+
+
+def test_ws_without_acks_is_abandoned_for_rest():
+    out = _run_js(_harness() + _WS_SETUP + """
+    await h.session.command({linear: 0.1, angular: 0});      // never acked
+    await new Promise(r => setTimeout(r, 1100));
+    await h.session.command({linear: 0.1, angular: 0});
+    console.log(JSON.stringify({posts: h.posts.length, failed: h.latencies.some(l => l.failed)}));
+    """)
+    assert out["posts"] == 1 and out["failed"] is True

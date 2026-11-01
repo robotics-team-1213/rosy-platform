@@ -110,6 +110,57 @@ def test_the_ap_steps_aside_after_the_hold_so_site_wifi_can_be_retried():
     assert action == "close" and state.no_uplink_since == 1600.0  # a fresh grace before reopening
 
 
+def test_an_unused_ap_steps_aside_early_so_a_returning_site_router_is_rejoined():
+    """Router reboot: every robot opened its AP; nobody joined, so none waits the full hold."""
+    module = _module()
+    policy = {**POLICY, "idle_hold_seconds": 120}
+    state = _state(module, ap_active=True, ap_since=1000.0)
+
+    assert module.decide(state, 1119.0, policy, uplink=False, ap_idle=True)[0] is None
+    action, state = module.decide(state, 1120.0, policy, uplink=False, ap_idle=True)
+    assert action == "close" and state.no_uplink_since == 1120.0
+    used = _state(module, ap_active=True, ap_since=1000.0)   # someone is on the AP: full hold
+    assert module.decide(used, 1500.0, policy, uplink=False, ap_idle=False)[0] is None
+
+
+def test_grace_offset_staggers_robots_and_delays_the_open(tmp_path):
+    """Robots behind one rebooted router do not all open their APs in the same poll."""
+    module = _module()
+    assert module.grace_offset(tmp_path) == 0                       # no identity: no offset
+    offsets = set()
+    for name in ("rosy-pinky-e4us", "rosy-pinky-a1b2", "rosy-pinky-zz09", "rosy-pinky-q7k3"):
+        root = tmp_path / name
+        (root / "etc/rosy").mkdir(parents=True)
+        (root / "etc/rosy/device-identity.json").write_text(json.dumps({"device_name": name}), encoding="utf-8")
+        offset = module.grace_offset(root)
+        assert offset == module.grace_offset(root) and 0 <= offset < module.GRACE_JITTER_SECONDS
+        assert module.load_policy(root)["grace_offset_seconds"] == offset
+        offsets.add(offset)
+    assert len(offsets) > 1
+    policy = {**POLICY, "grace_offset_seconds": 7}
+    state = _state(module, no_uplink_since=1000.0)
+    assert module.decide(state, 1126.0, policy, uplink=False)[0] is None
+    assert module.decide(state, 1127.0, policy, uplink=False)[0] == "open"
+
+
+def test_idle_mark_counts_only_packets_since_the_ap_opened():
+    module = _module()
+    assert module.idle_mark(False, 50, 60) == (False, None)
+    assert module.idle_mark(True, None, 50) == (True, 50)      # first poll with the AP up
+    assert module.idle_mark(True, 50, 50) == (True, 50)
+    assert module.idle_mark(True, 50, 53) == (False, 50)       # a client sent something
+    assert module.idle_mark(True, None, None) == (False, None)  # unreadable counter: never idle
+
+
+def test_rx_packets_reads_the_wlan0_counter(tmp_path):
+    module = _module()
+    assert module.rx_packets(tmp_path) is None
+    counter = tmp_path / module.RX_PACKETS
+    counter.parent.mkdir(parents=True)
+    counter.write_text("1234\n", encoding="ascii")
+    assert module.rx_packets(tmp_path) == 1234
+
+
 @pytest.mark.parametrize(("mode", "ap_active", "expected"),
                          [("off", True, "close"), ("off", False, None),
                           ("relay", False, "open"), ("relay", True, None)])

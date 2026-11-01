@@ -1067,3 +1067,28 @@
 - 변경: `connect.js`의 연동 코드 보여주기(`mountShowCode`)를 `screens/show-code.js`로 그대로 옮겼다. 착지가 D-766 600줄 규칙(`c9cc22a986` 632줄)에 막혀 그 앞에 분리 커밋을 두고 이후 커밋을 다시 쌓았다. 서빙 목록·OMX SIM·dev_server·서비스워커 SHELL에 등록하고 캐시 키를 올렸다.
 - 증거: `tools/harness/size_range.py main HEAD` 16커밋 통과, 최종 `connect.js` 586줄. 동작 변경 없음. 실제 시험은 착지 auto 선택에 맡긴다.
 - gate 변화: 없음. CE: 해당 없음 — 기계적 이동이며 규칙은 기존 착지 교훈에 있다.
+
+## 2026-10-31 · uncommitted · 피어 공통 소스로 이동(D-939)
+
+- 변경: 이름만 다른 피어 서명·첫 접촉 CA 고정·Keystore 신원 사본(Pilot `PeerProof`/`PeerTls`/`AndroidPeerIdentity`, Cam `CameraProof`/`CameraTls`/`AndroidCameraIdentity`)을 `shared/android/peer` 한 곳으로 모았다. 두 앱이 `srcDir`로 함께 컴파일한다. 신원은 `AndroidPeerIdentity(context, app)`이고 기존 키 별칭·표시 파일·client id 접두어를 그대로 쓴다. 세션·보관소는 앱에 남긴다.
+- 증거: 새 구조 시험 `test/architecture/test_app_shared_sources.py` 3건이 main 배치에서 RED(빌드 미포함·12개 다시 선언·사본 4쌍), 이 브랜치에서 GREEN이다. 로컬 SDK35 빌드: Cam JVM 443 pass/0 skip, Pilot JVM 110 pass/1 skip(기존 ShellPageProbe), 두 앱 assembleDebug 성공. lint 0 error.
+- gate 변화: 없음. 실제 태블릿·휴대폰에서 기존 승인 관계 유지는 설치 후 확인한다. CE: 해당 없음 — 규칙은 D-939와 구조 시험에 있다.
+
+## 2026-11-01 · f15a4cba63 · OMX SIM 시연 기록 순서·센서 값 화면
+
+- 변경: OMX SIM 화면의 시연 기록을 네 단계 카드로 바꿨다. (1) 시작 자세: 현재 관절 값을 시작 자세로 저장(이 기기의 localStorage, 인스턴스별)하고, 저장 자세까지 `max_step_rad` 이하 조그를 하나씩 보내 돌아간다(D-390 §2, `arm-stick.js` `homeStep`). 멈추면 보낸 한 걸음만 끝까지 간다. 녹화 중에는 이동하지 않는다. (2) 과제 설명: 여러 줄 입력, 300자 표시, 탭이 살아 있는 동안 다음 기록에 남긴다. 비어 있으면 녹화를 막는다(계약 `task` 최소 1자). (3) 녹화: 경과 시간(이 화면 기준)·프레임 수. (4) 결과 선택 select를 없애고 `성공으로 종료`·`실패 사례로 종료`·`결과 없이 종료` 버튼 하나로 정지와 결과를 함께 보낸다. 마지막 기록의 결과·프레임·episode를 남긴다.
+- 변경: 관절 상태 JSON 대신 센서 값 표(관절별 각도·rad, 허용 범위 안 위치 막대, 시작 자세까지 남은 각도, 그리퍼 열림 %·상태, 수신 신선도 칩)를 두고 원본 JSON은 접어 둔다. 기록 상태 라벨을 계약 값(`incomplete`)에 맞췄다.
+- 증거: 실물 OMX 화면(D-902)은 아직 Proposed라 SIM 화면만 고쳤다. 로컬 Chromium 화면 확인 2000×1200·390 넘침 없음. 원격 시험 결과는 커밋 메시지·착지 기록에 남긴다.
+- gate 변화: 없음(SIM 전용). CE: 해당 없음 — 화면 개선이며 새 장애 교훈 없음.
+
+## 2026-11-01 · f2333e8aea · OMX SIM 시작 자세·과제를 기계 프로파일에서
+
+- 변경: `target.start_pose`가 있으면 그 자세를 시작 자세로 쓰고 `현재 자세를 시작 자세로 저장`을 숨긴다(브라우저 저장 없음, 어느 태블릿에서도 같은 자세). 없으면(이전 서버) 태블릿 localStorage 저장을 그대로 쓴다. 과제 칸은 탭 저장값이 없을 때 `target.task`로 채운다.
+- 증거: `test_arm_record_browser.py` 프로파일 시작 자세·과제 시험(원격). 결과는 커밋·착지 기록에 남긴다.
+- gate 변화: 없음(SIM 전용). CE: 해당 없음.
+
+## 2026-11-01 · f35a03048e · OMX SIM 녹화 중 종료 카드 고정
+
+- 변경: 녹화 중에는 '종료하고 결과 남기기' 카드를 화면 아래에 고정하고 경과 시간·프레임을 함께 보인다. 1280×800 태블릿에서 페이지가 1064px, 390px 폰에서 2120px라 조이스틱(위)과 종료 버튼(아래)이 한 화면에 없었다(로컬 Chromium 화면 확인). 끝나면 원래 자리로 돌아간다.
+- 증거: `test_arm_record_browser.py`가 맨 위로 스크롤한 상태에서 종료 버튼이 화면 안인지, 종료 뒤 고정이 풀리는지 확인한다(원격).
+- gate 변화: 없음(SIM 전용). CE: 해당 없음.

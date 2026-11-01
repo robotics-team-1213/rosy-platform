@@ -13212,6 +13212,20 @@ osy-d395-s1d\`.
 - 증거: 현장 PC 실측(PING·LED·udev 링크·영상). depth(USB 2.0)는 미해결로 남김
 - gate 변화: 없음
 
+## 2026-10-31 · uncommitted · sim/omx: D-927 C2~C4 시뮬 ARM_TRANSFER를 실제 셀 소유자로 끝까지 돌림
+- 변경: `tools/sim/transfer_state_writer.py`(C2), `deploy/robot/omx/sim/transfer_installation.yaml`·`tools/sim/transfer_installation.py`(C3: catalog·binding → Fleet policy·digest → bases, 홈 관절), `tools/sim/run_arm_transfer_sim.sh`·`without_devices.sh`(C4: MuJoCo+설치된 소유자+기록기, 장치 없는 namespace), `omx_topic_backend.py`·`omx_mujoco_backend.py` `--initial` 시작 조건, `run_cell_owner.py`가 `ROSY_ARM_TRANSFER_INSTALLATION`을 설치하고 fence 거절 이유(상태·숫자만)를 남김. 소유자 고침: receipt `observed_at`이 보고하는 모든 phase 시각을 덮음(`policy_parent.projection`), phase 시작·dispatch 실패 예외를 로그로 남김
+- 증거: 원격 설치·기록기·셀 소유자·receipt 시험 통과(102 등). AI PC에서 Harbor `real_fleet_http --arm-only --sim-arm`(Harbor `feat/sim-arm-harness`)이 approach·grasp·transfer·release를 MuJoCo로 진행하고 독립 관찰자가 PRE_DISPATCH·POST_ACTION을 증명, 연속 4회 OK(각 약 52 s). 그 전 1회는 grasp가 `cancel_during_action_unknown`으로 실패(원인 미확인)
+- 미해결: ① Fleet ARM grant TTL 15 s(D-778)인데 소유자가 phase마다 grant를 다시 확인하고 한 이송이 약 30 s라 기본값으로는 끝까지 못 감. 하네스만 허용 최대 60 s로 돌림, 플랫폼 결정 필요 ② Fleet→소유자 UDS 응답 창 250 ms가 SubmitAction 안에서 계획하는 실제 소유자에 짧음(바쁜 PC에서 결과 불명 HOLD). 하네스는 G2처럼 2 s, 운영 기본값 결정 필요 ③ 위 grasp 1회 실패
+- gate 변화: 없음. 시뮬 계약 검증이며 실물·현장 수용 아님
+- 결정: 없음(①② 결정 요청)
+- 교훈: `docs/solutions/logic-errors/owner-receipt-time-must-cover-its-phases-2026-10-31.md`, `docs/solutions/deployment/sim-cell-owner-on-a-lab-pc-needs-a-device-free-namespace-2026-10-31.md`, 홈 교훈 갱신
+
+## 2026-10-31 · uncommitted · shared: D-939 앱 연동 공통 소스
+- 변경: 이름만 다른 피어 서명·첫 접촉 CA 고정·Keystore 신원 사본(Pilot `PeerProof`/`PeerTls`/`AndroidPeerIdentity`, Cam `CameraProof`/`CameraTls`/`AndroidCameraIdentity`)을 `shared/android/peer` 한 곳으로 모았다. 두 앱이 `srcDir`로 함께 컴파일한다. 신원은 `AndroidPeerIdentity(context, app)`이고 기존 키 별칭·표시 파일·client id 접두어를 그대로 쓴다. 세션·보관소는 앱에 남긴다.
+- 증거: 새 구조 시험 `test/architecture/test_app_shared_sources.py` 3건이 main 배치에서 RED(빌드 미포함·12개 다시 선언·사본 4쌍), 이 브랜치에서 GREEN이다. 로컬 SDK35 빌드: Cam JVM 443 pass/0 skip, Pilot JVM 110 pass/1 skip(기존 ShellPageProbe), 두 앱 assembleDebug 성공. lint 0 error.
+- gate 변화: 없음. 실제 태블릿·휴대폰에서 기존 승인 관계 유지는 설치 후 확인한다. CE: 해당 없음 — 규칙은 D-939와 구조 시험에 있다.
+- 결정: D-939 Accepted(사용자 결정)
+
 ## 2026-11-01 · uncommitted · docs: D-940 중복 정의 게이트와 등록부
 - 변경: `docs/adr/D-940`, ADR Log 행, `test/architecture/test_duplicate_definitions.py`와 `known_duplicates.txt`(초기 47 그룹), `test/architecture/AGENTS.md` 행 2건, `platform-folder-responsibilities.md` 3건(D-940 갈래 안내, Situation 섀도 모듈 목록 5개로 정정, 보정 저장 계층 병립 명시)
 - 증거: 로컬 `--scan` 재생성이 등록부와 집합 일치(2026-11-01). 원격 시험·mutation 증명은 착지 기록에 남긴다
@@ -13233,4 +13247,161 @@ osy-d395-s1d\`.
 - 증거: 원격 `test/test_land_rollup.py`·`test/test_land_queue.py`·`test/test_harness_contracts.py`
 - gate 변화: 없음
 - 결정: D-889 추가 11(사용자 지시 2026-11-01)
+- 교훈: 없음
+
+## 2026-11-01 · uncommitted · refactor: D-940 후속 1 — 정본 소비·REST 미러 핀·PR 템플릿
+- 변경: `learning/registry/perception/store.py`(content_sha에 manifest_bytes 이식), `learning/curation/perception/build.py`(로컬 stand-in 삭제·정본 import), `test/architecture/test_rest_model_mirror.py`(신규, Fleet⊆CORE 필드 핀, KNOWN_DRIFT 3건), `.github/pull_request_template.md`(재사용 경로 칸 한 줄), 두 모듈 `logs.md`
+- 증거: 로컬 py_compile·필드 집합 추출이 KNOWN_DRIFT와 일치(2026-11-01). 원격 시험 3359 passed/485 skipped(초록 `6aa4000879`)·mutation 빨강 `78e7a05dde`(probe_field 지목)·revert `cb59bedf6f`
+- gate 변화: 없음
+- 결정: D-940 갈래 ① 소비 1건, ③ 핀 1건
+- 교훈: 없음
+
+## 2026-11-01 · uncommitted · fix(land): 브라우저·시뮬레이션 시험은 필요할 때만, 전체는 밤에
+- 변경: `tools/land_selection.py`(`browsers()`·`without_sim`), `tools/land_nightly.py`(새 파일), `test/test_land_selection.py`, `test/test_land_nightly.py`, D-889 추가 12
+- 근거: 12.2시간 시험 실행 3,405분 중 브라우저 50%(사전 시험 1,085·투기 471·차례 147분), 문서 착지가 변화분 브라우저로 착지마다 50~80분
+- 증거: 원격 `test/test_land_selection.py`·`test/test_land_nightly.py`·`test/test_affected_tests.py`·`test/test_harness_contracts.py`
+- gate 변화: 없음
+- 결정: D-889 추가 12(사용자 결정 2026-11-01)
+- 교훈: 없음
+
+## 2026-11-01 · uncommitted · fix: 로봇-사이트 링크 견고성 (조사 1순위 4건 + D-944)
+- 변경: 허브가 본문 검증 실패에 `PAYLOAD_INVALID`로 답하고 Agent는 세션을 유지(이벤트는 재전송 없이 버림), API v1.336. CORE `/ws/events` 소켓 8개·소켓당 미전송 1000개 상한(넘으면 1013, `since_seq`로 갭 보정)과 스레드 안전한 큐 적재. Pinky 런타임 세 곳에 `ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST`(D-795 1)와 존재 검사. fallback AP는 열린 뒤 받은 패킷이 없으면 `idle_hold_seconds`(120 s)에 물러나 사이트 Wi-Fi를 다시 시도. D-944: LCD 코드 페어링·도달 확인 읽기에 팀 tailnet 허용(개발 세션·peer 승인은 LAN 전용), API v1.337
+- 증거: 원격 시험은 착지 기록에 남긴다. AP 유휴 판정(wlan0 rx_packets)과 공유기 재부팅 복귀는 장치 미확인
+- gate 변화: 없음
+- 결정: D-944 Accepted(사용자 결정), 워크트리 슬롯 1회 force-over-cap 승인(2026-11-01)
+- 교훈: 없음
+
+## 2026-11-01 · uncommitted · fix: 링크 조사 후속 (문서 정리·AP 지터·enum 판단)
+- 변경: D-124 Status와 ADR Log 행에 "업링크 손실 AP 금지 문장은 D-176·D-919가 대체" 표기, Pi5 수용 체크리스트 §5.4에 fallback AP grace·유휴 복귀 항목, 통신 평가 보고서(2026-09-22) 머리에 이후 변경 표기. fallback AP 열림 시점에 기기 이름별 0~29 s 고정 지터(`grace_offset_seconds`). API §7.7에 새 CORE 스냅샷 필드·enum은 Fleet이 따라올 때까지 `PAYLOAD_INVALID`→REST gather로 읽히며 Fleet 먼저 배포한다는 규칙과 스키마를 관용으로 바꾸지 않는 이유
+- 증거: 원격 시험은 착지 기록에 남긴다. 지터·유휴 복귀는 장치 미확인
+- gate 변화: 없음
+- 교훈: 없음
+
+## 2026-11-01 · uncommitted · fix: 조종 끊김·정지 전파·링크 지연 (D-948)
+- 변경: Wi-Fi 절전 끄기(NM conf.d·첫 부팅 STA 프로필). Fleet 전체 정지 전달을 `console/estop_fanout.py`로 분리(동시, 1.5 s×3 재시도, 대형 해제 병행). 허브 하트비트가 SQLite를 기다리지 않음(투영 밀릴 때만, 쓰기·읽기는 스레드, 콜백은 루프). 미디어 권한 재확인을 lock 밖에서 병렬로. D-948 `/ws/teleop`(최신 것만 적용, 끊기면 0, REST 대체), API v1.338. `console.py` 1267→634줄(교통 중재·대형 믹스인 분리, 동작 불변)
+- 증거: 원격 시험은 착지 기록에 남긴다. Pinky 두 대가 LAN에 없어 Wi-Fi 절전 상태·조종 지연 실측 못 함
+- gate 변화: 없음
+- 결정: D-948 Accepted(사용자 지시)
+- 교훈: 없음
+
+## 2026-11-01 · uncommitted · fix(monitoring): 이벤트 기록을 수집기 시계로 읽는다 (MAIN-RED)
+- 변경: `store.events(now=)`, `ObservationCache.events`, 이벤트 경로가 수집기 캐시를 거친다. 저장·정리는 주입 시계, 읽기 7일 컷은 호스트 시계라 실제 날짜가 시험 고정 날짜(2026-10-25)보다 7일 지나자 모든 이벤트가 숨었다
+- 증거: main 36e0e35945·a3eb3f4081에서 `test_history_ignores_polling_age_and_is_site_scoped` MAIN-RED, 수정 뒤 원격 `operations/monitoring/test` 통과
+- gate 변화: 없음
+- 교훈: 없음(시계 주입 원칙은 기존 코드에 있었고 한 경로만 빠졌다)
+
+## 2026-11-01 · uncommitted · refactor: D-949 줄 수 래칫을 리팩터링 대기열로
+- 변경: D-949와 `test/architecture/test_size_tiers.py`(1,000줄 이상 제품 행 금지, 800~999·시험 1,500 초과·단위 10,000 초과 대기열 집합은 줄어들기만). 1차 분리: `action_store.py` 1132→497, `diagnostic.html` 1857→288(+css·js 3), `rosy-face.py` 1235→221, `sync-image-layer.py` 1014→496. `console.py`는 fix/robot-site-link-robustness의 분리(634)가 착지하면 `TIER1_IN_FLIGHT`에서 빠진다
+- 증거: 옮긴 정의의 AST 동일성(에이전트 검사), 원격 시험은 착지 기록에 남긴다. 장치(LCD·이미지 층 갱신·진단 화면) 확인 안 함
+- gate 변화: 없음
+- 결정: D-949 Accepted(사용자 결정), 워크트리 슬롯 2번째 force-over-cap 승인(2026-11-01)
+- 교훈: 없음
+
+## 2026-11-01 · uncommitted · omx: 계획 경로 통로 점검(cell_corridor), 경로에 물체·다른 팔이 있으면 움직이기 전에 거절
+- 변경: `deploy/robot/omx/cell_corridor.py`(계획 프레임 FK → 낮은 TCP 구간을 상단 뷰 통로로 그리고 전경 덩어리를 찾음, 집을 물체·놓을 칸·팔 기부는 제외), `cell_params.py`에 `corridor.*` 5개
+- 증거: `test/test_omx_cell_corridor.py` 원격 실행
+- gate 변화: 없음(읽기 전용 점검, 움직임 없음)
+- 결정: 사용자 2026-11-01 "팔의 경로에 있다면 정지하거나 안전처리" — 1단계는 움직이기 전 정적 점검
+- 교훈: 없음
+
+## 2026-11-01 · uncommitted · omx: 통로 점검 규칙 수정, 낮은 구간은 집을 물체 말고 모두, 높은 이동은 모르는 덩어리만
+- 변경: `cell_corridor.py` 제외 원 대신 집을 물체 자신의 덩어리만 제외, 놓을 칸은 `--stack` 없으면 비어야 함, 높은 이동 구간은 카탈로그 물체 통과·모르는 덩어리(손·다른 팔) 거절. `corridor.exempt_mm` 삭제
+- 증거: 현장 계획(왼팔 벨트→팔레트) 2410프레임 중 낮은 구간은 집기·놓기 수직 구간뿐, 이동은 138 mm. 제외 원 45 mm가 낮은 통로(±30 mm)를 다 덮어 아무것도 못 막았음
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 없음
+
+## 2026-11-01 · uncommitted · omx: 통로 점검은 보이는 표면 밖이면 거절(낡은 surface_px), 카메라 교체 교훈 갱신
+- 변경: `cell_corridor.check`에 `surface_px` 밖 통로 픽셀 `off_surface` → 거절. `omx-cell-device-identity-after-rewiring-2026-10-31.md`에 카메라 교체 뒤 surface_px·surface_lab 무효 절 추가
+- 증거: 현장 실 프레임(읽기 전용, 팔 정지) — 낡은 폴리곤은 전경 0 px로 컨테이너 위 놓기를 통과시켰고, 수정 후 off_surface 10844 px로 거절. 현재 표면 색 3개로는 차 있는 칸 놓기 거절, `--stack`이면 통과
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 기존 교훈 갱신(카메라 교체 시 이미지 좌표 설정도 무효)
+
+## 2026-11-01 · uncommitted · omx: 계획기 low_zones, 바닥 높이를 지정한 사각형 안에서만 낮춤
+- 변경: `grasp_planner.Planner.limits_at`가 `limits.low_zones` 사각형 안에서만 IK 작업 공간 바닥을 낮춘다(높이지는 않음). 그 밖은 기존 바닥 그대로
+- 증거: `test_omx_grasp_planner.py` 원격 실행. 현장: 왼팔 벨트 끝이 테이블보다 낮고(사용자 측정·깊이) 팔이 10~20 mm 판 위에 있어 FK 바닥 0.005 아래에서만 집기가 가능
+- gate 변화: 계획기 작업 공간 바닥(사용자 승인 2026-11-01 "Approve, belt rectangle only"), 러너 접촉 정지는 그대로
+- 결정: 사용자 승인으로 벨트 사각형에만 적용, 값은 현장 계획 파일이 정함
+- 교훈: 없음
+
+## 2026-11-01 · uncommitted · fix(land): 재부팅은 시험 PC별로 비킨다 (D-889 추가 13)
+- 변경: `land_prepare`의 전역 05:15~06:10 사전 시험 금지 창을 없앴다. `host_probe.PROBE`는 `rosy-nightly-reboot.timer`가 15분 안이거나 그 서비스가 도는 동안 busy(`reboot_soon`)로 보고해 새 작업을 받지 않는다. 모델 PC 재부팅을 06:05 → 05:00으로 옮겼다(AI PC는 주인 동의 필요).
+- 증거: 11-01 05:34~06:10 차례 0건, 그 창에 걸린 착지의 차례 대기 80~139분. 시험 PC 세 대의 `systemctl show -P NextElapseUSecRealtime`·`date -d` 출력을 확인했다. 원격 시험은 착지 기록에 남긴다.
+- gate 변화: 없음
+- 결정: D-889 추가 13(사용자 목표 2026-11-01)
+- 교훈: 없음
+
+## 2026-11-01 · uncommitted · fix(land): main이 이미 고친 MAIN-RED로 멈추지 않는다 (D-889 추가 14)
+- 변경: `land_prepare.prepare`는 사전 시험이 MAIN-RED로 멈추고 main이 합친 base보다 앞으로 갔으면, 새 main에서 한 번 더 준비한다.
+- 증거: 11-01 rest 묶음과 payload-build가 09:27 base의 monitoring MAIN-RED(`rosy-main-red.jsonl` 16번째 줄)로 멈췄다. 그 시험은 지금 main에서 통과한다(원격 10건). 원격 시험은 착지 기록에 남긴다.
+- gate 변화: 없음
+- 결정: D-889 추가 14(사용자 목표 2026-11-01)
+- 교훈: 없음
+
+## 2026-11-01 · uncommitted · docs(solutions): mutation 증명 탐침은 safety 태그 경로 밖에서
+- 변경: `docs/solutions/workflow-issues/mutation-probe-on-safety-path-blocks-landing-2026-11-01.md` 신규. D-940 후속 착지에서 mutation probe가 `concern: safety` 경로를 건드려 초록인데도 D-430 §5가 착지를 막은 사례와 예방·복구 절차.
+- 증거: 초록 `6aa4000879`·빨강 `78e7a05dde`(probe_field 지목)·재브랜치 `e373c7b615` main 반영. probe 위치를 safety 밖에 찍은 D-940 게이트 증명(`2e8109ab34`)은 같은 날 무사 통과한 대조군.
+- gate 변화: 없음
+- 결정: 없음(교훈 기록)
+- 교훈: 신규 mutation-probe는 probe 파일 선정 전 `platform_parts.yaml`의 safety 태그를 먼저 본다
+
+## 2026-11-01 · uncommitted · omx: 팔별 세션 잠금, 한 팔이 작업해도 다른 팔 세션·관찰기는 돈다
+- 변경: `joint_tune.session_lock(arm)` 셀 잠금 공유 + `session-<arm>.lock` 배타. 인자 없으면 기존처럼 셀 전체 배타(자동 갱신·두 팔 파이프라인). `record_session --arm`. 관찰기 유닛은 셀 잠금 공유 확인 + 자기 팔 잠금 확인
+- 증거: `test_omx_session_lock.py`, `test_omx_hardware_observer.py` 원격 실행. 현장 2026-11-01 한 팔 세션마다 다른 팔 관찰기를 멈춰야 했고 두 팔 병렬 시험이 불가능했음
+- gate 변화: 잠금 범위(자동 갱신은 여전히 모든 팔이 쉴 때만)
+- 결정: 사용자 2026-11-01 "병렬로 로봇암이 작동해야하는 부분… 구조적으로 개선"
+- 교훈: 없음
+
+## 2026-11-01 · uncommitted · omx: 공유 동작 공간 cell_space, 팔이 쓸 통로를 예약하고 다른 팔의 살아 있는 예약과 겹치면 거절
+- 변경: `deploy/robot/omx/cell_space.py` 상단 카메라 픽셀을 두 팔의 공통 좌표로 쓰는 통로 마스크 예약·해제·만료, 파일 잠금 하나로 직렬화
+- 증거: `test_omx_cell_space.py` 원격 실행
+- gate 변화: 없음(동작 전 거절만 더함)
+- 결정: 사용자 2026-11-01 "안전적인 문제나 서로 겹침등으로 인해서 생길 수 있는 문제를 해결"
+- 교훈: 없음
+
+## 2026-11-01 · uncommitted · omx: cell_depth, 깊이 카메라로 셀의 높이를 자르고 컬러 화면에 맞춤(자·접촉 없이)
+- 변경: `deploy/robot/omx/cell_depth.py` 테이블 평면 RANSAC, 높이 지도, 물체 마스크로 깊이↔컬러 배율·이동 탐색, 컬러 픽셀의 높이, 팔 받침판 높이(FK 0)
+- 증거: 현장 D435(읽기 전용) 스택 위 75~77 mm, 팔레트 10~11 mm, 벨트 −29~−35 mm, 왼팔 받침판 20.9 mm, 4.5 s. `test_omx_cell_depth.py` 합성 장면
+- gate 변화: 없음(읽기 전용 측정)
+- 결정: 사용자 2026-11-01 "다 프로그램적으로", "높이 분석 opencv로"
+- 교훈: 없음
+
+## 2026-11-01 · uncommitted · fix(land): 차례 한도에 한 번 돌려보낸 착지는 다음 차례를 끝까지 쓴다 (D-889 추가 15)
+- 변경: `Overtime` 뒤 `args._overtime`을 켜고, `land_checks.run_tests`는 그때 차례 한도를 걸지 않는다.
+- 증거: 11-01 11:43~12:10 rest 묶음·android-shared-peer가 12~13분 차례 뒤 반납, main 27분 넘게 정지. 원격 시험은 착지 기록에 남긴다.
+- gate 변화: 없음
+- 결정: D-889 추가 15(사용자 목표 2026-11-01)
+- 교훈: 없음
+
+## 2026-11-01 · uncommitted · tools: 워크트리 .git 유실 재발 교훈 갱신
+- 변경: `docs/solutions/workflow-issues/empty-worktree-folder-runs-git-on-the-shared-main-2026-10-25.md`에 재발(파일 남은 폴더·묘비 없음·land_async 재사용) 추가
+- 증거: 공유 체크아웃 reflog의 `checkout: moving from main to feat/omx-devices-scan`, 2분 뒤 `git switch main`로 복구
+- gate 변화: 없음
+
+## 2026-11-01 · f2333e8aea · API v1.339 OMX SIM 시연 기본값
+
+- 변경: `GET /api/v1/sim/omx/target`에 `start_pose`·`task`(additive)를 적었다. 값은 `deploy/robot/omx/sim/pilot_demonstration.yaml`에서 온다. 버전 고정 시험·`app.py` 문자열을 v1.339로 올렸다.
+- 증거: 계약 시험 `test_omx_sim_pilot_contract.py`, 버전 고정 시험(원격).
+- gate 변화: 없음. CE: 해당 없음.
+
+## 2026-11-01 · uncommitted · fix(land): FULL 착지도 겹침 판정, 돌려보낸 표시는 표에 (D-889 추가 16)
+- 변경: `land_selection.select`의 겹침 생략을 자기 선택이 FULL인 착지에도 쓴다. `Overtime`은 표에 `overtime`을 남기고 `land_checks.overtimed`가 그것을 읽는다.
+- 증거: 11-01 13:13~13:26 rest 묶음이 추가 15 착지 뒤에도 차례를 반납했다(새 코드로 다시 떠 표시가 사라짐). FULL 자기 선택을 차례마다 다시 돌았다. 원격 시험은 착지 기록에 남긴다.
+- gate 변화: 없음
+- 결정: D-889 추가 16(사용자 목표 2026-11-01)
+- 교훈: 없음
+
+## 2026-11-01 · uncommitted · docs: D-951 ROSY Calibration 앱과 rosy-calibration 스킬
+- 변경: `docs/adr/D-951-rosy-calibration-application.md`(그림 5장 `docs/assets/omx-calibration-2026-11-01-*`), ADR Log, `applications/calibration/{README,AGENTS}.md`, `platform_parts.yaml` 등록, `.claude/skills/rosy-calibration`
+- 증거: 2026-11-01 현장 기록(왼팔 벨트 끝 높이·터치 실패·I 게인 12.3→3.3 mm, 깊이 표식 LOO 62~355 px, 경로 점검 거절)
+- gate 변화: 없음(결정·문서·경계)
+- 결정: D-951 Accepted(사용자 "rosy calibration 이라고 하나 만들어", "코드적으로", 벨트 사각형 바닥 승인). D-933 3항(높이는 터치)을 깊이로 고침
+- 교훈: 없음
+
+## 2026-11-01 · uncommitted · fix(land): main이 FULL로 넣은 변경은 지난 통과를 버리게 하지 않는다 (D-889 추가 17)
+- 변경: `land_cache._delta_paths`는 범위가 FULL이면, 이 브랜치의 새 commit을 하나씩 선택하고 main의 착지 commit은 차례 규칙(landed)으로 본다. 그 경로와 겹치지 않는 지난 통과만 재사용한다.
+- 증거: 11-01 12시간 시험 호출 약 4,700건 가운데 재사용 470건. narrow 시도 표본 40건 가운데 30건이 FULL(하네스 설정 43, 매핑 없음 16). 원격 시험은 착지 기록에 남긴다.
+- gate 변화: 없음
+- 결정: D-889 추가 17(사용자 지시 2026-11-01)
 - 교훈: 없음
