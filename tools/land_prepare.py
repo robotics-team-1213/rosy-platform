@@ -137,7 +137,7 @@ def prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, t
             raise
         args._main_red_retry = True
         print(f"[land] {stop}\n[land] main moved since that base: preparing once more on the new main", flush=True)
-        _prepare(land, wt, branch, args, python, qdir, None)
+        _prepare(land, wt, branch, args, python, qdir, None, None, None)
 
 
 def _prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, ticket: Path | None,
