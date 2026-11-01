@@ -51,7 +51,7 @@ def test_all_resolves_robots_site_stack_and_declared_updaters():
     assert found['rosy-pinky-alpha.local'] == [('robot', None)]
     assert found['ops@10.0.0.9'] == [('robot', None)]
     assert found['ops@site-pc'] == [
-        ('site-stack', None), unit('rosy-site-tools-autoupdate.service'), unit('rosy-omx-autoupdate.service')]
+        ('site-stack', None), unit('rosy-omx-autoupdate.service'), unit('rosy-site-tools-autoupdate.service')]
     assert found['ml@model-pc'] == [unit('rosy-model-code-update.service')]
     assert found['ai@ai-pc'] == [unit('rosy-situation-autoupdate.service')]
 
@@ -179,8 +179,8 @@ def test_robot_reason_and_holder_charsets_are_the_ps1_contract():
 
 def test_forget_failed_refuses_non_site_channels():
     with pytest.raises(ValueError):
-        ops.execute([one('robot', 'rosy-pinky-a.local')], 'forget-failed', run=FakeRun(), tag='site-abc')
-    assert ops.execute([one('site-stack')], 'forget-failed', run=FakeRun(), tag='site-abc') == 0
+        ops.execute([one('robot', 'rosy-pinky-a.local')], 'forget-failed', run=FakeRun(), tag='site-abc123')
+    assert ops.execute([one('site-stack')], 'forget-failed', run=FakeRun(), tag='site-abc123') == 0
 
 
 def test_hold_writes_the_ledger_run_now_warns_resume_clears(tmp_path, capsys):
