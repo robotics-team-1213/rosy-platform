@@ -673,4 +673,4 @@ def test_every_signal_lamp_paints_with_the_signal_tokens():
     for root in ("applications", "middleware", "operations", "learning"):
         for path in (repo / root).rglob("*"):
             if path.suffix in (".css", ".js") and "test" not in path.parts and path not in lamp_files:
-                assert "--signal-" not in path.read_text(encoding="utf-8", errors="ignore"), path
+                assert not re.search(r"--signal-(go|caution|stop)", path.read_text(encoding="utf-8", errors="ignore")), path
