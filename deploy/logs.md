@@ -4296,3 +4296,9 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 현장 `pivot-near` 두 번이 "no clear point"로 멈춤(팔레트 위 빈 칸이 있는데도). 원격 `test_omx_cell_calibrate.py` 6 passed.
 - gate 변화: 없음
 - 교훈: 작업 기록 2026-10-31 §15
+
+## 2026-11-01 · uncommitted · fix(omx): 깊이 높이의 기준 평면이 프레임마다 바뀌지 않는다
+- 변경: `cell_depth.table_plane`이 가장 큰 평면 둘 가운데 더 높은 쪽(카메라에 가까운 쪽)을 셀 테이블로 고른다. 큰 쪽 점 수의 25% 이상이고 평행할 때다. RANSAC은 `_ransac`로 나눴다.
+- 증거: 현장 깊이 프레임 둘에서 수정 전에는 팔레트가 75 mm와 10 mm로 갈렸다(테이블 밖 약 60 mm 낮은 면이 더 넓게 잡힌 프레임). 수정 후에는 두 프레임·시드 6개 모두 팔레트 8–12 mm, 열 74–79 mm. 원격 `test_omx_cell_depth.py` 5 passed(더 넓은 낮은 면 장면은 수정 전 코드로 실패).
+- gate 변화: 없음
+- 교훈: 작업 기록 2026-10-31 §15.2
