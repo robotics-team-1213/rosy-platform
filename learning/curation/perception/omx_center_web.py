@@ -41,6 +41,11 @@ def get(handler, path, center, workspace=None):
         else:
             handler.send(center.review(prepared))
         return True
+    if path == PREFIX + '/hub':
+        if center is None:
+            raise ValueError('이 작업대에 OMX 학습 실행기가 연결되지 않았습니다.')
+        handler.send({'bundles': center.hub.bundles()})
+        return True
     match = re.fullmatch(PREFIX + r'/artifact/([0-9a-f-]{36})', path)
     if match:
         if center is None:
@@ -54,7 +59,7 @@ def get(handler, path, center, workspace=None):
     return True
 
 
-def post(handler, path, body, center, workspace=None):
+def post(handler, path, body, center, workspace=None, accounts=None):
     if not path.startswith(PREFIX + '/'):
         return False
     if center is None:
@@ -71,6 +76,19 @@ def post(handler, path, body, center, workspace=None):
             handler.send(center.save_review(body, prepared, actor))
             return True
         handler.send(center.start_export(body, prepared))
+        return True
+    if path == PREFIX + '/hub-prepare':
+        handler.send(center.hub.prepare(body))
+        return True
+    if path == PREFIX + '/hub-upload':
+        if set(body) != {'bundle_id', 'connection_id'}:
+            raise ValueError('hub upload fields differ from schema')
+        if accounts is None:
+            raise ValueError('HF 업로드에는 프로젝트 계정과 HF 연결이 필요합니다.')
+        from learning_repos import _credential
+        credential = _credential(accounts, getattr(handler, 'learning_principal', None), body['connection_id'],
+                                 'write-repos', center.hub.repo_of(body['bundle_id']))
+        handler.send(center.hub.upload(body['bundle_id'], credential['token']))
         return True
     name = {PREFIX + '/upload': 'upload',
             PREFIX + '/publish': 'publish',

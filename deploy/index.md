@@ -80,5 +80,5 @@
 - 2026-11-01 · uncommitted · D-907 authenticated metadata read repair
 - 2026-11-01 · uncommitted · D-907 readonly native v2 verifier
 - 2026-11-01 · uncommitted · native v2 readonly profile contract
-- 2026-11-01 · uncommitted · fix(omx): 깊이 높이의 기준 평면이 프레임마다 바뀌지 않는다
-- 2026-11-01 · uncommitted · fix(omx): 피벗 측정점 찾기가 현장 바닥 색을 쓴다
+- 2026-11-01 · uncommitted · fix(omx): 피벗 측정이 빽빽한 팔레트에서는 대상 바로 위에서 한다
+- 2026-11-01 · uncommitted · feat(omx): 붙어 선 긴 상자를 팔이 스스로 떼어 집는다
