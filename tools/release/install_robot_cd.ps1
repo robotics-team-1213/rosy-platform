@@ -37,6 +37,8 @@ $files = @(
     "deploy/robot/pinky_pro/release/artifact_impact.py",
     "deploy/robot/pinky_pro/native/image_layer_boot.py",
     "deploy/robot/pinky_pro/native/image_layer_files.py",
+    "deploy/robot/pinky_pro/native/image_layer_plan.py",
+    "deploy/robot/pinky_pro/native/image_layer_records.py",
     "deploy/robot/pinky_pro/native/sync-image-layer.py"
 )
 $keyFiles = @(& git -C $repo ls-files "deploy/robot/pinky_pro/release/public-keys/*.pem")
