@@ -55,6 +55,9 @@ from record_config import validate_config
 
 SERVICES = ("rosy-omx-camera@top.service", "rosy-omx-camera@front.service",
             "rosy-omx-camera-view.service", "rosy-omx-camera-readiness.service")
+# Since 2026-10-31 camera roles come from the registry (D435 top, side, a second wrist): every running
+# instance holds a V4L device the recorder may open, so all of them hand over, not only top/front.
+CAMERA_UNIT = re.compile(r"rosy-omx-camera@[\w-]+\.service")
 LEADER_GRIPPER = 6
 LEADER = range(1, 7)
 TORQUE_OFF_DEADLINE_S = 30.0
@@ -146,6 +149,11 @@ class Session:
         self.sleep, self.clock, self.replay, self.chunks = sleep, clock, replay, chunks
         self.operating_profile = operating_profile
         self.hardware_faults = {}
+
+    def handover_units(self):
+        """Camera units first, then camera-view and readiness; reversed for stopping (dependents first)."""
+        running = CAMERA_UNIT.findall(self.systemctl("list-units", "rosy-omx-camera@*") or "")
+        return list(dict.fromkeys(SERVICES[:2] + tuple(running))) + list(SERVICES[2:])
 
     @staticmethod
     def command(config_path: Path, teleop_only: bool, *, body_only=False, replay: dict | None = None) -> list:
@@ -344,7 +352,7 @@ class Session:
             # Dependents first: stopping camera-view first also stops readiness (Requires=), whose
             # ExecStopPost restore outlasts the 10 s systemctl timeout (2026-10-24).
             # The chunk runner opens no camera: the services stay up so the judge can watch.
-            for unit in () if self.chunks else reversed(SERVICES):
+            for unit in () if self.chunks else reversed(self.handover_units()):
                 # "activating" includes a readiness unit waiting out RestartSec; stop cancels that restart.
                 if self.systemctl("is-active", unit) in ("active", "activating"):
                     self.systemctl("stop", unit)

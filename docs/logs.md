@@ -13506,9 +13506,36 @@ osy-d395-s1d\`.
 - 결정: 격리 목록(D-762, 안전 루트)에 넣지 않고 원인을 고침. 세션 시험의 `rehearsal_clock` 고정물과 같은 방식
 - 교훈: 없음
 
+## 2026-11-01 · uncommitted · D-926 보강: 새 구획은 ui-section 네 역할
+
+- 변경: D-926에 부기를 더했다 — 설치 문서의 남은 `panel`·`hint`는 그 화면을 고치는 변경에 묶어 `ui-section` 네 역할로 옮기고 일괄 치환은 하지 않는다(비평 P2 결정 공백 메움).
+- 증거: 부기는 결정 기록이며 실행 코드 변화 없음. `rosy_harness.py lint` 통과로 확인.
+- Gate: 없음. CE: 해당 없음.
+
+
+## 2026-11-01 · uncommitted · D-945 전 표면 자리 규칙
+
+- 변경: [D-945](adr/D-945-cross-surface-layout-canon.md)로 모든 표면이 같은 뼈대(자리 순서·제목 하나·표식 어휘 셋·붕괴 두 사다리)를 쓰는 규칙을 세우고 DESIGN.md 「자리 순서와 뼈대」 절에 규범 표를 뒀다. 상용 도구(IDE·관리형 웹·모바일 체계)의 레이아웃 대역을 근거로 제시했다.
+- 증거: ADR Log 행 추가. `rosy_harness.py lint` 통과로 확인.
+- Gate: 없음 — 설계 수용이며 표면 이행은 각 화면 변경에 따른다. CE: 해당 없음.
+
 ## 2026-11-01 · uncommitted · docs: D-937 제품 앱 입사 문법과 capture-wall 표면 등록
 - 변경: `docs/adr/D-937`(제품/기능 두 레인, 제품 원형 네 가지, 웹 표면 전체 등록, Learning 웹 carve 조건)과 ADR Log 표 행·절, `tools/harness/adr_gaps.txt` D-936 결번 갱, `shared/web/surfaces.yaml` capture-wall 등록, `tools/capture/multi_record.html` 표면 계약 준수(`./` 참조, 범위 제목, RosyPalette 캔버스 팔레트)와 `multi_record.py` common 복사 목록 확대, `shared/web/test/test_canvas_palette_contract.py` 캔버스 목록, `applications/AGENTS.md` 판별 포인터
 - 증거: 원격 영향 선택 2 invocation — 38파일 923 passed(첫 돌림에서 캔버스 팔레트·제목 계약 2 failed를 계약 준수 수정 뒤 재시험으로 통과), `tools/capture/test/test_multi_record.py` 10 passed, `test/known_failures.py` 0 new. `rosy_harness.py lint` 0 errors
 - gate 변화: 없음
 - 결정: D-937 Accepted(사용자 합의)
 - 교훈: 기존 교훈 `landing-blockers-cost-hours-2026-10-18`(미등록 표면 사각지대)의 적용 사례 — 새 교훈 없음
+
+## 2026-11-02 · uncommitted · fix(land): 서로 닿지 않으면 차례는 가드만 (D-889 추가 22)
+- 변경: `land_selection.select` landed 경로 두 곳. 이 브랜치와 main 변화분의 선택이 겹치지 않고 안전 경로가 없으면 `_guards_only` + 닿는 브라우저 묶음만.
+- 증거: 11-01 17:45 뒤 착지 p90 152분. 느린 착지는 사전 시험 5~7분, 차례 대기 약 125분. 차례마다 변화분 묶음을 다시 돌아 7~13분씩 걸렸다. 원격 시험은 착지 기록에 남긴다.
+- gate 변화: 없음
+- 결정: D-889 추가 22(사용자 지시 2026-11-02)
+- 교훈: 없음
+
+## 2026-11-02 · uncommitted · fix(harness): 같은 폴더 import 사슬로 시험을 찾는다 (D-889 추가 21)
+- 변경: `affected_repo.local_importers`. `referencing_tests`가 같은 폴더에서 바뀐 파일을 직·간접 import하는 모듈의 stem도 본다. 실제 저장소 시험 `test_real_repo_module_reached_through_a_sibling_import_maps_to_its_tests`.
+- 증거: 11-01 `experiment_hub.py` "unknown -> full" 17회. 원격 시험은 착지 기록에 남긴다.
+- gate 변화: 없음
+- 결정: D-889 추가 21(사용자 지시 2026-11-02)
+- 교훈: 없음

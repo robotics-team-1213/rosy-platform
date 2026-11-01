@@ -5201,3 +5201,45 @@
 - 증거: `test/test_arm_transfer_policy_admission.py` 원격 실행은 착지 전에 기록한다.
 - Gate: simulation 팔 이송 HTTP에서만 동작한다. 범위 설정·첫 자동 admit의 원장 대조는 현장 수용으로 따로 남긴다.
 - CE: 해당 없음 — 만료 미적용은 D-938과 회귀 시험이 보여 준다.
+
+
+## 2026-11-01 · uncommitted · uiux(fleet): 설치 문서 하위 탐색 계약 시험
+
+- 변경: `test/test_doc_tabs.py`에 설치 문서의 화면 안 이동이 공용 하위 탐색 자리에 서는지 검사를 추가했다(사이드바 배치 잔여 없음, app-shell 시트 링크, install.js가 자리를 채움). `test/test_grammar_separation.py`의 install.html 시트 목록에 `/common/app-shell.css`를 반영했다.
+- 증거: node --test 403 passed, 원격 pytest는 착지 전에 기록한다.
+- Gate: 없음. CE: 해당 없음.
+
+
+## 2026-11-01 · uncommitted · uiux(fleet): 경로 줄 계약 시험
+
+- 변경: `test/test_doc_tabs.py`에 다섯 영역 문서의 경로 줄 계약을 추가했다(본문 머리에 문서 제목 h1 하나 + 현재 화면 strong, site-map 첫 구획은 h2).
+- 증거: 원격 시험은 착지 전 기록한다.
+- Gate: 없음. CE: 해당 없음.
+
+
+## 2026-11-01 · uncommitted · uiux(fleet): policy 현재 표시 계약 정정
+
+- 변경: `test/test_doc_tabs.py`의 작업 영역 검사에서 policy가 `학습` 링크에 현재 표시를 두지 않는다고 정정했다(거짓 `aria-current="page"` 제거 반영).
+- 증거: 원격 시험은 착지 전 기록한다.
+- Gate: 없음. CE: 해당 없음.
+
+
+## 2026-11-01 · uncommitted · uiux(fleet): 소속 표시 계약 재정정
+
+- 변경: `test/test_doc_tabs.py`의 작업 영역 검사에서 policy도 `학습` 링크에 현재 표시를 둔다고 재정정했다(재비평 판정 반영 — 1차 비평의 제거 판정을 뒤집고 Cell 전례로 통일).
+- 증거: 원격 시험은 착지 전 기록한다.
+- Gate: 없음. CE: 해당 없음.
+
+
+## 2026-11-01 · uncommitted · uiux(fleet): 테마 자리 계약 정정
+
+- 변경: `test/test_fleet_header.py`가 테마 단추의 자리를 계정 접힘이 아니라 머리 줄 조작 칸(로그인과 계정 단추 사이, 문서당 하나)으로 정정했다.
+- 증거: 원격 시험은 착지 전 기록한다.
+- Gate: 없음. CE: 해당 없음.
+
+
+## 2026-11-01 · uncommitted · 헤더 정적 계약 원복
+
+- 변경: `test/test_fleet_header.py`의 테마 자리 단정을 계정 접힘 원복으로 되돌렸다(이동 판정 철회).
+- 증거: 원격 시험은 재착지 전 기록한다.
+- Gate: 없음. CE: 해당 없음.

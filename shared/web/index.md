@@ -49,8 +49,8 @@
 
 ## 최근 기록
 
-- 2026-10-31 · uncommitted · capture-wall 표면 등록과 캔버스 계약 준수
-- 2026-10-30 · uncommitted · D-926 6: 쓰지 않는 토큰 정리
-- 2026-10-30 · uncommitted · 아이콘 표시 속성과 공용 탐색 계약
-- 2026-10-29 · 1c8923b441 · 숨겨진 WHEP video 재생 시작
-- 2026-10-29 · bc25167b00 · 현 소스의 표면 발견과 공용 소비자 회귀 연결
+- 2026-11-01 · uncommitted · 착지 시험 반영: 표식 토큰 true 인정, 검수 페이지 원복
+- 2026-11-01 · uncommitted · D-945 focal 표면 검사 추가
+- 2026-11-01 · uncommitted · D-945 레이아웃 계약 시험
+- 2026-11-01 · uncommitted · step 자리 표식
+- 2026-11-01 · uncommitted · task-chooser onSelect 선택 알림

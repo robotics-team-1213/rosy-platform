@@ -1019,9 +1019,44 @@
 - 증거: `git grep`으로 소비처 없음 확인, 대비 시험은 `--surface-line`만 본다.
 - gate 변화: 없음. CE: 해당 없음.
 
+
 ## 2026-10-31 · uncommitted · capture-wall 표면 등록과 캔버스 계약 준수
 
 - 변경: `surfaces.yaml`에 다중 녹화 벽(`tools/capture/multi_record.html`)을 `capture-wall`(dev)로 등록하고 캔버스 팔레트 계약 목록에 올렸다. 페이지는 참조 `./` 접두, 범위 제목 `Rosy 개발 — 함께 녹화`, 캔버스 색·글꼴을 `window.RosyPalette`로 읽도록 바뀌었고 `multi_record.py`는 `ui.js`와 의존 모듈 셋을 세션 `common/`에 복사한다(D-937).
 - 증거: 원격 영향 선택 923 passed. 첫 돌림의 2 failed(캔버스 팔레트·제목 계약)는 같은 커밋에서 계약 준수로 해소했고 `tools/capture/test/test_multi_record.py` 10 passed, `test/known_failures.py` 0 new다. 브라우저 화면 검증·실물 녹화 세션 수용은 별개다.
 - gate 변화: 없음. 토큰·테마 계약의 선택 범위가 이 페이지로 늘었다.
 - CE: 해당 없음 — 기존 교훈(2026-10-18 미등록 표면)의 적용이며 원인·해결이 레지스트리와 계약 시험에 남는다.
+
+## 2026-11-01 · uncommitted · task-chooser onSelect 선택 알림
+
+- 변경: `createTaskChooser`에 선택적 `onSelect(id)` 콜백을 더했다(선택 확정 직후 한 번). 기존 호출처(robot_ui mount.js)는 무변경. Fleet 설치 문서의 경로 줄 화면 이름이 이 콜백을 쓴다. `test_chrome_layout.py`의 Fleet 사이드바 고정을 D-741 6 좌석 통일에 맞게 바로잡았다(설치 문서는 이제 자기 열이 없다).
+- 증거: node --test 403 passed, robot_ui 호출처 무변경. 원격 시험은 착지 전 기록.
+- gate 변화: 없음. CE: 해당 없음.
+
+
+## 2026-11-01 · uncommitted · step 자리 표식
+
+- 변경: `app-shell.css`의 하위 탐색 현재 표식이 `aria-current="step"`(같은 문서 안 현재 단계, D-926 3)도 `page`와 같은 장미색 wash로 그린다. 빈 표식으로 단계가 보이지 않던 Cell 화면이 시각 표시를 얻는다.
+- 증거: Fleet Cell 화면 Chromium 실측(단계 배경 렌더 확인). 원격 시험은 착지 전 기록.
+- gate 변화: 없음. CE: 해당 없음.
+
+
+## 2026-11-01 · uncommitted · D-945 레이아웃 계약 시험
+
+- 변경: `test/test_layout_canon.py` — Fleet 아홉 문서·로봇 셸·학습 검수 화면의 자리 순서, 문서 h1 하나(경로 줄), 표식 어휘(page·step)를 검사한다. 시험이 첫 이탈을 잡아 검수 화면 여섯의 낡은 `aria-current="true"`를 `page`로 통일했다.
+- 증거: 정적 단정 전 통과(로컬 파일 검사). 원격 pytest는 착지 전 기록.
+- Gate: 없음. CE: 해당 없음.
+
+
+## 2026-11-01 · uncommitted · D-945 focal 표면 검사 추가
+
+- 변경: `test_layout_canon.py`에 focal 문법(Pilot)의 순서·skip link 검사와 로봇 대시보드의 topbar-first·skip link 검사를 넣었다(대시보드 경로 줄 이행 유예의 근거를 주석으로 남김).
+- 증거: 정적 단정 전 통과. 원격 pytest는 착지 전 기록.
+- Gate: 없음. CE: 해당 없음.
+
+
+## 2026-11-01 · uncommitted · 착지 시험 반영: 표식 토큰 true 인정, 검수 페이지 원복
+
+- 변경: 착지 게이트가 잡은 대로 학습 검수의 `aria-current="true"`는 낡은 어휘가 아니라 정규약("현 페이지 링크=page, 현 페이지를 담은 상위 단계=true", test_app_shell_seats)이다. 검수 페이지 여섯의 `page` 통일을 원복하고 D-945·DESIGN.md·test_layout_canon의 표식 규칙을 표준 토큰 셋(page·step·true·aria-selected)으로 정정했다. test_site_map_api의 canvas role 검사도 무장 상태 추종(render) 소유로 바로잡았다.
+- 증거: test_layout_canon 전 통과, 검수 페이지 6건 완전 원복(net diff 0), node --test 403 passed. 원격 시험은 재착지 전 기록.
+- Gate: 없음. CE: 해당 없음 — 착지 시험이 계약 충돌을 잡은 사례로, 교훈은 아래 CE 판단 참조.

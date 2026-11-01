@@ -61,13 +61,14 @@ def test_in_page_anchors_sit_in_the_shared_subnav_seat():
 
 
 def test_work_area_screens_are_the_same_subnav_in_the_console_and_cell():
-    """D-741 7 / D-763 9 — 전체 작업·승인 대기·끝난 작업·새 작업. 새 작업은 종류 목록이고 Cell 문서는 그 아래에 놓인다."""
+    """D-741 7 / D-763 9 — 전체 작업·승인 대기·끝난 작업·새 작업. 새 작업은 종류 목록이고 Cell 문서는 그 아래에 놓인다.
+    policy·cell 모두 소속 화면 링크에 현재 표시를 둔다(재비평 판정 — 경로 줄 h1이 문서 정체를 말한다)."""
     screens = [("/console?view=work", "전체 작업"), ("/console?view=work&amp;show=pending", "승인 대기"),
                ("/console?view=work&amp;show=done", "끝난 작업"), ("/console?view=work&amp;show=new", "새 작업"),
                ("/console/learning", "학습")]
     for name, opening, current in (("index.html", '<div class="ui-subnav" data-area="work" hidden>', []),
-                                   ("cell.html", '<div class="ui-subnav">', ["/console?view=work&amp;show=new"]),
-                                   ("policy.html", '<div class="ui-subnav">', ["/console/learning"])):
+                                    ("cell.html", '<div class="ui-subnav">', ["/console?view=work&amp;show=new"]),
+                                    ("policy.html", '<div class="ui-subnav">', ["/console/learning"])):
         page = _page(name).read_text(encoding="utf-8")
         seat = re.search(re.escape(opening) + r'<nav class="ui-subnav-nav" aria-label="작업 화면">(.*?)</nav></div>', page, re.S)
         assert seat, name
@@ -99,6 +100,36 @@ def test_records_area_screens_and_the_judgment_seat():
     assert "/api/fleet/incidents?limit=${records ? 100 : 10}" in view, "the records area reads the same incident API"
     assert "details name" not in view and "detail.name" not in view, "one open fold is kept in script, not by <details name>"
     assert 'querySelectorAll(".incident-row > details[open]")) if (other !== detail) other.open = false;' in view
+
+
+def test_install_task_list_sits_in_the_shared_subnav_seat():
+    """D-741 6 — 설치 문서의 화면 안 이동도 같은 자리에 선다. 공용 task-chooser가 채우고 사이드바 자체 배치는 남지 않는다."""
+    page = re.sub(r'<!--.*?-->', '', _page("install.html").read_text(encoding="utf-8"), flags=re.S)
+    seat = re.search(r'</nav>\s*<div class="ui-subnav" id="install-chooser" aria-label="설치 작업"></div>\s*'
+                     r'<div class="fleet-workspace">', page)
+    assert seat, "install: the task list stands in the shared sub-nav seat between the rail and the workspace"
+    assert "install-tasks" not in page and "install-workspace" not in page, "install: no bespoke sidebar layout remains"
+    assert '<link rel="stylesheet" href="/common/app-shell.css">' in page
+    assert 'class="fleet-task-page"' in page
+    entry = (WEB / "installation" / "install.js").read_text(encoding="utf-8")
+    assert 'el("install-chooser").append(taskChooser.element);' in entry, "install: the shared chooser fills the seat"
+
+
+def test_every_area_document_heads_the_workspace_with_one_pathbar():
+    """D-926 2 — 경로 줄이 문서 제목(h1)과 현재 화면(strong)을 본문 머리에 보인다. h1은 문서에 이 하나뿐이다."""
+    docs = {"index.html": ("사이트 관제", '<strong id="console-screen" hidden></strong>'),
+            "install.html": ("설치·보정", '<strong id="install-screen">장비 찾기</strong>'),
+            "site-map.html": ("현장 지도", '<strong id="site-map-screen">지도 보기</strong>'),
+            "cell.html": ("팔레타이징 작업 준비", '<strong id="cell-screen">저장된 문서</strong>'),
+            "policy.html": ("학습 정책 승인", "<strong>학습</strong>")}
+    for name, (title, screen) in docs.items():
+        page = re.sub(r'<!--.*?-->', '', _page(name).read_text(encoding="utf-8"), flags=re.S)
+        assert page.count("<h1") == 1, f"{name}: one h1 only, and it lives in the path bar"
+        bar = re.search(r'<div class="fleet-workspace">\s*<ui-status id="estop-feedback" hidden></ui-status>\s*'
+                        r'<div class="ui-pathbar"><h1>([^<]+)</h1>' + re.escape(screen) + r'</div>', page)
+        assert bar and bar.group(1) == title, f"{name}: the path bar heads the workspace with the document title"
+    # 사이트 지도의 첫 구획 제목은 이제 화면 이름 h2다(경로 줄 h1과 겹치지 않는다).
+    assert '<h2 class="ui-section-heading" id="map-heading">지도 보기</h2>' in _page("site-map.html").read_text(encoding="utf-8")
 
 
 def test_no_back_link_sentences_remain():
