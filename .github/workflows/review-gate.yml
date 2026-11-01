@@ -16,6 +16,7 @@ permissions:
 jobs:
   review-gate:
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         if: github.event_name != 'merge_group'
@@ -24,8 +25,9 @@ jobs:
       # Run the base branch's gate so a PR cannot loosen its own check; gate edits take effect once merged.
       - if: github.event_name != 'merge_group'
         run: |
-          git show "origin/$BASE:.github/review-gate.sh" > "$RUNNER_TEMP/review-gate.sh" 2>/dev/null \
-            || cp .github/review-gate.sh "$RUNNER_TEMP/review-gate.sh"   # first PR, before main has the gate
+          gate=".github/review-gate.sh"
+          if git cat-file -e "origin/$BASE:$gate"; then git show "origin/$BASE:$gate" > "$RUNNER_TEMP/review-gate.sh"
+          else cp "$gate" "$RUNNER_TEMP/review-gate.sh"; fi   # only before the base branch has the gate
           bash "$RUNNER_TEMP/review-gate.sh"
         env:
           BASE: ${{ github.event.pull_request.base.ref }}

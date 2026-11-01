@@ -5,40 +5,50 @@
 # one that touches any needs a non-author's latest review to approve.
 # Env: GH_TOKEN, REPO (owner/name), PR (number), AUTHOR (PR author login),
 #      WINDOW_DAYS (default 14), IGNORE (space-separated logins that are agents, not people).
-# shortcut: evaluated on this PR's events only; a later overlapping PR by someone else gates that PR, not this one.
+# Needs a full-history checkout with origin/main. Rows are "login<TAB>path" so paths may hold spaces.
 set -euo pipefail
 since=$(date -u -d "${WINDOW_DAYS:-14} days ago" +%Y-%m-%dT%H:%M:%SZ)
 skip=" $AUTHOR ${IGNORE:-} "
+pr_files=$(gh api "repos/$REPO/pulls/$PR/files?per_page=100" --paginate --jq '.[].filename')
+if [ -z "$pr_files" ]; then
+  echo "PR changes no files: review not required"
+  exit 0
+fi
+# Commit -> login comes from GitHub (git identities do not name accounts); files come from one git log.
+logins=$(gh api "repos/$REPO/commits?sha=main&since=$since&per_page=100" --paginate \
+  --jq '.[] | select(.author != null and .author.type == "User") | "\(.sha)\t\(.author.login)"' |
+  awk -F'\t' -v skip="$skip" 'index(skip, " " $2 " ") == 0')
 others_files=$(
-  gh api "repos/$REPO/commits?sha=main&since=$since&per_page=100" --paginate \
-    --jq '.[] | select(.author != null and .author.type == "User") | "\(.author.login) \(.sha)"' |
-  while read -r login sha; do
-    [[ "$skip" == *" $login "* ]] && continue
-    git show --format= --name-only "$sha" | sed "s/^/$login /"   # needs a full-history checkout
-  done
+  if [ -n "$logins" ]; then
+    git -c core.quotepath=off log origin/main --since="$since" --no-merges --name-only --format='@%H' |
+      awk -F'\t' 'NR == FNR { who[$1] = $2; next }
+                  /^@/ { login = who[substr($0, 2)]; next }
+                  NF && login != "" { print login "\t" $0 }' <(echo "$logins") -
+  fi
   gh api "repos/$REPO/pulls?state=open&per_page=100" --paginate \
     --jq '.[] | select(.user.type == "User") | "\(.user.login) \(.number)"' |
   while read -r login number; do
     [[ "$skip" == *" $login "* || "$number" == "$PR" ]] && continue
-    gh api "repos/$REPO/pulls/$number/files?per_page=100" --paginate --jq ".[].filename | \"$login \" + ."
+    gh api "repos/$REPO/pulls/$number/files?per_page=100" --paginate --jq ".[].filename | \"$login\t\" + ."
   done
 )
-pr_files=$(gh api "repos/$REPO/pulls/$PR/files?per_page=100" --paginate --jq '.[].filename' | sort -u)
-overlap=$(awk 'NR == FNR { mine[$0] = 1; next } ($2 in mine) { print $2 " (" $1 ")" }' \
+overlap=$(awk -F'\t' 'NR == FNR { mine[$0] = 1; next } ($2 in mine) { print $1 "\t" $2 }' \
   <(echo "$pr_files") <(echo "$others_files") | sort -u)
 if [ -z "$overlap" ]; then
   echo "no overlap with others' recent work: review not required"
   exit 0
 fi
-echo "files shared with others' recent work:"; echo "$overlap"
-{ echo "### review-gate: files shared with others' recent work"; sed 's/^/- /' <<<"$overlap"; } >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+echo "files shared with others' recent work:"; awk -F'\t' '{ print $2 " (" $1 ")" }' <<<"$overlap"
+{ echo "### review-gate: files shared with others' recent work"; awk -F'\t' '{ print "- " $2 " (" $1 ")" }' <<<"$overlap"; } \
+  >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+# shortcut: first 100 reviews only; paginate if a PR ever collects more.
 approvers=$(AUTHOR="$AUTHOR" gh api "repos/$REPO/pulls/$PR/reviews?per_page=100" --jq '
   map(select(.state == "APPROVED" or .state == "CHANGES_REQUESTED" or .state == "DISMISSED"))
   | group_by(.user.login) | map(last) | .[]
   | select(.state == "APPROVED" and .user.login != env.AUTHOR) | .user.login')
 if [ -z "$approvers" ]; then
   # Ask the people whose work it meets; a failed request (no write access, read-only token) only loses the hint.
-  for login in $(sed -E 's/.*\((.*)\)$/\1/' <<<"$overlap" | sort -u); do
+  for login in $(cut -f1 <<<"$overlap" | sort -u); do
     gh api -X POST "repos/$REPO/pulls/$PR/requested_reviewers" -f "reviewers[]=$login" >/dev/null 2>&1 &&
       echo "requested review from $login" || echo "could not request review from $login"
   done
