@@ -11,6 +11,7 @@
 | ID | 제목 | Status |
 |---|---|---|
 | D-930 | 확인된 ARM 시도의 재관측(새 측정 사실만, 실행·claim·완료 권한 없음, API v1.334). [전문](../adr/D-930-arm-transfer-recheck-of-confirmed-attempt.md) | Accepted (2026-10-30, 계약·simulation 구현 결정; 실물 수용 별도) |
+| D-939 | 앱 연동 코드는 한 곳에 둔다 — 앱 사이 사본 금지. [전문](../adr/D-939-app-link-shared-sources.md) | Accepted (2026-10-31, 사용자 결정; Android peer 공통 소스·구조 시험, 기기 수용 별도) |
 | D-949 | 줄 수 래칫은 리팩터링 대기열이다 — 1,000줄 이상은 지금 나누고 800줄 이상은 다음에 고칠 때 먼저 나눈다. [전문](../adr/D-949-size-ratchet-refactor-tiers.md) | Accepted (2026-11-01, 사용자 결정; D-766에 순서를 더함) |
 | D-948 | 사람 조종은 `/ws/teleop` 스트림으로 보내고 REST `/teleop`은 대체 경로로 남긴다. [전문](../adr/D-948-teleop-websocket-stream.md) | Accepted (2026-11-01, 사용자 지시; 장치·현장 수용 별도) |
 | D-944 | 팀 tailnet에서도 LCD 코드로 CORE에 페어링한다. [전문](../adr/D-944-tailnet-code-pairing.md) | Accepted (2026-11-01, 사용자 결정; 코드 없는 개발 세션·peer 승인은 LAN 전용 유지) |

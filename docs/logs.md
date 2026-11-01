@@ -13220,6 +13220,12 @@ osy-d395-s1d\`.
 - 결정: 없음(①② 결정 요청)
 - 교훈: `docs/solutions/logic-errors/owner-receipt-time-must-cover-its-phases-2026-10-31.md`, `docs/solutions/deployment/sim-cell-owner-on-a-lab-pc-needs-a-device-free-namespace-2026-10-31.md`, 홈 교훈 갱신
 
+## 2026-10-31 · uncommitted · shared: D-939 앱 연동 공통 소스
+- 변경: 이름만 다른 피어 서명·첫 접촉 CA 고정·Keystore 신원 사본(Pilot `PeerProof`/`PeerTls`/`AndroidPeerIdentity`, Cam `CameraProof`/`CameraTls`/`AndroidCameraIdentity`)을 `shared/android/peer` 한 곳으로 모았다. 두 앱이 `srcDir`로 함께 컴파일한다. 신원은 `AndroidPeerIdentity(context, app)`이고 기존 키 별칭·표시 파일·client id 접두어를 그대로 쓴다. 세션·보관소는 앱에 남긴다.
+- 증거: 새 구조 시험 `test/architecture/test_app_shared_sources.py` 3건이 main 배치에서 RED(빌드 미포함·12개 다시 선언·사본 4쌍), 이 브랜치에서 GREEN이다. 로컬 SDK35 빌드: Cam JVM 443 pass/0 skip, Pilot JVM 110 pass/1 skip(기존 ShellPageProbe), 두 앱 assembleDebug 성공. lint 0 error.
+- gate 변화: 없음. 실제 태블릿·휴대폰에서 기존 승인 관계 유지는 설치 후 확인한다. CE: 해당 없음 — 규칙은 D-939와 구조 시험에 있다.
+- 결정: D-939 Accepted(사용자 결정)
+
 ## 2026-11-01 · uncommitted · docs: D-940 중복 정의 게이트와 등록부
 - 변경: `docs/adr/D-940`, ADR Log 행, `test/architecture/test_duplicate_definitions.py`와 `known_duplicates.txt`(초기 47 그룹), `test/architecture/AGENTS.md` 행 2건, `platform-folder-responsibilities.md` 3건(D-940 갈래 안내, Situation 섀도 모듈 목록 5개로 정정, 보정 저장 계층 병립 명시)
 - 증거: 로컬 `--scan` 재생성이 등록부와 집합 일치(2026-11-01). 원격 시험·mutation 증명은 착지 기록에 남긴다
