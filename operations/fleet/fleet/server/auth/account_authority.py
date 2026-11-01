@@ -13,7 +13,7 @@ from types import SimpleNamespace
 from urllib.parse import parse_qs, urlsplit
 
 from oauthlib.oauth2 import RequestValidator, WebApplicationServer, OAuth2Error
-from core_common.protocol.account_access import sign_access, verify_access
+from core_common.protocol.account_access import grants_for, sign_access, verify_access
 
 NO_STORE = {'Cache-Control': 'no-store', 'Pragma': 'no-cache'}
 # OAuthlib's debug messages contain raw grant/refresh credentials.
@@ -120,7 +120,7 @@ class AccountAuthority:
             with self.transaction() as db:
                 current = self.resolve_family(db, context['session_family'])
                 if (current is None or current['account_id'] != context['account_id']
-                        or not any(g['resource'] == fields['scope'] for g in current['grants'])):
+                        or not grants_for(current['grants'], fields['scope'])):
                     return self.error('access_denied', 403)
                 return self.server(db).create_authorization_response(
                     self.issuer + '/api/fleet/auth/authorize?' + query,
@@ -222,7 +222,7 @@ class _Validator(RequestValidator):
 
     def validate_scopes(self, client_id, scopes, client, request, *args, **kwargs):
         return (len(scopes) == 1 and scopes[0] in self.a.clients[client_id]['resources']
-                and any(g['resource'] == scopes[0] for g in request.user['grants']))
+                and grants_for(request.user['grants'], scopes[0]))
 
     def get_default_scopes(self, client_id, request, *args, **kwargs):
         return []
@@ -242,7 +242,7 @@ class _Validator(RequestValidator):
         context = self.a.resolve_family(self.db, row['family'])
         if context is None or context['revision'] != row['revision']:
             return False
-        if not any(g['resource'] == row['resource'] for g in context['grants']):
+        if not grants_for(context['grants'], row['resource']):
             return False
         request.user, request.scopes, request.account_grant = context, [row['resource']], row
         return True
@@ -283,7 +283,7 @@ class _Validator(RequestValidator):
         now = int(self.a.clock())
         return sign_access({'iss': self.a.issuer, 'aud': resource, 'sub': context['account_id'],
             'sid': context['session_family'], 'jti': secrets.token_urlsafe(24), 'rev': context['revision'], 'iat': now, 'exp': now + 300,
-            'grants': [g for g in context['grants'] if g['resource'] == resource]},
+            'grants': grants_for(context['grants'], resource)},
             self.a.private_key, key_id=self.a.key_id)
 
     def save_bearer_token(self, token, request, *args, **kwargs):

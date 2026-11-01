@@ -13429,3 +13429,16 @@ osy-d395-s1d\`.
 - 증거: 11-01 20:04·20:17·20:30 세 착지가 차례에서 `test_omx_fleet_ros_actionserver.py exited 5`(rclpy 없는 PC, 1 skipped)로 멈췄다. 착지는 main의 착지 코드로 돌아서 `land_cache` 수정만으로는 자기 차례를 지나지 못한다. 그래서 시험 트리에도 고친다. 원격 시험은 착지 기록에 남긴다.
 - gate 변화: 없음
 - 교훈: 없음
+
+## 2026-11-01 · uncommitted · feat: Rosy 허브 1단계 — 모든 로봇·프로젝트 grant와 팀원 기본 묶음 (D-955)
+- 변경: `account_access.py`에 `robot:*`·`project:*` grant와 `grants_for`, Authority 발급·허가 네 곳이 `grants_for`를 사용, 계정 화면이 새 계정을 팀원 기본 묶음으로 채우고 버튼 제공, D-955
+- 증거: 계약·Authority·Chromium 계정 시험 갱신(원격 결과는 커밋 기록)
+- gate 변화: 없음
+- 결정: D-955 추가(사용자 지시 2026-11-01)
+- 교훈: 없음
+
+## 2026-11-01 · uncommitted · docs(solutions): 착지가 차례를 반납하고 모두 다시 돈 다섯 원인
+- 변경: `docs/solutions/workflow-issues/landings-gave-the-turn-back-and-reran-everything-2026-11-01.md` 새 교훈(D-889 추가 13~17의 원인·확인 방법·측정 함정)
+- 증거: 11-01 이벤트·착지 로그 분석(차례 반납, 매핑 안 된 경로 73회, 재사용 470/4,700, narrow 시도 표본 30/40 FULL)
+- gate 변화: 없음
+- 교훈: 이 항목 자체
