@@ -47,6 +47,8 @@ export function createCellObservation({request, root}) {
     for (const cell of workcells) {
       const section = element('section');
       section.append(element('h3', cell.label));
+      // every camera of the cell side by side, the shared views first; a click enlarges one (2026-11-01)
+      const wall = element('div'); wall.className = 'cell-camera-wall';
       const grid = element('div'); grid.className = 'cell-observation-grid';
       for (const arm of cell.arms) {
         const card = element('article'); card.className = 'cell-observation-card'; card.dataset.armSource = arm.source_id;
@@ -60,17 +62,19 @@ export function createCellObservation({request, root}) {
         card.append(element('h4', arm.label), healthDetails, element('ui-text', '엔코더 각도 · rad'), status, values); grid.append(card);
         card.append(profiles.detail('arm', arm.source_id, {owner_id: arm.arm_id, sha256: arm.binding_sha256}));
       }
-      for (const camera of cell.cameras) {
+      const rank = camera => ({overhead: 0, side: 1}[camera.role] ?? 2) + (camera.stream === 'depth' ? 0.5 : 0);
+      for (const camera of [...cell.cameras].sort((a, b) => rank(a) - rank(b))) {
         const card = element('article'); card.className = 'cell-observation-card'; card.dataset.cameraSource = camera.source_id;
         const status = element('ui-status'); status.setAttribute('state', 'unavailable');
         const image = element('img'); image.alt = `${camera.label} 현재 영상`; image.hidden = true;
         const entry = {image, status, expires: 0, pending: false, lease: null, identity: null, url: null};
         image.onerror = () => staleCamera(entry);
+        card.title = '눌러서 크게 보기'; card.addEventListener('click', () => card.classList.toggle('focused'));
         staleCamera(entry); cameras.set(camera.source_id, entry);
-        card.append(element('h4', camera.label), element('ui-text', camera.role === 'overhead'
-          ? '공용 상단 카메라' : `설정된 팔: ${camera.arm_id}`), status, image); grid.append(card);
+        card.append(element('h4', camera.stream === 'depth' ? `${camera.label} · 깊이` : camera.label), element('ui-text', camera.role === 'overhead'
+          ? '공용 상단 카메라' : camera.role === 'side' ? '공용 측면 카메라' : `설정된 팔: ${camera.arm_id}`), status, image); wall.append(card);
       }
-      section.append(grid); root.append(section);
+      section.append(wall, grid); root.append(section);
     }
   }
 
