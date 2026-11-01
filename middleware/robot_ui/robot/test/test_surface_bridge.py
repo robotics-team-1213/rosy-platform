@@ -114,7 +114,7 @@ def test_the_bridge_builder_draws_manifest_surfaces_and_hides_when_empty():
         server.server_close()
         thread.join(timeout=2)
 
-    assert outcome["drawn"] == [["/console", "운용"], ["/setup", "작업 준비"]], outcome
+    assert outcome["drawn"] == [["/console", "운용"], ["/setup", "준비"]], outcome  # D-945: 셸 레일과 같은 짧은 이름, 전체 이름은 aria-label
     assert outcome["hiddenWhenEmpty"] is True
     assert outcome["visible"] is True
 
