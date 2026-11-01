@@ -117,3 +117,42 @@ def test_a_push_moves_only_as_a_supervised_trial():
     for extra, why in (([], "outside the D-911 gate"), (["--commissioning"], "needs --person-at-switch")):
         with pytest.raises(SystemExit, match=why):
             cell_push.main(base + extra)
+
+
+def test_the_lane_is_the_measured_jaw_face_and_a_real_push_leaves_its_decision(tmp_path, monkeypatch):
+    """2026-11-01: a push lane taken as 20 mm wide dragged two neighbours; the size now comes from the measured finger
+    spacing, and a supervised push is a decision row the next run can learn from, refused or not."""
+    import cell_params as prm
+
+    assert prm.jaw_face_half_mm(None) == pytest.approx((34.4 + 8.0) / 2)
+    frame = np.zeros((480, 640, 3), np.uint8)
+
+    class Cell:
+        def __init__(self, *a):
+            pass
+
+        def frame(self, camera):
+            return frame
+
+        def act(self, command):
+            raise AssertionError(f"a refused push must not move: {command}")
+
+    seen = {}
+    monkeypatch.setattr(cpu.cp, "FifoCell", Cell)
+    monkeypatch.setattr(cpu.cell_pivot, "map_record", lambda cal, site: {"loo_error_mm": {"max": 11.9}})
+    monkeypatch.setattr(cpu.cell_pivot, "bias_at", lambda *a, **k: None)
+    monkeypatch.setattr(cpu.cell_objects, "to_mm", lambda px, *a: np.array([[130.0, -20.0], [130.0, -60.0]]))
+    monkeypatch.setattr(cpu.cell_objects, "foreground", lambda *a, **k: np.zeros((10, 10), np.uint8))
+    monkeypatch.setattr(cpu, "path_clear", lambda *a: seen.setdefault("lane", a[-1]) and [("beside", [150.0, -20.0])])
+    (tmp_path / "cal.json").write_text("{}")
+    config = {"plan_path": str(ROOT / "deploy/robot/omx/grasp-plan.example.json"), "calibration_path": str(tmp_path / "cal.json"),
+              "io": str(tmp_path / "io"), "work_dir": str(tmp_path / "work"), "arm_id": "arm_b",
+              "cameras": {"top": {"height_m": 0.6, "center_px": [320, 240]}},
+              "sites": {"pallet": {"surface_z": -0.01}}}
+    (tmp_path / "cfg.json").write_text(json.dumps(config))
+    code = cpu.main(["--config", str(tmp_path / "cfg.json"), "--site", "pallet", "--roi", "0", "0", "10", "10",
+                     "--px", "312,201", "--dir", "0,1", "--mm", "80", "--half-mm", "50", "--commissioning", "--person-at-switch"])
+    assert code == 1 and seen["lane"] == pytest.approx(21.2 + 11.9)
+    rows = [json.loads(line) for line in (tmp_path / "work/decisions.jsonl").read_text().splitlines()]
+    assert [(r["stage"], r["chosen"], r["by"]) for r in rows] == [("push", "refuse", "rule")]
+    assert rows[0]["arm_id"] == "arm_b" and rows[0]["facts"]["blocked"]

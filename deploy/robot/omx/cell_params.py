@@ -68,7 +68,7 @@ DEFAULTS = {
     "pivot.over_target": (0, "flag", 0, 1), "pivot.over_top_mm": (30.0, "mm", 5, 120), "pivot.over_clear_mm": (30.0, "mm", 10, 100),
     "feel.enabled": (1, "flag", 0, 1), "feel.step_mm": (12.0, "mm", 3, 30), "feel.tries": (4, "count", 0, 6),
     "push.height_m": (0.012, "m", 0.005, 0.03), "push.speed_m_s": (0.010, "m/s", 0.003, 0.03),
-    "push.gap_mm": (10.0, "mm", 3, 40), "push.lane_half_mm": (21.0, "mm", 5, 60),
+    "push.gap_mm": (10.0, "mm", 3, 40),
     "runner.pace_lag": (1.6, "joint_unit", 0.1, 5), "runner.pace_rise": (0.3, "joint_unit", 0, 5),
     "runner.pace_max_s": (3.0, "s", 0.1, 30), "runner.idle_park_s": (180.0, "s", 5, 7200),
     "runner.idle_stop_s": (180.0, "s", 5, 7200), "safety.bus_watchdog_ms": (0.0, "ms", 0, 2540), "runner.contact_lag": (1.5, "joint_unit", 0.1, 5),
@@ -130,3 +130,10 @@ def load(path=None) -> dict:
 if __name__ == "__main__":
     loaded = load(sys.argv[1])
     print(len(loaded["values"]), "parameters ok, sha", loaded["sha"])
+
+
+def jaw_face_half_mm(params=None) -> float:
+    """Half the closed jaws' face across the fingers, from the measured finger spacing plus one finger: the one
+    gripper size every lane and room check uses (2026-11-01: about 42 mm across; a push lane taken as 20 mm wide
+    dragged both neighbouring columns along)."""
+    return (get(params, "look.other_finger_mm") + get(params, "auto.finger_mm")) / 2
