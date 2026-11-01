@@ -49,8 +49,8 @@
 
 ## 최근 기록
 
+- 2026-11-01 · uncommitted · ROS 없는 실험실에서 빈 실행(exit 5)으로 착지를 막는 수집 가드 교체
 - 2026-10-29 · 724ecfbff1 · D-916 원본 joint 시각 보존
 - 2026-10-28 · fce9c60216 · SIM Pilot의 배치 자산 일치
 - 2026-10-28 · ed77a021dc · test(omx): record literal value-contract compatibility
 - 2026-10-27 · uncommitted · refactor(omx): align five literal value-contract families
-- 2026-10-27 · uncommitted · refactor(omx): extract legacy motion thread unchanged

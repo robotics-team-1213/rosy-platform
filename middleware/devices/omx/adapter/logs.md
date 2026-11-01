@@ -841,3 +841,10 @@
 - 증거: tests-only RED 11 failed/19 passed, focused GREEN 139 passed/skip0. 실제 native ROS RED 1 failed/1 passed에서 GREEN 2 passed/skip0. 수동 Gazebo에서 원본 metadata와 증가하는 state 시각을 관측했다. 공식 행렬의 실행 범위·실패·skip과 측정 누락은 [검증 정본](../../../../docs/validation/joint-source-provenance-2026-10-29/result.md)에 구분한다. 독립 contract/Safety 및 최종 소스 리뷰에서 추가 P1/P2 없음.
 - Gate: 변화 없음. 전체 source-clock/물리 producer·장치·현장 수용은 열려 있다.
 - CE: 새 교훈 기록 — FULL 판정과 실제 실행 행렬을 혼동한 원인·정정·배열 대조 기준을 소유 저장소 solutions에 기록했다.
+
+
+## 2026-11-01 · uncommitted · ROS 없는 실험실에서 빈 실행(exit 5)으로 착지를 막는 수집 가드 교체
+
+- 변경: `test/test_omx_fleet_ros_actionserver.py`의 모듈 단계 `importorskip`을 조건 수집 가드로 바꿨다 — ROS 런타임이 없는 실험실 PC에서도 이 파일은 수집되어 "1 skipped"(exit 0)로 기록된다. 수집 단계 건너뛰기는 pytest exit 5(빈 실행)라, fleet 변경의 역방향 의존으로 이 파일이 선택된 모든 착지가 정지했다(D-785 착지 이후 처음으로 fleet 시험 파일을 고친 브랜치가 이 지뢰를 밟음).
+- 증거: 원격 시험은 커밋 후 이어 기록한다.
+- Gate: 없음. CE: 해당 없음 — 착지 인프라와의 상호작용이며 패턴은 이 기록으로 충분.
