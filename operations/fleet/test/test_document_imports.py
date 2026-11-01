@@ -88,6 +88,7 @@ OWN = {
         "link-tag.js",
         "localization-badge.js",
         "power-health-view.js",
+        "charge-bays-view.js",  # D-941: read-only charge bay plan
         "state-age.js",
     },
     "install.js": {

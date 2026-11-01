@@ -33,7 +33,7 @@ STATUS_DIR = "run/rosy-boot"
 #: D-548: root's marker that this robot accepts the shared rosy-dev-* API tokens.
 DEV_MODE_FILE = "etc/rosy/dev-mode"
 LOGIN_CODE = re.compile(r"^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$")
-LOGIN_ROLES = frozenset({"viewer", "operator", "administrator"})
+LOGIN_ROLES = frozenset({"viewer", "operator", "administrator", "estop_release"})
 #: D-433: CORE's hand-over (rosy-core's /run/rosy, 0644) and its writer's account.
 FACE_INPUTS = "run/rosy/face-inputs.json"
 #: D-483: CORE's pending peer-request approval code (rosy-core:rosy-display 2750, file 0640).
@@ -362,10 +362,10 @@ class FaceDisplay:
         if mode != self._mode:  # the drive card's cadence starts with each operating mode
             self._mode = mode
             self._drive_since = now if mode in robot_state.OPERATING_MODES else None
-        login = "code" if view.get("login_code") else ("burned" if view.get("login_burned") else None)
-        # D-483: a release without the reader has no peer row in its table either.
-        extra = {}
-        if hasattr(face_screen, "read_peer_approval"):
+        # v1.343: a release code is no login; it rides only on the stopped card.
+        extra = {"release_code": view["login_code"]} if view.get("login_role") == "estop_release" else {}
+        login = "code" if view.get("login_code") and not extra else ("burned" if view.get("login_burned") else None)
+        if hasattr(face_screen, "read_peer_approval"):  # D-483: a release without the reader has no peer row
             extra["peer"] = face_screen.read_peer_approval(
                 str(self.root / PEER_APPROVAL), datetime.fromtimestamp(self._wall(), timezone.utc),
                 owner_uid=self._core_owner)

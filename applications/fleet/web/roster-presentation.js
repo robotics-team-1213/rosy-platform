@@ -6,6 +6,7 @@ import { positionTag, sitePoseText, untrustedQueuedReason } from "./localization
 import { staleAgeS } from "./state-age.js";
 import { powerHealthView } from "./power-health-view.js";
 import { cardTripLine } from "./card-trip.js";
+import { estopText } from "./motion-readiness.js";
 
 const TAG_STATUS = { nav: "active", ok: "active", warn: "warn", crit: "crit" };
 
@@ -107,7 +108,7 @@ export function createRosterSummary({scope, view, openCard, render, attentionIte
     const estop = state.safety?.estop;
     const safety = view.stateUnavailable || !robot.online || !robot.state ? "안전 확인 불가"
       : staleAgeS(robot, view.receivedAtMs, Date.now()) !== null ? "안전 확인 불가"
-        : estop === true ? "비상 정지" : estop === false ? "안전 정상" : "안전 확인 불가";
+        : estop === true ? estopText(state, "비상 정지") : estop === false ? "안전 정상" : "안전 확인 불가";
     const facts = nodeWithText("div", "robot-summary-status");
     facts.append(tag(status, view.stateUnavailable || !robot.online ? "warn" : ""),
       tag(safety, estop === true ? "crit" : safety === "안전 정상" ? "" : "warn"));
