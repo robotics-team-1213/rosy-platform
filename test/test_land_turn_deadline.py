@@ -81,3 +81,14 @@ def test_with_no_landing_waiting_the_turn_cap_does_not_cut_the_turn(cached, monk
     monkeypatch.setattr(land.remote_pytest, "run", _runner({"pkg/test": GREEN, "pkg/test/test_a.py": GREEN}))
     assert land.run_tests(wt, land.argparse.Namespace(tests="auto", node=False, no_cache=False),
                           [["pkg/test"], ["pkg/test/test_a.py"]], wt.parent / "logs", 1)
+
+
+def test_a_landing_the_cap_sent_back_once_keeps_its_next_turn(cached, monkeypatch):
+    """D-889 15, 11-01: big FULL landings went back 3-6 times, each turn rerunning their FULL past the cap."""
+    from test_land import GREEN, _runner
+    wt, run, _ = cached
+    monkeypatch.setattr(land, "TURN_CAP_S", -1)
+    monkeypatch.setattr(land.land_checks, "turn_wanted", lambda *a: pytest.fail("the cap was asked again"))
+    monkeypatch.setattr(land.remote_pytest, "run", _runner({"pkg/test": GREEN, "pkg/test/test_a.py": GREEN}))
+    args = land.argparse.Namespace(tests="auto", node=False, no_cache=False, _overtime=True)
+    assert land.run_tests(wt, args, [["pkg/test"], ["pkg/test/test_a.py"]], wt.parent / "logs", 1)

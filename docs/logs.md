@@ -13361,6 +13361,13 @@ osy-d395-s1d\`.
 - 결정: 사용자 2026-11-01 "다 프로그램적으로", "높이 분석 opencv로"
 - 교훈: 없음
 
+## 2026-11-01 · uncommitted · fix(land): 차례 한도에 한 번 돌려보낸 착지는 다음 차례를 끝까지 쓴다 (D-889 추가 15)
+- 변경: `Overtime` 뒤 `args._overtime`을 켜고, `land_checks.run_tests`는 그때 차례 한도를 걸지 않는다.
+- 증거: 11-01 11:43~12:10 rest 묶음·android-shared-peer가 12~13분 차례 뒤 반납, main 27분 넘게 정지. 원격 시험은 착지 기록에 남긴다.
+- gate 변화: 없음
+- 결정: D-889 추가 15(사용자 목표 2026-11-01)
+- 교훈: 없음
+
 ## 2026-11-01 · uncommitted · tools: 워크트리 .git 유실 재발 교훈 갱신
 - 변경: `docs/solutions/workflow-issues/empty-worktree-folder-runs-git-on-the-shared-main-2026-10-25.md`에 재발(파일 남은 폴더·묘비 없음·land_async 재사용) 추가
 - 증거: 공유 체크아웃 reflog의 `checkout: moving from main to feat/omx-devices-scan`, 2분 뒤 `git switch main`로 복구

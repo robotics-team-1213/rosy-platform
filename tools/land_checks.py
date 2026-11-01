@@ -314,7 +314,10 @@ def turn_wanted(land, wt: Path) -> bool:
 
 def run_tests(land, wt: Path, args, invocations: list[list[str]], logdir: Path, round_no: int) -> list[str]:
     """Run lint + pytest (+ node); return a summary line per step. Stop on any NEW failure."""
-    deadline = land.time.monotonic() + land.TURN_CAP_S if isinstance(round_no, int) else None
+    # D-889 15: a landing the cap already sent back once keeps its next turn. 11-01: big FULL landings went back
+    # 3-6 times, 12-13 min of main each, because every turn reran their own FULL past the cap.
+    capped = isinstance(round_no, int) and not getattr(args, "_overtime", False)
+    deadline = land.time.monotonic() + land.TURN_CAP_S if capped else None
     python = land.sys.executable
     done = []
     if (wt / land.HARNESS).is_file():
