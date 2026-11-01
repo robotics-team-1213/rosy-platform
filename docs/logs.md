@@ -13373,6 +13373,19 @@ osy-d395-s1d\`.
 - 증거: 공유 체크아웃 reflog의 `checkout: moving from main to feat/omx-devices-scan`, 2분 뒤 `git switch main`로 복구
 - gate 변화: 없음
 
+## 2026-11-01 · f2333e8aea · API v1.339 OMX SIM 시연 기본값
+
+- 변경: `GET /api/v1/sim/omx/target`에 `start_pose`·`task`(additive)를 적었다. 값은 `deploy/robot/omx/sim/pilot_demonstration.yaml`에서 온다. 버전 고정 시험·`app.py` 문자열을 v1.339로 올렸다.
+- 증거: 계약 시험 `test_omx_sim_pilot_contract.py`, 버전 고정 시험(원격).
+- gate 변화: 없음. CE: 해당 없음.
+
+## 2026-11-01 · uncommitted · fix(land): FULL 착지도 겹침 판정, 돌려보낸 표시는 표에 (D-889 추가 16)
+- 변경: `land_selection.select`의 겹침 생략을 자기 선택이 FULL인 착지에도 쓴다. `Overtime`은 표에 `overtime`을 남기고 `land_checks.overtimed`가 그것을 읽는다.
+- 증거: 11-01 13:13~13:26 rest 묶음이 추가 15 착지 뒤에도 차례를 반납했다(새 코드로 다시 떠 표시가 사라짐). FULL 자기 선택을 차례마다 다시 돌았다. 원격 시험은 착지 기록에 남긴다.
+- gate 변화: 없음
+- 결정: D-889 추가 16(사용자 목표 2026-11-01)
+- 교훈: 없음
+
 ## 2026-11-01 · uncommitted · docs: D-951 ROSY Calibration 앱과 rosy-calibration 스킬
 - 변경: `docs/adr/D-951-rosy-calibration-application.md`(그림 5장 `docs/assets/omx-calibration-2026-11-01-*`), ADR Log, `applications/calibration/{README,AGENTS}.md`, `platform_parts.yaml` 등록, `.claude/skills/rosy-calibration`
 - 증거: 2026-11-01 현장 기록(왼팔 벨트 끝 높이·터치 실패·I 게인 12.3→3.3 mm, 깊이 표식 LOO 62~355 px, 경로 점검 거절)
