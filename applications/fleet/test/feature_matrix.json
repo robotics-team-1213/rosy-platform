@@ -3634,6 +3634,7 @@
         "applications/fleet/web/index.html"
       ],
       "consumers": [
+        "applications/fleet/web/charge-bays-view.js",
         "applications/fleet/web/calibration/map-fit-view.js",
         "applications/fleet/web/map/map-polling.js",
         "applications/fleet/web/sitemap/site-map-camera.js",
@@ -3646,6 +3647,14 @@
       ],
       "availability": "configured capability and authorized role; see backend contract",
       "calls": [
+        {
+          "consumer": "applications/fleet/web/charge-bays-view.js",
+          "expression": "/api/fleet/charge-bays",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/charge-bays"
+          ]
+        },
         {
           "consumer": "applications/fleet/web/calibration/map-fit-view.js",
           "expression": "/api/fleet/site-lanes",
@@ -3811,6 +3820,23 @@
         }
       ],
       "requests": [
+        {
+          "id": "GET:/api/fleet/charge-bays",
+          "method": "GET",
+          "path": "/api/fleet/charge-bays",
+          "implementation": "operations/fleet/fleet/server/console/console_routes.py",
+          "handler": "charge_bay_plan",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_charge_bays.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/charge-bays"
+        },
         {
           "id": "GET:/api/fleet/guide",
           "method": "GET",
