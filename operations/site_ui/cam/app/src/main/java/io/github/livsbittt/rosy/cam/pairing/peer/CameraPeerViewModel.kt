@@ -1,5 +1,6 @@
 package io.github.livsbittt.rosy.cam.pairing.peer
 
+import io.github.livsbittt.rosy.peer.PeerCaOffer
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -19,7 +20,7 @@ sealed interface CameraPeerState {
     data object Idle : CameraPeerState
     data class Connecting(val site: PairableSite) : CameraPeerState
     data class Pending(val site: PairableSite, val pending: CameraPending) : CameraPeerState
-    data class Certificate(val site: PairableSite, val offer: CameraCaOffer) : CameraPeerState
+    data class Certificate(val site: PairableSite, val offer: PeerCaOffer) : CameraPeerState
     data class Connected(val site: PairableSite) : CameraPeerState
     data class Failed(val site: PairableSite, val retained: Boolean) : CameraPeerState
     data class Forgetting(val site: PairableSite) : CameraPeerState

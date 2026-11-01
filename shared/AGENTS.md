@@ -12,11 +12,13 @@ Shared web components and operator copy. Protocol and skill contracts stay in `c
 | Directory | Purpose |
 |-----------|---------|
 | `web/` | Shared web package used by the dashboard and Fleet UI (see `web/AGENTS.md`) |
+| `android/` | Kotlin sources every Android app compiles in place (see `android/AGENTS.md`, D-939) |
 
 ## For AI Agents
 
 ### Working In This Directory
 
+- Code two apps both need lives here once, never as a renamed copy in each app (D-939, `test/architecture/test_app_shared_sources.py`).
 - A string or component shared by two UIs belongs here. A REST field does not. Add the field in the API reference and the schema first.
 - Follow `DESIGN.md` for tokens and components.
 
