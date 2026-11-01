@@ -81,6 +81,14 @@ def test_start_pose_task_recording_and_failure_case_flow(tablet_page):
     # Task first: recording stays off until the task is written, and the text is kept for the next try.
     start = page.locator("[data-sim-record-start]")
     assert start.evaluate("b => b.disabled") and start.get_attribute("reason") == "과제 설명을 먼저 적으세요"
+    # One shared note explains the three disabled stop buttons; no reason repeats under each button.
+    assert page.locator("[data-sim-stop-help]").is_visible()
+    assert page.locator("[data-sim-record-stop][reason]").count() == 0
+    assert page.locator("[data-sim-record-stop][aria-describedby='arm-stop-help']").count() == 3
+    # A long task grows the field instead of hiding text behind a scrollbar.
+    task_box = page.locator("[data-sim-task]")
+    task_box.fill("긴 과제 설명 " * 30)
+    assert task_box.evaluate("t => t.scrollHeight <= t.clientHeight + 1")
     page.fill("[data-sim-task]", "파란 상자를 벨트 표시 안에 놓기")
     page.wait_for_function("!document.querySelector('[data-sim-record-start]').disabled")
     assert page.evaluate("sessionStorage.getItem(`rosy.pilot.omx-sim.task.${location.origin}`)") == "파란 상자를 벨트 표시 안에 놓기"
@@ -93,6 +101,7 @@ def test_start_pose_task_recording_and_failure_case_flow(tablet_page):
     box = page.locator("[data-sim-record-stop='failure']").bounding_box()
     assert box and box["y"] + box["height"] <= page.viewport_size["height"], box
     assert text(page, "[data-sim-record-live]").startswith("● 녹화 중")
+    assert page.locator("[data-sim-stop-help]").is_hidden()
     if os.environ.get("ROSY_SHOT_DIR"):
         shots = Path(os.environ["ROSY_SHOT_DIR"])
         shots.mkdir(parents=True, exist_ok=True)

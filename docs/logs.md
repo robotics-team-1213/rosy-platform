@@ -13437,6 +13437,68 @@ osy-d395-s1d\`.
 - 결정: D-955 추가(사용자 지시 2026-11-01)
 - 교훈: 없음
 
+## 2026-11-01 · uncommitted · docs(solutions): 착지가 차례를 반납하고 모두 다시 돈 다섯 원인
+- 변경: `docs/solutions/workflow-issues/landings-gave-the-turn-back-and-reran-everything-2026-11-01.md` 새 교훈(D-889 추가 13~17의 원인·확인 방법·측정 함정)
+- 증거: 11-01 이벤트·착지 로그 분석(차례 반납, 매핑 안 된 경로 73회, 재사용 470/4,700, narrow 시도 표본 30/40 FULL)
+- gate 변화: 없음
+- 교훈: 이 항목 자체
+
+## 2026-11-01 · uncommitted · learning/omx: D-943 GPU 학습·장치 초안·작업대 녹화·HF 업로드 버튼
+- 변경: OMX 학습 센터가 CUDA를 보고하는 학습기에서 ACT에 `cuda`를 제공하고 작업자는 `~/.cache/rosy-learning/gpu.lock`을 학습 내내 잡는다(`experiment_center/jobs/train`, 학습 화면 장치 선택). HF 업로드 버튼(`experiment_hub.py`, `omx-hub.js`, 센터 `hub`·`hub-prepare`·`hub-upload`, `publish` 권한·`write-repos` 연결). 작업대 장치 목록(`deploy/robot/omx/device_inventory.py`, 뷰어 `/inventory.json`, 프로필 화면 불러오기). 작업대 녹화 화면(`deploy/robot/omx/bench_record.py`). D-943, ADR Log 행, `adr_gaps` D-941·D-942
+- 증거: 원격 pytest — `learning/training/omx/test` 전체 exit 0, HF·센터·Learning 웹·협업·구조 93건 exit 0, 장치 목록·작업대 녹화·뷰어 exit 0. 관제 PC에서 장치 목록을 읽기 전용으로 실행해 follower 2대(arm_a·arm_b)·미지정 보드 2개·카메라 4대 확인
+- gate 변화: 없음. 실물 녹화·GPU 실학습·HF 실계정 왕복은 미수용(작업대 인원·팀 HF 연결 필요)
+- 결정: D-943 Accepted(사용자 지시)
+- 교훈: `record_session.py`의 고정 서비스 목록(`camera@top/front`)은 10-31 카메라 역할 변경(`arm_a_wrist`·`arm_b_wrist`·`side`)과 토크 OFF observer를 놓쳐 녹화가 장치를 열지 못한다. 작업대 화면이 실행 중 유닛에서 인계 목록을 만든다
+
+## 2026-11-01 · uncommitted · fix(land): 차례에서는 변화분이 닿는 자기 호출만 다시 돈다 (D-889 추가 18)
+- 변경: `land_selection.select`의 landed 경로가 자기 호출을 하나씩 `overlaps`로 거른다.
+- 증거: 11-01 17:48~18:45 main 57분 정지. arm-transfer-recheck 차례 2라운드가 자기 호출 485개를 다시 돌았다. 원격 시험은 착지 기록에 남긴다.
+- gate 변화: 없음
+- 결정: D-889 추가 18(사용자 지시 2026-11-01)
+- 교훈: 없음(docs/solutions/workflow-issues/landings-gave-the-turn-back-and-reran-everything-2026-11-01.md의 연장)
+
+## 2026-11-01 · uncommitted · fix(land): 차례 한도는 돌려보낸 횟수만큼, 자기 브라우저 묶음도 닿는 것만 (D-889 추가 19)
+- 변경: `land_checks.overtimes`(횟수), 차례 한도 10→30분→없음, 표 `overtime` 정수. `land_selection.browsers(reach)`가 추가 18 경로에서 닿는 자기 브라우저 묶음만 고른다.
+- 증거: 11-01 18:01~19:2x arm-transfer-recheck의 한도 없는 차례가 main을 90분 넘게 잡았다(자기 호출 485개 + 브라우저 직렬). 원격 시험은 착지 기록에 남긴다.
+- gate 변화: 없음
+- 결정: D-889 추가 19(사용자 목표 2026-11-01)
+- 교훈: docs/solutions/workflow-issues/landings-gave-the-turn-back-and-reran-everything-2026-11-01.md에 이어 적는다
+
+## 2026-11-01 · uncommitted · fix(land): 모두 건너뛴 파일의 exit 5는 판정 (D-889 추가 20)
+- 변경: `land_cache.unusable`이 요약 줄이 건너뜀뿐인 exit 5를 판정으로 본다(`ALL_SKIPPED`).
+- 증거: 11-01 20:04·20:17 두 착지가 `test_omx_fleet_ros_actionserver.py exited 5`(1 skipped)로 차례에서 멈췄다. 원격 시험은 착지 기록에 남긴다.
+- gate 변화: 없음
+- 결정: D-889 추가 20(사용자 목표 2026-11-01)
+- 교훈: 없음
+
+## 2026-11-01 · uncommitted · docs(solutions): in-process uvicorn.Config hides logs from caplog
+- 변경: `solutions/workflow-issues/in-process-uvicorn-config-hides-logs-from-caplog-2026-10-31.md` 추가
+- 증거: 게시 PR #223 fleet-2of5 두 번 실패, uvicorn 0.52.4에서 propagate=False 재현, 고친 시험 원격 통과(43 passed, 2 skipped)
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 새 교훈 기록
+
+## 2026-11-01 · uncommitted · docs(adr): D-950 도킹 진입 방향은 후면(후진)
+- 변경: `docs/adr/D-950-docking-direction-rear-entry.md` 새 ADR(Accepted, 사용자 결정). D-200·D-349·D-350과 도킹 설계 문서에 관계 줄을 더했다. ADR 로그 행과 adr_gaps를 정리했다.
+- 증거: 다른 세션이 `.worktrees/dockrear`에 커밋하지 않고 남긴 초안. 사용자 지시(2026-11-01 "미커밋들을 커밋하고 머지")로 그대로 커밋해 착지한다.
+- gate 변화: 없음
+- 결정: D-950
+- 교훈: 없음
+
+## 2026-11-01 · uncommitted · native v2 readonly profile contract
+
+- 변경: D-907·ADR Log와 test/test_native_profile_manifest.py 초안. 기존 v1 producer/validator를 보존하고 v2 서명·형식·inventory·독립 policy·runtime identity 계약을 시험한다.
+- 검증: 검토 기준 14680235에서 b58162a6까지 관련 common signing/Pinky release/native verifier/test seam diff 없음. 현재는 test/doc 후보이며 pytest·생산 구현은 검토 뒤 진행한다.
+- gate 변화: 없음. readonly metadata 검증은 consumer 설치·native closure·활성화·실물 권한 증거가 아니다.
+- CE: 해당 없음 — 새 계약 단위의 test-first 후보이며 해결·검증한 비문서화 장애가 없다.
+
+## 2026-11-01 · uncommitted · D-907 source review R1 corrections
+
+- 변경: runtime binary drift를 유효한 다른 64자리 digest로 바꾸고 OS identity drift와 signed object-key reorder positive를 추가했다. D-903~D-906 예약이 있으나 이 브랜치에 본문이 없어서 필요한 adr_gaps 네 행을 기록했다. 예약 ref는 바꾸지 않았다.
+- 증거: 독립 SOURCE 검토가 malformed digest와 canonical-only positive의 두 oracle 공백을 찾았다. 이 후보의 D-907 추가로 생긴 metadata 의존성을 기존 실패 면제로 처리하지 않는다. 정적 검사와 harness 결과는 같은 외부 구현 기록에 추가한다.
+- gate 변화: 없음. 생산 구현·커밋·원격 pytest는 다음 검토까지 보류한다.
+- CE: 해당 없음 — 설계 단계 시험 oracle 보완이며 운영 장애를 검증·해결한 기록이 아니다.
+
 ## 2026-11-01 · uncommitted · fix(ci): 게시 PR CI 빨강 두 건(nightly의 로컬 main, OMX 리허설 실시간)
 - 변경: `tools/land_nightly.py`가 main sha를 `_main_sha()`로 읽고 `test/test_land_nightly.py`가 이를 바꿔 끼운다(PR checkout에는 로컬 `main` 브랜치가 없어 매번 실패). `deploy/robot/omx/collection_session.py`의 `run_session`·`require_reached`가 `clock`을 받고(기본은 실제 시간), `collection_rehearsal.SimulatedClock`을 CLI `rehearsal-suite`가 세션·가짜 장치에 같이 넘긴다. 실물 수집 경로의 시간·가드 값은 그대로다
 - 증거: 게시 PR #225 CI run 41290376246 `root-test-3of3`에서 두 시험 실패(`git rev-parse main` exit 128, 리허설 `none` 경우 correct=false). 리허설은 로컬 착지에서도 부하 때 4회 실패·단독 통과(LOAD-FLAKY 후보)
