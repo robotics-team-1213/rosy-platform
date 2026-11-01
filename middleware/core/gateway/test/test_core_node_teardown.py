@@ -299,3 +299,44 @@ def test_events_executor_is_spun_natively_and_needs_no_pool_drain(node_module, m
     assert calls == ["add_node", "attach", "spin returned", "detach", "remove_node",
                      "executor.shutdown(0)"]
     assert node.get_logger().warnings == []
+
+
+class _ExternalShutdown(Exception):
+    pass
+
+
+def test_events_spin_ending_on_context_shutdown_returns_like_threaded(node_module, monkeypatch):
+    # Real EventsExecutor.spin() raises ExternalShutdownException when the context goes down.
+    calls: list[str] = []
+
+    class Raising(_EventsExecutor):
+        def spin(self) -> None:
+            calls.append("spin raised")
+            raise _ExternalShutdown()
+
+    experimental = types.ModuleType("rclpy.experimental")
+    experimental.EventsExecutor = lambda: Raising(calls)
+    monkeypatch.setitem(sys.modules, "rclpy.experimental", experimental)
+    monkeypatch.setattr(sys.modules["rclpy.executors"], "ExternalShutdownException",
+                        _ExternalShutdown, raising=False)
+    monkeypatch.setenv("ROSY_CORE_EXECUTOR", "events")
+    node = _bare_node(node_module, calls)
+    node.run()
+    assert calls == ["add_node", "attach", "spin raised", "detach", "remove_node",
+                     "executor.shutdown(0)"]
+
+
+def test_threaded_spin_still_propagates_errors(node_module, monkeypatch):
+    monkeypatch.delenv("ROSY_CORE_EXECUTOR", raising=False)
+    calls: list[str] = []
+    node = _bare_node(node_module, calls)
+    executor = _FakeExecutor(calls)
+    executor.release.set()
+
+    def spin():
+        raise _ExternalShutdown()
+
+    executor.spin = spin
+    monkeypatch.setattr(node_module, "MultiThreadedExecutor", lambda: executor)
+    with pytest.raises(_ExternalShutdown):
+        node.run()

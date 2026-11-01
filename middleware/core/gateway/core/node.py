@@ -272,14 +272,20 @@ class RosyCoreNode(Node):
         # events: one native thread runs every callback, so nothing is left in flight when spin()
         # returns and there is no pool to drain.
         if events:
+            from rclpy.executors import ExternalShutdownException
             from rclpy.experimental import EventsExecutor  # Jazzy: experimental, hence opt-in
             executor = EventsExecutor()
+            # The native spin raises on context shutdown where the threaded one returns.
+            shutdown_return = ExternalShutdownException
         else:
-            executor = MultiThreadedExecutor()
+            executor, shutdown_return = MultiThreadedExecutor(), ()
         executor.add_node(self)
         try:
             self.control_adapter.attach(executor)
-            executor.spin()
+            try:
+                executor.spin()
+            except shutdown_return:
+                pass
         finally:
             try:
                 self.control_adapter.detach(executor)
