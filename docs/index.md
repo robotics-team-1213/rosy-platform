@@ -355,6 +355,6 @@
 
 - 2026-11-01 · uncommitted · fix(land): main이 이미 고친 MAIN-RED로 멈추지 않는다 (D-889 추가 14)
 - 2026-11-01 · uncommitted · fix(land): 재부팅은 시험 PC별로 비킨다 (D-889 추가 13)
+- 2026-11-01 · uncommitted · refactor: D-949 줄 수 래칫을 리팩터링 대기열로
 - 2026-11-01 · uncommitted · fix(monitoring): 이벤트 기록을 수집기 시계로 읽는다 (MAIN-RED)
 - 2026-11-01 · uncommitted · fix: 조종 끊김·정지 전파·링크 지연 (D-948)
-- 2026-11-01 · uncommitted · fix: 링크 조사 후속 (문서 정리·AP 지터·enum 판단)

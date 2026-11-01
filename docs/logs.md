@@ -13284,6 +13284,13 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 교훈: 없음(시계 주입 원칙은 기존 코드에 있었고 한 경로만 빠졌다)
 
+## 2026-11-01 · uncommitted · refactor: D-949 줄 수 래칫을 리팩터링 대기열로
+- 변경: D-949와 `test/architecture/test_size_tiers.py`(1,000줄 이상 제품 행 금지, 800~999·시험 1,500 초과·단위 10,000 초과 대기열 집합은 줄어들기만). 1차 분리: `action_store.py` 1132→497, `diagnostic.html` 1857→288(+css·js 3), `rosy-face.py` 1235→221, `sync-image-layer.py` 1014→496. `console.py`는 fix/robot-site-link-robustness의 분리(634)가 착지하면 `TIER1_IN_FLIGHT`에서 빠진다
+- 증거: 옮긴 정의의 AST 동일성(에이전트 검사), 원격 시험은 착지 기록에 남긴다. 장치(LCD·이미지 층 갱신·진단 화면) 확인 안 함
+- gate 변화: 없음
+- 결정: D-949 Accepted(사용자 결정), 워크트리 슬롯 2번째 force-over-cap 승인(2026-11-01)
+- 교훈: 없음
+
 ## 2026-11-01 · uncommitted · fix(land): 재부팅은 시험 PC별로 비킨다 (D-889 추가 13)
 - 변경: `land_prepare`의 전역 05:15~06:10 사전 시험 금지 창을 없앴다. `host_probe.PROBE`는 `rosy-nightly-reboot.timer`가 15분 안이거나 그 서비스가 도는 동안 busy(`reboot_soon`)로 보고해 새 작업을 받지 않는다. 모델 PC 재부팅을 06:05 → 05:00으로 옮겼다(AI PC는 주인 동의 필요).
 - 증거: 11-01 05:34~06:10 차례 0건, 그 창에 걸린 착지의 차례 대기 80~139분. 시험 PC 세 대의 `systemctl show -P NextElapseUSecRealtime`·`date -d` 출력을 확인했다. 원격 시험은 착지 기록에 남긴다.

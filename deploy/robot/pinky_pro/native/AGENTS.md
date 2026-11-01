@@ -49,6 +49,13 @@ Jazzy. This directory is copied into every offline ROSY release payload.
   `rosy-hw-probe.path` reruns it when CORE writes `/run/rosy/hw-probe.request`.
   While `rosy-io`/`rosy-navigation` run it never opens their buses.
 
+- `rosy-face.py` (D-433, split by D-766) is the entry script `rosy-face.service` runs; it puts its own
+  directory on `sys.path` and imports `rosy_face_parts.py` (Log, battery, buzzer, lamp), `rosy_face_inputs.py`
+  (hand-over/update readers, switches, face frames, LCD open) and `rosy_face_display.py` (status view,
+  `FaceDisplay`). They ship beside it (install-native-runtime.sh copies the whole directory) and are listed
+  in `rosy-face.service`'s `PROGRAM_SOURCES` in `test/test_native_systemd_contract.py`. Tests patch
+  `robot_state`/`presentation` on `rosy_face_display` and `IDENTIFY_MAX_S` on `rosy_face_parts`.
+
 - `rosy-auto-update.timer` → `rosy_auto_update.py run` (D-412) stages and applies signed
   GitHub payload releases only when the rollout and the robot allow it; state lives in
   `/var/lib/rosy/updates/`. It and `rosy-release-push.ps1` both hold `/run/rosy-claim`
