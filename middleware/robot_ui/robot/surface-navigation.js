@@ -40,10 +40,7 @@ export function dashboardSurfaceBridge(nav, surfaces) {
       link.href = `/${id}`;
       link.textContent = short;
       link.setAttribute("aria-label", title || id);
-      if (icon) {
-        link.dataset.actionIcon = icon;
-        actionIcon(link, icon);
-      }
+      if (icon) link.dataset.actionIcon = icon;
       return link;
     });
   nav.replaceChildren(...links);
