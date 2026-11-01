@@ -449,7 +449,8 @@ def rounds(args, wt: Path, branch: str, main_co: Path, python: str, qdir, ticket
         try:
             tested = run_tests(wt, args, invocations, logdir, round_no)
         except Overtime if ticket is not None else ():  # without a ticket (--no-queue) it stops like any Stop
-            args._overtime = True  # D-889 15: the next turn runs uncapped
+            args._overtime = True  # D-889 15: the next turn runs uncapped, after a relaunch too (the ticket keeps it)
+            land_queue.set_status(ticket, "preparing", overtime=True)
             full_main = land_prepare.again(sys.modules[__name__], wt, branch, args, python, qdir, ticket, invocations, "")
             continue
         if out(wt, "rev-parse", "HEAD") != candidate:

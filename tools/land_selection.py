@@ -83,10 +83,10 @@ def select(land, wt: Path, base: str, python: str, head: str | None = None,
                       " this branch's own selection on the merged tree")
                 mine = own["local_invocations"] if own["mode"] == "full" else own["invocations"]
                 # D-889 addendum 10 item 2: this branch's suites passed its pretest, and main's delta reaches none of
-                # them (guards aside, which the delta's run carries): only the delta's suites. FULL-mode own: re-run.
+                # them (guards aside, which the delta's run carries): only the delta's suites. A FULL-mode own too
+                # (D-889 16): re-running it every turn ran past the 10 min cap, so it never landed (11-01).
                 # Browser chunks only where addendum 12 says (browsers()).
-                if own["mode"] != "full" and not overlaps(sel["local_invocations"], mine,
-                                                          getattr(getattr(land, "land_guards", None), "GUARDS", ())):
+                if not overlaps(sel["local_invocations"], mine, getattr(getattr(land, "land_guards", None), "GUARDS", ())):
                     print("[tests] main's delta reaches none of this branch's suites: the delta's suites only")
                     return _unique(sel["local_invocations"] + browsers()), None
                 return _unique(sel["local_invocations"] + mine + browsers()), None

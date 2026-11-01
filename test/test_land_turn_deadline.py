@@ -92,3 +92,15 @@ def test_a_landing_the_cap_sent_back_once_keeps_its_next_turn(cached, monkeypatc
     monkeypatch.setattr(land.remote_pytest, "run", _runner({"pkg/test": GREEN, "pkg/test/test_a.py": GREEN}))
     args = land.argparse.Namespace(tests="auto", node=False, no_cache=False, _overtime=True)
     assert land.run_tests(wt, args, [["pkg/test"], ["pkg/test/test_a.py"]], wt.parent / "logs", 1)
+
+
+def test_the_ticket_keeps_the_sent_back_mark_across_a_relaunch(tmp_path, monkeypatch):
+    """11-01 13:26: the rest bundle relaunched on main's new landing code, lost the mark and went back again."""
+    ticket = tmp_path / "1.json"
+    ticket.write_text('{"status": "preparing", "branch": "b"}', encoding="utf-8")
+    monkeypatch.setattr(land.land_queue, "_held", [ticket])
+    fresh = land.argparse.Namespace()  # a relaunched process: nothing in memory
+    assert not land.land_checks.overtimed(land, fresh)
+    land.land_queue.set_status(ticket, "preparing", overtime=True)
+    land.land_queue.set_status(ticket, "waiting")  # later status changes keep the field
+    assert land.land_checks.overtimed(land, fresh)
