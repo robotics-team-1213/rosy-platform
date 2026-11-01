@@ -13312,6 +13312,34 @@ osy-d395-s1d\`.
 - 결정: 없음
 - 교훈: 기존 교훈 갱신(카메라 교체 시 이미지 좌표 설정도 무효)
 
+## 2026-11-01 · uncommitted · omx: 계획기 low_zones, 바닥 높이를 지정한 사각형 안에서만 낮춤
+- 변경: `grasp_planner.Planner.limits_at`가 `limits.low_zones` 사각형 안에서만 IK 작업 공간 바닥을 낮춘다(높이지는 않음). 그 밖은 기존 바닥 그대로
+- 증거: `test_omx_grasp_planner.py` 원격 실행. 현장: 왼팔 벨트 끝이 테이블보다 낮고(사용자 측정·깊이) 팔이 10~20 mm 판 위에 있어 FK 바닥 0.005 아래에서만 집기가 가능
+- gate 변화: 계획기 작업 공간 바닥(사용자 승인 2026-11-01 "Approve, belt rectangle only"), 러너 접촉 정지는 그대로
+- 결정: 사용자 승인으로 벨트 사각형에만 적용, 값은 현장 계획 파일이 정함
+- 교훈: 없음
+
+## 2026-11-01 · uncommitted · fix(land): 재부팅은 시험 PC별로 비킨다 (D-889 추가 13)
+- 변경: `land_prepare`의 전역 05:15~06:10 사전 시험 금지 창을 없앴다. `host_probe.PROBE`는 `rosy-nightly-reboot.timer`가 15분 안이거나 그 서비스가 도는 동안 busy(`reboot_soon`)로 보고해 새 작업을 받지 않는다. 모델 PC 재부팅을 06:05 → 05:00으로 옮겼다(AI PC는 주인 동의 필요).
+- 증거: 11-01 05:34~06:10 차례 0건, 그 창에 걸린 착지의 차례 대기 80~139분. 시험 PC 세 대의 `systemctl show -P NextElapseUSecRealtime`·`date -d` 출력을 확인했다. 원격 시험은 착지 기록에 남긴다.
+- gate 변화: 없음
+- 결정: D-889 추가 13(사용자 목표 2026-11-01)
+- 교훈: 없음
+
+## 2026-11-01 · uncommitted · fix(land): main이 이미 고친 MAIN-RED로 멈추지 않는다 (D-889 추가 14)
+- 변경: `land_prepare.prepare`는 사전 시험이 MAIN-RED로 멈추고 main이 합친 base보다 앞으로 갔으면, 새 main에서 한 번 더 준비한다.
+- 증거: 11-01 rest 묶음과 payload-build가 09:27 base의 monitoring MAIN-RED(`rosy-main-red.jsonl` 16번째 줄)로 멈췄다. 그 시험은 지금 main에서 통과한다(원격 10건). 원격 시험은 착지 기록에 남긴다.
+- gate 변화: 없음
+- 결정: D-889 추가 14(사용자 목표 2026-11-01)
+- 교훈: 없음
+
+## 2026-11-01 · uncommitted · docs(solutions): mutation 증명 탐침은 safety 태그 경로 밖에서
+- 변경: `docs/solutions/workflow-issues/mutation-probe-on-safety-path-blocks-landing-2026-11-01.md` 신규. D-940 후속 착지에서 mutation probe가 `concern: safety` 경로를 건드려 초록인데도 D-430 §5가 착지를 막은 사례와 예방·복구 절차.
+- 증거: 초록 `6aa4000879`·빨강 `78e7a05dde`(probe_field 지목)·재브랜치 `e373c7b615` main 반영. probe 위치를 safety 밖에 찍은 D-940 게이트 증명(`2e8109ab34`)은 같은 날 무사 통과한 대조군.
+- gate 변화: 없음
+- 결정: 없음(교훈 기록)
+- 교훈: 신규 mutation-probe는 probe 파일 선정 전 `platform_parts.yaml`의 safety 태그를 먼저 본다
+
 ## 2026-11-01 · uncommitted · omx: 팔별 세션 잠금, 한 팔이 작업해도 다른 팔 세션·관찰기는 돈다
 - 변경: `joint_tune.session_lock(arm)` 셀 잠금 공유 + `session-<arm>.lock` 배타. 인자 없으면 기존처럼 셀 전체 배타(자동 갱신·두 팔 파이프라인). `record_session --arm`. 관찰기 유닛은 셀 잠금 공유 확인 + 자기 팔 잠금 확인
 - 증거: `test_omx_session_lock.py`, `test_omx_hardware_observer.py` 원격 실행. 현장 2026-11-01 한 팔 세션마다 다른 팔 관찰기를 멈춰야 했고 두 팔 병렬 시험이 불가능했음
