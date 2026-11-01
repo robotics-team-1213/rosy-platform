@@ -48,6 +48,8 @@ def main() -> None:
     source_hasher.update((repo / "contracts/foundation/core_common/protocol/omx_sim.py").read_bytes())
     source_hasher.update((repo / "contracts/foundation/core_common/protocol/controls.py").read_bytes())
     source_hasher.update(cell_path.read_bytes())
+    demonstration_path = repo / "deploy/robot/omx/sim/pilot_demonstration.yaml"
+    source_hasher.update(demonstration_path.read_bytes())
     vendor_revision = yaml.safe_load((repo / "deploy/robot/omx/stack.lock.yaml").read_text())["vendor"]["revision"]
     source = {"source_revision": revision, "source_tree_sha256": source_hasher.hexdigest(),
               "vendor_revision": vendor_revision,
@@ -93,6 +95,7 @@ def main() -> None:
     facade = PilotSimRuntime(arm, gripper=cell.gripper_joint, range_inset_rad=cell.start_state_tolerance_rad,
                              gripper_open=cell.gripper_open, gripper_closed=cell.gripper_closed,
                              gripper_velocity=gripper_velocity, gripper_preload=cell.gripper_preload_rad)
+    facade.load_demonstration(yaml.safe_load(demonstration_path.read_text(encoding="utf-8")))
     facade.capture = PilotSimCapture(
         facade, record_root, source, sim_time_ns=lambda: node.get_clock().now().nanoseconds)
     camera = PilotSimCamera(node, facade.capture, source["world_sha256"])

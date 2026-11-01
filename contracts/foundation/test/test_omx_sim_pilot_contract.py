@@ -63,6 +63,18 @@ def test_target_may_carry_a_controls_descriptor():
     assert target.model_dump(by_alias=True)["controls"] == {"schema": "rosy.controls/1", "items": ()}
 
 
+def test_target_start_pose_names_only_advertised_arm_joints():
+    target = OmxSimTarget(instance_id="omx_01", joints=("joint1", "joint2"), gripper="gripper_joint_1",
+                          start_pose={"joint1": 0.0, "joint2": -1.57}, task="닿기")
+    assert target.start_pose == {"joint1": 0.0, "joint2": -1.57} and target.task == "닿기"
+    for pose in ({}, {"gripper_joint_1": 0.5}, {"joint1": float("nan")}):
+        with pytest.raises(ValidationError):
+            OmxSimTarget(instance_id="omx_01", joints=("joint1", "joint2"), gripper="gripper_joint_1",
+                         start_pose=pose)
+    with pytest.raises(ValidationError):
+        OmxSimTarget(instance_id="omx_01", joints=("joint1",), gripper="gripper_joint_1", task="")
+
+
 def _gripper(**changes):
     from core_common.protocol.omx_sim import OmxSimGripperGoal
     body = {"instance_id": "omx_01", "seat_id": "s", "request_id": "r", "position": 0.5,
