@@ -207,16 +207,17 @@ class WebNode(Node):
         with open(html_path, 'rb') as f:
             raw = f.read()
         html = raw.replace(b'__BACKEND_PORT__', str(backend_port).encode())
-        page = make_page_handler(html)
+        asset_dir = os.path.dirname(html_path)
+        page = make_page_handler(html, asset_dir)
         httpd = http.server.ThreadingHTTPServer((bind_host, port), page)
         threading.Thread(target=httpd.serve_forever, daemon=True).start()
         if backend_port != port:
-            api = make_api_handler(self, html, page_port=port)
+            api = make_api_handler(self, html, page_port=port, asset_dir=asset_dir)
             httpd2 = http.server.ThreadingHTTPServer(
                 (bind_host, backend_port), api)
             threading.Thread(target=httpd2.serve_forever, daemon=True).start()
         else:
-            api = make_api_handler(self, html, page_port=port)
+            api = make_api_handler(self, html, page_port=port, asset_dir=asset_dir)
             httpd2 = http.server.ThreadingHTTPServer(
                 (bind_host, port), api)
         self.get_logger().info(
