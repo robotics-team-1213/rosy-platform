@@ -13430,6 +13430,13 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 교훈: 없음
 
+## 2026-11-01 · uncommitted · feat: Rosy 허브 1단계 — 모든 로봇·프로젝트 grant와 팀원 기본 묶음 (D-955)
+- 변경: `account_access.py`에 `robot:*`·`project:*` grant와 `grants_for`, Authority 발급·허가 네 곳이 `grants_for`를 사용, 계정 화면이 새 계정을 팀원 기본 묶음으로 채우고 버튼 제공, D-955
+- 증거: 계약·Authority·Chromium 계정 시험 갱신(원격 결과는 커밋 기록)
+- gate 변화: 없음
+- 결정: D-955 추가(사용자 지시 2026-11-01)
+- 교훈: 없음
+
 ## 2026-11-01 · uncommitted · docs(solutions): in-process uvicorn.Config hides logs from caplog
 - 변경: `solutions/workflow-issues/in-process-uvicorn-config-hides-logs-from-caplog-2026-10-31.md` 추가
 - 증거: 게시 PR #223 fleet-2of5 두 번 실패, uvicorn 0.52.4에서 propagate=False 재현, 고친 시험 원격 통과(43 passed, 2 skipped)
