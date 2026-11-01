@@ -777,3 +777,10 @@
 - 변경: 중복 감사로 찾은 진짜 중복 2건을 정리했다 — ① styles.css 안에서 `#fleet-main :is(.map-stage #map-canvas, .map-birdseye)` 규칙이 두 번 선언돼 있던 것을 한 곳으로 합침(절대 배치는 폭과 무관). ② cell.css와 site-map.css가 각자 가진 `a { color: var(--text-primary) }` 링크 색 규칙 제거(공용 components.css가 이미 같은 규칙을 소유). 나머지 감사 결과(JS 함수명 56건·다문서 id 36건·같은 값 다른 변수명 137쌍)는 전부 설계상 정상(모듈 클로저·공용 헤더·시맨틱 토큰)으로 판정해 그대로 둔다.
 - 증거: test_layout_canon 전 통과, node --test 403 passed. 원격 시험은 다음 착지 전 기록.
 - gate 변화: 없음. CE: 해당 없음.
+
+
+## 2026-11-02 · uncommitted · 4차 감사: noscript 안내 — JS 없는 사용자에게 물리 정지 경로 알림
+
+- 변경: 다섯 영역 문서에 `<noscript>` 안내(ui-status error)를 추가했다 — 스크립트 없이 열면 「스크립트를 허용하세요 + 비상 정지는 로봇 본체 물리 스위치」를 보여준다. 4차 감사의 나머지 지표는 전부 해당 없음: 인쇄 스타일(운용 도구), prefers-reduced-motion(D-220 정지 계약으로 애니메이션 자체가 없음), 대화상자 포커스(showModal이 첫 포커스 요소에 자동).
+- 증거: fleet_components --check·test_layout_canon 전 통과·node --test 403 passed. 원격 시험은 다음 착지 전 기록.
+- gate 변화: 없음. CE: 해당 없음.
