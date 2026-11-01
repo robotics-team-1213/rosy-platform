@@ -13412,3 +13412,9 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: 없음
 - 교훈: 새 교훈 1건
+
+## 2026-11-01 · uncommitted · docs(solutions): 착지가 차례를 반납하고 모두 다시 돈 다섯 원인
+- 변경: `docs/solutions/workflow-issues/landings-gave-the-turn-back-and-reran-everything-2026-11-01.md` 새 교훈(D-889 추가 13~17의 원인·확인 방법·측정 함정)
+- 증거: 11-01 이벤트·착지 로그 분석(차례 반납, 매핑 안 된 경로 73회, 재사용 470/4,700, narrow 시도 표본 30/40 FULL)
+- gate 변화: 없음
+- 교훈: 이 항목 자체
