@@ -1,4 +1,4 @@
-"""E-stop release with the robot's screen release code (user decision 2026-10-31, API v1.337)."""
+"""E-stop release with the robot's screen release code (user decision 2026-10-31, API v1.343)."""
 
 from __future__ import annotations
 

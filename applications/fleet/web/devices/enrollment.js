@@ -264,7 +264,7 @@ export function createEnrollmentPanel({ scope, headers, identity, log, dialogs, 
     el("enroll-submit").disabled = true;
     try {
       if (target.release) {
-        // 사용자 결정 2026-10-31(v1.337): 정지 화면의 해제 전용 코드. 로그인 권한은 없다.
+        // 사용자 결정 2026-10-31(v1.343): 정지 화면의 해제 전용 코드. 로그인 권한은 없다.
         await call(`/api/fleet/robots/${encodeURIComponent(target.release)}/estop-release`, {
           method: "POST", body: { code: input.value },
         });

@@ -16,11 +16,14 @@ from omx_adapter.kinematics import (
     IK_SINGULAR,
     IK_UNREACHABLE,
     IK_YAW_LIMIT,
+    WAYPOINT_DISCONTINUITY,
     IkLimits,
+    LineRejected,
     OmxKinematics,
     TopDownPose,
     wrap_angle,
 )
+from omx_adapter.swept_volume import GRIPPER_RADIUS_M, LINK_RADIUS_M, capsules
 
 
 PINNED_REVISION = "0a4af6a923b8b7d80b8c20506d1839c54d2e993e"
@@ -281,3 +284,42 @@ def test_reach_ring_at_table_height(kin):
     inner, outer = measure_reach_ring(kin, _limits(singularity_radius_m=0.001), 0.005)
     assert 0.27 < outer < 0.285
     assert inner < 0.06
+
+
+def test_solve_line_follows_a_straight_vertical_descent_with_a_steady_wrist(kin):
+    limits = _limits()
+    start = TopDownPose(0.18, 0.02, 0.10, 0.3)
+    first = kin.solve_top_down(start, limits).joints
+    path = kin.solve_line(first, start, (0.18, 0.02, 0.04), limits, count=12, max_joint_step_rad=0.25)
+    assert len(path) == 12
+    for i, joints in enumerate(path, 1):
+        fk = kin.fk(joints)
+        assert (fk.x, fk.y, fk.z) == pytest.approx((0.18, 0.02, 0.10 - 0.06 * i / 12), abs=1e-9)
+        assert kin.tool_down_sum_error(joints) < 1e-9
+        assert joints[4] == pytest.approx(first[4], abs=1e-9)
+
+
+def test_solve_line_refuses_a_joint_jump_and_an_unreachable_sample(kin):
+    limits = _limits()
+    start = TopDownPose(0.18, 0.0, 0.10, 0.0)
+    first = kin.solve_top_down(start, limits).joints
+    with pytest.raises(LineRejected) as jump:
+        kin.solve_line(first, start, (0.18, 0.0, 0.04), limits, count=1, max_joint_step_rad=0.01)
+    assert (jump.value.reason, jump.value.sample) == (WAYPOINT_DISCONTINUITY, 1)
+    with pytest.raises(LineRejected) as far:
+        # coarse steps near full stretch would trip the jump check first; this one looks at reach alone
+        kin.solve_line(first, start, (0.39, 0.0, 0.10), limits, count=10, max_joint_step_rad=math.pi)
+    assert far.value.reason == IK_UNREACHABLE
+
+
+def test_capsules_run_shoulder_elbow_wrist_fingertips_with_the_held_item(kin):
+    joints = kin.solve_top_down(TopDownPose(0.18, 0.0, 0.06, 0.0), _limits()).joints
+    points, approach = kin.link_points(joints, 0.01)
+    fk = kin.fk(joints)
+    assert points[4] == pytest.approx((fk.x, fk.y, fk.z), abs=1e-12)
+    assert approach == pytest.approx((0.0, 0.0, -1.0), abs=1e-9)
+    assert points[5] == pytest.approx((fk.x, fk.y, fk.z - 0.01), abs=1e-9)
+    caps = capsules(kin, joints, fingertip_m=0.01, item=(0.04, 0.02))
+    assert [c[2] for c in caps] == [LINK_RADIUS_M, LINK_RADIUS_M, GRIPPER_RADIUS_M, 0.02]
+    assert caps[0][0] == points[0] and caps[2][1] == points[5]
+    assert caps[3][1] == pytest.approx((fk.x, fk.y, fk.z - 0.04), abs=1e-9)

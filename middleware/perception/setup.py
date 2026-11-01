@@ -88,7 +88,7 @@ setup(
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
         (os.path.join('share', package_name, 'config'), glob('config/*.yaml')),
-        (os.path.join('share', package_name, 'web'), glob('web/*.html')),
+        (os.path.join('share', package_name, 'web'), glob('web/*.html') + glob('web/*.css') + glob('web/*.js')),
         (os.path.join('share', package_name, 'launch'), glob('launch/*.py')),
     ] + map_data_files,
     install_requires=['setuptools', 'core_common>=0.0.1'],

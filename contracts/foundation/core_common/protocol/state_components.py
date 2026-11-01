@@ -59,7 +59,7 @@ class BatteryStatus(BaseModel):
 
 class SafetySummary(BaseModel):
     estop: bool = False
-    # v1.336: who latched it (`api:<role>`, `battery_policy`, `battery_deep`, `control:<reason>`); "" when clear.
+    # v1.342: who latched it (`api:<role>`, `battery_policy`, `battery_deep`, `control:<reason>`); "" when clear.
     source: str = ""
 
 

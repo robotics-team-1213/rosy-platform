@@ -82,7 +82,7 @@ PER_IP_LIMIT = 5
 GLOBAL_LIMIT = 30
 RATE_WINDOW_S = 60.0
 MAX_WRONG_ATTEMPTS = 5
-#: v1.337: the screen code root shows while the robot is latched; it can only release (safety.py).
+#: v1.343: the screen code root shows while the robot is latched; it can only release (safety.py).
 RELEASE_ROLE = "estop_release"
 ENROLLMENT_TTL_S = 300.0
 MAX_ENROLLMENT_CODES = 8
@@ -94,6 +94,9 @@ MAX_LIFETIME_HOURS = 168.0
 ALLOWED_NETWORKS = tuple(ipaddress.ip_network(net) for net in (
     "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8", "::1/128",
 ))
+#: D-944: the team tailnet (D-477) for the code-gated pairing and the reachability read only.
+#: Keyless paths (development session, first peer approval) stay on the robot LAN (D-477 4).
+TAILNET_NETWORKS = tuple(ipaddress.ip_network(net) for net in ("100.64.0.0/10", "fd7a:115c:a1e0::/48"))
 
 NO_STORE = {"Cache-Control": "no-store", "Pragma": "no-cache"}
 
@@ -116,14 +119,15 @@ def scrypt_digest(code: str, salt: bytes, *, n: int = SCRYPT_N, r: int = SCRYPT_
                           maxmem=SCRYPT_MAXMEM)
 
 
-def client_allowed(host: Optional[str]) -> bool:
+def client_allowed(host: Optional[str], *, tailnet: bool = False) -> bool:
     try:
         address = ipaddress.ip_address(host or "")
     except ValueError:
         return False
     if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped is not None:
         address = address.ipv4_mapped
-    return any(address in network for network in ALLOWED_NETWORKS)
+    networks = ALLOWED_NETWORKS + TAILNET_NETWORKS if tailnet else ALLOWED_NETWORKS
+    return any(address in network for network in networks)
 
 
 class _Window:
@@ -409,8 +413,8 @@ def _match(state: PairingState, code: str,
 async def pair(request: Request, svc: CoreServicesLike = Depends(get_services)):
     """로그인 코드 → 이 브라우저 전용 만료 토큰 (인증 없음, D-193 4)."""
     host = request.client.host if request.client else ""
-    if not client_allowed(host):
-        return _error(403, "FORBIDDEN", "pairing is accepted only from the robot LAN")
+    if not client_allowed(host, tailnet=True):
+        return _error(403, "FORBIDDEN", "pairing is accepted only from the robot LAN or the team tailnet")
     state = _pairing(request)
     wait = state.admit(host)
     if wait is not None:

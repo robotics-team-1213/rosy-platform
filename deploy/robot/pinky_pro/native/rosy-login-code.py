@@ -17,7 +17,7 @@ first CORE_READY of a boot, as `login.boot_code` says (off | operator |
 administrator), then clears the three files when CORE signals that the code
 was used or burned (/run/rosy/login-code-state.json, read strictly) or when it
 expires. While CORE reports an e-stop latch (/run/rosy/face-inputs.json, fresh)
-it shows a release-only code instead (role estop_release, API v1.337): CORE
+it shows a release-only code instead (role estop_release, API v1.343): CORE
 accepts it only at POST /api/v1/safety/release-code, never as a login. A live
 CLI code is left alone. It never prints a code. The command `sudo rosy-login-code [--role R]
 [--minutes N]` issues a code on demand and prints it only to its own terminal.

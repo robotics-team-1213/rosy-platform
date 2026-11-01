@@ -325,7 +325,7 @@ class HttpRobotClient(StationTransport, NavigationTransport):
         return await self._post("/api/v1/safety/stop")
 
     async def estop_release_code(self, code: str) -> dict:
-        """v1.337: release with the one-time code this robot's screen shows while latched."""
+        """v1.343: release with the one-time code this robot's screen shows while latched."""
         return await self._post("/api/v1/safety/release-code", {"code": code})
 
     async def identify_lamp(self, color: Optional[str] = None, quiet: bool = False) -> dict:

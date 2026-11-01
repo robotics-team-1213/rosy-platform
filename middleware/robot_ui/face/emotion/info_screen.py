@@ -370,7 +370,7 @@ def boot_lines(payload: dict) -> list[tuple[str, str, tuple[int, int, int]]]:
             lines.append(("ap_login", "PW: see the operator AP store", _MUTED))
 
     if kind == "CORE_READY":
-        if payload.get("login_code") and payload.get("login_role") != "estop_release":  # v1.337: not a login
+        if payload.get("login_code") and payload.get("login_role") != "estop_release":  # v1.343: not a login
             lines.append(("login", f"Login {payload['login_code']} {payload.get('login_role') or ''}".rstrip(),
                           _FG))
         elif payload.get("login_burned"):

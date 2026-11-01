@@ -128,7 +128,7 @@ test('the console skips the map request only when every robot says it serves no 
   assert.equal(noRobotServesGrid([manual, {capabilities: {runtime: {maps: {occupancy: true}}}}]), false);
 });
 
-test('an e-stop names its cause when CORE reports one (v1.336)', () => {
+test('an e-stop names its cause when CORE reports one (v1.342)', () => {
   assert.equal(estopCause('battery_policy'), '배터리 보호');
   assert.equal(estopCause('battery_deep'), '배터리 과방전');
   assert.equal(estopCause('api:operator'), 'API 정지(operator)');

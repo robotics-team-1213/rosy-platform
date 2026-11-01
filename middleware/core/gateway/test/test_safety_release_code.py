@@ -1,4 +1,4 @@
-"""v1.337: the e-stop release code root shows on the stopped screen; CORE takes it only to release."""
+"""v1.343: the e-stop release code root shows on the stopped screen; CORE takes it only to release."""
 
 from __future__ import annotations
 

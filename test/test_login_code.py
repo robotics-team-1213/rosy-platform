@@ -379,7 +379,7 @@ def test_rosy_config_apply_hands_the_login_policy_to_the_issuer(tmp_path):
     assert json.loads((root / "etc/rosy/login-policy.json").read_text(encoding="utf-8")) == {"boot_code": "off"}
 
 
-# --- v1.337: the e-stop release code ---------------------------------------------
+# --- v1.343: the e-stop release code ---------------------------------------------
 
 
 def _latch(root: Path, estop: bool = True, age_s: float = 0.0) -> None:

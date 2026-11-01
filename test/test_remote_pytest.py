@@ -347,6 +347,12 @@ def test_matching_venv_does_not_wait_for_active_pytest(tmp_path):
         holder.wait(timeout=2)
 
 
+def test_the_venv_build_keeps_pips_cache_and_logs_its_wall_time():
+    """2026-10-31: ~13-14 rebuilds a host a day re-downloaded every wheel under --no-cache-dir."""
+    assert "--no-cache-dir" not in rp.VENV and "--require-hashes" in rp.VENV
+    assert '[remote-pytest] venv built $DEPS in $((SECONDS - B))s' in rp.VENV
+
+
 def test_pytest_uses_the_same_dependency_environment_as_setup():
     assert 'V=$R/venvs/$DEPS' in rp.VENV
     assert 'V=$R/venvs/$DEPS' in rj.START and 'V=$R/venvs/$2' in rj.JOB
@@ -702,8 +708,10 @@ def test_largest_test_files_are_queued_first(tmp_path):
     (tmp_path / "d").mkdir()
     (tmp_path / "d" / "a.py").write_text("x" * 30)
     (tmp_path / "d" / "b.py").write_text("x" * 30)
-    assert rp.cost(tmp_path, [rp.BROWSER_ENV, "big.py::test_t", "-q"]) == 100
-    assert rp.cost(tmp_path, ["d"]) == 60 and rp.cost(tmp_path, ["missing.py"]) == 0
+    b = wq.BYTES_PER_S
+    assert rp.cost(tmp_path, [rp.BROWSER_ENV, "big.py::test_t", "-q"], {}) == 100 / b
+    assert rp.cost(tmp_path, ["d"], {}) == 60 / b and rp.cost(tmp_path, ["missing.py"], {}) == 0
+    assert rp.cost(tmp_path, ["d"], {("d",): 300.0}) == 300.0, "measured history wins over file size"
 
 
 class FakeJobHost:

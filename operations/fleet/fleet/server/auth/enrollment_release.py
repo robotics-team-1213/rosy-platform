@@ -1,6 +1,6 @@
 """E-stop release from the console with the robot's screen release code (user decision 2026-10-31).
 
-While CORE is latched, the robot's own screen shows a one-time release code (API v1.337). A
+While CORE is latched, the robot's own screen shows a one-time release code (API v1.343). A
 teammate standing at the robot reads it and enters it in the console; Fleet hands it to CORE
 `POST /api/v1/safety/release-code` over the enrolled operator connection. The code can only
 release that latch: it logs nobody in, and Fleet never stores or logs it. CORE checks the
@@ -46,7 +46,7 @@ class SafetyReleaseMixin:
             answer = await client.estop_release_code(normalized)
         except RobotApiError as exc:
             if exc.status == 404:
-                outcome, status, message = "robot_too_old", 409, "this robot's CORE has no release code (before v1.337)"
+                outcome, status, message = "robot_too_old", 409, "this robot's CORE has no release code (before v1.343)"
             else:
                 outcome, status, message = _REFUSALS.get(exc.code, ("robot_error", 502, f"the robot answered {exc.status}"))
                 if outcome == "code_rejected" and (exc.detail or {}).get("burned"):

@@ -39,6 +39,7 @@ for _relative in ("operations/processes/palletizing/src", "middleware/devices/om
 
 from omx_adapter.kinematics import ARM_JOINTS, OmxKinematics, TopDownPose  # noqa: E402
 from omx_adapter.manipulation_plan import ExecutionStateSnapshot  # noqa: E402
+from omx_adapter.swept_volume import capsules as arm_capsules  # noqa: E402
 from omx_adapter.pose_plan import (  # noqa: E402
     AnalyticCellTransferPlanner, CellPlanningProfile, CellTransferPlanRejected, CellTransferRequest)
 from rosy.integrations.robots.omx.mixed_reach import IkReach, workcell_bases  # noqa: E402
@@ -54,10 +55,7 @@ MIXED_FIXTURE = ROOT / "operations/processes/palletizing/test/fixtures/mixed_two
 G1_FIXTURE = ROOT / "test/fixtures/g1_sim"
 PROFILE_PATH = ROOT / "deploy/robot/omx/sim/cell_profile.yaml"
 SHARED_BAND = "shared_band"
-# Capsule radii (m). Links: XL430 body 28.5 x 34 mm -> half diagonal ~22 mm, rounded up. Gripper and
-# wrist: fingers open to the profile's 1.0 rad (~50 mm jaw) -> 30 mm. Sample decimation adds DECIMATE_M.
-LINK_RADIUS_M = 0.025
-GRIPPER_RADIUS_M = 0.030
+# Capsule radii are omx_adapter.swept_volume's. Sample decimation adds DECIMATE_M.
 DECIMATE_M = 0.005
 # Required free distance between two concurrent swept volumes after the radii (m). The radii are
 # envelopes and every capsule already carries DECIMATE_M, so any positive distance passes; the smallest
@@ -177,42 +175,6 @@ def phase_durations(plan) -> dict[str, float]:
 
 
 # Swept volume -------------------------------------------------------------------------------------
-def _rot(axis, angle):
-    x, y, z = axis
-    c, s = math.cos(angle), math.sin(angle)
-    t = 1 - c
-    return ((t * x * x + c, t * x * y - s * z, t * x * z + s * y),
-            (t * x * y + s * z, t * y * y + c, t * y * z - s * x),
-            (t * x * z - s * y, t * y * z + s * x, t * z * z + c))
-
-
-def _mul(a, b):
-    return tuple(tuple(sum(a[i][k] * b[k][j] for k in range(3)) for j in range(3)) for i in range(3))
-
-
-def _apply(a, v):
-    return tuple(sum(a[i][k] * v[k] for k in range(3)) for i in range(3))
-
-
-def link_points(kin: OmxKinematics, joints, fingertip_m: float) -> tuple[list[tuple], tuple]:
-    """Joint-origin points joint2..joint5, the TCP and the fingertips (base frame), and the tool axis.
-
-    The chain has zero origin rpy (checked by OmxKinematics), so each joint is offset then rotated."""
-    rotation = ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0))
-    position, points, index = (0.0, 0.0, 0.0), [], 0
-    for joint in kin.chain:
-        offset = _apply(rotation, joint.xyz)
-        position = tuple(p + o for p, o in zip(position, offset))
-        if joint.name != "joint1":
-            points.append(position)
-        if joint.axis is not None:
-            rotation = _mul(rotation, _rot(joint.axis, joints[index]))
-            index += 1
-    approach = (rotation[0][0], rotation[1][0], rotation[2][0])
-    tip = tuple(p + a * fingertip_m for p, a in zip(position, approach))
-    return points + [tip], approach
-
-
 def _to_cell(base, point):
     bx, by, byaw = base
     c, s = math.cos(byaw), math.sin(byaw)
@@ -221,15 +183,8 @@ def _to_cell(base, point):
 
 def capsules(kin, base, joints, *, fingertip_m: float, item: tuple[float, float] | None) -> list[tuple]:
     """(a, b, radius) capsules of one configuration in the cell frame; ``item`` = (hang, radius)."""
-    pts, approach = link_points(kin, joints, fingertip_m)
-    cell = [_to_cell(base, p) for p in pts]
-    shoulder, elbow, wrist, joint5, tcp, tip = cell
-    out = [(shoulder, elbow, LINK_RADIUS_M), (elbow, wrist, LINK_RADIUS_M), (wrist, tip, GRIPPER_RADIUS_M)]
-    if item is not None:
-        hang, radius = item
-        bottom = _to_cell(base, tuple(p + a * hang for p, a in zip(pts[4], approach)))
-        out.append((tcp, bottom, radius))
-    return out
+    return [(_to_cell(base, a), _to_cell(base, b), r)
+            for a, b, r in arm_capsules(kin, joints, fingertip_m=fingertip_m, item=item)]
 
 
 def _segment_distance(p1, q1, p2, q2) -> float:
@@ -285,7 +240,7 @@ def sweep(kin, profile, base, plan, *, label: str, hang_radius: tuple[float, flo
         holding = phase.phase_id in {"grasp", "transfer"}
         for point in phase.points:
             joints = point.positions[:5]
-            pts, _ = link_points(kin, joints, fingertip)
+            pts, _ = kin.link_points(joints, fingertip)
             if last is not None and phase.phase_id == last[1] and max(
                     math.dist(p, q) for p, q in zip(pts, last[0])) < DECIMATE_M:
                 continue

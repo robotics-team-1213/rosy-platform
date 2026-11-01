@@ -1,7 +1,7 @@
 // CAP-001 is evidence for presentation. CORE still decides every command.
 import { robotMapPose } from "./localization-badge.js";
 
-/** Short cause of a latched e-stop from CORE's state `safety.source` (v1.336); "" when not given. */
+/** Short cause of a latched e-stop from CORE's state `safety.source` (v1.342); "" when not given. */
 export function estopCause(source) {
   const text = String(source || "");
   if (text.startsWith("api:")) return `API 정지(${text.slice(4) || "?"})`;

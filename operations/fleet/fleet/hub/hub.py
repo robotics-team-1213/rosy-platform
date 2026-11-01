@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import hashlib
+import asyncio
 import hmac
 import logging
 import sqlite3
+import threading
 import time
 from typing import Optional, Sequence
 from collections.abc import Callable, Mapping
@@ -82,7 +84,14 @@ class SiteHub:
         self.event_store = event_store
         self.event_callback = event_callback
         self.junction_signal = None  # D-620: synchronous cached signal lookup, no robot control
+        # Cursor is in memory: a Fleet restart replays the audit table once, in batches.
+        # shortcut: persisting it needs a schema change in the audit DB, do it if replay gets slow.
         self._event_projection_cursor = 0
+        # Heartbeats read only this flag; SQLite is touched only while the projection is behind.
+        self._projection_dirty = True
+        self._projection_lock = threading.Lock()
+        self._io_lock: asyncio.Lock | None = None  # orders durable work issued via handle_async
+        self._recovery_task: asyncio.Task | None = None
 
     def set_event_callback(self, callback: Callable[[Mapping[str, object]], object]) -> None:
         self.event_callback = callback
@@ -132,26 +141,74 @@ class SiteHub:
         self._paired.discard(robot_id)
         self.registry.mark_offline(robot_id)
 
-    def handle(self, envelope: Envelope, *, session: HubSession | None = None) -> Envelope:
+    async def handle_async(self, envelope: Envelope, *, session: HubSession | None = None) -> Envelope:
+        """`handle` for the event loop: SQLite work runs in a thread, never on the loop.
+
+        Durable event writes keep arrival order (one at a time). A heartbeat never waits
+        on the store: while the projection is behind it is answered TASK_PROJECTION_UNAVAILABLE
+        and recovery runs in the background.
+        """
+        if envelope.type is EnvelopeType.EVENT and self.event_store is not None:
+            early = self._screen(envelope)
+            if early is not None:
+                return early
+            event = self._event_admit(envelope, session)
+            if isinstance(event, Envelope):
+                return event
+            async with self._lock():
+                is_new = await asyncio.to_thread(self._event_persist, event, False)
+                if not isinstance(is_new, Envelope) and self.event_callback is not None:
+                    self._projection_dirty = True
+                    if not await self._project_async():
+                        is_new = _error("TASK_PROJECTION_UNAVAILABLE", "event task projection is pending")
+            return is_new if isinstance(is_new, Envelope) else self._event_commit(event, is_new)
+        reply = self.handle(envelope, session=session, defer_projection=True)
+        if (self._projection_dirty and self._recovery_task is None
+                and envelope.type is EnvelopeType.HEARTBEAT):
+            self._recovery_task = asyncio.create_task(self._recover_in_background())
+        return reply
+
+    def _lock(self) -> asyncio.Lock:
+        if self._io_lock is None:
+            self._io_lock = asyncio.Lock()
+        return self._io_lock
+
+    async def _recover_in_background(self) -> None:
+        try:
+            async with self._lock():
+                await self._project_async()
+        finally:
+            self._recovery_task = None
+
+    def handle(self, envelope: Envelope, *, session: HubSession | None = None,
+               defer_projection: bool = False) -> Envelope:
         """Route one envelope.
 
         Network code must pass the socket's session. Without one, HEARTBEAT/EVENT
         fall back to the global paired set, which is only safe in-process (D-382 F6).
         """
+        early = self._screen(envelope)
+        if early is not None:
+            return early
+        if envelope.type is EnvelopeType.HELLO:
+            return self._hello(envelope, session)
+        if envelope.type is EnvelopeType.HEARTBEAT:
+            return self._heartbeat(envelope, session, defer_projection)
+        if envelope.type is EnvelopeType.EVENT:
+            return self._event(envelope, session)
+        return _error("SESSION_NOT_PAIRED", "hello first")
+
+    def _screen(self, envelope: Envelope) -> Envelope | None:
         if _protocol_major(envelope.protocol_version) != _protocol_major(PROTOCOL_VERSION):
             return _error("PROTOCOL_UNSUPPORTED", "protocol major is not supported")
         if envelope.type is EnvelopeType.HELLO:
-            return self._hello(envelope, session)
+            return None
         if envelope.type is EnvelopeType.COMMAND:
             return _error("ROLE_VIOLATION", "robots do not command the hub")
         keys = {str(k).lower() for k in envelope.payload}
         if keys & _FORBIDDEN_PAYLOAD_KEYS:
             return _error("ROLE_VIOLATION", "hub does not accept cmd_vel, image, or twist")
-        if envelope.type is EnvelopeType.HEARTBEAT:
-            return self._heartbeat(envelope, session)
-        if envelope.type is EnvelopeType.EVENT:
-            return self._event(envelope, session)
-        return _error("SESSION_NOT_PAIRED", "hello first")
+        return None
 
     def assert_scatterable(self, params: SwarmFollowParams) -> None:
         if params.source is SwarmReferenceSource.PEER:
@@ -226,14 +283,16 @@ class SiteHub:
         )
         return Envelope(type=EnvelopeType.WELCOME, payload=welcome.model_dump())
 
-    def _heartbeat(self, envelope: Envelope, session: HubSession | None) -> Envelope:
+    def _heartbeat(self, envelope: Envelope, session: HubSession | None,
+                   defer_projection: bool = False) -> Envelope:
         try:
             payload = HeartbeatPayload.model_validate(envelope.payload)
         except Exception:
             if session is not None and session.robot_id is not None:
                 # A refused heartbeat ends the last good one's freshness: the gather reads REST (D-447).
                 self.registry.record(session.robot_id).last_heartbeat_monotonic = None
-            return _error("SESSION_NOT_PAIRED", "hello first")
+            # Not a pairing failure: a newer CORE's additive field must not end the session.
+            return _error("PAYLOAD_INVALID", "heartbeat payload failed validation")
         robot_id = payload.state_snapshot.robot_id
         if session is not None and session.robot_id is None:
             return _error("SESSION_NOT_PAIRED", "hello first")
@@ -241,7 +300,8 @@ class SiteHub:
             if session is None:
                 return _error("SESSION_NOT_PAIRED", "hello first")
             return _error("PAIRING_INVALID", "robot mismatch")
-        if not self._recover_event_projections():
+        pending = self.event_callback is not None and self.event_store is not None
+        if self._projection_dirty and ((defer_projection and pending) or not self._recover_event_projections()):
             return _error("TASK_PROJECTION_UNAVAILABLE", "durable event projection is pending")
         row = self.registry.record(robot_id)
         row.snapshot = payload.state_snapshot
@@ -261,15 +321,26 @@ class SiteHub:
         return Envelope(type=EnvelopeType.HEARTBEAT, payload=reply)
 
     def _event(self, envelope: Envelope, session: HubSession | None) -> Envelope:
+        event = self._event_admit(envelope, session)
+        if isinstance(event, Envelope):
+            return event
+        is_new = self._event_persist(event)
+        return is_new if isinstance(is_new, Envelope) else self._event_commit(event, is_new)
+
+    def _event_admit(self, envelope: Envelope, session: HubSession | None) -> EventMessage | Envelope:
         try:
             event = EventMessage.model_validate(envelope.payload)
         except Exception:
-            return _error("SESSION_NOT_PAIRED", "hello first")
+            return _error("PAYLOAD_INVALID", "event payload failed validation")
         if not self._paired or (session is not None and session.robot_id is None):
             return _error("SESSION_NOT_PAIRED", "hello first")
         if not self._bound(event.robot_id, session):
             return _error("PAIRING_INVALID", "robot mismatch")
-        row = self.registry.record(event.robot_id)
+        return event
+
+    def _event_persist(self, event: EventMessage, project: bool = True) -> bool | Envelope:
+        """Durable write (+ projection when ``project``). handle_async runs it in a worker
+        thread with project=False: the callback may touch loop objects (asyncio.Event)."""
         is_new = True
         if self.event_store is not None:
             try:
@@ -280,7 +351,7 @@ class SiteHub:
                 return _error("EVENT_STORAGE_UNAVAILABLE", "event was not durably accepted")
         else:
             # Match CoreEventStore's normalized JSON comparison, including data value types.
-            previous_hash = row.seen_event_hash(event)
+            previous_hash = self.registry.record(event.robot_id).seen_event_hash(event)
             if previous_hash is not None:
                 try:
                     if previous_hash != event_content_hash(event):
@@ -288,26 +359,62 @@ class SiteHub:
                 except (TypeError, ValueError):
                     return _error("EVENT_NOT_AUDITABLE", "event is outside the safe audit contract")
                 is_new = False
-        if self.event_callback is not None and not self._recover_event_projections():
-            return _error("TASK_PROJECTION_UNAVAILABLE", "event task projection is pending")
+        if project and self.event_callback is not None:
+            self._projection_dirty = True
+            if not self._recover_event_projections():
+                return _error("TASK_PROJECTION_UNAVAILABLE", "event task projection is pending")
+        return is_new
+
+    def _event_commit(self, event: EventMessage, is_new: bool) -> Envelope:
+        row = self.registry.record(event.robot_id)
         if is_new:
-            row.note_event(event)
+            # The hash map is the no-store dedup; with a durable store it would only grow.
+            row.note_event(event, remember=self.event_store is None)
         row.last_event_seq = max(row.last_event_seq, event.seq)
         return Envelope(type=EnvelopeType.EVENT, payload={"accepted": True})
 
     def _recover_event_projections(self) -> bool:
         """Replay durable CORE events after transient task projection failures."""
         if self.event_callback is None or self.event_store is None:
+            self._projection_dirty = False
+            return True
+        if not hasattr(self.event_store, "read_events"):
+            return False
+        with self._projection_lock:
+            try:
+                while True:
+                    rows = self.event_store.read_events(
+                        after_id=self._event_projection_cursor, limit=100,
+                    )
+                    for row in rows[:100]:
+                        self.event_callback(row["event"])
+                        self._event_projection_cursor = row["audit_id"]
+                    if len(rows) < 100:
+                        break
+                self._projection_dirty = False
+                return True
+            except Exception:
+                _LOGGER.exception("Could not project durable CORE event into Fleet task history")
+                return False
+
+    async def _project_async(self) -> bool:
+        """Same replay as the sync one, but only read_events runs in a thread; the callback
+        runs on the event loop. Caller holds the io lock."""
+        if self.event_callback is None or self.event_store is None:
+            self._projection_dirty = False
             return True
         if not hasattr(self.event_store, "read_events"):
             return False
         try:
-            rows = self.event_store.read_events(
-                after_id=self._event_projection_cursor, limit=100,
-            )
-            for row in rows[:100]:
-                self.event_callback(row["event"])
-                self._event_projection_cursor = row["audit_id"]
+            while True:
+                rows = await asyncio.to_thread(
+                    self.event_store.read_events, after_id=self._event_projection_cursor, limit=100)
+                for row in rows[:100]:
+                    self.event_callback(row["event"])
+                    self._event_projection_cursor = row["audit_id"]
+                if len(rows) < 100:
+                    break
+            self._projection_dirty = False
             return True
         except Exception:
             _LOGGER.exception("Could not project durable CORE event into Fleet task history")

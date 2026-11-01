@@ -416,7 +416,7 @@ def test_safety_stop_release_cycle(client):
     assert tc.post("/api/v1/safety/stop", headers=VIEWER).status_code == 200   # 누구나 (SAF-001)
     assert svc.safety.estop is True
     assert svc.command.teleop(0.1, 0.0)[0] is False                            # 차단 확인
-    # v1.336: the snapshot says who latched it, so Fleet and screens can show why.
+    # v1.342: the snapshot says who latched it, so Fleet and screens can show why.
     source = tc.get("/api/v1/robot/state", headers=VIEWER).json()["safety"]["source"]
     assert source == svc.safety.estop_source and source.startswith("api:")
     assert tc.post("/api/v1/safety/release", headers=ADMIN).status_code == 200

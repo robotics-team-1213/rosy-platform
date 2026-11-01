@@ -7,11 +7,12 @@ StartLimitIntervalSec=0
 Type=simple
 EnvironmentFile=%h/.config/rosy/omx-observer-%i.env
 # A transient register stall ends the observer (field PC 2026-10-22..23: eight exits, each restarted by
-# hand). Come back only into an idle cell: no session holds session.lock (joint_tune, record_session,
-# omx_autoupdate) and no other process owns this bus. A manual stop is not a failure and stays stopped.
+# hand). Come back only into an idle arm: no whole-cell holder of session.lock (joint_tune, omx_autoupdate, the
+# two-arm pipeline), no session on this arm (record_session --arm takes session-<arm>.lock) and no other process
+# owns this bus. A manual stop is not a failure and stays stopped.
 # The health snapshot writer needs its private folder (the updater's torque-OFF evidence).
 ExecStartPre=/bin/mkdir -p -m 0700 %h/.local/state/rosy/motor-health
-ExecStartPre=/bin/sh -c 'exec 9>>"%h/rosy-omx/session.lock"; flock -n 9 || { echo "a session holds the OMX cell"; exit 1; }; if fuser "$ROSY_OBSERVER_DEVICE" >/dev/null 2>&1; then echo "another process owns $ROSY_OBSERVER_DEVICE"; exit 1; fi'
+ExecStartPre=/bin/sh -c 'exec 9>>"%h/rosy-omx/session.lock"; flock -n -s 9 || { echo "a session holds the OMX cell"; exit 1; }; exec 8>>"%h/rosy-omx/session-%i.lock"; flock -n 8 || { echo "a session holds %i"; exit 1; }; if fuser "$ROSY_OBSERVER_DEVICE" >/dev/null 2>&1; then echo "another process owns $ROSY_OBSERVER_DEVICE"; exit 1; fi'
 Environment=ROSY_OBSERVATION_DIR=%t/rosy-observations
 ExecStart=:/bin/bash -c 'export PYTHONPATH="${ROSY_OBSERVER_SOURCE%/deploy/*}/contracts/foundation${PYTHONPATH:+:$PYTHONPATH}"; exec "$ROSY_OBSERVER_PYTHON" "$ROSY_OBSERVER_SOURCE" --device "$ROSY_OBSERVER_DEVICE" --joint-topic "$ROSY_OBSERVER_TOPIC" --persistent --health-file "%h/.local/state/rosy/motor-health/%i.json" --health-owner %i'
 Restart=on-failure

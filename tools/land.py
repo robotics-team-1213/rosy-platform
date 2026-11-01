@@ -291,8 +291,9 @@ def step(wt: Path, command: list[str], log: Path | None, label: str, env: dict =
 def run_tests(wt: Path, args, invocations: list[list[str]], logdir: Path, round_no: int) -> list[str]:
     """Run lint + pytest (+ node); return a summary line per step. Stop on any NEW failure.
 
-    A turn's rounds (``1``, ``g1``; not ``pre``) mark their jobs (xdist_plan.TURN_ENV) to skip the hosts' queues."""
-    turn = str(round_no).removeprefix("g").isdigit()
+    A turn's rounds (``1``, ``g1``; not ``pre``) mark their jobs (xdist_plan.TURN_ENV) to skip the hosts' queues, and
+    so does every round of an urgent landing: its pretest got 'no host' behind six others' on full hosts (2026-10-31)."""
+    turn = str(round_no).removeprefix("g").isdigit() or bool(getattr(args, "urgent", ""))
     os.environ[TURN_ENV] = "1" if turn else ""
     try:
         return land_checks.run_tests(sys.modules[__name__], wt, args, invocations, logdir, round_no)
@@ -448,6 +449,7 @@ def rounds(args, wt: Path, branch: str, main_co: Path, python: str, qdir, ticket
         try:
             tested = run_tests(wt, args, invocations, logdir, round_no)
         except Overtime if ticket is not None else ():  # without a ticket (--no-queue) it stops like any Stop
+            args._overtime = True  # D-889 15: the next turn runs uncapped
             full_main = land_prepare.again(sys.modules[__name__], wt, branch, args, python, qdir, ticket, invocations, "")
             continue
         if out(wt, "rev-parse", "HEAD") != candidate:

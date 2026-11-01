@@ -59,7 +59,7 @@ class FakeCore:
         self.device_uid = device_uid
         self.logged_out: list[str] = []
         self.estop = False
-        #: v1.337: the code this robot's screen shows while latched (None: no live code).
+        #: v1.343: the code this robot's screen shows while latched (None: no live code).
         self.release_code: str | None = None
         self.release_status = 200
         self.release_calls: list[dict] = []

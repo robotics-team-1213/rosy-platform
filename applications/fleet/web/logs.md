@@ -644,3 +644,9 @@
 - 변경: `shared/file-picker.css`·`file-picker.js`가 브라우저 기본 파일 입력을 덮고 `파일 선택` 단추와 고른 이름을 한국어로 보인다. 지도(도면·지도 JSON·카메라 초안)·설치(측정 특성·교정 묶음)·Cell(레시피·셀)의 파일 입력 일곱이 같은 모양이다. 학습 정책 승인(`work/policy.html`)은 가벼운 문서 머리 대신 작업 화면과 같은 머리(비상 정지·계정·시계)·레일·작업 하위 탐색(`학습` 표시)을 쓰고 구역은 공용 `ui-section` 머리다. 단계·승인 창·사유는 `0단계 · 학습만 마침`, `따라 보기(명령 없음)`, `팔 제어 보류`, `작업대·보정 버전`처럼 읽고 lease·revision·owner HOLD·receipt·D-번호를 화면에서 뺐다. 정책 문서 폭 토큰 `--content-policy-max`는 쓰는 곳이 없어 지웠다(D-909 메모).
 - 증거: 작업 세션 Fleet 샘플 서버(4175) Edge 1366·390에서 정책 화면 머리·레일·비상 정지·`운영자` 표시, 지도 설정 화면 `파일 선택 · 선택한 파일 없음`, 가로 넘침·페이지 오류 없음. 브라우저 시험은 원격 PC에서 돌린다.
 - gate 변화: 없음. CE: 해당 없음 — 규칙은 D-926이 담는다.
+
+## 2026-10-31 · uncommitted · 학습 정책 승인이 탭의 토큰을 읽는다
+
+- 변경: `work/policy-page.js`가 다른 작업 화면처럼 `rosy-console-token`을 credential로 보내고 시작할 때 `developmentToken()`을 부른다. 전에는 개발 세션에서 이 화면만 `인증 필요`로 보였고, 머리의 `로그인`이 이미 로그인된 탭을 `/console`로 넘겨 "누르면 관제 홈으로 간다"로 보였다.
+- 증거: 실제 `create_app` 개발 모드 + Chromium에서 `/console?view=work&show=done` → 정책 링크 클릭 → `/console/policy`에 머물고 `운영자` 표시. `test_development_console_browser.py`에 `/console/policy`를 더했고 고치기 전 실패·후 통과를 확인했다.
+- gate 변화: 없음. CE: 새 교훈 `docs/solutions/logic-errors/fleet-page-without-tab-token-bounces-dev-login-to-console-2026-10-31.md`.

@@ -105,7 +105,7 @@ def _match_release(state: "login.PairingState", code: str) -> tuple[bool, bool]:
 async def safety_release_code(body: ReleaseCodeRequest, request: Request,
                               auth: AuthContext = Depends(operator),
                               svc: CoreServicesLike = Depends(get_services)):
-    """v1.337: release with the one-time code the robot's own screen shows while latched.
+    """v1.343: release with the one-time code the robot's own screen shows while latched.
 
     The code proves a person read this robot's LCD; it releases once and logs nobody in.
     The administrator release above is unchanged.

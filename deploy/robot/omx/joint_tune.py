@@ -35,6 +35,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import fcntl
+import re
 import json
 import math
 import os
@@ -68,17 +69,40 @@ def lock_root() -> Path:
     return Path(os.environ.get("ROSY_OMX_HOME", Path.home() / "rosy-omx"))
 
 
-def session_lock():
-    """Held for a whole tuning run or recording session; another holder means the cell is busy."""
+class _ArmLocks:
+    def __init__(self, *handles):
+        self.handles = handles
+
+    def close(self):
+        for handle in reversed(self.handles):
+            handle.close()
+
+
+def session_lock(arm: str | None = None):
+    """Held for a whole tuning run or recording session. Without `arm` it holds the whole cell. With `arm` it holds
+    that arm only: the cell lock shared (the updater and the two-arm pipeline take it exclusively, so they still
+    wait for every arm) and the arm's own lock, which its observer also checks (2026-11-01: two arms work at once)."""
     root = lock_root()
     root.mkdir(parents=True, exist_ok=True)
     handle = (root / "session.lock").open("a")
     try:
-        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        fcntl.flock(handle, (fcntl.LOCK_SH if arm else fcntl.LOCK_EX) | fcntl.LOCK_NB)
     except BlockingIOError:
         handle.close()
         raise SystemExit("another OMX session holds session.lock")
-    return handle
+    if arm is None:
+        return handle
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,32}", arm):
+        handle.close()
+        raise SystemExit(f"arm id {arm!r} is not a plain name")
+    own = (root / f"session-{arm}.lock").open("a")
+    try:
+        fcntl.flock(own, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        own.close()
+        handle.close()
+        raise SystemExit(f"another OMX session holds session-{arm}.lock")
+    return _ArmLocks(handle, own)
 
 
 def _interrupt(signum, frame):

@@ -79,7 +79,7 @@ def test_camera_survival_observer_does_not_block_restart():
     assert 'camera-boot-guard.py healthy' in service
 
 def test_observer_units_reach_image_and_image_layer_sync():
-    sync = (NATIVE / 'sync-image-layer.py').read_text()
+    sync = (NATIVE / 'image_layer_plan.py').read_text()
     image = (NATIVE.parent / 'image/build-native-payload.sh').read_text()
     for name in ['rosy-camera-healthy.timer','rosy-camera-healthy.service']:
         assert '"'+name+'"' in sync

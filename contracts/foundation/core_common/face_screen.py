@@ -381,7 +381,7 @@ def screen_for(*, stage: Any = None, state: Any = None, todo: Optional[str] = No
     or ``"identify_blue"``/``"identify_amber"`` during a fleet call;
     ``drive_since``: when the current operating mode began (monotonic);
     ``peer``: ``read_peer_approval``'s answer while a D-456 request waits (D-483);
-    ``release_code``: root's e-stop release code (v1.337), drawn on the stopped card only.
+    ``release_code``: root's e-stop release code (v1.343), drawn on the stopped card only.
 
     The answer: ``kind`` (one of KINDS), ``row`` (the table row id), ``face``,
     ``overlay`` (``{"kind": "drive"|"wake", "payload": {...}}``), ``strip`` and
