@@ -245,3 +245,57 @@ def test_teardown_bounds_fit_inside_systemd_stop_timeout(node_module):
     # uvicorn graceful 상한은 API join 안에서 돈다.
     assert node_module.API_GRACEFUL_TIMEOUT_S <= node_module.API_JOIN_TIMEOUT_S
     assert node_module.EXECUTOR_DRAIN_TIMEOUT_S + node_module.API_JOIN_TIMEOUT_S < 15
+
+
+# --- ROSY_CORE_EXECUTOR (D-953): opt-in C++ EventsExecutor for CORE -------------------------
+# Why swapping is allowed: CORE and its sensor node make every subscription/timer in the
+# default (mutually exclusive) callback group, so MultiThreadedExecutor never ran two callbacks
+# of one node at once; the only overlap is core node vs safety_node. Callbacks that wait for a
+# service reply (wait=True) run on API threads, never on an executor thread.
+
+def test_core_callbacks_never_rely_on_a_reentrant_group():
+    import pathlib
+    root = pathlib.Path(__file__).resolve().parents[1] / "core"
+    offenders = [str(p.relative_to(root)) for p in root.rglob("*.py")
+                 if "callback_group" in p.read_text(encoding="utf-8")
+                 or "ReentrantCallbackGroup" in p.read_text(encoding="utf-8")]
+    assert offenders == [], offenders
+
+
+class _EventsExecutor:
+    def __init__(self, calls: list[str]) -> None:
+        self.calls = calls
+
+    def add_node(self, node) -> None:
+        self.calls.append("add_node")
+
+    def remove_node(self, node) -> None:
+        self.calls.append("remove_node")
+
+    def spin(self) -> None:
+        self.calls.append("spin returned")
+
+    def shutdown(self, timeout_sec=None) -> bool:
+        self.calls.append(f"executor.shutdown({timeout_sec})")
+        return True
+
+
+def test_default_stays_multithreaded_and_unknown_value_is_refused(node_module, monkeypatch):
+    monkeypatch.delenv("ROSY_CORE_EXECUTOR", raising=False)
+    assert node_module.core_executor_kind() == "threaded"
+    monkeypatch.setenv("ROSY_CORE_EXECUTOR", "turbo")
+    with pytest.raises(ValueError, match="ROSY_CORE_EXECUTOR"):
+        node_module.core_executor_kind()
+
+
+def test_events_executor_is_spun_natively_and_needs_no_pool_drain(node_module, monkeypatch):
+    calls: list[str] = []
+    experimental = types.ModuleType("rclpy.experimental")
+    experimental.EventsExecutor = lambda: _EventsExecutor(calls)
+    monkeypatch.setitem(sys.modules, "rclpy.experimental", experimental)
+    monkeypatch.setenv("ROSY_CORE_EXECUTOR", "events")
+    node = _bare_node(node_module, calls)
+    node.run()
+    assert calls == ["add_node", "attach", "spin returned", "detach", "remove_node",
+                     "executor.shutdown(0)"]
+    assert node.get_logger().warnings == []
