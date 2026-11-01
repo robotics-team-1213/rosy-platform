@@ -4284,3 +4284,9 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 원격 `test_omx_cell_push.py` 8 passed(막힌 밀기는 움직이지 않고 거절 행을 남김), 지식 파일 검증 26건
 - gate 변화: 없음
 - 교훈: 작업 기록 2026-10-31 §14
+
+## 2026-11-01 · uncommitted · fix(omx): 팔 세션이 도는 동안 원격 시험을 관제 PC에서 뺀다
+- 변경: `joint_tune.session_lock`이 잡혀 있는 동안 `~/rosy-jobs/busy`에 `<만료> omx-session <pid>`(4시간)를 쓰고, 셀 잠금을 홀로 잡는 마지막 세션이 지운다. 다른 사람이 쓴 표시는 건드리지 않는다.
+- 증거: 두 팔 동시 시험(현장 스위치 옆) 때 관제 PC에 원격 시험 작업(CPU 66%·50%)이 돌았고 arm_a wrist_roll 추종 오류, arm_b over_ticks 0–1→477. 원격 `test_omx_session_lock.py` 등 108 passed.
+- gate 변화: 없음
+- 교훈: 작업 기록 2026-10-31 §15.1(재시험으로 원인 확인 전이라 미해결)
