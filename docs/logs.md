@@ -13532,3 +13532,10 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: D-889 추가 21(사용자 지시 2026-11-02)
 - 교훈: 없음
+
+## 2026-11-02 · uncommitted · fix(omx): 막힌 wrist_roll을 가드 전에 멈추고, 가드 고장마다 기록과 카메라 프레임을 남긴다
+- 변경: `chunk_runner.ROLL_BLOCK_LAG`. goto·park·lift의 막힘 감지가 wrist_roll도 보며, PWM과 관계없이 지연이 1.5단위를 넘어 계속 오르면 토크를 유지한 채 멈춘다. 멈춤 문구에 다른 관절의 지연을 붙인다. `motor_health.keep_fault`는 가드 고장마다 `faults/<owner>-<utc>.json`(`rosy.motor-fault.v1`, 모든 관절)과 `ROSY_OMX_FAULT_FRAMES`의 로컬 카메라 프레임을 남긴다.
+- 증거: arm_a가 11-01 15:12·15:18·23:19 첫 goto에서 wrist_roll 막힘으로 가드 토크 OFF, 팔이 반쯤 뻗은 채 남음. 원격 시험은 착지 기록에 남긴다.
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: `docs/solutions/runtime-errors/omx-blocked-wrist-roll-reached-the-guard-unseen-2026-11-02.md`
