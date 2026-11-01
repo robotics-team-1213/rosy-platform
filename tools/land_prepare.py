@@ -25,22 +25,6 @@ import land_queue
 
 MAX_PREPARING = 6
 POLL = 15.0
-# D-889 7: the test PCs clean up at 05:30 and reboot at 06:00; a pretest started in between dies (2026-10-27 06:00,
-# exit 143). Minutes after midnight, local time: no pretest starts inside, it waits for the hosts to come back.
-REBOOT = (5 * 60 + 15, 6 * 60 + 10)
-
-
-def after_reboot(ticket: Path | None, sleep=time.sleep, clock=time.localtime) -> None:
-    """Wait (ticket kept fresh) while the lab PCs' nightly cleanup and reboot window is on."""
-    told = False
-    while REBOOT[0] <= (now := clock()).tm_hour * 60 + now.tm_min < REBOOT[1]:
-        if not told:
-            print(f"[land] test PCs reboot at 06:00: the pretest starts after {REBOOT[1] // 60:02d}:{REBOOT[1] % 60:02d}",
-                  flush=True)
-            told = True
-        if ticket is not None:
-            land_queue.touch(ticket)
-        sleep(POLL)
 
 
 def rules() -> str | None:
@@ -142,8 +126,22 @@ def prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, t
             invocations: list[list[str]] | None = None, note: str | None = None) -> None:
     """Merge main, run this branch's selection (or the given FULL ``invocations`` of main's delta), record it.
 
-    A NEW failure stops here, before the turn; the ticket is released by ``land.main``."""
-    after_reboot(ticket)
+    A NEW failure stops here, before the turn; the ticket is released by ``land.main``. One exception (D-889 14):
+    a failure main already had at the merged base, when main has moved since, prepares once more on the new main.
+    11-01: two landings stopped on a MAIN-RED test that main had fixed during their 66 min pretest."""
+    try:
+        _prepare(land, wt, branch, args, python, qdir, ticket, invocations, note)
+    except land.Stop as stop:
+        if (invocations is not None or "MAIN-RED" not in str(stop) or getattr(args, "_main_red_retry", False)
+                or land.out(wt, "rev-parse", "main") == land.land_mainred.merged_main(wt)):
+            raise
+        args._main_red_retry = True
+        print(f"[land] {stop}\n[land] main moved since that base: preparing once more on the new main", flush=True)
+        _prepare(land, wt, branch, args, python, qdir, None, None, None)
+
+
+def _prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, ticket: Path | None,
+             invocations: list[list[str]] | None, note: str | None) -> None:
     if ticket is not None:
         landed = lambda: land.land_batch.in_main(land, wt, branch)  # noqa: E731
         slot(qdir, ticket, held=lambda: not landed() and land.land_batch.carried(qdir, branch),

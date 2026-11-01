@@ -773,7 +773,7 @@ def test_main_binds_unique_child_monitor_path_to_receipt(tmp_path, monkeypatch, 
     def release_lock():
         if created:
             assert json.loads(Path(captured['env']['ROSY_OMX_MONITOR_STATE']).read_text())['status'] == 'ended'
-    monkeypatch.setattr(m, 'session_lock', lambda: SimpleNamespace(close=release_lock))
+    monkeypatch.setattr(m, 'session_lock', lambda arm=None: SimpleNamespace(close=release_lock))
     with pytest.raises(SystemExit) as ended:
         m.main(['--config', str(path), '--caps', str(caps), '--teleop-only'])
     assert ended.value.code == 0
