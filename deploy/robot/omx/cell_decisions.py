@@ -33,7 +33,7 @@ from pathlib import Path
 
 SCHEMA = "rosy.omx-cell-decision.v1"
 APPLIES = {"target": ["objects", "map"], "bias": ["map"], "closing_axis": ["grasp"], "safety": ["lift", "idle"],
-           "retry": ["grasp"], "verify": ["map"], "wrist_align": ["grasp", "map"], "failure": ["grasp", "map"]}
+           "retry": ["grasp"], "verify": ["map"], "wrist_align": ["grasp", "map"], "failure": ["grasp", "map"], "push": ["push", "objects", "map"], "push_outcome": ["push"]}
 RUN = {"path": None, "knowledge": None, "n": 0, "frame": None}  # set by start(); path None = no decision rows
 
 

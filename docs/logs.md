@@ -13424,6 +13424,12 @@ osy-d395-s1d\`.
 - 증거: `publish_main.py` dry run이 "no commit past origin/main has a green FULL land record"
 - gate 변화: 없음
 
+## 2026-11-01 · uncommitted · fix(omx): ROS 전용 시험 파일만 돌 때 건너뜀은 판정이다 (D-889 추가 20)
+- 변경: `middleware/devices/omx/adapter/test/conftest.py`의 `pytest_sessionfinish`이 실패·오류 없이 건너뜀만 있는 exit 5를 0으로 바꾼다. 시험 `test_skip_only_exit.py`.
+- 증거: 11-01 20:04·20:17·20:30 세 착지가 차례에서 `test_omx_fleet_ros_actionserver.py exited 5`(rclpy 없는 PC, 1 skipped)로 멈췄다. 착지는 main의 착지 코드로 돌아서 `land_cache` 수정만으로는 자기 차례를 지나지 못한다. 그래서 시험 트리에도 고친다. 원격 시험은 착지 기록에 남긴다.
+- gate 변화: 없음
+- 교훈: 없음
+
 ## 2026-11-01 · uncommitted · fix(land): 차례에서는 변화분이 닿는 자기 호출만 다시 돈다 (D-889 추가 18)
 - 변경: `land_selection.select`의 landed 경로가 자기 호출을 하나씩 `overlaps`로 거른다.
 - 증거: 11-01 17:48~18:45 main 57분 정지. arm-transfer-recheck 차례 2라운드가 자기 호출 485개를 다시 돌았다. 원격 시험은 착지 기록에 남긴다.
