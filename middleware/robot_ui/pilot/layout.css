@@ -255,6 +255,33 @@ body[data-pilot-screen="arm"] ui-topbar [data-gate-state] { display: none; }
 .arm-controls > section[data-control-unsupported] { border-style: dashed; }
 .arm-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); }
 
+/* 센서 값 표: 각도·범위 막대·시작 자세까지 남은 각도. 원본 JSON은 접어 둔다. */
+.arm-sensors { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-2); min-width: 0; }
+.arm-sensors-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.arm-chip { font-size: var(--text-label); padding: 0 var(--space-2); border-radius: var(--radius-flag); border: 1px solid var(--border-subtle); }
+.arm-chip[data-state="fresh"] { border-color: var(--status-good); color: var(--status-good); }
+.arm-chip[data-state="stale"] { border-color: var(--status-warn); }
+.arm-sensors .ui-table-scroll { max-width: 100%; overflow-x: auto; }   /* Pilot does not load component-controls.css */
+.arm-sensor-table { width: 100%; border-collapse: collapse; font-size: var(--text-label); }
+.arm-sensor-table :is(th, td) { padding: var(--space-1) var(--space-2); text-align: start; border-bottom: 1px solid var(--border-subtle); }
+.arm-sensor-table td { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.arm-sensor-table meter { width: 100%; min-width: 5rem; }
+
+/* 시연 기록 4단계: 지금 할 단계는 테두리, 끝난 단계는 ✓ 표시. */
+.arm-steps { display: grid; gap: var(--space-3); grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  margin: var(--space-3) 0 0; padding: 0; list-style: none; counter-reset: arm-step; }
+.arm-steps > li { counter-increment: arm-step; display: grid; gap: var(--space-2); align-content: start; min-width: 0;
+  padding: var(--space-3); background: var(--surface-raised); border: 1px solid var(--border-subtle); border-radius: var(--radius-panel); }
+.arm-steps > li[data-state="current"] { border-color: var(--focus-ring); }
+.arm-steps h4 { margin: 0; }
+.arm-steps h4::before { content: counter(arm-step) " · "; color: var(--text-secondary); }
+.arm-steps > li[data-state="done"] h4::after { content: " ✓"; color: var(--status-good); }
+[data-screen="arm"] .arm-steps label { margin: 0; }
+[data-screen="arm"] textarea { display: block; width: 100%; resize: vertical; }
+.arm-step-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.arm-record-status { margin: 0; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.arm-record-status[data-state="recording"] { color: var(--status-crit); font-weight: var(--weight-label); }
+
 /* D-411 C 그리퍼 — 오른손 칸: 상태 배지, 열기/반/닫기, 열림 % 슬라이더(놓을 때 한 번 보낸다). */
 .gripper-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); }
 .gripper-presets { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-2); }
@@ -308,7 +335,8 @@ body[data-pilot-screen="arm"] ui-topbar [data-gate-state] { display: none; }
   .arm-camera { order: 0; }
   .arm-camera img { max-height: 25dvh; width: auto; max-width: 100%; justify-self: center; object-fit: contain; }
   .arm-controls { order: 1; }
-  [data-sim-readback] { order: 2; max-height: 10rem; }
+  .arm-sensors { order: 2; }
+  [data-sim-readback] { max-height: 10rem; }
   .arm-actions { order: 3; }
   .arm-console > [data-sim-record-panel] { order: 4; }
 }

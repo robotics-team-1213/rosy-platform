@@ -159,3 +159,37 @@ def test_a_low_zone_lowers_the_floor_only_inside_its_rectangle():
     above = dict(zone, z_min_m=0.05)  # a zone never raises the floor
     assert planner.limits_at(0.07, 0.10).workspace_min_m[2] == -0.03
     assert m.Planner(dict(PLAN, limits=dict(PLAN["limits"], low_zones=[above]))).limits_at(0.07, 0.10).workspace_min_m[2] == 0.005
+
+
+def test_keep_out_counts_the_elbow_capsule_not_only_the_gripper(planned):
+    planner, library = planned
+    from omx_adapter.swept_volume import LINK_RADIUS_M
+
+    for frame in library["chunks"]["above_pick"] + library["chunks"]["home"]:
+        points, _ = planner.kin.link_points([m.norm_to_rad(v) for v in frame[:5]])
+        assert planner.body_x(frame) >= max(points[0][0], points[1][0], points[2][0]) + LINK_RADIUS_M - 1e-12
+
+
+FAR_TRANSIT = {"shoulder_lift.pos": -15.0, "elbow_flex.pos": 5.0, "wrist_flex.pos": 46.0}
+
+
+def test_a_taught_transit_past_the_line_gives_way_to_a_pulled_in_one_no_lower():
+    planner = m.Planner(dict(PLAN, transit=FAR_TRANSIT, keep_out={"x_max_m": 0.20}))
+    library = planner.library()
+    assert library["transit"] != FAR_TRANSIT and library["source"]["transit"] == "pulled in for keep_out"
+    assert max(planner.body_x(f) for f in planner.travel(library["chunks"], FAR_TRANSIT)) > 0.20
+    assert max(planner.body_x(f) for f in planner.travel(library["chunks"], library["transit"])) <= 0.20
+
+    def lowest(transit):
+        q = [0.0] + [m.norm_to_rad(transit[n]) for n in m.NAMES[1:4]] + [0.0]
+        return min(z for _, _, z in planner.kin.link_points(q)[0])
+
+    assert lowest(library["transit"]) >= lowest(FAR_TRANSIT) - 1e-3  # rounded to 0.001 units
+    assert m.Planner(dict(PLAN, keep_out={"x_max_m": 0.30})).library()["source"]["transit"] == "taught"
+
+
+def test_travel_no_pulled_in_transit_can_keep_inside_is_refused():
+    plan = dict(PLAN, transit={"shoulder_lift.pos": 5.0, "elbow_flex.pos": 18.0, "wrist_flex.pos": 46.0},
+                keep_out={"x_max_m": 0.20})
+    with pytest.raises(SystemExit, match="no pulled-in transit"):
+        m.Planner(plan).library()

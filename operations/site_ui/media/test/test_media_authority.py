@@ -112,3 +112,43 @@ def test_slow_reader_is_removed_without_degrading_healthy_reader(media):
     assert authority.report_queue('slow', token(), queue_ms=600, now=104)
     assert kicked == ['slow']
     assert authority.demand('rosy_01', now=104)['active'] is True
+
+
+def test_slow_recheck_does_not_block_other_robots_and_revoke_mid_flight_still_closes(media):
+    import threading
+    authority, token, online, kicked = media
+    authority.intent(token(), now=100)
+    authority.authorize(token(), 'read', 'robots/rosy_01/front', 'viewer-1', now=101)
+    inner, entered, release = authority._validate_online, threading.Event(), threading.Event()
+
+    def slow(robot_id, bearer, now):
+        result = inner(robot_id, bearer, now)
+        entered.set()
+        release.wait(5)
+        return result
+
+    authority._validate_online = slow
+    ticker = threading.Thread(target=authority.tick, kwargs={'now': 102})
+    ticker.start()
+    assert entered.wait(5)
+    # The in-flight re-check holds no lock: demand returns at once for this robot and another.
+    assert authority.demand('rosy_01', now=102)['active'] is True
+    assert authority.demand('rosy_02', now=102)['active'] is False
+    online[0] = False  # revoked while the earlier (positive) answer is still in flight
+    release.set()
+    ticker.join(5)
+    assert kicked == []  # that answer was positive; the revoke shows at the next tick
+    authority.tick(now=103)
+    assert kicked == ['viewer-1']
+
+
+def test_every_request_rechecks_online_without_a_cache(media):
+    """A revoke reaches intent/authorize at once; no positive answer is reused."""
+    authority, token, online, _ = media
+    calls = []
+    inner = authority._validate_online
+    authority._validate_online = lambda *a: calls.append(a) or inner(*a)
+    assert authority.intent(token(), now=100)
+    assert authority.intent(token(), now=100.5) and len(calls) == 2
+    online[0] = False
+    assert authority.intent(token(), now=100.6) is None
