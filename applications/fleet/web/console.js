@@ -347,7 +347,7 @@ function refreshDiagnostics() {
     : "정상");
   const robotErrors = view.robots
     .filter((r) => r.error)
-    .map((r) => `${r.robot_id}: ${r.error.reachable === false ? "닿지 않음" : "거부"} ${r.error.code ?? ""}`.trim());
+    .map((r) => `${r.robot_id}: ${r.error.held ? "Fleet 보류" : r.error.reachable === false ? "닿지 않음" : "거부"} ${r.error.code ?? ""}`.trim());
   diag("diag-robots", robotErrors.length ? robotErrors.join(" · ") : "오류 없음");
   diag("diag-vision", el("vision-state")?.textContent ?? "—");
 }

@@ -5,9 +5,14 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.347
+**Version:** v1.348
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.348 Fleet 보류와 로봇 거절의 구분
+
+- `GET /api/fleet/state` 로봇 행 `error`에서, Fleet이 고정 주소 검사(D-361)로 요청을 스스로 막은 경우(`code: ADDRESS_UNVERIFIED`)는 `{reachable: null, held: true, code, message}`다. 이전에는 `reachable: true`라 로봇이 거절한 것처럼 읽혔지만 로봇에는 아무것도 묻지 않았다. 이유는 같은 행의 `held`(`needs_new_code`·`address_changed`·`conflict`)에 있다.
+- 로봇이 실제로 거절한 오류는 그대로 `reachable: true`, 닿지 않은 오류는 `reachable: false`다. `reachable`을 참·거짓으로만 읽던 소비자는 `null`을 '모름'으로 읽어야 한다.
 
 ### v1.347 감속 장소 종류 `slow` (D-941)
 
@@ -4437,6 +4442,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.348 | 2026-11-02 | 상태 행 `error`: Fleet 자체 보류(`ADDRESS_UNVERIFIED`)는 `reachable: null, held: true`, 로봇 거절과 구분 |
 | v1.347 | 2026-11-02 | additive (D-941): 장소 `kind` `slow`(감속만, 정지 아님), 속도표가 줄무늬 감속으로 반영 |
 | v1.346 | 2026-11-02 | additive (D-941): `GET /api/fleet/platoon`의 `speed`(고리 속도표, 보내기 없음), 충전 칸 관측을 백그라운드 루프로 |
 | v1.345 | 2026-11-02 | additive (D-941): `GET /api/fleet/platoon` — 활성 지도의 가장 짧은 한 방향 고리 위 로봇 간격·앞차 보기, 보내기 없음 |
