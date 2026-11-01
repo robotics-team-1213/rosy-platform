@@ -13429,3 +13429,23 @@ osy-d395-s1d\`.
 - 증거: 11-01 20:04·20:17·20:30 세 착지가 차례에서 `test_omx_fleet_ros_actionserver.py exited 5`(rclpy 없는 PC, 1 skipped)로 멈췄다. 착지는 main의 착지 코드로 돌아서 `land_cache` 수정만으로는 자기 차례를 지나지 못한다. 그래서 시험 트리에도 고친다. 원격 시험은 착지 기록에 남긴다.
 - gate 변화: 없음
 - 교훈: 없음
+
+## 2026-11-01 · uncommitted · feat: Rosy 허브 1단계 — 모든 로봇·프로젝트 grant와 팀원 기본 묶음 (D-955)
+- 변경: `account_access.py`에 `robot:*`·`project:*` grant와 `grants_for`, Authority 발급·허가 네 곳이 `grants_for`를 사용, 계정 화면이 새 계정을 팀원 기본 묶음으로 채우고 버튼 제공, D-955
+- 증거: 계약·Authority·Chromium 계정 시험 갱신(원격 결과는 커밋 기록)
+- gate 변화: 없음
+- 결정: D-955 추가(사용자 지시 2026-11-01)
+- 교훈: 없음
+
+## 2026-11-01 · uncommitted · docs(solutions): 착지가 차례를 반납하고 모두 다시 돈 다섯 원인
+- 변경: `docs/solutions/workflow-issues/landings-gave-the-turn-back-and-reran-everything-2026-11-01.md` 새 교훈(D-889 추가 13~17의 원인·확인 방법·측정 함정)
+- 증거: 11-01 이벤트·착지 로그 분석(차례 반납, 매핑 안 된 경로 73회, 재사용 470/4,700, narrow 시도 표본 30/40 FULL)
+- gate 변화: 없음
+- 교훈: 이 항목 자체
+
+## 2026-11-01 · uncommitted · learning/omx: D-943 GPU 학습·장치 초안·작업대 녹화·HF 업로드 버튼
+- 변경: OMX 학습 센터가 CUDA를 보고하는 학습기에서 ACT에 `cuda`를 제공하고 작업자는 `~/.cache/rosy-learning/gpu.lock`을 학습 내내 잡는다(`experiment_center/jobs/train`, 학습 화면 장치 선택). HF 업로드 버튼(`experiment_hub.py`, `omx-hub.js`, 센터 `hub`·`hub-prepare`·`hub-upload`, `publish` 권한·`write-repos` 연결). 작업대 장치 목록(`deploy/robot/omx/device_inventory.py`, 뷰어 `/inventory.json`, 프로필 화면 불러오기). 작업대 녹화 화면(`deploy/robot/omx/bench_record.py`). D-943, ADR Log 행, `adr_gaps` D-941·D-942
+- 증거: 원격 pytest — `learning/training/omx/test` 전체 exit 0, HF·센터·Learning 웹·협업·구조 93건 exit 0, 장치 목록·작업대 녹화·뷰어 exit 0. 관제 PC에서 장치 목록을 읽기 전용으로 실행해 follower 2대(arm_a·arm_b)·미지정 보드 2개·카메라 4대 확인
+- gate 변화: 없음. 실물 녹화·GPU 실학습·HF 실계정 왕복은 미수용(작업대 인원·팀 HF 연결 필요)
+- 결정: D-943 Accepted(사용자 지시)
+- 교훈: `record_session.py`의 고정 서비스 목록(`camera@top/front`)은 10-31 카메라 역할 변경(`arm_a_wrist`·`arm_b_wrist`·`side`)과 토크 OFF observer를 놓쳐 녹화가 장치를 열지 못한다. 작업대 화면이 실행 중 유닛에서 인계 목록을 만든다
