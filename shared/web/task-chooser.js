@@ -3,7 +3,7 @@ import "./ui.js";
 
 export const TASK_CONFIRM_TIMEOUT_MS = 10_000;
 
-export function createTaskChooser({ tasks, beforeSelect = () => true, timeoutMs = TASK_CONFIRM_TIMEOUT_MS }) {
+export function createTaskChooser({ tasks, beforeSelect = () => true, timeoutMs = TASK_CONFIRM_TIMEOUT_MS, onSelect = null }) {
   if (!tasks.length || new Set(tasks.map(task => task.id)).size !== tasks.length) {
     throw new Error("Task chooser needs a nonempty, unique inventory");
   }
@@ -77,6 +77,7 @@ export function createTaskChooser({ tasks, beforeSelect = () => true, timeoutMs 
         return false;
       }
       selected = id;
+      onSelect?.(id);
       status.hidden = true;
       status.textContent = "";
       return true;

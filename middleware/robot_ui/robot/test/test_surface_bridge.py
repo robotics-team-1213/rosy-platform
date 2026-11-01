@@ -47,6 +47,24 @@ def test_the_bridge_draws_only_registered_role_surfaces_from_the_manifest():
     assert "nav.hidden = links.length === 0" in source
 
 
+def test_the_rail_vocabulary_has_one_source_and_the_entry_list_uses_it():
+    """D-945(2026-11-01) — 레일 어휘(아이콘·짧은 이름)는 surface-navigation.js의
+    SURFACE_RAIL 하나다. 셸 레일과 인증 브리지 목적지 목록이 같은 부품(ui-rail-item,
+    전체 이름은 접근 이름)을 쓴다 — 표면마다 제각각인 메뉴를 다시 만들지 않는다."""
+    source = (ROOT / "surface-navigation.js").read_text(encoding="utf-8")
+    assert 'export const SURFACE_RAIL' in source and '"robot", "운용"' in source
+    bridge = source[source.index("export function dashboardSurfaceBridge"):]
+    assert '"ui-rail-item"' in bridge and 'setAttribute("aria-label", title || id)' in bridge
+    shell = (ROOT / "shell" / "shell.js").read_text(encoding="utf-8")
+    assert 'SURFACE_RAIL as RAIL' in shell and "const RAIL = {" not in shell, (
+        "셸은 자기 표를 두지 않는다 — 정본을 가져다 쓴다"
+    )
+    entry = (ROOT / "dashboard-entry.js").read_text(encoding="utf-8")
+    assert 'actionIcon(link, link.dataset.actionIcon)' in entry, (
+        "ui.js는 부팅 때만 아이콘을 붙인다 — 동적으로 그린 목록은 다시 칠한다"
+    )
+
+
 def test_the_shell_wires_the_bridge_to_the_callers_identity():
     app = (ROOT / "app.js").read_text(encoding="utf-8")
     assert 'import { completeDashboardAuthentication, dashboardSurfaceBridge } from "./surface-navigation.js";' in app
@@ -114,7 +132,7 @@ def test_the_bridge_builder_draws_manifest_surfaces_and_hides_when_empty():
         server.server_close()
         thread.join(timeout=2)
 
-    assert outcome["drawn"] == [["/console", "운용"], ["/setup", "작업 준비"]], outcome
+    assert outcome["drawn"] == [["/console", "운용"], ["/setup", "준비"]], outcome  # D-945: 셸 레일과 같은 짧은 이름, 전체 이름은 aria-label
     assert outcome["hiddenWhenEmpty"] is True
     assert outcome["visible"] is True
 
