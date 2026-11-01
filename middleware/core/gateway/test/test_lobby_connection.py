@@ -35,6 +35,9 @@ def test_public_client_cannot_probe_or_join_development(core_client, monkeypatch
     client = TestClient(original.app, client=('8.8.8.8', 1234))
     assert client.get('/api/v1/auth/connection').status_code == 403
     assert client.post('/api/v1/auth/development-session').status_code == 403
+    # D-944 / D-477 4: the tailnet may pair with a code, never join without one.
+    tailnet = TestClient(original.app, base_url='http://100.101.2.3', client=('100.101.2.4', 1234))
+    assert tailnet.post('/api/v1/auth/development-session').status_code == 403
 
 
 def test_join_budget_is_bounded(core_client, monkeypatch):

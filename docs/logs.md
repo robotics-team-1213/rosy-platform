@@ -13263,3 +13263,29 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: D-889 추가 12(사용자 결정 2026-11-01)
 - 교훈: 없음
+
+## 2026-11-01 · uncommitted · fix: 로봇-사이트 링크 견고성 (조사 1순위 4건 + D-944)
+- 변경: 허브가 본문 검증 실패에 `PAYLOAD_INVALID`로 답하고 Agent는 세션을 유지(이벤트는 재전송 없이 버림), API v1.336. CORE `/ws/events` 소켓 8개·소켓당 미전송 1000개 상한(넘으면 1013, `since_seq`로 갭 보정)과 스레드 안전한 큐 적재. Pinky 런타임 세 곳에 `ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST`(D-795 1)와 존재 검사. fallback AP는 열린 뒤 받은 패킷이 없으면 `idle_hold_seconds`(120 s)에 물러나 사이트 Wi-Fi를 다시 시도. D-944: LCD 코드 페어링·도달 확인 읽기에 팀 tailnet 허용(개발 세션·peer 승인은 LAN 전용), API v1.337
+- 증거: 원격 시험은 착지 기록에 남긴다. AP 유휴 판정(wlan0 rx_packets)과 공유기 재부팅 복귀는 장치 미확인
+- gate 변화: 없음
+- 결정: D-944 Accepted(사용자 결정), 워크트리 슬롯 1회 force-over-cap 승인(2026-11-01)
+- 교훈: 없음
+
+## 2026-11-01 · uncommitted · fix: 링크 조사 후속 (문서 정리·AP 지터·enum 판단)
+- 변경: D-124 Status와 ADR Log 행에 "업링크 손실 AP 금지 문장은 D-176·D-919가 대체" 표기, Pi5 수용 체크리스트 §5.4에 fallback AP grace·유휴 복귀 항목, 통신 평가 보고서(2026-09-22) 머리에 이후 변경 표기. fallback AP 열림 시점에 기기 이름별 0~29 s 고정 지터(`grace_offset_seconds`). API §7.7에 새 CORE 스냅샷 필드·enum은 Fleet이 따라올 때까지 `PAYLOAD_INVALID`→REST gather로 읽히며 Fleet 먼저 배포한다는 규칙과 스키마를 관용으로 바꾸지 않는 이유
+- 증거: 원격 시험은 착지 기록에 남긴다. 지터·유휴 복귀는 장치 미확인
+- gate 변화: 없음
+- 교훈: 없음
+
+## 2026-11-01 · uncommitted · fix: 조종 끊김·정지 전파·링크 지연 (D-948)
+- 변경: Wi-Fi 절전 끄기(NM conf.d·첫 부팅 STA 프로필). Fleet 전체 정지 전달을 `console/estop_fanout.py`로 분리(동시, 1.5 s×3 재시도, 대형 해제 병행). 허브 하트비트가 SQLite를 기다리지 않음(투영 밀릴 때만, 쓰기·읽기는 스레드, 콜백은 루프). 미디어 권한 재확인을 lock 밖에서 병렬로. D-948 `/ws/teleop`(최신 것만 적용, 끊기면 0, REST 대체), API v1.338. `console.py` 1267→634줄(교통 중재·대형 믹스인 분리, 동작 불변)
+- 증거: 원격 시험은 착지 기록에 남긴다. Pinky 두 대가 LAN에 없어 Wi-Fi 절전 상태·조종 지연 실측 못 함
+- gate 변화: 없음
+- 결정: D-948 Accepted(사용자 지시)
+- 교훈: 없음
+
+## 2026-11-01 · uncommitted · fix(monitoring): 이벤트 기록을 수집기 시계로 읽는다 (MAIN-RED)
+- 변경: `store.events(now=)`, `ObservationCache.events`, 이벤트 경로가 수집기 캐시를 거친다. 저장·정리는 주입 시계, 읽기 7일 컷은 호스트 시계라 실제 날짜가 시험 고정 날짜(2026-10-25)보다 7일 지나자 모든 이벤트가 숨었다
+- 증거: main 36e0e35945·a3eb3f4081에서 `test_history_ignores_polling_age_and_is_site_scoped` MAIN-RED, 수정 뒤 원격 `operations/monitoring/test` 통과
+- gate 변화: 없음
+- 교훈: 없음(시계 주입 원칙은 기존 코드에 있었고 한 경로만 빠졌다)
