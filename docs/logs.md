@@ -13284,6 +13284,95 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 교훈: 없음(시계 주입 원칙은 기존 코드에 있었고 한 경로만 빠졌다)
 
+## 2026-11-01 · uncommitted · refactor: D-949 줄 수 래칫을 리팩터링 대기열로
+- 변경: D-949와 `test/architecture/test_size_tiers.py`(1,000줄 이상 제품 행 금지, 800~999·시험 1,500 초과·단위 10,000 초과 대기열 집합은 줄어들기만). 1차 분리: `action_store.py` 1132→497, `diagnostic.html` 1857→288(+css·js 3), `rosy-face.py` 1235→221, `sync-image-layer.py` 1014→496. `console.py`는 fix/robot-site-link-robustness의 분리(634)가 착지하면 `TIER1_IN_FLIGHT`에서 빠진다
+- 증거: 옮긴 정의의 AST 동일성(에이전트 검사), 원격 시험은 착지 기록에 남긴다. 장치(LCD·이미지 층 갱신·진단 화면) 확인 안 함
+- gate 변화: 없음
+- 결정: D-949 Accepted(사용자 결정), 워크트리 슬롯 2번째 force-over-cap 승인(2026-11-01)
+- 교훈: 없음
+
+## 2026-11-01 · uncommitted · omx: 계획 경로 통로 점검(cell_corridor), 경로에 물체·다른 팔이 있으면 움직이기 전에 거절
+- 변경: `deploy/robot/omx/cell_corridor.py`(계획 프레임 FK → 낮은 TCP 구간을 상단 뷰 통로로 그리고 전경 덩어리를 찾음, 집을 물체·놓을 칸·팔 기부는 제외), `cell_params.py`에 `corridor.*` 5개
+- 증거: `test/test_omx_cell_corridor.py` 원격 실행
+- gate 변화: 없음(읽기 전용 점검, 움직임 없음)
+- 결정: 사용자 2026-11-01 "팔의 경로에 있다면 정지하거나 안전처리" — 1단계는 움직이기 전 정적 점검
+- 교훈: 없음
+
+## 2026-11-01 · uncommitted · omx: 통로 점검 규칙 수정, 낮은 구간은 집을 물체 말고 모두, 높은 이동은 모르는 덩어리만
+- 변경: `cell_corridor.py` 제외 원 대신 집을 물체 자신의 덩어리만 제외, 놓을 칸은 `--stack` 없으면 비어야 함, 높은 이동 구간은 카탈로그 물체 통과·모르는 덩어리(손·다른 팔) 거절. `corridor.exempt_mm` 삭제
+- 증거: 현장 계획(왼팔 벨트→팔레트) 2410프레임 중 낮은 구간은 집기·놓기 수직 구간뿐, 이동은 138 mm. 제외 원 45 mm가 낮은 통로(±30 mm)를 다 덮어 아무것도 못 막았음
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 없음
+
+## 2026-11-01 · uncommitted · omx: 통로 점검은 보이는 표면 밖이면 거절(낡은 surface_px), 카메라 교체 교훈 갱신
+- 변경: `cell_corridor.check`에 `surface_px` 밖 통로 픽셀 `off_surface` → 거절. `omx-cell-device-identity-after-rewiring-2026-10-31.md`에 카메라 교체 뒤 surface_px·surface_lab 무효 절 추가
+- 증거: 현장 실 프레임(읽기 전용, 팔 정지) — 낡은 폴리곤은 전경 0 px로 컨테이너 위 놓기를 통과시켰고, 수정 후 off_surface 10844 px로 거절. 현재 표면 색 3개로는 차 있는 칸 놓기 거절, `--stack`이면 통과
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 기존 교훈 갱신(카메라 교체 시 이미지 좌표 설정도 무효)
+
+## 2026-11-01 · uncommitted · omx: 계획기 low_zones, 바닥 높이를 지정한 사각형 안에서만 낮춤
+- 변경: `grasp_planner.Planner.limits_at`가 `limits.low_zones` 사각형 안에서만 IK 작업 공간 바닥을 낮춘다(높이지는 않음). 그 밖은 기존 바닥 그대로
+- 증거: `test_omx_grasp_planner.py` 원격 실행. 현장: 왼팔 벨트 끝이 테이블보다 낮고(사용자 측정·깊이) 팔이 10~20 mm 판 위에 있어 FK 바닥 0.005 아래에서만 집기가 가능
+- gate 변화: 계획기 작업 공간 바닥(사용자 승인 2026-11-01 "Approve, belt rectangle only"), 러너 접촉 정지는 그대로
+- 결정: 사용자 승인으로 벨트 사각형에만 적용, 값은 현장 계획 파일이 정함
+- 교훈: 없음
+
+## 2026-11-01 · uncommitted · fix(land): 재부팅은 시험 PC별로 비킨다 (D-889 추가 13)
+- 변경: `land_prepare`의 전역 05:15~06:10 사전 시험 금지 창을 없앴다. `host_probe.PROBE`는 `rosy-nightly-reboot.timer`가 15분 안이거나 그 서비스가 도는 동안 busy(`reboot_soon`)로 보고해 새 작업을 받지 않는다. 모델 PC 재부팅을 06:05 → 05:00으로 옮겼다(AI PC는 주인 동의 필요).
+- 증거: 11-01 05:34~06:10 차례 0건, 그 창에 걸린 착지의 차례 대기 80~139분. 시험 PC 세 대의 `systemctl show -P NextElapseUSecRealtime`·`date -d` 출력을 확인했다. 원격 시험은 착지 기록에 남긴다.
+- gate 변화: 없음
+- 결정: D-889 추가 13(사용자 목표 2026-11-01)
+- 교훈: 없음
+
+## 2026-11-01 · uncommitted · fix(land): main이 이미 고친 MAIN-RED로 멈추지 않는다 (D-889 추가 14)
+- 변경: `land_prepare.prepare`는 사전 시험이 MAIN-RED로 멈추고 main이 합친 base보다 앞으로 갔으면, 새 main에서 한 번 더 준비한다.
+- 증거: 11-01 rest 묶음과 payload-build가 09:27 base의 monitoring MAIN-RED(`rosy-main-red.jsonl` 16번째 줄)로 멈췄다. 그 시험은 지금 main에서 통과한다(원격 10건). 원격 시험은 착지 기록에 남긴다.
+- gate 변화: 없음
+- 결정: D-889 추가 14(사용자 목표 2026-11-01)
+- 교훈: 없음
+
+## 2026-11-01 · uncommitted · docs(solutions): mutation 증명 탐침은 safety 태그 경로 밖에서
+- 변경: `docs/solutions/workflow-issues/mutation-probe-on-safety-path-blocks-landing-2026-11-01.md` 신규. D-940 후속 착지에서 mutation probe가 `concern: safety` 경로를 건드려 초록인데도 D-430 §5가 착지를 막은 사례와 예방·복구 절차.
+- 증거: 초록 `6aa4000879`·빨강 `78e7a05dde`(probe_field 지목)·재브랜치 `e373c7b615` main 반영. probe 위치를 safety 밖에 찍은 D-940 게이트 증명(`2e8109ab34`)은 같은 날 무사 통과한 대조군.
+- gate 변화: 없음
+- 결정: 없음(교훈 기록)
+- 교훈: 신규 mutation-probe는 probe 파일 선정 전 `platform_parts.yaml`의 safety 태그를 먼저 본다
+
+## 2026-11-01 · uncommitted · omx: 팔별 세션 잠금, 한 팔이 작업해도 다른 팔 세션·관찰기는 돈다
+- 변경: `joint_tune.session_lock(arm)` 셀 잠금 공유 + `session-<arm>.lock` 배타. 인자 없으면 기존처럼 셀 전체 배타(자동 갱신·두 팔 파이프라인). `record_session --arm`. 관찰기 유닛은 셀 잠금 공유 확인 + 자기 팔 잠금 확인
+- 증거: `test_omx_session_lock.py`, `test_omx_hardware_observer.py` 원격 실행. 현장 2026-11-01 한 팔 세션마다 다른 팔 관찰기를 멈춰야 했고 두 팔 병렬 시험이 불가능했음
+- gate 변화: 잠금 범위(자동 갱신은 여전히 모든 팔이 쉴 때만)
+- 결정: 사용자 2026-11-01 "병렬로 로봇암이 작동해야하는 부분… 구조적으로 개선"
+- 교훈: 없음
+
+## 2026-11-01 · uncommitted · omx: 공유 동작 공간 cell_space, 팔이 쓸 통로를 예약하고 다른 팔의 살아 있는 예약과 겹치면 거절
+- 변경: `deploy/robot/omx/cell_space.py` 상단 카메라 픽셀을 두 팔의 공통 좌표로 쓰는 통로 마스크 예약·해제·만료, 파일 잠금 하나로 직렬화
+- 증거: `test_omx_cell_space.py` 원격 실행
+- gate 변화: 없음(동작 전 거절만 더함)
+- 결정: 사용자 2026-11-01 "안전적인 문제나 서로 겹침등으로 인해서 생길 수 있는 문제를 해결"
+- 교훈: 없음
+
+## 2026-11-01 · uncommitted · omx: cell_depth, 깊이 카메라로 셀의 높이를 자르고 컬러 화면에 맞춤(자·접촉 없이)
+- 변경: `deploy/robot/omx/cell_depth.py` 테이블 평면 RANSAC, 높이 지도, 물체 마스크로 깊이↔컬러 배율·이동 탐색, 컬러 픽셀의 높이, 팔 받침판 높이(FK 0)
+- 증거: 현장 D435(읽기 전용) 스택 위 75~77 mm, 팔레트 10~11 mm, 벨트 −29~−35 mm, 왼팔 받침판 20.9 mm, 4.5 s. `test_omx_cell_depth.py` 합성 장면
+- gate 변화: 없음(읽기 전용 측정)
+- 결정: 사용자 2026-11-01 "다 프로그램적으로", "높이 분석 opencv로"
+- 교훈: 없음
+
+## 2026-11-01 · uncommitted · fix(land): 차례 한도에 한 번 돌려보낸 착지는 다음 차례를 끝까지 쓴다 (D-889 추가 15)
+- 변경: `Overtime` 뒤 `args._overtime`을 켜고, `land_checks.run_tests`는 그때 차례 한도를 걸지 않는다.
+- 증거: 11-01 11:43~12:10 rest 묶음·android-shared-peer가 12~13분 차례 뒤 반납, main 27분 넘게 정지. 원격 시험은 착지 기록에 남긴다.
+- gate 변화: 없음
+- 결정: D-889 추가 15(사용자 목표 2026-11-01)
+- 교훈: 없음
+
+## 2026-11-01 · uncommitted · tools: 워크트리 .git 유실 재발 교훈 갱신
+- 변경: `docs/solutions/workflow-issues/empty-worktree-folder-runs-git-on-the-shared-main-2026-10-25.md`에 재발(파일 남은 폴더·묘비 없음·land_async 재사용) 추가
+- 증거: 공유 체크아웃 reflog의 `checkout: moving from main to feat/omx-devices-scan`, 2분 뒤 `git switch main`로 복구
+- gate 변화: 없음
+
 ## 2026-11-01 · uncommitted · docs: D-951 ROSY Calibration 앱과 rosy-calibration 스킬
 - 변경: `docs/adr/D-951-rosy-calibration-application.md`(그림 5장 `docs/assets/omx-calibration-2026-11-01-*`), ADR Log, `applications/calibration/{README,AGENTS}.md`, `platform_parts.yaml` 등록, `.claude/skills/rosy-calibration`
 - 증거: 2026-11-01 현장 기록(왼팔 벨트 끝 높이·터치 실패·I 게인 12.3→3.3 mm, 깊이 표식 LOO 62~355 px, 경로 점검 거절)

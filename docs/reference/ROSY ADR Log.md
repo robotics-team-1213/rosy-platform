@@ -11,6 +11,7 @@
 | ID | 제목 | Status |
 |---|---|---|
 | D-951 | ROSY Calibration 앱을 두고, 두 팔 셀의 보정·높이·공간 점검을 코드 한 경로로 돌린다. 집게는 D-933 마커, 면 높이는 깊이(`cell_depth`, D-933 3항 터치 대신), 테이블보다 낮은 면은 승인된 `low_zones` 사각형에서만, 하중 관절 I 게인, 팔별 세션 잠금과 통로 예약(`cell_space`). [전문](../adr/D-951-rosy-calibration-application.md) | Accepted (2026-11-01, 사용자 결정; 앱 화면 없음, 부품 착지 대기, 현장 수용 없음) |
+| D-949 | 줄 수 래칫은 리팩터링 대기열이다 — 1,000줄 이상은 지금 나누고 800줄 이상은 다음에 고칠 때 먼저 나눈다. [전문](../adr/D-949-size-ratchet-refactor-tiers.md) | Accepted (2026-11-01, 사용자 결정; D-766에 순서를 더함) |
 | D-948 | 사람 조종은 `/ws/teleop` 스트림으로 보내고 REST `/teleop`은 대체 경로로 남긴다. [전문](../adr/D-948-teleop-websocket-stream.md) | Accepted (2026-11-01, 사용자 지시; 장치·현장 수용 별도) |
 | D-944 | 팀 tailnet에서도 LCD 코드로 CORE에 페어링한다. [전문](../adr/D-944-tailnet-code-pairing.md) | Accepted (2026-11-01, 사용자 결정; 코드 없는 개발 세션·peer 승인은 LAN 전용 유지) |
 | D-941 | 261026 트랙 운행: 우측통행 순환로에서 차선 진행 거리로 앞차를 따라가고, 줄무늬는 감속·관제 정지점, 주차장 세 칸은 후진 진입 충전 칸. [전문](../adr/D-941-track-platoon-hold-points-charge-bays.md) | Proposed (2026-11-01, 사용자 결정; 설계만) |
@@ -1395,6 +1396,11 @@ Fleet device ID, 실제 follower 설정, 장치별 검증·기록 경로를 별�
 
 두 파트 이상에 동일하게 살아 있는 최상위 정의를 AST로 그룹 지어 `known_duplicates.txt`에 갈래(정본 소비·소유 통합·보호된 의도 중복·이름 분리)와 사유로 등록하고, 미등록 신규 그룹과 사라진 행 둘 다 빨간불로 막는다. 전역 utils 신설과 관습이 다른 정의의 강제 통합은 하지 않는다(D-841 계승). 전문은 [D-940](../adr/D-940-duplicate-definitions-gate.md).
 
+## D-949 줄 수 래칫은 리팩터링 대기열이다 — 1,000줄 이상은 지금 나누고 800줄 이상은 다음에 고칠 때 먼저 나눈다
+
+**Status:** Accepted (2026-11-01). D-766을 대체하지 않는다.
+
+1,000줄 이상 제품 파일은 지금 나누고, 800~999줄은 다음에 그 파일을 고치는 변경이 먼저 나눈다. 1,500줄을 넘은 시험과 10,000줄을 넘은 단위는 대기열에 둔다. 대기열은 `test/architecture/test_size_tiers.py`가 측정값과 같은지 본다. 전문은 [D-949](../adr/D-949-size-ratchet-refactor-tiers.md).
 ## D-944 팀 tailnet에서도 LCD 코드로 CORE에 페어링한다
 
 **Status:** Accepted (2026-11-01). D-193 4의 출발지 조건만 넓히며 원격 시험·착지는 착지 기록이 증거를 가진다.
