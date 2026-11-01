@@ -714,6 +714,23 @@ def test_flat_markings_are_no_obstacle_for_the_finger_mask(tmp_path):
     assert plain[inside].any() and not masked[inside].any()
 
 
+
+def test_what_the_detector_calls_an_object_stands_beside_the_fingers_whatever_the_surface_colour(tmp_path):
+    """2026-11-01: on a pallet full of orange containers the surface colour (the ROI median) was orange, so the finger
+    mask lost the neighbouring columns 4 mm away and the middle one was planned with 26 mm free on both sides."""
+    path = biased_map(tmp_path)
+    one = {"x": 0.080, "y": 0.120, "long": 0.0, "length": 30, "width": 30}
+    other = dict(one, x=0.030, y=0.090)
+    config = copy.deepcopy(CONFIG)
+    green = cv2.cvtColor(np.uint8([[[60, 160, 60]]]), cv2.COLOR_BGR2LAB)[0, 0].tolist()
+    config["sites"]["pinky"]["surface_lab"] = green  # the boxes' own colour taken for the surface
+    u, v = (round(c) for c in tray_pixel(other["x"], other["y"]))
+    _, blind, _, _ = auto.observe(Cell([one, other]), config, cal.load(path), "pinky", ROI, CATALOG)
+    assert not blind[v - ROI[1], u - ROI[0]]  # the surface test alone calls the box surface
+    config["objects"] = {"hsv": [[35, 80, 60], [90, 255, 255]]}
+    _, mask, objects, error = auto.observe(Cell([one, other]), config, cal.load(path), "pinky", ROI, CATALOG)
+    assert error is None and len(objects) == 2 and mask[v - ROI[1], u - ROI[0]]
+
 def test_the_margin_opens_as_wide_as_the_room_and_the_jaws_allow():
     mask = np.zeros((200, 200), np.uint8)
     px = lambda p: (100 + p[0] * 1000, 100 + (p[1] - 0.1) * 1000)  # noqa: E731  1 px per mm

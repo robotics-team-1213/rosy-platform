@@ -209,6 +209,17 @@ def _measure_blob(px, record: dict, camera: dict, catalog: list, surface_z: floa
     return best
 
 
+def colour_mask(img, roi, hsv):
+    """Mask (ROI-sized) of every pixel in the objects' colour range, side faces included, for the finger room: what the
+    detector calls an object stands beside the fingers whatever the surface test says (2026-11-01: the ROI median of a
+    pallet full of orange containers was orange, so the neighbours 4 mm away read as surface and the room check found
+    26 mm free on both sides). Without a range, nothing. Kept out of the surface-size cut, where it merged into the
+    pallet's blob and was dropped with it."""
+    x0, y0, x1, y1 = roi
+    if hsv is None:
+        return np.zeros((y1 - y0, x1 - x0), np.uint8)
+    return cv2.inRange(cv2.cvtColor(img[y0:y1, x0:x1], cv2.COLOR_BGR2HSV), np.array(hsv[0]), np.array(hsv[1]))
+
 def object_mask(img, roi, hsv, surface_px=None, params=None):
     """Mask (ROI-sized) of the objects by their own colour (OpenCV HSV range, e.g. the green containers): the
     surface, its shadows, white lines and belts do not matter. On the board the green boxes read hue 78-80, the board
