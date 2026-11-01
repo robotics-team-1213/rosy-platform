@@ -13242,6 +13242,14 @@ osy-d395-s1d\`.
 - 결정: D-940 갈래 ① 소비 1건, ③ 핀 1건
 - 교훈: 없음
 
+## 2026-11-01 · uncommitted · fix(land): 브라우저·시뮬레이션 시험은 필요할 때만, 전체는 밤에
+- 변경: `tools/land_selection.py`(`browsers()`·`without_sim`), `tools/land_nightly.py`(새 파일), `test/test_land_selection.py`, `test/test_land_nightly.py`, D-889 추가 12
+- 근거: 12.2시간 시험 실행 3,405분 중 브라우저 50%(사전 시험 1,085·투기 471·차례 147분), 문서 착지가 변화분 브라우저로 착지마다 50~80분
+- 증거: 원격 `test/test_land_selection.py`·`test/test_land_nightly.py`·`test/test_affected_tests.py`·`test/test_harness_contracts.py`
+- gate 변화: 없음
+- 결정: D-889 추가 12(사용자 결정 2026-11-01)
+- 교훈: 없음
+
 ## 2026-11-01 · uncommitted · sim/omx: D-927 C2~C4 시뮬 ARM_TRANSFER를 실제 셀 소유자로 끝까지 돌림
 - 변경: `tools/sim/transfer_state_writer.py`(C2), `deploy/robot/omx/sim/transfer_installation.yaml`·`tools/sim/transfer_installation.py`(C3: catalog·binding → Fleet policy·digest → bases, 홈 관절), `tools/sim/run_arm_transfer_sim.sh`·`without_devices.sh`(C4: MuJoCo+설치된 소유자+기록기, 장치 없는 namespace), `omx_topic_backend.py`·`omx_mujoco_backend.py` `--initial` 시작 조건, `run_cell_owner.py`가 `ROSY_ARM_TRANSFER_INSTALLATION`을 설치하고 fence 거절 이유(상태·숫자만)를 남김. 소유자 고침: receipt `observed_at`이 보고하는 모든 phase 시각을 덮음(`policy_parent.projection`), phase 시작·dispatch 실패 예외를 로그로 남김
 - 증거: 원격 설치·기록기·셀 소유자·receipt 시험 통과(102 등). AI PC에서 Harbor `real_fleet_http --arm-only --sim-arm`(Harbor `feat/sim-arm-harness`)이 approach·grasp·transfer·release를 MuJoCo로 진행하고 독립 관찰자가 PRE_DISPATCH·POST_ACTION을 증명, 연속 4회 OK(각 약 52 s). 그 전 1회는 grasp가 `cancel_during_action_unknown`으로 실패(원인 미확인)
