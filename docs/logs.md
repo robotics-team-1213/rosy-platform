@@ -13372,3 +13372,8 @@ osy-d395-s1d\`.
 - 변경: `docs/solutions/workflow-issues/empty-worktree-folder-runs-git-on-the-shared-main-2026-10-25.md`에 재발(파일 남은 폴더·묘비 없음·land_async 재사용) 추가
 - 증거: 공유 체크아웃 reflog의 `checkout: moving from main to feat/omx-devices-scan`, 2분 뒤 `git switch main`로 복구
 - gate 변화: 없음
+
+## 2026-11-01 · uncommitted · tools: 정책 화면 수정 게시용 FULL 착지
+- 변경: 없음(기록만). origin/main 동기화(0699b12647) 뒤 게시할 커밋에 녹색 FULL 착지 기록이 없어 이 기록 커밋을 `--tests full`로 착지한다. 같은 main과 같은 브랜치는 batch로 흡수되어 시험이 돌지 않았다.
+- 증거: `publish_main.py` dry run이 "no commit past origin/main has a green FULL land record"
+- gate 변화: 없음
