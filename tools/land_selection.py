@@ -43,6 +43,14 @@ def overlaps(delta: list[list[str]], mine: list[list[str]], ignore=()) -> bool:
     return any(a == b or a.startswith(b + "/") or b.startswith(a + "/") for a in paths(delta) for b in paths(mine))
 
 
+def _guards_only(invocations: list[list[str]], guards) -> list[list[str]]:
+    """The invocations whose every test path is one of ``guards`` (or inside one)."""
+    def paths(inv):
+        return [w.replace("\\", "/").split("::")[0].rstrip("/") for w in inv if not w.startswith(("ROSY_", "-"))]
+    return [inv for inv in invocations
+            if paths(inv) and all(any(p == g or p.startswith(g + "/") for g in guards) for p in paths(inv))]
+
+
 def _unique(invocations: list[list[str]]) -> list[list[str]]:
     return [list(inv) for inv in dict.fromkeys(map(tuple, invocations))]
 
@@ -97,9 +105,11 @@ def select(land, wt: Path, base: str, python: str, head: str | None = None,
                 # a foundation landing's turn reran all 485 own invocations for a delta that reached a few (45 min).
                 guards = getattr(getattr(land, "land_guards", None), "GUARDS", ())
                 reached = [inv for inv in mine if overlaps(sel["local_invocations"], [inv], guards)]
-                if not reached:
-                    print("[tests] main's delta reaches none of this branch's suites: the delta's suites only")
-                elif len(reached) < len(mine):
+                safe_delta = any(e.endswith(SAFETY_TRIGGER) for e in sel["escalations"])  # addendum 8 keeps those
+                if not reached and not safe_delta:  # D-889 22: the delta's suites run here as they ran on main
+                    print("[tests] main's delta and this branch reach none of each other's suites: the guards only")
+                    return _unique(_guards_only(sel["local_invocations"], guards) + browsers(sel["local_invocations"])), None
+                if len(reached) < len(mine):
                     print(f"[tests] main's delta reaches {len(reached)} of this branch's {len(mine)} invocations: those rerun")
                 return _unique(sel["local_invocations"] + reached + browsers(sel["local_invocations"])), None
             if sel["mode"] == "full":
@@ -111,6 +121,17 @@ def select(land, wt: Path, base: str, python: str, head: str | None = None,
                 if landed and head:
                     changed += land.lines(wt, "diff", "--name-only", f"{head}...HEAD")
                 return without_sim(sel["full_invocations"], changed) + browsers(), note
+            if landed and head:
+                # D-889 22: an ordinary delta (not escalated) the same way: when this branch and main's delta reach
+                # none of each other's suites, those suites run on the merged tree as they ran on main. 11-02: a
+                # docs landing's turn took 7 min for the delta's suites; queued landings waited ~125 min for turns.
+                own = _affected(land, wt, python, head, None)
+                guards = getattr(getattr(land, "land_guards", None), "GUARDS", ())
+                mine = own["local_invocations"] if own["mode"] == "full" else own["invocations"]
+                if (not any(e.endswith(SAFETY_TRIGGER) for e in own["escalations"] + sel["escalations"])
+                        and not overlaps(sel["invocations"], mine, guards)):
+                    print("[tests] main's delta and this branch reach none of each other's suites: the guards only")
+                    return _unique(_guards_only(sel["invocations"], guards) + browsers(sel["invocations"])), None
             return sel["invocations"] + browsers(), None
         except (ValueError, KeyError, TypeError) as exc:
             raise land.Stop(f"affected selector printed unusable JSON ({exc!r}); not guessing tests") from exc

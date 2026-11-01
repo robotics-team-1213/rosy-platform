@@ -137,13 +137,20 @@ def test_a_landed_delta_reaching_none_of_this_branchs_suites_does_not_rerun_them
         answers[:] = [delta, mine]
         got = selection.select(land, tmp_path, "base", "python", head="main", landed=True)[0]
         own = mine.get("invocations") or mine["local_invocations"]
-        assert got == ([["guard/test"], ["fleet/test"]] + ([inv for inv in own if inv != ["guard/test"]] if rerun
-                                                            else []) + [browser])
+        # D-889 22: reaching nothing either way, the delta's suites do not rerun either: the guards only
+        assert got == ([["guard/test"], ["fleet/test"]] + [inv for inv in own if inv != ["guard/test"]] if rerun
+                       else [["guard/test"]]) + [browser]
     # D-889 18: per invocation, only the own ones the delta reaches rerun (11-01: 485 rerun for a few reached)
     answers[:] = [delta, dict(mode="full", escalations=["contracts/foundation/x.py: shared foundation"],
                               local_invocations=[["fleet/test/test_y.py"], ["arm/test"], ["guard/test"]])]
     assert selection.select(land, tmp_path, "base", "python", head="main", landed=True)[0] == [
         ["guard/test"], ["fleet/test"], ["fleet/test/test_y.py"], browser]
+    # D-889 22: an ordinary (not escalated) delta the same way (a safety delta escalates: test above)
+    plain = dict(mode="affected", escalations=[], invocations=[["guard/test"], ["fleet/test"]])
+    for mine, want in ((["arm/test"], [["guard/test"]]),
+                       (["fleet/test/test_x.py"], [["guard/test"], ["fleet/test"]])):
+        answers[:] = [plain, dict(mode="affected", escalations=[], invocations=[mine])]
+        assert selection.select(land, tmp_path, "base", "python", head="main", landed=True)[0] == want + [browser]
     assert selection.overlaps([["a/test"]], [["ROSY_X=1", "a/test/test_b.py::c"]]) and not selection.overlaps(
         [["a/test"]], [["b/test"]])
 
