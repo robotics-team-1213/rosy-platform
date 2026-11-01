@@ -156,6 +156,8 @@ def test_a_low_zone_lowers_the_floor_only_inside_its_rectangle():
     outside = dict(low, pick=dict(low["pick"], x=0.10))  # the same height just past the rectangle
     with pytest.raises(SystemExit, match="OUTSIDE_WORKSPACE"):
         m.Planner(dict(outside, limits=dict(PLAN["limits"], low_zones=[zone]))).library()
+    with pytest.raises(SystemExit, match="IK"):  # a line leaving the zone keeps the floor of its outside end
+        planner.line((0.075, 0.105, -0.02), (0.12, 0.105, -0.02), 0.05, 0.0, 0.0, 0.0)
     above = dict(zone, z_min_m=0.05)  # a zone never raises the floor
     assert planner.limits_at(0.07, 0.10).workspace_min_m[2] == -0.03
     assert m.Planner(dict(PLAN, limits=dict(PLAN["limits"], low_zones=[above]))).limits_at(0.07, 0.10).workspace_min_m[2] == 0.005
