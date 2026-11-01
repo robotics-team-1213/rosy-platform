@@ -85,7 +85,7 @@ def test_review_pages_head_the_body_with_one_pathbar_h1():
 
 def test_robot_operating_surfaces_explain_no_script_and_keep_styles_out_of_markup():
     """스크립트 없이 열린 조작 표면은 물리 정지 경로를 알린다. 표면 CSP는 style-src 'self'라 style 속성은 조용히 무시된다."""
-    operating = [WEB / name for name in AREA_DOCS] + [ROOT / "middleware/robot_ui/pilot/index.html", ROBOT / "index.html"]
+    operating = [WEB / name for name in AREA_DOCS] + [ROOT / "middleware/robot_ui/pilot/index.html", ROBOT / "index.html", ROOT / "operations/apps/games/games/web/index.html"]
     for path in operating:
         assert '<noscript><ui-status state="error">' in path.read_text(encoding="utf-8"), path.name
     for base in (WEB, ROBOT, ROOT / "middleware/robot_ui/pilot", REVIEW, ROOT / "operations/apps/games/games/web"):

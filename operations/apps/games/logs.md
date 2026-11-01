@@ -426,3 +426,10 @@
 - 변경: 경기 보드(`games/web/index.html`)에 sr-only h1을 넣었다 — 한 화면 예산(스크롤 없음 계약)을 지키면서 문서 h1 하나 규칙(D-945 2항 focal 표현)을 만족한다. test_layout_canon의 focal 검사가 경기 보드를 포함하고 D-945의 h1 규칙에 focal 키오스크 표현을 명문화했다.
 - 증거: test_layout_canon 전 통과(경기 보드 h1 1·topbar-first·skip link). 원격 시험은 다음 착지 전 기록.
 - Gate: 없음. CE: 해당 없음.
+
+
+## 2026-11-02 · uncommitted · noscript 안내 (D-945 마무리, 사용자 지시)
+
+- 변경: 경기 보드 `index.html`에 Fleet·로봇 대시보드·Pilot과 같은 noscript `ui-status state="error"`를 넣었다.
+- 증거: `test_layout_canon.py` 조작 표면 noscript 검사 대상에 경기 보드 추가.
+- Gate: 없음. CE: 해당 없음.
