@@ -13430,6 +13430,13 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 교훈: 없음
 
+## 2026-11-01 · uncommitted · feat: Rosy 허브 1단계 — 모든 로봇·프로젝트 grant와 팀원 기본 묶음 (D-955)
+- 변경: `account_access.py`에 `robot:*`·`project:*` grant와 `grants_for`, Authority 발급·허가 네 곳이 `grants_for`를 사용, 계정 화면이 새 계정을 팀원 기본 묶음으로 채우고 버튼 제공, D-955
+- 증거: 계약·Authority·Chromium 계정 시험 갱신(원격 결과는 커밋 기록)
+- gate 변화: 없음
+- 결정: D-955 추가(사용자 지시 2026-11-01)
+- 교훈: 없음
+
 ## 2026-11-01 · uncommitted · docs(adr): D-950 도킹 진입 방향은 후면(후진)
 - 변경: `docs/adr/D-950-docking-direction-rear-entry.md` 새 ADR(Accepted, 사용자 결정). D-200·D-349·D-350과 도킹 설계 문서에 관계 줄을 더했다. ADR 로그 행과 adr_gaps를 정리했다.
 - 증거: 다른 세션이 `.worktrees/dockrear`에 커밋하지 않고 남긴 초안. 사용자 지시(2026-11-01 "미커밋들을 커밋하고 머지")로 그대로 커밋해 착지한다.
