@@ -9,6 +9,16 @@ export function canViewAccountSetup(session) {
     && !session.password_change_required && session.role === 'policy-admin');
 }
 
+// D-955 team default: operate the site, every robot and every project; no account, policy,
+// camera, robot-admin or learning approval/publish/manage rights.
+export function teamGrants(siteResource) {
+  return [
+    {resource: siteResource, capabilities: ['fleet.read', 'fleet.operate', 'games.operate']},
+    {resource: 'robot:*', capabilities: ['robot.read', 'robot.operate']},
+    {resource: 'project:*', capabilities: ['learning.view', 'learning.edit', 'learning.import']},
+  ];
+}
+
 export const CAPABILITIES = {
   site: {'accounts.manage': '계정 관리', 'fleet.read': '관제 조회', 'fleet.operate': '관제 조작',
     'fleet.policy': '관제 정책', 'camera.manage': '카메라 관리', 'games.operate': '게임 조작',

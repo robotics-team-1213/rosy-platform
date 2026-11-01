@@ -13430,6 +13430,13 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 교훈: 없음
 
+## 2026-11-01 · uncommitted · feat: Rosy 허브 1단계 — 모든 로봇·프로젝트 grant와 팀원 기본 묶음 (D-955)
+- 변경: `account_access.py`에 `robot:*`·`project:*` grant와 `grants_for`, Authority 발급·허가 네 곳이 `grants_for`를 사용, 계정 화면이 새 계정을 팀원 기본 묶음으로 채우고 버튼 제공, D-955
+- 증거: 계약·Authority·Chromium 계정 시험 갱신(원격 결과는 커밋 기록)
+- gate 변화: 없음
+- 결정: D-955 추가(사용자 지시 2026-11-01)
+- 교훈: 없음
+
 ## 2026-11-01 · uncommitted · docs: D-937 제품 앱 입사 문법과 capture-wall 표면 등록
 - 변경: `docs/adr/D-937`(제품/기능 두 레인, 제품 원형 네 가지, 웹 표면 전체 등록, Learning 웹 carve 조건)과 ADR Log 표 행·절, `tools/harness/adr_gaps.txt` D-936 결번 갱, `shared/web/surfaces.yaml` capture-wall 등록, `tools/capture/multi_record.html` 표면 계약 준수(`./` 참조, 범위 제목, RosyPalette 캔버스 팔레트)와 `multi_record.py` common 복사 목록 확대, `shared/web/test/test_canvas_palette_contract.py` 캔버스 목록, `applications/AGENTS.md` 판별 포인터
 - 증거: 원격 영향 선택 2 invocation — 38파일 923 passed(첫 돌림에서 캔버스 팔레트·제목 계약 2 failed를 계약 준수 수정 뒤 재시험으로 통과), `tools/capture/test/test_multi_record.py` 10 passed, `test/known_failures.py` 0 new. `rosy_harness.py lint` 0 errors
