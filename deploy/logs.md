@@ -4290,3 +4290,9 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 두 팔 동시 시험(현장 스위치 옆) 때 관제 PC에 원격 시험 작업(CPU 66%·50%)이 돌았고 arm_a wrist_roll 추종 오류, arm_b over_ticks 0–1→477. 원격 `test_omx_session_lock.py` 등 108 passed.
 - gate 변화: 없음
 - 교훈: 작업 기록 2026-10-31 §15.1(재시험으로 원인 확인 전이라 미해결)
+
+## 2026-11-01 · uncommitted · fix(omx): 피벗 측정점 찾기가 현장 바닥 색을 쓴다
+- 변경: `cell_calibrate`의 `pivot-near` 단계가 같은 일을 하던 `auto_pivot_point`를 다시 쓰고, 장애물 판정에 현장의 측정 바닥 색(`surface_lab`)·바닥 다각형을 넘긴다.
+- 증거: 현장 `pivot-near` 두 번이 "no clear point"로 멈춤(팔레트 위 빈 칸이 있는데도). 원격 `test_omx_cell_calibrate.py` 6 passed.
+- gate 변화: 없음
+- 교훈: 작업 기록 2026-10-31 §15

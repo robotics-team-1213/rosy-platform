@@ -77,8 +77,8 @@
 
 ## 최근 기록
 
+- 2026-11-01 · uncommitted · fix(omx): 피벗 측정점 찾기가 현장 바닥 색을 쓴다
 - 2026-11-01 · uncommitted · fix(omx): 팔 세션이 도는 동안 원격 시험을 관제 PC에서 뺀다
 - 2026-11-01 · uncommitted · feat(omx): 밀기도 판단·결과를 남기고, 집게 크기는 측정값 하나에서
 - 2026-11-01 · uncommitted · fix(omx): 밀기 경로가 집게가 지나는 폭까지 본다
 - 2026-11-01 · uncommitted · fix(omx): 손가락 여유 검사가 검출기가 물체라 부르는 것을 모두 본다
-- 2026-11-01 · a785121ef0 · sim/real 같은 동작: Planner.stream 하나
