@@ -3,6 +3,7 @@ from contextlib import contextmanager
 from hashlib import sha256
 import json
 import os
+import re
 from pathlib import Path
 import ssl
 import threading
@@ -110,6 +111,10 @@ def test_persisted_analysis_origin_and_diagnosis_order_in_cell(persisted_cell, w
                     and ('/api/fleet/robots/' in request.url or '/api/fleet/device-profiles/' in request.url) else None)
             page.add_init_script(f"sessionStorage.setItem('rosy-console-token', '{VIEWER}')")
             page.goto(origin + '/console/cell')
+            camera = page.locator('.cell-camera-wall [data-camera-source="fixture-top"]')  # cameras on their own wall
+            expect(camera).to_have_count(1)
+            camera.click(); expect(camera).to_have_class(re.compile('focused'))
+            camera.click(); expect(camera).not_to_have_class(re.compile('focused'))
             info = page.locator('[data-arm-source="source-one"] [data-robot-profile]')
             expect(info).to_contain_text('2·3번 관절 하중 주의')
             expect(info).to_contain_text('feedback_gap')

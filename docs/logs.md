@@ -13338,3 +13338,43 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: D-889 추가 14(사용자 목표 2026-11-01)
 - 교훈: 없음
+
+## 2026-11-01 · uncommitted · docs(solutions): mutation 증명 탐침은 safety 태그 경로 밖에서
+- 변경: `docs/solutions/workflow-issues/mutation-probe-on-safety-path-blocks-landing-2026-11-01.md` 신규. D-940 후속 착지에서 mutation probe가 `concern: safety` 경로를 건드려 초록인데도 D-430 §5가 착지를 막은 사례와 예방·복구 절차.
+- 증거: 초록 `6aa4000879`·빨강 `78e7a05dde`(probe_field 지목)·재브랜치 `e373c7b615` main 반영. probe 위치를 safety 밖에 찍은 D-940 게이트 증명(`2e8109ab34`)은 같은 날 무사 통과한 대조군.
+- gate 변화: 없음
+- 결정: 없음(교훈 기록)
+- 교훈: 신규 mutation-probe는 probe 파일 선정 전 `platform_parts.yaml`의 safety 태그를 먼저 본다
+
+## 2026-11-01 · uncommitted · omx: 팔별 세션 잠금, 한 팔이 작업해도 다른 팔 세션·관찰기는 돈다
+- 변경: `joint_tune.session_lock(arm)` 셀 잠금 공유 + `session-<arm>.lock` 배타. 인자 없으면 기존처럼 셀 전체 배타(자동 갱신·두 팔 파이프라인). `record_session --arm`. 관찰기 유닛은 셀 잠금 공유 확인 + 자기 팔 잠금 확인
+- 증거: `test_omx_session_lock.py`, `test_omx_hardware_observer.py` 원격 실행. 현장 2026-11-01 한 팔 세션마다 다른 팔 관찰기를 멈춰야 했고 두 팔 병렬 시험이 불가능했음
+- gate 변화: 잠금 범위(자동 갱신은 여전히 모든 팔이 쉴 때만)
+- 결정: 사용자 2026-11-01 "병렬로 로봇암이 작동해야하는 부분… 구조적으로 개선"
+- 교훈: 없음
+
+## 2026-11-01 · uncommitted · omx: 공유 동작 공간 cell_space, 팔이 쓸 통로를 예약하고 다른 팔의 살아 있는 예약과 겹치면 거절
+- 변경: `deploy/robot/omx/cell_space.py` 상단 카메라 픽셀을 두 팔의 공통 좌표로 쓰는 통로 마스크 예약·해제·만료, 파일 잠금 하나로 직렬화
+- 증거: `test_omx_cell_space.py` 원격 실행
+- gate 변화: 없음(동작 전 거절만 더함)
+- 결정: 사용자 2026-11-01 "안전적인 문제나 서로 겹침등으로 인해서 생길 수 있는 문제를 해결"
+- 교훈: 없음
+
+## 2026-11-01 · uncommitted · omx: cell_depth, 깊이 카메라로 셀의 높이를 자르고 컬러 화면에 맞춤(자·접촉 없이)
+- 변경: `deploy/robot/omx/cell_depth.py` 테이블 평면 RANSAC, 높이 지도, 물체 마스크로 깊이↔컬러 배율·이동 탐색, 컬러 픽셀의 높이, 팔 받침판 높이(FK 0)
+- 증거: 현장 D435(읽기 전용) 스택 위 75~77 mm, 팔레트 10~11 mm, 벨트 −29~−35 mm, 왼팔 받침판 20.9 mm, 4.5 s. `test_omx_cell_depth.py` 합성 장면
+- gate 변화: 없음(읽기 전용 측정)
+- 결정: 사용자 2026-11-01 "다 프로그램적으로", "높이 분석 opencv로"
+- 교훈: 없음
+
+## 2026-11-01 · uncommitted · fix(land): 차례 한도에 한 번 돌려보낸 착지는 다음 차례를 끝까지 쓴다 (D-889 추가 15)
+- 변경: `Overtime` 뒤 `args._overtime`을 켜고, `land_checks.run_tests`는 그때 차례 한도를 걸지 않는다.
+- 증거: 11-01 11:43~12:10 rest 묶음·android-shared-peer가 12~13분 차례 뒤 반납, main 27분 넘게 정지. 원격 시험은 착지 기록에 남긴다.
+- gate 변화: 없음
+- 결정: D-889 추가 15(사용자 목표 2026-11-01)
+- 교훈: 없음
+
+## 2026-11-01 · uncommitted · tools: 워크트리 .git 유실 재발 교훈 갱신
+- 변경: `docs/solutions/workflow-issues/empty-worktree-folder-runs-git-on-the-shared-main-2026-10-25.md`에 재발(파일 남은 폴더·묘비 없음·land_async 재사용) 추가
+- 증거: 공유 체크아웃 reflog의 `checkout: moving from main to feat/omx-devices-scan`, 2분 뒤 `git switch main`로 복구
+- gate 변화: 없음
