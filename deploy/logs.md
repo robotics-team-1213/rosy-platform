@@ -4308,3 +4308,9 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 현장 dry run에서 4 mm 간격 3칸 열을 길이로 밀 때 통로 33 mm(집게 21.2 + 지도 오차 11.85)가 옆 열에 닿아 거절, 앞길 표본이 반 길이(43.5 mm) 옆에 찍혀 거절. 원격 `test_omx_cell_push.py`·`test_omx_cell_auto_pick.py`·`test_omx_cell_calibrate.py` 62 passed.
 - gate 변화: 없음
 - 교훈: 작업 기록 2026-10-31 §15.3
+
+## 2026-11-01 · uncommitted · fix(omx): 피벗 측정이 빽빽한 팔레트에서는 대상 바로 위에서 한다
+- 변경: `cell_calibrate`의 `pivot-near`가 `pivot.over_target`이 켜져 있고 집게 높이가 대상 꼭대기(`pivot.over_top_mm`)보다 `pivot.over_clear_mm` 이상 높으면 빈 자리를 찾지 않고 대상 바로 위에서 잰다. 자동 집기(`self_calibrate`)와 같은 규칙(`over_target`) 하나를 쓴다.
+- 증거: 현장 `pivot-near pallet:0.118,-0.064`가 "no clear point"로 멈춤(필요한 빈 칸 72 px, 붙어 선 열 옆 빈 띠 41·60·61 px). 원격 `test_omx_cell_calibrate.py`.
+- gate 변화: 없음
+- 교훈: 작업 기록 2026-10-31 §15.3
