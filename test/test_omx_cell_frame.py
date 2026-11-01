@@ -71,8 +71,8 @@ def learned():
 
 
 def test_slot_ids_are_the_print_sheet_table():
-    assert cf.slot_ids(1) == {"gripper": 35, "base": [36, 37], "surfaces": [[38, 39, 40, 41], [42, 43, 44, 45], [46, 47, 48, 49]]}
-    assert [cf.slot_ids(n)["gripper"] for n in (1, 2, 3, 4)] == [35, 50, 65, 80]
+    assert cf.slot_ids(1) == {"gripper": 50, "base": [51, 52], "surfaces": [[53, 54, 55, 56], [57, 58, 59, 60], [61, 62, 63, 64]]}
+    assert [cf.slot_ids(n)["gripper"] for n in (1, 2, 3)] == [50, 65, 80]
 
 
 def test_the_gripper_marker_at_fk_points_gives_the_camera_and_the_markers_their_arm_corners():
@@ -80,7 +80,7 @@ def test_the_gripper_marker_at_fk_points_gives_the_camera_and_the_markers_their_
     assert rms < 1.0
     assert np.linalg.norm(camera[1] - CAMERA[1]) < 0.004 and cf._angle(camera[0].T @ CAMERA[0]) < 0.3
     truth = layout()
-    for i in (36, 37, 38, 47):
+    for i in (51, 52, 53, 62):
         assert np.abs(np.array(record["markers"][str(i)]) - truth[i]).max() < 0.004
 
 
@@ -111,14 +111,14 @@ def test_a_moved_pinky_is_followed_by_its_markers_and_one_marker_is_not_enough()
     box = turn @ box_at_setup + shift
     pixel = cf.project(box, K, DIST, CAMERA)
     assert np.linalg.norm(cf.to_arm(record, "pinky", pixel, Z["pinky"]) - box) < 0.003
-    only_one = {i: c for i, c in seen.items() if i not in pinky or i == 46}
+    only_one = {i: c for i, c in seen.items() if i not in pinky or i == 61}
     cf.update(record, only_one)
     assert "pinky" not in record["now"]["motion"]
 
 
 def test_learning_refuses_without_a_base_marker_in_view():
     _, camera, _ = learned()
-    seen = {i: c for i, c in seen_by(CAMERA, layout()).items() if i not in (36, 37)}
+    seen = {i: c for i, c in seen_by(CAMERA, layout()).items() if i not in (51, 52)}
     with pytest.raises(ValueError, match="no base marker"):
         cf.learn(seen, K, DIST, camera, 1, Z, ["board", "belt", "pinky"])
 
