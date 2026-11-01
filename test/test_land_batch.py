@@ -250,7 +250,6 @@ def test_a_carried_pending_ticket_holds_its_slot_and_skips_its_pretest_once_land
     naps = []
     land.land_prepare.slot(qdir, ticket, sleep=naps.append, held=lambda: next(holds))
     assert len(naps) == 2 and info(ticket)["status"] == "preparing"
-    monkeypatch.setattr(land.land_prepare, "after_reboot", lambda ticket: None)
     monkeypatch.setattr(land.land_prepare, "slot", lambda *a, **k: None)
     monkeypatch.setattr(land.land_batch, "in_main", lambda *a: True)
     monkeypatch.setattr(land, "select", lambda *a, **k: pytest.fail("a landed member ran its own pretest"))

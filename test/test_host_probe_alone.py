@@ -16,7 +16,7 @@ pytestmark = pytest.mark.skipif(os.name != 'posix' or not shutil.which('bash'),
                                 reason='the actual PROBE shell requires POSIX bash')
 
 
-def measured(tmp_path, marker=None, live=True):
+def measured(tmp_path, marker=None, live=True, systemctl='return 1'):
     jobs = tmp_path / 'rosy-jobs'
     jobs.mkdir(parents=True)
     pid = 4242 if live else 4243
@@ -25,7 +25,7 @@ def measured(tmp_path, marker=None, live=True):
     elif marker:
         (jobs / 'fixture.lock').write_text(f'{pid} {marker} 2 3\n')
     # Liveness is confined to this shell fixture; no signal or real job marker is used.
-    script = 'kill() { [ "$1" = -0 ] && [ "$2" = 4242 ]; }\n' + host_probe.PROBE
+    script = 'kill() { [ "$1" = -0 ] && [ "$2" = 4242 ]; }\nsystemctl() { ' + systemctl + '; }\n' + host_probe.PROBE
     script = script.replace('J=~/rosy-jobs', f'J={shlex.quote(str(jobs))}')
     script = script.replace('/usr/bin/python3', shlex.quote(sys.executable))
     result = subprocess.run(['bash', '-c', script], capture_output=True, text=True, check=True,
@@ -89,3 +89,14 @@ def test_legacy_probe_python_capability_does_not_imply_exclusive_admission(pytho
     assert probe['pytest'] is capable
     assert probe['sim'] is True
     assert probe.get('pytest_blocked') is False
+
+
+@pytest.mark.parametrize('fires_in,active,held', [
+    (600, False, True), (900, False, False), (-60, False, False), (None, True, True), (None, False, False)])
+def test_no_new_job_lands_on_a_host_whose_nightly_reboot_is_near(tmp_path, fires_in, active, held):
+    # D-889 13: rosy-nightly-reboot.timer fires 2 min before the reboot; its service sleeps through those 2 min.
+    when = 'echo' if fires_in is None else f"date -d @$(( $(date +%s) + {fires_in} )) '+%a %Y-%m-%d %H:%M:%S %Z'"
+    stub = f'case "$1" in show) {when};; is-active) {"return 0" if active else "return 3"};; esac'
+    probe, _ = measured(tmp_path, systemctl=stub)
+    assert probe['busy'] is held and probe['reboot_soon'] is held
+    assert runner.place('pytest', ['fixture'], [probe])[0] == ([] if held else ['fixture'])

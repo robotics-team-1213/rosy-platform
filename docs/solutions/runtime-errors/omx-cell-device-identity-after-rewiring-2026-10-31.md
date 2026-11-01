@@ -64,6 +64,18 @@ After anything is plugged, unplugged or moved on the control PC:
 
 Never select a RealSense node, or a camera whose serial another camera shares, by its kernel by-id name.
 
+### Image-space site settings go stale with the camera (2026-11-01)
+
+A new or moved top camera also invalidates every per-site value given in its pixels or colours: `surface_px` and `surface_lab` in the cell configs.
+
+On 2026-11-01 the left arm's `belt` and `board` polygons were slivers near x≈520, left over from the camera before the RealSense. `cell_objects.foreground` drops everything outside the polygon, so the mask was empty. A planned leg that placed onto one of three containers on the pallet read clear.
+
+- `cell_corridor.check` now fails closed: corridor pixels outside `surface_px` count as `off_surface`. On that frame the old polygon gave 10,844 px off the surface and a refusal.
+- With this camera's three surface colours (table Lab 175/125/161, pallet 86/134/86, belt 61/129/101) the same leg was refused at the occupied slot. With `--stack` it passed.
+- After a camera change, redraw `surface_px` and resample `surface_lab` per site together with the remap.
+- An all-empty foreground on a frame that shows objects means the site settings are stale. It never means the path is clear.
+- The black arm links read as the black belt, so the other arm is not foreground. Its position must come from its joint state.
+
 ## Not resolved here
 
 The D435 gave colour but no depth on USB 2.0 when plugged directly into a PC port (no frames; UVC control errors -32 and -110). Behind a hub it had given depth at the same USB 2.0 speed.

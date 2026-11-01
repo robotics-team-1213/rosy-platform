@@ -82,6 +82,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # os_cms_trust wants the checkout owned by this user, not group/world-writable; the container runs as
+          # root over the runner user's checkout (every build failed this way from 10-26). The runner is ephemeral.
+          chown -R "$(id -u):$(id -g)" . && chmod -R go-w .
           python3 deploy/robot/pinky_pro/image/resolve-build-lock.py \
             --input deploy/robot/pinky_pro/image/inputs.lock.yaml \
             --output "$RESOLVED_LOCK" \
