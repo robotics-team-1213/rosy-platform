@@ -14,6 +14,7 @@ import { createLineStuckPanel } from "./line-stuck.js";
 import { createDeviceWatch } from "./device-watch.js";
 import { createTripReplan } from "./trip-replan.js";
 import { createSignals } from "./signals.js";
+import { createChargeBaysView } from "./charge-bays-view.js";
 import { createTrackingView } from "./tracking-view.js";
 import { createVisionView } from "/console/assets/vision-view.js";
 import { applyRoleToControls, namedOperatorReason, OPERATOR_REASON } from "/console/assets/authorization.js";
@@ -362,6 +363,7 @@ mapView.bindCamera(visionView);
 
 // --- 신호등 (ROSY-SIGNAL-001) --------------------------------------------------
 
+const chargeBays = createChargeBaysView({ scope: pageScope, el, call, auth });
 const trackingView = createTrackingView({ scope: pageScope, el, view, call, auth, onChanged: () => mapView.draw() });
 
 // 잠금·세션 확인·토큰 입력·비밀번호 로그인·개발 접속은 console-auth.js 팩토리가 가진다(D-798 3.2).
@@ -389,6 +391,7 @@ refreshAuthorization();
 visionView.refreshSources();
 mapView.refresh();
 trackingView.refresh();
+chargeBays.refresh();
 pageScope.interval(() => { if (!auth.locked) formation.refreshFormation(); }, MAP_MS);
 pageScope.interval(refreshState, STATE_MS);
 pageScope.interval(() => { if (!auth.locked) workView.refresh(); }, MAP_MS);
@@ -398,6 +401,7 @@ pageScope.interval(() => { if (!auth.locked) refreshDispatchControl(); }, STATE_
 pageScope.interval(refreshDiscovery, MAP_MS);
 pageScope.interval(refreshRobotApps, MAP_MS);
 pageScope.interval(() => mapView.refresh(), MAP_MS);
+pageScope.interval(() => chargeBays.refresh(), MAP_MS);
 pageScope.interval(() => mapView.refreshSightings(), STATE_MS);
 pageScope.interval(() => mapView.refreshTraffic(), STATE_MS);
 pageScope.interval(() => mapView.refreshGuide(), STATE_MS);  // D-536

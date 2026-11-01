@@ -350,6 +350,7 @@ main {
 /* 신호등 카드(ROSY-SIGNAL-001). 램프 도트는 구동값(lamps)을 그대로 보여 준다 —
    "켜라고 시킨 것"이 아니라 "실제 켜진 것"이 화면의 축이다. */
 .signal-cards { display: grid; gap: var(--space-2); margin-top: var(--space-2); }
+.charge-bay-rows { display: grid; gap: var(--space-1); margin: var(--space-2) 0 0; padding: 0; list-style: none; }
 .signal {
   border: 1px solid var(--border-subtle);
   border-left: 3px solid var(--series-primary);
