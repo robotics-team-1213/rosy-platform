@@ -4302,3 +4302,9 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 현장 깊이 프레임 둘에서 수정 전에는 팔레트가 75 mm와 10 mm로 갈렸다(테이블 밖 약 60 mm 낮은 면이 더 넓게 잡힌 프레임). 수정 후에는 두 프레임·시드 6개 모두 팔레트 8–12 mm, 열 74–79 mm. 원격 `test_omx_cell_depth.py` 5 passed(더 넓은 낮은 면 장면은 수정 전 코드로 실패).
 - gate 변화: 없음
 - 교훈: 작업 기록 2026-10-31 §15.2
+
+## 2026-11-01 · uncommitted · feat(omx): 붙어 선 긴 상자를 팔이 스스로 떼어 집는다
+- 변경: `cell_push`의 집게 통로 폭이 근처에서 잰 피벗 원의 rms를 쓴다(없으면 지도의 최대 오차). 길이 방향으로 미는 긴 상자는 `--half-width-mm`로 앞길을 상자 폭만큼만 본다. `cell_auto_pick`은 가운데에 손가락 자리가 없을 때 상자 끝 쪽 집기 점(`reachable_ends`)에서 자리를 찾는다.
+- 증거: 현장 dry run에서 4 mm 간격 3칸 열을 길이로 밀 때 통로 33 mm(집게 21.2 + 지도 오차 11.85)가 옆 열에 닿아 거절, 앞길 표본이 반 길이(43.5 mm) 옆에 찍혀 거절. 원격 `test_omx_cell_push.py`·`test_omx_cell_auto_pick.py`·`test_omx_cell_calibrate.py` 62 passed.
+- gate 변화: 없음
+- 교훈: 작업 기록 2026-10-31 §15.3

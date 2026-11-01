@@ -77,6 +77,7 @@
 
 ## 최근 기록
 
+- 2026-11-01 · uncommitted · feat(omx): 붙어 선 긴 상자를 팔이 스스로 떼어 집는다
 - 2026-11-01 · uncommitted · fix(omx): 깊이 높이의 기준 평면이 프레임마다 바뀌지 않는다
 - 2026-11-01 · uncommitted · fix(omx): 피벗 측정점 찾기가 현장 바닥 색을 쓴다
 - 2026-11-01 · uncommitted · fix(omx): 팔 세션이 도는 동안 원격 시험을 관제 PC에서 뺀다
