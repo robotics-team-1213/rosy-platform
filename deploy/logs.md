@@ -4266,3 +4266,9 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 변경: 실제 셀 실행기(`chunk_runner`)가 재생하는 프레임 순서를 `grasp_planner.Planner.stream` 하나로 두고, 녹화 사이클(`leg`)·금지선 검사·native SIM 교사(`sim_chunk_plan`)·Isaac(`isaac_cell_frames`)가 모두 이것을 쓴다. SIM은 실제 plan의 동작값(접근·들어 올림 높이, 속도, 집게 시간, transit_speed)을 그대로 쓰고 장소·홈·transit·한계·집게 단위만 바꾼다. 복사해 둔 `REAL` 상수와 접근 높이로 고정한 들어 올림을 없앴다. 이동 중 집게는 실제처럼 `gripper_closed`로 닫는다. 라이브러리가 고른 transit(금지선 때문에 당긴 것 포함)도 SIM에 그대로 간다.
 - 증거: `test_the_sim_replays_frame_for_frame_what_chunk_runner_streams`가 chunk_runner의 goto 식으로 따로 만든 프레임과 SIM 단계를 프레임 단위로 대조한다. 원격 pytest 결과는 착지 기록에 남긴다.
 - gate 변화: 없음. native SIM·Isaac 실제 실행으로 다시 확인하지 않았다(들어 올림 높이와 이동 중 집게가 바뀌어 이전 SIM 기록과 다르다).
+
+## 2026-11-01 · uncommitted · fix(omx): 밀기 경로가 집게가 지나는 폭까지 본다
+- 변경: `cell_push.path_clear`에 `beside` 검사 — 집게가 지나는 줄의 양옆(`push.lane_half_mm` 21 mm = 손가락 간격 34.4 + 손가락 / 2, 더하기 지도의 LOO 최대 오차)에 무엇이 있으면 거절
+- 증거: 현장 감독 시험(사람 스위치 옆) — 붙어 선 세 열 중 왼쪽 열을 밀자 이웃 두 열(중심에서 19 mm)이 함께 약 40 px 밀리고 shoulder lag 2.2로 접촉 정지·후퇴·귀환. 원격 `test_omx_cell_push.py` 새 회귀 시험
+- gate 변화: 없음
+- 교훈: 작업 기록 2026-10-31 §14

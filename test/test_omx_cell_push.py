@@ -40,6 +40,21 @@ def test_a_clear_path_passes_and_an_object_ahead_or_behind_is_refused():
     assert {w for w, _ in cpu.path_clear(mask, ROI, to_px, (0.0, 0.1), d, 15, 35, 10, floor_only)} == {"behind"}
 
 
+
+def test_a_neighbour_beside_the_jaws_lane_is_refused():
+    """2026-11-01: closed jaws about 42 mm across (34.4 mm finger spacing + a finger) pushed a column out of a packed
+    row; the neighbours stood 19 mm from its centre and all three slid together."""
+    mask = np.zeros((200, 200), np.uint8)
+    mask[85:116, 85:116] = 255  # the object, 30 mm wide
+    d = np.array([0.0, 1.0])
+    packed = mask.copy()
+    packed[85:116, 119:150] = 255  # a neighbour 4 mm beside it
+    assert cpu.path_clear(packed, ROI, to_px, (0.0, 0.1), d, 15, 35, 10) == []  # the old check: only its own width
+    assert {w for w, _ in cpu.path_clear(packed, ROI, to_px, (0.0, 0.1), d, 15, 35, 10, lane_mm=21)} == {"beside"}
+    apart = mask.copy()
+    apart[85:116, 140:170] = 255  # one cell (25 mm) of room
+    assert cpu.path_clear(apart, ROI, to_px, (0.0, 0.1), d, 15, 35, 10, lane_mm=21) == []
+
 def test_push_library_loads_in_the_runner_with_a_level_slow_slide(tmp_path):
     lib = cpu.push_library(PLAN, (0.15, -0.02), (0.15, 0.025), -14.4, 0.054, 0.010)
     path = tmp_path / "push.json"

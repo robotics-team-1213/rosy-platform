@@ -42,7 +42,7 @@ def geometry(centre_raw, direction, half_mm: float, push_mm: float, gap_mm: floa
 
 
 def path_clear(mask, roi, to_px, centre_raw, d, half_mm: float, push_mm: float, gap_mm: float,
-               surface_px=None) -> list:
+               surface_px=None, lane_mm: float = 0.0) -> list:
     """Foreground pixels where the jaws go down (behind) or where the object's front sweeps (ahead); [] is clear.
     The object itself is skipped: ahead starts a gap past its top face (its side face shows below the top face in
     the top view, facts 28), and the side samples stay 6 mm inside its width (a neighbouring surface's edge, such
@@ -56,6 +56,10 @@ def path_clear(mask, roi, to_px, centre_raw, d, half_mm: float, push_mm: float, 
     checks = [("behind", c - d * (half_mm + gap_mm) / 1000 + side * s / 1000) for s in (-6, 0, 6)]
     for t in np.arange(half_mm + gap_mm, half_mm + push_mm + 4, 4.0):
         checks += [("ahead", c + d * t / 1000 + side * s / 1000) for s in (-half_mm + 6, 0, half_mm - 6)]
+    # the closed jaws' face is wider than a container and the map is off by some mm: what stands beside the lane the jaws
+    # travel is dragged along (2026-11-01: a column pushed out of a packed row took both neighbours 19 mm away with it)
+    for t in np.arange(-(half_mm + gap_mm), push_mm - half_mm + 1, 4.0) if lane_mm else ():
+        checks += [("beside", c + d * t / 1000 + side * s / 1000) for s in (-lane_mm, lane_mm)]
     for where, p in checks:
         px = to_px(p)
         if px is None:
@@ -175,8 +179,9 @@ def main(argv=None):
     gap = prm.get(params, "push.gap_mm")
     start, end, d = geometry(a, direction, args.half_mm, args.mm, gap)
     mask = cell_objects.foreground(img, args.roi, params=params, surface_px=site.get("surface_px"), surface_lab=site.get("surface_lab"))
+    lane = prm.get(params, "push.lane_half_mm") + (record.get("loo_error_mm") or {}).get("max", 0.0)  # jaw face + map
     hits = path_clear(mask, args.roi, lambda p: predicted_pixel(config, calibration, args.site, p), a, d,
-                      args.half_mm, args.mm, gap, site.get("surface_px"))
+                      args.half_mm, args.mm, gap, site.get("surface_px"), lane)
     region = cell_pivot.bias_at(cell_pivot.load_bias(cell_pivot.bias_path(calibration_path)), args.site, a.tolist(),
                                 params=params)
     bias = np.asarray(region["bias_mm"] if region else [0.0, 0.0]) / 1000
