@@ -176,3 +176,17 @@ console.log(JSON.stringify({waiting, sent: sent.length, state: jog.state()}));
 """)
     assert out == {"waiting": {"pressed": True, "inFlight": False}, "sent": 1,
                    "state": {"pressed": True, "inFlight": True}}
+
+def test_home_step_moves_the_farthest_joint_by_at_most_one_bounded_step():
+    out = _run_js("""
+const home = {joint1: 0, joint2: -0.5, joint3: 0.2};
+console.log(JSON.stringify([
+  m.homeStep({joint1: 0.3, joint2: -0.49, joint3: 0.18}, home, 0.05),
+  m.homeStep({joint1: 0.02, joint2: -0.5, joint3: 0.2}, home, 0.05),
+  m.homeStep({joint1: 0.005, joint2: -0.495, joint3: 0.2}, home, 0.05),
+  m.homeStep({joint2: -0.5}, {joint9: 1, joint2: -0.5}, 0.05),
+  m.homeStep({joint1: 1}, home, 0),
+]))""")
+    assert out[0] == {"joint": "joint1", "delta": -0.05, "remaining": -0.3}
+    assert out[1] == {"joint": "joint1", "delta": -0.02, "remaining": -0.02}
+    assert out[2:] == [None, None, None]

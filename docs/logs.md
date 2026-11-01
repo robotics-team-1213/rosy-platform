@@ -13212,6 +13212,14 @@ osy-d395-s1d\`.
 - 증거: 현장 PC 실측(PING·LED·udev 링크·영상). depth(USB 2.0)는 미해결로 남김
 - gate 변화: 없음
 
+## 2026-10-31 · uncommitted · sim/omx: D-927 C2~C4 시뮬 ARM_TRANSFER를 실제 셀 소유자로 끝까지 돌림
+- 변경: `tools/sim/transfer_state_writer.py`(C2), `deploy/robot/omx/sim/transfer_installation.yaml`·`tools/sim/transfer_installation.py`(C3: catalog·binding → Fleet policy·digest → bases, 홈 관절), `tools/sim/run_arm_transfer_sim.sh`·`without_devices.sh`(C4: MuJoCo+설치된 소유자+기록기, 장치 없는 namespace), `omx_topic_backend.py`·`omx_mujoco_backend.py` `--initial` 시작 조건, `run_cell_owner.py`가 `ROSY_ARM_TRANSFER_INSTALLATION`을 설치하고 fence 거절 이유(상태·숫자만)를 남김. 소유자 고침: receipt `observed_at`이 보고하는 모든 phase 시각을 덮음(`policy_parent.projection`), phase 시작·dispatch 실패 예외를 로그로 남김
+- 증거: 원격 설치·기록기·셀 소유자·receipt 시험 통과(102 등). AI PC에서 Harbor `real_fleet_http --arm-only --sim-arm`(Harbor `feat/sim-arm-harness`)이 approach·grasp·transfer·release를 MuJoCo로 진행하고 독립 관찰자가 PRE_DISPATCH·POST_ACTION을 증명, 연속 4회 OK(각 약 52 s). 그 전 1회는 grasp가 `cancel_during_action_unknown`으로 실패(원인 미확인)
+- 미해결: ① Fleet ARM grant TTL 15 s(D-778)인데 소유자가 phase마다 grant를 다시 확인하고 한 이송이 약 30 s라 기본값으로는 끝까지 못 감. 하네스만 허용 최대 60 s로 돌림, 플랫폼 결정 필요 ② Fleet→소유자 UDS 응답 창 250 ms가 SubmitAction 안에서 계획하는 실제 소유자에 짧음(바쁜 PC에서 결과 불명 HOLD). 하네스는 G2처럼 2 s, 운영 기본값 결정 필요 ③ 위 grasp 1회 실패
+- gate 변화: 없음. 시뮬 계약 검증이며 실물·현장 수용 아님
+- 결정: 없음(①② 결정 요청)
+- 교훈: `docs/solutions/logic-errors/owner-receipt-time-must-cover-its-phases-2026-10-31.md`, `docs/solutions/deployment/sim-cell-owner-on-a-lab-pc-needs-a-device-free-namespace-2026-10-31.md`, 홈 교훈 갱신
+
 ## 2026-11-01 · uncommitted · docs: D-940 중복 정의 게이트와 등록부
 - 변경: `docs/adr/D-940`, ADR Log 행, `test/architecture/test_duplicate_definitions.py`와 `known_duplicates.txt`(초기 47 그룹), `test/architecture/AGENTS.md` 행 2건, `platform-folder-responsibilities.md` 3건(D-940 갈래 안내, Situation 섀도 모듈 목록 5개로 정정, 보정 저장 계층 병립 명시)
 - 증거: 로컬 `--scan` 재생성이 등록부와 집합 일치(2026-11-01). 원격 시험·mutation 증명은 착지 기록에 남긴다
@@ -13234,6 +13242,47 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: D-889 추가 11(사용자 지시 2026-11-01)
 - 교훈: 없음
+
+## 2026-11-01 · uncommitted · refactor: D-940 후속 1 — 정본 소비·REST 미러 핀·PR 템플릿
+- 변경: `learning/registry/perception/store.py`(content_sha에 manifest_bytes 이식), `learning/curation/perception/build.py`(로컬 stand-in 삭제·정본 import), `test/architecture/test_rest_model_mirror.py`(신규, Fleet⊆CORE 필드 핀, KNOWN_DRIFT 3건), `.github/pull_request_template.md`(재사용 경로 칸 한 줄), 두 모듈 `logs.md`
+- 증거: 로컬 py_compile·필드 집합 추출이 KNOWN_DRIFT와 일치(2026-11-01). 원격 시험 3359 passed/485 skipped(초록 `6aa4000879`)·mutation 빨강 `78e7a05dde`(probe_field 지목)·revert `cb59bedf6f`
+- gate 변화: 없음
+- 결정: D-940 갈래 ① 소비 1건, ③ 핀 1건
+- 교훈: 없음
+
+## 2026-11-01 · uncommitted · fix(land): 브라우저·시뮬레이션 시험은 필요할 때만, 전체는 밤에
+- 변경: `tools/land_selection.py`(`browsers()`·`without_sim`), `tools/land_nightly.py`(새 파일), `test/test_land_selection.py`, `test/test_land_nightly.py`, D-889 추가 12
+- 근거: 12.2시간 시험 실행 3,405분 중 브라우저 50%(사전 시험 1,085·투기 471·차례 147분), 문서 착지가 변화분 브라우저로 착지마다 50~80분
+- 증거: 원격 `test/test_land_selection.py`·`test/test_land_nightly.py`·`test/test_affected_tests.py`·`test/test_harness_contracts.py`
+- gate 변화: 없음
+- 결정: D-889 추가 12(사용자 결정 2026-11-01)
+- 교훈: 없음
+
+## 2026-11-01 · uncommitted · fix: 로봇-사이트 링크 견고성 (조사 1순위 4건 + D-944)
+- 변경: 허브가 본문 검증 실패에 `PAYLOAD_INVALID`로 답하고 Agent는 세션을 유지(이벤트는 재전송 없이 버림), API v1.336. CORE `/ws/events` 소켓 8개·소켓당 미전송 1000개 상한(넘으면 1013, `since_seq`로 갭 보정)과 스레드 안전한 큐 적재. Pinky 런타임 세 곳에 `ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST`(D-795 1)와 존재 검사. fallback AP는 열린 뒤 받은 패킷이 없으면 `idle_hold_seconds`(120 s)에 물러나 사이트 Wi-Fi를 다시 시도. D-944: LCD 코드 페어링·도달 확인 읽기에 팀 tailnet 허용(개발 세션·peer 승인은 LAN 전용), API v1.337
+- 증거: 원격 시험은 착지 기록에 남긴다. AP 유휴 판정(wlan0 rx_packets)과 공유기 재부팅 복귀는 장치 미확인
+- gate 변화: 없음
+- 결정: D-944 Accepted(사용자 결정), 워크트리 슬롯 1회 force-over-cap 승인(2026-11-01)
+- 교훈: 없음
+
+## 2026-11-01 · uncommitted · fix: 링크 조사 후속 (문서 정리·AP 지터·enum 판단)
+- 변경: D-124 Status와 ADR Log 행에 "업링크 손실 AP 금지 문장은 D-176·D-919가 대체" 표기, Pi5 수용 체크리스트 §5.4에 fallback AP grace·유휴 복귀 항목, 통신 평가 보고서(2026-09-22) 머리에 이후 변경 표기. fallback AP 열림 시점에 기기 이름별 0~29 s 고정 지터(`grace_offset_seconds`). API §7.7에 새 CORE 스냅샷 필드·enum은 Fleet이 따라올 때까지 `PAYLOAD_INVALID`→REST gather로 읽히며 Fleet 먼저 배포한다는 규칙과 스키마를 관용으로 바꾸지 않는 이유
+- 증거: 원격 시험은 착지 기록에 남긴다. 지터·유휴 복귀는 장치 미확인
+- gate 변화: 없음
+- 교훈: 없음
+
+## 2026-11-01 · uncommitted · fix: 조종 끊김·정지 전파·링크 지연 (D-948)
+- 변경: Wi-Fi 절전 끄기(NM conf.d·첫 부팅 STA 프로필). Fleet 전체 정지 전달을 `console/estop_fanout.py`로 분리(동시, 1.5 s×3 재시도, 대형 해제 병행). 허브 하트비트가 SQLite를 기다리지 않음(투영 밀릴 때만, 쓰기·읽기는 스레드, 콜백은 루프). 미디어 권한 재확인을 lock 밖에서 병렬로. D-948 `/ws/teleop`(최신 것만 적용, 끊기면 0, REST 대체), API v1.338. `console.py` 1267→634줄(교통 중재·대형 믹스인 분리, 동작 불변)
+- 증거: 원격 시험은 착지 기록에 남긴다. Pinky 두 대가 LAN에 없어 Wi-Fi 절전 상태·조종 지연 실측 못 함
+- gate 변화: 없음
+- 결정: D-948 Accepted(사용자 지시)
+- 교훈: 없음
+
+## 2026-11-01 · uncommitted · fix(monitoring): 이벤트 기록을 수집기 시계로 읽는다 (MAIN-RED)
+- 변경: `store.events(now=)`, `ObservationCache.events`, 이벤트 경로가 수집기 캐시를 거친다. 저장·정리는 주입 시계, 읽기 7일 컷은 호스트 시계라 실제 날짜가 시험 고정 날짜(2026-10-25)보다 7일 지나자 모든 이벤트가 숨었다
+- 증거: main 36e0e35945·a3eb3f4081에서 `test_history_ignores_polling_age_and_is_site_scoped` MAIN-RED, 수정 뒤 원격 `operations/monitoring/test` 통과
+- gate 변화: 없음
+- 교훈: 없음(시계 주입 원칙은 기존 코드에 있었고 한 경로만 빠졌다)
 
 ## 2026-11-01 · uncommitted · omx: cell_depth, 깊이 카메라로 셀의 높이를 자르고 컬러 화면에 맞춤(자·접촉 없이)
 - 변경: `deploy/robot/omx/cell_depth.py` 테이블 평면 RANSAC, 높이 지도, 물체 마스크로 깊이↔컬러 배율·이동 탐색, 컬러 픽셀의 높이, 팔 받침판 높이(FK 0)

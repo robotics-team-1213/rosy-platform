@@ -1,5 +1,6 @@
 """The real producer must not mix a cached watermark with later phase events."""
-from datetime import timedelta
+from contextlib import closing
+from datetime import datetime, timedelta
 from pathlib import Path
 import sys
 
@@ -64,6 +65,21 @@ def test_cached_parent_state_and_goal_are_refreshed_with_its_watermark(tmp_path)
     assert receipt['state'] == 'RUNNING'
     assert receipt['journal_event_id'] == store.latest_event_id(grant.action_id)
     assert receipt['observed_at'] == store.get_action(grant.action_id)['updated_at']
+
+
+def test_a_phase_stamped_after_its_parent_row_is_covered_by_the_receipt_time(tmp_path):
+    # 2026-10-31 real sim owner: the first phase was recorded ~190 ms after the parent row, and Fleet refused the
+    # receipt ("clock is future or regressed") because a phase was newer than the receipt it came in.
+    grant, store, runner = _setup(tmp_path, True)
+    action = store.get_action(grant.action_id)
+    later = (datetime.fromisoformat(action['updated_at'].replace('Z', '+00:00')) + timedelta(milliseconds=190))
+    with closing(store._connect()) as connection, connection:
+        connection.execute("UPDATE omx_action_phases SET updated_at=? WHERE action_id=?",
+                           (later.isoformat().replace('+00:00', 'Z'), grant.action_id))
+    receipt = runner._receipt(action, created=False)
+    parsed = UnixLocalActionTransport._parse_receipt(grant, ActionApi(runner)._success(2, receipt))
+    assert parsed.observed_at == later
+    assert all(phase.observed_at <= parsed.observed_at for phase in parsed.phase_summaries)
 
 
 @pytest.mark.parametrize('change', [{'action_id': 'missing'}, {'attempt_id': 'another-attempt'}])

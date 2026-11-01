@@ -42,7 +42,7 @@ def caller(tmp_path):
     land = SimpleNamespace(Stop=Stop, HARNESS="tools/harness/rosy_harness.py",
                            HARNESS_TRIGGER=": harness configuration or the selector itself",
                            ENV={"PYTHONUTF8": "1", "CALLER_ENV": "retained"},
-                           subprocess=SimpleNamespace(run=run),
+                           subprocess=SimpleNamespace(run=run), lines=lambda *args: [],
                            browser_tier=lambda *args: [["ROSY_RUN_BROWSER_TESTS=1", "browser/test"]])
     return land, payload, calls
 
@@ -531,3 +531,27 @@ def test_explicit_full_refuses_incident_no_queue_before_ff_or_receipt(full_case)
     assert git(full_case.main, "rev-parse", "HEAD") == before
     assert not full_case.remote
     assert land.land_record.read(full_case.main, git(full_case.wt, "rev-parse", "HEAD")) is None
+
+
+def test_a_landed_delta_repeats_its_browser_tests_only_for_a_branch_that_changes_ui(caller, tmp_path):
+    """D-889 addendum 12 (user decision 2026-11-01): main's delta passed its own browser tests when it landed."""
+    selection = load_selection()
+    land, payload, _ = caller
+    ui = ["ROSY_RUN_BROWSER_TESTS=1", "browser/test"]
+    land.browser_tier = lambda wt, base, head=None: [ui] if head else []  # own change (base=main tip): no UI
+    assert selection.select(land, tmp_path, "base", "python", head="main", landed=True)[0] == [["selected/test"]]
+    land.browser_tier = lambda wt, base, head=None: [ui]  # this branch changes UI too: both run
+    assert ui in selection.select(land, tmp_path, "base", "python", head="main", landed=True)[0]
+    assert ui in selection.select(land, tmp_path, "base", "python")[0], "a pretest keeps its own browser tier"
+
+
+def test_an_automatic_full_tier_runs_simulation_suites_only_for_a_simulation_change(caller, tmp_path):
+    selection = load_selection()
+    land, payload, _ = caller
+    payload.update(mode="full", escalations=["x"], full_invocations=[
+        ["test"], ["integrations/simulation/gazebo/test"], ["ROSY_JOB_CORES=2", "learning/envs/isaac/test"]])
+    assert selection.select(land, tmp_path, "base", "python")[0][:1] == [["test"]]
+    assert len(selection.select(land, tmp_path, "base", "python")[0]) == 2, "only test + browser"
+    land.lines = lambda *a: ["integrations/simulation/gazebo/launch/x.py"]
+    assert ["integrations/simulation/gazebo/test"] in selection.select(land, tmp_path, "base", "python")[0]
+    assert selection.without_sim([["a/test", "learning/envs/isaac/test/test_x.py"]], []) == [["a/test"]]

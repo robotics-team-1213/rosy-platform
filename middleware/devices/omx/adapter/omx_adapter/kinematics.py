@@ -105,6 +105,15 @@ def _axis_angle(axis: Sequence[float], angle: float) -> Matrix:
 
 
 _IDENTITY: Matrix = ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0))
+WAYPOINT_DISCONTINUITY = "WAYPOINT_DISCONTINUITY"
+
+
+class LineRejected(ValueError):
+    """A straight top-down line the arm cannot follow; ``reason`` is an IK reason or WAYPOINT_DISCONTINUITY."""
+
+    def __init__(self, reason: str, sample: int, detail: str) -> None:
+        super().__init__(f"{reason} at sample {sample}: {detail}")
+        self.reason, self.sample, self.detail = reason, sample, detail
 
 
 class OmxKinematics:
@@ -202,6 +211,50 @@ class OmxKinematics:
         error = math.acos(max(-1.0, min(1.0, -approach[2])))
         yaw = math.atan2(rotation[1][2], rotation[0][2])
         return TcpPose(position[0], position[1], position[2], yaw, error, rotation)
+
+    def link_points(self, joints: Sequence[float], fingertip_m: float = 0.0,
+                    ) -> tuple[list[tuple[float, float, float]], tuple[float, float, float]]:
+        """joint2..joint5 origins, the TCP and the fingertips (base frame), and the tool approach axis.
+
+        The chain has zero origin rpy (checked at load), so each joint is offset then rotated."""
+        rotation: Matrix = _IDENTITY
+        position, points, index = (0.0, 0.0, 0.0), [], 0
+        for joint in self.chain:
+            position = tuple(p + o for p, o in zip(position, _matvec(rotation, joint.xyz)))  # type: ignore[assignment]
+            if joint.name != "joint1":
+                points.append(position)
+            if joint.axis is not None:
+                rotation = _matmul(rotation, _axis_angle(joint.axis, joints[index]))
+                index += 1
+        approach = (rotation[0][0], rotation[1][0], rotation[2][0])
+        return points + [tuple(p + a * fingertip_m for p, a in zip(position, approach))], approach
+
+    def solve_line(self, start_joints: Sequence[float], start: TopDownPose, end_xyz: Sequence[float],
+                   limits: IkLimits, *, count: int, max_joint_step_rad: float,
+                   yaw_delta: float = 0.0) -> list[tuple[float, ...]]:
+        """joint1..joint5 at ``count`` evenly spaced top-down poses on the straight line from ``start``
+        (excluded) to ``end_xyz``, yaw turning by ``yaw_delta``. Each q5 follows the previous sample, every
+        sample is FK-checked, and a step over ``max_joint_step_rad`` (a yaw-twin flip) refuses the line.
+        The one straight-line path of the real-arm chunk planner and the simulation transfer planner."""
+        x0, y0, z0 = start.x, start.y, start.z
+        x1, y1, z1 = end_xyz
+        samples, previous = [], tuple(start_joints)
+        for i in range(1, count + 1):
+            s = i / count
+            pose = TopDownPose(x0 + (x1 - x0) * s, y0 + (y1 - y0) * s, z0 + (z1 - z0) * s,
+                               start.yaw + yaw_delta * s)
+            result = self.solve_top_down(pose, limits, reference_q5=previous[4])
+            where = f"({pose.x:.4f}, {pose.y:.4f}, {pose.z:.4f}, yaw {pose.yaw:.3f})"
+            if not result.ok:
+                raise LineRejected(result.reason, i, f"{where} {result.detail}")
+            fk = self.fk(result.joints)
+            if math.dist((fk.x, fk.y, fk.z), (pose.x, pose.y, pose.z)) > 1e-6:
+                raise LineRejected(IK_OUTSIDE_WORKSPACE, i, f"{where} FK check of waypoint failed")
+            if max(abs(a - b) for a, b in zip(result.joints, previous)) > max_joint_step_rad:
+                raise LineRejected(WAYPOINT_DISCONTINUITY, i, f"{where} joint jump")
+            samples.append(result.joints)
+            previous = result.joints
+        return samples
 
     def wrist_point(self, pose: TopDownPose) -> tuple[float, float, float]:
         """joint4-axis point for a top-down TCP target (independent of joint values)."""
