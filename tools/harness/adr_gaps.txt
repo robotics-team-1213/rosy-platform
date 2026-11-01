@@ -104,3 +104,6 @@ D-943 reserved in another in-flight branch (worktree arm-recheck), absent from t
 D-945 reserved in another in-flight branch (worktree install-seat), absent from this D-944/D-948 branch; remove when its ADR lands
 D-946 reserved in another in-flight branch (worktree sim-parity), absent from this D-944/D-948 branch; remove when its ADR lands
 D-947 reserved in another in-flight branch (worktree release-corrector), absent from this D-944/D-948 branch; remove when its ADR lands
+D-950 reserved in another in-flight branch (refs/adr/D-950, worktree dockrear), absent from this D-953 branch; remove when its ADR lands
+D-951 reserved in another in-flight branch (refs/adr/D-951), absent from this D-953 branch; remove when its ADR lands
+D-952 unused: no refs/adr/D-952; the D-953 draft held the number outside the repo before adr_reserve.py assigned D-953 (2026-11-01)

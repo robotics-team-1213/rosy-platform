@@ -13372,3 +13372,10 @@ osy-d395-s1d\`.
 - 변경: `docs/solutions/workflow-issues/empty-worktree-folder-runs-git-on-the-shared-main-2026-10-25.md`에 재발(파일 남은 폴더·묘비 없음·land_async 재사용) 추가
 - 증거: 공유 체크아웃 reflog의 `checkout: moving from main to feat/omx-devices-scan`, 2분 뒤 `git switch main`로 복구
 - gate 변화: 없음
+
+## 2026-11-01 · uncommitted · refactor: D-953 Pi 4·5 CPU 경로와 match_motion 비트 동일 가속
+- 변경: D-953(자체 Rust는 Pi 4 실측이 요구할 때만, 실행기는 `EventsExecutor`로 먼저). `scan_motion` `_segments` 묶음 SVD·`correspondence` 성분별 배열(결과 `==` 동일, 노트북 31~32→10.6~11.7 ms), `test_scan_motion_equivalence.py`(원본 사본, 실제 기록 프레임 포함 55건). `adr_gaps.txt`에 D-950·951(다른 브랜치)·952(미사용)
+- 증거: 관제 PC 상주 서비스 `py-spy --gil`(파이썬 몫 2~7%), Gazebo 2대 벤치에서 control 노드 GIL 표본의 81~96%가 rclpy 실행기, `ROSY_EXECUTOR=events` A/B로 line 50→24%·road 47→21%. 원격 시험 99개 통과(모델 PC). Pi 4·5 실기 측정 안 함(온라인 기체 없음)
+- gate 변화: 없음
+- 결정: D-953 Accepted(사용자 지시), 워크트리 슬롯 force-over-cap(사용자 "바로 처리해")
+- 교훈: `docs/solutions/logic-errors/expanded-distance-formula-flips-shared-vertex-ties-2026-11-01.md`(전개식 거리 계산이 실제 프레임 공유 끝점 동점을 뒤집음)

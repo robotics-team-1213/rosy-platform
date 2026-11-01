@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-953 | Pi 4·Pi 5 CPU는 이미 있는 네이티브 경로로 먼저 줄인다 — 자체 Rust 확장은 Pi 4 실측이 요구할 때만. [전문](../adr/D-953-pi45-cpu-native-path.md) | Accepted (2026-11-01, 사용자 지시; D-185 순서를 따름) |
 | D-949 | 줄 수 래칫은 리팩터링 대기열이다 — 1,000줄 이상은 지금 나누고 800줄 이상은 다음에 고칠 때 먼저 나눈다. [전문](../adr/D-949-size-ratchet-refactor-tiers.md) | Accepted (2026-11-01, 사용자 결정; D-766에 순서를 더함) |
 | D-948 | 사람 조종은 `/ws/teleop` 스트림으로 보내고 REST `/teleop`은 대체 경로로 남긴다. [전문](../adr/D-948-teleop-websocket-stream.md) | Accepted (2026-11-01, 사용자 지시; 장치·현장 수용 별도) |
 | D-944 | 팀 tailnet에서도 LCD 코드로 CORE에 페어링한다. [전문](../adr/D-944-tailnet-code-pairing.md) | Accepted (2026-11-01, 사용자 결정; 코드 없는 개발 세션·peer 승인은 LAN 전용 유지) |
@@ -1411,3 +1412,9 @@ LCD 코드 페어링과 도달 확인 읽기는 Tailscale tailnet(`100.64.0.0/10
 **Status:** Accepted (2026-11-01). 장치·현장 수용은 별도다.
 
 프레임마다 REST와 같은 검사(`apply_teleop`)를 하고, 최신 seq만 적용하며, 움직이던 소켓이 끊기면 0을 적용한다. Pilot은 소켓이 없거나 ack가 1 s 넘게 없으면 REST로 보낸다. 전문은 [D-948](../adr/D-948-teleop-websocket-stream.md).
+
+## D-953 Pi 4·Pi 5 CPU는 이미 있는 네이티브 경로로 먼저 줄인다 — 자체 Rust 확장은 Pi 4 실측이 요구할 때만
+
+**Status:** Accepted (2026-11-01). D-185를 대체하지 않는다. 기체 실측은 남아 있다.
+
+기체 노드 파이썬 시간의 81~96%는 rclpy 실행기다. 이것은 C++ `EventsExecutor`(`ROSY_EXECUTOR=events`, 시뮬 노드 CPU 약 절반)로 줄이고, 기체 A/B 뒤 Pi 4·5 기본값으로 삼는다. `match_motion`은 결과가 비트 단위로 같은 numpy 구현으로 약 2.8배 줄였다(Pi 5 환산 약 24 ms). 자체 PyO3 커널은 Pi 4 bench가 50 ms tick을 넘을 때만 들인다(환산 55~70 ms라 첫 후보). 전문은 [D-953](../adr/D-953-pi45-cpu-native-path.md).
