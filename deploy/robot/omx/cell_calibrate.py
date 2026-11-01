@@ -160,6 +160,14 @@ def auto_pivot_point(cell, config, calibration, site, target_xy):
     return clear_point(target_xy, mask, big, inside, lambda q: predicted_pixel(config, calibration, site, q))
 
 
+def over_target(config, site) -> bool:
+    """The jaws may be marked right over the target: the pivot height clears the tallest top there (pivot.over_top_mm
+    above the surface: 2026-11-01 two-layer columns, 65-71 mm on depth) by pivot.over_clear_mm."""
+    p, s_z = config.get("params"), config["sites"][site].get("surface_z")
+    return bool(prm.get(p, "pivot.over_target")) and s_z is not None and (
+        1000 * (cell_pivot.pivot_z_view(config, site) - s_z) - prm.get(p, "pivot.over_top_mm") >= prm.get(p, "pivot.over_clear_mm"))
+
+
 def carried(region: dict) -> bool:
     """A region copied from another site or point, never measured where it stands."""
     return bool(region.get("carried_from")) or str(region.get("source", "")).startswith("carried")
@@ -179,9 +187,7 @@ def self_calibrate(cell, config, calibration, calibration_path, site, target_xy,
     points = [q for q in pivot.get("points", [])
               if 1000 * math.dist(q, target_xy) <= 0.9 * prm.get(p, "pivot.bias_reach_mm", cell_pivot.BIAS_REACH_MM)
               and all(1000 * math.dist(q, o["raw_m"]) >= clear_mm for o in objects)]
-    z_view, s_z = cell_pivot.pivot_z_view(config, site), config["sites"][site].get("surface_z")
-    if (prm.get(p, "pivot.over_target") and cell is not None and s_z is not None
-            and 1000 * (z_view - s_z) - prm.get(p, "pivot.over_top_mm") >= prm.get(p, "pivot.over_clear_mm")):
+    if cell is not None and over_target(config, site):
         # 2026-10-29: floor biases 3.5-5.7 cm apart read 16.9, 6.1 and 4.2 mm and every pick missed; the jaws hover
         # above the box, so they are marked right over it (frame differencing sees the jaws on any background)
         points = [tuple(target_xy)]
@@ -278,7 +284,8 @@ def main(argv=None):
         elif step.startswith("pivot-near"):
             site, xy = step.split()[1].split(":")
             near = tuple(float(v) for v in xy.split(","))
-            point = auto_pivot_point(cell, config, calibration, site, near)
+            # a packed pallet has no empty 72 px patch beside a column (2026-11-01): over it, when high enough
+            point = list(near) if over_target(config, site) else auto_pivot_point(cell, config, calibration, site, near)
             if point is None:
                 done.append({step: "no clear point near the target"})
                 continue

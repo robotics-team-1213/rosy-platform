@@ -354,7 +354,7 @@
 ## 최근 기록
 
 - 2026-11-01 · uncommitted · docs(adr): D-950 도킹 진입 방향은 후면(후진)
-- 2026-11-01 · uncommitted · feat: Rosy 허브 1단계 — 모든 로봇·프로젝트 grant와 팀원 기본 묶음 (D-955)
-- 2026-11-01 · uncommitted · fix(omx): ROS 전용 시험 파일만 돌 때 건너뜀은 판정이다 (D-889 추가 20)
-- 2026-11-01 · uncommitted · tools: 정책 화면 수정 게시용 FULL 착지
-- 2026-11-01 · uncommitted · D-954 현장 마커 프로필과 팔 마커 50번부터
+- 2026-11-01 · uncommitted · docs(solutions): in-process uvicorn.Config hides logs from caplog
+- 2026-11-01 · uncommitted · fix(land): 모두 건너뛴 파일의 exit 5는 판정 (D-889 추가 20)
+- 2026-11-01 · uncommitted · fix(land): 차례 한도는 돌려보낸 횟수만큼, 자기 브라우저 묶음도 닿는 것만 (D-889 추가 19)
+- 2026-11-01 · uncommitted · fix(land): 차례에서는 변화분이 닿는 자기 호출만 다시 돈다 (D-889 추가 18)
