@@ -665,7 +665,8 @@ def test_every_signal_lamp_paints_with_the_signal_tokens():
                   repo / "middleware/robot_ui/robot/panels/surface-panels.css",
                   repo / "applications/fleet/web/map/traffic-view.js"]
     for path in lamp_files:
-        lines = [line for line in path.read_text(encoding="utf-8").splitlines() if "lamp" in line.lower()]
+        lines = [line for line in path.read_text(encoding="utf-8").splitlines()
+                 if "lamp" in line.lower() and re.search(r"green|yellow|red", line)]  # 켜진 등 색만; 꺼진 등 윤곽은 중립
         painted = [line for line in lines if re.search(r"--(status-(good|warn|crit)|nominal)\b", line)]
         assert not painted, (path.name, painted)
         assert any("--signal-go" in line for line in lines), path.name
