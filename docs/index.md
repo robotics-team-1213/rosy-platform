@@ -354,7 +354,7 @@
 ## 최근 기록
 
 - 2026-11-01 · uncommitted · docs(solutions): 착지가 차례를 반납하고 모두 다시 돈 다섯 원인
+- 2026-11-01 · uncommitted · feat: Rosy 허브 1단계 — 모든 로봇·프로젝트 grant와 팀원 기본 묶음 (D-955)
 - 2026-11-01 · uncommitted · fix(omx): ROS 전용 시험 파일만 돌 때 건너뜀은 판정이다 (D-889 추가 20)
 - 2026-11-01 · uncommitted · tools: 정책 화면 수정 게시용 FULL 착지
 - 2026-11-01 · uncommitted · D-954 현장 마커 프로필과 팔 마커 50번부터
-- 2026-11-01 · 093ef30c2b · docs: autocrlf=false commit -a 교훈
