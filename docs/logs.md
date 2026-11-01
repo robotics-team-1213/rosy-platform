@@ -13429,3 +13429,10 @@ osy-d395-s1d\`.
 - 증거: 11-01 20:04·20:17·20:30 세 착지가 차례에서 `test_omx_fleet_ros_actionserver.py exited 5`(rclpy 없는 PC, 1 skipped)로 멈췄다. 착지는 main의 착지 코드로 돌아서 `land_cache` 수정만으로는 자기 차례를 지나지 못한다. 그래서 시험 트리에도 고친다. 원격 시험은 착지 기록에 남긴다.
 - gate 변화: 없음
 - 교훈: 없음
+
+## 2026-11-01 · uncommitted · docs(adr): D-950 도킹 진입 방향은 후면(후진)
+- 변경: `docs/adr/D-950-docking-direction-rear-entry.md` 새 ADR(Accepted, 사용자 결정). D-200·D-349·D-350과 도킹 설계 문서에 관계 줄을 더했다. ADR 로그 행과 adr_gaps를 정리했다.
+- 증거: 다른 세션이 `.worktrees/dockrear`에 커밋하지 않고 남긴 초안. 사용자 지시(2026-11-01 "미커밋들을 커밋하고 머지")로 그대로 커밋해 착지한다.
+- gate 변화: 없음
+- 결정: D-950
+- 교훈: 없음
