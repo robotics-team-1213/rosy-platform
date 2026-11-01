@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-11-02 · uncommitted · docs(adr): D-889 추가 10 결과에 M4 판정(FAIL)
 - 2026-11-02 · uncommitted · fix(harness): 같은 폴더 import 사슬로 시험을 찾는다 (D-889 추가 21)
 - 2026-11-02 · uncommitted · fix(land): 서로 닿지 않으면 차례는 가드만 (D-889 추가 22)
 - 2026-11-01 · uncommitted · D-945 전 표면 자리 규칙
 - 2026-11-01 · uncommitted · D-926 보강: 새 구획은 ui-section 네 역할
-- 2026-11-01 · uncommitted · fix(ci): 게시 PR CI 빨강 두 건(nightly의 로컬 main, OMX 리허설 실시간)
