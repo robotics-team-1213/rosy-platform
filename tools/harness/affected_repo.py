@@ -166,6 +166,25 @@ class Repo:
         return {name: source for name, source in names.items() if name not in IGNORED_BASENAMES}
 
 
+    def local_importers(self, path: str) -> set[str]:
+        """Stems of the non-test modules beside ``path`` that import it, directly or through each other.
+
+        A test that loads experiment_center reaches experiment_hub through it; without this the hub was
+        "unknown -> full" in 17 landings on 2026-11-01, and 9 learning modules had the same gap (D-889 21)."""
+        p = PurePosixPath(path)
+        siblings = [t for t in self.tracked if t.endswith(".py") and PurePosixPath(t).parent == p.parent
+                    and t != path and not TEST_FILE.search(t)]
+        found: set[str] = set()
+        frontier = {p.stem}
+        while frontier:
+            stem = frontier.pop()
+            for sibling in siblings:
+                name = PurePosixPath(sibling).stem
+                if name not in found and stem in self.imports(sibling):
+                    found.add(name)
+                    frontier.add(name)
+        return found
+
     def basename_unique(self, path: str) -> bool:
         name = PurePosixPath(path).name
         return sum(1 for t in self.tracked if PurePosixPath(t).name == name) == 1
@@ -188,12 +207,13 @@ class Repo:
             parts = (p.name, p.parent.name)
         simple_parts = bool(parts and all(re.fullmatch(r"[\w.-]+", token) for token in parts))
         helper = p.stem if p.suffix == ".py" and not TEST_FILE.search(path) else None
+        helpers = {helper} | self.local_importers(path) if helper else set()
         found = []
         for test in self.test_files:
             if test == path:
                 continue
             text = self.text(test)
-            if (any(n in text for n in needles) or (helper and helper in self.imports(test))
+            if (any(n in text for n in needles) or (helpers & self.imports(test))
                     or (parts and (all(token in self.tokens(test) for token in parts)
                                    if simple_parts
                                    else all(re.search(rf"(?<![\w.-]){re.escape(token)}(?![\w.-])", text)
