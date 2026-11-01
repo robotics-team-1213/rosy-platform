@@ -13379,3 +13379,10 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: D-953 Accepted(사용자 지시), 워크트리 슬롯 force-over-cap(사용자 "바로 처리해")
 - 교훈: `docs/solutions/logic-errors/expanded-distance-formula-flips-shared-vertex-ties-2026-11-01.md`(전개식 거리 계산이 실제 프레임 공유 끝점 동점을 뒤집음)
+
+## 2026-11-01 · uncommitted · perf: D-953 후속 — 작업대 관측 압축, Fleet TLS 컨텍스트, CORE 실행기 선택
+- 변경: `workcell_observation_bridge` 카메라 송신 `compression=None`(JPEG). `enrollment_tls` 검증 완료 컨텍스트를 (CA 바이트, 핀)으로 캐시(파일·유효기간 검사는 매번). CORE `ROSY_CORE_EXECUTOR`(`threaded` 기본, `events` 선택), `main()`에서 값 조기 검증, events 종료 예외는 경고로. D-953 후속 절
+- 증거: 원격 gateway 전체 통과(`e0f5a05691`), ROS-lane 19개 통과(진짜 Jazzy `EventsExecutor`, `RosyCoreNode.run()` 직접), 작업대 관측 시험 24개·Fleet 등록 TLS 시험 통과. Fleet TLS 733→170 µs/호출(노트북). 독립 검토: Fleet APPROVE, CORE REQUEST CHANGES(MEDIUM 3) 반영. CORE CPU A/B는 시험 PC 포화로 못 얻음. 기체 확인 안 함
+- gate 변화: 없음(CORE 기본값 그대로)
+- 결정: D-953 후속(사용자 "바로 처리해", "변경이 필요하면 변경")
+- 교훈: 없음

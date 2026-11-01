@@ -74,3 +74,37 @@
 - **numba 일괄 도입:** 기체 이미지에 LLVM 의존성이 늘고 첫 실행 JIT 비용이 생긴다. 상위 함수 대부분은 numba가 가속할 형태가 아니다. 기각.
 - **`match_motion`을 바로 Rust로:** Pi 5는 numpy로 예산 안에 든다. Pi 4는 환산상 넘을 가능성이 크지만 실측 전이다. 4의 조건으로 미룬다. Pi 4 실측이 50ms를 넘으면 이 항목이 첫 PyO3 대상이다.
 - **행렬곱 전개 거리식:** 더 빠르지만 실제 기록 프레임에서 판정이 달라졌다(Context). 기각.
+
+### 후속 (2026-11-01, 같은 브랜치)
+
+측정에서 나온 나머지 개선을 같은 날 처리했다. 계획은 저장소 밖 `Rosy/docs/superpowers/plans/2026-11-01-cpu-followups.md`에 있다.
+
+1. **작업대 관측 카메라 송신의 웹소켓 압축을 끈다.**
+   - 위치는 `deploy/robot/omx/workcell_observation_bridge.py` `CameraSender`이고, `compression=None`을 준다.
+   - 패킷은 이진 헤더와 JPEG라 deflate로 줄지 않는다. 그런데 이 프로세스 파이썬 표본의 약 70%가 `permessage_deflate.encode`였다.
+   - 고정 버전 websockets 17.0.1의 sync `connect`는 `None`일 때 확장을 제안하지 않는다(소스 확인). 수신 서버는 압축을 허용만 하고 요구하지 않는다.
+2. **Fleet 등록 TLS 컨텍스트를 재사용한다.**
+   - 위치는 `operations/fleet/fleet/server/auth/enrollment_tls.py`다.
+   - 요청마다 하던 CA 파싱·검증·`create_default_context`를 (CA 파일 바이트, 핀) 키로 캐시한다. 파일 안전 검사와 유효기간 검사는 호출마다 그대로 한다. 캐시는 32개로 제한한다.
+   - 노트북 측정으로 호출당 733 µs가 170 µs가 되었다. 독립 검토는 APPROVE였다.
+   - 전송 객체는 요청마다 `identity()`에서 `binding().context()`를 다시 거치므로, 만료된 CA로는 요청이 나가지 않는다.
+3. **CORE 실행기를 선택형으로 둔다.**
+   - `ROSY_CORE_EXECUTOR`가 `threaded`(기본, 지금과 같음) 또는 `events`(`rclpy.experimental.EventsExecutor`)를 고른다.
+   - `ROSY_EXECUTOR`와 따로 두었다. CORE는 safety 경로(D-430)라서 자기 결정으로만 바뀌어야 한다.
+   - 잘못된 값은 `main()`에서 rclpy와 API보다 먼저 실패한다.
+   - CORE와 safety_node는 callback group을 쓰지 않는다(시험이 `middleware/core`와 `drive/motion_limits/adapter`를 검사한다). 그래서 지금도 한 노드의 콜백은 서로 겹치지 않는다. `events`에서 새로 생기는 것은 safety_node 20 Hz tick과 CORE 콜백이 한 스레드로 합쳐지는 것이다.
+   - 실행기 스레드에서 서비스 응답을 기다리는 콜백은 없다. 블로킹 대기는 API 스레드에만 있다.
+   - native `spin()`은 context 종료 때 `ExternalShutdownException`을 낸다(ROS-lane 시험으로 확인). `run()`은 `events` 분기에서만 이것을 정상 반환으로 받는다. 종료 오류는 기존 경로처럼 경고로 남긴다.
+   - ROS-lane 시험이 `RosyCoreNode.run()`을 직접 돌린다. 두 노드 타이머, 다른 스레드의 `call_async`, 종료 순서를 확인한다.
+   - 독립 검토의 MEDIUM 3건(종료 비대칭, 시험 범위, 문서·검증 위치)은 반영했다.
+   - **기본값은 바꾸지 않는다.** 바꾸기 전에 기체에서 다음을 `threaded`와 A/B로 확인한다. 바퀴·팔이 움직이는 시험은 사람이 옆에 있을 때 한다.
+     1. `cmd_vel` 50 Hz와 safety tick 20 Hz의 간격, deadman·watchdog 반응의 p99와 최대값. map·costmap·scan 폭주와 디스크 정지(상태 파일, 감사 DB WAL)를 넣은 경우도 잰다.
+     2. Gazebo `use_sim_time`에서 `/clock`이 점프·정지·재개할 때 타이머가 제대로 발화하는지.
+     3. 실제 서비스(`save_map`, pilot recorder)를 API 스레드에서 `call_async`와 `await_call`로 불러, 3 s 안에 응답이 오는지.
+     4. SIGTERM·SIGINT의 종료 코드·로그 순서·포트 해제가 `TimeoutStopSec` 안에 끝나는지.
+     5. estop·모터 정지·고장 주입에서 정지 반응이 이전과 같은지.
+     6. 수 시간 운전에서 메모리·CPU·FATAL 로그가 문제없는지.
+   - CORE CPU의 A/B 수치는 아직 없다. 시뮬 벤치가 시험 PC 포화로 시작되지 못했다.
+4. **그대로 둔 것.**
+   - `joint_state_publisher`: 실기 `bringup_robot`이 `upload_robot`을 포함해 20 Hz로 띄운다. 시뮬 46%는 `/clock`으로 부풀려진 값이다. 기체에서 잰 뒤 정한다. 없애면 TF가 바뀌는 동작 변경이다.
+   - 시뮬 `/clock` 빈도(D-185 R6): 기체 성능과 무관하다.

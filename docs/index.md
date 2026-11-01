@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-11-01 · uncommitted · perf: D-953 후속 — 작업대 관측 압축, Fleet TLS 컨텍스트, CORE 실행기 선택
 - 2026-11-01 · uncommitted · refactor: D-953 Pi 4·5 CPU 경로와 match_motion 비트 동일 가속
 - 2026-11-01 · uncommitted · tools: 워크트리 .git 유실 재발 교훈 갱신
 - 2026-11-01 · uncommitted · fix(land): 차례 한도에 한 번 돌려보낸 착지는 다음 차례를 끝까지 쓴다 (D-889 추가 15)
 - 2026-11-01 · uncommitted · omx: cell_depth, 깊이 카메라로 셀의 높이를 자르고 컬러 화면에 맞춤(자·접촉 없이)
-- 2026-11-01 · uncommitted · omx: 공유 동작 공간 cell_space, 팔이 쓸 통로를 예약하고 다른 팔의 살아 있는 예약과 겹치면 거절
