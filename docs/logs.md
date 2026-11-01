@@ -13284,6 +13284,13 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 교훈: 없음(시계 주입 원칙은 기존 코드에 있었고 한 경로만 빠졌다)
 
+## 2026-11-01 · uncommitted · fix(land): 재부팅은 시험 PC별로 비킨다 (D-889 추가 13)
+- 변경: `land_prepare`의 전역 05:15~06:10 사전 시험 금지 창을 없앴다. `host_probe.PROBE`는 `rosy-nightly-reboot.timer`가 15분 안이거나 그 서비스가 도는 동안 busy(`reboot_soon`)로 보고해 새 작업을 받지 않는다. 모델 PC 재부팅을 06:05 → 05:00으로 옮겼다(AI PC는 주인 동의 필요).
+- 증거: 11-01 05:34~06:10 차례 0건, 그 창에 걸린 착지의 차례 대기 80~139분. 시험 PC 세 대의 `systemctl show -P NextElapseUSecRealtime`·`date -d` 출력을 확인했다. 원격 시험은 착지 기록에 남긴다.
+- gate 변화: 없음
+- 결정: D-889 추가 13(사용자 목표 2026-11-01)
+- 교훈: 없음
+
 ## 2026-11-01 · uncommitted · fix(land): main이 이미 고친 MAIN-RED로 멈추지 않는다 (D-889 추가 14)
 - 변경: `land_prepare.prepare`는 사전 시험이 MAIN-RED로 멈추고 main이 합친 base보다 앞으로 갔으면, 새 main에서 한 번 더 준비한다.
 - 증거: 11-01 rest 묶음과 payload-build가 09:27 base의 monitoring MAIN-RED(`rosy-main-red.jsonl` 16번째 줄)로 멈췄다. 그 시험은 지금 main에서 통과한다(원격 10건). 원격 시험은 착지 기록에 남긴다.
