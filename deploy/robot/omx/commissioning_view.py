@@ -126,7 +126,7 @@ class ObservationStore:
 PAGE = '''<!doctype html><html lang="ko"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>OMX 수집 관측</title><link rel="stylesheet" href="/viewer.css">
-<h1>OMX 수집 관측</h1><p id="connection" role="status">연결 확인 중</p>
+<h1>OMX 수집 관측</h1><p id="connection" role="status">연결 확인 중</p><p><a href="/inventory.json" download="inventory.json">장치 목록 내려받기 (Learning 프로필 초안용)</a></p>
 <main>__CAMERA_PANELS__</main>
 __ARM_PANELS__
 <section><h2>커미셔닝 관문 (읽기 전용)</h2><pre id="gates">수신 대기</pre></section>
@@ -298,6 +298,9 @@ def make_server(store, *, port=8766):
             if path in static:
                 body, kind = static[path]
                 self.reply(200, body.encode(), kind)
+            elif path == "/inventory.json":
+                from device_inventory import local_inventory  # read-only files; opens no device
+                self.reply(200, json.dumps(local_inventory(), ensure_ascii=False).encode(), "application/json")
             elif path == "/state.json":
                 self.reply(200, json.dumps(store.snapshot(), allow_nan=False).encode(), "application/json")
             elif path in {f"/frame/{label}.jpg" for label in store.cameras}:
