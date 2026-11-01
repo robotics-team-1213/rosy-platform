@@ -52,7 +52,7 @@ def speed_table(site_map, segments: Sequence[tuple[str, bool, float, float]], *,
             continue   # the route does not cross this stripe
         stripes.append({"place": stop_id, "s_m": round(s[near], 3)})
         for i in range(len(points)):
-            if abs(s[i] - s[near]) <= STRIPE_HALF_M:
+            if abs(s[i] - s[near]) <= STRIPE_HALF_M + 1e-9:
                 limit[i] = min(limit[i], STRIPE_MPS)
     limit[-1] = 0.0
     for i in range(len(limit) - 2, -1, -1):        # brake before what comes next
