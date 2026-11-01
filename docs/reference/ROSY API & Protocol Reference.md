@@ -5,9 +5,14 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.345
+**Version:** v1.346
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.346 대열 고리 속도표와 충전 칸 계획 갱신 (D-941)
+
+- `GET /api/fleet/platoon` 응답에 `speed`를 더한다: `{length_m, rows:[[s_m, v_mps]], stripes:[{place, s_m}], curve_caps_measured}`. 고리 한 바퀴의 속도 상한 v(s)이며 `rows`는 값이 바뀌는 점만 담는다. 차선 `speed_cap_mps`, `stop` 장소 앞뒤 0.06 m의 줄무늬 감속 0.05 m/s, 측정된 곡선 상한(없으면 `curve_caps_measured: false`), 그 앞의 감속(0.3 m/s²)을 반영한다. 고리라 끝에서 0으로 서지 않고 이음매를 넘어 감속이 이어진다. 로봇에 보내지 않는다.
+- `GET /api/fleet/charge-bays`의 칸 방문·전압 상승 관측이 화면을 연 동안이 아니라 Fleet 백그라운드 루프(`charge-bays`, 1 s, `/readyz`의 loops에 보임)에서 갱신된다. 응답 모양은 같다. additive다.
 
 ### v1.345 대열 간격 보기 (D-941)
 
@@ -4426,6 +4431,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.346 | 2026-11-02 | additive (D-941): `GET /api/fleet/platoon`의 `speed`(고리 속도표, 보내기 없음), 충전 칸 관측을 백그라운드 루프로 |
 | v1.345 | 2026-11-02 | additive (D-941): `GET /api/fleet/platoon` — 활성 지도의 가장 짧은 한 방향 고리 위 로봇 간격·앞차 보기, 보내기 없음 |
 | v1.344 | 2026-11-01 | additive (D-941): `GET /api/fleet/charge-bays` — 활성 지도 충전 칸 계획 보기(전압 상승으로 연결, 도착 % + 측정 충전 속도로 나감), 보내기 없음 |
 | v1.343 | 2026-10-31 | additive (SAF-001, Safety-Review 대상): `POST /api/v1/safety/release-code` — 래치 중 정지 화면의 일회용 해제 코드(역할 `estop_release`, root 발급)로 해제한다. 로그인 토큰을 주지 않고 로그인 코드로는 해제할 수 없다. Fleet `POST /api/fleet/robots/{robot_id}/estop-release` |

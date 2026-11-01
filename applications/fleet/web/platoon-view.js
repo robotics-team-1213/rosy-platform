@@ -19,10 +19,15 @@ export function platoonRows(body) {
     return { robot: r.robot_id, text: parts.join(" · "), status };
   });
   const loop = body?.loop;
-  const summary = loop
-    ? `고리 ${loop.edges.length}구간 · ${metres(loop.perimeter_m)} · 목표 간격 ${metres(body.target_gap_m)} · 보기 전용`
-    : "";
-  return { robots, summary };
+  const speed = body?.speed;
+  const parts = loop ? [`고리 ${loop.edges.length}구간 · ${metres(loop.perimeter_m)}`, `목표 간격 ${metres(body.target_gap_m)}`] : [];
+  if (loop && speed) {
+    const stripes = (speed.stripes || []).map((s) => s.place);
+    parts.push(stripes.length ? `감속 줄무늬 ${stripes.join("·")}` : "감속 줄무늬 없음");
+    parts.push(speed.curve_caps_measured ? "곡선 상한 측정값" : "곡선 상한 미측정");
+  }
+  if (loop) parts.push("보기 전용");
+  return { robots, summary: parts.join(" · ") };
 }
 
 export function createPlatoonView({ scope, el, call, auth }) {

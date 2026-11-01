@@ -33,7 +33,7 @@ EXPECTED_LOOPS = {
     "goal-lease-renew", "identity", "lane-compliance", "tether-watch", "paths",
     "job-trips", "task-dispatch", "proposal-expiry", "mission-dispatch",
     "cell-job-dispatch", "goal-evidence-expiry", "mission-feedback-schedule",
-    "mission-model-turn", "control-unit-journal", "control-unit-information",
+    "mission-model-turn", "control-unit-journal", "control-unit-information", "charge-bays",
 }
 
 
@@ -231,7 +231,7 @@ def test_readyz_enumerates_every_loop_and_distinguishes_states(tmp_path):
     assert set(loops) == EXPECTED_LOOPS
     running = {name for name, row in loops.items() if row["state"] == RUNNING}
     assert {"trip-runner", "identity", "lane-compliance", "tether-watch",
-            "paths", "task-dispatch"} <= running
+            "paths", "task-dispatch", "charge-bays"} <= running
     assert loops["signals"]["state"] == NOT_CONFIGURED
     assert loops["stuck-resolver"]["state"] == NOT_CONFIGURED
 

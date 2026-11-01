@@ -85,4 +85,5 @@ def test_the_route_shows_the_active_loop_and_never_dispatches():
     body = client.get("/api/fleet/platoon", headers=auth).json()
     assert body["dispatch"] is False and body["robots"] == []      # nobody localized
     assert sorted(body["loop"]["edges"]) == ["AB", "BC", "CD", "DA"] and body["loop"]["perimeter_m"] == 4.0
+    assert body["speed"]["rows"][-1][1] > 0 and body["speed"]["curve_caps_measured"] is False   # a loop, no end stop
     assert client.get("/api/fleet/platoon").status_code == 401

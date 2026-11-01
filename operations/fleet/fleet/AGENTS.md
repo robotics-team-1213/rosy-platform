@@ -49,9 +49,9 @@ Authority: **pure** = no I/O, inputs to outputs; **view** = read-only route or j
 | `guide/` | D-536 robot situation and guide, read by `server/guide_service.py` | pure |
 | `site_map.py` | D-488 `rosy.site_map/1`: places, directed lanes, bans, crosswalks | pure |
 | `lane_route.py` | Ordered lane edges to one polyline and the next point | pure |
-| `charge_bays.py` | D-941 5/7 charge-bay plan: who goes to which bay, when to leave; `GET /api/fleet/charge-bays` | pure (shown, not dispatched) |
+| `charge_bays.py` | D-941 5/7 charge-bay plan: who goes to which bay, when to leave; fed by the `charge-bays` loop, read at `GET /api/fleet/charge-bays` | pure (shown, not dispatched) |
 | `lane_progress.py` | D-941 2 loop progress `s`, leader and gap; `GET /api/fleet/platoon` | pure (shown, not dispatched) |
-| `speed_table.py` | D-941 3 speed table v(s): lane cap, measured curve cap, stripe slow zones, braking ahead | pure (not sent yet) |
+| `speed_table.py` | D-941 3 speed table v(s): lane cap, measured curve cap, stripe slow zones, braking ahead; open or closed loop; shown in `GET /api/fleet/platoon` | pure (shown, not sent) |
 | `host_control.py` | Allowlisted reboot/restart of site, AI and model hosts | robot (hosts) |
 | `cli.py`, `console_site_config.py` | `fleet relay` / `formation` / `console` entry points and site config | — |
 | `bench.py` | Public surface for the Gazebo swarm bench (D-148) | — |

@@ -29,7 +29,8 @@ class CurveCap:
 
 
 def speed_table(site_map, segments: Sequence[tuple[str, bool, float, float]], *,
-                curve_caps: Sequence[CurveCap] = (), start_mps: float = 0.0) -> dict:
+                curve_caps: Sequence[CurveCap] = (), start_mps: float = 0.0, closed: bool = False) -> dict:
+    """``closed``: the segments form a loop, so nothing stops at the end and braking wraps around."""
     edges = {e.id: e for e in site_map.edges}
     stops = [(p.id, p.x, p.y) for p in site_map.places if p.kind == "stop"]
     caps = sorted(curve_caps, key=lambda c: c.radius_m)
@@ -52,14 +53,19 @@ def speed_table(site_map, segments: Sequence[tuple[str, bool, float, float]], *,
             continue   # the route does not cross this stripe
         stripes.append({"place": stop_id, "s_m": round(s[near], 3)})
         for i in range(len(points)):
-            if abs(s[i] - s[near]) <= STRIPE_HALF_M + 1e-9:
+            d = abs(s[i] - s[near])
+            if (min(d, s[-1] - d) if closed else d) <= STRIPE_HALF_M + 1e-9:
                 limit[i] = min(limit[i], STRIPE_MPS)
-    limit[-1] = 0.0
-    for i in range(len(limit) - 2, -1, -1):        # brake before what comes next
-        limit[i] = min(limit[i], math.sqrt(limit[i + 1] ** 2 + 2 * DECEL_MPS2 * (s[i + 1] - s[i])))
-    v = [min(limit[0], start_mps)] + limit[1:]
-    for i in range(1, len(v)):                      # cannot be faster than the start allows
-        v[i] = min(v[i], math.sqrt(v[i - 1] ** 2 + 2 * ACCEL_MPS2 * (s[i] - s[i - 1])))
+    n = len(limit)
+    if not closed:
+        limit[-1] = 0.0
+    for k in range(2 * n - 2 if closed else n - 1, 0, -1):    # brake before what comes next; twice round a loop
+        i, j = (k - 1) % n, k % n
+        limit[i] = min(limit[i], math.sqrt(limit[j] ** 2 + 2 * DECEL_MPS2 * max(0.0, s[j] - s[i])))
+    v = list(limit) if closed else [min(limit[0], start_mps)] + limit[1:]
+    for k in range(1, 2 * n if closed else n):     # cannot be faster than the start allows
+        i, j = (k - 1) % n, k % n
+        v[j] = min(v[j], math.sqrt(v[i] ** 2 + 2 * ACCEL_MPS2 * max(0.0, s[j] - s[i])))
     rows = [(0.0, v[0])]
     for i in range(1, len(v)):
         if abs(v[i] - rows[-1][1]) >= CHANGE_MPS or i == len(v) - 1:

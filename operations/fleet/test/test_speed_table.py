@@ -49,3 +49,22 @@ def test_a_start_from_rest_accelerates_and_a_route_off_the_stripe_has_none():
     table = speed_table(site(), [("lower", True, 0.0, 0.8)])
     assert table["rows"][0] == [0.0, 0.0] and table["stripes"] == []
     assert at(table, 0.02) < 0.15 and at(table, 0.4) == 0.15
+
+
+def test_a_closed_loop_does_not_stop_at_its_seam_and_slows_on_both_sides_of_a_stripe_there():
+    from fleet.lane_progress import main_loop
+    square = SiteMap.model_validate({
+        "schema": "rosy.site_map/1", "map_id": "loop_speed",
+        "places": [{"id": "A", "name": "A", "x": 0.0, "y": 0.0, "kind": "stop"},
+                   {"id": "B", "name": "B", "x": 1.0, "y": 0.0}, {"id": "C", "name": "C", "x": 1.0, "y": 1.0},
+                   {"id": "D", "name": "D", "x": 0.0, "y": 1.0}],
+        "edges": [{"id": a + b, "from": a, "to": b, "polyline": [p, q], "direction": "one_way",
+                   "width_m": 0.1, "speed_cap_mps": 0.15}
+                  for a, b, p, q in (("A", "B", [0, 0], [1, 0]), ("B", "C", [1, 0], [1, 1]),
+                                     ("C", "D", [1, 1], [0, 1]), ("D", "A", [0, 1], [0, 0]))]})
+    table = speed_table(square, [(e, True, 0.0, math.inf) for e in main_loop(square)], closed=True)
+    assert table["stripes"] == [{"place": "A", "s_m": 0.0}]
+    assert at(table, 0.0) <= STRIPE_MPS and at(table, 2.0) == 0.15
+    assert at(table, 3.96) <= STRIPE_MPS                      # the stripe's far side, just before the seam
+    assert at(table, 3.85) == 0.15 and at(table, 3.925) < 0.15  # braking ahead of it wraps too (~0.033 m)
+    assert table["rows"][-1][1] > 0.0                         # a loop never ends at 0
