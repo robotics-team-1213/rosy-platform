@@ -35,8 +35,9 @@ def test_the_scan_reads_css_files_and_inline_styles():
     seen = {row["id"]: registry.media_conditions(REPO, row) for row in _web_rows()}
     for ident in ("robot", "console", "game-board"):
         assert seen[ident], f"{ident}에서 @media 크기 조건을 하나도 읽지 못했다"
-    inline = [here for here, _, _ in seen["lane-live-view"] + seen["control-diagnostic"]]
+    inline = [here for here, _, _ in seen["lane-live-view"]]
     assert inline and all(here.endswith(".html") for here in inline)
+    assert seen["control-diagnostic"], "control-diagnostic의 diagnostic.css에서 @media 조건을 읽지 못했다"
 
 
 def test_breakpoint_allowlists_are_well_formed_and_used():

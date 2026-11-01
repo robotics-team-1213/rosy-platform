@@ -160,12 +160,16 @@ def test_for_contract_returns_registered_paths_in_order():
     assert [path.relative_to(REPO).as_posix() for path in dialog] == registered
 
 
-def test_a_file_surface_is_returned_as_a_file_not_walked():
-    """진단 표면은 파일 하나다 — 로더가 폴더로 착각해 안을 훑지 않는다."""
-    diagnostic = registry.for_contract(REPO, "shared_controls")
-    file_surfaces = [path for path in diagnostic if path.suffix == ".html"]
-    assert file_surfaces, "파이 경로 표면이 등록돼 있지 않다"
-    assert all(path.is_file() for path in file_surfaces)
+def test_a_file_surface_is_returned_as_a_file_not_walked(tmp_path):
+    """파일 표면은 그 파일 하나다 — 로더가 폴더로 착각해 옆 파일까지 훑지 않는다.
+
+    D-949로 진단 화면이 html·css·js로 나뉘어 폴더 표면이 됐으므로, 등록부 대신 임시 파일로 본다."""
+    (tmp_path / "a").mkdir()
+    page = tmp_path / "a" / "page.html"
+    page.write_text("<!doctype html>", encoding="utf-8")
+    (tmp_path / "a" / "other.html").write_text("<!doctype html>", encoding="utf-8")
+    assert registry._pages(tmp_path, "a/page.html") == [page]
+    assert registry._pages(tmp_path, "a/page.html", ".css") == []
 
 
 def test_registered_ports_match_their_source_and_do_not_collide():
