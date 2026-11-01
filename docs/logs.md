@@ -13419,3 +13419,10 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: D-889 추가 18(사용자 지시 2026-11-01)
 - 교훈: 없음(docs/solutions/workflow-issues/landings-gave-the-turn-back-and-reran-everything-2026-11-01.md의 연장)
+
+## 2026-11-01 · uncommitted · fix(land): 차례 한도는 돌려보낸 횟수만큼, 자기 브라우저 묶음도 닿는 것만 (D-889 추가 19)
+- 변경: `land_checks.overtimes`(횟수), 차례 한도 10→30분→없음, 표 `overtime` 정수. `land_selection.browsers(reach)`가 추가 18 경로에서 닿는 자기 브라우저 묶음만 고른다.
+- 증거: 11-01 18:01~19:2x arm-transfer-recheck의 한도 없는 차례가 main을 90분 넘게 잡았다(자기 호출 485개 + 브라우저 직렬). 원격 시험은 착지 기록에 남긴다.
+- gate 변화: 없음
+- 결정: D-889 추가 19(사용자 목표 2026-11-01)
+- 교훈: docs/solutions/workflow-issues/landings-gave-the-turn-back-and-reran-everything-2026-11-01.md에 이어 적는다
