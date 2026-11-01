@@ -11,6 +11,8 @@
 | ID | 제목 | Status |
 |---|---|---|
 | D-951 | ROSY Calibration 앱을 두고, 두 팔 셀의 보정·높이·공간 점검을 코드 한 경로로 돌린다. 집게는 D-933 마커, 면 높이는 깊이(`cell_depth`, D-933 3항 터치 대신), 테이블보다 낮은 면은 승인된 `low_zones` 사각형에서만, 하중 관절 I 게인, 팔별 세션 잠금과 통로 예약(`cell_space`). [전문](../adr/D-951-rosy-calibration-application.md) | Accepted (2026-11-01, 사용자 결정; 앱 화면 없음, 부품 착지 대기, 현장 수용 없음) |
+| D-948 | 사람 조종은 `/ws/teleop` 스트림으로 보내고 REST `/teleop`은 대체 경로로 남긴다. [전문](../adr/D-948-teleop-websocket-stream.md) | Accepted (2026-11-01, 사용자 지시; 장치·현장 수용 별도) |
+| D-944 | 팀 tailnet에서도 LCD 코드로 CORE에 페어링한다. [전문](../adr/D-944-tailnet-code-pairing.md) | Accepted (2026-11-01, 사용자 결정; 코드 없는 개발 세션·peer 승인은 LAN 전용 유지) |
 | D-941 | 261026 트랙 운행: 우측통행 순환로에서 차선 진행 거리로 앞차를 따라가고, 줄무늬는 감속·관제 정지점, 주차장 세 칸은 후진 진입 충전 칸. [전문](../adr/D-941-track-platoon-hold-points-charge-bays.md) | Proposed (2026-11-01, 사용자 결정; 설계만) |
 | D-940 | 중복 정의 게이트와 의도 중복 등록부를 둔다. [전문](../adr/D-940-duplicate-definitions-gate.md) | Accepted (2026-11-01, 사용자 결정; 원격 시험·착지는 파이프라인 기록) |
 | D-938 | 팔 이송 정책 승인 — D-865 승인 범위를 ARM_TRANSFER로 확장. [전문](../adr/D-938-arm-transfer-policy-admission.md) | Accepted (2026-10-31, 사용자 결정; simulation 팔 이송 HTTP 전용, 현장 범위 설정·수용 별도) |
@@ -247,7 +249,7 @@
 | D-121 | Cyclone 적용은 CORE 기동 전이고 웹은 보고만 한다 | Accepted |
 | D-122 | 잘못된 RMW는 다음 CORE 기동에서 Cyclone으로 고친다. OS reboot가 아니다 | Accepted |
 | D-123 | 웹은 Cyclone을 오버레이에 저장한 뒤 Host Agent 재부팅을 요청한다 | Accepted |
-| D-124 | 대시보드는 AP on/off와 Wi-Fi 연결을 Host Agent로 확인하고 적용한다 | Accepted |
+| D-124 | 대시보드는 AP on/off와 Wi-Fi 연결을 Host Agent로 확인하고 적용한다 | Accepted (업링크 손실 AP 금지 문장은 D-176·D-919가 대체) |
 | D-125 | Core 패키지를 논리적 도메인 라이브러리로 분할 (Option A) | Accepted |
 | D-126 | 완전 모듈 분리 — CORE는 슬라이스 코드를 import하지 않는다 | Accepted |
 | D-127 | 276커밋 백로그는 직접 FF 푸시하지 않고 슬라이스별 단계 통합한다 | Accepted |
@@ -1392,3 +1394,15 @@ Fleet device ID, 실제 follower 설정, 장치별 검증·기록 경로를 별�
 **Status:** Accepted (2026-11-01). 등록·구현 지시는 사용자 결정이며 원격 시험·착지는 파이프라인 기록이 증거를 가진다.
 
 두 파트 이상에 동일하게 살아 있는 최상위 정의를 AST로 그룹 지어 `known_duplicates.txt`에 갈래(정본 소비·소유 통합·보호된 의도 중복·이름 분리)와 사유로 등록하고, 미등록 신규 그룹과 사라진 행 둘 다 빨간불로 막는다. 전역 utils 신설과 관습이 다른 정의의 강제 통합은 하지 않는다(D-841 계승). 전문은 [D-940](../adr/D-940-duplicate-definitions-gate.md).
+
+## D-944 팀 tailnet에서도 LCD 코드로 CORE에 페어링한다
+
+**Status:** Accepted (2026-11-01). D-193 4의 출발지 조건만 넓히며 원격 시험·착지는 착지 기록이 증거를 가진다.
+
+LCD 코드 페어링과 도달 확인 읽기는 Tailscale tailnet(`100.64.0.0/10`, `fd7a:115c:a1e0::/48`)도 받는다. 코드 없는 개발 세션과 최초 peer 승인은 D-477 4대로 로봇 LAN 전용이다. 전문은 [D-944](../adr/D-944-tailnet-code-pairing.md).
+
+## D-948 사람 조종은 `/ws/teleop` 스트림으로 보내고 REST `/teleop`은 대체 경로로 남긴다
+
+**Status:** Accepted (2026-11-01). 장치·현장 수용은 별도다.
+
+프레임마다 REST와 같은 검사(`apply_teleop`)를 하고, 최신 seq만 적용하며, 움직이던 소켓이 끊기면 0을 적용한다. Pilot은 소켓이 없거나 ack가 1 s 넘게 없으면 REST로 보낸다. 전문은 [D-948](../adr/D-948-teleop-websocket-stream.md).

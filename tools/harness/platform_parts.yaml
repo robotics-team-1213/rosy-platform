@@ -1167,6 +1167,9 @@ safety_modules:
   - operations/fleet/fleet/server/console/observe.py  # D-430 admission observation extracted from console
   - operations/fleet/fleet/server/console/goal_admission.py  # D-430 pure goal-admission hold shapes (console helper)
   - operations/fleet/fleet/server/console/degraded_reroute.py  # ADR-1000 MSN-004 stop-then-reroute of degraded robots (console helper)
+  - operations/fleet/fleet/server/console/estop_fanout.py  # whole-site E-stop delivery: concurrent, short re-sends, formation release beside it (console helper)
+  - operations/fleet/fleet/server/console/traffic_arbitration.py  # D-766 console.py split 2026-11-01: route claims, yield, localization holds, cancel (FleetConsole mixin)
+  - operations/fleet/fleet/server/console/formation_control.py  # D-766 console.py split 2026-11-01: formation session, follower set, leader hand-off (FleetConsole mixin)
   - operations/fleet/fleet/server/goal_lease.py
   - operations/fleet/fleet/server/tether_watch.py
 
@@ -1183,6 +1186,10 @@ safety_anchors:
   - {symbol: fleet.server.goal_admission.QueueDecision}  # D-430 frozen hold shapes (console helper)
   - {symbol: fleet.server.goal_admission.response_of}
   - {symbol: fleet.server.degraded_reroute.reroute_degraded}  # ADR-1000 MSN-004 stop-then-reroute (console helper)
+  - {symbol: fleet.server.estop_fanout.stop_robots}  # E-stop delivery to every robot (console helper)
+  - {symbol: fleet.server.traffic_arbitration.TrafficArbitration}  # moved from console.py: yield/hold/cancel (FleetConsole mixin)
+  - {symbol: fleet.server.formation_control.FormationControl}  # moved from console.py: formation session (FleetConsole mixin)
+  - {symbol: fleet.server.estop_fanout.deliver}  # one robot's E-stop with short re-sends (console helper)
   - {symbol: fleet.swarm.session_lifecycle.FormationLifecycle, public: true}
   - {symbol: fleet.swarm.session_lifecycle.EVENT_TYPES, public: true}
   - {symbol: fleet.swarm.session_lifecycle.TRIGGERS, public: true}

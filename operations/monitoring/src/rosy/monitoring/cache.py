@@ -140,6 +140,10 @@ class ObservationCache:
             raise ObservationRejected("MONITORING_CLOCK")
         return value.astimezone(timezone.utc)
 
+    def events(self, site, *, after, limit):
+        """Site history on this collector's clock, the same one that stamps and prunes it."""
+        return self.store.events(site, after=after, limit=limit, now=self._wall())
+
     def _source(self, source_id):
         if source_id not in self._sources:
             raise ObservationRejected()

@@ -323,6 +323,8 @@ def run_tests(land, wt: Path, args, invocations: list[list[str]], logdir: Path, 
     # HEAD is the candidate (merge commit included); the runner ships it to a test host (D-584:
     # no host means it waits, then fails, and nothing lands).
     head = land.out(wt, "rev-parse", "HEAD")
+    # Long invocations split by measured run time so hosts run them side by side (2026-11-01: 30 min tails).
+    invocations = sys.modules["work_queue"].split(wt, invocations)
     reused, todo, keep = land.land_cache.split(wt, args, invocations, head, python, land.select)
     done += reused
 
