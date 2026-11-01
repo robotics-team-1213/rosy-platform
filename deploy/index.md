@@ -78,7 +78,7 @@
 ## 최근 기록
 
 - 2026-11-02 · uncommitted · feat(site): 관제 단위 overlay를 서명 candidate에 넣는다 (D-960)
+- 2026-11-02 · uncommitted · feat(omx): 팔 혼자 정렬하기를 한 파이프라인으로 (`cell_align`)
 - 2026-11-02 · 97da913f85 · OMX record_session이 켜진 카메라 단위 전부를 넘겨받음
 - 2026-11-01 · uncommitted · D-907 authenticated metadata read repair
 - 2026-11-01 · uncommitted · D-907 readonly native v2 verifier
-- 2026-11-01 · uncommitted · native v2 readonly profile contract

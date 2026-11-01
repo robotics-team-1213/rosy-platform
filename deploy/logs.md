@@ -4343,6 +4343,12 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - gate 변화: 없음. 실물 작업대 녹화로 확인한 결과가 아니다.
 - CE: 해당 없음
 
+## 2026-11-02 · uncommitted · feat(omx): 팔 혼자 정렬하기를 한 파이프라인으로 (`cell_align`)
+- 변경: `cell_align.py`의 `plan`이 관측으로 다음 단계를 고른다. 집을 수 있으면 pick, 붙어 선 긴 상자는 길이 방향 밀기(옆으로 비킨 선, 통로가 옆 열을 피하는 오프셋, 끝 집기 점이 이웃 끝을 지나는 길이), 그 자리에 오차 측정이 없으면 pivot 먼저, 아무것도 안 되면 hold와 이유. `next`는 그 한 단계만 감독 시험(`--commissioning --person-at-switch`)으로 실행하고 결정 행을 남긴다. `cell_push`는 지도 좌표 입력(`--at`, `--along`)과 손가락 하나(20 mm 패드)를 앞세운 좁은 밀기(`--narrow`)를 받고, 좁은 밀기를 먼저 시도한다. 옆 통로 검사는 상자 옆부터 통로 끝까지 띠 전체를 본다(끝 한 점만 보면 그 사이 이웃을 건너뛰었다). 측정 없이도 지도 최대 오차로 밀 수 있으면 바로 밀고, 측정해야만 맞으면 pivot을 먼저 한다. `cell_pivot.jaw_blobs`는 `pivot.merge_px` 안의 조각을 한 표시로 센다(기본 0 = 이전과 같음).
+- 증거: 현장(2026-11-02) 붙어 선 열 위 집게 표시가 72·165·260 px 조각으로 나와 `min_blob` 300 미만, 피벗이 0개 각도로 끝남. `plan`이 실제 셀에서 넓은 면(42 mm)으로는 hold, 좁은 밀기로는 "pivot 먼저(지도 최대 오차 11.85 mm로는 안 맞고 5 mm면 맞음)"를 냄. 원격 `test_omx_cell_align.py` 등.
+- gate 변화: 없음
+- 교훈: 작업 기록 2026-10-31 §15.5
+
 ## 2026-11-02 · uncommitted · feat(site): 관제 단위 overlay를 서명 candidate에 넣는다 (D-960)
 - 변경: `deploy/site/compose.control-unit.yaml`(Fleet에 `ROSY_CONTROL_UNIT_DIR` 읽기 전용 mount + 서명 proxy 이미지의 peer 프록시, 외부 `rosy-control-peers` 네트워크, alias `ROSY_CONTROL_UNIT_PEER_ALIAS`)을 candidate build·verify(`control_unit` 요약)·자동 갱신 허용 목록·실행 검사에 workcell과 같은 방식으로 추가.
 - 증거: 2026-11-02 현장 R 전환에서 사이트별 미서명 `compose.control-unit-r.yaml`을 `ROSY_SITE_PAIRING_COMPOSE`에 넣으면 자동 갱신이 모든 새 candidate를 거절함을 확인(updater `allowed_overlays`). 원격 `test_site_autoupdate.py`·`test_site_candidate*.py`·`test_control_unit_deploy.py`·`test_site_compose_log_rotation.py`.
