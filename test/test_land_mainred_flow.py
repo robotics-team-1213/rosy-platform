@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
-import time
 from pathlib import Path
 
 import pytest
@@ -26,7 +25,6 @@ def carried_outcome(case, monkeypatch, producer, marker, active):
     """Exercise real preparation/selection/isolation, varying only a producer's returned evidence/state."""
     monkeypatch.setattr(land.land_mainred, "CARRIED", [])
     monkeypatch.setattr(land.land_mainred, "PASSES", [])
-    monkeypatch.setattr(land.land_prepare, "after_reboot", lambda ticket: None)  # clock has its own test below
     actual = land.run_tests
 
     def run(wt, args, invocations, logdir, round_no):
@@ -103,20 +101,6 @@ def test_carried_ids_join_every_selection_and_a_carried_full_is_never_restored(r
     assert land.land_full.restore(wt, "feat/x") is None
     land.land_full.save(wt, "feat/x", head, base, "full", invocations)
     assert land.land_full.restore(wt, "feat/x") == base, "the mutation: a full tier is restored"
-
-
-def test_no_pretest_starts_in_the_test_pcs_reboot_window(capsys):
-    clock = iter([(5, 30), (5, 59), (6, 10)])
-    naps = []
-
-    def at():
-        h, m = next(clock)
-        return time.struct_time((2026, 10, 27, h, m, 0, 0, 300, -1))
-
-    land.land_prepare.after_reboot(None, sleep=naps.append, clock=at)
-    assert len(naps) == 2 and "reboot at 06:00" in capsys.readouterr().out
-    land.land_prepare.after_reboot(None, sleep=naps.append, clock=lambda: time.struct_time((2026, 10, 27, 6, 10, 0, 0, 300, -1)))
-    assert len(naps) == 2, "outside the window it does not wait"
 
 
 def test_doctor_shows_open_main_red_records(repos):

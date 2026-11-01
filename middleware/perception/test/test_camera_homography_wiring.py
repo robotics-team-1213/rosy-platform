@@ -35,7 +35,8 @@ def test_camera_node_has_tunable_fail_closed_homography_contract():
 def test_web_only_relays_bounded_enable_disable_and_renders_node_checks():
     node = source('nodes/web_node.py')
     http = source('nodes/web_http.py')
-    page = source('web/diagnostic.html')
+    page = ''.join(source('web/' + name) for name in (
+        'diagnostic.html', 'diagnostic-core.js', 'diagnostic-map.js', 'diagnostic-input.js'))
 
     assert "'camera/calibration/status'" in node
     assert "'camera/calibration/cmd'" in node

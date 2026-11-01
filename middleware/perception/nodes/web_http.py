@@ -45,6 +45,12 @@ POST_VERBS = {
     '/wander': ('wander_pub', ('start', 'stop', 'explore', 'coverage')),
     '/estop': ('estop_pub', ('stop', 'release')),
 }
+DIAGNOSTIC_ASSETS = {
+    'diagnostic.css': 'text/css; charset=utf-8',
+    'diagnostic-core.js': 'text/javascript; charset=utf-8',
+    'diagnostic-map.js': 'text/javascript; charset=utf-8',
+    'diagnostic-input.js': 'text/javascript; charset=utf-8',
+}
 GOAL_BOUND = 50.0   # metres; a dashboard goal beyond this is a typo
 
 
@@ -91,7 +97,7 @@ def page_origin_allowed(origin, host_header, page_port):
     return origin in allowed
 
 
-def _handler(node, html, api, page_port=None):
+def _handler(node, html, api, page_port=None, asset_dir=None):
     """HTTP handler closing over the node. api=True = backend (state/map/
     camera/result + POSTs); api=False = frontend (the page only). CORS answers
     only the page origin on ``page_port`` so the page can fetch the backend."""
@@ -108,30 +114,30 @@ def _handler(node, html, api, page_port=None):
                 self.send_header('Access-Control-Allow-Origin', self.headers.get('Origin'))
                 self.send_header('Vary', 'Origin')
 
-        def _html(self):
-            self.send_response(200)
-            self.send_header('Content-Type', 'text/html')
+        def _reply(self, status, body=None, media=None, cache=None):
+            self.send_response(status)
+            if media:
+                self.send_header('Content-Type', media)
+            if cache:
+                self.send_header('Cache-Control', cache)
             self.end_headers()
-            self.wfile.write(html)
+            if body is not None:
+                self.wfile.write(body)
+
+        def _html(self):
+            self._reply(200, html, 'text/html')
 
         def _png_jpg(self, data, typ):
             if data is None:
-                self.send_response(404)
-                self.end_headers()
+                self._reply(404)
                 return
-            self.send_response(200)
-            self.send_header('Content-Type', typ)
-            self.send_header('Cache-Control', 'no-store')
-            self.end_headers()
-            self.wfile.write(data)
+            self._reply(200, data, typ, 'no-store')
 
-        def _common(self, name):
-            root = getattr(node, 'web_common_dir', None) or web_common_dir()
-            media = shared_assets(root).get(name)
-            file = os.path.join(root, name)
-            if media is None or not os.path.isfile(file):
-                self.send_response(404)
-                self.end_headers()
+        def _file(self, root, media, name):
+            # media comes from a fixed allowlist, so the request never picks a path
+            file = os.path.join(root, name) if media and root else None
+            if not file or not os.path.isfile(file):
+                self._reply(404)
                 return
             with open(file, 'rb') as handle:
                 data = handle.read()
@@ -142,13 +148,20 @@ def _handler(node, html, api, page_port=None):
             self.end_headers()
             self.wfile.write(data)
 
+        def _common(self, name):
+            root = getattr(node, 'web_common_dir', None) or web_common_dir()
+            self._file(root, shared_assets(root).get(name), name)
+
         def do_GET(self):
             path = self.path.split('?')[0]
+            if path.startswith('/diagnostic/'):
+                name = path[len('/diagnostic/'):]
+                self._file(asset_dir, DIAGNOSTIC_ASSETS.get(name), name)
+                return
             if path.startswith('/common/'):
                 name = path[len('/common/'):]
                 if '/' in name or name.startswith('.'):
-                    self.send_response(404)
-                    self.end_headers()
+                    self._reply(404)
                     return
                 self._common(name)
                 return
@@ -156,16 +169,10 @@ def _handler(node, html, api, page_port=None):
                 self._html()
                 return
             if not api:
-                self.send_response(404)
-                self.end_headers()
+                self._reply(404)
                 return
             if path == '/state.json':
-                body = state_json()
-                self.send_response(200)
-                self.send_header('Content-Type', 'application/json')
-                self.send_header('Cache-Control', 'no-store')
-                self.end_headers()
-                self.wfile.write(body)
+                self._reply(200, state_json(), 'application/json', 'no-store')
             elif path == '/map.png':
                 from urllib.parse import parse_qs, urlsplit
                 query = parse_qs(urlsplit(self.path).query)
@@ -176,9 +183,7 @@ def _handler(node, html, api, page_port=None):
                     generation = MAP_PNG['gen']
                 # A newer image must never masquerade as the requested map.
                 if session != RUNTIME_ID or (requested is not None and requested != str(generation)):
-                    self.send_response(409)
-                    self.send_header('Cache-Control', 'no-store')
-                    self.end_headers()
+                    self._reply(409, cache='no-store')
                     return
                 self._png_jpg(png, 'image/png')
             elif path == '/camera.jpg':
@@ -190,30 +195,20 @@ def _handler(node, html, api, page_port=None):
                     body = {'state': STATE.get(K_GSTATE),
                             'path_m': STATE.get(K_PATH, 0.0)}
                 body['metrics'] = node.load_metrics()
-                body = json.dumps(body).encode()
-                self.send_response(200)
-                self.send_header('Content-Type', 'application/json')
-                self.send_header('Cache-Control', 'no-store')
-                self.end_headers()
-                self.wfile.write(body)
+                self._reply(200, json.dumps(body).encode(), 'application/json', 'no-store')
             else:
-                self.send_response(404)
-                self.end_headers()
+                self._reply(404)
 
         def do_POST(self):
             if not api:
-                self.send_response(404)
-                self.end_headers()
+                self._reply(404)
                 return
             ln = int(self.headers.get('Content-Length', 0))
             body = self.rfile.read(ln).decode()
             if self.headers.get('Origin') is not None and not self._origin_allowed():
                 print(json.dumps({'event': 'operator_rejected', 'path': self.path,
                                   'reason': 'foreign origin'}), flush=True)
-                self.send_response(403)
-                self.send_header('Content-Type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({'ok': False, 'error': 'foreign origin'}).encode())
+                self._reply(403, json.dumps({'ok': False, 'error': 'foreign origin'}).encode(), 'application/json')
                 return
             logged_action = self.path in ('/calibration', '/camera/calibration', '/estop', '/wander', '/navigation/start', '/goal', '/map/reset', '/map/resume', '/map/pause')
             if logged_action:
@@ -223,10 +218,7 @@ def _handler(node, html, api, page_port=None):
                 if logged_action:
                     print(json.dumps({'event': 'operator_rejected', 'path': self.path,
                                       'reason': reason}), flush=True)
-                self.send_response(status)
-                self.send_header('Content-Type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({'ok': False, 'error': reason}).encode())
+                self._reply(status, json.dumps({'ok': False, 'error': reason}).encode(), 'application/json')
 
             with LOCK:
                 ready = (time.monotonic() - STATE.get('calibration_received', -1e9) <= 3.0 and
@@ -246,8 +238,7 @@ def _handler(node, html, api, page_port=None):
                     reject('Camera ground calibration has not passed validation')
                     return
                 node.publish_text('camera_calibration_pub', body)
-                self.send_response(202)
-                self.end_headers()
+                self._reply(202)
                 return
             if self.path == '/calibration':
                 if body not in ('retry', 'retry:stay', 'retry:return_origin', 'retry:stay:full',
@@ -255,8 +246,7 @@ def _handler(node, html, api, page_port=None):
                                 'retry:return_origin:skip_motion', 'validate_motion', 'abort',
                                 'partial_calibration', 'sensing_only', 'use_existing_settings',
                                 'use_limited_sensors'):
-                    self.send_response(400)
-                    self.end_headers()
+                    self._reply(400)
                     return
                 if body != 'abort' and not calibration_receiver_available(
                         calibration_received, time.monotonic(), node.calibration_pub):
@@ -273,15 +263,11 @@ def _handler(node, html, api, page_port=None):
                     with LOCK:
                         STATE['calibration_ready'] = False
                 node.publish_text('calibration_pub', body)
-                self.send_response(200)
-                self.end_headers()
+                self._reply(200)
                 return
             if self.path in ('/map/reset', '/map/resume', '/map/pause'):
                 status, result = node.map_control.execute(self.path.rsplit('/', 1)[1])
-                self.send_response(status)
-                self.send_header('Content-Type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps(result).encode())
+                self._reply(status, json.dumps(result).encode(), 'application/json')
                 return
             verb = POST_VERBS.get(self.path)
             if self.path == '/navigation/start':
@@ -291,10 +277,7 @@ def _handler(node, html, api, page_port=None):
                 try:
                     options = validate_options(json.loads(body))
                 except (ValueError, TypeError) as error:
-                    self.send_response(400)
-                    self.send_header('Content-Type', 'application/json')
-                    self.end_headers()
-                    self.wfile.write(json.dumps({'error': str(error)}).encode())
+                    self._reply(400, json.dumps({'error': str(error)}).encode(), 'application/json')
                     return
                 with LOCK:
                     session = STATE.get('navigation_session', {})
@@ -304,8 +287,7 @@ def _handler(node, html, api, page_port=None):
                     reject('Fresh idle navigation, stopped driving, calibration and released emergency stop required')
                     return
                 node.publish_text('wander_pub', 'session:' + json.dumps(options))
-                self.send_response(202)
-                self.end_headers()
+                self._reply(202)
                 return
             if verb:
                 attr, allowed = verb
@@ -360,13 +342,13 @@ def _handler(node, html, api, page_port=None):
     return Handler
 
 
-def make_api_handler(node, html, page_port=None):
+def make_api_handler(node, html, page_port=None, asset_dir=None):
     """``page_port`` is the page's port; None answers no cross-origin caller."""
-    return _handler(node, html, api=True, page_port=page_port)
+    return _handler(node, html, api=True, page_port=page_port, asset_dir=asset_dir)
 
 
-def make_page_handler(html):
-    return _handler(None, html, api=False)
+def make_page_handler(html, asset_dir=None):
+    return _handler(None, html, api=False, asset_dir=asset_dir)
 
 
 def calibration_receiver_available(received, now, publisher):

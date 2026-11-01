@@ -86,3 +86,14 @@ def test_guard_rejects_a_nic_bound_cyclone_profile():
     assert _cyclone_problems('<NetworkInterface autodetermine="true"/>')
     assert _cyclone_problems('<NetworkInterface name="lo"/><Peers><Peer address="10.0.0.2"/></Peers>')
     assert not _cyclone_problems('<NetworkInterface name="lo"/>')
+
+
+@pytest.mark.parametrize("relative", [
+    "deploy/robot/pinky_pro/native/rosy-runtime.env",
+    "deploy/robot/pinky_pro/image/first-boot/rosy-first-boot.py",
+    "deploy/robot/pinky_pro/compose.yaml",
+])
+def test_pinky_runtime_sets_localhost_discovery(relative):
+    """D-795 1: the forbidden-value scan cannot see a missing LOCALHOST; pin it per runtime source."""
+    text = (ROOT / relative).read_text(encoding="utf-8")
+    assert re.search(r"ROS_AUTOMATIC_DISCOVERY_RANGE[\"']?\s*[=:]\s*[\"']?LOCALHOST\b", text), relative

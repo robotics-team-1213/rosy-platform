@@ -45,10 +45,11 @@ class RobotRecord:
     #: event_id → 본문 해시. 개발 경로(event_store 없음) 중복 제거 전용.
     seen_event_hashes: dict = field(default_factory=dict)
 
-    def note_event(self, event: EventMessage) -> None:
+    def note_event(self, event: EventMessage, remember: bool = True) -> None:
         """새 이벤트 기록: 최근 창에 넣고, stuck 형식은 인덱스를 갱신한다."""
         self.events.append(event)
-        self.seen_event_hashes[event.event_id] = event_content_hash(event)
+        if remember:
+            self.seen_event_hashes[event.event_id] = event_content_hash(event)
         if event.type in STUCK_EVENT_TYPES:
             stuck_id = (event.data or {}).get("stuck_id")
             if stuck_id:

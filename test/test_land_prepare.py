@@ -292,3 +292,30 @@ def test_mains_land_py_adopts_the_parents_ticket(tmp_path, monkeypatch):
     qdir, ticket = queue.enter(tmp_path, "feat/mine", "preparing")
     assert ticket == mine and sorted(tmp_path.glob("[0-9]*.json")) == [ahead, mine], "same place, no new ticket"
     assert json.loads(mine.read_text())["status"] == "preparing" and queue.TICKET_ENV not in os.environ
+
+
+@pytest.mark.parametrize("main_moves,reds", [(True, 1), (True, 2), (False, 1)])
+def test_a_main_red_stop_prepares_once_more_only_when_main_moved(repos, monkeypatch, main_moves, reds):
+    """D-889 14, 11-01: a pretest on a 66 min old main stopped on a MAIN-RED test main had fixed meanwhile."""
+    main, wt = repos
+    merged = []
+    monkeypatch.setattr(land.land_guards, "first", lambda *a, **k: [])
+    monkeypatch.setattr(land.land_speculate, "prepare", lambda *a, **k: None)
+    monkeypatch.setattr(land, "select", lambda *a, **k: ([["pkg/test"]], "FULL tier (test)"))
+
+    def run(wt_, args, invocations, logdir, tag):
+        merged.append(land.land_mainred.merged_main(wt_))
+        if len(merged) == 1 and main_moves:
+            commit(main, {"fixed.txt": "x\n"}, "main fixes its red test")
+        if len(merged) <= reds:
+            raise land.Stop("NEW failure in pkg/test; MAIN-RED: 1 of 1 NEW id(s) also fail on main")
+        return []
+    monkeypatch.setattr(land, "run_tests", run)
+    args = land.argparse.Namespace(tests="auto", no_cache=True)
+    if main_moves and reds == 1:
+        land.land_prepare.prepare(land, wt, "feat/x", args, sys.executable, None, None)
+        assert len(merged) == 2 and merged[1] == git(main, "rev-parse", "HEAD") != merged[0]
+    else:
+        with pytest.raises(land.Stop, match="MAIN-RED"):
+            land.land_prepare.prepare(land, wt, "feat/x", args, sys.executable, None, None)
+        assert len(merged) == (2 if main_moves else 1), "once more at most, and only on a moved main"

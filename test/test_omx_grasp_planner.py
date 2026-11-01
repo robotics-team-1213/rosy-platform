@@ -144,6 +144,25 @@ def test_a_lift_the_wrist_cannot_reach_is_shortened_inside_the_joint_limit():
     assert lifted(planner) <= lifted(wide) + 1e-6
 
 
+def test_a_low_zone_lowers_the_floor_only_inside_its_rectangle():
+    """2026-11-01: the left arm's belt end lies below the table; only there may the jaws go under the normal floor."""
+    low = dict(PLAN, pick=dict(PLAN["pick"], z=-0.02))
+    with pytest.raises(SystemExit, match="OUTSIDE_WORKSPACE"):
+        m.Planner(low).library()
+    zone = {"x": [0.06, 0.09], "y": [0.09, 0.12], "z_min_m": -0.03}
+    planner = m.Planner(dict(low, limits=dict(PLAN["limits"], low_zones=[zone])))
+    lib = planner.library()
+    assert min(fk(planner, f).z for f in lib["chunks"]["descend_pick"]) == pytest.approx(-0.02, abs=2e-3)
+    outside = dict(low, pick=dict(low["pick"], x=0.10))  # the same height just past the rectangle
+    with pytest.raises(SystemExit, match="OUTSIDE_WORKSPACE"):
+        m.Planner(dict(outside, limits=dict(PLAN["limits"], low_zones=[zone]))).library()
+    with pytest.raises(SystemExit, match="IK"):  # a line leaving the zone keeps the floor of its outside end
+        planner.line((0.075, 0.105, -0.02), (0.12, 0.105, -0.02), 0.05, 0.0, 0.0, 0.0)
+    above = dict(zone, z_min_m=0.05)  # a zone never raises the floor
+    assert planner.limits_at(0.07, 0.10).workspace_min_m[2] == -0.03
+    assert m.Planner(dict(PLAN, limits=dict(PLAN["limits"], low_zones=[above]))).limits_at(0.07, 0.10).workspace_min_m[2] == 0.005
+
+
 def test_keep_out_counts_the_elbow_capsule_not_only_the_gripper(planned):
     planner, library = planned
     from omx_adapter.swept_volume import LINK_RADIUS_M

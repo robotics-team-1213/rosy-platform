@@ -354,7 +354,7 @@
 ## 최근 기록
 
 - 2026-11-01 · uncommitted · learning/omx: D-943 GPU 학습·장치 초안·작업대 녹화·HF 업로드 버튼
-- 2026-11-01 · uncommitted · fix(land): 브라우저·시뮬레이션 시험은 필요할 때만, 전체는 밤에
-- 2026-11-01 · uncommitted · refactor: D-940 후속 1 — 정본 소비·REST 미러 핀·PR 템플릿
-- 2026-11-01 · uncommitted · feat(land): 한 표 묶음(rollup)
-- 2026-11-01 · uncommitted · docs(adr): 착지 처리량은 시험 PC 용량이 정한다
+- 2026-11-01 · uncommitted · fix(land): main이 이미 고친 MAIN-RED로 멈추지 않는다 (D-889 추가 14)
+- 2026-11-01 · uncommitted · fix(land): 재부팅은 시험 PC별로 비킨다 (D-889 추가 13)
+- 2026-11-01 · uncommitted · omx: 계획기 low_zones, 바닥 높이를 지정한 사각형 안에서만 낮춤
+- 2026-11-01 · uncommitted · omx: 통로 점검은 보이는 표면 밖이면 거절(낡은 surface_px), 카메라 교체 교훈 갱신
