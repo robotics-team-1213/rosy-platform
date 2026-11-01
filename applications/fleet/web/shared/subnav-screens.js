@@ -1,6 +1,7 @@
 // D-926 3: an in-page sub-nav moves between screens instead of jumping down one long page.
 // `mark` is 'step' when the sub-nav also links to the page itself. `stage` stays visible on every screen (the site map); `groups` lists headings that belong to a screen without a link.
-export function bindScreens({nav, home, stage = null, groups = {}, mark = 'page'}) {
+// `label` (D-926 2 path bar) mirrors the current screen's name in the document head.
+export function bindScreens({nav, home, stage = null, groups = {}, mark = 'page', label = null}) {
   const links = [...nav.querySelectorAll('a[href^="#"]')];
   const known = new Set(links.map(link => link.hash.slice(1)));
   const holder = id => document.getElementById(id)?.closest('ui-section, details');
@@ -18,6 +19,8 @@ export function bindScreens({nav, home, stage = null, groups = {}, mark = 'page'
       if (link.hash.slice(1) === screen) link.setAttribute('aria-current', mark);
       else link.removeAttribute('aria-current');
     }
+    const active = links.find(link => link.hash.slice(1) === screen);
+    if (label && active) label.replaceChildren(active.textContent.trim());
   };
   addEventListener('hashchange', show);
   // The same link again changes no hash; it still reopens a step the operator folded.

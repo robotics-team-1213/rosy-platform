@@ -13506,9 +13506,36 @@ osy-d395-s1d\`.
 - 결정: 격리 목록(D-762, 안전 루트)에 넣지 않고 원인을 고침. 세션 시험의 `rehearsal_clock` 고정물과 같은 방식
 - 교훈: 없음
 
+## 2026-11-01 · uncommitted · D-926 보강: 새 구획은 ui-section 네 역할
+
+- 변경: D-926에 부기를 더했다 — 설치 문서의 남은 `panel`·`hint`는 그 화면을 고치는 변경에 묶어 `ui-section` 네 역할로 옮기고 일괄 치환은 하지 않는다(비평 P2 결정 공백 메움).
+- 증거: 부기는 결정 기록이며 실행 코드 변화 없음. `rosy_harness.py lint` 통과로 확인.
+- Gate: 없음. CE: 해당 없음.
+
+
+## 2026-11-01 · uncommitted · D-945 전 표면 자리 규칙
+
+- 변경: [D-945](adr/D-945-cross-surface-layout-canon.md)로 모든 표면이 같은 뼈대(자리 순서·제목 하나·표식 어휘 셋·붕괴 두 사다리)를 쓰는 규칙을 세우고 DESIGN.md 「자리 순서와 뼈대」 절에 규범 표를 뒀다. 상용 도구(IDE·관리형 웹·모바일 체계)의 레이아웃 대역을 근거로 제시했다.
+- 증거: ADR Log 행 추가. `rosy_harness.py lint` 통과로 확인.
+- Gate: 없음 — 설계 수용이며 표면 이행은 각 화면 변경에 따른다. CE: 해당 없음.
+
 ## 2026-11-01 · uncommitted · feat(fleet): 확인된 ARM 시도의 재관측 계약(D-930, API v1.334)
 
 - 변경: `POST/GET /api/fleet/arm-transfers/jobs/{id}/rechecks`를 추가했다. 기다리는 재관측은 기존 observation context에 `phase=RECHECK`로 나오고 같은 observations 경로로 받는다. 검사는 POST_ACTION과 같고 요청 뒤 시각·측정 관절을 요구한다. Action·claim·작업 상태·영수증·v1.330 근거는 바뀌지 않는다(`work/physical_transfer_rechecks.py`, `fleet_physical_transfer_rechecks` 테이블).
 - 증거: 원격 `test_physical_transfer_recheck.py`와 관측자·v1.330·관측 계약·holder import 시험 58 passed. Harbor 전체 흐름 회귀(D-927)의 ⑤가 이 계약을 쓴다.
 - Gate: 없음. simulation 계약 구현이며 실물 관측자·현장 수용은 별도다. 공개 push 없음.
 - CE: 해당 없음 — 설계 결정과 계약 추가이며 해결한 장애가 아니다.
+
+## 2026-11-02 · uncommitted · fix(land): 서로 닿지 않으면 차례는 가드만 (D-889 추가 22)
+- 변경: `land_selection.select` landed 경로 두 곳. 이 브랜치와 main 변화분의 선택이 겹치지 않고 안전 경로가 없으면 `_guards_only` + 닿는 브라우저 묶음만.
+- 증거: 11-01 17:45 뒤 착지 p90 152분. 느린 착지는 사전 시험 5~7분, 차례 대기 약 125분. 차례마다 변화분 묶음을 다시 돌아 7~13분씩 걸렸다. 원격 시험은 착지 기록에 남긴다.
+- gate 변화: 없음
+- 결정: D-889 추가 22(사용자 지시 2026-11-02)
+- 교훈: 없음
+
+## 2026-11-02 · uncommitted · fix(harness): 같은 폴더 import 사슬로 시험을 찾는다 (D-889 추가 21)
+- 변경: `affected_repo.local_importers`. `referencing_tests`가 같은 폴더에서 바뀐 파일을 직·간접 import하는 모듈의 stem도 본다. 실제 저장소 시험 `test_real_repo_module_reached_through_a_sibling_import_maps_to_its_tests`.
+- 증거: 11-01 `experiment_hub.py` "unknown -> full" 17회. 원격 시험은 착지 기록에 남긴다.
+- gate 변화: 없음
+- 결정: D-889 추가 21(사용자 지시 2026-11-02)
+- 교훈: 없음
