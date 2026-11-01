@@ -287,8 +287,7 @@ def test_every_running_camera_role_hands_over_not_only_top_and_front(tmp_path):
     extra = ("rosy-omx-camera@side.service", "rosy-omx-camera@arm_a_wrist.service")
     s, calls = session(arm, leader, active=m.SERVICES + extra)
     fake = s.systemctl
-    listing = "
-".join(f"  {u} loaded active running ROSY OMX camera" for u in (m.SERVICES[0],) + extra)
+    listing = "\n".join(f"  {u} loaded active running ROSY OMX camera" for u in (m.SERVICES[0],) + extra)
     s.systemctl = lambda verb, unit: listing if verb == "list-units" else fake(verb, unit)
     record = s.execute(config(tmp_path), CAPS, teleop_only=True)
     stopped = [u for v, u in calls if v == "stop"]
