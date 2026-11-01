@@ -13392,6 +13392,27 @@ osy-d395-s1d\`.
 - 결정: D-889 추가 16(사용자 목표 2026-11-01)
 - 교훈: 없음
 
+## 2026-11-01 · uncommitted · docs: D-951 ROSY Calibration 앱과 rosy-calibration 스킬
+- 변경: `docs/adr/D-951-rosy-calibration-application.md`(그림 5장 `docs/assets/omx-calibration-2026-11-01-*`), ADR Log, `applications/calibration/{README,AGENTS}.md`, `platform_parts.yaml` 등록, `.claude/skills/rosy-calibration`
+- 증거: 2026-11-01 현장 기록(왼팔 벨트 끝 높이·터치 실패·I 게인 12.3→3.3 mm, 깊이 표식 LOO 62~355 px, 경로 점검 거절)
+- gate 변화: 없음(결정·문서·경계)
+- 결정: D-951 Accepted(사용자 "rosy calibration 이라고 하나 만들어", "코드적으로", 벨트 사각형 바닥 승인). D-933 3항(높이는 터치)을 깊이로 고침
+- 교훈: 없음
+
+## 2026-11-01 · uncommitted · fix(land): main이 FULL로 넣은 변경은 지난 통과를 버리게 하지 않는다 (D-889 추가 17)
+- 변경: `land_cache._delta_paths`는 범위가 FULL이면, 이 브랜치의 새 commit을 하나씩 선택하고 main의 착지 commit은 차례 규칙(landed)으로 본다. 그 경로와 겹치지 않는 지난 통과만 재사용한다.
+- 증거: 11-01 12시간 시험 호출 약 4,700건 가운데 재사용 470건. narrow 시도 표본 40건 가운데 30건이 FULL(하네스 설정 43, 매핑 없음 16). 원격 시험은 착지 기록에 남긴다.
+- gate 변화: 없음
+- 결정: D-889 추가 17(사용자 지시 2026-11-01)
+- 교훈: 없음
+
+## 2026-11-01 · 093ef30c2b · docs: autocrlf=false commit -a 교훈
+- 변경: `docs/solutions/workflow-issues/autocrlf-false-commit-a-rewrites-tree-to-crlf-2026-11-01.md`
+- 증거: 11-01 `fix/pilot-record-bar` 커밋이 3,128파일을 CRLF로 바꿔 Safety-Review 검사에서 멈춤. 임시 저장소 재현(평범한 `commit -a`는 바뀐 것 없음, `-c core.autocrlf=false`는 속성 없는 파일을 `i/crlf`로 커밋). 다시 만든 가지는 093ef30c2b로 착지
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 새 교훈 1건
+
 ## 2026-11-01 · uncommitted · feat(fleet): 확인된 ARM 시도의 재관측 계약(D-930, API v1.334)
 
 - 변경: `POST/GET /api/fleet/arm-transfers/jobs/{id}/rechecks`를 추가했다. 기다리는 재관측은 기존 observation context에 `phase=RECHECK`로 나오고 같은 observations 경로로 받는다. 검사는 POST_ACTION과 같고 요청 뒤 시각·측정 관절을 요구한다. Action·claim·작업 상태·영수증·v1.330 근거는 바뀌지 않는다(`work/physical_transfer_rechecks.py`, `fleet_physical_transfer_rechecks` 테이블).

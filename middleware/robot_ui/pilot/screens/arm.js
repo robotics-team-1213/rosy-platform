@@ -96,6 +96,7 @@ export function mountArm(root, target, driver) {
             <ui-button kind="primary" type="button" data-sim-record-start>녹화 시작</ui-button>
             <p class="arm-record-status" data-sim-record-status role="status">기록 대기</p></li>
           <li data-sim-step="stop" ${target.recording ? "" : "hidden"}><h4>종료하고 결과 남기기</h4>
+            <p class="arm-record-status" data-sim-record-live data-state="recording" aria-hidden="true" hidden></p>
             <div class="arm-step-actions">
               <ui-button kind="primary" type="button" data-sim-record-stop="success" disabled>성공으로 종료</ui-button>
               <ui-button type="button" data-sim-record-stop="failure" disabled>실패 사례로 종료</ui-button>
@@ -344,6 +345,11 @@ export function mountArm(root, target, driver) {
     $("[data-sim-step='task']").dataset.state = task ? "done" : "current";
     $("[data-sim-step='record']").dataset.state = now === "recording" ? "current" : "";
     $("[data-sim-step='stop']").dataset.state = now === "complete" ? "done" : now === "recording" ? "current" : "";
+    // While recording, the stop card is pinned to the viewport bottom: the stick and the stop stay in one view.
+    root.toggleAttribute("data-recording", now === "recording");
+    const live = $("[data-sim-record-live]");
+    live.hidden = now !== "recording";
+    live.textContent = live.hidden ? "" : status.textContent;
   }
   async function refreshRecording() {
     recording = await request("/recordings");

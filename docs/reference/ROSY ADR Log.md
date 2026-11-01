@@ -11,6 +11,7 @@
 | ID | 제목 | Status |
 |---|---|---|
 | D-930 | 확인된 ARM 시도의 재관측(새 측정 사실만, 실행·claim·완료 권한 없음, API v1.334). [전문](../adr/D-930-arm-transfer-recheck-of-confirmed-attempt.md) | Accepted (2026-10-30, 계약·simulation 구현 결정; 실물 수용 별도) |
+| D-951 | ROSY Calibration 앱을 두고, 두 팔 셀의 보정·높이·공간 점검을 코드 한 경로로 돌린다. 집게는 D-933 마커, 면 높이는 깊이(`cell_depth`, D-933 3항 터치 대신), 테이블보다 낮은 면은 승인된 `low_zones` 사각형에서만, 하중 관절 I 게인, 팔별 세션 잠금과 통로 예약(`cell_space`). [전문](../adr/D-951-rosy-calibration-application.md) | Accepted (2026-11-01, 사용자 결정; 앱 화면 없음, 부품 착지 대기, 현장 수용 없음) |
 | D-939 | 앱 연동 코드는 한 곳에 둔다 — 앱 사이 사본 금지. [전문](../adr/D-939-app-link-shared-sources.md) | Accepted (2026-10-31, 사용자 결정; Android peer 공통 소스·구조 시험, 기기 수용 별도) |
 | D-949 | 줄 수 래칫은 리팩터링 대기열이다 — 1,000줄 이상은 지금 나누고 800줄 이상은 다음에 고칠 때 먼저 나눈다. [전문](../adr/D-949-size-ratchet-refactor-tiers.md) | Accepted (2026-11-01, 사용자 결정; D-766에 순서를 더함) |
 | D-948 | 사람 조종은 `/ws/teleop` 스트림으로 보내고 REST `/teleop`은 대체 경로로 남긴다. [전문](../adr/D-948-teleop-websocket-stream.md) | Accepted (2026-11-01, 사용자 지시; 장치·현장 수용 별도) |
