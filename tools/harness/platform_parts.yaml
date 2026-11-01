@@ -18,7 +18,7 @@ colcon_roots: [learning, operations, middleware, contracts, integrations, shared
 # imported module can be traced back to its owner. Script folders that put
 # themselves on sys.path have none.
 
-parts: [middleware, operations, learning, contracts, integrations, shared_web, profiles, deploy, tools, test, docs]
+parts: [middleware, operations, learning, contracts, integrations, shared_web, shared_android, profiles, deploy, tools, test, docs]
 
 # D-427 §2. Same-part imports are always allowed. Parts not listed here
 # (profiles, deploy, tools, test, docs) are outside the import rules.
@@ -688,6 +688,15 @@ roots:
     note: D-876 independent Monitoring application boundary and backend browser contracts; visual UI acceptance follows separately. Static artifacts consume canonical shared web assets.
     concern: other
     capability: fleet
+  - path: applications/calibration
+    layout_target: applications/calibration
+    part: operations
+    d427_target: operations/ui/calibration
+    wave: none
+    import_prefix: []
+    note: D-951 ROSY Calibration application boundary; the calibration engine stays in deploy/robot/omx cell tools and arm motion stays under D-911.
+    concern: other
+    capability: omx
   - path: operations/processes/palletizing
     part: operations
     d427_target: operations/processes/palletizing
@@ -884,6 +893,14 @@ roots:
     d427_target: shared/web
     legacy: src/hmi/web_common
     wave: "4b"
+    concern: other
+    capability: platform
+
+  # --- shared android (D-939) -----------------------------------------------
+  - path: shared/android
+    part: shared_android
+    d427_target: shared/android
+    wave: none
     concern: other
     capability: platform
 
