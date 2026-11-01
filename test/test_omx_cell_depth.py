@@ -30,6 +30,8 @@ def scene(tilt_deg=10.0):
         lift[(cxs >= x0) & (cxs < x1) & (cys >= y0) & (cys < y1)] = 76.0
     plate = (np.hypot(cxs - 150, cys - 380) < 60) & (np.hypot(cxs - 150, cys - 380) > 25)
     lift[plate] = 20.0
+    cv2.circle(colour, (150, 380), 60, (150, 150, 150), -1)  # the plate is seen in colour too (grey: not in the mask)
+    cv2.circle(colour, (150, 380), 25, (0, 0, 0), -1)
     # depth along each ray to the plane n.p + 620 = lift (heights measured along the normal)
     depth = (lift - 620.0) / (rays @ normal)
     return depth.astype(np.uint16), colour
