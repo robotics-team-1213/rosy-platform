@@ -11,16 +11,21 @@ from __future__ import annotations
 import collections
 from concurrent.futures import CancelledError
 import contextlib
+import functools
 import itertools
+import json
+import math
 import os
 import re
+import statistics
+import subprocess
 import sys
 import threading
 import time
 from pathlib import Path
 
 from remote_job import CANCELLED
-from xdist_plan import HOST_ALONE
+from xdist_plan import HOST_ALONE, SERIAL_FILE, load_serial, serial_reason
 
 
 BROWSER_ENV = "ROSY_RUN_BROWSER_TESTS=1"
@@ -34,7 +39,9 @@ ENV_WORD = re.compile(r"^ROSY_[A-Z0-9_]*=")
 # admission (remote_job.ADMIT, since 10-28) now holds the cores and GB, and LOAD-FLAKY ids keep their ALONE chunk.
 # ROSY_BROWSER_PER_HOST overrides it to measure.
 BROWSER_PER_HOST = int(os.environ.get("ROSY_BROWSER_PER_HOST", "4"))
-MAX_MAIN = 4  # main workers one run may ask of a full host (1 restores one-at-a-time)
+# 6 since 2026-11-01: FULL rounds ran their invocations at 0.4-0.7x parallelism (sum run_s / wall), the tail queued
+# behind the run's own workers for 60-117 min; each PC's JOB admission still bounds cores and GB.
+MAX_MAIN = 6  # main workers one run may ask of a full host (1 restores one-at-a-time)
 MAIN_CORES, MAIN_GB = 2, 2  # headroom one more main worker needs
 SKIP_ALONE = "!"  # workers(): a worker kind on a host other than the host_alone suites' one
 
@@ -207,13 +214,82 @@ class Gate:
                 self._cv.notify_all()
 
 
-def cost(repo: Path, inv: list[str]) -> int:
-    """Bytes of the test files an invocation names (dirs: their .py files), a cheap stand-in for run time."""
-    # ponytail: size, not time; record per-invocation durations if largest-first still leaves a tail.
+SPLIT_S = 240  # an invocation whose median run exceeds this is split (2026-11-01: 30 min combined invocations)
+MAX_SPLIT = 6
+BYTES_PER_S = 2000  # shortcut: rough test-code bytes per run second for invocations with no history; replace if it misorders
+
+
+@functools.lru_cache(maxsize=4)
+def _history(events: str, mtime: float) -> dict[tuple, float]:
+    runs = collections.defaultdict(list)
+    with open(events, encoding="utf-8") as f:
+        for line in f:
+            if '"run_s"' not in line:
+                continue
+            try:
+                row = json.loads(line)
+            except ValueError:
+                continue
+            if row.get("event") == "tests" and isinstance(row.get("run_s"), (int, float)):
+                runs[tuple(row.get("argv") or ())].append(row["run_s"])
+    return {argv: statistics.median(v) for argv, v in runs.items()}
+
+
+def history(repo: Path) -> dict[tuple, float]:
+    """Median run_s per invocation argv from the landing events log (land_checks records run_s since 2026-10-31)."""
+    common = subprocess.run(["git", "-C", str(repo), "rev-parse", "--path-format=absolute", "--git-common-dir"],
+                            capture_output=True, text=True).stdout.strip()
+    events = Path(common) / "rosy-land-events.jsonl" if common else None
+    if events is None or not events.is_file():
+        return {}
+    return _history(str(events), events.stat().st_mtime)
+
+
+def cost(repo: Path, inv: list[str], seen: dict | None = None) -> float:
+    """Expected run seconds: the measured median when this argv ran before, else test-file bytes / BYTES_PER_S."""
+    seen = history(repo) if seen is None else seen
+    if tuple(inv) in seen:
+        return seen[tuple(inv)]
     total = 0
     for word in inv:
         path = repo / word.split("::", 1)[0]
         files = path.rglob("*.py") if path.is_dir() else [path]
         total += sum(f.stat().st_size for f in files if f.is_file())
-    return total
+    return total / BYTES_PER_S
+
+
+def split(repo: Path, invocations: list[list[str]], seen: dict | None = None) -> list[list[str]]:
+    """Long invocations as smaller ones the hosts can run side by side; every test still runs exactly once.
+
+    One measured above SPLIT_S splits into one invocation per path, and a single directory into up to MAX_SPLIT
+    balanced file groups. Browser chunks (land_browser chunks them), alone/isolation runs, node ids, own -n and
+    serial_suites.txt paths stay whole."""
+    seen = history(repo) if seen is None else seen
+    serial = load_serial(SERIAL_FILE.read_text(encoding="utf-8")) if SERIAL_FILE.is_file() else []
+    out = []
+    for inv in invocations:
+        env = list(itertools.takewhile(ENV_WORD.match, inv))
+        rest = inv[len(env):]
+        paths = [w for w in rest if not w.startswith("-")]
+        whole = (seen.get(tuple(inv), 0) < SPLIT_S or any(w.startswith(("ROSY_RUN_BROWSER_TESTS", "ROSY_ALONE",
+                 "ROSY_JOB_ALONE", "ROSY_COLLECT")) for w in env) or len(paths) != len(rest)
+                 or any("::" in p or "collect_alone" in p for p in paths) or serial_reason(inv, serial))
+        if whole:
+            out.append(inv)
+        elif len(paths) > 1:
+            out += [[*env, p] for p in paths]
+        elif (repo / paths[0]).is_dir():
+            files = sorted((f for f in (repo / paths[0]).rglob("*.py")
+                            if f.name.startswith("test_") or f.name.endswith("_test.py")),
+                           key=lambda f: -f.stat().st_size)
+            n = min(MAX_SPLIT, math.ceil(seen[tuple(inv)] / SPLIT_S), len(files))
+            groups, sizes = [[] for _ in range(n)], [0] * n
+            for f in files:  # largest first into the lightest group
+                i = sizes.index(min(sizes))
+                groups[i].append(f.relative_to(repo).as_posix())
+                sizes[i] += f.stat().st_size
+            out += [[*env, *sorted(g)] for g in groups if g] if n > 1 else [inv]
+        else:
+            out.append(inv)
+    return out
 
