@@ -354,7 +354,7 @@
 ## 최근 기록
 
 - 2026-11-01 · uncommitted · tools: 정책 화면 수정 게시용 FULL 착지
+- 2026-11-01 · uncommitted · D-954 현장 마커 프로필과 팔 마커 50번부터
+- 2026-11-01 · 093ef30c2b · docs: autocrlf=false commit -a 교훈
+- 2026-11-01 · uncommitted · fix(land): main이 FULL로 넣은 변경은 지난 통과를 버리게 하지 않는다 (D-889 추가 17)
 - 2026-11-01 · uncommitted · docs: D-951 ROSY Calibration 앱과 rosy-calibration 스킬
-- 2026-11-01 · uncommitted · fix(land): FULL 착지도 겹침 판정, 돌려보낸 표시는 표에 (D-889 추가 16)
-- 2026-11-01 · f2333e8aea · API v1.339 OMX SIM 시연 기본값
-- 2026-11-01 · uncommitted · tools: 워크트리 .git 유실 재발 교훈 갱신

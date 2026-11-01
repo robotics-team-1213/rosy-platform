@@ -13399,6 +13399,26 @@ osy-d395-s1d\`.
 - 결정: D-951 Accepted(사용자 "rosy calibration 이라고 하나 만들어", "코드적으로", 벨트 사각형 바닥 승인). D-933 3항(높이는 터치)을 깊이로 고침
 - 교훈: 없음
 
+## 2026-11-01 · uncommitted · fix(land): main이 FULL로 넣은 변경은 지난 통과를 버리게 하지 않는다 (D-889 추가 17)
+- 변경: `land_cache._delta_paths`는 범위가 FULL이면, 이 브랜치의 새 commit을 하나씩 선택하고 main의 착지 commit은 차례 규칙(landed)으로 본다. 그 경로와 겹치지 않는 지난 통과만 재사용한다.
+- 증거: 11-01 12시간 시험 호출 약 4,700건 가운데 재사용 470건. narrow 시도 표본 40건 가운데 30건이 FULL(하네스 설정 43, 매핑 없음 16). 원격 시험은 착지 기록에 남긴다.
+- gate 변화: 없음
+- 결정: D-889 추가 17(사용자 지시 2026-11-01)
+- 교훈: 없음
+
+## 2026-11-01 · 093ef30c2b · docs: autocrlf=false commit -a 교훈
+- 변경: `docs/solutions/workflow-issues/autocrlf-false-commit-a-rewrites-tree-to-crlf-2026-11-01.md`
+- 증거: 11-01 `fix/pilot-record-bar` 커밋이 3,128파일을 CRLF로 바꿔 Safety-Review 검사에서 멈춤. 임시 저장소 재현(평범한 `commit -a`는 바뀐 것 없음, `-c core.autocrlf=false`는 속성 없는 파일을 `i/crlf`로 커밋). 다시 만든 가지는 093ef30c2b로 착지
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 새 교훈 1건
+
+## 2026-11-01 · uncommitted · D-954 현장 마커 프로필과 팔 마커 50번부터
+
+- 변경: D-954(D-933 8항 대체)와 로그 행. `deploy/site/marker-profile.json.example`(소유자별 번호 범위, 팔 슬롯↔팔 이름)과 `marker_profile.py check`(같은 계열 겹침 거절, ChArUco는 경고, `--site-cameras` 번호 소유 확인). 팔 슬롯을 35→50부터 3개로 옮김(`cell_print_sheets.arm_ids`, `cell_frame.slot_ids`, `cell_marks` 기본값, Cell 화면 목록). 천장 팔 마커 20~22 예약.
+- 증거: 현장 관제 PC 읽기 — `cameras.top` 기록 없음, `identity` 블록 없음(D-596 기본 켜짐), `field_boundary` 정합. 비트표 계산: 50~94번은 회전 포함 `DICT_4X4_50` 0~49와 최소 3비트 차(시험 고정). 예시 프로필 `check --site-cameras` ok. 원격 pytest는 아래 착지 전 실행.
+- gate 변화: 없음. CE: 해당 없음(새 설계·배정, 장애 해결 아님).
+
 ## 2026-11-01 · uncommitted · tools: 정책 화면 수정 게시용 FULL 착지
 - 변경: 없음(기록만). origin/main 동기화(0699b12647) 뒤 게시할 커밋에 녹색 FULL 착지 기록이 없어 이 기록 커밋을 `--tests full`로 착지한다. 같은 main과 같은 브랜치는 batch로 흡수되어 시험이 돌지 않았다.
 - 증거: `publish_main.py` dry run이 "no commit past origin/main has a green FULL land record"
