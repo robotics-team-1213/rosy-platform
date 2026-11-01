@@ -35,6 +35,70 @@ def test_multithreaded_executor_still_exposes_a_thread_pool():
         context.try_shutdown()
 
 
+def _spin_events_until(context, node, done, timeout=5.0):
+    """CORE.run()'s events branch on a real EventsExecutor: add, spin, remove, shutdown(0)."""
+    import threading
+    import time
+
+    from rclpy.experimental import EventsExecutor
+
+    executor = EventsExecutor(context=context)
+    executor.add_node(node)
+    spinner = threading.Thread(target=executor.spin, daemon=True)
+    spinner.start()
+    deadline = time.monotonic() + timeout
+    while not done() and time.monotonic() < deadline:
+        time.sleep(0.01)
+    context.try_shutdown()
+    spinner.join(timeout)
+    assert not spinner.is_alive(), "EventsExecutor.spin() did not return on context shutdown"
+    executor.remove_node(node)
+    executor.shutdown(timeout_sec=0)
+
+
+def test_events_executor_runs_timers_and_returns_on_shutdown():
+    context = rclpy.context.Context()
+    context.init()
+    node = rclpy.create_node("core_events_timer", context=context)
+    ticks = []
+    node.create_timer(0.02, lambda: ticks.append(1))  # CORE's cmd_vel timer period
+    try:
+        _spin_events_until(context, node, lambda: len(ticks) >= 5)
+        assert len(ticks) >= 5
+    finally:
+        node.destroy_node()
+
+
+def test_events_executor_delivers_a_publish_from_another_thread():
+    # CORE's uvicorn thread publishes on the node while the executor thread spins.
+    import threading
+
+    from std_msgs.msg import String
+
+    context = rclpy.context.Context()
+    context.init()
+    node = rclpy.create_node("core_events_api_thread", context=context)
+    received = []
+    node.create_subscription(String, "core_events_probe", lambda m: received.append(m.data), 10)
+    publisher = node.create_publisher(String, "core_events_probe", 10)
+    stop = threading.Event()
+
+    def api_thread():
+        while not stop.is_set():
+            publisher.publish(String(data="x"))
+            stop.wait(0.02)
+
+    sender = threading.Thread(target=api_thread, daemon=True)
+    sender.start()
+    try:
+        _spin_events_until(context, node, lambda: len(received) >= 3)
+        assert len(received) >= 3
+    finally:
+        stop.set()
+        sender.join(1.0)
+        node.destroy_node()
+
+
 def test_stop_executor_drains_a_real_executor():
     context = rclpy.context.Context()
     context.init()
