@@ -520,6 +520,8 @@ SIM 웹 어댑터와 화면은 조건 확인·실행 요청을 위한 준비 경
 
 서버는 선택적 `--sim-config PRIVATE.json`을 사용한다. 설정이 없으면 SIM 연결 미설정으로 응답하고 기존 검수는 계속 동작한다. 이 파일은 현재 계정 소유·0600이며 검수 state의 workspace_id와 결속한다.
 
+SIM 실험의 셀 모델 대장·사람 할 일은 저장소의 `learning/envs/isaac/cell_model_inventory.yaml`을 읽기만 한다. 실물 사진은 공개 저장소에 넣지 않는다. 대장 `photos`의 파일 이름으로 이 설정 파일 옆 `cell-photos/`에 두면 화면이 같은 방향 시뮬레이션 그림과 나란히 보여 준다. 컨테이너 적층 실행의 그림·영상(64 MiB 이하)·적층 요약도 같은 화면에서 본다.
+
 ```json
 {
   "workspace_id": "CURRENT_REVIEW_WORKSPACE_ID",

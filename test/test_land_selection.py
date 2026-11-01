@@ -42,7 +42,7 @@ def caller(tmp_path):
     land = SimpleNamespace(Stop=Stop, HARNESS="tools/harness/rosy_harness.py",
                            HARNESS_TRIGGER=": harness configuration or the selector itself",
                            ENV={"PYTHONUTF8": "1", "CALLER_ENV": "retained"},
-                           subprocess=SimpleNamespace(run=run),
+                           subprocess=SimpleNamespace(run=run), lines=lambda *args: [],
                            browser_tier=lambda *args: [["ROSY_RUN_BROWSER_TESTS=1", "browser/test"]])
     return land, payload, calls
 
@@ -107,12 +107,36 @@ def test_a_safety_path_in_mains_landed_delta_keeps_only_its_mapped_suites(caller
     land.subprocess = SimpleNamespace(run=lambda command, **kw: calls.append(command) or SimpleNamespace(
         returncode=0, stdout=json.dumps(answers.pop(0)), stderr=""))
     assert selection.select(land, tmp_path, "base", "python", head="main", landed=True) == (
-        [["guard/test"], ["safe/test"], ["mine/test"], ["ROSY_RUN_BROWSER_TESTS=1", "browser/test"]], None)
+        [["guard/test"], ["safe/test"], ["ROSY_RUN_BROWSER_TESTS=1", "browser/test"]], None), "addendum 10: no overlap"
     answers[:] = [delta, dict(mine, mode="full", escalations=["safe/y.py" + selection.SAFETY_TRIGGER],
                               local_invocations=[["mine/test"]])]
     assert selection.select(land, tmp_path, "base", "python", head="main", landed=True)[1] is not None
     answers[:] = [delta]  # not a landed delta (no own FULL to stand on): FULL as before
     assert selection.select(land, tmp_path, "base", "python", head="main")[1] is not None
+
+
+def test_a_landed_delta_reaching_none_of_this_branchs_suites_does_not_rerun_them(caller, tmp_path):
+    """D-889 addendum 10 item 2: own suites re-run only when main's delta reaches them (guards aside)."""
+    selection = load_selection()
+    land, _, _ = caller
+    land.land_guards = SimpleNamespace(GUARDS=("guard/test",))
+    delta = dict(mode="full", escalations=["conftest.py: pytest conftest"],
+                 local_invocations=[["guard/test"], ["fleet/test"]], full_invocations=[["test"]])
+    answers = []
+    land.subprocess = SimpleNamespace(run=lambda command, **kw: SimpleNamespace(
+        returncode=0, stdout=json.dumps(answers.pop(0)), stderr=""))
+    browser = ["ROSY_RUN_BROWSER_TESTS=1", "browser/test"]
+    for mine, rerun in ((dict(mode="affected", escalations=[], invocations=[["guard/test"], ["arm/test"]]), False),
+                        (dict(mode="affected", escalations=[], invocations=[["fleet/test/test_x.py::t"]]), True),
+                        (dict(mode="full", escalations=["tools/x.py: harness"], local_invocations=[["arm/test"]]),
+                         True)):
+        answers[:] = [delta, mine]
+        got = selection.select(land, tmp_path, "base", "python", head="main", landed=True)[0]
+        own = mine.get("invocations") or mine["local_invocations"]
+        assert got == ([["guard/test"], ["fleet/test"]] + ([inv for inv in own if inv != ["guard/test"]] if rerun
+                                                            else []) + [browser])
+    assert selection.overlaps([["a/test"]], [["ROSY_X=1", "a/test/test_b.py::c"]]) and not selection.overlaps(
+        [["a/test"]], [["b/test"]])
 
 
 def test_safety_trigger_is_the_selectors_text():
@@ -507,3 +531,27 @@ def test_explicit_full_refuses_incident_no_queue_before_ff_or_receipt(full_case)
     assert git(full_case.main, "rev-parse", "HEAD") == before
     assert not full_case.remote
     assert land.land_record.read(full_case.main, git(full_case.wt, "rev-parse", "HEAD")) is None
+
+
+def test_a_landed_delta_repeats_its_browser_tests_only_for_a_branch_that_changes_ui(caller, tmp_path):
+    """D-889 addendum 12 (user decision 2026-11-01): main's delta passed its own browser tests when it landed."""
+    selection = load_selection()
+    land, payload, _ = caller
+    ui = ["ROSY_RUN_BROWSER_TESTS=1", "browser/test"]
+    land.browser_tier = lambda wt, base, head=None: [ui] if head else []  # own change (base=main tip): no UI
+    assert selection.select(land, tmp_path, "base", "python", head="main", landed=True)[0] == [["selected/test"]]
+    land.browser_tier = lambda wt, base, head=None: [ui]  # this branch changes UI too: both run
+    assert ui in selection.select(land, tmp_path, "base", "python", head="main", landed=True)[0]
+    assert ui in selection.select(land, tmp_path, "base", "python")[0], "a pretest keeps its own browser tier"
+
+
+def test_an_automatic_full_tier_runs_simulation_suites_only_for_a_simulation_change(caller, tmp_path):
+    selection = load_selection()
+    land, payload, _ = caller
+    payload.update(mode="full", escalations=["x"], full_invocations=[
+        ["test"], ["integrations/simulation/gazebo/test"], ["ROSY_JOB_CORES=2", "learning/envs/isaac/test"]])
+    assert selection.select(land, tmp_path, "base", "python")[0][:1] == [["test"]]
+    assert len(selection.select(land, tmp_path, "base", "python")[0]) == 2, "only test + browser"
+    land.lines = lambda *a: ["integrations/simulation/gazebo/launch/x.py"]
+    assert ["integrations/simulation/gazebo/test"] in selection.select(land, tmp_path, "base", "python")[0]
+    assert selection.without_sim([["a/test", "learning/envs/isaac/test/test_x.py"]], []) == [["a/test"]]

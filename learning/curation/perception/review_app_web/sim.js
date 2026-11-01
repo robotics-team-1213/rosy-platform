@@ -4,7 +4,16 @@ const $=id=>document.getElementById(id);
 let token='', manager=false, busy=false, source='', checked=null, selected=null, pending=null;
 const terminal=new Set(['SUCCEEDED','FAILED','STOPPED']);
 const labels={PENDING:'준비 중',RUNNING:'실행 중',STOP_REQUESTED:'종료 확인 중',UNKNOWN:'확인 필요',SUCCEEDED:'실행 완료',FAILED:'실패',STOPPED:'중단'};
-const artifactLabels={'import-report':'모델 검사 보고서 열기','contact-report':'접촉 왕복 보고서 열기',pinky_initial:'Pinky 초기 위치',out_lift:'첫 파지·들기',conveyor_settle:'컨베이어 안착',back_lift:'복귀 파지·들기',pinky_settle:'Pinky 원위치 안착'};
+const artifactLabels={'import-report':'모델 검사 보고서 열기','contact-report':'접촉 왕복 보고서 열기',pinky_initial:'Pinky 초기 위치',out_lift:'첫 파지·들기',conveyor_settle:'컨베이어 안착',back_lift:'복귀 파지·들기',pinky_settle:'Pinky 원위치 안착',
+  'mapped-stack-report':'적층 보고서 열기','mapped-video':'연속 영상','mapped-overview':'전체','mapped-initial':'처음 배치','mapped-top':'위','mapped-side':'옆','mapped-grasp-failed':'파지 실패 순간'};
+const numbered={layer:'번째 놓기 후',trial:'번째 시도 끝',leveling:'번째 고르기'};
+const simStatus={reflected:'반영',stand_in:'대용',none:'없음'};
+let inventory=null;
+function artifactLabel(id){
+  const match=/^mapped-(layer|trial|leveling)-([0-9]{1,2})$/.exec(id);
+  return match?match[2]+numbered[match[1]]:artifactLabels[id];
+}
+function el(tag,text){const node=document.createElement(tag);if(text!==undefined)node.textContent=text;return node;}
 function notice(id,value){$(id).textContent=value;$(id).hidden=!value;}
 async function api(action,body){
   const response=await accountFetch('/api/learning/sim/'+action,body===undefined?{cache:'no-store'}:
@@ -36,14 +45,59 @@ function detail(row){
   selected=row;
   $('sim-selected').textContent=`${row.run_id} · ${labels[row.status]||row.status} · ${row.input_sha256||'입력 확인 필요'}`;
   $('sim-result').textContent=JSON.stringify(row.result||{status:row.status,error:row.error||null,snapshot:row.snapshot},null,2);
-  $('sim-artifacts').replaceChildren();
+  $('sim-artifacts').replaceChildren();notice('sim-summary','');
+  const ids=new Set();
   for(const file of row.artifacts?.files||[]){
-    if(!Object.hasOwn(artifactLabels,file.id))continue;
-    const link=document.createElement('a');link.textContent=artifactLabels[file.id];
-    link.href=`/api/learning/sim/runs/${row.run_id}/artifacts/${file.id}`;
-    const item=document.createElement('p');item.append(link);$('sim-artifacts').append(item);
+    const label=artifactLabel(file.id);
+    if(!label)continue;
+    ids.add(file.id);
+    const href=`/api/learning/sim/runs/${row.run_id}/artifacts/${file.id}`;
+    const link=el('a',label);link.href=href;
+    const item=el(/report$/.test(file.id)?'p':'figure');
+    if(file.id==='mapped-video'){const video=el('video');video.controls=true;video.preload='metadata';video.src=href;video.style.maxWidth='100%';item.append(video);}
+    else if(item.tagName==='FIGURE'){const image=el('img');image.loading='lazy';image.alt=label;image.src=href;item.append(image);}
+    if(item.tagName==='FIGURE'){const caption=el('figcaption');caption.append(link);item.append(caption);}else item.append(link);
+    $('sim-artifacts').append(item);
   }
+  if(ids.has('mapped-stack-report'))api('runs/'+row.run_id+'/summary').then(value=>{
+    if(selected?.run_id!==row.run_id)return;
+    const gaps=value.row_gaps_mm?` · 줄 간격 ${value.row_gaps_mm.join(', ')} mm`:'';
+    notice('sim-summary',`놓은 상자 ${value.placed}/${value.planned}${gaps} · 불안정 상자 ${value.unstable.length}개${value.error?' · 멈춘 이유 '+value.error:''}`);
+  },error=>notice('sim-summary',error.message));
+  compare(row.run_id,ids);
   controls();
+}
+function compare(runId,ids){
+  if(!inventory)return;
+  $('sim-compare').replaceChildren();
+  for(const photo of inventory.photos){
+    const real=el('figure'),image=el('img');image.alt='실물 '+photo.camera;image.src='/api/learning/sim/photos/'+photo.id;
+    image.addEventListener('error',()=>image.replaceWith(el('p','실물 사진이 아직 등록되지 않았습니다.')),{once:true});
+    real.append(image,el('figcaption',`실물 · ${photo.camera} · ${photo.captured_at}`));
+    const sim=el('figure');
+    if(runId&&photo.sim_view&&ids.has(photo.sim_view)){
+      const view=el('img');view.alt='시뮬레이션 '+artifactLabel(photo.sim_view);
+      view.src=`/api/learning/sim/runs/${runId}/artifacts/${photo.sim_view}`;sim.append(view);
+    }else sim.append(el('p',runId?'이 실행에는 같은 방향 시뮬레이션 그림이 없습니다.':'실행 기록을 선택하면 같은 방향 시뮬레이션 그림을 놓습니다.'));
+    sim.append(el('figcaption','시뮬레이션 · '+(photo.sim_view?artifactLabel(photo.sim_view):'같은 방향 없음')));
+    const pair=el('div');pair.className='omx-review-gallery';pair.style.marginBlockEnd='var(--space-3)';pair.append(real,sim);$('sim-compare').append(pair);
+  }
+}
+function ledger(value){
+  inventory=value;
+  const table=el('table'),head=el('tr');
+  for(const name of ['항목','CAD 출처','시뮬레이션','잰 값·출처','실물과 다른 점'])head.append(el('th',name));
+  const thead=el('thead');thead.append(head);const body=el('tbody');
+  for(const model of value.models){
+    const tr=el('tr');
+    const cad=model.cad.file?model.cad.file+(model.cad.sha256?' · sha256 '+model.cad.sha256.slice(0,12):''):'없음';
+    for(const text of [model.name,cad,simStatus[model.sim]||model.sim,model.measured||'—',model.differs||'—'])tr.append(el('td',text));
+    body.append(tr);
+  }
+  table.append(thead,body);const wrap=el('div');wrap.className='omx-table-wrap';wrap.append(table);
+  $('sim-inventory').replaceChildren(el('p',`확인 ${value.checked_at}`),wrap);
+  $('sim-tasks').replaceChildren(...value.person_tasks.map(task=>el('li',`${task.status==='done'?'완료':'할 일'} · ${task.task} — ${task.why}`)));
+  compare(selected?.run_id,new Set((selected?.artifacts?.files||[]).map(file=>file.id)));
 }
 async function refresh(){
   const data=await api('runs');$('sim-runs').replaceChildren();
@@ -83,6 +137,8 @@ $('sim-replay').addEventListener('click',()=>work(async()=>{
 work(async()=>{
   const session=await accountFetch('/api/accounts/session',{cache:'no-store'});
   if(session.ok){const account=await session.json();token=account.token;manager=account.capabilities.includes('manage');}
+  // The ledger is a repository file, so it shows even when the SIM connection is down.
+  ledger(await api('inventory'));
   const data=await api('catalog');source=data.source_sha;$('sim-source').textContent='실행 소스: '+source;
   for(const entry of data.scenarios){
     const option=document.createElement('option');option.value=entry.id;option.textContent=entry.name||entry.id;option.disabled=!entry.implemented;

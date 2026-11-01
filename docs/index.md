@@ -353,9 +353,8 @@
 
 ## 최근 기록
 
-- 2026-10-31 · uncommitted · tools: 워크트리 .git 유실 재발 교훈 갱신
-- 2026-11-01 · uncommitted · docs: D-940 중복 정의 게이트와 등록부
-- 2026-10-31 · uncommitted · omx: 재배선 뒤 장치 식별 교훈
-- 2026-10-31 · uncommitted · fix(land): 자동 묶음 착지를 끈다
-- 2026-10-31 · uncommitted · docs(solutions): version pins grew, use api_reserve bump
-- 2026-10-31 · uncommitted · fleet: D-938 팔 이송 정책 승인
+- 2026-11-01 · uncommitted · tools: 워크트리 .git 유실 재발 교훈 갱신
+- 2026-11-01 · uncommitted · fix(monitoring): 이벤트 기록을 수집기 시계로 읽는다 (MAIN-RED)
+- 2026-11-01 · uncommitted · fix: 조종 끊김·정지 전파·링크 지연 (D-948)
+- 2026-11-01 · uncommitted · fix: 링크 조사 후속 (문서 정리·AP 지터·enum 판단)
+- 2026-11-01 · uncommitted · fix: 로봇-사이트 링크 견고성 (조사 1순위 4건 + D-944)

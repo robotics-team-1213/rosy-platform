@@ -32,6 +32,8 @@ def test_connection_is_lan_only_and_rate_limited(core_client):
     original, _ = core_client()
     outside = TestClient(original.app, client=("8.8.8.8", 1234))
     assert _reason(outside.get("/api/v1/auth/connection"), 403) == "LAN_REQUIRED"
+    tailnet = TestClient(original.app, client=("100.101.2.3", 1234))      # D-944
+    assert tailnet.get("/api/v1/auth/connection").status_code == 200
     client = TestClient(original.app, base_url="http://192.168.1.10", client=("192.168.1.21", 1234))
     for _ in range(30):
         assert client.get("/api/v1/auth/connection").status_code == 200
