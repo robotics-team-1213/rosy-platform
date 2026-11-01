@@ -4,7 +4,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives import serialization
 from pydantic import ValidationError
 
-from core_common.protocol.account_access import AccountGrant, AccessRejected, sign_access, verify_access
+from core_common.protocol.account_access import AccountGrant, AccessRejected, grants_for, sign_access, verify_access
 
 
 def keys():
@@ -84,3 +84,27 @@ def test_extra_claims_and_cross_resource_grants_are_refused():
             {'resource': 'robot:r2', 'capabilities': ['robot.admin']}]}]:
         with pytest.raises((AccessRejected, ValidationError)):
             sign_access({**claims(), **change}, private, key_id='key-1')
+
+
+def test_stored_grant_may_name_every_robot_or_project_but_not_every_site():
+    for resource in ('robot:*', 'project:*'):
+        AccountGrant.model_validate({'resource': resource, 'capabilities':
+                                     ['robot.read' if resource.startswith('robot') else 'learning.view']})
+    for resource in ('site:*', 'robot:r*', 'robot:**'):
+        with pytest.raises(ValidationError):
+            AccountGrant.model_validate({'resource': resource, 'capabilities': ['fleet.read']})
+
+
+def test_wildcard_resolves_to_one_concrete_resource_and_never_enters_a_token():
+    stored = [{'resource': 'robot:*', 'capabilities': ['robot.read', 'robot.operate']},
+              {'resource': 'robot:r1', 'capabilities': ['robot.admin', 'robot.read']},
+              {'resource': 'project:*', 'capabilities': ['learning.view']}]
+    assert grants_for(stored, 'robot:r1') == [
+        {'resource': 'robot:r1', 'capabilities': ['robot.admin', 'robot.operate', 'robot.read']}]
+    assert grants_for(stored, 'robot:r2') == [
+        {'resource': 'robot:r2', 'capabilities': ['robot.operate', 'robot.read']}]
+    assert grants_for(stored, 'site:s1') == []
+    private, _ = keys()
+    with pytest.raises(ValueError):
+        sign_access(claims(aud='robot:*', grants=[{'resource': 'robot:*', 'capabilities': ['robot.read']}]),
+                    private, key_id='key-1')

@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-955 | Rosy를 연동 허브로 두고, 팀원은 로그인하면 기본 권한 묶음으로 바로 쓴다 | Accepted (2026-11-01) |
 | D-951 | ROSY Calibration 앱을 두고, 두 팔 셀의 보정·높이·공간 점검을 코드 한 경로로 돌린다. 집게는 D-933 마커, 면 높이는 깊이(`cell_depth`, D-933 3항 터치 대신), 테이블보다 낮은 면은 승인된 `low_zones` 사각형에서만, 하중 관절 I 게인, 팔별 세션 잠금과 통로 예약(`cell_space`). [전문](../adr/D-951-rosy-calibration-application.md) | Accepted (2026-11-01, 사용자 결정; 앱 화면 없음, 부품 착지 대기, 현장 수용 없음) |
 | D-939 | 앱 연동 코드는 한 곳에 둔다 — 앱 사이 사본 금지. [전문](../adr/D-939-app-link-shared-sources.md) | Accepted (2026-10-31, 사용자 결정; Android peer 공통 소스·구조 시험, 기기 수용 별도) |
 | D-949 | 줄 수 래칫은 리팩터링 대기열이다 — 1,000줄 이상은 지금 나누고 800줄 이상은 다음에 고칠 때 먼저 나눈다. [전문](../adr/D-949-size-ratchet-refactor-tiers.md) | Accepted (2026-11-01, 사용자 결정; D-766에 순서를 더함) |
