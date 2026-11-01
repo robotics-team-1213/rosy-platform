@@ -142,7 +142,22 @@ def prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, t
             invocations: list[list[str]] | None = None, note: str | None = None) -> None:
     """Merge main, run this branch's selection (or the given FULL ``invocations`` of main's delta), record it.
 
-    A NEW failure stops here, before the turn; the ticket is released by ``land.main``."""
+    A NEW failure stops here, before the turn; the ticket is released by ``land.main``. One exception (D-889 14):
+    a failure main already had at the merged base, when main has moved since, prepares once more on the new main.
+    11-01: two landings stopped on a MAIN-RED test that main had fixed during their 66 min pretest."""
+    try:
+        _prepare(land, wt, branch, args, python, qdir, ticket, invocations, note)
+    except land.Stop as stop:
+        if (invocations is not None or "MAIN-RED" not in str(stop) or getattr(args, "_main_red_retry", False)
+                or land.out(wt, "rev-parse", "main") == land.land_mainred.merged_main(wt)):
+            raise
+        args._main_red_retry = True
+        print(f"[land] {stop}\n[land] main moved since that base: preparing once more on the new main", flush=True)
+        _prepare(land, wt, branch, args, python, qdir, None)
+
+
+def _prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, ticket: Path | None,
+             invocations: list[list[str]] | None, note: str | None) -> None:
     after_reboot(ticket)
     if ticket is not None:
         landed = lambda: land.land_batch.in_main(land, wt, branch)  # noqa: E731
