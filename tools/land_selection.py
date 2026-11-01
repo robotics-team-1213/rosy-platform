@@ -106,7 +106,7 @@ def select(land, wt: Path, base: str, python: str, head: str | None = None,
                 guards = getattr(getattr(land, "land_guards", None), "GUARDS", ())
                 reached = [inv for inv in mine if overlaps(sel["local_invocations"], [inv], guards)]
                 safe_delta = any(e.endswith(SAFETY_TRIGGER) for e in sel["escalations"])  # addendum 8 keeps those
-                if not reached and not safe_delta:  # D-889 22: the delta's suites run here as they ran on main
+                if not reached and not safe_delta and own["mode"] != "full":  # D-889 22: ran here as on main
                     print("[tests] main's delta and this branch reach none of each other's suites: the guards only")
                     return _unique(_guards_only(sel["local_invocations"], guards) + browsers(sel["local_invocations"])), None
                 if len(reached) < len(mine):
@@ -128,7 +128,8 @@ def select(land, wt: Path, base: str, python: str, head: str | None = None,
                 own = _affected(land, wt, python, head, None)
                 guards = getattr(getattr(land, "land_guards", None), "GUARDS", ())
                 mine = own["local_invocations"] if own["mode"] == "full" else own["invocations"]
-                if (not any(e.endswith(SAFETY_TRIGGER) for e in own["escalations"] + sel["escalations"])
+                if (own["mode"] != "full"  # a FULL own reaches more than its local suites name
+                        and not any(e.endswith(SAFETY_TRIGGER) for e in own["escalations"] + sel["escalations"])
                         and not overlaps(sel["invocations"], mine, guards)):
                     print("[tests] main's delta and this branch reach none of each other's suites: the guards only")
                     return _unique(_guards_only(sel["invocations"], guards) + browsers(sel["invocations"])), None

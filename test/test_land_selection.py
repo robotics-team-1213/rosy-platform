@@ -138,8 +138,9 @@ def test_a_landed_delta_reaching_none_of_this_branchs_suites_does_not_rerun_them
         got = selection.select(land, tmp_path, "base", "python", head="main", landed=True)[0]
         own = mine.get("invocations") or mine["local_invocations"]
         # D-889 22: reaching nothing either way, the delta's suites do not rerun either: the guards only
+        unreached = [["guard/test"], ["fleet/test"]] if mine["mode"] == "full" else [["guard/test"]]  # a FULL own: unknown reach
         assert got == ([["guard/test"], ["fleet/test"]] + [inv for inv in own if inv != ["guard/test"]] if rerun
-                       else [["guard/test"]]) + [browser]
+                       else unreached) + [browser]
     # D-889 18: per invocation, only the own ones the delta reaches rerun (11-01: 485 rerun for a few reached)
     answers[:] = [delta, dict(mode="full", escalations=["contracts/foundation/x.py: shared foundation"],
                               local_invocations=[["fleet/test/test_y.py"], ["arm/test"], ["guard/test"]])]
