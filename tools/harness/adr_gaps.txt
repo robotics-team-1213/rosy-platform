@@ -105,6 +105,6 @@ D-945 reserved in another in-flight branch (worktree install-seat), absent from 
 D-946 reserved in another in-flight branch (worktree sim-parity), absent from this D-944/D-948 branch; remove when its ADR lands
 D-947 reserved in another in-flight branch (worktree release-corrector), absent from this D-944/D-948 branch; remove when its ADR lands
 D-950 reserved in another in-flight branch (worktree dockrear), absent from this D-954 branch; remove when its ADR lands
-D-951 reserved by land/feat/map-world-261026-b (refs/adr/D-951), absent from this D-954 branch; remove when its ADR lands
+D-951 reserved in another in-flight branch (docs/rosy-calibration-application), absent from this D-954 branch; remove when its ADR lands
 D-952 no refs/adr/D-952 and no ADR file in any worktree when D-954 was written (worktree pi45 owner note names it); remove if it lands
 D-953 reserved in another in-flight branch (worktree pi45), absent from this D-954 branch; remove when its ADR lands
