@@ -4342,3 +4342,9 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: `test/test_omx_record_session.py` 원격 시험(새 시험: side·arm_a_wrist 단위가 멈췄다 다시 켜짐)
 - gate 변화: 없음. 실물 작업대 녹화로 확인한 결과가 아니다.
 - CE: 해당 없음
+
+## 2026-11-02 · uncommitted · feat(site): 관제 단위 overlay를 서명 candidate에 넣는다 (D-960)
+- 변경: `deploy/site/compose.control-unit.yaml`(Fleet에 `ROSY_CONTROL_UNIT_DIR` 읽기 전용 mount + 서명 proxy 이미지의 peer 프록시, 외부 `rosy-control-peers` 네트워크, alias `ROSY_CONTROL_UNIT_PEER_ALIAS`)을 candidate build·verify(`control_unit` 요약)·자동 갱신 허용 목록·실행 검사에 workcell과 같은 방식으로 추가.
+- 증거: 2026-11-02 현장 R 전환에서 사이트별 미서명 `compose.control-unit-r.yaml`을 `ROSY_SITE_PAIRING_COMPOSE`에 넣으면 자동 갱신이 모든 새 candidate를 거절함을 확인(updater `allowed_overlays`). 원격 `test_site_autoupdate.py`·`test_site_candidate*.py`·`test_control_unit_deploy.py`·`test_site_compose_log_rotation.py`.
+- gate 변화: 없음
+- 교훈: 작업 기록 2026-11-02 control-unit-d960-switch
