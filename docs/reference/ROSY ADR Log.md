@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-954 | 현장 마커 번호는 프로필 한 장에 배정하고, 팔 마커는 50번부터 쓴다 (D-933 8항 대체). [전문](../adr/D-954-site-marker-profile-arm-ids.md) | Accepted (2026-11-01, 사용자 결정; 천장 팔 마커 소비·인쇄·실물 수용 별도) |
 | D-949 | 줄 수 래칫은 리팩터링 대기열이다 — 1,000줄 이상은 지금 나누고 800줄 이상은 다음에 고칠 때 먼저 나눈다. [전문](../adr/D-949-size-ratchet-refactor-tiers.md) | Accepted (2026-11-01, 사용자 결정; D-766에 순서를 더함) |
 | D-948 | 사람 조종은 `/ws/teleop` 스트림으로 보내고 REST `/teleop`은 대체 경로로 남긴다. [전문](../adr/D-948-teleop-websocket-stream.md) | Accepted (2026-11-01, 사용자 지시; 장치·현장 수용 별도) |
 | D-944 | 팀 tailnet에서도 LCD 코드로 CORE에 페어링한다. [전문](../adr/D-944-tailnet-code-pairing.md) | Accepted (2026-11-01, 사용자 결정; 코드 없는 개발 세션·peer 승인은 LAN 전용 유지) |

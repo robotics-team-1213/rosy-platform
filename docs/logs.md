@@ -13378,3 +13378,9 @@ osy-d395-s1d\`.
 - 변경: `GET /api/v1/sim/omx/target`에 `start_pose`·`task`(additive)를 적었다. 값은 `deploy/robot/omx/sim/pilot_demonstration.yaml`에서 온다. 버전 고정 시험·`app.py` 문자열을 v1.339로 올렸다.
 - 증거: 계약 시험 `test_omx_sim_pilot_contract.py`, 버전 고정 시험(원격).
 - gate 변화: 없음. CE: 해당 없음.
+
+## 2026-11-01 · uncommitted · D-954 현장 마커 프로필과 팔 마커 50번부터
+
+- 변경: D-954(D-933 8항 대체)와 로그 행. `deploy/site/marker-profile.json.example`(소유자별 번호 범위, 팔 슬롯↔팔 이름)과 `marker_profile.py check`(같은 계열 겹침 거절, ChArUco는 경고, `--site-cameras` 번호 소유 확인). 팔 슬롯을 35→50부터 3개로 옮김(`cell_print_sheets.arm_ids`, `cell_frame.slot_ids`, `cell_marks` 기본값, Cell 화면 목록). 천장 팔 마커 20~22 예약.
+- 증거: 현장 관제 PC 읽기 — `cameras.top` 기록 없음, `identity` 블록 없음(D-596 기본 켜짐), `field_boundary` 정합. 비트표 계산: 50~94번은 회전 포함 `DICT_4X4_50` 0~49와 최소 3비트 차(시험 고정). 예시 프로필 `check --site-cameras` ok. 원격 pytest는 아래 착지 전 실행.
+- gate 변화: 없음. CE: 해당 없음(새 설계·배정, 장애 해결 아님).

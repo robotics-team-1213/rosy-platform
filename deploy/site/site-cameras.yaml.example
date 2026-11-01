@@ -5,7 +5,8 @@
 # unenrolling a robot in the console needs no edit here. A list of ids still works
 # (fixed targets). A placeholder id is not a robot.
 # A robot's marker id equals its robot number: rosy_NN wears DICT_4X4_50 id NN,
-# robots are 40-49, 7 is the dock tag and 30-38 are corners/places (D-562). With
+# robots are 40-49, 7 is the dock tag and 30-38 are corners/places (D-562). Every owner's
+# ids: marker-profile.json.example (D-954; marker_profile.py check --site-cameras). With
 # robot_ids: enrolled, robot_markers lists only exceptions ({} = numbers for all).
 sources:
   # credential: static (default) - the phone is given a fixed token by hand (rosyov:// link).

@@ -71,8 +71,8 @@ def learned():
 
 
 def test_slot_ids_are_the_print_sheet_table():
-    assert cf.slot_ids(1) == {"gripper": 35, "base": [36, 37], "surfaces": [[38, 39, 40, 41], [42, 43, 44, 45], [46, 47, 48, 49]]}
-    assert [cf.slot_ids(n)["gripper"] for n in (1, 2, 3, 4)] == [35, 50, 65, 80]
+    assert cf.slot_ids(1) == {"gripper": 50, "base": [51, 52], "surfaces": [[53, 54, 55, 56], [57, 58, 59, 60], [61, 62, 63, 64]]}
+    assert [cf.slot_ids(n)["gripper"] for n in (1, 2, 3)] == [50, 65, 80]
 
 
 def test_the_gripper_marker_at_fk_points_gives_the_camera_and_the_markers_their_arm_corners():
