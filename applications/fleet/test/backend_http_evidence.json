@@ -1312,6 +1312,14 @@
       ],
       "source_revision": "46563c52da7f22338d0139531ac6ac61d4966297"
     },
+    "GET:/api/fleet/platoon": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_lane_progress.py",
+        "test_the_route_shows_the_active_loop_and_never_dispatches"
+      ],
+      "source_revision": "1246e35ce8884a6127d0bbae0260b060290b3cdc"
+    },
     "GET:/api/fleet/tracking": {
       "status": 200,
       "test": [
