@@ -42,7 +42,8 @@ MOUNT = """async () => {
   }};
   window.disposeArm = mountArm(root, {instance_id: 'sim-test', joints: ['joint1', 'joint2'], gripper: 'gripper',
     camera: true, recording: true, controls: {schema: 'rosy.controls/1', items: [{id: 'arm', kind: 'joint_jog',
-    label: '팔', joints: ranges, max_step_rad: 0.05, duration_s: 0.4, command: 'bounded_goal'}]}}, driver);
+    label: '팔', joints: ranges, max_step_rad: 0.05, duration_s: 0.4, command: 'bounded_goal'}]},
+    ...(window.extraTarget ?? {})}, driver);
 }"""
 
 
@@ -107,3 +108,24 @@ def test_start_pose_task_recording_and_failure_case_flow(tablet_page):
 
 def window_task(page):
     return page.evaluate("window.task")
+
+
+def test_profile_start_pose_and_task_need_no_tablet_setup(tablet_page):
+    base_url, page, errors = tablet_page
+    page.goto(f"{base_url}/pilot")
+    page.evaluate("localStorage.clear(); sessionStorage.clear();"
+                  "window.extraTarget = {start_pose: {joint1: 0.1, joint2: 0.2}, task: '프로파일 과제'}")
+    page.evaluate(MOUNT)
+    page.fill("[data-sim-code]", "test-only")
+    page.click("[data-sim-connect]")
+    page.wait_for_function("document.querySelector('[data-sim-home-status]').textContent.includes('시작 자세와 다릅니다')")
+    assert page.locator("[data-sim-home-save]").is_hidden() and page.locator("[data-sim-home-source]").is_visible()
+    assert page.input_value("[data-sim-task]") == "프로파일 과제"
+    page.wait_for_function("document.querySelector(\"[data-sim-step='task']\").dataset.state === 'done'")
+    page.click("[data-sim-home-go]")
+    page.wait_for_function("document.querySelector('[data-sim-home-status]').textContent === '시작 자세에 있습니다'",
+                           timeout=20_000)
+    assert page.evaluate("window.sent") == [0.05, 0.05]
+    assert page.evaluate("Object.keys(localStorage).filter((key) => key.includes('home'))") == []
+    page.evaluate("window.disposeArm()")
+    assert errors == [], errors
