@@ -35,8 +35,8 @@ MIN_SURFACE_MARKERS = 2  # one marker's four corners leave the tilt loose and ca
 
 
 def slot_ids(slot: int) -> dict:
-    """The same table as the print sheets' arm_ids (D-933 8): gripper, 2 base, 3 surfaces of 4."""
-    first = 35 + 15 * (int(slot) - 1)
+    """The same table as the print sheets' arm_ids (D-933 8, D-954): gripper, 2 base, 3 surfaces of 4."""
+    first = 50 + 15 * (int(slot) - 1)
     return {"gripper": first, "base": [first + 1, first + 2],
             "surfaces": [list(range(first + 3 + 4 * k, first + 7 + 4 * k)) for k in range(3)]}
 
