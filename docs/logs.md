@@ -13333,6 +13333,13 @@ osy-d395-s1d\`.
 - 결정: D-889 추가 14(사용자 목표 2026-11-01)
 - 교훈: 없음
 
+## 2026-11-01 · uncommitted · docs(solutions): mutation 증명 탐침은 safety 태그 경로 밖에서
+- 변경: `docs/solutions/workflow-issues/mutation-probe-on-safety-path-blocks-landing-2026-11-01.md` 신규. D-940 후속 착지에서 mutation probe가 `concern: safety` 경로를 건드려 초록인데도 D-430 §5가 착지를 막은 사례와 예방·복구 절차.
+- 증거: 초록 `6aa4000879`·빨강 `78e7a05dde`(probe_field 지목)·재브랜치 `e373c7b615` main 반영. probe 위치를 safety 밖에 찍은 D-940 게이트 증명(`2e8109ab34`)은 같은 날 무사 통과한 대조군.
+- gate 변화: 없음
+- 결정: 없음(교훈 기록)
+- 교훈: 신규 mutation-probe는 probe 파일 선정 전 `platform_parts.yaml`의 safety 태그를 먼저 본다
+
 ## 2026-11-01 · uncommitted · fix(land): 차례 한도에 한 번 돌려보낸 착지는 다음 차례를 끝까지 쓴다 (D-889 추가 15)
 - 변경: `Overtime` 뒤 `args._overtime`을 켜고, `land_checks.run_tests`는 그때 차례 한도를 걸지 않는다.
 - 증거: 11-01 11:43~12:10 rest 묶음·android-shared-peer가 12~13분 차례 뒤 반납, main 27분 넘게 정지. 원격 시험은 착지 기록에 남긴다.
