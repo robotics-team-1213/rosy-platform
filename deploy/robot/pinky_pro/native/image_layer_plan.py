@@ -32,7 +32,15 @@ UDEV_DIR = "etc/udev/rules.d"
 MODPROBE_DIR = "etc/modprobe.d"
 
 
-ALLOWED_PREFIXES = (NATIVE_RUNTIME + "/", UNIT_DIR + "/", UDEV_DIR + "/", MODPROBE_DIR + "/")
+NETWORKMANAGER_DIR = "etc/NetworkManager/conf.d"
+
+
+# Image-overlay configs kept flat in native/, installed under the name build-native-payload.sh gives them.
+OVERLAY_CONFIGS = (("networkmanager-60-rosy-wifi.conf", NETWORKMANAGER_DIR + "/60-rosy-wifi.conf"),)
+
+
+ALLOWED_PREFIXES = (NATIVE_RUNTIME + "/", UNIT_DIR + "/", UDEV_DIR + "/", MODPROBE_DIR + "/",
+                    NETWORKMANAGER_DIR + "/")
 
 
 # OS boot/configuration and account state never belong to application sync.
@@ -238,6 +246,13 @@ def allowlist(native: Path) -> tuple[list[dict], list[dict]]:
             entries.append(_entry(source, f"{UNIT_DIR}/{unit}", "unit", 0o644))
         else:
             skipped.append({"path": f"/{UNIT_DIR}/{unit}", "reason": "not in this release"})
+    # Read at NetworkManager's next start or connection activation: nothing is reloaded live.
+    for name, destination in OVERLAY_CONFIGS:
+        source = native / name
+        if source.is_file() and not source.is_symlink():
+            entries.append(_entry(source, destination, "config", 0o644))
+        else:
+            skipped.append({"path": f"/{destination}", "reason": "not in this release"})
     for kind, folder, pattern, destination in (
         ("udev", "udev", "*.rules", UDEV_DIR),
         ("modprobe", "modprobe", "*.conf", MODPROBE_DIR),

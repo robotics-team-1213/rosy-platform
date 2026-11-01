@@ -4273,7 +4273,77 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - gate 변화: 없음
 - 교훈: 기존 문서 갱신 대상 없음(작업 기록 2026-10-31 §14)
 
-## 2026-11-01 · uncommitted · fix(site): Tailscale 대역에서도 천장 카메라 미리보기
+## 2026-11-01 · uncommitted · fix(omx): 밀기 경로가 집게가 지나는 폭까지 본다
+- 변경: `cell_push.path_clear`에 `beside` 검사 — 집게가 지나는 줄의 양옆(`push.lane_half_mm` 21 mm = 손가락 간격 34.4 + 손가락 / 2, 더하기 지도의 LOO 최대 오차)에 무엇이 있으면 거절
+- 증거: 현장 감독 시험(사람 스위치 옆) — 붙어 선 세 열 중 왼쪽 열을 밀자 이웃 두 열(중심에서 19 mm)이 함께 약 40 px 밀리고 shoulder lag 2.2로 접촉 정지·후퇴·귀환. 원격 `test_omx_cell_push.py` 새 회귀 시험
+- gate 변화: 없음
+- 교훈: 작업 기록 2026-10-31 §14
+
+## 2026-11-01 · uncommitted · feat(omx): 밀기도 판단·결과를 남기고, 집게 크기는 측정값 하나에서
+- 변경: `cell_params.jaw_face_half_mm`(손가락 간격 측정값 + 손가락) 하나를 밀기 통로 폭에 사용(`push.lane_half_mm` 제거). 감독 밀기는 `decisions.jsonl`에 `push`·`push_outcome` 행을 남긴다. `cell-knowledge.example.json`에 11-01 검증 사실 5건(붙어 선 줄, 표면 색 중앙값, 밀기 끌림, 판 높이 편차, I 게인)
+- 증거: 원격 `test_omx_cell_push.py` 8 passed(막힌 밀기는 움직이지 않고 거절 행을 남김), 지식 파일 검증 26건
+- gate 변화: 없음
+- 교훈: 작업 기록 2026-10-31 §14
+
+## 2026-11-01 · uncommitted · fix(omx): 팔 세션이 도는 동안 원격 시험을 관제 PC에서 뺀다
+- 변경: `joint_tune.session_lock`이 잡혀 있는 동안 `~/rosy-jobs/busy`에 `<만료> omx-session <pid>`(4시간)를 쓰고, 셀 잠금을 홀로 잡는 마지막 세션이 지운다. 다른 사람이 쓴 표시는 건드리지 않는다.
+- 증거: 두 팔 동시 시험(현장 스위치 옆) 때 관제 PC에 원격 시험 작업(CPU 66%·50%)이 돌았고 arm_a wrist_roll 추종 오류, arm_b over_ticks 0–1→477. 원격 `test_omx_session_lock.py` 등 108 passed.
+- gate 변화: 없음
+- 교훈: 작업 기록 2026-10-31 §15.1(재시험으로 원인 확인 전이라 미해결)
+
+## 2026-11-01 · uncommitted · fix(omx): 피벗 측정점 찾기가 현장 바닥 색을 쓴다
+- 변경: `cell_calibrate`의 `pivot-near` 단계가 같은 일을 하던 `auto_pivot_point`를 다시 쓰고, 장애물 판정에 현장의 측정 바닥 색(`surface_lab`)·바닥 다각형을 넘긴다.
+- 증거: 현장 `pivot-near` 두 번이 "no clear point"로 멈춤(팔레트 위 빈 칸이 있는데도). 원격 `test_omx_cell_calibrate.py` 6 passed.
+- gate 변화: 없음
+- 교훈: 작업 기록 2026-10-31 §15
+
+## 2026-11-01 · uncommitted · fix(omx): 깊이 높이의 기준 평면이 프레임마다 바뀌지 않는다
+- 변경: `cell_depth.table_plane`이 가장 큰 평면 둘 가운데 더 높은 쪽(카메라에 가까운 쪽)을 셀 테이블로 고른다. 큰 쪽 점 수의 25% 이상이고 평행할 때다. RANSAC은 `_ransac`로 나눴다.
+- 증거: 현장 깊이 프레임 둘에서 수정 전에는 팔레트가 75 mm와 10 mm로 갈렸다(테이블 밖 약 60 mm 낮은 면이 더 넓게 잡힌 프레임). 수정 후에는 두 프레임·시드 6개 모두 팔레트 8–12 mm, 열 74–79 mm. 원격 `test_omx_cell_depth.py` 5 passed(더 넓은 낮은 면 장면은 수정 전 코드로 실패).
+- gate 변화: 없음
+- 교훈: 작업 기록 2026-10-31 §15.2
+
+## 2026-11-01 · uncommitted · feat(omx): 붙어 선 긴 상자를 팔이 스스로 떼어 집는다
+- 변경: `cell_push`의 집게 통로 폭이 근처에서 잰 피벗 원의 rms를 쓴다(없으면 지도의 최대 오차). 길이 방향으로 미는 긴 상자는 `--half-width-mm`로 앞길을 상자 폭만큼만 본다. `cell_auto_pick`은 가운데에 손가락 자리가 없을 때 상자 끝 쪽 집기 점(`reachable_ends`)에서 자리를 찾는다.
+- 증거: 현장 dry run에서 4 mm 간격 3칸 열을 길이로 밀 때 통로 33 mm(집게 21.2 + 지도 오차 11.85)가 옆 열에 닿아 거절, 앞길 표본이 반 길이(43.5 mm) 옆에 찍혀 거절. 원격 `test_omx_cell_push.py`·`test_omx_cell_auto_pick.py`·`test_omx_cell_calibrate.py` 62 passed.
+- gate 변화: 없음
+- 교훈: 작업 기록 2026-10-31 §15.3
+
+## 2026-11-01 · uncommitted · fix(omx): 피벗 측정이 빽빽한 팔레트에서는 대상 바로 위에서 한다
+- 변경: `cell_calibrate`의 `pivot-near`가 `pivot.over_target`이 켜져 있고 집게 높이가 대상 꼭대기(`pivot.over_top_mm`)보다 `pivot.over_clear_mm` 이상 높으면 빈 자리를 찾지 않고 대상 바로 위에서 잰다. 자동 집기(`self_calibrate`)와 같은 규칙(`over_target`) 하나를 쓴다.
+- 증거: 현장 `pivot-near pallet:0.118,-0.064`가 "no clear point"로 멈춤(필요한 빈 칸 72 px, 붙어 선 열 옆 빈 띠 41·60·61 px). 원격 `test_omx_cell_calibrate.py`.
+- gate 변화: 없음
+- 교훈: 작업 기록 2026-10-31 §15.3
+
+## 2026-11-01 · uncommitted · native v2 readonly profile contract
+
+- 변경: D-907·ADR Log와 test/test_native_profile_manifest.py 초안. 기존 v1 producer/validator를 보존하고 v2 서명·형식·inventory·독립 policy·runtime identity 계약을 시험한다.
+- 검증: 검토 기준 14680235에서 b58162a6까지 관련 common signing/Pinky release/native verifier/test seam diff 없음. 현재는 test/doc 후보이며 pytest·생산 구현은 검토 뒤 진행한다.
+- gate 변화: 없음. readonly metadata 검증은 consumer 설치·native closure·활성화·실물 권한 증거가 아니다.
+- CE: 해당 없음 — 새 계약 단위의 test-first 후보이며 해결·검증한 비문서화 장애가 없다.
+
+## 2026-11-01 · uncommitted · D-907 readonly native v2 verifier
+
+- 변경: common release owner에 native_profiles.py를 추가했다. 기존 Ed25519/SHA256SUMS를 먼저 검증한 뒤 v2 exact JSON·inventory·독립 설치 policy·unit digest·runtime identity/fingerprint·lock bytes hash를 대조한다. Pinky v1과 updater/consumer/activation은 바꾸지 않는다.
+- 증거: test-first 2f01b94b901a0d363ccacb49bf3ecd0934d5b47e의 공식 원격 집중 실행은 v1 corpus 1 passed, 새 interface 부재 94 failed, skip0·setup/collection0이었다. 현재 생산 후보는 정적 검사와 독립 SOURCE 검토를 앞두며 GREEN·실물 수용은 아직 없다.
+- gate 변화: 없음. 성공 반환은 서명 metadata/policy 일치이며 실제 native closure·실행 가능성·arm readiness·권한·업데이트 transaction의 인증이 아니다.
+- CE: 해당 없음 — 새 metadata 계약 구현이며 해결한 비문서화 운영 장애가 없다.
+
+## 2026-11-01 · uncommitted · D-907 authenticated metadata read repair
+
+- 변경: 실제 common 서명 검증이 반환한 digest map으로 각 metadata의 한 번 읽은 bytes를 다시 인증하고, 그 bytes를 그대로 JSON 파싱·fingerprint/marker/revision 대조에 쓴다. 서명 검사 뒤 재개방한 다른 내용을 신뢰하는 공백을 닫는다.
+- 증거: test-only8658211939와 동결된 취약 생산 bytes의 unreferenced 후보bf952ea992에서 실제 서명 검증 뒤 manifest/identity 교체 두 시험이 모두 DID NOT RAISE로 원격 RED였다(2 failed/skip0/setup0/collection0, comparator2NEW). 현재 수정은 독립 검토 전이며 GREEN은 아직 없다.
+- gate 변화: 없음. 실제 설치·native closure·활성화·장치 권한을 검증한 결과가 아니다.
+- CE: 미해결 — 실제 RED는 확인했으며 수정 검증 후 trust-boundary 교훈 기록 필요성을 판단한다.
+
+## 2026-11-02 · 97da913f85 · OMX record_session이 켜진 카메라 단위 전부를 넘겨받음
+
+- 변경: `record_session.py`가 top/front 고정 목록 대신 `systemctl list-units rosy-omx-camera@*`로 켜진 카메라 단위를 모두 찾아 멈추고 끝나면 다시 켠다(camera-view·readiness는 전처럼 먼저 멈춤). 10-31 레지스트리로 늘어난 side·두 번째 손목 카메라가 V4L 장치를 쥔 채 남지 않는다. 벤치 녹화 페이지(D-943)는 이미 같은 패턴을 쓴다.
+- 증거: `test/test_omx_record_session.py` 원격 시험(새 시험: side·arm_a_wrist 단위가 멈췄다 다시 켜짐)
+- gate 변화: 없음. 실물 작업대 녹화로 확인한 결과가 아니다.
+- CE: 해당 없음
+
+## 2026-11-02 · uncommitted · fix(site): Tailscale 대역에서도 천장 카메라 미리보기
 
 - 변경: 사이트 Caddy의 토큰 없는 카메라 보기 예외(`@lan_camera`, Fleet `vision/sources`·`vision/lease` 두 경로)에 Tailscale tailnet `100.64.0.0/10`을 더한다. 기존 `private_ranges`는 CGNAT 대역을 포함하지 않아 tailnet 브라우저가 401을 받았다. D-473 개발 세션이 이미 같은 대역을 사설망으로 받는 것과 맞춘다. 허가 범위(소스 목록·60초 source 한정 lease)와 다른 Fleet 경로의 토큰 요구는 그대로다.
 - 증거: 사이트·Fleet 관련 원격 pytest(커밋 뒤 실행). 2026-10-31 현장 proxy 컨테이너의 Caddy로 이 Caddyfile을 `caddy validate` → Valid configuration(적용 안 함). 현장 방화벽은 이미 `tailscale0`을 허용한다. 배포 전 현장 443에서 tailnet 주소의 `/api/fleet/vision/sources`는 401, 8443(Account)에서는 목록·lease·`ceiling_north` 프레임 200.

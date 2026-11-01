@@ -23,10 +23,10 @@ def check_request(body, methods):
     identifier(body['request_id'])
     if 'arm_id' in body and (not isinstance(body['arm_id'], str) or not body['arm_id']):
         raise ValueError('explicit arm target identity required')
-    if body['device'] != 'cpu':
-        raise ValueError('CPU only until shared GPU admission is connected')
     if body['method'] not in methods:
         raise ValueError('unknown learning method')
+    if body['device'] not in methods[body['method']]['devices']:
+        raise ValueError('device unavailable for this learning method; CPU is always offered')
     for key, lower, upper in [('steps', 1, 100000), ('batch_size', 1, 64), ('seed', 0, 2147483647)]:
         if type(body[key]) is not int or not lower <= body[key] <= upper:
             raise ValueError('learning integer outside allowed range: ' + key)

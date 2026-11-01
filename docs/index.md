@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
-- 2026-11-01 · uncommitted · feat(fleet): 확인된 ARM 시도의 재관측 계약(D-930, API v1.334)
-- 2026-11-01 · uncommitted · fix(land): FULL 착지도 겹침 판정, 돌려보낸 표시는 표에 (D-889 추가 16)
-- 2026-11-01 · f2333e8aea · API v1.339 OMX SIM 시연 기본값
-- 2026-11-01 · uncommitted · tools: 워크트리 .git 유실 재발 교훈 갱신
-- 2026-11-01 · uncommitted · fix(land): 차례 한도에 한 번 돌려보낸 착지는 다음 차례를 끝까지 쓴다 (D-889 추가 15)
+- 2026-11-02 · uncommitted · feat(fleet): 확인된 ARM 시도의 재관측 계약(D-930, API v1.334)
+- 2026-11-02 · uncommitted · fix(harness): 같은 폴더 import 사슬로 시험을 찾는다 (D-889 추가 21)
+- 2026-11-02 · uncommitted · fix(land): 서로 닿지 않으면 차례는 가드만 (D-889 추가 22)
+- 2026-11-01 · uncommitted · D-945 전 표면 자리 규칙
+- 2026-11-01 · uncommitted · D-926 보강: 새 구획은 ui-section 네 역할

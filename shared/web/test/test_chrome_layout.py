@@ -23,10 +23,8 @@ def test_sidebar_track_is_the_procedure_column():
     assert '<div class="ui-subnav"></div>' in (robot / "surface.html").read_text(encoding="utf-8")
     assert ".ui-subnav:empty { display: none; }" in shell, "a screen without tasks folds the empty seat"
     assert "subnav.append(taskChooser.element);" in (robot / "shell" / "mount.js").read_text(encoding="utf-8")
-    # D-926: the Fleet install chooser sits in the same sub-nav seat, so Fleet no longer draws its own column.
-    assert "--sidebar-track" not in fleet
-    install = (FLEET.parents[1] / "installation" / "install.html").read_text(encoding="utf-8")
-    assert '<div class="ui-subnav"><nav id="install-chooser"' in install
+    # D-741 6: the Fleet install task list sits in the shared sub-nav seat, not in a column of its own.
+    assert "--sidebar-track" not in fleet and "install-tasks" not in fleet
     assert "minmax(13rem, 18rem)" not in shell
     assert "minmax(12rem, .22fr)" not in fleet
     assert 'rail.className = "ui-task-rail ui-sidebar"' in CHOOSER.read_text(encoding="utf-8")

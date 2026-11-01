@@ -14,6 +14,8 @@ def test_the_night_runs_full_plus_every_browser_suite_and_records_new_failures_a
     assert land_nightly.plan() == [["test"], ["integrations/simulation/gazebo/test"],
                                    ["ROSY_RUN_BROWSER_TESTS=1", "a/test_x_browser.py"]]
     monkeypatch.setattr(land_nightly.land_checks, "tmp_dir", lambda name: tmp_path)
+    # A PR checkout (CI) has no local `main` branch.
+    monkeypatch.setattr(land_nightly, "_main_sha", lambda: "0" * 40)
 
     def run(invocations, logs, sha, repo, label):
         logs[0].write_text("FAILED test/test_a.py::test_new - boom\n1 failed\n", encoding="utf-8")

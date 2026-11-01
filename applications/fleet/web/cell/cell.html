@@ -79,6 +79,7 @@
     <a class="ui-subnav-item" href="/console?view=work&amp;show=pending">승인 대기</a>
     <a class="ui-subnav-item" href="/console?view=work&amp;show=done">끝난 작업</a>
     <a class="ui-subnav-item" href="/console?view=work&amp;show=new" aria-current="page">새 작업</a>
+    <span class="ui-subnav-head">다른 문서</span>
     <a class="ui-subnav-item" href="/console/learning">학습</a>
     <span class="ui-subnav-head">Cell 적재 단계</span>
     <a class="ui-subnav-item" href="#saved-heading">저장된 문서</a>
@@ -90,9 +91,12 @@
   </nav></div>
   <div class="fleet-workspace">
   <ui-status id="estop-feedback" hidden></ui-status>
+
+  <!-- D-926 2 — 경로 줄: 문서 제목과 현재 단계를 본문 머리에도 보인다(subnav-screens.js). -->
+  <div class="ui-pathbar"><h1>팔레타이징 작업 준비</h1><strong id="cell-screen">저장된 문서</strong></div>
+
   <main id="cell-main" class="fleet-task-page" tabindex="-1">
     <div class="cell-intro">
-      <h1 class="ui-page-heading">팔레타이징 작업 준비</h1>
       <ui-text id="cell-purpose">레시피와 작업대 설정으로 적재 계획을 미리 보고 Fleet에 작업을 제안합니다. 승인·진행은 그 단계에서, 로봇 상태·예외 확인은 관제에서 합니다.</ui-text>
     </div>
     <ui-text id="notice" role="status" aria-live="polite">운영자 계정으로 접속해 저장된 레시피와 셀을 준비하세요.</ui-text>
@@ -104,7 +108,7 @@
     <ui-section aria-labelledby="print-heading">
       <ui-head><h2 class="ui-section-heading" id="print-heading">보정 인쇄물</h2></ui-head>
       <ui-text>실제 크기 PDF입니다. 100%(맞춤 없이)로 인쇄하고 종이의 50 mm 막대를 자로 확인하세요. 팔마다 마커 번호가 다릅니다(D-933). 팔 번호를 골라 그 팔의 그리퍼 · 받침대 · 면 마커를 한 장으로 받습니다. 마커는 둘레의 얇은 실선대로 정확히 자르고 흰 테두리는 남깁니다.</ui-text>
-      <label for="print-arm">팔 번호</label><select class="ui-field" id="print-arm" aria-label="마커를 인쇄할 팔 번호"><option value="1">팔 1 (마커 35~49)</option><option value="2">팔 2 (마커 50~64)</option><option value="3">팔 3 (마커 65~79)</option><option value="4">팔 4 (마커 80~94)</option></select>
+      <label for="print-arm">팔 번호</label><select class="ui-field" id="print-arm" aria-label="마커를 인쇄할 팔 번호"><option value="1">팔 1 (마커 50~64)</option><option value="2">팔 2 (마커 65~79)</option><option value="3">팔 3 (마커 80~94)</option></select>
       <div class="actions"><ui-button id="print-arm-markers" kind="quiet">팔 마커 PDF</ui-button><ui-button id="print-charuco" kind="quiet">ChArUco 보정판 PDF</ui-button><ui-button id="print-checkerboard" kind="quiet">체커보드 PDF</ui-button></div>
       <ui-text id="print-status" role="status" aria-live="polite"></ui-text>
     </ui-section>

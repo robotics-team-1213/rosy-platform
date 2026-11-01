@@ -50,7 +50,7 @@ from image_layer_files import _install, _mode, _sha256, _write_json
 import image_layer_boot as boot
 from image_layer_plan import (  # noqa: F401  (names stay reachable on this entry module)
     ALLOWED_PREFIXES, BACKUP_MANIFEST, BACKUP_ROOT, DEFAULT_PUBLIC_KEY, ENABLED_UNITS, FORBIDDEN_PREFIXES,
-    IMAGE_LAYER, LOCK_FILE, MAX_PENDING_ATTEMPTS, MODPROBE_DIR, NATIVE_RUNTIME, NEXT_BOOT_ONLY, PENDING_FILE,
+    IMAGE_LAYER, LOCK_FILE, MAX_PENDING_ATTEMPTS, MODPROBE_DIR, NATIVE_RUNTIME, NEXT_BOOT_ONLY, OVERLAY_CONFIGS, PENDING_FILE,
     RELEASE_ID, RELEASE_NATIVE, RETIRED_UNITS, Runner, STATE_CONFIG, STATE_DIRECTORIES, SyncError, UDEV_DIR,
     UNITS, UNIT_DIR, _compare_modes, _entry, _restartable, _run, active_units, affected_units, allowlist,
     check_destination, plan, resolve_current,

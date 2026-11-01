@@ -182,10 +182,11 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
         });
         ctx.stroke();
       }
-      for (const [index, place] of (activeMap.places || []).entries()) {
+      // The place's own id, as trips, the API and a floor sticker name it; a list position shifts on every edit.
+      for (const place of activeMap.places || []) {
         const p = toPx(place.x, place.y);
         ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2); ctx.fill();
-        ctx.fillText(String(index + 1), p.x + 8, p.y - 8);
+        ctx.fillText(String(place.id), p.x + 8, p.y - 8);
       }
       ctx.restore();
     }

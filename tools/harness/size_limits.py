@@ -68,6 +68,7 @@ STANDALONE = {
     "rosy-cam": "operations/site_ui/cam",
     "rosy-media": "operations/site_ui/media",
     "rosy-media-edge": "middleware/media",
+    "rosy-shared-android": "shared/android",  # D-939 sources compiled into each app
 }
 #: D-766 coverage addendum (2026-10-15): files already over their limit when the roots above and
 #: ``.kt`` joined the count. Each may enter the ratchet as a new row once, at no more than this.

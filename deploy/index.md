@@ -77,8 +77,8 @@
 
 ## 최근 기록
 
-- 2026-11-01 · uncommitted · fix(site): Tailscale 대역에서도 천장 카메라 미리보기
-- 2026-11-01 · uncommitted · fix(omx): 손가락 여유 검사가 검출기가 물체라 부르는 것을 모두 본다
-- 2026-11-01 · a785121ef0 · sim/real 같은 동작: Planner.stream 하나
-- 2026-10-31 · a517780fbc · feat(model-pc): one Learning center follows the signed release; retire the candidates (D-857)
-- 2026-10-30 · 796fbe489c · D-871 가드 수집 관제 PC 적용과 `rosy-update-report` 선언
+- 2026-11-02 · uncommitted · fix(site): Tailscale 대역에서도 천장 카메라 미리보기
+- 2026-11-02 · 97da913f85 · OMX record_session이 켜진 카메라 단위 전부를 넘겨받음
+- 2026-11-01 · uncommitted · D-907 authenticated metadata read repair
+- 2026-11-01 · uncommitted · D-907 readonly native v2 verifier
+- 2026-11-01 · uncommitted · native v2 readonly profile contract

@@ -78,3 +78,5 @@
 [API & Protocol Reference](../reference/ROSY%20API%20%26%20Protocol%20Reference.md) v1.20, D-2, D-199.
 
 **See also:** [D-205](D-205-real-lane-mission-transition-order.md) — 다음 단계의 실행 순서와 게이트, 인계 절차.
+
+**2026-11-01 상호 참조 (D-950):** [D-950](D-950-docking-direction-rear-entry.md)이 기본 도킹 진입 방향을 후면(후진)으로 정했다. 이 ADR의 DOCKING 모드·전용 슬롯 계약은 그대로이고, 후진 접근의 장애물 정지·면제는 D-950의 후속 결정이다.
