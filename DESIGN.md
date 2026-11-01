@@ -378,7 +378,7 @@ D-741(Accepted)이 정한, 모든 웹 표면이 같이 쓸 자리다. Rosy Fleet
 |---|---|---|
 | 자리 순서 | 앱 바 → 레일 → 하위 탐색 → 경로 줄 → 본문 → 오른쪽 칸. 비움은 아래부터 | `shared/web/test/test_layout_canon.py` |
 | 제목 하나 | 문서의 h1은 경로 줄의 문서 제목 하나. 현재 화면은 경로 줄 strong + 하위 탐색 표식 | 〃 |
-| 표식 어휘 셋 | 문서·화면 `aria-current="page"`, 문서 안 단계 `aria-current="step"`, 탭 작업 공간 `aria-selected` | 〃 |
+| 표식 어휘 | `aria-current`는 표준 토큰 셋 — 문서·화면 `page`, 문서 안 단계 `step`, 현 화면을 담은 상위 단계 `true`(학습 검수). 탭 작업 공간은 `aria-selected` | 〃 |
 | 머리 조작 | 머리에 들어갈 조작은 머리 줄의 공용 아이콘 단추(접힘에 숨기지 않음) | `test_fleet_header.py` |
 | 흰 채움 하나 | 구획마다 primary 하나(D-926 7). 새 구획은 `ui-section` 네 역할 | D-926 보강 |
 | 붕괴 두 사다리 | 셸 64rem, 본문 48·30rem. 그 밖은 `surfaces.yaml` 허가 | `test_responsive_tiers.py` |

@@ -38,12 +38,13 @@ def test_fleet_light_documents_are_header_then_main_with_one_h1():
 
 
 def test_current_markers_use_only_the_three_agreed_words():
-    """표식 어휘는 page·step뿐이다(셋째는 탭의 aria-selected). 다른 값은 새 어휘의 탄생이다."""
+    """표식 어휘는 표준 토큰 page·step·true뿐이다(넷째는 탭의 aria-selected).
+    page=현 문서·화면, step=같은 문서 안 단계, true=현 화면을 담은 상위 단계(학습 검수의 단계 홀더)."""
     for base, names in ((WEB, AREA_DOCS + LIGHT_DOCS),
                         (REVIEW, [path.name for path in REVIEW.glob("*.html")])):
         for name in names:
             for value in re.findall(r'aria-current="([^"]+)"', _page(base, name)):
-                assert value in ("page", "step"), (name, value)
+                assert value in ("page", "step", "true"), (name, value)
 
 
 def test_robot_shell_keeps_the_seat_order():
