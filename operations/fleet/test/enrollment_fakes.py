@@ -6,6 +6,7 @@ Code and token values are assembled at runtime so no literal secret is tracked.
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import json
 
 import httpx
 
@@ -57,6 +58,11 @@ class FakeCore:
         self.known = set(known)
         self.device_uid = device_uid
         self.logged_out: list[str] = []
+        self.estop = False
+        #: v1.343: the code this robot's screen shows while latched (None: no live code).
+        self.release_code: str | None = None
+        self.release_status = 200
+        self.release_calls: list[dict] = []
 
     def handle(self, request: httpx.Request) -> httpx.Response:
         path = request.url.path
@@ -93,7 +99,20 @@ class FakeCore:
             return httpx.Response(200, json={"robot_id": self.robot_id, "navigation": self.navigation,
                                              "localization": {"state": "LOCALIZED", "pose_frame": "map"},
                                              "pose": {"x": self.pose[0], "y": self.pose[1],
-                                                      "yaw": 0.0}})
+                                                      "yaw": 0.0}, "safety": {"estop": self.estop}})
+        if path == "/api/v1/safety/release-code":
+            body = json.loads(request.content or b"{}")
+            self.release_calls.append(body)
+            if not self.estop:
+                return httpx.Response(409, json={"error": {"code": "NOT_LATCHED", "message": "not latched"}})
+            if body.get("code") != self.release_code:
+                return httpx.Response(403, json={"error": {"code": "CODE_REJECTED", "message": "bad code"}})
+            self.release_code = None
+            if self.release_status != 200:
+                return httpx.Response(self.release_status,
+                                      json={"error": {"code": "MODE_CONFLICT", "message": "busy"}})
+            self.estop = False
+            return httpx.Response(200, json={"estop": False})
         if path == "/api/v1/navigation/path":
             return httpx.Response(200, json={"poses": [{"x": x, "y": y} for x, y in self.path]})
         if path == "/api/v1/map":

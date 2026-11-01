@@ -4348,3 +4348,9 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 현장(2026-11-02) 붙어 선 열 위 집게 표시가 72·165·260 px 조각으로 나와 `min_blob` 300 미만, 피벗이 0개 각도로 끝남. `plan`이 실제 셀에서 넓은 면(42 mm)으로는 hold, 좁은 밀기로는 "pivot 먼저(지도 최대 오차 11.85 mm로는 안 맞고 5 mm면 맞음)"를 냄. 원격 `test_omx_cell_align.py` 등.
 - gate 변화: 없음
 - 교훈: 작업 기록 2026-10-31 §15.5
+
+## 2026-11-02 · uncommitted · feat(site): 작업셀 카메라 자격 매핑도 site.env에서 바꾼다
+- 변경: `compose.workcell.yaml`의 Vision 카메라 credential 매핑을 `ROSY_SITE_WORKCELL_CAMERA_CREDENTIAL_PATHS`(전체 교체, 비우면 overhead·wrist A·wrist B)로 받는다. 팔 매핑(`ROSY_SITE_WORKCELL_ARM_CREDENTIAL_PATHS`)과 같은 방식이다.
+- 증거: OMX 셀에 측면 카메라가 서비스로 돌지만 서명 Compose가 카메라 세 개를 고정해 Fleet·Vision에 넣을 수 없었다(2026-11-02 현장). 원격 `test_site_workcell_deploy.py`.
+- gate 변화: 없음
+- 교훈: 해당 없음

@@ -103,7 +103,7 @@ class PhysicalTransferPolicy(_Closed):
 class TransferEvidenceContext(_Closed):
     action_id: ArmPhysicalRef
     attempt_id: ArmPhysicalRef
-    phase: Literal["PRE_DISPATCH", "POST_ACTION"]
+    phase: Literal["PRE_DISPATCH", "POST_ACTION", "RECHECK"]
     not_before_ns: Counter
     owners: Annotated[tuple[TransferOwnerTarget, ...], Field(min_length=1, max_length=32)]
 
