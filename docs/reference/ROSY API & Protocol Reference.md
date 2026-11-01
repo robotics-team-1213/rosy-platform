@@ -4399,6 +4399,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.339 | 2026-11-01 | Additive: `GET /api/v1/sim/omx/target` carries `start_pose` (advertised arm joints only, within the offered jog range) and `task` (1-300 chars) from `deploy/robot/omx/sim/pilot_demonstration.yaml`; null on servers without the profile. |
 | v1.338 | 2026-11-01 | Additive: `/ws/teleop` (operator) streams teleop commands with per-frame `seq` and an `ack` answer; same checks as `POST /api/v1/teleop`; stale `seq` dropped; a motion command is zeroed when the socket closes. REST teleop unchanged. |
 | v1.337 | 2026-11-01 | D-944: LCD code pairing and the reachability read accept the team tailnet (100.64.0.0/10, fd7a:115c:a1e0::/48); development session and first peer approval stay robot-LAN only. |
 | v1.336 | 2026-11-01 | Corrective: Fleet hub answers a `heartbeat`/`event` payload it cannot validate with `PAYLOAD_INVALID` (was `SESSION_NOT_PAIRED`); the robot agent keeps the session on a heartbeat answer and drops the event without retry. Envelope 1.0 unchanged. |
