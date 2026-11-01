@@ -68,3 +68,11 @@ def test_a_closed_loop_does_not_stop_at_its_seam_and_slows_on_both_sides_of_a_st
     assert at(table, 3.96) <= STRIPE_MPS                      # the stripe's far side, just before the seam
     assert at(table, 3.85) == 0.15 and at(table, 3.925) < 0.15  # braking ahead of it wraps too (~0.033 m)
     assert table["rows"][-1][1] > 0.0                         # a loop never ends at 0
+
+
+def test_a_slow_place_slows_like_a_stripe_but_never_stops():
+    site_map = site().model_dump(by_alias=True)
+    site_map["places"].append({"id": "S4", "name": "감속", "x": 0.4, "y": -R, "kind": "slow"})
+    table = speed_table(SiteMap.model_validate(site_map), [("lower", True, 0.0, 0.8)], start_mps=0.15)
+    assert table["stripes"] == [{"place": "S4", "s_m": 0.4}]
+    assert at(table, 0.4) <= STRIPE_MPS and at(table, 0.4) > 0.0 and at(table, 0.2) == 0.15

@@ -2,7 +2,7 @@
 
 Pure: built from the site map and a trip plan's segments ``(edge_id, forward, s_from, s_to)``.
 Each point's limit is the smallest of the lane's ``speed_cap_mps``, a measured curve cap for the
-local turn radius, and the stripe cap near a ``stop`` place; then the braking limit is applied
+local turn radius, and the stripe cap near a ``stop`` or ``slow`` place; then the braking limit is applied
 backwards so the robot is already slow when a curve or stripe starts, and the route ends at 0.
 Not sent to a robot yet (D-941 opens: one robot's table is checked first).
 """
@@ -32,7 +32,7 @@ def speed_table(site_map, segments: Sequence[tuple[str, bool, float, float]], *,
                 curve_caps: Sequence[CurveCap] = (), start_mps: float = 0.0, closed: bool = False) -> dict:
     """``closed``: the segments form a loop, so nothing stops at the end and braking wraps around."""
     edges = {e.id: e for e in site_map.edges}
-    stops = [(p.id, p.x, p.y) for p in site_map.places if p.kind == "stop"]
+    stops = [(p.id, p.x, p.y) for p in site_map.places if p.kind in ("stop", "slow")]   # slow: stripe, no stop
     caps = sorted(curve_caps, key=lambda c: c.radius_m)
     points: list[tuple[float, float, float, Optional[float]]] = []   # x, y, lane cap, turn radius
     for edge_id, forward, s_from, s_to in segments:

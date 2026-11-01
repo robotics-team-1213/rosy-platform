@@ -221,7 +221,7 @@
           <div class="actions"><ui-button id="element-load" kind="quiet" disabled>수정할 요소 불러오기</ui-button><ui-button id="element-delete" kind="irreversible" disabled>초안 요소 삭제</ui-button></div>
           <label>요소 ID<input class="ui-field" id="element-id" maxlength="32" pattern="[A-Za-z0-9_.-]{1,32}"></label>
           <label>이름<input class="ui-field" id="element-name" maxlength="64"></label>
-          <label>종류<select class="ui-field" id="element-kind"><option value="junction">교차로</option><option value="park">목적지·주차</option><option value="charge">충전소</option><option value="stop">정차 장소</option><option value="turnaround">회차 장소</option><option value="start">출발 장소</option><option value="road">도로</option><option value="traffic_signal">신호등</option><option value="stop_line">정지선</option><option value="landmark">기준 표식</option><option value="exclusion">금지 구역</option></select></label>
+          <label>종류<select class="ui-field" id="element-kind"><option value="junction">교차로</option><option value="park">목적지·주차</option><option value="charge">충전소</option><option value="stop">정차 장소</option><option value="slow">감속 장소</option><option value="turnaround">회차 장소</option><option value="start">출발 장소</option><option value="road">도로</option><option value="traffic_signal">신호등</option><option value="stop_line">정지선</option><option value="landmark">기준 표식</option><option value="exclusion">금지 구역</option></select></label>
           <label id="element-heading" hidden>확인한 출발 방향 (°)<input class="ui-field" id="element-yaw" type="number" min="-360" max="360" step="any" value="0"></label>
         </div>
         <fieldset id="element-road" class="form" hidden><legend>도로 연결</legend>
