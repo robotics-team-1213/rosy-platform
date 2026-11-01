@@ -13220,3 +13220,10 @@ osy-d395-s1d\`.
 - 변경: [D-945](adr/D-945-cross-surface-layout-canon.md)로 모든 표면이 같은 뼈대(자리 순서·제목 하나·표식 어휘 셋·붕괴 두 사다리)를 쓰는 규칙을 세우고 DESIGN.md 「자리 순서와 뼈대」 절에 규범 표를 뒀다. 상용 도구(IDE·관리형 웹·모바일 체계)의 레이아웃 대역을 근거로 제시했다.
 - 증거: ADR Log 행 추가. `rosy_harness.py lint` 통과로 확인.
 - Gate: 없음 — 설계 수용이며 표면 이행은 각 화면 변경에 따른다. CE: 해당 없음.
+
+
+## 2026-11-01 · uncommitted · UI 일관성 회차 검증 기록
+
+- 변경: `docs/validation/fleet-ui-consistency-2026-11-01/README.md` — 이번 회차의 변경·비평 점수(23→27)·게이트 적발 6건·LOCAL 증거의 경계를 날짜 기록으로 남겼다.
+- 증거: 기록 문서이며 실행 코드 변화 없음.
+- Gate: 없음. CE: 해당 없음.

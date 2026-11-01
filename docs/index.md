@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-11-01 · uncommitted · UI 일관성 회차 검증 기록
 - 2026-11-01 · uncommitted · D-945 전 표면 자리 규칙
 - 2026-11-01 · uncommitted · D-926 보강: 새 구획은 ui-section 네 역할
 - 2026-10-31 · uncommitted · fix(land): 자동 묶음 착지를 끈다
 - 2026-10-31 · uncommitted · docs(solutions): version pins grew, use api_reserve bump
-- 2026-10-31 · uncommitted · fleet: D-938 팔 이송 정책 승인

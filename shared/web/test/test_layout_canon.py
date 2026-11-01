@@ -56,12 +56,18 @@ def test_robot_shell_keeps_the_seat_order():
 
 
 def test_focal_surfaces_keep_topbar_first_main_and_a_skip_link():
-    """D-945 — focal 문법(Pilot)은 자리를 아래부터 비우는 게 합법이지만, 건너뛰기와 순서는 지킨다.
-    로봇 대시보드(/dashboard)는 공간 문법의 hero-strip이 제목 줄 역할을 하고 고정 프레임 예산을
-    지키므로(D-201·test_console_layout) 경로 줄 이행은 그 화면을 고치는 변경에 따른다."""
+    """D-945 — focal 문법(Pilot·경기 보드)은 자리를 아래부터 비우는 게 합법이지만, 건너뛰기와 순서는 지키고
+    문서의 h1은 하나다(키오스크 화면은 한 화면 예산을 지키려 sr-only h1). 로봇 대시보드(/dashboard)는
+    공간 문법의 hero-strip이 제목 줄 역할을 하고 고정 프레임 예산을 지키므로(D-201·test_console_layout)
+    경로 줄 이행은 그 화면을 고치는 변경에 따른다."""
     pilot = _page(ROOT / "middleware/robot_ui/pilot", "index.html")
     body = pilot[pilot.index("<body"):]
     assert body.index('class="skip-link"') < body.index("<ui-topbar") < body.index("<main")
+    assert pilot.count("<h1") == 1
+    games = _page(ROOT / "operations/apps/games/games/web", "index.html")
+    gbody = games[games.index("<body"):]
+    assert gbody.index("<ui-topbar") < gbody.index("<main") and 'class="skip-link"' in games
+    assert games.count("<h1") == 1 and 'class="sr-only"' in games
     dashboard = _page(ROBOT, "index.html")
     dbody = dashboard[dashboard.index("<body"):]
     assert dbody.index("<ui-topbar") < dbody.index("<main") and 'class="skip-link"' in dashboard
