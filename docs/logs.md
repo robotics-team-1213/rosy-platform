@@ -13471,6 +13471,41 @@ osy-d395-s1d\`.
 - 결정: D-889 추가 20(사용자 목표 2026-11-01)
 - 교훈: 없음
 
+## 2026-11-01 · uncommitted · docs(solutions): in-process uvicorn.Config hides logs from caplog
+- 변경: `solutions/workflow-issues/in-process-uvicorn-config-hides-logs-from-caplog-2026-10-31.md` 추가
+- 증거: 게시 PR #223 fleet-2of5 두 번 실패, uvicorn 0.52.4에서 propagate=False 재현, 고친 시험 원격 통과(43 passed, 2 skipped)
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 새 교훈 기록
+
+## 2026-11-01 · uncommitted · docs(adr): D-950 도킹 진입 방향은 후면(후진)
+- 변경: `docs/adr/D-950-docking-direction-rear-entry.md` 새 ADR(Accepted, 사용자 결정). D-200·D-349·D-350과 도킹 설계 문서에 관계 줄을 더했다. ADR 로그 행과 adr_gaps를 정리했다.
+- 증거: 다른 세션이 `.worktrees/dockrear`에 커밋하지 않고 남긴 초안. 사용자 지시(2026-11-01 "미커밋들을 커밋하고 머지")로 그대로 커밋해 착지한다.
+- gate 변화: 없음
+- 결정: D-950
+- 교훈: 없음
+
+## 2026-11-01 · uncommitted · native v2 readonly profile contract
+
+- 변경: D-907·ADR Log와 test/test_native_profile_manifest.py 초안. 기존 v1 producer/validator를 보존하고 v2 서명·형식·inventory·독립 policy·runtime identity 계약을 시험한다.
+- 검증: 검토 기준 14680235에서 b58162a6까지 관련 common signing/Pinky release/native verifier/test seam diff 없음. 현재는 test/doc 후보이며 pytest·생산 구현은 검토 뒤 진행한다.
+- gate 변화: 없음. readonly metadata 검증은 consumer 설치·native closure·활성화·실물 권한 증거가 아니다.
+- CE: 해당 없음 — 새 계약 단위의 test-first 후보이며 해결·검증한 비문서화 장애가 없다.
+
+## 2026-11-01 · uncommitted · D-907 source review R1 corrections
+
+- 변경: runtime binary drift를 유효한 다른 64자리 digest로 바꾸고 OS identity drift와 signed object-key reorder positive를 추가했다. D-903~D-906 예약이 있으나 이 브랜치에 본문이 없어서 필요한 adr_gaps 네 행을 기록했다. 예약 ref는 바꾸지 않았다.
+- 증거: 독립 SOURCE 검토가 malformed digest와 canonical-only positive의 두 oracle 공백을 찾았다. 이 후보의 D-907 추가로 생긴 metadata 의존성을 기존 실패 면제로 처리하지 않는다. 정적 검사와 harness 결과는 같은 외부 구현 기록에 추가한다.
+- gate 변화: 없음. 생산 구현·커밋·원격 pytest는 다음 검토까지 보류한다.
+- CE: 해당 없음 — 설계 단계 시험 oracle 보완이며 운영 장애를 검증·해결한 기록이 아니다.
+
+## 2026-11-01 · uncommitted · fix(ci): 게시 PR CI 빨강 두 건(nightly의 로컬 main, OMX 리허설 실시간)
+- 변경: `tools/land_nightly.py`가 main sha를 `_main_sha()`로 읽고 `test/test_land_nightly.py`가 이를 바꿔 끼운다(PR checkout에는 로컬 `main` 브랜치가 없어 매번 실패). `deploy/robot/omx/collection_session.py`의 `run_session`·`require_reached`가 `clock`을 받고(기본은 실제 시간), `collection_rehearsal.SimulatedClock`을 CLI `rehearsal-suite`가 세션·가짜 장치에 같이 넘긴다. 실물 수집 경로의 시간·가드 값은 그대로다
+- 증거: 게시 PR #225 CI run 41290376246 `root-test-3of3`에서 두 시험 실패(`git rev-parse main` exit 128, 리허설 `none` 경우 correct=false). 리허설은 로컬 착지에서도 부하 때 4회 실패·단독 통과(LOAD-FLAKY 후보)
+- gate 변화: 없음
+- 결정: 격리 목록(D-762, 안전 루트)에 넣지 않고 원인을 고침. 세션 시험의 `rehearsal_clock` 고정물과 같은 방식
+- 교훈: 없음
+
 ## 2026-11-01 · uncommitted · feat(fleet): 확인된 ARM 시도의 재관측 계약(D-930, API v1.334)
 
 - 변경: `POST/GET /api/fleet/arm-transfers/jobs/{id}/rechecks`를 추가했다. 기다리는 재관측은 기존 observation context에 `phase=RECHECK`로 나오고 같은 observations 경로로 받는다. 검사는 POST_ACTION과 같고 요청 뒤 시각·측정 관절을 요구한다. Action·claim·작업 상태·영수증·v1.330 근거는 바뀌지 않는다(`work/physical_transfer_rechecks.py`, `fleet_physical_transfer_rechecks` 테이블).

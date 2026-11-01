@@ -17,16 +17,32 @@ def teacher():
     return dict(schema='rosy.omx-collection-teacher.v1', steps=[dict(positions=[.1]*6, duration_s=.35)])
 
 
+class SimulatedClock:
+    """Time shared by session and fixture, so a loaded host cannot break a software rehearsal's capture cadence."""
+    def __init__(self):
+        self.ns = 1_000_000_000
+
+    def time_ns(self):
+        self.ns += 1_000_000
+        return self.ns
+
+    def monotonic(self):
+        return self.ns / 1e9
+
+    def sleep(self, seconds):
+        self.ns += int(seconds * 1e9)
+
+
 class RehearsalBackend:
     mode = 'rehearsal'
-    def __init__(self, config, *, fault='none'):
-        self.profile, self.fault = config, fault
+    def __init__(self, config, *, fault='none', clock=time):
+        self.profile, self.fault, self.clock = config, fault, clock
         self.started, self.sequence, self.target, self.stopped = None, 0, [0.]*6, False
         self.hardware_connections, self.submissions = 0, 0
 
     def observe(self):
         self.sequence += 1
-        now = time.time_ns()
+        now = self.clock.time_ns()
         bad = self.started is not None
         if bad and self.fault == 'disconnect':
             raise ValueError('injected sensor disconnection')
@@ -51,13 +67,13 @@ class RehearsalBackend:
                             source_stamp=now/1e9) for r in ('top', 'front')})
 
     def submit(self, step, command_id):
-        self.started, self.target = time.monotonic(), list(step['positions'])
+        self.started, self.target = self.clock.monotonic(), list(step['positions'])
         self.duration = step['duration_s']
         self.submissions += 1
         return dict(accepted=self.fault != 'reject', command_id=command_id, reason='software_fixture')
 
     def terminal(self):
-        if self.started is None or time.monotonic()-self.started < self.duration:
+        if self.started is None or self.clock.monotonic()-self.started < self.duration:
             return None
         return dict(succeeded=self.fault != 'terminal_failure', source='software_fixture')
 

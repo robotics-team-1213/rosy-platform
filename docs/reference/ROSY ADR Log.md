@@ -11,6 +11,8 @@
 | ID | 제목 | Status |
 |---|---|---|
 | D-930 | 확인된 ARM 시도의 재관측(새 측정 사실만, 실행·claim·완료 권한 없음, API v1.334). [전문](../adr/D-930-arm-transfer-recheck-of-confirmed-attempt.md) | Accepted (2026-10-30, 계약·simulation 구현 결정; 실물 수용 별도) |
+| D-907 | Native v2 read-only signed component profile contract. [전문](../adr/D-907-native-v2-readonly-profile-contract.md) | Accepted (2026-10-28) |
+| D-950 | 도킹 진입 방향은 후면(후진)이다 — 짐칸 USB 코를 충전소 깔때기에 후진으로 꽂는다. [전문](../adr/D-950-docking-direction-rear-entry.md) | Accepted (2026-11-01, 사용자 결정; 방향만, 구현·실물 수용·후속 결정 별도) |
 | D-955 | Rosy를 연동 허브로 두고, 팀원은 로그인하면 기본 권한 묶음으로 바로 쓴다 | Accepted (2026-11-01) |
 | D-954 | 현장 마커 번호는 프로필 한 장에 배정하고, 팔 마커는 50번부터 쓴다 (D-933 8항 대체). [전문](../adr/D-954-site-marker-profile-arm-ids.md) | Accepted (2026-11-01, 사용자 결정; 천장 팔 마커 소비·인쇄·실물 수용 별도) |
 | D-951 | ROSY Calibration 앱을 두고, 두 팔 셀의 보정·높이·공간 점검을 코드 한 경로로 돌린다. 집게는 D-933 마커, 면 높이는 깊이(`cell_depth`, D-933 3항 터치 대신), 테이블보다 낮은 면은 승인된 `low_zones` 사각형에서만, 하중 관절 I 게인, 팔별 세션 잠금과 통로 예약(`cell_space`). [전문](../adr/D-951-rosy-calibration-application.md) | Accepted (2026-11-01, 사용자 결정; 앱 화면 없음, 부품 착지 대기, 현장 수용 없음) |
