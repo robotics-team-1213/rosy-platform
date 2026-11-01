@@ -13312,6 +13312,13 @@ osy-d395-s1d\`.
 - 결정: 없음
 - 교훈: 기존 교훈 갱신(카메라 교체 시 이미지 좌표 설정도 무효)
 
+## 2026-11-01 · uncommitted · omx: 계획기 low_zones, 바닥 높이를 지정한 사각형 안에서만 낮춤
+- 변경: `grasp_planner.Planner.limits_at`가 `limits.low_zones` 사각형 안에서만 IK 작업 공간 바닥을 낮춘다(높이지는 않음). 그 밖은 기존 바닥 그대로
+- 증거: `test_omx_grasp_planner.py` 원격 실행. 현장: 왼팔 벨트 끝이 테이블보다 낮고(사용자 측정·깊이) 팔이 10~20 mm 판 위에 있어 FK 바닥 0.005 아래에서만 집기가 가능
+- gate 변화: 계획기 작업 공간 바닥(사용자 승인 2026-11-01 "Approve, belt rectangle only"), 러너 접촉 정지는 그대로
+- 결정: 사용자 승인으로 벨트 사각형에만 적용, 값은 현장 계획 파일이 정함
+- 교훈: 없음
+
 ## 2026-11-01 · uncommitted · tools: 워크트리 .git 유실 재발 교훈 갱신
 - 변경: `docs/solutions/workflow-issues/empty-worktree-folder-runs-git-on-the-shared-main-2026-10-25.md`에 재발(파일 남은 폴더·묘비 없음·land_async 재사용) 추가
 - 증거: 공유 체크아웃 reflog의 `checkout: moving from main to feat/omx-devices-scan`, 2분 뒤 `git switch main`로 복구
