@@ -14,7 +14,7 @@ def reopen(cache, clock, path):
     if cache.store is not None:
         cache.store.close()
     return ObservationCache(cache.config, monotonic=clock.monotonic, utcnow=clock.utcnow,
-                            store=MonitoringStore(path, cache.config.collector_id))
+                            store=MonitoringStore(path, cache.config.collector_id, utcnow=clock.utcnow))
 
 
 def test_second_writer_cannot_open_the_same_owned_store(tmp_path):

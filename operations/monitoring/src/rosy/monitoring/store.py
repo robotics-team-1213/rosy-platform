@@ -26,7 +26,8 @@ def state(item):
 
 
 class MonitoringStore:
-    def __init__(self, path: Path, collector_id: str):
+    def __init__(self, path: Path, collector_id: str, *, utcnow=lambda: datetime.now(timezone.utc)):
+        self._utcnow = utcnow  # the cache clock, so tests with a fixed date do not expire with the calendar
         self._lease = None
         self.path = Path(path)
         try:
@@ -159,7 +160,7 @@ class MonitoringStore:
         if type(after) is not int or after < 0 or type(limit) is not int or not 1 <= limit <= 200:
             raise ValueError('invalid event cursor')
         with self._connection() as db:
-            cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+            cutoff = (self._utcnow() - timedelta(days=7)).isoformat()
             rows = db.execute('''select seq,time,payload from events where site=? and seq>?
                               and time>=? order by seq limit ?''', (site, after, cutoff, limit)).fetchall()
         try:
