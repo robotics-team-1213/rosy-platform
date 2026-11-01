@@ -82,3 +82,5 @@ Phase 1→2 전환은 설정 변경만(`instrumented: true`). Phase 2→3 전환
 **Consequences:** 하드웨어가 어떤 단계로 오든 소프트웨어는 코드 변경 없이 해당 단계의 기능을 제공한다. Phase 1은 최소 검증용이고, D-27 억제는 Phase 2부터 — 이게 "충전선만 물었다고 안전 경로가 꺼지는" 사고를 막는다.
 
 **References:** [D-28 도크 계약](D-28-nav2.md), [D-347 capability lifecycle](D-347-capability-lifecycle-vocabulary.md), [D-349 코드 준비 기록](D-349-dock-auto-charge-code-readiness.md), `docking/charging.py`, `firmware/dock/README.md`.
+
+**2026-11-01 상호 참조 (D-950):** [D-950](D-950-docking-direction-rear-entry.md)이 기본 도킹 진입 방향을 후면(후진)으로 정했다. 후면 경로의 충전 판정은 이 ADR의 Phase 1(전압 1소스, D-27 억제 안 함)과 같다. Phase 2·3 포고핀 도크의 처우는 팀 확인 필요.

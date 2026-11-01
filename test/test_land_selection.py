@@ -87,8 +87,9 @@ def test_landed_full_delta_runs_both_changes_own_suites_unless_safety(caller, tm
     answers = [delta, mine]
     land.subprocess = SimpleNamespace(run=lambda command, **kw: calls.append(command) or SimpleNamespace(
         returncode=0, stdout=json.dumps(answers.pop(0)), stderr=""))
+    # D-889 18: the delta reaches guard/test only, so mine/test keeps its pretest pass
     assert selection.select(land, tmp_path, "base", "python", head="main", landed=True) == (
-        [["guard/test"], ["mine/test"], ["ROSY_RUN_BROWSER_TESTS=1", "browser/test"]], None)
+        [["guard/test"], ["ROSY_RUN_BROWSER_TESTS=1", "browser/test"]], None)
     assert calls[-1] == ["python", land.HARNESS, "affected", "--base", "main", "--json"]  # this branch on the merge
     answers[:] = [delta, dict(mine, escalations=["safe/x.py" + selection.SAFETY_TRIGGER])]
     assert selection.select(land, tmp_path, "base", "python", head="main", landed=True)[1] is not None
@@ -138,6 +139,11 @@ def test_a_landed_delta_reaching_none_of_this_branchs_suites_does_not_rerun_them
         own = mine.get("invocations") or mine["local_invocations"]
         assert got == ([["guard/test"], ["fleet/test"]] + ([inv for inv in own if inv != ["guard/test"]] if rerun
                                                             else []) + [browser])
+    # D-889 18: per invocation, only the own ones the delta reaches rerun (11-01: 485 rerun for a few reached)
+    answers[:] = [delta, dict(mode="full", escalations=["contracts/foundation/x.py: shared foundation"],
+                              local_invocations=[["fleet/test/test_y.py"], ["arm/test"], ["guard/test"]])]
+    assert selection.select(land, tmp_path, "base", "python", head="main", landed=True)[0] == [
+        ["guard/test"], ["fleet/test"], ["fleet/test/test_y.py"], browser]
     assert selection.overlaps([["a/test"]], [["ROSY_X=1", "a/test/test_b.py::c"]]) and not selection.overlaps(
         [["a/test"]], [["b/test"]])
 

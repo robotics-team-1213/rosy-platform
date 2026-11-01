@@ -98,10 +98,11 @@ export function mountArm(root, target, driver) {
           <li data-sim-step="stop" ${target.recording ? "" : "hidden"}><h4>종료하고 결과 남기기</h4>
             <p class="arm-record-status" data-sim-record-live data-state="recording" aria-hidden="true" hidden></p>
             <div class="arm-step-actions">
-              <ui-button kind="primary" type="button" data-sim-record-stop="success" disabled>성공으로 종료</ui-button>
-              <ui-button type="button" data-sim-record-stop="failure" disabled>실패 사례로 종료</ui-button>
-              <ui-button kind="quiet" type="button" data-sim-record-stop="unspecified" disabled>결과 없이 종료</ui-button>
+              <ui-button kind="primary" type="button" data-sim-record-stop="success" disabled aria-describedby="arm-stop-help">성공으로 종료</ui-button>
+              <ui-button type="button" data-sim-record-stop="failure" disabled aria-describedby="arm-stop-help">실패 사례로 종료</ui-button>
+              <ui-button kind="quiet" type="button" data-sim-record-stop="unspecified" disabled aria-describedby="arm-stop-help">결과 없이 종료</ui-button>
             </div>
+            <p class="arm-hint" id="arm-stop-help" data-sim-stop-help>녹화 중일 때 누를 수 있습니다</p>
             <p class="arm-hint" data-sim-record-last hidden></p></li>
         </ol>
       </section>
@@ -335,10 +336,9 @@ export function mountArm(root, target, driver) {
     start.disabled = now === "recording" || !state?.ready || !cameraFresh || homing || !task;
     setReason(start, now === "recording" ? "녹화 중" : homing ? "시작 자세로 이동 중" : !task ? "과제 설명을 먼저 적으세요"
       : !cameraFresh ? "영상 수신 대기" : !state?.ready ? "조작 준비 대기" : "");
-    root.querySelectorAll("[data-sim-record-stop]").forEach((button) => {
-      button.disabled = now !== "recording";
-      setReason(button, now === "recording" ? "" : "녹화 중일 때 누를 수 있습니다");
-    });
+    // One visible note (arm-stop-help) explains all three disabled stop buttons instead of repeating it under each.
+    root.querySelectorAll("[data-sim-record-stop]").forEach((button) => { button.disabled = now !== "recording"; });
+    $("[data-sim-stop-help]").hidden = now === "recording";
     const last = $("[data-sim-record-last]");
     last.hidden = !recording?.episode_id || now === "recording";
     last.textContent = last.hidden ? "" : `마지막 기록 · ${OUTCOME_LABEL[recording.task_outcome] ?? "결과 없음"} · ${recording.frame_count} 프레임 · ${recording.episode_id}${issues}`;

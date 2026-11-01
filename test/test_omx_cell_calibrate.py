@@ -102,3 +102,15 @@ def test_the_auto_pivot_point_judges_clutter_against_the_sites_measured_surface(
     site = {"surface_lab": [74, 135, 88], "surface_px": [[0, 0], [399, 0], [399, 399], [0, 399]], "auto_roi": [100, 100, 300, 300]}
     assert cc.auto_pivot_point(cell, {"sites": {"pallet": site}}, {}, "pallet", (0.0, 0.2)) is not None
     assert seen["surface_lab"] == [74, 135, 88] and seen["surface_px"] == site["surface_px"]
+
+
+def test_a_pivot_near_a_packed_column_goes_over_it_only_when_the_jaws_clear_both_layers():
+    """2026-11-01: no 72 px empty patch beside the packed pallet columns (65-71 mm tall), so pivot-near marks the jaws
+    right over the target, which needs the view height raised above the default 80 mm."""
+    config = {"params": {"pivot.over_target": 1, "pivot.over_top_mm": 71.0}, "pivot": {"z_view": 0.08},
+              "coarse": {"z_view": 0.118}, "sites": {"pallet": {"surface_z": -0.01}}}
+    assert not cc.over_target(config, "pallet")  # 90 mm above the pallet, 19 mm over the top: below 30
+    config["pivot"]["z_view"] = 0.10
+    assert cc.over_target(config, "pallet")
+    config["params"]["pivot.over_target"] = 0
+    assert not cc.over_target(config, "pallet")

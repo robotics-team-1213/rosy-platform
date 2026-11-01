@@ -129,6 +129,16 @@ $('profile-record').onchange=recordSelection;$('profiles-refresh').onclick=()=>l
 $('profile-clone').onclick=()=>{const selected=record();if(saving||!selected)return;parent=copy(selected);draft=copy(selected.profile);pending=null;render();};
 $('profile-new').onclick=()=>{if(saving)return;parent=null;draft=empty();pending=null;render();};
 document.addEventListener('omx-dataset-profile',event=>{datasetProfile=event.detail;$('profile-import-dataset').disabled=!datasetProfile?.schema;});
+$('profile-bench').onchange=async()=>{
+  const file=$('profile-bench').files[0];$('profile-bench').value='';if(saving||!file)return;
+  try{
+    const inventory=JSON.parse(await file.text());
+    if(inventory?.schema!=='rosy.omx-bench-inventory/1'||!inventory.draft)throw new Error('작업대 장치 목록(inventory.json) 파일이 아닙니다.');
+    parent=null;draft=copy(inventory.draft);pending=null;render();
+    const left=inventory.unassigned_boards||[];
+    $('profile-bench-status').textContent=`팔 ${draft.arms.length}대 · 카메라 ${draft.cameras.length}대를 채웠습니다. 이름·과제·사용 방식과 카메라 해상도를 확인하세요.`+(left.length?` 역할 미지정 보드 ${left.length}개(리더 등)는 직접 지정하세요: ${left.join(', ')}`:'');
+  }catch(exc){$('profile-bench-status').textContent=`불러오기 실패: ${exc.message}`;}
+};
 $('profile-import-dataset').onclick=()=>{if(saving||!datasetProfile)return;parent=null;draft=copy(datasetProfile);pending=null;render();};
 $('profile-use').onclick=()=>{const selected=record();if(selected)document.dispatchEvent(new CustomEvent('omx-profile-selected',{detail:{id:selected.id,revision:selected.revision,profile:copy(selected.profile)}}));};
 $('profile-form').onsubmit=async event=>{
