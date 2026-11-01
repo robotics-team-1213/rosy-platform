@@ -4335,3 +4335,9 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: test-only8658211939와 동결된 취약 생산 bytes의 unreferenced 후보bf952ea992에서 실제 서명 검증 뒤 manifest/identity 교체 두 시험이 모두 DID NOT RAISE로 원격 RED였다(2 failed/skip0/setup0/collection0, comparator2NEW). 현재 수정은 독립 검토 전이며 GREEN은 아직 없다.
 - gate 변화: 없음. 실제 설치·native closure·활성화·장치 권한을 검증한 결과가 아니다.
 - CE: 미해결 — 실제 RED는 확인했으며 수정 검증 후 trust-boundary 교훈 기록 필요성을 판단한다.
+
+## 2026-11-02 · uncommitted · feat(site): 작업셀 카메라 자격 매핑도 site.env에서 바꾼다
+- 변경: `compose.workcell.yaml`의 Vision 카메라 credential 매핑을 `ROSY_SITE_WORKCELL_CAMERA_CREDENTIAL_PATHS`(전체 교체, 비우면 overhead·wrist A·wrist B)로 받는다. 팔 매핑(`ROSY_SITE_WORKCELL_ARM_CREDENTIAL_PATHS`)과 같은 방식이다.
+- 증거: OMX 셀에 측면 카메라가 서비스로 돌지만 서명 Compose가 카메라 세 개를 고정해 Fleet·Vision에 넣을 수 없었다(2026-11-02 현장). 원격 `test_site_workcell_deploy.py`.
+- gate 변화: 없음
+- 교훈: 해당 없음
