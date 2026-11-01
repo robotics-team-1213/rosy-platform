@@ -355,6 +355,6 @@
 
 - 2026-11-02 · uncommitted · fix(harness): 같은 폴더 import 사슬로 시험을 찾는다 (D-889 추가 21)
 - 2026-11-02 · uncommitted · fix(land): 서로 닿지 않으면 차례는 가드만 (D-889 추가 22)
+- 2026-11-01 · uncommitted · fix(ci): 게시 PR CI 빨강 두 건(nightly의 로컬 main, OMX 리허설 실시간)
 - 2026-11-01 · uncommitted · D-907 source review R1 corrections
 - 2026-11-01 · uncommitted · native v2 readonly profile contract
-- 2026-11-01 · uncommitted · docs(adr): D-950 도킹 진입 방향은 후면(후진)
