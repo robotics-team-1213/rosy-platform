@@ -7,6 +7,7 @@
 #      WINDOW_DAYS (default 14), IGNORE (space-separated logins that are agents, not people).
 # Needs a full-history checkout with origin/main. Rows are "login<TAB>path" so paths may hold spaces.
 set -euo pipefail
+shopt -s inherit_errexit   # a failing git log inside $(...) must fail the gate, not read as "no overlap"
 since=$(date -u -d "${WINDOW_DAYS:-14} days ago" +%Y-%m-%dT%H:%M:%SZ)
 skip=" $AUTHOR ${IGNORE:-} "
 pr_files=$(gh api "repos/$REPO/pulls/$PR/files?per_page=100" --paginate --jq '.[].filename')
