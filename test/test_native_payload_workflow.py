@@ -160,3 +160,10 @@ def test_the_job_runs_in_the_builder_image_pinned_by_digest():
     assert "payload-builder/make-builder-image.sh" in builder and "secrets." not in builder
     make = (PREREQS.parent / "make-builder-image.sh").read_text(encoding="utf-8")
     assert "ubuntu@sha256:" in make and "install-ros-build-prereqs.sh" in make
+
+
+def test_the_checkout_belongs_to_the_container_user_before_the_cms_trust_check():
+    """os_cms_trust refuses a checkout owned by another uid; the container is root over the runner's files."""
+    text = _run_text()
+    assert 'chown -R "$(id -u):$(id -g)" . && chmod -R go-w .' in text
+    assert text.index("chown -R") < text.index("resolve-build-lock.py")
