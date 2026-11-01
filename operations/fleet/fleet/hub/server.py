@@ -68,7 +68,7 @@ def install_hub_routes(app: FastAPI, hub: SiteHub,
                     await websocket.close(code=1008)
                     break
                 
-                reply = hub.handle(env, session=session)
+                reply = await hub.handle_async(env, session=session)
                 if reply.type is EnvelopeType.ERROR:
                     code = reply.payload.get("code")
                     logger.warning("hub rejected %s: %s", env.type.value, code)

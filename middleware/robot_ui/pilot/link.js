@@ -1,5 +1,6 @@
 // Rosy Pilot DeviceSession(D-323 T4). 상태 WS(/ws/state, 첫 메시지 auth)와
-// REST teleop(hold-to-drive)를 하나의 세션 상태머신으로 묶는다.
+// teleop(hold-to-drive)을 하나의 세션 상태머신으로 묶는다. teleop 은 조종 WS(/ws/teleop,
+// 같은 auth 첫 프레임)를 먼저 쓰고, 닫혀 있거나 응답이 끊기면 REST 로 보낸다.
 // DOM·fetch·WebSocket 을 모른다 — 전부 주입받아 Node 순수 시험이 가능하다.
 //
 // 상태: CONNECTING → OPEN → (close) RETRYING|FORBIDDEN|OFFLINE|BLOCKED
@@ -17,12 +18,19 @@ export const IDLE_ZERO_REPEATS = 3;    // 놓은 뒤 0 을 몇 번 보내고 조
 // 워치독 전에 나간다. 끊긴 요청은 다음 틱이 최신 명령으로 대신한다. 시한 + 왕복이
 // 500ms 를 넘으면 로봇이 잠깐 서는 쪽으로 실패한다(의도된 안전 방향).
 export const POST_TIMEOUT_MS = 400;
+// 조종 WS: 이 시간 넘게 ack 가 없으면 죽은 소켓으로 보고 닫은 뒤 REST 로 보낸다.
+export const WS_ACK_STALE_MS = 1000;
+export const TELEOP_WS_RETRY_MS = 2000;
+// ack 로 받는 409 상당 거절 코드 — REST 가 409 로 답하는 것과 같다.
+const CONFLICT_CODES = new Set(["MODE_CONFLICT", "EMERGENCY_ACTIVE", "OWNER_GENERATION_CHANGED",
+  "CALIBRATION_ACTIVE", "TRIP_LEASED", "CAPABILITY_WITHHELD"]);
 export const MIN_BACKOFF_MS = 1000;
 export const MAX_BACKOFF_MS = 30000;
 
 export function createDeviceSession({
   token,
   url = "/ws/state",
+  teleopUrl = "/ws/teleop",
   openSocket,
   schedule,
   postJson,
@@ -47,6 +55,10 @@ export function createDeviceSession({
   let pending = null;          // 스로틀·비행 중 때문에 늦춰진 최신 명령(가장 최신 것만 남긴다)
   let pendingTimer = null;
   let socket = null;
+  let teleopSocket = null;     // 조종 WS. null 이거나 teleopReady 가 거짓이면 REST 로 보낸다
+  let teleopReady = false;
+  let teleopSeq = 0;
+  const unacked = new Map();   // seq → 발행 시각(ack 왕복 지연·죽은 소켓 판정)
 
   const blocked = () => hiddenBlock || conflictBlock;
 
@@ -73,12 +85,14 @@ export function createDeviceSession({
       if (state === "CONNECTING" || state === "RETRYING") {
         failures = 0;          // 인증이 통과하고 첫 스냅샷이 왔다 = 연결 성공
         setState(conflictBlock ? "BLOCKED" : "OPEN");
+        openTeleop();
       }
       onSnapshot(frame);
     };
     socket.onclose = (event) => {
       if (closed) return;
       socket = null;
+      closeTeleop();
       clearPending();
       if (lastWasMotion || motionFlights > 0) {
         if (motionFlights > 0) zeroAfterFlight = true;
@@ -105,6 +119,68 @@ export function createDeviceSession({
     };
   }
 
+  function closeTeleop() {
+    const old = teleopSocket;
+    teleopSocket = null;
+    teleopReady = false;
+    unacked.clear();
+    if (old) {
+      old.onopen = old.onmessage = old.onclose = null;
+      try { old.close(); } catch (error) { /* 이미 닫혔다 */ }
+    }
+  }
+
+  function openTeleop() {
+    if (closed || teleopSocket || !teleopUrl || (state !== "OPEN" && state !== "BLOCKED")) return;
+    const ws = openSocket(teleopUrl);
+    teleopSocket = ws;
+    ws.onopen = () => {
+      if (token) ws.send(JSON.stringify({type: "auth", token}));
+      teleopReady = true;      // 서버는 인증 성공을 따로 알리지 않는다. 거부는 close 4401/4403 으로 온다
+    };
+    ws.onmessage = (event) => {
+      let frame = null;
+      try { frame = JSON.parse(event.data); } catch (error) { return; }
+      if (frame?.type !== "ack") return;
+      const startedAt = unacked.get(frame.seq);
+      for (const seq of unacked.keys()) if (seq <= frame.seq) unacked.delete(seq);
+      if (startedAt !== undefined) onLatency(now() - startedAt, false);
+      if (frame.accepted === false && CONFLICT_CODES.has(frame.code)) {
+        conflictBlock = true;
+        clearPending();
+        setState("BLOCKED");
+        onConflict({code: frame.code});
+      }
+    };
+    ws.onclose = (event) => {
+      if (closed || teleopSocket !== ws) return;
+      closeTeleop();
+      // CORE 는 닫힌 소켓의 마지막 움직임을 0 으로 덮는다. REST 로도 한 번 더 보낸다.
+      if (lastWasMotion) post({linear: 0, angular: 0});
+      if (event?.code !== 4403) schedule(openTeleop, TELEOP_WS_RETRY_MS);
+    };
+  }
+
+  function postWs(command, startedAt) {
+    // 기다리지 않는다 — 항상 최신 명령 하나만 이 함수에 온다(command()/flushPending() 가 걸러 준다).
+    const oldest = unacked.size ? Math.min(...unacked.values()) : startedAt;
+    if (startedAt - oldest > WS_ACK_STALE_MS) {
+      onLatency(startedAt - oldest, true);
+      closeTeleop();
+      schedule(openTeleop, TELEOP_WS_RETRY_MS);
+      return false;
+    }
+    teleopSeq += 1;
+    unacked.set(teleopSeq, startedAt);
+    try {
+      teleopSocket.send(JSON.stringify({type: "teleop", seq: teleopSeq, ...command}));
+    } catch (error) {
+      closeTeleop();
+      return false;
+    }
+    return true;
+  }
+
   function retry() {
     if (closed) return;
     setState("RETRYING");
@@ -123,6 +199,7 @@ export function createDeviceSession({
     lastSentAt = startedAt;
     lastWasMotion = motion;
     zeroStreak = motion ? 0 : zeroStreak + 1;
+    if (teleopReady && teleopSocket && postWs(command, startedAt)) return {status: 200, ws: true};
     flights += 1;
     if (motion) motionFlights += 1;
     let response = null;
@@ -207,6 +284,7 @@ export function createDeviceSession({
     close() {
       closed = true;
       clearPending();
+      closeTeleop();
       if (socket) {
         socket.onopen = socket.onmessage = socket.onclose = null;
         try { socket.close(); } catch (error) { /* 이미 닫혔다 */ }

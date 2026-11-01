@@ -4,6 +4,7 @@ import base64
 import json
 import math
 import threading
+from concurrent.futures import ThreadPoolExecutor
 
 from core_common.protocol.media_tokens import MediaTokenRejected, verify_media
 
@@ -18,6 +19,8 @@ class MediaAuthority:
         self._validate_online, self._kick = validate_online, kick
         self._intents, self._sessions = {}, {}
         self._lock = threading.RLock()
+        # tick re-checks run here, never under self._lock; the peers' own timeouts bound each call.
+        self._pool = ThreadPoolExecutor(max_workers=16, thread_name_prefix='media-recheck')
 
     def _claims(self, token, now):
         for robot_id, keys in self._keys.items():
@@ -133,17 +136,32 @@ class MediaAuthority:
         self._sessions.pop(session_id, None)
 
     def tick(self, *, now):
+        """Revocation bound: a revoke ends the session at the next tick plus one re-check round
+        (<= ~1.5 s per worker batch). No network I/O runs while self._lock is held."""
         with self._lock:
-            for grant_id, intent in list(self._intents.items()):
-                if intent['expires'] <= now or not self._online(intent['token'], intent['claims'], now):
+            self._intents = {k: v for k, v in self._intents.items() if v['expires'] > now}
+            intents = list(self._intents.items())
+            sessions = {sid: (rec, rec['token']) for sid, rec in self._sessions.items()
+                        if not (rec.get('closing') or rec['expires'] <= now or rec['claims'].exp <= now)}
+            jobs = {(r['claims'].jti, t): (t, r['claims']) for r, t in sessions.values()}
+            jobs.update({(v['claims'].jti, v['token']): (v['token'], v['claims']) for _, v in intents})
+        keys = list(jobs)
+        verdict = dict(zip(keys, self._pool.map(lambda k: self._online(*jobs[k], now), keys)))
+        with self._lock:
+            # Apply only to the same record and token; a renewed or replaced one is rechecked next tick.
+            for grant_id, intent in intents:
+                if self._intents.get(grant_id) is intent and not verdict[(intent['claims'].jti, intent['token'])]:
                     self._intents.pop(grant_id, None)
             # Readers first so their removal immediately retracts source demand.
-            sessions = sorted(list(self._sessions.items()), key=lambda item: item[1]['claims'].action != 'read')
-            for session_id, record in sessions:
+            for session_id, record in sorted(list(self._sessions.items()),
+                                             key=lambda item: item[1]['claims'].action != 'read'):
                 claims = record['claims']
-                if (record.get('closing') or record['expires'] <= now or claims.exp <= now
-                        or not self._online(record['token'], claims, now)
-                        or (claims.action == 'publish' and not self.demand(claims.robot_id, now=now)['active'])):
+                snap = sessions.get(session_id)
+                bad = (record.get('closing') or record['expires'] <= now or claims.exp <= now
+                       or (snap is not None and snap[0] is record and snap[1] == record['token']
+                           and not verdict[(claims.jti, snap[1])])
+                       or (claims.action == 'publish' and not self.demand(claims.robot_id, now=now)['active']))
+                if bad:
                     self._close(session_id)
 
     def report_queue(self, session_id, token, *, queue_ms, now):

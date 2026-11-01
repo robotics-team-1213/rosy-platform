@@ -113,9 +113,9 @@ def test_history_ignores_polling_age_and_is_site_scoped(runtime, tmp_path):
     cache.update_local('pc-a', nodes=(value,))
     clock.advance(1)
     cache.update_local('pc-a', nodes=(value,))
-    events = cache.store.events('site-a', after=0, limit=100)
+    events = cache.events('site-a', after=0, limit=100)
     assert len(events) == 1 and events[0]['item_id'] == value.id
-    assert cache.store.events('site-b', after=0, limit=100) == []
+    assert cache.events('site-b', after=0, limit=100) == []
 
 
 def test_removed_configuration_cannot_bypass_durable_anchor_budget(runtime, tmp_path):
