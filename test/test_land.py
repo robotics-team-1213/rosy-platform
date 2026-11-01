@@ -1064,6 +1064,7 @@ def test_a_confirmed_new_failure_cancels_the_rest_and_the_cancelled_are_neither_
 def test_the_turns_time_cap_cancels_the_rest_as_overtime_and_a_prepare_round_has_no_cap(cached, monkeypatch):
     wt, run, calls = cached
     monkeypatch.setattr(land, "TURN_CAP_S", -1)
+    monkeypatch.setattr(land.land_checks, "turn_wanted", lambda *a: True)
     monkeypatch.setattr(land.remote_pytest, "run", _runner({"pkg/test": GREEN, "pkg/test/test_a.py": GREEN}))
     with pytest.raises(land.Overtime):
         land.run_tests(wt, land.argparse.Namespace(tests="auto", node=False, no_cache=False),

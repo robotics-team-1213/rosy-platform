@@ -32,8 +32,10 @@ TOOL_DOWN_TOL = math.radians(1.0)
 POS_TOL = 0.0015     # m between the requested and the FK position of every frame
 REACH_MARGIN_M = 0.008  # wrist distance kept inside l1 + l2 at the travel end points of a site
 MIN_STANDOFF_M = 0.02   # the shortest approach / lift a site may shrink to
+MAX_JOINT_STEP_RAD = 0.25  # between two frames; the sim profile's max_waypoint_joint_step_rad
 # shortcut: the gripper housing's reach past the tool axis is an estimate, not a measurement; measure it on the
-# cell and replace (2026-10-27: a TCP-only keep-out let the wrist and gripper hit the wall behind the belt)
+# cell and replace (2026-10-27: a TCP-only keep-out let the wrist and gripper hit the wall behind the belt).
+# It is the keep-out radius of the wrist-TCP capsule; the other links use swept_volume.LINK_RADIUS_M.
 BODY_MARGIN_M = 0.035
 
 
@@ -103,15 +105,16 @@ class Planner:
         return self.kin.solve_top_down(self.TopDownPose(x, y, z, math.radians(yaw_deg)), self.limits).ok
 
     def line(self, start, end, speed_m_s, yaw_deg, grip, reference_q5):
-        """Frames along a straight Cartesian line at `speed_m_s`, one IK solve per frame."""
+        """Frames along a straight Cartesian line at `speed_m_s` and the q5 it ends at: the kinematics' shared
+        line (one IK solve and FK check per frame, a yaw-twin flip refused), the same one the sim planner uses."""
         n = max(1, math.ceil(math.dist(start, end) / (speed_m_s / self.fps)))
-        frames, q5 = [], reference_q5
-        for k in range(1, n + 1):
-            p = [a + (b - a) * k / n for a, b in zip(start, end)]
-            joints = self.solve(*p, yaw_deg, q5)
-            q5 = joints[4]
-            frames.append([round(rad_to_norm(q), 3) for q in joints] + [grip])
-        return frames, q5
+        try:
+            path = self.kin.solve_line(self.solve(*start, yaw_deg, reference_q5),
+                                       self.TopDownPose(*start, math.radians(yaw_deg)), end, self.limits,
+                                       count=n, max_joint_step_rad=MAX_JOINT_STEP_RAD)
+        except ValueError as exc:
+            raise SystemExit(f"IK line {start} -> {end}: {exc}") from None
+        return [[round(rad_to_norm(q), 3) for q in joints] + [grip] for joints in path], path[-1][4]
 
     def hold(self, frame, seconds, grip_from=None, grip_to=None):
         n = max(1, round(seconds * self.fps))
@@ -155,12 +158,13 @@ class Planner:
         for name, frames in chunks.items():
             if too_fast(frames, self.fps):
                 raise SystemExit(f"{name}: frames move faster than the guard streams ({GUARD_UNITS_PER_S} units/s)")
-        self.keep_out(chunks)
+        transit = self.keep_out(chunks)
         return {"schema": "rosy.omx-chunk-library.v1", "names": NAMES, "fps": self.fps, "chunks": chunks,
                 "gripper_closed": p["grip_closed"], "hold_current_ma": p.get("hold_current_ma"),
-                "transit": p.get("transit", {}),
+                "transit": transit,
                 "transit_speed": p.get("transit_speed", 0.85),
                 "source": {"planner": "grasp_planner.py top-down v1", "pick": p["pick"], "place": p["place"],
+                           "transit": "taught" if transit == p.get("transit", {}) else "pulled in for keep_out",
                            "reach": {site: {"approach_m": round(self.height(chunks[f"above_{site}"][0]) - p[site]["z"], 3),
                                "margin_m": round(self.reach_margin(p[site]["x"], p[site]["y"], p[site]["z"],
                                                                    p[site]["yaw_deg"]), 4)}
@@ -169,46 +173,82 @@ class Planner:
     def height(self, frame) -> float:
         return self.kin.fk([norm_to_rad(v) for v in frame[:5]]).z
 
-    def keep_out(self, chunks) -> None:
-        """``keep_out`` {"x_max_m": ...} in the plan: no tool position past that line, in the chunks and on the
-        travel between them (chunk_runner's rise-turn-descend path), e.g. the wall behind the S cell's belt."""
+    def keep_out(self, chunks) -> dict:
+        """``keep_out`` {"x_max_m": ...} in the plan: no link capsule (shoulder to fingertips) past that line, in
+        the chunks and on the travel between them (chunk_runner's rise-turn-descend path), e.g. the wall behind
+        the S cell's belt. Returns the transit the travel uses: the plan's taught one, or when its travel crosses
+        the line the first passing tool-down transit pulled toward the base (taught and computed compete)."""
+        taught = self.plan.get("transit", {})
         bound = (self.plan.get("keep_out") or {}).get("x_max_m")
         if bound is None:
-            return
-        from chunk_runner import transit_path
-
-        p = self.plan
-        transit = {NAMES.index(k): float(v) for k, v in p.get("transit", {}).items()} or None
-        home = list(p["home"]) + [p["grip_closed"]]
-        travel = (transit_path(home, chunks["above_pick"][0], p["grip_closed"], self.fps, transit)
-                  + transit_path(chunks["lift_pick"][-1], chunks["above_place"][0], p["grip_closed"], self.fps, transit)
-                  + transit_path(chunks["lift_place"][-1], home, p["grip_closed"], self.fps, transit))
-        for name, frames in [*chunks.items(), ("travel", travel)]:
+            return taught
+        for name, frames in chunks.items():
             worst = max(self.body_x(f) for f in frames)
             if worst > bound:
-                raise SystemExit(f"{name}: the wrist or gripper reaches x {worst:.3f} m past keep_out x_max {bound} m")
+                raise SystemExit(f"{name}: a link (elbow, wrist or gripper) reaches x {worst:.3f} m "
+                                 f"past keep_out x_max {bound} m")
+        first = None
+        for transit in [taught, *self.pulled_in_transits(taught)]:
+            worst = max(self.body_x(f) for f in self.travel(chunks, transit))
+            if worst <= bound:
+                return transit
+            first = first if first is not None else worst
+        raise SystemExit(f"travel: a link (elbow, wrist or gripper) reaches x {first:.3f} m past keep_out x_max "
+                         f"{bound} m with the taught transit, and no pulled-in transit stays inside")
+
+    def travel(self, chunks, transit: dict) -> list:
+        """Every frame of one leg from home with this transit, the travel included."""
+        library = {"chunks": chunks, "gripper_closed": self.plan["grip_closed"], "transit": transit,
+                   "transit_speed": self.plan.get("transit_speed", 0.85)}
+        home = list(self.plan["home"]) + [self.plan["grip_closed"]]
+        return [f for _, frames in self.stream(library, home) for f in frames]
+
+    def stream(self, library, home) -> list[tuple[str, list]]:
+        """What chunk_runner plays for one leg from ``home``, as the teacher's four phases: its goto travel (jaws at
+        the library's gripper_closed, its transit and transit_speed) and the chunks. The recorded cycle, the keep-out
+        check, the native SIM teacher and Isaac all replay this, so no simulation runs another motion than the cell."""
+        from chunk_runner import transit_path
+
+        c = library["chunks"]
+        transit = {NAMES.index(k): float(v) for k, v in library.get("transit", {}).items()} or None
+        travel = lambda start, goal: transit_path(start, goal, library["gripper_closed"], self.fps,  # noqa: E731
+                                                  transit, library.get("transit_speed", 0.85))
+        return [("approach", travel(home, c["above_pick"][0]) + c["descend_pick"]),
+                ("grasp", c["grasp_pick"]),
+                ("transfer", c["lift_pick"] + travel(c["lift_pick"][-1], c["above_place"][0]) + c["descend_place"]),
+                ("release", c["release_place"] + c["lift_place"] + travel(c["lift_place"][-1], home))]
+
+    def pulled_in_transits(self, taught: dict) -> list[dict]:
+        """Tool-down transits 1 cm apart from the taught one's reach toward the base, the TCP no lower than the
+        taught transit's lowest link point (turning low scraped the jaws on the table, 2026-10-24)."""
+        from omx_adapter.chunk_library import TRANSIT
+
+        index = {NAMES.index(k): float(v) for k, v in taught.items()} or TRANSIT
+        points, _ = self.kin.link_points([0.0] + [norm_to_rad(index.get(i, 0.0)) for i in (1, 2, 3)] + [0.0])
+        floor = min(z for _, _, z in points)
+        bx, by = self.kin.base_xy
+        radius = round(math.hypot(points[-1][0] - bx, points[-1][1] - by) - 0.01, 3)
+        out = []
+        while radius >= self.limits.singularity_radius_m:
+            result = self.kin.solve_top_down(self.TopDownPose(bx + radius, by, floor, 0.0), self.limits)
+            if result.ok:
+                out.append({NAMES[i]: round(rad_to_norm(result.joints[i]), 3) for i in (1, 2, 3)})
+            radius = round(radius - 0.01, 3)
+        return out
 
     def body_x(self, frame) -> float:
-        """Largest x of the gripper body: the TCP and the wrist point behind it, plus the housing margin."""
-        pose = self.kin.fk([norm_to_rad(v) for v in frame[:5]])
-        wrist_x = pose.x - self.kin.tool_length_m * pose.rotation[0][0]  # back along the approach axis
-        return max(pose.x, wrist_x) + BODY_MARGIN_M
+        """Largest x any link capsule reaches: shoulder-elbow, elbow-wrist, and wrist-TCP at the housing margin."""
+        from omx_adapter.swept_volume import capsules
 
+        caps = capsules(self.kin, [norm_to_rad(v) for v in frame[:5]], fingertip_m=0.0,
+                        gripper_radius_m=BODY_MARGIN_M)
+        return max(max(a[0], b[0]) + r for a, b, r in caps)
 
     def leg(self, library):
         """One recordable leg from home: travel to above pick, pick, travel to above place, place, travel home.
         Travel uses chunk_runner's rise-turn-descend path, the same one goto and park take."""
-        from chunk_runner import transit_path
-
-        c, p = library["chunks"], self.plan
-        transit = {NAMES.index(k): float(v) for k, v in p.get("transit", {}).items()} or None
-        home = list(p["home"]) + [p["grip_closed"]]
-        frames = transit_path(home, c["above_pick"][0], p["grip_closed"], self.fps, transit)
-        frames += c["descend_pick"] + c["grasp_pick"] + c["lift_pick"]
-        frames += transit_path(frames[-1], c["above_place"][0], p["grip_closed"], self.fps, transit)
-        frames += c["descend_place"] + c["release_place"] + c["lift_place"]
-        frames += transit_path(frames[-1], home, p["grip_closed"], self.fps, transit)
-        return [[round(v, 3) for v in f] for f in frames]
+        home = list(self.plan["home"]) + [self.plan["grip_closed"]]
+        return [[round(v, 3) for v in f] for _, frames in self.stream(library, home) for f in frames]
 
     def cycle_trajectory(self, reset_s: float = 2.0) -> dict:
         """A self-resetting cycle for record_session --replay: A carries pick -> place, B carries it back."""

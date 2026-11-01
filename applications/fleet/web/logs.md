@@ -645,6 +645,12 @@
 - 증거: 작업 세션 Fleet 샘플 서버(4175) Edge 1366·390에서 정책 화면 머리·레일·비상 정지·`운영자` 표시, 지도 설정 화면 `파일 선택 · 선택한 파일 없음`, 가로 넘침·페이지 오류 없음. 브라우저 시험은 원격 PC에서 돌린다.
 - gate 변화: 없음. CE: 해당 없음 — 규칙은 D-926이 담는다.
 
+## 2026-10-31 · uncommitted · 학습 정책 승인이 탭의 토큰을 읽는다
+
+- 변경: `work/policy-page.js`가 다른 작업 화면처럼 `rosy-console-token`을 credential로 보내고 시작할 때 `developmentToken()`을 부른다. 전에는 개발 세션에서 이 화면만 `인증 필요`로 보였고, 머리의 `로그인`이 이미 로그인된 탭을 `/console`로 넘겨 "누르면 관제 홈으로 간다"로 보였다.
+- 증거: 실제 `create_app` 개발 모드 + Chromium에서 `/console?view=work&show=done` → 정책 링크 클릭 → `/console/policy`에 머물고 `운영자` 표시. `test_development_console_browser.py`에 `/console/policy`를 더했고 고치기 전 실패·후 통과를 확인했다.
+- gate 변화: 없음. CE: 새 교훈 `docs/solutions/logic-errors/fleet-page-without-tab-token-bounces-dev-login-to-console-2026-10-31.md`.
+
 ## 2026-10-31 · uncommitted · D-926 후속: 설치 작업 고르기 자리, 관제 오른쪽 칩·위험 채움
 
 - 변경: 설치 화면의 작업 고르기는 화면 안 왼쪽 칸 대신 공용 하위 탐색 자리(레일과 본문 사이)에 선다. Cell·지도·Robot 화면과 같은 자리다. 관제 로봇 카드의 배터리는 다른 사실과 같은 칩이고, 운행 상태가 없는 카드는 `—` 줄을 그리지 않는다. 접힌 `관제 경로` 요약은 할 일이 없는 진단이라 빨간 채움 대신 D-668 점 표시로 위험을 말한다. 간격 역할 토큰은 측정 결과 모두 쓰여 그대로 둔다(D-926 관계 표 D-292).

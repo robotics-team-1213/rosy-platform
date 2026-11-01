@@ -4262,7 +4262,12 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 결정: D-857
 - 교훈: 없음
 
-## 2026-10-31 · uncommitted · fix(site): Tailscale 대역에서도 천장 카메라 미리보기
+## 2026-11-01 · a785121ef0 · sim/real 같은 동작: Planner.stream 하나
+- 변경: 실제 셀 실행기(`chunk_runner`)가 재생하는 프레임 순서를 `grasp_planner.Planner.stream` 하나로 두고, 녹화 사이클(`leg`)·금지선 검사·native SIM 교사(`sim_chunk_plan`)·Isaac(`isaac_cell_frames`)가 모두 이것을 쓴다. SIM은 실제 plan의 동작값(접근·들어 올림 높이, 속도, 집게 시간, transit_speed)을 그대로 쓰고 장소·홈·transit·한계·집게 단위만 바꾼다. 복사해 둔 `REAL` 상수와 접근 높이로 고정한 들어 올림을 없앴다. 이동 중 집게는 실제처럼 `gripper_closed`로 닫는다. 라이브러리가 고른 transit(금지선 때문에 당긴 것 포함)도 SIM에 그대로 간다.
+- 증거: `test_the_sim_replays_frame_for_frame_what_chunk_runner_streams`가 chunk_runner의 goto 식으로 따로 만든 프레임과 SIM 단계를 프레임 단위로 대조한다. 원격 pytest 결과는 착지 기록에 남긴다.
+- gate 변화: 없음. native SIM·Isaac 실제 실행으로 다시 확인하지 않았다(들어 올림 높이와 이동 중 집게가 바뀌어 이전 SIM 기록과 다르다).
+
+## 2026-11-01 · uncommitted · fix(site): Tailscale 대역에서도 천장 카메라 미리보기
 
 - 변경: 사이트 Caddy의 토큰 없는 카메라 보기 예외(`@lan_camera`, Fleet `vision/sources`·`vision/lease` 두 경로)에 Tailscale tailnet `100.64.0.0/10`을 더한다. 기존 `private_ranges`는 CGNAT 대역을 포함하지 않아 tailnet 브라우저가 401을 받았다. D-473 개발 세션이 이미 같은 대역을 사설망으로 받는 것과 맞춘다. 허가 범위(소스 목록·60초 source 한정 lease)와 다른 Fleet 경로의 토큰 요구는 그대로다.
 - 증거: 사이트·Fleet 관련 원격 pytest(커밋 뒤 실행). 2026-10-31 현장 proxy 컨테이너의 Caddy로 이 Caddyfile을 `caddy validate` → Valid configuration(적용 안 함). 현장 방화벽은 이미 `tailscale0`을 허용한다. 배포 전 현장 443에서 tailnet 주소의 `/api/fleet/vision/sources`는 401, 8443(Account)에서는 목록·lease·`ceiling_north` 프레임 200.

@@ -298,6 +298,20 @@ def landed_copy(main_co: Path, argv: list[str]) -> int | None:
     return subprocess.run([sys.executable, str(there / "land.py"), *argv], env={**os.environ, OWN_COPY: "1"}).returncode
 
 
+CAP_POLL_S = 15
+
+
+def turn_wanted(land, wt: Path) -> bool:
+    """Whether another landing is ready ('waiting') for the turn. The turn cap only applies then: on 2026-10-31 an
+    urgent landing's turn hit the 10 min cap at 584 s with no one waiting and redid its pretest outside for an hour."""
+    try:
+        mine = {t.name for t in land.land_queue._held}
+        rows = land.land_queue.ahead(land.land_queue.queue_dir(wt), Path("~"))
+        return any(r.get("status") == "waiting" and r["ticket"] not in mine for r in rows)
+    except Exception:  # noqa: BLE001 - an unreadable queue keeps the cap
+        return True
+
+
 def run_tests(land, wt: Path, args, invocations: list[list[str]], logdir: Path, round_no: int) -> list[str]:
     """Run lint + pytest (+ node); return a summary line per step. Stop on any NEW failure."""
     deadline = land.time.monotonic() + land.TURN_CAP_S if isinstance(round_no, int) else None
@@ -309,6 +323,8 @@ def run_tests(land, wt: Path, args, invocations: list[list[str]], logdir: Path, 
     # HEAD is the candidate (merge commit included); the runner ships it to a test host (D-584:
     # no host means it waits, then fails, and nothing lands).
     head = land.out(wt, "rev-parse", "HEAD")
+    # Long invocations split by measured run time so hosts run them side by side (2026-11-01: 30 min tails).
+    invocations = sys.modules["work_queue"].split(wt, invocations)
     reused, todo, keep = land.land_cache.split(wt, args, invocations, head, python, land.select)
     done += reused
 
@@ -333,17 +349,28 @@ def run_tests(land, wt: Path, args, invocations: list[list[str]], logdir: Path, 
 
         def on_done(inv, log):  # D-889: a confirmed NEW failure, or the turn's time cap, cancels the rest
             seen[str(log)] = v = judge(inv, log, f"{round_no}-{land.Path(log).stem[4:]}")
-            return bool(v[0] and not v[1]) or (deadline is not None and land.time.monotonic() >= deadline)
+            return bool(v[0] and not v[1]) or (stop is not None and stop.is_set())
         stop = threading.Event() if deadline is not None else None
-        timer = threading.Timer(max(0, deadline - land.time.monotonic()), stop.set) if stop is not None else None
-        if timer is not None:
+        timers = []
+
+        def expire():  # the cap frees the lock for a landing ready to take it; with no one waiting, the turn goes on
+            if turn_wanted(land, wt):
+                stop.set()
+            elif not stop.is_set():
+                arm(CAP_POLL_S)
+
+        def arm(seconds):
+            timer = threading.Timer(max(0, seconds), expire)
             timer.daemon = True
+            timers.append(timer)
             timer.start()
+        if stop is not None:
+            arm(deadline - land.time.monotonic())
         try:
             codes = land.remote_pytest.run(todo, logs, head, repo=wt, label=f"land-{round_no}", on_done=on_done,
                                           **({"stop": stop} if stop is not None else {}))
         finally:
-            if timer is not None:
+            for timer in timers:
                 timer.cancel()
         if land.out(wt, "rev-parse", "HEAD") != head:
             raise land.Stop(f"HEAD changed during remote checks; {head[:10]} was tested; retry the landing")

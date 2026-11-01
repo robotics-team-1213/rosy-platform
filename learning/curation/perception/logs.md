@@ -357,3 +357,9 @@
 - gate 변화: 없음. 운영 검수 DB·사람 정답·학습·모델 활성화·실물 동작은 변경하지 않았다. 새 로봇 녹화·실제 서비스 설치·착지/push는 별도다.
 - CE: 해당 없음 — 복구·무결성·중복 방지 판단은 코드·회귀·운영 문서에 남는다. 로봇 접속 실패는 해결된 사실로 기록하지 않는다.
 - 후속 검증: d2d68c3346의 공식 affected 전체 13,602 passed/1,285 skipped/NEW 0, 실제 기존 녹화와 pinned raw 집중 88 passed/skip0/NEW 0. 생산 코드는 66e86cb0fb와 같으며, 중간 전체 회귀의 OMX 합성 시계 실패 두 건은 기존 시계 fixture를 공유해 보완했다. 원본 실패·대조·취소·skip은 검증 정본에 보존했다.
+
+## 2026-11-01 · uncommitted · curation/perception: content_sha stand-in을 정본 소비로 대체
+
+- 변경: `build.py`의 로컬 `content_sha` stand-in 제거(D-373 정본 착지 후에도 남아 있던 사본)하고 `learning/registry/perception/store.py` 정본을 import로 소비(D-940 ①갈래). `manifest_bytes` 옵션은 정본으로 이식했다.
+- 증거: test/learning/perception 원격 실행·mutation은 착지 기록에 남긴다(2026-11-01).
+- gate 변화: 없음

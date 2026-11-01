@@ -120,9 +120,27 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--days", type=int, default=7)
     parser.add_argument("--json", action="store_true")
+    parser.add_argument("--goal", action="store_true", help="the landing goal over --hours (land_goal.py)")
+    parser.add_argument("--hours", type=float, default=24)
+    parser.add_argument("--p90", type=float, default=120, help="goal: lead time p90 minutes")
+    parser.add_argument("--stall", type=float, default=30, help="goal: longest stall minutes")
     args = parser.parse_args(argv)
     common = subprocess.run(["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
                             capture_output=True, text=True, check=True).stdout.strip()
+    if args.goal:
+        import land_goal
+        import land_queue
+        t1 = time.time()
+        t0 = t1 - args.hours * 3600
+        rows = land_events.read(Path(common) / land_events.EVENTS)  # all of it: a lead time may start before t0
+        moves = [int(x) for x in subprocess.run(["git", "log", "--first-parent", "--format=%ct", f"--since=@{int(t0)}",
+                                                 "main"], capture_output=True, text=True).stdout.split()]
+        alive = {int(json.loads(p.read_text(encoding="utf-8")).get("pid") or 0)
+                 for p in (Path(common) / land_queue.QUEUE).glob("[0-9]*.json")}
+        lines, ok = land_goal.report(rows, moves, {p for p in alive if land_queue.pid_alive(p)}, t0, t1,
+                                     args.p90, args.stall)
+        print("\n".join(lines))
+        return 0 if ok else 1
     since = time.time() - args.days * 86400
     rows = [r for r in land_events.read(Path(common) / land_events.EVENTS) if r["t"] >= since]
     stats = daily(rows)

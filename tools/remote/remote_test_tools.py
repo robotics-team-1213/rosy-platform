@@ -137,6 +137,7 @@ mkdir -p "$R/venvs"
 exec 9>"$R/venvs/$DEPS.lock"; flock -x -w 600 9
 [ "$(cat "$V/.deps-sha" 2>/dev/null)" = "$DEPS" ] && exit 0
 echo "[remote] building $N (CI install inputs changed)"
+B=$SECONDS
 rm -rf "$N"
 # The site PC (Ubuntu 26.04) has no system 3.12; `uv python install 3.12` puts one in ~/.local/bin.
 PY=/usr/bin/python3; "$PY" -c 'import sys; sys.exit(sys.version_info[:2] != (3, 12))' 2>/dev/null || PY=~/.local/bin/python3.12
@@ -144,7 +145,9 @@ PY=/usr/bin/python3; "$PY" -c 'import sys; sys.exit(sys.version_info[:2] != (3, 
 UV=$(command -v uv || ls ~/.local/bin/uv 2>/dev/null || true)
 [ -n "$UV" ] || { echo "[remote] uv missing (D-802): sudo python3 deploy/hosts/common/rosy-host-state install <role> --approve uv"; exit 1; }
 "$UV" venv -q --seed -p "$PY" "$N"
-P="$N/bin/python -m pip -q --disable-pip-version-check --no-cache-dir"
+# pip's cache stays on: ~13-14 rebuilds a host a day re-downloaded every wheel (2026-10-31); hashes still pin what
+# installs, and the host storage timer prunes the cache (rosy-ops lab-host-storage rule 5).
+P="$N/bin/python -m pip -q --disable-pip-version-check"
 REQ=deploy/robot/pinky_pro/image/device-python-requirements.txt
 $P install --require-hashes --no-deps --only-binary=:all: -r "$REQ"
 grep -o '^[A-Za-z0-9._-]*==[^ ]*' "$REQ" > "$N/constraints.txt"
@@ -171,4 +174,5 @@ echo "$DEPS" > "$N/.deps-sha"
 grep -rlI --exclude-dir=__pycache__ "$N" "$N/bin" | xargs -r sed -i "s|$N|$V|g"
 mv "$N" "$V"
 echo "[remote] ready $V"
+echo "[remote-pytest] venv built $DEPS in $((SECONDS - B))s (pip cache $(du -sm ~/.cache/pip 2>/dev/null | cut -f1 || true) MB)"
 """
