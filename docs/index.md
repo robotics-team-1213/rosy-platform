@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
-- 2026-10-31 · uncommitted · shared: D-939 앱 연동 공통 소스
-- 2026-10-31 · uncommitted · fleet: D-938 팔 이송 정책 승인
-- 2026-10-31 · uncommitted · fix(land): main 변화분의 safety 경로는 FULL 재실행을 부르지 않는다
-- 2026-10-31 · uncommitted · omx: D-933 camera model from printed markers (cell_frame)
-- 2026-10-30 · uncommitted · fleet/omx: per-arm marker id blocks for up to four arms (D-933 보충)
+- 2026-11-01 · uncommitted · fix(land): 브라우저·시뮬레이션 시험은 필요할 때만, 전체는 밤에
+- 2026-11-01 · uncommitted · refactor: D-940 후속 1 — 정본 소비·REST 미러 핀·PR 템플릿
+- 2026-11-01 · uncommitted · feat(land): 한 표 묶음(rollup)
+- 2026-11-01 · uncommitted · docs(adr): 착지 처리량은 시험 PC 용량이 정한다
+- 2026-11-01 · uncommitted · docs: D-940 중복 정의 게이트와 등록부

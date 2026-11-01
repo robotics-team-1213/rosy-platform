@@ -19,7 +19,7 @@ from pathlib import Path
 REPO = Path(os.environ.get("ROSY_SIM_REPO", "/repo"))
 for _part in ("contracts/foundation", "contracts/skill/src", "middleware/devices/omx/adapter", "middleware/devices/omx/agent/src",
               "operations/site_execution/src", "operations/processes/palletizing/src", "middleware/skills/api/src",
-              "middleware/skills/manipulation/src", "integrations/robots/omx/src", "deploy/robot/omx"):
+              "middleware/skills/manipulation/src", "integrations/robots/omx/src", "deploy/robot/omx", "tools/sim"):
     sys.path.append(str(REPO / _part))
 
 from cell_sim_tools import refuse_second_owner  # noqa: E402
@@ -35,6 +35,31 @@ def forward_pilot_event(holder, event):
         pilot.on_goal_event(event)
 
 
+def explained_refusals(readback):
+    """Simulation only: say why the fail-closed readback refused (status and fence numbers, never the token or body)."""
+    def current(epoch, generation):
+        if readback(epoch, generation):
+            return True
+        import http.client
+        import json
+        connection = http.client.HTTPConnection(readback._host, readback._port, timeout=2)
+        try:
+            connection.request("GET", "/api/fleet/dispatch-control",
+                               headers={"Authorization": "Bearer " + readback._token})
+            response = connection.getresponse()
+            control = json.loads(response.read(8192)) if response.status == 200 else {}
+            seen = (response.status, control.get("authority_epoch"), control.get("generation"),
+                    control.get("dispatch_enabled"))
+        except Exception as error:
+            seen = type(error).__name__
+        finally:
+            connection.close()
+        print(f"fence refused for epoch {epoch} generation {generation}; a 2 s read of port {readback._port} saw {seen}",
+              flush=True)
+        return False
+    return current
+
+
 def main() -> None:
     if os.environ.get("ROS_AUTOMATIC_DISCOVERY_RANGE") != "LOCALHOST":
         raise RuntimeError("the cell owner requires localhost-only ROS discovery")
@@ -42,7 +67,7 @@ def main() -> None:
         raise RuntimeError("the simulation cell owner refuses hardware device grants")
     fleet_uid = int(os.environ["ROSY_FLEET_PEER_UID"])
     from rosy_agent.fleet_fence import fleet_fence_from_environment
-    fleet_fence = fleet_fence_from_environment()
+    fleet_fence = explained_refusals(fleet_fence_from_environment())
     names = names_from_environment()
     refuse_second_owner(namespace=names.namespace)
 
@@ -56,6 +81,7 @@ def main() -> None:
     from omx_adapter.pilot_sim.runtime import PilotSimRuntime
     from omx_adapter.ros_runtime import RosArmCommandRuntime, RosArmPhaseGoalPort
     from rosy_agent.omx_cell_owner import CellOwnerSettings, build_cell_owner, sim_gripper_observation
+    from transfer_installation import owner_installation_from_environment
 
     rclpy.init()
     node = Node("rosy_omx_cell_owner", parameter_overrides=[Parameter("use_sim_time", value=True)])
@@ -87,6 +113,7 @@ def main() -> None:
         refuse_second_owner=lambda: None,  # checked above, before rclpy
         gripper_readback=gripper_readback,
         fleet_fence_current=fleet_fence,
+        arm_transfer=owner_installation_from_environment(),  # D-927 C3; unset keeps CELL_TRANSFER only
     )
     holder["owner"] = owner
     workflow_timer = node.create_timer(0.05, owner.advance_pending)

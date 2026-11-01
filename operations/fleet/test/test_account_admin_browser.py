@@ -25,7 +25,7 @@ def test_account_administration_uses_real_ledger(tmp_path, managed):
         sessions.bootstrap_accounts("alice", "test-site")
     listener = safe_listener()
     origin = f"http://localhost:{listener.getsockname()[1]}"
-    server = uvicorn.Server(uvicorn.Config(app, log_level="error", timeout_graceful_shutdown=3))
+    server = uvicorn.Server(uvicorn.Config(app, log_level="error", timeout_graceful_shutdown=3, log_config=None))
     worker = threading.Thread(target=server.run, kwargs={"sockets": [listener]}, daemon=True)
     worker.start()
     try:

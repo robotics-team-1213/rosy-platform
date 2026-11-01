@@ -49,7 +49,7 @@ def test_real_http_failure_request_observation_approval_and_child_result(rig, mo
     rig.app.state.web_common = Path(__file__).resolve().parents[3] / "shared/web"
     listener = safe_listener()
     origin = f"http://127.0.0.1:{listener.getsockname()[1]}"
-    server = uvicorn.Server(uvicorn.Config(rig.app, log_level="error", timeout_graceful_shutdown=3))
+    server = uvicorn.Server(uvicorn.Config(rig.app, log_level="error", timeout_graceful_shutdown=3, log_config=None))
     worker = threading.Thread(target=server.run, kwargs={"sockets": [listener]}, daemon=True)
     worker.start()
     try:

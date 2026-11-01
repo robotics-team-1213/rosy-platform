@@ -1034,8 +1034,49 @@
 - 증거: dab8 AVD6건 중 primary1실패를 재현했다.42c의 edge 검사 통과 뒤 독립 이미지 검토에서 약한 구별을 P2로 확인해 center fill·focus/blur 글자·아이콘 tint·disabled 회귀를 보강했다.473c SDK35 debug/test APK 성공, JVM110pass/1skip(ShellPageProbe), 동일 APK의600×1000/font1.3와1280×800/font1.0에서 각각6pass. 최종30PNG 전수 독립 검토로 P2 해결·새 P1/P2 없음을 확인했으며 첫 수정30장과 구분한다.
 - gate 변화: 없음. 무동작 debug fixture이며 실제 연결·운전·TalkBack·실물·release 수용이 아니다. 정본: docs/validation/platform-ui-integration-2026-10-29/result.md. CE: 해당 없음 — 실제 상태 차이와 시험의 보강 기준을 코드·회귀·이미지 기록이 보존한다.
 
+## 2026-10-29 · 5c2a1f5eb2 · 한 대 조종 기본 흐름과 배포 검사 수정
+
+- 변경: 시작 화면의 제목을 한 대 선택으로 명시하고 두 대 함께 조종은 목록 아래 보조 버튼으로 옮겼다. 기존 두 대 연결과 안전 조건은 유지한다. 로봇 이름의 줄바꿈 상수는 같은 값의 LineBreaker 상수로 바꿔 release lint 오류를 해결했다.
+- 증거: `testReleaseUnitTest assembleRelease lintRelease` 성공. JVM 110 pass/1 skip(ShellPageProbe). Impeccable 기계 검사 결과 없음. 기존 release lint의 WrongConstant 1건 실패와 수정 후 성공을 확인했다. Lenovo 실물에 같은 배포 서명으로 업데이트하고 2000×1200 화면에서 한 대 선택 제목과 하단 두 대 보조 버튼을 확인했다. APK SHA-256 `b8907bd75fee0a504bccbb38c699f7b05c932b3428b866eafa2f4ef1628d4e70`. 로컬 증거는 `C:/DevTemp/pinky-pilot-single-20261029/`.
+- gate 변화: 화면 배치의 실물 관찰만 확인했다. 태블릿이 Android 보호 상태여서 실제 로봇 인증·카메라·조종 세션 수용은 대기다. 비영 주행 명령 없음. CE: 해당 없음 — 배치와 정적 검사 수정은 최종 코드·검사·실물 화면으로 확인할 수 있다.
+
+## 2026-10-29 · 347132298e · 실제 로봇 연결 경로와 수신 전용 상태 소켓 유지
+
+- 변경: 한 세션의 수동 HTTP 로봇 추가와 검색 결과 중복 제거, 사용자 지시로 Pilot 전용 태블릿 보호 차단 제거, 관리자 확인을 거치는 기존 비상정지 해제 API 연결. 안전 소유자를 직접 조회하며 지연된 latch 이벤트를 현재 상태의 신선도로 오해하지 않는다. CORE 안전 조건과 화면 종료 시 정지는 유지한다.
+- 변경: NanoWSD의 5초 읽기 제한으로 상태를 받기만 하는 브라우저 소켓이 닫히는 문제를 2초 프로토콜 ping/자동 pong으로 해결했다. HTTP 제한은 유지하고 소켓 종료 시 타이머를 취소한다.
+- 증거: 기존 코드의 실제 프록시 회귀는 5.376초에 실패했고 수정 후 12.033초 동안 100개 이상 상태 프레임 수신과 명시적 종료를 확인했다. 인증 외 추가 애플리케이션 메시지는 없다. 최종 release JVM 114 pass/1 skip(ShellPageProbe), assembleRelease·lintRelease 성공. 안전 소유자·배터리 해제 브라우저 회귀는 a8570ce500에서 7 pass/27 deselected, NEW 0. 독립 계약·소켓 검토의 지적을 반영했다.
+- 실물: 수동 추가·태블릿 차단 제거 버전은 같은 배포 서명으로 설치했고 실제 로봇 인증과 320×240 카메라 수신을 확인했다. 이후 로봇 재부팅·복구 서비스 실패를 별도로 관측했다. 공식 복구 서비스 재실행 후 CORE·IO·카메라 active와 CA/hostname을 검증한 HTTPS connection 응답 200을 확인했다. 이 사실을 앱 소켓 수정의 효과로 계산하지 않는다.
+- gate 변화: 최종 소켓·해제 APK는 준비했으나 대상 태블릿이 무선 ADB 목록에서 사라져 미설치다. 실물 연속 조종·비영 주행·실제 비상정지 해제는 미수용이다. CE: 해당 없음 — 소켓 원인과 수명주기 판단은 코드 주석·실제 소켓 회귀가 보존한다. 장치 통신 변화와 미해결 항목은 작업 공간 기록에 구분했다.
+
+## 2026-10-30 · 7fe32cc596 · 조종 요청과 연속 영상의 프록시 수명 분리
+
+- 변경: 화면의 조종 요청 400ms 제한 뒤에도 로봇 요청은 최대 8초 남을 수 있었다. 조종 전용 클라이언트도 400ms로 제한하고 자동 재시도를 끈다. 연속 영상은 일반 요청의 전체 시간과 256MiB 누적 다운로드 제한에서 분리하되 연결·읽기 제한과 유한 다운로드 한도는 유지한다. NanoHTTPD가 본문 IO 오류를 삼킨 뒤 루프백을 5초 더 유지하므로 영상 응답은 종료 시 연결도 닫는다. 로봇 쪽 WS에는 2초 ping을 추가해 내부 소켓만 살아 있는 무응답 연결을 감지한다.
+- 증거: 신규 실제 프록시 시험 3건이 수정 전 실패했다(지연된 조종 응답, 영상 전체 시간 제한, 로봇 ping 부재). 추가 257MiB 스트림 시험은 EOF로 실패했고 멈춘 영상은 읽기 200ms 뒤에도 루프백 때문에 약 5초 지연됐다. 수정 후 5건 통과: 연속 영상과 조종 동시 처리, 유한 다운로드 413, 무응답 WS 종료, 멈춘 영상 읽기 제한 포함. 전체 release JVM 119 pass/1 skip(ShellPageProbe), assembleRelease·lintRelease 성공. 공식 모델 PC의 7fe32cc596 link/shell 자산 회귀 24 pass, NEW 0. 이전 JS 브라우저 회귀는 347132298e에서 69 pass/NEW 0이며 최신 Android 실물 증거와 구분한다.
+- 검토: 독립 검토의 연속 영상 256MiB 잔여 차단 지적을 수정·재현 시험으로 해결했고 최종 추가 중요 지적은 없었다. 소유 저장소의 기존 카메라 프록시 교훈을 먼저 확인했다. CE: 해당 없음 — 추가 판단은 코드 주석·실제 프록시 회귀·이 기록에 남아 별도 교훈을 늘리지 않는다.
+- gate 변화: 배포 키로 서명한 APK 준비까지 확인했다. 대상 태블릿은 무선 ADB에서 보이지 않고 로봇도 기존 현장망에서 확인되지 않아 최종 설치·연속 주행 수용은 미실시다. 비영 주행 명령 없음. Wi-Fi 손실이나 로봇 재부팅 자체가 해결됐다고 주장하지 않는다.
+
+## 2026-10-30 · 349509dd9a · 종료 사유 보존·조종 처리 여유·지연 진단
+
+- 변경: 로봇 WS 종료를 onClosing에서 확인해 upstream을 승인 종료하고 4401/4403을 브라우저에 보존한다. NanoWSD enum에 없는 애플리케이션 코드는 wire close frame으로 전달하며 자유 형식 서버 사유는 버린다. 4401 이후 whoami의 실제 HTTP 200만 재접속을 허용한다. 최대 12개 처리기에서 WS 4개·일반 upstream HTTP 4개로 조종/모드/비상정지 여유를 남긴다. 초과 조회는 즉시 503, 로컬 번들/인증 bootstrap은 제외한다. 응답 종료 시 loopback keepalive를 닫고 body close가 조회 lease를 한 번만 회수한다.
+- 변경: 앱 처리와 upstream 첫 응답 시간을 고정 네 종류로 집계한다. 오류·영상 본문 읽기 실패·조회 거절·소켓 종료 코드를 기기·연결에서 확인하고 최대 5초당 한 번 기록한다. URL·주소·토큰·명령 본문·원격 사유를 저장하지 않는다. upstream 시간은 네트워크와 서버의 합산이며 CORE 단독 시간이 아니다.
+- 증거: 종료 사유 전달, 조회 과부하, 진단 누락 RED를 먼저 확인했다. 독립 검토의 로컬 자산 503 지적을 보정했다. 실제 프록시에서 WS4+정체 조회4+거절 조회4 상태의 번들·bootstrap·zero·비상정지·lease 재사용을 확인한다. whoami resolved401/403/503 회귀는 1195e30b0b의 공식 현장/모델 PC에서 RETRYING·retry1로 실패했고 349509dd9a의 공식 현장 PC link/shell/browser 회귀 94 pass, NEW 0. 최종 JVM 124 pass/1 skip(ShellPageProbe), assembleRelease·lintRelease 성공, lint 오류 0. 독립 최종 검토의 추가 중요 지적 없음. 실제 장치 시험은 포함하지 않는다.
+- gate 변화: 앱 수정·서명 APK 준비 범위다. 태블릿 무선 ADB 부재로 설치·연속 실주행은 대기다. 업데이트 점검은 CORE와 OS/native 활성화 간 원자적인 동작 예약이 없음을 확인했으나 새 소유권 계약이나 제품 안전 코드는 적용하지 않았다. root-owned 안정 inode와 모든 설치 owner의 shared/exclusive gate가 필요한 설계·검증안을 작업 공간 계획에 남겼다. CE: 미해결 — 앱 판단은 코드·회귀에 보존했고 업데이트 경쟁의 제품 수정·실물 수용은 남아 있다. 이를 해결 교훈으로 쓰지 않았다.
+
+## 2026-10-31 · 754e2bb1da · 연동 코드 화면 분리
+
+- 변경: `connect.js`의 연동 코드 보여주기(`mountShowCode`)를 `screens/show-code.js`로 그대로 옮겼다. 착지가 D-766 600줄 규칙(`c9cc22a986` 632줄)에 막혀 그 앞에 분리 커밋을 두고 이후 커밋을 다시 쌓았다. 서빙 목록·OMX SIM·dev_server·서비스워커 SHELL에 등록하고 캐시 키를 올렸다.
+- 증거: `tools/harness/size_range.py main HEAD` 16커밋 통과, 최종 `connect.js` 586줄. 동작 변경 없음. 실제 시험은 착지 auto 선택에 맡긴다.
+- gate 변화: 없음. CE: 해당 없음 — 기계적 이동이며 규칙은 기존 착지 교훈에 있다.
+
 ## 2026-10-31 · uncommitted · 피어 공통 소스로 이동(D-939)
 
 - 변경: 이름만 다른 피어 서명·첫 접촉 CA 고정·Keystore 신원 사본(Pilot `PeerProof`/`PeerTls`/`AndroidPeerIdentity`, Cam `CameraProof`/`CameraTls`/`AndroidCameraIdentity`)을 `shared/android/peer` 한 곳으로 모았다. 두 앱이 `srcDir`로 함께 컴파일한다. 신원은 `AndroidPeerIdentity(context, app)`이고 기존 키 별칭·표시 파일·client id 접두어를 그대로 쓴다. 세션·보관소는 앱에 남긴다.
 - 증거: 새 구조 시험 `test/architecture/test_app_shared_sources.py` 3건이 main 배치에서 RED(빌드 미포함·12개 다시 선언·사본 4쌍), 이 브랜치에서 GREEN이다. 로컬 SDK35 빌드: Cam JVM 443 pass/0 skip, Pilot JVM 110 pass/1 skip(기존 ShellPageProbe), 두 앱 assembleDebug 성공. lint 0 error.
 - gate 변화: 없음. 실제 태블릿·휴대폰에서 기존 승인 관계 유지는 설치 후 확인한다. CE: 해당 없음 — 규칙은 D-939와 구조 시험에 있다.
+
+## 2026-11-01 · f15a4cba63 · OMX SIM 시연 기록 순서·센서 값 화면
+
+- 변경: OMX SIM 화면의 시연 기록을 네 단계 카드로 바꿨다. (1) 시작 자세: 현재 관절 값을 시작 자세로 저장(이 기기의 localStorage, 인스턴스별)하고, 저장 자세까지 `max_step_rad` 이하 조그를 하나씩 보내 돌아간다(D-390 §2, `arm-stick.js` `homeStep`). 멈추면 보낸 한 걸음만 끝까지 간다. 녹화 중에는 이동하지 않는다. (2) 과제 설명: 여러 줄 입력, 300자 표시, 탭이 살아 있는 동안 다음 기록에 남긴다. 비어 있으면 녹화를 막는다(계약 `task` 최소 1자). (3) 녹화: 경과 시간(이 화면 기준)·프레임 수. (4) 결과 선택 select를 없애고 `성공으로 종료`·`실패 사례로 종료`·`결과 없이 종료` 버튼 하나로 정지와 결과를 함께 보낸다. 마지막 기록의 결과·프레임·episode를 남긴다.
+- 변경: 관절 상태 JSON 대신 센서 값 표(관절별 각도·rad, 허용 범위 안 위치 막대, 시작 자세까지 남은 각도, 그리퍼 열림 %·상태, 수신 신선도 칩)를 두고 원본 JSON은 접어 둔다. 기록 상태 라벨을 계약 값(`incomplete`)에 맞췄다.
+- 증거: 실물 OMX 화면(D-902)은 아직 Proposed라 SIM 화면만 고쳤다. 로컬 Chromium 화면 확인 2000×1200·390 넘침 없음. 원격 시험 결과는 커밋 메시지·착지 기록에 남긴다.
+- gate 변화: 없음(SIM 전용). CE: 해당 없음 — 화면 개선이며 새 장애 교훈 없음.
