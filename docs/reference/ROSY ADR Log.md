@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-941 | 261026 트랙 운행: 우측통행 순환로에서 차선 진행 거리로 앞차를 따라가고, 줄무늬는 감속·관제 정지점, 주차장 세 칸은 후진 진입 충전 칸. [전문](../adr/D-941-track-platoon-hold-points-charge-bays.md) | Proposed (2026-11-01, 사용자 결정; 설계만) |
 | D-940 | 중복 정의 게이트와 의도 중복 등록부를 둔다. [전문](../adr/D-940-duplicate-definitions-gate.md) | Accepted (2026-11-01, 사용자 결정; 원격 시험·착지는 파이프라인 기록) |
 | D-943 | Rosy Learning OMX 한 바퀴: GPU 학습, 장치 초안, 작업대 녹화 버튼, HF 업로드 버튼. [전문](../adr/D-943-rosy-learning-omx-gpu-detect-bench-record-hub-button.md) | Accepted (2026-11-01, 사용자 지시; 구현·착지는 logs) |
 | D-938 | 팔 이송 정책 승인 — D-865 승인 범위를 ARM_TRANSFER로 확장. [전문](../adr/D-938-arm-transfer-policy-admission.md) | Accepted (2026-10-31, 사용자 결정; simulation 팔 이송 HTTP 전용, 현장 범위 설정·수용 별도) |

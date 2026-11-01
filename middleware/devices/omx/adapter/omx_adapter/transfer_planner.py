@@ -9,12 +9,12 @@ import math
 import time
 from typing import Callable, Sequence
 
-from .kinematics import ARM_JOINTS, IkLimits, OmxKinematics, TopDownPose
+from .kinematics import ARM_JOINTS, IkLimits, LineRejected, OmxKinematics, TopDownPose
 from .manipulation_plan import MOTION_PHASES, ExecutionStateSnapshot, JointTrajectoryPoint, PlannedMotionPhase
 from .transfer_motion import (
     ArmPlanningProfile, TransferMotionPlan, TransferMotionRequest, GraspGeometry, TransferPlanRejected,
     PLANNER_REVISION, STATE_INVALID, HOME_DEVIATION, GRIPPER_NOT_OPEN, CARRY_Z_INSUFFICIENT,
-    WAYPOINT_DISCONTINUITY, PHASE_DURATION_EXCEEDED, GRIPPER_WIDTH_INVALID, GRASP_DEPTH_BELOW_FINGERTIPS,
+    PHASE_DURATION_EXCEEDED, GRIPPER_WIDTH_INVALID, GRASP_DEPTH_BELOW_FINGERTIPS,
 )
 
 def _trapezoid_points(samples: Sequence[Sequence[float]], names: Sequence[str],
@@ -233,16 +233,13 @@ class AnalyticTransferPlanner:
         distance = math.dist((x0, y0, z0), (x1, y1, z1))
         count = max(math.ceil(distance / profile.cartesian_step_m - 1e-9),
                     math.ceil(abs(yaw_delta) / profile.angular_step_rad - 1e-9))
-        samples = [start_arm]
-        arm = start_arm
-        for i in range(1, count + 1):
-            s = i / count
-            pose = TopDownPose(x0 + (x1 - x0) * s, y0 + (y1 - y0) * s, z0 + (z1 - z0) * s,
-                               yaw0 + yaw_delta * s)
-            arm = self._solve(pose, limits, arm[4])
-            if max(abs(a - b) for a, b in zip(arm, samples[-1])) > profile.max_waypoint_joint_step_rad:
-                raise TransferPlanRejected(WAYPOINT_DISCONTINUITY, f"joint jump near sample {i}")
-            samples.append(arm)
+        try:
+            samples = [start_arm] + self.kinematics.solve_line(
+                start_arm, TopDownPose(x0, y0, z0, yaw0), target_xyz, limits, count=count,
+                max_joint_step_rad=profile.max_waypoint_joint_step_rad, yaw_delta=yaw_delta)
+        except LineRejected as exc:
+            raise TransferPlanRejected(exc.reason, str(exc)) from None
+        arm = samples[-1]
         return samples, arm, TopDownPose(x1, y1, z1, arm[0] - arm[4])
 
     def _travel(self, start_pose: TopDownPose, start_arm: tuple[float, ...], target: TopDownPose,

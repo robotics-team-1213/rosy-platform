@@ -1,0 +1,106 @@
+# SIM cell model inventory: what the simulated cell is built from and how it differs from the real cell.
+# Learning → SIM 실험 shows this file read-only; change it by commit (this file is the one source).
+# Real-cell photos stay out of Git (public repository): register the file name here and put the file in
+# cell-photos/ beside the private SIM operator configuration on the review host.
+schema: rosy.cell-model-inventory/1
+checked_at: '2026-10-31'
+models:
+  - id: gripper
+    name: 그리퍼(OMX 팔레타이징 조 v2.1)
+    cad: {file: omx_f_palletizing_description.zip, sha256: 672cd4813c439b826fd6f9b005d1e5fec5b74bea0a1a9c670e099335f6e47583}
+    sim: none
+    measured: 손가락 판 두께 약 1.1~2.0 mm, 길이 약 18 mm, 폭 40 mm, 패드 사이 29.977 mm @ 0.35 rad, TCP x 0.0740 m(원본 0.09193). 출처 URDF 메시 직접 측정
+    differs: 시뮬레이션은 아직 옛 OMX-F 조다. 교체 작업 중(계획 2026-10-31-omx-palletizing-sim-rebuild 1단계)
+  - id: ship_plate
+    name: 배 모양 판(본선)
+    cad: {file: null, sha256: null}
+    sim: stand_in
+    measured: 미측정. 남색 판에 흰 돌기 격자
+    differs: 261026_World.STL과 STEP 두 개에 없다. 시뮬레이션은 평평한 판으로 대신한다
+  - id: workbench
+    name: 작업대
+    cad: {file: 261026_World.STL, sha256: dd91457a4a8d17d7fbb4fbfdb12dff9c2ae98e92e74760231c9ec08aa377f3cc}
+    sim: reflected
+    measured: World STL에서 읽음
+    differs: null
+  - id: belt
+    name: 벨트
+    cad: {file: 261026_World.STL, sha256: dd91457a4a8d17d7fbb4fbfdb12dff9c2ae98e92e74760231c9ec08aa377f3cc}
+    sim: reflected
+    measured: 폭 약 100 mm(World STL)
+    differs: null
+  - id: arm_base
+    name: 팔 베이스(두 대)
+    cad: {file: 261026_World.STL, sha256: dd91457a4a8d17d7fbb4fbfdb12dff9c2ae98e92e74760231c9ec08aa377f3cc}
+    sim: reflected
+    measured: 두 베이스 중심 사이 약 330 mm(World STL), 시뮬레이션 ±0.165 m와 일치
+    differs: null
+  - id: container
+    name: 컨테이너
+    cad: {file: null, sha256: null}
+    sim: reflected
+    measured: 90×30×30 mm. 무게 1칸 7.2 g, 2칸 11.79 g, 3칸 16 g(사용자 측정 2026-11-01). 사람이 놓은 기준 배치 3열 2층, 틈 약 4~5 / 2~3 mm(옆 카메라 추정)
+    differs: 시뮬레이션은 3칸 무게를 60 g으로 둔다(교체 예정)
+  - id: camera_ceiling
+    name: 천장 카메라(Rosy Cam, Fleet ceiling_north)
+    cad: {file: null, sha256: null}
+    sim: stand_in
+    measured: null
+    differs: 가끔 프레임이 멈춘다(frame stale)
+  - id: camera_top
+    name: 위쪽 카메라(RealSense D435)
+    cad: {file: null, sha256: null}
+    sim: stand_in
+    measured: USB 2.0(480 Mbps)으로 연결되어 424×240만 나온다
+    differs: 서비스 경로 rosy-realsense-d435-color는 feat/omx-devices-and-realsense-top 착지 전이라 없다
+  - id: camera_side
+    name: 옆 카메라(Jieli)
+    cad: {file: null, sha256: null}
+    sim: stand_in
+    measured: 640×480
+    differs: null
+  - id: camera_wrist
+    name: 손목 카메라 둘(Innomaker)
+    cad: {file: null, sha256: null}
+    sim: none
+    measured: front가 Innomaker 1.3
+    differs: arm_a 손목 서비스는 404
+photos:
+  - id: ceiling
+    camera: 천장 Rosy Cam
+    file: ceiling.jpg
+    captured_at: '2026-10-31T21:50'
+    sim_view: mapped-overview
+  - id: top
+    camera: 위쪽 RealSense D435
+    file: top.jpg
+    captured_at: '2026-10-31T22:30'
+    sim_view: mapped-top
+  - id: side
+    camera: 옆 Jieli
+    file: side.jpg
+    captured_at: '2026-10-31T22:20'
+    sim_view: mapped-side
+  - id: wrist_a
+    camera: 손목 arm_a
+    file: wrist-a.jpg
+    captured_at: '2026-10-31T21:03'
+    sim_view: null
+  - id: wrist_b
+    camera: 손목 arm_b
+    file: wrist-b.jpg
+    captured_at: '2026-10-31T21:03'
+    sim_view: null
+person_tasks:
+  - task: 배 모양 판(본선) 치수를 재거나 CAD를 전달
+    why: World STL·STEP에 없어 시뮬레이션은 평평한 판으로 대신한다
+    status: open
+  - task: arm_a 모터 무응답(Motor 11 ping failed) 전원·케이블 확인
+    why: arm_a를 실물로 움직일 수 없다
+    status: open
+  - task: RealSense를 USB 3.0 포트에 직결
+    why: USB 2.0이라 424×240만 나온다
+    status: open
+  - task: 리더 팔 두 대의 짝 지정
+    why: 원격 조종 기록에서 어느 팔을 따르는지 정해야 한다
+    status: open

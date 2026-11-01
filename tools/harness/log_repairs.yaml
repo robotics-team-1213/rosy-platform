@@ -42,3 +42,6 @@
 "b531ce8335125b13d4eb31dcf41c8e064bf7d645c1d7e10fe534ce55f5f7a0ef": "75e01869a01d4ae8e8f30ad747025e73d34013750d1b294aca7a5614d5402fa3" # SHA256 normalized journal block pair
 # Site CI record 3: field labels from existing prose only; execution evidence unchanged (046299191f).
 "4fa1b7023f35c3872b84d58ac0d07b42e8c6f83a31018ab12aefe2a86a2f05d2": "82013747b910016dd488b2f35325c4b40a9c99b2131e414f7294d4104214c08f" # SHA256 normalized journal block pair
+
+# 574e7c8b07 land rollup entry: a later main merge dropped its last field line; restore the committed text (published at 143c047f78).
+"ff2ecc42f353336d6041bc211a61b25a9bb73e20ed027aa2ca1081d727f1075c": "9a8160e7f0121eb0c9e8ce99339b9535d388a71a6dfd4eb6e54163a04d431f91" # SHA256 normalized journal block pair

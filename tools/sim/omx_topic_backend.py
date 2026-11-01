@@ -37,6 +37,18 @@ def with_topic_hardware(urdf):
     return re.sub(r'(<ros2_control[^>]*?)is_async="true"', r'\1is_async="false"', out)
 
 
+def with_initial(urdf, initial):
+    """Scene staging: ros2_control starts a joint's state and command here, as the simulator does (--initial)."""
+    for name, value in initial.items():
+        # Within one <joint> element: the vendor URDF names the joint elsewhere too (2026-10-31 it seeded joint1).
+        urdf, count = re.subn(rf'(<joint name="{re.escape(name)}">(?:(?!</joint>).)*?<state_interface name="position")\s*/>',
+                              rf'\1><param name="initial_value">{float(value)}</param></state_interface>',
+                              urdf, count=1, flags=re.S)
+        if count != 1:
+            raise ValueError(f'no ros2_control position state for {name}')
+    return urdf
+
+
 def description():
     from ament_index_python.packages import get_package_share_directory
     xacro = Path(get_package_share_directory('open_manipulator_description'))/'urdf/omx_f/omx_f.urdf.xacro'
@@ -48,12 +60,13 @@ def description():
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument('--out', type=Path, required=True)
+    parser.add_argument('--initial', action='append', default=[], metavar='JOINT=RAD')
     args = parser.parse_args()
     from ament_index_python.packages import get_package_share_directory
     import yaml
     config = Path(get_package_share_directory('open_manipulator_bringup'))/'config/omx_f_follower_ai'
     args.out.mkdir(parents=True, exist_ok=True)
-    urdf = description()
+    urdf = with_initial(description(), dict(item.split('=') for item in args.initial))
     (args.out/'omx_f_topic.urdf').write_text(urdf)
     rsp = args.out/'robot_state_publisher.yaml'
     rsp.write_text(yaml.safe_dump({'robot_state_publisher': {'ros__parameters': {
