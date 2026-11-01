@@ -17,7 +17,7 @@ ui-head:has(label.inline) { flex-wrap: wrap; align-items: center; }
 .ui-field:not([type="checkbox"], label.inline > *) { width: 100%; }  /* components.css caps fields at 100%; an inline label's select keeps its own width */
 a:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 .draft-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
-a { color: var(--text-primary); }
+
 .map-viewport { min-width: 0; max-width: 100%; }
 .map-viewport:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 .map-scroll-hint { display: none; }

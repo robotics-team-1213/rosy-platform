@@ -770,3 +770,10 @@
 - 변경: 세 문서에서 각자 만들던 안내 접힘(대형 조작·배경 학습·지도 범례)을 공용 `hint-more` 클래스 하나로 통합했다 — 구조 감사에서 세 곳이 같은 패턴으로 각자 선언돼 있던 것을 발견. 시트도 styles.css 공용 규칙 한 곳으로 모으고 site-map.css는 범례 용어 목록 배치만 남긴다.
 - 증거: Chromium — 세 접힘 48px 통일, node --test 403 passed. 원격 시험은 다음 착지 전 기록.
 - gate 변화: 없음. CE: 해당 없음.
+
+
+## 2026-11-02 · uncommitted · 구조 감사 3차: CSS 중복 2건 통합
+
+- 변경: 중복 감사로 찾은 진짜 중복 2건을 정리했다 — ① styles.css 안에서 `#fleet-main :is(.map-stage #map-canvas, .map-birdseye)` 규칙이 두 번 선언돼 있던 것을 한 곳으로 합침(절대 배치는 폭과 무관). ② cell.css와 site-map.css가 각자 가진 `a { color: var(--text-primary) }` 링크 색 규칙 제거(공용 components.css가 이미 같은 규칙을 소유). 나머지 감사 결과(JS 함수명 56건·다문서 id 36건·같은 값 다른 변수명 137쌍)는 전부 설계상 정상(모듈 클로저·공용 헤더·시맨틱 토큰)으로 판정해 그대로 둔다.
+- 증거: test_layout_canon 전 통과, node --test 403 passed. 원격 시험은 다음 착지 전 기록.
+- gate 변화: 없음. CE: 해당 없음.
