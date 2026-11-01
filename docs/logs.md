@@ -13449,3 +13449,24 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 실물 녹화·GPU 실학습·HF 실계정 왕복은 미수용(작업대 인원·팀 HF 연결 필요)
 - 결정: D-943 Accepted(사용자 지시)
 - 교훈: `record_session.py`의 고정 서비스 목록(`camera@top/front`)은 10-31 카메라 역할 변경(`arm_a_wrist`·`arm_b_wrist`·`side`)과 토크 OFF observer를 놓쳐 녹화가 장치를 열지 못한다. 작업대 화면이 실행 중 유닛에서 인계 목록을 만든다
+
+## 2026-11-01 · uncommitted · fix(land): 차례에서는 변화분이 닿는 자기 호출만 다시 돈다 (D-889 추가 18)
+- 변경: `land_selection.select`의 landed 경로가 자기 호출을 하나씩 `overlaps`로 거른다.
+- 증거: 11-01 17:48~18:45 main 57분 정지. arm-transfer-recheck 차례 2라운드가 자기 호출 485개를 다시 돌았다. 원격 시험은 착지 기록에 남긴다.
+- gate 변화: 없음
+- 결정: D-889 추가 18(사용자 지시 2026-11-01)
+- 교훈: 없음(docs/solutions/workflow-issues/landings-gave-the-turn-back-and-reran-everything-2026-11-01.md의 연장)
+
+## 2026-11-01 · uncommitted · fix(land): 차례 한도는 돌려보낸 횟수만큼, 자기 브라우저 묶음도 닿는 것만 (D-889 추가 19)
+- 변경: `land_checks.overtimes`(횟수), 차례 한도 10→30분→없음, 표 `overtime` 정수. `land_selection.browsers(reach)`가 추가 18 경로에서 닿는 자기 브라우저 묶음만 고른다.
+- 증거: 11-01 18:01~19:2x arm-transfer-recheck의 한도 없는 차례가 main을 90분 넘게 잡았다(자기 호출 485개 + 브라우저 직렬). 원격 시험은 착지 기록에 남긴다.
+- gate 변화: 없음
+- 결정: D-889 추가 19(사용자 목표 2026-11-01)
+- 교훈: docs/solutions/workflow-issues/landings-gave-the-turn-back-and-reran-everything-2026-11-01.md에 이어 적는다
+
+## 2026-11-01 · uncommitted · fix(land): 모두 건너뛴 파일의 exit 5는 판정 (D-889 추가 20)
+- 변경: `land_cache.unusable`이 요약 줄이 건너뜀뿐인 exit 5를 판정으로 본다(`ALL_SKIPPED`).
+- 증거: 11-01 20:04·20:17 두 착지가 `test_omx_fleet_ros_actionserver.py exited 5`(1 skipped)로 차례에서 멈췄다. 원격 시험은 착지 기록에 남긴다.
+- gate 변화: 없음
+- 결정: D-889 추가 20(사용자 목표 2026-11-01)
+- 교훈: 없음
