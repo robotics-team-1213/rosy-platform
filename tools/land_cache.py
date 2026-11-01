@@ -38,6 +38,8 @@ NARROW = "reused across trees"  # land.py: a narrow reuse is not this candidate'
 LISTS = ("test/known_failures.py", "test/known_failures.txt", "test/flaky_quarantine.txt")
 OID = re.compile(r"[0-9a-f]{40,64}")
 ENV_TOKEN = re.compile(r"^[A-Z_][A-Z0-9_]*=")
+# pytest's whole summary line when only skips happened (11-01: a lone ROS-only file under xdist exited 5)
+ALL_SKIPPED = re.compile(r"(?m)^=*\s*\d+ skipped(?:, \d+ warnings?)? in [0-9.]+s\b")
 
 
 def _git(wt: Path, *args: str) -> subprocess.CompletedProcess:
@@ -120,6 +122,8 @@ def unusable(code: int | None, log: Path) -> str | None:
     """Why a pytest exit gives no verdict (interrupted, lost host, no FAILED lines); None when it does."""
     # 2/3/4 (interrupted, internal error, usage/path error), 5 (nothing collected) and a lost host
     # print no FAILED lines, so known_failures would wave them through.
+    if code == 5 and log.is_file() and ALL_SKIPPED.search(log.read_text(encoding="utf-8-sig", errors="replace")):
+        return None  # D-889 20: a file that skips itself at import (no rclpy here) is a verdict, as at exit 0
     if code not in (0, 1):
         return f"exited {code}"
     if code == 1:

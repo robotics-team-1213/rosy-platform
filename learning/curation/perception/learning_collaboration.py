@@ -216,6 +216,8 @@ class Collaboration:
         elif path == '/api/learning/storage/jobs' or (path.startswith('/api/learning/storage/jobs/')
                 and path.rsplit('/', 1)[-1] in ('run', 'restore', 'cancel', 'reconcile')):
             capability = 'publish'
+        elif path.startswith('/api/learning/omx/center/hub-'):
+            capability = 'publish'
         elif path.startswith('/api/learning/imports/'):
             capability = 'import'
         elif path.startswith('/api/accounts/'):
