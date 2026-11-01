@@ -438,6 +438,15 @@ def test_valid_ci_base_ref_is_checked_alongside_the_merge_base(monkeypatch):
     assert refs == ["feedfac", "abc1234", "HEAD"] and note is None
 
 
+def test_local_main_entries_are_guarded_before_they_are_published(monkeypatch):
+    # 2026-11-01: an entry landed on local main, not yet on origin/main, lost its last line in a topic commit.
+    monkeypatch.delenv("HARNESS_BASE_REF", raising=False)
+    bases = {"origin/main": "abc1234\n", "main": "def5678\n"}
+    monkeypatch.setattr(harness, "_git", lambda repo, *args: bases.get(args[-1]) if args[0] == "merge-base" else None)
+    refs, note = harness._history_refs(ROOT)
+    assert refs == ["abc1234", "def5678", "HEAD"] and note is None
+
+
 def test_session_brief_carries_status_and_the_loop():
     brief = harness.render_brief(ROOT)
     for module in harness.load_config(ROOT)["modules"]:

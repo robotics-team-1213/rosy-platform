@@ -375,6 +375,7 @@ class FirstBootProvisioner:
             "ROSY_RUNTIME_MODE=core",
             "RMW_IMPLEMENTATION=rmw_cyclonedds_cpp",
             "CYCLONEDDS_URI=file:///etc/rosy/cyclonedds.xml",
+            "ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST",  # D-795 1
             "ROSY_CMD_VEL_TIMEOUT_S=0.5",
             # D-193 7: CORE refuses the shared dev tokens and ignores ROSY_DEV_AUTH.
             "ROSY_DEPLOYMENT=device",
@@ -394,6 +395,7 @@ class FirstBootProvisioner:
             "",
             "[wifi]",
             "mode=infrastructure",
+            "powersave=2",  # power save adds 100-500 ms spikes; image NM conf.d says the same
             f"ssid={network['ssid']}",
             "",
             "[wifi-security]",

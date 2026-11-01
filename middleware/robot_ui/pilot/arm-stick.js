@@ -40,6 +40,26 @@ export function limitStep(step, range, position) {
     ? {...step, delta} : null;
 }
 
+// A joint this close to its saved start position counts as there (about 0.6°).
+export const HOME_TOLERANCE_RAD = 0.01;
+
+// The next bounded goal toward a saved start pose: the joint farthest away first, at most
+// `maxStep`. null = every saved joint is within tolerance (or unreadable: the owner judges).
+export function homeStep(positions, home, maxStep, tolerance = HOME_TOLERANCE_RAD) {
+  let best = null;
+  for (const [joint, goal] of Object.entries(home ?? {})) {
+    const now = positions?.[joint];
+    if (typeof now !== "number" || !Number.isFinite(now) || typeof goal !== "number") continue;
+    const remaining = goal - now;
+    if (Math.abs(remaining) > tolerance && (!best || Math.abs(remaining) > Math.abs(best.remaining))) {
+      best = {joint, remaining};
+    }
+  }
+  if (!best || !(maxStep > 0)) return null;
+  const delta = round4(Math.sign(best.remaining) * Math.min(maxStep, Math.abs(best.remaining)));
+  return {joint: best.joint, delta, remaining: round4(best.remaining)};
+}
+
 // `submit(step)` resolves to the accepted command id (truthy); `null` = "not now" (a goal is
 // still running or the readback is not ready yet — `poke()` retries while pressed); any other
 // falsy value or a throw = refused, which stops the stick until it is pressed again.
