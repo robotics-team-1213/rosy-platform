@@ -25,7 +25,7 @@ def test_account_administration_uses_real_ledger(tmp_path, managed):
         sessions.bootstrap_accounts("alice", "test-site")
     listener = safe_listener()
     origin = f"http://localhost:{listener.getsockname()[1]}"
-    server = uvicorn.Server(uvicorn.Config(app, log_level="error", timeout_graceful_shutdown=3))
+    server = uvicorn.Server(uvicorn.Config(app, log_level="error", timeout_graceful_shutdown=3, log_config=None))
     worker = threading.Thread(target=server.run, kwargs={"sockets": [listener]}, daemon=True)
     worker.start()
     try:
@@ -57,9 +57,14 @@ def test_account_administration_uses_real_ledger(tmp_path, managed):
                 page.locator("#account-name").fill("bob")
                 page.locator("#account-principal").fill("bob")
                 page.locator("#account-password").fill("bob!")
-                page.locator("#account-add-grant").click()
-                page.locator("[data-grant=id]").fill("test-site")
-                page.get_by_label("관제 조회", exact=True).check()
+                # D-955: a new account starts from the team default bundle.
+                expect(page.locator("#account-grants > fieldset")).to_have_count(3)
+                for index, value in enumerate(["test-site", "*", "*"]):
+                    expect(page.locator("[data-grant=id]").nth(index)).to_have_value(value)
+                for label in ['관제 조회', '관제 조작', '게임 조작', '로봇 조회', '로봇 조작', '학습 조회', '학습 편집', '데이터 가져오기']:
+                    expect(page.get_by_label(label, exact=True)).to_be_checked()
+                for label in ['계정 관리', '관제 정책', '카메라 관리', '로봇 관리', '학습 승인', '모델 게시', '프로젝트 관리']:
+                    expect(page.get_by_label(label, exact=True)).not_to_be_checked()
                 for label in ['Vault 조회', 'Vault 조작', 'Vault 장부 정리']:
                     expect(page.get_by_label(label, exact=True)).not_to_be_checked()
                     page.get_by_label(label, exact=True).check()
@@ -105,8 +110,11 @@ def test_account_administration_uses_real_ledger(tmp_path, managed):
                 expect(page.locator("#account-list")).to_contain_text("bob · 정지됨")
                 bob = next(row for row in sessions.list_accounts(value) if row["login"] == "bob")
                 assert bob["enabled"] is False and bob["revision"] == 6
-                assert bob["grants"] == [{"resource": "site:test-site", "capabilities": [
-                    "fleet.read", "vault.read", "vault.operate", "vault.manage"]}]
+                assert bob["grants"] == [
+                    {"resource": "site:test-site", "capabilities": [
+                        "fleet.read", "fleet.operate", "games.operate", "vault.read", "vault.operate", "vault.manage"]},
+                    {"resource": "robot:*", "capabilities": ["robot.read", "robot.operate"]},
+                    {"resource": "project:*", "capabilities": ["learning.view", "learning.edit", "learning.import"]}]
                 assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
                 page.goto(origin + "/console")
                 expect(page.locator("#fleet-accounts")).to_have_js_property("hidden", False)

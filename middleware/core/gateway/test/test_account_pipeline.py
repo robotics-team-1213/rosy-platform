@@ -256,7 +256,7 @@ def test_browser_sso_return_uses_real_cookies_and_authority_ui(pipeline, tmp_pat
     key_file.write_bytes(tls_key.private_bytes(serialization.Encoding.PEM,serialization.PrivateFormat.PKCS8,serialization.NoEncryption()))
     servers, threads = [], []
     for client, listener in zip((fleet,core),core.test_sockets):
-        server = uvicorn.Server(uvicorn.Config(client.app,log_level='error',ssl_keyfile=str(key_file),ssl_certfile=str(cert_file),timeout_graceful_shutdown=2))
+        server = uvicorn.Server(uvicorn.Config(client.app,log_level='error',ssl_keyfile=str(key_file),ssl_certfile=str(cert_file),timeout_graceful_shutdown=2, log_config=None))
         worker = threading.Thread(target=server.run,kwargs={'sockets':[listener]},daemon=True)
         servers.append(server); threads.append(worker); worker.start()
     deadline=time.monotonic()+20

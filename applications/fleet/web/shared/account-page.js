@@ -1,8 +1,8 @@
 import {createFleetClient} from '/common/fleet-client.js';
-import {canManageAccounts, canViewAccountSetup, CAPABILITIES} from '/console/assets/account-permissions.js';
+import {canManageAccounts, canViewAccountSetup, CAPABILITIES, teamGrants} from '/console/assets/account-permissions.js';
 
 const rawRequest = createFleetClient(), $ = id => document.getElementById(id), endpoint = '/api/fleet/auth/accounts';
-let owner = null, rows = [], selected = null, busy = false;
+let owner = null, rows = [], selected = null, busy = false, siteResource = '';
 const lifetime = new AbortController();
 let invalidated = false;
 function changed() { return Object.assign(new Error(), {code:'ACCOUNT_CHANGED'}); }
@@ -44,7 +44,7 @@ async function identity() {
   if (!canManageAccounts(session)) throw Object.assign(new Error(), {status: 403});
   const current = `${session.account_id}:${session.session_family}:${session.revision}`;
   if (invalidated || (owner && owner !== current)) throw changed();
-  owner = current; return session;
+  owner = current; siteResource = session.site_resource; return session;
 }
 async function perform(fn) {
   if (busy) return;
@@ -71,7 +71,7 @@ function grantRow(grant = null) {
   kindLabel.append(kind); group.append(kindLabel);
   const idLabel = document.createElement('label'), id = document.createElement('input');
   idLabel.textContent = ' 식별자 '; id.className = 'ui-field'; id.required = true;
-  id.pattern = '[A-Za-z0-9._-]{1,96}'; id.dataset.grant = 'id'; idLabel.append(id); group.append(idLabel);
+  id.pattern = '[A-Za-z0-9._\\-]{1,96}|\\*'; id.dataset.grant = 'id'; idLabel.append(id); group.append(idLabel);
   const choices = document.createElement('div'); group.append(choices);
   const draw = (selectedCaps = []) => {
     choices.replaceChildren();
@@ -96,7 +96,7 @@ function edit(row = null) {
   $('account-role').value = row?.role || 'viewer'; $('account-enabled').checked = row?.enabled ?? true;
   $('account-enabled').closest('label').hidden = !row; $('account-initial-password').hidden = !!row;
   $('account-password').required = !row; $('account-actions').hidden = !row;
-  $('account-grants').replaceChildren(); for (const grant of row?.grants || []) grantRow(grant);
+  $('account-grants').replaceChildren(); for (const grant of row?.grants || teamGrants(siteResource)) grantRow(grant);
 }
 async function load() {
   rows = await request(endpoint); $('account-list').replaceChildren();
@@ -116,6 +116,9 @@ function grants() {
 }
 $('account-new').addEventListener('click', () => edit());
 $('account-add-grant').addEventListener('click', () => grantRow());
+$('account-team-grants').addEventListener('click', () => {
+  $('account-grants').replaceChildren(); for (const grant of teamGrants(siteResource)) grantRow(grant);
+});
 $('account-reload').addEventListener('click', () => perform(async () => { await load(); status('최신 계정 상태입니다.'); }));
 $('account-save').addEventListener('click', () => {
   if (!$('account-form').reportValidity()) return;

@@ -174,3 +174,16 @@ def test_signing_key_rotation_preserves_trusted_overlap(authority):
         revoke_family=instance.revoke_family, clock=instance.clock,
         trusted_public_keys=instance.public_keys)
     assert rotated.introspect(tokens['access_token'])['active'] is True
+
+
+def test_every_robot_grant_issues_only_the_registered_concrete_robot(authority):
+    from core_common.protocol.account_access import verify_access
+    instance, context, _ = authority
+    context['grants'] = [{'resource': 'robot:*', 'capabilities': ['robot.read', 'robot.operate']}]
+    tokens = json.loads(exchange(instance, get_code(instance, context))[1])
+    claims = verify_access(tokens['access_token'], {'key-1': instance.public_keys['key-1']},
+                           issuer=ISSUER, audience='robot:r1', now=1001)
+    assert [g.model_dump() for g in claims.grants] == [
+        {'resource': 'robot:r1', 'capabilities': ['robot.operate', 'robot.read']}]
+    # The wildcard reaches only resources a registered client names.
+    assert authorize(instance, context, scope='robot:r2')[2] in (400, 403)

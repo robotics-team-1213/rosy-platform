@@ -294,6 +294,82 @@
    "applies_when": [
     "any"
    ]
+  },
+  {
+   "id": "packed-row-unextractable",
+   "topic": "objects",
+   "statement": "Containers 30 mm wide in adjacent 34 mm pallet cells stand about 4 mm apart; with 8 mm fingers and a closed jaw face about 42 mm across, no grasp or push takes one out of the row, so placements keep every other cell free or stack on top.",
+   "status": "verified",
+   "evidence": [
+    "workspace record 2026-10-31 section 14",
+    "decisions push 2026-11-01",
+    "test_a_neighbour_beside_the_jaws_lane_is_refused"
+   ],
+   "date": "2026-11-01",
+   "applies_when": [
+    "grasp",
+    "push",
+    "objects"
+   ]
+  },
+  {
+   "id": "surface-colour-median",
+   "topic": "camera",
+   "statement": "Without a site surface colour the ROI median stands for the surface; in an ROI mostly filled by orange containers it was orange, the finger mask lost the neighbours 4 mm away, and the room check passed a pick it should refuse.",
+   "status": "verified",
+   "evidence": [
+    "test_what_the_detector_calls_an_object_stands_beside_the_fingers_whatever_the_surface_colour",
+    "dry-run 2026-11-01 13:45"
+   ],
+   "date": "2026-11-01",
+   "applies_when": [
+    "grasp",
+    "objects"
+   ]
+  },
+  {
+   "id": "push-drags-neighbours",
+   "topic": "safety",
+   "statement": "A closed-jaw push at 1 cm/s moved a two-layer column and both neighbours 19 mm from its centre about 40 px together before contact (shoulder lag 2.2) stopped it; light containers do not stop the arm early.",
+   "status": "verified",
+   "evidence": [
+    "chunk-status slide_push 2026-11-01 14:40",
+    "push-after frame 2026-11-01"
+   ],
+   "date": "2026-11-01",
+   "applies_when": [
+    "push"
+   ]
+  },
+  {
+   "id": "plate-height-spread",
+   "topic": "map",
+   "statement": "Two single-frame depth readings of the left arm's plate (its FK zero) gave 15.5 and 19.7 mm above the table; one frame is not enough to fix heights in the arm frame.",
+   "status": "partial",
+   "evidence": [
+    "cell_depth runs 2026-11-01 13:41 and 14:20"
+   ],
+   "date": "2026-11-01",
+   "applies_when": [
+    "map",
+    "grasp"
+   ]
+  },
+  {
+   "id": "loaded-joint-i-gain",
+   "topic": "arm",
+   "statement": "With I gain 0 at power-up the loaded elbow and wrist lagged; I 50 on both took the left arm's belt-end TCP error from 12.3 to 3.3 mm.",
+   "status": "verified",
+   "evidence": [
+    "workspace record 2026-10-31 sections 8 and 11",
+    "test_a_session_may_give_a_joint_an_i_gain_and_restores_it"
+   ],
+   "date": "2026-11-01",
+   "applies_when": [
+    "lift",
+    "grasp",
+    "approach"
+   ]
   }
  ]
 }

@@ -355,6 +355,6 @@
 
 - 2026-11-01 · uncommitted · D-945 전 표면 자리 규칙
 - 2026-11-01 · uncommitted · D-926 보강: 새 구획은 ui-section 네 역할
-- 2026-10-31 · uncommitted · fix(land): 자동 묶음 착지를 끈다
-- 2026-10-31 · uncommitted · docs(solutions): version pins grew, use api_reserve bump
-- 2026-10-31 · uncommitted · fleet: D-938 팔 이송 정책 승인
+- 2026-11-01 · uncommitted · feat: Rosy 허브 1단계 — 모든 로봇·프로젝트 grant와 팀원 기본 묶음 (D-955)
+- 2026-11-01 · uncommitted · fix(omx): ROS 전용 시험 파일만 돌 때 건너뜀은 판정이다 (D-889 추가 20)
+- 2026-11-01 · uncommitted · tools: 정책 화면 수정 게시용 FULL 착지

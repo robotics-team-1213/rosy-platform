@@ -38,7 +38,7 @@ def connected_fleet(tmp_path):
     listener = safe_listener()
     endpoint = f'https://localhost:{listener.getsockname()[1]}'
     server = uvicorn.Server(uvicorn.Config(app, ssl_certfile=str(certificate), ssl_keyfile=str(key),
-                                        log_level='error', access_log=False, proxy_headers=False))
+                                        log_level='error', access_log=False, proxy_headers=False, log_config=None))
     thread = threading.Thread(target=lambda: server.run(sockets=[listener]), daemon=True)
     thread.start()
     try:

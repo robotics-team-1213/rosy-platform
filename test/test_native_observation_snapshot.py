@@ -150,3 +150,13 @@ def test_native_units_preserve_shell_paths_through_systemd(tmp_path, unit_name, 
     if unit_name == 'camera-view':
         assert result['args'][1:] == ['--port', '8767', *shlex.split(view_args)]
         assert 'EnvironmentFile=-%h/.config/rosy/omx-camera-view.env' in unit.read_text()
+
+
+def test_a_depth_frame_travels_beside_its_preview(tmp_path):
+    """2026-10-31: a RealSense depth role keeps a JPEG preview on its topic and the 16-bit depth beside it."""
+    raw = SnapshotChannel('/top_depth/image_raw:depth16', root=tmp_path)
+    raw.write('depth16', b'\x89PNG...', captured_at=time.time(), quality={'unit_m': 0.001, 'valid_fraction': 0.87})
+    sample = raw.read()
+    assert sample['kind'] == 'depth16' and sample['quality']['unit_m'] == 0.001
+    with pytest.raises(ValueError):
+        raw.write('raw16', b'x', captured_at=time.time())

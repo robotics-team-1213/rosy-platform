@@ -15,6 +15,7 @@
 /operations/prediction/ @livsbittt
 /operations/situation/ @livsbittt
 /applications/fleet/ @livsbittt
+/applications/calibration/ @sajy0804 @ddaokki @livsbittt
 /integrations/messaging/discord/ @livsbittt
 
 # KAN-20 pinky. Device and image paths keep the default owner as a second reviewer.

@@ -52,11 +52,16 @@ the flag.
 
 A lander killed this way left no STOP line, so nothing needs fixing on its branch:
 
-1. Check that the hidden tree is clean, holds no queue ticket, and has no live land.py.
+Run `python tools/land_async.py resume <hidden-tree-name>` from the main checkout (since 2026-11-01). It does the
+steps used by hand before:
+
+1. Check that the hidden tree is clean, its snapshot is not in main, and no live ticket holds it.
 2. If land.py had moved it onto a batch candidate (`...-batch<n>-k2`), check out its own snapshot branch again.
-3. Relaunch the supervisor on the existing tree and snapshot:
-   `land_async.py --supervise <tree> <snapshot> --tests auto`, detached, logging to a new file.
-4. Remove the old `.stopped` marker, because a supervisor that lands does not remove it.
+3. Remove the old `.stopped` marker, because a supervisor that lands does not remove it.
+4. Relaunch the supervisor on the existing tree and snapshot (`--tests auto` by default), detached, logging to
+   `<tree>.resume.log`.
+5. Wait up to 60 s for the relaunched land.py's queue ticket; exit 1 when none appears. A hand relaunch without
+   this check once printed "resumed" while nothing ran (2026-10-31, a quoting error in the script).
 
 On 2026-10-30, 6 killed landings from other sessions were resumed this way.
 

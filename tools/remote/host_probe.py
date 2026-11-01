@@ -37,12 +37,18 @@ py=0; for p in /usr/bin/python3 ~/.local/bin/python3.12; do
   "$p" -c 'import sys; sys.exit(sys.version_info[:2] != (3, 12))' 2>/dev/null && py=1 && break; done
 [ "$py" = 1 ] && [ "$a" = 1 ] && py=2
 s=0; [ -f /opt/ros/jazzy/share/ros_gz_sim/package.xml ] && [ -f /opt/ros/jazzy/share/nav2_bringup/package.xml ] && s=1
-b=0; if [ -e "$J/busy" ]; then  # "<expiry epoch> <owner> <pid>" or a bare touch; 2 = pre-boot, 3 = expired
+b=0; if [ -e "$J/busy" ]; then  # "<expiry epoch> <owner> <pid>" or a bare touch; 2 = pre-boot, 3 = expired, 4 = reboot
   b=1; t=; read -r t _ < "$J/busy" 2>/dev/null || true
   case "$t" in ''|*[!0-9]*) e=0;; *) e=${#t};; esac
   if [ "$e" -ge 10 ]; then [ "$t" -gt "$now" ] 2>/dev/null || b=3  # an explicit expiry wins over a reboot
   # The site PC's hold may be a person's equipment work, not a test job: a reboot never releases it (robot-4a).
   elif [ ! -e "$J/site" ] && [ "$(stat -c %Y "$J/busy")" -lt "$(awk '/^btime /{print $2}' /proc/stat)" ]; then b=2; fi
+fi
+# D-889 13: no new job when this host's nightly reboot is under 15 min away (the timer fires 2 min before it).
+if [ "$b" != 1 ]; then
+  r=$(systemctl show -P NextElapseUSecRealtime rosy-nightly-reboot.timer 2>/dev/null); [ -n "$r" ] && r=$(date -d "$r" +%s 2>/dev/null)
+  case "$r" in ''|*[!0-9]*) ;; *) [ "$r" -ge "$now" ] && [ $((r - now)) -lt 780 ] && b=4;; esac
+  systemctl is-active -q rosy-nightly-reboot.service 2>/dev/null && b=4
 fi
 st=0; [ -e "$J/site" ] && st=1
 d=~/rosy-test; [ -d "$d" ] || d=~
@@ -59,7 +65,7 @@ def parse_probe(out: str) -> dict | None:
         n, load, avail, total, py, sim, busy, cores, gb, site, held, browsers, *disk = line.split()[1:]
         p = {"nproc": int(n), "load1": float(load), "avail_gb": int(avail) / 2**20,
              "total_gb": int(total) / 2**20, "pytest": py in ("1", "2"), "pytest_blocked": py == "2",
-             "sim": sim == "1", "busy": busy == "1",
+             "sim": sim == "1", "busy": busy in ("1", "4"), "reboot_soon": busy == "4",
              "busy_ignored": {"2": "pre-boot", "3": "expired"}.get(busy),
              "lock_cores": int(cores), "lock_gb": int(gb), "site": site == "1",
              "sim_held": int(held), "browser_jobs": int(browsers)}

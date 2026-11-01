@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Callable, Mapping, Protocol
@@ -15,6 +16,7 @@ from .local_stop import LocalStopBlocked
 from .managed_transfer_scope import validate_transfer_owner
 from .phase_recorder import ActionPhaseRecorder
 
+_LOG = logging.getLogger(__name__)
 
 # Kinds the ordered phase runner may execute, and the only kind the direct
 # driver path admits. CELL_TRANSFER runs through the phase runner only (D-402 §3).
@@ -195,6 +197,7 @@ class ActionRunner:
         payload = request.get("payload", {}) if isinstance(request, Mapping) else {}
         if not isinstance(payload, Mapping):
             payload = {}
+        projected = projection(snapshot) if action.get('attempt_id') else None
         return {
             "mission_id": payload.get("mission_id"),
             "step_id": payload.get("step_id"),
@@ -205,9 +208,9 @@ class ActionRunner:
             "dispatch_generation": payload.get("dispatch_generation"),
             "state": action["state"], "driver_goal_id": action.get("driver_goal_id"),
             "journal_event_id": action["journal_event_id"],
-            "observed_at": action["updated_at"],
+            "observed_at": projected["observed_at"] if projected else action["updated_at"],
             "reason": reason or action.get("reason"), "created": created,
-            "phase_summaries": projection(snapshot)['phase_summaries'] if action.get('attempt_id') else [],
+            "phase_summaries": projected["phase_summaries"] if projected else [],
             **({"journal_id": snapshot["journal_id"]} if action["action_kind"] == "ARM_TRANSFER" else {}),
         }
 
@@ -274,6 +277,8 @@ class ActionRunner:
                 self._phase_runners[identity] = phase_runner
                 start()
             except Exception:
+                # The receipt says only START_UNKNOWN; the cause must still reach the owner's log.
+                _LOG.exception("phase runner start failed for %s", grant.action_id)
                 current = self.store.get_action(grant.action_id)
                 if current is not None and current["state"] in {
                     "SUBMITTING", "ACCEPTED", "RUNNING", "CANCEL_REQUESTED", "UNKNOWN",
