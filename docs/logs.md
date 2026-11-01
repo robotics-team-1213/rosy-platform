@@ -13284,6 +13284,13 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 교훈: 없음(시계 주입 원칙은 기존 코드에 있었고 한 경로만 빠졌다)
 
+## 2026-11-01 · uncommitted · refactor: D-949 줄 수 래칫을 리팩터링 대기열로
+- 변경: D-949와 `test/architecture/test_size_tiers.py`(1,000줄 이상 제품 행 금지, 800~999·시험 1,500 초과·단위 10,000 초과 대기열 집합은 줄어들기만). 1차 분리: `action_store.py` 1132→497, `diagnostic.html` 1857→288(+css·js 3), `rosy-face.py` 1235→221, `sync-image-layer.py` 1014→496. `console.py`는 fix/robot-site-link-robustness의 분리(634)가 착지하면 `TIER1_IN_FLIGHT`에서 빠진다
+- 증거: 옮긴 정의의 AST 동일성(에이전트 검사), 원격 시험은 착지 기록에 남긴다. 장치(LCD·이미지 층 갱신·진단 화면) 확인 안 함
+- gate 변화: 없음
+- 결정: D-949 Accepted(사용자 결정), 워크트리 슬롯 2번째 force-over-cap 승인(2026-11-01)
+- 교훈: 없음
+
 ## 2026-11-01 · uncommitted · omx: 계획기 low_zones, 바닥 높이를 지정한 사각형 안에서만 낮춤
 - 변경: `grasp_planner.Planner.limits_at`가 `limits.low_zones` 사각형 안에서만 IK 작업 공간 바닥을 낮춘다(높이지는 않음). 그 밖은 기존 바닥 그대로
 - 증거: `test_omx_grasp_planner.py` 원격 실행. 현장: 왼팔 벨트 끝이 테이블보다 낮고(사용자 측정·깊이) 팔이 10~20 mm 판 위에 있어 FK 바닥 0.005 아래에서만 집기가 가능
