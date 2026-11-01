@@ -101,16 +101,16 @@ Fleet와 명시된 계정 SSO 여정 외의 CORE 브라우저 시험은 기본 �
 
 ## GitHub 설정
 
-아래 표는 공개 `rosy-platform`의 설정이다. 2026-10-17 GitHub API로 확인했다. 설정을 바꾸는 담당자는 이 표를 같은 PR에서 갱신한다. 운영 결정과 후속 전환 조건은 [D-762](../adr/D-762-main-gateway-pull-request-merge-queue.md)에 있다.
+아래 표는 공개 `rosy-platform`의 설정이다. 2026-10-17 GitHub API로 확인했고 2026-11-02 다시 확인했다. 설정을 바꾸는 담당자는 이 표를 같은 PR에서 갱신한다. 운영 결정과 후속 전환 조건은 [D-762](../adr/D-762-main-gateway-pull-request-merge-queue.md)에 있다.
 
 | 항목 | 현재 설정 |
 |---|---|
 | 공개 범위·기본 브랜치 | public · `main`, Issues 사용 |
 | main 보호 | PR 필요, 삭제·force-push 제한, 관리자 우회도 PR 경로로 제한 |
-| 필수 검사 | `ci-result` |
-| 사람 승인 | 0명, code owner 승인 강제 꺼짐. `CODEOWNERS`의 리뷰 요청과 서버의 승인 강제는 구분 |
+| 필수 검사 | `ci-result`, `review-gate`(이 workflow가 녹색으로 보고된 뒤 ruleset에 추가) |
+| 사람 승인 | ruleset 0명, code owner 승인 강제 꺼짐. 다른 사람(PR 작성자·에이전트 계정 `codex` 제외)이 최근 14일 `main`에서 바꿨거나 열린 PR에서 바꾸는 파일을 이 PR도 바꾸면 `review-gate`가 작성자 아닌 사람의 승인(그 사람의 마지막 리뷰)을 요구하고 그 사람에게 리뷰를 요청한다. 겹침이 없으면 혼자·병렬 작업 모두 승인 없이 통과. 검사는 대상 브랜치의 `.github/review-gate.sh`로 돌고, `main`이 바뀌거나 다른 PR이 갱신되면 `review-gate-recheck`가 열린 PR의 검사를 다시 돌린다. `CODEOWNERS`의 리뷰 요청과 서버의 승인 강제는 구분 |
 | 병합 | merge commit만 허용(D-868, 2026-10-25), 병합 후 원격 브랜치 자동 삭제 |
-| auto-merge·merge queue | auto-merge 꺼짐, ruleset에 queue 없음 |
+| auto-merge·merge queue | auto-merge 꺼짐, ruleset `main-protection`에 merge queue 있음(`ALLGREEN`·MERGE, 2026-11-02 확인). 필수 검사는 `merge_group`에도 보고해야 한다 |
 
 ```bash
 gh api repos/robotics-team-1213/rosy-platform
