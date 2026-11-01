@@ -213,7 +213,7 @@ def test_purposeful_workspace_keeps_goal_and_explains_one_next_action(empty_lear
             page.wait_for_function('document.querySelector("#stage-question").getBoundingClientRect().top >= document.querySelector("ui-topbar").getBoundingClientRect().bottom - 1')
             expect(page.locator('#stage-purpose')).to_contain_text('영상만')
             expect(page.locator('#stage-done')).to_contain_text('행동')
-            expect(page.locator('#capture-section')).to_contain_text('아직 연결되지 않았습니다')
+            expect(page.locator('#capture-section')).to_contain_text('작업대 PC의 녹화 화면에서 시작합니다')
             expect(page.locator('#profile-panel')).to_be_hidden()
             expect(page.locator('#journey-goal')).to_contain_text('아직 선택하지 않았습니다')
             page.locator('#stage-next').click()

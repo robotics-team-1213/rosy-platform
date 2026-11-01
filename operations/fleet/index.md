@@ -96,6 +96,7 @@
 
 ## 교훈 (docs/solutions)
 
+- [Fleet이 스스로 막은 요청을 "로봇이 거절"로 보였다](../../docs/solutions/logic-errors/fleet-own-address-hold-shown-as-robot-refusal-2026-11-02.md)
 - [로봇이 틀린 코드에 401을 주면 Fleet은 자기 등록 자격이 죽은 줄 안다](../../docs/solutions/logic-errors/robot-401-for-a-wrong-code-drops-fleets-enrolled-credential-2026-10-31.md)
 
 ## 시험

@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
-- 2026-11-01 · uncommitted · fix(omx): ROS 전용 시험 파일만 돌 때 건너뜀은 판정이다 (D-889 추가 20)
-- 2026-11-01 · uncommitted · tools: 정책 화면 수정 게시용 FULL 착지
-- 2026-11-01 · uncommitted · D-954 현장 마커 프로필과 팔 마커 50번부터
-- 2026-11-01 · 093ef30c2b · docs: autocrlf=false commit -a 교훈
-- 2026-11-01 · uncommitted · fix(land): main이 FULL로 넣은 변경은 지난 통과를 버리게 하지 않는다 (D-889 추가 17)
+- 2026-11-02 · uncommitted · fix(harness): 같은 폴더 import 사슬로 시험을 찾는다 (D-889 추가 21)
+- 2026-11-02 · uncommitted · fix(land): 서로 닿지 않으면 차례는 가드만 (D-889 추가 22)
+- 2026-11-01 · uncommitted · fix(ci): 게시 PR CI 빨강 두 건(nightly의 로컬 main, OMX 리허설 실시간)
+- 2026-11-01 · uncommitted · D-907 source review R1 corrections
+- 2026-11-01 · uncommitted · native v2 readonly profile contract

@@ -394,7 +394,8 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                 if storage_web.post(self, path, body): return
                 if learning_tasks_web.post(self, path, body, tasks, omx_center, collaboration):
                     return
-                if omx_center_web.post(self, path, body, omx_center, learning):
+                if omx_center_web.post(self, path, body, omx_center, learning,
+                                       collaboration.accounts if collaboration else None):
                     return
                 if camera_setup_web.post(self, path, body, store.state, collaboration):
                     return
