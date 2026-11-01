@@ -52,6 +52,8 @@ def _fit(ref, cur, hint):
 
 
 def _segments(ref):
+    if len(ref) < 4:
+        return None  # no 4-return window; the keep floor of 20 rejects it anyway
     edges = np.diff(ref,axis=0)
     lengths = np.linalg.norm(edges,axis=1)
     directions = edges/np.maximum(lengths[:,None],1e-12)

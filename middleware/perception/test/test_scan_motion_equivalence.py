@@ -129,6 +129,12 @@ def test_segments_are_bit_identical():
                 assert all(np.array_equal(a, b) for a, b in zip(old, new))
 
 
+def test_segments_short_inputs_match():
+    for n in range(8):  # below one 4-return window the batch has nothing to stack
+        points = np.random.default_rng(n).normal(size=(n, 2))
+        assert reference_segments(points) is None and sm._segments(points) is None
+
+
 def test_match_motion_is_bit_identical(reference):
     accepted = rejected = 0
     for case in corpus():
