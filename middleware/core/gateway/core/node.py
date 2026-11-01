@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import importlib
 import os
 import threading
 import time
@@ -272,8 +271,11 @@ class RosyCoreNode(Node):
         events = core_executor_kind() == "events"
         # events: one native thread runs every callback, so nothing is left in flight when spin()
         # returns and there is no pool to drain.
-        executor = (importlib.import_module("rclpy.experimental").EventsExecutor()
-                    if events else MultiThreadedExecutor())
+        if events:
+            from rclpy.experimental import EventsExecutor  # Jazzy: experimental, hence opt-in
+            executor = EventsExecutor()
+        else:
+            executor = MultiThreadedExecutor()
         executor.add_node(self)
         try:
             self.control_adapter.attach(executor)
