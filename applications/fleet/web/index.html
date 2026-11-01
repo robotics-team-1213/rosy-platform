@@ -421,7 +421,10 @@
             <ui-button kind="quiet" id="formation-resume" type="button">대형 재개</ui-button>
             <ui-button kind="quiet" id="formation-stop" type="button">대형 해제</ui-button>
           </div>
-          <p class="hint" id="formation-help">리더는 같은 진행 방향에서 가장 앞인 로봇이고, 방향이 없거나 앞이 겹치면 번호가 앞선 로봇입니다. 팔로워는 나머지가 따라갑니다. 대형을 시작한 뒤 리더에게 길을 주면 팔로워가 움직입니다. 변경은 모양·간격만 바꾸고, 재개는 멈춘 대형을 다시 움직이며, 해제는 추종을 끕니다.</p>
+          <p class="hint" id="formation-help">리더는 같은 진행 방향에서 가장 앞인 로봇이고, 팔로워는 나머지가 따라갑니다. 대형을 시작한 뒤 리더에게 길을 주면 팔로워가 움직입니다.</p>
+            <details class="formation-more"><summary class="ui-disclosure-row">대형 조작 규칙</summary>
+              <p class="hint">방향이 없거나 앞이 겹치면 번호가 앞선 로봇이 리더입니다. 변경은 모양·간격만 바꾸고, 재개는 멈춘 대형을 다시 움직이며, 해제는 추종을 끕니다.</p>
+            </details>
           <div class="robot-actions">
             <ui-button kind="primary" id="formation-path" type="button">리더에게 길 주기</ui-button>
           </div>
