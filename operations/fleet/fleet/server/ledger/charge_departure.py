@@ -1,5 +1,6 @@
 """Fleet's selected-work departure coordinator; CORE remains the motion writer."""
 import asyncio
+import logging
 from copy import deepcopy
 from uuid import uuid4
 
@@ -9,6 +10,7 @@ from fleet.server.charge_policy_admission import ChargeEnergyBudget, ChargePolic
 _SCOPE = ('session_id', 'attempt_id', 'robot_id', 'station_id', 'boot_id', 'battery_id',
           'map_id', 'map_revision', 'pose_revision')
 _TERMINAL = {'WORK_AVAILABLE', 'HOLD', 'CANCELED'}
+_LOG = logging.getLogger(__name__)
 
 
 class ChargeDeparture:
@@ -162,4 +164,6 @@ class ChargeDeparture:
                 await s.motion._cleanup(self._stop(current, 'CHARGE_DEPARTURE_CANCELED'))
                 raise
             except Exception:
+                # The stop stays the same; the cause is kept: unrecorded, it hid a station race for days (2026-10-30).
+                _LOG.warning('charge %s: CHARGE_DEPARTURE_UNVERIFIED stop', current.session_id, exc_info=True)
                 return await self._stop(current, 'CHARGE_DEPARTURE_UNVERIFIED')

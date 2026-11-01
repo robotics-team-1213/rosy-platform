@@ -2,6 +2,8 @@
 
 **Status:** Proposed
 
+**Amended by:** [D-929](D-929-packing-row-gap-band-and-prior-stack-window.md) — §1 `gap`과 §3.1의 간격 조건(측정 이웃 면 기준 놓기에서 2~5 mm 띠).
+
 이 ADR은 D-778 §9의 마지막 G1 선행 조건을 정한다. 크기와 모양이 다른 물체를 쌓는 레시피 스키마, 그리고 컴파일러가 낼 Step의 모양과 순서 규칙이다. 적재 계획 알고리즘의 구현, 온라인 적재, 실물 수용을 뜻하지 않는다. 지금의 `rosy_cell.recipe/1`·`/2`는 바뀌지 않는다. 폴더나 패키지 구조도 바꾸지 않는다.
 
 ## Context

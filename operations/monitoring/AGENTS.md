@@ -11,7 +11,8 @@ in [logs.md](logs.md), then regenerate the harness index.
 
 - Keep this wheel ROS-free and independent of the Fleet distribution. Fleet owns its passive
   `/api/fleet/monitoring` producer; CORE/host owners retain their diagnostics and repair logic.
-- Keep the launcher on loopback with one worker and a private 0700 state directory. Reject platforms
+- Keep the launcher on loopback with one worker and a private 0700 state directory. Only the D-936
+  site container passes `--host` for its unpublished internal network; never publish its port. Reject platforms
   whose private state permissions it cannot enforce; never skip that check to make startup succeed.
 - Preserve original sample identity, reported health and source age across forwarding and receiving restarts.
   The service must use its owned `MonitoringStore`; publish facts and advance peer cursors only after durable commit.

@@ -197,7 +197,7 @@ def scenario(case, out, runtime, rig, controllers, calibration):
         # short lease starts, so first-use cost is not charged to the lease (2026-10-25 P0 run expired it).
         began = runtime.monotonic()
         closed_app = create_app({}, SimpleNamespace(arm_policy=None, safety=SimpleNamespace(estop=False, estop_listeners=[])))
-        uvicorn.Config(closed_app, log_level='warning', lifespan='off').load()
+        uvicorn.Config(closed_app, log_level='warning', lifespan='off', log_config=None).load()
         fleet.admin('GET', '/api/fleet/workcells/'+cfg.workcell_id+'/policy')
         (out/'preparation-timing.json').write_text(json.dumps(dict(prepared_s=runtime.monotonic()-began)))
         exchanges = []

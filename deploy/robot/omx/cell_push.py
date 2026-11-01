@@ -10,6 +10,10 @@ shortcut: the pixel and direction come from the caller (Claude reading the frame
 outline automatically once more than one cluster shape has been pushed.
 
   cell_push.py --config cell-auto.json --site floor --px 228,330 --dir 0,-1 --mm 35 [--half-mm 15] [--dry-run]
+               [--commissioning --person-at-switch]
+
+A push moves the arm outside any reviewed carry and its commands do not pass the D-911 gate, so it moves only as a
+supervised trial (--commissioning --person-at-switch), like a pivot; without them it plans and stops (2026-10-31).
 """
 from __future__ import annotations
 
@@ -22,6 +26,8 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import cell_attempts  # noqa: E402
+import cell_decisions as cd  # noqa: E402
 import cell_objects  # noqa: E402
 import cell_params as prm  # noqa: E402
 import cell_pipeline as cp  # noqa: E402
@@ -38,7 +44,7 @@ def geometry(centre_raw, direction, half_mm: float, push_mm: float, gap_mm: floa
 
 
 def path_clear(mask, roi, to_px, centre_raw, d, half_mm: float, push_mm: float, gap_mm: float,
-               surface_px=None) -> list:
+               surface_px=None, lane_mm: float = 0.0) -> list:
     """Foreground pixels where the jaws go down (behind) or where the object's front sweeps (ahead); [] is clear.
     The object itself is skipped: ahead starts a gap past its top face (its side face shows below the top face in
     the top view, facts 28), and the side samples stay 6 mm inside its width (a neighbouring surface's edge, such
@@ -52,6 +58,10 @@ def path_clear(mask, roi, to_px, centre_raw, d, half_mm: float, push_mm: float, 
     checks = [("behind", c - d * (half_mm + gap_mm) / 1000 + side * s / 1000) for s in (-6, 0, 6)]
     for t in np.arange(half_mm + gap_mm, half_mm + push_mm + 4, 4.0):
         checks += [("ahead", c + d * t / 1000 + side * s / 1000) for s in (-half_mm + 6, 0, half_mm - 6)]
+    # the closed jaws' face is wider than a container and the map is off by some mm: what stands beside the lane the jaws
+    # travel is dragged along (2026-11-01: a column pushed out of a packed row took both neighbours 19 mm away with it)
+    for t in np.arange(-(half_mm + gap_mm), push_mm - half_mm + 1, 4.0) if lane_mm else ():
+        checks += [("beside", c + d * t / 1000 + side * s / 1000) for s in (-lane_mm, lane_mm)]
     for where, p in checks:
         px = to_px(p)
         if px is None:
@@ -140,7 +150,13 @@ def main(argv=None):
     ap.add_argument("--mm", type=float, default=35.0)
     ap.add_argument("--half-mm", type=float, default=15.0, help="object half-extent along the push")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--commissioning", action="store_true", help="a supervised trial of this one push (D-911)")
+    ap.add_argument("--person-at-switch", action="store_true", help="with --commissioning: a person is at the power switch")
     args = ap.parse_args(argv)
+    if args.commissioning != args.person_at_switch:
+        raise SystemExit("--commissioning needs --person-at-switch (and the other way round)")
+    if not (args.dry_run or args.commissioning):
+        raise SystemExit("a push moves the arm outside the D-911 gate: --dry-run, or --commissioning --person-at-switch")
     config = json.loads(args.config.read_text(encoding="utf-8"))
     params = config["params"] = prm.load(config.get("params_path"))["values"]
     plan = json.loads(Path(config["plan_path"]).expanduser().read_text())
@@ -165,8 +181,9 @@ def main(argv=None):
     gap = prm.get(params, "push.gap_mm")
     start, end, d = geometry(a, direction, args.half_mm, args.mm, gap)
     mask = cell_objects.foreground(img, args.roi, params=params, surface_px=site.get("surface_px"), surface_lab=site.get("surface_lab"))
+    lane = prm.jaw_face_half_mm(params) + (record.get("loo_error_mm") or {}).get("max", 0.0)  # jaw face + map error
     hits = path_clear(mask, args.roi, lambda p: predicted_pixel(config, calibration, args.site, p), a, d,
-                      args.half_mm, args.mm, gap, site.get("surface_px"))
+                      args.half_mm, args.mm, gap, site.get("surface_px"), lane)
     region = cell_pivot.bias_at(cell_pivot.load_bias(cell_pivot.bias_path(calibration_path)), args.site, a.tolist(),
                                 params=params)
     bias = np.asarray(region["bias_mm"] if region else [0.0, 0.0]) / 1000
@@ -174,6 +191,15 @@ def main(argv=None):
     out = {"site": args.site, "px": px, "dir_px": dpx, "object_raw_mm": (a * 1000).round(1).tolist(),
            "start_m": (start - bias).round(4).tolist(), "end_m": (end - bias).round(4).tolist(), "z": round(z, 4),
            "yaw_deg": round(yaw, 1), "bias_mm": (bias * 1000).round(1).tolist(), "blocked": hits}
+    if not args.dry_run:  # a real push is a decision with an outcome, rows like the auto pick's (D-872)
+        wd = Path(config["work_dir"]).expanduser()
+        cell_attempts.start(wd / "attempts.jsonl", knowledge=config.get("knowledge"), params=config.get("params_path"),
+                            arm_id=config.get("arm_id", "arm_s"))
+        cd.start(wd / "decisions.jsonl", knowledge=config.get("knowledge"))
+        cd.see(keep("push-decision", img))
+        cd.emit("push", {"object_raw_mm": out["object_raw_mm"], "dir_px": dpx, "push_mm": args.mm, "gap_mm": gap,
+                         "lane_half_mm": round(lane, 1), "z": out["z"], "blocked": hits}, ["push", "refuse"],
+                "refuse" if hits else "push", "rule", "path not clear" if hits else "path clear")
     if hits:
         out["result"] = "refused: path not clear"
     elif args.dry_run:
@@ -207,6 +233,9 @@ def main(argv=None):
                                               (config.get("objects") or {}).get("hsv"))
                 out["after"] = [{"centre_mm": o["centre_mm"], "object": o.get("object"), "matched": o["matched"],
                                  "tangled": o.get("tangled", False)} for o in objects]
+    if not args.dry_run and not hits:
+        cd.emit("push_outcome", {"result": out.get("result"), "at": out.get("at"), "after": out.get("after")},
+                ["pushed", "contact", "refused"], out.get("result"), "measurement", "what the run and the top camera showed")
     (work / f"{stamp}-push.result.json").write_text(json.dumps(out, indent=1, default=str))
     print(json.dumps({k: v for k, v in out.items() if k != "steps"}, default=str))
     return 0 if out.get("result") in ("pushed", "planned") else 1

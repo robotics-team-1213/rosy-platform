@@ -16,7 +16,7 @@
 |---|---|---|
 | `--content-auth-max` | 32rem | 로그인·계정 관리·내 계정의 문서 폭 |
 | `--content-learning-max` | 48rem | 학습 호스트 선택의 문서 폭 |
-| `--content-policy-max` | 56rem | 정책 검토의 문서 폭 |
+| ~~`--content-policy-max`~~ | — | D-926 2로 정책 화면이 작업 셸로 옮겨 삭제(2026-10-30) |
 | `--content-policy-form-max` | 36rem | 정책 제안 입력의 폭 |
 | `--block-policy-evidence-max` | 12rem | 스크롤 가능한 정책 근거 높이 |
 | `--measure-login-identity` | 10rem | 로그인 부품의 신원 요약 폭 |
@@ -35,3 +35,5 @@
 정본 편집 뒤 `python applications/fleet/web/shared/fleet_components.py`로 산출물을 갱신하며 `--check`가9문서의 드리프트를 거절한다. 새 시트는 기존 자산 등록에 추가하며 CSP·URL·인증 API를 유지한다. 인증 문서/정책의 기존12px inset은16px로 맞추고 Learning의 별도 바깥 여백·간격을 공통 절차 리듬에 맞춘다.
 
 이 결정은 설계 수용이다.320/390/480/768/1440 및 밝게/어둡게, 긴 값·권한·로그인·계정 변경·정책 승인과 패키지 산출물은 별도로 검증한다. 전체 제품·실물·현장 UI 수용을 의미하지 않는다.
+
+> 2026-10-30 D-926 2: 학습 정책 승인(`work/policy.html`)은 실물 실행 창을 여는 화면이라 가벼운 문서 머리 대신 작업 화면과 같은 셸(비상 정지·계정·레일·작업 하위 탐색)을 쓴다. 가벼운 문서는 로그인·내 계정·계정 관리·학습 넷이다.

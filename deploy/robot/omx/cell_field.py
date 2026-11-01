@@ -155,7 +155,9 @@ class Field:
                         candidates.append({"px": p, "dir": d, "half_mm": half, "mm": mm, "blocked": out.get("blocked", ["no plan"])})
         return rank_pushes(candidates, away)[:top]
 
-    def push(self, site: str, px, away, roi=None) -> dict:
+    def push(self, site: str, px, away, roi=None, *, person_at_switch=False) -> dict:
+        if person_at_switch is not True:  # a push moves outside the D-911 gate: supervised only (cell_push)
+            return self.report("push", {"site": site, "result": "held: supervised --person-at-switch required"})
         best = self.push_search(site, px, away, 12, 6, 1, roi)
         if not best:
             return self.report("push", {"site": site, "result": "no clear push"})
@@ -165,7 +167,7 @@ class Field:
         code, out, err = self.run("cell_push.py", ["--config", self.config_path, "--site", site, "--roi", *roi,
                                                    f"--px={c['px'][0]},{c['px'][1]}", f"--dir={c['dir'][0]},{c['dir'][1]}",
                                                    "--mm", c["mm"], "--half-mm", c["half_mm"],
-                                                   "--catalog", self.catalog])
+                                                   "--catalog", self.catalog, "--commissioning", "--person-at-switch"])
         after, _ = self.snapshot(f"push-{site}-after")
         return self.report("push", {"site": site, "chosen": c, "exit": code, "result": out.get("result"), "look": out.get("look"),
                                     "after_objects": out.get("after"), "stderr": err if code not in (0, 1) else ""}, before, after)
@@ -228,6 +230,8 @@ def main(argv=None) -> int:
         p.add_argument("--px", required=True, help="x,y top-camera pixel on the object to push")
         p.add_argument("--away", required=True, help="dx,dy image direction away from the neighbour")
         p.add_argument("--roi", type=int, nargs=4)
+        if verb == "push":
+            p.add_argument("--person-at-switch", action="store_true")
         if verb == "push-search":
             p.add_argument("--radius", type=int, default=12)
             p.add_argument("--step", type=int, default=6)
@@ -252,7 +256,7 @@ def main(argv=None) -> int:
     elif args.verb == "push-search":
         out = {"candidates": field.push_search(args.site, xy(args.px), xy(args.away), args.radius, args.step, args.top, args.roi)}
     elif args.verb == "push":
-        out = field.push(args.site, xy(args.px), xy(args.away), args.roi)
+        out = field.push(args.site, xy(args.px), xy(args.away), args.roi, person_at_switch=args.person_at_switch)
     elif args.verb == "marks":
         out = field.marks(args.library, args.goto, commissioning=args.commissioning,
                           person_at_switch=args.person_at_switch)

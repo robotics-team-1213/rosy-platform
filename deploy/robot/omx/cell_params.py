@@ -62,7 +62,7 @@ DEFAULTS = {
     "look.max_total_mm": (30.0, "mm", 5, 80), "push.look_tol_mm": (6.0, "mm", 1, 15), "look.near_px": (40.0, "px", 10, 150),
     "look.other_finger_deg": (229.5, "deg", 0, 360), "look.other_finger_mm": (34.4, "mm", 10, 60),
     "objects.drop_shadow": (1, "flag", 0, 1), "objects.shadow_tol": (12.0, "lab", 2, 40), "objects.shadow_min_light": (0.45, "ratio", 0.1, 0.9),
-    "objects.top_v_frac": (0.8, "ratio", 0, 0.95),
+    "objects.top_v_frac": (0.8, "ratio", 0, 0.95), "objects.side_retry_v_frac": (0.75, "ratio", 0, 0.95),
     "grasp.end_frac": (0.7, "ratio", 0, 1),
     "objects.split_touching": (1, "flag", 0, 1), "objects.split_peak_frac": (0.6, "ratio", 0.3, 0.9),
     "pivot.over_target": (0, "flag", 0, 1), "pivot.over_top_mm": (30.0, "mm", 5, 120), "pivot.over_clear_mm": (30.0, "mm", 10, 100),
@@ -71,9 +71,12 @@ DEFAULTS = {
     "push.gap_mm": (10.0, "mm", 3, 40),
     "runner.pace_lag": (1.6, "joint_unit", 0.1, 5), "runner.pace_rise": (0.3, "joint_unit", 0, 5),
     "runner.pace_max_s": (3.0, "s", 0.1, 30), "runner.idle_park_s": (180.0, "s", 5, 7200),
-    "runner.idle_stop_s": (180.0, "s", 5, 7200), "runner.contact_lag": (1.5, "joint_unit", 0.1, 5),
+    "runner.idle_stop_s": (180.0, "s", 5, 7200), "safety.bus_watchdog_ms": (0.0, "ms", 0, 2540), "runner.contact_lag": (1.5, "joint_unit", 0.1, 5),
     "runner.contact_ticks": (2, "count", 1, 30), "runner.contact_rise": (0.6, "joint_unit", 0.1, 1.5),
     "runner.contact_loaded_max": (2.2, "joint_unit", 1.5, 2.3),
+    "corridor.half_width_mm": (30.0, "mm", 10, 80), "corridor.clear_z_m": (0.10, "m", 0.04, 0.25),
+    "corridor.base_m": (0.10, "m", 0.0, 0.2),
+    "corridor.min_px": (40, "px", 1, 100000),
 }
 
 
@@ -127,3 +130,10 @@ def load(path=None) -> dict:
 if __name__ == "__main__":
     loaded = load(sys.argv[1])
     print(len(loaded["values"]), "parameters ok, sha", loaded["sha"])
+
+
+def jaw_face_half_mm(params=None) -> float:
+    """Half the closed jaws' face across the fingers, from the measured finger spacing plus one finger: the one
+    gripper size every lane and room check uses (2026-11-01: about 42 mm across; a push lane taken as 20 mm wide
+    dragged both neighbouring columns along)."""
+    return (get(params, "look.other_finger_mm") + get(params, "auto.finger_mm")) / 2

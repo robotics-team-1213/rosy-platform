@@ -68,6 +68,7 @@
 ## 교훈 (docs/solutions)
 
 - [컨테이너에서 `kill -0`은 좀비를 산 것으로 본다](../docs/solutions/deployment/container-zombie-kill0-blindness.md)
+- [실험실 PC에서 시뮬 셀 소유자는 장치 없는 namespace와 짧은 소켓 경로로 띄운다](../docs/solutions/deployment/sim-cell-owner-on-a-lab-pc-needs-a-device-free-namespace-2026-10-31.md)
 - [Cell 시뮬레이터는 홈 복귀를 관측한 뒤 Action을 받는다](../docs/solutions/logic-errors/cell-startup-must-reach-home-before-action-admission.md)
 
 ## 시험
@@ -76,8 +77,8 @@
 
 ## 최근 기록
 
-- 2026-10-30 · uncommitted · field marks admission의 원격 GREEN·mutation·복귀 검증
-- 2026-10-30 · uncommitted · field marks를 선택 프로필과 감독 절차에 연결
-- 2026-10-30 · uncommitted · 새 field marks 호출의 프로필·감독 거부 회귀
-- 2026-10-30 · uncommitted · 게시 준비 기록의 필수 표기 정정
-- 2026-10-30 · uncommitted · 게시 범위의 역사적 비밀값 오탐 검토
+- 2026-11-01 · uncommitted · fix(omx): 깊이 높이의 기준 평면이 프레임마다 바뀌지 않는다
+- 2026-11-01 · uncommitted · fix(omx): 피벗 측정점 찾기가 현장 바닥 색을 쓴다
+- 2026-11-01 · uncommitted · fix(omx): 팔 세션이 도는 동안 원격 시험을 관제 PC에서 뺀다
+- 2026-11-01 · uncommitted · feat(omx): 밀기도 판단·결과를 남기고, 집게 크기는 측정값 하나에서
+- 2026-11-01 · uncommitted · fix(omx): 밀기 경로가 집게가 지나는 폭까지 본다

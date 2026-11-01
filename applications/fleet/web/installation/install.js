@@ -25,6 +25,7 @@ import { createTaskChooser } from "/common/task-chooser.js";
 import {createDeviceCare} from '/console/assets/device-care.js';
 import { confirmIrreversible, openLiveDialog } from "/common/ui.js";
 import { bindEstop, bindTopbarToggle, showSession, showSignedOut, stopNotice, tickClock, watchFleet } from "/console/assets/fleet-header.js";
+import '/console/assets/file-picker.js';
 
 const pageScope = createPageScope();
 

@@ -1,0 +1,5 @@
+# RealSense D435: its colour, depth and IR nodes share one by-id name and take index0 in any order per boot
+# (2026-10-31: the top role opened depth after a replug). Name each by its USB interface, on any port.
+SUBSYSTEM=="video4linux", ATTRS{idVendor}=="8086", ATTRS{idProduct}=="0b07", ENV{ID_USB_INTERFACE_NUM}=="03", ATTR{index}=="0", SYMLINK+="v4l/by-id/rosy-realsense-d435-color"
+SUBSYSTEM=="video4linux", ATTRS{idVendor}=="8086", ATTRS{idProduct}=="0b07", ENV{ID_USB_INTERFACE_NUM}=="00", ATTR{index}=="0", SYMLINK+="v4l/by-id/rosy-realsense-d435-depth"
+SUBSYSTEM=="video4linux", ATTRS{idVendor}=="8086", ATTRS{idProduct}=="0b07", ENV{ID_USB_INTERFACE_NUM}=="00", ATTR{index}=="2", SYMLINK+="v4l/by-id/rosy-realsense-d435-ir"

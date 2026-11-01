@@ -1,8 +1,8 @@
 package io.github.livsbittt.rosy.cam.settings
 
+import io.github.livsbittt.rosy.peer.PeerProof
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import io.github.livsbittt.rosy.cam.pairing.peer.CameraConnection
-import io.github.livsbittt.rosy.cam.pairing.peer.CameraProof
 import io.github.livsbittt.rosy.cam.pairing.peer.CameraRelationship
 import java.io.File
 import java.security.KeyPairGenerator
@@ -62,10 +62,10 @@ class PeerSettingsTest {
     }
     private fun approval(link: SiteLink): CameraConnection {
         val keys = KeyPairGenerator.getInstance("EC").apply { initialize(ECGenParameterSpec("secp256r1")) }.generateKeyPair()
-        val public = CameraProof.encodeKey(keys.public)
+        val public = PeerProof.encodeKey(keys.public)
         val ca = HeldCertificate.Builder().certificateAuthority(0).commonName("fixture").build()
-        val relationship = CameraRelationship("https://site.local:8443", "fleet-" + CameraProof.fingerprint(public).take(32), public,
-            "cam_fixture", CameraProof.fingerprint(public), "A".repeat(32), 0, link.source, true, null, ca.certificatePem())
+        val relationship = CameraRelationship("https://site.local:8443", "fleet-" + PeerProof.fingerprint(public).take(32), public,
+            "cam_fixture", PeerProof.fingerprint(public), "A".repeat(32), 0, link.source, true, null, ca.certificatePem())
         return CameraConnection(link, relationship, "0")
     }
     @Test fun newerManualWriteIncludingSameValueFencesOldCredentialCommit() = runBlocking {

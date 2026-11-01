@@ -227,9 +227,13 @@ def assess(config: dict, calibration: dict, library: dict, state: dict, *, now=N
         return {**out, "reason": "evidence_unavailable"}
 
 
-def same_session(state: dict, assessment: dict, *, now=None) -> bool:
-    """Recheck current owner facts between chunks; this is additional to the existing motion guard."""
+def same_session(state: dict, assessment: dict, *, now=None, recovering: bool = False) -> bool:
+    """Recheck current owner facts between chunks; this is additional to the existing motion guard. `recovering`
+    (retreat, park) passes a latched fault: after a contact in descend_pick both were held and the arm stayed out
+    over the Pinky tray until the idle watchdog folded it (2026-10-30). The session itself must still match."""
     now = time.time() if now is None else now
+    if recovering and isinstance(state, dict) and state.get("fault"):
+        state = {**state, "fault": None}
     return (_number(now) and _state_current(state, now)
             and state["operating_context"] == {"scope": assessment.get("scope"),
                                                 "sha256": assessment.get("runtime_sha256"),

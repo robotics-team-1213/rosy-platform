@@ -1,4 +1,4 @@
-# deploy logs
+﻿# deploy logs
 
 추가만 한다. 형식: [module harness 설계](../docs/plans/2026-09-15-module-harness-design.md) §4.2.
 2026-09-15 이전 이력은 [Device 검증 계획](../docs/plans/2026-09-13-rosy-os-device-validation-implementation-plan.md)과 `git log -- deploy`를 본다.
@@ -4235,3 +4235,70 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: source69bbc19002의 field/profile/pipeline/Runner/envelope 5file suite174passed/skip0/96warnings/NEW0. 별도 mutant aa51c31e5d는 FIFO binding과 marks/CLI admission 4줄만 무력화해14failed/4passed/skip0/14NEW를 보였고 TypeError가 아닌 실제 assertion으로 실패했다. 정상69bbc branch 복귀 뒤18passed/skip0/NEW0을 확인했다. mutant는 정상 이력에 포함되지 않으며 착지·게시·설치 금지다. 독립 source 검토와 local lint0errors/39warnings도 확인했다.
 - gate 변화: native source 회귀 범위만 확인했다. 실제 장치 수용·적격 FULL·GitHub CI·게시·운영 서버 전환은 아직 미완료이며 도구 설치 상태와 구분한다. 이전 FULL129576은 새 안전 수정 때문에 원격 시험 시작 전 소유자 확인 후 종료했고 snapshot을 보존했다.
 - CE: 해당 없음 — 새 wrapper의 누락과 필요한 profile/supervision 경계는 정본 D-911/D-914, 기존 FifoCell 구현과 이번 실제 전송 회귀·mutation에서 복원된다. 문서에 없는 장치 성질을 새로 추정하거나 실물 동작을 관측한 결과는 아니다.
+
+## 2026-10-30 · 6302fcb63c · 선택 Monitoring overlay를 서명 후보와 업데이트기에 등록 (D-936)
+
+- 변경: `compose.monitoring.yaml`·`Caddyfile.monitoring`을 후보 배포 파일 한 쌍으로 등록했다. 검증기는 manifest `monitoring`을 내고, 업데이트기는 overlay가 켜졌을 때만 `monitoring` 서비스를 후보 Fleet 이미지로 허용하며 drift 검사에 넣는다. 건강·롤백 관문에는 넣지 않는다. Fleet 이미지는 Monitoring 소스와 화면 묶음을 함께 싣고 Fleet의 PYTHONPATH는 바꾸지 않았다.
+- 증거: 원격 겨냥 시험 통과(NEW/KNOWN/FLAKY0). 관제 PC에서 실제 site.env 렌더링과 운영 프록시 이미지의 `caddy validate`를 overlay 켬·끔으로 확인했다.
+- gate 변화: 없음. 새 서명 후보·관제 PC 설정·실제 열람 수용은 남았다. 관제 PC 자동 업데이트는 기존 ARM-S overlay 거절이 먼저 풀려야 한다.
+
+## 2026-10-30 · uncommitted · 관제 PC Monitoring 설정 예시 (D-936)
+
+- 변경: `deploy/site/monitoring.yaml.example`을 더했다. Fleet, host-state, 관제·AI·모델 PC guard 원천과 overlay의 키 이름·마운트 경로를 그대로 쓴다. 로봇 이름은 공개 예시에 넣지 않고 추가 방법만 적었다.
+- 증거: `operations/monitoring/test/test_deployment.py`가 예시를 실제 설정 로더로 읽고, 키 이름·CA·마운트가 overlay와 같은지 확인한다(원격 결과는 커밋 후 기록).
+- gate 변화: 없음. 관제 PC 설정·키 준비는 ARM-S 전환 뒤에 한다.
+
+## 2026-10-30 · 796fbe489c · D-871 가드 수집 관제 PC 적용과 `rosy-update-report` 선언
+
+- 변경: 공통 host-state 매니페스트에 `rosy-update-report`를 `approval=recovery`로 더했다. 관제 PC에 origin/main 판 가드·원격 스크립트·`site updates` 줄을 설치하고, `rosy-host-state install site`로 승인 사본을 갱신했다(야간 재부팅 세션 잠금 조건도 함께 적용).
+- 근거: 설치 뒤 `site` 줄에 `updates`가 들어왔고, host-state `check`는 fixed·drift·errors 0이다. 기록은 D-871 적용 기록 2026-10-30.
+- gate 변화: D-871 DEVICE 관제 PC 수집 경로 적용. AI·모델 PC는 sudo 비밀번호가 필요해 남았다.
+- CE: 새 교훈 — `docs/solutions/deployment/host-guard-files-update-through-host-state-install-2026-10-30.md`.
+
+## 2026-10-31 · a517780fbc · feat(model-pc): one Learning center follows the signed release; retire the candidates (D-857)
+- 변경: 리뷰 릴리스 업데이터가 8768(`rosy-edge-review`, D-857의 유일한 Learning 센터)도 갱신. 모델 PC 8769·AI PC 8770 `rosy-learning-center` 후보와 그 업데이트 timer를 끄고 `services.yaml`에 retired로 표시
+- 증거: 두 후보의 검수 자료 0장, OMX 자료는 전부 `synthetic_smoke`(모델 15·AI 14 데이터셋, 10-24 이후 파일 없음). 각 PC `~/rosy-learning-candidate-retired-20261031/`에 자료·유닛 백업 뒤 stop+disable. 9444~9448 HTTPS 프록시·Fleet 코드에 두 후보 포트 연결 없음. 원격 pytest 100 passed(host services·review autoupdate·release·update status·gate)
+- gate 변화: 없음. 8768 갱신은 모델 PC `work.lock`(학습 작업) 해제 뒤 업데이터가 적용
+- 결정: D-857
+- 교훈: 없음
+
+## 2026-11-01 · a785121ef0 · sim/real 같은 동작: Planner.stream 하나
+- 변경: 실제 셀 실행기(`chunk_runner`)가 재생하는 프레임 순서를 `grasp_planner.Planner.stream` 하나로 두고, 녹화 사이클(`leg`)·금지선 검사·native SIM 교사(`sim_chunk_plan`)·Isaac(`isaac_cell_frames`)가 모두 이것을 쓴다. SIM은 실제 plan의 동작값(접근·들어 올림 높이, 속도, 집게 시간, transit_speed)을 그대로 쓰고 장소·홈·transit·한계·집게 단위만 바꾼다. 복사해 둔 `REAL` 상수와 접근 높이로 고정한 들어 올림을 없앴다. 이동 중 집게는 실제처럼 `gripper_closed`로 닫는다. 라이브러리가 고른 transit(금지선 때문에 당긴 것 포함)도 SIM에 그대로 간다.
+- 증거: `test_the_sim_replays_frame_for_frame_what_chunk_runner_streams`가 chunk_runner의 goto 식으로 따로 만든 프레임과 SIM 단계를 프레임 단위로 대조한다. 원격 pytest 결과는 착지 기록에 남긴다.
+- gate 변화: 없음. native SIM·Isaac 실제 실행으로 다시 확인하지 않았다(들어 올림 높이와 이동 중 집게가 바뀌어 이전 SIM 기록과 다르다).
+
+## 2026-11-01 · uncommitted · fix(omx): 손가락 여유 검사가 검출기가 물체라 부르는 것을 모두 본다
+- 변경: `cell_auto_pick.observe`의 손가락 쪽 장애물 마스크에, 크기 컷 뒤에 물체 색 범위(`objects.hsv`)를 더한다. 표면 색 판정만으로는 이웃 물체를 놓칠 수 있다.
+- 증거: 현장 dry-run(읽기 전용) — 수정 전 주황 컨테이너 세 열(간격 약 4 mm) 가운데를 양쪽 26 mm 여유로 계획, 수정 뒤 "no finger room: 4.0 / 26.0 mm". 원격 `test_omx_cell_auto_pick.py` 46 passed(새 회귀 시험 포함)
+- gate 변화: 없음
+- 교훈: 기존 문서 갱신 대상 없음(작업 기록 2026-10-31 §14)
+
+## 2026-11-01 · uncommitted · fix(omx): 밀기 경로가 집게가 지나는 폭까지 본다
+- 변경: `cell_push.path_clear`에 `beside` 검사 — 집게가 지나는 줄의 양옆(`push.lane_half_mm` 21 mm = 손가락 간격 34.4 + 손가락 / 2, 더하기 지도의 LOO 최대 오차)에 무엇이 있으면 거절
+- 증거: 현장 감독 시험(사람 스위치 옆) — 붙어 선 세 열 중 왼쪽 열을 밀자 이웃 두 열(중심에서 19 mm)이 함께 약 40 px 밀리고 shoulder lag 2.2로 접촉 정지·후퇴·귀환. 원격 `test_omx_cell_push.py` 새 회귀 시험
+- gate 변화: 없음
+- 교훈: 작업 기록 2026-10-31 §14
+
+## 2026-11-01 · uncommitted · feat(omx): 밀기도 판단·결과를 남기고, 집게 크기는 측정값 하나에서
+- 변경: `cell_params.jaw_face_half_mm`(손가락 간격 측정값 + 손가락) 하나를 밀기 통로 폭에 사용(`push.lane_half_mm` 제거). 감독 밀기는 `decisions.jsonl`에 `push`·`push_outcome` 행을 남긴다. `cell-knowledge.example.json`에 11-01 검증 사실 5건(붙어 선 줄, 표면 색 중앙값, 밀기 끌림, 판 높이 편차, I 게인)
+- 증거: 원격 `test_omx_cell_push.py` 8 passed(막힌 밀기는 움직이지 않고 거절 행을 남김), 지식 파일 검증 26건
+- gate 변화: 없음
+- 교훈: 작업 기록 2026-10-31 §14
+
+## 2026-11-01 · uncommitted · fix(omx): 팔 세션이 도는 동안 원격 시험을 관제 PC에서 뺀다
+- 변경: `joint_tune.session_lock`이 잡혀 있는 동안 `~/rosy-jobs/busy`에 `<만료> omx-session <pid>`(4시간)를 쓰고, 셀 잠금을 홀로 잡는 마지막 세션이 지운다. 다른 사람이 쓴 표시는 건드리지 않는다.
+- 증거: 두 팔 동시 시험(현장 스위치 옆) 때 관제 PC에 원격 시험 작업(CPU 66%·50%)이 돌았고 arm_a wrist_roll 추종 오류, arm_b over_ticks 0–1→477. 원격 `test_omx_session_lock.py` 등 108 passed.
+- gate 변화: 없음
+- 교훈: 작업 기록 2026-10-31 §15.1(재시험으로 원인 확인 전이라 미해결)
+
+## 2026-11-01 · uncommitted · fix(omx): 피벗 측정점 찾기가 현장 바닥 색을 쓴다
+- 변경: `cell_calibrate`의 `pivot-near` 단계가 같은 일을 하던 `auto_pivot_point`를 다시 쓰고, 장애물 판정에 현장의 측정 바닥 색(`surface_lab`)·바닥 다각형을 넘긴다.
+- 증거: 현장 `pivot-near` 두 번이 "no clear point"로 멈춤(팔레트 위 빈 칸이 있는데도). 원격 `test_omx_cell_calibrate.py` 6 passed.
+- gate 변화: 없음
+- 교훈: 작업 기록 2026-10-31 §15
+
+## 2026-11-01 · uncommitted · fix(omx): 깊이 높이의 기준 평면이 프레임마다 바뀌지 않는다
+- 변경: `cell_depth.table_plane`이 가장 큰 평면 둘 가운데 더 높은 쪽(카메라에 가까운 쪽)을 셀 테이블로 고른다. 큰 쪽 점 수의 25% 이상이고 평행할 때다. RANSAC은 `_ransac`로 나눴다.
+- 증거: 현장 깊이 프레임 둘에서 수정 전에는 팔레트가 75 mm와 10 mm로 갈렸다(테이블 밖 약 60 mm 낮은 면이 더 넓게 잡힌 프레임). 수정 후에는 두 프레임·시드 6개 모두 팔레트 8–12 mm, 열 74–79 mm. 원격 `test_omx_cell_depth.py` 5 passed(더 넓은 낮은 면 장면은 수정 전 코드로 실패).
+- gate 변화: 없음
+- 교훈: 작업 기록 2026-10-31 §15.2

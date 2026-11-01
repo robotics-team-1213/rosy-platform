@@ -354,7 +354,7 @@
 ## 최근 기록
 
 - 2026-10-31 · uncommitted · docs: D-937 제품 앱 입사 문법과 capture-wall 표면 등록
-- 2026-10-30 · uncommitted · omx: D-935 payload bound on the D-911 gate
-- 2026-10-30 · uncommitted · omx: cell scale reader and D-934 object mass
-- 2026-10-30 · uncommitted · docs(adr): D-931..D-933 arm S measured checks, one field revision, cell coordinate frame
-- 2026-10-30 · 08b6c8c362 · 새 장치 수집과 mDNS 진단 기록
+- 2026-11-01 · uncommitted · fix(omx): ROS 전용 시험 파일만 돌 때 건너뜀은 판정이다 (D-889 추가 20)
+- 2026-11-01 · uncommitted · tools: 정책 화면 수정 게시용 FULL 착지
+- 2026-11-01 · uncommitted · D-954 현장 마커 프로필과 팔 마커 50번부터
+- 2026-11-01 · 093ef30c2b · docs: autocrlf=false commit -a 교훈

@@ -177,3 +177,14 @@ def test_marks_cli_passes_explicit_supervision_to_the_guarded_method(monkeypatch
                     "--commissioning", "--person-at-switch"]) == 0
     assert calls == [("fixture.json", "goto above_pick", True, True)]
     assert json.loads(capsys.readouterr().out) == {"result": "fixture"}
+
+
+def test_a_field_push_is_held_without_a_person_at_the_switch_and_passes_the_flags_with_one(marking_cell):
+    """2026-10-31: cell_push moves outside the D-911 gate, so it now refuses to move without the supervised flags."""
+    field, runs = marking_cell.field, []
+    field.run = lambda script, argv: runs.append((script, argv)) or (0, {"result": "pushed"}, "")
+    field.push_search = lambda *a: [{"px": (1, 1), "dir": (0, 1), "mm": 15, "half_mm": 15, "blocked": []}]
+    field.snapshot = lambda name: (None, None)
+    assert field.push("floor", (1, 1), (0, 1), [0, 0, 9, 9])["result"].startswith("held:") and runs == []
+    field.push("floor", (1, 1), (0, 1), [0, 0, 9, 9], person_at_switch=True)
+    assert runs[-1][0] == "cell_push.py" and runs[-1][1][-2:] == ["--commissioning", "--person-at-switch"]

@@ -165,9 +165,9 @@ def observe(cell, config: dict, calibration: dict, site: str, roi, catalog: list
         return None, None, [], f"no map for {site}"
     img = cell.frame("top")
     cd.see(keep(f"auto-{site}-top", img))
-    poly, lab = config["sites"][site].get("surface_px"), config["sites"][site].get("surface_lab")
+    poly, lab, obj = config["sites"][site].get("surface_px"), config["sites"][site].get("surface_lab"), config.get("objects") or {}
     objects = cell_objects.detect(img, roi, record, config["cameras"]["top"], catalog, surface_z(config, site),
-                                  config.get("params"), poly, lab, (config.get("objects") or {}).get("hsv"))
+                                  config.get("params"), poly, lab, obj.get("hsv"))
     for o in objects:
         o["raw_m"] = [o["centre_mm"][0] / 1000, o["centre_mm"][1] / 1000]
     # the finger-side mask is not clipped to the site polygon: a container on the next surface (the board beside the
@@ -175,7 +175,7 @@ def observe(cell, config: dict, calibration: dict, site: str, roi, catalog: list
     near = cell_objects.foreground(img, roi, params=config.get("params"), surface_lab=lab)
     for poly in config["sites"][site].get("markings_px", []):  # flat floor markings (a white line) are no obstacle
         cv2.fillPoly(near, [np.asarray(poly, np.int32) - [roi[0], roi[1]]], 0)
-    return img, object_sized(near, config.get("params")), objects, None
+    return img, object_sized(near, config.get("params")) | cell_objects.colour_mask(img, roi, obj.get("hsv")), objects, None
 
 
 def object_sized(mask, params=None):
@@ -246,8 +246,7 @@ def plan_pick(config: dict, site: str, dest_site: str, place_xy, o: dict, entry:
                      "yaw_deg": s["yaw_deg"] if place_yaw is None else place_yaw}
             try:
                 jaws = jaw_open_for(entry["width_mm"], config.get("params"), o.get("jaw_margin_mm"))
-                # one file per object: two boxes on the floor planned into one name, and the arm went to the other one
-                # (2026-10-29, the second candidate overwrote the first's library)
+                # one file per object: two boxes on the floor planned into one name, and the arm went to the other one (2026-10-29)
                 lib = cp.write_library(dict(config, plan=dict(config["plan"], approach_m=approach, grip_open=jaws)), pick,
                                        place, work / f"auto-{site}-{offset}-{round(1000 * o['raw_m'][0])}_{round(1000 * o['raw_m'][1])}.json")
                 return lib, pick, place, approach, yaw, {"approach_m": approach, "grip_open": jaws}
@@ -400,6 +399,8 @@ def run_auto(cell, config, calibration, calibration_path, catalog, roi, source, 
              dry_run=False, sleep=time.sleep, log=print, attempts=None) -> dict:
     """One object from `source` to `dest`; up to `attempts` grasps (the second with the better candidate)."""
     work, out = Path(work), {"from": source, "to": dest, "attempts": []}
+    if dest in config["sites"] and "place" not in config["sites"][dest]:  # the board: taken from, never put on
+        return {**out, "result": f"refused: {dest} is not a destination (its site has no 'place')"}
     for site in {source, dest} & {k for k, v in config["sites"].items() if v.get("track")}:  # a robot that moves
         config, out[f"track_{site}"] = cell_site_track.follow(config, site, cell.frame("top"),
                                                               lambda q, s=site: predicted_pixel(config, calibration, s, q), work)

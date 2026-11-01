@@ -1,5 +1,6 @@
 """Installed simulation proposal/admission HTTP; no Action submission or claim release."""
 import asyncio
+import logging
 import sqlite3
 import time
 
@@ -15,6 +16,9 @@ from .physical_transfer_store import PhysicalTransferStore
 from .password_session import same_origin
 
 
+_log = logging.getLogger("fleet.arm_transfer_policy_admission")
+
+
 def _view(job):
     fields = ("mission_id", "proposal_principal_id", "request_key", "request_digest", "proposal_digest",
               "status", "authority_epoch", "dispatch_generation", "approved_by", "reason")
@@ -25,7 +29,8 @@ def _view(job):
 
 def install_arm_transfer_job_routes(app, *, installation, deployment_profile, task_store, transport,
                                     socket_root, require_proposer, require_viewer, require_named_operator,
-                                    observer, console, principals, other_tokens, other_services, registries):
+                                    observer, console, principals, other_tokens, other_services, registries,
+                                    policy_admission_core=None):
     store = reader = None
     if installation is not None:
         if deployment_profile != "simulation":
@@ -49,6 +54,35 @@ def install_arm_transfer_job_routes(app, *, installation, deployment_profile, ta
                                                deployment_profile=deployment_profile)
         service = PhysicalObservationService(dispatcher, observer)
     app.state.arm_transfer_dispatcher = dispatcher
+
+    def read_capabilities():
+        """Fresh participant capabilities for an admit; the human and policy admits share this read."""
+        observed_at = time.time_ns()
+        capabilities = []
+        for participant in store.installation.policy.participants:
+            cap = ArmTransferCapability.model_validate(reader.transfer_capability(
+                participant.instance_id, workcell_id=participant.workcell_id))
+            if (cap.workcell_id, cap.instance_id) != (participant.workcell_id, participant.instance_id):
+                raise LocalActionUnavailable("capability targets a different participant")
+            capabilities.append(cap)
+        return tuple(capabilities), observed_at
+
+    audit_log = getattr(policy_admission_core, "audit_log", None)
+    if store is not None and audit_log is not None:
+        from .arm_transfer_policy_admission import ArmTransferPolicyWorker, arm_transfer_policy_loop
+        worker = ArmTransferPolicyWorker(core=policy_admission_core, store=store, read_capabilities=read_capabilities,
+                                         dispatcher=dispatcher, audit_log=audit_log, log=_log)
+
+        @app.on_event("startup")
+        async def arm_transfer_policy_start():
+            app.state.arm_transfer_policy_task = asyncio.create_task(arm_transfer_policy_loop(worker, _log))
+
+        @app.on_event("shutdown")
+        async def arm_transfer_policy_stop():
+            task = getattr(app.state, "arm_transfer_policy_task", None)
+            if task is not None:
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
 
     def installed_store():
         if store is None:
@@ -117,17 +151,10 @@ def install_arm_transfer_job_routes(app, *, installation, deployment_profile, ta
                 raise KeyError(mission_id)
             if job["proposal_principal_id"] == principal.principal_id:
                 raise PermissionError("proposer cannot approve itself")
-            observed_at = time.time_ns()
-            capabilities = []
-            for participant in rows.installation.policy.participants:
-                cap = ArmTransferCapability.model_validate(reader.transfer_capability(
-                    participant.instance_id, workcell_id=participant.workcell_id))
-                if (cap.workcell_id, cap.instance_id) != (participant.workcell_id, participant.instance_id):
-                    raise LocalActionUnavailable("capability targets a different participant")
-                capabilities.append(cap)
+            capabilities, observed_at = read_capabilities()
             job = rows.admit(mission_id, principal=principal,
                 expected_proposal_digest=body.expected_proposal_digest, expected_generation=body.expected_generation,
-                capabilities=tuple(capabilities), capabilities_observed_at_ns=observed_at)
+                capabilities=capabilities, capabilities_observed_at_ns=observed_at)
             if dispatcher is not None and job["status"] == "READY":
                 dispatcher.prepare(mission_id)
                 job = rows.get(mission_id, principal=principal)

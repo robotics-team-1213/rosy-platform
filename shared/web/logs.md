@@ -1013,6 +1013,12 @@
 - gate 변화: 없음. 표시 정책의 제품 수용과 native main 반영은 별도다.
 - CE: 해당 없음 — 기존 의미 계약을 유지하는 matcher 수정이며 원인과 허용 범위가 검사에 남는다.
 
+## 2026-10-30 · uncommitted · D-926 6: 쓰지 않는 토큰 정리
+
+- 변경: 어디서도 읽지 않는 `--flag-line`·`--ground-grad-2`·`--line-015`·`--shade-14`·`--shade-28`과 정책 문서 폭 `--content-policy-max`를 지웠다. `--ground-grad-1`은 색 섞기 해석 시험의 기준으로 남는다. `DESIGN.md` 음영 항목과 부품 견본의 폭 줄을 같이 정리했다.
+- 증거: `git grep`으로 소비처 없음 확인, 대비 시험은 `--surface-line`만 본다.
+- gate 변화: 없음. CE: 해당 없음.
+
 ## 2026-10-31 · uncommitted · capture-wall 표면 등록과 캔버스 계약 준수
 
 - 변경: `surfaces.yaml`에 다중 녹화 벽(`tools/capture/multi_record.html`)을 `capture-wall`(dev)로 등록하고 캔버스 팔레트 계약 목록에 올렸다. 페이지는 참조 `./` 접두, 범위 제목 `Rosy 개발 — 함께 녹화`, 캔버스 색·글꼴을 `window.RosyPalette`로 읽도록 바뀌었고 `multi_record.py`는 `ui.js`와 의존 모듈 셋을 세션 `common/`에 복사한다(D-937).

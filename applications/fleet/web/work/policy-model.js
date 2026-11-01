@@ -2,15 +2,15 @@
 // 서버가 규칙의 단일 출처다. 여기서는 서버가 거절할 조작을 미리 잠그고 사유를 보인다.
 
 export const STAGE_LABELS = {
-  L0: 'L0 학습됨 · 오프라인 재생만', L1: 'L1 오프라인 통과', L2: 'L2 shadow · 명령 없음',
-  L3: 'L3 입회 시험', LIMITED: '제한 사용',
+  L0: '0단계 · 학습만 마침(기록 재생만)', L1: '1단계 · 기록 재생 통과', L2: '2단계 · 따라 보기(명령 없음)',
+  L3: '3단계 · 입회 시험', LIMITED: '제한 사용',
 };
-export const WINDOW_LABELS = {shadow: 'shadow (명령 없음)', supervised: '입회 시험', limited: '제한 사용'};
+export const WINDOW_LABELS = {shadow: '따라 보기(명령 없음)', supervised: '입회 시험', limited: '제한 사용'};
 export const REASON_LABELS = {
-  new_policy: '처음 쓰는 모델', revision_mismatch: 'rig·보정 revision 다름',
+  new_policy: '처음 쓰는 모델', revision_mismatch: '작업대·보정 버전이 다름',
   environment_out_of_range: '환경이 지원 범위 밖', policy_output_rejected: '정책 출력 거부',
   target_not_reached: '목표에 도달하지 않음', timing_budget_exceeded: '시간 예산 초과',
-  owner_fault: 'owner fault·모터 오류', owner_hold: 'owner HOLD', other: '기타',
+  owner_fault: '팔 제어 오류·모터 오류', owner_hold: '팔 제어 보류', other: '기타',
 };
 export const RESOLUTION_LABELS = {resume: '재개', abort: '중단', send_to_learning: '학습으로 되돌림'};
 export const TWO_PERSON_REASON = '제안한 사람과 다른 관리자가 승인해야 합니다';
@@ -49,12 +49,12 @@ export function executionVerdict(state) {
   const incidents = state.incidents.filter(item => item.cleared_ns === null);
   if (incidents.length) return {state: 'error', text: `사고 잠금 ${incidents.length}건 — 다른 관리자가 해제하기 전까지 학습 정책은 실행되지 않습니다.`};
   const open = state.confirmations.filter(item => item.resolution === null);
-  if (open.length) return {state: 'warning', text: `확인 요청 ${open.length}건 — 해결하기 전까지 실행 lease를 발급하지 않습니다.`};
+  if (open.length) return {state: 'warning', text: `확인 요청 ${open.length}건 — 해결하기 전까지 학습 정책을 실행하지 않습니다.`};
   const active = state.windows.find(item => item.active);
   if (!active) return {state: 'ready', text: '열린 승인 창이 없습니다. 학습 정책은 실물을 움직이지 않습니다.'};
   const left = remaining(active.expires_ns, state.now_ns);
-  if (active.kind === 'shadow') return {state: 'ready', text: `shadow 승인 창 ${left} 남음 — 추론만 하고 명령은 보내지 않습니다.`};
-  return {state: 'warning', text: `${WINDOW_LABELS[active.kind]} 승인 창 ${left} 남음 — ${active.policy_revision}이(가) 1–2초 lease로 실행될 수 있습니다.`};
+  if (active.kind === 'shadow') return {state: 'ready', text: `따라 보기 승인 창 ${left} 남음 — 추론만 하고 명령은 보내지 않습니다.`};
+  return {state: 'warning', text: `${WINDOW_LABELS[active.kind]} 승인 창 ${left} 남음 — ${active.policy_revision}이(가) 실물을 움직일 수 있습니다. 1–2초마다 다시 확인하고, 확인 요청이나 사고가 생기면 멈춥니다.`};
 }
 
 // 서버가 거절할 승인을 미리 잠그는 사유. 빈 글이면 누를 수 있다.
@@ -80,8 +80,8 @@ export function errorText(error) {
     STAGE_SKIP_REFUSED: '단계는 하나씩만 올릴 수 있습니다.',
     APPROVER_MUST_DIFFER_FROM_PROPOSER: TWO_PERSON_REASON,
     INCIDENT_OPEN: '사고 잠금 중에는 실물 단계를 승인하거나 승인 창을 열 수 없습니다.',
-    REVISION_CHANGED_REAPPROVAL_REQUIRED: 'rig·보정 revision이 승인 때와 다릅니다. 다시 등록하고 승인받아야 합니다.',
-    REVISION_CHANGED_REREGISTER_REQUIRED: 'rig·보정 revision이 승인 때와 다릅니다. 다시 등록하고 승인받아야 합니다.',
+    REVISION_CHANGED_REAPPROVAL_REQUIRED: '작업대·보정 버전이 승인 때와 다릅니다. 다시 등록하고 승인받아야 합니다.',
+    REVISION_CHANGED_REREGISTER_REQUIRED: '작업대·보정 버전이 승인 때와 다릅니다. 다시 등록하고 승인받아야 합니다.',
     STAGE_TOO_LOW: '이 승인 창을 열기에는 정책 단계가 낮습니다.',
     ANOTHER_WINDOW_ACTIVE: '이미 열린 승인 창이 있습니다. 먼저 닫으세요.',
     WINDOW_TOO_LONG: '승인 창 길이가 허용 범위를 넘습니다.',

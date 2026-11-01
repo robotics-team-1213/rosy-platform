@@ -2,6 +2,8 @@
 
 Copy ``hosts.example.json`` to ``private/lab-hosts.json`` on the main checkout.
 A linked worktree reads that same file. ``ROSY_LAB_HOSTS`` overrides the path.
+Robots the SD writer registered (``%LOCALAPPDATA%\\Rosy\\device-registry.json``) join ``robots()``
+under their mDNS name; an entry in ``robots`` wins.
 """
 
 from __future__ import annotations
@@ -111,8 +113,22 @@ def omx_hosts(config: dict | None = None) -> list[str]:
     return hosts
 
 
+def registered_robots() -> dict[str, str]:
+    """Robots the SD writer registered on this PC, by mDNS name, so a new card needs no hand edit."""
+    base = os.environ.get("LOCALAPPDATA", "").strip()
+    path = Path(base) / "Rosy" / "device-registry.json" if base else None
+    if path is None or not path.is_file():
+        return {}
+    names = json.loads(path.read_text(encoding="utf-8-sig")).get("device_names")
+    if not isinstance(names, list):
+        raise SystemExit(f"{path} device_names must be a list")
+    return {name.removeprefix("rosy-pinky-"): f"{name}.local" for name in names
+            if isinstance(name, str) and re.fullmatch(r"rosy-pinky-[a-z0-9]+", name)}
+
+
 def robots() -> dict[str, str]:
     raw = load().get("robots") or {}
     if not isinstance(raw, dict):
         raise SystemExit("lab-hosts.json robots must be an object")
-    return {str(key): str(value).strip() for key, value in raw.items() if str(value).strip()}
+    listed = {str(key): str(value).strip() for key, value in raw.items() if str(value).strip()}
+    return {**registered_robots(), **listed}

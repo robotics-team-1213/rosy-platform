@@ -1,7 +1,7 @@
 # 우리가 git으로 일하는 법
 
 - **대상:** 이 저장소에 변경을 넣는 모든 사람과 에이전트 세션. 처음이면 이 문서 → [팀 가이드](team-guide.md) §1(첫날 설정) 순서로 읽는다.
-- **갱신:** 2026-10-16
+- **갱신:** 2026-10-30 — 제3의 레인(개인 클론 에이전트) 추가, §8 CODEOWNERS 현황 정정(2026-10-30 협업 방안). 이전 2026-10-16
 - **규칙 원본:** 이 문서는 흩어진 git 규칙을 한 장에 모은 안내다. 다르면 ADR이 이긴다 — [D-372](../adr/D-372-topic-branch-names-and-shared-checkout-wip.md)(브랜치 이름, 남의 미커밋), [D-427](../adr/D-427-platform-three-parts-middleware-operations-learning.md) 4항(push 순서), [D-510](../adr/D-510-union-merge-and-adr-number-reservation.md)(ADR 번호), [D-584](../adr/D-584-tests-never-run-on-operator-laptop.md)(시험 위치), [D-761](../adr/D-761-worktree-gateway-and-prune.md)(워크트리, Proposed), [D-762](../adr/D-762-main-gateway-pull-request-merge-queue.md)(main으로 가는 길).
 
 ## 1. 한 장 요약
@@ -16,6 +16,8 @@
 | 절차 전문 | [CONTRIBUTING](../../.github/CONTRIBUTING.md) | [같이 하는 깃](shared-checkout.md) · 루트 [AGENTS.md](../../AGENTS.md) |
 
 두 길은 **이행 기간의 모습**이다. 정해진 끝 상태는 모든 변경이 PR과 merge queue로 들어가고 공유 로컬 `main`이 없어지는 것이다(§7).
+
+**제3의 레인 — 개인 클론에서 각자 에이전트(2026-10-30 협업 방안).** 팀원 길(§3)의 규칙을 그대로 따르고 아래 세 가지만 더 지킨다. ① ADR·API 번호 선점은 클론 간에 공유되지 않으니 선점 즉시 그 이슈의 기록용 코멘트에 알린다(팀 가이드 §3.4). ② 계약·공용 자산(API reference·ADR Log·`shared/web`)을 동시에 바꿀 때는 §3.6의 순서 규칙을 먼저 적용한다. ③ 스킬 카드는 rosy-docs `skills/`에서 복사하며 카드와 정본 문서가 다르면 정본이 이긴다. CODEOWNERS 리뷰 강제·에이전트 신원 표기는 완주(11/21) 후 D-762 단계3과 함께 편입한다.
 
 ```mermaid
 flowchart LR
@@ -133,7 +135,7 @@ gh run view <run-id> --log-failed
 
 ## 8. 사용자가 정해야 하는 것
 
-1. **두 번째 관리자(owner·admin)** — 관문 경로(`.github/workflows/**`, `tools/harness/**`, `test/known_failures.txt`, `.github/CODEOWNERS`)를 읽고 거절할 수 있는 팀원. 단계 3을 막는다. 지금 `CODEOWNERS`는 `* @livsbittt` 하나다.
+1. **두 번째 관리자(owner·admin)** — 관문 경로(`.github/workflows/**`, `tools/harness/**`, `test/known_failures.txt`, `.github/CODEOWNERS`)를 읽고 거절할 수 있는 팀원. 단계 3을 막는다. `CODEOWNERS`는 Epic 담당표대로 확장돼 있고 `test/architecture/test_capability_owners.py`가 정합을 고정한다(2026-10-27). 리뷰 강제는 단계 3부터다.
 2. **로컬 `main`이 `origin`에서 떨어질 수 있는 상한** — 제안값 50커밋 또는 12시간(D-762 열린 항목 4).
 3. **보관 태그·wip 스냅샷의 자리** — 권장은 비공개 미러(열린 항목 2).
 4. **모듈 담당자** — [팀 가이드](team-guide.md) §5.1 표가 비어 있다. 정해지면 `CODEOWNERS`에도 적는다.

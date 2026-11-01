@@ -107,7 +107,7 @@ class FleetThread:
     def __init__(self, app, port: int, pki: dict[str, Path]) -> None:
         self.server = uvicorn.Server(uvicorn.Config(
             app, host="127.0.0.1", port=port, log_level="critical",
-            ssl_certfile=str(pki["chain"]), ssl_keyfile=str(pki["key"])))
+            ssl_certfile=str(pki["chain"]), ssl_keyfile=str(pki["key"]), log_config=None))
         self.thread = threading.Thread(target=self.server.run, name="e2e-fleet", daemon=True)
 
     def start(self) -> FleetThread:

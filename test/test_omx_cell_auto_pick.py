@@ -247,6 +247,15 @@ def test_a_runner_that_does_not_answer_refuses_to_start(tmp_path):
     assert result["result"] == "refused"
 
 
+def test_a_site_without_a_place_spot_is_refused_as_a_destination_before_anything_runs(tmp_path):
+    config = copy.deepcopy(CONFIG)
+    config["sites"]["board"] = {k: v for k, v in config["sites"]["belt"].items() if k != "place"}  # 2026-10-30: KeyError
+    path, cell = biased_map(tmp_path), Cell([CONT2])
+    result = auto.run_auto(cell, config, cal.load(path), path, CATALOG, ROI, "pinky", "board", tmp_path,
+                           cell_choices.Choices(tmp_path / "choices.json"))
+    assert result["result"] == "refused: board is not a destination (its site has no 'place')" and cell.commands == []
+
+
 REAL_CAPS = {"11": {"pwm": 300}, "12": {"pwm": 600}, "13": {"pwm": 600}, "14": {"pwm": 300}, "15": {"pwm": 300}, "16": {"pwm": 300}}
 
 
@@ -705,6 +714,23 @@ def test_flat_markings_are_no_obstacle_for_the_finger_mask(tmp_path):
     assert plain[inside].any() and not masked[inside].any()
 
 
+
+def test_what_the_detector_calls_an_object_stands_beside_the_fingers_whatever_the_surface_colour(tmp_path):
+    """2026-11-01: on a pallet full of orange containers the surface colour (the ROI median) was orange, so the finger
+    mask lost the neighbouring columns 4 mm away and the middle one was planned with 26 mm free on both sides."""
+    path = biased_map(tmp_path)
+    one = {"x": 0.080, "y": 0.120, "long": 0.0, "length": 30, "width": 30}
+    other = dict(one, x=0.030, y=0.090)
+    config = copy.deepcopy(CONFIG)
+    green = cv2.cvtColor(np.uint8([[[60, 160, 60]]]), cv2.COLOR_BGR2LAB)[0, 0].tolist()
+    config["sites"]["pinky"]["surface_lab"] = green  # the boxes' own colour taken for the surface
+    u, v = (round(c) for c in tray_pixel(other["x"], other["y"]))
+    _, blind, _, _ = auto.observe(Cell([one, other]), config, cal.load(path), "pinky", ROI, CATALOG)
+    assert not blind[v - ROI[1], u - ROI[0]]  # the surface test alone calls the box surface
+    config["objects"] = {"hsv": [[35, 80, 60], [90, 255, 255]]}
+    _, mask, objects, error = auto.observe(Cell([one, other]), config, cal.load(path), "pinky", ROI, CATALOG)
+    assert error is None and len(objects) == 2 and mask[v - ROI[1], u - ROI[0]]
+
 def test_the_margin_opens_as_wide_as_the_room_and_the_jaws_allow():
     mask = np.zeros((200, 200), np.uint8)
     px = lambda p: (100 + p[0] * 1000, 100 + (p[1] - 0.1) * 1000)  # noqa: E731  1 px per mm
@@ -717,3 +743,33 @@ def test_the_margin_opens_as_wide_as_the_room_and_the_jaws_allow():
     mask[138:150, 60:140] = 255  # a neighbour 18 mm off the 40 mm box's +y side: room, not the jaws, decides
     assert auto.finger_room(mask, (0, 0, 200, 200), px, wide)["margin_mm"] < 14.0
     assert auto.jaw_open_for(30, margin_mm=16.0) <= 56.0
+
+
+def test_after_a_contact_the_gate_still_lets_the_arm_retreat_and_park_but_nothing_else(tmp_path):
+    """2026-10-30: descend_pick touched the container top; retreat and park were held 'session_changed' (the runner's
+    latched fault) and the arm stayed out over the Pinky tray until the idle watchdog folded it."""
+    import cell_transfer
+
+    class Faulted(Cell):
+        fault, session = None, None
+
+        def act(self, command):
+            status = super().act(command)
+            if command == "state":
+                status["fault"] = self.fault
+                if self.session:
+                    status["operating_context"] = {**status["operating_context"], "session_id": self.session}
+            return status
+
+    cell = Faulted([CONT2])
+    gate = cell_transfer.Gate(cell, {**CONFIG, "_payload": cell_objects.payload(CATALOG, "container-2")}, {})
+    lib = tmp_path / "lib.json"
+    lib.write_text(json.dumps({"chunks": {"home": [[0] * 6]}}))
+    assert gate.open(lib, lambda a: None) is None
+    cell.fault = "contact in descend_pick: a joint lagged the command by 1.6 units"
+    assert gate.act("goto above_place") == {"ok": False, "error": "held: fault"} and "goto above_place" not in cell.commands
+    for verb in ("retreat", "park"):
+        gate.act(verb)
+        assert cell.commands[-1] == verb  # sent in the Gate's checked form (the fake asserts its session)
+    cell.session = "replacement-session"  # another owner: recovery is not this gate's to send
+    assert gate.act("park") == {"ok": False, "error": "held: session_changed"}

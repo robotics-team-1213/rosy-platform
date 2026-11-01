@@ -1,4 +1,5 @@
 """Runner-scoped, process-local parent readback; not a dispatch or peer API."""
+from datetime import datetime
 import json
 import weakref
 
@@ -30,6 +31,10 @@ def projection(snapshot):
             raise PermissionError('phase has no original durable event')
         result['phase_summaries'].append(dict(phase_id=phase['phase_id'], ordinal=phase['ordinal'],
             state=phase['state'], journal_event_id=matching[-1]['event_id'], observed_at=phase['updated_at']))
+    # A phase row can be stamped after the parent row (the first phase is recorded once planning ends); the receipt
+    # observes everything it reports, and Fleet bounds every phase by it (2026-10-31, real sim owner).
+    result['observed_at'] = max([result['observed_at'], *(p['observed_at'] for p in result['phase_summaries'])],
+                                key=lambda stamp: datetime.fromisoformat(stamp.replace('Z', '+00:00')))
     return result
 
 

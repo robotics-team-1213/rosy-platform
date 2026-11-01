@@ -29,7 +29,6 @@ def test_web_budgets_are_owned_by_the_architecture_gate():
     # D-262 scanned .js and .html; D-362 covers those plus .css.
     assert {".js", ".html", ".css"} <= limits.WEB_SUFFIXES
     assert limits.FILE_LIMIT_WEB == 800
-    # The two files D-262 kept verdicts for stay frozen as ratchet rows.
+    # The file D-262 kept a verdict for stays frozen as a ratchet row (diagnostic.html left it by D-766 split).
     rows, _ = limits.parse_ratchet((REPO / limits.RATCHET).read_text(encoding="utf-8"))
-    assert "perception/web/diagnostic.html" in rows
     assert "simulation/gazebo/scripts/lane_live_view.html" in rows

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import math
 from uuid import uuid4
 
@@ -9,6 +10,7 @@ from core_common.protocol.station_charging import ChargeDecision, StationTargetS
 
 
 TERMINAL = ('HOLD', 'CANCELED', 'WORK_AVAILABLE')
+_LOG = logging.getLogger(__name__)
 
 
 class ChargeMotion:
@@ -266,6 +268,8 @@ class ChargeMotion:
                 await self._cleanup(self.stop_hold(cached, 'CHARGE_OPERATION_CANCELED', intent=intent))
                 raise
             except Exception:
+                # The stop stays the same; only its cause is kept (see charge_departure.evaluate, 2026-10-30).
+                _LOG.warning('charge %s: CHARGE_MOTION_READBACK_UNAVAILABLE stop', session_id, exc_info=True)
                 cached, intent = self.stop_context(current.robot_id)
                 return await self.stop_hold(cached, 'CHARGE_MOTION_READBACK_UNAVAILABLE', intent=intent)
 

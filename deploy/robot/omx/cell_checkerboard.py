@@ -97,6 +97,9 @@ PX_PER_MM = 12  # 304.8 dpi; print the PDF at 100 % (no fit-to-page), then check
 A4_MM = (210, 297)
 
 
+PRINTED = (7, 10, 0.020, 0.015)  # the Fleet print sheet's board (cell_print_sheets.charuco_pdf, D-933 1)
+
+
 def charuco_board(cols: int = 7, rows: int = 5, square_m: float = 0.025, marker_m: float = 0.018):
     import cv2
 
@@ -270,7 +273,7 @@ def main(argv=None):
         s.add_argument("--config", required=True, type=Path)
         s.add_argument("--camera", default="wrist")
         s.add_argument("--out", required=True, type=Path)
-    sub.choices["intrinsics"].add_argument("--frames", type=int, default=15)
+    sub.choices["intrinsics"].add_argument("--frames", type=int, default=25)
     cap = sub.choices["capture"]
     cap.add_argument("--centre", nargs=2, type=float, required=True, help="TCP hover centre (m) with the board in the wrist view")
     cap.add_argument("--z", nargs="+", type=float, default=[0.20, 0.23])
@@ -296,7 +299,7 @@ def main(argv=None):
     config = json.loads(args.config.read_text())
     cell = cp.FifoCell(Path(config["io"]).expanduser(), config["cameras"])
     if args.verb == "intrinsics":
-        result = grab_intrinsics(cell, args.camera, args.frames)
+        result = grab_intrinsics(cell, args.camera, args.frames, board=charuco_board(*PRINTED))
         args.out.write_text(json.dumps(result, indent=1))
         print(json.dumps(result))
         return 0

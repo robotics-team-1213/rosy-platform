@@ -44,7 +44,7 @@ class WorkcellObservations:
                       "units": "encoder_rad", "binding_sha256": self._bindings[arm.source_id]['sha256']}
                      for arm in cell.arms],
             "cameras": [{"source_id": camera.source_id, "label": camera.label,
-                         "role": camera.role, "arm_id": camera.arm_id} for camera in cell.cameras],
+                         "role": camera.role, "arm_id": camera.arm_id, "stream": camera.stream} for camera in cell.cameras],
         } for cell in manifest.workcells]
 
     def credential_values(self) -> tuple[str, ...]:

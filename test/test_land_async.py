@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import importlib.util
+import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -75,7 +77,8 @@ def test_supervise_cleans_up_only_a_landed_snapshot(repo, lands):
     snap, log = tool.start(dev, [], NOW, lambda *a: None)
     tree = log.parent / log.name.removesuffix(".log")
 
-    def fake_land(argv, cwd, stdout, stderr):
+    def fake_land(argv, cwd, stdout, stderr, **kw):
+        assert kw == ({"creationflags": tool.NO_WINDOW} if os.name == "nt" else {})  # no window to close
         stdout.write("[land] STOP: merge aborted\n")  # what the owner must find in the .log
         if lands:
             _git(main, "merge", "-q", "--ff-only", snap)
@@ -97,3 +100,66 @@ def test_the_supervisor_never_holds_the_callers_worktree(tmp_path, monkeypatch):
     log.parent.mkdir()
     tool.detach([sys.executable, "-c", "import os; print(os.getcwd())"], log).wait(timeout=60)
     assert Path(log.read_text(encoding="utf-8").strip()) == log.parent
+
+
+def _ticket(main: Path, name: str, **row) -> Path:
+    qdir = main / ".git" / "rosy-land-queue"
+    qdir.mkdir(exist_ok=True)
+    path = qdir / f"{name}-1.json"
+    path.write_text(json.dumps({"pid": os.getpid(), "status": "pending", **row}), encoding="utf-8")
+    return path
+
+
+def _dead_pid() -> int:
+    proc = subprocess.Popen([sys.executable, "-c", "pass"])
+    proc.wait()
+    return proc.pid
+
+
+def test_a_branch_already_landing_is_refused_and_replace_stops_that_lander(repo, monkeypatch):
+    """2026-10-31/11-01: the same change was queued twice and ran two pretests on the shared test PCs."""
+    main, dev = repo
+    _ticket(main, "0001", branch="land/feat/x-20261027000000")
+    with pytest.raises(SystemExit, match="already landing in 0001-1.json"):
+        tool.start(dev, ["--tests", "auto"], NOW, lambda *a: None)
+    stopped, launched = [], []
+    monkeypatch.setattr(tool, "stop", stopped.append)
+    tool.start(dev, ["--replace", "--tests", "auto"], NOW, lambda argv, log: launched.append(argv))
+    assert stopped == [os.getpid()] and "--replace" not in launched[0] and launched[0][-2:] == ["--tests", "auto"]
+
+
+def test_a_branch_carried_in_a_batch_is_refused_even_with_replace_and_a_dead_ticket_is_not(repo, monkeypatch):
+    main, dev = repo
+    carrier = _ticket(main, "0002", branch="land/feat/y-20261027000000", batch=["land/feat/x-20261027000000"])
+    monkeypatch.setattr(tool, "stop", lambda pid: pytest.fail("never stops another branch's leader"))
+    with pytest.raises(SystemExit, match="rides in that batch"):
+        tool.start(dev, ["--replace"], NOW, lambda *a: None)
+    carrier.write_text(json.dumps({"pid": _dead_pid(), "branch": "land/feat/x-20261027000000"}), encoding="utf-8")
+    assert tool.start(dev, [], NOW, lambda *a: None)[0] == "land/feat/x-20261028044000"
+
+
+def test_resume_relaunches_a_stopped_snapshot_and_reports_its_ticket(repo):
+    main, dev = repo
+    snap, log = tool.start(dev, [], NOW, lambda *a: None)
+    tree = log.parent / log.name.removesuffix(".log")
+    (tree.parent / (tree.name + ".stopped")).write_text("land.py exit 1\n")
+    launched = []
+
+    def lander(argv, log_):  # the relaunched land.py takes a ticket on its snapshot
+        launched.append(argv)
+        _ticket(main, "0003", branch=snap)
+    assert tool.resume(dev, tree.name, [], lander, wait=5, sleep=lambda s: None) == "pending"
+    assert launched[0][-4:] == [str(tree), snap, "--tests", "auto"]
+    assert not (tree.parent / (tree.name + ".stopped")).exists()
+    with pytest.raises(SystemExit, match="held by live ticket"):
+        tool.resume(dev, tree.name, [], lander, wait=5, sleep=lambda s: None)
+
+
+def test_resume_refuses_a_landed_snapshot_and_reports_a_relaunch_without_ticket(repo):
+    main, dev = repo
+    snap, log = tool.start(dev, [], NOW, lambda *a: None)
+    tree = log.parent / log.name.removesuffix(".log")
+    assert tool.resume(dev, tree.name, [], lambda *a: None, wait=5, sleep=lambda s: None) is None
+    _git(main, "merge", "-q", "--ff-only", snap)
+    with pytest.raises(SystemExit, match="already in main"):
+        tool.resume(dev, tree.name, [], lambda *a: None, wait=5, sleep=lambda s: None)

@@ -76,7 +76,7 @@ def fleet_site(tmp_path):
                      map_pose_port=fleet, lane_junction=fleet, traffic_authority=True)
     listener = safe_listener()
     origin = f"http://localhost:{listener.getsockname()[1]}"  # Secure session cookie on localhost
-    server = uvicorn.Server(uvicorn.Config(app, log_level="error", timeout_graceful_shutdown=3))
+    server = uvicorn.Server(uvicorn.Config(app, log_level="error", timeout_graceful_shutdown=3, log_config=None))
     worker = threading.Thread(target=server.run, kwargs={"sockets": [listener]}, daemon=True)
     worker.start()
     stop = threading.Event()
@@ -356,7 +356,7 @@ def test_a_hundred_robots_stay_usable(tmp_path):
                      web_common=ROOT / "shared" / "web")
     listener = safe_listener()
     origin = f"http://localhost:{listener.getsockname()[1]}"
-    server = uvicorn.Server(uvicorn.Config(app, log_level="error", timeout_graceful_shutdown=3))
+    server = uvicorn.Server(uvicorn.Config(app, log_level="error", timeout_graceful_shutdown=3, log_config=None))
     worker = threading.Thread(target=server.run, kwargs={"sockets": [listener]}, daemon=True)
     worker.start()
     try:
@@ -442,7 +442,7 @@ def test_map_labels_declutter_and_one_cause_is_one_queue_row(tmp_path):
                      web_common=ROOT / "shared" / "web")
     listener = safe_listener()
     origin = f"http://localhost:{listener.getsockname()[1]}"
-    server = uvicorn.Server(uvicorn.Config(app, log_level="error", timeout_graceful_shutdown=3))
+    server = uvicorn.Server(uvicorn.Config(app, log_level="error", timeout_graceful_shutdown=3, log_config=None))
     worker = threading.Thread(target=server.run, kwargs={"sockets": [listener]}, daemon=True)
     worker.start()
     try:

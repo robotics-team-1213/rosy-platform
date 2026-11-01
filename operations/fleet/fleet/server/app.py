@@ -475,8 +475,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     install_arm_transfer_preflight_routes(
         app, instances=configured_omx, deployment_profile=deployment_profile,
         transport=action_transport, socket_root=omx_socket_root, require_proposer=require_proposer)
-    install_arm_transfer_job_routes(
-        app, installation=arm_transfer_installation, deployment_profile=deployment_profile,
+    install_arm_transfer_job_routes(policy_admission_core=policy_admission_core,  # D-938
+        app=app, installation=arm_transfer_installation, deployment_profile=deployment_profile,
         task_store=task_service.store if mission_configured else None, transport=action_transport,
         socket_root=omx_socket_root, require_proposer=require_proposer, require_viewer=require_viewer,
         require_named_operator=require_named_operator, observer=arm_transfer_observer, console=console,

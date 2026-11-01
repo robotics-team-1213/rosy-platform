@@ -1,5 +1,6 @@
 package io.github.livsbittt.rosy.cam
 
+import io.github.livsbittt.rosy.peer.PeerCaOffer
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -12,7 +13,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import io.github.livsbittt.rosy.cam.pairing.PairableSite
 import io.github.livsbittt.rosy.cam.pairing.PairingState
-import io.github.livsbittt.rosy.cam.pairing.peer.CameraCaOffer
 import io.github.livsbittt.rosy.cam.pairing.peer.CameraPeerState
 import io.github.livsbittt.rosy.cam.pairing.peer.CameraPending
 import io.github.livsbittt.rosy.cam.ui.CamAppBar
@@ -39,7 +39,7 @@ class UiuxPreviewActivity : ComponentActivity() {
                         "pair-fingerprint" -> PairingScreen(site, PairingState.ConfirmFingerprint(site, "Demo receiver", "ceiling_demo", "ABCD-EF12-3456-7890", "demo-credential", ""), false, {}, {}, {}, {})
                         "pair-rejected" -> PairingScreen(site, PairingState.Rejected(intent.getStringExtra("reason") ?: "unreachable"), false, {}, {}, {}, {})
                         "peer-pending" -> CameraPeerScreen(CameraPeerState.Pending(site, CameraPending("123456", "fleet_demo", Instant.now())), {}, {}, {}, {}, {})
-                        "peer-certificate" -> CameraPeerScreen(CameraPeerState.Certificate(site, CameraCaOffer("", "A".repeat(64), "demo.local")), {}, {}, {}, {}, {})
+                        "peer-certificate" -> CameraPeerScreen(CameraPeerState.Certificate(site, PeerCaOffer("", "A".repeat(64), "demo.local")), {}, {}, {}, {}, {})
                         "peer-failed" -> CameraPeerScreen(CameraPeerState.Failed(site, false), {}, {}, {}, {}, {})
                         else -> finish()
                     }

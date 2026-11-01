@@ -70,7 +70,8 @@ class SiteRuntimeIO:
             if manifest.get('manifest_version') == 2:
                 self._incremental_commits.add(commit)
             overlays = shlex.split((env or {}).get('ROSY_SITE_PAIRING_COMPOSE', ''))
-            for name, field in (('account', 'account_https'), ('omx', 'omx'), ('workcell', 'workcell')):
+            for name, field in (('account', 'account_https'), ('omx', 'omx'), ('workcell', 'workcell'),
+                                ('monitoring', 'monitoring')):
                 if f'/opt/rosy/candidate/deploy/site/compose.{name}.yaml' in overlays and not manifest.get(field):
                     raise Rejected(f'{name} overlay is not covered by this signed candidate')
             if loaded:

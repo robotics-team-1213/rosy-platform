@@ -11,6 +11,7 @@ import {PLACE_KINDS, PLACE_KIND_LABEL, actionRows, arrowMarks, fitView, planIsCu
 import {tripStatusText} from '/console/assets/trip-display.js';
 import {editEdge, editPlace} from '/console/assets/site-map-edit.js';
 import {bindScreens} from '/console/assets/subnav-screens.js';
+import '/console/assets/file-picker.js';
 import {guideMarks, poseLabel} from '/console/assets/guide-layer.js';
 import {createTeachPanel} from '/console/assets/site-map-teach.js';
 import {createSurveyPanel} from '/console/assets/site-map-survey.js';

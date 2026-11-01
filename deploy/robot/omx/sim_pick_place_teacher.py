@@ -293,7 +293,7 @@ def run(directory, world, observer_path, *, home_only=False, plan_kind='analytic
                 transit_q=kin.solve_top_down(carry, limits, reference_q5=home_q[ARM_JOINTS[4]]).joints,
                 pick=pick_pose,
                 place=(request.place.x, request.place.y, request.place.z, request.place.yaw),
-                approach_m=request.pick_approach_z-request.pick.z, grip_open=profile.gripper_open,
+                grip_open=profile.gripper_open,
                 grip_close=profile.gripper_close_for_width(recipe.box.width),
                 limits={'joints_rad': {n: list(limits.position_limits[n]) for n in ARM_JOINTS},
                         'workspace_min_m': list(limits.workspace_min_m),

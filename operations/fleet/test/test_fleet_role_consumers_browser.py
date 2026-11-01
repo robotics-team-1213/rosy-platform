@@ -99,6 +99,8 @@ def test_fleet_role_styles_reach_fields_disclosures_and_headings(tmp_path, theme
                     assert page.get_by_role("heading", level=1).evaluate("node => getComputedStyle(node).fontSize") == "20px"
                     assert page.locator("h2.ui-section-heading").evaluate_all(
                         "nodes => nodes.length > 0 && nodes.every(node => getComputedStyle(node).fontSize === '16px')")
+                    if path == "/console/cell":
+                        page.evaluate("location.hash = '#recipe-heading'")  # D-926 3: one Cell step at a time
                     if path == "/console/site-map":
                         page.evaluate("location.hash = '#profile-heading'")  # D-926 3: one sub-nav screen at a time
                         expect(page.get_by_role("heading", name="지도 설정", exact=True)).to_have_count(1)

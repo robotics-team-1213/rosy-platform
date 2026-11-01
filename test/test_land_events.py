@@ -91,3 +91,18 @@ def test_a_judged_failure_leaves_its_ids_and_host_user_never_the_address(tmp_pat
     assert emitted[0] == ("failure", {"argv": inv, "failed": ["test/x.py::test_a", "test/x.py::test_b"], "host": "ai",
                                       "flaky": [], "confirmed": True})
     assert emitted[1][1]["host"] is None and emitted[1][1]["confirmed"] is False
+
+
+def test_each_invocation_carries_its_queue_wait_and_run_time(tmp_path):
+    """2026-10-31: every tests event carried the round's elapsed seconds, so where 20 min went was a guess."""
+    sys.path.insert(0, str(ROOT / "tools" / "remote"))
+    import land_checks
+    log = tmp_path / "run-1-1.txt"
+    log.write_text("1 passed\n[remote-pytest] timing host=ai start=1000 wait_s=30 run_s=50\n", encoding="utf-8")
+    assert land_checks.timing(log, 940.4) == {"host": "ai", "queued_s": 60, "wait_s": 30, "run_s": 50}
+    assert land_checks.timing(tmp_path / "none.txt", 0) == {} and land_checks.timing(tmp_path, 0) == {}
+    t = 1_792_900_000.0
+    rows = [{"t": t, "event": "tests", "pid": 1, "verdict": "pass", "queued_s": q, "wait_s": w, "run_s": r}
+            for q, w, r in ((10, 0, 20), (300, 120, 40), (60, 0, 30))] + [{"t": t, "event": "tests", "verdict": "pass"}]
+    (day,) = land_stats.daily(rows).values()
+    assert (day["queued_s_p50"], day["wait_s_p90"], day["run_s_p50"]) == (60, 120, 30)

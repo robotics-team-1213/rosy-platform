@@ -40,7 +40,7 @@ class System:
         from run_store import RunStore
         binding = load_binding(binding_file)
         scenario = RunStore(Path(binding['data_root'])).get(run_id)['input']['scenario_id']
-        timeout = 900 if scenario in ('omx-stacking-rl', 'omx-map-long-stack', 'omx-map-stacking-rl', 'omx-map-cube-stack') else 180
+        timeout = 2520 if scenario == 'omx-map-container-stack' else 900 if scenario in ('omx-stacking-rl', 'omx-map-long-stack', 'omx-map-stacking-rl', 'omx-map-cube-stack') else 180
         command = ['systemd-run', '--user', '--quiet', '--unit=' + _unit(unit),
             '--property=Type=exec', '--property=KillMode=control-group',
             '--property=RuntimeMaxSec='+str(timeout), '--property=TimeoutStopSec=10',
