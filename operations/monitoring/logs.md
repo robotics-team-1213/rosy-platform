@@ -1,4 +1,4 @@
-# monitoring 작업 기록
+﻿# monitoring 작업 기록
 
 ## 2026-10-26 · uncommitted · 독립 관측 기반과 모듈 등록
 
@@ -77,3 +77,9 @@
 - 변경: host_guard 원천이 가드 줄의 `updates` 보고를 읽어 PC마다 `<PC> 업데이트` 노드를 하나 더 낸다. 판정은 Fleet `/api/fleet/updates`와 같다. 켜진 타이머가 6시간 안에 정상 판정이 없으면 ERROR, 동결이면 WARNING, 보고가 깨졌으면 UNKNOWN이다. 사유·릴리스 문자열은 그래프에 복사하지 않는다. `updates`가 없는 줄(로봇·예전 가드)은 노드를 만들지 않는다.
 - 증거: 원격 `operations/monitoring/test` 전체 통과(1 skip), 비교 NEW/KNOWN/FLAKY0.
 - gate 변화: 없음. 관제 PC 적용은 D-936 활성화와 함께한다. CE 해당 없음 — 판정 규칙은 코드와 회귀 시험에 남는다.
+
+## 2026-11-01 · ea45e0c79f · 관제 PC Monitoring 입력 staging (D-936)
+
+- 변경: 사이트 호스트에 `/etc/rosy/monitoring/monitoring.yaml`(root:10001 0640, 예제 복사·Fleet 포트 무수정)과 조회/원천 키 2개(root 0600, 미출력)를 두고, `site_users.py`(main ea45e0c79f 사본)로 Fleet viewer `monitoring` 계정을 등록했다(도구 JSON 응답·yaml 행 확인).
+- 근거: 호스트 읽기 전용 조사로 candidate c47d7c3e78c9(2026-10-26 서명분) 가동·account 디렉터리 staging 확인. overlay 활성은 compose.monitoring.yaml 포함 서명 후보 적용 뒤 site.env 단계와 함께 별도 수행한다.
+- gate 변화: DEVICE blocker 문구 갱신(입력 준비 완료, 활성 대기). ARTIFACT/FIELD HOLD 유지.

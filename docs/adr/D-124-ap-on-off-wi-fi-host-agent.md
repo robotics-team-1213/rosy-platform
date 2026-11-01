@@ -1,6 +1,6 @@
 ﻿## D-124 대시보드는 AP on/off와 Wi-Fi 연결을 Host Agent로 확인하고 적용한다
 
-**Status:** Accepted (2026-09-18). 운영 네트워크 카드. nmcli 는 CORE 가 아니다.
+**Status:** Accepted (2026-09-18). 운영 네트워크 카드. nmcli 는 CORE 가 아니다. "업링크 손실로 AP 를 여는 것도 금지" 한 문장은 D-176·D-919의 fallback AP(업링크 없음 120 s 뒤 자동)가 대체했다(2026-11-01 표기).
 
 **Context:** D-26 은 `SITE_STA`(AP 꺼짐)와 `RELAY_AP_STA`(AP 켜짐)를 장비 모드로
 둔다. 대시보드 네트워크 카드는 그 모드·SSID·주소를 보여야 하고, 관리자가 AP를

@@ -7,15 +7,24 @@ from pathlib import Path
 import re
 import stat
 import subprocess
+import sys
+
+import yaml
 
 STATIC = Path(__file__).with_name('review_app_web')
 PREFIX = '/api/learning/sim/'
 ID = '[0-9a-f]{32}'
-ARTIFACT_TYPES = {
+ARTIFACT_TYPES = {  # artifact id pattern -> media type
     'import-report': 'application/json', 'contact-report': 'application/json',
     **{name: 'image/png' for name in (
         'pinky_initial', 'out_lift', 'conveyor_settle', 'back_lift', 'pinky_settle')},
+    'mapped-stack-report': 'application/json', 'mapped-video': 'video/mp4',
+    'mapped-(?:overview|initial|grasp-failed|top|side|(?:layer|trial|leveling)-[0-9]{1,2})': 'image/png',
 }
+# run_store's container-stack bounds; every other artifact stays within 1 MiB.
+ARTIFACT_BYTES = {'mapped-stack-report': 16 * 1024 * 1024, 'mapped-video': 64 * 1024 * 1024}
+ISAAC = Path(__file__).resolve().parents[2] / 'envs/isaac'
+INVENTORY = ISAAC / 'cell_model_inventory.yaml'
 
 
 class LocalRuns:
@@ -38,6 +47,8 @@ class LocalRuns:
         self.entry = self.source / 'learning/envs/isaac/run_control.py'
         self.entry_sha256 = value['entry_sha256']
         self.binding_sha256 = value['binding_sha256']
+        # Real-cell photos stay out of the public repository, beside this private configuration.
+        self.photos = config.parent / 'cell-photos'
 
     def call(self, payload):
         try:
@@ -64,7 +75,8 @@ class LocalRuns:
                 '--expected-binding-sha256', self.binding_sha256],
                 input=json.dumps(payload, allow_nan=False).encode(), capture_output=True,
                 env=env, timeout=40, check=True)
-            if len(result.stdout) > 2 * 1024 * 1024:
+            # A 64 MiB video arrives base64-encoded; everything else is a small JSON row.
+            if len(result.stdout) > (96 if payload.get('action') == 'artifact' else 2) * 1024 * 1024:
                 raise ValueError('Oversized SIM response')
             return json.loads(result.stdout)
         except (OSError, ValueError, KeyError, subprocess.SubprocessError):
@@ -97,12 +109,39 @@ def guarded(row):
         return None
 
 
+def artifact(runs, run_id, artifact_id):
+    """Bytes and media type of one registered run artifact, checked against its manifest entry."""
+    media_type = next(kind for pattern, kind in ARTIFACT_TYPES.items() if re.fullmatch(pattern, artifact_id))
+    blob = runs.call({'action': 'artifact', 'run_id': run_id, 'artifact_id': artifact_id})
+    if (blob['media_type'] != media_type or type(blob['bytes']) is not int
+            or not 0 <= blob['bytes'] <= ARTIFACT_BYTES.get(artifact_id, 1048576)
+            or len(blob['data_base64']) > 4 * ((blob['bytes'] + 2) // 3)):
+        raise ValueError('SIM 증거 형식이 올바르지 않습니다.')
+    raw = base64.b64decode(blob['data_base64'], validate=True)
+    if len(raw) != blob['bytes'] or hashlib.sha256(raw).hexdigest() != blob['sha256']:
+        raise ValueError('SIM 보고서 지문이 달라졌습니다.')
+    return raw, media_type
+
+
+def summary(raw):
+    """Placements, row gaps and unstable boxes of a container run, or None for an unreadable report."""
+    if str(ISAAC) not in sys.path:
+        sys.path.append(str(ISAAC))
+    from mapped_stack_report import summarize
+    try:
+        return summarize(json.loads(raw))
+    except (AttributeError, IndexError, KeyError, TypeError, ValueError):
+        return None
+
+
 def get(handler, path, runs):
     if path in {'/learning/sim', '/sim.js'}:
         file = STATIC / ('sim.html' if path == '/learning/sim' else 'sim.js')
         handler.send(file.read_bytes(), mime=('text/html' if path == '/learning/sim' else 'text/javascript') + '; charset=utf-8')
     elif not path.startswith(PREFIX):
         return False
+    elif path == PREFIX + 'inventory':
+        handler.send(yaml.safe_load(INVENTORY.read_text(encoding='utf-8')))
     elif runs is None:
         handler.send({'error': 'SIM 실행 연결이 설정되지 않았습니다.'}, 503)
     elif path == PREFIX + 'catalog':
@@ -118,16 +157,22 @@ def get(handler, path, runs):
         else:
             handler.send(row)
     elif match := re.fullmatch(PREFIX + 'runs/(' + ID + ')/artifacts/(' + '|'.join(ARTIFACT_TYPES) + ')', path):
-        blob = runs.call({'action': 'artifact', 'run_id': match[1], 'artifact_id': match[2]})
-        media_type = ARTIFACT_TYPES[match[2]]
-        if (blob['media_type'] != media_type or type(blob['bytes']) is not int
-                or not 0 <= blob['bytes'] <= 1048576
-                or len(blob['data_base64']) > 4 * ((blob['bytes'] + 2) // 3)):
-            raise ValueError('SIM 증거 형식이 올바르지 않습니다.')
-        raw = base64.b64decode(blob['data_base64'], validate=True)
-        if len(raw) != blob['bytes'] or hashlib.sha256(raw).hexdigest() != blob['sha256']:
-            raise ValueError('SIM 보고서 지문이 달라졌습니다.')
+        raw, media_type = artifact(runs, match[1], match[2])
         handler.send(raw, mime=media_type + ('; charset=utf-8' if media_type == 'application/json' else ''))
+    elif match := re.fullmatch(PREFIX + 'runs/(' + ID + ')/summary', path):
+        value = summary(artifact(runs, match[1], 'mapped-stack-report')[0])
+        if value is None:
+            handler.send({'error': '적층 보고서 형식을 확인하세요.'}, 502)
+        else:
+            handler.send(value)
+    elif match := re.fullmatch(PREFIX + 'photos/([a-z0-9_]{1,32})', path):
+        inventory = yaml.safe_load(INVENTORY.read_text(encoding='utf-8'))
+        photo = next((row for row in inventory['photos'] if row['id'] == match[1]), None)
+        file = photo and runs.photos / photo['file']
+        if not file or not file.is_file() or file.stat().st_size > 4 * 1024 * 1024:
+            handler.send({'error': '실물 사진이 아직 등록되지 않았습니다.'}, 404)
+        else:
+            handler.send(file.read_bytes(), mime='image/png' if file.suffix == '.png' else 'image/jpeg')
     else:
         handler.send({'error': 'SIM 경로를 확인하세요.'}, 404)
     return True
