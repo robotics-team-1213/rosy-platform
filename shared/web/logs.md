@@ -1081,3 +1081,10 @@
 - 변경: 로봇·Fleet 로그인·모니터링의 `.skip-link` 재정의와 Pilot의 `.sr-only` 재정의를 지우고 `components.css` 정본만 쓴다(세 표면이 z-index·채움·숨김 방식이 제각각이었다). `test_shared_controls.py` 덧칠 검사 대상에 `skip-link`를 더했다. `test_operator_copy.py`에 표면 전체(검수·Pilot 포함) '같은 뜻 한 말' 검사를 두고 첫 항목으로 '권한이 거부'→'권한이 없습니다'를 정했다.
 - 증거: 원격 계약 시험. 감사 백로그는 `docs/validation/fleet-ui-consistency-2026-11-01/README.md`.
 - Gate: 없음. CE: 해당 없음.
+
+
+## 2026-11-02 · uncommitted · 신호기 등 역할 토큰 (D-525 보강, 사용자 결정)
+
+- 변경: `tokens.css`에 `--signal-go/-caution/-stop`을 두고 Fleet 신호기 카드·Fleet 지도 램프·로봇 가상 신호 등이 모두 이것만 쓴다. Fleet 카드의 녹색 등이 무색이던 불일치를 녹색으로 통일했다.
+- 증거: `test_every_signal_lamp_paints_with_the_signal_tokens`(등 그림은 신호 토큰만, 신호 토큰은 등 밖 금지).
+- Gate: 없음. CE: 해당 없음.

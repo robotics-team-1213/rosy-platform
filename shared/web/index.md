@@ -49,8 +49,8 @@
 
 ## 최근 기록
 
+- 2026-11-02 · uncommitted · 신호기 등 역할 토큰 (D-525 보강, 사용자 결정)
 - 2026-11-02 · uncommitted · 공용 skip-link·sr-only 단일화, 같은 뜻 한 말 계약
 - 2026-11-02 · uncommitted · D-945 마무리 — 22rem 칸 경계 허가, 조작 표면 noscript·style 속성 계약
 - 2026-11-02 · uncommitted · 대시보드 두 상태 셸 h1 검사 추가
 - 2026-11-01 · uncommitted · focal 검사에 경기 보드 포함
-- 2026-11-01 · uncommitted · 착지 시험 반영: 표식 토큰 true 인정, 검수 페이지 원복

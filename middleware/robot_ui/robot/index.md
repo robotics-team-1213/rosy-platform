@@ -37,8 +37,8 @@
 
 ## 최근 기록
 
+- 2026-11-02 · uncommitted · 가상 신호 등 역할 토큰
 - 2026-11-02 · uncommitted · skip-link 재정의 제거
 - 2026-11-02 · uncommitted · noscript 안내 (D-945 마무리)
 - 2026-11-02 · uncommitted · D-945 이행 완료 선언 — 대시보드 두 상태 셸 h1 규칙으로 준수
 - 2026-11-01 · uncommitted · 목적지 메뉴를 셸 레일과 같은 부품으로 (사용자 지시)
-- 2026-11-01 · uncommitted · D-945 준수 평가 — hero-strip이 제목 줄, 이행은 다음 화면 변경에

@@ -363,9 +363,9 @@ main {
   border: 1px solid var(--border-strong);
   background: var(--surface-recessed);
 }
-.lamp.red.on { background: var(--status-crit); border-color: var(--status-crit); }
-.lamp.yellow.on { background: var(--status-warn); border-color: var(--status-warn); }
-.lamp.green.on { background: var(--nominal); border-color: var(--nominal); }
+.lamp.red.on { background: var(--signal-stop); border-color: var(--signal-stop); }
+.lamp.yellow.on { background: var(--signal-caution); border-color: var(--signal-caution); }
+.lamp.green.on { background: var(--signal-go); border-color: var(--signal-go); }
 
 .signal-body { display: flex; align-items: center; gap: var(--space-3); margin-top: var(--space-2); }
 .signal-meta { font-family: var(--mono); font-size: var(--text-micro); color: var(--text-secondary); }

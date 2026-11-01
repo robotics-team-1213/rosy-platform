@@ -1406,3 +1406,10 @@
 - 변경: `styles.css`의 skip-link(주 단추 채움, z 20)를 지우고 공용 `components.css` 규칙을 쓴다.
 - 증거: 공용 덧칠 검사(skip-link 포함).
 - Gate: 없음. CE: 해당 없음.
+
+
+## 2026-11-02 · uncommitted · 가상 신호 등 역할 토큰
+
+- 변경: `panels/surface-panels.css` 등 색을 `--signal-*`로(값 동일).
+- 증거: 공용 신호 등 계약 시험.
+- Gate: 없음. CE: 해당 없음.

@@ -655,3 +655,21 @@ def test_styleguide_renders_the_shared_type_and_interaction_contract():
     # 초점 링 토큰은 공용 시트가 소비한다 — 견본 시트가 따로 그리지 않는다(D-398 정리).
     assert "--focus-ring-width" in components and "--focus-ring-offset" in components
 
+
+
+def test_every_signal_lamp_paints_with_the_signal_tokens():
+    """D-525 — 같은 신호기 등은 어느 표면에서나 같은 색이다(녹색 등은 녹색, 2026-11-02 사용자 결정).
+    등 그림은 --signal-* 만 쓰고, --signal-* 는 등 그림 밖에서 쓰지 않는다(정상 무색 D-82 유지)."""
+    repo = Path(__file__).resolve().parents[3]
+    lamp_files = [repo / "applications/fleet/web/shared/styles.css",
+                  repo / "middleware/robot_ui/robot/panels/surface-panels.css",
+                  repo / "applications/fleet/web/map/traffic-view.js"]
+    for path in lamp_files:
+        lines = [line for line in path.read_text(encoding="utf-8").splitlines() if "lamp" in line.lower()]
+        painted = [line for line in lines if re.search(r"--(status-(good|warn|crit)|nominal)\b", line)]
+        assert not painted, (path.name, painted)
+        assert any("--signal-go" in line for line in lines), path.name
+    for root in ("applications", "middleware", "operations", "learning"):
+        for path in (repo / root).rglob("*"):
+            if path.suffix in (".css", ".js") and "test" not in path.parts and path not in lamp_files:
+                assert "--signal-" not in path.read_text(encoding="utf-8", errors="ignore"), path
