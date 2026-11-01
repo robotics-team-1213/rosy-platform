@@ -353,7 +353,7 @@
 
 ## 최근 기록
 
-- 2026-10-31 · uncommitted · docs(solutions): in-process uvicorn.Config hides logs from caplog
+- 2026-11-01 · uncommitted · docs(solutions): in-process uvicorn.Config hides logs from caplog
 - 2026-11-01 · uncommitted · fix(omx): ROS 전용 시험 파일만 돌 때 건너뜀은 판정이다 (D-889 추가 20)
 - 2026-11-01 · uncommitted · tools: 정책 화면 수정 게시용 FULL 착지
 - 2026-11-01 · uncommitted · D-954 현장 마커 프로필과 팔 마커 50번부터

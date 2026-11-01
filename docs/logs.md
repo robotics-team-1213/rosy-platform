@@ -13430,7 +13430,7 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 교훈: 없음
 
-## 2026-10-31 · uncommitted · docs(solutions): in-process uvicorn.Config hides logs from caplog
+## 2026-11-01 · uncommitted · docs(solutions): in-process uvicorn.Config hides logs from caplog
 - 변경: `solutions/workflow-issues/in-process-uvicorn-config-hides-logs-from-caplog-2026-10-31.md` 추가
 - 증거: 게시 PR #223 fleet-2of5 두 번 실패, uvicorn 0.52.4에서 propagate=False 재현, 고친 시험 원격 통과(43 passed, 2 skipped)
 - gate 변화: 없음
