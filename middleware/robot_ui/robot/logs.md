@@ -1371,3 +1371,17 @@
 - 변경: surface-main의96rem cap/가운데 배치와 폭별 padding override를 제거해 레일 옆 가용 폭과 공통 inset-pane을 사용한다. notice 두줄 스크롤 예산과 brand shrink 방지는 보존한다.
 - 증거: 1366/2000px 레일·본문 경계 회귀와 현재425의 actual CORE manifest/HTTP frontend console/setup/device320·390 셸 기하가 통과했다. 셸42회차의 Robot6PNG도 독립 직접 검토해 해당 범위 P1/P2없음. 이것은 전체20패널·전체키보드·실제명령/장치 수용이 아니다.
 - gate 변화: 없음. 전체 browser 실행과 최종 소비자 검증은 진행 중이다. docs/validation/platform-ui-integration-2026-10-29/result.md 참조. CE: 해당 없음 — layout 소유와 기존 notice/브랜드 회귀를 유지한다.
+
+
+## 2026-11-01 · uncommitted · D-945 준수 평가 — hero-strip이 제목 줄, 이행은 다음 화면 변경에
+
+- 변경: 없음(평가 기록). `/dashboard`는 공간 문법으로 hero-strip(`#robot-heading`)이 제목 줄 역할을 하고, 고정 프레임 예산(100dvh·overflow hidden)을 `test_console_layout`이 고정한다 — `ui-pathbar` 행을 얹으면 조작 열 높이를 잡아먹는다(D-201). h1 2개는 게이트(로봇에 연결)/연결 후 두 문서 상태로 동시에 하나만 보인다. app-shell 시트·경로 줄 이행은 그 화면을 고치는 변경에 따른다(D-945 5항).
+- 증거: 구조 조사(h1·topbar·main·시트) + `test_layout_canon.py` 새 검사가 topbar-first·skip link를 지킨다고 단언.
+- Gate: 없음. CE: 해당 없음.
+
+
+## 2026-11-01 · uncommitted · 목적지 메뉴를 셸 레일과 같은 부품으로 (사용자 지시)
+
+- 변경: `/dashboard` 인증 브리지의 작업 화면 목록(밑줄 텍스트 링크)이 역할 화면 셸·Fleet과 같은 레일 부품(`ui-rail-item`, 아이콘 아래 짧은 이름, 전체 이름은 접근 이름)로 그려진다. 레일 어휘(SURFACE_RAIL)를 surface-navigation.js 한 곳에 두고 셸 shell.js도 같은 정본을 쓴다. 대시보드에 app-shell.css를 더하고 목록 배치를 세로 레일로 바꿨다. 아이콘은 ui.js가 부팅 때만 훑으므로 dashboard-entry.js가 그린 뒤 다시 칠한다.
+- 증거: node --check 3파일, test_layout_canon 전 통과. 어휘 변화(전체 제목→짧은 이름)에 맞춰 test_surface_bridge·test_dashboard_entry_browser 기대치 갱신(접근 이름은 전체 제목 유지). 원격 시험은 착지 전 기록.
+- Gate: 없음. CE: 해당 없음.

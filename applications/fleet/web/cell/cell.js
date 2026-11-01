@@ -15,7 +15,7 @@ import {showObjectCatalog} from '/console/assets/cell-object-catalog.js';
 const $ = id => document.getElementById(id);
 // D-926 3: each Cell step is its own screen; the first one shows the live cell, its calibration printouts and the saved documents.
 bindScreens({nav: document.querySelector('.ui-subnav-nav'), home: 'saved-heading', mark: 'step',
-  groups: {'saved-heading': ['observation-heading', 'print-heading', 'saved-heading']}});
+  groups: {'saved-heading': ['observation-heading', 'print-heading', 'saved-heading']}, label: document.getElementById('cell-screen')});
 const channelQuery = new URL(location.href).searchParams, channelRequested = channelQuery.has('channel_request');
 const channelId = channelQuery.get('channel_request'), channelPath = `/api/fleet/channel-requests/${encodeURIComponent(channelId)}`;
 let channelReceipt = null, channelReview = null;
