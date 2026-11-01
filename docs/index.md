@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
-- 2026-11-01 · uncommitted · fix(monitoring): 이벤트 기록을 수집기 시계로 읽는다 (MAIN-RED)
-- 2026-11-01 · uncommitted · fix: 조종 끊김·정지 전파·링크 지연 (D-948)
-- 2026-11-01 · uncommitted · fix: 링크 조사 후속 (문서 정리·AP 지터·enum 판단)
-- 2026-11-01 · uncommitted · fix: 로봇-사이트 링크 견고성 (조사 1순위 4건 + D-944)
-- 2026-11-01 · uncommitted · fix(land): 브라우저·시뮬레이션 시험은 필요할 때만, 전체는 밤에
+- 2026-11-01 · uncommitted · fix(land): main이 이미 고친 MAIN-RED로 멈추지 않는다 (D-889 추가 14)
+- 2026-11-01 · uncommitted · fix(land): 재부팅은 시험 PC별로 비킨다 (D-889 추가 13)
+- 2026-11-01 · uncommitted · omx: 계획기 low_zones, 바닥 높이를 지정한 사각형 안에서만 낮춤
+- 2026-11-01 · uncommitted · omx: 통로 점검은 보이는 표면 밖이면 거절(낡은 surface_px), 카메라 교체 교훈 갱신
+- 2026-11-01 · uncommitted · omx: 통로 점검 규칙 수정, 낮은 구간은 집을 물체 말고 모두, 높은 이동은 모르는 덩어리만
