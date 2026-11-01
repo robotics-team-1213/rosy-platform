@@ -13291,6 +13291,27 @@ osy-d395-s1d\`.
 - 결정: D-949 Accepted(사용자 결정), 워크트리 슬롯 2번째 force-over-cap 승인(2026-11-01)
 - 교훈: 없음
 
+## 2026-11-01 · uncommitted · omx: 계획 경로 통로 점검(cell_corridor), 경로에 물체·다른 팔이 있으면 움직이기 전에 거절
+- 변경: `deploy/robot/omx/cell_corridor.py`(계획 프레임 FK → 낮은 TCP 구간을 상단 뷰 통로로 그리고 전경 덩어리를 찾음, 집을 물체·놓을 칸·팔 기부는 제외), `cell_params.py`에 `corridor.*` 5개
+- 증거: `test/test_omx_cell_corridor.py` 원격 실행
+- gate 변화: 없음(읽기 전용 점검, 움직임 없음)
+- 결정: 사용자 2026-11-01 "팔의 경로에 있다면 정지하거나 안전처리" — 1단계는 움직이기 전 정적 점검
+- 교훈: 없음
+
+## 2026-11-01 · uncommitted · omx: 통로 점검 규칙 수정, 낮은 구간은 집을 물체 말고 모두, 높은 이동은 모르는 덩어리만
+- 변경: `cell_corridor.py` 제외 원 대신 집을 물체 자신의 덩어리만 제외, 놓을 칸은 `--stack` 없으면 비어야 함, 높은 이동 구간은 카탈로그 물체 통과·모르는 덩어리(손·다른 팔) 거절. `corridor.exempt_mm` 삭제
+- 증거: 현장 계획(왼팔 벨트→팔레트) 2410프레임 중 낮은 구간은 집기·놓기 수직 구간뿐, 이동은 138 mm. 제외 원 45 mm가 낮은 통로(±30 mm)를 다 덮어 아무것도 못 막았음
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 없음
+
+## 2026-11-01 · uncommitted · omx: 통로 점검은 보이는 표면 밖이면 거절(낡은 surface_px), 카메라 교체 교훈 갱신
+- 변경: `cell_corridor.check`에 `surface_px` 밖 통로 픽셀 `off_surface` → 거절. `omx-cell-device-identity-after-rewiring-2026-10-31.md`에 카메라 교체 뒤 surface_px·surface_lab 무효 절 추가
+- 증거: 현장 실 프레임(읽기 전용, 팔 정지) — 낡은 폴리곤은 전경 0 px로 컨테이너 위 놓기를 통과시켰고, 수정 후 off_surface 10844 px로 거절. 현재 표면 색 3개로는 차 있는 칸 놓기 거절, `--stack`이면 통과
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 기존 교훈 갱신(카메라 교체 시 이미지 좌표 설정도 무효)
+
 ## 2026-11-01 · uncommitted · omx: 계획기 low_zones, 바닥 높이를 지정한 사각형 안에서만 낮춤
 - 변경: `grasp_planner.Planner.limits_at`가 `limits.low_zones` 사각형 안에서만 IK 작업 공간 바닥을 낮춘다(높이지는 않음). 그 밖은 기존 바닥 그대로
 - 증거: `test_omx_grasp_planner.py` 원격 실행. 현장: 왼팔 벨트 끝이 테이블보다 낮고(사용자 측정·깊이) 팔이 10~20 mm 판 위에 있어 FK 바닥 0.005 아래에서만 집기가 가능
