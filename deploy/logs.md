@@ -4335,3 +4335,9 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: test-only8658211939와 동결된 취약 생산 bytes의 unreferenced 후보bf952ea992에서 실제 서명 검증 뒤 manifest/identity 교체 두 시험이 모두 DID NOT RAISE로 원격 RED였다(2 failed/skip0/setup0/collection0, comparator2NEW). 현재 수정은 독립 검토 전이며 GREEN은 아직 없다.
 - gate 변화: 없음. 실제 설치·native closure·활성화·장치 권한을 검증한 결과가 아니다.
 - CE: 미해결 — 실제 RED는 확인했으며 수정 검증 후 trust-boundary 교훈 기록 필요성을 판단한다.
+
+## 2026-11-02 · uncommitted · feat(omx): 팔 혼자 정렬하기를 한 파이프라인으로 (`cell_align`)
+- 변경: `cell_align.py`의 `plan`이 관측으로 다음 단계를 고른다. 집을 수 있으면 pick, 붙어 선 긴 상자는 길이 방향 밀기(옆으로 비킨 선, 통로가 옆 열을 피하는 오프셋, 끝 집기 점이 이웃 끝을 지나는 길이), 그 자리에 오차 측정이 없으면 pivot 먼저, 아무것도 안 되면 hold와 이유. `next`는 그 한 단계만 감독 시험(`--commissioning --person-at-switch`)으로 실행하고 결정 행을 남긴다. `cell_push`는 지도 좌표 입력(`--at`, `--along`)과 손가락 하나(20 mm 패드)를 앞세운 좁은 밀기(`--narrow`)를 받고, 좁은 밀기를 먼저 시도한다. 옆 통로 검사는 상자 옆부터 통로 끝까지 띠 전체를 본다(끝 한 점만 보면 그 사이 이웃을 건너뛰었다). 측정 없이도 지도 최대 오차로 밀 수 있으면 바로 밀고, 측정해야만 맞으면 pivot을 먼저 한다. `cell_pivot.jaw_blobs`는 `pivot.merge_px` 안의 조각을 한 표시로 센다(기본 0 = 이전과 같음).
+- 증거: 현장(2026-11-02) 붙어 선 열 위 집게 표시가 72·165·260 px 조각으로 나와 `min_blob` 300 미만, 피벗이 0개 각도로 끝남. `plan`이 실제 셀에서 넓은 면(42 mm)으로는 hold, 좁은 밀기로는 "pivot 먼저(지도 최대 오차 11.85 mm로는 안 맞고 5 mm면 맞음)"를 냄. 원격 `test_omx_cell_align.py` 등.
+- gate 변화: 없음
+- 교훈: 작업 기록 2026-10-31 §15.5
