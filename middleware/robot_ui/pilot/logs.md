@@ -1093,6 +1093,13 @@
 - 증거: `test_arm_record_browser.py`가 맨 위로 스크롤한 상태에서 종료 버튼이 화면 안인지, 종료 뒤 고정이 풀리는지 확인한다(원격).
 - gate 변화: 없음(SIM 전용). CE: 해당 없음.
 
+## 2026-11-01 · a7ebffaf72 · OMX SIM 녹화 화면 다듬기
+- 변경: 종료 버튼 세 개의 비활성 사유를 카드 안 안내 한 줄(`arm-stop-help`, aria-describedby)로 모은다. 과제 설명 칸은 글 길이에 맞춰 늘어난다(`field-sizing: content`). 진행 중 명령 취소 묶음에 조작 카드와 같은 테두리를 준다.
+- 증거: `test_arm_record_browser.py` 원격 브라우저 시험
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 없음
+
 ## 2026-11-01 · uncommitted · skip link 추가 (D-945)
 
 - 변경: `index.html` 본문 앞에 공용 `skip-link`(본문으로 건너뛰기, #pilot-main)를 넣었다. focal 문법이라 자리를 비우는 것은 합법이지만 건너뛰기는 표면 공통 의무다.

@@ -4302,3 +4302,36 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 현장 깊이 프레임 둘에서 수정 전에는 팔레트가 75 mm와 10 mm로 갈렸다(테이블 밖 약 60 mm 낮은 면이 더 넓게 잡힌 프레임). 수정 후에는 두 프레임·시드 6개 모두 팔레트 8–12 mm, 열 74–79 mm. 원격 `test_omx_cell_depth.py` 5 passed(더 넓은 낮은 면 장면은 수정 전 코드로 실패).
 - gate 변화: 없음
 - 교훈: 작업 기록 2026-10-31 §15.2
+
+## 2026-11-01 · uncommitted · feat(omx): 붙어 선 긴 상자를 팔이 스스로 떼어 집는다
+- 변경: `cell_push`의 집게 통로 폭이 근처에서 잰 피벗 원의 rms를 쓴다(없으면 지도의 최대 오차). 길이 방향으로 미는 긴 상자는 `--half-width-mm`로 앞길을 상자 폭만큼만 본다. `cell_auto_pick`은 가운데에 손가락 자리가 없을 때 상자 끝 쪽 집기 점(`reachable_ends`)에서 자리를 찾는다.
+- 증거: 현장 dry run에서 4 mm 간격 3칸 열을 길이로 밀 때 통로 33 mm(집게 21.2 + 지도 오차 11.85)가 옆 열에 닿아 거절, 앞길 표본이 반 길이(43.5 mm) 옆에 찍혀 거절. 원격 `test_omx_cell_push.py`·`test_omx_cell_auto_pick.py`·`test_omx_cell_calibrate.py` 62 passed.
+- gate 변화: 없음
+- 교훈: 작업 기록 2026-10-31 §15.3
+
+## 2026-11-01 · uncommitted · fix(omx): 피벗 측정이 빽빽한 팔레트에서는 대상 바로 위에서 한다
+- 변경: `cell_calibrate`의 `pivot-near`가 `pivot.over_target`이 켜져 있고 집게 높이가 대상 꼭대기(`pivot.over_top_mm`)보다 `pivot.over_clear_mm` 이상 높으면 빈 자리를 찾지 않고 대상 바로 위에서 잰다. 자동 집기(`self_calibrate`)와 같은 규칙(`over_target`) 하나를 쓴다.
+- 증거: 현장 `pivot-near pallet:0.118,-0.064`가 "no clear point"로 멈춤(필요한 빈 칸 72 px, 붙어 선 열 옆 빈 띠 41·60·61 px). 원격 `test_omx_cell_calibrate.py`.
+- gate 변화: 없음
+- 교훈: 작업 기록 2026-10-31 §15.3
+
+## 2026-11-01 · uncommitted · native v2 readonly profile contract
+
+- 변경: D-907·ADR Log와 test/test_native_profile_manifest.py 초안. 기존 v1 producer/validator를 보존하고 v2 서명·형식·inventory·독립 policy·runtime identity 계약을 시험한다.
+- 검증: 검토 기준 14680235에서 b58162a6까지 관련 common signing/Pinky release/native verifier/test seam diff 없음. 현재는 test/doc 후보이며 pytest·생산 구현은 검토 뒤 진행한다.
+- gate 변화: 없음. readonly metadata 검증은 consumer 설치·native closure·활성화·실물 권한 증거가 아니다.
+- CE: 해당 없음 — 새 계약 단위의 test-first 후보이며 해결·검증한 비문서화 장애가 없다.
+
+## 2026-11-01 · uncommitted · D-907 readonly native v2 verifier
+
+- 변경: common release owner에 native_profiles.py를 추가했다. 기존 Ed25519/SHA256SUMS를 먼저 검증한 뒤 v2 exact JSON·inventory·독립 설치 policy·unit digest·runtime identity/fingerprint·lock bytes hash를 대조한다. Pinky v1과 updater/consumer/activation은 바꾸지 않는다.
+- 증거: test-first 2f01b94b901a0d363ccacb49bf3ecd0934d5b47e의 공식 원격 집중 실행은 v1 corpus 1 passed, 새 interface 부재 94 failed, skip0·setup/collection0이었다. 현재 생산 후보는 정적 검사와 독립 SOURCE 검토를 앞두며 GREEN·실물 수용은 아직 없다.
+- gate 변화: 없음. 성공 반환은 서명 metadata/policy 일치이며 실제 native closure·실행 가능성·arm readiness·권한·업데이트 transaction의 인증이 아니다.
+- CE: 해당 없음 — 새 metadata 계약 구현이며 해결한 비문서화 운영 장애가 없다.
+
+## 2026-11-01 · uncommitted · D-907 authenticated metadata read repair
+
+- 변경: 실제 common 서명 검증이 반환한 digest map으로 각 metadata의 한 번 읽은 bytes를 다시 인증하고, 그 bytes를 그대로 JSON 파싱·fingerprint/marker/revision 대조에 쓴다. 서명 검사 뒤 재개방한 다른 내용을 신뢰하는 공백을 닫는다.
+- 증거: test-only8658211939와 동결된 취약 생산 bytes의 unreferenced 후보bf952ea992에서 실제 서명 검증 뒤 manifest/identity 교체 두 시험이 모두 DID NOT RAISE로 원격 RED였다(2 failed/skip0/setup0/collection0, comparator2NEW). 현재 수정은 독립 검토 전이며 GREEN은 아직 없다.
+- gate 변화: 없음. 실제 설치·native closure·활성화·장치 권한을 검증한 결과가 아니다.
+- CE: 미해결 — 실제 RED는 확인했으며 수정 검증 후 trust-boundary 교훈 기록 필요성을 판단한다.

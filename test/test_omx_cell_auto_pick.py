@@ -700,6 +700,21 @@ def test_a_long_box_out_of_reach_at_its_middle_offers_grasp_points_toward_the_ba
     assert auto.reachable_ends(o, {"length_mm": 30, "width_mm": 30}, None) == []  # a square box has no end to move to
 
 
+def test_a_long_box_packed_beside_another_is_held_near_its_free_end():
+    """2026-11-01: 3-cell columns stood 4 mm apart, no finger room at any middle; one pushed along its length had its
+    front end clear of the neighbour, and the fingers fit there."""
+    mask = np.zeros((200, 200), np.uint8)
+    px = lambda p: (100 + p[0] * 1000, 100 + (p[1] - 0.1) * 1000)  # noqa: E731  1 px per mm
+    box = {"raw_m": [0.0, 0.1], "width_mm": 30, "length_mm": 100, "long_axis_deg": 0.0, "object": "container-3"}
+    mask[85:116, 50:151] = 255
+    mask[119:150, 30:106] = 255  # the neighbour, 4 mm beside it, ending 5 mm past its middle
+    assert auto.finger_room(mask, (0, 0, 200, 200), px, box)["margin_mm"] is None
+    ends = auto.reachable_ends(box, {"length_mm": 100, "width_mm": 30}, None)
+    rooms = {e["grasp_shift_mm"]: auto.finger_room(mask, (0, 0, 200, 200), px, e)["margin_mm"] for e in ends}
+    assert rooms[-24.5] is None and rooms[24.5] is not None
+    assert auto.reachable_ends(ends[0], {"length_mm": 100, "width_mm": 30}, None) == []  # an end is not moved again
+
+
 def test_flat_markings_are_no_obstacle_for_the_finger_mask(tmp_path):
     """2026-10-29: the board's white line beside a 2-cell closed its finger gap; a site lists such flat markings."""
     path = biased_map(tmp_path)
