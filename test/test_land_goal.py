@@ -42,6 +42,17 @@ def test_pinned_retry_does_not_consume_an_earlier_unrelated_snapshot(late_stop):
     assert land_goal.lead_times(rows, 0, 400) == [4, 3]
 
 
+def test_new_request_retry_does_not_inherit_a_stop_before_the_previous_completion():
+    a, b, c, d = [f"land/fix/a-202611010{i}0000" for i in range(4)]
+    rows = [ev(0, "queue", branch=a, ticket="a"), ev(120, "queue", branch=b, ticket="b", pid=2),
+            ev(200, "stop", branch=b, pid=2),
+            ev(240, "landed", branch="land/fix/land-rollup-x", members=[dict(branch=a, ticket="a")]),
+            ev(300, "queue", branch=c, ticket="c", pid=3), ev(360, "stop", branch=c, pid=3),
+            ev(400, "queue", branch=d, ticket="d", pid=4),
+            ev(500, "landed", branch="land/fix/land-rollup-y", members=[dict(branch=d, ticket="d")])]
+    assert land_goal.lead_times(rows, 0, 600) == [4, 200 / 60]
+
+
 def test_failed_rollup_does_not_close_member_or_create_a_sample():
     rows = [ev(0, "queue", ticket="a"), ev(60, "stop", members=[{"branch": "land/fix/a", "ticket": "a"}]),
             ev(120, "landed")]
