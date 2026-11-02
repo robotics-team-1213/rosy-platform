@@ -3,6 +3,8 @@ import math
 from pathlib import Path
 import xml.etree.ElementTree as ET
 
+import ship_plate
+from pad_sweep import pad_sweep_bottom_relative_tcp, rotation_matrix  # noqa: F401  (split out, D-766)
 from stacking_fixture import DT, PROFILE
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -66,14 +68,21 @@ def grip_duration(start, value, acceleration=.4):
     return max(.8, 1.875*delta/.4, math.sqrt(5.774*delta/acceleration))
 
 
-from release_cases import EVALUATION_CASES, RL_RESIDUALS  # noqa: E402  (pinned model and residual files)
+from release_cases import EVALUATION_CASES, FIXTURE_OVERRIDES, RL_RESIDUALS  # noqa: E402  (pinned model and residual files)
 
 
 def container_fixture(*, layers, case):
+    if case in FIXTURE_OVERRIDES and case not in EVALUATION_CASES:  # nominal IK geometry variants
+        value = container_fixture(layers=layers, case='nominal')
+        value.update(FIXTURE_OVERRIDES[case], revision=value['revision']+'-'+case, case=case)
+        gap = value['row_gap_m']  # the envelope grows by the two row gaps, as in the D-929 branch below
+        value.update(bin_origin_m=[.035, -.045-gap, .074], bin_size_m=[.09, .09+2*gap, .03*layers])
+        return ship_plate.place(value) if 'ship_plate' in value else value
     if case in EVALUATION_CASES:
         value = container_fixture(layers=layers, case='nominal')
         value.update(revision=value['revision']+'-'+case, case=case, release_estimate_noise_m=[.002, .005],
                      release_convergence_m=.0015)
+        value.update(FIXTURE_OVERRIDES.get(case, {}))
         if EVALUATION_CASES[case]:
             value['release_corrector'] = dict(EVALUATION_CASES[case])
         if case in RL_RESIDUALS:
@@ -152,7 +161,7 @@ def plan(cube=False, *, fixture=None):
         width=len(rows)
         pitch=.03+fixture.get('row_gap_m',0.)
         return [dict(id='bar-'+str(i+1), cells=3, cell=[0, rows[i % width], i//width], size=[.09, .03, .03],
-                     mass=.06, arm=i%2 if width==1 else 0 if rows[i % width] == 0 else 1,
+                     mass=(fixture.get('cargo_mass_kg') or [0, 0, .06])[2], arm=i%2 if width==1 else 0 if rows[i % width] == 0 else 1,
                      color_rgb=fixture['cargo_colors_rgb'][i % 3],
                      target=[fixture['bin_origin_m'][0]+.045, fixture['bin_origin_m'][1]+.015+rows[i % width]*pitch,
                              fixture['bin_origin_m'][2]+.015+(i//width)*.03])
@@ -190,16 +199,8 @@ def physical_model(urdf):
     return ET.ElementTree(root)
 
 
-def rotation_matrix(quaternion):
-    w, x, y, z = quaternion
-    return ((1-2*(y*y+z*z), 2*(x*y-z*w), 2*(x*z+y*w)),
-              (2*(x*y+z*w), 1-2*(x*x+z*z), 2*(y*z-x*w)),
-              (2*(x*z-y*w), 2*(y*z+x*w), 1-2*(x*x+y*y)))
-
-
-def tcp_from_wrist(position, quaternion):
+def tcp_from_wrist(position, quaternion, offset=(.09193, -.0016, 0.)):
     matrix = rotation_matrix(quaternion)
-    offset = (.09193, -.0016, 0.)
     return [position[i]+sum(matrix[i][j]*offset[j] for j in range(3)) for i in range(3)]
 
 
@@ -382,29 +383,6 @@ def leveling_sequence_observed(layer,index,fixture):
         return False
 
 
-def pad_sweep_bottom_relative_tcp(quaternion):
-    from run_omx_backend import PAD_HALF_LENGTH, PAD_RADIUS, PAD_CONTACT_OFFSET_M, jaw_contact_point
-    if (len(quaternion) != 4 or not all(math.isfinite(v) for v in quaternion)
-            or abs(sum(v*v for v in quaternion)-1) > .01):
-        raise ValueError('A measured wrist quaternion is required')
-    root = ET.parse(ROOT/'learning/envs/isaac/assets/open_manipulator_description/urdf/omx_f/omx_f.urdf').getroot()
-    tcp = [float(v) for v in root.find("joint[@name='end_effector_joint']/origin").get('xyz').split()]
-    row = rotation_matrix(quaternion)[2]
-    x, y = jaw_contact_point()
-    radius = math.hypot(x, y+PAD_RADIUS)
-    sweep = math.hypot(row[0], row[1])*radius
-    vertical = PAD_HALF_LENGTH*abs(row[2])+PAD_RADIUS+PAD_CONTACT_OFFSET_M
-    bottoms = []
-    for name in ('gripper_joint_1', 'gripper_joint_2'):
-        joint = root.find(f"joint[@name='{name}']")
-        if (joint.find('axis').get('xyz') != '0 0 1' or joint.find('origin').get('rpy') != '0 0 0'
-                or joint.find('parent').get('link') != 'link5'):
-            raise ValueError('Calibrated swept finger geometry changed')
-        pivot = [float(v) for v in joint.find('origin').get('xyz').split()]
-        bottoms.append(sum(row[k]*(pivot[k]-tcp[k]) for k in range(3))-sweep-vertical)
-    return min(bottoms)
-
-
 def center_neighbor(index, sample, fixture):
     items = plan(True, fixture=fixture)
     level = items[index]['cell'][2]
@@ -436,11 +414,20 @@ def release_footprint_fits(box,size,y,fixture):
         and y-extent>=low-overhang and y+extent<=high+overhang)
 
 
+def finger_fits_gap(gap, fixture):
+    # The neighbour-side finger may go down into the row gap only when the gap is wider than the finger needs.
+    return gap >= fixture.get('finger_gap_width_m', math.inf)
+
+
 def packed_release_position(index, sample, fixture):
     item = plan(True, fixture=fixture)[index]
     box = sample['boxes'][index]
     desired = item['target'][:]
-    desired[2] += fixture['release_clearance_m']
+    desired[2] += fixture.get('stack_release_clearance_m', fixture['release_clearance_m'])  # leveling keeps its own
+    pad_offset = lambda: (sample['tcps'][item['arm']][2]-box['position'][2]  # noqa: E731  (finger bottom below the box centre)
+        +pad_sweep_bottom_relative_tcp(sample['wrist_orientations'][item['arm']], fixture.get('gripper')))
+    if fixture.get('ship_plate') and item['cell'][2] == 0:  # first layer: box and fingers stay above the studs
+        desired[2] = max(desired[2], ship_plate.release_floor_z(fixture, pad_offset()))
     if item['cell'][1] == fixture.get('center_row',1):
         return desired
     direction, face, top = center_neighbor(index, sample, fixture)
@@ -449,11 +436,11 @@ def packed_release_position(index, sample, fixture):
     desired[1] = min(desired[1], edge) if direction < 0 else max(desired[1], edge)
     if not release_footprint_fits(box,item['size'],desired[1],fixture):
         raise PackingFootprintUnavailable('Outer held footprint cannot fit the original envelope')
+    if finger_fits_gap(direction*(desired[1]-face)-extent, fixture):
+        return desired
     clearance = fixture['neighbor_vertical_clearance_m']
-    arm = item['arm']
-    pad_offset = sample['tcps'][arm][2]-box['position'][2]+pad_sweep_bottom_relative_tcp(sample['wrist_orientations'][arm])
     # Measured lateral separation excludes body overlap; only swept fingers may need a higher release.
-    desired[2] = max(desired[2], top+clearance-pad_offset)
+    desired[2] = max(desired[2], top+clearance-pad_offset())
     return desired
 
 
@@ -467,10 +454,11 @@ def cube_release_target(index, sample, source_z, commanded_tcp=None, *, fixture=
         raise ValueError('cube carry lost bilateral free lift before release')
     if fixture.get('packing_strategy'):
         desired = packed_release_position(index, sample, fixture)
+        desired[:2] = [desired[k]+fixture.get('release_offset_m', (0., 0.))[k] for k in (0, 1)]  # deliberate off-centre release (MuJoCo sweep candidates)
         anchor = sample['tcps'][arm] if commanded_tcp is None else commanded_tcp
         return [anchor[k]+desired[k]-box['position'][k] for k in range(3)]
     desired = item['target'][:]
-    desired[2] += fixture['release_clearance_m']
+    desired[2] += fixture.get('stack_release_clearance_m', fixture['release_clearance_m'])  # leveling keeps its own
     if item['cell'][1] == 0:
         # Measured positive opening drift accumulates across tightly packed rows; center the released footprint.
         desired[1] += fixture['first_row_release_bias_m']
@@ -502,9 +490,11 @@ def cube_release_ready(index, sample, source_z, *, fixture=None):
             y_extent = half_extent(box, items[index]['size'], 1)
             margin = fixture['row_clearance_m']-.000001
             vertical = fixture['neighbor_vertical_clearance_m']-.000001
-            clear = (direction*(box['position'][1]-face)-y_extent >= margin
+            gap = direction*(box['position'][1]-face)-y_extent
+            clear = (gap >= margin
                 and release_footprint_fits(box,items[index]['size'],box['position'][1],fixture)
-                and tcp[2]+pad_sweep_bottom_relative_tcp(sample['wrist_orientations'][items[index]['arm']]) >= top+vertical)
+                and (finger_fits_gap(gap, fixture) or
+                     tcp[2]+pad_sweep_bottom_relative_tcp(sample['wrist_orientations'][items[index]['arm']], fixture.get('gripper')) >= top+vertical))
         # Estimate-only control converges to its estimate, not the true pose: estimate cases accept the final
         # position tolerance here; clearance, footprint and prior-stack checks stay on the measured pose.
         return norm(error) <= fixture.get('release_convergence_m', .00005) and clear and prefix_held(sample, index, fixture)
@@ -521,7 +511,9 @@ def stable_box(box, index, cube=False, *, fixture=None, speed=True):
     values = [*p, *q, *box['velocity'], *box['angular_velocity'], *(v for row in forces for v in row)]
     if not all(math.isfinite(v) for v in values) or abs(sum(v*v for v in q)-1) > .01:
         return False
-    if (any(abs(p[i]-item['target'][i]) > .0015 for i in range(3))
+    # On the stud plate a box resting on a stud sits 0.9-1.2 mm high (Isaac offset runs 2026-11-01), inside the 1.5 mm band.
+    tolerance = (.0015, .0015, .0005 if fixture.get('ship_plate') else .0015)
+    if (any(abs(p[i]-item['target'][i]) > tolerance[i] for i in range(3))
             or speed and (norm(box['velocity']) > .01 or norm(box['angular_velocity']) > .1)
             or any(norm(f) > .001 for f in forces[:4]) or not explained_contacts(box)):
         return False

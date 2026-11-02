@@ -10,8 +10,8 @@ from stacking_fixture import BELT_TOP, DT, FIXTURE, PROFILE, UNIT, advance_joint
 import stacking_scene as scene
 from importer_compat import import_model, reference_model
 from model_checks import check_urdf, check_vendor_manifest
-from run_omx_backend import (PAD_RADIUS, PAD_HALF_LENGTH, PAD_CONTACT_OFFSET_M, PAD_REST_OFFSET_M,
-                            FOLLOWER_STIFFNESS, FOLLOWER_DAMPING, FOLLOWER_MAX_EFFORT_NM, jaw_contact_point)
+from finger_pads import add_finger_pads
+from run_omx_backend import FOLLOWER_STIFFNESS, FOLLOWER_DAMPING, FOLLOWER_MAX_EFFORT_NM
 
 
 def run(args):
@@ -113,9 +113,12 @@ def run(args):
     fixed('BeltStop', FIXTURE.get('belt_stop_m', [.16 if mapped else .20, -.029, .027 if mapped else .035]),
           FIXTURE.get('belt_stop_size_m', [.12, .004, .004 if mapped else .02]), [.65, .65, .65])
     floor = args.mapped_cube_stack
-    fixed('Bin', [FIXTURE['bin_origin_m'][0]+.045, 0., FIXTURE['bin_origin_m'][2]-.001] if floor else
-          ([.16, FIXTURE['bin_origin_m'][1]+FIXTURE['bin_size_m'][1]/2, .0125] if mapped else [.20, .02, .0125]),
-          [.09, FIXTURE['bin_size_m'][1] if mapped else .09, .002 if floor else .025], [.30, .32, .34] if floor else [.15, .48, .7])
+    if FIXTURE.get('ship_plate'):
+        scene.add_ship_plate(stage, FIXTURE)
+    else:
+        fixed('Bin', [FIXTURE['bin_origin_m'][0]+.045, 0., FIXTURE['bin_origin_m'][2]-.001] if floor else
+              ([.16, FIXTURE['bin_origin_m'][1]+FIXTURE['bin_size_m'][1]/2, .0125] if mapped else [.20, .02, .0125]),
+              [.09, FIXTURE['bin_size_m'][1] if mapped else .09, .002 if floor else .025], [.30, .32, .34] if floor else [.15, .48, .7])
     if mapped:
         from mapped_stack_task import build_map
         build_map(world, stage, FIXTURE)
@@ -167,7 +170,7 @@ def run(args):
             if len(parents) != 1 or 'end_effector_link' in tool:
                 raise RuntimeError('Expected one physical link5 without a dynamic TCP body')
             frame = UsdGeom.Xform.Define(stage, parents[0].GetPath().AppendChild('end_effector_link'))
-            UsdGeom.XformCommonAPI(frame).SetTranslate(Gf.Vec3d(.09193, -.0016, 0.))
+            UsdGeom.XformCommonAPI(frame).SetTranslate(Gf.Vec3d(*FIXTURE.get('tcp_offset_m', [.09193, -.0016, 0.])))
             tool['end_effector_link'] = str(frame.GetPath())
         if set(tool) != {'link6', 'link7', 'end_effector_link'}:
             raise RuntimeError('Each OMX requires both finger and TCP links')
@@ -218,30 +221,7 @@ def run(args):
                 collision.CreateRestOffsetAttr(0.)
                 if prim.IsA(UsdGeom.Mesh):
                     UsdPhysics.MeshCollisionAPI.Apply(prim).CreateApproximationAttr('convexHull')
-        x, y = jaw_contact_point()
-        for finger, side in (('link6', 1), ('link7', -1)):
-            body = stage.GetPrimAtPath(tool[finger])
-            disabled = 0
-            for prim in Usd.PrimRange(body):
-                if prim.HasAPI(UsdPhysics.CollisionAPI):
-                    UsdPhysics.CollisionAPI(prim).GetCollisionEnabledAttr().Set(False)
-                    disabled += 1
-            if disabled == 0:
-                raise RuntimeError('Imported finger collision hull was not found')
-            pad = UsdGeom.Capsule.Define(stage, body.GetPath().AppendChild('grip_pad'))
-            pad.CreateAxisAttr('Z'); pad.CreateRadiusAttr(PAD_RADIUS); pad.CreateHeightAttr(2*PAD_HALF_LENGTH)
-            UsdGeom.Xformable(pad).AddTranslateOp().Set(Gf.Vec3d(x, side*(y+PAD_RADIUS), 0.))
-            pad.CreatePurposeAttr('guide')
-            UsdPhysics.CollisionAPI.Apply(pad.GetPrim())
-            offsets = PhysxSchema.PhysxCollisionAPI.Apply(pad.GetPrim())
-            offsets.CreateContactOffsetAttr(PAD_CONTACT_OFFSET_M)
-            offsets.CreateRestOffsetAttr(PAD_REST_OFFSET_M)
-            UsdShade.MaterialBindingAPI.Apply(pad.GetPrim()).Bind(UsdShade.Material.Get(stage, '/World/GripMaterial'),
-                UsdShade.Tokens.weakerThanDescendants, 'physics')
-            enabled = [p for p in Usd.PrimRange(body) if p.HasAPI(UsdPhysics.CollisionAPI)
-                       and UsdPhysics.CollisionAPI(p).GetCollisionEnabledAttr().Get()]
-            if len(enabled) != 1 or enabled[0].GetPath() != pad.GetPath():
-                raise RuntimeError('Each finger requires exactly its calibrated capsule collider')
+        add_finger_pads(stage, tool, FIXTURE.get('gripper'))
         robot = world.scene.add(Robot(articulation_path, name='arm'+str(len(robots))))
         robots.append(robot)
     if mapped:
@@ -275,14 +255,17 @@ def run(args):
     if mapped:
         from mapped_stack_fixture import free_lift, home, stable_box, tcp_from_wrist
         from mapped_stack_task import Planner, apply_servo
-        planner = Planner(args.report.parent,scene=FIXTURE.get('planning_scene'))
+        planner = Planner(args.report.parent,scene=FIXTURE.get('planning_scene'),tcp_x_m=FIXTURE.get('tcp_offset_m',[None])[0])
         initial = planner.request('homes', bases=FIXTURE['arm_bases_m'],
             base_yaws=FIXTURE.get('arm_base_yaws_rad', [0., 0.]),
             points=[home(0, args.mapped_cube_stack, fixture=FIXTURE), home(1, args.mapped_cube_stack, fixture=FIXTURE)])
+        if FIXTURE.get('gripper'):  # opt-in jaw: finger angles from its pad geometry, not the stock jaw's profile
+            from palletizing_gripper import finger_angles
+            initial['gripper'] = finger_angles(FIXTURE.get('release_gap_m'))
 
     def tcp_position(arm):
         positions, quaternions = wrist_views[arm].get_world_poses()
-        return np.array(tcp_from_wrist(positions[0], quaternions[0]))
+        return np.array(tcp_from_wrist(positions[0], quaternions[0], FIXTURE.get('tcp_offset_m', (.09193, -.0016, 0.))))
 
     if args.mapped_long_stack or args.mapped_cube_stack:
         from mapped_stack_task import execute
@@ -563,7 +546,10 @@ def main():
     parser.add_argument('--layers', type=int, choices=(1, 3), default=3)
     parser.add_argument('--container-case', choices=('nominal', 'offset', 'reverse', 'column', 'nominal-estimate', 'nominal-bc-v0',
                                  'nominal-bc-v0-rl0', 'release-episodes-rl0', 'release-episodes-rl1',
-                                 'release-episodes-rl2', 'release-episodes-rl3', 'nominal-bc-v0-rl3'),
+                                 'release-episodes-rl2', 'release-episodes-rl3', 'nominal-bc-v0-rl3',
+                                 'nominal-bc-v0-release8', 'nominal-release3', 'nominal-gap6-release3',
+                                 'nominal-palletizing-v21', 'nominal-palletizing-v21-hold', 'nominal-palletizing-v21-ship',
+                                 *('nominal-palletizing-v21-ship-'+n for n in ('y040', 'y050', 'y060', 'y-060', 'x150', 'y020', 'y030', 'x100', 'y-020', 'y-030', 'g315', 'y020-g315', 'y030-g315', 'y040-g315', 'y-020-g315', 'y-030-g315', 'g3225', 'y060-g315', 'y060-guard-g315', 'r290-g315', 'y080-r290-g315', 'y100-r290-guard-g315', 'y050-g315', 'y100-r290-g315', 'y-080-r290-g315', 'w05-g315', 'y060-r290-g315', 'y070-r290-g315', 'y-060-r290-g315', 'y-070-r290-g315', 'w10-g315', 'w05-r290-g315', 'w10-r290-g315', 'y020-g3225', 'y030-g3225', 'y040-g3225', 'y-020-g3225'))),
                         default='nominal')
     args = parser.parse_args()
     check_vendor_manifest()
