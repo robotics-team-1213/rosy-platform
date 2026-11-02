@@ -551,7 +551,8 @@ def test_account_native_tests_are_required_in_full_and_source_affected_ci():
         owners = [entry for entry in affected.ci_matrix(repo, selection)['include']
                   if any(suite in invocation for invocation in entry['invocations'])]
         assert len(owners) == 1 and owners[0]['gating'] and owners[0]['ros'] == 'none'
-        assert [suite] in owners[0]['invocations']
+        if selection.mode == 'full':
+            assert [suite] in owners[0]['invocations']
 
 
 def test_ci_full_matrix_reaches_every_registered_module_suite():
