@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import time
 
 import pytest
 
@@ -163,3 +164,76 @@ def test_resume_refuses_a_landed_snapshot_and_reports_a_relaunch_without_ticket(
     _git(main, "merge", "-q", "--ff-only", snap)
     with pytest.raises(SystemExit, match="already in main"):
         tool.resume(dev, tree.name, [], lambda *a: None, wait=5, sleep=lambda s: None)
+
+
+@pytest.fixture
+def starting_lander(repo, tmp_path):
+    main, dev = repo
+    snap, log = tool.start(dev, [], NOW, lambda *a: None)
+    tree = log.parent / log.name.removesuffix(".log")
+    stop, admit, calls = (tmp_path / name for name in ("stop", "admit", "calls"))
+    script = tree / "tools" / "land.py"
+    script.parent.mkdir()
+    qdir = main / ".git" / "rosy-land-queue"
+    script.write_text(
+        "import json,os,time\nfrom pathlib import Path\n"
+        f"with Path({str(calls)!r}).open('a') as stream: stream.write('run\\n')\n"
+        f"while not Path({str(stop)!r}).exists():\n"
+        f" if Path({str(admit)!r}).exists():\n"
+        f"  q = Path({str(qdir)!r}); q.mkdir(exist_ok=True)\n"
+        f"  (q/'0001-1.json').write_text(json.dumps(dict(pid=os.getpid(),branch={snap!r},status='pending')))\n"
+        " time.sleep(.02)\n"
+        "raise SystemExit(7)\n", encoding="utf-8")
+    processes = []
+
+    def launch(argv, path):
+        process = tool.detach(argv, path)
+        processes.append(process)
+        return process
+
+    yield main, dev, snap, tree, admit, calls, launch
+    stop.touch()
+    for process in processes:
+        process.wait(timeout=10)
+
+
+def test_live_startup_is_successful_and_cannot_be_resumed_twice(starting_lander):
+    main, dev, snap, tree, admit, calls, launch = starting_lander
+    assert tool.resume(dev, tree.name, [], launch, wait=0, sleep=lambda s: None) == "starting"
+    bootstrap = tree.parent / (tree.name + ".land_async.py")
+    bootstrap.write_text(bootstrap.read_text(encoding="utf-8") + "\n# keep running bootstrap\n", encoding="utf-8")
+    before = bootstrap.read_bytes()
+    with pytest.raises(SystemExit, match="supervisor"):
+        tool.resume(dev, tree.name, [], launch, wait=0, sleep=lambda s: None)
+    assert bootstrap.read_bytes() == before
+    admit.touch()
+    until = time.monotonic() + 5
+    while not tool.live_tickets(dev) and time.monotonic() < until:
+        time.sleep(.02)
+    assert tool.live_tickets(dev)[0]["branch"] == snap
+    assert calls.read_text() == "run\n", "only one land.py may drive the hidden tree"
+
+
+def test_exited_supervisor_without_ticket_is_a_failure(repo):
+    _, dev = repo
+    _, log = tool.start(dev, [], NOW, lambda *a: None)
+    tree = log.parent / log.name.removesuffix(".log")
+    processes = []
+
+    def launch(*a):
+        process = subprocess.Popen([sys.executable, "-c", "raise SystemExit(7)"])
+        processes.append(process)
+        return process
+
+    assert tool.resume(dev, tree.name, [], launch, wait=0, sleep=lambda s: processes[0].wait(timeout=5)) is None
+    assert processes[0].wait(timeout=5) == 7
+
+
+def test_direct_duplicate_supervisor_does_not_run_or_mark_the_owner_stopped(starting_lander):
+    _, dev, snap, tree, _, calls, launch = starting_lander
+    tool.resume(dev, tree.name, [], launch, wait=0, sleep=lambda s: None)
+    duplicate = subprocess.run([sys.executable, str(ROOT / "tools/land_async.py"), "--supervise", str(tree), snap],
+                               capture_output=True, text=True, timeout=5)
+    assert duplicate.returncode != 0 and "supervisor" in duplicate.stdout + duplicate.stderr
+    assert not (tree.parent / (tree.name + ".stopped")).exists()
+    assert calls.read_text() == "run\n"
