@@ -481,3 +481,17 @@ def test_every_allowlist_entry_still_matches():
 def test_operator_copy_uses_the_sanctioned_korean_terms():
     found = problems()
     assert found == [], "\n".join(f"{rel}:{line}: {why}: {literal[:120]}" for rel, line, literal, why in found)
+
+
+#: 같은 뜻의 표면별 다른 말 — 왼쪽이 은퇴한 말, 오른쪽이 정본(2026-11-02 표면 일관성 감사).
+SAME_MEANING_RETIRED = {"권한이 거부": "권한이 없습니다"}
+
+
+def test_one_word_per_meaning_across_every_web_surface():
+    roots = [REPO / root for root, _ in SURFACES] + [
+        REPO / "middleware/robot_ui/pilot", REPO / "learning/curation/perception/review_app_web"]
+    hits = [f"{_rel(path)}: {old} → {new}"
+            for root in roots for path in root.rglob("*")
+            if path.suffix in (".js", ".html") and "test" not in path.parts
+            for old, new in SAME_MEANING_RETIRED.items() if old in path.read_text(encoding="utf-8-sig")]
+    assert not hits, "\n".join(sorted(set(hits)))

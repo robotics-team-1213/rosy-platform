@@ -53,7 +53,8 @@ def validate_profile(profile):
         if not re.fullmatch(r'[a-z][a-z0-9_]{0,31}', units[-1]):
             raise ValueError('camera preview unit must be a plain instance name')
         device = Path(spec['device'])
-        if device.parent != Path('/dev/v4l/by-id'):
+        # Identical camera serials need the registry's persistent USB-port path.
+        if device.parent not in (Path('/dev/v4l/by-id'), Path('/dev/v4l/by-path')):
             raise ValueError('persistent camera identity required')
         devices.append(str(device))
         candidates = spec['candidates']
