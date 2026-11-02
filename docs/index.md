@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-11-03 · uncommitted · fix(harness): bootstrap each timing test before canonical imports
 - 2026-11-03 · uncommitted · fix(harness): preserve admission and G1 tests across main merge
 - 2026-11-03 · uncommitted · fix(harness): retain fresh timing proof through publication
 - 2026-11-03 · uncommitted · fix(harness): isolate G1 timing in a dedicated serial, host-exclusive job
 - 2026-11-03 · uncommitted · fix(landing): 분할 중복과 중첩 rollup 집계를 보완한다
-- 2026-11-03 · uncommitted · fix(landing): 병렬 준비와 폴백에서 급행 표시를 보존한다

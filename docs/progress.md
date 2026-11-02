@@ -3,17 +3,17 @@ module: docs
 logical_modules: []
 owner: 거버넌스
 last_verified:
-  commit: 111d476ce2
+  commit: 45720c033b
   date: 2026-11-03
 gates:
   SOURCE:
     state: GO
-    evidence: G1 isolation and fresh hash-bound publication evidence preserved through main 04877e4058 merge. Independent exact 111d476ce2 review found no supported findings; both parent test definitions remain intact. Thresholds and control code are unchanged.
+    evidence: Each of the two G1 tooling tests bootstraps its canonical tools import before use; independent 45720c033b review found no supported findings. No global conftest or whole-import checks changed. The 0.45s threshold and control code remain unchanged.
     cmd: python tools/harness/rosy_harness.py lint
   LOCAL:
     state: GO
-    evidence: '111d476ce2 remote admission/G1/selection/publication merge regressions: 267 passed / 0 skipped, NEW/known/flaky 0. Prior 9a9ca24543 publication/cache/landing regressions: 292 passed / 0 skipped. Separate actual G1 at 791a remains 12 passed / 0 skipped with one strict receipt; its file/gate/SOT are unchanged and it was not repeated. Scoped verification only; FULL/landing/field acceptance remain separate.'
-    cmd: python tools/remote/remote_pytest.py --sha 111d476ce2 -- ROSY_JOB_CORES=3 '-pno:xdist' test/test_remote_pytest.py test/test_g1_timing_gate.py test/test_work_queue_split.py test/test_land_tests_flag.py test/test_land_selection.py test/test_publish_evidence.py test/test_land_record.py
+    evidence: '45720c033b fresh whole-file remote execution: selection 58 passed / 0 skipped, G1 gate 36 passed / 0 skipped. Separate unchanged collect_alone wrapper: 4 passed / 0 skipped (two collections and two full child executions). All three reports NEW/known/flaky 0. Previous actual timing remains separate 12/12 evidence; no FULL or landing success is claimed.'
+    cmd: python tools/remote/remote_pytest.py --sha 45720c033b --affected-json '<OS Temp>/rosy-g1-bootstrap-isolation-4572/invocations.json'
   ROS-SIM:
     state: N/A
   ARTIFACT:
