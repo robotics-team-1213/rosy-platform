@@ -265,6 +265,7 @@ def test_prepared_full_and_fresh_turn_timing_execution_keep_all_hash_bound_proof
 
 @pytest.mark.parametrize('damage', [None, 'spec-only', 'missing-turn', 'bridge', 'malformed-spec'])
 def test_three_context_composition_uses_only_existing_prepared_and_final_publication_proof(repo, damage):
+    import land_full
     import land_speculate
     local, prepared, _ = _proof(repo)
     on = _git(local, 'rev-parse', f'{prepared}^')
@@ -280,8 +281,8 @@ def test_three_context_composition_uses_only_existing_prepared_and_final_publica
         invs.append(['test/test_spec_only.py'])
     if damage == 'malformed-spec':
         invs.append(exclusive.DEDICATED + ['-k', 'one'])
-    tool.land_full.save(local, 'feat/x', prepared, on, 'full', FULL)
-    path = tool.land_full._path(local, 'feat/x')
+    land_full.save(local, 'feat/x', prepared, on, 'full', FULL)
+    path = land_full._path(local, 'feat/x')
     data = json.loads(path.read_text())
     data['spec'] = {'sha': predicted, 'invocations': invs}
     path.write_text(json.dumps(data), encoding='utf-8')
@@ -291,12 +292,12 @@ def test_three_context_composition_uses_only_existing_prepared_and_final_publica
                    '1 passed in 0.01s\n', encoding='utf-8')
     for inv in invs:
         land_cache.record(local, predicted, tree, land_cache.env_id(local, predicted), inv, log)
-    prepared_plan = tool.land_full.prepared(local, 'feat/x', on)
+    prepared_plan = land_full.prepared(local, 'feat/x', on)
     if damage == 'malformed-spec':
         with pytest.raises(ValueError):
-            land_speculate.with_spec(SimpleNamespace(land_full=tool.land_full), local, 'feat/x', prepared_plan)
+            land_speculate.with_spec(SimpleNamespace(land_full=land_full), local, 'feat/x', prepared_plan)
         return
-    composed = land_speculate.with_spec(SimpleNamespace(land_full=tool.land_full), local, 'feat/x', prepared_plan)
+    composed = land_speculate.with_spec(SimpleNamespace(land_full=land_full), local, 'feat/x', prepared_plan)
     if damage == 'bridge':
         composed['main'] = final
     logs = qualified_record(tool, local, final, base, [exclusive.DEDICATED], prepared=composed)
