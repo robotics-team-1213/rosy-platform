@@ -102,6 +102,16 @@ def test_legacy_train_with_ambiguous_origins_is_incomplete_instead_of_guessing(t
     assert warnings and "ambiguous" in warnings[0]
 
 
+def test_competing_train_origins_cannot_be_inferred_from_a_later_successful_request(tmp_path):
+    rows = [ev(0, "queue", branch="fix/a", ticket="a", pid=1),
+            ev(10, "queue", branch="fix/b", ticket="selected-b", pid=2),
+            ev(20, "queue", branch="fix/b", ticket="other-b", pid=3),
+            ev(60, "train", branch="fix/a", branches=["fix/a", "fix/b"], result="landed"),
+            ev(80, "landed", branch="fix/b", pid=3)]
+    _, warnings = land_goal.normalize(rows, tmp_path)
+    assert warnings and "ambiguous" in warnings[0]
+
+
 def ev(t, event, branch="land/fix/a-20261031120000", pid=1, **kw):
     return {"t": t, "event": event, "branch": branch, "pid": pid, **kw}
 
@@ -184,6 +194,19 @@ def test_goal_cli_scopes_old_incomplete_trains_to_the_current_origins(goal_repo,
     monkeypatch.setattr(land_stats.time, "time", lambda: start + 600)
     assert land_stats.main(["--goal", "--hours", "1", "--p90", "300", "--stall", "300"]) == code
     assert ("FAIL: logical landing metrics incomplete" if code else "PASS:") in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("fields", [dict(event="landed", members=[]), dict(event="landed", members=[{}]),
+                                   dict(event="train", branches=[], result="landed"),
+                                   dict(event="train", branches=["fix/old"], members=[], result="landed")])
+def test_goal_cli_unknown_historical_membership_scope_cannot_pass(goal_repo, monkeypatch, capsys, fields):
+    events, start = goal_repo
+    rows = [ev(start - 2 * H, branch="land/fix/land-rollup-x", **fields),
+            ev(start, "queue", branch="fix/current"), ev(start + 300, "landed", branch="fix/current")]
+    events.write_text("\n".join(json.dumps(r) for r in rows), encoding="utf-8")
+    monkeypatch.setattr(land_stats.time, "time", lambda: start + 600)
+    assert land_stats.main(["--goal", "--hours", "1"]) == 1
+    assert "FAIL: logical landing metrics incomplete" in capsys.readouterr().out
 
 
 def test_goal_cli_recovers_historical_rollup_members_without_rewriting_events(goal_repo, monkeypatch, capsys):
