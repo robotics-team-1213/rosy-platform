@@ -180,3 +180,12 @@ def test_apply_history_revalidation_is_linear(landing, monkeypatch):
     monkeypatch.setattr(land_gc, "git", counted)
     assert land_gc.apply(repo, rows) == []
     assert len(calls) == 4, "each candidate's history is rechecked once"
+
+
+def test_sidecars_without_tree_or_branch_are_removed(landing):
+    repo, common, _, _ = landing
+    marker = common / land_gc.HOLDER / "land-feat-gone-20261102000009.stopped"
+    marker.write_text("STOP")
+    rows = land_gc.plan(repo, time.time(), 7)
+    assert land_gc.apply(repo, rows) == []
+    assert not marker.exists()
