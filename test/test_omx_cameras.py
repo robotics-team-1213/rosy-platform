@@ -108,3 +108,63 @@ def test_manifest_check_exits_1_until_applied(tmp_path, capsys):
     args = ["manifest", "--registry", str(reg_path), "--manifest", str(manifest)]
     assert oc.main(args) == 1 and manifest.read_text() == MANIFEST
     assert oc.main(args + ["--apply"]) == 0 and oc.main(args) == 0
+
+
+A_WRIST = {"role": "arm_a_wrist", "device": "/dev/v4l/by-path/pci-usb-0:3.3:1.0-video-index0",
+           "topic": "/arm_a_wrist_camera/image_raw", "frame": "arm_a_wrist_camera_link"}
+U20 = {"id": "0c45:6366", "serial": "SN0001", "usb": "1-2", "interface": "1-2:1.0", "speed_mbps": 480}
+
+
+def _bench(nodes: dict):
+    """facts, names and present/realpath for {node: (fact, [names])}."""
+    facts = {n: f for n, (f, _) in nodes.items()}
+    names = {n: ns for n, (_, ns) in nodes.items()}
+    owner = {name: n for n, (_, ns) in nodes.items() for name in ns}
+    return facts, names, owner.__contains__, lambda d: owner.get(d, d)
+
+
+def test_a_wrist_camera_moved_to_another_port_follows_its_role_and_a_new_model_is_only_proposed(tmp_path):
+    reg = registry(tmp_path, [dict(WRIST, usb_id=U20["id"]), dict(TOP, usb_id="8086:0b07")])
+    moved = "/dev/v4l/by-path/pci-usb-0:2.4:1.0-video-index0"
+    facts, names, present, realpath = _bench({
+        "/dev/video2": (U20, ["/dev/v4l/by-id/usb-U20CAM_SN0001-video-index0", moved]),
+        "/dev/video4": ({**U20, "id": "04f2:b678", "serial": "0001"}, ["/dev/v4l/by-id/usb-LG_Camera_0001-video-index0",
+                                                                      "/dev/v4l/by-path/pci-usb-0:2:1.0-video-index0"]),
+        "/dev/video12": ({**U20, "id": "8086:0b07"}, [TOP["device"]])})
+    rows = oc.propose(reg, facts, names, present, realpath)
+    assert [(r["node"], r["follow"], r["roles"]) for r in rows] == [("/dev/video2", "arm_b_wrist", ["arm_b_wrist"]),
+                                                                    ("/dev/video4", None, [])]
+    assert [r["device"] for r in rows] == [moved, "/dev/v4l/by-path/pci-usb-0:2:1.0-video-index0"]  # never by-id
+    changes = oc.learn(reg, facts, rows, present, realpath)
+    assert changes == [{"role": "arm_b_wrist", "from": WRIST["device"], "to": rows[0]["device"]}]
+
+
+def test_two_identical_cameras_gone_at_once_are_proposed_by_port_not_followed(tmp_path):
+    reg = registry(tmp_path, [dict(WRIST, usb_id=U20["id"]), dict(A_WRIST, usb_id=U20["id"])])
+    facts, names, present, realpath = _bench({
+        "/dev/video2": (U20, ["/dev/v4l/by-id/usb-U20CAM_SN0001-video-index0", "/dev/v4l/by-path/pci-usb-0:1.1:1.0-video-index0"]),
+        "/dev/video6": ({**U20, "usb": "1-3"}, ["/dev/v4l/by-id/usb-U20CAM_SN0001-video-index0",
+                                                "/dev/v4l/by-path/pci-usb-0:1.2:1.0-video-index0"])})
+    rows = oc.propose(reg, facts, names, present, realpath)
+    assert [r["follow"] for r in rows] == [None, None] and rows[0]["roles"] == ["arm_b_wrist", "arm_a_wrist"]
+    assert oc.learn(reg, facts, rows, present, realpath) == []
+
+
+def test_learn_records_the_model_of_each_present_camera_so_a_later_move_can_follow(tmp_path):
+    reg = registry(tmp_path, [WRIST])
+    facts, _, present, realpath = _bench({"/dev/video2": (U20, [WRIST["device"]])})
+    assert oc.learn(reg, facts, [], present, realpath) == [{"role": "arm_b_wrist", "usb_id": U20["id"]}]
+    assert reg["cameras"][0]["usb_id"] == U20["id"] and oc.learn(reg, facts, [], present, realpath) == []
+
+
+def test_approve_gives_a_new_role_the_naming_convention_and_save_refuses_a_device_used_twice(tmp_path):
+    path = tmp_path / "omx-cameras.json"
+    reg = registry(tmp_path, [TOP])
+    row = {"device": "/dev/v4l/by-id/usb-LG_Camera_0001-video-index0", "usb_id": "04f2:b678"}
+    oc.save(oc.approve(reg, "front", row), path)
+    front = oc.load(path)["cameras"][1]
+    assert front == {"role": "front", "topic": "/front_camera/image_raw", "frame": "front_camera_link",
+                     "stream": "color", "device": row["device"], "usb_id": "04f2:b678"}
+    with pytest.raises(SystemExit):
+        oc.save(oc.approve(oc.load(path), "back", {**row}), path)
+    assert len(oc.load(path)["cameras"]) == 2 and not path.with_suffix(".tmp").exists()

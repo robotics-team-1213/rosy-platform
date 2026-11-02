@@ -4395,3 +4395,9 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 이 worktree에서 `tools/remote/update_status.py` — model 37 declared 0 findings, ai 23 declared 0 findings(review-bridge는 KNOWN).
 - gate 변화: 없음. 관제 PC의 observer arm_a·arm_b 정지와 카메라(front·천장 폰) 실패는 셀 작업 중인 것으로 보여 손대지 않았다.
 - CE: 해당 없음 — 선언 누락은 update_status가 매번 드러낸다.
+
+## 2026-11-02 · uncommitted · OMX 카메라: 옮긴 카메라는 역할이 따라가고, 새 카메라는 제안 후 승인 한 번
+
+- 변경: `omx_cameras.py bind --apply`(20초 타이머)가 꽂힌 각 역할 카메라의 모델(`usb_id`)을 레지스트리에 기록한다. 역할의 카메라가 사라지고, 같은 모델의 미등록 카메라가 하나뿐이며, 그 모델로 사라진 역할도 하나뿐이면 그 역할을 새 포트로 옮기고 브리지 manifest도 맞춘다. 같은 모델 두 대가 함께 옮겨졌거나 처음 보는 모델은 `propose`가 후보로만 보여 주고 `approve NODE ROLE` 한 번으로 등록한다(새 역할은 `/<role>_camera/image_raw`·`<role>_camera_link`). 새 등록은 커널 by-id 이름을 쓰지 않는다(쌍둥이가 나중에 꽂히면 같은 이름).
+- 증거: `test/test_omx_cameras.py` 11 passed(로컬). 현장 PC에서 새 파일을 임시 경로로 `propose`·`bind`(apply 없음) → 미등록 LG 카메라 1대가 역할 없는 후보로만 나오고 레지스트리 해시 변화 없음.
+- gate 변화: 없음. 현장 `/etc` manifest는 여전히 root로 `manifest --apply`. 기존 역할은 다음 bind 때 모델이 기록된 뒤부터 따라간다. CE: 기존 교훈 갱신.

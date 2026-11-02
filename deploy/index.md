@@ -77,8 +77,8 @@
 
 ## 최근 기록
 
+- 2026-11-02 · uncommitted · OMX 카메라: 옮긴 카메라는 역할이 따라가고, 새 카메라는 제안 후 승인 한 번
 - 2026-11-02 · b101f57783 · fix(hosts): 모델·AI PC 미선언 유닛 선언, review-bridge 알려진 차이
 - 2026-11-02 · uncommitted · 현장 추가 팔 오버레이 전환 순서를 교훈으로
 - 2026-11-02 · uncommitted · fix(site): Tailscale 대역에서도 천장 카메라 미리보기
 - 2026-11-02 · uncommitted · feat(site): 관제 단위 overlay를 서명 candidate에 넣는다 (D-960)
-- 2026-11-02 · uncommitted · OMX 자동 연속 운반(cell_auto_carry)과 없는 출발 site 거절
