@@ -1,6 +1,6 @@
 ## D-473 관제 콘솔도 개발 연결 모드에서는 토큰 없이 같은 망 PC에 운용자 세션을 준다
 
-**Status:** Accepted (2026-10-06, 사용자 방향 결정 "관제pc나 기타 pc에선 토큰없이 동작" → 개발 연결 모드 확장 선택. 구현·ARTIFACT·FIELD 별도)
+**Status:** Superseded by D-962 (2026-11-02). 아래는 2026-10-06의 익명 개발 접속 결정 기록이다. 개발 모드도 사람 로그인을 필수로 하며 합성 operator 발급·수락은 폐기한다. 구현·배포·현장 수용은 별도다.
 
 잇는 결정: [D-432](D-432-common-discovery-and-development-link-mode.md)(개발 연결 모드) · [D-471](D-471-same-network-auth-free-request-rejected.md)(같은 망 전면 무인증 기각) · [D-361](D-361-site-console-enrolls-robot-by-screen-code.md)(콘솔 로봇 등록).
 

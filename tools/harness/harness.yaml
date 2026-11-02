@@ -42,6 +42,11 @@ modules:
     tests: [operations/fleet/test]
     functional_kind: pytest
     functional: [operations/fleet/test]
+  - name: account
+    path: operations/account
+    tests: [operations/account/test]
+    functional_kind: pytest
+    functional: [operations/account/test]
   - name: monitoring
     path: operations/monitoring
     tests: [operations/monitoring/test]

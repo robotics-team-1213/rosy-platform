@@ -118,10 +118,57 @@ health, and drift for all four.
 
 ## Where the control console runs
 
-### Rosy Account activation (D-757)
+### Independent Rosy Account service (D-962)
+
+`compose.account.yaml` runs Account as a separate process using the signed Fleet
+image, with a dedicated `account_state` volume. Only Account mounts the signing
+key directory `/etc/rosy/account` at `/run/rosy-account`. Keep its directory mode
+0700 and files mode0400 owned by runtime UID10001. The existing issuer HTTPS
+frontend forwards to Account, not Fleet. Fleet receives public verification keys
+and its own encrypted local session configuration under `/etc/rosy/fleet-account`,
+mounted read-only at `/run/rosy-fleet-account`; its session DB belongs in Fleet's
+writable state volume. Set `ROSY_FLEET_ACCOUNT_CLIENT_CONFIG` to that receiver JSON
+and register its exact HTTPS callback and site resource in the existing authority.
+The issuer hostname aliases the proxy on both its edge and backend networks.
+Fleet reaches Account over the shared backend with the original issuer hostname
+and TLS verification; it does not need edge-network access or host hairpin routing.
+Keep `ROSY_ACCOUNT_CONFIG` for the Account command; the Fleet environment sets it
+empty so Fleet never opens the authority database. Development mode also requires
+human login and never issues an anonymous development operator.
+
+Before receiver activation, inventory existing machine health credentials. A
+token-only read-only viewer must be explicitly marked `machine: true` in the
+protected site-users file; retain its existing role and token. The marker cannot
+be combined with human login/password or policy authority. Unmarked human legacy
+Bearers remain refused. Verify state and vision-source reads and denied writes
+with that same machine credential after cutover; never promote its role to make
+the health gate pass. Include configured Monitoring Fleet upstream credentials
+in this inventory; each retained viewer needs its own explicit marker. For
+maintenance status reads, use the existing token file registered in
+`functional_checks`; an unregistered file does not replace bootstrap authority.
+
+Before switching an existing activated authority, stop its writer, create and
+verify a consistent SQLite backup, then use
+`rosy_account.migration.migrate_authority(source, target)` to copy the ten related
+Account/session/OAuth tables into a new protected Account DB. It refuses an
+existing target. Preserve account IDs, effective password digests, grants,
+revisions, families and OAuth records; do not bootstrap the activated DB again.
+Remove the one-time `bootstrap_admin_login` setting from the protected runtime
+authority configuration. Retain a protected copy of the previous configuration
+with the consistent backup. Never expose these values in a deployment log.
+
+Validate the signed candidate and normalized Compose before enabling the single
+Account writer and changing the proxy. Verify TLS, `/healthz`, anonymous API
+denial, the visible Learning login form and callback registration, Fleet cookie
+authorization/logout, and Account availability while Fleet is stopped. Preserve
+new account changes during recovery: do not overwrite the new DB with a stale
+pre-transition copy. Real-user password entry and allowed project operations are
+separate acceptance evidence.
+
+### Initial in-process Account activation (D-757, historical compatibility)
 
 Prepare `/etc/rosy/account/authority.json` and its signing key outside the checkout.
-Fleet alone mounts this directory at `/run/rosy-account`; use directory mode0700
+The historical Fleet composition mounted this directory at `/run/rosy-account`; use directory mode0700
 and files mode0400 owned by Fleet's runtime UID10001. Set
 `ROSY_ACCOUNT_CONFIG=/run/rosy-account/authority.json` in the existing site env
 only after preparing the approved HTTPS issuer, registered app callbacks, trust

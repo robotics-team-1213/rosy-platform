@@ -25,7 +25,8 @@ from fleet.server.context_options import activate_from_args, add_cli_arguments
 from fleet.server.sightings_config import _relax_retired_sighting_targets
 from fleet.stuck.cli_config import _ai_first, _stuck_resolver_enrolled, _realign_config
 from fleet.console_site_config import (_build_site_map, _goal_lease_ttl_s, _policy_admission_core,
-                                       _lane_compliance_config, _map_pose_config, _trip_config)
+                                       _lane_compliance_config, _map_pose_config, _trip_config,
+                                       _account_login_config)
 from fleet.traffic.config import (_traffic_authority, _traffic_signal_advice, _traffic_signals, _traffic_zones,
                                    _trip_lease)
 from fleet.formation.geometry import DEFAULT_SPACING, Formation, FormationError
@@ -184,8 +185,8 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         "mount the central Fleet registry (D-454 step 1): /api/v1/fleet/robots reads the "
         "site roster as the source of truth; requires an enrollment store"))
     console.add_argument("--connection-mode", choices=("paired", "development"), default="paired",
-                         help=("D-473: development gives same-LAN browsers a 1 h operator session "
-                               "without a token; also needs ROSY_DEPLOYMENT=development"))
+                         help=("development connection metadata; human login is required; "
+                               "also needs ROSY_DEPLOYMENT=development"))
     return parser.parse_args(argv)
 
 
@@ -437,9 +438,7 @@ def run_console(args: argparse.Namespace) -> None:
 
         site_users, site_logins = load_site_accounts(users_file)
     tasks_db = getattr(args, "tasks_db", None)
-    account_config = getattr(args, "account_config", None)
-    if account_config is not None and tasks_db is None:
-        sys.exit("--tasks-db is required with --account-config")
+    account_config, account_client_config, human_login = _account_login_config(args, site_logins, tasks_db)
     if site_users is not None and tasks_db is None:
         sys.exit("--tasks-db is required with --users-file for persistent audit")
     mission_api = bool(getattr(args, "mission_api", False))
@@ -459,16 +458,16 @@ def run_console(args: argparse.Namespace) -> None:
                   file=sys.stderr)
         elif tasks_db is None:
             sys.exit("--tasks-db is required with --connection-mode development for the session audit")
+        elif not human_login:
+            sys.exit("development connection mode requires human login configuration")
         else:
             from fleet.server.development_session import DevelopmentSessions
 
             development_sessions = DevelopmentSessions()
-            print("warning: development connection mode: same-LAN browsers get 1 h operator sessions",
-                  file=sys.stderr)
-    # D-548: a development session is a named operator (D-473 3), so it stands in for site-users.
-    if mission_api and site_users is None and development_sessions is None and account_config is None:
+            print("development connection mode: human login required", file=sys.stderr)
+    if mission_api and site_users is None and not human_login:
         sys.exit("--users-file is required with --mission-api for named operator authorization")
-    if args.host not in LOOPBACK_HOSTS and not (console_token or users_file is not None or account_config is not None):
+    if args.host not in LOOPBACK_HOSTS and not (console_token or users_file is not None or human_login):
         sys.exit("--token or --users-file 없이 루프백 밖으로 열 수 없다")
     if args.host not in LOOPBACK_HOSTS and tasks_db is None:
         sys.exit("--tasks-db is required when the Fleet control surface is externally reachable")
@@ -690,7 +689,8 @@ def run_console(args: argparse.Namespace) -> None:
                      cell_app_service_id=getattr(args, "cell_app_service_id", None),
                      goal_evidence_service=goal_evidence_service,
                      site_users=site_users, site_logins=site_logins, discovery=discovery,
-                     account_config=account_config, discovery_token=discovery_token,
+                     account_config=account_config, account_client_config=account_client_config,
+                     discovery_token=discovery_token,
                      approved_peer_directory_file=getattr(args, 'approved_peer_directory_file', None),
                      start_task_dispatcher=not mission_api,
                      vision_lease_secret=vision_preview_secret,
