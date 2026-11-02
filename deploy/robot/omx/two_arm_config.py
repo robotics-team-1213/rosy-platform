@@ -23,6 +23,7 @@ from guarded_native import BODY, TURN, connect_passive  # noqa: E402
 from joint_tune import FOLLOWER as FOLLOWER_MODELS  # noqa: E402
 from leader_actuator import (  # noqa: E402
     CAP_MAX, CURRENT_MAX, DEFAULT_CURRENT, DEFAULT_PWM, GRAVITY_MAX_TICKS)
+from session_caps import model_tuning  # noqa: E402
 
 SCHEMA = "rosy.omx-two-arm-pipeline/1"
 POSE_SCHEMA = "rosy.omx-two-arm-poses/1"
@@ -187,8 +188,14 @@ def follower_gains(config: dict) -> dict:
     Without an I gain a servo stops short of its goal under load, and that steady-state
     error is what a drooping shoulder shows as a Follower that never reaches the Leader.
     The gains are RAM registers, so a run sets them with torque OFF and restores them.
+    The OMX-AI model's P and I tuning (session_caps, D-951 6) sits under the config's own.
     """
-    return _per_joint_gains(config, "follower_gains")
+    names = dict(zip(FOLLOWER_MODELS, guarded_native.NAMES))
+    model = {names[motor]: {k: v for k, v in tuning.items() if k in ("p", "i")}
+             for motor, tuning in model_tuning().items() if names[motor] in BODY}
+    own = _per_joint_gains(config, "follower_gains")
+    merged = {name: {**model.get(name, {}), **own.get(name, {})} for name in BODY}
+    return {name: values for name, values in merged.items() if values}
 
 
 def leader_gains(config: dict) -> dict:
