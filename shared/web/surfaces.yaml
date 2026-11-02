@@ -253,6 +253,19 @@ surfaces:
       test_web_budgets의 D-262 VERDICTS가 맡는다.
     baseline_reason: 제품 표면이 아니므로 G2 기준선이 없다.
 
+  - id: capture-wall
+    path: tools/capture/multi_record.html
+    themes: [dark, light]
+    surface: dev
+    medium: web
+    audience: 녹화 세션 감시 담당자 — 촬영 중 카메라 벽과 로봇 지도 위치 확인 (D-563)
+    role: 다중 녹화 벽 — 이 PC의 녹화 세션을 읽어 보이기만 한다. 고정 포트 없이 임시 포트로 로컬에서만 서빙되며 제품 표면이 아니다 (D-937).
+    owns: []
+    contracts: []
+    contract_reason: >
+      색은 /common 토큰을 따르지만 제품 셸·확인 문법 계약 대상이 아니다(촬영 도구). 캔버스 색도 매 프레임 토큰에서 읽는다.
+    baseline_reason: 제품 표면이 아니므로 G2 기준선이 없다.
+
   - id: robot-face
     api_owners: []
     path: middleware/robot_ui/face

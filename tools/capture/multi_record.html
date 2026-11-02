@@ -1,20 +1,20 @@
 <!doctype html>
 <html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ROSY · 함께 녹화</title>
-<link rel="stylesheet" href="common/tokens.css"><script src="common/theme.js"></script>
+<title>Rosy 개발 — 함께 녹화</title>
+<link rel="stylesheet" href="./common/tokens.css"><script src="./common/theme.js"></script>
+<script type="module" src="./common/ui.js"></script>
 <style>
 body{margin:0;background:var(--surface-canvas);color:var(--text-primary);font:var(--text-body) var(--body)}header{padding:var(--space-4) var(--space-5);display:flex;gap:var(--space-5);align-items:center}h1{font-size:var(--text-title);margin:0}#state{margin-left:auto;color:var(--series-primary)}canvas{width:100%;height:auto;display:block}p{margin:var(--space-3) var(--space-5);color:var(--text-secondary)}a{color:var(--series-primary)}
 </style>
 <header><h1>카메라 · 위치 함께 녹화</h1><span id="state" role="status">연결 중</span></header>
 <canvas id="wall" width="1280" height="720" aria-label="선택한 카메라 영상과 로봇 위치"></canvas>
 <p>원본 JPEG · 위치 기록 · 분석 DB를 이 PC에 저장합니다. <a href="session.json">세션 정보</a> · 지도 위치 미확인은 별도로 표시합니다.</p>
-<script>
+<script type="module">
 const canvas=document.querySelector('#wall'),ctx=canvas.getContext('2d'),state=document.querySelector('#state');
 const images=new Map();
-// Canvas colours are the page tokens, read on every frame so a theme change repaints.
-const token=name=>getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-const C={get ground(){return token('--ground')},get ink(){return token('--ink')},get live(){return token('--series-primary')},get warn(){return token('--status-warn')}};
-function text(value,x,y,color=C.ink){ctx.fillStyle=color;ctx.font=`18px ${token('--body')}`;ctx.fillText(value,x,y)}
+// Canvas colours and fonts come from the shared palette (window.RosyPalette, D-359 §4).
+const C={get ground(){return window.RosyPalette.cssColor('--ground')},get ink(){return window.RosyPalette.cssColor('--ink')},get live(){return window.RosyPalette.cssColor('--series-primary')},get warn(){return window.RosyPalette.cssColor('--status-warn')}};
+function text(value,x,y,color=C.ink){ctx.fillStyle=color;ctx.font=window.RosyPalette.canvasFont('body');ctx.fillText(value,x,y)}
 async function update(){
  try{
   const response=await fetch('session.json',{cache:'no-store'});if(!response.ok)throw Error('session');
