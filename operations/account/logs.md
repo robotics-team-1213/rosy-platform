@@ -6,6 +6,7 @@
 - 증거: `e82b3cfc73` 소유·호환 import 원격 3 passed. `023d9915a3` 실제 HTTP 수집 9 passed, 인증 요청 15종의 응답·passing node 수집. 같은 SHA의 sample 로그인·거절·로그아웃과 Chromium 전송 흐름 2 passed, skip 0. 이 증거는 운영 사용자 로그인 수용을 대신하지 않는다.
 - 경계: 운영 PC의 기존 인증서 호스트 매핑은 관리자 승인 뒤 기존 파일 바이트를 보존해 한 줄만 추가했다. 일반 이름 해석과 인증서 검증을 유지한 Python·Edge의 기존 Fleet health 응답 200을 확인했다. 계정 DB·서비스 전환은 아직 적용하지 않았다.
 - CE: 검증표·호환 import 수정은 코드와 회귀 시험이 설명한다. 기존 로그인 화면 교훈 외의 새 교훈은 추가하지 않는다.
+- gate 변화: SOURCE·LOCAL GO, ARTIFACT·FIELD HOLD. 이번 검증은 서명 설치나 운영 사용자 수용을 증명하지 않는다. ROS-SIM·DEVICE N/A.
 
 ## 2026-11-02 · uncommitted · D-962 독립 인증 소유 모듈
 
