@@ -68,11 +68,12 @@ def test_full_selection_keeps_full_plan_and_reason(caller, tmp_path):
     assert note == "selector escalated to FULL (safety; foundation): full tier on the lab PCs"
 
 
-def test_explicit_full_accepts_root_exclusion_only_with_strict_timing_companion(caller, tmp_path):
+def test_explicit_full_accepts_root_exclusion_only_with_strict_timing_companion(caller, tmp_path, monkeypatch):
     selection = load_selection()
     owner, payload, _ = caller
     plan = [['test', '--ignore=' + exclusive.TARGET], exclusive.DEDICATED]
     payload.update(mode='full', full_invocations=plan)
+    monkeypatch.setattr(selection, 'all_browsers', lambda *args: [['ROSY_RUN_BROWSER_TESTS=1', 'browser/test']])
     actual, note = selection.select(owner, tmp_path, 'base', 'python', full=True)
     assert actual == plan + [['ROSY_RUN_BROWSER_TESTS=1', 'browser/test']]
     assert note == 'explicit canonical FULL'
@@ -557,7 +558,8 @@ def test_explicit_full_missing_canonical_evidence_fails_closed(full_case, fault)
         git(case.wt, "rm", "tools/harness/affected_tests.py")
         git(case.wt, "commit", "-qm", "missing selector")
     elif fault == "empty_plan":
-        commit(case.wt, {"tools/harness/rosy_harness.py": CANONICAL.replace("[['test'], ['pkg/test']]", "[]")}, fault)
+        commit(case.wt, {"tools/harness/rosy_harness.py": CANONICAL.replace(
+            "full_invocations=FULL_PLAN if full else []", "full_invocations=[]")}, fault)
     elif fault == "bad_json":
         commit(case.wt, {"tools/harness/rosy_harness.py": "print('not-json')\n"}, fault)
     else:
