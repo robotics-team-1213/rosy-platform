@@ -38,6 +38,8 @@ full = selection["full_invocations"]
 browsers = command(["tools/land_selection.py", "--all-browsers"])
 assert selection["mode"] == "full" and valid_plan(full)
 assert exclusive.canonical_full(full) if exclusive is not None else ["test"] in full
+if exclusive is not None:
+    exclusive.validate(request["invocations"], True)
 assert valid_plan(browsers) and all("ROSY_RUN_BROWSER_TESTS=1" in inv for inv in browsers)
 plan = full + browsers
 variants = {}
