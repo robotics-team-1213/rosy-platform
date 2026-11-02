@@ -211,6 +211,7 @@ def test_unproven_nested_completion_stays_incomplete(nested_completion, bad):
     elif bad == "cycle":
         inner["members"] = [{k: v for k, v in inner.items() if k != "members"}]
     elif bad == "duplicate":
+        rows[-1]["members"][1]["candidate"] = inner["members"][0]["candidate"]
         inner["members"].append(dict(rows[-1]["members"][1]))
     elif bad == "invalid_pin":
         inner["members"][0]["candidate"] = "f" * 40
@@ -221,6 +222,25 @@ def test_unproven_nested_completion_stays_incomplete(nested_completion, bad):
     normalized, warnings = land_goal.normalize(rows, events.parent)
     assert warnings and normalized[-1]["metrics_incomplete"]
     assert land_goal.lead_times(normalized, start, start + 200) == []
+
+
+@pytest.mark.parametrize("bad", ["invalid_pin", "missing", "cycle", "invalid_branch"])
+def test_nested_incomplete_scope_keeps_known_leaves_and_unknown_trees_closed(nested_completion, bad):
+    events, start, rows = nested_completion
+    inner = rows[-1]["members"][0]
+    if bad == "invalid_pin":
+        inner["members"][0]["candidate"] = "f" * 40
+    elif bad == "missing":
+        inner.pop("members")
+    elif bad == "cycle":
+        inner["members"] = [{k: v for k, v in inner.items() if k != "members"}]
+    else:
+        inner["members"][0]["branch"] = 42
+    rows += [ev(start + 300, "queue", branch="fix/unrelated", ticket="other", pid=9),
+             ev(start + 360, "landed", branch="fix/unrelated", pid=9)]
+    normalized, warnings = land_goal.normalize(rows, events.parent, start + 200, start + 400)
+    assert normalized[-3]["metrics_incomplete"]
+    assert bool(warnings) == (bad != "invalid_pin"), "only a complete leaf name set can prove an unrelated window"
 
 
 def test_goal_cli_stall_uses_landing_events_despite_old_commit_dates(goal_repo, monkeypatch, capsys):

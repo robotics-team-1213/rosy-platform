@@ -141,6 +141,13 @@ def test_build_persists_nested_children_without_changing_direct_ownership(repo, 
     assert len(completed) == 1 and completed[0]["members"][0]["members"] == children
 
 
+def test_capture_does_not_turn_invalid_noncarrier_children_into_a_valid_leaf(tmp_path):
+    member = dict(branch="land/fix/a-20261101000000", ticket="a", candidate="a" * 40,
+                  members=[dict(branch="land/fix/b-20261101000000", ticket="b", candidate="b" * 40)])
+    captured = land_rollup.member_metadata(tmp_path, member)
+    assert captured.get("members_error"), "invalid nested metadata must not be silently dropped into a valid leaf"
+
+
 @pytest.mark.parametrize("log, groups", [("[land] STOP: NEW failure in pkg/test", [["a", "b"], ["c", "d", "e"]]),
                                          ("[land] STOP: merge aborted; resolve by hand", [["a"], ["b"], ["c"], ["d"],
                                                                                          ["e"]])])

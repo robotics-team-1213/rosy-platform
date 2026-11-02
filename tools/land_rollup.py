@@ -104,6 +104,26 @@ def plan(repo: Path, rows: list[dict], tier_of=tier, reach_of=reach) -> list[dic
     return members if len(members) >= 2 else []
 
 
+def member_metadata(place: Path, member: dict, ancestors=()) -> dict:
+    """Keep direct owners, embedding frozen child metadata before their sidecars can be collected."""
+    data = {k: member[k] for k in ("branch", "worktree", "candidate", "ticket", "members_error") if k in member}
+    branch = data["branch"]
+    if not land_async.ROLLUP.fullmatch(branch) or data.get("members_error"):
+        return data
+    try:
+        if branch in ancestors:
+            raise ValueError("cyclic nested membership")
+        children = member["members"] if "members" in member else json.loads(
+            (place / (branch.replace("/", "-") + ".members")).read_text(encoding="utf-8"))
+        if not isinstance(children, list) or not children or any(
+                not isinstance(m, dict) or not isinstance(m.get("branch"), str) or not m["branch"] for m in children):
+            raise ValueError("invalid nested members")
+        data["members"] = [member_metadata(place, m, (*ancestors, branch)) for m in children]
+    except (OSError, ValueError, RecursionError):
+        data["members_error"] = "unavailable nested membership"
+    return data
+
+
 def build(repo: Path, members: list[dict], now: datetime, python: str = sys.executable,
           start=land_async.start) -> tuple[str, list[dict]] | None:
     """Merge members into a fresh branch from main, run the stage-0 checks, queue it; (snapshot, merged members)."""
@@ -118,7 +138,8 @@ def build(repo: Path, members: list[dict], now: datetime, python: str = sys.exec
             try:
                 candidate = git(repo, "rev-parse", r["branch"]).stdout.strip()
                 land.merge(wt, candidate, branch, python, False, source=r["branch"])
-                merged.append({**r, "candidate": candidate})
+                metadata = member_metadata(land_async.holder(repo), {**r, "candidate": candidate})
+                merged.append({**r, **metadata})
             except land.Stop as exc:
                 print(f"[rollup] {r['branch']} left out: {str(exc).splitlines()[0]}", flush=True)
         if len(merged) < 2:
@@ -136,7 +157,8 @@ def build(repo: Path, members: list[dict], now: datetime, python: str = sys.exec
         finally:
             os.environ.pop(land_queue.TICKET_ENV, None)
         (log.parent / (log.name.removesuffix(".log") + ".members")).write_text(
-            json.dumps([{k: r[k] for k in ("branch", "worktree", "candidate", "ticket") if k in r}
+            json.dumps([{k: r[k] for k in ("branch", "worktree", "candidate", "ticket", "members", "members_error")
+                         if k in r}
                         for r in merged], indent=1),
             encoding="utf-8")
         return snap, merged
