@@ -58,6 +58,17 @@ def test_historical_batch_observer_is_not_an_extra_main_move(tmp_path):
     assert "main_move" not in rows[4], "raw log rows stay immutable"
 
 
+def test_legacy_train_branch_reuse_counts_each_origin_once():
+    a, b = "fix/a", "fix/b"
+    rows = [ev(0, "queue", branch=a, ticket="a1", pid=1), ev(10, "queue", branch=b, ticket="b1", pid=2),
+            ev(60, "train", branch=a, pid=1, branches=[a, b], result="landed"),
+            ev(61, "landed", branch=b, pid=2),
+            ev(100, "queue", branch=a, ticket="a2", pid=3), ev(110, "queue", branch=b, ticket="b2", pid=4),
+            ev(160, "train", branch=a, pid=3, branches=[a, b], result="landed"),
+            ev(161, "landed", branch=b, pid=4)]
+    assert land_goal.lead_times(rows, 0, 200) == [1, 50 / 60, 1, 50 / 60]
+
+
 def ev(t, event, branch="land/fix/a-20261031120000", pid=1, **kw):
     return {"t": t, "event": event, "branch": branch, "pid": pid, **kw}
 
