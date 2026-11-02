@@ -3,8 +3,8 @@ turn will most likely test, outside the lock.
 
 On 2026-10-27 a landing took 2.6 turns: a prepare took 15-60 min, two to four landings moved main meanwhile, and
 the turn's selection of main's delta outgrew the turn cap, so the ticket prepared again and main moved again.
-After its own prepare a ticket predicts main as main plus each waiting ticket ahead of it (their land_full
-candidates, in queue order), merges itself on top (``land.merge``, so the records are resolved as at a turn) and
+After its own prepare a ticket predicts main as main plus its ready turn blockers (their land_full
+candidates, in queue order, using ``land_queue.blockers``), merges itself on top (``land.merge``, so the records are resolved as at a turn) and
 runs ``select(<its FULL main>, head=<predicted main>, landed=True)`` there: the selection its turn would run. The
 predicted tree is kept in its land_full record. At the turn, when the merged candidate's tree equals it up to the
 records ``land_merge.resolver`` regenerates, that selection already passed on this tree: the turn runs only the
@@ -37,9 +37,9 @@ def _record(land, wt: Path, branch: str) -> dict | None:
 
 
 def chain(land, wt: Path, python: str, qdir: Path, ticket: Path) -> list[str]:
-    """Candidates of the waiting tickets ahead, in queue order, up to the first that nobody stacks on."""
+    """Candidates of ready turn blockers, in queue order, up to the first that nobody stacks on."""
     found = []
-    for row in land.land_queue.ahead(qdir, ticket):
+    for row in land.land_queue.blockers(qdir, ticket):
         if row.get("status") in ("preparing", "pending"):
             continue
         record = _record(land, wt, str(row.get("branch", "")))
