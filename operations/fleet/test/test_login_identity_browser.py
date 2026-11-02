@@ -33,6 +33,10 @@ def test_login_identity_matches_heading_form_and_return_context(account_page, wi
         expect(page.locator("#login-intro")).to_have_text("Rosy Account로 로그인해 원래 앱의 작업을 이어가세요.")
         expect(page.locator("ui-brand small")).to_have_text("공용 계정")
     expect(page.locator("#login-back")).to_have_attribute("href", target)
+    if central:
+        expect(page.locator("#login-back")).to_be_hidden()
+    else:
+        expect(page.locator("#login-back")).to_be_visible()
     expect(page.locator("[data-login=login]")).to_have_attribute("autocomplete", "username")
     expect(page.locator("[data-login=password]")).to_have_attribute("autocomplete", "current-password")
     assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")

@@ -39,6 +39,7 @@ def test_anonymous_account_entry_separates_login_from_denied_access(tmp_path, wi
                 api.expect(page.locator("h1")).to_have_count(1)
                 api.expect(page.locator(".ui-rail")).to_be_hidden()
                 api.expect(page.locator("#review-command-open")).to_be_hidden()
+                api.expect(page.get_by_role("link", name="학습 홈으로 돌아가기", exact=True)).to_have_count(0)
                 login = page.get_by_role("link", name="Rosy Account로 로그인", exact=True)
                 if session_status == 401:
                     api.expect(login).to_be_visible()
