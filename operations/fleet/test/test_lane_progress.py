@@ -1,4 +1,9 @@
 """D-941 2: lane-progress gap, leader choice across the loop seam, follower speed."""
+import asyncio
+import threading
+from types import SimpleNamespace
+
+import httpx
 import pytest
 
 from fleet.lane_progress import MIN_GAP_M, TARGET_GAP_M, Loop, follower_speed, leaders, main_loop, platoon
@@ -87,3 +92,98 @@ def test_the_route_shows_the_active_loop_and_never_dispatches():
     assert sorted(body["loop"]["edges"]) == ["AB", "BC", "CD", "DA"] and body["loop"]["perimeter_m"] == 4.0
     assert body["speed"]["rows"][-1][1] > 0 and body["speed"]["curve_caps_measured"] is False   # a loop, no end stop
     assert client.get("/api/fleet/platoon").status_code == 401
+
+
+@pytest.fixture
+def platoon_app():
+    from fakes import FakeRobot
+    from fleet.server.app import create_app
+    from fleet.server.console import FleetConsole
+    from fleet.server.site_map_store import SiteMapStore
+    from fleet.swarm.robots import RobotEndpoint
+
+    store = SiteMapStore()
+    draft = store.save_draft(square(), expected_revision=None, principal_id="op")
+    store.activate(expected_revision=draft["revision"], principal_id="op", route_active=False)
+    app = create_app(FleetConsole([RobotEndpoint("r1", "http://x", "t")], [FakeRobot("r1")]),
+                     console_token="op", site_maps=store)
+    yield app, store
+    store.close()
+
+
+@pytest.mark.asyncio
+async def test_platoon_computation_yields_and_concurrent_readers_share_it(platoon_app, monkeypatch):
+    from fleet import lane_progress
+
+    app, _ = platoon_app
+    started, release, finished = threading.Event(), threading.Event(), threading.Event()
+    calls = []
+
+    def slow_loop(site):
+        calls.append(site)
+        started.set()
+        try:
+            assert release.wait(5), "platoon computation blocked the HTTP event loop"
+            return main_loop(site)
+        finally:
+            finished.set()
+
+    monkeypatch.setattr(lane_progress, "main_loop", slow_loop)
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://fleet",
+                                 headers={"Authorization": "Bearer op"}) as client:
+        first = asyncio.create_task(client.get("/api/fleet/platoon"))
+        second = None
+        try:
+            assert await asyncio.to_thread(started.wait, 5)
+            # This authenticated request must complete while the geometry worker is still held.
+            assert (await client.get("/api/fleet/session")).status_code == 200
+            assert not finished.is_set()
+            second = asyncio.create_task(client.get("/api/fleet/platoon"))
+            await asyncio.sleep(0)
+        finally:
+            release.set()
+            results = await asyncio.gather(first, *([second] if second else []), return_exceptions=True)
+        assert all(isinstance(result, httpx.Response) and result.status_code == 200 for result in results)
+        assert (await client.get("/api/fleet/platoon")).status_code == 200
+        assert len(calls) == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("no_loop", [False, True])
+async def test_platoon_caches_geometry_per_version_but_reads_current_pose(platoon_app, monkeypatch, no_loop):
+    from fleet import lane_progress
+    from fleet.server import console_routes
+
+    app, store = platoon_app
+    calls, speed_calls = [], []
+    real_speed_table = console_routes.speed_table
+
+    def counted_loop(site):
+        calls.append(site)
+        return None if no_loop else main_loop(site)
+
+    def counted_speed(*args, **kwargs):
+        speed_calls.append(args)
+        return real_speed_table(*args, **kwargs)
+
+    pose = SimpleNamespace(state="LOCALIZED", x=0.2, y=0.0)
+    monkeypatch.setattr(lane_progress, "main_loop", counted_loop)
+    monkeypatch.setattr(console_routes, "speed_table", counted_speed)
+    monkeypatch.setattr(app.state.map_pose, "arbitrated_pose", lambda _: pose)
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://fleet",
+                                 headers={"Authorization": "Bearer op"}) as client:
+        first = await client.get("/api/fleet/platoon")
+        pose.x = 0.7
+        second = await client.get("/api/fleet/platoon")
+        assert first.status_code == second.status_code == (404 if no_loop else 200)
+        assert len(calls) == 1 and len(speed_calls) == (0 if no_loop else 1)
+        if no_loop:
+            assert second.json()["detail"]["code"] == "NO_LOOP"
+        else:
+            assert first.json()["robots"][0]["s_m"] == pytest.approx(0.2)
+            assert second.json()["robots"][0]["s_m"] == pytest.approx(0.7)
+            assert second.json()["dispatch"] is False
+        draft = store.draft()
+        store.activate(expected_revision=draft["revision"], principal_id="op", route_active=False)
+        assert (await client.get("/api/fleet/platoon")).status_code == second.status_code
+        assert len(calls) == 2 and len(speed_calls) == (0 if no_loop else 2)
