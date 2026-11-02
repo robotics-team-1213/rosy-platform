@@ -1,6 +1,7 @@
 ---
 title: Landings gave the turn back over and over and reran every suite; eight causes behind a 783 min p90
 date: 2026-11-01
+last_updated: 2026-11-02
 category: workflow-issues
 module: tools/land.py, tools/land_checks.py, tools/land_selection.py, tools/land_cache.py, tools/land_prepare.py, tools/remote/host_probe.py, tools/harness/affected_tests.py
 problem_type: workflow_issue
@@ -79,8 +80,20 @@ reruns. Each cause below was found from `.git/rosy-land-events.jsonl` and `.git/
 
 `land_goal.py` first took main's stalls from `git log --first-parent --format=%ct main`. A landing's
 merge commit is made at prepare time, and main fast-forwards to it later, so the gaps were wrong (360
-min reported for a 148 min stall). Use the `landed` events' `t` instead. Lead time keys on the ticket
-branch (`land/<branch>-<stamp>`), so a resubmission starts a new clock.
+min reported for a 148 min stall). Use the `landed` events' `t` instead. Lead time must retain a
+topic's first queue time across timestamped resubmissions.
+
+Rechecked on 2026-11-02: local main at `f432c4f43a` still used commit times in
+`tools/land_stats.py`, despite this guidance. Its CLI reported a 526 min stall while the same
+24 h event window gave 137 min; p90 lead time was 518 min under both measurements. The correction
+feeds `rows`' `landed` timestamps to `land_goal.report`. Two CLI regressions use an old Git commit
+date and recent landing events, and check the user's new 60 min default plus the explicit 120 min
+override. Both failed before the fix; the corrected goal/event suites passed all 11 remote tests.
+Do not count the stall correction as a throughput gain: compare both windows with event times.
+The current `land_goal.topic` collapses timestamped resubmissions to the same topic, so restarting
+a landing does not reset its first queue time. Remote regression evidence and actual main landing
+are separate checks. Paths under `.git/` here refer to the main checkout's shared Git directory,
+not a linked worktree's `.git` pointer file; these local records are not tracked product files.
 
 ## How to verify next time
 
