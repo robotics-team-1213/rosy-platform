@@ -4354,3 +4354,18 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: OMX 셀에 측면 카메라가 서비스로 돌지만 서명 Compose가 카메라 세 개를 고정해 Fleet·Vision에 넣을 수 없었다(2026-11-02 현장). 원격 `test_site_workcell_deploy.py`.
 - gate 변화: 없음
 - 교훈: 해당 없음
+
+## 2026-11-02 · uncommitted · OMX 카메라 manifest를 레지스트리에서 맞춤
+
+- 변경: `omx_cameras.py manifest [--manifest PATH] [--apply]`가 각 카메라의 `device_path`를 같은 `image_topic`을 내는 레지스트리 역할의 장치로 맞춘다. 다르면 exit 1이고 `--apply`로 쓴다. 레지스트리에 없는 토픽은 목록으로만 보고한다. 교훈 문서의 예방 2단계를 이 명령으로 바꿨다.
+- 근거: 2026-11-02 손목 카메라 두 포트를 레지스트리와 현장 `/etc` manifest에서만 손으로 바꿨다. 브리지가 읽는 사용자 manifest에는 옛 포트가 남았다(현장에서 손으로 맞춤, 백업 `.bak-20261102-registry-sync`).
+- 증거: `test/test_omx_cameras.py` 7 passed(로컬). 원격 시험은 착지에서 돈다.
+- gate 변화: 없음. 현장 적용은 OMX 장치 도구 자동 업데이트가 이 버전을 받은 뒤다.
+- CE: 기존 교훈 갱신 — `docs/solutions/runtime-errors/omx-cell-device-identity-after-rewiring-2026-10-31.md`
+
+## 2026-11-02 · uncommitted · OMX 자동 연속 운반(cell_auto_carry)과 없는 출발 site 거절
+
+- 변경: `cell_auto_carry.py`가 `cell_auto_pick.run_auto`를 반복해 출발지가 빌 때(관측 0개), 처음으로 놓기에 실패할 때, 또는 `--max`(검토자가 정한 횟수, 기본값 없음)에 이를 때까지 옮긴다. 매 운반 전에 top 시야를 확인하고, 운반마다 검토된 운영 범위(D-911)를 거친다. `--commissioning`은 받지 않는다(D-911 4: 감독 시험은 한 번의 운반). 공통 설정(`load_config`·옵션·셀 열기)은 `cell_auto_setup.py`로 옮겨 `cell_auto_pick.py`를 600줄 아래로 유지했다. `run_auto`는 config에 없는 출발 site를 동작 전에 거절한다(현장 arm_b 설정에서 `--from` 기본값 `pinky`가 KeyError였음).
+- 증거: 현장 arm_b dry-run(읽기 전용, `--from stack --dest pallet`): 2개 관측, 엉킨 덩어리·손가락 여유 7/26 mm로 모두 거절(정상). 원격 `test_omx_cell_auto_pick.py`·`test_omx_cell_auto_carry.py`
+- gate 변화: 없음. 실물 연속 운반은 아직 하지 않았다.
+- CE: 해당 없음

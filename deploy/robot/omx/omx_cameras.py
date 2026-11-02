@@ -18,6 +18,9 @@ ROSY_DEPTH_RANGE_MM or ROSY_CAMERA_MIN_USB_MBPS) are optional.
   omx_cameras.py inventory every plugged camera node: model, USB ID and port, speed, formats, names, the role using it
   omx_cameras.py bind [--apply]  write each role's env from the registry and (re)start its unit when it changed or
                            its camera came back; a camera nobody registered is listed, never given a role by guess
+  omx_cameras.py manifest [--manifest PATH] [--apply]  copy each registered camera's device into the workcell
+                           observation manifest entry with the same image topic; exit 1 while one differs
+                           (2026-11-02: the bridge's and the site's copies had the two wrist ports swapped)
 """
 from __future__ import annotations
 
@@ -35,6 +38,7 @@ import omx_devices  # noqa: E402
 SCHEMA = "rosy.omx-cameras.v1"
 REGISTRY = Path("~/.config/rosy/omx-cameras.json").expanduser()
 ENV_DIR = Path("~/.config/rosy").expanduser()
+MANIFEST = Path("~/.config/rosy/workcell-observations/observations.yaml").expanduser()
 FIELDS = {"device": "ROSY_CAMERA_DEVICE", "topic": "ROSY_CAMERA_TOPIC", "frame": "ROSY_CAMERA_FRAME",
           "fourcc": "ROSY_CAMERA_FOURCC"}
 
@@ -139,6 +143,28 @@ def apply(plan: dict, env_dir: Path, units_running, run=subprocess.run) -> list:
     return done
 
 
+def sync_manifest(registry: dict, text: str) -> tuple[str, list, list]:
+    """(text, changed, unregistered): each camera's device_path set from the registry role with its image_topic.
+
+    Line edits keep the manifest's order and comments; a camera whose topic no role publishes is listed, not touched.
+    """
+    device = {c["topic"]: c["device"] for c in registry["cameras"]}
+    lines, topic, changed, unregistered = text.split("\n"), None, [], []
+    for i, line in enumerate(lines):
+        key, _, value = line.strip().removeprefix("- ").partition(":")
+        value = value.split(" #")[0]
+        if key == "image_topic":
+            topic = value.strip()
+        elif key == "device_path" and topic is not None:
+            if topic not in device:
+                unregistered.append(topic)
+            elif value.strip() != device[topic]:
+                changed.append({"topic": topic, "from": value.strip(), "to": device[topic]})
+                lines[i] = line[:len(line) - len(line.lstrip())] + f"device_path: {device[topic]}"
+            topic = None
+    return "\n".join(lines), changed, unregistered
+
+
 def _names() -> dict:
     out = {}
     for link in glob.glob("/dev/v4l/by-id/*") + [p for p in glob.glob("/dev/v4l/by-path/*") if "usbv2" not in p]:
@@ -148,11 +174,22 @@ def _names() -> dict:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("action", choices=("init", "inventory", "bind"))
+    ap.add_argument("action", choices=("init", "inventory", "bind", "manifest"))
     ap.add_argument("--registry", type=Path, default=REGISTRY)
     ap.add_argument("--env-dir", type=Path, default=ENV_DIR)
-    ap.add_argument("--apply", action="store_true", help="bind: write env files and restart units")
+    ap.add_argument("--manifest", type=Path, default=MANIFEST, help="manifest: the observation manifest to check")
+    ap.add_argument("--apply", action="store_true", help="bind: write env files and restart units; manifest: write it")
     args = ap.parse_args(argv)
+    if args.action == "manifest":
+        text, changed, unregistered = sync_manifest(load(args.registry), args.manifest.read_text(encoding="utf-8"))
+        if changed and args.apply:
+            tmp = args.manifest.with_suffix(".tmp")
+            tmp.write_text(text, encoding="utf-8")
+            os.chmod(tmp, args.manifest.stat().st_mode)
+            os.replace(tmp, args.manifest)
+        print(json.dumps({"manifest": str(args.manifest), "changed": changed, "unregistered": unregistered,
+                          "written": bool(changed and args.apply)}, indent=1))
+        return 1 if changed and not args.apply else 0
     if args.action == "init":
         if args.registry.exists():
             raise SystemExit(f"{args.registry} exists; edit it instead")
