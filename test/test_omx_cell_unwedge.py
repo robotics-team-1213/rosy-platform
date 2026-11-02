@@ -2,8 +2,11 @@
 from pathlib import Path
 import sys
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).parents[1] / "deploy/robot/omx"))
 import cell_unwedge as u  # noqa: E402
+from chunk_runner import SETTLE_TOL  # noqa: E402
 
 HOME = [0.8, -62.2, 53.1, 51.6, 45.2]
 
@@ -11,8 +14,9 @@ HOME = [0.8, -62.2, 53.1, 51.6, 45.2]
 class Cell:
     """Joints follow a jog at once, except `stuck` joints, which lag `stuck_lag` behind their target."""
 
-    def __init__(self, state, stuck=(), stuck_lag=2.0):
+    def __init__(self, state, stuck=(), stuck_lag=2.0, park_settled=True, park_offset=0.0):
         self.state, self.target, self.stuck, self.stuck_lag, self.sent = list(state), list(state), stuck, stuck_lag, []
+        self.park_settled, self.park_offset = park_settled, park_offset
 
     def act(self, command):
         self.sent.append(command)
@@ -21,6 +25,13 @@ class Cell:
             i = u.BODY.index(words[1].removesuffix(".pos"))
             self.target[i] += float(words[2])
             self.state[i] = self.target[i] - (self.stuck_lag if words[1].startswith(self.stuck) else 0.0)
+        if words[0] == "park":
+            self.target[:5], self.state[:5] = HOME, HOME
+            self.state[0] += self.park_offset
+            result = {"ok": True, "state": list(self.state), "target": list(self.target)}
+            if self.park_settled is not None:
+                result["settled"] = self.park_settled
+            return result
         return {"ok": True, "state": list(self.state), "target": list(self.target)}
 
 
@@ -45,3 +56,23 @@ def test_the_rule_never_repeats_the_action_that_just_strained():
     assert u.decide(None, None, 0.0) == "lift"
     assert u.decide(None, "lift", 0.0) == "pull"
     assert u.decide("lift", None, 5.0) == "pull" and u.decide("pull", None, 5.0) == "lift"
+
+
+def test_near_home_shoulder_cannot_oscillate_into_clearance():
+    cell = Cell([-5.4, HOME[1] + 0.25, -1.9, 59.4, 41.3, 48.8])
+    out = u.unwedge(cell, HOME, sleep=lambda s: None)
+    assert out["result"] != "recovered" and "park" not in cell.sent
+    assert all(row["state"][1] >= HOME[1] for row in out["rows"])
+
+
+@pytest.mark.parametrize("settled", [False, None])
+def test_park_without_positive_settled_evidence_is_not_recovered(settled):
+    cell = Cell([-5.4, 13.5, -1.9, 59.4, 41.3, 48.8], park_settled=settled)
+    out = u.unwedge(cell, HOME, sleep=lambda s: None)
+    assert cell.sent[-1] == "park" and out["result"] == "stopped"
+
+
+def test_park_settled_flag_cannot_replace_measured_home_evidence():
+    cell = Cell([-5.4, 13.5, -1.9, 59.4, 41.3, 48.8], park_offset=SETTLE_TOL + 0.1)
+    out = u.unwedge(cell, HOME, sleep=lambda s: None)
+    assert cell.sent[-1] == "park" and out["result"] == "stopped"
