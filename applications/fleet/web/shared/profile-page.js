@@ -1,6 +1,6 @@
 import {createFleetClient} from '/common/fleet-client.js';
 import {loginHref, loginReturn} from '/console/assets/login-return.js';
-import {roleLabel} from '/console/assets/fleet-header.js';
+import {roleLabel} from '/common/account-profile.js';
 import {CAPABILITIES} from '/console/assets/account-permissions.js';
 
 const request = createFleetClient();

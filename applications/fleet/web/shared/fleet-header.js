@@ -3,9 +3,10 @@
 // count, role words on the account button, development badge, the account fold and the one E-stop rule.
 import "/common/ui.js";  // wires the `[data-theme-cycle]` button
 import {OPERATOR_REASON} from "/console/assets/authorization.js";
+import {roleLabel} from "/common/account-profile.js";
+export {roleLabel};
 
 export const SESSION_REASON = "접속이 필요합니다";
-const ROLE = {operator: "운영자", viewer: "보기 전용", "policy-admin": "정책 관리자"};
 const $ = id => document.getElementById(id);
 
 // D-741 3 — 브라우저와 Fleet 사이의 연결. 답이 오면 실시간, LATE_MS 넘게 새 답이 없으면 지연,
@@ -47,8 +48,6 @@ export function showInboxCount(count) {
   inbox.setAttribute("data-ui-tooltip", `${inbox.getAttribute("aria-label")} · 읽음은 개입 해소가 아닙니다`);
   inbox.title = "읽음 표시는 개입 해소나 로봇 상태 변경이 아닙니다";
 }
-
-export const roleLabel = role => ROLE[role] || "권한 없음";
 
 // The one E-stop rule. `session` is undefined while unknown (loading, Fleet unreachable), null after a 401,
 // else the /api/fleet/session body. Only a press the server would surely refuse is locked: no session (401)

@@ -12,12 +12,12 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 COMMON = {'tokens.css', 'components.css', 'theme.js', 'ui.js', 'ui-wiring.js',
           'confirmation.js', 'live-dialog-geometry.js', 'fleet-client.js', 'request.js',
-          'icons/console.svg', 'brand/mark.svg'}
+          'account-profile.js', 'icons/console.svg', 'brand/mark.svg'}
 
 
 def bundle(repo, output):
     env = {**os.environ, 'PYTHONPATH': str(ROOT / 'operations/account')}
-    return subprocess.run([sys.executable, '-m', 'rosy_account.web_assets',
+    return subprocess.run([sys.executable, '-S', '-m', 'rosy_account.web_assets',
                            '--repo', str(repo), '--output', str(output)],
                           cwd=output.parent, env=env, capture_output=True, text=True)
 
@@ -28,7 +28,8 @@ def test_account_bundle_has_only_account_pages_assets_and_common_dependencies(tm
     assert result.returncode == 0, result.stderr
     registry = json.loads((output / 'console/assets.json').read_text())
     assert set(registry['pages']) == {'/console/login', '/console/profile', '/console/accounts'}
-    assert len(registry['assets']) == 10
+    assert len(registry['assets']) == 8
+    assert not {'fleet-header.js', 'authorization.js'} & registry['assets'].keys()
     common = json.loads((output / 'common/shared-assets.json').read_text())['shared_assets']
     assert set(common) == COMMON
     expected = {'console/assets.json', 'common/shared-assets.json'}
@@ -36,6 +37,7 @@ def test_account_bundle_has_only_account_pages_assets_and_common_dependencies(tm
     expected.update('common/' + name for name in common)
     assert {str(p.relative_to(output)).replace('\\', '/') for p in output.rglob('*') if p.is_file()} == expected
     assert (output / 'common/brand/mark.svg').read_bytes() == (ROOT / 'shared/web/brand/mark.svg').read_bytes()
+    assert all('/api/fleet/estop' not in p.read_text() for p in output.rglob('*.js'))
 
 
 @pytest.mark.parametrize('damage', ['missing', 'escape', 'undeclared'])

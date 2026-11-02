@@ -11,7 +11,7 @@ from .static import ASSETS, PAGES
 
 COMMON = ('tokens.css', 'components.css', 'theme.js', 'ui.js', 'ui-wiring.js',
           'confirmation.js', 'live-dialog-geometry.js', 'fleet-client.js', 'request.js',
-          'icons/console.svg', 'brand/mark.svg')
+          'account-profile.js', 'icons/console.svg', 'brand/mark.svg')
 
 
 class _Resources(HTMLParser):

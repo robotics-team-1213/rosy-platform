@@ -112,16 +112,24 @@ uses the repo image `rosy-site-postgres:${ROSY_SITE_IMAGE_TAG:-local}`, built or
 mirrored from `postgres:16-alpine` by the candidate build. Because it is stock
 upstream, its hardening is weaker than Fleet/Vision; `read_only` with a tmpfs,
 dropped capabilities, `no-new-privileges`, and an internal-only network are the
-bounds. The signed candidate covers four images (Fleet, Vision, proxy,
-Postgres), and the updater checks the compose-config image pins, container
-health, and drift for all four.
+bounds. New signed candidates cover five images (Fleet, Vision, proxy,
+Postgres and Account). The updater verifies all signed images and checks
+Compose pins, container health and drift for enabled services. Historical
+three-image and four-image signed candidates remain supported for rollback.
 
 ## Where the control console runs
 
 ### Independent Rosy Account service (D-962)
 
-`compose.account.yaml` runs Account as a separate process using the signed Fleet
-image, with a dedicated `account_state` volume. Only Account mounts the signing
+`compose.account.yaml` runs the independent signed `rosy-site-account` image as
+UID/GID10001, with a dedicated `account_state` volume and no setuid capabilities.
+Its build includes only Account, its foundation Account protocol, minimal Python
+dependencies and a fixed bundle of login/profile/administration assets from
+their canonical frontend sources. It needs no Fleet or Control Unit service to
+build or start. Historical signed candidates retain their verified Fleet-image
+mapping; new candidates require Account's own signed reference and immutable ID,
+including when an incremental build reuses that image. The image and SBOM are
+verified even when the Account overlay is disabled. Only Account mounts the signing
 key directory `/etc/rosy/account` at `/run/rosy-account`. Keep its directory mode
 0700 and files mode0400 owned by runtime UID10001. The existing issuer HTTPS
 frontend forwards to Account, not Fleet. Fleet receives public verification keys

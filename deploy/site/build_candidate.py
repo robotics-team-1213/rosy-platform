@@ -48,7 +48,7 @@ _PARSED_COPY_FLAGS = ("--chown=", "--chmod=")
 Runner = Callable[..., subprocess.CompletedProcess]
 
 
-def _local_stage_copy(words: list[str], text: str) -> bool:
+def _local_stage_copy(words: list[str], text: str, name: str) -> bool:
     stages = {match.lower() for match in re.findall(r'^FROM\s+\S+\s+AS\s+(\S+)\s*$', text, re.M | re.I)}
     flags = [word for word in words if word.startswith('--from=')]
     if not flags:
@@ -58,7 +58,7 @@ def _local_stage_copy(words: list[str], text: str) -> bool:
             or any(w.startswith(('[', '<<')) for w in words[1:])
             or any(w.startswith('--') and w not in flags and not w.startswith(_PARSED_COPY_FLAGS)
                    for w in words[1:])):
-        raise ValueError('COPY --from must name a local declared build stage')
+        raise ValueError(f'{name}: COPY --from must name a local declared build stage')
     return True
 
 
@@ -71,7 +71,7 @@ def _image_source_paths(site: Path) -> list[str]:
             words = line.split()
             if not words or words[0].upper() not in {"COPY", "ADD"}:
                 continue
-            if _local_stage_copy(words, text):
+            if _local_stage_copy(words, text, name):
                 continue
             # Fail closed on any form this parser does not understand (JSON
             # array, heredoc, --from/--link/... flags): a skipped COPY would
@@ -108,7 +108,7 @@ def _build_inputs(site: Path, service: str) -> set[str] | None:
         words = line.split()
         if not words or words[0].upper() not in {"COPY", "ADD"}:
             continue
-        if _local_stage_copy(words, text):
+        if _local_stage_copy(words, text, name):
             continue
         if (len(words) < 3 or any(w.startswith(("[", "<<")) for w in words[1:])
                 or any(w.startswith("--") and not w.startswith(_PARSED_COPY_FLAGS) for w in words[1:])):

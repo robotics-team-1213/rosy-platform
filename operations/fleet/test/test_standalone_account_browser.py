@@ -62,6 +62,7 @@ def test_standalone_existing_cookie_and_initial_password_resume_registered_app(s
                 assert 'code=' in page.url and 'state=standalone-browser' in page.url
                 page.goto(origin + '/console/profile')
                 expect(page.locator('#profile-content')).to_be_visible()
+                expect(page.locator('#profile-role')).to_have_text('운영자')
                 page.locator('#profile-name').fill('Account artifact administrator')
                 with page.expect_response(lambda response: response.url.endswith('/api/fleet/auth/profile')
                                           and response.request.method == 'PATCH') as saved:

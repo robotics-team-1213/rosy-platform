@@ -15,8 +15,6 @@
 !applications/fleet/web/shared/profile-page.js
 !applications/fleet/web/shared/account-page.js
 !applications/fleet/web/shared/account-permissions.js
-!applications/fleet/web/shared/fleet-header.js
-!applications/fleet/web/shared/authorization.js
 !shared/web/shared-assets.json
 !shared/web/tokens.css
 !shared/web/components.css
@@ -27,6 +25,7 @@
 !shared/web/live-dialog-geometry.js
 !shared/web/fleet-client.js
 !shared/web/request.js
+!shared/web/account-profile.js
 !shared/web/icons/console.svg
 !shared/web/brand/mark.svg
 !deploy/site/requirements-account.txt

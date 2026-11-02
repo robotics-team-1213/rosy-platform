@@ -715,6 +715,55 @@ def test_signed_but_disabled_account_image_requires_no_runtime_container():
     assert upd.containers_reason(rows, NEW, accepted, inspect, services, refs) == ''
 
 
+@pytest.mark.parametrize('missing', ['reference', 'identity', 'both'])
+def test_independent_account_never_falls_back_to_fleet_for_incomplete_proof(missing):
+    services = ('fleet', 'vision', 'proxy', 'postgres', 'account')
+    refs = {s: f'rosy-site-{s}:{NEW}' for s in services}
+    accepted = {s: [_image_id(NEW, s)] for s in services}
+    if missing in ('reference', 'both'):
+        refs.pop('account')
+    if missing in ('identity', 'both'):
+        accepted.pop('account')
+    def inspect(args):
+        raise AssertionError('incomplete signed proof must fail before Docker inspection')
+    assert 'account signed image identity proof is incomplete' == upd.containers_reason(
+        [], NEW, accepted, inspect, services, refs)
+
+
+def test_verified_account_image_is_retained_when_its_runtime_is_disabled(host):
+    fake = FakeHost(host.paths)
+    updater = _updater(host, FakeHttp([], {}), fake)
+    original = updater.verifier
+    def verifier(folder, **kwargs):
+        proof = original(folder, **kwargs)
+        proof['verified_images'].append('account')
+        proof['accepted_image_ids']['account'] = [_image_id(OLD, 'account')]
+        proof['image_references'] = {s: f'rosy-site-{s}:{OLD}' for s in (*upd.SERVICES, 'account')}
+        return proof
+    updater.verifier = verifier
+    env = upd.read_env(host.paths.site_env)
+    proof = updater._verify(host.paths.candidates / OLD, loaded=True, env=env)
+    assert 'account' in proof['verified_images']
+    assert updater._accepted_images[OLD]['account'] == [_image_id(OLD, 'account')]
+    assert updater._containers_reason(env, OLD) == ''
+    enabled = {**env, 'ROSY_SITE_PAIRING_COMPOSE': '-f /opt/rosy/candidate/deploy/site/compose.account.yaml'}
+    assert 'account needs exactly one running container' == updater._containers_reason(enabled, OLD)
+
+
+def test_independent_account_compose_cannot_pin_fleet_as_its_image(host):
+    fake = FakeHost(host.paths)
+    env = {**upd.read_env(host.paths.site_env),
+           'ROSY_SITE_PAIRING_COMPOSE': '-f /opt/rosy/candidate/deploy/site/compose.account.yaml'}
+    services = (*upd.SERVICES, 'account')
+    refs = {s: f'rosy-site-{s}:{NEW}' for s in services}
+    def compose(env, *args, **kwargs):
+        configured = {s: {'image': refs[s]} for s in services}
+        configured['account']['image'] = refs['fleet']
+        return SimpleNamespace(stdout=json.dumps({'services': configured}))
+    with pytest.raises(upd.Refused, match='account'):
+        upd.check_overrides(env, NEW, fake, compose, services, refs)
+
+
 def test_monitoring_service_without_its_overlay_is_refused(host):
     fake = FakeHost(host.paths)
     env = upd.read_env(host.paths.site_env)
