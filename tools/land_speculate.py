@@ -4,8 +4,9 @@ turn will most likely test, outside the lock.
 On 2026-10-27 a landing took 2.6 turns: a prepare took 15-60 min, two to four landings moved main meanwhile, and
 the turn's selection of main's delta outgrew the turn cap, so the ticket prepared again and main moved again.
 After its own prepare a ticket predicts main as main plus its ready turn blockers (their land_full
-candidates, in queue order, using ``land_queue.blockers``), merges itself on top (``land.merge``, so the records are resolved as at a turn) and
-runs ``select(<its FULL main>, head=<predicted main>, landed=True)`` there: the selection its turn would run. The
+candidates, in queue order, using ``land_queue.blockers``), merges itself on top (``land.merge``, so the records
+are resolved as at a turn) and runs ``select(<its FULL main>, head=<predicted main>, landed=True)`` there:
+the selection its turn would run. The
 predicted tree is kept in its land_full record. At the turn, when the merged candidate's tree equals it up to the
 records ``land_merge.resolver`` regenerates, that selection already passed on this tree: the turn runs only the
 root test/ part (the guards read those records) and lands. Otherwise the turn runs as before, never worse.

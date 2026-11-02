@@ -13726,3 +13726,9 @@ osy-d395-s1d\`.
 - 증거: 실패는 land-fix-publish-baseline-checkout-pin 착지의 MAIN-RED(main 06a479abd1), 복구는 fix/main-red-rosbridge-ledger. 이 변경은 원격 `test/test_affected_tests.py`·`test/test_no_cross_host_dds.py`.
 - gate 변화: 없음
 - CE: 해당 없음 — 재발 방지는 가드 집합 자체이고 이유는 코드 주석에 있다.
+
+## 2026-11-02 · uncommitted · fix(landing): 예측 체인을 실제 우선순위 차단자와 정렬
+- 변경: `land_speculate.chain`이 FIFO 앞줄 대신 정본 `land_queue.blockers`를 재사용한다. TURN 유지, 긴급 요청이 앞지르는 ordinary waiting 제외, 나중 urgent 포함과 stale-bypass를 같은 정책으로 선택한다. preparing/pending 제외와 safety/record 중단 조건은 보존한다.
+- 증거: 미착지 소스 `1f324d765a` 원격 speculation/queue/urgent/prepare/batch 5 suite 133개 통과, NEW 0. 테스트 전용 `daf434afd6`에서 3개 RED를 확인했다. 실제 append-only queue의 ticket/branch/urgent와 당시 관측 status를 고정한 counterfactual은 합성 후보 2개를 실제 TURN 1개로 줄였다. 불필요 후보 제외를 확인한 것이며 절약 시간이나 진행 중인 예측 실행의 새 규칙 적용을 측정한 것은 아니다.
+- gate 변화: 없음. 소스 검증이며 기존 run-spec 작업을 중단하거나 재시작하지 않았다.
+- CE: 해당 없음 — 기존 Oct31 교훈의 우선순위 경계를 적용한 수정이며 정본 helper 재사용과 실제 Git 회귀 시험으로 원인·해결이 드러난다. 새 교훈 문서는 만들지 않는다.
