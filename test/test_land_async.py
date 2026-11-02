@@ -12,6 +12,7 @@ import sys
 import time
 
 import pytest
+from test_land_gc import supervisor_lease
 
 ROOT = Path(__file__).resolve().parents[1]
 _SPEC = importlib.util.spec_from_file_location("land_async", ROOT / "tools" / "land_async.py")
@@ -243,6 +244,58 @@ def test_ordinary_rollup_code_branch_needs_no_members_file(live_rollup, action):
     else:
         tool.resume(dev, tree.name, [], lambda *args: launched.append(args), wait=0, sleep=lambda s: None)
     assert len(launched) == 1
+
+
+@pytest.fixture
+def pre_ticket_rollup(live_rollup):
+    main, dev, _, tree, ticket, metadata = live_rollup
+    branch = json.loads(ticket.read_text())["branch"]
+    ticket.unlink()
+    leader = metadata.parent / metadata.name.removesuffix(".members")
+    _git(main, "worktree", "add", "-q", str(leader), branch)
+    return dev, tree, leader, metadata
+
+
+@pytest.mark.parametrize("action", ["start", "replace", "resume"])
+@pytest.mark.parametrize("alive", [False, True])
+def test_rollup_lease_owns_members_before_its_ticket(pre_ticket_rollup, monkeypatch, action, alive):
+    dev, tree, leader, metadata = pre_ticket_rollup
+    monkeypatch.setattr(tool, "stop", lambda pid: pytest.fail("a member cannot stop its rollup supervisor"))
+    launched = []
+
+    def attempt():
+        if action == "resume":
+            return tool.resume(dev, tree.name, [], lambda *args: launched.append(args), wait=0, sleep=lambda s: None)
+        return tool.start(dev, ["--replace"] if action == "replace" else [], NOW.replace(second=1),
+                          lambda *args: launched.append(args))
+
+    if alive:
+        with supervisor_lease(leader):
+            with pytest.raises(SystemExit, match="supervisor"):
+                attempt()
+        assert not launched
+    else:
+        with supervisor_lease(leader):
+            pass
+        metadata.write_text("stale malformed metadata")
+        attempt()
+        assert len(launched) == 1
+
+
+@pytest.mark.parametrize("content", [None, "{"])
+@pytest.mark.parametrize("action", ["start", "resume"])
+def test_pre_ticket_rollup_unknown_membership_fails_closed(pre_ticket_rollup, content, action):
+    dev, tree, leader, metadata = pre_ticket_rollup
+    if content is None:
+        metadata.unlink()
+    else:
+        metadata.write_text(content)
+    with supervisor_lease(leader):
+        with pytest.raises(SystemExit, match="membership"):
+            if action == "start":
+                tool.start(dev, [], NOW.replace(second=1), lambda *args: None)
+            else:
+                tool.resume(dev, tree.name, [], lambda *args: None, wait=0, sleep=lambda s: None)
 
 
 @pytest.fixture
