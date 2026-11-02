@@ -383,7 +383,7 @@ D-741(Accepted)이 정한, 모든 웹 표면이 같이 쓸 자리다. Rosy Fleet
 | 흰 채움 하나 | 구획마다 primary 하나(D-926 7). 새 구획은 `ui-section` 네 역할 | D-926 보강 |
 | 붕괴 두 사다리 | 셸 64rem, 본문 48·30rem. 그 밖은 `surfaces.yaml` 허가 | `test_responsive_tiers.py` |
 
-아직 이 뼈대로 안 옮은 표면(로봇 대시보드 본문, Pilot, Cam)은 그 화면을 고치는 변경에 옮긴다(D-945 5항).
+아직 이 뼈대로 안 옮은 웹 표면은 없다(2026-11-02 이행 완료 — 로봇 대시보드는 hero-strip 제목 줄·두 상태 셸 h1 규칙으로 준수, D-945 5항). Android Cam은 네이티브 앱이라 웹 캐논 밖이다.
 
 ## Elevation & Depth
 

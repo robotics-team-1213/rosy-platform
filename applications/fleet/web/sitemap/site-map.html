@@ -21,6 +21,7 @@
 <body>
 <ui-shell grammar="procedure" class="fleet-shell">
   <a class="skip-link" href="#site-map-main">본문으로 건너뛰기</a>
+  <noscript><ui-status state="error">이 화면은 브라우저 스크립트를 사용합니다. 스크립트를 허용한 뒤 다시 여세요. 비상 정지는 로봇 본체의 물리 스위치로 항상 사용할 수 있습니다.</ui-status></noscript>
   <!-- D-540 2 — 네 문서가 같은 머리다(test_fleet_header.py가 글자 그대로 고정한다). 움직임은 web/shared/fleet-header.js 하나다. -->
   <header class="fleet-header">
   <!-- fleet:header:start -->
@@ -107,7 +108,15 @@
       <div id="map-viewport" class="map-viewport" role="region" aria-label="현장 지도 가로 이동" tabindex="0" hidden>
         <svg id="site-map-svg" viewBox="0 0 800 480" role="img" aria-label="현장 지도 · 장소와 방향 있는 차로" tabindex="0"></svg>
       </div>
-      <ui-text id="map-legend" hidden>점은 주소, 선은 차로, 화살표는 통행 방향입니다. 점선 면은 횡단보도, 색 면은 그 대기 띠입니다. 색 원은 로봇(점선 고리 = 위치 불확실성, 막대 = 방향), 색 선은 운행 경로입니다. 실선은 차선 주행, 점선은 좌표 주행입니다. 지도 위 장소나 차로를 누르면 아래에서 고칩니다.</ui-text>
+      <ui-text id="map-legend" hidden>점은 주소, 선은 차로, 화살표는 통행 방향입니다. 지도 위 장소나 차로를 누르면 아래에서 고칩니다.
+        <details class="hint-more"><summary class="ui-disclosure-row">기호 안내</summary>
+          <dl class="legend-terms">
+            <dt>점선 면</dt><dd>횡단보도</dd>
+            <dt>색 면</dt><dd>횡단보도 대기 띠</dd>
+            <dt>색 원</dt><dd>로봇 — 점선 고리는 위치 불확실성, 막대는 방향</dd>
+            <dt>색 선</dt><dd>운행 경로 — 실선은 차선 주행, 점선은 좌표 주행</dd>
+          </dl>
+        </details></ui-text>
       <details class="plane-tools">
         <summary class="ui-disclosure-row">평면 영상 도구 · 표시 전용</summary>
         <div class="plane-tools-body">

@@ -1053,3 +1053,38 @@
 - 변경: 착지 게이트가 잡은 대로 학습 검수의 `aria-current="true"`는 낡은 어휘가 아니라 정규약("현 페이지 링크=page, 현 페이지를 담은 상위 단계=true", test_app_shell_seats)이다. 검수 페이지 여섯의 `page` 통일을 원복하고 D-945·DESIGN.md·test_layout_canon의 표식 규칙을 표준 토큰 셋(page·step·true·aria-selected)으로 정정했다. test_site_map_api의 canvas role 검사도 무장 상태 추종(render) 소유로 바로잡았다.
 - 증거: test_layout_canon 전 통과, 검수 페이지 6건 완전 원복(net diff 0), node --test 403 passed. 원격 시험은 재착지 전 기록.
 - Gate: 없음. CE: 해당 없음 — 착지 시험이 계약 충돌을 잡은 사례로, 교훈은 아래 CE 판단 참조.
+
+
+## 2026-11-01 · uncommitted · focal 검사에 경기 보드 포함
+
+- 변경: `test_layout_canon.py`의 focal 표면 검사가 Pilot·경기 보드 모두의 순서·skip link·h1 하나(sr-only 허용)를 검사한다.
+- 증거: 정적 단정 전 통과. 원격 pytest는 다음 착지 전 기록.
+- Gate: 없음. CE: 해당 없음.
+
+
+## 2026-11-02 · uncommitted · 대시보드 두 상태 셸 h1 검사 추가
+
+- 변경: `test_layout_canon.py`의 focal 표면 검사가 로봇 대시보드의 상태 셸별 h1 하나(입장/공간)를 검사한다. D-945 웹 이행 완료를 못박는다.
+- 증거: 정적 단정 전 통과. 원격 pytest는 다음 착지 전 기록.
+- Gate: 없음. CE: 해당 없음.
+
+
+## 2026-11-02 · uncommitted · D-945 마무리 — 22rem 칸 경계 허가, 조작 표면 noscript·style 속성 계약
+
+- 변경: Fleet 좁은 좌석 하위 탐색 줄바꿈의 `@container (width >= 22rem)`를 `surfaces.yaml` console `container_breakpoints`에 근거와 함께 등록했다(`test_responsive_tiers`가 미허가 값으로 거절하던 것). `test_layout_canon.py`에 조작 표면 noscript 의무와 style 속성 금지 검사를 더했다.
+- 증거: 로컬 대조에서 main 대비 추가 실패가 `test_responsive_tiers` 하나였고 등록 뒤 통과. 원격 시험은 착지 기록.
+- Gate: 없음. CE: 해당 없음.
+
+
+## 2026-11-02 · uncommitted · 공용 skip-link·sr-only 단일화, 같은 뜻 한 말 계약
+
+- 변경: 로봇·Fleet 로그인·모니터링의 `.skip-link` 재정의와 Pilot의 `.sr-only` 재정의를 지우고 `components.css` 정본만 쓴다(세 표면이 z-index·채움·숨김 방식이 제각각이었다). `test_shared_controls.py` 덧칠 검사 대상에 `skip-link`를 더했다. `test_operator_copy.py`에 표면 전체(검수·Pilot 포함) '같은 뜻 한 말' 검사를 두고 첫 항목으로 '권한이 거부'→'권한이 없습니다'를 정했다.
+- 증거: 원격 계약 시험. 감사 백로그는 `docs/validation/fleet-ui-consistency-2026-11-01/README.md`.
+- Gate: 없음. CE: 해당 없음.
+
+
+## 2026-11-02 · uncommitted · 신호기 등 역할 토큰 (D-525 보강, 사용자 결정)
+
+- 변경: `tokens.css`에 `--signal-go/-caution/-stop`을 두고 Fleet 신호기 카드·Fleet 지도 램프·로봇 가상 신호 등이 모두 이것만 쓴다. Fleet 카드의 녹색 등이 무색이던 불일치를 녹색으로 통일했다.
+- 증거: `test_every_signal_lamp_paints_with_the_signal_tokens`(등 그림은 신호 토큰만, 신호 토큰은 등 밖 금지).
+- Gate: 없음. CE: 해당 없음.
