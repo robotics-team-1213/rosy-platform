@@ -81,6 +81,16 @@ reruns. Each cause below was found from `.git/rosy-land-events.jsonl` and `.git/
    17:44) were followed by two give-backs: a rollup at 18:00 (10 min cap) and `docs/app-surface-grammar`
    at 18:35 (30 min cap), and main stood 58+ min. Rule: batch landing-tool changes into one landing at
    night; in the day, hold them in a worktree with their tests already passing remotely.
+   "Night" alone is not enough. The night batch landed at 23:22 with ten tickets queued; every ticket
+   prepared before it carried `tools/land.py` in its main delta. Those turns were not FULL: the log's
+   `selector escalated to FULL` line is the intermediate selection, and the next lines narrow it to the
+   delta's suites (`test/test_land*.py`, `test_affected_tests.py`: 1,203 tests, 6 min) plus the own
+   invocations the delta reaches (a foundation branch: 9,135 tests, 22 min). On test PCs below the floor
+   or held by an `alone` job these ran serially, the turns gave the turn back at their cap, and main stood
+   51 min (23:31-00:22). Only tickets prepared after the tool landing turn fast. Land tool changes when
+   the queue is nearly empty (few `waiting`/`preparing` tickets), not just after a clock time. Read the
+   lines after an escalation before calling a turn FULL; `tests` events are written when a round ends, so
+   a turn that gave the turn back shows none.
 
 ## Measurement trap
 
