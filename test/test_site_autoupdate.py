@@ -739,6 +739,45 @@ def test_control_unit_peer_configuration_requires_a_service_object(host, configu
         upd.check_overrides(env, NEW, fake, compose)
 
 
+@pytest.mark.parametrize('account_enabled,fleet_owned', [(True, False), (False, False), (True, True)])
+def test_independent_account_inventory_keeps_companion_image_owners(host, account_enabled, fleet_owned):
+    services = ('fleet', 'vision', 'proxy', 'postgres', 'account')
+    overlays = ['control-unit', 'monitoring'] + (['account'] if account_enabled else [])
+    env = {'ROSY_SITE_PAIRING_COMPOSE': ' '.join(
+        f'-f /opt/rosy/candidate/deploy/site/compose.{name}.yaml' for name in overlays)}
+    references = {role: f'rosy-site-{role}:{NEW}' for role in services}
+    owners = {role: role for role in services if role != 'account' or account_enabled}
+    owners.update({'monitoring': 'fleet', 'control-unit-peer': 'proxy'})
+    if fleet_owned:
+        owners['account'] = 'fleet'
+
+    def compose(*args, **kwargs):
+        return SimpleNamespace(stdout=json.dumps({'services': {
+            role: {'image': references[owner]} for role, owner in owners.items()}}))
+
+    if fleet_owned:
+        with pytest.raises(upd.Refused, match='Compose resolves account'):
+            upd.check_overrides(env, NEW, FakeHost(host.paths), compose, services, references)
+    else:
+        upd.check_overrides(env, NEW, FakeHost(host.paths), compose, services, references)
+
+
+def test_independent_account_runtime_uses_its_own_signed_identity():
+    roles = ('fleet', 'vision', 'proxy', 'postgres', 'account')
+    owners = {**{role: role for role in roles}, 'monitoring': 'fleet', 'control-unit-peer': 'proxy'}
+    references = {role: f'rosy-site-{role}:{NEW}' for role in roles}
+    accepted = {role: [_image_id(NEW, role)] for role in roles}
+    rows = [{'Service': role, 'Image': references[owner], 'State': 'running',
+             'Health': '' if role == 'control-unit-peer' else 'healthy', 'ID': role}
+            for role, owner in owners.items()]
+
+    def inspect(args):
+        return SimpleNamespace(stdout=_image_id(NEW, owners[args[-1]]))
+
+    assert upd.containers_reason(rows, NEW, accepted, inspect, roles, references,
+                                 companions={'monitoring', 'control-unit-peer'}) == ''
+
+
 @pytest.mark.parametrize("loaded", [False, True])
 def test_legacy_candidate_cannot_enable_unsigned_control_unit_overlay(host, loaded):
     old = host.paths.candidates / OLD
