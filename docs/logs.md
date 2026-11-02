@@ -13742,7 +13742,7 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 과거 실행을 적격 근거로 소급 승인하지 않았다.
 - CE: 기존 교훈 갱신 — 자동화의 병합 성공을 FULL의 적격성으로 해석한 기존 설명이 다음 작업을 오도할 수 있어 바로잡았다.
 
-## 2026-11-03 · camera-readiness-followup · evidence: 재연결 뒤 READY 복구와 수정 검증 동결
+## 2026-11-03 · 3db26622ab · evidence: 재연결 뒤 READY 복구와 수정 검증 동결
 
 - 변경: `validation/camera-readiness-followup-2026-11-03/result.md`에 실제 USB 재연결 뒤 새 기준선으로 복구한 결과와 세 코드 수정의 원격 검증 근거를 동결했다. 게시 근거 수정 bootstrap 착지 스냅샷을 접수한 뒤, 아직 미착지인 원본 주제 브랜치에서 같은 후속 검증 기록을 준비했다.
 - 증거: 네 역할의 registry/env 일치·단독 소유권·서로 다른 장치를 확인했고, 준비 검사 시작·원본 controls readback·재시작 뒤 별도 READY 3회에서 네 영상 sequence가 모두 증가했다. 실행 source는 기존 landed commit cbfb144767의 불변 snapshot이며 이전 profile/env/state를 보존했다.
