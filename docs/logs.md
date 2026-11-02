@@ -13608,3 +13608,10 @@ osy-d395-s1d\`.
 - 증거: FULL source27묶음과 실패 묶음 재실행, 최종 source b1eafb186f의 10544 passed/1155 skipped/exit0, 최종 browser9ffb4a4944의82파일·1316 passed/skip0/exit0 및 각 known_failures NEW0. 두 로그인 axe8회 위반0/판단보류0, 화면 캡처와 독립 소스·CORE 계약 검토를 분리했다.
 - gate 변화: 없음. 착지·공개 게시·운영 배포·실제 SSO·스크린리더·ARM64 이미지·실물/현장 수용은 이 기록으로 통과시키지 않는다.
 - CE: 해당 없음 — 원인·보존 조건·시험 구성의 범위가 구현·회귀·ADR·검증 기록으로 복원돼 별도 교훈을 늘리지 않는다.
+
+## 2026-11-02 · 131087f3b1 · 공개 Git 무결성 증거의 필드 명확화
+
+- 변경: [후속 기록](validation/rosy-web-unification-2026-11-02b/result.md)에 공개 Git OID가 비밀 토큰으로 분류된 문서 검사 실패를 남겼다. 증거 JSON의 commit/revision/oid 필드만 명확히 하고 관측·해시·실패 이력은 유지했다. scanner와 제외 목록은 수정하지 않는다.
+- 증거: 원본 문서 영향 320 passed/1 failed, 두 JSON에 대한 실제 scanner 정적 발견0. committed 수정본의 동일 영향 검사는 별도 재실행 영수증으로 확인한다.
+- gate 변화: 없음. 원래 소스·브라우저 검증을 다시 쓰거나 운영·실물 수용으로 올리지 않는다.
+- CE: 해당 없음 — 기존 공개 무결성 문맥과 이번 필드 이름으로 원인을 복원할 수 있다.

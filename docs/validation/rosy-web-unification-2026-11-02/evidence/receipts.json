@@ -441,7 +441,7 @@
       "status": "Completed original phase; source25 seat fixture and browser5 video fixture failed. Corrected checks and whole invocation replacements are recorded separately, never relabel this phase green."
     },
     "FULL-browser-receipts-c4f15610cc.json": {
-      "head": "c4f15610cc529a4908d71dc60c7b1ab26a80fdd1",
+      "head_revision": "c4f15610cc529a4908d71dc60c7b1ab26a80fdd1",
       "runner_exit": 0,
       "browser_files": 113,
       "passed": 1911,
@@ -780,7 +780,7 @@
       "receipts": [
         {
           "run": 1,
-          "source": "9ffb4a49447fc485c0ed68b1d98fd8d5280a56f1",
+          "source_revision": "9ffb4a49447fc485c0ed68b1d98fd8d5280a56f1",
           "log": "<session-scratch>/rosy-web-unify/final-delta-browser-9ffb4a4944/run-1.txt",
           "sha256": "a8009edd6dee4b638e78e550e997578a8d8aef51d0cb8eca273a36d6f26935c0",
           "summary": "114 passed, 2 warnings in 305.83s (0:05:05)",
@@ -790,7 +790,7 @@
         },
         {
           "run": 2,
-          "source": "9ffb4a49447fc485c0ed68b1d98fd8d5280a56f1",
+          "source_revision": "9ffb4a49447fc485c0ed68b1d98fd8d5280a56f1",
           "log": "<session-scratch>/rosy-web-unify/final-delta-browser-9ffb4a4944/run-2.txt",
           "sha256": "923c2b28c65db4d1c143494ccd44da1e807ee13482ce709196eb645df96c28b1",
           "summary": "118 passed in 307.28s (0:05:07)",
@@ -800,7 +800,7 @@
         },
         {
           "run": 3,
-          "source": "9ffb4a49447fc485c0ed68b1d98fd8d5280a56f1",
+          "source_revision": "9ffb4a49447fc485c0ed68b1d98fd8d5280a56f1",
           "log": "<session-scratch>/rosy-web-unify/final-delta-browser-9ffb4a4944/run-3.txt",
           "sha256": "3e278ab8e0d279b9358155e53a05e4485b1ac2f6aac86f798f72a19aa348a878",
           "summary": "17 passed, 2 warnings in 192.62s (0:03:12)",
@@ -810,7 +810,7 @@
         },
         {
           "run": 4,
-          "source": "9ffb4a49447fc485c0ed68b1d98fd8d5280a56f1",
+          "source_revision": "9ffb4a49447fc485c0ed68b1d98fd8d5280a56f1",
           "log": "<session-scratch>/rosy-web-unify/final-delta-browser-9ffb4a4944/run-4.txt",
           "sha256": "ad5eacdb42561d624aeb4c5afc878e9f2ee312575c89ac62a421bde1bf7d2d38",
           "summary": "162 passed in 426.40s (0:07:06)",
@@ -820,7 +820,7 @@
         },
         {
           "run": 5,
-          "source": "9ffb4a49447fc485c0ed68b1d98fd8d5280a56f1",
+          "source_revision": "9ffb4a49447fc485c0ed68b1d98fd8d5280a56f1",
           "log": "<session-scratch>/rosy-web-unify/final-delta-browser-9ffb4a4944/run-5.txt",
           "sha256": "1593d8f0a2ae6f4d01f2fc01934aee69d7e50c5582465f57cc4dcfe5bc08fa17",
           "summary": "46 passed, 2 warnings in 166.31s (0:02:46)",
@@ -830,7 +830,7 @@
         },
         {
           "run": 6,
-          "source": "9ffb4a49447fc485c0ed68b1d98fd8d5280a56f1",
+          "source_revision": "9ffb4a49447fc485c0ed68b1d98fd8d5280a56f1",
           "log": "<session-scratch>/rosy-web-unify/final-delta-browser-9ffb4a4944/run-6.txt",
           "sha256": "fca819e246675ebb389075dee4bea40a247b58a0b66b615dbef564568ddb2649",
           "summary": "111 passed, 2 warnings in 276.30s (0:04:36)",
@@ -840,7 +840,7 @@
         },
         {
           "run": 7,
-          "source": "9ffb4a49447fc485c0ed68b1d98fd8d5280a56f1",
+          "source_revision": "9ffb4a49447fc485c0ed68b1d98fd8d5280a56f1",
           "log": "<session-scratch>/rosy-web-unify/final-delta-browser-9ffb4a4944/run-7.txt",
           "sha256": "c95a0fda0070822e210fd1abd1378affc14d9014f9011baddaf035aaae933e3b",
           "summary": "141 passed, 2 warnings in 394.83s (0:06:34)",
@@ -850,7 +850,7 @@
         },
         {
           "run": 8,
-          "source": "9ffb4a49447fc485c0ed68b1d98fd8d5280a56f1",
+          "source_revision": "9ffb4a49447fc485c0ed68b1d98fd8d5280a56f1",
           "log": "<session-scratch>/rosy-web-unify/final-delta-browser-9ffb4a4944/run-8.txt",
           "sha256": "d4900101f48aac39fc4b7f584833e6bd2169d90d2e08fcfff7d06f835f1261dd",
           "summary": "146 passed, 2 warnings in 442.91s (0:07:22)",
@@ -860,7 +860,7 @@
         },
         {
           "run": 9,
-          "source": "9ffb4a49447fc485c0ed68b1d98fd8d5280a56f1",
+          "source_revision": "9ffb4a49447fc485c0ed68b1d98fd8d5280a56f1",
           "log": "<session-scratch>/rosy-web-unify/final-delta-browser-9ffb4a4944/run-9.txt",
           "sha256": "db97e3ae9866c23abfdc80c881282547b058f8169364a6ef6d00105d52a49aaa",
           "summary": "136 passed, 2 warnings in 362.08s (0:06:02)",
@@ -870,7 +870,7 @@
         },
         {
           "run": 10,
-          "source": "9ffb4a49447fc485c0ed68b1d98fd8d5280a56f1",
+          "source_revision": "9ffb4a49447fc485c0ed68b1d98fd8d5280a56f1",
           "log": "<session-scratch>/rosy-web-unify/final-delta-browser-9ffb4a4944/run-10.txt",
           "sha256": "cb710e4f8ef9f4f169792ada3a8738232510ef40fc826a012ddc57fc9bf2d73d",
           "summary": "78 passed, 2 warnings in 267.67s (0:04:27)",
@@ -880,7 +880,7 @@
         },
         {
           "run": 11,
-          "source": "9ffb4a49447fc485c0ed68b1d98fd8d5280a56f1",
+          "source_revision": "9ffb4a49447fc485c0ed68b1d98fd8d5280a56f1",
           "log": "<session-scratch>/rosy-web-unify/final-delta-browser-9ffb4a4944/run-11.txt",
           "sha256": "fa6264896c3d3dc7aae99a44c16bfbdba58e1cc15349781764e1a38922c74b01",
           "summary": "97 passed, 2 warnings in 288.74s (0:04:48)",
@@ -890,7 +890,7 @@
         },
         {
           "run": 12,
-          "source": "9ffb4a49447fc485c0ed68b1d98fd8d5280a56f1",
+          "source_revision": "9ffb4a49447fc485c0ed68b1d98fd8d5280a56f1",
           "log": "<session-scratch>/rosy-web-unify/final-delta-browser-9ffb4a4944/run-12.txt",
           "sha256": "3d2a85a28d528b331f336d16a6c30266356d2f2d224f7d2e39f4b5454409f9f3",
           "summary": "79 passed, 2 warnings in 199.61s (0:03:19)",
@@ -900,7 +900,7 @@
         },
         {
           "run": 13,
-          "source": "9ffb4a49447fc485c0ed68b1d98fd8d5280a56f1",
+          "source_revision": "9ffb4a49447fc485c0ed68b1d98fd8d5280a56f1",
           "log": "<session-scratch>/rosy-web-unify/final-delta-browser-9ffb4a4944/run-13.txt",
           "sha256": "3a8d79d759826ab169e47e8c9b55dbaf505c7cd70f8fac765f96366205810098",
           "summary": "71 passed in 236.26s (0:03:56)",
