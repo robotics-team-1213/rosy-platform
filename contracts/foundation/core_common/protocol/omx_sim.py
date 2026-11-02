@@ -28,6 +28,18 @@ class OmxSimTarget(_Wire):
     camera: bool = False
     recording: bool = False
     controls: ControlsDescriptor | None = None
+    # Demonstration defaults from the workcell's profile: the reviewed start pose (arm joints,
+    # rad) and the default task text. None = the profile names none (older servers).
+    start_pose: dict[str, float] | None = None
+    task: str | None = Field(None, min_length=1, max_length=300)
+
+    @model_validator(mode="after")
+    def _start_pose_names_arm_joints(self) -> "OmxSimTarget":
+        pose = self.start_pose
+        if pose is not None and (not pose or not set(pose) <= set(self.joints)
+                                 or not all(math.isfinite(value) for value in pose.values())):
+            raise ValueError("start_pose must give finite positions for advertised arm joints only")
+        return self
 
 
 class OmxSimRecordStart(_Wire):

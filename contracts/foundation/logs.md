@@ -1093,3 +1093,10 @@
 - 증거: Fleet `test_arm_transfer_policy_admission.py`의 계약 시험(원격).
 - Gate: 변화 없음.
 - CE: 해당 없음.
+
+## 2026-11-01 · f2333e8aea · OmxSimTarget 시연 기본값
+
+- 변경: `OmxSimTarget`에 `start_pose`(알린 팔 관절만, 유한값, 비어 있지 않음)·`task`(1–300자)를 더했다(additive). API v1.339.
+- 증거: `test_omx_sim_pilot_contract.py`(원격).
+- Gate: 변화 없음.
+- CE: 해당 없음.

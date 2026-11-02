@@ -148,13 +148,15 @@ def test_half_open_link_is_aborted_at_the_reply_deadline_despite_event_acks(fast
     assert stable is False                   # only 2 answered heartbeats
 
 
-def test_degraded_hub_error_keeps_the_link(fast, caplog):
+@pytest.mark.parametrize("code", ["TASK_PROJECTION_UNAVAILABLE", "PAYLOAD_INVALID"])
+def test_degraded_hub_error_keeps_the_link(fast, caplog, code):
     """Round 3 HIGH: a live hub with one poisoned event row answers every heartbeat with
     ERROR TASK_PROJECTION_UNAVAILABLE. That is an answer: no abort, still connected, the
-    session counts as stable, and the warning is rate-limited."""
+    session counts as stable, and the warning is rate-limited. PAYLOAD_INVALID (a heartbeat
+    from a newer CORE the hub cannot validate) is the same kind of answer."""
     agent = _agent()
     agent.reply_timeout_s = 1.0              # generous: a saturated host stalls the loop
-    hub = FakeHub(heartbeat_error="TASK_PROJECTION_UNAVAILABLE", delay=0.02)
+    hub = FakeHub(heartbeat_error=code, delay=0.02)
 
     async def run():
         task = asyncio.create_task(agent._serve(hub))
@@ -168,7 +170,7 @@ def test_degraded_hub_error_keeps_the_link(fast, caplog):
         connected, stable = asyncio.run(run())
     assert connected is True and hub.answered >= agent_mod.STABLE_HEARTBEATS
     assert stable is True                    # >= STABLE_HEARTBEATS answers
-    degraded = [r for r in caplog.records if "TASK_PROJECTION_UNAVAILABLE" in r.getMessage()]
+    degraded = [r for r in caplog.records if code in r.getMessage()]
     assert len(degraded) == 1
 
 
@@ -547,9 +549,10 @@ def test_a_transient_hub_error_re_sends_the_event(caplog):
     assert "will re-send" in caplog.text
 
 
-def test_a_permanent_refusal_drops_the_event_with_its_seq_and_type(caplog):
+@pytest.mark.parametrize("code", ["EVENT_NOT_AUDITABLE", "PAYLOAD_INVALID"])
+def test_a_permanent_refusal_drops_the_event_with_its_seq_and_type(caplog, code):
     agent = _agent_with([_bus_event(7)])
-    ws = ScriptedHub({(7, 1): "EVENT_NOT_AUDITABLE"})
+    ws = ScriptedHub({(7, 1): code})
     with caplog.at_level(logging.WARNING, logger="fleet_agent"):
         _session_for(agent, ws)
     assert ws.attempts == {7: 1} and agent._event_buffer == []

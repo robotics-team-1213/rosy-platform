@@ -37,5 +37,5 @@
 - 2026-11-02 · uncommitted · sr-only 재정의 제거
 - 2026-11-02 · uncommitted · noscript 안내 (D-945 마무리)
 - 2026-11-01 · uncommitted · skip link 추가 (D-945)
-- 2026-10-31 · 754e2bb1da · 연동 코드 화면 분리
-- 2026-10-30 · 349509dd9a · 종료 사유 보존·조종 처리 여유·지연 진단
+- 2026-11-01 · a7ebffaf72 · OMX SIM 녹화 화면 다듬기
+- 2026-11-01 · f35a03048e · OMX SIM 녹화 중 종료 카드 고정

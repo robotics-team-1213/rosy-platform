@@ -596,4 +596,5 @@ def main(argv: list[str] | None = None, now: float | None = None) -> int:
 
 
 if __name__ == "__main__":
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # Korean owner notes on a cp1252 console
     sys.exit(main())

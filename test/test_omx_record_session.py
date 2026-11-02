@@ -281,6 +281,21 @@ def test_services_stop_dependents_first_and_start_in_reverse(tmp_path):
     assert_restored(arm, leader)
 
 
+def test_every_running_camera_role_hands_over_not_only_top_and_front(tmp_path):
+    # 2026-10-31: the registry added side and a second wrist camera; a unit left running keeps its V4L device.
+    arm, leader = follower(), leader_arm()
+    extra = ("rosy-omx-camera@side.service", "rosy-omx-camera@arm_a_wrist.service")
+    s, calls = session(arm, leader, active=m.SERVICES + extra)
+    fake = s.systemctl
+    listing = "\n".join(f"  {u} loaded active running ROSY OMX camera" for u in (m.SERVICES[0],) + extra)
+    s.systemctl = lambda verb, unit: listing if verb == "list-units" else fake(verb, unit)
+    record = s.execute(config(tmp_path), CAPS, teleop_only=True)
+    stopped = [u for v, u in calls if v == "stop"]
+    assert set(extra) <= set(stopped) and stopped[:2] == list(reversed(m.SERVICES[2:]))
+    assert set(record["restarted_services"]) == set(stopped) == set(m.SERVICES + extra)
+    assert_restored(arm, leader)
+
+
 def test_a_readiness_unit_waiting_to_restart_is_stopped_before_recording(tmp_path):
     # Restart=on-failure leaves it "activating" for RestartSec; firing mid-session would restart the cameras.
     arm, leader = follower(), leader_arm()
@@ -773,7 +788,7 @@ def test_main_binds_unique_child_monitor_path_to_receipt(tmp_path, monkeypatch, 
     def release_lock():
         if created:
             assert json.loads(Path(captured['env']['ROSY_OMX_MONITOR_STATE']).read_text())['status'] == 'ended'
-    monkeypatch.setattr(m, 'session_lock', lambda: SimpleNamespace(close=release_lock))
+    monkeypatch.setattr(m, 'session_lock', lambda arm=None: SimpleNamespace(close=release_lock))
     with pytest.raises(SystemExit) as ended:
         m.main(['--config', str(path), '--caps', str(caps), '--teleop-only'])
     assert ended.value.code == 0
@@ -785,3 +800,16 @@ def test_main_binds_unique_child_monitor_path_to_receipt(tmp_path, monkeypatch, 
     assert receipt['motor_health_owner'] == captured['env']['ROSY_OMX_MONITOR_OWNER']
     assert receipt['motor_health_session'] == captured['env']['ROSY_OMX_MONITOR_SESSION']
     assert receipt['motor_health_state'] == captured['env']['ROSY_OMX_MONITOR_STATE']
+
+
+def test_a_session_may_give_a_joint_an_i_gain_and_restores_it(tmp_path):
+    """2026-11-01: both arms' wrists stopped short under load with PWM to spare; the session ran them with no I gain."""
+    path = tmp_path / "caps.json"
+    path.write_text('{"11": {"pwm": 300}, "12": {"pwm": 600, "p": 1600}, "13": {"pwm": 600}, '
+                    '"14": {"pwm": 300, "current": 250, "p": 800, "i": 200}, "15": {"pwm": 300, "current": 250}, '
+                    '"16": {"pwm": 300, "current": 250}}')
+    assert m.load_caps(path)[14] == {"pwm_limit": 300, "current_limit": 250, "p_gain": 800, "i_gain": 200}
+    assert "i_gain" in m.SESSION_ONLY  # put back to the value found, like the P gain
+    path.write_text(path.read_text().replace('"i": 200', '"i": 5000'))
+    with pytest.raises(SystemExit, match="i 0..1600"):
+        m.load_caps(path)

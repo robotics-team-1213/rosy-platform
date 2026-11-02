@@ -27,21 +27,27 @@ FULL = {"cores": 20.0, "mem": 22.0, "site": False, "light": False}
 def test_a_full_host_gets_up_to_max_main_workers_and_each_job_sizes_xdist_from_its_share():
     rooms = {"a": dict(FULL), "small": {**FULL, "cores": 4.0, "mem": 3.0}, "light": {**FULL, "light": True}}
     plan = wq.workers(["a", "small", "light"], [["x"]] * 10, rooms)
-    assert plan.count(("a", "any")) == wq.MAX_MAIN == 4 and rooms["a"]["share"] == 4
+    assert plan.count(("a", "any")) == wq.MAX_MAIN == 6 and rooms["a"]["share"] == 6
     assert plan.count(("small", "any")) == 1 and "share" not in rooms["small"]  # 3 GB: room for one more only
     assert plan.count(("light", "any")) == 1
     assert wq.workers(["b"], [["x"]] * 2, {"b": dict(FULL)}).count(("b", "any")) == 2, "never more than the jobs"
     words, extra, note = xp.plan(["pkg/test"], rooms["a"], [])
-    assert words == ["ROSY_JOB_CORES=5"] and extra[:2] == ["-n", "5"] and "1/4 of the host" in note
+    assert words == ["ROSY_JOB_CORES=3"] and extra[:2] == ["-n", "3"] and "1/6 of the host" in note
     assert xp.plan(["pkg/test"], FULL, [])[0] == [f"ROSY_JOB_CORES={xp.MAX_WORKERS}"], "one worker: whole host"
 
 
-def test_only_gazebo_isaac_and_alone_browser_chunks_ask_the_host_for_it_alone():
-    """robot-08: serial (no -n) and alone on the host are different needs; an alone job empties a host."""
+def test_only_listed_suites_and_alone_browser_chunks_ask_the_host_for_it_alone(monkeypatch):
+    """robot-08: serial (no -n) and alone on the host are different needs; an alone job empties a host.
+    2026-10-31: neither Gazebo's nor Isaac's pytest suite starts nodes, gz or fixed ports; both run serial beside others."""
     serial = ["integrations/simulation/gazebo/test", "learning/envs/isaac/test", "tools"]
     alone = lambda inv: "ROSY_JOB_ALONE=1" in xp.plan(inv, FULL, serial)[0]  # noqa: E731
-    assert alone(["integrations/simulation/gazebo/test/test_x.py"]) and alone(["learning/envs/isaac/test"])
-    assert alone(["integrations"]), "a parent directory runs the gazebo suites too"
+    assert not alone(["integrations/simulation/gazebo/test/test_world_to_map.py"]), "a pure-Python gazebo file"
+    assert not alone(["integrations/simulation/gazebo/test"]) and not alone(["learning/envs/isaac/test"])
+    assert xp.plan(["integrations/simulation/gazebo/test"], FULL, serial)[1] == [], "still serial: no -n"
+    monkeypatch.setattr(xp, "HOST_ALONE", ("integrations/simulation/gazebo/test/test_live_ports.py",))
+    assert alone(["integrations/simulation/gazebo/test/test_live_ports.py"]), "a listed conflicting file stays alone"
+    assert alone(["integrations"]), "a parent directory runs the listed file too"
+    assert not alone(["integrations/simulation/gazebo/test/test_world_to_map.py"])
     assert alone(["ROSY_RUN_BROWSER_TESTS=1", "ROSY_BROWSER_ALONE=1", "a/test/test_b_browser.py"])
     assert not alone(["ROSY_JOB_CORES=6", "tools/collect_alone.py"]), "the isolation gate: serial, admitted normally"
     assert not alone(["ROSY_RUN_BROWSER_TESTS=1", "a/test/test_b_browser.py"]), "browser lanes run beside others"
@@ -159,3 +165,16 @@ def test_jobs_hide_cuda_while_an_isaac_run_holds_the_gpu(tmp_path, resv, hidden)
     assert ("cuda=\n" in out.stdout) is hidden and ("cuda=unset" in out.stdout) is not hidden, out.stdout
     assert ("Isaac holds the GPU" in out.stdout) is hidden
     assert rj.ISAAC_GPU_GUARD in rj.JOB
+
+
+@pytest.mark.parametrize("round_no, urgent, marked", [(1, "", "1"), ("g1", "", "1"), ("pre", "", ""),
+                                                      ("pre", "the user's words", "1")])
+def test_turn_rounds_and_urgent_landings_mark_their_jobs_to_skip_host_queues(monkeypatch, round_no, urgent, marked):
+    """2026-10-31: an urgent landing's pretest got 'no host' behind six others' pretests on full hosts."""
+    sys.path.insert(0, str(ROOT / "tools"))
+    import argparse
+    import land
+    seen = []
+    monkeypatch.setattr(land.land_checks, "run_tests", lambda *a, **k: seen.append(land.os.environ[land.TURN_ENV]))
+    land.run_tests(Path("."), argparse.Namespace(urgent=urgent), [], Path("."), round_no)
+    assert seen == [marked] and land.os.environ[land.TURN_ENV] == ""

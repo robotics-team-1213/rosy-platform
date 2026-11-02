@@ -74,20 +74,21 @@ def require_provable_motion(start, step, profile):
             'teacher step moves no joint beyond its reach tolerance; motion would be unprovable')
 
 
-def require_reached(backend, step, profile, session_end):
+def require_reached(backend, step, profile, session_end, clock):
     """A successful terminal is not motion: the measured joints must settle at the step target (D-793)."""
-    deadline = min(time.monotonic()+profile['max_sample_gap_s'], session_end)
+    deadline = min(clock.monotonic()+profile['max_sample_gap_s'], session_end)
     while True:
         sample = backend.observe()
-        validate_observation(sample, profile, time.time_ns())
+        validate_observation(sample, profile, clock.time_ns())
         errors = [abs(a-b) for a, b in zip(sample['joint_positions'], step['positions'])]
         if all(e <= t for e, t in zip(errors, profile['reach_tolerance_rad'])):
             return errors
-        require(time.monotonic() < deadline, 'joints did not reach the teacher target after a successful terminal')
-        time.sleep(.01)
+        require(clock.monotonic() < deadline, 'joints did not reach the teacher target after a successful terminal')
+        clock.sleep(.01)
 
 
-def run_session(profile, teacher, output, backend, *, episodes=1):
+def run_session(profile, teacher, output, backend, *, episodes=1, clock=None):
+    clock = clock or time  # rehearsals pass a simulated clock; looked up per call so tests may patch time
     validate_profile(profile, mode=backend.mode, acceptance=getattr(backend, 'acceptance', None), teacher=teacher)
     validate_teacher(teacher, profile)
     require(type(episodes) is int and 1 <= episodes <= 100, 'bounded episode count required')
@@ -96,7 +97,7 @@ def run_session(profile, teacher, output, backend, *, episodes=1):
     save(store.root/'profile.json', profile)
     if getattr(backend, 'acceptance', None) is not None:
         save(store.root/'acceptance.json', backend.acceptance)
-    began = time.monotonic()
+    began = clock.monotonic()
     if hasattr(backend, 'set_deadline'):
         backend.set_deadline(began+profile['max_session_s'])
     current, stop = None, None
@@ -109,16 +110,16 @@ def run_session(profile, teacher, output, backend, *, episodes=1):
         for _ in range(episodes):
             sample = backend.observe()
             previous_end = store.manifest['episodes'][-1]['end_ns'] if store.manifest['episodes'] else 0
-            window_deadline = time.monotonic()+profile['max_sample_gap_s']
+            window_deadline = clock.monotonic()+profile['max_sample_gap_s']
             while sample['environment']['recorded_ns'] <= previous_end:
-                require(time.monotonic() < window_deadline, 'new episode environment window unavailable')
-                time.sleep(.01)
+                require(clock.monotonic() < window_deadline, 'new episode environment window unavailable')
+                clock.sleep(.01)
                 sample = backend.observe()
-            validate_observation(sample, profile, time.time_ns())
+            validate_observation(sample, profile, clock.time_ns())
             current = store.begin(min(sample['time_ns'], sample['environment']['recorded_ns']), sample['environment'])
             store.environment(sample['environment'])
             store.camera_info(sample.get('camera_info'), sample['time_ns'])
-            last_frame, last_identity = time.monotonic(), None
+            last_frame, last_identity = clock.monotonic(), None
             identity = (current['run_id'], current['profile_sha256'])
             generations = {r: (sample['environment']['environment'][r]['environment_epoch'],
                                 sample['environment']['environment'][r]['control_generation']) for r in ('top','front')}
@@ -126,24 +127,24 @@ def run_session(profile, teacher, output, backend, *, episodes=1):
                 command_id = f'{current["cycle_id"]}-{ordinal}'
                 require(shutil.disk_usage(store.root).free >= profile['free_disk_bytes'], 'disk reserve exhausted')
                 before = backend.observe()
-                validate_observation(before, profile, time.time_ns())
+                validate_observation(before, profile, clock.time_ns())
                 start = before['joint_positions']
                 require_provable_motion(start, step, profile)
                 append(store.root/'events.jsonl', dict(kind='INTENT', step=step, command_id=command_id,
-                                                       time_ns=time.time_ns()))
-                require(time.monotonic()-began < profile['max_session_s'], 'session deadline before dispatch')
+                                                       time_ns=clock.time_ns()))
+                require(clock.monotonic()-began < profile['max_session_s'], 'session deadline before dispatch')
                 decision = backend.submit(step, command_id)
                 append(store.root/'events.jsonl', dict(kind='SUBMISSION', decision=decision,
-                                                       command_id=command_id, time_ns=time.time_ns()))
+                                                       command_id=command_id, time_ns=clock.time_ns()))
                 require(decision.get('accepted') is True, 'existing owner rejected teacher command')
                 terminal = None
                 while terminal is None:
-                    require(time.monotonic()-began < profile['max_session_s'], 'session deadline exceeded')
+                    require(clock.monotonic()-began < profile['max_session_s'], 'session deadline exceeded')
                     require(shutil.disk_usage(store.root).free >= profile['free_disk_bytes'], 'disk reserve exhausted')
                     sample = backend.observe()
                     store.environment(sample['environment'])
                     store.camera_info(sample.get('camera_info'), sample['time_ns'])
-                    validate_observation(sample, profile, time.time_ns())
+                    validate_observation(sample, profile, clock.time_ns())
                     env = sample['environment']
                     require((env['run_id'], env['profile_sha256']) == identity, 'environment run/profile changed')
                     require(all((env['environment'][r]['environment_epoch'],
@@ -152,7 +153,7 @@ def run_session(profile, teacher, output, backend, *, episodes=1):
                     for event in backend.drain_events():
                         append(store.root/'events.jsonl', event)
                     image_identity = tuple(sample['images'][role]['source_stamp'] for role in ('top', 'front'))
-                    now = time.monotonic()
+                    now = clock.monotonic()
                     if last_identity is None or all(a > b for a, b in zip(image_identity, last_identity)):
                         if now-last_frame >= 1/profile['fps'] or last_identity is None:
                             if last_identity is not None:
@@ -168,15 +169,15 @@ def run_session(profile, teacher, output, backend, *, episodes=1):
                             append(store.root/'events.jsonl', event)
                         require(terminal.get('succeeded') is True, 'controller terminal was not successful')
                         append(store.root/'events.jsonl', dict(kind='TERMINAL', result=terminal,
-                                                               command_id=command_id, time_ns=time.time_ns()))
-                    time.sleep(.01)
-                errors = require_reached(backend, step, profile, began+profile['max_session_s'])
+                                                               command_id=command_id, time_ns=clock.time_ns()))
+                    clock.sleep(.01)
+                errors = require_reached(backend, step, profile, began+profile['max_session_s'], clock)
                 append(store.root/'events.jsonl', dict(kind='REACHED', command_id=command_id, errors_rad=errors,
                                                        start_rad=list(start),
                                                        tolerance_rad=list(profile['reach_tolerance_rad']),
-                                                       time_ns=time.time_ns()))
+                                                       time_ns=clock.time_ns()))
             require(current['frames'] >= 2, 'insufficient distinct captured frames')
-            current.update(complete=True, reason='', end_ns=time.time_ns())
+            current.update(complete=True, reason='', end_ns=clock.time_ns())
             current = None
     except (Exception, KeyboardInterrupt) as exc:
         reason = f'{type(exc).__name__}: {exc}'
@@ -185,10 +186,10 @@ def run_session(profile, teacher, output, backend, *, episodes=1):
         if current is None:
             store.manifest['error'] = reason
         else:
-            current.update(complete=False, reason=reason, end_ns=time.time_ns())
+            current.update(complete=False, reason=reason, end_ns=clock.time_ns())
             try:
                 append(store.root/'events.jsonl', dict(kind='ABORT', cycle_id=current['cycle_id'],
-                                                       reason=reason, time_ns=time.time_ns()))
+                                                       reason=reason, time_ns=clock.time_ns()))
             except OSError:
                 pass
     finally:

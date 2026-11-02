@@ -44,7 +44,8 @@ HELLO_TIMEOUT_S = 5.0
 #: Hub codes that refuse an event for good (its content is outside the audit contract).
 #: Every other ERROR to an event is treated as transient and re-sent, at most
 #: EVENT_MAX_TRIES times in total, then dropped with a log line (D-407 review M3).
-PERMANENT_EVENT_CODES = frozenset({"EVENT_NOT_AUDITABLE"})
+#: PAYLOAD_INVALID: the same bytes fail validation again, so re-sending cannot help.
+PERMANENT_EVENT_CODES = frozenset({"EVENT_NOT_AUDITABLE", "PAYLOAD_INVALID"})
 EVENT_MAX_TRIES = 3
 #: Unanswered EVENTs on the wire at once. The hub answers in order with one durable
 #: commit per event, so a heartbeat queued behind a 1000-event backlog would miss its
@@ -449,9 +450,9 @@ class FleetAgent(HeartbeatLoop):
                     if request is not None:
                         self.junction_signal_answer(dict(request_id=request, lamp='unknown',
                                                          may_enter=False, reason='fleet_error'))
-                # The hub answers an EVENT payload it cannot validate with SESSION_NOT_PAIRED
-                # (hub.py `_event`), so a "fatal" code answering an EVENT is an event
-                # rejection, not a pairing failure. PAIRING_INVALID is fatal either way.
+                # Hubs before PAYLOAD_INVALID answered an EVENT payload they could not
+                # validate with SESSION_NOT_PAIRED, so a "fatal" code answering an EVENT is an
+                # event rejection, not a pairing failure. PAIRING_INVALID is fatal either way.
                 if code in SESSION_FATAL_ERRORS and (
                         answers == EnvelopeType.HEARTBEAT or code == "PAIRING_INVALID"):
                     logger.error("Fleet hub ended the session: %s", code)

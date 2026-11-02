@@ -2181,7 +2181,7 @@ docker compose --env-file <site env> -f deploy/site/compose.media.yaml -p rosy-m
 |---|---|
 | 공유 manifest | `ROSY_SITE_WORKCELL_MANIFEST`: 엄격한 `rosy.workcell-observations/1` YAML |
 | Fleet 전용 디렉터리 | `ROSY_SITE_WORKCELL_ARM_SECRETS_DIR`: `arm_a_token`, `arm_b_token` |
-| Vision 전용 디렉터리 | `ROSY_SITE_WORKCELL_CAMERA_SECRETS_DIR`: `overhead_token`, `wrist_a_token`, `wrist_b_token` |
+| Vision 전용 디렉터리 | `ROSY_SITE_WORKCELL_CAMERA_SECRETS_DIR`: `overhead_token`, `wrist_a_token`, `wrist_b_token`(카메라를 더하면 그 파일도) |
 
 Manifest의 토큰 환경 변수는 팔 `ROSY_ARM_A_TOKEN`, `ROSY_ARM_B_TOKEN`, 카메라
 `ROSY_CAMERA_OVERHEAD_TOKEN`, `ROSY_CAMERA_WRIST_A_TOKEN`, `ROSY_CAMERA_WRIST_B_TOKEN`으로 맞춘다.
@@ -2209,7 +2209,7 @@ ROSY_SITE_WORKCELL_ARM_CREDENTIAL_PATHS='{"ROSY_ARM_A_TOKEN":"/run/rosy-workcell
 
 변수를 생략하거나 빈 값으로 두면 기존 A/B 매핑을 유지한다. 모든 manifest `token_env`는
 해당 매핑에 있어야 하며 파일이 없거나 기존 자격 증명 이름을 덮어쓰면 시작을 거절한다.
-Vision의 카메라 매핑과 secret mount는 그대로다. 별도 미서명 Compose 오버레이로
+카메라도 같은 방식이다. 기본 Vision 매핑은 overhead·wrist A·wrist B이고, 측면 카메라처럼 카메라를 더하면 `ROSY_SITE_WORKCELL_CAMERA_CREDENTIAL_PATHS`에 전체 교체 매핑을 넣고 Vision 전용 camera secret 디렉터리에 파일을 둔다(예: `"ROSY_CAMERA_SIDE_TOKEN":"/run/rosy-workcell-camera-secrets/side_token"`). 별도 미서명 Compose 오버레이로
 자격 증명을 덧붙이지 않는다. 기존 추가 팔 오버레이를 쓰는 현장은 이 변수를 지원하는
 새 서명 candidate로 전환할 때 전체 매핑을 보존하고 추가 오버레이를 함께 제거한다.
 

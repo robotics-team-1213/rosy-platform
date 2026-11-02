@@ -28,7 +28,7 @@ def authority(app=None):
         import uvicorn
         port = free_port()
         server = uvicorn.Server(uvicorn.Config(app, host='127.0.0.1', port=port,
-                                               log_level='error', access_log=False))
+                                               log_level='error', access_log=False, log_config=None))
         thread = threading.Thread(target=server.run, daemon=True)
         thread.start()
         until = time.monotonic() + 5

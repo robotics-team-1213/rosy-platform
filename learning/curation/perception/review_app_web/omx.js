@@ -5,6 +5,7 @@ import '/commands.js';
 import '/omx-review.js';
 import {profileDocumentKey} from '/omx-profiles.js';
 import {renderExportRuns} from '/omx-export.js';
+import {initHub,updateHubRuns} from '/omx-hub.js';
 const $=id=>document.getElementById(id);
 const VERDICT={ok:'맞음',adjust:'조정 필요',unmeasurable:'측정 불가'};
 const SPLIT={train:'학습',eval:'평가',test:'시험',exclude:'제외'};
@@ -363,6 +364,8 @@ function selection(){
     if(/synthetic|smoke/i.test(JSON.stringify({source:row.source,profile})))area.append(el('p','합성 스모크 자료입니다. 실물 수집·개입·성공 증거가 아닙니다.','quiet'));
   }
   const method=snapshot.methods[$('method').value];
+  const devices=online?['cpu']:method?.devices||['cpu'],chosen=devices.includes($('device').value)?$('device').value:'cpu';
+  $('device').replaceChildren(...devices.map(value=>{const option=el('option',value==='cuda'?'GPU (CUDA)':'CPU');option.value=value;return option;}));$('device').value=chosen;
   const compatible=!selectedProfileRecord||profileDocumentKey(selectedProfileRecord.profile)===profileDocumentKey(row?.profile);
   $('profile-clear').disabled=!selectedProfileRecord;
   $('selected-profile-status').textContent=!selectedProfileRecord?'저장 프로필 선택 없음 · 등록 데이터의 입력 프로필을 사용합니다.':
@@ -459,7 +462,7 @@ async function refreshCenter(){
     $('dataset').value=snapshot.datasets.some(row=>row.id===selected)?selected:'';
     $('dataset').disabled=!snapshot.datasets.length;
     $('empty-datasets').hidden=!!snapshot.datasets.length;
-    renderRuns();selection();
+    renderRuns();selection();updateHubRuns(snapshot.runs);
     $('center-read-error').hidden=true;$('center-read-error').textContent='';
     $('center-status').setAttribute('state','ready');$('center-status').textContent=`데이터 ${snapshot.datasets.length}개 · 작업 ${snapshot.runs.length}개 · ${new Date().toLocaleTimeString('ko-KR')} 확인`;
   }catch(exc){centerReady=false;updateJourney();ownerRequest++;clearOwner('학습센터 연결을 확인한 뒤 현장 상태를 다시 조회하세요.');$('center-status').setAttribute('state','error');$('center-status').textContent='실행기 연결을 확인하세요. 아래 목록은 이전 확인 결과일 수 있습니다.';$('start').disabled=true;$('center-read-error').hidden=false;$('center-read-error').textContent=exc.message;}
@@ -470,6 +473,7 @@ function uuid(){
   const hex=Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join('');
   return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
 }
+initHub({request,uuid});
 $('prepared-set').onchange=()=>{pendingExport=null;exportSelection();};
 $('export-saved-review').onchange=()=>{pendingExport=null;exportSelection();};
 document.addEventListener('omx-review-loaded',event=>{if(loadedReview?.prepared_id!==event.detail.prepared_id)$('export-saved-review').checked=false;loadedReview=event.detail;pendingExport=null;exportSelection();});
@@ -510,13 +514,14 @@ $('native-export-form').onsubmit=async event=>{
 $('dataset').onchange=()=>{pendingRequest=null;selection();};
 $('arm-target').onchange=()=>{pendingRequest=null;selection();};
 $('method').onchange=()=>{pendingRequest=null;selection();};
+$('device').onchange=()=>{pendingRequest=null;};
 $('execution-mode').onchange=()=>{pendingRequest=null;selection();};
 $('experience-run').onchange=()=>{pendingExperience=null;selection();};
 $('train-form').oninput=()=>{pendingRequest=null;};
 $('train-form').onsubmit=async event=>{
   event.preventDefault();if(submitting||$('start').disabled)return;
   submitting=true;selection();error('');
-  pendingRequest??={dataset_id:$('dataset').value,method:$('method').value,steps:Number($('steps').value),batch_size:Number($('batch-size').value),device:'cpu',seed:0,request_id:uuid()};
+  pendingRequest??={dataset_id:$('dataset').value,method:$('method').value,steps:Number($('steps').value),batch_size:Number($('batch-size').value),device:$('device').value,seed:0,request_id:uuid()};
   if(selectedProfileRecord)pendingRequest.profile_id=selectedProfileRecord.id;
   if(needsArm(snapshot.datasets.find(row=>row.id===$('dataset').value)))pendingRequest.arm_id=$('arm-target').value;
   const route=$('execution-mode').value==='online_experience'?'/online-run':'/run';

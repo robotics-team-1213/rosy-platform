@@ -89,7 +89,7 @@ async def _run_pipeline(config_path):
     vision_config = load_vision_sources(config_path)[0]
     sightings = SightingService(fleet_sources, known_robot_ids=console.robot_ids)
     app = create_app(console, console_token=OPERATOR_TOKEN, sightings=sightings)
-    server = uvicorn.Server(uvicorn.Config(app, log_level="critical", lifespan="off"))
+    server = uvicorn.Server(uvicorn.Config(app, log_level="critical", lifespan="off", log_config=None))
     http_task = asyncio.create_task(server.serve(sockets=[http_socket]))
 
     ingest = IngestServer({SOURCE_ID: vision_config.phone_token})

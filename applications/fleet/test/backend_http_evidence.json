@@ -56,6 +56,11 @@
       "source_revision": "6dd16b79b939c0954efef354dae965fbab4ecb83",
       "result": "6 passed; policy admission readback and toggle receipts captured for the work view (D-865 P3)",
       "pytest_root": "."
+    },
+    {
+      "source_revision": "2957a4e971c3beb0b651191b70609341bcd92cc3",
+      "result": "1 passed; console e-stop release with the robot's admin screen code, fake CORE transport (no device evidence)",
+      "pytest_root": "."
     }
   ],
   "requests": {
@@ -546,6 +551,14 @@
         "test_cancel_all_is_safe_to_repeat"
       ],
       "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/robots/{robot_id}/estop-release": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_app_frontend_http_contracts.py",
+        "test_estop_release_uses_enrollment_owner"
+      ],
+      "source_revision": "2957a4e971c3beb0b651191b70609341bcd92cc3"
     },
     "POST:/api/fleet/robots/{robot_id}/hub-link": {
       "status": 200,
@@ -1290,6 +1303,22 @@
         "test_activation_preserves_running_teach_and_allows_stopped_pending_records"
       ],
       "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "GET:/api/fleet/charge-bays": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_charge_bays.py",
+        "test_the_route_shows_the_active_maps_bays_and_never_dispatches"
+      ],
+      "source_revision": "46563c52da7f22338d0139531ac6ac61d4966297"
+    },
+    "GET:/api/fleet/platoon": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_lane_progress.py",
+        "test_the_route_shows_the_active_loop_and_never_dispatches"
+      ],
+      "source_revision": "1246e35ce8884a6127d0bbae0260b060290b3cdc"
     },
     "GET:/api/fleet/tracking": {
       "status": 200,

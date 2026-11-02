@@ -40,9 +40,8 @@ def set_mode(body: ModeRequest, auth: AuthContext = Depends(operator),
     return {"mode": new_mode.value}
 
 
-@control_router.post("/teleop")
-def teleop(body: TeleopRequest, auth: AuthContext = Depends(operator),
-           svc: CoreServicesLike = Depends(get_services)):
+def apply_teleop(body: TeleopRequest, auth: AuthContext, svc: CoreServicesLike) -> dict:
+    """One manual drive command with every SAF-002 check; shared by REST and /ws/teleop."""
     # D-541 1: a trip never teleops, so the lease owner's token driving by hand is shared.
     trip = getattr(svc, "trip_lease", None)
     if trip is not None:
@@ -77,6 +76,12 @@ def teleop(body: TeleopRequest, auth: AuthContext = Depends(operator),
         svc.vision_stream.hook_errors += 1
         _log.exception("driver stream seat-change hook failed")
     return {"accepted": True, "operation": receipt[0].model_dump(mode="json")}
+
+
+@control_router.post("/teleop")
+def teleop(body: TeleopRequest, auth: AuthContext = Depends(operator),
+           svc: CoreServicesLike = Depends(get_services)):
+    return apply_teleop(body, auth, svc)
 
 
 @control_router.get("/teleop/state")

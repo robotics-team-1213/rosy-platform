@@ -16,6 +16,7 @@ from test_learning_collaboration import Accounts, request
 
 class Runs:
     source_sha = 'a' * 40
+    photos = Path('/nonexistent/cell-photos')
     def __init__(self):
         self.calls = []
         self.row = {'run_id': 'b' * 32, 'revision': 1, 'status': 'RUNNING',
@@ -39,6 +40,10 @@ class Runs:
     ('contact-report', 'application/json', b'{"task_success":true}'),
     *[(name, 'image/png', b'\x89PNG\r\n\x1a\n') for name in (
         'pinky_initial', 'out_lift', 'conveyor_settle', 'back_lift', 'pinky_settle')],
+    ('mapped-stack-report', 'application/json', b'{"task_success":false}'),
+    ('mapped-video', 'video/mp4', b'\x00\x00\x00\x18ftypmp42'),
+    *[(name, 'image/png', b'\x89PNG\r\n\x1a\n') for name in (
+        'mapped-overview', 'mapped-initial', 'mapped-layer-9', 'mapped-trial-1', 'mapped-leveling-12')],
 ])
 def test_contact_evidence_is_readable_through_learning_routes(tmp_path, artifact_id, media_type, raw):
     import base64
@@ -75,6 +80,79 @@ def test_contact_evidence_rejects_changed_or_mistyped_bytes(tmp_path, corruption
         with pytest.raises(urllib.error.HTTPError) as caught:
             urllib.request.urlopen(req)
         assert caught.value.code == 400
+
+
+def blob(raw, media_type, size=None):
+    import base64
+    import hashlib
+    return {'media_type': media_type, 'bytes': len(raw) if size is None else size,
+            'sha256': hashlib.sha256(raw).hexdigest(), 'data_base64': base64.b64encode(raw).decode()}
+
+
+def test_video_and_report_bounds_follow_the_container_run_limits(tmp_path):
+    with running(tmp_path) as (base, runs):
+        def get(artifact_id):
+            req = urllib.request.Request(base + '/api/learning/sim/runs/' + 'b' * 32 + '/artifacts/' + artifact_id,
+                                         headers={'Cookie': 'rosy_learning_session=reader'})
+            try:
+                with urllib.request.urlopen(req) as response:
+                    return response.status
+            except urllib.error.HTTPError as error:
+                return error.code
+        runs.call = lambda payload: blob(b'video', 'video/mp4', 64 * 1024 * 1024 + 1)
+        assert get('mapped-video') == 400
+        runs.call = lambda payload: blob(b'\x89PNG', 'image/png', 1048577)
+        assert get('mapped-layer-1') == 400
+        # Frame logs and encoder logs are run evidence, not something the page shows.
+        assert get('mapped-video-frames') == 404 and get('mapped-layer-123') == 404
+
+
+def test_container_summary_comes_from_the_registered_report(tmp_path):
+    import sys
+    import sim_web
+    sys.path.append(str(sim_web.ISAAC))
+    from mapped_stack_fixture import container_fixture
+    report = {'fixture': container_fixture(layers=3, case='nominal'), 'trials': [{'layers': []}], 'task_success': False}
+    with running(tmp_path) as (base, runs):
+        asked = []
+        def call(payload):
+            asked.append(payload)
+            return blob(json.dumps(report).encode(), 'application/json')
+        runs.call = call
+        code, data = request(base, '/api/learning/sim/runs/' + 'b' * 32 + '/summary', 'reader')
+        assert code == 200 and data['placed'] == 0 and data['planned'] == 9 and data['unstable'] == []
+        assert asked == [{'action': 'artifact', 'run_id': 'b' * 32, 'artifact_id': 'mapped-stack-report'}]
+        runs.call = lambda payload: blob(b'{"trials":[]}', 'application/json')
+        code, data = request(base, '/api/learning/sim/runs/' + 'b' * 32 + '/summary', 'reader')
+        assert code == 502 and data['error'] == '적층 보고서 형식을 확인하세요.'
+
+
+def test_cell_inventory_is_complete_and_its_photos_stay_outside_the_repository(tmp_path):
+    import re
+    import sim_web
+    with running(tmp_path) as (base, runs):
+        code, data = request(base, '/api/learning/sim/inventory', 'reader')
+        assert code == 200 and data['schema'] == 'rosy.cell-model-inventory/1'
+        ids = {model['id'] for model in data['models']}
+        assert {'gripper', 'ship_plate', 'workbench', 'belt', 'container', 'arm_base'} <= ids
+        assert sum(model['id'].startswith('camera_') for model in data['models']) == 4
+        for model in data['models']:
+            assert model['sim'] in {'reflected', 'stand_in', 'none'} and model['name']
+            assert model['cad']['sha256'] is None or re.fullmatch('[0-9a-f]{64}', model['cad']['sha256'])
+        for photo in data['photos']:
+            assert re.fullmatch('[a-z0-9_]{1,32}', photo['id']) and re.fullmatch(r'[a-z0-9_-]+\.(jpg|png)', photo['file'])
+            assert photo['sim_view'] is None or any(re.fullmatch(p, photo['sim_view']) for p in sim_web.ARTIFACT_TYPES)
+        assert all(task['status'] in {'open', 'done'} and task['task'] and task['why'] for task in data['person_tasks'])
+        assert not list(sim_web.INVENTORY.parent.glob('cell-photos'))
+
+        runs.photos = tmp_path / 'cell-photos'
+        assert request(base, '/api/learning/sim/photos/ceiling', 'reader')[0] == 404
+        runs.photos.mkdir()
+        (runs.photos / 'ceiling.jpg').write_bytes(b'\xff\xd8\xff')
+        req = urllib.request.Request(base + '/api/learning/sim/photos/ceiling', headers={'Cookie': 'rosy_learning_session=reader'})
+        with urllib.request.urlopen(req) as response:
+            assert response.headers.get_content_type() == 'image/jpeg' and response.read() == b'\xff\xd8\xff'
+        assert request(base, '/api/learning/sim/photos/unknown', 'reader')[0] == 404
 
 
 @contextmanager

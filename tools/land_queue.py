@@ -19,6 +19,7 @@ import json
 import os
 import socket
 import subprocess
+import threading
 import time
 
 import land_events  # rosy-land-events.jsonl (queue and turn lines)
@@ -183,6 +184,28 @@ def describe(rows: list[dict]) -> str:
                      f"{r.get('host', '?')}, {r['age'] / 60:.0f} min)" for r in rows)
 
 
+KEEPALIVE_S = 300.0
+_alive: list[threading.Thread] = []
+
+
+def _keepalive() -> None:
+    """Refresh held tickets every KEEPALIVE_S while this process lives. Rounds and slot waits touched them, but a
+    pretest that ran past STALE_AFTER on busy hosts did not, and a live landing's ticket was reclaimed (2026-11-01)."""
+    if _alive:
+        return
+
+    def beat() -> None:
+        while True:
+            time.sleep(KEEPALIVE_S)
+            for path in list(_held):
+                try:
+                    os.utime(path)
+                except OSError:
+                    pass
+    _alive.append(threading.Thread(target=beat, daemon=True, name="land-ticket-keepalive"))
+    _alive[0].start()
+
+
 def touch(ticket: Path | None = None) -> None:
     """Refresh a held ticket so others do not reclaim it while its holder still waits or tests."""
     land_events.beat()
@@ -248,7 +271,8 @@ def enter(wt: Path, branch: str, status: str = "waiting", urgent: str = "", *,
     adopted = Path(os.environ.pop(TICKET_ENV, "") or "~")  # land_prepare.relaunch: keep the parent's place
     if adopted.is_file():
         ticket = adopted
-        set_status(ticket, status)
+        # its owner now: a relaunch, or a rollup taking its first member's place (D-889 23), whose land.py then ends
+        set_status(ticket, status, pid=os.getpid(), branch=branch, worktree=str(wt))
     elif urgent and (holder := urgent_holder(qdir)):
         raise QueueError(f"--urgent refused: {describe([holder])} is already urgent ({holder['urgent']}); one at a time")
     elif not urgent and (why := full(qdir)):
@@ -259,6 +283,7 @@ def enter(wt: Path, branch: str, status: str = "waiting", urgent: str = "", *,
         land_events.emit("urgent", ticket=ticket.name, reason=urgent)
     _held.append(ticket)
     atexit.register(leave)
+    _keepalive()
     print(f"[queue] ticket {ticket.name} in {qdir}", flush=True)
     land_events.emit("queue", ticket=ticket.name, position=len(ahead(qdir, ticket)) + 1)
     return qdir, ticket
@@ -272,6 +297,13 @@ def join(wt: Path, branch: str, timeout: float) -> Path:
 
 
 def leave() -> None:
-    """Remove every ticket this process holds. Safe to call twice."""
+    """Remove every ticket this process holds. Safe to call twice. A ticket another process adopted (its pid
+    changed: a rollup took its place, D-889 23) stays."""
     while _held:
-        _held.pop().unlink(missing_ok=True)
+        ticket = _held.pop()
+        try:
+            if int(json.loads(ticket.read_text(encoding="utf-8")).get("pid") or 0) not in (0, os.getpid()):
+                continue
+        except (OSError, ValueError):
+            pass
+        ticket.unlink(missing_ok=True)

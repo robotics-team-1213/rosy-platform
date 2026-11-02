@@ -29,5 +29,5 @@
 - 2026-11-02 · uncommitted · 권한 거부 문구 통일·행간 토큰
 - 2026-11-02 · uncommitted · 로봇암 검수 프레임 이미지의 style 속성 제거 (CSP)
 - 2026-11-01 · uncommitted · 레일 현재 표식 어휘 통일
+- 2026-11-01 · uncommitted · curation/perception: content_sha stand-in을 정본 소비로 대체
 - 2026-10-29 · 66e86cb0fb · Pilot 로컬 복구와 Learning 검수 대기 연결
-- 2026-10-29 · c38009ec42 · 작업 폭과 픽셀 승인 영역의 반응형 문맥

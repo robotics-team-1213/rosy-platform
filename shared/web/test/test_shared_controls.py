@@ -493,15 +493,15 @@ def test_measure_comes_from_the_scale():
 
 
 def test_diagnostic_palette_references_the_tokens():
-    page = (ROOT / "middleware" / "perception" / "web" / "diagnostic.html").read_text(encoding="utf-8")
-    declared = dict(re.findall(r"--([a-z0-9-]+):\s*([^;]+);", page.split("<style>", 1)[1].split("}", 1)[0]))
+    page = (ROOT / "middleware" / "perception" / "web" / "diagnostic.css").read_text(encoding="utf-8")
+    declared = dict(re.findall(r"--([a-z0-9-]+):\s*([^;]+);", page.split("}", 1)[0]))
     mismatch = [f"--{local}: {declared.get(local)} != var({token})" for local, token in _DIAGNOSTIC_ROLES.items()
                 if declared.get(local, "").strip() != f"var({token})"]
     assert not mismatch, mismatch
     raw = {name for name, value in declared.items() if RAW_COLOR.search(value)}
     assert raw == _DIAGNOSTIC_LOCAL, raw ^ _DIAGNOSTIC_LOCAL
     assert "--ink:" not in page and "--ink-quiet:" not in page, "the page must not redefine a shared token"
-    rest = page.split("<style>", 1)[1].split("}", 1)[1]
+    rest = page.split("}", 1)[1]
     assert not RAW_COLOR.findall(rest), "colours past the role block come from a role, not a literal"
 
 

@@ -57,8 +57,9 @@
           <input id="account-password" class="ui-field password-login-field" type="password" autocomplete="new-password" minlength="2" maxlength="1024">
         </div>
         <h3>자원별 권한</h3>
-        <p>조작 권한과 조회 권한은 별개입니다. 필요한 조회 권한도 함께 선택하세요.</p>
+        <p>조작 권한과 조회 권한은 별개입니다. 필요한 조회 권한도 함께 선택하세요. 식별자 <code>*</code>는 모든 로봇 또는 모든 프로젝트입니다.</p>
         <div id="account-grants"></div>
+        <ui-button id="account-team-grants" kind="quiet" type="button">팀원 기본 권한으로 채우기</ui-button>
         <ui-button id="account-add-grant" kind="quiet" type="button">자원 추가</ui-button>
         <ui-button id="account-save" kind="primary" type="button">계정 저장</ui-button>
       </form>

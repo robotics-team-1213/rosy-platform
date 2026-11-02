@@ -25,7 +25,6 @@ at 80 % of the cap twice in a row, or a stale live state. The arm is never left 
 """
 from __future__ import annotations
 
-import argparse
 import json
 import math
 import sys
@@ -153,8 +152,7 @@ def parse_dest(config: dict, source: str, dest: str):
     """A site name, or 'x,y' metres on the source surface -> (site, (x, y))."""
     if dest in config["sites"]:
         return dest, tuple(config["sites"][dest]["place"])
-    x, y = (float(v) for v in dest.split(","))
-    return source, (x, y)
+    return source, tuple(float(v) for v in dest.split(","))
 
 
 def observe(cell, config: dict, calibration: dict, site: str, roi, catalog: list):
@@ -165,9 +163,9 @@ def observe(cell, config: dict, calibration: dict, site: str, roi, catalog: list
         return None, None, [], f"no map for {site}"
     img = cell.frame("top")
     cd.see(keep(f"auto-{site}-top", img))
-    poly, lab = config["sites"][site].get("surface_px"), config["sites"][site].get("surface_lab")
+    poly, lab, obj = config["sites"][site].get("surface_px"), config["sites"][site].get("surface_lab"), config.get("objects") or {}
     objects = cell_objects.detect(img, roi, record, config["cameras"]["top"], catalog, surface_z(config, site),
-                                  config.get("params"), poly, lab, (config.get("objects") or {}).get("hsv"))
+                                  config.get("params"), poly, lab, obj.get("hsv"))
     for o in objects:
         o["raw_m"] = [o["centre_mm"][0] / 1000, o["centre_mm"][1] / 1000]
     # the finger-side mask is not clipped to the site polygon: a container on the next surface (the board beside the
@@ -175,7 +173,7 @@ def observe(cell, config: dict, calibration: dict, site: str, roi, catalog: list
     near = cell_objects.foreground(img, roi, params=config.get("params"), surface_lab=lab)
     for poly in config["sites"][site].get("markings_px", []):  # flat floor markings (a white line) are no obstacle
         cv2.fillPoly(near, [np.asarray(poly, np.int32) - [roi[0], roi[1]]], 0)
-    return img, object_sized(near, config.get("params")), objects, None
+    return img, object_sized(near, config.get("params")) | cell_objects.colour_mask(img, roi, obj.get("hsv")), objects, None
 
 
 def object_sized(mask, params=None):
@@ -184,10 +182,7 @@ def object_sized(mask, params=None):
 
     n, labels, stats, _ = cv2.connectedComponentsWithStats(mask)
     big = [i for i in range(1, n) if stats[i, cv2.CC_STAT_AREA] > prm.get(params, "objects.surface_min_px")]
-    out = mask.copy()
-    for i in big:
-        out[labels == i] = 0
-    return out
+    return np.where(np.isin(labels, big), 0, mask).astype(mask.dtype)
 
 
 def finger_room(mask, roi, pixel_fn, o: dict, closing_deg: float | None = None, params=None) -> dict:
@@ -222,7 +217,7 @@ def reachable_ends(o: dict, entry: dict, params=None) -> list:
     """Grasp points shifted along a long box's axis, toward the arm's base first: grasp.end_frac of the way from
     the middle to where the jaws would reach the box's end. A square box has none."""
     reach = prm.get(params, "grasp.end_frac") * (entry["length_mm"] - entry["width_mm"]) / 2000
-    if reach <= 0:
+    if reach <= 0 or "grasp_shift_mm" in o:  # an end is not shifted again
         return []
     u = math.radians(o["long_axis_deg"])
     ends = [dict(o, raw_m=[o["raw_m"][0] + k * reach * math.cos(u), o["raw_m"][1] + k * reach * math.sin(u)],
@@ -300,6 +295,9 @@ def choose(cell, config, calibration, site, dest_site, place_xy, roi, objects, m
             why = "not inside the camera view"
         elif not square_entry(entries, o):
             room = finger_room(mask, roi, pixel_fn, o, None, p)
+            if room["margin_mm"] is None:  # a long box packed beside another may have room near one end (2026-11-01)
+                o, room = next(((e, r) for e in reachable_ends(o, entries[o["object"]], p)
+                                if (r := finger_room(mask, roi, pixel_fn, e, None, p))["margin_mm"] is not None), (o, room))
             if room["margin_mm"] is None:
                 why = f"no finger room: {room['free_mm'][0]} / {room['free_mm'][1]} mm free beside it"
         if why:
@@ -399,6 +397,8 @@ def run_auto(cell, config, calibration, calibration_path, catalog, roi, source, 
              dry_run=False, sleep=time.sleep, log=print, attempts=None) -> dict:
     """One object from `source` to `dest`; up to `attempts` grasps (the second with the better candidate)."""
     work, out = Path(work), {"from": source, "to": dest, "attempts": []}
+    if source not in config["sites"]:  # the --from default (pinky) on a cell without one was a bare KeyError
+        return {**out, "result": f"refused: source {source!r} is not a site in the config"}
     if dest in config["sites"] and "place" not in config["sites"][dest]:  # the board: taken from, never put on
         return {**out, "result": f"refused: {dest} is not a destination (its site has no 'place')"}
     for site in {source, dest} & {k for k, v in config["sites"].items() if v.get("track")}:  # a robot that moves
@@ -547,45 +547,18 @@ def run_auto(cell, config, calibration, calibration_path, catalog, roi, source, 
     return {**out, "result": f"stopped: {attempts} attempts"}
 
 
-def load_config(path: Path) -> dict:
-    import cell_perception
-
-    config = json.loads(path.read_text())
-    config["profiles"] = {camera: cell_perception.load_profile(Path(spec.get("profile_path", config["profile_path"])).expanduser())
-                          for camera, spec in config["cameras"].items()}
-    config["plan"] = json.loads(Path(config["plan_path"]).expanduser().read_text())
-    config["params"] = prm.load(config.get("params_path"))["values"]  # cell-params.example.json form
-    return config
-
-
 def main(argv=None):
     import cell_choices
+    import cell_preflight
+    from cell_auto_setup import open_cell, parser
 
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--config", required=True, type=Path)
-    ap.add_argument("--catalog", required=True)
-    ap.add_argument("--roi", type=int, nargs=4, required=True, metavar=("X0", "Y0", "X1", "Y1"))
-    ap.add_argument("--dest", required=True, help="a site name from the config, or x,y metres on the source surface")
-    ap.add_argument("--from", dest="source", default="pinky")
-    ap.add_argument("--dry-run", action="store_true", help="observe, choose and plan only; print JSON")
+    ap = parser(__doc__)
     ap.add_argument("--commissioning", action="store_true", help="a supervised trial of this one carry (D-911)")
     ap.add_argument("--person-at-switch", action="store_true", help="with --commissioning: a person is at the power switch")
     args = ap.parse_args(argv)
     if args.commissioning != args.person_at_switch:
         raise SystemExit("--commissioning needs --person-at-switch (and the other way round)")
-    config = load_config(args.config)
-    if args.commissioning:
-        config["_commissioning"] = {"person_at_switch": True}
-    work = Path(config["work_dir"]).expanduser()
-    cell = cp.FifoCell(Path(config["io"]).expanduser(), config["cameras"])
-    calibration_path = Path(config["calibration_path"]).expanduser()
-    cp.KEEP["dir"] = work / "frames"
-    cell_attempts.start(work / "attempts.jsonl", knowledge=config.get("knowledge"), params=config.get("params_path"),
-                        arm_id=config.get("arm_id", "arm_s"))
-    if not args.dry_run:
-        cd.start(work / "decisions.jsonl", knowledge=config.get("knowledge"))
-    import cell_preflight
-
+    config, cell, calibration_path, work = open_cell(args, args.commissioning)
     dark = cell_preflight.ready(cell.frame, config)
     if dark:  # nothing is seen in the dark: no observe, no motion
         print(json.dumps({"from": args.source, "to": args.dest, "result": "refused", "error": "; ".join(dark)}, indent=1))

@@ -40,6 +40,35 @@ def test_a_clear_path_passes_and_an_object_ahead_or_behind_is_refused():
     assert {w for w, _ in cpu.path_clear(mask, ROI, to_px, (0.0, 0.1), d, 15, 35, 10, floor_only)} == {"behind"}
 
 
+
+def test_a_neighbour_beside_the_jaws_lane_is_refused():
+    """2026-11-01: closed jaws about 42 mm across (34.4 mm finger spacing + a finger) pushed a column out of a packed
+    row; the neighbours stood 19 mm from its centre and all three slid together."""
+    mask = np.zeros((200, 200), np.uint8)
+    mask[85:116, 85:116] = 255  # the object, 30 mm wide
+    d = np.array([0.0, 1.0])
+    packed = mask.copy()
+    packed[85:116, 119:150] = 255  # a neighbour 4 mm beside it
+    assert cpu.path_clear(packed, ROI, to_px, (0.0, 0.1), d, 15, 35, 10) == []  # the old check: only its own width
+    assert {w for w, _ in cpu.path_clear(packed, ROI, to_px, (0.0, 0.1), d, 15, 35, 10, lane_mm=21)} == {"beside"}
+    beyond = mask.copy()
+    beyond[85:116, 125:132] = 255  # a 7 mm piece 10-16 mm past the box's side, inside a 30 mm lane
+    assert {w for w, _ in cpu.path_clear(beyond, ROI, to_px, (0.0, 0.1), d, 15, 35, 10, lane_mm=30)} == {"beside"}
+    apart = mask.copy()
+    apart[85:116, 140:170] = 255  # one cell (25 mm) of room
+    assert cpu.path_clear(apart, ROI, to_px, (0.0, 0.1), d, 15, 35, 10, lane_mm=21) == []
+
+
+def test_a_long_box_pushed_lengthwise_sweeps_only_its_width_ahead():
+    """2026-11-01: a 99 mm container pushed along its length had its 'ahead' samples taken 43.5 mm to each side (the
+    half-length), on the next column's corner past its own end."""
+    mask = np.zeros((200, 200), np.uint8)
+    mask[50:150, 85:116] = 255  # 100 mm long, 30 mm wide, along the push
+    mask[160:170, 140:150] = 255  # something 40 mm to the side, ahead
+    d = np.array([0.0, 1.0])
+    assert {w for w, _ in cpu.path_clear(mask, ROI, to_px, (0.0, 0.1), d, 50, 20, 10)} == {"ahead"}
+    assert cpu.path_clear(mask, ROI, to_px, (0.0, 0.1), d, 50, 20, 10, width_half_mm=15) == []
+
 def test_push_library_loads_in_the_runner_with_a_level_slow_slide(tmp_path):
     lib = cpu.push_library(PLAN, (0.15, -0.02), (0.15, 0.025), -14.4, 0.054, 0.010)
     path = tmp_path / "push.json"
@@ -102,3 +131,64 @@ def test_a_push_moves_only_as_a_supervised_trial():
     for extra, why in (([], "outside the D-911 gate"), (["--commissioning"], "needs --person-at-switch")):
         with pytest.raises(SystemExit, match=why):
             cell_push.main(base + extra)
+
+
+def test_the_lane_is_the_measured_jaw_face_and_a_real_push_leaves_its_decision(tmp_path, monkeypatch):
+    """2026-11-01: a push lane taken as 20 mm wide dragged two neighbours; the size now comes from the measured finger
+    spacing, and a supervised push is a decision row the next run can learn from, refused or not."""
+    import cell_params as prm
+
+    assert prm.jaw_face_half_mm(None) == pytest.approx((34.4 + 8.0) / 2)
+    frame = np.zeros((480, 640, 3), np.uint8)
+
+    class Cell:
+        def __init__(self, *a):
+            pass
+
+        def frame(self, camera):
+            return frame
+
+        def act(self, command):
+            raise AssertionError(f"a refused push must not move: {command}")
+
+    seen = {}
+    for module in (cpu.cd, cpu.cell_attempts):  # a started run must not outlive this test (the next file's checks)
+        monkeypatch.setattr(module, "RUN", dict(module.RUN))
+    monkeypatch.setattr(cpu.cp, "FifoCell", Cell)
+    monkeypatch.setattr(cpu.cell_pivot, "map_record", lambda cal, site: {"loo_error_mm": {"max": 11.9}})
+    monkeypatch.setattr(cpu.cell_pivot, "bias_at", lambda *a, **k: None)
+    monkeypatch.setattr(cpu.cell_objects, "to_mm", lambda px, *a: np.array([[130.0, -20.0], [130.0, -60.0]]))
+    monkeypatch.setattr(cpu.cell_objects, "foreground", lambda *a, **k: np.zeros((10, 10), np.uint8))
+    monkeypatch.setattr(cpu, "path_clear", lambda *a: seen.setdefault("lane", a[9]) and [("beside", [150.0, -20.0])])
+    (tmp_path / "cal.json").write_text("{}")
+    config = {"plan_path": str(ROOT / "deploy/robot/omx/grasp-plan.example.json"), "calibration_path": str(tmp_path / "cal.json"),
+              "io": str(tmp_path / "io"), "work_dir": str(tmp_path / "work"), "arm_id": "arm_b",
+              "cameras": {"top": {"height_m": 0.6, "center_px": [320, 240]}},
+              "sites": {"pallet": {"surface_z": -0.01}}}
+    (tmp_path / "cfg.json").write_text(json.dumps(config))
+    code = cpu.main(["--config", str(tmp_path / "cfg.json"), "--site", "pallet", "--roi", "0", "0", "10", "10",
+                     "--px", "312,201", "--dir", "0,1", "--mm", "80", "--half-mm", "50", "--commissioning", "--person-at-switch"])
+    assert code == 1 and seen["lane"] == pytest.approx(21.2 + 11.9)
+    rows = [json.loads(line) for line in (tmp_path / "work/decisions.jsonl").read_text().splitlines()]
+    assert [(r["stage"], r["chosen"], r["by"]) for r in rows] == [("push", "refuse", "rule")]
+    assert rows[0]["arm_id"] == "arm_b" and rows[0]["facts"]["blocked"]
+    # a pivot measured near the object leaves only its circle's rms as the miss
+    monkeypatch.setattr(cpu.cell_pivot, "bias_at", lambda *a, **k: {"bias_mm": [1.0, -2.0], "rms_mm": 2.4})
+    seen.clear()
+    cpu.main(["--config", str(tmp_path / "cfg.json"), "--site", "pallet", "--roi", "0", "0", "10", "10",
+              "--px", "312,201", "--dir", "0,1", "--mm", "80", "--half-mm", "50", "--dry-run"])
+    assert seen["lane"] == pytest.approx(21.2 + 2.4)
+
+
+def test_a_narrow_push_leads_with_one_finger_pad_and_looks_behind_for_the_trailing_finger():
+    import cell_params as prm
+
+    face, back = cpu.jaw_shape(None, True)
+    assert face == 10.0 and back == pytest.approx(prm.jaw_face_half_mm(None) - 4.0)
+    assert cpu.jaw_shape(None, False) == (prm.jaw_face_half_mm(None), 0.0)
+    mask = np.zeros((200, 200), np.uint8)
+    mask[85:116, 85:116] = 255
+    mask[48:56, 95:105] = 255  # 45-52 mm behind the centre: past the lead finger, under the trailing one
+    d = np.array([0.0, 1.0])
+    assert cpu.path_clear(mask, ROI, to_px, (0.0, 0.1), d, 15, 35, 10) == []
+    assert {w for w, _ in cpu.path_clear(mask, ROI, to_px, (0.0, 0.1), d, 15, 35, 10 + back, tail_mm=2 * back)} == {"behind"}

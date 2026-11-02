@@ -283,7 +283,8 @@ def test_native_session_goal_facts_and_revocation(tmp_path, revoke, with_parent,
                       for name in ('policy_parent','policy_episode')]
             files += ['middleware/devices/omx/adapter/omx_adapter/'+name+'.py'
                       for name in ('policy_parent','action_store_readback','action_api',
-                                   'action_runner','action_store','journal_identity')]
+                                   'action_runner','action_store',
+                                   'action_store_phases','action_store_workflow','journal_identity')]
             files += ['contracts/learning/src/rosy/contracts/learning/'+name+'.py'
                       for name in ('omx_execution','omx_execution_intent')]
             files += ['learning/registry/policy/fleet_join.py',
