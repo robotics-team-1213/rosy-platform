@@ -282,6 +282,19 @@ def test_a_pending_landing_continues_on_mains_new_landing_code_with_its_own_tick
     assert json.loads(mine.read_text())["status"] == "preparing"
 
 
+@pytest.mark.parametrize("remote_tool", [False, True])
+def test_repository_without_landing_entrypoint_has_no_rules_to_relaunch(repos, monkeypatch, remote_tool):
+    main, wt = repos
+    if remote_tool:
+        commit(main, {"tools/remote/helper.py": "# unrelated remote tooling\n"}, "remote tool without a lander")
+    prep, queue = land.land_prepare, land.land_queue
+    assert prep.rules() is None, "missing landing code is unknown, not a changed runnable rule set"
+    qdir = main / ".git" / queue.QUEUE
+    mine = queue.take(qdir, "feat/x", str(wt))
+    monkeypatch.setattr(prep, "STARTED", "rules from the importing repository")
+    assert prep.relaunch(land, qdir, mine, lambda *a: pytest.fail("spawned a missing lander")) is None
+
+
 def test_mains_land_py_adopts_the_parents_ticket(tmp_path, monkeypatch):
     queue = land.land_queue
     ahead = queue.take(tmp_path, "feat/ahead", status="waiting")
