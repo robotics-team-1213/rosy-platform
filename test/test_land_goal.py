@@ -172,3 +172,29 @@ def test_completion_keeps_the_actual_ff_even_when_member_metadata_is_unusable(tm
     rows = land_events.read(path)
     assert len(rows) == 1 and rows[0]["event"] == "landed" and rows[0]["t"] == 1234
     assert rows[0]["sha"] == "a" * 40 and rows[0]["main_move"]
+
+
+def test_completion_survives_sidecar_stat_failure(tmp_path, monkeypatch):
+    path = tmp_path / land_events.EVENTS
+    monkeypatch.setattr(land_events, "_where", dict(path=path, branch="land/fix/a"))
+    monkeypatch.setattr(Path, "exists", lambda self: (_ for _ in ()).throw(PermissionError("denied")))
+    land_events.landed("a" * 40)
+    assert land_events.read(path)[0]["event"] == "landed"
+
+
+def test_historical_completion_closes_same_snapshot_retries_but_preserves_new_snapshot(goal_repo):
+    events, start = goal_repo
+    sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+    a, newer, carrier = "land/fix/a-20261101000000", "land/fix/a-20261101010000", "land/fix/land-rollup-x"
+    rows = [ev(start, "queue", branch=a, ticket="original"),
+            ev(start + 60, "isolation", branch=a, kind="prepare", candidate=sha),
+            ev(start + 120, "queue", branch=newer, ticket="new", pid=2),
+            ev(start + 180, "queue", branch=a, ticket="retry", pid=3),
+            ev(start + 240, "landed", branch=carrier, sha=sha),
+            ev(start + 300, "landed", branch=newer, pid=2)]
+    holder = events.parent / "rosy-land-wt"
+    holder.mkdir()
+    (holder / (carrier.replace("/", "-") + ".members")).write_text(json.dumps([{"branch": a}]), encoding="utf-8")
+    normalized, warnings = land_goal.normalize(rows, events.parent)
+    assert not warnings
+    assert land_goal.lead_times(normalized, start, start + 400) == [4, 3]
