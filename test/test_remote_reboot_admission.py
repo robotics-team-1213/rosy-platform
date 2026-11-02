@@ -31,6 +31,7 @@ def defer(log):
 def test_each_job_reuses_the_probe_cutoff_before_any_priority_or_resource_admission(tmp_path, words, delta, active, blocked):
     home, env = _job_env(tmp_path, 'touch "$HOME/pytest-started"\n')
     (home / "rosy-test/runs/r.jobs").mkdir()
+    (home / "rosy-jobs").mkdir()
     when = "echo" if delta is None else f"/usr/bin/date -d @{10000 + delta} '+%a %Y-%m-%d %H:%M:%S %Z'"
     prefix = ('date() { if [ "$1" = +%s ]; then echo 10000; else /usr/bin/date "$@"; fi; }\n'
               f'systemctl() {{ case "$1" in show) {when};; is-active) return {0 if active else 3};; esac; }}\n')
