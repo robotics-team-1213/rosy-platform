@@ -80,5 +80,5 @@
 - 2026-11-02 · uncommitted · Account 통합 게시 범위의 검증 문서 오탐 분류
 - 2026-11-02 · 5f02d723d1 · D-962 independent identity backup and presentation
 - 2026-11-02 · e81af2d7c3 · D-962 independent Account artifact
+- 2026-11-02 · uncommitted · OMX 카메라 후보에 같은 허브의 팔을 표시
 - 2026-11-02 · 14e64763d9 · fix(hosts): D-795 DDS 가드를 깬 pinky rosbridge 선언 제거
-- 2026-11-02 · uncommitted · 관제 단위 companion 로그 상한 보완

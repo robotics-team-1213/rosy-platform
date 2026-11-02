@@ -80,6 +80,9 @@ def test_build_merges_the_members_into_one_branch_and_records_them(repo, monkeyp
     main, snapshot = repo
     rows = [snapshot("fix/a", {"pkg/a.py": "x = 2\n"}), snapshot("fix/clash", {"pkg/a.py": "x = 3\n"}),
             snapshot("fix/b", {"pkg/b.py": "y = 2\n"})]
+    for i, row in enumerate(rows):
+        row["ticket"] = f"member-{i}"
+    expected = {r["branch"]: git(main, "rev-parse", r["branch"]) for r in rows}
     started = []
 
     def start(wt, args, now, launch):
@@ -93,6 +96,16 @@ def test_build_merges_the_members_into_one_branch_and_records_them(repo, monkeyp
     assert git(main, "show", f"{head}:pkg/a.py") == "x = 2" and git(main, "show", f"{head}:pkg/b.py") == "y = 2"
     members = json.loads((land_rollup.land_async.holder(main) / "land-fix-land-rollup-x.members").read_text())
     assert [m["branch"] for m in members] == ["land/fix/a", "land/fix/b"]
+    assert [(m["candidate"], m["ticket"]) for m in members] == [
+        (expected[rows[i]["branch"]], rows[i]["ticket"]) for i in (0, 2)]
+
+
+def test_build_rejects_duplicate_branches_from_legacy_queue_rows(repo):
+    main, snapshot = repo
+    row = snapshot("fix/a", {"pkg/a.py": "x = 2\n"})
+    with pytest.raises(land_rollup.land.Stop, match="duplicate"):
+        land_rollup.build(main, [{**row, "ticket": "a1"}, {**row, "ticket": "a2"}], NOW,
+                          start=lambda *a: pytest.fail("duplicate branch reached admission"))
 
 
 @pytest.mark.parametrize("log, groups", [("[land] STOP: NEW failure in pkg/test", [["a", "b"], ["c", "d", "e"]]),
