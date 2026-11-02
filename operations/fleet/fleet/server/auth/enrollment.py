@@ -30,6 +30,7 @@ import httpx
 from fleet.server.discovery import is_rfc1918
 from fleet.server.enrollment_errors import EnrollmentError  # noqa: F401  (re-exported)
 from fleet.server.enrollment_hub import HubLinkMixin
+from fleet.server.enrollment_release import SafetyReleaseMixin
 from fleet.server.enrollment_store import (
     EnrollmentStore,
     SealError,
@@ -192,7 +193,7 @@ class EnrolledRobotClient(HttpRobotClient):
             yield event
 
 
-class EnrollmentService(HubLinkMixin):
+class EnrollmentService(HubLinkMixin, SafetyReleaseMixin):
     def __init__(self, store: EnrollmentStore, roster, *, key: bytes | None,
                  key_error: str | None = None, fleet_name: str = "rosy-site",
                  discovery=None, transport: httpx.AsyncBaseTransport | None = None,
@@ -203,9 +204,7 @@ class EnrollmentService(HubLinkMixin):
         self._hub_link = hub_link
         self._roster = roster
         self._key = key
-        self.unavailable_reason = key_error if key is None else None
-        if key is None and self.unavailable_reason is None:
-            self.unavailable_reason = "robot credential key is not configured"
+        self.unavailable_reason = (key_error or "robot credential key is not configured") if key is None else None
         self._fleet_name = fleet_name
         self._discovery = discovery
         self._transport = transport

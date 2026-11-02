@@ -59,6 +59,8 @@ class BatteryStatus(BaseModel):
 
 class SafetySummary(BaseModel):
     estop: bool = False
+    # v1.342: who latched it (`api:<role>`, `battery_policy`, `battery_deep`, `control:<reason>`); "" when clear.
+    source: str = ""
 
 
 # --- 절전/근접 웨이크 (PWR-001~004, D-24) -----------------------------------

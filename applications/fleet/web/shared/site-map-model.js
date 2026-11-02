@@ -3,9 +3,9 @@ import {DRAWING_ERROR_LABEL} from './drawing-errors.js';
 import {ACTION_LABEL, RESOLVER_DECISION_LABEL, TRIP_ERROR_LABEL, startCheckText, tripErrorText} from './trip-display.js';
 export {routeAttention} from './route-attention.js';
 
-export const PLACE_KINDS = ['junction', 'park', 'charge', 'stop', 'turnaround', 'start'];
+export const PLACE_KINDS = ['junction', 'park', 'charge', 'stop', 'slow', 'turnaround', 'start'];
 export const PLACE_KIND_LABEL = {
-  junction: '교차', park: '주차', charge: '충전', stop: '정차', turnaround: '회차', start: '출발',
+  junction: '교차', park: '주차', charge: '충전', stop: '정차', slow: '감속', turnaround: '회차', start: '출발',
 };
 export const SITE_MAP_ERROR_LABEL = {
   SITE_MAP_NOT_ACTIVE: '활성 지도가 없습니다',

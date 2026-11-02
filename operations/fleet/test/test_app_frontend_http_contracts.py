@@ -27,6 +27,22 @@ def test_hub_link_create_and_delete_use_enrollment_owner(tmp_path):
     assert store.get('rosy_09')['hub_digest'] is None
 
 
+def test_estop_release_uses_enrollment_owner(tmp_path):
+    from fastapi import FastAPI
+    from fleet.server.enrollment_routes import install_enrollment_routes
+    from fleet.server.site_auth import SitePrincipal
+    from test_enrollment_estop_release import SCREEN, latched
+    service, _, core, _ = latched(tmp_path)
+    app = FastAPI()
+    principal = lambda: SitePrincipal('alice', 'operator')
+    install_enrollment_routes(app, service, require_viewer=principal, require_operator=principal, named_identity=True)
+    client = TestClient(app)
+    path = '/api/fleet/robots/rosy_09/estop-release'
+    assert client.post(path, json={'code': SCREEN}).json() == {'robot_id': 'rosy_09', 'estop': False}
+    assert core.estop is False
+    assert client.post(path, json={'code': SCREEN}).status_code == 409
+
+
 def test_channel_deliberation_read_is_owned_and_does_not_call_model(tmp_path):
     from fastapi import FastAPI
     from types import SimpleNamespace

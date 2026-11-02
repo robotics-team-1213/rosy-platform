@@ -212,6 +212,7 @@ def test_address_change_sends_no_bearer_except_stop_to_the_pinned_address(tmp_pa
     row = {r["robot_id"]: r for r in snapshot["robots"]}["rosy_09"]
     assert row["online"] is False and row["held"] == "address_changed"
     assert row["error"]["code"] == "ADDRESS_UNVERIFIED"
+    assert row["error"]["held"] is True and row["error"]["reachable"] is None   # Fleet held it; the robot was not asked
 
 
 def _moved(tmp_path, moved_core, *, pinned_alive=False):

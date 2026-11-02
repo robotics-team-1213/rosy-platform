@@ -21,7 +21,7 @@ services:
   vision:
     environment:
       ROSY_WORKCELL_OBSERVATIONS: /run/rosy-workcell/observations.yaml
-      ROSY_ADDITIONAL_CREDENTIAL_PATHS: '{"ROSY_CAMERA_OVERHEAD_TOKEN":"/run/rosy-workcell-camera-secrets/overhead_token","ROSY_CAMERA_WRIST_A_TOKEN":"/run/rosy-workcell-camera-secrets/wrist_a_token","ROSY_CAMERA_WRIST_B_TOKEN":"/run/rosy-workcell-camera-secrets/wrist_b_token"}'
+      ROSY_ADDITIONAL_CREDENTIAL_PATHS: '${ROSY_SITE_WORKCELL_CAMERA_CREDENTIAL_PATHS:-{"ROSY_CAMERA_OVERHEAD_TOKEN":"/run/rosy-workcell-camera-secrets/overhead_token","ROSY_CAMERA_WRIST_A_TOKEN":"/run/rosy-workcell-camera-secrets/wrist_a_token","ROSY_CAMERA_WRIST_B_TOKEN":"/run/rosy-workcell-camera-secrets/wrist_b_token"}}'
     volumes:
       - type: bind
         source: "${ROSY_SITE_WORKCELL_MANIFEST:?set ROSY_SITE_WORKCELL_MANIFEST}"

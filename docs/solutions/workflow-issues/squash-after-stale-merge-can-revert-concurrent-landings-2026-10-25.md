@@ -42,3 +42,10 @@ main이 된다.
 여러 세션이 같은 저장소의 착지 큐를 쓰는 동안에는, 병합 충돌 해결에 오래
 걸린 브랜치는 재커밋 전에 반드시 main-대비 diff 경로 검사를 한다. 사고 대응
 중이 아니면 스쿼시를 피하고 병합 커밋 그대로 착지하는 것이 안전하다.
+
+## 재발 (2026-11-02)
+
+병합 충돌이 없는 경우에도 같은 일이 났다. 브랜치를 만든 뒤 main이 앞으로 갔고, 스쿼시를 `reset --soft main`으로 했더니 커밋 diff에 내가 건드리지 않은 `collection_*`·`tools/land_nightly.py`·`docs/logs.md` 되돌림이 섞였다. 이번에는 착지 lint의 큐레이션 규칙이 우연히 막았다. 경로 검사를 건너뛴 것이 원인이다.
+
+- 스쿼시는 **브랜치의 원래 기준**으로 한다: `git reset --soft $(git merge-base main HEAD)`. 최신 main 위에 올리려면 `git diff <원래 기준> HEAD -- <내 경로>`를 패치로 떠서 `reset --hard main` 뒤 `git apply --3way`로 다시 적용한다.
+- `land_async.py --replace`로 잘못 넣은 착지를 바로 고친 커밋으로 바꿀 수 있다(같은 브랜치의 대기 표를 교체).

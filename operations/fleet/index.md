@@ -96,6 +96,7 @@
 
 ## 교훈 (docs/solutions)
 
+- [Fleet이 스스로 막은 요청을 "로봇이 거절"로 보였다](../../docs/solutions/logic-errors/fleet-own-address-hold-shown-as-robot-refusal-2026-11-02.md)
 - [로봇이 틀린 코드에 401을 주면 Fleet은 자기 등록 자격이 죽은 줄 안다](../../docs/solutions/logic-errors/robot-401-for-a-wrong-code-drops-fleets-enrolled-credential-2026-10-31.md)
 
 ## 시험
@@ -104,8 +105,8 @@
 
 ## 최근 기록
 
-- 2026-10-31 · uncommitted · feat(fleet): D-938 팔 이송 정책 승인
-- 2026-10-30 · uncommitted · feat(sim): 정상 단계 시뮬 관측자 transfer_observer (D-927 결정 3)
-- 2026-10-30 · f10444d3af · 헤더 CI 교정 원격 검증
-- 2026-10-30 · uncommitted · fix(fleet): 작업 발행 루프의 연속 발행과 발행 시간 기록
-- 2026-10-30 · uncommitted · fix(fleet): 교통 판정 구간을 콘솔 잠금 하나로 직렬화
+- 2026-11-01 · uncommitted · 헤더 정적 계약 원복
+- 2026-11-01 · uncommitted · uiux(fleet): 테마 자리 계약 정정
+- 2026-11-01 · uncommitted · uiux(fleet): 소속 표시 계약 재정정
+- 2026-11-01 · uncommitted · uiux(fleet): policy 현재 표시 계약 정정
+- 2026-11-01 · uncommitted · uiux(fleet): 경로 줄 계약 시험

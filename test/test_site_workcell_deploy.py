@@ -27,20 +27,23 @@ def test_compose_renders_default_or_complete_administrator_arm_mapping(tmp_path,
     env = dict(os.environ)
     variable = "ROSY_SITE_WORKCELL_ARM_CREDENTIAL_PATHS"
     env.pop(variable, None)
+    env.pop("ROSY_SITE_WORKCELL_CAMERA_CREDENTIAL_PATHS", None)
     env.update(ROSY_SITE_WORKCELL_MANIFEST=str(tmp_path / "observations.yaml"),
                ROSY_SITE_WORKCELL_ARM_SECRETS_DIR=str(tmp_path / "arms"),
                ROSY_SITE_WORKCELL_CAMERA_SECRETS_DIR=str(tmp_path / "cameras"))
     expected = {f"ROSY_ARM_{arm}_TOKEN": f"/run/rosy-workcell-arm-secrets/arm_{arm.lower()}_token"
                 for arm in ("A", "B", "S") if configured == "three-arms" or arm != "S"}
+    cameras = {f"ROSY_CAMERA_{c}_TOKEN": f"/run/rosy-workcell-camera-secrets/{c.lower()}_token"
+               for c in ("OVERHEAD", "WRIST_A", "WRIST_B", "SIDE") if configured == "three-arms" or c != "SIDE"}
     if configured is not None:
         env[variable] = json.dumps(expected) if configured == "three-arms" else configured
+        env["ROSY_SITE_WORKCELL_CAMERA_CREDENTIAL_PATHS"] = json.dumps(cameras) if configured == "three-arms" else configured
     result = subprocess.run([docker, "compose", "--env-file", str(env_file), "-f", str(base),
                              "-f", str(SITE / "compose.workcell.yaml"), "config", "--format", "json"],
                             env=env, capture_output=True, text=True, timeout=30, check=True)
     services = json.loads(result.stdout)["services"]
     assert json.loads(services["fleet"]["environment"]["ROSY_ADDITIONAL_CREDENTIAL_PATHS"]) == expected
-    vision = json.loads(services["vision"]["environment"]["ROSY_ADDITIONAL_CREDENTIAL_PATHS"])
-    assert set(vision) == {"ROSY_CAMERA_OVERHEAD_TOKEN", "ROSY_CAMERA_WRIST_A_TOKEN", "ROSY_CAMERA_WRIST_B_TOKEN"}
+    assert json.loads(services["vision"]["environment"]["ROSY_ADDITIONAL_CREDENTIAL_PATHS"]) == cameras  # side: 2026-11-02
 
 
 def test_workcell_overlay_adds_manifest_and_separate_role_secrets_without_replacing_commands():
@@ -57,10 +60,9 @@ def test_workcell_overlay_adds_manifest_and_separate_role_secrets_without_replac
         assert "ROSY_CREDENTIAL_PATHS" not in config["environment"]
         assert config["environment"]["ROSY_WORKCELL_OBSERVATIONS"] == "/run/rosy-workcell/observations.yaml"
         mapping = config["environment"]["ROSY_ADDITIONAL_CREDENTIAL_PATHS"]
-        if service == "fleet":
-            prefix = "${ROSY_SITE_WORKCELL_ARM_CREDENTIAL_PATHS:-"
-            assert mapping.startswith(prefix) and mapping.endswith("}")
-            mapping = mapping[len(prefix):-1]
+        prefix = "${ROSY_SITE_WORKCELL_" + ("ARM" if service == "fleet" else "CAMERA") + "_CREDENTIAL_PATHS:-"
+        assert mapping.startswith(prefix) and mapping.endswith("}")
+        mapping = mapping[len(prefix):-1]
         paths = json.loads(mapping)
         assert set(paths) == names
         volumes = config["volumes"]

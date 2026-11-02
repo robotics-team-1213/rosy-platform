@@ -363,3 +363,9 @@
 - 변경: `build.py`의 로컬 `content_sha` stand-in 제거(D-373 정본 착지 후에도 남아 있던 사본)하고 `learning/registry/perception/store.py` 정본을 import로 소비(D-940 ①갈래). `manifest_bytes` 옵션은 정본으로 이식했다.
 - 증거: test/learning/perception 원격 실행·mutation은 착지 기록에 남긴다(2026-11-01).
 - gate 변화: 없음
+
+## 2026-11-01 · uncommitted · 레일 현재 표식 어휘 통일
+
+- 변경: 검수 화면 여섯(camera·pixels·omx·vlm·workspaces·sim)의 레일 항목이 쓰던 `aria-current="true"`를 표준 어휘 `page`로 바꿨다(D-945 계약 시험이 이탈로 지목).
+- 증거: `test_layout_canon.py` 통과. 원격 시험은 착지 전 기록.
+- Gate: 없음. CE: 해당 없음.

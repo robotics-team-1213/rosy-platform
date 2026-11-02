@@ -6,6 +6,7 @@ import { restoreAccount } from "../client.js";
 
 import { api, session } from "../client.js";
 import { mountPanels } from "./mount.js";
+import { SURFACE_RAIL as RAIL } from "../surface-navigation.js";
 import { createStore } from "./store.js";
 import { ROLE_LABEL, enumLabel } from "/common/core_ui_logic.js";
 import { actionIcon } from "/common/ui.js";
@@ -83,9 +84,9 @@ function showRoleDeniedStatus() {
   showLinkedStatus("이 화면은 현재 계정 역할로 열 수 없습니다.", "/console", "운용 화면으로 이동");
 }
 
-// D-741 6 — 화면 전환은 탐색 레일이다. 아이콘과 아래 적는 짧은 이름은 표면 id로 고르고
-// 전체 이름은 접근성 이름으로 남긴다. 매니페스트 계약은 그대로다.
-const RAIL = {console: ["robot", "운용"], setup: ["settings", "준비"], device: ["install", "설치"]};
+// D-741 6 — 화면 전환은 탐색 레일이다. 아이콘과 아래 적는 짧은 이름은 SURFACE_RAIL
+// (surface-navigation.js 정본)이 표면 id로 고르고 전체 이름은 접근성 이름으로 남긴다.
+// 매니페스트 계약은 그대로다.
 
 function renderSwitch(surfaces) {
   const nav = document.getElementById("surface-switch");
