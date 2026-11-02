@@ -129,6 +129,9 @@ and its own encrypted local session configuration under `/etc/rosy/fleet-account
 mounted read-only at `/run/rosy-fleet-account`; its session DB belongs in Fleet's
 writable state volume. Set `ROSY_FLEET_ACCOUNT_CLIENT_CONFIG` to that receiver JSON
 and register its exact HTTPS callback and site resource in the existing authority.
+The issuer hostname aliases the proxy on both its edge and backend networks.
+Fleet reaches Account over the shared backend with the original issuer hostname
+and TLS verification; it does not need edge-network access or host hairpin routing.
 Keep `ROSY_ACCOUNT_CONFIG` for the Account command; the Fleet environment sets it
 empty so Fleet never opens the authority database. Development mode also requires
 human login and never issues an anonymous development operator.

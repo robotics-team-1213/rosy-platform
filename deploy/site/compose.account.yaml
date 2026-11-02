@@ -64,7 +64,10 @@ services:
     labels:
       org.rosy.site-account-caddy-sha256: unbuilt
     networks:
-      site_backend: {}
+      site_backend:
+        # Fleet consumes Account here; Docker aliases are scoped to each network.
+        aliases:
+          - "${ROSY_ACCOUNT_HTTPS_HOST:?set ROSY_ACCOUNT_HTTPS_HOST}"
       site_edge:
         aliases:
           - "${ROSY_ACCOUNT_HTTPS_HOST:?set ROSY_ACCOUNT_HTTPS_HOST}"
