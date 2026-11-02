@@ -243,7 +243,8 @@ class CameraSender:
         from websockets.sync.client import connect
         try:
             if self.connection is None:
-                self.connection = connect(self.url, ssl=self.context,
+                # Packets are raw JPEG that deflate cannot shrink; permessage-deflate burned ~70% of this process's CPU.
+                self.connection = connect(self.url, ssl=self.context, compression=None,
                     additional_headers={'Authorization': f'Bearer {self.token}'},
                     open_timeout=2, close_timeout=1, max_queue=1, max_size=65536)
                 self.connection.socket.settimeout(2)
