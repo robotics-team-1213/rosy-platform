@@ -102,6 +102,69 @@ def test_disconnect_after_motion_applies_zero(drive, monkeypatch):
     assert svc.command.select_output().linear == 0.0
 
 
+@pytest.mark.parametrize("cancel_method", ["anyio-scope", "asyncio-task"])
+def test_cancelled_teleop_handler_applies_explicit_zero(drive, monkeypatch, cancel_method):
+    import asyncio
+    from threading import Event
+    from types import SimpleNamespace
+
+    import anyio
+    import core_api_web.api.ws as ws_module
+
+    tc, svc = drive()
+    auth = ws_module.authenticate(svc.config, None, OPERATOR)
+    zero_applied = Event()
+    real_apply = ws_module.apply_teleop
+
+    async def authorize(_socket, **_kwargs):
+        return svc
+
+    def observe_apply(request, context, services):
+        result = real_apply(request, context, services)
+        if request.linear == 0.0 and request.angular == 0.0:
+            zero_applied.set()
+        return result
+
+    monkeypatch.setattr(ws_module, "_authorize", authorize)
+    monkeypatch.setattr(ws_module, "apply_teleop", observe_apply)
+
+    async def exercise():
+        acknowledged = anyio.Event()
+        handler_task = []
+
+        class Socket:
+            app = tc.app
+            state = SimpleNamespace(token_id=auth.token_id, auth=auth)
+            sent = False
+
+            async def receive_text(self):
+                if not self.sent:
+                    self.sent = True
+                    return _frame(1, 0.1)
+                await anyio.sleep_forever()
+
+            async def send_json(self, message):
+                assert message["accepted"] is True
+                acknowledged.set()
+
+        async def handle():
+            handler_task.append(asyncio.current_task())
+            await ws_module.ws_teleop(Socket())
+
+        async with anyio.create_task_group() as group:
+            group.start_soon(handle)
+            await acknowledged.wait()
+            assert svc.command.select_output().linear == pytest.approx(0.1)
+            if cancel_method == "anyio-scope":
+                group.cancel_scope.cancel()
+            else:
+                handler_task[0].cancel()
+        assert zero_applied.is_set(), "handler cancellation bypassed the explicit zero"
+        assert svc.command.select_output().linear == 0.0
+
+    anyio.run(exercise)
+
+
 def test_socket_cap_and_same_token_replacement(drive):
     from contextlib import ExitStack
     tc, _svc = drive(config_overrides={"teleop": {"max_ws_clients": 1}})
