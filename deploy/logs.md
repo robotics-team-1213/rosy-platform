@@ -4383,6 +4383,11 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - gate 변화: 없음. 서명 후보 배포 뒤 443 tailnet readback이 남았다. IP 주소로는 TLS가 실패하므로(인증서 SAN에 IP 없음) 이름으로 접속한다.
 - CE: 해당 없음 — 대역 누락은 이 기록과 Caddyfile 주석으로 복원된다.
 
+## 2026-11-02 · uncommitted · 현장 추가 팔 오버레이 전환 순서를 교훈으로
+- 변경: 10-27부터 현장 자동 업데이트를 막은 미서명 arm-s 오버레이를 정식 매핑으로 바꾼 실제 순서를 `docs/solutions/deployment/site-extra-arm-overlay-switch-needs-a-staged-runtime-2026-11-01.md`에 기록하고, `deploy/site/README.md` 전환 문단에서 그 문서를 가리킨다. 기존 README는 "오버레이를 함께 제거"만 적어 그대로 하면 세 번 거절된다.
+- 증거: 2026-11-02 09:17 KST 현장 candidate 2ba97ac, proxy·fleet·vision·postgres healthy, Fleet에 A/B/S 토큰, dry-run idle.
+- gate 변화: 없음. CE: 새 교훈 기록.
+
 ## 2026-11-02 · uncommitted · OMX 카메라: 옮긴 카메라는 역할이 따라가고, 새 카메라는 제안 후 승인 한 번
 
 - 변경: `omx_cameras.py bind --apply`(20초 타이머)가 꽂힌 각 역할 카메라의 모델(`usb_id`)을 레지스트리에 기록한다. 역할의 카메라가 사라지고, 같은 모델의 미등록 카메라가 하나뿐이며, 그 모델로 사라진 역할도 하나뿐이면 그 역할을 새 포트로 옮기고 브리지 manifest도 맞춘다. 같은 모델 두 대가 함께 옮겨졌거나 처음 보는 모델은 `propose`가 후보로만 보여 주고 `approve NODE ROLE` 한 번으로 등록한다(새 역할은 `/<role>_camera/image_raw`·`<role>_camera_link`). 새 등록은 커널 by-id 이름을 쓰지 않는다(쌍둥이가 나중에 꽂히면 같은 이름).
