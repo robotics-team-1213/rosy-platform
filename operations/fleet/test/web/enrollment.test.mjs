@@ -58,10 +58,10 @@ test("viewers and the shared console token see no enrollment buttons", () => {
   assert.equal(canManage({ role: "operator", principal_id: "alice" }), true);
   assert.deepEqual(rowActions(row, false), []);
   assert.deepEqual(rowActions(row, true), ["move", "unenroll"]);
-  assert.deepEqual(rowActions({ ...row, state: "active" }, true), ["unenroll"]);
+  assert.deepEqual(rowActions({ ...row, state: "active" }, true), ["estop-release", "unenroll"]);
   assert.deepEqual(rowActions({ ...row, state: "pending_logout" }, true), []);
-  assert.deepEqual(rowActions({ ...row, state: "active", hub_linkable: true }, true), ["hub-link", "unenroll"]);
-  assert.deepEqual(rowActions({ ...row, state: "active", hub_linked: true }, true), ["hub-unlink", "unenroll"]);
+  assert.deepEqual(rowActions({ ...row, state: "active", hub_linkable: true }, true), ["hub-link", "estop-release", "unenroll"]);
+  assert.deepEqual(rowActions({ ...row, state: "active", hub_linked: true }, true), ["hub-unlink", "estop-release", "unenroll"]);
   assert.deepEqual(discoveryActions({ enrollable: true }, false, 0, 1), []);
   assert.deepEqual(discoveryActions({ enrollable: false }, true, 0, 1), []);
 });

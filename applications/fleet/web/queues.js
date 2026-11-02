@@ -5,6 +5,7 @@ import { ruleMTag } from "./link-tag.js";
 import { localizationUrgent } from "./localization-badge.js";
 import { staleAgeS } from "./state-age.js";
 import { powerHealthView } from "./power-health-view.js";
+import { estopText } from "./motion-readiness.js";
 import {routeAttention, trafficAttention} from "/console/assets/site-map-model.js";
 import {tripEndText, tripWaitText} from "/console/assets/trip-display.js";
 import { guideAttention } from "/console/assets/guide-layer.js";
@@ -157,7 +158,7 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
     }
     const relay = streamEvidence(view.formation, robot.robot_id);
     if (relay && relay.cls) items.push({ severity: relay.cls === "crit" ? "crit" : "warn", text: `: ${relay.text}` });
-    if (state.safety?.estop === true) items.push({ severity: "warn", text: ": 비상 정지 걸림 — 관리자가 해제해야 움직입니다" });
+    if (state.safety?.estop === true) items.push({ severity: "warn", text: `: ${estopText(state, "비상 정지 걸림")} — 관리자가 해제해야 움직입니다` });
     else if (state.safety?.estop !== false) items.push({ severity: "warn", text: ": 정지 상태 미확인" });
     if (state.navigation === "FAILED") items.push({ severity: "warn", text: ": 목표 실패" });
     // D-511 M0: Fleet이 Rosy Cam 지도 자세로 본 차로 여유. 움직이는 로봇만 알린다(D-511 §2).

@@ -354,7 +354,7 @@
 ## 최근 기록
 
 - 2026-11-02 · uncommitted · feat(fleet): 확인된 ARM 시도의 재관측 계약(D-930, API v1.334)
+- 2026-11-02 · uncommitted · docs(adr): D-960 암 세트마다 셀 관제, 그 위에 통합관제 R
 - 2026-11-02 · uncommitted · fix(harness): 같은 폴더 import 사슬로 시험을 찾는다 (D-889 추가 21)
 - 2026-11-02 · uncommitted · fix(land): 서로 닿지 않으면 차례는 가드만 (D-889 추가 22)
-- 2026-11-01 · uncommitted · D-945 전 표면 자리 규칙
-- 2026-11-01 · uncommitted · D-926 보강: 새 구획은 ui-section 네 역할
+- 2026-11-01 · uncommitted · feat(fleet): 확인된 ARM 시도의 재관측 계약(D-930, API v1.334)
