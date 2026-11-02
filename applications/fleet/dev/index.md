@@ -25,8 +25,8 @@
 
 ## 최근 기록
 
+- 2026-11-03 · 8b38f889ba · fix: 쿠키 운영자 화면의 샘플 USB 목록 연결
 - 2026-11-02 · uncommitted · fix: Windows 개발 서버 포트 독점
 - 2026-10-27 · uncommitted · fix: 프로필 API 소비자와 설치 작업 검증 연결
 - 2026-10-27 · uncommitted · fix: 샘플 프로필 저장소 미설정 표시
 - 2026-10-25 · uncommitted · 관제8 API 관측 receipt와 통과 sample flow 등록
-- 2026-10-25 · uncommitted · 비동기·streaming backend HTTP 증거 수집

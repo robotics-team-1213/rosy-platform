@@ -13765,3 +13765,9 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: 없음
 - 교훈: `docs/solutions/runtime-errors/omx-arm-b-dropped-on-the-stack-and-the-fixed-recover-lift-pressed-it-down-2026-11-03.md`
+
+## 2026-11-03 · f81b8315d0 · docs: unwedge의 측정 기반 성공 조건과 검증 범위
+
+- 변경: 기존 unwedge 교훈의 clearance를 명령 횟수 대신 시작 측정값 대비 순변위로 정정하고, held-target 기준 HOME 한계·park 정착·측정 HOME 확인을 기록했다. 기존 21단계 현장 기록과 후속 호스트 회귀를 구분했다.
+- 증거: 1bd891afdf의 공식 원격 RED는 예상 실패 4건/통과 3건이었다. 독립 안전 검토된 f81b8315d0의 unwedge·pipeline 원격 회귀는 55 PASS/0 SKIP, NEW/known/flaky=0이었다. 교훈은 실제 코드의 SETTLE_TOL·readback 조건과 대조했다.
+- gate 변화: 기존 guard·torque·session 규칙을 유지한다. 수정 revision의 실물 수용에는 감독 시험이 필요하다. CE: 기존 교훈 갱신.
