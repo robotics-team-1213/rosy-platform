@@ -48,6 +48,7 @@ def test_site_candidate_is_commit_tagged_and_contains_sbom_and_image_hash(tmp_pa
         encoding="utf-8")
     (site / ".env.example").write_text("ROSY_SITE_IMAGE_TAG=local\n", encoding="utf-8")
     (site / "Dockerfile.fleet").write_text("FROM ubuntu", encoding="utf-8")
+    (site / "Dockerfile.account").write_text("FROM ubuntu", encoding="utf-8")
     (site / "Dockerfile.vision").write_text("FROM ubuntu", encoding="utf-8")
     (site / "Dockerfile.proxy").write_text("FROM caddy", encoding="utf-8")
 
@@ -75,7 +76,7 @@ def test_site_candidate_is_commit_tagged_and_contains_sbom_and_image_hash(tmp_pa
     assert manifest["source_commit"] == COMMIT
     assert manifest["image_tag"] == COMMIT
     assert manifest["platform"] == "linux/amd64"
-    assert len(manifest["images"]) == 4
+    assert set(manifest["images"]) == {'fleet', 'vision', 'proxy', 'postgres', 'account'}
     assert all(item["image_id"].startswith("sha256:") for item in manifest["images"].values())
     assert all(item["sbom_sha256"] for item in manifest["images"].values())
     assert manifest["image_archive_sha256"]

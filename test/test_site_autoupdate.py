@@ -685,6 +685,33 @@ def test_account_runtime_identity_must_match_accepted_fleet_image():
         rows, NEW, accepted, untrusted, services=())
 
 
+def test_independent_account_runtime_uses_its_signed_reused_reference_and_identity():
+    services = ('fleet', 'vision', 'proxy', 'postgres', 'account')
+    refs = {s: f'rosy-site-{s}:{NEW}' for s in services}
+    refs['account'] = f'rosy-site-account:{OLD}'
+    accepted = {s: [_image_id(NEW, s)] for s in services}
+    rows = [{'Service': s, 'Image': refs[s], 'State': 'running', 'Health': 'healthy', 'ID': s}
+            for s in services]
+    def inspect(args):
+        return SimpleNamespace(stdout=accepted[args[-1]][0])
+    assert upd.containers_reason(rows, NEW, accepted, inspect, services, refs) == ''
+    rows[-1]['Image'] = refs['fleet']
+    assert 'account' in upd.containers_reason(rows, NEW, accepted, inspect, services, refs)
+    rows[-1]['Image'] = refs['account']
+    assert 'account' in upd.containers_reason(rows[:-1], NEW, accepted, inspect, services, refs)
+
+
+def test_signed_but_disabled_account_image_requires_no_runtime_container():
+    services = ('fleet', 'vision', 'proxy', 'postgres')
+    refs = {s: f'rosy-site-{s}:{NEW}' for s in (*services, 'account')}
+    accepted = {s: [_image_id(NEW, s)] for s in refs}
+    rows = [{'Service': s, 'Image': refs[s], 'State': 'running', 'Health': 'healthy', 'ID': s}
+            for s in services]
+    def inspect(args):
+        return SimpleNamespace(stdout=accepted[args[-1]][0])
+    assert upd.containers_reason(rows, NEW, accepted, inspect, services, refs) == ''
+
+
 def test_monitoring_service_without_its_overlay_is_refused(host):
     fake = FakeHost(host.paths)
     env = upd.read_env(host.paths.site_env)
