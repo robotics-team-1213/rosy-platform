@@ -69,10 +69,11 @@ def test_plan_keeps_one_tier_skips_safety_and_conflicts_and_caps_the_size(repo, 
             snapshot("fix/b", {"pkg/b.py": "y = 2\n"}), snapshot("fix/c", {"pkg/c.py": "z = 2\n"})]
     tiers = {"land/fix/safe": None, "land/fix/full": "full"}
     tier = lambda repo_, branch: tiers.get(branch, "affected")  # noqa: E731
-    assert [r["branch"] for r in land_rollup.plan(main, rows, tier)] == ["land/fix/a", "land/fix/b", "land/fix/c"]
+    apart = lambda repo_, branch: [[branch + "/test"]]  # noqa: E731  (no two members share a suite)
+    assert [r["branch"] for r in land_rollup.plan(main, rows, tier, apart)] == ["land/fix/a", "land/fix/b", "land/fix/c"]
     monkeypatch.setattr(land_rollup, "ROLLUP_MAX", 2)
-    assert [r["branch"] for r in land_rollup.plan(main, rows, tier)] == ["land/fix/a", "land/fix/b"]
-    assert land_rollup.plan(main, rows[:2], tier) == [], "one member is no rollup"
+    assert [r["branch"] for r in land_rollup.plan(main, rows, tier, apart)] == ["land/fix/a", "land/fix/b"]
+    assert land_rollup.plan(main, rows[:2], tier, apart) == [], "one member is no rollup"
 
 
 def test_build_merges_the_members_into_one_branch_and_records_them(repo, monkeypatch):
@@ -106,3 +107,36 @@ def test_a_failed_rollup_splits_in_halves_or_sends_members_back_alone(tmp_path, 
     seen = land_rollup.split(tmp_path, "land-r", NOW, builder=lambda repo, half, now: [m["branch"] for m in half],
                              resumer=lambda m: [m["branch"]])
     assert seen == groups
+
+
+def test_ready_landings_roll_up_only_when_their_suites_do_not_overlap(repo):
+    """D-889 23, 11-02: two or more landings sat ready 75 % of the time while each turn landed one."""
+    main, snapshot = repo
+    rows = [{**snapshot("fix/a", {"pkg/a.py": "x = 2\n"}), "status": "waiting"},
+            {**snapshot("fix/b", {"pkg/b.py": "y = 2\n"}), "status": "waiting"},
+            snapshot("fix/c", {"pkg/c.py": "z = 2\n"})]
+    assert land_rollup.candidates(rows, main, host="h") == rows, "waiting (ready) tickets are members too"
+    reach = {"land/fix/a": [["pkg/test/test_a.py"]], "land/fix/b": [["pkg/test"]], "land/fix/c": [["other/test"]]}
+    plan = land_rollup.plan(main, rows, lambda r, b: "affected", lambda r, b: reach[b])
+    assert [r["branch"] for r in plan] == ["land/fix/a", "land/fix/c"], "b's suites contain a's: b lands alone"
+
+
+def test_the_rollup_takes_its_first_members_place_and_the_member_leaves_it(repo, monkeypatch, tmp_path):
+    main, snapshot = repo
+    qdir = land_rollup.land_queue.queue_dir(main)
+    first = land_rollup.land_queue.take(qdir, "land/fix/a", "w", "waiting")
+    rows = [{**snapshot("fix/a", {"pkg/a.py": "x = 2\n"}), "ticket": first.name, "pid": 1},
+            snapshot("fix/b", {"pkg/b.py": "y = 2\n"})]
+    seen = []
+
+    def start(wt, args, now, launch):
+        seen.append(land_rollup.os.environ.get(land_rollup.land_queue.TICKET_ENV))
+        return "land/fix/land-rollup-x", land_rollup.land_async.holder(wt) / "land-fix-land-rollup-x.log"
+    land_rollup.build(main, rows, NOW, start=start)
+    assert seen == [str(first)] and land_rollup.land_queue.TICKET_ENV not in land_rollup.os.environ
+    # the rollup's land.py adopts it (pid changes); the first member's exit must not remove it
+    land_rollup.land_queue.set_status(first, "preparing", pid=999999, branch="fix/land-rollup-x")
+    assert land_rollup.adopted(qdir, rows[0], wait=1, sleep=lambda s: None)
+    monkeypatch.setattr(land_rollup.land_queue, "_held", [first])
+    land_rollup.land_queue.leave()
+    assert first.exists(), "an adopted ticket stays when its old owner leaves"

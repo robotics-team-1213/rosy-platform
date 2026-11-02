@@ -13539,3 +13539,17 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: D-889 추가 21(사용자 지시 2026-11-02)
 - 교훈: 없음
+
+## 2026-11-02 · uncommitted · docs(adr): D-960 암 세트마다 셀 관제, 그 위에 통합관제 R
+- 변경: D-960 추가. 실제 제어(원장·승인·팔 정지·셀 카메라)는 암 세트(셀)마다 팔이 연결된 PC의 관제가 하고, 통합관제 R은 control-unit HTTP/TLS로 요약·위임·정지 요청만 중계한다. R은 임시로 OMX 관제 PC에 두고 목표는 상시 켜 둔 전용 PC(모델 PC 제외). R·CELL-A는 서명 candidate로 돌고, Pinky 등록을 가진 운영 site 스택이 R, 셀 관측은 CELL-A 인스턴스가 맡는다. 검증용 `r-verify`는 대체 확인 뒤 은퇴. ADR log 행, 다른 브랜치가 예약한 D-956~958과 쓰지 않은 D-959를 adr_gaps에 선언.
+- 증거: 2026-11-02 현장 — OMX 관제 PC에 서명 `rosy-site`와 dev 이미지 `cell-a`·`r-verify`가 함께 돌고, r-verify는 브라우저 포트가 없고 cell-a 인증서를 빌려 씀. 모델 PC 부하 약 22/24 코어. 원격 `test_harness_contracts.py`.
+- gate 변화: 없음
+- 결정: D-960(사용자 결정 2026-11-02)
+- 수용: R 서명 재구성·R↔CELL-A 연결·브라우저 접속은 미수용(ADR 「수용 조건」, handoff `Rosy/.omc/handoffs/2026-11-02-control-units-per-arm-set.md`)
+
+## 2026-11-02 · uncommitted · fix(land): 준비된 착지도 서로 닿지 않으면 한 표로 묶는다 (D-889 추가 23)
+- 변경: `land_rollup`이 waiting 표를 받고 구성원 사이 시험 겹침을 거른다. 첫 구성원의 표를 이어받고(`land_queue.enter`가 pid·branch·worktree를 갱신), 이어받은 뒤 구성원을 멈춘다(`adopted`). `leave`는 남이 이어받은 표를 지우지 않는다.
+- 증거: 11-02 24시간 동안 대기열 변화의 75 %에 준비된 착지가 2개 이상 있었다. 원격 시험은 착지 기록에 남긴다.
+- gate 변화: 없음
+- 결정: D-889 추가 23(사용자 결정 2026-11-02)
+- 교훈: 없음
