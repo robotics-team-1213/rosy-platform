@@ -23,6 +23,9 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from core_common.protocol.power_health import PowerHealthResponse
 from core_common.protocol.motor_health import MotorHealthResponse
+from fleet.charge_bays import ChargeBays, RobotView, bays_from_map
+from fleet import lane_progress
+from fleet.speed_table import speed_table
 from fleet.hub.hub import HubError
 from fleet.server.console_view import CapabilityDisplay
 from fleet.server.monitoring_routes import cached_projection, install_monitoring_routes
@@ -231,6 +234,64 @@ def install_console_routes(app, *, console, sightings, require_viewer,
     @app.get("/api/fleet/state", dependencies=read_guard, tags=["fleet"])
     async def fleet_state() -> dict:
         return await gathered()
+
+    # D-941 5/7: the active map's charge bays, shown only; Fleet does not dispatch from the plan yet.
+    bay_plan = app.state.charge_bays = ChargeBays()
+
+    def bay_view(row: dict, on_trip: set) -> RobotView:
+        battery = (row.get("power_health") or {}).get("battery") or {}
+        fresh = battery.get("evidence") == "fresh"
+        pose = map_pose.arbitrated_pose(row["robot_id"]) if map_pose is not None else None
+        return RobotView(row["robot_id"], bool(row["online"]), battery.get("percent") if fresh else None,
+                         battery.get("filtered_voltage") if fresh else None,
+                         (pose.x, pose.y) if pose is not None and pose.state == "LOCALIZED" else None,
+                         row["robot_id"] in on_trip)
+
+    async def bay_inputs():
+        maps = getattr(app.state, "site_maps", None)
+        active = maps.active() if maps is not None else None
+        if active is None:
+            return None, [], []
+        runner = getattr(app.state, "trip_runner", None)
+        on_trip = {trip["robot_id"] for trip in runner.open_trips()} if runner is not None else set()
+        robots = [bay_view(row, on_trip) for row in (await gathered())["robots"]]
+        return active, robots, bays_from_map(active[1])
+
+    async def charge_bays_tick() -> None:
+        """Feed the plan each period, so a voltage rise is seen with nobody on the page."""
+        active, robots, bays = await bay_inputs()
+        if active is not None and bays:
+            bay_plan.observe(console._clock(), robots, bays)
+    app.state.charge_bays_tick = charge_bays_tick
+
+    @app.get("/api/fleet/charge-bays", dependencies=read_guard, tags=["fleet"])
+    async def charge_bay_plan() -> dict:
+        active, robots, bays = await bay_inputs()
+        if active is None:
+            raise HTTPException(404, detail={"code": "NO_ACTIVE_MAP"})
+        return {"map_version": active[0], **bay_plan.plan(robots, bays)}
+
+    # D-941 2: gaps on the active map's loop, shown only; the 20 Hz following loop belongs to CORE.
+    @app.get("/api/fleet/platoon", dependencies=read_guard, tags=["fleet"])
+    async def platoon_gaps() -> dict:
+        maps = getattr(app.state, "site_maps", None)
+        active = maps.active() if maps is not None else None
+        if active is None:
+            raise HTTPException(404, detail={"code": "NO_ACTIVE_MAP"})
+        edges = lane_progress.main_loop(active[1])
+        if edges is None:
+            raise HTTPException(404, detail={"code": "NO_LOOP"})
+        loop = lane_progress.Loop(active[1], edges)
+        poses = {}
+        for row in (await gathered())["robots"]:
+            pose = map_pose.arbitrated_pose(row["robot_id"]) if map_pose is not None and row["online"] else None
+            if pose is not None and pose.state == "LOCALIZED":
+                poses[row["robot_id"]] = (pose.x, pose.y)
+        segments = [(e, True, 0.0, math.inf) for e in edges]
+        speed = speed_table(active[1], segments, closed=True)
+        return {"map_version": active[0], "loop": {"edges": edges, "perimeter_m": round(loop.perimeter, 3)},
+                "target_gap_m": lane_progress.TARGET_GAP_M, "min_gap_m": lane_progress.MIN_GAP_M,
+                "robots": lane_progress.platoon(loop, poses), "speed": speed, "dispatch": False}
 
     @app.get("/api/fleet/session", dependencies=read_guard, tags=["fleet-auth"])
     def fleet_session(request: Request) -> dict:

@@ -271,7 +271,8 @@ def enter(wt: Path, branch: str, status: str = "waiting", urgent: str = "", *,
     adopted = Path(os.environ.pop(TICKET_ENV, "") or "~")  # land_prepare.relaunch: keep the parent's place
     if adopted.is_file():
         ticket = adopted
-        set_status(ticket, status)
+        # its owner now: a relaunch, or a rollup taking its first member's place (D-889 23), whose land.py then ends
+        set_status(ticket, status, pid=os.getpid(), branch=branch, worktree=str(wt))
     elif urgent and (holder := urgent_holder(qdir)):
         raise QueueError(f"--urgent refused: {describe([holder])} is already urgent ({holder['urgent']}); one at a time")
     elif not urgent and (why := full(qdir)):
@@ -296,6 +297,13 @@ def join(wt: Path, branch: str, timeout: float) -> Path:
 
 
 def leave() -> None:
-    """Remove every ticket this process holds. Safe to call twice."""
+    """Remove every ticket this process holds. Safe to call twice. A ticket another process adopted (its pid
+    changed: a rollup took its place, D-889 23) stays."""
     while _held:
-        _held.pop().unlink(missing_ok=True)
+        ticket = _held.pop()
+        try:
+            if int(json.loads(ticket.read_text(encoding="utf-8")).get("pid") or 0) not in (0, os.getpid()):
+                continue
+        except (OSError, ValueError):
+            pass
+        ticket.unlink(missing_ok=True)

@@ -25,7 +25,6 @@ at 80 % of the cap twice in a row, or a stale live state. The arm is never left 
 """
 from __future__ import annotations
 
-import argparse
 import json
 import math
 import sys
@@ -398,6 +397,8 @@ def run_auto(cell, config, calibration, calibration_path, catalog, roi, source, 
              dry_run=False, sleep=time.sleep, log=print, attempts=None) -> dict:
     """One object from `source` to `dest`; up to `attempts` grasps (the second with the better candidate)."""
     work, out = Path(work), {"from": source, "to": dest, "attempts": []}
+    if source not in config["sites"]:  # the --from default (pinky) on a cell without one was a bare KeyError
+        return {**out, "result": f"refused: source {source!r} is not a site in the config"}
     if dest in config["sites"] and "place" not in config["sites"][dest]:  # the board: taken from, never put on
         return {**out, "result": f"refused: {dest} is not a destination (its site has no 'place')"}
     for site in {source, dest} & {k for k, v in config["sites"].items() if v.get("track")}:  # a robot that moves
@@ -546,45 +547,18 @@ def run_auto(cell, config, calibration, calibration_path, catalog, roi, source, 
     return {**out, "result": f"stopped: {attempts} attempts"}
 
 
-def load_config(path: Path) -> dict:
-    import cell_perception
-
-    config = json.loads(path.read_text())
-    config["profiles"] = {camera: cell_perception.load_profile(Path(spec.get("profile_path", config["profile_path"])).expanduser())
-                          for camera, spec in config["cameras"].items()}
-    config["plan"] = json.loads(Path(config["plan_path"]).expanduser().read_text())
-    config["params"] = prm.load(config.get("params_path"))["values"]  # cell-params.example.json form
-    return config
-
-
 def main(argv=None):
     import cell_choices
+    import cell_preflight
+    from cell_auto_setup import open_cell, parser
 
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--config", required=True, type=Path)
-    ap.add_argument("--catalog", required=True)
-    ap.add_argument("--roi", type=int, nargs=4, required=True, metavar=("X0", "Y0", "X1", "Y1"))
-    ap.add_argument("--dest", required=True, help="a site name from the config, or x,y metres on the source surface")
-    ap.add_argument("--from", dest="source", default="pinky")
-    ap.add_argument("--dry-run", action="store_true", help="observe, choose and plan only; print JSON")
+    ap = parser(__doc__)
     ap.add_argument("--commissioning", action="store_true", help="a supervised trial of this one carry (D-911)")
     ap.add_argument("--person-at-switch", action="store_true", help="with --commissioning: a person is at the power switch")
     args = ap.parse_args(argv)
     if args.commissioning != args.person_at_switch:
         raise SystemExit("--commissioning needs --person-at-switch (and the other way round)")
-    config = load_config(args.config)
-    if args.commissioning:
-        config["_commissioning"] = {"person_at_switch": True}
-    work = Path(config["work_dir"]).expanduser()
-    cell = cp.FifoCell(Path(config["io"]).expanduser(), config["cameras"])
-    calibration_path = Path(config["calibration_path"]).expanduser()
-    cp.KEEP["dir"] = work / "frames"
-    cell_attempts.start(work / "attempts.jsonl", knowledge=config.get("knowledge"), params=config.get("params_path"),
-                        arm_id=config.get("arm_id", "arm_s"))
-    if not args.dry_run:
-        cd.start(work / "decisions.jsonl", knowledge=config.get("knowledge"))
-    import cell_preflight
-
+    config, cell, calibration_path, work = open_cell(args, args.commissioning)
     dark = cell_preflight.ready(cell.frame, config)
     if dark:  # nothing is seen in the dark: no observe, no motion
         print(json.dumps({"from": args.source, "to": args.dest, "result": "refused", "error": "; ".join(dark)}, indent=1))

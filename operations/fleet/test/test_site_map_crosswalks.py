@@ -47,7 +47,7 @@ def test_lane_graph_crosswalks_import_deterministically_onto_their_lanes():
 
 
 def test_place_kinds_are_unchanged_crosswalks_are_areas():
-    assert typing.get_args(PlaceKind) == ("park", "charge", "stop", "junction", "turnaround", "start", "bend")
+    assert typing.get_args(PlaceKind) == ("park", "charge", "stop", "junction", "turnaround", "start", "bend", "slow")
 
 
 def test_lanes_are_derived_and_a_map_without_crosswalks_keeps_its_body():

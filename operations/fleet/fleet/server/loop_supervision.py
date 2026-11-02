@@ -17,7 +17,8 @@ from typing import Awaitable, Callable, Optional
 
 from fleet.server.background_workers import (
     _mission_model_turn_worker_loop, _task_dispatch_loop, goal_evidence_expiry_loop,
-    goal_lease_renew_loop, lane_compliance_loop, proposal_expiry_loop, start_notification_worker)
+    charge_bays_loop, goal_lease_renew_loop, lane_compliance_loop, proposal_expiry_loop,
+    start_notification_worker)
 from fleet.server.control_unit_observation_runtime import start_control_unit_tasks
 from fleet.server.dispatch_workers import mission_dispatch_loop, mission_feedback_schedule_loop
 
@@ -134,7 +135,7 @@ FLEET_LOOP_NAMES = (
     "goal-lease-renew", "identity", "lane-compliance", "tether-watch", "paths",
     "job-trips", "task-dispatch", "proposal-expiry", "mission-dispatch",
     "cell-job-dispatch", "goal-evidence-expiry", "mission-feedback-schedule",
-    "mission-model-turn", "control-unit-journal", "control-unit-information",
+    "mission-model-turn", "control-unit-journal", "control-unit-information", "charge-bays",
 )
 
 
@@ -184,6 +185,8 @@ def start_fleet_loops(app, console, *, supervisor, task_service=None, start_task
     identity_task = supervisor.supervised("identity", identity.run())  # D-596 blink answers
     lane_task = supervisor.supervised("lane-compliance", lane_compliance_loop(  # D-511 M0
         app.state.lane_compliance, log, lane_compliance_period_s))
+    bays_task = (supervisor.supervised("charge-bays", charge_bays_loop(app.state.charge_bays_tick, log))
+                 if getattr(app.state, "charge_bays_tick", None) is not None else None)  # D-941 5
     tether_task = supervisor.attach("tether-watch", app.state.tether_watch.start())  # D-526
     path_task = supervisor.supervised("paths", app.state.paths.run())  # D-594
     job_task = (supervisor.supervised("job-trips", app.state.job_trips.run())
@@ -219,6 +222,6 @@ def start_fleet_loops(app, console, *, supervisor, task_service=None, start_task
                                           trip_task, identity_task, lane_task, tether_task,
                                           lease_task, path_task, calibration_drift_task,
                                           notification_task, job_task, charge_task,
-                                          physical_worker, *control_tasks)
+                                          physical_worker, bays_task, *control_tasks)
                         if task is not None]
     return supervisor, notification_http, background_tasks

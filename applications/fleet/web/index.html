@@ -452,6 +452,26 @@
           <p class="hint" id="signals-hint" hidden></p>
         </div>
 
+        <div class="charge-bays" aria-labelledby="charge-bays-heading">
+          <div class="robot-head">
+            <h3 id="charge-bays-heading" title="활성 지도의 충전 칸(charge) 계획입니다. 보기만 하며 Fleet은 이 계획으로 로봇을 보내지 않습니다 (D-941)">충전 칸</h3>
+            <span class="spacer"></span>
+            <ui-tag id="charge-bays-state" status="neutral">—</ui-tag>
+          </div>
+          <ul id="charge-bay-rows" class="charge-bay-rows"></ul>
+          <p class="hint" id="charge-bays-hint" hidden></p>
+        </div>
+
+        <div class="charge-bays" aria-labelledby="platoon-heading">
+          <div class="robot-head">
+            <h3 id="platoon-heading" title="활성 지도의 한 방향 고리 위 로봇 사이 간격입니다. 따라가기는 로봇 CORE가 하며 Fleet은 보기만 합니다 (D-941)">대열 간격</h3>
+            <span class="spacer"></span>
+            <ui-tag id="platoon-state" status="neutral">—</ui-tag>
+          </div>
+          <ul id="platoon-rows" class="charge-bay-rows"></ul>
+          <p class="hint" id="platoon-hint" hidden></p>
+        </div>
+
         <details id="console-diagnostics" class="console-diagnostics">
           <summary class="ui-disclosure-row">진단</summary>
           <dl class="diag-readout">

@@ -61,10 +61,17 @@ def jaw_blobs(closed, opened, params=None) -> list:
     mask = _changed_mask(closed, opened, diff_px)
     if int(np.count_nonzero(mask)) <= diff_px:
         return []
-    n, _, stats, centroids = cv2.connectedComponentsWithStats(mask)
-    return [(float(centroids[i][0]), float(centroids[i][1]), int(stats[i, cv2.CC_STAT_AREA])) for i in range(1, n)
-            if stats[i, cv2.CC_STAT_AREA] >= prm.get(params, "pivot.min_blob", MIN_BLOB)
-            and stats[i, cv2.CC_STAT_WIDTH] <= max_blob and stats[i, cv2.CC_STAT_HEIGHT] <= max_blob]
+    # pieces this close are one mark: over a box top the gripper body hid the fingers and the open-closed change came
+    # in 2-3 pieces of 72-260 px, none reaching min_blob (2026-11-02); the merge only groups, the area is the changed px
+    merge = int(prm.get(params, "pivot.merge_px"))
+    grouped = cv2.dilate(mask, np.ones((2 * merge + 1, 2 * merge + 1), np.uint8)) if merge else mask
+    n, labels, _, _ = cv2.connectedComponentsWithStats(grouped)
+    blobs = []
+    for i in range(1, n):
+        ys, xs = np.nonzero((labels == i) & (mask > 0))
+        if len(xs) >= prm.get(params, "pivot.min_blob", MIN_BLOB) and np.ptp(xs) < max_blob and np.ptp(ys) < max_blob:
+            blobs.append((float(xs.mean()), float(ys.mean()), int(len(xs))))
+    return blobs
 
 
 def mark_jaws(cell, config: dict, sleep=time.sleep, clock=time.monotonic, max_marks: int = 6, near=None):

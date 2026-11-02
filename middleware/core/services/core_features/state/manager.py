@@ -275,9 +275,9 @@ class StateManager:
                                     voltage=voltage if voltage is not None else self._battery.voltage)
             self._mark("battery")
 
-    def set_estop(self, active: bool) -> None:
+    def set_estop(self, active: bool, source: str = "") -> None:
         with self._lock:
-            self._safety = SafetySummary(estop=active)
+            self._safety = SafetySummary(estop=active, source=source if active else "")
             self._mark("safety")
 
     def set_swarm(self, status: SwarmStatus) -> None:
