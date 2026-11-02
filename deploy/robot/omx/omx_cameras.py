@@ -180,9 +180,28 @@ def best_name(node: str, names: dict) -> str:
     raise SystemExit(f"{node}: no persistent /dev/v4l name")
 
 
-def propose(registry: dict, facts: dict, names: dict, present, realpath=os.path.realpath) -> list:
+def hub(usb: str | None) -> str | None:
+    """The USB hub a device sits on ("3-1.3" -> "3-1"); None on a root port, which every device shares."""
+    return usb.rsplit(".", 1)[0] if usb and "." in usb else None
+
+
+def arm_hubs(env_dir: Path = ENV_DIR, realpath=os.path.realpath) -> dict:
+    """{arm: hub} for each observer board plugged into a hub (omx-observer-<arm>.env names the board)."""
+    out = {}
+    for role, device in omx_devices.roles(env_dir).items():
+        if role.startswith("observer-") and os.path.exists(device):
+            interface = Path(f"/sys/class/tty/{os.path.basename(realpath(device))}/device").resolve().name
+            if hub(interface.split(":")[0]):
+                out[role.removeprefix("observer-")] = hub(interface.split(":")[0])
+    return out
+
+
+def propose(registry: dict, facts: dict, names: dict, present, realpath=os.path.realpath, hubs=None) -> list:
     """One row per camera no present role uses: its name and model, the gone roles last seen on that model, and
-    `follow` when it is the only such camera and the only such role (the same camera moved to another port)."""
+    `follow` when it is the only such camera and the only such role (the same camera moved to another port).
+
+    `hub_arm` is the one arm whose board shares the camera's USB hub, and `suggest` its `<arm>_wrist` role when that
+    role is gone: a hint for the person approving, not a binding, until the cell's wiring is checked to be that way."""
     gone = [c for c in registry["cameras"] if not present(c["device"])]
     used = {realpath(c["device"]) for c in registry["cameras"] if present(c["device"])}
     free = [n for n in sorted(facts) if n not in used]
@@ -191,8 +210,12 @@ def propose(registry: dict, facts: dict, names: dict, present, realpath=os.path.
         model = facts[node]["id"]
         roles = [c["role"] for c in gone if c.get("usb_id") == model]
         same = [n for n in free if facts[n]["id"] == model]
-        rows.append({"node": node, "device": best_name(node, names), "usb_id": model,
-                     "roles": roles, "follow": roles[0] if len(roles) == 1 and len(same) == 1 else None})
+        follow = roles[0] if len(roles) == 1 and len(same) == 1 else None
+        arms = [arm for arm, h in (hubs or {}).items() if h == hub(facts[node]["usb"])]
+        hub_arm = arms[0] if len(arms) == 1 else None
+        rows.append({"node": node, "device": best_name(node, names), "usb_id": model, "roles": roles,
+                     "follow": follow, "hub_arm": hub_arm,
+                     "suggest": follow or (f"{hub_arm}_wrist" if f"{hub_arm}_wrist" in roles else None)})
     return rows
 
 
@@ -287,7 +310,7 @@ def main(argv=None) -> int:
         return 0
     if registry is None:
         raise SystemExit(f"no registry at {args.registry}: run 'init' first")
-    proposals = propose(registry, facts, _names(), os.path.exists)
+    proposals = propose(registry, facts, _names(), os.path.exists, hubs=arm_hubs(args.env_dir))
     if args.action == "propose":
         print(json.dumps(proposals, indent=1))
         return 0
@@ -306,7 +329,7 @@ def main(argv=None) -> int:
             save(registry, args.registry)
     if learned:
         registry = load(args.registry)
-        proposals = propose(registry, facts, _names(), os.path.exists)
+        proposals = propose(registry, facts, _names(), os.path.exists, hubs=arm_hubs(args.env_dir))
     plan = bind(registry, args.env_dir, os.path.exists, set(facts))
     plan["learned"], plan["proposals"] = learned, proposals
     if learned:  # the bridge's copy is the user's; the site's /etc copy needs 'manifest --apply' with root
