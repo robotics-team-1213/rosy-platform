@@ -856,7 +856,8 @@
           "status": "verified",
           "verification_scope": "Observed passing HTTP test; successful response",
           "contract_tests": [
-            "operations/fleet/test/test_account_deployment.py"
+            "operations/fleet/test/test_account_deployment.py",
+            "operations/fleet/test/test_password_session.py"
           ],
           "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/auth/session"
@@ -907,7 +908,8 @@
           "status": "verified",
           "verification_scope": "Observed passing HTTP test; successful response",
           "contract_tests": [
-            "operations/fleet/test/test_app_frontend_http_contracts.py"
+            "operations/fleet/test/test_app_frontend_http_contracts.py",
+            "operations/fleet/test/test_account_ledger.py"
           ],
           "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/auth/login"
@@ -948,8 +950,8 @@
           "scenario_id": "auth.happy",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[auth]",
           "sample_status": "verified",
-          "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
-          "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
+          "source_revision": "023d9915a34efb4cf88bd198badc30101fe196dc",
+          "test_scope": "Passing browser fetch checks connection readiness, refused retired development issuance, password login and logout session readback, then renders the login document; form interactions tested separately"
         },
         {
           "id": "auth.refused",
@@ -968,8 +970,8 @@
           "scenario_id": "auth.refused",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[auth]",
           "sample_status": "verified",
-          "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
-          "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
+          "source_revision": "023d9915a34efb4cf88bd198badc30101fe196dc",
+          "test_scope": "Passing browser fetch checks connection readiness, refused retired development issuance, password login and logout session readback, then renders the login document; form interactions tested separately"
         },
         {
           "id": "auth.terminal",
@@ -987,8 +989,8 @@
           "scenario_id": "auth.terminal",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[auth]",
           "sample_status": "verified",
-          "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
-          "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
+          "source_revision": "023d9915a34efb4cf88bd198badc30101fe196dc",
+          "test_scope": "Passing browser fetch checks connection readiness, refused retired development issuance, password login and logout session readback, then renders the login document; form interactions tested separately"
         }
       ]
     },
@@ -1267,7 +1269,8 @@
           "status": "verified",
           "verification_scope": "Observed passing HTTP test; successful response",
           "contract_tests": [
-            "operations/fleet/test/test_account_ledger.py"
+            "operations/fleet/test/test_account_ledger.py",
+            "operations/fleet/test/test_self_profile.py"
           ],
           "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/auth/change-password"

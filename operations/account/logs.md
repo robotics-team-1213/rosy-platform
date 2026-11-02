@@ -1,5 +1,12 @@
 # Account 변경 기록
 
+## 2026-11-02 · uncommitted · 인증 계약의 실제 응답 증거 갱신
+
+- 변경: 공통 Account로 이동한 13개 handler의 검증표 소유 경로를 바로잡고, 개발 세션 발급은 403 거절로 검증한다. Fleet 호환 import 검사는 기존 alias와 Account 모듈의 동일성을 명시적으로 확인한다.
+- 증거: `e82b3cfc73` 소유·호환 import 원격 3 passed. `023d9915a3` 실제 HTTP 수집 9 passed, 인증 요청 15종의 응답·passing node 수집. 같은 SHA의 sample 로그인·거절·로그아웃과 Chromium 전송 흐름 2 passed, skip 0. 이 증거는 운영 사용자 로그인 수용을 대신하지 않는다.
+- 경계: 운영 PC의 기존 인증서 호스트 매핑은 관리자 승인 뒤 기존 파일 바이트를 보존해 한 줄만 추가했다. 일반 이름 해석과 인증서 검증을 유지한 Python·Edge의 기존 Fleet health 응답 200을 확인했다. 계정 DB·서비스 전환은 아직 적용하지 않았다.
+- CE: 검증표·호환 import 수정은 코드와 회귀 시험이 설명한다. 기존 로그인 화면 교훈 외의 새 교훈은 추가하지 않는다.
+
 ## 2026-11-02 · uncommitted · D-962 독립 인증 소유 모듈
 
 - 변경: 기존 계정·비밀번호·프로필·grant·세션·OAuth·감사를 독립 모듈로 이동했다. 활성 authority의 열 개 테이블·원자적 회수·계정 식별자를 보존하며 Fleet은 서명 자격을 검증하는 receiver가 된다.
