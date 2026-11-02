@@ -257,6 +257,8 @@ def lead(land, wt: Path, branch: str, args, python: str, qdir: Path, ticket: Pat
     name, took = f"{branch}-batch{time.strftime('%H%M%S')}-k{len(joined) + 1}", []  # a halved retry gets its own
     origins = [dict(branch=branch, ticket=ticket.name, candidate=land.out(wt, "rev-parse", "HEAD"))]
     try:
+        if len({branch, *(r["branch"] for r in joined)}) != len(joined) + 1:
+            raise land.Stop("duplicate batch member branch")
         land.git(wt, "switch", "-c", name)
         for row in joined:
             tip = land.out(wt, "rev-parse", f"refs/heads/{row['branch']}")

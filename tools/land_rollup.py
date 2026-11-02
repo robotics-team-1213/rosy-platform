@@ -107,6 +107,8 @@ def plan(repo: Path, rows: list[dict], tier_of=tier, reach_of=reach) -> list[dic
 def build(repo: Path, members: list[dict], now: datetime, python: str = sys.executable,
           start=land_async.start) -> tuple[str, list[dict]] | None:
     """Merge members into a fresh branch from main, run the stage-0 checks, queue it; (snapshot, merged members)."""
+    if len({r["branch"] for r in members}) != len(members):
+        raise land.Stop("duplicate rollup member branch; preserve the competing tickets for review")
     stamp = f"{now:%Y%m%d%H%M%S}"
     branch, wt = f"fix/land-rollup-{stamp}", land_async.holder(repo) / f"rollup-build-{stamp}"
     git(repo, "worktree", "add", "-q", "-b", branch, str(wt), "main")

@@ -28,7 +28,8 @@ def percentile(values: list[float], q: float) -> float | None:
 
 def known_topics(names) -> set[str] | None:
     """Only a complete nonempty membership list proves which topics an error can affect."""
-    if not isinstance(names, list) or not names or any(not isinstance(n, str) or not n for n in names):
+    if (not isinstance(names, list) or not names or any(not isinstance(n, str) or not n for n in names)
+            or len(set(names)) != len(names)):
         return None
     return {topic(n) for n in names}
 
@@ -45,6 +46,8 @@ def train_origins(rows: list[dict], train: dict) -> list[dict]:
             raise ValueError("invalid batch origins")
         if {m["branch"] for m in members} != set(train["branches"]):
             raise ValueError("batch origins disagree with selected branches")
+        if len({m["branch"] for m in members}) != len(members):
+            raise ValueError("duplicate batch member branch")
         if any(not any(q["event"] == "queue" and q.get("branch") == m["branch"]
                        and q.get("ticket") == m["ticket"] and q["t"] <= train["t"] for q in rows) for m in members):
             raise ValueError("missing recorded batch queue origin")
@@ -200,6 +203,8 @@ def normalize(rows: list[dict], common: Path, t0: float | None = None,
             members = r.get("members") if "members" in r else json.loads(path.read_text(encoding="utf-8"))
             if not isinstance(members, list) or not members:
                 raise ValueError("missing members")
+            if known_topics([m.get("branch") if isinstance(m, dict) else None for m in members]) is None:
+                raise ValueError("invalid or duplicate member branches")
             verified = []
             for m in members:
                 if not isinstance(m, dict) or not isinstance(m.get("branch"), str):
