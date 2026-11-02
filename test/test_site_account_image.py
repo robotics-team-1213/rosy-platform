@@ -72,6 +72,10 @@ def test_account_image_context_has_no_control_python_or_runtime_dependency():
         if words and words[0] == 'COPY' and not any(w.startswith('--from=') for w in words):
             sources.extend(w for w in words[1:-1] if not w.startswith('--'))
     assert 'operations/account/rosy_account/' in sources
+    common_sources = {f'shared/web/{name}' for name in COMMON} | {'shared/web/shared-assets.json'}
+    assert common_sources <= set(sources)
+    context_rules = set((ROOT / 'deploy/site/Dockerfile.account.dockerignore').read_text().splitlines())
+    assert {'!' + name for name in common_sources} <= context_rules
     assert all(not p.startswith(('operations/fleet/', 'middleware/', 'applications/fleet/gateway/',
                                  'operations/decision/', 'operations/world/')) for p in sources)
     foundation = [p for p in sources if p.startswith('contracts/')]
