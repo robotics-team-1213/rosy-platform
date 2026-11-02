@@ -1,15 +1,15 @@
 ---
 module: account
 owner: ACCOUNT
-last_verified: {commit: e81af2d7c3, date: 2026-11-02}
+last_verified: {commit: 5f02d723d1, date: 2026-11-02}
 gates:
   SOURCE:
     state: GO
-    evidence: "원격 패키지 소유·크기·중복 구조와 독립 import 58건 통과. D-962의 전용 원장·프로세스·수신 경계 구현. D-962 independent image scope: remote AI-PC closure at e81af2d7c3 passed 320 tests, 0 skipped, 0 NEW. Account TLS login/initial-password/profile/admin, minimal Account/foundation startup, stdlib-only fixed assets, signed legacy/new inventories and reuse, and Fleet header browser/Node compatibility. OCI build and live independent-image acceptance were not run."
+    evidence: "원격 패키지 소유·크기·중복 구조와 독립 import 58건 통과. D-962의 전용 원장·프로세스·수신 경계 구현. D-962 independent image and identity backup scope at 5f02d723d1: remote 335 backend/signing/image/backup cases plus 71 opted-in identity TLS/browser cases passed, 0 skipped, 0 NEW. Full Account tables including HTTP audit preserved; stale/corrupt backup refusal, strict signed legacy/new groups, reused image pins, branding, login/profile/admin and first-password flows verified. Prior e81af2d7c3 closure also passed 320 cases including Fleet header browser/Node compatibility. OCI construction and live independent-image/timer acceptance remain pending."
     cmd: python tools/remote/remote_pytest.py --log-dir <external-log-dir> -- operations/account/test test/architecture/test_wheel_structure.py -q
   LOCAL:
     state: GO
-    evidence: "동일 인증 소스의 da5aab6c09 원격 Account·Fleet·실제 TLS Chromium 279건 및 공유 클라이언트·receiver 66건 통과, skip 0/NEW 0. 최종 게시 SHA 검증은 착지 기록을 따른다. D-962 independent image scope: remote AI-PC closure at e81af2d7c3 passed 320 tests, 0 skipped, 0 NEW. Account TLS login/initial-password/profile/admin, minimal Account/foundation startup, stdlib-only fixed assets, signed legacy/new inventories and reuse, and Fleet header browser/Node compatibility. OCI build and live independent-image acceptance were not run."
+    evidence: "동일 인증 소스의 da5aab6c09 원격 Account·Fleet·실제 TLS Chromium 279건 및 공유 클라이언트·receiver 66건 통과, skip 0/NEW 0. 최종 게시 SHA 검증은 착지 기록을 따른다. D-962 independent image and identity backup scope at 5f02d723d1: remote 335 backend/signing/image/backup cases plus 71 opted-in identity TLS/browser cases passed, 0 skipped, 0 NEW. Full Account tables including HTTP audit preserved; stale/corrupt backup refusal, strict signed legacy/new groups, reused image pins, branding, login/profile/admin and first-password flows verified. Prior e81af2d7c3 closure also passed 320 cases including Fleet header browser/Node compatibility. OCI construction and live independent-image/timer acceptance remain pending."
     cmd: python tools/remote/remote_pytest.py --log-dir <external-log-dir> -- ROSY_RUN_BROWSER_TESTS=1 operations/fleet/test/test_account_service_separation.py operations/fleet/test/test_standalone_account_browser.py operations/fleet/test/test_account_receiver.py -q
   ROS-SIM:
     state: N/A

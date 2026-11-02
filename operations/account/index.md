@@ -25,8 +25,8 @@
 
 ## 최근 기록
 
+- 2026-11-02 · 5f02d723d1 · D-962 independent identity backup and presentation
 - 2026-11-02 · e81af2d7c3 · D-962 independent Account artifact
 - 2026-11-02 · uncommitted · 유지보수 상태 조회의 등록된 기계 자격 사용
 - 2026-11-02 · uncommitted · 사람 로그인 보완과 읽기 전용 기계 자격 보존
 - 2026-11-02 · uncommitted · 독립 배포 의존성과 통합 검사 보완
-- 2026-11-02 · uncommitted · D-962 독립 인증 소유 모듈

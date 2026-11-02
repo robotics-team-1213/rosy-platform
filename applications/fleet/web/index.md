@@ -31,8 +31,8 @@
 
 ## 최근 기록
 
+- 2026-11-02 · 5f02d723d1 · D-962 independent identity backup and presentation
 - 2026-11-02 · e81af2d7c3 · D-962 independent Account artifact
 - 2026-11-02 · uncommitted · D-926 후속: 설치 작업 고르기 자리, 관제 오른쪽 칩·위험 채움
 - 2026-11-02 · uncommitted · D-962 개발 연결의 로그인 안내·브라우저 계약
 - 2026-11-02 · uncommitted · D-962 개발 환경에서도 사람 로그인과 계정 복귀
-- 2026-11-01 · uncommitted · 테마 단추 계정 접힘 원복 (사용자 재확인)
