@@ -53,6 +53,8 @@ python tools/land.py --tests full --no-cache
 
 `full`은 현재 후보의 CI·모듈·전체 root 시험과 등록된 모든 opt-in 브라우저의 chunk·ALONE 계획을 고른다. 매 프로세스 실행마다 정상 준비를 거치고 guard·isolation은 현재 실행에서 cache 없이 확인한다. 본시험은 같은 tree·시험 환경의 clean cache를 재사용할 수 있으며, `--no-cache`는 이 본시험 재사용을 끈다. 한 실행에서 확인한 준비 근거로 main 변경분을 검증하는 흐름은 유지하므로, 이 옵션을 모든 후속 호출의 무조건 재실행으로 설명하지 않는다. main·registry·packing·환경이 달라져 근거가 부족하면 다시 준비한다. `full --no-queue`는 지원하지 않는다.
 
+게시용 explicit FULL은 lookahead speculation을 만들거나 소비하지 않고, 실제 main 변경분의 실행 근거를 사용한다.
+
 LOAD-FLAKY·다른 tree의 좁은 재사용·불완전 본시험·빈 브라우저 통과는 explicit FULL의 저장·착지를 막는다. isolation의 기존 정책은 유지한다. Safety 미도달·새 실패·죽거나 report가 없는 job은 중단하고, 허용된 nonSafety 예산 초과는 미완료로 기록·보고한다. auto의 착지 허용은 그대로지만 부적격 준비·차례 결과는 재사용 가능한 게시 기록이 되지 않는다. 준비 기록의 `tier=full` 문자열만으로 이전 실행을 신뢰하지 않는다.
 
 게시 담당은 `tools/publish_main.py`가 선택한 **실제 SHA**에 요청된 모든 착지가 포함되는지 각각 `git merge-base --is-ancestor <착지-SHA> <선택-SHA>`로 확인한다. 도구가 고른 가장 최근 FULL 조상에 마지막 기능이 없으면 게시하지 않는다. 해당 SHA의 적격 FULL 기록, 같은 PR head의 녹색 `ci-result`, merge commit 병합과 origin 역동기화를 함께 확인한다(D-868). `--force-blocked`는 FULL 근거나 기능 포함 확인을 대신하지 않는다. 실제 FULL·공개 CI·산출물·현장 수용은 별도 근거다.
