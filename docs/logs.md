@@ -13766,7 +13766,7 @@ osy-d395-s1d\`.
 - CE: 해당 없음 — 측정 기록이며 해결한 장애가 아니다. 실물과 시뮬레이션의 차이는 대장에 남겼다.
 
 ## 2026-11-03 · uncommitted · feat(omx): 세션 서보 튜닝을 기종 → 현장 caps → 로봇 프로필 순서로 겹친다
-- 변경: 기종 기본값 `deploy/robot/omx/omx-ai-follower-tuning.json`(`rosy.omx-servo-tuning.v1`, 팔꿈치 13·손목 14 I 게인 50, 근거 포함). `session_caps.load_caps(model=, robot=)`가 모터·키 단위로 기종 < 현장 `caps.json` < 로봇 프로필 `servo` 순서로 합친 뒤 기존 범위로 검사한다. 튜닝 층은 `p`·`i`·`acc`·`vel`만 받고 PWM·전류는 현장 caps에만 둔다. `cell_robot_profile`이 선택 필드 `servo`를 받고 profile SHA에 넣는다. `record_session`이 세 층을 읽는다.
+- 변경: 기종 기본값 `deploy/robot/omx/omx-ai-follower-tuning.json`(`rosy.omx-servo-tuning.v1`, 팔꿈치 13·손목 14 I 게인 50, 근거 포함). `session_caps.load_caps(model=, robot=)`가 모터·키 단위로 기종 < 현장 `caps.json` < 로봇 프로필 `servo` 순서로 합친 뒤 기존 범위로 검사한다. 튜닝 층은 `p`·`i`·`acc`·`vel`만 받고 PWM·전류는 현장 caps에만 둔다. `cell_robot_profile`이 선택 필드 `servo`를 받고 profile SHA에 넣는다. `record_session`이 세 층을 읽는다. 두 팔 원격조종(`two_arm_config.follower_gains`)도 같은 기종 P·I를 설정 파일 `follower_gains` 아래에 깐다.
 - 증거: D-951 5·6(2026-11-01 두 팔, I 50으로 팔꿈치 +1.52→+0.06, 손목 −0.41→+0.03, TCP 12.3→3.3 mm). 지금까지는 현장 `caps.json`에 손으로 넣어야 했고 빠지면 다시 처졌다.
 - gate 변화: 없음. 가드 한계(`I_GAIN_MAX` 등)는 그대로다.
 - 결정: 없음(D-951 6의 구현)
