@@ -110,14 +110,18 @@ def lead_times(rows: list[dict], t0: float, t1: float) -> list[float]:
             if not choices:
                 continue
             end = choices[-1]
-            origin = (name, queues[end].get("ticket"), queues[end]["t"])
+            origin = (name, queues[end].get("ticket") or (queues[end].get("pid"), queues[end]["t"]))
             if members is None and (name, r.get("pid"), queues[end]["t"]) in exits:
                 continue
             if members is not None and origin in completed:
                 continue
             snapshot, cutoff = queues[end].get("branch"), queues[end]["t"]
+            origin_ticket = queues[end].get("ticket")
+            if origin_ticket:
+                cutoff = min(q["t"] for q in queues if q.get("branch") == snapshot and q.get("ticket") == origin_ticket)
             covered = [q for q in queues if
-                       q.get("branch") == snapshot and (q["t"] <= cutoff or q.get("ticket") in member.get("retries", []))
+                       q.get("branch") == snapshot and (q["t"] <= cutoff or origin_ticket and q.get("ticket") == origin_ticket
+                                                        or q.get("ticket") in member.get("retries", []))
                        or finished.get(topic(name), float("-inf")) < q["t"] <= cutoff
                        and stopped_before(runs.get((q.get("branch"), q.get("pid")), []), q, cutoff)]
             start = min(q["t"] for q in covered)
