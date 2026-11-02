@@ -85,7 +85,7 @@ export function createUsbCameraPanel({scope, headers, identity, locked, dialogs,
   }
   async function refresh() {
     const panel = el('usb-camera-panel');
-    if (!panel || locked() || identity()?.role !== 'operator' || !/^Bearer\s+\S+$/.test(bearer())) {
+    if (!panel || locked() || identity()?.role !== 'operator') {
       if (panel) panel.hidden = true; return;
     }
     if (inFlight || busy || document.visibilityState === 'hidden') return;
