@@ -413,7 +413,7 @@ def test_gate_panel_at_tablet_viewports(base_url):
                 assert manifest_href.endswith("/pilot/assets/manifest.webmanifest")
                 page.locator('.skip-link').focus()
                 page.keyboard.press('Enter')
-                expect(page.locator('#pilot-main')).to_be_focused()
+                playwright_sync.expect(page.locator('#pilot-main')).to_be_focused()
                 step = page.evaluate(
                     "getComputedStyle(document.documentElement).getPropertyValue('--space-1').trim()")
                 assert step, "tokens.css 가 적용되지 않았다"
