@@ -249,7 +249,12 @@ def run(args):
         if mapped and not robot._articulation_view._physics_view.shared_metatype.fixed_base:
             raise RuntimeError('Mapped OMX requires a native fixed base')
 
+    real_cameras = {}
+
     def capture(name, overview=False):
+        if name.startswith('real-'):
+            view = name[len('real-'):-len('.png')]
+            return scene.real_capture(world, real_cameras, view, FIXTURE['real_cameras'][view], args.report.parent/name)
         scene.capture(world, camera, eye, args.report.parent/name, container=container, overview=overview)
 
     if mapped:
