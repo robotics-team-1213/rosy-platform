@@ -218,11 +218,11 @@ def wait_for_room(tree: Path, deadline: float) -> bool:
     """Poll until the queue takes an ordinary ticket again; False once ``deadline`` (monotonic) passes."""
     sys.path.insert(0, str(tree / "tools"))  # the snapshot's land_queue: this copy runs beside the log
     import land_queue
-    while land_queue.full(land_queue.queue_dir(tree)):
-        if time.monotonic() >= deadline:
-            return False
+    while time.monotonic() < deadline:
+        if not land_queue.full(land_queue.queue_dir(tree)):
+            return True
         time.sleep(60)
-    return True
+    return False
 
 
 def supervise(tree: Path, snap: str, land_args: list[str], run=subprocess.call, room=wait_for_room) -> int:
@@ -244,8 +244,11 @@ def _supervise(tree: Path, snap: str, land_args: list[str], run, room) -> int:
             code = run([sys.executable, "-X", "utf8", "tools/land.py", *land_args], cwd=str(tree), stdout=log,
                        stderr=subprocess.STDOUT, **({"creationflags": NO_WINDOW} if os.name == "nt" else {}))
         # start() saw room, but another session took the last slot before land.py did (2026-10-31: twice in a row)
-        full = code != 0 and QUEUE_FULL in path.read_bytes()[seen:].decode("utf-8", "replace")
-        if not (full and room(tree, deadline)):
+        output = path.read_bytes()[seen:].decode("utf-8", "replace").rstrip().splitlines()
+        reason = output[-1] if output else ""
+        full = code != 0 and reason.startswith(f"[land] STOP: {QUEUE_FULL} (")
+        if not (full and time.monotonic() < deadline and room(tree, deadline)
+                and time.monotonic() < deadline):
             break
         print(f"[land-async] {snap}: the queue has room again; land.py once more", flush=True)
     landed = subprocess.run(["git", "-C", str(tree), "merge-base", "--is-ancestor", snap, "main"]).returncode == 0
