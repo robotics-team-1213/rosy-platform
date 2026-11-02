@@ -10,7 +10,7 @@ import sys
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-COMMON = {'tokens.css', 'components.css', 'theme.js', 'ui.js', 'ui-wiring.js',
+COMMON = {'tokens.css', 'components.css', 'component-controls.css', 'theme.js', 'ui.js', 'ui-wiring.js',
           'confirmation.js', 'live-dialog-geometry.js', 'fleet-client.js', 'request.js',
           'account-profile.js', 'icons/console.svg', 'brand/mark.svg'}
 
@@ -36,7 +36,8 @@ def test_account_bundle_has_only_account_pages_assets_and_common_dependencies(tm
     expected.update('console/' + entry['path'] for group in ('pages', 'assets') for entry in registry[group].values())
     expected.update('common/' + name for name in common)
     assert {str(p.relative_to(output)).replace('\\', '/') for p in output.rglob('*') if p.is_file()} == expected
-    assert (output / 'common/brand/mark.svg').read_bytes() == (ROOT / 'shared/web/brand/mark.svg').read_bytes()
+    for name in ('brand/mark.svg', 'component-controls.css'):
+        assert (output / 'common' / name).read_bytes() == (ROOT / 'shared/web' / name).read_bytes()
     assert all('/api/fleet/estop' not in p.read_text() for p in output.rglob('*.js'))
 
 
