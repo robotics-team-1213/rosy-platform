@@ -391,7 +391,7 @@ ui-topbar:has([data-learning-account-entry]) { flex-wrap: wrap; }
 .omx-episodes{border-collapse:collapse;font-variant-numeric:tabular-nums}
 .omx-episodes th,.omx-episodes td{padding:var(--space-1) var(--space-2);text-align:left;white-space:nowrap}
 .omx-review-gallery{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,16rem),1fr));gap:var(--space-3)}
-.omx-review-gallery figure{margin:0;min-width:0}.omx-review-gallery img{display:block;max-width:100%;height:auto}
+.omx-review-gallery figure{margin:0;min-width:0}.omx-review-gallery img,#review-image{display:block;max-width:100%;height:auto}
 .omx-review > summary,.omx-source-info > summary{padding-block:var(--space-3);min-block-size:var(--target-secondary);cursor:pointer}
 .omx-editor{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,28rem),1fr));gap:var(--gap-form);margin-block:var(--space-3)}
 .omx-editor fieldset{min-inline-size:0;border:1px solid var(--surface-line);padding:var(--space-3);margin:0}
@@ -452,7 +452,7 @@ ui-topbar:has([data-learning-account-entry]) { flex-wrap: wrap; }
 .ui-app-main > .review-kinds{grid-row:1;grid-column:2;align-items:center;display:flex;gap:var(--gap-rail);max-inline-size:100%;padding-inline:var(--space-4);overflow-x:auto;border-block-end:1px solid var(--border-default)}
 @media (width < 40rem){.ui-app-main:has(> .review-kinds){grid-template-columns:minmax(0,1fr)}.ui-app-main > .review-kinds{grid-row:3;grid-column:1;padding-block:var(--space-2);border-block-end:0;border-block-start:1px solid var(--border-default)}}
 /* Below 30rem the editors' title row is only the page name, so the photo keeps a margin inside the first view. */
-@media (width < 30rem){.ui-app-main:has(> .review-kinds) > .ui-pathbar{padding-block:0}.ui-app-main:has(> .review-kinds) > .ui-pathbar h1{line-height:1.25}}
+@media (width < 30rem){.ui-app-main:has(> .review-kinds) > .ui-pathbar{padding-block:0}.ui-app-main:has(> .review-kinds) > .ui-pathbar h1{line-height:var(--leading-compact)}}
 /* D-857 §2: the center's workspace links; the 열기 link wraps under the name on a phone. */
 .workspace-list{list-style:none;margin:0;padding:0;display:grid;gap:var(--space-3)}
 .workspace-entry{display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-2) var(--space-3);padding:var(--space-4);border:1px solid var(--border-subtle);border-radius:var(--radius-control);background:var(--surface-flat)}
