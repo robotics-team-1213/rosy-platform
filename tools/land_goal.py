@@ -26,8 +26,17 @@ def percentile(values: list[float], q: float) -> float | None:
     return ordered[min(len(ordered) - 1, round(q * (len(ordered) - 1)))] if ordered else None
 
 
+def known_topics(names) -> set[str] | None:
+    """Only a complete nonempty membership list proves which topics an error can affect."""
+    if not isinstance(names, list) or not names or any(not isinstance(n, str) or not n for n in names):
+        return None
+    return {topic(n) for n in names}
+
+
 def train_origins(rows: list[dict], train: dict) -> list[dict]:
     """Old trains name branches only: resolve their queue origins, rejecting competing requests."""
+    if known_topics(train.get("branches")) is None:
+        raise ValueError("invalid batch branches")
     if "members" in train:
         members = train["members"]
         if not isinstance(members, list) or not members or any(
@@ -44,10 +53,8 @@ def train_origins(rows: list[dict], train: dict) -> list[dict]:
             and r.get("result") == "landed" and name in r.get("branches", []))), default=-1)
         queues = [r for r in rows if r["event"] == "queue" and r.get("branch") == name
                   and previous < r["t"] <= bound]
-        exits = [r for r in rows if r["event"] == "landed" and r.get("branch") == name and r["t"] >= train["t"]]
-        pid = train.get("pid") if name == train.get("branch") else min(exits, key=lambda r: r["t"]).get("pid") if exits else None
-        if pid is not None:
-            queues = [q for q in queues if q.get("pid") == pid]
+        if name == train.get("branch"):
+            queues = [q for q in queues if q.get("pid") == train.get("pid")]
         origins = {(q.get("ticket") or (q.get("pid"), q["t"])): q for q in queues}
         if len(origins) != 1:
             raise ValueError(f"ambiguous batch origin: {name}")
@@ -121,7 +128,8 @@ def lead_times(rows: list[dict], t0: float, t1: float) -> list[float]:
 
 def completion_topics(row: dict) -> set[str]:
     names = row.get("branches", []) if row["event"] == "train" else [row.get("branch", "")]
-    return {topic(n) for n in names} | {topic(m["branch"]) for m in row.get("members", [])
+    names = names if isinstance(names, list) else []
+    return {topic(n) for n in names if isinstance(n, str)} | {topic(m["branch"]) for m in row.get("members", [])
                                        if isinstance(m, dict) and isinstance(m.get("branch"), str)}
 
 
@@ -163,7 +171,7 @@ def normalize(rows: list[dict], common: Path, t0: float | None = None,
             except ValueError as exc:
                 r["members"] = []
                 r["metrics_incomplete"] = True
-                r["incomplete_topics"] = {topic(n) for n in r.get("branches", [])}
+                r["incomplete_topics"] = known_topics(row.get("branches")) if "members" not in row else None
                 issues.append((r, f"INCOMPLETE: {r.get('branch', '')}: {exc}"))
         if r["event"] != "landed":
             continue
@@ -217,8 +225,8 @@ def normalize(rows: list[dict], common: Path, t0: float | None = None,
         except (OSError, ValueError, TypeError, KeyError) as exc:
             r["members"] = []  # an incomplete carrier is never substituted for its logical members
             r["metrics_incomplete"] = True
-            r["incomplete_topics"] = {topic(m["branch"]) for m in members if isinstance(m, dict)
-                                      and isinstance(m.get("branch"), str)} if isinstance(members, list) else None
+            r["incomplete_topics"] = known_topics([m.get("branch") if isinstance(m, dict) else None
+                                                   for m in members]) if isinstance(members, list) else None
             issues.append((r, f"INCOMPLETE: {branch}: member completion unavailable ({exc})"))
     return result, [message for r, message in issues if t0 is None or t1 is None or affects_window(r, result, t0, t1)]
 
