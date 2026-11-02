@@ -125,7 +125,7 @@ async function refresh() {
   try { session=await api('/api/accounts/session'); }
   catch(e) {
     if (e.status === 403) {
-      // Signed in to Rosy Account without this project's grant; another login would loop.
+      // Keep denial visible; changing accounts is an explicit action, never an automatic redirect.
       signedOut(); status('이 학습 작업에 접근할 권한이 없습니다. 관리자에게 권한을 요청하거나 다른 계정으로 로그인하세요.', 'forbidden'); return;
     }
     if (e.status !== 401) throw e;
