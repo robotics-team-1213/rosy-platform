@@ -251,6 +251,7 @@ def test_receiver_explicit_machine_viewer_reads_health_without_command_or_propos
     client = TestClient(app, base_url=BASE)
     headers = {'Authorization': 'Bearer ' + credential}
     assert client.get('/api/fleet/state', headers=headers).status_code == 200
+    assert client.get('/api/fleet/dispatch-control', headers=headers).status_code == 200
     sources = client.get('/api/fleet/vision/sources', headers=headers)
     assert sources.status_code == 200 and sources.json() == {'sources': ['camera-1']}
     assert client.post('/api/fleet/estop', headers=headers, json={}).status_code == 403

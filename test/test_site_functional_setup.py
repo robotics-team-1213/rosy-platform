@@ -89,6 +89,73 @@ class Host:
 
 
 @pytest.fixture
+def idle_guard(tmp_path,monkeypatch):
+ m=module()
+ health=tmp_path/'health.token'
+ operator=tmp_path/'operator.token'
+ calls=[]
+ host=m.Host.__new__(m.Host)
+ host.token_file=health
+ host.config={'functional_checks':[
+  {'path':'/api/fleet/state','token_file':str(health),'required_ids':'enrolled'},
+  {'path':'/api/fleet/vision/sources','token_file':str(health),'required_ids':['camera-a']}]}
+ def get(path,credential):
+  calls.append((path,credential))
+  return {'queued_tasks':0,'unresolved_actions':0} if path.endswith('dispatch-control') else {'robots':[]}
+ host.get=get
+ monkeypatch.setattr(m,'_secret',lambda name:operator if name=='operator.token' else pytest.fail('unexpected credential'))
+ return m,host,health,operator,calls
+
+
+def test_idle_guard_prefers_provisioned_machine_health_credential_for_both_reads(idle_guard,monkeypatch):
+ m,host,health,_,calls=idle_guard
+ health.write_text('synthetic-health-key',encoding='utf-8')
+ monkeypatch.setattr(m,'_secret',lambda _:pytest.fail('operator bootstrap must not be resolved'))
+ host.guard()
+ assert calls==[('/api/fleet/dispatch-control',health),('/api/fleet/state',health)]
+
+
+def test_idle_guard_without_health_file_keeps_operator_bootstrap_fallback(idle_guard):
+ _,host,health,operator,calls=idle_guard
+ assert not health.exists()
+ host.guard()
+ assert calls==[('/api/fleet/dispatch-control',operator),('/api/fleet/state',operator)]
+
+
+@pytest.mark.parametrize('registered_elsewhere',[False,True])
+def test_idle_guard_preseeded_unregistered_health_file_keeps_operator_bootstrap(idle_guard,registered_elsewhere):
+ _,host,health,operator,calls=idle_guard
+ health.write_text('synthetic-health-key',encoding='utf-8')
+ host.config={'functional_checks':[
+  {'path':'/api/fleet/state','token_file':str(health.parent/'another-health.token'),'required_ids':'enrolled'}
+ ]} if registered_elsewhere else {}
+ host.guard()
+ assert calls==[('/api/fleet/dispatch-control',operator),('/api/fleet/state',operator)]
+
+
+@pytest.mark.parametrize('control,robot',[
+ ({'queued_tasks':1,'unresolved_actions':0},{}),
+ ({'queued_tasks':0,'unresolved_actions':1},{}),
+ ({'unresolved_actions':0},{}),
+ ({'queued_tasks':0},{}),
+ ({'queued_tasks':0,'unresolved_actions':0},{'goal':{'target':'B'}}),
+ ({'queued_tasks':0,'unresolved_actions':0},{'queued':['B']}),
+ ({'queued_tasks':0,'unresolved_actions':0},{'held':True}),
+ ({'queued_tasks':0,'unresolved_actions':0},{'yielding':True}),
+])
+def test_machine_health_idle_guard_still_refuses_pending_or_active_work(idle_guard,control,robot):
+ _,host,health,_,calls=idle_guard
+ health.write_text('synthetic-health-key',encoding='utf-8')
+ def get(path,credential):
+  calls.append((path,credential))
+  return control if path.endswith('dispatch-control') else {'robots':[robot]}
+ host.get=get
+ with pytest.raises(ValueError,match='setup deferred'):
+  host.guard()
+ assert calls and all(credential==health for _,credential in calls)
+
+
+@pytest.fixture
 def transaction(tmp_path,monkeypatch):
  if os.name=='nt':pytest.skip('Linux root ownership semantics; exercised separately on site host with temporary fixtures')
  m=module()
