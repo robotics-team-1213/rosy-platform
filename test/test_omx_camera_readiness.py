@@ -129,6 +129,23 @@ def test_profile_rejects_camera_identity_guess_and_unbounded_exposure():
         runtime.validate_profile(profile('/dev/v4l/by-id/selected-camera', 400))
 
 
+@pytest.mark.parametrize('root', ['/dev/v4l/by-id', '/dev/v4l/by-path'])
+def test_registered_persistent_camera_paths_are_accepted(root):
+    profile = dict(viewer_url='http://127.0.0.1:8767', cameras={role: dict(
+        device=f'{root}/{role}', candidates=[dict(auto_exposure=1, exposure_time_absolute=400)])
+        for role in ('top', 'front')})
+    assert load('camera_readiness').validate_profile(profile) == profile
+
+
+@pytest.mark.parametrize('device', ['/dev/video0', '/tmp/by-path/front', '/dev/v4l/by-path/../video0'])
+def test_unpinned_camera_paths_are_rejected(device):
+    profile = dict(viewer_url='http://127.0.0.1:8767', cameras={
+        'top': dict(device='/dev/v4l/by-id/top', candidates=[dict(auto_exposure=1, exposure_time_absolute=400)]),
+        'front': dict(device=device, candidates=[dict(auto_exposure=1, exposure_time_absolute=400)])})
+    with pytest.raises(ValueError, match='persistent camera identity'):
+        load('camera_readiness').validate_profile(profile)
+
+
 def test_a_role_names_the_preview_unit_that_owns_its_camera(monkeypatch, tmp_path):
     """2026-10-28: the front role's camera is opened by rosy-omx-camera@arm_a_wrist; asking for @front failed restore."""
     import json

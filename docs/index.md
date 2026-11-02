@@ -357,4 +357,4 @@
 - 2026-11-02 · 7090702e1f · fix(remote): isaac_batch retries an UNKNOWN run; Step 4c boundary over seeds and yaw; D-958 stage 1 kill test
 - 2026-11-02 · uncommitted · test: 리뷰 관문 스크립트를 시험이 부른다
 - 2026-11-02 · uncommitted · docs(omx): 시범 학습 준비와 왼쪽 손목 진단 기록
-- 2026-11-02 · uncommitted · docs(adr): D-889 추가 10 결과에 M4 판정(FAIL)
+- 2026-11-02 · uncommitted · D-945 5항 이행 완료로 닫음
