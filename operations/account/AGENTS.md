@@ -2,7 +2,7 @@
 
 **Parent context:** [operations/AGENTS.md](../AGENTS.md)
 
-Read [D-962](../../docs/adr/D-962-independent-account-and-authenticated-development.md) before changing authority or receiver ownership. Account owns human identities, credentials, grants, signing keys, sessions, profiles, administration and authentication audit. Fleet consumes signed grants through the foundation Account client; its compatibility imports point here.
+Read [D-962](../../docs/adr/D-962-independent-account-and-authenticated-development.md) before changing authority or receiver ownership. Account owns human identities, credentials, grants, signing keys, central sessions/session families and credential issuance, profiles, administration and authentication audit. Fleet owns its application sessions and authorization and consumes signed grants through the foundation Account client; its compatibility imports point here.
 
 - Keep `rosy_account` independently importable without Fleet or ROS. `COLCON_IGNORE` marks this standalone Python package outside colcon discovery.
 - Startup requires an activated, validated Account database. Use `rosy_account.migration` for explicit extraction; preserve IDs, grants, revisions, session families and credential digests. Do not bootstrap an existing authority.
