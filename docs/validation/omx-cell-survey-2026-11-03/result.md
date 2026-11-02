@@ -54,10 +54,28 @@ Pick-by-eye inputs are good to about 5 px, which is about 5 mm on the plate in t
 - The 2026-11-01 top-camera cell maps (`cell-arm-b/calibration.json` and others on the control PC) put the arm_b origin at
   pixel (158, 158), outside the current base plate: they predate the plate layout and are not reused here.
 
+## Step 2: the same cameras in Isaac (D-947 3, 2026-11-03)
+
+The container fixture now carries `real_cameras` (top and side): eye, focus and up taken from the PnP rotations above
+(up is the image -y axis, so the 1.5 deg side roll is kept), 640x480, focal length in pixels. Each run's first trial
+renders `real-top.png` and `real-side.png` next to the observer pictures.
+
+| Check | Result |
+|---|---|
+| Fixture pinhole against the real PnP, 36 studs | top 0.03 px, side 0.11 px (mean) |
+| Isaac `real-top.png` against the real top frame: both frames fitted by the same stud detector, 36 studs | mean 1.13 px, max 1.85 px |
+| Isaac `real-side.png` against the real side frame | overlaid by eye: stud rows match, the cropped bow differs as known. Not measured per stud; bounded by the side PnP residual 2.8 px |
+
+Both are inside the limit D-947 proposes (top and side reference points, mean 3 px). Runs: case
+`nominal-palletizing-v21-ship`, seed 42. Run `d53cfe92f3475a6da6c1f50aa6633d56` (first camera encoding without roll,
+top 2.04 px mean; 9/9 placed). Run `82e147c7e04f5711834ee96395f01aa3` (final encoding): the camera pictures were written,
+then the run unit was stopped from outside together with an unrelated test job on the model PC during layer 7, so its
+stacking result is not a claim. The arm bases in the renders are still the CAD values, so the base plates draw toward
+the bow of the real ones, as measured above.
+
 ## Next
 
 1. Run the D-947 MuJoCo sweep with the surveyed bases as a second candidate next to the CAD ones; adopt them in
    `arm_bases_m` only if they change reach or collision results, with the run evidence.
-2. Add a real-camera view to the Isaac capture (640x480, the poses above) so rendered and real frames can be compared
-   pixel for pixel.
+2. Done: see step 2 above.
 3. Measure the belt height and arm_a by FK when arm_a is back in scope.
