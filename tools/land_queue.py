@@ -124,7 +124,7 @@ def turn_started() -> float | None:
         for ticket in _held:
             try:
                 info = json.loads(ticket.read_text(encoding="utf-8"))
-                if int(info.get("pid") or 0) in (0, os.getpid()) and isinstance(info.get("turn_started"), (int, float)):
+                if int(info.get("pid") or 0) == os.getpid() and type(info.get("turn_started")) in (int, float):
                     starts.append(info["turn_started"])
             except (OSError, ValueError):
                 pass
@@ -135,7 +135,8 @@ def owns_turn(ticket: Path, *, started: float | None = None) -> bool:
     with _status_lock:
         try:
             info = json.loads(ticket.read_text(encoding="utf-8"))
-            return (info.get("status") == "turn" and int(info.get("pid") or 0) in (0, os.getpid())
+            return (info.get("status") == "turn" and int(info.get("pid") or 0) == os.getpid()
+                    and type(info.get("turn_started")) in (int, float)
                     and (started is None or info.get("turn_started") == started))
         except (OSError, ValueError):
             return False

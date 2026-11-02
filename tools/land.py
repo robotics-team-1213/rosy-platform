@@ -471,7 +471,7 @@ def rounds(args, wt: Path, branch: str, main_co: Path, python: str, qdir, ticket
                 raise Stop(f"{branch} moved to {tip[:10]} during the checks; {candidate[:10]} was tested, not that")
             land_selection.require_eligible(sys.modules[__name__], args, reusable and prepared is not None)
             land_checks.check_turn(sys.modules[__name__], wt, args, round_no)
-            if ticket is not None and not land_queue.owns_turn(ticket, started=turn_epoch):
+            if ticket is not None and (turn_epoch is None or not land_queue.owns_turn(ticket, started=turn_epoch)):
                 raise Stop("landing turn ownership changed during checks; refusing to fast-forward main")
             on_main(main_co)
             ff = git(main_co, "merge", "--ff-only", candidate, check=False)
