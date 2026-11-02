@@ -3,8 +3,8 @@ learned paint worker - on synthetic floors rendered through the NOMINAL ground."
 import numpy as np
 import pytest
 
-from control.sensing.perception.lane_keep import LaneKeeper, clean_learned_mask, denoise_white_mask, floor_white_mask
-from control.sensing.perception.lane_keep_lines import DENOISE_MIN_AREA_PX
+from perception_runtime.perception.lane_keep import LaneKeeper, clean_learned_mask, denoise_white_mask, floor_white_mask
+from perception_runtime.perception.lane_keep_lines import DENOISE_MIN_AREA_PX
 from control.sensing.perception.learned.paint_worker import LearnedPaintWorker
 from test_lane_keep import GROUND, HALF, X_OFFSET, X, Y, _render
 
@@ -187,7 +187,7 @@ def test_reported_revision_belongs_only_to_the_served_fresh_mask():
 
 
 def test_paint_path_does_not_compute_lane_evidence(monkeypatch):
-    from control.sensing.perception.learned import runner
+    from perception_runtime.perception.learned import runner
     from test_learned_runner import _factory, _model_dir
     import tempfile
     from pathlib import Path
@@ -200,7 +200,7 @@ def test_paint_path_does_not_compute_lane_evidence(monkeypatch):
 
 
 def test_open_passes_allow_spinning_to_the_default_session(tmp_path, monkeypatch):
-    from control.sensing.perception.learned import runner
+    from perception_runtime.perception.learned import runner
     from test_learned_runner import _factory, _model_dir
     seen = []
 
@@ -220,7 +220,7 @@ def test_open_passes_allow_spinning_to_the_default_session(tmp_path, monkeypatch
 
 def test_ort_session_options_disable_spinning():
     ort = pytest.importorskip("onnxruntime")
-    from control.sensing.perception.learned import runner
+    from perception_runtime.perception.learned import runner
     entries = {}
     real = ort.SessionOptions
 
@@ -338,7 +338,7 @@ def test_node_gates_reuse_on_turn_rate_and_resets_the_worker():
 
 def test_ort_session_options_with_a_fake_onnxruntime(monkeypatch):
     import sys
-    from control.sensing.perception.learned import runner
+    from perception_runtime.perception.learned import runner
     entries = {}
 
     class Options:

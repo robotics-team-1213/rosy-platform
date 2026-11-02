@@ -16,7 +16,7 @@ from control.sensing import lidar as lidar_module
 
 from control.sensing.body import LIDAR_X
 from control.sensing.lidar import NOSE_YAW
-from control.sensing.perception.camera_ground import nominal_ground_plane
+from perception_runtime.perception.camera_ground import nominal_ground_plane
 
 PROFILE = yaml.safe_load((Path(__file__).resolve().parents[3] / "middleware" / "devices" / "pinky" / "profile"
                           / "config" / "camera_nominal.yaml").read_text(encoding="utf-8"))

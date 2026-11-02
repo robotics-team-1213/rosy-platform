@@ -51,7 +51,7 @@ def test_invalid_exposure_resets_keeper_and_worker_before_publishing_invisible(b
 
 @pytest.mark.parametrize('geometry', ['NOMINAL', 'GAZEBO', 'HOMOGRAPHY'])
 def test_camera_geometry_source_keeps_the_motion_observation_wire_contract(geometry):
-    from control.sensing.perception.lane import LaneObservation, line_observation_payload
+    from perception_runtime.perception.lane import LaneObservation, line_observation_payload
     tree = ast.parse((ROOT / 'sensors/line_observation/line_observer_node.py').read_text(encoding='utf-8'))
     method = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == '_ground_label')
     namespace = {}
@@ -87,7 +87,7 @@ def test_keep_callback_binds_fresh_route_seq_to_observation_and_debug_then_expir
 
     from control.route_context_input import RouteContextInput, bend_expected
     from control.core_law_input import refresh_drivable_law
-    from control.sensing.perception.lane import LaneObservation, line_observation_payload
+    from perception_runtime.perception.lane import LaneObservation, line_observation_payload
 
     tree = ast.parse((ROOT / 'sensors/line_observation/line_observer_node.py').read_text(encoding='utf-8'))
     names = ('_on_camera', '_publish')

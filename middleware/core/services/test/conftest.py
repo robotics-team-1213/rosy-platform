@@ -13,7 +13,7 @@ for _path in (
     REPO / "middleware" / "core" / "services",
     REPO / "middleware" / "core" / "gateway",  # test_lane_return_manager imports core.drive.line_follow
     REPO / "contracts" / "foundation",
-    REPO / "middleware" / "perception",
+    REPO / "middleware" / "perception", REPO / "integrations" / "perception",
 ):
     _entry = str(_path)
     if _entry not in sys.path:

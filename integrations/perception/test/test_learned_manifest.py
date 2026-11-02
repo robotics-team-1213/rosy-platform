@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from control.sensing.perception.learned.manifest import (
+from perception_runtime.perception.learned.manifest import (
     ManifestError,
     ROLES,
     load_manifest,
@@ -163,7 +163,7 @@ def test_model_revision_must_be_path_safe(tmp_path, rev):
 
 
 def test_check_revision_is_the_shared_rule():
-    from control.sensing.perception.learned.manifest import check_revision
+    from perception_runtime.perception.learned.manifest import check_revision
     assert check_revision("lane-seg-20260930-abcdef12") == "lane-seg-20260930-abcdef12"
     with pytest.raises(ManifestError):
         check_revision("a b")

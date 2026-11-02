@@ -3,7 +3,7 @@ from pathlib import Path
 import json
 import re
 
-from control.sensing.perception.learned.manifest import validate_label_semantic
+from perception_runtime.perception.learned.manifest import validate_label_semantic
 
 
 class EvalSetError(ValueError):

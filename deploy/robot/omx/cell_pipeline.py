@@ -351,8 +351,11 @@ def recover(cell, config: dict, site: str, work: Path, person_at_switch: bool) -
     current = abs(((state.get("health") or {}).get("current_ma") or [0] * 6)[5])
     holding = current >= config["plan"].get("hold_current_ma", 140)
     steps = [{"command": "state", "gripper_current_ma": current, "holding": holding}]
-    plan = [f"grip {config['plan']['grip_closed']}" if holding else f"grip {config['plan']['grip_open']}",
-            config.get("recover_lift", "jog elbow_flex.pos -5 wrist_flex.pos 4")]
+    if not holding:  # 2026-11-03: the fixed lift below pressed a dropped arm further onto the stack; step out instead
+        import cell_unwedge
+        out = cell_unwedge.unwedge(cell, cell_unwedge.HOME, sleep=time.sleep if config.get("recover_settle_s", 3.0) else bool)
+        return {"result": out["result"], "holding": False, "steps": steps + out.get("rows", [])}
+    plan = [f"grip {config['plan']['grip_closed']}", config.get("recover_lift", "jog elbow_flex.pos -5 wrist_flex.pos 4")]
     if holding:
         here = state["state"]
         library = write_library(config, target(config, site, config["sites"][site]["start"]),
