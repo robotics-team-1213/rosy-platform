@@ -59,10 +59,23 @@ Nothing checked a role's path against what is actually plugged in, or against th
 After anything is plugged, unplugged or moved on the control PC:
 
 1. Run `omx_devices.py scan --session-config <record-config.json>`.
-2. Update the role env files and the site's `~/.config/rosy/workcell-observations/observations.yaml` until it exits 0.
+2. Change cameras only in `~/.config/rosy/omx-cameras.json`, then run `omx_cameras.py bind --apply` and `omx_cameras.py manifest --apply`. Run the second command again with `sudo` and `--manifest` for the site's `/etc/rosy/workcell-observations/<id>/observations.yaml`. Repeat until the scan exits 0.
+   - On 2026-11-02 someone swapped the two wrist ports in the registry and in the site's copy by hand. The bridge's copy kept the old ports. Two hand-kept copies of one fact drift apart.
 3. Only then start observers, sessions or a calibration.
 
 Never select a RealSense node, or a camera whose serial another camera shares, by its kernel by-id name.
+
+### Image-space site settings go stale with the camera (2026-11-01)
+
+A new or moved top camera also invalidates every per-site value given in its pixels or colours: `surface_px` and `surface_lab` in the cell configs.
+
+On 2026-11-01 the left arm's `belt` and `board` polygons were slivers near x≈520, left over from the camera before the RealSense. `cell_objects.foreground` drops everything outside the polygon, so the mask was empty. A planned leg that placed onto one of three containers on the pallet read clear.
+
+- `cell_corridor.check` now fails closed: corridor pixels outside `surface_px` count as `off_surface`. On that frame the old polygon gave 10,844 px off the surface and a refusal.
+- With this camera's three surface colours (table Lab 175/125/161, pallet 86/134/86, belt 61/129/101) the same leg was refused at the occupied slot. With `--stack` it passed.
+- After a camera change, redraw `surface_px` and resample `surface_lab` per site together with the remap.
+- An all-empty foreground on a frame that shows objects means the site settings are stale. It never means the path is clear.
+- The black arm links read as the black belt, so the other arm is not foreground. Its position must come from its joint state.
 
 ## Not resolved here
 

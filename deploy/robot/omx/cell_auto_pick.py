@@ -153,8 +153,7 @@ def parse_dest(config: dict, source: str, dest: str):
     """A site name, or 'x,y' metres on the source surface -> (site, (x, y))."""
     if dest in config["sites"]:
         return dest, tuple(config["sites"][dest]["place"])
-    x, y = (float(v) for v in dest.split(","))
-    return source, (x, y)
+    return source, tuple(float(v) for v in dest.split(","))
 
 
 def observe(cell, config: dict, calibration: dict, site: str, roi, catalog: list):
@@ -165,9 +164,9 @@ def observe(cell, config: dict, calibration: dict, site: str, roi, catalog: list
         return None, None, [], f"no map for {site}"
     img = cell.frame("top")
     cd.see(keep(f"auto-{site}-top", img))
-    poly, lab = config["sites"][site].get("surface_px"), config["sites"][site].get("surface_lab")
+    poly, lab, obj = config["sites"][site].get("surface_px"), config["sites"][site].get("surface_lab"), config.get("objects") or {}
     objects = cell_objects.detect(img, roi, record, config["cameras"]["top"], catalog, surface_z(config, site),
-                                  config.get("params"), poly, lab, (config.get("objects") or {}).get("hsv"))
+                                  config.get("params"), poly, lab, obj.get("hsv"))
     for o in objects:
         o["raw_m"] = [o["centre_mm"][0] / 1000, o["centre_mm"][1] / 1000]
     # the finger-side mask is not clipped to the site polygon: a container on the next surface (the board beside the
@@ -175,7 +174,7 @@ def observe(cell, config: dict, calibration: dict, site: str, roi, catalog: list
     near = cell_objects.foreground(img, roi, params=config.get("params"), surface_lab=lab)
     for poly in config["sites"][site].get("markings_px", []):  # flat floor markings (a white line) are no obstacle
         cv2.fillPoly(near, [np.asarray(poly, np.int32) - [roi[0], roi[1]]], 0)
-    return img, object_sized(near, config.get("params")), objects, None
+    return img, object_sized(near, config.get("params")) | cell_objects.colour_mask(img, roi, obj.get("hsv")), objects, None
 
 
 def object_sized(mask, params=None):
@@ -184,10 +183,7 @@ def object_sized(mask, params=None):
 
     n, labels, stats, _ = cv2.connectedComponentsWithStats(mask)
     big = [i for i in range(1, n) if stats[i, cv2.CC_STAT_AREA] > prm.get(params, "objects.surface_min_px")]
-    out = mask.copy()
-    for i in big:
-        out[labels == i] = 0
-    return out
+    return np.where(np.isin(labels, big), 0, mask).astype(mask.dtype)
 
 
 def finger_room(mask, roi, pixel_fn, o: dict, closing_deg: float | None = None, params=None) -> dict:
@@ -222,7 +218,7 @@ def reachable_ends(o: dict, entry: dict, params=None) -> list:
     """Grasp points shifted along a long box's axis, toward the arm's base first: grasp.end_frac of the way from
     the middle to where the jaws would reach the box's end. A square box has none."""
     reach = prm.get(params, "grasp.end_frac") * (entry["length_mm"] - entry["width_mm"]) / 2000
-    if reach <= 0:
+    if reach <= 0 or "grasp_shift_mm" in o:  # an end is not shifted again
         return []
     u = math.radians(o["long_axis_deg"])
     ends = [dict(o, raw_m=[o["raw_m"][0] + k * reach * math.cos(u), o["raw_m"][1] + k * reach * math.sin(u)],
@@ -300,6 +296,9 @@ def choose(cell, config, calibration, site, dest_site, place_xy, roi, objects, m
             why = "not inside the camera view"
         elif not square_entry(entries, o):
             room = finger_room(mask, roi, pixel_fn, o, None, p)
+            if room["margin_mm"] is None:  # a long box packed beside another may have room near one end (2026-11-01)
+                o, room = next(((e, r) for e in reachable_ends(o, entries[o["object"]], p)
+                                if (r := finger_room(mask, roi, pixel_fn, e, None, p))["margin_mm"] is not None), (o, room))
             if room["margin_mm"] is None:
                 why = f"no finger room: {room['free_mm'][0]} / {room['free_mm'][1]} mm free beside it"
         if why:

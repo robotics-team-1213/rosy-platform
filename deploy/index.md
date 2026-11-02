@@ -68,6 +68,7 @@
 ## 교훈 (docs/solutions)
 
 - [컨테이너에서 `kill -0`은 좀비를 산 것으로 본다](../docs/solutions/deployment/container-zombie-kill0-blindness.md)
+- [실험실 PC에서 시뮬 셀 소유자는 장치 없는 namespace와 짧은 소켓 경로로 띄운다](../docs/solutions/deployment/sim-cell-owner-on-a-lab-pc-needs-a-device-free-namespace-2026-10-31.md)
 - [Cell 시뮬레이터는 홈 복귀를 관측한 뒤 Action을 받는다](../docs/solutions/logic-errors/cell-startup-must-reach-home-before-action-admission.md)
 
 ## 시험
@@ -76,8 +77,8 @@
 
 ## 최근 기록
 
-- 2026-10-31 · a517780fbc · feat(model-pc): one Learning center follows the signed release; retire the candidates (D-857)
-- 2026-10-30 · 796fbe489c · D-871 가드 수집 관제 PC 적용과 `rosy-update-report` 선언
-- 2026-10-30 · uncommitted · 관제 PC Monitoring 설정 예시 (D-936)
-- 2026-10-30 · 6302fcb63c · 선택 Monitoring overlay를 서명 후보와 업데이트기에 등록 (D-936)
-- 2026-10-30 · uncommitted · field marks admission의 원격 GREEN·mutation·복귀 검증
+- 2026-11-02 · uncommitted · OMX 카메라 manifest를 레지스트리에서 맞춤
+- 2026-11-02 · uncommitted · feat(site): 작업셀 카메라 자격 매핑도 site.env에서 바꾼다
+- 2026-11-02 · uncommitted · feat(omx): 팔 혼자 정렬하기를 한 파이프라인으로 (`cell_align`)
+- 2026-11-02 · 97da913f85 · OMX record_session이 켜진 카메라 단위 전부를 넘겨받음
+- 2026-11-01 · uncommitted · D-907 authenticated metadata read repair

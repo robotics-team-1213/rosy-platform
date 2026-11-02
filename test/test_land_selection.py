@@ -42,7 +42,7 @@ def caller(tmp_path):
     land = SimpleNamespace(Stop=Stop, HARNESS="tools/harness/rosy_harness.py",
                            HARNESS_TRIGGER=": harness configuration or the selector itself",
                            ENV={"PYTHONUTF8": "1", "CALLER_ENV": "retained"},
-                           subprocess=SimpleNamespace(run=run),
+                           subprocess=SimpleNamespace(run=run), lines=lambda *args: [],
                            browser_tier=lambda *args: [["ROSY_RUN_BROWSER_TESTS=1", "browser/test"]])
     return land, payload, calls
 
@@ -87,8 +87,9 @@ def test_landed_full_delta_runs_both_changes_own_suites_unless_safety(caller, tm
     answers = [delta, mine]
     land.subprocess = SimpleNamespace(run=lambda command, **kw: calls.append(command) or SimpleNamespace(
         returncode=0, stdout=json.dumps(answers.pop(0)), stderr=""))
+    # D-889 18: the delta reaches guard/test only, so mine/test keeps its pretest pass
     assert selection.select(land, tmp_path, "base", "python", head="main", landed=True) == (
-        [["guard/test"], ["mine/test"], ["ROSY_RUN_BROWSER_TESTS=1", "browser/test"]], None)
+        [["guard/test"], ["ROSY_RUN_BROWSER_TESTS=1", "browser/test"]], None)
     assert calls[-1] == ["python", land.HARNESS, "affected", "--base", "main", "--json"]  # this branch on the merge
     answers[:] = [delta, dict(mine, escalations=["safe/x.py" + selection.SAFETY_TRIGGER])]
     assert selection.select(land, tmp_path, "base", "python", head="main", landed=True)[1] is not None
@@ -128,13 +129,29 @@ def test_a_landed_delta_reaching_none_of_this_branchs_suites_does_not_rerun_them
     browser = ["ROSY_RUN_BROWSER_TESTS=1", "browser/test"]
     for mine, rerun in ((dict(mode="affected", escalations=[], invocations=[["guard/test"], ["arm/test"]]), False),
                         (dict(mode="affected", escalations=[], invocations=[["fleet/test/test_x.py::t"]]), True),
+                        # D-889 16: a FULL-mode own follows the same rule; re-run every turn, it never landed (11-01)
                         (dict(mode="full", escalations=["tools/x.py: harness"], local_invocations=[["arm/test"]]),
+                         False),
+                        (dict(mode="full", escalations=["tools/x.py: harness"], local_invocations=[["fleet/test/test_y.py"]]),
                          True)):
         answers[:] = [delta, mine]
         got = selection.select(land, tmp_path, "base", "python", head="main", landed=True)[0]
         own = mine.get("invocations") or mine["local_invocations"]
-        assert got == ([["guard/test"], ["fleet/test"]] + ([inv for inv in own if inv != ["guard/test"]] if rerun
-                                                            else []) + [browser])
+        # D-889 22: reaching nothing either way, the delta's suites do not rerun either: the guards only
+        unreached = [["guard/test"], ["fleet/test"]] if mine["mode"] == "full" else [["guard/test"]]  # a FULL own: unknown reach
+        assert got == ([["guard/test"], ["fleet/test"]] + [inv for inv in own if inv != ["guard/test"]] if rerun
+                       else unreached) + [browser]
+    # D-889 18: per invocation, only the own ones the delta reaches rerun (11-01: 485 rerun for a few reached)
+    answers[:] = [delta, dict(mode="full", escalations=["contracts/foundation/x.py: shared foundation"],
+                              local_invocations=[["fleet/test/test_y.py"], ["arm/test"], ["guard/test"]])]
+    assert selection.select(land, tmp_path, "base", "python", head="main", landed=True)[0] == [
+        ["guard/test"], ["fleet/test"], ["fleet/test/test_y.py"], browser]
+    # D-889 22: an ordinary (not escalated) delta the same way (a safety delta escalates: test above)
+    plain = dict(mode="affected", escalations=[], invocations=[["guard/test"], ["fleet/test"]])
+    for mine, want in ((["arm/test"], [["guard/test"]]),
+                       (["fleet/test/test_x.py"], [["guard/test"], ["fleet/test"]])):
+        answers[:] = [plain, dict(mode="affected", escalations=[], invocations=[mine])]
+        assert selection.select(land, tmp_path, "base", "python", head="main", landed=True)[0] == want + [browser]
     assert selection.overlaps([["a/test"]], [["ROSY_X=1", "a/test/test_b.py::c"]]) and not selection.overlaps(
         [["a/test"]], [["b/test"]])
 
@@ -531,3 +548,27 @@ def test_explicit_full_refuses_incident_no_queue_before_ff_or_receipt(full_case)
     assert git(full_case.main, "rev-parse", "HEAD") == before
     assert not full_case.remote
     assert land.land_record.read(full_case.main, git(full_case.wt, "rev-parse", "HEAD")) is None
+
+
+def test_a_landed_delta_repeats_its_browser_tests_only_for_a_branch_that_changes_ui(caller, tmp_path):
+    """D-889 addendum 12 (user decision 2026-11-01): main's delta passed its own browser tests when it landed."""
+    selection = load_selection()
+    land, payload, _ = caller
+    ui = ["ROSY_RUN_BROWSER_TESTS=1", "browser/test"]
+    land.browser_tier = lambda wt, base, head=None: [ui] if head else []  # own change (base=main tip): no UI
+    assert selection.select(land, tmp_path, "base", "python", head="main", landed=True)[0] == [["selected/test"]]
+    land.browser_tier = lambda wt, base, head=None: [ui]  # this branch changes UI too: both run
+    assert ui in selection.select(land, tmp_path, "base", "python", head="main", landed=True)[0]
+    assert ui in selection.select(land, tmp_path, "base", "python")[0], "a pretest keeps its own browser tier"
+
+
+def test_an_automatic_full_tier_runs_simulation_suites_only_for_a_simulation_change(caller, tmp_path):
+    selection = load_selection()
+    land, payload, _ = caller
+    payload.update(mode="full", escalations=["x"], full_invocations=[
+        ["test"], ["integrations/simulation/gazebo/test"], ["ROSY_JOB_CORES=2", "learning/envs/isaac/test"]])
+    assert selection.select(land, tmp_path, "base", "python")[0][:1] == [["test"]]
+    assert len(selection.select(land, tmp_path, "base", "python")[0]) == 2, "only test + browser"
+    land.lines = lambda *a: ["integrations/simulation/gazebo/launch/x.py"]
+    assert ["integrations/simulation/gazebo/test"] in selection.select(land, tmp_path, "base", "python")[0]
+    assert selection.without_sim([["a/test", "learning/envs/isaac/test/test_x.py"]], []) == [["a/test"]]

@@ -1,5 +1,7 @@
 # 통신·프로토콜 평가 보고서
 
+> 2026-11-01 표기: 이 보고서는 작성일 기준 기록이다. 그 뒤 바뀐 것 — WLAN 유실 시 fallback AP 자동 열림(D-176·D-919), 이벤트 재전송은 미응답 `event_id` 기준(D-869), 허브 검증 실패 코드 `PAYLOAD_INVALID`(API v1.336), tailnet 코드 페어링(D-944). 아직 유효한 지적은 PRT-004 ACK 미구현이다.
+
 작성일: 2026-09-22 / 대상: `Rosy OS` 작업 트리 (src 6도메인 + deploy + dock + signal)
 범위: **전송·규약 관점** — 물리 버스 → ROS 그래프(QoS) → 프로세스 내/호스트 → 로봇 API → 사이트/함대 → ESP32 장비 계약 → 배포 네트워크. 모듈 import 결합도는 `module-coupling-report.md`(2026-09-21)이 이미 다루므로 제외.
 계약 원천: `docs/reference/ROSY API & Protocol Reference.md`(v1.12), `rosy-host-agent-contract.md`, `firmware/dock/README.md`(ROSY-DOCK-001), `firmware/signal/README.md`(ROSY-SIGNAL-001), ADR Log(D-1~D-168), CORE/FLEET SRS.

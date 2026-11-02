@@ -55,10 +55,13 @@ from record_config import validate_config
 
 SERVICES = ("rosy-omx-camera@top.service", "rosy-omx-camera@front.service",
             "rosy-omx-camera-view.service", "rosy-omx-camera-readiness.service")
+# Since 2026-10-31 camera roles come from the registry (D435 top, side, a second wrist): every running
+# instance holds a V4L device the recorder may open, so all of them hand over, not only top/front.
+CAMERA_UNIT = re.compile(r"rosy-omx-camera@[\w-]+\.service")
 LEADER_GRIPPER = 6
 LEADER = range(1, 7)
 TORQUE_OFF_DEADLINE_S = 30.0
-SESSION_ONLY = ("p_gain", "profile_acc", "profile_vel")  # not commissioning caps: restored to the value found
+SESSION_ONLY = ("p_gain", "i_gain", "profile_acc", "profile_vel")  # not commissioning caps: restored to the value found
 
 
 def interrupt_on_parent_death() -> None:
@@ -146,6 +149,11 @@ class Session:
         self.sleep, self.clock, self.replay, self.chunks = sleep, clock, replay, chunks
         self.operating_profile = operating_profile
         self.hardware_faults = {}
+
+    def handover_units(self):
+        """Camera units first, then camera-view and readiness; reversed for stopping (dependents first)."""
+        running = CAMERA_UNIT.findall(self.systemctl("list-units", "rosy-omx-camera@*") or "")
+        return list(dict.fromkeys(SERVICES[:2] + tuple(running))) + list(SERVICES[2:])
 
     @staticmethod
     def command(config_path: Path, teleop_only: bool, *, body_only=False, replay: dict | None = None) -> list:
@@ -344,7 +352,7 @@ class Session:
             # Dependents first: stopping camera-view first also stops readiness (Requires=), whose
             # ExecStopPost restore outlasts the 10 s systemctl timeout (2026-10-24).
             # The chunk runner opens no camera: the services stay up so the judge can watch.
-            for unit in () if self.chunks else reversed(SERVICES):
+            for unit in () if self.chunks else reversed(self.handover_units()):
                 # "activating" includes a readiness unit waiting out RestartSec; stop cancels that restart.
                 if self.systemctl("is-active", unit) in ("active", "activating"):
                     self.systemctl("stop", unit)
@@ -485,6 +493,7 @@ def main(argv=None):
     parser.add_argument("--params", type=Path, help="--chunks: cell-params.json for the runner (default: built-in values)")
     parser.add_argument("--io", type=Path, default=Path("chunk-io"), help="--chunks: command FIFO and status directory")
     parser.add_argument("--operating-profile", type=Path, help="--chunks/--replay: per-device operating profile")
+    parser.add_argument("--arm", help="lock only this arm (its observer's instance name), so the other arm can work too")
     args = parser.parse_args(argv)
     if args.operating_profile:
         if not (args.chunks or args.replay):
@@ -557,7 +566,7 @@ def main(argv=None):
                   **({"params": str(args.params.resolve())} if args.params else {})}
     session = Session(open_bus=lambda which: SerialBus(ports[which], 0), systemctl=systemctl, run=run, log=log,
                       replay=replay, chunks=chunks, operating_profile=args.operating_profile)
-    lock = session_lock()
+    lock = session_lock(args.arm)
     record = {}
     try:
         record = session.execute(args.config, caps, teleop_only=args.teleop_only, task_card=args.task_card,

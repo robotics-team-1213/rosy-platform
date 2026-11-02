@@ -25,6 +25,10 @@ from starlette.websockets import WebSocketState
 
 from core_api_web.api.deps import authenticate, token_alive
 from core_api_web.api.account_sessions import authenticate_account
+from core_api_web.api.errors import ApiError
+from core_api_web.api.v1.control import TeleopRequest, apply_teleop
+from core_common.capability import CapabilityError
+from pydantic import ValidationError
 from starlette.concurrency import run_in_threadpool
 from core_features.swarm import ReferencePose
 from core_common.protocol.schemas import Envelope, EnvelopeType, Pose, PoseSample
@@ -44,7 +48,15 @@ REVALIDATE_S = 30.0
 #: Network load: /ws/state sockets one robot serves at once (config `state.max_clients`).
 #: One more is closed with 1013 and a reason; every open socket shares one serialized frame per tick.
 MAX_STATE_CLIENTS = 4
+#: /ws/events sockets one robot serves at once (config `events.max_clients`), and the
+#: undelivered events one socket may hold (`events.max_backlog`) before it is closed with 1013.
+MAX_EVENT_CLIENTS = 8
+EVENT_BACKLOG_MAX = 1000
 ACCOUNT_REVALIDATE_S = 5.0
+#: /ws/teleop sockets one robot serves at once (config `teleop.max_ws_clients`); one more gets 1013.
+MAX_TELEOP_WS_CLIENTS = 2
+#: Consecutive malformed teleop frames before the socket is closed with 1008.
+MAX_BAD_TELEOP_FRAMES = 20
 
 
 def _guarded(handler):
@@ -146,27 +158,164 @@ async def ws_events(websocket: WebSocket):
     if svc is None:
         return
     patterns = [p.strip() for p in websocket.query_params.get("types", "").split(",") if p.strip()]
+    config = svc.config.get("events", {})
+    limit = int(config.get("max_clients", MAX_EVENT_CLIENTS))
+    app_state = websocket.app.state
+    open_now = getattr(app_state, "ws_event_clients", 0)
+    if open_now >= limit:
+        await websocket.close(code=1013, reason=f"event stream full: {limit} clients already connected")
+        return
+    app_state.ws_event_clients = open_now + 1
 
-    queue: asyncio.Queue = asyncio.Queue()
+    loop = asyncio.get_running_loop()
+    queue: asyncio.Queue = asyncio.Queue(maxsize=int(config.get("max_backlog", EVENT_BACKLOG_MAX)))
+    overflowed = asyncio.Event()
 
-    def _on_event(event) -> None:
+    def _enqueue(event) -> None:
         try:
             queue.put_nowait(event)
-        except Exception:
-            pass
+        except asyncio.QueueFull:
+            overflowed.set()
+
+    def _on_event(event) -> None:
+        # The bus publishes from ROS and worker threads; asyncio.Queue is loop-only.
+        if _match_type(event.type, patterns):
+            try:
+                loop.call_soon_threadsafe(_enqueue, event)
+            except RuntimeError:  # loop already closed
+                pass
 
     unsubscribe = svc.events.subscribe(_on_event)
     try:
         while True:
             event = await queue.get()
-            if _match_type(event.type, patterns):
-                await websocket.send_json(event.model_dump())
+            if overflowed.is_set():
+                # A slow reader would otherwise grow CORE memory without bound; it
+                # reconnects and fills the gap with since_seq (EVT-003).
+                await websocket.close(code=1013, reason="event backlog full: reconnect with since_seq")
+                return
+            await websocket.send_json(event.model_dump())
     except WebSocketDisconnect:
         pass
     except Exception:
         pass
     finally:
         unsubscribe()
+        app_state.ws_event_clients -= 1
+
+
+@ws_router.websocket("/ws/teleop")
+@_guarded
+async def ws_teleop(websocket: WebSocket):
+    """Hold-to-drive stream: the REST /teleop checks per frame, answered by an ack, no request per command.
+
+    One socket per token: a newer socket for the same token replaces the older one (closed 4409),
+    so a half-open socket after a Wi-Fi drop never locks the driver out of reconnecting.
+    """
+    svc = await _authorize(websocket, min_role="operator")
+    if svc is None:
+        return
+    token_id, auth = websocket.state.token_id, websocket.state.auth
+    limit = int(svc.config.get("teleop", {}).get("max_ws_clients", MAX_TELEOP_WS_CLIENTS))
+    app_state = websocket.app.state
+    if getattr(app_state, "ws_teleop_sockets", None) is None:
+        app_state.ws_teleop_sockets = {}
+    sockets = app_state.ws_teleop_sockets
+    if token_id not in sockets and len(sockets) >= limit:
+        await websocket.close(code=1013, reason=f"teleop stream full: {limit} clients already connected")
+        return
+    older = sockets.get(token_id)
+    sockets[token_id] = websocket
+    if older is not None:
+        try:
+            await older.close(code=4409, reason="replaced by a newer teleop socket")
+        except Exception:  # noqa: BLE001 - already gone
+            pass
+    last_seq = -1
+    moving = False       # the last applied command was motion
+    bad_frames = 0
+    slot = None          # (seq, request): the newest frame not applied yet (latest wins)
+    wake = asyncio.Event()
+    stopping = False
+
+    async def drive(request: TeleopRequest):
+        try:
+            await run_in_threadpool(apply_teleop, request, auth, svc)
+            return True, None
+        except ApiError as exc:
+            return False, exc.code
+        except CapabilityError:
+            return False, "CAPABILITY_NOT_SUPPORTED"
+        except Exception:  # noqa: BLE001 - one bad command must not kill the stream
+            return False, "INTERNAL_ERROR"
+
+    async def ack(seq, accepted, code):
+        try:
+            await websocket.send_json({"type": "ack", "seq": seq, "accepted": accepted, "code": code})
+        except Exception:  # noqa: BLE001 - the socket is closing; the fail-safe zero still runs
+            pass
+
+    async def applier():
+        nonlocal slot, moving
+        while True:
+            await wake.wait()
+            wake.clear()
+            if stopping:
+                return       # a frame still waiting at close is dropped, never applied late
+            item, slot = slot, None
+            if item is None:
+                continue
+            accepted, code = await drive(item[1])
+            if accepted:
+                moving = item[1].linear != 0 or item[1].angular != 0
+            await ack(item[0], accepted, code)
+
+    async def receiver():
+        nonlocal last_seq, slot, bad_frames
+        while True:
+            try:
+                frame = json.loads(await websocket.receive_text())
+                seq = frame["seq"]
+                if frame["type"] != "teleop" or type(seq) is not int or seq < 0:
+                    raise ValueError("not a teleop frame")
+                request = TeleopRequest.model_validate(frame)
+            except WebSocketDisconnect:
+                raise
+            except (ValueError, KeyError, TypeError, ValidationError):
+                bad_frames += 1
+                if bad_frames >= MAX_BAD_TELEOP_FRAMES:
+                    await websocket.close(code=1008, reason="too many malformed teleop frames")
+                    return
+                await ack(None, False, "BAD_FRAME")
+                continue
+            bad_frames = 0
+            if seq <= last_seq:
+                continue     # a late frame must never override a newer command
+            last_seq = seq
+            if slot is not None:     # latest wins: the older unapplied frame is never executed
+                await ack(slot[0], False, "SUPERSEDED")
+            slot = (seq, request)
+            wake.set()
+
+    applier_task = asyncio.create_task(applier())
+    try:
+        await receiver()
+    except WebSocketDisconnect:
+        pass
+    except Exception:  # noqa: BLE001 - fail-safe below still runs
+        pass
+    finally:
+        stopping = True
+        wake.set()
+        try:
+            await applier_task       # let an apply in flight finish before the zero
+        except Exception:  # noqa: BLE001
+            pass
+        replaced = sockets.get(token_id) is not websocket
+        if not replaced:
+            del sockets[token_id]
+        if moving and not replaced:   # a replacing socket owns the drive now; its frames win
+            await drive(TeleopRequest())   # fail-safe: do not leave the last motion running
 
 
 async def _first_message_token(websocket: WebSocket) -> str:
@@ -233,6 +382,7 @@ async def _authorize(websocket: WebSocket, min_role: str = "viewer",
     if query_token is not None and not account_auth:
         await websocket.accept()
     websocket.state.token_id = auth.token_id
+    websocket.state.auth = auth
     websocket.state.account_auth = account_auth
     authorization_header = 'authorization'
     websocket.state.account_bearer = websocket.headers.get(authorization_header, None) if account_auth else None

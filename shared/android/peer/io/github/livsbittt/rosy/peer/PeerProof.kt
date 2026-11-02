@@ -1,4 +1,4 @@
-package io.github.livsbittt.rosy.pilot
+package io.github.livsbittt.rosy.peer
 
 import org.json.JSONObject
 import java.security.KeyFactory

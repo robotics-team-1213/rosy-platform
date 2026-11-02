@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
-- 2026-11-01 · uncommitted · feat(land): 한 표 묶음(rollup)
-- 2026-11-01 · uncommitted · docs(adr): 착지 처리량은 시험 PC 용량이 정한다
-- 2026-11-01 · uncommitted · docs: D-940 중복 정의 게이트와 등록부
-- 2026-10-31 · uncommitted · omx: 재배선 뒤 장치 식별 교훈
-- 2026-10-31 · uncommitted · fix(land): 자동 묶음 착지를 끈다
+- 2026-11-02 · uncommitted · fix(land): 준비된 착지도 서로 닿지 않으면 한 표로 묶는다 (D-889 추가 23)
+- 2026-11-02 · uncommitted · docs(adr): D-960 암 세트마다 셀 관제, 그 위에 통합관제 R
+- 2026-11-02 · uncommitted · fix(harness): 같은 폴더 import 사슬로 시험을 찾는다 (D-889 추가 21)
+- 2026-11-02 · uncommitted · fix(land): 서로 닿지 않으면 차례는 가드만 (D-889 추가 22)
+- 2026-11-01 · uncommitted · feat(fleet): 확인된 ARM 시도의 재관측 계약(D-930, API v1.334)

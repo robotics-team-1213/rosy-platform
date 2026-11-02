@@ -151,11 +151,21 @@ def auto_pivot_point(cell, config, calibration, site, target_xy):
     img = cell.frame("top")
     roi = tuple(config["sites"][site].get("auto_roi") or (0, 0, img.shape[1], img.shape[0]))
     big = (max(0, roi[0] - 60), max(0, roi[1] - 60), min(img.shape[1], roi[2] + 60), min(img.shape[0], roi[3] + 60))
-    mask = cell_objects.foreground(img, big, params=config.get("params"))
+    site_cfg = config["sites"][site]  # its measured surface colour: the median alone called the pallet clutter (2026-11-01)
+    mask = cell_objects.foreground(img, big, params=config.get("params"), surface_px=site_cfg.get("surface_px"),
+                                   surface_lab=site_cfg.get("surface_lab"))
     inside = np.zeros(img.shape[:2], np.uint8)
     poly = config["sites"][site].get("surface_px") or [[0, 0], [img.shape[1] - 1, 0], [img.shape[1] - 1, img.shape[0] - 1], [0, img.shape[0] - 1]]
     cv2.fillPoly(inside, [np.asarray(poly, np.int32)], 1)
     return clear_point(target_xy, mask, big, inside, lambda q: predicted_pixel(config, calibration, site, q))
+
+
+def over_target(config, site) -> bool:
+    """The jaws may be marked right over the target: the pivot height clears the tallest top there (pivot.over_top_mm
+    above the surface: 2026-11-01 two-layer columns, 65-71 mm on depth) by pivot.over_clear_mm."""
+    p, s_z = config.get("params"), config["sites"][site].get("surface_z")
+    return bool(prm.get(p, "pivot.over_target")) and s_z is not None and (
+        1000 * (cell_pivot.pivot_z_view(config, site) - s_z) - prm.get(p, "pivot.over_top_mm") >= prm.get(p, "pivot.over_clear_mm"))
 
 
 def carried(region: dict) -> bool:
@@ -177,9 +187,7 @@ def self_calibrate(cell, config, calibration, calibration_path, site, target_xy,
     points = [q for q in pivot.get("points", [])
               if 1000 * math.dist(q, target_xy) <= 0.9 * prm.get(p, "pivot.bias_reach_mm", cell_pivot.BIAS_REACH_MM)
               and all(1000 * math.dist(q, o["raw_m"]) >= clear_mm for o in objects)]
-    z_view, s_z = cell_pivot.pivot_z_view(config, site), config["sites"][site].get("surface_z")
-    if (prm.get(p, "pivot.over_target") and cell is not None and s_z is not None
-            and 1000 * (z_view - s_z) - prm.get(p, "pivot.over_top_mm") >= prm.get(p, "pivot.over_clear_mm")):
+    if cell is not None and over_target(config, site):
         # 2026-10-29: floor biases 3.5-5.7 cm apart read 16.9, 6.1 and 4.2 mm and every pick missed; the jaws hover
         # above the box, so they are marked right over it (frame differencing sees the jaws on any background)
         points = [tuple(target_xy)]
@@ -238,9 +246,7 @@ def main(argv=None):
     ap.add_argument("--person-at-switch", action="store_true", help="with --commissioning: a person is at the power switch")
     args = ap.parse_args(argv)
     import cv2
-    import cell_objects
     import cell_pipeline as cp
-    from cell_observe import predicted_pixel
 
     config = json.loads(args.config.read_text(encoding="utf-8"))
     config["params"] = prm.load(config.get("params_path"))["values"]
@@ -278,13 +284,8 @@ def main(argv=None):
         elif step.startswith("pivot-near"):
             site, xy = step.split()[1].split(":")
             near = tuple(float(v) for v in xy.split(","))
-            img = cell.frame("top")
-            roi = tuple(config["sites"][site].get("auto_roi") or (0, 0, 640, 480))
-            big = (max(0, roi[0] - 60), max(0, roi[1] - 60), min(640, roi[2] + 60), min(480, roi[3] + 60))
-            mask = cell_objects.foreground(img, big, params=config["params"])
-            inside = np.zeros(img.shape[:2], np.uint8)
-            cv2.fillPoly(inside, [np.asarray(config["sites"][site].get("surface_px") or [[0, 0], [639, 0], [639, 479], [0, 479]], np.int32)], 1)
-            point = clear_point(near, mask, big, inside, lambda p: predicted_pixel(config, calibration, site, p))
+            # a packed pallet has no empty 72 px patch beside a column (2026-11-01): over it, when high enough
+            point = list(near) if over_target(config, site) else auto_pivot_point(cell, config, calibration, site, near)
             if point is None:
                 done.append({step: "no clear point near the target"})
                 continue

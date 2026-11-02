@@ -700,6 +700,21 @@ def test_a_long_box_out_of_reach_at_its_middle_offers_grasp_points_toward_the_ba
     assert auto.reachable_ends(o, {"length_mm": 30, "width_mm": 30}, None) == []  # a square box has no end to move to
 
 
+def test_a_long_box_packed_beside_another_is_held_near_its_free_end():
+    """2026-11-01: 3-cell columns stood 4 mm apart, no finger room at any middle; one pushed along its length had its
+    front end clear of the neighbour, and the fingers fit there."""
+    mask = np.zeros((200, 200), np.uint8)
+    px = lambda p: (100 + p[0] * 1000, 100 + (p[1] - 0.1) * 1000)  # noqa: E731  1 px per mm
+    box = {"raw_m": [0.0, 0.1], "width_mm": 30, "length_mm": 100, "long_axis_deg": 0.0, "object": "container-3"}
+    mask[85:116, 50:151] = 255
+    mask[119:150, 30:106] = 255  # the neighbour, 4 mm beside it, ending 5 mm past its middle
+    assert auto.finger_room(mask, (0, 0, 200, 200), px, box)["margin_mm"] is None
+    ends = auto.reachable_ends(box, {"length_mm": 100, "width_mm": 30}, None)
+    rooms = {e["grasp_shift_mm"]: auto.finger_room(mask, (0, 0, 200, 200), px, e)["margin_mm"] for e in ends}
+    assert rooms[-24.5] is None and rooms[24.5] is not None
+    assert auto.reachable_ends(ends[0], {"length_mm": 100, "width_mm": 30}, None) == []  # an end is not moved again
+
+
 def test_flat_markings_are_no_obstacle_for_the_finger_mask(tmp_path):
     """2026-10-29: the board's white line beside a 2-cell closed its finger gap; a site lists such flat markings."""
     path = biased_map(tmp_path)
@@ -713,6 +728,23 @@ def test_flat_markings_are_no_obstacle_for_the_finger_mask(tmp_path):
     inside = (slice(280 - ROI[1], 380 - ROI[1]), slice(60 - ROI[0], 200 - ROI[0]))
     assert plain[inside].any() and not masked[inside].any()
 
+
+
+def test_what_the_detector_calls_an_object_stands_beside_the_fingers_whatever_the_surface_colour(tmp_path):
+    """2026-11-01: on a pallet full of orange containers the surface colour (the ROI median) was orange, so the finger
+    mask lost the neighbouring columns 4 mm away and the middle one was planned with 26 mm free on both sides."""
+    path = biased_map(tmp_path)
+    one = {"x": 0.080, "y": 0.120, "long": 0.0, "length": 30, "width": 30}
+    other = dict(one, x=0.030, y=0.090)
+    config = copy.deepcopy(CONFIG)
+    green = cv2.cvtColor(np.uint8([[[60, 160, 60]]]), cv2.COLOR_BGR2LAB)[0, 0].tolist()
+    config["sites"]["pinky"]["surface_lab"] = green  # the boxes' own colour taken for the surface
+    u, v = (round(c) for c in tray_pixel(other["x"], other["y"]))
+    _, blind, _, _ = auto.observe(Cell([one, other]), config, cal.load(path), "pinky", ROI, CATALOG)
+    assert not blind[v - ROI[1], u - ROI[0]]  # the surface test alone calls the box surface
+    config["objects"] = {"hsv": [[35, 80, 60], [90, 255, 255]]}
+    _, mask, objects, error = auto.observe(Cell([one, other]), config, cal.load(path), "pinky", ROI, CATALOG)
+    assert error is None and len(objects) == 2 and mask[v - ROI[1], u - ROI[0]]
 
 def test_the_margin_opens_as_wide_as_the_room_and_the_jaws_allow():
     mask = np.zeros((200, 200), np.uint8)

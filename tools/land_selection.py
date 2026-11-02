@@ -11,6 +11,17 @@ import sys
 from pathlib import Path
 
 SAFETY_TRIGGER = ": safety path (platform_parts concern: safety)"  # affected_tests.SAFETY_TRIGGER
+# D-889 addendum 12: simulation suites in an automatic FULL tier only when the change touches simulation.
+SIM_SUITES = ("integrations/simulation/gazebo/test", "learning/envs/isaac/test")
+SIM_PATHS = ("integrations/simulation/", "learning/envs/isaac/")
+
+
+def without_sim(invocations: list[list[str]], changed: list[str]) -> list[list[str]]:
+    """An automatic FULL tier without the simulation suites, unless a changed path is simulation's own."""
+    if any(p.startswith(SIM_PATHS) for p in changed):
+        return invocations
+    kept = [[w for w in inv if not any(w == s or w.startswith(s + "/") for s in SIM_SUITES)] for inv in invocations]
+    return [inv for inv in kept if any(not w.startswith(("ROSY_", "-")) for w in inv)]
 
 
 def _affected(land, wt: Path, python: str, base: str, head: str | None, full: bool = False) -> dict:
@@ -32,6 +43,14 @@ def overlaps(delta: list[list[str]], mine: list[list[str]], ignore=()) -> bool:
     return any(a == b or a.startswith(b + "/") or b.startswith(a + "/") for a in paths(delta) for b in paths(mine))
 
 
+def _guards_only(invocations: list[list[str]], guards) -> list[list[str]]:
+    """The invocations whose every test path is one of ``guards`` (or inside one)."""
+    def paths(inv):
+        return [w.replace("\\", "/").split("::")[0].rstrip("/") for w in inv if not w.startswith(("ROSY_", "-"))]
+    return [inv for inv in invocations
+            if paths(inv) and all(any(p == g or p.startswith(g + "/") for g in guards) for p in paths(inv))]
+
+
 def _unique(invocations: list[list[str]]) -> list[list[str]]:
     return [list(inv) for inv in dict.fromkeys(map(tuple, invocations))]
 
@@ -44,6 +63,22 @@ def select(land, wt: Path, base: str, python: str, head: str | None = None,
     it adds the guard set and reverse dependents — otherwise the nearest test/ dir.
     ``landed``: base...head is main's delta, already on main with its own FULL tier when it escalated.
     """
+    def browsers(reach: list[list[str]] | None = None) -> list[list[str]]:
+        """The changed paths' browser tier. D-889 addendum 12: main's landed delta passed its own browser tests,
+        so they repeat only when this branch changes UI too; on 2026-10-31 docs landings ran 50-80 browser
+        minutes each for other landings' UI, and speculation 471 of 1,703 browser minutes."""
+        if not (landed and head):
+            return land.browser_tier(wt, base, head)
+        own = land.browser_tier(wt, head)
+        if not own:
+            return []
+        delta = land.browser_tier(wt, base, head)
+        if reach is None:
+            return _unique(own + delta)
+        # D-889 19: like the own pytest invocations (18), only the own browser chunks the delta (its suites or its
+        # browser chunks) reaches; 11-01 a foundation landing's turn ran its whole browser tier serially.
+        return _unique(delta + [inv for inv in own if overlaps(reach + delta, [inv])])
+
     if (wt / "tools/harness/affected_tests.py").is_file():
         try:
             sel = _affected(land, wt, python, base, head, full)
@@ -63,20 +98,42 @@ def select(land, wt: Path, base: str, python: str, head: str | None = None,
                       " this branch's own selection on the merged tree")
                 mine = own["local_invocations"] if own["mode"] == "full" else own["invocations"]
                 # D-889 addendum 10 item 2: this branch's suites passed its pretest, and main's delta reaches none of
-                # them (guards aside, which the delta's run carries): only the delta's suites. FULL-mode own: re-run.
-                if own["mode"] != "full" and not overlaps(sel["local_invocations"], mine,
-                                                          getattr(getattr(land, "land_guards", None), "GUARDS", ())):
-                    print("[tests] main's delta reaches none of this branch's suites: the delta's suites only")
-                    return _unique(sel["local_invocations"] + land.browser_tier(wt, base, head)), None
-                return _unique(sel["local_invocations"] + mine + land.browser_tier(wt, base, head)
-                               + land.browser_tier(wt, head)), None
+                # them (guards aside, which the delta's run carries): only the delta's suites. A FULL-mode own too
+                # (D-889 16): re-running it every turn ran past the 10 min cap, so it never landed (11-01).
+                # Browser chunks only where addendum 12 says (browsers()).
+                # D-889 18: the same rule per invocation: only the own invocations the delta reaches rerun. 11-01 18:01
+                # a foundation landing's turn reran all 485 own invocations for a delta that reached a few (45 min).
+                guards = getattr(getattr(land, "land_guards", None), "GUARDS", ())
+                reached = [inv for inv in mine if overlaps(sel["local_invocations"], [inv], guards)]
+                safe_delta = any(e.endswith(SAFETY_TRIGGER) for e in sel["escalations"])  # addendum 8 keeps those
+                if not reached and not safe_delta and own["mode"] != "full":  # D-889 22: ran here as on main
+                    print("[tests] main's delta and this branch reach none of each other's suites: the guards only")
+                    return _unique(_guards_only(sel["local_invocations"], guards) + browsers(sel["local_invocations"])), None
+                if len(reached) < len(mine):
+                    print(f"[tests] main's delta reaches {len(reached)} of this branch's {len(mine)} invocations: those rerun")
+                return _unique(sel["local_invocations"] + reached + browsers(sel["local_invocations"])), None
             if sel["mode"] == "full":
                 # D-762 stage 0: a FULL-class landing runs the whole tier on the lab PCs, never
                 # guards alone; not via GitHub, which would publish unpushed main commits.
                 note = "selector escalated to FULL (" + "; ".join(sel["escalations"][:3]) + "): full tier on the lab PCs"
                 print(f"[tests] {note}")
-                return sel["full_invocations"] + land.browser_tier(wt, base, head), note
-            return sel["invocations"] + land.browser_tier(wt, base, head), None
+                changed = land.lines(wt, "diff", "--name-only", f"{base}...{head or 'HEAD'}")
+                if landed and head:
+                    changed += land.lines(wt, "diff", "--name-only", f"{head}...HEAD")
+                return without_sim(sel["full_invocations"], changed) + browsers(), note
+            if landed and head:
+                # D-889 22: an ordinary delta (not escalated) the same way: when this branch and main's delta reach
+                # none of each other's suites, those suites run on the merged tree as they ran on main. 11-02: a
+                # docs landing's turn took 7 min for the delta's suites; queued landings waited ~125 min for turns.
+                own = _affected(land, wt, python, head, None)
+                guards = getattr(getattr(land, "land_guards", None), "GUARDS", ())
+                mine = own["local_invocations"] if own["mode"] == "full" else own["invocations"]
+                if (own["mode"] != "full"  # a FULL own reaches more than its local suites name
+                        and not any(e.endswith(SAFETY_TRIGGER) for e in own["escalations"] + sel["escalations"])
+                        and not overlaps(sel["invocations"], mine, guards)):
+                    print("[tests] main's delta and this branch reach none of each other's suites: the guards only")
+                    return _unique(_guards_only(sel["invocations"], guards) + browsers(sel["invocations"])), None
+            return sel["invocations"] + browsers(), None
         except (ValueError, KeyError, TypeError) as exc:
             raise land.Stop(f"affected selector printed unusable JSON ({exc!r}); not guessing tests") from exc
     if full:

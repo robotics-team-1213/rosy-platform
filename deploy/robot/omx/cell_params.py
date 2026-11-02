@@ -23,6 +23,8 @@ DEFAULTS = {
     "objects.close_px": (5, "px", 1, 31), "objects.surface_min_px": (12000, "px", 500, 300000),
     "pivot.still_px": (40, "px", 1, 100000), "pivot.diff_px": (30, "gray", 1, 255),
     "pivot.min_blob": (300, "px", 1, 100000), "pivot.max_blob": (90, "px", 1, 1000),
+    "pivot.merge_px": (0, "px", 0, 20),
+    "align.free_margin_mm": (15.0, "mm", 0, 60), "align.face_short_mm": (4.0, "mm", 0, 15),
     "pivot.follow_px": (60, "px", 1, 1000), "pivot.agree_px": (3.0, "px", 0.1, 50),
     "pivot.bias_reach_mm": (80.0, "mm", 1, 500), "pivot.clear_above_m": (0.074, "m", 0.03, 0.2), "pivot.settle_limit_s": (5.0, "s", 0.5, 60),
     "pivot.settle_step_s": (0.4, "s", 0.05, 5), "pivot.grip_closed": (50.5, "gripper", 0, 100), "pivot.grip_open": (62.0, "gripper", 0, 100),
@@ -74,6 +76,9 @@ DEFAULTS = {
     "runner.idle_stop_s": (180.0, "s", 5, 7200), "safety.bus_watchdog_ms": (0.0, "ms", 0, 2540), "runner.contact_lag": (1.5, "joint_unit", 0.1, 5),
     "runner.contact_ticks": (2, "count", 1, 30), "runner.contact_rise": (0.6, "joint_unit", 0.1, 1.5),
     "runner.contact_loaded_max": (2.2, "joint_unit", 1.5, 2.3),
+    "corridor.half_width_mm": (30.0, "mm", 10, 80), "corridor.clear_z_m": (0.10, "m", 0.04, 0.25),
+    "corridor.base_m": (0.10, "m", 0.0, 0.2),
+    "corridor.min_px": (40, "px", 1, 100000),
 }
 
 
@@ -127,3 +132,10 @@ def load(path=None) -> dict:
 if __name__ == "__main__":
     loaded = load(sys.argv[1])
     print(len(loaded["values"]), "parameters ok, sha", loaded["sha"])
+
+
+def jaw_face_half_mm(params=None) -> float:
+    """Half the closed jaws' face across the fingers, from the measured finger spacing plus one finger: the one
+    gripper size every lane and room check uses (2026-11-01: about 42 mm across; a push lane taken as 20 mm wide
+    dragged both neighbouring columns along)."""
+    return (get(params, "look.other_finger_mm") + get(params, "auto.finger_mm")) / 2
