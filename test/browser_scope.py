@@ -76,7 +76,8 @@ OMX_LEARNING = ["test/learning/perception/test_omx_" + name + "_browser.py" for 
 CAMERA = ["test/learning/perception/test_camera_setup_browser.py"]
 SIM = ["test/learning/perception/test_sim_browser.py"]
 PIPELINE = ["test/learning/perception/test_learning_pipeline_browser.py"]
-ACCOUNTS = ["test/learning/perception/test_learning_accounts_browser.py"]
+ACCOUNTS = ["test/learning/perception/test_learning_accounts_browser.py",
+            "test/learning/perception/test_learning_auth_surface_browser.py"]
 TASKS = ["test/learning/perception/test_learning_tasks_browser.py"]
 STAGES = ["test/learning/perception/test_learning_stages_browser.py", "test/learning/perception/test_vlm_judge_browser.py",
           "test/learning/perception/test_promotion_request_browser.py"]
