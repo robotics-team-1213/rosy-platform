@@ -36,6 +36,8 @@ def tick(services, now: float):
             services.events.publish("thermal.warm", severity="warning", source="safety_manager", data=data)
         elif level != before:
             services.events.publish("thermal.ok", severity="info", source="safety_manager", data=data)
+        if level != before:
+            services.state.set_thermal(level)   # after the event, so a state failure cannot swallow it
         return level
     except Exception:  # the diagnostics tick that calls this must keep running
         _log.exception("thermal evaluation failed")

@@ -13,6 +13,7 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 
 - 로봇은 SoC 온도, Raspberry Pi 펌웨어 `get_throttled`(지금 저전압·주파수 제한·스로틀·soft 온도 한계), 바퀴 모터마다 온도·모터 자체 한계·입력 전압·하드웨어 오류를 읽는다. 모터 값은 bringup이 2초마다 ROS `motor/health`(std_msgs/String JSON `{motors:[{id, temperature_c, temperature_limit_c, input_voltage_v, hardware_error}]}`)로 낸다.
 - CORE가 1초마다 열 단계를 정한다. `warm`(SoC 75 °C, 모터 한계 −10 °C, 지금 스로틀·저전압, 모터 입력 전압 오류)이면 직선 상한을 절반으로 줄인다. `hot`(SoC 82 °C, 모터 한계 −4 °C, 모터 과열 오류)이면 Fleet·주행 명령을 0으로 만들고, 수동 조작은 `warm` 상한으로 남겨 차선 밖으로 옮길 수 있게 한다. 단계는 5 °C 아래로 내려가야 풀린다. 래치가 아니며 e-stop을 걸지 않는다. 읽은 값이 없으면 `ok`다. 문턱은 `safety.thermal`로 바꿀 수 있다.
+- 상태 스냅샷 `safety`에 `thermal`(`ok`·`warm`·`hot`)을 더한다(additive). 없으면 Fleet 화면은 `ok`처럼 아무것도 표시하지 않는다. Fleet 로봇 카드는 `warm`이면 "열: 감속", `hot`이면 "열: 정지"를 보인다.
 - `GET /api/v1/safety/state`에 `thermal: {level, reasons, soc_c, throttled, motors}`를 더한다(additive). 단계가 바뀔 때마다 이벤트 `thermal.warm`·`thermal.hot`·`thermal.ok`를 한 번 낸다.
 ### v1.350 USB 카메라 역할 승인 (D-963)
 

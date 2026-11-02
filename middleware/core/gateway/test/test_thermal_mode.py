@@ -7,6 +7,7 @@ from core.bridge import thermal_policy
 from core.system.runtime import HostRuntimeProbe
 from core_features.safety.manager import BatteryPolicy, SafetyManager, SpeedLimits
 from core_features.safety.thermal import HOT, OK, WARM, ThermalMonitor, ThermalPolicy
+from core_features.state.manager import StateManager
 
 
 def motors(temp, limit=72, error=0):
@@ -72,7 +73,8 @@ def robot():
     manager = SafetyManager(SpeedLimits(max_linear=0.20, max_angular=0.80, manual_linear=0.15,
                                         manual_angular=0.60), BatteryPolicy(), events=bus)
     probe = SimpleNamespace(temperature=lambda: soc["c"], throttled=lambda: 0)
-    return SimpleNamespace(safety=manager, runtime_probe=probe, events=bus), soc, events
+    state = StateManager("rosy_45")
+    return SimpleNamespace(safety=manager, runtime_probe=probe, events=bus, state=state), soc, events
 
 
 def test_warm_halves_linear_and_hot_stops_autonomy_but_lets_an_operator_nudge(robot):
@@ -142,3 +144,16 @@ def test_a_failing_evaluation_is_logged_and_never_raises_into_the_diagnostics_ti
     services.runtime_probe = SimpleNamespace(temperature=lambda: 1 / 0, throttled=lambda: 0)
     assert thermal_policy.tick(services, 0.0) is None
     assert services.safety.thermal.level == OK
+
+
+def test_the_state_snapshot_carries_the_heat_level_and_an_estop_keeps_it(robot):
+    services, soc, _ = robot
+    soc["c"] = 83.0
+    thermal_policy.tick(services, 0.0)
+    assert services.state.snapshot().safety.thermal == HOT
+    services.state.set_estop(True, "api:operator")
+    safety = services.state.snapshot().safety
+    assert (safety.estop, safety.source, safety.thermal) == (True, "api:operator", HOT)
+    soc["c"] = 60.0
+    thermal_policy.tick(services, 1.0)
+    assert services.state.snapshot().safety.thermal == OK and services.state.snapshot().safety.estop
