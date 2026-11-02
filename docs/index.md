@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-11-02 · 7620243a3b · feat(hosts): D-958 stage 1, role services lend the GPU only while idle
+- 2026-11-02 · cd8243b5b2 · docs: D-958 lab compute ledger (Proposed)
+- 2026-11-02 · b3702baef5 · feat(remote): isaac_batch grid plans, service pause window, summary table; AI PC as Isaac host
+- 2026-11-02 · d33ce586f0 · feat(remote): Isaac batch across model and AI PCs, resume only unfinished runs
 - 2026-11-02 · uncommitted · feat(tools): 업데이트 운영 CLI update_ops (D-957)
-- 2026-11-02 · uncommitted · fix(land): 준비된 착지도 서로 닿지 않으면 한 표로 묶는다 (D-889 추가 23)
-- 2026-11-02 · uncommitted · docs(adr): D-960 암 세트마다 셀 관제, 그 위에 통합관제 R
-- 2026-11-02 · uncommitted · fix(harness): 같은 폴더 import 사슬로 시험을 찾는다 (D-889 추가 21)
-- 2026-11-02 · uncommitted · fix(land): 서로 닿지 않으면 차례는 가드만 (D-889 추가 22)

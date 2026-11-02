@@ -10,6 +10,9 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-958 | 실험실 PC 계산 작업은 호스트마다 한 입구로 받고, GPU는 한 자리로 세며, 상시 서비스는 양보한다 — `remote_job.ADMIT` 단일 입구, GPU 자리 독점·대기, 각 PC 본업 최우선·실험은 노는 자원만(본업 요청 시 실험 양보), 호스트 측 서비스 되살리기, 모델 PC 배치 대기열, `lab_jobs.py status`. [전문](../adr/D-958-lab-compute-ledger-one-admission-gpu-slot-pausable-services.md) | Proposed (2026-11-02, 우선순위는 사용자 결정 반영) |
+| D-956 | OMX 배 판 놓기: 그 자리에서 놓고 앉음을 확인하며, 컨테이너 바닥에 단을 둔다 — 31.5 mm 열기, 높이 0.5 mm·기울기 0.5° 앉음 확인, 한 번 다시 놓기 후 HOLD, 바닥 3 mm 폭 29.0 mm. [전문](../adr/D-956-omx-ship-plate-release-seat-check-and-relief-foot.md) | Proposed (2026-11-01, 실물 여유 실측 대기) |
+| D-947 | OMX 적층 셀 시뮬레이션: 접촉·영상은 Isaac, 기하 스윕은 MuJoCo, 실행 계약은 MuJoCo·Gazebo — 셀 모델 원본 하나, 실물과 같은 카메라, 주장 범위. [전문](../adr/D-947-omx-palletizing-sim-models-and-claim-scope.md) | Proposed (2026-11-01, 사용자 확인 대기) |
 | D-957 | 업데이트 운영 CLI: 운영자의 즉시 시도·홀드·해제를 하나의 명령으로 구조화한다. 게이트(유휴·배터리·서명·freeze) 우회는 없다. [전문](../adr/D-957-update-ops-cli.md) | Accepted (2026-11-02, 사용자 결정; 호스트 코드 불변, 원격 시험·착지는 파이프라인 기록) |
 | D-960 | 실제 제어는 암 세트마다 붙은 관제가 하고, 통합관제 R은 그 위에서 조정한다. [전문](../adr/D-960-control-unit-per-arm-set-under-integrated-r.md) | Accepted (2026-11-02, 사용자 결정) |
 | D-930 | 확인된 ARM 시도의 재관측(새 측정 사실만, 실행·claim·완료 권한 없음, API v1.334). [전문](../adr/D-930-arm-transfer-recheck-of-confirmed-attempt.md) | Accepted (2026-10-30, 계약·simulation 구현 결정; 실물 수용 별도) |

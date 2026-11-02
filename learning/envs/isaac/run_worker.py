@@ -171,7 +171,12 @@ def execute(store, binding_file, run_id, *, expected_binding_sha256=None):
                 else:
                     row = store.update(run_id, row['revision'],
                         {'status': 'RUNNING', 'phase': 'SDK_IMPORT', 'runtime': dict(owner, gpu=admitted_gpu)})
-                    urdf = prepare('omx_f', directory / 'prepared.urdf')
+                    config = row['input']['config']
+                    jaw = None  # opt-in jaw of a container case (palletizing v2.1); the stock jaw otherwise
+                    if row['input']['scenario_id'] == 'omx-map-container-stack':
+                        from mapped_stack_fixture import container_fixture
+                        jaw = container_fixture(layers=config['layers'], case=config['case']).get('gripper')
+                    urdf = prepare('omx_f', directory / 'prepared.urdf', jaw)
                     env = {key: os.environ[key] for key in ('HOME', 'USER', 'LOGNAME', 'XDG_RUNTIME_DIR')
                            if key in os.environ}
                     env.update(PATH='/usr/local/bin:/usr/bin:/bin', LANG='C.UTF-8',

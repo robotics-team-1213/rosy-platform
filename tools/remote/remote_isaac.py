@@ -1,4 +1,4 @@
-"""Run fixed Isaac scenarios on the explicitly declared model PC."""
+"""Run fixed Isaac scenarios on an explicitly declared simulation host (model PC by default, --role ai)."""
 import argparse
 import base64
 import hashlib
@@ -77,7 +77,7 @@ def _sync_directory(path):
             os.close(fd)
 
 
-def _receipt(request):
+def _receipt(request, role='model'):
     required = {'request_id', 'scenario_id', 'config', 'source_sha', 'expected_input_sha256'}
     if (not isinstance(request, dict) or not required <= request.keys()
             or request.keys() - required - {'parent_run_id'}
@@ -87,7 +87,7 @@ def _receipt(request):
             or not re.fullmatch('[0-9a-f]{64}', request['expected_input_sha256'])):
         raise ValueError('Invalid Isaac start request')
     _sha(request['source_sha'])
-    return {'schema': 'rosy.remote-isaac-receipt/1', 'role': 'model',
+    return {'schema': 'rosy.remote-isaac-receipt/1', 'role': role,
             'source_sha': request['source_sha'], 'request_id': request['request_id'],
             'run_id': uuid.uuid5(uuid.NAMESPACE_URL, 'rosy.isaac-run:' + request['request_id']).hex,
             'input_sha256': request['expected_input_sha256'],
@@ -97,7 +97,7 @@ def _receipt(request):
 
 def read_receipt(path):
     value = _json(path)
-    if (value.get('schema') != 'rosy.remote-isaac-receipt/1' or value.get('role') != 'model'
+    if (value.get('schema') != 'rosy.remote-isaac-receipt/1' or value.get('role') not in ('model', 'ai')
             or not re.fullmatch('[0-9a-f]{32}', str(value.get('run_id', '')))
             or not re.fullmatch('[0-9a-f]{64}', str(value.get('input_sha256', '')))):
         raise ValueError('Invalid model-PC receipt')
@@ -106,7 +106,7 @@ def read_receipt(path):
 
 
 def start(request, receipt_file, remote):
-    value = _receipt(request)
+    value = _receipt(request, getattr(remote, 'role', 'model'))
     if getattr(remote, 'target_id', None):
         value['target_id'] = remote.target_id
     try:
@@ -135,8 +135,12 @@ def observe(receipt_file, remote, *, stop=False):
     return row
 
 
+class NotReady(ValueError):
+    """The readiness check never passed, so no run was started."""
+
+
 def run_experiment(scenario, config, sha, directory, remote, *, parent=None, sleep=None, fetch=None,
-                   attempts=20, interval=30, max_polls=240, max_errors=10, admissions=3):
+                   attempts=60, interval=30, max_polls=240, max_errors=10, admissions=3):
     """check until ready -> start once -> wait (riding out lost replies) -> fetch a terminal run.
 
     Hand-rolled loops started a run while the model PC was busy and stopped waiting on one lost reply. A start
@@ -172,7 +176,7 @@ def _run_once(scenario, config, sha, directory, remote, *, parent, sleep, fetch,
         if attempt + 1 < attempts:
             sleep(interval)
     else:
-        raise ValueError(f"Model PC not ready after {attempts} checks: {checked.get('reason')}")
+        raise NotReady(f"Model PC not ready after {attempts} checks: {checked.get('reason')}")
     request = {'request_id': uuid.uuid4().hex, 'scenario_id': scenario, 'config': config, 'source_sha': sha,
                'expected_input_sha256': checked['input_sha256'], **({'parent_run_id': parent} if parent else {})}
     directory.mkdir(parents=True, exist_ok=True)
@@ -309,7 +313,7 @@ print('{"ready":true}')
 '''
 
 # The supervisor run holds no ~/rosy-jobs lock, so host_probe would call the model PC idle: hold a
-# gpu reservation (Gazebo sim budget, 6 cores 8 GB) renewed per poll. The probe deletes it 2 h after a lost client.
+# gpu reservation (Gazebo sim budget, 6 cores 8 GB) renewed per poll (30 s). D-958: it lapses 10 min after a lost client.
 HOLD = r'''
 import json,os,sys,time
 from pathlib import Path
@@ -318,18 +322,18 @@ if len(run)!=32 or any(c not in '0123456789abcdef' for c in run): raise ValueErr
 path=Path.home()/'rosy-jobs'/('isaac-'+run+'.resv')
 if value['active'] is True:
  path.parent.mkdir(parents=True,exist_ok=True); temporary=path.with_name('.pending-isaac-'+run)
- temporary.write_text('%d gpu 6 8\n'%(time.time()+7200)); os.replace(temporary,path)
+ temporary.write_text('%d gpu 6 8\n'%(time.time()+600)); os.replace(temporary,path)
 else: path.unlink(missing_ok=True)
 print(json.dumps({'held':path.exists()}))
 '''
 
 
 class SSH:
-    def __init__(self, repo):
+    def __init__(self, repo, role='model'):
         import remote_pytest
         import lab_hosts
-        self.runner, self.repo = remote_pytest, repo
-        self.host = choose_target(lab_hosts.load(), 'model')
+        self.runner, self.repo, self.role = remote_pytest, repo, role
+        self.host = choose_target(lab_hosts.load(), role)
         self.target_id = hashlib.sha256(self.host.encode()).hexdigest()
 
     def _invoke(self, script, value):
@@ -359,9 +363,33 @@ class SSH:
     def call(self, sha, payload):
         return self._invoke(BOOTSTRAP, {'sha': _sha(sha), 'payload': payload})
 
+    def tenants(self, action, units):
+        """idle|claim|release role units through the host's D-958 gpu_tenants.py; returns its one-line answer."""
+        if action not in ('idle', 'claim', 'release') or not all(
+                re.fullmatch(r'[A-Za-z0-9@._-]+\.service', unit) for unit in units):
+            raise ValueError('Refused gpu tenant request')
+        result = self.runner.remote(self.host, 'exec /usr/bin/python3 -I ~/.local/lib/rosy-gpu-tenants/gpu_tenants.py '
+                                    + ' '.join([action, *units]), capture_output=True, timeout=120)
+        if result.returncode:
+            raise ConnectionError(f'gpu_tenants {action} failed')
+        return result.stdout.decode(errors='replace').strip().split('\n')[-1]
+
+
+def summarize(result):
+    """Attach the mapped-stack report summary to a fetched run result, when there is a report."""
+    report = Path(result['snapshot_directory'] or '.') / 'mapped-stack-report.json'
+    if result['snapshot_directory'] and report.is_file():
+        import subprocess
+        summary = subprocess.run([sys.executable, str(Path(__file__).resolve().parents[2] /
+                                  'learning/envs/isaac/mapped_stack_report.py'), 'summary', str(report)],
+                                 capture_output=True, text=True, encoding='utf-8', timeout=120)
+        result['summary'] = json.loads(summary.stdout) if summary.returncode == 0 else {'error': summary.stderr[-500:]}
+    return result
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--role', choices=('model', 'ai'), default='model', help='declared sim_hosts role to run on')
     commands = parser.add_subparsers(dest='action', required=True)
     check = commands.add_parser('check')
     check.add_argument('--scenario', required=True, choices=['omx-f-import', 'omx-stacking-rl', 'omx-map-long-stack', 'omx-map-stacking-rl', 'omx-map-cube-stack', 'omx-map-container-stack', 'pinky-conveyor-roundtrip',
@@ -380,7 +408,7 @@ def main():
     for name in ('status', 'stop', 'fetch'):
         commands.add_parser(name).add_argument('--receipt', required=True, type=Path)
     args = parser.parse_args()
-    remote = SSH(Path(__file__).resolve().parents[2])
+    remote = SSH(Path(__file__).resolve().parents[2], args.role)
     if args.action == 'check':
         remote.prepare(_sha(args.sha))
         result = remote.call(args.sha, {'action': 'check', 'scenario_id': args.scenario,
@@ -388,13 +416,7 @@ def main():
     elif args.action == 'run':
         result = run_experiment(args.scenario, _json(args.config), args.sha, args.out, remote,
                                 parent=args.parent_run_id)
-        report = Path(result['snapshot_directory'] or '.') / 'mapped-stack-report.json'
-        if result['snapshot_directory'] and report.is_file():
-            import subprocess
-            summary = subprocess.run([sys.executable, str(Path(__file__).resolve().parents[2] /
-                                      'learning/envs/isaac/mapped_stack_report.py'), 'summary', str(report)],
-                                     capture_output=True, text=True, encoding='utf-8', timeout=120)
-            result['summary'] = json.loads(summary.stdout) if summary.returncode == 0 else {'error': summary.stderr[-500:]}
+        summarize(result)
     elif args.action == 'start':
         result = start(_json(args.request), args.receipt, remote)
     elif args.action == 'fetch':
@@ -409,6 +431,9 @@ def main():
 if __name__ == '__main__':
     try:
         raise SystemExit(main())
+    except NotReady:  # nothing was started: say so, so a queued caller retries instead of chasing a failure
+        print(json.dumps({'error': 'Model PC stayed busy or not ready; nothing was started, retry later'}))
+        raise SystemExit(3)
     except (ValueError, OSError, ConnectionError):
         print(json.dumps({'error': 'Isaac operation failed; retain the request and receipt for status/retry'}))
         raise SystemExit(2)
