@@ -67,8 +67,6 @@ roles:
     pinky-r2-watch.service: {run: active, channel: external, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
     pinky-v13-training.service: {run: oneshot, channel: external, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
     pinky-nav2.service: {run: "off", channel: external, note: "DDS unit; cleanup needs D-530 6 joint consent", doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
-    pinky-rosbridge-d12.service: {run: "off", channel: external, note: "Pinky stack ~/.local/bin/pinky-stack.sh, disabled", doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
-    pinky-rosbridge-d13.service: {run: "off", channel: external, note: "Pinky stack ~/.local/bin/pinky-stack.sh, disabled", doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
     rosy-ai-gpu-watchdog.service: {run: oneshot, channel: copy, template: deploy/ai_pc/rosy-ai-gpu-watchdog.service, doc: deploy/ai_pc/README.md}
     rosy-ai-gpu-watchdog.timer: {run: timer, channel: copy, template: deploy/ai_pc/rosy-ai-gpu-watchdog.timer, doc: deploy/ai_pc/README.md}
     rosy-decision-laya.service: {run: "off", channel: copy, doc: deploy/ai_pc/README.md}
