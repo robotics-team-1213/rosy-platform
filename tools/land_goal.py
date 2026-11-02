@@ -26,6 +26,38 @@ def percentile(values: list[float], q: float) -> float | None:
     return ordered[min(len(ordered) - 1, round(q * (len(ordered) - 1)))] if ordered else None
 
 
+def train_origins(rows: list[dict], train: dict) -> list[dict]:
+    """Old trains name branches only: resolve their queue origins, rejecting competing requests."""
+    if "members" in train:
+        members = train["members"]
+        if not isinstance(members, list) or not members or any(
+                not isinstance(m, dict) or not m.get("branch") or not m.get("ticket") for m in members):
+            raise ValueError("invalid batch origins")
+        return members
+    formed = [r["t"] for r in rows if r["event"] == "train" and r.get("result") == "formed"
+              and r.get("pid") == train.get("pid") and r.get("branches") == train.get("branches")
+              and r["t"] <= train["t"]]
+    bound, members = max(formed, default=train["t"]), []
+    for name in train.get("branches", []):
+        previous = max((r["t"] for r in rows if r["t"] < bound and (
+            r["event"] == "landed" and r.get("branch") == name or r["event"] == "train"
+            and r.get("result") == "landed" and name in r.get("branches", []))), default=-1)
+        queues = [r for r in rows if r["event"] == "queue" and r.get("branch") == name
+                  and previous < r["t"] <= bound]
+        exits = [r for r in rows if r["event"] == "landed" and r.get("branch") == name and r["t"] >= train["t"]]
+        pid = train.get("pid") if name == train.get("branch") else min(exits, key=lambda r: r["t"]).get("pid") if exits else None
+        if pid is not None:
+            queues = [q for q in queues if q.get("pid") == pid]
+        origins = {(q.get("ticket") or (q.get("pid"), q["t"])): q for q in queues}
+        if len(origins) != 1:
+            raise ValueError(f"ambiguous batch origin: {name}")
+        origin = next(iter(origins.values()))
+        members.append(dict(branch=name, ticket=origin.get("ticket"), queued=origin["t"]))
+    if not members:
+        raise ValueError("missing batch origins")
+    return members
+
+
 def lead_times(rows: list[dict], t0: float, t1: float) -> list[float]:
     """Minutes from a topic's first queue event to its landing, for landings inside [t0, t1)."""
     pending, out, completed, exits = {}, [], set(), set()
@@ -46,6 +78,7 @@ def lead_times(rows: list[dict], t0: float, t1: float) -> list[float]:
             choices = [i for i, q in enumerate(queues) if
                        (q.get("branch") == name if members is not None else topic(q.get("branch", "")) == topic(name))
                        and (q.get("ticket") == member["ticket"] if member.get("ticket") else
+                            q["t"] == member["queued"] if member.get("queued") is not None else
                             members is not None or q.get("pid") == r.get("pid"))]
             if not choices:
                 continue
@@ -77,6 +110,12 @@ def normalize(rows: list[dict], common: Path) -> tuple[list[dict], list[str]]:
     for row in rows:
         r = dict(row)
         result.append(r)
+        if r["event"] == "train" and r.get("result") == "landed":
+            try:
+                r["members"] = train_origins(rows, r)
+            except ValueError as exc:
+                r["members"] = []
+                warnings.append(f"INCOMPLETE: {r.get('branch', '')}: {exc}")
         if r["event"] != "landed":
             continue
         branch = r.get("branch", "")
