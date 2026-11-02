@@ -20,6 +20,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import land_queue  # noqa: E402  (pid_alive)
+import land_async  # noqa: E402  (supervisor ownership before the queue ticket)
 import worktrees  # noqa: E402  (lossless status, including ignored user data)
 
 HOLDER, QUEUE, PREFIX = "rosy-land-wt", "rosy-land-queue", "land/"
@@ -83,6 +84,9 @@ def plan(repo: Path, now: float, log_days: float, *, only: str | None = None) ->
         if any(b in names for b in branches) or str(tree.resolve()) in trees:
             out.append(("keep", "live ticket", tree if tree.is_dir() else None, branches))
             continue
+        if land_async.running(tree):
+            out.append(("keep", "live supervisor", tree if tree.is_dir() else None, branches))
+            continue
         if log.exists() and now - log.stat().st_mtime < QUIET_S:
             out.append(("keep", "log written in the last hour", tree if tree.is_dir() else None, branches))
             continue
@@ -140,13 +144,14 @@ def apply(repo: Path, rows) -> list[str]:
             if action == "log":
                 Path(items[0]).unlink()
                 continue
-            if tree.is_dir():
-                git(repo, "worktree", "remove", str(tree))
-            for branch, sha in rows.states[key][0]:
-                git(repo, "update-ref", "-d", f"refs/heads/{branch}", sha)
-            for suffix in FILES:
-                (holder / f"{name}{suffix}").unlink(missing_ok=True)
-        except (subprocess.CalledProcessError, OSError, RuntimeError, ValueError) as exc:
+            with land_async.locked(tree.parent / (tree.name + ".supervisor.lock")):
+                if tree.is_dir():
+                    git(repo, "worktree", "remove", str(tree))
+                for branch, sha in rows.states[key][0]:
+                    git(repo, "update-ref", "-d", f"refs/heads/{branch}", sha)
+                for suffix in FILES:
+                    (holder / f"{name}{suffix}").unlink(missing_ok=True)
+        except (subprocess.CalledProcessError, OSError, RuntimeError, ValueError, land_async.Busy) as exc:
             detail = exc.stderr if isinstance(exc, subprocess.CalledProcessError) else str(exc)
             problems.append(f"{tree or items}: {detail.strip()[:120]}")
     return problems
