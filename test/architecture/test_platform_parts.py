@@ -419,6 +419,33 @@ def test_import_rules_only_shrink():
     )
 
 
+#: Roots the OMX cell engine in ``deploy/robot/omx`` (D-951) imports. ``deploy`` is outside the
+#: import rules and this engine spans middleware and operations, so no part fits it; freezing the
+#: set keeps new cross-part reach visible. Checked by set equality: it only shrinks.
+DEPLOY_OMX_IMPORTS = {
+    "contracts/foundation", "contracts/learning", "contracts/skill",
+    "middleware/apps/device/omx/adapter", "middleware/apps/device/omx/agent", "middleware/execution/local",
+    "operations/execution/src/rosy/execution/site", "operations/fleet", "operations/processes/cell",
+    "operations/vision",
+}
+
+
+def test_deploy_omx_engine_imports_only_shrink():
+    owners = _prefix_owners(_manifest()["roots"])
+    found: dict[str, str] = {}
+    for path in _tracked():
+        if path.startswith("deploy/robot/omx/") and path.endswith(".py") and not _is_test_file(path):
+            for name in _imports((ROOT / path).read_text(encoding="utf-8-sig"), ""):
+                target = _target_of(name, owners)
+                if target is not None:
+                    found.setdefault(target["d427_target"], f"{path} imports {name}")
+    new = sorted(set(found) - DEPLOY_OMX_IMPORTS)
+    stale = sorted(DEPLOY_OMX_IMPORTS - set(found))
+    assert not new and not stale, (
+        f"new deploy/robot/omx reach: {[found[key] for key in new]} | stale DEPLOY_OMX_IMPORTS (remove them): {stale}"
+    )
+
+
 #: (file, matched text) pairs the old-path scan reports that are not paths, e.g. a
 #: path-traversal rejection case like "../../etc/passwd". Stale entries fail.
 LEGACY_SCAN_ALLOWLIST: set[tuple[str, str]] = {
