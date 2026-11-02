@@ -1020,6 +1020,13 @@
 - gate 변화: 없음. CE: 해당 없음.
 
 
+## 2026-10-31 · uncommitted · capture-wall 표면 등록과 캔버스 계약 준수
+
+- 변경: `surfaces.yaml`에 다중 녹화 벽(`tools/capture/multi_record.html`)을 `capture-wall`(dev)로 등록하고 캔버스 팔레트 계약 목록에 올렸다. 페이지는 참조 `./` 접두, 범위 제목 `Rosy 개발 — 함께 녹화`, 캔버스 색·글꼴을 `window.RosyPalette`로 읽도록 바뀌었고 `multi_record.py`는 `ui.js`와 의존 모듈 셋을 세션 `common/`에 복사한다(D-937).
+- 증거: 원격 영향 선택 923 passed. 첫 돌림의 2 failed(캔버스 팔레트·제목 계약)는 같은 커밋에서 계약 준수로 해소했고 `tools/capture/test/test_multi_record.py` 10 passed, `test/known_failures.py` 0 new다. 브라우저 화면 검증·실물 녹화 세션 수용은 별개다.
+- gate 변화: 없음. 토큰·테마 계약의 선택 범위가 이 페이지로 늘었다.
+- CE: 해당 없음 — 기존 교훈(2026-10-18 미등록 표면)의 적용이며 원인·해결이 레지스트리와 계약 시험에 남는다.
+
 ## 2026-11-01 · uncommitted · task-chooser onSelect 선택 알림
 
 - 변경: `createTaskChooser`에 선택적 `onSelect(id)` 콜백을 더했다(선택 확정 직후 한 번). 기존 호출처(robot_ui mount.js)는 무변경. Fleet 설치 문서의 경로 줄 화면 이름이 이 콜백을 쓴다. `test_chrome_layout.py`의 Fleet 사이드바 고정을 D-741 6 좌석 통일에 맞게 바로잡았다(설치 문서는 이제 자기 열이 없다).
