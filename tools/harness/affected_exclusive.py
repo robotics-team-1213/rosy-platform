@@ -56,6 +56,8 @@ def validate(invocations, required):
 
 
 def separate(invocations, available=True):
+    if sum(dedicated(inv) for inv in invocations) > 1:
+        raise ValueError('duplicate G1 timing exclusive jobs')
     ordinary, needed = [], False
     for original in invocations:
         inv = list(original)
@@ -76,6 +78,8 @@ def separate(invocations, available=True):
 
 
 def matrix(entries, available):
+    if sum(dedicated(inv) for entry in entries for inv in entry['invocations']) > 1:
+        raise ValueError('duplicate G1 timing exclusive matrix jobs')
     result, needed = [], False
     for entry in entries:
         if entry.get('kind') == 'smoke':

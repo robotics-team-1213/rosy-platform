@@ -23,6 +23,13 @@ def test_missing_duplicate_partial_or_empty_jobs_cannot_cover_full(invocations):
         exclusive.validate(invocations, True)
 
 
+def test_duplicate_prebuilt_jobs_are_rejected_at_both_producer_boundaries():
+    with pytest.raises(ValueError):
+        exclusive.separate([exclusive.DEDICATED, exclusive.DEDICATED])
+    with pytest.raises(ValueError):
+        exclusive.matrix([{'invocations': [exclusive.DEDICATED, exclusive.DEDICATED]}], True)
+
+
 @pytest.mark.parametrize('paths', [['test'], [exclusive.TARGET, 'test/test_other.py'], [exclusive.TARGET]])
 def test_ordinary_real_collection_excludes_timing_for_directories_and_explicit_files(tmp_path, paths):
     target = tmp_path / exclusive.TARGET

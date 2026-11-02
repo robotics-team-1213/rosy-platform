@@ -49,7 +49,11 @@ def test_g1_timing_full_ci_and_lab_have_one_exclusive_whole_file():
     ['test/test_platform_g1_timing.py::test_real_uds_round_trip_stays_inside_the_bound',
      'test/test_affected_tests.py']])
 def test_g1_timing_owner_selections_keep_the_whole_file_exclusive(paths):
-    _assert_g1_timing_is_dedicated(affected.pack(affected.Repo.load(ROOT), paths))
+    repo = affected.Repo.load(ROOT)
+    invocations = affected.pack(repo, paths)
+    _assert_g1_timing_is_dedicated(invocations)
+    matrix = affected.ci_matrix(repo, affected.Selection('affected', [], invocations=invocations))['include']
+    _assert_g1_timing_is_dedicated([inv for entry in matrix for inv in entry['invocations']])
 
 
 def test_fleet_development_module_selects_application_contracts():
