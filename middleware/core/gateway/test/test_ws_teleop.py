@@ -76,13 +76,29 @@ def test_refusal_is_an_ack_with_the_rest_code(core_client):
         assert socket.receive_json() == {"type": "ack", "seq": 1, "accepted": False, "code": "MODE_CONFLICT"}
 
 
-def test_disconnect_after_motion_applies_zero(drive):
+def test_disconnect_after_motion_applies_zero(drive, monkeypatch):
+    from threading import Event
+    import core_api_web.api.ws as ws_module
+
+    zero_applied = Event()
+    real_apply = ws_module.apply_teleop
+
+    def observe_apply(request, auth, services):
+        result = real_apply(request, auth, services)
+        if request.linear == 0.0 and request.angular == 0.0:
+            zero_applied.set()
+        return result
+
+    monkeypatch.setattr(ws_module, "apply_teleop", observe_apply)
     tc, svc = drive()
     with tc.websocket_connect(TELEOP) as socket:
         socket.send_text(json.dumps({"type": "auth", "token": OPERATOR}))
         socket.send_text(_frame(1, 0.1))
         assert socket.receive_json()["accepted"] is True
         assert svc.command.select_output().linear == pytest.approx(0.1)
+        # TestClient cancels the ASGI task on context exit; observe disconnect cleanup first.
+        socket.close()
+        assert zero_applied.wait(1), "disconnect did not apply an explicit zero command"
     assert svc.command.select_output().linear == 0.0
 
 
