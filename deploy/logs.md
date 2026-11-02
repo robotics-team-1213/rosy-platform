@@ -4388,3 +4388,10 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 변경: 2026-11-02 · 6d7e296033 · D-961의 공용 작업·인증 조합을 native Wi-Fi 복구 HTML에도 적용했다. 제목·폭·버튼 위계·테마를 통일하고 component-controls.css/theme.js를 기존 recovery-web 이미지 자산에 포함했다. CORE·Account 없이 복구하는 구조, 물리 지문·코드·세션·CSRF·NetworkAgent 쓰기 권한은 유지한다. registry/native asset/실제 Chromium 복구 39건 원격 통과; dark/light 및 320/390/1366px 포함. 이미지 ARM64 빌드·AP·물리 네트워크 수용은 미실행이며 gate 변화 없음. CE: 해당 없음 — 자산·독립성 계약은 코드와 회귀가 설명한다.
 - 증거: committed SHA and remote results are recorded above; final consolidated receipts are retained in the unification validation record.
 - gate 변화: 없음. Source/browser checks do not establish deployment, ARM64, device or field acceptance.
+
+## 2026-11-02 · ee09871413 · 웹 통합 게시 이력의 공개 무결성 식별자 검토
+
+- 변경: publish_secret_baseline에 독립 검토한 정확한 commit/path/high-entropy-token 조합 세 개만 더했다. 과거 두 UI 증거 JSON의 Git commit·blob과 main의 actions/checkout 고정 revision이다. 값·excerpt는 기록하지 않으며 scanner·public provenance·검사 제외 목록·테스트 기준은 유지한다.
+- 증거: 독립 검토가 증거 JSON의 Git 식별자와 workflow pin을 확인했고, 별도 GitHub API 확인으로 checkout의 정확한 upstream commit이 존재함을 검증했다. 최신 main 통합 ee09871413의 충돌 처리도 독립 검토에서 지적0이다. 최종 FULL 착지·공개 CI와 배포는 아직 실행 결과가 필요하다.
+- gate 변화: 없음. 공개 식별자의 이력 분류는 서명·현장·실물 수용을 대신하지 않는다. agent review이며 사람의 GitHub 승인이 아니다.
+- CE: 해당 없음 — 기존 exact-tuple 게시 규약과 공개 무결성 문맥으로 판단을 복원할 수 있다.
