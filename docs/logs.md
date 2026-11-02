@@ -13765,3 +13765,10 @@ osy-d395-s1d\`.
 - 증거: 원본 문서 영향 320 passed/1 failed, 두 JSON에 대한 실제 scanner 정적 발견0. committed 수정본의 동일 영향 검사는 별도 재실행 영수증으로 확인한다.
 - gate 변화: 없음. 원래 소스·브라우저 검증을 다시 쓰거나 운영·실물 수용으로 올리지 않는다.
 - CE: 해당 없음 — 기존 공개 무결성 문맥과 이번 필드 이름으로 원인을 복원할 수 있다.
+
+## 2026-11-03 · uncommitted · fix(omx): 놀고 있는 팔은 60초에 접고, 막힌 접기는 한 번만 다시 한 뒤 사람을 부른다
+- 변경: `runner.idle_park_s` 180→60, `runner.idle_stop_s` 180→30, 새 `runner.idle_retry_s` 300. 막혀 멈춘 자동 접기는 멈춘 때부터 idle_retry_s 뒤 한 번만 다시 하고, 또 멈추면 토크를 유지한 채 `person_needed`를 보고한다. 명령이 오면 자동 접기 횟수가 되살아난다. 접기는 이전 고장이 있어도 막힘을 감시하고, 실제로 홈에 정착했을 때만 홈으로 친다(토크 OFF의 조건).
+- 증거: 전에는 막힌 자동 접기를 idle_park_s마다 끝없이 다시 했고, 고장 뒤 접기는 막힘 감시가 꺼진 채 SETTLE_S가 지나면 홈으로 쳐서 홈이 아닌 곳에서 토크 OFF가 가능했다(시험으로 재현). 사용자 결정 2026-11-03.
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: `docs/solutions/runtime-errors/omx-blocked-wrist-roll-reached-the-guard-unseen-2026-11-02.md`

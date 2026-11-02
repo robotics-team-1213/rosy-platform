@@ -842,6 +842,30 @@
 - gate 변화: 없음. 실제 USB 카메라를 꽂아 승인하는 현장 수용은 하지 않았다.
 - CE: 해당 없음 — 새 기능이며 장애 해결이 아니다. 결정은 D-963에 있다.
 
+## 2026-11-02 · e81af2d7c3 · D-962 independent Account artifact
+
+- Change: Account profile uses the common Account role-label helper; Fleet header compatibility export retains exact labels. Canonical login/profile/admin sources produce the reduced Account-only bundle. Real TLS browser exercised existing cookie resume, profile edit, administrator list and initial-password flow without missing resource responses or page errors.
+- Evidence: D-962 independent image scope: remote AI-PC closure at e81af2d7c3 passed 320 tests, 0 skipped, 0 NEW. Account TLS login/initial-password/profile/admin, minimal Account/foundation startup, stdlib-only fixed assets, signed legacy/new inventories and reuse, and Fleet header browser/Node compatibility. OCI build and live independent-image acceptance were not run.
+- Log: `rosy-account-image-closure/run-1.txt`; native `size_range.py d7fcc74e43 b9424451a0` checked four commits successfully; native static secret scan found zero findings.
+- Gate: scoped SOURCE/LOCAL verification only; existing artifact, device and field limits remain.
+
+
+## 2026-11-02 · 5f02d723d1 · D-962 independent identity backup and presentation
+
+- Change: Login/profile/admin identity pages now display Rosy Account. Plain login and accessible form use the Account login label; the existing OAuth Account heading remains compatible with Learning. Return links, theme and layout are unchanged. Actual standalone TLS browser confirms all three brands, profile edit, admin listing, cookie resume and first-password return; all affected identity browser suites passed.
+- Evidence: D-962 independent image and identity backup scope at 5f02d723d1: remote 335 backend/signing/image/backup cases plus 71 opted-in identity TLS/browser cases passed, 0 skipped, 0 NEW. Full Account tables including HTTP audit preserved; stale/corrupt backup refusal, strict signed legacy/new groups, reused image pins, branding, login/profile/admin and first-password flows verified. Prior e81af2d7c3 closure also passed 320 cases including Fleet header browser/Node compatibility. OCI construction and live independent-image/timer acceptance remain pending.
+- Logs: `rosy-account-backup-replay/run-1.txt` (335 passed), `rosy-account-identity-replay/run-1.txt` (71 passed); known-failure comparison 0 new/known/flaky. Native size range checked eight commits without a violation.
+- Gate: scoped SOURCE/LOCAL GO; image artifact, installation, timer activation and human field acceptance remain separate.
+
+
+## 2026-11-02 · 59dbc2136b · D-962 canonical Account scope closure
+
+- Change: Canonical lightweight header now takes the document brand and title from one renderer: Account login/profile/admin, Fleet learning. Existing component propagation checks remain; a brand mutation proves form/task bytes outside the header are unchanged. Identity HTML needs no manual regeneration delta.
+- Evidence: Official FULL snapshot 20261102132628 exposed stale Fleet component/title consumers and stopped; it was not a FULL success. At 59dbc2136b, committed remote shared-web contracts, component/registry/app ownership, Account TLS identity, Fleet header browser/Node and Account image/deploy closure passed 581 tests, with one separately disabled Android native-token-export check skipped and 0 NEW. Exact title-file isolation via tools/collect_alone.py completed one whole-file target (wrapper 1 passed, 1 empty collection parametrization skipped). Independent review found no supported material findings.
+- Logs: `rosy-account-surface-closure/run-1.txt`; `rosy-account-title-isolated/run-1.txt`. Native canonical renderer check, AST, secret scan (0 findings), diff check and one-commit size range passed.
+- Gate: Scoped SOURCE/LOCAL evidence only. Replacement FULL/no-cache, OCI artifact, installation and live field acceptance remain pending. CE: no additional lesson; canonical ownership, propagation and strict mutation regressions retain the cause and fix.
+
+
 ## 2026-11-02 · uncommitted · D-961 웹 제품 통합
 
 - 변경: Account/Fleet 로그인 맥락의 앱바·제목·폼·복귀를 맞췄다. 문서 본문과 영역 레일의 공용 구성을 재사용하고 중복 외형을 제거했다. 권한·원장·실행 owner는 유지한다.
@@ -853,6 +877,13 @@
 - 변경: 공용 로그인은 Account owner 표식을 읽어 직접 진입과 프로필 경유 진입에도 같은 Account 제목·폼 이름·도움말을 사용한다. 기존 Fleet 맥락과 등록 authorize 복귀 조건은 유지한다. Account 프로필의 의미 없는 자기 복귀 링크는 숨긴다.
 - 증거: 독립 Account 서버가 제공한 실제 HTML과 TLS Chromium의 직접·프로필·계정 관리 진입을 회귀에 더해 적색 4건을 확인했다. 수정본은 동일 시험과 기존 Fleet 로그인·등록 앱 복귀를 함께 원격 검증한다.
 - Gate: 운영 수용 전. CE: 해당 없음 — 명시적 owner 맥락과 회귀로 재현·보존 조건을 복원한다.
+
+## 2026-11-03 · 721b59a094 · D-963 USB approval with Account cookie identity
+
+- Change: USB camera approval now uses the verified named operator identity and lock state instead of requiring a Bearer header. The same gate runs before and after confirmation. Shared request transport retains same-origin cookies, current Bearer compatibility, no-store and redirect refusal; anonymous/unnamed/viewer identities remain hidden. Backend authority and CSRF policy are unchanged.
+- Evidence: After canonical main merge 4b374d64c7 (D-963 e5911e84f3 ancestor), committed remote 721b59a094 passed 64 tests, 0 skipped, 0 NEW. Existing USB backend and all Fleet Node specs cover cookie/Bearer list/approve, viewer/unnamed/locked refusal and stale controls; real PasswordSessions checks preserve cookie operator success, viewer/anonymous denial and CSRF rejection. Account receiver plus actual standalone TLS, navigation and password-login browsers also passed; this is not an Account completion claim based only on legacy PasswordSessions.
+- Log: `rosy-account-usb-cookie-closure/run-1.txt`; official supported light/serial host, 14 free cores and 4.8 GB at preflight, MemoryMax4GB, measured peak642MiB, 72s. No below-floor fallback or ALONE bypass. Independent exact-source review found no supported findings. Native JS syntax, Python AST, secret scan0, diff check and one-commit size range passed.
+- Gate: Scoped SOURCE/LOCAL verification only. Existing FULL142019 snapshot was not changed or restarted; landing/publication, OCI artifact and live acceptance remain separate. CE: no additional lesson; the cookie transport and authorization distinction is retained directly in regression tests.
 
 ## 2026-11-03 · e84e4f46b3 · 독립 Account의 자기 화면 복귀 숨김
 
@@ -866,3 +897,9 @@
 - 증거: 실제 sample host 쿠키 로그인과 공용 확인 대화상자를 사용하는 원격 Chromium 회귀가 숨겨진 패널을 3 NEW로 재현했다. 쿠키 수정과 입력 역할 선택자 보정 후 승인은 통과했고, 주기 조회 2건은 작성값 대신 추천값으로 돌아가는 실패를 재현했다. 수정본의 전체 브라우저 파일 및 쿠키·USB 백엔드 회귀 결과는 후속 기록에 남긴다. 독립 검토는 91889f3c3e에서 지적 없음이다.
 - 후속 검증: 91889f3c3e의 USB·쿠키 백엔드 원격 시험은 exit 0/NEW 0이다. 전체 브라우저 파일에서 sample provider의 빠진 USB 읽기 경로가 기존 설치 흐름 3건의 미처리 요청으로 검출되어, 8ce38e2a61에 장비가 없는 sample의 빈 목록 응답을 추가했다. 그 커밋의 상태별 흐름·sample 페이지 2개 브라우저 파일은 36 passed/0 skipped/exit 0/NEW 0이다. 원격 환경 05ef7ad25a10607e, freeze eb75e06857d6c188이며 독립 검토는 두 수정 모두 지적 없음이다.
 - Gate: SOURCE 회귀 통과. USB 응답만 제어한 브라우저 시험이므로 운영 카메라 승인·실물 적용·배포 수용을 주장하지 않는다. CE: 해당 없음 — 원인과 보존 조건을 코드·회귀가 설명한다.
+
+## 2026-11-03 ? 50b5b4340d ? ?? Account ?? ??? ? ?? ??
+
+- ??: ?? Account ???? ?? ?? ??? ?? ???? ?? canonical component-controls.css? ????. ?? ??? ??? ?? ??? ?? ?? ?? ??? ?? ???? USB ???? named operator ??? ????? ??????? ??? ?? ?? ??? ????. Node? DOM fixture? ?? ?? ????? ??? ????.
+- ??: ?? 8ce38e2a61? ???? 36? ??? ? ??? ???. ?? ??? ?? ????? ????????Node ??? ? committed source? ????. ?? ??? ? ??? ??? ???? ???.
+- Gate: ?? SOURCE ?? ?. ???????? ????? ?? ?? ?? ??? ????. CE: ?? ?? ? ?? ????owner ????? ???? ??? ?? ??? ????.

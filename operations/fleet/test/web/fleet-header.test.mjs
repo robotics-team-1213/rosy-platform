@@ -98,6 +98,7 @@ test("message counts update one summary value without replacing its connection o
 test("role words are Korean; English stays out of the text", () => {
   assert.equal(roleLabel("operator"), "운영자");
   assert.equal(roleLabel("viewer"), "보기 전용");
+  assert.equal(roleLabel("policy-admin"), "정책 관리자");
   assert.equal(roleLabel("nobody"), "권한 없음");
 });
 

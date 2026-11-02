@@ -68,7 +68,8 @@ def companion_services(overlays, services, configured):
     companions = set()
     if MONITORING_OVERLAY[1] in overlays and 'fleet' in services:
         companions.add('monitoring')
-    if ACCOUNT_OVERLAY[1] in overlays and 'account' in configured and 'fleet' in services:
+    if ('account' not in services and tuple(services) in (SERVICES[:3], SERVICES)
+            and ACCOUNT_OVERLAY[1] in overlays and 'account' in configured):
         companions.add('account')
     if CONTROL_UNIT_OVERLAY[1] in overlays and 'proxy' in services:
         companions.add('control-unit-peer')
@@ -79,6 +80,11 @@ def check_overrides(env: dict[str, str], commit: str, run, compose, services=SER
                     image_references: dict | None = None) -> None:
     """Refuse when anything could pin a site image other than the candidate's."""
     overlays = allowed_overlays(env)
+    inventory = services
+    independent_account = 'account' in inventory
+    if independent_account and not (image_references or {}).get('account'):
+        raise Refused('independent Account signed image reference is missing')
+    services = tuple(s for s in services if s != 'account' or ACCOUNT_OVERLAY[1] in overlays)
     link_compose = "/opt/rosy/candidate/deploy/site/compose.yaml"
     unit = run(["systemctl", "cat", STACK_UNIT]).stdout
     for line in unit.splitlines():
@@ -105,12 +111,12 @@ def check_overrides(env: dict[str, str], commit: str, run, compose, services=SER
         raise Transient("docker compose config output is not JSON") from None
     if not isinstance(configured, dict):
         raise Refused("Compose service set differs from the signed candidate")
-    companions = companion_services(overlays, services, configured)
+    companions = companion_services(overlays, inventory, configured)
     if set(configured) != set(services) | companions:
         raise Refused("Compose service set differs from the signed candidate")
     for service in (*services, *companions):
         image = (configured.get(service) or {}).get("image")
-        owner = COMPANION_IMAGES.get(service, service)
+        owner = service if service in inventory else COMPANION_IMAGES.get(service, service)
         expected = (image_references or {}).get(owner, f"rosy-site-{owner}:{commit}")
         if image != expected:
             raise Refused(f"Compose resolves {service} to {image!r}, not the candidate "
@@ -413,69 +419,6 @@ def set_hold(updater, reason: str | None) -> int:
     except Refused as error:
         log('state-refused', reason=str(error))
         return EXIT_FAILED
-
-
-def runtime_reason(rows, hashes: dict, run) -> str:
-    """Detect operational drift without logging inspect output or credentials."""
-    for service in COMPANION_IMAGES:
-        if service in hashes:
-            matches = [row for row in rows if isinstance(row, dict) and row.get('Service') == service]
-            if (len(matches) != 1 or matches[0].get('State') != 'running'
-                    or (service != 'control-unit-peer' and matches[0].get('Health') != 'healthy')):
-                health = '' if service == 'control-unit-peer' else 'healthy '
-                return f'{service} needs exactly one {health}running container'
-    for row in rows:
-        if not isinstance(row, dict):
-            continue
-        service = row.get('Service')
-        if service not in (*SERVICES, *COMPANION_IMAGES):
-            continue
-        try:
-            details = json.loads(run(['docker', 'container', 'inspect', row['ID']]).stdout)[0]
-            host = details['HostConfig']
-            labels = details['Config'].get('Labels') or {}
-            if not hashes.get(service) or labels.get('com.docker.compose.config-hash') != hashes[service]:
-                return f'{service} runtime differs from current Compose configuration'
-            if host.get('ReadonlyRootfs') is not True or host.get('Privileged') is not False:
-                return f'{service} runtime no longer has a read-only unprivileged root'
-        except (ValueError, KeyError, IndexError, TypeError, AttributeError):
-            return f'{service} runtime configuration cannot be verified'
-    return ''
-
-
-def containers_reason(rows, commit: str, accepted: dict, run, services=SERVICES,
-                      image_references: dict | None = None, companions=None) -> str:
-    if not isinstance(rows, list):
-        return 'docker compose ps output is not a list'
-    if any(isinstance(row, dict) and row.get('Service') in SERVICES
-           and row['Service'] not in services for row in rows):
-        return 'runtime contains a managed service outside the signed candidate'
-    present = {row.get('Service') for row in rows
-               if isinstance(row, dict) and row.get('Service') in COMPANION_IMAGES}
-    if companions is None:
-        companions = present - {'control-unit-peer'}  # Legacy direct callers have no expected Compose proof.
-    if present - companions:
-        return 'runtime contains an unconfigured companion'
-    for service in (*services, *sorted(companions)):
-        owner = COMPANION_IMAGES.get(service, service)
-        matches = [row for row in rows if isinstance(row, dict) and row.get('Service') == service]
-        if len(matches) != 1:
-            return f'{service} needs exactly one running container'
-        row = matches[0]
-        if row.get('Image') != (image_references or {}).get(owner, f'rosy-site-{owner}:{commit}'):
-            return f"{service} runs {row.get('Image')!r}"
-        if (row.get('State') != 'running'
-                or (service != 'control-unit-peer' and row.get('Health') != 'healthy')):
-            return f"{service} is {row.get('State')}/{row.get('Health') or 'no health'}"
-        if not row.get('ID'):
-            return f'{service} container ID is missing'
-        try:
-            identity = run(['docker', 'container', 'inspect', '--format', '{{.Image}}', row['ID']]).stdout.strip()
-        except Transient as error:
-            return str(error)
-        if identity not in accepted.get(owner, ()):
-            return f'{service} running image identity differs from signed candidate'
-    return ''
 
 
 def _sha256(path: Path) -> str:

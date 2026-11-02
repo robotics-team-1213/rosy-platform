@@ -52,6 +52,6 @@
 
 - 2026-11-02 · uncommitted · D-961 웹 제품 통합
 - 2026-11-02 · uncommitted · D-961 공용 이동 조작과 작업 구성
-- 2026-11-02 · uncommitted · 신호기 등 역할 토큰 (D-525 보강, 사용자 결정)
-- 2026-11-02 · uncommitted · 공용 skip-link·sr-only 단일화, 같은 뜻 한 말 계약
-- 2026-11-02 · uncommitted · D-945 마무리 — 22rem 칸 경계 허가, 조작 표면 noscript·style 속성 계약
+- 2026-11-02 · 59dbc2136b · D-962 canonical Account scope closure
+- 2026-11-02 · 5f02d723d1 · D-962 independent identity backup and presentation
+- 2026-11-02 · e81af2d7c3 · D-962 independent Account artifact

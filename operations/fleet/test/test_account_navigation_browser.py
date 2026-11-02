@@ -26,7 +26,7 @@ def test_account_entry_uses_shared_heading_and_readable_layout(account_page, acc
     page.goto(origin + '/console/login')
     expect(page.locator('[data-login=form]')).to_be_visible()
     expect(page.locator('ui-brand')).to_be_in_viewport()
-    heading = page.get_by_role('heading', name='관제 로그인')
+    heading = page.get_by_role('heading', name='계정 로그인')
     assert heading.evaluate('(node) => getComputedStyle(node).fontSize') == '20px'
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
     expect(page.locator('#login-back')).to_be_visible()

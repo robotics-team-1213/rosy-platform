@@ -2,15 +2,15 @@
 module: deploy
 logical_modules: [M01, M13, M14]
 owner: 릴리스·플랫폼
-last_verified: { commit: "4e99d92e", date: 2026-10-02 }
+last_verified: {commit: 5f02d723d1, date: 2026-11-02}
 gates:
   SOURCE:
     state: GO
-    evidence: "unsigned handoff importer 40 passed; release/device 집중 370 passed, 2 skipped; 실제 397bb25 artifact 17 files + 2 linux/arm64 images bounded-stream import PASS (2026-09-21)"
+    evidence: "unsigned handoff importer 40 passed; release/device 집중 370 passed, 2 skipped; 실제 397bb25 artifact 17 files + 2 linux/arm64 images bounded-stream import PASS (2026-09-21) D-962 independent image and identity backup scope at 5f02d723d1: remote 335 backend/signing/image/backup cases plus 71 opted-in identity TLS/browser cases passed, 0 skipped, 0 NEW. Full Account tables including HTTP audit preserved; stale/corrupt backup refusal, strict signed legacy/new groups, reused image pins, branding, login/profile/admin and first-password flows verified. Prior e81af2d7c3 closure also passed 320 cases including Fleet header browser/Node compatibility. OCI construction and live independent-image/timer acceptance remain pending."
     cmd: "python3 -m pytest test/test_unsigned_handoff_import.py test/test_arm64_release_builder.py test/test_release_manifest.py test/test_release_signing.py test/test_release_bundle.py test/test_pinky_commissioning.py test/test_device_readback.py -q"
   LOCAL:
     state: GO
-    evidence: "1093 passed, 13 skipped, 6 known harness warnings (2026-09-21 Windows, uncommitted)"
+    evidence: "1093 passed, 13 skipped, 6 known harness warnings (2026-09-21 Windows, uncommitted) D-962 independent image and identity backup scope at 5f02d723d1: remote 335 backend/signing/image/backup cases plus 71 opted-in identity TLS/browser cases passed, 0 skipped, 0 NEW. Full Account tables including HTTP audit preserved; stale/corrupt backup refusal, strict signed legacy/new groups, reused image pins, branding, login/profile/admin and first-password flows verified. Prior e81af2d7c3 closure also passed 320 cases including Fleet header browser/Node compatibility. OCI construction and live independent-image/timer acceptance remain pending."
     cmd: "python3 -m pytest test -q"
   ROS-SIM:
     state: N/A

@@ -111,8 +111,8 @@ surfaces:
     ports:
       - {port: 8090, source: operations/fleet/fleet/cli.py}
     audience: 사이트 관제자 (D-153 §7 — Fleet /console) · 설치자 (D-410 — /console/install 기기 등록·카메라 보정) · Cell 작업 준비자 (/console/cell, D-446) · 계정 관리자 (/console/accounts, D-757) · 정책 관리자 (/console/policy, D-793)
-    role: 사이트 관제·Mission·원장·기기 연결 승인과 계정 관리. Cell은 팔레타이징 작업 준비 화면이며 Account는 공용 로그인 기능이다 (D-370·D-757·D-806).
-    owns: [site-monitoring, mission, cell-document, cell-compile, cell-proposal, overhead-camera-view, device-link-site, estop, account-management, policy-governance]
+    role: 사이트 관제·Mission·원장·기기 연결 승인과 정책 관리. Cell은 팔레타이징 작업 준비 화면이며 계정 관리는 공용 Account 화면으로 연결한다 (D-370·D-757·D-806·D-962).
+    owns: [site-monitoring, mission, cell-document, cell-compile, cell-proposal, overhead-camera-view, device-link-site, estop, policy-governance]
     grammar: exception
     contracts: [shared_controls, typography_focus, dialog]
     container_breakpoints:
@@ -126,6 +126,49 @@ surfaces:
       - value: 110rem
         reason: 지도와 개입 칸을 같은 폭으로 두어도 좁은 화면에서는 지도·관제 카메라가 작아진다 — 지도 칸이 충분히 넓은 이 폭 이상에서만 카메라를 지도 옆에 둔다
     baseline: docs/validation/uiux-surfaces-2026-09-26/captures/fleet-normal-1920x1080.png
+
+  # D-962: exact identity files are common Account surfaces, not Fleet business pages or launchers.
+  - id: account-login
+    title_prefix: Rosy Account
+    api_owners: [Account]
+    path: applications/fleet/web/login.html
+    themes: [dark, light]
+    surface: site
+    medium: web
+    audience: People authenticating to registered Rosy applications.
+    role: Shared Account identity login and initial-password flow; no robot or Fleet command authority.
+    owns: []
+    grammar: procedure
+    contracts: [shared_controls, typography_focus, dialog]
+    baseline_reason: D-962 real TLS login regressions cover this shared page; independent signed-image field acceptance is pending.
+
+  - id: account-profile
+    title_prefix: Rosy Account
+    api_owners: [Account]
+    path: applications/fleet/web/profile.html
+    themes: [dark, light]
+    surface: site
+    medium: web
+    audience: Authenticated people managing their Rosy identity.
+    role: Shared Account profile and password management; no Fleet or robot command surface.
+    owns: []
+    grammar: procedure
+    contracts: [shared_controls, typography_focus, dialog]
+    baseline_reason: D-962 real TLS profile regressions cover this shared page; independent signed-image field acceptance is pending.
+
+  - id: account-administration
+    title_prefix: Rosy Account
+    api_owners: [Account]
+    path: applications/fleet/web/accounts.html
+    themes: [dark, light]
+    surface: site
+    medium: web
+    audience: Authorized Rosy Account administrators.
+    role: Shared Account identities and explicit resource grants; receiving services retain command admission.
+    owns: [account-management]
+    grammar: procedure
+    contracts: [shared_controls, typography_focus, dialog]
+    baseline_reason: D-962 real TLS administration regressions cover this shared page; independent signed-image field acceptance is pending.
 
   - id: game-board
     title_prefix: Rosy Games

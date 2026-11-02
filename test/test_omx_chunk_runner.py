@@ -234,8 +234,8 @@ def test_a_caller_that_keeps_asking_for_state_keeps_the_arm_where_it_is():
     lib["chunks"]["home"] = [HOME]
     status, clock, sent = [], [0.0], []
 
-    def lines():  # a `state` every 100 s for 10 minutes, then stop
-        due = int(clock[0] // 100)
+    def lines():  # a `state` every 50 s (under idle_park_s) for 10 minutes, then stop
+        due = int(clock[0] // 50)
         if due > len(sent):
             sent.append(due)
             return ["stop"] if clock[0] > 600 else ["state"]

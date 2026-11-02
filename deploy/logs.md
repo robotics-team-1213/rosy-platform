@@ -4429,6 +4429,29 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - gate 변화: 없음. 실제 USB 카메라를 꽂아 승인하는 현장 수용은 하지 않았다.
 - CE: 해당 없음 — 새 기능이며 장애 해결이 아니다. 결정은 D-963에 있다.
 
+## 2026-11-02 · e81af2d7c3 · D-962 independent Account artifact
+
+- Change: Added dedicated Account image/SBOM/archive and guarded build inputs. Verifier accepts only authenticated legacy3/legacy4/new5 inventories. Disabled Account still has its signed image checked; enabled Account must match its own signed reference and immutable identity. Incremental reuse and rollback keep historical signed references; no new-manifest Fleet fallback. No image build, service change or deployment occurred in this scope.
+- Evidence: D-962 independent image scope: remote AI-PC closure at e81af2d7c3 passed 320 tests, 0 skipped, 0 NEW. Account TLS login/initial-password/profile/admin, minimal Account/foundation startup, stdlib-only fixed assets, signed legacy/new inventories and reuse, and Fleet header browser/Node compatibility. OCI build and live independent-image acceptance were not run.
+- Log: `rosy-account-image-closure/run-1.txt`; native `size_range.py d7fcc74e43 b9424451a0` checked four commits successfully; native static secret scan found zero findings.
+- Gate: scoped SOURCE/LOCAL verification only; existing artifact, device and field limits remain.
+
+
+## 2026-11-02 · 5f02d723d1 · D-962 independent identity backup and presentation
+
+- Change: Signed deployment inventory includes the complete five-file Account maintenance group. New five-image candidates require every file; historical authenticated three/four-image candidates must omit the group. Separate maintenance Compose cannot create the external authority volume and has image-only/no-pull jobs, nonoptional site.env, mandatory tag, protected existing host bind, UID10001, no network/privileges/keys. Reused Account image references stay pinned. No OCI build, restore, service restart or timer activation was performed.
+- Evidence: D-962 independent image and identity backup scope at 5f02d723d1: remote 335 backend/signing/image/backup cases plus 71 opted-in identity TLS/browser cases passed, 0 skipped, 0 NEW. Full Account tables including HTTP audit preserved; stale/corrupt backup refusal, strict signed legacy/new groups, reused image pins, branding, login/profile/admin and first-password flows verified. Prior e81af2d7c3 closure also passed 320 cases including Fleet header browser/Node compatibility. OCI construction and live independent-image/timer acceptance remain pending.
+- Logs: `rosy-account-backup-replay/run-1.txt` (335 passed), `rosy-account-identity-replay/run-1.txt` (71 passed); known-failure comparison 0 new/known/flaky. Native size range checked eight commits without a violation.
+- Gate: scoped SOURCE/LOCAL GO; image artifact, installation, timer activation and human field acceptance remain separate.
+
+## 2026-11-02 · uncommitted · Account 통합 게시 범위의 검증 문서 오탐 분류
+
+- 변경: 최신 main 병합 뒤 게시 검사에 걸린 다른 검증 문서의 정확한 commit/path/rule 한 건만 기존 historical baseline에 추가했다. 탐지 규칙·경로 전체 예외·다른 commit의 처리는 바꾸지 않는다.
+- 근거: 독립 검토가 `16737449b4d6368a9f374eae2c24c0d9ef24e1f6`의 camera-readiness 검증 문서 13행을 확인했다. 탐지된 값은 독립 검토 문장의 Git revision이며 실제 commit으로 해석되고 해당 증거 commit의 조상이다. 값·본문은 기록하지 않았고 개인 자료와 대조하지 않았다. 에이전트 분류이며 사람의 서명 승인이 아니다.
+- 확인: 현재 작업 트리의 게시 범위 319 commits clean, 기존 검토된 정확한 예외 두 건만 제외됐다. Account 최종 전체 검사·공개 CI·서명·운영 수용은 아직 별도다.
+- gate 변화: SOURCE·LOCAL 유지, FULL·ARTIFACT·FIELD HOLD. 실제 서명·운영 수용을 이 문서 분류로 대신하지 않는다.
+- CE: 해당 없음 — 기존 역사적 오탐 처리 계약과 baseline 항목이 판단을 설명한다.
+
 ## 2026-11-02 · 6d7e296033 · Web unification follow-up
 
 - 변경: 2026-11-02 · 6d7e296033 · D-961의 공용 작업·인증 조합을 native Wi-Fi 복구 HTML에도 적용했다. 제목·폭·버튼 위계·테마를 통일하고 component-controls.css/theme.js를 기존 recovery-web 이미지 자산에 포함했다. CORE·Account 없이 복구하는 구조, 물리 지문·코드·세션·CSRF·NetworkAgent 쓰기 권한은 유지한다. registry/native asset/실제 Chromium 복구 39건 원격 통과; dark/light 및 320/390/1366px 포함. 이미지 ARM64 빌드·AP·물리 네트워크 수용은 미실행이며 gate 변화 없음. CE: 해당 없음 — 자산·독립성 계약은 코드와 회귀가 설명한다.
@@ -4467,3 +4490,9 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 변경: canonical control-unit overlay의 peer를 서명된 proxy 이미지의 동반 서비스로 다룬다. 정확한 서비스 구성, 이미지 참조·실제 immutable identity, 현재 Compose hash와 읽기 전용·비특권 실행 조건을 확인한다. 원래 healthcheck가 없는 peer에 가상의 healthy 값을 요구하지 않으며, 기존 Account·Monitoring의 건강 검사와 옛 Account overlay 복구 경로는 유지한다.
 - 증거: 운영 hold가 peer 서비스 검사 누락을 기록했다. 실제 companion을 내보내지 않던 FakeHost를 서비스·hash·실행 row·이미지 owner에 맞게 고친 committed 원격 회귀는 21 failed/112 passed/NEW21로 재현했다. cc5f657ce9의 네 관련 모듈은 원격 204 passed/0 skipped/NEW0이며, 세 companion의 동시 전환·복구 및 설치 CLI도 포함한다. 독립 계약 검토에서 수정 필요 사항은 없었다.
 - Gate: 운영 hold·설정·writer·컨테이너는 바꾸지 않았다. 검토된 외부 updater helper 설치와 실제 운영 수용은 별도다. CE: 미해결 — 소스 수정본은 검증했으며 실제 helper 전환이 아직 남았다.
+
+## 2026-11-03 ? 50b5b4340d ? Account ???? ?? ??? ??? ??
+
+- ??: ?? ?? ?? Account ??? ??? USB ?? PC ??? ??? ?? ????. ?? ?? ??? ??? ?? ??? ??? ??? ????, ?? Account?Fleet??? Account?Account?Monitoring?Fleet??? PC ????proxy ??? ?? ????. ??? ?? ? ??? ?? site_update_runtime?? ?? I/O ??? ??? ??? ?? ???? ?? ??? ???. ?? updater? ?? re-export? ?? ?? ??? ????.
+- ??: source 50b5b4340d? ? ?? 4?? ?? ?? AI PC?? ?? ??/NEW4? ????. ????? ?? ??? ????? ??, ?? ??????????????? ??????? ??? ID? ?? fixture? ????. ??? GREEN? ?? ??? ???.
+- Gate: ?? SOURCE ?? ?. ?? ??? hold?writer?????? ????? ??? ???? ???. CE: ??? ? ?? ?? helper ??? ?? ??? ?? ??.

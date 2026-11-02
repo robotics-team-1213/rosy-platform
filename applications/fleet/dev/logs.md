@@ -68,6 +68,14 @@
 - 증거: `6d812fe216` 원격 RED는 독점 옵션 없이 주소 재사용 bind를 호출해 1 실패·6 통과. 제품 수정 후 `dc0d8f5346`의 Windows 네이티브 소켓 검증은 독점 옵션 값 1, 중복 bind 오류 10048, close 후 재bind 성공을 확인했다. 서버 프로세스는 시작하지 않고 모든 소켓을 닫았다. 같은 SHA의 Linux 원격 샘플 서버·connected proxy 회귀는 15 통과·0 skip, known_failures 0 NEW다.
 - gate 변화: 포트 소유·반환 회귀와 Windows 소켓 수용만 확인한다. 브라우저·장치·현장 수용과 별개다. CE: 기존 Windows 워크트리 교훈 갱신은 상위 작업에서 맡는다.
 
+
+## 2026-11-03 · 0b8bb631a5 · D-963 sample USB inventory closure
+
+- Change: The sample provider now implements only the existing exact USB camera listing GET and returns the production empty-hardware shape `{workcells: []}`. It invents no device or approval and keeps unknown requests visible. Existing session, viewer and HTTP Origin/CSRF guards run before this response; no operational API/version or device access changed.
+- Evidence: Actual browser context at 721b59a094 failed1/passed183 because `/console/install` recorded the unhandled USB listing GET (501). Test-only 69d18d0e17 independently reproduced2 HTTP failures, normal/operator and viewer, both exact501!=200. Three-line fix 0b8bb631a5 passed35 tests, skipped0, NEW0: full sample-server and sample-flow units, the exact formerly failing installation browser and operational USB backend contract tests. Authenticated listing is empty; anonymous401, foreign-origin403, no-origin write403, viewer-write403 and unsupported operator approval501 remain verified. Root owns the separate full184 context replay.
+- Logs: `rosy-account-sample-context-closure/run-1.txt` (721b context RED), `rosy-sample-usb-listing-red/run-1.txt` (69d RED2), `rosy-sample-usb-listing-green/run-1.txt` (0b GREEN35). GREEN preflight6.6 free cores/8.8GB, no below-floor fallback; measured peak246MiB,4.81s. Native AST, secret scan0, diff check and two-commit size range passed.
+- Gate: Scoped SOURCE/LOCAL only; broader context, official FULL, artifact and live acceptance remain separate. Earlier64-case Account consumer proof and USB authorization fix remain intact. No live service/hardware or existing FULL job changed. CE: no additional lesson; the missing read mapping and retained boundary checks are captured by real HTTP and existing browser regressions.
+
 ## 2026-11-03 · 8ce38e2a61 · sample USB 목록 읽기 누락 보완
 
 - 변경: 관측 작업 셀이 없는 sample provider가 USB 목록 조회에도 빈 작업 셀 목록을 반환한다. 승인·쓰기 경로는 추가하지 않는다.

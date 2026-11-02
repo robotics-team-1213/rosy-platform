@@ -138,7 +138,7 @@ class FakeHost:
     def _ok(self, stdout: str = "", code: int = 0) -> SimpleNamespace:
         return SimpleNamespace(returncode=code, stdout=stdout, stderr="")
 
-    def _owners(self):
+    def _owners(self, *, tag=None):
         owners = {service: service for service in upd.SERVICES}
         overlays = upd.read_env(self.paths.site_env).get('ROSY_SITE_PAIRING_COMPOSE', '')
         if 'compose.monitoring.yaml' in overlays:
@@ -159,7 +159,7 @@ class FakeHost:
                 return self._ok("\n".join(f"{s} hash-{s}" for s in self._owners()))
             if "config" in args:
                 tag = kwargs["env"]["ROSY_SITE_IMAGE_TAG"]
-                services = {s: {"image": f"rosy-site-{owner}:{tag}"} for s, owner in self._owners().items()}
+                services = {s: {"image": f"rosy-site-{owner}:{tag}"} for s, owner in self._owners(tag=tag).items()}
                 if self.config_image:
                     services["fleet"]["image"] = self.config_image
                 if "compose.monitoring.yaml" in upd.read_env(self.paths.site_env).get("ROSY_SITE_PAIRING_COMPOSE", ""):
@@ -174,7 +174,8 @@ class FakeHost:
                     for s, owner in self._owners().items()))
         if args[:3] == ["docker", "image", "load"]:
             commit = Path(args[-1]).parent.name
-            self.images |= {f"rosy-site-{s}:{commit}" for s in upd.SERVICES}
+            services = (*upd.SERVICES, 'account') if commit in getattr(self, 'independent_commits', ()) else upd.SERVICES
+            self.images |= {f"rosy-site-{s}:{commit}" for s in services}
             return self._ok()
         if args[:3] == ["docker", "image", "ls"]:
             return self._ok("\n".join(sorted(self.images)))
@@ -187,14 +188,14 @@ class FakeHost:
                     "HostConfig": {"ReadonlyRootfs": True, "Privileged": False}}]))
             return self._ok(_image_id(self.running, owner))
         if args[:2] == ["docker", "ps"]:
-            return self._ok("\n".join(f"rosy-site-{s}:{self.running}" for s in upd.SERVICES))
+            return self._ok("\n".join(f"rosy-site-{owner}:{self.running}" for owner in self._owners().values()))
         if args[:3] == ["docker", "image", "rm"]:
             self.images.discard(args[3])
             return self._ok()
         raise AssertionError(f"unexpected command {args}")
 
 
-def _verifier(calls):
+def _verifier(calls, independent_commits=()):
     def verify(folder, *, trusted_key_id, trusted_public_key, runner, inspect_loaded_images):
         calls.append((Path(folder).name, inspect_loaded_images))
         if not (Path(folder) / "release.json.sig").is_file():
@@ -205,8 +206,12 @@ def _verifier(calls):
         manifest.setdefault('workcell', True)
         manifest.setdefault('control_unit', True)
         manifest.setdefault('monitoring', True)
-        manifest['verified_images'] = list(upd.SERVICES)
-        manifest['accepted_image_ids'] = {s: [_image_id(manifest['source_commit'], s)] for s in upd.SERVICES}
+        commit = manifest['source_commit']
+        services = (*upd.SERVICES, 'account') if commit in independent_commits else upd.SERVICES
+        manifest['verified_images'] = list(services)
+        manifest['accepted_image_ids'] = {s: [_image_id(commit, s)] for s in services}
+        if commit in independent_commits:
+            manifest['image_references'] = {s: f'rosy-site-{s}:{commit}' for s in services}
         return manifest
     return verify
 
@@ -238,7 +243,8 @@ def host(tmp_path):
 def _updater(host, http, fake, verify_calls=None, **kwargs):
     clock = iter(range(0, 100000, 10))
     return upd.SiteUpdater(host.config, paths=host.paths, runner=fake, http=http,
-                           verifier=_verifier(verify_calls if verify_calls is not None else []),
+                           verifier=_verifier(verify_calls if verify_calls is not None else [],
+                                              getattr(fake, 'independent_commits', ())),
                            sleep=lambda seconds: None, clock=lambda: next(clock), **kwargs)
 
 
@@ -709,15 +715,19 @@ def test_control_unit_peer_container_requires_the_accepted_proxy_identity(fault)
 
 
 @pytest.mark.parametrize('healthy', [True, False])
-def test_control_peer_monitoring_and_account_follow_the_signed_switch_and_rollback(host, healthy):
+@pytest.mark.parametrize('independent', [False, True])
+def test_control_peer_monitoring_and_account_follow_the_signed_switch_and_rollback(host, healthy, independent):
     with host.paths.site_env.open('a', encoding='utf-8') as stream:
         stream.write('ROSY_SITE_PAIRING_COMPOSE=' + ' '.join(
             f'-f /opt/rosy/candidate/deploy/site/compose.{name}.yaml'
             for name in ('control-unit', 'monitoring', 'account')) + '\n')
 
     class AccountHost(FakeHost):
-        def _owners(self):
-            return {**super()._owners(), 'account': 'fleet'}
+        independent_commits = {NEW} if independent else set()
+
+        def _owners(self, *, tag=None):
+            return {**super()._owners(tag=tag),
+                    'account': 'account' if (tag or self.running) in self.independent_commits else 'fleet'}
 
     fake = AccountHost(host.paths, healthy_tags=None if healthy else {OLD})
     releases, blobs = _world((NEW, '2026-10-04T02:00:00Z'))
@@ -762,20 +772,42 @@ def test_independent_account_inventory_keeps_companion_image_owners(host, accoun
         upd.check_overrides(env, NEW, FakeHost(host.paths), compose, services, references)
 
 
-def test_independent_account_runtime_uses_its_own_signed_identity():
+@pytest.mark.parametrize('reused', [False, True])
+@pytest.mark.parametrize('fault', [None, 'missing', 'duplicate', 'stopped', 'wrong-reference', 'wrong-identity', 'peer-identity', 'unexpected'])
+def test_independent_account_runtime_uses_its_own_signed_identity(reused, fault):
     roles = ('fleet', 'vision', 'proxy', 'postgres', 'account')
     owners = {**{role: role for role in roles}, 'monitoring': 'fleet', 'control-unit-peer': 'proxy'}
-    references = {role: f'rosy-site-{role}:{NEW}' for role in roles}
-    accepted = {role: [_image_id(NEW, role)] for role in roles}
+    commits = {role: OLD if reused and role in {'account', 'proxy'} else NEW for role in roles}
+    references = {role: f'rosy-site-{role}:{commits[role]}' for role in roles}
+    accepted = {role: [_image_id(commits[role], role)] for role in roles}
     rows = [{'Service': role, 'Image': references[owner], 'State': 'running',
              'Health': '' if role == 'control-unit-peer' else 'healthy', 'ID': role}
             for role, owner in owners.items()]
+    account = next(row for row in rows if row['Service'] == 'account')
+    if fault == 'missing':
+        rows.remove(account)
+    elif fault == 'duplicate':
+        rows.append(dict(account))
+    elif fault == 'stopped':
+        account['State'] = 'exited'
+    elif fault == 'wrong-reference':
+        account['Image'] = references['fleet']
+    elif fault == 'unexpected':
+        roles = roles[:-1]
 
     def inspect(args):
-        return SimpleNamespace(stdout=_image_id(NEW, owners[args[-1]]))
+        role = args[-1]
+        owner = 'fleet' if ((fault == 'wrong-identity' and role == 'account')
+                            or (fault == 'peer-identity' and role == 'control-unit-peer')) else owners[role]
+        return SimpleNamespace(stdout=_image_id(commits[owner], owner))
 
-    assert upd.containers_reason(rows, NEW, accepted, inspect, roles, references,
-                                 companions={'monitoring', 'control-unit-peer'}) == ''
+    reason = upd.containers_reason(rows, NEW, accepted, inspect, roles, references,
+                                   companions={'monitoring', 'control-unit-peer'})
+    if fault is None:
+        assert reason == ''
+    else:
+        assert ('unconfigured companion' if fault == 'unexpected' else
+                'control-unit-peer' if fault == 'peer-identity' else 'account') in reason
 
 
 @pytest.mark.parametrize("loaded", [False, True])
@@ -839,16 +871,95 @@ def test_account_companion_missing_or_unhealthy_blocks_acceptance(rows):
 
 
 def test_account_runtime_identity_must_match_accepted_fleet_image():
-    rows = [{'Service': 'account', 'Image': f'rosy-site-fleet:{NEW}',
-             'State': 'running', 'Health': 'healthy', 'ID': 'account-container'}]
-    accepted = {'fleet': ['sha256:' + 'a' * 64]}
-    def inspect(*args):
-        return SimpleNamespace(stdout='sha256:' + 'a' * 64)
-    assert upd.containers_reason(rows, NEW, accepted, inspect, services=()) == ''
-    def untrusted(*args):
-        return SimpleNamespace(stdout='sha256:' + 'b' * 64)
+    services = ('fleet', 'vision', 'proxy')
+    rows = [{'Service': s, 'Image': f'rosy-site-{s}:{NEW}',
+             'State': 'running', 'Health': 'healthy', 'ID': s} for s in services]
+    rows.append({'Service': 'account', 'Image': f'rosy-site-fleet:{NEW}',
+                 'State': 'running', 'Health': 'healthy', 'ID': 'account'})
+    accepted = {s: [_image_id(NEW, s)] for s in services}
+    def inspect(args):
+        return SimpleNamespace(stdout=accepted['fleet' if args[-1] == 'account' else args[-1]][0])
+    assert upd.containers_reason(rows, NEW, accepted, inspect, services=services) == ''
+    def untrusted(args):
+        return SimpleNamespace(stdout='sha256:' + 'b' * 64) if args[-1] == 'account' else inspect(args)
     assert 'account running image identity' in upd.containers_reason(
-        rows, NEW, accepted, untrusted, services=())
+        rows, NEW, accepted, untrusted, services=services)
+
+
+def test_independent_account_runtime_uses_its_signed_reused_reference_and_identity():
+    services = ('fleet', 'vision', 'proxy', 'postgres', 'account')
+    refs = {s: f'rosy-site-{s}:{NEW}' for s in services}
+    refs['account'] = f'rosy-site-account:{OLD}'
+    accepted = {s: [_image_id(NEW, s)] for s in services}
+    rows = [{'Service': s, 'Image': refs[s], 'State': 'running', 'Health': 'healthy', 'ID': s}
+            for s in services]
+    def inspect(args):
+        return SimpleNamespace(stdout=accepted[args[-1]][0])
+    assert upd.containers_reason(rows, NEW, accepted, inspect, services, refs) == ''
+    rows[-1]['Image'] = refs['fleet']
+    assert 'account' in upd.containers_reason(rows, NEW, accepted, inspect, services, refs)
+    rows[-1]['Image'] = refs['account']
+    assert 'account' in upd.containers_reason(rows[:-1], NEW, accepted, inspect, services, refs)
+
+
+def test_signed_but_disabled_account_image_requires_no_runtime_container():
+    services = ('fleet', 'vision', 'proxy', 'postgres')
+    refs = {s: f'rosy-site-{s}:{NEW}' for s in (*services, 'account')}
+    accepted = {s: [_image_id(NEW, s)] for s in refs}
+    rows = [{'Service': s, 'Image': refs[s], 'State': 'running', 'Health': 'healthy', 'ID': s}
+            for s in services]
+    def inspect(args):
+        return SimpleNamespace(stdout=accepted[args[-1]][0])
+    assert upd.containers_reason(rows, NEW, accepted, inspect, services, refs) == ''
+
+
+@pytest.mark.parametrize('missing', ['reference', 'identity', 'both'])
+def test_independent_account_never_falls_back_to_fleet_for_incomplete_proof(missing):
+    services = ('fleet', 'vision', 'proxy', 'postgres', 'account')
+    refs = {s: f'rosy-site-{s}:{NEW}' for s in services}
+    accepted = {s: [_image_id(NEW, s)] for s in services}
+    if missing in ('reference', 'both'):
+        refs.pop('account')
+    if missing in ('identity', 'both'):
+        accepted.pop('account')
+    def inspect(args):
+        raise AssertionError('incomplete signed proof must fail before Docker inspection')
+    assert 'account signed image identity proof is incomplete' == upd.containers_reason(
+        [], NEW, accepted, inspect, services, refs)
+
+
+def test_verified_account_image_is_retained_when_its_runtime_is_disabled(host):
+    fake = FakeHost(host.paths)
+    updater = _updater(host, FakeHttp([], {}), fake)
+    original = updater.verifier
+    def verifier(folder, **kwargs):
+        proof = original(folder, **kwargs)
+        proof['verified_images'].append('account')
+        proof['accepted_image_ids']['account'] = [_image_id(OLD, 'account')]
+        proof['image_references'] = {s: f'rosy-site-{s}:{OLD}' for s in (*upd.SERVICES, 'account')}
+        return proof
+    updater.verifier = verifier
+    env = upd.read_env(host.paths.site_env)
+    proof = updater._verify(host.paths.candidates / OLD, loaded=True, env=env)
+    assert 'account' in proof['verified_images']
+    assert updater._accepted_images[OLD]['account'] == [_image_id(OLD, 'account')]
+    assert updater._containers_reason(env, OLD) == ''
+    enabled = {**env, 'ROSY_SITE_PAIRING_COMPOSE': '-f /opt/rosy/candidate/deploy/site/compose.account.yaml'}
+    assert 'account needs exactly one running container' == updater._containers_reason(enabled, OLD)
+
+
+def test_independent_account_compose_cannot_pin_fleet_as_its_image(host):
+    fake = FakeHost(host.paths)
+    env = {**upd.read_env(host.paths.site_env),
+           'ROSY_SITE_PAIRING_COMPOSE': '-f /opt/rosy/candidate/deploy/site/compose.account.yaml'}
+    services = (*upd.SERVICES, 'account')
+    refs = {s: f'rosy-site-{s}:{NEW}' for s in services}
+    def compose(env, *args, **kwargs):
+        configured = {s: {'image': refs[s]} for s in services}
+        configured['account']['image'] = refs['fleet']
+        return SimpleNamespace(stdout=json.dumps({'services': configured}))
+    with pytest.raises(upd.Refused, match='account'):
+        upd.check_overrides(env, NEW, fake, compose, services, refs)
 
 
 def test_monitoring_service_without_its_overlay_is_refused(host):

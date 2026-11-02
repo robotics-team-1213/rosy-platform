@@ -19,6 +19,11 @@ export function createUsbCameraPanel({scope, headers, identity, locked, dialogs,
   const rows = new Map();
   let rowSerial = 0;
   const bearer = () => headers().Authorization || headers().authorization || '';
+  const canDecide = () => {
+    const principal = identity();
+    return !locked() && principal?.role === 'operator'
+      && typeof principal.principal_id === 'string' && Boolean(principal.principal_id.trim());
+  };
   async function call(path, {method = 'GET', body} = {}) {
     const life = scope.capture(); life.check();
     const requestHeaders = {...headers(), ...(body ? {'Content-Type': 'application/json'} : {})};
@@ -44,14 +49,14 @@ export function createUsbCameraPanel({scope, headers, identity, locked, dialogs,
   const notice = message => {el('usb-camera-status').textContent = message;};
   async function decide(workcell, candidate, role) {
     const body = decisionBody(role);
-    if (busy || locked() || !body) {if (!body) notice('역할 이름은 영문자·숫자·_·-로 64자 이내여야 합니다.'); return;}
+    if (busy || !canDecide() || !body) {if (!body) notice('역할 이름은 영문자·숫자·_·-로 64자 이내여야 합니다.'); return;}
     const life = scope.capture(); life.check(); busy = true;
     try {
       const allowed = await dialogs.confirmIrreversible({
         message: `USB 카메라(${candidate.usb_id})에 역할 "${body.role}"을 줄까요? 제어 PC가 20초 안에 적용하고 그 역할의 카메라 서비스를 시작합니다.`,
         action: '역할 승인', signal: life.signal});
       life.check();
-      if (!allowed || locked()) return;
+      if (!allowed || !canDecide()) return;
       await call(`${BASE}/${encodeURIComponent(workcell.workcell_id)}/usb-devices/${candidate.key}/decision`,
         {method: 'POST', body});
       life.check(); notice('승인했습니다. 제어 PC가 곧 적용합니다.');
@@ -111,7 +116,7 @@ export function createUsbCameraPanel({scope, headers, identity, locked, dialogs,
   }
   async function refresh() {
     const panel = el('usb-camera-panel');
-    if (!panel || locked() || identity()?.role !== 'operator') {
+    if (!panel || !canDecide()) {
       if (panel) {panel.hidden = true; el('usb-camera-list').replaceChildren(); rows.clear();} return;
     }
     if (inFlight || busy || document.visibilityState === 'hidden') return;
