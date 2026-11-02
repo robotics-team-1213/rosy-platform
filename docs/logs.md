@@ -13800,6 +13800,12 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 팔 받침은 CAD 값 그대로다. 둘째 실행은 모델 PC에서 외부 정지로 적층 결과를 주장하지 않는다.
 - CE: 해당 없음 — 새 기능이다. 카메라 기울기(roll)를 빼면 side가 4.3 px로 한계를 넘는다는 점은 fixture 주석과 검증 기록에 남겼다.
 
+## 2026-11-03 · uncommitted · fix(landing): 병렬 준비와 폴백에서 급행 표시를 보존한다
+- 변경: 병렬 guard/body의 활성 우선순위 호출 수를 Lock으로 관리해 마지막 호출까지 표시를 유지한다. 자원 정보가 없는 serial 폴백에도 TURN_JOB를 전달한다. selector·검증 범위·worker/메모리 한계·host floor·ALONE 정책은 그대로다.
+- 증거: committed RED `d27b7a625c` 의도 실패6/양성2. 수정 `150a10701e`의 flags/remote_pytest/host_admission 원격125 PASS, skip/NEW/known/flaky0. 양쪽 종료 순서·normal 중첩·예외 정리·fallback flag1/0/빈값을 검증했다. 독립 검토 추가P1/P2없음, size2commits PASS, lint0오류42경고.
+- gate 변화: 없음. 소스 검증이며 기존 실행 중 job의 표시 갱신·main 적용·60분 SLO를 주장하지 않는다.
+- CE: 기존 Oct31 교훈 갱신. 공유 환경변수의 진입/종료 순서와 job launch 시점이 다른 문제, 단순 이전값 복원으로 해결되지 않는 이유를 기록했다.
+
 ## 2026-11-03 · uncommitted · feat(omx): 떨어진 팔을 센 관절로 한 단계씩 빼내는 복구
 - 변경: `cell_unwedge.py`. shoulder_lift·elbow_flex만 홈 쪽으로 1단위씩, 손목은 명령 없음. 단계마다 지연을 읽어 1.2단위를 넘으면 반 단계 되돌리고 다른 관절로, 둘 다 막히면 사람을 부름. 단계마다 top·side 사진과 판단 기록. `cell_pipeline.recover`는 쥔 것이 없으면 이 단계를 쓰고 집게를 크게 벌리지 않는다.
 - 증거: 2026-11-03 04:05 arm_b가 피벗 goto 중 wrist_flex 가드로 컨테이너 위에 떨어짐. 고정 recover lift(elbow −5, wrist +4)는 이 자세에서 홈 반대쪽이라 같은 오류로 실패. `cell_unwedge`는 실물에서 21단계, 막힘 없이 빼내고 park.

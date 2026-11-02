@@ -354,7 +354,7 @@
 ## 최근 기록
 
 - 2026-11-03 · uncommitted · feat(omx): 떨어진 팔을 센 관절로 한 단계씩 빼내는 복구
+- 2026-11-03 · uncommitted · fix(landing): 병렬 준비와 폴백에서 급행 표시를 보존한다
 - 2026-11-03 · uncommitted · feat(isaac): 실물 top·side 카메라 시점과 D-947 Accepted
 - 2026-11-03 · uncommitted · test(publish): held turn의 출처 보존과 실행 증거를 구분한다
 - 2026-11-03 · 3db26622ab · evidence: 재연결 뒤 READY 복구와 수정 검증 동결
-- 2026-11-03 · f8fdc85890 · docs: 게시 성공과 적격 FULL 근거 구분
