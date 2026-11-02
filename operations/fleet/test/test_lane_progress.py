@@ -111,11 +111,12 @@ def platoon_app():
     store.close()
 
 
-def test_platoon_computation_yields_and_concurrent_readers_share_it(platoon_app, monkeypatch):
-    asyncio.run(_check_concurrent_readers(platoon_app, monkeypatch))
+@pytest.mark.parametrize("cancel_first", [False, True])
+def test_platoon_computation_yields_and_concurrent_readers_share_it(platoon_app, monkeypatch, cancel_first):
+    asyncio.run(_check_concurrent_readers(platoon_app, monkeypatch, cancel_first))
 
 
-async def _check_concurrent_readers(platoon_app, monkeypatch):
+async def _check_concurrent_readers(platoon_app, monkeypatch, cancel_first):
     from fleet import lane_progress
 
     app, _ = platoon_app
@@ -143,9 +144,15 @@ async def _check_concurrent_readers(platoon_app, monkeypatch):
             assert not finished.is_set()
             second = asyncio.create_task(client.get("/api/fleet/platoon"))
             await asyncio.sleep(0)
+            if cancel_first:
+                first.cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await first
         finally:
             release.set()
             results = await asyncio.gather(first, *([second] if second else []), return_exceptions=True)
+        if cancel_first:
+            assert isinstance(results.pop(0), asyncio.CancelledError)
         assert all(isinstance(result, httpx.Response) and result.status_code == 200 for result in results)
         assert (await client.get("/api/fleet/platoon")).status_code == 200
         assert len(calls) == 1
@@ -158,11 +165,11 @@ def test_platoon_caches_geometry_per_version_but_reads_current_pose(platoon_app,
 
 async def _check_cached_geometry(platoon_app, monkeypatch, no_loop):
     from fleet import lane_progress
-    from fleet.server import console_routes
+    from fleet.server import platoon_geometry
 
     app, store = platoon_app
     calls, speed_calls = [], []
-    real_speed_table = console_routes.speed_table
+    real_speed_table = platoon_geometry.speed_table
 
     def counted_loop(site):
         calls.append(site)
@@ -174,7 +181,7 @@ async def _check_cached_geometry(platoon_app, monkeypatch, no_loop):
 
     pose = SimpleNamespace(state="LOCALIZED", x=0.2, y=0.0)
     monkeypatch.setattr(lane_progress, "main_loop", counted_loop)
-    monkeypatch.setattr(console_routes, "speed_table", counted_speed)
+    monkeypatch.setattr(platoon_geometry, "speed_table", counted_speed)
     monkeypatch.setattr(app.state.map_pose, "arbitrated_pose", lambda _: pose)
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://fleet",
                                  headers={"Authorization": "Bearer op"}) as client:
@@ -189,7 +196,36 @@ async def _check_cached_geometry(platoon_app, monkeypatch, no_loop):
             assert first.json()["robots"][0]["s_m"] == pytest.approx(0.2)
             assert second.json()["robots"][0]["s_m"] == pytest.approx(0.7)
             assert second.json()["dispatch"] is False
-        draft = store.draft_view()
+        changed = square().model_dump(by_alias=True)
+        for edge in changed["edges"]:
+            edge["speed_cap_mps"] = 0.1
+        draft = store.save_draft(SiteMap.model_validate(changed), expected_revision=None, principal_id="op")
         store.activate(expected_revision=draft["revision"], principal_id="op", route_active=False)
-        assert (await client.get("/api/fleet/platoon")).status_code == second.status_code
+        updated = await client.get("/api/fleet/platoon")
+        assert updated.status_code == second.status_code
         assert len(calls) == 2 and len(speed_calls) == (0 if no_loop else 2)
+        if not no_loop:
+            assert updated.json()["map_version"] != second.json()["map_version"]
+            assert updated.json()["speed"] != second.json()["speed"]
+
+
+def test_failed_platoon_geometry_is_retried(platoon_app, monkeypatch):
+    from fastapi.testclient import TestClient
+    from fleet import lane_progress
+
+    app, _ = platoon_app
+    calls = []
+
+    def transient_failure(site):
+        calls.append(site)
+        if len(calls) == 1:
+            raise ValueError("transient computation failure")
+        return main_loop(site)
+
+    monkeypatch.setattr(lane_progress, "main_loop", transient_failure)
+    with TestClient(app, raise_server_exceptions=False) as client:
+        auth = {"Authorization": "Bearer op"}
+        assert client.get("/api/fleet/platoon", headers=auth).status_code == 500
+        assert client.get("/api/fleet/platoon", headers=auth).status_code == 200
+        assert client.get("/api/fleet/platoon", headers=auth).status_code == 200
+        assert len(calls) == 2
