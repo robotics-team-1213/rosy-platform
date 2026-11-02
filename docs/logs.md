@@ -13764,3 +13764,9 @@ osy-d395-s1d\`.
 - 증거: 돌기 격자 PnP top 0.58 px·side 2.8 px, arm_b 녹화 세션 `live.json`을 읽기만 해 FK 맞춤 3.1 px. 팔 명령·관측기 기동 없음. 스크립트와 겹침 영상은 Git 밖 작업 공간 조사 폴더.
 - gate 변화: 없음. fixture 수치는 바꾸지 않았다(실측 받침 채택은 도달·충돌 비교 뒤).
 - CE: 해당 없음 — 측정 기록이며 해결한 장애가 아니다. 실물과 시뮬레이션의 차이는 대장에 남겼다.
+
+## 2026-11-03 · uncommitted · feat(isaac): 실물 top·side 카메라 시점과 D-947 Accepted
+- 변경: 컨테이너 fixture `real_cameras`(실측 PnP의 자세·기울기·초점거리), `stacking_scene.real_capture`가 첫 시행에 `real-top.png`·`real-side.png`를 렌더, 보고서 허용 그림에 추가, 방향(좌우 반전) 시험. D-947 Accepted(사용자 확인).
+- 증거: Isaac top 렌더와 실물 top 영상의 돌기 36개 평균 1.13 px·최대 1.85 px, side는 겹침으로 확인(PnP 잔차 2.8 px 이내). `test_container_stack.py` 원격 통과.
+- gate 변화: 없음. 팔 받침은 CAD 값 그대로다. 둘째 실행은 모델 PC에서 외부 정지로 적층 결과를 주장하지 않는다.
+- CE: 해당 없음 — 새 기능이다. 카메라 기울기(roll)를 빼면 side가 4.3 px로 한계를 넘는다는 점은 fixture 주석과 검증 기록에 남겼다.
