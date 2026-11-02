@@ -355,6 +355,6 @@
 
 - 2026-11-03 · uncommitted · docs: 측면 카메라 정량 검증 상태 정정
 - 2026-11-03 · f81b8315d0 · docs: unwedge의 측정 기반 성공 조건과 검증 범위
-- 2026-11-03 · uncommitted · feat(omx): 떨어진 팔을 센 관절로 한 단계씩 빼내는 복구
 - 2026-11-03 · uncommitted · fix(harness): bootstrap each timing test before canonical imports
 - 2026-11-03 · uncommitted · fix(harness): preserve admission and G1 tests across main merge
+- 2026-11-03 · uncommitted · fix(harness): retain fresh timing proof through publication

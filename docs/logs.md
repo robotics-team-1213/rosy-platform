@@ -13812,6 +13812,13 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 기존 legacy 중첩 carrier의 미확인 origin은 추정하지 않으며 소스 검증을 main 착지·SLO 달성으로 보고하지 않는다.
 - CE: 기존 Nov1 교훈 갱신. 직접 소유권 목록과 논리 leaf 완료를 구분해야 하는 이유, 분할 후에야 드러나는 중복 호출을 기록했다.
 
+## 2026-11-03 · uncommitted · feat(omx): 떨어진 팔을 센 관절로 한 단계씩 빼내는 복구
+- 변경: `cell_unwedge.py`. shoulder_lift·elbow_flex만 홈 쪽으로 1단위씩, 손목은 명령 없음. 단계마다 지연을 읽어 1.2단위를 넘으면 반 단계 되돌리고 다른 관절로, 둘 다 막히면 사람을 부름. 단계마다 top·side 사진과 판단 기록. `cell_pipeline.recover`는 쥔 것이 없으면 이 단계를 쓰고 집게를 크게 벌리지 않는다.
+- 증거: 2026-11-03 04:05 arm_b가 피벗 goto 중 wrist_flex 가드로 컨테이너 위에 떨어짐. 고정 recover lift(elbow −5, wrist +4)는 이 자세에서 홈 반대쪽이라 같은 오류로 실패. `cell_unwedge`는 실물에서 21단계, 막힘 없이 빼내고 park.
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: `docs/solutions/runtime-errors/omx-arm-b-dropped-on-the-stack-and-the-fixed-recover-lift-pressed-it-down-2026-11-03.md`
+
 ## 2026-11-03 · uncommitted · feat(omx): 세션 서보 튜닝을 기종 → 현장 caps → 로봇 프로필 순서로 겹친다
 - 변경: 기종 기본값 `deploy/robot/omx/omx-ai-follower-tuning.json`(`rosy.omx-servo-tuning.v1`, 팔꿈치 13·손목 14 I 게인 50, 근거 포함). `session_caps.load_caps(model=, robot=)`가 모터·키 단위로 기종 < 현장 `caps.json` < 로봇 프로필 `servo` 순서로 합친 뒤 기존 범위로 검사한다. 튜닝 층은 `p`·`i`·`acc`·`vel`만 받고 PWM·전류는 현장 caps에만 둔다. `cell_robot_profile`이 선택 필드 `servo`를 받고 profile SHA에 넣는다. `record_session`이 세 층을 읽는다. 두 팔 원격조종(`two_arm_config.follower_gains`)도 같은 기종 P·I를 설정 파일 `follower_gains` 아래에 깐다.
 - 증거: D-951 5·6(2026-11-01 두 팔, I 50으로 팔꿈치 +1.52→+0.06, 손목 −0.41→+0.03, TCP 12.3→3.3 mm). 지금까지는 현장 `caps.json`에 손으로 넣어야 했고 빠지면 다시 처졌다.
@@ -13819,18 +13826,18 @@ osy-d395-s1d\`.
 - 결정: 없음(D-951 6의 구현)
 - CE: 해당 없음 — 원인과 해결은 D-951과 작업 기록에 이미 있고, 이번은 그 값을 코드 기본값으로 옮긴 일이다.
 
-## 2026-11-03 · uncommitted · fix(remote): 배치의 각 시험 입장에서 재부팅 임박 차단
-- 변경: 최초 호스트 선택에만 있던 D-889 13의 재부팅 임박 판정을 각 원격 ADMIT에도 적용한다. 차단된 작업은 자원 해제 뒤 같은 Work index로 반환하고 다른 호스트 또는 기존 bounded wait로 이어간다. quarantine 재시험의 원본 실패·로그와 남은 재시험을 보존한다. 기존 단일 호스트 호출 계약도 유지한다.
-- 증거: 원격 재현 15 FAIL/9 PASS, 최종 코드 `95abfc2cdb` 관련 9 suite 228 PASS·skip/NEW/known/flaky 0, 독립 검토 P1/P2 없음, size 3 commits PASS. 관측된 종료143은 시험 PC의 예약 재부팅 경계와 겹쳤다. 기존 착지의 공식 resume에서 PASS31 invocation 재사용을 확인했다.
-- gate 변화: 없음. 기존 재부팅 시각·780초 타이머/서비스 판정·자원 하한·deadline/stop을 유지하며 추가 SSH·새 flag·의존성은 없다. 이미 실행 중인 긴 작업은 기존143/resume 경계다.
-- CE: 기존 교훈 갱신 — `docs/solutions/workflow-issues/landings-gave-the-turn-back-and-reran-everything-2026-11-01.md`의 재부팅 항목에 배치 중간 입장 공백과 검증·복구 범위를 남겼다. 새 실물 재부팅 시험이나 운영 반영 완료를 주장하지 않는다.
-
 ## 2026-11-03 · uncommitted · feat(omx): 같은 크기 컨테이너가 줄지어 붙어 있으면 개수를 세어 나눈다
 - 변경: `cell_objects.classify`가 2~`objects.split_max`(6)개, 칸 사이 틈 `objects.split_gap_mm`(8)까지 나눠 보고, 줄이 컨테이너 짧은 변·긴 변 어느 쪽으로 늘어서도 시도한다. 엄격 판정을 통과하는 조합 중 조각 폭·길이가 카탈로그에 가장 가까운 것을 고른다. 조각마다 엄격 일치·방향·채움 검사는 그대로다.
 - 증거: 2026-11-03 arm_b 배 위에 3칸 컨테이너 다섯 개가 6 mm 틈으로 놓여 한 덩어리(113 × 100 mm)로 보여 집을 대상이 없었다. 현장 사진에서 셋으로 나뉘어 각각 container-3로 인식됨. 실물 집기는 손목에 가려 집게 확인이 거절해 아직 없음.
 - gate 변화: 없음
 - 결정: 없음
 - 교훈: 없음(같은 날 arm_b 낙하 교훈에 이어서 기록 예정)
+
+## 2026-11-03 · uncommitted · fix(remote): 배치의 각 시험 입장에서 재부팅 임박 차단
+- 변경: 최초 호스트 선택에만 있던 D-889 13의 재부팅 임박 판정을 각 원격 ADMIT에도 적용한다. 차단된 작업은 자원 해제 뒤 같은 Work index로 반환하고 다른 호스트 또는 기존 bounded wait로 이어간다. quarantine 재시험의 원본 실패·로그와 남은 재시험을 보존한다. 기존 단일 호스트 호출 계약도 유지한다.
+- 증거: 원격 재현 15 FAIL/9 PASS, 최종 코드 `95abfc2cdb` 관련 9 suite 228 PASS·skip/NEW/known/flaky 0, 독립 검토 P1/P2 없음, size 3 commits PASS. 관측된 종료143은 시험 PC의 예약 재부팅 경계와 겹쳤다. 기존 착지의 공식 resume에서 PASS31 invocation 재사용을 확인했다.
+- gate 변화: 없음. 기존 재부팅 시각·780초 타이머/서비스 판정·자원 하한·deadline/stop을 유지하며 추가 SSH·새 flag·의존성은 없다. 이미 실행 중인 긴 작업은 기존143/resume 경계다.
+- CE: 기존 교훈 갱신 — `docs/solutions/workflow-issues/landings-gave-the-turn-back-and-reran-everything-2026-11-01.md`의 재부팅 항목에 배치 중간 입장 공백과 검증·복구 범위를 남겼다. 새 실물 재부팅 시험이나 운영 반영 완료를 주장하지 않는다.
 
 ## 2026-11-03 · uncommitted · fix(harness): isolate G1 timing in a dedicated serial, host-exclusive job
 - Change: CI/lab share one plan that removes G1 timing from ordinary FULL/ROOT/explicit-file/affected invocations and adds exactly one whole-file job. Existing ROSY_JOB_ALONE admission and disabled xdist apply together. The gate requires original collected and actually passed item sets to match, with zero skips. Dedicated results bypass success caches and reruns. Explicit FULL validates both the ROOT exclusion and the complete dedicated companion. The 0.45s threshold, skip helper and production control code are unchanged.
@@ -13859,13 +13866,6 @@ osy-d395-s1d\`.
 - Gate: SOURCE/LOCAL remain GO only for these scoped results. Independent exact 45720c033b source review found no supported findings. Standalone and wrapper checks are separate process contexts, not a broad selection that can share import state. Existing whole-import validation remains intact. Actual G1 timing was not executed again; the next official FULL still requires its fresh strict receipt. The old official snapshot and its diagnostic work were not stopped, restarted or edited by this fix, and no FULL success or landing is claimed.
 - CE: not applicable. Applied shared-pytest-process-masks-path-dependent-import-2026-10-26: the existing lesson already describes this exact masking mechanism and requires whole-file fresh-process proof. The fix and the three explicit execution contexts retain the new evidence without duplicating the lesson.
 - Native checks: canonical generate completed; lint 0 errors / 41 existing module-freshness/worktree-cap warnings. Both files retain all original test/fixture definitions and decorators (AST comparison); Python AST/progress YAML and diff checks passed. Eighteen-commit size_range passed before this record-only commit; secret scan added 0 findings (two unchanged historical log findings). Account1077 remains preserved.
-
-## 2026-11-03 · uncommitted · feat(omx): 떨어진 팔을 센 관절로 한 단계씩 빼내는 복구
-- 변경: `cell_unwedge.py`. shoulder_lift·elbow_flex만 홈 쪽으로 1단위씩, 손목은 명령 없음. 단계마다 지연을 읽어 1.2단위를 넘으면 반 단계 되돌리고 다른 관절로, 둘 다 막히면 사람을 부름. 단계마다 top·side 사진과 판단 기록. `cell_pipeline.recover`는 쥔 것이 없으면 이 단계를 쓰고 집게를 크게 벌리지 않는다.
-- 증거: 2026-11-03 04:05 arm_b가 피벗 goto 중 wrist_flex 가드로 컨테이너 위에 떨어짐. 고정 recover lift(elbow −5, wrist +4)는 이 자세에서 홈 반대쪽이라 같은 오류로 실패. `cell_unwedge`는 실물에서 21단계, 막힘 없이 빼내고 park.
-- gate 변화: 없음
-- 결정: 없음
-- 교훈: `docs/solutions/runtime-errors/omx-arm-b-dropped-on-the-stack-and-the-fixed-recover-lift-pressed-it-down-2026-11-03.md`
 
 ## 2026-11-03 · f81b8315d0 · docs: unwedge의 측정 기반 성공 조건과 검증 범위
 
