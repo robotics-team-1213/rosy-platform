@@ -34,7 +34,7 @@ if (failure) {
   document.getElementById('login-retry').href = back;
 }
 document.getElementById('login-back').href = back;
-document.getElementById('login-back').hidden = central || !!failure;
+document.getElementById('login-back').hidden = account || !!failure;
 if (query.get('draft') === '1') {
   document.getElementById('login-context').hidden = false;
   document.getElementById('login-context').textContent =
