@@ -13732,3 +13732,10 @@ osy-d395-s1d\`.
 - 증거: 미착지 소스 `d51f653ee5` 원격 goal/rollup/event/batch 95개 통과, NEW 0. 선행 원격 RED로 회원 누락·재시도 누출·direct branch 재사용·metadata stat 실패·모호한 train origin·열린 snapshot 보존·이전 완료/조회 기간 경계·손상 scope·미기록 pin origin·동일ticket 재emit·중복branch를 확인했다. 읽기 전용 실제 기록 재계산은 회원 4건의 최초 topic lead와 새 camera lead 18.2916667분을 복원했다. 과거 automatic train 18건의 origin 증거 부족과 고정/현재 24h 조회의 영향 0건을 구분한다.
 - gate 변화: 없음. 소스 회귀·입력 재계산이며 main 적용과 SLO 달성을 주장하지 않는다.
 - CE: 기존 Nov1 교훈의 measurement trap을 갱신했다. ticket lead로 바꾸면 retry 이전의 대기 시간이 사라지는 비가시 판단과 검증 한계를 기록한다.
+
+## 2026-11-03 · uncommitted · fix(omx): 놀고 있는 팔은 60초에 접고, 막힌 접기는 한 번만 다시 한 뒤 사람을 부른다
+- 변경: `runner.idle_park_s` 180→60, `runner.idle_stop_s` 180→30, 새 `runner.idle_retry_s` 300. 막혀 멈춘 자동 접기는 멈춘 때부터 idle_retry_s 뒤 한 번만 다시 하고, 또 멈추면 토크를 유지한 채 `person_needed`를 보고한다. 명령이 오면 자동 접기 횟수가 되살아난다. 접기는 이전 고장이 있어도 막힘을 감시하고, 실제로 홈에 정착했을 때만 홈으로 친다(토크 OFF의 조건).
+- 증거: 전에는 막힌 자동 접기를 idle_park_s마다 끝없이 다시 했고, 고장 뒤 접기는 막힘 감시가 꺼진 채 SETTLE_S가 지나면 홈으로 쳐서 홈이 아닌 곳에서 토크 OFF가 가능했다(시험으로 재현). 사용자 결정 2026-11-03.
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: `docs/solutions/runtime-errors/omx-blocked-wrist-roll-reached-the-guard-unseen-2026-11-02.md`
