@@ -99,5 +99,6 @@ D-946 reserved in another in-flight branch (refs/adr/D-946), absent from this D-
 D-942 unused: no refs/adr/D-942 and no ADR file in any branch or worktree when D-944/D-948 landed (2026-11-01)
 D-946 reserved in another in-flight branch (worktree sim-parity), absent from this D-944/D-948 branch; remove when its ADR lands
 D-952 no refs/adr/D-952 and no ADR file in any worktree when D-954 was written (worktree pi45 owner note names it); remove if it lands
-D-953 reserved in another in-flight branch (worktree pi45), absent from this D-954 branch; remove when its ADR lands
+D-952 unused: no refs/adr/D-952; the D-953 draft held the number outside the repo before adr_reserve.py assigned D-953 (2026-11-01)
+D-952 no refs/adr/D-952 and no ADR file in any worktree when D-954 was written (worktree pi45 owner note names it); remove if it lands
 D-959 unused: a D-960 draft first took this number without a reservation, adr_reserve then issued D-960; no refs/adr/D-959
