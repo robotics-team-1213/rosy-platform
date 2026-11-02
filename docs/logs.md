@@ -13726,3 +13726,11 @@ osy-d395-s1d\`.
 - 증거: 실패는 land-fix-publish-baseline-checkout-pin 착지의 MAIN-RED(main 06a479abd1), 복구는 fix/main-red-rosbridge-ledger. 이 변경은 원격 `test/test_affected_tests.py`·`test/test_no_cross_host_dds.py`.
 - gate 변화: 없음
 - CE: 해당 없음 — 재발 방지는 가드 집합 자체이고 이유는 코드 주석에 있다.
+
+## 2026-11-03 · uncommitted · fix(publish): 실제 FULL·브라우저 실행 근거로 게시와 병합을 검증한다
+
+- 변경: `publish_main.green_full`이 후보 SHA의 정본 FULL·전체 opt-in 브라우저 chunk/ALONE 계획과 정확한 commit·tree·환경·argv·로그 SHA-256 대응을 확인한다. 기존 분할기를 그대로 사용하며 준비 후보는 기존 main 병합 bridge와 최종 계획·환경 일치가 필요하다. `--no-cache`는 재사용만 끄고 새 clean 실행 근거를 남긴다.
+- 증거: `cf16fa8214` 원격 게시·착지·준비·선택·캐시·batch 7파일 318 PASS, 0 SKIP, NEW 0·known 0·flaky 0. 선행 RED `b1cf199195` 3실패, 독립 검토 반례 RED `d4ed8d5348` 4실패 뒤 수정했다. 실제 후보의 정본 41호출·브라우저 13청크 추출을 확인했고 #227 head `8a84c7e359`는 opt-in 브라우저 계획 부재로 거부했다.
+- gate 변화: 기존 FULL 기준을 선택과 열린 PR 병합 양쪽에서 검증한다. 일반 ROS skip과 승인된 quarantine 재실행의 기존 판정은 유지한다. tier-only·hash 없는 과거 근거는 소급 승인하지 않는다.
+- 한계: 캐시 정리·로그 소실·같은 경로의 내용 교체는 게시 거부다. 최종 통합 SHA의 새 FULL, 공개 CI, 배포·실물 수용은 별도 검증이다.
+- 교훈: 기존 `own-full-landing-to-publish-wasted-hours-2026-11-02.md`의 #227 해석은 게시 담당이 최종 검증 뒤 정정한다.

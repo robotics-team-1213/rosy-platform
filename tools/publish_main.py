@@ -14,8 +14,8 @@ Publish mode:
    parents. **Green FULL** = an exact-SHA land record whose base is an ancestor and explicit tier is
    ``full``, containing that immutable candidate's canonical FULL and every opted-in browser chunk,
    including ALONE. ``publish_evidence`` requires exact commit/tree/environment/argv/log cache mappings
-   and usable clean logs for every invocation (including the existing sharder outputs). Prepared FULL
-   evidence keeps its own candidate provenance and requires the final plan and environment to match.
+   and content-hashed clean logs for every invocation (including the existing sharder outputs). Prepared
+   FULL evidence requires the existing main-merge bridge plus matching final plan and environment.
    Missing/pruned mappings, missing logs and vacuous browsers fail closed. Legacy tier/root-test
    markers alone never qualify. If records exist but none has a ``tier`` string or an ``invocations``
    list of lists, the format is unknown: exit 8, never a silent "nothing to publish". The push runs the
