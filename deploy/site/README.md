@@ -2259,6 +2259,10 @@ ROSY_SITE_WORKCELL_ARM_CREDENTIAL_PATHS='{"ROSY_ARM_A_TOKEN":"/run/rosy-workcell
 카메라도 같은 방식이다. 기본 Vision 매핑은 overhead·wrist A·wrist B이고, 측면 카메라처럼 카메라를 더하면 `ROSY_SITE_WORKCELL_CAMERA_CREDENTIAL_PATHS`에 전체 교체 매핑을 넣고 Vision 전용 camera secret 디렉터리에 파일을 둔다(예: `"ROSY_CAMERA_SIDE_TOKEN":"/run/rosy-workcell-camera-secrets/side_token"`). 별도 미서명 Compose 오버레이로
 자격 증명을 덧붙이지 않는다. 기존 추가 팔 오버레이를 쓰는 현장은 이 변수를 지원하는
 새 서명 candidate로 전환할 때 전체 매핑을 보존하고 추가 오버레이를 함께 제거한다.
+오버레이만 빼면 갱신기가 실행 중 구성 불일치·Fleet 재시작 반복으로 거절하므로, 실제로 통과한 순서
+(hold → 추가 팔을 뺀 임시 manifest로 현재 candidate 재생성 → 검토한 checkout에서 host verifier 갱신 →
+forget-failed·resume·run → 전체 매핑 복원)는
+[교훈 문서](../../docs/solutions/deployment/site-extra-arm-overlay-switch-needs-a-staged-runtime-2026-11-01.md)를 따른다.
 
 이 기능에는 변경 소스로 다시 빌드한 Fleet·Vision 이미지와 오버레이 해시를 포함한
 새 서명 candidate가 필요하다. 새 오버레이와 서명 coverage를 지원하는 host verifier·updater를

@@ -4383,6 +4383,11 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - gate 변화: 없음. 서명 후보 배포 뒤 443 tailnet readback이 남았다. IP 주소로는 TLS가 실패하므로(인증서 SAN에 IP 없음) 이름으로 접속한다.
 - CE: 해당 없음 — 대역 누락은 이 기록과 Caddyfile 주석으로 복원된다.
 
+## 2026-11-02 · uncommitted · 현장 추가 팔 오버레이 전환 순서를 교훈으로
+- 변경: 10-27부터 현장 자동 업데이트를 막은 미서명 arm-s 오버레이를 정식 매핑으로 바꾼 실제 순서를 `docs/solutions/deployment/site-extra-arm-overlay-switch-needs-a-staged-runtime-2026-11-01.md`에 기록하고, `deploy/site/README.md` 전환 문단에서 그 문서를 가리킨다. 기존 README는 "오버레이를 함께 제거"만 적어 그대로 하면 세 번 거절된다.
+- 증거: 2026-11-02 09:17 KST 현장 candidate 2ba97ac, proxy·fleet·vision·postgres healthy, Fleet에 A/B/S 토큰, dry-run idle.
+- gate 변화: 없음. CE: 새 교훈 기록.
+
 ## 2026-11-02 · uncommitted · 관제 단위 companion 로그 상한 보완
 
 - 변경: 서명 canonical 관제 단위 overlay의 새 `control-unit-peer`에도 기본 스택과 같은 json-file 20m × 3 로그 상한을 명시했다. 이미지·네트워크·명령·권한은 바꾸지 않는다.

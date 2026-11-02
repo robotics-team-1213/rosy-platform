@@ -78,7 +78,7 @@
 ## 최근 기록
 
 - 2026-11-02 · uncommitted · 관제 단위 companion 로그 상한 보완
+- 2026-11-02 · uncommitted · 현장 추가 팔 오버레이 전환 순서를 교훈으로
 - 2026-11-02 · uncommitted · fix(site): Tailscale 대역에서도 천장 카메라 미리보기
 - 2026-11-02 · uncommitted · feat(site): 관제 단위 overlay를 서명 candidate에 넣는다 (D-960)
 - 2026-11-02 · uncommitted · OMX 자동 연속 운반(cell_auto_carry)과 없는 출발 site 거절
-- 2026-11-02 · uncommitted · OMX 카메라 manifest를 레지스트리에서 맞춤
