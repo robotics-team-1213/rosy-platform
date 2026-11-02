@@ -180,6 +180,36 @@ def test_fast_forward_requires_the_same_turn_ownership_after_all_checks(full_anc
     assert git(main, "rev-parse", "HEAD") == before
 
 
+@pytest.mark.parametrize("change", ["pid", "epoch", "missing_epoch"])
+def test_overtime_does_not_reprepare_or_rewrite_another_turn(full_anchor, monkeypatch, change):
+    main, _, _, _, _, _ = full_anchor
+    before, prepared = git(main, "rev-parse", "HEAD"), []
+    saved = {}
+
+    def adopted(*args, **kwargs):
+        ticket = land.land_queue._held[0]
+        info = json.loads(ticket.read_text())
+        fields = {"pid": os.getpid() + 1} if change == "pid" else {
+            "turn_started": info["turn_started"] + 100 if change == "epoch" else None}
+        land.land_queue.set_status(ticket, "turn", **fields)
+        saved.update(ticket=ticket, contents=ticket.read_bytes())
+        raise land.Overtime("an old check completed after ownership changed")
+
+    def refuse_prepare(*args, **kwargs):
+        prepared.append(args)
+        raise land.Stop("must not prepare another owner's ticket")
+
+    monkeypatch.setattr(land.land_guards, "first", adopted)
+    monkeypatch.setattr(land.land_prepare, "again", refuse_prepare)
+    monkeypatch.setattr(land, "select", lambda *a, **k: ([["pkg/test"]], None))
+    assert land.main(["--tests", "auto"]) == 1
+    assert not prepared, "the old owner entered preparation after losing its turn"
+    # same-PID epoch changes are removed by normal leave(), so inspect the last status write before cleanup
+    if change == "pid":
+        assert saved["ticket"].read_bytes() == saved["contents"]
+    assert git(main, "rev-parse", "HEAD") == before
+
+
 def test_again_retains_original_full_base_when_main_moves_during_preparation(full_anchor, monkeypatch):
     main, wt, base, candidate, path, original = full_anchor
     args = land.argparse.Namespace(tests="auto", no_cache=False, queue_timeout=0)
