@@ -62,21 +62,26 @@ def restore(wt: Path, branch: str) -> str | None:
         return None
     if record.get("tier") == "carried":
         return None  # a main-red carry (land_mainred) is never green: the next run tests it again
+    return main if bridge(wt, candidate, main, "HEAD", "main") else None
+
+
+def bridge(wt: Path, candidate: str, tested_main: str, head: str, main: str) -> bool:
+    """Only merges of main and permitted record resolutions connect candidate to head."""
     ancestor = lambda a, b: _git(wt, "merge-base", "--is-ancestor", a, b).returncode == 0  # noqa: E731
-    if not (ancestor(candidate, "HEAD") and ancestor(main, "main")):
-        return None
-    if _git(wt, "rev-list", "--no-merges", "HEAD", f"^{candidate}", "^main").stdout.strip():
-        return None  # a commit of the branch's own since the FULL tier: test it all again
-    for line in _git(wt, "rev-list", "--merges", "--parents", "HEAD", f"^{candidate}", "^main").stdout.splitlines():
+    if not (ancestor(candidate, head) and ancestor(tested_main, main)):
+        return False
+    if _git(wt, "rev-list", "--no-merges", head, f"^{candidate}", f"^{main}").stdout.strip():
+        return False  # a commit of the branch's own since the FULL tier: test it all again
+    for line in _git(wt, "rev-list", "--merges", "--parents", head, f"^{candidate}", f"^{main}").stdout.splitlines():
         sha, first, *others = line.split()
-        if len(others) != 1 or not ancestor(others[0], "main"):
-            return None  # something other than main was merged in
+        if len(others) != 1 or not ancestor(others[0], main):
+            return False  # something other than main was merged in
         tree = _git(wt, "merge-tree", "--write-tree", "--no-messages", first, others[0])
         if tree.returncode == 0:
             # land.merge regenerates index.md and drops landed gap lines in the merge commit itself
             edited = _git(wt, "diff", "--name-only", tree.stdout.split()[0], sha).stdout.split()
             if not all(map(resolver, edited)):
-                return None  # the merge commit changed more than git's own merge and those records
+                return False  # the merge commit changed more than git's own merge and those records
         elif tree.returncode != 1 or not all(map(resolver, conflict_stages(tree.stdout))):
-            return None  # a conflict outside land.py's auto-resolved records was settled by hand
-    return main
+            return False  # a conflict outside land.py's auto-resolved records was settled by hand
+    return True

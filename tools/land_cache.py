@@ -14,12 +14,14 @@ which every worktree of the clone shares. A later run skips an invocation when
   nothing, and leaves the known-failure lists alone (a shorter list can turn an old pass NEW).
 
 Lint, safety-review, size-range and node never come from here. Bad lines are ignored; the file
-is trimmed to its last ``KEEP`` lines past ``MAX_LINES``. ``--no-cache`` turns it off.
+is trimmed to its last ``KEEP`` lines past ``MAX_LINES``. ``--no-cache`` disables reuse;
+fresh clean executions still leave evidence for publication.
 Standard library only.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import subprocess
@@ -84,8 +86,12 @@ def entries(wt: Path) -> list[dict]:
 
 def record(wt: Path, commit: str, tree: str, env: str, inv: list[str], log: Path) -> None:
     target = path(wt)
+    try:
+        digest = hashlib.sha256(log.read_bytes()).hexdigest()
+    except OSError:
+        digest = None  # Missing historical logs can support cache reuse, never publication.
     line = json.dumps({"tree": tree, "commit": commit, "env": env, "argv": inv, "log": str(log),
-                       "at": time.strftime("%Y-%m-%dT%H:%M:%S")})
+                       "log_sha256": digest, "at": time.strftime("%Y-%m-%dT%H:%M:%S")})
     with open(target, "a", encoding="utf-8") as out:
         out.write(line + "\n")
     if len(target.read_text(encoding="utf-8", errors="replace").splitlines()) > MAX_LINES:
@@ -197,14 +203,18 @@ def split(wt: Path, args, invocations: list[list[str]], head: str, python: str, 
     """(summary lines of reused invocations, invocations still to run, record(inv, log) for each pass)."""
     def skip(inv, log):
         return None
-    if getattr(args, "no_cache", False):
-        print("[cache] off (--no-cache)")
-        return [], invocations, skip
     env = env_id(wt, head)
     if env is None:
         print("[cache] off: the test-environment hash (remote_pytest.deps) is unavailable here")
         return [], invocations, skip
     tree = _git(wt, "rev-parse", f"{head}^{{tree}}").stdout.strip()
+
+    def keep(inv, log):
+        record(wt, head, tree, env, inv, log)
+
+    if getattr(args, "no_cache", False):
+        print("[cache] off (--no-cache): retaining fresh clean execution evidence")
+        return [], invocations, keep
     known = [e for e in entries(wt) if e["env"] == env]
     exact = {tuple(e["argv"]) for e in known if e["tree"] == tree}
     reused, todo = [], []
@@ -230,6 +240,4 @@ def split(wt: Path, args, invocations: list[list[str]], head: str, python: str, 
     for line in reused:
         print(f"[cache] {line}")
 
-    def keep(inv, log):
-        record(wt, head, tree, env, inv, log)
     return reused, todo, keep
