@@ -47,15 +47,15 @@ def test_diagnostic_expiry_releases_the_turn_without_starting_another_check(
             if "pkg/test" not in invocation:
                 log.write_text("1 passed in 0.01s\n", encoding="utf-8")
                 return 0
-            now[0] = 590
+            now[0] = land.TURN_CAP_S - 10
             log.write_text(FAILURE, encoding="utf-8")
             return 1
         diagnostics.append(phase)
         if phase == "alone" and expires_in == "main":
-            now[0] = 595
+            now[0] = land.TURN_CAP_S - 5
             log.write_text(FAILURE, encoding="utf-8")
             return 1
-        now[0] = 601
+        now[0] = land.TURN_CAP_S + 1
         for timer in timers:
             if not timer.cancelled and timer.due <= now[0]:
                 timer.function()
