@@ -111,8 +111,11 @@ def platoon_app():
     store.close()
 
 
-@pytest.mark.asyncio
-async def test_platoon_computation_yields_and_concurrent_readers_share_it(platoon_app, monkeypatch):
+def test_platoon_computation_yields_and_concurrent_readers_share_it(platoon_app, monkeypatch):
+    asyncio.run(_check_concurrent_readers(platoon_app, monkeypatch))
+
+
+async def _check_concurrent_readers(platoon_app, monkeypatch):
     from fleet import lane_progress
 
     app, _ = platoon_app
@@ -148,9 +151,12 @@ async def test_platoon_computation_yields_and_concurrent_readers_share_it(platoo
         assert len(calls) == 1
 
 
-@pytest.mark.asyncio
 @pytest.mark.parametrize("no_loop", [False, True])
-async def test_platoon_caches_geometry_per_version_but_reads_current_pose(platoon_app, monkeypatch, no_loop):
+def test_platoon_caches_geometry_per_version_but_reads_current_pose(platoon_app, monkeypatch, no_loop):
+    asyncio.run(_check_cached_geometry(platoon_app, monkeypatch, no_loop))
+
+
+async def _check_cached_geometry(platoon_app, monkeypatch, no_loop):
     from fleet import lane_progress
     from fleet.server import console_routes
 
@@ -183,7 +189,7 @@ async def test_platoon_caches_geometry_per_version_but_reads_current_pose(platoo
             assert first.json()["robots"][0]["s_m"] == pytest.approx(0.2)
             assert second.json()["robots"][0]["s_m"] == pytest.approx(0.7)
             assert second.json()["dispatch"] is False
-        draft = store.draft()
+        draft = store.draft_view()
         store.activate(expected_revision=draft["revision"], principal_id="op", route_active=False)
         assert (await client.get("/api/fleet/platoon")).status_code == second.status_code
         assert len(calls) == 2 and len(speed_calls) == (0 if no_loop else 2)
