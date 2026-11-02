@@ -13601,3 +13601,9 @@ osy-d395-s1d\`.
 - 증거: 운영 Learning 계정 화면 HTTP 200, 모터 ID 11–16 응답, 정지 직전 같은 장치의 건강 표본 대조. 새 학습·팔 동작·수리는 미실행이다.
 - gate 변화: 없음. 데이터·고장 원인 확인은 실물 수용이 아니다.
 - 교훈: CE 미해결. 원인이 검증되지 않아 해결 교훈을 추가하지 않았다.
+
+## 2026-11-02 · uncommitted · test: 리뷰 관문 스크립트를 시험이 부른다
+- 변경: `test/test_review_gate_script.py` — `.github/review-gate.sh`가 bash로 파싱되고 엄격 모드(`set -euo pipefail`, `inherit_errexit`)를 지키는지 본다. 경로를 글자 그대로 불러 선택기가 매핑한다.
+- 증거: 11-02 13:20~13:33 omx-arm-fault-visibility 차례가 main 변화분의 `.github/review-gate.sh: maps to no module (unknown -> full)`로 반납됐다. 원격 시험은 착지 기록에 남긴다.
+- gate 변화: 없음
+- 교훈: 없음
