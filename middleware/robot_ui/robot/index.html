@@ -20,7 +20,7 @@
 <body>
   <ui-shell id="entry-shell" grammar="procedure">
     <a class="skip-link" href="#entry-main">로그인과 작업 화면으로 건너뛰기</a>
-    <ui-topbar class="entry-topbar">
+    <ui-topbar class="entry-topbar" role="banner">
       <ui-brand><a href="/dashboard" aria-label="Rosy Robot 홈"><b>Rosy Robot</b></a></ui-brand>
       <ui-tag id="entry-role" aria-label="접속 권한" hidden></ui-tag>
       <ui-button kind="quiet" id="entry-logout" hidden>로그아웃</ui-button>
@@ -42,7 +42,7 @@
   </ui-shell>
   <ui-shell id="compatibility-shell" grammar="spatial" hidden>
   <a class="skip-link" href="#dashboard-main">상태 화면으로 건너뛰기</a>
-  <ui-topbar>
+  <ui-topbar role="banner">
     <ui-brand>
     <a class="brand" href="/dashboard" aria-label="Rosy Robot 홈">
       <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>

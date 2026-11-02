@@ -36,7 +36,7 @@
 # 가리는 원시 색이 없는 항목은 적지 않는다. 테마를 따르는 표면의 색은 tokens.css에서만 온다.
 surfaces:
   - id: monitoring
-    title_prefix: ROSY Monitoring
+    title_prefix: Rosy Monitoring
     api_owners: []
     path: applications/monitoring
     themes: [dark, light]
