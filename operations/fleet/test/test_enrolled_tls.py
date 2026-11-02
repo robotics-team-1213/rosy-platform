@@ -1,6 +1,7 @@
 """Existing encrypted enrollment must select authenticated transport, not another roster."""
 import asyncio
 import socket
+import ssl
 
 import httpx
 import pytest
@@ -17,7 +18,7 @@ from cryptography.x509.oid import NameOID
 from enrollment_fakes import CODE, NAME, PINNED, FakeCore, build, scan_row
 from fleet.server.enrollment import EnrollmentService
 from fleet.swarm.robots import RobotEndpoint
-from fleet.server.enrollment_tls import EnrolledTlsBindings, EnrollmentTlsError
+from fleet.server.enrollment_tls import EnrolledTlsBinding, EnrolledTlsBindings, EnrollmentTlsError
 from fleet.server.enrollment import EnrolledRobotClient, RobotGate, EnrollmentError
 from core_common.discover import DiscoveredDevice
 from fleet.server.console import FleetConsole
@@ -705,3 +706,35 @@ def test_learned_id_applies_only_to_the_unchanged_file_row_and_the_file_wins(tmp
     file.write_text(json.dumps(dict(version='rosy.enrolled-tls/1', robots=[
         row, {**row, 'robot_id': 'rosy_42', 'hostname': 'other.local'}])))
     assert set(EnrolledTlsBindings(file, store)._approved) == {'rosy_09', 'rosy_42'}
+
+
+def test_context_is_reused_but_keyed_on_exact_ca_bytes_and_pin(tmp_path):
+    bindings, row, _, _ = approved(tmp_path)
+    binding = bindings.binding('rosy_09')
+    assert binding.context() is binding.context() is bindings.binding('rosy_09').context()
+    assert binding.context().minimum_version == ssl.TLSVersion.TLSv1_2
+    other = EnrolledTlsBinding(**{**row, 'tls_ca_sha256': '0'*64})
+    with pytest.raises(EnrollmentTlsError):  # same bytes, different pin: no reuse
+        other.context()
+    ca = tmp_path/'ca.pem'
+    ca.write_text('not a certificate')  # same pin, changed bytes: no reuse
+    with pytest.raises(EnrollmentTlsError):
+        binding.context()
+
+
+def test_expired_ca_fails_on_a_cached_context(tmp_path, monkeypatch):
+    import fleet.server.enrollment_tls as tls
+    bindings, _, _, _ = approved(tmp_path)
+    binding = bindings.binding('rosy_09')
+    cached = binding.context()
+    later = datetime.now(timezone.utc) + timedelta(days=2)
+
+    class Later(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return later
+    monkeypatch.setattr(tls, 'datetime', Later)
+    with pytest.raises(EnrollmentTlsError, match='expired'):
+        binding.context()
+    monkeypatch.undo()
+    assert binding.context() is cached
