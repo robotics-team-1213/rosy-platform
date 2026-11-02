@@ -298,6 +298,18 @@ def test_pre_ticket_rollup_unknown_membership_fails_closed(pre_ticket_rollup, co
                 tool.resume(dev, tree.name, [], lambda *args: None, wait=0, sleep=lambda s: None)
 
 
+def test_replace_validates_all_owners_before_stopping_a_direct_member(pre_ticket_rollup, monkeypatch):
+    dev, tree, leader, _ = pre_ticket_rollup
+    main = tool.holder(dev).parent.parent
+    _ticket(main, "0001", branch=_git(tree, "rev-parse", "--abbrev-ref", "HEAD"))
+    stopped = []
+    monkeypatch.setattr(tool, "stop", stopped.append)
+    with supervisor_lease(leader):
+        with pytest.raises(SystemExit, match="rides in that batch"):
+            tool.start(dev, ["--replace"], NOW.replace(second=1), lambda *args: pytest.fail("duplicate started"))
+    assert not stopped, "a later rollup owner must prevent every destructive replacement step"
+
+
 @pytest.fixture
 def starting_lander(repo, tmp_path):
     main, dev = repo
