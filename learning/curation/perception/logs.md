@@ -401,3 +401,5 @@
 - 변경: 이미지 decode의 보류 준비를 DOM 표식으로 확인하고 표시 상태는 locator로 기다려 실제 CSP의 unsafe-eval 금지를 유지한다. 카메라 새로고침은 workspace 조회 뒤 실제 references 요청을 기다린 다음 입력을 수정한다. 제품 camera.js·generation·입력 보존·미제출·판정 무효화 검증과 기존 완료 대기는 유지한다.
 - 증거: 원격 FULL run-pre48은 CSP EvalError와 아직 도착하지 않은 held 요청으로 2 failed/146 passed/NEW2를 기록했다. 해당 시험·camera.js·서빙 fixture blob은 origin/main·main·동결 후보·수정 전 HEAD가 같다. 이는 소스 동등성 근거이며 별도 main 실행 재현을 뜻하지 않는다. 정본 착지 도구의 단독 재실행은 별도로 확인한다.
 - Gate: 수정본 원격 확인 및 FULL 완료 전. CE: 해당 없음 — 실제 요청 대기와 DOM 표식이 원인·보존 조건을 설명한다.
+
+- 후속: 전체 파일의 첫 수정본 원격 실행은 decode·refresh를 포함해 24 passed, 늦은 판정의 네 입력 변형은 아직 held 요청이 도착하지 않아 4 failed/NEW4였다. 이 시험도 실제 check 요청을 보류한 뒤 입력을 바꾸도록 같은 요청 대기를 명시했다. canvas 표시나 disabled 상태가 요청 도착을 대신하지 않으며 기존 미제출·판정 무효화·편집 값 검증은 유지한다.

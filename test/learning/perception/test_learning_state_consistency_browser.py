@@ -87,7 +87,8 @@ def test_late_verdict_cannot_describe_changed_inputs(workspace, key):
     page, state, origin, expect = workspace
     ready_camera(page, origin, expect)
     state['hold'] = True
-    page.locator('#check-form ui-button[type=submit]').click()
+    with page.expect_request('**/api/learning/camera/check'):
+        page.locator('#check-form ui-button[type=submit]').click()
     expect(page.locator('#view')).to_be_visible()
     expect(page.locator('#check-form ui-button[type=submit]')).to_be_disabled()
     assert len(state['held']) == 1
