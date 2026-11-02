@@ -13812,6 +13812,13 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 기존 legacy 중첩 carrier의 미확인 origin은 추정하지 않으며 소스 검증을 main 착지·SLO 달성으로 보고하지 않는다.
 - CE: 기존 Nov1 교훈 갱신. 직접 소유권 목록과 논리 leaf 완료를 구분해야 하는 이유, 분할 후에야 드러나는 중복 호출을 기록했다.
 
+## 2026-11-03 · uncommitted · feat(omx): 세션 서보 튜닝을 기종 → 현장 caps → 로봇 프로필 순서로 겹친다
+- 변경: 기종 기본값 `deploy/robot/omx/omx-ai-follower-tuning.json`(`rosy.omx-servo-tuning.v1`, 팔꿈치 13·손목 14 I 게인 50, 근거 포함). `session_caps.load_caps(model=, robot=)`가 모터·키 단위로 기종 < 현장 `caps.json` < 로봇 프로필 `servo` 순서로 합친 뒤 기존 범위로 검사한다. 튜닝 층은 `p`·`i`·`acc`·`vel`만 받고 PWM·전류는 현장 caps에만 둔다. `cell_robot_profile`이 선택 필드 `servo`를 받고 profile SHA에 넣는다. `record_session`이 세 층을 읽는다. 두 팔 원격조종(`two_arm_config.follower_gains`)도 같은 기종 P·I를 설정 파일 `follower_gains` 아래에 깐다.
+- 증거: D-951 5·6(2026-11-01 두 팔, I 50으로 팔꿈치 +1.52→+0.06, 손목 −0.41→+0.03, TCP 12.3→3.3 mm). 지금까지는 현장 `caps.json`에 손으로 넣어야 했고 빠지면 다시 처졌다.
+- gate 변화: 없음. 가드 한계(`I_GAIN_MAX` 등)는 그대로다.
+- 결정: 없음(D-951 6의 구현)
+- CE: 해당 없음 — 원인과 해결은 D-951과 작업 기록에 이미 있고, 이번은 그 값을 코드 기본값으로 옮긴 일이다.
+
 ## 2026-11-03 · uncommitted · fix(harness): isolate G1 timing in a dedicated serial, host-exclusive job
 - Change: CI/lab share one plan that removes G1 timing from ordinary FULL/ROOT/explicit-file/affected invocations and adds exactly one whole-file job. Existing ROSY_JOB_ALONE admission and disabled xdist apply together. The gate requires original collected and actually passed item sets to match, with zero skips. Dedicated results bypass success caches and reruns. Explicit FULL validates both the ROOT exclusion and the complete dedicated companion. The 0.45s threshold, skip helper and production control code are unchanged.
 - Evidence: 72508553f6 remote plan RED: 4 failures. Final 791a884c6c five-file remote regressions: 471 passed / 0 skipped (248.25s), rosy-g1-plan-green-791a/run-1.txt. Separate actual G1 execution used main af46af4666 transport with that same source: 12 passed / 0 skipped (6.31s, peak 68MiB), rosy-g1-timing-exclusive-791a/run-1.txt. Exactly one receipt: expected=12 collected=12 passed=12 skipped=0 clean=1. Formal admission waited for existing jobs to drain; this was the first and only actual attempt, without retry. Pre-enqueue observations were 12 free cores/11.8GB, CPU some avg10 0.13%, IO some avg60 0.18%; they do not prove absence of external I/O during execution. Regression runner resource output (3MiB/CPU 9ms) conflicts with elapsed time and is not accepted as resource evidence. Logs reside outside the repository under OS Temp.

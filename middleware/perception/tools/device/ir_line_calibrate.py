@@ -27,7 +27,7 @@ if str(_PKG) not in sys.path:
 
 from control.sensing.perception.ir_calibration import (  # noqa: E402
     CHANNELS, PHASES, compute_ir_calibration, ir_side, render_config)
-from control.sensing.perception.lane import IRLineCalibration, detect_ir_line  # noqa: E402
+from perception_runtime.perception.lane import IRLineCalibration, detect_ir_line  # noqa: E402
 
 SCHEMA = "rosy.control.ir_line_calibration/1"
 PROMPTS = {

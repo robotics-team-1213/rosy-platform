@@ -15,10 +15,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from control.sensing.perception.camera_ground import simulation_ground_plane
-from control.sensing.perception.lane import LaneCornerTracker, LaneObservation
-from control.sensing.perception import lane_bev
-from control.sensing.perception.lane_bev import (
+from perception_runtime.perception.camera_ground import simulation_ground_plane
+from perception_runtime.perception.lane import LaneCornerTracker, LaneObservation
+from perception_runtime.perception import lane_bev
+from perception_runtime.perception.lane_bev import (
     BirdsEye,
     LaneEdgeFollower,
     error_for_curvature,
@@ -457,7 +457,7 @@ def test_stale_odometry_stamp_is_no_pose_and_no_output():
 
 
 def test_armed_corner_expires_by_time_without_odometry_motion():
-    from control.sensing.perception import lane as lane_module
+    from perception_runtime.perception import lane as lane_module
 
     world, _ = l_corner_world()
     tracker = LaneCornerTracker(camera_x_offset_m=CAM_X)

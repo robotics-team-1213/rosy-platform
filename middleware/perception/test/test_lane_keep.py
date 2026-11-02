@@ -7,10 +7,10 @@ import numpy as np
 import pytest
 import yaml
 
-from control.sensing.perception.camera_ground import nominal_ground_plane
-from control.sensing.perception.lane_keep import CORNER_MAX_ERROR as CORNER_CAP, FLIP_WINDOW_FRAMES as FLIP_WINDOW, LaneKeeper
-from control.sensing.perception.lane_keep import SIDE_X_M
-from control.sensing.perception.lane_keep_pairs import is_pair, pair_conflicts
+from perception_runtime.perception.camera_ground import nominal_ground_plane
+from perception_runtime.perception.lane_keep import CORNER_MAX_ERROR as CORNER_CAP, FLIP_WINDOW_FRAMES as FLIP_WINDOW, LaneKeeper
+from perception_runtime.perception.lane_keep import SIDE_X_M
+from perception_runtime.perception.lane_keep_pairs import is_pair, pair_conflicts
 
 PKG = Path(__file__).resolve().parents[1]
 PROFILE = yaml.safe_load((Path(__file__).resolve().parents[3] / "middleware" / "devices" / "pinky" / "profile" / "config" / "camera_nominal.yaml").read_text(encoding="utf-8"))
@@ -274,7 +274,7 @@ def test_steep_line_without_a_straight_lane_edge_still_holds(extra):
 
 
 def test_near_run_needs_no_long_line_on_its_side_and_is_taken_once():
-    from control.sensing.perception.lane_keep_bend import near_run
+    from perception_runtime.perception.lane_keep_bend import near_run
     run = {"centre": np.array([0.2, -0.10]), "direction": np.array([1.0, 0.0]), "along": (0.0, 0.12)}
     ends, limits = [np.array([0.289, -0.129]), np.array([0.383, 0.031])], (math.radians(45.0), 0.03, 0.08)
     assert near_run([run], ends, HALF, [], [], limits) == [run] and run["near_run"]
@@ -442,7 +442,7 @@ def test_paint_along_the_heading_outweighs_length():
 
 
 def _drop_steep_left(monkeypatch, min_heading_deg):
-    import control.sensing.perception.lane_keep as lk
+    import perception_runtime.perception.lane_keep as lk
     real = lk.pair_conflicts
     monkeypatch.setattr(lk, "pair_conflicts", lambda left, right, half, side_x: real(left, right, half, side_x)
                         + [b for b in left if b["heading_deg"] > min_heading_deg])
@@ -551,7 +551,7 @@ def test_crosswalk_blob_does_not_erase_a_continuous_lane_boundary():
 
 
 def test_blob_retry_does_not_invent_a_boundary_on_a_solid_patch():
-    from control.sensing.perception.lane_keep_lines import extract_lines
+    from perception_runtime.perception.lane_keep_lines import extract_lines
     x, y = np.meshgrid(np.arange(0.15, 0.45, 0.005), np.arange(-0.10, 0.10, 0.005))
     fitted, blobs = extract_lines(np.column_stack((x.ravel(), y.ravel())), np.random.default_rng(0))
     assert not fitted and blobs

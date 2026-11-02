@@ -8,11 +8,11 @@ import numpy as np
 import pytest
 
 ROOT = Path(__file__).resolve().parents[4]
-for directory in ("middleware/perception", "contracts/foundation", "operations/world/src",
+for directory in ("middleware/perception", "integrations/perception", "contracts/foundation", "operations/world/src",
                   "learning/evaluation/perception"):
     sys.path.insert(0, str(ROOT / directory))
 
-from control.sensing.perception.learned.road_region import observed_road_region  # noqa: E402
+from perception_runtime.perception.learned.road_region import observed_road_region  # noqa: E402
 from rosy.world.api import ObservationSnapshot, SnapshotValidity  # noqa: E402
 from rosy.world.state.projections.road_region import road_region_input_errors  # noqa: E402
 from road_fitness import _metrics, evaluate_frame, evaluate_model_frame, summarize_frames  # noqa: E402
@@ -292,7 +292,7 @@ def _replay_model(tmp_path, crop=True, real_runtime=False):
     import hashlib
     import json
     import cv2
-    from control.sensing.perception.learned.runner import LaneSegModel
+    from perception_runtime.perception.learned.runner import LaneSegModel
     height = 4 if crop else 6
     labels = cv2.resize(_labels(), (6, 6), interpolation=cv2.INTER_NEAREST)[-height:]
     logits = np.eye(len(CLASSES), dtype=np.float32)[labels].transpose(2, 0, 1)[None]

@@ -22,7 +22,7 @@ from std_msgs.msg import String
 from . import executor_choice
 from .capture_trigger import (DEFAULT_COOLDOWN_S, DEFAULT_DELTA_THRESHOLD, DEFAULT_FRAMES,
                               DEFAULT_OPERATOR_COOLDOWN_S, CaptureTrigger)
-from .recording import DEFAULT_ROOT, snapshot_node_name, write_snapshot_request
+from perception_runtime.recording import DEFAULT_ROOT, snapshot_node_name, write_snapshot_request
 
 # A snapshot flushes ~10 MB from memory; far longer means the recorder hung.
 # The request file must go then, or it would pair with the next dump.

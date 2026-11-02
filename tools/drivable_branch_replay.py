@@ -27,12 +27,13 @@ import numpy as np
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "middleware" / "perception"))
+sys.path.insert(0, str(REPO / "integrations" / "perception"))
 sys.path.insert(0, str(REPO / "contracts" / "foundation"))
 
-from control.sensing.perception.learned.drivable_paint import (  # noqa: E402
+from perception_runtime.perception.learned.drivable_paint import (  # noqa: E402
     MIN_BRANCH_WIDTH_FRACTION, _runs, drivable_target, fill_holes)
-from control.sensing.perception.learned.lane_mask import _row_runs, lane_bounded_drivable  # noqa: E402
-from control.sensing.perception.learned.runner import LaneSegModel  # noqa: E402
+from perception_runtime.perception.learned.lane_mask import _row_runs, lane_bounded_drivable  # noqa: E402
+from perception_runtime.perception.learned.runner import LaneSegModel  # noqa: E402
 
 FRAME_W, FRAME_H = 320, 240
 TILES = 48

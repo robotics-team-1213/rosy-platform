@@ -10,15 +10,15 @@
 
 Camera and lane evidence (D-209, D-228). This folder answers what is visible. It does not publish `cmd_vel`. Lidar, body geometry and dock tags live in `middleware/perception/sensors/sensing`. Static source mapping preserves `control.sensing.perception` imports and the ROS `control` distribution (D-630).
 
+> 2026-11-03 (D-964): lane fit, bird's-eye view, keeper, camera ground plane, road state and the learned model contract/runners (`manifest`, `runner`, `detector`, `lane_mask`, `signature`, ...) moved to `integrations/perception` (`perception_runtime.perception.*`). Rows below for those files are gone; see `integrations/perception/AGENTS.md`.
+
 ## Key Files
 
 | File | Description |
 |------|-------------|
 | `camera.py` | Floor, void, and obstacle classification |
-| `lane.py` | Line centre and error |
 | `road.py` | Road observation |
 | `scene_context.py` | Closed scene profiles |
-| `image_frame.py` | Shared `sensor_msgs/Image` to ndarray decode, used by `line_observer_node` and the learned node |
 | `paint_hypothesis.py` | D-395 `paint_score`: how well a pose hypothesis explains the camera's paint points (same distance score as `paint_localizer`); `camera_paint_points`: base_link paint points from one frame (keep mode front end: `floor_white_mask` on the `BirdsEye` grid) |
 | `reference_square.py` | D-395 reference square (red ring, blue core): `SquareObservation(bearing_rad, range_m, confidence)` contract, `SquareDetector` protocol, `HsvSquareDetector` rule backend |
 

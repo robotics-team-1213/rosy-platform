@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 import yaml
-from control.sensing.perception.camera_ground import GroundPlane
+from perception_runtime.perception.camera_ground import GroundPlane
 from control.sensing.perception.lane_containment import (
     PAINT_HALF_WIDTH_M, RECEIVER_EXTRAPOLATION_M, containment_payload, geometry_error, projection_uncertainty_m)
 

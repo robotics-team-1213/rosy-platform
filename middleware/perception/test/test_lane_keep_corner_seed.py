@@ -11,8 +11,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from control.sensing.perception.camera_ground import GroundPlane
-from control.sensing.perception.lane_keep import CORNER_SEED_FRAMES, LaneKeeper
+from perception_runtime.perception.camera_ground import GroundPlane
+from perception_runtime.perception.lane_keep import CORNER_SEED_FRAMES, LaneKeeper
 from test_lane_keep import GROUND, HALF, X_OFFSET, _render, _render_corner
 
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "v13c_corner_reacquire_20261010.npz"

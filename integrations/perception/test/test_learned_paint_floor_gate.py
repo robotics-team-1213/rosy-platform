@@ -3,9 +3,9 @@
 import numpy as np
 import pytest
 
-from control.sensing.perception.learned.lane_mask import FOOT_GAP_PX, NoWallClass, lane_marking_mask
-from control.sensing.perception.learned.manifest import ClassSpec, ManifestError
-from control.sensing.perception.learned.runner import LaneSegModel
+from perception_runtime.perception.learned.lane_mask import FOOT_GAP_PX, NoWallClass, lane_marking_mask
+from perception_runtime.perception.learned.manifest import ClassSpec, ManifestError
+from perception_runtime.perception.learned.runner import LaneSegModel
 
 FLOOR, LANE, WALL, DRIVABLE = 0, 1, 2, 3
 CLASSES = (ClassSpec(0, "floor", "background"), ClassSpec(1, "lane_line", "lane_marking"),

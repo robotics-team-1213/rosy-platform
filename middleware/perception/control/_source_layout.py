@@ -17,6 +17,7 @@ PACKAGE_DIRS = {
 FLAT_ROOTS = tuple(DRIVE_ROOT / name for name in
                    ("motion_limits", "recovery", "tracking", "calibration"))
 RUNTIME_ROOT = DRIVE_ROOT / 'runtime'
+PERCEPTION_RUNTIME_ROOT = PACKAGE_ROOT.parent.parent / 'integrations/perception'
 CONTROL_ROOTS = (PACKAGE_ROOT / 'nodes', RUNTIME_ROOT, *(PACKAGE_ROOT / name for name in
     ('localization', 'graph_health', 'front_camera/object_observation',
      'sensors/line_observation', 'snapshots')))
