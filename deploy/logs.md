@@ -4382,3 +4382,11 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 사이트·Fleet 관련 원격 pytest(커밋 뒤 실행). 2026-10-31 현장 proxy 컨테이너의 Caddy로 이 Caddyfile을 `caddy validate` → Valid configuration(적용 안 함). 현장 방화벽은 이미 `tailscale0`을 허용한다. 배포 전 현장 443에서 tailnet 주소의 `/api/fleet/vision/sources`는 401, 8443(Account)에서는 목록·lease·`ceiling_north` 프레임 200.
 - gate 변화: 없음. 서명 후보 배포 뒤 443 tailnet readback이 남았다. IP 주소로는 TLS가 실패하므로(인증서 SAN에 IP 없음) 이름으로 접속한다.
 - CE: 해당 없음 — 대역 누락은 이 기록과 Caddyfile 주석으로 복원된다.
+
+## 2026-11-02 · b101f57783 · fix(hosts): 모델·AI PC 미선언 유닛 선언, review-bridge 알려진 차이
+
+- 변경: `deploy/hosts/services.yaml`에 이미 설치돼 있던 유닛을 관측한 그대로 선언했다. 모델 PC `rosy-harbor-nightly` 서비스·타이머(Harbor 저장소의 `nightly_full_flow.sh`를 `~/rosy-jobs`에 복사, external), `rosy-pilot-prepare-geg6`(서명 model-code, 손으로 시작). AI PC `pinky-rosbridge-d12`·`-d13`(Pinky 스택, 꺼짐). `rosy-review-bridge`에는 `known_drift`를 단다. 설치본이 매일 갱신되는 `bridge-state-20261024`에 쓰고 템플릿의 `bridge-state`는 10-24 뒤 그대로라, 템플릿을 설치하면 오래된 상태로 돌아간다.
+- 같은 점검에서 저장소 변경 없이 처리: AI PC `gpu_tenants.py`를 착지된 main 판으로 교체(해시 일치), 모델 PC의 끝난 Isaac 실행 유닛 5개 reset-failed, 관제 PC `host_storage.py`를 rosy-ops origin/main(#12)으로 교체(self-test 통과, 이전 판 백업), 카메라 뷰 drop-in 폴더의 `.bak`를 백업 폴더로 옮김.
+- 증거: 이 worktree에서 `tools/remote/update_status.py` — model 37 declared 0 findings, ai 23 declared 0 findings(review-bridge는 KNOWN).
+- gate 변화: 없음. 관제 PC의 observer arm_a·arm_b 정지와 카메라(front·천장 폰) 실패는 셀 작업 중인 것으로 보여 손대지 않았다.
+- CE: 해당 없음 — 선언 누락은 update_status가 매번 드러낸다.
