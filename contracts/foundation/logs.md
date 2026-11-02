@@ -1100,3 +1100,16 @@
 - 증거: `test_omx_sim_pilot_contract.py`(원격).
 - Gate: 변화 없음.
 - CE: 해당 없음.
+
+## 2026-11-02 · uncommitted · 작업대 관측 manifest의 카메라 `device_path`를 선택 항목으로
+
+- 변경: `WorkcellCamera.device_path`를 선택 항목으로 바꾼다. 값이 있으면 기존처럼 중복 검사에 들고, 없으면 직렬화에서도 빠진다. Fleet·Vision·브리지는 카메라를 `image_topic`으로 고르고 이 값은 중복 검사 말고 아무도 읽지 않는다(Fleet 시험이 화면 노출 금지까지 고정). 관제 PC의 `omx-cameras.json`이 장치의 정본이며, 현장 `/etc` 사본은 2026-11-02 손목 포트가 어긋났고 root가 있어야 맞출 수 있었다. 예시 manifest에서 줄을 지웠다.
+- 증거: `operations/fleet/test/test_workcell_observations.py`(없는 manifest 왕복·있을 때 중복 거절)·`test_workcell_observation_config.py`·`test/test_omx_cameras.py` 41 passed(로컬). overhead 시험은 cv2가 있는 원격에서.
+- gate 변화: 없음. 현장 manifest의 줄은 이 계약을 가진 사이트 후보와 OMX 도구가 둘 다 깔린 뒤에 지운다(먼저 지우면 옛 계약이 Fleet 시작을 거절). CE: 기존 교훈 갱신.
+
+## 2026-11-02 · uncommitted · D-963 UsbCameraReport·UsbCameraDecisions
+
+- 변경: `workcell_observations.py`에 USB 카메라 후보·보고·결정 모델을 더했다(additive, extra forbid). API v1.350.
+- 증거: `operations/fleet/test/test_usb_camera_decisions.py`.
+- gate 변화: 없음. 실제 USB 카메라를 꽂아 승인하는 현장 수용은 하지 않았다.
+- CE: 해당 없음 — 새 기능이며 장애 해결이 아니다. 결정은 D-963에 있다.

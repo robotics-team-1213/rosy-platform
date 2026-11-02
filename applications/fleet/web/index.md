@@ -34,5 +34,5 @@
 - 2026-11-02 · 59dbc2136b · D-962 canonical Account scope closure
 - 2026-11-02 · 5f02d723d1 · D-962 independent identity backup and presentation
 - 2026-11-02 · e81af2d7c3 · D-962 independent Account artifact
+- 2026-11-02 · uncommitted · D-963 설치 화면 USB 카메라 역할 승인 패널
 - 2026-11-02 · uncommitted · 모바일 지도 레이어 경계 복구
-- 2026-11-02 · uncommitted · 신호기 녹색 등을 녹색으로 (D-525 보강)
