@@ -192,6 +192,7 @@ def _verifier(calls):
         manifest.setdefault('account_https', True)
         manifest.setdefault('omx', True)
         manifest.setdefault('workcell', True)
+        manifest.setdefault('control_unit', True)
         manifest.setdefault('monitoring', True)
         manifest['verified_images'] = list(upd.SERVICES)
         manifest['accepted_image_ids'] = {s: [_image_id(manifest['source_commit'], s)] for s in upd.SERVICES}
@@ -598,6 +599,27 @@ def test_signed_workcell_overlay_composes_with_existing_optional_overlays(host, 
         stream.write(f"ROSY_SITE_PAIRING_COMPOSE={overlay}\n")
     releases, blobs = _world((NEW, "2026-10-04T02:00:00Z"))
     assert _updater(host, FakeHttp(releases, blobs), FakeHost(host.paths)).run() == upd.EXIT_OK
+
+
+@pytest.mark.parametrize("workcell", [False, True])
+def test_signed_control_unit_overlay_keeps_automatic_updates(host, workcell):
+    """D-960: with R's control-unit overlay from the signed candidate the updater still installs new candidates."""
+    names = ["omx"] + (["workcell"] if workcell else []) + ["control-unit"]
+    overlay = " ".join(f"-f /opt/rosy/candidate/deploy/site/compose.{name}.yaml" for name in names)
+    with host.paths.site_env.open("a", encoding="utf-8") as stream:
+        stream.write(f"ROSY_SITE_PAIRING_COMPOSE={overlay}\n")
+    releases, blobs = _world((NEW, "2026-10-04T02:00:00Z"))
+    assert _updater(host, FakeHttp(releases, blobs), FakeHost(host.paths)).run() == upd.EXIT_OK
+
+
+@pytest.mark.parametrize("loaded", [False, True])
+def test_legacy_candidate_cannot_enable_unsigned_control_unit_overlay(host, loaded):
+    old = host.paths.candidates / OLD
+    (old / "release.json").write_text(json.dumps({"source_commit": OLD, "control_unit": False}))
+    updater = _updater(host, FakeHttp([], {}), FakeHost(host.paths))
+    env = {"ROSY_SITE_PAIRING_COMPOSE": "-f /opt/rosy/candidate/deploy/site/compose.control-unit.yaml"}
+    with pytest.raises(upd.Rejected, match="not covered by this signed candidate"):
+        updater._verify(old, loaded=loaded, env=env)
 
 
 @pytest.mark.parametrize("workcell", [False, True])

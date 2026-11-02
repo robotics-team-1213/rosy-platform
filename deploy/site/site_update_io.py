@@ -50,10 +50,12 @@ def allowed_overlays(env: dict[str, str]) -> list[str]:
     allowed = [[], pairing, omx, pairing + omx]  # D-785; Account is appended last.
     workcell = ["-f", "/opt/rosy/candidate/deploy/site/compose.workcell.yaml"]
     allowed += [base + workcell for base in allowed]
+    control_unit = ["-f", "/opt/rosy/candidate/deploy/site/compose.control-unit.yaml"]  # D-960
+    allowed += [base + control_unit for base in allowed]
     allowed += [base + MONITORING_OVERLAY for base in allowed]  # D-936
     if shlex.split(env.get("ROSY_SITE_PAIRING_COMPOSE", "")) not in allowed + [base + account for base in allowed]:
         raise Refused("ROSY_SITE_PAIRING_COMPOSE adds a Compose file other than "
-                      "the candidate's pairing, omx, workcell, monitoring and Account overlays")
+                      "the candidate's pairing, omx, workcell, control-unit, monitoring and Account overlays")
     if env.get("COMPOSE_FILE") or env.get("COMPOSE_PROFILES"):
         raise Refused("site.env sets COMPOSE_FILE/COMPOSE_PROFILES")
     return shlex.split(env.get("ROSY_SITE_PAIRING_COMPOSE", ""))

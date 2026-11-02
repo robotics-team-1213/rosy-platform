@@ -12,7 +12,7 @@ import yaml
 SITE = Path(__file__).resolve().parents[1] / "deploy/site"
 BOUNDED = {"driver": "json-file", "options": {"max-size": "20m", "max-file": "3"}}
 BASE_SERVICES = ("fleet", "vision", "postgres", "proxy")
-OVERLAYS = ("compose.account.yaml", "compose.control-unit.yaml.example", "compose.omx.yaml",
+OVERLAYS = ("compose.account.yaml", "compose.control-unit.yaml", "compose.control-unit.yaml.example", "compose.omx.yaml",
             "compose.pairing.yaml", "compose.workcell.yaml")
 
 

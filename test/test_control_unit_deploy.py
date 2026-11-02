@@ -27,3 +27,20 @@ def test_control_unit_overlay_requires_private_fleet_only_readonly_configuration
     assert example["share_information_with_parent"] is False and example["accept_parent_stop"] is False
     for relative in [example["tls_ca_file"], *(peer["token_file"] for peer in example["peers"].values())]:
         assert not PurePosixPath(relative).is_absolute() and ".." not in PurePosixPath(relative).parts
+
+
+def test_signed_control_unit_overlay_mounts_the_unit_read_only_and_names_its_peer():
+    """D-960: the signed overlay replaces the unsigned per-site file, so the updater keeps verifying every Compose file."""
+    site = ROOT / "deploy/site"
+    overlay = yaml.safe_load((site / "compose.control-unit.yaml").read_text(encoding="utf-8"))
+    assert set(overlay["services"]) == {"fleet", "control-unit-peer"}
+    fleet, peer = overlay["services"]["fleet"], overlay["services"]["control-unit-peer"]
+    assert "command" not in fleet and "secrets" not in fleet and "ports" not in peer
+    assert fleet["environment"]["ROSY_CONTROL_UNIT_CONFIG"] == "/etc/rosy/control-unit/control-unit.yaml"
+    assert "rosy-control-peers" in fleet["networks"] and overlay["networks"]["rosy-control-peers"]["external"]
+    mounts = fleet["volumes"] + peer["volumes"]
+    assert all(m["type"] == "bind" and m["read_only"] and m["source"].startswith("${ROSY_CONTROL_UNIT_DIR:?")
+               and not m["bind"]["create_host_path"] for m in mounts)
+    assert peer["image"].startswith("rosy-site-proxy:${ROSY_SITE_IMAGE_TAG")
+    assert peer["read_only"] and peer["cap_drop"] == ["ALL"]
+    assert peer["networks"]["rosy-control-peers"]["aliases"] == ["${ROSY_CONTROL_UNIT_PEER_ALIAS:?Set this unit's peer alias, e.g. peer-r}"]
