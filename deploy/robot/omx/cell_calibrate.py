@@ -92,11 +92,17 @@ def check(config: dict, calibration: dict, targets: list, frame, params=None) ->
     return out
 
 
+def map_sites(config: dict) -> list:
+    """The sites one remap serves: calibrate.map_sites, else arm A's floor/pinky/belt (arm B's pallet cell names
+    its own sites, 2026-11-02)."""
+    return config.get("calibrate", {}).get("map_sites") or [s for s in ("floor", "pinky", "belt") if s in config["sites"]]
+
+
 def remap(cell, config: dict, points: list, work: Path, log=print) -> dict:
     """Hover the empty jaws at each point (z_view), mark them, fit the map; None marks are skipped."""
     import cell_pipeline as cp
 
-    z_view, yaw, marks = config["coarse"]["z_view"], config["sites"]["floor"]["yaw_deg"], []
+    z_view, yaw, marks = config["coarse"]["z_view"], config["sites"][map_sites(config)[0]]["yaw_deg"], []
     for i, (x, y) in enumerate(points):
         view = {"x": x, "y": y, "z": round(z_view - config["plan"]["approach_m"], 4), "yaw_deg": yaw}
         try:
@@ -279,9 +285,8 @@ def main(argv=None):
             ref_path = Path(config["preflight"]["reference_top"]).expanduser()
             record = remap(cell, config, config.get("calibrate", {}).get("map_points", MAP_POINTS), work)
             current = cell.frame("top")
-            for site in ("floor", "pinky", "belt"):
-                if site in config["sites"]:
-                    calibration["sites"][site] = dict(record, note="remap by cell_calibrate")
+            for site in map_sites(config):
+                calibration["sites"][site] = dict(record, note="remap by cell_calibrate")
             cal_path.write_text(json.dumps(calibration))
             cell_pivot.bias_path(cal_path).write_text(json.dumps({"schema": cell_pivot.SCHEMA, "regions": []}))
             move_regions(config, cv2.imread(str(ref_path), cv2.IMREAD_GRAYSCALE), cv2.cvtColor(current, cv2.COLOR_BGR2GRAY))
