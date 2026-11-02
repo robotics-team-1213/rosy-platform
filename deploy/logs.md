@@ -4382,3 +4382,8 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 사이트·Fleet 관련 원격 pytest(커밋 뒤 실행). 2026-10-31 현장 proxy 컨테이너의 Caddy로 이 Caddyfile을 `caddy validate` → Valid configuration(적용 안 함). 현장 방화벽은 이미 `tailscale0`을 허용한다. 배포 전 현장 443에서 tailnet 주소의 `/api/fleet/vision/sources`는 401, 8443(Account)에서는 목록·lease·`ceiling_north` 프레임 200.
 - gate 변화: 없음. 서명 후보 배포 뒤 443 tailnet readback이 남았다. IP 주소로는 TLS가 실패하므로(인증서 SAN에 IP 없음) 이름으로 접속한다.
 - CE: 해당 없음 — 대역 누락은 이 기록과 Caddyfile 주석으로 복원된다.
+
+## 2026-11-02 · uncommitted · 현장 추가 팔 오버레이 전환 순서를 교훈으로
+- 변경: 10-27부터 현장 자동 업데이트를 막은 미서명 arm-s 오버레이를 정식 매핑으로 바꾼 실제 순서를 `docs/solutions/deployment/site-extra-arm-overlay-switch-needs-a-staged-runtime-2026-11-01.md`에 기록하고, `deploy/site/README.md` 전환 문단에서 그 문서를 가리킨다. 기존 README는 "오버레이를 함께 제거"만 적어 그대로 하면 세 번 거절된다.
+- 증거: 2026-11-02 09:17 KST 현장 candidate 2ba97ac, proxy·fleet·vision·postgres healthy, Fleet에 A/B/S 토큰, dry-run idle.
+- gate 변화: 없음. CE: 새 교훈 기록.
