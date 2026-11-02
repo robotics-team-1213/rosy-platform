@@ -256,6 +256,13 @@ def test_a_site_without_a_place_spot_is_refused_as_a_destination_before_anything
     assert result["result"] == "refused: board is not a destination (its site has no 'place')" and cell.commands == []
 
 
+def test_a_source_that_is_not_a_site_is_refused_before_anything_runs(tmp_path):
+    path, cell = biased_map(tmp_path), Cell([CONT2])  # 2026-11-02: --from's default pinky on arm_b's config was a KeyError
+    result = auto.run_auto(cell, CONFIG, cal.load(path), path, CATALOG, ROI, "stack", "belt", tmp_path,
+                           cell_choices.Choices(tmp_path / "choices.json"))
+    assert result["result"] == "refused: source 'stack' is not a site in the config" and cell.commands == []
+
+
 REAL_CAPS = {"11": {"pwm": 300}, "12": {"pwm": 600}, "13": {"pwm": 600}, "14": {"pwm": 300}, "15": {"pwm": 300}, "16": {"pwm": 300}}
 
 
