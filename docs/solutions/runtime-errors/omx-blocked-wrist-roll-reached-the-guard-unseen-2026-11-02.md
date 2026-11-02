@@ -68,6 +68,11 @@ under the strain thresholds.
 - Fleet: the monitor flags the joint the guard named (`fault: true`), Fleet keeps each arm's last 20 stops, and the
   cell page's `고장 이력` lists the stopped joint, every joint lagging over 1° with it, and the camera frames on
   screen when the stop arrived.
+- Idle fold (2026-11-03, tests only, not yet seen on an arm): a fold out of a hold had strain detection off
+  (`not self.fault`) and counted as home when `SETTLE_S` ran out, so it pushed a blocked roll and could turn torque
+  OFF away from home. Now a fold watches for strain, is home only when settled, and an idle fold a hold stopped is
+  tried once more after `runner.idle_retry_s`; a second hold keeps the arm and reports `person_needed`
+  (`test/test_omx_runner_idle_fold.py`).
 
 ## Next time
 
