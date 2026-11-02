@@ -591,3 +591,14 @@ def test_own_browser_chunks_rerun_only_where_the_deltas_browser_chunks_reach(cal
         land.browser_tier = lambda *args, _d=delta_ui: [ui] if len(args) == 2 else _d  # (wt, head): own
         got = selection.select(land, tmp_path, "base", "python", head="main", landed=True)[0]
         assert [inv for inv in got if inv[0].startswith("ROSY_RUN_BROWSER")] == want
+
+
+def test_the_guard_set_and_paths_under_an_ignored_folder_are_no_overlap():
+    """D-889 25, 11-02: every selection carried test_protocol_version_alignment and test/architecture tests, so
+    every pair of landings overlapped and the rollup and guards-only rules (22, 23) never applied."""
+    selection = load_selection()
+    shared = ["middleware/core/gateway/test/test_protocol_version_alignment.py",
+              "test/architecture/test_document_placement.py"]
+    assert not selection.overlaps([shared + ["fleet/test"]], [shared + ["arm/test"]])
+    assert selection.overlaps([shared + ["fleet/test"]], [shared + ["fleet/test/test_x.py"]])
+    assert not selection.overlaps([["guard/test/test_a.py"]], [["guard/test/test_a.py"]], ignore=("guard/test",))
