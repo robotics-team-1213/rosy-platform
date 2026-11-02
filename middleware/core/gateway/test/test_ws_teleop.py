@@ -102,7 +102,7 @@ def test_disconnect_after_motion_applies_zero(drive, monkeypatch):
     assert svc.command.select_output().linear == 0.0
 
 
-@pytest.mark.parametrize("cancel_method", ["anyio-scope", "asyncio-task"])
+@pytest.mark.parametrize("cancel_method", ["anyio-scope", "asyncio-task", "asyncio-during-zero"])
 def test_cancelled_teleop_handler_applies_explicit_zero(drive, monkeypatch, cancel_method):
     import asyncio
     from threading import Event
@@ -130,7 +130,18 @@ def test_cancelled_teleop_handler_applies_explicit_zero(drive, monkeypatch, canc
 
     async def exercise():
         acknowledged = anyio.Event()
+        zero_started = anyio.Event()
+        release_zero = anyio.Event()
         handler_task = []
+        real_pool = ws_module.run_in_threadpool
+
+        async def gated_pool(func, request, context, services):
+            if cancel_method == "asyncio-during-zero" and request.linear == request.angular == 0.0:
+                zero_started.set()
+                await release_zero.wait()
+            return await real_pool(func, request, context, services)
+
+        monkeypatch.setattr(ws_module, "run_in_threadpool", gated_pool)
 
         class Socket:
             app = tc.app
@@ -153,12 +164,19 @@ def test_cancelled_teleop_handler_applies_explicit_zero(drive, monkeypatch, canc
 
         async with anyio.create_task_group() as group:
             group.start_soon(handle)
-            await acknowledged.wait()
+            with anyio.fail_after(2):
+                await acknowledged.wait()
             assert svc.command.select_output().linear == pytest.approx(0.1)
             if cancel_method == "anyio-scope":
                 group.cancel_scope.cancel()
             else:
                 handler_task[0].cancel()
+                if cancel_method == "asyncio-during-zero":
+                    with anyio.fail_after(2):
+                        await zero_started.wait()
+                    handler_task[0].cancel()
+                    await anyio.sleep(0)
+                    release_zero.set()
         assert zero_applied.is_set(), "handler cancellation bypassed the explicit zero"
         assert svc.command.select_output().linear == 0.0
 
