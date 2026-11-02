@@ -13581,3 +13581,10 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: D-889 추가 24
 - 교훈: 없음
+
+## 2026-11-02 · uncommitted · fix(land): 겹침 판정이 선택기 가드 묶음을 보지 않는다 (D-889 추가 25)
+- 변경: `land_selection.overlaps`가 `affected_tests.GUARD_SET`을 늘 빼고, `ignore`를 접두사로 본다.
+- 증거: 11-02 11:43 준비된 착지 다섯이 모두 가드 묶음(test_protocol_version_alignment, test/architecture/test_document_placement)으로 겹친다고 나와 rollup이 0개를 묶었다. 원격 시험은 착지 기록에 남긴다.
+- gate 변화: 없음
+- 결정: D-889 추가 25
+- 교훈: docs/solutions/workflow-issues/landings-gave-the-turn-back-and-reran-everything-2026-11-01.md에 더한다
