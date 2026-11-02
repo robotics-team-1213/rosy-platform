@@ -1,6 +1,7 @@
 """applications/fleet/dev runs without Fleet, ROS, or an upstream."""
 import importlib.util
 import json
+import socket
 from pathlib import Path
 import subprocess
 import sys
@@ -21,7 +22,7 @@ def http_host(monkeypatch):
 def test_windows_bind_is_exclusive_before_binding(http_host, monkeypatch):
     calls = []
     exclusive = 0x10000
-    monkeypatch.setattr(http_host.socket, 'SO_EXCLUSIVEADDRUSE', exclusive, raising=False)
+    monkeypatch.setattr(socket, 'SO_EXCLUSIVEADDRUSE', exclusive, raising=False)
 
     def initialize(server, address, handler):
         server.socket = SimpleNamespace(setsockopt=lambda *args: calls.append(args))
@@ -33,7 +34,7 @@ def test_windows_bind_is_exclusive_before_binding(http_host, monkeypatch):
     monkeypatch.setattr(http_host.ThreadingHTTPServer, '__init__', initialize)
     monkeypatch.setattr(http_host.ThreadingHTTPServer, 'server_bind', bind)
     http_host.make_server(object(), 'http://localhost:4173')
-    assert calls == [(http_host.socket.SOL_SOCKET, exclusive, 1), ('bind', False, False)]
+    assert calls == [(socket.SOL_SOCKET, exclusive, 1), ('bind', False, False)]
 
 
 def test_preview_port_has_one_owner_until_close(http_host):
