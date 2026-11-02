@@ -30,6 +30,9 @@ def test_elapsed_turn_cancels_unfinished_work_without_resetting_its_budget(
         def cancel(self):
             self.cancelled = True
 
+        def join(self):
+            pass
+
     def unfinished_job(host, path, stop):
         if failed_first and path == "pkg/test/test_a.py":
             now[0] = 540
@@ -149,7 +152,7 @@ def test_guard_and_body_share_the_budget_from_turn_acquisition(cached, monkeypat
     args = land.argparse.Namespace(tests="auto", node=False, no_cache=True)
     for phase in ("g1", 1):
         land.run_tests(wt, args, [["pkg/test"]], wt.parent / "logs", phase)
-    assert armed == [420, 300], "guard and body must not each get a fresh ten-minute budget"
+    assert armed == [land.TURN_CAP_S - 180, land.TURN_CAP_S - 300], "guard and body must share the acquired budget"
 
 
 def test_expiry_marks_preparing_while_remote_cancellation_is_still_draining(cached, monkeypatch):

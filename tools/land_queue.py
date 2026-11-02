@@ -35,6 +35,7 @@ REPORT_EVERY = 300.0  # seconds between unchanged position lines
 # turn, 2026-10-30..31). Only while the passed one has waited less than this; then order holds again.
 PASS_CAP_S = 3600
 _held: list[Path] = []
+_status_lock = threading.RLock()  # timer release and the main thread share the ticket's read/replace operation
 
 
 class QueueError(Exception):
@@ -106,13 +107,44 @@ def _stale(info: dict | None, age: float) -> str | None:
 
 def set_status(ticket: Path, status: str, **fields) -> None:
     """Rewrite a held ticket's status (and ``fields``, e.g. ``batch``) by rename (also refreshes it)."""
-    try:
-        info = json.loads(ticket.read_text(encoding="utf-8"))
-    except FileNotFoundError as error:
-        raise QueueError(f"landing ticket disappeared: {ticket.name}; run land.py again to rejoin the queue") from error
-    tmp = ticket.with_name(f".{ticket.name}.tmp")
-    tmp.write_text(json.dumps({**info, **fields, "status": status}), encoding="utf-8")
-    os.replace(tmp, ticket)
+    with _status_lock:
+        try:
+            info = json.loads(ticket.read_text(encoding="utf-8"))
+        except FileNotFoundError as error:
+            raise QueueError(f"landing ticket disappeared: {ticket.name}; run land.py again to rejoin the queue") from error
+        tmp = ticket.with_name(f".{ticket.name}.tmp")
+        tmp.write_text(json.dumps({**info, **fields, "status": status}), encoding="utf-8")
+        os.replace(tmp, ticket)
+
+
+def turn_started() -> float | None:
+    """The latest actual acquisition by this process, using the host's monotonic clock."""
+    starts = []
+    with _status_lock:
+        for ticket in _held:
+            try:
+                info = json.loads(ticket.read_text(encoding="utf-8"))
+                if int(info.get("pid") or 0) in (0, os.getpid()) and isinstance(info.get("turn_started"), (int, float)):
+                    starts.append(info["turn_started"])
+            except (OSError, ValueError):
+                pass
+    return max(starts, default=None)
+
+
+def release(ticket: Path | None, note: str = "", *, started: float | None = None) -> bool:
+    """Release once, only while this PID still owns the expected turn; never turn a draining job pending."""
+    with _status_lock:
+        if ticket is not None:
+            try:
+                info = json.loads(ticket.read_text(encoding="utf-8"))
+            except FileNotFoundError:
+                return False
+            if (info.get("status") != "turn" or int(info.get("pid") or 0) not in (0, os.getpid())
+                    or (started is not None and info.get("turn_started") != started)):
+                return False
+            set_status(ticket, "preparing")
+        land_events.emit("released", note=note)
+        return True
 
 
 def blockers(qdir: Path, ticket: Path, now: float | None = None) -> list[dict]:
@@ -236,7 +268,7 @@ def wait(qdir: Path, ticket: Path, timeout: float, clock=time.time, sleep=time.s
             if said is not None:
                 print(f"[queue] first in line after {(clock() - began) / 60:.0f} min", flush=True)
             land_events.emit("turn", waited_s=round(clock() - began))
-            set_status(ticket, "turn")
+            set_status(ticket, "turn", turn_started=time.monotonic())
             return None
         if form and form(rows):
             return "batch"
