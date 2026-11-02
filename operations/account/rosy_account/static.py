@@ -26,7 +26,7 @@ def install_static(app, web_root, web_common):
             text = text.replace('<title>Rosy Fleet —', '<title>Rosy Account —', 1)
             text = text.replace('<b>Rosy Fleet</b>', '<b>Rosy Account</b>', 1)
             text = text.replace('href="/common/icons/console.svg"', 'href="/common/brand/mark.svg"', 1)
-            text = text.replace('관제 로그인', 'Rosy Account 로그인')
+            text = text.replace('계정 로그인', 'Rosy Account 로그인')
             return HTMLResponse(text, headers=headers)
         return FileResponse(path, media_type=entry['media_type'], headers=headers)
 

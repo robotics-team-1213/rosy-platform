@@ -25,8 +25,8 @@
 
 ## 최근 기록
 
+- 2026-11-03 · 50b5b4340d · 최소 Account 이미지의 공용 작업면 통합
 - 2026-11-03 · e84e4f46b3 · 로그인 전 자기 화면 복귀 제거
 - 2026-11-02 · d90ee50ad3 · 독립 Account 페이지의 명시적 제품 맥락
 - 2026-11-02 · 5f02d723d1 · D-962 independent identity backup and presentation
 - 2026-11-02 · e81af2d7c3 · D-962 independent Account artifact
-- 2026-11-02 · uncommitted · 유지보수 상태 조회의 등록된 기계 자격 사용

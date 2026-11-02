@@ -1,4 +1,4 @@
-"""Account authorization and Fleet login keep their own coherent identity."""
+"""Account authorization and site login share identity and retain their return context."""
 from urllib.parse import urlencode
 
 import pytest
@@ -27,8 +27,11 @@ def test_login_identity_matches_heading_form_and_return_context(account_page, wi
     page.goto(origin + "/console/login?" + urlencode({"return": target}))
     expect(page.locator("[data-login=login]")).to_be_visible()
     page.evaluate('(scale) => document.documentElement.style.fontSize = `${scale * 100}%`', text_scale)
-    expect(page.locator("ui-brand b")).to_have_text("Rosy Account" if central else "Rosy Fleet")
-    expect(page.locator("[data-login=form]")).to_have_attribute("aria-label", "Rosy Account 로그인" if central else "관제 로그인")
+    expect(page.locator("ui-brand b")).to_have_text("Rosy Account")
+    expect(page.locator("[data-login=form]")).to_have_attribute("aria-label", "Rosy Account 로그인" if central else "계정 로그인")
+    expect(page.locator("#login-title")).to_have_text("Rosy Account 로그인" if central else "계정 로그인")
+    if not central:
+        expect(page.locator("#login-intro")).to_have_text("이 현장의 계정으로 로그인하세요.")
     if central:
         expect(page.locator("#login-intro")).to_have_text("Rosy Account로 로그인해 원래 앱의 작업을 이어가세요.")
         expect(page.locator("ui-brand small")).to_have_text("공용 계정")
