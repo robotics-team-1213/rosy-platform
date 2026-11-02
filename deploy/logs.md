@@ -4369,3 +4369,4 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 현장 arm_b dry-run(읽기 전용, `--from stack --dest pallet`): 2개 관측, 엉킨 덩어리·손가락 여유 7/26 mm로 모두 거절(정상). 원격 `test_omx_cell_auto_pick.py`·`test_omx_cell_auto_carry.py`
 - gate 변화: 없음. 실물 연속 운반은 아직 하지 않았다.
 - CE: 해당 없음
+- 2026-11-02 · 6d7e296033 · D-961의 공용 작업·인증 조합을 native Wi-Fi 복구 HTML에도 적용했다. 제목·폭·버튼 위계·테마를 통일하고 component-controls.css/theme.js를 기존 recovery-web 이미지 자산에 포함했다. CORE·Account 없이 복구하는 구조, 물리 지문·코드·세션·CSRF·NetworkAgent 쓰기 권한은 유지한다. registry/native asset/실제 Chromium 복구 39건 원격 통과; dark/light 및 320/390/1366px 포함. 이미지 ARM64 빌드·AP·물리 네트워크 수용은 미실행이며 gate 변화 없음. CE: 해당 없음 — 자산·독립성 계약은 코드와 회귀가 설명한다.

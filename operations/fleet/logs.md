@@ -5243,3 +5243,4 @@
 - 변경: `test/test_fleet_header.py`의 테마 자리 단정을 계정 접힘 원복으로 되돌렸다(이동 판정 철회).
 - 증거: 원격 시험은 재착지 전 기록한다.
 - Gate: 없음. CE: 해당 없음.
+- 2026-11-02 · a7f36cb999 · 독립 검토가 확인한 central Account의 사용 불가능한 복귀 링크를 숨겼다. validated return과 로그인 완료 후 원래 앱 복귀는 유지한다. 영상 Chromium fixture에 실제 app-runtime.js 자산을 복원했다. 인증 네 파일 64건과 영상/seat fixture 25건 원격 통과; 운영 SSO·실제 영상·장치 수용을 뜻하지 않는다. CE: 해당 없음 — UI 상태와 자산 계약을 회귀로 검증한다.
