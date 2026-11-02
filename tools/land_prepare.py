@@ -31,6 +31,8 @@ def rules() -> str | None:
     """main's landing code: its tools/land*.py and tools/remote/*.py blob ids, or None when git cannot tell."""
     try:
         top = subprocess.run(["git", "ls-tree", "main", "tools/"], capture_output=True, text=True, check=True).stdout
+        if not any(line.endswith("\ttools/land.py") for line in top.splitlines()):
+            return None
         remote = subprocess.run(["git", "ls-tree", "-r", "main", "tools/remote/"], capture_output=True, text=True,
                                 check=True).stdout
     except (OSError, subprocess.CalledProcessError):
