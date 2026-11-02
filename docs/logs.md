@@ -13567,3 +13567,17 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: D-889 추가 23(사용자 결정 2026-11-02)
 - 교훈: 없음
+
+## 2026-11-02 · uncommitted · feat(tools): 업데이트 운영 CLI update_ops (D-957)
+- 변경: `tools/remote/update_ops.py`(status/run-now/hold/resume/forget-failed, selector `all|robots|site|로봇|호스트`), 계약 시험 `test/test_update_ops.py`, 설계 `docs/plans/2026-11-02-update-ops-cli-design.md`, ADR D-957, `tools/remote/AGENTS.md` 행. 호스트 코드 변경 없음; PC 유닛 홀드 장부는 gitignored `private/update-holds.json`
+- 증거: 원격 시험 PC(ai/model) `test/test_update_ops.py test/test_update_status.py` 46 passed / exit 0 (sha 54124e716b). RED 확인: 시험만 커밋한 712c66a83d에서 모듈 부재로 전체 실패. 실패 0이라 known_failures 비교 대상 없음. 착지 전 pre-push·영향 등급은 land 파이프라인이 다시 돈다
+- gate 변화: 없음. 원격 pytest 통과는 실장치·현장 수용 아님(로봇 유닛명·사이트 sudo 범위는 설계 §7 현장 확인 항목)
+- 결정: D-957 Accepted. 게이트 우회·Fleet UI 조작·주기 변경은 범위 밖
+- 교훈: 없음
+
+## 2026-11-02 · uncommitted · fix(land): 차례의 자기 브라우저 묶음은 변화분 브라우저 묶음이 닿을 때만 (D-889 추가 24)
+- 변경: `land_selection.select`의 `browsers()`가 변화분의 브라우저 묶음과만 겹침을 본다.
+- 증거: 11-02 03:32~04:06 charge-bay-panel 차례가 브라우저 묶음 7개를 직렬로 돌다 30분 한도로 반납, main 42분 정지. 원격 시험은 착지 기록에 남긴다.
+- gate 변화: 없음
+- 결정: D-889 추가 24
+- 교훈: 없음
