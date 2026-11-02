@@ -217,7 +217,7 @@ def test_power_health_card_keeps_stale_evidence_unknown_and_safety_latched(conso
         robot["state"]["safety"]["estop"] = True
         page.wait_for_function("() => document.querySelector('#robot-workspace [data-fact=safety]')?.textContent.includes('비상 정지')")
         assert "충전 확인" in card.locator('[data-charging]').inner_text()
-        assert "관리자:" in card.inner_text()
+        assert "비상정지 해제…" in card.inner_text()
         assert not errors
         browser.close()
 
@@ -2508,7 +2508,7 @@ def test_formation_buttons_keep_their_reasons_readable(console_url, width):
 
 @pytest.mark.parametrize("width,height", [(390, 844), (320, 568)])
 def test_compact_header_budget_keeps_the_stop_in_view(console_url, width, height):
-    """접속 입력·현재 역할은 상태 센터 뒤로 접히고 테마 버튼 하나는 남는다(D-668). 머리는 창 높이의 20% 이하다.
+    """접속 입력·현재 역할은 상태 센터 뒤로 접히고 테마 버튼 하나는 계정 접힘 안에 남는다(D-668). 머리는 창 높이의 20% 이하다.
 
     변이 증명: components.css `ui-topbar`에 `min-height: 300px`을 넣으면 빨갛다."""
     from playwright.sync_api import sync_playwright
