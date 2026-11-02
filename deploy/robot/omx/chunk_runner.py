@@ -354,7 +354,8 @@ class Runner:
             self.contact_ticks = self.contact_ticks + 1 if over else 0
             if self.contact_ticks >= prm.get(self.params, "runner.contact_ticks", CONTACT_TICKS):
                 self.hold(present, f"contact in {self.chunk}: a joint lagged the command by {lag:.1f} units")
-        elif isinstance(sent, dict) and not self.fault and self.chunk is not None:
+        elif isinstance(sent, dict) and (not self.fault or self.chunk == "park") and self.chunk is not None:
+            # a fold out of a hold watches too: it pushed a blocked wrist roll until SETTLE_S ran out (2026-11-03)
             strain = self.strained(sent, present)
             if strain:  # named a contact: the judge may retreat or jog, and park clears it
                 motor, lag, pwm, limit = strain
@@ -405,7 +406,7 @@ class Runner:
                 fields = dict(command=f"run {self.chunk}", ok=True, settled=error <= SETTLE_TOL,
                               paced_ticks=self.paced_ticks, peak_lag=round(self.peak_lag, 2), over_ticks=self.over_ticks)
                 self.paced_ticks, self.pace_floor, self.peak_lag, self.over_ticks = 0, 0.0, 0.0, 0
-                if self.chunk == "park":
+                if self.chunk == "park" and error <= SETTLE_TOL:  # torque goes OFF from here: only when really home
                     self.home_since = now
                 backed_out = self.chunk == "retreat" and error <= SETTLE_TOL
                 if (self.chunk == "park" or backed_out) and (self.fault or "").startswith("contact"):
