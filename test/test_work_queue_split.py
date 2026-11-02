@@ -27,13 +27,13 @@ def _tree(tmp_path, monkeypatch, serial=""):
     monkeypatch.setattr(wq, "SERIAL_FILE", serial_file)
 
 
-def test_only_measured_long_invocations_split_and_every_test_file_runs_once(tmp_path, monkeypatch):
+def test_measured_long_invocations_split_and_every_test_file_runs_once(tmp_path, monkeypatch):
     _tree(tmp_path, monkeypatch)
     multi = ["ROSY_JOB_CORES=6", "pkg/test", "other/test"]
     seen = {tuple(multi): 600.0, ("pkg/test",): 600.0, ("short/test",): 30.0}
     assert wq.split(tmp_path, [multi], seen) == [["ROSY_JOB_CORES=6", "pkg/test"], ["ROSY_JOB_CORES=6", "other/test"]]
     assert wq.split(tmp_path, [["short/test"]], seen) == [["short/test"]], "under SPLIT_S stays whole"
-    assert wq.split(tmp_path, [["never/ran"]], seen) == [["never/ran"]], "no history stays whole"
+    assert wq.split(tmp_path, [["never/ran"]], seen) == [["never/ran"]], "a missing path has zero estimated cost"
     groups = wq.split(tmp_path, [["pkg/test"]], seen)
     assert len(groups) == 3  # ceil(600 / 240)
     files = sorted(f for g in groups for f in g)
