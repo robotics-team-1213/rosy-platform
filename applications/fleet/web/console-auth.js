@@ -1,9 +1,8 @@
 // 관제 접속: 잠금·해제, 세션 확인, 토큰 입력과 비밀번호 로그인, 개발 접속 모드(D-248·D-473·D-519).
 // 토큰은 셸(console.js)의 auth 에 살고, 이 팩토리는 그 상태를 바꾸는 길을 가진다(D-798 3.2).
 import { applyRoleToControls } from "/console/assets/authorization.js";
-import { issueDevelopmentSession } from "/console/assets/development-auth.js";
 import { createPasswordLogin } from "./password-login.js";
-import { showSession, showSignedOut, stopNotice } from "/console/assets/fleet-header.js";
+import { showConnection, showSession, showSignedOut, stopNotice } from "/console/assets/fleet-header.js";
 
 export function createConsoleAuth({ pageScope, el, view, auth, call, fleetClient, render, operatorControls, assistant,
   confirmedAction, connectionView, workView, incidents, visionView, trackingView, mapView, formation,
@@ -40,9 +39,9 @@ export function createConsoleAuth({ pageScope, el, view, auth, call, fleetClient
       visionView.reset(); visionView.refreshSources(); trackingView.reset();
     }
     render();
-    // D-473 4 — the first 401 of a lock asks once whether this console is in development mode.
-    if (firstLock && reason === "auth") renewDevelopmentSession();
-    // D-519 6 — paired consoles offer 아이디·비밀번호 once per lock.
+    // Connection metadata changes the badge, never the authenticated identity.
+    if (firstLock && reason === "auth") connectionMode();
+    // Offer human login once per lock.
     if (firstLock && reason === "auth") loginForm.refresh(true);
   }
 
@@ -142,24 +141,11 @@ export function createConsoleAuth({ pageScope, el, view, auth, call, fleetClient
   async function connectionMode() {
     try {
       const info = await fleetClient("/api/fleet/auth/connection");
-      el("development-badge").hidden = info?.mode !== "development";
+      showConnection(info);
       return info?.mode === "development";
     } catch (_err) {
       return false;
     }
-  }
-
-  // Called on the first 401 of a lock only, so a refused or rate-limited issue (403/429) is one
-  // request, not a loop. useToken() invalidates in-flight polls so their stale 401s are dropped.
-  async function renewDevelopmentSession() {
-    if (!(await connectionMode())) return;
-    let token;
-    try {
-      token = await issueDevelopmentSession(fleetClient);  // at most one per minute per page
-    } catch (_err) {
-      return;
-    }
-    if (token) useToken(token);
   }
 
   return { markLocked, markUnlocked, refreshAuthorization, connectionMode };

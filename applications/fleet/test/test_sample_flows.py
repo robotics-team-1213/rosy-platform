@@ -9,9 +9,16 @@ COOKIES = WeakKeyDictionary()
 
 def test_auth_login_logout_and_rejected_credentials():
     engine = load_engine()
+    assert call(engine, 'GET', '/api/fleet/auth/connection')[1] == {'mode': 'paired', 'password_login': True}
+    retired = '/api/fleet/auth/development-session'
+    status, refused = call(engine, 'POST', retired)
+    assert status == 403 and refused['detail']['code'] == 'FORBIDDEN' and 'token' not in refused
+    assert call(engine, 'GET', '/api/fleet/auth/session')[0] == 401
     target = '/api/fleet/auth/login'
     assert call(engine, 'POST', target, {'login':'sample', 'password':'incorrect'})[0] == 401
     assert call(engine, 'POST', target, {'login':'sample', 'password':'CHANGE_ME'})[0] == 204
+    assert call(engine, 'GET', '/api/fleet/auth/session')[1]['principal_id'] == 'sample'
+    assert call(engine, 'POST', retired)[0] == 403
     assert call(engine, 'GET', '/api/fleet/auth/session')[1]['principal_id'] == 'sample'
     assert call(engine, 'POST', '/api/fleet/auth/logout')[0] == 204
     assert call(engine, 'GET', '/api/fleet/auth/session')[0] == 401

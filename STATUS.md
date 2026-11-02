@@ -9,6 +9,7 @@
 | [deploy](deploy/progress.md) | 릴리스·플랫폼 | 4e99d92e (2026-10-02) | GO | GO | N/A | HOLD | HOLD | N/A |
 | [control](middleware/perception/progress.md) | CONTROL | 4e99d92e (2026-10-02) | GO | GO | HOLD | HOLD | HOLD | PARKED |
 | [fleet](operations/fleet/progress.md) | FLEET | bed604ef (2026-09-30) | GO | GO | HOLD | PARKED | PARKED | PARKED |
+| [account](operations/account/progress.md) | ACCOUNT | dd9d55404f (2026-11-02) | GO | GO | N/A | HOLD | N/A | HOLD |
 | [monitoring](operations/monitoring/progress.md) | MONITORING | 6b0f7568f5 (2026-10-26) | GO | GO | N/A | GO | GO | GO |
 | [fleet_decision](operations/decision/progress.md) | fleet_decision | 587c0b4c8c (2026-10-29) | GO | GO | HOLD | HOLD | HOLD | HOLD |
 | [situation](operations/situation/progress.md) | SITUATION | 3627ec21fb (2026-10-28) | GO | HOLD | N/A | HOLD | HOLD | HOLD |
@@ -67,6 +68,8 @@
 - control ARTIFACT: 서명된 ARM64 manifest·immutable digest 발행 전. 흡수된 코드는 deploy가 소유하는 OS 이미지에 번들된다
 - control DEVICE: Pi bench Device 설치와 device-readback.sh --json 증거 없음. Control sensor adapter 활성화는 Device 보정 generation에 묶인다(D-47)
 - fleet ROS-SIM: D-87: 현재 트리의 colcon install/setup.bash가 없다. 2026-09-17 WSL Task 14 로그는 설계 입력이며 GO가 아니다 (D-89)
+- account ARTIFACT: 독립 Account 서비스를 포함한 서명 사이트 후보의 게시·검증·설치 대기.
+- account FIELD: 운영 단일 writer 이관·실제 로그인 진입·Fleet 중단 중 독립성 수용 전.
 - fleet_decision ROS-SIM: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
 - fleet_decision ARTIFACT: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
 - fleet_decision DEVICE: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.

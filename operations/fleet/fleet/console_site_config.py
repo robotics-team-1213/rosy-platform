@@ -5,8 +5,22 @@ D-766 4 나누기: cli.py(레칫 872)에서 그대로 옮겼다(정의 순서·�
 끝난다(cli_config 패턴 그대로).
 """
 
+import os
 import sys
 from pathlib import Path
+
+
+def _account_login_config(args, site_logins, tasks_db):
+    """Resolve Account login sources and require their durable audit database."""
+    account_config = getattr(args, "account_config", None)
+    account_client_path = os.environ.get("ROSY_FLEET_ACCOUNT_CLIENT_CONFIG", "").strip()
+    account_client_config = Path(account_client_path) if account_client_path else None
+    human_login = bool(site_logins or account_config is not None or account_client_config is not None)
+    if account_client_config is not None and tasks_db is None:
+        sys.exit("--tasks-db is required with ROSY_FLEET_ACCOUNT_CLIENT_CONFIG")
+    if account_config is not None and tasks_db is None:
+        sys.exit("--tasks-db is required with --account-config")
+    return account_config, account_client_config, human_login
 
 
 def _goal_lease_ttl_s(args) -> float:
