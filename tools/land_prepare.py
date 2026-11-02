@@ -88,7 +88,7 @@ def again(land, wt: Path, branch: str, args, python: str, qdir: Path, ticket: Pa
     """Mid-turn work too long for the lock (a FULL delta, or the turn's time cap): prepare it outside, wait again,
     and give back the main it now passed over."""
     # The lock's end, so a turn's real length is measurable (turn -> released), not turn -> landed/stop (2026-10-31).
-    land.land_events.emit("released", note=note)
+    land_queue.release(ticket, note)
     prepare(land, wt, branch, args, python, qdir, ticket, invocations, note)
     land_queue.wait(qdir, ticket, args.queue_timeout * 60, check=watch(land, wt),
                     tested=land.land_full.restore(wt, branch), changed=lambda: relaunch(land, qdir, ticket))

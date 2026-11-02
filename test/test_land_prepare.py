@@ -141,6 +141,75 @@ def test_affected_overtime_preserves_full_origin_and_final_publisher_eligibility
     assert green_full(main, landed)
 
 
+def test_guard_overtime_prepares_outside_and_keeps_full_origin(full_anchor, monkeypatch):
+    main, wt, base, candidate, _, _ = full_anchor
+    guard_calls, prepared = [], []
+    real_prepare = land.land_prepare.prepare
+
+    def guard(wt_, args, invocations, logdir, round_no, run_tests, **kw):
+        guard_calls.append(round_no)
+        if len(guard_calls) == 1:
+            raise land.Overtime("guard consumed the turn budget")
+        return []
+
+    def outside(*args, **kw):
+        prepared.append(args[-2])
+        return real_prepare(*args, **kw)
+
+    monkeypatch.setattr(land.land_guards, "first", guard)
+    monkeypatch.setattr(land.land_prepare, "prepare", outside)
+    monkeypatch.setattr(land, "select", lambda *a, **k: ([["pkg/test"]], None))
+    assert land.main(["--tests", "auto"]) == 0
+    assert prepared == [[["pkg/test"]]] and "pre" in guard_calls
+    record = land.land_record.read(main, git(main, "rev-parse", "HEAD"))
+    assert record["tier"] == "full" and record["prepared_candidate"] == candidate and record["prepared_on"] == base
+
+
+def test_fast_forward_requires_the_same_turn_ownership_after_all_checks(full_anchor, monkeypatch):
+    main, _, _, _, _, _ = full_anchor
+    before = git(main, "rev-parse", "HEAD")
+
+    def lost_turn(*args, **kwargs):
+        for ticket in land.land_queue._held:
+            land.land_queue.set_status(ticket, "preparing")
+        return []
+
+    monkeypatch.setattr(land, "run_tests", lost_turn)
+    monkeypatch.setattr(land, "select", lambda *a, **k: ([["pkg/test"]], None))
+    assert land.main(["--tests", "auto"]) == 1
+    assert git(main, "rev-parse", "HEAD") == before
+
+
+@pytest.mark.parametrize("change", ["pid", "epoch", "missing_epoch"])
+def test_overtime_does_not_reprepare_or_rewrite_another_turn(full_anchor, monkeypatch, change):
+    main, _, _, _, _, _ = full_anchor
+    before, prepared = git(main, "rev-parse", "HEAD"), []
+    saved = {}
+
+    def adopted(*args, **kwargs):
+        ticket = land.land_queue._held[0]
+        info = json.loads(ticket.read_text())
+        fields = {"pid": os.getpid() + 1} if change == "pid" else {
+            "turn_started": info["turn_started"] + 100 if change == "epoch" else None}
+        land.land_queue.set_status(ticket, "turn", **fields)
+        saved.update(ticket=ticket, contents=ticket.read_bytes())
+        raise land.Overtime("an old check completed after ownership changed")
+
+    def refuse_prepare(*args, **kwargs):
+        prepared.append(args)
+        raise land.Stop("must not prepare another owner's ticket")
+
+    monkeypatch.setattr(land.land_guards, "first", adopted)
+    monkeypatch.setattr(land.land_prepare, "again", refuse_prepare)
+    monkeypatch.setattr(land, "select", lambda *a, **k: ([["pkg/test"]], None))
+    assert land.main(["--tests", "auto"]) == 1
+    assert not prepared, "the old owner entered preparation after losing its turn"
+    # leave() preserves a ticket adopted by another PID; its complete record must remain untouched.
+    if change == "pid":
+        assert saved["ticket"].read_bytes() == saved["contents"]
+    assert git(main, "rev-parse", "HEAD") == before
+
+
 def test_again_retains_original_full_base_when_main_moves_during_preparation(full_anchor, monkeypatch):
     main, wt, base, candidate, path, original = full_anchor
     args = land.argparse.Namespace(tests="auto", no_cache=False, queue_timeout=0)
