@@ -12,6 +12,7 @@ import math
 from pathlib import Path
 import ssl
 import signal
+import sys
 import threading
 import time
 from urllib.error import HTTPError
@@ -26,7 +27,8 @@ from core_common.motor_health import read_motor_health_snapshot
 from core_common.protocol.motor_health import MotorHealthResponse
 from core_common.observation_snapshot import SnapshotChannel, interrupt_on_termination
 from rosy_vision import protocol
-import usb_camera_report  # beside this file; D-963
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # loaded by path in tests, not only from its folder
+import usb_camera_report  # noqa: E402  beside this file; D-963
 
 
 def select_sources(manifest, workcell_id, environ):
