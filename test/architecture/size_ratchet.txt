@@ -16,7 +16,7 @@
 630 drive/behaviors/traffic_policy/manager.py
 842 drive/motion_limits/adapter/node.py
 757 fleet/fleet/cli.py
-828 fleet/fleet/server/app.py
+797 fleet/fleet/server/app.py
 846 fleet/fleet/server/auth/enrollment.py
 790 fleet/fleet/server/cell/cell_job_store.py
 634 fleet/fleet/server/console/console.py
@@ -42,7 +42,7 @@
 709 simulation/gazebo/scripts/lane_live_view.py
 791 site_ui/cam/app/src/main/java/io/github/livsbittt/rosy/cam/camera/CameraController.kt
 3049 test/test_dashboard_browser.py
-3835 test/test_fleet_console_browser.py
+3790 test/test_fleet_console_browser.py
 2484 test/test_rosy_face.py
 2720 test/test_sd_writer_contract.py
 609 tools/device_test/run.py

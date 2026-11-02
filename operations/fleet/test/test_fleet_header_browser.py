@@ -24,6 +24,7 @@ from fakes import FakeRobot
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
 from fleet.server.development_session import DevelopmentSessions
+from fleet.server.site_users import hash_password
 from fleet.server.task_service import FleetTaskService
 from fleet.server.task_store import FleetTaskStore
 from fleet.swarm.robots import RobotEndpoint
@@ -114,7 +115,7 @@ def test_header_stays_one_row_with_account_overlay_and_connection_exceptions(tmp
     from playwright.sync_api import TimeoutError as PlaywrightTimeoutError, expect
 
     with _fleet(tmp_path, console_token='registry-only', development_sessions=DevelopmentSessions()) as (browser, origin):
-        page = browser.new_page(viewport={'width': width, 'height': height}, color_scheme=theme)
+        page = _signed_in_page(browser, origin, viewport={'width': width, 'height': height}, color_scheme=theme)
         pending_reads = set()
         page.on('request', lambda request: pending_reads.add(request)
                 if request.resource_type == 'fetch' and request.url.startswith(origin + '/api/fleet/') else None)
@@ -201,7 +202,7 @@ def test_account_escape_closes_menu_without_stealing_outside_focus(tmp_path, nam
     from playwright.sync_api import expect
 
     with _fleet(tmp_path, console_token='registry-only', development_sessions=DevelopmentSessions()) as (browser, origin):
-        page = browser.new_page(viewport={'width': 390, 'height': 844})
+        page = _signed_in_page(browser, origin, viewport={'width': 390, 'height': 844})
         page.goto(origin + path)
         expect(page.locator('#user-role')).to_have_text('운영자', timeout=15000)
         trigger = page.locator('#topbar-more')
@@ -290,8 +291,19 @@ def _api():
     return api
 
 
+def _signed_in_page(browser, origin, **options):
+    page = browser.new_page(**options)
+    response = page.request.post(origin + "/api/fleet/auth/login", headers={"Origin": origin},
+                                 data={"login": "alice", "password": "correct horse"})
+    assert response.status == 204
+    return page
+
+
 @contextmanager
 def _fleet(tmp_path, **options):
+    if options.get("development_sessions") is not None:
+        options.setdefault("site_logins", {"alice": {"principal_id": "alice", "role": "operator",
+                            "password_scrypt": hash_password("correct horse")}})
     console = FleetConsole([RobotEndpoint("rosy_01", "http://127.0.0.1:8080", "t")], [FakeRobot("rosy_01")])
     tasks = FleetTaskService(FleetTaskStore(tmp_path / "fleet.sqlite3"), robot_ids=console.robot_ids)
     app = create_app(console, task_service=tasks, web_common=ROOT / "shared" / "web",
@@ -331,7 +343,7 @@ def test_four_documents_draw_one_header_and_one_estop(tmp_path):
     measured = {}
     with _fleet(tmp_path, console_token="registry-only", development_sessions=DevelopmentSessions()) as (browser, origin):
         for name, path in DOCS:
-            page = browser.new_page(viewport={"width": 1440, "height": 900})
+            page = _signed_in_page(browser, origin, viewport={"width": 1440, "height": 900})
             errors = []
             page.on("pageerror", lambda exc, e=errors: e.append(str(exc)))
 
@@ -556,7 +568,7 @@ def test_task_layout_and_feedback_share_role_geometry(tmp_path, width):
     from playwright.sync_api import expect
     with _fleet(tmp_path, console_token='registry-only', development_sessions=DevelopmentSessions()) as (browser, origin):
         for name, path in DOCS:
-            page = browser.new_page(viewport={'width': width, 'height': 1000})
+            page = _signed_in_page(browser, origin, viewport={'width': width, 'height': 1000})
             page.goto(origin+path)
             expect(page.locator('#user-role')).to_have_text('운영자')
             page.evaluate("""async()=>{
