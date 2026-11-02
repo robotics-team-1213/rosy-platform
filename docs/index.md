@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-11-02 · uncommitted · D-962 Account 독립 실행과 개발 모드 인증 계약
+- 2026-11-02 · uncommitted · fix(auth): Fleet 개발 모드에서도 Rosy Account 로그인 제공
 - 2026-11-02 · 7090702e1f · fix(remote): isaac_batch retries an UNKNOWN run; Step 4c boundary over seeds and yaw; D-958 stage 1 kill test
 - 2026-11-02 · uncommitted · test: 리뷰 관문 스크립트를 시험이 부른다
 - 2026-11-02 · uncommitted · docs(omx): 시범 학습 준비와 왼쪽 손목 진단 기록
-- 2026-11-02 · uncommitted · docs(adr): D-889 추가 10 결과에 M4 판정(FAIL)
-- 2026-11-02 · uncommitted · fix(land): 겹침 판정이 선택기 가드 묶음을 보지 않는다 (D-889 추가 25)

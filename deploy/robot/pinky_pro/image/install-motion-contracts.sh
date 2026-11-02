@@ -26,6 +26,11 @@ if [[ -f "$WORKSPACE/middleware/media/pyproject.toml" ]]; then
     WHEEL_NAMES+=(rosy-media-edge==0.1.0)
 fi
 if [[ -f "$WORKSPACE/operations/fleet/package.xml" ]]; then
+    mkdir -p "$CONTRACT_WORK/account"
+    cp "$WORKSPACE/operations/account/pyproject.toml" "$CONTRACT_WORK/account/"
+    cp -a "$WORKSPACE/operations/account/rosy_account" "$CONTRACT_WORK/account/"
+    WHEEL_SOURCES+=("$CONTRACT_WORK/account")
+    WHEEL_NAMES+=(rosy-account==0.1.0)
     mkdir -p "$CONTRACT_WORK/execution"
     cp "$WORKSPACE/operations/site_execution/pyproject.toml" "$CONTRACT_WORK/execution/"
     cp -a "$WORKSPACE/operations/site_execution/src" "$CONTRACT_WORK/execution/"

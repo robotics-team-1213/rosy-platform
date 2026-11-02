@@ -13650,3 +13650,17 @@ osy-d395-s1d\`.
 - 증거: 24개 실행(모델 PC 21·AI PC 3) — 지금 컨테이너는 +0.2 mm에서 seed 43 실패, +0.3 mm 세 seed 실패. r290은 +0.6~+0.8 mm 세 seed 9/9, -0.6 mm 세 seed 9/9, -0.7 mm seed 42 9/9(seed 43은 평탄 맞춤 단계 실패로 판정 불가). 회전 0.5°는 두 컨테이너 9/9, 1°는 지금 컨테이너 실패, r290은 줄 간격 4.1~4.6 mm로 범위 밖. AI PC 실행 4fe8은 정리 확인 없이 UNKNOWN으로 끝나 옛 배치가 11시간 대기 없이 다시 물었다. D-958: 13:44 강제 종료 → 13:54 점검이 `released rosy-ollama.service`, `owner_mode` available. 원격 pytest `test_isaac_batch.py`·`test_remote_isaac.py` 통과
 - gate 변화: 없음
 - CE: 해당 없음 — UNKNOWN 재시도는 회귀 시험으로 고정했고, 세션 재시작 뒤 살아남은 프로세스는 저장소 밖 경험 메모에 남겼다
+
+## 2026-11-02 · uncommitted · fix(auth): Fleet 개발 모드에서도 Rosy Account 로그인 제공
+- 변경: 공통 로그인 폼은 Fleet 연결 모드 대신 서버의 `password_login` 제공 여부를 따른다. Learning에서 중앙 로그인 폼이 숨겨지는 현상을 실제 Chromium에서 재현했다.
+- 증거: 수정 전 회귀 2개 실패, 수정 후 `eb7580de25` 원격 opt-in Chromium·인증 route 59개 통과, skip 없음, known-failures NEW 0. 운영 브라우저의 스크립트 응답 대체로 폼 복구 확인. 서버 배포와 실제 사용자 로그인 수용은 미완료.
+- gate 변화: 없음
+- 결정: D-757 계약 유지, 연결 모드와 권한 변경 없음
+- 교훈: `solutions/logic-errors/fleet-development-mode-hides-central-account-login-2026-11-02.md`
+
+## 2026-11-02 · uncommitted · D-962 Account 독립 실행과 개발 모드 인증 계약
+- 변경: D-962와 API v1.349로 Account source·프로세스·DB·키 소유권을 분리하고 D-473의 익명 개발 operator를 대체했다. 기존 issuer·계정 ID·grant·회수·장치 안전 경계는 유지한다.
+- 증거: `3292c6eccb` 원격 site 배포·HTTPS·candidate·증분 update·updater 회귀 163건 통과/skip 0/NEW 0. `a35da73013`에서는 구조·CLI·node·배포·API 회귀 458건 통과/skip 0/NEW 0. Account·브라우저 165건은 `471a611e05`에서 통과했고 최종 앱 조합 정리 후 재검증 중이다. 독립 계약 검토는 `a35da73013`에서 발견 사항 없음이다.
+- gate 변화: 없음. 최종 통합·서명 배포·단일 writer 이관·실제 사용자 수용은 아직 별도다.
+- 이력: `fix/learning-auth-entry`의 중간 크기 증가 커밋 때문에 size_range 착지가 거절됐다. 원본 브랜치·시험 기록은 보존하고 현재 main의 새 `fix/independent-account-auth`에 최종 변경을 다시 구성한다. 이력을 다시 쓰거나 크기 제한을 늘리지 않는다.
+- CE: 새 교훈 기록은 앞선 로그인 폼 문제 한 건이며, 이후 구조·전환 제약은 코드·시험·D-962에 기록한다.

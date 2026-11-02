@@ -109,8 +109,9 @@ class AccountClient:
         return verify_access(token, self.public_keys, issuer=self.issuer,
                              audience=self.resource, now=self.clock())
 
-    def start(self, target):
-        if target not in self.destinations:
+    def start(self, target, *, destination_allowed=None):
+        if not isinstance(target, str) or not (
+                target in self.destinations if destination_allowed is None else destination_allowed(target)):
             raise ValueError('Invalid local return destination')
         cookie, state, verifier = (secrets.token_urlsafe(32) for _ in range(3))
         with self.transaction() as db:

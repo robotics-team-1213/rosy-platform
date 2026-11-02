@@ -18,6 +18,7 @@ SRC = (Path(__file__).resolve().parents[3] / "src")
 # junction manoeuvre states).
 for path in (
     SRC.parent / "operations" / "fleet",
+    SRC.parent / "operations" / "account",
     SRC.parent / "operations" / "decision" / "src",
     SRC.parent / "operations" / "world" / "src",
     SRC.parent / 'operations' / 'site_execution' / "src",
