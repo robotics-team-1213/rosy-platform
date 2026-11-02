@@ -237,6 +237,9 @@ def test_direct_duplicate_supervisor_does_not_run_or_mark_the_owner_stopped(star
                                capture_output=True, text=True, timeout=5)
     assert duplicate.returncode != 0 and "supervisor" in duplicate.stdout + duplicate.stderr
     assert not (tree.parent / (tree.name + ".stopped")).exists()
+    until = time.monotonic() + 5
+    while not calls.exists() and time.monotonic() < until:
+        time.sleep(.02)
     assert calls.read_text() == "run\n"
 
 
@@ -298,7 +301,10 @@ def test_official_stop_ends_starting_supervisors_child_and_releases_ownership(st
         if not tool._queue().pid_alive(child):
             return True
         state = Path(f"/proc/{child}/stat")
-        return state.is_file() and state.read_text().split()[2] == "Z"  # killed orphan awaiting OS reaping
+        try:
+            return state.is_file() and state.read_text().split()[2] == "Z"  # killed orphan awaiting OS reaping
+        except FileNotFoundError:
+            return True
 
     until = time.monotonic() + 5
     while not child_exited() and time.monotonic() < until:
