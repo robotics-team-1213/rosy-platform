@@ -133,6 +133,9 @@ class SampleEngine:
         if (method, path) == ('GET', '/workcell-observations'):
             # The sample site registers no observed workcell (D-837): an empty read-only snapshot.
             return reply({'read_only': True, 'physical_acceptance': False, 'workcells': []})
+        if (method, path) == ('GET', '/workcell-observations/usb-devices'):
+            # No hardware is connected to the sample provider.
+            return reply({'workcells': []})
         if method == 'GET' and (path in ('/device-profiles', '/device-profile-sources')
                                 or re.fullmatch('/device-profile-sources/(robot|arm)/[^/]+', path)):
             # Match an absent Fleet route so the existing poll gate closes until reset.
