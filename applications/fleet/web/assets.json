@@ -254,6 +254,10 @@
       "path": "installation/camera-peer.js",
       "media_type": "application/javascript"
     },
+    "usb-camera.js": {
+      "path": "installation/usb-camera.js",
+      "media_type": "application/javascript"
+    },
     "field-layers.js": {
       "path": "calibration/field-layers.js",
       "media_type": "application/javascript"

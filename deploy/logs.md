@@ -4422,6 +4422,13 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: `test/test_omx_cameras.py` 12 passed(로컬).
 - gate 변화: 없음. CE: 해당 없음 — 미확인 가정은 이 기록과 docstring에 있다.
 
+## 2026-11-02 · uncommitted · D-963 제어 PC USB 카메라 역할 보고와 결정 적용
+
+- 변경: `usb_camera_report.py`(읽기 전용 보고, 결정 파일 쓰기)를 추가하고 `workcell_observation_bridge.py`가 20초마다 `POST .../{workcell_id}/usb-devices`로 보내 결정을 받는다. `omx_cameras.py bind --apply`가 결정 파일의 키가 현재 제안과 맞으면 `approve`+`save`로 적용하고 항목을 지운다. 레지스트리의 쓰기 주체는 `bind` 하나로 유지한다.
+- 증거: `test/test_omx_usb_camera_report.py`, `test/test_omx_workcell_observation_bridge.py`, `test/test_omx_cameras.py` 노트북에서 29건 통과(원격 재확인 대기).
+- gate 변화: 없음. 실제 USB 카메라를 꽂아 승인하는 현장 수용은 하지 않았다.
+- CE: 해당 없음 — 새 기능이며 장애 해결이 아니다. 결정은 D-963에 있다.
+
 ## 2026-11-02 · 5eff2fd4d0 · fix(omx): 빈 관측과 관측 실패 구분
 
 - 변경: 반복 운반은 observed=0과 정상 관측의 `no usable object`가 함께 있을 때만 source empty를 반환한다. 맵 누락·영상 누락 오류는 원래 실패 결과를 유지하고 다음 운반을 중단한다.
