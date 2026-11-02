@@ -13597,3 +13597,10 @@ osy-d395-s1d\`.
 - 증거: 원격 pytest `test_gpu_tenants.py`·`test_isaac_batch.py`·`test_remote_isaac.py`·`test_host_services_manifest.py` 통과. AI PC에 설치, 타이머 active, `idle` 판정 idle(운행 로봇 없음), 실행 중 배치에서 `claim` → `paused-rosy-ollama.service` 표시와 owner_mode `shared` 확인
 - gate 변화: 없음. 단계 1 수용(배치 강제 종료 뒤 10분 안 복구)은 이번 배치가 끝난 뒤 확인
 - CE: 해당 없음 — 설계 구현이며, 세션 종료로 Ollama가 꺼진 채 남은 사건은 이 구현으로 구조를 고쳤다
+
+## 2026-11-02 · uncommitted · fix(land): 차례의 자기 브라우저 묶음은 변화분 브라우저 묶음이 닿을 때만 (D-889 추가 24)
+- 변경: `land_selection.select`의 `browsers()`가 변화분의 브라우저 묶음과만 겹침을 본다.
+- 증거: 11-02 03:32~04:06 charge-bay-panel 차례가 브라우저 묶음 7개를 직렬로 돌다 30분 한도로 반납, main 42분 정지. 원격 시험은 착지 기록에 남긴다.
+- gate 변화: 없음
+- 결정: D-889 추가 24
+- 교훈: 없음
