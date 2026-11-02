@@ -73,3 +73,5 @@
 - 변경: 최소 Account 자산 묶음은 기존 공용 조작 스타일의 정확한 파일을 포함한다. static module의 표준 라이브러리 전용 import를 보존하며 FastAPI 응답은 설치 함수 안에서 가져온다. 실행 시 Account owner 표식·제품 제목·CSP·경로 검증을 보존한다. 익명 직접·프로필·관리 진입과 로그인 후 흐름 모두 자산 오류를 수집한다.
 - 증거: 새 committed 통합본의 독립 import·bundle 폐쇄성·실제 TLS 브라우저 확인이 필요하다. 이전 소스의 통과는 해당 소스의 범위로 남긴다.
 - Gate: 통합 SOURCE 검증 전이며 운영 authority의 계정·세션·토큰·비밀번호·키를 변경하지 않았다. CE: 해당 없음 — 설치 자산 검사와 owner 회귀로 검증한다.
+
+- 후속 검증: 21f1dcd378의 독립 import·최소 bundle·Node·화면 제목 16건 통과 후, 4493982d05에서 정확한 한국어 heading/intro와 static owner 치환을 보정했다. 해당 수정본의 실제 독립 TLS fixture·등록 callback·최초 비밀번호·기존 Fleet·sample을 포함한 브라우저 112건은 원격 PASS/0 SKIP/exit 0/NEW 0이다. 독립 재검토 지적 없음이다. 테스트 authority/합성 fixture와 익명 소스 미리보기의 범위이며 운영 계정이나 운영 callback 수용으로 대신하지 않는다.

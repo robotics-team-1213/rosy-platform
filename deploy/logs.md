@@ -4496,3 +4496,5 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 변경: 대기 중인 독립 Account 이미지 변경과 USB 제어 PC 도우미 검사를 함께 통합한다. 전체 서명 이미지 목록과 켜진 런타임 서비스 목록을 구분하고, 구형 Account→Fleet·독립 Account→Account·Monitoring→Fleet·제어 PC 도우미→proxy 신원을 각각 검증한다. 런타임 검사 두 함수를 기존 site_update_runtime으로 옮겨 I/O 모듈의 크기를 줄이고 실제 호출자와 복구 경로를 맞춘다. 외부 updater의 공개 re-export와 기존 검증 경계는 유지한다.
 - 증거: source 50b5b4340d의 새 계약 4건이 공식 원격 AI PC에서 모두 실패/NEW4로 재현됐다. 구형·신형 성공 전환과 구형으로의 복구, 선택 해제·누락·중복·종료·잘못된 소유자·재사용 이미지 ID를 기존 fixture로 검증한다. 수정본 GREEN은 후속 기록에 남긴다.
 - Gate: 통합 SOURCE 검증 전. 원격 서버의 hold·writer·설정·서명 작업·로봇 상태는 변경하지 않았다. CE: 미해결 — 실제 설치 helper 전환과 운영 수용은 남아 있다.
+
+- 후속 검증: 통합 source 21f1dcd378의 updater·incremental·config·functional-setup 4개 모듈은 공식 원격 248 passed/0 skipped/exit 0/NEW 0이다. 독립 계약 검토는 전체 서명 목록·선택 런타임·신원·복구·함수 이동·import 경로에서 지적 없음이다. 환경 d8fff8b263b691df, freeze eb75e06857d6c188. 이는 해당 소스와 helper 계약의 증거이며 전체 FULL·설치·운영 수용은 아니다. 실제 설치는 matching updater·I/O·runtime·verifier 및 호출 helper 묶음을 함께 바꿔야 한다.

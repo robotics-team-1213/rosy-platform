@@ -903,3 +903,5 @@
 - 변경: 독립 Account 이미지의 최소 자산 묶음에 실제 페이지가 쓰는 canonical component-controls.css를 포함한다. 계정 로그인 문서의 제품 이름과 공용 집중 작업 구성을 함께 보존하고 USB 승인에는 named operator 검사를 적용하면서 작성값·포커스 유지와 실제 쿠키 회귀를 유지한다. Node의 DOM fixture는 표준 노드 이동·제거 연산을 지원한다.
 - 증거: 앞선 8ce38e2a61의 브라우저 36건 통과는 그 소스의 증거다. 이번 병합의 설치 자산·독립 서버·브라우저·Node 검증은 새 committed source로 확인한다. 기존 증거를 새 소스의 통과로 대신하지 않는다.
 - Gate: 통합 SOURCE 검증 전. 인증·권한·확인 대화상자와 실제 장치 승인 경계는 유지한다. CE: 해당 없음 — 자산 폐쇄성·owner 표식·실제 브라우저 회귀가 보존 조건을 설명한다.
+
+- 후속 검증: 21f1dcd378에서 Node wrapper·Account 최소 자산·화면 제목 16건은 통과했으나 브라우저는 87 passed/1 failed/NEW 1로 raw 로그인 문구 부식을 검출했다. PowerShell 5.1 native pipe의 ASCII 인코딩을 무쓰기 실험으로 확인하고 네이티브 편집으로 문구·저널을 복원했다. 기존 PowerShell 한글 파이프 교훈을 적용했으며 중복 교훈은 만들지 않았다. 수정 source 4493982d05의 로그인 신원·실제 독립 Account·기존 Fleet 계정·설치/sample 브라우저 6개 파일은 112 passed/0 skipped/exit 0/NEW 0이다. 제목·안내·복귀·autocomplete·320/1366 폭·1/2/4배 텍스트 검사를 보존한다. 환경 da0de26b4df3720c, freeze eb75e06857d6c188. 독립 UI 재검토 지적 없음이며 같은 소스의 익명 owner 미리보기 30개도 통과했다. 운영 배포·실제 사용자 비밀번호 수용은 별도다.
