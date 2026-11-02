@@ -40,7 +40,7 @@ Ubuntu site-host stack: Caddy TLS proxy, Fleet console and task SQLite, and Visi
 - Bind the proxy with a wildcard plus the interface firewall, never a literal LAN IP. No hosts or addresses in tracked files (public repo).
 - Browser `/console` (site) and robot `/console` have different origins and credentials (D-275).
 - Keep this stack separate from the Pi image under `deploy/robot/pinky_pro/`.
-- D-437: candidates are built by `.github/workflows/build-site-candidate.yml`; signing stays on the offline station. The builder refuses git-ignored files under this folder (the proxy build context) and under every path the Fleet/Vision Dockerfiles COPY, so keep real secrets out of the checkout used for builds.
+- D-437: candidates are built by `.github/workflows/build-site-candidate.yml`; signing stays on the offline station. The builder refuses git-ignored files under this folder (the proxy build context) and under every path the Fleet/Vision Dockerfiles COPY, so keep real secrets out of the checkout used for builds. Unsigned candidates are signed only by the signing PC's `RosySiteAutoSign` task after its provenance checks and a green exact-main CI run; never run `sign_candidate.py` manually — an out-of-band signature skips the provenance audit and the (unsigned)→(signed) retitle and has already left misleading release titles (2026-10-29, 2026-10-31, corrected 2026-11-02 after canonical verification).
 
 ### Testing Requirements
 

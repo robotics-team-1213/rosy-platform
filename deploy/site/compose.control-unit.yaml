@@ -1,0 +1,51 @@
+# Signed control-unit overlay (D-850, D-960): the site Fleet joins a control-unit hierarchy.
+# ROSY_CONTROL_UNIT_DIR is the approved private unit directory (control-unit.yaml, certs/, secrets/,
+# peer.Caddyfile, peer-secrets/), read-only. The peer proxy serves this unit's peer origin on the external
+# rosy-control-peers network under ROSY_CONTROL_UNIT_PEER_ALIAS (e.g. peer-r); it publishes no host port.
+# Append "-f /opt/rosy/candidate/deploy/site/compose.control-unit.yaml" to ROSY_SITE_PAIRING_COMPOSE.
+services:
+  fleet:
+    environment:
+      ROSY_CONTROL_UNIT_CONFIG: /etc/rosy/control-unit/control-unit.yaml
+    volumes:
+      - type: bind
+        source: ${ROSY_CONTROL_UNIT_DIR:?Set the approved private control-unit directory}
+        target: /etc/rosy/control-unit
+        read_only: true
+        bind:
+          create_host_path: false
+    networks:
+      - site_backend
+      - robot_egress
+      - rosy-control-peers
+  control-unit-peer:
+    image: rosy-site-proxy:${ROSY_SITE_IMAGE_TAG:-local}
+    volumes:
+      - type: bind
+        source: ${ROSY_CONTROL_UNIT_DIR:?Set the approved private control-unit directory}/peer.Caddyfile
+        target: /etc/caddy/Caddyfile
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${ROSY_CONTROL_UNIT_DIR:?Set the approved private control-unit directory}/peer-secrets
+        target: /run/secrets
+        read_only: true
+        bind:
+          create_host_path: false
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    restart: unless-stopped
+    networks:
+      site_backend: {}
+      rosy-control-peers:
+        aliases:
+          - ${ROSY_CONTROL_UNIT_PEER_ALIAS:?Set this unit's peer alias, e.g. peer-r}
+
+networks:
+  rosy-control-peers:
+    external: true

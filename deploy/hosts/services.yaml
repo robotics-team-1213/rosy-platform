@@ -15,12 +15,15 @@
 # dropins:  drop-in file names the unit may carry; any other drop-in is reported
 # instances_from: workcell-arms reads the selected workcell from the host's existing bridge configuration
 # known_drift: why the installed unit or copy may differ for now; reported as KNOWN, not a failure
+# gpu:      idle-yield (D-958: lends the GPU to experiments only while its role is idle; deploy/hosts/gpu_tenants.py) | keep
 schema: rosy.host-services/1
 roles:
   model:
     rosy-dataset-review-account.service: {run: active, channel: snapshot, source: "rosy-ml/legacy-review-account-code/releases/*", doc: docs/adr/D-809-legacy-learning-account-boundary.md}
     rosy-dataset-review.service: {run: active, channel: external, source: "dataset-review-937*", dropins: [90-account-loopback.conf], doc: docs/adr/D-809-legacy-learning-account-boundary.md}
     rosy-edge-review.service: {run: active, channel: signed, source: "rosy-ml/edge-capture/review-code/current", note: "the one Learning center; rosy-review-release-update (D-857)", doc: docs/adr/D-857-rosy-learning-product-definition.md}
+    rosy-harbor-nightly.service: {run: oneshot, channel: external, note: "Harbor repo tools/integration/nightly_full_flow.sh copied into ~/rosy-jobs/harbor-nightly", doc: docs/adr/D-927-harbor-first-flow-demo-seams-and-automated-sim.md}
+    rosy-harbor-nightly.timer: {run: timer, channel: external, note: "02:30 nightly", doc: docs/adr/D-927-harbor-first-flow-demo-seams-and-automated-sim.md}
     rosy-learning-center.service: {run: "off", channel: retired, note: "candidate retired 2026-10-31; synthetic-only data kept in ~/rosy-learning-candidate-retired-20261031", doc: docs/adr/D-857-rosy-learning-product-definition.md}
     rosy-learning-center-update.service: {run: "off", channel: retired, doc: docs/adr/D-857-rosy-learning-product-definition.md}
     rosy-learning-center-update.timer: {run: "off", channel: retired, doc: docs/adr/D-857-rosy-learning-product-definition.md}
@@ -34,9 +37,10 @@ roles:
     rosy-ollama.service: {run: active, channel: host, doc: deploy/model_pc/README.md}
     rosy-pilot-fetch@.service: {run: oneshot, channel: signed, template: deploy/model_pc/rosy-pilot-fetch@.service, note: "entry and modules from the signed model-code release", doc: deploy/model_pc/README.md}
     rosy-pilot-fetch@.timer: {run: timer, instances: [9dfk], channel: copy, template: deploy/model_pc/rosy-pilot-fetch@.timer, doc: deploy/model_pc/README.md}
+    rosy-pilot-prepare-geg6.service: {run: oneshot, channel: signed, note: "pilot_review.py from the signed model-code release for robot geg6; started by hand, no timer", doc: deploy/model_pc/README.md}
     rosy-pilot-process.service: {run: oneshot, channel: signed, template: deploy/model_pc/rosy-pilot-process.service, doc: deploy/model_pc/README.md}
     rosy-pilot-process.timer: {run: timer, channel: signed, template: deploy/model_pc/rosy-pilot-process.timer, doc: deploy/model_pc/README.md}
-    rosy-review-bridge.service: {run: oneshot, channel: signed, template: deploy/model_pc/rosy-review-bridge.service, doc: deploy/model_pc/README.md}
+    rosy-review-bridge.service: {run: oneshot, channel: signed, template: deploy/model_pc/rosy-review-bridge.service, known_drift: "installed unit writes --out bridge-state-20261024 (live, updated daily) while the template writes bridge-state (untouched since 2026-10-24); installing the template would move the bridge back to the stale state", doc: deploy/model_pc/README.md}
     rosy-review-bridge.timer: {run: timer, channel: signed, template: deploy/model_pc/rosy-review-bridge.timer, doc: deploy/model_pc/README.md}
     rosy-review-pipeline.service: {run: oneshot, channel: signed, template: deploy/model_pc/rosy-review-pipeline.service, doc: deploy/model_pc/README.md}
     rosy-review-pipeline.timer: {run: timer, channel: signed, template: deploy/model_pc/rosy-review-pipeline.timer, doc: deploy/model_pc/README.md}
@@ -63,20 +67,24 @@ roles:
     pinky-r2-watch.service: {run: active, channel: external, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
     pinky-v13-training.service: {run: oneshot, channel: external, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
     pinky-nav2.service: {run: "off", channel: external, note: "DDS unit; cleanup needs D-530 6 joint consent", doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
+    pinky-rosbridge-d12.service: {run: "off", channel: external, note: "Pinky stack ~/.local/bin/pinky-stack.sh, disabled", doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
+    pinky-rosbridge-d13.service: {run: "off", channel: external, note: "Pinky stack ~/.local/bin/pinky-stack.sh, disabled", doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
     rosy-ai-gpu-watchdog.service: {run: oneshot, channel: copy, template: deploy/ai_pc/rosy-ai-gpu-watchdog.service, doc: deploy/ai_pc/README.md}
     rosy-ai-gpu-watchdog.timer: {run: timer, channel: copy, template: deploy/ai_pc/rosy-ai-gpu-watchdog.timer, doc: deploy/ai_pc/README.md}
     rosy-decision-laya.service: {run: "off", channel: copy, doc: deploy/ai_pc/README.md}
     rosy-learning-center.service: {run: "off", channel: retired, note: "candidate retired 2026-10-31; synthetic-only data kept in ~/rosy-learning-candidate-retired-20261031", doc: docs/adr/D-857-rosy-learning-product-definition.md}
     rosy-learning-center-update.service: {run: "off", channel: retired, doc: docs/adr/D-857-rosy-learning-product-definition.md}
     rosy-learning-center-update.timer: {run: "off", channel: retired, doc: docs/adr/D-857-rosy-learning-product-definition.md}
-    rosy-ollama.service: {run: active, channel: host, dropins: [warm.conf], note: "warm.conf keeps the vision model loaded", doc: deploy/ai_pc/README.md}
+    rosy-ollama.service: {run: active, gpu: idle-yield, channel: host, dropins: [warm.conf], note: "warm.conf keeps the vision model loaded; D-958 lends the GPU to experiments only while no robot is online (gpu_tenants.py), run may read inactive then", doc: deploy/ai_pc/README.md}
+    rosy-gpu-tenants.service: {run: oneshot, channel: copy, template: deploy/hosts/rosy-gpu-tenants.service, copies: {.local/lib/rosy-gpu-tenants/gpu_tenants.py: deploy/hosts/gpu_tenants.py}, doc: docs/adr/D-958-lab-compute-ledger-one-admission-gpu-slot-pausable-services.md}
+    rosy-gpu-tenants.timer: {run: timer, channel: copy, template: deploy/hosts/rosy-gpu-tenants.timer, doc: docs/adr/D-958-lab-compute-ledger-one-admission-gpu-slot-pausable-services.md}
     rosy-situation.service: {run: active, channel: autoupdate, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
     rosy-situation-autoupdate.service: {run: oneshot, channel: updater, dropins: [bootstrap.conf], note: "bootstrap.conf falls back to ~/rosy-situation/bootstrap before the first switch; harmless afterwards", doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
     rosy-situation-autoupdate.timer: {run: timer, channel: updater, template: deploy/ai_pc/rosy-situation-autoupdate.timer, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
     rosy-situation-model-tunnel.service: {run: "off", channel: retired, doc: deploy/ai_pc/README.md}
     rosy-test-storage.service: {run: oneshot, channel: copy, template: "rosy-ops:deploy/lab-host-storage/rosy-test-storage.service", copies: {rosy-test/maintenance/host_storage.py: "rosy-ops:tools/host_storage.py"}, doc: "rosy-ops:docs/lab-host-storage.md"}
     rosy-test-storage.timer: {run: timer, channel: copy, template: "rosy-ops:deploy/lab-host-storage/rosy-test-storage.timer", doc: "rosy-ops:docs/lab-host-storage.md"}
-    rosy-v11-sam-worker.service: {run: active, channel: external, dropins: [autostart.conf], note: "SAM benchmark worker outside this repository", doc: deploy/ai_pc/README.md}
+    rosy-v11-sam-worker.service: {run: oneshot, channel: external, dropins: [autostart.conf], note: "SAM benchmark worker outside this repository; on demand since 2026-11-02 (disabled, start by hand when a review needs it; frees the GPU for Isaac)", doc: deploy/ai_pc/README.md}
   site:
     rosy-account-tls-renew.service: {run: oneshot, channel: autoupdate, template: deploy/site/rosy-account-tls-renew.service, source: ".local/share/rosy/site-tools/current", note: "certificates stay in their data folder", doc: deploy/site/README.md}
     rosy-account-tls-renew.timer: {run: timer, channel: autoupdate, template: deploy/site/rosy-account-tls-renew.timer, doc: deploy/site/README.md}

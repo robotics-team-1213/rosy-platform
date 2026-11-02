@@ -20,6 +20,8 @@ same change was queued twice and ran two pretests).
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from contextlib import contextmanager
+import errno
 import json
 import os
 from pathlib import Path
@@ -30,7 +32,59 @@ import time
 
 HOLDER = "rosy-land-wt"
 PREFIX = "land/"
+ROLLUP = re.compile(r"land/fix/land-rollup-\d{14}-\d{14}")
 NO_WINDOW = 0x08000000  # subprocess.CREATE_NO_WINDOW, named here so the module imports off Windows too
+QUEUE_FULL = "landing queue full"
+ROOM_WAIT_S = 3 * 3600  # a landing refused only by the queue cap waits this long for room, then stops as before
+
+
+class Busy(SystemExit):
+    """Another supervisor or launch admission owns this OS lock."""
+
+
+@contextmanager
+def locked(path: Path, wait: bool = False):
+    """A process-owned lock; closing it, including on process death, releases ownership."""
+    with path.open("a+b") as stream:
+        if stream.tell() == 0:
+            stream.write(b"\0")
+            stream.flush()
+        stream.seek(0)
+        try:
+            if os.name == "nt":
+                import msvcrt
+                msvcrt.locking(stream.fileno(), msvcrt.LK_LOCK if wait else msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(stream.fileno(), fcntl.LOCK_EX | (0 if wait else fcntl.LOCK_NB))
+        except OSError as exc:
+            if exc.errno not in (errno.EACCES, errno.EAGAIN):
+                raise
+            raise Busy(f"[land-async] another supervisor owns {path.name}") from exc
+        yield
+
+
+def running(tree: Path) -> bool:
+    if not tree.parent.is_dir():
+        return False
+    try:
+        with locked(tree.parent / (tree.name + ".supervisor.lock")):
+            return False
+    except Busy:
+        return True
+
+
+def spawn(tree: Path, snap: str, args: list[str], log: Path, launch):
+    """Under launch admission, wait only until the child's lifetime lock is held or it exits."""
+    if running(tree):
+        raise SystemExit(f"[land-async] {snap} already has a live supervisor")
+    script = tree.parent / (tree.name + ".land_async.py")
+    script.write_bytes(Path(__file__).read_bytes())
+    process = launch([sys.executable, "-X", "utf8", str(script), "--supervise", str(tree), snap, *args], log)
+    if process is not None:
+        while process.poll() is None and not running(tree):
+            time.sleep(.02)
+    return process
 
 
 def git(cwd: Path, *args: str, check: bool = True) -> str:
@@ -67,22 +121,63 @@ def live_tickets(cwd: Path) -> list[dict]:
     return rows
 
 
+def live_owners(cwd: Path) -> list[dict]:
+    """A rollup's lifetime lease owns its members even before its land.py takes a queue ticket."""
+    rows, place = live_tickets(cwd), holder(cwd)
+    for ref in git(cwd, "for-each-ref", "--format=%(refname:short)", "refs/heads/land/fix/land-rollup-*").splitlines():
+        if ROLLUP.fullmatch(ref) and not any(r.get("branch") == ref for r in rows):
+            if running(place / ref.replace("/", "-")):
+                rows.append({"branch": ref, "status": "starting", "ticket": "supervisor"})
+    return rows
+
+
+def member_branches(place: Path, row: dict) -> list[str]:
+    """Existing batch fields and land_rollup.build's .members record, without rewriting the queue ticket."""
+    branch = row.get("branch") or ""
+    path = place / (branch.replace("/", "-") + ".members")
+    try:
+        members = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(members, list) or not members or any(
+                not isinstance(m, dict) or not isinstance(m.get("branch"), str) or not m["branch"] for m in members):
+            raise ValueError("expected member branches")
+    except FileNotFoundError as exc:
+        if ROLLUP.fullmatch(branch):
+            raise SystemExit(f"[land-async] unknown live rollup membership: {path.name}") from exc
+        return row.get("batch") or []
+    except (OSError, ValueError) as exc:
+        raise SystemExit(f"[land-async] unreadable live rollup membership: {path.name}") from exc
+    return [*(row.get("batch") or []), *(m["branch"] for m in members)]
+
+
 def holders(cwd: Path, branch: str) -> list[dict]:
-    """Live tickets landing ``branch``: its own ticket, a snapshot of it, or a batch carrying a snapshot of it."""
+    """Tickets, rollups or supervisors landing ``branch``, including startup before its ticket exists."""
     snap = re.compile(rf"^{re.escape(PREFIX + branch)}-\d{{14}}")
-    return [r for r in live_tickets(cwd) if r.get("branch") == branch or snap.match(r.get("branch") or "")
-            or any(snap.match(b) for b in r.get("batch") or [])]
+    place = holder(cwd)
+    rows = [r for r in live_owners(cwd) if r.get("branch") == branch or snap.match(r.get("branch") or "")
+            or any(snap.match(b) for b in member_branches(place, r))]
+    for ref in git(cwd, "for-each-ref", "--format=%(refname:short)", "refs/heads/land/").splitlines():
+        if snap.match(ref) and not any(r.get("branch") == ref or ref in (r.get("batch") or []) for r in rows):
+            if running(holder(cwd) / ref.replace("/", "-")):
+                rows.append({"branch": ref, "status": "starting", "ticket": "supervisor"})
+    return rows
 
 
 def stop(pid: int) -> None:
     if os.name == "nt":
         subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], capture_output=True)
+    elif os.getpgid(pid) == pid:  # detach made this supervisor the group leader: stop its land.py too
+        os.killpg(pid, 15)
     else:
         os.kill(pid, 15)
 
 
 def start(cwd: Path, land_args: list[str], now: datetime, launch) -> tuple[str, Path]:
     """Create the snapshot branch and hidden worktree, hand them to ``launch``; (snapshot, log path)."""
+    with locked(holder(cwd).parent / "rosy-land-async.lock", wait=True):
+        return _start(cwd, land_args, now, launch)
+
+
+def _start(cwd: Path, land_args: list[str], now: datetime, launch) -> tuple[str, Path]:
     branch = git(cwd, "rev-parse", "--abbrev-ref", "HEAD")
     if branch in ("HEAD", "main") or branch.startswith(PREFIX):
         raise SystemExit(f"[land-async] run it from a topic branch's worktree, not {branch!r}")
@@ -90,14 +185,18 @@ def start(cwd: Path, land_args: list[str], now: datetime, launch) -> tuple[str, 
         raise SystemExit("[land-async] uncommitted changes: commit them first (a landing takes only commits)")
     replace = "--replace" in land_args
     land_args = [a for a in land_args if a != "--replace"]
+    replacements = []
     for row in holders(cwd, branch):  # one landing per change: a second one only doubled the pretest
         carried = row.get("branch") not in (branch,) and not row.get("branch", "").startswith(PREFIX + branch + "-")
         where = f"{row['ticket']} ({row.get('branch')}, {row.get('status')}, pid {row.get('pid')})"
-        if not replace or carried:
+        if not replace or carried or row.get("status") == "starting":
             raise SystemExit(f"[land-async] {branch} is already landing in {where}"
-                             + ("; it rides in that batch" if carried else "; --replace stops it and queues this HEAD"))
+                             + ("; it rides in that batch" if carried else "; its supervisor is still starting"
+                                if row.get("status") == "starting" else "; --replace stops it and queues this HEAD"))
+        replacements.append((int(row["pid"]), where))
+    for pid, where in replacements:
         print(f"[land-async] --replace: stopping {where}", flush=True)
-        stop(int(row["pid"]))
+        stop(pid)
     if "--urgent" not in land_args:  # refused before a snapshot or hidden worktree exists
         land_queue = _queue()
         if why := land_queue.full(land_queue.queue_dir(cwd)):
@@ -111,20 +210,47 @@ def start(cwd: Path, land_args: list[str], now: datetime, launch) -> tuple[str, 
     log = tree.parent / (tree.name + ".log")
     # The supervisor runs a copy beside the log, never the caller's file: Windows keeps a running script's
     # folder from being deleted, and the caller's worktree must be free (2026-10-28).
-    script = place / (tree.name + ".land_async.py")  # one per landing: a running copy cannot be rewritten
-    script.write_bytes(Path(__file__).read_bytes())
-    launch([sys.executable, "-X", "utf8", str(script), "--supervise", str(tree), snap, *land_args], log)
+    spawn(tree, snap, land_args, log, launch)
     return snap, log
 
 
-def supervise(tree: Path, snap: str, land_args: list[str], run=subprocess.call) -> int:
+def wait_for_room(tree: Path, deadline: float) -> bool:
+    """Poll until the queue takes an ordinary ticket again; False once ``deadline`` (monotonic) passes."""
+    sys.path.insert(0, str(tree / "tools"))  # the snapshot's land_queue: this copy runs beside the log
+    import land_queue
+    while time.monotonic() < deadline:
+        if not land_queue.full(land_queue.queue_dir(tree)):
+            return True
+        time.sleep(60)
+    return False
+
+
+def supervise(tree: Path, snap: str, land_args: list[str], run=subprocess.call, room=wait_for_room) -> int:
     """Run land.py in ``tree``; clean up when the snapshot landed, keep it and mark it stopped otherwise."""
-    # land.py's own lines (the STOP reason) into the .log, appended: the inherited handle lost them (2026-10-28)
-    with open(tree.parent / (tree.name + ".log"), "a", encoding="utf-8") as log:
-        # CREATE_NO_WINDOW: under the detached supervisor land.py got a new console, a tab of the default terminal;
-        # closing that window killed every lander at once (exit 0xC000013A: 8 on 10-28, 12 on 10-30 18:58).
-        code = run([sys.executable, "-X", "utf8", "tools/land.py", *land_args], cwd=str(tree), stdout=log,
-                   stderr=subprocess.STDOUT, **({"creationflags": NO_WINDOW} if os.name == "nt" else {}))
+    # shortcut: parent-only force kills can orphan pre-ticket children; use stop(), add OS job ownership if needed.
+    with locked(tree.parent / (tree.name + ".supervisor.lock")):
+        return _supervise(tree, snap, land_args, run, room)
+
+
+def _supervise(tree: Path, snap: str, land_args: list[str], run, room) -> int:
+    path = tree.parent / (tree.name + ".log")
+    deadline = time.monotonic() + ROOM_WAIT_S
+    while True:
+        seen = path.stat().st_size if path.exists() else 0
+        # land.py's own lines (the STOP reason) into the .log, appended: the inherited handle lost them (2026-10-28)
+        with open(path, "a", encoding="utf-8") as log:
+            # CREATE_NO_WINDOW: under the detached supervisor land.py got a new console, a tab of the default
+            # terminal; closing that window killed every lander at once (exit 0xC000013A: 8 on 10-28, 12 on 10-30).
+            code = run([sys.executable, "-X", "utf8", "tools/land.py", *land_args], cwd=str(tree), stdout=log,
+                       stderr=subprocess.STDOUT, **({"creationflags": NO_WINDOW} if os.name == "nt" else {}))
+        # start() saw room, but another session took the last slot before land.py did (2026-10-31: twice in a row)
+        output = path.read_bytes()[seen:].decode("utf-8", "replace").rstrip().splitlines()
+        reason = output[-1] if output else ""
+        full = code != 0 and reason.startswith(f"[land] STOP: {QUEUE_FULL} (")
+        if not (full and time.monotonic() < deadline and room(tree, deadline)
+                and time.monotonic() < deadline):
+            break
+        print(f"[land-async] {snap}: the queue has room again; land.py once more", flush=True)
     landed = subprocess.run(["git", "-C", str(tree), "merge-base", "--is-ancestor", snap, "main"]).returncode == 0
     if landed:
         main = git(tree, "rev-parse", "--path-format=absolute", "--git-common-dir")
@@ -146,15 +272,13 @@ def detach(argv: list[str], log: Path) -> subprocess.Popen:
                                 creationflags=flags, start_new_session=os.name != "nt")
 
 
-def resume(cwd: Path, name: str, land_args: list[str], launch, wait: float = 60, sleep=time.sleep) -> str | None:
-    """Relaunch a stopped landing on its kept hidden tree and snapshot; the queue status its ticket reached, or None.
-
-    The recovery used after console kills, reboots and paused queues (2026-10-30/31); a relaunch that never took a
-    ticket once went unnoticed, so this waits for the ticket."""
+def _resume_start(cwd: Path, name: str, land_args: list[str], launch):
     place = holder(cwd)
     tree = place / name
     if not tree.is_dir():
         raise SystemExit(f"[land-async] no hidden tree {tree}")
+    if running(tree):
+        raise SystemExit(f"[land-async] {name} already has a live supervisor")
     if git(tree, "status", "--porcelain", "--untracked-files=no"):
         raise SystemExit(f"[land-async] {tree} has uncommitted changes")
     snaps = [s for s in git(cwd, "for-each-ref", "--format=%(refname:short)", "refs/heads/land/").splitlines()
@@ -164,20 +288,33 @@ def resume(cwd: Path, name: str, land_args: list[str], launch, wait: float = 60,
     snap = snaps[0]
     if subprocess.run(["git", "-C", str(cwd), "merge-base", "--is-ancestor", snap, "main"]).returncode == 0:
         raise SystemExit(f"[land-async] {snap} is already in main")
-    if held := [r for r in live_tickets(cwd) if r.get("branch") == snap or snap in (r.get("batch") or [])]:
-        raise SystemExit(f"[land-async] {snap} is held by live ticket {held[0]['ticket']} ({held[0].get('branch')})")
+    if held := [r for r in live_owners(cwd) if r.get("branch") == snap or snap in member_branches(place, r)]:
+        owner = "live supervisor" if held[0]["ticket"] == "supervisor" else f"live ticket {held[0]['ticket']}"
+        raise SystemExit(f"[land-async] {snap} is held by {owner} ({held[0].get('branch')})")
     if git(tree, "rev-parse", "--abbrev-ref", "HEAD") != snap:  # land.py had moved it onto a batch candidate
         git(tree, "checkout", "-q", snap)
     (place / (name + ".stopped")).unlink(missing_ok=True)
-    script = place / (name + ".land_async.py")
-    script.write_bytes(Path(__file__).read_bytes())
     args = land_args or ["--tests", "auto"]
-    launch([sys.executable, "-X", "utf8", str(script), "--supervise", str(tree), snap, *args],
-           place / (name + ".resume.log"))
+    head = git(tree, "rev-parse", "HEAD")
+    process = spawn(tree, snap, args, place / (name + ".resume.log"), launch)
+    return snap, head, process
+
+
+def resume(cwd: Path, name: str, land_args: list[str], launch, wait: float = 60, sleep=time.sleep) -> str | None:
+    """Return ticket status, starting while its supervisor lives, landed after a quick success, or None on failure."""
+    with locked(holder(cwd).parent / "rosy-land-async.lock", wait=True):
+        snap, head, process = _resume_start(cwd, name, land_args, launch)
     for _ in range(max(1, int(wait / 5))):
         if mine := [r for r in live_tickets(cwd) if r.get("branch") == snap]:
             return mine[0].get("status")
+        if process is not None and process.poll() is not None:
+            break
         sleep(5)
+    if process is not None and process.poll() is None:
+        return "starting"
+    if process is not None and process.poll() == 0 and subprocess.run(
+            ["git", "-C", str(cwd), "merge-base", "--is-ancestor", head, "main"]).returncode == 0:
+        return "landed"
     return None
 
 
@@ -186,7 +323,9 @@ def main(argv: list[str]) -> int:
         return supervise(Path(argv[1]), argv[2], argv[3:])
     if argv[:1] == ["resume"] and len(argv) > 1:
         status = resume(Path.cwd(), argv[1], argv[2:], detach)
-        note = f"ticket {status}" if status else "NO ticket after 60 s; read its .log"
+        note = ("starting (supervisor alive; ticket pending)" if status == "starting" else
+                "landed" if status == "landed" else f"ticket {status}" if status else
+                "supervisor exited without a ticket or landing; read its .log")
         print(f"[land-async] resumed {argv[1]}: {note}")
         return 0 if status else 1
     snap, log = start(Path.cwd(), argv, datetime.now(timezone.utc), detach)

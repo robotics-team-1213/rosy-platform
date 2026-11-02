@@ -4369,3 +4369,29 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 현장 arm_b dry-run(읽기 전용, `--from stack --dest pallet`): 2개 관측, 엉킨 덩어리·손가락 여유 7/26 mm로 모두 거절(정상). 원격 `test_omx_cell_auto_pick.py`·`test_omx_cell_auto_carry.py`
 - gate 변화: 없음. 실물 연속 운반은 아직 하지 않았다.
 - CE: 해당 없음
+
+## 2026-11-02 · uncommitted · feat(site): 관제 단위 overlay를 서명 candidate에 넣는다 (D-960)
+- 변경: `deploy/site/compose.control-unit.yaml`(Fleet에 `ROSY_CONTROL_UNIT_DIR` 읽기 전용 mount + 서명 proxy 이미지의 peer 프록시, 외부 `rosy-control-peers` 네트워크, alias `ROSY_CONTROL_UNIT_PEER_ALIAS`)을 candidate build·verify(`control_unit` 요약)·자동 갱신 허용 목록·실행 검사에 workcell과 같은 방식으로 추가.
+- 증거: 2026-11-02 현장 R 전환에서 사이트별 미서명 `compose.control-unit-r.yaml`을 `ROSY_SITE_PAIRING_COMPOSE`에 넣으면 자동 갱신이 모든 새 candidate를 거절함을 확인(updater `allowed_overlays`). 원격 `test_site_autoupdate.py`·`test_site_candidate*.py`·`test_control_unit_deploy.py`·`test_site_compose_log_rotation.py`.
+- gate 변화: 없음
+- 교훈: 작업 기록 2026-11-02 control-unit-d960-switch
+
+## 2026-11-02 · uncommitted · fix(site): Tailscale 대역에서도 천장 카메라 미리보기
+
+- 변경: 사이트 Caddy의 토큰 없는 카메라 보기 예외(`@lan_camera`, Fleet `vision/sources`·`vision/lease` 두 경로)에 Tailscale tailnet `100.64.0.0/10`을 더한다. 기존 `private_ranges`는 CGNAT 대역을 포함하지 않아 tailnet 브라우저가 401을 받았다. D-473 개발 세션이 이미 같은 대역을 사설망으로 받는 것과 맞춘다. 허가 범위(소스 목록·60초 source 한정 lease)와 다른 Fleet 경로의 토큰 요구는 그대로다.
+- 증거: 사이트·Fleet 관련 원격 pytest(커밋 뒤 실행). 2026-10-31 현장 proxy 컨테이너의 Caddy로 이 Caddyfile을 `caddy validate` → Valid configuration(적용 안 함). 현장 방화벽은 이미 `tailscale0`을 허용한다. 배포 전 현장 443에서 tailnet 주소의 `/api/fleet/vision/sources`는 401, 8443(Account)에서는 목록·lease·`ceiling_north` 프레임 200.
+- gate 변화: 없음. 서명 후보 배포 뒤 443 tailnet readback이 남았다. IP 주소로는 TLS가 실패하므로(인증서 SAN에 IP 없음) 이름으로 접속한다.
+- CE: 해당 없음 — 대역 누락은 이 기록과 Caddyfile 주석으로 복원된다.
+
+## 2026-11-02 · uncommitted · 현장 추가 팔 오버레이 전환 순서를 교훈으로
+- 변경: 10-27부터 현장 자동 업데이트를 막은 미서명 arm-s 오버레이를 정식 매핑으로 바꾼 실제 순서를 `docs/solutions/deployment/site-extra-arm-overlay-switch-needs-a-staged-runtime-2026-11-01.md`에 기록하고, `deploy/site/README.md` 전환 문단에서 그 문서를 가리킨다. 기존 README는 "오버레이를 함께 제거"만 적어 그대로 하면 세 번 거절된다.
+- 증거: 2026-11-02 09:17 KST 현장 candidate 2ba97ac, proxy·fleet·vision·postgres healthy, Fleet에 A/B/S 토큰, dry-run idle.
+- gate 변화: 없음. CE: 새 교훈 기록.
+
+## 2026-11-02 · b101f57783 · fix(hosts): 모델·AI PC 미선언 유닛 선언, review-bridge 알려진 차이
+
+- 변경: `deploy/hosts/services.yaml`에 이미 설치돼 있던 유닛을 관측한 그대로 선언했다. 모델 PC `rosy-harbor-nightly` 서비스·타이머(Harbor 저장소의 `nightly_full_flow.sh`를 `~/rosy-jobs`에 복사, external), `rosy-pilot-prepare-geg6`(서명 model-code, 손으로 시작). AI PC `pinky-rosbridge-d12`·`-d13`(Pinky 스택, 꺼짐). `rosy-review-bridge`에는 `known_drift`를 단다. 설치본이 매일 갱신되는 `bridge-state-20261024`에 쓰고 템플릿의 `bridge-state`는 10-24 뒤 그대로라, 템플릿을 설치하면 오래된 상태로 돌아간다.
+- 같은 점검에서 저장소 변경 없이 처리: AI PC `gpu_tenants.py`를 착지된 main 판으로 교체(해시 일치), 모델 PC의 끝난 Isaac 실행 유닛 5개 reset-failed, 관제 PC `host_storage.py`를 rosy-ops origin/main(#12)으로 교체(self-test 통과, 이전 판 백업), 카메라 뷰 drop-in 폴더의 `.bak`를 백업 폴더로 옮김.
+- 증거: 이 worktree에서 `tools/remote/update_status.py` — model 37 declared 0 findings, ai 23 declared 0 findings(review-bridge는 KNOWN).
+- gate 변화: 없음. 관제 PC의 observer arm_a·arm_b 정지와 카메라(front·천장 폰) 실패는 셀 작업 중인 것으로 보여 손대지 않았다.
+- CE: 해당 없음 — 선언 누락은 update_status가 매번 드러낸다.

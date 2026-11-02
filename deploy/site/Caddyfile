@@ -9,7 +9,8 @@ import /etc/caddy/account/*.caddy
 	tls /run/secrets/site_cert /run/secrets/site_key
 
 	@lan_camera {
-		remote_ip private_ranges
+		# The tailnet (100.64.0.0/10) counts as private, as for D-473 development sessions.
+		remote_ip private_ranges 100.64.0.0/10
 		path /api/fleet/vision/sources /api/fleet/vision/lease
 	}
 	@camera path /overhead/v1/frames

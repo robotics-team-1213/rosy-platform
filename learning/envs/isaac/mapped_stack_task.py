@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import subprocess
 
+from guarded_release import descend
 from mapped_stack_fixture import CUBE_FIXTURE, DT, FIXTURE, PROFILE, ROOT, belt_transport_observed, cube_release_ready, cube_release_target, free_lift, grip_duration, home, judge, plan, stable_box, leveling_release_target, leveling_box_stable, leveling_sequence_observed, norm, PackingFootprintUnavailable, prefix_held, measured_motion
 
 
@@ -79,9 +80,9 @@ def packing_target(index,snapshot,step,source_z,fixture,commanded_tcp=None):
 
 class Planner:
     """Use the OMX owner's offline JSON producer without importing its device adapter."""
-    def __init__(self, directory, *, scene=None):
+    def __init__(self, directory, *, scene=None, tcp_x_m=None):
         self.directory, self.count = Path(directory), 0
-        self.scene = scene
+        self.scene, self.tcp_x_m = scene, tcp_x_m  # tcp_x_m only for an opt-in jaw with another TCP
 
     def request(self, operation, **fields):
         from stacking_report import read_regular
@@ -90,6 +91,8 @@ class Planner:
         output = self.directory/f'plan-frames-{self.count}.json'
         if self.scene is not None:
             fields = dict(fields,scene=self.scene)
+        if self.tcp_x_m is not None:
+            fields = dict(fields,tcp_x_m=self.tcp_x_m)
         with request.open('x', encoding='utf-8') as stream:
             json.dump(dict(schema='rosy.omx-sim-stack-plan/1', operation=operation, **fields), stream, allow_nan=False)
         try:
@@ -401,11 +404,20 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
                 if not all(free_lift(s['boxes'][index], arm, float(p[2])) for s in layer['lift_samples']):
                     photo('mapped-grasp-failed.png')
                     raise ValueError('bilateral free lift failed; transport interlock stopped the arm')
+                if fixture.get('grasp_hold_check'):  # step 1 of the palletizing rebuild: lift, hold, stop before any placement
+                    layer['hold'] = dict(finger_dof=fingers[arm][0], seconds=2, samples=samples(240))
+                    raise ValueError('grasp-hold check complete; placement not attempted')
                 if fixture.get('leveling_protocol'):
                     leveling = layer['leveling'] = dict(arm=arm,grasp_samples=[],lift_samples=[],settle_samples=[])
                     center = fixture['leveling_center_m']
                     leveling_yaw = fixture['leveling_yaws_rad'][arm]
-                    move(arm,[*center[:2],carry_height],leveling_yaw)
+                    level_carry = fixture.get('leveling_carry_height_m', carry_height)
+
+                    def via(yaw):  # the leveling spot is out of reach at the carry height: climb and descend through a waypoint
+                        if fixture.get('leveling_via_m'):
+                            move(arm, fixture['leveling_via_m'], yaw)
+                    via(leveling_yaw)
+                    move(arm,[*center[:2],level_carry],leveling_yaw)
                     leveling['prefix_window'] = await_prefix(index,snapshot,step,fixture)
                     command = None
                     for _ in range(fixture['release_feedback_iterations']):
@@ -417,7 +429,8 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
                         raise ValueError('Leveling release feedback did not converge')
                     grip(arm,initial['gripper']['release'],release=True)
                     leveling['opened_sample'] = snapshot()
-                    move(arm,[*center[:2],carry_height],leveling_yaw)
+                    move(arm,[*center[:2],level_carry],leveling_yaw)
+                    via(leveling_yaw)
                     move(arm,home(arm,cube,fixture=fixture))
                     leveling['settle_samples'] = samples(132)
                     if not all(leveling_box_stable(s['boxes'][index],index,fixture) and prefix_held(s,index,fixture)
@@ -427,17 +440,20 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
                     p,q = box.get_world_pose()
                     leveling['source_center_z'] = float(p[2])
                     yaw = math.atan2(2*(q[0]*q[3]+q[1]*q[2]),1-2*(q[2]**2+q[3]**2))
-                    move(arm,[p[0],p[1],carry_height],yaw)
+                    via(yaw)
+                    move(arm,[p[0],p[1],level_carry],yaw)
                     grip(arm,initial['gripper']['preopen'])
                     move(arm,[p[0],p[1],p[2]+.002],yaw)
                     leveling['grasp_samples'].append(grasp_snapshot(arm))
                     grip(arm,initial['gripper']['close'])
                     leveling['grasp_samples'].append(grasp_snapshot(arm))
-                    move(arm,[p[0],p[1],carry_height],yaw)
+                    move(arm,[p[0],p[1],level_carry],yaw)
+                    via(yaw)
                     leveling['lift_samples'] = samples(36)
                     if not leveling_sequence_observed(layer,index,fixture):
                         raise ValueError('Leveled container regrasp lacks measured second free lift')
-                move(arm, [*item['target'][:2], carry_height])
+                ryaw = fixture.get('release_yaw_rad', 0.) if cube else 0.  # deliberate yaw at release (MuJoCo yaw sweep candidates)
+                move(arm, [*item['target'][:2], carry_height], ryaw)
                 if cube:
                     layer['carry_sample'] = snapshot()
                     if fixture.get('leveling_protocol') and fixture.get('packing_strategy'):
@@ -462,7 +478,7 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
                         else:
                             release_command = cube_release_target(index, snapshot(), float(p[2]), commanded_tcp=release_command, fixture=fixture)
                         layer['release_commands'].append(release_command)
-                        move(arm, release_command)
+                        move(arm, release_command, ryaw)
                         layer['release_samples'].append(snapshot())
                 else:
                     move(arm, [*item['target'][:2], item['target'][2]+.003])
@@ -472,6 +488,9 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
                     layer['release_sample'] = snapshot()
                     if not cube_release_ready(index, layer['release_sample'], float(p[2]), fixture=fixture):
                         raise ValueError('cube release correction did not converge; opening blocked')
+                if cube and fixture.get('guarded_descent'):  # lower until the container stops, then open (guarded_release.py)
+                    _, layer['guarded'] = descend(lambda point: move(arm, point, ryaw), lambda: float(snapshot()['boxes'][index]['position'][2]),
+                                                  release_command, fixture['guarded_descent'])
                 layer['opening_samples'] = grip(arm, initial['gripper']['release'], observe=cube, release=True)
                 if cube:
                     layer['opened_sample'] = snapshot()

@@ -133,7 +133,7 @@ async function preview(automatic=false){
       $('review-gallery').replaceChildren(...figures);$('review-gallery').hidden=false;
       $('review-frame-status').textContent=`기록 행 ${data.index} · 시각 ${data.timestamp_seconds} s · source fps ${data.fps} · 카메라 ${start+1}–${start+indices.length} / ${keys.length} (선택 카메라 포함)`;
     }else{
-      const image=new Image();image.id='review-image';image.style.cssText=$('review-image').style.cssText;image.alt=`시도 ${episode}, 프레임 ${frame}, 카메라 ${keys[camera]}`;
+      const image=new Image();image.id='review-image';image.alt=`시도 ${episode}, 프레임 ${frame}, 카메라 ${keys[camera]}`;
       await new Promise((resolve,reject)=>{image.onload=resolve;image.onerror=()=>reject(new Error('원본 리비전·해시와 카메라를 확인하세요.'));signal.addEventListener('abort',()=>{image.removeAttribute('src');reject(new DOMException('Cancelled','AbortError'));},{once:true});image.src=`${API}/review-frame/${source.prepared_id}/${source.source_revision}/${episode}/${frame}/${camera}`;});
       if(ticket!==generation)return;image.onload=null;image.onerror=null;$('review-image').replaceWith(image);$('review-frame-status').textContent='선택 프레임의 RGB 이미지를 읽었습니다. 기록 시각은 묶음 보기에서 확인하세요.';
     }

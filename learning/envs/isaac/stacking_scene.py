@@ -13,7 +13,7 @@ def add_cargo(world, stage, plan, links, material, fixture, *, mapped, cube):
     filters = [link[key] for link in links for key in ('link6', 'link7')]
     for i, item in enumerate(plan):
         box = world.scene.add(DynamicCuboid('/World/Cargo'+str(i), name='cargo'+str(i), size=1.,
-            scale=np.array([UNIT*item['cells'], UNIT, UNIT]), mass=.02*item['cells'],
+            scale=np.array([UNIT*item['cells'], UNIT, UNIT]), mass=(fixture.get('cargo_mass_kg') or [.02, .04, .06])[item['cells']-1],
             position=np.array([.7, -.5+i*.065, .015]), color=np.array(item.get('color_rgb', colors[item['cells']])),
             physics_material=material))
         cargo.append(box)
@@ -34,6 +34,8 @@ def add_cargo(world, stage, plan, links, material, fixture, *, mapped, cube):
             panel('DoorSeam', [.502, 0., 0.], [.006, .012, .88], .55)
             for side in (-1, 1):
                 panel('DoorBar'+('Left' if side < 0 else 'Right'), [.506, side*.17, 0.], [.008, .015, .76], .55)
+        if cube and fixture.get('container_variant', 'plain') != 'plain':
+            variant_colliders(stage, box, item['cells']*UNIT, fixture['container_variant'])
         if mapped:
             # Resolve the small stacked contacts with the same solver budget as the arms.
             body = PhysxSchema.PhysxRigidBodyAPI.Apply(box.prim)
@@ -45,6 +47,30 @@ def add_cargo(world, stage, plan, links, material, fixture, *, mapped, cube):
             ['/World/Cargo'+str(j) for j in range(len(plan)) if j != i]+(['/World/Table'] if fixture.get('leveling_protocol') else []),
             max_contact_count=512 if cube else 128)))
     return cargo, contacts
+
+
+def variant_colliders(stage, box, length, name):
+    """Replace the cuboid collider by the convex pieces of container variant `name` (container_variants.py); the cuboid stays the
+    body and the visual. The prim is scaled to the container size, so the piece points are divided by that scale."""
+    from pxr import Gf, UsdGeom, UsdPhysics, UsdShade, Vt
+    import container_variants as cv
+    UsdPhysics.CollisionAPI(box.prim).CreateCollisionEnabledAttr(False)
+    scale, material = (length, UNIT, UNIT), UsdShade.Material.Get(stage, '/World/GripMaterial')
+    for k, (kind, data, *rest) in enumerate(cv.pieces(cv.VARIANTS[name], length)):
+        if kind == 'box':
+            points = [(rest[0][0]+sx*data[0], rest[0][1]+sy*data[1], rest[0][2]+sz*data[2]) for sx in (-1, 1) for sy in (-1, 1) for sz in (-1, 1)]
+            points = [tuple(c/1e3 for c in p) for p in points]
+        else:
+            points = [tuple(data[i:i+3]) for i in range(0, len(data), 3)]
+        piece = UsdGeom.Mesh.Define(stage, box.prim.GetPath().AppendChild(f'Piece{k}'))
+        piece.CreatePointsAttr(Vt.Vec3fArray([Gf.Vec3f(*(c/s for c, s in zip(p, scale))) for p in points]))
+        tris = cv.hull_triangles(points)
+        piece.CreateFaceVertexCountsAttr(Vt.IntArray([3]*len(tris)))
+        piece.CreateFaceVertexIndicesAttr(Vt.IntArray([i for t in tris for i in t]))
+        piece.CreatePurposeAttr('guide')
+        UsdPhysics.CollisionAPI.Apply(piece.GetPrim())
+        UsdPhysics.MeshCollisionAPI.Apply(piece.GetPrim()).CreateApproximationAttr('convexHull')
+        UsdShade.MaterialBindingAPI.Apply(piece.GetPrim()).Bind(material, UsdShade.Tokens.weakerThanDescendants, 'physics')
 
 
 def add_probes(world, stage, links, plan, arm_roots, *, mapped, probed):
@@ -94,3 +120,45 @@ def capture(world, camera, eye, path, *, container, overview=False):
     if rgba is None or rgba.shape != (600, 800, 4):
         raise RuntimeError('Actual SDK image unavailable')
     Image.fromarray(rgba.astype(np.uint8)).save(path)
+
+
+def add_ship_plate(stage, fixture):
+    """The navy stud plate: one kinematic (never moving) body at /World/Bin, so the cargo contact views see plate and studs as
+    'bin'. Visual mesh with the CAD chamfered dots; colliders are a plate box and one convex-hull mesh per dot (ship_plate.stud_solid). A static triangle-mesh collider gave inconsistent vertical contact forces (run s42p)."""
+    from pxr import Gf, UsdGeom, UsdPhysics, UsdShade, Vt
+    import ship_plate
+    spec = fixture['ship_plate']
+    body = UsdGeom.Xform.Define(stage, '/World/Bin')
+    UsdPhysics.RigidBodyAPI.Apply(body.GetPrim()).CreateKinematicEnabledAttr(True)
+    points, tris, plate_faces = ship_plate.mesh(fixture)
+    mesh = UsdGeom.Mesh.Define(stage, '/World/Bin/Visual')
+    mesh.CreatePointsAttr(Vt.Vec3fArray([Gf.Vec3f(*p) for p in points]))
+    mesh.CreateFaceVertexCountsAttr(Vt.IntArray([3]*len(tris)))
+    mesh.CreateFaceVertexIndicesAttr(Vt.IntArray([i for t in tris for i in t]))
+    mesh.CreateSubdivisionSchemeAttr('none')
+    navy, stud = Gf.Vec3f(.04, .07, .22), Gf.Vec3f(.85, .88, .92)
+    color = mesh.CreateDisplayColorAttr(Vt.Vec3fArray([navy]*plate_faces+[stud]*(len(tris)-plate_faces)))
+    UsdGeom.Primvar(color).SetInterpolation('uniform')
+    material = UsdShade.Material.Get(stage, '/World/GripMaterial')
+
+    def collider(prim):
+        prim.CreatePurposeAttr('guide')
+        UsdPhysics.CollisionAPI.Apply(prim.GetPrim())
+        UsdShade.MaterialBindingAPI.Apply(prim.GetPrim()).Bind(material, UsdShade.Tokens.weakerThanDescendants, 'physics')
+    outline, top = ship_plate.outline(fixture), ship_plate.top_z(fixture)
+    x0, x1, cy = min(x for x, _ in outline), max(x for x, _ in outline), ship_plate.stack_centre(fixture)[1]
+    plate = UsdGeom.Cube.Define(stage, '/World/Bin/PlateCollider')
+    plate.CreateSizeAttr(1.)
+    pose = UsdGeom.Xformable(plate)
+    pose.AddTranslateOp().Set(Gf.Vec3d((x0+x1)/2, cy, top-spec['thickness_m']/2))
+    pose.AddScaleOp().Set(Gf.Vec3f(x1-x0, 2*max(abs(y-cy) for _, y in outline), spec['thickness_m']))
+    collider(plate)
+    solid, solid_tris = ship_plate.stud_solid(spec)
+    for n, (x, y) in enumerate(ship_plate.stud_positions(fixture)):
+        dot = UsdGeom.Mesh.Define(stage, f'/World/Bin/Stud{n}')
+        dot.CreatePointsAttr(Vt.Vec3fArray([Gf.Vec3f(*p) for p in solid]))
+        dot.CreateFaceVertexCountsAttr(Vt.IntArray([3]*len(solid_tris)))
+        dot.CreateFaceVertexIndicesAttr(Vt.IntArray([i for t in solid_tris for i in t]))
+        UsdGeom.Xformable(dot).AddTranslateOp().Set(Gf.Vec3d(x, y, top))
+        UsdPhysics.MeshCollisionAPI.Apply(dot.GetPrim()).CreateApproximationAttr('convexHull')
+        collider(dot)

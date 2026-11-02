@@ -1,7 +1,7 @@
 ---
 module: tools
 date: 2026-10-25
-last_updated: 2026-10-31
+last_updated: 2026-11-02
 problem_type: workflow_issue
 component: development_workflow
 severity: high
@@ -31,6 +31,31 @@ Windows에서는 어느 프로세스든 그 폴더를 현재 위치로 쓰고 �
 - 복구: 공유 체크아웃의 `git reflog`에서 직전이 `main`인지 확인하고 `git switch main`. 그 사이 커밋은 없었으므로 빈 브랜치를 지웠다(약 2분).
 - 폴더는 지우지 않고 `Rosy/artifacts/worktree-backups/`로 옮겼다. `worktrees.py prune`은 이 폴더를 `orphan`으로만 표시하고 남겼다.
 - `.git`이 사라진 경위는 확인하지 못했다. 위 구조 수정(빈 폴더 삭제·묘비)은 이 경로를 막지 못했다. 등록이 지워졌는데 파일이 남은 폴더에서는 git이 여전히 상위 공유 체크아웃을 잡는다.
+
+## 재발과 복구 (2026-11-02): 상대 경로 preview와 남은 감시 프로세스
+
+등록을 제거한 install-seat 폴더가 WinError 32로 남았다. 프로세스 명령행에 워크트리
+이름이 없어 단순 경로 검색으로는 원인을 찾지 못했다. 읽기 전용 현재 디렉터리 점검에서
+부모가 사라진 sample UI 서버 43개가 같은 폴더를 잡고 있었다. 명령은 모두
+`python -X utf8 applications/fleet/dev/serve.py --mode sample --scenario normal --port 4173`였고,
+한 시간 이상 지난 프로세스였다. 상대 경로 명령도 시작한 폴더의 핸들을 계속 보유한다.
+
+각 PID의 명령·생성 시각·부모 부재·sample 모드를 다시 확인한 뒤 그 43개만 종료했다.
+오래된 로그 감시 shell의 자식도 정리했다. 반면 release-corrector 폴더의 Isaac batch
+coordinator는 부모가 없어도 실제 작업과 소유 세션의 감시가 남아 있어 보존했다.
+부모 부재만으로 모든 Python이나 shell을 종료하면 안 된다.
+
+ignored `.impeccable/`는 먼저 우산의 `artifacts/worktree-backups/` 아래 zip으로 보관하고,
+다시 열어 모든 파일의 SHA256을 원본과 비교했다. 등록 제거 뒤 남은 폴더에는 묘비를
+유지했다. 검증된 고아 프로세스 종료 후 공식 prune이 install-seat·fleetreg·publish-full2
+세 폴더를 실제로 제거했다. 파일 보존·프로세스 종료·등록 제거·폴더 제거는 별도 확인이다.
+
+이전 `http_host.make_server`는 Windows에서 같은 포트의 두 bind를 허용하는 것을
+실제 socket으로 재현했다. 수정은 Windows의 exclusive bind를 켜고 address reuse를
+끄며, 모든 플랫폼에서 port reuse를 끈다. 원격 관련 시험 15개가 통과했고, Windows에서
+exclusive 값 1·두 번째 bind 오류 10048·닫은 뒤 재bind를 확인했다. 이 guard는 같은 포트에
+preview가 쌓이는 것을 막는다. 단일 백그라운드 프로세스의 자동 종료 기능은 아니므로,
+호출자가 PID와 자식 수명을 관리하고 워크트리 회수 전에 종료해야 한다.
 
 ## 다음에 적용할 조건
 
