@@ -65,6 +65,13 @@ def test_near_home_shoulder_cannot_oscillate_into_clearance():
     assert all(row["state"][1] >= HOME[1] for row in out["rows"])
 
 
+def test_a_held_target_at_home_cannot_be_jogged_past_it_while_measurement_lags():
+    cell = Cell([-5.4, HOME[1] + 0.25, -1.9, 59.4, 41.3, 48.8])
+    cell.target[1] = HOME[1]
+    assert u.unwedge(cell, HOME, sleep=lambda s: None)["result"] == "stopped"
+    assert cell.sent == ["state"]
+
+
 @pytest.mark.parametrize("settled", [False, None])
 def test_park_without_positive_settled_evidence_is_not_recovered(settled):
     cell = Cell([-5.4, 13.5, -1.9, 59.4, 41.3, 48.8], park_settled=settled)
@@ -76,3 +83,28 @@ def test_park_settled_flag_cannot_replace_measured_home_evidence():
     cell = Cell([-5.4, 13.5, -1.9, 59.4, 41.3, 48.8], park_offset=SETTLE_TOL + 0.1)
     out = u.unwedge(cell, HOME, sleep=lambda s: None)
     assert cell.sent[-1] == "park" and out["result"] == "stopped"
+
+
+@pytest.mark.parametrize("field,value", [("state", None), ("target", []), ("state", [float("nan")] * 6)])
+def test_missing_or_nonfinite_body_evidence_stops_before_motion(field, value):
+    class MissingEvidence(Cell):
+        def act(self, command):
+            return {**super().act(command), field: value}
+
+    cell = MissingEvidence([-5.4, 13.5, -1.9, 59.4, 41.3, 48.8])
+    assert u.unwedge(cell, HOME, sleep=lambda s: None)["result"] == "stopped"
+    assert cell.sent == ["state"]
+
+
+def test_a_failed_backoff_does_not_try_another_motion():
+    class FailedBackoff(Cell):
+        def act(self, command):
+            if command == "jog shoulder_lift.pos 0.5":
+                self.sent.append(command)
+                return {"ok": False, "error": "backoff refused"}
+            return super().act(command)
+
+    cell = FailedBackoff([-5.4, 13.5, -1.9, 59.4, 41.3, 48.8], stuck=("shoulder_lift",))
+    out = u.unwedge(cell, HOME, sleep=lambda s: None)
+    assert out["result"] == "stopped" and out["error"] == "backoff refused"
+    assert cell.sent[-1] == "jog shoulder_lift.pos 0.5"
