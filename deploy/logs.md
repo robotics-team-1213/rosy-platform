@@ -4416,6 +4416,12 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - gate 변화: main 녹색 복구.
 - CE: 해당 없음 — 가드 시험이 바로 잡았고, 앞 착지가 이 시험을 고르지 않은 것은 시험 선택 범위의 문제다.
 
+## 2026-11-02 · uncommitted · OMX 카메라 후보에 같은 허브의 팔을 표시
+
+- 변경: `omx_cameras.py propose`의 각 후보에 `hub_arm`(카메라와 같은 USB 허브에 관찰 보드가 꽂힌 팔이 하나일 때)과 `suggest`(그 팔의 `<arm>_wrist` 역할이 비어 있을 때)를 더한다. 루트 포트는 모든 장치가 공유하므로 허브로 보지 않는다. 추천일 뿐 역할을 묶지 않는다. 손목 카메라가 팔 보드와 같은 허브에 꽂힌다는 배선은 아직 현장에서 확인하지 않았다(셀 분리 중); 확인되면 자동 배정으로 올린다.
+- 증거: `test/test_omx_cameras.py` 12 passed(로컬).
+- gate 변화: 없음. CE: 해당 없음 — 미확인 가정은 이 기록과 docstring에 있다.
+
 ## 2026-11-02 · 5eff2fd4d0 · fix(omx): 빈 관측과 관측 실패 구분
 
 - 변경: 반복 운반은 observed=0과 정상 관측의 `no usable object`가 함께 있을 때만 source empty를 반환한다. 맵 누락·영상 누락 오류는 원래 실패 결과를 유지하고 다음 운반을 중단한다.

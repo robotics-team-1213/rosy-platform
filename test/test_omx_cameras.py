@@ -168,3 +168,15 @@ def test_approve_gives_a_new_role_the_naming_convention_and_save_refuses_a_devic
     with pytest.raises(SystemExit):
         oc.save(oc.approve(oc.load(path), "back", {**row}), path)
     assert len(oc.load(path)["cameras"]) == 2 and not path.with_suffix(".tmp").exists()
+
+
+def test_twin_wrist_cameras_are_suggested_for_the_arm_whose_board_shares_their_hub(tmp_path):
+    reg = registry(tmp_path, [dict(WRIST, usb_id=U20["id"]), dict(A_WRIST, usb_id=U20["id"])])
+    facts, names, present, realpath = _bench({
+        "/dev/video2": ({**U20, "usb": "3-1.4"}, ["/dev/v4l/by-path/pci-usb-0:1.4:1.0-video-index0"]),
+        "/dev/video6": ({**U20, "usb": "3-2"}, ["/dev/v4l/by-path/pci-usb-0:2:1.0-video-index0"])})
+    rows = oc.propose(reg, facts, names, present, realpath, hubs={"arm_b": "3-1", "arm_a": "3-4"})
+    assert [(r["hub_arm"], r["suggest"], r["follow"]) for r in rows] == [("arm_b", "arm_b_wrist", None),
+                                                                         (None, None, None)]  # root port: no hub
+    assert oc.learn(reg, facts, rows, present, realpath) == []  # a hint only: nothing is bound
+    assert oc.hub("3-1.3.2") == "3-1.3" and oc.hub("3-2") is None

@@ -78,7 +78,7 @@
 ## 최근 기록
 
 - 2026-11-02 · 5eff2fd4d0 · fix(omx): 빈 관측과 관측 실패 구분
+- 2026-11-02 · uncommitted · OMX 카메라 후보에 같은 허브의 팔을 표시
 - 2026-11-02 · 14e64763d9 · fix(hosts): D-795 DDS 가드를 깬 pinky rosbridge 선언 제거
 - 2026-11-02 · uncommitted · 관제 단위 companion 로그 상한 보완
 - 2026-11-02 · uncommitted · OMX 카메라: 옮긴 카메라는 역할이 따라가고, 새 카메라는 제안 후 승인 한 번
-- 2026-11-02 · b101f57783 · fix(hosts): 모델·AI PC 미선언 유닛 선언, review-bridge 알려진 차이
