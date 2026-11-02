@@ -291,5 +291,5 @@ def split(repo: Path, invocations: list[list[str]], seen: dict | None = None) ->
             out += [[*env, *sorted(g)] for g in groups if g] if n > 1 else [inv]
         else:
             out.append(inv)
-    return out
+    return [list(inv) for inv in dict.fromkeys(map(tuple, out))]
 
