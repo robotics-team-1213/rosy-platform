@@ -108,6 +108,39 @@ def test_build_rejects_duplicate_branches_from_legacy_queue_rows(repo):
                           start=lambda *a: pytest.fail("duplicate branch reached admission"))
 
 
+def test_build_persists_nested_children_without_changing_direct_ownership(repo, monkeypatch):
+    import land_events
+
+    main, snapshot = repo
+    leaves = [snapshot("fix/a", {"pkg/a.py": "x = 2\n"}), snapshot("fix/b", {"pkg/b.py": "y = 2\n"})]
+    inner = snapshot("fix/land-rollup-20261101000100-20261101000100", {"pkg/inner.py": "inner = 1\n"})
+    for leaf in leaves:
+        git(Path(inner["worktree"]), "merge", "--no-edit", leaf["branch"])
+    children = [dict(branch=r["branch"], worktree=r["worktree"], ticket=f"leaf-{i}",
+                     candidate=git(main, "rev-parse", r["branch"])) for i, r in enumerate(leaves)]
+    holder = land_rollup.land_async.holder(main)
+    child_sidecar = holder / (inner["branch"].replace("/", "-") + ".members")
+    child_sidecar.write_text(json.dumps(children), encoding="utf-8")
+    sibling = snapshot("fix/c", {"pkg/c.py": "z = 2\n"})
+    rows = [{**inner, "ticket": "inner"}, {**sibling, "ticket": "sibling"}]
+    tip, log = [], holder / "land-fix-land-rollup-x.log"
+
+    def start(wt, args, now, launch):
+        tip.append(git(wt, "rev-parse", "HEAD"))
+        return "land/fix/land-rollup-x", log
+
+    name, _ = land_rollup.build(main, rows, NOW, start=start)
+    members = json.loads(log.with_suffix(".members").read_text())
+    assert [m["branch"] for m in members] == [r["branch"] for r in rows]
+    assert members[0]["members"] == children
+    child_sidecar.unlink()  # completion must survive later collection of the child's sidecar
+    event_log = holder.parent / land_events.EVENTS
+    monkeypatch.setattr(land_events, "_where", dict(path=event_log, branch=name))
+    land_events.landed(tip[0])
+    completed = land_events.read(event_log)
+    assert len(completed) == 1 and completed[0]["members"][0]["members"] == children
+
+
 @pytest.mark.parametrize("log, groups", [("[land] STOP: NEW failure in pkg/test", [["a", "b"], ["c", "d", "e"]]),
                                          ("[land] STOP: merge aborted; resolve by hand", [["a"], ["b"], ["c"], ["d"],
                                                                                          ["e"]])])
