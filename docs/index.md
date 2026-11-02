@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-11-02 · uncommitted · D-962 Account 독립 실행과 개발 모드 인증 계약
+- 2026-11-02 · uncommitted · fix(auth): Fleet 개발 모드에서도 Rosy Account 로그인 제공
 - 2026-11-02 · uncommitted · fix(land): 겹침 판정이 선택기 가드 묶음을 보지 않는다 (D-889 추가 25)
 - 2026-11-02 · uncommitted · fix(land): 차례의 자기 브라우저 묶음은 변화분 브라우저 묶음이 닿을 때만 (D-889 추가 24)
 - 2026-11-02 · uncommitted · feat(tools): 업데이트 운영 CLI update_ops (D-957)
-- 2026-11-02 · uncommitted · fix(land): 준비된 착지도 서로 닿지 않으면 한 표로 묶는다 (D-889 추가 23)
-- 2026-11-02 · uncommitted · docs(adr): D-960 암 세트마다 셀 관제, 그 위에 통합관제 R

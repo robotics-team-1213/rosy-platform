@@ -95,7 +95,13 @@ export function bindTopbarToggle(listen = (node, type, fn) => node.addEventListe
   });
 }
 
-// English role names and principal ids stay in title (D-540 2); a development session says so with its badge.
+let developmentConnection = false;
+export function showConnection(info) {
+  developmentConnection = info?.mode === "development";
+  if ($("fleet-login").hidden) $("development-badge").hidden = !developmentConnection;
+}
+
+// English role names and principal ids stay in title (D-540 2).
 export function showSession(identity, {credentialChange = false, focusOrigin = document.activeElement} = {}) {
   const tag = $("user-role"), title = `${identity.principal_id} · ${identity.role}`;
   const changed = tag.title !== title;
@@ -110,11 +116,10 @@ export function showSession(identity, {credentialChange = false, focusOrigin = d
     setTopbarOpen(false);
     if (returnFocus) $("topbar-more").focus();
   }
-  const development = identity.principal_id.startsWith("development-");
   tag.textContent = roleLabel(identity.role);
   tag.title = title;
   tag.setAttribute("status", identity.role === "operator" ? "active" : "neutral");
-  $("development-badge").hidden = !development;
+  $("development-badge").hidden = !developmentConnection;
   gateEstop(identity);
 }
 
@@ -145,6 +150,7 @@ export function showFleet(fleet, robots = null) {
 // Pages without their own state poll (설치·보정, 현장 지도, Cell) read Fleet every 5 s for the site name
 // and the link word. They show no robot count.
 export function watchFleet(request, {every = 5000, interval = setInterval} = {}) {
+  request("/api/fleet/auth/connection").then(showConnection).catch(() => {});
   async function read() {
     let state;
     try { state = await request("/api/fleet/state"); } catch (error) { return noteLink(error); }

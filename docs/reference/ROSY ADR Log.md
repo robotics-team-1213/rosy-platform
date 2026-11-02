@@ -11,6 +11,7 @@
 | ID | 제목 | Status |
 |---|---|---|
 | D-953 | Pi 4·Pi 5 CPU는 이미 있는 네이티브 경로로 먼저 줄인다 — 자체 Rust 확장은 Pi 4 실측이 요구할 때만. [전문](../adr/D-953-pi45-cpu-native-path.md) | Accepted (2026-11-01, 사용자 지시; D-185 순서를 따름) |
+| D-962 | Rosy Account 독립 서비스와 개발 모드의 사람 로그인. [전문](../adr/D-962-independent-account-and-authenticated-development.md) | Accepted (2026-11-02, 사용자 승인; 구현·배포·운영 수용 별도) |
 | D-957 | 업데이트 운영 CLI: 운영자의 즉시 시도·홀드·해제를 하나의 명령으로 구조화한다. 게이트(유휴·배터리·서명·freeze) 우회는 없다. [전문](../adr/D-957-update-ops-cli.md) | Accepted (2026-11-02, 사용자 결정; 호스트 코드 불변, 원격 시험·착지는 파이프라인 기록) |
 | D-960 | 실제 제어는 암 세트마다 붙은 관제가 하고, 통합관제 R은 그 위에서 조정한다. [전문](../adr/D-960-control-unit-per-arm-set-under-integrated-r.md) | Accepted (2026-11-02, 사용자 결정) |
 | D-930 | 확인된 ARM 시도의 재관측(새 측정 사실만, 실행·claim·완료 권한 없음, API v1.334). [전문](../adr/D-930-arm-transfer-recheck-of-confirmed-attempt.md) | Accepted (2026-10-30, 계약·simulation 구현 결정; 실물 수용 별도) |
@@ -600,7 +601,7 @@
 | D-470 | main CI 통과부터 로봇 서명 배포까지 고정된 로컬 서명기가 자동 연결한다 | Accepted (2026-10-05, 사용자 GitHub CI/CD 자동 로봇 업데이트 지시; DEVICE/FIELD 별도) |
 | D-471 | 같은 네트워크 무인증 연결 요청은 기각하고, 같은 망 무코드 접속은 개발 연결 모드로만 제공한다 | Accepted (2026-10-06, 사용자 요청 기록 + 방향 결정; 구현 변경 없음) |
 | D-472 | Rosy Cam 현장 영상을 지도에 표시하고 후면 LED 점멸로 로봇 신원을 대조한다 | Accepted (2026-10-08, 사용자 결정 "LED 대조 구현"; addendum: 모서리·상단 마커 없이 D-484 보정 + LED 확인 트랙을 D-511 입력으로 허용, trip·initialpose 불가) |
-| D-473 | 관제 콘솔도 개발 연결 모드에서는 토큰 없이 같은 망 PC에 운용자 세션을 준다 | Accepted (2026-10-06, 사용자 방향 결정; 구현·ARTIFACT·FIELD 별도) |
+| D-473 | 관제 콘솔도 개발 연결 모드에서는 토큰 없이 같은 망 PC에 운용자 세션을 준다 | Superseded by D-962 (2026-11-02, 개발 모드도 사람 로그인 필수) |
 | D-474 | 로봇은 주의점 정지선에서 멈추고 Fleet의 구역 허가를 받아 진입하며, 출구 표시를 지나면 점유를 푼다 | Accepted (2026-10-06, 사용자 설계 승인; 구현·SIM·DEVICE·FIELD 별도) |
 | D-475 | 고정 평가 세트에 사람이 검수한 정답 버전을 두고, MCAP 프레임의 출처를 증명해 검수 앱으로 받는다 | Proposed (2026-10-06, 사용자 "ADR 초안부터" 선택; 구현·실제 검수·평가 게이트 전환 별도) |
 | D-476 | 차선을 잃으면 곧바로 멈추지 않고, 알던 차로의 연장선을 짧게 잇는다(예상 도로 bridge) | Proposed (2026-10-06; 문서만, 기본 꺼짐; SOURCE/SIM/DEVICE/FIELD 별도) |
@@ -1429,3 +1430,8 @@ LCD 코드 페어링과 도달 확인 읽기는 Tailscale tailnet(`100.64.0.0/10
 **Status:** Accepted (2026-11-01). D-185를 대체하지 않는다. 기체 실측은 남아 있다.
 
 기체 노드 파이썬 시간의 81~96%는 rclpy 실행기다. 이것은 C++ `EventsExecutor`(`ROSY_EXECUTOR=events`, 시뮬 노드 CPU 약 절반)로 줄이고, 기체 A/B 뒤 Pi 4·5 기본값으로 삼는다. `match_motion`은 결과가 비트 단위로 같은 numpy 구현으로 약 2.8배 줄였다(Pi 5 환산 약 24 ms). 자체 PyO3 커널은 Pi 4 bench가 50 ms tick을 넘을 때만 들인다(환산 55~70 ms라 첫 후보). 후속: 작업대 관측 웹소켓 압축 끔, Fleet 등록 TLS 컨텍스트 재사용, CORE `ROSY_CORE_EXECUTOR`(기본 `threaded`, 기체 A/B 전 전환 금지). 전문은 [D-953](../adr/D-953-pi45-cpu-native-path.md).
+## D-962 Rosy Account 독립 서비스와 개발 모드의 사람 로그인
+
+**Status:** Accepted (2026-11-02, 사용자 승인). 구현·배포·운영 수용은 별도다.
+
+Account는 전용 계정 DB·키를 갖는 독립 프로세스가 되고 Fleet은 같은 신원을 검증하는 receiver가 된다. Fleet의 익명 개발 operator 발급·수락·자동 재접속을 폐기하며, 개발 환경에서도 실제 계정의 권한을 검사한다. 기존 issuer·계정 ID·권한·회수 계약과 장치 안전 경계는 유지한다. 전문은 [D-962](../adr/D-962-independent-account-and-authenticated-development.md).

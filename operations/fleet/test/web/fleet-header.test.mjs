@@ -8,7 +8,7 @@ const { register } = await import("node:module");
 register("./common-loader.mjs", import.meta.url);
 const {
   LATE_MS, SESSION_REASON, bindEstop, bindTopbarToggle, estopReason, linkState, noteLink, roleLabel, showFleet,
-  showInboxCount, showSession, showSignedOut, tickClock, watchFleet,
+  showConnection, showInboxCount, showSession, showSignedOut, tickClock, watchFleet,
 } = await import("../../../../applications/fleet/web/shared/fleet-header.js");
 
 function fakeNode(id) {
@@ -116,8 +116,12 @@ test("a session shows its Korean role and title identity; a development session 
   showSession({principal_id: "development-1a2b", role: "operator"});
   assert.equal(nodes["user-role"].textContent, "운영자");
   assert.match(nodes["user-role"].title, /^development-1a2b/);
+  assert.equal(nodes["development-badge"].hidden, true);
+  showConnection({mode: "development"});
+  showSession({principal_id: "alice", role: "operator"});
   assert.equal(nodes["development-badge"].hidden, false);
 
+  showConnection({mode: "paired"});
   showSession({principal_id: "vic", role: "viewer"});
   assert.equal(nodes["development-badge"].hidden, true);
   assert.equal(nodes["user-role"].textContent, "보기 전용");

@@ -107,7 +107,7 @@ export function createPasswordLogin(host, {onChange = () => {}, standalone = fal
       }
       if (standalone) {
         const connection = await cookieRequest('/api/fleet/auth/connection');
-        const offered = connection.mode !== 'development' && connection.password_login === true;
+        const offered = connection.password_login === true;
         host.hidden = !offered;
         const availability = document.getElementById('login-availability');
         availability.hidden = offered;

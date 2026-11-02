@@ -19,6 +19,7 @@ drive/behaviors/localization
 drive/behaviors/docking
 drive/behaviors/swarm small
 fleet/fleet/traffic
+account/rosy_account
 fleet/fleet/observe small
 fleet/fleet/server
 fleet/fleet/server/channel

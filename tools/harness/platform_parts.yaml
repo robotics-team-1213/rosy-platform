@@ -670,6 +670,16 @@ roots:
     import_prefix: [rosy.world]
     concern: other
     capability: fleet
+  - path: operations/account
+    layout_target: operations/account
+    part: operations
+    d427_target: operations/account
+    wave: none
+    import_prefix: [rosy_account]
+    source_packages: {rosy_account: rosy_account}
+    note: D-962 independent Account identity, session, grant and revocation authority. No Fleet ledger or device command authority.
+    concern: other
+    capability: platform
   - path: operations/monitoring
     layout_target: operations/monitoring
     part: operations

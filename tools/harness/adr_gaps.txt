@@ -105,3 +105,4 @@ D-952 no refs/adr/D-952 and no ADR file in any worktree when D-954 was written (
 D-956 reserved in another in-flight branch (OMX ship-plate seat check), absent from this D-960 branch; remove when its ADR lands
 D-958 reserved in another in-flight branch (lab compute ledger), absent from this D-960 branch; remove when its ADR lands
 D-959 unused: a D-960 draft first took this number without a reservation, adr_reserve then issued D-960; no refs/adr/D-959
+D-961 reserved in another in-flight branch (refs/adr/D-961), absent from this D-962 branch; remove when its ADR lands
