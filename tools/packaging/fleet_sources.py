@@ -14,7 +14,6 @@ from setuptools.command.develop import develop
 layout = runpy.run_path('fleet/_source_layout.py')
 roots = layout['SOURCE_ROOTS']
 package_dirs = {
-    'rosy_account': roots['account'] / 'rosy_account',
     'rosy.decision': roots['decision'] / 'src/rosy/decision',
     'rosy.decision.conversation': roots['decision'] / 'src/rosy/decision/conversation',
     'rosy.decision.deliberation': roots['decision'] / 'src/rosy/decision/deliberation',
@@ -55,6 +54,8 @@ class HolderSource(sdist):
         support.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(__file__, support)
         for name, folder in roots.items():
+            if name == 'account':
+                continue  # Account is delivered by its own required distribution.
             destination = Path(base_dir) / '_source_roots' / name
             if name == 'assessment':
                 destination = destination / 'rosy_situation'
