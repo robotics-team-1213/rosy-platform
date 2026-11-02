@@ -3,8 +3,8 @@
     gpu_tenants.py idle  UNIT...   prints idle|busy for the units' role
     gpu_tenants.py claim UNIT...   if idle: stop the units, leave ~/rosy-jobs/paused-<unit> (15 min, renewed per claim)
     gpu_tenants.py release UNIT... start the units again and clear the marks
-    gpu_tenants.py tick            (timer, every minute) release a paused unit when its role has work again, or
-                                   when its mark expired and no GPU job holds the host
+    gpu_tenants.py tick            (timer, every minute) release a paused unit when its role has work again or
+                                   its mark expired, after the admitted GPU job releases the host
 
 Restoring is the host's job, so a laptop or batch that dies never leaves a role service off. Standard library only.
 """
@@ -102,21 +102,26 @@ def claim(units, now):
     for unit in units:
         previous = json.loads(mark(unit).read_text()) if mark(unit).exists() else None
         before = previous['owner_mode'] if previous else _owner_mode()
-        if unit == 'rosy-ollama.service' and before == 'available':
+        revision = previous.get('owner_revision') if previous else None
+        if not previous and unit == 'rosy-ollama.service' and before == 'available':
             _set_owner_mode('shared')
-        mark(unit).write_text(json.dumps({'until': now + HOLD_S, 'owner_mode': before}))
+            revision = OWNER_MODE.stat().st_mtime_ns
+        mark(unit).write_text(json.dumps({'until': now + HOLD_S, 'owner_mode': before, 'owner_revision': revision}))
         if not previous:
             systemctl('stop', unit)
     return 'claimed'
 
 
 def release(units):
+    if gpu_held(time.time()):
+        return 'busy GPU held'
     for unit in units:
         if not mark(unit).exists():
             continue
-        before = json.loads(mark(unit).read_text()).get('owner_mode')
+        previous = json.loads(mark(unit).read_text())
         systemctl('start', unit)
-        if unit == 'rosy-ollama.service' and before == 'available':
+        if (unit == 'rosy-ollama.service' and previous.get('owner_mode') == 'available'
+                and _owner_mode() == 'shared' and OWNER_MODE.stat().st_mtime_ns == previous.get('owner_revision')):
             _set_owner_mode('available')
         mark(unit).unlink()
     return 'released'
@@ -127,7 +132,7 @@ def tick(now):
     for path in JOBS.glob('paused-*.service'):
         unit = path.name[len('paused-'):]
         expired = json.loads(path.read_text()).get('until', 0) < now
-        if (unit in ROLES and ROLES[unit](now)) or (expired and not gpu_held(now)):
+        if ((unit in ROLES and ROLES[unit](now)) or expired) and not gpu_held(now):
             release([unit])
             done.append(unit)
     return 'released ' + ' '.join(done) if done else 'nothing'
