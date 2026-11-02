@@ -61,3 +61,9 @@
 - 변경: 설치의 여섯 작업을 정확히 확인하고 새 장치 정보의 Viewer 잠금·모바일 전환을 검증한다. 프로필의 실제 API 9개와 소비자를 기능 목록에 등록하고 통과한 HTTP 응답·원본 commit·시험 node를 결속한다. 기존 증거와 누락 검출 규칙은 유지한다.
 - 증거: FULL 후보 commit `05f436131a`의 기능 목록·기존 5-tab 시험 실패는 각각 단독 재현되고 main에서 통과했다. commit `8e86f34a26`의 실제 API·재시작 DB·Chromium·권한·설치 작업 40건 PASS/0 SKIP에서 HTTP 9개를 수집했다. commit `0a3bca1f98`의 기능 목록·부정 검사·수집기 8건 PASS, console Node suite exit 0. `backend_http_evidence.json`은 해당 실제 source와 node를 보존한다.
 - gate 변화: 합성 입력·TestClient HTTPS·fixture UI의 범위를 구분하며 실물·배포 TLS·실행 수용으로 승격하지 않는다. 전체 재검증·main 병합은 별도다. CE 해당 없음 — 원인과 결속 규칙은 코드·회귀 시험·검증 기록에 남겼다.
+
+## 2026-11-02 · uncommitted · fix: Windows 개발 서버 포트 독점
+
+- 변경: 공용 HTTP 호스트가 Windows에서는 `SO_EXCLUSIVEADDRUSE`를 bind 전에 설정하고 주소 재사용을 끈다. 모든 플랫폼에서 포트 재사용을 명시적으로 끈다. 샘플·실제 API 연결 모두 사용 중인 포트로는 준비 메시지 전에 실패하며, 호출자가 백그라운드 PID·자식 프로세스를 종료한 뒤 워크트리를 제거하도록 README에 기록했다.
+- 증거: `6d812fe216` 원격 RED는 독점 옵션 없이 주소 재사용 bind를 호출해 1 실패·6 통과. 제품 수정 후 `dc0d8f5346`의 Windows 네이티브 소켓 검증은 독점 옵션 값 1, 중복 bind 오류 10048, close 후 재bind 성공을 확인했다. 서버 프로세스는 시작하지 않고 모든 소켓을 닫았다. 같은 SHA의 Linux 원격 샘플 서버·connected proxy 회귀는 15 통과·0 skip, known_failures 0 NEW다.
+- gate 변화: 포트 소유·반환 회귀와 Windows 소켓 수용만 확인한다. 브라우저·장치·현장 수용과 별개다. CE: 기존 Windows 워크트리 교훈 갱신은 상위 작업에서 맡는다.
