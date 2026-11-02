@@ -31,7 +31,7 @@ RULE = re.compile(r"([^{}]+)\{([^}]*)\}")
 CONTROL = re.compile(
     r"ui-button|ui-field|ui-tag|ui-text|ui-head|ui-grid|ui-chip|ui-triage|ui-evidence|"
     r"ui-shell|ui-topbar|ui-brand|ui-section|ui-empty|ui-status|ui-actions|"
-    r"ui-disclosure-row|ui-disclosure-name|ui-page-heading|ui-section-heading|ui-tooltip|ui-icon-label|ui-legend"
+    r"ui-disclosure-row|ui-disclosure-name|ui-page-heading|ui-section-heading|ui-tooltip|ui-icon-label|ui-legend|ui-action-link"
 )
 EVIDENCE_TAG = re.compile(r"<ui-evidence\b([^>]*)>", re.S)
 # D-359 §7.4 — outline도 덧칠이다(포커스처럼 보인다). 눌림은 aria-pressed의 공용 표현이다.

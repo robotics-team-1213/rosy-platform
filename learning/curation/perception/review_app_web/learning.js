@@ -52,7 +52,7 @@ function renderDomains() {
     }
     if(t){const line=text(item,'p',`정답 ${truthText}`,'domain-truth');if(t.href){const confirm=text(line,'a',' · 임시 정답 확인(맞음/고침)');confirm.href=t.href;}}
     text(item,'p',domain.blocked||'막힌 단계가 없습니다.','domain-blocked');
-    if(domain.next){const next=text(item,'a',domain.next.label,'workspace-link domain-next');next.href=domain.next.href;}
+    if(domain.next){const next=text(item,'a',domain.next.label,'ui-action-link domain-next');next.dataset.kind='quiet';next.href=domain.next.href;}
   }
 }
 function setBusy(value) {
@@ -238,8 +238,8 @@ function render() {
       if(report.images?.length) {
         const group=text(card,'div','','job-images');
         for(const image of report.images) {
-          const link=text(group,'a',`결과 JPG 열기 · ${image.name}`,'workspace-link');
-          link.href=`/api/learning/images/${encodeURIComponent(item.id)}/${encodeURIComponent(image.name)}`;
+          const link=text(group,'a',`결과 JPG 열기 · ${image.name}`,'ui-action-link');
+          link.dataset.kind='quiet';link.href=`/api/learning/images/${encodeURIComponent(item.id)}/${encodeURIComponent(image.name)}`;
           link.target='_blank';link.rel='noopener';
         }
       }

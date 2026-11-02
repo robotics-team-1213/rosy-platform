@@ -2,33 +2,33 @@
 <html lang="ko" data-theme="dark">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Rosy Learning — 로봇암 시범 검수</title><link rel="stylesheet" href="/common/tokens.css"><script src="/common/theme.js"></script>
-<link rel="stylesheet" href="/common/components.css"><link rel="stylesheet" href="/common/app-shell.css"><link rel="stylesheet" href="/app.css">
+<link rel="stylesheet" href="/common/components.css"><link rel="stylesheet" href="/common/component-controls.css"><link rel="stylesheet" href="/common/app-shell.css"><link rel="stylesheet" href="/app.css">
 <script type="module" src="/omx.js"></script></head>
 <body><a class="skip-link" href="#omx-main">로봇암 시범 검수로 이동</a>
 <ui-shell grammar="procedure" class="ui-app-shell"><!-- review:header:start -->
-<ui-topbar role="banner"><ui-brand href="/learning" aria-label="Rosy Learning"><b>Learning</b></ui-brand><span data-spacer></span><a class="workspace-link" data-action-icon="account" data-learning-account-entry href="/accounts" title="로그인·계정">로그인·계정</a>
+<ui-topbar role="banner"><ui-brand href="/learning" aria-label="Rosy Learning"><b>Learning</b></ui-brand><span data-spacer></span><a data-kind="quiet" class="ui-action-link" data-action-icon="account" data-learning-account-entry href="/accounts" title="로그인·계정">로그인·계정</a>
 <ui-button kind="quiet" data-theme-cycle="" data-icon-only="" type="button" aria-label="테마 변경" data-action-icon="theme-dark"></ui-button></ui-topbar>
 <!-- review:header:end -->
 <div class="ui-app-body" data-seats="rail"><div class="ui-rail"><nav class="ui-rail-nav workspace-tabs" aria-label="학습 화면"><!-- review:rail:start -->
 <a class="ui-rail-item" data-action-icon="list" href="/learning" aria-label="홈">홈</a><a class="ui-rail-item" data-action-icon="folder" href="/catalog" aria-label="자료 등록">자료</a><a class="ui-rail-item" data-action-icon="pencil" href="/" aria-label="정답 달기" aria-current="true">정답</a><a class="ui-rail-item" data-action-icon="robot" href="/learning/tasks" aria-label="학습 실행">학습</a><a class="ui-rail-item" data-action-icon="check" href="/learning/evaluate" aria-label="평가·승격">평가·승격</a>
 <!-- review:rail:end --></nav></div>
 <div class="ui-app-main"><div class="ui-pathbar"><h1>로봇암 시범 검수</h1><span data-spacer></span><ui-button id="refresh" data-action-icon="refresh" kind="quiet">다시 확인</ui-button></div><nav class="review-kinds" aria-label="정답 하위 메뉴"><a class="ui-subnav-item" href="/">객체 검수</a><a class="ui-subnav-item" href="/pixels">픽셀 검수</a><a class="ui-subnav-item" href="/learning/omx" aria-current="page">로봇암 시범 검수</a><a class="ui-subnav-item" href="/learning/vlm">VLM 판단</a></nav>
-<main id="omx-main" class="learning-main" tabindex="-1">
+<main id="omx-main" class="learning-main ui-task-page" tabindex="-1">
 <p class="learning-lede">같은 과제에서 ACT+교정과 HIL-SERL을 비교합니다. 먼저 성공 조건을 정하고, 시범과 평가 근거를 연결하세요.</p>
 <ui-status id="omx-status" state="pending" role="status">불러오는 중입니다.</ui-status>
 <section class="learning-section learning-panel" aria-labelledby="journey-heading"><h2 id="journey-heading">지금 진행할 과제</h2>
 <p id="journey-goal">과제는 아직 선택하지 않았습니다.</p><p id="journey-data" class="quiet">학습 데이터를 확인하는 중입니다.</p>
 <label class="ui-field-label">이번 과제의 학습 데이터 <select id="dataset" class="ui-field" disabled><option value="">데이터를 불러오는 중</option></select></label>
-<h3>다음으로 할 일</h3><p id="journey-reason" role="status">과제와 자료를 확인하는 중입니다.</p><a id="journey-next" class="workspace-link" href="#profile-panel">과제와 성공 조건 정하기</a>
+<h3>다음으로 할 일</h3><p id="journey-reason" role="status">과제와 자료를 확인하는 중입니다.</p><a data-kind="quiet" id="journey-next" class="ui-action-link" href="#profile-panel">과제와 성공 조건 정하기</a>
 <details open><summary id="learning-entry-heading">로그인·외부 자료 연결 상태</summary>
 <p id="learning-account-state" role="status">로그인과 계정 연결을 확인하는 중입니다.</p>
-<div class="learning-next-actions"><a id="learning-account-link" class="workspace-link" href="/accounts">로그인·Hugging Face 연결 확인</a><a id="learning-task-link" class="workspace-link" href="#profile-panel">과제·팔·카메라 설정</a></div>
+<div class="learning-next-actions"><a data-kind="quiet" id="learning-account-link" class="ui-action-link" href="/accounts">로그인·Hugging Face 연결 확인</a><a data-kind="quiet" id="learning-task-link" class="ui-action-link" href="#profile-panel">과제·팔·카메라 설정</a></div>
 </details><ui-status id="center-status" state="pending" role="status">실행기 연결을 확인하는 중입니다.</ui-status><p id="center-read-error" role="alert" hidden></p><p id="center-error" role="alert" hidden></p></section>
 <div class="learning-workflow-layout"><nav id="omx-sections" class="learning-step-menu" aria-label="로봇암 학습 단계">
 <h2>과제 작업</h2>
 <a href="#profile-panel">1 · 과제·팔·카메라</a><a href="#owner-section">2 · 현장 상태</a><a href="#capture-section">3 · 시범·교정 수집</a><a href="#dataset-section">4 · 검수·학습 데이터</a><a href="#reward-section">5 · 성공 판정·초기화</a><a href="#train-section">6 · ACT / HIL-SERL</a><a href="#comparison-section">7 · 평가·실물 적용</a><a href="/accounts">계정·Hugging Face</a>
 </nav><div class="learning-workflow-content">
-<section class="learning-section learning-panel" aria-labelledby="stage-question"><h2 id="stage-question">무엇을 성공으로 볼까요?</h2><p id="stage-purpose"></p><p id="stage-done" class="quiet"></p><a id="stage-next" class="workspace-link" href="#owner-section">이후 현장 상태 확인</a><p class="quiet">단계 이동은 작업 완료나 승인을 기록하지 않습니다. 저장하지 않은 설정은 이 화면의 메뉴 이동 동안만 유지됩니다.</p><a id="workflow-view" class="workspace-link" href="?view=all">전체 도구 펼쳐 보기</a></section>
+<section class="learning-section learning-panel" aria-labelledby="stage-question"><h2 id="stage-question">무엇을 성공으로 볼까요?</h2><p id="stage-purpose"></p><p id="stage-done" class="quiet"></p><a data-kind="quiet" id="stage-next" class="ui-action-link" href="#owner-section">이후 현장 상태 확인</a><p class="quiet">단계 이동은 작업 완료나 승인을 기록하지 않습니다. 저장하지 않은 설정은 이 화면의 메뉴 이동 동안만 유지됩니다.</p><a data-kind="quiet" id="workflow-view" class="ui-action-link" href="?view=all">전체 도구 펼쳐 보기</a></section>
 <details id="profile-panel" class="learning-section learning-panel"><summary>1 · 과제·팔·카메라 설정</summary>
 <p class="quiet">학습할 작업 팔을 등록합니다. 리더 팔은 시범·교정 입력 장치로 구분합니다. 입력 순서·단위·카메라 출처와 배치를 확인하세요. 장치 연결·교정·실행 승인은 별도이며, 협동 학습 결과도 실제 협동 동작의 검증이 필요합니다. 현재 native 자료 변환은 팔 1대·6관절을 지원합니다.</p>
 <label class="ui-field-label">저장 프로필 <select id="profile-record" class="ui-field" disabled></select></label>
@@ -56,7 +56,7 @@
 <section id="capture-section" class="learning-section learning-panel" aria-labelledby="capture-heading"><h2 id="capture-heading">3 · 시범·교정 수집</h2>
 <p>기본 조작기는 리더 팔입니다. 게임패드는 선택 가능한 입력 방식으로 준비하며, 작업 팔과 조작기를 구분합니다.</p>
 <ol><li>과제와 장치 설정에서 작업 팔·관절 순서·단위, 카메라의 소속과 배치를 저장합니다.</li><li>상단·손목·측면 시야에 물체와 그리퍼가 보이는지 확인합니다. 카메라를 옮겼다면 배치와 촬영 기준을 다시 확인합니다.</li><li>한 시도마다 영상·관절 상태·실제로 적용한 행동을 같은 기록에 남깁니다. 교정 입력과 개입 시점, 성공·실패·종료·초기화도 함께 기록해야 합니다.</li><li>기록을 연결하고 다음 메뉴에서 프레임·결과를 검수합니다. 영상 파일만으로는 행동을 배우는 데이터가 되지 않습니다.</li></ol>
-<ui-empty><h3>녹화는 작업대 PC의 녹화 화면에서 시작합니다</h3><p>팔이 움직이므로 이 화면(모델 PC)에서는 녹화를 시작하지 않습니다. 작업대 PC에서 녹화 화면(<code>bench_record.py</code>, 127.0.0.1:8771)을 열고, 리더 팔과 전원 스위치를 잡은 사람이 시작합니다. 안전하게 끝난 녹화는 자동으로 봉인됩니다. 이미 수집한 자료는 OMX 시연 준비 결과 폴더로 연결한 뒤 검수할 수 있습니다.</p><div class="learning-next-actions"><a class="workspace-link" href="/learning/camera">카메라 촬영 기준 확인</a><a class="workspace-link" href="/learning?connect=omx#connection-panel">기존 OMX 시연 폴더 연결</a><a class="workspace-link" href="#dataset-section">등록 자료 검수</a></div></ui-empty>
+<ui-empty><h3>녹화는 작업대 PC의 녹화 화면에서 시작합니다</h3><p>팔이 움직이므로 이 화면(모델 PC)에서는 녹화를 시작하지 않습니다. 작업대 PC에서 녹화 화면(<code>bench_record.py</code>, 127.0.0.1:8771)을 열고, 리더 팔과 전원 스위치를 잡은 사람이 시작합니다. 안전하게 끝난 녹화는 자동으로 봉인됩니다. 이미 수집한 자료는 OMX 시연 준비 결과 폴더로 연결한 뒤 검수할 수 있습니다.</p><div class="learning-next-actions"><a data-kind="quiet" class="ui-action-link" href="/learning/camera">카메라 촬영 기준 확인</a><a data-kind="quiet" class="ui-action-link" href="/learning?connect=omx#connection-panel">기존 OMX 시연 폴더 연결</a><a data-kind="quiet" class="ui-action-link" href="#dataset-section">등록 자료 검수</a></div></ui-empty>
 <p class="quiet">OMX LeRobot 녹화는 모델 PC에서 시연 준비를 마친 폴더를 연결하고, 4단계에서 검수·변환합니다. Pinky Pilot의 MCAP 녹화(.tar)는 모델 PC 수신·영상 변환 후 자료 등록에서 검수하며 OMX 시연 입력과 구분합니다. 변환 완료 카드에서 학습 또는 HF 보관 준비로 이어갈 수 있습니다.</p>
 <details><summary>녹화 자료를 준비해서 연결하는 방법</summary><ol><li>OMX 리더·작업 팔 녹화는 종료된 수집 폴더와 촬영 기준을 모델 PC 운영자에게 전달합니다. 운영자는 고정된 LeRobot 환경에서 <code>learning/curation/omx/collection_pipeline.py prepare-native</code>로 새 준비 폴더를 만듭니다. 입력과 옵션은 같은 명령의 <code>--help</code>에서 확인합니다.</li><li>준비 결과의 <code>intake-receipt.json</code>, <code>inspection.json</code>, <code>decisions.json</code>을 보존한 폴더를 위의 “기존 OMX 시연 폴더 연결”에서 등록합니다. 원본 녹화 대신 준비 폴더를 선택합니다.</li><li>4단계에서 프레임·결과를 확인하고 검수를 저장한 뒤, 변환에 쓸 저장 검수 버전을 선택합니다. 완료 카드에서 학습 또는 고정 버전의 HF 보관 준비를 선택합니다.</li><li>Pinky의 <code>.tar</code>는 OMX 준비 명령에 넣지 않습니다. 모델 PC에서 원본 수신·해시 확인·영상 변환을 마친 뒤 Learning의 자료 등록에서 객체·픽셀 검수를 이어갑니다. 자동 수신 여부는 운영자가 마지막 수신 결과로 확인합니다.</li></ol></details>
 </section>
@@ -65,7 +65,7 @@
 <p class="quiet">작업 목록에서 연결한 기존 시연의 검수·분할·카메라 판정입니다. 아래 학습 가능 판정과 현재 실행기의 데이터 등록은 별도입니다.</p>
 <div id="sets" aria-live="polite"></div>
 </section>
-<ui-empty id="empty-prepared" hidden><h3>등록된 검수 시연이 없습니다</h3><p>시범의 영상·행동·시도별 결과를 준비한 OMX 시연 폴더를 연결하세요. 연결 화면의 필수 결과 파일을 확인합니다.</p><a class="workspace-link" href="/learning?connect=omx#connection-panel">OMX 시연 폴더 연결</a></ui-empty>
+<ui-empty id="empty-prepared" hidden><h3>등록된 검수 시연이 없습니다</h3><p>시범의 영상·행동·시도별 결과를 준비한 OMX 시연 폴더를 연결하세요. 연결 화면의 필수 결과 파일을 확인합니다.</p><a data-kind="quiet" class="ui-action-link" href="/learning?connect=omx#connection-panel">OMX 시연 폴더 연결</a></ui-empty>
 <h3>검수한 native 시연에서 ACT 데이터 만들기</h3>
 <form id="native-export-form" class="ui-form learning-form"><label class="ui-field-label">등록된 검수 시연 <select id="prepared-set" class="ui-field" required disabled><option value="">등록 자료를 불러오는 중</option></select></label>
 <p id="prepared-status" role="status"></p>
@@ -106,7 +106,7 @@
 <section id="reward-section" class="learning-section learning-panel" aria-labelledby="reward-heading"><h2 id="reward-heading">5 · 성공 판정·초기화</h2>
 <p>HIL-SERL에는 매 시도의 보상·종료와 다음 시도의 시작 상태가 필요합니다. ACT의 시범 검수와 구분해 준비하세요.</p>
 <ul><li>성공: 지정한 물체를 집어 과제에서 정한 높이·시간 동안 유지하는지 확인합니다.</li><li>실패: 빈 그리퍼 상승, 물체 가림, 들었다가 낙하, 시간 초과를 성공으로 잘못 판정하지 않는지 확인합니다.</li><li>초기화: 팔과 물체를 정한 시작 상태로 되돌리는 방법과 사람의 소요 시간을 기록합니다.</li></ul>
-<ui-empty><h3>자동 성공 판정기·현장 초기화는 아직 연결되지 않았습니다</h3><p>현재는 데이터 검수에서 사람이 확인한 시도 결과를 저장할 수 있습니다. 자동 판정기를 학습·검증하고 현장 보상·종료·초기화에 연결하는 단계가 남아 있습니다.</p><a class="workspace-link" href="#native-review-heading">시도별 결과 검수로 이동</a></ui-empty>
+<ui-empty><h3>자동 성공 판정기·현장 초기화는 아직 연결되지 않았습니다</h3><p>현재는 데이터 검수에서 사람이 확인한 시도 결과를 저장할 수 있습니다. 자동 판정기를 학습·검증하고 현장 보상·종료·초기화에 연결하는 단계가 남아 있습니다.</p><a data-kind="quiet" class="ui-action-link" href="#native-review-heading">시도별 결과 검수로 이동</a></ui-empty>
 </section>
 <section id="train-section" class="learning-section learning-panel" aria-labelledby="train-heading"><h2 id="train-heading">6 · ACT / HIL-SERL 학습</h2>
 <p id="selected-profile-status" role="status">저장 프로필 선택 없음 · 등록 데이터의 입력 프로필을 사용합니다.</p><ui-button kind="quiet" id="profile-clear" class="ui-field" type="button" disabled>저장 프로필 선택 해제</ui-button>
