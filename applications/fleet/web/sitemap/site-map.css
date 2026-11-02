@@ -17,7 +17,7 @@ ui-head:has(label.inline) { flex-wrap: wrap; align-items: center; }
 .ui-field:not([type="checkbox"], label.inline > *) { width: 100%; }  /* components.css caps fields at 100%; an inline label's select keeps its own width */
 a:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 .draft-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
-a { color: var(--text-primary); }
+
 .map-viewport { min-width: 0; max-width: 100%; }
 .map-viewport:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 .map-scroll-hint { display: none; }
@@ -67,3 +67,8 @@ a { color: var(--text-primary); }
   .actions { display: grid; grid-template-columns: minmax(0, 1fr); }
   .draft-actions { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* D-926 7(2026-11-02) — 범례 용어 목록 배치(hint-more 접힘 근처). */
+.legend-terms { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--space-1) var(--space-3); margin: var(--space-2) 0 0; }
+.legend-terms dt { color: var(--text-secondary); font-weight: var(--weight-label); white-space: nowrap; }
+.legend-terms dd { margin: 0; color: var(--text-primary); }
