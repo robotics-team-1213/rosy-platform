@@ -13800,6 +13800,12 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 팔 받침은 CAD 값 그대로다. 둘째 실행은 모델 PC에서 외부 정지로 적층 결과를 주장하지 않는다.
 - CE: 해당 없음 — 새 기능이다. 카메라 기울기(roll)를 빼면 side가 4.3 px로 한계를 넘는다는 점은 fixture 주석과 검증 기록에 남겼다.
 
+## 2026-11-03 · uncommitted · fix(landing): 병렬 준비와 폴백에서 급행 표시를 보존한다
+- 변경: 병렬 guard/body의 활성 우선순위 호출 수를 Lock으로 관리해 마지막 호출까지 표시를 유지한다. 자원 정보가 없는 serial 폴백에도 TURN_JOB를 전달한다. selector·검증 범위·worker/메모리 한계·host floor·ALONE 정책은 그대로다.
+- 증거: committed RED `d27b7a625c` 의도 실패6/양성2. 수정 `150a10701e`의 flags/remote_pytest/host_admission 원격125 PASS, skip/NEW/known/flaky0. 양쪽 종료 순서·normal 중첩·예외 정리·fallback flag1/0/빈값을 검증했다. 독립 검토 추가P1/P2없음, size2commits PASS, lint0오류42경고.
+- gate 변화: 없음. 소스 검증이며 기존 실행 중 job의 표시 갱신·main 적용·60분 SLO를 주장하지 않는다.
+- CE: 기존 Oct31 교훈 갱신. 공유 환경변수의 진입/종료 순서와 job launch 시점이 다른 문제, 단순 이전값 복원으로 해결되지 않는 이유를 기록했다.
+
 ## 2026-11-03 · uncommitted · feat(omx): 같은 크기 컨테이너가 줄지어 붙어 있으면 개수를 세어 나눈다
 - 변경: `cell_objects.classify`가 2~`objects.split_max`(6)개, 칸 사이 틈 `objects.split_gap_mm`(8)까지 나눠 보고, 줄이 컨테이너 짧은 변·긴 변 어느 쪽으로 늘어서도 시도한다. 엄격 판정을 통과하는 조합 중 조각 폭·길이가 카탈로그에 가장 가까운 것을 고른다. 조각마다 엄격 일치·방향·채움 검사는 그대로다.
 - 증거: 2026-11-03 arm_b 배 위에 3칸 컨테이너 다섯 개가 6 mm 틈으로 놓여 한 덩어리(113 × 100 mm)로 보여 집을 대상이 없었다. 현장 사진에서 셋으로 나뉘어 각각 container-3로 인식됨. 실물 집기는 손목에 가려 집게 확인이 거절해 아직 없음.
