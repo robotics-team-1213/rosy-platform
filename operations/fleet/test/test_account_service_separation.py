@@ -98,6 +98,43 @@ assert not any(n=='fleet' or n.startswith('fleet.') for n in sys.modules)
     assert result.returncode == 0, result.stderr
 
 
+def test_account_backup_preserves_all_auth_tables_and_refuses_stale_or_corrupt_copies(standalone, tmp_path):
+    import os
+    import stat
+    import subprocess
+    import sys
+    import time
+    app, client, _, _ = standalone
+    assert client.patch('/api/fleet/auth/profile', json={'display_name': 'Backup administrator'},
+                        headers={'Origin': 'https://account.test'}).status_code == 200
+    path = app.state.password_sessions.path
+    def rows(database):
+        with sqlite3.connect(database) as db:
+            tables = [r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")]
+            return {table: db.execute('SELECT * FROM "' + table + '"').fetchall() for table in tables}
+    original = rows(path)
+    assert original['account_http_audit']
+    destination = tmp_path / 'account-backups'
+    tool = [sys.executable, '-I', str(ROOT / 'deploy/site/site_db.py')]
+    def run(*args):
+        return subprocess.run([*tool, *args], capture_output=True, text=True)
+    result = run('backup', '--source', str(path), '--dest-dir', str(destination), '--prune', '14',
+                 '--prune-history', '0', '--prune-audit', '0')
+    assert result.returncode == 0, result.stderr
+    copies = list(destination.glob('fleet-backup-*.sqlite3'))
+    assert len(copies) == 1
+    assert rows(copies[0]) == original == rows(path)
+    assert stat.S_IMODE(copies[0].stat().st_mode) == 0o600
+    assert run('verify', '--path', str(copies[0])).returncode == 0
+    assert run('check', '--dest-dir', str(destination), '--max-age-hours', '48').returncode == 0
+    os.utime(copies[0], (time.time() - 50 * 3600,) * 2)
+    assert run('check', '--dest-dir', str(destination), '--max-age-hours', '48').returncode != 0
+    os.utime(copies[0], None)
+    copies[0].write_bytes(b'corrupt synthetic backup')
+    assert run('check', '--dest-dir', str(destination), '--max-age-hours', '48').returncode != 0
+    assert rows(path) == original
+
+
 def test_standalone_preserves_session_profile_and_durable_audit(standalone):
     app, client, original, _ = standalone
     response = client.get('/api/fleet/auth/session')
