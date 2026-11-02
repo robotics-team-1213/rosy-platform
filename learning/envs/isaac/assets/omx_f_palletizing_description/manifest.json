@@ -1,0 +1,27 @@
+{
+  "schema": "rosy.isaac-vendor-assets.v1",
+  "source": "HarborLogi OMX-F palletizing jaw v2.1 (team-provided omx_f_palletizing_description.zip, 2026-10-31)",
+  "base_repository": "https://github.com/ROBOTIS-GIT/open_manipulator",
+  "base_revision": "0a4af6a923b8b7d80b8c20506d1839c54d2e993e",
+  "base_release": "5.1.2",
+  "license": "Apache-2.0",
+  "note": "Only link6/link7 meshes and inertials, end_effector_joint x and the package name differ from open_manipulator_description; follower_01..06 meshes are byte-identical and are resolved from that package.",
+  "files": [
+    {
+      "path": "LICENSE",
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+    },
+    {
+      "path": "meshes/omx_f/palletizing_jaw6_servo_side_v2_1.stl",
+      "sha256": "18843d7b56989bde584a0eb27004a72f8d4cbfeee662b3ce4c64f09c8ad87dce"
+    },
+    {
+      "path": "meshes/omx_f/palletizing_jaw7_gear_side_v2_1.stl",
+      "sha256": "3a303126d24529a9e0279e0397625db0fc80298134cbe446b97c7a0c9fd17ad1"
+    },
+    {
+      "path": "urdf/omx_f_palletizing.urdf",
+      "sha256": "09a21d0a5a15908f7ca0b755cbd343b3484d762acd4a910fac6699ebf53ded1d"
+    }
+  ]
+}

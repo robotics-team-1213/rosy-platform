@@ -1,11 +1,53 @@
 """applications/fleet/dev runs without Fleet, ROS, or an upstream."""
 import importlib.util
 import json
+import socket
 from pathlib import Path
 import subprocess
 import sys
+from types import SimpleNamespace
+
+import pytest
 
 DEV = Path(__file__).resolve().parents[1] / 'dev'
+
+
+@pytest.fixture
+def http_host(monkeypatch):
+    monkeypatch.syspath_prepend(str(DEV))
+    import http_host
+    return http_host
+
+
+def test_windows_bind_is_exclusive_before_binding(http_host, monkeypatch):
+    calls = []
+    exclusive = 0x10000
+    monkeypatch.setattr(socket, 'SO_EXCLUSIVEADDRUSE', exclusive, raising=False)
+
+    def initialize(server, address, handler):
+        server.socket = SimpleNamespace(setsockopt=lambda *args: calls.append(args))
+        server.server_bind()
+
+    def bind(server):
+        calls.append(('bind', server.allow_reuse_address, server.allow_reuse_port))
+
+    monkeypatch.setattr(http_host.ThreadingHTTPServer, '__init__', initialize)
+    monkeypatch.setattr(http_host.ThreadingHTTPServer, 'server_bind', bind)
+    monkeypatch.setattr(http_host.ThreadingHTTPServer, 'allow_reuse_port', True)
+    http_host.make_server(object(), 'http://localhost:4173')
+    assert calls == [(socket.SOL_SOCKET, exclusive, 1), ('bind', False, False)]
+
+
+def test_preview_port_has_one_owner_until_close(http_host):
+    with http_host.make_server(load_engine(), 'http://localhost:0') as first:
+        port = first.server_address[1]
+        assert port > 0
+        origin = f'http://localhost:{port}'
+        with pytest.raises(OSError):
+            with http_host.make_server(object(), origin):
+                pass
+    with http_host.make_server(object(), origin) as restarted:
+        assert restarted.server_address[1] == port
 
 
 def load_engine():

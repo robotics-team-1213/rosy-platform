@@ -96,13 +96,10 @@ D-942 skipped: no reservation ref and no body existed when D-945 landed; revisit
 D-942 unused: no refs/adr/D-942 and no ADR file in any branch or worktree when D-944/D-948 landed (2026-11-01)
 D-942 not on main when D-950 was reserved (refs/adr has none); remove when its ADR lands
 D-946 reserved in another in-flight branch (refs/adr/D-946), absent from this D-950 branch; remove when its ADR lands
-D-947 reserved in another in-flight branch (refs/adr/D-947), absent from this D-950 branch; remove when its ADR lands
 D-942 unused: no refs/adr/D-942 and no ADR file in any branch or worktree when D-944/D-948 landed (2026-11-01)
 D-946 reserved in another in-flight branch (worktree sim-parity), absent from this D-944/D-948 branch; remove when its ADR lands
-D-947 reserved in another in-flight branch (worktree release-corrector), absent from this D-944/D-948 branch; remove when its ADR lands
+D-952 no refs/adr/D-952 and no ADR file in any worktree when D-954 was written (worktree pi45 owner note names it); remove if it lands
 D-952 unused: no refs/adr/D-952; the D-953 draft held the number outside the repo before adr_reserve.py assigned D-953 (2026-11-01)
 D-952 no refs/adr/D-952 and no ADR file in any worktree when D-954 was written (worktree pi45 owner note names it); remove if it lands
-D-956 reserved in another in-flight branch (OMX ship-plate seat check), absent from this D-960 branch; remove when its ADR lands
-D-958 reserved in another in-flight branch (lab compute ledger), absent from this D-960 branch; remove when its ADR lands
 D-959 unused: a D-960 draft first took this number without a reservation, adr_reserve then issued D-960; no refs/adr/D-959
 D-961 reserved in another in-flight branch (refs/adr/D-961), absent from this D-962 branch; remove when its ADR lands

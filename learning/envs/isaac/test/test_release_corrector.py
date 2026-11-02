@@ -213,3 +213,17 @@ def test_reinforce_step_stays_inside_the_trust_region_on_the_data():
     assert .0002 - 1e-9 <= change <= .0002 + 1e-9  # the large step is scaled down to the 0.2 mm bound
     small = rc.Residual.update(rc.Residual.zero(), obs, noise, rewards, lr=1e-7, max_change_m=.0002)
     assert np.abs(small.predict(obs)).max() < .0002  # a small step is left as it is
+
+
+def test_release8_case_only_lowers_the_release_clearance():
+    base, low = (f.container_fixture(layers=3, case=c) for c in ('nominal-bc-v0', 'nominal-bc-v0-release8'))
+    assert low['release_clearance_m'] == .008 and base['release_clearance_m'] == .015
+    assert {k for k in base if base[k] != low.get(k)} == {'release_clearance_m', 'revision', 'case'}
+
+
+def test_finger_goes_into_the_gap_only_when_the_case_widens_it():
+    narrow, wide = (f.container_fixture(layers=3, case=c) for c in ('nominal-release3', 'nominal-gap6-release3'))
+    assert not f.finger_fits_gap(.0035, narrow) and not f.finger_fits_gap(.0045, wide)
+    assert f.finger_fits_gap(.006, wide) and wide['bin_size_m'][1] == pytest.approx(.102)
+    assert wide['release_clearance_m'] == .015 and wide['stack_release_clearance_m'] == .003  # leveling unchanged
+    assert [round(i['target'][1], 4) for i in f.plan(True, fixture=wide)[:3]] == [0., -.036, .036]

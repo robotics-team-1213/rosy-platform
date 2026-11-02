@@ -10,7 +10,7 @@
 | [control](middleware/perception/progress.md) | CONTROL | 4e99d92e (2026-10-02) | GO | GO | HOLD | HOLD | HOLD | PARKED |
 | [fleet](operations/fleet/progress.md) | FLEET | bed604ef (2026-09-30) | GO | GO | HOLD | PARKED | PARKED | PARKED |
 | [account](operations/account/progress.md) | ACCOUNT | dd9d55404f (2026-11-02) | GO | GO | N/A | HOLD | N/A | HOLD |
-| [monitoring](operations/monitoring/progress.md) | MONITORING | 6b0f7568f5 (2026-10-26) | GO | GO | N/A | HOLD | HOLD | HOLD |
+| [monitoring](operations/monitoring/progress.md) | MONITORING | 6b0f7568f5 (2026-10-26) | GO | GO | N/A | GO | GO | GO |
 | [fleet_decision](operations/decision/progress.md) | fleet_decision | 587c0b4c8c (2026-10-29) | GO | GO | HOLD | HOLD | HOLD | HOLD |
 | [situation](operations/situation/progress.md) | SITUATION | 3627ec21fb (2026-10-28) | GO | HOLD | N/A | HOLD | HOLD | HOLD |
 | [media](operations/site_ui/media/progress.md) | SITE MEDIA | 2190ba6889 (2026-10-18) | GO | GO | N/A | HOLD | HOLD | HOLD |
@@ -70,9 +70,6 @@
 - fleet ROS-SIM: D-87: 현재 트리의 colcon install/setup.bash가 없다. 2026-09-17 WSL Task 14 로그는 설계 입력이며 GO가 아니다 (D-89)
 - account ARTIFACT: 독립 Account 서비스를 포함한 서명 사이트 후보의 게시·검증·설치 대기.
 - account FIELD: 운영 단일 writer 이관·실제 로그인 진입·Fleet 중단 중 독립성 수용 전.
-- monitoring ARTIFACT: 관제 PC는 D-936 사이트 스택 overlay로 싣는다. 소스·후보 검증·관제 PC compose 렌더링·Caddy 검사는 통과했다. overlay를 포함한 서명 후보가 아직 없고, 관제 PC 자동 업데이트는 서명되지 않은 ARM-S overlay 때문에 거절 중이다.
-- monitoring DEVICE: 관제 PC 입력은 2026-11-01 staging 완료(설정 root:10001 0640, 키 2개 root 0600, Fleet viewer 'monitoring' 등록). overlay를 켜지 않았다 — 활성은 compose.monitoring.yaml 포함 서명 후보 적용 뒤 site.env 단계다.
-- monitoring FIELD: 실 PC 배치·LAN/TLS 단절 및 복구·시각·제어 영향 수용이 남아 있다.
 - fleet_decision ROS-SIM: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
 - fleet_decision ARTIFACT: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
 - fleet_decision DEVICE: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
