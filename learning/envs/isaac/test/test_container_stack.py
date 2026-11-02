@@ -269,3 +269,29 @@ def test_ship_offset_cases_move_only_the_release_target():
         a = f.cube_release_target(i, held_scene(base, i), .04, fixture=base)
         b = f.cube_release_target(i, held_scene(shifted, i), .04, fixture=shifted)
         assert [b[0]-a[0], b[1]-a[1], b[2]-a[2]] == pytest.approx([0., .0006, 0.])
+
+
+def test_real_cameras_see_the_studs_unmirrored_where_the_survey_saw_them():
+    """D-947 3: a pinhole of each surveyed camera puts every stud in frame, the +y column on the image left, and for the
+    top camera the stern row above the bow row (survey frame: stern at the top, arm_b on the left)."""
+    import numpy as np
+    import ship_plate
+    fixture = f.container_fixture(layers=3, case='nominal-palletizing-v21-ship')
+    studs = ship_plate.stud_positions(fixture)
+    z = ship_plate.top_z(fixture)+fixture['ship_plate']['stud_height_m']
+    for name, cam in fixture['real_cameras'].items():
+        eye, forward = np.array(cam['eye']), np.array(cam['focus'])-cam['eye']
+        forward /= np.linalg.norm(forward)
+        right = np.cross(forward, cam['up'])
+        right /= np.linalg.norm(right)
+        down = np.cross(forward, right)
+        uv = {}
+        for x, y in studs:
+            d = np.array([x, y, z])-eye
+            uv[x, y] = (cam['width']/2+cam['f_px']*d @ right/(d @ forward), cam['height']/2+cam['f_px']*d @ down/(d @ forward))
+        assert all(0 < u < cam['width'] and 0 < v < cam['height'] for u, v in uv.values()), name
+        (x0, y_left), (_, y_right) = max(studs), min(studs, key=lambda s: (-s[0], s[1]))
+        assert uv[x0, y_left][0] < uv[x0, y_right][0], name
+        if name == 'top':
+            bow = min(x for x, _ in studs)
+            assert uv[x0, y_left][1] < uv[bow, y_left][1]
