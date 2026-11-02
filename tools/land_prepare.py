@@ -42,13 +42,17 @@ STARTED = rules()  # the rules this process runs: a landing loads main's copy on
 
 
 def relaunch(land, qdir: Path, ticket: Path, run=None) -> int | None:
-    """While pending: when main's landing code changed since this process started, run main's land.py on the same
+    """While waiting: when main's landing code changed since this process started, run main's land.py on the same
     ticket and return its exit code. This process stays alive, so the ticket's pid holds its place.
 
     2026-10-31: fixes to the queue (batch deadlock, turn priority) never reached landers already waiting; they
     deadlocked and bounced until each was restarted by hand in queue order."""
     if STARTED is None or rules() in (None, STARTED):
         return None
+    rows = land_queue.ahead(qdir, Path("~"))
+    me = next((r for r in rows if r["ticket"] == ticket.name), {})
+    if me.get("batch") or any(me.get("branch") in (r.get("batch") or []) for r in rows):
+        return None  # a live batch keeps its loaded rules through preparation, landing and switch-back
     print("[land] main's landing code changed while this landing waited: continuing with it", flush=True)
     argv = [sys.executable, "-X", "utf8", str(qdir.parent.parent / "tools" / "land.py"), *sys.argv[1:]]
     env = {**land.ENV, land_queue.TICKET_ENV: str(ticket), land.land_checks.OWN_COPY: "1"}
@@ -85,7 +89,7 @@ def again(land, wt: Path, branch: str, args, python: str, qdir: Path, ticket: Pa
     land.land_events.emit("released", note=note)
     prepare(land, wt, branch, args, python, qdir, ticket, invocations, note)
     land_queue.wait(qdir, ticket, args.queue_timeout * 60, check=watch(land, wt),
-                    tested=land.land_full.restore(wt, branch))
+                    tested=land.land_full.restore(wt, branch), changed=lambda: relaunch(land, qdir, ticket))
     return land.land_full.restore(wt, branch)
 
 

@@ -217,17 +217,20 @@ def touch(ticket: Path | None = None) -> None:
 
 
 def wait(qdir: Path, ticket: Path, timeout: float, clock=time.time, sleep=time.sleep, check=None,
-         done=None, form=None, tested: str | None = None) -> str | None:
+         done=None, form=None, tested: str | None = None, changed=None) -> str | None:
     """Mark ``ticket`` waiting; return None once nothing blocks it (``blockers``), marked as in its turn;
     QueueError after ``timeout`` seconds (0: no limit), or as soon as ``check()`` names a reason to stop.
     ``"landed"`` as soon as ``done()`` is true (a batch landed this branch), ``"batch"`` when ``form(rows)``
     made this ticket a batch leader while ``rows`` blocked it (``land_batch.py``). ``tested``: the main this
-    ticket's green tier passed over (``land_full.restore``), for ``blockers``' fresh-first order."""
+    ticket's green tier passed over (``land_full.restore``), for ``blockers``' fresh-first order.
+    ``changed()`` may run current main's lander on this ticket; its exit code ends this process before a turn."""
     set_status(ticket, "waiting", tested=tested or "", waiting_since=clock())
     began, said, last = clock(), None, 0.0
     while True:
         if done and done():
             return "landed"
+        if changed and (code := changed()) is not None:
+            raise SystemExit(code)
         rows = blockers(qdir, ticket, clock())
         if not rows:
             if said is not None:
