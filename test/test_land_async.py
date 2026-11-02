@@ -177,6 +177,7 @@ def starting_lander(repo, tmp_path):
     qdir = main / ".git" / "rosy-land-queue"
     script.write_text(
         "import json,os,time\nfrom pathlib import Path\n"
+        f"Path({str(calls.with_suffix('.pid'))!r}).write_text(str(os.getpid()))\n"
         f"with Path({str(calls)!r}).open('a') as stream: stream.write('run\\n')\n"
         f"while not Path({str(stop)!r}).exists():\n"
         f" if Path({str(admit)!r}).exists():\n"
@@ -273,3 +274,34 @@ def test_quick_success_without_a_ticket_reports_landed(repo):
         return process
 
     assert tool.resume(dev, tree.name, [], finish, wait=0, sleep=lambda s: None) == "landed"
+
+
+def test_official_stop_ends_starting_supervisors_child_and_releases_ownership(starting_lander):
+    _, dev, _, tree, _, calls, launch = starting_lander
+    processes = []
+
+    def capture(*args):
+        process = launch(*args)
+        processes.append(process)
+        return process
+
+    tool.resume(dev, tree.name, [], capture, wait=0, sleep=lambda s: None)
+    until = time.monotonic() + 5
+    pidfile = calls.with_suffix(".pid")
+    while not pidfile.exists() and time.monotonic() < until:
+        time.sleep(.02)
+    child = int(pidfile.read_text())
+    tool.stop(processes[0].pid)
+    processes[0].wait(timeout=5)
+
+    def child_exited():
+        if not tool._queue().pid_alive(child):
+            return True
+        state = Path(f"/proc/{child}/stat")
+        return state.is_file() and state.read_text().split()[2] == "Z"  # killed orphan awaiting OS reaping
+
+    until = time.monotonic() + 5
+    while not child_exited() and time.monotonic() < until:
+        time.sleep(.02)
+    assert child_exited(), "stop must end the child as well as its detached supervisor"
+    assert tool.resume(dev, tree.name, [], capture, wait=0, sleep=lambda s: None) == "starting"
