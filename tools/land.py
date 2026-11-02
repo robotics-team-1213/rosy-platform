@@ -72,7 +72,7 @@ SAFETY = "tools/harness/safety_review.py"  # D-430 5: the rule CI's scope job en
 ENV = {**os.environ, "PYTHONUTF8": "1"}
 
 
-TURN_CAP_S = 600  # D-889: the acquired turn's budget; expiry yields at safe boundaries (land_prepare.again)
+TURN_CAP_S = 1200  # D-889 26 (20 min): the acquired turn's budget; expiry yields at safe boundaries (land_prepare.again)
 TURN_MAX_S = 1800  # user decision 2026-11-02: every acquired turn yields, even without a waiter
 # 2026-10-27: a landing with a hand-picked --tests skipped its selection, guards and pretest and left main red
 # (3125704e24). A real landing always runs the selection; --tests "<args>" only adds EXTRA, "none" is refused.
@@ -540,7 +540,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.tests == "none":
             land_events.emit("skip", reason=args.skip_reason.strip()[:300])
         if (code := land(args)) == 0 and not args.dry_run:
-            land_events.emit("landed", sha=out(wt, "rev-parse", "HEAD"))
+            land_events.landed(out(wt, "rev-parse", "HEAD"), main_move=not getattr(args, "_carried", False))
         return code
     except (Stop, land_queue.QueueError) as exc:
         print(f"[land] STOP: {exc}", file=sys.stderr)
