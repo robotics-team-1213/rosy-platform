@@ -143,3 +143,24 @@ across async, rollup, GC, worktree and queue suites, with 0 new, 0 known and 0 f
 `$TEMP/rosy-rollup-owner-red/run-1.txt`, `$TEMP/rosy-rollup-lease-red/run-1.txt` and
 `$TEMP/rosy-rollup-replace-red/run-1.txt`. These checks verify source behavior; deployment,
 already-running older gateways and measured lead-time targets remain separate acceptance checks.
+
+## 병렬 준비와 폴백에서 사라진 급행 표시
+
+급행 표라도 뒤쪽 작업이 일반 admission 대기에 들어갈 수 있었다. 준비의 guard와 body가
+같은 프로세스에서 병렬로 `land.run_tests`를 호출하고, 먼저 끝난 호출의 `finally`가
+공유 `ROSY_LAND_TURN`을 지웠기 때문이다. 실제 job의 표시는 batch 시작 때가 아니라
+각 launch 직전 `xdist_plan.plan`에서 읽는다. 기존 플래그를 저장했다가 복원하는 방식도
+두 호출의 종료 순서가 뒤집히면 틀린다.
+
+활성 turn/urgent 호출 수를 짧은 Lock 구간에서 관리해 마지막 호출이 끝날 때만 표시를
+지운다. 시험 실행 자체는 잠그지 않는다. 자원 정보가 없는 폴백도 기존 serial/자원
+설정에 `TURN_JOB`만 전달한다. worker 수·메모리·host floor·ALONE 규칙은 바꾸지 않는다.
+같은 시기 후반 작업 세 개의 admission 대기1997/1988/1988초를 관측했지만, 그 전량을
+수정의 벽시계 절약으로 계산하지 않는다.
+
+`test_land_tests_flag.py`와 `test_remote_pytest.py`에서 두 종료 순서, normal 중첩,
+예외 정리와 fallback 표시를 검증했다. 소스 `d27b7a625c`는 의도한6개 실패를 냈고,
+수정 `150a10701e`의 flags/remote_pytest/host_admission 원격125개는 skip/NEW/known/flaky0으로
+통과했다. 독립 검토에 추가P1/P2가 없었다. 이미 표시 없이 launch된 remote job은
+코드 착지만으로 소급 변경되지 않으므로 새 controller/job의 표시를 별도로 확인한다.
+복구는 기존 착지 경로로 이 변경을 되돌린 뒤 급행 표와 실제 job 표시를 다시 대조한다.
