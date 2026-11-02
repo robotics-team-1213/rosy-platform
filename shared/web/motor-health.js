@@ -4,10 +4,14 @@ const JOINT = {shoulder_pan: "어깨 회전", shoulder_lift: "어깨 올림", el
   wrist_flex: "손목 굽힘", wrist_roll: "손목 회전", gripper: "그리퍼",
   joint1: "어깨 회전", joint2: "어깨 올림", joint3: "팔꿈치", joint4: "손목 굽힘",
   joint5: "손목 회전", gripper_joint_1: "그리퍼"};
+export const jointLabel = joint => JOINT[joint] || joint || "모터";
 const WARNING = {high_pwm: "PWM 사용률 높음", near_temperature_limit: "온도 한계 근접"};
 const GROUP = {arm_a: "A 팔", arm_b: "B 팔", follower: "팔로워"};
 const validAge = value => Number.isFinite(value) && value >= 0;
 const hardwareFault = motor => Number.isInteger(motor.hardware_error) && motor.hardware_error > 0;
+// The joint the guard stopped on: the stop reason itself never names it.
+const stopped = motor => motor.fault === true && !hardwareFault(motor);
+const stoppedText = motor => `${GROUP[motor.group] || motor.group || "팔로워"} ${JOINT[motor.joint] || motor.joint || "모터"}(ID ${motor.id ?? "—"}) 정지`;
 const number = (value, digits = 1) => Number.isFinite(value) ? value.toFixed(digits) : "—";
 const ageText = age => validAge(age) ? `${age.toFixed(1)}초 전` : "관측 시각 없음";
 
@@ -22,7 +26,8 @@ export function createMotorHealthState() {
       disconnected = options.disconnected === true;
       if (snapshot?.status === "fault") {
         const faults = (snapshot.motors || []).filter(hardwareFault).map(motor =>
-          `${GROUP[motor.group] || motor.group || "팔로워"} ID ${motor.id ?? "—"} 하드웨어 오류 ${motor.hardware_error}`);
+          `${GROUP[motor.group] || motor.group || "팔로워"} ID ${motor.id ?? "—"} 하드웨어 오류 ${motor.hardware_error}`)
+          .concat((snapshot.motors || []).filter(stopped).map(stoppedText));
         lastFault = [...faults, ...(snapshot.stop_reasons || []).filter(reason => typeof reason === "string")].join(" · ")
           || "세션이 중단되었습니다.";
       }
@@ -78,7 +83,8 @@ export function renderMotorHealthSummary(root, health) {
     ? `${fresh ? "" : "마지막 관측 · "}주의 모터 ${warned.length}개` : "";
   const faults = failed.length ? `고장 모터 ${failed.length}개 · ${failed.map(motor =>
     `${GROUP[motor.group] || motor.group || "팔로워"} ID ${motor.id ?? "—"} 오류 ${motor.hardware_error}`).join(" / ")}` : "";
-  const cause = health.status === "fault" ? health.stopReasons[0] || health.lastFault
+  const cause = health.status === "fault"
+    ? [...health.motors.filter(stopped).map(stoppedText), health.stopReasons[0]].filter(Boolean).join(" · ") || health.lastFault
     : warning || (health.lastFault ? `마지막 중단: ${health.lastFault}` : "");
   root.textContent = [health.label, health.evidenceLabel, faults, count, cause].filter(Boolean).join(" · ");
   root.title = `${health.ageText}${health.lastFault ? ` · 마지막 중단: ${health.lastFault}` : ""}`;
@@ -133,7 +139,7 @@ export function renderMotorHealth(root, health) {
   parts.scroll.hidden = health.motors.length === 0;
   const rows = health.motors.map(motor => {
     const row = node("tr"); row.dataset.evidence = motor.evidence;
-    row.dataset.severity = motor.warnings.length ? "warn" : "neutral";
+    row.dataset.severity = stopped(motor) ? "crit" : motor.warnings.length ? "warn" : "neutral";
     const identity = node("th"); identity.scope = "row";
     identity.append(node("b", `${GROUP[motor.group] || motor.group || "팔로워"} · ID ${motor.id ?? "—"}`),
       node("span", JOINT[motor.joint] || motor.joint || "모터", "motor-health-sub"));
@@ -150,6 +156,10 @@ export function renderMotorHealth(root, health) {
     const observation = node("td");
     observation.append(node("span", `${EVIDENCE[motor.evidence]} · ${ageText(motor.age)}`),
       node("span", motor.warnings.join(" · "), "motor-health-sub motor-health-warning"));
+    if (stopped(motor)) {
+      const tag = node("ui-tag", "이 관절에서 정지");
+      tag.setAttribute("status", "crit"); observation.append(tag);
+    }
     if (hardwareFault(motor)) {
       const fault = node("ui-tag", `하드웨어 오류 ${motor.hardware_error}`);
       fault.setAttribute("status", "crit"); observation.append(fault);
