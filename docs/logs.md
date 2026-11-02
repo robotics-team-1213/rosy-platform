@@ -13819,6 +13819,13 @@ osy-d395-s1d\`.
 - 결정: 없음(D-951 6의 구현)
 - CE: 해당 없음 — 원인과 해결은 D-951과 작업 기록에 이미 있고, 이번은 그 값을 코드 기본값으로 옮긴 일이다.
 
+## 2026-11-03 · uncommitted · feat(omx): 같은 크기 컨테이너가 줄지어 붙어 있으면 개수를 세어 나눈다
+- 변경: `cell_objects.classify`가 2~`objects.split_max`(6)개, 칸 사이 틈 `objects.split_gap_mm`(8)까지 나눠 보고, 줄이 컨테이너 짧은 변·긴 변 어느 쪽으로 늘어서도 시도한다. 엄격 판정을 통과하는 조합 중 조각 폭·길이가 카탈로그에 가장 가까운 것을 고른다. 조각마다 엄격 일치·방향·채움 검사는 그대로다.
+- 증거: 2026-11-03 arm_b 배 위에 3칸 컨테이너 다섯 개가 6 mm 틈으로 놓여 한 덩어리(113 × 100 mm)로 보여 집을 대상이 없었다. 현장 사진에서 셋으로 나뉘어 각각 container-3로 인식됨. 실물 집기는 손목에 가려 집게 확인이 거절해 아직 없음.
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 없음(같은 날 arm_b 낙하 교훈에 이어서 기록 예정)
+
 ## 2026-11-03 · uncommitted · fix(harness): isolate G1 timing in a dedicated serial, host-exclusive job
 - Change: CI/lab share one plan that removes G1 timing from ordinary FULL/ROOT/explicit-file/affected invocations and adds exactly one whole-file job. Existing ROSY_JOB_ALONE admission and disabled xdist apply together. The gate requires original collected and actually passed item sets to match, with zero skips. Dedicated results bypass success caches and reruns. Explicit FULL validates both the ROOT exclusion and the complete dedicated companion. The 0.45s threshold, skip helper and production control code are unchanged.
 - Evidence: 72508553f6 remote plan RED: 4 failures. Final 791a884c6c five-file remote regressions: 471 passed / 0 skipped (248.25s), rosy-g1-plan-green-791a/run-1.txt. Separate actual G1 execution used main af46af4666 transport with that same source: 12 passed / 0 skipped (6.31s, peak 68MiB), rosy-g1-timing-exclusive-791a/run-1.txt. Exactly one receipt: expected=12 collected=12 passed=12 skipped=0 clean=1. Formal admission waited for existing jobs to drain; this was the first and only actual attempt, without retry. Pre-enqueue observations were 12 free cores/11.8GB, CPU some avg10 0.13%, IO some avg60 0.18%; they do not prove absence of external I/O during execution. Regression runner resource output (3MiB/CPU 9ms) conflicts with elapsed time and is not accepted as resource evidence. Logs reside outside the repository under OS Temp.
