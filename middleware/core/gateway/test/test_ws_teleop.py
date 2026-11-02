@@ -179,6 +179,7 @@ def test_cancelled_teleop_handler_applies_explicit_zero(drive, monkeypatch, canc
                     release_zero.set()
         assert zero_applied.is_set(), "handler cancellation bypassed the explicit zero"
         assert svc.command.select_output().linear == 0.0
+        assert handler_task[0].cancelled(), "cleanup must preserve caller cancellation"
 
     anyio.run(exercise)
 
