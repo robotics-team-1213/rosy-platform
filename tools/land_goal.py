@@ -70,6 +70,7 @@ def stopped_before(rows: list[dict], queued: dict, cutoff: float) -> bool:
 def lead_times(rows: list[dict], t0: float, t1: float) -> list[float]:
     """Minutes from a topic's first queue event to its landing, for landings inside [t0, t1)."""
     pending, out, completed, exits = {}, [], set(), set()
+    finished = {}
     runs = {}
     for row in rows:
         if row["event"] in ("queue", "stop"):
@@ -104,13 +105,15 @@ def lead_times(rows: list[dict], t0: float, t1: float) -> list[float]:
             snapshot, cutoff = queues[end].get("branch"), queues[end]["t"]
             covered = [q for q in queues if
                        q.get("branch") == snapshot and (q["t"] <= cutoff or q.get("ticket") in member.get("retries", []))
-                       or q["t"] <= cutoff and stopped_before(runs.get((q.get("branch"), q.get("pid")), []), q, cutoff)]
+                       or finished.get(topic(name), float("-inf")) < q["t"] <= cutoff
+                       and stopped_before(runs.get((q.get("branch"), q.get("pid")), []), q, cutoff)]
             start = min(q["t"] for q in covered)
             if members is not None:
                 completed.add(origin)
                 if train:
                     exits.add((name, queues[end].get("pid"), queues[end]["t"]))
             pending[topic(name)] = [q for q in queues if q not in covered]
+            finished[topic(name)] = r["t"]
             if t0 <= r["t"] < t1:
                 out.append((r["t"] - start) / 60)
     return out

@@ -169,16 +169,21 @@ def test_goal_cli_defaults_to_sixty_minutes_and_preserves_override(goal_repo, mo
     assert "p90 90 min (goal <= 120)" in capsys.readouterr().out
 
 
-def test_goal_cli_old_unrelated_incomplete_train_does_not_fail_the_current_window(goal_repo, monkeypatch, capsys):
+@pytest.mark.parametrize("branch,resolved,code", [("fix/current", False, 0), ("fix/old", False, 1),
+                                                ("fix/old", True, 0)])
+def test_goal_cli_scopes_old_incomplete_trains_to_the_current_origins(goal_repo, monkeypatch, capsys,
+                                                                  branch, resolved, code):
     events, start = goal_repo
     rows = [ev(start - 3 * H, "queue", branch="fix/old", ticket="a", pid=3),
             ev(start - 2.9 * H, "queue", branch="fix/old", ticket="b", pid=4),
             ev(start - 2.8 * H, "train", branch="fix/leader", branches=["fix/old"], result="landed"),
-            ev(start, "queue", branch="fix/current"), ev(start + 300, "landed", branch="fix/current")]
+            ev(start, "queue", branch=branch), ev(start + 300, "landed", branch=branch)]
+    if resolved:
+        rows.extend([ev(start - 2 * H, "queue", branch="fix/old"), ev(start - 1.5 * H, "landed", branch="fix/old")])
     events.write_text("\n".join(json.dumps(r) for r in rows), encoding="utf-8")
     monkeypatch.setattr(land_stats.time, "time", lambda: start + 600)
-    assert land_stats.main(["--goal", "--hours", "1"]) == 0
-    assert "PASS:" in capsys.readouterr().out
+    assert land_stats.main(["--goal", "--hours", "1", "--p90", "300", "--stall", "300"]) == code
+    assert ("FAIL: logical landing metrics incomplete" if code else "PASS:") in capsys.readouterr().out
 
 
 def test_goal_cli_recovers_historical_rollup_members_without_rewriting_events(goal_repo, monkeypatch, capsys):
