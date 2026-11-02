@@ -4395,3 +4395,10 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 이 worktree에서 `tools/remote/update_status.py` — model 37 declared 0 findings, ai 23 declared 0 findings(review-bridge는 KNOWN).
 - gate 변화: 없음. 관제 PC의 observer arm_a·arm_b 정지와 카메라(front·천장 폰) 실패는 셀 작업 중인 것으로 보여 손대지 않았다.
 - CE: 해당 없음 — 선언 누락은 update_status가 매번 드러낸다.
+
+## 2026-11-02 · 14e64763d9 · fix(hosts): D-795 DDS 가드를 깬 pinky rosbridge 선언 제거
+
+- 변경: b101f57783에서 `services.yaml`에 더한 AI PC `pinky-rosbridge-d12`·`-d13` 선언 두 줄을 뺐다. `test_no_cross_host_dds`는 deploy 파일에 rosbridge를 금지한다(D-795). 두 유닛은 꺼진 채 AI PC에 남아 update_status에 UNDECLARED로 계속 나온다 — D-795상 선언할 대상이 아니라 치울 대상이다(Pinky 스택 소유자 확인 필요).
+- 증거: 착지 land-fix-publish-baseline-checkout-pin가 MAIN-RED로 멈춤(main 06a479abd1에서도 같은 실패). 원격 `test/test_no_cross_host_dds.py`·`test/test_host_services_manifest.py`.
+- gate 변화: main 녹색 복구.
+- CE: 해당 없음 — 가드 시험이 바로 잡았고, 앞 착지가 이 시험을 고르지 않은 것은 시험 선택 범위의 문제다.
