@@ -1,6 +1,7 @@
 """/ws/teleop — hold-to-drive stream: same checks as REST /teleop, ack per frame, fail-safe zero."""
 
 import json
+import time
 
 import pytest
 from starlette.websockets import WebSocketDisconnect
@@ -83,6 +84,10 @@ def test_disconnect_after_motion_applies_zero(drive):
         socket.send_text(_frame(1, 0.1))
         assert socket.receive_json()["accepted"] is True
         assert svc.command.select_output().linear == pytest.approx(0.1)
+    # the server's finally applies the zero after the client has closed, on the portal thread
+    deadline = time.monotonic() + 5
+    while svc.command.select_output().linear != 0.0 and time.monotonic() < deadline:
+        time.sleep(0.01)
     assert svc.command.select_output().linear == 0.0
 
 
@@ -107,7 +112,6 @@ def test_socket_cap_and_same_token_replacement(drive):
 
 
 def test_slow_apply_is_latest_wins(drive, monkeypatch):
-    import time
     from contextlib import ExitStack
     import core_api_web.api.ws as ws_module
     tc, _svc = drive()

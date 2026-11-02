@@ -20,6 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "operations" / "overhead"))
 from rosy_vision import protocol
 
+sys.path.insert(0, str(ROOT / "deploy" / "robot" / "omx"))
 _spec = importlib.util.spec_from_file_location("workcell_observation_bridge", ROOT / "deploy" / "robot" / "omx" / "workcell_observation_bridge.py")
 bridge = importlib.util.module_from_spec(_spec)
 sys.modules[_spec.name] = bridge
@@ -320,6 +321,7 @@ def test_native_main_delivers_only_registered_channels_without_ros(manifest, tmp
             delivered.append((self.source, sample.value))
             if len(delivered) == arm_count + 1: stop.set()
         def close(self): pass
+    monkeypatch.setattr(bridge, 'run_usb_reports', lambda *args, **kwargs: None)  # needs no registry or network here
     monkeypatch.setattr(bridge, 'ArmSender', Sender)
     monkeypatch.setattr(bridge, 'CameraSender', Sender)
     monkeypatch.setattr(bridge, 'threading', SimpleNamespace(
@@ -349,3 +351,40 @@ def test_the_cells_arm_health_files_come_from_the_environment_when_not_given(man
         bridge.main(["--manifest", str(path), "--workcell", "example", "--fleet-url", "https://fleet.example",
                      "--vision-url", "wss://vision.example", "--domain-id", "13"])
     assert "observation configuration invalid: ValueError" in capsys.readouterr().err
+
+
+def test_usb_camera_report_goes_to_the_workcell_route_with_an_arm_token_and_returns_decisions(monkeypatch):
+    from core_common.protocol.workcell_observations import UsbCameraReport
+    captured = {}
+
+    class Response:
+        status = 200
+        def __enter__(self): return self
+        def __exit__(self, *args): pass
+        def read(self, *args): return b'{"decisions":[{"key":"' + b"a" * 32 + b'","role":"front"}]}'
+
+    def build(*handlers):
+        return SimpleNamespace(open=lambda request, timeout: captured.update(request=request) or Response())
+
+    monkeypatch.setattr(bridge, "build_opener", build)
+    report = UsbCameraReport(workcell_id="example", candidates=[], roles=["top"])
+    decisions = bridge.post_usb_devices("https://fleet.example", "example", "arm-secret", report,
+                                        context=ssl.create_default_context())
+    request = captured["request"]
+    assert request.full_url == "https://fleet.example/api/fleet/workcell-observations/example/usb-devices"
+    assert {key.lower(): value for key, value in request.header_items()}["x-workcell-observation-token"] == "arm-secret"
+    assert [(d.key, d.role) for d in decisions.decisions] == [("a" * 32, "front")]
+
+
+def test_a_failing_usb_report_is_logged_and_retried_without_stopping_the_loop(monkeypatch):
+    calls, stop = [], threading.Event()
+
+    def cycle(post, workcell):
+        calls.append(workcell)
+        if len(calls) == 2:
+            stop.set()
+        raise OSError("fleet down")
+
+    monkeypatch.setattr(bridge.usb_camera_report, "cycle", cycle)
+    bridge.run_usb_reports(stop, None, "example", interval=0)
+    assert calls == ["example", "example"]

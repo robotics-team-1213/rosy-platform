@@ -107,6 +107,8 @@ def plan(repo: Path, rows: list[dict], tier_of=tier, reach_of=reach) -> list[dic
 def build(repo: Path, members: list[dict], now: datetime, python: str = sys.executable,
           start=land_async.start) -> tuple[str, list[dict]] | None:
     """Merge members into a fresh branch from main, run the stage-0 checks, queue it; (snapshot, merged members)."""
+    if len({r["branch"] for r in members}) != len(members):
+        raise land.Stop("duplicate rollup member branch; preserve the competing tickets for review")
     stamp = f"{now:%Y%m%d%H%M%S}"
     branch, wt = f"fix/land-rollup-{stamp}", land_async.holder(repo) / f"rollup-build-{stamp}"
     git(repo, "worktree", "add", "-q", "-b", branch, str(wt), "main")
@@ -114,9 +116,9 @@ def build(repo: Path, members: list[dict], now: datetime, python: str = sys.exec
         merged = []
         for r in members:
             try:
-                land.merge(wt, git(repo, "rev-parse", r["branch"]).stdout.strip(), branch, python, False,
-                           source=r["branch"])
-                merged.append(r)
+                candidate = git(repo, "rev-parse", r["branch"]).stdout.strip()
+                land.merge(wt, candidate, branch, python, False, source=r["branch"])
+                merged.append({**r, "candidate": candidate})
             except land.Stop as exc:
                 print(f"[rollup] {r['branch']} left out: {str(exc).splitlines()[0]}", flush=True)
         if len(merged) < 2:
@@ -134,7 +136,8 @@ def build(repo: Path, members: list[dict], now: datetime, python: str = sys.exec
         finally:
             os.environ.pop(land_queue.TICKET_ENV, None)
         (log.parent / (log.name.removesuffix(".log") + ".members")).write_text(
-            json.dumps([{"branch": r["branch"], "worktree": r["worktree"]} for r in merged], indent=1),
+            json.dumps([{k: r[k] for k in ("branch", "worktree", "candidate", "ticket") if k in r}
+                        for r in merged], indent=1),
             encoding="utf-8")
         return snap, merged
     finally:

@@ -97,6 +97,10 @@ def test_a_batch_lands_its_clean_members_in_one_fast_forward_and_leaves_a_confli
     main, wt, rows = batch_repos(repos, tmp_path)
     qdir, ticket = tmp_path / "q", queue.take(tmp_path / "q", "feat/x", status="preparing")
     calls = []
+    completion = []
+    expected = {b: git(wt, "rev-parse", b) for b in ("feat/x", "feat/m")}
+    monkeypatch.setattr(land_batch.land_events, "emit", lambda event, **fields: completion.append(fields)
+                        if event == "train" and fields.get("result") == "landed" else None)
     monkeypatch.setattr(land, "select", lambda *a, **k: ([], None))
     monkeypatch.setattr(land_batch.land_prepare, "STARTED", "old")
     monkeypatch.setattr(land_batch.land_prepare, "rules", lambda: "new")
@@ -118,6 +122,8 @@ def test_a_batch_lands_its_clean_members_in_one_fast_forward_and_leaves_a_confli
     code, took = land_batch.lead(land, wt, "feat/x", land.argparse.Namespace(queue_timeout=0), sys.executable, qdir,
                                  ticket, main, rows, {})
     assert code == 0 and took == ["feat/m"] and calls and calls[0].startswith("feat/x-batch")
+    assert {m["branch"]: m["candidate"] for m in completion[0]["members"]} == expected
+    assert completion[0]["members"][0]["ticket"] == ticket.name
     assert info(ticket)["batch"] == ["feat/m"], "the conflicting member was left out"
     for branch, landed in (("feat/x", True), ("feat/m", True), ("feat/c", False)):
         assert land_batch.in_main(land, wt, branch) is landed, branch
@@ -136,6 +142,15 @@ def test_a_stopped_batch_goes_back_to_the_untouched_leader_branch_and_clears_its
     assert git(wt, "rev-parse", "--abbrev-ref", "HEAD") == "feat/x" and git(wt, "rev-parse", "HEAD") == before
     assert git(wt, "branch", "--list", "feat/x-batch*"), "a stopped batch branch is kept for its log"
     assert not land_batch.in_main(land, wt, "feat/m")
+
+
+def test_duplicate_batch_branches_stop_before_preparation(repos, tmp_path, monkeypatch):
+    main, wt, rows = batch_repos(repos, tmp_path)
+    qdir, ticket = tmp_path / "q", queue.take(tmp_path / "q", "feat/x", status="preparing")
+    monkeypatch.setattr(land, "select", lambda *a, **k: ([], None))
+    monkeypatch.setattr(land_batch.land_prepare, "prepare", lambda *a: pytest.fail("duplicate reached preparation"))
+    assert land_batch.lead(land, wt, "feat/x", land.argparse.Namespace(queue_timeout=0), sys.executable, qdir,
+                           ticket, main, [rows[0], rows[0]], {}) == (None, [])
 
 
 def test_an_affected_batch_that_selects_the_full_tier_stops_before_any_pretest(repos, tmp_path, monkeypatch):
