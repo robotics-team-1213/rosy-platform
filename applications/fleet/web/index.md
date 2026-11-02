@@ -31,8 +31,8 @@
 
 ## 최근 기록
 
+- 2026-11-03 · uncommitted · 만료된 Cell 고장 영상 URL 해제
 - 2026-11-02 · uncommitted · 모바일 지도 레이어 경계 복구
 - 2026-11-02 · uncommitted · 신호기 녹색 등을 녹색으로 (D-525 보강)
 - 2026-11-02 · uncommitted · 로그인 문서 skip-link 재정의 제거
 - 2026-11-02 · uncommitted · 4차 감사: noscript 안내 — JS 없는 사용자에게 물리 정지 경로 알림
-- 2026-11-02 · uncommitted · 구조 감사 3차: CSS 중복 2건 통합
