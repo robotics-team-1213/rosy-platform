@@ -646,6 +646,7 @@
         "applications/fleet/web/installation/install.js",
         "applications/fleet/web/shared/account-page.js",
         "applications/fleet/web/shared/development-auth.js",
+        "applications/fleet/web/shared/fleet-header.js",
         "applications/fleet/web/shared/login-page.js",
         "applications/fleet/web/shared/login-return.js",
         "applications/fleet/web/shared/password-login.js",
@@ -709,14 +710,6 @@
           "resolution": "literal-or-template",
           "request_ids": [
             "GET:/api/fleet/auth/session"
-          ]
-        },
-        {
-          "consumer": "applications/fleet/web/shared/development-auth.js",
-          "expression": "/api/fleet/auth/development-session",
-          "resolution": "literal-or-template",
-          "request_ids": [
-            "POST:/api/fleet/auth/development-session"
           ]
         },
         {
@@ -806,6 +799,14 @@
           "request_ids": [
             "GET:/api/fleet/auth/session"
           ]
+        },
+        {
+          "consumer": "applications/fleet/web/shared/fleet-header.js",
+          "expression": "/api/fleet/auth/connection",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/auth/connection"
+          ]
         }
       ],
       "requests": [
@@ -813,7 +814,7 @@
           "id": "GET:/api/fleet/auth/authorize",
           "method": "GET",
           "path": "/api/fleet/auth/authorize",
-          "implementation": "operations/fleet/fleet/server/auth/account_authority_routes.py",
+          "implementation": "operations/account/rosy_account/account_authority_routes.py",
           "handler": "authorize",
           "expected_statuses": [
             302
@@ -838,7 +839,7 @@
           "status": "verified",
           "verification_scope": "Observed passing HTTP test; successful response",
           "contract_tests": [
-            "operations/fleet/test/test_cli.py"
+            "operations/fleet/test/test_development_session.py"
           ],
           "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/auth/connection"
@@ -847,7 +848,7 @@
           "id": "GET:/api/fleet/auth/session",
           "method": "GET",
           "path": "/api/fleet/auth/session",
-          "implementation": "operations/fleet/fleet/server/auth/password_routes.py",
+          "implementation": "operations/account/rosy_account/password_routes.py",
           "handler": "fleet_auth_session",
           "expected_statuses": [
             200
@@ -884,12 +885,12 @@
           "implementation": "operations/fleet/fleet/server/auth/development_session.py",
           "handler": "fleet_development_session",
           "expected_statuses": [
-            201
+            403
           ],
           "status": "verified",
-          "verification_scope": "Observed passing HTTP test; successful response",
+          "verification_scope": "Observed passing HTTP test; retired development credential issuance is refused",
           "contract_tests": [
-            "operations/fleet/test/test_cli.py"
+            "operations/fleet/test/test_development_session.py"
           ],
           "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/auth/development-session"
@@ -898,7 +899,7 @@
           "id": "POST:/api/fleet/auth/login",
           "method": "POST",
           "path": "/api/fleet/auth/login",
-          "implementation": "operations/fleet/fleet/server/auth/password_routes.py",
+          "implementation": "operations/account/rosy_account/password_routes.py",
           "handler": "fleet_auth_login",
           "expected_statuses": [
             204
@@ -915,7 +916,7 @@
           "id": "POST:/api/fleet/auth/logout",
           "method": "POST",
           "path": "/api/fleet/auth/logout",
-          "implementation": "operations/fleet/fleet/server/auth/password_routes.py",
+          "implementation": "operations/account/rosy_account/password_routes.py",
           "handler": "fleet_auth_logout",
           "expected_statuses": [
             204
@@ -936,6 +937,7 @@
           "steps": [
             {
               "request_ids": [
+                "GET:/api/fleet/auth/connection",
                 "POST:/api/fleet/auth/login",
                 "POST:/api/fleet/auth/logout",
                 "GET:/api/fleet/auth/session"
@@ -955,6 +957,7 @@
           "steps": [
             {
               "request_ids": [
+                "POST:/api/fleet/auth/development-session",
                 "POST:/api/fleet/auth/login",
                 "POST:/api/fleet/auth/logout",
                 "GET:/api/fleet/auth/session"
@@ -1026,7 +1029,7 @@
           "id": "GET:/api/fleet/auth/accounts",
           "method": "GET",
           "path": "/api/fleet/auth/accounts",
-          "implementation": "operations/fleet/fleet/server/auth/account_routes.py",
+          "implementation": "operations/account/rosy_account/account_routes.py",
           "handler": "accounts",
           "expected_statuses": [
             200
@@ -1043,7 +1046,7 @@
           "id": "GET:/api/fleet/auth/setup",
           "method": "GET",
           "path": "/api/fleet/auth/setup",
-          "implementation": "operations/fleet/fleet/server/auth/account_routes.py",
+          "implementation": "operations/account/rosy_account/account_routes.py",
           "handler": "setup",
           "expected_statuses": [
             200
@@ -1060,7 +1063,7 @@
           "id": "PATCH:/api/fleet/auth/accounts/{account_id}",
           "method": "PATCH",
           "path": "/api/fleet/auth/accounts/{account_id}",
-          "implementation": "operations/fleet/fleet/server/auth/account_routes.py",
+          "implementation": "operations/account/rosy_account/account_routes.py",
           "handler": "update",
           "expected_statuses": [
             200
@@ -1077,7 +1080,7 @@
           "id": "POST:/api/fleet/auth/accounts",
           "method": "POST",
           "path": "/api/fleet/auth/accounts",
-          "implementation": "operations/fleet/fleet/server/auth/account_routes.py",
+          "implementation": "operations/account/rosy_account/account_routes.py",
           "handler": "create",
           "expected_statuses": [
             201
@@ -1094,7 +1097,7 @@
           "id": "POST:/api/fleet/auth/accounts/{account_id}/reset-password",
           "method": "POST",
           "path": "/api/fleet/auth/accounts/{account_id}/reset-password",
-          "implementation": "operations/fleet/fleet/server/auth/account_routes.py",
+          "implementation": "operations/account/rosy_account/account_routes.py",
           "handler": "reset",
           "expected_statuses": [
             200
@@ -1111,7 +1114,7 @@
           "id": "POST:/api/fleet/auth/accounts/{account_id}/revoke-sessions",
           "method": "POST",
           "path": "/api/fleet/auth/accounts/{account_id}/revoke-sessions",
-          "implementation": "operations/fleet/fleet/server/auth/account_routes.py",
+          "implementation": "operations/account/rosy_account/account_routes.py",
           "handler": "revoke",
           "expected_statuses": [
             200
@@ -1222,7 +1225,7 @@
           "id": "GET:/api/fleet/auth/profile",
           "method": "GET",
           "path": "/api/fleet/auth/profile",
-          "implementation": "operations/fleet/fleet/server/auth/password_routes.py",
+          "implementation": "operations/account/rosy_account/password_routes.py",
           "handler": "fleet_auth_profile",
           "expected_statuses": [
             200
@@ -1239,7 +1242,7 @@
           "id": "PATCH:/api/fleet/auth/profile",
           "method": "PATCH",
           "path": "/api/fleet/auth/profile",
-          "implementation": "operations/fleet/fleet/server/auth/password_routes.py",
+          "implementation": "operations/account/rosy_account/password_routes.py",
           "handler": "fleet_auth_profile_update",
           "expected_statuses": [
             200
@@ -1256,7 +1259,7 @@
           "id": "POST:/api/fleet/auth/change-password",
           "method": "POST",
           "path": "/api/fleet/auth/change-password",
-          "implementation": "operations/fleet/fleet/server/auth/password_routes.py",
+          "implementation": "operations/account/rosy_account/password_routes.py",
           "handler": "fleet_auth_change_password",
           "expected_statuses": [
             204
