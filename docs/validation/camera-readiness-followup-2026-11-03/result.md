@@ -16,13 +16,13 @@ The executed engine is the immutable snapshot from landed commit `cbfb144767f424
 | Device ownership | Four distinct character devices, one expected producer per role |
 | Readiness start | READY with fresh/NORMAL top and front observations |
 | Stop | Controls matched the saved originals by readback |
-| Restart | READY again; producer identities unchanged |
+| Restart | READY again; configured top/front producer identities unchanged |
 | Independent follow-up | Three unexpired READY samples; all four camera sequences advanced in every sample |
 | Motion authority | `motion_admitted=false`; no arm or Pinky commands |
 
 The preserved site backup is `camera-readiness-migration-20261102T161343Z`. The operator-private receipt is `camera-readiness-rebind-20261102/reconnect-verified-20261103.json`, SHA-256 `7da824933463e40b674a3e0c70e2440adb578b654447d9d9cb2b849b095cbb17`. Filled configuration and device identities remain private. The existing [baseline migration lesson](../../solutions/runtime-errors/omx-camera-readiness-preview-active-before-owning-camera-2026-10-23.md) supplied this recovery sequence.
 
-READY here is photometric readiness for the configured top/front pair; freshness and ownership were independently checked for all four roles. These timestamps describe host capture/read time, not synchronized exposure. Camera-to-arm geometry, repeated picks, loaded-joint safety and Pinky re-parking were not tested. A reboot or another USB reset/updater transition was not exercised. The earlier no-supervised-motion constraint remains in effect.
+READY here is photometric readiness for the configured top/front pair; freshness and ownership were independently checked for all four roles. The four-role owner comparison covers the three independent samples; the start/stop lifecycle compared the configured pair. These timestamps describe host capture/read time, not synchronized exposure. Camera-to-arm geometry, repeated picks, loaded-joint safety and Pinky re-parking were not tested. A reboot or another USB reset/updater transition was not exercised. The earlier no-supervised-motion constraint remains in effect.
 
 ## Software regressions
 
