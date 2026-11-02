@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="/common/tokens.css">
   <script src="/common/theme.js"></script>
   <link rel="stylesheet" href="/common/components.css">
+  <link rel="stylesheet" href="/common/component-controls.css">
   <link rel="stylesheet" href="/common/motor-health.css">
   <link rel="stylesheet" href="/common/app-shell.css">
   <link rel="stylesheet" href="/console/assets/cell.css">
@@ -66,12 +67,12 @@
   <!-- D-741 2 — Fleet 문서 넷은 같은 탐색 레일을 쓴다. 영역은 관제·작업·기록·지도·설치 다섯이다. -->
   <div class="fleet-body">
   <!-- fleet:nav:start -->
-<nav class="doc-tabs" aria-label="Rosy Fleet 문서">
-    <a href="/console" data-action-icon="fleet">관제</a>
-    <a href="/console?view=work" aria-current="page" data-action-icon="list">작업</a>
-    <a href="/console?view=records" data-action-icon="history">기록</a>
-    <a href="/console/site-map" data-action-icon="map" aria-label="현장 지도">지도</a>
-    <a href="/console/install" data-action-icon="install" aria-label="설치·보정">설치</a>
+<nav class="doc-tabs ui-rail ui-rail-nav" aria-label="Rosy Fleet 문서">
+    <a class="ui-rail-item" href="/console" data-action-icon="fleet">관제</a>
+    <a class="ui-rail-item" href="/console?view=work" aria-current="page" data-action-icon="list">작업</a>
+    <a class="ui-rail-item" href="/console?view=records" data-action-icon="history">기록</a>
+    <a class="ui-rail-item" href="/console/site-map" data-action-icon="map" aria-label="현장 지도">지도</a>
+    <a class="ui-rail-item" href="/console/install" data-action-icon="install" aria-label="설치·보정">설치</a>
   </nav>
 <!-- fleet:nav:end -->
   <div class="ui-subnav"><nav class="ui-subnav-nav" aria-label="작업 화면">
@@ -95,7 +96,7 @@
   <!-- D-926 2 — 경로 줄: 문서 제목과 현재 단계를 본문 머리에도 보인다(subnav-screens.js). -->
   <div class="ui-pathbar"><h1>팔레타이징 작업 준비</h1><strong id="cell-screen">저장된 문서</strong></div>
 
-  <main id="cell-main" class="fleet-task-page" tabindex="-1">
+  <main id="cell-main" class="fleet-task-page ui-task-page" tabindex="-1">
     <div class="cell-intro">
       <ui-text id="cell-purpose">레시피와 작업대 설정으로 적재 계획을 미리 보고 Fleet에 작업을 제안합니다. 승인·진행은 그 단계에서, 로봇 상태·예외 확인은 관제에서 합니다.</ui-text>
     </div>

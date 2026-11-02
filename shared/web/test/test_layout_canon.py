@@ -22,7 +22,7 @@ def test_fleet_area_documents_keep_the_seat_order_and_one_h1():
         page = _page(WEB, name)
         body = page[page.index("<body"):]
         order = [body.index(marker) for marker in
-                 ("<ui-topbar", 'class="doc-tabs"', 'class="ui-subnav"', 'class="ui-pathbar"', "<main")]
+                 ("<ui-topbar", 'class="doc-tabs ui-rail ui-rail-nav"', 'class="ui-subnav"', 'class="ui-pathbar"', "<main")]
         assert order == sorted(order), f"{name}: seat order"
         assert page.count("<h1") == 1 and '<div class="ui-pathbar"><h1>' in page, f"{name}: one h1, in the path bar"
 
@@ -34,7 +34,7 @@ def test_fleet_light_documents_are_header_then_main_with_one_h1():
         body = page[page.index("<body"):]
         assert body.index("<ui-topbar") < body.index("<main"), name
         assert 'class="fleet-document-header"' in page and page.count("<h1") == 1, name
-        assert 'class="doc-tabs"' not in page and 'class="ui-subnav"' not in page, name
+        assert not re.search(r'class="[^"]*\bdoc-tabs\b', page) and 'class="ui-subnav"' not in page, name
 
 
 def test_current_markers_use_only_the_three_agreed_words():

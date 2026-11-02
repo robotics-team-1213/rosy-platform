@@ -27,6 +27,9 @@ def test_fleet_task_documents_share_composition_and_keep_live_stop(account_page,
         page.evaluate("theme => window.RosyTheme.set(theme)", theme)
         expect(page.locator("main")).to_have_class(re.compile(r"\bui-task-page\b"))
         expect(page.locator("h1")).to_have_count(1)
+        if page.locator(".doc-tabs").count():
+            expect(page.locator(".doc-tabs")).to_have_class(re.compile(r"\bui-rail-nav\b"))
+            assert page.locator(".doc-tabs > a:not(.ui-rail-item)").count() == 0
         assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"), target
         if page.locator("#estop").count():
             expect(page.locator("#estop")).to_be_visible()
