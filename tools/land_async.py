@@ -31,6 +31,8 @@ import time
 HOLDER = "rosy-land-wt"
 PREFIX = "land/"
 NO_WINDOW = 0x08000000  # subprocess.CREATE_NO_WINDOW, named here so the module imports off Windows too
+QUEUE_FULL = "landing queue full"
+ROOM_WAIT_S = 3 * 3600  # a landing refused only by the queue cap waits this long for room, then stops as before
 
 
 def git(cwd: Path, *args: str, check: bool = True) -> str:
@@ -117,14 +119,34 @@ def start(cwd: Path, land_args: list[str], now: datetime, launch) -> tuple[str, 
     return snap, log
 
 
-def supervise(tree: Path, snap: str, land_args: list[str], run=subprocess.call) -> int:
+def wait_for_room(tree: Path, deadline: float) -> bool:
+    """Poll until the queue takes an ordinary ticket again; False once ``deadline`` (monotonic) passes."""
+    sys.path.insert(0, str(tree / "tools"))  # the snapshot's land_queue: this copy runs beside the log
+    import land_queue
+    while land_queue.full(land_queue.queue_dir(tree)):
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(60)
+    return True
+
+
+def supervise(tree: Path, snap: str, land_args: list[str], run=subprocess.call, room=wait_for_room) -> int:
     """Run land.py in ``tree``; clean up when the snapshot landed, keep it and mark it stopped otherwise."""
-    # land.py's own lines (the STOP reason) into the .log, appended: the inherited handle lost them (2026-10-28)
-    with open(tree.parent / (tree.name + ".log"), "a", encoding="utf-8") as log:
-        # CREATE_NO_WINDOW: under the detached supervisor land.py got a new console, a tab of the default terminal;
-        # closing that window killed every lander at once (exit 0xC000013A: 8 on 10-28, 12 on 10-30 18:58).
-        code = run([sys.executable, "-X", "utf8", "tools/land.py", *land_args], cwd=str(tree), stdout=log,
-                   stderr=subprocess.STDOUT, **({"creationflags": NO_WINDOW} if os.name == "nt" else {}))
+    path = tree.parent / (tree.name + ".log")
+    deadline = time.monotonic() + ROOM_WAIT_S
+    while True:
+        seen = path.stat().st_size if path.exists() else 0
+        # land.py's own lines (the STOP reason) into the .log, appended: the inherited handle lost them (2026-10-28)
+        with open(path, "a", encoding="utf-8") as log:
+            # CREATE_NO_WINDOW: under the detached supervisor land.py got a new console, a tab of the default
+            # terminal; closing that window killed every lander at once (exit 0xC000013A: 8 on 10-28, 12 on 10-30).
+            code = run([sys.executable, "-X", "utf8", "tools/land.py", *land_args], cwd=str(tree), stdout=log,
+                       stderr=subprocess.STDOUT, **({"creationflags": NO_WINDOW} if os.name == "nt" else {}))
+        # start() saw room, but another session took the last slot before land.py did (2026-10-31: twice in a row)
+        full = code != 0 and QUEUE_FULL in path.read_bytes()[seen:].decode("utf-8", "replace")
+        if not (full and room(tree, deadline)):
+            break
+        print(f"[land-async] {snap}: the queue has room again; land.py once more", flush=True)
     landed = subprocess.run(["git", "-C", str(tree), "merge-base", "--is-ancestor", snap, "main"]).returncode == 0
     if landed:
         main = git(tree, "rev-parse", "--path-format=absolute", "--git-common-dir")

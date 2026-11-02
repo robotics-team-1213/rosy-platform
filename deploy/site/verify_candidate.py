@@ -31,7 +31,8 @@ REQUIRED_DEPLOYMENT_FILES = (
     "rosy-site-firewall-failclosed.service", "rosy-site-firewall-check.service",
     "rosy-site-firewall-check.timer",
     "discovery-token.template.txt", "site_db.py", "site_users.py", "candidate_signing.py",
-    "compose.pairing.yaml", "compose.omx.yaml", "compose.workcell.yaml", "pairing-sync-token.template.txt",
+    "compose.pairing.yaml", "compose.omx.yaml", "compose.workcell.yaml", "compose.control-unit.yaml",
+    "pairing-sync-token.template.txt",
     "compose.monitoring.yaml", "Caddyfile.monitoring",
     "compose.account.yaml", "Caddyfile.account",
     "sign_candidate.py", "verify_candidate.py",
@@ -126,6 +127,8 @@ def _verify_candidate_content(candidate_dir: Path, *, manifest_bytes: bytes | No
         required.discard("compose.omx.yaml")
     if "compose.workcell.yaml" not in hashes:
         required.discard("compose.workcell.yaml")
+    if "compose.control-unit.yaml" not in hashes:
+        required.discard("compose.control-unit.yaml")
     if not set(hashes) & set(MONITORING_DEPLOYMENT_FILES):
         required.difference_update(MONITORING_DEPLOYMENT_FILES)
     unsupported = set(hashes) - required
@@ -209,6 +212,7 @@ def _verify_candidate_content(candidate_dir: Path, *, manifest_bytes: bytes | No
         "account_https": set(ACCOUNT_DEPLOYMENT_FILES) <= set(hashes),
         "omx": "compose.omx.yaml" in hashes,
         "workcell": "compose.workcell.yaml" in hashes,
+        "control_unit": "compose.control-unit.yaml" in hashes,
         "monitoring": set(MONITORING_DEPLOYMENT_FILES) <= set(hashes),
         "image_archive_sha256": archive_hash,
     }
@@ -373,6 +377,7 @@ def verify_candidate(
             "account_https": summary["account_https"],
             "omx": summary["omx"],
             "workcell": summary["workcell"],
+            "control_unit": summary["control_unit"],
             "monitoring": summary["monitoring"],
             "image_archive_sha256": summary["image_archive_sha256"],
             "manifest_image_ids": summary["image_ids"],
