@@ -766,3 +766,11 @@
 - 변경: 설치 화면의 작업 고르기는 화면 안 왼쪽 칸 대신 공용 하위 탐색 자리(레일과 본문 사이)에 선다. Cell·지도·Robot 화면과 같은 자리다. 관제 로봇 카드의 배터리는 다른 사실과 같은 칩이고, 운행 상태가 없는 카드는 `—` 줄을 그리지 않는다. 접힌 `관제 경로` 요약은 할 일이 없는 진단이라 빨간 채움 대신 D-668 점 표시로 위험을 말한다. 간격 역할 토큰은 측정 결과 모두 쓰여 그대로 둔다(D-926 관계 표 D-292).
 - 증거: 작업 세션 Fleet 샘플 서버(4176) Edge 1366·390에서 설치 고르기 위치·16px 여백, 관제 카드 칩 네 개, `● 프록시 끊김 외 1건`, 가로 넘침·페이지 오류 없음. 브라우저 시험은 원격 PC에서 돌린다.
 - gate 변화: 없음. CE: 해당 없음 — 규칙은 D-926이 담는다.
+
+
+## 2026-11-02 · e81af2d7c3 · D-962 independent Account artifact
+
+- Change: Account profile uses the common Account role-label helper; Fleet header compatibility export retains exact labels. Canonical login/profile/admin sources produce the reduced Account-only bundle. Real TLS browser exercised existing cookie resume, profile edit, administrator list and initial-password flow without missing resource responses or page errors.
+- Evidence: D-962 independent image scope: remote AI-PC closure at e81af2d7c3 passed 320 tests, 0 skipped, 0 NEW. Account TLS login/initial-password/profile/admin, minimal Account/foundation startup, stdlib-only fixed assets, signed legacy/new inventories and reuse, and Fleet header browser/Node compatibility. OCI build and live independent-image acceptance were not run.
+- Log: `rosy-account-image-closure/run-1.txt`; native `size_range.py d7fcc74e43 b9424451a0` checked four commits successfully; native static secret scan found zero findings.
+- Gate: scoped SOURCE/LOCAL verification only; existing artifact, device and field limits remain.

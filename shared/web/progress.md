@@ -1,15 +1,15 @@
 ---
 module: web_common
 owner: CORE
-last_verified: { commit: "1c8923b441", date: 2026-10-29 }
+last_verified: {commit: e81af2d7c3, date: 2026-11-02}
 gates:
   SOURCE:
     state: GO
-    evidence: "1c8923b441 remote shared WHEP/media/probe contracts 82 passed; affected source 4311 passed, 156 skipped. Hidden playback, rejection and timeout cleanup covered; separate browser/device acceptance in docs/validation/robot-local-video-recovery-2026-10-29/result.md."
+    evidence: "1c8923b441 remote shared WHEP/media/probe contracts 82 passed; affected source 4311 passed, 156 skipped. Hidden playback, rejection and timeout cleanup covered; separate browser/device acceptance in docs/validation/robot-local-video-recovery-2026-10-29/result.md. D-962 independent image scope: remote AI-PC closure at e81af2d7c3 passed 320 tests, 0 skipped, 0 NEW. Account TLS login/initial-password/profile/admin, minimal Account/foundation startup, stdlib-only fixed assets, signed legacy/new inventories and reuse, and Fleet header browser/Node compatibility. OCI build and live independent-image acceptance were not run."
     cmd: "python tools/remote/remote_pytest.py -- shared/web/test/test_webrtc_client.py middleware/media/test test/test_webrtc_artifact_contracts.py"
   LOCAL:
     state: GO
-    evidence: "tools/web_visible_roles.py(실 CORE TestClient + headless Chromium): operator /console·/setup, administrator /console·/setup·/device at 1366x768·390x844 — 0 missing kinds, 0 page errors, no horizontal overflow, first responses all 200 (2026-09-30 Windows)"
+    evidence: "tools/web_visible_roles.py(실 CORE TestClient + headless Chromium): operator /console·/setup, administrator /console·/setup·/device at 1366x768·390x844 — 0 missing kinds, 0 page errors, no horizontal overflow, first responses all 200 (2026-09-30 Windows) D-962 independent image scope: remote AI-PC closure at e81af2d7c3 passed 320 tests, 0 skipped, 0 NEW. Account TLS login/initial-password/profile/admin, minimal Account/foundation startup, stdlib-only fixed assets, signed legacy/new inventories and reuse, and Fleet header browser/Node compatibility. OCI build and live independent-image acceptance were not run."
     cmd: "python -X utf8 tools/web_visible_roles.py"
   ROS-SIM:
     state: N/A

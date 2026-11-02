@@ -1,18 +1,16 @@
 ---
 module: console_source
 owner: console_source
-last_verified:
-  commit: d4988bffba
-  date: 2026-10-11
+last_verified: {commit: e81af2d7c3, date: 2026-11-02}
 gates:
   SOURCE:
     state: GO
     cmd: python tools/harness/rosy_harness.py lint
-    evidence: D-637 independent source review, committed remote regression and local main FF; see dated result.
+    evidence: "D-637 independent source review, committed remote regression and local main FF; see dated result. D-962 independent image scope: remote AI-PC closure at e81af2d7c3 passed 320 tests, 0 skipped, 0 NEW. Account TLS login/initial-password/profile/admin, minimal Account/foundation startup, stdlib-only fixed assets, signed legacy/new inventories and reuse, and Fleet header browser/Node compatibility. OCI build and live independent-image acceptance were not run."
   LOCAL:
     state: GO
     cmd: python tools/remote/remote_pytest.py --log-dir X:/DevTemp/d637-check -- test/test_remaining_platform_installed.py -q
-    evidence: D-637 independent source review, committed remote regression and local main FF; see dated result.
+    evidence: "D-637 independent source review, committed remote regression and local main FF; see dated result. D-962 independent image scope: remote AI-PC closure at e81af2d7c3 passed 320 tests, 0 skipped, 0 NEW. Account TLS login/initial-password/profile/admin, minimal Account/foundation startup, stdlib-only fixed assets, signed legacy/new inventories and reuse, and Fleet header browser/Node compatibility. OCI build and live independent-image acceptance were not run."
   ROS-SIM:
     state: HOLD
     blocker: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.

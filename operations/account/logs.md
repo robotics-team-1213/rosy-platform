@@ -38,3 +38,11 @@
 - 증거: `95ae8d2414` 원격 적색 뒤 `a1ad46665c`의 guard·receiver 검사 48 passed, skip 0. 등록되지 않은 미리 생성된 토큰은 사용하지 않으며 기계 viewer의 실제 API 상태 조회를 확인했다. 독립 계약 검토 지적 없음.
 - gate 변화: SOURCE·LOCAL GO. 통합 FULL, 서명 설치와 실제 사용자 로그인 수용은 아직 완료되지 않았다.
 - CE: 해당 없음 — 선택 조건과 권한 경계는 최종 코드·회귀 시험이 설명한다.
+
+
+## 2026-11-02 · e81af2d7c3 · D-962 independent Account artifact
+
+- Change: Account image is independently built from Account and its minimal foundation contract; no Fleet or Control Unit runtime/build service is required. Fixed UI bundle keeps three pages, eight Account assets and twelve common assets. Account has UID/GID10001 and no setuid capabilities. Remote minimal-source startup and real TLS login/initial-password/profile/admin passed. ARTIFACT/FIELD stay HOLD pending OCI construction and independent-image deployment. CE: no separate lesson; the artifact boundary and regressions encode this change.
+- Evidence: D-962 independent image scope: remote AI-PC closure at e81af2d7c3 passed 320 tests, 0 skipped, 0 NEW. Account TLS login/initial-password/profile/admin, minimal Account/foundation startup, stdlib-only fixed assets, signed legacy/new inventories and reuse, and Fleet header browser/Node compatibility. OCI build and live independent-image acceptance were not run.
+- Log: `rosy-account-image-closure/run-1.txt`; native `size_range.py d7fcc74e43 b9424451a0` checked four commits successfully; native static secret scan found zero findings.
+- Gate: scoped SOURCE/LOCAL verification only; existing artifact, device and field limits remain.

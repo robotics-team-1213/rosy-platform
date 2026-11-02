@@ -2,15 +2,15 @@
 module: deploy
 logical_modules: [M01, M13, M14]
 owner: 릴리스·플랫폼
-last_verified: { commit: "4e99d92e", date: 2026-10-02 }
+last_verified: {commit: e81af2d7c3, date: 2026-11-02}
 gates:
   SOURCE:
     state: GO
-    evidence: "unsigned handoff importer 40 passed; release/device 집중 370 passed, 2 skipped; 실제 397bb25 artifact 17 files + 2 linux/arm64 images bounded-stream import PASS (2026-09-21)"
+    evidence: "unsigned handoff importer 40 passed; release/device 집중 370 passed, 2 skipped; 실제 397bb25 artifact 17 files + 2 linux/arm64 images bounded-stream import PASS (2026-09-21) D-962 independent image scope: remote AI-PC closure at e81af2d7c3 passed 320 tests, 0 skipped, 0 NEW. Account TLS login/initial-password/profile/admin, minimal Account/foundation startup, stdlib-only fixed assets, signed legacy/new inventories and reuse, and Fleet header browser/Node compatibility. OCI build and live independent-image acceptance were not run."
     cmd: "python3 -m pytest test/test_unsigned_handoff_import.py test/test_arm64_release_builder.py test/test_release_manifest.py test/test_release_signing.py test/test_release_bundle.py test/test_pinky_commissioning.py test/test_device_readback.py -q"
   LOCAL:
     state: GO
-    evidence: "1093 passed, 13 skipped, 6 known harness warnings (2026-09-21 Windows, uncommitted)"
+    evidence: "1093 passed, 13 skipped, 6 known harness warnings (2026-09-21 Windows, uncommitted) D-962 independent image scope: remote AI-PC closure at e81af2d7c3 passed 320 tests, 0 skipped, 0 NEW. Account TLS login/initial-password/profile/admin, minimal Account/foundation startup, stdlib-only fixed assets, signed legacy/new inventories and reuse, and Fleet header browser/Node compatibility. OCI build and live independent-image acceptance were not run."
     cmd: "python3 -m pytest test -q"
   ROS-SIM:
     state: N/A

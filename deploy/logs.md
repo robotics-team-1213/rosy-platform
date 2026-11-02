@@ -4389,3 +4389,11 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: `f70298b8c6`의 실제 격리 검사에서 누락으로 적색을 확인했다. `87a7797034` 원격 로그 계약과 같은 파일의 독립 pytest 검사 4 passed, isolation complete 1, skip 0.
 - gate 변화: SOURCE·LOCAL GO. 실제 서명 설치·운영 수용은 별도다. 기존 R overlay와 updater hold를 유지하며 canonical 관제 단위의 자동 adoption 문제를 해결했다고 주장하지 않는다.
 - CE: 해당 없음 — 기존 로그 계약 검사가 누락을 검출했고 최종 설정이 해결을 설명한다.
+
+
+## 2026-11-02 · e81af2d7c3 · D-962 independent Account artifact
+
+- Change: Added dedicated Account image/SBOM/archive and guarded build inputs. Verifier accepts only authenticated legacy3/legacy4/new5 inventories. Disabled Account still has its signed image checked; enabled Account must match its own signed reference and immutable identity. Incremental reuse and rollback keep historical signed references; no new-manifest Fleet fallback. No image build, service change or deployment occurred in this scope.
+- Evidence: D-962 independent image scope: remote AI-PC closure at e81af2d7c3 passed 320 tests, 0 skipped, 0 NEW. Account TLS login/initial-password/profile/admin, minimal Account/foundation startup, stdlib-only fixed assets, signed legacy/new inventories and reuse, and Fleet header browser/Node compatibility. OCI build and live independent-image acceptance were not run.
+- Log: `rosy-account-image-closure/run-1.txt`; native `size_range.py d7fcc74e43 b9424451a0` checked four commits successfully; native static secret scan found zero findings.
+- Gate: scoped SOURCE/LOCAL verification only; existing artifact, device and field limits remain.
