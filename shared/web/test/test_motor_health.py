@@ -74,6 +74,15 @@ def test_motor_health_evidence_clock_fault_retention_and_unknown_values():
       state.accept({schema_version:'rosy.motor-health.v1',status:'unavailable',evidence:'unavailable',motors:[]},
         {receivedAtMs:16000});
       assert.ok(state.read(16000).lastFault.includes('A 팔 ID 12 하드웨어 오류 32'));
+      // a guard stop names the joint only through the motor's fault flag
+      state.accept({...sample,status:'fault',stop_reasons:['following error'],
+        motors:[{...sample.motors[0],warnings:[]},{...sample.motors[0],joint:'wrist_roll',id:15,warnings:[],fault:true}]},
+        {receivedAtMs:17000});
+      renderMotorHealthSummary(root,state.read(17000));
+      assert.ok(root.textContent.includes('A 팔 손목 회전(ID 15) 정지 · following error'));
+      state.accept({schema_version:'rosy.motor-health.v1',status:'unavailable',evidence:'unavailable',motors:[]},
+        {receivedAtMs:18000});
+      assert.ok(state.read(18000).lastFault.includes('손목 회전(ID 15) 정지'));
     """
     done = subprocess.run([node,'--input-type=module','--eval',script],cwd=COMMON,
                           capture_output=True,text=True,check=False)

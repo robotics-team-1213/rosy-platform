@@ -61,6 +61,23 @@ def test_terminal_health_only_never_fabricates_position_freshness(setup):
                        positions=None, motor_health=motor_health())
 
 
+def test_a_guard_stop_stays_in_the_arm_history_after_the_next_sample(setup):
+    service, clock, _, _ = setup
+    assert arms(service)['feedback_a']['faults'] == []
+    fault = ArmObservation(epoch='1'*32, sequence=1, captured_at=clock.wall, positions=None,
+                           motor_health=motor_health(status='fault'))
+    service.ingest('feedback_a', 'arm-a-secret', fault)
+    clock.wall += 1
+    service.ingest('feedback_a', 'arm-a-secret', ArmObservation(**{**fault.model_dump(), 'sequence': 2,
+                                                                  'captured_at': clock.wall}))  # resent: kept once
+    service.ingest('feedback_a', 'arm-a-secret', sample(epoch='1'*32, sequence=3, captured_at=clock.wall + .1))
+    history = arms(service)['feedback_a']['faults']
+    assert len(history) == 1 and history[0]['captured_at'] == 100.0
+    assert history[0]['stop_reasons'] == fault.motor_health.stop_reasons
+    assert [m['joint'] for m in history[0]['motors'] if m['fault']] == ['joint1']
+    assert arms(service)['feedback_b']['faults'] == []
+
+
 @pytest.fixture
 def setup():
     arms = [{"source_id": f"feedback_{side}", "arm_id": f"arm_{side}", "label": f"Arm {side}",

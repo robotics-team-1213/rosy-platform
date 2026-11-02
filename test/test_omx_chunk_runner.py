@@ -636,15 +636,16 @@ class Straining(Robot):
     """Reports the commanded pose like the guard does; the lift's lag behind it is `lag(n)` at action n, and the
     guard's last PWM sample sits on `motion` the way NativeJointMotion keeps it."""
 
-    def __init__(self, lag, pwm=500):
+    def __init__(self, lag, pwm=500, joint=1):
         super().__init__()
-        self.lag, self.count = lag, 0
-        self.motion = type("Motion", (), {"effort_pwm": {"shoulder_lift": -pwm}, "pwm_limits": {"shoulder_lift": 600}})()
+        self.lag, self.count, self.joint = lag, 0, joint
+        name = m.MOTORS[joint]
+        self.motion = type("Motion", (), {"effort_pwm": {name: -pwm}, "pwm_limits": {name: 600 if joint < 3 else 300}})()
 
     def send_action(self, action):
         self.count += 1
         super().send_action(action)
-        self.pos[1] = action["shoulder_lift.pos"] - self.lag(self.count)
+        self.pos[self.joint] = action[m.NAMES[self.joint]] - self.lag(self.count)
         return dict(action)
 
 
@@ -683,6 +684,27 @@ def test_a_lag_that_keeps_rising_while_the_joint_pushes_holds_with_torque_on_the
 ])
 def test_travel_lag_without_a_rising_push_is_not_strain(lag, pwm):
     status = run_with(Straining(lag, pwm), goto_library(), ["goto approach_pinky", "stop"])
+    done = by_command(status, "run goto approach_pinky")[0]
+    assert done["ok"] is True and done["fault"] is None
+
+
+def test_a_blocked_wrist_roll_holds_at_low_pwm_before_the_guard_drops_the_arm():
+    # arm_a 2026-11-01 23:19: the roll stopped dead at PWM 82 of 300 while its command ran on, 1.8 -> 4.6 deg in 1 s
+    status = run_with(Straining(lambda n: min(2.8, max(0.0, 0.05 * (n - 30))), pwm=82, joint=4), goto_library(),
+                      ["goto approach_pinky", "park", "stop"])
+    held = by_command(status, "run goto approach_pinky")[0]
+    assert held["ok"] is False and held["contact"] is True and "wrist_roll" in held["fault"]
+    assert "shoulder_pan" in held["fault"]  # the other joints' lags travel with it
+    lag = float(held["fault"].split("lag rose to ")[1].split()[0])
+    assert m.ROLL_BLOCK_LAG <= lag < 2.7  # held well short of the guard's 5 degrees (~2.8 units)
+
+
+@pytest.mark.parametrize("lag", [
+    lambda n: 1.2,                                 # a steady roll lag is travel, not a block
+    lambda n: min(1.2, max(0.0, 0.05 * (n - 30))),  # rising, but within the roll's normal travel lag
+])
+def test_a_wrist_roll_travel_lag_is_not_a_block(lag):
+    status = run_with(Straining(lag, pwm=20, joint=4), goto_library(), ["goto approach_pinky", "stop"])
     done = by_command(status, "run goto approach_pinky")[0]
     assert done["ok"] is True and done["fault"] is None
 
