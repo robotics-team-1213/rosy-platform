@@ -1,6 +1,22 @@
 // CAP-001 is evidence for presentation. CORE still decides every command.
 import { robotMapPose } from "./localization-badge.js";
 
+/** Short cause of a latched e-stop from CORE's state `safety.source` (v1.342); "" when not given. */
+export function estopCause(source) {
+  const text = String(source || "");
+  if (text.startsWith("api:")) return `API 정지(${text.slice(4) || "?"})`;
+  if (text === "battery_deep") return "배터리 과방전";
+  if (text.startsWith("battery")) return "배터리 보호";
+  if (text.startsWith("control:")) return `제어 정책(${text.slice(8) || "?"})`;
+  return text;
+}
+
+/** `label`, followed by the e-stop cause when CORE reported one. */
+export function estopText(state, label = "비상정지 중") {
+  const cause = estopCause(state?.safety?.source);
+  return cause ? `${label} · ${cause}` : label;
+}
+
 // Shared heading must agree, and a pack closer than one body is not "in front".
 const AHEAD_AGREE_RAD = Math.PI / 3;
 const AHEAD_TIE_M = 0.17;
@@ -122,7 +138,7 @@ export function chooseConvoyLeader(robots, leaders, guide, mapVersion) {
 export function leaderPathKind(robot, { map = false, places = 0 } = {}) {
   if (!robot?.online) return { kind: "", reason: robot?.robot_id ? `${robot.robot_id} · 로봇 오프라인` : "리더를 고르세요" };
   const estop = robot.state?.safety?.estop;
-  if (estop === true) return { kind: "", reason: "비상정지 중" };
+  if (estop === true) return { kind: "", reason: estopText(robot.state) };
   if (estop !== false) return { kind: "", reason: "안전 상태 확인 불가" };
   const mode = robot.state?.line_follow?.mode;
   const lane = mode === "CAMERA_LINE" || mode === "IR_LINE";

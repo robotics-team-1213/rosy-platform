@@ -75,3 +75,36 @@ def test_inventory_names_every_node_and_its_role():
                         realpath=lambda device: "/dev/video12")
     assert rows[0]["roles"] == ["top"]
     assert rows[0]["formats"] == ["YUYV"] and rows[0]["names"] == [TOP["device"]]
+
+
+MANIFEST = """cameras:
+  - source_id: omx_wrist_b
+    image_topic: /arm_b_wrist_camera/image_raw
+    device_path: /dev/v4l/by-path/pci-usb-0:3.3:1.0-video-index0  # swapped by hand
+    token_env: ROSY_CAMERA_WRIST_B_TOKEN
+  - source_id: omx_overhead
+    image_topic: /top_camera/image_raw
+    device_path: /dev/v4l/by-id/rosy-realsense-d435-color
+  - source_id: omx_side
+    image_topic: /side_camera/image_raw
+    device_path: /dev/v4l/by-id/usb-Jieli-video-index0
+"""
+
+
+def test_manifest_takes_each_camera_device_from_the_role_with_its_topic_and_lists_unknown_topics(tmp_path):
+    reg = registry(tmp_path, [TOP, WRIST])
+    text, changed, unregistered = oc.sync_manifest(reg, MANIFEST)
+    assert changed == [{"topic": WRIST["topic"], "from": "/dev/v4l/by-path/pci-usb-0:3.3:1.0-video-index0",
+                        "to": WRIST["device"]}]
+    assert f"    device_path: {WRIST['device']}\n    token_env" in text and unregistered == ["/side_camera/image_raw"]
+    assert oc.sync_manifest(reg, text)[1] == []
+
+
+def test_manifest_check_exits_1_until_applied(tmp_path, capsys):
+    reg_path = tmp_path / "omx-cameras.json"
+    reg_path.write_text(json.dumps({"schema": oc.SCHEMA, "defaults": DEFAULTS, "cameras": [TOP, WRIST]}))
+    manifest = tmp_path / "observations.yaml"
+    manifest.write_text(MANIFEST)
+    args = ["manifest", "--registry", str(reg_path), "--manifest", str(manifest)]
+    assert oc.main(args) == 1 and manifest.read_text() == MANIFEST
+    assert oc.main(args + ["--apply"]) == 0 and oc.main(args) == 0

@@ -69,7 +69,7 @@ def core(monkeypatch):
         calibration=SimpleNamespace(blocking=lambda token_id: None),
         modes=SimpleNamespace(transition=lambda mode: writes.append(("mode", mode.value)),
                               release_emergency=lambda: (True, "")),
-        state=SimpleNamespace(set_estop=lambda value: writes.append(("state-estop", value))),
+        state=SimpleNamespace(set_estop=lambda value, source="": writes.append(("state-estop", value))),
         events=SimpleNamespace(publish=lambda *args, **kw: writes.append(("event", args[0]))),
     )
     monkeypatch.setattr(safety, "patch_local_config", lambda patch: writes.append(("persist", patch)))
