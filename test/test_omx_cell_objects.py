@@ -179,3 +179,29 @@ def test_an_objects_outline_takes_in_the_side_faces_the_camera_sees():
     hull = co.outline(px, [{"object": "container-1"}], CATALOG, CAMERA, 0.0)
     assert cv2.contourArea(hull.astype(np.float32)) > cv2.contourArea(px.astype(np.float32))
     assert hull[:, 0].max() > 140 and hull[:, 1].max() > 130  # extended toward the principal point (320, 240)
+
+
+@pytest.mark.parametrize("gap", [0.0, 6.0])
+def test_five_3_cells_in_a_row_on_the_ship_plate_are_five_targets(gap):
+    """2026-11-03 arm_b: five 3-cells laid side by side in the plate's 6 mm cell gaps read as one blob, no match."""
+    pitch = 30 + gap
+    mm = np.array([(x, k * pitch + y) for k in range(5) for x in np.arange(-45, 45.5, 1.0) for y in np.arange(0, 30.5, 1.0)],
+                  np.float32)
+    found = co.classify(mm, CATALOG)
+    assert [o["object"] for o in found] == ["container-3"] * 5 and all(o["split_from"] == 5 for o in found)
+    assert sorted(round(o["centre_mm"][1]) for o in found) == [round(k * pitch + 15) for k in range(5)]
+
+
+def test_a_row_wider_than_its_gaps_allow_stays_unmatched():
+    mm = np.array([(x, y) for x in np.arange(-45, 45.5, 1.0) for y in np.arange(0, 260.5, 1.0)], np.float32)
+    assert not any(o["matched"] for o in co.classify(mm, CATALOG))  # 260 mm: past six widths and five 8 mm gaps
+
+
+def test_three_3_cells_in_a_row_longer_than_one_box_are_split_along_the_row():
+    """2026-11-03: three 3-cells with 6 mm gaps read 113 x 100 mm, the row longer than a box (90)."""
+    mm = np.array([(k * 36 + x, y) for k in range(3) for x in np.arange(0, 30.5, 1.0) for y in np.arange(-45, 45.5, 1.0)],
+                  np.float32)
+    found = co.classify(mm, CATALOG)
+    assert [o["object"] for o in found] == ["container-3"] * 3
+    assert sorted(round(o["centre_mm"][0]) for o in found) == [15, 51, 87]
+

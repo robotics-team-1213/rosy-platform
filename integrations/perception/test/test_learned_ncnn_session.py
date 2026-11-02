@@ -7,12 +7,12 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from control.sensing.perception.learned.manifest import ManifestError, load_manifest
+from perception_runtime.perception.learned.manifest import ManifestError, load_manifest
 from test_learned_manifest_ncnn import ncnn_doc, write_doc
 
 
 def adapter():
-    from control.sensing.perception.learned.ncnn_session import NcnnSession
+    from perception_runtime.perception.learned.ncnn_session import NcnnSession
     return NcnnSession
 
 

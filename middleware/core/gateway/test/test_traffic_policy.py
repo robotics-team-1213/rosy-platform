@@ -128,7 +128,7 @@ def test_approach_distance_adaptively_reduces_linear_speed(rig):
 @pytest.mark.parametrize('unknown', [False, True])
 def test_detector_nearest_stop_edge_reaches_existing_core_gate(rig, unknown):
     import numpy as np
-    from control.sensing.perception.camera_ground import simulation_ground_plane
+    from perception_runtime.perception.camera_ground import simulation_ground_plane
     from control.sensing.perception.road import detect_road_observation, road_observation_payload
     from core.bridge.translate import road_evidence
 

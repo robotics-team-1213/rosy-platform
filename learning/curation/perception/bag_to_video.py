@@ -62,7 +62,7 @@ import cv2
 import numpy as np
 
 import extract
-from control.recording import (
+from perception_runtime.recording import (
     CAMERA_GROUND_STATUS_MAX_AGE_NS, CAMERA_GROUND_STATUS_TOPIC,
     CAMERA_TELEMETRY_TOPIC, CAMERA_TOPIC, IR_RANGE_TOPIC, KEEP_DEBUG_TOPIC, SHADOW_TOPIC,
     SIDE_TOPICS, ir_range_sample)
@@ -71,7 +71,7 @@ SCHEMA = "rosy.teleop.video/1"
 ODOM_TOPIC = "odom"
 SCAN_TOPIC = "scan"
 # D-411 Pilot recordings: CORE's teleop decision per command (core_common.protocol.recording;
-# not imported, and not in control.recording SIDE_TOPICS, the snapshot recorder's contract).
+# not imported, and not in perception_runtime.recording SIDE_TOPICS, the snapshot recorder's contract).
 INTENT_TOPIC = "teleop/intent"
 PIX_FMT = "yuv420p"
 # Evidence stamped with its source image's header stamp (see the module docstring).

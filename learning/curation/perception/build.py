@@ -59,10 +59,10 @@ import numpy as np
 SCHEMA = "rosy.perception.dataset/1"
 _SENSING = str(Path(__file__).resolve().parents[3] / 'middleware/perception')
 _FOUNDATION = str(Path(__file__).resolve().parents[3] / 'contracts/foundation')  # core_common (D-424)
-for _p in (_SENSING, _FOUNDATION):
+for _p in (_SENSING, str(Path(_SENSING).parents[1] / 'integrations/perception'), _FOUNDATION):
     if _p not in sys.path:
         sys.path.insert(0, _p)
-from control.sensing.perception.learned.manifest import ROLES, validate_label_semantic  # noqa: E402
+from perception_runtime.perception.learned.manifest import ROLES, validate_label_semantic  # noqa: E402
 # Mask value for unlabelled pixels (manifest "ignore_index"): excluded from the
 # loss, never a class. D-379 addendum 2026-10-01.
 IGNORE_INDEX = 255

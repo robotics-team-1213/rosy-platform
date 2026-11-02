@@ -19,7 +19,7 @@ START = (-1.26955, 0.24255, -math.pi / 2)
 
 def test_birds_eye_cache_is_shared_and_invalidates_for_camera_offset():
     from types import SimpleNamespace
-    from control.sensing.perception.lane_bev import cached_birds_eye
+    from perception_runtime.perception.lane_bev import cached_birds_eye
 
     owner = SimpleNamespace(_camera_x=CAM_X, _view_key=None, _view=None)
     first = cached_birds_eye(owner, GROUND, (240, 320))

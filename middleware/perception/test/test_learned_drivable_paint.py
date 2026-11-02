@@ -5,12 +5,12 @@ import json
 import numpy as np
 import pytest
 
-from control.sensing.perception.lane_keep import LaneKeeper, clean_learned_mask
-from control.sensing.perception.lane_keep_lines import PAINT_HALF_WIDTH_M
-from control.sensing.perception.learned.drivable_paint import (
+from perception_runtime.perception.lane_keep import LaneKeeper, clean_learned_mask
+from perception_runtime.perception.lane_keep_lines import PAINT_HALF_WIDTH_M
+from perception_runtime.perception.learned.drivable_paint import (
     boundary_paint, drivable_target, lateral_px_per_m, right_branch, right_exit_way)
-from control.sensing.perception.learned.lane_mask import preprocess, uncrop_logits
-from control.sensing.perception.learned.manifest import ClassSpec, ManifestError, load_manifest
+from perception_runtime.perception.learned.lane_mask import preprocess, uncrop_logits
+from perception_runtime.perception.learned.manifest import ClassSpec, ManifestError, load_manifest
 from control.sensing.perception.learned.paint_worker import LearnedPaintWorker
 from test_lane_keep import GROUND, HALF, X_OFFSET, X, Y, _render
 
@@ -270,7 +270,7 @@ def test_a_bad_crop_is_refused(tmp_path, crop):
 
 
 def test_runner_falls_back_to_lane_marking_without_a_drivable_class(tmp_path):
-    from control.sensing.perception.learned.runner import LaneSegModel
+    from perception_runtime.perception.learned.runner import LaneSegModel
     from test_learned_runner import _factory, _model_dir
     model = LaneSegModel.open(_model_dir(tmp_path), session_factory=_factory())
     mask, kind, info, latency_ms = model.infer_drivable(np.zeros((480, 640, 3), np.uint8))
@@ -336,7 +336,7 @@ def test_a_white_line_across_the_road_still_ends_the_way_and_is_no_crosswalk():
 
 @pytest.mark.parametrize('class_index,name', [(3, 'crosswalk'), (4, 'speed_bump')])
 def test_runner_hands_the_traffic_class_mask_beside_the_way(tmp_path, monkeypatch, class_index, name):
-    from control.sensing.perception.learned.runner import LaneSegModel
+    from perception_runtime.perception.learned.runner import LaneSegModel
     labels = _road()
     labels[170:180, 120:200] = class_index
     model = LaneSegModel.__new__(LaneSegModel)

@@ -12,7 +12,7 @@ SCHEMAS = {'camera/front': 'sensor_msgs/msg/Image',
            'scan': 'sensor_msgs/msg/LaserScan', 'line/observation': 'std_msgs/msg/String',
            'perception/learned/shadow': 'std_msgs/msg/String', 'teleop/intent': 'std_msgs/msg/String',
            'ir_sensor/range': 'std_msgs/msg/UInt16MultiArray'}
-# Same acceptance as control.recording.ir_range_sample. This module does not import it.
+# Same acceptance as perception_runtime.recording.ir_range_sample. This module does not import it.
 _IR_CHANNELS = ('left', 'centre', 'right')
 _IR_ADC_MAX = 4095
 

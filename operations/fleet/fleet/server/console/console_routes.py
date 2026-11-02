@@ -25,7 +25,6 @@ from core_common.protocol.power_health import PowerHealthResponse
 from core_common.protocol.motor_health import MotorHealthResponse
 from fleet.charge_bays import ChargeBays, RobotView, bays_from_map
 from fleet import lane_progress
-from fleet.speed_table import speed_table
 from fleet.hub.hub import HubError
 from fleet.server.console_view import CapabilityDisplay
 from fleet.server.monitoring_routes import cached_projection, install_monitoring_routes
@@ -36,6 +35,7 @@ from fleet.stuck.reports import LineStuckAnswerLog
 from fleet.incidents.handoff import judgment_revision
 from fleet.server.site_auth import SitePrincipal
 from fleet.server.site_lanes import site_lanes_payload
+from fleet.server.platoon_geometry import PlatoonGeometry
 from fleet.swarm.transport import RobotApiError
 from fleet.traffic import rule_m
 
@@ -272,23 +272,23 @@ def install_console_routes(app, *, console, sightings, require_viewer,
         return {"map_version": active[0], **bay_plan.plan(robots, bays)}
 
     # D-941 2: gaps on the active map's loop, shown only; the 20 Hz following loop belongs to CORE.
+    platoon_geometry = PlatoonGeometry()
+
     @app.get("/api/fleet/platoon", dependencies=read_guard, tags=["fleet"])
     async def platoon_gaps() -> dict:
         maps = getattr(app.state, "site_maps", None)
         active = maps.active() if maps is not None else None
         if active is None:
             raise HTTPException(404, detail={"code": "NO_ACTIVE_MAP"})
-        edges = lane_progress.main_loop(active[1])
-        if edges is None:
+        geometry = await platoon_geometry.get(active)
+        if geometry is None:
             raise HTTPException(404, detail={"code": "NO_LOOP"})
-        loop = lane_progress.Loop(active[1], edges)
+        edges, loop, speed = geometry
         poses = {}
         for row in (await gathered())["robots"]:
             pose = map_pose.arbitrated_pose(row["robot_id"]) if map_pose is not None and row["online"] else None
             if pose is not None and pose.state == "LOCALIZED":
                 poses[row["robot_id"]] = (pose.x, pose.y)
-        segments = [(e, True, 0.0, math.inf) for e in edges]
-        speed = speed_table(active[1], segments, closed=True)
         return {"map_version": active[0], "loop": {"edges": edges, "perimeter_m": round(loop.perimeter, 3)},
                 "target_gap_m": lane_progress.TARGET_GAP_M, "min_gap_m": lane_progress.MIN_GAP_M,
                 "robots": lane_progress.platoon(loop, poses), "speed": speed, "dispatch": False}

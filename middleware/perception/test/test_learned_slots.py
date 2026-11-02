@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from control.sensing.perception.learned.manifest import TASKS
-from control.sensing.perception.learned.slots import MODELS_ROOT, SLOTS, slot_pointer, task_root
+from perception_runtime.perception.learned.manifest import TASKS
+from perception_runtime.perception.learned.slots import MODELS_ROOT, SLOTS, slot_pointer, task_root
 
 PKG = Path(__file__).resolve().parents[1]
 

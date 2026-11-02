@@ -15,7 +15,6 @@ PACKAGE = Path(__file__).resolve().parents[1]
 MIDDLEWARE = PACKAGE.parent
 SOURCE_MODULES = {
     "nodes/sensor_provider.py": "control.sensor_provider",
-    "nodes/recording.py": "control.recording",
     "nodes/camera_detect_node.py": "control.camera_detect_node",
     "localization/loc_assist.py": "control.loc_assist",
     "localization/loc_assist_node.py": "control.loc_assist_node",
@@ -32,8 +31,6 @@ SOURCE_MODULES = {
     "snapshots/capture_trigger.py": "control.capture_trigger",
     "snapshots/capture_trigger_node.py": "control.capture_trigger_node",
     "sensors/sensing/lidar.py": "control.sensing.lidar",
-    "front_camera/perception/lane.py": "control.sensing.perception.lane",
-    "front_camera/perception/learned/road_observation.py": "control.sensing.perception.learned.road_observation",
     "../drive/motion_limits/command_gate.py": "control.control.command_gate",
     "../drive/recovery/recover.py": "control.control.recover",
     "../drive/tracking/path_follow.py": "control.control.path_follow",
@@ -139,12 +136,12 @@ def test_sdist_alone_builds_one_installed_copy_with_provider_identity(tmp_path):
         "assert any(e.group == 'rosy.sensor_provider' and "
         "e.value == 'control.sensor_provider:PROVIDER' for e in entries), ('provider entry point', entries); "
         "root = pathlib.Path(sys.argv[1]).resolve(); "
-        "modules = ['control.sensing.lidar', 'control.sensing.perception.lane', "
+        "modules = ['control.sensing.lidar', 'perception_runtime.perception.lane', "
         "'control.loc_assist', 'control.watch', 'control.object_detector', "
         "'control.ir_overlay', 'control.core_law_input', 'control.route_context_input', "
         "'control.route_followers', 'control.capture_trigger', "
         "'control.control.recover', 'control.planning.goals', "
-        "'control.sensing.perception.learned.road_observation', 'core_common.observation']; "
+        "'perception_runtime.perception.learned.road_observation', 'core_common.observation']; "
         "paths = {m: pathlib.Path(importlib.import_module(m).__file__).resolve() for m in modules}; "
         "assert all(path.is_relative_to(root) for path in paths.values()), ('installed source roots', root, paths)"
     )
@@ -155,6 +152,14 @@ def test_sdist_alone_builds_one_installed_copy_with_provider_identity(tmp_path):
          str(foundation), cwd=tmp_path)
     _run("-m", "pip", "install", "--no-deps", "--no-index", "--target", str(installed),
          str(next(dist.glob("core_common-*.whl"))), cwd=tmp_path)
+    # perception_runtime (D-964) is control's sibling package: install it the same way.
+    runtime = tmp_path / "perception_runtime"
+    shutil.copytree(MIDDLEWARE.parent / "integrations/perception", runtime,
+                    ignore=shutil.ignore_patterns("__pycache__", "*.egg-info", "build", "dist", "test"))
+    _run("-m", "pip", "wheel", "--no-deps", "--no-build-isolation", "--wheel-dir", str(dist),
+         str(runtime), cwd=tmp_path)
+    _run("-m", "pip", "install", "--no-deps", "--no-index", "--target", str(installed),
+         str(next(dist.glob("perception_runtime-*.whl"))), cwd=tmp_path)
     check += (
         "; import importlib.metadata as metadata; "
         "from packaging.requirements import Requirement; "

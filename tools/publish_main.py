@@ -370,6 +370,10 @@ def merge_when_green(repo: Path, pr: str, apply: bool, now: datetime) -> str:
         run_gh(repo, "pr", "merge", pr, "--auto", "--match-head-commit", head)
         return (f"queued PR {pr} at {head[:10]} in the merge queue; it merges after the merge group's ci-result."
                 f" Sync origin/main back into local main once it merged:" + sync_commands(now))
+    # gh also exits 0 when the merge queue takes the PR without saying so (2026-11-02, PR 227).
+    if json.loads(run_gh(repo, "pr", "view", pr, "--json", "state")).get("state") != "MERGED":
+        return (f"queued PR {pr} at {head[:10]} in the merge queue (not merged yet); it merges after the merge"
+                f" group's ci-result. Sync origin/main back into local main once it merged:" + sync_commands(now))
     git(repo, "fetch", "origin")
     merged = f"merged PR {pr} at {head[:10]} (merge commit)"
     if ancestor(repo, "origin/main", "main"):

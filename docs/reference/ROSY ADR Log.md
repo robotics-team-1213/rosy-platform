@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-964 | 차선 판정·학습 모델 실행 코드를 공유 계층 perception_runtime으로 나눈다. [전문](../adr/D-964-perception-runtime-shared-perception-layer.md) | Accepted (2026-11-03) |
 | D-937 | 제품 앱 입사 문법 — 제품/기능 두 레인과 네 제품 원형, 웹 표면 전체 등록. [전문](../adr/D-937-product-app-entry-grammar.md) | Accepted (2026-10-31, 사용자 합의; 물리 이동·권한 변경 없음) |
 | D-958 | 실험실 PC 계산 작업은 호스트마다 한 입구로 받고, GPU는 한 자리로 세며, 상시 서비스는 양보한다 — `remote_job.ADMIT` 단일 입구, GPU 자리 독점·대기, 각 PC 본업 최우선·실험은 노는 자원만(본업 요청 시 실험 양보), 호스트 측 서비스 되살리기, 모델 PC 배치 대기열, `lab_jobs.py status`. [전문](../adr/D-958-lab-compute-ledger-one-admission-gpu-slot-pausable-services.md) | Proposed (2026-11-02, 우선순위는 사용자 결정 반영) |
 | D-956 | OMX 배 판 놓기: 그 자리에서 놓고 앉음을 확인하며, 컨테이너 바닥에 단을 둔다 — 31.5 mm 열기, 높이 0.5 mm·기울기 0.5° 앉음 확인, 한 번 다시 놓기 후 HOLD, 바닥 3 mm 폭 29.0 mm. [전문](../adr/D-956-omx-ship-plate-release-seat-check-and-relief-foot.md) | Proposed (2026-11-01, 실물 여유 실측 대기) |

@@ -12,9 +12,9 @@ import tempfile
 from pathlib import Path
 
 from compare_backends import compare_frames
-from control.sensing.perception.learned.manifest import (
+from perception_runtime.perception.learned.manifest import (
     LAYOUTS, NCNN_FAMILIES, NCNN_SCHEMA, OBJECT_CLASSES, load_manifest, verify_files)
-from control.sensing.perception.learned.ncnn_session import NcnnSession
+from perception_runtime.perception.learned.ncnn_session import NcnnSession
 
 
 def set_revision(doc):

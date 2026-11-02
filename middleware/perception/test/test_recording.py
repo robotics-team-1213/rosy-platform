@@ -5,7 +5,7 @@ from datetime import datetime, timezone, timedelta
 
 import pytest
 
-from control.recording import (
+from perception_runtime.recording import (
     RECORD_TOPICS,
     bag_command,
     can_record,
@@ -132,13 +132,13 @@ def test_main_namespace_reaches_the_bag_command(monkeypatch, tmp_path):
 
 
 def test_shadow_topic_matches():
-    from control.recording import SHADOW_TOPIC
+    from perception_runtime.recording import SHADOW_TOPIC
     from control.sensing.perception.learned.shadow import TOPIC
     assert SHADOW_TOPIC == TOPIC
 
 
 def test_shadow_schema_matches():
-    from control.recording import SHADOW_SCHEMA
+    from perception_runtime.recording import SHADOW_SCHEMA
     from control.sensing.perception.learned import shadow
     assert SHADOW_SCHEMA == shadow.SHADOW_SCHEMA
 
@@ -334,7 +334,7 @@ def test_quota_check_error_stops_recorder_exit_1(monkeypatch, tmp_path):
 
 def test_total_bytes_skips_vanished_files(tmp_path, monkeypatch):
     from pathlib import Path
-    import control.recording as rec
+    import perception_runtime.recording as rec
     (tmp_path / "a").write_bytes(b"0" * 5)
     (tmp_path / "b").write_bytes(b"0" * 7)
     orig = Path.stat
