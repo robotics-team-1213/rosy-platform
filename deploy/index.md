@@ -77,8 +77,8 @@
 
 ## 최근 기록
 
+- 2026-11-02 · uncommitted · OMX 자동 연속 운반(cell_auto_carry)과 없는 출발 site 거절
 - 2026-11-02 · uncommitted · OMX 카메라 manifest를 레지스트리에서 맞춤
 - 2026-11-02 · uncommitted · feat(site): 작업셀 카메라 자격 매핑도 site.env에서 바꾼다
 - 2026-11-02 · uncommitted · feat(omx): 팔 혼자 정렬하기를 한 파이프라인으로 (`cell_align`)
 - 2026-11-02 · 97da913f85 · OMX record_session이 켜진 카메라 단위 전부를 넘겨받음
-- 2026-11-01 · uncommitted · D-907 authenticated metadata read repair

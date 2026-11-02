@@ -103,6 +103,5 @@ D-947 reserved in another in-flight branch (worktree release-corrector), absent 
 D-952 no refs/adr/D-952 and no ADR file in any worktree when D-954 was written (worktree pi45 owner note names it); remove if it lands
 D-953 reserved in another in-flight branch (worktree pi45), absent from this D-954 branch; remove when its ADR lands
 D-956 reserved in another in-flight branch (OMX ship-plate seat check), absent from this D-960 branch; remove when its ADR lands
-D-957 reserved in another in-flight branch (update ops CLI), absent from this D-960 branch; remove when its ADR lands
 D-958 reserved in another in-flight branch (lab compute ledger), absent from this D-960 branch; remove when its ADR lands
 D-959 unused: a D-960 draft first took this number without a reservation, adr_reserve then issued D-960; no refs/adr/D-959
