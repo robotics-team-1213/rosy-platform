@@ -144,3 +144,11 @@ def test_a_jaw_mark_split_into_pieces_over_a_box_top_counts_once_merged_and_nois
     for x in range(10, 190, 20):  # scattered 4x4 specks, 16 px apart: not one mark at any merge
         noise[50:54, x:x + 4] = 255
     assert cell_pivot.jaw_blobs(closed, noise, {"pivot.merge_px": 3}) == []
+
+
+def test_a_remap_serves_the_sites_the_config_names_and_arm_a_keeps_its_three():
+    """2026-11-02: arm B's pallet cell has no floor site; its remap is named by calibrate.map_sites."""
+    arm_a = {"sites": {"floor": {}, "belt": {}, "board": {}}}
+    assert cc.map_sites(arm_a) == ["floor", "belt"]
+    arm_b = {"calibrate": {"map_sites": ["pallet", "stack"]}, "sites": {"pallet": {}, "stack": {}}}
+    assert cc.map_sites(arm_b) == ["pallet", "stack"]

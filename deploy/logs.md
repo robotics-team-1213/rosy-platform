@@ -4416,6 +4416,12 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - gate 변화: main 녹색 복구.
 - CE: 해당 없음 — 가드 시험이 바로 잡았고, 앞 착지가 이 시험을 고르지 않은 것은 시험 선택 범위의 문제다.
 
+## 2026-11-02 · uncommitted · OMX 카메라 후보에 같은 허브의 팔을 표시
+
+- 변경: `omx_cameras.py propose`의 각 후보에 `hub_arm`(카메라와 같은 USB 허브에 관찰 보드가 꽂힌 팔이 하나일 때)과 `suggest`(그 팔의 `<arm>_wrist` 역할이 비어 있을 때)를 더한다. 루트 포트는 모든 장치가 공유하므로 허브로 보지 않는다. 추천일 뿐 역할을 묶지 않는다. 손목 카메라가 팔 보드와 같은 허브에 꽂힌다는 배선은 아직 현장에서 확인하지 않았다(셀 분리 중); 확인되면 자동 배정으로 올린다.
+- 증거: `test/test_omx_cameras.py` 12 passed(로컬).
+- gate 변화: 없음. CE: 해당 없음 — 미확인 가정은 이 기록과 docstring에 있다.
+
 ## 2026-11-02 · 6d7e296033 · Web unification follow-up
 
 - 변경: 2026-11-02 · 6d7e296033 · D-961의 공용 작업·인증 조합을 native Wi-Fi 복구 HTML에도 적용했다. 제목·폭·버튼 위계·테마를 통일하고 component-controls.css/theme.js를 기존 recovery-web 이미지 자산에 포함했다. CORE·Account 없이 복구하는 구조, 물리 지문·코드·세션·CSRF·NetworkAgent 쓰기 권한은 유지한다. registry/native asset/실제 Chromium 복구 39건 원격 통과; dark/light 및 320/390/1366px 포함. 이미지 ARM64 빌드·AP·물리 네트워크 수용은 미실행이며 gate 변화 없음. CE: 해당 없음 — 자산·독립성 계약은 코드와 회귀가 설명한다.

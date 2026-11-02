@@ -1,6 +1,7 @@
 """/ws/teleop — hold-to-drive stream: same checks as REST /teleop, ack per frame, fail-safe zero."""
 
 import json
+import time
 
 import pytest
 from starlette.websockets import WebSocketDisconnect
@@ -282,7 +283,6 @@ def test_socket_cap_and_same_token_replacement(drive):
 
 
 def test_slow_apply_is_latest_wins(drive, monkeypatch):
-    import time
     from contextlib import ExitStack
     import core_api_web.api.ws as ws_module
     tc, _svc = drive()

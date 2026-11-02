@@ -111,6 +111,10 @@ IDLE_PARK_S, IDLE_STOP_S = prm.default("runner.idle_park_s"), prm.default("runne
 # PWM, and P x error builds that only near 1.7-1.9 units, at P 1200 and 1600 alike. At RISE_SPEED 2 the guard
 # runs on v^2/20 = 0.65 deg after a hold, so holding at 2.2 units (4.0 deg) still stops short of 5.
 STRAIN_LAG, STRAIN_RISE, STRAIN_TICKS, STRAIN_PWM = 2.2, 0.25, 6, 0.5
+# The wrist roll carries no load, so a blocked roll pushes at low PWM (arm_a stopped dead at 28 % of its cap while
+# the command ran on, 4 times on 2026-11-01) and the PWM test above never fires; it travels within ~0.7 units, so a
+# rising lag of ROLL_BLOCK_LAG (<= 2.7 deg) holds it before the guard's 5 degree stop.
+ROLL_BLOCK_LAG = 1.5
 # Stalled = pushing at its session cap (300) while short of its target and not moving: blocked or colliding.
 # At the cap alone is normal: the elbow saturates while lifting the arm out of home (2026-10-25).
 PWM_STOP, PWM_STOP_S, STALL_GAP, STALL_MOVE = 285, 0.5, 4.0, 0.3
@@ -290,8 +294,9 @@ class Runner:
         self.report(command=f"run {chunk}", ok=False, error=self.fault, contact=True)
 
     def strained(self, sent, present):
-        """(motor, lag, pwm, cap) of a load-bearing joint whose lag keeps rising while it pushes, or None."""
-        lags = [abs(present[i] - sent[n]) if n in sent else 0.0 for i, n in enumerate(NAMES[:4])]
+        """(motor, lag, pwm, cap) of a load-bearing joint whose lag keeps rising while it pushes, or of a wrist roll
+        whose lag keeps rising past ROLL_BLOCK_LAG at any PWM; else None."""
+        lags = [abs(present[i] - sent[n]) if n in sent else 0.0 for i, n in enumerate(NAMES[:5])]
         self.trend = (self.trend + [lags])[-(STRAIN_TICKS + 1):]
         if len(self.trend) <= STRAIN_TICKS:
             return None
@@ -303,6 +308,8 @@ class Runner:
             pushing = motor not in pwm or motor not in limits or abs(pwm[motor]) >= STRAIN_PWM * limits[motor]
             if lags[i] >= STRAIN_LAG and rising and pushing:
                 return motor, lags[i], pwm.get(motor), limits.get(motor)
+        if first[4] < middle[4] < lags[4] and lags[4] >= ROLL_BLOCK_LAG and lags[4] - first[4] >= STRAIN_RISE:
+            return MOTORS[4], lags[4], pwm.get(MOTORS[4]), limits.get(MOTORS[4])
         return None
 
     def tick(self) -> None:
@@ -348,7 +355,10 @@ class Runner:
             strain = self.strained(sent, present)
             if strain:  # named a contact: the judge may retreat or jog, and park clears it
                 motor, lag, pwm, limit = strain
-                self.hold(present, f"contact in {self.chunk}: {motor} lag rose to {lag:.1f} units at PWM {pwm} of {limit}")
+                others = ", ".join(f"{n} {abs(present[i] - sent[f'{n}.pos']):.1f}" for i, n in enumerate(MOTORS[:5])
+                                   if n != motor and f"{n}.pos" in sent)  # a joint lagging with it points outside
+                self.hold(present, f"contact in {self.chunk}: {motor} lag rose to {lag:.1f} units at PWM {pwm} of {limit}"
+                                   f" (lags: {others})")
                 return
         error = max(abs(a - b) for a, b in zip(present[:5], self.target[:5]))
         # Load-bearing joints only: the taught wrist roll lagged its leader by 66 units (2026-10-24 teach r2).
