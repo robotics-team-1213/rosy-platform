@@ -294,6 +294,8 @@ class Runner:
         self.target = list(present[:5]) + [self.target[5]]
         self.fault = reason
         self.chunk, self.played = None, []
+        if chunk == "park":
+            self.last_input = self.clock()  # an idle fold's retry waits idle_retry_s from the hold, not from its start
         self.report(command=f"run {chunk}", ok=False, error=self.fault, contact=True)
 
     def strained(self, sent, present):
