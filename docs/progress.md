@@ -3,17 +3,17 @@ module: docs
 logical_modules: []
 owner: 거버넌스
 last_verified:
-  commit: 9a9ca24543
+  commit: 111d476ce2
   date: 2026-11-03
 gates:
   SOURCE:
     state: GO
-    evidence: G1 dedicated plan, strict execution receipt and hash-bound publication consumers; independent review of 9a9ca24543 found no supported findings. Fresh mappings are stored but never reused for DED execution. The 0.45s threshold and control code are unchanged.
+    evidence: G1 isolation and fresh hash-bound publication evidence preserved through main 04877e4058 merge. Independent exact 111d476ce2 review found no supported findings; both parent test definitions remain intact. Thresholds and control code are unchanged.
     cmd: python tools/harness/rosy_harness.py lint
   LOCAL:
     state: GO
-    evidence: '9a9ca24543 remote publication/cache/landing regressions: 292 passed / 0 skipped, NEW/known/flaky 0. Prior 791a884c6c selection regressions: 471 passed / 0 skipped. Separate actual G1 at 791a: 12 passed / 0 skipped, 6.31s, one strict whole-file receipt. G1 file/gate/control dependencies are unchanged; it was not repeated. These are scoped results, not FULL, landing or field acceptance.'
-    cmd: python tools/remote/remote_pytest.py --sha 9a9ca24543 -- ROSY_JOB_CORES=3 '-pno:xdist' test/test_publish_evidence.py test/test_publish_main.py test/test_g1_timing_gate.py test/test_land.py test/test_land_cache_landed.py test/test_land_selection.py test/test_land_record.py
+    evidence: '111d476ce2 remote admission/G1/selection/publication merge regressions: 267 passed / 0 skipped, NEW/known/flaky 0. Prior 9a9ca24543 publication/cache/landing regressions: 292 passed / 0 skipped. Separate actual G1 at 791a remains 12 passed / 0 skipped with one strict receipt; its file/gate/SOT are unchanged and it was not repeated. Scoped verification only; FULL/landing/field acceptance remain separate.'
+    cmd: python tools/remote/remote_pytest.py --sha 111d476ce2 -- ROSY_JOB_CORES=3 '-pno:xdist' test/test_remote_pytest.py test/test_g1_timing_gate.py test/test_work_queue_split.py test/test_land_tests_flag.py test/test_land_selection.py test/test_publish_evidence.py test/test_land_record.py
   ROS-SIM:
     state: N/A
   ARTIFACT:
