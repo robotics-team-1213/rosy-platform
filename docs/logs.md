@@ -13806,6 +13806,12 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 소스 검증이며 기존 실행 중 job의 표시 갱신·main 적용·60분 SLO를 주장하지 않는다.
 - CE: 기존 Oct31 교훈 갱신. 공유 환경변수의 진입/종료 순서와 job launch 시점이 다른 문제, 단순 이전값 복원으로 해결되지 않는 이유를 기록했다.
 
+## 2026-11-03 · uncommitted · fix(landing): 분할 중복과 중첩 rollup 집계를 보완한다
+- 변경: 원격 호출 분할 후 전체 argv가 같은 항목만 첫 순서대로 제거한다. rollup의 직접 회원 소유권은 유지하며 자식 metadata를 실제 완료 이벤트에 보존하고, 집계는 부모 candidate·원래 ticket을 검증한 leaf만 닫는다. 순환·중복·미확인 pin은 불완전으로 유지하고 확인 가능한 leaf 영향 범위는 보존한다.
+- 증거: 실제 같은 SHA/tree/환경의 body 중복 5쌍을 확인했다. 소스 `3bb09294bb` 원격 split/isolation/remote_pytest 137 PASS, `d48e9f8e65` 원격 goal/rollup 55 PASS, 모두 skip/NEW/known/flaky 0. 선행 committed RED는 분할 중복 2건·중첩 완료/검증 경계 8건·metadata 손상 보존/기간 scope 2건이었다. `d48e9f8e65`의 독립 검토에 추가 P1/P2가 없었으며 소유권·이벤트 관련 통합 검증은 착지 전에 확인한다.
+- gate 변화: 없음. 기존 legacy 중첩 carrier의 미확인 origin은 추정하지 않으며 소스 검증을 main 착지·SLO 달성으로 보고하지 않는다.
+- CE: 기존 Nov1 교훈 갱신. 직접 소유권 목록과 논리 leaf 완료를 구분해야 하는 이유, 분할 후에야 드러나는 중복 호출을 기록했다.
+
 ## 2026-11-03 · uncommitted · feat(omx): 같은 크기 컨테이너가 줄지어 붙어 있으면 개수를 세어 나눈다
 - 변경: `cell_objects.classify`가 2~`objects.split_max`(6)개, 칸 사이 틈 `objects.split_gap_mm`(8)까지 나눠 보고, 줄이 컨테이너 짧은 변·긴 변 어느 쪽으로 늘어서도 시도한다. 엄격 판정을 통과하는 조합 중 조각 폭·길이가 카탈로그에 가장 가까운 것을 고른다. 조각마다 엄격 일치·방향·채움 검사는 그대로다.
 - 증거: 2026-11-03 arm_b 배 위에 3칸 컨테이너 다섯 개가 6 mm 틈으로 놓여 한 덩어리(113 × 100 mm)로 보여 집을 대상이 없었다. 현장 사진에서 셋으로 나뉘어 각각 container-3로 인식됨. 실물 집기는 손목에 가려 집게 확인이 거절해 아직 없음.
