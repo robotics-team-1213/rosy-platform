@@ -310,7 +310,10 @@ jobs:
               "middleware/devices/omx/adapter/test/test_omx_fleet_ros_actionserver.py": "114",
           }
           runs = []
+          sys.path.insert(0, "tools/harness")
+          from affected_exclusive import dedicated, split_environment
           for paths in json.loads(os.environ["ROSY_INVOCATIONS"]):
+              paths, job_environment = split_environment(paths)
               # Timing-sensitive ROS fixtures need the same fresh-process environment as
               # test_omx_native_ros_runtime.py. Keep their tests in full AND affected runs.
               isolated = [p for p in paths if p.split("::", 1)[0] in native_ros]
@@ -321,7 +324,7 @@ jobs:
                       isolated.append(target)
               browser = [p for p in paths if p.startswith(("operations/fleet/test", "applications/fleet/test")) or p in (account_browser, "test/test_monitoring_browser.py")]
               rest = [p for p in paths if p not in browser]
-              runs += [(rest, {}), (browser, {"ROSY_RUN_BROWSER_TESTS": "1"})]
+              runs += [(rest, job_environment), (browser, {**job_environment, "ROSY_RUN_BROWSER_TESTS": "1"})]
               for target in isolated:
                   runs.append(([target], {
                       "ROSY_OMX_NATIVE_REQUIRED": "1", "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
@@ -358,7 +361,7 @@ jobs:
                   out.append(line)
               code = proc.wait()
               failed = known_failures.failed_ids("".join(out))
-              ids = known_failures.rerun_ids("".join(out), quarantine)
+              ids = [] if dedicated(paths) else known_failures.rerun_ids("".join(out), quarantine)
               if known_failures.should_rerun(code, failed, ids):
                   print(f"rerunning quarantined failures once: {' '.join(ids)}", flush=True)
                   rerun = subprocess.run([sys.executable, "-m", "pytest", *ids, "-q", "-rA", "-p", "no:cacheprovider",

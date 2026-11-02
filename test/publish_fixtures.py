@@ -5,6 +5,7 @@ import shutil
 import subprocess
 
 import land_cache
+from harness import affected_exclusive as exclusive
 
 ROOT = Path(__file__).resolve().parents[1]
 BROWSERS = [
@@ -12,13 +13,15 @@ BROWSERS = [
      "operations/fleet/test/test_site_map_browser.py"],
     ["ROSY_RUN_BROWSER_TESTS=1", "test/test_dashboard_browser.py"],
 ]
-FULL = [["learning/registry/policy/test"], ["test"], *BROWSERS]
+FULL = [["learning/registry/policy/test"], ["test", "--ignore=" + exclusive.TARGET],
+        exclusive.DEDICATED, *BROWSERS]
 
 
 def candidate_files(local):
     """The harness's small fixture plan; browser, splitting, deps and verdict code are production copies."""
     copies = [*ROOT.glob("tools/remote/*.py"), ROOT / "tools/remote/serial_suites.txt",
               ROOT / "tools/land_cache.py", ROOT / "tools/land_selection.py", ROOT / "tools/land_browser.py",
+              ROOT / "tools/harness/affected_exclusive.py",
               ROOT / "test/browser_scope.py", ROOT / "test/known_failures.py"]
     for source in copies:
         target = local / source.relative_to(ROOT)
@@ -27,7 +30,7 @@ def candidate_files(local):
     files = {
         "tools/harness/affected_tests.py": "# canonical harness is present\n",
         "tools/harness/rosy_harness.py": "import json\nprint(json.dumps(" + repr(
-            {"mode": "full", "full_invocations": FULL[:2]}) + "))\n",
+            {"mode": "full", "full_invocations": FULL[:3]}) + "))\n",
         ".github/workflows/ci.yml": '--wheel-dir "$wheelhouse" \\\n  fixture-wheel\n',
         "fixture-wheel/setup.py": "# fixture wheel\n",
         "test/known_failures.txt": "",
@@ -59,7 +62,9 @@ def qualified_record(tool, local, sha, base, invocations=None, *, prepared=None)
     logs = []
     for i, inv in enumerate(invocations):
         log = folder / f"run-{i}.txt"
-        log.write_text("1 passed in 0.01s\n", encoding="utf-8")
+        text = ("[g1-timing-gate] expected=1 collected=1 passed=1 skipped=0 clean=1\n"
+                if exclusive.dedicated(inv) else "")
+        log.write_text(text + "1 passed in 0.01s\n", encoding="utf-8")
         land_cache.record(local, sha, tree, env, inv, log)
         logs.append(str(log))
     tool.land_record.write(local, sha, base, invocations, logs, tier="full", prepared=prepared)

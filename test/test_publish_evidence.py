@@ -11,6 +11,68 @@ import pytest
 from test_publish_main import FULL, _commit, _git, _view, repo, tool
 from publish_fixtures import qualified_record
 import land_cache
+from harness import affected_exclusive as exclusive
+
+
+def _timing_proof(repo):
+    local, sha, logs = _proof(repo)
+    return local, sha, Path(logs[2])
+
+
+def test_canonical_exclusive_full_with_hash_bound_strict_receipt_qualifies(repo):
+    local, sha, _ = _timing_proof(repo)
+    assert tool.green_full(local, sha)
+
+
+@pytest.mark.parametrize('damage', ['missing', 'skip', 'partial', 'quarantine', 'hash', 'ignore-only'])
+def test_publication_requires_complete_strict_dedicated_evidence(repo, damage):
+    local, sha, log = _timing_proof(repo)
+    if damage == 'ignore-only':
+        record = tool.land_record.read(local, sha)
+        record['invocations'].remove(exclusive.DEDICATED)
+        (tool.land_record.folder(local) / f'{sha}.json').write_text(json.dumps(record), encoding='utf-8')
+    else:
+        text = {'missing': '2 passed in 0.01s\n',
+                'skip': '[g1-timing-gate] expected=2 collected=2 passed=1 skipped=1 clean=0\n1 passed, 1 skipped in 0.01s\n',
+                'partial': '[g1-timing-gate] expected=2 collected=1 passed=1 skipped=0 clean=0\n1 passed in 0.01s\n',
+                'quarantine': '2 passed in 0.01s\nLOAD-FLAKY\n',
+                'hash': '999 passed in 0.01s\n'}[damage]
+        log.write_text(text, encoding='utf-8')
+        if damage != 'hash':
+            _record_updated_log(local, log)
+    assert not tool.green_full(local, sha)
+
+
+@pytest.mark.parametrize('extra', [exclusive.DEDICATED, exclusive.DEDICATED + ['-k', 'one']])
+def test_publication_rejects_additional_dedicated_record_jobs_even_with_clean_mappings(repo, extra):
+    local, sha, log = _timing_proof(repo)
+    record = tool.land_record.read(local, sha)
+    record['invocations'].append(extra)
+    (tool.land_record.folder(local) / f'{sha}.json').write_text(json.dumps(record), encoding='utf-8')
+    row = next(row for row in land_cache.entries(local) if row['argv'] == exclusive.DEDICATED)
+    land_cache.record(local, sha, row['tree'], row['env'], extra, log)
+    assert not tool.green_full(local, sha)
+
+
+@pytest.mark.parametrize('mode', ['exact', 'narrow', 'no-cache'])
+def test_dedicated_execution_mapping_never_replaces_a_fresh_run(repo, monkeypatch, tmp_path, mode):
+    local, _ = repo
+    sha = _git(local, 'rev-parse', 'HEAD')
+    monkeypatch.setattr(land_cache, 'env_id', lambda *_: 'fixture-env')
+    tree = _git(local, 'rev-parse', 'HEAD^{tree}')
+    previous = tmp_path / 'previous.txt'
+    previous.write_text('2 passed in 0.01s\n', encoding='utf-8')
+    land_cache.record(local, sha, tree, 'fixture-env', exclusive.DEDICATED, previous)
+    if mode == 'narrow':
+        sha = _commit(local, 'unrelated.py', '# unrelated\n')
+    reused, todo, keep = land_cache.split(local, Namespace(no_cache=mode == 'no-cache', tests='auto'),
+                                         [exclusive.DEDICATED], sha, sys.executable,
+                                         lambda *a, **k: ([], False))
+    assert reused == [] and todo == [exclusive.DEDICATED]
+    fresh = tmp_path / 'fresh.txt'
+    fresh.write_text('2 passed in 0.01s\n', encoding='utf-8')
+    keep(exclusive.DEDICATED, fresh)
+    assert land_cache.entries(local)[-1]['log_sha256'] == hashlib.sha256(fresh.read_bytes()).hexdigest()
 
 
 @pytest.mark.parametrize("legacy", [False, True])
@@ -133,10 +195,11 @@ def test_real_work_queue_shards_are_complete_proof_but_one_missing_shard_is_not(
     import work_queue
     local, _ = repo
     for n in range(5):
-        _commit(local, f"test/test_shard_{n}.py", f"def test_{n}(): pass\n" + "# size\n" * n)
+        _commit(local, f"learning/registry/policy/test/test_shard_{n}.py",
+                f"def test_{n}(): pass\n" + "# size\n" * n)
     sha = _git(local, "rev-parse", "HEAD")
     logs = qualified_record(tool, local, sha, _git(local, "rev-parse", f"{sha}^"))
-    root = ["test"]
+    root = ["learning/registry/policy/test"]  # ROOT-with-ignore intentionally stays whole.
     parts = work_queue.split(local, [root], seen={tuple(root): 3 * work_queue.SPLIT_S})
     assert len(parts) == 3
     _rewrite_rows(local, lambda rows: rows.remove(next(r for r in rows if r["argv"] == root)))
@@ -149,7 +212,7 @@ def test_real_work_queue_shards_are_complete_proof_but_one_missing_shard_is_not(
         land_cache.record(local, sha, tree, env, part, log)
         shard_logs.append(str(log))
     record = tool.land_record.read(local, sha)
-    record["logs"] = [log for log in logs if log != logs[1]] + shard_logs
+    record["logs"] = [log for log in logs if log != logs[0]] + shard_logs
     (tool.land_record.folder(local) / f"{sha}.json").write_text(json.dumps(record), encoding="utf-8")
     assert tool.green_full(local, sha)
     _rewrite_rows(local, lambda rows: rows.pop())
@@ -179,6 +242,24 @@ def test_prepared_full_proof_requires_matching_final_plan_and_environment(repo, 
         _deny_selection_and_merge(local, sha, monkeypatch)
     else:
         assert tool.green_full(local, sha)
+
+
+def test_prepared_full_and_fresh_turn_timing_execution_keep_all_hash_bound_proofs(repo):
+    local, prepared, _ = _proof(repo)
+    on = _git(local, 'rev-parse', f'{prepared}^')
+    _git(local, 'checkout', '-qb', 'peer', on)
+    base = _commit(local, 'peer.py', 'main advanced')
+    _git(local, 'checkout', '-q', 'main')
+    _git(local, 'merge', '-q', '--no-ff', '--no-edit', 'peer')
+    sha = _git(local, 'rev-parse', 'HEAD')
+    logs = qualified_record(tool, local, sha, base, [exclusive.DEDICATED],
+                            prepared={'candidate': prepared, 'main': on,
+                                      'tier': 'full', 'invocations': FULL})
+    record = tool.land_record.read(local, sha)
+    assert record['invocations'].count(exclusive.DEDICATED) == 1
+    assert tool.green_full(local, sha)
+    Path(logs[0]).unlink()
+    assert not tool.green_full(local, sha)
 
 
 @pytest.mark.parametrize("change", ["own-commit", "manual-merge"])
