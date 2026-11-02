@@ -13712,3 +13712,10 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: 없음
 - 교훈: `docs/solutions/runtime-errors/omx-blocked-wrist-roll-reached-the-guard-unseen-2026-11-02.md`
+
+## 2026-11-02 · uncommitted · fix(omx): 가드 고장 프레임을 설정 없이 남긴다
+- 변경: `motor_health.FAULT_FRAMES`. `ROSY_OMX_FAULT_FRAMES`가 없으면 카메라 뷰 유닛(`rosy-omx-camera-view`, 포트 8767)의 top·side 프레임을 남긴다. 빈 값이면 끈다.
+- 증거: 현장 PC 러너에 이 변수를 넣는 배포 경로가 없어, 기본값 없이는 프레임이 남지 않음.
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: `docs/solutions/runtime-errors/omx-blocked-wrist-roll-reached-the-guard-unseen-2026-11-02.md`
