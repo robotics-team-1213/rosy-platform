@@ -19,6 +19,19 @@ export const REACH_LABEL = Object.freeze({
   ReadTimeout: "응답 시간 초과",
 });
 
+const HOLD_WHY = Object.freeze({
+  needs_new_code: "등록 자격 만료 · 로봇 화면의 새 코드로 다시 등록",
+  address_changed: "주소 바뀜 · 새 주소는 로봇 화면의 코드로 확인",
+  conflict: "신원 충돌 · 등록 화면 확인",
+});
+
+/** Why an offline robot is offline: Fleet's own hold (the robot was not asked), a robot refusal, or no answer. */
+export function offlineWhy(robot) {
+  const error = robot.error;
+  if (error.held) return `Fleet이 정지 요청만 보냄 · ${HOLD_WHY[robot.held] ?? robot.held ?? "주소 미확인"}`;
+  return error.reachable ? `로봇이 거절: ${error.code}` : `닿지 않음: ${REACH_LABEL[error.code] ?? error.code}`;
+}
+
 // D-596: why a camera LED check did not name the robot (Vision/Fleet reason codes).
 export const IDENTIFY_REASON = {
   none: "식별 조명이 보이지 않음", multiple: "같은 식별 조명이 둘 이상", frames_missing: "카메라 프레임이 빠짐",
@@ -112,7 +125,9 @@ export function createRosterSummary({scope, view, openCard, render, attentionIte
     const facts = nodeWithText("div", "robot-summary-status");
     facts.append(tag(status, view.stateUnavailable || !robot.online ? "warn" : ""),
       tag(safety, estop === true ? "crit" : safety === "안전 정상" ? "" : "warn"));
-    const battery = nodeWithText("span", "robot-line-battery", `배터리 ${powerHealthView(robot, view.receivedAtMs, Date.now()).battery}`);
+    // D-926: every fact on the card is the one chip shape; an unread battery is not an attention item.
+    const power = powerHealthView(robot, view.receivedAtMs, Date.now());
+    const battery = tag(`배터리 ${power.battery}`, power.problem ? "warn" : "");
     battery.dataset.fact = "battery";
     facts.append(battery, motorHealth.summary(robot));
     const guideRow = (view.guide?.robots || []).find(row => row.robot_id === robot.robot_id);
@@ -129,14 +144,14 @@ export function createRosterSummary({scope, view, openCard, render, attentionIte
     const lane = state.line_follow;
     const mode = lane?.mode === "CAMERA_LINE" || lane?.mode === "IR_LINE"
       ? `${enumLabel(LINE_FOLLOW_MODE_LABEL, lane.mode)} · ${enumLabel(LINE_STATE_LABEL, lane.state)}` : navTag(state).text;
-    node.append(nodeWithText("p", "trip-line", view.stateUnavailable ? "운행 확인 불가"
-      : cardTripLine(view, robot.robot_id) || (robot.yielding ? "비켜서는 중" : robot.queued ? "출발 대기" : mode)));
+    const trip = view.stateUnavailable ? "운행 확인 불가"
+      : cardTripLine(view, robot.robot_id) || (robot.yielding ? "비켜서는 중" : robot.queued ? "출발 대기" : mode);
+    if (trip !== "—") node.append(nodeWithText("p", "trip-line", trip)); // no navigation state: no placeholder line
     const evidence = [];
     if (view.stateUnavailable) evidence.push("Fleet 상태를 확인할 수 없습니다. 연결을 확인하세요.");
     else {
       if (robot.link_reason) evidence.push(`${robot.link_reason.message} ${robot.link_reason.action || ""}`.trim());
-      else if (!robot.online && robot.error) evidence.push(robot.error.reachable
-        ? `로봇이 거절: ${robot.error.code}` : `닿지 않음: ${REACH_LABEL[robot.error.code] ?? robot.error.code}`);
+      else if (!robot.online && robot.error) evidence.push(offlineWhy(robot));
       if (robot.calibration) evidence.push(`보정 진행 중 · ${robot.calibration.label || "보정"}${robot.calibration.holder ? ` · ${robot.calibration.holder}` : ""}`);
       const address = !robot.online ? addressReason(view.addresses?.[robot.robot_id]) : null;
       if (address) {

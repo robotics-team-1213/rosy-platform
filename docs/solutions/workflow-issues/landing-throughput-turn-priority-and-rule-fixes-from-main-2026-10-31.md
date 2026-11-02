@@ -1,8 +1,9 @@
 ---
 title: The turn holder waited behind the landings it held up, and fixes to the landing rules ran under the old rules
 date: 2026-10-31
+last_updated: 2026-11-02
 category: workflow-issues
-module: tools/land.py, tools/land_checks.py, tools/land_prepare.py, tools/remote/remote_job.py, tools/remote/xdist_plan.py
+module: tools/land.py, tools/land_checks.py, tools/land_prepare.py, tools/land_async.py, tools/land_rollup.py, tools/remote/remote_job.py, tools/remote/xdist_plan.py
 problem_type: workflow_issue
 component: development_workflow
 severity: high
@@ -13,11 +14,13 @@ symptoms:
   - "a landing waited p50 52 / p90 239 min for a prepare slot while prepare took p50 23 min, its turn p50 6 min, and the model and AI PCs ran at load ~2-5 of 24 cores"
   - "a fix raising MAX_PREPARING to 6 and letting urgent tickets skip pending reservations stayed pending at position ~31, even resubmitted with --urgent"
   - "tests events reported invocations of p50 20 / p90 79 min while pytest itself ran p50 14 s"
+  - "a stopped member was resumed although another live rollup already owned its commits"
 applies_when:
   - "main stops moving while a ticket holds the turn and its log shows only 'waiting for host room'"
   - "a branch changes tools/land*.py or the remote test tooling and its effect is expected right after queueing"
   - "reading the 'seconds' of tests events in .git/rosy-land-events.jsonl"
-tags: [land-py, queue, priority-inversion, admit, remote-pytest, landed-copy, throughput]
+  - "recovering a stopped snapshot or deciding whether its branch is free to queue"
+tags: [land-py, queue, priority-inversion, admit, remote-pytest, landed-copy, throughput, rollup, ownership]
 ---
 
 # The turn holder waited behind the landings it held up, and fixes to the landing rules ran under the old rules
@@ -60,5 +63,83 @@ These ship in `fix/land-throughput-bundle`. Their savings are **expected**, not 
 ## Prevention
 
 - Treat any shared resource the turn holder needs as a priority-inversion risk: a host budget, a lock, an alone drain. The turn must not queue behind tickets that queue behind it.
-- After a landing-rule fix lands, restart the pending landers in queue order. Do not expect the queue to speed up by itself.
+- Processes already running code without the refresh mechanism below need a bootstrap restart in queue order after a rule fix. Keep their snapshot and passed records.
 - Before reasoning from `tests` events, check what their timing fields measure.
+
+## Rechecked on 2026-11-02: prepared waiters missed automatic refresh
+
+`land_prepare.relaunch` could load current main while pending for a preparation slot, but green
+waiters never called it. They kept the old overlap rules after main was fixed. The existing queue
+also granted an unblocked turn before its merge-preview callback, so adding refresh only to that
+callback would still miss immediate acquisition.
+
+The correction reuses the existing child handoff in ordinary queue and reprepare waits. It checks
+completion first, then refreshes before deciding blockers or granting a turn. The child adopts the
+same ticket filename and start time, retaining FIFO, urgency and metadata; the parent's cleanup
+does not unlink a ticket the child owns. This avoids a stop/resubmit loop and does not reset lead time.
+
+An active batch leader or carried member keeps its loaded rules until the batch lifecycle ends.
+Raising `SystemExit` inside the leader would skip switch-back, branch cleanup and train reporting.
+The suppression belongs in `relaunch` itself because a leader can reach it through preparation
+slots and reprepare paths as well as its direct wait.
+
+Regression suites `test/test_land_prepare.py`, `test/test_land_batch.py` and `test/test_land_queue.py`
+passed all 104 remote tests after six intended failures on the earlier implementation. They cover
+changed and unchanged rules, blocked and immediate acquisition, completion before refresh, child
+exit propagation, ticket metadata, and batch suppression. This is source-level regression evidence;
+coordinated landing and already-running processes' bootstrap remain separate checks.
+
+Those 104 targeted passes missed compatibility with the miniature Git repositories used by the
+broader landing tests. Their `main` has no tracked `tools/land.py`. `rules()` returned an empty
+fingerprint, or only unrelated remote-tool blobs, and compared it with the importing repository's
+nonempty startup fingerprint. The new immediate refresh then spawned that miniature checkout's
+missing `tools/land.py`, exiting 2 before the turn. An untracked stub entrypoint also reproduced an
+unwanted child exit 7. Testing the callback with mocked rule fingerprints alone did not exercise
+this repository boundary.
+
+The compatibility correction makes `rules()` return `None` unless main tracks the landing
+entrypoint. Missing landing code provides no runnable replacement; it is not evidence that the
+loaded rules changed. This keeps real repositories eligible for refresh without a fixture-only
+bypass. Two real-Git regressions cover absent tooling and unrelated remote tooling.
+
+Verification: committed source `23fafbc089` reproduced the existing log-merge regression's exit 2;
+tests-only `3f0f45a653` produced both intended new entrypoint failures. Repaired source `fb845aabfd`
+passed all 27 `test/test_land*.py` suites plus worktree, remote-pytest and memory suites remotely (596 tests)
+(`$TEMP/rosy-land-refresh-compat-broad/run-1.txt`, exit 0; known-failure comparison: 0 new, 0 known,
+0 flaky). The red reports are `$TEMP/rosy-land-refresh-compat-red/run-1.txt` and
+`$TEMP/rosy-land-refresh-compat-rules-red/run-1.txt`. This verifies the repair in source; it does not
+claim coordinated landing or a measured reduction in queue lead time.
+
+## Rechecked on 2026-11-02: stopped members still had rollup owners
+
+A stopped supervisor and an absent member ticket do not establish that a snapshot is free to resume.
+Recovery checked the queue's legacy `batch` field, but a one-ticket rollup deliberately has no such
+field: its member snapshots are recorded beside its log in a `.members` JSON array. Mobile was
+resumed despite a live covering rollup. REST2 was resumed after checking that first rollup, but a
+second rollup owned it by the next inspection. A rollup can also hold its supervisor's lifetime
+lease while its slow startup has not yet produced a queue ticket.
+
+Recovery stopped only the duplicate waiting originals. Before each stop, the operator verified that
+the complete source was an ancestor of the covering rollup, no extra non-merge topic commits would
+be lost, and the original was clean and had no Git operation in progress. The source heads were
+preserved under `refs/wip/2026-11-02/`; the covering rollups and active tests were left running.
+Those checks establish safe recovery for these two cases, not permission to stop an arbitrary
+member based only on a similar branch name.
+
+The pending gateway correction reads existing `.members` records for live ticket owners and for
+generated rollup snapshots holding the existing supervisor lease. Both `start` and `resume` use
+that ownership view; it never synthesizes persisted queue `batch` state. Missing or malformed
+membership for an active generated leader fails closed. Dead leases and dead tickets do not make
+old metadata an owner. The generated leader has two timestamp suffixes; an ordinary code branch
+such as `fix/land-rollup-member-ownership` must not be mistaken for a leader with missing metadata.
+`--replace` validates every owner before executing any stop, so encountering a direct member first
+cannot bypass a later rollup owner.
+
+Unlanded source evidence: `fb01a870b1` produced 15 intended failures for live-ticket membership;
+`ae34b23513` produced seven for pre-ticket leases, and `207f10a89d` showed that replacement stopped
+a direct member before refusing its carrier. Repaired source `1ba2ed8e85` passed 157 remote tests
+across async, rollup, GC, worktree and queue suites, with 0 new, 0 known and 0 flaky failures
+(`$TEMP/rosy-rollup-final-green/run-1.txt`). Red reports are
+`$TEMP/rosy-rollup-owner-red/run-1.txt`, `$TEMP/rosy-rollup-lease-red/run-1.txt` and
+`$TEMP/rosy-rollup-replace-red/run-1.txt`. These checks verify source behavior; deployment,
+already-running older gateways and measured lead-time targets remain separate acceptance checks.

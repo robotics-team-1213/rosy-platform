@@ -4362,3 +4362,23 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: `test/test_omx_cameras.py` 7 passed(로컬). 원격 시험은 착지에서 돈다.
 - gate 변화: 없음. 현장 적용은 OMX 장치 도구 자동 업데이트가 이 버전을 받은 뒤다.
 - CE: 기존 교훈 갱신 — `docs/solutions/runtime-errors/omx-cell-device-identity-after-rewiring-2026-10-31.md`
+
+## 2026-11-02 · uncommitted · OMX 자동 연속 운반(cell_auto_carry)과 없는 출발 site 거절
+
+- 변경: `cell_auto_carry.py`가 `cell_auto_pick.run_auto`를 반복해 출발지가 빌 때(관측 0개), 처음으로 놓기에 실패할 때, 또는 `--max`(검토자가 정한 횟수, 기본값 없음)에 이를 때까지 옮긴다. 매 운반 전에 top 시야를 확인하고, 운반마다 검토된 운영 범위(D-911)를 거친다. `--commissioning`은 받지 않는다(D-911 4: 감독 시험은 한 번의 운반). 공통 설정(`load_config`·옵션·셀 열기)은 `cell_auto_setup.py`로 옮겨 `cell_auto_pick.py`를 600줄 아래로 유지했다. `run_auto`는 config에 없는 출발 site를 동작 전에 거절한다(현장 arm_b 설정에서 `--from` 기본값 `pinky`가 KeyError였음).
+- 증거: 현장 arm_b dry-run(읽기 전용, `--from stack --dest pallet`): 2개 관측, 엉킨 덩어리·손가락 여유 7/26 mm로 모두 거절(정상). 원격 `test_omx_cell_auto_pick.py`·`test_omx_cell_auto_carry.py`
+- gate 변화: 없음. 실물 연속 운반은 아직 하지 않았다.
+- CE: 해당 없음
+
+## 2026-11-02 · uncommitted · feat(site): 관제 단위 overlay를 서명 candidate에 넣는다 (D-960)
+- 변경: `deploy/site/compose.control-unit.yaml`(Fleet에 `ROSY_CONTROL_UNIT_DIR` 읽기 전용 mount + 서명 proxy 이미지의 peer 프록시, 외부 `rosy-control-peers` 네트워크, alias `ROSY_CONTROL_UNIT_PEER_ALIAS`)을 candidate build·verify(`control_unit` 요약)·자동 갱신 허용 목록·실행 검사에 workcell과 같은 방식으로 추가.
+- 증거: 2026-11-02 현장 R 전환에서 사이트별 미서명 `compose.control-unit-r.yaml`을 `ROSY_SITE_PAIRING_COMPOSE`에 넣으면 자동 갱신이 모든 새 candidate를 거절함을 확인(updater `allowed_overlays`). 원격 `test_site_autoupdate.py`·`test_site_candidate*.py`·`test_control_unit_deploy.py`·`test_site_compose_log_rotation.py`.
+- gate 변화: 없음
+- 교훈: 작업 기록 2026-11-02 control-unit-d960-switch
+
+## 2026-11-02 · uncommitted · fix(site): Tailscale 대역에서도 천장 카메라 미리보기
+
+- 변경: 사이트 Caddy의 토큰 없는 카메라 보기 예외(`@lan_camera`, Fleet `vision/sources`·`vision/lease` 두 경로)에 Tailscale tailnet `100.64.0.0/10`을 더한다. 기존 `private_ranges`는 CGNAT 대역을 포함하지 않아 tailnet 브라우저가 401을 받았다. D-473 개발 세션이 이미 같은 대역을 사설망으로 받는 것과 맞춘다. 허가 범위(소스 목록·60초 source 한정 lease)와 다른 Fleet 경로의 토큰 요구는 그대로다.
+- 증거: 사이트·Fleet 관련 원격 pytest(커밋 뒤 실행). 2026-10-31 현장 proxy 컨테이너의 Caddy로 이 Caddyfile을 `caddy validate` → Valid configuration(적용 안 함). 현장 방화벽은 이미 `tailscale0`을 허용한다. 배포 전 현장 443에서 tailnet 주소의 `/api/fleet/vision/sources`는 401, 8443(Account)에서는 목록·lease·`ceiling_north` 프레임 200.
+- gate 변화: 없음. 서명 후보 배포 뒤 443 tailnet readback이 남았다. IP 주소로는 TLS가 실패하므로(인증서 SAN에 IP 없음) 이름으로 접속한다.
+- CE: 해당 없음 — 대역 누락은 이 기록과 Caddyfile 주석으로 복원된다.

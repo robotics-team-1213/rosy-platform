@@ -1,4 +1,8 @@
 """Pinned release-corrector evaluation and RL cases (split from mapped_stack_fixture, D-766)."""
+import math
+
+from container_variants import MASS_RATIO
+from ship_plate import SHIP_PLATE
 
 EVALUATION_CASES = {  # nominal geometry; the release feedback sees a 2-5 mm held-box estimate error
     'nominal-estimate': None,
@@ -28,3 +32,79 @@ RL_RESIDUALS['release-episodes-rl3'] = dict(file='release-residual-rl3.npz',
 # Nine-container check of rl3 without exploration: the same flow as nominal-bc-v0 (run ebdd, 8/9).
 EVALUATION_CASES['nominal-bc-v0-rl3'] = EVALUATION_CASES['nominal-bc-v0']
 RL_RESIDUALS['nominal-bc-v0-rl3'] = dict(RL_RESIDUALS['release-episodes-rl3'], sigma_m=0.)
+# Seed 45 (run ffb0): box 0 fell the 15 mm release clearance and slid 7.4 mm on landing. Same flow released 8 mm up.
+EVALUATION_CASES['nominal-bc-v0-release8'] = EVALUATION_CASES['nominal-bc-v0']
+FIXTURE_OVERRIDES = {'nominal-bc-v0-release8': dict(release_clearance_m=.008)}
+# Nominal IK (true pose) with a 3 mm release. The sim pad is a 3 mm capsule with a 1 mm rest offset per side, so a
+# neighbour-side finger needs a 5 mm gap; the new real fingers are about 3 mm (side camera estimate, 2026-10-31).
+FIXTURE_OVERRIDES['nominal-release3'] = dict(stack_release_clearance_m=.003)  # leveling stays at 15 mm (runs bcb1..4b67)
+FIXTURE_OVERRIDES['nominal-gap6-release3'] = dict(stack_release_clearance_m=.003, finger_gap_width_m=.005, row_gap_m=.006,
+                                                row_gap_band_m=[.0045, .0075])
+# Opt-in palletizing jaw v2.1 (team CAD, 2026-10-31) and the real container masses (user, 2026-11-01: 1/2/3 cells
+# 7.2 / 11.79 / 16 g). Everything else is the nominal flow; the default cases keep the stock jaw and 60 g.
+FIXTURE_OVERRIDES['nominal-palletizing-v21'] = dict(gripper='palletizing-v2.1', tcp_offset_m=[.074, -.0016, 0.],
+                                                    cargo_mass_kg=[.0072, .01179, .016])
+# Step 1 check: pick one 3-cell container, lift it and hold 2 s; the run ends there on purpose.
+FIXTURE_OVERRIDES['nominal-palletizing-v21-hold'] = dict(FIXTURE_OVERRIDES['nominal-palletizing-v21'], grasp_hold_check=True)
+# Step 2 check: the same jaw on the navy stud plate (ship_plate.py; KAN-108 CAD since 2026-11-01, before that photo estimates with a
+# 35.1 mm pitch and 5.1 mm lane). The three rows sit at the 36 mm dot pitch (6 mm lane); the stack release is 5 mm over the plate,
+# above the 3 mm dots (the floor is enforced too).
+FIXTURE_OVERRIDES['nominal-palletizing-v21-ship'] = dict(FIXTURE_OVERRIDES['nominal-palletizing-v21'],
+    ship_plate=dict(SHIP_PLATE), row_gap_m=.006, row_gap_band_m=[.0045, .0075], finger_gap_width_m=.005,
+    stack_release_clearance_m=.005,
+    # Open only 33 mm: each pad moves 1.5 mm off the box, so the neighbour-side pad (1.5 mm thick) stays inside the 5.1 mm lane (a 40 mm
+    # opening swung it 5 mm outward into the centre box: layer-1 row gap -0.7 mm, run s42o).
+    release_gap_m=.033,
+    # Leveling goes to bare table past the bow, at the arms' reach limit: 0.212 m carry is unreachable there, so it
+    # climbs and descends through a waypoint and carries at 0.13 m (planner scan, both arms reachable up to x -0.13, so the spot sits at -0.12 for drift margin).
+    leveling_center_m=[-.12, 0., .072], leveling_size_m=[.10, .06], leveling_carry_height_m=.13, leveling_via_m=[-.07, 0., .212])
+# Deliberate off-centre releases (release_offset_m = [along x, across y] metres, added to every placement's release target,
+# after the neighbour clamp). Candidates from the MuJoCo sweep (tools/sim/ship_release_sweep.py, docs/validation/omx-palletizing-sim-2026-11-01):
+# its layer-1 seat boundary at friction 1.0 is 0.5-0.6 mm across the channel and does not depend on the along offset. The sweep
+# says y040 seats, y060 and y-060 ride up a stud on the first layer, x150 seats. MuJoCo picks these; only the Isaac result counts.
+for _name, _offset in (('y040', [0., .0004]), ('y050', [0., .0005]), ('y060', [0., .0006]), ('y-060', [0., -.0006]),
+                       ('x150', [.0015, 0.]), ('y020', [0., .0002]), ('y030', [0., .0003]), ('x100', [.001, 0.])):
+    # Isaac 2026-11-01: y040..y-060 left first-layer boxes 0.9-1.2 mm high on a stud; x150 sits at the 1.5 mm target band edge.
+    FIXTURE_OVERRIDES['nominal-palletizing-v21-ship-'+_name] = dict(FIXTURE_OVERRIDES['nominal-palletizing-v21-ship'],
+                                                                    release_offset_m=_offset)
+# Isaac y020/y030 (2026-11-01): the 33 mm opening pushed a box released 0.2 mm toward its neighbour 0.6 mm outward onto
+# the outer stud. Try a 31.5 mm opening (each pad 0.75 mm off the box) on the nominal and offset releases.
+for _name, _offset in (('y-020', [0., -.0002]), ('y-030', [0., -.0003])):  # outward: meets the outer stud directly
+    FIXTURE_OVERRIDES['nominal-palletizing-v21-ship-'+_name] = dict(FIXTURE_OVERRIDES['nominal-palletizing-v21-ship'],
+                                                                    release_offset_m=_offset)
+for _name in ('', '-y020', '-y030', '-y040', '-y-020', '-y-030'):
+    FIXTURE_OVERRIDES['nominal-palletizing-v21-ship'+_name+'-g315'] = dict(
+        FIXTURE_OVERRIDES['nominal-palletizing-v21-ship'+_name], release_gap_m=.0315)
+# 31.5 mm (2026-11-01, seed 42): nominal, y020 and y040 9/9; y030 and y-020 left the first box 1.3 mm high with a pad
+# still touching it. Try the middle, 32.25 mm (each pad 1.1 mm off the box).
+for _name in ('', '-y020', '-y030', '-y040', '-y-020'):
+    FIXTURE_OVERRIDES['nominal-palletizing-v21-ship'+_name+'-g3225'] = dict(
+        FIXTURE_OVERRIDES['nominal-palletizing-v21-ship'+_name], release_gap_m=.03225)
+# Step 4 (2026-11-01, KAN-108 plate with 0.4 mm clearance per side): release strategy and container variant candidates from the MuJoCo
+# strategy sweep (tools/sim/ship_release_strategy_sweep.py): a relief foot (bottom 3 mm narrowed to 29.0 mm, container_variants 'r290')
+# widens the seat band most; a guarded descent (guarded_release.py) helps little. Isaac confirms the boundary only.
+GUARDED_DESCENT = dict(step_m=.0005, limit_m=.008, stall_m=.0002)
+for _name, _offset, _guard, _variant in (('y060-g315', .0006, False, None), ('y060-guard-g315', .0006, True, None),
+                                         ('r290-g315', 0., False, 'r290'), ('y080-r290-g315', .0008, False, 'r290'),
+                                         ('y100-r290-guard-g315', .001, True, 'r290'),
+                                         # plain boundary on the CAD plate and the relief foot past 0.8 mm both ways
+                                         ('y050-g315', .0005, False, None), ('y100-r290-g315', .001, False, 'r290'),
+                                         ('y-080-r290-g315', -.0008, False, 'r290')):
+    _value = dict(FIXTURE_OVERRIDES['nominal-palletizing-v21-ship'], release_gap_m=.0315)
+    if _offset:
+        _value['release_offset_m'] = [0., _offset]
+    if _guard:
+        _value['guarded_descent'] = dict(GUARDED_DESCENT)
+    if _variant:  # same density as the 16 g container: the mass follows the volume
+        _value.update(container_variant=_variant, cargo_mass_kg=[round(m*MASS_RATIO[_variant], 7) for m in _value['cargo_mass_kg']])
+    FIXTURE_OVERRIDES['nominal-palletizing-v21-ship-'+_name] = _value
+# Yaw at release (2026-11-01): MuJoCo on the CAD plate seated almost nothing at 3 degrees. Find the Isaac yaw boundary at 0.5 and 1 degree
+# (beyond about 1.3 degrees the 90 mm box overruns the 1 mm bin-extent band, a judging limit).
+for _name, _yaw in (('w05', .5), ('w10', 1.)):
+    for _base in ('g315', 'r290-g315'):
+        FIXTURE_OVERRIDES['nominal-palletizing-v21-ship-'+_name+'-'+_base] = dict(
+            FIXTURE_OVERRIDES['nominal-palletizing-v21-ship-'+_base], release_yaw_rad=math.radians(_yaw))
+# Step 4c (2026-11-02): fill the relief-foot boundary in 0.1 mm steps on both sides, several seeds (Isaac band about +-0.7 mm in Step 4b).
+for _name, _offset in (('y060', .0006), ('y070', .0007), ('y-060', -.0006), ('y-070', -.0007)):
+    FIXTURE_OVERRIDES['nominal-palletizing-v21-ship-'+_name+'-r290-g315'] = dict(
+        FIXTURE_OVERRIDES['nominal-palletizing-v21-ship-r290-g315'], release_offset_m=[0., _offset])

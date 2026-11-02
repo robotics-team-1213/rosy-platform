@@ -13526,6 +13526,47 @@ osy-d395-s1d\`.
 - Gate: 없음. simulation 계약 구현이며 실물 관측자·현장 수용은 별도다. 공개 push 없음.
 - CE: 해당 없음 — 설계 결정과 계약 추가이며 해결한 장애가 아니다.
 
+## 2026-11-01 · uncommitted · refactor: D-953 Pi 4·5 CPU 경로와 match_motion 비트 동일 가속
+- 변경: D-953(자체 Rust는 Pi 4 실측이 요구할 때만, 실행기는 `EventsExecutor`로 먼저). `scan_motion` `_segments` 묶음 SVD·`correspondence` 성분별 배열(결과 `==` 동일, 노트북 31~32→10.6~11.7 ms), `test_scan_motion_equivalence.py`(원본 사본, 실제 기록 프레임 포함 55건). `adr_gaps.txt`에 D-950·951(다른 브랜치)·952(미사용)
+- 증거: 관제 PC 상주 서비스 `py-spy --gil`(파이썬 몫 2~7%), Gazebo 2대 벤치에서 control 노드 GIL 표본의 81~96%가 rclpy 실행기, `ROSY_EXECUTOR=events` A/B로 line 50→24%·road 47→21%. 원격 시험 99개 통과(모델 PC). Pi 4·5 실기 측정 안 함(온라인 기체 없음)
+- gate 변화: 없음
+- 결정: D-953 Accepted(사용자 지시), 워크트리 슬롯 force-over-cap(사용자 "바로 처리해")
+- 교훈: `docs/solutions/logic-errors/expanded-distance-formula-flips-shared-vertex-ties-2026-11-01.md`(전개식 거리 계산이 실제 프레임 공유 끝점 동점을 뒤집음)
+
+## 2026-11-01 · uncommitted · perf: D-953 후속 — 작업대 관측 압축, Fleet TLS 컨텍스트, CORE 실행기 선택
+- 변경: `workcell_observation_bridge` 카메라 송신 `compression=None`(JPEG). `enrollment_tls` 검증 완료 컨텍스트를 (CA 바이트, 핀)으로 캐시(파일·유효기간 검사는 매번). CORE `ROSY_CORE_EXECUTOR`(`threaded` 기본, `events` 선택), `main()`에서 값 조기 검증, events 종료 예외는 경고로. D-953 후속 절
+- 증거: 원격 gateway 전체 통과(`e0f5a05691`), ROS-lane 19개 통과(진짜 Jazzy `EventsExecutor`, `RosyCoreNode.run()` 직접), 작업대 관측 시험 24개·Fleet 등록 TLS 시험 통과. Fleet TLS 733→170 µs/호출(노트북). 독립 검토: Fleet APPROVE, CORE REQUEST CHANGES(MEDIUM 3) 반영. CORE CPU A/B는 시험 PC 포화로 못 얻음. 기체 확인 안 함
+- gate 변화: 없음(CORE 기본값 그대로)
+- 결정: D-953 후속(사용자 "바로 처리해", "변경이 필요하면 변경")
+- 교훈: 없음
+
+## 2026-11-01 · 2ceddde26f · docs: D-947 OMX stacking sim models and claim scope (Proposed)
+- 변경: `docs/adr/D-947-omx-palletizing-sim-models-and-claim-scope.md`와 ADR 로그 행. 접촉·영상은 Isaac, 기하 스윕은 MuJoCo, 실행 계약은 MuJoCo·Gazebo, 셀 모델 대장 하나, 실물과 같은 카메라 다섯 대, 주장 범위
+- 증거: 하네스 lint에 D-947 오류 없음(남은 오류는 이 브랜치에 없는 다른 세션의 D-937~946)
+- gate 변화: 없음
+- 결정: D-947 Proposed(사용자 확인 대기)
+- 교훈: 없음
+
+## 2026-11-01 · a20b28b499 · docs: D-956 OMX ship plate release, seat check and relief-foot container (Proposed)
+- 변경: `docs/adr/D-956-omx-ship-plate-release-seat-check-and-relief-foot.md`와 ADR 로그 행. 31.5 mm 그 자리에서 놓기, 앉음 확인(0.5 mm·0.5°), 한 번 다시 놓기 후 HOLD, 컨테이너 바닥 3 mm 폭 29.0 mm, SR 후보 세 줄
+- 증거: `docs/validation/omx-palletizing-sim-2026-11-01/result.md` Step 3b~4(MuJoCo 3,942가지, Isaac seed 42)
+- gate 변화: 없음. 시뮬레이션 근거 제안이며 실물 수용(D-911)과 별개
+- 결정: D-956 Proposed(실물 옆 여유 실측·시험 출력 대기)
+
+## 2026-11-01 · uncommitted · docs: D-937 제품 앱 입사 문법과 capture-wall 표면 등록
+- 변경: `docs/adr/D-937`(제품/기능 두 레인, 제품 원형 네 가지, 웹 표면 전체 등록, Learning 웹 carve 조건)과 ADR Log 표 행·절, `tools/harness/adr_gaps.txt` D-936 결번 갱, `shared/web/surfaces.yaml` capture-wall 등록, `tools/capture/multi_record.html` 표면 계약 준수(`./` 참조, 범위 제목, RosyPalette 캔버스 팔레트)와 `multi_record.py` common 복사 목록 확대, `shared/web/test/test_canvas_palette_contract.py` 캔버스 목록, `applications/AGENTS.md` 판별 포인터
+- 증거: 원격 영향 선택 2 invocation — 38파일 923 passed(첫 돌림에서 캔버스 팔레트·제목 계약 2 failed를 계약 준수 수정 뒤 재시험으로 통과), `tools/capture/test/test_multi_record.py` 10 passed, `test/known_failures.py` 0 new. `rosy_harness.py lint` 0 errors
+- gate 변화: 없음
+- 결정: D-937 Accepted(사용자 합의)
+- 교훈: 기존 교훈 `landing-blockers-cost-hours-2026-10-18`(미등록 표면 사각지대)의 적용 사례 — 새 교훈 없음
+
+## 2026-11-01 · uncommitted · UI 일관성 회차 검증 기록
+
+- 변경: `docs/validation/fleet-ui-consistency-2026-11-01/README.md` — 이번 회차의 변경·비평 점수(23→27)·게이트 적발 6건·LOCAL 증거의 경계를 날짜 기록으로 남겼다.
+- 증거: 기록 문서이며 실행 코드 변화 없음.
+- Gate: 없음. CE: 해당 없음.
+
+
 ## 2026-11-02 · uncommitted · fix(land): 서로 닿지 않으면 차례는 가드만 (D-889 추가 22)
 - 변경: `land_selection.select` landed 경로 두 곳. 이 브랜치와 main 변화분의 선택이 겹치지 않고 안전 경로가 없으면 `_guards_only` + 닿는 브라우저 묶음만.
 - 증거: 11-01 17:45 뒤 착지 p90 152분. 느린 착지는 사전 시험 5~7분, 차례 대기 약 125분. 차례마다 변화분 묶음을 다시 돌아 7~13분씩 걸렸다. 원격 시험은 착지 기록에 남긴다.
@@ -13553,3 +13594,86 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: D-889 추가 23(사용자 결정 2026-11-02)
 - 교훈: 없음
+
+## 2026-11-02 · uncommitted · feat(tools): 업데이트 운영 CLI update_ops (D-957)
+- 변경: `tools/remote/update_ops.py`(status/run-now/hold/resume/forget-failed, selector `all|robots|site|로봇|호스트`), 계약 시험 `test/test_update_ops.py`, 설계 `docs/plans/2026-11-02-update-ops-cli-design.md`, ADR D-957, `tools/remote/AGENTS.md` 행. 호스트 코드 변경 없음; PC 유닛 홀드 장부는 gitignored `private/update-holds.json`
+- 증거: 원격 시험 PC(ai/model) `test/test_update_ops.py test/test_update_status.py` 46 passed / exit 0 (sha 54124e716b). RED 확인: 시험만 커밋한 712c66a83d에서 모듈 부재로 전체 실패. 실패 0이라 known_failures 비교 대상 없음. 착지 전 pre-push·영향 등급은 land 파이프라인이 다시 돈다
+- gate 변화: 없음. 원격 pytest 통과는 실장치·현장 수용 아님(로봇 유닛명·사이트 sudo 범위는 설계 §7 현장 확인 항목)
+- 결정: D-957 Accepted. 게이트 우회·Fleet UI 조작·주기 변경은 범위 밖
+- 교훈: 없음
+
+## 2026-11-02 · d33ce586f0 · feat(remote): Isaac batch across model and AI PCs, resume only unfinished runs
+- 변경: `tools/remote/isaac_batch.py`(실행 목록을 호스트마다 나눠 맡김, result.json 있으면 건너뜀, receipt만 있으면 그 호스트에서 이어 받음, 바쁜 호스트는 물러남), `remote_isaac.py --role model|ai`와 receipt role, `summarize()` 분리, 시험 `test/test_isaac_batch.py`, 실행 문서 한 단락
+- 증거: 원격 pytest `test_isaac_batch.py`·`test_remote_isaac.py`·`test_omx_cell_cases.py` 통과(exit 0)
+- gate 변화: 없음. AI PC는 Isaac SDK 6.2 venv는 있으나 실행 설정(`isaac-sdk.json`·`model-code.json`)이 없고, Ollama·SAM 서비스가 GPU를 상시 점유해 실행 승인 조건(GPU 점유 프로세스 없음)을 못 넘는다 — 사용자 결정 대기
+- CE: 해당 없음 — 새 도구 추가이며 장애 해결이 아니다
+
+## 2026-11-02 · b3702baef5 · feat(remote): isaac_batch grid plans, service pause window, summary table; AI PC as Isaac host
+- 변경: `tools/remote/isaac_batch.py` 격자 계획(`cases`×`seeds`), `--pause ROLE=unit`(배치 동안 멈추고 실패해도 원래 켜진 유닛만 다시 켬), `--busy-limit`, `summary.tsv`; `remote_isaac.SSH.systemctl`(유닛 이름만 허용). AI PC에 Isaac 실행 설정(`isaac-sdk.json`, 실행 잠금용 `model-code.json`)을 두고 `rosy-v11-sam-worker`는 자동 시작을 끔(`deploy/hosts/services.yaml` oneshot). 문서 `deploy/ai_pc/README.md`, `docs/deployment/isaac-experiment-runs.md`
+- 증거: 원격 pytest `test_isaac_batch.py`·`test_remote_isaac.py` 통과(exit 0). AI PC가 실제 배치에서 첫 실행(g315-s44)을 받아 시작함(receipt role ai)
+- gate 변화: 없음. AI PC Isaac 결과가 모델 PC와 같은지는 첫 결과로 대조한다
+- CE: 해당 없음 — 도구 개선이며 장애 해결이 아니다
+
+## 2026-11-02 · cd8243b5b2 · docs: D-958 lab compute ledger (Proposed)
+- 변경: `docs/adr/D-958-lab-compute-ledger-one-admission-gpu-slot-pausable-services.md`와 ADR 로그 행. 호스트마다 `remote_job.ADMIT` 한 입구, GPU 자리 독점·대기, `services.yaml` `gpu: yield/keep`과 호스트 측 되살리기, 다섯 단계 우선순위, 모델 PC 배치 대기열, `lab_jobs.py status`, 4단계 수용 기준
+- 증거: 이 브랜치의 잠금·입구 조사(`~/rosy-jobs`·`gpu.lock`·`work.lock` 분리, pytest만 ADMIT 통과)와 2026-11-02 배치 사건(세션 종료로 AI PC Ollama가 꺼진 채 남음, 따로 시작한 배치가 GPU를 뺏겨 실행 없이 끝남)
+- gate 변화: 없음. 설계 제안이며 구현은 단계별 변경
+- CE: 해당 없음 — 설계 결정 기록이며 해결한 장애가 아니다
+
+## 2026-11-02 · 7620243a3b · feat(hosts): D-958 stage 1, role services lend the GPU only while idle
+- 변경: `deploy/hosts/gpu_tenants.py`(idle·claim·release·tick), `rosy-gpu-tenants.service`·`.timer`(1분), `services.yaml` AI PC Ollama `gpu: idle-yield`와 두 유닛, `isaac_batch --pause`가 실행마다 빌림(이어 받는 실행 포함), `remote_isaac.SSH.tenants`, Isaac 예약 2시간→10분, 문서 `deploy/ai_pc/README.md`·D-958
+- 증거: 원격 pytest `test_gpu_tenants.py`·`test_isaac_batch.py`·`test_remote_isaac.py`·`test_host_services_manifest.py` 통과. AI PC에 설치, 타이머 active, `idle` 판정 idle(운행 로봇 없음), 실행 중 배치에서 `claim` → `paused-rosy-ollama.service` 표시와 owner_mode `shared` 확인
+- gate 변화: 없음. 단계 1 수용(배치 강제 종료 뒤 10분 안 복구)은 이번 배치가 끝난 뒤 확인
+- CE: 해당 없음 — 설계 구현이며, 세션 종료로 Ollama가 꺼진 채 남은 사건은 이 구현으로 구조를 고쳤다
+
+## 2026-11-02 · uncommitted · fix(land): 차례의 자기 브라우저 묶음은 변화분 브라우저 묶음이 닿을 때만 (D-889 추가 24)
+- 변경: `land_selection.select`의 `browsers()`가 변화분의 브라우저 묶음과만 겹침을 본다.
+- 증거: 11-02 03:32~04:06 charge-bay-panel 차례가 브라우저 묶음 7개를 직렬로 돌다 30분 한도로 반납, main 42분 정지. 원격 시험은 착지 기록에 남긴다.
+- gate 변화: 없음
+- 결정: D-889 추가 24
+- 교훈: 없음
+
+## 2026-11-02 · uncommitted · fix(land): 겹침 판정이 선택기 가드 묶음을 보지 않는다 (D-889 추가 25)
+- 변경: `land_selection.overlaps`가 `affected_tests.GUARD_SET`을 늘 빼고, `ignore`를 접두사로 본다.
+- 증거: 11-02 11:43 준비된 착지 다섯이 모두 가드 묶음(test_protocol_version_alignment, test/architecture/test_document_placement)으로 겹친다고 나와 rollup이 0개를 묶었다. 원격 시험은 착지 기록에 남긴다.
+- gate 변화: 없음
+- 결정: D-889 추가 25
+- 교훈: docs/solutions/workflow-issues/landings-gave-the-turn-back-and-reran-everything-2026-11-01.md에 더한다
+
+## 2026-11-02 · uncommitted · docs(adr): D-889 추가 10 결과에 M4 판정(FAIL)
+- 변경: D-889 추가 10 「결과」에 24시간 목표 판정 한 단락.
+- 증거: `tools/land_stats.py --goal --hours 24`(p90 395분, 정체 156분), 기록 폴더의 `land_goal.py`(p90 241분, 정체 103분), NEW 0.3 %·flaky 0.4 %·MAIN-RED 3건.
+- gate 변화: 없음
+- 결정: D-889 추가 10
+- 교훈: 없음
+
+## 2026-11-02 · uncommitted · D-945 5항 이행 완료로 닫음
+
+- 변경: D-945 5항과 DESIGN.md의 유예 목록을 닫는다 — 로봇 대시보드는 두 상태 셸 h1 규칙·hero-strip 제목 줄로 준수(공간 문법 보존), 웹 표면 이행 완료. Cam은 네이티브 앱이라 밖.
+- 증거: 기록 변경이며 test_layout_canon이 근거. 원격 시험은 다음 착지 전 기록.
+- Gate: 없음. CE: 해당 없음.
+
+## 2026-11-02 · uncommitted · docs(omx): 시범 학습 준비와 왼쪽 손목 진단 기록
+- 변경: [검증 기록](validation/omx-learning-readiness-2026-11-02/result.md)에 실제 녹화의 준비 부족, arm_a 읽기 전용 모터 관측, 손목 추종 실패 로그와 확대 사진 해시를 남겼다.
+- 증거: 운영 Learning 계정 화면 HTTP 200, 모터 ID 11–16 응답, 정지 직전 같은 장치의 건강 표본 대조. 새 학습·팔 동작·수리는 미실행이다.
+- gate 변화: 없음. 데이터·고장 원인 확인은 실물 수용이 아니다.
+- 교훈: CE 미해결. 원인이 검증되지 않아 해결 교훈을 추가하지 않았다.
+
+## 2026-11-02 · uncommitted · test: 리뷰 관문 스크립트를 시험이 부른다
+- 변경: `test/test_review_gate_script.py` — `.github/review-gate.sh`가 bash로 파싱되고 엄격 모드(`set -euo pipefail`, `inherit_errexit`)를 지키는지 본다. 경로를 글자 그대로 불러 선택기가 매핑한다.
+- 증거: 11-02 13:20~13:33 omx-arm-fault-visibility 차례가 main 변화분의 `.github/review-gate.sh: maps to no module (unknown -> full)`로 반납됐다. 원격 시험은 착지 기록에 남긴다.
+- gate 변화: 없음
+- 교훈: 없음
+
+## 2026-11-02 · 7090702e1f · fix(remote): isaac_batch retries an UNKNOWN run; Step 4c boundary over seeds and yaw; D-958 stage 1 kill test
+- 변경: `tools/remote/isaac_batch.py`가 UNKNOWN으로 끝난 실행을 옆으로 치우고 `job_errors` 한도 안에서 다시 돌린다(회귀 시험 `test_an_unknown_run_is_set_aside_and_retried_not_polled_forever`). `result.md` Step 4c, D-956 근거·결정 5·결과, D-958 1단계 진행
+- 증거: 24개 실행(모델 PC 21·AI PC 3) — 지금 컨테이너는 +0.2 mm에서 seed 43 실패, +0.3 mm 세 seed 실패. r290은 +0.6~+0.8 mm 세 seed 9/9, -0.6 mm 세 seed 9/9, -0.7 mm seed 42 9/9(seed 43은 평탄 맞춤 단계 실패로 판정 불가). 회전 0.5°는 두 컨테이너 9/9, 1°는 지금 컨테이너 실패, r290은 줄 간격 4.1~4.6 mm로 범위 밖. AI PC 실행 4fe8은 정리 확인 없이 UNKNOWN으로 끝나 옛 배치가 11시간 대기 없이 다시 물었다. D-958: 13:44 강제 종료 → 13:54 점검이 `released rosy-ollama.service`, `owner_mode` available. 원격 pytest `test_isaac_batch.py`·`test_remote_isaac.py` 통과
+- gate 변화: 없음
+- CE: 해당 없음 — UNKNOWN 재시도는 회귀 시험으로 고정했고, 세션 재시작 뒤 살아남은 프로세스는 저장소 밖 경험 메모에 남겼다
+
+## 2026-11-02 · uncommitted · feat(fleet): 확인된 ARM 시도의 재관측 계약(D-930, API v1.334)
+
+- 변경: `POST/GET /api/fleet/arm-transfers/jobs/{id}/rechecks`를 추가했다. 기다리는 재관측은 기존 observation context에 `phase=RECHECK`로 나오고 같은 observations 경로로 받는다. 검사는 POST_ACTION과 같고 요청 뒤 시각·측정 관절을 요구한다. Action·claim·작업 상태·영수증·v1.330 근거는 바뀌지 않는다(`work/physical_transfer_rechecks.py`, `fleet_physical_transfer_rechecks` 테이블).
+- 증거: 원격 `test_physical_transfer_recheck.py`와 관측자·v1.330·관측 계약·holder import 시험 58 passed. Harbor 전체 흐름 회귀(D-927)의 ⑤가 이 계약을 쓴다.
+- Gate: 없음. simulation 계약 구현이며 실물 관측자·현장 수용은 별도다. 공개 push 없음.
+- CE: 해당 없음 — 설계 결정과 계약 추가이며 해결한 장애가 아니다.

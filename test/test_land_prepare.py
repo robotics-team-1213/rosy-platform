@@ -141,6 +141,75 @@ def test_affected_overtime_preserves_full_origin_and_final_publisher_eligibility
     assert green_full(main, landed)
 
 
+def test_guard_overtime_prepares_outside_and_keeps_full_origin(full_anchor, monkeypatch):
+    main, wt, base, candidate, _, _ = full_anchor
+    guard_calls, prepared = [], []
+    real_prepare = land.land_prepare.prepare
+
+    def guard(wt_, args, invocations, logdir, round_no, run_tests, **kw):
+        guard_calls.append(round_no)
+        if len(guard_calls) == 1:
+            raise land.Overtime("guard consumed the turn budget")
+        return []
+
+    def outside(*args, **kw):
+        prepared.append(args[-2])
+        return real_prepare(*args, **kw)
+
+    monkeypatch.setattr(land.land_guards, "first", guard)
+    monkeypatch.setattr(land.land_prepare, "prepare", outside)
+    monkeypatch.setattr(land, "select", lambda *a, **k: ([["pkg/test"]], None))
+    assert land.main(["--tests", "auto"]) == 0
+    assert prepared == [[["pkg/test"]]] and "pre" in guard_calls
+    record = land.land_record.read(main, git(main, "rev-parse", "HEAD"))
+    assert record["tier"] == "full" and record["prepared_candidate"] == candidate and record["prepared_on"] == base
+
+
+def test_fast_forward_requires_the_same_turn_ownership_after_all_checks(full_anchor, monkeypatch):
+    main, _, _, _, _, _ = full_anchor
+    before = git(main, "rev-parse", "HEAD")
+
+    def lost_turn(*args, **kwargs):
+        for ticket in land.land_queue._held:
+            land.land_queue.set_status(ticket, "preparing")
+        return []
+
+    monkeypatch.setattr(land, "run_tests", lost_turn)
+    monkeypatch.setattr(land, "select", lambda *a, **k: ([["pkg/test"]], None))
+    assert land.main(["--tests", "auto"]) == 1
+    assert git(main, "rev-parse", "HEAD") == before
+
+
+@pytest.mark.parametrize("change", ["pid", "epoch", "missing_epoch"])
+def test_overtime_does_not_reprepare_or_rewrite_another_turn(full_anchor, monkeypatch, change):
+    main, _, _, _, _, _ = full_anchor
+    before, prepared = git(main, "rev-parse", "HEAD"), []
+    saved = {}
+
+    def adopted(*args, **kwargs):
+        ticket = land.land_queue._held[0]
+        info = json.loads(ticket.read_text())
+        fields = {"pid": os.getpid() + 1} if change == "pid" else {
+            "turn_started": info["turn_started"] + 100 if change == "epoch" else None}
+        land.land_queue.set_status(ticket, "turn", **fields)
+        saved.update(ticket=ticket, contents=ticket.read_bytes())
+        raise land.Overtime("an old check completed after ownership changed")
+
+    def refuse_prepare(*args, **kwargs):
+        prepared.append(args)
+        raise land.Stop("must not prepare another owner's ticket")
+
+    monkeypatch.setattr(land.land_guards, "first", adopted)
+    monkeypatch.setattr(land.land_prepare, "again", refuse_prepare)
+    monkeypatch.setattr(land, "select", lambda *a, **k: ([["pkg/test"]], None))
+    assert land.main(["--tests", "auto"]) == 1
+    assert not prepared, "the old owner entered preparation after losing its turn"
+    # leave() preserves a ticket adopted by another PID; its complete record must remain untouched.
+    if change == "pid":
+        assert saved["ticket"].read_bytes() == saved["contents"]
+    assert git(main, "rev-parse", "HEAD") == before
+
+
 def test_again_retains_original_full_base_when_main_moves_during_preparation(full_anchor, monkeypatch):
     main, wt, base, candidate, path, original = full_anchor
     args = land.argparse.Namespace(tests="auto", no_cache=False, queue_timeout=0)
@@ -282,16 +351,104 @@ def test_a_pending_landing_continues_on_mains_new_landing_code_with_its_own_tick
     assert json.loads(mine.read_text())["status"] == "preparing"
 
 
+@pytest.mark.parametrize("remote_tool", [False, True])
+def test_repository_without_landing_entrypoint_has_no_rules_to_relaunch(repos, monkeypatch, remote_tool):
+    main, wt = repos
+    if remote_tool:
+        commit(main, {"tools/remote/helper.py": "# unrelated remote tooling\n"}, "remote tool without a lander")
+    prep, queue = land.land_prepare, land.land_queue
+    assert prep.rules() is None, "missing landing code is unknown, not a changed runnable rule set"
+    qdir = main / ".git" / queue.QUEUE
+    mine = queue.take(qdir, "feat/x", str(wt))
+    monkeypatch.setattr(prep, "STARTED", "rules from the importing repository")
+    assert prep.relaunch(land, qdir, mine, lambda *a: pytest.fail("spawned a missing lander")) is None
+
+
 def test_mains_land_py_adopts_the_parents_ticket(tmp_path, monkeypatch):
     queue = land.land_queue
     ahead = queue.take(tmp_path, "feat/ahead", status="waiting")
     mine = queue.take(tmp_path, "feat/mine", status="pending")
+    queue.set_status(mine, "waiting", urgent="user request", batch_auto=True, batch=[], owner_note="keep")
+    original = json.loads(mine.read_text())
     monkeypatch.setattr(queue, "queue_dir", lambda wt: tmp_path)
     monkeypatch.setattr(queue, "_held", [])
     monkeypatch.setenv(queue.TICKET_ENV, str(mine))
     qdir, ticket = queue.enter(tmp_path, "feat/mine", "preparing")
     assert ticket == mine and sorted(tmp_path.glob("[0-9]*.json")) == [ahead, mine], "same place, no new ticket"
     assert json.loads(mine.read_text())["status"] == "preparing" and queue.TICKET_ENV not in os.environ
+    adopted = json.loads(mine.read_text())
+    assert all(adopted[key] == original[key] for key in ("start", "urgent", "batch_auto", "batch", "owner_note"))
+
+
+@pytest.mark.parametrize("blocked", [False, True])
+@pytest.mark.parametrize("changed", [False, True])
+def test_waiting_landing_refreshes_rules_before_its_turn(tmp_path, monkeypatch, blocked, changed):
+    prep, queue, batch = land.land_prepare, land.land_queue, land.land_batch
+    qdir = tmp_path / ".git" / queue.QUEUE
+    peer = queue.take(qdir, "feat/peer", status="turn") if blocked else None
+    mine = queue.take(qdir, "feat/mine", status="waiting", urgent="user request", batch_auto=True)
+    original = json.loads(mine.read_text())
+    monkeypatch.setattr(prep, "STARTED", "old")
+    monkeypatch.setattr(prep, "rules", lambda: "new" if changed else "old")
+    monkeypatch.setattr(prep, "watch", lambda *a: None)
+    monkeypatch.setattr(batch, "group_of", lambda *a: None)
+    monkeypatch.setattr(batch, "in_main", lambda *a: False)
+    monkeypatch.setattr(land.land_full, "restore", lambda *a: "tested-main")
+    calls, naps = [], []
+
+    def child(argv, env):
+        calls.append((argv, env))
+        assert argv[3] == str(tmp_path / "tools" / "land.py")
+        assert env[queue.TICKET_ENV] == str(mine) and env[land.land_checks.OWN_COPY] == "1"
+        return land.argparse.Namespace(returncode=7)
+
+    def release(seconds):
+        naps.append(seconds)
+        if peer:
+            peer.unlink()
+
+    wait = queue.wait
+    monkeypatch.setattr(queue, "wait", lambda *a, **k: wait(*a, **k, sleep=release))
+    monkeypatch.setattr(land.remote_pytest.remote_job, "step", child)
+    args = land.argparse.Namespace(tests="full", queue_timeout=0)
+    if changed:
+        with pytest.raises(SystemExit) as stopped:
+            batch.queue(land, tmp_path, "feat/mine", args, sys.executable, qdir, mine, tmp_path)
+        assert stopped.value.code == 7 and len(calls) == 1 and not naps
+        assert json.loads(mine.read_text())["status"] == "waiting", "old rules never grant the turn"
+    else:
+        assert batch.queue(land, tmp_path, "feat/mine", args, sys.executable, qdir, mine, tmp_path) is None
+        assert not calls and len(naps) == int(blocked)
+    current = json.loads(mine.read_text())
+    assert all(current[key] == original[key] for key in ("start", "urgent", "batch_auto", "branch", "worktree"))
+    assert sorted(qdir.glob("[0-9]*.json")) == ([peer, mine] if changed and blocked else [mine])
+
+
+@pytest.mark.parametrize("leader", [False, True])
+def test_rule_refresh_keeps_live_batches_on_their_loaded_rules(tmp_path, monkeypatch, leader):
+    prep, queue = land.land_prepare, land.land_queue
+    mine = queue.take(tmp_path, "feat/mine", status="waiting")
+    if leader:
+        queue.set_status(mine, "preparing", batch=["feat/member"])
+    else:
+        owner = queue.take(tmp_path, "feat/leader", status="preparing")
+        queue.set_status(owner, "preparing", batch=["feat/mine"])
+    monkeypatch.setattr(prep, "STARTED", "old")
+    monkeypatch.setattr(prep, "rules", lambda: "new")
+    assert prep.relaunch(land, tmp_path, mine, lambda *a: pytest.fail("a live batch was relaunched")) is None
+
+
+def test_reprepare_wait_refreshes_rules_before_turn(tmp_path, monkeypatch):
+    prep, queue = land.land_prepare, land.land_queue
+    mine = queue.take(tmp_path, "feat/mine", status="preparing")
+    monkeypatch.setattr(prep, "prepare", lambda *a: None)
+    monkeypatch.setattr(prep, "watch", lambda *a: None)
+    monkeypatch.setattr(prep, "relaunch", lambda *a: 9)
+    monkeypatch.setattr(land.land_full, "restore", lambda *a: "tested-main")
+    with pytest.raises(SystemExit) as stopped:
+        prep.again(land, tmp_path, "feat/mine", land.argparse.Namespace(queue_timeout=0), sys.executable,
+                   tmp_path, mine, [], "reprepare")
+    assert stopped.value.code == 9
 
 
 @pytest.mark.parametrize("main_moves,reds", [(True, 1), (True, 2), (False, 1)])

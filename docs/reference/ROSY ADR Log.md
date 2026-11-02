@@ -10,6 +10,12 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-937 | 제품 앱 입사 문법 — 제품/기능 두 레인과 네 제품 원형, 웹 표면 전체 등록. [전문](../adr/D-937-product-app-entry-grammar.md) | Accepted (2026-10-31, 사용자 합의; 물리 이동·권한 변경 없음) |
+| D-958 | 실험실 PC 계산 작업은 호스트마다 한 입구로 받고, GPU는 한 자리로 세며, 상시 서비스는 양보한다 — `remote_job.ADMIT` 단일 입구, GPU 자리 독점·대기, 각 PC 본업 최우선·실험은 노는 자원만(본업 요청 시 실험 양보), 호스트 측 서비스 되살리기, 모델 PC 배치 대기열, `lab_jobs.py status`. [전문](../adr/D-958-lab-compute-ledger-one-admission-gpu-slot-pausable-services.md) | Proposed (2026-11-02, 우선순위는 사용자 결정 반영) |
+| D-956 | OMX 배 판 놓기: 그 자리에서 놓고 앉음을 확인하며, 컨테이너 바닥에 단을 둔다 — 31.5 mm 열기, 높이 0.5 mm·기울기 0.5° 앉음 확인, 한 번 다시 놓기 후 HOLD, 바닥 3 mm 폭 29.0 mm. [전문](../adr/D-956-omx-ship-plate-release-seat-check-and-relief-foot.md) | Proposed (2026-11-01, 실물 여유 실측 대기) |
+| D-947 | OMX 적층 셀 시뮬레이션: 접촉·영상은 Isaac, 기하 스윕은 MuJoCo, 실행 계약은 MuJoCo·Gazebo — 셀 모델 원본 하나, 실물과 같은 카메라, 주장 범위. [전문](../adr/D-947-omx-palletizing-sim-models-and-claim-scope.md) | Proposed (2026-11-01, 사용자 확인 대기) |
+| D-953 | Pi 4·Pi 5 CPU는 이미 있는 네이티브 경로로 먼저 줄인다 — 자체 Rust 확장은 Pi 4 실측이 요구할 때만. [전문](../adr/D-953-pi45-cpu-native-path.md) | Accepted (2026-11-01, 사용자 지시; D-185 순서를 따름) |
+| D-957 | 업데이트 운영 CLI: 운영자의 즉시 시도·홀드·해제를 하나의 명령으로 구조화한다. 게이트(유휴·배터리·서명·freeze) 우회는 없다. [전문](../adr/D-957-update-ops-cli.md) | Accepted (2026-11-02, 사용자 결정; 호스트 코드 불변, 원격 시험·착지는 파이프라인 기록) |
 | D-960 | 실제 제어는 암 세트마다 붙은 관제가 하고, 통합관제 R은 그 위에서 조정한다. [전문](../adr/D-960-control-unit-per-arm-set-under-integrated-r.md) | Accepted (2026-11-02, 사용자 결정) |
 | D-930 | 확인된 ARM 시도의 재관측(새 측정 사실만, 실행·claim·완료 권한 없음, API v1.334). [전문](../adr/D-930-arm-transfer-recheck-of-confirmed-attempt.md) | Accepted (2026-10-30, 계약·simulation 구현 결정; 실물 수용 별도) |
 | D-907 | Native v2 read-only signed component profile contract. [전문](../adr/D-907-native-v2-readonly-profile-contract.md) | Accepted (2026-10-28) |
@@ -1399,6 +1405,11 @@ Fleet device ID, 실제 follower 설정, 장치별 검증·기록 경로를 별�
 
 발행 루프는 로봇마다 작업 하나를 claim해 백그라운드로 보내고, 교통 판정만 콘솔 잠금 하나로 직렬화한다. 발행 중인 로봇은 claim 순서대로 기록한 직선 임시 점유를 갖고, 판정은 그 순서를 따라 우선순위를 지킨다. 스냅샷 정리는 임시 점유를 지우지 않고 잠금을 기다리지 않는다. 취소된 발행은 로봇 취소와 `UNKNOWN`으로 스스로 정리한다. 전문은 [D-928](../adr/D-928-fleet-per-robot-dispatch-serial-traffic.md).
 
+## D-937 제품 앱 입사 문법 — 제품·기능 두 레인과 네 제품 원형, 웹 표면 전체 등록
+
+**Status:** Accepted (2026-10-31). 사용자 합의에 따른 입사 문법 정리이며 물리 이동·권한 변경을 수반하지 않는다.
+
+새 웹·네이티브 표면은 먼저 제품/기능을 판정한다. 기능 표면은 소유 모듈 곁에 둔 채 `surfaces.yaml`에 등록하고, 제품 표면은 `applications/<제품>`에 거래형·관측형·계산호스트형·외부업무형 네 원형 하나로 입사한다. 모든 웹 표면은 `tools/` 로컬 페이지를 포함해 등록하며 첫 적용으로 다중 녹화 벽(`capture-wall`)을 등록했다. Learning 웹의 server carve는 다음 임계점에 적용한다. 전문은 [D-937](../adr/D-937-product-app-entry-grammar.md).
 ## D-940 중복 정의 게이트와 의도 중복 등록부를 둔다
 
 **Status:** Accepted (2026-11-01). 등록·구현 지시는 사용자 결정이며 원격 시험·착지는 파이프라인 기록이 증거를 가진다.
@@ -1421,3 +1432,9 @@ LCD 코드 페어링과 도달 확인 읽기는 Tailscale tailnet(`100.64.0.0/10
 **Status:** Accepted (2026-11-01). 장치·현장 수용은 별도다.
 
 프레임마다 REST와 같은 검사(`apply_teleop`)를 하고, 최신 seq만 적용하며, 움직이던 소켓이 끊기면 0을 적용한다. Pilot은 소켓이 없거나 ack가 1 s 넘게 없으면 REST로 보낸다. 전문은 [D-948](../adr/D-948-teleop-websocket-stream.md).
+
+## D-953 Pi 4·Pi 5 CPU는 이미 있는 네이티브 경로로 먼저 줄인다 — 자체 Rust 확장은 Pi 4 실측이 요구할 때만
+
+**Status:** Accepted (2026-11-01). D-185를 대체하지 않는다. 기체 실측은 남아 있다.
+
+기체 노드 파이썬 시간의 81~96%는 rclpy 실행기다. 이것은 C++ `EventsExecutor`(`ROSY_EXECUTOR=events`, 시뮬 노드 CPU 약 절반)로 줄이고, 기체 A/B 뒤 Pi 4·5 기본값으로 삼는다. `match_motion`은 결과가 비트 단위로 같은 numpy 구현으로 약 2.8배 줄였다(Pi 5 환산 약 24 ms). 자체 PyO3 커널은 Pi 4 bench가 50 ms tick을 넘을 때만 들인다(환산 55~70 ms라 첫 후보). 후속: 작업대 관측 웹소켓 압축 끔, Fleet 등록 TLS 컨텍스트 재사용, CORE `ROSY_CORE_EXECUTOR`(기본 `threaded`, 기체 A/B 전 전환 금지). 전문은 [D-953](../adr/D-953-pi45-cpu-native-path.md).
