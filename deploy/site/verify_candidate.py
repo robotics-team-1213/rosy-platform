@@ -41,6 +41,7 @@ REQUIRED_DOCUMENT_FILES = ("docs/reference/site-lan-discovery-profile.md",)
 ACCOUNT_DEPLOYMENT_FILES = ("compose.account.yaml", "Caddyfile.account")
 MONITORING_DEPLOYMENT_FILES = ("compose.monitoring.yaml", "Caddyfile.monitoring")  # D-936
 SERVICES = ("fleet", "vision", "proxy", "postgres")
+ACCOUNT_SERVICES = (*SERVICES, "account")
 _COMMIT = re.compile(r"^[0-9a-f]{40}$")
 Runner = Callable[..., subprocess.CompletedProcess]
 
@@ -50,12 +51,12 @@ class CandidateVerificationError(ValueError):
 
 
 def verified_services(value: object) -> tuple[str, ...]:
-    """Canonicalize only the two authenticated service inventories (D-887)."""
+    """Canonicalize only the legacy and independent-Account signed inventories."""
     if isinstance(value, list) and all(isinstance(s, str) for s in value):
-        for services in (SERVICES[:3], SERVICES):
+        for services in (SERVICES[:3], SERVICES, ACCOUNT_SERVICES):
             if len(value) == len(services) and set(value) == set(services):
                 return services
-    raise CandidateVerificationError("candidate images must contain exactly Fleet, Vision, proxy, optionally Postgres")
+    raise CandidateVerificationError("candidate images must contain exactly the legacy or independent Account inventory")
 
 
 def _digest(path: Path) -> str:

@@ -673,16 +673,19 @@ def test_account_companion_missing_or_unhealthy_blocks_acceptance(rows):
 
 
 def test_account_runtime_identity_must_match_accepted_fleet_image():
-    rows = [{'Service': 'account', 'Image': f'rosy-site-fleet:{NEW}',
-             'State': 'running', 'Health': 'healthy', 'ID': 'account-container'}]
-    accepted = {'fleet': ['sha256:' + 'a' * 64]}
-    def inspect(*args):
-        return SimpleNamespace(stdout='sha256:' + 'a' * 64)
-    assert upd.containers_reason(rows, NEW, accepted, inspect, services=()) == ''
-    def untrusted(*args):
-        return SimpleNamespace(stdout='sha256:' + 'b' * 64)
+    services = ('fleet', 'vision', 'proxy')
+    rows = [{'Service': s, 'Image': f'rosy-site-{s}:{NEW}',
+             'State': 'running', 'Health': 'healthy', 'ID': s} for s in services]
+    rows.append({'Service': 'account', 'Image': f'rosy-site-fleet:{NEW}',
+                 'State': 'running', 'Health': 'healthy', 'ID': 'account'})
+    accepted = {s: [_image_id(NEW, s)] for s in services}
+    def inspect(args):
+        return SimpleNamespace(stdout=accepted['fleet' if args[-1] == 'account' else args[-1]][0])
+    assert upd.containers_reason(rows, NEW, accepted, inspect, services=services) == ''
+    def untrusted(args):
+        return SimpleNamespace(stdout='sha256:' + 'b' * 64) if args[-1] == 'account' else inspect(args)
     assert 'account running image identity' in upd.containers_reason(
-        rows, NEW, accepted, untrusted, services=())
+        rows, NEW, accepted, untrusted, services=services)
 
 
 def test_independent_account_runtime_uses_its_signed_reused_reference_and_identity():

@@ -66,6 +66,10 @@ def check_overrides(env: dict[str, str], commit: str, run, compose, services=SER
                     image_references: dict | None = None) -> None:
     """Refuse when anything could pin a site image other than the candidate's."""
     overlays = allowed_overlays(env)
+    independent_account = 'account' in services
+    if independent_account and not (image_references or {}).get('account'):
+        raise Refused('independent Account signed image reference is missing')
+    services = tuple(s for s in services if s != 'account' or ACCOUNT_OVERLAY[1] in overlays)
     link_compose = "/opt/rosy/candidate/deploy/site/compose.yaml"
     unit = run(["systemctl", "cat", STACK_UNIT]).stdout
     for line in unit.splitlines():
@@ -93,7 +97,8 @@ def check_overrides(env: dict[str, str], commit: str, run, compose, services=SER
     # D-936: Monitoring is no candidate image; it may only run the candidate's Fleet image.
     companions = {"monitoring": "fleet"} if MONITORING_OVERLAY[1] in overlays and "fleet" in services else {}
     # Older signed Account overlays had only a proxy; preserve their rollback path.
-    if ACCOUNT_OVERLAY[1] in overlays and 'account' in configured and 'fleet' in services:
+    if (not independent_account and tuple(services) in (SERVICES[:3], SERVICES)
+            and ACCOUNT_OVERLAY[1] in overlays and 'account' in configured):
         companions['account'] = 'fleet'
     if not isinstance(configured, dict) or set(configured) != set(services) | set(companions):
         raise Refused("Compose service set differs from the signed candidate")
@@ -434,13 +439,21 @@ def containers_reason(rows, commit: str, accepted: dict, run, services=SERVICES,
                       image_references: dict | None = None) -> str:
     if not isinstance(rows, list):
         return 'docker compose ps output is not a list'
+    independent = 'account' in services or 'account' in accepted or 'account' in (image_references or {})
+    if independent and (not accepted.get('account') or not (image_references or {}).get('account')):
+        return 'account signed image identity proof is incomplete'
     if any(isinstance(row, dict) and row.get('Service') in SERVICES
            and row['Service'] not in services for row in rows):
         return 'runtime contains a managed service outside the signed candidate'
     companions = {row.get('Service') for row in rows
                   if isinstance(row, dict) and row.get('Service') in ('account', 'monitoring')}
-    for service in (*services, *sorted(companions)):
-        owner = 'fleet' if service in companions else service
+    if ('account' in companions and not independent and
+            (tuple(services) not in (SERVICES[:3], SERVICES) or set(accepted) != set(services)
+             or (image_references is not None and set(image_references) != set(services)))):
+        return 'account legacy signed inventory proof is incomplete'
+    for service in (*services, *sorted(companions - set(services))):
+        owner = ('account' if service == 'account' and independent else
+                 'fleet' if service in companions else service)
         matches = [row for row in rows if isinstance(row, dict) and row.get('Service') == service]
         if len(matches) != 1:
             return f'{service} needs exactly one running container'

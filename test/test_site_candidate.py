@@ -168,7 +168,7 @@ def test_site_candidate_refuses_non_amd64_images_and_output_inside_checkout(tmp_
                  "pairing-sync-token.template.txt",
                  "compose.monitoring.yaml", "Caddyfile.monitoring",
                  "compose.account.yaml", "Caddyfile.account",
-                 "Dockerfile.fleet", "Dockerfile.vision", "Dockerfile.proxy"):
+                 "Dockerfile.fleet", "Dockerfile.vision", "Dockerfile.proxy", "Dockerfile.account"):
         (site / name).write_text("fixture", encoding="utf-8")
     (site / "rosy-site-stack.service").write_text("fixture", encoding="utf-8")
 
@@ -212,7 +212,7 @@ def test_host_runbook_verifies_site_signature_before_docker_load():
 def _fixture_repo(root: Path) -> None:
     site = root / "deploy" / "site"
     site.mkdir(parents=True)
-    for name in (*DEPLOY_FILES, "Dockerfile.fleet", "Dockerfile.vision", "Dockerfile.proxy"):
+    for name in (*DEPLOY_FILES, "Dockerfile.fleet", "Dockerfile.vision", "Dockerfile.proxy", "Dockerfile.account"):
         (site / name).write_text(f"fixture:{name}", encoding="utf-8")
     (site / ".env.example").write_text("ROSY_SITE_IMAGE_TAG=local\n", encoding="utf-8")
     for name in DOC_FILES:
@@ -251,7 +251,7 @@ def test_site_candidate_syft_sbom_keeps_the_scout_file_layout(tmp_path):
     syft_calls = [call for call in calls if call[0] == "syft"]
     assert [call[2] for call in syft_calls] == [
         f"docker:rosy-site-{service}:{COMMIT}"
-        for service in ("fleet", "vision", "proxy", "postgres")]
+        for service in ("fleet", "account", "vision", "proxy", "postgres")]
     assert not any(call[1:2] == ["scout"] for call in calls)
     for service, row in manifest["images"].items():
         assert row["sbom"] == f"sbom/{service}.spdx"
@@ -283,7 +283,7 @@ def test_site_candidate_refuses_ignored_secret_files_in_the_proxy_build_context(
 def test_site_images_copy_only_public_repo_files():
     root = Path(__file__).resolve().parents[1]
     site = root / "deploy" / "site"
-    for name in ("Dockerfile.fleet", "Dockerfile.vision"):
+    for name in ("Dockerfile.fleet", "Dockerfile.vision", "Dockerfile.account"):
         for line in (site / name).read_text(encoding="utf-8").splitlines():
             if line.split(" ", 1)[0] in {"COPY", "ADD"}:
                 assert "secrets" not in line and ".env" not in line, line

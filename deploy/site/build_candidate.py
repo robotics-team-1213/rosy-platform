@@ -43,9 +43,23 @@ MIRRORED_IMAGES = {
 # sources are copied whole, so ignored files under any of them could reach the
 # Docker daemon or an image. Python caches and egg-info carry no secrets.
 _HARMLESS_IGNORED = ("__pycache__/", ".pytest_cache/", ".egg-info/")
-_COPIED_BY = ("Dockerfile.fleet", "Dockerfile.vision")
+_COPIED_BY = ("Dockerfile.fleet", "Dockerfile.vision", "Dockerfile.account")
 _PARSED_COPY_FLAGS = ("--chown=", "--chmod=")
 Runner = Callable[..., subprocess.CompletedProcess]
+
+
+def _local_stage_copy(words: list[str], text: str) -> bool:
+    stages = {match.lower() for match in re.findall(r'^FROM\s+\S+\s+AS\s+(\S+)\s*$', text, re.M | re.I)}
+    flags = [word for word in words if word.startswith('--from=')]
+    if not flags:
+        return False
+    if (words[0].upper() != 'COPY' or len(flags) != 1
+            or flags[0].split('=', 1)[1].lower() not in stages
+            or any(w.startswith(('[', '<<')) for w in words[1:])
+            or any(w.startswith('--') and w not in flags and not w.startswith(_PARSED_COPY_FLAGS)
+                   for w in words[1:])):
+        raise ValueError('COPY --from must name a local declared build stage')
+    return True
 
 
 def _image_source_paths(site: Path) -> list[str]:
@@ -56,6 +70,8 @@ def _image_source_paths(site: Path) -> list[str]:
         for line in text.splitlines():
             words = line.split()
             if not words or words[0].upper() not in {"COPY", "ADD"}:
+                continue
+            if _local_stage_copy(words, text):
                 continue
             # Fail closed on any form this parser does not understand (JSON
             # array, heredoc, --from/--link/... flags): a skipped COPY would
@@ -87,9 +103,12 @@ def _build_inputs(site: Path, service: str) -> set[str] | None:
     name = f"Dockerfile.{service}"
     paths = {f"deploy/site/{name}", f"deploy/site/{name}.dockerignore", prefix + ".dockerignore",
              "deploy/site/build_candidate.py", ".github/workflows/build-site-candidate.yml"}
-    for line in (site / name).read_text(encoding="utf-8").replace("\\\n", " ").splitlines():
+    text = (site / name).read_text(encoding="utf-8").replace("\\\n", " ")
+    for line in text.splitlines():
         words = line.split()
         if not words or words[0].upper() not in {"COPY", "ADD"}:
+            continue
+        if _local_stage_copy(words, text):
             continue
         if (len(words) < 3 or any(w.startswith(("[", "<<")) for w in words[1:])
                 or any(w.startswith("--") and not w.startswith(_PARSED_COPY_FLAGS) for w in words[1:])):
@@ -211,6 +230,7 @@ def build_candidate(root: Path, output_dir: Path, *, runner: Runner = subprocess
         return True
     services = {
         "fleet": (site / "Dockerfile.fleet", root),
+        "account": (site / "Dockerfile.account", root),
         "vision": (site / "Dockerfile.vision", root),
         "proxy": (site / "Dockerfile.proxy", site),
     }

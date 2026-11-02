@@ -52,10 +52,23 @@ def test_standalone_existing_cookie_and_initial_password_resume_registered_app(s
                                       'secure': True, 'httpOnly': True, 'sameSite': 'Lax'}])
                 page = context.new_page()
                 errors = []
+                resources_failed = []
                 page.on('pageerror', lambda error: errors.append(str(error)))
+                page.on('response', lambda response: resources_failed.append(response.url)
+                        if response.status >= 400 and any(p in response.url for p in
+                            ('/common/', '/console/assets/')) else None)
                 page.goto(entry)
                 expect(page.get_by_role('heading', name='Registered callback')).to_be_visible(timeout=15000)
                 assert 'code=' in page.url and 'state=standalone-browser' in page.url
+                page.goto(origin + '/console/profile')
+                expect(page.locator('#profile-content')).to_be_visible()
+                page.locator('#profile-name').fill('Account artifact administrator')
+                with page.expect_response(lambda response: response.url.endswith('/api/fleet/auth/profile')
+                                          and response.request.method == 'PATCH') as saved:
+                    page.locator('#profile-name-save').click()
+                assert saved.value.status == 200
+                page.goto(origin + '/console/accounts')
+                expect(page.locator('#account-list')).to_contain_text('bob')
                 context.clear_cookies()
                 page.goto(entry)
                 expect(page.locator('[data-login=form]')).to_be_visible()
@@ -68,6 +81,7 @@ def test_standalone_existing_cookie_and_initial_password_resume_registered_app(s
                 page.locator('[data-login=submit]').click()
                 expect(page.get_by_role('heading', name='Registered callback')).to_be_visible(timeout=15000)
                 assert errors == []
+                assert resources_failed == []
                 assert sessions.check('browser-check', 'bob', 'bob-final-password').password_change_required is False
             finally:
                 browser.close()

@@ -61,6 +61,8 @@ class SiteRuntimeIO:
                 raise Rejected('signed manifest commit differs from candidate commit')
             services = verified_services(manifest.get('verified_images'))
             refs = manifest.get('image_references')
+            if 'account' in services and refs is None:
+                raise Rejected('independent Account signed image reference proof is missing')
             if refs is not None:
                 if (not isinstance(refs, dict) or set(refs) != set(services)
                         or any(not isinstance(refs[s], str)
@@ -116,6 +118,9 @@ class SiteRuntimeIO:
         services = self._runtime_proofs.get(commit)
         if services is None:
             return 'runtime has no verified service-set proof'
+        overlays = shlex.split(env.get('ROSY_SITE_PAIRING_COMPOSE', ''))
+        services = tuple(s for s in services if s != 'account' or
+                         '/opt/rosy/candidate/deploy/site/compose.account.yaml' in overlays)
         try:
             out = self._compose(env, "ps", "--all", "--format", "json").stdout.strip()
         except Transient as error:
@@ -157,6 +162,9 @@ class SiteRuntimeIO:
         outgoing = self._runtime_proofs[commit]
         self.check_overrides(env, commit, folder=folder, env_file=self.paths.env_backup,
                              services=outgoing)
+        # Account remains an optional overlay across old Fleet-owned and new independent images.
+        outgoing = tuple(s for s in outgoing if s != 'account')
+        incoming = tuple(s for s in incoming if s != 'account')
         if outgoing == incoming:
             return
         if set(outgoing) - set(incoming) != {'postgres'}:

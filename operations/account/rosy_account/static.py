@@ -2,9 +2,6 @@
 import json
 from pathlib import Path
 
-from fastapi import HTTPException
-from fastapi.responses import FileResponse, RedirectResponse
-
 PAGES = frozenset(('/console/login', '/console/profile', '/console/accounts'))
 ASSETS = frozenset(('fleet-document.css', 'password-login.css', 'password-login.js', 'login-page.js',
                     'login-return.js', 'profile-page.js', 'account-page.js', 'account-permissions.js',
@@ -13,6 +10,8 @@ CSP = "default-src 'self'; connect-src 'self'; img-src 'self' data:; style-src '
 
 
 def install_static(app, web_root, web_common):
+    from fastapi import HTTPException
+    from fastapi.responses import FileResponse, RedirectResponse
     root, common = Path(web_root).resolve(), Path(web_common).resolve()
     registry = json.loads((root / 'assets.json').read_text(encoding='utf-8'))
     common_assets = json.loads((common / 'shared-assets.json').read_text(encoding='utf-8'))['shared_assets']

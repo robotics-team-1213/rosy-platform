@@ -11,7 +11,7 @@ D-757은 단일 사람 신원과 앱별 세션·권한을 정했고 초기 구�
 ## Decision
 
 1. `operations/account/rosy_account`가 사람 계정·비밀번호·프로필·자원 grant·세션 family·회수·PKCE 발급과 계정 감사를 소유한다. Fleet을 import하거나 Fleet 원장·admission·장치 자격을 필요로 하지 않는다. 기존 구현을 이동·재사용하며 계정 ID·grant·revision을 다시 발급하지 않는다.
-2. 통합관제 PC의 별도 Compose 서비스 `account`로 실행한다. 첫 배포는 기존 서명 Fleet 이미지에 두 프로세스의 코드를 함께 포장하되 Account의 실행 환경·설정·키·영속 DB·수명은 Fleet과 분리한다. Account에 Docker socket·로봇 자격·Fleet 원장 볼륨을 연결하지 않는다. 별도 실행은 별도 이미지 이름을 요구하지 않는다(D-315).
+2. 통합관제 PC의 별도 Compose 서비스 `account`로 실행한다. Account는 독립 서명 이미지 `rosy-site-account`로 빌드하며 Fleet·Control Unit 서비스·제어/지각 코드나 Fleet 이미지에 빌드·실행 의존하지 않는다. Account 코드와 필요한 foundation Account 계약, 최소 Python 의존성, 기존 정본에서 추출한 로그인·프로필·계정 관리 자산만 포함한다. UID/GID 10001의 비특권 프로세스로 실행하고 설정·키·영속 DB·수명을 Fleet과 분리한다. Docker socket·로봇 자격·Fleet 원장 볼륨을 연결하지 않는다. 기존 세 이미지·네 이미지 서명 후보의 검증과 복구는 유지하고, 새 다섯 이미지 후보는 Account 이미지·SBOM·불변 ID도 서명·검증한다. Account overlay가 꺼져 있어도 서명 이미지 검증은 생략하지 않으며, 켜져 있으면 해당 Account 이미지로만 실행한다. 과거 서명 후보의 Fleet 이미지 공유는 그 후보의 검증된 이미지 목록에만 적용하는 호환 경로다(D-315).
 3. 현재 HTTPS issuer와 등록 client/callback, `/api/fleet/auth/*` 프로토콜을 유지한다. Account origin은 Account가, Fleet origin의 업무 API와 receiver 세션은 Fleet이 소유한다. Fleet은 foundation AccountClient로 동일 계정을 검증하고 실제 site scope·grant로 SitePrincipal을 만든다. 중앙 쿠키와 Fleet receiver 쿠키를 구분한다.
 4. 기존 SQLite의 Account·브라우저 세션·OAuth 테이블을 하나의 새 Account DB로 일관되게 이관한다. 계정과 OAuth의 원자적 회수 transaction을 나누지 않는다. 기존 활성 authority를 재-bootstrap하지 않는다. writer 중지·백업·참조 및 값 보존 검사·단일 writer 전환 뒤 프록시를 바꾼다. 이후 변경을 옛 백업으로 덮는 복구는 금지한다.
 5. D-473의 익명 개발 세션 발급·합성 operator 수락·로그아웃 직후 자동 개발 재접속은 폐기한다. `development`는 개발 연결 환경 표식으로 남고 사람 권한을 만들지 않는다. 개발 모드도 로그인 제공 설정이 있어야 시작하며, 익명 업무 읽기·쓰기는 거부한다. 로그인한 viewer를 operator로 승격하지 않는다. 최초 비밀번호 변경·CSRF·세션 회수·기계 자격의 기존 제한을 유지한다.
