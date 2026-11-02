@@ -1317,6 +1317,25 @@ def test_plan_gives_xdist_words_and_args_only_to_safe_invocations_on_full_hosts(
     assert xp.plan(GROUP, {**full, "light": True, "mem": 4.7}, [])[:2] == (["ROSY_JOB_MEM_GB=4"], [])
 
 
+def test_explicit_host_exclusive_job_never_gets_xdist_workers():
+    full = {"cores": 14.0, "mem": 10.0, "site": False, "light": False}
+    assert xp.plan(['ROSY_JOB_ALONE=1', 'test/test_platform_g1_timing.py'], full, [])[:2] == ([], [])
+
+
+def test_exclusive_word_reaches_actual_job_export_and_admission(tmp_path):
+    if not shutil.which('setsid') or sys.platform == 'win32':
+        pytest.skip('Linux process/job admission fixture')
+    home, env = _job_env(tmp_path, 'echo "job_alone=${ROSY_JOB_ALONE:-}"\n'
+                        'cat "$HOME"/rosy-jobs/*.lock\necho "args $*"\n')
+    start = _sh(rj.START, env, 'r', 'd', '', '0', '60', rj.JOB,
+                'ROSY_JOB_ALONE=1', 'test/test_platform_g1_timing.py', '-pno:xdist')
+    assert start.returncode == 0, start.stderr
+    assert _poll_until_done(env) == 0
+    out = (home / 'rosy-test/runs/r.jobs/0.log').read_text()
+    assert 'job_alone=1' in out and re.search(r'^\d+ alone 2 6$', out, re.M)
+    assert 'ROSY_JOB_ALONE=1' not in out
+
+
 def test_run_on_adds_xdist_to_the_run_but_never_to_the_quarantine_rerun(tmp_path, monkeypatch):
     monkeypatch.setattr(rp, "ship", lambda *a, **kw: None)
     monkeypatch.setattr(rp, "deps", lambda repo, sha: ("d" * 16, []))

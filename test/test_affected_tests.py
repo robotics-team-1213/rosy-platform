@@ -667,7 +667,7 @@ def test_local_run_of_a_full_selection_runs_only_guards_and_direct_suites(sample
     class Done:
         returncode = 0
 
-    monkeypatch.setattr(affected.subprocess, "run", lambda cmd, cwd: ran.append(cmd) or Done())
+    monkeypatch.setattr(affected.subprocess, "run", lambda cmd, cwd, **kwargs: ran.append(cmd) or Done())
     assert affected.run(sample, sel) == 0
     local = {p for cmd in ran for p in cmd[3:] if not p.startswith("-")}
     # core_common's own suite and its direct reverse dependent (sensing imports core_common)
@@ -703,7 +703,7 @@ def test_skip_drops_paths_the_caller_already_ran(sample, monkeypatch):
     class Done:
         returncode = 0
 
-    monkeypatch.setattr(affected.subprocess, "run", lambda cmd, cwd: ran.append(cmd) or Done())
+    monkeypatch.setattr(affected.subprocess, "run", lambda cmd, cwd, **kwargs: ran.append(cmd) or Done())
     affected.run(sample, sel, skip=frozenset(GUARDS))
     paths = {p for cmd in ran for p in cmd[3:] if not p.startswith("-")}
     assert paths == {"test/test_rosy_ssh_enroll.py"}

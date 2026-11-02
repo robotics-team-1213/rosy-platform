@@ -23,6 +23,7 @@ Standard library plus PyYAML, like the rest of the harness.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from dataclasses import dataclass, field
@@ -32,6 +33,7 @@ from affected_pack import IGNORED_BASENAMES, MAX_INVOCATION_CHARS, SelectionErro
 from affected_repo import HARNESS, IMPORT, TEST_FILE, Repo, _git, _match, _under  # noqa: F401  (re-exported)
 
 import affected_narrow  # D-762 stage 0 FULL-trigger narrowing
+import affected_exclusive
 import safety_review  # D-430 5 judge, reused so the selector and the trailer rule agree
 from affected_ci import (CI_FULL_EXCLUDED, CI_FULL_MATRIX, FLEET_TEST_SECONDS, FULL_SUITES,  # noqa: F401
                          ROOT_SHARDS, SUITE_SHARDS, ci_matrix)  # the CI full-run matrix, re-exported
@@ -210,7 +212,9 @@ def lab_full_invocations(repo: Repo, local: list[list[str]] = ()) -> list[list[s
     suite (`_full_paths`) and every `local` path none of those already covers.
     """
     ci = [inv for entry in CI_FULL_MATRIX for inv in entry["invocations"]] + [["test"]]
-    return ci + pack(repo, _outside_ci_matrix([*_full_paths(repo), *(p for inv in local for p in inv)]))
+    return affected_exclusive.separate(ci + pack(repo, _outside_ci_matrix(
+        [*_full_paths(repo), *(p for inv in local for p in inv if not p.startswith(('ROSY_', '-')))])),
+        affected_exclusive.TARGET in repo.test_files)
 
 
 def _outside_ci_matrix(paths: list[str]) -> list[str]:
@@ -354,6 +358,7 @@ def pytest_command(paths: list[str], python: str = "python") -> list[str]:
     # One suite that cannot import (a wheel missing on this host) must not hide
     # the rest of a packed invocation; the collection error still fails the run.
     # Same ROS launch_testing block as CI (test/known_failures.py NO_ROS_LAUNCH_PLUGINS).
+    paths, _ = affected_exclusive.split_environment(paths)
     return [python, "-m", "pytest", *paths, "-q", "--continue-on-collection-errors",
             "-pno:launch_testing", "-pno:launch_ros"]
 
@@ -389,13 +394,14 @@ def run(repo_root: Path, sel: Selection, allow_full: bool = False,
               " reverse dependents, referencing tests). --full overrides.", flush=True)
         invocations = sel.local_invocations
     if skip:
-        invocations = [kept for kept in ([p for p in inv if p not in skip] for inv in invocations) if kept]
+        invocations = affected_exclusive.omit(invocations, skip)
         print(f"[affected] skipping {len(skip)} path(s) the caller already ran", flush=True)
     status = 0
     for inv in invocations:
+        _, environment = affected_exclusive.split_environment(inv)
         command = pytest_command(inv, sys.executable)
         print("[affected] " + " ".join(pytest_command(inv)), flush=True)
-        code = subprocess.run(command, cwd=repo_root).returncode
+        code = subprocess.run(command, cwd=repo_root, env={**os.environ, **environment}).returncode
         # 5 = no tests collected; a selected file that only skips is not a failure.
         if code not in (0, 5):
             status = 1

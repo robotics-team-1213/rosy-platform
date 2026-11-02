@@ -51,6 +51,8 @@ def serial_reason(inv: list[str], serial: list[str]) -> str | None:
     """Why inv must not get ``-n``, or None when it may."""
     env = list(itertools.takewhile(ENV_WORD.match, inv))
     words = inv[len(env):]
+    if 'ROSY_JOB_ALONE=1' in env:
+        return 'host-exclusive job'
     if any(w.startswith("ROSY_RUN_BROWSER_TESTS=") for w in env):
         return "browser job"
     if any(OWN_XDIST.match(w) for w in words):

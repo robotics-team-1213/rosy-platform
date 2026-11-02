@@ -12,6 +12,7 @@ from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 
 import affected_ros  # PR #96: per-path full-tier ROS environment for affected runners
+import affected_exclusive
 
 if TYPE_CHECKING:
     from affected_tests import Repo, Selection
@@ -140,4 +141,4 @@ def ci_matrix(repo: Repo, sel: Selection) -> dict:
         entry.setdefault("kind", "pytest")
         entry.setdefault("gating", True)
         entry.setdefault("ros", "overlay")
-    return {"include": entries}
+    return {"include": affected_exclusive.matrix(entries, affected_exclusive.TARGET in repo.test_files)}
