@@ -13588,3 +13588,16 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: D-889 추가 25
 - 교훈: docs/solutions/workflow-issues/landings-gave-the-turn-back-and-reran-everything-2026-11-01.md에 더한다
+
+## 2026-11-02 · uncommitted · docs(adr): D-889 추가 10 결과에 M4 판정(FAIL)
+- 변경: D-889 추가 10 「결과」에 24시간 목표 판정 한 단락.
+- 증거: `tools/land_stats.py --goal --hours 24`(p90 395분, 정체 156분), 기록 폴더의 `land_goal.py`(p90 241분, 정체 103분), NEW 0.3 %·flaky 0.4 %·MAIN-RED 3건.
+- gate 변화: 없음
+- 결정: D-889 추가 10
+- 교훈: 없음
+
+## 2026-11-02 · uncommitted · docs(omx): 시범 학습 준비와 왼쪽 손목 진단 기록
+- 변경: [검증 기록](validation/omx-learning-readiness-2026-11-02/result.md)에 실제 녹화의 준비 부족, arm_a 읽기 전용 모터 관측, 손목 추종 실패 로그와 확대 사진 해시를 남겼다.
+- 증거: 운영 Learning 계정 화면 HTTP 200, 모터 ID 11–16 응답, 정지 직전 같은 장치의 건강 표본 대조. 새 학습·팔 동작·수리는 미실행이다.
+- gate 변화: 없음. 데이터·고장 원인 확인은 실물 수용이 아니다.
+- 교훈: CE 미해결. 원인이 검증되지 않아 해결 교훈을 추가하지 않았다.
