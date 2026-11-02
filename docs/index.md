@@ -355,6 +355,6 @@
 
 - 2026-11-02 · uncommitted · feat(fleet): 멈춘 관절을 이름으로 보이고, 팔마다 가드 정지 이력을 셀 화면에 남긴다
 - 2026-11-02 · uncommitted · fix(omx): 막힌 wrist_roll을 가드 전에 멈추고, 가드 고장마다 기록과 카메라 프레임을 남긴다
-- 2026-11-02 · uncommitted · feat(tools): 업데이트 운영 CLI update_ops (D-957)
-- 2026-11-02 · uncommitted · fix(land): 준비된 착지도 서로 닿지 않으면 한 표로 묶는다 (D-889 추가 23)
-- 2026-11-02 · uncommitted · docs(adr): D-960 암 세트마다 셀 관제, 그 위에 통합관제 R
+- 2026-11-02 · uncommitted · docs(omx): 시범 학습 준비와 왼쪽 손목 진단 기록
+- 2026-11-02 · uncommitted · docs(adr): D-889 추가 10 결과에 M4 판정(FAIL)
+- 2026-11-02 · uncommitted · fix(land): 겹침 판정이 선택기 가드 묶음을 보지 않는다 (D-889 추가 25)
