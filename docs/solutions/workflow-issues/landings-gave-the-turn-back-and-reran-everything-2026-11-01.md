@@ -75,6 +75,12 @@ reruns. Each cause below was found from `.git/rosy-land-events.jsonl` and `.git/
    (`land_checks.landed_copy`), so the exit-5 fix in `land_cache` hit the same exit 5 in its own turn. When
    the blocker is in the judging code, put a fix in the tested tree first (here the conftest), land that,
    then land the tooling change.
+9. **A daytime landing-tool change makes every later turn rerun the tool suites.** `tools/land*.py` maps
+   to the harness tier, so once one lands, each later landing's main delta escalates to FULL and its turn
+   reruns the delta's mapped suites, even for a docs-only branch. On 11-02 two tool landings (17:31,
+   17:44) were followed by two give-backs: a rollup at 18:00 (10 min cap) and `docs/app-surface-grammar`
+   at 18:35 (30 min cap), and main stood 58+ min. Rule: batch landing-tool changes into one landing at
+   night; in the day, hold them in a worktree with their tests already passing remotely.
 
 ## Measurement trap
 

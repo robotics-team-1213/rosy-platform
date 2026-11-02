@@ -13713,6 +13713,13 @@ osy-d395-s1d\`.
 - 결정: 없음
 - 교훈: `docs/solutions/runtime-errors/omx-blocked-wrist-roll-reached-the-guard-unseen-2026-11-02.md`
 
+## 2026-11-02 · uncommitted · fix(omx): 가드 고장 프레임을 설정 없이 남긴다
+- 변경: `motor_health.FAULT_FRAMES`. `ROSY_OMX_FAULT_FRAMES`가 없으면 카메라 뷰 유닛(`rosy-omx-camera-view`, 포트 8767)의 top·side 프레임을 남긴다. 빈 값이면 끈다.
+- 증거: 현장 PC 러너에 이 변수를 넣는 배포 경로가 없어, 기본값 없이는 프레임이 남지 않음.
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: `docs/solutions/runtime-errors/omx-blocked-wrist-roll-reached-the-guard-unseen-2026-11-02.md`
+
 ## 2026-11-02 · uncommitted · fix(landing): rollup 회원 완료와 접수 origin 측정
 - 변경: 성공 rollup과 automatic train이 선택 당시 회원 snapshot·ticket·candidate를 기록한다. 표준 goal 입력은 보존된 sidecar·historical isolation·정확한 landed SHA ancestry로 과거 회원 완료를 검증하고, 같은 snapshot 재시도와 다음 snapshot 작업의 시계를 분리한다. 실제 FF 횟수·시각은 보존하고 논리 회원 origin이 모호하면 INCOMPLETE/FAIL로 판정한다.
 - 증거: 미착지 소스 `d51f653ee5` 원격 goal/rollup/event/batch 95개 통과, NEW 0. 선행 원격 RED로 회원 누락·재시도 누출·direct branch 재사용·metadata stat 실패·모호한 train origin·열린 snapshot 보존·이전 완료/조회 기간 경계·손상 scope·미기록 pin origin·동일ticket 재emit·중복branch를 확인했다. 읽기 전용 실제 기록 재계산은 회원 4건의 최초 topic lead와 새 camera lead 18.2916667분을 복원했다. 과거 automatic train 18건의 origin 증거 부족과 고정/현재 24h 조회의 영향 0건을 구분한다.
