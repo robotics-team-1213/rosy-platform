@@ -13741,3 +13741,10 @@ osy-d395-s1d\`.
 - 증거: 게시 근거 수정의 최종 문서 head f8fdc85890에서도 관련 318개가 원격 통과했고 skip과 NEW/known/flaky는0이었다. 실제 과거 후보는 새 검증기에서 거부됐다. 이 검증은 최종 통합 FULL·공개 CI·장치 수용을 대신하지 않는다.
 - gate 변화: 없음. 과거 실행을 적격 근거로 소급 승인하지 않았다.
 - CE: 기존 교훈 갱신 — 자동화의 병합 성공을 FULL의 적격성으로 해석한 기존 설명이 다음 작업을 오도할 수 있어 바로잡았다.
+
+## 2026-11-03 · camera-readiness-followup · evidence: 재연결 뒤 READY 복구와 수정 검증 동결
+
+- 변경: `validation/camera-readiness-followup-2026-11-03/result.md`에 실제 USB 재연결 뒤 새 기준선으로 복구한 결과와 세 코드 수정의 원격 검증 근거를 동결했다. 게시 근거 수정 bootstrap 착지 스냅샷을 접수한 뒤, 아직 미착지인 원본 주제 브랜치에서 같은 후속 검증 기록을 준비했다.
+- 증거: 네 역할의 registry/env 일치·단독 소유권·서로 다른 장치를 확인했고, 준비 검사 시작·원본 controls readback·재시작 뒤 별도 READY 3회에서 네 영상 sequence가 모두 증가했다. 실행 source는 기존 landed commit cbfb144767의 불변 snapshot이며 이전 profile/env/state를 보존했다.
+- gate 변화: 이번 실행의 photometric READY 복구. 팔/Pinky 동작·기하 보정·재부팅·새 릴리스 배포는 하지 않았다. 통합 후보의 qualified FULL와 공개 CI를 이 기록으로 대신하지 않는다.
+- CE: 기존 카메라 기준선 전환 절차 적용, 새 교훈 없음. 게시 근거 교훈 정정은 앞 기록과 같다.
