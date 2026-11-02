@@ -370,7 +370,10 @@ def run_tests(land, wt: Path, args, invocations: list[list[str]], logdir: Path, 
     head = land.out(wt, "rev-parse", "HEAD")
     # Long invocations split by measured run time so hosts run them side by side (2026-11-01: 30 min tails).
     invocations = sys.modules["work_queue"].split(wt, invocations)
-    reused, todo, keep = land.land_cache.split(wt, args, invocations, head, python, land.select)
+    cacheable = [inv for inv in invocations if not affected_exclusive.dedicated(inv)]
+    reused, pending, keep = (land.land_cache.split(wt, args, cacheable, head, python, land.select)
+                             if cacheable else ([], [], None))
+    todo = [inv for inv in invocations if affected_exclusive.dedicated(inv) or inv in pending]
     done += reused
 
     def batch(part: list[tuple[int, list[str]]]) -> list[str]:
@@ -472,7 +475,8 @@ def run_tests(land, wt: Path, args, invocations: list[list[str]], logdir: Path, 
             land.land_events.emit("tests", round=round_no, argv=inv, seconds=secs, **timing(log, began_at),
                                   verdict="carried" if carried else "flaky" if flaky else "pass")
             if not failed:
-                keep(inv, log)
+                if not affected_exclusive.dedicated(inv):
+                    keep(inv, log)
                 land.land_mainred.passed(inv)  # this round passed it: an earlier round's carry of it is void
                 land.land_mainred.close(wt, log.read_text(encoding="utf-8", errors="replace"), head)
             done.append(f"pytest {' '.join(inv)} ok ({log.name})"

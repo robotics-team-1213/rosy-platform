@@ -30,7 +30,9 @@ def test_duplicate_prebuilt_jobs_are_rejected_at_both_producer_boundaries():
         exclusive.matrix([{'invocations': [exclusive.DEDICATED, exclusive.DEDICATED]}], True)
 
 
-@pytest.mark.parametrize('paths', [['test'], [exclusive.TARGET, 'test/test_other.py'], [exclusive.TARGET]])
+@pytest.mark.parametrize('paths', [['test'], ['./test'], [exclusive.TARGET, 'test/test_other.py'],
+    ['./' + exclusive.TARGET, 'test/test_other.py'], ['test/./test_platform_g1_timing.py', 'test/test_other.py'],
+    [exclusive.TARGET]])
 def test_ordinary_real_collection_excludes_timing_for_directories_and_explicit_files(tmp_path, paths):
     target = tmp_path / exclusive.TARGET
     target.parent.mkdir()
@@ -98,6 +100,35 @@ def test_nonclean_dedicated_job_is_not_retried_or_cached(cached, monkeypatch, te
         run([exclusive.DEDICATED])
     assert calls == [[exclusive.DEDICATED]]
     assert land.land_cache.entries(wt) == []
+
+
+@pytest.mark.parametrize('seed_previous_pass', [False, True])
+def test_success_requires_fresh_execution_without_reading_or_writing_result_cache(
+        cached, monkeypatch, tmp_path, seed_previous_pass):
+    wt, run, _ = cached
+    commit(wt, {exclusive.TARGET: 'def test_stub(): pass\n'}, 'timing fixture')
+    if seed_previous_pass:
+        log = tmp_path / 'previous.txt'
+        log.write_text(CLEAN, encoding='utf-8')
+        head = land.out(wt, 'rev-parse', 'HEAD')
+        land.land_cache.record(wt, head, land.out(wt, 'rev-parse', 'HEAD^{tree}'),
+                               'env1', exclusive.DEDICATED, log)
+    before = list(land.land_cache.entries(wt))
+    calls = []
+
+    def remote(invocations, logs, *args, on_done=None, **kwargs):
+        calls.append(invocations)
+        for inv, log in zip(invocations, logs):
+            log.write_text(CLEAN, encoding='utf-8')
+            if on_done:
+                on_done(inv, log)
+        return [0] * len(invocations)
+
+    monkeypatch.setattr(land.remote_pytest, 'run', remote)
+    monkeypatch.setattr(land.land_cache, 'split', lambda *a: pytest.fail('timing result cache consulted'))
+    run([exclusive.DEDICATED])
+    assert calls == [[exclusive.DEDICATED]]
+    assert land.land_cache.entries(wt) == before
 
 
 def test_ci_extracts_exclusive_environment_before_passing_pytest_arguments():

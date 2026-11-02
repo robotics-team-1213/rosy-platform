@@ -1,5 +1,6 @@
 """One strict, whole-file G1 timing job shared by CI and lab selection."""
 import re
+import posixpath
 
 TARGET = 'test/test_platform_g1_timing.py'
 ALONE = 'ROSY_JOB_ALONE=1'
@@ -30,14 +31,18 @@ def affected_invocations(selection, skip):
     return omit(selection['local_invocations' if selection['mode'] == 'full' else 'invocations'], skip)
 
 
+def normalize(word):
+    return posixpath.normpath(word.replace('\\', '/').split('::', 1)[0])
+
+
 def covers(word):
-    path = word.replace('\\', '/').removeprefix('./').split('::', 1)[0].rstrip('/')
+    path = normalize(word)
     return not word.startswith('-') and not ENV.match(word) and (
         path == TARGET or path in ('', '.') or TARGET.startswith(path + '/'))
 
 
 def dedicated(inv):
-    return any(w.split('::', 1)[0] == TARGET for w in inv) and (ALONE in inv or PLUGIN in inv)
+    return any(normalize(w) == TARGET for w in inv) and (ALONE in inv or PLUGIN in inv)
 
 
 def validate(invocations, required):
@@ -47,7 +52,7 @@ def validate(invocations, required):
     for inv in invocations:
         if inv in jobs:
             continue
-        if any(w.split('::', 1)[0] == TARGET for w in inv):
+        if any(normalize(w) == TARGET for w in inv):
             raise ValueError('G1 timing file also appears in an ordinary invocation')
         if required and any(covers(w) for w in inv) and '--ignore=' + TARGET not in inv:
             raise ValueError('ordinary invocation still collects G1 timing')
@@ -61,13 +66,13 @@ def separate(invocations, available=True):
     ordinary, needed = [], False
     for original in invocations:
         inv = list(original)
-        selected = any(w.split('::', 1)[0] == TARGET or available and covers(w) for w in inv)
+        selected = any(normalize(w) == TARGET or available and covers(w) for w in inv)
         needed |= selected
         if dedicated(inv):
             if inv != DEDICATED:
                 raise ValueError('malformed G1 timing exclusive invocation')
             continue
-        inv = [w for w in inv if w.split('::', 1)[0] != TARGET]
+        inv = [w for w in inv if normalize(w) != TARGET]
         if any(covers(w) for w in inv) and selected and '--ignore=' + TARGET not in inv:
             inv.append('--ignore=' + TARGET)
         if any(not w.startswith('-') and not ENV.match(w) for w in inv):
