@@ -7,6 +7,10 @@ const request = createFleetClient();
 const $ = id => document.getElementById(id);
 const back = loginReturn(new URLSearchParams(location.search).get('return'), location.origin);
 $('profile-back').href = back.startsWith('/console/profile') ? '/console' : back;
+if (document.documentElement.dataset.app === 'account') {
+  $('profile-back').hidden = back === '/console' || back.startsWith('/console/profile');
+  $('profile-back').textContent = '원래 화면으로 돌아가기';
+}
 $('profile-login').href = loginHref(location);
 let busy = false, owner = null;
 

@@ -4442,3 +4442,9 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: FULL run-pre-31의 한 외부 패키지 setup이 기존 무결성 assertion에서 실패했다. 같은 모델 PC와 개발 PC의 독립 HTTPS 재획득은 모두 기존 pin과 일치했다. 최초 응답은 보존되지 않아 그 실패 원인은 미확정이며, 잘림이나 upstream 변경으로 단정하지 않는다. 먼저 추가한 다섯 결정적 시험은 원격 committed revision에서 helper 부재로 실패했고, 구현 뒤에는 같은 시험과 실제 RAUC 소비자들을 확인한다.
 - gate 변화: 없음. 검증하지 않은 바이트·실패한 추출·다른 RAUC 버전은 재시도 성공이나 통과로 인정하지 않는다.
 - CE: 미해결 — 최초 응답의 원인은 복원할 수 없어 작업 기록에 제한을 남긴다. 획득 계약과 진단 보강은 코드·결정적 시험으로 검증한다.
+
+## 2026-11-02 · 6be78e9139 · 카메라 검증 문서의 공개 Git 식별자 이력 분류
+
+- 변경: 새로 통합된 카메라 검증 문서의 정확한 commit/path/high-entropy-token 조합 하나만 기존 게시 baseline에 더한다. 이전 양쪽 reviewer 근거와 모든 기존 조합을 보존한다. scanner·검사 제외·비공개 자료 접근은 바꾸지 않는다.
+- 증거: 실제 scanner의 한 발견은 review revision이며 독립 검토에서 Git commit으로 해소됐다. 값·excerpt는 추가하지 않으며 agent 검토를 사람 승인으로 표현하지 않는다. 최종 source의 게시 검사를 다시 확인한다.
+- Gate: 서명·운영·실물 수용과 별개. CE: 해당 없음 — 기존 정확한 조합 규약과 Git 출처로 분류를 복원한다.

@@ -85,6 +85,7 @@ def test_standalone_pages_identify_the_account_owner(standalone, path):
     assert '<title>Rosy Account —' in response.text
     assert '<b>Rosy Account</b>' in response.text
     assert '<b>Rosy Fleet</b>' not in response.text
+    assert 'href="/common/brand/mark.svg"' in response.text
     assert response.headers['cache-control'] == 'no-cache'
     assert "script-src 'self'" in response.headers['content-security-policy']
 

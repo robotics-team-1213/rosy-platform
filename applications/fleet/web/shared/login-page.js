@@ -11,15 +11,19 @@ const failures = new Map([
 ]);
 const failure = failures.get(query.get('error'));
 const central = back.startsWith('/api/fleet/auth/authorize?');
-if (central) {
+const account = central || document.documentElement.dataset.app === 'account';
+if (account) {
   document.title = 'Rosy Account — 로그인';
   document.getElementById('login-title').textContent = 'Rosy Account 로그인';
   document.querySelector('ui-brand b').textContent = 'Rosy Account';
   document.querySelector('ui-brand small').textContent = '공용 계정';
   const home = document.querySelector('ui-brand a');
-  home.href = location.href; home.setAttribute('aria-label', 'Rosy Account 로그인');
+  if (central) home.href = location.href;
+  home.setAttribute('aria-label', 'Rosy Account 로그인');
   document.querySelector('link[rel="icon"]').href = '/common/brand/mark.svg';
-  document.getElementById('login-intro').textContent = 'Rosy Account로 로그인해 원래 앱의 작업을 이어가세요.';
+  document.getElementById('login-intro').textContent = central
+    ? 'Rosy Account로 로그인해 원래 앱의 작업을 이어가세요.'
+    : 'Rosy Account로 로그인해 내 계정과 권한을 확인하세요.';
   document.getElementById('login-support').textContent = '계정이 없거나 비밀번호를 잊었다면 계정 관리자에게 문의하세요.';
 }
 if (failure) {
@@ -40,6 +44,6 @@ const login = createPasswordLogin(document.getElementById('password-login'), {
   standalone: true, autoContinue: !failure,
   onChange: authenticated => { if (authenticated) location.assign(back); },
 });
-if (central) document.querySelector('[data-login=form]').setAttribute('aria-label', 'Rosy Account 로그인');
+if (account) document.querySelector('[data-login=form]').setAttribute('aria-label', 'Rosy Account 로그인');
 if (failure) document.querySelector('[data-login=submit]').textContent = '다른 계정으로 로그인';
 login.refresh(true);
