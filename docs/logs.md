@@ -13812,12 +13812,26 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 기존 legacy 중첩 carrier의 미확인 origin은 추정하지 않으며 소스 검증을 main 착지·SLO 달성으로 보고하지 않는다.
 - CE: 기존 Nov1 교훈 갱신. 직접 소유권 목록과 논리 leaf 완료를 구분해야 하는 이유, 분할 후에야 드러나는 중복 호출을 기록했다.
 
+## 2026-11-03 · uncommitted · feat(omx): 떨어진 팔을 센 관절로 한 단계씩 빼내는 복구
+- 변경: `cell_unwedge.py`. shoulder_lift·elbow_flex만 홈 쪽으로 1단위씩, 손목은 명령 없음. 단계마다 지연을 읽어 1.2단위를 넘으면 반 단계 되돌리고 다른 관절로, 둘 다 막히면 사람을 부름. 단계마다 top·side 사진과 판단 기록. `cell_pipeline.recover`는 쥔 것이 없으면 이 단계를 쓰고 집게를 크게 벌리지 않는다.
+- 증거: 2026-11-03 04:05 arm_b가 피벗 goto 중 wrist_flex 가드로 컨테이너 위에 떨어짐. 고정 recover lift(elbow −5, wrist +4)는 이 자세에서 홈 반대쪽이라 같은 오류로 실패. `cell_unwedge`는 실물에서 21단계, 막힘 없이 빼내고 park.
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: `docs/solutions/runtime-errors/omx-arm-b-dropped-on-the-stack-and-the-fixed-recover-lift-pressed-it-down-2026-11-03.md`
+
 ## 2026-11-03 · uncommitted · feat(omx): 세션 서보 튜닝을 기종 → 현장 caps → 로봇 프로필 순서로 겹친다
 - 변경: 기종 기본값 `deploy/robot/omx/omx-ai-follower-tuning.json`(`rosy.omx-servo-tuning.v1`, 팔꿈치 13·손목 14 I 게인 50, 근거 포함). `session_caps.load_caps(model=, robot=)`가 모터·키 단위로 기종 < 현장 `caps.json` < 로봇 프로필 `servo` 순서로 합친 뒤 기존 범위로 검사한다. 튜닝 층은 `p`·`i`·`acc`·`vel`만 받고 PWM·전류는 현장 caps에만 둔다. `cell_robot_profile`이 선택 필드 `servo`를 받고 profile SHA에 넣는다. `record_session`이 세 층을 읽는다. 두 팔 원격조종(`two_arm_config.follower_gains`)도 같은 기종 P·I를 설정 파일 `follower_gains` 아래에 깐다.
 - 증거: D-951 5·6(2026-11-01 두 팔, I 50으로 팔꿈치 +1.52→+0.06, 손목 −0.41→+0.03, TCP 12.3→3.3 mm). 지금까지는 현장 `caps.json`에 손으로 넣어야 했고 빠지면 다시 처졌다.
 - gate 변화: 없음. 가드 한계(`I_GAIN_MAX` 등)는 그대로다.
 - 결정: 없음(D-951 6의 구현)
 - CE: 해당 없음 — 원인과 해결은 D-951과 작업 기록에 이미 있고, 이번은 그 값을 코드 기본값으로 옮긴 일이다.
+
+## 2026-11-03 · uncommitted · feat(omx): 같은 크기 컨테이너가 줄지어 붙어 있으면 개수를 세어 나눈다
+- 변경: `cell_objects.classify`가 2~`objects.split_max`(6)개, 칸 사이 틈 `objects.split_gap_mm`(8)까지 나눠 보고, 줄이 컨테이너 짧은 변·긴 변 어느 쪽으로 늘어서도 시도한다. 엄격 판정을 통과하는 조합 중 조각 폭·길이가 카탈로그에 가장 가까운 것을 고른다. 조각마다 엄격 일치·방향·채움 검사는 그대로다.
+- 증거: 2026-11-03 arm_b 배 위에 3칸 컨테이너 다섯 개가 6 mm 틈으로 놓여 한 덩어리(113 × 100 mm)로 보여 집을 대상이 없었다. 현장 사진에서 셋으로 나뉘어 각각 container-3로 인식됨. 실물 집기는 손목에 가려 집게 확인이 거절해 아직 없음.
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 없음(같은 날 arm_b 낙하 교훈에 이어서 기록 예정)
 
 ## 2026-11-03 · uncommitted · fix(harness): isolate G1 timing in a dedicated serial, host-exclusive job
 - Change: CI/lab share one plan that removes G1 timing from ordinary FULL/ROOT/explicit-file/affected invocations and adds exactly one whole-file job. Existing ROSY_JOB_ALONE admission and disabled xdist apply together. The gate requires original collected and actually passed item sets to match, with zero skips. Dedicated results bypass success caches and reruns. Explicit FULL validates both the ROOT exclusion and the complete dedicated companion. The 0.45s threshold, skip helper and production control code are unchanged.
