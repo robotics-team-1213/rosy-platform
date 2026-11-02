@@ -258,3 +258,16 @@ def test_a_depth_camera_says_so_and_a_camera_without_a_stream_is_colour(setup):
     document["workcells"][0]["cameras"][0]["stream"] = "thermal"
     with pytest.raises(ValueError):
         WorkcellObservationManifest.model_validate(document)
+
+
+def test_a_camera_without_device_path_is_valid_and_round_trips_without_it(setup):
+    """The control PC's camera registry owns the device; the site copy drifted from it (2026-11-02)."""
+    _, _, manifest, _ = setup
+    data = manifest.model_dump(by_alias=True)
+    for camera in data["workcells"][0]["cameras"]:
+        camera.pop("device_path")
+    parsed = WorkcellObservationManifest.model_validate(data)
+    assert all("device_path" not in c for c in parsed.model_dump(by_alias=True)["workcells"][0]["cameras"])
+    data["workcells"][0]["cameras"][1]["device_path"] = data["workcells"][0]["cameras"][2]["device_path"] = "/dev/v4l/by-id/x"
+    with pytest.raises(ValueError, match="duplicate device"):
+        WorkcellObservationManifest.model_validate(data)
