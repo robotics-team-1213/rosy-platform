@@ -4430,3 +4430,11 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - Evidence: D-962 independent image and identity backup scope at 5f02d723d1: remote 335 backend/signing/image/backup cases plus 71 opted-in identity TLS/browser cases passed, 0 skipped, 0 NEW. Full Account tables including HTTP audit preserved; stale/corrupt backup refusal, strict signed legacy/new groups, reused image pins, branding, login/profile/admin and first-password flows verified. Prior e81af2d7c3 closure also passed 320 cases including Fleet header browser/Node compatibility. OCI construction and live independent-image/timer acceptance remain pending.
 - Logs: `rosy-account-backup-replay/run-1.txt` (335 passed), `rosy-account-identity-replay/run-1.txt` (71 passed); known-failure comparison 0 new/known/flaky. Native size range checked eight commits without a violation.
 - Gate: scoped SOURCE/LOCAL GO; image artifact, installation, timer activation and human field acceptance remain separate.
+
+## 2026-11-02 · uncommitted · Account 통합 게시 범위의 검증 문서 오탐 분류
+
+- 변경: 최신 main 병합 뒤 게시 검사에 걸린 다른 검증 문서의 정확한 commit/path/rule 한 건만 기존 historical baseline에 추가했다. 탐지 규칙·경로 전체 예외·다른 commit의 처리는 바꾸지 않는다.
+- 근거: 독립 검토가 `16737449b4d6368a9f374eae2c24c0d9ef24e1f6`의 camera-readiness 검증 문서 13행을 확인했다. 탐지된 값은 독립 검토 문장의 Git revision이며 실제 commit으로 해석되고 해당 증거 commit의 조상이다. 값·본문은 기록하지 않았고 개인 자료와 대조하지 않았다. 에이전트 분류이며 사람의 서명 승인이 아니다.
+- 확인: 현재 작업 트리의 게시 범위 319 commits clean, 기존 검토된 정확한 예외 두 건만 제외됐다. Account 최종 전체 검사·공개 CI·서명·운영 수용은 아직 별도다.
+- gate 변화: SOURCE·LOCAL 유지, FULL·ARTIFACT·FIELD HOLD. 실제 서명·운영 수용을 이 문서 분류로 대신하지 않는다.
+- CE: 해당 없음 — 기존 역사적 오탐 처리 계약과 baseline 항목이 판단을 설명한다.
