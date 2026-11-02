@@ -77,8 +77,8 @@
 
 ## 최근 기록
 
+- 2026-11-02 · uncommitted · OMX 카메라: 옮긴 카메라는 역할이 따라가고, 새 카메라는 제안 후 승인 한 번
 - 2026-11-02 · uncommitted · fix(site): Tailscale 대역에서도 천장 카메라 미리보기
 - 2026-11-02 · uncommitted · feat(site): 관제 단위 overlay를 서명 candidate에 넣는다 (D-960)
 - 2026-11-02 · uncommitted · OMX 자동 연속 운반(cell_auto_carry)과 없는 출발 site 거절
 - 2026-11-02 · uncommitted · OMX 카메라 manifest를 레지스트리에서 맞춤
-- 2026-11-02 · uncommitted · feat(site): 작업셀 카메라 자격 매핑도 site.env에서 바꾼다
