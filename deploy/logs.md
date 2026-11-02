@@ -4382,3 +4382,10 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 사이트·Fleet 관련 원격 pytest(커밋 뒤 실행). 2026-10-31 현장 proxy 컨테이너의 Caddy로 이 Caddyfile을 `caddy validate` → Valid configuration(적용 안 함). 현장 방화벽은 이미 `tailscale0`을 허용한다. 배포 전 현장 443에서 tailnet 주소의 `/api/fleet/vision/sources`는 401, 8443(Account)에서는 목록·lease·`ceiling_north` 프레임 200.
 - gate 변화: 없음. 서명 후보 배포 뒤 443 tailnet readback이 남았다. IP 주소로는 TLS가 실패하므로(인증서 SAN에 IP 없음) 이름으로 접속한다.
 - CE: 해당 없음 — 대역 누락은 이 기록과 Caddyfile 주석으로 복원된다.
+
+## 2026-11-02 · uncommitted · 관제 단위 companion 로그 상한 보완
+
+- 변경: 서명 canonical 관제 단위 overlay의 새 `control-unit-peer`에도 기본 스택과 같은 json-file 20m × 3 로그 상한을 명시했다. 이미지·네트워크·명령·권한은 바꾸지 않는다.
+- 증거: `f70298b8c6`의 실제 격리 검사에서 누락으로 적색을 확인했다. `87a7797034` 원격 로그 계약과 같은 파일의 독립 pytest 검사 4 passed, isolation complete 1, skip 0.
+- gate 변화: SOURCE·LOCAL GO. 실제 서명 설치·운영 수용은 별도다. 기존 R overlay와 updater hold를 유지하며 canonical 관제 단위의 자동 adoption 문제를 해결했다고 주장하지 않는다.
+- CE: 해당 없음 — 기존 로그 계약 검사가 누락을 검출했고 최종 설정이 해결을 설명한다.
