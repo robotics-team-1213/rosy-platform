@@ -47,6 +47,8 @@ GUARD_SET = (
     "test/architecture/test_platform_parts.py",
     # D-762 stage 0: Markdown under a FULL trigger is not FULL; placement still runs.
     "test/architecture/test_document_placement.py",
+    # D-795: walks every deploy/runtime file, so no path mapping selects it (b101f57783 turned main red).
+    "test/test_no_cross_host_dds.py",
 )
 
 # D-436 §2: a change here can break any suite, so the full tier runs.
