@@ -5,6 +5,7 @@ import hashlib
 import json
 from pathlib import Path
 import sys
+from types import SimpleNamespace
 
 import pytest
 
@@ -260,6 +261,49 @@ def test_prepared_full_and_fresh_turn_timing_execution_keep_all_hash_bound_proof
     assert tool.green_full(local, sha)
     Path(logs[0]).unlink()
     assert not tool.green_full(local, sha)
+
+
+@pytest.mark.parametrize('damage', [None, 'spec-only', 'missing-turn', 'bridge', 'malformed-spec'])
+def test_three_context_composition_uses_only_existing_prepared_and_final_publication_proof(repo, damage):
+    import land_speculate
+    local, prepared, _ = _proof(repo)
+    on = _git(local, 'rev-parse', f'{prepared}^')
+    _git(local, 'checkout', '-qb', 'peer', on)
+    base = _commit(local, 'peer.py', 'main advanced')
+    _git(local, 'checkout', '-q', 'main')
+    _git(local, 'merge', '-q', '--no-ff', '--no-edit', 'peer')
+    final = _git(local, 'rev-parse', 'HEAD')
+    tree = _git(local, 'rev-parse', 'HEAD^{tree}')
+    predicted = _git(local, 'commit-tree', tree, '-p', prepared, '-p', base, '-m', 'predicted context')
+    invs = [['test', '--ignore=' + exclusive.TARGET], exclusive.DEDICATED]
+    if damage == 'spec-only':
+        invs.append(['test/test_spec_only.py'])
+    if damage == 'malformed-spec':
+        invs.append(exclusive.DEDICATED + ['-k', 'one'])
+    tool.land_full.save(local, 'feat/x', prepared, on, 'full', FULL)
+    path = tool.land_full._path(local, 'feat/x')
+    data = json.loads(path.read_text())
+    data['spec'] = {'sha': predicted, 'invocations': invs}
+    path.write_text(json.dumps(data), encoding='utf-8')
+    # Predicted-SHA rows alone remain insufficient: publication has no spec-SHA provenance source.
+    log = path.with_suffix('.execution.txt')
+    log.write_text('[g1-timing-gate] expected=1 collected=1 passed=1 skipped=0 clean=1\n'
+                   '1 passed in 0.01s\n', encoding='utf-8')
+    for inv in invs:
+        land_cache.record(local, predicted, tree, land_cache.env_id(local, predicted), inv, log)
+    prepared_plan = tool.land_full.prepared(local, 'feat/x', on)
+    if damage == 'malformed-spec':
+        with pytest.raises(ValueError):
+            land_speculate.with_spec(SimpleNamespace(land_full=tool.land_full), local, 'feat/x', prepared_plan)
+        return
+    composed = land_speculate.with_spec(SimpleNamespace(land_full=tool.land_full), local, 'feat/x', prepared_plan)
+    if damage == 'bridge':
+        composed['main'] = final
+    logs = qualified_record(tool, local, final, base, [exclusive.DEDICATED], prepared=composed)
+    assert tool.land_record.read(local, final)['invocations'].count(exclusive.DEDICATED) == 1
+    if damage == 'missing-turn':
+        Path(logs[0]).unlink()
+    assert tool.green_full(local, final) is (damage is None)
 
 
 @pytest.mark.parametrize("change", ["own-commit", "manual-merge"])

@@ -33,8 +33,28 @@ def test_duplicate_timing_jobs_inside_a_single_plan_are_not_hidden(repo):
     path, c = repo
     prepared = {'invocations': [DEDICATED, DEDICATED], 'tier': 'full',
                 'candidate': c[2], 'main': c[1]}
-    tool.write(path, c[3], c[2], [], [], prepared=prepared)
-    assert tool.read(path, c[3])['invocations'] == [DEDICATED, DEDICATED]
+    with pytest.raises(ValueError):
+        tool.write(path, c[3], c[2], [], [], prepared=prepared)
+
+
+def test_composition_validates_each_context_and_only_normalizes_cross_context_timing():
+    from harness import affected_exclusive as exclusive
+    root = ['test', '--ignore=' + exclusive.TARGET]
+    ordinary = ['pkg/test']
+    got = exclusive.compose([root, exclusive.DEDICATED, ordinary], [exclusive.DEDICATED],
+                            [ordinary, exclusive.DEDICATED])
+    assert got == [root, exclusive.DEDICATED, ordinary, ordinary]
+    assert exclusive.compose([['test']], [['pkg/test']], available=False) == [['test'], ['pkg/test']]
+
+
+@pytest.mark.parametrize('bad', ['duplicate', 'partial', 'missing'])
+def test_a_bad_context_cannot_borrow_timing_completeness_from_another(bad):
+    from harness import affected_exclusive as exclusive
+    contexts = {'duplicate': [exclusive.DEDICATED, exclusive.DEDICATED],
+                'partial': [exclusive.DEDICATED + ['-k', 'one']],
+                'missing': [['test', '--ignore=' + exclusive.TARGET]]}
+    with pytest.raises(ValueError):
+        exclusive.compose([exclusive.DEDICATED], contexts[bad])
 
 
 def _git(repo: Path, *args: str) -> str:

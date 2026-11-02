@@ -397,6 +397,28 @@ def test_explicit_full_affected_change_executes_canonical_plan_and_real_receipt(
     assert all(no_cache for _, no_cache, invs in case.splits if any("tools/collect_alone.py" in inv for inv in invs))
 
 
+def test_explicit_full_ignores_stale_spec_and_executes_the_actual_main_delta(full_case, monkeypatch):
+    case = full_case
+    case.mutate = lambda: commit(case.main, {'lib/peer.py': 'peer = 1\n'}, 'main advanced')
+    prepared = land.land_full.prepared
+    def stale_spec(*args):
+        result = prepared(*args)
+        if result:
+            path = land.land_full._path(case.wt, 'feat/x')
+            data = json.loads(path.read_text())
+            data['spec'] = {'invocations': [['test']], 'tree': 'stale'}
+            path.write_text(json.dumps(data))
+        return result
+    monkeypatch.setattr(land.land_full, 'prepared', stale_spec)
+    monkeypatch.setattr(land.land_speculate, 'held', lambda *a: pytest.fail('FULL consumed held speculation'))
+    monkeypatch.setattr(land.land_speculate, 'with_spec', lambda *a: pytest.fail('FULL inherited spec proof'))
+    assert land.main(['--tests', 'full']) == 0
+    assert any(label == 'land-1' for label, _, _ in case.remote)
+    assert_full_plan(body_calls(case))
+    record = land.land_record.read(case.main, git(case.main, 'rev-parse', 'HEAD'))
+    assert record['prepared_candidate'] and record['invocations'].count(exclusive.DEDICATED) == 1
+
+
 @pytest.mark.parametrize("tier, invocations", [("affected", [["pkg/test"]]), ("full", NORMAL),
                                                ("full", NORMAL + [[BROWSER, BROWSER_FILES[0]]])])
 def test_old_or_partial_preparation_never_skips_current_full_prepare(full_case, tier, invocations):

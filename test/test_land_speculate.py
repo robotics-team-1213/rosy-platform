@@ -18,6 +18,32 @@ from test_land import commit, git, repos  # noqa: E402,F401  (land.py's fixture 
 SELECTED = [["pkg/test/test_a.py"], ["test/test_harness_contracts.py"]]
 
 
+def test_explicit_full_never_starts_speculative_preparation(queued, monkeypatch):
+    _, wt, _, _, qdir, ticket, *_ = queued
+    monkeypatch.setattr(spec, '_record', lambda *a: pytest.fail('FULL inspected speculative state'))
+    spec.prepare(land, wt, 'feat/x', land.argparse.Namespace(tests='full'), sys.executable, qdir, ticket)
+
+
+@pytest.mark.parametrize('extra', [
+    ['ROSY_RUN_BROWSER_TESTS=1', 'pkg/test', 'test/test_browser.py'],
+    ['pkg/test', 'test/test_other.py', '-k', 'with spaces'],
+    ['pkg/test', 'test/test_other.py', '--basetemp', 'test/option-value'],
+])
+def test_held_projection_preserves_complete_option_and_environment_invocations(queued, monkeypatch, extra):
+    from harness import affected_exclusive as exclusive
+    main, wt, base, peer, qdir, ticket, *_ = queued
+    commit(wt, {exclusive.TARGET: 'def test_stub(): pass\n'}, 'timing source')
+    land.land_full.save(wt, 'feat/x', git(wt, 'rev-parse', 'HEAD'), base, 'full', [['pkg/test']])
+    root = ['test', '--ignore=' + exclusive.TARGET]
+    plain = ['pkg/test', 'test/test_plain.py']
+    monkeypatch.setattr(land, 'select', lambda *a, **k: ([root, exclusive.DEDICATED, plain, extra], None))
+    _prepare(wt, qdir, ticket)
+    git(main, 'merge', '-q', '--ff-only', peer)
+    git(wt, 'merge', '-q', '--no-edit', 'main')
+    assert spec.held(land, wt, 'feat/x', base, git(wt, 'rev-parse', 'HEAD')) == [
+        root, exclusive.DEDICATED, ['test/test_plain.py'], extra]
+
+
 @pytest.fixture
 def queued(repos, monkeypatch):
     """feat/x prepared FULL over base; feat/peer, ahead of it in the queue, waits with its own candidate."""
