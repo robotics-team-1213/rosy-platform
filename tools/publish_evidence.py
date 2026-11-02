@@ -23,6 +23,9 @@ root = Path.cwd()
 sys.path[:0] = [str(root / p) for p in ("tools", "tools/remote", "test")]
 import land_cache, land_browser, work_queue, known_failures
 from land_selection import valid_plan
+exclusive = None
+if (root / "tools/harness/affected_exclusive.py").is_file():
+    from harness import affected_exclusive as exclusive
 sha, base = sys.argv[1:]
 request = json.load(sys.stdin)
 def command(args):
@@ -33,7 +36,8 @@ selection = command(["tools/harness/rosy_harness.py", "affected", "--base", base
                      "--head", sha, "--json", "--full"])
 full = selection["full_invocations"]
 browsers = command(["tools/land_selection.py", "--all-browsers"])
-assert selection["mode"] == "full" and valid_plan(full) and ["test"] in full
+assert selection["mode"] == "full" and valid_plan(full)
+assert exclusive.canonical_full(full) if exclusive is not None else ["test"] in full
 assert valid_plan(browsers) and all("ROSY_RUN_BROWSER_TESTS=1" in inv for inv in browsers)
 plan = full + browsers
 variants = {}
@@ -55,6 +59,11 @@ def clean(row):
         return False
     if row.get("log_sha256") != hashlib.sha256(data).hexdigest():
         return False
+    if exclusive is not None and exclusive.dedicated(row["argv"]):
+        with tempfile.TemporaryDirectory(prefix="rosy-publish-log-") as temporary:
+            snapshot = Path(temporary) / "execution.txt"
+            snapshot.write_bytes(data)
+            return exclusive.evidence(snapshot, 0) is None
     text = data.decode("utf-8-sig", errors="replace")
     summaries = [line for line in text.splitlines()
                  if re.search(r"\b\d+ (?:passed|failed|skipped|errors?)\b.* in [0-9.]+s", line)]

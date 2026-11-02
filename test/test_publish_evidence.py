@@ -15,22 +15,8 @@ from harness import affected_exclusive as exclusive
 
 
 def _timing_proof(repo):
-    local, _ = repo
-    source = Path(__file__).resolve().parents[1] / 'tools/harness/affected_exclusive.py'
-    _commit(local, 'tools/harness/affected_exclusive.py', source.read_text(encoding='utf-8'))
-    full = [['learning/registry/policy/test'], ['test', '--ignore=' + exclusive.TARGET],
-            exclusive.DEDICATED, *FULL[2:]]
-    # The fixture's browser chunks are appended by the actual immutable-candidate consumer.
-    from publish_fixtures import BROWSERS
-    full = full[:3] + BROWSERS
-    script = 'import json\nprint(json.dumps(' + repr({'mode': 'full', 'full_invocations': full[:3]}) + '))\n'
-    sha = _commit(local, 'tools/harness/rosy_harness.py', script)
-    logs = qualified_record(tool, local, sha, _git(local, 'rev-parse', f'{sha}^'), full)
-    log = Path(logs[2])
-    log.write_text('[g1-timing-gate] expected=2 collected=2 passed=2 skipped=0 clean=1\n'
-                   '2 passed in 0.01s\n', encoding='utf-8')
-    _record_updated_log(local, log)
-    return local, sha, log
+    local, sha, logs = _proof(repo)
+    return local, sha, Path(logs[2])
 
 
 def test_canonical_exclusive_full_with_hash_bound_strict_receipt_qualifies(repo):
@@ -201,7 +187,7 @@ def test_real_work_queue_shards_are_complete_proof_but_one_missing_shard_is_not(
         _commit(local, f"test/test_shard_{n}.py", f"def test_{n}(): pass\n" + "# size\n" * n)
     sha = _git(local, "rev-parse", "HEAD")
     logs = qualified_record(tool, local, sha, _git(local, "rev-parse", f"{sha}^"))
-    root = ["test"]
+    root = ["test", "--ignore=" + exclusive.TARGET]
     parts = work_queue.split(local, [root], seen={tuple(root): 3 * work_queue.SPLIT_S})
     assert len(parts) == 3
     _rewrite_rows(local, lambda rows: rows.remove(next(r for r in rows if r["argv"] == root)))
