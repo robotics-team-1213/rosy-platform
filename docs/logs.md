@@ -13739,3 +13739,9 @@ osy-d395-s1d\`.
 - 증거: API 버전 pin 8곳 갱신, 구현 시험은 deploy·fleet 로그.
 - gate 변화: 없음. 실제 USB 카메라를 꽂아 승인하는 현장 수용은 하지 않았다.
 - CE: 해당 없음 — 새 기능이며 장애 해결이 아니다. 결정은 D-963에 있다.
+
+## 2026-11-03 · uncommitted · docs(omx): 실물 카메라로 잰 셀 실측과 셀 모델 대장 갱신
+- 변경: 검증 기록 `docs/validation/omx-cell-survey-2026-11-03/result.md`(top·side 카메라 자세, arm_b 받침 FK 맞춤, fixture와의 차이), `learning/envs/isaac/cell_model_inventory.yaml`의 판·팔 받침·top·side 카메라 항목과 벨트 높이 사람 작업, D-947 2의 보강(Gazebo도 같은 대장, 값마다 출처, CAD·실측은 후보).
+- 증거: 돌기 격자 PnP top 0.58 px·side 2.8 px, arm_b 녹화 세션 `live.json`을 읽기만 해 FK 맞춤 3.1 px. 팔 명령·관측기 기동 없음. 스크립트와 겹침 영상은 Git 밖 작업 공간 조사 폴더.
+- gate 변화: 없음. fixture 수치는 바꾸지 않았다(실측 받침 채택은 도달·충돌 비교 뒤).
+- CE: 해당 없음 — 측정 기록이며 해결한 장애가 아니다. 실물과 시뮬레이션의 차이는 대장에 남겼다.
