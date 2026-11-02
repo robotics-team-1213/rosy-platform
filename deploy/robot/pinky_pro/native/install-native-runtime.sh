@@ -28,7 +28,8 @@ for helper in host_agent.py host_agent_server.py host_lane_perception.py ssh_pai
 done
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 mkdir -p "$DESTINATION/recovery-web"
-cp "$REPO_ROOT/shared/web/tokens.css" "$REPO_ROOT/shared/web/components.css" "$DESTINATION/recovery-web/"
+cp "$REPO_ROOT/shared/web/tokens.css" "$REPO_ROOT/shared/web/components.css" \
+   "$REPO_ROOT/shared/web/component-controls.css" "$REPO_ROOT/shared/web/theme.js" "$DESTINATION/recovery-web/"
 # Old clients first receive the bridge without installing feature services.
 if [[ "${ROSY_BOOT_SUPPORT:-feature}" == bridge ]]; then
     rm -f -- "$DESTINATION/rosy-network-users.service" "$DESTINATION/rosy-network-agent.service" \
