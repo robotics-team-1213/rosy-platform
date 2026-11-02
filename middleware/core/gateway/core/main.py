@@ -98,8 +98,9 @@ def main() -> None:
     import rclpy
 
     from core_common.config import load_config
-    from core.node import RosyCoreNode
+    from core.node import RosyCoreNode, core_executor_kind
 
+    core_executor_kind()  # a mistyped ROSY_CORE_EXECUTOR fails before rclpy and the API start
     node = None
     context_was_valid = False
     try:

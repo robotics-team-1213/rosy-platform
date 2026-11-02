@@ -48,6 +48,7 @@ import cell_wrist_ref  # noqa: E402
 from cell_calibrate import learn_bias, self_calibrate  # noqa: E402,F401  (calibration lives there)
 import cell_pipeline as cp  # noqa: E402
 from cell_observe import keep, predicted_pixel, wrap90  # noqa: E402
+from cell_auto_setup import load_config  # noqa: E402,F401  (cell_align and cell_replay call auto.load_config)
 
 CLOSING = "gripper.closing_axis_offset_deg"
 TEMP_STOP_C, PWM_FRACTION = prm.default("auto.temp_stop_c"), prm.default("auto.pwm_fraction")

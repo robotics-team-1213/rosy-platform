@@ -13526,6 +13526,20 @@ osy-d395-s1d\`.
 - Gate: 없음. simulation 계약 구현이며 실물 관측자·현장 수용은 별도다. 공개 push 없음.
 - CE: 해당 없음 — 설계 결정과 계약 추가이며 해결한 장애가 아니다.
 
+## 2026-11-01 · uncommitted · refactor: D-953 Pi 4·5 CPU 경로와 match_motion 비트 동일 가속
+- 변경: D-953(자체 Rust는 Pi 4 실측이 요구할 때만, 실행기는 `EventsExecutor`로 먼저). `scan_motion` `_segments` 묶음 SVD·`correspondence` 성분별 배열(결과 `==` 동일, 노트북 31~32→10.6~11.7 ms), `test_scan_motion_equivalence.py`(원본 사본, 실제 기록 프레임 포함 55건). `adr_gaps.txt`에 D-950·951(다른 브랜치)·952(미사용)
+- 증거: 관제 PC 상주 서비스 `py-spy --gil`(파이썬 몫 2~7%), Gazebo 2대 벤치에서 control 노드 GIL 표본의 81~96%가 rclpy 실행기, `ROSY_EXECUTOR=events` A/B로 line 50→24%·road 47→21%. 원격 시험 99개 통과(모델 PC). Pi 4·5 실기 측정 안 함(온라인 기체 없음)
+- gate 변화: 없음
+- 결정: D-953 Accepted(사용자 지시), 워크트리 슬롯 force-over-cap(사용자 "바로 처리해")
+- 교훈: `docs/solutions/logic-errors/expanded-distance-formula-flips-shared-vertex-ties-2026-11-01.md`(전개식 거리 계산이 실제 프레임 공유 끝점 동점을 뒤집음)
+
+## 2026-11-01 · uncommitted · perf: D-953 후속 — 작업대 관측 압축, Fleet TLS 컨텍스트, CORE 실행기 선택
+- 변경: `workcell_observation_bridge` 카메라 송신 `compression=None`(JPEG). `enrollment_tls` 검증 완료 컨텍스트를 (CA 바이트, 핀)으로 캐시(파일·유효기간 검사는 매번). CORE `ROSY_CORE_EXECUTOR`(`threaded` 기본, `events` 선택), `main()`에서 값 조기 검증, events 종료 예외는 경고로. D-953 후속 절
+- 증거: 원격 gateway 전체 통과(`e0f5a05691`), ROS-lane 19개 통과(진짜 Jazzy `EventsExecutor`, `RosyCoreNode.run()` 직접), 작업대 관측 시험 24개·Fleet 등록 TLS 시험 통과. Fleet TLS 733→170 µs/호출(노트북). 독립 검토: Fleet APPROVE, CORE REQUEST CHANGES(MEDIUM 3) 반영. CORE CPU A/B는 시험 PC 포화로 못 얻음. 기체 확인 안 함
+- gate 변화: 없음(CORE 기본값 그대로)
+- 결정: D-953 후속(사용자 "바로 처리해", "변경이 필요하면 변경")
+- 교훈: 없음
+
 ## 2026-11-01 · 2ceddde26f · docs: D-947 OMX stacking sim models and claim scope (Proposed)
 - 변경: `docs/adr/D-947-omx-palletizing-sim-models-and-claim-scope.md`와 ADR 로그 행. 접촉·영상은 Isaac, 기하 스윕은 MuJoCo, 실행 계약은 MuJoCo·Gazebo, 셀 모델 대장 하나, 실물과 같은 카메라 다섯 대, 주장 범위
 - 증거: 하네스 lint에 D-947 오류 없음(남은 오류는 이 브랜치에 없는 다른 세션의 D-937~946)
@@ -13597,6 +13611,39 @@ osy-d395-s1d\`.
 - 증거: 원격 pytest `test_gpu_tenants.py`·`test_isaac_batch.py`·`test_remote_isaac.py`·`test_host_services_manifest.py` 통과. AI PC에 설치, 타이머 active, `idle` 판정 idle(운행 로봇 없음), 실행 중 배치에서 `claim` → `paused-rosy-ollama.service` 표시와 owner_mode `shared` 확인
 - gate 변화: 없음. 단계 1 수용(배치 강제 종료 뒤 10분 안 복구)은 이번 배치가 끝난 뒤 확인
 - CE: 해당 없음 — 설계 구현이며, 세션 종료로 Ollama가 꺼진 채 남은 사건은 이 구현으로 구조를 고쳤다
+
+## 2026-11-02 · uncommitted · fix(land): 차례의 자기 브라우저 묶음은 변화분 브라우저 묶음이 닿을 때만 (D-889 추가 24)
+- 변경: `land_selection.select`의 `browsers()`가 변화분의 브라우저 묶음과만 겹침을 본다.
+- 증거: 11-02 03:32~04:06 charge-bay-panel 차례가 브라우저 묶음 7개를 직렬로 돌다 30분 한도로 반납, main 42분 정지. 원격 시험은 착지 기록에 남긴다.
+- gate 변화: 없음
+- 결정: D-889 추가 24
+- 교훈: 없음
+
+## 2026-11-02 · uncommitted · fix(land): 겹침 판정이 선택기 가드 묶음을 보지 않는다 (D-889 추가 25)
+- 변경: `land_selection.overlaps`가 `affected_tests.GUARD_SET`을 늘 빼고, `ignore`를 접두사로 본다.
+- 증거: 11-02 11:43 준비된 착지 다섯이 모두 가드 묶음(test_protocol_version_alignment, test/architecture/test_document_placement)으로 겹친다고 나와 rollup이 0개를 묶었다. 원격 시험은 착지 기록에 남긴다.
+- gate 변화: 없음
+- 결정: D-889 추가 25
+- 교훈: docs/solutions/workflow-issues/landings-gave-the-turn-back-and-reran-everything-2026-11-01.md에 더한다
+
+## 2026-11-02 · uncommitted · docs(adr): D-889 추가 10 결과에 M4 판정(FAIL)
+- 변경: D-889 추가 10 「결과」에 24시간 목표 판정 한 단락.
+- 증거: `tools/land_stats.py --goal --hours 24`(p90 395분, 정체 156분), 기록 폴더의 `land_goal.py`(p90 241분, 정체 103분), NEW 0.3 %·flaky 0.4 %·MAIN-RED 3건.
+- gate 변화: 없음
+- 결정: D-889 추가 10
+- 교훈: 없음
+
+## 2026-11-02 · uncommitted · docs(omx): 시범 학습 준비와 왼쪽 손목 진단 기록
+- 변경: [검증 기록](validation/omx-learning-readiness-2026-11-02/result.md)에 실제 녹화의 준비 부족, arm_a 읽기 전용 모터 관측, 손목 추종 실패 로그와 확대 사진 해시를 남겼다.
+- 증거: 운영 Learning 계정 화면 HTTP 200, 모터 ID 11–16 응답, 정지 직전 같은 장치의 건강 표본 대조. 새 학습·팔 동작·수리는 미실행이다.
+- gate 변화: 없음. 데이터·고장 원인 확인은 실물 수용이 아니다.
+- 교훈: CE 미해결. 원인이 검증되지 않아 해결 교훈을 추가하지 않았다.
+
+## 2026-11-02 · uncommitted · test: 리뷰 관문 스크립트를 시험이 부른다
+- 변경: `test/test_review_gate_script.py` — `.github/review-gate.sh`가 bash로 파싱되고 엄격 모드(`set -euo pipefail`, `inherit_errexit`)를 지키는지 본다. 경로를 글자 그대로 불러 선택기가 매핑한다.
+- 증거: 11-02 13:20~13:33 omx-arm-fault-visibility 차례가 main 변화분의 `.github/review-gate.sh: maps to no module (unknown -> full)`로 반납됐다. 원격 시험은 착지 기록에 남긴다.
+- gate 변화: 없음
+- 교훈: 없음
 
 ## 2026-11-02 · 7090702e1f · fix(remote): isaac_batch retries an UNKNOWN run; Step 4c boundary over seeds and yaw; D-958 stage 1 kill test
 - 변경: `tools/remote/isaac_batch.py`가 UNKNOWN으로 끝난 실행을 옆으로 치우고 `job_errors` 한도 안에서 다시 돌린다(회귀 시험 `test_an_unknown_run_is_set_aside_and_retried_not_polled_forever`). `result.md` Step 4c, D-956 근거·결정 5·결과, D-958 1단계 진행
