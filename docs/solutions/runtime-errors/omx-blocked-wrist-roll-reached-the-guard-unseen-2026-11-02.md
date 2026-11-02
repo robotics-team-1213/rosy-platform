@@ -64,6 +64,9 @@ under the strain thresholds.
 - `motor_health.keep_fault`: each guard fault writes `faults/<owner>-<utc>.json` (`rosy.motor-fault.v1`, every joint)
   next to the snapshot, and saves the local camera view frames named in `ROSY_OMX_FAULT_FRAMES`. The snapshot keeps
   only the public reason, and the next session overwrites it. Before this, no frame of any fault existed.
+- Fleet: the monitor flags the joint the guard named (`fault: true`), Fleet keeps each arm's last 20 stops, and the
+  cell page's `고장 이력` lists the stopped joint, every joint lagging over 1° with it, and the camera frames on
+  screen when the stop arrived.
 
 ## Next time
 

@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-11-02 · uncommitted · feat(fleet): 멈춘 관절을 이름으로 보이고, 팔마다 가드 정지 이력을 셀 화면에 남긴다
 - 2026-11-02 · uncommitted · fix(omx): 막힌 wrist_roll을 가드 전에 멈추고, 가드 고장마다 기록과 카메라 프레임을 남긴다
 - 2026-11-02 · uncommitted · fix(harness): 같은 폴더 import 사슬로 시험을 찾는다 (D-889 추가 21)
 - 2026-11-02 · uncommitted · fix(land): 서로 닿지 않으면 차례는 가드만 (D-889 추가 22)
 - 2026-11-01 · uncommitted · D-945 전 표면 자리 규칙
-- 2026-11-01 · uncommitted · D-926 보강: 새 구획은 ui-section 네 역할
