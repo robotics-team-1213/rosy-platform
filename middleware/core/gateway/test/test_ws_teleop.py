@@ -84,8 +84,6 @@ def test_disconnect_after_motion_applies_zero(drive, monkeypatch):
     real_apply = ws_module.apply_teleop
 
     def observe_apply(request, auth, services):
-        if request.linear == 0.0 and request.angular == 0.0:
-            return None  # Deliberate test-only mutation: disconnect zero is not applied.
         result = real_apply(request, auth, services)
         if request.linear == 0.0 and request.angular == 0.0:
             zero_applied.set()
