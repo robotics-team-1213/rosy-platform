@@ -5,7 +5,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[3]
 for p in (ROOT / "learning/curation/perception", ROOT / "learning/registry/perception",
           ROOT / "learning/training/perception", ROOT / "learning/evaluation/perception",
-          ROOT / "tools/perception", ROOT / "middleware" / "perception",
+          ROOT / "tools/perception", ROOT / "middleware" / "perception", ROOT / "integrations" / "perception",
           ROOT / "contracts" / "foundation"):  # core_common, needed by control (D-424)
     if str(p) not in sys.path:
         sys.path.insert(0, str(p))

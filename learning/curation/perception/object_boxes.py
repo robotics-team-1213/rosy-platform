@@ -30,13 +30,13 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 ROOT = Path(__file__).resolve().parents[3]
-for _p in (HERE, ROOT / "middleware" / "perception",
+for _p in (HERE, ROOT / "middleware" / "perception", ROOT / "integrations" / "perception",
            ROOT / "contracts" / "foundation"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
 from labels import scan_segments  # noqa: E402
-from control.sensing.perception.learned.manifest import OBJECT_CLASSES  # noqa: E402
+from perception_runtime.perception.learned.manifest import OBJECT_CLASSES  # noqa: E402
 
 MAX_OBJECT_EXTENT_M = 0.45  # longer runs are walls (the D-379 wall labeller owns them)
 MIN_POINTS = 3

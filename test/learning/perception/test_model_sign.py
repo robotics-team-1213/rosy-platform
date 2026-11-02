@@ -8,13 +8,13 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
-for _p in (Path(__file__).resolve().parents[3] / 'learning/registry/perception', ROOT / "middleware" / "perception"):
+for _p in (Path(__file__).resolve().parents[3] / 'learning/registry/perception', ROOT / "middleware" / "perception", ROOT / "integrations" / "perception"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
 import deliver  # noqa: E402
 import sign_model  # noqa: E402
-from control.sensing.perception.learned.signature import (  # noqa: E402
+from perception_runtime.perception.learned.signature import (  # noqa: E402
     SIGNATURE_NAME, SignatureError, openssl_path, verify_manifest_signature)
 
 

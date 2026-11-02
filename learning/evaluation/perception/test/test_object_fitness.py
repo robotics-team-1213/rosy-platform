@@ -5,7 +5,7 @@ import sys
 import pytest
 
 ROOT = Path(__file__).resolve().parents[4]
-for holder in ('middleware/perception', 'learning/curation/perception',
+for holder in ('middleware/perception', 'integrations/perception', 'learning/curation/perception',
                'learning/evaluation/perception', 'contracts/foundation'):
     sys.path.insert(0, str(ROOT / holder))
 
@@ -110,7 +110,7 @@ def model_frame(snapshot_validity=None, **kwargs):
     from types import SimpleNamespace
     import numpy as np
     from core_common.observation import ObservationSnapshot, SnapshotValidity
-    from control.sensing.perception.learned.manifest import OBJECT_CLASSES
+    from perception_runtime.perception.learned.manifest import OBJECT_CLASSES
     image = ObservationSnapshot('image', 'camera', 1000, datetime.now(timezone.utc),
                                 'front', 'cal-1', ('capture',),
                                 snapshot_validity or SnapshotValidity.VALID)

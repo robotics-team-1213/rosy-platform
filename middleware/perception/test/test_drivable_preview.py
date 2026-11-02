@@ -7,7 +7,7 @@ from control.sensing.perception.drivable.drivable_preview import (
     MAX_RUNS, chain_rows, drivable, floor_px, way_mask, way_runs)
 from control.sensing.perception.drivable.drivable_steer import pursuit_error
 from control.sensing.perception.follow_preview import draw_follow_evidence
-from control.sensing.perception.lane_keep import LaneKeeper
+from perception_runtime.perception.lane_keep import LaneKeeper
 
 PROJECTION = dict(height_m=0.0549, pitch_rad=0.2115, focal_px=281.6, principal_x=160.0, principal_y=120.0,
                   max_range_m=0.6, camera_x_offset_m=0.03317)

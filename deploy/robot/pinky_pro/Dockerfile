@@ -143,6 +143,7 @@ COPY middleware/drive/planning/nav2 /opt/rosy_ws/src/runtime/navigation
 COPY middleware/devices/omx/adapter /opt/rosy_ws/src/products/omx/adapter
 COPY middleware/devices/omx/profile /opt/rosy_ws/src/products/omx/profile
 COPY middleware/perception /opt/rosy_ws/src/runtime/sensing
+COPY integrations/perception /opt/rosy_ws/src/runtime/perception_runtime
 COPY middleware/drive/motion_limits /opt/rosy_ws/src/runtime/drive/motion_limits
 COPY middleware/drive/recovery /opt/rosy_ws/src/runtime/drive/recovery
 COPY middleware/drive/tracking /opt/rosy_ws/src/runtime/drive/tracking
@@ -154,7 +155,7 @@ RUN mkdir -p /opt/rosy_ws/src/sim/description/meshes
 RUN set -eo pipefail \
     && source /opt/ros/jazzy/setup.bash \
     && colcon build --merge-install \
-        --packages-select sllidar_ros2 interfaces core_common description bringup navigation omx_adapter omx control web_common \
+        --packages-select sllidar_ros2 interfaces core_common description bringup navigation omx_adapter omx perception_runtime control web_common \
     && test -d /opt/rosy_ws/install
 
 FROM io-runtime AS io

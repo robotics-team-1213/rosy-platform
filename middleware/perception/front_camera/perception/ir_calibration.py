@@ -22,7 +22,7 @@ import statistics
 from dataclasses import dataclass, field
 from typing import Mapping, Optional, Sequence
 
-from .lane import IRLineCalibration, detect_ir_line
+from perception_runtime.perception.lane import IRLineCalibration, detect_ir_line
 
 PHASES = ("carpet", "left", "centre", "right")
 CHANNELS = ("left", "centre", "right")

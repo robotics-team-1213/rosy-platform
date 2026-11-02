@@ -6,7 +6,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[3]
 for holder in ("learning/registry/perception", "learning/curation/perception",
-               "learning/evaluation/perception", "middleware/perception", "contracts/foundation"):
+               "learning/evaluation/perception", "middleware/perception", "integrations/perception", "contracts/foundation"):
     path = str(ROOT / holder)
     if path not in sys.path:
         sys.path.insert(0, path)
@@ -23,8 +23,8 @@ from intake_eval_gate import evaluation_semantics
 import review_evidence as review
 import review_masks
 import store
-from control.sensing.perception.learned.manifest import verify_files
-from control.sensing.perception.learned.runner import LaneSegModel
+from perception_runtime.perception.learned.manifest import verify_files
+from perception_runtime.perception.learned.runner import LaneSegModel
 from core_common.observation import ObservationSnapshot, SnapshotValidity
 from road_fitness import evaluate_model_frame, summarize_frames
 from source_uncertainty import summarize_sources

@@ -88,14 +88,8 @@ import math
 
 import numpy as np
 
-from .lane import LaneObservation
-from .lane_bev import (
-    CORE_CRUISE_M_S,
-    CORE_CURVE_SLOWDOWN,
-    CORE_MIN_CONFIDENCE,
-    CORE_STEERING_GAIN,
-    error_for_curvature,
-)
+from perception_runtime.perception.lane import LaneObservation
+from perception_runtime.perception.lane_bev import ( CORE_CRUISE_M_S, CORE_CURVE_SLOWDOWN, CORE_MIN_CONFIDENCE, CORE_STEERING_GAIN, error_for_curvature, )
 from .paint_localizer import PaintLocalizer, PaintMap
 from .route_camera import JUNCTION_ARM_M, TRACK_HALF_WIDTH_M, RouteCameraFollower
 from .route_map import (

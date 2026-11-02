@@ -248,7 +248,7 @@ def test_generated_unit_uses_exact_canonical_runtime_holders(tmp_path):
     path_line = next(line for line in text.splitlines() if line.startswith("Environment=PYTHONPATH="))
     paths = path_line.partition("=")[2].partition("=")[2].split(":")
     assert paths == [str(current / relative) for relative in (
-        "middleware/perception", "contracts/foundation", "tools/perception",
+        "middleware/perception", "integrations/perception", "contracts/foundation", "tools/perception",
         "learning/registry/perception", "learning/curation/perception", "learning/training/perception",
     )]
     assert len(paths) == len(set(paths))

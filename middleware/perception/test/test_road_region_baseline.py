@@ -9,9 +9,9 @@ ROOT = Path(__file__).resolve().parents[3]
 for folder in ("middleware/perception", "contracts/foundation"):
     sys.path.insert(0, str(ROOT / folder))
 
-from control.sensing.perception.learned.drivable_paint import drivable_target  # noqa: E402
-from control.sensing.perception.learned.lane_mask import lane_bounded_drivable  # noqa: E402
-from control.sensing.perception.learned.manifest import ClassSpec  # noqa: E402
+from perception_runtime.perception.learned.drivable_paint import drivable_target  # noqa: E402
+from perception_runtime.perception.learned.lane_mask import lane_bounded_drivable  # noqa: E402
+from perception_runtime.perception.learned.manifest import ClassSpec  # noqa: E402
 
 CLASSES = (ClassSpec(0, "background", "background"),
            ClassSpec(1, "lane_left", "lane_marking"),

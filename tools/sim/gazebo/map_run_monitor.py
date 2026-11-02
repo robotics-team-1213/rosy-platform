@@ -21,6 +21,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'middleware/perception'))  # ../../tools/sim/gazebo -> repo root
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'integrations/perception'))  # ../../tools/sim/gazebo -> repo root
 
 import rclpy
 from rclpy.node import Node
