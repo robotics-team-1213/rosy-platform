@@ -49,8 +49,11 @@ def test_anonymous_account_entry_separates_login_from_denied_access(tmp_path, wi
                     page.keyboard.press("Tab")
                     api.expect(login).to_be_focused()
                 else:
-                    api.expect(page.locator("#account-login")).to_be_hidden()
+                    api.expect(page.get_by_role("link", name="다른 계정으로 로그인")).to_be_visible()
+                    api.expect(page.locator("#account-login")).to_have_attribute("data-kind", "quiet")
                     api.expect(page.locator("#account-retry")).to_be_visible()
+                    api.expect(status).to_contain_text("접근할 권한이 없습니다")
+                    assert page.url == origin + "/accounts"
                 assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
                 assert not errors, errors
             finally:

@@ -32,7 +32,10 @@ function status(text, state) {
   loginControls();
 }
 function loginControls() {
-  $('account-login').hidden=!loginOptions?.enabled || !loginOptions?.rosy_account || $('account-status').getAttribute('state')==='forbidden';
+  const denied=$('account-status').getAttribute('state')==='forbidden';
+  $('account-login').hidden=!loginOptions?.enabled || !loginOptions?.rosy_account;
+  $('account-login').dataset.kind=denied?'quiet':'primary';
+  $('account-login').textContent=denied?'다른 계정으로 로그인':'Rosy Account로 로그인';
 }
 function accountShell(signedIn) {
   document.querySelector('.ui-app-body').dataset.seats=signedIn?'rail':'none';
@@ -123,7 +126,7 @@ async function refresh() {
   catch(e) {
     if (e.status === 403) {
       // Signed in to Rosy Account without this project's grant; another login would loop.
-      signedOut(); status(e.message, 'forbidden'); $('account-retry').hidden=false; return;
+      signedOut(); status('이 학습 작업에 접근할 권한이 없습니다. 관리자에게 권한을 요청하거나 다른 계정으로 로그인하세요.', 'forbidden'); return;
     }
     if (e.status !== 401) throw e;
     signedOut(); return;

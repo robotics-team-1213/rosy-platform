@@ -247,8 +247,9 @@ def test_named_multi_account_import_logout_real_browser(tmp_path, monkeypatch, a
                 page.goto(url + '/accounts', wait_until='networkidle')
                 expect = playwright.expect
                 expect(page.locator('#login-panel')).to_be_visible()
-                expect(page.locator('#account-status')).to_have_attribute('state', 'empty')
-                expect(page.get_by_role('region', name='Rosy Account 로그인')).to_be_visible()
+                expect(page.locator('#account-status')).to_have_attribute('state', 'unavailable')
+                expect(page.get_by_role('region', name='Learning에 로그인')).to_be_visible()
+                expect(page.locator('#account-login')).to_be_hidden()
                 expect(page.locator('#account-login')).to_have_attribute('href', '/api/account/login?return=/accounts')
                 assert page.locator('#login-panel input').count() == 0
                 sign_in(page, url, accounts, 'alice')
