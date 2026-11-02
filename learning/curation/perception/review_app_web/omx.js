@@ -170,7 +170,7 @@ async function load(){
     token=(await (await accountFetch('/api/workspace')).json()).token;
     const response=await accountFetch('/api/learning/omx');
     const value=await response.json();
-    if(!response.ok)throw new Error(response.status===403?'이 작업대의 권한이 거부되었습니다.':value.error||'요청 실패');
+    if(!response.ok)throw new Error(response.status===403?'이 작업대의 권한이 없습니다.':value.error||'요청 실패');
     if(generation!==editGeneration){$('omx-status').setAttribute('state','warning');$('omx-status').textContent='불러오는 동안 편집이 바뀌어 기존 화면을 보존했습니다. 필요하면 다시 확인하세요.';return;}
     preparedSets=value.sets;preparedReady=true;
     const selected=$('prepared-set').value;

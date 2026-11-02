@@ -173,19 +173,6 @@ ui-button, a { -webkit-tap-highlight-color: transparent; }
    2. 껍질 — 두 문법이 공유하는 테두리
    ======================================================================== */
 
-.skip-link {
-  position: fixed;
-  z-index: 20;
-  top: var(--space-2);
-  left: var(--space-2);
-  padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius-button);
-  transform: translateY(-150%);
-  color: var(--button-primary-ink);
-  background: var(--button-primary-bg);
-}
-.skip-link:focus { transform: translateY(0); }
-
 .topbar {
   position: sticky;
   z-index: 10;

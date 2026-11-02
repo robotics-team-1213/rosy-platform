@@ -112,7 +112,7 @@ export function drawTraffic(ctx, toPoint, pxPerM, { view, el, css, colorOf, draw
 export function drawSignalLamps(ctx, toPoint, { view, css, on }) {
   const drawing = on ? trafficDrawing(view.traffic, view.activeSiteMap, view.trafficTrips) : null;
   if (!drawing?.signals?.length) return;
-  const lampColour = { green: css("--status-good"), yellow: css("--status-warn"), red: css("--status-crit") };
+  const lampColour = { green: css("--signal-go"), yellow: css("--signal-caution"), red: css("--signal-stop") };
   for (const stop of drawing.signals) {
     const back = 0.17, side = 0.13;  // m upstream of the stop line, m to the approach's right
     const mx = stop.x - Math.cos(stop.angle) * back + Math.sin(stop.angle) * side;
