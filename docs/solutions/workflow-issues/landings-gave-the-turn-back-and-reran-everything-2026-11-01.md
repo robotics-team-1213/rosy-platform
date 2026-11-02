@@ -83,7 +83,7 @@ reruns. Each cause below was found from `.git/rosy-land-events.jsonl` and `.git/
    night; in the day, hold them in a worktree with their tests already passing remotely.
    "Night" alone is not enough. The night batch landed at 23:22 with ten tickets queued; every ticket
    prepared before it carried `tools/land.py` in its main delta, so the next turns ran FULL on test PCs
-   already below the floor (serial), gave the turn back at their cap, and main stood 40+ min (23:31-00:12).
+   already below the floor (serial), gave the turn back at their cap, and main stood 51 min (23:31-00:22).
    Only tickets prepared after the tool landing turn fast. Land tool changes when the queue is nearly
    empty (few `waiting`/`preparing` tickets), not just after a clock time.
 
