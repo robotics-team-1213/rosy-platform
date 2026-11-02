@@ -40,8 +40,11 @@ def train_origins(rows: list[dict], train: dict) -> list[dict]:
     if "members" in train:
         members = train["members"]
         if not isinstance(members, list) or not members or any(
-                not isinstance(m, dict) or not m.get("branch") or not m.get("ticket") for m in members):
+                not isinstance(m, dict) or not isinstance(m.get("branch"), str) or not m["branch"]
+                or not isinstance(m.get("ticket"), str) or not m["ticket"] for m in members):
             raise ValueError("invalid batch origins")
+        if {m["branch"] for m in members} != set(train["branches"]):
+            raise ValueError("batch origins disagree with selected branches")
         return members
     formed = [r["t"] for r in rows if r["event"] == "train" and r.get("result") == "formed"
               and r.get("pid") == train.get("pid") and r.get("branches") == train.get("branches")
