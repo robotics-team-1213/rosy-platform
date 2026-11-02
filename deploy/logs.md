@@ -4415,3 +4415,10 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 착지 land-fix-publish-baseline-checkout-pin가 MAIN-RED로 멈춤(main 06a479abd1에서도 같은 실패). 원격 `test/test_no_cross_host_dds.py`·`test/test_host_services_manifest.py`.
 - gate 변화: main 녹색 복구.
 - CE: 해당 없음 — 가드 시험이 바로 잡았고, 앞 착지가 이 시험을 고르지 않은 것은 시험 선택 범위의 문제다.
+
+## 2026-11-02 · uncommitted · D-963 제어 PC USB 카메라 역할 보고와 결정 적용
+
+- 변경: `usb_camera_report.py`(읽기 전용 보고, 결정 파일 쓰기)를 추가하고 `workcell_observation_bridge.py`가 20초마다 `POST .../{workcell_id}/usb-devices`로 보내 결정을 받는다. `omx_cameras.py bind --apply`가 결정 파일의 키가 현재 제안과 맞으면 `approve`+`save`로 적용하고 항목을 지운다. 레지스트리의 쓰기 주체는 `bind` 하나로 유지한다.
+- 증거: `test/test_omx_usb_camera_report.py`, `test/test_omx_workcell_observation_bridge.py`, `test/test_omx_cameras.py` 노트북에서 29건 통과(원격 재확인 대기).
+- gate 변화: 없음. 실제 USB 카메라를 꽂아 승인하는 현장 수용은 하지 않았다.
+- CE: 해당 없음 — 새 기능이며 장애 해결이 아니다. 결정은 D-963에 있다.

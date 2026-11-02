@@ -1100,3 +1100,10 @@
 - 증거: `test_omx_sim_pilot_contract.py`(원격).
 - Gate: 변화 없음.
 - CE: 해당 없음.
+
+## 2026-11-02 · uncommitted · D-963 UsbCameraReport·UsbCameraDecisions
+
+- 변경: `workcell_observations.py`에 USB 카메라 후보·보고·결정 모델을 더했다(additive, extra forbid). API v1.350.
+- 증거: `operations/fleet/test/test_usb_camera_decisions.py`.
+- gate 변화: 없음. 실제 USB 카메라를 꽂아 승인하는 현장 수용은 하지 않았다.
+- CE: 해당 없음 — 새 기능이며 장애 해결이 아니다. 결정은 D-963에 있다.

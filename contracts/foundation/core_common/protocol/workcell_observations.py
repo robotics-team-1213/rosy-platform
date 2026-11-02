@@ -151,3 +151,34 @@ class WorkcellObservationManifest(_StrictModel):
                 remember("token_env", camera.token_env)
                 remember("credential_sha256", camera.credential_sha256)
         return self
+
+
+# D-963: the control PC reports unregistered USB cameras (no device path, only a hash of its name) and Fleet returns
+# the operator's role decisions in the same reply.
+UsbCameraKey = Annotated[str, Field(pattern=r"^[0-9a-f]{16,64}$")]
+UsbId = Annotated[str, Field(pattern=r"^[0-9a-f]{4}:[0-9a-f]{4}$")]
+RoleList = Annotated[list[Identifier], Field(max_length=32)]
+
+
+class UsbCameraCandidate(_StrictModel):
+    key: UsbCameraKey
+    usb_id: UsbId
+    roles: RoleList  # gone roles last seen on this model
+    suggest: Identifier | None = None
+    hub_arm: Identifier | None = None
+
+
+class UsbCameraReport(_StrictModel):
+    workcell_id: Identifier
+    candidates: Annotated[list[UsbCameraCandidate], Field(max_length=16)]
+    roles: RoleList  # every role in the host's camera registry
+
+
+class UsbCameraDecision(_StrictModel):
+    key: UsbCameraKey
+    role: Identifier
+
+
+class UsbCameraDecisions(_StrictModel):
+    decisions: Annotated[list[UsbCameraDecision], Field(max_length=16)]
+

@@ -21,6 +21,7 @@ ROSY_DEPTH_RANGE_MM or ROSY_CAMERA_MIN_USB_MBPS) are optional.
                            exactly one unregistered camera has the role's recorded model (usb_id) and no other gone
                            role has that model; every other unregistered camera is proposed, never given a role
   omx_cameras.py propose   the unregistered cameras, each with its persistent name and the gone roles of its model
+                           A role Fleet's operator decided (omx-camera-decisions.json, D-963) is approved the same way
   omx_cameras.py approve NODE ROLE  give a plugged camera a role (a new role gets /<role>_camera/image_raw), then bind
   omx_cameras.py manifest [--manifest PATH] [--apply]  copy each registered camera's device into the workcell
                            observation manifest entry with the same image topic; exit 1 while one differs
@@ -30,8 +31,10 @@ from __future__ import annotations
 
 import argparse
 import glob
+import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -42,6 +45,7 @@ import omx_devices  # noqa: E402
 SCHEMA = "rosy.omx-cameras.v1"
 REGISTRY = Path("~/.config/rosy/omx-cameras.json").expanduser()
 ENV_DIR = Path("~/.config/rosy").expanduser()
+DECISIONS = Path("~/.local/state/rosy/omx-camera-decisions.json").expanduser()  # {key: role}, written by the bridge
 MANIFEST = Path("~/.config/rosy/workcell-observations/observations.yaml").expanduser()
 FIELDS = {"device": "ROSY_CAMERA_DEVICE", "topic": "ROSY_CAMERA_TOPIC", "frame": "ROSY_CAMERA_FRAME",
           "fourcc": "ROSY_CAMERA_FOURCC"}
@@ -223,6 +227,28 @@ def approve(registry: dict, role: str, row: dict) -> dict:
     return registry
 
 
+def device_key(device: str) -> str:
+    """What the control PC tells Fleet instead of a device name (D-963)."""
+    return hashlib.sha256(device.encode()).hexdigest()[:32]
+
+
+def apply_decisions(registry: dict, proposals: list, path: Path) -> tuple[list, dict]:
+    """Approve each proposed camera whose key Fleet decided a role for: (changes, decisions still waiting)."""
+    try:
+        decided = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return [], {}
+    if not isinstance(decided, dict):
+        return [], {}
+    changes = []
+    for row in proposals:
+        role = decided.pop(device_key(row["device"]), None)
+        if isinstance(role, str) and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_-]{0,63}", role):
+            approve(registry, role, row)
+            changes.append({"role": role, "to": row["device"]})
+    return changes, decided
+
+
 def save(registry: dict, path: Path) -> None:
     """Write the registry only if it still loads (one role and one device each)."""
     tmp = path.with_suffix(".tmp")
@@ -261,6 +287,7 @@ def main(argv=None) -> int:
     ap.add_argument("role", nargs="?", help="approve: the role it gets")
     ap.add_argument("--registry", type=Path, default=REGISTRY)
     ap.add_argument("--env-dir", type=Path, default=ENV_DIR)
+    ap.add_argument("--decisions", type=Path, default=DECISIONS, help="bind --apply: Fleet's role decisions")
     ap.add_argument("--manifest", type=Path, default=MANIFEST, help="manifest: the observation manifest to check")
     ap.add_argument("--apply", action="store_true", help="bind: write env files and restart units; manifest: write it")
     args = ap.parse_args(argv)
@@ -302,8 +329,14 @@ def main(argv=None) -> int:
         learned, args.apply = [{"role": args.role, "to": row["device"]}], True
     elif args.apply:
         learned = learn(registry, facts, proposals, os.path.exists)
+        approved, waiting = apply_decisions(registry, [r for r in proposals if not r["follow"]], args.decisions)
+        learned += approved
         if learned:
             save(registry, args.registry)
+        if approved:  # the registry is saved first, so a crash re-applies a decision instead of losing it
+            tmp = args.decisions.with_suffix(".tmp")
+            tmp.write_text(json.dumps(waiting), encoding="utf-8")
+            os.replace(tmp, args.decisions)
     if learned:
         registry = load(args.registry)
         proposals = propose(registry, facts, _names(), os.path.exists)

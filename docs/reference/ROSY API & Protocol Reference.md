@@ -5,9 +5,13 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.349
+**Version:** v1.350
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.350 USB 카메라 역할 승인 (D-963)
+
+- 제어 PC가 역할 없는 USB 카메라를 `POST /api/fleet/workcell-observations/{workcell_id}/usb-devices`로 보고하고, 같은 응답으로 운영자 결정을 받는다. Fleet은 결정만 저장하며(SQLite) 장치 경로·레지스트리를 모른다. 인증은 그 작업셀의 팔 관측 토큰을 재사용한다. 계약은 `core_common.protocol.workcell_observations`의 `UsbCameraReport`·`UsbCameraDecisions`다.
 
 ### v1.349 독립 Rosy Account와 개발 모드 사람 로그인 (D-962)
 
@@ -456,6 +460,9 @@ It does not enable a physical owner, command, calibration or motion admission.
 |---|---|---|
 | `GET /api/fleet/workcell-observations` | Existing Fleet viewer authentication | `{read_only:true,physical_acceptance:false,workcells:[{workcell_id,label,arms,cameras}]}`; no-store. Each arm has `{source_id,arm_id,label,units:"encoder_rad",fresh,epoch,sequence,captured_at,source_age_s,receipt_age_s,positions}`; cameras have `{source_id,label,role,arm_id}`. Missing samples have null data/age/epoch, sequence0. Stale positions are null. No producer secret or serial selector. |
 | `POST /api/fleet/workcell-observations/arms/{source_id}` | Source-bound `X-Workcell-Observation-Token`; strict `ArmObservation` `{epoch,sequence,captured_at,positions}`; actual body limit16KiB | 202 `{accepted:true}`; 401 bad/unknown source credential; 409 replay, nonadvancing capture, expired/future capture; 413 `WORKCELL_OBSERVATION_TOO_LARGE`; 422 invalid structure; 503 unconfigured. Identity comes from the registered source, never the payload. |
+| `GET /api/fleet/workcell-observations/usb-devices` | Existing Fleet viewer authentication | `{workcells:[{workcell_id,roles,candidates:[{key,usb_id,roles,suggest,hub_arm,decision}]}]}`; no-store. `key` is a hash of the camera's persistent name; no device path or token. `decision` is `{role,principal_id}` or null. A workcell whose control PC has not reported for 60 s is omitted. (D-963, v1.350) |
+| `POST /api/fleet/workcell-observations/{workcell_id}/usb-devices` | `X-Workcell-Observation-Token` of any arm of that workcell; strict `UsbCameraReport` `{workcell_id,candidates<=16,roles<=32}`; body limit 16KiB | 200 `{decisions:[{key,role}]}` for reported keys an operator decided; the stored report replaces the previous one and decisions for keys no longer reported are dropped. 401 bad token or another workcell's token; 404 unknown workcell; 413 `WORKCELL_OBSERVATION_TOO_LARGE`; 422 `INVALID_USB_CAMERA_REPORT` (incl. `workcell_id` differing from the path). no-store. |
+| `POST /api/fleet/workcell-observations/{workcell_id}/usb-devices/{key}/decision` | Named operator (`require_named_operator`); body `{role}` (Identifier), at most 4096 bytes, duplicate keys and non-finite numbers rejected | 200 `{key,role}`; the decision and operator are stored and audited by the mutation audit. 403 not a named operator; 404 `USB_CAMERA_NOT_REPORTED`; 422 `INVALID_USB_CAMERA_DECISION`. A new role name is allowed (the control PC gives it `/<role>_camera/image_raw`). Fleet applies nothing: the control PC reads the decision from its next report reply and `omx_cameras.py bind --apply` writes its own registry. |
 
 Epoch is lowercase UUID hex32; sequence is a positive strict integer. Original
 UNIX capture seconds and exact registered joint→number positions are finite JSON
@@ -4479,6 +4486,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.350 | 2026-11-02 | D-963: 제어 PC의 역할 없는 USB 카메라 보고·운영자 역할 결정 (`workcell-observations/{workcell_id}/usb-devices`) |
 | v1.349 | 2026-11-02 | D-962: 독립 Account authority와 Fleet PKCE receiver, 개발 모드의 익명 세션 폐기·사람 로그인 의무화 |
 | v1.348 | 2026-11-02 | 상태 행 `error`: Fleet 자체 보류(`ADDRESS_UNVERIFIED`)는 `reachable: null, held: true`, 로봇 거절과 구분 |
 | v1.347 | 2026-11-02 | additive (D-941): 장소 `kind` `slow`(감속만, 정지 아님), 속도표가 줄무늬 감속으로 반영 |

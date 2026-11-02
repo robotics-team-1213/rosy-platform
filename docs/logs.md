@@ -13698,3 +13698,10 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 결정 승인과 소스 회귀 검증은 운영 수용과 구분한다.
 - 결정: D-889 「모든 차례 최대 30분」, 사용자 승인 2026-11-02.
 - CE: 해당 없음 — 시간 정책·안전 경계는 ADR 정본과 회귀 시험에 기록했다.
+
+## 2026-11-02 · uncommitted · D-963 USB 카메라 역할 승인 결정과 API v1.350
+
+- 변경: ADR D-963과 API 참조 v1.350(`workcell-observations/{workcell_id}/usb-devices`). 구현은 deploy·fleet·contracts·web 로그를 따른다.
+- 증거: API 버전 pin 8곳 갱신, 구현 시험은 deploy·fleet 로그.
+- gate 변화: 없음. 실제 USB 카메라를 꽂아 승인하는 현장 수용은 하지 않았다.
+- CE: 해당 없음 — 새 기능이며 장애 해결이 아니다. 결정은 D-963에 있다.

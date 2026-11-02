@@ -71,6 +71,22 @@ class WorkcellObservations:
         if expected is None or not isinstance(token, str) or not valid:
             raise PermissionError("unknown source or invalid observation credential")
 
+    def authorize_workcell(self, workcell_id: str, token: str) -> None:
+        """Any arm token of this workcell identifies its control PC (D-963). KeyError: no such workcell."""
+        sources = [arm["source_id"] for cell in self._workcells if cell["workcell_id"] == workcell_id
+                   for arm in cell["arms"]]
+        if not sources:
+            raise KeyError(workcell_id)
+        results = []
+        for source in sources:  # every token is compared, so timing does not show which arm matched
+            try:
+                self.authorize(source, token)
+                results.append(True)
+            except PermissionError:
+                results.append(False)
+        if not any(results):
+            raise PermissionError("invalid observation credential")
+
     def ingest(self, source_id: str, token: str, observation: ArmObservation) -> None:
         self.authorize(source_id, token)
         observation = ArmObservation.model_validate(observation.model_dump())
