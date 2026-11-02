@@ -40,7 +40,8 @@ def test_package_acquisition_retries_only_until_exact_pinned_bytes(monkeypatch):
         return response
 
     monkeypatch.setattr(fixtures, "urlopen", open_response)
-    assert fixtures.download_package(pin) == trusted
+    with pytest.warns(RuntimeWarning, match="attempt 1:.*attempt 2: URLError"):
+        assert fixtures.download_package(pin) == trusted
     assert calls == [(pin["url"], 30)] * 3
 
 

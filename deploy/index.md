@@ -78,8 +78,8 @@
 
 ## 최근 기록
 
+- 2026-11-02 · c61e4fcdc1 · RAUC 시험 패키지는 정확한 pin만 수용하고 다운로드 실패 근거 보존
 - 2026-11-02 · 2ec8698993 · 수집 rehearsal의 미도달 시험도 같은 모의 시계 사용
 - 2026-11-02 · ee09871413 · 웹 통합 게시 이력의 공개 무결성 식별자 검토
 - 2026-11-02 · 6d7e296033 · Web unification follow-up
 - 2026-11-02 · uncommitted · fix(site): Tailscale 대역에서도 천장 카메라 미리보기
-- 2026-11-02 · uncommitted · feat(site): 관제 단위 overlay를 서명 candidate에 넣는다 (D-960)
