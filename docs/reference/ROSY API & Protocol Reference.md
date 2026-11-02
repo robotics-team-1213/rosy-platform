@@ -4478,6 +4478,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.349 | 2026-11-02 | D-962: 독립 Account authority와 Fleet PKCE receiver, 개발 모드의 익명 세션 폐기·사람 로그인 의무화 |
 | v1.348 | 2026-11-02 | 상태 행 `error`: Fleet 자체 보류(`ADDRESS_UNVERIFIED`)는 `reachable: null, held: true`, 로봇 거절과 구분 |
 | v1.347 | 2026-11-02 | additive (D-941): 장소 `kind` `slow`(감속만, 정지 아님), 속도표가 줄무늬 감속으로 반영 |
 | v1.346 | 2026-11-02 | additive (D-941): `GET /api/fleet/platoon`의 `speed`(고리 속도표, 보내기 없음), 충전 칸 관측을 백그라운드 루프로 |
