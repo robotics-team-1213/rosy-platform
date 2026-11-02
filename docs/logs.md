@@ -13825,3 +13825,10 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: 없음
 - 교훈: 없음(같은 날 arm_b 낙하 교훈에 이어서 기록 예정)
+
+## 2026-11-03 · uncommitted · fix(remote): 이력 없는 큰 시험 묶음을 기존 비용 추정으로 분할
+- 변경: `work_queue.split`의 분할 판정과 단일 디렉터리 그룹 수가 같은 기존 `cost()`를 사용한다. 실제 측정값은 0도 포함해 추정보다 우선하며, 기존 240초 경계·분할 상한·제외 조건·환경 복제·정확 argv 중복 제거는 유지한다.
+- 증거: 실제 첫 차례의 83경로 한 묶음이 완료 전 시간 상한으로 취소돼 본문 37개 PASS 0이었다. 재현 3 FAIL/9 PASS 뒤 코드 `8f4cf7e0bc` 원격 관련 3 suite 145 PASS·skip/NEW/known/flaky 0, 독립 검토 P1/P2 없음. 기존 캐시 argv 527개의 분할 계획은 그대로다.
+- 관측 한계: 고정 167e Git blob의 같은 83경로/.py620 합집합으로 1→83묶음, 최대 byte 추정 3468→995초다. 실제 wall·startup 비용은 미측정이며 남는 큰 자식 3개도 있다. 99%를 PASS로 저장하거나 30분이면 끝났다고 추정하지 않는다.
+- gate 변화: 없음. 기존 시간 예산·캐시 적격성·검증 범위·자원 정책을 바꾸지 않고 새 flag·의존성을 추가하지 않는다.
+- CE: 기존 교훈 갱신 — `docs/solutions/workflow-issues/landings-gave-the-turn-back-and-reran-everything-2026-11-01.md`에 cold packet과 부분 완료 증거의 경계를 남겼다. 같은 명령의 기존 PASS 키를 다른 자식 키로 추론하지 않는다.
