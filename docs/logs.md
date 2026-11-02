@@ -13758,3 +13758,10 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: 없음
 - 교훈: `docs/solutions/runtime-errors/omx-blocked-wrist-roll-reached-the-guard-unseen-2026-11-02.md`
+
+## 2026-11-03 · uncommitted · feat(omx): 떨어진 팔을 센 관절로 한 단계씩 빼내는 복구
+- 변경: `cell_unwedge.py`. shoulder_lift·elbow_flex만 홈 쪽으로 1단위씩, 손목은 명령 없음. 단계마다 지연을 읽어 1.2단위를 넘으면 반 단계 되돌리고 다른 관절로, 둘 다 막히면 사람을 부름. 단계마다 top·side 사진과 판단 기록. `cell_pipeline.recover`는 쥔 것이 없으면 이 단계를 쓰고 집게를 크게 벌리지 않는다.
+- 증거: 2026-11-03 04:05 arm_b가 피벗 goto 중 wrist_flex 가드로 컨테이너 위에 떨어짐. 고정 recover lift(elbow −5, wrist +4)는 이 자세에서 홈 반대쪽이라 같은 오류로 실패. `cell_unwedge`는 실물에서 21단계, 막힘 없이 빼내고 park.
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: `docs/solutions/runtime-errors/omx-arm-b-dropped-on-the-stack-and-the-fixed-recover-lift-pressed-it-down-2026-11-03.md`

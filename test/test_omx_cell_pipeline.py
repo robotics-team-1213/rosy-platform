@@ -549,8 +549,10 @@ def test_recover_lifts_clear_then_places_a_held_box_or_folds_home(tmp_path, curr
     assert cell.commands == []  # nothing moves without a person at the switch
     result = m.recover(cell, config, "pinky", tmp_path, person_at_switch=True)
     assert result["result"] == "recovered" and result["holding"] is holding
-    grip, lift = cell.commands[1], cell.commands[2]
-    assert grip == ("grip 46.6" if holding else "grip 56.0") and lift.startswith("jog")
+    if holding:
+        assert cell.commands[1] == "grip 46.6" and cell.commands[2].startswith("jog")
+    else:  # nothing held: the strong joints step it out, the jaws stay as they are (cell_unwedge)
+        assert cell.commands[2] == "jog shoulder_lift.pos -1.0" and not any(c.startswith("grip") for c in cell.commands)
     assert ("run release_place" in cell.commands) is holding and cell.commands[-1] == "park"
 
 

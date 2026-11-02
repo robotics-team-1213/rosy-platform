@@ -4428,3 +4428,10 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: `test/test_omx_usb_camera_report.py`, `test/test_omx_workcell_observation_bridge.py`, `test/test_omx_cameras.py` 노트북에서 29건 통과(원격 재확인 대기).
 - gate 변화: 없음. 실제 USB 카메라를 꽂아 승인하는 현장 수용은 하지 않았다.
 - CE: 해당 없음 — 새 기능이며 장애 해결이 아니다. 결정은 D-963에 있다.
+
+## 2026-11-02 · 5eff2fd4d0 · fix(omx): 빈 관측과 관측 실패 구분
+
+- 변경: 반복 운반은 observed=0과 정상 관측의 `no usable object`가 함께 있을 때만 source empty를 반환한다. 맵 누락·영상 누락 오류는 원래 실패 결과를 유지하고 다음 운반을 중단한다.
+- 검증: 원격 RED commit 314f571ea0에서 두 회귀 사례가 예상대로 실패했고 기존 9개는 통과했다. 수정 commit 5eff2fd4d0에서 자동 운반·자동 집기 관련 59개가 통과했다. 실제 팔 동작과 현장 배포는 하지 않았다.
+- gate 변화: 없음. 장치·현장 수용을 주장하지 않는다.
+- CE: 해당 없음 — 오류 전달 원인과 해결은 수정 코드 및 회귀 시험에 직접 남아 있다.
