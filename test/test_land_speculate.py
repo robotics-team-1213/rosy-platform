@@ -86,6 +86,37 @@ def test_prediction_uses_the_same_stale_bypass_window_as_the_turn(queued, age, p
     assert spec.chain(land, wt, sys.executable, qdir, ticket) == ([] if passed else [peer])
 
 
+@pytest.mark.parametrize("retry,moves,clean", [(False, False, True), (True, False, True),
+                                            (False, True, True), (True, True, True), (True, False, False)])
+def test_real_prepare_publishes_only_its_tested_main_before_predicting(queued, monkeypatch, retry, moves, clean):
+    main, wt, old, peer, qdir, ticket, *_ = queued
+    commit(main, {"lib/current.py": "current = 1\n"}, "main before prepare")
+    tested = git(main, "rev-parse", "HEAD")
+    if retry:
+        land.land_queue.set_status(ticket, "preparing", tested=old)
+    earlier = sorted(qdir.glob("*.json"))[0]
+    land.land_queue.set_status(earlier, "waiting", tested=old, waiting_since=land.land_queue.time.time())
+    observed, predict = [], spec.prepare
+
+    def run(wt_, args, invocations, logdir, phase):
+        if phase == "pre" and moves:
+            commit(main, {"lib/later.py": "later = 1\n"}, "main moves during prepare")
+        return [] if clean else ["LOAD-FLAKY"]
+
+    def predicting(*args):
+        row = json.loads(ticket.read_text(encoding="utf-8"))
+        observed.append((row.get("tested"), row["status"], spec.chain(land, wt, sys.executable, qdir, ticket)))
+        predict(*args)
+
+    monkeypatch.setattr(land, "run_tests", run)
+    monkeypatch.setattr(spec, "prepare", predicting)
+    land.land_prepare.prepare(land, wt, "feat/x", land.argparse.Namespace(tests="auto", no_cache=True),
+                              sys.executable, qdir, ticket, SELECTED, "FULL tier (test)")
+    assert observed == [(tested if clean else "", "preparing", [peer] if moves or not clean else [])]
+    assert spec._record(land, wt, "feat/x")["main"] == tested
+    assert (git(main, "rev-parse", "HEAD") != tested) is moves
+
+
 def test_prepare_tests_the_predicted_tree_and_leaves_the_branch_as_it_was(queued):
     main, wt, base, peer, qdir, ticket, ran, _ = queued
     head = git(wt, "rev-parse", "HEAD")
