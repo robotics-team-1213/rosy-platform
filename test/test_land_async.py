@@ -163,3 +163,68 @@ def test_resume_refuses_a_landed_snapshot_and_reports_a_relaunch_without_ticket(
     _git(main, "merge", "-q", "--ff-only", snap)
     with pytest.raises(SystemExit, match="already in main"):
         tool.resume(dev, tree.name, [], lambda *a: None, wait=5, sleep=lambda s: None)
+
+
+@pytest.fixture
+def live_rollup(repo):
+    main, dev = repo
+    snap, log = tool.start(dev, [], NOW, lambda *a: None)
+    tree = log.parent / log.name.removesuffix(".log")
+    rollup = "land/fix/land-rollup-20261102045038-20261102045038"
+    _git(main, "branch", rollup, snap)
+    ticket = _ticket(main, "0004", branch=rollup, status="waiting")
+    metadata = log.parent / (rollup.replace("/", "-") + ".members")
+    metadata.write_text(json.dumps([{"branch": snap, "worktree": str(tree)}]), encoding="utf-8")
+    (tree.parent / (tree.name + ".stopped")).write_text("previous stop")
+    return main, dev, snap, tree, ticket, metadata
+
+
+@pytest.mark.parametrize("action", ["start", "replace", "resume"])
+def test_live_one_ticket_rollup_owns_members_without_batch_state(live_rollup, monkeypatch, action):
+    _, dev, _, tree, ticket, _ = live_rollup
+    before = ticket.read_bytes()
+    monkeypatch.setattr(tool, "stop", lambda pid: pytest.fail("a member cannot stop the rollup leader"))
+    with pytest.raises(SystemExit, match="rides in that batch|held by live ticket"):
+        if action == "resume":
+            tool.resume(dev, tree.name, [], lambda *a: pytest.fail("duplicate member resumed"), wait=0)
+        else:
+            tool.start(dev, ["--replace"] if action == "replace" else [], NOW.replace(second=1),
+                       lambda *a: pytest.fail("duplicate member started"))
+    assert ticket.read_bytes() == before and "batch" not in json.loads(before)
+    assert (tree.parent / (tree.name + ".stopped")).exists()
+
+
+@pytest.mark.parametrize("dead", [False, True])
+@pytest.mark.parametrize("action", ["start", "resume"])
+def test_unrelated_or_dead_rollup_does_not_own_the_member(live_rollup, action, dead):
+    _, dev, _, tree, ticket, metadata = live_rollup
+    if dead:
+        row = json.loads(ticket.read_text())
+        ticket.write_text(json.dumps({**row, "pid": _dead_pid()}))
+        metadata.write_text("malformed dead metadata")
+    else:
+        metadata.write_text(json.dumps([{"branch": "land/feat/unrelated-20261102045038", "worktree": "other"}]))
+    launched = []
+    launch = lambda *args: launched.append(args)  # noqa: E731
+    if action == "start":
+        tool.start(dev, [], NOW.replace(second=1), launch)
+    else:
+        tool.resume(dev, tree.name, [], launch, wait=0, sleep=lambda s: None)
+    assert len(launched) == 1
+
+
+@pytest.mark.parametrize("content", [None, "{", "{}", "[]", '[{"worktree":"x"}]', '[{"branch":null}]'])
+@pytest.mark.parametrize("action", ["start", "resume"])
+def test_live_rollup_unknown_membership_fails_closed(live_rollup, content, action):
+    _, dev, _, tree, _, metadata = live_rollup
+    if content is None:
+        metadata.unlink()
+    else:
+        metadata.write_text(content)
+    launched = []
+    with pytest.raises(SystemExit, match="membership"):
+        if action == "start":
+            tool.start(dev, [], NOW.replace(second=1), lambda *args: launched.append(args))
+        else:
+            tool.resume(dev, tree.name, [], lambda *args: launched.append(args), wait=0, sleep=lambda s: None)
+    assert not launched
