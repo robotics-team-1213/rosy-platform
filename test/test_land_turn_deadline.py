@@ -74,7 +74,7 @@ def test_elapsed_turn_cancels_unfinished_work_without_resetting_its_budget(
         "only the invocation completed before expiry may become passing evidence")
 
 
-def test_with_no_landing_waiting_the_turn_cap_does_not_cut_the_turn(cached, monkeypatch):
+def test_no_waiter_can_continue_past_the_early_budget_before_the_ceiling(cached, monkeypatch):
     """2026-10-31: an urgent landing's turn hit the cap at 584 s with no one waiting and redid its pretest outside."""
     from test_land import GREEN, _runner
     wt, run, _ = cached
@@ -88,9 +88,8 @@ def test_with_no_landing_waiting_the_turn_cap_does_not_cut_the_turn(cached, monk
 
 
 @pytest.mark.parametrize("sent_back", [1, 2])
-def test_the_turn_cap_grows_each_time_it_sent_the_landing_back(cached, monkeypatch, sent_back):
-    """D-889 15/19, 11-01: FULL landings went back 3-6 times; then one uncapped turn held main for over 90 min.
-    Once sent back the cap is 3x (still cut when a landing waits), twice it is gone."""
+def test_later_turns_never_become_uncapped(cached, monkeypatch, sent_back):
+    """A second turn keeps its earlier waiter budget; third and later turns always have the 30-minute ceiling."""
     from test_land import GREEN, _runner
     wt, run, _ = cached
     monkeypatch.setattr(land, "TURN_CAP_S", -1)
@@ -102,8 +101,9 @@ def test_the_turn_cap_grows_each_time_it_sent_the_landing_back(cached, monkeypat
         with pytest.raises(land.Overtime):
             land.run_tests(wt, args, [["pkg/test"], ["pkg/test/test_a.py"]], wt.parent / "logs", 1)
     else:
+        assert land.land_checks.turn_budget(land, args) == 1800
         assert land.run_tests(wt, args, [["pkg/test"], ["pkg/test/test_a.py"]], wt.parent / "logs", 1)
-        assert not asked, "no cap: nobody is asked whether they wait"
+        assert not asked, "a quick run has not exhausted the ceiling"
 
 
 def test_the_ticket_keeps_the_sent_back_count_across_a_relaunch(tmp_path, monkeypatch):
