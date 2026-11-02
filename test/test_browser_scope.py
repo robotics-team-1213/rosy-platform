@@ -95,6 +95,14 @@ def test_learning_changes_select_the_screens_that_use_them():
         assert set(browser_scope.LEARNING) <= set(browser_scope.targets([source]))
 
 
+def test_auth_entry_regression_is_selected_by_its_sources_and_the_full_registry():
+    target = "test/learning/perception/test_learning_auth_surface_browser.py"
+    for source in ("learning/curation/perception/review_app_web/accounts.js",
+                   "learning/curation/perception/learning_rosy_accounts.py", "shared/web/component-controls.css"):
+        assert target in browser_scope.targets([source])
+    assert target in browser_scope.all_targets()
+
+
 def test_empty_selection_exits_3_without_targets(capsys):
     assert browser_scope.main(["docs/logs.md"]) == 3
     out = capsys.readouterr()
