@@ -27,10 +27,11 @@ sys.path.insert(0, str(HERE))
 BODY = ("shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll")
 ACTIONS = {"lift": "shoulder_lift", "pull": "elbow_flex"}
 STEP, LAG_STOP, CLEAR, MAX_STEPS, SETTLE_S = 1.0, 1.2, 12.0, 60, 1.5
+HOME = [0.8, -62.2, 53.1, 51.6, 45.2]  # the chunk libraries' home (topdown-guard), body joints
 
 
 def lags(status: dict) -> list:
-    return [round(abs(t - s), 2) for t, s in zip(status["target"][:5], status["state"][:5])]
+    return [round(abs(t - s), 2) for t, s in zip(status.get("target", status["state"])[:5], status["state"][:5])]
 
 
 def decide(last: str | None, blocked: str | None, lifted: float) -> str:
@@ -96,8 +97,6 @@ def main(argv=None) -> int:
     if not args.person_at_switch:
         ap.error("unwedge moves an arm the guard dropped: confirm a person at the switch")
     field = Field(args.config, args.catalog)
-    home = [0.8, -62.2, 53.1, 51.6, 45.2]  # the chunk libraries' home (topdown-guard), body joints
-
     def frames(name):
         out = {}
         for camera in ("top", "side"):
@@ -111,7 +110,7 @@ def main(argv=None) -> int:
 
     decisions = field.dir / f"{field.stamp}-unwedge-decisions.jsonl"
     with decisions.open("a") as fh:
-        out = unwedge(field.cell, home, frames=frames, log=lambda row: fh.write(json.dumps(row) + "\n") or fh.flush())
+        out = unwedge(field.cell, HOME, frames=frames, log=lambda row: fh.write(json.dumps(row) + "\n") or fh.flush())
     print(json.dumps(field.report("unwedge", {k: v for k, v in out.items() if k != "rows"} | {"steps": len(out.get("rows", [])),
                                                                                          "decisions": str(decisions)}), indent=1))
     return 0 if out["result"] == "recovered" else 1
