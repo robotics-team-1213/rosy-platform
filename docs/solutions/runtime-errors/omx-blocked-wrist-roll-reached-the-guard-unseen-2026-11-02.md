@@ -62,7 +62,8 @@ under the strain thresholds.
 - The hold text lists the other joints' lags (`(lags: shoulder_pan 1.3, ...)`). A second joint lagging with the
   first shows in the message itself.
 - `motor_health.keep_fault`: each guard fault writes `faults/<owner>-<utc>.json` (`rosy.motor-fault.v1`, every joint)
-  next to the snapshot, and saves the local camera view frames named in `ROSY_OMX_FAULT_FRAMES`. The snapshot keeps
+  next to the snapshot, and saves the local camera view frames named in `ROSY_OMX_FAULT_FRAMES` (default: the camera
+  view unit's top and side on port 8767; empty turns it off). The snapshot keeps
   only the public reason, and the next session overwrites it. Before this, no frame of any fault existed.
 - Fleet: the monitor flags the joint the guard named (`fault: true`), Fleet keeps each arm's last 20 stops, and the
   cell page's `고장 이력` lists the stopped joint, every joint lagging over 1° with it, and the camera frames on

@@ -204,11 +204,15 @@ class MotorHealth:
             keep_fault(self.state_path.parent / 'faults', self.owner_id, self.session_id, row)
 
 
+FAULT_FRAMES = 'top=http://127.0.0.1:8767/frame/top.jpg,side=http://127.0.0.1:8767/frame/side.jpg'  # rosy-omx-camera-view
+
+
 def keep_fault(directory, owner_id, session_id, row, frames=None):
     """One record per guard fault that the next session's snapshot cannot overwrite, plus the cell cameras at that
-    moment (ROSY_OMX_FAULT_FRAMES="top=<url>,side=<url>"). arm_a's wrist roll stalled four times on 2026-11-01 and the
-    only trace was the joint text in a session log; the cause was visible only in a camera. Called after torque OFF;
-    the frames are fetched on a thread so nothing waits on a camera."""
+    moment (ROSY_OMX_FAULT_FRAMES="top=<url>,side=<url>", default the camera view unit's port 8767, empty = none).
+    arm_a's wrist roll stalled four times on 2026-11-01 and the only trace was the joint text in a session log; the
+    cause was visible only in a camera. Called after torque OFF; the frames are fetched on a thread so nothing waits
+    on a camera."""
     import threading
     import urllib.request
     try:
@@ -220,7 +224,7 @@ def keep_fault(directory, owner_id, session_id, row, frames=None):
         atomic_snapshot(directory / f"{stem}.json", record)
     except (OSError, ValueError):
         return None
-    wanted = frames if frames is not None else os.environ.get('ROSY_OMX_FAULT_FRAMES', '')
+    wanted = frames if frames is not None else os.environ.get('ROSY_OMX_FAULT_FRAMES', FAULT_FRAMES)
     sources = dict(item.split('=', 1) for item in wanted.split(',') if '=' in item)
 
     def fetch():
