@@ -49,6 +49,43 @@ def _prepare(wt, qdir, ticket):
     return json.loads(land.land_full._path(wt, "feat/x").read_text(encoding="utf-8")).get(spec.KEY)
 
 
+def _later_candidate(queued, name, status, urgent=""):
+    main, wt, base, _, qdir, *_ = queued
+    git(main, "checkout", "-q", "-b", name)
+    commit(main, {f"lib/{name.rsplit('/', 1)[-1]}.py": "ready = True\n"}, name)
+    candidate = git(main, "rev-parse", "HEAD")
+    git(main, "checkout", "-q", "main")
+    land.land_full.save(wt, name, candidate, base, "full", [["lib/test"]])
+    land.land_queue.take(qdir, name, "", status, urgent=urgent)
+    return candidate
+
+
+def test_urgent_prediction_keeps_the_turn_and_excludes_the_waiter_it_passes(queued):
+    main, wt, _, peer, qdir, ticket, ran, _ = queued
+    turn = _later_candidate(queued, "feat/turn", "turn")
+    land.land_queue.set_status(ticket, "preparing", urgent="the user's words")
+    kept = _prepare(wt, qdir, ticket)
+    assert kept["chain"] == [turn], "the later TURN blocks it; the earlier ordinary waiter does not"
+    assert git(main, "ls-tree", "--name-only", kept["sha"], "lib/peer.py") == ""
+    assert git(main, "ls-tree", "--name-only", kept["sha"], "lib/turn.py") == "lib/turn.py"
+    assert ran == [("spec", kept["tree"])]
+
+
+def test_ordinary_prediction_includes_a_later_urgent_blocker(queued):
+    _, wt, _, peer, qdir, ticket, *_ = queued
+    urgent = _later_candidate(queued, "feat/urgent", "waiting", "the user's words")
+    assert spec.chain(land, wt, sys.executable, qdir, ticket) == [peer, urgent]
+
+
+@pytest.mark.parametrize("age,passed", [(0, True), (land.land_queue.PASS_CAP_S + 1, False)])
+def test_prediction_uses_the_same_stale_bypass_window_as_the_turn(queued, age, passed):
+    _, wt, base, peer, qdir, ticket, *_ = queued
+    earlier = sorted(qdir.glob("*.json"))[0]
+    land.land_queue.set_status(ticket, "preparing", tested=base)
+    land.land_queue.set_status(earlier, "waiting", tested="old", waiting_since=land.land_queue.time.time() - age)
+    assert spec.chain(land, wt, sys.executable, qdir, ticket) == ([] if passed else [peer])
+
+
 def test_prepare_tests_the_predicted_tree_and_leaves_the_branch_as_it_was(queued):
     main, wt, base, peer, qdir, ticket, ran, _ = queued
     head = git(wt, "rev-parse", "HEAD")
@@ -130,6 +167,8 @@ def test_a_held_records_only_turn_without_root_tests_still_runs_the_guards(queue
 @pytest.mark.parametrize("status, escalation, chained", [
     ("waiting", "", True),
     ("preparing", "", False),  # still preparing: it most likely lands after this one
+    ("pending", "", False),
+    ("turn", "", True),
     ("waiting", "pkg/x.py" + spec.SAFETY_TRIGGER, False),  # nobody stacks on a safety-path ticket
 ])
 def test_the_chain_skips_preparing_tickets_and_stops_at_safety(queued, status, escalation, chained):
