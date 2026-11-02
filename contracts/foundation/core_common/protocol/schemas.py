@@ -24,6 +24,9 @@ from .arm_transfer_observations import (  # noqa: F401
 from .arm_transfer_evidence import (  # noqa: F401
     ArmTransferEvidenceOwner, ArmTransferEvidenceContext, ArmTransferEvidenceDocument,
     ArmTransferPhysicalEvidenceResponse)
+from .arm_transfer_recheck import (  # noqa: F401
+    ArmTransferRecheckCreate, ArmTransferRecheckContext, ArmTransferRecheckDocument, ArmTransferRecheck,
+    ArmTransferRecheckResponse)
 from .arm_transfer_recovery import (  # noqa: F401
     ArmTransferRecoveryCreate, ArmTransferRecoveryApprove, ArmTransferRecoveryRequestSnapshot,
     ArmTransferRecoveryRequestResponse, ArmTransferRecoveryPreview, ArmTransferRecoveryPreviewResponse,

@@ -236,7 +236,7 @@ def test_migration_adds_physical_tables_preserves_legacy_and_old_host_refuses_ne
     before = snapshot(path)
     api().PhysicalTransferStore(path, installation=installation, deployment_profile="simulation")
     assert snapshot(path) == {**before, "fleet_physical_transfer_approvals": [], "fleet_physical_transfer_attempts": [],
-                              "fleet_physical_transfer_observations": []}
+                              "fleet_physical_transfer_observations": [], "fleet_physical_transfer_rechecks": []}
     with closing(connect(path)) as connection:
         assert not connection.execute("PRAGMA foreign_key_check").fetchall()
         assert connection.execute("SELECT MAX(version) FROM fleet_component_migrations WHERE component='cell_jobs'").fetchone()[0] == 8

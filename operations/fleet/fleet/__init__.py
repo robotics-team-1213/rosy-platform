@@ -1,6 +1,7 @@
-"""fleet — Fleet 쪽 씨앗: 대형 기하·슬롯 배정·참조 스트림 릴레이·FOR-004 세션.
+"""fleet — ROSY Platform의 현장 조정 서비스(Rosy Fleet의 서버).
 
-Fleet 서버 본체(Phase 4)는 아직 없다. 여기 있는 것은 로봇 계약(API Ref)만
+현장 로봇을 모아 보고, 누가 어디로 언제 갈지 정해 원장에 받아들이고, 각 로봇 CORE에 요청한다.
+최종 주행 명령과 안전 래치는 CORE의 몫이다. 패키지별 역할은 `AGENTS.md`. 로봇 계약(API Ref)만
 소비하며 `core` 는 스키마 재사용을 위해서만 import 한다(D-18).
 """
 

@@ -25,7 +25,7 @@ class NewPlace(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str = Field(min_length=1, max_length=64)
     # an edge end has no robot yaw, so it cannot be a D-513 start place
-    kind: Literal["park", "charge", "stop", "junction", "turnaround"] = "junction"
+    kind: Literal["park", "charge", "stop", "junction", "turnaround", "slow"] = "junction"
 
 
 class StartRequest(BaseModel):

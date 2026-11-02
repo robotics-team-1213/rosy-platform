@@ -8,7 +8,8 @@ from fastapi import Depends, Header, HTTPException, Request
 
 from core_common.protocol.arm_transfer import ArmActionId
 from core_common.protocol.arm_transfer_evidence import ArmTransferPhysicalEvidenceResponse
-from core_common.protocol.arm_transfer_jobs import ArmTransferJobResponse
+from core_common.protocol.arm_transfer_jobs import ArmTransferJobResponse, ArmTransferRequestKey
+from core_common.protocol.arm_transfer_recheck import ArmTransferRecheckCreate, ArmTransferRecheckResponse
 from core_common.protocol.arm_transfer_observations import (
     ArmTransferObservationContextResponse, ArmTransferObservationRequest, ArmTransferObservationReply,
     ArmTransferPhysicalReceiptResponse, ArmTransferCancelRequest)
@@ -104,6 +105,37 @@ def install_physical_observer_routes(app, *, service, task_store, job_view, requ
             if result is None:
                 raise HTTPException(409, detail={"code": "ARM_TRANSFER_PHYSICAL_EVIDENCE_UNAVAILABLE"})
             return result
+        return await call(read)
+
+    def recheck(function):
+        # D-930: fresh facts for a confirmed job; the job, receipt and claims never change.
+        try:
+            return {"recheck": function()}
+        except KeyError:
+            raise HTTPException(404, detail={"code": "ARM_TRANSFER_RECHECK_NOT_FOUND"}) from None
+        except MissionConflict:
+            raise HTTPException(409, detail={"code": "ARM_TRANSFER_RECHECK_CONFLICT"}) from None
+
+    @app.post(path + "/rechecks", response_model=ArmTransferRecheckResponse, tags=["fleet-work"],
+              dependencies=[Depends(write_origin)])
+    async def request_recheck(mission_id: ArmActionId, body: ArmTransferRecheckCreate,
+                              principal=Depends(require_proposer)):
+        current = installed()
+        def create():
+            if current.store.get(mission_id, principal=principal) is None:
+                raise KeyError(mission_id)
+            return recheck(lambda: current.rechecks.request(mission_id, body.recheck_key,
+                                                            principal_id=principal.principal_id))
+        return await call(create)
+
+    @app.get(path + "/rechecks/{recheck_key}", response_model=ArmTransferRecheckResponse, tags=["fleet-work"])
+    async def read_recheck(mission_id: ArmActionId, recheck_key: ArmTransferRequestKey,
+                           principal=Depends(require_viewer)):
+        current = installed()
+        def read():
+            if current.store.get(mission_id, principal=principal) is None:
+                raise KeyError(mission_id)
+            return recheck(lambda: current.rechecks.read(mission_id, recheck_key))
         return await call(read)
 
     return authenticate
