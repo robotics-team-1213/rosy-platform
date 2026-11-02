@@ -18,6 +18,42 @@ def test_fleet_development_changes_include_independent_browser_flows():
         assert 'applications/fleet/test/test_sample_browser.py' in found
 
 
+SAMPLE_CONSUMERS = {
+    'applications/fleet/test/test_sample_browser.py',
+    'applications/fleet/test/test_feature_browser_flows.py',
+    'applications/fleet/test/test_browser_adapters.py',
+    'applications/fleet/test/test_integrated_sample_browser.py',
+}
+
+
+def test_development_runtime_selects_sample_and_connected_host_consumers_only():
+    expected = SAMPLE_CONSUMERS | {'operations/fleet/test/test_app_connected_browser.py'}
+    for path in ('applications/fleet/dev/http_host.py', 'applications/fleet/dev/serve.py',
+                 'applications/fleet/dev/connected.py', 'applications/fleet/dev/sample/engine.py',
+                 'applications/fleet/dev/web/controls.js'):
+        assert set(browser_scope.targets([path])) == expected, path
+
+
+def test_sample_engine_and_shared_fixture_select_all_sample_consumers_only():
+    for path in ('applications/fleet/test/test_sample_server.py',
+                 'applications/fleet/test/test_sample_browser.py'):
+        assert set(browser_scope.targets([path])) == SAMPLE_CONSUMERS, path
+
+
+def test_development_markdown_does_not_select_browser_tests():
+    for path in ('applications/fleet/dev/logs.md', 'applications/fleet/dev/index.md',
+                 'applications/fleet/dev/progress.md', 'applications/fleet/dev/AGENTS.md'):
+        assert browser_scope.targets([path]) == [], path
+
+
+def test_production_sources_and_unproven_app_tests_keep_fleet_coverage():
+    for path in ('applications/fleet/web/runtime.js', 'shared/web/ui.js',
+                 'operations/fleet/fleet/server/app.py', 'applications/fleet/test/test_connected_proxy.py'):
+        found = set(browser_scope.targets([path]))
+        assert set(browser_scope._expand('operations/fleet/test/*_browser.py')) <= found, path
+        assert SAMPLE_CONSUMERS <= found, path
+
+
 def test_fleet_web_change_selects_fleet_browser_tests():
     found = browser_scope.targets(["applications/fleet/web/sitemap/site-map.js"])
     assert "test/test_fleet_console_browser.py" in found

@@ -5,23 +5,26 @@ last_verified: {commit: 6b0f7568f5, date: 2026-10-26}
 gates:
   SOURCE:
     state: GO
-    evidence: 독립 수집·집계·읽기 API와 POSIX CLI의 원격98시험 및247구조검사 통과. UI와 native 배포는 별도 gate다.
+    evidence: "독립 수집·집계·읽기 API와 POSIX CLI의 원격98시험 및247구조검사 통과. UI와 native 배포는 별도 gate다."
     cmd: python tools/remote/remote_pytest.py --log-dir "$env:TEMP/rosy-monitoring-launcher-accepted-green" -- operations/monitoring/test -q
   LOCAL:
     state: GO
-    evidence: 실제 backend Chromium16+G1 총151 PASS, scope 거부 상태6 PASS, G2 40셀 캡처와 G3 대표 검토 차단 없음. docs/validation/uiux-surfaces-2026-10-26/monitoring/README.md 참조.
+    evidence: "실제 backend Chromium16+G1 총151 PASS, scope 거부 상태6 PASS, G2 40셀 캡처와 G3 대표 검토 차단 없음. docs/validation/uiux-surfaces-2026-10-26/monitoring/README.md 참조."
     cmd: python tools/remote/remote_pytest.py --log-dir "$env:TEMP/rosy-monitoring-ui-canonical-green" -- ROSY_RUN_BROWSER_TESTS=1 test/test_monitoring_browser.py shared/web/test/test_surface_registry.py shared/web/test/test_shared_controls.py shared/web/test/test_surface_typography_focus_contracts.py shared/web/test/test_ui_token_contracts.py shared/web/test/test_palette_gates.py -q
   ROS-SIM:
     state: N/A
   ARTIFACT:
-    state: HOLD
-    blocker: 관제 PC는 D-936 사이트 스택 overlay로 싣는다. 소스·후보 검증·관제 PC compose 렌더링·Caddy 검사는 통과했다. overlay를 포함한 서명 후보가 아직 없고, 관제 PC 자동 업데이트는 서명되지 않은 ARM-S overlay 때문에 거절 중이다.
+    state: GO
+    evidence: "overlay 쌍(monitoring·account)을 포함한 서명 후보 site-2ba97ac2c346(PR #224 merge)가 2026-11-01 발행·설치됐다. 관제 PC 자동 업데이트 수용."
+    cmd: gh release view site-2ba97ac2c346 -R robotics-team-1213/rosy-platform --json name,assets
   DEVICE:
-    state: HOLD
-    blocker: 관제 PC 입력은 2026-11-01 staging 완료(설정 root:10001 0640, 키 2개 root 0600, Fleet viewer 'monitoring' 등록). overlay를 켜지 않았다 — 활성은 compose.monitoring.yaml 포함 서명 후보 적용 뒤 site.env 단계다.
+    state: GO
+    evidence: "관제(사이트) 호스트 입력 완료·Fleet viewer 'monitoring' 등록·overlay 활성(2026-11-01). rosy-site-monitoring-1 healthy. 현장 수용 기록 참조."
+    cmd: ssh <site-host> "docker ps --format '{{.Names}} {{.Status}}' | grep monitoring"
   FIELD:
-    state: HOLD
-    blocker: 실 PC 배치·LAN/TLS 단절 및 복구·시각·제어 영향 수용이 남아 있다.
+    state: GO
+    evidence: "실제 단절·거부·TLS 수용 2026-11-01 — 401(무자격·용도 불일치 키)·403(범위 밖)·Fleet 정지 중 수집기 독립(200)과 fleet 노드 신선도 구별(age_s 9.19/valid 15s)·모니터링 정지 시 Fleet 무영향(502/200)·원격 클라이언트 CA 신뢰 TLS 200(콘솔 로그인 포함). 한계: 로봇 오프라인(2026-10-10~)으로 로봇 원천 단절 관측은 연결 뒤 보강. [현장 수용 기록](../../docs/validation/monitoring-site-overlay-2026-11-01/result.md)"
+    cmd: ssh <site-host> "curl -sk -o /dev/null -w '%{http_code}' https://localhost:8443/api/monitoring/v1/snapshot"  # 401 without reader key; see the validation record for the full scenario set
 adrs: [D-876, D-936, D-961]
 ---
 

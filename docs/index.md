@@ -355,6 +355,6 @@
 
 - 2026-11-02 · 131087f3b1 · 공개 Git 무결성 증거의 필드 명확화
 - 2026-11-02 · b1eafb186f · D-961 웹 제품 통합 검증 기록
-- 2026-11-02 · uncommitted · docs(omx): 시범 학습 준비와 왼쪽 손목 진단 기록
-- 2026-11-02 · uncommitted · docs(adr): D-889 추가 10 결과에 M4 판정(FAIL)
-- 2026-11-02 · uncommitted · fix(land): 겹침 판정이 선택기 가드 묶음을 보지 않는다 (D-889 추가 25)
+- 2026-11-02 · uncommitted · feat(fleet): 확인된 ARM 시도의 재관측 계약(D-930, API v1.334)
+- 2026-11-02 · 7090702e1f · fix(remote): isaac_batch retries an UNKNOWN run; Step 4c boundary over seeds and yaw; D-958 stage 1 kill test
+- 2026-11-02 · uncommitted · test: 리뷰 관문 스크립트를 시험이 부른다

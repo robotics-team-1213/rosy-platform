@@ -84,6 +84,12 @@
 - 근거: 호스트 읽기 전용 조사로 candidate c47d7c3e78c9(2026-10-26 서명분) 가동·account 디렉터리 staging 확인. overlay 활성은 compose.monitoring.yaml 포함 서명 후보 적용 뒤 site.env 단계와 함께 별도 수행한다.
 - gate 변화: DEVICE blocker 문구 갱신(입력 준비 완료, 활성 대기). ARTIFACT/FIELD HOLD 유지.
 
+## 2026-11-01 · 2ba97ac2c346 · 사이트 overlay 현장 수용 (D-936)
+
+- 변경: 서명 후보 site-2ba97ac2c346 설치(00:17 UTC) 후 compose.monitoring.yaml overlay 활성(site.env 백업 존재). 실제 단절 관측: 401(무자격·용도 불일치)·403(범위 밖)·Fleet 정지 중 수집기 독립과 fleet 노드 신선도 구별(age_s 9.19/valid 15s)·모니터링 정지 시 Fleet/콘솔 무영향(502/200/307)·원격 클라이언트 CA 신뢰 TLS 200(콘솔 로그인 포함).
+- 근거: [현장 수용 기록](../../docs/validation/monitoring-site-overlay-2026-11-01/result.md). 로봇 오프라인으로 로봇 원천 단절 관측은 연결 뒤 보강. 함께 기록: account_tls_renew.py의 vault 소비자 의존(제거 불가, 제품 변경 필요), 대역 외 서명 관행(서명은 유효, 제목 보정 + README 규칙 추가).
+- gate 변화: ARTIFACT/DEVICE/FIELD GO.
+
 ## 2026-11-02 · uncommitted · D-961 웹 제품 통합
 
 - 변경: 읽기 화면을 공용 워드마크·테마·본문으로 옮기고 고정 번들에 조합 시트·중첩 brand/mark.svg를 포함했다. 키 메모리 수명·범위·관측 시각·읽기 전용 API는 유지한다.

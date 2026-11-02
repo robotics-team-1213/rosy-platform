@@ -70,7 +70,7 @@ binding과 경로는 같은 계정 소유이며 group/world 쓰기를 허용하�
 
 ## 실행·중지·증거
 
-개발 PC의 진입은 `python tools/remote/remote_isaac.py`다. `private/lab-hosts.json`의 명시적인 `sim_hosts` model 한 대만 사용한다. 첫 check 전에 모델 PC의 `~/.config/rosy/isaac-sdk.json`에 기존 SDK의 `python`, `python_sha256`, `version`을 운영자가 기록한다. 설치·의존성 변경은 하지 않는다. CLI는 승인 SHA를 새 `sim-isaac-*` checkout으로 전송하고 SHA별 source binding을 exclusive 게시한다. 기존 binding과 실행 source를 덮어쓰지 않는다.
+개발 PC의 진입은 `python tools/remote/remote_isaac.py`다. `private/lab-hosts.json`의 명시적인 `sim_hosts`에서 `--role`(기본 `model`, `ai` 가능)로 고른 한 대를 사용한다. 여러 실행은 `tools/remote/isaac_batch.py --plan plan.json --out DIR --roles model,ai`가 호스트마다 하나씩 나눠 맡긴다. `DIR/<이름>/result.json`이 있으면 끝난 것이고, receipt만 있으면 그 호스트에서 이어 받아 가져오며 다시 시작하지 않는다. 멈추면 같은 명령을 다시 실행한다. 바쁜 호스트는 물러나고 다른 호스트가 나머지를 맡는다. 계획은 실행을 하나씩 적거나 `cases`×`seeds` 격자로 쓴다. `--pause ai=rosy-ollama.service`는 배치 동안 그 사용자 유닛을 멈추고, 실패해도 원래 켜져 있던 유닛만 다시 켠다. 끝나면 `DIR/summary.tsv`에 실행마다 놓은 개수와 가장 크게 어긋난 상자를 적는다. 첫 check 전에 대상 PC의 `~/.config/rosy/isaac-sdk.json`에 기존 SDK의 `python`, `python_sha256`, `version`을 운영자가 기록한다. 설치·의존성 변경은 하지 않는다. CLI는 승인 SHA를 새 `sim-isaac-*` checkout으로 전송하고 SHA별 source binding을 exclusive 게시한다. 기존 binding과 실행 source를 덮어쓰지 않는다.
 
 ```text
 python tools/remote/remote_isaac.py check --scenario omx-f-import --config config.json --sha FULL_SHA

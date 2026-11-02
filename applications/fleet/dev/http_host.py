@@ -3,6 +3,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 from pathlib import Path
 import runpy
+import socket
 from urllib.parse import urlsplit
 
 from response import DevResponse, error, reply
@@ -153,6 +154,14 @@ def make_server(provider, origin):
 
     class Server(ThreadingHTTPServer):
         daemon_threads = True
+        allow_reuse_address = not hasattr(socket, 'SO_EXCLUSIVEADDRUSE')
+        allow_reuse_port = False
+
+        def server_bind(self):
+            # Windows SO_REUSEADDR permits another preview to bind the same port.
+            if hasattr(socket, 'SO_EXCLUSIVEADDRUSE'):
+                self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+            super().server_bind()
 
     server = Server(('127.0.0.1', local.port if local.port is not None else (443 if local.scheme == 'https' else 80)), Handler)
     if local.port == 0:

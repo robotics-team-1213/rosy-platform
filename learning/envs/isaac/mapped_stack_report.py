@@ -90,6 +90,27 @@ def verify_report(path, *, sdk_version, seed, cube=False, container=None):
     return value
 
 
+def hold_metrics(layer, fixture):
+    """Grasp-and-hold check (grasp_hold_check): pad gap, finger angle and slip of the box against the TCP, from raw samples."""
+    from mapped_stack_fixture import norm
+    from palletizing_gripper import gap_m
+    hold, arm, item = layer['hold'], layer['arm'], layer['item']
+    samples = hold['samples']
+    relative = [[b-t for b, t in zip(s['boxes'][item]['position'], s['tcps'][arm])] for s in samples]
+    angles = [s['joints'][arm][hold['finger_dof']] for s in samples]
+    gaps = [gap_m(q)*1000 for q in angles]
+    rise = samples[-1]['boxes'][item]['position'][2]-layer['source_center_z']
+    drift = max(norm([r[k]-relative[0][k] for k in range(3)]) for r in relative)*1000
+    q0 = samples[0]['boxes'][item]['orientation']  # rotation of the box since the hold began (yaw and tilt together)
+    turn = max(math.degrees(2*math.acos(min(1., abs(sum(a*b for a, b in zip(q0, s['boxes'][item]['orientation'])))))) for s in samples)
+    return dict(seconds=round((samples[-1]['tick']-samples[0]['tick'])/120, 2), samples=len(samples),
+                finger_angle_rad=[round(min(angles), 4), round(max(angles), 4)], pad_gap_mm=[round(min(gaps), 3), round(max(gaps), 3)],
+                command_rad=round(samples[-1]['commands'][arm][hold['finger_dof']], 4),
+                box_rise_mm=round(rise*1000, 2), slip_mm_vs_tcp=round(drift, 3),
+                box_pose_mm_vs_tcp_start=[round(v*1000, 2) for v in relative[0]], box_rotation_deg_max=round(turn, 3),
+                held=bool(rise > .03 and drift <= 1.0))
+
+
 def summarize(report):
     """What a container run did, from its report: placements, error, final row gaps and unstable boxes."""
     from mapped_stack_fixture import norm, row_gaps, stable_box
@@ -105,7 +126,8 @@ def summarize(report):
             unstable.append(dict(box=j, position_error_mm=round(1000*max(abs(box['position'][k]-items[j]['target'][k])
                                                                           for k in range(3)), 3),
                                  speed_m_s=round(norm(box['velocity']), 4), angular_rad_s=round(norm(box['angular_velocity']), 4)))
-    return dict(task_success=report.get('task_success'), placed=placed,
+    hold = next((hold_metrics(l, fixture) for l in layers if 'hold' in l), None)
+    return dict(task_success=report.get('task_success'), placed=placed, hold=hold,
                 planned=len(items), error=trial.get('error'), failures=trial.get('failures'),
                 row_gaps_mm=[round(g*1000, 3) for g in row_gaps(sample, fixture, placed)] if sample and fixture.get('row_gap_band_m') else None,
                 unstable=unstable, frames=report.get('video', {}).get('frames'))
