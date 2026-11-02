@@ -86,9 +86,9 @@ def test_prediction_uses_the_same_stale_bypass_window_as_the_turn(queued, age, p
     assert spec.chain(land, wt, sys.executable, qdir, ticket) == ([] if passed else [peer])
 
 
-@pytest.mark.parametrize("retry,moves,clean", [(False, False, True), (True, False, True),
-                                            (False, True, True), (True, True, True), (True, False, False)])
-def test_real_prepare_publishes_only_its_tested_main_before_predicting(queued, monkeypatch, retry, moves, clean):
+@pytest.mark.parametrize("retry,moves,keep_full", [(False, False, False), (True, False, False),
+                                                (False, True, False), (True, True, False), (True, False, True)])
+def test_real_prepare_publishes_only_its_tested_main_before_predicting(queued, monkeypatch, retry, moves, keep_full):
     main, wt, old, peer, qdir, ticket, *_ = queued
     commit(main, {"lib/current.py": "current = 1\n"}, "main before prepare")
     tested = git(main, "rev-parse", "HEAD")
@@ -101,7 +101,7 @@ def test_real_prepare_publishes_only_its_tested_main_before_predicting(queued, m
     def run(wt_, args, invocations, logdir, phase):
         if phase == "pre" and moves:
             commit(main, {"lib/later.py": "later = 1\n"}, "main moves during prepare")
-        return [] if clean else ["LOAD-FLAKY"]
+        return []
 
     def predicting(*args):
         row = json.loads(ticket.read_text(encoding="utf-8"))
@@ -110,10 +110,11 @@ def test_real_prepare_publishes_only_its_tested_main_before_predicting(queued, m
 
     monkeypatch.setattr(land, "run_tests", run)
     monkeypatch.setattr(spec, "prepare", predicting)
-    land.land_prepare.prepare(land, wt, "feat/x", land.argparse.Namespace(tests="auto", no_cache=True),
-                              sys.executable, qdir, ticket, SELECTED, "FULL tier (test)")
-    assert observed == [(tested if clean else "", "preparing", [peer] if moves or not clean else [])]
-    assert spec._record(land, wt, "feat/x")["main"] == tested
+    land.land_prepare.prepare(land, wt, "feat/x", land.argparse.Namespace(tests="auto", no_cache=not keep_full),
+                              sys.executable, qdir, ticket, SELECTED, "" if keep_full else "FULL tier (test)")
+    anchor = old if keep_full else tested
+    assert observed == [(anchor, "preparing", [peer] if moves or keep_full else [])]
+    assert spec._record(land, wt, "feat/x")["main"] == anchor
     assert (git(main, "rev-parse", "HEAD") != tested) is moves
 
 
