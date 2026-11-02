@@ -53,6 +53,17 @@ def test_new_request_retry_does_not_inherit_a_stop_before_the_previous_completio
     assert land_goal.lead_times(rows, 0, 600) == [4, 200 / 60]
 
 
+def test_reemitting_the_same_ticket_cannot_move_the_retry_coverage_cutoff():
+    a, b = "land/fix/a-20261101000000", "land/fix/a-20261101010000"
+    rows = [ev(0, "queue", branch=a, ticket="a", pid=1),
+            ev(120, "queue", branch=b, ticket="b1", pid=2), ev(200, "stop", branch=b, pid=2),
+            ev(240, "queue", branch=a, ticket="a", pid=3),
+            ev(300, "landed", branch="land/fix/land-rollup-x", members=[dict(branch=a, ticket="a")]),
+            ev(320, "queue", branch=b, ticket="b2", pid=4),
+            ev(400, "landed", branch="land/fix/land-rollup-y", members=[dict(branch=b, ticket="b2")])]
+    assert land_goal.lead_times(rows, 0, 500) == [5, 280 / 60]
+
+
 def test_failed_rollup_does_not_close_member_or_create_a_sample():
     rows = [ev(0, "queue", ticket="a"), ev(60, "stop", members=[{"branch": "land/fix/a", "ticket": "a"}]),
             ev(120, "landed")]
