@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-930 | 확인된 ARM 시도의 재관측(새 측정 사실만, 실행·claim·완료 권한 없음, API v1.334). [전문](../adr/D-930-arm-transfer-recheck-of-confirmed-attempt.md) | Accepted (2026-10-30, 계약·simulation 구현 결정; 실물 수용 별도) |
 | D-907 | Native v2 read-only signed component profile contract. [전문](../adr/D-907-native-v2-readonly-profile-contract.md) | Accepted (2026-10-28) |
 | D-950 | 도킹 진입 방향은 후면(후진)이다 — 짐칸 USB 코를 충전소 깔때기에 후진으로 꽂는다. [전문](../adr/D-950-docking-direction-rear-entry.md) | Accepted (2026-11-01, 사용자 결정; 방향만, 구현·실물 수용·후속 결정 별도) |
 | D-955 | Rosy를 연동 허브로 두고, 팀원은 로그인하면 기본 권한 묶음으로 바로 쓴다 | Accepted (2026-11-01) |
@@ -936,6 +937,7 @@
 | D-881 | A/B 이미지의 기체 상태와 슬롯별 적용 기록을 분리한다 | Proposed |
 | D-915 | Immutable physical evidence export with measured joint provenance | Accepted |
 | D-916 | Atomic raw source stamps on validated OMX joint snapshots | Accepted |
+| D-945 | 모든 표면이 같은 뼈대를 쓰는 자리 규칙 | Accepted |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 

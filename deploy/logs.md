@@ -4335,3 +4335,22 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: test-only8658211939와 동결된 취약 생산 bytes의 unreferenced 후보bf952ea992에서 실제 서명 검증 뒤 manifest/identity 교체 두 시험이 모두 DID NOT RAISE로 원격 RED였다(2 failed/skip0/setup0/collection0, comparator2NEW). 현재 수정은 독립 검토 전이며 GREEN은 아직 없다.
 - gate 변화: 없음. 실제 설치·native closure·활성화·장치 권한을 검증한 결과가 아니다.
 - CE: 미해결 — 실제 RED는 확인했으며 수정 검증 후 trust-boundary 교훈 기록 필요성을 판단한다.
+
+## 2026-11-02 · 97da913f85 · OMX record_session이 켜진 카메라 단위 전부를 넘겨받음
+
+- 변경: `record_session.py`가 top/front 고정 목록 대신 `systemctl list-units rosy-omx-camera@*`로 켜진 카메라 단위를 모두 찾아 멈추고 끝나면 다시 켠다(camera-view·readiness는 전처럼 먼저 멈춤). 10-31 레지스트리로 늘어난 side·두 번째 손목 카메라가 V4L 장치를 쥔 채 남지 않는다. 벤치 녹화 페이지(D-943)는 이미 같은 패턴을 쓴다.
+- 증거: `test/test_omx_record_session.py` 원격 시험(새 시험: side·arm_a_wrist 단위가 멈췄다 다시 켜짐)
+- gate 변화: 없음. 실물 작업대 녹화로 확인한 결과가 아니다.
+- CE: 해당 없음
+
+## 2026-11-02 · uncommitted · feat(omx): 팔 혼자 정렬하기를 한 파이프라인으로 (`cell_align`)
+- 변경: `cell_align.py`의 `plan`이 관측으로 다음 단계를 고른다. 집을 수 있으면 pick, 붙어 선 긴 상자는 길이 방향 밀기(옆으로 비킨 선, 통로가 옆 열을 피하는 오프셋, 끝 집기 점이 이웃 끝을 지나는 길이), 그 자리에 오차 측정이 없으면 pivot 먼저, 아무것도 안 되면 hold와 이유. `next`는 그 한 단계만 감독 시험(`--commissioning --person-at-switch`)으로 실행하고 결정 행을 남긴다. `cell_push`는 지도 좌표 입력(`--at`, `--along`)과 손가락 하나(20 mm 패드)를 앞세운 좁은 밀기(`--narrow`)를 받고, 좁은 밀기를 먼저 시도한다. 옆 통로 검사는 상자 옆부터 통로 끝까지 띠 전체를 본다(끝 한 점만 보면 그 사이 이웃을 건너뛰었다). 측정 없이도 지도 최대 오차로 밀 수 있으면 바로 밀고, 측정해야만 맞으면 pivot을 먼저 한다. `cell_pivot.jaw_blobs`는 `pivot.merge_px` 안의 조각을 한 표시로 센다(기본 0 = 이전과 같음).
+- 증거: 현장(2026-11-02) 붙어 선 열 위 집게 표시가 72·165·260 px 조각으로 나와 `min_blob` 300 미만, 피벗이 0개 각도로 끝남. `plan`이 실제 셀에서 넓은 면(42 mm)으로는 hold, 좁은 밀기로는 "pivot 먼저(지도 최대 오차 11.85 mm로는 안 맞고 5 mm면 맞음)"를 냄. 원격 `test_omx_cell_align.py` 등.
+- gate 변화: 없음
+- 교훈: 작업 기록 2026-10-31 §15.5
+
+## 2026-11-02 · uncommitted · feat(site): 작업셀 카메라 자격 매핑도 site.env에서 바꾼다
+- 변경: `compose.workcell.yaml`의 Vision 카메라 credential 매핑을 `ROSY_SITE_WORKCELL_CAMERA_CREDENTIAL_PATHS`(전체 교체, 비우면 overhead·wrist A·wrist B)로 받는다. 팔 매핑(`ROSY_SITE_WORKCELL_ARM_CREDENTIAL_PATHS`)과 같은 방식이다.
+- 증거: OMX 셀에 측면 카메라가 서비스로 돌지만 서명 Compose가 카메라 세 개를 고정해 Fleet·Vision에 넣을 수 없었다(2026-11-02 현장). 원격 `test_site_workcell_deploy.py`.
+- gate 변화: 없음
+- 교훈: 해당 없음

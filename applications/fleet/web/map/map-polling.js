@@ -177,7 +177,6 @@ export function createMapPolling({ scope, el, view, auth, call, camera, draw, la
       el("map-stage").dataset.mapState = "ready";
       el("map-empty").hidden = true;
       el("map-canvas").removeAttribute("aria-hidden");
-      el("map-canvas").setAttribute("role", "button");
       syncLegend("grid");
       draw();
       onMapChanged();

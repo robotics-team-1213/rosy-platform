@@ -23,6 +23,8 @@ DEFAULTS = {
     "objects.close_px": (5, "px", 1, 31), "objects.surface_min_px": (12000, "px", 500, 300000),
     "pivot.still_px": (40, "px", 1, 100000), "pivot.diff_px": (30, "gray", 1, 255),
     "pivot.min_blob": (300, "px", 1, 100000), "pivot.max_blob": (90, "px", 1, 1000),
+    "pivot.merge_px": (0, "px", 0, 20),
+    "align.free_margin_mm": (15.0, "mm", 0, 60), "align.face_short_mm": (4.0, "mm", 0, 15),
     "pivot.follow_px": (60, "px", 1, 1000), "pivot.agree_px": (3.0, "px", 0.1, 50),
     "pivot.bias_reach_mm": (80.0, "mm", 1, 500), "pivot.clear_above_m": (0.074, "m", 0.03, 0.2), "pivot.settle_limit_s": (5.0, "s", 0.5, 60),
     "pivot.settle_step_s": (0.4, "s", 0.05, 5), "pivot.grip_closed": (50.5, "gripper", 0, 100), "pivot.grip_open": (62.0, "gripper", 0, 100),

@@ -324,6 +324,10 @@ class HttpRobotClient(StationTransport, NavigationTransport):
     async def estop(self) -> dict:
         return await self._post("/api/v1/safety/stop")
 
+    async def estop_release_code(self, code: str) -> dict:
+        """v1.343: release with the one-time code this robot's screen shows while latched."""
+        return await self._post("/api/v1/safety/release-code", {"code": code})
+
     async def identify_lamp(self, color: Optional[str] = None, quiet: bool = False) -> dict:
         """D-472: None asks for the robot's configured colour; the answer names the one used.
         D-596: ``quiet`` asks for no call chirp (a query flag: an older CORE ignores it and chirps)."""
