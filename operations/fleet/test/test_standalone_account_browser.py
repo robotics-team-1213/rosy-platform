@@ -48,11 +48,24 @@ def test_standalone_existing_cookie_and_initial_password_resume_registered_app(s
             browser = playwright.chromium.launch(headless=True)
             try:
                 context = browser.new_context(ignore_https_errors=True)  # Disposable self-signed fixture only.
-                context.add_cookies([{'name': 'rosy_fleet_session', 'value': value, 'url': origin,
-                                      'secure': True, 'httpOnly': True, 'sameSite': 'Lax'}])
                 page = context.new_page()
                 errors = []
                 page.on('pageerror', lambda error: errors.append(str(error)))
+                page.goto(origin + '/console/login')
+                expect(page.get_by_role('heading', name='Rosy Account 로그인', exact=True)).to_be_visible()
+                expect(page.get_by_role('form', name='Rosy Account 로그인', exact=True)).to_be_visible()
+                page.goto(origin + '/console/profile')
+                expect(page).to_have_title('Rosy Account — 내 계정')
+                expect(page.locator('#profile-back')).to_be_hidden()
+                page.locator('#profile-login').click()
+                expect(page.get_by_role('heading', name='Rosy Account 로그인', exact=True)).to_be_visible()
+                assert '/console/login?return=%2Fconsole%2Fprofile' in page.url
+                page.goto(origin + '/console/accounts')
+                expect(page).to_have_title('Rosy Account — 계정 관리')
+                page.locator('#account-login').click()
+                expect(page.get_by_role('heading', name='Rosy Account 로그인', exact=True)).to_be_visible()
+                context.add_cookies([{'name': 'rosy_fleet_session', 'value': value, 'url': origin,
+                                      'secure': True, 'httpOnly': True, 'sameSite': 'Lax'}])
                 page.goto(entry)
                 expect(page.get_by_role('heading', name='Registered callback')).to_be_visible(timeout=15000)
                 assert 'code=' in page.url and 'state=standalone-browser' in page.url

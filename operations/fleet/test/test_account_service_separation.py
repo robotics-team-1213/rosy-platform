@@ -77,6 +77,18 @@ def test_standalone_preserves_session_profile_and_durable_audit(standalone):
         assert db.execute('SELECT status_code FROM account_http_audit').fetchall() == [(200,)]
 
 
+@pytest.mark.parametrize('path', ['/console/login', '/console/profile', '/console/accounts'])
+def test_standalone_pages_identify_the_account_owner(standalone, path):
+    response = standalone[1].get(path)
+    assert response.status_code == 200
+    assert '<html data-app="account" ' in response.text
+    assert '<title>Rosy Account —' in response.text
+    assert '<b>Rosy Account</b>' in response.text
+    assert '<b>Rosy Fleet</b>' not in response.text
+    assert response.headers['cache-control'] == 'no-cache'
+    assert "script-src 'self'" in response.headers['content-security-policy']
+
+
 def test_standalone_login_fails_closed_when_audit_is_unavailable(standalone, monkeypatch):
     from rosy_account import audit
     from test_password_session import TYPED
