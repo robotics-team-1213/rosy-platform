@@ -100,7 +100,7 @@ def main():
         raise ValueError('diagnostic refuses operational CORE environment')
     check_urdf(args.urdf, 'pinky', allow_package=False)
     for path in ('contracts/foundation', 'contracts/motion/src', 'contracts/skill/src',
-                 'middleware/core/gateway', 'middleware/core/services', 'middleware/core/events', 'middleware/perception'):
+                 'middleware/core/gateway', 'middleware/core/services', 'middleware/core/events', 'middleware/perception', 'integrations/perception'):
         sys.path.insert(0, str(REPOSITORY / path))
     camera_args = (args.camera_model, args.camera_model_revision, args.camera_model_sha256)
     if any(camera_args) and not all(camera_args):
@@ -108,7 +108,7 @@ def main():
     perception_model = perception = None
     if args.camera_model:
         from camera_lane import CameraQPolicy, LearnedCameraLane, camera_model_identity
-        from control.sensing.perception.learned.runner import LaneSegModel
+        from perception_runtime.perception.learned.runner import LaneSegModel
         # The frozen v2 has no wall class; its lane-mask fallback cannot use the wall floor gate.
         perception_model = LaneSegModel.open(args.camera_model, threads=1, allow_spinning=False, floor_gate=False)
         perception = camera_model_identity(perception_model, revision=args.camera_model_revision,
@@ -196,7 +196,7 @@ def main():
             camera.set_horizontal_aperture(36.)
         if perception is not None:
             import yaml
-            from control.sensing.perception.camera_ground import ground_plane
+            from perception_runtime.perception.camera_ground import ground_plane
             from isaacsim.core.utils.rotations import quat_to_rot_matrix, rot_matrix_to_quat
             camera_profile = yaml.safe_load((REPOSITORY / 'middleware/devices/pinky/profile/config/camera_nominal.yaml').read_text())
             front_camera = Camera(prim_path='/World/FrontCamera', resolution=(320, 240), frequency=-1)

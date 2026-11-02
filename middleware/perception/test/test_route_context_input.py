@@ -4,7 +4,7 @@ import json
 import numpy as np
 
 from control.route_context_input import RouteContextInput, bend_expected
-from control.sensing.perception.lane_keep import LaneKeeper
+from perception_runtime.perception.lane_keep import LaneKeeper
 from test_lane_keep_bend import CAMERA_X, HALF, FIXTURE, _ground
 
 

@@ -8,9 +8,10 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'middleware/perception/test'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'middleware/perception/test'))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'learning/registry/perception'))
 from test_learned_manifest_ncnn import ncnn_doc, write_doc  # noqa: E402
-from control.sensing.perception.learned.manifest import ManifestError, load_manifest  # noqa: E402
+from perception_runtime.perception.learned.manifest import ManifestError, load_manifest  # noqa: E402
 import intake  # noqa: E402
 
 

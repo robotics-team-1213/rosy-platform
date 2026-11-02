@@ -167,7 +167,7 @@ def _paint_for():
     """line_observer_node._paint_for compiled alone (no rclpy on the host)."""
     import ast
     from pathlib import Path
-    from control.sensing.perception.lane_bev import pose_if_fresh
+    from perception_runtime.perception.lane_bev import pose_if_fresh
     src = (Path(__file__).resolve().parents[1] / "sensors/line_observation" / "line_observer_node.py").read_text(encoding="utf-8")
     fn = next(n for n in ast.walk(ast.parse(src)) if isinstance(n, ast.FunctionDef) and n.name == "_paint_for")
     namespace = dict(pose_if_fresh=pose_if_fresh, clean_learned_mask=lambda m, h: m,

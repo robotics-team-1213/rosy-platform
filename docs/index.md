@@ -354,7 +354,7 @@
 ## 최근 기록
 
 - 2026-11-03 · uncommitted · fix(remote): 배치의 각 시험 입장에서 재부팅 임박 차단
+- 2026-11-03 · uncommitted · feat(omx): 세션 서보 튜닝을 기종 → 현장 caps → 로봇 프로필 순서로 겹친다
 - 2026-11-03 · uncommitted · fix(landing): 분할 중복과 중첩 rollup 집계를 보완한다
 - 2026-11-03 · uncommitted · fix(landing): 병렬 준비와 폴백에서 급행 표시를 보존한다
 - 2026-11-03 · uncommitted · feat(isaac): 실물 top·side 카메라 시점과 D-947 Accepted
-- 2026-11-03 · uncommitted · test(publish): held turn의 출처 보존과 실행 증거를 구분한다

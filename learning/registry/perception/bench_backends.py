@@ -13,7 +13,7 @@ from pathlib import Path
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[3]
-for path in (ROOT / "middleware/perception", ROOT / "contracts/foundation"):
+for path in (ROOT / "middleware/perception", ROOT / "integrations/perception", ROOT / "contracts/foundation"):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
@@ -30,9 +30,9 @@ def summarize(latencies, *, errors, max_p95_ms):
 
 def benchmark(folder, frames, *, iterations=100, warmup=5, max_p95_ms, duration_s=0):
     import cv2
-    from control.sensing.perception.learned.detector import ObjectDetModel
-    from control.sensing.perception.learned.runner import LaneSegModel
-    from control.sensing.perception.learned.manifest import load_manifest
+    from perception_runtime.perception.learned.detector import ObjectDetModel
+    from perception_runtime.perception.learned.runner import LaneSegModel
+    from perception_runtime.perception.learned.manifest import load_manifest
     if iterations < 1 or warmup < 0 or not np.isfinite(duration_s) or duration_s < 0:
         raise ValueError("invalid benchmark iteration/warm-up/duration")
     paths = [Path(p) for p in frames]

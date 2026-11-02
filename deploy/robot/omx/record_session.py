@@ -50,7 +50,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from joint_tune import BASELINE, FOLLOWER, SerialBus, no_interrupts, protect_signals, session_lock
-from session_caps import load_caps as load_caps
+from session_caps import load_caps as load_caps, model_tuning, robot_tuning
 from record_config import validate_config
 
 SERVICES = ("rosy-omx-camera@top.service", "rosy-omx-camera@front.service",
@@ -501,7 +501,7 @@ def main(argv=None):
         args.operating_profile = args.operating_profile.expanduser().resolve()
     if args.body_only and not args.teleop_only:
         parser.error("--body-only requires --teleop-only")
-    caps = load_caps(args.caps)
+    caps = load_caps(args.caps, model=model_tuning(), robot=robot_tuning(args.operating_profile))
     config = json.loads(args.config.read_text(encoding="utf-8-sig"))
     if args.task_card is not None:
         card = load_task_card(args.task_card)

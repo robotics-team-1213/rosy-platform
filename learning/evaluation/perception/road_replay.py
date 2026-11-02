@@ -44,18 +44,18 @@ import cv2
 import numpy as np
 
 REPO = Path(__file__).resolve().parents[3]
-for _p in (REPO / "middleware" / "perception",
+for _p in (REPO / "middleware" / "perception", REPO / "integrations" / "perception",
            REPO / "contracts" / "foundation", REPO / "tools", Path(__file__).resolve().parents[3] / 'learning/curation/perception'):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
 import lane_replay  # noqa: E402
 from road_replay_inputs import Frame, _interp, mcap_frames, recorded_projection, session_frames, video_frames  # noqa: E402, F401
-from control.sensing.perception.camera_ground import nominal_ground_plane  # noqa: E402
-from control.sensing.perception.lane_keep import LaneKeeper, floor_white_mask  # noqa: E402
-from control.sensing.perception.lane_boundaries import LaneBoundaryTracker  # noqa: E402
-from control.sensing.perception.lane_bev import pose_if_fresh  # noqa: E402
-from control.keep_odom_veto import OdomVetoLaneKeeper  # noqa: E402
+from perception_runtime.perception.camera_ground import nominal_ground_plane  # noqa: E402
+from perception_runtime.perception.lane_keep import LaneKeeper, floor_white_mask  # noqa: E402
+from perception_runtime.perception.lane_boundaries import LaneBoundaryTracker  # noqa: E402
+from perception_runtime.perception.lane_bev import pose_if_fresh  # noqa: E402
+from perception_runtime.keep_odom_veto import OdomVetoLaneKeeper  # noqa: E402
 from road_replay_metrics import (  # noqa: E402, F401 — re-exported for tests and tools
     _boundary_comparison,
     boundary_candidate,
@@ -73,7 +73,7 @@ from road_replay_metrics import (  # noqa: E402, F401 — re-exported for tests 
     _unassociated_summary,
     _unassociated_ys,
 )
-from control.sensing.perception.road_state import (  # noqa: E402
+from perception_runtime.perception.road_state import (  # noqa: E402
     STOP,
     TRACK,
     IrMeas,

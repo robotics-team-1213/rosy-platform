@@ -13,9 +13,9 @@ import math
 
 import numpy as np
 
-from .lane import _WASHED_FRACTION
-from .lane_bev import BirdsEye
-from .lane_keep_lines import floor_white_mask
+from perception_runtime.perception.lane import _WASHED_FRACTION
+from perception_runtime.perception.lane_bev import BirdsEye
+from perception_runtime.perception.lane_keep_lines import floor_white_mask
 from .paint_localizer import MATCH_SCALE_M, MATCH_TRUNCATE_M
 
 #: Fewer paint points than this is no evidence either way (None, not 0).

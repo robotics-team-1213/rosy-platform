@@ -23,7 +23,7 @@ from .sensing.perception.camera_homography import (
     CalibrationThresholds,
     load_homography_profile,
 )
-from .sensing.perception.camera_ground import simulation_ground_plane
+from perception_runtime.perception.camera_ground import simulation_ground_plane
 from .object_detector import TOPIC as DETECTIONS_TOPIC
 from .sensing.perception.follow_preview import FrameEvidence
 from .sensing.perception.camera_visibility import visibility_reason

@@ -7,7 +7,7 @@ import cv2
 import lane_sim
 import numpy as np
 import pytest
-from control.sensing.perception.lane_bev import BEV_CELL_M
+from perception_runtime.perception.lane_bev import BEV_CELL_M
 from control.sensing.perception.route_camera import MANOEUVRE_MAX_TRAVEL_M, RouteCameraFollower
 from lane_scenarios import (
     GRAPH,

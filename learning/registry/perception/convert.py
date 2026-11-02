@@ -45,12 +45,12 @@ from pathlib import Path
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[3]
-for _p in (Path(__file__).resolve().parents[3] / 'learning/training/perception', ROOT / "middleware" / "perception",
+for _p in (Path(__file__).resolve().parents[3] / 'learning/training/perception', ROOT / "middleware" / "perception", ROOT / "integrations" / "perception",
            ROOT / "contracts" / "foundation"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
-from control.sensing.perception.learned.manifest import (  # noqa: E402
+from perception_runtime.perception.learned.manifest import (  # noqa: E402
     LAYOUTS, OBJECT_CLASSES, OBJECT_ROLE, SCHEMA, TASKS, load_manifest, verify_files)
 
 PARITY_TOLERANCE = 1e-3
@@ -150,7 +150,7 @@ def _calibration_paths(calib_dir) -> list:
 def calibration_frames(calib_dir, hw, color):
     """Letterboxed NCHW float32 frames (scale 1/255, the manifest's) in the model's colour order."""
     import cv2
-    from control.sensing.perception.learned.detector import letterbox
+    from perception_runtime.perception.learned.detector import letterbox
 
     for path in _calibration_paths(calib_dir):
         image = letterbox(cv2.imread(str(path)), hw[1], hw[0])[0]  # cv2 decodes BGR

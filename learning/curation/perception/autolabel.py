@@ -33,6 +33,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'tools'))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'middleware/perception'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'integrations/perception'))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'contracts/foundation'))  # core_common, imported by control (D-424)
 
 import labels as L  # noqa: E402
@@ -218,7 +219,7 @@ def scan_points_at(lidar: Lidar, odom: PoseSeries, scan, frame_pose, max_range):
 
 def load_rules(keep_v2: Path | None):
     """{name: fn(bgr, horizon_row) -> 0/1 mask}: the rules we compare against."""
-    from control.sensing.perception.lane_keep import floor_white_mask
+    from perception_runtime.perception.lane_keep import floor_white_mask
 
     def device_line(bgr, horizon):  # D-378 E1: the device 'line' mode's bright mask
         hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
