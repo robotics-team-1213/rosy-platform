@@ -202,10 +202,12 @@ def test_historical_completion_closes_same_snapshot_retries_but_preserves_new_sn
             ev(start + 120, "queue", branch=newer, ticket="new", pid=2),
             ev(start + 180, "queue", branch=a, ticket="retry", pid=3),
             ev(start + 240, "landed", branch=carrier, sha=sha),
-            ev(start + 300, "landed", branch=newer, pid=2)]
+            ev(start + 300, "landed", branch=newer, pid=2),
+            ev(start + 360, "queue", branch="land/fix/a-20261101020000", ticket="future", pid=4),
+            ev(start + 420, "landed", branch="land/fix/a-20261101020000", pid=4)]
     holder = events.parent / "rosy-land-wt"
     holder.mkdir()
     (holder / (carrier.replace("/", "-") + ".members")).write_text(json.dumps([{"branch": a}]), encoding="utf-8")
     normalized, warnings = land_goal.normalize(rows, events.parent)
     assert not warnings
-    assert land_goal.lead_times(normalized, start, start + 400) == [4, 3]
+    assert land_goal.lead_times(normalized, start, start + 500) == [4, 3, 1]
