@@ -237,3 +237,26 @@ def test_direct_duplicate_supervisor_does_not_run_or_mark_the_owner_stopped(star
     assert duplicate.returncode != 0 and "supervisor" in duplicate.stdout + duplicate.stderr
     assert not (tree.parent / (tree.name + ".stopped")).exists()
     assert calls.read_text() == "run\n"
+
+
+def test_start_refuses_the_same_change_while_its_supervisor_has_no_ticket(starting_lander):
+    _, dev, _, tree, _, _, launch = starting_lander
+    tool.resume(dev, tree.name, [], launch, wait=0, sleep=lambda s: None)
+    with pytest.raises(SystemExit, match="supervisor"):
+        tool.start(dev, [], NOW.replace(second=1), launch)
+
+
+def test_concurrent_resumes_admit_only_one_supervisor(starting_lander):
+    _, dev, _, tree, _, calls, _ = starting_lander
+    code = (f"import sys;sys.path.insert(0,{str(ROOT / 'tools')!r});import land_async as a;from pathlib import Path;"
+            f"print(a.resume(Path({str(dev)!r}),{tree.name!r},[],a.detach,wait=0,sleep=lambda s:None))")
+    parents = [subprocess.Popen([sys.executable, "-c", code], stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                text=True) for _ in range(2)]
+    results = [process.communicate(timeout=10) for process in parents]
+    assert sorted(process.returncode for process in parents) == [0, 1]
+    assert sum("starting" in stdout for stdout, _ in results) == 1
+    assert any("supervisor" in stderr for _, stderr in results)
+    until = time.monotonic() + 5
+    while not calls.exists() and time.monotonic() < until:
+        time.sleep(.02)
+    assert calls.read_text() == "run\n"
