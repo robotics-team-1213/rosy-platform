@@ -13765,6 +13765,35 @@ osy-d395-s1d\`.
 - gate 변화: 없음. fixture 수치는 바꾸지 않았다(실측 받침 채택은 도달·충돌 비교 뒤).
 - CE: 해당 없음 — 측정 기록이며 해결한 장애가 아니다. 실물과 시뮬레이션의 차이는 대장에 남겼다.
 
+## 2026-11-03 · uncommitted · fix(publish): 실제 FULL·브라우저 실행 근거로 게시와 병합을 검증한다
+
+- 변경: `publish_main.green_full`이 후보 SHA의 정본 FULL·전체 opt-in 브라우저 chunk/ALONE 계획과 정확한 commit·tree·환경·argv·로그 SHA-256 대응을 확인한다. 기존 분할기를 그대로 사용하며 준비 후보는 기존 main 병합 bridge와 최종 계획·환경 일치가 필요하다. `--no-cache`는 재사용만 끄고 새 clean 실행 근거를 남긴다.
+- 증거: `cf16fa8214` 원격 게시·착지·준비·선택·캐시·batch 7파일 318 PASS, 0 SKIP, NEW 0·known 0·flaky 0. 선행 RED `b1cf199195` 3실패, 독립 검토 반례 RED `d4ed8d5348` 4실패 뒤 수정했다. 실제 후보의 정본 41호출·브라우저 13청크 추출을 확인했고 #227 head `8a84c7e359`는 opt-in 브라우저 계획 부재로 거부했다.
+- gate 변화: 기존 FULL 기준을 선택과 열린 PR 병합 양쪽에서 검증한다. 일반 ROS skip과 승인된 quarantine 재실행의 기존 판정은 유지한다. tier-only·hash 없는 과거 근거는 소급 승인하지 않는다.
+- 한계: 캐시 정리·로그 소실·같은 경로의 내용 교체는 게시 거부다. 최종 통합 SHA의 새 FULL, 공개 CI, 배포·실물 수용은 별도 검증이다.
+- 교훈: 기존 `own-full-landing-to-publish-wasted-hours-2026-11-02.md`의 #227 해석은 게시 담당이 최종 검증 뒤 정정한다.
+
+## 2026-11-03 · f8fdc85890 · docs: 게시 성공과 적격 FULL 근거 구분
+
+- 변경: 기존 FULL 교훈의 #227 해석을 정정했다. 실제 병합 사실은 보존하고, 당시 브라우저 실행 근거가 없었다는 후속 검토와 후보·준비 bridge·로그 hash 검증 조건을 구분했다.
+- 증거: 게시 근거 수정의 최종 문서 head f8fdc85890에서도 관련 318개가 원격 통과했고 skip과 NEW/known/flaky는0이었다. 실제 과거 후보는 새 검증기에서 거부됐다. 이 검증은 최종 통합 FULL·공개 CI·장치 수용을 대신하지 않는다.
+- gate 변화: 없음. 과거 실행을 적격 근거로 소급 승인하지 않았다.
+- CE: 기존 교훈 갱신 — 자동화의 병합 성공을 FULL의 적격성으로 해석한 기존 설명이 다음 작업을 오도할 수 있어 바로잡았다.
+
+## 2026-11-03 · 3db26622ab · evidence: 재연결 뒤 READY 복구와 수정 검증 동결
+
+- 변경: `validation/camera-readiness-followup-2026-11-03/result.md`에 실제 USB 재연결 뒤 새 기준선으로 복구한 결과와 세 코드 수정의 원격 검증 근거를 동결했다. 게시 근거 수정 bootstrap 착지 스냅샷을 접수한 뒤, 아직 미착지인 원본 주제 브랜치에서 같은 후속 검증 기록을 준비했다.
+- 증거: 네 역할의 registry/env 일치·단독 소유권·서로 다른 장치를 확인했고, 준비 검사 시작·원본 controls readback·재시작 뒤 별도 READY 3회에서 네 영상 sequence가 모두 증가했다. 실행 source는 기존 landed commit cbfb144767의 불변 snapshot이며 이전 profile/env/state를 보존했다.
+- gate 변화: 이번 실행의 photometric READY 복구. 팔/Pinky 동작·기하 보정·재부팅·새 릴리스 배포는 하지 않았다. 통합 후보의 qualified FULL와 공개 CI를 이 기록으로 대신하지 않는다.
+- CE: 기존 카메라 기준선 전환 절차 적용, 새 교훈 없음. 게시 근거 교훈 정정은 앞 기록과 같다.
+
+## 2026-11-03 · uncommitted · test(publish): held turn의 출처 보존과 실행 증거를 구분한다
+
+- 변경: `test_land_speculate`의 모의 FULL fixture는 출처·held turn의 root 실행·record base/ancestry·선택 보존을 그대로 검사하고, 실제 정본 FULL·브라우저 실행 근거가 없으므로 게시 검증 거부를 기대한다. 생산 관문과 캐시·로그 판정은 바꾸지 않았다.
+- 증거: 기존 bootstrap 후보 `382138de78`의 root 행렬에서 이 기대값 하나가 NEW였고 단독 재실행도 실패했다. 변경 전 main `37cde0e33e`에서는 통과했다. 수정한 최종 SHA는 speculate·prepare·publish 회귀와 speculate 단독 프로세스로 원격 검증한다.
+- gate 변화: 없음. 모의 검사로 기록한 `tier=full`을 실제 게시 근거로 해석하지 않는다.
+- CE: 해당 없음 — 이미 정정한 게시 근거 교훈과 엄격한 게시 회귀가 이 구분을 설명하며, 이번 수정은 남은 모의 fixture 기대값을 그 계약에 맞춘다.
+
 ## 2026-11-03 · uncommitted · fix(remote): 배치의 각 시험 입장에서 재부팅 임박 차단
 - 변경: 최초 호스트 선택에만 있던 D-889 13의 재부팅 임박 판정을 각 원격 ADMIT에도 적용한다. 차단된 작업은 자원 해제 뒤 같은 Work index로 반환하고 다른 호스트 또는 기존 bounded wait로 이어간다. quarantine 재시험의 원본 실패·로그와 남은 재시험을 보존한다. 기존 단일 호스트 호출 계약도 유지한다.
 - 증거: 원격 재현 15 FAIL/9 PASS, 최종 코드 `95abfc2cdb` 관련 9 suite 228 PASS·skip/NEW/known/flaky 0, 독립 검토 P1/P2 없음, size 3 commits PASS. 관측된 종료143은 시험 PC의 예약 재부팅 경계와 겹쳤다. 기존 착지의 공식 resume에서 PASS31 invocation 재사용을 확인했다.

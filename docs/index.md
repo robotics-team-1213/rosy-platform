@@ -354,7 +354,7 @@
 ## 최근 기록
 
 - 2026-11-03 · uncommitted · fix(remote): 배치의 각 시험 입장에서 재부팅 임박 차단
-- 2026-11-03 · uncommitted · docs(omx): 실물 카메라로 잰 셀 실측과 셀 모델 대장 갱신
-- 2026-11-03 · uncommitted · fix(omx): 놀고 있는 팔은 60초에 접고, 막힌 접기는 한 번만 다시 한 뒤 사람을 부른다
-- 2026-11-02 · uncommitted · fix(landing): 실제 준비 anchor를 예측 전에 게시
-- 2026-11-02 · uncommitted · fix(landing): 예측 체인을 실제 우선순위 차단자와 정렬
+- 2026-11-03 · uncommitted · test(publish): held turn의 출처 보존과 실행 증거를 구분한다
+- 2026-11-03 · 3db26622ab · evidence: 재연결 뒤 READY 복구와 수정 검증 동결
+- 2026-11-03 · f8fdc85890 · docs: 게시 성공과 적격 FULL 근거 구분
+- 2026-11-03 · uncommitted · fix(publish): 실제 FULL·브라우저 실행 근거로 게시와 병합을 검증한다
