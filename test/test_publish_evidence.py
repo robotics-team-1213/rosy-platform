@@ -70,6 +70,15 @@ def test_canonical_full_with_every_exact_opted_in_browser_chunk_qualifies(repo):
     assert tool.publish_sha(local) == sha
 
 
+def test_another_clean_execution_on_the_same_candidate_preserves_the_recorded_log_mapping(repo):
+    local, sha, logs = _proof(repo)
+    row = land_cache.entries(local)[-1]
+    log = Path(logs[-1]).with_name("later-clean.txt")
+    log.write_text("1 passed in 0.01s\n", encoding="utf-8")
+    land_cache.record(local, sha, row["tree"], row["env"], row["argv"], log)
+    assert tool.green_full(local, sha)
+
+
 @pytest.mark.parametrize("damage", ["opt-in", "alone", "missing", "duplicate", "ordinary-invocation"])
 def test_canonical_full_and_browser_chunks_cannot_be_replaced_by_partial_or_duplicate_coverage(
         repo, monkeypatch, damage):
@@ -150,14 +159,46 @@ def test_prepared_full_proof_requires_matching_final_plan_and_environment(repo, 
     elif changed == "environment":
         sha = _commit(local, "fixture-wheel/setup.py", "# changed installed wheel\n")
     else:
-        sha = _commit(local, "app.py", "final candidate")
+        _git(local, "checkout", "-qb", "peer", base)
+        final_base = _commit(local, "peer.py", "main advanced")
+        _git(local, "checkout", "-q", "main")
+        _git(local, "merge", "-q", "--no-ff", "--no-edit", "peer")
+        sha = _git(local, "rev-parse", "HEAD")
     delta = [["test/test_dashboard_browser.py"]]
-    qualified_record(tool, local, sha, prepared, delta,
+    qualified_record(tool, local, sha, prepared if changed else final_base, delta,
                      prepared={"candidate": prepared, "main": base, "tier": "full", "invocations": FULL})
     if changed:
         _deny_selection_and_merge(local, sha, monkeypatch)
     else:
         assert tool.green_full(local, sha)
+
+
+@pytest.mark.parametrize("change", ["own-commit", "manual-merge"])
+def test_prepared_proof_cannot_cover_new_branch_code_or_a_hand_edited_merge(repo, monkeypatch, change):
+    local, prepared, _ = _proof(repo)
+    on = _git(local, "rev-parse", f"{prepared}^")
+    if change == "own-commit":
+        sha = _commit(local, "app.py", "untested branch code")
+        base = on
+    else:
+        _git(local, "checkout", "-qb", "peer", on)
+        base = _commit(local, "peer.py", "main advanced")
+        _git(local, "checkout", "-q", "main")
+        _git(local, "merge", "-q", "--no-ff", "--no-commit", "peer")
+        sha = _commit(local, "app.py", "manual merge changed untested code")
+    qualified_record(tool, local, sha, base, [["test/test_dashboard_browser.py"]],
+                     prepared={"candidate": prepared, "main": on, "tier": "full", "invocations": FULL})
+    _deny_selection_and_merge(local, sha, monkeypatch)
+
+
+@pytest.mark.parametrize("change", ["hashless-legacy", "same-path-clean-overwrite"])
+def test_execution_proof_binds_the_original_log_bytes(repo, monkeypatch, change):
+    local, sha, logs = _proof(repo)
+    if change == "hashless-legacy":
+        _rewrite_rows(local, lambda rows: [row.pop("log_sha256", None) for row in rows])
+    else:
+        Path(logs[-1]).write_text("999 passed in 0.02s\n", encoding="utf-8")
+    _deny_selection_and_merge(local, sha, monkeypatch)
 
 
 def test_normal_ros_only_skip_and_approved_quarantine_rerun_keep_existing_verdict_policy(repo):

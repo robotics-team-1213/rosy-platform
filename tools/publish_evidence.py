@@ -107,7 +107,7 @@ def reason(publish, repo, sha, record):
         if prepared != sha:
             sources.append((prepared, on))
     entries = land_cache.entries(repo)
-    descriptions, evidence = [], []
+    descriptions, evidence, final_logs = [], [], set()
     for commit, base in sources:
         tree = publish.git(repo, "rev-parse", f"{commit}^{{tree}}").stdout.strip()
         rows = [row for row in entries if row["commit"] == commit and row["tree"] == tree]
@@ -116,8 +116,11 @@ def reason(publish, repo, sha, record):
         description = describe(publish, repo, commit, base, invocations, rows)
         if not description or not description.get("env") or not valid_plan(description.get("plan")):
             return f"canonical candidate plan/environment unavailable for {commit[:10]}"
-        mapped = {tuple(row["argv"]): row for row, clean in zip(rows, description["clean"])
-                  if clean and row["env"] == description["env"]}
+        usable = [row for row, clean in zip(rows, description["clean"])
+                  if clean and row["env"] == description["env"]]
+        mapped = {tuple(row["argv"]) for row in usable}
+        if commit == sha:
+            final_logs = {row["log"] for row in usable}
         descriptions.append(description)
         evidence.append(mapped)
     current = descriptions[0]
@@ -132,7 +135,7 @@ def reason(publish, repo, sha, record):
             return f"missing clean exact execution/log proof for {' '.join(inv)}"
     logs = record.get("logs")
     if (not isinstance(logs, list) or not all(isinstance(log, str) for log in logs)
-            or not set(logs) <= {row["log"] for row in evidence[0].values()}):
+            or not set(logs) <= final_logs):
         return "final-round logs lack clean exact final-candidate mappings"
     return None
 
