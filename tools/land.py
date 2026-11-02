@@ -540,7 +540,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.tests == "none":
             land_events.emit("skip", reason=args.skip_reason.strip()[:300])
         if (code := land(args)) == 0 and not args.dry_run:
-            land_events.emit("landed", sha=out(wt, "rev-parse", "HEAD"))
+            land_events.landed(out(wt, "rev-parse", "HEAD"), main_move=not getattr(args, "_carried", False))
         return code
     except (Stop, land_queue.QueueError) as exc:
         print(f"[land] STOP: {exc}", file=sys.stderr)

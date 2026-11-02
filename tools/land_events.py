@@ -61,6 +61,24 @@ def emit(event: str, **fields) -> None:
         pass  # a record we could not write must not cost the landing
 
 
+def landed(sha: str, *, main_move: bool = True) -> None:
+    """One actual completion event, retaining pinned rollup members when available.
+
+    A missing/invalid sidecar must never hide a successful FF. The goal reader can recover late sidecars
+    and reports incomplete membership separately from the actual main move.
+    """
+    fields = {"sha": sha, "main_move": main_move}
+    path = _where.get("path")
+    if path is not None:
+        sidecar = Path(path).parent / "rosy-land-wt" / (str(_where.get("branch", "")).replace("/", "-") + ".members")
+        if sidecar.exists():
+            try:
+                fields["members"] = json.loads(sidecar.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                fields["members_error"] = "unreadable sidecar"
+    emit("landed", **fields)
+
+
 def read(path: Path) -> list[dict]:
     """Every readable line, oldest first; a torn or foreign line is skipped."""
     rows = []

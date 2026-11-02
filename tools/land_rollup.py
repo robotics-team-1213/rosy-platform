@@ -114,9 +114,9 @@ def build(repo: Path, members: list[dict], now: datetime, python: str = sys.exec
         merged = []
         for r in members:
             try:
-                land.merge(wt, git(repo, "rev-parse", r["branch"]).stdout.strip(), branch, python, False,
-                           source=r["branch"])
-                merged.append(r)
+                candidate = git(repo, "rev-parse", r["branch"]).stdout.strip()
+                land.merge(wt, candidate, branch, python, False, source=r["branch"])
+                merged.append({**r, "candidate": candidate})
             except land.Stop as exc:
                 print(f"[rollup] {r['branch']} left out: {str(exc).splitlines()[0]}", flush=True)
         if len(merged) < 2:
@@ -134,7 +134,8 @@ def build(repo: Path, members: list[dict], now: datetime, python: str = sys.exec
         finally:
             os.environ.pop(land_queue.TICKET_ENV, None)
         (log.parent / (log.name.removesuffix(".log") + ".members")).write_text(
-            json.dumps([{"branch": r["branch"], "worktree": r["worktree"]} for r in merged], indent=1),
+            json.dumps([{k: r[k] for k in ("branch", "worktree", "candidate", "ticket") if k in r}
+                        for r in merged], indent=1),
             encoding="utf-8")
         return snap, merged
     finally:

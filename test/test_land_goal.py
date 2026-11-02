@@ -142,3 +142,21 @@ def test_goal_cli_recovers_historical_rollup_members_without_rewriting_events(go
     rows[4]["candidate"] = "f" * 40
     normalized, warnings = land_goal.normalize(rows, events.parent)
     assert warnings and land_goal.lead_times(normalized, start, start + 600) != [5, 2, 1]
+    events.write_text("\n".join(json.dumps(r) for r in rows), encoding="utf-8")
+    assert land_stats.main(["--goal", "--hours", "1"]) == 1
+    assert "FAIL: logical landing metrics incomplete" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("contents", ['[{"branch":"land/fix/a","ticket":"a","candidate":"abc"}]', '{bad'])
+def test_completion_keeps_the_actual_ff_even_when_member_metadata_is_unusable(tmp_path, monkeypatch, contents):
+    path = tmp_path / land_events.EVENTS
+    holder = tmp_path / "rosy-land-wt"
+    holder.mkdir()
+    branch = "land/fix/land-rollup-20261101000000-20261101000000"
+    (holder / (branch.replace("/", "-") + ".members")).write_text(contents, encoding="utf-8")
+    monkeypatch.setattr(land_events, "_where", dict(path=path, branch=branch))
+    monkeypatch.setattr(land_events.time, "time", lambda: 1234)
+    land_events.landed("a" * 40)
+    rows = land_events.read(path)
+    assert len(rows) == 1 and rows[0]["event"] == "landed" and rows[0]["t"] == 1234
+    assert rows[0]["sha"] == "a" * 40 and rows[0]["main_move"]

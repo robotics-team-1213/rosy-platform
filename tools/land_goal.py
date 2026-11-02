@@ -9,6 +9,9 @@ timing, and PASS/FAIL. Exit 1 on FAIL so a scheduled check can alert.
 from __future__ import annotations
 
 import re
+import json
+import subprocess
+from pathlib import Path
 
 INFRA = ("3221225786", "1073807364", "unusable", "exited 124", "timed out", "lost contact")
 
@@ -25,16 +28,94 @@ def percentile(values: list[float], q: float) -> float | None:
 
 def lead_times(rows: list[dict], t0: float, t1: float) -> list[float]:
     """Minutes from a topic's first queue event to its landing, for landings inside [t0, t1)."""
-    first, out = {}, []
+    pending, out, completed, exits = {}, [], set(), set()
     for r in sorted(rows, key=lambda r: r["t"]):
         key = topic(r.get("branch", ""))
         if r["event"] == "queue":
-            first.setdefault(key, r["t"])
-        elif r["event"] == "landed" and key in first:
-            start = first.pop(key)  # a later landing of the same topic starts its own clock
+            pending.setdefault(key, []).append(r)
+            continue
+        train = r["event"] == "train" and r.get("result") == "landed"
+        if r["event"] != "landed" and not train:
+            continue
+        members = r.get("members")
+        if train:
+            members = [{"branch": b} for b in r.get("branches", [])]
+        for member in members if members is not None else [r]:
+            name = member.get("branch", "")
+            queues = pending.get(topic(name), [])
+            origin = (name, member.get("ticket"))
+            if members is not None and origin in completed:
+                continue
+            choices = [i for i, q in enumerate(queues) if
+                       (q.get("branch") == name if members is not None else topic(q.get("branch", "")) == topic(name))
+                       and (q.get("ticket") == member["ticket"] if member.get("ticket") else
+                            members is not None or q.get("pid") == r.get("pid"))]
+            if not choices or (members is None and (name, r.get("pid")) in exits):
+                continue
+            end = choices[-1]
+            start = queues[0]["t"]  # retries before this origin remain part of the topic's lead
+            if members is not None:
+                completed.add(origin)
+                if train:
+                    exits.add((name, queues[end].get("pid")))
+            pending[topic(name)] = queues[end + 1:]
             if t0 <= r["t"] < t1:
                 out.append((r["t"] - start) / 60)
     return out
+
+
+def normalize(rows: list[dict], common: Path) -> tuple[list[dict], list[str]]:
+    """Attach proven member origins to actual FF events; never rewrite the append-only log.
+
+    Old sidecars lack pinned candidates: the member's historical prepare and its preceding queue identify
+    the origin, only when that candidate is an ancestor of this exact landed SHA (not today's main).
+    """
+    result, warnings = [], []
+    for row in rows:
+        r = dict(row)
+        result.append(r)
+        if r["event"] != "landed":
+            continue
+        branch = r.get("branch", "")
+        path = common / "rosy-land-wt" / (branch.replace("/", "-") + ".members")
+        known = re.fullmatch(r"land/fix/land-rollup-\d{14}-\d{14}", branch)
+        if "members" not in r and not path.exists() and not known:
+            continue
+        try:
+            members = r.get("members") if "members" in r else json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(members, list) or not members:
+                raise ValueError("missing members")
+            verified = []
+            for m in members:
+                if not isinstance(m, dict) or not isinstance(m.get("branch"), str):
+                    raise ValueError("invalid member")
+                origins = [q for q in rows if q["event"] == "queue" and q.get("branch") == m["branch"]
+                           and q["t"] <= r["t"]]
+                candidates = [m] if m.get("candidate") else sorted(
+                    (q for q in rows if q["event"] == "isolation" and q.get("kind") == "prepare"
+                     and q.get("branch") == m["branch"] and q["t"] <= r["t"]), key=lambda q: q["t"], reverse=True)
+                found = None
+                for candidate in candidates:
+                    oid = candidate.get("candidate", "")
+                    if not re.fullmatch(r"[0-9a-f]{40,64}", oid) or not r.get("sha"):
+                        continue
+                    proof = subprocess.run(["git", "--git-dir", str(common), "merge-base", "--is-ancestor",
+                                            oid, r["sha"]], capture_output=True)
+                    eligible = [q for q in origins if q.get("ticket") == m["ticket"]] if m.get("ticket") else [
+                        q for q in origins if q["t"] <= candidate.get("t", r["t"])]
+                    if proof.returncode == 0 and eligible:
+                        origin = max(eligible, key=lambda q: q["t"])
+                        if origin.get("ticket"):
+                            found = dict(branch=m["branch"], ticket=origin["ticket"], candidate=oid)
+                            break
+                if found is None:
+                    raise ValueError("unproven member origin")
+                verified.append(found)
+            r["members"] = verified
+        except (OSError, ValueError, TypeError, KeyError) as exc:
+            r["members"] = []  # an incomplete carrier is never substituted for its logical members
+            warnings.append(f"INCOMPLETE: {branch}: member completion unavailable ({exc})")
+    return result, warnings
 
 
 def live(rows: list[dict], t1: float, alive_pids: set[int]) -> list[tuple[float, float]]:
