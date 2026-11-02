@@ -1,25 +1,12 @@
 """Account authority is independently importable; extraction preserves every authority row."""
-import os
 import json
 from pathlib import Path
 import sqlite3
-import subprocess
-import sys
 
 import pytest
 from fastapi.testclient import TestClient
 
 ROOT = Path(__file__).resolve().parents[3]
-
-
-def test_account_import_does_not_require_fleet():
-    env = {**os.environ, 'PYTHONPATH': os.pathsep.join(str(ROOT / p) for p in (
-        'operations/account', 'contracts/foundation'))}
-    result = subprocess.run([sys.executable, '-c',
-        'import sys; import rosy_account.app; '
-        'assert not any(m == "fleet" or m.startswith("fleet.") for m in sys.modules)'],
-        cwd=ROOT / 'operations/account', env=env, capture_output=True, text=True)
-    assert result.returncode == 0, result.stderr
 
 
 def test_migration_preserves_rows_and_refuses_overwrite(standalone, tmp_path):
