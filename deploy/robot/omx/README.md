@@ -1235,6 +1235,15 @@ python deploy/robot/omx/cell_robot_profile.py <private-record-config.json> --pro
 다른 폴더로 복사해 다른 장부를 고르면 재검증이 필요하다. 같은 경로의 `./` 별칭은 동일하다.
 검토 내용은 profile SHA에 넣지 않으므로 검토 파일을 쓰는 작업과 task SHA 사이의 순환은 없다.
 
+세션 서보 튜닝은 기종 → 현장 → 로봇 순서로 겹친다(D-951 6). 뒤 층이 모터·키 단위로 앞 층을 덮는다.
+
+1. 기종 기본값 `omx-ai-follower-tuning.json`: 하중 받는 팔꿈치(13)·손목(14) I 게인 50, 값마다 근거.
+2. 현장 `caps.json`: PWM·전류 한계는 여기에만 둔다.
+3. 로봇 프로필의 선택 필드 `servo`(예: `{"14": {"i": 70}}`): `p`·`i`·`acc`·`vel`만 받는다.
+
+합친 값은 `session_caps`의 기존 범위로 검사하고, 세션이 끝나면 찾은 값으로 되돌린다. `servo`는 profile
+SHA에 들어가므로 값을 바꾸면 바인딩도 바뀐다. 실제 적용값은 세션 기록 `caps`에 남는다.
+
 실제로 승인된 실행을 준비할 때 parent session과 pipeline 양쪽에서 **같은 프로필**을 고른다.
 다음은 사용 형식이며 장치 시작 지시가 아니다.
 
