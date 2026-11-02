@@ -142,7 +142,7 @@ def install(monkeypatch, world: World) -> None:
     for package, names in (("geometry_msgs", ("Twist", "TransformStamped")),
                            ("nav_msgs", ("Odometry",)),
                            ("sensor_msgs", ("JointState",)),
-                           ("std_msgs", ("Bool", "Float32", "UInt16MultiArray"))):
+                           ("std_msgs", ("Bool", "Float32", "String", "UInt16MultiArray"))):
         module(package)
         module(f"{package}.msg", **{name: _msg_type(name) for name in names})
     module("tf2_ros", TransformBroadcaster=lambda _node: SimpleNamespace(sendTransform=lambda _t: None))
