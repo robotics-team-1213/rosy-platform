@@ -191,6 +191,73 @@ def test_cell_arm_health_uses_shared_view_without_double_aging_and_retains_fault
         browser.close()
 
 
+def test_cell_releases_expired_fault_frames_across_all_arms_and_disposes_survivors(cell_url):
+    from playwright.sync_api import expect, sync_playwright
+    from test_fleet_workcell_observation_browser import observation_feed
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        page = browser.new_page()
+        errors = []
+        page.on('pageerror', lambda error: errors.append(str(error)))
+        state, snapshot = observation_feed(page)
+        # Drive each poll explicitly so 21 deque updates need no wall-clock waits.
+        page.add_init_script('window.setInterval = () => 0')
+        page.goto(cell_url)
+        data = snapshot()
+        for arm in data['workcells'][0]['arms']:
+            arm['faults'] = []
+        data['workcells'].append({'workcell_id': 'second', 'label': '두 번째 셀',
+                                  'arms': [data['workcells'][0]['arms'].pop()], 'cameras': []})
+        page.evaluate("""async data => {
+          const {createCellObservation} = await import('/console/assets/cell-observation.js');
+          const root = document.createElement('section'); root.id = 'fault-lifetime'; document.body.append(root);
+          window.__faultState = data; window.__revoked = [];
+          const revoke = URL.revokeObjectURL.bind(URL);
+          URL.revokeObjectURL = url => { window.__revoked.push(url); revoke(url); };
+          window.__observation = createCellObservation({root, request: async (path, options) => {
+            if (path.endsWith('/workcell-observations')) return structuredClone(window.__faultState);
+            const response = await fetch(path, {...options,
+              headers: {...options?.headers, Authorization: 'Bearer viewer-token'}});
+            return response.json();
+          }});
+          await window.__observation.refresh();
+        }""", data)
+        root = page.locator('#fault-lifetime')
+        for image in root.locator('[data-camera-source] img').all():
+            expect(image).to_be_visible()
+        page.evaluate("""async () => {
+          const arms = window.__faultState.workcells.flatMap(cell => cell.arms);
+          const stop = session_id => ({session_id, captured_at: 1793500000,
+            motors: [], stop_reasons: ['following error']});
+          arms[1].faults = [stop('other-arm')];
+          await window.__observation.refresh();
+          window.__surviving = [...document.querySelectorAll(
+            '#fault-lifetime [data-arm-source="feedback_b"] .cell-fault-frames img')].map(img => img.src);
+          for (let i = 0; i < 21; i++) {
+            arms[0].faults.unshift(stop(`stop-${i}`)); arms[0].faults = arms[0].faults.slice(0, 20);
+            await window.__observation.refresh();
+            if (i === 0) window.__expired = [...document.querySelectorAll(
+              '#fault-lifetime [data-arm-source="feedback_a"] .cell-fault-frames img')].map(img => img.src);
+          }
+        }""")
+        expect(root.locator('[data-arm-source="feedback_a"] .cell-fault-history > li')).to_have_count(20)
+        assert page.evaluate('window.__expired.length === 3 && window.__expired.every(url => window.__revoked.includes(url))')
+        assert page.evaluate('window.__surviving.length === 3 && window.__surviving.every(url => !window.__revoked.includes(url))')
+        for image in root.locator('[data-arm-source="feedback_b"] .cell-fault-frames img').all():
+            expect(image).to_be_visible()
+            assert image.evaluate('img => img.complete && img.naturalWidth > 0')
+        page.evaluate("""() => {
+          window.__remaining = [...document.querySelectorAll('#fault-lifetime img')].map(img => img.src);
+          window.__observation.dispose();
+        }""")
+        assert page.evaluate('window.__remaining.length === 66 && window.__remaining.every(url => window.__revoked.includes(url))')
+        expect(root.locator('img')).to_have_count(0)
+        assert not state.failed_assets, state.failed_assets
+        assert not errors, errors
+        page.unroute_all(behavior='ignoreErrors')
+        browser.close()
+
+
 @pytest.mark.parametrize('focus', ['table','select'])
 def test_kept_fleet_card_reads_current_fault_and_offline_row(console_url,focus):
     from playwright.sync_api import sync_playwright
