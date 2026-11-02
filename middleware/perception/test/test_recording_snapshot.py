@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 import pytest
 
 import control.record_session as rs
-from control.recording import (
+from perception_runtime.recording import (
     COMPRESSED_CAMERA_TOPIC,
     DEFAULT_ROOT,
     SIDE_TOPICS,
@@ -45,7 +45,7 @@ def test_cache_size_is_sixty_seconds_of_the_compressed_stream():
     assert SNAPSHOT_CACHE_BYTES == (
         (SNAPSHOT_FRAME_BUDGET_BYTES + SNAPSHOT_SIDE_BUDGET_BYTES) * SNAPSHOT_FPS * SNAPSHOT_SECONDS)
     assert 5_000_000 < SNAPSHOT_CACHE_BYTES < 50_000_000  # fits Pi memory next to the stack
-    from control.recording import SCAN_TOPIC, SNAPSHOT_SCAN_BUDGET_BYTES
+    from perception_runtime.recording import SCAN_TOPIC, SNAPSHOT_SCAN_BUDGET_BYTES
     assert SCAN_TOPIC in SIDE_TOPICS and SNAPSHOT_SIDE_BUDGET_BYTES >= 4_000 + SNAPSHOT_SCAN_BUDGET_BYTES
 
 
@@ -370,7 +370,7 @@ def test_request_default_sequence_is_monotonic(tmp_path):
 
 
 def test_snapshot_node_name_is_per_namespace():
-    from control.recording import snapshot_node_name
+    from perception_runtime.recording import snapshot_node_name
     assert snapshot_node_name("") == "rosy_snapshot_recorder"
     assert snapshot_node_name("/") == "rosy_snapshot_recorder"
     assert snapshot_node_name("/rosy_01") == "rosy_01_snapshot_recorder"
@@ -385,7 +385,7 @@ def test_snapshot_cli_node_name_follows_the_namespace(monkeypatch, tmp_path):
 def test_mcap_message_count_reads_real_files(tmp_path):
     pytest.importorskip("mcap")
     from mcap.writer import Writer
-    from control.recording import mcap_message_count
+    from perception_runtime.recording import mcap_message_count
 
     def write(path, n):
         with open(path, "wb") as fh:

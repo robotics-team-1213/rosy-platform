@@ -116,8 +116,8 @@ def full_anchor(repos, monkeypatch):
     return main, wt, base, candidate, path, original
 
 
-def test_affected_overtime_preserves_full_origin_and_final_publisher_eligibility(full_anchor, monkeypatch):
-    """A passing delta must not replace the FULL proof its eventual landing and publisher consume."""
+def test_affected_overtime_preserves_full_origin_without_minting_execution_proof(full_anchor, monkeypatch):
+    """Preserve provenance, but mocked empty checks cannot establish canonical browser execution."""
     main, wt, base, candidate, path, original = full_anchor
     args = land.argparse.Namespace(tests="auto", no_cache=False)
     land.land_prepare.prepare(land, wt, "feat/x", args, sys.executable, None, None, [["pkg/test"]], "")
@@ -138,7 +138,7 @@ def test_affected_overtime_preserves_full_origin_and_final_publisher_eligibility
     assert record["prepared_candidate"] == candidate and record["prepared_on"] == base
     assert selected and all(start == base for start, _ in selected)
     from publish_main import green_full
-    assert green_full(main, landed)
+    assert not green_full(main, landed)
 
 
 def test_guard_overtime_prepares_outside_and_keeps_full_origin(full_anchor, monkeypatch):

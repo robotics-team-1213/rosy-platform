@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from control.sensing.perception.learned.lane_mask import (
+from perception_runtime.perception.learned.lane_mask import (
     MIN_COMPONENT_PX,
     LaneMaskEvidence,
     NonFiniteLogits,
@@ -11,7 +11,7 @@ from control.sensing.perception.learned.lane_mask import (
     lane_evidence,
     preprocess,
 )
-from control.sensing.perception.learned.manifest import ClassSpec, InputSpec
+from perception_runtime.perception.learned.manifest import ClassSpec, InputSpec
 
 CLASSES = (ClassSpec(0, "floor", "background"), ClassSpec(1, "line", "lane_marking"))
 SPEC = InputSpec((1, 3, 240, 320), "rgb", 1 / 255, (0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
@@ -116,7 +116,7 @@ def test_no_wall_class_means_zero_wall_fraction():
 
 def _reference_evidence(logits, classes):
     """The pre-2026-10-01 implementation: full-frame softmax, labels from it."""
-    from control.sensing.perception.learned import lane_mask as lm
+    from perception_runtime.perception.learned import lane_mask as lm
 
     probs = lm._softmax(logits[0].astype(np.float32))
     labels = probs.argmax(axis=0)
@@ -245,7 +245,7 @@ def test_inner_half_of_a_touching_boundary_line_is_drivable():
 
 def test_lane_bounded_drives_only_the_road_reached_from_the_front():
     """D-566 item 4: lines at 100-109 and 210-219; drivable everywhere else below row 110."""
-    from control.sensing.perception.learned.lane_mask import lane_bounded_drivable
+    from perception_runtime.perception.learned.lane_mask import lane_bounded_drivable
 
     labels = np.full((240, 320), 5, np.int64)
     labels[:110] = 0
@@ -256,7 +256,7 @@ def test_lane_bounded_drives_only_the_road_reached_from_the_front():
 
 
 def test_lane_bounded_growth_clamp_stops_a_leak_through_a_line_gap():
-    from control.sensing.perception.learned.lane_mask import lane_bounded_drivable
+    from perception_runtime.perception.learned.lane_mask import lane_bounded_drivable
 
     labels = np.full((240, 320), 5, np.int64)
     labels[:110] = 0
@@ -271,7 +271,7 @@ def test_lane_bounded_growth_clamp_stops_a_leak_through_a_line_gap():
 
 
 def test_beyond_both_lines_is_blocked_only_on_rows_showing_both_d576():
-    from control.sensing.perception.learned.lane_mask import lane_bounded_drivable
+    from perception_runtime.perception.learned.lane_mask import lane_bounded_drivable
 
     labels = np.full((240, 320), 5, np.int64)
     labels[:110] = 0
@@ -284,7 +284,7 @@ def test_beyond_both_lines_is_blocked_only_on_rows_showing_both_d576():
 def test_v_corner_and_crosswalk_keep_the_own_road_d576():
     """A lane_left that turns into a V corner above the road, and a crosswalk row across it,
     must not cut the robot's own road (sheets4 tiles T0006, T0413)."""
-    from control.sensing.perception.learned.lane_mask import lane_bounded_drivable
+    from perception_runtime.perception.learned.lane_mask import lane_bounded_drivable
 
     labels = np.full((240, 320), 5, np.int64)
     labels[:110] = 0
@@ -299,7 +299,7 @@ def test_v_corner_and_crosswalk_keep_the_own_road_d576():
 def test_line_across_the_bottom_centre_seeds_the_larger_side_d576():
     """Drive frame 32 (2026-10-09): lane_left covers the bottom centre and slants up-left; the
     floor left of it is mostly not drivable, so the road is the larger region on the right."""
-    from control.sensing.perception.learned.lane_mask import lane_bounded_drivable
+    from perception_runtime.perception.learned.lane_mask import lane_bounded_drivable
 
     labels = np.full((240, 320), 5, np.int64)
     labels[:110] = 0
@@ -313,7 +313,7 @@ def test_line_across_the_bottom_centre_seeds_the_larger_side_d576():
 
 
 def test_beyond_boundary_marks_only_rows_with_both_lines():
-    from control.sensing.perception.learned.lane_mask import beyond_boundary
+    from perception_runtime.perception.learned.lane_mask import beyond_boundary
 
     labels = np.zeros((3, 320), np.int64)
     labels[0, 50:60], labels[0, 250:260] = 1, 2

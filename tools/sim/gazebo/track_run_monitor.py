@@ -8,6 +8,7 @@ import time
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 sys.path.insert(0, str((Path(__file__).resolve().parents[3] / 'middleware/perception')))
+sys.path.insert(0, str((Path(__file__).resolve().parents[3] / 'integrations/perception')))
 import numpy as np
 import rclpy
 from rclpy.parameter import Parameter

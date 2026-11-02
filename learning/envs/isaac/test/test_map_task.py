@@ -9,7 +9,7 @@ sys.path.insert(0, str(Path(__file__).parents[1]))
 repo = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(repo / 'tools/sim/isaac'))
 for path in ('contracts/foundation', 'contracts/motion/src', 'contracts/skill/src',
-             'middleware/core/services', 'middleware/core/gateway', 'middleware/perception'):
+             'middleware/core/services', 'middleware/core/gateway', 'middleware/perception', 'integrations/perception'):
     sys.path.insert(0, str(repo / path))
 from map_task import MapTask, QPolicy, SimulationOwner, load_track
 from rosy.contracts.motion import BaseTwist, MotionHeader, MotionIntent, MotionKind, PriorityClass

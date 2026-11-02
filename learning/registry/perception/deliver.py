@@ -68,7 +68,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-for _p in (ROOT / "middleware" / "perception",
+for _p in (ROOT / "middleware" / "perception", ROOT / "integrations" / "perception",
            ROOT / "contracts" / "foundation", ROOT / 'learning/evaluation/perception', ROOT / 'tools/perception'):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
@@ -76,11 +76,11 @@ for _p in (ROOT / "middleware" / "perception",
 import operator_ssh  # noqa: E402
 import delivery_journal  # noqa: E402
 import promote_readback  # noqa: E402
-from control.sensing.perception.learned.manifest import (  # noqa: E402
+from perception_runtime.perception.learned.manifest import (  # noqa: E402
     MANIFEST_NAME, TASKS, ManifestError, check_revision, load_manifest, verify_files)
-from control.sensing.perception.learned.slots import FLAT_TASKS, task_root  # noqa: E402
+from perception_runtime.perception.learned.slots import FLAT_TASKS, task_root  # noqa: E402
 from intake_eval_gate import v13_lineage_error, road_delivery_error  # noqa: E402
-from control.sensing.perception.learned.signature import (  # noqa: E402
+from perception_runtime.perception.learned.signature import (  # noqa: E402
     SIGNATURE_NAME, SignatureError, verify_manifest_signature)
 
 #: Tasks whose robot node refuses unsigned bundles (D-423; lane_seg is warn-only for now).

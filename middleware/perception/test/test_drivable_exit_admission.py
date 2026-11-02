@@ -13,7 +13,7 @@ import zlib
 import numpy as np
 import pytest
 
-from control.sensing.perception.camera_ground import GroundPlane
+from perception_runtime.perception.camera_ground import GroundPlane
 from control.sensing.perception.drivable.drivable_steer import DrivableSteer, way_target
 
 

@@ -87,7 +87,7 @@ def test_recorder_name_is_left_to_the_namespace():
 
 
 def test_recording_root_matches_recording_default():
-    from control.recording import DEFAULT_ROOT
+    from perception_runtime.recording import DEFAULT_ROOT
     assert _declared_defaults()["recording_root"] == DEFAULT_ROOT
 
 

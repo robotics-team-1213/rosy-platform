@@ -36,6 +36,7 @@ sys.path.insert(0, str(REPO / "tools"))
 from data_paths import data_root  # noqa: E402
 sys.path.insert(0, str(REPO / "learning" / "training" / "perception" / "dataset"))
 sys.path.insert(0, str(REPO / "middleware" / "perception"))
+sys.path.insert(0, str(REPO / "integrations" / "perception"))
 sys.path.insert(0, str(REPO / "contracts" / "foundation"))
 
 import autolabel as A  # noqa: E402

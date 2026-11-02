@@ -53,10 +53,10 @@ import cv2
 import numpy as np
 
 _ROOT = Path(__file__).resolve().parents[3]
-for _p in (_ROOT / "middleware" / "perception", _ROOT / "contracts" / "foundation"):
+for _p in (_ROOT / "middleware" / "perception", _ROOT / "integrations" / "perception", _ROOT / "contracts" / "foundation"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
-from control.sensing.perception.learned.lane_mask import beyond_boundary  # noqa: E402  D-576
+from perception_runtime.perception.learned.lane_mask import beyond_boundary  # noqa: E402  D-576
 
 
 SCHEMA = "rosy.lane-derived-drivable/1"

@@ -145,7 +145,7 @@ def generate_launch_description():
             output='screen', respawn=True, respawn_delay=2.0,
             condition=IfCondition(capture),
             # The recorder service name follows the namespace on both sides
-            # (control.recording.snapshot_node_name), so robots sharing a
+            # (perception_runtime.recording.snapshot_node_name), so robots sharing a
             # domain do not collide.
             parameters=[{'recording_root': recording_root}],
         ),

@@ -26,7 +26,7 @@ def test_too_few_or_non_finite_points_are_no_evidence():
 def _floor_with_a_line(ground, width=320, height=240, left_m=0.):
     """Grey carpet with a white tape line along x at lateral `left_m`, drawn through the BEV grid."""
     import numpy as np
-    from control.sensing.perception.lane_bev import BirdsEye
+    from perception_runtime.perception.lane_bev import BirdsEye
     image = np.full((height, width, 3), 90, np.uint8)
     view = BirdsEye(ground, width, height, 0.)
     on = view.observable & (np.abs(view.y - left_m) < .0125)
@@ -35,7 +35,7 @@ def _floor_with_a_line(ground, width=320, height=240, left_m=0.):
 
 
 def _ground():
-    from control.sensing.perception.camera_ground import ground_plane
+    from perception_runtime.perception.camera_ground import ground_plane
     return ground_plane(height_m=.063, pitch_rad=math.radians(11.8), focal_px=260., principal_x=160.,
                         principal_y=120., max_range_m=.6)
 

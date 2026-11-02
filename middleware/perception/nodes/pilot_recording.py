@@ -29,7 +29,7 @@ from pathlib import Path
 from core_common.protocol.recording import (
     FETCHED_NAME, MANIFEST_NAME, MANIFEST_SCHEMA, MAX_DURATION_S, SESSION_NAME, STATUS_SCHEMA,
     TELEOP_INTENT_TOPIC, recording_id_ok)
-from control.recording import (
+from perception_runtime.recording import (
     CAMERA_GROUND_STATUS_TOPIC, CAMERA_TELEMETRY_TOPIC, COMPRESSED_CAMERA_TOPIC,
     IR_RANGE_TOPIC, KEEP_DEBUG_TOPIC,
     ODOM_TOPIC, SCAN_TOPIC, _iso, _ns_topics, _read_meta, _sessions, _total_bytes,

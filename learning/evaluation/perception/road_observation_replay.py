@@ -9,10 +9,10 @@ import cv2
 import numpy as np
 import store
 from review_evidence import safe_file, valid_digest
-from control.sensing.perception.learned.manifest import load_manifest, verify_files, _parse_input, check_revision
-from control.sensing.perception.learned.runner import LaneSegModel
-from control.sensing.perception.learned.road_observation import observe_model_frame
-from control.sensing.perception.learned.road_region import road_masks, observed_road_region
+from perception_runtime.perception.learned.manifest import load_manifest, verify_files, _parse_input, check_revision
+from perception_runtime.perception.learned.runner import LaneSegModel
+from perception_runtime.perception.learned.road_observation import observe_model_frame
+from perception_runtime.perception.learned.road_region import road_masks, observed_road_region
 from core_common.observation import road_region_input_errors
 
 INPUT_SCHEMA = 'rosy.perception.road-observation-input/1'

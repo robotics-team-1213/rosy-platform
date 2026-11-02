@@ -37,17 +37,7 @@ from sensor_msgs.msg import LaserScan
 from std_msgs.msg import String
 
 from . import executor_choice
-from .sensing.perception.road_state import (
-    TOPIC,
-    IrMeas,
-    OdomBuffer,
-    RoadStateEstimator,
-    RoadStateParams,
-    boundaries_from_keep,
-    decision_point_from_keep,
-    offset_from_shadow,
-    wall_segments_from_scan,
-)
+from perception_runtime.perception.road_state import ( TOPIC, IrMeas, OdomBuffer, RoadStateEstimator, RoadStateParams, boundaries_from_keep, decision_point_from_keep, offset_from_shadow, wall_segments_from_scan, )
 
 
 def _stamp(header) -> float:

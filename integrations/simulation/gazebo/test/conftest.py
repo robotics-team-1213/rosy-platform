@@ -10,8 +10,9 @@ if _HARNESS not in sys.path:
 
 # Camera-ground launch contracts must also run when collected without the perception suite.
 _PERCEPTION = str(Path(__file__).resolve().parents[4] / 'middleware' / 'perception')
-if _PERCEPTION not in sys.path:
-    sys.path.insert(0, _PERCEPTION)
+for _path in (_PERCEPTION, str(Path(_PERCEPTION).parents[1] / 'integrations' / 'perception')):
+    if _path not in sys.path:
+        sys.path.insert(0, _path)
 
 # Standalone launch tests use the committed CORE defaults and operator overlay loader.
 _FOUNDATION = str(Path(__file__).resolve().parents[4] / 'contracts' / 'foundation')
