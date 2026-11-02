@@ -8,13 +8,13 @@ import numpy as np
 import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
-for _p in (Path(__file__).resolve().parents[3] / 'learning/curation/perception', ROOT / "middleware" / "perception"):
+for _p in (Path(__file__).resolve().parents[3] / 'learning/curation/perception', ROOT / "middleware" / "perception", ROOT / "integrations" / "perception"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
 import object_boxes as OB  # noqa: E402
 from geometry import Camera, Lidar  # noqa: E402
-from control.sensing.perception.learned.manifest import OBJECT_CLASSES  # noqa: E402
+from perception_runtime.perception.learned.manifest import OBJECT_CLASSES  # noqa: E402
 
 CAM = Camera.from_profile(width=320, height=240)
 

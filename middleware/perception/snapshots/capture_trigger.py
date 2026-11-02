@@ -22,7 +22,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 
-from .recording import SHADOW_SCHEMA
+from perception_runtime.recording import SHADOW_SCHEMA
 
 DEFAULT_DELTA_THRESHOLD = 0.35
 DEFAULT_FRAMES = 3

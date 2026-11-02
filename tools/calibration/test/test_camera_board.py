@@ -137,7 +137,7 @@ def test_store_writes_a_camera_profile_candidate_geometry_error_reads(tmp_path):
     import sys
     m = module()
     root = Path(__file__).resolve().parents[3]
-    sys.path[:0] = [str(root/'contracts'/'foundation'), str(root/'middleware'/'perception')]
+    sys.path[:0] = [str(root/'contracts'/'foundation'), str(root/'middleware'/'perception'), str(root/'integrations'/'perception')]
     from core_common.calibration_store import CalibrationStore, check_values
     from control.sensing.perception.lane_containment import geometry_error
     fit = m.placement_fit(PLACEMENTS, board_elevation_m=.006)

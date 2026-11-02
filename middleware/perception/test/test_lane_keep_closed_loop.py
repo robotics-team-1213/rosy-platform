@@ -9,7 +9,7 @@ import math
 
 import numpy as np
 
-from control.sensing.perception.lane_keep import LaneKeeper
+from perception_runtime.perception.lane_keep import LaneKeeper
 from lane_sim import (CAM_X, DT, GROUND, H, World, core_command,
                       distance_to_polyline, lane, offset_polyline)
 

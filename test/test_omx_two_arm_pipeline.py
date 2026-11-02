@@ -481,6 +481,17 @@ def test_the_align_stage_sets_the_gains_with_torque_off_and_restores_them():
     assert applied < torque_on
 
 
+def test_the_align_stage_gives_the_loaded_elbow_and_wrist_the_models_i_gain():
+    # D-951 6: with I 0 both arms' elbow and wrist stopped short under load; the config still overrides the model.
+    rig = Rig(follower_position=2028, leader_position=2028 + 40)
+    config_gains = config(follower_gains={"per_joint": {"wrist_flex": {"i": 30}}})
+    pipeline.stage_align(rig.arms(), config=config_gains, log=rig.log, clock=rig.clock, sleep=rig.sleep, timeout_s=30)
+    events = rig.followers["arm_a"].events
+    assert ("Position_I_Gain", "elbow_flex", 50) in events and ("Position_I_Gain", "wrist_flex", 30) in events
+    assert not any(event[:2] == ("Position_I_Gain", "shoulder_pan") for event in events)
+    assert rig.followers["arm_a"].gains["elbow_flex"] == {"p": 640, "i": 0}
+
+
 def test_the_load_stop_uses_the_joints_own_cap_not_the_shared_one():
     rig = Rig(follower_position=2028, leader_position=2028, stall=("shoulder_lift",))
     leader = rig.leaders["arm_a"]

@@ -91,8 +91,8 @@ class _Runner:
 
     def __init__(self, folder):
         import onnxruntime as ort
-        from control.sensing.perception.learned.lane_mask import preprocess
-        from control.sensing.perception.learned.manifest import load_manifest, verify_files
+        from perception_runtime.perception.learned.lane_mask import preprocess
+        from perception_runtime.perception.learned.manifest import load_manifest, verify_files
         self.manifest = load_manifest(folder)
         verify_files(self.manifest)
         self._pre = preprocess
