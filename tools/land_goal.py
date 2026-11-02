@@ -58,6 +58,15 @@ def train_origins(rows: list[dict], train: dict) -> list[dict]:
     return members
 
 
+def stopped_before(rows: list[dict], queued: dict, cutoff: float) -> bool:
+    """A stop in this exact branch/PID queue epoch, already observed when the member queued."""
+    same = lambda r: r.get("branch") == queued.get("branch") and r.get("pid") == queued.get("pid")  # noqa: E731
+    next_queue = min((r["t"] for r in rows if r["event"] == "queue" and same(r)
+                      and queued["t"] < r["t"]), default=float("inf"))
+    return any(r["event"] == "stop" and same(r) and queued["t"] <= r["t"] <= cutoff
+               and r["t"] < next_queue for r in rows)
+
+
 def lead_times(rows: list[dict], t0: float, t1: float) -> list[float]:
     """Minutes from a topic's first queue event to its landing, for landings inside [t0, t1)."""
     pending, out, completed, exits = {}, [], set(), set()
@@ -88,25 +97,56 @@ def lead_times(rows: list[dict], t0: float, t1: float) -> list[float]:
                 continue
             if members is not None and origin in completed:
                 continue
-            start = queues[0]["t"]  # retries before this origin remain part of the topic's lead
+            snapshot, cutoff = queues[end].get("branch"), queues[end]["t"]
+            covered = [q for q in queues if
+                       q.get("branch") == snapshot and (q["t"] <= cutoff or q.get("ticket") in member.get("retries", []))
+                       or q["t"] <= cutoff and stopped_before(rows, q, cutoff)]
+            start = min(q["t"] for q in covered)
             if members is not None:
                 completed.add(origin)
                 if train:
                     exits.add((name, queues[end].get("pid"), queues[end]["t"]))
-            pending[topic(name)] = [q for q in queues[end + 1:] if not
-                                    (q.get("branch") == name and q.get("ticket") in member.get("retries", []))]
+            pending[topic(name)] = [q for q in queues if q not in covered]
             if t0 <= r["t"] < t1:
                 out.append((r["t"] - start) / 60)
     return out
 
 
-def normalize(rows: list[dict], common: Path) -> tuple[list[dict], list[str]]:
+def completion_topics(row: dict) -> set[str]:
+    names = row.get("branches", []) if row["event"] == "train" else [row.get("branch", "")]
+    return {topic(n) for n in names} | {topic(m["branch"]) for m in row.get("members", [])
+                                       if isinstance(m, dict) and isinstance(m.get("branch"), str)}
+
+
+def affects_window(row: dict, rows: list[dict], t0: float, t1: float) -> bool:
+    if row["t"] >= t1:
+        return False
+    if row["t"] >= t0:
+        return True
+    keys = row.get("incomplete_topics")
+    if keys is None:  # unreadable membership cannot prove which later requests are unaffected
+        return True
+    for key in keys:
+        if not any(t0 <= r["t"] < t1 and key in completion_topics(r) for r in rows):
+            continue
+        resolved = any(row["t"] < r["t"] < t0 and not r.get("metrics_incomplete")
+                       and (r["event"] == "landed" or r["event"] == "train" and r.get("result") == "landed")
+                       and key in completion_topics(r) and any(q["event"] == "queue" and
+                           row["t"] < q["t"] <= r["t"] and topic(q.get("branch", "")) == key for q in rows)
+                       for r in rows)
+        if not resolved:
+            return True
+    return False
+
+
+def normalize(rows: list[dict], common: Path, t0: float | None = None,
+              t1: float | None = None) -> tuple[list[dict], list[str]]:
     """Attach proven member origins to actual FF events; never rewrite the append-only log.
 
     Old sidecars lack pinned candidates: the member's historical prepare and its preceding queue identify
     the origin, only when that candidate is an ancestor of this exact landed SHA (not today's main).
     """
-    result, warnings = [], []
+    result, issues = [], []
     for row in rows:
         r = dict(row)
         result.append(r)
@@ -115,7 +155,9 @@ def normalize(rows: list[dict], common: Path) -> tuple[list[dict], list[str]]:
                 r["members"] = train_origins(rows, r)
             except ValueError as exc:
                 r["members"] = []
-                warnings.append(f"INCOMPLETE: {r.get('branch', '')}: {exc}")
+                r["metrics_incomplete"] = True
+                r["incomplete_topics"] = {topic(n) for n in r.get("branches", [])}
+                issues.append((r, f"INCOMPLETE: {r.get('branch', '')}: {exc}"))
         if r["event"] != "landed":
             continue
         branch = r.get("branch", "")
@@ -126,6 +168,7 @@ def normalize(rows: list[dict], common: Path) -> tuple[list[dict], list[str]]:
             r["main_move"] = False  # a carried member observes the leader's FF
         path = common / "rosy-land-wt" / (branch.replace("/", "-") + ".members")
         known = re.fullmatch(r"land/fix/land-rollup-\d{14}-\d{14}", branch)
+        members = None
         try:
             if "members" not in r and not path.exists() and not known and not r.get("members_error"):
                 continue
@@ -166,8 +209,11 @@ def normalize(rows: list[dict], common: Path) -> tuple[list[dict], list[str]]:
             r["members"] = verified
         except (OSError, ValueError, TypeError, KeyError) as exc:
             r["members"] = []  # an incomplete carrier is never substituted for its logical members
-            warnings.append(f"INCOMPLETE: {branch}: member completion unavailable ({exc})")
-    return result, warnings
+            r["metrics_incomplete"] = True
+            r["incomplete_topics"] = {topic(m["branch"]) for m in members if isinstance(m, dict)
+                                      and isinstance(m.get("branch"), str)} if isinstance(members, list) else None
+            issues.append((r, f"INCOMPLETE: {branch}: member completion unavailable ({exc})"))
+    return result, [message for r, message in issues if t0 is None or t1 is None or affects_window(r, result, t0, t1)]
 
 
 def live(rows: list[dict], t1: float, alive_pids: set[int]) -> list[tuple[float, float]]:
