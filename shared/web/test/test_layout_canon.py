@@ -67,7 +67,15 @@ def test_focal_surfaces_keep_topbar_first_main_and_a_skip_link():
     assert dbody.index("<ui-topbar") < dbody.index("<main") and 'class="skip-link"' in dashboard
 
 
-def test_review_pages_head_the_body_with_one_pathbar_h1():
+def test_review_pages_have_one_title_in_their_declared_composition():
     for path in sorted(REVIEW.glob("*.html")):
         page = path.read_text(encoding="utf-8")
-        assert page.count("<h1") == 1 and '<div class="ui-pathbar"><h1>' in page, path.name
+        assert page.count("<h1") == 1, path.name
+        if path.name == "accounts.html":
+            # D-961: anonymous auth uses a focused main; signed-in navigation is restored by the account owner.
+            assert 'ui-task-page ui-auth-page' in page
+            assert page.index('<main') < page.index('<h1') < page.index('id="account-login"')
+            assert 'data-seats="none"' in page and 'class="ui-rail" hidden' in page
+            assert 'class="ui-action-link" data-kind="primary" hidden' in page
+        else:
+            assert '<div class="ui-pathbar"><h1>' in page, path.name

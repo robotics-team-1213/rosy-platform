@@ -141,7 +141,6 @@ ui-topbar:has([data-learning-account-entry]) { flex-wrap: wrap; }
 /* Account pages compose shared sections and fields; only placement lives here. */
 #accounts-main { container-type: inline-size; }
 #accounts-main ui-section > p { margin: 0; }
-#accounts-main #login-panel { max-width: 30rem; }
 .account-form { display: grid; gap: var(--gap-form); min-width: 0; }
 .account-form .ui-field-label { min-width: 0; }
 .account-form .ui-field { width: 100%; box-sizing: border-box; min-width: 0; }

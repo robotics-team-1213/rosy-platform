@@ -46,7 +46,7 @@ def test_login_entry_and_unconfigured_panel_recover_when_accounts_connect(tmp_pa
                 assert page.url == url+'/accounts'
                 expect(page.locator('#account-setup')).to_be_hidden()
                 page.route('**/api/accounts/options', lambda route: route.fulfill(status=503, json={'error': 'connection unavailable'}))
-                page.locator('#account-retry').click()
+                page.reload(wait_until='domcontentloaded')
                 expect(page.locator('#login-help')).to_contain_text('연결을 확인할 수 없습니다')
                 expect(page.locator('#account-login')).to_be_hidden()
                 assert not posts

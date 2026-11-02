@@ -10,9 +10,17 @@ const failures = new Map([
   ['service_unavailable', ['unavailable', '로그인 서비스에 연결할 수 없습니다. 잠시 후 접근을 다시 확인하세요.']],
 ]);
 const failure = failures.get(query.get('error'));
-if (back.startsWith('/api/fleet/auth/authorize?')) {
+const central = back.startsWith('/api/fleet/auth/authorize?');
+if (central) {
   document.title = 'Rosy Account — 로그인';
   document.getElementById('login-title').textContent = 'Rosy Account 로그인';
+  document.querySelector('ui-brand b').textContent = 'Rosy Account';
+  document.querySelector('ui-brand small').textContent = '공용 계정';
+  const home = document.querySelector('ui-brand a');
+  home.href = location.href; home.setAttribute('aria-label', 'Rosy Account 로그인');
+  document.querySelector('link[rel="icon"]').href = '/common/brand/mark.svg';
+  document.getElementById('login-intro').textContent = 'Rosy Account로 로그인해 원래 앱의 작업을 이어가세요.';
+  document.getElementById('login-support').textContent = '계정이 없거나 비밀번호를 잊었다면 계정 관리자에게 문의하세요.';
 }
 if (failure) {
   document.getElementById('login-recovery').hidden = false;
@@ -23,11 +31,15 @@ if (failure) {
 }
 document.getElementById('login-back').href = back;
 document.getElementById('login-back').hidden = !!failure;
-if (query.get('draft') === '1') document.getElementById('login-context').textContent =
-  '편집 중이던 탭의 초안은 그대로 남습니다. 로그인 뒤 원래 탭으로 돌아가 현재 상태를 다시 조회하세요.';
+if (query.get('draft') === '1') {
+  document.getElementById('login-context').hidden = false;
+  document.getElementById('login-context').textContent =
+    '편집 중이던 탭의 초안은 그대로 남습니다. 로그인 뒤 원래 탭으로 돌아가 현재 상태를 다시 조회하세요.';
+}
 const login = createPasswordLogin(document.getElementById('password-login'), {
   standalone: true, autoContinue: !failure,
   onChange: authenticated => { if (authenticated) location.assign(back); },
 });
+if (central) document.querySelector('[data-login=form]').setAttribute('aria-label', 'Rosy Account 로그인');
 if (failure) document.querySelector('[data-login=submit]').textContent = '다른 계정으로 로그인';
 login.refresh(true);
