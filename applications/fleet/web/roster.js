@@ -11,7 +11,7 @@ import { createRobotAppActions } from "/console/assets/device-discovery.js";
 import { addressReason } from "/console/assets/address-drift.js";
 import { linkTag, ruleMTag } from "./link-tag.js";
 import { positionTag, robotPoseText, sitePoseText } from "./localization-badge.js";
-import { capabilityReason, motionCommandReason } from "./motion-readiness.js";
+import { capabilityReason, estopText, motionCommandReason } from "./motion-readiness.js";
 import { staleAgeS } from "./state-age.js";
 import { powerHealthView } from "./power-health-view.js";
 import { createQueues } from "./queues.js";
@@ -20,7 +20,7 @@ import { placeRosterCards as place, mustExpand, selectRobot } from "./roster-car
 export {mustExpand, selectRobot} from "./roster-cards.js";
 import {createRobotProfiles} from "/console/assets/robot-profile-view.js";
 import { cancelScope, cardTripLine, createCardTrip, openTrip } from "./card-trip.js";
-import { createRosterSummary, nodeWithText, tag, blockWith, navTag, queuedReason, REACH_LABEL,
+import { createRosterSummary, nodeWithText, tag, blockWith, navTag, queuedReason, offlineWhy,
   IDENTIFY_REASON, LAMP_REASON } from "./roster-presentation.js";
 
 export function createRoster({ scope, el, view, log, call, render, streamEvidence, isOperator, namedReason = () => "",
@@ -86,7 +86,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     const tripLine = view.stateUnavailable ? "" : cardTripLine(view, robot.robot_id);
     const estop = state.safety?.estop;
     const stateStale = staleAgeS(robot, view.receivedAtMs, Date.now()) !== null;
-    const safetyLabel = !robot.online ? "—" : view.stateUnavailable || stateStale ? EVIDENCE_LABEL.unavailable : estop === true ? "비상 정지"
+    const safetyLabel = !robot.online ? "—" : view.stateUnavailable || stateStale ? EVIDENCE_LABEL.unavailable : estop === true ? estopText(state, "비상 정지")
       : estop === false ? "정상" : EVIDENCE_LABEL.unavailable;
     const goalSafetyReason = view.stateUnavailable
       ? "Fleet 상태를 확인할 수 없어 목표를 보낼 수 없습니다."
@@ -269,9 +269,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       ? `robot-why-${robot.robot_id}` : null;
     if (!view.stateUnavailable && !robot.online && robot.error && !link) {
       const why = nodeWithText("p", "hint");
-      why.textContent = robot.error.reachable
-        ? `로봇이 거절: ${robot.error.code}`
-        : `닿지 않음: ${REACH_LABEL[robot.error.code] ?? robot.error.code}`;
+      why.textContent = offlineWhy(robot);
       why.id = offlineWhyId;
       node.appendChild(why);
     }

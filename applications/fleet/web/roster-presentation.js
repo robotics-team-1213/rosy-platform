@@ -6,6 +6,7 @@ import { positionTag, sitePoseText, untrustedQueuedReason } from "./localization
 import { staleAgeS } from "./state-age.js";
 import { powerHealthView } from "./power-health-view.js";
 import { cardTripLine } from "./card-trip.js";
+import { estopText } from "./motion-readiness.js";
 
 const TAG_STATUS = { nav: "active", ok: "active", warn: "warn", crit: "crit" };
 
@@ -17,6 +18,19 @@ export const REACH_LABEL = Object.freeze({
   TimeoutException: "응답 시간 초과",
   ReadTimeout: "응답 시간 초과",
 });
+
+const HOLD_WHY = Object.freeze({
+  needs_new_code: "등록 자격 만료 · 로봇 화면의 새 코드로 다시 등록",
+  address_changed: "주소 바뀜 · 새 주소는 로봇 화면의 코드로 확인",
+  conflict: "신원 충돌 · 등록 화면 확인",
+});
+
+/** Why an offline robot is offline: Fleet's own hold (the robot was not asked), a robot refusal, or no answer. */
+export function offlineWhy(robot) {
+  const error = robot.error;
+  if (error.held) return `Fleet이 정지 요청만 보냄 · ${HOLD_WHY[robot.held] ?? robot.held ?? "주소 미확인"}`;
+  return error.reachable ? `로봇이 거절: ${error.code}` : `닿지 않음: ${REACH_LABEL[error.code] ?? error.code}`;
+}
 
 // D-596: why a camera LED check did not name the robot (Vision/Fleet reason codes).
 export const IDENTIFY_REASON = {
@@ -107,7 +121,7 @@ export function createRosterSummary({scope, view, openCard, render, attentionIte
     const estop = state.safety?.estop;
     const safety = view.stateUnavailable || !robot.online || !robot.state ? "안전 확인 불가"
       : staleAgeS(robot, view.receivedAtMs, Date.now()) !== null ? "안전 확인 불가"
-        : estop === true ? "비상 정지" : estop === false ? "안전 정상" : "안전 확인 불가";
+        : estop === true ? estopText(state, "비상 정지") : estop === false ? "안전 정상" : "안전 확인 불가";
     const facts = nodeWithText("div", "robot-summary-status");
     facts.append(tag(status, view.stateUnavailable || !robot.online ? "warn" : ""),
       tag(safety, estop === true ? "crit" : safety === "안전 정상" ? "" : "warn"));
@@ -134,8 +148,7 @@ export function createRosterSummary({scope, view, openCard, render, attentionIte
     if (view.stateUnavailable) evidence.push("Fleet 상태를 확인할 수 없습니다. 연결을 확인하세요.");
     else {
       if (robot.link_reason) evidence.push(`${robot.link_reason.message} ${robot.link_reason.action || ""}`.trim());
-      else if (!robot.online && robot.error) evidence.push(robot.error.reachable
-        ? `로봇이 거절: ${robot.error.code}` : `닿지 않음: ${REACH_LABEL[robot.error.code] ?? robot.error.code}`);
+      else if (!robot.online && robot.error) evidence.push(offlineWhy(robot));
       if (robot.calibration) evidence.push(`보정 진행 중 · ${robot.calibration.label || "보정"}${robot.calibration.holder ? ` · ${robot.calibration.holder}` : ""}`);
       const address = !robot.online ? addressReason(view.addresses?.[robot.robot_id]) : null;
       if (address) {

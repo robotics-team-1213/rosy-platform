@@ -73,7 +73,7 @@ IMPORT_SPEED_CAP_MPS = 0.2
 #: the two centre lines, ``yaw`` the entering heading as the edge is drawn, ``exit_yaw`` the
 #: leaving heading and ``radius_m`` the centre-line arc; driven the other way it is the same
 #: bend entered at ``exit_yaw + pi``. Bends do not split edges.
-PlaceKind = Literal["park", "charge", "stop", "junction", "turnaround", "start", "bend"]
+PlaceKind = Literal["park", "charge", "stop", "junction", "turnaround", "start", "bend", "slow"]   # slow: D-941 4
 #: A bend turns at least this much (a smaller one is the expected window's, D-507 2) and at most 90.
 BEND_MIN_DEG, BEND_MAX_DEG = 15.0, 90.0
 
