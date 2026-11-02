@@ -32,7 +32,7 @@ TEST_QUEUE = {
     "operations/fleet/test/test_trip_runner.py", "middleware/core/events/test/test_audit.py",
 }
 #: D-949 4: size units over 10,000 lines; each needs a dated split plan before it is cut.
-UNIT_QUEUE = {"control", "perception/front_camera/perception"}
+UNIT_QUEUE = {"control"}  # perception/front_camera/perception: back under 10,000 after the 2026-11-03 perception_runtime split
 
 _CODE = size_limits.CODE_SUFFIXES | size_limits.WEB_SUFFIXES
 

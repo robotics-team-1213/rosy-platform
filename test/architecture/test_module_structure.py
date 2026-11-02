@@ -48,7 +48,7 @@ DOMAINS = {"contracts", "runtime", "drivers", "products", "hmi", "site", "sim", 
            "foundation", "ros_idl", "perception", "devices", "drive", "robot_ui", "site_ui", "overhead", "signal_observation"}
 
 #: P2 library/contract tier: no process of their own (runtime gates N/A).
-LIBRARY_PACKAGES = {"core_common", "core_events", "core_features", "core_api_web", "web_common"}
+LIBRARY_PACKAGES = {"core_common", "core_events", "core_features", "core_api_web", "web_common", "perception_runtime"}
 
 #: P4: core contracts every domain may consume.
 CORE_CONTRACTS = {"interfaces", "core_common", "web_common"}
@@ -132,6 +132,7 @@ PACKAGES = _packages()
 D310_ROLE = {
     "core": ("runtime", None), "core_events": ("runtime", None), "core_features": ("runtime", None),
     "core_api_web": ("runtime", None), "control": ("runtime", None), "navigation": ("runtime", None),
+    "perception_runtime": ("runtime", None),
     "core_common": ("contracts", None), "interfaces": ("contracts", None),
     "web_common": ("hmi", None), "emotion": ("hmi", None), "dashboard": ("hmi", None), "pilot": ("hmi", None),
     "pinky_pro": ("products", "pinky_pro"), "bringup": ("products", "pinky_pro"),
@@ -164,6 +165,7 @@ ROLE_DIR = {
     "core_common": ("foundation",),
     "interfaces": ("ros_idl",),
     "control": ("perception",),  # middleware/perception (D-427 wave 4e)
+    "perception_runtime": ("perception",),  # integrations/perception (split out of control, 2026-11-03)
     "web_common": ("web",),  # shared/web (D-427 wave 4b)
     "emotion": ("robot_ui", "face"),  # middleware/robot_ui/face (D-427 wave 4b)
     "dashboard": ("robot_ui", "robot"),  # middleware/robot_ui/robot (D-427 wave 4b)

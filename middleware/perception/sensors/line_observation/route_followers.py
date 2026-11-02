@@ -10,7 +10,7 @@ import os
 
 import yaml
 
-from .sensing.perception.camera_ground import simulation_ground_allowed
+from perception_runtime.perception.camera_ground import simulation_ground_allowed
 from .sensing.perception.paint_localizer import PaintMap
 from .sensing.perception.route_camera import RouteCameraFollower
 from .sensing.perception.route_hybrid import RouteHybridFollower

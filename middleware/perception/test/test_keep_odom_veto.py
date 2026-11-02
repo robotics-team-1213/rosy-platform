@@ -6,9 +6,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from control.keep_odom_veto import OdomVetoLaneKeeper
-from control.sensing.perception.lane import LaneObservation, line_observation_payload
-from control.sensing.perception.lane_keep import LaneKeeper
+from perception_runtime.keep_odom_veto import OdomVetoLaneKeeper
+from perception_runtime.perception.lane import LaneObservation, line_observation_payload
+from perception_runtime.perception.lane_keep import LaneKeeper
 from test_lane_keep import GROUND, HALF, X_OFFSET, _render
 
 NODE = Path(__file__).parents[1] / "sensors/line_observation/line_observer_node.py"

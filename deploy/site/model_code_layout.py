@@ -6,6 +6,9 @@ LEARNING_CODE_PREFIXES = ("learning/curation/perception/", "learning/registry/pe
 # Only these two policy-registry files: the Learning HF button (D-943) needs them, the rest of the folder stays out.
 HUB_FILES = ("learning/registry/policy/hub_sync.py", "learning/registry/policy/policy_output_paths.py")
 LEARNING_REQUIRED = ("learning/registry/perception/watch.py", PREFIX + "rosy_ml.py",
+                     # D-964: the lane/learned runtime the review and training tools import
+                     "integrations/perception/perception_runtime/recording.py",
+                     "integrations/perception/perception_runtime/perception/learned/manifest.py",
                      "tools/data_paths.py",
                      PREFIX + "operator_ssh.py", "learning/registry/perception/store.py",
                      "learning/curation/perception/review_app.py",
@@ -70,7 +73,6 @@ SPLIT_REQUIRED = (
                   'middleware/perception/nodes/pilot_recorder_node.py',
                   'middleware/perception/nodes/pilot_recording.py',
                   'middleware/perception/nodes/record_session.py',
-                  'middleware/perception/nodes/recording.py',
                   'middleware/perception/nodes/road_observer_node.py',
                   'middleware/perception/nodes/road_state_node.py',
                   'middleware/perception/nodes/sensor_provider.py',
@@ -110,7 +112,8 @@ SPLIT_REQUIRED = (
                   "middleware/drive/tracking/wander/__init__.py")
 FITNESS_ENTRY = "learning/evaluation/perception/road_fitness_replay.py"
 FITNESS_CONTRACT_FILES = ("contracts/foundation/core_common/observation.py",)
-CODE_PREFIXES = (*LEARNING_CODE_PREFIXES, "middleware/perception/control/", "contracts/foundation/core_common/",
+CODE_PREFIXES = (*LEARNING_CODE_PREFIXES, "middleware/perception/control/", "integrations/perception/perception_runtime/",
+                 "contracts/foundation/core_common/",
                  "contracts/learning/src/", "shared/web/", "tools/data_paths.py", *HUB_FILES, CAMERA_PROFILE, *CAMERA_MAP_FILES, *SPLIT_CODE_PREFIXES)
 # Observe enrolled pre-migration checkouts too; new signed archives stay canonical.
 CHECKOUT_PREFIXES = CODE_PREFIXES + (*LEGACY_LEARNING_PREFIXES, "src/runtime/sensing/control/",
@@ -118,7 +121,7 @@ CHECKOUT_PREFIXES = CODE_PREFIXES + (*LEGACY_LEARNING_PREFIXES, "src/runtime/sen
 LIMIT = 512 * 1024 * 1024
 FORBIDDEN = {"data", "private", "runs", "scratch", "checkpoints", "store", ".git", ".venv", "__pycache__", "secrets"}
 IMPORT_PATHS = tuple(p.rstrip("/") for p in LEARNING_CODE_PREFIXES) + (
-                "middleware/perception", "contracts/foundation", "contracts/learning/src", "operations/overhead",
+                "middleware/perception", "integrations/perception", "contracts/foundation", "contracts/learning/src", "operations/overhead",
                 *(prefix + name for prefix in LEGACY_LEARNING_PREFIXES for name in ("model", "dataset", "training")),
                 "src/runtime/sensing", "src/contracts/foundation")
 PATH_SETUP = ("import pathlib,sys,runpy;root=pathlib.Path(sys.argv.pop(1)).resolve();"

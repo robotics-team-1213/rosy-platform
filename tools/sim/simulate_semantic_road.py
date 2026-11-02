@@ -17,8 +17,9 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CONTROL_ROOT = REPO_ROOT / "middleware/perception"
-if str(CONTROL_ROOT) not in sys.path:
-    sys.path.insert(0, str(CONTROL_ROOT))
+for _root in (CONTROL_ROOT, REPO_ROOT / "integrations/perception"):
+    if str(_root) not in sys.path:
+        sys.path.insert(0, str(_root))
 _PACKAGE_ROOTS = {
     "core": "middleware/core/gateway",
     "core_common": "contracts/foundation",

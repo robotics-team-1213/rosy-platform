@@ -7,7 +7,7 @@ from sensor_msgs.msg import LaserScan
 from .calibrated_values import finite_overrides, lidar_nose_rad, nominal_camera_profile
 from .sensing.body import LIDAR_X
 from .sensing.lidar import enable_simulation_scans, is_robot_scan
-from .sensing.perception.camera_ground import nominal_ground_plane
+from perception_runtime.perception.camera_ground import nominal_ground_plane
 from .sensing.perception.region_range import range_regions, scan_in_camera
 
 

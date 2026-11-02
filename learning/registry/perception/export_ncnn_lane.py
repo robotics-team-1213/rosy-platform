@@ -9,8 +9,8 @@ from pathlib import Path
 
 from compare_backends import compare_lane_frames
 from export_ncnn import bundle, publish
-from control.sensing.perception.learned.manifest import load_manifest
-from control.sensing.perception.learned.ncnn_session import NcnnSession
+from perception_runtime.perception.learned.manifest import load_manifest
+from perception_runtime.perception.learned.ncnn_session import NcnnSession
 
 
 def convert_lane_ncnn(args, hw, out):

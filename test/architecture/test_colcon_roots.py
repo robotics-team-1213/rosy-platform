@@ -26,11 +26,12 @@ COLCON_OUTPUT = {"build", "install", "log"}
 #: The ROS package names on 2026-10-03 (WSL `colcon list --base-paths src --names-only`).
 #: D-427 moves folders, never names: a move that renames, drops or duplicates one fails here.
 #: The config-only RaspTank profile was explicitly added on 2026-10-25.
+#: perception_runtime was split out of control on 2026-11-03 (shared with learning tools).
 FROZEN_ROS_PACKAGES = frozenset({
     "bringup", "control", "core", "core_api_web", "core_common", "core_events", "core_features",
     "dashboard", "description", "emotion", "fleet", "games", "gz_sim", "imu_bno055", "interfaces",
     "isaac_sim", "lamp_control", "led", "navigation", "omx", "omx_adapter", "pilot", "pinky_pro",
-    "rosy_cell", "rosy_vision", "sensor_adc", "web_common", "rasptank_metal",
+    "rosy_cell", "rosy_vision", "sensor_adc", "web_common", "rasptank_metal", "perception_runtime",
 })
 
 #: Every tracked file whose colcon/rosdep lines run over the ROSY colcon roots. Value: a

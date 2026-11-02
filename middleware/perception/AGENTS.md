@@ -15,7 +15,7 @@ ROS 2 Jazzy `control` distribution in **ROSY Platform** for the Pinky Pro desk-m
 | `STEPS.txt` | Korean operator runbook: bringup order, tuning log, LCD/web notes |
 | `package.xml` / `setup.py` | ament_python package manifest and entry points |
 | `resource/control` | ament resource marker (generated, do not edit) |
-| `learned_lane_node` / `record_session` | Console scripts (D-356). `learned_lane_node` runs a delivered ONNX model on `camera/front` and publishes shadow-only `perception/learned/shadow` (launch: `launch/learned_lane.launch.py`); `record_session` records raw `camera/front` plus evidence topics into a harvest-aware session (`nodes/recording.py`) |
+| `learned_lane_node` / `record_session` | Console scripts (D-356). `learned_lane_node` runs a delivered ONNX model on `camera/front` and publishes shadow-only `perception/learned/shadow` (launch: `launch/learned_lane.launch.py`); `record_session` records raw `camera/front` plus evidence topics into a harvest-aware session (`perception_runtime.recording`, `integrations/perception`) |
 | `progress.md` | Current gate snapshot (SOURCE…FIELD). Overwrite; state of record over this file |
 | `logs.md` | Append-only work journal, one entry per change |
 | `index.md` | Generated: ADRs, plans, solutions, tests, recent logs. Do not edit |
@@ -28,7 +28,7 @@ ROS 2 Jazzy `control` distribution in **ROSY Platform** for the Pinky Pro desk-m
 | `nodes/` | Remaining ROS, calibration/storage, recording and provider composition; existing control.* identity |
 | `control/` | Thin source-import compatibility entries and thin source-import compatibility entries (see `control/AGENTS.md`) |
 | `sensors/` | Sensor-evidence holder. The installed package is `sensing/` (see `sensors/AGENTS.md`) |
-| `front_camera/perception/` | Camera/detector/learned evidence, installed as `control.sensing.perception` (see `front_camera/perception/AGENTS.md`) |
+| `front_camera/perception/` | Camera/detector/learned evidence, installed as `control.sensing.perception` (see `front_camera/perception/AGENTS.md`). Lane fit/keeper/ground plane and the learned model runtime live in `integrations/perception` (`perception_runtime`, D-964); `control` exec_depends it |
 | `../drive/` | Existing Drive algorithms installed by this distribution under `control.control`, `control.planning`, `control.wander`, `control.safety` (see `../drive/AGENTS.md`) |
 | `config/` | Shared and per-node ROS parameters (see `config/AGENTS.md`) |
 | `launch/` | Launch files; bringup order matters (see `launch/AGENTS.md`) |

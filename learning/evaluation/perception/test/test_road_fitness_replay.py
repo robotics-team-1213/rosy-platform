@@ -11,7 +11,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[4]
 for holder in ("learning/registry/perception", "learning/curation/perception",
-               "learning/evaluation/perception", "middleware/perception", "operations/world/src"):
+               "learning/evaluation/perception", "middleware/perception", "integrations/perception", "operations/world/src"):
     sys.path.insert(0, str(ROOT / holder))
 
 import store
@@ -90,7 +90,7 @@ def bundle(tmp_path, monkeypatch):
     raw = json.loads((model_dir / "model_manifest.json").read_text())
     raw["dataset"] = {"repo": "store:train", "revision": train.name}
     (model_dir / "model_manifest.json").write_text(json.dumps(raw))
-    from control.sensing.perception.learned.manifest import load_manifest
+    from perception_runtime.perception.learned.manifest import load_manifest
     model.manifest = load_manifest(model_dir)
     monkeypatch.setattr(replay.LaneSegModel, "open", lambda folder: model)
     image, anchor = _snapshots()

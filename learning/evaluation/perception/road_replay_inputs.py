@@ -21,8 +21,8 @@ import numpy as np
 import bag_to_video
 import extract
 import lane_replay
-from control.recording import CAMERA_TOPIC, KEEP_DEBUG_TOPIC, SHADOW_TOPIC
-from control.sensing.perception.camera_ground import ground_plane
+from perception_runtime.recording import CAMERA_TOPIC, KEEP_DEBUG_TOPIC, SHADOW_TOPIC
+from perception_runtime.perception.camera_ground import ground_plane
 
 
 @dataclass

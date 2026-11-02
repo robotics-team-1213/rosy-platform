@@ -18,7 +18,7 @@ def test_native_runner_preserves_camera_guard_exports(name):
 ROOT = Path(__file__).resolve().parents[4]
 for part in ('tools/sim/isaac', 'contracts/foundation', 'contracts/motion/src',
              'contracts/skill/src', 'middleware/core/services', 'middleware/core/events',
-             'middleware/core/gateway', 'middleware/perception'):
+             'middleware/core/gateway', 'middleware/perception', 'integrations/perception'):
     sys.path.insert(0, str(ROOT / part))
 
 
@@ -124,8 +124,8 @@ def test_unlearned_motion_breaks_prior_terminal_credit(state, candidate, receipt
 
 def test_native_camera_containment_reaches_core_with_unknown_error(monkeypatch):
     import camera_lane
-    from control.sensing.perception.camera_ground import ground_plane
-    from control.sensing.perception.lane import LaneObservation
+    from perception_runtime.perception.camera_ground import ground_plane
+    from perception_runtime.perception.lane import LaneObservation
     model = SimpleNamespace(model_revision='lane-seg-test', infer_drivable=lambda frame:
         (np.ones((240, 320), np.uint8), 'drivable', {'crosswalk_mask': np.zeros((240, 320), np.uint8)}, 1.))
     lane = camera_lane.LearnedCameraLane(model, ground_plane(.06343, .139626, 281.6, 160., 120., .6),
@@ -151,7 +151,7 @@ def test_native_camera_containment_reaches_core_with_unknown_error(monkeypatch):
 def test_native_scan_reaches_camera_wall_and_core_return_evidence(monkeypatch):
     import camera_lane
     from core_common.robot_body import NOMINAL_BODY
-    from control.sensing.perception.camera_ground import ground_plane
+    from perception_runtime.perception.camera_ground import ground_plane
     from native_scan import scan_sample
     way = np.zeros((240, 320), np.uint8)
     way[112:, 65:256] = 255
@@ -187,7 +187,7 @@ def test_native_scan_reaches_camera_wall_and_core_return_evidence(monkeypatch):
 def test_native_scan_nanosecond_rounding_does_not_discard_current_camera(age_ns, accepted):
     from camera_lane import LearnedCameraLane
     from core_common.robot_body import NOMINAL_BODY
-    from control.sensing.perception.camera_ground import ground_plane
+    from perception_runtime.perception.camera_ground import ground_plane
     from native_scan import scan_sample
     source_now = 241 / 240
     stamp_ns = round(source_now * 1e9) - age_ns
@@ -215,7 +215,7 @@ def test_native_scan_nanosecond_rounding_does_not_discard_current_camera(age_ns,
 def test_native_body_sweep_uses_the_actual_scan_and_holds_unknown(distance, moving):
     from camera_lane import LearnedCameraLane
     from core_common.robot_body import NOMINAL_BODY
-    from control.sensing.perception.camera_ground import ground_plane
+    from perception_runtime.perception.camera_ground import ground_plane
     from native_scan import scan_sample
     way = np.zeros((240, 320), np.uint8)
     way[112:, 65:256] = 255
@@ -272,7 +272,7 @@ def test_camera_route_guide_uses_nonzero_tangent_at_duplicates_and_route_end(ind
 
 def test_missing_camera_observation_is_not_a_learning_state():
     from camera_lane import LearnedCameraLane
-    from control.sensing.perception.camera_ground import ground_plane
+    from perception_runtime.perception.camera_ground import ground_plane
     lane = LearnedCameraLane(SimpleNamespace(), ground_plane(.06343, .139626, 281.6, 160., 120., .6),
                              camera_x=.03317, clock=lambda: 10.)
     try:
@@ -305,7 +305,7 @@ def test_camera_admission_still_rejects_an_unusable_baseline_or_evaluation(phase
 
 def test_learning_state_expires_with_source_age_and_processing_time():
     from camera_lane import LearnedCameraLane
-    from control.sensing.perception.camera_ground import ground_plane
+    from perception_runtime.perception.camera_ground import ground_plane
     now = [10.]
     way = np.zeros((240, 320), np.uint8)
     way[112:, 65:256] = 255
@@ -393,7 +393,7 @@ def test_sensor_failure_is_not_credited_to_steering(cause):
 
 def test_camera_command_is_zero_if_observation_expires_during_core_tick(monkeypatch):
     from camera_lane import LearnedCameraLane
-    from control.sensing.perception.camera_ground import ground_plane
+    from perception_runtime.perception.camera_ground import ground_plane
     from run_map_rl import camera_tick
     now = [10.]
     way = np.zeros((240, 320), np.uint8)
@@ -424,7 +424,7 @@ def test_camera_command_is_zero_if_observation_expires_during_core_tick(monkeypa
 
 def test_two_camera_lanes_keep_distinct_core_event_identity_and_loss_state():
     from camera_lane import LearnedCameraLane
-    from control.sensing.perception.camera_ground import ground_plane
+    from perception_runtime.perception.camera_ground import ground_plane
     from core_features.line_follow import LineFollowMode, LineObservation
     ground = ground_plane(.06343, .139626, 281.6, 160., 120., .6)
     lanes = [LearnedCameraLane(SimpleNamespace(), ground, camera_x=.03317, clock=lambda: 10.,
@@ -517,7 +517,7 @@ def test_changed_gain_uses_changed_intended_twist_for_body_sweep():
 
 def test_camera_pipeline_inference_failure_holds_without_rule_fallback():
     from camera_lane import LearnedCameraLane
-    from control.sensing.perception.camera_ground import ground_plane
+    from perception_runtime.perception.camera_ground import ground_plane
     class Broken:
         model_revision = 'lane-seg-test'
         def infer_drivable(self, frame):
@@ -532,7 +532,7 @@ def test_camera_pipeline_inference_failure_holds_without_rule_fallback():
 
 def test_camera_source_age_and_replay_invalidate_existing_observation():
     from camera_lane import LearnedCameraLane
-    from control.sensing.perception.camera_ground import ground_plane
+    from perception_runtime.perception.camera_ground import ground_plane
     ground = ground_plane(.06343, .139626, 281.6, 160., 120., .6)
     model = SimpleNamespace(model_revision='lane-seg-test', infer_drivable=lambda _f: pytest.fail('stale inferred'))
     lane = LearnedCameraLane(model, ground, camera_x=.03317, clock=lambda: 10.)
@@ -543,7 +543,7 @@ def test_camera_source_age_and_replay_invalidate_existing_observation():
 
 def test_low_light_image_never_calls_model():
     from camera_lane import LearnedCameraLane
-    from control.sensing.perception.camera_ground import ground_plane
+    from perception_runtime.perception.camera_ground import ground_plane
     ground = ground_plane(.06343, .139626, 281.6, 160., 120., .6)
     model = SimpleNamespace(model_revision='lane-seg-test', infer_drivable=lambda _f: pytest.fail('dark inferred'))
     lane = LearnedCameraLane(model, ground, camera_x=.03317, clock=lambda: 10.)
@@ -555,7 +555,7 @@ def test_low_light_image_never_calls_model():
 
 def test_existing_drivable_output_reaches_core_then_replayed_frame_stops():
     from camera_lane import LearnedCameraLane
-    from control.sensing.perception.camera_ground import ground_plane
+    from perception_runtime.perception.camera_ground import ground_plane
     ground = ground_plane(.06343, .139626, 281.6, 160., 120., .6)
     rows, cols = np.mgrid[0:240, 0:320]
     denominator = ground.focal_px * np.sin(ground.pitch_rad) + (rows - 120) * np.cos(ground.pitch_rad)
@@ -580,7 +580,7 @@ def test_existing_drivable_output_reaches_core_then_replayed_frame_stops():
 
 def gap_lane(frames, curvature=0.):
     from camera_lane import LearnedCameraLane
-    from control.sensing.perception.camera_ground import ground_plane
+    from perception_runtime.perception.camera_ground import ground_plane
     ground = ground_plane(.06343, .139626, 281.6, 160., 120., .6)
     rows, cols = np.mgrid[0:240, 0:320]
     denominator = ground.focal_px * np.sin(ground.pitch_rad) + (rows - 120) * np.cos(ground.pitch_rad)
@@ -687,7 +687,7 @@ def test_existing_model_revision_hash_and_roles_must_match_before_inference():
 @pytest.mark.parametrize('guide_deg', [0., 60., 170.])
 def test_map_only_bridge_or_pivot_is_not_a_camera_lane(guide_deg):
     from camera_lane import LearnedCameraLane
-    from control.sensing.perception.camera_ground import ground_plane
+    from perception_runtime.perception.camera_ground import ground_plane
     ground = ground_plane(.06343, .139626, 281.6, 160., 120., .6)
     way = np.zeros((240, 320), np.uint8)
     way[140:165, 110:210] = 1  # A real nonempty mask, but no way under the robot.
@@ -790,7 +790,7 @@ def test_failed_camera_heading_remains_rejected_when_later_headings_are_measured
 
 def test_inference_wall_time_cannot_refresh_an_old_camera_frame():
     from camera_lane import LearnedCameraLane
-    from control.sensing.perception.camera_ground import ground_plane
+    from perception_runtime.perception.camera_ground import ground_plane
     ground = ground_plane(.06343, .139626, 281.6, 160., 120., .6)
     now = [10.]
     def infer(_frame):
@@ -806,7 +806,7 @@ def test_inference_wall_time_cannot_refresh_an_old_camera_frame():
 
 def test_existing_camera_derived_off_line_recovery_keeps_its_provenance():
     from camera_lane import LearnedCameraLane
-    from control.sensing.perception.camera_ground import ground_plane
+    from perception_runtime.perception.camera_ground import ground_plane
     ground = ground_plane(.06343, .139626, 281.6, 160., 120., .6)
     way = np.zeros((240, 320), np.uint8)
     way[90:, :100] = 1
