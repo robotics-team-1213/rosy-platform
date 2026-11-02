@@ -106,7 +106,7 @@
 ## 최근 기록
 
 - 2026-11-03 · 9f666845e8 · fix(fleet): platoon 지도 계산 공유와 HTTP 응답성
+- 2026-11-02 · uncommitted · D-963 USB 카메라 역할 결정 라우트
 - 2026-11-02 · uncommitted · D-962 독립 Account 수신과 개발 모드 사람 로그인
 - 2026-11-01 · uncommitted · 헤더 정적 계약 원복
 - 2026-11-01 · uncommitted · uiux(fleet): 테마 자리 계약 정정
-- 2026-11-01 · uncommitted · uiux(fleet): 소속 표시 계약 재정정

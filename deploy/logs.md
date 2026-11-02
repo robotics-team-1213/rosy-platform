@@ -4415,3 +4415,23 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 착지 land-fix-publish-baseline-checkout-pin가 MAIN-RED로 멈춤(main 06a479abd1에서도 같은 실패). 원격 `test/test_no_cross_host_dds.py`·`test/test_host_services_manifest.py`.
 - gate 변화: main 녹색 복구.
 - CE: 해당 없음 — 가드 시험이 바로 잡았고, 앞 착지가 이 시험을 고르지 않은 것은 시험 선택 범위의 문제다.
+
+## 2026-11-02 · uncommitted · OMX 카메라 후보에 같은 허브의 팔을 표시
+
+- 변경: `omx_cameras.py propose`의 각 후보에 `hub_arm`(카메라와 같은 USB 허브에 관찰 보드가 꽂힌 팔이 하나일 때)과 `suggest`(그 팔의 `<arm>_wrist` 역할이 비어 있을 때)를 더한다. 루트 포트는 모든 장치가 공유하므로 허브로 보지 않는다. 추천일 뿐 역할을 묶지 않는다. 손목 카메라가 팔 보드와 같은 허브에 꽂힌다는 배선은 아직 현장에서 확인하지 않았다(셀 분리 중); 확인되면 자동 배정으로 올린다.
+- 증거: `test/test_omx_cameras.py` 12 passed(로컬).
+- gate 변화: 없음. CE: 해당 없음 — 미확인 가정은 이 기록과 docstring에 있다.
+
+## 2026-11-02 · uncommitted · D-963 제어 PC USB 카메라 역할 보고와 결정 적용
+
+- 변경: `usb_camera_report.py`(읽기 전용 보고, 결정 파일 쓰기)를 추가하고 `workcell_observation_bridge.py`가 20초마다 `POST .../{workcell_id}/usb-devices`로 보내 결정을 받는다. `omx_cameras.py bind --apply`가 결정 파일의 키가 현재 제안과 맞으면 `approve`+`save`로 적용하고 항목을 지운다. 레지스트리의 쓰기 주체는 `bind` 하나로 유지한다.
+- 증거: `test/test_omx_usb_camera_report.py`, `test/test_omx_workcell_observation_bridge.py`, `test/test_omx_cameras.py` 노트북에서 29건 통과(원격 재확인 대기).
+- gate 변화: 없음. 실제 USB 카메라를 꽂아 승인하는 현장 수용은 하지 않았다.
+- CE: 해당 없음 — 새 기능이며 장애 해결이 아니다. 결정은 D-963에 있다.
+
+## 2026-11-02 · 5eff2fd4d0 · fix(omx): 빈 관측과 관측 실패 구분
+
+- 변경: 반복 운반은 observed=0과 정상 관측의 `no usable object`가 함께 있을 때만 source empty를 반환한다. 맵 누락·영상 누락 오류는 원래 실패 결과를 유지하고 다음 운반을 중단한다.
+- 검증: 원격 RED commit 314f571ea0에서 두 회귀 사례가 예상대로 실패했고 기존 9개는 통과했다. 수정 commit 5eff2fd4d0에서 자동 운반·자동 집기 관련 59개가 통과했다. 실제 팔 동작과 현장 배포는 하지 않았다.
+- gate 변화: 없음. 장치·현장 수용을 주장하지 않는다.
+- CE: 해당 없음 — 오류 전달 원인과 해결은 수정 코드 및 회귀 시험에 직접 남아 있다.

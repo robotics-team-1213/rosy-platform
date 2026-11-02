@@ -17,7 +17,8 @@ finally:
     sys.path.remove(str(OMX))
 
 PLACED = {"result": "placed", "attempts": [{"observed": 2}]}
-EMPTY = {"result": "stopped: no usable object", "attempts": [{"observed": 0, "refused": []}]}
+EMPTY = {"result": "stopped: no usable object",
+         "attempts": [{"observed": 0, "refused": [], "error": "no usable object"}]}
 PACKED = {"result": "stopped: no usable object", "attempts": [{"observed": 2, "refused": [{"why": "tangled blob"}]}]}
 
 
@@ -34,6 +35,13 @@ def test_carries_until_the_source_has_nothing_left():
 def test_objects_left_but_unusable_is_a_stop_not_an_empty_source():
     out = carry.carry(runs(PLACED, PACKED), 5)
     assert out["result"] == "stopped: no usable object" and out["placed"] == 1 and out["last"] is PACKED
+
+
+@pytest.mark.parametrize("error", ["no map for floor", "camera frame missing"])
+def test_zero_objects_from_a_failed_observation_is_not_an_empty_source(error):
+    failed = {"result": f"stopped: {error}", "attempts": [{"observed": 0, "refused": [], "error": error}]}
+    out = carry.carry(runs(PLACED, failed, PLACED), 5)
+    assert out["result"] == failed["result"] and out["placed"] == 1 and out["last"] is failed
 
 
 @pytest.mark.parametrize("stop", ["held: not a reviewed task", "stopped: empty -> retry", "aborted: temperature"])

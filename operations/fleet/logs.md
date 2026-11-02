@@ -5251,6 +5251,13 @@
 - gate 변화: 없음. 장치 명령과 실물 수용을 수행하지 않았다.
 - CE: 해당 없음 — 개발 우회 방지는 코드·회귀 시험에 남는다. 중앙 로그인 화면 실패의 교훈은 `docs/solutions/logic-errors/fleet-development-mode-hides-central-account-login-2026-11-02.md`를 따른다.
 
+## 2026-11-02 · uncommitted · D-963 USB 카메라 역할 결정 라우트
+
+- 변경: `recognition/usb_camera_decisions.py`가 `GET/POST /api/fleet/workcell-observations/usb-devices…`(보고·목록·이름 있는 운영자 결정)를 낸다. 결정은 작업 DB의 SQLite에, 최신 보고는 메모리에 둔다. 인증은 작업셀 팔 토큰(`authorize_workcell`). API v1.350.
+- 증거: `operations/fleet/test/test_usb_camera_decisions.py`(노트북 5건 통과), `usb-camera-panel.test.mjs`.
+- gate 변화: 없음. 실제 USB 카메라를 꽂아 승인하는 현장 수용은 하지 않았다.
+- CE: 해당 없음 — 새 기능이며 장애 해결이 아니다. 결정은 D-963에 있다.
+
 ## 2026-11-03 · 9f666845e8 · fix(fleet): platoon 지도 계산 공유와 HTTP 응답성
 
 - 변경: `/api/fleet/platoon`이 활성 지도 버전별 루프·기하·속도표 계산 한 건을 작업 스레드에서 공유한다. 취소된 독자는 공유 계산을 취소하지 않고, NO_LOOP도 재사용하며 계산 실패 뒤에는 다시 시도한다. 로봇 자세·차간 거리는 요청마다 읽고 기존 인증·표시 전용 dispatch=false를 유지한다.

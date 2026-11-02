@@ -834,3 +834,16 @@
 - 변경: 지도 canvas·영상의 절대 배치를 화면 폭과 무관하게 적용한다. 데스크톱 media query 안으로 옮겨진 규칙 때문에 모바일 canvas가 단계 밖 접힘 행을 덮어 클릭을 막았다.
 - 증거: main `f432c4f43a`에서 기존 좌표/만료 관측 브라우저 회귀 4개 통과, 병합 `40ff3d3bb5`에서 390×844·320×568 두 경우 canvas pointer interception 실패 재현. 같은 기존 시험으로 수정 검증.
 - Gate: 호스트 브라우저 검증. 장치·현장 수용과 별개. CE: 해당 없음 — 원인과 경계는 최종 CSS와 기존 회귀 시험에서 복원 가능.
+
+## 2026-11-02 · uncommitted · D-963 설치 화면 USB 카메라 역할 승인 패널
+
+- 변경: `installation/usb-camera.js`와 `install.html`의 `usb-camera-panel`. 역할 없는 USB 카메라마다 추천 역할(출처 표시)을 채우고 `confirmIrreversible` 뒤 이름 있는 운영자 Bearer로 결정을 보낸다.
+- 증거: `operations/fleet/test/web/usb-camera-panel.test.mjs` 통과. 브라우저 시험은 하지 않았다.
+- gate 변화: 없음. 실제 USB 카메라를 꽂아 승인하는 현장 수용은 하지 않았다.
+- CE: 해당 없음 — 새 기능이며 장애 해결이 아니다. 결정은 D-963에 있다.
+
+## 2026-11-03 · uncommitted · 만료된 Cell 고장 영상 URL 해제
+
+- 변경: 성공한 관측 응답의 모든 작업 셀·팔에 남은 고장 세션을 모아, 이력에서 사라진 세션의 JPEG URL만 해제한다. 처음 접속할 때 있던 이력의 영상 처리와 다른 팔의 영상은 유지한다.
+- 증거: 기존 Chromium fixture에서 21회 고장으로 20건 이력을 넘기고, 서로 다른 셀의 두 팔에서 만료 URL 해제·생존 영상·dispose 정리를 확인한다. 수정 전 `f0423a0364` 원격 실행은 만료 URL assertion에서 실패했고 known_failures 판정은 NEW 1 / known 0 / flaky 0이었다.
+- Gate: 수정 커밋의 집중 원격 Chromium 검증 대상. 장치·현장 수용과 별개. CE: 해당 없음 — URL 수명 규칙과 재현 조건은 코드와 회귀 시험으로 복원 가능.

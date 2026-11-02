@@ -4598,7 +4598,8 @@
       ],
       "consumers": [
         "applications/fleet/web/devices/camera-pairing.js",
-        "applications/fleet/web/installation/camera-peer.js"
+        "applications/fleet/web/installation/camera-peer.js",
+        "applications/fleet/web/installation/usb-camera.js"
       ],
       "availability": "configured capability and authorized role; see backend contract",
       "calls": [
@@ -4643,9 +4644,52 @@
           "request_ids": [
             "GET:/api/fleet/pairing/v1/pending"
           ]
+        },
+        {
+          "consumer": "applications/fleet/web/installation/usb-camera.js",
+          "expression": "/api/fleet/workcell-observations",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/workcell-observations/usb-devices",
+            "POST:/api/fleet/workcell-observations/{workcell_id}/usb-devices/{key}/decision"
+          ]
         }
       ],
       "requests": [
+        {
+          "id": "GET:/api/fleet/workcell-observations/usb-devices",
+          "method": "GET",
+          "path": "/api/fleet/workcell-observations/usb-devices",
+          "implementation": "operations/fleet/fleet/server/recognition/usb_camera_decisions.py",
+          "handler": "listing",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response (D-963, in-process, no device)",
+          "contract_tests": [
+            "operations/fleet/test/test_usb_camera_decisions.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/workcell-observations/usb-devices"
+        },
+        {
+          "id": "POST:/api/fleet/workcell-observations/{workcell_id}/usb-devices/{key}/decision",
+          "method": "POST",
+          "path": "/api/fleet/workcell-observations/{workcell_id}/usb-devices/{key}/decision",
+          "implementation": "operations/fleet/fleet/server/recognition/usb_camera_decisions.py",
+          "handler": "decide",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response (D-963, in-process, no device)",
+          "contract_tests": [
+            "operations/fleet/test/test_usb_camera_decisions.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/workcell-observations/{workcell_id}/usb-devices/{key}/decision"
+        },
         {
           "id": "GET:/api/fleet/pairing/v1/credentials",
           "method": "GET",

@@ -211,5 +211,7 @@ def _prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, 
         land.land_full.save(wt, branch, candidate, main_sha, tier, invocations)
     if explicit:
         args._full_witness = dict(candidate=candidate, main=main_sha, invocations=[list(i) for i in invocations], env=env)
+    if ticket is not None:
+        land_queue.set_status(ticket, "preparing", tested=land.land_full.restore(wt, branch) or "")
     land.land_events.emit("prepared", tier=tier, seconds=round(time.monotonic() - began))
     land.land_speculate.prepare(land, wt, branch, args, python, qdir, ticket)
