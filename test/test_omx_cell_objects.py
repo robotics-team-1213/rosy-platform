@@ -195,3 +195,12 @@ def test_five_3_cells_in_a_row_on_the_ship_plate_are_five_targets(gap):
 def test_a_row_wider_than_its_gaps_allow_stays_unmatched():
     mm = np.array([(x, y) for x in np.arange(-45, 45.5, 1.0) for y in np.arange(0, 260.5, 1.0)], np.float32)
     assert not any(o["matched"] for o in co.classify(mm, CATALOG))  # 260 mm: past six widths and five 8 mm gaps
+
+
+def test_three_3_cells_in_a_row_longer_than_one_box_are_split_along_the_row():
+    """2026-11-03: three 3-cells with 6 mm gaps read 113 x 100 mm, the row longer than a box (90)."""
+    mm = np.array([(k * 36 + x, y) for k in range(3) for x in np.arange(0, 30.5, 1.0) for y in np.arange(-45, 45.5, 1.0)],
+                  np.float32)
+    found = co.classify(mm, CATALOG)
+    assert [o["object"] for o in found] == ["container-3"] * 3
+    assert sorted(round(o["centre_mm"][0]) for o in found) == [15, 51, 87]
