@@ -16,7 +16,7 @@ tracking ref, the file in every worktree (uncommitted included), and existing
 
 ``bump`` rewrites, in this worktree's tracked files, only the lines that pin the
 live version: ``**Version:** v1.N`` (reference header and tests),
-``ROSY-API-REF-001 v1.N`` / ``(v1.N)`` (core_api_web app.py) and the
+``ROSY-API-REF-001 v1.N`` (core_api_web contract_version.py) and the
 ``"v1.N" in header`` test pin. Changelog rows and logs are history and stay;
 rename your own ``### v1.N`` row by hand. Standard library only.
 """

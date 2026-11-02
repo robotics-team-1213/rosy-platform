@@ -10,7 +10,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[4]
 SCHEMAS = ROOT / "contracts/foundation/core_common/protocol/schemas.py"
-API_APP = ROOT / "middleware/core/api/core_api_web/api/app.py"
+API_APP = ROOT / "middleware/core/api/core_api_web/api/contract_version.py"  # app.py description reads it
 DOC = ROOT / "docs/reference/ROSY API & Protocol Reference.md"
 
 
