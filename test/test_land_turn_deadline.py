@@ -188,3 +188,47 @@ def test_expiry_marks_preparing_while_remote_cancellation_is_still_draining(cach
         land.run_tests(wt, args, [["pkg/test"]], wt.parent / "logs", 1)
     assert not queue.release(ticket, "outside prepare", started=0)
     assert events.count("released") == 1
+
+
+@pytest.mark.parametrize("at_join", [False, True])
+def test_expired_turn_yields_even_when_every_check_passed_and_peer_already_owns_turn(cached, monkeypatch, at_join):
+    wt, _, _ = cached
+    now, timers = [0.0], []
+    queue = land.land_queue
+    qdir = queue.queue_dir(wt)
+    ticket = queue.take(qdir, "feat/x")
+    monkeypatch.setattr(queue, "_held", [ticket])
+    monkeypatch.setattr(land.time, "monotonic", lambda: now[0])
+    queue.wait(qdir, ticket, 0)
+    peer = queue.take(qdir, "feat/peer", status="waiting")
+
+    def handoff():
+        now[0] = 601
+        timers[0].function()
+        queue.wait(qdir, peer, 0)
+        assert not land.land_checks.turn_wanted(land, wt), "the waiter already acquired its turn"
+
+    class Timer:
+        def __init__(self, seconds, function): self.function = function
+        def start(self): timers.append(self)
+        def cancel(self): pass  # callback already entered; cancellation cannot undo it
+        def join(self):
+            if at_join:
+                handoff()
+
+    monkeypatch.setattr(threading, "Timer", Timer)
+
+    def passed(invocations, logs, *a, **kw):
+        for log in logs:
+            log.write_text("1 passed\n", encoding="utf-8")
+        if not at_join:
+            handoff()
+        return [0] * len(invocations)
+
+    monkeypatch.setattr(land.remote_pytest, "run", passed)
+    invocations = [["pkg/test"], ["queued/test"]]
+    args = land.argparse.Namespace(tests="auto", node=False, no_cache=False)
+    with pytest.raises(land.Overtime):
+        land.run_tests(wt, args, invocations, wt.parent / "logs", 1)
+    assert [entry["argv"] for entry in land.land_cache.entries(wt)] == invocations, "all completed passes remain reusable"
+    assert json.loads(peer.read_text())["status"] == "turn"

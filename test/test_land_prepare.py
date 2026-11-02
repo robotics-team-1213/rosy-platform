@@ -165,6 +165,21 @@ def test_guard_overtime_prepares_outside_and_keeps_full_origin(full_anchor, monk
     assert record["tier"] == "full" and record["prepared_candidate"] == candidate and record["prepared_on"] == base
 
 
+def test_fast_forward_requires_the_same_turn_ownership_after_all_checks(full_anchor, monkeypatch):
+    main, _, _, _, _, _ = full_anchor
+    before = git(main, "rev-parse", "HEAD")
+
+    def lost_turn(*args, **kwargs):
+        for ticket in land.land_queue._held:
+            land.land_queue.set_status(ticket, "preparing")
+        return []
+
+    monkeypatch.setattr(land, "run_tests", lost_turn)
+    monkeypatch.setattr(land, "select", lambda *a, **k: ([["pkg/test"]], None))
+    assert land.main(["--tests", "auto"]) == 1
+    assert git(main, "rev-parse", "HEAD") == before
+
+
 def test_again_retains_original_full_base_when_main_moves_during_preparation(full_anchor, monkeypatch):
     main, wt, base, candidate, path, original = full_anchor
     args = land.argparse.Namespace(tests="auto", no_cache=False, queue_timeout=0)
