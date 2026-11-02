@@ -9,6 +9,7 @@ from collection_profile import digest
 
 SCHEMA = "rosy.omx-cell-robot-profile.v1"
 FIELDS = {"schema", "device_id", "instance_id", "robot_config_sha256", "operating_envelope_path", "work_dir"}
+OPTIONAL = {"servo"}  # this robot's servo tuning over the model's (session_caps.load_tuning checks it)
 
 
 def _unique(pairs):
@@ -23,8 +24,12 @@ def _unique(pairs):
 def load(path, *, robot_config=None) -> dict:
     path = Path(path).expanduser().resolve()
     document = json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=_unique)
-    if not isinstance(document, dict) or set(document) != FIELDS or document["schema"] != SCHEMA:
+    if (not isinstance(document, dict) or not FIELDS <= set(document) <= FIELDS | OPTIONAL
+            or document["schema"] != SCHEMA):
         raise ValueError("expected a per-device operating profile without authority fields")
+    servo = document.get("servo", {})
+    if not isinstance(servo, dict):
+        raise ValueError("profile servo must map follower IDs to their tuning")
     device_id, instance = document["device_id"], document["instance_id"]
     if not isinstance(device_id, str) or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}", device_id) is None:
         raise ValueError("device_id must identify its descriptive Fleet device profile")
@@ -44,7 +49,7 @@ def load(path, *, robot_config=None) -> dict:
             raise ValueError(f"profile {key} must be explicitly configured")
         target = Path(value).expanduser()
         paths[key] = str((target if target.is_absolute() else path.parent / target).resolve())
-    return {**paths, "binding": {"device_id": device_id, "instance_id": instance,
+    return {**paths, "servo": servo, "binding": {"device_id": device_id, "instance_id": instance,
             "robot_config_sha256": revision, "profile_sha256": digest({**document, **paths})}}
 
 
