@@ -111,7 +111,7 @@ def test_install_task_list_sits_in_the_shared_subnav_seat():
     assert seat, "install: the task list stands in the shared sub-nav seat between the rail and the workspace"
     assert "install-tasks" not in page and "install-workspace" not in page, "install: no bespoke sidebar layout remains"
     assert '<link rel="stylesheet" href="/common/app-shell.css">' in page
-    assert 'class="fleet-task-page"' in page
+    assert 'class="fleet-task-page ui-task-page"' in page
     entry = (WEB / "installation" / "install.js").read_text(encoding="utf-8")
     assert 'el("install-chooser").append(taskChooser.element);' in entry, "install: the shared chooser fills the seat"
 

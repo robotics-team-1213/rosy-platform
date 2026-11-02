@@ -9,7 +9,7 @@
 
 .ui-rail { min-width: 0; background: var(--surface-chrome); border-inline-end: 1px solid var(--border-default); }
 .ui-rail-nav { display: flex; flex-direction: column; align-items: center; gap: var(--gap-rail); padding: var(--inset-rail); }
-.ui-rail-item { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--gap-rail); align-self: stretch; min-block-size: var(--target-secondary); border-radius: var(--radius-button); color: var(--text-secondary); font: var(--weight-label) var(--text-micro)/var(--leading-control) var(--body); text-decoration: none; text-align: center; }
+.ui-rail-item { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--gap-rail); align-self: stretch; min-block-size: var(--size-rail-item); border-radius: var(--radius-button); color: var(--text-secondary); font: var(--weight-label) var(--text-micro)/var(--leading-control) var(--body); text-decoration: none; text-align: center; }
 .ui-rail-item[aria-current="page"], .ui-rail-item[aria-current="true"] { background: var(--brand-rose-wash); color: var(--brand-rose); }
 
 .ui-subnav { min-width: 0; background: var(--surface-chrome); border-inline-end: 1px solid var(--border-default); }
@@ -46,7 +46,7 @@
   .ui-app-main { flex: 1 1 auto; }
   .ui-rail, .ui-subnav { border-inline-end: 0; border-block-end: 1px solid var(--border-default); }
   .ui-rail-nav { flex-direction: row; overflow-x: auto; }
-  .ui-rail-item { flex: none; flex-direction: row; align-self: auto; white-space: nowrap; min-block-size: var(--target-secondary); padding: var(--inset-button); font-size: var(--text-label); }
+  .ui-rail-item { flex: none; flex-direction: column; align-self: auto; white-space: nowrap; inline-size: var(--size-rail-item); min-block-size: var(--size-rail-item); padding: 0; font-size: var(--text-micro); }
   .ui-subnav-nav { flex-direction: row; overflow-x: auto; padding: var(--inset-rail); }
   .ui-subnav-head { display: none; }
   .ui-stage-grid[data-layout="sense"] { grid-template-columns: minmax(0, 1fr) var(--context-track); grid-template-rows: auto; align-content: start; grid-template-areas: "stage now" "cam now" "sense sense"; }
