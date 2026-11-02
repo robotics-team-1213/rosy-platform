@@ -3079,8 +3079,8 @@ guard. A read that finds no frame, a stale frame, or
 
 | Method | Path | Credential | Result |
 |---|---|---|---|
-| GET | `/api/fleet/vision/sources` | Site console Bearer token, or tokenless through the site Caddy proxy from a private LAN address | Configured preview source IDs |
-| POST | `/api/fleet/vision/lease` | Viewer Bearer token, or tokenless through the site Caddy proxy from a private LAN address | 60 s source-scoped lease and direct Vision frame path |
+| GET | `/api/fleet/vision/sources` | Site console Bearer token, or tokenless through the site Caddy proxy from a private LAN or Tailscale tailnet (`100.64.0.0/10`) address | Configured preview source IDs |
+| POST | `/api/fleet/vision/lease` | Viewer Bearer token, or tokenless through the site Caddy proxy from a private LAN or Tailscale tailnet (`100.64.0.0/10`) address | 60 s source-scoped lease and direct Vision frame path |
 | GET | `/api/vision/sources/{source_id}/frame` | Vision preview lease Bearer token | One latest fresh JPEG; `Cache-Control: no-store`; `X-Frame-Seq`, `X-Frame-Age-Ms`, `X-Frame-Captured-At`, `X-Frame-Width`, `X-Frame-Height`, `X-Frame-Rotation-Deg`, and `X-Frame-Rectified` (`true` manual, `auto` D-484 field calibration, `map` D-560 map plane, `false` raw) describe that exact frame; `mode: "map"` requests add `X-Frame-Plane` and `X-Frame-Calibration` or answer 409 `X-Frame-State: plane-unavailable` (never the raw JPEG); `mode: "auto"` requests additionally report `X-Field-Calib` (calibration state) and, while no accepted quad exists, answer the raw JPEG with `X-Frame-State: field-unavailable` |
 | GET | `/api/vision/sources/{source_id}/field-proposal` | Vision preview lease Bearer token | D-360 field-corner proposal JSON for operator review (`proposal` null when no full field is visible); own 1/s bucket per lease subject; detection runs at most once per source per second, off the event loop (readers in between get the last result, 429 while the first run is busy); `no-store`, same freshness 404s, 422 on undecodable frame. Display only, never applied to sightings |
 

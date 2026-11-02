@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-11-02 · uncommitted · feat(fleet): 확인된 ARM 시도의 재관측 계약(D-930, API v1.334)
 - 2026-11-02 · uncommitted · test: 리뷰 관문 스크립트를 시험이 부른다
 - 2026-11-02 · uncommitted · docs(omx): 시범 학습 준비와 왼쪽 손목 진단 기록
 - 2026-11-02 · uncommitted · docs(adr): D-889 추가 10 결과에 M4 판정(FAIL)
 - 2026-11-02 · uncommitted · fix(land): 겹침 판정이 선택기 가드 묶음을 보지 않는다 (D-889 추가 25)
-- 2026-11-02 · uncommitted · fix(land): 차례의 자기 브라우저 묶음은 변화분 브라우저 묶음이 닿을 때만 (D-889 추가 24)

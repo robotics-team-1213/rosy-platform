@@ -13644,3 +13644,10 @@ osy-d395-s1d\`.
 - 증거: 11-02 13:20~13:33 omx-arm-fault-visibility 차례가 main 변화분의 `.github/review-gate.sh: maps to no module (unknown -> full)`로 반납됐다. 원격 시험은 착지 기록에 남긴다.
 - gate 변화: 없음
 - 교훈: 없음
+
+## 2026-11-02 · uncommitted · feat(fleet): 확인된 ARM 시도의 재관측 계약(D-930, API v1.334)
+
+- 변경: `POST/GET /api/fleet/arm-transfers/jobs/{id}/rechecks`를 추가했다. 기다리는 재관측은 기존 observation context에 `phase=RECHECK`로 나오고 같은 observations 경로로 받는다. 검사는 POST_ACTION과 같고 요청 뒤 시각·측정 관절을 요구한다. Action·claim·작업 상태·영수증·v1.330 근거는 바뀌지 않는다(`work/physical_transfer_rechecks.py`, `fleet_physical_transfer_rechecks` 테이블).
+- 증거: 원격 `test_physical_transfer_recheck.py`와 관측자·v1.330·관측 계약·holder import 시험 58 passed. Harbor 전체 흐름 회귀(D-927)의 ⑤가 이 계약을 쓴다.
+- Gate: 없음. simulation 계약 구현이며 실물 관측자·현장 수용은 별도다. 공개 push 없음.
+- CE: 해당 없음 — 설계 결정과 계약 추가이며 해결한 장애가 아니다.
