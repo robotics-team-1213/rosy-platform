@@ -10,7 +10,7 @@ The registry accepts persistent USB-port paths for identical-serial cameras; rea
 
 - Focused remote suites: 59 passed, no skips or failures.
 - Affected remote selection: 372 passed, 84 warnings, no new/known/flaky failures.
-- Independent source review: no findings on `bec3bd954721a0281b64da986853b9c1e506e3b0`.
+- Independent source review: no findings on commit `bec3bd954721a0281b64da986853b9c1e506e3b0`.
 - At the 05:14 UTC field-recovery checkpoint, official landing had stopped and resume was refused at 13/12 queue capacity. The improvement was pending then and was **not** used for the field recovery below. Subsequent merge follow-up confirmed `bec3bd9547` is included in local main; this does not claim public publication.
 
 Reports are in the operator's external `rosy-camera-path-red-20261102`, `rosy-camera-path-green-20261102` and `rosy-camera-path-affected-20261102` directories. Additional speculative landing checks are separate from this targeted verification; passing them is not a claim that all other queued changes landed.
