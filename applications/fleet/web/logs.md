@@ -835,6 +835,13 @@
 - 증거: main `f432c4f43a`에서 기존 좌표/만료 관측 브라우저 회귀 4개 통과, 병합 `40ff3d3bb5`에서 390×844·320×568 두 경우 canvas pointer interception 실패 재현. 같은 기존 시험으로 수정 검증.
 - Gate: 호스트 브라우저 검증. 장치·현장 수용과 별개. CE: 해당 없음 — 원인과 경계는 최종 CSS와 기존 회귀 시험에서 복원 가능.
 
+## 2026-11-02 · uncommitted · D-963 설치 화면 USB 카메라 역할 승인 패널
+
+- 변경: `installation/usb-camera.js`와 `install.html`의 `usb-camera-panel`. 역할 없는 USB 카메라마다 추천 역할(출처 표시)을 채우고 `confirmIrreversible` 뒤 이름 있는 운영자 Bearer로 결정을 보낸다.
+- 증거: `operations/fleet/test/web/usb-camera-panel.test.mjs` 통과. 브라우저 시험은 하지 않았다.
+- gate 변화: 없음. 실제 USB 카메라를 꽂아 승인하는 현장 수용은 하지 않았다.
+- CE: 해당 없음 — 새 기능이며 장애 해결이 아니다. 결정은 D-963에 있다.
+
 ## 2026-11-02 · uncommitted · D-961 웹 제품 통합
 
 - 변경: Account/Fleet 로그인 맥락의 앱바·제목·폼·복귀를 맞췄다. 문서 본문과 영역 레일의 공용 구성을 재사용하고 중복 외형을 제거했다. 권한·원장·실행 owner는 유지한다.

@@ -355,6 +355,6 @@
 
 - 2026-11-02 · 131087f3b1 · 공개 Git 무결성 증거의 필드 명확화
 - 2026-11-02 · b1eafb186f · D-961 웹 제품 통합 검증 기록
+- 2026-11-02 · uncommitted · D-963 USB 카메라 역할 승인 결정과 API v1.350
 - 2026-11-02 · uncommitted · fix(landing): rollup 회원 완료와 접수 origin 측정
 - 2026-11-02 · 20390c3486 · fix(harness): D-795 DDS 가드를 매 착지에서 돌린다
-- 2026-11-02 · uncommitted · fix(omx): 가드 고장 프레임을 설정 없이 남긴다

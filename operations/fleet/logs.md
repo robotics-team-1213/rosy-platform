@@ -5251,6 +5251,13 @@
 - gate 변화: 없음. 장치 명령과 실물 수용을 수행하지 않았다.
 - CE: 해당 없음 — 개발 우회 방지는 코드·회귀 시험에 남는다. 중앙 로그인 화면 실패의 교훈은 `docs/solutions/logic-errors/fleet-development-mode-hides-central-account-login-2026-11-02.md`를 따른다.
 
+## 2026-11-02 · uncommitted · D-963 USB 카메라 역할 결정 라우트
+
+- 변경: `recognition/usb_camera_decisions.py`가 `GET/POST /api/fleet/workcell-observations/usb-devices…`(보고·목록·이름 있는 운영자 결정)를 낸다. 결정은 작업 DB의 SQLite에, 최신 보고는 메모리에 둔다. 인증은 작업셀 팔 토큰(`authorize_workcell`). API v1.350.
+- 증거: `operations/fleet/test/test_usb_camera_decisions.py`(노트북 5건 통과), `usb-camera-panel.test.mjs`.
+- gate 변화: 없음. 실제 USB 카메라를 꽂아 승인하는 현장 수용은 하지 않았다.
+- CE: 해당 없음 — 새 기능이며 장애 해결이 아니다. 결정은 D-963에 있다.
+
 ## 2026-11-02 · a7f36cb999 · Web unification follow-up
 
 - 변경: 2026-11-02 · a7f36cb999 · 독립 검토가 확인한 central Account의 사용 불가능한 복귀 링크를 숨겼다. validated return과 로그인 완료 후 원래 앱 복귀는 유지한다. 영상 Chromium fixture에 실제 app-runtime.js 자산을 복원했다. 인증 네 파일 64건과 영상/seat fixture 25건 원격 통과; 운영 SSO·실제 영상·장치 수용을 뜻하지 않는다. CE: 해당 없음 — UI 상태와 자산 계약을 회귀로 검증한다.

@@ -13733,6 +13733,13 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 소스 회귀·입력 재계산이며 main 적용과 SLO 달성을 주장하지 않는다.
 - CE: 기존 Nov1 교훈의 measurement trap을 갱신했다. ticket lead로 바꾸면 retry 이전의 대기 시간이 사라지는 비가시 판단과 검증 한계를 기록한다.
 
+## 2026-11-02 · uncommitted · D-963 USB 카메라 역할 승인 결정과 API v1.350
+
+- 변경: ADR D-963과 API 참조 v1.350(`workcell-observations/{workcell_id}/usb-devices`). 구현은 deploy·fleet·contracts·web 로그를 따른다.
+- 증거: API 버전 pin 8곳 갱신, 구현 시험은 deploy·fleet 로그.
+- gate 변화: 없음. 실제 USB 카메라를 꽂아 승인하는 현장 수용은 하지 않았다.
+- CE: 해당 없음 — 새 기능이며 장애 해결이 아니다. 결정은 D-963에 있다.
+
 ## 2026-11-02 · b1eafb186f · D-961 웹 제품 통합 검증 기록
 
 - 변경: [동결 검증 기록](validation/rosy-web-unification-2026-11-02/result.md)에 공통 화면·이동 조작, 로그인·상태·탐색과 접근성 적용, 원본 실패와 수정 후 결과를 모았다. 내부 주소·계정 경로를 제외한 실행 영수증·로그 해시와 126개 브라우저 파일별 시험 기준을 함께 둔다.
