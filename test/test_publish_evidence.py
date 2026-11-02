@@ -11,6 +11,71 @@ import pytest
 from test_publish_main import FULL, _commit, _git, _view, repo, tool
 from publish_fixtures import qualified_record
 import land_cache
+from harness import affected_exclusive as exclusive
+
+
+def _timing_proof(repo):
+    local, _ = repo
+    source = Path(__file__).resolve().parents[1] / 'tools/harness/affected_exclusive.py'
+    _commit(local, 'tools/harness/affected_exclusive.py', source.read_text(encoding='utf-8'))
+    full = [['learning/registry/policy/test'], ['test', '--ignore=' + exclusive.TARGET],
+            exclusive.DEDICATED, *FULL[2:]]
+    # The fixture's browser chunks are appended by the actual immutable-candidate consumer.
+    from publish_fixtures import BROWSERS
+    full = full[:3] + BROWSERS
+    script = 'import json\nprint(json.dumps(' + repr({'mode': 'full', 'full_invocations': full[:3]}) + '))\n'
+    sha = _commit(local, 'tools/harness/rosy_harness.py', script)
+    logs = qualified_record(tool, local, sha, _git(local, 'rev-parse', f'{sha}^'), full)
+    log = Path(logs[2])
+    log.write_text('[g1-timing-gate] expected=2 collected=2 passed=2 skipped=0 clean=1\n'
+                   '2 passed in 0.01s\n', encoding='utf-8')
+    _record_updated_log(local, log)
+    return local, sha, log
+
+
+def test_canonical_exclusive_full_with_hash_bound_strict_receipt_qualifies(repo):
+    local, sha, _ = _timing_proof(repo)
+    assert tool.green_full(local, sha)
+
+
+@pytest.mark.parametrize('damage', ['missing', 'skip', 'partial', 'quarantine', 'hash', 'ignore-only'])
+def test_publication_requires_complete_strict_dedicated_evidence(repo, damage):
+    local, sha, log = _timing_proof(repo)
+    if damage == 'ignore-only':
+        record = tool.land_record.read(local, sha)
+        record['invocations'].remove(exclusive.DEDICATED)
+        (tool.land_record.folder(local) / f'{sha}.json').write_text(json.dumps(record), encoding='utf-8')
+    else:
+        text = {'missing': '2 passed in 0.01s\n',
+                'skip': '[g1-timing-gate] expected=2 collected=2 passed=1 skipped=1 clean=0\n1 passed, 1 skipped in 0.01s\n',
+                'partial': '[g1-timing-gate] expected=2 collected=1 passed=1 skipped=0 clean=0\n1 passed in 0.01s\n',
+                'quarantine': '2 passed in 0.01s\nLOAD-FLAKY\n',
+                'hash': '999 passed in 0.01s\n'}[damage]
+        log.write_text(text, encoding='utf-8')
+        if damage != 'hash':
+            _record_updated_log(local, log)
+    assert not tool.green_full(local, sha)
+
+
+@pytest.mark.parametrize('mode', ['exact', 'narrow', 'no-cache'])
+def test_dedicated_execution_mapping_never_replaces_a_fresh_run(repo, monkeypatch, tmp_path, mode):
+    local, _ = repo
+    sha = _git(local, 'rev-parse', 'HEAD')
+    monkeypatch.setattr(land_cache, 'env_id', lambda *_: 'fixture-env')
+    tree = _git(local, 'rev-parse', 'HEAD^{tree}')
+    previous = tmp_path / 'previous.txt'
+    previous.write_text('2 passed in 0.01s\n', encoding='utf-8')
+    land_cache.record(local, sha, tree, 'fixture-env', exclusive.DEDICATED, previous)
+    if mode == 'narrow':
+        sha = _commit(local, 'unrelated.py', '# unrelated\n')
+    reused, todo, keep = land_cache.split(local, Namespace(no_cache=mode == 'no-cache', tests='auto'),
+                                         [exclusive.DEDICATED], sha, sys.executable,
+                                         lambda *a, **k: ([], False))
+    assert reused == [] and todo == [exclusive.DEDICATED]
+    fresh = tmp_path / 'fresh.txt'
+    fresh.write_text('2 passed in 0.01s\n', encoding='utf-8')
+    keep(exclusive.DEDICATED, fresh)
+    assert land_cache.entries(local)[-1]['log_sha256'] == hashlib.sha256(fresh.read_bytes()).hexdigest()
 
 
 @pytest.mark.parametrize("legacy", [False, True])

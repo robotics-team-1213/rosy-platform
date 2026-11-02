@@ -104,7 +104,7 @@ def test_nonclean_dedicated_job_is_not_retried_or_cached(cached, monkeypatch, te
 
 
 @pytest.mark.parametrize('seed_previous_pass', [False, True])
-def test_success_requires_fresh_execution_without_reading_or_writing_result_cache(
+def test_success_requires_fresh_execution_and_preserves_publication_mapping(
         cached, monkeypatch, tmp_path, seed_previous_pass):
     wt, run, _ = cached
     commit(wt, {exclusive.TARGET: 'def test_stub(): pass\n'}, 'timing fixture')
@@ -127,10 +127,13 @@ def test_success_requires_fresh_execution_without_reading_or_writing_result_cach
         return [0] * len(invocations)
 
     monkeypatch.setattr(land.remote_pytest, 'run', remote)
-    monkeypatch.setattr(land.land_cache, 'split', lambda *a: pytest.fail('timing result cache consulted'))
     run([exclusive.DEDICATED])
     assert calls == [[exclusive.DEDICATED]]
-    assert land.land_cache.entries(wt) == before
+    rows = land.land_cache.entries(wt)
+    assert len(rows) == len(before) + 1
+    assert rows[-1]['argv'] == exclusive.DEDICATED
+    import hashlib
+    assert rows[-1]['log_sha256'] == hashlib.sha256(Path(rows[-1]['log']).read_bytes()).hexdigest()
 
 
 def test_ci_extracts_exclusive_environment_before_passing_pytest_arguments():
