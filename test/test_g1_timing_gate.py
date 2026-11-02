@@ -7,10 +7,12 @@ import sys
 import pytest
 import affected_tests
 
-from harness import affected_exclusive as exclusive
-from test_land import cached, commit, land, repos  # existing fake landing boundary
-
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "tools"))
+
+from harness import affected_exclusive as exclusive  # noqa: E402
+from test_land import cached, commit, land, repos  # noqa: E402 (existing fake landing boundary)
+
 CLEAN = '[g1-timing-gate] expected=2 collected=2 passed=2 skipped=0 clean=1\n2 passed in 0.01s\n'
 
 

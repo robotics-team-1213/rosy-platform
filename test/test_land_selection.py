@@ -6,12 +6,15 @@ import importlib
 import importlib.util
 import json
 from pathlib import Path
+import sys
 from types import SimpleNamespace
 
 import pytest
-from harness import affected_exclusive as exclusive
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "tools"))
+
+from harness import affected_exclusive as exclusive  # noqa: E402
 
 
 def load_selection():
