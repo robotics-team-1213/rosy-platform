@@ -68,6 +68,7 @@ sys.path.insert(0, str(TOOLS / "hooks"))
 import land_record  # noqa: E402  (green land.py results per landed commit)
 sys.path.insert(0, str(TOOLS))
 import worktree_rules  # noqa: E402  (tombstone for a removed worktree folder a handle still holds)
+import publish_evidence  # noqa: E402  (canonical plan and exact executed proof)
 SCANNER = TOOLS.parent / "deploy" / "robot" / "pinky_pro" / "release"
 sys.path.insert(0, str(SCANNER))
 import secret_scan  # noqa: E402  (the one repository secret scanner: tokens, keys, PSKs, SHA-256 rows)
@@ -142,7 +143,8 @@ HOOK = "tools/hooks/pre-push"
 
 def green_full(repo: Path, sha: str) -> bool:
     record = land_record.read(repo, sha)
-    return bool(record) and tier(record) == "full" and ancestor(repo, record["base"], sha)
+    return (bool(record) and tier(record) == "full" and ancestor(repo, record["base"], sha)
+            and publish_evidence.qualified(sys.modules[__name__], repo, sha, record))
 
 
 def publish_sha(repo: Path) -> str | None:

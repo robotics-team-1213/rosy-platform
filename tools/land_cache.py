@@ -14,7 +14,8 @@ which every worktree of the clone shares. A later run skips an invocation when
   nothing, and leaves the known-failure lists alone (a shorter list can turn an old pass NEW).
 
 Lint, safety-review, size-range and node never come from here. Bad lines are ignored; the file
-is trimmed to its last ``KEEP`` lines past ``MAX_LINES``. ``--no-cache`` turns it off.
+is trimmed to its last ``KEEP`` lines past ``MAX_LINES``. ``--no-cache`` disables reuse;
+fresh clean executions still leave evidence for publication.
 Standard library only.
 """
 
@@ -197,14 +198,18 @@ def split(wt: Path, args, invocations: list[list[str]], head: str, python: str, 
     """(summary lines of reused invocations, invocations still to run, record(inv, log) for each pass)."""
     def skip(inv, log):
         return None
-    if getattr(args, "no_cache", False):
-        print("[cache] off (--no-cache)")
-        return [], invocations, skip
     env = env_id(wt, head)
     if env is None:
         print("[cache] off: the test-environment hash (remote_pytest.deps) is unavailable here")
         return [], invocations, skip
     tree = _git(wt, "rev-parse", f"{head}^{{tree}}").stdout.strip()
+
+    def keep(inv, log):
+        record(wt, head, tree, env, inv, log)
+
+    if getattr(args, "no_cache", False):
+        print("[cache] off (--no-cache): retaining fresh clean execution evidence")
+        return [], invocations, keep
     known = [e for e in entries(wt) if e["env"] == env]
     exact = {tuple(e["argv"]) for e in known if e["tree"] == tree}
     reused, todo = [], []
@@ -230,6 +235,4 @@ def split(wt: Path, args, invocations: list[list[str]], head: str, python: str, 
     for line in reused:
         print(f"[cache] {line}")
 
-    def keep(inv, log):
-        record(wt, head, tree, env, inv, log)
     return reused, todo, keep
