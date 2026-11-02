@@ -57,9 +57,15 @@ docker run --rm --network none -v /tmp/fit:/tmp/fit:ro -w /tmp/fit \
 3. **그리기**: 도면 위에 차선(edge), 교차점·주차·충전 장소(place, `kind: charge|park|junction|…`), 횡단보도를 그린다. 저장은 초안만 바꾼다.
 4. **축척 근거**: survey에 줄자로 잰 두 점 거리를 적는다. CAD 값만 있으면 그렇다고 쓰고 검토를 끝내지 않는다.
 5. **검토 → 활성화**: 검토 메모를 남기고 활성화한다. 주행·대형·teach 중이면 활성화가 막힌다.
-6. **카메라**: `site-cameras.yaml`의 `map_id`를 새 지도로 맞추고, 관제 카메라 교정을 새 지도 기준으로 다시 받는다. 이 파일을 바꾸면 `rosy-site-config-reload`가 Fleet과 Vision을 재시작한다. 몇 초간 Vision의 설정 읽기가 502를 내는 것은 정상이다. `robot_ids: enrolled`이면 등록 로봇을 카메라가 자동으로 따른다(D-580).
+6. **카메라**: 지도 활성화와 같이 바꾼다. 하나만 바꾸면 sighting과 활성 지도의 `map_id`가 달라 로봇 위치가 사라진다.
+   - `site-cameras.yaml`의 `map_id`, `calibration_revision`, `corner_world_m`(새 매트 사각형, 매트 중심 원점)을 바꾼다. **꼭짓점 좌표를 예전 트랙 크기로 두면 모든 카메라 위치의 축척이 틀린다**(2026-11-01까지 2.81 × 1.26 m가 남아 있어 실제 2.44 × 1.22 m보다 약 15 % 컸다).
+   - 이 파일을 바꾸면 `rosy-site-config-reload`가 Fleet과 Vision을 재시작한다. 몇 초간 Vision의 설정 읽기가 502를 내는 것은 정상이다. 카메라 휴대폰은 약 10 s 안에 다시 붙는다. `robot_ids: enrolled`이면 등록 로봇을 카메라가 자동으로 따른다(D-580).
+   - 그다음 소스 상태가 `CALIBRATION_REQUIRED`다. 관제 **맵 자동 맞춤**은 Vision 이미지에 박힌 예전 트랙 페인트(`--map-paint`)를 쓰므로 새 트랙에서는 맞지 않는다. 3단계 방식으로 새 페인트에 맞춘 `map_to_image`를 구해 `POST /api/fleet/calibrations`(관제 "추적 보정 적용"과 같은 본문)로 승인한다. 승인 뒤 소스는 `LEARNING`(배경 학습)으로 간다.
+   - 렌즈 왜곡: 2026-11-01 Rosy Cam은 차선 흰 선으로 추정한 반경 왜곡이 k1 ≈ −0.02로 사실상 없었다(선 맞춤 1.9 px로 보정 전후 같음). 보정 평면(위에서 본 400 px/m 그림)에서 칸·유도선 위치를 재면 원근 픽셀보다 정확하다. 정식 렌즈 측정은 ChArUco 판(D-636)이다.
 
 2026-10-31 261026: 바닥층 업로드 `a739985e…`, projection `5c7b3c3d…`, 초안 `world_261026`(장소·차선 없음, 미검토)까지 만들었다.
+
+2026-11-01: 현재 바닥 기준 그래프(D-941: 순환로 일방 반시계, 정지점 S1·S2·S3·S5, 충전 칸 C1–C3)로 v7 활성, 카메라 설정 전환, 추적 교정 `paint-…` 승인. 근거 그림·스크립트는 작업 공간 `Rosy/docs/research/map-world-261026/`.
 
 ## 5. 로봇 인식
 
@@ -80,3 +86,5 @@ docker run --rm --network none -v /tmp/fit:/tmp/fit:ro -w /tmp/fit \
 | `CAMERA_NOT_SEEING` | 위와 같다 | 5단계 |
 | Vision `tracking config read failed ... 502` | Fleet 재시작 중 | 몇 초 뒤 자동 회복. 계속되면 프록시 로그 확인 |
 | 맵 자동 맞춤 "weak paint match" | 다른 트랙의 지도이거나 색 테이프 구역 | 1·3단계 |
+| 새 지도 활성 뒤 위치가 실제보다 크거나 작게 나온다 | `corner_world_m`이 예전 트랙 크기 | 4단계 6 |
+| 새 지도 활성 뒤 소스가 `CALIBRATION_REQUIRED` | 새 지도 교정이 아직 없다. 자동 맞춤은 예전 페인트를 쓴다 | 4단계 6 |

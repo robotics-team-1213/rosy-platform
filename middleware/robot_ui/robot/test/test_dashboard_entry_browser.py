@@ -90,7 +90,7 @@ def test_entry_loads_only_identity_and_destinations_with_stop_on_demand(entry):
     page, state = entry
     _open(page)
     expect(page.get_by_role('navigation', name='작업 화면')).to_be_visible()
-    expect(page.get_by_role('link', name='작업 준비', exact=True)).to_be_visible()
+    expect(page.get_by_role('link', name='작업 준비', exact=True)).to_be_visible()  # 접근 이름은 전체 제목(D-945 레일 어휘)
     # restoreAccount() probes the account session first; the fixture answers 404 (no account), so the token path continues.
     assert [(method, path) for method, path, _ in state['calls']] == [
         ('GET', '/api/account/session'), ('GET', '/api/v1/auth/whoami'), ('GET', '/api/v1/ui/surfaces/console')]
@@ -131,7 +131,7 @@ def test_entry_long_identity_keeps_destinations_inside_screen(entry, width):
     identity = page.locator('#entry-identity')
     expect(identity).to_contain_text(label)
     links = page.locator('#entry-navigation a')
-    expect(links).to_have_text(['운용', '작업 준비'])
+    expect(links).to_have_text(['운용', '준비'])  # D-945: 셸 레일과 같은 짧은 이름
     if shot_dir := os.environ.get('ROSY_SHOT_DIR'):
         Path(shot_dir).mkdir(parents=True, exist_ok=True)
         page.screenshot(path=str(Path(shot_dir) / f'robot_entry_long_identity_{width}.png'))

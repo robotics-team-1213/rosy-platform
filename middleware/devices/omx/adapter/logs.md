@@ -853,3 +853,9 @@
 - 변경: `deploy/robot/omx/sim/pilot_demonstration.yaml`(`rosy.omx-sim-demonstration.v1`: `start_pose`·`task`)을 SIM 서버가 읽어 `/target`에 싣는다. `PilotSimRuntime.load_demonstration`이 조그 관절이 아니거나 알린 범위 밖인 자세, 1–300자가 아닌 과제를 기동 때 거절한다. 파일은 시연 출처 해시에 들어간다. 기계마다 이 파일 하나로 시작 자세·기본 과제를 정한다.
 - 증거: `test_pilot_sim_demonstration.py`(동봉 파일이 셀 프로파일 범위 안, 거절 7종). 원격 결과는 착지 기록에 남긴다. Gazebo 실행 확인은 하지 않았다.
 - gate 변화: 없음.
+
+## 2026-11-01 · uncommitted · ROS 없는 실험실에서 빈 실행(exit 5)으로 착지를 막는 수집 가드 교체
+
+- 변경: `test/test_omx_fleet_ros_actionserver.py`의 모듈 단계 `importorskip`을 조건 수집 가드로 바꿨다 — ROS 런타임이 없는 실험실 PC에서도 이 파일은 수집되어 "1 skipped"(exit 0)로 기록된다. 수집 단계 건너뛰기는 pytest exit 5(빈 실행)라, fleet 변경의 역방향 의존으로 이 파일이 선택된 모든 착지가 정지했다(D-785 착지 이후 처음으로 fleet 시험 파일을 고친 브랜치가 이 지뢰를 밟음).
+- 증거: 원격 시험은 커밋 후 이어 기록한다.
+- Gate: 없음. CE: 해당 없음 — 착지 인프라와의 상호작용이며 패턴은 이 기록으로 충분.

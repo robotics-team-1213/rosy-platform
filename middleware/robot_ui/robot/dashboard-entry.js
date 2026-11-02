@@ -4,6 +4,7 @@ import { api, session, rememberToken, forgetToken, normalizeLoginCode, pairWithC
   logout, connectionOffer, developmentSession, PAIRED_SOURCES, sourceLabel, expiryLabel } from "./client.js";
 import { dashboardReturnTarget, completeDashboardAuthentication, dashboardSurfaceBridge } from "./surface-navigation.js";
 import { ROLE_LABEL, enumLabel } from "/common/core_ui_logic.js";
+import { actionIcon } from "/common/ui.js";
 
 const el = id => document.getElementById(id);
 const status = el("entry-status");
@@ -101,6 +102,10 @@ async function loadDestinations() {
       throw new Error("작업 화면 목록 응답을 읽지 못했습니다.");
     }
     dashboardSurfaceBridge(nav, manifest?.surfaces);
+    // ui.js는 부팅 때만 아이콘을 붙인다 — 동적으로 그린 레일 항목은 여기서 다시 칠한다.
+    for (const link of nav.querySelectorAll("a[data-action-icon]")) {
+      if (!link.querySelector(":scope > .ui-icon")) actionIcon(link, link.dataset.actionIcon);
+    }
     el("entry-destinations").hidden = false;
     const target = dashboardReturnTarget(window.location.search);
     const allowed = [...nav.querySelectorAll("a")].some(link => link.getAttribute("href") === target);

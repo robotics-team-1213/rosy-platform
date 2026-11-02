@@ -17,10 +17,8 @@
   .connection-guide { margin-inline: var(--space-3); }
 }
 
-/* Fleet task owners remain mounted; visibility is navigation-owned. */
-#install-main { grid-template-columns: minmax(0, 1fr); }
-.install-tasks { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
-.install-workspace, .install-task { min-width: 0; }
+/* Fleet task owners remain mounted; visibility is navigation-owned (D-741 6 seat). */
+.install-task { min-width: 0; }
 .install-task > h2 { margin-top: 0; }
 .peer-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
 .peer-toolbar select { min-width: 0; max-width: 100%; }
@@ -50,10 +48,6 @@
 .ops-block { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
 .ops-block > h2, .ops-block > .console-diagnostics { grid-column: 1 / -1; margin: 0; }
 .ops-block > .formation, .ops-block > .signals { margin: 0; }
-@media (width >= 64rem) {
-  .install-tasks { grid-template-columns: var(--sidebar-track) minmax(0, 1fr); }
-  #install-chooser { position: sticky; top: var(--space-4); }
-}
 @media (width >= 110rem) {
   .ops-block { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
@@ -350,6 +344,7 @@ main {
 /* 신호등 카드(ROSY-SIGNAL-001). 램프 도트는 구동값(lamps)을 그대로 보여 준다 —
    "켜라고 시킨 것"이 아니라 "실제 켜진 것"이 화면의 축이다. */
 .signal-cards { display: grid; gap: var(--space-2); margin-top: var(--space-2); }
+.charge-bay-rows { display: grid; gap: var(--space-1); margin: var(--space-2) 0 0; padding: 0; list-style: none; }
 .signal {
   border: 1px solid var(--border-subtle);
   border-left: 3px solid var(--series-primary);
