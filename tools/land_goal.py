@@ -38,27 +38,30 @@ def lead_times(rows: list[dict], t0: float, t1: float) -> list[float]:
         if r["event"] != "landed" and not train:
             continue
         members = r.get("members")
-        if train:
+        if train and members is None:
             members = [{"branch": b} for b in r.get("branches", [])]
         for member in members if members is not None else [r]:
             name = member.get("branch", "")
             queues = pending.get(topic(name), [])
-            origin = (name, member.get("ticket"))
-            if members is not None and origin in completed:
-                continue
             choices = [i for i, q in enumerate(queues) if
                        (q.get("branch") == name if members is not None else topic(q.get("branch", "")) == topic(name))
                        and (q.get("ticket") == member["ticket"] if member.get("ticket") else
                             members is not None or q.get("pid") == r.get("pid"))]
-            if not choices or (members is None and (name, r.get("pid")) in exits):
+            if not choices:
                 continue
             end = choices[-1]
+            origin = (name, queues[end].get("ticket"), queues[end]["t"])
+            if members is None and (name, r.get("pid"), queues[end]["t"]) in exits:
+                continue
+            if members is not None and origin in completed:
+                continue
             start = queues[0]["t"]  # retries before this origin remain part of the topic's lead
             if members is not None:
                 completed.add(origin)
                 if train:
-                    exits.add((name, queues[end].get("pid")))
-            pending[topic(name)] = queues[end + 1:]
+                    exits.add((name, queues[end].get("pid"), queues[end]["t"]))
+            pending[topic(name)] = [q for q in queues[end + 1:] if not
+                                    (q.get("branch") == name and q.get("ticket") in member.get("retries", []))]
             if t0 <= r["t"] < t1:
                 out.append((r["t"] - start) / 60)
     return out
@@ -77,11 +80,16 @@ def normalize(rows: list[dict], common: Path) -> tuple[list[dict], list[str]]:
         if r["event"] != "landed":
             continue
         branch = r.get("branch", "")
+        origin = max((q["t"] for q in rows if q["event"] == "queue" and q.get("branch") == branch
+                      and q.get("pid") == r.get("pid") and q["t"] <= r["t"]), default=r["t"])
+        if any(q["event"] == "train" and q.get("result") == "landed" and q.get("branch") != branch
+               and branch in q.get("branches", []) and origin <= q["t"] <= r["t"] for q in rows):
+            r["main_move"] = False  # a carried member observes the leader's FF
         path = common / "rosy-land-wt" / (branch.replace("/", "-") + ".members")
         known = re.fullmatch(r"land/fix/land-rollup-\d{14}-\d{14}", branch)
-        if "members" not in r and not path.exists() and not known:
-            continue
         try:
+            if "members" not in r and not path.exists() and not known and not r.get("members_error"):
+                continue
             members = r.get("members") if "members" in r else json.loads(path.read_text(encoding="utf-8"))
             if not isinstance(members, list) or not members:
                 raise ValueError("missing members")
@@ -93,7 +101,7 @@ def normalize(rows: list[dict], common: Path) -> tuple[list[dict], list[str]]:
                            and q["t"] <= r["t"]]
                 candidates = [m] if m.get("candidate") else sorted(
                     (q for q in rows if q["event"] == "isolation" and q.get("kind") == "prepare"
-                     and q.get("branch") == m["branch"] and q["t"] <= r["t"]), key=lambda q: q["t"], reverse=True)
+                     and q.get("branch") == m["branch"] and q["t"] <= r["t"]), key=lambda q: q["t"], reverse=True)[:1]
                 found = None
                 for candidate in candidates:
                     oid = candidate.get("candidate", "")
@@ -107,6 +115,11 @@ def normalize(rows: list[dict], common: Path) -> tuple[list[dict], list[str]]:
                         origin = max(eligible, key=lambda q: q["t"])
                         if origin.get("ticket"):
                             found = dict(branch=m["branch"], ticket=origin["ticket"], candidate=oid)
+                            # A frozen snapshot's later resumes are covered too; other snapshots of this topic
+                            # may already queue new work before this FF and must retain their own clock.
+                            if m["branch"].startswith("land/") and re.search(r"-\d{14}$", m["branch"]):
+                                found["retries"] = [q["ticket"] for q in origins if q["t"] > origin["t"]
+                                                    and q.get("ticket")]
                             break
                 if found is None:
                     raise ValueError("unproven member origin")

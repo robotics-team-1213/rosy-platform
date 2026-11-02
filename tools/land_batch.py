@@ -255,6 +255,7 @@ def lead(land, wt: Path, branch: str, args, python: str, qdir: Path, ticket: Pat
          joined: list[dict], measured: dict, kind: str = "affected") -> tuple[int | None, list[str]]:
     """Merge, prepare and land the batch: (code, merged members); code None after a stop, back on ``branch``."""
     name, took = f"{branch}-batch{time.strftime('%H%M%S')}-k{len(joined) + 1}", []  # a halved retry gets its own
+    origins = [dict(branch=branch, ticket=ticket.name, candidate=land.out(wt, "rev-parse", "HEAD"))]
     try:
         land.git(wt, "switch", "-c", name)
         for row in joined:
@@ -262,6 +263,7 @@ def lead(land, wt: Path, branch: str, args, python: str, qdir: Path, ticket: Pat
             try:
                 land.merge(wt, tip, name, python, False, source=row["branch"])
                 took.append(row["branch"])
+                origins.append(dict(branch=row["branch"], ticket=row.get("ticket"), candidate=tip))
             except land.Stop as stop:
                 print(f"[batch] {row['branch']} left out, it lands alone: {str(stop).splitlines()[0]}", flush=True)
         if not took:
@@ -290,5 +292,6 @@ def lead(land, wt: Path, branch: str, args, python: str, qdir: Path, ticket: Pat
     land.git(wt, "branch", "-d", name, check=False)
     land_full.forget(wt, name)
     land_full.forget(wt, branch)
-    land_events.emit("train", branches=[branch, *took], k=len(took) + 1, **measured, result="landed")
+    land_events.emit("train", branches=[branch, *took], k=len(took) + 1, **measured, result="landed",
+                     members=origins, sha=land.out(wt, "rev-parse", "HEAD"))
     return code, took

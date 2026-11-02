@@ -71,11 +71,11 @@ def landed(sha: str, *, main_move: bool = True) -> None:
     path = _where.get("path")
     if path is not None:
         sidecar = Path(path).parent / "rosy-land-wt" / (str(_where.get("branch", "")).replace("/", "-") + ".members")
-        if sidecar.exists():
-            try:
+        try:
+            if sidecar.exists():
                 fields["members"] = json.loads(sidecar.read_text(encoding="utf-8"))
-            except (OSError, ValueError):
-                fields["members_error"] = "unreadable sidecar"
+        except (OSError, ValueError):
+            fields["members_error"] = "unreadable sidecar"
     emit("landed", **fields)
 
 
