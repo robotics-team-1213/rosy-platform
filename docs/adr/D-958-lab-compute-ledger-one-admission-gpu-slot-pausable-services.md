@@ -43,7 +43,7 @@
 | 3 | 모델 PC 배치 대기열 서비스, `lab_jobs.py status` | 노트북을 끈 채 24개 배치가 끝나고, 다시 켰을 때 결과를 가져옴 |
 | 4 | 검수 파이프라인 GPU 단계·Pinky 학습·native sim도 입구로 | 한 화면에 모든 GPU 사용이 보임 |
 
-**1단계 진행(2026-11-02):** `deploy/hosts/gpu_tenants.py`·`rosy-gpu-tenants.timer`를 AI PC에 설치했다. Ollama(`gpu: idle-yield`)는 로봇이 온라인이 아니고 최근 제안이 없을 때만 빌려주고, 빌리는 동안 situation `owner_mode`는 `shared`다. 호스트가 1분마다 확인하되 GPU 작업 잠금·Isaac 예약·기존 `gpu.lock`이 모두 비었을 때만 되살린다. `owner_mode`는 helper가 쓴 `shared`의 수정 시각이 그대로일 때만 복원해 그 사이 소유자의 변경을 보존한다. Isaac 예약은 10분이며, 예약이 만료돼도 worker의 `gpu.lock`이 남으면 복구를 미룬다. 본업 요청에 따른 실험 선점·재대기와 강제 종료 수용 시험, 모델 PC 적용은 남았다.
+**1단계 진행(2026-11-02):** `deploy/hosts/gpu_tenants.py`·`rosy-gpu-tenants.timer`를 AI PC에 설치했다. Ollama(`gpu: idle-yield`)는 로봇이 온라인이 아니고 최근 제안이 없을 때만 빌려주고, 빌리는 동안 situation `owner_mode`는 `shared`다. 호스트가 1분마다 확인하되 GPU 작업 잠금·Isaac 예약·기존 `gpu.lock`이 모두 비었을 때만 되살린다. `owner_mode`는 helper가 쓴 `shared`의 수정 시각이 그대로일 때만 복원해 그 사이 소유자의 변경을 보존한다. Isaac 예약은 10분이며, 예약이 만료돼도 worker의 `gpu.lock`이 남으면 복구를 미룬다. 강제 종료 수용 시험은 2026-11-02 통과했다: 배치를 13:44에 강제 종료하자 마지막 Isaac 예약이 10분 뒤 만료됐고, 13:54 점검이 표시 파일을 지우고 `owner_mode`를 `available`로 되돌렸다(설치본은 이 단락의 lease·owner mode 보강 이전 판). 본업 요청에 따른 실험 선점·재대기와 모델 PC 적용은 남았다.
 
 ### Consequences
 

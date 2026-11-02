@@ -349,3 +349,37 @@ Dot geometry from the KAN-108 CAD; friction 1.0 (0.5-1.2 swept); container densi
 - The relief foot adds its 0.5 mm per side: r290 seated +0.8 (Step 4) and failed +1.0, whose foot margin is 0.9 mm. Toward the neighbouring row the box at -0.8 slid another 0.27 mm onto the foot margin and did not settle, so the r290 band is about ±0.7 mm, not 1.0.
 - The failures are the box edge resting on a dot (1.8-1.9 mm high, 1.4-1.9 deg roll), the same mode as Step 3b.
 - r290 nominal is 9/9 on four seeds (42-45).
+
+## Step 4c — seeds, finer offsets and yaw on the CAD plate (2026-11-02, commit 3921d2aa65)
+
+Same scene as Step 4b (31.5 mm opening, drop release, three layers). Offsets are across the channel in mm; "2 placed" means box 1 rested on the dot between rows and the first layer stopped. Runs went through `tools/remote/isaac_batch.py` on the model PC and the AI PC (D-958 stage 1).
+
+Plain container:
+
+| Offset | seed 42 | seed 43 | seed 44 |
+|---|---|---|---|
+| 0 | 9/9 (Step 4b, seeds 42-45) | 9/9 | 9/9 |
+| +0.2 | 9/9 | 2 placed, box 1 off 1.06 | 9/9 |
+| -0.2 / -0.3 | 9/9 / 9/9 | not run | not run |
+| +0.3 | 2 placed, box 1 off 1.12 | 2 placed, 1.10 | 2 placed, 1.07 |
+
+Relief foot r290:
+
+| Offset | seed 42 | seed 43 | seed 44 |
+|---|---|---|---|
+| +0.6 / +0.7 | 9/9 / 9/9 | 9/9 / 9/9 | 9/9 / 9/9 |
+| +0.8 | 9/9 (Step 4) | 9/9 | 9/9 |
+| -0.6 | 9/9 (rerun on the model PC) | 9/9 | 9/9 |
+| -0.7 | 9/9 (box 8 settled 0.79 off) | not judged: tabletop leveling failed before the place | not run |
+
+Yaw at release (seed 42, zero offset; row gap band 4.5-7.5 mm):
+
+| Container | 0.5 deg | 1.0 deg |
+|---|---|---|
+| plain | 9/9, row gaps 4.9-5.5 mm | 2 placed, box 1 off 1.08 |
+| r290 | 9/9, row gaps 4.9-5.2 mm | 9/9 seated, row gaps 4.1-4.6 mm: fails the gap band |
+
+- Plain: the one-try band is about 0.2 mm and not reliable there (seed 43 failed at +0.2); +0.3 fails on every seed. That is half the 0.40 mm side clearance.
+- r290: +0.8 seats on three seeds, -0.6 and -0.7 seat where judged, +1.0 and -0.8 fail (Step 4b). The band is about -0.7..+0.8 mm; plan with ±0.7 mm.
+- Yaw must stay within 0.5 deg. At 1 deg the plain box rests on a dot, and r290 seats but the rotated boxes push the row gaps below the band.
+- One AI PC run (y-060 r290 seed 42, run 4fe8) ended without a confirmed result (cleanup unobserved, status UNKNOWN) and was rerun on the model PC. The batch tool polled it for 11 h; it now sets such a run aside and retries it.

@@ -30,7 +30,8 @@ def test_site_candidate_is_commit_tagged_and_contains_sbom_and_image_hash(tmp_pa
                  "candidate_signing.py", "sign_candidate.py",
                  "verify_candidate.py",
                  "discovery-token.template.txt", "site_db.py", "site_users.py",
-                 "compose.pairing.yaml", "compose.omx.yaml", "compose.workcell.yaml", "pairing-sync-token.template.txt",
+                 "compose.pairing.yaml", "compose.omx.yaml", "compose.workcell.yaml", "compose.control-unit.yaml",
+                 "pairing-sync-token.template.txt",
                  "compose.monitoring.yaml", "Caddyfile.monitoring",
                  "compose.account.yaml", "Caddyfile.account"):
         (site / name).write_text(f"fixture:{name}", encoding="utf-8")
@@ -108,7 +109,8 @@ def test_site_candidate_is_commit_tagged_and_contains_sbom_and_image_hash(tmp_pa
         "verify_candidate.py",
         "candidate_signing.py", "sign_candidate.py",
         "discovery-token.template.txt", "site_db.py", "site_users.py",
-                 "compose.pairing.yaml", "compose.omx.yaml", "compose.workcell.yaml", "pairing-sync-token.template.txt",
+                 "compose.pairing.yaml", "compose.omx.yaml", "compose.workcell.yaml", "compose.control-unit.yaml",
+                 "pairing-sync-token.template.txt",
                  "compose.monitoring.yaml", "Caddyfile.monitoring",
                  "compose.account.yaml", "Caddyfile.account",
     }
@@ -161,7 +163,8 @@ def test_site_candidate_refuses_non_amd64_images_and_output_inside_checkout(tmp_
                  "rosy-site-firewall-check.service", "rosy-site-firewall-check.timer",
                  "candidate_signing.py", "sign_candidate.py", "verify_candidate.py",
                  "discovery-token.template.txt", "site_db.py", "site_users.py",
-                 "compose.pairing.yaml", "compose.omx.yaml", "compose.workcell.yaml", "pairing-sync-token.template.txt",
+                 "compose.pairing.yaml", "compose.omx.yaml", "compose.workcell.yaml", "compose.control-unit.yaml",
+                 "pairing-sync-token.template.txt",
                  "compose.monitoring.yaml", "Caddyfile.monitoring",
                  "compose.account.yaml", "Caddyfile.account",
                  "Dockerfile.fleet", "Dockerfile.vision", "Dockerfile.proxy"):
