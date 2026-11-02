@@ -13712,3 +13712,17 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: 없음
 - 교훈: `docs/solutions/runtime-errors/omx-blocked-wrist-roll-reached-the-guard-unseen-2026-11-02.md`
+
+## 2026-11-02 · uncommitted · fix(omx): 가드 고장 프레임을 설정 없이 남긴다
+- 변경: `motor_health.FAULT_FRAMES`. `ROSY_OMX_FAULT_FRAMES`가 없으면 카메라 뷰 유닛(`rosy-omx-camera-view`, 포트 8767)의 top·side 프레임을 남긴다. 빈 값이면 끈다.
+- 증거: 현장 PC 러너에 이 변수를 넣는 배포 경로가 없어, 기본값 없이는 프레임이 남지 않음.
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: `docs/solutions/runtime-errors/omx-blocked-wrist-roll-reached-the-guard-unseen-2026-11-02.md`
+
+## 2026-11-02 · 20390c3486 · fix(harness): D-795 DDS 가드를 매 착지에서 돌린다
+
+- 변경: `tools/harness/affected_tests.py` `GUARD_SET`에 `test/test_no_cross_host_dds.py`를 더했다. 이 시험은 deploy·runtime 파일 전체를 훑기 때문에 경로 대응으로는 뽑히지 않는다. b101f57783(`services.yaml`에 pinky rosbridge 선언)이 affected tier로 이 시험 없이 착지해 main이 빨개졌고, 다음 착지가 MAIN-RED로 멈춘 뒤에야 드러났다.
+- 증거: 실패는 land-fix-publish-baseline-checkout-pin 착지의 MAIN-RED(main 06a479abd1), 복구는 fix/main-red-rosbridge-ledger. 이 변경은 원격 `test/test_affected_tests.py`·`test/test_no_cross_host_dds.py`.
+- gate 변화: 없음
+- CE: 해당 없음 — 재발 방지는 가드 집합 자체이고 이유는 코드 주석에 있다.
