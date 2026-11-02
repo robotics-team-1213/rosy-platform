@@ -4402,6 +4402,13 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: `test/test_omx_cameras.py` 11 passed(로컬). 현장 PC에서 새 파일을 임시 경로로 `propose`·`bind`(apply 없음) → 미등록 LG 카메라 1대가 역할 없는 후보로만 나오고 레지스트리 해시 변화 없음.
 - gate 변화: 없음. 현장 `/etc` manifest는 여전히 root로 `manifest --apply`. 기존 역할은 다음 bind 때 모델이 기록된 뒤부터 따라간다. CE: 기존 교훈 갱신.
 
+## 2026-11-02 · uncommitted · 관제 단위 companion 로그 상한 보완
+
+- 변경: 서명 canonical 관제 단위 overlay의 새 `control-unit-peer`에도 기본 스택과 같은 json-file 20m × 3 로그 상한을 명시했다. 이미지·네트워크·명령·권한은 바꾸지 않는다.
+- 증거: `f70298b8c6`의 실제 격리 검사에서 누락으로 적색을 확인했다. `87a7797034` 원격 로그 계약과 같은 파일의 독립 pytest 검사 4 passed, isolation complete 1, skip 0.
+- gate 변화: SOURCE·LOCAL GO. 실제 서명 설치·운영 수용은 별도다. 기존 R overlay와 updater hold를 유지하며 canonical 관제 단위의 자동 adoption 문제를 해결했다고 주장하지 않는다.
+- CE: 해당 없음 — 기존 로그 계약 검사가 누락을 검출했고 최종 설정이 해결을 설명한다.
+
 ## 2026-11-02 · 14e64763d9 · fix(hosts): D-795 DDS 가드를 깬 pinky rosbridge 선언 제거
 
 - 변경: b101f57783에서 `services.yaml`에 더한 AI PC `pinky-rosbridge-d12`·`-d13` 선언 두 줄을 뺐다. `test_no_cross_host_dds`는 deploy 파일에 rosbridge를 금지한다(D-795). 두 유닛은 꺼진 채 AI PC에 남아 update_status에 UNDECLARED로 계속 나온다 — D-795상 선언할 대상이 아니라 치울 대상이다(Pinky 스택 소유자 확인 필요).

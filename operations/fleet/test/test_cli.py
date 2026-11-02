@@ -116,16 +116,16 @@ def test_console_mission_api_requires_shared_database_and_named_users(tmp_path):
         cli.run_console(no_named_users)
 
 
-def test_console_mission_api_runs_on_development_sessions_without_site_users(tmp_path, monkeypatch):
-    # D-548: a development session is the named operator, so no site-users.yaml is needed.
+@pytest.mark.parametrize("mission", [False, True])
+def test_console_development_mode_requires_human_login_configuration(tmp_path, monkeypatch, mission):
     monkeypatch.setenv("ROSY_DEPLOYMENT", "development")
-    captured = {}
-    monkeypatch.setattr("uvicorn.run", lambda app, **kwargs: captured.update(app=app))
-    cli.run_console(cli.parse_args([
-        "console", "--robots", str(_write(tmp_path)), "--tasks-db", str(tmp_path / "fleet.sqlite3"),
-        "--mission-api", "--connection-mode", "development",
-    ]))
-    assert captured["app"].state.mission_service is not None
+    args = ["console", "--robots", str(_write(tmp_path)), "--tasks-db", str(tmp_path / "fleet.sqlite3"),
+            "--connection-mode", "development", "--token", "registry-only"]
+    if mission:
+        args.append("--mission-api")
+    monkeypatch.setattr("uvicorn.run", lambda *_args, **_kwargs: None)
+    with pytest.raises(SystemExit, match="human login"):
+        cli.run_console(cli.parse_args(args))
 
 
 def test_console_mission_api_persists_candidates_without_enabling_dispatch(
@@ -649,19 +649,23 @@ def test_console_development_mode_needs_both_the_flag_and_the_deployment(
         tmp_path, monkeypatch, deployment, mode, expected):
     # D-473 1: a missing or mismatched setting never falls back to development mode.
     monkeypatch.setenv("ROSY_DEPLOYMENT", deployment)
+    from fleet.server.site_users import hash_password
+    users_file = tmp_path / "site-users.yaml"
+    users_file.write_text(yaml.safe_dump({"users": [{"login": "alice", "principal_id": "alice",
+                            "role": "operator", "password_scrypt": hash_password("correct horse")}]}), encoding="utf-8")
     captured = {}
     monkeypatch.setattr("uvicorn.run", lambda app, **kwargs: captured.update(app=app))
     args = cli.parse_args(["console", "--robots", str(_write(tmp_path)),
                            "--tasks-db", str(tmp_path / "fleet.sqlite3"),
-                           "--token", "operator-test", "--connection-mode", mode])
+                           "--users-file", str(users_file), "--connection-mode", mode])
 
     cli.run_console(args)
 
     client = TestClient(captured["app"], client=("192.168.1.50", 50000),
                         base_url="http://192.168.1.10:8090")
-    assert client.get("/api/fleet/auth/connection").json() == {"mode": expected, "password_login": False}
+    assert client.get("/api/fleet/auth/connection").json() == {"mode": expected, "password_login": True}
     issued = client.post("/api/fleet/auth/development-session")
-    assert issued.status_code == (201 if expected == "development" else 403)
+    assert issued.status_code == 403
 
 
 def test_console_connection_mode_defaults_to_paired(tmp_path):
@@ -768,3 +772,25 @@ def test_hub_link_left_empty_by_compose_is_off():
     """D-555: deploy/site/compose.yaml passes "" for an unset ROSY_SITE_HUB_LINK_* (argparse makes Path(".") of it)."""
     args = cli.parse_args(["console", "--hub-link-hostname", "", "--hub-link-ca", ""])
     assert cli._hub_link(args) is None
+
+
+@pytest.mark.parametrize("kind", ["local", "external"])
+def test_console_development_accepts_account_login_configuration(tmp_path, monkeypatch, kind):
+    monkeypatch.setenv("ROSY_DEPLOYMENT", "development")
+    captured = {}
+    from fastapi import FastAPI
+    def capture(_console, **kwargs):
+        captured.update(kwargs)
+        return FastAPI()
+    monkeypatch.setattr("fleet.server.app.create_app", capture)
+    monkeypatch.setattr("uvicorn.run", lambda *_args, **_kwargs: None)
+    config = tmp_path / "account.json"
+    args = ["console", "--robots", str(_write(tmp_path)), "--tasks-db", str(tmp_path / "fleet.sqlite3"),
+            "--connection-mode", "development", "--mission-api"]
+    if kind == "external":
+        monkeypatch.setenv("ROSY_FLEET_ACCOUNT_CLIENT_CONFIG", str(config))
+    else:
+        args += ["--account-config", str(config)]
+    cli.run_console(cli.parse_args(args))
+    assert captured["account_client_config" if kind == "external" else "account_config"] == config
+    assert captured["development_sessions"] is not None

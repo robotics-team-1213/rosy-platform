@@ -70,11 +70,9 @@ from fleet.server.site_auth import (
     build_authorize,
     build_role_guards,
     install_mutation_audit,
-    parse_site_principals,
 )
 from fleet.server.static_routes import install_static_routes
-from fleet.server.development_session import install_development_routes
-from fleet.server.password_session import PasswordSessions, install_password_routes
+from fleet.server.account_runtime import configure_account_sessions, install_account_login_routes
 from fleet.hub.server import fan_out_events as _fan_out_events
 from fleet.server.task_dispatch_routes import (  # noqa: F401 — GoalRequest 재수출: test_task_contract_docs 참조
     GoalRequest,
@@ -109,6 +107,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                site_logins: Optional[Mapping[str, Mapping[str, str]]] = None,
                accounts_bootstrap: Optional[tuple[str, str]] = None,
                account_config: Optional[Path] = None,
+               account_client_config: Optional[Path] = None,
                discovery=None, discovery_token: Optional[str] = None,
                approved_peer_directory_file: Optional[Path] = None,
                vision_lease_secret: Optional[str] = None,
@@ -369,36 +368,9 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     if tracking is not None and (sightings is None
                                  or tuple(tracking.sources) != tuple(sightings.sources)):
         raise ValueError("overhead tracking must use the configured sighting sources")
-    # D-519 1: a site-users file may hold only login accounts, leaving no token principals.
-    authority = None
-    if account_config is not None:
-        from fleet.server.account_config import load_account_config
-        from fleet.server.account_authority import AccountAuthority
-        settings = load_account_config(account_config)
-        admin = settings.pop("bootstrap_admin_login", None)
-        site_id = settings.pop("site_id")
-        if accounts_bootstrap is not None:
-            raise ValueError("use one explicit Account bootstrap configuration")
-        if admin is not None:
-            accounts_bootstrap = (admin, site_id)
-        if accounts_bootstrap is None and not PasswordSessions.accounts_active(task_service.store.path):
-            raise ValueError("Account first activation requires an explicit existing administrator login")
-        authority = AccountAuthority(task_service.store.path, **settings,
-            resolve_family=lambda db, family: password_sessions.context_by_family(family, db=db),
-            revoke_family=lambda db, family: password_sessions.revoke_family(family, db=db))
-    account_login = bool(site_logins) or accounts_bootstrap is not None or (
-        task_service is not None and PasswordSessions.accounts_active(task_service.store.path))
-    principals = {} if account_login and not site_users else parse_site_principals(site_users, console)
-    password_sessions = None
-    if account_login:
-        password_sessions = PasswordSessions(task_service.store.path, site_logins or {}, accounts_bootstrap=accounts_bootstrap)
-    app.state.password_sessions = password_sessions
-    app.state.account_authority = authority
-    if authority is not None:
-        if password_sessions._ledger.site_id != site_id:
-            raise ValueError("Account configured site does not match the activated authority")
-        from fleet.server.account_authority_routes import install_account_authority_routes
-        install_account_authority_routes(app, sessions=password_sessions, authority=authority)
+    principals = configure_account_sessions(
+        app, console=console, task_service=task_service, site_users=site_users, site_logins=site_logins,
+        accounts_bootstrap=accounts_bootstrap, account_config=account_config, account_client_config=account_client_config)
     other_tokens = (console_token, discovery_token, vision_lease_secret, robot_credential_key, pairing_sync_token)
     if workcell_observations is not None:
         from fleet.server.workcell_observation_routes import assert_workcell_observation_credentials_isolated
@@ -434,20 +406,17 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             console=console, sightings=sightings, policy_evidence=policy_evidence,
             principals=principals)
     authorize = build_authorize(console_token, principals, task_service, development=development_sessions,
-                                password_sessions=password_sessions)
+                                password_sessions=app.state.password_sessions)
     require_viewer, require_operator, require_named_operator, require_proposer = build_role_guards(
-        authorize, principals, named_logins=password_sessions is not None)
+        authorize, principals, named_logins=app.state.password_sessions is not None)
     install_control_unit(app, control_unit_config, tasks=task_service, console=console,
-                         principals=principals, named_logins=password_sessions is not None,
+                         principals=principals, named_logins=app.state.password_sessions is not None,
                          console_token=console_token, authorize=authorize, require_viewer=require_viewer,
                          require_named_operator=require_named_operator, map_snapshot=site_maps.active,
                          configured_omx=configured_omx, stop_transport=stop_transport, stop_targets=stop_targets)
-    # D-473: `--lan-camera-proxy` already means "Fleet sits behind the site Caddy", whose
-    # X-Forwarded-For carries the browser address the development session checks.
-    install_development_routes(app, sessions=development_sessions, task_service=task_service,
-                               trust_forwarded=lan_camera_proxy, account_login=password_sessions is not None)
-    install_password_routes(app, sessions=password_sessions, authorize=authorize, task_service=task_service,
-                            trust_forwarded=lan_camera_proxy)
+    install_account_login_routes(app, sessions=app.state.password_sessions, authorize=authorize, task_service=task_service,
+                                 development_sessions=development_sessions, account_client_config=account_client_config,
+                                 trust_forwarded=lan_camera_proxy)
     read_guard = [Depends(require_viewer)]
     from fleet.server.workcell_observation_routes import install_workcell_observation_routes
     install_workcell_observation_routes(app, service=workcell_observations, require_viewer=require_viewer)
@@ -503,7 +472,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     from fleet.server.central_registry_routes import install_registry_routes
     install_registry_routes(app, registry=central_registry, enrollment=enrollment, pairing=pairing,
         sync_token=pairing_sync_token, require_viewer=require_viewer, require_operator=require_operator,
-        named_identity=bool(principals) or password_sessions is not None, observations=workcell_observations,
+        named_identity=bool(principals) or app.state.password_sessions is not None, observations=workcell_observations,
         device_profile_path=task_service and task_service.store.path, require_named_operator=require_named_operator)
     from fleet.server.camera_peer_adapter import install_camera_peer
     app.state.camera_peer = install_camera_peer(app, pairing=pairing,
@@ -602,7 +571,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     install_signal_routes(app, signals=console._signals, require_viewer=require_viewer,
                           require_operator=require_operator, require_named_operator=require_named_operator,
                           # D-519: login accounts are configured named operators too.
-                          auth_configured=bool(principals or console_token) or password_sessions is not None)
+                          auth_configured=bool(principals or console_token) or app.state.password_sessions is not None)
 
     if stuck_resolver_clients is not None:
         resolver_core = StuckResolver(ResolverConfig(), realign=realign_config,
@@ -818,7 +787,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     # D-524: without site-users or logins every caller is `site-console`, so no host control.
     install_host_control_routes(
         app, require_operator=require_operator, require_named_operator=require_named_operator,
-        require_viewer=require_viewer, helper=(helper_from_config() if principals or password_sessions is not None
+        require_viewer=require_viewer, helper=(helper_from_config() if principals or app.state.password_sessions is not None
                 else UnavailableHostHelper()))
 
     install_static_routes(app)

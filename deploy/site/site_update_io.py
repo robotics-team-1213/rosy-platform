@@ -25,6 +25,7 @@ SERVICES = ("fleet", "vision", "proxy", "postgres")
 PROJECT = "rosy-site"
 STACK_UNIT = "rosy-site-stack.service"
 MONITORING_OVERLAY = ["-f", "/opt/rosy/candidate/deploy/site/compose.monitoring.yaml"]
+ACCOUNT_OVERLAY = ["-f", "/opt/rosy/candidate/deploy/site/compose.account.yaml"]
 SIGNATURE = "release.json.sig"
 EXIT_OK = 0
 EXIT_FAILED = 1
@@ -91,6 +92,9 @@ def check_overrides(env: dict[str, str], commit: str, run, compose, services=SER
         raise Transient("docker compose config output is not JSON") from None
     # D-936: Monitoring is no candidate image; it may only run the candidate's Fleet image.
     companions = {"monitoring": "fleet"} if MONITORING_OVERLAY[1] in overlays and "fleet" in services else {}
+    # Older signed Account overlays had only a proxy; preserve their rollback path.
+    if ACCOUNT_OVERLAY[1] in overlays and 'account' in configured and 'fleet' in services:
+        companions['account'] = 'fleet'
     if not isinstance(configured, dict) or set(configured) != set(services) | set(companions):
         raise Refused("Compose service set differs from the signed candidate")
     for service in (*services, *companions):
@@ -402,11 +406,16 @@ def set_hold(updater, reason: str | None) -> int:
 
 def runtime_reason(rows, hashes: dict, run) -> str:
     """Detect operational drift without logging inspect output or credentials."""
+    for service in ('account', 'monitoring'):
+        if service in hashes:
+            matches = [row for row in rows if isinstance(row, dict) and row.get('Service') == service]
+            if len(matches) != 1 or matches[0].get('State') != 'running' or matches[0].get('Health') != 'healthy':
+                return f'{service} needs exactly one healthy running container'
     for row in rows:
         if not isinstance(row, dict):
             continue
         service = row.get('Service')
-        if service not in (*SERVICES, 'monitoring'):
+        if service not in (*SERVICES, 'monitoring', 'account'):
             continue
         try:
             details = json.loads(run(['docker', 'container', 'inspect', row['ID']]).stdout)[0]
@@ -428,12 +437,15 @@ def containers_reason(rows, commit: str, accepted: dict, run, services=SERVICES,
     if any(isinstance(row, dict) and row.get('Service') in SERVICES
            and row['Service'] not in services for row in rows):
         return 'runtime contains a managed service outside the signed candidate'
-    for service in services:
+    companions = {row.get('Service') for row in rows
+                  if isinstance(row, dict) and row.get('Service') in ('account', 'monitoring')}
+    for service in (*services, *sorted(companions)):
+        owner = 'fleet' if service in companions else service
         matches = [row for row in rows if isinstance(row, dict) and row.get('Service') == service]
         if len(matches) != 1:
             return f'{service} needs exactly one running container'
         row = matches[0]
-        if row.get('Image') != (image_references or {}).get(service, f'rosy-site-{service}:{commit}'):
+        if row.get('Image') != (image_references or {}).get(owner, f'rosy-site-{owner}:{commit}'):
             return f"{service} runs {row.get('Image')!r}"
         if row.get('State') != 'running' or row.get('Health') != 'healthy':
             return f"{service} is {row.get('State')}/{row.get('Health') or 'no health'}"
@@ -443,7 +455,7 @@ def containers_reason(rows, commit: str, accepted: dict, run, services=SERVICES,
             identity = run(['docker', 'container', 'inspect', '--format', '{{.Image}}', row['ID']]).stdout.strip()
         except Transient as error:
             return str(error)
-        if identity not in accepted.get(service, ()):
+        if identity not in accepted.get(owner, ()):
             return f'{service} running image identity differs from signed candidate'
     return ''
 

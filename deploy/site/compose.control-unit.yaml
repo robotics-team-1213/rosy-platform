@@ -20,6 +20,11 @@ services:
       - rosy-control-peers
   control-unit-peer:
     image: rosy-site-proxy:${ROSY_SITE_IMAGE_TAG:-local}
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
     volumes:
       - type: bind
         source: ${ROSY_CONTROL_UNIT_DIR:?Set the approved private control-unit directory}/peer.Caddyfile

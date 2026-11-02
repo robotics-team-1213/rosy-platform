@@ -48,7 +48,7 @@ PACKAGE_HOLDERS = {
                      ("calibration", "recovery", "motion_limits", "tracking", "planning/grid", "runtime")),
     "core_features": ("middleware/drive/behaviors",),
     "fleet": ("operations/decision", "applications/fleet/web", "operations/situation",
-              "operations/site_execution", "integrations/messaging/discord"),
+              "operations/site_execution", "integrations/messaging/discord", "operations/account"),
 }
 #: Product roots without a package.xml (pyproject distributions, the Gradle app), counted like a package.
 STANDALONE = {
