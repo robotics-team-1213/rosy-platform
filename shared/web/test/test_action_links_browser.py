@@ -50,8 +50,14 @@ def test_native_task_link_size_focus_reflow_and_keyboard_navigation(width, theme
             bounds = link.bounding_box()
             assert bounds and bounds["height"] >= 48 and bounds["width"] >= 48
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
-            assert link.evaluate("e => getComputedStyle(e).backgroundColor") == page.evaluate(
-                "getComputedStyle(document.documentElement).getPropertyValue('--button-primary-bg').trim()")
+            assert link.evaluate("""e => {
+              const probe = document.createElement('span');
+              probe.style.backgroundColor = 'var(--button-primary-bg)';
+              document.body.append(probe);
+              const matches = getComputedStyle(e).backgroundColor === getComputedStyle(probe).backgroundColor;
+              probe.remove();
+              return matches;
+            }""")
             page.keyboard.press("Tab")
             api.expect(link).to_be_focused()
             assert link.evaluate("e => getComputedStyle(e).outlineStyle") == "solid"
