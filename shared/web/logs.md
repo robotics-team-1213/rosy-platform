@@ -1053,3 +1053,9 @@
 - 변경: 착지 게이트가 잡은 대로 학습 검수의 `aria-current="true"`는 낡은 어휘가 아니라 정규약("현 페이지 링크=page, 현 페이지를 담은 상위 단계=true", test_app_shell_seats)이다. 검수 페이지 여섯의 `page` 통일을 원복하고 D-945·DESIGN.md·test_layout_canon의 표식 규칙을 표준 토큰 셋(page·step·true·aria-selected)으로 정정했다. test_site_map_api의 canvas role 검사도 무장 상태 추종(render) 소유로 바로잡았다.
 - 증거: test_layout_canon 전 통과, 검수 페이지 6건 완전 원복(net diff 0), node --test 403 passed. 원격 시험은 재착지 전 기록.
 - Gate: 없음. CE: 해당 없음 — 착지 시험이 계약 충돌을 잡은 사례로, 교훈은 아래 CE 판단 참조.
+
+## 2026-11-02 · uncommitted · D-961 공용 이동 조작과 작업 구성
+
+- 변경: 기존 component-controls.css에 네이티브 이동 링크와 task/auth 구성을 추가하고 gallery·styleguide·template에 연결했다. 팔레트·48px 조작·실행 권한은 유지한다.
+- 증거: 130627f04f 원격 AI PC Chromium RED 8 failed, 0 skipped — 링크 높이가 48px 미만임을 재현. 구현 후 GREEN과 공용 계약은 다음 검증 기록에서 확인한다.
+- Gate: 이동 없음. CE: 미해결 — 제품 적용·회귀·배포 화면 검증 전이다.

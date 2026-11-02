@@ -1422,3 +1422,7 @@ LCD 코드 페어링과 도달 확인 읽기는 Tailscale tailnet(`100.64.0.0/10
 **Status:** Accepted (2026-11-01). 장치·현장 수용은 별도다.
 
 프레임마다 REST와 같은 검사(`apply_teleop`)를 하고, 최신 seq만 적용하며, 움직이던 소켓이 끊기면 0을 적용한다. Pilot은 소켓이 없거나 ack가 1 s 넘게 없으면 REST로 보낸다. 전문은 [D-948](../adr/D-948-teleop-websocket-stream.md).
+
+## D-961 공용 작업 이동과 작업·인증 화면 구성
+
+**Status:** Accepted (2026-11-02, 사용자 승인 통합 설계). 네이티브 이동 링크의 공용 조작·본문 구성을 기존 토큰과 조합 부품에 연결한다. 인증·정지·도메인 owner를 바꾸지 않는다. 전문은 [D-961](../adr/D-961-shared-task-links-and-page-compositions.md).

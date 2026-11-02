@@ -1,11 +1,20 @@
 /* Opt-in compositions. Existing controls retain their shared appearance and semantics. */
+.ui-task-page { box-sizing: border-box; width: 100%; min-width: 0; max-width: var(--content-task-max); margin-inline: auto; padding: var(--inset-task-page); display: flex; flex-direction: column; gap: var(--gap-task-page); }
+.ui-task-page > :is(h1, h2, p) { margin: 0; }
+.ui-auth-page { max-width: var(--content-auth-max); padding-block: var(--space-6); }
+a.ui-action-link { box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; gap: var(--gap-button-content); min-width: var(--target-secondary); min-height: var(--target-secondary); max-width: 100%; padding: 0 var(--inset-button); border: 1px solid var(--control-line); border-radius: var(--radius-button); color: var(--text-primary); background: transparent; font: var(--weight-label) var(--text-label)/var(--leading-control) var(--body); text-align: center; text-decoration: none; white-space: normal; overflow-wrap: anywhere; }
+a.ui-action-link[data-kind="primary"] { padding-inline: var(--inset-button-primary); border-color: transparent; color: var(--button-primary-ink); background: var(--button-primary-bg); }
+a.ui-action-link[data-kind="quiet"] { color: var(--nominal-quiet); }
+a.ui-action-link[data-kind="quiet"]:hover { color: var(--text-primary); border-color: var(--ink); }
+a.ui-action-link[data-kind="primary"]:hover { background: color-mix(in oklab, var(--button-primary-bg) 88%, var(--ground)); }
+a.ui-action-link:active { box-shadow: inset 0 0 0 var(--focus-ring-width) var(--ground); }
 .ui-control-stack { display: grid; gap: var(--space-3); min-width: 0; align-content: start; }
 .ui-control-stack > :is(h2, h3, p) { margin: 0; }
 .ui-field-error { color: var(--status-crit); font-size: var(--text-label); overflow-wrap: anywhere; }
 .ui-state-panel { display: grid; gap: var(--space-2); padding-block: var(--space-3); border-block: 1px solid var(--border-subtle); }
 .ui-state-panel > p { margin: 0; overflow-wrap: anywhere; }
 .ui-action-bar { display: flex; flex-wrap: wrap; gap: var(--space-2); }
-.ui-action-bar > ui-button { flex: 1 1 auto; min-width: 0; max-width: 100%; white-space: normal; overflow-wrap: anywhere; text-align: start; }
+.ui-action-bar > :is(ui-button, .ui-action-link) { flex: 1 1 auto; min-width: 0; max-width: 100%; white-space: normal; overflow-wrap: anywhere; text-align: start; }
 .ui-action-bar > ui-button .ui-icon-label { white-space: normal; overflow-wrap: anywhere; }
 .ui-list-toolbar { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: end; }
 .ui-list-toolbar > label { flex: 1 1 10rem; min-width: 0; }
