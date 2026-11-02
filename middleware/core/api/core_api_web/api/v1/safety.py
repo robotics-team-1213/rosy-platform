@@ -164,6 +164,8 @@ def _safety_payload(svc: CoreServicesLike) -> dict:
             # evidence "fresh" and level "ok" is the operator's cue to release.
             **{key: health[key] for key in ("evidence", "sample_age_s", "level", "percent")},
         },
+        # Heat mode: level ok|warm|hot, why, and the readings it judged (SoC, throttle bits, wheel motors).
+        "thermal": svc.safety.thermal.status(),
     }
 
 

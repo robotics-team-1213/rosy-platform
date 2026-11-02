@@ -44,6 +44,7 @@ from core.bridge import (
     pilot_recorder_client,
     reconcile,
     save_map,
+    thermal_policy,
     traffic_gate,
     translate,
 )
@@ -103,19 +104,13 @@ class RosBridge:
         node.create_subscription(String, "line/keep_debug", self._on_lane_perception, 1)
         # D-137 T4: 검출 증거는 boxes 토픽과 분리된 evidence 채널로 들어온다
         # (D-136 §2). 판정은 ROS-free 피드가 하고, 이 파일은 적응만 한다.
-        node.create_subscription(String, "detection_evidence",
-                                 self._on_detection_evidence, 10)
+        node.create_subscription(String, "detection_evidence", self._on_detection_evidence, 10)
         node.create_subscription(String, "road/observation", self._on_road_observation, 10)
         # 주차형 도크: control 의 dock_observer_node 가 태그를 base_link 로 풀어 낸 증거.
         node.create_subscription(String, "dock/observation", self._on_dock_observation, 10)
-        preview_qos = QoSProfile(
-            depth=1, reliability=ReliabilityPolicy.BEST_EFFORT)
-        node.create_subscription(
-            CompressedImage, PREVIEW_TOPIC,
-            self._on_camera_preview, preview_qos)
-        node.create_subscription(
-            CompressedImage, RAW_PREVIEW_TOPIC,
-            self._on_camera_raw_preview, preview_qos)
+        preview_qos = QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT)
+        node.create_subscription(CompressedImage, PREVIEW_TOPIC, self._on_camera_preview, preview_qos)
+        node.create_subscription(CompressedImage, RAW_PREVIEW_TOPIC, self._on_camera_raw_preview, preview_qos)
         # D-423 §3.6: learned-model status per task (latched by the model nodes); display only.
         lane_topic, object_topic = MODEL_STATUS_TOPICS
         node.create_subscription(String, lane_topic, self._on_lane_model_status, _LATCHED)
@@ -136,6 +131,7 @@ class RosBridge:
         node.create_subscription(TransitionEvent, "global_costmap/global_costmap/transition_event",
                                  self._on_global_costmap_transition, 10)
         node.create_subscription(Bool, "motor/ready", self._on_motor_ready, _LATCHED)
+        node.create_subscription(String, "motor/health", self._on_motor_health, 10)
         node.create_subscription(String, "robot/hitl_request", self._on_hitl_request, 10)
         node.create_subscription(String, "robot/degraded_modules", self._on_degraded_modules, 10)
         node.create_subscription(LaserScan, "scan", self._on_scan, qos_profile_sensor_data)
@@ -749,6 +745,9 @@ class RosBridge:
         self.diagnostics.register("odom_topic", topic_freshness_provider(
             lambda: self._last_odom_ts, stale_s=2.0))
 
+    def _on_motor_health(self, msg: String) -> None:
+        thermal_policy.on_motor_health(self._svc, msg.data, time.monotonic())
+
     def _tick_diagnostics(self) -> None:
         results = self.diagnostics.collect()
         for component, health in results.items():
@@ -758,6 +757,7 @@ class RosBridge:
                 "navigation_readiness",
                 HealthState.OK if self._readiness.snapshot().ready else HealthState.ERROR,
             )
+        thermal_policy.tick(self._svc, time.monotonic())  # last: diagnostics never wait on heat
 
     def _tick_swarm(self) -> None:
         """SWM-004 는 마감시각으로 판정한다 — 스트림이 끊기면 아무 프레임도

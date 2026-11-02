@@ -75,8 +75,8 @@
 
 ## 최근 기록
 
+- 2026-11-03 · uncommitted · feat(core): 핑키 열 모드 — 온도·전압으로 속도 낮추기 (API v1.351)
 - 2026-10-29 · 512bf77f89 · 카메라 SIM scheduling 선행 복구
 - 2026-10-29 · 7608139018 · Station SIM ASGI 회귀와 운영 제한 변이 검증
 - 2026-10-29 · 33ffa6e6a2 · Station SIM HTTP 시험의 실제 RPC 시간 예산 분리
 - 2026-10-28 · uncommitted · CORE host-file declared reads and C6 triage
-- 2026-10-28 · uncommitted · CORE host-file 실행 소유권 분리

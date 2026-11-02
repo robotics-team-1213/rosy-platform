@@ -307,3 +307,25 @@ def test_no_motion_initialization_confirms_zero_and_never_enables_torque(monkeyp
     assert ("write1", 2, driver.ADDR_TORQUE_ENABLE, 0) in events
     assert ("read4", 1, driver.ADDR_GOAL_VELOCITY) in events
     assert ("read4", 2, driver.ADDR_GOAL_VELOCITY) in events
+
+
+def test_read_health_reports_temperature_limit_voltage_and_error_per_motor(monkeypatch):
+    driver = _load_driver(monkeypatch, [])
+    registers = {(1, 146): 61, (1, 31): 72, (1, 144): 121, (1, 70): 0,
+                 (2, 146): 70, (2, 31): 72, (2, 70): 0x04}           # ID 2: voltage unreadable
+
+    class Reader:
+        def read1ByteTxRx(self, _port, motor_id, address):
+            return registers.get((motor_id, address), 0), 0, 0
+
+        def read2ByteTxRx(self, _port, motor_id, address):
+            value = registers.get((motor_id, address))
+            return (0, -1, 0) if value is None else (value, 0, 0)
+
+    driver.packetHandler = Reader()
+    assert driver.read_health() == [
+        {"id": 1, "temperature_c": 61, "temperature_limit_c": 72, "input_voltage_v": 12.1,
+         "hardware_error": 0},
+        {"id": 2, "temperature_c": 70, "temperature_limit_c": 72, "input_voltage_v": None,
+         "hardware_error": 0x04},
+    ]
