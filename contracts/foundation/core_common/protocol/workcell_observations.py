@@ -91,7 +91,9 @@ class WorkcellCamera(_StrictModel):
     role: Literal["overhead", "side", "wrist"]  # side: a fixed view across the cell (2026-10-31), no arm of its own
     arm_id: Identifier | None
     image_topic: ImageTopic
-    device_path: DevicePath
+    # optional: the control PC's camera registry (omx-cameras.json) owns which device serves the topic; a copy
+    # here drifted from it (2026-11-02) and nothing reads it but the duplicate check below
+    device_path: DevicePath | None = None
     token_env: TokenEnv
     credential_sha256: CredentialSha256
     # depth: the topic carries a colour-mapped preview and `<topic>:depth16` the raw 16-bit depth (camera_source)
@@ -102,6 +104,8 @@ class WorkcellCamera(_StrictModel):
         result = handler(self)
         if self.stream == "color":
             result.pop("stream", None)
+        if self.device_path is None:
+            result.pop("device_path", None)
         return result
 
 
@@ -147,7 +151,8 @@ class WorkcellObservationManifest(_StrictModel):
             for camera in cell.cameras:
                 remember("source_id", camera.source_id)
                 remember("topic", camera.image_topic)
-                remember("device", camera.device_path)
+                if camera.device_path is not None:
+                    remember("device", camera.device_path)
                 remember("token_env", camera.token_env)
                 remember("credential_sha256", camera.credential_sha256)
         return self
