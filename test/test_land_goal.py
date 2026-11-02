@@ -69,6 +69,15 @@ def test_legacy_train_branch_reuse_counts_each_origin_once():
     assert land_goal.lead_times(rows, 0, 200) == [1, 50 / 60, 1, 50 / 60]
 
 
+def test_legacy_train_with_ambiguous_origins_is_incomplete_instead_of_guessing(tmp_path):
+    rows = [ev(0, "queue", branch="fix/a", ticket="a", pid=1),
+            ev(10, "queue", branch="fix/b", ticket="b1", pid=2),
+            ev(20, "queue", branch="fix/b", ticket="b2", pid=3),
+            ev(60, "train", branch="fix/a", branches=["fix/a", "fix/b"], result="landed")]
+    _, warnings = land_goal.normalize(rows, tmp_path)
+    assert warnings and "ambiguous" in warnings[0]
+
+
 def ev(t, event, branch="land/fix/a-20261031120000", pid=1, **kw):
     return {"t": t, "event": event, "branch": branch, "pid": pid, **kw}
 
