@@ -102,13 +102,21 @@ def test_a_landing_refused_only_by_a_full_queue_waits_for_room(repo, room):
     runs = []
 
     def fake_land(argv, cwd, stdout, stderr, **kw):
+        assert tool.running(tree), "the supervisor owns every queue-admission attempt"
         runs.append(argv)
         if len(runs) == 1:
             stdout.write(f"[land] STOP: {tool.QUEUE_FULL} (12/12 tickets)\n")
             return 1
         _git(main, "merge", "-q", "--ff-only", snap)
         return 0
-    code = tool.supervise(tree, snap, [], run=fake_land, room=lambda t, d: room)
+    def wait_for_room(kept, deadline):
+        assert kept == tree and tool.running(tree), "queue-full backoff must retain lifetime ownership"
+        with pytest.raises(tool.Busy):
+            tool.supervise(tree, snap, [], run=lambda *a, **kw: pytest.fail("duplicate land.py ran during backoff"))
+        assert not (tree.parent / (tree.name + ".stopped")).exists()
+        return room
+
+    code = tool.supervise(tree, snap, [], run=fake_land, room=wait_for_room)
     assert len(runs) == (2 if room else 1)
     assert code == (0 if room else 1)
     assert (tree.parent / (tree.name + ".stopped")).exists() is not room
