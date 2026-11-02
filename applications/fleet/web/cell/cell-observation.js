@@ -222,7 +222,12 @@ export function createCellObservation({request, root}) {
       if (life !== scope || scope.signal.aborted) return;
       build(state.workcells);
       // stops already in the history when the page opened have no frames here; later ones get this page's frames
-      seenFaults ??= new Set(state.workcells.flatMap(cell => cell.arms.flatMap(arm => (arm.faults || []).map(f => f.session_id))));
+      const liveFaults = new Set(state.workcells.flatMap(cell => cell.arms.flatMap(arm => (arm.faults || []).map(f => f.session_id))));
+      seenFaults ??= new Set(liveFaults);
+      for (const [session, frames] of faultFrames) if (!liveFaults.has(session)) {
+        for (const frame of frames) URL.revokeObjectURL(frame.url);
+        faultFrames.delete(session);
+      }
       empty.hidden = state.workcells.length > 0;
       empty.textContent = '등록된 작업 셀 관측이 없습니다.';
       for (const cell of state.workcells) for (const arm of cell.arms) {

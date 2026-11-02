@@ -36,4 +36,4 @@
 - 2026-11-03 · 91889f3c3e · USB 카메라 승인과 편집 상태 유지
 - 2026-11-03 · e84e4f46b3 · 독립 Account의 자기 화면 복귀 숨김
 - 2026-11-03 · 721b59a094 · D-963 USB approval with Account cookie identity
-- 2026-11-02 · d90ee50ad3 · 독립 Account 진입도 같은 계정 제품으로 표시
+- 2026-11-03 · uncommitted · 만료된 Cell 고장 영상 URL 해제

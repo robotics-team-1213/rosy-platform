@@ -878,6 +878,12 @@
 - 증거: 독립 Account 서버가 제공한 실제 HTML과 TLS Chromium의 직접·프로필·계정 관리 진입을 회귀에 더해 적색 4건을 확인했다. 수정본은 동일 시험과 기존 Fleet 로그인·등록 앱 복귀를 함께 원격 검증한다.
 - Gate: 운영 수용 전. CE: 해당 없음 — 명시적 owner 맥락과 회귀로 재현·보존 조건을 복원한다.
 
+## 2026-11-03 · uncommitted · 만료된 Cell 고장 영상 URL 해제
+
+- 변경: 성공한 관측 응답의 모든 작업 셀·팔에 남은 고장 세션을 모아, 이력에서 사라진 세션의 JPEG URL만 해제한다. 처음 접속할 때 있던 이력의 영상 처리와 다른 팔의 영상은 유지한다.
+- 증거: 기존 Chromium fixture에서 21회 고장으로 20건 이력을 넘기고, 서로 다른 셀의 두 팔에서 만료 URL 해제·생존 영상·dispose 정리를 확인한다. 수정 전 `f0423a0364` 원격 실행은 만료 URL assertion에서 실패했고 known_failures 판정은 NEW 1 / known 0 / flaky 0이었다.
+- Gate: 수정 커밋의 집중 원격 Chromium 검증 대상. 장치·현장 수용과 별개. CE: 해당 없음 — URL 수명 규칙과 재현 조건은 코드와 회귀 시험으로 복원 가능.
+
 ## 2026-11-03 · 721b59a094 · D-963 USB approval with Account cookie identity
 
 - Change: USB camera approval now uses the verified named operator identity and lock state instead of requiring a Bearer header. The same gate runs before and after confirmation. Shared request transport retains same-origin cookies, current Bearer compatibility, no-store and redirect refusal; anonymous/unnamed/viewer identities remain hidden. Backend authority and CSRF policy are unchanged.
