@@ -32,6 +32,7 @@ function status(text, state) {
   loginControls();
 }
 function loginControls() {
+  $('account-home').hidden=!active && loginOptions?.rosy_account !== false;
   const denied=$('account-status').getAttribute('state')==='forbidden';
   $('account-login').hidden=!loginOptions?.enabled || !loginOptions?.rosy_account;
   $('account-login').dataset.kind=denied?'quiet':'primary';
