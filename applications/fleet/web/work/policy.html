@@ -18,6 +18,7 @@
 <body>
 <ui-shell grammar="procedure" class="fleet-shell">
   <a class="skip-link" href="#policy-main">본문으로 건너뛰기</a>
+  <noscript><ui-status state="error">이 화면은 브라우저 스크립트를 사용합니다. 스크립트를 허용한 뒤 다시 여세요. 비상 정지는 로봇 본체의 물리 스위치로 항상 사용할 수 있습니다.</ui-status></noscript>
   <!-- D-926 2: 실물 실행을 여는 화면이라 다른 작업 화면과 같은 머리(비상 정지·계정)와 레일을 쓴다. -->
   <header class="fleet-header">
   <!-- fleet:header:start -->
@@ -92,7 +93,7 @@
     <label for="policy-workcell" class="ui-field-label" hidden>작업셀</label>
     <select id="policy-workcell" class="ui-field" aria-describedby="policy-verdict" hidden></select>
     <ui-status id="policy-verdict" state="pending" role="status">상태를 확인하고 있습니다.</ui-status>
-    <a id="policy-login" href="/console/login?return=%2Fconsole%2Fpolicy" hidden>로그인</a>
+    <a id="policy-login" class="ui-disclosure-row" href="/console/login?return=%2Fconsole%2Fpolicy" hidden data-action-icon="login">로그인</a>
     <ui-status id="policy-message" role="alert" hidden></ui-status>
 
     <div id="policy-content" hidden>
