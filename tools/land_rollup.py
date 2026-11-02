@@ -22,6 +22,7 @@ import os
 import socket
 import subprocess
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -56,7 +57,7 @@ def candidates(rows: list[dict], repo: Path, host: str | None = None) -> list[di
     found = []
     for r in rows:
         tree = Path(r.get("worktree") or "")
-        if (r.get("status") != "pending" or land_async.HOLDER not in tree.parts or r.get("urgent")
+        if (r.get("status") not in ("pending", "waiting") or land_async.HOLDER not in tree.parts or r.get("urgent")
                 or r.get("host") != host or r.get("batch") or r.get("branch") in carried or not tree.is_dir()):
             continue
         tip = git(repo, "rev-parse", "-q", "--verify", f"refs/heads/{r['branch']}", check=False).stdout.strip()
@@ -65,14 +66,25 @@ def candidates(rows: list[dict], repo: Path, host: str | None = None) -> list[di
     return found
 
 
-def plan(repo: Path, rows: list[dict], tier_of=tier) -> list[dict]:
+def reach(repo: Path, branch: str) -> list[list[str]]:
+    """The pytest invocations main..branch selects: what a fellow member must not overlap (D-889 23)."""
+    sel = land_selection._affected(land, repo, sys.executable, "main", branch)
+    return sel["local_invocations"] if sel["mode"] == "full" else sel["invocations"]
+
+
+def plan(repo: Path, rows: list[dict], tier_of=tier, reach_of=reach) -> list[dict]:
     """Members, in queue order: one tier, merging together onto main; fewer than two means no rollup."""
-    cur, kind, members = git(repo, "rev-parse", "main").stdout.strip(), None, []
+    cur, kind, members, reached = git(repo, "rev-parse", "main").stdout.strip(), None, [], []
+    guards = getattr(getattr(land, "land_guards", None), "GUARDS", ())
     for r in rows:
         if len(members) >= ROLLUP_MAX:
             break
         t = tier_of(repo, r["branch"])
         if t is None or (kind and t != kind):
+            continue
+        # D-889 23: members whose suites overlap would each have to rerun the others'; such a member lands alone
+        mine = reach_of(repo, r["branch"])
+        if any(land_selection.overlaps(other, mine, guards) for other in reached):
             continue
         res = git(repo, "merge-tree", "--write-tree", "--no-messages", cur, r["branch"], check=False)
         if res.returncode == 1:
@@ -88,6 +100,7 @@ def plan(repo: Path, rows: list[dict], tier_of=tier) -> list[dict]:
             continue
         kind = kind or t
         members.append(r)
+        reached.append(mine)
     return members if len(members) >= 2 else []
 
 
@@ -113,13 +126,33 @@ def build(repo: Path, members: list[dict], now: datetime, python: str = sys.exec
         land.size_check(wt, "main", "HEAD", python)
         if (wt / land.HARNESS).is_file():
             land.step(wt, [python, land.HARNESS, "lint"], None, "lint")
-        snap, log = start(wt, ["--tests", "auto"], now, land_async.detach)
+        first = members[0].get("ticket")  # D-889 23: the rollup takes its first member's place in the queue
+        if first:
+            os.environ[land_queue.TICKET_ENV] = str(land_queue.queue_dir(repo) / first)
+        try:
+            snap, log = start(wt, ["--tests", "auto"], now, land_async.detach)
+        finally:
+            os.environ.pop(land_queue.TICKET_ENV, None)
         (log.parent / (log.name.removesuffix(".log") + ".members")).write_text(
             json.dumps([{"branch": r["branch"], "worktree": r["worktree"]} for r in merged], indent=1),
             encoding="utf-8")
         return snap, merged
     finally:
         git(repo, "worktree", "remove", "--force", str(wt), check=False)
+
+
+def adopted(qdir: Path, first: dict, wait: float = 180, sleep=time.sleep, clock=time.monotonic) -> bool:
+    """Wait until the rollup's land.py owns the first member's ticket (its pid changed), so stopping the member
+    cannot leave a dead ticket that a peer's ``blockers`` removes before the rollup adopts it."""
+    path, until = qdir / str(first.get("ticket") or ""), clock() + wait
+    while first.get("ticket") and clock() < until:
+        try:
+            if int(json.loads(path.read_text(encoding="utf-8")).get("pid") or 0) != int(first["pid"]):
+                return True
+        except (OSError, ValueError):
+            return False
+        sleep(3)
+    return False
 
 
 def stop(pid: int) -> None:
@@ -179,6 +212,7 @@ def main(argv: list[str]) -> int:
     if built is None:
         return 1
     snap, merged = built
+    adopted(land_queue.queue_dir(repo), merged[0])
     for r in merged:  # only now: the rollup ticket exists, so the members' commits are still queued
         stop(int(r["pid"]))
     print(f"[rollup] queued {snap}; stopped {len(merged)} member landing(s)")

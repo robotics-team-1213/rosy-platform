@@ -66,6 +66,7 @@ schema reuse (D-18). No ROS imports anywhere in this package.
 
 | Directory | Purpose |
 |-----------|---------|
+| `fleet/` | Every package and module with its role and authority (pure / view / ledger / robot), and Fleet's place beside CORE, World and business apps: `fleet/AGENTS.md` |
 | `fleet/formation/` | Pure geometry and slot-assignment functions — no transport, no ROS (see `fleet/formation/AGENTS.md`) |
 | `fleet/swarm/` | Robot endpoints, transport, relay, arming, and the formation session (see `fleet/swarm/AGENTS.md`) |
 | `fleet/hub/` | D-59 SiteHub: hello/heartbeat/event gather, REST scatter — no rclpy, no cmd_vel, no Image (see `fleet/hub/AGENTS.md`) |

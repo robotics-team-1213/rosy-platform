@@ -134,7 +134,7 @@ class ArmTransferObservation(_Closed):
 
 
 class ArmTransferObservationRequest(_Closed):
-    phase: Literal["PRE_DISPATCH", "POST_ACTION"]
+    phase: Literal["PRE_DISPATCH", "POST_ACTION", "RECHECK"]
     expected_request_digest: ArmDigest
     observations: Annotated[tuple[ArmTransferObservation, ArmTransferObservation], BeforeValidator(_sequence)]
 
@@ -144,8 +144,8 @@ class ArmTransferObservationContext(_Closed):
     request_digest: ArmDigest
     action_id: ArmActionId
     attempt_id: ArmActionId
-    status: Literal["PREPARED", "SUBMITTING", "ACTION_SUCCEEDED", "HOLD", "UNKNOWN"]
-    phase: Literal["PRE_DISPATCH", "POST_ACTION"]
+    status: Literal["PREPARED", "SUBMITTING", "ACTION_SUCCEEDED", "HOLD", "UNKNOWN", "GOAL_CONFIRMED"]
+    phase: Literal["PRE_DISPATCH", "POST_ACTION", "RECHECK"]
     not_before_ns: _Counter
     capture_deadline: Annotated[AwareDatetime, BeforeValidator(_datetime)] | None
     producer_id: Annotated[ArmPhysicalRef, Field(max_length=96)]

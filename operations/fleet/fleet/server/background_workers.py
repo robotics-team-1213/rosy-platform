@@ -65,6 +65,16 @@ async def lane_compliance_loop(monitor, logger, period_s: float) -> None:
         await asyncio.sleep(period_s)
 
 
+async def charge_bays_loop(tick, logger, period_s: float = 1.0) -> None:
+    """D-941 5: feed the charge-bay plan; it plans only and sends nothing."""
+    while True:
+        try:
+            await tick()
+        except Exception:       # one bad tick must not end the watch
+            logger.exception("charge bays tick failed")
+        await asyncio.sleep(period_s)
+
+
 async def goal_lease_renew_loop(console, logger) -> None:
     """D-550 10: every ttl/3 renew the console's leased goals whose source still holds (named
     operator present, attempt open, still yielding: ``goal_lease.GoalLeases``). Trip goals are

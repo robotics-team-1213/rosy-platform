@@ -13519,6 +13519,13 @@ osy-d395-s1d\`.
 - 증거: ADR Log 행 추가. `rosy_harness.py lint` 통과로 확인.
 - Gate: 없음 — 설계 수용이며 표면 이행은 각 화면 변경에 따른다. CE: 해당 없음.
 
+## 2026-11-01 · uncommitted · feat(fleet): 확인된 ARM 시도의 재관측 계약(D-930, API v1.334)
+
+- 변경: `POST/GET /api/fleet/arm-transfers/jobs/{id}/rechecks`를 추가했다. 기다리는 재관측은 기존 observation context에 `phase=RECHECK`로 나오고 같은 observations 경로로 받는다. 검사는 POST_ACTION과 같고 요청 뒤 시각·측정 관절을 요구한다. Action·claim·작업 상태·영수증·v1.330 근거는 바뀌지 않는다(`work/physical_transfer_rechecks.py`, `fleet_physical_transfer_rechecks` 테이블).
+- 증거: 원격 `test_physical_transfer_recheck.py`와 관측자·v1.330·관측 계약·holder import 시험 58 passed. Harbor 전체 흐름 회귀(D-927)의 ⑤가 이 계약을 쓴다.
+- Gate: 없음. simulation 계약 구현이며 실물 관측자·현장 수용은 별도다. 공개 push 없음.
+- CE: 해당 없음 — 설계 결정과 계약 추가이며 해결한 장애가 아니다.
+
 ## 2026-11-02 · uncommitted · fix(land): 서로 닿지 않으면 차례는 가드만 (D-889 추가 22)
 - 변경: `land_selection.select` landed 경로 두 곳. 이 브랜치와 main 변화분의 선택이 겹치지 않고 안전 경로가 없으면 `_guards_only` + 닿는 브라우저 묶음만.
 - 증거: 11-01 17:45 뒤 착지 p90 152분. 느린 착지는 사전 시험 5~7분, 차례 대기 약 125분. 차례마다 변화분 묶음을 다시 돌아 7~13분씩 걸렸다. 원격 시험은 착지 기록에 남긴다.
@@ -13531,4 +13538,32 @@ osy-d395-s1d\`.
 - 증거: 11-01 `experiment_hub.py` "unknown -> full" 17회. 원격 시험은 착지 기록에 남긴다.
 - gate 변화: 없음
 - 결정: D-889 추가 21(사용자 지시 2026-11-02)
+- 교훈: 없음
+
+## 2026-11-02 · uncommitted · docs(adr): D-960 암 세트마다 셀 관제, 그 위에 통합관제 R
+- 변경: D-960 추가. 실제 제어(원장·승인·팔 정지·셀 카메라)는 암 세트(셀)마다 팔이 연결된 PC의 관제가 하고, 통합관제 R은 control-unit HTTP/TLS로 요약·위임·정지 요청만 중계한다. R은 임시로 OMX 관제 PC에 두고 목표는 상시 켜 둔 전용 PC(모델 PC 제외). R·CELL-A는 서명 candidate로 돌고, Pinky 등록을 가진 운영 site 스택이 R, 셀 관측은 CELL-A 인스턴스가 맡는다. 검증용 `r-verify`는 대체 확인 뒤 은퇴. ADR log 행, 다른 브랜치가 예약한 D-956~958과 쓰지 않은 D-959를 adr_gaps에 선언.
+- 증거: 2026-11-02 현장 — OMX 관제 PC에 서명 `rosy-site`와 dev 이미지 `cell-a`·`r-verify`가 함께 돌고, r-verify는 브라우저 포트가 없고 cell-a 인증서를 빌려 씀. 모델 PC 부하 약 22/24 코어. 원격 `test_harness_contracts.py`.
+- gate 변화: 없음
+- 결정: D-960(사용자 결정 2026-11-02)
+- 수용: R 서명 재구성·R↔CELL-A 연결·브라우저 접속은 미수용(ADR 「수용 조건」, handoff `Rosy/.omc/handoffs/2026-11-02-control-units-per-arm-set.md`)
+
+## 2026-11-02 · uncommitted · fix(land): 준비된 착지도 서로 닿지 않으면 한 표로 묶는다 (D-889 추가 23)
+- 변경: `land_rollup`이 waiting 표를 받고 구성원 사이 시험 겹침을 거른다. 첫 구성원의 표를 이어받고(`land_queue.enter`가 pid·branch·worktree를 갱신), 이어받은 뒤 구성원을 멈춘다(`adopted`). `leave`는 남이 이어받은 표를 지우지 않는다.
+- 증거: 11-02 24시간 동안 대기열 변화의 75 %에 준비된 착지가 2개 이상 있었다. 원격 시험은 착지 기록에 남긴다.
+- gate 변화: 없음
+- 결정: D-889 추가 23(사용자 결정 2026-11-02)
+- 교훈: 없음
+
+## 2026-11-02 · uncommitted · feat(tools): 업데이트 운영 CLI update_ops (D-957)
+- 변경: `tools/remote/update_ops.py`(status/run-now/hold/resume/forget-failed, selector `all|robots|site|로봇|호스트`), 계약 시험 `test/test_update_ops.py`, 설계 `docs/plans/2026-11-02-update-ops-cli-design.md`, ADR D-957, `tools/remote/AGENTS.md` 행. 호스트 코드 변경 없음; PC 유닛 홀드 장부는 gitignored `private/update-holds.json`
+- 증거: 원격 시험 PC(ai/model) `test/test_update_ops.py test/test_update_status.py` 46 passed / exit 0 (sha 54124e716b). RED 확인: 시험만 커밋한 712c66a83d에서 모듈 부재로 전체 실패. 실패 0이라 known_failures 비교 대상 없음. 착지 전 pre-push·영향 등급은 land 파이프라인이 다시 돈다
+- gate 변화: 없음. 원격 pytest 통과는 실장치·현장 수용 아님(로봇 유닛명·사이트 sudo 범위는 설계 §7 현장 확인 항목)
+- 결정: D-957 Accepted. 게이트 우회·Fleet UI 조작·주기 변경은 범위 밖
+- 교훈: 없음
+
+## 2026-11-02 · uncommitted · fix(land): 차례의 자기 브라우저 묶음은 변화분 브라우저 묶음이 닿을 때만 (D-889 추가 24)
+- 변경: `land_selection.select`의 `browsers()`가 변화분의 브라우저 묶음과만 겹침을 본다.
+- 증거: 11-02 03:32~04:06 charge-bay-panel 차례가 브라우저 묶음 7개를 직렬로 돌다 30분 한도로 반납, main 42분 정지. 원격 시험은 착지 기록에 남긴다.
+- gate 변화: 없음
+- 결정: D-889 추가 24
 - 교훈: 없음

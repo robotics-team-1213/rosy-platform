@@ -29,6 +29,7 @@ Harbor 용어의 정본은 팀 저장소 `harborlogi/CONTEXT.md`(2026-10-24 확�
 | `GET /api/fleet/arm-transfers/observation-context`, `POST /jobs/{mission_id}/observations` | 별도 expiring 관측자 credential; 원본 측정값만 제출. 앱/승인자와 분리하며 Fleet monitor가 실행을 추적 |
 | `GET /api/fleet/arm-transfers/jobs/{mission_id}/physical-receipt` | creator/named operator scope. 물리 receipt와 Harbor 업무 완료는 별개 |
 | `GET /api/fleet/arm-transfers/jobs/{mission_id}/physical-evidence` | v1.330/D-915. 같은 job 읽기 scope로 저장된 원본 closure·측정 관절·해당 시도의 해제 zone 참조만 조회. 누락 측정을 합성하거나 현재 가용성/업무 완료를 판정하지 않음 |
+| `POST /api/fleet/arm-transfers/jobs/{mission_id}/rechecks`, `GET …/rechecks/{recheck_key}` | v1.334/D-930. 확인된 시도에 새 측정 사실을 요청·조회. 같은 관측자·검사, Action·claim·상태·영수증 변경 없음. 앱의 업무 완료 판정용 사실이며 완료 자체가 아님 |
 | `POST /api/fleet/arm-transfers/jobs/{mission_id}/cancel` | 원래 scope/권한 유지. ACK·timeout·Action 성공으로 점유를 해제하지 않음 |
 
 | 목적 | 현재 경로·producer | 권한·의미 | 소비 제한 |

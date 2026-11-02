@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-11-02 · uncommitted · fix(land): 차례의 자기 브라우저 묶음은 변화분 브라우저 묶음이 닿을 때만 (D-889 추가 24)
+- 2026-11-02 · uncommitted · feat(tools): 업데이트 운영 CLI update_ops (D-957)
+- 2026-11-02 · uncommitted · fix(land): 준비된 착지도 서로 닿지 않으면 한 표로 묶는다 (D-889 추가 23)
+- 2026-11-02 · uncommitted · docs(adr): D-960 암 세트마다 셀 관제, 그 위에 통합관제 R
 - 2026-11-02 · uncommitted · fix(harness): 같은 폴더 import 사슬로 시험을 찾는다 (D-889 추가 21)
-- 2026-11-02 · uncommitted · fix(land): 서로 닿지 않으면 차례는 가드만 (D-889 추가 22)
-- 2026-11-01 · uncommitted · D-945 전 표면 자리 규칙
-- 2026-11-01 · uncommitted · D-926 보강: 새 구획은 ui-section 네 역할
-- 2026-11-01 · uncommitted · fix(ci): 게시 PR CI 빨강 두 건(nightly의 로컬 main, OMX 리허설 실시간)
