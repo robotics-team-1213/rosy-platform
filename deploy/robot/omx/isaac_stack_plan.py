@@ -10,7 +10,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT/'middleware/devices/omx/adapter'))
-from omx_adapter.kinematics import OmxKinematics, TopDownPose
+from omx_adapter.kinematics import DEFAULT_KINEMATICS_PATH, OmxKinematics, TopDownPose
 from omx_adapter.contracts.transfer_motion import ArmPlanningProfile
 
 PROFILE = ROOT/'deploy/robot/omx/sim/cell_profile.yaml'
@@ -28,6 +28,13 @@ def build(case):
     if not isinstance(case, dict) or case.get('schema') != SCHEMA:
         raise ValueError('Unexpected SIM planning case')
     kin, profile = OmxKinematics.load(), ArmPlanningProfile.load(PROFILE)
+    if 'tcp_x_m' in case:  # opt-in jaw with another TCP (the palletizing jaw v2.1 ends at 0.0740); stock stays 0.09193
+        tcp_x = vector([case['tcp_x_m']], 1)[0]
+        if not .05 <= tcp_x <= .12:
+            raise ValueError('TCP x outside the OMX-F jaw range')
+        document = yaml.safe_load(DEFAULT_KINEMATICS_PATH.read_text(encoding='utf-8'))
+        next(j for j in document['joints'] if j['name'] == 'end_effector_joint')['origin']['xyz'][0] = tcp_x
+        kin = OmxKinematics(document)
     control = yaml.safe_load(PROFILE.read_text(encoding='utf-8'))
     if control['profile'] != 'simulation':
         raise ValueError('Only the simulation planning profile is allowed')
@@ -59,7 +66,7 @@ def build(case):
     if scene:
         result['planning_scene'] = scene
     if case.get('operation') == 'homes':
-        if set(case)-{'base_yaws','scene'} != {'schema', 'operation', 'bases', 'points'} or len(case['bases']) != 2 or len(case['points']) != 2:
+        if set(case)-{'base_yaws','scene','tcp_x_m'} != {'schema', 'operation', 'bases', 'points'} or len(case['bases']) != 2 or len(case['points']) != 2:
             raise ValueError('Two simulation homes required')
         yaws = vector(case.get('base_yaws', [0., 0.]), 2)
         result['homes'] = [solve(vector(b, 3), vector(p, 3), 0., base_yaw=y)
@@ -67,7 +74,7 @@ def build(case):
         result['gripper'] = dict(preopen=profile.gripper_contact_for_width(.036),
             close=profile.gripper_close_for_width(.03), release=profile.gripper_contact_for_width(.04))
         return result
-    if case.get('operation') != 'move' or set(case)-{'base_yaw','scene'} != {'schema', 'operation', 'base', 'start', 'target', 'yaw', 'dt'}:
+    if case.get('operation') != 'move' or set(case)-{'base_yaw','scene','tcp_x_m'} != {'schema', 'operation', 'base', 'start', 'target', 'yaw', 'dt'}:
         raise ValueError('Unexpected SIM planning operation')
     base, start, target = vector(case['base'], 3), vector(case['start'], 5), vector(case['target'], 3)
     yaw, dt = vector([case['yaw'], case['dt']], 2)

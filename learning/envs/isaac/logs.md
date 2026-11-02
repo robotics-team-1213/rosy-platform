@@ -574,3 +574,59 @@
 - 증거: seed 43 BC v0 run d37d 2/9(1번 상자 안정 실패, 간격 5.44 mm). 같은 조건 rl3 run f3eb는 6개 놓은 뒤 감시가 지워지는 plan-request 파일(nlink 0)을 unsafe_output으로 보고 종료. 수정 뒤 rl3 run 1038 SUCCEEDED 9/9(간격 2.65~4.82 mm). 두 seed에서 rl3 9/9·9/9, BC v0 8/9·2/9. 원격 run_worker 시험 통과.
 - gate 변화: 없음. 시뮬레이션(가정한 2~5 mm 추정 오차)이며 실물 수용이 아니다.
 - CE: 새 교훈 기록 — `docs/solutions/runtime-errors/isaac-run-supervisor-flagged-a-file-being-deleted-2026-10-31.md`(a4e9·10-30·f3eb 반복, 감시 로그로 원인 확인, 1038로 검증).
+
+## 2026-10-31 · fa58721ca6 · seeds 44 and 45: neither model passes the nine-container flow
+
+- 변경: 없음(평가만). seed 43 BC v0 실패 분석을 result.md에 추가.
+- 증거: seed 44 BC v0 54de 8개·rl3 c0b1 5개, seed 45 BC v0 ffb0 1개·rl3 8ae2 2개, 모두 FAILED. 네 seed 합계 완주 rl3 2/4, BC v0 0/4. 실패는 마지막 보정의 0.4~0.6 mm 흔들림, 0번 상자의 +y 치우침, 열 때 밀림이 겹친 것. seed 45 BC는 열 때 7.4 mm 튐.
+- gate 변화: 없음. 두 seed만으로 쓴 "rl3가 낫다"는 결론을 철회한다. 시뮬레이션(가정한 2~5 mm 추정 오차)이며 실물 수용이 아니다.
+- CE: 해당 없음 — 평가 결과이며 막힌 문제가 없었다.
+
+## 2026-10-31 · a66fc77016 · seed-45 jump is a landing slide; BC v0 cannot release lower
+
+- 변경: 놓는 높이만 8 mm로 낮춘 평가 조건 `nominal-bc-v0-release8`(`FIXTURE_OVERRIDES`)과 시험.
+- 증거: ffb0의 7.4 mm는 15 mm 낙하 후 착지 때 옆으로 175 mm/s 미끄러진 것(같은 seed rl3 8ae2는 미끄러지지 않음). 8 mm 조건 BC v0 seed 42·43·44는 모두 0개(보정이 높이를 학습 때의 15 mm로 되돌려 수렴 실패), seed 45는 SDK import에서 실행 단위가 꺼져 결과 없음. 원격 시험 22개 통과.
+- gate 변화: 없음. 낮은 놓기는 BC 재학습 없이는 평가할 수 없다. 시뮬레이션이며 실물 수용이 아니다.
+- CE: 해당 없음 — 평가 결과이며 재발 위험이 있는 막힘이 없었다.
+
+## 2026-11-01 · d65acb82f1 · palletizing jaw v2.1 and 16 g containers as an opt-in sim condition (step 1)
+
+- 변경: 팀의 새 조 v2.1(`assets/omx_f_palletizing_description/`)을 선택 조건 `gripper='palletizing-v2.1'`로 넣었다. 케이스 `nominal-palletizing-v21`(전체 흐름)·`-hold`(들어 2 s 유지 후 멈춤). 패드는 메시의 솟은 패드면에 얹은 상자 하나(1.5×17×18 mm), TCP x 0.0740(IK는 요청 필드 `tcp_x_m`), 컨테이너 7.2/11.79/16 g. 기본 조건은 예전 조·60 g 그대로. 새 파일 `palletizing_gripper.py`·`finger_pads.py`·`pad_sweep.py`, 시험 9개.
+- 증거: 실행 3614198ae7d750418daf633fc3900763(seed 42, 보고서·영상 검증 통과). 3칸 컨테이너 1개를 집어 158 mm 들고 2 s 유지: 손가락 0.3379 rad(명령 0.3047, 토크 상한에 멈춤), 패드 간격 29.925 mm, TCP 대비 미끄럼 0.0 mm, 회전 0.0°. 패드면은 n·p 6.3385 mm(판 7.24, 판 뒷면 약 8.2), 0.35 rad에서 간격 30.977 mm로 README의 29.977 mm와 정확히 1.000 mm 다름(면당 테이프 0.5 mm로 설명되나 메시에 없음, 캘리퍼 확인 필요).
+- gate 변화: 없음. 배 모양 돌기 판·돌기·실제 마찰·새 조로 놓기(틈 3.5~6 mm)는 모델링하지 않았다. 예전 BC v0·rl3는 예전 조·60 g로 학습되어 여기에 쓸 수 없다. 시뮬레이션이며 실물 수용이 아니다. 자세한 값은 docs/validation/omx-palletizing-sim-2026-11-01/result.md.
+- CE: 해당 없음 — 평가 결과이며 재발 위험이 있는 막힘이 없었다(한 번의 시작 실패는 GPU 경합 중 일시 오류, 같은 요청이 다음 커밋에서 정상).
+
+## 2026-11-01 · 45da34bf98 · finger inside a 6 mm row gap places nine at a 3 mm release
+
+- 변경: nominal IK 조건 `nominal-release3`·`nominal-gap6-release3`(쌓기 놓기만 3 mm, 고르기 내려놓기는 15 mm 유지), `finger_fits_gap`. 첫 커밋 18f9bb98a4는 고르기 높이까지 낮춰 8개 실행이 모두 고르기에서 멈췄다(미집계).
+- 증거: 6 mm 틈 seed 42·43·45 9/9(간격 4.65~6.91 mm), seed 44는 고르기 수렴 실패로 1개. 3.5 mm 틈은 3·5·8개(seed 43은 원격 시작 실패). 6 mm에서 놓기 높이 3 mm, 열 때 밀림 0.1~0.6 mm. 열 때 손가락이 이웃 가운데 상자를 0.7~2.5 mm 밀었다가 반대쪽 놓기로 되돌아옴. 원격 시험 통과.
+- gate 변화: 없음. 시뮬레이션 손가락은 3 mm 캡슐+양쪽 1 mm(실물 jaw v2.1 판 1.1~2.0 mm보다 보수적), 상자 60 g(실물 16 g). 실물 수용이 아니다.
+- CE: 해당 없음 — 평가 결과다.
+
+## 2026-11-01 · f0d8c10dc9 · navy stud plate under the stack, opt-in case nominal-palletizing-v21-ship (step 2)
+
+- 변경: `ship_plate.py`(돌기 36개 격자, 판, 반구 돌기, 놓기 하한, 빈 통로 좌표), 케이스 `nominal-palletizing-v21-ship`(35.1 mm 행 피치, 놓기 5 mm, 조 33 mm만 열기, 높이 0.13 m 평탄화 지점과 경유점). 판 충돌체는 한 키네마틱 몸체의 상자와 구. 판 두께·여백·뱃머리 길이·돌기 윗면은 가정(코드에 표시).
+- 증거: seed 42·43·44·45 모두 9/9(run b18a·b105·94c4·982a), 행 간격 4.80-5.24 mm, 정착 xy 오차 0.2 mm 이하(45의 맨 윗층 한 개 0.8 mm), 손가락 아래가 돌기 윗면보다 18.5 mm 이상 위, 열 때 이웃이 0.3 mm 넘게 움직인 것 없음. 막힌 점: 삼각형 메시 충돌체의 접촉력 불일치(s42p), 평평한 돌기 윗면에서 0.5 mm 어긋난 상자가 올라탐(s42n), 40 mm 열기가 이웃을 밀음(s42o), 평탄화 지점이 판과 겹치고 팔 닿는 거리 밖(s42e·s42j).
+- gate 변화: 없음. 시뮬레이션이며 실물 수용이 아니다. 자세한 값은 docs/validation/omx-palletizing-sim-2026-11-01/result.md.
+- CE: 해당 없음 — 평가·구성 단계이며, 막힌 점은 코드 주석과 시험·result.md에 남겼다.
+
+## 2026-11-01 · ab049f0b98 · MuJoCo sweep of off-centre release on the ship plate, Isaac offset cases (D-947 order, candidates only)
+
+- 변경: `tools/sim/ship_release_scene.py`(조 v2.1 mocap + 배 판 + 컨테이너, 값은 Isaac 쪽 모듈에서 읽음)와 `ship_release_sweep.py`(7,056 경우), Isaac에 `release_offset_m` 키와 케이스 `nominal-palletizing-v21-ship-{y040,y050,y060,y-060,x150}`. 시험 `test/test_ship_release_scene.py`, `test_container_stack.py`(원격 41개 통과).
+- 증거: (MuJoCo, 후보 선정용) 기준 놓기는 Isaac과 같이 z 0.0 mm, 이웃 0.3 mm 이하이고 40 mm 열기는 이웃을 민다(Isaac s42o와 같은 방향). 1층 가로 어긋남은 마찰 1.0에서 0.5 mm까지 자리 잡고 0.55~0.6 mm부터 돌기에 올라탄다(마찰 0.5~1.2에서 0.4~1.0 mm). 요는 1.5도까지 자리 잡고 2도부터 올라탄다. 세로 어긋남과 놓기 높이 3~8 mm는 영향이 없다. 값은 docs/validation/omx-palletizing-sim-2026-11-01/result.md 「Step 3a」.
+- gate 변화: 없음. MuJoCo 접촉 수치는 후보를 고르는 데만 쓴다(D-947 §5). Isaac은 돌리지 않았다. 요·마찰 어긋남은 아직 Isaac에 배선이 없다. 떠 있는 조(팔·IK 없음)라 놓기와 정착만 답한다.
+- CE: 해당 없음 — 평가·구성 단계이며 막힌 문제가 없었다(노트북 MuJoCo 휠의 msvcp140.dll 부재는 result.md에 우회를 적음).
+
+## 2026-11-01 · de414c8795 · Isaac confirmation of off-centre ship-plate releases; stud ride-up now fails the seat check
+
+- 변경: 배 판 조건의 안착 높이 허용 0.5 mm(`stable_box`), 회귀 시험 1개, 사례 y020·y030·x100 추가
+- 증거: (Isaac seed 42) 기준 9/9(새 판정). 가로 0.2~0.6 mm는 모두 실패 — 1층 바깥 줄 상자가 조가 열릴 때 바깥으로 0.6 mm 밀려 돌기 위 0.9~1.2 mm에 얹힘. 따라 1.0 mm는 물리적으로 앉음(판정 경계만 걸림). MuJoCo 경계 0.5 mm보다 Isaac이 엄격. 원격 시험 통과
+- gate 변화: 없음. 다음: 열면서 들기 또는 더 작은 열기로 바깥 밀림 제거 뒤 y020·y030 재시험
+- CE: 해당 없음 — 판정 구멍은 코드와 회귀 시험으로 막았고 result.md Step 3b에 근거를 남겼다
+
+## 2026-11-01 · e51d9f1a62 · KAN-108 plate, release strategies and container variants (step 4, D-947 order: MuJoCo candidates, Isaac boundary)
+
+- 변경: 판을 팀 CAD(KAN-108, hull STL sha256 `d545ae51…88ad5`)로 교체(피치 36, 점 5.2 mm 모따기, 판 8 mm, 여유 한쪽 0.40 mm, 줄 간격 6 mm; 선미 16 mm·선수 갑판 198 mm로 자름), 점 충돌체는 볼록 껍질 메시. `container_variants.py`(릴리프·모따기·적층 레일, 질량 비율), `guarded_release.py`(닿을 때까지 내린 뒤 열기, `fixture['guarded_descent']`), 변형 충돌체(`stacking_scene.variant_colliders`), 케이스 `…-ship-{y060-g315, y060-guard-g315, r290-g315, y080-r290-g315, y100-r290-guard-g315}`. MuJoCo: 용접 조(mocap 조는 속도가 없어 패드가 상자 위를 마찰 없이 미끄러졌다), `ship_release_strategies.py`·`ship_release_strategy_sweep.py`.
+- 증거: Isaac seed 42 — 새 판 기준 9/9(a9d31a94aa, 간격 5.57-5.99 mm). 일반 컨테이너는 0.6 mm 어긋남에서 떨어뜨리기·가드 하강 모두 첫 상자가 점 위에 1.1 mm 높이로 실패. 발 릴리프 29.0 mm(바닥 3 mm)는 기준 9/9, 0.8 mm 어긋남 9/9, 1.0 mm는 앞 두 상자 안착 뒤 계획기의 수렴 검사에서 막힘(안착 실패 아님). MuJoCo 3,942 + 1,377(여유 0.2/0.5/1.0) 경우: 일반 대역 0.6 mm, 릴리프 1.0 mm, 가드 하강 +0~0.25 mm, 가로 탐색은 오히려 나쁨, 요 3도는 어느 쪽도 못 고침. 원격 시험 47 통과(MuJoCo 시험 2개 파일은 호스트에 MuJoCo가 없어 건너뜀, 노트북에서 스크립트로 같은 논리 확인).
+- gate 변화: 없음. 시뮬레이션이며 실물 수용이 아니다. 열린 결정: 실제 선미·브리지·벨트 끝과 레벨링 지점 배치.
+- CE: 새 교훈 기록 아님 — 판단 근거(mocap 조 속도 없음, 판 자르기 이유)는 result.md Step 4와 코드 주석에 있고, 해결된 장애는 아니다.

@@ -184,7 +184,7 @@ def queue(land, wt: Path, branch: str, args, python: str, qdir: Path, ticket: Pa
     while True:
         got = land_queue.wait(qdir, ticket, args.queue_timeout * 60, check=land_prepare.watch(land, wt),
                               done=lambda: in_main(land, wt, branch), form=form,
-                              tested=land_full.restore(wt, branch))
+                              tested=land_full.restore(wt, branch), changed=lambda: land_prepare.relaunch(land, qdir, ticket))
         if got == "landed":
             land_full.forget(wt, branch)
             print(f"== landed in a batch (not pushed): main {land.out(wt, 'rev-parse', 'main')[:10]} holds {branch}\n"
