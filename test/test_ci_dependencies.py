@@ -199,6 +199,10 @@ def test_ci_provides_the_site_account_oauth_runtime():
     tokens = shlex.split('\n'.join(step.get('run', '') for step in steps[:test_index]
                                   if not step.get('if')).replace('\\\n', ' '), comments=True)
     assert oauth_pin in tokens, f'CI account authority lacks site runtime {oauth_pin}'
+    # Installed-package tests run python3 -I, which ignores a --target dir on PYTHONPATH.
+    lines = [line for step in steps[:test_index] if not step.get('if')
+             for line in step.get('run', '').replace('\\\n', ' ').splitlines() if oauth_pin in line]
+    assert lines and not any('--target' in line for line in lines), f'{oauth_pin} must be system-wide'
 
 
 def test_fleet_account_oauth_pin_matches_site_runtime():
