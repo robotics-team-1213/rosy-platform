@@ -1,6 +1,6 @@
 """Heat mode: how hot the robot is decides how fast it may drive. ROS-free.
 
-Inputs are what a Pinky Pro can read about itself: the SoC temperature, the Raspberry Pi
+Inputs are what a Raspberry Pi robot can read about itself: the SoC temperature, the Pi
 firmware's throttle bits, and per wheel motor the temperature, the motor's own limit and its
 hardware-error register (the bringup node's `motor/health`).
 
