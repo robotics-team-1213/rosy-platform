@@ -4408,3 +4408,10 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: `f70298b8c6`의 실제 격리 검사에서 누락으로 적색을 확인했다. `87a7797034` 원격 로그 계약과 같은 파일의 독립 pytest 검사 4 passed, isolation complete 1, skip 0.
 - gate 변화: SOURCE·LOCAL GO. 실제 서명 설치·운영 수용은 별도다. 기존 R overlay와 updater hold를 유지하며 canonical 관제 단위의 자동 adoption 문제를 해결했다고 주장하지 않는다.
 - CE: 해당 없음 — 기존 로그 계약 검사가 누락을 검출했고 최종 설정이 해결을 설명한다.
+
+## 2026-11-02 · 14e64763d9 · fix(hosts): D-795 DDS 가드를 깬 pinky rosbridge 선언 제거
+
+- 변경: b101f57783에서 `services.yaml`에 더한 AI PC `pinky-rosbridge-d12`·`-d13` 선언 두 줄을 뺐다. `test_no_cross_host_dds`는 deploy 파일에 rosbridge를 금지한다(D-795). 두 유닛은 꺼진 채 AI PC에 남아 update_status에 UNDECLARED로 계속 나온다 — D-795상 선언할 대상이 아니라 치울 대상이다(Pinky 스택 소유자 확인 필요).
+- 증거: 착지 land-fix-publish-baseline-checkout-pin가 MAIN-RED로 멈춤(main 06a479abd1에서도 같은 실패). 원격 `test/test_no_cross_host_dds.py`·`test/test_host_services_manifest.py`.
+- gate 변화: main 녹색 복구.
+- CE: 해당 없음 — 가드 시험이 바로 잡았고, 앞 착지가 이 시험을 고르지 않은 것은 시험 선택 범위의 문제다.
