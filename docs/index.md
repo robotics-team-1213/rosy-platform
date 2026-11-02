@@ -354,7 +354,7 @@
 ## 최근 기록
 
 - 2026-11-02 · 20390c3486 · fix(harness): D-795 DDS 가드를 매 착지에서 돌린다
+- 2026-11-02 · uncommitted · fix(omx): 가드 고장 프레임을 설정 없이 남긴다
 - 2026-11-02 · uncommitted · feat(fleet): 멈춘 관절을 이름으로 보이고, 팔마다 가드 정지 이력을 셀 화면에 남긴다
 - 2026-11-02 · uncommitted · fix(omx): 막힌 wrist_roll을 가드 전에 멈추고, 가드 고장마다 기록과 카메라 프레임을 남긴다
 - 2026-11-02 · uncommitted · fix(landing): 모든 차례의 30분 상한
-- 2026-11-02 · uncommitted · feat(fleet): 확인된 ARM 시도의 재관측 계약(D-930, API v1.334)

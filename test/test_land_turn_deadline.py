@@ -35,10 +35,10 @@ def test_elapsed_turn_cancels_unfinished_work_without_resetting_its_budget(
 
     def unfinished_job(host, path, stop):
         if failed_first and path == "pkg/test/test_a.py":
-            now[0] = 540
+            now[0] = land.TURN_CAP_S - 60
             return 0
-        # One job is still running at 601 s, including after a successful failed-first batch.
-        now[0] = 601
+        # One job is still running past the cap, including after a successful failed-first batch.
+        now[0] = land.TURN_CAP_S + 1
         for timer in timers:
             if not timer.cancelled and timer.due <= now[0]:
                 timer.function()
@@ -237,7 +237,7 @@ def test_expiry_marks_preparing_while_remote_cancellation_is_still_draining(cach
     queue.wait(qdir, ticket, 0)
 
     def draining(invocations, logs, *a, stop, **kw):
-        now[0] = 601
+        now[0] = land.TURN_CAP_S + 1
         timers[0].function()
         assert stop.is_set()
         assert json.loads(ticket.read_text())["status"] == "preparing", "drain still held the turn"
@@ -264,7 +264,7 @@ def test_expired_turn_yields_even_when_every_check_passed_and_peer_already_owns_
     peer = queue.take(qdir, "feat/peer", status="waiting")
 
     def handoff():
-        now[0] = 601
+        now[0] = land.TURN_CAP_S + 1
         timers[0].function()
         queue.wait(qdir, peer, 0)
         assert not land.land_checks.turn_wanted(land, wt), "the waiter already acquired its turn"
