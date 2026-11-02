@@ -135,7 +135,7 @@ def test_usb_camera_cookie_operator_keeps_edit_during_poll(sample_site, scenario
             panel = page.locator('#usb-camera-panel')
             expect(panel).to_be_visible()
             assert page.evaluate("sessionStorage.getItem('rosy-console-token')") in (None, '')
-            field = panel.get_by_role('textbox', name='USB 046d:0825의 역할', exact=True)
+            field = panel.get_by_role('combobox', name='USB 046d:0825의 역할', exact=True)
             field.fill('custom_camera')
             if scenario == 'approve':
                 panel.get_by_role('button', name='역할 승인', exact=True).click()
@@ -154,7 +154,7 @@ def test_usb_camera_cookie_operator_keeps_edit_during_poll(sample_site, scenario
                 assert field.evaluate('(input) => [input.selectionStart, input.selectionEnd]') == [2, 8]
                 assert reads >= 2
                 if scenario == 'changed_poll':
-                    expect(panel.get_by_role('textbox')).to_have_count(2)
+                    expect(panel.get_by_role('combobox')).to_have_count(2)
                     expect(panel).to_contain_text('추천: side')
                 assert not posts
         finally:
