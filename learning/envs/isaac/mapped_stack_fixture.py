@@ -143,6 +143,10 @@ def container_fixture(*, layers, case):
     for key in ('upstream_belt_center_m','upstream_belt_size_m','upstream_velocity_m_s','upstream_scope'):
         value.pop(key)
     value['recording'] = dict(value['recording'], eye=[.69,-.78,.69], focus=[.08,0.,.12])
+    # D-947 3: the real top and side cameras, surveyed by stud-grid PnP (docs/validation/omx-cell-survey-2026-11-03).
+    value['real_cameras'] = dict(
+        top=dict(eye=[-.041,.037,.662], focus=[.096,.041,.074], up=[1.,0.,0.], f_px=615., width=640, height=480),  # D435 nominal f
+        side=dict(eye=[-.508,.002,.147], focus=[-.008,-.0165,.1445], up=[0.,0.,1.], f_px=950., width=640, height=480))  # f by reprojection
     if case=='column':
         value.update(revision='final-map-cad-container-column-v1',target_cells=[3,1,3],
             row_order=[0],center_row=0,bin_origin_m=[.035,-.015,.074],bin_size_m=[.09,.03,.09])
