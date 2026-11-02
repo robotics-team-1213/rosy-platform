@@ -541,6 +541,19 @@ def test_ci_fleet_shards_balance_measured_slow_files_without_losing_tests():
     assert affected.ci_matrix(repo, selection)["include"] == matrix
 
 
+def test_account_native_tests_are_required_in_full_and_source_affected_ci():
+    repo = affected.Repo.load(ROOT)
+    suite = 'operations/account/test'
+    assert any(suite in invocation for invocation in affected.full_invocations(repo))
+    selections = [affected.Selection('full', []),
+                  affected.select(repo, ['operations/account/rosy_account/app.py'])]
+    for selection in selections:
+        owners = [entry for entry in affected.ci_matrix(repo, selection)['include']
+                  if any(suite in invocation for invocation in entry['invocations'])]
+        assert len(owners) == 1 and owners[0]['gating'] and owners[0]['ros'] == 'none'
+        assert [suite] in owners[0]['invocations']
+
+
 def test_ci_full_matrix_reaches_every_registered_module_suite():
     """D-762 stage 1: CI's full tier runs every registered test file, bar the reasoned exclusions."""
     repo = affected.Repo.load(ROOT)
