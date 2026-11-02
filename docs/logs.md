@@ -13733,6 +13733,13 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 소스 회귀·입력 재계산이며 main 적용과 SLO 달성을 주장하지 않는다.
 - CE: 기존 Nov1 교훈의 measurement trap을 갱신했다. ticket lead로 바꾸면 retry 이전의 대기 시간이 사라지는 비가시 판단과 검증 한계를 기록한다.
 
+## 2026-11-02 · uncommitted · D-963 USB 카메라 역할 승인 결정과 API v1.350
+
+- 변경: ADR D-963과 API 참조 v1.350(`workcell-observations/{workcell_id}/usb-devices`). 구현은 deploy·fleet·contracts·web 로그를 따른다.
+- 증거: API 버전 pin 8곳 갱신, 구현 시험은 deploy·fleet 로그.
+- gate 변화: 없음. 실제 USB 카메라를 꽂아 승인하는 현장 수용은 하지 않았다.
+- CE: 해당 없음 — 새 기능이며 장애 해결이 아니다. 결정은 D-963에 있다.
+
 ## 2026-11-02 · uncommitted · fix(landing): 예측 체인을 실제 우선순위 차단자와 정렬
 - 변경: `land_speculate.chain`이 FIFO 앞줄 대신 정본 `land_queue.blockers`를 재사용한다. TURN 유지, 긴급 요청이 앞지르는 ordinary waiting 제외, 나중 urgent 포함과 stale-bypass를 같은 정책으로 선택한다. preparing/pending 제외와 safety/record 중단 조건은 보존한다.
 - 증거: 미착지 소스 `1f324d765a` 원격 speculation/queue/urgent/prepare/batch 5 suite 133개 통과, NEW 0. 테스트 전용 `daf434afd6`에서 3개 RED를 확인했다. 실제 append-only queue의 ticket/branch/urgent와 당시 관측 status를 고정한 counterfactual은 합성 후보 2개를 실제 TURN 1개로 줄였다. 불필요 후보 제외를 확인한 것이며 절약 시간이나 진행 중인 예측 실행의 새 규칙 적용을 측정한 것은 아니다.
