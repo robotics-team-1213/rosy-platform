@@ -3,7 +3,7 @@ title: Landings gave the turn back over and over and reran every suite; eight ca
 date: 2026-11-01
 last_updated: 2026-11-02
 category: workflow-issues
-module: tools/land.py, tools/land_checks.py, tools/land_selection.py, tools/land_cache.py, tools/land_prepare.py, tools/remote/host_probe.py, tools/harness/affected_tests.py
+module: tools/land.py, tools/land_checks.py, tools/land_selection.py, tools/land_cache.py, tools/land_prepare.py, tools/land_goal.py, tools/land_events.py, tools/land_rollup.py, tools/land_batch.py, tools/remote/host_probe.py, tools/harness/affected_tests.py
 problem_type: workflow_issue
 component: development_workflow
 severity: high
@@ -110,6 +110,60 @@ The current `land_goal.topic` collapses timestamped resubmissions to the same to
 a landing does not reset its first queue time. Remote regression evidence and actual main landing
 are separate checks. Paths under `.git/` here refer to the main checkout's shared Git directory,
 not a linked worktree's `.git` pointer file; these local records are not tracked product files.
+
+### Rollup 회원 완료가 다음 요청의 시계를 오염시킨 경우
+
+2026-11-02 성공한 one-ticket rollup 두 건은 carrier의 `landed`만 남겼다. 실제 완료 commit에
+회원 후보가 들어 있었지만 회원 topic의 최초 접수가 닫히지 않았다. 이전 camera 요청은 rollup으로
+379.54분 만에 끝났는데, 뒤의 새 요청은 실제 18.29분 대신 이전 접수부터 488.59분으로 집계됐다.
+carrier는 main FF 한 번이며 여러 논리 요청의 완료다. 짧은 carrier lead를 대신 세면 회원 표본과
+완료 경계를 모두 잃는다.
+
+원본 이벤트는 고치지 않는다. 선택 당시 회원 snapshot branch·queue ticket·병합 입력 candidate
+OID를 고정하고 성공 완료 metadata에 남긴다. 표준 goal 입력도 보존된 `.members`와 해당 회원의
+historical `isolation` prepare·queue를 연결하여 **그 carrier의 landed SHA**에 candidate가 포함되는지
+검증한다. 오늘의 main에 포함된다는 사실만으로 완료 담당과 시각을 정하면 안 된다. 늦게 읽은
+metadata도 실제 FF 시각에 붙인다. sidecar의 stat/read 실패가 실제 FF 이벤트를 누락시키면 안 된다.
+논리 회원 검증이 부족하면 carrier의 짧은 lead로 대체하지 않고 `INCOMPLETE`/FAIL로 표시한다.
+
+ticket lead로 바꾸는 것도 오답이다. REST와 install의 최초 topic lead는 1938.64·973.03분인데,
+선택된 ticket만 쓰면 853.44·488.89분으로 줄어든다. 이전 성공 이후의 재시도 중 **선택된 회원의
+접수 시점 전에** stop이 확인된 branch/PID/queue epoch만 retry coverage로 잇는다. 그 시점에 열린
+다른 snapshot은 origin의 앞뒤와 관계없이 보존한다. 뒤늦게 FF 전에 stop된 요청도 소급하여 삼키지
+않는다. 같은 frozen snapshot의 완료 전 재접수는 함께 닫되, 이전 성공 전에 남은 stop을 다음 요청의
+시작으로 다시 붙이지 않는다. 같은 ticket을 유지한 재launch의 반복 `queue`도 최초 접수 시점을
+바꾸지 않는다. prefix 전체 삭제나 최신 queue 시각을 기준으로 한 재분류는 이 경계를 깨뜨린다.
+
+기존 automatic train도 실제 queue origin으로 중복을 제거해야 한다. `(branch, None)`를 영구 완료
+표시로 쓰면 공식 direct workflow가 같은 branch를 새 ticket으로 재사용할 때 다음 표본이 사라진다.
+선택한 회원 origin을 성공 train에 고정하고, 회원이 뒤늦게 관측한 `landed`를 추가 main 이동으로
+세지 않는다. 구형 train의 origin이 모호하면 추측하지 않는다. 다만 무관한 과거 불완전 기록이 현재
+조회 기간을 영구 실패시키지 않도록 해당 기간의 표본·미해결 원점에 영향을 주는지 따로 판정한다.
+명단에 같은 branch가 여러 ticket으로 중복되면 두 완료 표본으로 만들지 않고 거절한다. producer도
+접수·prepare 전에 중복을 거절하며, 동일 metadata 이벤트의 반복 수신은 origin 기준으로 중복 제거한다.
+
+미착지 소스 `d51f653ee5`의 goal/rollup/event/batch 원격 회귀 95개가 통과했고 NEW는 0이었다.
+회원 누락·재접수
+누출·direct branch 재사용·metadata stat 오류·모호한 train origin·열린 다른 snapshot 삭제·이전
+완료 경계·조회 기간 범위를 committed RED로 확인한 뒤 고쳤다. 읽기 전용 실제 기록 재계산으로
+회원 네 건과 새 camera 18.2916667분을 복원했다. 고정된 이전 24시간의 원래 집계는 47표본,
+p90 517.8227167분이었다. 두 검증된 rollup은 그 기간 뒤에 완료되어 **두 rollup 보정만** 적용하면
+이 수치는 변하지 않는다. 열린 다른 snapshot과 stop coverage까지 전체 교정한 같은 기간은 47표본,
+p90 491.1793분이다. 이 차이는 측정 교정이며 처리량 개선이 아니다. 구형 automatic train 52건 중
+18건의 origin 증거 부족은 별도 한계로 남는다. 후행 회원 `landed`의 PID만으로 경쟁 origin 중
+하나를 고르면 별도 요청의 성공을 observer로 오인할 수 있다. 명시 pin이나 선택 근거가 없으면
+추정하지 않는다. 빈 목록·부분 손상 metadata는 영향 topic을 모르는 `None`이며, 검증된 빈 범위로
+바꾸면 안 된다.
+
+조회 범위도 함께 확인했다. 고정 구간 `[1793497550, 1793583950)`의 47표본/p90 491.1793분에
+영향을 주는 불완전 기록은 0건이었다. `t1=1793626432.102415`의 이전 24시간은 57표본/p90
+973.0276분, 영향 불완전 0건이었다. 전체 역사 18건과 각 조회의 영향 건수를 섞지 않는다.
+다른 기간에 불완전 기록이 영향을 주면 표본 수·백분위는 관측 가능한 부분으로만 보고한다.
+소스 시험과 입력 재계산은 main 적용이나 60분 SLO 달성의 증거가 아니다.
+
+재발 시 topic 이름부터 바꾸지 말고 snapshot·ticket·candidate·stop epoch를 대조한다. 보존된
+sidecar와 isolation 근거를 복구할 수 없으면 불완전 판정을 유지한다. 원본 시각이나 alias를
+추정해서 고치거나, 재접수라는 이유로 최초 접수 시간을 새로 시작하지 않는다.
 
 ## How to verify next time
 

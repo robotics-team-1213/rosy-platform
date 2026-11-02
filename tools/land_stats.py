@@ -133,13 +133,16 @@ def main(argv=None) -> int:
         t1 = time.time()
         t0 = t1 - args.hours * 3600
         rows = land_events.read(Path(common) / land_events.EVENTS)  # all of it: a lead time may start before t0
-        moves = [r["t"] for r in rows if r["event"] == "landed"]
+        rows, incomplete = land_goal.normalize(rows, Path(common), t0, t1)
+        moves = [r["t"] for r in rows if r["event"] == "landed" and r.get("main_move", True)]
         alive = {int(json.loads(p.read_text(encoding="utf-8")).get("pid") or 0)
                  for p in (Path(common) / land_queue.QUEUE).glob("[0-9]*.json")}
         lines, ok = land_goal.report(rows, moves, {p for p in alive if land_queue.pid_alive(p)}, t0, t1,
                                      args.p90, args.stall)
-        print("\n".join(lines))
-        return 0 if ok else 1
+        if incomplete:
+            lines[-1] = "FAIL: logical landing metrics incomplete"
+        print("\n".join([*incomplete, *lines]))
+        return 0 if ok and not incomplete else 1
     since = time.time() - args.days * 86400
     rows = [r for r in land_events.read(Path(common) / land_events.EVENTS) if r["t"] >= since]
     stats = daily(rows)

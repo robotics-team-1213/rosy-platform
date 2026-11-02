@@ -16,7 +16,13 @@ def assert_workcell_observation_credentials_isolated(service, *, console, princi
         raise ValueError("Workcell observation credential must differ from every other site credential")
 
 
-def install_workcell_observation_routes(app, *, service, require_viewer):
+def install_workcell_observation_routes(app, service, require_viewer, require_named_operator=None, task_service=None):
+    if service is not None and require_named_operator is not None:  # D-963
+        from fleet.server.usb_camera_decisions import UsbCameraStore, install_usb_camera_routes
+        install_usb_camera_routes(app, service=service, require_viewer=require_viewer,
+                                  require_named_operator=require_named_operator,
+                                  store=UsbCameraStore(task_service and task_service.store.path))
+
     def available():
         if service is None:
             raise HTTPException(503, detail={"code": "WORKCELL_OBSERVATIONS_UNAVAILABLE"})

@@ -13726,3 +13726,35 @@ osy-d395-s1d\`.
 - 증거: 실패는 land-fix-publish-baseline-checkout-pin 착지의 MAIN-RED(main 06a479abd1), 복구는 fix/main-red-rosbridge-ledger. 이 변경은 원격 `test/test_affected_tests.py`·`test/test_no_cross_host_dds.py`.
 - gate 변화: 없음
 - CE: 해당 없음 — 재발 방지는 가드 집합 자체이고 이유는 코드 주석에 있다.
+
+## 2026-11-02 · uncommitted · fix(landing): rollup 회원 완료와 접수 origin 측정
+- 변경: 성공 rollup과 automatic train이 선택 당시 회원 snapshot·ticket·candidate를 기록한다. 표준 goal 입력은 보존된 sidecar·historical isolation·정확한 landed SHA ancestry로 과거 회원 완료를 검증하고, 같은 snapshot 재시도와 다음 snapshot 작업의 시계를 분리한다. 실제 FF 횟수·시각은 보존하고 논리 회원 origin이 모호하면 INCOMPLETE/FAIL로 판정한다.
+- 증거: 미착지 소스 `d51f653ee5` 원격 goal/rollup/event/batch 95개 통과, NEW 0. 선행 원격 RED로 회원 누락·재시도 누출·direct branch 재사용·metadata stat 실패·모호한 train origin·열린 snapshot 보존·이전 완료/조회 기간 경계·손상 scope·미기록 pin origin·동일ticket 재emit·중복branch를 확인했다. 읽기 전용 실제 기록 재계산은 회원 4건의 최초 topic lead와 새 camera lead 18.2916667분을 복원했다. 과거 automatic train 18건의 origin 증거 부족과 고정/현재 24h 조회의 영향 0건을 구분한다.
+- gate 변화: 없음. 소스 회귀·입력 재계산이며 main 적용과 SLO 달성을 주장하지 않는다.
+- CE: 기존 Nov1 교훈의 measurement trap을 갱신했다. ticket lead로 바꾸면 retry 이전의 대기 시간이 사라지는 비가시 판단과 검증 한계를 기록한다.
+
+## 2026-11-02 · uncommitted · D-963 USB 카메라 역할 승인 결정과 API v1.350
+
+- 변경: ADR D-963과 API 참조 v1.350(`workcell-observations/{workcell_id}/usb-devices`). 구현은 deploy·fleet·contracts·web 로그를 따른다.
+- 증거: API 버전 pin 8곳 갱신, 구현 시험은 deploy·fleet 로그.
+- gate 변화: 없음. 실제 USB 카메라를 꽂아 승인하는 현장 수용은 하지 않았다.
+- CE: 해당 없음 — 새 기능이며 장애 해결이 아니다. 결정은 D-963에 있다.
+
+## 2026-11-02 · uncommitted · fix(landing): 예측 체인을 실제 우선순위 차단자와 정렬
+- 변경: `land_speculate.chain`이 FIFO 앞줄 대신 정본 `land_queue.blockers`를 재사용한다. TURN 유지, 긴급 요청이 앞지르는 ordinary waiting 제외, 나중 urgent 포함과 stale-bypass를 같은 정책으로 선택한다. preparing/pending 제외와 safety/record 중단 조건은 보존한다.
+- 증거: 미착지 소스 `1f324d765a` 원격 speculation/queue/urgent/prepare/batch 5 suite 133개 통과, NEW 0. 테스트 전용 `daf434afd6`에서 3개 RED를 확인했다. 실제 append-only queue의 ticket/branch/urgent와 당시 관측 status를 고정한 counterfactual은 합성 후보 2개를 실제 TURN 1개로 줄였다. 불필요 후보 제외를 확인한 것이며 절약 시간이나 진행 중인 예측 실행의 새 규칙 적용을 측정한 것은 아니다.
+- gate 변화: 없음. 소스 검증이며 기존 run-spec 작업을 중단하거나 재시작하지 않았다.
+- CE: 해당 없음 — 기존 Oct31 교훈의 우선순위 경계를 적용한 수정이며 정본 helper 재사용과 실제 Git 회귀 시험으로 원인·해결이 드러난다. 새 교훈 문서는 만들지 않는다.
+
+## 2026-11-02 · uncommitted · fix(landing): 실제 준비 anchor를 예측 전에 게시
+- 변경: `land_prepare.prepare`가 저장/유지한 증거를 확정한 뒤 실제 차례와 같은 `land_full.restore` 값을 PREPARING ticket에 게시하고 speculation을 호출한다. 검사 중 main이 움직여도 최신 main으로 위장하지 않고, retained FULL의 원래 anchor와 carried의 빈 anchor를 그대로 따른다. 별도 clean 정책이나 우선순위 정책은 추가하지 않는다.
+- 증거: 미착지 소스 `c0f1c7c7b7` 원격 speculation/queue/urgent/prepare/batch 138개 통과, NEW 0. `930b8940d7` RED에서 실제 prepare의 첫 준비/재준비와 검사 중 main 이동 네 경로가 missing/stale tested로 실패했다. retained FULL 보존도 실제 호출 경로로 확인했다. 앞선 tested 수동 주입 회귀가 놓친 producer 순서를 보완한 것이다.
+- gate 변화: 없음. 기존 실행·동결본을 바꾸거나 중단하지 않았으며 운영 반영은 별도다.
+- CE: 해당 없음 — 호출 순서와 정본 anchor 보존은 코드와 실제 Git 회귀 시험에 직접 남긴다.
+
+## 2026-11-03 · uncommitted · fix(omx): 놀고 있는 팔은 60초에 접고, 막힌 접기는 한 번만 다시 한 뒤 사람을 부른다
+- 변경: `runner.idle_park_s` 180→60, `runner.idle_stop_s` 180→30, 새 `runner.idle_retry_s` 300. 막혀 멈춘 자동 접기는 멈춘 때부터 idle_retry_s 뒤 한 번만 다시 하고, 또 멈추면 토크를 유지한 채 `person_needed`를 보고한다. 명령이 오면 자동 접기 횟수가 되살아난다. 접기는 이전 고장이 있어도 막힘을 감시하고, 실제로 홈에 정착했을 때만 홈으로 친다(토크 OFF의 조건).
+- 증거: 전에는 막힌 자동 접기를 idle_park_s마다 끝없이 다시 했고, 고장 뒤 접기는 막힘 감시가 꺼진 채 SETTLE_S가 지나면 홈으로 쳐서 홈이 아닌 곳에서 토크 OFF가 가능했다(시험으로 재현). 사용자 결정 2026-11-03.
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: `docs/solutions/runtime-errors/omx-blocked-wrist-roll-reached-the-guard-unseen-2026-11-02.md`

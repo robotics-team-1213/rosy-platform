@@ -21,6 +21,7 @@ ROSY_DEPTH_RANGE_MM or ROSY_CAMERA_MIN_USB_MBPS) are optional.
                            exactly one unregistered camera has the role's recorded model (usb_id) and no other gone
                            role has that model; every other unregistered camera is proposed, never given a role
   omx_cameras.py propose   the unregistered cameras, each with its persistent name and the gone roles of its model
+                           A role Fleet's operator decided (omx-camera-decisions.json, D-963) is approved the same way
   omx_cameras.py approve NODE ROLE  give a plugged camera a role (a new role gets /<role>_camera/image_raw), then bind
   omx_cameras.py manifest [--manifest PATH] [--apply]  copy each registered camera's device into the workcell
                            observation manifest entry with the same image topic; exit 1 while one differs
@@ -30,8 +31,10 @@ from __future__ import annotations
 
 import argparse
 import glob
+import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -42,6 +45,7 @@ import omx_devices  # noqa: E402
 SCHEMA = "rosy.omx-cameras.v1"
 REGISTRY = Path("~/.config/rosy/omx-cameras.json").expanduser()
 ENV_DIR = Path("~/.config/rosy").expanduser()
+DECISIONS = Path("~/.local/state/rosy/omx-camera-decisions.json").expanduser()  # {key: role}, written by the bridge
 MANIFEST = Path("~/.config/rosy/workcell-observations/observations.yaml").expanduser()
 FIELDS = {"device": "ROSY_CAMERA_DEVICE", "topic": "ROSY_CAMERA_TOPIC", "frame": "ROSY_CAMERA_FRAME",
           "fourcc": "ROSY_CAMERA_FOURCC"}
@@ -180,9 +184,28 @@ def best_name(node: str, names: dict) -> str:
     raise SystemExit(f"{node}: no persistent /dev/v4l name")
 
 
-def propose(registry: dict, facts: dict, names: dict, present, realpath=os.path.realpath) -> list:
+def hub(usb: str | None) -> str | None:
+    """The USB hub a device sits on ("3-1.3" -> "3-1"); None on a root port, which every device shares."""
+    return usb.rsplit(".", 1)[0] if usb and "." in usb else None
+
+
+def arm_hubs(env_dir: Path = ENV_DIR, realpath=os.path.realpath) -> dict:
+    """{arm: hub} for each observer board plugged into a hub (omx-observer-<arm>.env names the board)."""
+    out = {}
+    for role, device in omx_devices.roles(env_dir).items():
+        if role.startswith("observer-") and os.path.exists(device):
+            interface = Path(f"/sys/class/tty/{os.path.basename(realpath(device))}/device").resolve().name
+            if hub(interface.split(":")[0]):
+                out[role.removeprefix("observer-")] = hub(interface.split(":")[0])
+    return out
+
+
+def propose(registry: dict, facts: dict, names: dict, present, realpath=os.path.realpath, hubs=None) -> list:
     """One row per camera no present role uses: its name and model, the gone roles last seen on that model, and
-    `follow` when it is the only such camera and the only such role (the same camera moved to another port)."""
+    `follow` when it is the only such camera and the only such role (the same camera moved to another port).
+
+    `hub_arm` is the one arm whose board shares the camera's USB hub, and `suggest` its `<arm>_wrist` role when that
+    role is gone: a hint for the person approving, not a binding, until the cell's wiring is checked to be that way."""
     gone = [c for c in registry["cameras"] if not present(c["device"])]
     used = {realpath(c["device"]) for c in registry["cameras"] if present(c["device"])}
     free = [n for n in sorted(facts) if n not in used]
@@ -191,8 +214,12 @@ def propose(registry: dict, facts: dict, names: dict, present, realpath=os.path.
         model = facts[node]["id"]
         roles = [c["role"] for c in gone if c.get("usb_id") == model]
         same = [n for n in free if facts[n]["id"] == model]
-        rows.append({"node": node, "device": best_name(node, names), "usb_id": model,
-                     "roles": roles, "follow": roles[0] if len(roles) == 1 and len(same) == 1 else None})
+        follow = roles[0] if len(roles) == 1 and len(same) == 1 else None
+        arms = [arm for arm, h in (hubs or {}).items() if h == hub(facts[node]["usb"])]
+        hub_arm = arms[0] if len(arms) == 1 else None
+        rows.append({"node": node, "device": best_name(node, names), "usb_id": model, "roles": roles,
+                     "follow": follow, "hub_arm": hub_arm,
+                     "suggest": follow or (f"{hub_arm}_wrist" if f"{hub_arm}_wrist" in roles else None)})
     return rows
 
 
@@ -221,6 +248,28 @@ def approve(registry: dict, role: str, row: dict) -> dict:
         registry["cameras"].append(camera)
     camera.update(device=row["device"], usb_id=row["usb_id"])
     return registry
+
+
+def device_key(device: str) -> str:
+    """What the control PC tells Fleet instead of a device name (D-963)."""
+    return hashlib.sha256(device.encode()).hexdigest()[:32]
+
+
+def apply_decisions(registry: dict, proposals: list, path: Path) -> tuple[list, dict]:
+    """Approve each proposed camera whose key Fleet decided a role for: (changes, decisions still waiting)."""
+    try:
+        decided = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return [], {}
+    if not isinstance(decided, dict):
+        return [], {}
+    changes = []
+    for row in proposals:
+        role = decided.pop(device_key(row["device"]), None)
+        if isinstance(role, str) and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_-]{0,63}", role):
+            approve(registry, role, row)
+            changes.append({"role": role, "to": row["device"]})
+    return changes, decided
 
 
 def save(registry: dict, path: Path) -> None:
@@ -261,6 +310,7 @@ def main(argv=None) -> int:
     ap.add_argument("role", nargs="?", help="approve: the role it gets")
     ap.add_argument("--registry", type=Path, default=REGISTRY)
     ap.add_argument("--env-dir", type=Path, default=ENV_DIR)
+    ap.add_argument("--decisions", type=Path, default=DECISIONS, help="bind --apply: Fleet's role decisions")
     ap.add_argument("--manifest", type=Path, default=MANIFEST, help="manifest: the observation manifest to check")
     ap.add_argument("--apply", action="store_true", help="bind: write env files and restart units; manifest: write it")
     args = ap.parse_args(argv)
@@ -287,7 +337,7 @@ def main(argv=None) -> int:
         return 0
     if registry is None:
         raise SystemExit(f"no registry at {args.registry}: run 'init' first")
-    proposals = propose(registry, facts, _names(), os.path.exists)
+    proposals = propose(registry, facts, _names(), os.path.exists, hubs=arm_hubs(args.env_dir))
     if args.action == "propose":
         print(json.dumps(proposals, indent=1))
         return 0
@@ -302,11 +352,17 @@ def main(argv=None) -> int:
         learned, args.apply = [{"role": args.role, "to": row["device"]}], True
     elif args.apply:
         learned = learn(registry, facts, proposals, os.path.exists)
+        approved, waiting = apply_decisions(registry, [r for r in proposals if not r["follow"]], args.decisions)
+        learned += approved
         if learned:
             save(registry, args.registry)
+        if approved:  # the registry is saved first, so a crash re-applies a decision instead of losing it
+            tmp = args.decisions.with_suffix(".tmp")
+            tmp.write_text(json.dumps(waiting), encoding="utf-8")
+            os.replace(tmp, args.decisions)
     if learned:
         registry = load(args.registry)
-        proposals = propose(registry, facts, _names(), os.path.exists)
+        proposals = propose(registry, facts, _names(), os.path.exists, hubs=arm_hubs(args.env_dir))
     plan = bind(registry, args.env_dir, os.path.exists, set(facts))
     plan["learned"], plan["proposals"] = learned, proposals
     if learned:  # the bridge's copy is the user's; the site's /etc copy needs 'manifest --apply' with root

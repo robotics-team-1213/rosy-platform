@@ -51,6 +51,7 @@ PINNED_CONFIRMS = {
     "middleware/robot_ui/robot/telemetry.js": 1,
     "applications/fleet/web/devices/camera-pairing.js": 2,
     "applications/fleet/web/installation/camera-peer.js": 2,
+    "applications/fleet/web/installation/usb-camera.js": 1,  # D-963 USB camera role approval
     "applications/fleet/web/cell/cell.js": 1,
     "applications/fleet/web/work/channel-request-view.js": 3,  # D-680/D-687/D-693 Task, Mission admission, incident claim
     "applications/fleet/web/work/arm-transfer-view.js": 2,  # Independent ARM admission and one recovery approval.
