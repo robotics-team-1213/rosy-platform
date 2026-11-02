@@ -183,6 +183,9 @@ class MotorHealth:
             self.terminal_at = time.time()
         state = self.motions.get(self.key(motion))
         last = state["last"] if state else None
+        if last:  # the public reason has no joint; flag the one the guard names ("wrist_roll: following error ...")
+            joint = str(exc).split(':', 1)[0]
+            last["motors"] = [{**m, "fault": m["fault"] or m["joint"] == joint} for m in last["motors"]]
         now = motion.clock()
         row = dict(event="fault", arm=motion.label, fault=str(exc) or type(exc).__name__,
                    fault_type=type(exc).__name__, telemetry="last_known",

@@ -278,6 +278,10 @@ def test_a_guard_fault_keeps_its_own_record_and_the_local_camera_frames(tmp_path
     record = json.loads(records[0].read_text())
     assert record['schema_version'] == 'rosy.motor-fault.v1' and 'wrist_roll' in record['fault']
     assert record['motors'][4]['joint'] == 'wrist_roll'  # every joint at the fault, not only the public reason
+    assert [m['joint'] for m in record['motors'] if m['fault']] == ['wrist_roll']
+    snapshot = json.loads(monitor.state_path.read_text())
+    assert [m['joint'] for m in snapshot['motors'] if m['fault']] == ['wrist_roll']  # Fleet sees which joint
+    assert snapshot['stop_reasons'] == ['following error']
     assert record['frames'] == {'top': records[0].stem + '-top.jpg'}  # not a jpeg and not local: skipped
     assert (tmp_path / 'faults' / record['frames']['top']).read_bytes() == jpeg
     # the next session overwrites the snapshot, never the fault record
