@@ -13698,3 +13698,17 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 결정 승인과 소스 회귀 검증은 운영 수용과 구분한다.
 - 결정: D-889 「모든 차례 최대 30분」, 사용자 승인 2026-11-02.
 - CE: 해당 없음 — 시간 정책·안전 경계는 ADR 정본과 회귀 시험에 기록했다.
+
+## 2026-11-02 · uncommitted · fix(omx): 막힌 wrist_roll을 가드 전에 멈추고, 가드 고장마다 기록과 카메라 프레임을 남긴다
+- 변경: `chunk_runner.ROLL_BLOCK_LAG`. goto·park·lift의 막힘 감지가 wrist_roll도 보며, PWM과 관계없이 지연이 1.5단위를 넘어 계속 오르면 토크를 유지한 채 멈춘다. 멈춤 문구에 다른 관절의 지연을 붙인다. `motor_health.keep_fault`는 가드 고장마다 `faults/<owner>-<utc>.json`(`rosy.motor-fault.v1`, 모든 관절)과 `ROSY_OMX_FAULT_FRAMES`의 로컬 카메라 프레임을 남긴다.
+- 증거: arm_a가 11-01 15:12·15:18·23:19 첫 goto에서 wrist_roll 막힘으로 가드 토크 OFF, 팔이 반쯤 뻗은 채 남음. 원격 시험은 착지 기록에 남긴다.
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: `docs/solutions/runtime-errors/omx-blocked-wrist-roll-reached-the-guard-unseen-2026-11-02.md`
+
+## 2026-11-02 · uncommitted · feat(fleet): 멈춘 관절을 이름으로 보이고, 팔마다 가드 정지 이력을 셀 화면에 남긴다
+- 변경: `motor_health.fault`가 가드 문구가 가리킨 관절의 `fault`를 켠다(공개 이유는 관절을 말하지 않음). `WorkcellObservations`가 팔마다 가드 정지 20건을 세션당 한 번 `faults`로 보존한다(메모리, Fleet 재시작 시 사라짐). 셀 화면은 `고장 이력`에 멈춘 관절·오차·PWM, 1° 넘게 함께 뒤처진 관절, 정지를 받은 순간 화면에 있던 카메라 영상을 보인다. 카메라 타일은 Enter·Space로 확대, Esc로 되돌린다.
+- 증거: 11-01 arm_a 정지는 화면에 `following error`만 남았고 다음 표본에서 사라짐. 원격 시험은 착지 기록에 남긴다.
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: `docs/solutions/runtime-errors/omx-blocked-wrist-roll-reached-the-guard-unseen-2026-11-02.md`

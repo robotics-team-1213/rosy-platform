@@ -169,7 +169,7 @@ def test_cell_arm_health_uses_shared_view_without_double_aging_and_retains_fault
         card=page.locator('[data-arm-source="feedback_a"]')
         expect(card.locator('.motor-health-summary')).to_contain_text('주의 모터 1개')
         assert card.locator('.motor-health-summary').get_attribute('data-evidence')=='fresh'
-        card.locator('summary').click()
+        card.locator('summary.motor-health-summary').click()
         expect(card.locator('.motor-health tbody tr')).to_have_count(5)
         assert '어깨 올림' in card.locator('.motor-health').inner_text()
         local_label(page,'[data-arm-source="feedback_a"] .motor-health')
@@ -260,4 +260,49 @@ def test_slow_response_counts_browser_transit_against_sample_freshness(console_u
             panel=page.locator('#motor-panel')
             panel.locator('tbody tr').first.wait_for()
             assert panel.get_attribute('data-evidence')=='delayed'
+        browser.close()
+
+
+def test_cell_keeps_a_guard_stop_with_the_lagging_joints_and_the_frames_on_screen(cell_url):
+    from playwright.sync_api import expect, sync_playwright
+    from test_fleet_workcell_observation_browser import observation_feed
+    stop = {'captured_at': 1793500000.0, 'session_id': '22222222-2222-4222-8222-222222222222',
+            'stop_reasons': ['following error'], 'motors': [
+                dict(joint=f'joint{i}', id=10 + i, error_deg=e, command_raw=2000., present_raw=2000. + e * 11.4,
+                     pwm=-82. if i == 5 else 100., pwm_limit=300., fault=i == 5)
+                for i, e in ((1, 2.2), (2, .1), (3, .2), (4, .3), (5, 5.0))]}
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        page = browser.new_page(viewport={'width': 390, 'height': 900})
+        state, snapshot = observation_feed(page)
+        faults = []
+
+        def observations(route):
+            data = snapshot()
+            for arm in data['workcells'][0]['arms']:
+                arm['faults'] = list(faults) if arm['arm_id'] == 'arm_a' else []
+            route.fulfill(json=data)
+        page.route('**/api/fleet/workcell-observations', observations)
+        page.goto(cell_url)
+        card = page.locator('[data-arm-source="feedback_a"]')
+        expect(card).to_contain_text('고장 이력 없음')
+        expect(page.locator('[data-camera-source="top"] img')).to_be_visible()
+        faults.append(stop)  # arrives while the page is open: held with the frames on screen
+        expect(card.locator('details:has(.cell-fault-history)')).to_have_attribute('open', '')
+        history = card.locator('.cell-fault-history')
+        expect(history).to_contain_text('손목 회전(ID 15) 정지 · 오차 5.0°')
+        expect(history).to_contain_text('함께 뒤처진 관절: 어깨 회전 2.2°')
+        expect(history.locator('.cell-fault-frames img')).to_have_count(3)
+        expect(card).to_contain_text('고장 이력 1건')
+        tile = page.locator('[data-camera-source="top"]')
+        tile.focus()
+        page.keyboard.press('Enter')
+        expect(tile).to_have_class('cell-observation-card focused')
+        expect(tile).to_have_attribute('aria-pressed', 'true')
+        page.keyboard.press('Escape')
+        expect(tile).to_have_attribute('aria-pressed', 'false')
+        assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
+        save_temp_screenshot(card, 'cell_fault_history_LOCAL_390.png')
+        assert not state.failed_assets, state.failed_assets
+        page.unroute_all(behavior='ignoreErrors')
         browser.close()
