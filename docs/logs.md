@@ -13764,3 +13764,50 @@ osy-d395-s1d\`.
 - 증거: 돌기 격자 PnP top 0.58 px·side 2.8 px, arm_b 녹화 세션 `live.json`을 읽기만 해 FK 맞춤 3.1 px. 팔 명령·관측기 기동 없음. 스크립트와 겹침 영상은 Git 밖 작업 공간 조사 폴더.
 - gate 변화: 없음. fixture 수치는 바꾸지 않았다(실측 받침 채택은 도달·충돌 비교 뒤).
 - CE: 해당 없음 — 측정 기록이며 해결한 장애가 아니다. 실물과 시뮬레이션의 차이는 대장에 남겼다.
+
+## 2026-11-03 · uncommitted · fix(publish): 실제 FULL·브라우저 실행 근거로 게시와 병합을 검증한다
+
+- 변경: `publish_main.green_full`이 후보 SHA의 정본 FULL·전체 opt-in 브라우저 chunk/ALONE 계획과 정확한 commit·tree·환경·argv·로그 SHA-256 대응을 확인한다. 기존 분할기를 그대로 사용하며 준비 후보는 기존 main 병합 bridge와 최종 계획·환경 일치가 필요하다. `--no-cache`는 재사용만 끄고 새 clean 실행 근거를 남긴다.
+- 증거: `cf16fa8214` 원격 게시·착지·준비·선택·캐시·batch 7파일 318 PASS, 0 SKIP, NEW 0·known 0·flaky 0. 선행 RED `b1cf199195` 3실패, 독립 검토 반례 RED `d4ed8d5348` 4실패 뒤 수정했다. 실제 후보의 정본 41호출·브라우저 13청크 추출을 확인했고 #227 head `8a84c7e359`는 opt-in 브라우저 계획 부재로 거부했다.
+- gate 변화: 기존 FULL 기준을 선택과 열린 PR 병합 양쪽에서 검증한다. 일반 ROS skip과 승인된 quarantine 재실행의 기존 판정은 유지한다. tier-only·hash 없는 과거 근거는 소급 승인하지 않는다.
+- 한계: 캐시 정리·로그 소실·같은 경로의 내용 교체는 게시 거부다. 최종 통합 SHA의 새 FULL, 공개 CI, 배포·실물 수용은 별도 검증이다.
+- 교훈: 기존 `own-full-landing-to-publish-wasted-hours-2026-11-02.md`의 #227 해석은 게시 담당이 최종 검증 뒤 정정한다.
+
+## 2026-11-03 · f8fdc85890 · docs: 게시 성공과 적격 FULL 근거 구분
+
+- 변경: 기존 FULL 교훈의 #227 해석을 정정했다. 실제 병합 사실은 보존하고, 당시 브라우저 실행 근거가 없었다는 후속 검토와 후보·준비 bridge·로그 hash 검증 조건을 구분했다.
+- 증거: 게시 근거 수정의 최종 문서 head f8fdc85890에서도 관련 318개가 원격 통과했고 skip과 NEW/known/flaky는0이었다. 실제 과거 후보는 새 검증기에서 거부됐다. 이 검증은 최종 통합 FULL·공개 CI·장치 수용을 대신하지 않는다.
+- gate 변화: 없음. 과거 실행을 적격 근거로 소급 승인하지 않았다.
+- CE: 기존 교훈 갱신 — 자동화의 병합 성공을 FULL의 적격성으로 해석한 기존 설명이 다음 작업을 오도할 수 있어 바로잡았다.
+
+## 2026-11-03 · 3db26622ab · evidence: 재연결 뒤 READY 복구와 수정 검증 동결
+
+- 변경: `validation/camera-readiness-followup-2026-11-03/result.md`에 실제 USB 재연결 뒤 새 기준선으로 복구한 결과와 세 코드 수정의 원격 검증 근거를 동결했다. 게시 근거 수정 bootstrap 착지 스냅샷을 접수한 뒤, 아직 미착지인 원본 주제 브랜치에서 같은 후속 검증 기록을 준비했다.
+- 증거: 네 역할의 registry/env 일치·단독 소유권·서로 다른 장치를 확인했고, 준비 검사 시작·원본 controls readback·재시작 뒤 별도 READY 3회에서 네 영상 sequence가 모두 증가했다. 실행 source는 기존 landed commit cbfb144767의 불변 snapshot이며 이전 profile/env/state를 보존했다.
+- gate 변화: 이번 실행의 photometric READY 복구. 팔/Pinky 동작·기하 보정·재부팅·새 릴리스 배포는 하지 않았다. 통합 후보의 qualified FULL와 공개 CI를 이 기록으로 대신하지 않는다.
+- CE: 기존 카메라 기준선 전환 절차 적용, 새 교훈 없음. 게시 근거 교훈 정정은 앞 기록과 같다.
+
+## 2026-11-03 · uncommitted · test(publish): held turn의 출처 보존과 실행 증거를 구분한다
+
+- 변경: `test_land_speculate`의 모의 FULL fixture는 출처·held turn의 root 실행·record base/ancestry·선택 보존을 그대로 검사하고, 실제 정본 FULL·브라우저 실행 근거가 없으므로 게시 검증 거부를 기대한다. 생산 관문과 캐시·로그 판정은 바꾸지 않았다.
+- 증거: 기존 bootstrap 후보 `382138de78`의 root 행렬에서 이 기대값 하나가 NEW였고 단독 재실행도 실패했다. 변경 전 main `37cde0e33e`에서는 통과했다. 수정한 최종 SHA는 speculate·prepare·publish 회귀와 speculate 단독 프로세스로 원격 검증한다.
+- gate 변화: 없음. 모의 검사로 기록한 `tier=full`을 실제 게시 근거로 해석하지 않는다.
+- CE: 해당 없음 — 이미 정정한 게시 근거 교훈과 엄격한 게시 회귀가 이 구분을 설명하며, 이번 수정은 남은 모의 fixture 기대값을 그 계약에 맞춘다.
+
+## 2026-11-03 · uncommitted · feat(isaac): 실물 top·side 카메라 시점과 D-947 Accepted
+- 변경: 컨테이너 fixture `real_cameras`(실측 PnP의 자세·기울기·초점거리), `stacking_scene.real_capture`가 첫 시행에 `real-top.png`·`real-side.png`를 렌더, 보고서 허용 그림에 추가, 방향(좌우 반전) 시험. D-947 Accepted(사용자 확인).
+- 증거: Isaac top 렌더와 실물 top 영상의 돌기 36개 평균 1.13 px·최대 1.85 px, side는 겹침으로 확인(PnP 잔차 2.8 px 이내). `test_container_stack.py` 원격 통과.
+- gate 변화: 없음. 팔 받침은 CAD 값 그대로다. 둘째 실행은 모델 PC에서 외부 정지로 적층 결과를 주장하지 않는다.
+- CE: 해당 없음 — 새 기능이다. 카메라 기울기(roll)를 빼면 side가 4.3 px로 한계를 넘는다는 점은 fixture 주석과 검증 기록에 남겼다.
+
+## 2026-11-03 · uncommitted · fix(landing): 병렬 준비와 폴백에서 급행 표시를 보존한다
+- 변경: 병렬 guard/body의 활성 우선순위 호출 수를 Lock으로 관리해 마지막 호출까지 표시를 유지한다. 자원 정보가 없는 serial 폴백에도 TURN_JOB를 전달한다. selector·검증 범위·worker/메모리 한계·host floor·ALONE 정책은 그대로다.
+- 증거: committed RED `d27b7a625c` 의도 실패6/양성2. 수정 `150a10701e`의 flags/remote_pytest/host_admission 원격125 PASS, skip/NEW/known/flaky0. 양쪽 종료 순서·normal 중첩·예외 정리·fallback flag1/0/빈값을 검증했다. 독립 검토 추가P1/P2없음, size2commits PASS, lint0오류42경고.
+- gate 변화: 없음. 소스 검증이며 기존 실행 중 job의 표시 갱신·main 적용·60분 SLO를 주장하지 않는다.
+- CE: 기존 Oct31 교훈 갱신. 공유 환경변수의 진입/종료 순서와 job launch 시점이 다른 문제, 단순 이전값 복원으로 해결되지 않는 이유를 기록했다.
+
+## 2026-11-03 · uncommitted · fix(landing): 분할 중복과 중첩 rollup 집계를 보완한다
+- 변경: 원격 호출 분할 후 전체 argv가 같은 항목만 첫 순서대로 제거한다. rollup의 직접 회원 소유권은 유지하며 자식 metadata를 실제 완료 이벤트에 보존하고, 집계는 부모 candidate·원래 ticket을 검증한 leaf만 닫는다. 순환·중복·미확인 pin은 불완전으로 유지하고 확인 가능한 leaf 영향 범위는 보존한다.
+- 증거: 실제 같은 SHA/tree/환경의 body 중복 5쌍을 확인했다. 소스 `3bb09294bb` 원격 split/isolation/remote_pytest 137 PASS, `d48e9f8e65` 원격 goal/rollup 55 PASS, 모두 skip/NEW/known/flaky 0. 선행 committed RED는 분할 중복 2건·중첩 완료/검증 경계 8건·metadata 손상 보존/기간 scope 2건이었다. `d48e9f8e65`의 독립 검토에 추가 P1/P2가 없었으며 소유권·이벤트 관련 통합 검증은 착지 전에 확인한다.
+- gate 변화: 없음. 기존 legacy 중첩 carrier의 미확인 origin은 추정하지 않으며 소스 검증을 main 착지·SLO 달성으로 보고하지 않는다.
+- CE: 기존 Nov1 교훈 갱신. 직접 소유권 목록과 논리 leaf 완료를 구분해야 하는 이유, 분할 후에야 드러나는 중복 호출을 기록했다.
