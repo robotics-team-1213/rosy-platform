@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-11-02 · 7090702e1f · fix(remote): isaac_batch retries an UNKNOWN run; Step 4c boundary over seeds and yaw; D-958 stage 1 kill test
 - 2026-11-02 · 7620243a3b · feat(hosts): D-958 stage 1, role services lend the GPU only while idle
 - 2026-11-02 · cd8243b5b2 · docs: D-958 lab compute ledger (Proposed)
 - 2026-11-02 · b3702baef5 · feat(remote): isaac_batch grid plans, service pause window, summary table; AI PC as Isaac host
 - 2026-11-02 · d33ce586f0 · feat(remote): Isaac batch across model and AI PCs, resume only unfinished runs
-- 2026-11-02 · uncommitted · feat(tools): 업데이트 운영 CLI update_ops (D-957)
