@@ -708,6 +708,26 @@ def test_control_unit_peer_container_requires_the_accepted_proxy_identity(fault)
     assert (result == '') is (fault is None)
 
 
+@pytest.mark.parametrize('healthy', [True, False])
+def test_control_peer_monitoring_and_account_follow_the_signed_switch_and_rollback(host, healthy):
+    with host.paths.site_env.open('a', encoding='utf-8') as stream:
+        stream.write('ROSY_SITE_PAIRING_COMPOSE=' + ' '.join(
+            f'-f /opt/rosy/candidate/deploy/site/compose.{name}.yaml'
+            for name in ('control-unit', 'monitoring', 'account')) + '\n')
+
+    class AccountHost(FakeHost):
+        def _owners(self):
+            return {**super()._owners(), 'account': 'fleet'}
+
+    fake = AccountHost(host.paths, healthy_tags=None if healthy else {OLD})
+    releases, blobs = _world((NEW, '2026-10-04T02:00:00Z'))
+    updater = _updater(host, FakeHttp(releases, blobs), fake)
+    assert updater.run() == (upd.EXIT_OK if healthy else upd.EXIT_FAILED)
+    assert fake.running == (NEW if healthy else OLD)
+    assert updater._containers_reason(upd.read_env(host.paths.site_env), fake.running) == ''
+    assert sum(args[:2] == ['systemctl', 'restart'] for args in fake.calls) == (1 if healthy else 2)
+
+
 @pytest.mark.parametrize('configured', [[], 1, 'unexpected'])
 def test_control_unit_peer_configuration_requires_a_service_object(host, configured):
     fake = FakeHost(host.paths)
