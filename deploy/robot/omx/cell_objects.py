@@ -148,7 +148,9 @@ def classify(mm, catalog: list, px_mm2: float | None = None, params=None) -> lis
     turned = {**m, "length_mm": m["width_mm"], "width_mm": m["length_mm"], "long_axis_deg": (m["long_axis_deg"] + 180) % 180 - 90}
     for k in range(2, prm.get(params, "objects.split_max") + 1):  # 2026-11-03: five 3-cells in a row on the ship plate
         for o in catalog:
-            row = next((r for r in (m, turned) if _fits(r, o, k, strict=True, gap_mm=gap)), None)
+            # the whole row's box length reads long (its end shadows: 100-101 mm for 90, 2026-11-03), so the row gate
+            # takes the loose length; each strip below is still matched strictly
+            row = next((r for r in (m, turned) if _fits(r, o, k, strict=False, gap_mm=gap)), None)
             if row:
                 strips = [(g, measure(mm[g])) for g in _strips(mm, row, k)]
                 found = [(match(s, catalog, strict=True), s, g) for g, s in strips]

@@ -204,3 +204,11 @@ def test_three_3_cells_in_a_row_longer_than_one_box_are_split_along_the_row():
     found = co.classify(mm, CATALOG)
     assert [o["object"] for o in found] == ["container-3"] * 3
     assert sorted(round(o["centre_mm"][0]) for o in found) == [15, 51, 87]
+
+
+def test_a_row_whose_box_length_reads_long_from_end_shadows_still_splits():
+    """2026-11-03: the same three-box row read 100.1 mm long on one frame (split) and 100.8 on the next (not)."""
+    mm = np.array([(k * 36 + x, y) for k in range(3) for x in np.arange(0, 30.5, 1.0) for y in np.arange(-45, 45.5, 1.0)]
+                  + [(x, y) for x in np.arange(0, 102.5, 1.0) for y in (-50.0, 50.0)], np.float32)  # a shadow line at each end
+    found = co.classify(mm, CATALOG)
+    assert len(found) == 3 and all(o["matched"] for o in found)
