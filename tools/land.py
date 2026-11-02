@@ -73,6 +73,7 @@ ENV = {**os.environ, "PYTHONUTF8": "1"}
 
 
 TURN_CAP_S = 600  # D-889: the acquired turn's budget; expiry yields at safe boundaries (land_prepare.again)
+TURN_MAX_S = 1800  # user decision 2026-11-02: every acquired turn yields, even without a waiter
 # 2026-10-27: a landing with a hand-picked --tests skipped its selection, guards and pretest and left main red
 # (3125704e24). A real landing always runs the selection; --tests "<args>" only adds EXTRA, "none" is refused.
 FIXTURE_ENV = "ROSY_LAND_FIXTURE"  # land.py's own test fixtures only: --tests none/"<args>" replace the selection
