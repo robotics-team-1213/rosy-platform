@@ -13645,6 +13645,12 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 교훈: 없음
 
+## 2026-11-02 · 7090702e1f · fix(remote): isaac_batch retries an UNKNOWN run; Step 4c boundary over seeds and yaw; D-958 stage 1 kill test
+- 변경: `tools/remote/isaac_batch.py`가 UNKNOWN으로 끝난 실행을 옆으로 치우고 `job_errors` 한도 안에서 다시 돌린다(회귀 시험 `test_an_unknown_run_is_set_aside_and_retried_not_polled_forever`). `result.md` Step 4c, D-956 근거·결정 5·결과, D-958 1단계 진행
+- 증거: 24개 실행(모델 PC 21·AI PC 3) — 지금 컨테이너는 +0.2 mm에서 seed 43 실패, +0.3 mm 세 seed 실패. r290은 +0.6~+0.8 mm 세 seed 9/9, -0.6 mm 세 seed 9/9, -0.7 mm seed 42 9/9(seed 43은 평탄 맞춤 단계 실패로 판정 불가). 회전 0.5°는 두 컨테이너 9/9, 1°는 지금 컨테이너 실패, r290은 줄 간격 4.1~4.6 mm로 범위 밖. AI PC 실행 4fe8은 정리 확인 없이 UNKNOWN으로 끝나 옛 배치가 11시간 대기 없이 다시 물었다. D-958: 13:44 강제 종료 → 13:54 점검이 `released rosy-ollama.service`, `owner_mode` available. 원격 pytest `test_isaac_batch.py`·`test_remote_isaac.py` 통과
+- gate 변화: 없음
+- CE: 해당 없음 — UNKNOWN 재시도는 회귀 시험으로 고정했고, 세션 재시작 뒤 살아남은 프로세스는 저장소 밖 경험 메모에 남겼다
+
 ## 2026-11-02 · uncommitted · feat(fleet): 확인된 ARM 시도의 재관측 계약(D-930, API v1.334)
 
 - 변경: `POST/GET /api/fleet/arm-transfers/jobs/{id}/rechecks`를 추가했다. 기다리는 재관측은 기존 observation context에 `phase=RECHECK`로 나오고 같은 observations 경로로 받는다. 검사는 POST_ACTION과 같고 요청 뒤 시각·측정 관절을 요구한다. Action·claim·작업 상태·영수증·v1.330 근거는 바뀌지 않는다(`work/physical_transfer_rechecks.py`, `fleet_physical_transfer_rechecks` 테이블).

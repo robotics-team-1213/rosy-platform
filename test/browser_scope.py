@@ -19,11 +19,14 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 
-FLEET = [
-    "test/test_integrated_control_backend_browser.py",
+FLEET_SAMPLE = [
     "applications/fleet/test/test_sample_browser.py",
     "applications/fleet/test/test_feature_browser_flows.py",
     "applications/fleet/test/test_browser_adapters.py",
+    "applications/fleet/test/test_integrated_sample_browser.py",
+]
+FLEET = FLEET_SAMPLE + [
+    "test/test_integrated_control_backend_browser.py",
     "test/test_measured_calibration_browser.py",
     "test/test_motor_health_ui_browser.py",
     "test/test_fleet_workcell_observation_browser.py",
@@ -93,7 +96,7 @@ EVERYTHING = FLEET + ROBOT + API_WEB + PILOT + GAMES + REVIEW + LEARNING + GAZEB
 SCOPE: dict[str, list[str]] = {
     "applications/monitoring/": MONITORING,
     "operations/monitoring/": MONITORING,
-    "applications/fleet/dev/": FLEET,
+    "applications/fleet/dev/": FLEET_SAMPLE + ["operations/fleet/test/test_app_connected_browser.py"],
     "applications/fleet/test/": FLEET,
     "operations/fleet/fleet/server/": FLEET,
     "applications/fleet/web/": FLEET,
@@ -158,6 +161,13 @@ def targets(paths: list[str]) -> list[str]:
     selected: set[str] = set()
     for raw in paths:
         path = raw.replace("\\", "/").removeprefix("./")
+        if path.startswith("applications/fleet/dev/") and path.endswith(".md"):
+            continue
+        # These shared sample-engine/fixture modules reach all sample browsers, not production fixtures.
+        if path in ("applications/fleet/test/test_sample_server.py", "applications/fleet/test/test_sample_browser.py"):
+            for pattern in FLEET_SAMPLE:
+                selected.update(_expand(pattern))
+            continue
         for prefix, patterns in SCOPE.items():
             if path.startswith(prefix):
                 for pattern in patterns:
