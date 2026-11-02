@@ -324,18 +324,43 @@ def overtimes(land, args) -> int:
     return max(counts)
 
 
+def turn_budget(land, args) -> float:
+    sent_back = overtimes(land, args)
+    return land.TURN_MAX_S if sent_back >= 2 else min(land.TURN_MAX_S, land.TURN_CAP_S * (3 if sent_back else 1))
+
+
+def turn_deadline(land, args, round_no, *, maximum: bool = False) -> float | None:
+    budget = land.TURN_MAX_S if maximum else turn_budget(land, args)
+    if not (isinstance(round_no, int) or re.fullmatch(r"g\d+r?", str(round_no))):
+        return None
+    started = land.land_queue.turn_started()
+    return (land.time.monotonic() if started is None else started) + budget
+
+
+def check_turn(land, wt: Path, args, round_no) -> None:
+    """Yield at a safe phase boundary; Git mutations are never interrupted by the turn clock."""
+    deadline = turn_deadline(land, args, round_no)
+    maximum = turn_deadline(land, args, round_no, maximum=True)
+    now = land.time.monotonic()
+    if deadline is not None and now >= deadline and (
+            (maximum is not None and now >= maximum) or turn_wanted(land, wt)):
+        for ticket in list(land.land_queue._held):
+            land.land_queue.release(ticket, "turn deadline", started=land.land_queue.turn_started())
+        raise land.Overtime("turn budget expired: remaining checks prepare outside the lock")
+
+
 def run_tests(land, wt: Path, args, invocations: list[list[str]], logdir: Path, round_no: int) -> list[str]:
     """Run lint + pytest (+ node); return a summary line per step. Stop on any NEW failure."""
-    # D-889 15/19/26: the cap grows with each time it sent this landing back: 20 min, then 30, then none. 11-01: big
-    # FULL landings went back 3-6 times (12-13 min each); then one uncapped turn held main for over 90 min.
-    sent_back = overtimes(land, args)
-    capped = isinstance(round_no, int) and sent_back < 2
-    deadline = land.time.monotonic() + land.TURN_CAP_S * (3 if sent_back else 2) // 2 if capped else None
+    # Earlier waiter budgets remain, but every turn has the user's unconditional thirty-minute ceiling.
+    started = land.land_queue.turn_started()
+    deadline = turn_deadline(land, args, round_no)
+    maximum = turn_deadline(land, args, round_no, maximum=True)
     python = land.sys.executable
     done = []
     if (wt / land.HARNESS).is_file():
         land.step(wt, [python, land.HARNESS, "lint"], logdir / f"lint-{round_no}.txt", "lint")
         done.append("lint ok")
+    check_turn(land, wt, args, round_no)
     # HEAD is the candidate (merge commit included); the runner ships it to a test host (D-584:
     # no host means it waits, then fails, and nothing lands).
     head = land.out(wt, "rev-parse", "HEAD")
@@ -369,11 +394,15 @@ def run_tests(land, wt: Path, args, invocations: list[list[str]], logdir: Path, 
         stop = threading.Event() if deadline is not None else None
         timers = []
 
-        def expire():  # the cap frees the lock for a landing ready to take it; with no one waiting, the turn goes on
-            if turn_wanted(land, wt):
-                stop.set()
+        def expire():
+            if (maximum is not None and land.time.monotonic() >= maximum) or turn_wanted(land, wt):
+                try:
+                    for ticket in list(land.land_queue._held):
+                        land.land_queue.release(ticket, "turn deadline", started=started)
+                finally:
+                    stop.set()
             elif not stop.is_set():
-                arm(CAP_POLL_S)
+                arm(min(CAP_POLL_S, maximum - land.time.monotonic()))
 
         def arm(seconds):
             timer = threading.Timer(max(0, seconds), expire)
@@ -388,6 +417,7 @@ def run_tests(land, wt: Path, args, invocations: list[list[str]], logdir: Path, 
         finally:
             for timer in timers:
                 timer.cancel()
+                timer.join()  # a late callback must finish before any later Git mutation or reacquisition
         if land.out(wt, "rev-parse", "HEAD") != head:
             raise land.Stop(f"HEAD changed during remote checks; {head[:10]} was tested; retry the landing")
         if len(codes) != len(todo):
@@ -442,9 +472,9 @@ def run_tests(land, wt: Path, args, invocations: list[list[str]], logdir: Path, 
                 land.land_mainred.close(wt, log.read_text(encoding="utf-8", errors="replace"), head)
             done.append(f"pytest {' '.join(inv)} ok ({log.name})"
                         + (f", {why}" if carried else f", LOAD-FLAKY {flaky}" if flaky else ""))
-        if cancelled and not stops:
+        if not stops and (cancelled or (stop is not None and stop.is_set())):
             raise land.Overtime(
-                f"{len(cancelled)} invocation(s) past the turn's {land.TURN_CAP_S // 60} min: tested outside the lock")
+                f"turn budget expired ({len(cancelled)} unfinished invocation(s)): tested outside the lock")
         return stops + (
             [f"{len(cancelled)} invocation(s) not run: cancelled after the failure above"] if cancelled else [])
 

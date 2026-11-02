@@ -72,7 +72,8 @@ SAFETY = "tools/harness/safety_review.py"  # D-430 5: the rule CI's scope job en
 ENV = {**os.environ, "PYTHONUTF8": "1"}
 
 
-TURN_CAP_S = 1200  # D-889 26 (20 min): a turn's delta tests past this move outside the lock (land_prepare.again)
+TURN_CAP_S = 1200  # D-889 26 (20 min): the acquired turn's budget; expiry yields at safe boundaries (land_prepare.again)
+TURN_MAX_S = 1800  # user decision 2026-11-02: every acquired turn yields, even without a waiter
 # 2026-10-27: a landing with a hand-picked --tests skipped its selection, guards and pretest and left main red
 # (3125704e24). A real landing always runs the selection; --tests "<args>" only adds EXTRA, "none" is refused.
 FIXTURE_ENV = "ROSY_LAND_FIXTURE"  # land.py's own test fixtures only: --tests none/"<args>" replace the selection
@@ -83,7 +84,7 @@ class Stop(Exception):
     """A step failed; the message says why. Exit 1."""
 
 
-class Overtime(Stop): """The turn's tests ran past TURN_CAP_S, the rest cancelled: land() prepares them outside."""
+class Overtime(Stop): """The turn exhausted its budget; remaining checks prepare outside the lock."""
 
 
 def git(cwd: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess:
@@ -376,127 +377,134 @@ def rounds(args, wt: Path, branch: str, main_co: Path, python: str, qdir, ticket
     start = out(wt, "rev-parse", "main")
 
     for round_no in range(1, args.max_rounds + 1):
-        land_queue.touch()  # a held ticket stays fresh through long rounds
-        reusable, prepared = args.tests in ("auto", "full"), None  # a green affected tier pre-push may reuse
-        main_sha = out(wt, "rev-parse", "main")
-        print(f"== round {round_no}: main {main_sha[:10]}, branch {branch}")
-        land_events.emit("round", round=round_no, main=main_sha)
-        if git(wt, "merge-base", "--is-ancestor", main_sha, "HEAD", check=False).returncode != 0:
-            resolved = merge(wt, main_sha, branch, python, args.dry_run)
-            summary.append(f"round {round_no}: merged main {main_sha[:10]}"
-                           + (f", auto-resolved {resolved}" if resolved else ""))
-        candidate = out(wt, "rev-parse", "HEAD")  # the commit the checks below vouch for
-        safety_review(wt, main_sha, candidate, python)
-        size_check(wt, main_sha, candidate, python)
-        note = None
-        if args.tests == "none":
-            invocations: list[list[str]] = []
-        elif args.tests in ("auto", "full"):
-            if args.tests == "full":
-                full_main = land_selection.current_main(sys.modules[__name__], wt, args, branch, main_sha, python)
-            # A peer's edit to a path the branch moved or removed: the selector skips paths that no longer
-            # exist, so the delta tier would test nothing of it; run this branch's FULL selection again.
-            gone = [p for p in lines(wt, "diff", "--name-only", "--diff-filter=d", full_main, main_sha)
-                    if not (wt / p).exists()] if full_main else []
-            if gone:
-                summary.append(f"round {round_no}: main delta edits {len(gone)} path(s) gone here"
-                               f" ({gone[0]}): FULL again")
-                invocations, note = select(wt, main_sha, python, full=True) if args.tests == "full" else select(wt, main_sha, python)
-            elif full_main:
-                # D-762 stage 0: the FULL tier passed over full_main; main's delta since then gets its own
-                # selection (affected + guards, or FULL again) on this candidate, so peers cannot starve us.
-                invocations, note = select(wt, full_main, python, head=main_sha, landed=True)
-                reusable = reusable and (prepared := land_full.prepared(wt, branch, full_main)) is not None
-                summary.append(f"round {round_no}: FULL tier passed over main {full_main[:10]}; main delta"
-                               f" {full_main[:10]}..{main_sha[:10]} runs its {'FULL' if note else 'affected'} tier")
-                if (held := land_speculate.held(sys.modules[__name__], wt, branch, full_main, candidate)) is not None:
-                    invocations, note = held, None  # it passed before the turn on this tree (up to the records)
-                    prepared = land_speculate.with_spec(sys.modules[__name__], wt, branch, prepared)
-                    summary.append(f"round {round_no}: speculated tree held; main delta passed before the turn")
-            else:
-                invocations, note = select(wt, main_sha, python, full=True) if args.tests == "full" else select(wt, main_sha, python)
-            if note and note not in summary:
-                summary.append(note)
-            if note and ticket is not None:  # a FULL tier never runs in the lock: prepare it, then wait again
-                full_main = land_prepare.again(sys.modules[__name__], wt, branch, args, python, qdir, ticket, invocations, note)
-                continue
-        else:
-            invocations = [shlex.split(args.tests)]
-        if args.dry_run:
-            print("[plan] lint, then pytest invocations:")
-            print("\n".join("  " + " ".join(inv) for inv in invocations) or "  (none)")
-            print(f"[plan] then git -C {main_co} merge --ff-only {candidate}  ({branch})")
-            return 0
-
-        delta = lines(wt, "diff", "--name-only", tested_main, main_sha) if tested_main else []
-        if tested_main and all(map(record_only, delta)):
-            # Only module-scoped suites may skip; root test/ guards read the records themselves.
-            invocations = [kept for kept in ([p for p in inv if p.startswith("test/") or p == "test"]
-                                             for inv in invocations) if kept]
-            reusable = False  # module suites ran on an earlier candidate, not this one
-            summary.append(f"round {round_no}: main delta ({len(delta)} file(s)) is records only"
-                           " (logs/index/progress/ADR), module suites skipped, root test/ rerun")
-        elif args.tests == "none":
-            summary.append(f"round {round_no}: tests skipped (--tests none)")
-        summary += (guarded := land_guards.first(wt, args, invocations, logdir, round_no, run_tests))  # NEW stops
-        if out(wt, "rev-parse", "HEAD") != candidate:
-            raise Stop(f"HEAD changed during guards; {candidate[:10]} was tested; retry the landing")
-        land_selection.require_eligible(sys.modules[__name__], args, land_selection.eligible(sys.modules[__name__], guarded), guarded)
-        if guarded and out(wt, "rev-parse", "main") != main_sha:
-            print("[land] main moved during the guard round; merging again")
-            continue
-        began = time.monotonic()
         try:
+            land_queue.touch()  # a held ticket stays fresh through long rounds
+            turn_epoch = land_queue.turn_started()
+            reusable, prepared = args.tests in ("auto", "full"), None  # a green affected tier pre-push may reuse
+            main_sha = out(wt, "rev-parse", "main")
+            print(f"== round {round_no}: main {main_sha[:10]}, branch {branch}")
+            land_events.emit("round", round=round_no, main=main_sha)
+            if git(wt, "merge-base", "--is-ancestor", main_sha, "HEAD", check=False).returncode != 0:
+                resolved = merge(wt, main_sha, branch, python, args.dry_run)
+                summary.append(f"round {round_no}: merged main {main_sha[:10]}"
+                               + (f", auto-resolved {resolved}" if resolved else ""))
+            candidate = out(wt, "rev-parse", "HEAD")  # the commit the checks below vouch for
+            safety_review(wt, main_sha, candidate, python)
+            size_check(wt, main_sha, candidate, python)
+            note = None
+            if args.tests == "none":
+                invocations: list[list[str]] = []
+            elif args.tests in ("auto", "full"):
+                if args.tests == "full":
+                    full_main = land_selection.current_main(sys.modules[__name__], wt, args, branch, main_sha, python)
+                # A peer's edit to a path the branch moved or removed: the selector skips paths that no longer
+                # exist, so the delta tier would test nothing of it; run this branch's FULL selection again.
+                gone = [p for p in lines(wt, "diff", "--name-only", "--diff-filter=d", full_main, main_sha)
+                        if not (wt / p).exists()] if full_main else []
+                if gone:
+                    summary.append(f"round {round_no}: main delta edits {len(gone)} path(s) gone here"
+                                   f" ({gone[0]}): FULL again")
+                    invocations, note = select(wt, main_sha, python, full=True) if args.tests == "full" else select(wt, main_sha, python)
+                elif full_main:
+                    # D-762 stage 0: the FULL tier passed over full_main; main's delta since then gets its own
+                    # selection (affected + guards, or FULL again) on this candidate, so peers cannot starve us.
+                    invocations, note = select(wt, full_main, python, head=main_sha, landed=True)
+                    reusable = reusable and (prepared := land_full.prepared(wt, branch, full_main)) is not None
+                    summary.append(f"round {round_no}: FULL tier passed over main {full_main[:10]}; main delta"
+                                   f" {full_main[:10]}..{main_sha[:10]} runs its {'FULL' if note else 'affected'} tier")
+                    if (held := land_speculate.held(sys.modules[__name__], wt, branch, full_main, candidate)) is not None:
+                        invocations, note = held, None  # it passed before the turn on this tree (up to the records)
+                        prepared = land_speculate.with_spec(sys.modules[__name__], wt, branch, prepared)
+                        summary.append(f"round {round_no}: speculated tree held; main delta passed before the turn")
+                else:
+                    invocations, note = select(wt, main_sha, python, full=True) if args.tests == "full" else select(wt, main_sha, python)
+                if note and note not in summary:
+                    summary.append(note)
+                if note and ticket is not None:  # a FULL tier never runs in the lock: prepare it, then wait again
+                    full_main = land_prepare.again(sys.modules[__name__], wt, branch, args, python, qdir, ticket, invocations, note)
+                    continue
+            else:
+                invocations = [shlex.split(args.tests)]
+            if args.dry_run:
+                print("[plan] lint, then pytest invocations:")
+                print("\n".join("  " + " ".join(inv) for inv in invocations) or "  (none)")
+                print(f"[plan] then git -C {main_co} merge --ff-only {candidate}  ({branch})")
+                return 0
+
+            delta = lines(wt, "diff", "--name-only", tested_main, main_sha) if tested_main else []
+            if tested_main and all(map(record_only, delta)):
+                # Only module-scoped suites may skip; root test/ guards read the records themselves.
+                invocations = [kept for kept in ([p for p in inv if p.startswith("test/") or p == "test"]
+                                                 for inv in invocations) if kept]
+                reusable = False  # module suites ran on an earlier candidate, not this one
+                summary.append(f"round {round_no}: main delta ({len(delta)} file(s)) is records only"
+                               " (logs/index/progress/ADR), module suites skipped, root test/ rerun")
+            elif args.tests == "none":
+                summary.append(f"round {round_no}: tests skipped (--tests none)")
+            summary += (guarded := land_guards.first(wt, args, invocations, logdir, round_no, run_tests))  # NEW stops
+            if out(wt, "rev-parse", "HEAD") != candidate:
+                raise Stop(f"HEAD changed during guards; {candidate[:10]} was tested; retry the landing")
+            land_selection.require_eligible(sys.modules[__name__], args, land_selection.eligible(sys.modules[__name__], guarded), guarded)
+            if guarded and out(wt, "rev-parse", "main") != main_sha:
+                print("[land] main moved during the guard round; merging again")
+                continue
+            began = time.monotonic()
             tested = run_tests(wt, args, invocations, logdir, round_no)
-        except Overtime if ticket is not None else ():  # without a ticket (--no-queue) it stops like any Stop
-            args._overtime = land_checks.overtimes(sys.modules[__name__], args) + 1  # D-889 19: the next cap grows
-            land_queue.set_status(ticket, "preparing", overtime=args._overtime)  # a relaunch keeps it
+            if out(wt, "rev-parse", "HEAD") != candidate:
+                raise Stop(f"HEAD changed during checks; {candidate[:10]} was tested; retry the landing")
+            # pre-push reruns its gate after a LOAD-FLAKY or a pass taken from another tree
+            reusable = reusable and not land_mainred.CARRIED and land_selection.eligible(sys.modules[__name__], guarded + tested)
+            land_selection.require_eligible(sys.modules[__name__], args, reusable, guarded + tested)
+            summary += [f"round {round_no}: {s}" for s in tested]
+            if note:
+                full_main = main_sha
+                tier = land_selection.tier(sys.modules[__name__], guarded + tested, True)
+                land_full.save(wt, branch, candidate, main_sha, tier, invocations)
+                summary.append(f"round {round_no}: FULL tier took {time.monotonic() - began:.0f} s wall clock")
+            if invocations or tested_main is None:
+                tested_main = main_sha
+
+            if out(wt, "rev-parse", "main") != main_sha:
+                print("[land] main moved during the round; merging again")
+                continue
+            tip = out(wt, "rev-parse", f"refs/heads/{branch}")
+            if tip != candidate or out(wt, "rev-parse", "HEAD") != candidate:
+                raise Stop(f"{branch} moved to {tip[:10]} during the checks; {candidate[:10]} was tested, not that")
+            land_selection.require_eligible(sys.modules[__name__], args, reusable and prepared is not None)
+            land_checks.check_turn(sys.modules[__name__], wt, args, round_no)
+            if ticket is not None and (turn_epoch is None or not land_queue.owns_turn(ticket, started=turn_epoch)):
+                raise Stop("landing turn ownership changed during checks; refusing to fast-forward main")
+            on_main(main_co)
+            ff = git(main_co, "merge", "--ff-only", candidate, check=False)
+            if ff.returncode == 0:
+                land_full.forget(wt, branch)
+                landed = out(main_co, "rev-parse", "HEAD")
+                if carried := land_mainred.landed(wt, landed, branch):  # closes too; never before the ff
+                    summary.append(f"main-red carried {carried}: no land record (pre-push, publish_main see none)")
+                if reusable and landed == candidate:
+                    record = land_record.write(wt, candidate, main_sha, invocations,
+                                               [str(p) for p in sorted(logdir.glob(f"run-{round_no}-*.txt"))], prepared=prepared,
+                                               tier="full" if note else "records" if delta and all(map(record_only, delta)) else "affected")
+                    summary.append(f"land record for pre-push: {record}")
+                count = out(wt, "rev-list", "--count", f"{start}..{landed}")
+                print("\n".join(["== landed (not pushed)", *summary,
+                                 f"rounds: {round_no}", f"commits merged onto main: {count}",
+                                 f"main is now {landed}", ahead_of_origin(wt, landed)]))
+                print(f"[land] this worktree is now removable. After leaving it, from the main checkout {main_co}:\n"
+                      f"  {worktrees.SWEEP}")
+                return 0
+            if out(wt, "rev-parse", "main") != main_sha:
+                print("[land] main moved before the fast-forward; merging again")
+                continue
+            raise Stop(f"git merge --ff-only refused in {main_co} (left as is):\n{ff.stdout}{ff.stderr}")
+        except Overtime if ticket is not None else ():  # a guard and body share one turn's budget
+            if turn_epoch is None or land_queue.turn_started() != turn_epoch:
+                raise Stop("landing turn ownership changed before overtime handoff; ticket left as is")
+            land_queue.release(ticket, "turn deadline", started=land_queue.turn_started())
+            args._overtime = land_checks.overtimes(sys.modules[__name__], args) + 1
+            land_queue.set_status(ticket, "preparing", overtime=args._overtime)
             full_main = land_prepare.again(sys.modules[__name__], wt, branch, args, python, qdir, ticket, invocations, "")
             continue
-        if out(wt, "rev-parse", "HEAD") != candidate:
-            raise Stop(f"HEAD changed during checks; {candidate[:10]} was tested; retry the landing")
-        # pre-push reruns its gate after a LOAD-FLAKY or a pass taken from another tree
-        reusable = reusable and not land_mainred.CARRIED and land_selection.eligible(sys.modules[__name__], guarded + tested)
-        land_selection.require_eligible(sys.modules[__name__], args, reusable, guarded + tested)
-        summary += [f"round {round_no}: {s}" for s in tested]
-        if note:
-            full_main = main_sha
-            tier = land_selection.tier(sys.modules[__name__], guarded + tested, True)
-            land_full.save(wt, branch, candidate, main_sha, tier, invocations)
-            summary.append(f"round {round_no}: FULL tier took {time.monotonic() - began:.0f} s wall clock")
-        if invocations or tested_main is None:
-            tested_main = main_sha
-
-        if out(wt, "rev-parse", "main") != main_sha:
-            print("[land] main moved during the round; merging again")
-            continue
-        tip = out(wt, "rev-parse", f"refs/heads/{branch}")
-        if tip != candidate or out(wt, "rev-parse", "HEAD") != candidate:
-            raise Stop(f"{branch} moved to {tip[:10]} during the checks; {candidate[:10]} was tested, not that")
-        land_selection.require_eligible(sys.modules[__name__], args, reusable and prepared is not None)
-        on_main(main_co)
-        ff = git(main_co, "merge", "--ff-only", candidate, check=False)
-        if ff.returncode == 0:
-            land_full.forget(wt, branch)
-            landed = out(main_co, "rev-parse", "HEAD")
-            if carried := land_mainred.landed(wt, landed, branch):  # closes too; never before the ff
-                summary.append(f"main-red carried {carried}: no land record (pre-push, publish_main see none)")
-            if reusable and landed == candidate:
-                record = land_record.write(wt, candidate, main_sha, invocations,
-                                           [str(p) for p in sorted(logdir.glob(f"run-{round_no}-*.txt"))], prepared=prepared,
-                                           tier="full" if note else "records" if delta and all(map(record_only, delta)) else "affected")
-                summary.append(f"land record for pre-push: {record}")
-            count = out(wt, "rev-list", "--count", f"{start}..{landed}")
-            print("\n".join(["== landed (not pushed)", *summary,
-                             f"rounds: {round_no}", f"commits merged onto main: {count}",
-                             f"main is now {landed}", ahead_of_origin(wt, landed)]))
-            print(f"[land] this worktree is now removable. After leaving it, from the main checkout {main_co}:\n"
-                  f"  {worktrees.SWEEP}")
-            return 0
-        if out(wt, "rev-parse", "main") != main_sha:
-            print("[land] main moved before the fast-forward; merging again")
-            continue
-        raise Stop(f"git merge --ff-only refused in {main_co} (left as is):\n{ff.stdout}{ff.stderr}")
     raise Stop(f"main kept moving: gave up after {args.max_rounds} rounds")
 
 

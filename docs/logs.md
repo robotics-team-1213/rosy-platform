@@ -13553,6 +13553,20 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 시뮬레이션 근거 제안이며 실물 수용(D-911)과 별개
 - 결정: D-956 Proposed(실물 옆 여유 실측·시험 출력 대기)
 
+## 2026-11-01 · uncommitted · docs: D-937 제품 앱 입사 문법과 capture-wall 표면 등록
+- 변경: `docs/adr/D-937`(제품/기능 두 레인, 제품 원형 네 가지, 웹 표면 전체 등록, Learning 웹 carve 조건)과 ADR Log 표 행·절, `tools/harness/adr_gaps.txt` D-936 결번 갱, `shared/web/surfaces.yaml` capture-wall 등록, `tools/capture/multi_record.html` 표면 계약 준수(`./` 참조, 범위 제목, RosyPalette 캔버스 팔레트)와 `multi_record.py` common 복사 목록 확대, `shared/web/test/test_canvas_palette_contract.py` 캔버스 목록, `applications/AGENTS.md` 판별 포인터
+- 증거: 원격 영향 선택 2 invocation — 38파일 923 passed(첫 돌림에서 캔버스 팔레트·제목 계약 2 failed를 계약 준수 수정 뒤 재시험으로 통과), `tools/capture/test/test_multi_record.py` 10 passed, `test/known_failures.py` 0 new. `rosy_harness.py lint` 0 errors
+- gate 변화: 없음
+- 결정: D-937 Accepted(사용자 합의)
+- 교훈: 기존 교훈 `landing-blockers-cost-hours-2026-10-18`(미등록 표면 사각지대)의 적용 사례 — 새 교훈 없음
+
+## 2026-11-01 · uncommitted · UI 일관성 회차 검증 기록
+
+- 변경: `docs/validation/fleet-ui-consistency-2026-11-01/README.md` — 이번 회차의 변경·비평 점수(23→27)·게이트 적발 6건·LOCAL 증거의 경계를 날짜 기록으로 남겼다.
+- 증거: 기록 문서이며 실행 코드 변화 없음.
+- Gate: 없음. CE: 해당 없음.
+
+
 ## 2026-11-02 · uncommitted · fix(land): 서로 닿지 않으면 차례는 가드만 (D-889 추가 22)
 - 변경: `land_selection.select` landed 경로 두 곳. 이 브랜치와 main 변화분의 선택이 겹치지 않고 안전 경로가 없으면 `_guards_only` + 닿는 브라우저 묶음만.
 - 증거: 11-01 17:45 뒤 착지 p90 152분. 느린 착지는 사전 시험 5~7분, 차례 대기 약 125분. 차례마다 변화분 묶음을 다시 돌아 7~13분씩 걸렸다. 원격 시험은 착지 기록에 남긴다.
@@ -13633,6 +13647,12 @@ osy-d395-s1d\`.
 - 결정: D-889 추가 10
 - 교훈: 없음
 
+## 2026-11-02 · uncommitted · D-945 5항 이행 완료로 닫음
+
+- 변경: D-945 5항과 DESIGN.md의 유예 목록을 닫는다 — 로봇 대시보드는 두 상태 셸 h1 규칙·hero-strip 제목 줄로 준수(공간 문법 보존), 웹 표면 이행 완료. Cam은 네이티브 앱이라 밖.
+- 증거: 기록 변경이며 test_layout_canon이 근거. 원격 시험은 다음 착지 전 기록.
+- Gate: 없음. CE: 해당 없음.
+
 ## 2026-11-02 · uncommitted · docs(omx): 시범 학습 준비와 왼쪽 손목 진단 기록
 - 변경: [검증 기록](validation/omx-learning-readiness-2026-11-02/result.md)에 실제 녹화의 준비 부족, arm_a 읽기 전용 모터 관측, 손목 추종 실패 로그와 확대 사진 해시를 남겼다.
 - 증거: 운영 Learning 계정 화면 HTTP 200, 모터 ID 11–16 응답, 정지 직전 같은 장치의 건강 표본 대조. 새 학습·팔 동작·수리는 미실행이다.
@@ -13657,3 +13677,10 @@ osy-d395-s1d\`.
 - 증거: 원격 `test_physical_transfer_recheck.py`와 관측자·v1.330·관측 계약·holder import 시험 58 passed. Harbor 전체 흐름 회귀(D-927)의 ⑤가 이 계약을 쓴다.
 - Gate: 없음. simulation 계약 구현이며 실물 관측자·현장 수용은 별도다. 공개 push 없음.
 - CE: 해당 없음 — 설계 결정과 계약 추가이며 해결한 장애가 아니다.
+
+## 2026-11-02 · uncommitted · fix(landing): 모든 차례의 30분 상한
+- 변경: D-889 사용자 확정 정책에 따라 acquisition 기준 1800초 상한을 모든 차례에 적용한다. 첫 예산이 10분 또는 20분인 경우의 조기 반납은 보존하고, 세 번째 이후 무제한과 대기자 없는 무제한 연장을 없앴다. Git 변경은 안전 경계까지 기다린다.
+- 증거: 미착지 소스 `719e36bdac` 원격 착지/remote 29개 suite 564개 통과, NEW 0·known 0·flaky 0. 선행 RED 14개 실패. 운영 적용·30분 내 착지 완료·p90 목표 달성을 주장하지 않는다.
+- gate 변화: 없음. 결정 승인과 소스 회귀 검증은 운영 수용과 구분한다.
+- 결정: D-889 「모든 차례 최대 30분」, 사용자 승인 2026-11-02.
+- CE: 해당 없음 — 시간 정책·안전 경계는 ADR 정본과 회귀 시험에 기록했다.

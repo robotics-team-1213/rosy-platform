@@ -41,7 +41,7 @@ function invalidate(message){
 async function request(path,body){
   const response=await accountFetch(path,body?{method:'POST',headers:{'Content-Type':'application/json','X-Pinky-Token':token},body:JSON.stringify(body)}:{});
   const value=await response.json();
-  if(!response.ok)throw new Error(response.status===403?'이 작업대의 권한이 거부되었습니다.':value.error||'요청 실패');
+  if(!response.ok)throw new Error(response.status===403?'이 작업대의 권한이 없습니다.':value.error||'요청 실패');
   return value;
 }
 async function jpeg(file){
