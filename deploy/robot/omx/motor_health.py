@@ -183,6 +183,9 @@ class MotorHealth:
             self.terminal_at = time.time()
         state = self.motions.get(self.key(motion))
         last = state["last"] if state else None
+        if last:  # the public reason has no joint; flag the one the guard names ("wrist_roll: following error ...")
+            joint = str(exc).split(':', 1)[0]
+            last["motors"] = [{**m, "fault": m["fault"] or m["joint"] == joint} for m in last["motors"]]
         now = motion.clock()
         row = dict(event="fault", arm=motion.label, fault=str(exc) or type(exc).__name__,
                    fault_type=type(exc).__name__, telemetry="last_known",
@@ -198,6 +201,45 @@ class MotorHealth:
             self.emit(row)
         finally:
             self.publish()
+            keep_fault(self.state_path.parent / 'faults', self.owner_id, self.session_id, row)
+
+
+def keep_fault(directory, owner_id, session_id, row, frames=None):
+    """One record per guard fault that the next session's snapshot cannot overwrite, plus the cell cameras at that
+    moment (ROSY_OMX_FAULT_FRAMES="top=<url>,side=<url>"). arm_a's wrist roll stalled four times on 2026-11-01 and the
+    only trace was the joint text in a session log; the cause was visible only in a camera. Called after torque OFF;
+    the frames are fetched on a thread so nothing waits on a camera."""
+    import threading
+    import urllib.request
+    try:
+        directory = Path(directory)
+        directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+        stem = f"{owner_id}-{datetime.now(timezone.utc):%Y%m%dT%H%M%S}-{uuid4().hex[:6]}"
+        record = dict(schema_version='rosy.motor-fault.v1', owner_id=owner_id, session_id=session_id,
+                      at=time.time(), **row, frames={})
+        atomic_snapshot(directory / f"{stem}.json", record)
+    except (OSError, ValueError):
+        return None
+    wanted = frames if frames is not None else os.environ.get('ROSY_OMX_FAULT_FRAMES', '')
+    sources = dict(item.split('=', 1) for item in wanted.split(',') if '=' in item)
+
+    def fetch():
+        for name, url in sources.items():
+            if not name.isidentifier() or not url.startswith(('http://127.0.0.1', 'http://localhost')):
+                continue  # local camera view only: a fault record never reaches out
+            try:
+                with urllib.request.urlopen(url, timeout=1.5) as response:
+                    image = response.read(4_000_000)
+                if image[:2] == b'\xff\xd8':
+                    (directory / f"{stem}-{name}.jpg").write_bytes(image)
+                    record['frames'][name] = f"{stem}-{name}.jpg"
+            except (OSError, ValueError):
+                continue
+        atomic_snapshot(directory / f"{stem}.json", record)
+
+    worker = threading.Thread(target=fetch, name='fault-frames')  # not a daemon: the frames outlive a crashing runner
+    worker.start()
+    return worker
 
 
 def public_reason(exc):
