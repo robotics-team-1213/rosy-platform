@@ -647,6 +647,44 @@ def test_monitoring_overlay_cannot_pin_another_image(host, image):
         upd.check_overrides(env, NEW, fake, compose)
 
 
+@pytest.mark.parametrize('image', ['rosy-site-fleet:{tag}', 'rosy-site-fleet:old', 'untrusted:latest'])
+def test_account_companion_requires_the_signed_fleet_image(host, image):
+    fake = FakeHost(host.paths)
+    env = {**upd.read_env(host.paths.site_env),
+           'ROSY_SITE_PAIRING_COMPOSE': '-f /opt/rosy/candidate/deploy/site/compose.account.yaml'}
+
+    def compose(env, *args, tag=None, **kwargs):
+        out = json.loads(fake(['docker', 'compose', *args], env={'ROSY_SITE_IMAGE_TAG': tag}).stdout)
+        out['services']['account'] = {'image': image.format(tag=tag)}
+        return SimpleNamespace(stdout=json.dumps(out))
+
+    if image == 'rosy-site-fleet:{tag}':
+        upd.check_overrides(env, NEW, fake, compose)
+    else:
+        with pytest.raises(upd.Refused, match='Compose resolves account'):
+            upd.check_overrides(env, NEW, fake, compose)
+
+
+@pytest.mark.parametrize('rows', [[], [{'Service': 'account', 'State': 'running', 'Health': 'unhealthy'}]])
+def test_account_companion_missing_or_unhealthy_blocks_acceptance(rows):
+    def inspect(*args):
+        raise AssertionError('unhealthy Account must fail before container inspection')
+    assert 'account' in upd.runtime_reason(rows, {'account': 'hash-account'}, inspect)
+
+
+def test_account_runtime_identity_must_match_accepted_fleet_image():
+    rows = [{'Service': 'account', 'Image': f'rosy-site-fleet:{NEW}',
+             'State': 'running', 'Health': 'healthy', 'ID': 'account-container'}]
+    accepted = {'fleet': ['sha256:' + 'a' * 64]}
+    def inspect(*args):
+        return SimpleNamespace(stdout='sha256:' + 'a' * 64)
+    assert upd.containers_reason(rows, NEW, accepted, inspect, services=()) == ''
+    def untrusted(*args):
+        return SimpleNamespace(stdout='sha256:' + 'b' * 64)
+    assert 'account running image identity' in upd.containers_reason(
+        rows, NEW, accepted, untrusted, services=())
+
+
 def test_monitoring_service_without_its_overlay_is_refused(host):
     fake = FakeHost(host.paths)
     env = upd.read_env(host.paths.site_env)

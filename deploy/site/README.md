@@ -118,10 +118,57 @@ health, and drift for all four.
 
 ## Where the control console runs
 
-### Rosy Account activation (D-757)
+### Independent Rosy Account service (D-962)
+
+`compose.account.yaml` runs Account as a separate process using the signed Fleet
+image, with a dedicated `account_state` volume. Only Account mounts the signing
+key directory `/etc/rosy/account` at `/run/rosy-account`. Keep its directory mode
+0700 and files mode0400 owned by runtime UID10001. The existing issuer HTTPS
+frontend forwards to Account, not Fleet. Fleet receives public verification keys
+and its own encrypted local session configuration under `/etc/rosy/fleet-account`,
+mounted read-only at `/run/rosy-fleet-account`; its session DB belongs in Fleet's
+writable state volume. Set `ROSY_FLEET_ACCOUNT_CLIENT_CONFIG` to that receiver JSON
+and register its exact HTTPS callback and site resource in the existing authority.
+The issuer hostname aliases the proxy on both its edge and backend networks.
+Fleet reaches Account over the shared backend with the original issuer hostname
+and TLS verification; it does not need edge-network access or host hairpin routing.
+Keep `ROSY_ACCOUNT_CONFIG` for the Account command; the Fleet environment sets it
+empty so Fleet never opens the authority database. Development mode also requires
+human login and never issues an anonymous development operator.
+
+Before receiver activation, inventory existing machine health credentials. A
+token-only read-only viewer must be explicitly marked `machine: true` in the
+protected site-users file; retain its existing role and token. The marker cannot
+be combined with human login/password or policy authority. Unmarked human legacy
+Bearers remain refused. Verify state and vision-source reads and denied writes
+with that same machine credential after cutover; never promote its role to make
+the health gate pass. Include configured Monitoring Fleet upstream credentials
+in this inventory; each retained viewer needs its own explicit marker. For
+maintenance status reads, use the existing token file registered in
+`functional_checks`; an unregistered file does not replace bootstrap authority.
+
+Before switching an existing activated authority, stop its writer, create and
+verify a consistent SQLite backup, then use
+`rosy_account.migration.migrate_authority(source, target)` to copy the ten related
+Account/session/OAuth tables into a new protected Account DB. It refuses an
+existing target. Preserve account IDs, effective password digests, grants,
+revisions, families and OAuth records; do not bootstrap the activated DB again.
+Remove the one-time `bootstrap_admin_login` setting from the protected runtime
+authority configuration. Retain a protected copy of the previous configuration
+with the consistent backup. Never expose these values in a deployment log.
+
+Validate the signed candidate and normalized Compose before enabling the single
+Account writer and changing the proxy. Verify TLS, `/healthz`, anonymous API
+denial, the visible Learning login form and callback registration, Fleet cookie
+authorization/logout, and Account availability while Fleet is stopped. Preserve
+new account changes during recovery: do not overwrite the new DB with a stale
+pre-transition copy. Real-user password entry and allowed project operations are
+separate acceptance evidence.
+
+### Initial in-process Account activation (D-757, historical compatibility)
 
 Prepare `/etc/rosy/account/authority.json` and its signing key outside the checkout.
-Fleet alone mounts this directory at `/run/rosy-account`; use directory mode0700
+The historical Fleet composition mounted this directory at `/run/rosy-account`; use directory mode0700
 and files mode0400 owned by Fleet's runtime UID10001. Set
 `ROSY_ACCOUNT_CONFIG=/run/rosy-account/authority.json` in the existing site env
 only after preparing the approved HTTPS issuer, registered app callbacks, trust
@@ -2212,6 +2259,10 @@ ROSY_SITE_WORKCELL_ARM_CREDENTIAL_PATHS='{"ROSY_ARM_A_TOKEN":"/run/rosy-workcell
 카메라도 같은 방식이다. 기본 Vision 매핑은 overhead·wrist A·wrist B이고, 측면 카메라처럼 카메라를 더하면 `ROSY_SITE_WORKCELL_CAMERA_CREDENTIAL_PATHS`에 전체 교체 매핑을 넣고 Vision 전용 camera secret 디렉터리에 파일을 둔다(예: `"ROSY_CAMERA_SIDE_TOKEN":"/run/rosy-workcell-camera-secrets/side_token"`). 별도 미서명 Compose 오버레이로
 자격 증명을 덧붙이지 않는다. 기존 추가 팔 오버레이를 쓰는 현장은 이 변수를 지원하는
 새 서명 candidate로 전환할 때 전체 매핑을 보존하고 추가 오버레이를 함께 제거한다.
+오버레이만 빼면 갱신기가 실행 중 구성 불일치·Fleet 재시작 반복으로 거절하므로, 실제로 통과한 순서
+(hold → 추가 팔을 뺀 임시 manifest로 현재 candidate 재생성 → 검토한 checkout에서 host verifier 갱신 →
+forget-failed·resume·run → 전체 매핑 복원)는
+[교훈 문서](../../docs/solutions/deployment/site-extra-arm-overlay-switch-needs-a-staged-runtime-2026-11-01.md)를 따른다.
 
 이 기능에는 변경 소스로 다시 빌드한 Fleet·Vision 이미지와 오버레이 해시를 포함한
 새 서명 candidate가 필요하다. 새 오버레이와 서명 coverage를 지원하는 host verifier·updater를

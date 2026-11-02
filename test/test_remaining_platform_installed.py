@@ -40,7 +40,8 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
     support.parent.mkdir(parents=True)
     shutil.copy2(ROOT / 'tools/packaging/fleet_sources.py', support)
     sources = []
-    for relative in ('operations/fleet', 'operations/decision', 'applications/fleet/web', 'operations/situation',
+    for relative in ('operations/fleet', 'operations/account', 'operations/decision', 'applications/fleet/web',
+                     'operations/situation',
                      'contracts/foundation', 'contracts/skill', 'contracts/motion', 'contracts/learning', 'operations/world',
                      'operations/site_execution', 'operations/processes/palletizing', 'applications/fleet/gateway',
                      'middleware/core/api', 'middleware/skills/api', 'integrations/messaging/discord'):
@@ -80,13 +81,18 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
         archives = tmp_path / 'archives'
         run(['setup.py', 'sdist', '--dist-dir', str(archives)], staging / 'operations/fleet')
         sources[0] = next(archives.glob('fleet-*.tar.gz'))
+        run(['-c', 'import sys; from setuptools import build_meta; build_meta.build_sdist(sys.argv[1])',
+             str(archives)], staging / 'operations/account')
+        sources[1] = next(archives.glob('rosy_account-*.tar.gz'))
         with tarfile.open(sources[0]) as archive:
             assert any(name.endswith('/_build/fleet_sources.py') for name in archive.getnames())
+            assert not any('/_source_roots/account/' in name for name in archive.getnames())
             assessment_files = {Path(name).name for name in archive.getnames()
                                 if '/_source_roots/assessment/' in name and name.endswith('.py')}
             assert assessment_files == {'__init__.py', 'assessment.py', 'snapshot_assessment.py',
                                         'wait_graph.py', 'fact_rules.py'}
-        # Removing the sibling holders proves the archive is self-contained.
+        # Removing sibling sources proves both archives build without checkout imports.
+        shutil.rmtree(staging / 'operations/account')
         shutil.rmtree(staging / 'operations/decision')
         shutil.rmtree(staging / 'applications/fleet/web')
         shutil.rmtree(staging / 'operations/situation')
@@ -97,6 +103,7 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
          '--no-build-isolation', '--wheel-dir', str(wheels), *map(str, sources)], tmp_path)
     with zipfile.ZipFile(next(wheels.glob('fleet-*.whl'))) as wheel:
         names = wheel.namelist()
+        assert not any(name.startswith('rosy_account/') for name in names)
         assert not any(name.startswith(('fleet_app_dev/', 'fleet/server/web/dev/', 'fleet/server/web/sample/'))
                        or name.endswith('runtime-sample.js') for name in names)
         for holder in ('peer', 'cell', 'auth', 'console', 'ledger', 'missions', 'work', 'trips', 'trip_checks', 'trip_progress', 'tracking',
@@ -163,11 +170,17 @@ assert projected['progress']['step']['state'] == 'AWAITING_GOAL_EVIDENCE'
 assert projected['progress']['goal_evidence']['state'] == 'PENDING'
 assert projected['progress']['stop']['physical_state'] == 'UNKNOWN'
 assert not any(name in sys.modules for name in ('fleet', 'sqlite3', 'httpx', 'rclpy'))
+account_app = importlib.import_module('rosy_account.app')
+assert 'fleet' not in sys.modules
+assert Path(account_app.__file__).resolve().is_relative_to(installed / 'rosy_account')
+assert any(str(name) == 'rosy_account/app.py' for name in importlib.metadata.distribution('rosy-account').files)
 fleet_files = importlib.metadata.distribution('fleet').files
 assert not any(str(name).startswith('rosy/execution/') for name in fleet_files)
+assert not any(str(name).startswith('rosy_account/') for name in fleet_files)
 fleet_requirements = {(canonicalize_name(r.name), str(r.specifier), tuple(sorted(r.extras)), r.marker, r.url)
                       for r in map(Requirement, importlib.metadata.requires('fleet'))}
 assert ('rosy-execution', '==0.1.2', (), None, None) in fleet_requirements, fleet_requirements
+assert ('rosy-account', '==0.1.0', (), None, None) in fleet_requirements, fleet_requirements
 foundation_floor = [r for r in map(Requirement, importlib.metadata.requires('fleet'))
                     if canonicalize_name(r.name) == 'core-common']
 assert len(foundation_floor) == 1
@@ -393,7 +406,7 @@ print('installed namespace, resources, HTTP guards and Fleet Cell submission ver
              json.dumps(signed(kind=APPROVE)), json.dumps(binding()), KEY.hex(), documents], tmp_path)
     if delivery == 'wheel':
         native = tmp_path / 'native/lib/python3.12/site-packages'
-        excluded = ('rosy_execution-', 'rosy_contracts_skill-', 'rosy_contracts_motion-')
+        excluded = ('rosy_account-', 'rosy_execution-', 'rosy_contracts_skill-', 'rosy_contracts_motion-')
         dependencies = [str(path) for path in wheels.glob('*.whl')
                         if not path.name.startswith(excluded)]
         run(['-m', 'pip', 'install', '--no-deps', '--no-index', '--target', str(native),
@@ -406,7 +419,10 @@ print('installed namespace, resources, HTTP guards and Fleet Cell submission ver
         assert result.returncode == 0, result.stdout + result.stderr
         native_probe = '''
 import sys
+from pathlib import Path
 sys.path.insert(0, sys.argv[1])
+import rosy_account
+assert Path(rosy_account.__file__).resolve().is_relative_to(Path(sys.argv[1]).resolve())
 from fleet.server.mission_service import MissionService
 from rosy_discord.intake import project_message, signed_request
 from rosy_discord.gateway import DiscordGateway
@@ -445,7 +461,7 @@ def test_fleet_source_image_keeps_only_the_pure_assessment_closure(tmp_path):
             else:
                 shutil.copy2(source, destination)
     roots = [image / 'opt/rosy/src' / path for path in
-             ('site/fleet', 'contracts/foundation', 'operations/world')]
+             ('site/fleet', 'contracts/foundation', 'operations/world', 'operations/account')]
     probe = r'''
 import importlib.util
 import json
@@ -453,6 +469,9 @@ import sys
 from pathlib import Path
 sys.path[:0] = json.loads(sys.argv[1])
 roots = [Path(path) for path in json.loads(sys.argv[1])]
+import rosy_account.app
+assert 'fleet' not in sys.modules
+assert Path(rosy_account.app.__file__).resolve().is_relative_to(roots[3] / 'rosy_account')
 from fleet.stuck.board import LineStuckBoard
 from fleet.server.mission_service import MissionService
 from rosy.execution.site.goal_evidence import verify_goal

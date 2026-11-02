@@ -61,6 +61,35 @@ def test_wait_returns_when_the_one_ahead_leaves(tmp_path):
     assert len(naps) == 1
 
 
+def test_turn_clock_resets_on_actual_reacquisition_and_old_release_cannot_touch_it(tmp_path, monkeypatch):
+    ticket = queue.take(tmp_path, "feat/clock")
+    now = [100.0]
+    monkeypatch.setattr(queue.time, "monotonic", lambda: now[0])
+    events = []
+    monkeypatch.setattr(queue.land_events, "emit", lambda event, **kw: events.append(event))
+    queue.wait(tmp_path, ticket, 0)
+    assert json.loads(ticket.read_text())["turn_started"] == 100
+    assert queue.release(ticket, "deadline", started=100)
+    assert not queue.release(ticket, "again", started=100)
+    now[0] = 900
+    queue.wait(tmp_path, ticket, 0)
+    assert json.loads(ticket.read_text())["turn_started"] == 900
+    assert not queue.release(ticket, "old timer", started=100)
+    queue.set_status(ticket, "turn", pid=os.getpid() + 1)
+    assert not queue.release(ticket, "old owner", started=900)
+    assert json.loads(ticket.read_text())["status"] == "turn"
+    assert events.count("released") == 1
+
+
+@pytest.mark.parametrize("fields", [{"pid": 0}, {"pid": None}, {"turn_started": None}])
+def test_unknown_pid_or_epoch_never_counts_as_turn_ownership(tmp_path, fields):
+    ticket = queue.take(tmp_path, "feat/clock")
+    queue.set_status(ticket, "turn", turn_started=100)
+    queue.set_status(ticket, "turn", **fields)
+    assert not queue.owns_turn(ticket)
+    assert not queue.release(ticket, "unknown owner")
+
+
 def test_completed_batch_member_finishes_before_rule_refresh(tmp_path):
     mine = queue.take(tmp_path, "feat/member")
     assert queue.wait(tmp_path, mine, 0, done=lambda: True,

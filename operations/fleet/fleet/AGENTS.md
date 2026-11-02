@@ -17,11 +17,13 @@ No ROS imports anywhere (`test/test_boundaries.py`).
 
 | Owner | Owns | Does not own |
 |---|---|---|
-| **Fleet** (this package) | Site map, trips, order and gaps, traffic blocks, charge-bay plan, task/mission ledgers, admission, claims, dispatch, site e-stop fan-out, stuck/incident handling, accounts | Final wheel command, local safety latch, a robot's own docking/line motion |
+| **Fleet** (this package) | Site map, trips, order and gaps, traffic blocks, charge-bay plan, task/mission ledgers, admission, claims, dispatch, site e-stop fan-out, stuck/incident handling, application sessions and grant enforcement | Final wheel command, local safety latch, a robot's own docking/line motion |
 | **CORE** (on each robot) | Final Base command (`/cmd_vel`), safety latch (10 %·5 % battery, E-stop), line following and the 20 Hz following loop, docking motion | Site order, other robots, the site map |
 | **World** (`operations/world`) | Current map pose projection; `source=bridged` is dead reckoning, not a forecast | Ledgers, dispatch |
 | **Vision / Decision** | Ceiling-camera sightings / candidates and model proposals | Ledger writes, robot commands |
 | **Business apps** (Harbor) | Their own business ledger and proposals, read through Fleet HTTP only | Robots, approval, charging |
+
+Human authentication authority follows [Account ownership](../../account/AGENTS.md).
 
 Contracts behind this table: [app responsibilities](../../../docs/reference/app-responsibilities.md),
 [Fleet rulebook](../../../docs/reference/fleet-rulebook.md) (observe → law → candidate → admission →

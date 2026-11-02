@@ -6,6 +6,7 @@ from fleet.server.mission_progress import MissionProgressService
 from fleet.server.model_feedback_dispatch import MissionFeedbackToolDispatcher
 from rosy.contracts.learning.inference import InferenceResult
 from rosy.contracts.motion.characteristics import characteristics_digest
+from rosy_account.app import create_app as create_account_app
 
 
 assert callable(PalletizingCellJobCompiler.compile_submission)
@@ -14,3 +15,4 @@ assert callable(MissionProgressService.model_context_from_snapshot)
 assert callable(MissionFeedbackToolDispatcher.dispatch)
 assert callable(characteristics_digest)
 assert InferenceResult.__dataclass_params__.frozen
+assert callable(create_account_app)

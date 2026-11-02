@@ -19,6 +19,9 @@
 
 /* Fleet task owners remain mounted; visibility is navigation-owned (D-741 6 seat). */
 .install-task { min-width: 0; }
+/* D-926 7(2026-11-02) — 긴 안내의 접힘(대형 조작·배경 학습·범례): 첫 문장은 보이고 세부 규칙은 접힌다. */
+.hint-more { display: block; margin-block: var(--space-2); }
+.hint-more summary { min-height: var(--target-secondary); }
 .install-task > h2 { margin-top: 0; }
 .peer-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
 .peer-toolbar select { min-width: 0; max-width: 100%; }
@@ -187,7 +190,6 @@ main {
   #fleet-main > .console-primary > .panel { flex: 1 0 auto; min-height: 0; display: flex; flex-direction: column; align-items: stretch; }
   /* 지도와 큰 영상은 칸을 채울 뿐 칸 높이를 정하지 않는다(그림 고유 크기가 문서를 밀지 않게). */
   #fleet-main .map-stage { flex: none; min-height: max(28rem, calc(100dvh - 18rem)); }
-  #fleet-main :is(.map-stage #map-canvas, .map-birdseye) { position: absolute; inset: 0; width: 100%; height: 100%; }
   #fleet-main .field-mismatch { position: relative; z-index: 1; }
   .ops-block { gap: var(--space-2); }
   .ops-block > h2 { margin: 0; }
@@ -360,9 +362,9 @@ main {
   border: 1px solid var(--border-strong);
   background: var(--surface-recessed);
 }
-.lamp.red.on { background: var(--status-crit); border-color: var(--status-crit); }
-.lamp.yellow.on { background: var(--status-warn); border-color: var(--status-warn); }
-.lamp.green.on { background: var(--nominal); border-color: var(--nominal); }
+.lamp.red.on { background: var(--signal-stop); border-color: var(--signal-stop); }
+.lamp.yellow.on { background: var(--signal-caution); border-color: var(--signal-caution); }
+.lamp.green.on { background: var(--signal-go); border-color: var(--signal-go); }
 
 .signal-body { display: flex; align-items: center; gap: var(--space-3); margin-top: var(--space-2); }
 .signal-meta { font-family: var(--mono); font-size: var(--text-micro); color: var(--text-secondary); }
@@ -679,6 +681,7 @@ main {
 @media (width < 64rem), (height < 40rem) {
   #fleet-main .map-stage { flex: none; block-size: clamp(20rem, calc(100dvh - 28rem), 48rem); min-height: 20rem; }
 }
+/* Keep map layers inside the stage at every viewport size. */
 #fleet-main :is(.map-stage #map-canvas, .map-birdseye) { position: absolute; inset: 0; width: 100%; height: 100%; }
 #map-tag, #map-display-status { flex: 1 1 100%; }
 @media (width < 64rem) {

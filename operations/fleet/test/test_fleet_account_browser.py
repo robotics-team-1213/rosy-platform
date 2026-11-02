@@ -21,6 +21,34 @@ pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason='opt-in Chro
 ROOT = Path(__file__).resolve().parents[3]
 
 
+@pytest.mark.parametrize('mode', ['paired', 'development'])
+@pytest.mark.parametrize('password_login', [True, False])
+def test_app_login_depends_on_account_availability_not_fleet_mode(account_page, mode, password_login):
+    from playwright.sync_api import expect
+    page, origin = account_page
+    page.route('**/api/fleet/auth/connection', lambda route: route.fulfill(
+        json={'mode': mode, 'password_login': password_login}))
+    target = '/api/fleet/auth/authorize?' + urlencode({
+        'response_type': 'code', 'client_id': 'learning', 'redirect_uri': 'https://learning.test/callback',
+        'scope': 'project:one', 'state': 'test-state', 'code_challenge': 'x' * 43,
+        'code_challenge_method': 'S256'})
+    page.route('**/api/fleet/auth/authorize?**', lambda route: route.fulfill(
+        content_type='text/html', body='<h1>Application authorization</h1>'))
+    page.goto(origin + '/console/login?' + urlencode({'return': target}))
+    form = page.locator('[data-login=form]')
+    if not password_login:
+        expect(page.locator('#login-availability')).to_be_visible()
+        expect(form).to_be_hidden()
+        return
+    expect(form).to_be_visible()
+    expect(page.locator('#login-availability')).to_be_hidden()
+    _credentials(page)
+    page.locator('[data-login=submit]').click()
+    expect(page.get_by_role('heading', name='Application authorization')).to_be_visible()
+    expect(page).to_have_url(origin + target)
+    assert page.request.get(origin + '/api/fleet/auth/session').json()['principal_id'] == 'alice'
+
+
 @pytest.mark.parametrize('account_page', ['multi'], indirect=True)
 def test_denied_login_stays_visible_and_allows_another_account(account_page):
     from playwright.sync_api import expect

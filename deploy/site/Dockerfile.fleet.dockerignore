@@ -1,5 +1,6 @@
 **
 !operations/fleet/**
+!operations/account/rosy_account/**
 !integrations/messaging/discord/rosy_discord/**
 !operations/decision/**
 !operations/site_execution/src/**

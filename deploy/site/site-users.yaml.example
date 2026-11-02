@@ -5,5 +5,11 @@ users:
   - principal_id: viewer-1
     role: viewer
     token_sha256: replace-with-64-lowercase-hex-characters
+  # Explicit machine viewer for authenticated health reads in Account receiver mode.
+  # Token only: no login, password_scrypt or policy_admin; no operator/proposal authority.
+  - principal_id: health-check
+    role: viewer
+    machine: true
+    token_sha256: replace-with-64-lowercase-hex-characters
   # policy-admin may edit policy conditions only after those endpoints exist
   # and D-268's acceptance gates have passed.

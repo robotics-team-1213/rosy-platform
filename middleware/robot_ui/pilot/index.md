@@ -34,8 +34,8 @@
 
 ## 최근 기록
 
+- 2026-11-02 · uncommitted · sr-only 재정의 제거
+- 2026-11-02 · uncommitted · noscript 안내 (D-945 마무리)
 - 2026-11-01 · uncommitted · skip link 추가 (D-945)
 - 2026-11-01 · a7ebffaf72 · OMX SIM 녹화 화면 다듬기
 - 2026-11-01 · f35a03048e · OMX SIM 녹화 중 종료 카드 고정
-- 2026-11-01 · f2333e8aea · OMX SIM 시작 자세·과제를 기계 프로파일에서
-- 2026-11-01 · f15a4cba63 · OMX SIM 시연 기록 순서·센서 값 화면

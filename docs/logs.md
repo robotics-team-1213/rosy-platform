@@ -13553,6 +13553,20 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 시뮬레이션 근거 제안이며 실물 수용(D-911)과 별개
 - 결정: D-956 Proposed(실물 옆 여유 실측·시험 출력 대기)
 
+## 2026-11-01 · uncommitted · docs: D-937 제품 앱 입사 문법과 capture-wall 표면 등록
+- 변경: `docs/adr/D-937`(제품/기능 두 레인, 제품 원형 네 가지, 웹 표면 전체 등록, Learning 웹 carve 조건)과 ADR Log 표 행·절, `tools/harness/adr_gaps.txt` D-936 결번 갱, `shared/web/surfaces.yaml` capture-wall 등록, `tools/capture/multi_record.html` 표면 계약 준수(`./` 참조, 범위 제목, RosyPalette 캔버스 팔레트)와 `multi_record.py` common 복사 목록 확대, `shared/web/test/test_canvas_palette_contract.py` 캔버스 목록, `applications/AGENTS.md` 판별 포인터
+- 증거: 원격 영향 선택 2 invocation — 38파일 923 passed(첫 돌림에서 캔버스 팔레트·제목 계약 2 failed를 계약 준수 수정 뒤 재시험으로 통과), `tools/capture/test/test_multi_record.py` 10 passed, `test/known_failures.py` 0 new. `rosy_harness.py lint` 0 errors
+- gate 변화: 없음
+- 결정: D-937 Accepted(사용자 합의)
+- 교훈: 기존 교훈 `landing-blockers-cost-hours-2026-10-18`(미등록 표면 사각지대)의 적용 사례 — 새 교훈 없음
+
+## 2026-11-01 · uncommitted · UI 일관성 회차 검증 기록
+
+- 변경: `docs/validation/fleet-ui-consistency-2026-11-01/README.md` — 이번 회차의 변경·비평 점수(23→27)·게이트 적발 6건·LOCAL 증거의 경계를 날짜 기록으로 남겼다.
+- 증거: 기록 문서이며 실행 코드 변화 없음.
+- Gate: 없음. CE: 해당 없음.
+
+
 ## 2026-11-02 · uncommitted · fix(land): 서로 닿지 않으면 차례는 가드만 (D-889 추가 22)
 - 변경: `land_selection.select` landed 경로 두 곳. 이 브랜치와 main 변화분의 선택이 겹치지 않고 안전 경로가 없으면 `_guards_only` + 닿는 브라우저 묶음만.
 - 증거: 11-01 17:45 뒤 착지 p90 152분. 느린 착지는 사전 시험 5~7분, 차례 대기 약 125분. 차례마다 변화분 묶음을 다시 돌아 7~13분씩 걸렸다. 원격 시험은 착지 기록에 남긴다.
@@ -13633,6 +13647,12 @@ osy-d395-s1d\`.
 - 결정: D-889 추가 10
 - 교훈: 없음
 
+## 2026-11-02 · uncommitted · D-945 5항 이행 완료로 닫음
+
+- 변경: D-945 5항과 DESIGN.md의 유예 목록을 닫는다 — 로봇 대시보드는 두 상태 셸 h1 규칙·hero-strip 제목 줄로 준수(공간 문법 보존), 웹 표면 이행 완료. Cam은 네이티브 앱이라 밖.
+- 증거: 기록 변경이며 test_layout_canon이 근거. 원격 시험은 다음 착지 전 기록.
+- Gate: 없음. CE: 해당 없음.
+
 ## 2026-11-02 · uncommitted · docs(omx): 시범 학습 준비와 왼쪽 손목 진단 기록
 - 변경: [검증 기록](validation/omx-learning-readiness-2026-11-02/result.md)에 실제 녹화의 준비 부족, arm_a 읽기 전용 모터 관측, 손목 추종 실패 로그와 확대 사진 해시를 남겼다.
 - 증거: 운영 Learning 계정 화면 HTTP 200, 모터 ID 11–16 응답, 정지 직전 같은 장치의 건강 표본 대조. 새 학습·팔 동작·수리는 미실행이다.
@@ -13651,12 +13671,33 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - CE: 해당 없음 — UNKNOWN 재시도는 회귀 시험으로 고정했고, 세션 재시작 뒤 살아남은 프로세스는 저장소 밖 경험 메모에 남겼다
 
+## 2026-11-02 · uncommitted · fix(auth): Fleet 개발 모드에서도 Rosy Account 로그인 제공
+- 변경: 공통 로그인 폼은 Fleet 연결 모드 대신 서버의 `password_login` 제공 여부를 따른다. Learning에서 중앙 로그인 폼이 숨겨지는 현상을 실제 Chromium에서 재현했다.
+- 증거: 수정 전 회귀 2개 실패, 수정 후 `eb7580de25` 원격 opt-in Chromium·인증 route 59개 통과, skip 없음, known-failures NEW 0. 운영 브라우저의 스크립트 응답 대체로 폼 복구 확인. 서버 배포와 실제 사용자 로그인 수용은 미완료.
+- gate 변화: 없음
+- 결정: D-757 계약 유지, 연결 모드와 권한 변경 없음
+- 교훈: `solutions/logic-errors/fleet-development-mode-hides-central-account-login-2026-11-02.md`
+
+## 2026-11-02 · uncommitted · D-962 Account 독립 실행과 개발 모드 인증 계약
+- 변경: D-962와 API v1.349로 Account source·프로세스·DB·키 소유권을 분리하고 D-473의 익명 개발 operator를 대체했다. 기존 issuer·계정 ID·grant·회수·장치 안전 경계는 유지한다.
+- 증거: `3292c6eccb` 원격 site 배포·HTTPS·candidate·증분 update·updater 회귀 163건 통과/skip 0/NEW 0. `a35da73013`에서는 구조·CLI·node·배포·API 회귀 458건 통과/skip 0/NEW 0. Account·브라우저 165건은 `471a611e05`에서 통과했고 최종 앱 조합 정리 후 재검증 중이다. 독립 계약 검토는 `a35da73013`에서 발견 사항 없음이다.
+- gate 변화: 없음. 최종 통합·서명 배포·단일 writer 이관·실제 사용자 수용은 아직 별도다.
+- 이력: `fix/learning-auth-entry`의 중간 크기 증가 커밋 때문에 size_range 착지가 거절됐다. 원본 브랜치·시험 기록은 보존하고 현재 main의 새 `fix/independent-account-auth`에 최종 변경을 다시 구성한다. 이력을 다시 쓰거나 크기 제한을 늘리지 않는다.
+- CE: 새 교훈 기록은 앞선 로그인 폼 문제 한 건이며, 이후 구조·전환 제약은 코드·시험·D-962에 기록한다.
+
 ## 2026-11-02 · uncommitted · feat(fleet): 확인된 ARM 시도의 재관측 계약(D-930, API v1.334)
 
 - 변경: `POST/GET /api/fleet/arm-transfers/jobs/{id}/rechecks`를 추가했다. 기다리는 재관측은 기존 observation context에 `phase=RECHECK`로 나오고 같은 observations 경로로 받는다. 검사는 POST_ACTION과 같고 요청 뒤 시각·측정 관절을 요구한다. Action·claim·작업 상태·영수증·v1.330 근거는 바뀌지 않는다(`work/physical_transfer_rechecks.py`, `fleet_physical_transfer_rechecks` 테이블).
 - 증거: 원격 `test_physical_transfer_recheck.py`와 관측자·v1.330·관측 계약·holder import 시험 58 passed. Harbor 전체 흐름 회귀(D-927)의 ⑤가 이 계약을 쓴다.
 - Gate: 없음. simulation 계약 구현이며 실물 관측자·현장 수용은 별도다. 공개 push 없음.
 - CE: 해당 없음 — 설계 결정과 계약 추가이며 해결한 장애가 아니다.
+
+## 2026-11-02 · uncommitted · fix(landing): 모든 차례의 30분 상한
+- 변경: D-889 사용자 확정 정책에 따라 acquisition 기준 1800초 상한을 모든 차례에 적용한다. 첫 예산이 10분 또는 20분인 경우의 조기 반납은 보존하고, 세 번째 이후 무제한과 대기자 없는 무제한 연장을 없앴다. Git 변경은 안전 경계까지 기다린다.
+- 증거: 미착지 소스 `719e36bdac` 원격 착지/remote 29개 suite 564개 통과, NEW 0·known 0·flaky 0. 선행 RED 14개 실패. 운영 적용·30분 내 착지 완료·p90 목표 달성을 주장하지 않는다.
+- gate 변화: 없음. 결정 승인과 소스 회귀 검증은 운영 수용과 구분한다.
+- 결정: D-889 「모든 차례 최대 30분」, 사용자 승인 2026-11-02.
+- CE: 해당 없음 — 시간 정책·안전 경계는 ADR 정본과 회귀 시험에 기록했다.
 
 ## 2026-11-02 · uncommitted · fix(omx): 막힌 wrist_roll을 가드 전에 멈추고, 가드 고장마다 기록과 카메라 프레임을 남긴다
 - 변경: `chunk_runner.ROLL_BLOCK_LAG`. goto·park·lift의 막힘 감지가 wrist_roll도 보며, PWM과 관계없이 지연이 1.5단위를 넘어 계속 오르면 토크를 유지한 채 멈춘다. 멈춤 문구에 다른 관절의 지연을 붙인다. `motor_health.keep_fault`는 가드 고장마다 `faults/<owner>-<utc>.json`(`rosy.motor-fault.v1`, 모든 관절)과 `ROSY_OMX_FAULT_FRAMES`의 로컬 카메라 프레임을 남긴다.

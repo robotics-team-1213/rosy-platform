@@ -31,6 +31,7 @@ on:
     paths:
       - deploy/site/**
       - operations/fleet/**
+      - operations/account/**
       - integrations/messaging/discord/**
       - operations/decision/**
       - applications/fleet/web/**
