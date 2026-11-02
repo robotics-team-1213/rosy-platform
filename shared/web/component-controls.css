@@ -1,5 +1,5 @@
 /* Opt-in compositions. Existing controls retain their shared appearance and semantics. */
-.ui-task-page { box-sizing: border-box; width: 100%; min-width: 0; max-width: var(--content-task-max); margin-inline: auto; padding: var(--inset-task-page); display: flex; flex-direction: column; gap: var(--gap-task-page); }
+.ui-task-page { box-sizing: border-box; width: 100%; min-width: 0; max-width: var(--content-task-max); margin-inline: auto; padding: var(--inset-task-page); display: flex; flex-direction: column; gap: var(--gap-task-page); overflow-wrap: anywhere; }
 .ui-task-page > :is(h1, h2, p) { margin: 0; }
 .ui-auth-page { max-width: var(--content-auth-max); padding-block: var(--space-6); }
 a.ui-action-link { box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; gap: var(--gap-button-content); min-width: var(--target-secondary); min-height: var(--target-secondary); max-width: 100%; padding: 0 var(--inset-button); border: 1px solid var(--control-line); border-radius: var(--radius-button); color: var(--text-primary); background: transparent; font: var(--weight-label) var(--text-label)/var(--leading-control) var(--body); text-align: center; text-decoration: none; white-space: normal; overflow-wrap: anywhere; }

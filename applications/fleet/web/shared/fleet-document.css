@@ -1,5 +1,7 @@
 /* Task geometry belongs to the shared composition; document owners keep their content measure. */
 body { margin: 0; }
+.fleet-document-header ui-brand { container-type: inline-size; flex: 1; }
+.fleet-document-header ui-brand a { flex-wrap: wrap; }
 .fleet-document { container-type: inline-size; overflow-wrap: anywhere; }
 .fleet-document:not(.ui-auth-page) { max-inline-size: var(--content-learning-max); }
 .fleet-document > * { min-inline-size: 0; }
