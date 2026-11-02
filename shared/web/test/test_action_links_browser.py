@@ -28,7 +28,7 @@ def serve(route):
     if path in assets:
         return route.fulfill(content_type="text/css", body=assets[path].read_text(encoding="utf-8"))
     body = PAGE if path == "/start" else '<main id="destination"><h1>원래 작업</h1></main>'
-    return route.fulfill(content_type="text/html", body=body)
+    return route.fulfill(content_type="text/html; charset=utf-8", body=body)
 
 
 @pytest.mark.parametrize("width", [320, 1366])
