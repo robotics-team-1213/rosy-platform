@@ -13759,6 +13759,12 @@ osy-d395-s1d\`.
 - 결정: 없음
 - 교훈: `docs/solutions/runtime-errors/omx-blocked-wrist-roll-reached-the-guard-unseen-2026-11-02.md`
 
+## 2026-11-03 · uncommitted · docs(omx): 실물 카메라로 잰 셀 실측과 셀 모델 대장 갱신
+- 변경: 검증 기록 `docs/validation/omx-cell-survey-2026-11-03/result.md`(top·side 카메라 자세, arm_b 받침 FK 맞춤, fixture와의 차이), `learning/envs/isaac/cell_model_inventory.yaml`의 판·팔 받침·top·side 카메라 항목과 벨트 높이 사람 작업, D-947 2의 보강(Gazebo도 같은 대장, 값마다 출처, CAD·실측은 후보).
+- 증거: 돌기 격자 PnP top 0.58 px·side 2.8 px, arm_b 녹화 세션 `live.json`을 읽기만 해 FK 맞춤 3.1 px. 팔 명령·관측기 기동 없음. 스크립트와 겹침 영상은 Git 밖 작업 공간 조사 폴더.
+- gate 변화: 없음. fixture 수치는 바꾸지 않았다(실측 받침 채택은 도달·충돌 비교 뒤).
+- CE: 해당 없음 — 측정 기록이며 해결한 장애가 아니다. 실물과 시뮬레이션의 차이는 대장에 남겼다.
+
 ## 2026-11-03 · uncommitted · fix(landing): 병렬 준비와 폴백에서 급행 표시를 보존한다
 - 변경: 병렬 guard/body의 활성 우선순위 호출 수를 Lock으로 관리해 마지막 호출까지 표시를 유지한다. 자원 정보가 없는 serial 폴백에도 TURN_JOB를 전달한다. selector·검증 범위·worker/메모리 한계·host floor·ALONE 정책은 그대로다.
 - 증거: committed RED `d27b7a625c` 의도 실패6/양성2. 수정 `150a10701e`의 flags/remote_pytest/host_admission 원격125 PASS, skip/NEW/known/flaky0. 양쪽 종료 순서·normal 중첩·예외 정리·fallback flag1/0/빈값을 검증했다. 독립 검토 추가P1/P2없음, size2commits PASS, lint0오류42경고.
