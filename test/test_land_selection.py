@@ -399,6 +399,9 @@ def test_explicit_full_affected_change_executes_canonical_plan_and_real_receipt(
 
 def test_explicit_full_ignores_stale_spec_and_executes_the_actual_main_delta(full_case, monkeypatch):
     case = full_case
+    delta_source = CANONICAL.replace("invocations=[] if '--head' in sys.argv",
+                                    "invocations=[['pkg/test/test_a.py']] if '--head' in sys.argv")
+    commit(case.main, {'tools/harness/rosy_harness.py': delta_source}, 'canonical delta fixture')
     case.mutate = lambda: commit(case.main, {'lib/peer.py': 'peer = 1\n'}, 'main advanced')
     prepared = land.land_full.prepared
     def stale_spec(*args):

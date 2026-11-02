@@ -60,6 +60,24 @@ def validate(invocations, required):
             raise ValueError('empty ordinary invocation would collect the entire repository')
 
 
+def compose(*contexts, available=True):
+    """Combine verified contexts, keeping one timing plan row and every ordinary row."""
+    def required(invocations):
+        return any(normalize(w) == TARGET or available and covers(w) for inv in invocations for w in inv)
+
+    result, timing = [], False
+    for context in contexts:
+        validate(context, required(context))
+        for inv in context:
+            if inv == DEDICATED:
+                if timing:
+                    continue
+                timing = True
+            result.append(inv)
+    validate(result, required(result))
+    return result
+
+
 def separate(invocations, available=True):
     if sum(dedicated(inv) for inv in invocations) > 1:
         raise ValueError('duplicate G1 timing exclusive jobs')

@@ -24,6 +24,7 @@ from pathlib import Path
 
 from land_merge import resolver
 from land_selection import SAFETY_TRIGGER, _affected
+from harness import affected_exclusive
 
 KEY = "spec"
 HOLDER = "rosy-land-spec"  # <git-common-dir>/rosy-land-spec/<branch>: the speculative worktree, like rosy-publish
@@ -56,6 +57,8 @@ def chain(land, wt: Path, python: str, qdir: Path, ticket: Path) -> list[str]:
 
 def prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, ticket: Path | None) -> None:
     """After the prepare: test the predicted turn and keep its tree in the land_full record. Never stops the landing."""
+    if args.tests == "full":
+        return
     record = _record(land, wt, branch)
     if ticket is None or not record or record.get("tier") not in ("full", "affected"):
         return
@@ -121,15 +124,23 @@ def held(land, wt: Path, branch: str, full_main: str, candidate: str) -> list[li
                               missing=[c for c in spec["chain"] if c not in landed],
                               outside=None if moved is None else max(0, moved - len(landed)))
         return None
-    root = [kept for kept in ([p for p in inv if p.startswith("test/") or p == "test"] for inv in spec["invocations"])
-            if kept]
+    invocations = affected_exclusive.compose(spec["invocations"], available=(wt / affected_exclusive.TARGET).is_file())
+    root = []
+    for inv in invocations:
+        kept = inv if any(w.startswith('-') or affected_exclusive.ENV.match(w) for w in inv) else [
+            p for p in inv if p.startswith("test/") or p == "test"]
+        if kept:
+            root.append(kept)
     land.land_events.emit("speculation", stage="turn", held=True, differ=differ[:20])
     guards = [g for g in land.land_guards.GUARDS if (wt / g).exists()]
-    return root or ([guards] if guards else [])  # never an empty invocation: bare pytest would collect anything
+    return affected_exclusive.compose(root or ([guards] if guards else []),
+                                      available=(wt / affected_exclusive.TARGET).is_file())
 
 
 def with_spec(land, wt: Path, branch: str, prepared: dict | None) -> dict | None:
     """``prepared`` for the land record of a held turn: its tier, plus the speculated selection (it passed on this
     tree up to the records). The record's base stays the turn's main, an ancestor of the landed commit."""
     spec = ((_record(land, wt, branch) or {}).get(KEY) or {})
-    return {**prepared, "invocations": prepared["invocations"] + spec.get("invocations", [])} if prepared else None
+    return {**prepared, "invocations": affected_exclusive.compose(
+        prepared["invocations"], spec.get("invocations", []),
+        available=(wt / affected_exclusive.TARGET).is_file())} if prepared else None
