@@ -15,6 +15,37 @@ import land_stats  # noqa: E402
 H = 3600.0
 
 
+def test_rollup_closes_member_retry_history_but_preserves_later_work_and_deduplicates():
+    a, b, carrier = "land/fix/a-20261101000000", "land/fix/b-20261101000000", "land/fix/land-rollup-x"
+    members = [{"branch": a, "ticket": "a2", "candidate": "a" * 40},
+               {"branch": b, "ticket": "b1", "candidate": "b" * 40}]
+    rows = [ev(0, "queue", branch=a, ticket="a1"), ev(10, "stop", branch=a),
+            ev(60, "queue", branch=a, ticket="a2"), ev(120, "queue", branch=b, ticket="b1"),
+            ev(180, "queue", branch=carrier, ticket="a2"),
+            ev(240, "landed", branch=carrier, members=members),
+            ev(300, "queue", branch=a, ticket="a3"),
+            ev(330, "landed", branch=carrier, members=members),
+            ev(360, "landed", branch=a)]
+    assert land_goal.lead_times(rows, 0, 400) == [4, 2, 1]
+
+
+def test_failed_rollup_does_not_close_member_or_create_a_sample():
+    rows = [ev(0, "queue", ticket="a"), ev(60, "stop", members=[{"branch": "land/fix/a", "ticket": "a"}]),
+            ev(120, "landed")]
+    assert land_goal.lead_times(rows, 0, 200) == [2]
+
+
+def test_legacy_batch_completion_closes_carried_members_before_their_later_exit():
+    a, b = "land/fix/a-20261101000000", "land/fix/b-20261101000000"
+    rows = [ev(0, "queue", branch=a, ticket="a"), ev(60, "queue", branch=b, ticket="b"),
+            ev(120, "train", branch=a, branches=[a, b], result="landed"),
+            ev(121, "landed", branch=a), ev(180, "queue", branch=b, ticket="b2"),
+            ev(181, "landed", branch=b, pid=1), ev(240, "landed", branch=b, pid=2)]
+    # The old member exit must not consume b2, even if the new queue appeared first.
+    rows[1]["pid"], rows[4]["pid"] = 1, 2
+    assert land_goal.lead_times(rows, 0, 300) == [2, 1, 1]
+
+
 def ev(t, event, branch="land/fix/a-20261031120000", pid=1, **kw):
     return {"t": t, "event": event, "branch": branch, "pid": pid, **kw}
 
@@ -80,3 +111,34 @@ def test_goal_cli_defaults_to_sixty_minutes_and_preserves_override(goal_repo, mo
     assert "p90 90 min (goal <= 60)" in capsys.readouterr().out
     assert land_stats.main([*args, "--p90", "120"]) == 0
     assert "p90 90 min (goal <= 120)" in capsys.readouterr().out
+
+
+def test_goal_cli_recovers_historical_rollup_members_without_rewriting_events(goal_repo, monkeypatch, capsys):
+    events, start = goal_repo
+    sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+    a, b, carrier = "land/fix/a-20261101000000", "land/fix/b-20261101000000", "land/fix/land-rollup-x"
+    rows = [ev(start, "queue", branch=a, ticket="old-a"), ev(start + 60, "stop", branch=a),
+            ev(start + 120, "queue", branch=a, ticket="a"), ev(start + 180, "queue", branch=b, ticket="b"),
+            ev(start + 200, "isolation", branch=a, kind="prepare", candidate=sha),
+            ev(start + 201, "isolation", branch=b, kind="prepare", candidate=sha),
+            ev(start + 240, "queue", branch=carrier), ev(start + 300, "landed", branch=carrier, sha=sha),
+            ev(start + 360, "queue", branch=a, ticket="next"), ev(start + 420, "landed", branch=a)]
+    raw = "\n".join(json.dumps(r) for r in rows)
+    events.write_text(raw, encoding="utf-8")
+    holder = events.parent / "rosy-land-wt"
+    holder.mkdir()
+    sidecar = holder / (carrier.replace("/", "-") + ".members")
+    sidecar.write_text(json.dumps([{"branch": a}, {"branch": b}]), encoding="utf-8")
+    monkeypatch.setattr(land_stats.time, "time", lambda: start + 600)
+    assert land_stats.main(["--goal", "--hours", "1"]) == 0
+    assert "landed 3, lead time p50 2 / p90 5 min" in capsys.readouterr().out
+    assert events.read_text(encoding="utf-8") == raw
+    normalized, warnings = land_goal.normalize(rows, events.parent)
+    assert not warnings
+    assert land_goal.lead_times(normalized, start, start + 290) == []
+    assert land_goal.lead_times(normalized, start, start + 600) == [5, 2, 1]
+    assert len([r for r in normalized if r["event"] == "landed"]) == 2
+    # A non-ancestor / missing candidate never closes a member by guessing its name.
+    rows[4]["candidate"] = "f" * 40
+    normalized, warnings = land_goal.normalize(rows, events.parent)
+    assert warnings and land_goal.lead_times(normalized, start, start + 600) != [5, 2, 1]
