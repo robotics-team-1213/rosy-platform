@@ -370,6 +370,20 @@
 - 증거: `test_layout_canon.py` 통과. 원격 시험은 착지 전 기록.
 - Gate: 없음. CE: 해당 없음.
 
+
+## 2026-11-02 · uncommitted · 로봇암 검수 프레임 이미지의 style 속성 제거 (CSP)
+
+- 변경: `omx.html`의 `#review-image`가 지닌 `style="max-width:100%;height:auto"`는 `style-src 'self'` CSP가 조용히 무시해 큰 프레임이 칸을 넘을 수 있었다. 규칙을 `app.css`(갤러리 이미지와 같은 줄)로 옮기고 `omx-review.js`의 cssText 복사를 지웠다.
+- 증거: `test_layout_canon.py` 새 검사가 표면 HTML의 style 속성을 거절한다(되돌리면 실패 확인).
+- Gate: 없음. CE: 해당 없음.
+
+
+## 2026-11-02 · uncommitted · 권한 거부 문구 통일·행간 토큰
+
+- 변경: 검수 화면 403 문구 '권한이 거부되었습니다'를 다른 표면과 같은 '권한이 없습니다'로 바꿨다. `app.css`의 `line-height:1.25`를 `--leading-compact`로.
+- 증거: `test_operator_copy.py` 같은 뜻 한 말 검사.
+- Gate: 없음. CE: 해당 없음.
+
 ## 2026-11-02 · uncommitted · D-961 웹 제품 통합
 
 - 변경: 12개 문서·공통 헤더·동적 링크를 공용 이동 조작으로 옮겼다. 인증의 정상·오류·권한 거부와 명시적 계정 전환을 구분하고 객체·픽셀 캔버스·사람 정답은 유지한다.

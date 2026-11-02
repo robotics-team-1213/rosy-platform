@@ -1106,6 +1106,20 @@
 - 증거: `test_layout_canon.py` focal 표면 검사 통과(순서·skip link). 원격 시험은 착지 전 기록.
 - Gate: 없음. CE: 해당 없음.
 
+
+## 2026-11-02 · uncommitted · noscript 안내 (D-945 마무리)
+
+- 변경: `index.html`에 Fleet 다섯 영역 문서와 같은 noscript `ui-status state="error"`를 넣었다 — 스크립트 없이 열린 조작 화면이 물리 정지 경로를 알린다.
+- 증거: `test_layout_canon.py` 새 검사(조작 표면 noscript·style 속성 금지)와 변이 증명.
+- Gate: 없음. CE: 해당 없음.
+
+
+## 2026-11-02 · uncommitted · sr-only 재정의 제거
+
+- 변경: `styles.css`의 `.sr-only`(clip-path 방식) 사본을 지우고 공용 규칙을 쓴다.
+- 증거: 원격 계약 시험.
+- Gate: 없음. CE: 해당 없음.
+
 ## 2026-11-02 · uncommitted · D-961 웹 제품 통합
 
 - 변경: 본문 건너뛰기가 main 포커스로 이어지도록 tabindex를 추가하고 앱바 banner를 명시했다. focal·영상·운전·정지 배치와 hold-to-drive는 유지한다.

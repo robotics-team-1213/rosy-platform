@@ -330,6 +330,7 @@
 - 변경: 캔버스가 축소돼도 공·로봇 표식·이름이 화면에서 읽히는 크기를 유지한다. 진행 중인 320/390px의 점수·피치·관측 동일 폭도 검사한다.
 - 증거: [UI/UX 회차](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 X: 전후 캡처. 기존 320px 공 반지름 화면상 2.6px, 수정 후 5px. 진행·좁은 폭 브라우저 3 passed, `known_failures.py` 0 NEW.
 - gate 변화: Game Board LOCAL G2 부분 근거 추가. D-101 노트북 운영, 실제 경기·정지 readback과 G3는 HOLD다.
+
 ## 2026-10-06 · uncommitted · uiux(games): 좁은 복구 화면의 동등 폭
 
 - 변경: 첫 연결 실패와 경기 수신 후 연결 끊김을 320/390px에서 재생하고, 점수·피치·관측의 동등 폭, 연결 문구, 첫 화면 정지를 브라우저 계약에 추가했다. 제품 렌더링은 바꾸지 않았다.
@@ -419,6 +420,20 @@
 - 증거: 최종 runtimefd770d8d36 board Chromium61 passed/skip0, test-only068의 부분16 passed·최종18PNG, 공식 영향641 passed/61 skipped 및 연결 overhead785 passed, NEW0. 무한 대기8·늦은 응답4·시각 근거1 RED를 실제 HTTP로 재현했고 최초50 통과의 범위 한계도 보존했다. `docs/validation/games-receipt-freshness-2026-10-29/` 참조.
 - gate 변화: 없음. DEVICE/FIELD와 G2/G3 HOLD·실제 정지/readback·운용 GO는 별도다. 배포·착지/push/merge 미수행.
 - CE: 해당 없음 — 시간 상한·UTC 비교 거부의 이유가 comment·회귀·검증 기록에 남는다.
+
+
+## 2026-11-01 · uncommitted · 경기 보드 h1 하나(D-945 마지막 미이행 표면)
+
+- 변경: 경기 보드(`games/web/index.html`)에 sr-only h1을 넣었다 — 한 화면 예산(스크롤 없음 계약)을 지키면서 문서 h1 하나 규칙(D-945 2항 focal 표현)을 만족한다. test_layout_canon의 focal 검사가 경기 보드를 포함하고 D-945의 h1 규칙에 focal 키오스크 표현을 명문화했다.
+- 증거: test_layout_canon 전 통과(경기 보드 h1 1·topbar-first·skip link). 원격 시험은 다음 착지 전 기록.
+- Gate: 없음. CE: 해당 없음.
+
+
+## 2026-11-02 · uncommitted · noscript 안내 (D-945 마무리, 사용자 지시)
+
+- 변경: 경기 보드 `index.html`에 Fleet·로봇 대시보드·Pilot과 같은 noscript `ui-status state="error"`를 넣었다.
+- 증거: `test_layout_canon.py` 조작 표면 noscript 검사 대상에 경기 보드 추가.
+- Gate: 없음. CE: 해당 없음.
 
 ## 2026-11-02 · uncommitted · D-961 웹 제품 통합
 

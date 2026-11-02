@@ -116,6 +116,8 @@ surfaces:
     grammar: exception
     contracts: [shared_controls, typography_focus, dialog]
     container_breakpoints:
+      - value: 22rem
+        reason: 좁은 좌석(22–64rem, 390px 전화 포함)의 하위 탐색은 가로 스크롤 대신 줄바꿈해 감춰진 화면이 없게 하고, 22rem 미만(320px)은 줄바꿈이 화면 절반을 먹지 않게 컴팩트 스크롤을 유지한다(D-926 3·D-945 4항)
       - value: 48rem
         reason: 한 줄 앱 바가 시계와 평상 연결 글(실시간)을 접는 셸 칸 폭 — 그 아래에서는 맥락·알림·계정·비상 정지가 한 줄에 서려면 연결 자리가 비어야 한다. 공용 셸의 본문 접힘과 같은 값이다(D-741 5항)
       - value: 60rem
@@ -251,6 +253,19 @@ surfaces:
     contract_reason: >
       색과 부품은 /common(tokens·components·ui.js)을 쓰지만 제품 셸·확인 문법 계약의 대상은 아니다. 라인 예산과 판정은
       test_web_budgets의 D-262 VERDICTS가 맡는다.
+    baseline_reason: 제품 표면이 아니므로 G2 기준선이 없다.
+
+  - id: capture-wall
+    path: tools/capture/multi_record.html
+    themes: [dark, light]
+    surface: dev
+    medium: web
+    audience: 녹화 세션 감시 담당자 — 촬영 중 카메라 벽과 로봇 지도 위치 확인 (D-563)
+    role: 다중 녹화 벽 — 이 PC의 녹화 세션을 읽어 보이기만 한다. 고정 포트 없이 임시 포트로 로컬에서만 서빙되며 제품 표면이 아니다 (D-937).
+    owns: []
+    contracts: []
+    contract_reason: >
+      색은 /common 토큰을 따르지만 제품 셸·확인 문법 계약 대상이 아니다(촬영 도구). 캔버스 색도 매 프레임 토큰에서 읽는다.
     baseline_reason: 제품 표면이 아니므로 G2 기준선이 없다.
 
   - id: robot-face

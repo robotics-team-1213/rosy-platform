@@ -1386,6 +1386,34 @@
 - 증거: node --check 3파일, test_layout_canon 전 통과. 어휘 변화(전체 제목→짧은 이름)에 맞춰 test_surface_bridge·test_dashboard_entry_browser 기대치 갱신(접근 이름은 전체 제목 유지). 원격 시험은 착지 전 기록.
 - Gate: 없음. CE: 해당 없음.
 
+
+## 2026-11-02 · uncommitted · D-945 이행 완료 선언 — 대시보드 두 상태 셸 h1 규칙으로 준수
+
+- 변경: 대시보드 본문을 실측으로 재평가했다 — h1 정확히 1(hero-strip 제목 줄, 공간 문법), h2/h3 사다리 정돈, 단추 종류 전부 규격(ui-button kind 5종), ui-empty 12, skip link·app-shell 시트 ✓(입장 레일 통일 커밋에서 반영). `#triage-title` 빈 h2는 JS가 채우는 동적 제목으로 결함 아님. 따라서 본문을 ui-section로 재작성하지 않고, test_layout_canon이 두 상태 셸(입장 게이트·연결 후 공간 콘솔)의 h1 하나 규칙을 검사하게 했다. D-945 5항·DESIGN.md의 유예 목록을 닫는다(웹 표면 이행 완료, Cam은 네이티브라 밖).
+- 증거: test_layout_canon 전 통과·lint 무결. 원격 시험은 다음 착지 전 기록.
+- Gate: 없음 — 감지·관측·조작 본문 문법과 고정 프레임 예산(D-201·test_console_layout)은 보존. CE: 해당 없음.
+
+
+## 2026-11-02 · uncommitted · noscript 안내 (D-945 마무리)
+
+- 변경: 대시보드 `index.html` 입장 셸에 Fleet·Pilot과 같은 noscript `ui-status state="error"`를 넣었다.
+- 증거: `test_layout_canon.py` 조작 표면 noscript 검사.
+- Gate: 없음. CE: 해당 없음.
+
+
+## 2026-11-02 · uncommitted · skip-link 재정의 제거
+
+- 변경: `styles.css`의 skip-link(주 단추 채움, z 20)를 지우고 공용 `components.css` 규칙을 쓴다.
+- 증거: 공용 덧칠 검사(skip-link 포함).
+- Gate: 없음. CE: 해당 없음.
+
+
+## 2026-11-02 · uncommitted · 가상 신호 등 역할 토큰
+
+- 변경: `panels/surface-panels.css` 등 색을 `--signal-*`로(값 동일).
+- 증거: 공용 신호 등 계약 시험.
+- Gate: 없음. CE: 해당 없음.
+
 ## 2026-11-02 · uncommitted · D-961 웹 제품 통합
 
 - 변경: 앱바의 banner 의미를 명시했다. 공용 레일 변화가 320×568 상단 예산을 넘긴 회귀를 확인한 뒤 공용 바닥과 Fleet 배치 치수를 분리했다. 역할·정지·장치 명령은 유지한다.
