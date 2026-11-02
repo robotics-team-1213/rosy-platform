@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-953 | Pi 4·Pi 5 CPU는 이미 있는 네이티브 경로로 먼저 줄인다 — 자체 Rust 확장은 Pi 4 실측이 요구할 때만. [전문](../adr/D-953-pi45-cpu-native-path.md) | Accepted (2026-11-01, 사용자 지시; D-185 순서를 따름) |
 | D-957 | 업데이트 운영 CLI: 운영자의 즉시 시도·홀드·해제를 하나의 명령으로 구조화한다. 게이트(유휴·배터리·서명·freeze) 우회는 없다. [전문](../adr/D-957-update-ops-cli.md) | Accepted (2026-11-02, 사용자 결정; 호스트 코드 불변, 원격 시험·착지는 파이프라인 기록) |
 | D-960 | 실제 제어는 암 세트마다 붙은 관제가 하고, 통합관제 R은 그 위에서 조정한다. [전문](../adr/D-960-control-unit-per-arm-set-under-integrated-r.md) | Accepted (2026-11-02, 사용자 결정) |
 | D-930 | 확인된 ARM 시도의 재관측(새 측정 사실만, 실행·claim·완료 권한 없음, API v1.334). [전문](../adr/D-930-arm-transfer-recheck-of-confirmed-attempt.md) | Accepted (2026-10-30, 계약·simulation 구현 결정; 실물 수용 별도) |
@@ -1422,3 +1423,9 @@ LCD 코드 페어링과 도달 확인 읽기는 Tailscale tailnet(`100.64.0.0/10
 **Status:** Accepted (2026-11-01). 장치·현장 수용은 별도다.
 
 프레임마다 REST와 같은 검사(`apply_teleop`)를 하고, 최신 seq만 적용하며, 움직이던 소켓이 끊기면 0을 적용한다. Pilot은 소켓이 없거나 ack가 1 s 넘게 없으면 REST로 보낸다. 전문은 [D-948](../adr/D-948-teleop-websocket-stream.md).
+
+## D-953 Pi 4·Pi 5 CPU는 이미 있는 네이티브 경로로 먼저 줄인다 — 자체 Rust 확장은 Pi 4 실측이 요구할 때만
+
+**Status:** Accepted (2026-11-01). D-185를 대체하지 않는다. 기체 실측은 남아 있다.
+
+기체 노드 파이썬 시간의 81~96%는 rclpy 실행기다. 이것은 C++ `EventsExecutor`(`ROSY_EXECUTOR=events`, 시뮬 노드 CPU 약 절반)로 줄이고, 기체 A/B 뒤 Pi 4·5 기본값으로 삼는다. `match_motion`은 결과가 비트 단위로 같은 numpy 구현으로 약 2.8배 줄였다(Pi 5 환산 약 24 ms). 자체 PyO3 커널은 Pi 4 bench가 50 ms tick을 넘을 때만 들인다(환산 55~70 ms라 첫 후보). 후속: 작업대 관측 웹소켓 압축 끔, Fleet 등록 TLS 컨텍스트 재사용, CORE `ROSY_CORE_EXECUTOR`(기본 `threaded`, 기체 A/B 전 전환 금지). 전문은 [D-953](../adr/D-953-pi45-cpu-native-path.md).
