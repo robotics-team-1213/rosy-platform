@@ -1,4 +1,4 @@
-"""The landing goal (user /goal 2026-10-31): 90% of landings reach main within 2 h, the queue never stalls > 30 min.
+"""The landing goal (user /goal 2026-11-02): 90% of landings reach main within 60 min, the queue never stalls > 30 min.
 
 ``python tools/land_stats.py --goal [--hours 24]`` prints lead time p50/p90 (a topic's first ``queue`` event to its
 ``landed``; ``land/`` prefix, ``-batch..-kN`` and UTC stamps collapsed, so restarts and resubmits count against it),

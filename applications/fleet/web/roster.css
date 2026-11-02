@@ -47,7 +47,6 @@
 .robot-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1) var(--space-3); width: 100%; }
 .robot-line b { font-family: var(--mono); letter-spacing: var(--track-wide); }
 .robot-line .trip-line { flex: 1 1 8rem; margin: 0; min-width: 0; color: var(--text-secondary); }
-.robot-line-battery strong { font-family: var(--mono); font-size: var(--text-label); }
 
 .facts {
   display: grid;

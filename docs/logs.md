@@ -13651,6 +13651,13 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - CE: 해당 없음 — UNKNOWN 재시도는 회귀 시험으로 고정했고, 세션 재시작 뒤 살아남은 프로세스는 저장소 밖 경험 메모에 남겼다
 
+## 2026-11-02 · uncommitted · feat(fleet): 확인된 ARM 시도의 재관측 계약(D-930, API v1.334)
+
+- 변경: `POST/GET /api/fleet/arm-transfers/jobs/{id}/rechecks`를 추가했다. 기다리는 재관측은 기존 observation context에 `phase=RECHECK`로 나오고 같은 observations 경로로 받는다. 검사는 POST_ACTION과 같고 요청 뒤 시각·측정 관절을 요구한다. Action·claim·작업 상태·영수증·v1.330 근거는 바뀌지 않는다(`work/physical_transfer_rechecks.py`, `fleet_physical_transfer_rechecks` 테이블).
+- 증거: 원격 `test_physical_transfer_recheck.py`와 관측자·v1.330·관측 계약·holder import 시험 58 passed. Harbor 전체 흐름 회귀(D-927)의 ⑤가 이 계약을 쓴다.
+- Gate: 없음. simulation 계약 구현이며 실물 관측자·현장 수용은 별도다. 공개 push 없음.
+- CE: 해당 없음 — 설계 결정과 계약 추가이며 해결한 장애가 아니다.
+
 ## 2026-11-02 · uncommitted · fix(landing): 모든 차례의 30분 상한
 - 변경: D-889 사용자 확정 정책에 따라 acquisition 기준 1800초 상한을 모든 차례에 적용한다. 첫 예산이 10분 또는 20분인 경우의 조기 반납은 보존하고, 세 번째 이후 무제한과 대기자 없는 무제한 연장을 없앴다. Git 변경은 안전 경계까지 기다린다.
 - 증거: 미착지 소스 `719e36bdac` 원격 착지/remote 29개 suite 564개 통과, NEW 0·known 0·flaky 0. 선행 RED 14개 실패. 운영 적용·30분 내 착지 완료·p90 목표 달성을 주장하지 않는다.

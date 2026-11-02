@@ -312,7 +312,7 @@ and counters only; it never echoes exception messages.
 
 ## LAN access
 
-The site Caddy proxy lets a browser on a private LAN address open the camera
+The site Caddy proxy lets a browser on a private LAN or Tailscale tailnet (`100.64.0.0/10`) address open the camera
 preview in `/console` without a site user token. This grants only the configured
 source list and a 60-second, source-scoped Vision preview lease. The console's
 other state and command controls still require a site user token. Access through
