@@ -33,6 +33,7 @@ import re
 import shlex
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path, PurePosixPath
 
@@ -289,17 +290,26 @@ def step(wt: Path, command: list[str], log: Path | None, label: str, env: dict =
     return result.returncode, text
 
 
+_priority_lock = threading.Lock()
+_priority_rounds = 0
+
+
 def run_tests(wt: Path, args, invocations: list[list[str]], logdir: Path, round_no: int) -> list[str]:
     """Run lint + pytest (+ node); return a summary line per step. Stop on any NEW failure.
 
     A turn's rounds (``1``, ``g1``; not ``pre``) mark their jobs (xdist_plan.TURN_ENV) to skip the hosts' queues, and
     so does every round of an urgent landing: its pretest got 'no host' behind six others' on full hosts (2026-10-31)."""
     turn = str(round_no).removeprefix("g").isdigit() or bool(getattr(args, "urgent", ""))
-    os.environ[TURN_ENV] = "1" if turn else ""
+    global _priority_rounds
+    with _priority_lock:  # guards and body overlap; either may finish first
+        _priority_rounds += int(turn)
+        os.environ[TURN_ENV] = "1" if _priority_rounds else ""
     try:
         return land_checks.run_tests(sys.modules[__name__], wt, args, invocations, logdir, round_no)
     finally:
-        os.environ[TURN_ENV] = ""
+        with _priority_lock:
+            _priority_rounds -= int(turn)
+            os.environ[TURN_ENV] = "1" if _priority_rounds else ""
 
 
 def main_checkout(wt: Path) -> Path:
