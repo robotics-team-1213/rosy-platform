@@ -650,3 +650,99 @@
 - 변경: `work/policy-page.js`가 다른 작업 화면처럼 `rosy-console-token`을 credential로 보내고 시작할 때 `developmentToken()`을 부른다. 전에는 개발 세션에서 이 화면만 `인증 필요`로 보였고, 머리의 `로그인`이 이미 로그인된 탭을 `/console`로 넘겨 "누르면 관제 홈으로 간다"로 보였다.
 - 증거: 실제 `create_app` 개발 모드 + Chromium에서 `/console?view=work&show=done` → 정책 링크 클릭 → `/console/policy`에 머물고 `운영자` 표시. `test_development_console_browser.py`에 `/console/policy`를 더했고 고치기 전 실패·후 통과를 확인했다.
 - gate 변화: 없음. CE: 새 교훈 `docs/solutions/logic-errors/fleet-page-without-tab-token-bounces-dev-login-to-console-2026-10-31.md`.
+
+## 2026-11-01 · uncommitted · 지도 장소 라벨은 장소 ID, 구역 칩에 구역 이름
+
+- 변경: `map/map-view.js`가 장소 점 옆에 목록 순번(`index + 1`) 대신 `place.id`를 쓴다. 순번은 지도를 고칠 때마다 바뀌고 trip·API·바닥 표시와 이어지지 않았다. `map/traffic-view.js` 구역 칩이 `<구역> · 점유 a/b · 대기 n`이라 같은 문장의 칩 여러 개를 구분한다. Cell 화면 팔 마커 목록은 D-954 번호(50~94, 팔 3개).
+- 증거: `node --test` traffic-view·traffic-layer·site-map 41 PASS(loader 포함).
+- gate 변화: 없음. CE: 해당 없음.
+
+## 2026-11-01 · uncommitted · D-741 6: 설치 문서 화면 이동을 공용 하위 탐색 자리로
+
+- 변경: 설치 문서(`installation/install.html`)가 본문 안 사이드바(`install-tasks`·`install-workspace`, `styles.css` 전용 배치)를 버리고 다른 네 문서와 같은 공용 하위 탐색 자리(`ui-subnav`)에 섰다. 작업 목록은 기존 공용 task-chooser가 같은 자리를 채운다(robot_ui shell과 같은 규칙, `install.js` 무변경). `app-shell.css`(자리 시트)를 문서에 넣고 `main`에 `fleet-task-page`를 달았으며 `doc-tabs.css`가 자리 안 여백만 준다. 이제 다섯 영역 문서 모두 레일(관제·작업·기록·지도·설치) + 하위 탐색 자리의 같은 구조다.
+- 증거: 작업 세션 Fleet 샘플 서버(4173) Chromium에서 세 문서(설치·지도·관제 작업 화면)의 자리 위치가 같다(레일 0·72px, 자리 x=72·232px, 본문 x=304). 탭 여섯 전환·tabpanel 라벨·좁은 화면 콤팩트 선택 유지, 페이지 오류 없음. node --test 403 passed. 원격 pytest는 착지 전에 기록한다.
+- gate 변화: 없음. CE: 해당 없음 — 화면 규칙은 D-741 6이 담는다.
+
+
+## 2026-11-01 · uncommitted · D-741 6 보강: 좁은 컨테이너에서 콤팩트 선택 기준 통일
+
+- 변경: `doc-tabs.css`의 `@container (width < 64rem)` 안에서 설치 자리의 task-chooser도 같은 컨테이너 기준으로 세로 레일을 숨기고 콤팩트 선택을 띄운다. `task-chooser.css`의 전환은 뷰포트 기준이라 고전 스크롤바 창(뷰포트 64rem 이상·컨테이너 미만)에서 레일이 세로로 남던 창을 메운다. 공용 시트는 그대로 두고 Fleet 표면이 자기 컨테이너 기준만 더한다.
+- 증거: 작업 세션 Fleet 샘플 서버(4173) Chromium 1440에서 컨테이너만 1000px로 줄인 경우 레일 숨김·콤팩트 선택 표시·탭 전환 정상, 1440 기본·480 좁은 폭은 기존과 같음, 페이지 오류 없음. 원격 브라우저 시험은 아래 착지 전 기록 참조.
+- gate 변화: 없음. CE: 해당 없음.
+
+
+## 2026-11-01 · uncommitted · D-926 2·비평 P0: 경로 줄 도입, 설치 문서 죽은 탭 수리, h1 모델 통일
+
+- 변경: 다섯 영역 문서가 본문 머리에 경로 줄(`ui-pathbar`, 부품은 app-shell.css)을 단다 — h1은 문서 제목 하나뿐이고 strong이 현재 화면을 따라온다(install은 task-chooser 새 `onSelect`, 지도·Cell은 `bindScreens` 새 `label`, 관제는 `area-nav`, 정책은 고정). site-map의 첫 구획 제목 "지도 보기"는 h2로 낮추고 관제·설치의 sr-only h1을 걷었다. 비평 P0도 고쳤다: `#camera-calibration`이 닫히지 않아 `#host-services`·설치 기록이 그 안에 중첩돼 호스트 서비스 탭이 빈 화면이던 잠복 결함(`</section>` 1줄).
+- 증거: 작업 세션 Fleet 샘플 서버(4173) Chromium — 호스트 서비스 탭 패널 표시·설치 기록 모든 탭에서 표시, 경로 줄 화면 이름이 chooser·해시·view를 따라감("카메라 설치·보정"·"초안 편집"·"레시피"·"작업"), site-map main h1 0개·map-heading H2, 페이지 오류 없음. node --test 403 passed. 원격 시험은 착지 전 기록.
+- gate 변화: 없음. CE: 해당 없음.
+
+
+## 2026-11-01 · uncommitted · 비평 P1: 현재 표시 어휘 통일, 설치 작업 주소 보존, policy 거짓 표시 제거
+
+- 변경: `aria-current="step"`(문서 안 현재 단계)이 `page`와 같은 장미색 자리 표식을 받는다(app-shell.css, Cell 단계가 처음으로 보인다). install 작업 선택이 `history.replaceState(#작업-id)`로 주소에 남고 첫 로드가 해시를 일반화해 읽어 새로고침·공유가 작업을 보존한다(기존 `#device-profiles` 특수 처리 제거). policy 좌석의 `학습` 링크에서 남의 문서를 가리키던 거짓 `aria-current="page"`를 뺐다 — 화면 이름은 경로 줄 strong이 말한다.
+- 증거: 작업 세션 Fleet 샘플 서버(4173) Chromium — Cell 현재 단계 표식 배경 확인, 탭 클릭 → `#hosts` → 새로고침 후 같은 작업 복원, 신규 로드 `#device-profiles` → 해당 패널, policy 현재 표시 0개, 페이지 오류 없음. node --test 403 passed. 원격 시험은 착지 전 기록.
+- gate 변화: 없음. CE: 해당 없음.
+
+
+## 2026-11-01 · uncommitted · 비평 사소한 관찰: 절차 문서 skip link·header 랜드마크, 좁은 좌석 단계 머리글, 영상 제목 층위
+
+- 변경: 네 가벼운 문서의 머리가 `header.fleet-document-header`로 랜드마크를 얻고(정본 inc + 재생성), 계정 관리·내 계정에 skip link와 main id·tabindex를 더했다(9문서 전부 skip link 보유). 좁은 컨테이너에서 app-shell이 지우던 `ui-subnav-head`를 Fleet 좌석에서 유지해 Cell 적재 단계·AI 판단 묶음 구분이 390px에서도 산다. 관제·설치의 `관제 카메라` 제목이 패널 제목 h2 안의 h2가 아니라 h3로 섰다.
+- 증거: 작업 세션 Fleet 샘플 서버(4173) Chromium — accounts/profile/login skip link 1개·header 랜드마크 1개·main id 확인, Cell 390px에서 "Cell 적재 단계" 머리글 표시, 두 문서 vision-heading H3, 페이지 오류 없음. node --test 403 passed. 원격 시험은 착지 전 기록.
+- gate 변화: 없음. CE: 해당 없음.
+
+
+## 2026-11-01 · uncommitted · 비평 후속: 호스트 안내 문장 줄이기, 실측 블록 흰 채움 하나, estop 폭 정합 확인
+
+- 변경: 호스트 서비스 안내 hint를 4문장에서 2문장으로 줄였다(사실 30초 갱신·점검 10분/30분·재부팅 10분·비상 정지 모두 보존). 실측 교정 블록의 `현재 조건 확인 후 미리보기` 단추가 primary→quiet로, 블록의 흰 채움은 `실측 교정 승인 저장` 하나다(D-926 7).
+- 증거: Chromium — 안내 문구·단추 kind 확인, 페이지 오류 없음. `#estop-feedback`는 1440·1920에서 main 본문과 픽셀 정렬(x·폭 일치) — 비평의 미실측 우려 종결, 수정 불필요. 원격 시험은 착지 전 기록.
+- gate 변화: 없음. CE: 해당 없음.
+
+
+## 2026-11-01 · uncommitted · 재비평 P2/P3: 소속 표시 복원, 경로 줄 화면 이름, canvas role 상태 추종, 알림 글리프, 묶음 머리글, 첫 화면 primary
+
+- 변경: policy 하위 탐색 `학습`에 현재 표시를 복원했다(재비평 판정 — Cell의 같은 패턴과 통일, 경로 줄 h1이 문서 정체를 말함). 관제 work/records의 경로 줄 strong이 영역 이름 대신 하위 탐색 현재 화면 이름(승인 대기 등)을 쓴다. 지도 캔버스의 `role="button"`이 마크업·지도 로드가 아니라 무장 상태(목표 선택·위치 찍기)를 따라간다(render에서 통제, WCAG 4.1.2). 본문 `알림` 탭 글리프를 종과 같은 notification에서 게시판 sign으로 바꿨다. `학습`(문서 경계 링크) 앞에 `다른 문서` 머리글을 관제·Cell·policy에 동일 적용. 비접속 관제 안내의 `관제 접속`이 primary 단추가 됐다(`data-login`으로 역할 잠금 제외 — 로그인 경로는 늘 열려 있다).
+- 증거: 작업 세션 Fleet 샘플 서버(4173) Chromium — policy 표식 1개, `?view=work&show=pending` 경로 줄 "승인 대기", 머리글 3문서, 접속 단추 UI-BUTTON kind=primary(비접속 클릭 가능·로그인 완료), canvas role 무장 시 "button"·해제 시 제거(핀 토글 실측), 알림 탭 sign 글리프 path 확인, 페이지 오류 없음. node --test 403 passed. 원격 시험은 착지 전 기록.
+- gate 변화: 없음. CE: 해당 없음.
+
+
+## 2026-11-01 · uncommitted · 테마 단추를 머리 줄 조작 칸으로(사용자 결정)
+
+- 변경: 영역 문서 다섯의 테마 단추(`#fleet-theme`)가 계정 접힘(`topbar-extra`, 펼치면 두 번째 줄처럼 보이는 패널)에서 머리 줄 조작 칸(알림·로그인 다음, 계정 단추 앞)으로 옮겼다. 머리에 들어갈 것은 머리 줄의 공용 아이콘 단추 하나로 충분하며 표시 선택을 계정 상세 뒤에 숨기지 않는다(가벼운 문서 넷은 원래 topbar 직속 — 이제 아홉 문서가 같은 자리). 정본 inc + 재생성.
+- 증거: Chromium — 다섯 영역 문서 actions 칸 소속·보임·topbar-extra 부재·문서당 1개, 가벼운 문서 셋 topbar 직속 1개, 계정 접힘 안 열고 다크→라이트 순환 확인, 페이지 오류 없음. node --test 403 passed. 원격 시험은 착지 전 기록.
+- gate 변화: 없음. CE: 해당 없음.
+
+
+## 2026-11-01 · uncommitted · 재비평 사소 관찰 마무리: policy 도입 산문 접기, 서식
+
+- 변경: policy 도입 산문 3문장을 첫 문장(0단계·실물 무동작)과 접힘 `단계와 승인 규칙`으로 나눴다(D-926 7 — 상태가 먼저 읽힌다). index.html의 나란한 script 태그 두 개를 두 줄로 나눴다. accounts `새 계정` 제목 중복은 JS가 동적 제목(계정 수정)을 쓰는 것으로 확인해 그대로 둔다.
+- 증거: Chromium — 첫 문장 표시·접힘 열림·페이지 오류 없음. node --test 403 passed. 원격 시험은 착지 전 기록.
+- gate 변화: 없음. CE: 해당 없음.
+
+
+## 2026-11-01 · uncommitted · 재비평 자극 문제 두 건 결정 — 현행 유지
+
+- 변경: 없음(결정 기록). ① `학습` 링크는 작업 하위 탐색에 잔류한다 — "다른 문서" 머리글이 문서 경계를 말하고, 여섯째 영역·계정 이동은 레일 5영역 원칙과 정책→학습 맥락을 흐린다. ② 설치 문서의 tablist(task-chooser)는 유지한다 — beforeSelect 상태 보호·초안 보존이 hash 화면 문법에 없고 robot UI와 같은 공용 부품이며, URL 보존·경로 줄 표시로 사용자 체감 차이는 해소됐다.
+- 증거: 문제 정의와 권고는 재비평(2026-10-31T18-09-46Z 스냅숏)에 있고 이 행이 채택을 기록한다.
+- gate 변화: 없음. CE: 해당 없음.
+
+
+## 2026-11-01 · uncommitted · 착지 브라우저 시험 반영: 캔버스 role 소유권 존중
+
+- 변경: 셸 render의 캔버스 role 관리가 무장 해제 때 사이트 뷰의 `role="img"`(지도 계층 소유)를 지우던 것을 막는다 — 해제하면 뷰 상태가 소유한 role(사이트 뷰 img, 격자 무장 아님 → 없음)로 즉시 돌리고 계층이 준 값은 덮어쓰지 않는다.
+- 증거: Chromium — 사이트 뷰 role=img가 여러 렌더 틱 생존, 핀 무장 → button → 해제 → img 즉시 복원, 페이지 오류 없음. node --test 403 passed. 원격 시험은 재착지 전 기록.
+- gate 변화: 없음. CE: 해당 없음.
+
+
+## 2026-11-01 · uncommitted · 착지 반영: 좁은 칸 머리 예산과 계약 갱신 (테마 머리 줄)
+
+- 변경: 테마 단추의 머리 줄 이동(사용자 결정)에 맞춰 <30rem에서 로그인 글자 링크를 접는다 — 계정 단추(계정과 접속)와 본문 관제 접속 안내가 같은 문을 연다. test_fleet_console_browser의 compact 예산·wide 한 줄 계약을 새 자리로 갱신(테마 머리 줄 표시).
+- 증거: Chromium — 390·320에서 overflow 0·topbar 64px(예산 내)·테마 보임·정지 우측·계정 48px, 1280 한 줄 64px·테마 보임. node --test 403 passed. 원격 시험은 재착지 전 기록.
+- gate 변화: 없음. CE: 해당 없음.
+
+
+## 2026-11-01 · uncommitted · 테마 단추 계정 접힘 원복 (사용자 재확인)
+
+- 변경: 테마 단추의 머리 줄 이동을 원복한다 — 계정 메뉴 상호작용(열기·테마 순환·Esc 닫힘·포커스 복귀)과 좁은 폭 예산을 소유한 D-668 계약 49시험이 그 자리를 정본으로 지닌다(사용자 재확인 2026-11-01). <30rem 로그인 접기도 함께 되돌린다. D-945·DESIGN.md의 머리 조작 규칙을 이 결정으로 정정했다.
+- 증거: fleet_components --check 통과(정본 inc 재생성), 원복 지오메트리 검증·node 시험은 아래 증거 줄에 이어 기록. 원격 시험은 재착지 전 기록.
+- gate 변화: 없음. CE: 해당 없음.

@@ -578,3 +578,9 @@ def test_recovery_is_a_known_phase_or_nothing(value, expected):
 
 def test_an_old_hand_over_without_recovery_reads_as_none():
     assert fs.validate_face_inputs(handover(), NOW)["recovery"] is None
+
+
+def test_the_stopped_card_shows_roots_release_code_and_nothing_else_does():
+    stopped = fs.screen_for(**READY, core=core(estop=True), release_code="HJKM-NPQR")
+    assert stopped["kind"] == fs.STOPPED and stopped["release"] == "Release code HJKM-NPQR"
+    assert "HJKM" not in json.dumps(fs.screen_for(**READY, core=core(), release_code="HJKM-NPQR"))

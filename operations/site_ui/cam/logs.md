@@ -369,3 +369,9 @@
 - 변경: 주소 미확인·승인 방식 미확인·충돌 사유를 비활성 버튼 밖의 공용 서체·색으로 표시하고, 서비스 identity key로 목록 재정렬의 input focus를 유지했다. 기존 enabled·발견·승인·trust·촬영 정책은 유지했다.
 - 증거: 실제 SDK35 debug/test APK 빌드·JVM443 pass/0 skip, 두 밀도의 native 각4 pass. key만 제거한 동일 fixture에서 재정렬2 RED를 확인했다. Python affected517 pass/NEW0. 최종24장 독립 검토 및 보고서97개/캡처24개 해시는 `docs/validation/cam-lan-guidance-2026-10-29/result.md`를 따른다.
 - gate 변화: 없음. 합성 목록이며 실제 기기·발견·승인·촬영·TalkBack·FIELD 수용은 아니다. CE: 해당 없음 — 원인과 해결이 코드·회귀·검증 기록에서 드러난다.
+
+## 2026-10-31 · uncommitted · 피어 공통 소스로 이동(D-939)
+
+- 변경: 이름만 다른 피어 서명·첫 접촉 CA 고정·Keystore 신원 사본(Pilot `PeerProof`/`PeerTls`/`AndroidPeerIdentity`, Cam `CameraProof`/`CameraTls`/`AndroidCameraIdentity`)을 `shared/android/peer` 한 곳으로 모았다. 두 앱이 `srcDir`로 함께 컴파일한다. 신원은 `AndroidPeerIdentity(context, app)`이고 기존 키 별칭·표시 파일·client id 접두어를 그대로 쓴다. 세션·보관소는 앱에 남긴다.
+- 증거: 새 구조 시험 `test/architecture/test_app_shared_sources.py` 3건이 main 배치에서 RED(빌드 미포함·12개 다시 선언·사본 4쌍), 이 브랜치에서 GREEN이다. 로컬 SDK35 빌드: Cam JVM 443 pass/0 skip, Pilot JVM 110 pass/1 skip(기존 ShellPageProbe), 두 앱 assembleDebug 성공. lint 0 error.
+- gate 변화: 없음. 실제 태블릿·휴대폰에서 기존 승인 관계 유지는 설치 후 확인한다. CE: 해당 없음 — 규칙은 D-939와 구조 시험에 있다.

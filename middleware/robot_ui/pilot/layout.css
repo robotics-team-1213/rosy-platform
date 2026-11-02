@@ -253,7 +253,11 @@ body[data-pilot-screen="arm"] ui-topbar [data-gate-state] { display: none; }
 .arm-readout { margin: 0; font-family: var(--mono); font-size: var(--text-label); color: var(--text-secondary); }
 [data-control-unsupported], [data-controls-empty] { margin: 0; color: var(--text-secondary); }
 .arm-controls > section[data-control-unsupported] { border-style: dashed; }
-.arm-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); }
+.arm-actions {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4);
+  padding: var(--space-4); background: var(--surface-raised); border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-panel);
+}
 
 /* 센서 값 표: 각도·범위 막대·시작 자세까지 남은 각도. 원본 JSON은 접어 둔다. */
 .arm-sensors { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-2); min-width: 0; }
@@ -273,11 +277,16 @@ body[data-pilot-screen="arm"] ui-topbar [data-gate-state] { display: none; }
 .arm-steps > li { counter-increment: arm-step; display: grid; gap: var(--space-2); align-content: start; min-width: 0;
   padding: var(--space-3); background: var(--surface-raised); border: 1px solid var(--border-subtle); border-radius: var(--radius-panel); }
 .arm-steps > li[data-state="current"] { border-color: var(--focus-ring); }
+[data-screen="arm"][data-recording] { padding-bottom: calc(var(--space-6) * 6); }
+[data-screen="arm"][data-recording] [data-sim-step="stop"] { position: fixed; z-index: 4;
+  inset: auto var(--space-3) calc(var(--space-3) + env(safe-area-inset-bottom, 0)); max-width: 40rem; margin-inline: auto;
+  border: 2px solid var(--focus-ring); }
 .arm-steps h4 { margin: 0; }
 .arm-steps h4::before { content: counter(arm-step) " · "; color: var(--text-secondary); }
 .arm-steps > li[data-state="done"] h4::after { content: " ✓"; color: var(--status-good); }
 [data-screen="arm"] .arm-steps label { margin: 0; }
-[data-screen="arm"] textarea { display: block; width: 100%; resize: vertical; }
+/* 과제 글이 길어지면 칸이 따라 늘어난다(지원 안 하는 브라우저는 rows=3에 세로 크기 조절). */
+[data-screen="arm"] textarea { display: block; width: 100%; resize: vertical; field-sizing: content; min-block-size: calc(var(--space-6) * 3); }
 .arm-step-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .arm-record-status { margin: 0; font-family: var(--mono); font-variant-numeric: tabular-nums; }
 .arm-record-status[data-state="recording"] { color: var(--status-crit); font-weight: var(--weight-label); }

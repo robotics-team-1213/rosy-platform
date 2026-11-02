@@ -33,10 +33,9 @@ def points(depth, focal: float = FOCAL_PX):
     return np.dstack([(xs - w / 2) * z / focal, (ys - h / 2) * z / focal, z])
 
 
-def table_plane(depth, tol_mm: float = PLANE_MM, tries: int = 400, seed: int = 0):
-    """(unit normal toward the camera, offset): the plane with the most points within `tol_mm`, refitted on them."""
-    pts = points(depth)[depth > 0][::7]
-    rng, best, count = np.random.default_rng(seed), None, -1
+def _ransac(pts, tol_mm: float, tries: int, rng):
+    """(unit normal, a point on it), inlier count: the plane with the most points within `tol_mm`."""
+    best, count = None, -1
     for _ in range(tries):
         a, b, c = pts[rng.choice(len(pts), 3, replace=False)]
         n = np.cross(b - a, c - a)
@@ -45,8 +44,23 @@ def table_plane(depth, tol_mm: float = PLANE_MM, tries: int = 400, seed: int = 0
         n = n / np.linalg.norm(n)
         k = int((np.abs((pts - a) @ n) < tol_mm).sum())
         if k > count:
-            best, count = (n, a), k
-    n, a = best
+            best, count = (n if n[2] < 0 else -n, a), k
+    return best, count
+
+
+def table_plane(depth, tol_mm: float = PLANE_MM, tries: int = 400, seed: int = 0, share: float = 0.25):
+    """(unit normal toward the camera, offset): the cell's table, refitted on its points. The view also holds a lower
+    surface about 60 mm under the table, sometimes larger than it: of the two largest parallel planes the higher one is
+    the table when it holds `share` of the larger's points (2026-11-01: the pallet read 75 mm in one frame, 10 in the
+    next, as the plane flipped between them)."""
+    pts = points(depth)[depth > 0][::7]
+    rng = np.random.default_rng(seed)
+    (n, a), k = _ransac(pts, tol_mm, tries, rng)
+    rest = pts[np.abs((pts - a) @ n) >= tol_mm]
+    if len(rest) >= 3:
+        (n2, a2), k2 = _ransac(rest, tol_mm, tries, rng)
+        if k2 >= share * k and (a2 - a) @ n > 5 * tol_mm and abs(n2 @ n) > 0.98:
+            n, a = n2, a2
     near = pts[np.abs((pts - a) @ n) < tol_mm]
     _, _, vt = np.linalg.svd(np.c_[near, np.ones(len(near))], full_matrices=False)
     normal, offset = vt[-1][:3], vt[-1][3]

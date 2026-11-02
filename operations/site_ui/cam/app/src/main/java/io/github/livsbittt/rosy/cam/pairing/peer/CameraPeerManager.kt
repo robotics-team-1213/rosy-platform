@@ -1,5 +1,7 @@
 package io.github.livsbittt.rosy.cam.pairing.peer
 
+import io.github.livsbittt.rosy.peer.PeerSigner
+import io.github.livsbittt.rosy.peer.AndroidPeerIdentity
 import android.content.Context
 import io.github.livsbittt.rosy.cam.pairing.PairableSite
 import io.github.livsbittt.rosy.cam.settings.SettingsStore
@@ -8,7 +10,7 @@ import kotlinx.coroutines.sync.withLock
 
 /** UI and transport share one vault/key owner. Forget and final credential commit are serialized. */
 class CameraPeerManager internal constructor(private val settings: SettingsStore,
-    val vault: CameraRelationshipVault, val signer: CameraSigner) {
+    val vault: CameraRelationshipVault, val signer: PeerSigner) {
     constructor(context: Context) : this(SettingsStore(context), vault(context), signer(context))
     suspend fun snapshot() = settings.peerSnapshot()
     suspend fun install(result: CameraConnection, expected: SettingsStore.PeerSnapshot, current: () -> Boolean) = writes.withLock {
@@ -32,12 +34,12 @@ class CameraPeerManager internal constructor(private val settings: SettingsStore
         private val owners = Any()
         private val writes = Mutex()
         private var storedVault: CameraRelationshipVault? = null
-        private var storedSigner: CameraSigner? = null
+        private var storedSigner: PeerSigner? = null
         private fun vault(context: Context) = synchronized(owners) {
             storedVault ?: CameraRelationshipVault(context.applicationContext).also { storedVault = it }
         }
         private fun signer(context: Context) = synchronized(owners) {
-            storedSigner ?: AndroidCameraIdentity(context.applicationContext).also { storedSigner = it }
+            storedSigner ?: AndroidPeerIdentity(context.applicationContext, "cam").also { storedSigner = it }
         }
     }
 }

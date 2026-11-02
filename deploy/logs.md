@@ -1,4 +1,4 @@
-# deploy logs
+﻿# deploy logs
 
 추가만 한다. 형식: [module harness 설계](../docs/plans/2026-09-15-module-harness-design.md) §4.2.
 2026-09-15 이전 이력은 [Device 검증 계획](../docs/plans/2026-09-13-rosy-os-device-validation-implementation-plan.md)과 `git log -- deploy`를 본다.
@@ -4266,3 +4266,99 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 변경: 실제 셀 실행기(`chunk_runner`)가 재생하는 프레임 순서를 `grasp_planner.Planner.stream` 하나로 두고, 녹화 사이클(`leg`)·금지선 검사·native SIM 교사(`sim_chunk_plan`)·Isaac(`isaac_cell_frames`)가 모두 이것을 쓴다. SIM은 실제 plan의 동작값(접근·들어 올림 높이, 속도, 집게 시간, transit_speed)을 그대로 쓰고 장소·홈·transit·한계·집게 단위만 바꾼다. 복사해 둔 `REAL` 상수와 접근 높이로 고정한 들어 올림을 없앴다. 이동 중 집게는 실제처럼 `gripper_closed`로 닫는다. 라이브러리가 고른 transit(금지선 때문에 당긴 것 포함)도 SIM에 그대로 간다.
 - 증거: `test_the_sim_replays_frame_for_frame_what_chunk_runner_streams`가 chunk_runner의 goto 식으로 따로 만든 프레임과 SIM 단계를 프레임 단위로 대조한다. 원격 pytest 결과는 착지 기록에 남긴다.
 - gate 변화: 없음. native SIM·Isaac 실제 실행으로 다시 확인하지 않았다(들어 올림 높이와 이동 중 집게가 바뀌어 이전 SIM 기록과 다르다).
+
+## 2026-11-01 · uncommitted · fix(omx): 손가락 여유 검사가 검출기가 물체라 부르는 것을 모두 본다
+- 변경: `cell_auto_pick.observe`의 손가락 쪽 장애물 마스크에, 크기 컷 뒤에 물체 색 범위(`objects.hsv`)를 더한다. 표면 색 판정만으로는 이웃 물체를 놓칠 수 있다.
+- 증거: 현장 dry-run(읽기 전용) — 수정 전 주황 컨테이너 세 열(간격 약 4 mm) 가운데를 양쪽 26 mm 여유로 계획, 수정 뒤 "no finger room: 4.0 / 26.0 mm". 원격 `test_omx_cell_auto_pick.py` 46 passed(새 회귀 시험 포함)
+- gate 변화: 없음
+- 교훈: 기존 문서 갱신 대상 없음(작업 기록 2026-10-31 §14)
+
+## 2026-11-01 · uncommitted · fix(omx): 밀기 경로가 집게가 지나는 폭까지 본다
+- 변경: `cell_push.path_clear`에 `beside` 검사 — 집게가 지나는 줄의 양옆(`push.lane_half_mm` 21 mm = 손가락 간격 34.4 + 손가락 / 2, 더하기 지도의 LOO 최대 오차)에 무엇이 있으면 거절
+- 증거: 현장 감독 시험(사람 스위치 옆) — 붙어 선 세 열 중 왼쪽 열을 밀자 이웃 두 열(중심에서 19 mm)이 함께 약 40 px 밀리고 shoulder lag 2.2로 접촉 정지·후퇴·귀환. 원격 `test_omx_cell_push.py` 새 회귀 시험
+- gate 변화: 없음
+- 교훈: 작업 기록 2026-10-31 §14
+
+## 2026-11-01 · uncommitted · feat(omx): 밀기도 판단·결과를 남기고, 집게 크기는 측정값 하나에서
+- 변경: `cell_params.jaw_face_half_mm`(손가락 간격 측정값 + 손가락) 하나를 밀기 통로 폭에 사용(`push.lane_half_mm` 제거). 감독 밀기는 `decisions.jsonl`에 `push`·`push_outcome` 행을 남긴다. `cell-knowledge.example.json`에 11-01 검증 사실 5건(붙어 선 줄, 표면 색 중앙값, 밀기 끌림, 판 높이 편차, I 게인)
+- 증거: 원격 `test_omx_cell_push.py` 8 passed(막힌 밀기는 움직이지 않고 거절 행을 남김), 지식 파일 검증 26건
+- gate 변화: 없음
+- 교훈: 작업 기록 2026-10-31 §14
+
+## 2026-11-01 · uncommitted · fix(omx): 팔 세션이 도는 동안 원격 시험을 관제 PC에서 뺀다
+- 변경: `joint_tune.session_lock`이 잡혀 있는 동안 `~/rosy-jobs/busy`에 `<만료> omx-session <pid>`(4시간)를 쓰고, 셀 잠금을 홀로 잡는 마지막 세션이 지운다. 다른 사람이 쓴 표시는 건드리지 않는다.
+- 증거: 두 팔 동시 시험(현장 스위치 옆) 때 관제 PC에 원격 시험 작업(CPU 66%·50%)이 돌았고 arm_a wrist_roll 추종 오류, arm_b over_ticks 0–1→477. 원격 `test_omx_session_lock.py` 등 108 passed.
+- gate 변화: 없음
+- 교훈: 작업 기록 2026-10-31 §15.1(재시험으로 원인 확인 전이라 미해결)
+
+## 2026-11-01 · uncommitted · fix(omx): 피벗 측정점 찾기가 현장 바닥 색을 쓴다
+- 변경: `cell_calibrate`의 `pivot-near` 단계가 같은 일을 하던 `auto_pivot_point`를 다시 쓰고, 장애물 판정에 현장의 측정 바닥 색(`surface_lab`)·바닥 다각형을 넘긴다.
+- 증거: 현장 `pivot-near` 두 번이 "no clear point"로 멈춤(팔레트 위 빈 칸이 있는데도). 원격 `test_omx_cell_calibrate.py` 6 passed.
+- gate 변화: 없음
+- 교훈: 작업 기록 2026-10-31 §15
+
+## 2026-11-01 · uncommitted · fix(omx): 깊이 높이의 기준 평면이 프레임마다 바뀌지 않는다
+- 변경: `cell_depth.table_plane`이 가장 큰 평면 둘 가운데 더 높은 쪽(카메라에 가까운 쪽)을 셀 테이블로 고른다. 큰 쪽 점 수의 25% 이상이고 평행할 때다. RANSAC은 `_ransac`로 나눴다.
+- 증거: 현장 깊이 프레임 둘에서 수정 전에는 팔레트가 75 mm와 10 mm로 갈렸다(테이블 밖 약 60 mm 낮은 면이 더 넓게 잡힌 프레임). 수정 후에는 두 프레임·시드 6개 모두 팔레트 8–12 mm, 열 74–79 mm. 원격 `test_omx_cell_depth.py` 5 passed(더 넓은 낮은 면 장면은 수정 전 코드로 실패).
+- gate 변화: 없음
+- 교훈: 작업 기록 2026-10-31 §15.2
+
+## 2026-11-01 · uncommitted · feat(omx): 붙어 선 긴 상자를 팔이 스스로 떼어 집는다
+- 변경: `cell_push`의 집게 통로 폭이 근처에서 잰 피벗 원의 rms를 쓴다(없으면 지도의 최대 오차). 길이 방향으로 미는 긴 상자는 `--half-width-mm`로 앞길을 상자 폭만큼만 본다. `cell_auto_pick`은 가운데에 손가락 자리가 없을 때 상자 끝 쪽 집기 점(`reachable_ends`)에서 자리를 찾는다.
+- 증거: 현장 dry run에서 4 mm 간격 3칸 열을 길이로 밀 때 통로 33 mm(집게 21.2 + 지도 오차 11.85)가 옆 열에 닿아 거절, 앞길 표본이 반 길이(43.5 mm) 옆에 찍혀 거절. 원격 `test_omx_cell_push.py`·`test_omx_cell_auto_pick.py`·`test_omx_cell_calibrate.py` 62 passed.
+- gate 변화: 없음
+- 교훈: 작업 기록 2026-10-31 §15.3
+
+## 2026-11-01 · uncommitted · fix(omx): 피벗 측정이 빽빽한 팔레트에서는 대상 바로 위에서 한다
+- 변경: `cell_calibrate`의 `pivot-near`가 `pivot.over_target`이 켜져 있고 집게 높이가 대상 꼭대기(`pivot.over_top_mm`)보다 `pivot.over_clear_mm` 이상 높으면 빈 자리를 찾지 않고 대상 바로 위에서 잰다. 자동 집기(`self_calibrate`)와 같은 규칙(`over_target`) 하나를 쓴다.
+- 증거: 현장 `pivot-near pallet:0.118,-0.064`가 "no clear point"로 멈춤(필요한 빈 칸 72 px, 붙어 선 열 옆 빈 띠 41·60·61 px). 원격 `test_omx_cell_calibrate.py`.
+- gate 변화: 없음
+- 교훈: 작업 기록 2026-10-31 §15.3
+
+## 2026-11-01 · uncommitted · native v2 readonly profile contract
+
+- 변경: D-907·ADR Log와 test/test_native_profile_manifest.py 초안. 기존 v1 producer/validator를 보존하고 v2 서명·형식·inventory·독립 policy·runtime identity 계약을 시험한다.
+- 검증: 검토 기준 14680235에서 b58162a6까지 관련 common signing/Pinky release/native verifier/test seam diff 없음. 현재는 test/doc 후보이며 pytest·생산 구현은 검토 뒤 진행한다.
+- gate 변화: 없음. readonly metadata 검증은 consumer 설치·native closure·활성화·실물 권한 증거가 아니다.
+- CE: 해당 없음 — 새 계약 단위의 test-first 후보이며 해결·검증한 비문서화 장애가 없다.
+
+## 2026-11-01 · uncommitted · D-907 readonly native v2 verifier
+
+- 변경: common release owner에 native_profiles.py를 추가했다. 기존 Ed25519/SHA256SUMS를 먼저 검증한 뒤 v2 exact JSON·inventory·독립 설치 policy·unit digest·runtime identity/fingerprint·lock bytes hash를 대조한다. Pinky v1과 updater/consumer/activation은 바꾸지 않는다.
+- 증거: test-first 2f01b94b901a0d363ccacb49bf3ecd0934d5b47e의 공식 원격 집중 실행은 v1 corpus 1 passed, 새 interface 부재 94 failed, skip0·setup/collection0이었다. 현재 생산 후보는 정적 검사와 독립 SOURCE 검토를 앞두며 GREEN·실물 수용은 아직 없다.
+- gate 변화: 없음. 성공 반환은 서명 metadata/policy 일치이며 실제 native closure·실행 가능성·arm readiness·권한·업데이트 transaction의 인증이 아니다.
+- CE: 해당 없음 — 새 metadata 계약 구현이며 해결한 비문서화 운영 장애가 없다.
+
+## 2026-11-01 · uncommitted · D-907 authenticated metadata read repair
+
+- 변경: 실제 common 서명 검증이 반환한 digest map으로 각 metadata의 한 번 읽은 bytes를 다시 인증하고, 그 bytes를 그대로 JSON 파싱·fingerprint/marker/revision 대조에 쓴다. 서명 검사 뒤 재개방한 다른 내용을 신뢰하는 공백을 닫는다.
+- 증거: test-only8658211939와 동결된 취약 생산 bytes의 unreferenced 후보bf952ea992에서 실제 서명 검증 뒤 manifest/identity 교체 두 시험이 모두 DID NOT RAISE로 원격 RED였다(2 failed/skip0/setup0/collection0, comparator2NEW). 현재 수정은 독립 검토 전이며 GREEN은 아직 없다.
+- gate 변화: 없음. 실제 설치·native closure·활성화·장치 권한을 검증한 결과가 아니다.
+- CE: 미해결 — 실제 RED는 확인했으며 수정 검증 후 trust-boundary 교훈 기록 필요성을 판단한다.
+
+## 2026-11-02 · 97da913f85 · OMX record_session이 켜진 카메라 단위 전부를 넘겨받음
+
+- 변경: `record_session.py`가 top/front 고정 목록 대신 `systemctl list-units rosy-omx-camera@*`로 켜진 카메라 단위를 모두 찾아 멈추고 끝나면 다시 켠다(camera-view·readiness는 전처럼 먼저 멈춤). 10-31 레지스트리로 늘어난 side·두 번째 손목 카메라가 V4L 장치를 쥔 채 남지 않는다. 벤치 녹화 페이지(D-943)는 이미 같은 패턴을 쓴다.
+- 증거: `test/test_omx_record_session.py` 원격 시험(새 시험: side·arm_a_wrist 단위가 멈췄다 다시 켜짐)
+- gate 변화: 없음. 실물 작업대 녹화로 확인한 결과가 아니다.
+- CE: 해당 없음
+
+## 2026-11-02 · uncommitted · feat(omx): 팔 혼자 정렬하기를 한 파이프라인으로 (`cell_align`)
+- 변경: `cell_align.py`의 `plan`이 관측으로 다음 단계를 고른다. 집을 수 있으면 pick, 붙어 선 긴 상자는 길이 방향 밀기(옆으로 비킨 선, 통로가 옆 열을 피하는 오프셋, 끝 집기 점이 이웃 끝을 지나는 길이), 그 자리에 오차 측정이 없으면 pivot 먼저, 아무것도 안 되면 hold와 이유. `next`는 그 한 단계만 감독 시험(`--commissioning --person-at-switch`)으로 실행하고 결정 행을 남긴다. `cell_push`는 지도 좌표 입력(`--at`, `--along`)과 손가락 하나(20 mm 패드)를 앞세운 좁은 밀기(`--narrow`)를 받고, 좁은 밀기를 먼저 시도한다. 옆 통로 검사는 상자 옆부터 통로 끝까지 띠 전체를 본다(끝 한 점만 보면 그 사이 이웃을 건너뛰었다). 측정 없이도 지도 최대 오차로 밀 수 있으면 바로 밀고, 측정해야만 맞으면 pivot을 먼저 한다. `cell_pivot.jaw_blobs`는 `pivot.merge_px` 안의 조각을 한 표시로 센다(기본 0 = 이전과 같음).
+- 증거: 현장(2026-11-02) 붙어 선 열 위 집게 표시가 72·165·260 px 조각으로 나와 `min_blob` 300 미만, 피벗이 0개 각도로 끝남. `plan`이 실제 셀에서 넓은 면(42 mm)으로는 hold, 좁은 밀기로는 "pivot 먼저(지도 최대 오차 11.85 mm로는 안 맞고 5 mm면 맞음)"를 냄. 원격 `test_omx_cell_align.py` 등.
+- gate 변화: 없음
+- 교훈: 작업 기록 2026-10-31 §15.5
+
+## 2026-11-02 · uncommitted · feat(site): 작업셀 카메라 자격 매핑도 site.env에서 바꾼다
+- 변경: `compose.workcell.yaml`의 Vision 카메라 credential 매핑을 `ROSY_SITE_WORKCELL_CAMERA_CREDENTIAL_PATHS`(전체 교체, 비우면 overhead·wrist A·wrist B)로 받는다. 팔 매핑(`ROSY_SITE_WORKCELL_ARM_CREDENTIAL_PATHS`)과 같은 방식이다.
+- 증거: OMX 셀에 측면 카메라가 서비스로 돌지만 서명 Compose가 카메라 세 개를 고정해 Fleet·Vision에 넣을 수 없었다(2026-11-02 현장). 원격 `test_site_workcell_deploy.py`.
+- gate 변화: 없음
+- 교훈: 해당 없음
+
+## 2026-11-02 · uncommitted · OMX 카메라 manifest를 레지스트리에서 맞춤
+
+- 변경: `omx_cameras.py manifest [--manifest PATH] [--apply]`가 각 카메라의 `device_path`를 같은 `image_topic`을 내는 레지스트리 역할의 장치로 맞춘다. 다르면 exit 1이고 `--apply`로 쓴다. 레지스트리에 없는 토픽은 목록으로만 보고한다. 교훈 문서의 예방 2단계를 이 명령으로 바꿨다.
+- 근거: 2026-11-02 손목 카메라 두 포트를 레지스트리와 현장 `/etc` manifest에서만 손으로 바꿨다. 브리지가 읽는 사용자 manifest에는 옛 포트가 남았다(현장에서 손으로 맞춤, 백업 `.bak-20261102-registry-sync`).
+- 증거: `test/test_omx_cameras.py` 7 passed(로컬). 원격 시험은 착지에서 돈다.
+- gate 변화: 없음. 현장 적용은 OMX 장치 도구 자동 업데이트가 이 버전을 받은 뒤다.
+- CE: 기존 교훈 갱신 — `docs/solutions/runtime-errors/omx-cell-device-identity-after-rewiring-2026-10-31.md`

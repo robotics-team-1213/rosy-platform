@@ -358,6 +358,14 @@
       "path": "power-health-view.js",
       "media_type": "application/javascript"
     },
+    "charge-bays-view.js": {
+      "path": "charge-bays-view.js",
+      "media_type": "application/javascript"
+    },
+    "platoon-view.js": {
+      "path": "platoon-view.js",
+      "media_type": "application/javascript"
+    },
     "enrollment.js": {
       "path": "devices/enrollment.js",
       "media_type": "application/javascript"

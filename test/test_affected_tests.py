@@ -382,6 +382,15 @@ def test_real_repo_wide_ordinary_edits_stay_affected():
         assert sel.mode == "affected", sel.escalations
 
 
+def test_real_repo_module_reached_through_a_sibling_import_maps_to_its_tests():
+    """D-889 21, 11-01: test_experiment_hub.py loads experiment_center, which imports experiment_hub; the hub was
+    "unknown -> full" in 17 landings because the selector followed one import level only."""
+    repo = affected.Repo.load(ROOT)
+    sel = affected.select(repo, ["learning/training/omx/experiment_hub.py"])
+    assert sel.mode == "affected", sel.escalations
+    assert "learning/training/omx/test/test_experiment_hub.py" in sel.reasons
+
+
 @pytest.mark.parametrize("changed", [
     ["middleware/robot_ui/pilot/package.xml"],        # was: pilot/test ran; must still run
     ["contracts/foundation/core_common/__init__.py"],

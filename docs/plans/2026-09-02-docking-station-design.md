@@ -321,6 +321,8 @@ face `+X` ([`rosy.urdf.xacro:262-288`](../../src/rosy_description/urdf/rosy.urdf
 so driving in forwards keeps the alignment sensors pointed at the dock for the
 entire approach. Rear docking would need sensors the robot does not have.
 
+> **2026-11-01:** [D-950](../adr/D-950-docking-direction-rear-entry.md) changed the docking direction to rear (reverse) entry (user decision). The paragraph above is kept as history.
+
 **Mechanical guidance absorbs what the controller cannot.** A funnel geometry
 with sloped side walls converts a lateral error of a centimetre or two into a
 correct final position, and wide contact pads tolerate the rest. Every docking

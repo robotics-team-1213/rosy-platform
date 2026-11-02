@@ -5,9 +5,54 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.338
+**Version:** v1.348
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.348 Fleet 보류와 로봇 거절의 구분
+
+- `GET /api/fleet/state` 로봇 행 `error`에서, Fleet이 고정 주소 검사(D-361)로 요청을 스스로 막은 경우(`code: ADDRESS_UNVERIFIED`)는 `{reachable: null, held: true, code, message}`다. 이전에는 `reachable: true`라 로봇이 거절한 것처럼 읽혔지만 로봇에는 아무것도 묻지 않았다. 이유는 같은 행의 `held`(`needs_new_code`·`address_changed`·`conflict`)에 있다.
+- 로봇이 실제로 거절한 오류는 그대로 `reachable: true`, 닿지 않은 오류는 `reachable: false`다. `reachable`을 참·거짓으로만 읽던 소비자는 `null`을 '모름'으로 읽어야 한다.
+
+### v1.347 감속 장소 종류 `slow` (D-941)
+
+- `rosy.site_map/1` 장소 `kind`에 `slow`를 더한다. 차선 위 감속 줄무늬처럼 **멈추지 않고 줄이기만** 하는 곳이다(트랙의 S4). `stop`은 관제 정지점이라 hold가 되므로 감속만 할 곳에 쓰지 않는다.
+- Fleet 속도표는 `slow` 장소 앞뒤 0.06 m를 `stop`과 같은 줄무늬 감속(0.05 m/s)으로 보고 그 앞에서 미리 줄인다. 경로 계획·trip 정지·교통 hold는 `slow`를 보통 장소처럼 지나간다. 주행 가르치기(`POST /api/fleet/teach/...`)의 장소 종류에도 `slow`를 쓸 수 있다.
+- additive다. 장소 `kind`를 닫힌 목록으로 검사하는 외부 소비자는 `slow`를 받아들이도록 고쳐야 한다.
+
+### v1.346 대열 고리 속도표와 충전 칸 계획 갱신 (D-941)
+
+- `GET /api/fleet/platoon` 응답에 `speed`를 더한다: `{length_m, rows:[[s_m, v_mps]], stripes:[{place, s_m}], curve_caps_measured}`. 고리 한 바퀴의 속도 상한 v(s)이며 `rows`는 값이 바뀌는 점만 담는다. 차선 `speed_cap_mps`, `stop` 장소 앞뒤 0.06 m의 줄무늬 감속 0.05 m/s, 측정된 곡선 상한(없으면 `curve_caps_measured: false`), 그 앞의 감속(0.3 m/s²)을 반영한다. 고리라 끝에서 0으로 서지 않고 이음매를 넘어 감속이 이어진다. 로봇에 보내지 않는다.
+- `GET /api/fleet/charge-bays`의 칸 방문·전압 상승 관측이 화면을 연 동안이 아니라 Fleet 백그라운드 루프(`charge-bays`, 1 s, `/readyz`의 loops에 보임)에서 갱신된다. 응답 모양은 같다. additive다.
+
+### v1.345 대열 간격 보기 (D-941)
+
+- 새 엔드포인트 `GET /api/fleet/platoon`(읽기 권한). 활성 지도에서 가장 짧은 한 방향(`one_way`) 고리를 대열 고리로 보고, 지도 자세가 `LOCALIZED`인 온라인 로봇마다 고리 위 진행 거리 `s_m`, 바로 앞 로봇 `leader`, 간격 `gap_m = (s_앞 − s_나) mod 둘레`를 보인다.
+- 응답 `{map_version, loop:{edges, perimeter_m}, target_gap_m, min_gap_m, robots:[{robot_id, s_m, off_m, state, leader?, gap_m?}], dispatch:false}`. `state`는 `ok`(목표 간격 이상)·`close`(목표 미만)·`too_close`(`min_gap_m` 미만)·`alone`(고리에 혼자)·`off_loop`(차선에서 0.1 m 넘게 벗어남, `s_m` null).
+- 보여 주기만 한다(`dispatch: false`). 따라가기 속도 고리는 로봇 CORE의 몫이며 Fleet은 이 값으로 아무것도 보내지 않는다. 활성 지도가 없으면 404 `NO_ACTIVE_MAP`, 한 방향 고리가 없으면 404 `NO_LOOP`. additive다.
+
+### v1.344 충전 칸 계획 보기 (D-941)
+
+- 새 엔드포인트 `GET /api/fleet/charge-bays`(읽기 권한). 활성 지도의 `charge` 장소를 충전 칸으로 보고, 로봇마다 배터리(`power_health.battery`, `evidence: fresh`일 때만)와 지도 자세(`LOCALIZED`일 때만)로 계획을 계산해 보여 준다.
+- 응답 `{map_version, thresholds:{go_percent, leave_percent, rate_pct_per_min}, bays:[{bay, x, y, state, robot_id}], actions:[{robot_id, action, reason, bay?, …}], dispatch:false}`. 칸 `state`는 `free`·`planned`·`arrived`·`charging`. `action`은 `go`(15 % 이하, 빈 칸 배정, 배터리 낮은 순)·`after_trip`·`wait`(`battery_unknown`·`no_free_bay`)·`stay`(`connecting`·`charging`·`charge_rate_not_measured`)·`reseat`(칸에 30 s 있었는데 전압 상승 없음, `usb_not_connected`)·`leave`(도착 % + 측정 충전 속도 × 연결 시간 ≥ 80 %).
+- 칸 연결은 걸러진 팩 전압이 20 s 안에 0.05 V 이상 오른 것이다(마그네틱 USB에는 보고 장치가 없다). 연결 중 CORE의 퍼센트는 충전기 전압이므로 나가는 판단에 쓰지 않는다. 충전 속도를 재기 전에는 `leave`를 내지 않는다.
+- 보여 주기만 한다(`dispatch: false`). Fleet은 이 계획으로 trip을 보내지 않는다. 활성 지도가 없으면 404 `NO_ACTIVE_MAP`. additive다.
+
+### v1.343 정지 화면의 해제 전용 코드
+
+- 래치가 걸려 있는 동안 root의 `rosy-login-code`가 정지 화면(LCD)에 일회용 해제 코드(역할 `estop_release`, 8자, 10분)를 띄운다. 래치 판단은 CORE의 `/run/rosy/face-inputs.json` `estop`(5초 안의 것)이다. 래치가 풀리면 코드를 지운다. SSH로 발급한 CLI 코드가 살아 있으면 덮어쓰지 않는다. 다섯 번 틀려 폐기된 코드는 1분 알림 뒤에 새로 나온다. 부팅 로그인 코드(operator)가 남아 있었다면 해제 코드가 그 자리를 대신한다.
+- 새 엔드포인트 `POST /api/v1/safety/release-code {code}`(Operator, 로봇 LAN, 로그인 코드와 같은 속도 제한). 래치가 없으면 코드를 쓰지 않고 409 `NOT_LATCHED`. 틀리면 403 `CODE_REJECTED`(호출자 토큰은 유효하므로 401이 아니다. 폐기시킨 시도만 `detail.burned`). 아무 operator 토큰 보유자나 틀린 코드로 폐기시킬 수 있으며, 그 뒤 1분 알림 후 새 코드가 나온다(Admin 해제는 그대로 쓸 수 있다). 맞으면 코드를 소비하고 Admin `POST /safety/release`와 같은 해제를 한다(래치 원인 `screen_code:<role>`). 응답 `{estop: false}`.
+- 해제 코드는 `POST /auth/pair`로 로그인되지 않고, 로그인 코드는 이 경로로 해제하지 못한다. Admin `POST /safety/release`는 그대로다.
+- Rosy Fleet: `POST /api/fleet/robots/{robot_id}/estop-release {code}`(이름 있는 운영자)가 등록된 operator 연결로 이 코드를 넘긴다. Fleet은 코드를 저장·기록하지 않는다. 콘솔의 로봇 등록 목록 행에 "비상정지 해제…"가 있다.
+- additive다. 이전 CORE는 404를 내며 Fleet은 `robot_too_old`로 알린다.
+
+### v1.342 상태 스냅샷의 비상정지 원인
+
+- 로봇 상태 스냅샷 `safety`에 `source`(문자열)를 더한다. 래치를 건 쪽이며 `GET /api/v1/safety/state`의 `source`와 같은 값이다: `api:<role>`(정지 API), `battery_policy`·`battery_deep`(배터리 정책), `control:<사유>`(제어 정책). 래치가 없으면 빈 문자열이다. 이미 래치된 뒤의 정지 요청은 처음 원인을 바꾸지 않는다.
+- additive다. 이전 CORE는 이 필드를 보내지 않으며 소비자는 없음을 원인 미상으로 읽는다. Rosy Fleet 화면은 "비상정지 중 · 배터리 보호"처럼 원인을 함께 보인다.
+### v1.339 OMX SIM 시연 기본값
+
+`GET /api/v1/sim/omx/target`에 `start_pose`와 `task`를 더한다(additive). 값은 작업대 시연 프로파일에서 온다. 자세한 계약은 §OMX SIM target 행.
 
 ### v1.338 `/ws/teleop` 조종 소켓
 
@@ -31,6 +76,34 @@ Fleet 허브는 검증하지 못한 `heartbeat`·`event` 본문에 `SESSION_NOT_
 - `valid_until`이 지나면 모든 종류가 닫히고 readback은 `reason=EXPIRED`, `admits_remaining=0`이다.
 
 자동 admit은 사람 admit과 같은 검사를 전부 거친다. 검사는 snapshot, 정지 세대, capability 신선도, 자원 claim이다. 원장 actor는 `fleet-policy-admission`이고, 이벤트에 `policy_scope_revision`·`policy_enabled_by`가 붙는다. HTTP 경로와 오류 코드는 v1.314와 같다. 이 계약 등록은 현장 활성화를 뜻하지 않는다.
+
+### v1.334 ARM transfer recheck of a confirmed attempt (D-930)
+
+`POST /api/fleet/arm-transfers/jobs/{mission_id}/rechecks` lets the job's creator or a
+permitted named operator (same scope and present-Origin check as cancel) ask for fresh
+measured facts about a `GOAL_CONFIRMED` job. The closed body `ArmTransferRecheckCreate`
+has only `recheck_key` (request-key rules). Repeating a key returns the same record; a
+second key while one recheck of the job is still waiting is409 `ARM_TRANSFER_RECHECK_CONFLICT`,
+as is a job that is not confirmed or has no closure proof. `GET .../rechecks/{recheck_key}`
+uses the physical-receipt read scope; an unknown key is404 `ARM_TRANSFER_RECHECK_NOT_FOUND`.
+
+Both return `ArmTransferRecheckResponse.recheck`: `mission_id`, `recheck_key`, the original
+`action_id`/`attempt_id`, server `requested_at_ns`, `status`
+(`WAITING_OBSERVATIONS`/`CONFIRMED`), and, only when confirmed, the exact canonical
+`evidence_document`, its SHA-256 `evidence_digest` and `validated_at_ns`, plus the installed
+`zone_ids`. The document has `context` (`phase=RECHECK`, `not_before_ns` = request time,
+original attempt and owner identities) and exactly two `samples` in the existing
+`ArmTransferObservation` shape, each owner with measured `joints`.
+
+The observer receives a waiting recheck from the existing observation context only when no
+attempt needs facts: `phase=RECHECK`, `status=GOAL_CONFIRMED`, `capture_deadline=null`. It
+submits through the existing observations route with `phase=RECHECK`. Fleet applies the
+POST_ACTION target-pose, rest, gripper and zone-clearance checks with source times after the
+request and requires measured joints; any failure is409 and leaves the recheck waiting.
+
+A recheck submits no Action, takes or releases no claim and never changes the job status,
+physical receipt or v1.330 evidence. It is a fresh simulation-or-installed fact for an
+application's own completion rule, not business completion and not current availability.
 
 ### v1.331 Neutral trip proposals and separate operator admission (D-908)
 
@@ -454,6 +527,7 @@ for the observer. Default and production execution stay closed.
 | `POST /api/fleet/arm-transfers/jobs/{mission_id}/observations` | Same independent observer credential and present-Origin check. Closed `ArmTransferObservationRequest`: `phase` (`PRE_DISPATCH` or `POST_ACTION`), `expected_request_digest`, exactly two `observations`. Returns `ArmTransferObservationReply` with `job` and nullable `receipt`. |
 | `GET /api/fleet/arm-transfers/jobs/{mission_id}/physical-receipt` | Creator or permitted named operator, same scoped read rule as the job. Returns `{receipt: ArmTransferPhysicalReceipt}`. Known job with no receipt is409 `ARM_TRANSFER_PHYSICAL_RECEIPT_PENDING`, unknown job404. |
 | `GET /api/fleet/arm-transfers/jobs/{mission_id}/physical-evidence` | v1.330 scoped immutable proof export (D-915); requires complete source joint facts. Does not refresh measurements or change claims. |
+| `POST /api/fleet/arm-transfers/jobs/{mission_id}/rechecks`, `GET .../rechecks/{recheck_key}` | v1.334 fresh measured facts for a confirmed attempt (D-930). No Action, claim, status or receipt change. |
 | `POST /api/fleet/arm-transfers/jobs/{mission_id}/cancel` | Creator service/operator or permitted named operator, same scoped job access and present-Origin check. Closed `ArmTransferCancelRequest` has only trimmed nonempty `reason` (max192). Returns the job snapshot; cancellation ACK is not stop/clearance proof. |
 
 With an execution profile, admission also prepares stable step/action/attempt and
@@ -1861,6 +1935,7 @@ config `control.sensor_adapter.mode` 와 같은 문자열이다(D-400). 일반 �
 | PUT | `/api/v1/fleet/link` | Admin 또는 사이트 등록 토큰 | D-555 3 (v1.163) — CORE 자신의 TLS 리스너(`https` + `network.tls`)로 온 요청만; 아니면 403 `TLS_REQUIRED`. Fleet 목표(`navigation/goal` + `correlation_id`)가 진행 중이면 409 `FLEET_GOAL_ACTIVE`. 기동 때 잘못된 Fleet·SAF-003 설정을 기본값으로 대신했으면 409 `FLEET_LINK_CONFIG_INVALID`. 새 링크는 허브의 첫 WELCOME 또는 relink 뒤 35 s(`FLEET_LINK_ARM_GRACE_S`) 중 먼저 오는 때부터 SAF-003 `fleet_link.configured` 다. 호출자는 관리자, 또는 화면 코드(`pair-physical`·`pair-admin`)로 받은 운영자 토큰 중 라벨이 `site:` 로 시작하는 것(Fleet 등록 토큰. 라벨은 인증이 아니다). 공용 개발 토큰과 그 밖은 403 `FORBIDDEN`. `{pairing_token (32–256자, [A-Za-z0-9_-]), expected_hostname (<name>.local), ca_pem (PEM 인증서, ≤ 16 KiB)}` → 비밀 덮어쓰기 `~/.rosy/fleet-link.yaml`(`ROSY_FLEET_LINK`, 0600)과 CA `fleet-link-ca.pem` 을 쓰고 FleetAgent 만 다시 시작한다(발견 프로필, D-452). 이 파일의 `fleet` 링크 키가 모든 층 위에 온다. 200 은 GET 과 같다. 틀린 본문 400 `VALIDATION_ERROR`(입력을 되돌리지 않도록 필드 detail 없음). 사건 `fleet.link_provisioned`. 능력: `GET /system/capabilities` 최상위 `fleet_link_provisioning: true` |
 | DELETE | `/api/v1/fleet/link` | PUT 과 같음 | D-555 6 (v1.163) — Fleet 목표 중이면 409 `FLEET_GOAL_ACTIVE`. 비밀 파일과 CA 를 지우고 아래 층(덮어쓰기 파일을 뺀 `load_config`)의 링크(있으면)로 FleetAgent 를 다시 시작한다. 200 `{…GET, removed}`. 사건 `fleet.link_cleared` |
 | POST | `/api/v1/safety/stop` | Viewer↑ | SAF-001 (누구나). 보정 세션 중에도 막지 않는다 |
+| POST | `/api/v1/safety/release-code` | Operator | v1.337. `{code}`: 래치 중 정지 화면에 보이는 일회용 해제 코드. 래치가 없으면 코드를 쓰지 않고 409 `NOT_LATCHED`, 틀리면 403 `CODE_REJECTED`(다섯 번째에 폐기, `detail.burned`), 맞으면 아래 Admin 해제와 같은 동작 후 `{estop: false}`. 로봇 LAN만, 로그인 코드와 같은 속도 제한. 로그인 토큰을 주지 않는다 |
 | POST | `/api/v1/safety/release` | Admin | SAF-001. 어떤 경로의 래치든(API, control 정책, SAF-005 `battery_policy`·`battery_deep`) E-Stop 은 모드 EMERGENCY 와 함께 걸리므로 이 경로로 풀린다. EMERGENCY 도 아니고 래치도 없으면 409 `MODE_CONFLICT`. 래치가 IDLE 에 남은 경우(v1.196 이전 CORE)도 이 경로로 풀린다 (v1.196). 배터리 래치는 전압이 회복되어도 스스로 풀리지 않는다. 해제는 배터리 정책을 끄지 않으며 Deep 이 이어지면 다음 표본에서 다시 래치한다. 어떤 출처의 E-Stop 이든 배터리 자동 복귀(도크 복귀·`RETURN_HOME`)를 배터리 단계가 OK 로 돌아올 때까지(복귀 히스테리시스 포함) 끄고, 해제는 래치 중 무장된 복귀를 지우며, 그 사이 Critical 통과는 다시 래치한다 — 해제 뒤 로봇은 새 명령 없이 움직이지 않는다(D-502, v1.120) |
 | GET | `/api/v1/safety/state` | Viewer | SAF-001. `battery` 는 정책 `{warning_percent, critical_percent, deep_percent, critical_policy}` 와 지금의 근거 `{evidence, sample_age_s, level, percent}`(D-502, v1.120 additive) — `evidence` 는 `missing`\|`fresh`\|`stale`, `level` 은 `ok`\|`warning`\|`critical`\|`deep`, 표본이 없으면 `sample_age_s`·`percent` 는 `null`. `source: battery_policy`\|`battery_deep` 래치를 풀기 전에 관리자는 `evidence: fresh` 와 `level` 을 본다. `fleet_loss_policy` 와 선택 필드 `fleet_link` (SAF-003, D-419, v1.86) `{configured, connected, lost, timeout_s, applied, correlation_id, disconnected_s, held_goal}` — `configured` 는 FleetAgent 가 돌고 있는가(승인된 `pairing_token` + 주소), `lost` 는 이번 단절에서 정책을 적용했는가, `applied` 는 실제로 한 것(`STOP`·`HOLD`·`RETURN_HOME`·`CONTINUE`·`NONE`), `held_goal` 은 `HOLD` 가 보관한 `{correlation_id, x, y, yaw}`(재접속 이벤트 뒤 비움). 서비스가 없으면 `null` |
 | PUT | `/api/v1/safety/limits` | Admin | SAF-004 — `{manual_linear?, manual_angular?}` 는 프로필 최대값으로 clamp. SAF-005 배터리 임계값 `{battery_warning_percent?, battery_critical_percent?, battery_deep_percent?, battery_critical_policy?}` 과 `{fleet_loss_policy?}` 도 같은 경로로 받는다. 임계값은 `0 < deep < critical < warning <= 100` 을 만족해야 한다. `fleet_loss_policy` 는 `STOP`·`HOLD`·`RETURN_HOME`·`CONTINUE`(`CONTINUE_CURRENT_NAVIGATION` 은 `CONTINUE` 로 저장), 그 밖은 400. `RETURN_HOME` 을 받으면 응답에 선택 필드 `warning`(문자열) — 사이트 Fleet 이 죽으면 이 정책의 로봇이 Fleet 교통정리 없이 동시에 home 으로 간다 — 을 싣고 로그에 경고를 남긴다(거절하지 않음). 판정 시간 `safety.fleet_loss_timeout_s`(기본 5.0, 4–60 s, `1 + fleet.heartbeat_reply_timeout_s + 1` 이상)와 하트비트 답 시한 `fleet.heartbeat_reply_timeout_s`(기본 2.0, 0.5–10 s)는 설정 파일 전용이고, Fleet 링크가 설정된 로봇에서 어기면 CORE 가 기동하지 않는다(Fleet 없는 로봇은 경고 후 기본값) (D-419) |
@@ -1941,7 +2016,7 @@ v1.42: `GET /api/v1/host/network`와 `/release`는 기존 `{available,ok?,code,d
 
 | Method | 경로 | 요청/응답 |
 |---|---|---|
-| GET | `/api/v1/sim/omx/target` | 공개 `{kind:"omx_sim",simulation:true,instance_id,joints,gripper,camera,recording,controls}`; `controls`(v1.87 additive, D-411 B)는 §9.1 `rosy.controls/1` — SIM은 `joint_jog` 하나(`id:"arm"`, 관절별 한계 = 고정된 vendor URDF 범위(`omx_f_kinematics.yaml`) ∩ SIM owner 허용 범위, `max_step_rad` 0.05, `duration_s` 0.4 = 각 요청에 보낼 목표 길이, `command:"bounded_goal"`; 이전 목표가 끝난 뒤에만 다음 목표, 100 ms 스트림 없음, D-390 §2). D-411 C부터 그리퍼는 `joint_jog`에서 빠지고 따로 `gripper` 항목(`id:"gripper"`, `joint`, `open`·`closed` = 셀 프로필 `gripper.open`·`gripper.closed`(1.0·0.0 rad), `presets{open, half, close}` — `half`는 가운데, `readback:["position","grasp"]`, `max_velocity` = 셀 프로필과 URDF 그리퍼 속도 중 작은 값(0.5 rad/s))이 된다. SIM owner 허용 범위는 모든 관절(팔·그리퍼)이 `deploy/robot/omx/sim/cell_profile.yaml` 범위 ∩ URDF 범위다(실물 한계 아님, URDF에 없는 관절은 서버 기동 오류). `joint_jog`에 알리는 범위는 그 허용 범위를 양쪽에서 `start_state_tolerance_rad`(0.02 rad)만큼 줄인 것이다 — 알린 끝을 조금 넘어 멈춰도 readback이 허용 범위 안이라 owner가 HOLD(`joint_state_limit`)를 걸지 않는다. 조그는 알린 범위 밖으로 더 나가는 목표를 409 `joint_limit`으로 거절하고, 범위 밖에서 안쪽으로 돌아오는 목표는 받는다. 시뮬레이션 전용이며 실물 OMX를 열지 않는다; Pinky CORE에서는 404 |
+| GET | `/api/v1/sim/omx/target` | 공개 `{kind:"omx_sim",simulation:true,instance_id,joints,gripper,camera,recording,controls}`; `controls`(v1.87 additive, D-411 B)는 §9.1 `rosy.controls/1` — SIM은 `joint_jog` 하나(`id:"arm"`, 관절별 한계 = 고정된 vendor URDF 범위(`omx_f_kinematics.yaml`) ∩ SIM owner 허용 범위, `max_step_rad` 0.05, `duration_s` 0.4 = 각 요청에 보낼 목표 길이, `command:"bounded_goal"`; 이전 목표가 끝난 뒤에만 다음 목표, 100 ms 스트림 없음, D-390 §2). D-411 C부터 그리퍼는 `joint_jog`에서 빠지고 따로 `gripper` 항목(`id:"gripper"`, `joint`, `open`·`closed` = 셀 프로필 `gripper.open`·`gripper.closed`(1.0·0.0 rad), `presets{open, half, close}` — `half`는 가운데, `readback:["position","grasp"]`, `max_velocity` = 셀 프로필과 URDF 그리퍼 속도 중 작은 값(0.5 rad/s))이 된다. SIM owner 허용 범위는 모든 관절(팔·그리퍼)이 `deploy/robot/omx/sim/cell_profile.yaml` 범위 ∩ URDF 범위다(실물 한계 아님, URDF에 없는 관절은 서버 기동 오류). `joint_jog`에 알리는 범위는 그 허용 범위를 양쪽에서 `start_state_tolerance_rad`(0.02 rad)만큼 줄인 것이다 — 알린 끝을 조금 넘어 멈춰도 readback이 허용 범위 안이라 owner가 HOLD(`joint_state_limit`)를 걸지 않는다. 조그는 알린 범위 밖으로 더 나가는 목표를 409 `joint_limit`으로 거절하고, 범위 밖에서 안쪽으로 돌아오는 목표는 받는다. v1.339 additive: `start_pose`({팔 관절: rad} 또는 null)·`task`(1–300자 또는 null)는 `deploy/robot/omx/sim/pilot_demonstration.yaml`(`rosy.omx-sim-demonstration.v1`)의 시연 기본값이다. `start_pose`는 알린 팔 관절만, 각 값은 `joint_jog`에 알린 범위 안이어야 하며 아니면 서버 기동 오류다. Pilot은 이 자세를 시작 자세로 쓰고(브라우저 저장 없음) `task`를 과제 칸의 기본값으로 채운다. 둘 다 null이면 이전처럼 태블릿에 시작 자세를 저장한다. 시뮬레이션 전용이며 실물 OMX를 열지 않는다; Pinky CORE에서는 404 |
 | POST | `/api/v1/sim/omx/pair` | 로컬 콘솔의 10분 유효 일회용 `{code}` → `{token}`; 성공 201, 재사용 403 |
 | GET | `/api/v1/sim/omx/whoami` | Bearer → `{role:"operator"}` |
 | POST/PUT/DELETE | `/api/v1/sim/omx/seat[/{seat_id}]` | 단일 조종권 취득·1초 간격 갱신·반납. lease 10초; 만료/반납 시 진행 목표 취소 요청. 취소 ACK는 정지 증거가 아니다 |
@@ -2034,7 +2109,7 @@ v1.70 추가 경로(모두 Bearer 인증):
   "pose": { "x": 1.82, "y": 3.21, "yaw": 0.73 },
   "velocity": { "linear": 0.12, "angular": 0.0 },
   "battery": { "percent": 81 },
-  "safety": { "estop": false },
+  "safety": { "estop": false, "source": "" },
   "power": {
     "mode": "STANDBY",
     "presence": "none",
@@ -3179,6 +3254,7 @@ Vision `vision --track`은 모서리 마커 보정 우선, 없으면 승인 사�
 | POST | `/api/fleet/tracking/relearn` | operator | `{source_id}`의 배경 재학습 번호 증가. v1.186(D-600): 응답 `{source_id, relearn_seq, occupied, unlocated:[robot_id]}` — 로봇은 그대로 두고, `occupied` 자리는 배우지 않으며, `unlocated` 로봇은 배경이 될 수 있다 |
 | GET | `/api/fleet/calibrations` | viewer 이상 | 승인 기록 목록과 `use: display-only` |
 | POST | `/api/fleet/robots/{robot_id}/identify` | named `operator` (D-540 9, v1.161) | D-472, v1.130; v1.185(D-596). 본문 생략 또는 `{color?:"blue"\|"amber"}`(생략 = 파랑, 파랑이 그 로봇을 보는 source에서 쓰이는 중이면 주황. 주황은 주의(caution) 램프와 같은 점멸이라 자동 요청은 파랑만 쓴다). 자동 요청은 CORE에 `?quiet=true`(호출음 없음, 이전 payload는 이 값을 무시하고 소리를 낸다), 마커가 계속 안 보이는 로봇은 30 s → 2 min → 5 min 간격. Vision의 `matched`는 그 로봇의 예상 자리 안이어야 하고(v1.191: Fleet 지도 자세, 반경 `auto_near_m` + 앵커 뒤 odom 1 m마다 0.15 m·최대 1.0 m; 지도 자세가 없으면 마지막 천장 마커 자리·`auto_near_m`; 아니면 UNKNOWN `far_from_robot`; v1.193부터 파랑 점멸 판정은 예상 자리 밖에서도 받는다, 주황과 정색 표시는 아님), 예상 자리를 모르는 주황 요청은 UNKNOWN `no_prediction`. 신원 미확인 등록 로봇에 서 있든 움직이든(로봇을 움직이지 않는다) CORE `POST /host/lamp/identify`를 전달하고 그 로봇을 보는 Vision source에 6 s 창을 연다. 동시에 source마다 색 하나씩(최대 2대): 같은 로봇이 이미 확인 중이거나 요청한 색이 쓰이는 중이거나 두 색 모두 쓰이는 중이면 창+2 s 동안 409 `IDENTIFY_BUSY`, 확인된 로봇 409 `IDENTIFY_ALREADY_CONFIRMED`, 로봇 거절(또는 쓰이는 색으로 답함) 502 `IDENTIFY_NOT_ACCEPTED`. 로봇이 주의 표시 중(차선 HOLD, 도킹 실패)이면 409 `IDENTIFY_ROBOT_CAUTION`(v1.191, 자동 요청은 묻지 않는다). v1.195: 요청 뒤 창이 열린 동안 Fleet은 로봇 CORE `GET /host/lamp/identify/{request_id}`를 1 s마다 묻고, `refused`면 창을 닫고 UNKNOWN `lamp_refused`(`last.lamp_reason`에 로봇의 이유)로 남긴다; 404(이전 CORE)면 그 요청은 다시 묻지 않는다. `IDENTIFY_NOT_MOVING`은 없어졌다. 응답 `{robot_id, request_id, color, not_after, sources, state:"pending_visual_confirmation", trigger:"operator"}`는 카메라 신원 확정이 아니다. 사이트 YAML `identity.auto_request`(기본 true, v1.185)면 Fleet이 스스로 요청한다: 마커를 본 로봇의 마커가 `auto_marker_missing_s`(3 s) 넘게 안 보이고 마지막 마커 자리(없으면 로봇 지도 자세) `auto_near_m`(0.5 m) 안에 익명 blob이 있을 때(`marker_missing`), 겹침으로 풀린 확인 트랙 근처 blob이 다시 혼자일 때(`split`), 로봇 자세가 odom 원점으로 뛴 뒤 익명 blob이 있을 때(`odom_reset`). 로봇마다 `auto_min_interval_s`(30 s)에 한 번, 상태가 신선하고 `safety.estop`이 정확히 false일 때만 |
+| GET | `/api/fleet/charge-bays` | 읽기 | D-941 5/7 (v1.338): 활성 지도 충전 칸과 로봇별 충전 계획(`go`·`stay`·`reseat`·`leave` 등). 보여 주기만 하며 trip을 보내지 않는다(`dispatch: false`). 활성 지도 없음 404 `NO_ACTIVE_MAP` |
 | POST | `/api/fleet/robots/{robot_id}/power` | named `operator` (D-540 9) | D-440 6 (v1.222): `{action: sleep\|wake}`, 다른 값·다른 필드는 422. `sleep` 은 그 로봇의 `POST /api/v1/power/mode {"mode":"STANDBY"}`, `wake` 는 `POST /api/v1/power/wake` 로 로봇 자격으로 그대로 보낸다 — CORE 인터록(IDLE 이 아닌 로봇은 ACTIVE 유지)은 CORE 가 판정하므로, 거절된 절전은 200 과 `result.mode: "ACTIVE"` 로 돌아온다. 200 `{robot_id, actor_id, result}`(`result` 는 CORE 의 `PowerStatus`), 모르는 로봇 404 `UNKNOWN_ROBOT`, 전송 실패 502. 전원 상태는 `GET /api/fleet/state` 행의 `state.power` 그대로다 |
 | POST | `/api/fleet/calibrations` | operator | source_id/map_id, map_to_image(9), image(width,height), track_bounds_m, fit_score, lens 또는 null, frame_seq 또는 null을 승인·영속 기록 |
 | DELETE | `/api/fleet/calibrations/{source_id}` | operator | 승인 기록 철회·감사 |
@@ -3322,7 +3398,7 @@ command. Reusing a key for a different request returns `409 IDEMPOTENCY_CONFLICT
 | GET | `/api/fleet/auth/session` | site-user bearer, development session or session cookie | D-519 (v1.137): `{principal_id, role, via: "cookie"\|"bearer"\|"development", expires_at}` with `Cache-Control: no-store`; `expires_at` is the cookie session's UTC ISO end, `null` for bearer and development. 401 without a credential. **Cookie rule (all `/api/fleet/*` routes):** an `Authorization: Bearer` header is checked exactly as before and wins; only without it is `rosy_fleet_session` read. A cookie-authenticated request other than `GET`/`HEAD` needs an `Origin` whose authority equals `Host`, else 403 `CSRF_REJECTED`. The cookie principal is a named operator for `require_named_operator`. Machine clients keep their Bearer tokens. |
 | POST | `/api/fleet/robots/{robot_id}/goal` | named `operator` (D-540 9, v1.161) + `Idempotency-Key` | Validates the configured robot and finite goal, durably accepts the task as `QUEUED`, then lets the dispatcher request a CORE goal. |
 | POST | `/api/fleet/robots/{robot_id}/route` | named `operator` (D-540 9, v1.161) + `Idempotency-Key` when durable tasks are configured | D-463 (v1.100): body `{edges: [edge_id, ...]}` of 1 to 8 stored lane-graph edge ids; extra fields 422. Each edge must exist and its `to` must equal the next edge `from`, or 400 `ROUTE_UNKNOWN_EDGE` / `ROUTE_DISCONTINUOUS`. Fleet expands the stored polyline and submits only the next point about 0.20 m ahead, yaw equal to the tangent, through the existing goal path. When that 0.20 m chord would put the nominal body outside the imported lane, the step shortens but stays at least 0.12 m, still past the 0.10 m device goal ball. A remainder of 0.12 m or less keeps the end. The ring's 0.20 m sag stays inside the body clearance, so that step stays 0.20 m. The shorter step is only this point goal. It does not submit the far junction as that goal. The fresh snapshot must be `LOCALIZED` with `pose_frame` `map` and within 0.08 m of the polyline; otherwise 409 `ROUTE_POSE_UNTRUSTED` or `ROUTE_OFF_LANE` and CORE is not called. A snapshot with no localization block is refused. Within 0.05 m of the end the response is 200 `ROUTE_COMPLETE` and no goal. Both 200 bodies carry `context` (D-726, v1.219): `{role: fact, planner: lane_step, supplied: {edges}, holds: {complete, step_m, chord_m, body_clear_m, body_inside, s_m}, planners}`. `context` is a fact for an AI or another system, not a command. `GoalRequest` stays `{x, y, yaw}`. |
-| GET | `/api/fleet/site-map/active` | any configured user bearer | D-488 (v1.111): the active `rosy.site_map/1` (places `{id, name, x, y, yaw?, kind park/charge/stop/junction/turnaround/start/bend, exit_yaw?, radius_m?}; D-513 (v1.124): a `start` place needs `yaw`, else 422 `SITE_MAP_INVALID`; D-507 addendum (v1.142): a `bend` place is the vertex of two lane centre lines with `yaw` (entering heading as its edge is drawn), `exit_yaw` and `radius_m` (0, 0.5], the arc the robot drives inside the lane, all required and a turn of 15–90°; other kinds may not carry `exit_yaw`/`radius_m`; bends do not split edges``, edges `{id, from, to, polyline, direction one_way/two_way, width_m, speed_cap_mps, drive_mode lane/free, robot_kinds?}`, optional `turn_bans {at, from_edge, to_edge}`, optional `view_turn_deg` 0/90/180/270 (D-513 7, v1.130: clockwise screen turn of the plain +y-up map view that every Fleet map and camera view follows; display only, default 0), optional `crosswalks` (D-573 1, v1.174) `[{id, polygon [[x, y]] (3–32 points, map frame), approach [[[x, y]]] (0–4 waiting bands, 3–32 points each), lanes [edge_id], revision}]` at most 50: the polygon is the import lane graph's `crosswalks[].polygon` as is (ids `cw1`.. in file order, `revision` `lane_graph:<sha256[:12]>` of that file), `lanes` is recomputed from the edges the polygon touches on every validation (a submitted value is replaced), waiting bands are drawn in the site map editor. 422 `SITE_MAP_INVALID` when crosswalk ids repeat, a polygon or band is not finite, under 1 cm² or over 3 m across, a crosswalk touches no edge, a band does not reach one of its lanes (within half the lane width) or a band point is off the D-507 9 site floor (farther than half the width + 0.30 m from every edge). Absent when empty; map data only, nothing is sent to a robot) with `version`, `sha256`, `activated_by`, `activated_at`. Places are more than 0.05 m apart and every edge is longer than 0.10 m between its places. 404 `SITE_MAP_NOT_ACTIVE` when the site has none. Errors here and on `/trip` are `{"detail": {"code", "detail"}}`. `GET /api/fleet/site-map` (D-257 camera rectangle) is unchanged. |
+| GET | `/api/fleet/site-map/active` | any configured user bearer | D-488 (v1.111): the active `rosy.site_map/1` (places `{id, name, x, y, yaw?, kind park/charge/stop/junction/turnaround/start/bend/slow (v1.347), exit_yaw?, radius_m?}; D-513 (v1.124): a `start` place needs `yaw`, else 422 `SITE_MAP_INVALID`; D-507 addendum (v1.142): a `bend` place is the vertex of two lane centre lines with `yaw` (entering heading as its edge is drawn), `exit_yaw` and `radius_m` (0, 0.5], the arc the robot drives inside the lane, all required and a turn of 15–90°; other kinds may not carry `exit_yaw`/`radius_m`; bends do not split edges``, edges `{id, from, to, polyline, direction one_way/two_way, width_m, speed_cap_mps, drive_mode lane/free, robot_kinds?}`, optional `turn_bans {at, from_edge, to_edge}`, optional `view_turn_deg` 0/90/180/270 (D-513 7, v1.130: clockwise screen turn of the plain +y-up map view that every Fleet map and camera view follows; display only, default 0), optional `crosswalks` (D-573 1, v1.174) `[{id, polygon [[x, y]] (3–32 points, map frame), approach [[[x, y]]] (0–4 waiting bands, 3–32 points each), lanes [edge_id], revision}]` at most 50: the polygon is the import lane graph's `crosswalks[].polygon` as is (ids `cw1`.. in file order, `revision` `lane_graph:<sha256[:12]>` of that file), `lanes` is recomputed from the edges the polygon touches on every validation (a submitted value is replaced), waiting bands are drawn in the site map editor. 422 `SITE_MAP_INVALID` when crosswalk ids repeat, a polygon or band is not finite, under 1 cm² or over 3 m across, a crosswalk touches no edge, a band does not reach one of its lanes (within half the lane width) or a band point is off the D-507 9 site floor (farther than half the width + 0.30 m from every edge). Absent when empty; map data only, nothing is sent to a robot) with `version`, `sha256`, `activated_by`, `activated_at`. Places are more than 0.05 m apart and every edge is longer than 0.10 m between its places. 404 `SITE_MAP_NOT_ACTIVE` when the site has none. Errors here and on `/trip` are `{"detail": {"code", "detail"}}`. `GET /api/fleet/site-map` (D-257 camera rectangle) is unchanged. |
 | GET | `/api/fleet/site-map/lane-graph-crosswalks` | any configured user bearer | D-573 1 (v1.174): `{source, crosswalks [{id, polygon, approach: [], lanes: [], revision}]}` read from the configured `--site-map-import` lane graph, for the site map editor to merge into the draft (polygons replaced by id, drawn bands kept); the draft is then saved by a named operator like any edit. 404 `SITE_MAP_NO_LANE_GRAPH` without a configured import, 422 `SITE_MAP_NO_LANE_GRAPH` when the file cannot be read. Writes nothing. |
 | GET / PUT | `/api/fleet/site-map/draft` | GET any user; PUT named `operator` | D-488 (v1.111): one editable draft. PUT `{map, expected_revision}` (body at most 2 MiB, else 413 `SITE_MAP_TOO_LARGE`); the map is validated or 422 `SITE_MAP_INVALID` with `detail.errors [{loc, msg}]` (no submitted values). A stale `expected_revision` is 409 `SITE_MAP_DRAFT_CHANGED`. Each save is a recorded site map event. A draft is never used for planning. |
 | POST | `/api/fleet/site-map/activate` | named `operator` | D-488 (v1.111): `{expected_revision}` copies the saved draft into a new immutable version that becomes active; audited. 409 `SITE_MAP_NO_DRAFT`, `SITE_MAP_DRAFT_CHANGED`, or `SITE_MAP_ROUTE_ACTIVE` while a lane route (`/route`) was stepped in the last 30 s; 422 `SITE_MAP_UNPLANNABLE` when the planner cannot use the map; 422 `SITE_MAP_START_INVALID` (D-513, v1.124) when a `start` place is not a trip start pose (within half a lane width of a lane whose direction there agrees with its `yaw` within the planner heading tolerance), `detail.message` names the place and `TRIP_START_OFF_MAP` or `TRIP_HEADING_CONFLICT`. The first version may come from `fleet console --site-map-import <lane_graph.yaml>` when the store is empty. `/route` reads the active map's edges and answers 409 `SITE_MAP_NOT_ACTIVE` without one. |
@@ -4395,10 +4471,19 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.348 | 2026-11-02 | 상태 행 `error`: Fleet 자체 보류(`ADDRESS_UNVERIFIED`)는 `reachable: null, held: true`, 로봇 거절과 구분 |
+| v1.347 | 2026-11-02 | additive (D-941): 장소 `kind` `slow`(감속만, 정지 아님), 속도표가 줄무늬 감속으로 반영 |
+| v1.346 | 2026-11-02 | additive (D-941): `GET /api/fleet/platoon`의 `speed`(고리 속도표, 보내기 없음), 충전 칸 관측을 백그라운드 루프로 |
+| v1.345 | 2026-11-02 | additive (D-941): `GET /api/fleet/platoon` — 활성 지도의 가장 짧은 한 방향 고리 위 로봇 간격·앞차 보기, 보내기 없음 |
+| v1.344 | 2026-11-01 | additive (D-941): `GET /api/fleet/charge-bays` — 활성 지도 충전 칸 계획 보기(전압 상승으로 연결, 도착 % + 측정 충전 속도로 나감), 보내기 없음 |
+| v1.343 | 2026-10-31 | additive (SAF-001, Safety-Review 대상): `POST /api/v1/safety/release-code` — 래치 중 정지 화면의 일회용 해제 코드(역할 `estop_release`, root 발급)로 해제한다. 로그인 토큰을 주지 않고 로그인 코드로는 해제할 수 없다. Fleet `POST /api/fleet/robots/{robot_id}/estop-release` |
+| v1.342 | 2026-10-31 | additive: 상태 스냅샷 `safety.source`(래치 원인) |
+| v1.339 | 2026-11-01 | Additive: `GET /api/v1/sim/omx/target` carries `start_pose` (advertised arm joints only, within the offered jog range) and `task` (1-300 chars) from `deploy/robot/omx/sim/pilot_demonstration.yaml`; null on servers without the profile. |
 | v1.338 | 2026-11-01 | Additive: `/ws/teleop` (operator) streams teleop commands with per-frame `seq` and an `ack` answer; same checks as `POST /api/v1/teleop`; stale `seq` dropped; a motion command is zeroed when the socket closes. REST teleop unchanged. |
 | v1.337 | 2026-11-01 | D-944: LCD code pairing and the reachability read accept the team tailnet (100.64.0.0/10, fd7a:115c:a1e0::/48); development session and first peer approval stay robot-LAN only. |
 | v1.336 | 2026-11-01 | Corrective: Fleet hub answers a `heartbeat`/`event` payload it cannot validate with `PAYLOAD_INVALID` (was `SESSION_NOT_PAIRED`); the robot agent keeps the session on a heartbeat answer and drops the event without retry. Envelope 1.0 unchanged. |
 | v1.335 | 2026-10-31 | D-938: policy admission scope accepts `arm_transfer` (ARM_TRANSFER jobs only) with required `proposers` and `valid_until`; status reads back `enabled_by`; expired scopes close every kind. Same admission checks as a human admit; simulation arm transfer HTTP only. |
+| v1.334 | 2026-10-30 | D-930: fresh measured recheck of a confirmed ARM transfer attempt (`POST/GET .../arm-transfers/jobs/{mission_id}/rechecks`); the physical observer answers in a RECHECK phase. No Action, claim, job status or receipt change. Envelope 1.0 unchanged. |
 | v1.331 | 2026-10-28 | D-908: closed simulation neutral TRIP proposal/read/admit HTTP; the proposer (service or operator) supplies candidates, request key and steps, a different named operator admits with digest and generation, and admission makes the existing TRIP step-ledger job. No cargo fields; operator trip-jobs POST unchanged. Envelope 1.0 unchanged. |
 | v1.330 | 2026-10-29 | D-915: optional measured source joint facts in physical observations and scoped immutable closure proof readback; legacy canonical bytes, writer/admission boundaries and envelope1.0 preserved. Independent SIM/hardware/field acceptance remains separate. |
 | v1.328 | 2026-10-28 | Learning registered OMX dataset discovery and fixed-revision archive preparation on existing host paths. Separate verified copy, explicit consent and original preservation; byte archival only. CORE envelope1.0 unchanged. |

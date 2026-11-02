@@ -312,12 +312,25 @@ def turn_wanted(land, wt: Path) -> bool:
         return True
 
 
+def overtimes(land, args) -> int:
+    """How often the turn cap sent this landing back: in this process, or before a relaunch on main's new landing
+    code (the ticket keeps it; 11-01 13:26 the rest bundle relaunched and went back once more). True counts as 1."""
+    counts = [int(getattr(args, "_overtime", 0) or 0)]
+    for ticket in land.land_queue._held:
+        try:
+            counts.append(int(json.loads(ticket.read_text(encoding="utf-8")).get("overtime") or 0))
+        except (OSError, ValueError, TypeError):
+            pass
+    return max(counts)
+
+
 def run_tests(land, wt: Path, args, invocations: list[list[str]], logdir: Path, round_no: int) -> list[str]:
     """Run lint + pytest (+ node); return a summary line per step. Stop on any NEW failure."""
-    # D-889 15: a landing the cap already sent back once keeps its next turn. 11-01: big FULL landings went back
-    # 3-6 times, 12-13 min of main each, because every turn reran their own FULL past the cap.
-    capped = isinstance(round_no, int) and not getattr(args, "_overtime", False)
-    deadline = land.time.monotonic() + land.TURN_CAP_S if capped else None
+    # D-889 15/19: the cap grows with each time it sent this landing back: 10 min, then 30, then none. 11-01: big
+    # FULL landings went back 3-6 times (12-13 min each); then one uncapped turn held main for over 90 min.
+    sent_back = overtimes(land, args)
+    capped = isinstance(round_no, int) and sent_back < 2
+    deadline = land.time.monotonic() + land.TURN_CAP_S * (3 if sent_back else 1) if capped else None
     python = land.sys.executable
     done = []
     if (wt / land.HARNESS).is_file():

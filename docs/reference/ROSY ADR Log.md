@@ -11,11 +11,20 @@
 | ID | 제목 | Status |
 |---|---|---|
 | D-953 | Pi 4·Pi 5 CPU는 이미 있는 네이티브 경로로 먼저 줄인다 — 자체 Rust 확장은 Pi 4 실측이 요구할 때만. [전문](../adr/D-953-pi45-cpu-native-path.md) | Accepted (2026-11-01, 사용자 지시; D-185 순서를 따름) |
+| D-960 | 실제 제어는 암 세트마다 붙은 관제가 하고, 통합관제 R은 그 위에서 조정한다. [전문](../adr/D-960-control-unit-per-arm-set-under-integrated-r.md) | Accepted (2026-11-02, 사용자 결정) |
+| D-930 | 확인된 ARM 시도의 재관측(새 측정 사실만, 실행·claim·완료 권한 없음, API v1.334). [전문](../adr/D-930-arm-transfer-recheck-of-confirmed-attempt.md) | Accepted (2026-10-30, 계약·simulation 구현 결정; 실물 수용 별도) |
+| D-907 | Native v2 read-only signed component profile contract. [전문](../adr/D-907-native-v2-readonly-profile-contract.md) | Accepted (2026-10-28) |
+| D-950 | 도킹 진입 방향은 후면(후진)이다 — 짐칸 USB 코를 충전소 깔때기에 후진으로 꽂는다. [전문](../adr/D-950-docking-direction-rear-entry.md) | Accepted (2026-11-01, 사용자 결정; 방향만, 구현·실물 수용·후속 결정 별도) |
+| D-955 | Rosy를 연동 허브로 두고, 팀원은 로그인하면 기본 권한 묶음으로 바로 쓴다 | Accepted (2026-11-01) |
+| D-954 | 현장 마커 번호는 프로필 한 장에 배정하고, 팔 마커는 50번부터 쓴다 (D-933 8항 대체). [전문](../adr/D-954-site-marker-profile-arm-ids.md) | Accepted (2026-11-01, 사용자 결정; 천장 팔 마커 소비·인쇄·실물 수용 별도) |
+| D-951 | ROSY Calibration 앱을 두고, 두 팔 셀의 보정·높이·공간 점검을 코드 한 경로로 돌린다. 집게는 D-933 마커, 면 높이는 깊이(`cell_depth`, D-933 3항 터치 대신), 테이블보다 낮은 면은 승인된 `low_zones` 사각형에서만, 하중 관절 I 게인, 팔별 세션 잠금과 통로 예약(`cell_space`). [전문](../adr/D-951-rosy-calibration-application.md) | Accepted (2026-11-01, 사용자 결정; 앱 화면 없음, 부품 착지 대기, 현장 수용 없음) |
+| D-939 | 앱 연동 코드는 한 곳에 둔다 — 앱 사이 사본 금지. [전문](../adr/D-939-app-link-shared-sources.md) | Accepted (2026-10-31, 사용자 결정; Android peer 공통 소스·구조 시험, 기기 수용 별도) |
 | D-949 | 줄 수 래칫은 리팩터링 대기열이다 — 1,000줄 이상은 지금 나누고 800줄 이상은 다음에 고칠 때 먼저 나눈다. [전문](../adr/D-949-size-ratchet-refactor-tiers.md) | Accepted (2026-11-01, 사용자 결정; D-766에 순서를 더함) |
 | D-948 | 사람 조종은 `/ws/teleop` 스트림으로 보내고 REST `/teleop`은 대체 경로로 남긴다. [전문](../adr/D-948-teleop-websocket-stream.md) | Accepted (2026-11-01, 사용자 지시; 장치·현장 수용 별도) |
 | D-944 | 팀 tailnet에서도 LCD 코드로 CORE에 페어링한다. [전문](../adr/D-944-tailnet-code-pairing.md) | Accepted (2026-11-01, 사용자 결정; 코드 없는 개발 세션·peer 승인은 LAN 전용 유지) |
 | D-941 | 261026 트랙 운행: 우측통행 순환로에서 차선 진행 거리로 앞차를 따라가고, 줄무늬는 감속·관제 정지점, 주차장 세 칸은 후진 진입 충전 칸. [전문](../adr/D-941-track-platoon-hold-points-charge-bays.md) | Proposed (2026-11-01, 사용자 결정; 설계만) |
 | D-940 | 중복 정의 게이트와 의도 중복 등록부를 둔다. [전문](../adr/D-940-duplicate-definitions-gate.md) | Accepted (2026-11-01, 사용자 결정; 원격 시험·착지는 파이프라인 기록) |
+| D-943 | Rosy Learning OMX 한 바퀴: GPU 학습, 장치 초안, 작업대 녹화 버튼, HF 업로드 버튼. [전문](../adr/D-943-rosy-learning-omx-gpu-detect-bench-record-hub-button.md) | Accepted (2026-11-01, 사용자 지시; 구현·착지는 logs) |
 | D-938 | 팔 이송 정책 승인 — D-865 승인 범위를 ARM_TRANSFER로 확장. [전문](../adr/D-938-arm-transfer-policy-admission.md) | Accepted (2026-10-31, 사용자 결정; simulation 팔 이송 HTTP 전용, 현장 범위 설정·수용 별도) |
 | D-936 | ROSY Monitoring은 관제 PC에서 서명 사이트 스택의 선택 서비스로 실행한다 (D-876 배치 보충). [전문](../adr/D-936-monitoring-site-stack-service.md) | Accepted (2026-10-30, 사용자 결정; 관제 PC 반영·수용 별도) |
 | D-935 | 공급암 S 운반 무게는 검증한 상한으로 묶고, 운반마다 실제 짐을 확인해 기록한다 (D-911 보충). [전문](../adr/D-935-arm-s-payload-bound-amends-d911.md) | Accepted (2026-10-30, 사용자 결정; 실측·실물 수용 별도) |
@@ -930,6 +939,7 @@
 | D-881 | A/B 이미지의 기체 상태와 슬롯별 적용 기록을 분리한다 | Proposed |
 | D-915 | Immutable physical evidence export with measured joint provenance | Accepted |
 | D-916 | Atomic raw source stamps on validated OMX joint snapshots | Accepted |
+| D-945 | 모든 표면이 같은 뼈대를 쓰는 자리 규칙 | Accepted |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 

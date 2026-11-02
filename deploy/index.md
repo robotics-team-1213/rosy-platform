@@ -77,8 +77,8 @@
 
 ## 최근 기록
 
-- 2026-11-01 · a785121ef0 · sim/real 같은 동작: Planner.stream 하나
-- 2026-10-31 · a517780fbc · feat(model-pc): one Learning center follows the signed release; retire the candidates (D-857)
-- 2026-10-30 · 796fbe489c · D-871 가드 수집 관제 PC 적용과 `rosy-update-report` 선언
-- 2026-10-30 · uncommitted · 관제 PC Monitoring 설정 예시 (D-936)
-- 2026-10-30 · 6302fcb63c · 선택 Monitoring overlay를 서명 후보와 업데이트기에 등록 (D-936)
+- 2026-11-02 · uncommitted · OMX 카메라 manifest를 레지스트리에서 맞춤
+- 2026-11-02 · uncommitted · feat(site): 작업셀 카메라 자격 매핑도 site.env에서 바꾼다
+- 2026-11-02 · uncommitted · feat(omx): 팔 혼자 정렬하기를 한 파이프라인으로 (`cell_align`)
+- 2026-11-02 · 97da913f85 · OMX record_session이 켜진 카메라 단위 전부를 넘겨받음
+- 2026-11-01 · uncommitted · D-907 authenticated metadata read repair

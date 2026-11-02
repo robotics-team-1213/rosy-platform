@@ -291,7 +291,10 @@ def test_console_polls_sightings_only_for_a_configured_site_and_stops_on_404():
     assert "if (unchanged && !next.length) return;" in map_view
     # A transient site-map failure keeps the last rectangle; only NO_SITE_MAP clears it.
     assert 'err.status === 404 && err.code === "NO_SITE_MAP"' in map_view
-    assert 'setAttribute("role", "img")' in map_view and 'setAttribute("role", "button")' in map_view
+    # role="img" stays with the map layer; role="button" follows the armed state
+    # (goal pick / operator pin) in the shell's render (WCAG 4.1.2, D-945 재비평 P2).
+    assert 'setAttribute("role", "img")' in map_view
+    assert 'setAttribute("role", "button")' in shell and 'removeAttribute("role")' in shell
     # Both documents import the served contract adapter. Its status/code behavior
     # is executed by web/fleet-client.test.mjs, rather than duplicated in the shell.
     assert 'import { createFleetClient } from "/common/fleet-client.js"' in shell

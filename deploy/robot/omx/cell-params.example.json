@@ -67,6 +67,24 @@
    "source": "default",
    "evidence": "2026-10-28 real arm: pivot circle from gripper open/close, 2 agreeing marks (value as shipped in code)"
   },
+  "align.free_margin_mm": {
+   "value": 15.0,
+   "unit": "mm",
+   "source": "default",
+   "evidence": "2026-11-01 packed 3-cell columns: past the end grasp point a finger pad half (~10 mm) and 5 mm room"
+  },
+  "align.face_short_mm": {
+   "value": 4.0,
+   "unit": "mm",
+   "source": "default",
+   "evidence": "2026-11-01: an off-centre push still meets all but 4 mm of a 30 mm container face with the 42 mm jaws"
+  },
+  "pivot.merge_px": {
+   "value": 0,
+   "unit": "px",
+   "source": "default",
+   "evidence": "2026-11-02 real arm over a packed column: the jaw mark came in 2-3 pieces under min_blob; 0 keeps the old per-piece check"
+  },
   "pivot.follow_px": {
    "value": 60,
    "unit": "px",

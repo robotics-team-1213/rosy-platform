@@ -255,7 +255,10 @@ def _shown(mission: Optional[dict]) -> Optional[dict]:
 
 
 def _error_of(exc: BaseException) -> dict:
-    """Show a robot refusal separately from a reachability failure."""
+    """Show a robot refusal separately from a reachability failure and from Fleet's own hold."""
+    if isinstance(exc, RobotApiError) and exc.code == "ADDRESS_UNVERIFIED":
+        # D-361 gate: Fleet held the request itself, the robot was never asked.
+        return {"reachable": None, "held": True, "code": exc.code, "message": str(exc)}
     if isinstance(exc, RobotApiError):
         return {"reachable": True, "code": exc.code, "message": str(exc)}
     return {"reachable": False, "code": type(exc).__name__, "message": str(exc) or type(exc).__name__}
