@@ -26,6 +26,7 @@
 .fleet-workspace:has(> .fleet-task-page) > #estop-feedback { max-inline-size: calc(var(--content-task-max) - 2 * var(--inset-task-page)); }
 /* D-741 2·6 — 탐색 레일: 아이콘 아래에 짧은 이름. 치수는 공용 자리 토큰(--rail-track 72px)을 쓴다.
    72px 자리에서 안쪽 여백과 오른쪽 선을 뺀 칸은 55px이라, 세로 레일의 항목은 그 칸 폭까지만 넓다. */
+.fleet-body > .doc-tabs > .ui-rail-item { inline-size: var(--size-rail-item); max-inline-size: 100%; min-block-size: var(--size-rail-item); }
 @media (width >= 64rem) and (height >= 40rem) {
   .fleet-shell:has(#fleet-main) { height: 100dvh; }
   .fleet-workspace > #fleet-main { flex: 1; min-height: 0; }
