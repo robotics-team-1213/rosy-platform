@@ -369,3 +369,9 @@
 - 변경: 검수 화면 여섯(camera·pixels·omx·vlm·workspaces·sim)의 레일 항목이 쓰던 `aria-current="true"`를 표준 어휘 `page`로 바꿨다(D-945 계약 시험이 이탈로 지목).
 - 증거: `test_layout_canon.py` 통과. 원격 시험은 착지 전 기록.
 - Gate: 없음. CE: 해당 없음.
+
+## 2026-11-02 · uncommitted · D-961 웹 제품 통합
+
+- 변경: 12개 문서·공통 헤더·동적 링크를 공용 이동 조작으로 옮겼다. 인증의 정상·오류·권한 거부와 명시적 계정 전환을 구분하고 객체·픽셀 캔버스·사람 정답은 유지한다.
+- 증거: 62df3526f7 stages/viewport/공용 계약 57 passed markers; 2b7ef22d61 auth/recovery 16 passed markers. 두 로그 known_failures 0 NEW.
+- Gate: 전체 회차 검증 중이며 운영 배포·DEVICE/FIELD를 주장하지 않는다. CE: 완료 전 판단; 최종 코드·회귀·ADR 외의 비명시 지식이 있는지 확인한다.

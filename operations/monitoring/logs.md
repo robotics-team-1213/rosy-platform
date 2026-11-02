@@ -83,3 +83,9 @@
 - 변경: 사이트 호스트에 `/etc/rosy/monitoring/monitoring.yaml`(root:10001 0640, 예제 복사·Fleet 포트 무수정)과 조회/원천 키 2개(root 0600, 미출력)를 두고, `site_users.py`(main ea45e0c79f 사본)로 Fleet viewer `monitoring` 계정을 등록했다(도구 JSON 응답·yaml 행 확인).
 - 근거: 호스트 읽기 전용 조사로 candidate c47d7c3e78c9(2026-10-26 서명분) 가동·account 디렉터리 staging 확인. overlay 활성은 compose.monitoring.yaml 포함 서명 후보 적용 뒤 site.env 단계와 함께 별도 수행한다.
 - gate 변화: DEVICE blocker 문구 갱신(입력 준비 완료, 활성 대기). ARTIFACT/FIELD HOLD 유지.
+
+## 2026-11-02 · uncommitted · D-961 웹 제품 통합
+
+- 변경: 읽기 화면을 공용 워드마크·테마·본문으로 옮기고 고정 번들에 조합 시트·중첩 brand/mark.svg를 포함했다. 키 메모리 수명·범위·관측 시각·읽기 전용 API는 유지한다.
+- 증거: c614d2d13d RED에서 공용 앱바 진입·bundle logo 누락 재현. 19dfe0c32b 실제 backend·배포 자산 회귀 실행 중. 이전 LOCAL GO와 새 변경을 구분한다.
+- Gate: 전체 회차 검증 중이며 운영 배포·DEVICE/FIELD를 주장하지 않는다. CE: 완료 전 판단; 최종 코드·회귀·ADR 외의 비명시 지식이 있는지 확인한다.

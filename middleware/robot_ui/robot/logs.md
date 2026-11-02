@@ -1385,3 +1385,9 @@
 - 변경: `/dashboard` 인증 브리지의 작업 화면 목록(밑줄 텍스트 링크)이 역할 화면 셸·Fleet과 같은 레일 부품(`ui-rail-item`, 아이콘 아래 짧은 이름, 전체 이름은 접근 이름)로 그려진다. 레일 어휘(SURFACE_RAIL)를 surface-navigation.js 한 곳에 두고 셸 shell.js도 같은 정본을 쓴다. 대시보드에 app-shell.css를 더하고 목록 배치를 세로 레일로 바꿨다. 아이콘은 ui.js가 부팅 때만 훑으므로 dashboard-entry.js가 그린 뒤 다시 칠한다.
 - 증거: node --check 3파일, test_layout_canon 전 통과. 어휘 변화(전체 제목→짧은 이름)에 맞춰 test_surface_bridge·test_dashboard_entry_browser 기대치 갱신(접근 이름은 전체 제목 유지). 원격 시험은 착지 전 기록.
 - Gate: 없음. CE: 해당 없음.
+
+## 2026-11-02 · uncommitted · D-961 웹 제품 통합
+
+- 변경: 앱바의 banner 의미를 명시했다. 공용 레일 변화가 320×568 상단 예산을 넘긴 회귀를 확인한 뒤 공용 바닥과 Fleet 배치 치수를 분리했다. 역할·정지·장치 명령은 유지한다.
+- 증거: d58538d018 관련 작은 화면·Fleet·Pilot 회귀 4 passed markers. 전체 역할 G2와 최종 HEAD는 별도 검증한다.
+- Gate: 전체 회차 검증 중이며 운영 배포·DEVICE/FIELD를 주장하지 않는다. CE: 완료 전 판단; 최종 코드·회귀·ADR 외의 비명시 지식이 있는지 확인한다.

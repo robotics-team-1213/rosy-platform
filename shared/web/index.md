@@ -29,6 +29,7 @@
 | D-654 | ROSY 플랫폼 경로 R 심볼과 공용 브랜드 자산 |
 | D-775 | 실측 카메라 교정의 승인·저장·적용·무효화는 목적별 기존 소유자를 따른다 |
 | D-845 | 공통 HTTP 전송 안에서 화면의 응답 해석을 유지한다 |
+| D-961 | 공용 작업 이동과 작업·인증 화면 구성. [전문](../adr/D-961-shared-task-links-and-page-compositions.md) |
 
 ## 계획·결과 문서
 
@@ -49,8 +50,8 @@
 
 ## 최근 기록
 
+- 2026-11-02 · uncommitted · D-961 웹 제품 통합
+- 2026-11-02 · uncommitted · D-961 공용 이동 조작과 작업 구성
 - 2026-11-01 · uncommitted · 착지 시험 반영: 표식 토큰 true 인정, 검수 페이지 원복
 - 2026-11-01 · uncommitted · D-945 focal 표면 검사 추가
 - 2026-11-01 · uncommitted · D-945 레이아웃 계약 시험
-- 2026-11-01 · uncommitted · step 자리 표식
-- 2026-11-01 · uncommitted · task-chooser onSelect 선택 알림

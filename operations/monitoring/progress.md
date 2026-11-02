@@ -22,7 +22,7 @@ gates:
   FIELD:
     state: HOLD
     blocker: 실 PC 배치·LAN/TLS 단절 및 복구·시각·제어 영향 수용이 남아 있다.
-adrs: [D-876, D-936]
+adrs: [D-876, D-936, D-961]
 ---
 
 ## 지금 상태

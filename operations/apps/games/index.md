@@ -32,6 +32,7 @@
 | D-113 | D-96 남은 실행은 현장 실측이며 LOCAL 호스트 트랙은 닫힌다 |
 | D-300 | Surface typography and focus feedback use shared tokens |
 | D-306 | 화면별 책임과 UI/UX 개선 완료 기준 |
+| D-961 | 공용 작업 이동과 작업·인증 화면 구성. [전문](../adr/D-961-shared-task-links-and-page-compositions.md) |
 
 ## 계획·결과 문서
 
@@ -52,8 +53,8 @@
 
 ## 최근 기록
 
+- 2026-11-02 · uncommitted · D-961 웹 제품 통합
 - 2026-10-29 · 068aa03060 · 지연·끝나지 않는 응답에서 마지막 경기 신선도 유지
 - 2026-10-22 · uncommitted · 긴 로봇 ID의 점수판 넘침 방지
 - 2026-10-19 · 9c1160981c · D-806 이름 정합 검증 완료
 - 2026-10-19 · uncommitted · D-806 앱 표시 이름과 현재 역할 정합
-- 2026-10-14 · be0ba5111 · fix: Games 계정 권한과 compact 정지 표시

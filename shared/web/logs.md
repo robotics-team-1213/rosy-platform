@@ -1059,3 +1059,9 @@
 - 변경: 기존 component-controls.css에 네이티브 이동 링크와 task/auth 구성을 추가하고 gallery·styleguide·template에 연결했다. 팔레트·48px 조작·실행 권한은 유지한다.
 - 증거: 130627f04f 원격 AI PC Chromium RED 8 failed, 0 skipped — 링크 높이가 48px 미만임을 재현. 구현 후 GREEN과 공용 계약은 다음 검증 기록에서 확인한다.
 - Gate: 이동 없음. CE: 미해결 — 제품 적용·회귀·배포 화면 검증 전이다.
+
+## 2026-11-02 · uncommitted · D-961 웹 제품 통합
+
+- 변경: 공용 네이티브 이동 조작·task/auth 구성과 같은 레일 표현을 기존 조합 시트에 연결했다. Robot의 48px 바닥·상단 예산과 Fleet의 56px 자리를 함께 보존한다.
+- 증거: 6262b09d30 공용 회귀 81 passed markers·0 skipped; known_failures 0 NEW. 최종 HEAD의 전체 affected는 다음 기록에서 확인한다.
+- Gate: 전체 회차 검증 중이며 운영 배포·DEVICE/FIELD를 주장하지 않는다. CE: 완료 전 판단; 최종 코드·회귀·ADR 외의 비명시 지식이 있는지 확인한다.

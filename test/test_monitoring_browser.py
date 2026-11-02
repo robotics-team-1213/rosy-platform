@@ -225,13 +225,15 @@ VIEWPORTS = [(320, 844), (390, 844), (1366, 768), (1920, 1080)]
 
 def capture(page, state):
     directory = os.environ.get('ROSY_MONITORING_CAPTURE_DIR')
-    for width, height in VIEWPORTS:
-        page.set_viewport_size({'width': width, 'height': height})
-        assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
-        if directory:
-            root = Path(directory).expanduser()
-            root.mkdir(parents=True, exist_ok=True)
-            page.screenshot(path=str(root / f'{state}-{width}x{height}.png'), full_page=True)
+    for theme in ('dark', 'light'):
+        page.evaluate('(theme) => RosyTheme.set(theme)', theme)
+        for width, height in VIEWPORTS:
+            page.set_viewport_size({'width': width, 'height': height})
+            assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+            if directory:
+                root = Path(directory).expanduser()
+                root.mkdir(parents=True, exist_ok=True)
+                page.screenshot(path=str(root / f'{state}-{width}x{height}-{theme}.png'), full_page=True)
 
 
 @pytest.mark.parametrize('monitoring_backend', ['web', 'delayed', 'unavailable', 'empty', 'error', 'disconnected'], indirect=True)

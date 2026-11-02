@@ -419,3 +419,9 @@
 - 증거: 최종 runtimefd770d8d36 board Chromium61 passed/skip0, test-only068의 부분16 passed·최종18PNG, 공식 영향641 passed/61 skipped 및 연결 overhead785 passed, NEW0. 무한 대기8·늦은 응답4·시각 근거1 RED를 실제 HTTP로 재현했고 최초50 통과의 범위 한계도 보존했다. `docs/validation/games-receipt-freshness-2026-10-29/` 참조.
 - gate 변화: 없음. DEVICE/FIELD와 G2/G3 HOLD·실제 정지/readback·운용 GO는 별도다. 배포·착지/push/merge 미수행.
 - CE: 해당 없음 — 시간 상한·UTC 비교 거부의 이유가 comment·회귀·검증 기록에 남는다.
+
+## 2026-11-02 · uncommitted · D-961 웹 제품 통합
+
+- 변경: 접근성 h1과 앱바 banner를 명시했다. 점수·상태·경기판·정지 배치와 host/API/승인 의미는 유지한다.
+- 증거: c614d2d13d RED에서 선언한 1280/390/320 화면의 h1 부재 재현. 19dfe0c32b 전체 Game-board 회귀 실행 중.
+- Gate: 전체 회차 검증 중이며 운영 배포·DEVICE/FIELD를 주장하지 않는다. CE: 완료 전 판단; 최종 코드·회귀·ADR 외의 비명시 지식이 있는지 확인한다.

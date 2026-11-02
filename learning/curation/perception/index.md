@@ -11,6 +11,7 @@
 |---|---|
 | D-637 | Remaining Decision Console learning holders and source consumer closure |
 | D-663 | 도로 라벨의 의미 버전을 보존하고 다른 의미의 평가·전달을 거절한다 |
+| D-961 | 공용 작업 이동과 작업·인증 화면 구성. [전문](../adr/D-961-shared-task-links-and-page-compositions.md) |
 
 ## 계획·결과 문서
 
@@ -26,8 +27,8 @@
 
 ## 최근 기록
 
+- 2026-11-02 · uncommitted · D-961 웹 제품 통합
 - 2026-11-01 · uncommitted · 레일 현재 표식 어휘 통일
 - 2026-11-01 · uncommitted · curation/perception: content_sha stand-in을 정본 소비로 대체
 - 2026-10-29 · 66e86cb0fb · Pilot 로컬 복구와 Learning 검수 대기 연결
 - 2026-10-29 · c38009ec42 · 작업 폭과 픽셀 승인 영역의 반응형 문맥
-- 2026-10-29 · 8e084f3e59 · 객체·픽셀의 공용 클래스 선택
