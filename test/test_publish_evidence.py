@@ -244,6 +244,24 @@ def test_prepared_full_proof_requires_matching_final_plan_and_environment(repo, 
         assert tool.green_full(local, sha)
 
 
+def test_prepared_full_and_fresh_turn_timing_execution_keep_all_hash_bound_proofs(repo):
+    local, prepared, _ = _proof(repo)
+    on = _git(local, 'rev-parse', f'{prepared}^')
+    _git(local, 'checkout', '-qb', 'peer', on)
+    base = _commit(local, 'peer.py', 'main advanced')
+    _git(local, 'checkout', '-q', 'main')
+    _git(local, 'merge', '-q', '--no-ff', '--no-edit', 'peer')
+    sha = _git(local, 'rev-parse', 'HEAD')
+    logs = qualified_record(tool, local, sha, base, [exclusive.DEDICATED],
+                            prepared={'candidate': prepared, 'main': on,
+                                      'tier': 'full', 'invocations': FULL})
+    record = tool.land_record.read(local, sha)
+    assert record['invocations'].count(exclusive.DEDICATED) == 1
+    assert tool.green_full(local, sha)
+    Path(logs[0]).unlink()
+    assert not tool.green_full(local, sha)
+
+
 @pytest.mark.parametrize("change", ["own-commit", "manual-merge"])
 def test_prepared_proof_cannot_cover_new_branch_code_or_a_hand_edited_merge(repo, monkeypatch, change):
     local, prepared, _ = _proof(repo)
