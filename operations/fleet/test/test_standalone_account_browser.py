@@ -74,7 +74,7 @@ def test_standalone_existing_cookie_and_initial_password_resume_registered_app(s
                 expect(page.locator('#account-list')).to_contain_text('bob')
                 context.clear_cookies()
                 page.goto(entry)
-                expect(page.get_by_role('heading', name='계정 로그인')).to_be_visible()
+                expect(page.get_by_role('heading', name='Rosy Account 로그인')).to_be_visible()
                 expect(page.locator('ui-brand b')).to_have_text('Rosy Account')
                 expect(page.locator('[data-login=form]')).to_be_visible()
                 page.locator('[data-login=login]').fill('bob')
