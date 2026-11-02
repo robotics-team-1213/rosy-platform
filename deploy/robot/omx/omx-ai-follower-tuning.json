@@ -1,0 +1,12 @@
+{
+  "schema": "rosy.omx-servo-tuning.v1",
+  "model": "omx_ai_follower",
+  "motors": {
+    "13": {"i": 50},
+    "14": {"i": 50}
+  },
+  "evidence": {
+    "13": "2026-11-01 both arms, elbow I 0 -> 50: steady error +1.52 -> +0.06, left arm belt-end TCP 12.3 -> 3.3 mm (D-951 5)",
+    "14": "2026-11-01 both arms, wrist_flex I 0 -> 50: steady error -0.41 -> +0.03 and -0.52 -> +0.02 (D-951 5)"
+  }
+}

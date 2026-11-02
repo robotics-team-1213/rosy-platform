@@ -166,6 +166,83 @@ def goal_repo(tmp_path, monkeypatch):
     return tmp_path / ".git" / land_events.EVENTS, 1_793_500_000.0
 
 
+@pytest.fixture
+def nested_completion(goal_repo):
+    events, start = goal_repo
+    base = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+    tips = []
+    for name in ("inner", "outer"):
+        subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q",
+                        "--allow-empty", "-m", name], check=True)
+        tips.append(subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip())
+    a, b, c = [f"land/fix/{name}-20261101000000" for name in "abc"]
+    inner, outer = [f"land/fix/land-rollup-{stamp}-{stamp}" for stamp in ("20261101000100", "20261101000200")]
+    children = [dict(branch=a, ticket="a2", candidate=base), dict(branch=b, ticket="b", candidate=base)]
+    members = [dict(branch=inner, ticket="inner", candidate=tips[0], members=children),
+               dict(branch=c, ticket="c", candidate=tips[1])]
+    rows = [ev(start, "queue", branch=a, ticket="a1"), ev(start + 5, "stop", branch=a),
+            ev(start + 10, "queue", branch=a, ticket="a2", pid=2),
+            ev(start + 20, "queue", branch=b, ticket="b"), ev(start + 30, "queue", branch=c, ticket="c"),
+            ev(start + 40, "queue", branch=inner, ticket="inner"),
+            ev(start + 50, "queue", branch=outer, ticket="outer"),
+            ev(start + 120, "landed", branch=outer, sha=tips[1], members=members)]
+    return events, start, rows
+
+
+def test_nested_completion_closes_only_leaves_at_the_single_actual_ff(nested_completion):
+    events, start, rows = nested_completion
+    raw = json.dumps(rows)
+    newer = "land/fix/a-20261101000300"
+    rows += [ev(start + 150, "queue", branch=newer, ticket="new", pid=9),
+             ev(start + 180, "landed", branch=newer, pid=9)]
+    normalized, warnings = land_goal.normalize(rows, events.parent)
+    assert not warnings
+    assert land_goal.lead_times(normalized, start, start + 200) == [2, 100 / 60, 1.5, .5]
+    assert len([r for r in normalized if r["event"] == "landed"]) == 2
+    assert json.dumps(rows[:-2]) == raw, "nested normalization must not mutate raw members"
+
+
+@pytest.mark.parametrize("bad", ["missing", "cycle", "duplicate", "invalid_pin", "wrong_parent", "unknown_ticket"])
+def test_unproven_nested_completion_stays_incomplete(nested_completion, bad):
+    events, start, rows = nested_completion
+    inner = rows[-1]["members"][0]
+    if bad == "missing":
+        inner.pop("members")
+    elif bad == "cycle":
+        inner["members"] = [{k: v for k, v in inner.items() if k != "members"}]
+    elif bad == "duplicate":
+        rows[-1]["members"][1]["candidate"] = inner["members"][0]["candidate"]
+        inner["members"].append(dict(rows[-1]["members"][1]))
+    elif bad == "invalid_pin":
+        inner["members"][0]["candidate"] = "f" * 40
+    elif bad == "wrong_parent":
+        inner["members"][0]["candidate"] = rows[-1]["sha"]
+    else:
+        inner["members"][0]["ticket"] = "not-recorded"
+    normalized, warnings = land_goal.normalize(rows, events.parent)
+    assert warnings and normalized[-1]["metrics_incomplete"]
+    assert land_goal.lead_times(normalized, start, start + 200) == []
+
+
+@pytest.mark.parametrize("bad", ["invalid_pin", "missing", "cycle", "invalid_branch"])
+def test_nested_incomplete_scope_keeps_known_leaves_and_unknown_trees_closed(nested_completion, bad):
+    events, start, rows = nested_completion
+    inner = rows[-1]["members"][0]
+    if bad == "invalid_pin":
+        inner["members"][0]["candidate"] = "f" * 40
+    elif bad == "missing":
+        inner.pop("members")
+    elif bad == "cycle":
+        inner["members"] = [{k: v for k, v in inner.items() if k != "members"}]
+    else:
+        inner["members"][0]["branch"] = 42
+    rows += [ev(start + 300, "queue", branch="fix/unrelated", ticket="other", pid=9),
+             ev(start + 360, "landed", branch="fix/unrelated", pid=9)]
+    normalized, warnings = land_goal.normalize(rows, events.parent, start + 200, start + 400)
+    assert normalized[-3]["metrics_incomplete"]
+    assert bool(warnings) == (bad != "invalid_pin"), "only a complete leaf name set can prove an unrelated window"
+
+
 def test_goal_cli_stall_uses_landing_events_despite_old_commit_dates(goal_repo, monkeypatch, capsys):
     events, start = goal_repo
     rows = [ev(start + i * 1200, "queue", branch=f"fix/{i}", pid=i + 1) for i in range(3)]
