@@ -102,6 +102,17 @@ def matrix(entries, available):
     return result
 
 
+def canonical_full(invocations):
+    root = ['test', '--ignore=' + TARGET]
+    if sum(inv == root for inv in invocations) != 1:
+        return False
+    try:
+        validate(invocations, True)
+    except ValueError:
+        return False
+    return True
+
+
 def evidence(log, code=None):
     if code is not None and code != 0:
         return f'G1 timing exclusive job exited {code}; no retry'

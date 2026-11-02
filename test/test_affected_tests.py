@@ -641,10 +641,13 @@ def test_ci_affected_whole_root_suite_uses_the_full_tier_groups(flags):
     other = "learning/registry/policy/test"
     sel = affected.Selection("affected", [], invocations=[["test", other, *flags]])
     matrix = [e for e in affected.ci_matrix(repo, sel)["include"] if e["kind"] == "pytest"]
-    assert [e["invocations"][0] for e in matrix] == [[other, *flags], *[group + flags for group in full]]
+    import affected_exclusive
+    assert [e["invocations"][0] for e in matrix] == [
+        [other, *flags], *[group + flags for group in full], affected_exclusive.DEDICATED]
     assert all(e["gating"] for e in matrix)
-    assert [e["ros"] for e in matrix] == ["none", *["overlay"] * len(full)]
-    assert sorted(p for group in full for p in group) == sorted(p for p in repo.test_files if p.startswith("test/"))
+    assert [e["ros"] for e in matrix] == ["none", *["overlay"] * (len(full) + 1)]
+    assert sorted([p for group in full for p in group] + [affected_exclusive.TARGET]) == sorted(
+        p for p in repo.test_files if p.startswith("test/"))
 
 
 def test_ci_affected_matrix_is_one_runner_per_invocation(sample):

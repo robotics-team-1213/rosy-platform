@@ -90,6 +90,7 @@ def test_nonclean_dedicated_job_is_not_retried_or_cached(cached, monkeypatch, te
     def remote(invocations, logs, *args, on_done=None, **kwargs):
         calls.append(invocations)
         for inv, log in zip(invocations, logs):
+            log.parent.mkdir(parents=True, exist_ok=True)
             log.write_text(text, encoding='utf-8')
             if on_done:
                 on_done(inv, log)
@@ -119,6 +120,7 @@ def test_success_requires_fresh_execution_without_reading_or_writing_result_cach
     def remote(invocations, logs, *args, on_done=None, **kwargs):
         calls.append(invocations)
         for inv, log in zip(invocations, logs):
+            log.parent.mkdir(parents=True, exist_ok=True)
             log.write_text(CLEAN, encoding='utf-8')
             if on_done:
                 on_done(inv, log)
@@ -179,4 +181,5 @@ def test_remote_exclusive_failure_cannot_turn_green_through_quarantine(tmp_path,
     monkeypatch.setattr(remote.remote_job, 'run', job)
     assert remote.run_on('fixture-host', [exclusive.DEDICATED], [tmp_path / 'remote.txt'],
                          'ab' * 20, tmp_path, None) == [1]
-    assert calls == [exclusive.DEDICATED]
+    assert len(calls) == 1 and calls[0][:len(exclusive.DEDICATED)] == exclusive.DEDICATED
+    assert '-n' not in calls[0]

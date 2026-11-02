@@ -18,6 +18,8 @@ class TimingGate:
     def pytest_configure(self, config):
         if os.environ.get('ROSY_JOB_ALONE') != '1':
             raise pytest.UsageError('G1 timing requires host-exclusive admission')
+        if len(config.args) != 1 or '::' in str(config.args[0]) or Path(config.args[0]).resolve() != self.target:
+            raise pytest.UsageError('G1 timing requires one explicit whole-file argument')
 
     def pytest_collectreport(self, report):
         for item in getattr(report, 'result', ()) or ():
