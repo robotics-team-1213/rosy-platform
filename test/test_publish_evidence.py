@@ -43,6 +43,17 @@ def test_publication_requires_complete_strict_dedicated_evidence(repo, damage):
     assert not tool.green_full(local, sha)
 
 
+@pytest.mark.parametrize('extra', [exclusive.DEDICATED, exclusive.DEDICATED + ['-k', 'one']])
+def test_publication_rejects_additional_dedicated_record_jobs_even_with_clean_mappings(repo, extra):
+    local, sha, log = _timing_proof(repo)
+    record = tool.land_record.read(local, sha)
+    record['invocations'].append(extra)
+    (tool.land_record.folder(local) / f'{sha}.json').write_text(json.dumps(record), encoding='utf-8')
+    row = next(row for row in land_cache.entries(local) if row['argv'] == exclusive.DEDICATED)
+    land_cache.record(local, sha, row['tree'], row['env'], extra, log)
+    assert not tool.green_full(local, sha)
+
+
 @pytest.mark.parametrize('mode', ['exact', 'narrow', 'no-cache'])
 def test_dedicated_execution_mapping_never_replaces_a_fresh_run(repo, monkeypatch, tmp_path, mode):
     local, _ = repo
