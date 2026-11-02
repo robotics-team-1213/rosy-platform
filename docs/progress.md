@@ -3,17 +3,17 @@ module: docs
 logical_modules: []
 owner: 거버넌스
 last_verified:
-  commit: 45720c033b
+  commit: 1abd2203e0
   date: 2026-11-03
 gates:
   SOURCE:
     state: GO
-    evidence: Each of the two G1 tooling tests bootstraps its canonical tools import before use; independent 45720c033b review found no supported findings. No global conftest or whole-import checks changed. The 0.45s threshold and control code remain unchanged.
+    evidence: Per-context validated G1 composition preserves env/options and ordinary rows; explicit publication FULL skips speculative preparation/consumption. Independent 90e0a7e8a2 source and 49ab758412 final fixture/documentation reviews found no supported findings. No control, timing threshold or isolation gate changed.
     cmd: python tools/harness/rosy_harness.py lint
   LOCAL:
     state: GO
-    evidence: '45720c033b fresh whole-file remote execution: selection 58 passed / 0 skipped, G1 gate 36 passed / 0 skipped. Separate unchanged collect_alone wrapper: 4 passed / 0 skipped (two collections and two full child executions). All three reports NEW/known/flaky 0. Previous actual timing remains separate 12/12 evidence; no FULL or landing success is claimed.'
-    cmd: python tools/remote/remote_pytest.py --sha 45720c033b --affected-json '<OS Temp>/rosy-g1-bootstrap-isolation-4572/invocations.json'
+    evidence: '1abd2203e0 fresh whole-file remote checks: record 13, speculate 24, selection 59, publication 49 passed; each 0 skipped. Separate unchanged collect_alone wrapper: 8 passed / 0 skipped (four collections and four complete child executions). All five reports NEW/known/flaky 0. Actual timing/FULL/landing acceptance remain separate.'
+    cmd: python tools/remote/remote_pytest.py --sha 1abd2203e0 --affected-json '<OS Temp>/rosy-g1-spec-composition-green-1abd/invocations.json'
   ROS-SIM:
     state: N/A
   ARTIFACT:
