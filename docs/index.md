@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-11-02 · uncommitted · docs(omx): 시범 학습 준비와 왼쪽 손목 진단 기록
 - 2026-11-02 · uncommitted · D-945 5항 이행 완료로 닫음
 - 2026-11-02 · uncommitted · docs(adr): D-889 추가 10 결과에 M4 판정(FAIL)
 - 2026-11-02 · uncommitted · fix(land): 겹침 판정이 선택기 가드 묶음을 보지 않는다 (D-889 추가 25)
 - 2026-11-02 · uncommitted · fix(land): 차례의 자기 브라우저 묶음은 변화분 브라우저 묶음이 닿을 때만 (D-889 추가 24)
-- 2026-11-02 · uncommitted · feat(tools): 업데이트 운영 CLI update_ops (D-957)
