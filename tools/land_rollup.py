@@ -108,7 +108,11 @@ def member_metadata(place: Path, member: dict, ancestors=()) -> dict:
     """Keep direct owners, embedding frozen child metadata before their sidecars can be collected."""
     data = {k: member[k] for k in ("branch", "worktree", "candidate", "ticket", "members_error") if k in member}
     branch = data["branch"]
-    if not land_async.ROLLUP.fullmatch(branch) or data.get("members_error"):
+    if not land_async.ROLLUP.fullmatch(branch):
+        if "members" in member:
+            data["members_error"] = "nested metadata on a non-carrier"
+        return data
+    if data.get("members_error"):
         return data
     try:
         if branch in ancestors:

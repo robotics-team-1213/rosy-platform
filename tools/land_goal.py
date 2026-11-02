@@ -168,6 +168,29 @@ def affects_window(row: dict, rows: list[dict], t0: float, t1: float) -> bool:
     return False
 
 
+def member_topics(members, seen: set[str]) -> set[str] | None:
+    """A complete child tree proves error scope even when its candidate pins cannot be verified."""
+    if not isinstance(members, list) or known_topics(
+            [m.get("branch") if isinstance(m, dict) else None for m in members]) is None:
+        return None
+    found = set()
+    for m in members:
+        branch = m["branch"]
+        if branch in seen or m.get("members_error"):
+            return None
+        seen.add(branch)
+        if ROLLUP.fullmatch(branch):
+            children = member_topics(m.get("members"), seen)
+            if children is None:
+                return None
+            found.update(children)
+        elif "members" in m:
+            return None
+        else:
+            found.add(topic(branch))
+    return found
+
+
 def member_origins(rows: list[dict], common: Path, members, sha: str, landed_at: float, seen: set[str]) -> list[dict]:
     """Verify each edge against its pinned parent, returning only unique logical leaves."""
     if not isinstance(members, list) or not members:
@@ -249,11 +272,7 @@ def normalize(rows: list[dict], common: Path, t0: float | None = None,
         except (OSError, ValueError, TypeError, KeyError, RecursionError) as exc:
             r["members"] = []  # an incomplete carrier is never substituted for its logical members
             r["metrics_incomplete"] = True
-            r["incomplete_topics"] = known_topics([m.get("branch") if isinstance(m, dict) else None
-                                                   for m in members]) if isinstance(members, list) else None
-            if isinstance(members, list) and any(isinstance(m, dict) and isinstance(m.get("branch"), str)
-                                                 and ROLLUP.fullmatch(m["branch"]) for m in members):
-                r["incomplete_topics"] = None  # a missing child tree cannot prove its affected leaf topics
+            r["incomplete_topics"] = member_topics(members, {branch})
             issues.append((r, f"INCOMPLETE: {branch}: member completion unavailable ({exc})"))
     return result, [message for r, message in issues if t0 is None or t1 is None or affects_window(r, result, t0, t1)]
 
