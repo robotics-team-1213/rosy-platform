@@ -13733,6 +13733,13 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 소스 회귀·입력 재계산이며 main 적용과 SLO 달성을 주장하지 않는다.
 - CE: 기존 Nov1 교훈의 measurement trap을 갱신했다. ticket lead로 바꾸면 retry 이전의 대기 시간이 사라지는 비가시 판단과 검증 한계를 기록한다.
 
+## 2026-11-02 · uncommitted · D-963 USB 카메라 역할 승인 결정과 API v1.350
+
+- 변경: ADR D-963과 API 참조 v1.350(`workcell-observations/{workcell_id}/usb-devices`). 구현은 deploy·fleet·contracts·web 로그를 따른다.
+- 증거: API 버전 pin 8곳 갱신, 구현 시험은 deploy·fleet 로그.
+- gate 변화: 없음. 실제 USB 카메라를 꽂아 승인하는 현장 수용은 하지 않았다.
+- CE: 해당 없음 — 새 기능이며 장애 해결이 아니다. 결정은 D-963에 있다.
+
 ## 2026-11-03 · uncommitted · fix(landing): 분할 중복과 중첩 rollup 집계를 보완한다
 - 변경: 원격 호출 분할 후 전체 argv가 같은 항목만 첫 순서대로 제거한다. rollup의 직접 회원 소유권은 유지하며 자식 metadata를 실제 완료 이벤트에 보존하고, 집계는 부모 candidate·원래 ticket을 검증한 leaf만 닫는다. 순환·중복·미확인 pin은 불완전으로 유지하고 확인 가능한 leaf 영향 범위는 보존한다.
 - 증거: 실제 같은 SHA/tree/환경의 body 중복 5쌍을 확인했다. 소스 `3bb09294bb` 원격 split/isolation/remote_pytest 137 PASS, `d48e9f8e65` 원격 goal/rollup 55 PASS, 모두 skip/NEW/known/flaky 0. 선행 committed RED는 분할 중복 2건·중첩 완료/검증 경계 8건·metadata 손상 보존/기간 scope 2건이었다. `d48e9f8e65`의 독립 검토에 추가 P1/P2가 없었으며 소유권·이벤트 관련 통합 검증은 착지 전에 확인한다.

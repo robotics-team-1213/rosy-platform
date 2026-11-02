@@ -419,7 +419,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                                  trust_forwarded=lan_camera_proxy)
     read_guard = [Depends(require_viewer)]
     from fleet.server.workcell_observation_routes import install_workcell_observation_routes
-    install_workcell_observation_routes(app, service=workcell_observations, require_viewer=require_viewer)
+    install_workcell_observation_routes(app, workcell_observations, require_viewer, require_named_operator, task_service)
 
     def require_camera_viewer(request: Request) -> SitePrincipal:
         # Enable only behind the site proxy; its other routes strip client copies.

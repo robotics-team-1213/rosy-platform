@@ -98,6 +98,7 @@ OWN = {
         "enrollment.js",
         "camera-pairing.js",
         "camera-peer.js",
+        "usb-camera.js",  # D-963 USB camera role approval
         "field-view.js",
         "field-layers.js",
         "map-fit-view.js",
