@@ -116,9 +116,9 @@ body[data-surface="console"] #vision-stage:fullscreen .surface-camera-frame,
 .line-signal { display: grid; grid-template-columns: auto auto minmax(0, 1fr); align-items: center; gap: var(--space-1) var(--space-2); padding: var(--space-2) var(--space-3); border: 2px dashed var(--status-warn); border-radius: var(--radius-control); background: var(--surface-recessed); }
 .line-signal-kind { color: var(--status-warn); font: var(--weight-emphasis) var(--text-micro)/var(--leading-flat) var(--body); }
 .line-signal-lamp { width: 0.875rem; height: 0.875rem; border-radius: 50%; border: 2px solid var(--nominal-quiet); }
-.line-signal[data-lamp="green"] .line-signal-lamp { background: var(--status-good); border-color: var(--status-good); }
-.line-signal[data-lamp="yellow"] .line-signal-lamp { background: var(--status-warn); border-color: var(--status-warn); }
-.line-signal[data-lamp="red"] .line-signal-lamp { background: var(--status-crit); border-color: var(--status-crit); }
+.line-signal[data-lamp="green"] .line-signal-lamp { background: var(--signal-go); border-color: var(--signal-go); }
+.line-signal[data-lamp="yellow"] .line-signal-lamp { background: var(--signal-caution); border-color: var(--signal-caution); }
+.line-signal[data-lamp="red"] .line-signal-lamp { background: var(--signal-stop); border-color: var(--signal-stop); }
 .line-signal-name, .line-signal-note, .line-signal[data-lamp="unknown"] .line-signal-text { color: var(--nominal-quiet); }
 .line-signal-name, .line-signal-text, .line-signal-stop, .line-signal-note { margin: 0; overflow-wrap: anywhere; }
 .line-signal-text, .line-signal-stop, .line-signal-note { grid-column: 1 / -1; }
