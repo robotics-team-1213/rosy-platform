@@ -141,6 +141,30 @@ def test_affected_overtime_preserves_full_origin_and_final_publisher_eligibility
     assert green_full(main, landed)
 
 
+def test_guard_overtime_prepares_outside_and_keeps_full_origin(full_anchor, monkeypatch):
+    main, wt, base, candidate, _, _ = full_anchor
+    guard_calls, prepared = [], []
+    real_prepare = land.land_prepare.prepare
+
+    def guard(wt_, args, invocations, logdir, round_no, run_tests, **kw):
+        guard_calls.append(round_no)
+        if len(guard_calls) == 1:
+            raise land.Overtime("guard consumed the turn budget")
+        return []
+
+    def outside(*args, **kw):
+        prepared.append(args[-2])
+        return real_prepare(*args, **kw)
+
+    monkeypatch.setattr(land.land_guards, "first", guard)
+    monkeypatch.setattr(land.land_prepare, "prepare", outside)
+    monkeypatch.setattr(land, "select", lambda *a, **k: ([["pkg/test"]], None))
+    assert land.main(["--tests", "auto"]) == 0
+    assert prepared == [[["pkg/test"]]] and "pre" in guard_calls
+    record = land.land_record.read(main, git(main, "rev-parse", "HEAD"))
+    assert record["tier"] == "full" and record["prepared_candidate"] == candidate and record["prepared_on"] == base
+
+
 def test_again_retains_original_full_base_when_main_moves_during_preparation(full_anchor, monkeypatch):
     main, wt, base, candidate, path, original = full_anchor
     args = land.argparse.Namespace(tests="auto", no_cache=False, queue_timeout=0)

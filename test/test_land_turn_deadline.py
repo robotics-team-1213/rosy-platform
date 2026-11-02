@@ -1,6 +1,7 @@
 """A turn must release remote jobs even when no invocation has finished."""
 
 import threading
+import json
 
 import pytest
 
@@ -114,3 +115,73 @@ def test_the_ticket_keeps_the_sent_back_count_across_a_relaunch(tmp_path, monkey
     assert land.land_checks.overtimes(land, fresh) == 1
     land.land_queue.set_status(ticket, "preparing", overtime=2)
     assert land.land_checks.overtimes(land, fresh) == 2
+
+
+def test_guard_and_body_share_the_budget_from_turn_acquisition(cached, monkeypatch):
+    from test_land import GREEN, _runner
+    wt, _, _ = cached
+    now, armed = [1000.0], []
+
+    class Timer:
+        def __init__(self, seconds, function):
+            armed.append(seconds)
+
+        def start(self): pass
+        def cancel(self): pass
+        def join(self): pass
+
+    monkeypatch.setattr(land.time, "monotonic", lambda: now[0])
+    monkeypatch.setattr(threading, "Timer", Timer)
+    queue = land.land_queue
+    qdir = queue.queue_dir(wt)
+    ticket = queue.take(qdir, "feat/x")
+    monkeypatch.setattr(queue, "_held", [ticket])
+    queue.wait(qdir, ticket, 0)
+    now[0] = 1180  # mandatory merge/selection/lint work already used three minutes
+    run = _runner({"pkg/test": GREEN})
+
+    def remote(*a, **kw):
+        result = run(*a, **kw)
+        now[0] += 120
+        return result
+
+    monkeypatch.setattr(land.remote_pytest, "run", remote)
+    args = land.argparse.Namespace(tests="auto", node=False, no_cache=True)
+    for phase in ("g1", 1):
+        land.run_tests(wt, args, [["pkg/test"]], wt.parent / "logs", phase)
+    assert armed == [420, 300], "guard and body must not each get a fresh ten-minute budget"
+
+
+def test_expiry_marks_preparing_while_remote_cancellation_is_still_draining(cached, monkeypatch):
+    wt, _, _ = cached
+    now, timers, events = [0.0], [], []
+
+    class Timer:
+        def __init__(self, seconds, function): self.function = function
+        def start(self): timers.append(self)
+        def cancel(self): pass
+        def join(self): pass
+
+    monkeypatch.setattr(threading, "Timer", Timer)
+    monkeypatch.setattr(land.time, "monotonic", lambda: now[0])
+    monkeypatch.setattr(land.land_checks, "turn_wanted", lambda *a: True)
+    monkeypatch.setattr(land.land_events, "emit", lambda event, **kw: events.append(event))
+    queue = land.land_queue
+    qdir = queue.queue_dir(wt)
+    ticket = queue.take(qdir, "feat/x")
+    monkeypatch.setattr(queue, "_held", [ticket])
+    queue.wait(qdir, ticket, 0)
+
+    def draining(invocations, logs, *a, stop, **kw):
+        now[0] = 601
+        timers[0].function()
+        assert stop.is_set()
+        assert json.loads(ticket.read_text())["status"] == "preparing", "drain still held the turn"
+        return [land.remote_pytest.CANCELLED] * len(invocations)
+
+    monkeypatch.setattr(land.remote_pytest, "run", draining)
+    args = land.argparse.Namespace(tests="auto", node=False, no_cache=True)
+    with pytest.raises(land.Overtime):
+        land.run_tests(wt, args, [["pkg/test"]], wt.parent / "logs", 1)
+    assert not queue.release(ticket, "outside prepare", started=0)
+    assert events.count("released") == 1
