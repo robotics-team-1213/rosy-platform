@@ -144,6 +144,15 @@ def test_a_stopped_batch_goes_back_to_the_untouched_leader_branch_and_clears_its
     assert not land_batch.in_main(land, wt, "feat/m")
 
 
+def test_duplicate_batch_branches_stop_before_preparation(repos, tmp_path, monkeypatch):
+    main, wt, rows = batch_repos(repos, tmp_path)
+    qdir, ticket = tmp_path / "q", queue.take(tmp_path / "q", "feat/x", status="preparing")
+    monkeypatch.setattr(land, "select", lambda *a, **k: ([], None))
+    monkeypatch.setattr(land_batch.land_prepare, "prepare", lambda *a: pytest.fail("duplicate reached preparation"))
+    assert land_batch.lead(land, wt, "feat/x", land.argparse.Namespace(queue_timeout=0), sys.executable, qdir,
+                           ticket, main, [rows[0], rows[0]], {}) == (None, [])
+
+
 def test_an_affected_batch_that_selects_the_full_tier_stops_before_any_pretest(repos, tmp_path, monkeypatch):
     main, wt, rows = batch_repos(repos, tmp_path)
     qdir, ticket = tmp_path / "q", queue.take(tmp_path / "q", "feat/x", status="preparing")

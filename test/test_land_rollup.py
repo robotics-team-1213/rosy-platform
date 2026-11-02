@@ -100,6 +100,14 @@ def test_build_merges_the_members_into_one_branch_and_records_them(repo, monkeyp
         (expected[rows[i]["branch"]], rows[i]["ticket"]) for i in (0, 2)]
 
 
+def test_build_rejects_duplicate_branches_from_legacy_queue_rows(repo):
+    main, snapshot = repo
+    row = snapshot("fix/a", {"pkg/a.py": "x = 2\n"})
+    with pytest.raises(land_rollup.land.Stop, match="duplicate"):
+        land_rollup.build(main, [{**row, "ticket": "a1"}, {**row, "ticket": "a2"}], NOW,
+                          start=lambda *a: pytest.fail("duplicate branch reached admission"))
+
+
 @pytest.mark.parametrize("log, groups", [("[land] STOP: NEW failure in pkg/test", [["a", "b"], ["c", "d", "e"]]),
                                          ("[land] STOP: merge aborted; resolve by hand", [["a"], ["b"], ["c"], ["d"],
                                                                                          ["e"]])])

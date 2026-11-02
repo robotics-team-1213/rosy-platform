@@ -237,6 +237,22 @@ def test_pinned_train_without_its_recorded_queue_origin_is_incomplete(goal_repo,
     assert "FAIL: logical landing metrics incomplete" in capsys.readouterr().out
 
 
+@pytest.mark.parametrize("kind", ["train-members", "train-branches", "rollup-members"])
+def test_duplicate_completion_branches_are_incomplete(goal_repo, kind):
+    events, start = goal_repo
+    sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+    members = [dict(branch="fix/a", ticket=t, candidate=sha) for t in ("a1", "a2")]
+    rows = [ev(start, "queue", branch="fix/a", ticket="a1"),
+            ev(start + 10, "queue", branch="fix/a", ticket="a2", pid=2)]
+    if kind == "rollup-members":
+        rows.append(ev(start + 60, "landed", branch="land/fix/land-rollup-x", sha=sha, members=members))
+    else:
+        fields = dict(branches=["fix/a"], members=members) if kind == "train-members" else dict(branches=["fix/a", "fix/a"])
+        rows.append(ev(start + 60, "train", branch="fix/a", sha=sha, result="landed", **fields))
+    _, warnings = land_goal.normalize(rows, events.parent)
+    assert warnings, "one branch cannot become two logical completions through competing tickets"
+
+
 def test_goal_cli_recovers_historical_rollup_members_without_rewriting_events(goal_repo, monkeypatch, capsys):
     events, start = goal_repo
     sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
