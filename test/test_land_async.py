@@ -122,6 +122,56 @@ def test_a_landing_refused_only_by_a_full_queue_waits_for_room(repo, room):
     assert (tree.parent / (tree.name + ".stopped")).exists() is not room
 
 
+def test_expired_room_deadline_refuses_even_a_free_queue(repo, monkeypatch):
+    _, dev = repo
+    monkeypatch.setattr(tool.time, "monotonic", lambda: 11)
+    monkeypatch.setattr(tool._queue(), "full", lambda qdir: None)
+    assert not tool.wait_for_room(dev, 10)
+
+
+@pytest.mark.parametrize("room_returns_late", [False, True])
+def test_supervisor_retry_deadline_is_authoritative(repo, monkeypatch, room_returns_late):
+    _, dev = repo
+    snap, log = tool.start(dev, [], NOW, lambda *a: None)
+    tree = log.parent / log.name.removesuffix(".log")
+    now, runs, waits = [0], [], []
+    monkeypatch.setattr(tool.time, "monotonic", lambda: now[0])
+    monkeypatch.setattr(tool, "ROOM_WAIT_S", 10)
+
+    def failed(argv, cwd, stdout, stderr, **kw):
+        runs.append(argv)
+        stdout.write(f"[land] STOP: {tool.QUEUE_FULL} (12/12 tickets)\n" if len(runs) == 1
+                     else "[land] STOP: unrelated failure\n")
+        if not room_returns_late:
+            now[0] = 11
+        return 1
+
+    def room(*args):
+        waits.append(args)
+        now[0] = 11
+        return True
+
+    assert tool.supervise(tree, snap, [], run=failed, room=room) == 1
+    assert len(runs) == 1, "an expired supervisor must not retry even if the room callback returns True"
+    assert len(waits) == int(room_returns_late)
+    assert (tree.parent / (tree.name + ".stopped")).exists()
+
+
+def test_captured_queue_full_inside_a_new_failure_is_not_an_admission_refusal(repo):
+    _, dev = repo
+    snap, log = tool.start(dev, [], NOW, lambda *a: None)
+    tree = log.parent / log.name.removesuffix(".log")
+
+    def failed(argv, cwd, stdout, stderr, **kw):
+        stdout.write(f"FAILED test_queue_full\nCaptured stdout call\n[land] STOP: {tool.QUEUE_FULL} (12/12 tickets)\n"
+                     "[land] STOP: NEW failure in test_queue_full; not landing\n")
+        return 1
+
+    assert tool.supervise(tree, snap, [], run=failed,
+                          room=lambda *args: pytest.fail("a confirmed NEW failure must not retry")) == 1
+    assert (tree.parent / (tree.name + ".stopped")).exists()
+
+
 def test_the_supervisor_never_holds_the_callers_worktree(tmp_path, monkeypatch):
     """Windows cannot delete a folder that a live process has as its cwd (2026-10-28: freed worktrees stayed)."""
     caller = tmp_path / "worktree"
