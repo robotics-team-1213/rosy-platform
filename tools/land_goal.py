@@ -45,6 +45,9 @@ def train_origins(rows: list[dict], train: dict) -> list[dict]:
             raise ValueError("invalid batch origins")
         if {m["branch"] for m in members} != set(train["branches"]):
             raise ValueError("batch origins disagree with selected branches")
+        if any(not any(q["event"] == "queue" and q.get("branch") == m["branch"]
+                       and q.get("ticket") == m["ticket"] and q["t"] <= train["t"] for q in rows) for m in members):
+            raise ValueError("missing recorded batch queue origin")
         return members
     formed = [r["t"] for r in rows if r["event"] == "train" and r.get("result") == "formed"
               and r.get("pid") == train.get("pid") and r.get("branches") == train.get("branches")
