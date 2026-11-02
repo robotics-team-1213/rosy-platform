@@ -1,10 +1,10 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-10-08 | Updated: 2026-10-26 -->
+<!-- Generated: 2026-10-08 | Updated: 2026-11-02 -->
 
 # remote
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-26
+**Updated:** 2026-11-02
 
 ## Purpose
 
@@ -25,6 +25,7 @@ Run pytest for one commit on whichever of the model PC (OMEN), AI PC and site PC
 | `omx_hotfix.py` | Fix-and-retry loop for the OMX cell scripts on the site PC; deploys files only, never starts an arm session. `commit --base <rev> --ref <name> --file <repo-path>=<local-path> ... -m <msg>` builds the commit in a temporary `GIT_INDEX_FILE` (no worktree, shared index untouched; an existing file keeps its mode) and points `refs/rosy-wip/<name>` at it. `test --sha <sha> --log-dir <dir> -- <tests>` runs `remote_pytest.py --sha` and writes `<dir>/omx-hotfix-sha`. `deploy --sha <sha> --tested-log <dir>/run-1.txt [--host user@host]` refuses unless that marker names the sha and the log's last pytest summary has `passed` and no `failed`/`error`; it streams `git archive` of `deploy/robot` and `middleware/devices/omx/adapter` with `REVISION` (10-char sha) over ssh stdin into `~/rosy-test/omx-tools-<sha10>/` (unpacked beside it, then renamed in; skipped when its `REVISION` already matches), then points `~/rosy-test/omx-tools-current` at it with `ln -sfn` to a temp name and `mv -T`, printing the folder and previous target. `status` prints the link target and the five newest folders. Host from `--host` or `OMX_HOTFIX_HOST` only (D-226). Test `test/test_omx_hotfix.py` |
 | `lab_hosts.py` | Loads gitignored `private/lab-hosts.json`, or the file `ROSY_LAB_HOSTS` names. A linked worktree reads the main checkout's copy. A missing file is an empty map. `remote_pytest.py` and `tools/release/ship.py` call it. Optional `tailscale_profile` (an ID from `tailscale switch --list`, the lab uses `665e`): `remote_pytest.placed_hosts` exits naming both profiles and `tailscale switch <id>` when the `*` profile differs; never switches; no key, no CLI or an explicit `ROSY_TEST_HOSTS` skips |
 | `robot_status.py` | Read-only: browses `_rosy._tcp` with avahi on a lab PC on the robot LAN (`--via`, default `site_host`; the model and AI PCs have no avahi-utils, exit 127 says so) and prints each robot from `lab_hosts.robots()` plus unknown ones found, with advertised release, stage and tls; BEHIND when older than the newest found; also the newest published `payload-*` release (gh). Exit 1 when a known robot is not found. Test `test/test_robot_status.py` |
+| `update_ops.py` | Operator update CLI (D-957), the acting twin of `update_status.py`: `targets/status/run-now/hold/resume/forget-failed <all\|robots\|site\|robot name\|ssh target> [--unit rosy-*.service]`. Selectors resolve through `lab_hosts` + `deploy/hosts/services.yaml` (`channel: updater`, `run: oneshot`; timers and retired units excluded). run-now only starts the existing updater once (robot `sudo -n systemctl start rosy-auto-update.service`, site the D-441 installed CLI, user units `systemctl --user start`); every surface's gates (idle, battery, signature, freeze) keep their authority — a frozen gate just makes the run skip. Holds: robot native `--hours` (0<h≤168, robot-only selections; reason/holder charsets from `rosy-update-hold.ps1`), site native (no expiry), user units disable the timer and record who/why in gitignored `private/update-holds.json` beside lab-hosts.json. Hold and run-now are independent: a held unit still runs once, with a warning. Robot ssh reuses the operator key + pinned known_hosts under `%LOCALAPPDATA%/Rosy` (the `rosy-update-hold.ps1` path); host ssh is BatchMode like `update_status.py`. forget-failed is site-only. Test `test/test_update_ops.py` |
 | `hosts.example.json` | Tracked placeholders for `test_hosts`, `sim_hosts`, `site_host`, and `robots`. Copy it to `private/lab-hosts.json` on the main checkout |
 
 ## For AI Agents

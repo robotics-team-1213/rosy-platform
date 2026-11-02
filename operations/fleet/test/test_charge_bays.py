@@ -89,3 +89,10 @@ def test_the_route_shows_the_active_maps_bays_and_never_dispatches():
     body = client.get("/api/fleet/charge-bays", headers=auth).json()
     assert body["dispatch"] is False and [(b["bay"], b["state"]) for b in body["bays"]] == [("C1", "free")]
     assert client.get("/api/fleet/charge-bays").status_code == 401
+
+    import asyncio
+    app = client.app
+    seen = []
+    app.state.charge_bays.observe = lambda now, robots, bays: seen.append(([r.robot_id for r in robots], bays))
+    asyncio.run(app.state.charge_bays_tick())    # the background loop's step, no page open
+    assert seen == [(["rosy_60"], [Bay("C1", -0.414, 0.47)])]

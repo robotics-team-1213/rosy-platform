@@ -15,6 +15,7 @@ import { createDeviceWatch } from "./device-watch.js";
 import { createTripReplan } from "./trip-replan.js";
 import { createSignals } from "./signals.js";
 import { createChargeBaysView } from "./charge-bays-view.js";
+import { createPlatoonView } from "./platoon-view.js";
 import { createTrackingView } from "./tracking-view.js";
 import { createVisionView } from "/console/assets/vision-view.js";
 import { applyRoleToControls, namedOperatorReason, OPERATOR_REASON } from "/console/assets/authorization.js";
@@ -354,7 +355,7 @@ function refreshDiagnostics() {
     : "정상");
   const robotErrors = view.robots
     .filter((r) => r.error)
-    .map((r) => `${r.robot_id}: ${r.error.reachable === false ? "닿지 않음" : "거부"} ${r.error.code ?? ""}`.trim());
+    .map((r) => `${r.robot_id}: ${r.error.held ? "Fleet 보류" : r.error.reachable === false ? "닿지 않음" : "거부"} ${r.error.code ?? ""}`.trim());
   diag("diag-robots", robotErrors.length ? robotErrors.join(" · ") : "오류 없음");
   diag("diag-vision", el("vision-state")?.textContent ?? "—");
 }
@@ -372,6 +373,7 @@ mapView.bindCamera(visionView);
 // --- 신호등 (ROSY-SIGNAL-001) --------------------------------------------------
 
 const chargeBays = createChargeBaysView({ scope: pageScope, el, call, auth });
+const platoon = createPlatoonView({ scope: pageScope, el, call, auth });
 const trackingView = createTrackingView({ scope: pageScope, el, view, call, auth, onChanged: () => mapView.draw() });
 
 // 잠금·세션 확인·토큰 입력·비밀번호 로그인·개발 접속은 console-auth.js 팩토리가 가진다(D-798 3.2).
@@ -400,6 +402,7 @@ visionView.refreshSources();
 mapView.refresh();
 trackingView.refresh();
 chargeBays.refresh();
+platoon.refresh();
 pageScope.interval(() => { if (!auth.locked) formation.refreshFormation(); }, MAP_MS);
 pageScope.interval(refreshState, STATE_MS);
 pageScope.interval(() => { if (!auth.locked) workView.refresh(); }, MAP_MS);
@@ -410,6 +413,7 @@ pageScope.interval(refreshDiscovery, MAP_MS);
 pageScope.interval(refreshRobotApps, MAP_MS);
 pageScope.interval(() => mapView.refresh(), MAP_MS);
 pageScope.interval(() => chargeBays.refresh(), MAP_MS);
+pageScope.interval(() => platoon.refresh(), MAP_MS);
 pageScope.interval(() => mapView.refreshSightings(), STATE_MS);
 pageScope.interval(() => mapView.refreshTraffic(), STATE_MS);
 pageScope.interval(() => mapView.refreshGuide(), STATE_MS);  // D-536

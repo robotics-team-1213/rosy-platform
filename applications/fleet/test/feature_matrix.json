@@ -3635,6 +3635,7 @@
       ],
       "consumers": [
         "applications/fleet/web/charge-bays-view.js",
+        "applications/fleet/web/platoon-view.js",
         "applications/fleet/web/calibration/map-fit-view.js",
         "applications/fleet/web/map/map-polling.js",
         "applications/fleet/web/sitemap/site-map-camera.js",
@@ -3653,6 +3654,14 @@
           "resolution": "literal-or-template",
           "request_ids": [
             "GET:/api/fleet/charge-bays"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/platoon-view.js",
+          "expression": "/api/fleet/platoon",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/platoon"
           ]
         },
         {
@@ -3836,6 +3845,23 @@
           ],
           "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/charge-bays"
+        },
+        {
+          "id": "GET:/api/fleet/platoon",
+          "method": "GET",
+          "path": "/api/fleet/platoon",
+          "implementation": "operations/fleet/fleet/server/console/console_routes.py",
+          "handler": "platoon_gaps",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_lane_progress.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/platoon"
         },
         {
           "id": "GET:/api/fleet/guide",

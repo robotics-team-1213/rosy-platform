@@ -13547,6 +13547,20 @@ osy-d395-s1d\`.
 - 결정: D-960(사용자 결정 2026-11-02)
 - 수용: R 서명 재구성·R↔CELL-A 연결·브라우저 접속은 미수용(ADR 「수용 조건」, handoff `Rosy/.omc/handoffs/2026-11-02-control-units-per-arm-set.md`)
 
+## 2026-11-02 · uncommitted · fix(land): 준비된 착지도 서로 닿지 않으면 한 표로 묶는다 (D-889 추가 23)
+- 변경: `land_rollup`이 waiting 표를 받고 구성원 사이 시험 겹침을 거른다. 첫 구성원의 표를 이어받고(`land_queue.enter`가 pid·branch·worktree를 갱신), 이어받은 뒤 구성원을 멈춘다(`adopted`). `leave`는 남이 이어받은 표를 지우지 않는다.
+- 증거: 11-02 24시간 동안 대기열 변화의 75 %에 준비된 착지가 2개 이상 있었다. 원격 시험은 착지 기록에 남긴다.
+- gate 변화: 없음
+- 결정: D-889 추가 23(사용자 결정 2026-11-02)
+- 교훈: 없음
+
+## 2026-11-02 · uncommitted · feat(tools): 업데이트 운영 CLI update_ops (D-957)
+- 변경: `tools/remote/update_ops.py`(status/run-now/hold/resume/forget-failed, selector `all|robots|site|로봇|호스트`), 계약 시험 `test/test_update_ops.py`, 설계 `docs/plans/2026-11-02-update-ops-cli-design.md`, ADR D-957, `tools/remote/AGENTS.md` 행. 호스트 코드 변경 없음; PC 유닛 홀드 장부는 gitignored `private/update-holds.json`
+- 증거: 원격 시험 PC(ai/model) `test/test_update_ops.py test/test_update_status.py` 46 passed / exit 0 (sha 54124e716b). RED 확인: 시험만 커밋한 712c66a83d에서 모듈 부재로 전체 실패. 실패 0이라 known_failures 비교 대상 없음. 착지 전 pre-push·영향 등급은 land 파이프라인이 다시 돈다
+- gate 변화: 없음. 원격 pytest 통과는 실장치·현장 수용 아님(로봇 유닛명·사이트 sudo 범위는 설계 §7 현장 확인 항목)
+- 결정: D-957 Accepted. 게이트 우회·Fleet UI 조작·주기 변경은 범위 밖
+- 교훈: 없음
+
 ## 2026-11-02 · uncommitted · feat(fleet): 확인된 ARM 시도의 재관측 계약(D-930, API v1.334)
 
 - 변경: `POST/GET /api/fleet/arm-transfers/jobs/{id}/rechecks`를 추가했다. 기다리는 재관측은 기존 observation context에 `phase=RECHECK`로 나오고 같은 observations 경로로 받는다. 검사는 POST_ACTION과 같고 요청 뒤 시각·측정 관절을 요구한다. Action·claim·작업 상태·영수증·v1.330 근거는 바뀌지 않는다(`work/physical_transfer_rechecks.py`, `fleet_physical_transfer_rechecks` 테이블).
