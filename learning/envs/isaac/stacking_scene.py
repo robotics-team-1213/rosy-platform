@@ -122,6 +122,32 @@ def capture(world, camera, eye, path, *, container, overview=False):
     Image.fromarray(rgba.astype(np.uint8)).save(path)
 
 
+def real_capture(world, cameras, name, spec, path):
+    """Render one surveyed real camera (D-947 3): its pose, resolution and focal length in pixels; save a PNG at `path`."""
+    import numpy as np
+    from isaacsim.sensors.camera import Camera
+    from pxr import Gf
+    from PIL import Image
+    if name not in cameras:
+        position, focus, up = (Gf.Vec3d(*spec[k]) for k in ('eye', 'focus', 'up'))
+        rotation = Gf.Matrix4d().SetLookAt(position, focus, up).GetInverse().ExtractRotationQuat()
+        camera = Camera('/World/Real_'+name, position=np.array(position), resolution=(spec['width'], spec['height']))
+        camera.initialize()
+        camera.set_world_pose(np.array(position), np.array([rotation.GetReal(), *rotation.GetImaginary()]), camera_axes='usd')
+        camera.set_clipping_range(.01, 10.)
+        aperture = 36.  # mm; focal length in mm follows from the focal length in pixels
+        for key, value in (('horizontalAperture', aperture), ('verticalAperture', aperture*spec['height']/spec['width']),
+                           ('focalLength', spec['f_px']*aperture/spec['width'])):
+            camera.prim.GetAttribute(key).Set(value)
+        cameras[name] = camera
+    for _ in range(8):
+        world.render()
+    rgba = cameras[name].get_rgba()
+    if rgba is None or rgba.shape != (spec['height'], spec['width'], 4):
+        raise RuntimeError('Actual SDK image unavailable')
+    Image.fromarray(rgba.astype(np.uint8)).save(path)
+
+
 def add_ship_plate(stage, fixture):
     """The navy stud plate: one kinematic (never moving) body at /World/Bin, so the cargo contact views see plate and studs as
     'bin'. Visual mesh with the CAD chamfered dots; colliders are a plate box and one convex-hull mesh per dot (ship_plate.stud_solid). A static triangle-mesh collider gave inconsistent vertical contact forces (run s42p)."""
