@@ -25,6 +25,33 @@ ROOT = Path(__file__).resolve().parents[1]
 GUARDS = set(affected.GUARD_SET)
 
 
+def _assert_g1_timing_is_dedicated(invocations):
+    target = 'test/test_platform_g1_timing.py'
+    dedicated = [inv for inv in invocations if target in inv and 'ROSY_JOB_ALONE=1' in inv]
+    assert len(dedicated) == 1, invocations
+    assert '-pno:xdist' in dedicated[0] and '-ptools.g1_timing_gate' in dedicated[0]
+    for inv in invocations:
+        if inv == dedicated[0]:
+            continue
+        assert not any(word.split('::', 1)[0] == target for word in inv)
+        if 'test' in inv:
+            assert '--ignore=' + target in inv
+
+
+def test_g1_timing_full_ci_and_lab_have_one_exclusive_whole_file():
+    repo = affected.Repo.load(ROOT)
+    _assert_g1_timing_is_dedicated(affected.lab_full_invocations(repo))
+    matrix = affected.ci_matrix(repo, affected.Selection('full', []))['include']
+    _assert_g1_timing_is_dedicated([inv for entry in matrix for inv in entry['invocations']])
+
+
+@pytest.mark.parametrize('paths', [['test'], ['test/test_platform_g1_timing.py'],
+    ['test/test_platform_g1_timing.py::test_real_uds_round_trip_stays_inside_the_bound',
+     'test/test_affected_tests.py']])
+def test_g1_timing_owner_selections_keep_the_whole_file_exclusive(paths):
+    _assert_g1_timing_is_dedicated(affected.pack(affected.Repo.load(ROOT), paths))
+
+
 def test_fleet_development_module_selects_application_contracts():
     repo = affected.Repo.load(ROOT)
     module = repo.module_for('applications/fleet/dev/sample/engine.py')
