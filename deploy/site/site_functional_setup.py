@@ -223,11 +223,13 @@ class Host:
         self.command(['docker', 'restart', 'rosy-site-fleet-1'])
 
     def guard(self):
-        operator = _secret('operator.token')
-        control = self.get('/api/fleet/dispatch-control', operator)
+        credential = (self.token_file if self.token_file.exists() and any(
+            check.get('token_file') == str(self.token_file)
+            for check in self.config.get('functional_checks', [])) else _secret('operator.token'))
+        control = self.get('/api/fleet/dispatch-control', credential)
         if control.get('queued_tasks') != 0 or control.get('unresolved_actions') != 0:
             raise ValueError('site has queued or unresolved work; setup deferred')
-        rows = self.get('/api/fleet/state', operator)['robots']
+        rows = self.get('/api/fleet/state', credential)['robots']
         if any(r.get('goal') or r.get('queued') or r.get('held') or r.get('yielding') for r in rows):
             raise ValueError('site has active robot work; setup deferred')
 
