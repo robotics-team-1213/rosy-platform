@@ -27,8 +27,8 @@
 
 ## 최근 기록
 
+- 2026-11-02 · c1af0160f4 · Web unification follow-up
 - 2026-11-02 · uncommitted · D-961 웹 제품 통합
 - 2026-11-01 · uncommitted · 레일 현재 표식 어휘 통일
 - 2026-11-01 · uncommitted · curation/perception: content_sha stand-in을 정본 소비로 대체
 - 2026-10-29 · 66e86cb0fb · Pilot 로컬 복구와 Learning 검수 대기 연결
-- 2026-10-29 · c38009ec42 · 작업 폭과 픽셀 승인 영역의 반응형 문맥

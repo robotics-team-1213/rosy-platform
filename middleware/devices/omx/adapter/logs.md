@@ -859,4 +859,9 @@
 - 변경: `test/test_omx_fleet_ros_actionserver.py`의 모듈 단계 `importorskip`을 조건 수집 가드로 바꿨다 — ROS 런타임이 없는 실험실 PC에서도 이 파일은 수집되어 "1 skipped"(exit 0)로 기록된다. 수집 단계 건너뛰기는 pytest exit 5(빈 실행)라, fleet 변경의 역방향 의존으로 이 파일이 선택된 모든 착지가 정지했다(D-785 착지 이후 처음으로 fleet 시험 파일을 고친 브랜치가 이 지뢰를 밟음).
 - 증거: 원격 시험은 커밋 후 이어 기록한다.
 - Gate: 없음. CE: 해당 없음 — 착지 인프라와의 상호작용이며 패턴은 이 기록으로 충분.
-- 2026-11-02 · a7f36cb999 · canonical CLI terminal 전달 시험은 SQLite 준비 중 fixture 관절 표본이 만료되면 submit 거절을 확인하지 않고 이후 goal KeyError로 실패했다. 이 시험에만 기존 seat-cleanup 시험과 같은 60초 표본 예산을 쓰고 LOCAL_ACCEPTED를 먼저 검사한다. 운영 신선도 한계·seat/admission·terminal 검사는 유지한다. 영상 fixture와 함께 원격 25 passed/exit0; 장치 수용·module gate 변화 없음. CE: 해당 없음 — fixture 범위와 선행 조건이 시험에 남는다.
+
+## 2026-11-02 · a7f36cb999 · Web unification follow-up
+
+- 변경: 2026-11-02 · a7f36cb999 · canonical CLI terminal 전달 시험은 SQLite 준비 중 fixture 관절 표본이 만료되면 submit 거절을 확인하지 않고 이후 goal KeyError로 실패했다. 이 시험에만 기존 seat-cleanup 시험과 같은 60초 표본 예산을 쓰고 LOCAL_ACCEPTED를 먼저 검사한다. 운영 신선도 한계·seat/admission·terminal 검사는 유지한다. 영상 fixture와 함께 원격 25 passed/exit0; 장치 수용·module gate 변화 없음. CE: 해당 없음 — fixture 범위와 선행 조건이 시험에 남는다.
+- 증거: committed SHA and remote results are recorded above; final consolidated receipts are retained in the unification validation record.
+- gate 변화: 없음. Source/browser checks do not establish deployment, ARM64, device or field acceptance.
