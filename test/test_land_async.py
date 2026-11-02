@@ -260,3 +260,16 @@ def test_concurrent_resumes_admit_only_one_supervisor(starting_lander):
     while not calls.exists() and time.monotonic() < until:
         time.sleep(.02)
     assert calls.read_text() == "run\n"
+
+
+def test_quick_success_without_a_ticket_reports_landed(repo):
+    main, dev = repo
+    snap, log = tool.start(dev, [], NOW, lambda *a: None)
+    tree = log.parent / log.name.removesuffix(".log")
+
+    def finish(*a):
+        process = subprocess.Popen(["git", "-C", str(main), "merge", "-q", "--ff-only", snap])
+        assert process.wait(timeout=5) == 0
+        return process
+
+    assert tool.resume(dev, tree.name, [], finish, wait=0, sleep=lambda s: None) == "landed"
