@@ -33,7 +33,9 @@ def test_site_candidate_is_commit_tagged_and_contains_sbom_and_image_hash(tmp_pa
                  "compose.pairing.yaml", "compose.omx.yaml", "compose.workcell.yaml", "compose.control-unit.yaml",
                  "pairing-sync-token.template.txt",
                  "compose.monitoring.yaml", "Caddyfile.monitoring",
-                 "compose.account.yaml", "Caddyfile.account"):
+                 "compose.account.yaml", "Caddyfile.account", "compose.account-backup.yaml",
+                 "rosy-account-backup.service", "rosy-account-backup.timer",
+                 "rosy-account-backup-check.service", "rosy-account-backup-check.timer"):
         (site / name).write_text(f"fixture:{name}", encoding="utf-8")
     (site / "rosy-site-stack.service").write_text(
         "Requires=docker.service\n"

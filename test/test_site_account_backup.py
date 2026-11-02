@@ -17,7 +17,7 @@ def test_account_maintenance_jobs_use_only_existing_authority_volume_and_own_ima
     assert config['volumes'] == {'account_state': {'external': True, 'name': 'rosy-site_account_state'}}
     assert set(config['services']) == {'account-backup', 'account-backup-check'}
     for job in config['services'].values():
-        assert job['image'] == 'rosy-site-account:${ROSY_SITE_IMAGE_TAG:-local}'
+        assert job['image'] == 'rosy-site-account:${ROSY_SITE_IMAGE_TAG:?set ROSY_SITE_IMAGE_TAG}'
         assert job['pull_policy'] == 'never' and 'build' not in job
         assert job['profiles'] == ['backup']
         assert job['entrypoint'] == ['python3', '/opt/rosy/site_db.py']
@@ -45,6 +45,7 @@ def test_account_backup_units_are_separate_opt_in_and_never_pull_or_build():
         unit = (ROOT / 'deploy/site' / name).read_text()
         assert '--project-name rosy-site' in unit
         assert '--env-file /etc/rosy/site/site.env' in unit
+        assert 'EnvironmentFile=/etc/rosy/site/site.env' in unit
         assert '-f /opt/rosy/candidate/deploy/site/compose.account-backup.yaml' in unit
         assert 'run --rm --no-deps --pull never ' in unit
         assert 'fleet' not in unit.lower() and 'ExecStartPre=' not in unit
@@ -77,3 +78,18 @@ def test_legacy_signed_inventory_needs_no_account_maintenance_group(candidate):
     manifest = json.loads((candidate[0] / 'release.json').read_text())
     assert not FILES & manifest['deployment_file_sha256'].keys()
     assert 'account' not in _verify(candidate)['verified_images']
+
+
+@pytest.mark.parametrize('complete', [False, True])
+def test_legacy_inventory_cannot_authorize_account_only_backup_jobs(candidate, complete):
+    root = candidate[0]
+    manifest = json.loads((root / 'release.json').read_text())
+    names = FILES if complete else {'compose.account-backup.yaml'}
+    import hashlib
+    for name in names:
+        path = root / 'deploy/site' / name
+        path.write_text('independent Account maintenance')
+        manifest['deployment_file_sha256'][name] = hashlib.sha256(path.read_bytes()).hexdigest()
+    (root / 'release.json').write_text(json.dumps(manifest))
+    with pytest.raises(_load_verifier().CandidateVerificationError, match='requires its own signed image'):
+        _verify(candidate)

@@ -20,6 +20,7 @@ RUN apt-get update \
     && useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin rosy \
     && install -d -o 10001 -g 10001 -m 0700 /var/lib/rosy-account
 COPY deploy/site/requirements-account.txt /opt/rosy/requirements.txt
+COPY deploy/site/site_db.py /opt/rosy/site_db.py
 RUN python3 -m venv /opt/rosy-venv \
     && pip install --no-cache-dir -r /opt/rosy/requirements.txt \
     && rm /opt/rosy/requirements.txt

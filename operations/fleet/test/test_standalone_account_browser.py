@@ -61,6 +61,7 @@ def test_standalone_existing_cookie_and_initial_password_resume_registered_app(s
                 expect(page.get_by_role('heading', name='Registered callback')).to_be_visible(timeout=15000)
                 assert 'code=' in page.url and 'state=standalone-browser' in page.url
                 page.goto(origin + '/console/profile')
+                expect(page.locator('ui-brand b')).to_have_text('Rosy Account')
                 expect(page.locator('#profile-content')).to_be_visible()
                 expect(page.locator('#profile-role')).to_have_text('운영자')
                 page.locator('#profile-name').fill('Account artifact administrator')
@@ -69,9 +70,12 @@ def test_standalone_existing_cookie_and_initial_password_resume_registered_app(s
                     page.locator('#profile-name-save').click()
                 assert saved.value.status == 200
                 page.goto(origin + '/console/accounts')
+                expect(page.locator('ui-brand b')).to_have_text('Rosy Account')
                 expect(page.locator('#account-list')).to_contain_text('bob')
                 context.clear_cookies()
                 page.goto(entry)
+                expect(page.get_by_role('heading', name='계정 로그인')).to_be_visible()
+                expect(page.locator('ui-brand b')).to_have_text('Rosy Account')
                 expect(page.locator('[data-login=form]')).to_be_visible()
                 page.locator('[data-login=login]').fill('bob')
                 page.locator('[data-login=password]').fill('bob!')

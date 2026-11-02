@@ -173,6 +173,55 @@ new account changes during recovery: do not overwrite the new DB with a stale
 pre-transition copy. Real-user password entry and allowed project operations are
 separate acceptance evidence.
 
+#### Independent Account database backups
+
+After the migrated Account is healthy, protect its separate authority volume
+with `rosy-account-backup.timer` and `rosy-account-backup-check.timer`. These
+opt-in units use the dedicated signed Account image and the standalone
+`compose.account-backup.yaml`; never append that maintenance file to
+`ROSY_SITE_PAIRING_COMPOSE`. Fleet-only sites do not enable these units.
+New five-image candidates must sign the complete five-file maintenance group.
+Historical three/four-image candidates remain valid only without this new group;
+maintenance never falls back to their Fleet image. Incremental candidates pin
+the jobs to the signed reused Account image reference.
+
+The backup job requires the exact existing external volume
+`rosy-site_account_state`; it cannot create an empty replacement authority.
+It runs as UID/GID10001 without network, privileges or signing-key mounts.
+The existing SQLite utility copies all tables, including authentication audit,
+with `--prune-history 0 --prune-audit 0`, retaining the newest fourteen backup
+files. Its source mount is writable only because the existing utility performs
+a best-effort WAL checkpoint; no authority or audit rows are pruned. The check
+job mounts only the backup directory read-only and verifies integrity and a
+maximum age of 48 hours every six hours. Both jobs forbid image pulls and have
+no build definition; a missing signed image fails.
+
+Create the separate protected host directory and install the units from the
+independently verified current candidate. Enable timers only after the first
+manual backup and check succeed:
+
+```sh
+sudo install -d -o 10001 -g 10001 -m 0700 /var/backups/rosy-account
+sudo docker volume inspect rosy-site_account_state >/dev/null
+for unit in rosy-account-backup.service rosy-account-backup.timer \
+            rosy-account-backup-check.service rosy-account-backup-check.timer; do
+  sudo install -m 0644 /opt/rosy/candidate/deploy/site/$unit /etc/systemd/system/$unit
+done
+sudo systemctl daemon-reload
+sudo systemctl start rosy-account-backup.service
+sudo systemctl start rosy-account-backup-check.service
+sudo systemctl enable --now rosy-account-backup.timer rosy-account-backup-check.timer
+```
+
+`ROSY_ACCOUNT_BACKUP_DIR` may select another approved protected directory in
+`site.env`; provision it with the same ownership/mode before running the jobs.
+The reused utility retains its `fleet-backup-*.sqlite3` filename convention
+inside this Account-only directory. Backups are identity secrets: keep encrypted
+off-site copies and separate protected signing-key/runtime-configuration backups.
+These jobs perform no restore. Never replace a live Account database with an
+older backup after password, grant, session or revocation changes; recovery needs
+an explicit reviewed procedure preserving the later security state.
+
 ### Initial in-process Account activation (D-757, historical compatibility)
 
 Prepare `/etc/rosy/account/authority.json` and its signing key outside the checkout.

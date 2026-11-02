@@ -29,5 +29,6 @@
 !shared/web/icons/console.svg
 !shared/web/brand/mark.svg
 !deploy/site/requirements-account.txt
+!deploy/site/site_db.py
 **/__pycache__
 **/.pytest_cache

@@ -109,7 +109,8 @@ def candidate(tmp_path):
     sbom_dir.mkdir()
     docs.mkdir(parents=True)
 
-    deploy_files = (*DEPLOY_FILES, "verify_candidate.py", "site_users.py")
+    deploy_files = (*(n for n in DEPLOY_FILES if n not in _load_verifier().ACCOUNT_BACKUP_FILES),
+                    "verify_candidate.py", "site_users.py")
     for name in deploy_files:
         (deploy / name).write_text(f"candidate:{name}\n", encoding="utf-8")
     (deploy / ".env.example").write_text(
@@ -191,6 +192,10 @@ def _add_account(candidate):
         'image_id': image_ids['account'], 'platform': 'linux/amd64',
         'sbom': 'sbom/account.spdx', 'sbom_sha256': hashlib.sha256(sbom.read_bytes()).hexdigest()}
     manifest['image_archive_sha256'] = hashlib.sha256((root / 'images.tar').read_bytes()).hexdigest()
+    for name in _load_verifier().ACCOUNT_BACKUP_FILES:
+        path = root / 'deploy/site' / name
+        path.write_text('signed Account maintenance fixture')
+        manifest['deployment_file_sha256'][name] = hashlib.sha256(path.read_bytes()).hexdigest()
     (root / 'release.json').write_text(json.dumps(manifest))
     return candidate
 

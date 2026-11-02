@@ -28,6 +28,8 @@ DEPLOY_FILES = (
     "pairing-sync-token.template.txt",
     "compose.monitoring.yaml", "Caddyfile.monitoring",
     "compose.account.yaml", "Caddyfile.account",
+    "compose.account-backup.yaml", "rosy-account-backup.service", "rosy-account-backup.timer",
+    "rosy-account-backup-check.service", "rosy-account-backup-check.timer",
     "sign_candidate.py", "verify_candidate.py",
 )
 DOC_FILES = ("docs/reference/site-lan-discovery-profile.md",)
@@ -311,7 +313,8 @@ def build_candidate(root: Path, output_dir: Path, *, runner: Runner = subprocess
             path = deploy_dir / name
             text = path.read_text(encoding="utf-8")
             for service, row in images.items():
-                text = text.replace(f"rosy-site-{service}:${{ROSY_SITE_IMAGE_TAG:-local}}", row["reference"])
+                for variable in ('${ROSY_SITE_IMAGE_TAG:-local}', '${ROSY_SITE_IMAGE_TAG:?set ROSY_SITE_IMAGE_TAG}'):
+                    text = text.replace(f"rosy-site-{service}:" + variable, row["reference"])
             path.write_text(text, encoding="utf-8")
 
     for name, config, label in (

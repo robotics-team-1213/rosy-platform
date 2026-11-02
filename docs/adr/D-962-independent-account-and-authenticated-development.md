@@ -30,6 +30,8 @@ D-757은 단일 사람 신원과 앱별 세션·권한을 정했고 초기 구�
 
 ## Consequences
 
+Account의 별도 원장은 전용 서명 Account 이미지의 SQLite 도구로 독립 백업한다. 유지보수 Compose는 기존 `rosy-site_account_state` 외부 볼륨만 사용하며 키·Fleet 볼륨·네트워크를 연결하지 않는다. 마이그레이션한 Account가 정상임을 확인한 뒤에만 일일 백업과 6시간 주기의 신선도·무결성 검사 타이머를 명시적으로 활성화한다. 계정·감사 행은 정리하지 않고 백업 파일만 14개로 제한한다. 새 다섯 이미지 후보에는 유지보수 파일 다섯 개를 모두 서명하고, 과거 세/네 이미지 후보에는 이 파일을 허용하지 않는다. 이 백업은 이후 비밀번호·grant·세션·회수 변경을 덮는 일반 복구를 허용하지 않는다.
+
 Account receiver 모드에서 기존 `service`·`ai_observer` 기계 자격을 유지하며, 읽기 전용 상태 점검에는 `site-users.yaml`의 명시적인 `machine: true`, `role: viewer` 토큰만 추가로 허용한다. 이 표식은 역할이나 grant를 바꾸지 않는다. 일반 사람 Bearer 자격은 receiver에서 계속 거부한다. `machine: false`·비불리언 값·다른 역할·`login`·`password_scrypt`·`policy_admin` 필드와의 조합은 시작 단계에서 거부하며, 같은 principal ID를 사람 `site_logins`에 함께 둘 수 없다. YAML 로더와 직접 전달한 `site_users`에 같은 검증을 적용한다. 호스트의 원자적 사용자 레지스트리 편집 도구도 같은 형식을 검증하고 다른 사용자를 편집할 때 표식을 보존한다. 이 예외는 인증된 viewer 읽기 권한만 유지하며 operator 명령·제안 권한이나 익명 접근을 허용하지 않는다.
 
 Fleet과 Account의 로그·health·백업·복구를 구분한다. 기존 signer·candidate 검증은 계속 적용한다. 호환 import나 같은 이미지 사용은 임시 실행 종속을 의미하지 않으며, 독립 프로세스에서 Fleet import가 없음을 시험한다. 세션·키·이관 보존 시험과 실제 운영의 익명 차단·로그인 진입·서비스 독립성 관측을 분리해 보고한다.

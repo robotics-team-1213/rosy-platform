@@ -89,6 +89,7 @@ def test_invalid_reuse_proof_is_rejected(candidate, value):
     (["applications/fleet/web/login.html"], {"fleet", "account"}),
     (["operations/account/rosy_account/web_assets.py"], {"fleet", "account"}),
     (["deploy/site/requirements-account.txt"], {"account"}),
+    (["deploy/site/site_db.py"], {"fleet", "account"}),
     (["contracts/foundation/core_common/protocol/account_access.py"], {"fleet", "vision", "account"}),
 ])
 @pytest.mark.parametrize('independent_base', [False, True])
@@ -139,6 +140,9 @@ def test_builder_only_builds_and_ships_affected_images(candidate, tmp_path, chan
         compose = (output / ('deploy/site/compose.account.yaml' if s == 'account' else
                               'deploy/site/compose.yaml')).read_text()
         assert f"rosy-site-{s}:{COMMIT}" in compose
+        if s == 'account':
+            maintenance = (output / 'deploy/site/compose.account-backup.yaml').read_text()
+            assert f'rosy-site-account:{COMMIT}' in maintenance
 
 
 def test_runtime_reconciles_incremental_stack_without_down_or_restart(tmp_path):

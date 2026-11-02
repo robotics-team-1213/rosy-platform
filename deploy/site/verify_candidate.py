@@ -35,10 +35,14 @@ REQUIRED_DEPLOYMENT_FILES = (
     "pairing-sync-token.template.txt",
     "compose.monitoring.yaml", "Caddyfile.monitoring",
     "compose.account.yaml", "Caddyfile.account",
+    "compose.account-backup.yaml", "rosy-account-backup.service", "rosy-account-backup.timer",
+    "rosy-account-backup-check.service", "rosy-account-backup-check.timer",
     "sign_candidate.py", "verify_candidate.py",
 )
 REQUIRED_DOCUMENT_FILES = ("docs/reference/site-lan-discovery-profile.md",)
 ACCOUNT_DEPLOYMENT_FILES = ("compose.account.yaml", "Caddyfile.account")
+ACCOUNT_BACKUP_FILES = ("compose.account-backup.yaml", "rosy-account-backup.service", "rosy-account-backup.timer",
+                        "rosy-account-backup-check.service", "rosy-account-backup-check.timer")
 MONITORING_DEPLOYMENT_FILES = ("compose.monitoring.yaml", "Caddyfile.monitoring")  # D-936
 SERVICES = ("fleet", "vision", "proxy", "postgres")
 ACCOUNT_SERVICES = (*SERVICES, "account")
@@ -124,6 +128,10 @@ def _verify_candidate_content(candidate_dir: Path, *, manifest_bytes: bytes | No
     # Preserve verification/rollback of earlier signed candidates; the new pair is indivisible.
     if not set(hashes) & set(ACCOUNT_DEPLOYMENT_FILES):
         required.difference_update(ACCOUNT_DEPLOYMENT_FILES)
+    if not (isinstance(manifest.get('images'), dict) and 'account' in manifest['images']):
+        if set(hashes) & set(ACCOUNT_BACKUP_FILES):
+            raise CandidateVerificationError('Account maintenance requires its own signed image inventory')
+        required.difference_update(ACCOUNT_BACKUP_FILES)
     if "compose.omx.yaml" not in hashes:
         required.discard("compose.omx.yaml")
     if "compose.workcell.yaml" not in hashes:
