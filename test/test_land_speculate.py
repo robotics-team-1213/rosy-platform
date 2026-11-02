@@ -145,8 +145,8 @@ def test_the_branch_worktree_is_never_touched_even_when_the_speculative_run_rais
     assert str(holder) not in git(main, "worktree", "list")
 
 
-def test_a_held_turn_runs_the_root_part_and_lands_a_green_full_record(queued, monkeypatch):
-    """Robot-45's rule 3: the record's base is the turn's main, an ancestor of the landed commit."""
+def test_a_held_turn_runs_the_root_part_and_preserves_full_provenance(queued, monkeypatch):
+    """Retain the turn's FULL provenance; mocked checks provide no executed publication proof."""
     main, wt, base, peer, qdir, ticket, ran, _ = queued
     kept = _prepare(wt, qdir, ticket)
     for path in qdir.glob("*.json"):
@@ -163,7 +163,7 @@ def test_a_held_turn_runs_the_root_part_and_lands_a_green_full_record(queued, mo
     assert record["tier"] == "full" and git(main, "merge-base", "--is-ancestor", record["base"], landed) == ""
     assert record["base"] == git(main, "rev-parse", "HEAD^2") and SELECTED[0] in record["invocations"]
     from publish_main import green_full
-    assert green_full(main, landed)
+    assert not green_full(main, landed)
     events = [json.loads(line) for line in (main / ".git" / land.land_events.EVENTS).read_text().splitlines()]
     assert [e["held"] for e in events if e["event"] == "speculation" and e["stage"] == "turn"] == [True]
     assert kept["chain"] == [peer]
