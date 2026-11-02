@@ -544,7 +544,7 @@ def test_ci_fleet_shards_balance_measured_slow_files_without_losing_tests():
 def test_account_native_tests_are_required_in_full_and_source_affected_ci():
     repo = affected.Repo.load(ROOT)
     suite = 'operations/account/test'
-    assert any(suite in invocation for invocation in affected.full_invocations(repo))
+    assert any(suite in invocation for invocation in affected.lab_full_invocations(repo))
     selections = [affected.Selection('full', []),
                   affected.select(repo, ['operations/account/rosy_account/app.py'])]
     for selection in selections:
