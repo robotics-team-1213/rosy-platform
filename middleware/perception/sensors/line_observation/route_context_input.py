@@ -4,7 +4,7 @@ import math
 
 from core_common.protocol.route_context import RouteContext
 
-from .sensing.perception.lane_keep_junction import JUNCTION_AHEAD_M
+from perception_runtime.perception.lane_keep_junction import JUNCTION_AHEAD_M
 
 
 ROUTE_CONTEXT_STALE_S = 0.5

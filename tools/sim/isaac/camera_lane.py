@@ -10,10 +10,10 @@ import numpy as np
 from control.sensing.perception.camera_visibility import visibility_reason
 from control.sensing.perception.drivable.drivable_keep import keep_step, scan_summary
 from control.sensing.perception.drivable.drivable_steer import DrivableSteer
-from control.sensing.perception.lane import LaneObservation
-from control.sensing.perception.lane_keep import LaneKeeper, clean_learned_mask
+from perception_runtime.perception.lane import LaneObservation
+from perception_runtime.perception.lane_keep import LaneKeeper, clean_learned_mask
 from control.sensing.perception.lane_containment import containment_payload
-from control.sensing.perception.learned.drivable_paint import boundary_paint, lateral_px_per_m
+from perception_runtime.perception.learned.drivable_paint import boundary_paint, lateral_px_per_m
 from control.sensing.perception.learned.paint_motion import OdomHistory
 from control.sensing.perception.learned.paint_worker import LearnedPaintWorker
 from core_events.events.bus import EventBus

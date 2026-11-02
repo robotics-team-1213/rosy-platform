@@ -19,7 +19,8 @@ NODE_KEY = "/**/line_observer_node"
 
 def _installed_control() -> None:
     # Native isolated and merged colcon layouts; system numpy keeps precedence.
-    for root in (Path("/opt/rosy/current/install/control"), Path("/opt/rosy/current/install")):
+    for root in (Path("/opt/rosy/current/install/control"), Path("/opt/rosy/current/install/perception_runtime"),
+                 Path("/opt/rosy/current/install")):
         for site in (*root.glob("lib/python*/site-packages"), *root.glob("local/lib/python*/dist-packages")):
             if str(site) not in sys.path:
                 sys.path.append(str(site))
@@ -27,8 +28,8 @@ def _installed_control() -> None:
 
 def installed_model_revision() -> str:
     _installed_control()
-    from control.sensing.perception.learned.manifest import load_manifest, verify_files
-    from control.sensing.perception.learned.signature import verify_manifest_signature
+    from perception_runtime.perception.learned.manifest import load_manifest, verify_files
+    from perception_runtime.perception.learned.signature import verify_manifest_signature
     pointer = Path(MODEL_POINTER)
     if pointer.stat().st_size > 4096:
         raise ValueError("model pointer too large")

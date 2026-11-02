@@ -63,18 +63,6 @@ KNOWN_VIOLATIONS = {
     ("integrations/robots/omx", "middleware/apps/device/omx/adapter"): (
         "integrations -> middleware: cell_workflow reuses the adapter pick-place journal"
     ),
-    ("learning/curation/perception", "middleware/perception"): (
-        "learning -> middleware: dataset tools reuse control.recording topics and perception helpers"
-    ),
-    ("learning/registry/perception", "middleware/perception"): (
-        "D-637 inherited model inspection/benchmark imports; baseline control import symbols unchanged"
-    ),
-    ("learning/evaluation/perception", "middleware/perception"): (
-        "D-637 inherited replay camera-ground/lane-keep imports; baseline control import symbols unchanged"
-    ),
-    ("learning/training/perception", "middleware/perception"): (
-        "D-637 retained trainer manifest/review imports; baseline control import symbols unchanged"
-    ),
 }
 
 

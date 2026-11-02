@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from control.sensing.perception.image_frame import image_msg_to_frame
+from perception_runtime.perception.image_frame import image_msg_to_frame
 
 
 def _msg(encoding, arr):

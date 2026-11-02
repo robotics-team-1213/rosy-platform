@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from control.sensing.perception.camera_ground import simulation_ground_plane
+from perception_runtime.perception.camera_ground import simulation_ground_plane
 
 from control.sensing.perception.road import (
     PreviewRateLimiter,

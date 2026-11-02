@@ -21,7 +21,7 @@ import math
 import numpy as np
 
 from .camera_extrinsic import FINE_STEPS, PC_FINE_STEPS
-from .lane_keep_lines import PAINT_HALF_WIDTH_M, paint_half_width  # noqa: F401 -- one value with the keeper
+from perception_runtime.perception.lane_keep_lines import PAINT_HALF_WIDTH_M, paint_half_width  # noqa: F401 -- one value with the keeper
 
 #: Lateral error of the lane edge detector in image pixels on the Gazebo camera (547b2d509).
 #: Real grounds take theirs from the profile key detector_lateral_px.

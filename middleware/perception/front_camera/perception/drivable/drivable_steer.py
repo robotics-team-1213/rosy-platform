@@ -32,7 +32,7 @@ from core_common.robot_body import NOMINAL_BODY
 
 from .target import CROSS_MIN_ALONG_M, CROSS_TOL_M, MAX_TARGET_CURVATURE, ROW_BAND_M, _centre_target, _col_y, _crosses, _exit_rows, _local_floor, _observed_target, _row_x, _to_current, _to_world, one_edge_centre  # noqa: F401 (re-exported)
 from .route_guard import observed_route_candidate, route_exit_point
-from ..lane_keep_lines import PAINT_HALF_WIDTH_M
+from perception_runtime.perception.lane_keep_lines import PAINT_HALF_WIDTH_M
 
 LOOKAHEAD_M = 0.25
 CORRIDOR_HALF_M = 0.03

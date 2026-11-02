@@ -1816,3 +1816,10 @@
 - 증거: pytest 9.2 후보 환경에서 기존 중첩 Python 목록 비교가 TypeError로 실패했고 단독 재현됐다. 수정 커밋의 전체 지각 모듈 원격 시험은 3563 passed / 113 skipped / NEW 0이며 독립 검토가 모양·좌표별 허용 오차 보존을 확인했다. 실행 원본은 native-cell-transport 작업 기록의 커밋 고정 호환 감사에 연결했다.
 - gate 변화: 없음. 전체 감사에는 별도 ROOT 시험의 E2BIG 1건이 있어 전체 통과로 보고하지 않는다. ROS 그래프·기기·현장 수용은 미실행이다.
 - CE: 해당 없음 — 자료 형식과 허용 오차의 이유는 비교식·이 기록으로 복원할 수 있다.
+
+## 2026-11-03 · uncommitted · refactor(perception): perception_runtime 분리 (D-964)
+- 변경: 학습 도구가 쓰던 import 닫힘 28개 모듈(`recording`, `keep_odom_veto`, 차선 판정 16개, `learned`의 모델 계약·실행 10개)을 `integrations/perception`(`perception_runtime`)으로 옮겼다. 이 패키지의 노드와 남은 모듈은 새 이름으로 import하고, `package.xml`은 `perception_runtime`을 exec_depend한다. 소스 실행에서는 `control/__init__.py`가 `integrations/perception`을 sys.path에 더한다. 이 모듈들만 시험하던 14개 시험은 새 패키지로 옮겼다.
+- 증거: 원격 시험 결과는 착지 기록에 남긴다.
+- gate 변화: 없음. 로봇 이미지 빌드와 실물 기동은 미실행이다.
+- 결정: D-964
+- 교훈: 없음.

@@ -21,7 +21,7 @@ import yaml
 from control import calibration_camera as step
 from control.calibration_camera import CalibrationCamera
 from control.sensing.perception import camera_extrinsic as ce
-from control.sensing.perception.camera_ground import nominal_ground_plane
+from perception_runtime.perception.camera_ground import nominal_ground_plane
 
 PROFILE_PATH = (Path(__file__).resolve().parents[3] / 'middleware' / 'devices' / 'pinky' / 'profile'
                 / 'config' / 'camera_nominal.yaml')

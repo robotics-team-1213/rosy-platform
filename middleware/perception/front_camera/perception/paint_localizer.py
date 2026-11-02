@@ -41,8 +41,8 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from .lane import _BRIGHT
-from .lane_bev import BirdsEye, cached_birds_eye
+from perception_runtime.perception.lane import _BRIGHT
+from perception_runtime.perception.lane_bev import BirdsEye, cached_birds_eye
 
 #: Paint raster. The STL's paint edges are exact; 2 mm keeps a 25 mm line
 #: 12 cells wide, finer than the 2.5 mm bird's-eye cell it is matched with.

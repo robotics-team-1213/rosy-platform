@@ -13,13 +13,13 @@ import cv2
 import numpy as np
 import pytest
 
-from control.sensing.perception.camera_ground import simulation_ground_plane
-from control.sensing.perception.crosswalk_stripes import crosswalk_extent
-from control.sensing.perception.lane_bev import BEV_CELL_M, BirdsEye
+from perception_runtime.perception.camera_ground import simulation_ground_plane
+from perception_runtime.perception.crosswalk_stripes import crosswalk_extent
+from perception_runtime.perception.lane_bev import BEV_CELL_M, BirdsEye
 from control.sensing.perception.lane_containment import (
     PAINT_HALF_WIDTH_M, RECEIVER_EXTRAPOLATION_M, SLOPE_SIGMAS, containment_payload)
-from control.sensing.perception.lane_keep import FIT_STRIDE, LaneKeeper
-from control.sensing.perception.lane_keep_lines import extract_lines, fit_cells
+from perception_runtime.perception.lane_keep import FIT_STRIDE, LaneKeeper
+from perception_runtime.perception.lane_keep_lines import extract_lines, fit_cells
 
 REPO = Path(__file__).resolve().parents[3]
 EVIDENCE = REPO / "docs" / "validation" / "d476-gazebo-rev1-2026-10-07" / "evidence" / "runs"
@@ -134,7 +134,8 @@ def test_a_boundary_without_a_stated_fit_error_leaves_uncertainty_unknown(bad):
 
 
 def test_keeper_and_containment_share_one_paint_half_width():
-    from control.sensing.perception import lane_containment, lane_keep_lines
+    from perception_runtime.perception import lane_keep_lines
+    from control.sensing.perception import lane_containment
     assert lane_containment.PAINT_HALF_WIDTH_M is lane_keep_lines.PAINT_HALF_WIDTH_M
     node = (REPO / "middleware" / "perception" / "sensors/line_observation" / "line_observer_node.py").read_text(encoding="utf-8")
     # The node hands its validated read-only lane_paint_half_width_m to the keeper too.

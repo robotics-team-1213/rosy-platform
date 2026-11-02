@@ -176,7 +176,7 @@ gaps:
     evidence:
       - docs/validation/d476-gazebo-rev1-2026-10-07/result.md
       - docs/validation/d476-gazebo-model-pc-2026-10-06/result.md:202-216
-      - middleware/perception/front_camera/perception/lane_keep_lines.py
+      - integrations/perception/perception_runtime/perception/lane_keep_lines.py
       - middleware/perception/front_camera/perception/lane_containment.py
       - middleware/drive/behaviors/line_follow/recovery/lane_return_evidence.py
       - middleware/perception/test/test_lane_slope_g16.py

@@ -7,7 +7,7 @@ import pytest
 
 from control.sensing.perception.ir_calibration import (
     channel_levels, compute_ir_calibration, ir_side, render_config, sign_errors)
-from control.sensing.perception.lane import IRLineCalibration
+from perception_runtime.perception.lane import IRLineCalibration
 from tools.device import ir_line_calibrate as tool
 
 CARPET = (1200.0, 1150.0, 1250.0)
