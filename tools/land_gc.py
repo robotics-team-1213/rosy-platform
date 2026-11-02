@@ -104,7 +104,7 @@ def plan(repo: Path, now: float, log_days: float, *, only: str | None = None) ->
             if status is None or any(status):
                 out.append(("keep", "dirty tree or ignored data", tree, branches))
             else:
-                row = ("remove", "landed or nothing unique", tree if tree.is_dir() else None, branches)
+                row = ("remove", "landed or nothing unique", tree, branches)
                 out.append(row)
                 out.states[(row[2], tuple(branches))] = (refs, head)
     if holder.is_dir():  # a landing's log outlives it by log_days, for its owner to read the STOP
@@ -132,8 +132,7 @@ def apply(repo: Path, rows) -> list[str]:
             continue
         key = (tree, tuple(items))
         try:
-            name = tree.name if tree else (Path(items[0]).name.removesuffix(".resume.log").removesuffix(".log")
-                                          if action == "log" else items[0].split("-batch")[0].replace("/", "-") if items else "")
+            name = tree.name if tree else Path(items[0]).name.removesuffix(".resume.log").removesuffix(".log")
             fresh = plan(repo, time.time(), rows.log_days, only=name)
             if row not in fresh or rows.states[key] != fresh.states.get(key):
                 problems.append(f"{tree or items}: state changed; kept")
@@ -141,11 +140,8 @@ def apply(repo: Path, rows) -> list[str]:
             if action == "log":
                 Path(items[0]).unlink()
                 continue
-            if tree is not None:
+            if tree.is_dir():
                 git(repo, "worktree", "remove", str(tree))
-                name = tree.name
-            else:
-                name = items[0].split("-batch")[0].replace("/", "-") if items else ""
             for branch, sha in rows.states[key][0]:
                 git(repo, "update-ref", "-d", f"refs/heads/{branch}", sha)
             for suffix in FILES:
