@@ -1,6 +1,7 @@
 """D-958 stage 1: a role service lends the GPU only while idle, and the host gives it back by itself."""
 import importlib.util
 import json
+import os
 from pathlib import Path
 import time
 
@@ -59,7 +60,11 @@ def test_tick_gives_back_on_role_work_or_after_the_lease_with_no_gpu_job(tenants
     situation(tenants, now + 1000)
     assert tenants.tick(now + 1000) == 'nothing'  # lease over but an Isaac run still holds the GPU
     situation(tenants, now + 1000, online=True)
-    assert tenants.tick(now + 1000) == f'released {UNIT}'  # a robot came online: the role wins at once
+    assert tenants.tick(now + 1000) == 'nothing'  # role work cannot preempt an admitted GPU job
+    assert tenants.release([UNIT]) == 'busy GPU held'
+    assert tenants.calls == [('stop', UNIT)] and tenants.mark(UNIT).exists()
+    (tenants.JOBS / 'isaac-x.resv').unlink()
+    assert tenants.tick(now + 1000) == f'released {UNIT}'
     assert tenants.calls[-1] == ('start', UNIT) and tenants.OWNER_MODE.read_text().strip() == 'available'
     assert not tenants.mark(UNIT).exists()
 
@@ -70,6 +75,20 @@ def test_tick_gives_back_a_forgotten_lease(tenants):
     tenants.claim([UNIT], now)
     situation(tenants, now + 1000)
     assert tenants.tick(now + 1000) == f'released {UNIT}'  # the batch died: nothing renewed, nothing holds the GPU
+
+
+@pytest.mark.parametrize('mode', ['owner_busy', 'shared'])
+def test_release_preserves_an_owner_choice_made_during_the_lease(tenants, mode):
+    now = time.time()
+    situation(tenants, now)
+    tenants.claim([UNIT], now)
+    changed = tenants.OWNER_MODE.stat().st_mtime_ns + 1_000_000
+    tenants.OWNER_MODE.write_text(mode + '\n')
+    os.utime(tenants.OWNER_MODE, ns=(changed, changed))
+    tenants.claim([UNIT], now + 10)  # renewing must not take ownership of the new choice
+    assert tenants.release([UNIT]) == 'released'
+    assert tenants.calls[-1] == ('start', UNIT)
+    assert tenants.OWNER_MODE.read_text().strip() == mode
 
 
 def test_a_proposal_in_the_last_ten_minutes_keeps_the_role_busy(tenants):
