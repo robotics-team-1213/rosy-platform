@@ -15,7 +15,7 @@
 | [situation](operations/situation/progress.md) | SITUATION | 3627ec21fb (2026-10-28) | GO | HOLD | N/A | HOLD | HOLD | HOLD |
 | [media](operations/site_ui/media/progress.md) | SITE MEDIA | 2190ba6889 (2026-10-18) | GO | GO | N/A | HOLD | HOLD | HOLD |
 | [media_edge](middleware/media/progress.md) | ROBOT MEDIA | abd6ce7cab (2026-10-30) | GO | GO | N/A | HOLD | HOLD | HOLD |
-| [console_source](applications/fleet/web/progress.md) | console_source | 5f02d723d1 (2026-11-02) | GO | GO | HOLD | HOLD | HOLD | HOLD |
+| [console_source](applications/fleet/web/progress.md) | console_source | 59dbc2136b (2026-11-02) | GO | GO | HOLD | HOLD | HOLD | HOLD |
 | [fleet_app_dev](applications/fleet/dev/progress.md) | fleet_app_dev | c000a57004 (2026-10-21) | GO | GO | HOLD | HOLD | HOLD | HOLD |
 | [perception_curation](learning/curation/perception/progress.md) | perception_curation | d4988bffba (2026-10-11) | GO | GO | HOLD | HOLD | HOLD | HOLD |
 | [perception_registry](learning/registry/perception/progress.md) | perception_registry | d4988bffba (2026-10-11) | GO | GO | HOLD | HOLD | HOLD | HOLD |
@@ -39,7 +39,7 @@
 | [core_events](middleware/core/events/progress.md) | CORE | bed604ef (2026-09-30) | GO | GO | N/A | N/A | N/A | N/A |
 | [core_features](middleware/core/services/progress.md) | CORE | 4e99d92e (2026-10-02) | GO | GO | N/A | N/A | N/A | N/A |
 | [core_api_web](middleware/core/api/progress.md) | CORE | 4e99d92e (2026-10-02) | GO | GO | N/A | N/A | N/A | N/A |
-| [web_common](shared/web/progress.md) | CORE | 5f02d723d1 (2026-11-02) | GO | GO | N/A | N/A | N/A | N/A |
+| [web_common](shared/web/progress.md) | CORE | 59dbc2136b (2026-11-02) | GO | GO | N/A | N/A | N/A | N/A |
 | [dashboard](middleware/robot_ui/robot/progress.md) | 화면 | e7cdf490 (2026-09-29) | GO | GO | N/A | HOLD | N/A | N/A |
 | [pilot](middleware/robot_ui/pilot/progress.md) | 화면 | 10daaae5 (2026-10-02) | GO | HOLD | HOLD | HOLD | GO | N/A |
 | [omx_transfer](integrations/robots/omx/progress.md) | OMX workcell | uncommitted (2026-10-27) | GO | PARKED | PARKED | PARKED | PARKED | PARKED |

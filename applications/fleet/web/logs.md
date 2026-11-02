@@ -849,3 +849,11 @@
 - Evidence: D-962 independent image and identity backup scope at 5f02d723d1: remote 335 backend/signing/image/backup cases plus 71 opted-in identity TLS/browser cases passed, 0 skipped, 0 NEW. Full Account tables including HTTP audit preserved; stale/corrupt backup refusal, strict signed legacy/new groups, reused image pins, branding, login/profile/admin and first-password flows verified. Prior e81af2d7c3 closure also passed 320 cases including Fleet header browser/Node compatibility. OCI construction and live independent-image/timer acceptance remain pending.
 - Logs: `rosy-account-backup-replay/run-1.txt` (335 passed), `rosy-account-identity-replay/run-1.txt` (71 passed); known-failure comparison 0 new/known/flaky. Native size range checked eight commits without a violation.
 - Gate: scoped SOURCE/LOCAL GO; image artifact, installation, timer activation and human field acceptance remain separate.
+
+
+## 2026-11-02 · 59dbc2136b · D-962 canonical Account scope closure
+
+- Change: Canonical lightweight header now takes the document brand and title from one renderer: Account login/profile/admin, Fleet learning. Existing component propagation checks remain; a brand mutation proves form/task bytes outside the header are unchanged. Identity HTML needs no manual regeneration delta.
+- Evidence: Official FULL snapshot 20261102132628 exposed stale Fleet component/title consumers and stopped; it was not a FULL success. At 59dbc2136b, committed remote shared-web contracts, component/registry/app ownership, Account TLS identity, Fleet header browser/Node and Account image/deploy closure passed 581 tests, with one separately disabled Android native-token-export check skipped and 0 NEW. Exact title-file isolation via tools/collect_alone.py completed one whole-file target (wrapper 1 passed, 1 empty collection parametrization skipped). Independent review found no supported material findings.
+- Logs: `rosy-account-surface-closure/run-1.txt`; `rosy-account-title-isolated/run-1.txt`. Native canonical renderer check, AST, secret scan (0 findings), diff check and one-commit size range passed.
+- Gate: Scoped SOURCE/LOCAL evidence only. Replacement FULL/no-cache, OCI artifact, installation and live field acceptance remain pending. CE: no additional lesson; canonical ownership, propagation and strict mutation regressions retain the cause and fix.
