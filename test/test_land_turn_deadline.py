@@ -31,14 +31,14 @@ def test_elapsed_turn_cancels_unfinished_work_without_resetting_its_budget(
 
     def unfinished_job(host, path, stop):
         if failed_first and path == "pkg/test/test_a.py":
-            now[0] = 540
+            now[0] = land.TURN_CAP_S - 60
             return 0
-        # One job is still running at 601 s, including after a successful failed-first batch.
-        now[0] = 601
+        # One job is still running past the cap, including after a successful failed-first batch.
+        now[0] = land.TURN_CAP_S + 1
         for timer in timers:
             if not timer.cancelled and timer.due <= now[0]:
                 timer.function()
-        assert stop.is_set(), "the 10-minute turn expired without interrupting the unfinished invocation"
+        assert stop.is_set(), "the turn cap expired without interrupting the unfinished invocation"
         return land.remote_pytest.CANCELLED
 
     monkeypatch.setattr(threading, "Timer", ClockTimer)
