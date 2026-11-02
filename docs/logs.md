@@ -13698,3 +13698,9 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 결정 승인과 소스 회귀 검증은 운영 수용과 구분한다.
 - 결정: D-889 「모든 차례 최대 30분」, 사용자 승인 2026-11-02.
 - CE: 해당 없음 — 시간 정책·안전 경계는 ADR 정본과 회귀 시험에 기록했다.
+
+## 2026-11-02 · uncommitted · fix(landing): rollup 회원 완료와 접수 origin 측정
+- 변경: 성공 rollup과 automatic train이 선택 당시 회원 snapshot·ticket·candidate를 기록한다. 표준 goal 입력은 보존된 sidecar·historical isolation·정확한 landed SHA ancestry로 과거 회원 완료를 검증하고, 같은 snapshot 재시도와 다음 snapshot 작업의 시계를 분리한다. 실제 FF 횟수·시각은 보존하고 논리 회원 origin이 모호하면 INCOMPLETE/FAIL로 판정한다.
+- 증거: 미착지 소스 `d51f653ee5` 원격 goal/rollup/event/batch 95개 통과, NEW 0. 선행 원격 RED로 회원 누락·재시도 누출·direct branch 재사용·metadata stat 실패·모호한 train origin·열린 snapshot 보존·이전 완료/조회 기간 경계·손상 scope·미기록 pin origin·동일ticket 재emit·중복branch를 확인했다. 읽기 전용 실제 기록 재계산은 회원 4건의 최초 topic lead와 새 camera lead 18.2916667분을 복원했다. 과거 automatic train 18건의 origin 증거 부족과 고정/현재 24h 조회의 영향 0건을 구분한다.
+- gate 변화: 없음. 소스 회귀·입력 재계산이며 main 적용과 SLO 달성을 주장하지 않는다.
+- CE: 기존 Nov1 교훈의 measurement trap을 갱신했다. ticket lead로 바꾸면 retry 이전의 대기 시간이 사라지는 비가시 판단과 검증 한계를 기록한다.
