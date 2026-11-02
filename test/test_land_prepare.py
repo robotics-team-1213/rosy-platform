@@ -204,7 +204,7 @@ def test_overtime_does_not_reprepare_or_rewrite_another_turn(full_anchor, monkey
     monkeypatch.setattr(land, "select", lambda *a, **k: ([["pkg/test"]], None))
     assert land.main(["--tests", "auto"]) == 1
     assert not prepared, "the old owner entered preparation after losing its turn"
-    # same-PID epoch changes are removed by normal leave(), so inspect the last status write before cleanup
+    # leave() preserves a ticket adopted by another PID; its complete record must remain untouched.
     if change == "pid":
         assert saved["ticket"].read_bytes() == saved["contents"]
     assert git(main, "rev-parse", "HEAD") == before

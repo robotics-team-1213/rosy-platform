@@ -497,6 +497,8 @@ def rounds(args, wt: Path, branch: str, main_co: Path, python: str, qdir, ticket
                 continue
             raise Stop(f"git merge --ff-only refused in {main_co} (left as is):\n{ff.stdout}{ff.stderr}")
         except Overtime if ticket is not None else ():  # a guard and body share one turn's budget
+            if turn_epoch is None or land_queue.turn_started() != turn_epoch:
+                raise Stop("landing turn ownership changed before overtime handoff; ticket left as is")
             land_queue.release(ticket, "turn deadline", started=land_queue.turn_started())
             args._overtime = land_checks.overtimes(sys.modules[__name__], args) + 1
             land_queue.set_status(ticket, "preparing", overtime=args._overtime)
