@@ -183,6 +183,7 @@ def _start(cwd: Path, land_args: list[str], now: datetime, launch) -> tuple[str,
         raise SystemExit("[land-async] uncommitted changes: commit them first (a landing takes only commits)")
     replace = "--replace" in land_args
     land_args = [a for a in land_args if a != "--replace"]
+    replacements = []
     for row in holders(cwd, branch):  # one landing per change: a second one only doubled the pretest
         carried = row.get("branch") not in (branch,) and not row.get("branch", "").startswith(PREFIX + branch + "-")
         where = f"{row['ticket']} ({row.get('branch')}, {row.get('status')}, pid {row.get('pid')})"
@@ -190,8 +191,10 @@ def _start(cwd: Path, land_args: list[str], now: datetime, launch) -> tuple[str,
             raise SystemExit(f"[land-async] {branch} is already landing in {where}"
                              + ("; it rides in that batch" if carried else "; its supervisor is still starting"
                                 if row.get("status") == "starting" else "; --replace stops it and queues this HEAD"))
+        replacements.append((int(row["pid"]), where))
+    for pid, where in replacements:
         print(f"[land-async] --replace: stopping {where}", flush=True)
-        stop(int(row["pid"]))
+        stop(pid)
     if "--urgent" not in land_args:  # refused before a snapshot or hidden worktree exists
         land_queue = _queue()
         if why := land_queue.full(land_queue.queue_dir(cwd)):
