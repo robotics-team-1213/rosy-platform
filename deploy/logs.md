@@ -4388,6 +4388,14 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 2026-11-02 09:17 KST 현장 candidate 2ba97ac, proxy·fleet·vision·postgres healthy, Fleet에 A/B/S 토큰, dry-run idle.
 - gate 변화: 없음. CE: 새 교훈 기록.
 
+## 2026-11-02 · b101f57783 · fix(hosts): 모델·AI PC 미선언 유닛 선언, review-bridge 알려진 차이
+
+- 변경: `deploy/hosts/services.yaml`에 이미 설치돼 있던 유닛을 관측한 그대로 선언했다. 모델 PC `rosy-harbor-nightly` 서비스·타이머(Harbor 저장소의 `nightly_full_flow.sh`를 `~/rosy-jobs`에 복사, external), `rosy-pilot-prepare-geg6`(서명 model-code, 손으로 시작). AI PC `pinky-rosbridge-d12`·`-d13`(Pinky 스택, 꺼짐). `rosy-review-bridge`에는 `known_drift`를 단다. 설치본이 매일 갱신되는 `bridge-state-20261024`에 쓰고 템플릿의 `bridge-state`는 10-24 뒤 그대로라, 템플릿을 설치하면 오래된 상태로 돌아간다.
+- 같은 점검에서 저장소 변경 없이 처리: AI PC `gpu_tenants.py`를 착지된 main 판으로 교체(해시 일치), 모델 PC의 끝난 Isaac 실행 유닛 5개 reset-failed, 관제 PC `host_storage.py`를 rosy-ops origin/main(#12)으로 교체(self-test 통과, 이전 판 백업), 카메라 뷰 drop-in 폴더의 `.bak`를 백업 폴더로 옮김.
+- 증거: 이 worktree에서 `tools/remote/update_status.py` — model 37 declared 0 findings, ai 23 declared 0 findings(review-bridge는 KNOWN).
+- gate 변화: 없음. 관제 PC의 observer arm_a·arm_b 정지와 카메라(front·천장 폰) 실패는 셀 작업 중인 것으로 보여 손대지 않았다.
+- CE: 해당 없음 — 선언 누락은 update_status가 매번 드러낸다.
+
 ## 2026-11-02 · uncommitted · OMX 카메라: 옮긴 카메라는 역할이 따라가고, 새 카메라는 제안 후 승인 한 번
 
 - 변경: `omx_cameras.py bind --apply`(20초 타이머)가 꽂힌 각 역할 카메라의 모델(`usb_id`)을 레지스트리에 기록한다. 역할의 카메라가 사라지고, 같은 모델의 미등록 카메라가 하나뿐이며, 그 모델로 사라진 역할도 하나뿐이면 그 역할을 새 포트로 옮기고 브리지 manifest도 맞춘다. 같은 모델 두 대가 함께 옮겨졌거나 처음 보는 모델은 `propose`가 후보로만 보여 주고 `approve NODE ROLE` 한 번으로 등록한다(새 역할은 `/<role>_camera/image_raw`·`<role>_camera_link`). 새 등록은 커널 by-id 이름을 쓰지 않는다(쌍둥이가 나중에 꽂히면 같은 이름).
