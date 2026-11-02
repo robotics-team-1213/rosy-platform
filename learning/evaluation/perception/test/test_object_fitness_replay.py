@@ -12,7 +12,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[4]
 for holder in ('learning/curation/perception', 'learning/registry/perception',
                'learning/evaluation/perception', 'middleware/perception', 'integrations/perception', 'contracts/foundation',
-               'middleware/perception/test', 'test/learning/perception', 'tools/perception'):
+               'middleware/perception/test', 'integrations/perception/test', 'test/learning/perception', 'tools/perception'):
     sys.path.insert(0, str(ROOT / holder))
 
 import object_fitness_replay as replay

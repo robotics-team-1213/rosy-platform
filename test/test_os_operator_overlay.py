@@ -15,7 +15,7 @@ def test_nominal_profile_is_captured_with_overlay_and_survives_missing_source(tm
 
     first, root_a, root_b, _, bundle = _provision_a(tmp_path, monkeypatch, protocol=2)
     repository = Path(__file__).resolve().parents[1]
-    monkeypatch.syspath_prepend(str(repository / 'middleware/perception'))
+    monkeypatch.syspath_prepend(str(repository / 'integrations/perception'))
     from perception_runtime.perception.camera_ground import nominal_ground_plane
 
     original = (repository / 'middleware/devices/pinky/profile/config/camera_nominal.yaml').read_bytes()

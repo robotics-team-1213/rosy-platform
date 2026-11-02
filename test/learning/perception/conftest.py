@@ -14,6 +14,8 @@ for p in (ROOT / "learning/curation/perception", ROOT / "learning/registry/perce
 _HARNESS = str(Path(__file__).resolve().parents[3] / 'test')
 if _HARNESS not in sys.path:
     sys.path.append(_HARNESS)
+# D-964: manifest/detector fixtures moved with their code to integrations/perception/test.
+sys.path.append(str(ROOT / "integrations" / "perception" / "test"))
 
 
 @pytest.fixture(autouse=True)
