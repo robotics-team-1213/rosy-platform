@@ -111,6 +111,25 @@ def test_empty_selection_exits_3_without_targets(capsys):
     assert capsys.readouterr().out.strip() == "test/test_games_board_browser.py"
 
 
+def test_full_registry_keeps_browser_files_after_splitting_them():
+    import subprocess
+    from pathlib import PurePosixPath
+
+    tracked = subprocess.check_output(
+        ["git", "-C", str(browser_scope.ROOT), "ls-files", "*.py"], text=True).splitlines()
+    # This file tests the selector/chunker itself, rather than a rendered page.
+    unit_only = {"test/test_land_browser.py"}
+    expected = {path for path in tracked if PurePosixPath(path).name.startswith("test_")
+                and path.endswith("_browser.py") and path not in unit_only}
+    assert not (expected - set(browser_scope.all_targets())), sorted(expected - set(browser_scope.all_targets()))
+
+
+def test_recovery_page_and_shared_styles_select_the_offline_browser_flow():
+    for source in ("deploy/robot/pinky_pro/native/network_recovery_http.py",
+                   "deploy/robot/pinky_pro/native/install-native-runtime.sh", "shared/web/components.css"):
+        assert "test/test_network_recovery_browser.py" in browser_scope.targets([source])
+
+
 def test_sim_sources_select_sim_browser():
     for path in (
         "learning/curation/perception/review_app_web/sim.js",
