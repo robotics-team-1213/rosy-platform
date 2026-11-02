@@ -205,7 +205,7 @@ def test_cancelled_inflight_apply_finishes_before_zero_and_preserves_replacement
 
     def observe_apply(request, context, services):
         result = real_apply(request, context, services)
-        if request.linear == 0.2:
+        if request.linear == 0.1:
             applying.set()
             release.wait()
         if request.linear == request.angular == 0.0:
@@ -226,7 +226,7 @@ def test_cancelled_inflight_apply_finishes_before_zero_and_preserves_replacement
             async def receive_text(self):
                 if not self.sent:
                     self.sent = True
-                    return _frame(1, 0.2)
+                    return _frame(1, 0.1)
                 await anyio.sleep_forever()
 
             async def send_json(self, message):
@@ -240,21 +240,21 @@ def test_cancelled_inflight_apply_finishes_before_zero_and_preserves_replacement
             try:
                 group.start_soon(handle)
                 assert await anyio.to_thread.run_sync(applying.wait, 2)
-                assert svc.command.select_output().linear == pytest.approx(0.2)
+                assert svc.command.select_output().linear == pytest.approx(0.1)
                 handler_task[0].cancel()
                 await anyio.sleep(0)
                 handler_task[0].cancel()
                 if replaced:
                     replacement = object()
                     tc.app.state.ws_teleop_sockets[auth.token_id] = replacement
-                    real_apply(ws_module.TeleopRequest(linear=0.3), auth, svc)
+                    real_apply(ws_module.TeleopRequest(linear=0.05), auth, svc)
             finally:
                 release.set()
         assert handler_task[0].cancelled()
         assert zero_applied.is_set() is (not replaced)
         if replaced:
             assert tc.app.state.ws_teleop_sockets[auth.token_id] is replacement
-            assert svc.command.select_output().linear == pytest.approx(0.3)
+            assert svc.command.select_output().linear == pytest.approx(0.05)
         else:
             assert svc.command.select_output().linear == 0.0
 
