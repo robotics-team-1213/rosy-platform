@@ -29,6 +29,16 @@ def test_rollup_closes_member_retry_history_but_preserves_later_work_and_dedupli
     assert land_goal.lead_times(rows, 0, 400) == [4, 2, 1]
 
 
+def test_pinned_retry_does_not_consume_an_earlier_unrelated_snapshot():
+    a, b = "land/fix/a-20261101000000", "land/fix/a-20261101010000"
+    rows = [ev(0, "queue", branch=a, ticket="a1"), ev(120, "queue", branch=b, ticket="b", pid=2),
+            ev(180, "queue", branch=a, ticket="a2", pid=3),
+            ev(240, "landed", branch="land/fix/land-rollup-x",
+               members=[dict(branch=a, ticket="a2", candidate="a" * 40)]),
+            ev(300, "landed", branch=b, pid=2)]
+    assert land_goal.lead_times(rows, 0, 400) == [4, 3]
+
+
 def test_failed_rollup_does_not_close_member_or_create_a_sample():
     rows = [ev(0, "queue", ticket="a"), ev(60, "stop", members=[{"branch": "land/fix/a", "ticket": "a"}]),
             ev(120, "landed")]
