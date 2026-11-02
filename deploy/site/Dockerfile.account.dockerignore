@@ -18,6 +18,7 @@
 !shared/web/shared-assets.json
 !shared/web/tokens.css
 !shared/web/components.css
+!shared/web/component-controls.css
 !shared/web/theme.js
 !shared/web/ui.js
 !shared/web/ui-wiring.js
