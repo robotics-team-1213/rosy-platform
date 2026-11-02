@@ -14,7 +14,8 @@ pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason="requires ex
 @pytest.mark.parametrize("width", [320, 1366])
 @pytest.mark.parametrize("theme", ["dark", "light"])
 @pytest.mark.parametrize("session_status", [401, 403])
-def test_anonymous_account_entry_separates_login_from_denied_access(tmp_path, width, theme, session_status):
+@pytest.mark.parametrize("text_scale", [1, 2, 4])
+def test_anonymous_account_entry_separates_login_from_denied_access(tmp_path, width, theme, session_status, text_scale):
     api = pytest.importorskip("playwright.sync_api")
     folder = tmp_path / "review"
     folder.mkdir()
@@ -34,6 +35,7 @@ def test_anonymous_account_entry_separates_login_from_denied_access(tmp_path, wi
                 page.evaluate("theme => document.documentElement.dataset.theme = theme", theme)
                 status = page.locator("#account-status")
                 api.expect(status).to_have_attribute("state", "empty" if session_status == 401 else "forbidden")
+                page.evaluate('(scale) => document.documentElement.style.fontSize = `${scale * 100}%`', text_scale)
                 api.expect(page.locator("h1")).to_have_count(1)
                 api.expect(page.locator(".ui-rail")).to_be_hidden()
                 api.expect(page.locator("#review-command-open")).to_be_hidden()

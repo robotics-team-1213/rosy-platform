@@ -12,7 +12,8 @@ pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason="opt-in Chro
 
 @pytest.mark.parametrize("width", [320, 1366])
 @pytest.mark.parametrize("central", [False, True])
-def test_login_identity_matches_heading_form_and_return_context(account_page, width, central):
+@pytest.mark.parametrize("text_scale", [1, 2, 4])
+def test_login_identity_matches_heading_form_and_return_context(account_page, width, central, text_scale):
     from playwright.sync_api import expect
 
     page, origin = account_page
@@ -25,6 +26,7 @@ def test_login_identity_matches_heading_form_and_return_context(account_page, wi
             "code_challenge_method": "S256"})
     page.goto(origin + "/console/login?" + urlencode({"return": target}))
     expect(page.locator("[data-login=login]")).to_be_visible()
+    page.evaluate('(scale) => document.documentElement.style.fontSize = `${scale * 100}%`', text_scale)
     expect(page.locator("ui-brand b")).to_have_text("Rosy Account" if central else "Rosy Fleet")
     expect(page.locator("[data-login=form]")).to_have_attribute("aria-label", "Rosy Account 로그인" if central else "관제 로그인")
     if central:
