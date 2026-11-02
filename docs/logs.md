@@ -13764,3 +13764,9 @@ osy-d395-s1d\`.
 - 증거: 돌기 격자 PnP top 0.58 px·side 2.8 px, arm_b 녹화 세션 `live.json`을 읽기만 해 FK 맞춤 3.1 px. 팔 명령·관측기 기동 없음. 스크립트와 겹침 영상은 Git 밖 작업 공간 조사 폴더.
 - gate 변화: 없음. fixture 수치는 바꾸지 않았다(실측 받침 채택은 도달·충돌 비교 뒤).
 - CE: 해당 없음 — 측정 기록이며 해결한 장애가 아니다. 실물과 시뮬레이션의 차이는 대장에 남겼다.
+
+## 2026-11-03 · uncommitted · fix(remote): 배치의 각 시험 입장에서 재부팅 임박 차단
+- 변경: 최초 호스트 선택에만 있던 D-889 13의 재부팅 임박 판정을 각 원격 ADMIT에도 적용한다. 차단된 작업은 자원 해제 뒤 같은 Work index로 반환하고 다른 호스트 또는 기존 bounded wait로 이어간다. quarantine 재시험의 원본 실패·로그와 남은 재시험을 보존한다. 기존 단일 호스트 호출 계약도 유지한다.
+- 증거: 원격 재현 15 FAIL/9 PASS, 최종 코드 `95abfc2cdb` 관련 9 suite 228 PASS·skip/NEW/known/flaky 0, 독립 검토 P1/P2 없음, size 3 commits PASS. 관측된 종료143은 시험 PC의 예약 재부팅 경계와 겹쳤다. 기존 착지의 공식 resume에서 PASS31 invocation 재사용을 확인했다.
+- gate 변화: 없음. 기존 재부팅 시각·780초 타이머/서비스 판정·자원 하한·deadline/stop을 유지하며 추가 SSH·새 flag·의존성은 없다. 이미 실행 중인 긴 작업은 기존143/resume 경계다.
+- CE: 기존 교훈 갱신 — `docs/solutions/workflow-issues/landings-gave-the-turn-back-and-reran-everything-2026-11-01.md`의 재부팅 항목에 배치 중간 입장 공백과 검증·복구 범위를 남겼다. 새 실물 재부팅 시험이나 운영 반영 완료를 주장하지 않는다.
