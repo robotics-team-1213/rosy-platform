@@ -12,6 +12,7 @@ import math
 from pathlib import Path
 import ssl
 import signal
+import sys
 import threading
 import time
 from urllib.error import HTTPError
@@ -21,11 +22,13 @@ from uuid import uuid4
 
 import yaml
 
-from core_common.protocol.workcell_observations import ArmObservation, WorkcellObservationManifest
+from core_common.protocol.workcell_observations import ArmObservation, UsbCameraDecisions, WorkcellObservationManifest
 from core_common.motor_health import read_motor_health_snapshot
 from core_common.protocol.motor_health import MotorHealthResponse
 from core_common.observation_snapshot import SnapshotChannel, interrupt_on_termination
 from rosy_vision import protocol
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # loaded by path in tests, not only from its folder
+import usb_camera_report  # noqa: E402  beside this file; D-963
 
 
 def select_sources(manifest, workcell_id, environ):
@@ -181,6 +184,28 @@ def post_arm(fleet_url, source_id, token, observation, *, context):
     with opener.open(request, timeout=2) as response:
         if response.status != 202:
             raise OSError('observation was not accepted')
+
+
+def post_usb_devices(fleet_url, workcell_id, token, report, *, context):
+    """D-963: the unregistered-camera report; the reply carries the operator's role decisions."""
+    url = secure_url(fleet_url, 'https') + '/api/fleet/workcell-observations/' + quote(workcell_id, safe='') + '/usb-devices'
+    request = Request(url, data=report.model_dump_json().encode(), method='POST',
+                      headers={'Content-Type': 'application/json', 'X-Workcell-Observation-Token': token})
+    with build_opener(HTTPSHandler(context=_verified(context)), _NoRedirect()).open(request, timeout=2) as response:
+        if response.status != 200:
+            raise OSError('usb camera report was not accepted')
+        return UsbCameraDecisions.model_validate_json(response.read(16385))
+
+
+def run_usb_reports(stop, post, workcell_id, *, interval=20):
+    """Independent of arm delivery: a Fleet or camera error here is logged and retried, never raised."""
+    while True:
+        try:
+            usb_camera_report.cycle(post, workcell_id)
+        except Exception as error:
+            logging.getLogger(__name__).warning('usb camera report failed error=%s', type(error).__name__)
+        if stop.wait(interval):
+            return
 
 
 class ArmSender:
@@ -359,6 +384,10 @@ def main(argv=None):
         for camera in cell.cameras:
             deliver(camera, NativeSource(camera.image_topic),
                       CameraSender(args.vision_url, camera.source_id, tokens[camera.source_id], context=context))
+        workers.append(threading.Thread(target=run_usb_reports, name='usb-cameras', daemon=True, args=(
+            stop, lambda report: post_usb_devices(args.fleet_url, cell.workcell_id, tokens[cell.arms[0].source_id],
+                                                  report, context=context), cell.workcell_id)))
+        workers[-1].start()
         while not stop.wait(1):
             pass
     except KeyboardInterrupt:

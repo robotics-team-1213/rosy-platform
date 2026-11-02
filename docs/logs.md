@@ -13732,3 +13732,10 @@ osy-d395-s1d\`.
 - 증거: 미착지 소스 `d51f653ee5` 원격 goal/rollup/event/batch 95개 통과, NEW 0. 선행 원격 RED로 회원 누락·재시도 누출·direct branch 재사용·metadata stat 실패·모호한 train origin·열린 snapshot 보존·이전 완료/조회 기간 경계·손상 scope·미기록 pin origin·동일ticket 재emit·중복branch를 확인했다. 읽기 전용 실제 기록 재계산은 회원 4건의 최초 topic lead와 새 camera lead 18.2916667분을 복원했다. 과거 automatic train 18건의 origin 증거 부족과 고정/현재 24h 조회의 영향 0건을 구분한다.
 - gate 변화: 없음. 소스 회귀·입력 재계산이며 main 적용과 SLO 달성을 주장하지 않는다.
 - CE: 기존 Nov1 교훈의 measurement trap을 갱신했다. ticket lead로 바꾸면 retry 이전의 대기 시간이 사라지는 비가시 판단과 검증 한계를 기록한다.
+
+## 2026-11-02 · uncommitted · D-963 USB 카메라 역할 승인 결정과 API v1.350
+
+- 변경: ADR D-963과 API 참조 v1.350(`workcell-observations/{workcell_id}/usb-devices`). 구현은 deploy·fleet·contracts·web 로그를 따른다.
+- 증거: API 버전 pin 8곳 갱신, 구현 시험은 deploy·fleet 로그.
+- gate 변화: 없음. 실제 USB 카메라를 꽂아 승인하는 현장 수용은 하지 않았다.
+- CE: 해당 없음 — 새 기능이며 장애 해결이 아니다. 결정은 D-963에 있다.

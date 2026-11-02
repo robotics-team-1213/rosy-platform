@@ -14,6 +14,9 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 - 로봇은 SoC 온도, Raspberry Pi 펌웨어 `get_throttled`(지금 저전압·주파수 제한·스로틀·soft 온도 한계), 바퀴 모터마다 온도·모터 자체 한계·입력 전압·하드웨어 오류를 읽는다. 모터 값은 bringup이 2초마다 ROS `motor/health`(std_msgs/String JSON `{motors:[{id, temperature_c, temperature_limit_c, input_voltage_v, hardware_error}]}`)로 낸다.
 - CORE가 1초마다 열 단계를 정한다. `warm`(SoC 75 °C, 모터 한계 −10 °C, 지금 스로틀·저전압, 모터 입력 전압 오류)이면 직선 상한을 절반으로 줄인다. `hot`(SoC 82 °C, 모터 한계 −4 °C, 모터 과열 오류)이면 Fleet·주행 명령을 0으로 만들고, 수동 조작은 `warm` 상한으로 남겨 차선 밖으로 옮길 수 있게 한다. 단계는 5 °C 아래로 내려가야 풀린다. 래치가 아니며 e-stop을 걸지 않는다. 읽은 값이 없으면 `ok`다. 문턱은 `safety.thermal`로 바꿀 수 있다.
 - `GET /api/v1/safety/state`에 `thermal: {level, reasons, soc_c, throttled, motors}`를 더한다(additive). 단계가 바뀔 때마다 이벤트 `thermal.warm`·`thermal.hot`·`thermal.ok`를 한 번 낸다.
+### v1.350 USB 카메라 역할 승인 (D-963)
+
+- 제어 PC가 역할 없는 USB 카메라를 `POST /api/fleet/workcell-observations/{workcell_id}/usb-devices`로 보고하고, 같은 응답으로 운영자 결정을 받는다. Fleet은 결정만 저장하며(SQLite) 장치 경로·레지스트리를 모른다. 인증은 그 작업셀의 팔 관측 토큰을 재사용한다. 계약은 `core_common.protocol.workcell_observations`의 `UsbCameraReport`·`UsbCameraDecisions`다.
 
 ### v1.349 독립 Rosy Account와 개발 모드 사람 로그인 (D-962)
 
@@ -462,6 +465,9 @@ It does not enable a physical owner, command, calibration or motion admission.
 |---|---|---|
 | `GET /api/fleet/workcell-observations` | Existing Fleet viewer authentication | `{read_only:true,physical_acceptance:false,workcells:[{workcell_id,label,arms,cameras}]}`; no-store. Each arm has `{source_id,arm_id,label,units:"encoder_rad",fresh,epoch,sequence,captured_at,source_age_s,receipt_age_s,positions,motor_health,faults}`; `faults` is the arm's last 20 guard stops, newest first, once per session `{captured_at,session_id,stop_reasons,motors:[{joint,id,error_deg,command_raw,present_raw,pwm,pwm_limit,fault}]}` (memory only: a Fleet restart clears it; the field PC keeps `faults/*.json`); cameras have `{source_id,label,role,arm_id}`. Missing samples have null data/age/epoch, sequence0. Stale positions are null. No producer secret or serial selector. |
 | `POST /api/fleet/workcell-observations/arms/{source_id}` | Source-bound `X-Workcell-Observation-Token`; strict `ArmObservation` `{epoch,sequence,captured_at,positions}`; actual body limit16KiB | 202 `{accepted:true}`; 401 bad/unknown source credential; 409 replay, nonadvancing capture, expired/future capture; 413 `WORKCELL_OBSERVATION_TOO_LARGE`; 422 invalid structure; 503 unconfigured. Identity comes from the registered source, never the payload. |
+| `GET /api/fleet/workcell-observations/usb-devices` | Existing Fleet viewer authentication | `{workcells:[{workcell_id,roles,candidates:[{key,usb_id,roles,suggest,hub_arm,decision}]}]}`; no-store. `key` is a hash of the camera's persistent name; no device path or token. `decision` is `{role,principal_id}` or null. A workcell whose control PC has not reported for 60 s is omitted. (D-963, v1.350) |
+| `POST /api/fleet/workcell-observations/{workcell_id}/usb-devices` | `X-Workcell-Observation-Token` of any arm of that workcell; strict `UsbCameraReport` `{workcell_id,candidates<=16,roles<=32}`; body limit 16KiB | 200 `{decisions:[{key,role}]}` for reported keys an operator decided; the stored report replaces the previous one and decisions for keys no longer reported are dropped. 401 bad token or another workcell's token; 404 unknown workcell; 413 `WORKCELL_OBSERVATION_TOO_LARGE`; 422 `INVALID_USB_CAMERA_REPORT` (incl. `workcell_id` differing from the path). no-store. |
+| `POST /api/fleet/workcell-observations/{workcell_id}/usb-devices/{key}/decision` | Named operator (`require_named_operator`); body `{role}` (Identifier), at most 4096 bytes, duplicate keys and non-finite numbers rejected | 200 `{key,role}`; the decision and operator are stored and audited by the mutation audit. 403 not a named operator; 404 `USB_CAMERA_NOT_REPORTED`; 422 `INVALID_USB_CAMERA_DECISION`. A new role name is allowed (the control PC gives it `/<role>_camera/image_raw`). Fleet applies nothing: the control PC reads the decision from its next report reply and `omx_cameras.py bind --apply` writes its own registry. |
 
 Epoch is lowercase UUID hex32; sequence is a positive strict integer. Original
 UNIX capture seconds and exact registered joint→number positions are finite JSON
@@ -4489,6 +4495,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 | 버전 | 일자 | 내용 |
 |---|---|---|
 | v1.351 | 2026-11-03 | 핑키 열 모드: `safety/state.thermal`, `thermal.*` 이벤트, ROS `motor/health`. warm은 직선 상한 절반, hot은 자율 주행 0(수동은 warm 상한) |
+| v1.350 | 2026-11-02 | D-963: 제어 PC의 역할 없는 USB 카메라 보고·운영자 역할 결정 (`workcell-observations/{workcell_id}/usb-devices`) |
 | v1.349 | 2026-11-02 | D-962: 독립 Account authority와 Fleet PKCE receiver, 개발 모드의 익명 세션 폐기·사람 로그인 의무화 |
 | v1.348 | 2026-11-02 | 상태 행 `error`: Fleet 자체 보류(`ADDRESS_UNVERIFIED`)는 `reachable: null, held: true`, 로봇 거절과 구분 |
 | v1.347 | 2026-11-02 | additive (D-941): 장소 `kind` `slow`(감속만, 정지 아님), 속도표가 줄무늬 감속으로 반영 |

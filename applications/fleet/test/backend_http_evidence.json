@@ -3,6 +3,11 @@
   "scope": "One observed response per route from a passing HTTP test. Success selected where observed; refusal-only receipts do not prove successful configuration or device behavior.",
   "reports": [
     {
+      "source_revision": "e5911e84f3ff9a2c9f9d5fe739848ff1b2c75857",
+      "result": "5 passed; USB camera listing and operator decision HTTP routes (D-963), in-process with real SQLite; no device evidence",
+      "pytest_root": "."
+    },
+    {
       "source_revision": "023d9915a34efb4cf88bd198badc30101fe196dc",
       "result": "9 passed, 0 skipped; 15 actual auth HTTP routes, including canonical Account handlers and retired development-session 403. In-process HTTP with synthetic auth/session fixtures and real SQLite; no device or deployed TLS evidence.",
       "pytest_root": "."
@@ -69,6 +74,22 @@
     }
   ],
   "requests": {
+    "GET:/api/fleet/workcell-observations/usb-devices": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_usb_camera_decisions.py",
+        "test_listing_shows_candidates_and_decisions_without_paths_or_tokens_and_hides_stale_reports"
+      ],
+      "source_revision": "e5911e84f3ff9a2c9f9d5fe739848ff1b2c75857"
+    },
+    "POST:/api/fleet/workcell-observations/{workcell_id}/usb-devices/{key}/decision": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_usb_camera_decisions.py",
+        "test_decision_is_dropped_when_the_camera_is_no_longer_reported_and_survives_a_restart"
+      ],
+      "source_revision": "e5911e84f3ff9a2c9f9d5fe739848ff1b2c75857"
+    },
     "GET:/api/fleet/device-profiles": {
       "status": 200,
       "test": [
