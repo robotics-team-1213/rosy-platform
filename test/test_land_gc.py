@@ -153,3 +153,30 @@ def test_main_reports_failed_removal(landing, monkeypatch):
     monkeypatch.chdir(repo)
     assert land_gc.main(["--apply"]) != 0
     assert tree.exists()
+
+
+def test_snapshot_checked_out_elsewhere_is_kept(landing, tmp_path):
+    repo, _, tree, branch = landing
+    moved = tmp_path / "active"
+    git(repo, "worktree", "move", str(tree), str(moved))
+    rows = land_gc.plan(repo, time.time(), 7)
+    assert land_gc.apply(repo, rows) == []
+    assert git(repo, "rev-parse", branch)
+    assert moved.exists()
+
+
+def test_apply_history_revalidation_is_linear(landing, monkeypatch):
+    repo, common, _, _ = landing
+    for i in range(3):
+        hidden(repo, common / land_gc.HOLDER, f"land/feat/other-2026110200000{i + 2}")
+    rows = land_gc.plan(repo, time.time(), 7)
+    original, calls = land_gc.git, []
+
+    def counted(path, *args):
+        if args[0] == "rev-list":
+            calls.append(args)
+        return original(path, *args)
+
+    monkeypatch.setattr(land_gc, "git", counted)
+    assert land_gc.apply(repo, rows) == []
+    assert len(calls) == 4, "each candidate's history is rechecked once"
