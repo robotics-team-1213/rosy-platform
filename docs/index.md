@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-11-03 · uncommitted · test(publish): held turn의 출처 보존과 실행 증거를 구분한다
 - 2026-11-03 · 3db26622ab · evidence: 재연결 뒤 READY 복구와 수정 검증 동결
 - 2026-11-03 · f8fdc85890 · docs: 게시 성공과 적격 FULL 근거 구분
 - 2026-11-03 · uncommitted · fix(publish): 실제 FULL·브라우저 실행 근거로 게시와 병합을 검증한다
 - 2026-11-02 · 20390c3486 · fix(harness): D-795 DDS 가드를 매 착지에서 돌린다
-- 2026-11-02 · uncommitted · fix(omx): 가드 고장 프레임을 설정 없이 남긴다

@@ -13748,3 +13748,10 @@ osy-d395-s1d\`.
 - 증거: 네 역할의 registry/env 일치·단독 소유권·서로 다른 장치를 확인했고, 준비 검사 시작·원본 controls readback·재시작 뒤 별도 READY 3회에서 네 영상 sequence가 모두 증가했다. 실행 source는 기존 landed commit cbfb144767의 불변 snapshot이며 이전 profile/env/state를 보존했다.
 - gate 변화: 이번 실행의 photometric READY 복구. 팔/Pinky 동작·기하 보정·재부팅·새 릴리스 배포는 하지 않았다. 통합 후보의 qualified FULL와 공개 CI를 이 기록으로 대신하지 않는다.
 - CE: 기존 카메라 기준선 전환 절차 적용, 새 교훈 없음. 게시 근거 교훈 정정은 앞 기록과 같다.
+
+## 2026-11-03 · uncommitted · test(publish): held turn의 출처 보존과 실행 증거를 구분한다
+
+- 변경: `test_land_speculate`의 모의 FULL fixture는 출처·held turn의 root 실행·record base/ancestry·선택 보존을 그대로 검사하고, 실제 정본 FULL·브라우저 실행 근거가 없으므로 게시 검증 거부를 기대한다. 생산 관문과 캐시·로그 판정은 바꾸지 않았다.
+- 증거: 기존 bootstrap 후보 `382138de78`의 root 행렬에서 이 기대값 하나가 NEW였고 단독 재실행도 실패했다. 변경 전 main `37cde0e33e`에서는 통과했다. 수정한 최종 SHA는 speculate·prepare·publish 회귀와 speculate 단독 프로세스로 원격 검증한다.
+- gate 변화: 없음. 모의 검사로 기록한 `tier=full`을 실제 게시 근거로 해석하지 않는다.
+- CE: 해당 없음 — 이미 정정한 게시 근거 교훈과 엄격한 게시 회귀가 이 구분을 설명하며, 이번 수정은 남은 모의 fixture 기대값을 그 계약에 맞춘다.
