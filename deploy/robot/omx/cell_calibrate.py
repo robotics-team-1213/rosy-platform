@@ -168,6 +168,14 @@ def over_target(config, site) -> bool:
         1000 * (cell_pivot.pivot_z_view(config, site) - s_z) - prm.get(p, "pivot.over_top_mm") >= prm.get(p, "pivot.over_clear_mm"))
 
 
+def pivot_near_yaws(config, site) -> list:
+    """Over a packed column only base -40..+40 marked in three runs (2026-11-02: -80/+80/+120 never), and the fit
+    needs 4 marks: there the yaws stay inside a 120 degree arc at 20 degree steps."""
+    base = config["sites"][site]["yaw_deg"]
+    offsets = range(-60, 61, 20) if over_target(config, site) else (-80, -40, 0, 40, 80, 120)
+    return [base + d for d in offsets]
+
+
 def carried(region: dict) -> bool:
     """A region copied from another site or point, never measured where it stands."""
     return bool(region.get("carried_from")) or str(region.get("source", "")).startswith("carried")
@@ -289,8 +297,7 @@ def main(argv=None):
             if point is None:
                 done.append({step: "no clear point near the target"})
                 continue
-            base = config["sites"][site]["yaw_deg"]
-            result = cell_pivot.pivot_calibrate(cell, config, point, [base + d for d in (-80, -40, 0, 40, 80, 120)],
+            result = cell_pivot.pivot_calibrate(cell, config, point, pivot_near_yaws(config, site),
                                                 calibration, site, work, time.sleep, lambda row: None)
             if result["result"] == "calibrated":
                 cell_pivot.save_bias(cell_pivot.bias_path(cal_path), result["bias"])
