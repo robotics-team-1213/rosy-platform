@@ -88,7 +88,7 @@ def test_late_verdict_cannot_describe_changed_inputs(workspace, key):
     ready_camera(page, origin, expect)
     state['hold'] = True
     page.locator('#check-form ui-button[type=submit]').click()
-    page.wait_for_function("document.querySelector('#view').hidden === false")
+    expect(page.locator('#view')).to_be_visible()
     expect(page.locator('#check-form ui-button[type=submit]')).to_be_disabled()
     assert len(state['held']) == 1
     change_input(page, key)
@@ -104,9 +104,10 @@ def test_image_decode_cannot_mix_an_old_photo_with_a_new_reference(workspace):
     ready_camera(page, origin, expect)
     page.evaluate("""() => {const decode = window.createImageBitmap;
       window.createImageBitmap = async (...args) => {const image = await decode(...args);
-        await new Promise(resolve => window.releaseImage = resolve); return image;};} """)
+        await new Promise(resolve => {window.releaseImage = resolve;
+          document.documentElement.dataset.testImageDecode = 'held';}); return image;};} """)
     page.locator('#check-form ui-button[type=submit]').click()
-    page.wait_for_function('window.releaseImage !== undefined')
+    expect(page.locator('html')).to_have_attribute('data-test-image-decode', 'held')
     page.select_option('#reference', 'b' * 64)
     page.evaluate('window.releaseImage()')
     page.wait_for_timeout(100)
@@ -172,7 +173,8 @@ def test_camera_refresh_keeps_edits_made_during_the_read(workspace):
     ready_camera(page, origin, expect)
     held = []
     page.route('**/api/learning/camera/references', lambda route: held.append(route))
-    page.locator('#camera-refresh').click()
+    with page.expect_request('**/api/learning/camera/references'):
+        page.locator('#camera-refresh').click()
     expect(page.locator('#camera-refresh')).to_be_disabled()
     page.fill('#fingerprint', 'd' * 64)
     page.fill('#joints', '{"joint1":0.2}')

@@ -395,3 +395,9 @@
 - 변경: 2026-11-02 · c1af0160f4 · central 인증 전에는 /learning이 /accounts로 돌아오므로 사용 불가능한 홈 복귀 링크를 숨긴다. 로그인 후 홈 링크와 서버 인증·권한·return 계약은 유지한다. 독립 검토의 두 복귀 UX 발견을 처리했고 로그인·계정 브라우저 네 파일 64건 통과, 두 테마·100/200/400% 글자 확대 포함. CE: 해당 없음 — 상태와 회귀가 판단을 설명한다.
 - 증거: committed SHA and remote results are recorded above; final consolidated receipts are retained in the unification validation record.
 - gate 변화: 없음. Source/browser checks do not establish deployment, ARM64, device or field acceptance.
+
+## 2026-11-03 · f987a0b10e · 상태 일관성 브라우저 시험의 실제 대기 지점
+
+- 변경: 이미지 decode의 보류 준비를 DOM 표식으로 확인하고 표시 상태는 locator로 기다려 실제 CSP의 unsafe-eval 금지를 유지한다. 카메라 새로고침은 workspace 조회 뒤 실제 references 요청을 기다린 다음 입력을 수정한다. 제품 camera.js·generation·입력 보존·미제출·판정 무효화 검증과 기존 완료 대기는 유지한다.
+- 증거: 원격 FULL run-pre48은 CSP EvalError와 아직 도착하지 않은 held 요청으로 2 failed/146 passed/NEW2를 기록했다. 해당 시험·camera.js·서빙 fixture blob은 origin/main·main·동결 후보·수정 전 HEAD가 같다. 이는 소스 동등성 근거이며 별도 main 실행 재현을 뜻하지 않는다. 정본 착지 도구의 단독 재실행은 별도로 확인한다.
+- Gate: 수정본 원격 확인 및 FULL 완료 전. CE: 해당 없음 — 실제 요청 대기와 DOM 표식이 원인·보존 조건을 설명한다.
