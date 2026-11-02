@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import time
 
 import pytest
 
@@ -242,3 +243,150 @@ def test_ordinary_rollup_code_branch_needs_no_members_file(live_rollup, action):
     else:
         tool.resume(dev, tree.name, [], lambda *args: launched.append(args), wait=0, sleep=lambda s: None)
     assert len(launched) == 1
+
+
+@pytest.fixture
+def starting_lander(repo, tmp_path):
+    main, dev = repo
+    snap, log = tool.start(dev, [], NOW, lambda *a: None)
+    tree = log.parent / log.name.removesuffix(".log")
+    stop, admit, calls = (tmp_path / name for name in ("stop", "admit", "calls"))
+    script = tree / "tools" / "land.py"
+    script.parent.mkdir()
+    qdir = main / ".git" / "rosy-land-queue"
+    script.write_text(
+        "import json,os,time\nfrom pathlib import Path\n"
+        f"Path({str(calls.with_suffix('.pid'))!r}).write_text(str(os.getpid()))\n"
+        f"with Path({str(calls)!r}).open('a') as stream: stream.write('run\\n')\n"
+        f"while not Path({str(stop)!r}).exists():\n"
+        f" if Path({str(admit)!r}).exists():\n"
+        f"  q = Path({str(qdir)!r}); q.mkdir(exist_ok=True)\n"
+        f"  (q/'0001-1.json').write_text(json.dumps(dict(pid=os.getpid(),branch={snap!r},status='pending')))\n"
+        " time.sleep(.02)\n"
+        "raise SystemExit(7)\n", encoding="utf-8")
+    processes = []
+
+    def launch(argv, path):
+        process = tool.detach(argv, path)
+        processes.append(process)
+        return process
+
+    yield main, dev, snap, tree, admit, calls, launch
+    stop.touch()
+    for process in processes:
+        process.wait(timeout=10)
+
+
+def test_live_startup_is_successful_and_cannot_be_resumed_twice(starting_lander):
+    main, dev, snap, tree, admit, calls, launch = starting_lander
+    assert tool.resume(dev, tree.name, [], launch, wait=0, sleep=lambda s: None) == "starting"
+    bootstrap = tree.parent / (tree.name + ".land_async.py")
+    bootstrap.write_text(bootstrap.read_text(encoding="utf-8") + "\n# keep running bootstrap\n", encoding="utf-8")
+    before = bootstrap.read_bytes()
+    with pytest.raises(SystemExit, match="supervisor"):
+        tool.resume(dev, tree.name, [], launch, wait=0, sleep=lambda s: None)
+    assert bootstrap.read_bytes() == before
+    admit.touch()
+    until = time.monotonic() + 5
+    while not tool.live_tickets(dev) and time.monotonic() < until:
+        time.sleep(.02)
+    assert tool.live_tickets(dev)[0]["branch"] == snap
+    assert calls.read_text() == "run\n", "only one land.py may drive the hidden tree"
+
+
+def test_exited_supervisor_without_ticket_is_a_failure(repo):
+    _, dev = repo
+    _, log = tool.start(dev, [], NOW, lambda *a: None)
+    tree = log.parent / log.name.removesuffix(".log")
+    processes = []
+
+    def launch(*a):
+        process = subprocess.Popen([sys.executable, "-c", "raise SystemExit(7)"])
+        processes.append(process)
+        return process
+
+    assert tool.resume(dev, tree.name, [], launch, wait=0, sleep=lambda s: processes[0].wait(timeout=5)) is None
+    assert processes[0].wait(timeout=5) == 7
+
+
+def test_direct_duplicate_supervisor_does_not_run_or_mark_the_owner_stopped(starting_lander):
+    _, dev, snap, tree, _, calls, launch = starting_lander
+    tool.resume(dev, tree.name, [], launch, wait=0, sleep=lambda s: None)
+    duplicate = subprocess.run([sys.executable, str(ROOT / "tools/land_async.py"), "--supervise", str(tree), snap],
+                               capture_output=True, text=True, timeout=5)
+    assert duplicate.returncode != 0 and "supervisor" in duplicate.stdout + duplicate.stderr
+    assert not (tree.parent / (tree.name + ".stopped")).exists()
+    until = time.monotonic() + 5
+    while not calls.exists() and time.monotonic() < until:
+        time.sleep(.02)
+    assert calls.read_text() == "run\n"
+
+
+def test_start_refuses_the_same_change_while_its_supervisor_has_no_ticket(starting_lander):
+    _, dev, _, tree, _, _, launch = starting_lander
+    tool.resume(dev, tree.name, [], launch, wait=0, sleep=lambda s: None)
+    with pytest.raises(SystemExit, match="supervisor"):
+        tool.start(dev, [], NOW.replace(second=1), launch)
+
+
+def test_concurrent_resumes_admit_only_one_supervisor(starting_lander):
+    _, dev, _, tree, _, calls, _ = starting_lander
+    code = (f"import sys;sys.path.insert(0,{str(ROOT / 'tools')!r});import land_async as a;from pathlib import Path;"
+            f"print(a.resume(Path({str(dev)!r}),{tree.name!r},[],a.detach,wait=0,sleep=lambda s:None))")
+    parents = [subprocess.Popen([sys.executable, "-c", code], stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                text=True) for _ in range(2)]
+    results = [process.communicate(timeout=10) for process in parents]
+    assert sorted(process.returncode for process in parents) == [0, 1]
+    assert sum("starting" in stdout for stdout, _ in results) == 1
+    assert any("supervisor" in stderr for _, stderr in results)
+    until = time.monotonic() + 5
+    while not calls.exists() and time.monotonic() < until:
+        time.sleep(.02)
+    assert calls.read_text() == "run\n"
+
+
+def test_quick_success_without_a_ticket_reports_landed(repo):
+    main, dev = repo
+    snap, log = tool.start(dev, [], NOW, lambda *a: None)
+    tree = log.parent / log.name.removesuffix(".log")
+
+    def finish(*a):
+        process = subprocess.Popen(["git", "-C", str(main), "merge", "-q", "--ff-only", snap])
+        assert process.wait(timeout=5) == 0
+        return process
+
+    assert tool.resume(dev, tree.name, [], finish, wait=0, sleep=lambda s: None) == "landed"
+
+
+def test_official_stop_ends_starting_supervisors_child_and_releases_ownership(starting_lander):
+    _, dev, _, tree, _, calls, launch = starting_lander
+    processes = []
+
+    def capture(*args):
+        process = launch(*args)
+        processes.append(process)
+        return process
+
+    tool.resume(dev, tree.name, [], capture, wait=0, sleep=lambda s: None)
+    until = time.monotonic() + 5
+    pidfile = calls.with_suffix(".pid")
+    while not pidfile.exists() and time.monotonic() < until:
+        time.sleep(.02)
+    child = int(pidfile.read_text())
+    tool.stop(processes[0].pid)
+    processes[0].wait(timeout=5)
+
+    def child_exited():
+        if not tool._queue().pid_alive(child):
+            return True
+        state = Path(f"/proc/{child}/stat")
+        try:
+            return state.is_file() and state.read_text().split()[2] == "Z"  # killed orphan awaiting OS reaping
+        except FileNotFoundError:
+            return True
+
+    until = time.monotonic() + 5
+    while not child_exited() and time.monotonic() < until:
+        time.sleep(.02)
+    assert child_exited(), "stop must end the child as well as its detached supervisor"
+    assert tool.resume(dev, tree.name, [], capture, wait=0, sleep=lambda s: None) == "starting"
