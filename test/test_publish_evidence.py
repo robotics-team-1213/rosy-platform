@@ -184,10 +184,11 @@ def test_real_work_queue_shards_are_complete_proof_but_one_missing_shard_is_not(
     import work_queue
     local, _ = repo
     for n in range(5):
-        _commit(local, f"test/test_shard_{n}.py", f"def test_{n}(): pass\n" + "# size\n" * n)
+        _commit(local, f"learning/registry/policy/test/test_shard_{n}.py",
+                f"def test_{n}(): pass\n" + "# size\n" * n)
     sha = _git(local, "rev-parse", "HEAD")
     logs = qualified_record(tool, local, sha, _git(local, "rev-parse", f"{sha}^"))
-    root = ["test", "--ignore=" + exclusive.TARGET]
+    root = ["learning/registry/policy/test"]  # ROOT-with-ignore intentionally stays whole.
     parts = work_queue.split(local, [root], seen={tuple(root): 3 * work_queue.SPLIT_S})
     assert len(parts) == 3
     _rewrite_rows(local, lambda rows: rows.remove(next(r for r in rows if r["argv"] == root)))
@@ -200,7 +201,7 @@ def test_real_work_queue_shards_are_complete_proof_but_one_missing_shard_is_not(
         land_cache.record(local, sha, tree, env, part, log)
         shard_logs.append(str(log))
     record = tool.land_record.read(local, sha)
-    record["logs"] = [log for log in logs if log != logs[1]] + shard_logs
+    record["logs"] = [log for log in logs if log != logs[0]] + shard_logs
     (tool.land_record.folder(local) / f"{sha}.json").write_text(json.dumps(record), encoding="utf-8")
     assert tool.green_full(local, sha)
     _rewrite_rows(local, lambda rows: rows.pop())
