@@ -29,13 +29,16 @@ def test_rollup_closes_member_retry_history_but_preserves_later_work_and_dedupli
     assert land_goal.lead_times(rows, 0, 400) == [4, 2, 1]
 
 
-def test_pinned_retry_does_not_consume_an_earlier_unrelated_snapshot():
+@pytest.mark.parametrize("late_stop", [False, True])
+def test_pinned_retry_does_not_consume_an_earlier_unrelated_snapshot(late_stop):
     a, b = "land/fix/a-20261101000000", "land/fix/a-20261101010000"
     rows = [ev(0, "queue", branch=a, ticket="a1"), ev(120, "queue", branch=b, ticket="b", pid=2),
             ev(180, "queue", branch=a, ticket="a2", pid=3),
             ev(240, "landed", branch="land/fix/land-rollup-x",
                members=[dict(branch=a, ticket="a2", candidate="a" * 40)]),
             ev(300, "landed", branch=b, pid=2)]
+    if late_stop:
+        rows.append(ev(200, "stop", branch=b, pid=2))
     assert land_goal.lead_times(rows, 0, 400) == [4, 3]
 
 
@@ -153,6 +156,18 @@ def test_goal_cli_defaults_to_sixty_minutes_and_preserves_override(goal_repo, mo
     assert "p90 90 min (goal <= 60)" in capsys.readouterr().out
     assert land_stats.main([*args, "--p90", "120"]) == 0
     assert "p90 90 min (goal <= 120)" in capsys.readouterr().out
+
+
+def test_goal_cli_old_unrelated_incomplete_train_does_not_fail_the_current_window(goal_repo, monkeypatch, capsys):
+    events, start = goal_repo
+    rows = [ev(start - 3 * H, "queue", branch="fix/old", ticket="a", pid=3),
+            ev(start - 2.9 * H, "queue", branch="fix/old", ticket="b", pid=4),
+            ev(start - 2.8 * H, "train", branch="fix/leader", branches=["fix/old"], result="landed"),
+            ev(start, "queue", branch="fix/current"), ev(start + 300, "landed", branch="fix/current")]
+    events.write_text("\n".join(json.dumps(r) for r in rows), encoding="utf-8")
+    monkeypatch.setattr(land_stats.time, "time", lambda: start + 600)
+    assert land_stats.main(["--goal", "--hours", "1"]) == 0
+    assert "PASS:" in capsys.readouterr().out
 
 
 def test_goal_cli_recovers_historical_rollup_members_without_rewriting_events(goal_repo, monkeypatch, capsys):
