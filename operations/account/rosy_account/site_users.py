@@ -21,7 +21,14 @@ import yaml
 _ROLES = {"viewer", "operator", "policy-admin", "service", "ai_observer"}  # D-577 4: ai_observer posts facts only
 _SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 _LOGIN = re.compile(r"[a-z0-9._-]{1,32}\Z")
-_FIELDS = {"principal_id", "role", "token_sha256", "login", "password_scrypt", "policy_admin"}
+_FIELDS = {"principal_id", "role", "token_sha256", "login", "password_scrypt", "policy_admin", "machine"}
+
+
+def validate_machine_user(entry: Mapping[str, object]) -> None:
+    """An explicit machine marker identifies only a token-only legacy viewer."""
+    if "machine" in entry and (entry["machine"] is not True or entry.get("role") != "viewer"
+                              or {"login", "password_scrypt", "policy_admin"} & entry.keys()):
+        raise ValueError("site user machine must be true on a token-only viewer without policy_admin")
 
 #: D-519 1: n=2^15, r=8, p=1, 16-byte salt, 32-byte result.
 SCRYPT_N, SCRYPT_R, SCRYPT_P = 2 ** 15, 8, 1
@@ -102,11 +109,14 @@ def load_site_accounts(path: Path | str) -> tuple[dict[str, dict[str, str]], dic
             raise ValueError("site principal_id values must be unique")
         if role not in _ROLES:
             raise ValueError("site user role is unknown")
+        validate_machine_user(entry)
         # D-793: an operator may also hold fleet.policy without losing the operator role.
         policy_admin = entry.get("policy_admin", False)
         if policy_admin is not False and (policy_admin is not True or role != "operator"):
             raise ValueError("site user policy_admin must be true on an operator, or absent")
         extra = {"policy_admin": True} if policy_admin else {}
+        if entry.get("machine") is True:
+            extra["machine"] = True
         if "token_sha256" in keys:
             token_digest = entry["token_sha256"]
             if not isinstance(token_digest, str) or not _SHA256.fullmatch(token_digest):

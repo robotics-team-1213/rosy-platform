@@ -225,3 +225,60 @@ def test_fleet_receiver_does_not_create_authority_tables(receiver, tmp_path):
     with pytest.raises(ValueError, match='cannot own'):
         create_app(console, task_service=tasks, account_client_config=tmp_path / 'public.json',
                    account_config=tmp_path / 'private.json')
+
+
+def _machine_receiver_app(tmp_path, users, logins=None):
+    from fakes import FakeRobot
+    from fleet.server.app import create_app
+    from fleet.server.console import FleetConsole
+    from fleet.server.task_service import FleetTaskService
+    from fleet.server.task_store import FleetTaskStore
+    from fleet.swarm.robots import RobotEndpoint
+    console = FleetConsole([RobotEndpoint('r1', 'http://127.0.0.1:8081', 'robot-key')], [FakeRobot('r1')])
+    tasks = FleetTaskService(FleetTaskStore(tmp_path / 'fleet.db'), robot_ids=console.robot_ids)
+    return create_app(console, task_service=tasks, site_users=users, site_logins=logins,
+                      account_client_config=tmp_path / 'public.json',
+                      vision_lease_secret='v' * 32, vision_sources=('camera-1',))
+
+
+def test_receiver_explicit_machine_viewer_reads_health_without_command_or_proposal_authority(receiver, tmp_path):
+    from hashlib import sha256
+    credential = 'health-check-credential'
+    users = {sha256(credential.encode()).hexdigest(): {
+        'principal_id': 'health-check', 'role': 'viewer', 'machine': True},
+        sha256(b'human-legacy-credential').hexdigest(): {'principal_id': 'alice', 'role': 'viewer'}}
+    app = _machine_receiver_app(tmp_path, users)
+    client = TestClient(app, base_url=BASE)
+    headers = {'Authorization': 'Bearer ' + credential}
+    assert client.get('/api/fleet/state', headers=headers).status_code == 200
+    sources = client.get('/api/fleet/vision/sources', headers=headers)
+    assert sources.status_code == 200 and sources.json() == {'sources': ['camera-1']}
+    assert client.post('/api/fleet/estop', headers=headers, json={}).status_code == 403
+    assert client.post('/api/fleet/trip-proposals', headers=headers, json={
+        'candidate_robot_ids': ['r1'], 'request_key': 'health/check',
+        'steps': [{'to': 'B', 'via': []}]}).status_code == 403
+    for path in ('/api/fleet/state', '/api/fleet/vision/sources'):
+        assert client.get(path, headers={'Authorization': 'Bearer human-legacy-credential'}).status_code == 401
+
+
+@pytest.mark.parametrize('changes', [
+    {'machine': False}, {'machine': 'true'}, {'machine': 1}, {'machine': None},
+    {'role': 'operator'}, {'role': 'policy-admin'}, {'role': 'service'}, {'role': 'ai_observer'},
+    {'login': 'health'}, {'password_scrypt': 'unused'}, {'policy_admin': False}, {'policy_admin': True},
+    {'login': 'health', 'password_scrypt': 'unused'},
+])
+def test_receiver_rejects_invalid_programmatic_machine_entries_at_startup(receiver, tmp_path, changes):
+    from hashlib import sha256
+    users = {sha256(b'health-check-credential').hexdigest(): {
+        'principal_id': 'health-check', 'role': 'viewer', 'machine': True, **changes}}
+    with pytest.raises(ValueError):
+        _machine_receiver_app(tmp_path, users)
+
+
+def test_receiver_rejects_machine_principal_shared_with_human_login(receiver, tmp_path):
+    from hashlib import sha256
+    users = {sha256(b'health-check-credential').hexdigest(): {
+        'principal_id': 'health-check', 'role': 'viewer', 'machine': True}}
+    logins = {'alice': {'principal_id': 'health-check', 'role': 'viewer', 'password_scrypt': 'unused'}}
+    with pytest.raises(ValueError):
+        _machine_receiver_app(tmp_path, users, logins)

@@ -25,11 +25,14 @@ def build_plan(users, config, robots, sources, digest, token_file):
     if not re.fullmatch('[0-9a-f]{64}', digest):
         raise ValueError('invalid credential digest')
     next_users, next_config = copy.deepcopy(users), copy.deepcopy(config)
-    expected = {'principal_id': PRINCIPAL, 'role': 'viewer', 'token_sha256': digest}
+    legacy = {'principal_id': PRINCIPAL, 'role': 'viewer', 'token_sha256': digest}
+    expected = {**legacy, 'machine': True}
     for entry in next_users['users']:
-        if entry['principal_id'] == PRINCIPAL and entry != expected:
+        if entry == legacy:
+            entry['machine'] = True
+        if entry['principal_id'] == PRINCIPAL and (entry != expected or entry.get('machine') is not True):
             raise ValueError('existing verification principal differs')
-        if entry['token_sha256'] == digest and entry != expected:
+        if entry.get('token_sha256') == digest and entry != expected:
             raise ValueError('verification credential belongs to another principal')
     if expected not in next_users['users']:
         next_users['users'].append(expected)

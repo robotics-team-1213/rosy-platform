@@ -28,8 +28,14 @@ def configure_account_sessions(app, *, console, task_service, site_users, site_l
     account_login = account_client_config is None and (bool(site_logins) or accounts_bootstrap is not None or (
         task_service is not None and PasswordSessions.accounts_active(task_service.store.path)))
     principals = {} if account_login and not site_users else parse_site_principals(site_users, console)
+    human_ids = {entry["principal_id"].strip() for entry in (site_logins or {}).values()}
+    if any(site_users[digest].get("machine") is True and p.principal_id in human_ids
+           for digest, p in principals.items()):
+        raise ValueError("machine viewer principal must differ from human login principals")
     if account_client_config is not None:
-        principals = {digest: p for digest, p in principals.items() if p.role in {"service", "ai_observer"}}
+        principals = {digest: p for digest, p in principals.items()
+                      if p.role in {"service", "ai_observer"}
+                      or (p.role == "viewer" and site_users[digest].get("machine") is True)}
     password_sessions = None
     if account_client_config is not None:
         from fleet.server.account_receiver import install_account_receiver

@@ -14,6 +14,7 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 - Rosy Account는 Fleet과 별도 프로세스·계정 DB로 실행한다. 기존 issuer와 Account protocol의 `/api/fleet/auth/*` 주소를 유지한다. Fleet 업무 origin에서는 foundation AccountClient의 PKCE receiver가 로컬 세션을 소유한다. 중앙 로그인 쿠키를 Fleet 자격으로 복제하지 않는다.
 - Fleet `development`는 연결 환경 표식이다. 익명 개발 토큰의 발급·수락·자동 재접속을 폐기하며, `POST /api/fleet/auth/development-session`은 403을 반환한다. 개발 모드도 설정된 사람 로그인 또는 중앙 Account receiver가 필요하다. 로그인한 계정의 실제 역할·자원별 grant·최초 비밀번호 변경·CSRF·회수 검사는 그대로 적용한다.
 - Fleet origin의 `/console/login`은 기존 로컬 복귀 주소를 검증해 중앙 인증으로 이동한다. `/api/fleet/auth/session`과 로그아웃은 Fleet receiver 세션에 적용하며 Account protocol의 session family 회수를 따른다. `/console/profile`·`/console/accounts`는 중앙 계정 화면으로 연결한다. Learning의 기존 등록과 receiver는 유지한다.
+- 읽기 전용 기계 점검 자격은 기존 `viewer` 역할·토큰을 유지하며 site-users에서 `machine: true`로 명시한다. 토큰이 필수이고 사람 login·password·policy 권한과 함께 설정할 수 없다. receiver는 이렇게 명시한 viewer와 기존 service·ai_observer만 기계 Bearer로 수락하며, 사람의 이전 Bearer는 수락하지 않는다. viewer의 명령·제안 권한은 추가하지 않는다.
 - 이는 D-473의 익명 접속 계약을 대체한다. 구현·서명 배포·실제 사용자 수용은 별도 증거다.
 
 ### v1.348 Fleet 보류와 로봇 거절의 구분

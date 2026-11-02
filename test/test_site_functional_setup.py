@@ -21,7 +21,8 @@ def test_plan_adds_viewer_preserves_existing_and_selects_enrolled_ids():
  next_users,next_config=module().build_plan(users,cfg,['robot-b','robot-a'],['camera-a'],'b'*64,'/etc/rosy/site-secrets/health.token')
  assert users==USERS and cfg==CONFIG
  assert next_users['users'][0]==USERS['users'][0]
- assert next_users['users'][1]['role']=='viewer'
+ assert next_users['users'][1]=={'principal_id':'site-update-health','role':'viewer',
+                               'token_sha256':'b'*64,'machine':True}
  assert next_config['keep']==3
  assert next_config['functional_checks'][0]['required_ids']=='enrolled'  # D-580
  assert next_config['functional_checks'][1]['required_ids']==['camera-a']
@@ -39,6 +40,39 @@ def test_idempotent_plan_does_not_add_duplicate_user():
  m=module();users,cfg=m.build_plan(USERS,CONFIG,['r'],['s'],'b'*64,'/etc/rosy/site-secrets/health.token')
  users2,cfg2=m.build_plan(users,cfg,['r'],['s'],'b'*64,'/etc/rosy/site-secrets/health.token')
  assert users2==users and cfg2==cfg
+
+
+@pytest.mark.parametrize('already_marked',[False,True])
+def test_plan_only_marks_exact_legacy_health_viewer_and_then_is_idempotent(already_marked):
+ m=module()
+ legacy={'principal_id':m.PRINCIPAL,'role':'viewer','token_sha256':'b'*64}
+ health={**legacy,'machine':True} if already_marked else legacy
+ unrelated={'principal_id':'other-reader','role':'viewer','token_sha256':'c'*64}
+ synthetic_hash='$'.join(('scrypt','32768','8','1','A'*22+'==','A'*43+'='))
+ login_only={'principal_id':'human-reader','role':'viewer','login':'reader','password_scrypt':synthetic_hash}
+ users={'users':[USERS['users'][0],health,unrelated,login_only]}
+ original=copy.deepcopy(users)
+ planned,cfg=m.build_plan(users,CONFIG,['r'],['s'],'b'*64,'/etc/rosy/site-secrets/health.token')
+ assert users==original
+ assert planned=={'users':[USERS['users'][0],{**legacy,'machine':True},unrelated,login_only]}
+ repeated,repeated_cfg=m.build_plan(planned,cfg,['r'],['s'],'b'*64,'/etc/rosy/site-secrets/health.token')
+ assert repeated==planned and repeated_cfg==cfg
+
+
+@pytest.mark.parametrize('changes',[
+ {'role':'operator'}, {'token_sha256':'c'*64}, {'principal_id':'another-principal'},
+ {'machine':False}, {'machine':None}, {'machine':1}, {'machine':'true'},
+ {'login':'health'}, {'password_scrypt':'not-a-human-login'}, {'policy_admin':False},
+ {'unexpected':'operator-local-metadata'},
+])
+def test_plan_refuses_nonexact_health_identity_instead_of_upgrading_or_overwriting(changes):
+ m=module()
+ health={'principal_id':m.PRINCIPAL,'role':'viewer','token_sha256':'b'*64,**changes}
+ users={'users':[USERS['users'][0],health]}
+ original=copy.deepcopy(users)
+ with pytest.raises(ValueError):
+  m.build_plan(users,CONFIG,['r'],['s'],'b'*64,'/etc/rosy/site-secrets/health.token')
+ assert users==original
 
 
 class Host:

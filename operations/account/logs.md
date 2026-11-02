@@ -23,3 +23,11 @@
 - 경계: 과거 공개 Actions pin은 독립 검토로 upstream commit API·태그를 확인한 정확한 과거 commit/path/rule 기록만 사용한다. 비밀 탐지 정책은 바꾸지 않는다. 런타임 인증·grant·장치 제어 계약은 그대로다.
 - CE: 추가 패키징 판단은 의존성 선언·실제 설치 회귀 시험이 설명한다. 기존 로그인 화면 교훈 외의 새 교훈은 늘리지 않는다.
 - gate 변화: 통합 FULL은 실패 수정 후 재실행 대기다. 서명 산출물 ARTIFACT·운영 수용 FIELD HOLD를 유지한다.
+
+## 2026-11-02 · uncommitted · 사람 로그인 보완과 읽기 전용 기계 자격 보존
+
+- 변경: 천장 marker 도구의 폐기된 Fleet 개발 로그인 옵션은 네트워크 전에 사람 로그인과 `ROSY_FLEET_TOKEN`을 안내하고 종료한다. 기존 상태 점검 viewer는 권한·토큰을 유지하고 `machine: true`인 token-only viewer만 receiver에서 명시적으로 보존한다. 기존 점검 계정 생성기도 같은 표식을 보존한다.
+- 증거: `643c3b399c` 적색 뒤 `453d43267f` 원격 보정 도구 11 passed. `b2537af54b` 적색 세 항목 뒤 `8faa6099e1` loader·receiver·writer 126 passed. `ca93b3dddb` 점검 계정 생성기 35 passed. 모두 skip 0이며 실제 시험 API에서 상태·비전 조회 허용, 정지·작업 제안 거절과 사람의 이전 Bearer 거절을 확인했다.
+- 경계: YAML·직접 구성·registry writer는 사람 로그인·비밀번호·정책 권한과의 결합 및 잘못된 marker를 거절한다. CORE의 별도 개발 인증과 보정 계산·동작은 그대로이며 실물 주행은 실행하지 않았다. 운영 계정 설정은 아직 적용하지 않았다.
+- gate 변화: SOURCE·LOCAL GO, ARTIFACT·FIELD HOLD. 통합 FULL과 서명 설치·운영 수용은 별도 증거다. ROS-SIM·DEVICE N/A.
+- CE: 경계 판단은 명시적 설정 계약과 회귀 시험이 설명한다. 기존 로그인 화면 교훈 외의 새 교훈은 늘리지 않는다.

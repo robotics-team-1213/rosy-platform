@@ -77,3 +77,16 @@ def test_offline_frames_in_capture_order(tmp_path, monkeypatch):
                                 heading_edge=(0, 1))
     assert [r[0] for r in rows] == [1000.0, 1002.0]
     assert seen[0] == ((128, 72), 1000.0, "ceiling_north", 41, (0, 1)) and len(seen) == 3
+def test_retired_development_session_never_contacts_fleet(monkeypatch, capsys):
+    import ceiling_marker_yaw as tool
+
+    def unexpected_request(*args, **kwargs):
+        pytest.fail("retired development login must not contact Fleet")
+
+    monkeypatch.setattr(tool, "_request", unexpected_request)
+    with pytest.raises(SystemExit) as refused:
+        tool.main(["--robot", "rosy_41", "--marker", "41", "--dev-session"])
+    assert refused.value.code == 2
+    captured = capsys.readouterr()
+    assert "sign in" in captured.err and "ROSY_FLEET_TOKEN" in captured.err
+    assert not captured.out

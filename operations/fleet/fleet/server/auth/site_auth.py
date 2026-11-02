@@ -15,6 +15,7 @@ from typing import Mapping, Optional
 from fastapi import Depends, Header, HTTPException, Request
 
 from rosy_account.principal import SitePrincipal, legacy_grants
+from rosy_account.site_users import validate_machine_user
 
 AI_PATHS = frozenset({"/api/fleet/ai/facts", "/api/fleet/ai/heartbeat",  # D-577 4
                       "/api/fleet/ai/proposals"})   # D-577 개정 2026-10-10: proposals, Fleet validates
@@ -31,6 +32,7 @@ def parse_site_principals(site_users: Mapping[str, Mapping[str, str]],
     for token, details in site_users.items():
         if not isinstance(token, str) or not isinstance(details, Mapping):
             raise ValueError("site user credential entries must be strings and mappings")
+        validate_machine_user(details)
         principal_id = details.get("principal_id", "")
         role = details.get("role", "")
         if not isinstance(principal_id, str) or not isinstance(role, str):

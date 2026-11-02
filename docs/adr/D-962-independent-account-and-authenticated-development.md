@@ -30,6 +30,8 @@ D-757은 단일 사람 신원과 앱별 세션·권한을 정했고 초기 구�
 
 ## Consequences
 
+Account receiver 모드에서 기존 `service`·`ai_observer` 기계 자격을 유지하며, 읽기 전용 상태 점검에는 `site-users.yaml`의 명시적인 `machine: true`, `role: viewer` 토큰만 추가로 허용한다. 이 표식은 역할이나 grant를 바꾸지 않는다. 일반 사람 Bearer 자격은 receiver에서 계속 거부한다. `machine: false`·비불리언 값·다른 역할·`login`·`password_scrypt`·`policy_admin` 필드와의 조합은 시작 단계에서 거부하며, 같은 principal ID를 사람 `site_logins`에 함께 둘 수 없다. YAML 로더와 직접 전달한 `site_users`에 같은 검증을 적용한다. 호스트의 원자적 사용자 레지스트리 편집 도구도 같은 형식을 검증하고 다른 사용자를 편집할 때 표식을 보존한다. 이 예외는 인증된 viewer 읽기 권한만 유지하며 operator 명령·제안 권한이나 익명 접근을 허용하지 않는다.
+
 Fleet과 Account의 로그·health·백업·복구를 구분한다. 기존 signer·candidate 검증은 계속 적용한다. 호환 import나 같은 이미지 사용은 임시 실행 종속을 의미하지 않으며, 독립 프로세스에서 Fleet import가 없음을 시험한다. 세션·키·이관 보존 시험과 실제 운영의 익명 차단·로그인 진입·서비스 독립성 관측을 분리해 보고한다.
 
 과거 제안자의 현재 권한을 재확인하는 recovery 경로도 새 Account를 따른다. Fleet의 보존된 receiver 세션에서 확인한 서명 신원과 온라인 회수 상태만 사용할 수 있으며, 이전 Fleet DB의 계정 행을 현재 권한으로 읽지 않는다. receiver 세션이 없는 과거 Bearer 제안자는 자동 허용하지 않고 재인증이 필요하다. 중앙 인증 장애·회수 시에도 recovery 권한을 연장하지 않는다.

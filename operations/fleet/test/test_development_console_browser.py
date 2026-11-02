@@ -183,6 +183,8 @@ def test_direct_development_entry_requires_login_and_stays_signed_out_after_logo
         expect(page.locator("#user-role")).to_have_attribute("title", re.compile("^alice"), timeout=15000)
         expect(page.locator("#user-role")).to_have_text("\uc6b4\uc601\uc790")
         expect(page.locator("#development-badge")).to_be_visible()
+        expect(page.locator("#development-badge")).to_have_attribute(
+            "aria-label", "개발 연결 모드: 사람 로그인 필요")
         assert not page.evaluate("sessionStorage.getItem('rosy-console-token')")
         logout = page.request.post(origin + "/api/fleet/auth/logout", headers={"Origin": origin})
         assert logout.status == 204

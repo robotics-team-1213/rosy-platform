@@ -136,6 +136,14 @@ Keep `ROSY_ACCOUNT_CONFIG` for the Account command; the Fleet environment sets i
 empty so Fleet never opens the authority database. Development mode also requires
 human login and never issues an anonymous development operator.
 
+Before receiver activation, inventory existing machine health credentials. A
+token-only read-only viewer must be explicitly marked `machine: true` in the
+protected site-users file; retain its existing role and token. The marker cannot
+be combined with human login/password or policy authority. Unmarked human legacy
+Bearers remain refused. Verify state and vision-source reads and denied writes
+with that same machine credential after cutover; never promote its role to make
+the health gate pass.
+
 Before switching an existing activated authority, stop its writer, create and
 verify a consistent SQLite backup, then use
 `rosy_account.migration.migrate_authority(source, target)` to copy the ten related
