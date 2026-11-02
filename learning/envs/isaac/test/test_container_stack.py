@@ -259,3 +259,13 @@ def test_nine_container_budget_covers_the_measured_run_and_the_mp4_cap():
     assert entry['timeout_seconds'] == 2520
     assert "timeout = 2520 if scenario == 'omx-map-container-stack'" in inspect.getsource(run_system)
     assert "'timeout': 2310 if container_task" in inspect.getsource(run_worker)
+
+
+def test_ship_offset_cases_move_only_the_release_target():
+    base = f.container_fixture(layers=3, case='nominal-palletizing-v21-ship')
+    shifted = f.container_fixture(layers=3, case='nominal-palletizing-v21-ship-y060')
+    assert shifted['release_offset_m'] == [0., .0006] and 'release_offset_m' not in base
+    for i in (0, 1, 2):
+        a = f.cube_release_target(i, held_scene(base, i), .04, fixture=base)
+        b = f.cube_release_target(i, held_scene(shifted, i), .04, fixture=shifted)
+        assert [b[0]-a[0], b[1]-a[1], b[2]-a[2]] == pytest.approx([0., .0006, 0.])

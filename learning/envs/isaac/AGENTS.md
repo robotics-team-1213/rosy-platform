@@ -29,7 +29,8 @@ Isaac Sim assets and Python probes (D-322). Not a buildable package — marker o
 | `arm_s_cell_task.py` | Isaac script: replays `deploy/robot/omx/isaac_cell_frames.py` frames against that scene, samples box, finger contact and joint lag, writes `rosy.arm-s-cell-report/1` |
 | `run_catalog.py` `arm-s-cell-case` | A real-cell case (`arm_s_cell_fixture.check_case`: box on the tray, place point, jaw turn, expected outcome) as a run beside the seed; an optional `aim` aims the pick off the box (tolerance sweep) |
 | `arm_s_cell_report.py` | Verifies an arm S cell report (schema, frames hash, SDK version) for the run worker |
-| `assets/` | `open_manipulator_description` (vendored reference) |
+| `palletizing_gripper.py` · `finger_pads.py` · `pad_sweep.py` | Opt-in palletizing jaw v2.1 (`gripper='palletizing-v2.1'` in a fixture case): pad box, pad gap and finger angles read from the vendored mesh, the finger collider for both jaws, and the pad sweep below the TCP. Default stays the stock OMX-F jaw |
+| `assets/` | `open_manipulator_description` and `omx_f_palletizing_description` (vendored reference; the latter holds only the new jaw meshes and URDF) |
 | `test/` | Host pytest: `test_graph_contract.py`, `test_model_checks.py`, `test_prepare_urdf.py` |
 
 ## Subdirectories

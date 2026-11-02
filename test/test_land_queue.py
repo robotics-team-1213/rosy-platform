@@ -61,6 +61,12 @@ def test_wait_returns_when_the_one_ahead_leaves(tmp_path):
     assert len(naps) == 1
 
 
+def test_completed_batch_member_finishes_before_rule_refresh(tmp_path):
+    mine = queue.take(tmp_path, "feat/member")
+    assert queue.wait(tmp_path, mine, 0, done=lambda: True,
+                      changed=lambda: pytest.fail("an already landed member restarted")) == "landed"
+
+
 def test_wait_times_out_with_who_is_ahead(tmp_path):
     ticket(tmp_path, "feat/peer", os.getpid())
     mine = queue.take(tmp_path, "feat/mine")

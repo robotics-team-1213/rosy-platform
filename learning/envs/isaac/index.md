@@ -32,8 +32,8 @@
 
 ## 최근 기록
 
-- 2026-10-31 · 7d26c6aef8 · rl3 places all nine on seed 43; supervisor deletion race fixed
-- 2026-10-31 · 2d63c2518a · rl3 places all nine containers under the 2-5 mm estimate
-- 2026-10-31 · e72e07e856 · rl3 vs rl0 over four seeds
-- 2026-10-31 · ade501751f · rl3 on seed 45
-- 2026-10-31 · 11e0eaafc9 · rl3 on seed 42: no clear gain over rl0
+- 2026-11-01 · e51d9f1a62 · KAN-108 plate, release strategies and container variants (step 4, D-947 order: MuJoCo candidates, Isaac boundary)
+- 2026-11-01 · de414c8795 · Isaac confirmation of off-centre ship-plate releases; stud ride-up now fails the seat check
+- 2026-11-01 · ab049f0b98 · MuJoCo sweep of off-centre release on the ship plate, Isaac offset cases (D-947 order, candidates only)
+- 2026-11-01 · f0d8c10dc9 · navy stud plate under the stack, opt-in case nominal-palletizing-v21-ship (step 2)
+- 2026-11-01 · 45da34bf98 · finger inside a 6 mm row gap places nine at a 3 mm release
