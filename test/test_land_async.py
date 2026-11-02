@@ -228,3 +228,17 @@ def test_live_rollup_unknown_membership_fails_closed(live_rollup, content, actio
         else:
             tool.resume(dev, tree.name, [], lambda *args: launched.append(args), wait=0, sleep=lambda s: None)
     assert not launched
+
+
+@pytest.mark.parametrize("action", ["start", "resume"])
+def test_ordinary_rollup_code_branch_needs_no_members_file(live_rollup, action):
+    _, dev, _, tree, ticket, metadata = live_rollup
+    metadata.unlink()
+    row = json.loads(ticket.read_text())
+    ticket.write_text(json.dumps({**row, "branch": "land/fix/land-rollup-member-ownership-20261102045038"}))
+    launched = []
+    if action == "start":
+        tool.start(dev, [], NOW.replace(second=1), lambda *args: launched.append(args))
+    else:
+        tool.resume(dev, tree.name, [], lambda *args: launched.append(args), wait=0, sleep=lambda s: None)
+    assert len(launched) == 1

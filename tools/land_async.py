@@ -67,11 +67,30 @@ def live_tickets(cwd: Path) -> list[dict]:
     return rows
 
 
+def member_branches(place: Path, row: dict) -> list[str]:
+    """Existing batch fields and land_rollup.build's .members record, without rewriting the queue ticket."""
+    branch = row.get("branch") or ""
+    path = place / (branch.replace("/", "-") + ".members")
+    try:
+        members = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(members, list) or not members or any(
+                not isinstance(m, dict) or not isinstance(m.get("branch"), str) or not m["branch"] for m in members):
+            raise ValueError("expected member branches")
+    except FileNotFoundError as exc:
+        if re.fullmatch(r"land/fix/land-rollup-\d{14}-\d{14}", branch):
+            raise SystemExit(f"[land-async] unknown live rollup membership: {path.name}") from exc
+        return row.get("batch") or []
+    except (OSError, ValueError) as exc:
+        raise SystemExit(f"[land-async] unreadable live rollup membership: {path.name}") from exc
+    return [*(row.get("batch") or []), *(m["branch"] for m in members)]
+
+
 def holders(cwd: Path, branch: str) -> list[dict]:
-    """Live tickets landing ``branch``: its own ticket, a snapshot of it, or a batch carrying a snapshot of it."""
+    """Live tickets landing ``branch`` directly, through legacy batches, or through a one-ticket rollup."""
     snap = re.compile(rf"^{re.escape(PREFIX + branch)}-\d{{14}}")
+    place = holder(cwd)
     return [r for r in live_tickets(cwd) if r.get("branch") == branch or snap.match(r.get("branch") or "")
-            or any(snap.match(b) for b in r.get("batch") or [])]
+            or any(snap.match(b) for b in member_branches(place, r))]
 
 
 def stop(pid: int) -> None:
@@ -164,7 +183,7 @@ def resume(cwd: Path, name: str, land_args: list[str], launch, wait: float = 60,
     snap = snaps[0]
     if subprocess.run(["git", "-C", str(cwd), "merge-base", "--is-ancestor", snap, "main"]).returncode == 0:
         raise SystemExit(f"[land-async] {snap} is already in main")
-    if held := [r for r in live_tickets(cwd) if r.get("branch") == snap or snap in (r.get("batch") or [])]:
+    if held := [r for r in live_tickets(cwd) if r.get("branch") == snap or snap in member_branches(place, r)]:
         raise SystemExit(f"[land-async] {snap} is held by live ticket {held[0]['ticket']} ({held[0].get('branch')})")
     if git(tree, "rev-parse", "--abbrev-ref", "HEAD") != snap:  # land.py had moved it onto a batch candidate
         git(tree, "checkout", "-q", snap)
