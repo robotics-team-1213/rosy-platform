@@ -276,7 +276,7 @@ def test_real_cameras_see_the_studs_unmirrored_where_the_survey_saw_them():
     top camera the stern row above the bow row (survey frame: stern at the top, arm_b on the left)."""
     import numpy as np
     import ship_plate
-    fixture = f.container_fixture(layers=3, case='nominal')
+    fixture = f.container_fixture(layers=3, case='nominal-palletizing-v21-ship')
     studs = ship_plate.stud_positions(fixture)
     z = ship_plate.top_z(fixture)+fixture['ship_plate']['stud_height_m']
     for name, cam in fixture['real_cameras'].items():
