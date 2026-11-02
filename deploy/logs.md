@@ -4383,6 +4383,11 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - gate 변화: 없음. 서명 후보 배포 뒤 443 tailnet readback이 남았다. IP 주소로는 TLS가 실패하므로(인증서 SAN에 IP 없음) 이름으로 접속한다.
 - CE: 해당 없음 — 대역 누락은 이 기록과 Caddyfile 주석으로 복원된다.
 
+## 2026-11-02 · uncommitted · 현장 추가 팔 오버레이 전환 순서를 교훈으로
+- 변경: 10-27부터 현장 자동 업데이트를 막은 미서명 arm-s 오버레이를 정식 매핑으로 바꾼 실제 순서를 `docs/solutions/deployment/site-extra-arm-overlay-switch-needs-a-staged-runtime-2026-11-01.md`에 기록하고, `deploy/site/README.md` 전환 문단에서 그 문서를 가리킨다. 기존 README는 "오버레이를 함께 제거"만 적어 그대로 하면 세 번 거절된다.
+- 증거: 2026-11-02 09:17 KST 현장 candidate 2ba97ac, proxy·fleet·vision·postgres healthy, Fleet에 A/B/S 토큰, dry-run idle.
+- gate 변화: 없음. CE: 새 교훈 기록.
+
 ## 2026-11-02 · b101f57783 · fix(hosts): 모델·AI PC 미선언 유닛 선언, review-bridge 알려진 차이
 
 - 변경: `deploy/hosts/services.yaml`에 이미 설치돼 있던 유닛을 관측한 그대로 선언했다. 모델 PC `rosy-harbor-nightly` 서비스·타이머(Harbor 저장소의 `nightly_full_flow.sh`를 `~/rosy-jobs`에 복사, external), `rosy-pilot-prepare-geg6`(서명 model-code, 손으로 시작). AI PC `pinky-rosbridge-d12`·`-d13`(Pinky 스택, 꺼짐). `rosy-review-bridge`에는 `known_drift`를 단다. 설치본이 매일 갱신되는 `bridge-state-20261024`에 쓰고 템플릿의 `bridge-state`는 10-24 뒤 그대로라, 템플릿을 설치하면 오래된 상태로 돌아간다.
