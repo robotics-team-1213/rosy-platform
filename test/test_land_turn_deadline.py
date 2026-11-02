@@ -120,6 +120,67 @@ def test_the_ticket_keeps_the_sent_back_count_across_a_relaunch(tmp_path, monkey
     assert land.land_checks.overtimes(land, fresh) == 2
 
 
+@pytest.mark.parametrize("first_cap", [600, 1200])
+@pytest.mark.parametrize("sent_back", [0, 1, 2, 20])
+def test_every_turn_budget_has_a_thirty_minute_ceiling(cached, monkeypatch, first_cap, sent_back):
+    monkeypatch.setattr(land, "TURN_CAP_S", first_cap)
+    args = land.argparse.Namespace(_overtime=sent_back)
+    assert land.land_checks.turn_budget(land, args) == (first_cap if sent_back == 0 else 1800)
+    assert land.land_checks.turn_deadline(land, args, "pre") is None
+    assert land.land_checks.turn_deadline(land, args, "gpre") is None
+
+
+@pytest.mark.parametrize("sent_back", [0, 1, 2, 20])
+@pytest.mark.parametrize("phase", [1, "g1"])
+def test_thirty_minute_ceiling_expires_without_any_waiter(cached, monkeypatch, sent_back, phase):
+    wt, _, _ = cached
+    now, timers = [1000.0], []
+
+    class Timer:
+        def __init__(self, seconds, function): self.function = function
+        def start(self): timers.append(self)
+        def cancel(self): pass
+        def join(self): pass
+
+    monkeypatch.setattr(threading, "Timer", Timer)
+    monkeypatch.setattr(land.time, "monotonic", lambda: now[0])
+    monkeypatch.setattr(land.land_checks, "turn_wanted", lambda *a: False)
+    queue = land.land_queue
+    qdir = queue.queue_dir(wt)
+    ticket = queue.take(qdir, "feat/x")
+    monkeypatch.setattr(queue, "_held", [ticket])
+    queue.wait(qdir, ticket, 0)
+
+    def remote(invocations, logs, *a, stop=None, **kw):
+        now[0] = 2801
+        assert stop is not None and timers, "later turns must also have a deadline"
+        timers[0].function()
+        assert stop.is_set(), "no waiter must never extend a turn beyond thirty minutes"
+        assert json.loads(ticket.read_text())["status"] == "preparing"
+        return [land.remote_pytest.CANCELLED] * len(invocations)
+
+    monkeypatch.setattr(land.remote_pytest, "run", remote)
+    args = land.argparse.Namespace(tests="auto", node=False, no_cache=False, _overtime=sent_back)
+    with pytest.raises(land.Overtime):
+        land.run_tests(wt, args, [["pkg/test"]], wt.parent / "logs", phase)
+
+
+def test_thirty_minute_safe_boundary_yields_without_a_waiter(cached, monkeypatch):
+    wt, _, _ = cached
+    now = [1000.0]
+    monkeypatch.setattr(land.time, "monotonic", lambda: now[0])
+    monkeypatch.setattr(land.land_checks, "turn_wanted", lambda *a: False)
+    queue = land.land_queue
+    qdir = queue.queue_dir(wt)
+    ticket = queue.take(qdir, "feat/x")
+    monkeypatch.setattr(queue, "_held", [ticket])
+    queue.wait(qdir, ticket, 0)
+    now[0] = 2801  # the non-interruptible local phase has now returned
+    with pytest.raises(land.Overtime):
+        land.land_checks.check_turn(land, wt, land.argparse.Namespace(_overtime=20), 1)
+    assert json.loads(ticket.read_text())["status"] == "preparing"
+
+
 def test_guard_and_body_share_the_budget_from_turn_acquisition(cached, monkeypatch):
     from test_land import GREEN, _runner
     wt, _, _ = cached
