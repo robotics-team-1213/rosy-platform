@@ -52,6 +52,8 @@ def _fit(ref, cur, hint):
 
 
 def _segments(ref):
+    if len(ref) < 4:
+        return None  # no 4-return window; the keep floor of 20 rejects it anyway
     edges = np.diff(ref,axis=0)
     lengths = np.linalg.norm(edges,axis=1)
     directions = edges/np.maximum(lengths[:,None],1e-12)
@@ -60,14 +62,15 @@ def _segments(ref):
     # Quantized millimetre returns make individual short-edge angles noisy.
     # A contiguous four-return line fit can independently support those edges
     # while retaining the existing gap limit and rejecting non-collinear corners.
-    for start in range(len(ref)-3):
-        if np.any(lengths[start:start+3] >= .08):
-            continue
-        window=ref[start:start+4]
-        centered=window-window.mean(axis=0)
-        _,_,axes=np.linalg.svd(centered,full_matrices=False)
-        extent=np.ptp(centered@axes[0])
-        if extent >= .01 and np.max(np.abs(centered@axes[1])) <= .001:
+    # One batched SVD over every gap-free window (D-953; same LAPACK call per window).
+    starts = np.flatnonzero(~np.any(np.lib.stride_tricks.sliding_window_view(lengths,3) >= .08,axis=1))
+    if len(starts):
+        windows=ref[starts[:,None]+np.arange(4)]
+        centered=windows-windows.mean(axis=1,keepdims=True)
+        axes=np.linalg.svd(centered,full_matrices=False)[2]
+        extent=np.ptp(np.einsum('kij,kj->ki',centered,axes[:,0]),axis=1)
+        across=np.max(np.abs(np.einsum('kij,kj->ki',centered,axes[:,1])),axis=1)
+        for start in starts[(extent >= .01) & (across <= .001)]:
             supported[start:start+3]=True
     keep = (lengths > .0001) & (lengths < .08) & supported
     if keep.sum() < max(20,.4*len(ref)):
@@ -78,20 +81,24 @@ def _segments(ref):
 def _fit_segments(segments,cur,hint,initial=None):
     starts,edges,length2 = segments
     normals = np.column_stack((-edges[:,1],edges[:,0]))/np.sqrt(length2[:,None])
+    (sx,sy),(ex,ey),rows = starts.T,edges.T,np.arange(len(cur))
     rotation,translation = _rotation(hint),np.zeros(2)
     if initial is not None:
         rotation,translation=initial[0].copy(),initial[1].copy()
     def correspondence(aligned):
-        offsets=aligned[:,None,:]-starts[None,:,:]
-        fractions=np.sum(offsets*edges[None,:,:],axis=2)/length2
-        projections=starts[None,:,:]+np.clip(fractions,0.,1.)[:,:,None]*edges[None,:,:]
-        distance2=np.sum((aligned[:,None,:]-projections)**2,axis=2)
+        # Same operations per axis as the (point, segment, 2) form, without its temporaries (D-953).
+        # Keep the a-(s+t*e) order: an expanded |d|^2-2t(d.e)+t^2|e|^2 form loses shared-vertex
+        # ties to 1e-16 m^2 cancellation and picks the segment the point lies outside of.
+        ax,ay=aligned[:,0,None],aligned[:,1,None]
+        fractions=((ax-sx)*ex+(ay-sy)*ey)/length2
+        t=np.clip(fractions,0.,1.)
+        distance2=(ax-(sx+t*ex))**2+(ay-(sy+t*ey))**2
         closest=np.argmin(distance2,axis=1)
-        errors=np.sqrt(distance2[np.arange(len(cur)),closest])
+        errors=np.sqrt(distance2[rows,closest])
         # Dot/divide roundoff can place an exact endpoint at 1+2e-16.
         # This admits at most 8e-14 m beyond an <=8 cm supported segment,
         # not extrapolation across an unobserved physical gap.
-        interior=(fractions[np.arange(len(cur)),closest]>=-1e-12)&(fractions[np.arange(len(cur)),closest]<=1.+1e-12)
+        interior=(fractions[rows,closest]>=-1e-12)&(fractions[rows,closest]<=1.+1e-12)
         keep=interior&(errors<=min(.04,max(.002,float(np.quantile(errors,.8)))))
         return closest,errors,keep
     for _ in range(14):

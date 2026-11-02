@@ -100,6 +100,7 @@ def harness(monkeypatch):
 
     node_mod = types.ModuleType("core.node")
     node_mod.RosyCoreNode = FakeNode
+    node_mod.core_executor_kind = lambda: "threaded"
     monkeypatch.setitem(sys.modules, "core.node", node_mod)
     yield rclpy, state
     for signum, handler in saved.items():
@@ -304,6 +305,18 @@ def test_rclpy_init_failure_propagates(harness, monkeypatch):
     with pytest.raises(RuntimeError, match="rcl_init failed"):
         core_main.main()
     assert "node" not in rclpy.calls
+
+
+def test_bad_core_executor_value_fails_before_rclpy_init(harness, monkeypatch):
+    rclpy, _ = harness
+
+    def refuse():
+        raise ValueError("ROSY_CORE_EXECUTOR must be one of threaded, events, not 'turbo'")
+
+    monkeypatch.setattr(sys.modules["core.node"], "core_executor_kind", refuse)
+    with pytest.raises(ValueError, match="ROSY_CORE_EXECUTOR"):
+        core_main.main()
+    assert rclpy.calls == []
 
 
 def _entry_point_spans(source: str) -> list[tuple[int, int]]:

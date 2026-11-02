@@ -6,6 +6,7 @@ import json
 import os
 import ssl
 import stat
+import threading
 from typing import Callable
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
@@ -80,6 +81,12 @@ def _public_file(path: str | Path, limit: int) -> bytes:
             os.close(fd)
 
 
+# (CA file bytes, pin) -> (context, not_before, not_after): parse/verify once, window re-checked per use.
+_VERIFIED: dict[tuple[bytes, str], tuple[ssl.SSLContext, datetime, datetime]] = {}
+_VERIFIED_MAX = 32
+_VERIFIED_LOCK = threading.Lock()
+
+
 @dataclass(frozen=True)
 class EnrolledTlsBinding:
     robot_id: str
@@ -90,6 +97,13 @@ class EnrolledTlsBinding:
 
     def context(self) -> ssl.SSLContext:
         pem = _public_file(self.tls_ca_file, 16384)
+        with _VERIFIED_LOCK:
+            hit = _VERIFIED.get((pem, self.tls_ca_sha256))
+        if hit is not None:
+            context, not_before, not_after = hit
+            if not not_before <= datetime.now(timezone.utc) < not_after:
+                raise EnrollmentTlsError('configured TLS CA is invalid, expired or changed')
+            return context
         try:
             certificates = x509.load_pem_x509_certificates(pem)
             if len(certificates) != 1:
@@ -107,6 +121,11 @@ class EnrolledTlsBinding:
             cert.verify_directly_issued_by(cert)
             context = ssl.create_default_context(cadata=cert.public_bytes(Encoding.PEM).decode('ascii'))
             context.minimum_version = ssl.TLSVersion.TLSv1_2
+            with _VERIFIED_LOCK:
+                if len(_VERIFIED) >= _VERIFIED_MAX:
+                    _VERIFIED.pop(next(iter(_VERIFIED)))
+                _VERIFIED[(pem, self.tls_ca_sha256)] = (context, cert.not_valid_before_utc,
+                                                         cert.not_valid_after_utc)
             return context
         except (ValueError, TypeError, x509.ExtensionNotFound, InvalidSignature):
             raise EnrollmentTlsError('configured TLS CA is invalid, expired or changed') from None
