@@ -255,10 +255,10 @@ def test_supervisor_run_holds_gpu_reservation_until_terminal(tmp_path, monkeypat
     resv = tmp_path / 'rosy-jobs' / ('isaac-' + row['run_id'] + '.resv')
     expiry, kind, cores, gb = resv.read_text().split()
     assert (kind, cores, gb) == ('gpu', '6', '8')
-    assert time.time() < int(expiry) <= time.time() + 7200
+    assert time.time() < int(expiry) <= time.time() + 600
     resv.write_text('%d gpu 6 8\n' % (time.time() + 10))
     mod.observe(receipt, remote)
-    assert int(resv.read_text().split()[0]) > time.time() + 7000, 'active poll renews the hold'
+    assert int(resv.read_text().split()[0]) > time.time() + 500, 'active poll renews the hold'
     mod.observe(receipt, remote)
     assert not resv.exists() and not statuses
 
@@ -428,9 +428,9 @@ def test_run_starts_only_after_ready_and_rides_out_lost_status_replies(tmp_path)
 
 
 def test_run_never_starts_when_the_model_pc_stays_busy(tmp_path):
-    remote = Pipeline([False] * 3, [])
-    with pytest.raises(ValueError, match='not ready.*GPU busy'):
-        module().run_experiment('omx-f-import', {'seed': 0}, SHA, tmp_path / 'run', remote, attempts=3,
+    remote, isaac = Pipeline([False] * 3, []), module()
+    with pytest.raises(isaac.NotReady, match='not ready.*GPU busy'):  # the CLI reports this apart from a failed run
+        isaac.run_experiment('omx-f-import', {'seed': 0}, SHA, tmp_path / 'run', remote, attempts=3,
                                 sleep=lambda s: None, fetch=None)
     assert 'start' not in remote.calls and not (tmp_path / 'run/receipt.json').exists()
 

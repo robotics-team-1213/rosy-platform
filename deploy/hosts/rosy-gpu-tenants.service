@@ -1,0 +1,7 @@
+[Unit]
+Description=D-958 give a lent GPU back to its role service (paused unit restore)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 -I %h/.local/lib/rosy-gpu-tenants/gpu_tenants.py tick
+TimeoutStartSec=120

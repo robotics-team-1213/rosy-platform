@@ -154,3 +154,136 @@ On this seed rl3 removes the one failure BC v0 had. It is one seed of a determin
 **Two seeds:** BC v0 + rl3 placed all nine containers on both seeds; BC v0 alone placed 8 and 2. In the short
 episodes rl3 was only a candidate (p = 0.23); in the nine-container flow it is the better model on both seeds tried.
 This is still simulation under an assumed 2–5 mm estimate error, not hardware acceptance.
+
+### Why BC v0 failed seed 43
+
+Read from the two seed-43 stack reports (d37d, 1038). The task stops at the first failed placement, so "2/9" means
+the run ended at box 1; boxes 2–8 were not tried. Box 1 was perfectly still (100/100 samples failed the window with
+zero velocity); it failed only because the row gap was 5.45 mm against the 2–5 mm band. Target y for box 1 is
+−33.5 mm (3.5 mm gap).
+
+| Box 1, y in mm | BC v0 (d37d) | BC v0 + rl3 (1038) |
+|---|---|---|
+| Box 0 after opening (shared start, same layout) | +0.47 | +0.50 |
+| Held box after each release iteration | −37.31, −34.74, **−33.83**, −34.40 | −34.95, −34.17, −34.21, −34.25 |
+| Box 1 after opening (14.6 mm fall) | −34.98 (moved −0.58) | −34.34 (moved −0.09) |
+| Row gap | **5.45** | 4.84 |
+
+Box 0 started both runs 0.5 mm off toward +y, leaving about 1 mm of the band's upper margin. BC v0 reached −33.83
+on its third iteration, then its fourth correction moved the box 0.57 mm away from the target, and the box slid
+another 0.58 mm when the gripper opened. Either alone would have stayed inside the band. With rl3 the held box
+stayed within 0.1 mm over the last three iterations and moved 0.09 mm on opening. One case: it shows the mechanism
+on this seed, not that rl3 always reduces drift on opening.
+
+### Seeds 44 and 45 (commit `fa58721ca6`)
+
+| Seed | BC v0 | BC v0 + rl3 |
+|---|---|---|
+| 44 | `54de45f4ab8658c2978a20db51d2c905` FAILED, 8 placed. Boxes 1, 4, 7 outside the window; first row gap 1.59 mm, below the band. | `c0b16e337f865e55867d267e1c2d54f0` FAILED, 5 placed. Box 4 ended 1.08 mm from its target in y; row gaps 3.85–4.60 mm. |
+| 45 | `ffb064aa26f2558eaec45a76dc50f246` FAILED, 1 placed. Box 0 jumped from +1.17 to +8.58 mm in y when the gripper opened. | `8ae2bf099abd5f1596a8accd73552b28` FAILED, 2 placed. Row gap 5.70 mm: box 0 at +1.01, box 1's last correction moved it 0.42 mm away, then 0.27 mm more on opening. |
+
+**Four seeds, placements out of nine:**
+
+| Seed | 42 | 43 | 44 | 45 | Complete |
+|---|---|---|---|---|---|
+| BC v0 | 8 | 2 | 8 | 1 | 0/4 |
+| BC v0 + rl3 | 9 | 9 | 5 | 2 | 2/4 |
+
+This replaces the two-seed reading above: rl3 is not reliably better in the full flow. It completed two of four
+seeds and BC v0 none, but BC v0 placed more on seed 44. Neither model passes the nine-container flow under the
+2–5 mm estimate.
+
+The failures share a pattern. The last release iteration of both models still moves the held box by 0.4–0.6 mm in y
+(seeds 43 BC, 45 rl3), box 0 often ends 0.5–1 mm toward +y, and the box moves again on opening. Together these use
+the 1.5 mm margin between the 3.5 mm nominal gap and either edge of the band. Seed 45 BC also shows a 7.4 mm jump on
+opening, far beyond the 0.1–0.4 mm (max 1.05 mm) seen before; the release measurement session should measure this
+drift on the real arm before more RL on the residual.
+
+### Why box 0 jumped 7.4 mm on seed 45 (run ffb0)
+
+The opening samples of ffb0 and 8ae2 (same seed, same layout) show the same opening up to landing. The fingers
+release by raising the command toward the measured finger angle; the box loses grip near command 0.417 rad, with
+the fingers still at 0.427. It then falls the 15 mm release clearance (`release_clearance_m`), reaching about
+220 mm/s. In both runs the box tilted 0.5–1.1° before it landed.
+
+| Box 0 | ffb0 (BC v0) | 8ae2 (BC v0 + rl3) |
+|---|---|---|
+| y before falling | +0.92 mm | +0.55 mm |
+| Velocity after landing | 175 mm/s in +y | 0 |
+| y after landing | +8.58 mm | +1.01 mm |
+
+So the jump is the landing, not the correction: in ffb0 the impact turned the vertical speed into a slide along the
+plate. A 14 mm drop onto a hard surface makes this sensitive to small tilt differences, and either model can hit it.
+Next check: the same BC v0 flow with an 8 mm clearance (case `nominal-bc-v0-release8`), seeds 42–45. The clearance
+was lowered from 35 mm to 15 mm on 2026-10-29 (`docs/validation/omx-cube-stacking-2026-10-29/result.md`); lower values
+were not tried.
+
+#### 8 mm release clearance with BC v0 (commit `a66fc77016`)
+
+| Seed | Run | Result |
+|---|---|---|
+| 42 | `fdb92f74efc55260ade38702d5800bd1` | FAILED, 0 placed: release correction did not converge, opening blocked. |
+| 43 | `10b911260a8b5e2397eb25ba3e950d6e` | Same. |
+| 44 | `47c471329f965190abb0fdc5eb51afc4` | Same. |
+| 45 | `82b197e3cc195ed092a01c1f596b78ae` | No result: the run unit went inactive at SDK import. Not a task outcome; not rerun. |
+
+On seed 42 the first command put the held box at z 96.9 mm, about the 8 mm target. BC v0's next corrections raised it
+to 101.4, 103.4 and 103.6 mm, the 15 mm height of its training demonstrations, so the 1.5 mm convergence check never
+passed. BC v0, and rl3 on top of it, learned the release height along with the lateral correction. A lower release
+cannot be evaluated with these models; it needs IK demonstrations and BC training at the new clearance. The landing
+slide hypothesis is therefore untested.
+
+## Current cell versus the simulated scene (2026-10-31 21:03)
+
+Checked on the ceiling camera (Fleet source `ceiling_north`), the side camera and both wrist cameras after the site PC
+was rewired from the single-arm S cell back to the two-arm A/B cell. Every result above used the CAD scene in
+`container_fixture`; these differences are not in it:
+
+- **Placing surface.** The real stack sits on a navy pentagon pallet with raised white studs on a grid. The simulated
+  stack sits on a flat plate. The landing slide (seed 45) and the opening drift both depend on what the box lands on,
+  so the drift numbers above are flat-plate numbers.
+- **Top camera.** The 2–5 mm estimate error stood for the old Jieli top camera. The top camera is now a RealSense D435
+  that serves no frame until its branch lands, and it has to be calibrated again before the estimate error can be
+  measured.
+- **New views.** A side camera faces the pallet and each arm has a wrist camera. The side view can record the fall
+  and landing; a wrist view is a candidate close-range estimate before release.
+- **Arm names.** arm_a is now the right follower and arm_b the left. Simulated arm indices are not yet mapped to them.
+
+Until the pallet is measured (outline, stud diameter, height and pitch) and added to the scene, more RL or release
+height work on the flat plate would tune for a surface the cell no longer has. The measurement session plan
+(`Rosy/docs/superpowers/plans/2026-10-31-omx-release-measurement-session.md`, section 6) now includes these.
+
+## Finger inside a 6 mm row gap, 3 mm release (2026-11-01, commit `45da34bf98`)
+
+Nominal IK with the true pose (no estimate error, no learned model). Two cases in `release_cases.FIXTURE_OVERRIDES`:
+`nominal-release3` lowers only the stack release to 3 mm above the target (the leveling set-down keeps 15 mm; lowering
+it too stopped all eight first runs at leveling, commit `18f9bb98a4`, runs not counted). `nominal-gap6-release3` also
+widens the target row gap to 6 mm (band 4.5–7.5 mm) and lets the neighbour-side finger go down into the gap when the
+gap is at least 5 mm (`finger_fits_gap`). Otherwise the finger still has to clear the neighbour top by 2 mm.
+
+**Finger model.** The simulated pads are 3 mm capsules with a 1 mm rest offset on each side, so a pad needs 5 mm of
+gap. The real new fingers were estimated at about 3 mm from the side camera. The jaw v2.1 CAD finger plate is
+1.1–2.0 mm thick, so this is a conservative proxy: the real finger has more room than the simulated one. The finger
+links themselves have no collision in this scene (pads only), and the containers weigh 60 g here against 16 g for the
+real 3-cell container.
+
+| Seed | 6 mm gap, finger in gap | 3.5 mm gap (finger cannot enter) |
+|---|---|---|
+| 42 | `1310913662965131b9dcb563a47007e6` **9/9**, gaps 4.65–6.91 mm | `6b98cae0e603553e87c9ab5f8dde2ad6` 3 placed. Box 2 slid 4.2 mm on opening; gap −0.27 mm (touching) |
+| 43 | `cb157b50463f515d9de14ba68c178c37` **9/9**, gaps 4.99–5.93 mm | No result: the remote run failed to start (`Isaac operation failed`); not rerun |
+| 44 | `bb5e2d3c29c755b5b08189a97f88fe78` 1 placed: the leveling set-down for box 1 did not converge, before any stack release of that box | `bc06c410f56953309dbdc205bf56510b` 5 placed. Box 4 ended 0.92 mm off |
+| 45 | `8279afde212a578f8bf4f18c5b2f204f` **9/9**, gaps 4.92–6.15 mm | `9997689b92c054ec8d5cca6902af833e` 8 placed. Box 7 ended 1.14 mm off |
+
+- **Release height.** With the 6 mm gap every box was released 3.0 mm above its target. With 3.5 mm the outer rows
+  still had to stay 13.6 mm up to keep the finger over the neighbour; only the centre rows dropped from 3 mm.
+- **Drift on opening.** With the finger in the gap the released box moved 0.1–0.6 mm on opening. With 3.5 mm the
+  13.6 mm drops moved it up to 4.2 mm (seed 42, box 2).
+- **Contact with the neighbour (new).** With the finger in the gap, opening the gripper pushed the neighbouring centre
+  box sideways: 0.7–0.8 mm on the first layer and 2.0–2.5 mm (with 0.4–0.8 mm lift) on layers 2 and 3. The pad swings
+  outward as the jaw opens and meets the neighbour. Placing the opposite outer row pushed it back, so the final gaps
+  stayed in the band. That is symmetry, not control, and a real finger catching the neighbour would also do this.
+  Ways to remove it: open the jaw less on release, or lift slightly while opening.
+
+So with the finger allowed into a 6 mm gap the nominal flow places all nine on three of four seeds, and the release
+drop and drift mostly disappear. The remaining risk is the opening finger pushing the neighbour. This is true-pose IK
+in simulation, not the learned models and not hardware.
