@@ -1,7 +1,9 @@
 # Rosy Account protocol (D-757)
 
 이 계약은 D-757 구현의 additive API다. 설치·활성화·실제 사용자 수용은 별도 기록한다.
-기존 Fleet 로그인/프로필 endpoint는 유지한다. 별도 인증 서버 프로세스를 만들지 않는다.
+기존 Fleet 로그인/프로필 endpoint는 유지한다. D-962(2026-11-02)는 초기 Fleet 프로세스 holder를 별도 Account 서비스로 대체한다. 같은 issuer와 프로토콜을 유지하고 Fleet은 별도 로컬 쿠키를 갖는 Account receiver가 된다. 초기 in-process 설치 절차는 아래에 역사와 호환 구성으로 남긴다.
+
+독립 구성은 `python -m rosy_account --config <protected-authority-json> --db <account-db>`로 실행하며, 실제 배포 인자·이미지·권한과 이관 절차는 [site 배포 안내](../../deploy/site/README.md)를 따른다. Fleet은 `ROSY_FLEET_ACCOUNT_CLIENT_CONFIG`로 공개 검증 키와 receiver의 보호 저장소 설정을 받으며 Account 서명 키와 계정 DB는 연결하지 않는다. 기존 활성 authority의 계정·세션·OAuth 열 개 테이블을 함께 이관하고 재-bootstrap하지 않는다.
 
 ## 명시적 배포와 최초 전환
 

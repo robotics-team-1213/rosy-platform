@@ -1,10 +1,16 @@
 """D-798: a file moved into a server holder still imports under its old ``fleet.server.<name>``."""
+import importlib
 import importlib.util
 from pathlib import Path
 
 from fleet._source_layout import SERVER_HOLDERS
 
 SERVER = Path(__file__).resolve().parents[1] / "fleet" / "server"
+ACCOUNT = SERVER.parents[2] / "account" / "rosy_account"
+ACCOUNT_ALIASES = frozenset({
+    "account_authority", "account_authority_routes", "account_config", "account_ledger",
+    "account_routes", "password_routes", "password_session", "site_users",
+})
 
 
 def test_every_holder_file_resolves_under_fleet_server():
@@ -12,8 +18,15 @@ def test_every_holder_file_resolves_under_fleet_server():
     assert {"proposal_store.py", "map_pose_service.py", "identity.py", "traffic.py", "site_map_store.py"} <= {
         p.name for p in moved}
     for path in moved:
-        spec = importlib.util.find_spec(f"fleet.server.{path.stem}")
-        assert spec is not None and Path(spec.origin).resolve() == path.resolve(), path
+        name = f"fleet.server.{path.stem}"
+        expected = path
+        if path.parent.name == "auth" and path.stem in ACCOUNT_ALIASES:
+            canonical = importlib.import_module(f"rosy_account.{path.stem}")
+            assert importlib.import_module(name) is canonical, path
+            expected = ACCOUNT / path.name
+            assert Path(canonical.__file__).resolve() == expected.resolve(), path
+        spec = importlib.util.find_spec(name)
+        assert spec is not None and Path(spec.origin).resolve() == expected.resolve(), path
 
 
 def test_old_import_path_loads_the_moved_module():

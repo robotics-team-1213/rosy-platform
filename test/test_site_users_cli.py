@@ -44,6 +44,41 @@ def _no_temp_files_left(tmp_path: Path) -> None:
     assert list(tmp_path.glob("*.tmp")) == []
 
 
+def test_unrelated_registry_edits_preserve_explicit_machine_viewer(tmp_path):
+    from fleet.server.site_users import load_site_users
+    path = tmp_path / "site-users.yaml"
+    machine = {**_entry("health-check", "viewer", "health-check-key"), "machine": True}
+    _seed(path, _entry(), machine)
+    add_user(path, "new-operator", "operator", "new-operator-key")
+    remove_user(path, "new-operator")
+    assert list_users(path) == [_entry(), machine]
+    assert load_site_users(path)[machine["token_sha256"]] == {
+        "principal_id": "health-check", "role": "viewer", "machine": True}
+
+
+@pytest.mark.parametrize("changes", [
+    {"machine": False}, {"machine": "true"}, {"machine": 1}, {"machine": None},
+    {"role": "operator"}, {"role": "policy-admin"}, {"role": "service"}, {"role": "ai_observer"},
+    {"login": "health"}, {"password_scrypt": "unused"}, {"policy_admin": False}, {"policy_admin": True},
+])
+def test_registry_writer_rejects_invalid_machine_entries(changes):
+    machine = {**_entry("health-check", "viewer"), "machine": True, **changes}
+    with pytest.raises(SiteUsersError):
+        validate_users_document({"users": [machine]})
+
+
+def test_machine_marker_cannot_accompany_valid_human_login_credentials(tmp_path):
+    from fleet.server.site_users import hash_password, load_site_users
+    path = tmp_path / "site-users.yaml"
+    machine = {**_entry("health-check", "viewer"), "machine": True,
+               "login": "health", "password_scrypt": hash_password("test-only-human-password")}
+    _seed(path, machine)
+    with pytest.raises(SiteUsersError):
+        validate_users_document({"users": [machine]})
+    with pytest.raises(ValueError):
+        load_site_users(path)
+
+
 def test_add_list_remove_roundtrip_loads_in_the_real_fleet_loader(
         tmp_path, monkeypatch, capsys):
     from fleet.server.site_users import load_site_users

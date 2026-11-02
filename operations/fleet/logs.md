@@ -5244,6 +5244,13 @@
 - 증거: 원격 시험은 재착지 전 기록한다.
 - Gate: 없음. CE: 해당 없음.
 
+## 2026-11-02 · uncommitted · D-962 독립 Account 수신과 개발 모드 사람 로그인
+
+- 변경: 사람 계정·세션·OAuth 구현은 `operations/account/rosy_account`가 소유하고 Fleet은 foundation AccountClient로 자원 grant를 검증한다. 익명 개발 토큰 발급·수락·자동 재접속을 폐기했다. 개발 모드의 실제 계정 역할과 CSRF·로그아웃 제한을 유지한다.
+- 증거: 개발 인증·CLI·node·브라우저 149건 중 147건은 `1b414063f2`에서 통과했고 두 site-map 저장소 단정은 토큰이 없는 빈 문자열을 허용하도록 보정했다. 최종 direct-page Chromium 10건은 `4d7ea3ac4e`에서 모두 통과/skip 0/NEW 0. Account 기존 회귀 160건 통과 뒤 정렬 단정·callback 시험 보정을 별도로 재검증 중이다. 최종 통합 SHA·운영 전환은 후속 기록으로 구분한다.
+- gate 변화: 없음. 장치 명령과 실물 수용을 수행하지 않았다.
+- CE: 해당 없음 — 개발 우회 방지는 코드·회귀 시험에 남는다. 중앙 로그인 화면 실패의 교훈은 `docs/solutions/logic-errors/fleet-development-mode-hides-central-account-login-2026-11-02.md`를 따른다.
+
 ## 2026-11-02 · a7f36cb999 · Web unification follow-up
 
 - 변경: 2026-11-02 · a7f36cb999 · 독립 검토가 확인한 central Account의 사용 불가능한 복귀 링크를 숨겼다. validated return과 로그인 완료 후 원래 앱 복귀는 유지한다. 영상 Chromium fixture에 실제 app-runtime.js 자산을 복원했다. 인증 네 파일 64건과 영상/seat fixture 25건 원격 통과; 운영 SSO·실제 영상·장치 수용을 뜻하지 않는다. CE: 해당 없음 — UI 상태와 자산 계약을 회귀로 검증한다.

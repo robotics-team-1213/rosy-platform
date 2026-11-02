@@ -6,7 +6,7 @@ import re
 import pytest
 from browser_harness import browser_tests_enabled
 from fleet.server.development_session import DevelopmentSessions
-from test_fleet_header_browser import _api, _fleet
+from test_fleet_header_browser import _api, _fleet, _signed_in_page
 
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason="opt-in Chromium acceptance")
 SIZES = [(1920, 1080), (1366, 768), (390, 844), (320, 568)]
@@ -30,7 +30,7 @@ def test_fleet_role_styles_reach_fields_disclosures_and_headings(tmp_path, theme
     api["/api/fleet/enrollment/robots"] = {"available": True, "robots": [], "static_robot_ids": [], "alarms": []}
     writes = []
     with _fleet(tmp_path, console_token="registry-only", development_sessions=DevelopmentSessions()) as (browser, origin):
-        page = browser.new_page()
+        page = _signed_in_page(browser, origin)
         errors = []
         page.on("pageerror", lambda error: errors.append(str(error)))
 

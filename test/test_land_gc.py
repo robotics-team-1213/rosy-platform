@@ -1,6 +1,7 @@
 """tools/land_gc.py: leftovers of stopped or landed land_async landings go only when nothing is lost (2026-11-01)."""
 
 import json
+from contextlib import contextmanager
 import os
 import subprocess
 import sys
@@ -14,6 +15,22 @@ sys.path.insert(0, str(ROOT / "tools"))
 import land_gc  # noqa: E402
 
 OLD = time.time() - 30 * 86400
+
+
+@contextmanager
+def supervisor_lease(tree):
+    """A real process owns the pre-ticket lease without refreshing the landing's old log."""
+    code = ("import sys;from pathlib import Path;sys.path.insert(0,sys.argv[1]);import land_async;\n"
+            "with land_async.locked(Path(sys.argv[2])):\n print('ready',flush=True);sys.stdin.readline()")
+    process = subprocess.Popen([sys.executable, "-c", code, str(ROOT / "tools"),
+                                str(tree.parent / (tree.name + ".supervisor.lock"))],
+                               stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    try:
+        assert process.stdout.readline().strip() == "ready"
+        yield
+    finally:
+        process.stdin.close()
+        process.wait(timeout=10)
 
 
 def git(repo, *args):
@@ -189,3 +206,45 @@ def test_sidecars_without_tree_or_branch_are_removed(landing):
     rows = land_gc.plan(repo, time.time(), 7)
     assert land_gc.apply(repo, rows) == []
     assert not marker.exists()
+
+
+def test_pre_ticket_supervisor_keeps_landed_old_tree(landing):
+    repo, common, tree, branch = landing
+    assert not (common / land_gc.QUEUE).exists()
+    assert time.time() - (tree.parent / (tree.name + ".log")).stat().st_mtime > land_gc.QUIET_S
+    assert git(repo, "rev-parse", branch) == git(repo, "rev-parse", "main")
+    with supervisor_lease(tree):
+        lease = tree.parent / (tree.name + ".supervisor.lock")
+        inode = lease.stat().st_ino
+        rows = land_gc.plan(repo, time.time(), 7)
+        assert next(row[0] for row in rows if row[2] == tree) == "keep"
+        assert land_gc.apply(repo, rows) == []
+        assert tree.exists() and git(repo, "rev-parse", branch)
+        assert lease.stat().st_ino == inode, "a live lease must never be unlinked"
+    assert land_gc.apply(repo, land_gc.plan(repo, time.time(), 7)) == []
+    assert not tree.exists() and lease.stat().st_ino == inode
+
+
+@pytest.mark.parametrize("after_revalidation", [False, True])
+def test_apply_keeps_supervisor_starting_after_plan(landing, monkeypatch, after_revalidation):
+    repo, _, tree, branch = landing
+    rows = land_gc.plan(repo, time.time(), 7)
+    assert next(row[0] for row in rows if row[2] == tree) == "remove"
+    lease = supervisor_lease(tree)
+    if after_revalidation:
+        original = land_gc.plan
+
+        def refresh(*args, **kwargs):
+            fresh = original(*args, **kwargs)
+            lease.__enter__()
+            return fresh
+
+        monkeypatch.setattr(land_gc, "plan", refresh)
+    else:
+        lease.__enter__()
+    try:
+        assert land_gc.apply(repo, rows), "new ownership must prevent removal and report the changed state"
+        assert tree.exists() and git(repo, "rev-parse", branch)
+        assert (tree.parent / (tree.name + ".stopped")).exists()
+    finally:
+        lease.__exit__(None, None, None)
