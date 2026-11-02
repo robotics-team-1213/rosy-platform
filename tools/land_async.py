@@ -32,6 +32,7 @@ import time
 
 HOLDER = "rosy-land-wt"
 PREFIX = "land/"
+ROLLUP = re.compile(r"land/fix/land-rollup-\d{14}-\d{14}")
 NO_WINDOW = 0x08000000  # subprocess.CREATE_NO_WINDOW, named here so the module imports off Windows too
 
 
@@ -118,6 +119,16 @@ def live_tickets(cwd: Path) -> list[dict]:
     return rows
 
 
+def live_owners(cwd: Path) -> list[dict]:
+    """A rollup's lifetime lease owns its members even before its land.py takes a queue ticket."""
+    rows, place = live_tickets(cwd), holder(cwd)
+    for ref in git(cwd, "for-each-ref", "--format=%(refname:short)", "refs/heads/land/fix/land-rollup-*").splitlines():
+        if ROLLUP.fullmatch(ref) and not any(r.get("branch") == ref for r in rows):
+            if running(place / ref.replace("/", "-")):
+                rows.append({"branch": ref, "status": "starting", "ticket": "supervisor"})
+    return rows
+
+
 def member_branches(place: Path, row: dict) -> list[str]:
     """Existing batch fields and land_rollup.build's .members record, without rewriting the queue ticket."""
     branch = row.get("branch") or ""
@@ -128,7 +139,7 @@ def member_branches(place: Path, row: dict) -> list[str]:
                 not isinstance(m, dict) or not isinstance(m.get("branch"), str) or not m["branch"] for m in members):
             raise ValueError("expected member branches")
     except FileNotFoundError as exc:
-        if re.fullmatch(r"land/fix/land-rollup-\d{14}-\d{14}", branch):
+        if ROLLUP.fullmatch(branch):
             raise SystemExit(f"[land-async] unknown live rollup membership: {path.name}") from exc
         return row.get("batch") or []
     except (OSError, ValueError) as exc:
@@ -140,7 +151,7 @@ def holders(cwd: Path, branch: str) -> list[dict]:
     """Tickets, rollups or supervisors landing ``branch``, including startup before its ticket exists."""
     snap = re.compile(rf"^{re.escape(PREFIX + branch)}-\d{{14}}")
     place = holder(cwd)
-    rows = [r for r in live_tickets(cwd) if r.get("branch") == branch or snap.match(r.get("branch") or "")
+    rows = [r for r in live_owners(cwd) if r.get("branch") == branch or snap.match(r.get("branch") or "")
             or any(snap.match(b) for b in member_branches(place, r))]
     for ref in git(cwd, "for-each-ref", "--format=%(refname:short)", "refs/heads/land/").splitlines():
         if snap.match(ref) and not any(r.get("branch") == ref or ref in (r.get("batch") or []) for r in rows):
@@ -249,8 +260,9 @@ def _resume_start(cwd: Path, name: str, land_args: list[str], launch):
     snap = snaps[0]
     if subprocess.run(["git", "-C", str(cwd), "merge-base", "--is-ancestor", snap, "main"]).returncode == 0:
         raise SystemExit(f"[land-async] {snap} is already in main")
-    if held := [r for r in live_tickets(cwd) if r.get("branch") == snap or snap in member_branches(place, r)]:
-        raise SystemExit(f"[land-async] {snap} is held by live ticket {held[0]['ticket']} ({held[0].get('branch')})")
+    if held := [r for r in live_owners(cwd) if r.get("branch") == snap or snap in member_branches(place, r)]:
+        owner = "live supervisor" if held[0]["ticket"] == "supervisor" else f"live ticket {held[0]['ticket']}"
+        raise SystemExit(f"[land-async] {snap} is held by {owner} ({held[0].get('branch')})")
     if git(tree, "rev-parse", "--abbrev-ref", "HEAD") != snap:  # land.py had moved it onto a batch candidate
         git(tree, "checkout", "-q", snap)
     (place / (name + ".stopped")).unlink(missing_ok=True)
