@@ -11,12 +11,13 @@ Publish mode:
 2. Publish SHA: the newest commit of ``--topo-order --ancestry-path origin/main..main`` (contains
    origin/main, is in local main) with a green FULL land record. Not ``--first-parent``: a land.py landing
    is a merge with the topic branch as first parent, so the main tips that hold records sit on second
-   parents. **Green FULL** = ``tools/hooks/land_record.py`` holds a record for exactly that SHA (land.py
-   writes one only after a fast-forward of that very candidate with 0 NEW, no LOAD-FLAKY and no pass
-   borrowed from another tree), its base is an ancestor of the SHA, and its tier is ``full``: the
-   record's ``tier`` field when present, else (older records) one invocation exactly ``["test"]`` (root
-   test/ whole: only ``lab_full_invocations``, the FULL tier, runs it; the affected tier names root test
-   files one by one). If records exist in the range but none has a ``tier`` string or an ``invocations``
+   parents. **Green FULL** = an exact-SHA land record whose base is an ancestor and explicit tier is
+   ``full``, containing that immutable candidate's canonical FULL and every opted-in browser chunk,
+   including ALONE. ``publish_evidence`` requires exact commit/tree/environment/argv/log cache mappings
+   and content-hashed clean logs for every invocation (including the existing sharder outputs). Prepared
+   FULL evidence requires the existing main-merge bridge plus matching final plan and environment.
+   Missing/pruned mappings, missing logs and vacuous browsers fail closed. Legacy tier/root-test
+   markers alone never qualify. If records exist but none has a ``tier`` string or an ``invocations``
    list of lists, the format is unknown: exit 8, never a silent "nothing to publish". The push runs the
    SHA's own hook copy (4.), so a later hook edit on main does not make older green SHAs unpublishable.
 3. Due when the last publish (newest ``origin/publish/main-YYYYMMDD[-HH]`` by name; with --apply also
@@ -68,6 +69,7 @@ sys.path.insert(0, str(TOOLS / "hooks"))
 import land_record  # noqa: E402  (green land.py results per landed commit)
 sys.path.insert(0, str(TOOLS))
 import worktree_rules  # noqa: E402  (tombstone for a removed worktree folder a handle still holds)
+import publish_evidence  # noqa: E402  (canonical plan and exact executed proof)
 SCANNER = TOOLS.parent / "deploy" / "robot" / "pinky_pro" / "release"
 sys.path.insert(0, str(SCANNER))
 import secret_scan  # noqa: E402  (the one repository secret scanner: tokens, keys, PSKs, SHA-256 rows)
@@ -142,7 +144,8 @@ HOOK = "tools/hooks/pre-push"
 
 def green_full(repo: Path, sha: str) -> bool:
     record = land_record.read(repo, sha)
-    return bool(record) and tier(record) == "full" and ancestor(repo, record["base"], sha)
+    return (bool(record) and tier(record) == "full" and ancestor(repo, record["base"], sha)
+            and publish_evidence.qualified(sys.modules[__name__], repo, sha, record))
 
 
 def publish_sha(repo: Path) -> str | None:
