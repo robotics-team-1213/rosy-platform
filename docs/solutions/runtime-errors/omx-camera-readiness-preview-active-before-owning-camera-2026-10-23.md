@@ -1,7 +1,7 @@
 ---
 title: OMX camera readiness failed every boot because the Type=simple preview was active before it owned the camera
 date: 2026-10-23
-last_updated: 2026-10-29
+last_updated: 2026-11-02
 category: runtime-errors
 module: deploy/robot/omx (camera_readiness.py, camera_environment.py, rosy-omx-camera-readiness.service, rosy-omx-camera@.service)
 problem_type: runtime_error
@@ -16,7 +16,7 @@ root_cause: startup_ordering
 resolution_type: code_fix
 severity: medium
 tags: [omx, camera, v4l2, systemd, fuser, boot-ordering, readiness, restore, fleet-pc, auto-update, is-active]
-applies_when: "a service must confirm that another Type=simple unit owns a device (fuser/lsof) right after systemd reports that unit active"
+applies_when: "a service must confirm another Type=simple unit owns a device, or a camera role/USB binding changed while readiness retained its old profile and baseline"
 ---
 
 # OMX camera readiness failed every boot because the preview was active before it owned the camera
@@ -202,6 +202,24 @@ NORMAL; top remained UNDEREXPOSED/EXHAUSTED, so the overall result correctly
 remained INSUFFICIENT with motion_admitted false. This verifies the idle hotfix
 and bounded on-host adjustment, not a new release switch, controlled lighting
 recovery or physical acceptance. Preserve the upgrade backup for rollback.
+
+## Eighth failure: camera roles changed but readiness kept the former bindings (2026-11-02)
+
+The live top producer used the RealSense while readiness still named the former top camera. Its journal ended with `camera restore incomplete`; the saved top restoration refused because the named producer was not the sole owner. The registered wrist cameras also used USB-port paths because their serials repeat. A by-id-only readiness profile could not directly express the current wrist binding. Camera preview health did not establish that the readiness profile described those same cameras.
+
+The direct by-path support fix is committed as `bec3bd9547` and passed 59 focused and 372 affected remote tests, but was not landed at this checkpoint. Official landing stopped and its resume was refused by the full queue. The field recovery therefore used already-landed local main `cbfb144767`, with no unlanded code or hand-edited release file.
+
+### Verified recovery
+
+1. Take the cell and updater locks. Preserve the old profile, environment and complete state directory, including failed restoration and control intents. Check live controls before retiring that state; do not rewrite a failed restoration as success or invent a control intent.
+2. For the wrist without a unique by-id name, declare a udev alias tied to its **registered** USB `ID_PATH`, VID/PID and video index. Reject alias/rule conflicts. Reload the rule and trigger only that video node. Verify the alias and registered path resolve to the same character device and `rdev`, with the same sole producer PID/invocation and unchanged controls. The alias is a declared port identity, not a claim of a unique camera serial.
+3. Build an immutable git archive of the landed revision, including the camera scripts and foundation needed by the viewer. On Windows use `git -c core.autocrlf=false -c core.eol=lf archive`: the default archive contained CRLF and failed the exact source hash check even though the git blob was LF. Keep `REVISION` and verify the extracted source against the committed blob before changing configuration.
+4. Generate the new profile from the current producer environment and actual device capabilities. Preserve the 80 ms exposure policy and existing identity, distinct-device and sole-owner checks. Point the camera pipeline environment at the immutable archive and let the existing engine create a fresh baseline.
+5. Require advancing fresh/NORMAL top and front frames and fresh READY leases. Stop readiness, verify both originals by readback, then restart and verify READY again. A green `is-active` result alone is insufficient.
+
+The field transition at 05:14 UTC retained `camera-readiness-migration-20261102T051410Z`. Both stop restorations returned `restored=true` with empty errors; restart and an additional three-sample check were READY with advancing top/front sequences and `motion_admitted=false`. No camera producer was restarted and no arm/Pinky command was sent. See `docs/validation/camera-readiness-rebind-2026-11-02/result.md`; filled device identities and receipts remain private.
+
+Prevention: after changing registry roles, compare the readiness device and producer bindings as well as the preview and observation manifest. Never substitute a convenient camera for a missing role. Zero markers were detected in three later top frames, so this recovery establishes photometric readiness, not geometric calibration or physical pick acceptance.
 
 ## Evidence
 Fleet PC journal 2026-10-23 06:10 (boot failure) and 11:33–11:34 (refusal, restore, READY). Fix commit on `fix/omx-camera-readiness-producer-wait`. The deployed file was replaced only after its SHA-256 matched the pre-fix repository version, and a backup `.bak-20261023` was kept.
