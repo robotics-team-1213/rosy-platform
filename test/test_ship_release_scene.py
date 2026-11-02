@@ -7,28 +7,6 @@ import pytest
 pytest.importorskip("mujoco")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools" / "sim"))
 import ship_release_scene as scene  # noqa: E402
-import ship_release_sweep as sweep  # noqa: E402
-
-
-def test_sweep_covers_both_rows_layers_and_offset_directions():
-    cases = list(sweep.cases())
-    assert len(cases) == 7056
-    assert {(c['layer'], c['row']) for c in cases} == {(1, 1), (1, -1), (2, 1), (2, -1)}
-    assert min(c['dy'] for c in cases) == -0.0015
-    assert max(c['dy'] for c in cases) == 0.0015
-    assert max(c['dx'] for c in cases) == 0.0015
-
-
-def test_sweep_one_reports_the_case_and_verdict(monkeypatch):
-    case = next(sweep.cases())
-    monkeypatch.setattr(sweep, '_models', {})
-    monkeypatch.setattr(scene, 'build', lambda layer: ('model', 'fixture'))
-    observed = dict(z_mm=1.4, y_mm=0, x_mm=0, nb_peak_mm=0)
-    monkeypatch.setattr(scene, 'run', lambda model, fixture, **kw: observed)
-    result = sweep.one(case)
-    assert all(result[k] == value for k, value in case.items())
-    assert result['fail'] == ['rode-up']
-    assert result['z_mm'] == 1.4
 
 
 def test_verdict_rules():

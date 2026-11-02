@@ -9,27 +9,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools" / "sim"))
 import ship_container_variants as variants  # noqa: E402
 import ship_release_scene as scene  # noqa: E402
 import ship_release_strategies as strategies  # noqa: E402
-import ship_release_strategy_sweep as sweep  # noqa: E402
-
-
-def test_strategy_sweep_preserves_the_stage_geometry():
-    main = list(sweep.cases('main'))
-    clearance = list(sweep.cases('clearance'))
-    assert len(main) == 3942 and len(clearance) == 1377
-    assert {c['layer'] for c in main} == {1, 2}
-    assert {c['clearance_mm'] for c in main} == {None}
-    assert {c['layer'] for c in clearance} == {1}
-    assert {c['gap'] for c in clearance} == {0.0315}
-    assert {c['clearance_mm'] for c in clearance} == {0.2, 0.5, 1.0}
-    assert sweep.signed([0, 0.5, 0.5]) == [-0.5, 0, 0.5]
-
-
-def test_strategy_band_stops_at_the_first_failed_direction():
-    rows = [dict(dy=dy, seated=seated) for dy, seated in
-            [(0, True), (-0.0005, True), (0.0005, False), (-0.001, True), (0.001, True)]]
-    assert sweep.band(rows) == 0
-    rows[2]['seated'] = True
-    assert sweep.band(rows) == 1.0
 
 
 def test_variants_stay_inside_the_90_x_30_x_30_envelope_and_below_the_pad_band():

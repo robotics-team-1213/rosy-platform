@@ -16,6 +16,7 @@ import sys
 import time
 
 JOBS = Path.home() / 'rosy-jobs'
+GPU_LOCK = Path.home() / '.cache/rosy-learning/gpu.lock'
 HOLD_S = 900
 IDLE_S = 600
 # AI PC: the situation service (D-577) drops to `shared` (rules only, no GPU) while Ollama is lent out.
@@ -68,7 +69,16 @@ def busy(units, now):
 
 
 def gpu_held(now):
-    """A live gpu-class lock or an unexpired Isaac reservation (remote_isaac HOLD) holds the host."""
+    """Include the worker's authoritative flock: it can outlive the client's reservation."""
+    import fcntl
+
+    try:
+        with GPU_LOCK.open('r') as lease:
+            fcntl.flock(lease, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except FileNotFoundError:
+        pass
+    except OSError:
+        return True
     for path in JOBS.glob('*.resv'):
         try:
             if path.name.startswith('isaac-') and float(path.read_text().split()[0]) > now:
@@ -133,8 +143,8 @@ def tick(now):
         unit = path.name[len('paused-'):]
         expired = json.loads(path.read_text()).get('until', 0) < now
         if ((unit in ROLES and ROLES[unit](now)) or expired) and not gpu_held(now):
-            release([unit])
-            done.append(unit)
+            if release([unit]) == 'released':
+                done.append(unit)
     return 'released ' + ' '.join(done) if done else 'nothing'
 
 
