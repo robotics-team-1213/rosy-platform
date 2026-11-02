@@ -110,13 +110,13 @@ def measure(mm) -> dict:
             "long_axis_deg": round((ang + 90) % 180 - 90, 1)}
 
 
-def _fits(m: dict, o: dict, k: int = 1, strict: bool = False) -> bool:
+def _fits(m: dict, o: dict, k: int = 1, strict: bool = False, gap_mm: float = 0.0) -> bool:
     # lengths come in whole cells, so a lone blob's length may stray up to half a cell; the real top camera read a
     # 60 mm container 47-56 mm long (dark end frames drop out of the mask) while its 30 mm width held within 9
     # (2026-10-28). Pieces split from a merged blob stay strict: with the loose length a tangled cluster's
     # piece matched and would have become a grasp target.
-    t = o["tolerance_mm"]
-    return (abs(m["width_mm"] - k * o["width_mm"]) <= t
+    t = o["tolerance_mm"]  # k side by side: k widths plus up to k - 1 gaps of gap_mm (the ship plate's 6 mm cells)
+    return (-t <= m["width_mm"] - k * o["width_mm"] <= (k - 1) * gap_mm + t
             and abs(m["length_mm"] - o["length_mm"]) <= (t if strict else o.get("length_tolerance_mm", t)))
 
 
@@ -143,9 +143,10 @@ def classify(mm, catalog: list, px_mm2: float | None = None, params=None) -> lis
     o = match(m, catalog)
     if o:
         return [{**m, "object": o["id"], "grasp": o["grasp"], "matched": True}]
-    for k in (2, 3):
+    gap = prm.get(params, "objects.split_gap_mm")
+    for k in range(2, prm.get(params, "objects.split_max") + 1):  # 2026-11-03: five 3-cells in a row on the ship plate
         for o in catalog:
-            if _fits(m, o, k, strict=True):
+            if _fits(m, o, k, strict=True, gap_mm=gap):
                 strips = [(g, measure(mm[g])) for g in _strips(mm, m, k)]
                 found = [(match(s, catalog, strict=True), s, g) for g, s in strips]
                 ok = all(e for e, _, _ in found) and all(
