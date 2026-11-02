@@ -3,8 +3,6 @@ body { margin: 0; background: var(--surface-canvas); color: var(--text-primary);
 ::selection { background: var(--surface-raised); color: var(--text-primary); }
 :focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 input { caret-color: var(--text-primary); }
-.skip-link { position: absolute; top: -5rem; left: var(--space-4); padding: var(--space-3); background: var(--surface-raised); z-index: 2; }
-.skip-link:focus { top: var(--space-2); }
 .topbar, main { width: 100%; min-width: 0; max-width: 82rem; margin-inline: auto; padding-inline: var(--space-5); }
 .topbar { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); padding-block: var(--space-5); }
 .brand { margin: 0 0 var(--space-1); font: var(--text-label) var(--mono); color: var(--text-secondary); }

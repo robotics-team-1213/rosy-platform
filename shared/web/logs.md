@@ -1020,6 +1020,13 @@
 - gate 변화: 없음. CE: 해당 없음.
 
 
+## 2026-10-31 · uncommitted · capture-wall 표면 등록과 캔버스 계약 준수
+
+- 변경: `surfaces.yaml`에 다중 녹화 벽(`tools/capture/multi_record.html`)을 `capture-wall`(dev)로 등록하고 캔버스 팔레트 계약 목록에 올렸다. 페이지는 참조 `./` 접두, 범위 제목 `Rosy 개발 — 함께 녹화`, 캔버스 색·글꼴을 `window.RosyPalette`로 읽도록 바뀌었고 `multi_record.py`는 `ui.js`와 의존 모듈 셋을 세션 `common/`에 복사한다(D-937).
+- 증거: 원격 영향 선택 923 passed. 첫 돌림의 2 failed(캔버스 팔레트·제목 계약)는 같은 커밋에서 계약 준수로 해소했고 `tools/capture/test/test_multi_record.py` 10 passed, `test/known_failures.py` 0 new다. 브라우저 화면 검증·실물 녹화 세션 수용은 별개다.
+- gate 변화: 없음. 토큰·테마 계약의 선택 범위가 이 페이지로 늘었다.
+- CE: 해당 없음 — 기존 교훈(2026-10-18 미등록 표면)의 적용이며 원인·해결이 레지스트리와 계약 시험에 남는다.
+
 ## 2026-11-01 · uncommitted · task-chooser onSelect 선택 알림
 
 - 변경: `createTaskChooser`에 선택적 `onSelect(id)` 콜백을 더했다(선택 확정 직후 한 번). 기존 호출처(robot_ui mount.js)는 무변경. Fleet 설치 문서의 경로 줄 화면 이름이 이 콜백을 쓴다. `test_chrome_layout.py`의 Fleet 사이드바 고정을 D-741 6 좌석 통일에 맞게 바로잡았다(설치 문서는 이제 자기 열이 없다).
@@ -1054,6 +1061,40 @@
 - 증거: test_layout_canon 전 통과, 검수 페이지 6건 완전 원복(net diff 0), node --test 403 passed. 원격 시험은 재착지 전 기록.
 - Gate: 없음. CE: 해당 없음 — 착지 시험이 계약 충돌을 잡은 사례로, 교훈은 아래 CE 판단 참조.
 
+
+## 2026-11-01 · uncommitted · focal 검사에 경기 보드 포함
+
+- 변경: `test_layout_canon.py`의 focal 표면 검사가 Pilot·경기 보드 모두의 순서·skip link·h1 하나(sr-only 허용)를 검사한다.
+- 증거: 정적 단정 전 통과. 원격 pytest는 다음 착지 전 기록.
+- Gate: 없음. CE: 해당 없음.
+
+
+## 2026-11-02 · uncommitted · 대시보드 두 상태 셸 h1 검사 추가
+
+- 변경: `test_layout_canon.py`의 focal 표면 검사가 로봇 대시보드의 상태 셸별 h1 하나(입장/공간)를 검사한다. D-945 웹 이행 완료를 못박는다.
+- 증거: 정적 단정 전 통과. 원격 pytest는 다음 착지 전 기록.
+- Gate: 없음. CE: 해당 없음.
+
+
+## 2026-11-02 · uncommitted · D-945 마무리 — 22rem 칸 경계 허가, 조작 표면 noscript·style 속성 계약
+
+- 변경: Fleet 좁은 좌석 하위 탐색 줄바꿈의 `@container (width >= 22rem)`를 `surfaces.yaml` console `container_breakpoints`에 근거와 함께 등록했다(`test_responsive_tiers`가 미허가 값으로 거절하던 것). `test_layout_canon.py`에 조작 표면 noscript 의무와 style 속성 금지 검사를 더했다.
+- 증거: 로컬 대조에서 main 대비 추가 실패가 `test_responsive_tiers` 하나였고 등록 뒤 통과. 원격 시험은 착지 기록.
+- Gate: 없음. CE: 해당 없음.
+
+
+## 2026-11-02 · uncommitted · 공용 skip-link·sr-only 단일화, 같은 뜻 한 말 계약
+
+- 변경: 로봇·Fleet 로그인·모니터링의 `.skip-link` 재정의와 Pilot의 `.sr-only` 재정의를 지우고 `components.css` 정본만 쓴다(세 표면이 z-index·채움·숨김 방식이 제각각이었다). `test_shared_controls.py` 덧칠 검사 대상에 `skip-link`를 더했다. `test_operator_copy.py`에 표면 전체(검수·Pilot 포함) '같은 뜻 한 말' 검사를 두고 첫 항목으로 '권한이 거부'→'권한이 없습니다'를 정했다.
+- 증거: 원격 계약 시험. 감사 백로그는 `docs/validation/fleet-ui-consistency-2026-11-01/README.md`.
+- Gate: 없음. CE: 해당 없음.
+
+
+## 2026-11-02 · uncommitted · 신호기 등 역할 토큰 (D-525 보강, 사용자 결정)
+
+- 변경: `tokens.css`에 `--signal-go/-caution/-stop`을 두고 Fleet 신호기 카드·Fleet 지도 램프·로봇 가상 신호 등이 모두 이것만 쓴다. Fleet 카드의 녹색 등이 무색이던 불일치를 녹색으로 통일했다.
+- 증거: `test_every_signal_lamp_paints_with_the_signal_tokens`(등 그림은 신호 토큰만, 신호 토큰은 등 밖 금지).
+- Gate: 없음. CE: 해당 없음.
 
 ## 2026-11-02 · e81af2d7c3 · D-962 independent Account artifact
 

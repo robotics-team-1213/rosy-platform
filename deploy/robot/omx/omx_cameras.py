@@ -17,7 +17,11 @@ ROSY_DEPTH_RANGE_MM or ROSY_CAMERA_MIN_USB_MBPS) are optional.
   omx_cameras.py init      write a registry from the role env files in use (once, to adopt them)
   omx_cameras.py inventory every plugged camera node: model, USB ID and port, speed, formats, names, the role using it
   omx_cameras.py bind [--apply]  write each role's env from the registry and (re)start its unit when it changed or
-                           its camera came back; a camera nobody registered is listed, never given a role by guess
+                           its camera came back. A role whose camera is gone follows it to another port only when
+                           exactly one unregistered camera has the role's recorded model (usb_id) and no other gone
+                           role has that model; every other unregistered camera is proposed, never given a role
+  omx_cameras.py propose   the unregistered cameras, each with its persistent name and the gone roles of its model
+  omx_cameras.py approve NODE ROLE  give a plugged camera a role (a new role gets /<role>_camera/image_raw), then bind
   omx_cameras.py manifest [--manifest PATH] [--apply]  copy each registered camera's device into the workcell
                            observation manifest entry with the same image topic; exit 1 while one differs
                            (2026-11-02: the bridge's and the site's copies had the two wrist ports swapped)
@@ -165,6 +169,84 @@ def sync_manifest(registry: dict, text: str) -> tuple[str, list, list]:
     return "\n".join(lines), changed, unregistered
 
 
+def best_name(node: str, names: dict) -> str:
+    """A node's persistent name: a ROSY udev name, else its USB port (by-path). Not the kernel by-id name: a twin
+    plugged later shares it (2026-10-31, two U20CAMs both SN0001); a port move is followed by `learn` instead."""
+    own = sorted(names.get(node, []))
+    for prefix in ("/dev/v4l/by-id/rosy-", "/dev/v4l/by-path/", "/dev/v4l/by-id/"):
+        found = [n for n in own if n.startswith(prefix)]
+        if found:
+            return found[0]
+    raise SystemExit(f"{node}: no persistent /dev/v4l name")
+
+
+def propose(registry: dict, facts: dict, names: dict, present, realpath=os.path.realpath) -> list:
+    """One row per camera no present role uses: its name and model, the gone roles last seen on that model, and
+    `follow` when it is the only such camera and the only such role (the same camera moved to another port)."""
+    gone = [c for c in registry["cameras"] if not present(c["device"])]
+    used = {realpath(c["device"]) for c in registry["cameras"] if present(c["device"])}
+    free = [n for n in sorted(facts) if n not in used]
+    rows = []
+    for node in free:
+        model = facts[node]["id"]
+        roles = [c["role"] for c in gone if c.get("usb_id") == model]
+        same = [n for n in free if facts[n]["id"] == model]
+        rows.append({"node": node, "device": best_name(node, names), "usb_id": model,
+                     "roles": roles, "follow": roles[0] if len(roles) == 1 and len(same) == 1 else None})
+    return rows
+
+
+def learn(registry: dict, facts: dict, proposals: list, present, realpath=os.path.realpath) -> list:
+    """Record each present camera's model, and move each `follow` role to its camera; the changes made."""
+    changes = []
+    by_role = {c["role"]: c for c in registry["cameras"]}
+    for c in registry["cameras"]:
+        fact = facts.get(realpath(c["device"])) if present(c["device"]) else None
+        if fact and c.get("usb_id") != fact["id"]:
+            c["usb_id"] = fact["id"]
+            changes.append({"role": c["role"], "usb_id": fact["id"]})
+    for row in proposals:
+        if row["follow"]:
+            camera = by_role[row["follow"]]
+            changes.append({"role": camera["role"], "from": camera["device"], "to": row["device"]})
+            camera["device"] = row["device"]
+    return changes
+
+
+def approve(registry: dict, role: str, row: dict) -> dict:
+    """The registry with ROLE on the proposed camera ROW; a new role gets the topic and frame naming convention."""
+    camera = next((c for c in registry["cameras"] if c["role"] == role), None)
+    if camera is None:
+        camera = {"role": role, "topic": f"/{role}_camera/image_raw", "frame": f"{role}_camera_link", "stream": "color"}
+        registry["cameras"].append(camera)
+    camera.update(device=row["device"], usb_id=row["usb_id"])
+    return registry
+
+
+def save(registry: dict, path: Path) -> None:
+    """Write the registry only if it still loads (one role and one device each)."""
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(registry, indent=1) + "\n", encoding="utf-8")
+    try:
+        load(tmp)
+    except SystemExit:
+        tmp.unlink()
+        raise
+    os.replace(tmp, path)
+
+
+def _sync_manifest_file(registry: dict, path: Path) -> list:
+    if not path.is_file() or not os.access(path, os.W_OK):
+        return []
+    text, changed, _ = sync_manifest(registry, path.read_text(encoding="utf-8"))
+    if changed:
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(text, encoding="utf-8")
+        os.chmod(tmp, path.stat().st_mode)
+        os.replace(tmp, path)
+    return changed
+
+
 def _names() -> dict:
     out = {}
     for link in glob.glob("/dev/v4l/by-id/*") + [p for p in glob.glob("/dev/v4l/by-path/*") if "usbv2" not in p]:
@@ -174,7 +256,9 @@ def _names() -> dict:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("action", choices=("init", "inventory", "bind", "manifest"))
+    ap.add_argument("action", choices=("init", "inventory", "bind", "manifest", "propose", "approve"))
+    ap.add_argument("node", nargs="?", help="approve: the camera (/dev/videoN or any of its names)")
+    ap.add_argument("role", nargs="?", help="approve: the role it gets")
     ap.add_argument("--registry", type=Path, default=REGISTRY)
     ap.add_argument("--env-dir", type=Path, default=ENV_DIR)
     ap.add_argument("--manifest", type=Path, default=MANIFEST, help="manifest: the observation manifest to check")
@@ -203,7 +287,30 @@ def main(argv=None) -> int:
         return 0
     if registry is None:
         raise SystemExit(f"no registry at {args.registry}: run 'init' first")
+    proposals = propose(registry, facts, _names(), os.path.exists)
+    if args.action == "propose":
+        print(json.dumps(proposals, indent=1))
+        return 0
+    learned = []
+    if args.action == "approve":
+        if not (args.node and args.role):
+            raise SystemExit("approve NODE ROLE")
+        row = next((r for r in proposals if r["node"] == os.path.realpath(args.node)), None)
+        if row is None:
+            raise SystemExit(f"{args.node}: not an unregistered plugged camera (see 'propose')")
+        save(approve(registry, args.role, row), args.registry)
+        learned, args.apply = [{"role": args.role, "to": row["device"]}], True
+    elif args.apply:
+        learned = learn(registry, facts, proposals, os.path.exists)
+        if learned:
+            save(registry, args.registry)
+    if learned:
+        registry = load(args.registry)
+        proposals = propose(registry, facts, _names(), os.path.exists)
     plan = bind(registry, args.env_dir, os.path.exists, set(facts))
+    plan["learned"], plan["proposals"] = learned, proposals
+    if learned:  # the bridge's copy is the user's; the site's /etc copy needs 'manifest --apply' with root
+        plan["manifest"] = _sync_manifest_file(registry, args.manifest)
     running = lambda role: subprocess.run(["systemctl", "--user", "is-active", "--quiet",  # noqa: E731
                                            f"rosy-omx-camera@{role}.service"]).returncode == 0
     plan["present"] = [c["role"] for c in registry["cameras"] if c["role"] not in plan["waiting"]]

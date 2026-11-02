@@ -48,3 +48,8 @@
   /* app-shell이 좁은 뷰포트에서 지우는 머리글을 Fleet 좌석에서는 유지한다 — 단계 구분(Cell 적재 단계·AI 판단)이 사라지지 않게. */
   .fleet-body > .ui-subnav .ui-subnav-head { display: block; }
 }
+/* D-926 3 — 22–64rem 좌석(390px 폰 포함)은 가로 민 스크롤 대신 줄바꿈: 감춰진 화면 없이 다 보인다(Casey).
+   22rem 미만(320px)은 컴팩트 스크롤을 유지한다 — 줄바꿈이 화면 절반을 먹지 않게. */
+@container (width >= 22rem) and (width < 64rem) {
+  .fleet-body > .ui-subnav .ui-subnav-nav { flex-wrap: wrap; overflow-x: visible; }
+}

@@ -22,6 +22,8 @@ roles:
     rosy-dataset-review-account.service: {run: active, channel: snapshot, source: "rosy-ml/legacy-review-account-code/releases/*", doc: docs/adr/D-809-legacy-learning-account-boundary.md}
     rosy-dataset-review.service: {run: active, channel: external, source: "dataset-review-937*", dropins: [90-account-loopback.conf], doc: docs/adr/D-809-legacy-learning-account-boundary.md}
     rosy-edge-review.service: {run: active, channel: signed, source: "rosy-ml/edge-capture/review-code/current", note: "the one Learning center; rosy-review-release-update (D-857)", doc: docs/adr/D-857-rosy-learning-product-definition.md}
+    rosy-harbor-nightly.service: {run: oneshot, channel: external, note: "Harbor repo tools/integration/nightly_full_flow.sh copied into ~/rosy-jobs/harbor-nightly", doc: docs/adr/D-927-harbor-first-flow-demo-seams-and-automated-sim.md}
+    rosy-harbor-nightly.timer: {run: timer, channel: external, note: "02:30 nightly", doc: docs/adr/D-927-harbor-first-flow-demo-seams-and-automated-sim.md}
     rosy-learning-center.service: {run: "off", channel: retired, note: "candidate retired 2026-10-31; synthetic-only data kept in ~/rosy-learning-candidate-retired-20261031", doc: docs/adr/D-857-rosy-learning-product-definition.md}
     rosy-learning-center-update.service: {run: "off", channel: retired, doc: docs/adr/D-857-rosy-learning-product-definition.md}
     rosy-learning-center-update.timer: {run: "off", channel: retired, doc: docs/adr/D-857-rosy-learning-product-definition.md}
@@ -35,9 +37,10 @@ roles:
     rosy-ollama.service: {run: active, channel: host, doc: deploy/model_pc/README.md}
     rosy-pilot-fetch@.service: {run: oneshot, channel: signed, template: deploy/model_pc/rosy-pilot-fetch@.service, note: "entry and modules from the signed model-code release", doc: deploy/model_pc/README.md}
     rosy-pilot-fetch@.timer: {run: timer, instances: [9dfk], channel: copy, template: deploy/model_pc/rosy-pilot-fetch@.timer, doc: deploy/model_pc/README.md}
+    rosy-pilot-prepare-geg6.service: {run: oneshot, channel: signed, note: "pilot_review.py from the signed model-code release for robot geg6; started by hand, no timer", doc: deploy/model_pc/README.md}
     rosy-pilot-process.service: {run: oneshot, channel: signed, template: deploy/model_pc/rosy-pilot-process.service, doc: deploy/model_pc/README.md}
     rosy-pilot-process.timer: {run: timer, channel: signed, template: deploy/model_pc/rosy-pilot-process.timer, doc: deploy/model_pc/README.md}
-    rosy-review-bridge.service: {run: oneshot, channel: signed, template: deploy/model_pc/rosy-review-bridge.service, doc: deploy/model_pc/README.md}
+    rosy-review-bridge.service: {run: oneshot, channel: signed, template: deploy/model_pc/rosy-review-bridge.service, known_drift: "installed unit writes --out bridge-state-20261024 (live, updated daily) while the template writes bridge-state (untouched since 2026-10-24); installing the template would move the bridge back to the stale state", doc: deploy/model_pc/README.md}
     rosy-review-bridge.timer: {run: timer, channel: signed, template: deploy/model_pc/rosy-review-bridge.timer, doc: deploy/model_pc/README.md}
     rosy-review-pipeline.service: {run: oneshot, channel: signed, template: deploy/model_pc/rosy-review-pipeline.service, doc: deploy/model_pc/README.md}
     rosy-review-pipeline.timer: {run: timer, channel: signed, template: deploy/model_pc/rosy-review-pipeline.timer, doc: deploy/model_pc/README.md}

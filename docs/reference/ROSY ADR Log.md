@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-937 | 제품 앱 입사 문법 — 제품/기능 두 레인과 네 제품 원형, 웹 표면 전체 등록. [전문](../adr/D-937-product-app-entry-grammar.md) | Accepted (2026-10-31, 사용자 합의; 물리 이동·권한 변경 없음) |
 | D-958 | 실험실 PC 계산 작업은 호스트마다 한 입구로 받고, GPU는 한 자리로 세며, 상시 서비스는 양보한다 — `remote_job.ADMIT` 단일 입구, GPU 자리 독점·대기, 각 PC 본업 최우선·실험은 노는 자원만(본업 요청 시 실험 양보), 호스트 측 서비스 되살리기, 모델 PC 배치 대기열, `lab_jobs.py status`. [전문](../adr/D-958-lab-compute-ledger-one-admission-gpu-slot-pausable-services.md) | Proposed (2026-11-02, 우선순위는 사용자 결정 반영) |
 | D-956 | OMX 배 판 놓기: 그 자리에서 놓고 앉음을 확인하며, 컨테이너 바닥에 단을 둔다 — 31.5 mm 열기, 높이 0.5 mm·기울기 0.5° 앉음 확인, 한 번 다시 놓기 후 HOLD, 바닥 3 mm 폭 29.0 mm. [전문](../adr/D-956-omx-ship-plate-release-seat-check-and-relief-foot.md) | Proposed (2026-11-01, 실물 여유 실측 대기) |
 | D-947 | OMX 적층 셀 시뮬레이션: 접촉·영상은 Isaac, 기하 스윕은 MuJoCo, 실행 계약은 MuJoCo·Gazebo — 셀 모델 원본 하나, 실물과 같은 카메라, 주장 범위. [전문](../adr/D-947-omx-palletizing-sim-models-and-claim-scope.md) | Proposed (2026-11-01, 사용자 확인 대기) |
@@ -1405,6 +1406,11 @@ Fleet device ID, 실제 follower 설정, 장치별 검증·기록 경로를 별�
 
 발행 루프는 로봇마다 작업 하나를 claim해 백그라운드로 보내고, 교통 판정만 콘솔 잠금 하나로 직렬화한다. 발행 중인 로봇은 claim 순서대로 기록한 직선 임시 점유를 갖고, 판정은 그 순서를 따라 우선순위를 지킨다. 스냅샷 정리는 임시 점유를 지우지 않고 잠금을 기다리지 않는다. 취소된 발행은 로봇 취소와 `UNKNOWN`으로 스스로 정리한다. 전문은 [D-928](../adr/D-928-fleet-per-robot-dispatch-serial-traffic.md).
 
+## D-937 제품 앱 입사 문법 — 제품·기능 두 레인과 네 제품 원형, 웹 표면 전체 등록
+
+**Status:** Accepted (2026-10-31). 사용자 합의에 따른 입사 문법 정리이며 물리 이동·권한 변경을 수반하지 않는다.
+
+새 웹·네이티브 표면은 먼저 제품/기능을 판정한다. 기능 표면은 소유 모듈 곁에 둔 채 `surfaces.yaml`에 등록하고, 제품 표면은 `applications/<제품>`에 거래형·관측형·계산호스트형·외부업무형 네 원형 하나로 입사한다. 모든 웹 표면은 `tools/` 로컬 페이지를 포함해 등록하며 첫 적용으로 다중 녹화 벽(`capture-wall`)을 등록했다. Learning 웹의 server carve는 다음 임계점에 적용한다. 전문은 [D-937](../adr/D-937-product-app-entry-grammar.md).
 ## D-940 중복 정의 게이트와 의도 중복 등록부를 둔다
 
 **Status:** Accepted (2026-11-01). 등록·구현 지시는 사용자 결정이며 원격 시험·착지는 파이프라인 기록이 증거를 가진다.
