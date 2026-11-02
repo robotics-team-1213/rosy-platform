@@ -5250,3 +5250,10 @@
 - 증거: 개발 인증·CLI·node·브라우저 149건 중 147건은 `1b414063f2`에서 통과했고 두 site-map 저장소 단정은 토큰이 없는 빈 문자열을 허용하도록 보정했다. 최종 direct-page Chromium 10건은 `4d7ea3ac4e`에서 모두 통과/skip 0/NEW 0. Account 기존 회귀 160건 통과 뒤 정렬 단정·callback 시험 보정을 별도로 재검증 중이다. 최종 통합 SHA·운영 전환은 후속 기록으로 구분한다.
 - gate 변화: 없음. 장치 명령과 실물 수용을 수행하지 않았다.
 - CE: 해당 없음 — 개발 우회 방지는 코드·회귀 시험에 남는다. 중앙 로그인 화면 실패의 교훈은 `docs/solutions/logic-errors/fleet-development-mode-hides-central-account-login-2026-11-02.md`를 따른다.
+
+## 2026-11-03 · 9f666845e8 · fix(fleet): platoon 지도 계산 공유와 HTTP 응답성
+
+- 변경: `/api/fleet/platoon`이 활성 지도 버전별 루프·기하·속도표 계산 한 건을 작업 스레드에서 공유한다. 취소된 독자는 공유 계산을 취소하지 않고, NO_LOOP도 재사용하며 계산 실패 뒤에는 다시 시도한다. 로봇 자세·차간 거리는 요청마다 읽고 기존 인증·표시 전용 dispatch=false를 유지한다.
+- 검증: 원격 RED `ec040ca3c5`에서 기존 7건 통과와 새 회귀 3건 실패를 확인했다. 분리 전 `372a05294f`의 집중 시험 12건 통과 뒤, 최종 소스 `9f666845e8`의 mapped affected 3회는 328 passed/28 skipped, 4676 passed/188 skipped/5 subtests passed, Fleet 7550 passed/585 skipped였다. 세 보고서 모두 known_failures 비교 NEW/known/flaky 0이며 size-range도 통과했다. 회귀는 이벤트로 작업을 멈춘 동안 인증 요청 완료, 동시·반복 계산 공유, 취소·실패 복구, 지도 버전 변경, 최신 자세 반영을 확인한다.
+- Gate: 변화 없음. 건너뛴 시험은 검증에 포함하지 않았으며 브라우저·ROS 실행·실물·현장 수용이나 실제 CPU 부하의 응답 지연 상한을 입증하지 않는다.
+- CE: 해당 없음 — 이번 원인과 재발 방지는 코드·회귀 시험으로 설명되며 기존 asyncio/GIL·동시성 교훈을 검토했다.
