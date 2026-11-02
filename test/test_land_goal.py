@@ -198,7 +198,11 @@ def test_goal_cli_scopes_old_incomplete_trains_to_the_current_origins(goal_repo,
 
 @pytest.mark.parametrize("fields", [dict(event="landed", members=[]), dict(event="landed", members=[{}]),
                                    dict(event="train", branches=[], result="landed"),
-                                   dict(event="train", branches=["fix/old"], members=[], result="landed")])
+                                   dict(event="train", branches=["fix/old"], members=[], result="landed"),
+                                   dict(event="train", branches=["fix/old"],
+                                        members=[dict(branch=1, ticket="x")], result="landed"),
+                                   dict(event="train", branches=["fix/old"],
+                                        members=[dict(branch="fix/other", ticket="x")], result="landed")])
 def test_goal_cli_unknown_historical_membership_scope_cannot_pass(goal_repo, monkeypatch, capsys, fields):
     events, start = goal_repo
     rows = [ev(start - 2 * H, branch="land/fix/land-rollup-x", **fields),
