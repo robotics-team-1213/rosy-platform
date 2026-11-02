@@ -46,6 +46,18 @@ def test_legacy_batch_completion_closes_carried_members_before_their_later_exit(
     assert land_goal.lead_times(rows, 0, 300) == [2, 1, 1]
 
 
+def test_historical_batch_observer_is_not_an_extra_main_move(tmp_path):
+    a, b = "land/fix/a", "land/fix/b"
+    rows = [ev(0, "queue", branch=a, pid=1), ev(10, "queue", branch=b, pid=2),
+            ev(60, "train", branch=a, pid=1, branches=[a, b], result="landed"),
+            ev(61, "landed", branch=a, pid=1), ev(62, "landed", branch=b, pid=2),
+            ev(70, "queue", branch=b, pid=3), ev(80, "landed", branch=b, pid=3)]
+    normalized, warnings = land_goal.normalize(rows, tmp_path)
+    assert not warnings
+    assert [r["t"] for r in normalized if r["event"] == "landed" and r.get("main_move", True)] == [61, 80]
+    assert "main_move" not in rows[4], "raw log rows stay immutable"
+
+
 def ev(t, event, branch="land/fix/a-20261031120000", pid=1, **kw):
     return {"t": t, "event": event, "branch": branch, "pid": pid, **kw}
 
