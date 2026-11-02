@@ -157,6 +157,10 @@ def run_batch(plan, out, remotes, *, sleep=time.sleep, fetch=None, summarize=rem
                 busy = 0
                 if result['status'] in TERMINAL:
                     remote_isaac._save(directory / 'result.json', dict(summarize(result), name=name, role=remote.role))
+                elif result['status'] == 'UNKNOWN':  # unit gone, result unconfirmed (AI run 4fe8 polled 11 h): start afresh
+                    _set_aside(directory)
+                    with lock:
+                        failures[name] = failures.get(name, 0) + 1
                 log(f"{name} [{remote.role}] {result['status']}")
             except remote_isaac.NotReady:  # nothing started: hand the run back, back off this host
                 busy += 1

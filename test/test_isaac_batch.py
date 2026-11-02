@@ -77,6 +77,16 @@ def test_a_started_run_is_resumed_on_its_owner_not_started_again(tmp_path):
     assert 'start' not in model.calls and model.started == ['a']
 
 
+def test_an_unknown_run_is_set_aside_and_retried_not_polled_forever(tmp_path):
+    mod, value = module(), plan('a')
+    model = Host('model', statuses=('UNKNOWN', 'UNKNOWN', 'SUCCEEDED'))
+    assert run(mod, value, tmp_path, [model]) == {'a': 'done'}
+    assert model.started == ['a', 'a', 'a'] and (tmp_path / 'a.stale-2').is_dir()
+    stuck = Host('model', statuses=('UNKNOWN',))
+    assert run(mod, plan('b'), tmp_path, [stuck], job_errors=2) == {'b': 'new'}  # bounded by job_errors
+    assert stuck.started == ['b', 'b']
+
+
 def test_a_busy_host_retires_and_the_other_takes_its_share(tmp_path):
     mod, value = module(), plan('a', 'b', 'c')
     busy, model = Host('ai', busy=True), Host('model')
