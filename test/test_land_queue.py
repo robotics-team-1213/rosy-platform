@@ -81,6 +81,15 @@ def test_turn_clock_resets_on_actual_reacquisition_and_old_release_cannot_touch_
     assert events.count("released") == 1
 
 
+@pytest.mark.parametrize("fields", [{"pid": 0}, {"pid": None}, {"turn_started": None}])
+def test_unknown_pid_or_epoch_never_counts_as_turn_ownership(tmp_path, fields):
+    ticket = queue.take(tmp_path, "feat/clock")
+    queue.set_status(ticket, "turn", turn_started=100)
+    queue.set_status(ticket, "turn", **fields)
+    assert not queue.owns_turn(ticket)
+    assert not queue.release(ticket, "unknown owner")
+
+
 def test_completed_batch_member_finishes_before_rule_refresh(tmp_path):
     mine = queue.take(tmp_path, "feat/member")
     assert queue.wait(tmp_path, mine, 0, done=lambda: True,
