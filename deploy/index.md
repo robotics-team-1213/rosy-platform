@@ -78,8 +78,8 @@
 
 ## 최근 기록
 
+- 2026-11-02 · 2ec8698993 · 수집 rehearsal의 미도달 시험도 같은 모의 시계 사용
 - 2026-11-02 · ee09871413 · 웹 통합 게시 이력의 공개 무결성 식별자 검토
 - 2026-11-02 · 6d7e296033 · Web unification follow-up
 - 2026-11-02 · uncommitted · fix(site): Tailscale 대역에서도 천장 카메라 미리보기
 - 2026-11-02 · uncommitted · feat(site): 관제 단위 overlay를 서명 candidate에 넣는다 (D-960)
-- 2026-11-02 · uncommitted · OMX 자동 연속 운반(cell_auto_carry)과 없는 출발 site 거절

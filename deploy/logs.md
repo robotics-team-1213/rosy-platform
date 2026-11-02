@@ -4395,3 +4395,10 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 독립 검토가 증거 JSON의 Git 식별자와 workflow pin을 확인했고, 별도 GitHub API 확인으로 checkout의 정확한 upstream commit이 존재함을 검증했다. 최신 main 통합 ee09871413의 충돌 처리도 독립 검토에서 지적0이다. 최종 FULL 착지·공개 CI와 배포는 아직 실행 결과가 필요하다.
 - gate 변화: 없음. 공개 식별자의 이력 분류는 서명·현장·실물 수용을 대신하지 않는다. agent review이며 사람의 GitHub 승인이 아니다.
 - CE: 해당 없음 — 기존 exact-tuple 게시 규약과 공개 무결성 문맥으로 판단을 복원할 수 있다.
+
+## 2026-11-02 · 2ec8698993 · 수집 rehearsal의 미도달 시험도 같은 모의 시계 사용
+
+- 변경: 목표에 도달하지 않은 성공 terminal을 검사하는 한 시험에서 기존 rehearsal_clock을 생산자와 소비자에 함께 연결했다. 관측 시각이 실제 저장·스케줄 지연으로 만료돼 의도한 미도달 검사 전에 중단되는 것을 막는다. 운영 100ms 신선도, 실제 저장 지연을 검증하는 시험, TERMINAL/REACHED/ABORT·정지 요청 검사는 유지한다.
+- 증거: FULL run-pre-32에서 미도달 대신 observation clock stale/future로 실패했다. 독립 진단에서 main과 시험·생산 코드가 같고, 이전 d2d68c334679의 같은 시계 수정에서 이 사례가 빠졌음을 확인했다. 수정한 committed SHA의 전체 파일·조정기 시간 검사는 원격으로 확인한다.
+- gate 변화: 없음. 모의 시간의 단위 시험은 실제 기계 정지 지연이나 배포 성공을 뜻하지 않는다.
+- CE: 해당 없음 — 기존 sim-wall-clock-step-and-line-staleness-clock 교훈의 모든 참여자 시계 결속을 적용했고 판단을 시험에 남겼다.
