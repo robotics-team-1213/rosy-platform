@@ -78,6 +78,7 @@ class ThermalMonitor:
     throttled: Optional[int] = None
     motors: list = field(default_factory=list)
     _motors_at: Optional[float] = None
+    _source_levels: dict = field(default_factory=dict, init=False, repr=False)
 
     def on_motor_health(self, payload, now: float) -> None:
         """Store one `motor/health` sample; malformed rows are dropped, not trusted."""
@@ -104,8 +105,10 @@ class ThermalMonitor:
         fresh = self._motors_at is not None and now - self._motors_at <= p.motor_stale_s
         motors = self.motors if fresh else []
         reasons: list[tuple[str, str]] = []
+        known: dict[str, bool] = {}
 
         def over(level: str, value: Optional[float], threshold: float, reason: str) -> None:
+            known[reason] = value is not None
             # Hysteresis: holding this level (or a worse one) lowers the bar by clear_c.
             bar = threshold - (p.clear_c if _RANK[self.level] >= _RANK[level] else 0.0)
             if value is not None and value >= bar:
@@ -118,7 +121,10 @@ class ThermalMonitor:
             if limit is not None:
                 over(HOT, temp, limit - p.motor_hot_margin_c, f"motor_{m['id']}_hot")
                 over(WARM, temp, limit - p.motor_warm_margin_c, f"motor_{m['id']}_warm")
-            error = m["hardware_error"] or 0
+            error = m["hardware_error"]
+            for suffix in ("overheating", "input_voltage"):
+                known[f"motor_{m['id']}_{suffix}"] = error is not None
+            error = error or 0
             if error & MOTOR_OVERHEATING:
                 reasons.append((HOT, f"motor_{m['id']}_overheating"))
             if error & MOTOR_INPUT_VOLTAGE:
@@ -128,16 +134,16 @@ class ThermalMonitor:
                             (THROTTLE_THROTTLED, "throttled"), (THROTTLE_SOFT_TEMP_LIMIT, "soft_temp_limit")):
             if bits & bit:
                 reasons.append((WARM, reason))
-        level = max((level for level, _ in reasons), key=_RANK.__getitem__, default=OK)
         # A reading that raised the level and then vanished (a hot motor stops answering, the
-        # probe fails) holds the level instead of reading as cool.
-        motor_known = any(m["temperature_c"] is not None for m in motors)
-        lost = ((self.soc_c is None and any(r.startswith("soc_") for r in self.reasons))
-                or (not motor_known and any(r.startswith("motor_") for r in self.reasons)))
-        if lost and _RANK[self.level] > _RANK[level]:
-            # Keep the reasons that raised it, so the hold lasts until a fresh reading is cool.
-            kept = [r for r in self.reasons if r != "readings_lost"]
-            level, reasons = self.level, [*reasons, *((self.level, r) for r in kept), (self.level, "readings_lost")]
+        # probe fails) holds that source's own severity until its required reading returns.
+        # Motor temperature reasons need both temperature and limit; another motor cannot clear them.
+        held = [(level, reason) for reason, level in self._source_levels.items() if not known.get(reason, False)]
+        reasons.extend(held)
+        level = max((level for level, _ in reasons), key=_RANK.__getitem__, default=OK)
+        self._source_levels = {reason: severity for severity, reason in reasons
+                               if reason.startswith(("soc_", "motor_"))}
+        if held:
+            reasons.append((level, "readings_lost"))
         self.level = level
         self.reasons = tuple(dict.fromkeys(reason for _, reason in reasons))
         return self.level
