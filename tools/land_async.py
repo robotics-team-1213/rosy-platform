@@ -158,7 +158,8 @@ def _start(cwd: Path, land_args: list[str], now: datetime, launch) -> tuple[str,
         where = f"{row['ticket']} ({row.get('branch')}, {row.get('status')}, pid {row.get('pid')})"
         if not replace or carried or row.get("status") == "starting":
             raise SystemExit(f"[land-async] {branch} is already landing in {where}"
-                             + ("; it rides in that batch" if carried else "; --replace stops it and queues this HEAD"))
+                             + ("; it rides in that batch" if carried else "; its supervisor is still starting"
+                                if row.get("status") == "starting" else "; --replace stops it and queues this HEAD"))
         print(f"[land-async] --replace: stopping {where}", flush=True)
         stop(int(row["pid"]))
     if "--urgent" not in land_args:  # refused before a snapshot or hidden worktree exists
