@@ -354,7 +354,7 @@
 ## 최근 기록
 
 - 2026-11-03 · uncommitted · docs(omx): 실물 카메라로 잰 셀 실측과 셀 모델 대장 갱신
+- 2026-11-02 · uncommitted · fix(landing): 실제 준비 anchor를 예측 전에 게시
+- 2026-11-02 · uncommitted · fix(landing): 예측 체인을 실제 우선순위 차단자와 정렬
 - 2026-11-02 · uncommitted · D-963 USB 카메라 역할 승인 결정과 API v1.350
 - 2026-11-02 · uncommitted · fix(landing): rollup 회원 완료와 접수 origin 측정
-- 2026-11-02 · 20390c3486 · fix(harness): D-795 DDS 가드를 매 착지에서 돌린다
-- 2026-11-02 · uncommitted · fix(omx): 가드 고장 프레임을 설정 없이 남긴다

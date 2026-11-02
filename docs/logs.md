@@ -13740,6 +13740,18 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 실제 USB 카메라를 꽂아 승인하는 현장 수용은 하지 않았다.
 - CE: 해당 없음 — 새 기능이며 장애 해결이 아니다. 결정은 D-963에 있다.
 
+## 2026-11-02 · uncommitted · fix(landing): 예측 체인을 실제 우선순위 차단자와 정렬
+- 변경: `land_speculate.chain`이 FIFO 앞줄 대신 정본 `land_queue.blockers`를 재사용한다. TURN 유지, 긴급 요청이 앞지르는 ordinary waiting 제외, 나중 urgent 포함과 stale-bypass를 같은 정책으로 선택한다. preparing/pending 제외와 safety/record 중단 조건은 보존한다.
+- 증거: 미착지 소스 `1f324d765a` 원격 speculation/queue/urgent/prepare/batch 5 suite 133개 통과, NEW 0. 테스트 전용 `daf434afd6`에서 3개 RED를 확인했다. 실제 append-only queue의 ticket/branch/urgent와 당시 관측 status를 고정한 counterfactual은 합성 후보 2개를 실제 TURN 1개로 줄였다. 불필요 후보 제외를 확인한 것이며 절약 시간이나 진행 중인 예측 실행의 새 규칙 적용을 측정한 것은 아니다.
+- gate 변화: 없음. 소스 검증이며 기존 run-spec 작업을 중단하거나 재시작하지 않았다.
+- CE: 해당 없음 — 기존 Oct31 교훈의 우선순위 경계를 적용한 수정이며 정본 helper 재사용과 실제 Git 회귀 시험으로 원인·해결이 드러난다. 새 교훈 문서는 만들지 않는다.
+
+## 2026-11-02 · uncommitted · fix(landing): 실제 준비 anchor를 예측 전에 게시
+- 변경: `land_prepare.prepare`가 저장/유지한 증거를 확정한 뒤 실제 차례와 같은 `land_full.restore` 값을 PREPARING ticket에 게시하고 speculation을 호출한다. 검사 중 main이 움직여도 최신 main으로 위장하지 않고, retained FULL의 원래 anchor와 carried의 빈 anchor를 그대로 따른다. 별도 clean 정책이나 우선순위 정책은 추가하지 않는다.
+- 증거: 미착지 소스 `c0f1c7c7b7` 원격 speculation/queue/urgent/prepare/batch 138개 통과, NEW 0. `930b8940d7` RED에서 실제 prepare의 첫 준비/재준비와 검사 중 main 이동 네 경로가 missing/stale tested로 실패했다. retained FULL 보존도 실제 호출 경로로 확인했다. 앞선 tested 수동 주입 회귀가 놓친 producer 순서를 보완한 것이다.
+- gate 변화: 없음. 기존 실행·동결본을 바꾸거나 중단하지 않았으며 운영 반영은 별도다.
+- CE: 해당 없음 — 호출 순서와 정본 anchor 보존은 코드와 실제 Git 회귀 시험에 직접 남긴다.
+
 ## 2026-11-03 · uncommitted · docs(omx): 실물 카메라로 잰 셀 실측과 셀 모델 대장 갱신
 - 변경: 검증 기록 `docs/validation/omx-cell-survey-2026-11-03/result.md`(top·side 카메라 자세, arm_b 받침 FK 맞춤, fixture와의 차이), `learning/envs/isaac/cell_model_inventory.yaml`의 판·팔 받침·top·side 카메라 항목과 벨트 높이 사람 작업, D-947 2의 보강(Gazebo도 같은 대장, 값마다 출처, CAD·실측은 후보).
 - 증거: 돌기 격자 PnP top 0.58 px·side 2.8 px, arm_b 녹화 세션 `live.json`을 읽기만 해 FK 맞춤 3.1 px. 팔 명령·관측기 기동 없음. 스크립트와 겹침 영상은 Git 밖 작업 공간 조사 폴더.
