@@ -143,12 +143,13 @@ export function createCellObservation({request, root}) {
       const identity = `${sequence}:${response.headers.get('X-Frame-Captured-At') || ''}`;
       if (entry.identity === identity) return;
       const expires = observedAt + 2000 - age;
-      url = URL.createObjectURL(await response.blob());
+      const blob = await response.blob();
+      url = URL.createObjectURL(blob);
       const decoded = new Image(); decoded.src = url; await decoded.decode();
       if (!current()) return;
       if (performance.now() >= expires) { staleCamera(entry); return; }
       if (entry.url) URL.revokeObjectURL(entry.url);
-      entry.image.src = url; entry.url = url; url = null;
+      entry.image.src = url; entry.url = url; entry.blob = blob; url = null;
       entry.identity = identity; entry.expires = expires; entry.image.hidden = false;
       entry.status.setAttribute('state', 'ready');
       entry.status.textContent = `원본 최신 영상 · #${sequence}`;
@@ -163,14 +164,10 @@ export function createCellObservation({request, root}) {
     }
   }
 
-  async function holdFrames(session) {
-    const frames = [];
-    faultFrames.set(session, frames);
-    for (const camera of cameras.values()) {
-      if (camera.image.hidden || !camera.url) continue;
-      try { frames.push({label: camera.label, url: URL.createObjectURL(await (await fetch(camera.url)).blob())}); }
-      catch { /* the tile went stale meanwhile: show what is held */ }
-    }
+  function holdFrames(session) {
+    // the tile's own JPEG: the page CSP (connect-src 'self') refuses fetch() of a blob: URL
+    faultFrames.set(session, [...cameras.values()].filter(camera => !camera.image.hidden && camera.blob)
+      .map(camera => ({label: camera.label, url: URL.createObjectURL(camera.blob)})));
   }
 
   function paintFaults(entry, faults) {
@@ -178,7 +175,7 @@ export function createCellObservation({request, root}) {
     for (const fault of fresh) {
       seenFaults.add(fault.session_id);
       entry.history.open = true;  // a stop that happens while the page is open is shown, not only counted
-      void holdFrames(fault.session_id).then(() => { entry.faults = ''; paintFaults(entry, faults); });
+      holdFrames(fault.session_id);
     }
     const key = JSON.stringify(faults.map(fault => fault.session_id));
     if (key === entry.faults) return;
