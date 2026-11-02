@@ -85,16 +85,16 @@ export function createUsbCameraPanel({scope, headers, identity, locked, dialogs,
   }
   async function refresh() {
     const panel = el('usb-camera-panel');
-    if (!panel || locked() || identity()?.role !== 'operator' || !/^Bearer\s+\S+$/.test(bearer())) {
+    if (!panel || locked() || identity()?.role !== 'operator') {
       if (panel) panel.hidden = true; return;
     }
     if (inFlight || busy || document.visibilityState === 'hidden') return;
-    inFlight = true; const life = scope.capture();
+    inFlight = true; panel.setAttribute('aria-busy', 'true'); const life = scope.capture();
     try {
       const {workcells} = await call(`${BASE}/usb-devices`);
       life.check(); panel.hidden = false; render(workcells);
     } catch (error) {if (error.name !== 'AbortError') panel.hidden = true;}  // no observation service: nothing to approve
-    finally {if (life.current()) inFlight = false;}
+    finally {if (life.current()) {inFlight = false; panel.setAttribute('aria-busy', 'false');}}
   }
   scope.interval(refresh, 5000);
   scope.onDispose(() => {inFlight = false; busy = false;});
