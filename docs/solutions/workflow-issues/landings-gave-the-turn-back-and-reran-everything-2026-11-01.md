@@ -155,6 +155,24 @@ p90 491.1793분이다. 이 차이는 측정 교정이며 처리량 개선이 아
 sidecar와 isolation 근거를 복구할 수 없으면 불완전 판정을 유지한다. 원본 시각이나 alias를
 추정해서 고치거나, 재접수라는 이유로 최초 접수 시간을 새로 시작하지 않는다.
 
+## 중첩 회원과 분할 이후 중복 호출
+
+rollup이 다른 rollup을 회원으로 받으면 직접 `.members` 목록은 queue·GC 소유권을 위해
+유지해야 한다. 그 목록을 leaf로 바꾸지 말고, 내부 회원의 frozen metadata를 자식으로
+붙여 실제 `landed` 이벤트 한 번에 보존한다. 집계는 각 자식 candidate가 직접 부모
+candidate의 조상인지와 원래 queue ticket을 확인한 뒤 실제 leaf만 완료 처리한다.
+자식 sidecar를 수거한 뒤에도 이벤트만으로 같은 결과가 나와야 한다. 순환·중복·누락된
+pin은 불완전이다. leaf 이름이 모두 확인되면 pin 검증 실패의 영향 범위는 보존하되,
+자식 목록 자체가 없거나 손상됐으면 범위를 추정하지 않는다.
+
+별도 실행 중에는 같은 tree·환경의 body 시험 다섯 쌍이 중복됐다. 선택기가 큰 묶음을
+유지한 상태에서 isolation의 stale singleton을 더하고, 나중에 `work_queue.split`이
+큰 묶음을 같은 singleton으로 나누기 때문이다. 분할 결과에서 전체 argv가 같은 호출만
+첫 순서대로 하나 남긴다. 큰 묶음과 단독 시험, 환경·옵션·node scope가 다른 호출,
+별도 guard와 다음 batch의 실행은 합치지 않는다. `test_work_queue_split.py`의 실제
+입력 회귀와 `test_land_goal.py`·`test_land_rollup.py`의 중첩 회귀로 이 경계를 확인한다.
+코드·원격 회귀 통과는 착지 완료나 60분 SLO 달성의 증거가 아니다.
+
 ## How to verify next time
 
 - Turn bounces: `released` events per hour, and for each the log's `[tests] selector escalated to FULL`
