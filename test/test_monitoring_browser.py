@@ -143,6 +143,28 @@ def login(page, key):
 
 
 @pytest.mark.parametrize('monitoring_backend', ['web'], indirect=True)
+@pytest.mark.parametrize('width', [320, 1366])
+def test_monitoring_uses_shared_chrome_and_keyboard_navigation(monitoring_backend, monitoring_page, width):
+    from playwright.sync_api import expect
+
+    page = monitoring_page
+    page.set_viewport_size({'width': width, 'height': 844})
+    errors = []
+    page.on('pageerror', lambda error: errors.append(str(error)))
+    page.goto(monitoring_backend.origin + '/', wait_until='domcontentloaded')
+    expect(page.get_by_role('link', name='Rosy Monitoring 홈')).to_be_visible()
+    expect(page.locator('main')).to_have_class('ui-task-page')
+    expect(page.locator('main h1')).to_have_text('시스템 상태')
+    page.locator('.skip-link').focus()
+    page.keyboard.press('Enter')
+    expect(page.locator('main')).to_be_focused()
+    page.locator('[data-theme-cycle]').click()
+    expect(page.locator('html')).to_have_attribute('data-theme', 'light')
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    assert not errors, errors
+
+
+@pytest.mark.parametrize('monitoring_backend', ['web'], indirect=True)
 @pytest.mark.parametrize('width', [320, 390, 1366, 1920])
 def test_actual_status_ui_is_scoped_responsive_and_read_only(monitoring_backend, monitoring_page, width):
     from playwright.sync_api import expect
