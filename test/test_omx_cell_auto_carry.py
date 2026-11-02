@@ -11,6 +11,8 @@ OMX = Path(__file__).parents[1] / "deploy/robot/omx"
 sys.path.insert(0, str(OMX))
 try:
     import cell_auto_carry as carry
+    import cell_auto_pick
+    import cell_auto_setup
 finally:
     sys.path.remove(str(OMX))
 
@@ -57,3 +59,7 @@ def test_no_commissioning_and_a_count_is_required(capsys):
                     "--commissioning", "--max", "3"])
     with pytest.raises(SystemExit):
         carry.main(["--config", "c.json", "--catalog", "k.json", "--roi", "0", "0", "1", "1", "--dest", "belt"])
+
+
+def test_auto_pick_still_exports_load_config_for_its_callers():
+    assert cell_auto_pick.load_config is cell_auto_setup.load_config  # cell_align, cell_replay (2026-11-02 regression)
