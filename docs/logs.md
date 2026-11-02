@@ -13568,6 +13568,13 @@ osy-d395-s1d\`.
 - 결정: D-889 추가 24
 - 교훈: 없음
 
+## 2026-11-02 · uncommitted · fix(land): 겹침 판정이 선택기 가드 묶음을 보지 않는다 (D-889 추가 25)
+- 변경: `land_selection.overlaps`가 `affected_tests.GUARD_SET`을 늘 빼고, `ignore`를 접두사로 본다.
+- 증거: 11-02 11:43 준비된 착지 다섯이 모두 가드 묶음(test_protocol_version_alignment, test/architecture/test_document_placement)으로 겹친다고 나와 rollup이 0개를 묶었다. 원격 시험은 착지 기록에 남긴다.
+- gate 변화: 없음
+- 결정: D-889 추가 25
+- 교훈: docs/solutions/workflow-issues/landings-gave-the-turn-back-and-reran-everything-2026-11-01.md에 더한다
+
 ## 2026-11-02 · uncommitted · docs(omx): 시범 학습 준비와 왼쪽 손목 진단 기록
 - 변경: [검증 기록](validation/omx-learning-readiness-2026-11-02/result.md)에 실제 녹화의 준비 부족, arm_a 읽기 전용 모터 관측, 손목 추종 실패 로그와 확대 사진 해시를 남겼다.
 - 증거: 운영 Learning 계정 화면 HTTP 200, 모터 ID 11–16 응답, 정지 직전 같은 장치의 건강 표본 대조. 새 학습·팔 동작·수리는 미실행이다.

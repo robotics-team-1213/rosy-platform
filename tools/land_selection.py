@@ -35,11 +35,27 @@ def _affected(land, wt: Path, python: str, base: str, head: str | None, full: bo
     return json.loads(result.stdout)
 
 
+def _guard_set() -> tuple[str, ...]:
+    """The selector's guard set (affected_tests.GUARD_SET): every selection carries it, so sharing it says
+    nothing about two changes meeting (D-889 25)."""
+    sys.path.insert(0, str(Path(__file__).resolve().parent / "harness"))
+    try:
+        from affected_tests import GUARD_SET
+    except ImportError:
+        return ()
+    return tuple(GUARD_SET)
+
+
 def overlaps(delta: list[list[str]], mine: list[list[str]], ignore=()) -> bool:
-    """Whether any test path of ``mine`` is, contains or sits in one of ``delta`` (node ids by file), ``ignore`` aside."""
+    """Whether any test path of ``mine`` is, contains or sits in one of ``delta`` (node ids by file); the paths in or
+    under ``ignore`` and the guard set aside. 11-02: the guard set (test_protocol_version_alignment,
+    test/architecture/...) sat in every selection, so every pair overlapped and addenda 18, 22, 23 rarely applied."""
+    skip = tuple(ignore) + _guard_set()
+
     def paths(invs):
-        return {w.replace("\\", "/").split("::")[0].rstrip("/") for inv in invs for w in inv
-                if not w.startswith(("ROSY_", "-"))} - set(ignore)
+        found = {w.replace("\\", "/").split("::")[0].rstrip("/") for inv in invs for w in inv
+                 if not w.startswith(("ROSY_", "-"))}
+        return {p for p in found if not any(p == g or p.startswith(g + "/") for g in skip)}
     return any(a == b or a.startswith(b + "/") or b.startswith(a + "/") for a in paths(delta) for b in paths(mine))
 
 
