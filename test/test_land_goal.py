@@ -213,6 +213,19 @@ def test_goal_cli_unknown_historical_membership_scope_cannot_pass(goal_repo, mon
     assert "FAIL: logical landing metrics incomplete" in capsys.readouterr().out
 
 
+def test_pinned_train_without_its_recorded_queue_origin_is_incomplete(goal_repo, monkeypatch, capsys):
+    events, start = goal_repo
+    sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+    rows = [ev(start, "queue", branch="fix/a", ticket="actual"),
+            ev(start + 60, "train", branch="fix/a", branches=["fix/a"], result="landed", sha=sha,
+               members=[dict(branch="fix/a", ticket="missing", candidate=sha)]),
+            ev(start + 61, "landed", branch="fix/a", sha=sha)]
+    events.write_text("\n".join(json.dumps(r) for r in rows), encoding="utf-8")
+    monkeypatch.setattr(land_stats.time, "time", lambda: start + 600)
+    assert land_stats.main(["--goal", "--hours", "1"]) == 1
+    assert "FAIL: logical landing metrics incomplete" in capsys.readouterr().out
+
+
 def test_goal_cli_recovers_historical_rollup_members_without_rewriting_events(goal_repo, monkeypatch, capsys):
     events, start = goal_repo
     sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
