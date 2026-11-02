@@ -33,6 +33,7 @@ def test_windows_bind_is_exclusive_before_binding(http_host, monkeypatch):
 
     monkeypatch.setattr(http_host.ThreadingHTTPServer, '__init__', initialize)
     monkeypatch.setattr(http_host.ThreadingHTTPServer, 'server_bind', bind)
+    monkeypatch.setattr(http_host.ThreadingHTTPServer, 'allow_reuse_port', True)
     http_host.make_server(object(), 'http://localhost:4173')
     assert calls == [(socket.SOL_SOCKET, exclusive, 1), ('bind', False, False)]
 
