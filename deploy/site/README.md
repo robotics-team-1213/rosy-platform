@@ -142,7 +142,10 @@ protected site-users file; retain its existing role and token. The marker cannot
 be combined with human login/password or policy authority. Unmarked human legacy
 Bearers remain refused. Verify state and vision-source reads and denied writes
 with that same machine credential after cutover; never promote its role to make
-the health gate pass.
+the health gate pass. Include configured Monitoring Fleet upstream credentials
+in this inventory; each retained viewer needs its own explicit marker. For
+maintenance status reads, use the existing token file registered in
+`functional_checks`; an unregistered file does not replace bootstrap authority.
 
 Before switching an existing activated authority, stop its writer, create and
 verify a consistent SQLite backup, then use
