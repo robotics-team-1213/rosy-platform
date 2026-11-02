@@ -35,11 +35,27 @@ def _affected(land, wt: Path, python: str, base: str, head: str | None, full: bo
     return json.loads(result.stdout)
 
 
+def _guard_set() -> tuple[str, ...]:
+    """The selector's guard set (affected_tests.GUARD_SET): every selection carries it, so sharing it says
+    nothing about two changes meeting (D-889 25)."""
+    sys.path.insert(0, str(Path(__file__).resolve().parent / "harness"))
+    try:
+        from affected_tests import GUARD_SET
+    except ImportError:
+        return ()
+    return tuple(GUARD_SET)
+
+
 def overlaps(delta: list[list[str]], mine: list[list[str]], ignore=()) -> bool:
-    """Whether any test path of ``mine`` is, contains or sits in one of ``delta`` (node ids by file), ``ignore`` aside."""
+    """Whether any test path of ``mine`` is, contains or sits in one of ``delta`` (node ids by file); the paths in or
+    under ``ignore`` and the guard set aside. 11-02: the guard set (test_protocol_version_alignment,
+    test/architecture/...) sat in every selection, so every pair overlapped and addenda 18, 22, 23 rarely applied."""
+    skip = tuple(ignore) + _guard_set()
+
     def paths(invs):
-        return {w.replace("\\", "/").split("::")[0].rstrip("/") for inv in invs for w in inv
-                if not w.startswith(("ROSY_", "-"))} - set(ignore)
+        found = {w.replace("\\", "/").split("::")[0].rstrip("/") for inv in invs for w in inv
+                 if not w.startswith(("ROSY_", "-"))}
+        return {p for p in found if not any(p == g or p.startswith(g + "/") for g in skip)}
     return any(a == b or a.startswith(b + "/") or b.startswith(a + "/") for a in paths(delta) for b in paths(mine))
 
 
@@ -75,9 +91,13 @@ def select(land, wt: Path, base: str, python: str, head: str | None = None,
         delta = land.browser_tier(wt, base, head)
         if reach is None:
             return _unique(own + delta)
-        # D-889 19: like the own pytest invocations (18), only the own browser chunks the delta (its suites or its
-        # browser chunks) reaches; 11-01 a foundation landing's turn ran its whole browser tier serially.
-        return _unique(delta + [inv for inv in own if overlaps(reach + delta, [inv])])
+        # D-889 19/24: like the own pytest invocations (18), only the own browser chunks the delta's browser chunks
+        # reach. Not its suites: a suite folder (operations/fleet/test) holds the browser files, so every chunk
+        # counted as reached (11-02 03:32, a 6-invocation turn ran 7 serial browser chunks for 34 min). The
+        # nightly full run covers browser tests (addendum 12).
+        # The delta's own chunks too only where this branch's reach them (D-889 22's rule): 11-02 04:06 a turn reran
+        # 10 delta chunks of 8 min for a branch whose own chunks touched few of them.
+        return _unique([inv for inv in delta if overlaps(own, [inv])] + [inv for inv in own if overlaps(delta, [inv])])
 
     if (wt / "tools/harness/affected_tests.py").is_file():
         try:

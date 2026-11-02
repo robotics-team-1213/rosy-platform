@@ -17,6 +17,10 @@ from concurrent.futures import ThreadPoolExecutor
 import pytest
 
 
+class _ExternalShutdown(Exception):
+    """Stand-in for rclpy.executors.ExternalShutdownException."""
+
+
 @pytest.fixture
 def node_module(monkeypatch):
     """rclpy 가 없어도(호스트) 있어도(ROS) 같은 가짜로 core.node 를 새로 읽는다."""
@@ -24,6 +28,7 @@ def node_module(monkeypatch):
     executors = types.ModuleType("rclpy.executors")
     node = types.ModuleType("rclpy.node")
     executors.MultiThreadedExecutor = object
+    executors.ExternalShutdownException = _ExternalShutdown
     node.Node = object
     rclpy.executors = executors
     rclpy.node = node
@@ -245,3 +250,114 @@ def test_teardown_bounds_fit_inside_systemd_stop_timeout(node_module):
     # uvicorn graceful 상한은 API join 안에서 돈다.
     assert node_module.API_GRACEFUL_TIMEOUT_S <= node_module.API_JOIN_TIMEOUT_S
     assert node_module.EXECUTOR_DRAIN_TIMEOUT_S + node_module.API_JOIN_TIMEOUT_S < 15
+
+
+# --- ROSY_CORE_EXECUTOR (D-953): opt-in C++ EventsExecutor for CORE -------------------------
+# Why swapping is allowed: CORE and its sensor node make every subscription/timer in the
+# default (mutually exclusive) callback group, so MultiThreadedExecutor never ran two callbacks
+# of one node at once; the only overlap is core node vs safety_node. Callbacks that wait for a
+# service reply (wait=True) run on API threads, never on an executor thread.
+
+def test_core_callbacks_never_rely_on_a_reentrant_group():
+    # Everything that shares CORE's executor: the core package, its services and API, and the
+    # safety_node control_adapter attaches (middleware/drive/motion_limits/adapter).
+    import pathlib
+    middleware = pathlib.Path(__file__).resolve().parents[3]
+    roots = [middleware / "core", middleware / "drive" / "motion_limits" / "adapter"]
+    offenders = [str(p) for root in roots for p in root.rglob("*.py")
+                 if "/test/" not in p.as_posix()
+                 and ("callback_group" in p.read_text(encoding="utf-8")
+                      or "ReentrantCallbackGroup" in p.read_text(encoding="utf-8"))]
+    assert all(root.is_dir() for root in roots), roots
+    assert offenders == [], offenders
+
+
+def test_events_executor_shutdown_error_is_logged_not_raised(node_module, monkeypatch):
+    calls: list[str] = []
+
+    class Failing(_EventsExecutor):
+        def shutdown(self, timeout_sec=None) -> bool:
+            raise RuntimeError("boom")
+
+    experimental = types.ModuleType("rclpy.experimental")
+    experimental.EventsExecutor = lambda: Failing(calls)
+    monkeypatch.setitem(sys.modules, "rclpy.experimental", experimental)
+    monkeypatch.setenv("ROSY_CORE_EXECUTOR", "events")
+    node = _bare_node(node_module, calls)
+    node.run()
+    assert any("executor shutdown raised during teardown" in w
+               for w in node.get_logger().warnings)
+
+
+class _EventsExecutor:
+    def __init__(self, calls: list[str]) -> None:
+        self.calls = calls
+
+    def add_node(self, node) -> None:
+        self.calls.append("add_node")
+
+    def remove_node(self, node) -> None:
+        self.calls.append("remove_node")
+
+    def spin(self) -> None:
+        self.calls.append("spin returned")
+
+    def shutdown(self, timeout_sec=None) -> bool:
+        self.calls.append(f"executor.shutdown({timeout_sec})")
+        return True
+
+
+def test_default_stays_multithreaded_and_unknown_value_is_refused(node_module, monkeypatch):
+    monkeypatch.delenv("ROSY_CORE_EXECUTOR", raising=False)
+    assert node_module.core_executor_kind() == "threaded"
+    monkeypatch.setenv("ROSY_CORE_EXECUTOR", "turbo")
+    with pytest.raises(ValueError, match="ROSY_CORE_EXECUTOR"):
+        node_module.core_executor_kind()
+
+
+def test_events_executor_is_spun_natively_and_needs_no_pool_drain(node_module, monkeypatch):
+    calls: list[str] = []
+    experimental = types.ModuleType("rclpy.experimental")
+    experimental.EventsExecutor = lambda: _EventsExecutor(calls)
+    monkeypatch.setitem(sys.modules, "rclpy.experimental", experimental)
+    monkeypatch.setenv("ROSY_CORE_EXECUTOR", "events")
+    node = _bare_node(node_module, calls)
+    node.run()
+    assert calls == ["add_node", "attach", "spin returned", "detach", "remove_node",
+                     "executor.shutdown(0)"]
+    assert node.get_logger().warnings == []
+
+
+def test_events_spin_ending_on_context_shutdown_returns_like_threaded(node_module, monkeypatch):
+    # Real EventsExecutor.spin() raises ExternalShutdownException when the context goes down.
+    calls: list[str] = []
+
+    class Raising(_EventsExecutor):
+        def spin(self) -> None:
+            calls.append("spin raised")
+            raise _ExternalShutdown()
+
+    experimental = types.ModuleType("rclpy.experimental")
+    experimental.EventsExecutor = lambda: Raising(calls)
+    monkeypatch.setitem(sys.modules, "rclpy.experimental", experimental)
+    monkeypatch.setenv("ROSY_CORE_EXECUTOR", "events")
+    node = _bare_node(node_module, calls)
+    node.run()
+    assert calls == ["add_node", "attach", "spin raised", "detach", "remove_node",
+                     "executor.shutdown(0)"]
+
+
+def test_threaded_spin_still_propagates_errors(node_module, monkeypatch):
+    monkeypatch.delenv("ROSY_CORE_EXECUTOR", raising=False)
+    calls: list[str] = []
+    node = _bare_node(node_module, calls)
+    executor = _FakeExecutor(calls)
+    executor.release.set()
+
+    def spin():
+        raise _ExternalShutdown()
+
+    executor.spin = spin
+    monkeypatch.setattr(node_module, "MultiThreadedExecutor", lambda: executor)
+    with pytest.raises(_ExternalShutdown):
+        node.run()
