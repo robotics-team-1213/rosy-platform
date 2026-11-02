@@ -13759,6 +13759,12 @@ osy-d395-s1d\`.
 - 결정: 없음
 - 교훈: `docs/solutions/runtime-errors/omx-blocked-wrist-roll-reached-the-guard-unseen-2026-11-02.md`
 
+## 2026-11-03 · uncommitted · docs(omx): 실물 카메라로 잰 셀 실측과 셀 모델 대장 갱신
+- 변경: 검증 기록 `docs/validation/omx-cell-survey-2026-11-03/result.md`(top·side 카메라 자세, arm_b 받침 FK 맞춤, fixture와의 차이), `learning/envs/isaac/cell_model_inventory.yaml`의 판·팔 받침·top·side 카메라 항목과 벨트 높이 사람 작업, D-947 2의 보강(Gazebo도 같은 대장, 값마다 출처, CAD·실측은 후보).
+- 증거: 돌기 격자 PnP top 0.58 px·side 2.8 px, arm_b 녹화 세션 `live.json`을 읽기만 해 FK 맞춤 3.1 px. 팔 명령·관측기 기동 없음. 스크립트와 겹침 영상은 Git 밖 작업 공간 조사 폴더.
+- gate 변화: 없음. fixture 수치는 바꾸지 않았다(실측 받침 채택은 도달·충돌 비교 뒤).
+- CE: 해당 없음 — 측정 기록이며 해결한 장애가 아니다. 실물과 시뮬레이션의 차이는 대장에 남겼다.
+
 ## 2026-11-03 · uncommitted · fix(publish): 실제 FULL·브라우저 실행 근거로 게시와 병합을 검증한다
 
 - 변경: `publish_main.green_full`이 후보 SHA의 정본 FULL·전체 opt-in 브라우저 chunk/ALONE 계획과 정확한 commit·tree·환경·argv·로그 SHA-256 대응을 확인한다. 기존 분할기를 그대로 사용하며 준비 후보는 기존 main 병합 bridge와 최종 계획·환경 일치가 필요하다. `--no-cache`는 재사용만 끄고 새 clean 실행 근거를 남긴다.

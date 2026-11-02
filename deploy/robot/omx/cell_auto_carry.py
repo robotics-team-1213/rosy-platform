@@ -29,7 +29,7 @@ def carry(run_one, maximum: int, dark=lambda: []) -> dict:
         result = run_one()
         if result["result"] != "placed":
             last = (result.get("attempts") or [{}])[-1]
-            empty = last.get("observed") == 0
+            empty = last.get("observed") == 0 and last.get("error") == "no usable object"
             return {"carries": carries, "placed": len(carries), "last": result,
                     "result": "source empty" if empty else result["result"]}
         carries.append(result)

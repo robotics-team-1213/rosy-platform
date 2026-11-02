@@ -357,4 +357,4 @@
 - 2026-11-03 · 3db26622ab · evidence: 재연결 뒤 READY 복구와 수정 검증 동결
 - 2026-11-03 · f8fdc85890 · docs: 게시 성공과 적격 FULL 근거 구분
 - 2026-11-03 · uncommitted · fix(publish): 실제 FULL·브라우저 실행 근거로 게시와 병합을 검증한다
-- 2026-11-03 · uncommitted · fix(omx): 놀고 있는 팔은 60초에 접고, 막힌 접기는 한 번만 다시 한 뒤 사람을 부른다
+- 2026-11-03 · uncommitted · docs(omx): 실물 카메라로 잰 셀 실측과 셀 모델 대장 갱신
