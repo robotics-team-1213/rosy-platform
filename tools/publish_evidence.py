@@ -10,13 +10,14 @@ import sys
 import uuid
 
 import land_cache
+import land_full
 from land_selection import valid_plan
 
 
 # Imports and selectors run in a fresh interpreter against the immutable candidate,
 # including its environment recipe, browser chunker, sharder and quarantine policy.
 DESCRIBE = r'''
-import json, re, subprocess, sys
+import hashlib, json, re, subprocess, sys, tempfile
 from pathlib import Path
 root = Path.cwd()
 sys.path[:0] = [str(root / p) for p in ("tools", "tools/remote", "test")]
@@ -49,16 +50,23 @@ quarantine = (known_failures.load_known(known_failures.QUARANTINE.read_text(enco
 def clean(row):
     log = Path(row.get("log", ""))
     try:
-        text = log.read_text(encoding="utf-8-sig", errors="replace")
+        data = log.read_bytes()
     except OSError:
         return False
+    if row.get("log_sha256") != hashlib.sha256(data).hexdigest():
+        return False
+    text = data.decode("utf-8-sig", errors="replace")
     summaries = [line for line in text.splitlines()
                  if re.search(r"\b\d+ (?:passed|failed|skipped|errors?)\b.* in [0-9.]+s", line)]
     if (not summaries or "no tests ran" in text or "LOAD-FLAKY" in text
             or "[tailscale-ssh: process died: signal:" in text):
         return False
-    if land_browser.vacuous(row["argv"], log):
-        return False
+    if "ROSY_RUN_BROWSER_TESTS=1" in row["argv"]:
+        with tempfile.TemporaryDirectory(prefix="rosy-publish-log-") as temporary:
+            snapshot = Path(temporary) / "execution.txt"
+            snapshot.write_bytes(data)
+            if land_browser.vacuous(row["argv"], snapshot):
+                return False
     if any(re.search(r"\b[1-9]\d* (?:failed|errors?)\b", line) for line in summaries) \
             and not known_failures.failed_ids(text):
         return False
@@ -101,8 +109,8 @@ def reason(publish, repo, sha, record):
         on = record.get("prepared_on")
         if (not isinstance(prepared, str) or not land_cache.OID.fullmatch(prepared)
                 or not isinstance(on, str) or not land_cache.OID.fullmatch(on)
-                or not publish.ancestor(repo, prepared, sha) or not publish.ancestor(repo, on, prepared)
-                or not publish.ancestor(repo, on, record["base"])):
+                or not publish.ancestor(repo, on, prepared)
+                or not land_full.bridge(repo, prepared, on, sha, record["base"])):
             return "invalid prepared-candidate provenance"
         if prepared != sha:
             sources.append((prepared, on))

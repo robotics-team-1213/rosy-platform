@@ -1,6 +1,7 @@
 """Publication needs executed canonical FULL evidence, including real browser chunks."""
 
 from argparse import Namespace
+import hashlib
 import json
 from pathlib import Path
 import sys
@@ -40,6 +41,7 @@ def test_no_cache_forbids_reuse_but_preserves_fresh_exact_execution_proof(repo, 
     row, = land_cache.entries(local)
     assert (row["commit"], row["tree"], row["env"], row["argv"], row["log"]) == (
         sha, _git(local, "rev-parse", f"{sha}^{{tree}}"), "fixture-env", inv, str(log))
+    assert row["log_sha256"] == hashlib.sha256(log.read_bytes()).hexdigest()
 
 
 def _proof(repo):
@@ -53,6 +55,11 @@ def _rewrite_rows(local, change):
     rows = land_cache.entries(local)
     change(rows)
     land_cache.path(local).write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+
+
+def _record_updated_log(local, log):
+    row = next(row for row in land_cache.entries(local) if row["log"] == str(log))
+    land_cache.record(local, row["commit"], row["tree"], row["env"], row["argv"], log)
 
 
 def _deny_selection_and_merge(local, sha, monkeypatch):
@@ -118,6 +125,7 @@ def test_exact_execution_mapping_and_usable_browser_verdict_are_required(repo, m
                     "load-flaky": "1 passed in 0.01s\nLOAD-FLAKY test_dashboard\n",
                     "zero-tests": "no tests ran in 0.01s\n"}[damage]
             log.write_text(text, encoding="utf-8")
+            _record_updated_log(local, log)
     _deny_selection_and_merge(local, sha, monkeypatch)
 
 
@@ -208,8 +216,10 @@ def test_normal_ros_only_skip_and_approved_quarantine_rerun_keep_existing_verdic
     sha = _commit(local, "test/flaky_quarantine.txt", nodeid + "  # fixture approved rerun\n")
     logs = qualified_record(tool, local, sha, _git(local, "rev-parse", f"{sha}^"))
     Path(logs[0]).write_text("1 skipped in 0.01s\n", encoding="utf-8")
+    _record_updated_log(local, Path(logs[0]))
     assert tool.green_full(local, sha)
     Path(logs[0]).write_text(f"FAILED {nodeid} - transient\n1 failed in 0.01s\n"
                             f"{known_failures.RERUN_MARKER}\nPASSED {nodeid}\n1 passed in 0.01s\n",
                             encoding="utf-8")
+    _record_updated_log(local, Path(logs[0]))
     assert tool.green_full(local, sha)

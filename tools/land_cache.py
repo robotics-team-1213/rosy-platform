@@ -21,6 +21,7 @@ Standard library only.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import subprocess
@@ -85,8 +86,12 @@ def entries(wt: Path) -> list[dict]:
 
 def record(wt: Path, commit: str, tree: str, env: str, inv: list[str], log: Path) -> None:
     target = path(wt)
+    try:
+        digest = hashlib.sha256(log.read_bytes()).hexdigest()
+    except OSError:
+        digest = None  # Missing historical logs can support cache reuse, never publication.
     line = json.dumps({"tree": tree, "commit": commit, "env": env, "argv": inv, "log": str(log),
-                       "at": time.strftime("%Y-%m-%dT%H:%M:%S")})
+                       "log_sha256": digest, "at": time.strftime("%Y-%m-%dT%H:%M:%S")})
     with open(target, "a", encoding="utf-8") as out:
         out.write(line + "\n")
     if len(target.read_text(encoding="utf-8", errors="replace").splitlines()) > MAX_LINES:
