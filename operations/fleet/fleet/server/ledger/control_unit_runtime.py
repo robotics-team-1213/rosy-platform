@@ -158,7 +158,8 @@ class ControlUnitPeers:
 
 def install_control_unit(app, path, *, tasks, console, principals, named_logins,
                          console_token, authorize, require_viewer, require_named_operator,
-                         map_snapshot=None, configured_omx=None, stop_transport=None, stop_targets=()):
+                         map_snapshot=None, configured_omx=None, stop_transport=None, stop_targets=(),
+                         enrollment=None):
     from fleet.server.control_unit_observation_runtime import install_control_information
     from fleet.server.control_unit_routes import install_control_unit_routes
     from fleet.server.control_unit_service import ControlUnitService
@@ -184,6 +185,9 @@ def install_control_unit(app, path, *, tasks, console, principals, named_logins,
     configured_omx = configured_omx or {}
     signal_ids = validate_control_stop_owners(config, console=console, configured_omx=configured_omx,
                                              signals=console._signals, stop_targets=stop_targets)
+    if enrollment is not None:  # a robot enrolled outside the manifest would stop the next start
+        resources = config.topology.unit(config.unit_id).resources
+        enrollment.owned_robot_ids = frozenset(r[6:] for r in resources if r.startswith("robot:"))
     store = ControlUnitStore(tasks.store.path, unit_id=config.unit_id)
     service = ControlUnitService(config.topology, store, tasks, console, peer=None)
     http = httpx.AsyncClient(verify=config.tls_context or True, trust_env=False,
