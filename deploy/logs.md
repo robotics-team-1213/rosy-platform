@@ -4505,3 +4505,9 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - Gate: 통합 SOURCE 검증 전. 원격 서버의 hold·writer·설정·서명 작업·로봇 상태는 변경하지 않았다. CE: 미해결 — 실제 설치 helper 전환과 운영 수용은 남아 있다.
 
 - 후속 검증: 통합 source 21f1dcd378의 updater·incremental·config·functional-setup 4개 모듈은 공식 원격 248 passed/0 skipped/exit 0/NEW 0이다. 독립 계약 검토는 전체 서명 목록·선택 런타임·신원·복구·함수 이동·import 경로에서 지적 없음이다. 환경 d8fff8b263b691df, freeze eb75e06857d6c188. 이는 해당 소스와 helper 계약의 증거이며 전체 FULL·설치·운영 수용은 아니다. 실제 설치는 matching updater·I/O·runtime·verifier 및 호출 helper 묶음을 함께 바꿔야 한다.
+
+## 2026-11-03 · bfd53106b3 · 독립 Account의 공용 스타일 빌드 입력 폐쇄성
+
+- 변경: 필수 component-controls.css를 Account Docker COPY와 전용 dockerignore의 정확한 허용 목록에 연결했다. 고정 common 자산 집합·정본 CSS 바이트·COPY 원본·명시적 빌드 문맥 허용을 검사해 실제 이미지 입력까지 전파한다. 빌드 입력 해시는 COPY에서 계산되므로 CSS 변경이 Account 이미지 재사용을 막는다. 최초 authority 전환은 기존 수동 서명 설치 절차와 연결하고 updater의 현재 컨테이너 건강 검사·정상 갱신 시 의미를 README에 명시했다.
+- 증거: e3f6ddc8e7의 공식 FULL 파일 단독 실행에서 자산 목록 불일치 1 NEW를 확인했다. 수정 전 source 3f56c1dbd1의 구성 검사와 공식 모델 PC 시험은 Docker COPY의 필수 스타일 누락을 재현했다(원격 1 failed/NEW 1). bfd53106b3의 이미지·후보·workflow 회귀 37 passed/0 skipped/exit 0/NEW 0, 같은 파일의 원래 전체 단독 실행 가드 1 passed/complete 1/0 skipped/exit 0/NEW 0이다. 환경 88f52f4345196f6d, freeze eb75e06857d6c188. 독립 빌드 경로 검토 지적 없음이다.
+- Gate: 소스·빌드 입력 계약 검증이다. 실제 OCI 빌드·서명·설치·운영 authority 전환은 아직 수행하지 않았다. e3f6 FULL은 실패 이력이며 게시 자격으로 쓰지 않는다. CE: 해당 없음 — 새 코드·시험과 기존 설치 절차가 원인·보존 조건을 설명하며 운영 전환 수용은 남아 있다.

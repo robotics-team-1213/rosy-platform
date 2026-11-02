@@ -155,6 +155,14 @@ in this inventory; each retained viewer needs its own explicit marker. For
 maintenance status reads, use the existing token file registered in
 `functional_checks`; an unregistered file does not replace bootstrap authority.
 
+For the initial writer handoff, stage and verify the signed candidate and its
+images through the [manual installation steps](#ci-built-candidates-d-437)
+before pausing the existing writer. Keep the updater timer paused, its
+maintenance hold in place, and the actual configuration-reload watcher stopped
+throughout extraction, configuration publication and activation. The updater requires healthy
+current containers before adoption and release selection; use the manual signed
+installation path for this stopped-writer transition.
+
 Before switching an existing activated authority, stop its writer, create and
 verify a consistent SQLite backup, then use
 `rosy_account.migration.migrate_authority(source, target)` to copy the ten related
@@ -172,6 +180,10 @@ authorization/logout, and Account availability while Fleet is stopped. Preserve
 new account changes during recovery: do not overwrite the new DB with a stale
 pre-transition copy. Real-user password entry and allowed project operations are
 separate acceptance evidence.
+
+Once the manually installed stack is healthy and the existing hold's exit
+conditions are satisfied, resume normal update processing. The same invocation
+can adopt the manual installation and then select a newer eligible candidate.
 
 #### Independent Account database backups
 

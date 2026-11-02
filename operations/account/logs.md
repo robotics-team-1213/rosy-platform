@@ -75,3 +75,9 @@
 - Gate: 통합 SOURCE 검증 전이며 운영 authority의 계정·세션·토큰·비밀번호·키를 변경하지 않았다. CE: 해당 없음 — 설치 자산 검사와 owner 회귀로 검증한다.
 
 - 후속 검증: 21f1dcd378의 독립 import·최소 bundle·Node·화면 제목 16건 통과 후, 4493982d05에서 정확한 한국어 heading/intro와 static owner 치환을 보정했다. 해당 수정본의 실제 독립 TLS fixture·등록 callback·최초 비밀번호·기존 Fleet·sample을 포함한 브라우저 112건은 원격 PASS/0 SKIP/exit 0/NEW 0이다. 독립 재검토 지적 없음이다. 테스트 authority/합성 fixture와 익명 소스 미리보기의 범위이며 운영 계정이나 운영 callback 수용으로 대신하지 않는다.
+
+## 2026-11-03 · bfd53106b3 · 최소 Account 이미지의 실제 스타일 입력 연결
+
+- 변경: 공용 조작 스타일이 최소 bundle뿐 아니라 Docker COPY·전용 제외 목록·이미지 재사용 입력까지 연결되도록 했다. 고정 자산 목록의 정확성과 공용 원본 바이트 일치를 보존한다.
+- 증거: 수정 전 Docker 문맥 시험 1 NEW를 재현했고, 수정본의 이미지·후보·workflow 37건과 원래 파일 전체 단독 실행 1건이 공식 원격 PASS/0 SKIP/NEW 0이다. 독립 경로 검토는 전파 누락·검증 약화 지적 없음이다.
+- Gate: 실제 OCI 아티팩트와 운영 수용 전이다. 계정·세션·키·토큰·writer 상태는 바꾸지 않았다. CE: 해당 없음 — 고정 파일 계약과 원본·COPY·허용 검사로 재발 조건을 검증한다.
