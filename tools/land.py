@@ -378,6 +378,7 @@ def rounds(args, wt: Path, branch: str, main_co: Path, python: str, qdir, ticket
     for round_no in range(1, args.max_rounds + 1):
         try:
             land_queue.touch()  # a held ticket stays fresh through long rounds
+            turn_epoch = land_queue.turn_started()
             reusable, prepared = args.tests in ("auto", "full"), None  # a green affected tier pre-push may reuse
             main_sha = out(wt, "rev-parse", "main")
             print(f"== round {round_no}: main {main_sha[:10]}, branch {branch}")
@@ -470,6 +471,8 @@ def rounds(args, wt: Path, branch: str, main_co: Path, python: str, qdir, ticket
                 raise Stop(f"{branch} moved to {tip[:10]} during the checks; {candidate[:10]} was tested, not that")
             land_selection.require_eligible(sys.modules[__name__], args, reusable and prepared is not None)
             land_checks.check_turn(sys.modules[__name__], wt, args, round_no)
+            if ticket is not None and not land_queue.owns_turn(ticket, started=turn_epoch):
+                raise Stop("landing turn ownership changed during checks; refusing to fast-forward main")
             on_main(main_co)
             ff = git(main_co, "merge", "--ff-only", candidate, check=False)
             if ff.returncode == 0:

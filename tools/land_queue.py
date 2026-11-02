@@ -131,16 +131,21 @@ def turn_started() -> float | None:
     return max(starts, default=None)
 
 
+def owns_turn(ticket: Path, *, started: float | None = None) -> bool:
+    with _status_lock:
+        try:
+            info = json.loads(ticket.read_text(encoding="utf-8"))
+            return (info.get("status") == "turn" and int(info.get("pid") or 0) in (0, os.getpid())
+                    and (started is None or info.get("turn_started") == started))
+        except (OSError, ValueError):
+            return False
+
+
 def release(ticket: Path | None, note: str = "", *, started: float | None = None) -> bool:
     """Release once, only while this PID still owns the expected turn; never turn a draining job pending."""
     with _status_lock:
         if ticket is not None:
-            try:
-                info = json.loads(ticket.read_text(encoding="utf-8"))
-            except FileNotFoundError:
-                return False
-            if (info.get("status") != "turn" or int(info.get("pid") or 0) not in (0, os.getpid())
-                    or (started is not None and info.get("turn_started") != started)):
+            if not owns_turn(ticket, started=started):
                 return False
             set_status(ticket, "preparing")
         land_events.emit("released", note=note)

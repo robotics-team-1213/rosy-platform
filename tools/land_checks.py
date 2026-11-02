@@ -469,9 +469,9 @@ def run_tests(land, wt: Path, args, invocations: list[list[str]], logdir: Path, 
                 land.land_mainred.close(wt, log.read_text(encoding="utf-8", errors="replace"), head)
             done.append(f"pytest {' '.join(inv)} ok ({log.name})"
                         + (f", {why}" if carried else f", LOAD-FLAKY {flaky}" if flaky else ""))
-        if cancelled and not stops:
+        if not stops and (cancelled or (stop is not None and stop.is_set())):
             raise land.Overtime(
-                f"{len(cancelled)} invocation(s) past the turn's {land.TURN_CAP_S // 60} min: tested outside the lock")
+                f"turn budget expired ({len(cancelled)} unfinished invocation(s)): tested outside the lock")
         return stops + (
             [f"{len(cancelled)} invocation(s) not run: cancelled after the failure above"] if cancelled else [])
 
