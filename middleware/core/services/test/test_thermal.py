@@ -77,3 +77,60 @@ def test_a_lost_soc_reading_holds_a_level_the_soc_raised():
     m.update(83.0, 0, 0.0)
     assert m.update(None, None, 1.0) == HOT and "readings_lost" in m.reasons
     assert m.update(60.0, 0, 2.0) == OK
+
+
+@pytest.mark.parametrize("missing", ["temperature_c", "temperature_limit_c", "motor"])
+def test_a_cool_second_motor_cannot_clear_a_hot_motor_with_missing_evidence(missing):
+    m = ThermalMonitor()
+    hot, cool = motors(77, limit=80)["motors"][0], {**motors(40, limit=80)["motors"][0], "id": 2}
+    m.on_motor_health({"motors": [hot, cool]}, 0.0)
+    assert m.update(50.0, 0, 0.0) == HOT
+    partial = {**hot, missing: None}
+    for now in (1.0, 2.0):
+        m.on_motor_health({"motors": [cool] if missing == "motor" else [partial, cool]}, now)
+        assert m.update(50.0, 0, now) == HOT
+        assert "motor_1_hot" in m.reasons and "readings_lost" in m.reasons
+        assert m.caps(.2, .8, "nav") == (0.0, 0.0)
+        if missing != "motor":
+            assert m.status()["motors"][0][missing] is None
+    m.on_motor_health({"motors": [{**hot, "temperature_c": 60}, cool]}, 3.0)
+    assert m.update(50.0, 0, 3.0) == OK
+    assert "readings_lost" not in m.reasons
+
+
+def test_a_missing_warm_source_does_not_hold_another_sources_cleared_hot_level():
+    m = ThermalMonitor()
+    hot = motors(77, limit=80)["motors"][0]
+    warm = {**motors(72, limit=80)["motors"][0], "id": 2}
+    m.on_motor_health({"motors": [hot, warm]}, 0.0)
+    assert m.update(50.0, 0, 0.0) == HOT
+    m.on_motor_health({"motors": [{**hot, "temperature_c": 40}, {**warm, "temperature_c": None}]}, 1.0)
+    assert m.update(50.0, 0, 1.0) == WARM
+    assert "motor_2_warm" in m.reasons and "motor_1_hot" not in m.reasons
+    assert m.caps(.2, .8, "nav") == pytest.approx((.1, .8))
+    m.on_motor_health({"motors": [{**hot, "temperature_c": 40}, {**warm, "temperature_c": 40}]}, 2.0)
+    assert m.update(50.0, 0, 2.0) == OK
+
+
+@pytest.mark.parametrize("error,level,reason", [(0x04, HOT, "overheating"), (0x01, WARM, "input_voltage")])
+def test_motor_fault_needs_its_own_fresh_error_register_to_clear(error, level, reason):
+    m = ThermalMonitor()
+    fault = motors(40, limit=80, error=error)["motors"][0]
+    cool = {**motors(40, limit=80)["motors"][0], "id": 2}
+    m.on_motor_health({"motors": [fault, cool]}, 0.0)
+    assert m.update(50.0, 0, 0.0) == level
+    m.on_motor_health({"motors": [{**fault, "hardware_error": None}, cool]}, 1.0)
+    assert m.update(50.0, 0, 1.0) == level
+    assert f"motor_1_{reason}" in m.reasons and "readings_lost" in m.reasons
+    assert m.status()["motors"][0]["hardware_error"] is None
+    m.on_motor_health({"motors": [{**fault, "hardware_error": 0}, cool]}, 2.0)
+    assert m.update(50.0, 0, 2.0) == OK
+
+
+def test_a_missing_warm_soc_does_not_hold_a_cleared_motor_hot_level():
+    m = ThermalMonitor()
+    m.on_motor_health(motors(77, limit=80), 0.0)
+    assert m.update(76.0, 0, 0.0) == HOT
+    m.on_motor_health(motors(40, limit=80), 1.0)
+    assert m.update(None, 0, 1.0) == WARM
+    assert "soc_warm" in m.reasons and "motor_1_hot" not in m.reasons
