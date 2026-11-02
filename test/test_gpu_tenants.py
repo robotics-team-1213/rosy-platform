@@ -18,6 +18,7 @@ def tenants(tmp_path, monkeypatch):
     monkeypatch.setattr(mod, 'JOBS', tmp_path / 'rosy-jobs')
     monkeypatch.setattr(mod, 'OWNER_MODE', tmp_path / 'situation-owner-mode')
     monkeypatch.setattr(mod, 'SITUATION', tmp_path / 'logs')
+    monkeypatch.setattr(mod, 'GPU_LOCK', tmp_path / 'gpu.lock', raising=False)
     (tmp_path / 'logs').mkdir()
     (tmp_path / 'rosy-jobs').mkdir()
     mod.OWNER_MODE.write_text('available\n')
@@ -75,6 +76,21 @@ def test_tick_gives_back_a_forgotten_lease(tenants):
     tenants.claim([UNIT], now)
     situation(tenants, now + 1000)
     assert tenants.tick(now + 1000) == f'released {UNIT}'  # the batch died: nothing renewed, nothing holds the GPU
+
+
+def test_detached_gpu_worker_keeps_the_lease_after_reservation_expiry(tenants):
+    fcntl = pytest.importorskip('fcntl')
+    now = time.time()
+    situation(tenants, now)
+    tenants.claim([UNIT], now)
+    (tenants.JOBS / 'isaac-x.resv').write_text(f'{now - 1} gpu 6 8\n')
+    with tenants.GPU_LOCK.open('w') as worker:
+        fcntl.flock(worker, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        situation(tenants, now + 1000, online=True)
+        assert tenants.tick(now + 1000) == 'nothing'
+        assert tenants.release([UNIT]) == 'busy GPU held'
+        assert tenants.mark(UNIT).exists() and tenants.calls == [('stop', UNIT)]
+    assert tenants.tick(now + 1000) == f'released {UNIT}'
 
 
 @pytest.mark.parametrize('mode', ['owner_busy', 'shared'])
