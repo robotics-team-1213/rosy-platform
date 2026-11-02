@@ -86,3 +86,24 @@ passed all 104 remote tests after six intended failures on the earlier implement
 changed and unchanged rules, blocked and immediate acquisition, completion before refresh, child
 exit propagation, ticket metadata, and batch suppression. This is source-level regression evidence;
 coordinated landing and already-running processes' bootstrap remain separate checks.
+
+Those 104 targeted passes missed compatibility with the miniature Git repositories used by the
+broader landing tests. Their `main` has no tracked `tools/land.py`. `rules()` returned an empty
+fingerprint, or only unrelated remote-tool blobs, and compared it with the importing repository's
+nonempty startup fingerprint. The new immediate refresh then spawned that miniature checkout's
+missing `tools/land.py`, exiting 2 before the turn. An untracked stub entrypoint also reproduced an
+unwanted child exit 7. Testing the callback with mocked rule fingerprints alone did not exercise
+this repository boundary.
+
+The pending compatibility correction makes `rules()` return `None` unless main tracks the landing
+entrypoint. Missing landing code provides no runnable replacement; it is not evidence that the
+loaded rules changed. This keeps real repositories eligible for refresh without a fixture-only
+bypass. Two real-Git regressions cover absent tooling and unrelated remote tooling.
+
+Verification: committed source `23fafbc089` reproduced the existing log-merge regression's exit 2;
+tests-only `3f0f45a653` produced both intended new entrypoint failures. Repaired source `fb845aabfd`
+passed all 27 `test/test_land*.py` suites plus worktree, remote-pytest and memory suites remotely (596 tests)
+(`$TEMP/rosy-land-refresh-compat-broad/run-1.txt`, exit 0; known-failure comparison: 0 new, 0 known,
+0 flaky). The red reports are `$TEMP/rosy-land-refresh-compat-red/run-1.txt` and
+`$TEMP/rosy-land-refresh-compat-rules-red/run-1.txt`. This verifies the repair in source; it does not
+claim coordinated landing or a measured reduction in queue lead time.
