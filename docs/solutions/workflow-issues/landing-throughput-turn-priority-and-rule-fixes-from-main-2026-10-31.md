@@ -1,6 +1,7 @@
 ---
 title: The turn holder waited behind the landings it held up, and fixes to the landing rules ran under the old rules
 date: 2026-10-31
+last_updated: 2026-11-02
 category: workflow-issues
 module: tools/land.py, tools/land_checks.py, tools/land_prepare.py, tools/remote/remote_job.py, tools/remote/xdist_plan.py
 problem_type: workflow_issue
@@ -60,5 +61,28 @@ These ship in `fix/land-throughput-bundle`. Their savings are **expected**, not 
 ## Prevention
 
 - Treat any shared resource the turn holder needs as a priority-inversion risk: a host budget, a lock, an alone drain. The turn must not queue behind tickets that queue behind it.
-- After a landing-rule fix lands, restart the pending landers in queue order. Do not expect the queue to speed up by itself.
+- Processes already running code without the refresh mechanism below need a bootstrap restart in queue order after a rule fix. Keep their snapshot and passed records.
 - Before reasoning from `tests` events, check what their timing fields measure.
+
+## Rechecked on 2026-11-02: prepared waiters missed automatic refresh
+
+`land_prepare.relaunch` could load current main while pending for a preparation slot, but green
+waiters never called it. They kept the old overlap rules after main was fixed. The existing queue
+also granted an unblocked turn before its merge-preview callback, so adding refresh only to that
+callback would still miss immediate acquisition.
+
+The correction reuses the existing child handoff in ordinary queue and reprepare waits. It checks
+completion first, then refreshes before deciding blockers or granting a turn. The child adopts the
+same ticket filename and start time, retaining FIFO, urgency and metadata; the parent's cleanup
+does not unlink a ticket the child owns. This avoids a stop/resubmit loop and does not reset lead time.
+
+An active batch leader or carried member keeps its loaded rules until the batch lifecycle ends.
+Raising `SystemExit` inside the leader would skip switch-back, branch cleanup and train reporting.
+The suppression belongs in `relaunch` itself because a leader can reach it through preparation
+slots and reprepare paths as well as its direct wait.
+
+Regression suites `test/test_land_prepare.py`, `test/test_land_batch.py` and `test/test_land_queue.py`
+passed all 104 remote tests after six intended failures on the earlier implementation. They cover
+changed and unchanged rules, blocked and immediate acquisition, completion before refresh, child
+exit propagation, ticket metadata, and batch suppression. This is source-level regression evidence;
+coordinated landing and already-running processes' bootstrap remain separate checks.
