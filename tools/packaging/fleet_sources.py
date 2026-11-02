@@ -54,6 +54,8 @@ class HolderSource(sdist):
         support.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(__file__, support)
         for name, folder in roots.items():
+            if name == 'account':
+                continue  # Account is delivered by its own required distribution.
             destination = Path(base_dir) / '_source_roots' / name
             if name == 'assessment':
                 destination = destination / 'rosy_situation'

@@ -355,6 +355,6 @@
 
 - 2026-11-02 · uncommitted · fix(landing): 모든 차례의 30분 상한
 - 2026-11-02 · uncommitted · feat(fleet): 확인된 ARM 시도의 재관측 계약(D-930, API v1.334)
+- 2026-11-02 · uncommitted · D-962 Account 독립 실행과 개발 모드 인증 계약
+- 2026-11-02 · uncommitted · fix(auth): Fleet 개발 모드에서도 Rosy Account 로그인 제공
 - 2026-11-02 · 7090702e1f · fix(remote): isaac_batch retries an UNKNOWN run; Step 4c boundary over seeds and yaw; D-958 stage 1 kill test
-- 2026-11-02 · uncommitted · test: 리뷰 관문 스크립트를 시험이 부른다
-- 2026-11-02 · uncommitted · docs(omx): 시범 학습 준비와 왼쪽 손목 진단 기록

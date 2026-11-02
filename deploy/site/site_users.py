@@ -24,7 +24,7 @@ from pathlib import Path
 
 import yaml
 
-# File-level contract mirrors fleet/server/auth/site_users.py (D-276).
+# File-level contract mirrors operations/account/rosy_account/site_users.py (D-276, D-962).
 FILE_ROLES = frozenset({"viewer", "operator", "policy-admin", "service", "ai_observer"})
 CLI_ROLES = frozenset({"viewer", "operator", "policy-admin"})
 _SHA256 = re.compile(r"[0-9a-f]{64}\Z")
@@ -77,7 +77,7 @@ def validate_users_document(document: object) -> list[dict[str, str]]:
         keys = set(entry) if isinstance(entry, Mapping) else set()
         if (not {"principal_id", "role"} <= keys
                 or not keys <= {"principal_id", "role", "token_sha256", "login", "password_scrypt",
-                                "policy_admin"}
+                                "policy_admin", "machine"}
                 or ("login" in keys) != ("password_scrypt" in keys)
                 or not keys & {"token_sha256", "login"}):
             raise SiteUsersError("each site user requires principal_id, role, and a token or login")
@@ -89,6 +89,9 @@ def validate_users_document(document: object) -> list[dict[str, str]]:
             raise SiteUsersError("site user role must be a string")
         if role not in FILE_ROLES:
             raise SiteUsersError("site user role is unknown")
+        if "machine" in keys and (entry["machine"] is not True or role != "viewer"
+                                  or keys & {"login", "password_scrypt", "policy_admin"}):
+            raise SiteUsersError("machine must be true on a token-only viewer without policy_admin")
         if "policy_admin" in keys and (entry["policy_admin"] is not True or role != "operator"):
             raise SiteUsersError("policy_admin must be true on an operator, or absent (D-793)")
         principal_id = principal_id.strip()
