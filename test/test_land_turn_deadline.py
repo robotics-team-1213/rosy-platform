@@ -220,6 +220,7 @@ def test_expired_turn_yields_even_when_every_check_passed_and_peer_already_owns_
 
     def passed(invocations, logs, *a, **kw):
         for log in logs:
+            log.parent.mkdir(parents=True, exist_ok=True)
             log.write_text("1 passed\n", encoding="utf-8")
         if not at_join:
             handoff()
