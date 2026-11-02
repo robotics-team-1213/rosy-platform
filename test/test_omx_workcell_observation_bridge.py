@@ -213,6 +213,7 @@ def test_camera_sender_uses_verified_source_scoped_persistent_websocket(monkeypa
     sender.send(source.latest()); sender.send(source.latest()); sender.close()
     assert len(opened) == 1 and opened[0][0] == "wss://vision.example" + protocol.WS_PATH
     assert opened[0][1]["ssl"] is context and opened[0][1]["max_queue"] == 1
+    assert "compression" in opened[0][1] and opened[0][1]["compression"] is None
     assert opened[0][1]["additional_headers"] == {"Authorization": "Bearer top-secret"}
     assert timeouts == [2]
     protocol.validate_hello(json.loads(sent[0]))

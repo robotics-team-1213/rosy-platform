@@ -69,14 +69,14 @@ Each folder's own `AGENTS.md` carries its files and rules. Root files: `README.m
 
 ### GitHub 게시와 두 에이전트 검토
 
-공개 `main`은 로컬 `main`을 올린 PR의 merge commit 병합으로만 갱신한다(D-868). squash·rebase 병합은 쓰지 않는다. GitHub 사람 승인 수는 0, 필수 검사는 `ci-result`다(2026-10-16 사용자 결정). 작성 에이전트와 다른 읽기 전용 검토 에이전트가 base/head SHA를 지정해 검토하고, 게시 담당 한 명이 사용자에게 허용받은 범위의 push·PR·병합을 수행한다. 검토 결과·발견 사항 처리·시험 SHA·실제 CI 결과를 PR에 남긴다. 문서·생성물·merge 해결을 포함해 head가 바뀌면 변경 범위의 재검토와 새 SHA 검증이 필요하며 최종 게시 head는 검토 head와 같아야 한다. 절차와 종료 조건은 [PR 파이프라인](docs/reference/pr-pipeline.md)이 소유한다. `tools/land.py`는 로컬 착지 도구이며 공개 `main`에 직접 push하는 경로가 아니다. 공개 `main`은 ruleset이 직접 push를 막는다.
+공개 `main`은 로컬 `main`을 올린 PR의 merge commit 병합으로만 갱신한다(D-868). squash·rebase 병합은 쓰지 않는다. GitHub 사람 승인 수는 0, 필수 검사는 `ci-result`다(2026-10-16 사용자 결정). 다른 사람의 최근 작업과 파일이 겹치는 PR만 `review-gate`가 승인 1명을 요구한다(2026-11-02, 정본은 PR 파이프라인). 작성 에이전트와 다른 읽기 전용 검토 에이전트가 base/head SHA를 지정해 검토하고, 게시 담당 한 명이 사용자에게 허용받은 범위의 push·PR·병합을 수행한다. 검토 결과·발견 사항 처리·시험 SHA·실제 CI 결과를 PR에 남긴다. 문서·생성물·merge 해결을 포함해 head가 바뀌면 변경 범위의 재검토와 새 SHA 검증이 필요하며 최종 게시 head는 검토 head와 같아야 한다. 절차와 종료 조건은 [PR 파이프라인](docs/reference/pr-pipeline.md)이 소유한다. `tools/land.py`는 로컬 착지 도구이며 공개 `main`에 직접 push하는 경로가 아니다. 공개 `main`은 ruleset이 직접 push를 막는다.
 
 ### Working In This Directory
 
 - 새 소스 위치와 소유 영역은 `tools/harness/platform_parts.yaml`의 현재 root와 `d427_target`이 정본이다. 브랜치는 로컬 `main`에서 만들고 `git merge main`으로 갱신한다(D-868).
 - Treat `docs/spec/ROSY CORE SRS.md`, `docs/reference/ROSY API & Protocol Reference.md`, and `docs/reference/ROSY ADR Log.md` as contracts. Do not invent REST paths, modes, or protocol fields that are not in the API ref or `core_common.protocol.schemas` (`contracts/foundation/core_common/protocol/schemas.py`).
 - External clients must not speak ROS. `core` is the only gateway (CORE SRS §1.3). Command Manager (`core_features.command`) is the only `cmd_vel` publisher (D-2).
-- Single process: main thread rclpy `MultiThreadedExecutor`, worker thread uvicorn+FastAPI (D-1). Entry point is `core=core.main:main` — `ros2 run core core`. Do not split into two processes.
+- Single process: main thread rclpy `MultiThreadedExecutor` (opt-in `ROSY_CORE_EXECUTOR=events`, default unchanged until the D-953 robot checks), worker thread uvicorn+FastAPI (D-1). Entry point is `core=core.main:main` — `ros2 run core core`. Do not split into two processes.
 - `slam_toolbox` is optional. `ros_bridge` must import it inside try/except, never at module top (`package.xml` comment). CI boots the node without it.
 - Config merge order: `contracts/foundation/config/rosy_default.yaml` → `~/.rosy/rosy.yaml` → `ROSY_CONFIG`.
 - Do not commit colcon `build/`, `install/`, `log/`, or `__pycache__/`.

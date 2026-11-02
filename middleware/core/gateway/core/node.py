@@ -25,6 +25,22 @@ API_GRACEFUL_TIMEOUT_S = 3.0
 API_JOIN_TIMEOUT_S = 5.0
 
 
+CORE_EXECUTOR_KINDS = ("threaded", "events")
+
+
+def core_executor_kind(environ=os.environ) -> str:
+    """ROSY_CORE_EXECUTOR (D-953): 'threaded' (default, today's MultiThreadedExecutor) or 'events'.
+
+    Separate from ROSY_EXECUTOR on purpose: CORE is the only /cmd_vel publisher (D-430), so
+    its executor flips only by its own measured, reviewed decision.
+    """
+    kind = environ.get("ROSY_CORE_EXECUTOR", "threaded").strip().lower() or "threaded"
+    if kind not in CORE_EXECUTOR_KINDS:
+        raise ValueError(f"ROSY_CORE_EXECUTOR must be one of {', '.join(CORE_EXECUTOR_KINDS)}, "
+                         f"not {kind!r}")
+    return kind
+
+
 def _robot_file_paths(config: dict[str, Any]) -> tuple[Path, Path]:
     """(profile, capabilities) paths CORE loads (D-196).
 
@@ -252,18 +268,37 @@ class RosyCoreNode(Node):
         self.get_logger().info(f"api server on {host}:{port}")
 
     def run(self) -> None:
-        executor = MultiThreadedExecutor()
+        events = core_executor_kind() == "events"
+        # events: one native thread runs every callback, so nothing is left in flight when spin()
+        # returns and there is no pool to drain.
+        if events:
+            from rclpy.executors import ExternalShutdownException
+            from rclpy.experimental import EventsExecutor  # Jazzy: experimental, hence opt-in
+            executor = EventsExecutor()
+            # The native spin raises on context shutdown where the threaded one returns.
+            shutdown_return = ExternalShutdownException
+        else:
+            executor, shutdown_return = MultiThreadedExecutor(), ()
         executor.add_node(self)
         try:
             self.control_adapter.attach(executor)
-            executor.spin()
+            try:
+                executor.spin()
+            except shutdown_return:
+                pass
         finally:
             try:
                 self.control_adapter.detach(executor)
                 executor.remove_node(self)
             finally:
-                if not _stop_executor(executor, EXECUTOR_DRAIN_TIMEOUT_S,
-                                      self.get_logger()):
+                if events:
+                    try:
+                        executor.shutdown(timeout_sec=0)
+                    except Exception as exc:
+                        self.get_logger().warning(
+                            f"executor shutdown raised during teardown: {exc!r}")
+                elif not _stop_executor(executor, EXECUTOR_DRAIN_TIMEOUT_S,
+                                        self.get_logger()):
                     self.get_logger().warning(
                         "executor callbacks were not drained within "
                         f"{EXECUTOR_DRAIN_TIMEOUT_S:.1f}s (see the reason above); "
