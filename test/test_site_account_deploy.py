@@ -10,6 +10,8 @@ def test_account_origin_resolves_to_its_tls_proxy_for_container_clients():
     proxy = yaml.safe_load((ROOT / 'deploy/site/compose.account.yaml').read_text())['services']['proxy']
     assert proxy['networks']['site_edge']['aliases'] == [
         '${ROSY_ACCOUNT_HTTPS_HOST:?set ROSY_ACCOUNT_HTTPS_HOST}']
+    assert proxy['networks']['site_backend']['aliases'] == [
+        '${ROSY_ACCOUNT_HTTPS_HOST:?set ROSY_ACCOUNT_HTTPS_HOST}']
     assert set(proxy['networks']) == set(base['proxy']['networks'])
     assert 'site_edge' not in base['fleet']['networks']
     assert 'network_mode' not in proxy
