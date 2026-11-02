@@ -207,7 +207,7 @@ recovery or physical acceptance. Preserve the upgrade backup for rollback.
 
 The live top producer used the RealSense while readiness still named the former top camera. Its journal ended with `camera restore incomplete`; the saved top restoration refused because the named producer was not the sole owner. The registered wrist cameras also used USB-port paths because their serials repeat. A by-id-only readiness profile could not directly express the current wrist binding. Camera preview health did not establish that the readiness profile described those same cameras.
 
-The direct by-path support fix is committed as `bec3bd9547` and passed 59 focused and 372 affected remote tests, but was not landed at this checkpoint. Official landing stopped and its resume was refused by the full queue. The field recovery therefore used already-landed local main `cbfb144767`, with no unlanded code or hand-edited release file.
+The direct by-path support fix is committed as `bec3bd9547` and passed 59 focused and 372 affected remote tests, but was not landed at the 05:14 UTC field-recovery checkpoint. Official landing stopped and its resume was refused by the full queue. The field recovery therefore used already-landed local main `cbfb144767`, with no unlanded code or hand-edited release file.
 
 ### Verified recovery
 
