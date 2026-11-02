@@ -129,7 +129,7 @@ def reason(publish, repo, sha, record):
         if not any(all(tuple(part) in mapped for part in variant)
                    for description, mapped in zip(descriptions, evidence)
                    for variant in description["variants"][json.dumps(inv)]):
-            return f"missing clean exact execution proof for {' '.join(inv)}"
+            return f"missing clean exact execution/log proof for {' '.join(inv)}"
     logs = record.get("logs")
     if (not isinstance(logs, list) or not all(isinstance(log, str) for log in logs)
             or not set(logs) <= {row["log"] for row in evidence[0].values()}):

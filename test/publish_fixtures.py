@@ -1,6 +1,5 @@
 """A committed candidate using the real browser chunker, sharder and environment recipe."""
 
-import json
 from pathlib import Path
 import shutil
 import subprocess

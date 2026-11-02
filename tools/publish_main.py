@@ -11,12 +11,13 @@ Publish mode:
 2. Publish SHA: the newest commit of ``--topo-order --ancestry-path origin/main..main`` (contains
    origin/main, is in local main) with a green FULL land record. Not ``--first-parent``: a land.py landing
    is a merge with the topic branch as first parent, so the main tips that hold records sit on second
-   parents. **Green FULL** = ``tools/hooks/land_record.py`` holds a record for exactly that SHA (land.py
-   writes one only after a fast-forward of that very candidate with 0 NEW, no LOAD-FLAKY and no pass
-   borrowed from another tree), its base is an ancestor of the SHA, and its tier is ``full``: the
-   record's ``tier`` field when present, else (older records) one invocation exactly ``["test"]`` (root
-   test/ whole: only ``lab_full_invocations``, the FULL tier, runs it; the affected tier names root test
-   files one by one). If records exist in the range but none has a ``tier`` string or an ``invocations``
+   parents. **Green FULL** = an exact-SHA land record whose base is an ancestor and explicit tier is
+   ``full``, containing that immutable candidate's canonical FULL and every opted-in browser chunk,
+   including ALONE. ``publish_evidence`` requires exact commit/tree/environment/argv/log cache mappings
+   and usable clean logs for every invocation (including the existing sharder outputs). Prepared FULL
+   evidence keeps its own candidate provenance and requires the final plan and environment to match.
+   Missing/pruned mappings, missing logs and vacuous browsers fail closed. Legacy tier/root-test
+   markers alone never qualify. If records exist but none has a ``tier`` string or an ``invocations``
    list of lists, the format is unknown: exit 8, never a silent "nothing to publish". The push runs the
    SHA's own hook copy (4.), so a later hook edit on main does not make older green SHAs unpublishable.
 3. Due when the last publish (newest ``origin/publish/main-YYYYMMDD[-HH]`` by name; with --apply also

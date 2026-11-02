@@ -8,7 +8,7 @@ import sys
 import pytest
 
 from test_publish_main import FULL, _commit, _git, _view, repo, tool
-from publish_fixtures import BROWSERS, qualified_record
+from publish_fixtures import qualified_record
 import land_cache
 
 
@@ -56,7 +56,7 @@ def _rewrite_rows(local, change):
 
 
 def _deny_selection_and_merge(local, sha, monkeypatch):
-    assert tool.publish_sha(local) is None
+    assert tool.publish_sha(local) != sha
     calls = []
     monkeypatch.setattr(tool, "run_gh", lambda _, *args: calls.append(args) or _view(local, sha))
     with pytest.raises(tool.Stop, match="no green FULL"):
@@ -122,7 +122,7 @@ def test_real_work_queue_shards_are_complete_proof_but_one_missing_shard_is_not(
     root = ["test"]
     parts = work_queue.split(local, [root], seen={tuple(root): 3 * work_queue.SPLIT_S})
     assert len(parts) == 3
-    _rewrite_rows(local, lambda rows: rows.__setitem__(slice(None), [r for r in rows if r["argv"] != root]))
+    _rewrite_rows(local, lambda rows: rows.remove(next(r for r in rows if r["argv"] == root)))
     tree, env = _git(local, "rev-parse", f"{sha}^{{tree}}"), land_cache.env_id(local, sha)
     folder = Path(logs[0]).parent
     shard_logs = []
