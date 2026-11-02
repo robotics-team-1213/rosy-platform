@@ -1336,6 +1336,13 @@ def test_exclusive_word_reaches_actual_job_export_and_admission(tmp_path):
     assert 'ROSY_JOB_ALONE=1' not in out
 
 
+@pytest.mark.parametrize("flag", ["", "0", "1"])
+def test_unmeasured_host_keeps_only_the_turn_priority_word(monkeypatch, flag):
+    monkeypatch.setenv(xp.TURN_ENV, flag)
+    assert xp.plan([xp.ALONE, *GROUP], None, []) == (
+        [xp.TURN_JOB] if flag == "1" else [], [], "serial: host below the floor (D-568 7 fallback)")
+
+
 def test_run_on_adds_xdist_to_the_run_but_never_to_the_quarantine_rerun(tmp_path, monkeypatch):
     monkeypatch.setattr(rp, "ship", lambda *a, **kw: None)
     monkeypatch.setattr(rp, "deps", lambda repo, sha: ("d" * 16, []))

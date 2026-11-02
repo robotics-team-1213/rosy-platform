@@ -49,6 +49,34 @@ def test_browser_alone_node_ids_flags_and_serial_paths_stay_whole(tmp_path, monk
     assert wq.split(tmp_path, keep, seen) == keep
 
 
+def test_observed_stale_singletons_are_deduplicated_after_splitting(tmp_path, monkeypatch):
+    """Metric round 2 queued these five paths both through a packed selection and stale-isolation extras."""
+    _tree(tmp_path, monkeypatch)
+    paths = ["test/architecture/test_document_placement.py", "test/architecture/test_platform_parts.py",
+             "test/test_affected_tests.py", "test/test_harness_contracts.py", "test/test_land.py"]
+    broad = [*paths, "test/test_browser_scope.py"]
+    singletons = [[p] for p in paths]
+    planned = [broad, paths, *singletons]
+    assert wq.split(tmp_path, planned, {tuple(paths): 600.0}) == [broad, *singletons]
+    assert planned == [broad, paths, *singletons], "do not mutate the producer's selection"
+
+
+def test_dedup_preserves_full_environment_options_and_node_scope(tmp_path, monkeypatch):
+    _tree(tmp_path, monkeypatch)
+    path = "pkg/test/test_a.py"
+    distinct = [[path], ["ROSY_JOB_CORES=2", path], ["ROSY_JOB_CORES=4", path],
+                [path, "-k", "fast"], [path + "::test_one"], [path + "::test_two"],
+                ["ROSY_ALONE_FILES=x", "tools/collect_alone.py"]]
+    assert wq.split(tmp_path, [*distinct, *distinct], {}) == distinct
+
+
+def test_dedup_does_not_share_state_between_batch_calls(tmp_path, monkeypatch):
+    _tree(tmp_path, monkeypatch)
+    invocations = [["pkg/test/test_a.py"]]
+    assert wq.split(tmp_path, invocations, {}) == invocations
+    assert wq.split(tmp_path, invocations, {}) == invocations
+
+
 def test_history_is_the_median_run_of_each_argv_from_the_events_log(tmp_path):
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
     rows = [{"event": "tests", "argv": ["pkg/test"], "run_s": s} for s in (100, 300, 200)]

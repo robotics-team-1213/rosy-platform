@@ -13800,6 +13800,18 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 팔 받침은 CAD 값 그대로다. 둘째 실행은 모델 PC에서 외부 정지로 적층 결과를 주장하지 않는다.
 - CE: 해당 없음 — 새 기능이다. 카메라 기울기(roll)를 빼면 side가 4.3 px로 한계를 넘는다는 점은 fixture 주석과 검증 기록에 남겼다.
 
+## 2026-11-03 · uncommitted · fix(landing): 병렬 준비와 폴백에서 급행 표시를 보존한다
+- 변경: 병렬 guard/body의 활성 우선순위 호출 수를 Lock으로 관리해 마지막 호출까지 표시를 유지한다. 자원 정보가 없는 serial 폴백에도 TURN_JOB를 전달한다. selector·검증 범위·worker/메모리 한계·host floor·ALONE 정책은 그대로다.
+- 증거: committed RED `d27b7a625c` 의도 실패6/양성2. 수정 `150a10701e`의 flags/remote_pytest/host_admission 원격125 PASS, skip/NEW/known/flaky0. 양쪽 종료 순서·normal 중첩·예외 정리·fallback flag1/0/빈값을 검증했다. 독립 검토 추가P1/P2없음, size2commits PASS, lint0오류42경고.
+- gate 변화: 없음. 소스 검증이며 기존 실행 중 job의 표시 갱신·main 적용·60분 SLO를 주장하지 않는다.
+- CE: 기존 Oct31 교훈 갱신. 공유 환경변수의 진입/종료 순서와 job launch 시점이 다른 문제, 단순 이전값 복원으로 해결되지 않는 이유를 기록했다.
+
+## 2026-11-03 · uncommitted · fix(landing): 분할 중복과 중첩 rollup 집계를 보완한다
+- 변경: 원격 호출 분할 후 전체 argv가 같은 항목만 첫 순서대로 제거한다. rollup의 직접 회원 소유권은 유지하며 자식 metadata를 실제 완료 이벤트에 보존하고, 집계는 부모 candidate·원래 ticket을 검증한 leaf만 닫는다. 순환·중복·미확인 pin은 불완전으로 유지하고 확인 가능한 leaf 영향 범위는 보존한다.
+- 증거: 실제 같은 SHA/tree/환경의 body 중복 5쌍을 확인했다. 소스 `3bb09294bb` 원격 split/isolation/remote_pytest 137 PASS, `d48e9f8e65` 원격 goal/rollup 55 PASS, 모두 skip/NEW/known/flaky 0. 선행 committed RED는 분할 중복 2건·중첩 완료/검증 경계 8건·metadata 손상 보존/기간 scope 2건이었다. `d48e9f8e65`의 독립 검토에 추가 P1/P2가 없었으며 소유권·이벤트 관련 통합 검증은 착지 전에 확인한다.
+- gate 변화: 없음. 기존 legacy 중첩 carrier의 미확인 origin은 추정하지 않으며 소스 검증을 main 착지·SLO 달성으로 보고하지 않는다.
+- CE: 기존 Nov1 교훈 갱신. 직접 소유권 목록과 논리 leaf 완료를 구분해야 하는 이유, 분할 후에야 드러나는 중복 호출을 기록했다.
+
 ## 2026-11-03 · uncommitted · fix(harness): isolate G1 timing in a dedicated serial, host-exclusive job
 - Change: CI/lab share one plan that removes G1 timing from ordinary FULL/ROOT/explicit-file/affected invocations and adds exactly one whole-file job. Existing ROSY_JOB_ALONE admission and disabled xdist apply together. The gate requires original collected and actually passed item sets to match, with zero skips. Dedicated results bypass success caches and reruns. Explicit FULL validates both the ROOT exclusion and the complete dedicated companion. The 0.45s threshold, skip helper and production control code are unchanged.
 - Evidence: 72508553f6 remote plan RED: 4 failures. Final 791a884c6c five-file remote regressions: 471 passed / 0 skipped (248.25s), rosy-g1-plan-green-791a/run-1.txt. Separate actual G1 execution used main af46af4666 transport with that same source: 12 passed / 0 skipped (6.31s, peak 68MiB), rosy-g1-timing-exclusive-791a/run-1.txt. Exactly one receipt: expected=12 collected=12 passed=12 skipped=0 clean=1. Formal admission waited for existing jobs to drain; this was the first and only actual attempt, without retry. Pre-enqueue observations were 12 free cores/11.8GB, CPU some avg10 0.13%, IO some avg60 0.18%; they do not prove absence of external I/O during execution. Regression runner resource output (3MiB/CPU 9ms) conflicts with elapsed time and is not accepted as resource evidence. Logs reside outside the repository under OS Temp.
