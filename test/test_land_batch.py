@@ -98,8 +98,19 @@ def test_a_batch_lands_its_clean_members_in_one_fast_forward_and_leaves_a_confli
     qdir, ticket = tmp_path / "q", queue.take(tmp_path / "q", "feat/x", status="preparing")
     calls = []
     monkeypatch.setattr(land, "select", lambda *a, **k: ([], None))
-    monkeypatch.setattr(land_batch.land_prepare, "prepare", lambda land_, wt_, name, *a: calls.append(name))
-    monkeypatch.setattr(land_batch.land_queue, "wait", lambda *a, **k: None)
+    monkeypatch.setattr(land_batch.land_prepare, "STARTED", "old")
+    monkeypatch.setattr(land_batch.land_prepare, "rules", lambda: "new")
+
+    def prepare(land_, wt_, name, *a):
+        calls.append(name)
+        assert land_batch.land_prepare.relaunch(land_, qdir, ticket,
+            lambda *a: pytest.fail("an active leader bypassed switch-back and cleanup")) is None
+
+    def wait(*a, **k):
+        assert k.get("changed") is None, "an active batch keeps its loaded rules"
+
+    monkeypatch.setattr(land_batch.land_prepare, "prepare", prepare)
+    monkeypatch.setattr(land_batch.land_queue, "wait", wait)
     def rounds(args, wt_, name, main_co, *a):  # the ordinary rounds' fast-forward, without their tests
         git(main_co, "merge", "-q", "--ff-only", name)
         return 0
