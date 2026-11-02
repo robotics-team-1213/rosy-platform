@@ -13727,6 +13727,12 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - CE: 해당 없음 — 재발 방지는 가드 집합 자체이고 이유는 코드 주석에 있다.
 
+## 2026-11-02 · uncommitted · fix(landing): rollup 회원 완료와 접수 origin 측정
+- 변경: 성공 rollup과 automatic train이 선택 당시 회원 snapshot·ticket·candidate를 기록한다. 표준 goal 입력은 보존된 sidecar·historical isolation·정확한 landed SHA ancestry로 과거 회원 완료를 검증하고, 같은 snapshot 재시도와 다음 snapshot 작업의 시계를 분리한다. 실제 FF 횟수·시각은 보존하고 논리 회원 origin이 모호하면 INCOMPLETE/FAIL로 판정한다.
+- 증거: 미착지 소스 `d51f653ee5` 원격 goal/rollup/event/batch 95개 통과, NEW 0. 선행 원격 RED로 회원 누락·재시도 누출·direct branch 재사용·metadata stat 실패·모호한 train origin·열린 snapshot 보존·이전 완료/조회 기간 경계·손상 scope·미기록 pin origin·동일ticket 재emit·중복branch를 확인했다. 읽기 전용 실제 기록 재계산은 회원 4건의 최초 topic lead와 새 camera lead 18.2916667분을 복원했다. 과거 automatic train 18건의 origin 증거 부족과 고정/현재 24h 조회의 영향 0건을 구분한다.
+- gate 변화: 없음. 소스 회귀·입력 재계산이며 main 적용과 SLO 달성을 주장하지 않는다.
+- CE: 기존 Nov1 교훈의 measurement trap을 갱신했다. ticket lead로 바꾸면 retry 이전의 대기 시간이 사라지는 비가시 판단과 검증 한계를 기록한다.
+
 ## 2026-11-02 · uncommitted · fix(landing): 예측 체인을 실제 우선순위 차단자와 정렬
 - 변경: `land_speculate.chain`이 FIFO 앞줄 대신 정본 `land_queue.blockers`를 재사용한다. TURN 유지, 긴급 요청이 앞지르는 ordinary waiting 제외, 나중 urgent 포함과 stale-bypass를 같은 정책으로 선택한다. preparing/pending 제외와 safety/record 중단 조건은 보존한다.
 - 증거: 미착지 소스 `1f324d765a` 원격 speculation/queue/urgent/prepare/batch 5 suite 133개 통과, NEW 0. 테스트 전용 `daf434afd6`에서 3개 RED를 확인했다. 실제 append-only queue의 ticket/branch/urgent와 당시 관측 status를 고정한 counterfactual은 합성 후보 2개를 실제 TURN 1개로 줄였다. 불필요 후보 제외를 확인한 것이며 절약 시간이나 진행 중인 예측 실행의 새 규칙 적용을 측정한 것은 아니다.
