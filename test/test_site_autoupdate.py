@@ -708,6 +708,17 @@ def test_control_unit_peer_container_requires_the_accepted_proxy_identity(fault)
     assert (result == '') is (fault is None)
 
 
+@pytest.mark.parametrize('configured', [[], 1, 'unexpected'])
+def test_control_unit_peer_configuration_requires_a_service_object(host, configured):
+    fake = FakeHost(host.paths)
+    env = {**upd.read_env(host.paths.site_env),
+           'ROSY_SITE_PAIRING_COMPOSE': '-f /opt/rosy/candidate/deploy/site/compose.control-unit.yaml'}
+    def compose(*args, **kwargs):
+        return SimpleNamespace(stdout=json.dumps({'services': configured}))
+    with pytest.raises(upd.Refused, match='service set differs'):
+        upd.check_overrides(env, NEW, fake, compose)
+
+
 @pytest.mark.parametrize("loaded", [False, True])
 def test_legacy_candidate_cannot_enable_unsigned_control_unit_overlay(host, loaded):
     old = host.paths.candidates / OLD

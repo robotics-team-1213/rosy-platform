@@ -16,14 +16,14 @@ import subprocess
 if __package__:
     from .site_update_io import (
         PROJECT, STACK_UNIT, Rejected, Transient, allowed_overlays, containers_reason,
-        functional_inventory, functional_reason, runtime_reason,
+        companion_services, functional_inventory, functional_reason, runtime_reason,
         read_env,
     )
     from .verify_candidate import CandidateVerificationError, verified_services
 else:  # pragma: no cover - installed host CLI
     from site_update_io import (
         PROJECT, STACK_UNIT, Rejected, Transient, allowed_overlays, containers_reason,
-        functional_inventory, functional_reason, runtime_reason,
+        companion_services, functional_inventory, functional_reason, runtime_reason,
         read_env,
     )
     from verify_candidate import CandidateVerificationError, verified_services
@@ -125,18 +125,17 @@ class SiteRuntimeIO:
                 json.loads(line) for line in out.splitlines() if line.strip()]
         except json.JSONDecodeError:
             return "docker compose ps output is not JSON"
-        reason = containers_reason(rows, commit, self._accepted_images.get(commit, {}), self._run, services,
-                                   self._image_references.get(commit))
-        if reason:
-            return reason
         try:
             output = self._compose(env, 'config', '--hash', '*', tag=commit).stdout
             hashes = dict(line.split() for line in output.splitlines() if line.strip())
-            return runtime_reason(rows, hashes, self._run)
         except Transient as error:
             return str(error)
         except ValueError:
             return 'Compose configuration hashes cannot be verified'
+        companions = companion_services(allowed_overlays(env), services, hashes)
+        reason = containers_reason(rows, commit, self._accepted_images.get(commit, {}), self._run, services,
+                                   self._image_references.get(commit), companions=companions)
+        return reason or runtime_reason(rows, hashes, self._run)
 
     def _restart(self) -> None:
         env = read_env(self.paths.site_env)

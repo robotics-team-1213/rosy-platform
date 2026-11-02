@@ -4454,3 +4454,9 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 변경: 새로 통합된 카메라 검증 문서의 정확한 commit/path/high-entropy-token 조합 하나만 기존 게시 baseline에 더한다. 이전 양쪽 reviewer 근거와 모든 기존 조합을 보존한다. scanner·검사 제외·비공개 자료 접근은 바꾸지 않는다.
 - 증거: 실제 scanner의 한 발견은 review revision이며 독립 검토에서 Git commit으로 해소됐다. 값·excerpt는 추가하지 않으며 agent 검토를 사람 승인으로 표현하지 않는다. 최종 source의 게시 검사를 다시 확인한다.
 - Gate: 서명·운영·실물 수용과 별개. CE: 해당 없음 — 기존 정확한 조합 규약과 Git 출처로 분류를 복원한다.
+
+## 2026-11-03 · 1c5f6c898a · D-960 서명 peer 동반 서비스 검증
+
+- 변경: canonical control-unit overlay의 peer를 서명된 proxy 이미지의 동반 서비스로 다룬다. 정확한 서비스 구성, 이미지 참조·실제 immutable identity, 현재 Compose hash와 읽기 전용·비특권 실행 조건을 확인한다. 원래 healthcheck가 없는 peer에 가상의 healthy 값을 요구하지 않으며, 기존 Account·Monitoring의 건강 검사와 옛 Account overlay 복구 경로는 유지한다.
+- 증거: 운영 hold가 peer 서비스 검사 누락을 기록했다. 실제 companion을 내보내지 않던 FakeHost를 서비스·hash·실행 row·이미지 owner에 맞게 고친 committed 원격 회귀는 21 failed/112 passed/NEW21로 재현했다. 수정본은 동일 모듈과 증분 업데이트·복구 경로를 원격 확인한다.
+- Gate: 운영 hold·설정·writer·컨테이너는 바꾸지 않았다. 검토된 외부 updater helper 설치와 실제 운영 수용은 별도다. CE: 미해결 — 소스 수정본 검증과 실제 helper 전환이 아직 남았다.

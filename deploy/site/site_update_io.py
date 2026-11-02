@@ -26,6 +26,8 @@ PROJECT = "rosy-site"
 STACK_UNIT = "rosy-site-stack.service"
 MONITORING_OVERLAY = ["-f", "/opt/rosy/candidate/deploy/site/compose.monitoring.yaml"]
 ACCOUNT_OVERLAY = ["-f", "/opt/rosy/candidate/deploy/site/compose.account.yaml"]
+CONTROL_UNIT_OVERLAY = ["-f", "/opt/rosy/candidate/deploy/site/compose.control-unit.yaml"]
+COMPANION_IMAGES = {'monitoring': 'fleet', 'account': 'fleet', 'control-unit-peer': 'proxy'}
 SIGNATURE = "release.json.sig"
 EXIT_OK = 0
 EXIT_FAILED = 1
@@ -51,8 +53,7 @@ def allowed_overlays(env: dict[str, str]) -> list[str]:
     allowed = [[], pairing, omx, pairing + omx]  # D-785; Account is appended last.
     workcell = ["-f", "/opt/rosy/candidate/deploy/site/compose.workcell.yaml"]
     allowed += [base + workcell for base in allowed]
-    control_unit = ["-f", "/opt/rosy/candidate/deploy/site/compose.control-unit.yaml"]  # D-960
-    allowed += [base + control_unit for base in allowed]
+    allowed += [base + CONTROL_UNIT_OVERLAY for base in allowed]  # D-960
     allowed += [base + MONITORING_OVERLAY for base in allowed]  # D-936
     if shlex.split(env.get("ROSY_SITE_PAIRING_COMPOSE", "")) not in allowed + [base + account for base in allowed]:
         raise Refused("ROSY_SITE_PAIRING_COMPOSE adds a Compose file other than "
@@ -60,6 +61,18 @@ def allowed_overlays(env: dict[str, str]) -> list[str]:
     if env.get("COMPOSE_FILE") or env.get("COMPOSE_PROFILES"):
         raise Refused("site.env sets COMPOSE_FILE/COMPOSE_PROFILES")
     return shlex.split(env.get("ROSY_SITE_PAIRING_COMPOSE", ""))
+
+
+def companion_services(overlays, services, configured):
+    """Companions reuse a signed image role; legacy Account overlays had only a proxy."""
+    companions = set()
+    if MONITORING_OVERLAY[1] in overlays and 'fleet' in services:
+        companions.add('monitoring')
+    if ACCOUNT_OVERLAY[1] in overlays and 'account' in configured and 'fleet' in services:
+        companions.add('account')
+    if CONTROL_UNIT_OVERLAY[1] in overlays and 'proxy' in services:
+        companions.add('control-unit-peer')
+    return companions
 
 
 def check_overrides(env: dict[str, str], commit: str, run, compose, services=SERVICES,
@@ -90,16 +103,14 @@ def check_overrides(env: dict[str, str], commit: str, run, compose, services=SER
         configured = json.loads(result.stdout).get("services") or {}
     except (json.JSONDecodeError, AttributeError):
         raise Transient("docker compose config output is not JSON") from None
-    # D-936: Monitoring is no candidate image; it may only run the candidate's Fleet image.
-    companions = {"monitoring": "fleet"} if MONITORING_OVERLAY[1] in overlays and "fleet" in services else {}
-    # Older signed Account overlays had only a proxy; preserve their rollback path.
-    if ACCOUNT_OVERLAY[1] in overlays and 'account' in configured and 'fleet' in services:
-        companions['account'] = 'fleet'
-    if not isinstance(configured, dict) or set(configured) != set(services) | set(companions):
+    if not isinstance(configured, dict):
+        raise Refused("Compose service set differs from the signed candidate")
+    companions = companion_services(overlays, services, configured)
+    if set(configured) != set(services) | companions:
         raise Refused("Compose service set differs from the signed candidate")
     for service in (*services, *companions):
         image = (configured.get(service) or {}).get("image")
-        owner = companions.get(service, service)
+        owner = COMPANION_IMAGES.get(service, service)
         expected = (image_references or {}).get(owner, f"rosy-site-{owner}:{commit}")
         if image != expected:
             raise Refused(f"Compose resolves {service} to {image!r}, not the candidate "
@@ -406,16 +417,18 @@ def set_hold(updater, reason: str | None) -> int:
 
 def runtime_reason(rows, hashes: dict, run) -> str:
     """Detect operational drift without logging inspect output or credentials."""
-    for service in ('account', 'monitoring'):
+    for service in COMPANION_IMAGES:
         if service in hashes:
             matches = [row for row in rows if isinstance(row, dict) and row.get('Service') == service]
-            if len(matches) != 1 or matches[0].get('State') != 'running' or matches[0].get('Health') != 'healthy':
-                return f'{service} needs exactly one healthy running container'
+            if (len(matches) != 1 or matches[0].get('State') != 'running'
+                    or (service != 'control-unit-peer' and matches[0].get('Health') != 'healthy')):
+                health = '' if service == 'control-unit-peer' else 'healthy '
+                return f'{service} needs exactly one {health}running container'
     for row in rows:
         if not isinstance(row, dict):
             continue
         service = row.get('Service')
-        if service not in (*SERVICES, 'monitoring', 'account'):
+        if service not in (*SERVICES, *COMPANION_IMAGES):
             continue
         try:
             details = json.loads(run(['docker', 'container', 'inspect', row['ID']]).stdout)[0]
@@ -431,23 +444,28 @@ def runtime_reason(rows, hashes: dict, run) -> str:
 
 
 def containers_reason(rows, commit: str, accepted: dict, run, services=SERVICES,
-                      image_references: dict | None = None) -> str:
+                      image_references: dict | None = None, companions=None) -> str:
     if not isinstance(rows, list):
         return 'docker compose ps output is not a list'
     if any(isinstance(row, dict) and row.get('Service') in SERVICES
            and row['Service'] not in services for row in rows):
         return 'runtime contains a managed service outside the signed candidate'
-    companions = {row.get('Service') for row in rows
-                  if isinstance(row, dict) and row.get('Service') in ('account', 'monitoring')}
+    present = {row.get('Service') for row in rows
+               if isinstance(row, dict) and row.get('Service') in COMPANION_IMAGES}
+    if companions is None:
+        companions = present - {'control-unit-peer'}  # Legacy direct callers have no expected Compose proof.
+    if present - companions:
+        return 'runtime contains an unconfigured companion'
     for service in (*services, *sorted(companions)):
-        owner = 'fleet' if service in companions else service
+        owner = COMPANION_IMAGES.get(service, service)
         matches = [row for row in rows if isinstance(row, dict) and row.get('Service') == service]
         if len(matches) != 1:
             return f'{service} needs exactly one running container'
         row = matches[0]
         if row.get('Image') != (image_references or {}).get(owner, f'rosy-site-{owner}:{commit}'):
             return f"{service} runs {row.get('Image')!r}"
-        if row.get('State') != 'running' or row.get('Health') != 'healthy':
+        if (row.get('State') != 'running'
+                or (service != 'control-unit-peer' and row.get('Health') != 'healthy')):
             return f"{service} is {row.get('State')}/{row.get('Health') or 'no health'}"
         if not row.get('ID'):
             return f'{service} container ID is missing'
