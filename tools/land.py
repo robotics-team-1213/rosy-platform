@@ -72,7 +72,7 @@ SAFETY = "tools/harness/safety_review.py"  # D-430 5: the rule CI's scope job en
 ENV = {**os.environ, "PYTHONUTF8": "1"}
 
 
-TURN_CAP_S = 600  # D-889: a turn's delta tests past this move outside the lock (land_prepare.again)
+TURN_CAP_S = 1200  # D-889 26 (20 min): a turn's delta tests past this move outside the lock (land_prepare.again)
 # 2026-10-27: a landing with a hand-picked --tests skipped its selection, guards and pretest and left main red
 # (3125704e24). A real landing always runs the selection; --tests "<args>" only adds EXTRA, "none" is refused.
 FIXTURE_ENV = "ROSY_LAND_FIXTURE"  # land.py's own test fixtures only: --tests none/"<args>" replace the selection

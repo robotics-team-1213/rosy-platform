@@ -86,7 +86,7 @@ def test_with_no_landing_waiting_the_turn_cap_does_not_cut_the_turn(cached, monk
 @pytest.mark.parametrize("sent_back", [1, 2])
 def test_the_turn_cap_grows_each_time_it_sent_the_landing_back(cached, monkeypatch, sent_back):
     """D-889 15/19, 11-01: FULL landings went back 3-6 times; then one uncapped turn held main for over 90 min.
-    Once sent back the cap is 3x (still cut when a landing waits), twice it is gone."""
+    Once sent back the cap is 1.5x (still cut when a landing waits), twice it is gone."""
     from test_land import GREEN, _runner
     wt, run, _ = cached
     monkeypatch.setattr(land, "TURN_CAP_S", -1)

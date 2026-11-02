@@ -326,11 +326,11 @@ def overtimes(land, args) -> int:
 
 def run_tests(land, wt: Path, args, invocations: list[list[str]], logdir: Path, round_no: int) -> list[str]:
     """Run lint + pytest (+ node); return a summary line per step. Stop on any NEW failure."""
-    # D-889 15/19: the cap grows with each time it sent this landing back: 10 min, then 30, then none. 11-01: big
+    # D-889 15/19/26: the cap grows with each time it sent this landing back: 20 min, then 30, then none. 11-01: big
     # FULL landings went back 3-6 times (12-13 min each); then one uncapped turn held main for over 90 min.
     sent_back = overtimes(land, args)
     capped = isinstance(round_no, int) and sent_back < 2
-    deadline = land.time.monotonic() + land.TURN_CAP_S * (3 if sent_back else 1) if capped else None
+    deadline = land.time.monotonic() + land.TURN_CAP_S * (3 if sent_back else 2) // 2 if capped else None
     python = land.sys.executable
     done = []
     if (wt / land.HARNESS).is_file():
