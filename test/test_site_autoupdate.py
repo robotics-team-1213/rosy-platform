@@ -138,6 +138,15 @@ class FakeHost:
     def _ok(self, stdout: str = "", code: int = 0) -> SimpleNamespace:
         return SimpleNamespace(returncode=code, stdout=stdout, stderr="")
 
+    def _owners(self):
+        owners = {service: service for service in upd.SERVICES}
+        overlays = upd.read_env(self.paths.site_env).get('ROSY_SITE_PAIRING_COMPOSE', '')
+        if 'compose.monitoring.yaml' in overlays:
+            owners['monitoring'] = 'fleet'
+        if 'compose.control-unit.yaml' in overlays:
+            owners['control-unit-peer'] = 'proxy'
+        return owners
+
     def __call__(self, args, **kwargs):
         self.calls.append(list(args))
         if args[:2] == ["systemctl", "cat"]:
@@ -147,10 +156,10 @@ class FakeHost:
             return self._ok()
         if args[:2] == ["docker", "compose"]:
             if "--hash" in args:
-                return self._ok("\n".join(f"{s} hash-{s}" for s in upd.SERVICES))
+                return self._ok("\n".join(f"{s} hash-{s}" for s in self._owners()))
             if "config" in args:
                 tag = kwargs["env"]["ROSY_SITE_IMAGE_TAG"]
-                services = {s: {"image": f"rosy-site-{s}:{tag}"} for s in upd.SERVICES}
+                services = {s: {"image": f"rosy-site-{owner}:{tag}"} for s, owner in self._owners().items()}
                 if self.config_image:
                     services["fleet"]["image"] = self.config_image
                 if "compose.monitoring.yaml" in upd.read_env(self.paths.site_env).get("ROSY_SITE_PAIRING_COMPOSE", ""):
@@ -159,9 +168,10 @@ class FakeHost:
             if "ps" in args:
                 healthy = self.healthy_tags is None or self.running in self.healthy_tags
                 return self._ok("\n".join(json.dumps({
-                    "Service": s, "Image": f"rosy-site-{s}:{self.running}", "State": "running",
+                    "Service": s, "Image": f"rosy-site-{owner}:{self.running}", "State": "running",
                     "ID": f'{s}-container',
-                    "Health": "healthy" if healthy else "unhealthy"}) for s in upd.SERVICES))
+                    "Health": '' if s == 'control-unit-peer' else ('healthy' if healthy else 'unhealthy')})
+                    for s, owner in self._owners().items()))
         if args[:3] == ["docker", "image", "load"]:
             commit = Path(args[-1]).parent.name
             self.images |= {f"rosy-site-{s}:{commit}" for s in upd.SERVICES}
@@ -169,12 +179,13 @@ class FakeHost:
         if args[:3] == ["docker", "image", "ls"]:
             return self._ok("\n".join(sorted(self.images)))
         if args[:3] == ['docker', 'container', 'inspect']:
-            service = args[-1].split('-')[0]
+            service = args[-1].removesuffix('-container')
+            owner = self._owners().get(service, service)
             if '--format' not in args:
-                return self._ok(json.dumps([{"Image": _image_id(self.running, service),
+                return self._ok(json.dumps([{"Image": _image_id(self.running, owner),
                     "Config": {"Labels": {"com.docker.compose.config-hash": f"hash-{service}"}},
                     "HostConfig": {"ReadonlyRootfs": True, "Privileged": False}}]))
-            return self._ok(_image_id(self.running, service))
+            return self._ok(_image_id(self.running, owner))
         if args[:2] == ["docker", "ps"]:
             return self._ok("\n".join(f"rosy-site-{s}:{self.running}" for s in upd.SERVICES))
         if args[:3] == ["docker", "image", "rm"]:
@@ -610,6 +621,91 @@ def test_signed_control_unit_overlay_keeps_automatic_updates(host, workcell):
         stream.write(f"ROSY_SITE_PAIRING_COMPOSE={overlay}\n")
     releases, blobs = _world((NEW, "2026-10-04T02:00:00Z"))
     assert _updater(host, FakeHttp(releases, blobs), FakeHost(host.paths)).run() == upd.EXIT_OK
+
+
+@pytest.mark.parametrize('proxy_reference', [f'rosy-site-proxy:{NEW}', f'rosy-site-proxy:{OLD}'])
+def test_control_unit_peer_uses_the_signed_proxy_reference(host, proxy_reference):
+    fake = FakeHost(host.paths)
+    env = {**upd.read_env(host.paths.site_env),
+           'ROSY_SITE_PAIRING_COMPOSE': '-f /opt/rosy/candidate/deploy/site/compose.control-unit.yaml'}
+
+    def compose(env, *args, tag=None, **kwargs):
+        out = json.loads(fake(['docker', 'compose', *args], env={'ROSY_SITE_IMAGE_TAG': tag}).stdout)
+        out['services']['proxy']['image'] = proxy_reference
+        out['services']['control-unit-peer'] = {'image': proxy_reference}
+        return SimpleNamespace(stdout=json.dumps(out))
+
+    upd.check_overrides(env, NEW, fake, compose, image_references={'proxy': proxy_reference})
+
+
+@pytest.mark.parametrize('image', ['rosy-site-fleet:{tag}', 'rosy-site-proxy:old', 'untrusted:latest'])
+def test_control_unit_peer_cannot_override_the_proxy_image(host, image):
+    fake = FakeHost(host.paths)
+    env = {**upd.read_env(host.paths.site_env),
+           'ROSY_SITE_PAIRING_COMPOSE': '-f /opt/rosy/candidate/deploy/site/compose.control-unit.yaml'}
+
+    def compose(env, *args, tag=None, **kwargs):
+        out = json.loads(fake(['docker', 'compose', *args], env={'ROSY_SITE_IMAGE_TAG': tag}).stdout)
+        out['services']['control-unit-peer'] = {'image': image.format(tag=tag)}
+        return SimpleNamespace(stdout=json.dumps(out))
+
+    with pytest.raises(upd.Refused, match='Compose resolves control-unit-peer'):
+        upd.check_overrides(env, NEW, fake, compose)
+
+
+@pytest.mark.parametrize('enabled', [False, True])
+def test_control_unit_peer_presence_must_match_the_canonical_overlay(host, enabled):
+    fake = FakeHost(host.paths)
+    env = {**upd.read_env(host.paths.site_env), 'ROSY_SITE_PAIRING_COMPOSE':
+           '-f /opt/rosy/candidate/deploy/site/compose.control-unit.yaml' if enabled else ''}
+
+    def compose(env, *args, tag=None, **kwargs):
+        out = json.loads(fake(['docker', 'compose', *args], env={'ROSY_SITE_IMAGE_TAG': tag}).stdout)
+        if not enabled:
+            out['services']['control-unit-peer'] = {'image': f'rosy-site-proxy:{tag}'}
+        return SimpleNamespace(stdout=json.dumps(out))
+
+    with pytest.raises(upd.Refused, match='service set differs'):
+        upd.check_overrides(env, NEW, fake, compose)
+
+
+@pytest.mark.parametrize('fault', [None, 'missing', 'duplicate', 'stopped', 'hash', 'writable', 'privileged'])
+def test_control_unit_peer_runtime_matches_compose_without_inventing_health(fault):
+    rows = [{'Service': 'control-unit-peer', 'State': 'running', 'ID': 'peer-container'}]
+    if fault == 'missing': rows.clear()
+    if fault == 'duplicate': rows *= 2
+    if fault == 'stopped': rows[0]['State'] = 'exited'
+    inspected = []
+
+    def inspect(args):
+        inspected.append(args[-1])
+        return SimpleNamespace(stdout=json.dumps([{
+            'HostConfig': {'ReadonlyRootfs': fault != 'writable', 'Privileged': fault == 'privileged'},
+            'Config': {'Labels': {'com.docker.compose.config-hash': 'wrong' if fault == 'hash' else 'peer-hash'}}}]))
+
+    result = upd.runtime_reason(rows, {'control-unit-peer': 'peer-hash'}, inspect)
+    if fault is None:
+        assert result == '' and inspected == ['peer-container']
+    else:
+        assert 'control-unit-peer' in result
+
+
+@pytest.mark.parametrize('fault', [None, 'missing', 'duplicate', 'stopped', 'reference', 'identity'])
+def test_control_unit_peer_container_requires_the_accepted_proxy_identity(fault):
+    proxy = f'rosy-site-proxy:{OLD}'  # Version2 may reuse a signed image from the previous commit.
+    rows = [{'Service': 'control-unit-peer', 'Image': proxy, 'State': 'running', 'ID': 'peer-container'}]
+    if fault == 'missing': rows.clear()
+    if fault == 'duplicate': rows *= 2
+    if fault == 'stopped': rows[0]['State'] = 'exited'
+    if fault == 'reference': rows[0]['Image'] = f'rosy-site-fleet:{NEW}'
+
+    def inspect(args):
+        return SimpleNamespace(stdout='sha256:' + ('b' if fault == 'identity' else 'a') * 64)
+
+    result = upd.containers_reason(rows, NEW, {'proxy': ['sha256:' + 'a' * 64]}, inspect,
+                                   services=(), image_references={'proxy': proxy},
+                                   companions={'control-unit-peer'})
+    assert (result == '') is (fault is None)
 
 
 @pytest.mark.parametrize("loaded", [False, True])
