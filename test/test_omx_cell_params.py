@@ -58,12 +58,12 @@ def test_defaults_equal_the_constants_the_modules_shipped_with_and_the_example_f
                "pivot.grip_closed": 50.5, "auto.temp_stop_c": 55, "auto.pwm_fraction": 0.8, "auto.approach_near_m": 0.020,
                "auto.grasp_depth_m": 0.015, "auto.clear_mm": 55.0, "auto.finger_mm": 8.0, "auto.closing_theory_deg": 90,
                "auto.closing_alt_deg": 0, "runner.pace_lag": 1.6, "runner.pace_rise": 0.3, "runner.pace_max_s": 3.0,
-               "runner.idle_park_s": 180.0, "runner.idle_stop_s": 180.0, "runner.contact_lag": 1.5, "runner.contact_ticks": 2}
+               "runner.idle_park_s": 60.0, "runner.idle_stop_s": 30.0, "runner.idle_retry_s": 300.0, "runner.contact_lag": 1.5, "runner.contact_ticks": 2}
     assert {k: prm.default(k) for k in shipped} == shipped
     assert (cell_objects.CHROMA, cell_objects.LIGHT, cell_objects.MIN_PX) == (25.0, 60.0, 150)
     assert (cell_pivot.STILL_PX, cell_pivot.BIAS_REACH_MM) == (40, 80.0)
     assert (auto.TEMP_STOP_C, auto.PWM_FRACTION) == (55, 0.8)
-    assert (chunk_runner.PACE_LAG, chunk_runner.IDLE_PARK_S, chunk_runner.CONTACT_TICKS) == (1.6, 180.0, 2)
+    assert (chunk_runner.PACE_LAG, chunk_runner.IDLE_PARK_S, chunk_runner.CONTACT_TICKS) == (1.6, 60.0, 2)
     assert prm.load(EXAMPLE) == prm.load() and prm.load()["sha"] == prm.digest(prm.load()["values"])
 
 

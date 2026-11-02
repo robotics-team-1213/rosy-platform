@@ -98,7 +98,9 @@ PACE_LAG, PACE_RISE, PACE_MAX_S = (prm.default(f"runner.{k}") for k in ("pace_la
 # Nobody sent a command for IDLE_PARK_S (a lost link, a crashed caller): fold home. IDLE_STOP_S more at home ends
 # the session, so record_session turns torque OFF and the motors rest instead of holding for hours (a session
 # held home 6 h on 2026-10-27/28 until its health log ran out). A caller that wants the arm held sends `state`.
-IDLE_PARK_S, IDLE_STOP_S = prm.default("runner.idle_park_s"), prm.default("runner.idle_stop_s")
+# A fold a hold stopped (a blocked joint) is tried once more after IDLE_RETRY_S; before 2026-11-03 it was retried
+# every IDLE_PARK_S for good, pushing a blocked joint with torque on. A second hold keeps the arm where it is.
+IDLE_PARK_S, IDLE_STOP_S, IDLE_RETRY_S = (prm.default(f"runner.idle_{k}_s") for k in ("park", "stop", "retry"))
 # Strain, in every other chunk (goto, park, lift): normal travel lags up to about 2.6 units, so CONTACT_LAG would
 # hold there. A shoulder lifting from a reach (2026-10-27) went 2.4 -> 3.1 -> 4.0 -> 4.7 deg at PWM 263 -> 516 of
 # 600 in 0.7 s before the guard's 5 degree stop; a wrist against the wall 2.6 -> 3.6 -> 4.7 deg at PWM 93 -> 165
@@ -141,6 +143,7 @@ class Runner:
         self.lag, self.paced, self.paced_ticks = 0.0, 0, 0  # paced_ticks: frames held in the current chunk
         self.pace_floor, self.pace_last = 0.0, None
         self.last_input, self.home_since = 0.0, None  # home_since: a park settled and nothing moved since
+        self.idle_parks = 0  # folds started by idle() since the last command
         # per chunk: the largest lag behind the command the guard sent, and the ticks it spent over CONTACT_LAG;
         # the contact margin a real run leaves, which live.json's chunk target does not show (2026-10-26)
         self.peak_lag, self.over_ticks = 0.0, 0
@@ -428,9 +431,18 @@ class Runner:
         if self.chunk is not None or self.queue or self.pending:
             return False
         quiet = self.clock() - self.last_input
-        if self.home_since is None and quiet >= prm.get(self.params, "runner.idle_park_s", IDLE_PARK_S):
-            self.last_input = self.clock()  # the stop's quiet time starts once the arm is folded
-            self.command("park")
+        if self.home_since is None:
+            if self.idle_parks >= 2:  # both folds held: dropping the arm is worse than holding it
+                if self.idle_parks == 2:
+                    self.idle_parks, self.fault = 3, f"idle fold held twice ({self.fault}): a person must free the arm"
+                    self.report(command="park", ok=False, error=self.fault, person_needed=True)
+                return False
+            wait = (prm.get(self.params, "runner.idle_retry_s", IDLE_RETRY_S) if self.idle_parks else
+                    prm.get(self.params, "runner.idle_park_s", IDLE_PARK_S))
+            if quiet >= wait:
+                self.last_input = self.clock()  # the stop's quiet time starts once the arm is folded
+                self.idle_parks += 1
+                self.command("park")
             return False
         if self.home_since is not None and min(quiet, self.clock() - self.home_since) >= prm.get(self.params, "runner.idle_stop_s", IDLE_STOP_S):
             self.report(command="stop", ok=True, reason=f"no command for {quiet:.0f} s; folded home, torque goes OFF")
@@ -447,7 +459,7 @@ class Runner:
             started = self.clock()
             arrived = lines()
             if arrived:
-                self.last_input = started
+                self.last_input, self.idle_parks = started, 0
             self.pending += arrived
             # one command per tick: a burst of jogs must not move the target by more than one jog at once
             if self.pending and not self.command(self.pending.pop(0)):
