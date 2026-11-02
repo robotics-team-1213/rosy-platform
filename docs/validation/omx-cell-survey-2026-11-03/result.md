@@ -79,3 +79,13 @@ the bow of the real ones, as measured above.
    `arm_bases_m` only if they change reach or collision results, with the run evidence.
 2. Done: see step 2 above.
 3. Measure the belt height and arm_a by FK when arm_a is back in scope.
+
+## Evidence correction (2026-11-03)
+
+This correction supersedes step 2's side-error bound, "Both are inside the limit", and the
+"Done" status in Next item 2. The reported top render comparison (mean 1.13 px) passes the
+proposed 3 px mean limit. The side render comparison is UNKNOWN pending a quantitative
+render-to-real reference-point measurement. The side PnP fit residual (2.8 px) measures a
+different comparison and cannot bound render-to-real error. The by-eye overlay remains a
+qualitative observation. No additional image measurement or physical trial was performed
+for this correction; the stopped run still provides no stacking acceptance.
