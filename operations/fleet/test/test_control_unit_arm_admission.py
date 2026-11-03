@@ -13,6 +13,7 @@ from fleet.server.control_unit_service import ControlUnitService
 from fleet.server.control_unit_store import ControlUnitStore
 from fleet.server.task_service import FleetTaskService
 from fleet.server.task_store import FleetTaskStore
+from fleet.server.site_auth import SitePrincipal
 import fleet.server.arm_transfer_policy_admission as policy_module
 import test_arm_transfer_job_api as api
 from test_arm_transfer_job_api import rig as http_rig  # noqa: F401
@@ -69,7 +70,7 @@ def delegated(world, tmp_path, *, fault="healthy"):
                 origin, identity = path.split("/")
                 return await nodes[target].read(origin, identity, for_child=caller)
             if path == "inbox":
-                principal = SimpleNamespace(principal_id="control-unit:" + caller, role="service")
+                principal = SitePrincipal("control-unit:" + caller, "service")
                 return await nodes[target].receive(ControlArmIngressRequest.model_validate(body),
                                                    parent_id=caller, principal=principal)
             origin, identity = path.split("/")
