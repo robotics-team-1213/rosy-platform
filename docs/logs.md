@@ -13929,6 +13929,12 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: 없음
 
+## 2026-11-03 · 85ec06aec9 · docs(solutions): 사이트 갱신 체인 정지 진단 순서 기록
+- 변경: `solutions/deployment/`에 D-441 체인 정지 진단 교훈을 추가했다. 릴리스 제목("(unsigned)")은 신뢰 금지(10-29·10-31·11-03 세 재발), 정본 신호는 서명 감사 로그·업데이터 hold 상태·journalctl·D-805 관문 순서. 11-03 착지(main 0656574fb674)의 notify 푸시·제목 자동 교정도 해법으로 기록.
+- 증거: 같은 날 실제 진단·복구로 검증(hold 5분 내 식별, `retitle-repaired` 2건 즉시 교정, `test/test_site_auto_sign.py` 31통과).
+- gate 변화: 없음.
+- CE: 이 문서 자체가 교훈 기록이다.
+
 ## 2026-11-03 · uncommitted · fix(landing): delta 차례 넘김은 깨끗한 아래 단계가 있을 때만 (D-889 추가 27 보완)
 - 변경: `land_selection.delta_yields(ticket, base)`를 두고, `land.py`가 표와 `land_full.prepared` 단계가 둘 다 있을 때만 DELTA_NOTE로 차례를 넘긴다.
 - 증거: 14:18·14:34 control-unit-arm-candidate가 tier None(LOAD-FLAKY) 사전 시험 위에서 두 번 넘기고 저장 없이 돌아옴(rosy-land-events). 원격 착지 회귀 27개 파일 + affected_tests 통과, 새 시험 1개.
