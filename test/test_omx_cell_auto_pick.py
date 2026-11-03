@@ -610,7 +610,8 @@ def test_a_whole_surface_in_view_is_not_a_finger_obstacle_but_a_box_is():
 
 def test_the_jaws_open_just_past_the_object_not_wide():
     assert auto.jaw_open_for(30) == pytest.approx(52.3 + 16 / 10.4, abs=0.01)  # 30 mm + 8 mm each side: ~53.8
-    assert auto.jaw_open_for(200) == 56.0  # never past the measured safe opening
+    with pytest.raises(SystemExit, match="past gripper.open_max"):  # never past the measured safe opening, and
+        auto.jaw_open_for(200)                                       # never clamped short onto the object either
     assert auto.jaw_open_for(0) >= 52.8
 
 
