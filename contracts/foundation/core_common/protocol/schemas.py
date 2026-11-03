@@ -437,6 +437,37 @@ from .state_components import (  # noqa: F401
 )
 
 
+class PeerBeacon(BaseModel):
+    """Peer pose sharing beacon (docs/plans/2026-11-04-peer-pose-sharing-design.md §4.1).
+
+    A CORE sends its own map pose to peer COREs; ``pose`` is absent unless the
+    sender is ``LOCALIZED``. The receiver binds identity to the caller's
+    session, never to this body alone.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    schema_version: int = Field(default=1, ge=1, le=1)
+    robot_id: str = Field(min_length=1, max_length=64)
+    boot_id: str = Field(min_length=1, max_length=96)
+    seq: int = Field(ge=0)
+    map_id: Optional[str] = Field(default=None, min_length=1, max_length=128)
+    pose: Optional[Pose] = None
+    localization_state: Optional[str] = Field(default=None, max_length=32)
+    stamp: float = Field(ge=0)
+
+
+class PeerRow(BaseModel):
+    """One peer as this CORE sees it: `GET /api/v1/peers`, `StateSnapshot.peers`."""
+
+    robot_id: str
+    boot_id: str
+    seq: int
+    map_id: Optional[str] = None
+    pose: Optional[Pose] = None
+    localization_state: Optional[str] = None
+    age_s: float = 0.0
+
+
 class StateSnapshot(TripLeaseFields):
     """로봇 상태 스냅샷 — /ws/state payload와 동일 (API Ref §6.1)."""
 
@@ -470,6 +501,9 @@ class StateSnapshot(TripLeaseFields):
     localization: Optional[LocalizationStatus] = None
     safety_policy: Optional[SafetyPolicyStatus] = None  # D-400, v1.71 additive
     odom_pose: Optional[OdomPose] = None  # D-494 2, v1.112 additive; null until odometry
+    #: Peer pose sharing, additive: peer rows this CORE sees, null when the
+    #: feature is off (docs/plans/2026-11-04-peer-pose-sharing-design.md §4.3).
+    peers: Optional[list[PeerRow]] = None
 
 
 class JunctionSignalAnswer(BaseModel):

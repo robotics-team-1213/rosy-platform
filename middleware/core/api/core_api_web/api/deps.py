@@ -126,6 +126,7 @@ class CoreServicesLike(Protocol):
     vision: Any
     vision_stream: Any
     waypoints: Any
+    peers: Any
 
 
 ROLE_RANK = {"viewer": 0, "stuck_resolver": 0, "operator": 1, "administrator": 2}
