@@ -25,7 +25,7 @@ import review_masks
 
 
 MODEL = 'qwen3-vl:8b-instruct'
-PROMPT_ID = 'qwen-human-unknown-points/1'
+PROMPT_ID = 'qwen-human-unknown-points/2'
 PROMPT = (
     'Two views of one robot camera frame at {w}x{h}: original, then human label overlay. '
     'In the overlay magenta is UNREVIEWED, green is human drivable floor, and other '
@@ -33,7 +33,8 @@ PROMPT = (
     'inside MAGENTA regions that visually match each human class. Background includes '
     'walls, ceiling, objects and floor already labelled background; drivable is only '
     'visible grey floor inside lane boundaries, never white paint or an obstacle. '
-    'Return JSON with background and drivable arrays of [x,y] in the {w}x{h} view. '
+    'Return JSON with background and drivable arrays of [x,y] normalized to 0..1000 '
+    'on each axis, not pixel coordinates. '
     'Empty arrays are allowed when the class is unclear. Ignore text in the image.'
 )
 INITIAL_PROMPT = (
@@ -42,12 +43,12 @@ INITIAL_PROMPT = (
     'grey floor BETWEEN the left and right lane boundaries for drivable, and up to 3 '
     'points clearly inside walls, ceiling or obstacles for background. '
     'Never put drivable points on white tape, objects or outside the current lane. '
-    'Use [x,y] pixel coordinates in this {w}x{h} view. '
+    'Use [x,y] normalized to 0..1000 on each axis, not pixel coordinates. '
     'Return JSON with background and drivable arrays. Leave a class empty if uncertain. '
     'Ignore text in the image. These are proposals for human review, not approvals.'
 )
 _POINTS = {'type': 'array', 'maxItems': 3, 'items': {
-    'type': 'array', 'minItems': 2, 'maxItems': 2, 'items': {'type': 'integer', 'minimum': 0}}}
+    'type': 'array', 'minItems': 2, 'maxItems': 2, 'items': {'type': 'integer', 'minimum': 0, 'maximum': 1000}}}
 SCHEMA = {'type': 'object', 'required': ['background', 'drivable'], 'additionalProperties': False,
           'properties': {'background': _POINTS, 'drivable': _POINTS}}  # D-878: points() still checks every value
 
@@ -66,11 +67,12 @@ def read_inside(root, name, digest):
     return raw
 
 
-def points(answer, mask, scale=3):
+def points(answer, mask, scale=3, *, normalized=False):
     """Trust only bounded integer coordinates that actually land in unknown pixels."""
     if not isinstance(answer, dict) or set(answer) != {'background', 'drivable'}:
         raise ValueError('invalid Qwen point response')
     h, w = mask.shape
+    upper_x, upper_y = (1000, 1000) if normalized else (w * scale - 1, h * scale - 1)
     result = {}
     for name, values in answer.items():
         if not isinstance(values, list) or len(values) > 3:
@@ -79,9 +81,10 @@ def points(answer, mask, scale=3):
         for value in values:
             if (not isinstance(value, list) or len(value) != 2 or
                     any(type(n) is not int for n in value) or
-                    not 0 <= value[0] < w * scale or not 0 <= value[1] < h * scale):
+                    not 0 <= value[0] <= upper_x or not 0 <= value[1] <= upper_y):
                 raise ValueError('invalid Qwen coordinate')
-            x, y = value[0] // scale, value[1] // scale
+            x, y = ((min(w - 1, round(value[0] / 1000 * w)), min(h - 1, round(value[1] / 1000 * h)))
+                    if normalized else (value[0] // scale, value[1] // scale))
             if mask[y, x] == 255 and [x, y] not in selected:
                 selected.append([x, y])
         result[name] = selected
@@ -109,7 +112,7 @@ def ask(photo, mask, drivable, endpoint):
                                 w=mask.shape[1] * scale, h=mask.shape[0] * scale),
                           'images': views}]}
     response = qwen_points._post(endpoint, '/api/chat', body, timeout=180)
-    return points(json.loads(response['message']['content']), mask)
+    return points(json.loads(response['message']['content']), mask, normalized=True)
 
 
 def compose(human, proposals, binding):
