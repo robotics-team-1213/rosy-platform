@@ -22,6 +22,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from harness.affected_exclusive import ENV
 from land_merge import resolver
 from land_selection import SAFETY_TRIGGER, _affected
 from harness import affected_exclusive
@@ -125,12 +126,7 @@ def held(land, wt: Path, branch: str, full_main: str, candidate: str) -> list[li
                               outside=None if moved is None else max(0, moved - len(landed)))
         return None
     invocations = affected_exclusive.compose(spec["invocations"], available=(wt / affected_exclusive.TARGET).is_file())
-    root = []
-    for inv in invocations:
-        kept = inv if any(w.startswith('-') or affected_exclusive.ENV.match(w) for w in inv) else [
-            p for p in inv if p.startswith("test/") or p == "test"]
-        if kept:
-            root.append(kept)
+    root = root_part(invocations)
     land.land_events.emit("speculation", stage="turn", held=True, differ=differ[:20])
     guards = [g for g in land.land_guards.GUARDS if (wt / g).exists()]
     return affected_exclusive.compose(root or ([guards] if guards else []),
@@ -141,6 +137,24 @@ def with_spec(land, wt: Path, branch: str, prepared: dict | None) -> dict | None
     """``prepared`` for the land record of a held turn: its tier, plus the speculated selection (it passed on this
     tree up to the records). The record's base stays the turn's main, an ancestor of the landed commit."""
     spec = ((_record(land, wt, branch) or {}).get(KEY) or {})
-    return {**prepared, "invocations": affected_exclusive.compose(
-        prepared["invocations"], spec.get("invocations", []),
-        available=(wt / affected_exclusive.TARGET).is_file())} if prepared else None
+    if not prepared:
+        return None
+    original = prepared["invocations"]
+    combined = affected_exclusive.compose(original, spec.get("invocations", []),
+                                           available=(wt / affected_exclusive.TARGET).is_file())
+    # Keep main's logical-row policy: only remove speculative rows already covered by preparation.
+    more = [inv for inv in combined[len(original):] if inv not in original]
+    return {**prepared, "invocations": original + more}
+
+
+def root_part(invocations: list[list[str]]) -> list[list[str]]:
+    """Omit no-root calls; project plain calls and keep root calls with env/options whole, including values."""
+    result = []
+    for inv in invocations:
+        if not any(p == "test" or p.startswith("test/") for p in inv):
+            continue
+        kept = inv if any(w.startswith('-') or ENV.match(w) for w in inv) else [
+            p for p in inv if p.startswith("test/") or p == "test"]
+        if kept:
+            result.append(kept)
+    return result

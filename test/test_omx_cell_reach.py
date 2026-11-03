@@ -40,5 +40,7 @@ def test_chain_stops_at_the_first_refusal():
     calls = []
     ok = lambda: calls.append("reach") or {"verdict": "pass"}  # noqa: E731
     no = lambda: calls.append("wrist") or {"verdict": "refuse"}  # noqa: E731
-    assert cr.chain(ok, no)()["verdict"] == "refuse" and calls == ["reach", "wrist"]
+    out = cr.chain(ok, no, ok)()
+    assert out["verdict"] == "refuse" and calls == ["reach", "wrist"]
+    assert out["hooks"] == [{"verdict": "pass"}, {"verdict": "refuse"}]  # every answer is kept for the attempt record
     assert cr.chain(None, None) is None
