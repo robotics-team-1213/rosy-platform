@@ -4435,3 +4435,10 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 검증: 원격 RED commit 314f571ea0에서 두 회귀 사례가 예상대로 실패했고 기존 9개는 통과했다. 수정 commit 5eff2fd4d0에서 자동 운반·자동 집기 관련 59개가 통과했다. 실제 팔 동작과 현장 배포는 하지 않았다.
 - gate 변화: 없음. 장치·현장 수용을 주장하지 않는다.
 - CE: 해당 없음 — 오류 전달 원인과 해결은 수정 코드 및 회귀 시험에 직접 남아 있다.
+
+## 2026-11-03 · uncommitted · fix(omx): 기기 업데이터가 카메라 바인드 유닛을 함께 싣는다
+
+- 변경: `omx-devices-autoupdate.json.example`의 `unit_files`에 `rosy-omx-cameras-bind.service`·`.timer`를 더하고 README 설치 5단계에서 바인드 타이머도 켠다. 업데이터는 유닛 파일을 복사만 하고 타이머를 켜지 않으므로 한 번 켜는 단계가 필요하다. `test_omx_cameras`가 예시 설정에 두 파일이 빠지면 실패한다.
+- 증거: 현장 관제 PC의 사용자 유닛에 바인드 유닛이 한 번도 설치되지 않아 옮겨 꽂은 카메라 추적과 Fleet 승인 적용이 일어날 수 없었다. 배포 도구로 `bind`(쓰기 없음)가 쓰기·재시작 없이 네 역할을 확인한 뒤 현장 설정 `unit_files`에 두 파일을 더하고(백업 `.bak-20261103-bind`) 타이머를 켰다. 첫 실행 `write: []`. `test/test_omx_cameras.py` 13 passed(로컬).
+- gate 변화: 없음. 카메라를 꽂아 Fleet에서 승인하는 실물 수용은 아직이다.
+- CE: 해당 없음 — 재발은 예시 설정 시험과 README 설치 단계가 막는다.
