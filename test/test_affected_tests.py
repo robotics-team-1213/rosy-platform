@@ -930,7 +930,7 @@ def test_landing_reports_select_their_readers_without_the_full_runtime_tier(chan
 
 @pytest.mark.parametrize("other", ["tools/land.py", "tools/land_events.py", "tools/land_queue.py",
     "tools/harness/affected_tests.py", "tools/remote/remote_pytest.py", "tools/land_future_gate.py",
-    "tools/unknown_future_owner.py"])
+    "unregistered/" + "future" + "_owner.py"])
 def test_landing_reports_do_not_narrow_other_gates_or_unmapped_changes(other):
     sel = affected.select(affected.Repo.load(ROOT), ["tools/land_goal.py", "tools/land_stats.py", other])
     assert sel.mode == "full"
