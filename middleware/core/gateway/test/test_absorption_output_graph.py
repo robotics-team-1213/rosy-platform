@@ -64,8 +64,9 @@ class OutputGraphTests(unittest.TestCase):
                    if isinstance(n, ast.ClassDef) and n.name == 'RosBridge')
         method = next(n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == '_publish_cmd_vel')
         # _publish_cmd_vel delegates to the module-level cmd_vel_cycle (core.bridge.cmd_vel).
+        from core.bridge import docking_mode
         from core.bridge.cmd_vel import cmd_vel_cycle
-        scope = dict(Twist=Twist, cmd_vel_cycle=cmd_vel_cycle)
+        scope = dict(Twist=Twist, cmd_vel_cycle=cmd_vel_cycle, docking_mode=docking_mode)
         exec(compile(ast.Module(body=[method], type_ignores=[]), str(path), 'exec'), scope)
         modes = ModeMachine()
         modes.transition(Mode.NAVIGATION)
@@ -86,7 +87,7 @@ class OutputGraphTests(unittest.TestCase):
             msg.linear.x, msg.angular.z = out.linear, out.angular
             publisher.publish(msg)
 
-        bridge = SimpleNamespace(_svc=SimpleNamespace(command=command,
+        bridge = SimpleNamespace(_svc=SimpleNamespace(command=command, modes=modes, station_docking=None,
                                                       power=Mock(motion_ready=lambda: True)),
                                  _readiness=None,
                                  _bounded_trial_guard=None,
