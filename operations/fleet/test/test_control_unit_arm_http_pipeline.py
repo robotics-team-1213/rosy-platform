@@ -98,7 +98,8 @@ def test_app_proposal_reaches_the_cell_store_and_only_the_cell_admit_approves(tm
             assert refused.status_code == 409 and refused.json()["detail"]["code"] == "CONTROL_UNIT_ARM_ADMIT_AT_CELL"
             assert (await network.get(JOBS + "/" + job["mission_id"], headers=OTHER)).status_code == 403
 
-            admit(store, cell_job, control)
+            checked_at = await nodes["CELL-A"].check_arm_admission(job["mission_id"])
+            admit(store, cell_job, control, delegation_checked_at=checked_at)
             await refresh(nodes)
             read = await network.get(JOBS + "/" + job["mission_id"], headers=HARBOR)
             assert read.status_code == 200, read.text
