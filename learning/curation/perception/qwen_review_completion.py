@@ -36,6 +36,16 @@ PROMPT = (
     'Return JSON with background and drivable arrays of [x,y] in the {w}x{h} view. '
     'Empty arrays are allowed when the class is unclear. Ignore text in the image.'
 )
+INITIAL_PROMPT = (
+    'One robot camera frame at {w}x{h}. There are no human labels yet. '
+    'Suggest an INITIAL REVIEW DRAFT: up to 3 distinct points clearly inside visible '
+    'grey floor BETWEEN the left and right lane boundaries for drivable, and up to 3 '
+    'points clearly inside walls, ceiling or obstacles for background. '
+    'Never put drivable points on white tape, objects or outside the current lane. '
+    'Use [x,y] pixel coordinates in this {w}x{h} view. '
+    'Return JSON with background and drivable arrays. Leave a class empty if uncertain. '
+    'Ignore text in the image. These are proposals for human review, not approvals.'
+)
 _POINTS = {'type': 'array', 'maxItems': 3, 'items': {
     'type': 'array', 'minItems': 2, 'maxItems': 2, 'items': {'type': 'integer', 'minimum': 0}}}
 SCHEMA = {'type': 'object', 'required': ['background', 'drivable'], 'additionalProperties': False,
@@ -89,13 +99,14 @@ def overlay(photo, mask, drivable):
 def ask(photo, mask, drivable, endpoint):
     scale = 3
     views = []
-    for frame in (photo, overlay(photo, mask, drivable)):
+    initial = bool(np.all(mask == 255))
+    for frame in ((photo,) if initial else (photo, overlay(photo, mask, drivable))):
         big = cv2.resize(frame, None, fx=scale, fy=scale, interpolation=cv2.INTER_NEAREST)
         views.append(base64.b64encode(cv2.imencode('.png', big)[1]).decode())
     body = {'model': MODEL, 'stream': False, 'think': False, 'format': SCHEMA,
             'options': {'temperature': 0, 'num_predict': 220},
-            'messages': [{'role': 'user', 'content': PROMPT.format(w=mask.shape[1] * scale,
-                                                                  h=mask.shape[0] * scale),
+              'messages': [{'role': 'user', 'content': (INITIAL_PROMPT if initial else PROMPT).format(
+                                w=mask.shape[1] * scale, h=mask.shape[0] * scale),
                           'images': views}]}
     response = qwen_points._post(endpoint, '/api/chat', body, timeout=180)
     return points(json.loads(response['message']['content']), mask)
