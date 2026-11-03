@@ -22,6 +22,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from harness.affected_exclusive import ENV
 from land_merge import resolver
 from land_selection import SAFETY_TRIGGER, _affected
 
@@ -121,8 +122,7 @@ def held(land, wt: Path, branch: str, full_main: str, candidate: str) -> list[li
                               missing=[c for c in spec["chain"] if c not in landed],
                               outside=None if moved is None else max(0, moved - len(landed)))
         return None
-    root = [kept for kept in ([p for p in inv if p.startswith("test/") or p == "test"] for inv in spec["invocations"])
-            if kept]
+    root = root_part(spec["invocations"])
     land.land_events.emit("speculation", stage="turn", held=True, differ=differ[:20])
     guards = [g for g in land.land_guards.GUARDS if (wt / g).exists()]
     return root or ([guards] if guards else [])  # never an empty invocation: bare pytest would collect anything
@@ -132,4 +132,18 @@ def with_spec(land, wt: Path, branch: str, prepared: dict | None) -> dict | None
     """``prepared`` for the land record of a held turn: its tier, plus the speculated selection (it passed on this
     tree up to the records). The record's base stays the turn's main, an ancestor of the landed commit."""
     spec = ((_record(land, wt, branch) or {}).get(KEY) or {})
-    return {**prepared, "invocations": prepared["invocations"] + spec.get("invocations", [])} if prepared else None
+    # An exact repeat is one plan row: a second copy of the G1 timing job never qualifies for publication (11-03).
+    more = [inv for inv in spec.get("invocations", []) if inv not in prepared["invocations"]] if prepared else []
+    return {**prepared, "invocations": prepared["invocations"] + more} if prepared else None
+
+
+def root_part(invocations: list[list[str]]) -> list[list[str]]:
+    """Each invocation's root test/ paths, with its options and ROSY_* words. 11-03: keeping paths alone ran the G1
+    timing job as an ordinary file (the record then never qualified) and browser chunks without their opt-in."""
+    result = []
+    for inv in invocations:
+        paths = [w for w in inv if not w.startswith("-") and not ENV.match(w)]
+        root = [p for p in paths if p.startswith("test/") or p == "test"]
+        if root:
+            result.append([w for w in inv if w not in paths or w in root])
+    return result

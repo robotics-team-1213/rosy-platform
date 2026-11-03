@@ -446,8 +446,7 @@ def rounds(args, wt: Path, branch: str, main_co: Path, python: str, qdir, ticket
             delta = lines(wt, "diff", "--name-only", tested_main, main_sha) if tested_main else []
             if tested_main and all(map(record_only, delta)):
                 # Only module-scoped suites may skip; root test/ guards read the records themselves.
-                invocations = [kept for kept in ([p for p in inv if p.startswith("test/") or p == "test"]
-                                                 for inv in invocations) if kept]
+                invocations = land_speculate.root_part(invocations)
                 reusable = False  # module suites ran on an earlier candidate, not this one
                 summary.append(f"round {round_no}: main delta ({len(delta)} file(s)) is records only"
                                " (logs/index/progress/ADR), module suites skipped, root test/ rerun")
