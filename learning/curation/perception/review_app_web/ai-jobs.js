@@ -27,9 +27,11 @@ export function showAI(lane,index,request,context,results){
     result.setAttribute('reason',blocked?'현재 편집을 저장하거나 마친 뒤 조회하세요.':'');
   };
   function render(){
+    const expanded=new Set([...jobs.querySelectorAll('details[open]')].map(node=>node.dataset.job));
     jobs.replaceChildren();
     for(const job of status.jobs.filter(row=>allowed.includes(row.action))){
       const row=element('li'),summary=element('p',`${actions[job.action]} · ${states[job.state]||job.state} · v${job.version}`),details=element('details');
+      details.dataset.job=job.id;details.open=expanded.has(job.id);
       details.append(element('summary','요청·모델 정보'),element('p',`요청 ${actorName(job.actor)} · ${job.created_at}`),element('p',`모델 ${job.model} · ${job.model_digest}`));
       row.append(summary,details);
       if(job.error)row.append(element('p',job.error));

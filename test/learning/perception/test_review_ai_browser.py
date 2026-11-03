@@ -53,6 +53,8 @@ def test_keyboard_ai_draft_publishes_candidate_without_overwriting_review(tmp_pa
         expect(provenance.locator('p').first).to_be_hidden()
         provenance.locator('summary').click()
         expect(provenance.locator('p').first).to_be_visible()
+        page.get_by_role('button', name='AI 실행 상태 다시 조회').click()
+        expect(provenance.locator('p').first).to_be_visible()
         assert store.get(0) == before
         assert jobs.status(0)['jobs'][0]['state'] == 'succeeded'
         command(page, 'AI 결과 목록 조회')
