@@ -38,6 +38,7 @@ from core_api_web.api.v1.routes import (
     map_router,
     metrics_router,
     navigation_router,
+    peers_router,
     power_router,
     recordings_router,
     robot_router,
@@ -231,6 +232,7 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
     app.include_router(recordings_router)
     app.include_router(safety_router)
     app.include_router(navigation_router)
+    app.include_router(peers_router)
     app.include_router(localization_router)
     app.include_router(motion_router)
     app.include_router(motors_router)
