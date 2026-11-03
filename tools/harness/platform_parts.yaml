@@ -150,6 +150,7 @@ roots:
       (D-429 §4 rule 1 needs an .api prefix); contracts are importable by every part.
     concern: contracts
     capability: platform
+    reviewers: [sajy0804, ddaokki]
 
   - path: contracts/motion
     part: contracts
@@ -180,6 +181,7 @@ roots:
     wave: none
     concern: control
     capability: platform
+    reviewers: [PURPLE-SY]
     import_prefix: [core_features.line_follow, core_features.docking, core_features.navigation, core_features.localization, core_features.swarm, core_features.road_behaviour, core_features.traffic_policy]
     source_packages:
       line_follow: core_features.line_follow
@@ -197,6 +199,7 @@ roots:
     wave: none
     concern: control
     capability: platform
+    reviewers: [PURPLE-SY]
     import_prefix: [control.control_node, control.goal_node, control.wander_node, control.safety_node]
     source_packages: {"": control}
     note: D-649 legacy ROS adapters installed by control; final legacy writer stays excluded.
@@ -262,6 +265,7 @@ roots:
     import_prefix: [navigation]
     concern: control
     capability: platform
+    reviewers: [PURPLE-SY]
   - path: middleware/drive/planning/nav2/native_map
     layout_target: middleware/drive/planning/nav2/native_map
     part: middleware
@@ -269,6 +273,7 @@ roots:
     wave: "4c"
     concern: safety
     capability: platform
+    reviewers: [PURPLE-SY]
     note: D-783 guarded native map producers, canonical identity, SDK/build and plugin boundary.
   - path: middleware/perception
     part: middleware
@@ -300,6 +305,7 @@ roots:
       tracking/wander: control.wander
     concern: control
     capability: platform
+    reviewers: [PURPLE-SY]
     note: D-630 Drive algorithms; installed by the existing control distribution.
   - path: middleware/drive/motion_limits
     layout_target: middleware/drive/motion_limits
@@ -312,6 +318,7 @@ roots:
       adapter: control.safety
     concern: safety
     capability: platform
+    reviewers: [PURPLE-SY]
     note: D-630 policy/clearance and existing sensor-only adapter; no new final writer.
   - path: middleware/drivers/imu_bno055
     part: middleware
@@ -414,6 +421,7 @@ roots:
     import_prefix: [rosy.skills.api]
     concern: control
     capability: platform
+    reviewers: [sajy0804, ddaokki]
     api: true
   - path: middleware/skills/manipulation
     part: middleware
@@ -446,6 +454,7 @@ roots:
       unchanged. rosy-execution no longer packages it.
     concern: control
     capability: platform
+    reviewers: [sajy0804, ddaokki]
   - path: operations/site_execution/src/rosy/execution/api
     layout_target: operations/site_execution/src/rosy/execution/api
     part: operations
@@ -671,7 +680,6 @@ roots:
     import_prefix: [rosy.world]
     concern: other
     capability: fleet
-    reviewers: [now2466]
   - path: operations/account
     layout_target: operations/account
     part: operations
@@ -927,6 +935,7 @@ roots:
     wave: none
     concern: other
     capability: platform
+    reviewers: [PURPLE-SY]
 
   # --- top-level non-part roots ----------------------------------------------
   - path: profiles
@@ -969,6 +978,7 @@ roots:
     note: Offline per-robot calibration fit and store CLI (never run on a robot).
     concern: other
     capability: platform
+    reviewers: [sajy0804, ddaokki]
   - path: tools/capture
     part: tools
     d427_target: tools/capture
