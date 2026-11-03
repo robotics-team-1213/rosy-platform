@@ -13935,9 +13935,33 @@ osy-d395-s1d\`.
 - gate 변화: 없음.
 - CE: 이 문서 자체가 교훈 기록이다.
 
+## 2026-11-03 · uncommitted · fix(landing): delta 차례 넘김은 깨끗한 아래 단계가 있을 때만 (D-889 추가 27 보완)
+- 변경: `land_selection.delta_yields(ticket, base)`를 두고, `land.py`가 표와 `land_full.prepared` 단계가 둘 다 있을 때만 DELTA_NOTE로 차례를 넘긴다.
+- 증거: 14:18·14:34 control-unit-arm-candidate가 tier None(LOAD-FLAKY) 사전 시험 위에서 두 번 넘기고 저장 없이 돌아옴(rosy-land-events). 원격 착지 회귀 27개 파일 + affected_tests 통과, 새 시험 1개.
+- gate 변화: 없음. 단계 없는 착지는 D-889 27 이전처럼 차례 안에서 delta 시험 폴더를 돌린다.
+- CE: 기존 교훈 갱신 — landings-gave-the-turn-back-and-reran-everything 10에 이 조건을 더함.
+
+## 2026-11-03 · uncommitted · docs(workflow): 제어 세션 종료 뒤 남은 synthetic 부하 정리
+- 변경: Windows 부하 시험의 PID·생성시각·부모 트리 확인과 이번 사례의 부모 우선 종료 근거를 교훈으로 남긴다. 프로세스 이름만으로 종료하거나 광범위 정리 명령을 재실행하지 않는다.
+- 증거: 원래 제어 부모가 없는 bash3개와 각 유일한 while-True Python3개를 확인하고 정확한 대상만 종료했다. 직후 대상0, 후속 표본의 동일PID는 새 hook shell로 재사용된 것을 구분했다. 전체CPU96%/다른작업진행으로 전체 지연·p90 개선은 주장하지 않는다.
+- gate 변화: 없음. 제품 코드·자원 기준·시험 선택·실패 baseline은 바꾸지 않는다. 운영자 로컬 증거는 저장소 밖 기존 workspace-records에 보존했다.
+- CE: 새 교훈 기록 — windows-synthetic-load-outlives-controller. 관련 CPU 경합·Windows 자식 수명 교훈과 구분하며 원격·장치 수용을 대신하지 않는다.
+
+## 2026-11-03 · 368f142943 · docs(adr): D-968 통합관제 이름·개인 로그인 계정 모델 확정
+- 변경: 통합관제 고유명은 Rosy Fleet, 사람 계정은 개인 로그인만, 소유자 권한은 operator+policy_admin 조합. 직함·공유 계정과 owner 문자가 들어간 새 역할·계정은 만들지 않고, 콘솔 id/비번 처리는 기존 구조화 경로(rosy_account 라우트·레지스트리 초기 비밀번호·강제 변경)만 쓴다. 2026-11-02~03 콘솔 로그인 실패는 초기 비밀번호 체계로 해결했다.
+- 검증: rosy_harness lint 잔여 오류 0건. D-966/D-967은 타 세션 진행 중 예약이라 adr_gaps.txt에 선언했다(ADR 착지 시 줄 삭제).
+- gate 변화: 없음.
+- CE: 해당 없음 — 진단·명명 결정 기록이며 새 교훈 없음.
+
+## 2026-11-03 · b71238da0d · fix(land): a held or records-only turn keeps each job's options
+- 변경: `tools/land_speculate.py` `root_part`가 root test/ 경로와 함께 그 invocation의 옵션·`ROSY_*` 단어를 남긴다(`land.py` records-only 경로도 같은 함수). `with_spec`은 이미 있는 invocation을 다시 붙이지 않는다
+- 증거: 5ec9ef709a 착지 기록이 G1 전용 job 2개와 평문 `test/test_platform_g1_timing.py`를 담아 `publish_main`이 "canonical candidate plan/environment unavailable"로 거부. 원격 `test_land_speculate.py test_land.py test_land_record.py test_publish_evidence.py test_land_selection.py` exit 0
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 없음(회귀 시험 `test_the_root_part_keeps_each_job_s_options_and_settings`)
+
 ## 2026-11-03 · uncommitted · fix(landing): LOAD-FLAKY는 사전 시험 전체가 아니라 그 시험만 차례에서 다시 (D-970 4항)
 - 변경: `land_selection.load_flaky_ids`가 요약의 LOAD-FLAKY id를 그 호출의 ROSY_ 환경 단어와 함께 읽고, `land_prepare`는 그 줄을 빼고 단계를 판정해 id를 `land_full` 기록(`flaky`)에 둔다. `land.py` 차례가 그 id를 하나씩 따로 다시 돌린다. 명시 FULL 증인과 읽을 수 없는 LOAD-FLAKY 줄은 예전처럼 엄격하다.
 - 증거: 11-03 12:53~15:53 사전 시험 28번 중 9번이 단계 없음(LOAD-FLAKY 등)이라 delta도 못 썼다. 원격 착지 회귀 27개 파일 + affected_tests 통과(test_land_async 한 건은 혼자 재실행 통과한 ProcessLookupError 타이밍 문제, 이 변경과 무관), 새 시험 2개.
 - gate 변화: 약화 없음. LOAD-FLAKY id는 차례에서 다시 통과해야 착지하고, 차례 요약에 LOAD-FLAKY가 다시 나오면 land record가 생기지 않아 pre-push가 다시 돈다. publish_evidence의 LOAD-FLAKY 거절도 그대로다.
 - CE: 해당 없음 — 교훈 10·11과 D-970에 이미 있음.
-

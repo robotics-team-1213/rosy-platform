@@ -72,6 +72,13 @@ def _guards_only(invocations: list[list[str]], guards) -> list[list[str]]:
 DELTA_NOTE = "main's landed delta reaches whole suite folders: they run before the turn"  # D-889 27
 
 
+def delta_yields(ticket, base: dict | None) -> bool:
+    """Whether a DELTA_NOTE turn yields to run the suites before the turn: only with a queue ticket and a clean
+    earlier tier for the delta record to stand on. 11-03 14:18-14:34 a LOAD-FLAKY pretest (no tier) yielded twice
+    and saved nothing; without a base the suites run in the turn as before (D-889 27)."""
+    return ticket is not None and base is not None
+
+
 def load_flaky_ids(summary) -> list[list[str]] | None:
     """D-970 4: one invocation per node id a summary marks LOAD-FLAKY (land_checks: failed under load, passed
     alone), with its invocation's environment words (ROSY_RUN_BROWSER_TESTS=1: without it a browser id skips and

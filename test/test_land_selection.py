@@ -677,6 +677,15 @@ def test_the_guard_set_and_paths_under_an_ignored_folder_are_no_overlap():
     assert not selection.overlaps([["guard/test/test_a.py"]], [["guard/test/test_a.py"]], ignore=("guard/test",))
 
 
+def test_a_delta_turn_yields_only_with_a_ticket_and_a_clean_tier_under_it():
+    """D-889 27: 11-03 a LOAD-FLAKY pretest (no tier) yielded its turn twice and saved nothing."""
+    selection = load_selection()
+    base = {"tier": "affected", "invocations": [["mine/test"]]}
+    assert selection.delta_yields("ticket.json", base)
+    assert not selection.delta_yields("ticket.json", None)
+    assert not selection.delta_yields(None, base)
+
+
 def test_load_flaky_ids_keep_the_invocation_environment_and_refuse_unreadable_lines():
     """D-970 4: a browser id rerun without ROSY_RUN_BROWSER_TESTS=1 would skip and look green."""
     selection = load_selection()
