@@ -451,14 +451,16 @@ D-741(Accepted)이 정한, 모든 웹 표면이 같이 쓸 자리다. Rosy Fleet
 
 | 모듈 | 공개 부품 | 사용·비사용 조건 |
 |---|---|---|
-| `form-controls.js` | `createFormErrors(form, summary)`, `createFilePicker({id,label,accept,maxBytes,onChange})` | 기존 네이티브 폼에 오류 요약·필드 설명을 연결한다. 파일 이름·크기 검사는 서버 검증을 대체하지 않는다. |
-| `form-controls.js` | `createSearchSelect({id,label,choices,onChange})`, `createDateRange({id,label,onChange})`, `createDirtyGuard(form)` | 검색+네이티브 선택, 현지 달력 날짜 범위, 미저장 이탈 확인. 단순 선택은 원래 select를 쓴다. 저장 성공 뒤에만 dirty guard의 `reset()`으로 기준선을 바꾼다. |
-| `collection-controls.js` | `createListToolbar({id,filters,onChange})`, `createPagination({id,onChange})` | 검색·필터·정렬 의도와 페이지 사실만 처리한다. 서버 검색·선택 범위·총량을 추측하지 않는다. |
+| `form-controls.js` | `createFormErrors(form, summary)`, `createFilePicker({id,label,accept,maxBytes,onChange})` | 기존 네이티브 폼에 오류 요약·필드 설명을 연결한다. 파일 이름·크기 오류는 네이티브 폼 유효성에도 반영하고, 수정·선택 해제 시 오류를 푼다. 이 검사는 서버 검증을 대체하지 않는다. |
+| `form-controls.js` | `createSearchSelect({id,label,choices,onChange})`, `createDateRange({id,label,onChange})`, `createDirtyGuard(form)` | 검색+네이티브 선택, 현지 달력 날짜 범위, 미저장 이탈 확인. 검색·자료 갱신으로 선택이 사라지면 빈 값을 한 번 알리고 유효한 선택은 유지한다. 단순 선택은 원래 select를 쓴다. 저장 성공 뒤에만 dirty guard의 `reset()`으로 기준선을 바꾼다. |
+| `collection-controls.js` | `createListToolbar({id,filters,sortLabel,sortOptions,onChange})`, `createPagination({id,onChange})` | 검색·필터·정렬 의도와 페이지 사실만 처리한다. 정렬 이름과 `{value,label}` 선택지는 호출자가 정하며, 생략하면 기존 이름 오름차순·내림차순을 쓴다. 서버 검색·선택 범위·총량을 추측하지 않는다. |
 | `collection-controls.js` | `createDataTable({id,columns,onOpen,onSelection,onActiveRemoved})`, `createSelectionBar({id,onClear,actions})` | 고유 문자열 ID로 행을 선택한다. `set(items,{allIds,label})`의 `allIds`는 현재 소유자가 유효함을 아는 범위다. 알 수 없는 전체 페이지 선택을 제공하지 않는다. 일괄 동작과 부분 실패는 호출자가 처리하며 선택을 자동 해제하지 않는다. |
 | `collection-controls.js` | `createPrimaryDetail({id,label,list})` | PC는 목록 옆 상세, 전화는 상세 진입과 목록 복귀. `open({title,body},opener)`의 opener는 재렌더 후 대상을 찾는 함수도 된다. 표면은 `onActiveRemoved`를 상세의 `unavailable(message)`에 연결해 사라진 대상을 명시한다. 복귀 대상이 없어졌으면 목록으로 초점을 보낸다. |
 | `interaction-controls.js` | `createTabs`, `createDisclosure`, `createActionMenu`, `createSupplementPanel` | 탭은 수동 활성화·방향키/Enter, 접힘은 native details. 보조 동작은 일반 Tab 순서의 disclosure이며 ARIA menu가 아니다. 보조 패널은 정지를 가리는 모달이 아니다. |
 | `workflow-controls.js` | `createStatePanel`, `createActionBar`, `createOperationResult` | 로딩·빈 상태·권한·실패·재시도를 구분한다. 요청·접수·실제 재조회·불확실을 표시하며 경과 시간으로 완료를 만들지 않는다. 중요한 동작 이름은 좁은 폭에서도 줄바꿈한다. |
 | `workflow-controls.js` | `createProgress`, `createTimeline`, `createSteps`, `createLogView` | 진행률 미확인은 `null`, 단계는 기존 stage strip을 쓴다. 로그는 호출자가 공개 가능한 내용만 전달한다. 단계·진행률 100%를 물리 완료로 해석하지 않는다. |
+
+파일·검색 선택·날짜 범위는 네이티브 폼 초기화가 끝난 뒤 표시와 호출자 상태를 맞춘다. 검색 선택은 명시적인 미선택 항목으로 시작하며 폼 초기화가 첫 대상을 자동 선택하지 않는다. 취소된 초기화와 그 뒤의 명시적 선택은 유지하고, `dispose()` 뒤에는 늦은 초기화 콜백을 보내지 않는다.
 
 실행 예시는 `/common/component-gallery.html`에 있다. 합성 데이터의 설정 폼·운영 목록·개입·파일 절차를 직접 조작하며 양 테마·작은 화면·오류·복귀를 확인한다. 견본 검증, 실제 제품 적용, 실물 수용은 서로 다른 근거다. 외부 참고 패턴은 Carbon의 목록 도구, PatternFly의 primary-detail/empty state, Fluent의 field/drawer, WAI-ARIA APG의 키보드 동작이다. 색·모션·정지 계약은 ROSY의 기존 ADR이 우선한다.
 

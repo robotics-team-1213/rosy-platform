@@ -14028,6 +14028,12 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 차례는 원래 정해진 선택을 그대로 돈다.
 - CE: 기존 교훈 갱신 — landings-gave-the-turn-back-and-reran-everything 11.
 
+## 2026-11-03 · uncommitted · Cell 표·정렬의 전체 화면 검증 기록
+
+- 변경: `validation/ui-collections-2026-11-03/result.md`와 캡처 매니페스트에 공용 표현 연결, 화면 그룹, 계정/요청 수명, 긴 출처의 열 압축·행 정렬 문제와 검증 범위를 남겼다.
+- 증거: 소스 02664861ec4a19857e9a8105c29bc48854371bc8의 원격 Chromium 43 passed/0 skipped/NEW0, 양 테마의 PC·전화 캡처 네 장과 로그의 SHA-256, 독립 코드 검토 지적 없음. 통합 검사와 착지 SHA는 별도 receipt가 소유한다.
+- gate 변화: 없음. 합성 브라우저 검증을 전체 UI/UX GO·실물·현장·배포 수용으로 올리지 않는다. CE: 해당 없음 — 원인과 재발 조건은 코드·전체 페이지 회귀·검증 기록에서 복원할 수 있다.
+
 ## 2026-11-03 · uncommitted · fix(landing): 다른 트리 통과 재사용도 대기열 단계는 남기고 게시 증거는 아님 (D-970 4항)
 - 변경: `land_prepare`가 affected·delta 사전 시험에서 LOAD-FLAKY와 `land_cache.NARROW` 줄을 빼고 단계를 판정하고, 재사용이 있으면 `land_full` 기록에 `reused`를 둔다. `land.py`는 `reused` 기록으로 land record를 쓰지 않는다(pre-push가 다시 돈다). FULL 단계(명시·승격)는 예전처럼 엄격하다(21:15 착지한 flaky 완화도 FULL에서는 거둠).
 - 증거: 11-03 20:00~23:00 단계 없는 사전 시험 9/20이 모두 "reused across trees" 포함(3건은 LOAD-FLAKY도). 원격 착지 회귀 27개 파일 + affected_tests + harness_contracts 통과, 새 시험 1개, 기존 FULL 엄격 시험 유지.
@@ -14070,6 +14076,18 @@ osy-d395-s1d\`.
 - 증거: 원격 pytest(관제 단위·서버 앱·브라우저·API 버전) 통과, node 시험 19개 통과, 독립 안전 검토 PASS 2회, lint 0 error. Confluence 2-1 v15 반영. Harbor PR #17 필수 검사 통과, 병합은 팀 승인 대기.
 - gate 변화: 없음.
 - CE: 해당 없음 — 착지 규칙(D-430·D-766·D-510)에 이미 있는 거절이며 그대로 따랐다.
+
+## 2026-11-04 · uncommitted · 검색 선택의 표시·호출자 상태 검증 기록
+
+- 변경: `validation/search-choice-2026-11-04/result.md`에 필터·자료 갱신 뒤 선택 일치와 이벤트 중복 방지 결과를 남겼다. 현재 소비자가 갤러리라는 적용 범위를 명시했다.
+- 증거: a1f8376013에서 원격 NEW1을 재현하고 9c909ff905의 공용 부품 Chromium 31 passed/0 skipped/NEW0, 문법 검사와 독립 검토 지적 없음을 확인했다.
+- gate 변화: 없음. main 통합·실제 제품 채택·실물 수용은 별도다. CE: 해당 없음 — 코드·회귀·부품 사용 설명에 원인과 동작 경계를 남겼다.
+
+## 2026-11-04 · uncommitted · 공용 폼의 네이티브 유효성·초기화 검증 기록
+
+- 변경: `validation/form-native-state-2026-11-04/result.md`에 파일 유효성·폼 초기화·새 선택 보존·dispose 경계의 재현과 최종 결과를 남겼다.
+- 증거: 92a3d65cfe의 실제 원격 Chromium 공용 부품 35 passed/0 skipped/NEW0, 독립 재사용·품질·효율 검토 지적 없음. 초기화 전 값 읽기 문제와 중간 호스트 점검 미실행을 구분했다.
+- gate 변화: 없음. 현재 소비자는 갤러리이며 실제 제품 채택·배포·실물 수용과 구분한다. CE: 해당 없음 — 시점·상태·복구 판단을 코드·회귀·검증 기록으로 복원할 수 있다.
 
 ## 2026-11-04 · uncommitted · feat(sim): MuJoCo 3층 전체 적재 순서, 실측 셀 layout, 실물 site 계획
 - 변경: `tools/sim/ship_stack_sequence.py`(Isaac 순서로 9개 연속 놓기, 놓기 오차·앞 상자 교란), `ship_release_scene.build(cargo=)`, `tools/sim/ship_stack_sites.py`(Isaac 적층 칸 → 한 팔의 실물 site와 `cell_auto_pick` 명령, D-911 범위 표시), `cell_model_inventory.yaml`에 `layout`(자 실측 높이, 받침, 카메라).
