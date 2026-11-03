@@ -1,5 +1,6 @@
 """Manager revisions are explicit and new classes reach the ordinary editor."""
 import json
+import re
 from urllib.parse import urlsplit
 import pytest
 from browser_harness import browser_tests_enabled
@@ -17,7 +18,7 @@ def test_class_manager_addition_requires_confirmation_and_reloads_binding(browse
     location = urlsplit(page.url)
     base = f'{location.scheme}://{location.netloc}'
     page.goto(base + '/classes?kind=object&folder_id=selected', wait_until='networkidle')
-    theme = page.get_by_role('button', name='테마 변경')
+    theme = page.get_by_role('button', name=re.compile('^테마'))
     expect(theme).to_be_visible()
     expect(theme).to_have_attribute('tabindex', '0')
     previous_theme = page.locator('html').get_attribute('data-theme')
