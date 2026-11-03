@@ -15,6 +15,28 @@ _SPEC.loader.exec_module(tool)
 FAST = ["test/fast_a.py", "test/fast_b.py"]
 
 
+def test_prepared_and_turn_timing_jobs_form_one_plan_but_preserve_execution_provenance(repo):
+    from harness.affected_exclusive import DEDICATED
+    path, c = repo
+    ordinary = ['test/test_other.py']
+    prepared = {'invocations': [DEDICATED, ordinary], 'tier': 'full',
+                'candidate': c[2], 'main': c[1]}
+    tool.write(path, c[3], c[2], [DEDICATED, ordinary], ['fresh-turn-log'], prepared=prepared)
+    record = tool.read(path, c[3])
+    assert record['invocations'] == [DEDICATED, ordinary, ordinary]
+    assert record['logs'] == ['fresh-turn-log']
+    assert record['prepared_candidate'] == c[2] and record['prepared_on'] == c[1]
+
+
+def test_duplicate_timing_jobs_inside_a_single_plan_are_not_hidden(repo):
+    from harness.affected_exclusive import DEDICATED
+    path, c = repo
+    prepared = {'invocations': [DEDICATED, DEDICATED], 'tier': 'full',
+                'candidate': c[2], 'main': c[1]}
+    tool.write(path, c[3], c[2], [], [], prepared=prepared)
+    assert tool.read(path, c[3])['invocations'] == [DEDICATED, DEDICATED]
+
+
 def _git(repo: Path, *args: str) -> str:
     return subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True, text=True).stdout.strip()
 

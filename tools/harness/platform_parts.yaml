@@ -36,14 +36,14 @@ import_rules:
     allow: [contracts]
   middleware:
     allow: [contracts, shared_web]   # shared_web is for ui roots only (not enforced in Python)
-    integrations: [robots, policies/lerobot_inference, simulation]
+    integrations: [robots, policies/lerobot_inference, simulation, perception]
     forbidden_external: [lerobot, torch]   # training stack; devices ship onnxruntime only (D-356)
   operations:
     allow: [contracts, shared_web]
     integrations: [models, storage, messaging]
   learning:
     allow: [contracts]
-    integrations: [models, policies/lerobot_training, simulation, storage]
+    integrations: [models, perception, policies/lerobot_training, simulation, storage]
 
 # D-429 §1 five-concern view plus D-430 §1 `safety`. Every root carries one
 # `concern:`. The view does not change import_rules above. `safety` is not only a
@@ -859,6 +859,18 @@ roots:
     note: D-671 pure mention envelope and signature transport, installed by Fleet; no runtime service or device authority.
     concern: other
     capability: fleet
+  - path: integrations/perception
+    part: integrations
+    integration: perception
+    d427_target: integrations/perception
+    wave: none
+    import_prefix: [perception_runtime]
+    source_packages: {perception_runtime: perception_runtime}
+    note: >-
+      ROS-free lane perception and learned-model runtime split out of control (2026-11-03) so learning
+      tools replay the robot's exact perception without importing middleware; colcon-installed beside control.
+    concern: control
+    capability: vision_ai
   - path: integrations/robots/omx
     part: integrations
     integration: robots

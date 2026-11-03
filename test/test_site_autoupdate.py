@@ -675,12 +675,14 @@ def test_control_unit_peer_presence_must_match_the_canonical_overlay(host, enabl
         upd.check_overrides(env, NEW, fake, compose)
 
 
-@pytest.mark.parametrize('fault', [None, 'missing', 'duplicate', 'stopped', 'hash', 'writable', 'privileged'])
+@pytest.mark.parametrize('fault', [None, 'missing', 'duplicate', 'stopped', 'hash', 'writable', 'privileged',
+                                  'unhealthy', 'starting'])
 def test_control_unit_peer_runtime_matches_compose_without_inventing_health(fault):
     rows = [{'Service': 'control-unit-peer', 'State': 'running', 'ID': 'peer-container'}]
     if fault == 'missing': rows.clear()
     if fault == 'duplicate': rows *= 2
     if fault == 'stopped': rows[0]['State'] = 'exited'
+    if fault in ('unhealthy', 'starting'): rows[0]['Health'] = fault
     inspected = []
 
     def inspect(args):
@@ -696,7 +698,8 @@ def test_control_unit_peer_runtime_matches_compose_without_inventing_health(faul
         assert 'control-unit-peer' in result
 
 
-@pytest.mark.parametrize('fault', [None, 'missing', 'duplicate', 'stopped', 'reference', 'identity'])
+@pytest.mark.parametrize('fault', [None, 'missing', 'duplicate', 'stopped', 'reference', 'identity',
+                                  'unhealthy', 'starting'])
 def test_control_unit_peer_container_requires_the_accepted_proxy_identity(fault):
     proxy = f'rosy-site-proxy:{OLD}'  # Version2 may reuse a signed image from the previous commit.
     rows = [{'Service': 'control-unit-peer', 'Image': proxy, 'State': 'running', 'ID': 'peer-container'}]
@@ -704,6 +707,7 @@ def test_control_unit_peer_container_requires_the_accepted_proxy_identity(fault)
     if fault == 'duplicate': rows *= 2
     if fault == 'stopped': rows[0]['State'] = 'exited'
     if fault == 'reference': rows[0]['Image'] = f'rosy-site-fleet:{NEW}'
+    if fault in ('unhealthy', 'starting'): rows[0]['Health'] = fault
 
     def inspect(args):
         return SimpleNamespace(stdout='sha256:' + ('b' if fault == 'identity' else 'a') * 64)
@@ -1469,3 +1473,24 @@ def test_large_asset_download_gets_longer_idle_timeout(tmp_path):
     client.get('https://example.invalid/release.json', 100)
     client.download('https://example.invalid/part00', tmp_path / 'part00')
     assert client.opener.timeouts == [60, 300]
+
+
+def test_the_control_unit_peer_runs_the_signed_proxy_image_and_needs_to_run_not_to_report_health():
+    """D-960: candidates up to 480de9e203 give the peer proxy no healthcheck; it must still run the proxy image."""
+    def rows(peer_state="running", peer_image=f"rosy-site-proxy:{NEW}"):
+        base = [{"Service": s, "Image": f"rosy-site-{s}:{NEW}", "State": "running", "Health": "healthy",
+                 "ID": f"{s}-container"} for s in upd.SERVICES]
+        return base + [{"Service": "control-unit-peer", "Image": peer_image, "State": peer_state,
+                        "Health": "", "ID": "control-unit-peer-container"}]
+    accepted = {s: [_image_id(NEW, s)] for s in upd.SERVICES}
+
+    def inspect(args, **_kwargs):
+        service = args[-1].removesuffix("-container")
+        return SimpleNamespace(stdout=_image_id(NEW, upd.COMPANIONS.get(service, service)))
+
+    expected = {"control-unit-peer"}
+    assert upd.containers_reason(rows(), NEW, accepted, inspect, companions=expected) == ""
+    assert "control-unit-peer" in upd.containers_reason(
+        rows(peer_state="exited"), NEW, accepted, inspect, companions=expected)
+    assert "control-unit-peer" in upd.containers_reason(
+        rows(peer_image="caddy:latest"), NEW, accepted, inspect, companions=expected)

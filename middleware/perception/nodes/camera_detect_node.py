@@ -34,7 +34,7 @@ from .sensing.perception.camera import classify_frame
 from .sensing.perception.camera_controls import (
     RELOCK_BRIGHT_MEDIAN, RELOCK_CLIP_FRACTION, RelockWatch, static_controls)
 from .sensing.perception.camera_evidence import observation_payload
-from .sensing.perception.camera_ground import ground_plane
+from perception_runtime.perception.camera_ground import ground_plane
 from .sensing.perception.camera_homography import CalibrationThresholds, load_homography_profile
 from .sensing.perception.camera_policy import CameraPolicy
 from .sensing.perception.camera_visibility import road_clip_stats, visibility_reason

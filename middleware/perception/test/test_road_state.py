@@ -10,7 +10,7 @@ import math
 import numpy as np
 import pytest
 
-from control.sensing.perception.road_state import (
+from perception_runtime.perception.road_state import (
     COAST,
     SLOW,
     STOP,
@@ -555,7 +555,7 @@ def test_core_suggestion_by_level(level, visible, confidence):
 
 
 def test_slow_confidence_is_the_lane_memory_confidence():
-    from control.sensing.perception.lane_bev import MEMORY_CONFIDENCE
+    from perception_runtime.perception.lane_bev import MEMORY_CONFIDENCE
     assert RoadStateParams().slow_confidence == MEMORY_CONFIDENCE
 
 

@@ -15,14 +15,14 @@ import subprocess
 
 if __package__:
     from .site_update_io import (
-        ACCOUNT_OVERLAY, COMPANION_IMAGES, PROJECT, SERVICES, STACK_UNIT, Rejected,
+        ACCOUNT_OVERLAY, COMPANIONS, PROJECT, SERVICES, STACK_UNIT, Rejected,
         Transient, allowed_overlays, companion_services, functional_inventory, functional_reason,
         read_env,
     )
     from .verify_candidate import CandidateVerificationError, verified_services
 else:  # pragma: no cover - installed host CLI
     from site_update_io import (
-        ACCOUNT_OVERLAY, COMPANION_IMAGES, PROJECT, SERVICES, STACK_UNIT, Rejected,
+        ACCOUNT_OVERLAY, COMPANIONS, PROJECT, SERVICES, STACK_UNIT, Rejected,
         Transient, allowed_overlays, companion_services, functional_inventory, functional_reason,
         read_env,
     )
@@ -31,7 +31,7 @@ else:  # pragma: no cover - installed host CLI
 
 def runtime_reason(rows, hashes: dict, run) -> str:
     """Detect operational drift without logging inspect output or credentials."""
-    for service in COMPANION_IMAGES:
+    for service in COMPANIONS:
         if service in hashes:
             matches = [row for row in rows if isinstance(row, dict) and row.get('Service') == service]
             if (len(matches) != 1 or matches[0].get('State') != 'running'
@@ -42,7 +42,7 @@ def runtime_reason(rows, hashes: dict, run) -> str:
         if not isinstance(row, dict):
             continue
         service = row.get('Service')
-        if service not in (*SERVICES, *COMPANION_IMAGES):
+        if service not in (*SERVICES, *COMPANIONS):
             continue
         try:
             details = json.loads(run(['docker', 'container', 'inspect', row['ID']]).stdout)[0]
@@ -68,7 +68,7 @@ def containers_reason(rows, commit: str, accepted: dict, run, services=SERVICES,
            and row['Service'] not in services for row in rows):
         return 'runtime contains a managed service outside the signed candidate'
     present = {row.get('Service') for row in rows
-               if isinstance(row, dict) and row.get('Service') in COMPANION_IMAGES}
+               if isinstance(row, dict) and row.get('Service') in COMPANIONS}
     if companions is None:
         companions = present - {'control-unit-peer'} - ({'account'} if independent else set())
     if present - (set(services) | companions):
@@ -78,7 +78,7 @@ def containers_reason(rows, commit: str, accepted: dict, run, services=SERVICES,
              or (image_references is not None and set(image_references) != set(services)))):
         return 'account legacy signed inventory proof is incomplete'
     for service in (*services, *sorted(companions - set(services))):
-        owner = 'account' if service == 'account' and independent else COMPANION_IMAGES.get(service, service)
+        owner = 'account' if service == 'account' and independent else COMPANIONS.get(service, service)
         matches = [row for row in rows if isinstance(row, dict) and row.get('Service') == service]
         if len(matches) != 1:
             return f'{service} needs exactly one running container'

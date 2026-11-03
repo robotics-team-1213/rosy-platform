@@ -10,8 +10,8 @@ import review_evidence as review
 import store
 import cv2
 import numpy as np
-from control.sensing.perception.learned.detector import ObjectDetModel
-from control.sensing.perception.learned.manifest import OBJECT_CLASSES, load_manifest, verify_files
+from perception_runtime.perception.learned.detector import ObjectDetModel
+from perception_runtime.perception.learned.manifest import OBJECT_CLASSES, load_manifest, verify_files
 from object_fitness import _fraction, evaluate_detections, evaluate_model_frame, summarize_frames
 
 

@@ -27,7 +27,7 @@ STACK_UNIT = "rosy-site-stack.service"
 MONITORING_OVERLAY = ["-f", "/opt/rosy/candidate/deploy/site/compose.monitoring.yaml"]
 ACCOUNT_OVERLAY = ["-f", "/opt/rosy/candidate/deploy/site/compose.account.yaml"]
 CONTROL_UNIT_OVERLAY = ["-f", "/opt/rosy/candidate/deploy/site/compose.control-unit.yaml"]
-COMPANION_IMAGES = {'monitoring': 'fleet', 'account': 'fleet', 'control-unit-peer': 'proxy'}
+COMPANIONS = {'monitoring': 'fleet', 'account': 'fleet', 'control-unit-peer': 'proxy'}
 SIGNATURE = "release.json.sig"
 EXIT_OK = 0
 EXIT_FAILED = 1
@@ -116,7 +116,7 @@ def check_overrides(env: dict[str, str], commit: str, run, compose, services=SER
         raise Refused("Compose service set differs from the signed candidate")
     for service in (*services, *companions):
         image = (configured.get(service) or {}).get("image")
-        owner = service if service in inventory else COMPANION_IMAGES.get(service, service)
+        owner = service if service in inventory else COMPANIONS.get(service, service)
         expected = (image_references or {}).get(owner, f"rosy-site-{owner}:{commit}")
         if image != expected:
             raise Refused(f"Compose resolves {service} to {image!r}, not the candidate "

@@ -8,7 +8,7 @@ import yaml
 
 from control.sensing.body import LIDAR_X
 from control.sensing.lidar import NOSE_YAW
-from control.sensing.perception.camera_ground import GroundPlane, nominal_ground_plane
+from perception_runtime.perception.camera_ground import GroundPlane, nominal_ground_plane
 from control.sensing.perception.region_range import (
     GROUND, LIDAR, choose_range, floor_distance_unbounded, pixel_bearing, range_regions,
     region_span, scan_in_camera)

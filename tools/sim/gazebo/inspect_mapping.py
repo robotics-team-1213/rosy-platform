@@ -5,6 +5,7 @@ import sys
 import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 sys.path.insert(0, str((Path(__file__).resolve().parents[3] / 'middleware/perception')))
+sys.path.insert(0, str((Path(__file__).resolve().parents[3] / 'integrations/perception')))
 from control.planning.gridmap import OccupancyMap
 from control.planning.frontier import frontier_points, pick_goal
 from control.planning.astar import best_route

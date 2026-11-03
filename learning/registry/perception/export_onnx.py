@@ -20,7 +20,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-for _p in (Path(__file__).resolve().parents[3] / 'learning/training/perception', ROOT / "middleware" / "perception",
+for _p in (Path(__file__).resolve().parents[3] / 'learning/training/perception', ROOT / "middleware" / "perception", ROOT / "integrations" / "perception",
            ROOT / "contracts" / "foundation"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
@@ -107,7 +107,7 @@ def main(argv=None) -> int:
     doc["metrics"]["export_parity_max_abs_diff"] = diff
     (out / "model_manifest.json").write_text(
         json.dumps(doc, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    from control.sensing.perception.learned.manifest import load_manifest, verify_files
+    from perception_runtime.perception.learned.manifest import load_manifest, verify_files
     verify_files(load_manifest(out))
     print(f"OK {doc['model_revision']} -> {out}")
     return 0

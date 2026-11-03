@@ -65,7 +65,7 @@ def test_an_unimportable_checker_skips_the_overlay_instead_of_aborting(tmp_path,
     import sys
     target = tmp_path / "ir_calibration.yaml"
     target.write_text(GOOD, encoding="utf-8")
-    monkeypatch.setitem(sys.modules, "control.sensing.perception.lane", None)   # import → ImportError
+    monkeypatch.setitem(sys.modules, "perception_runtime.perception.lane", None)   # import → ImportError
     path, note = usable_overlay(str(target))
     assert path is None and "skipped" in note and "cannot check" in note
 

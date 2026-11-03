@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from control.sensing.perception.learned.manifest import ManifestError, load_manifest, verify_files
+from perception_runtime.perception.learned.manifest import ManifestError, load_manifest, verify_files
 from test_learned_manifest_object_det import object_manifest
 
 
