@@ -144,8 +144,8 @@ def pad_sweep_bottom_relative_tcp(row):
 # Wrist camera on the rated B replacement holder b16-u16-span-B (rosy-docs hardware/omx-wrist-camera-mount a1b43e9,
 # out/results.json, 2026-11-04): lens and the point where the optical axis meets the jaw axis, link5 metres; vertical
 # FOV over the 720 rows of the 1280x720 sensor; lowest holder point above the TCP in the top-down pose.
-WRIST_CAMERA_B = dict(name='b16-u16-span-B', lens_m=(.0338, 0., .0511), axis_hit_x_m=.1209, vfov_deg=69.6,
-                      sensor=(1280, 720), lowest_above_tcp_m=.0366)
+WRIST_CAMERA_B = dict(name='b16-u16-span-B', lens_m=[.0338, 0., .0511], axis_hit_x_m=.1209, vfov_deg=69.6,
+                      sensor=[1280, 720], lowest_above_tcp_m=.0366)  # lists: the fixture is compared after JSON
 
 
 def wrist_camera_pose(spec=WRIST_CAMERA_B):

@@ -400,3 +400,12 @@ def test_seat_check_flags_a_box_riding_on_a_stud_and_passes_a_seated_one():
     riding = dict(position=[.1, 0., .0905], orientation=[math.cos(.01), math.sin(.01), 0., 0.])  # 1.5 mm up, ~1.1 deg
     limits = dict(height_m=.0005, tilt_rad=math.radians(.5))
     assert f.seat_check(flat, target, limits)['seated'] and not f.seat_check(riding, target, limits)['seated']
+
+
+def test_every_ship_case_fixture_survives_the_json_round_trip_the_report_check_makes():
+    # run a5e03df9 (2026-11-04): a tuple in the wrist camera spec made the stored fixture differ -> provenance refused
+    import json
+    from release_cases import FIXTURE_OVERRIDES
+    for case in (c for c in FIXTURE_OVERRIDES if c.startswith('nominal-palletizing-v21-ship')):
+        fixture = f.container_fixture(layers=3, case=case)
+        assert json.loads(json.dumps(fixture)) == fixture, case
