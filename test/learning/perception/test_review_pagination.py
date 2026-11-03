@@ -64,3 +64,31 @@ def test_page_rejects_invalid_bounds_before_reading(tmp_path, options):
     store = ReviewStore(tmp_path / 'state', empty_training=True)
     with pytest.raises(ValueError):
         store.frame_page(**options)
+
+
+def test_workspace_http_page_never_uses_unbounded_list(tmp_path, monkeypatch):
+    import threading
+    import urllib.error
+    import urllib.request
+    from review_app import make_server
+
+    store = large_store(tmp_path)
+    server = make_server(store, 0)
+    monkeypatch.setattr(store, 'list_frames', lambda: pytest.fail('unbounded frame read'))
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    url = f'http://127.0.0.1:{server.server_port}/api/workspace'
+    try:
+        with urllib.request.urlopen(url + '?limit=60&around=120') as response:
+            page = json.load(response)
+        assert len(page['frames']) == 60
+        assert page['frames'][0]['index'] == 120
+        assert page['page']['total'] == 6000
+        for query in ('limit=61', 'limit=60&limit=60', 'offset=-1', 'lane=wrong', 'unknown=1'):
+            with pytest.raises(urllib.error.HTTPError) as error:
+                urllib.request.urlopen(url + '?' + query)
+            assert error.value.code == 400
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)

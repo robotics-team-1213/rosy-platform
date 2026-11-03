@@ -354,7 +354,7 @@ async function mutate(action, extras={}, restoring=false) {
     // A decision finishes this photo, so open the next pending one (D-461 next task first).
     // Audits inside the approved/excluded filters stay where they are.
     const decided=['approve','exclude'].includes(action), advance=decided&&['all','pending'].includes($('filter').value)&&await nextPending(id);
-    if(!advance&&$('filter').value!=='all'&&frame.status!==$('filter').value) {$('filter').value='all';saveView();}
+    if(!advance&&$('filter').value!=='all'&&frame.status!==$('filter').value) {$('filter').value='all';saveView();workspace={...workspace,...await request(workspacePage('object','all',{around:id}))};}
     $('status').textContent=statuses[frame.status]; $('save-status').textContent=`서버 저장됨 · v${frame.version}`;
     if(decided&&['all','pending'].includes($('filter').value)) $('drag-status').textContent=`사진 ${id+1} ${statuses[frame.status]} · ${advance?'다음 검수 대기 사진입니다.':'검수 대기 사진을 모두 처리했습니다.'}`;
     if(advance) {select(advance.index); return;}
