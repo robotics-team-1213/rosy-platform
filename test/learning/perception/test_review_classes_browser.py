@@ -17,6 +17,13 @@ def test_class_manager_addition_requires_confirmation_and_reloads_binding(browse
     location = urlsplit(page.url)
     base = f'{location.scheme}://{location.netloc}'
     page.goto(base + '/classes?kind=object&folder_id=selected', wait_until='networkidle')
+    theme = page.get_by_role('button', name='테마 변경')
+    expect(theme).to_be_visible()
+    expect(theme).to_have_attribute('tabindex', '0')
+    previous_theme = page.locator('html').get_attribute('data-theme')
+    theme.focus()
+    theme.press('Enter')
+    expect(page.locator('html')).not_to_have_attribute('data-theme', previous_theme)
     expect(page.locator('#workspace')).to_contain_text('프로젝트')
     expect(page.locator('#apply')).to_be_disabled()
     count = page.locator('#rows fieldset').count()

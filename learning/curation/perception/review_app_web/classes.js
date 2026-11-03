@@ -1,4 +1,6 @@
 import {accountFetch} from '/account-session.js';
+import '/common/ui.js';
+import '/commands.js';
 const $=id=>document.getElementById(id),query=new URLSearchParams(location.search);
 $('kind').value=query.get('kind')==='pixel'?'pixel':'object';
 let current,rows=[],busy=false;
