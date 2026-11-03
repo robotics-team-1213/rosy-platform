@@ -3,17 +3,17 @@ module: docs
 logical_modules: []
 owner: 거버넌스
 last_verified:
-  commit: 45720c033b
+  commit: 7c0225640f
   date: 2026-11-03
 gates:
   SOURCE:
     state: GO
-    evidence: Each of the two G1 tooling tests bootstraps its canonical tools import before use; independent 45720c033b review found no supported findings. No global conftest or whole-import checks changed. The 0.45s threshold and control code remain unchanged.
+    evidence: Actual-main SOT gates stored FULL reuse; shared strict plan validation runs before FF and again in the writer. Independent 7c0225640f review found no supported findings. Legacy-main/affected behavior and immutable bridge remain unchanged.
     cmd: python tools/harness/rosy_harness.py lint
   LOCAL:
     state: GO
-    evidence: '45720c033b fresh whole-file remote execution: selection 58 passed / 0 skipped, G1 gate 36 passed / 0 skipped. Separate unchanged collect_alone wrapper: 4 passed / 0 skipped (two collections and two full child executions). All three reports NEW/known/flaky 0. Previous actual timing remains separate 12/12 evidence; no FULL or landing success is claimed.'
-    cmd: python tools/remote/remote_pytest.py --sha 45720c033b --affected-json '<OS Temp>/rosy-g1-bootstrap-isolation-4572/invocations.json'
+    evidence: '7c0225640f fresh whole-file checks: selection 74, record 22, affected selector 171, G1 gate 36 and publication 49 passed, each skip 0; unchanged collect/whole wrapper 4 passed / skip 0. All six reports NEW/known/flaky 0. Base 374f684bfa fresh selection/record/prepare/publication/landing checks and wrapper passed without skips; strict-shape RED was separately reproduced. No FULL, landing, publication or actual timing acceptance is claimed.'
+    cmd: python tools/remote/remote_pytest.py --sha 7c0225640f --affected-json '<OS Temp>/rosy-g1-restore-preff-green-7c02/invocations.json'
   ROS-SIM:
     state: N/A
   ARTIFACT:
