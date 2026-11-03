@@ -29,6 +29,33 @@ def test_hold_survives_a_new_recording_directory(tmp_path, monkeypatch):
     oi.refuse_if_held("arm_a")
 
 
+def test_hold_is_durable_before_recovery_callback_can_fail(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+
+    def broken(ids):
+        raise RuntimeError("recovery unavailable")
+
+    with pytest.raises(RuntimeError, match="recovery unavailable"):
+        oi.handle(session(tmp_path), "arm_b", act=broken)
+    with pytest.raises(SystemExit, match="held for a person"):
+        oi.refuse_if_held("arm_b")
+
+
+def test_cli_cannot_clear_a_hold_while_the_arm_session_is_owned(tmp_path, monkeypatch):
+    import joint_tune
+
+    monkeypatch.chdir(tmp_path)
+    oi.handle(session(tmp_path), "arm_b")
+
+    def busy(arm):
+        raise SystemExit("another OMX session owns this arm")
+
+    monkeypatch.setattr(joint_tune, "session_lock", busy)
+    with pytest.raises(SystemExit, match="another OMX session"):
+        oi.main(["clear", "--arm", "arm_b", "--by", "operator", "--note", "inspected"])
+    assert oi.held("arm_b")
+
+
 @pytest.mark.parametrize("bad_read", ["transport", "packet"])
 def test_reboot_refuses_failed_torque_readback(tmp_path, monkeypatch, bad_read):
     from types import SimpleNamespace
