@@ -5264,3 +5264,10 @@
 - 검증: 원격 RED `ec040ca3c5`에서 기존 7건 통과와 새 회귀 3건 실패를 확인했다. 분리 전 `372a05294f`의 집중 시험 12건 통과 뒤, 최종 소스 `9f666845e8`의 mapped affected 3회는 328 passed/28 skipped, 4676 passed/188 skipped/5 subtests passed, Fleet 7550 passed/585 skipped였다. 세 보고서 모두 known_failures 비교 NEW/known/flaky 0이며 size-range도 통과했다. 회귀는 이벤트로 작업을 멈춘 동안 인증 요청 완료, 동시·반복 계산 공유, 취소·실패 복구, 지도 버전 변경, 최신 자세 반영을 확인한다.
 - Gate: 변화 없음. 건너뛴 시험은 검증에 포함하지 않았으며 브라우저·ROS 실행·실물·현장 수용이나 실제 CPU 부하의 응답 지연 상한을 입증하지 않는다.
 - CE: 해당 없음 — 이번 원인과 재발 방지는 코드·회귀 시험으로 설명되며 기존 asyncio/GIL·동시성 교훈을 검토했다.
+
+## 2026-11-03 · uncommitted · feat(fleet): D-971 OMX 팔 사건 원장·AI PC 설명·운영자 해제
+
+- 변경: `recognition/arm_incidents.py`의 `ArmIncidentStore`(공유 Fleet SQLite, open→explained→cleared, 같은 `(source, session)` 재보고는 같은 사건)와 라우트: 팔 토큰 보고·보류 조회, 이름 있는 운영자 해제(확인 내용 필수, 삭제 없음), 사진 조회(viewer), AI PC 전용 설명 없는 사건 목록·설명 저장. 작업 셀 관측 스냅샷 팔마다 `incidents`. `site_auth.py`가 ai_observer의 설명 POST 한 경로만 더 허용한다. API v1.357.
+- 증거: `operations/fleet/test/test_arm_incidents.py`(계약·저장소·인증·본문 한도)와 `test_ai_facts.py` 원격 통과.
+- gate 변화: 없음. 실물 수용은 하지 않았다.
+- CE: 해당 없음 — 새 기능이며 결정은 D-971에 있다.
