@@ -25,6 +25,7 @@ from pathlib import Path
 from harness.affected_exclusive import ENV
 from land_merge import resolver
 from land_selection import SAFETY_TRIGGER, _affected
+from harness import affected_exclusive
 
 KEY = "spec"
 HOLDER = "rosy-land-spec"  # <git-common-dir>/rosy-land-spec/<branch>: the speculative worktree, like rosy-publish
@@ -57,6 +58,8 @@ def chain(land, wt: Path, python: str, qdir: Path, ticket: Path) -> list[str]:
 
 def prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, ticket: Path | None) -> None:
     """After the prepare: test the predicted turn and keep its tree in the land_full record. Never stops the landing."""
+    if args.tests == "full":
+        return
     record = _record(land, wt, branch)
     if ticket is None or not record or record.get("tier") not in ("full", "affected"):
         return
@@ -122,28 +125,36 @@ def held(land, wt: Path, branch: str, full_main: str, candidate: str) -> list[li
                               missing=[c for c in spec["chain"] if c not in landed],
                               outside=None if moved is None else max(0, moved - len(landed)))
         return None
-    root = root_part(spec["invocations"])
+    invocations = affected_exclusive.compose(spec["invocations"], available=(wt / affected_exclusive.TARGET).is_file())
+    root = root_part(invocations)
     land.land_events.emit("speculation", stage="turn", held=True, differ=differ[:20])
     guards = [g for g in land.land_guards.GUARDS if (wt / g).exists()]
-    return root or ([guards] if guards else [])  # never an empty invocation: bare pytest would collect anything
+    return affected_exclusive.compose(root or ([guards] if guards else []),
+                                      available=(wt / affected_exclusive.TARGET).is_file())
 
 
 def with_spec(land, wt: Path, branch: str, prepared: dict | None) -> dict | None:
     """``prepared`` for the land record of a held turn: its tier, plus the speculated selection (it passed on this
     tree up to the records). The record's base stays the turn's main, an ancestor of the landed commit."""
     spec = ((_record(land, wt, branch) or {}).get(KEY) or {})
-    # An exact repeat is one plan row: a second copy of the G1 timing job never qualifies for publication (11-03).
-    more = [inv for inv in spec.get("invocations", []) if inv not in prepared["invocations"]] if prepared else []
-    return {**prepared, "invocations": prepared["invocations"] + more} if prepared else None
+    if not prepared:
+        return None
+    original = prepared["invocations"]
+    combined = affected_exclusive.compose(original, spec.get("invocations", []),
+                                           available=(wt / affected_exclusive.TARGET).is_file())
+    # Keep main's logical-row policy: only remove speculative rows already covered by preparation.
+    more = [inv for inv in combined[len(original):] if inv not in original]
+    return {**prepared, "invocations": original + more}
 
 
 def root_part(invocations: list[list[str]]) -> list[list[str]]:
-    """Each invocation's root test/ paths, with its options and ROSY_* words. 11-03: keeping paths alone ran the G1
-    timing job as an ordinary file (the record then never qualified) and browser chunks without their opt-in."""
+    """Omit no-root calls; project plain calls and keep root calls with env/options whole, including values."""
     result = []
     for inv in invocations:
-        paths = [w for w in inv if not w.startswith("-") and not ENV.match(w)]
-        root = [p for p in paths if p.startswith("test/") or p == "test"]
-        if root:
-            result.append([w for w in inv if w not in paths or w in root])
+        if not any(p == "test" or p.startswith("test/") for p in inv):
+            continue
+        kept = inv if any(w.startswith('-') or ENV.match(w) for w in inv) else [
+            p for p in inv if p.startswith("test/") or p == "test"]
+        if kept:
+            result.append(kept)
     return result
