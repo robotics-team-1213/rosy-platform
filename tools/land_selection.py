@@ -71,11 +71,15 @@ def _guards_only(invocations: list[list[str]], guards) -> list[list[str]]:
 DELTA_NOTE = "main's landed delta reaches whole suite folders: they run before the turn"  # D-889 27
 
 
+MAX_DELTA_YIELDS = 2  # D-970 1: then the turn (30 min budget after two send-backs) runs the suite folders
+
+
 def delta_yields(ticket, base: dict | None) -> bool:
     """Whether a DELTA_NOTE turn yields to run the suites before the turn: only with a queue ticket and a clean
     earlier tier for the delta record to stand on. 11-03 14:18-14:34 a LOAD-FLAKY pretest (no tier) yielded twice
-    and saved nothing; without a base the suites run in the turn as before (D-889 27)."""
-    return ticket is not None and base is not None
+    and saved nothing; without a base the suites run in the turn as before (D-889 27). After MAX_DELTA_YIELDS the
+    turn runs them itself: 11-03 15:58-18:07 one ticket yielded three times while main kept moving past it."""
+    return ticket is not None and base is not None and int(base.get("yields") or 0) < MAX_DELTA_YIELDS
 
 
 def _suite_dirs(inv: list[str]) -> bool:

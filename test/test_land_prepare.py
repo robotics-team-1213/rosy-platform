@@ -490,3 +490,11 @@ def test_a_delta_record_reports_the_tier_under_it_and_is_never_full(tmp_path, mo
     land.land_full.save(tmp_path, "b", "c" * 40, "m" * 40, "delta", [["fleet/test"]])
     assert land.land_full.prepared(tmp_path, "b", "m" * 40) is None
     assert json.loads(record.read_text(encoding="utf-8"))["tier"] == "delta"
+
+
+def test_a_delta_record_counts_its_yields(tmp_path, monkeypatch):
+    """D-970 1: each delta record carries how many delta records came before it."""
+    record = tmp_path / "record.json"
+    monkeypatch.setattr(land.land_full, "_path", lambda wt, branch: record)
+    land.land_full.save(tmp_path, "b", "c" * 40, "m" * 40, "delta", [["x/test"]], base_tier="affected", yields=2)
+    assert land.land_full.prepared(tmp_path, "b", "m" * 40)["yields"] == 2

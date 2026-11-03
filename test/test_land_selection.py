@@ -684,3 +684,10 @@ def test_a_delta_turn_yields_only_with_a_ticket_and_a_clean_tier_under_it():
     assert selection.delta_yields("ticket.json", base)
     assert not selection.delta_yields("ticket.json", None)
     assert not selection.delta_yields(None, base)
+
+
+def test_a_delta_turn_stops_yielding_after_two_delta_records():
+    """D-970 1: 11-03 one ticket yielded three times while main kept moving past it."""
+    selection = load_selection()
+    assert selection.delta_yields("ticket.json", {"tier": "affected", "yields": 1})
+    assert not selection.delta_yields("ticket.json", {"tier": "affected", "yields": selection.MAX_DELTA_YIELDS})
