@@ -110,14 +110,14 @@ def measure(mm) -> dict:
             "long_axis_deg": round((ang + 90) % 180 - 90, 1)}
 
 
-def _fits(m: dict, o: dict, k: int = 1, strict: bool = False, gap_mm: float = 0.0) -> bool:
+def _fits(m: dict, o: dict, k: int = 1, strict: bool = False, gap_mm: float = 0.0, stagger_mm: float = 0.0) -> bool:
     # lengths come in whole cells, so a lone blob's length may stray up to half a cell; the real top camera read a
     # 60 mm container 47-56 mm long (dark end frames drop out of the mask) while its 30 mm width held within 9
     # (2026-10-28). Pieces split from a merged blob stay strict: with the loose length a tangled cluster's
     # piece matched and would have become a grasp target.
     t = o["tolerance_mm"]  # k side by side: k widths plus up to k - 1 gaps of gap_mm (the ship plate's 6 mm cells)
     return (-t <= m["width_mm"] - k * o["width_mm"] <= (k - 1) * gap_mm + t
-            and abs(m["length_mm"] - o["length_mm"]) <= (t if strict else o.get("length_tolerance_mm", t)))
+            and abs(m["length_mm"] - o["length_mm"]) <= (t if strict else o.get("length_tolerance_mm", t)) + stagger_mm)
 
 
 def match(m: dict, catalog: list, strict: bool = False):
@@ -143,14 +143,16 @@ def classify(mm, catalog: list, px_mm2: float | None = None, params=None) -> lis
     o = match(m, catalog)
     if o:
         return [{**m, "object": o["id"], "grasp": o["grasp"], "matched": True}]
-    gap = prm.get(params, "objects.split_gap_mm")
+    # a row put back by hand: one box 15 mm along from the others made the row's blob 16 mm longer than a box
+    # (2026-11-03); the row's own length allows that, each strip is still held to the box length
+    gap, stagger = prm.get(params, "objects.split_gap_mm"), prm.get(params, "objects.split_stagger_mm")
     # the row may run across the boxes' short side or, once it is longer than a box, along the blob's long side
     turned = {**m, "length_mm": m["width_mm"], "width_mm": m["length_mm"], "long_axis_deg": (m["long_axis_deg"] + 180) % 180 - 90}
     feasible, best = False, None
     for k in range(2, prm.get(params, "objects.split_max") + 1):  # 2026-11-03: five 3-cells in a row on the ship plate
         for o in catalog:
             for row in (m, turned):
-                if not _fits(row, o, k, strict=True, gap_mm=gap):
+                if not _fits(row, o, k, strict=True, gap_mm=gap, stagger_mm=stagger):
                     continue
                 feasible = True
                 strips = [(g, measure(mm[g])) for g in _strips(mm, row, k)]

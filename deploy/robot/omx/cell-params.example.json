@@ -812,6 +812,12 @@
   "source": "tuned",
   "evidence": "2026-10-29 board pivot point, the same marks: 31.7/33.1/38.3 mm from the circle's centre"
  },
+ "objects.split_stagger_mm": {
+  "value": 20.0,
+  "unit": "mm",
+  "source": "measured",
+  "evidence": "2026-11-03 arm_b pallet: four 3-cells put back by hand, the leftmost about 15 px along from the others; the row read 116 x 145 mm and no count fit the 90 mm box length within 9"
+ },
  "look.near_px": {
   "value": 40.0,
   "unit": "px",

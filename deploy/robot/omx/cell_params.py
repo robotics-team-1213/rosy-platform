@@ -67,7 +67,7 @@ DEFAULTS = {
     "objects.top_v_frac": (0.8, "ratio", 0, 0.95), "objects.side_retry_v_frac": (0.75, "ratio", 0, 0.95),
     "grasp.end_frac": (0.7, "ratio", 0, 1),
     "objects.split_touching": (1, "flag", 0, 1), "objects.split_peak_frac": (0.6, "ratio", 0.3, 0.9),
-    "objects.split_max": (6, "count", 2, 9), "objects.split_gap_mm": (8.0, "mm", 0, 20),
+    "objects.split_max": (6, "count", 2, 9), "objects.split_gap_mm": (8.0, "mm", 0, 20), "objects.split_stagger_mm": (20.0, "mm", 0, 40),
     "pivot.over_target": (0, "flag", 0, 1), "pivot.over_top_mm": (30.0, "mm", 5, 120), "pivot.over_clear_mm": (30.0, "mm", 10, 100),
     "feel.enabled": (1, "flag", 0, 1), "feel.step_mm": (12.0, "mm", 3, 30), "feel.tries": (4, "count", 0, 6),
     "push.height_m": (0.012, "m", 0.005, 0.03), "push.speed_m_s": (0.010, "m/s", 0.003, 0.03),
