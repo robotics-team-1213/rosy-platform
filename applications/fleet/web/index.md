@@ -31,8 +31,8 @@
 
 ## 최근 기록
 
+- 2026-11-03 · d4e263f5fa · fix(console): explain fixed-unit registration refusal without consuming-code advice
 - 2026-11-03 · 12aa681800 · USB 카메라 역할 승인에 쿠키 운영자 로그인 허용
 - 2026-11-03 · uncommitted · 만료된 Cell 고장 영상 URL 해제
 - 2026-11-02 · uncommitted · D-963 설치 화면 USB 카메라 역할 승인 패널
 - 2026-11-02 · uncommitted · 모바일 지도 레이어 경계 복구
-- 2026-11-02 · uncommitted · 신호기 녹색 등을 녹색으로 (D-525 보강)

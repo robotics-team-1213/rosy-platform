@@ -13924,3 +13924,11 @@ osy-d395-s1d\`.
 - Evidence: test-only `69b5622629` reproduced the whole-root failure deterministically (one expected failure and one pass). `270285542c` passed all 152 tests across remote_test_tools, remote_pytest and reboot admission, with zero skips/NEW/known/flaky. The prior source9752 whole-root run had one profile-fixture failure; its isolated retry passed, demonstrating uncontrolled shared state rather than missing profile propagation.
 - Gate: no quarantine or weakened evidence. The previous FULL was stopped and its 1855 browser passes plus clean 12-test G1 receipt remain audit evidence only; a new tree requires a fresh canonical FULL before publication. No new public CI or field acceptance claim.
 - CE: no additional lesson; the two resource cases and exact assertions explain the correction. Existing workflow/recovery lessons updated earlier remain applicable.
+
+
+## 2026-11-03 · bd44ee1305 · fix(isaac): keep unverified reboot state outside run admission
+
+- Change: keep one SSH request and its50-second limit, verify service state before timer absence, map active/activating to zero remaining seconds, and accept None only for an explicit successful timer not-found result. Failed/empty/malformed responses become ConnectionError and the existing bounded readiness loop ends in NotReady before a request/start.
+- Evidence: commit 830bc0db27 reproduced12 failures/6 passes using actual Bash branch stubs and the real reader-to-Pipeline path. Independently reviewed commit bd44ee1305 passed76 remote-Isaac/batch tests, zero skips/NEW/known/flaky. This verifies tooling; it is not a model evaluation or an actual simulator/device run.
+- gate 변화: the90-minute budget, GPU/launcher interfaces and physical motion authority are unchanged. Final combined canonical FULL/public CI remain pending.
+- CE: no additional lesson; explicit negative-path regressions cover this distinction.

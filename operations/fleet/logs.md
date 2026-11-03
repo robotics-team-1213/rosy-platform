@@ -5264,3 +5264,11 @@
 - 검증: 원격 RED `ec040ca3c5`에서 기존 7건 통과와 새 회귀 3건 실패를 확인했다. 분리 전 `372a05294f`의 집중 시험 12건 통과 뒤, 최종 소스 `9f666845e8`의 mapped affected 3회는 328 passed/28 skipped, 4676 passed/188 skipped/5 subtests passed, Fleet 7550 passed/585 skipped였다. 세 보고서 모두 known_failures 비교 NEW/known/flaky 0이며 size-range도 통과했다. 회귀는 이벤트로 작업을 멈춘 동안 인증 요청 완료, 동시·반복 계산 공유, 취소·실패 복구, 지도 버전 변경, 최신 자세 반영을 확인한다.
 - Gate: 변화 없음. 건너뛴 시험은 검증에 포함하지 않았으며 브라우저·ROS 실행·실물·현장 수용이나 실제 CPU 부하의 응답 지연 상한을 입증하지 않는다.
 - CE: 해당 없음 — 이번 원인과 재발 방지는 코드·회귀 시험으로 설명되며 기존 asyncio/GIL·동시성 교훈을 검토했다.
+
+
+## 2026-11-03 · d4e263f5fa · fix(fleet): refuse fixed-unit enrollment before sending a robot code
+
+- Change: move the ownership refusal to enroll() immediately after credential availability, before normalization/discovery/HTTP/exchange. Current fixed-manifest mode reports a specific409; standalone registration, renewal, address movement, hub and release keep their existing paths. No live topology expansion is added.
+- Evidence: real create_app/control-unit fixtures for owned and foreign robot IDs reproduced two code_consumed failures at commit bdcba7bed8; commit d4e263f5fa passed106 enrollment/owner/API/release/hub tests, zero skips/NEW/known/flaky. The impossible manually-mutated ownership positive fixture was replaced. Independent review confirmed the only bind caller and startup-only immutable ownership writer.
+- gate 변화: roster/store preserved and no robot request is sent on the new refusal. Global availability and the845-line ratchet are preserved; no new schema field/version reservation.
+- CE: no additional lesson; the real application regression explains the invariant.

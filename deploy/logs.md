@@ -4449,3 +4449,11 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - Evidence: official historical scan found exactly one hit; independent agent proof_retry_review checked its Git object type and correspondence. Existing malformed-row/new-commit/new-rule refusal remains required; targeted remote publisher tests and AUTO landing are pending.
 - Gate: no scanner rule, environment input, canonical FULL/browser/G1 plan, runtime authority or field gate changes. This is an agent review, not a human sign-off.
 - CE: no new lesson; existing exact-triple review mechanism covers this case.
+
+
+## 2026-11-03 · b741d370f0 · fix(site): require the configured signed companion before runtime acceptance
+
+- Change: runtime presence follows the current Compose hash keys. Every enabled companion needs exactly one running container; Account/Monitoring health remains strict and the historical peer without a healthcheck is supported. Explicit unhealthy, duplicate and stopped peers are refused.
+- Evidence: commit 8ae0f56199 reproduced four failures/four passes; independently reviewed commit b741d370f0 passed all149 site-updater/publisher tests, zero skips/NEW/known/flaky. The exact historical Git-tree baseline row is agent-reviewed, with no values or broad exceptions.
+- gate 변화: signed image identity, Compose hash, read-only/unprivileged checks and field acceptance boundaries remain enforced. Qualified FULL/public CI are separate pending checks.
+- CE: no additional lesson; explicit presence regressions cover this correction.

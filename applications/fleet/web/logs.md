@@ -854,3 +854,11 @@
 - 증거: `8316bbe1a9` 원격 Chromium RED는 legacy·managed 로그인 모두 패널 숨김에서 실패(NEW 2/known 0/flaky 0). 수정 소스 `12aa681800`에서 전체 계정 브라우저와 USB 결정 라우트 57 passed/0 skipped, known_failures NEW/known/flaky 0. 실제 테스트 서버·SQLite로 쿠키 로그인, 빈 저장 토큰, 외부 Origin 403, 확인 뒤 승인 200·쿠키 전송·Authorization 부재·저장 결과를 확인했다.
 - Gate: 호스트 브라우저·HTTP 검증이며 실제 USB 적용·장치·현장 수용은 수행하지 않았다.
 - CE: 해당 없음 — 기존 쿠키 로그인 교훈을 검토했고 원인·수정·재발 방지는 한 조건과 실제 브라우저 회귀로 복원 가능하다.
+
+
+## 2026-11-03 · d4e263f5fa · fix(console): explain fixed-unit registration refusal without consuming-code advice
+
+- Change: the existing messageFor path describes current fixed-roster registration as unavailable and confirms the code was not sent. The old manifest-edit/retry advice is removed from the legacy refusal explanation.
+- Evidence: native JavaScript syntax check exit0; the official remote console Node-unit wrapper passed1, skipped0, NEW/known/flaky0. Backend real-application refusal and preserved enrollment flows passed106 tests.
+- gate 변화: existing response rendering, transport and authorization remain in use. Qualified FULL/public CI and physical acceptance are separate.
+- CE: no additional lesson; existing error mapping and regression evidence explain the change.
