@@ -4,6 +4,7 @@
 # `platform` roots (shared code, no role Epic) stay with the default owner.
 # The last matching line wins, so keep the default first.
 * @livsbittt
+/deploy/ @PURPLE-SY @livsbittt
 
 # KAN-19 fleet: 관제·충전·물류
 /operations/fleet/ @livsbittt

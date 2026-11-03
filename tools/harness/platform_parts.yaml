@@ -158,6 +158,7 @@ roots:
     import_prefix: [rosy.contracts.motion]
     concern: contracts
     capability: platform
+    reviewers: [PURPLE-SY]
     note: >-
       D-442(a) ROS-free Motion Intent and DeviceControlPort shapes. The Pinky B
       writer binding consumes GuardedMotion carrying BaseTwist; full producer admission and the
@@ -670,6 +671,7 @@ roots:
     import_prefix: [rosy.world]
     concern: other
     capability: fleet
+    reviewers: [now2466]
   - path: operations/account
     layout_target: operations/account
     part: operations
