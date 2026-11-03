@@ -14100,3 +14100,9 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - CE: 해당 없음
 
+
+## 2026-11-04 · uncommitted · fix(land): ADR Log union 병합의 옛 행을 착지가 지운다 (D-889 추가 30)
+- 변경: `land_merge.stale_adr_rows`·`land.merge` — 병합 뒤 행이 둘인 ID에서 merge-base와 같은 행을 지우고 기록을 다시 만든다. D-889에 추가 29(단독 작업 한 PC 고정, 06:02 착지분)·30을 적었다.
+- 증거: 11-04 lint 정지 4건 중 2건이 D-974 "duplicate index row"(control-terms-v3, learning-image-upload). 실제 커밋 7516e33a49·22ca11cfa5의 merge-tree로 union이 두 행을 남기는 것을 재현. 원격 `test_land.py` 외 4파일 177 통과.
+- gate 변화: 없음
+- CE: 해당 없음 — 원인과 기준은 코드 docstring·회귀 시험·D-889 추가 30에 있다.
