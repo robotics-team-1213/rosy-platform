@@ -55,7 +55,7 @@ def overlay_problem(data) -> Optional[str]:
         try:
             # Lazy: lane.py pulls in cv2/numpy. A broken import must skip the overlay,
             # never abort the camera launch.
-            from control.sensing.perception.lane import IRLineCalibration
+            from perception_runtime.perception.lane import IRLineCalibration
         except ImportError as exc:
             return f"cannot check the calibration ({exc})"
         try:

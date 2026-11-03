@@ -35,6 +35,7 @@
 | [imu_bno055](middleware/drivers/imu_bno055/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | PARKED | PARKED |
 | [sensor_adc](middleware/drivers/pinky_adc/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | PARKED | PARKED |
 | [lamp_control](middleware/drivers/pinky_lamp/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | PARKED | PARKED |
+| [perception_runtime](integrations/perception/progress.md) | CONTROL | uncommitted (2026-11-03) | GO | GO | N/A | N/A | N/A | N/A |
 | [core_common](contracts/foundation/progress.md) | CORE | b587404b (2026-10-02) | GO | GO | N/A | N/A | N/A | N/A |
 | [core_events](middleware/core/events/progress.md) | CORE | bed604ef (2026-09-30) | GO | GO | N/A | N/A | N/A | N/A |
 | [core_features](middleware/core/services/progress.md) | CORE | 4e99d92e (2026-10-02) | GO | GO | N/A | N/A | N/A | N/A |

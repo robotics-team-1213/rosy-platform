@@ -306,7 +306,7 @@ def run_draft(config, out, min_confidence=0.6):
                                  model.manifest.classes, model_raw_classes=model.manifest.raw['output']['classes'])
         inputs = {**proof, "min_confidence": min_confidence, "model_revision": model.model_revision,
                   "model_manifest_sha256": sha(model.manifest.folder / "model_manifest.json")}
-        from control.sensing.perception.learned.lane_mask import preprocess
+        from perception_runtime.perception.learned.lane_mask import preprocess
         frames = []
         with Job(out, inputs) as job:
             for catalog_index, row in enumerate(rows):

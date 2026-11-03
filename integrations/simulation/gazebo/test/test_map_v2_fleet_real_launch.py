@@ -47,7 +47,7 @@ def test_two_camera_road_evidence_matches_core_binding_and_has_one_preview_owner
     assert params['gazebo_camera_height_m'] == .06343
     assert params['gazebo_camera_pitch_rad'] == .13962634015954636
     assert params['gazebo_camera_hfov_rad'] == 1.0334
-    from control.sensing.perception.camera_ground import simulation_ground_plane
+    from perception_runtime.perception.camera_ground import simulation_ground_plane
     assert simulation_ground_plane(
         source=params['dashboard_source'],
         simulation_enabled=params['allow_simulation_ground'], use_sim_time=params['use_sim_time'],

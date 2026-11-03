@@ -39,6 +39,7 @@
 
 # KAN-22 vision_ai: 비전·AI
 /middleware/perception/ @now2466
+/integrations/perception/ @now2466
 /operations/signal_observation/ @now2466
 /operations/overhead/ @now2466
 /operations/site_ui/cam/ @now2466

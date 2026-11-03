@@ -47,7 +47,7 @@ from torch import nn
 from torch.nn import functional as F
 
 from rosy_lane_model import HEIGHT, WIDTH, LaneUNet
-from control.sensing.perception.learned.lane_mask import beyond_boundary, lane_bounded_drivable  # D-566/D-576
+from perception_runtime.perception.learned.lane_mask import beyond_boundary, lane_bounded_drivable  # D-566/D-576
 
 # State-dict names of the pinky-lane-segmentation LaneUNet -> rosy_lane_model.LaneUNet.
 KEY_RENAMES = ((".body.", "."), ("middle.", "bottleneck."))

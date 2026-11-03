@@ -324,6 +324,8 @@ def _view(local: Path, sha: str, **over) -> str:
 
 def _merge_gh(local: Path, sha: str, calls: list, **over):
     """gh whose `pr merge` makes origin/main the merge commit M(old origin/main, sha), as GitHub does."""
+    merged = []
+
     def gh(repo_path, *args):
         calls.append(args)
         if args[:2] == ("pr", "merge"):
@@ -331,8 +333,27 @@ def _merge_gh(local: Path, sha: str, calls: list, **over):
             _git(local, "merge", "-q", "--no-ff", "--no-edit", sha)
             _git(local, "push", "-q", "origin", "HEAD:main")
             _git(local, "checkout", "-q", "main")
-        return _view(local, sha, **over) if args[:2] == ("pr", "view") else ""
+            merged.append(True)
+        if args[:2] == ("pr", "view"):
+            return _view(local, sha, **({"state": "MERGED"} if merged else {}), **over)
+        return ""
     return gh
+
+
+def test_a_merge_the_queue_takes_silently_is_reported_as_queued_not_merged(repo, monkeypatch, capsys):
+    """gh exits 0 when main's merge queue takes the PR (PR 227); the PR is still OPEN, not merged."""
+    local, _ = repo
+    sha = _commit(local, "app.py", "1")
+    qualified_record(tool, local, sha, _git(local, "rev-parse", f"{sha}^"))
+    calls = []
+
+    def gh(repo_path, *args):
+        calls.append(args)
+        return _view(local, sha) if args[:2] == ("pr", "view") else ""
+    monkeypatch.setattr(tool, "run_gh", gh)
+    assert _run(local, "--merge-when-green", "7", "--apply") == 0
+    out = capsys.readouterr().out
+    assert "queued PR 7" in out and "not merged yet" in out and "merged PR" not in out
 
 
 @pytest.mark.parametrize("over,code", [

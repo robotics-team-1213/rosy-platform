@@ -10,8 +10,8 @@ import inspect
 
 import pytest
 
-from control.sensing.perception import camera_ground
-from control.sensing.perception.camera_ground import focal_from_hfov, ground_plane
+from perception_runtime.perception import camera_ground
+from perception_runtime.perception.camera_ground import focal_from_hfov, ground_plane
 
 HEIGHT, PITCH = 0.08, 0.25
 WIDTH, HEIGHT_PX, HFOV = 320, 240, 1.2

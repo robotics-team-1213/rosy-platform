@@ -15,7 +15,7 @@ ROS-101: the only module allowed to import rclpy message types and talk to the R
 | File | Description |
 |------|-------------|
 | `__init__.py` | Package marker |
-| `ros_bridge.py` | 24 subs, 5 pubs, 4 service clients, 7 timers, the Nav2 action client and TF. Exact list pinned in `test/test_bridge_timers.py` — update both together |
+| `ros_bridge.py` | 25 subs, 5 pubs, 4 service clients, 7 timers, the Nav2 action client and TF. Exact list pinned in `test/test_bridge_timers.py` — update both together |
 | `observation.py` | ROS-free decide half of every sensor/evidence callback (D-338): parse, validate, admit/reject, route, mirror. The bridge keeps the node clock, `warn` and the act. Pinned by `core/test/test_bridge_observation.py` |
 | `translate.py` | ROS-free message → domain dict conversion. Imports no ROS type, so host pytest runs it |
 | `goal_tracker.py` | ROS-free Nav2 goal generations: which result is current, what to cancel |
@@ -24,6 +24,7 @@ ROS-101: the only module allowed to import rclpy message types and talk to the R
 | `device_power.py` | ROS-free `DevicePowerPort` adapters (D-440): `ServiceDevicePort` (LiDAR start/stop), `TopicDevicePort` on the latched `power/devices` board, `reconcile_devices`, `power/device_ready` report parsing |
 | `odometry.py` | ROS-free `travelled_m` — the only measure undocking has |
 | `battery_policy.py` | ROS-free SAF-005/DNC-006 chain: what one voltage reading sets in motion, in order |
+| `thermal_policy.py` | ROS-free heat mode feed: stores `motor/health`, and the 1 Hz diagnostics tick re-judges the level from the SoC probe (`core_features.safety.thermal`) |
 | `cmd_vel.py` | ROS-free 50 Hz `cmd_vel` cycle: select, readiness HOLD → zero (hardware graph, and D-440 `motion_ready` after a power wake), wheels, then power activity and the SAF-002 `safety.watchdog` announcement |
 | `save_map.py` | ROS-free SaveMap reply handling: safe basenames under the configured map directory, `RESULT_SUCCESS = 0`, and the D-13 map id |
 | `docking_mode.py` | ROS-free seam for docking's hold on the DOCKING mode: releases DOCKING in the same critical section that ends a run, and the docking tick rate. Pinned by `core/test/test_docking_mode_{ownership,release}.py` |
@@ -64,7 +65,7 @@ None.
 
 Host pytest does not import `ros_bridge.py` (optional ROS). CI boot smoke + the SaveMap guard are what *should* cover it — **and `origin` exists (`github.com/robotics-team-1213/rosy-platform.git`) with CI firing on `push: [main]` and pull requests, so check the latest run (`gh run list`)**. A local `main` ahead of `origin/main` has no CI evidence at all; until a branch is pushed, construction-time correctness in this file stays unverified.
 One exception, deliberately narrow — `test/test_bridge_timers.py` stubs `rclpy` in `sys.modules` to build
-the bridge against a recording node and assert **what it registers**: seven timers at fixed periods, twenty-four
+the bridge against a recording node and assert **what it registers**: seven timers at fixed periods, twenty-five
 subscriptions with their callbacks and QoS, five publishers with QoS, four service clients, the action
 client, the TF listener and both executor wirings. Structural only. It exists so the 3b adapter reshape
 is gradable without a robot. Do not add semantic tests there and do not move the stub into `conftest.py` —

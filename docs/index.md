@@ -354,7 +354,7 @@
 ## 최근 기록
 
 - 2026-11-03 · uncommitted · fix(harness): compose timing plans without inheriting speculation into publication FULL
-- 2026-11-03 · uncommitted · fix(harness): bootstrap each timing test before canonical imports
-- 2026-11-03 · uncommitted · fix(harness): preserve admission and G1 tests across main merge
-- 2026-11-03 · uncommitted · fix(harness): retain fresh timing proof through publication
-- 2026-11-03 · uncommitted · fix(harness): isolate G1 timing in a dedicated serial, host-exclusive job
+- 2026-11-03 · uncommitted · fix(landing): 계측 전용 변경의 시험 범위 선택
+- 2026-11-03 · uncommitted · fix(landing): preserve first queue across a proven rules-refresh stop
+- 2026-11-03 · uncommitted · fix(remote): 배치의 각 시험 입장에서 재부팅 임박 차단
+- 2026-11-03 · uncommitted · docs(landing): 초기 GC 등록 목록과 추가 복구의 확인 범위

@@ -11,8 +11,8 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[4]
 for holder in ('learning/curation/perception', 'learning/registry/perception',
-               'learning/evaluation/perception', 'middleware/perception', 'contracts/foundation',
-               'middleware/perception/test', 'test/learning/perception', 'tools/perception'):
+               'learning/evaluation/perception', 'middleware/perception', 'integrations/perception', 'contracts/foundation',
+               'middleware/perception/test', 'integrations/perception/test', 'test/learning/perception', 'tools/perception'):
     sys.path.insert(0, str(ROOT / holder))
 
 import object_fitness_replay as replay
@@ -21,8 +21,8 @@ import review_eval_bootstrap as bootstrap
 import store
 from test_object_eval_publication import fixture
 from test_learned_detector import model_dir, FakeSession
-from control.sensing.perception.learned.detector import ObjectDetModel
-from control.sensing.perception.learned.manifest import load_manifest
+from perception_runtime.perception.learned.detector import ObjectDetModel
+from perception_runtime.perception.learned.manifest import load_manifest
 from core_common.observation import ObservationSnapshot, SnapshotValidity
 
 

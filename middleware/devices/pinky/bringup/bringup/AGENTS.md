@@ -15,10 +15,10 @@ Bringup node and ROS-independent motor/deadman/Dynamixel helpers.
 | File | Description |
 |------|-------------|
 | `__init__.py` | Package marker |
-| `bringup.py` | `Rosy` node: cmd_vel → MotorController → Dynamixel, odom/TF/joint_states |
+| `bringup.py` | `Rosy` node: cmd_vel → MotorController → Dynamixel, odom/TF/joint_states, `motor/health` JSON every 2 s for CORE heat mode |
 | `motor_control.py` | `DriveGeometry`, `DriveLimits`, `MotorController`, CommandStatus enums |
 | `command_deadman.py` | Stale cmd_vel → confirmed stop, independent of CORE |
-| `dynamixel_driver.py` | SDK wrapper, RPM cap, 32-bit encoder wrap, ID validation |
+| `dynamixel_driver.py` | SDK wrapper, RPM cap, 32-bit encoder wrap, ID validation; `read_health` (temperature, own limit, input voltage, hardware error per motor) |
 | `dynamixel_probe.py` | UART probe utilities |
 | `battery_publisher.py` | Optional `battery/voltage` publisher |
 

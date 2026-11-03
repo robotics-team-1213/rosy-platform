@@ -16,7 +16,7 @@ import time
 
 import numpy as np
 
-from .sensing.perception.learned.detector import detection_packet
+from perception_runtime.perception.learned.detector import detection_packet
 from .sensing.perception.learned.status import LearnedStatus, rate_limited
 from .sensing.perception.region_range import range_boxes, scan_in_camera
 

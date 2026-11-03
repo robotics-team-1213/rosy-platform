@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from control.sensing.perception.learned.manifest import (
+from perception_runtime.perception.learned.manifest import (
     OBJECT_CLASSES, TASKS, ManifestError, load_manifest)
 
 

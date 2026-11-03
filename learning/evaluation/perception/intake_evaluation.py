@@ -7,13 +7,13 @@ import cv2
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[3]
-for holder in ('learning/registry/perception', 'middleware/perception', 'contracts/foundation'):
+for holder in ('learning/registry/perception', 'middleware/perception', 'integrations/perception', 'contracts/foundation'):
     path = str(ROOT / holder)
     if path not in sys.path:
         sys.path.insert(0, path)
 
-from control.sensing.perception.learned.lane_mask import preprocess
-from control.sensing.perception.learned.manifest import ManifestError, validate_label_semantic
+from perception_runtime.perception.learned.lane_mask import preprocess
+from perception_runtime.perception.learned.manifest import ManifestError, validate_label_semantic
 from intake_dataset import EvalSetError, _verified_manifest, _sessions
 from intake_eval_gate import evaluation_semantics
 

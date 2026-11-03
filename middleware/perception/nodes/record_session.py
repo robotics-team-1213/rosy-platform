@@ -7,7 +7,7 @@ forces raw).
 --snapshot: rosbag2 snapshot mode keeps ~60 s of camera/front/compressed and
 the side topics in memory. capture_trigger_node calls /<--node-name>/snapshot;
 every dump becomes its own session folder whose session.json carries the
-trigger reason and values (see control.recording)."""
+trigger reason and values (see perception_runtime.recording)."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from control.recording import (CAMERA_TOPIC, COMPRESSED_CAMERA_TOPIC, DEFAULT_ROOT,
+from perception_runtime.recording import (CAMERA_TOPIC, COMPRESSED_CAMERA_TOPIC, DEFAULT_ROOT,
                                SNAPSHOT_CACHE_PREFIX, adopt_snapshot, bag_command,
                                can_record, closed_snapshot_files, enforce_quota,
                                finish_session, mcap_message_count, new_session,

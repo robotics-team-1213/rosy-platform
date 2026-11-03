@@ -35,6 +35,7 @@ Nothing responded below the guard's bound. The chunk runner's own following-erro
 - Soft contact in `chunk_runner`: during descend, grasp and release chunks, a body joint that lags the command the guard actually sent by more than 1.5 units (≤ 2.7°) for 2 ticks counts as pressing on something. The runner holds where it is with torque on. `retreat` replays the chunk's played frames in reverse, and `park` clears the contact state. Mutation check: with detection off, `test_a_soft_contact_holds_with_torque_on_then_retreats_along_its_path_and_parks` fails. `test_normal_following_lag_is_not_a_contact` guards against false stops.
 - `cell_pipeline`: on a soft contact it retreats, parks, logs the case, and the judge seat decides a retry. Calibration grid points must keep the whole box (half a box inside `flat_px`) on the flat zone, judged by the coarse map before the arm goes there. The grid is centred on that zone with 10 mm spacing, using an affine map.
 - `cell_pipeline --stage recover --person-at-switch` codifies the recovery done by hand: seed at the present pose, lift clear (jaws kept closed if a box is held), place the box at the start or fold home. It refuses without the confirmation.
+  - 2026-11-03: that fixed lift only reverses a top-down descent. With nothing held, recover now steps out with the strong joints (`cell_unwedge`), see `omx-arm-b-dropped-on-the-stack-and-the-fixed-recover-lift-pressed-it-down-2026-11-03.md`.
 
 The guard's own rule is unchanged.
 

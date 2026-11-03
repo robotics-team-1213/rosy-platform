@@ -71,6 +71,21 @@ def test_full_selection_keeps_full_plan_and_reason(caller, tmp_path):
     assert note == "selector escalated to FULL (safety; foundation): full tier on the lab PCs"
 
 
+def test_actual_landing_report_delta_reaches_the_affected_plan(caller, tmp_path):
+    import affected_tests
+
+    land, payload, _ = caller
+    actual = affected_tests.select(affected_tests.Repo.load(ROOT),
+                                   ["tools/land_goal.py", "test/test_land_goal.py"])
+    payload.update(actual.to_json())
+    invocations, note = load_selection().select(land, tmp_path, "base", "python", head="candidate")
+    assert note is None
+    assert invocations == actual.invocations + [["ROSY_RUN_BROWSER_TESTS=1", "browser/test"]]
+    assert "test/test_land_goal.py" in {word for inv in invocations for word in inv}
+    assert "test/test_land_events.py" in {word for inv in invocations for word in inv}
+    assert not any("test" in inv for inv in invocations)
+
+
 def test_explicit_full_accepts_root_exclusion_only_with_strict_timing_companion(caller, tmp_path, monkeypatch):
     selection = load_selection()
     owner, payload, _ = caller

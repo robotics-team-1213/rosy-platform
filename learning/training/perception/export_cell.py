@@ -153,7 +153,7 @@ def write_manifest(out_dir, *, onnx_path, classes, color, scale, mean, std,
         json.dumps(doc, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     # Fail here rather than at intake: validate with the robot-side loader when importable.
     try:
-        from control.sensing.perception.learned.manifest import load_manifest, verify_files
+        from perception_runtime.perception.learned.manifest import load_manifest, verify_files
     except ImportError:
         return doc
     manifest = load_manifest(out_dir)
