@@ -195,7 +195,11 @@ def _prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, 
     clean = land.land_selection.eligible(land, guarded + tested)
     land.land_selection.require_eligible(land, args, clean, guarded + tested)
     delta = bool(note) and note.startswith(land.land_selection.DELTA_NOTE) and not explicit
-    tier = land.land_selection.tier(land, guarded + tested, bool(note) and not delta)  # carried: restore() refuses it
+    # D-970 4: a LOAD-FLAKY id no longer voids the whole pretest; the record keeps it and the turn reruns it.
+    # An explicit FULL witness stays strict, and so does a summary whose LOAD-FLAKY line cannot be read.
+    flaky = None if explicit else land.land_selection.load_flaky_ids(guarded + tested)
+    judged = [line for line in guarded + tested if "LOAD-FLAKY" not in line] if flaky else guarded + tested
+    tier = land.land_selection.tier(land, judged, bool(note) and not delta)  # carried: restore() refuses it
     anchor = None
     if delta:
         # D-889 27: main's delta suites passed here outside the lock. They extend the earlier tier over the new
@@ -203,7 +207,7 @@ def _prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, 
         base = land.land_full.prepared(wt, branch, land.land_full.restore(wt, branch))
         if tier is not None and base is not None:
             land.land_full.save(wt, branch, candidate, main_sha, "delta", base["invocations"] + invocations,
-                                base_tier=base["tier"])
+                                base_tier=base["tier"], flaky=land.land_full.flaky(wt, branch) + (flaky or []))
         tier = "delta" if tier is not None and base is not None else None
     # Keeping an older base with --no-cache would repeat overtime on every turn.
     elif tier == "affected" and not args.no_cache:
@@ -217,7 +221,7 @@ def _prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, 
         # A delta cannot replace a FULL origin; retain its exact base and invocations.
         print(f"[land] retained FULL preparation {anchor['candidate'][:10]} over {anchor['main'][:10]}", flush=True)
     elif not delta:
-        land.land_full.save(wt, branch, candidate, main_sha, tier, invocations)
+        land.land_full.save(wt, branch, candidate, main_sha, tier, invocations, flaky=flaky)
     if explicit:
         args._full_witness = dict(candidate=candidate, main=main_sha, invocations=[list(i) for i in invocations], env=env)
     if ticket is not None:

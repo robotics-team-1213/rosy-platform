@@ -6,6 +6,7 @@ runs as __main__. Keep its public wrappers and defaults in the gateway.
 
 from __future__ import annotations
 
+import ast
 import json
 from harness import affected_exclusive
 import sys
@@ -69,6 +70,26 @@ def _guards_only(invocations: list[list[str]], guards) -> list[list[str]]:
 
 
 DELTA_NOTE = "main's landed delta reaches whole suite folders: they run before the turn"  # D-889 27
+
+
+def load_flaky_ids(summary) -> list[list[str]] | None:
+    """D-970 4: one invocation per node id a summary marks LOAD-FLAKY (land_checks: failed under load, passed
+    alone), with its invocation's environment words (ROSY_RUN_BROWSER_TESTS=1: without it a browser id skips and
+    looks green). None when a LOAD-FLAKY line cannot be read, so the caller keeps the evidence unusable as before."""
+    runs: list[list[str]] = []
+    for line in summary:
+        if "LOAD-FLAKY " not in line:
+            continue
+        head, _, tail = line.partition("LOAD-FLAKY ")
+        try:
+            found = ast.literal_eval(tail.strip())
+        except (ValueError, SyntaxError):
+            return None
+        if not isinstance(found, list) or not all(isinstance(i, str) and i for i in found):
+            return None
+        env = [w for w in head.split() if w.startswith("ROSY_") and "=" in w]
+        runs += [env + [i] for i in found]
+    return runs
 
 
 def _suite_dirs(inv: list[str]) -> bool:

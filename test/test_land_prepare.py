@@ -490,3 +490,16 @@ def test_a_delta_record_reports_the_tier_under_it_and_is_never_full(tmp_path, mo
     land.land_full.save(tmp_path, "b", "c" * 40, "m" * 40, "delta", [["fleet/test"]])
     assert land.land_full.prepared(tmp_path, "b", "m" * 40) is None
     assert json.loads(record.read_text(encoding="utf-8"))["tier"] == "delta"
+
+
+def test_a_load_flaky_pretest_keeps_its_tier_and_hands_the_ids_to_the_turn(full_anchor, monkeypatch):
+    """D-970 4: one LOAD-FLAKY id no longer voids the pretest; the record keeps it for the turn to rerun alone.
+    An explicit FULL witness stays strict."""
+    main, wt, base, candidate, path, original = full_anchor
+    line = "pytest pkg/test ok (run-pre-1.txt), LOAD-FLAKY ['pkg/test/test_a.py::test_a']"
+    monkeypatch.setattr(land, "run_tests", lambda *a, **k: [line])
+    args = land.argparse.Namespace(tests="auto", no_cache=True)
+    land.land_prepare.prepare(land, wt, "feat/x", args, sys.executable, None, None, [["pkg/test"]], "")
+    record = json.loads(path.read_text(encoding="utf-8"))
+    assert record["tier"] == "affected" and record["flaky"] == [["pkg/test/test_a.py::test_a"]]
+    assert land.land_full.flaky(wt, "feat/x") == [["pkg/test/test_a.py::test_a"]]

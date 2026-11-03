@@ -675,3 +675,14 @@ def test_the_guard_set_and_paths_under_an_ignored_folder_are_no_overlap():
     assert not selection.overlaps([shared + ["fleet/test"]], [shared + ["arm/test"]])
     assert selection.overlaps([shared + ["fleet/test"]], [shared + ["fleet/test/test_x.py"]])
     assert not selection.overlaps([["guard/test/test_a.py"]], [["guard/test/test_a.py"]], ignore=("guard/test",))
+
+
+def test_load_flaky_ids_keep_the_invocation_environment_and_refuse_unreadable_lines():
+    """D-970 4: a browser id rerun without ROSY_RUN_BROWSER_TESTS=1 would skip and look green."""
+    selection = load_selection()
+    line = ("pytest ROSY_RUN_BROWSER_TESTS=1 ops/test/test_x_browser.py ok (run-pre-3.txt), "
+            "LOAD-FLAKY ['ops/test/test_x_browser.py::test_a']")
+    assert selection.load_flaky_ids(["pytest a/test ok (run-pre-1.txt)", line]) == [
+        ["ROSY_RUN_BROWSER_TESTS=1", "ops/test/test_x_browser.py::test_a"]]
+    assert selection.load_flaky_ids(["pytest a/test ok (run-pre-1.txt)"]) == []
+    assert selection.load_flaky_ids(["LOAD-FLAKY node"]) is None
