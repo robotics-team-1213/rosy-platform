@@ -148,3 +148,10 @@ def test_record_plan_rejects_non_plan_shapes_instead_of_coercing_them(row):
     from harness.affected_exclusive import DEDICATED
     with pytest.raises(ValueError):
         tool.plan([DEDICATED, row], available=False)
+
+
+@pytest.mark.parametrize('context', [{'pkg/test': 0}, 'pkg/test', None])
+def test_record_plan_requires_a_list_context_and_preserves_an_empty_context(context):
+    with pytest.raises(ValueError):
+        tool.plan(context, available=False)
+    assert tool.plan([], available=False) == []
