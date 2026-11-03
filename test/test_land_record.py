@@ -33,8 +33,28 @@ def test_duplicate_timing_jobs_inside_a_single_plan_are_not_hidden(repo):
     path, c = repo
     prepared = {'invocations': [DEDICATED, DEDICATED], 'tier': 'full',
                 'candidate': c[2], 'main': c[1]}
-    tool.write(path, c[3], c[2], [], [], prepared=prepared)
-    assert tool.read(path, c[3])['invocations'] == [DEDICATED, DEDICATED]
+    with pytest.raises(ValueError):
+        tool.write(path, c[3], c[2], [], [], prepared=prepared)
+
+
+def test_composition_validates_each_context_and_only_normalizes_cross_context_timing():
+    from harness import affected_exclusive as exclusive
+    root = ['test', '--ignore=' + exclusive.TARGET]
+    ordinary = ['pkg/test']
+    got = exclusive.compose([root, exclusive.DEDICATED, ordinary], [exclusive.DEDICATED],
+                            [ordinary, exclusive.DEDICATED])
+    assert got == [root, exclusive.DEDICATED, ordinary, ordinary]
+    assert exclusive.compose([['test']], [['pkg/test']], available=False) == [['test'], ['pkg/test']]
+
+
+@pytest.mark.parametrize('bad', ['duplicate', 'partial', 'missing'])
+def test_a_bad_context_cannot_borrow_timing_completeness_from_another(bad):
+    from harness import affected_exclusive as exclusive
+    contexts = {'duplicate': [exclusive.DEDICATED, exclusive.DEDICATED],
+                'partial': [exclusive.DEDICATED + ['-k', 'one']],
+                'missing': [['test', '--ignore=' + exclusive.TARGET]]}
+    with pytest.raises(ValueError):
+        exclusive.compose([exclusive.DEDICATED], contexts[bad])
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -105,3 +125,33 @@ def test_a_record_names_the_tier_the_landing_ran(repo):
     tool.write(root, commits[1], commits[0], [["test"]], [], "full")
     tool.write(root, commits[2], commits[1], [["pkg/test"]], [])
     assert tool.read(root, commits[1])["tier"] == "full" and "tier" not in tool.read(root, commits[2])
+
+
+def test_record_plan_is_pure_and_is_reused_by_the_writer(repo, monkeypatch):
+    from harness.affected_exclusive import DEDICATED
+    path, c = repo
+    prepared = {'invocations': [DEDICATED], 'tier': 'full', 'candidate': c[2], 'main': c[1]}
+    before = list(path.rglob('*'))
+    assert tool.plan([DEDICATED], prepared, available=False) == [DEDICATED]
+    assert list(path.rglob('*')) == before
+    calls, plan = [], tool.plan
+    def inspect(*args, **kwargs):
+        calls.append((args, kwargs))
+        return plan(*args, **kwargs)
+    monkeypatch.setattr(tool, 'plan', inspect)
+    tool.write(path, c[3], c[2], [DEDICATED], [], prepared=prepared)
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize('row', [{'pkg/test': 0}, 'pkg/test', [1], [''], []])
+def test_record_plan_rejects_non_plan_shapes_instead_of_coercing_them(row):
+    from harness.affected_exclusive import DEDICATED
+    with pytest.raises(ValueError):
+        tool.plan([DEDICATED, row], available=False)
+
+
+@pytest.mark.parametrize('context', [{'pkg/test': 0}, 'pkg/test', None])
+def test_record_plan_requires_a_list_context_and_preserves_an_empty_context(context):
+    with pytest.raises(ValueError):
+        tool.plan(context, available=False)
+    assert tool.plan([], available=False) == []
