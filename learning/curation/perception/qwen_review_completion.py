@@ -107,6 +107,8 @@ def compose(human, proposals, binding):
         raise ValueError('road_surface/1 cannot use own-road completion')
     out = human.copy()
     ids = {entry['name']: entry['index'] for entry in binding['classes']}
+    ids.update({'background': entry['index'] for entry in binding['classes']
+                if entry.get('role') == 'background'})
     accepted = {}
     for name in ('background', 'drivable'):
         area = proposals.get(name)
