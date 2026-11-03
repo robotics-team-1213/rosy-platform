@@ -357,8 +357,8 @@ class Session:
                            f"--config={config_path}", f"--library={self.chunks['library']}", f"--io={self.chunks['io']}"]
                 if self.operating_profile:
                     command.append(f"--operating-profile={Path(self.operating_profile).expanduser().resolve()}")
-                if self.chunks.get("params"):
-                    command.append(f"--params={self.chunks['params']}")
+                command += [f"--{k.replace('_', '-')}={self.chunks[k]}"  # load_model: ROSY_LOAD_MODEL (load_model.py)
+                            for k in ("params", "load_model") if self.chunks.get(k)]
                 record["source_mode"] = "scripted_teacher"
                 record["chunks"] = self.chunks
             else:
@@ -556,7 +556,8 @@ def main(argv=None):
         load_library(args.chunks)  # refuse a bad library before any cap is raised
         chunks = {"library": str(args.chunks.resolve()), "io": str(args.io.resolve()),
                   "sha256": hashlib.sha256(args.chunks.read_bytes()).hexdigest(),
-                  **({"params": str(args.params.resolve())} if args.params else {})}
+                  **({"params": str(args.params.resolve())} if args.params else {}),
+                  **({"load_model": os.environ["ROSY_LOAD_MODEL"]} if os.environ.get("ROSY_LOAD_MODEL") else {})}
     import omx_incident
     omx_incident.refuse_if_held(args.arm)
     session = Session(open_bus=lambda which: SerialBus(ports[which], 0), systemctl=systemctl, run=run, log=log,
