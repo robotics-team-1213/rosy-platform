@@ -337,6 +337,12 @@ def leveling_center(fixture, arm):
     return centers[arm] if centers else fixture['leveling_center_m']
 
 
+def leveling_via(fixture, arm):
+    """The waypoint `arm` passes on its way to and from leveling: its own (`leveling_vias_m`, None for none) or the shared one."""
+    vias = fixture.get('leveling_vias_m')
+    return vias[arm] if vias else fixture.get('leveling_via_m')
+
+
 def leveling_box_stable(box,index,fixture):
     size = plan(True,fixture=fixture)[index]['size']
     values = [*box['position'],*box['orientation'],*box['velocity'],*box['angular_velocity'],

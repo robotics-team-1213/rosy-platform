@@ -114,8 +114,10 @@ for _name, _offset in (('y060', .0006), ('y070', .0007), ('y-060', -.0006), ('y-
 SURVEYED_BASES = dict(arm_bases_m=[[.116, -.164, .072], [.104, .153, .072]], arm_base_yaws_rad=[math.pi/2, math.radians(-94.3)])
 # From these bases arm_a cannot reach the shared leveling spot past the bow (0.287 m), so each arm levels on its own spot:
 # the user's slot in front of each arm (plan 2026-10-31: about 170 mm from the base away from the belt, off the plate).
+# arm_a's straight path from home to its spot passes 35 mm from its own base axis (a wrist singularity in the planner), so it
+# goes over the empty bow-side cells of the plate; arm_b goes straight.
 SURVEYED_BASES.update(leveling_centers_m=[[.116-.17, -.164, .072], [.104-.17, .153, .072]], leveling_via_m=None,
-                      leveling_carry_height_m=.212)
+                      leveling_vias_m=[[-.004, -.084, .212], None], leveling_carry_height_m=.212)
 FIXTURE_OVERRIDES['nominal-palletizing-v21-ship-surveyed-bases'] = dict(FIXTURE_OVERRIDES['nominal-palletizing-v21-ship'],
                                                                         planning_scene='surveyed-bases-20261103', **SURVEYED_BASES)
 FIXTURE_OVERRIDES['nominal-palletizing-v21-ship-surveyed'] = dict(FIXTURE_OVERRIDES['nominal-palletizing-v21-ship-surveyed-bases'],

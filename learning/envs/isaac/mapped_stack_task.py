@@ -6,7 +6,7 @@ from pathlib import Path
 import subprocess
 
 from guarded_release import descend
-from mapped_stack_fixture import CUBE_FIXTURE, DT, FIXTURE, PROFILE, ROOT, belt_transport_observed, cube_release_ready, cube_release_target, free_lift, grip_duration, home, judge, plan, stable_box, leveling_release_target, leveling_box_stable, leveling_center, leveling_sequence_observed, norm, PackingFootprintUnavailable, prefix_held, measured_motion
+from mapped_stack_fixture import CUBE_FIXTURE, DT, FIXTURE, PROFILE, ROOT, belt_transport_observed, cube_release_ready, cube_release_target, free_lift, grip_duration, home, judge, plan, stable_box, leveling_release_target, leveling_box_stable, leveling_center, leveling_via, leveling_sequence_observed, norm, PackingFootprintUnavailable, prefix_held, measured_motion
 
 
 def stable_window(snapshot,step,ok,failure,check=None,boxes=None):
@@ -416,9 +416,9 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
                     leveling_yaw = fixture['leveling_yaws_rad'][arm]
                     level_carry = fixture.get('leveling_carry_height_m', carry_height)
 
-                    def via(yaw):  # the leveling spot is out of reach at the carry height: climb and descend through a waypoint
-                        if fixture.get('leveling_via_m'):
-                            move(arm, fixture['leveling_via_m'], yaw)
+                    def via(yaw):  # climb and descend through a waypoint: out of reach at carry height, or a wrist singularity on the way
+                        if leveling_via(fixture, arm):
+                            move(arm, leveling_via(fixture, arm), yaw)
                     via(leveling_yaw)
                     move(arm,[*center[:2],level_carry],leveling_yaw)
                     leveling['prefix_window'] = await_prefix(index,snapshot,step,fixture)

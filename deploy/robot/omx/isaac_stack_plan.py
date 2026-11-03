@@ -23,7 +23,8 @@ _CAD_BASES = (([.08,-.165,.072], math.pi/2), ([.08,.165,.072], -math.pi/2))
 _SURVEYED_BASES = (([.116,-.164,.072], math.pi/2), ([.104,.153,.072], math.radians(-94.3)))
 SCENES = {'cad-stage1-lower-belt-v1': (_CAD_BASES, (.040, .077)),
           'surveyed-bases-20261103': (_SURVEYED_BASES, (.040, .077)),
-          'surveyed-cell-20261103': (_SURVEYED_BASES, (.040-.028, .077-.028))}  # belt 28 mm below the CAD face
+          # belt 28 mm below the CAD face: only the corridor floor drops; its top stays where a TCP counts as low
+          'surveyed-cell-20261103': (_SURVEYED_BASES, (.040-.028, .077))}
 
 
 def vector(value, count):
@@ -64,7 +65,7 @@ def build(case):
                 # This scene alone reaches below the raised plate, in the external belt corridor.
                 if not (.201 <= point[0] <= .270 and -.013 <= point[1] <= .027 and z_low <= point[2] <= z_high):
                     raise ValueError('Low TCP must remain outside the Stage1 footprint in its belt corridor')
-                limits = replace(limits,workspace_min_m=(*limits.workspace_min_m[:2],-.04))
+                limits = replace(limits,workspace_min_m=(*limits.workspace_min_m[:2],-.04-(.040-z_low)))  # CAD scene: -0.04
         result = kin.solve_top_down(pose, limits, reference_q5=reference)
         if not result.ok:
             raise ValueError(f'Unreachable SIM target: {result.reason} {result.detail}')

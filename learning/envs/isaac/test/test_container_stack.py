@@ -345,3 +345,23 @@ def test_surveyed_bases_reach_belt_stack_and_their_own_leveling_spot(tmp_path, c
     with pytest.raises(ValueError, match='UNREACHABLE'):
         reach(0, [*shared[:2], .13])
     assert all(abs(c[1]) > .096+.045 for c in fixture['leveling_centers_m'])  # off the plate (half width 96 mm) with the box
+
+
+def test_lowered_belt_pick_descends_vertically_and_arm_a_levels_through_its_waypoint(tmp_path):
+    """Isaac 2026-11-03: the 28 mm lower belt was refused at z 0.07 on the vertical descent (the corridor's top dropped too)
+    and below -0.04 (the relaxed floor did not); arm_a's straight path to its own leveling spot is a wrist singularity."""
+    from mapped_stack_task import Planner
+    fixture = f.container_fixture(layers=3, case='nominal-palletizing-v21-ship-surveyed')
+    planner = Planner(tmp_path, scene=fixture['planning_scene'], tcp_x_m=fixture['tcp_offset_m'][0])
+    homes = planner.request('homes', bases=fixture['arm_bases_m'], base_yaws=fixture['arm_base_yaws_rad'],
+                            points=[f.home(0, True, fixture=fixture), f.home(1, True, fixture=fixture)])['homes']
+
+    def path(arm, points):
+        q = homes[arm]
+        for point, yaw in points:
+            q = planner.request('move', base=fixture['arm_bases_m'][arm], base_yaw=fixture['arm_base_yaws_rad'][arm],
+                                start=q, target=[float(v) for v in point], yaw=float(yaw), dt=f.DT)['frames'][-1]
+    pick = fixture['pickup_center_m']
+    path(1, [([*pick[:2], fixture['carry_height_m']], 0.), (pick, 0.)])
+    spot, via, yaw = f.leveling_center(fixture, 0), f.leveling_via(fixture, 0), fixture['leveling_yaws_rad'][0]
+    path(0, [(via, yaw), ([*spot[:2], fixture['leveling_carry_height_m']], yaw), ([*spot[:2], spot[2]+.02], yaw)])
