@@ -28,9 +28,9 @@ def _import_files(store, entries, actor, kind):
     rows, upstream = [], {}
     for path, session, name in entries:
         raw = review_ingest.bounded(path, IMAGE_LIMIT)
-        width, height = review_ingest.image_dimensions(raw)
+        review_ingest.image_dimensions(raw)
         pixels = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
-        if pixels is None or pixels.shape[:2] != (height, width):
+        if pixels is None:
             raise ValueError(f'JPEG/PNG 사진을 읽을 수 없습니다: {name}')
         digest = review_masks.sha(raw)
         path = str(path)

@@ -20,6 +20,10 @@ def test_class_manager_addition_requires_confirmation_and_reloads_binding(browse
     expect(page.locator('#workspace')).to_contain_text('프로젝트')
     expect(page.locator('#apply')).to_be_disabled()
     count = page.locator('#rows fieldset').count()
+    for width in (390, 1440):
+        page.set_viewport_size({'width': width, 'height': 900})
+        assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+        assert page.locator('#rows label').first.evaluate("node => getComputedStyle(node).display") == 'grid'
     page.locator('#add').click()
     last = page.locator('#rows fieldset').last
     last.get_by_label('정본 이름').fill('new_object')

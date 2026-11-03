@@ -231,8 +231,7 @@ def image_dimensions(raw):
 def image(raw, digest, width, height):
     if review_masks.sha(raw) != digest:
         raise ValueError('source image hash differs')
-    if image_dimensions(raw) != (width, height):
-        raise ValueError('source image dimensions differ')
+    image_dimensions(raw)  # EXIF may rotate the decoded axes; bound both header dimensions first.
     pixels = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
     if pixels is None or pixels.shape[:2] != (height, width):
         raise ValueError('source image dimensions differ')
@@ -568,9 +567,9 @@ def import_hf(store, job, files, registered_by):
             continue
         path = str(files[entry['path']])
         raw = bounded(path)
-        width, height = image_dimensions(raw)
+        image_dimensions(raw)
         pixels = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
-        if pixels is None or pixels.shape[:2] != (height, width):
+        if pixels is None:
             raise ValueError(f"가져온 사진을 읽을 수 없습니다: {entry['path']}")
         rows.append({'image': path, 'image_sha256': entry['sha256'], 'width': pixels.shape[1],
                      'height': pixels.shape[0], 'source_session': source, 'capture_group': source})

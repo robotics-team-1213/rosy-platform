@@ -1,6 +1,7 @@
 """Client-owned image bytes are imported without server filesystem authority."""
 import base64
 import json
+import struct
 import zlib
 
 import cv2
@@ -86,6 +87,24 @@ def test_bounded_png_and_jpeg_headers_preserve_valid_uploads(tmp_path, extension
     result = review_upload.import_image(store, {'name': 'photo' + extension, 'data': base64.b64encode(raw).decode()}, 'alice')
     assert result['added'] == 1
     assert store.get(result['indices'][0])['source']['width'] == 32
+
+
+def test_phone_jpeg_exif_rotation_preserves_decoded_catalog_dimensions(tmp_path):
+    store = open_store(tmp_path)
+    review_masks.bind_classes(store, CLASSES)
+    raw = cv2.imencode('.jpg', np.full((24, 32, 3), 90, np.uint8))[1].tobytes()
+    # A single little-endian TIFF orientation entry (6 = rotate 90 degrees clockwise).
+    exif = b'Exif\0\0II' + struct.pack('<HIH', 42, 8, 1)
+    exif += struct.pack('<HHIHHI', 0x0112, 3, 1, 6, 0, 0)
+    raw = raw[:2] + b'\xff\xe1' + struct.pack('>H', len(exif) + 2) + exif + raw[2:]
+    assert review_ingest.image_dimensions(raw) == (32, 24)
+    assert cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR).shape[:2] == (32, 24)
+    review_ingest.image(raw, review_masks.sha(raw), 24, 32)
+    with pytest.raises(ValueError, match='source image dimensions differ'):
+        review_ingest.image(raw, review_masks.sha(raw), 32, 24)
+    result = review_upload.import_image(store, {'name': 'phone.jpg', 'data': base64.b64encode(raw).decode()}, 'alice')
+    source = store.get(result['indices'][0])['source']
+    assert (source['width'], source['height']) == (24, 32)
 
 
 @pytest.mark.parametrize('body', [payload('../secret.png'), {'name': 'x.png', 'data': 'invalid'},
