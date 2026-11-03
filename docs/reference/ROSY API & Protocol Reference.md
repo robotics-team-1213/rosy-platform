@@ -9,11 +9,6 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
-### v1.358 Fleet 상태가 관제 단위 이름을 싣는다 (D-974)
-
-- 관제 단위 설정(`--control-unit-config`)이 있는 Fleet의 `GET /api/fleet/state` 최상위 `fleet`에 `unit`(설정의 `unit_id`)과 `root`(부모가 없으면 `true`)를 더한다. 설정이 없는 Fleet에는 두 필드가 없다.
-- 콘솔 헤더는 `root`면 "통합관제 <unit>", 아니면 `<unit>`을 보이고, 두 필드가 없으면 예전처럼 `name`을 보인다. `name`(`fleet_name`)은 페어링 이름표·site link·lease holder 신원으로 그대로다(D-361, D-391). 표시 전용이며 권한·위임 판정에 쓰지 않는다.
-
 ### v1.351 핑키 열 모드: 온도·전압으로 속도를 낮춘다
 
 - 로봇은 SoC 온도, Raspberry Pi 펌웨어 `get_throttled`(지금 저전압·주파수 제한·스로틀·soft 온도 한계), 바퀴 모터마다 온도·모터 자체 한계·입력 전압·하드웨어 오류를 읽는다. 모터 값은 bringup이 2초마다 ROS `motor/health`(std_msgs/String JSON `{motors:[{id, temperature_c, temperature_limit_c, input_voltage_v, hardware_error}]}`)로 낸다.
@@ -910,7 +905,7 @@ ARM 설치가 없고 관제 단위가 설정된 Fleet(현장 R)은 `/api/fleet/a
 - 기명 admit과 D-938 정책 admit은 취소 요청된 위임에 묶인 제안을 409로 거절한다.
 - 셀의 제안 기록에서 제안 principal은 R의 service principal(`control-unit:R`)이다. R relay는 제안한 앱 자신에게는 `proposal_principal_id`를 그 앱의 principal로 보여 준다(이 Fleet에서 제안한 주체). operator 조회는 셀 기록 그대로다. 같은 앱의 재요청은 같은 위임과 같은 제안을 돌려준다.
 
-### v1.359 Relay forwards evidence and rechecks; requesting app and cancel reason (D-965)
+### v1.356 Relay forwards evidence and rechecks; requesting app and cancel reason (D-965)
 
 - R relay는 `GET /jobs/{mission_id}/physical-evidence`, `POST /jobs/{mission_id}/rechecks`, `GET /jobs/{mission_id}/rechecks/{recheck_key}`를 그 작업의 위임을 가진 직접 하위 셀로 보낸다. 셀 쪽 경로는 관제 단위 API 안의 `GET .../delegations/{origin}/{id}/arm/physical-evidence`, `POST .../arm/rechecks`, `GET .../arm/rechecks/{key}`다. 관제 단위 자격은 그 밖의 경로에 닿지 않는다(credential scope 유지). 셀은 위임에 결속된 자기 ARM 작업만 찾고, 증거가 없으면 409 `ARM_TRANSFER_PHYSICAL_EVIDENCE_UNAVAILABLE`, recheck 충돌은 409 `ARM_TRANSFER_RECHECK_CONFLICT`, 관측 서비스가 없으면 503이다. 셀의 4xx는 그대로 앱에 돌아간다. recheck 요청은 직접 부모 service만, 조회는 직접 부모 또는 셀 viewer가 한다. relay에서 recheck 요청·취소는 제안한 앱만, 조회는 제안한 앱 또는 operator만 한다. 더 깊은 셀은 409 `ARM_TRANSFER_RELAY_DEPTH`다.
 - `ControlArmTransferCandidate.requested_by`(선택, 표시 전용): R이 인증한 앱 principal. 셀에서 권한을 주지 않는다.
@@ -1939,6 +1934,8 @@ config `control.sensor_adapter.mode` 와 같은 문자열이다(D-400). 일반 �
 | POST | `/api/v1/navigation/cancel` | Operator | NAV-002 |
 | POST | `/api/v1/navigation/home` | Operator | NAV-003. 기능 보류 시 409 `CAPABILITY_WITHHELD`. D-395 로봇이 `LOCALIZED` 가 아니면 409 `NOT_LOCALIZED` (v1.72) |
 | GET | `/api/v1/navigation/state` | Viewer | NAV-004. `mapping_active: bool`은 CORE가 수락한 맵핑 세션 상태다. SLAM Toolbox의 실제 실행·지도 갱신 성공을 증명하지 않는다. |
+| GET | `/api/v1/peers` | Viewer | Peer pose sharing(v1.359, docs/plans/2026-11-04-peer-pose-sharing-design.md). 이 CORE가 보는 peer 로봇 `{peers:[{robot_id, boot_id, seq, map_id, pose, localization_state, age_s}]}`. `max_age_s`(기본 5 s)를 넘겨 침묵한 행은 사라진다. 기능이 꺼져 있으면 빈 목록 |
+| POST | `/api/v1/peers/beacon` | Grant `PEER_SHARE`(operator 이상) | Peer pose sharing beacon(v1.359): `{schema_version:1, robot_id, boot_id, seq, map_id?, pose?, localization_state?, stamp}`. sender가 `LOCALIZED`일 때만 `pose`가 있다. 오래된·중복 `seq`와 `boot_id` 재설정 뒤의 낮은 `seq`는 표를 움직이지 않지만 그대로 202 `{accepted:true, updated:false}`다. 경로의 신뢰 경계는 이 부여다 — 본문의 `robot_id` 주장만으로는 신원이 되지 않는다 |
 | GET | `/api/v1/navigation/path` | Viewer | MAP-003. `{poses}`; 경로 메시지를 받은 뒤에는 `map_id`(그때 로봇 지도 ID 또는 null), `frame_id`(`nav_msgs/Path.header.frame_id` 또는 null), `age_s`(CORE 수신 뒤 경과 초, 서버 monotonic 시계)를 함께 반환한다. 최초 수신 전은 `{poses: []}`. 이 응답은 마지막 수신 계획이며 현재 목표와의 동일성은 증명하지 않는다. |
 | GET | `/api/v1/line-follow/perception` | Viewer | 저장된 `paint_source`(threshold / denoise / learned), `camera_lane_mode`, 서명·해시 확인 `model_ready`와 `model_revision`. 별도 `applied_paint_source`는 실제 최신 keeper 프레임의 threshold / denoise / learned / denoise_fallback 또는 null; `applied_source_age_s`는 monotonic 수신 나이(2초 이내), `applied_model_revision`은 실제 사용한 learned mask의 producer revision(없으면 null). stale·malformed·설정 불일치·재시작 전 증거는 null. 운전 모드와 독립이며 물체 검출이나 주행 허가가 아니다. |
 | PUT | `/api/v1/line-follow/perception` | Administrator | `{paint_source: threshold\|denoise\|learned}`만 허용. IDLE·line-follow OFF·보정 비활성, Host Agent가 fresh 정지 및 active mission 부재를 재확인. 기존 기하 보존, learned는 고정 signed model pointer 검증, camera만 재시작·실패 복구. `applied: true`는 설정/서비스 적용이며 live 추론이나 실제 주행 성공이 아니다. |
@@ -2266,6 +2263,8 @@ v1.70 추가 경로(모두 Bearer 인증):
 - `unmapped_objects`(v1.75, 선택, ≤16, 기본 `[]`): `LOCALIZED` 로봇의 LiDAR 가 전체 스캔에서 지도로 설명하지 못한 물체 `{x, y}`(base_link, 앞 x·왼쪽 y, m; 자기 차체 안쪽은 뺀다). `objects_stamp`(v1.74, 선택): 그 스캔의 로봇 시각 s. 시계가 동기되지 않으므로 Fleet 은 스캔을 구별하는 데만 쓰고 신선도는 처음 본 때부터 잰다. `LOCALIZED` 밖에서는 빈 목록이다(후보 물체는 `CandidateReport` 에 실린다). CORE 는 그대로 넘기되 `pose_frame` 이 `odom` 이거나 상태가 끊겨 `state_stale` 이면 둘 다 비운다. Fleet 감시(D-395 9항, 개정 4 5항 후속)가 닻 로봇의 보고 자세로 이 물체를 놓아 다른 `LOCALIZED` 로봇의 거울 잠금을 잡는 데 쓴다.
 
 `odom_pose` 는 v1.112 additive 다(D-494 2). `{x, y, yaw, stamp}` 는 로봇 odom 프레임의 자세와 CORE 가 그 odom 메시지를 받은 시각(ROS 헤더 시각이 아님)이다. 유한하지 않은 표본은 버리고 이전 값을 둔다. `stamp` 는 UTC epoch 초(실수)로, sighting 의 `captured_at` 과 같은 형식이다(로봇 단조 시각이 아니다). `pose` 가 map 프레임이어도 같이 싣는다. odom 이 한 번도 오지 않은 로봇과 D-494 이전 로봇은 `null` 이다. odom 이 끊겨도 마지막 값이 남으므로 소비자는 `stamp` 로 신선도를 판단한다. 같은 값이 Fleet 하트비트(1 Hz)의 상태 스냅샷에도 실린다.
+
+`peers` 는 v1.359 additive 다(peer pose sharing). 이 CORE가 받은 peer beacon 행들의 목록(`GET /api/v1/peers` 와 같은 모양)이고, `peers` 설정이 꺼져 있으면 `null` 이다(빈 목록이 아니라). 각 행의 `age_s` 는 이 CORE의 단조 시계로 잰 마지막 수신 나이다. 같은 목록이 Fleet 하트비트 상태 스냅샷에도 실려, 카메라 없는 현장에서 관제가 각 로봇의 상대 관측을 볼 수 있다.
 
 ```json
 "odom_pose": { "x": 1.204, "y": -0.311, "yaw": 1.57, "stamp": 1791374400.123, "epoch": 0, "mono_s": 5123.875 }
@@ -4546,8 +4545,9 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
-| v1.359 | 2026-11-04 | D-965: relay가 physical-evidence·rechecks를 셀로 전달, `requested_by`·`delegated_by`(요청한 앱 표시), 위임 취소 reason 전달, 503에 마지막 투영 |
+| v1.359 | 2026-11-04 | Additive: peer pose sharing(탑뷰 부재 대비) — `GET /api/v1/peers`, `POST /api/v1/peers/beacon`(부여 `PEER_SHARE`, operator 이상), `StateSnapshot.peers`(기능이 꺼져 있으면 null). 설계 docs/plans/2026-11-04-peer-pose-sharing-design.md |
 | v1.358 | 2026-11-03 | D-974: 관제 단위 설정이 있는 Fleet의 `GET /api/fleet/state` `fleet`에 `unit`·`root`. 헤더 표시 전용, `name`(`fleet_name`) 신원은 그대로 |
+| v1.356 | 2026-11-04 | D-965: relay가 physical-evidence·rechecks를 셀로 전달, `requested_by`·`delegated_by`(요청한 앱 표시), 위임 취소 reason 전달, 503에 마지막 투영 |
 | v1.355 | 2026-11-03 | D-965: ARM 설치 없는 꼭대기 관제(R)가 ARM 작업 경로 다섯 개를 하위 셀 위임으로 relay. 셀 result에 job·receipt, 승인 전 취소는 HOLD로 거둠, admit은 취소된 위임 제안 거절 |
 | v1.354 | 2026-11-03 | D-965: 셀 inbox가 팔 작업 위임을 받아 부모 service principal로 기존 ARM 제안을 만들고 결속. 위임 approve는 팔 작업에 409, 승인은 셀 ARM admit |
 | v1.353 | 2026-11-03 | D-965: 팔 작업 위임 후보 모양(`ControlArmTransferCandidate`·`ControlArmWorkRequest`·`ControlArmIngressRequest`), snapshot request는 두 종류 중 하나. 경로는 아직 navigation만 |

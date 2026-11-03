@@ -78,6 +78,9 @@ from core_features.safety.fleet_loss import FleetLossMonitor
 from core_features.safety.thermal import ThermalMonitor, ThermalPolicy
 from core_common.protocol.evidence import CHANNEL_STALE_AFTER_S
 from core_features.state.manager import StateManager
+from core_features.peers.beacon import BeaconSender
+from core_features.peers.manager import PeersManager
+from core_features.peers.transport import post_beacon
 from core.system.runtime import HostRuntimeProbe
 from core.system.host_files import HostFileExchange
 from core_features.waypoints.manager import WaypointManager
@@ -127,6 +130,9 @@ class CoreServices:
     dock_feed: DockObservationFeed = field(default_factory=DockObservationFeed)
     station_docking: Optional[StationDockingOwner] = None
     localization: Optional[LocalizationAssist] = None  # D-395 P2-1 (ros_bridge ingests)
+    # Peer pose sharing (docs/plans/2026-11-04-peer-pose-sharing-design.md).
+    peers: PeersManager = field(default_factory=lambda: PeersManager(now=time.monotonic))
+    peer_beacon: Optional[BeaconSender] = None
     loc_mission: Optional[LocalizationMission] = None  # D-395 P2-7 (ros_bridge ticks)
     fleet_loss: Optional[FleetLossMonitor] = None  # SAF-003 D-419 (ros_bridge ticks)
     # D-525 signal advice, display only: kept off LineFollowManager so no decision can read it.
@@ -289,6 +295,18 @@ class CoreServices:
         fleet_agent.junction_signal_answer = line_follow.junction_signal_answer
         line_follow.junction_signal_link_refused = lambda: fleet_agent.junction_signal_refused
         fleet_agent.start()
+        peers_cfg = dict((config or {}).get("peers") or {})
+        peers = PeersManager(now=time.monotonic,
+                             max_age_s=float(peers_cfg.get("max_age_s", 5.0)))
+        peer_beacon = None
+        if peers_cfg.get("enabled"):
+            # Only an enabled peers block changes the snapshot shape (additive null otherwise).
+            state.set_peers_provider(peers.snapshot)
+            peer_beacon = BeaconSender(robot_id=identity.robot_id,
+                                       boot_id=f"boot-{int(time.time())}",
+                                       snapshot=state.snapshot, peers_cfg=peers_cfg,
+                                       poster=post_beacon)
+            peer_beacon.start()
         bind_stuck_recovery(line_follow, safety=safety, calibration=calibration,
                             fleet_agent=fleet_agent, vision=vision)
         bind_motion_envelope(line_follow, safety=safety, traffic_policy=traffic_policy)
@@ -309,7 +327,7 @@ class CoreServices:
                    audit=audit, calibration=calibration, trip_lease=trip_lease,
                    adapter_registry=adapter_registry, pilot_recording=PilotRecordingGuard(events=events),
                    dock_feed=dock_feed, station_docking=station_docking, localization=localization, loc_mission=loc_mission,
-                   fleet_loss=fleet_loss)
+                   fleet_loss=fleet_loss, peers=peers, peer_beacon=peer_beacon)
 
     def inventory(self) -> dict[str, Any]:
         cap001 = self.capability.to_dict()
