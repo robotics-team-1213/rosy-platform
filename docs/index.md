@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-11-03 · uncommitted · fix(harness): compose new DELTA preparations through the shared timing policy
 - 2026-11-03 · uncommitted · fix(harness): preserve current-main root projection and speculation semantics
 - 2026-11-03 · uncommitted · fix(harness): reject stale FULL reuse and validate record composition before FF
 - 2026-11-03 · uncommitted · fix(harness): compose timing plans without inheriting speculation into publication FULL
 - 2026-11-03 · uncommitted · test(remote): imported fake-host helper의 HEADROOM 격리
-- 2026-11-03 · uncommitted · fix(landing): main delta의 시험 폴더를 차례 밖 "delta" 단계로 (D-889 추가 27)
