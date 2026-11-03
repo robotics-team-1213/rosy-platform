@@ -1,4 +1,5 @@
 """Current-map extensions keep layer support and per-case provenance explicit."""
+import math
 from pathlib import Path
 import sys
 
@@ -367,3 +368,35 @@ def test_lowered_belt_pick_descends_vertically_and_arm_a_levels_through_its_wayp
     path(1, [([*pick[:2], fixture['carry_height_m']], 0.), (pick, 0.)])
     spot, via, yaw = f.leveling_center(fixture, 0), f.leveling_via(fixture, 0), fixture['leveling_yaws_rad'][0]
     path(0, [(via, yaw), ([*spot[:2], fixture['leveling_carry_height_m']], yaw), ([*spot[:2], spot[2]+.02], yaw)])
+
+
+def test_stack_sites_map_back_onto_the_isaac_targets_for_the_arm_that_places_them():
+    import math
+    sys.path.insert(0, str(Path(__file__).resolve().parents[4]/'tools/sim'))
+    import ship_stack_sites as sites
+    found, order = sites.sites('arm_b', -.01, -.02)
+    fixture = f.container_fixture(layers=3, case=sites.CASE)
+    base, yaw = fixture['arm_bases_m'][1], fixture['arm_base_yaws_rad'][1]
+    mine = [step for step in order if not step.get('other_arm')]
+    assert len(mine) == 6 and {s['arm'] for s in order if s.get('other_arm')} == {'arm_a'}
+    for step in mine:
+        x, y = found[step['site']]['place']
+        back = [base[0]+math.cos(yaw)*x-math.sin(yaw)*y, base[1]+math.sin(yaw)*x+math.cos(yaw)*y]
+        target = f.plan(True, fixture=fixture)[step['item']]['target']
+        assert math.dist(back, target[:2]) < 1e-3
+        assert found[step['site']]['surface_z'] == pytest.approx(-.01+.03*int(step['site'][-1]))
+
+
+def test_measured_layout_gives_the_arm_b_heights_the_sites_use():
+    sys.path.insert(0, str(Path(__file__).resolve().parents[4]/'tools/sim'))
+    import ship_stack_sites as sites
+    plate, table = sites.layout_heights('arm_b')  # 2026-11-03 ruler: base plate 12, plate 8, leveling table 0 (assumed)
+    assert (plate, table) == pytest.approx((-.004, -.012))
+
+
+def test_seat_check_flags_a_box_riding_on_a_stud_and_passes_a_seated_one():
+    target = [.1, 0., .089]
+    flat = dict(position=[.1, 0., .0892], orientation=[1., 0., 0., 0.])
+    riding = dict(position=[.1, 0., .0905], orientation=[math.cos(.01), math.sin(.01), 0., 0.])  # 1.5 mm up, ~1.1 deg
+    limits = dict(height_m=.0005, tilt_rad=math.radians(.5))
+    assert f.seat_check(flat, target, limits)['seated'] and not f.seat_check(riding, target, limits)['seated']

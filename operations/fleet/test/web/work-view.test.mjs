@@ -22,7 +22,7 @@ test("D-763 8: a row reads the server's visible state, a wait first, the ledger 
   assert.equal(workLine(row), "운행 · rosy_01 · 진행 중");
   assert.equal(workLine({...row, visible_state: "waiting", wait: {reason: "signal", waiting: true}}), "운행 · rosy_01 · 대기 · 신호");
   assert.equal(workLine({...row, wait: {reason: "authority", waiting: false, over_bound: true}}), "운행 · rosy_01 · 대기 상한 넘음 · 통행권");
-  assert.equal(workLine({source: "cell_job", device_id: "omx", status: "PROPOSED", visible_state: "approval_pending"}), "Cell 적재 · omx · 승인 대기");
+  assert.equal(workLine({source: "cell_job", device_id: "omx", status: "PROPOSED", visible_state: "approval_pending"}), "팔레트 적재 · omx · 승인 대기");
   assert.equal(workLine({source: "task", device_id: "rosy_02", status: "RUNNING"}), "주행 · rosy_02 · 실행 중");
   assert.equal(workStatus("arrived"), "도착");
   assert.notEqual(workKey({source: "trip", source_id: "same"}), workKey({source: "cell_job", source_id: "same"}));

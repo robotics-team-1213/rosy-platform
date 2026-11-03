@@ -75,10 +75,10 @@ def test_work_area_screens_are_the_same_subnav_in_the_console_and_cell():
         links = re.findall(r'<a class="ui-subnav-item" href="(/console[^"#]*)"( aria-current="page")?>(.*?)</a>', seat.group(1))
         assert [(href, text) for href, _, text in links] == screens, name
         assert [href for href, mark, _ in links if mark] == current, name
-    # D-763 9: 종류는 실행할 수 있을 때만 선다. 이동은 꺼진 단추가 아니라 숨은 항목이고, Cell 적재는 /console/cell이다.
+    # D-763 9: 종류는 실행할 수 있을 때만 선다. 이동은 꺼진 단추가 아니라 숨은 항목이고, 팔레트 적재는 /console/cell이다.
     kinds = re.search(r'<ul class="work-list" aria-label="새 작업 종류">(.*?)</ul>', _page("index.html").read_text(encoding="utf-8"), re.S)
     assert kinds and '<li id="work-new-move-item" hidden><ui-button kind="toggle" id="work-new-move"' in kinds.group(1)
-    assert re.findall(r'<a [^>]*href="([^"]+)">(.*?)</a>', kinds.group(1)) == [("/console/cell", "Cell 적재")]
+    assert re.findall(r'<a [^>]*href="([^"]+)">(.*?)</a>', kinds.group(1)) == [("/console/cell", "팔레트 적재")]
     assert "disabled" not in kinds.group(1) and 'id="work-kind"' not in _page("cell.html").read_text(encoding="utf-8")
     work_view = (WEB / "work" / "work-view.js").read_text(encoding="utf-8")
     assert 'pending: ["approval_pending"]' in work_view and "doc-tabs" not in work_view

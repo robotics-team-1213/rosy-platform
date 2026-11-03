@@ -408,7 +408,7 @@ def test_trip_and_cell_job_rows_read_their_visible_state_and_filters(site, size)
     with sync_playwright() as playwright:
         browser, page, errors = _open(playwright, site, api, [], size=size)
         try:
-            for show, expected in (("pending", ["Cell 적재 · omx_control · 승인 대기"]),
+            for show, expected in (("pending", ["팔레트 적재 · omx_control · 승인 대기"]),
                                    ("done", ["운행 · rosy_03 · 끝남"])):  # 개입 필요 is not 끝남 (D-763 8)
                 page.goto(site + "/console?view=work&show=" + show)
                 _settle(page, '#work-list ui-button')
@@ -421,7 +421,7 @@ def test_trip_and_cell_job_rows_read_their_visible_state_and_filters(site, size)
             texts = page.locator("#work-list ui-button").all_inner_texts()
             assert texts[:2] == ["운행 · rosy_01 · 대기 · 신호", "운행 · rosy_02 · 대기 상한 넘음 · 신호"], texts
             assert "개입" not in texts[1]  # past its bound: a warning (rev 2 Q7)
-            assert "Cell 작업 원장" in page.locator("#work-sources").inner_text()
+            assert "팔레트 적재 작업 원장" in page.locator("#work-sources").inner_text()
             page.locator("#work-filter").select_option("trip")
             assert page.locator("#work-list ui-button").count() == 3
             page.locator("#work-list ui-button").filter(has_text="rosy_03").click()
@@ -434,7 +434,7 @@ def test_trip_and_cell_job_rows_read_their_visible_state_and_filters(site, size)
             assert len(chosen) == 1 and chosen.isdisjoint(fill for pressed, fill in fills if pressed != "true"), fills
             page.locator("#work-filter").select_option("cell_job")
             page.locator("#work-list ui-button").click()
-            page.wait_for_function("() => document.getElementById('work-detail').textContent.includes('Cell 적재')")
+            page.wait_for_function("() => document.getElementById('work-detail').textContent.includes('팔레트 적재')")
             assert "packing" in page.locator("#work-detail").inner_text()
             terms = page.locator("#work-detail dt").all_inner_texts()  # D-763 7: the rule is shown, read-only
             assert page.locator("#work-detail dd").nth(terms.index("승인 조건")).inner_text().startswith("두 사람"), terms
