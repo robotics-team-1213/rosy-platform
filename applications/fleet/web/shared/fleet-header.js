@@ -137,7 +137,8 @@ export function showSignedOut({refused = true} = {}) {
 }
 
 export function showFleet(fleet, robots = null) {
-  $("fleet-name").textContent = fleet.name || "사이트";
+  // D-974: an instance in a control-unit tree is named by its unit (R and CELL-A share one host).
+  $("fleet-name").textContent = fleet.unit ? (fleet.root ? `통합관제 ${fleet.unit}` : fleet.unit) : fleet.name || "사이트";
   const pill = $("online-pill");
   if (!pill) return;  // 연결 수는 관제 문서에만 있다(D-741 3)
   delete pill.dataset.locked;

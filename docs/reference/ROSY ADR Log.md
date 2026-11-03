@@ -10,9 +10,10 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-974 | 관제 용어는 제품·관제 단위·호스트·화면 층을 섞지 않는다 — Rosy Fleet은 제품 이름, 통합관제 R·셀 관제 CELL-x는 단위, PC는 물리 이름(OMX 노트북), 헤더는 `unit_id`, Cell 표시 문구는 팔레트 적재. [전문](../adr/D-974-control-vocabulary-layers.md) | Accepted (2026-11-03, 사용자 결정; D-968 1항 대체, 헤더·문구 구현, Confluence 반영, Harbor PR 병합 대기, 현장 헤더 관측 미수용) |
+| D-968 | 통합관제 고유명은 Rosy Fleet이고 사람 계정은 개인 로그인만 쓴다 — 소유자 권한은 `operator`+`policy_admin` 조합, 직함·공유 계정·owner 문자가 들어간 새 역할·계정은 만들지 않는다. [전문](../adr/D-968-rosy-fleet-naming-and-individual-logins.md) | Accepted (2026-11-03, 사용자 결정; 명명·계정 모델 확정, 코드 변경 없음; 1항은 D-974가 대체) |
 | D-970 | 착지 대기열: 잠금은 짧게, 같은 시험은 한 번만, 추측은 끄고, flaky는 시험 단위로. [전문](../adr/D-970-landing-queue-stages-dedup-speculation-flaky.md) | Proposed (2026-11-03, 사용자 지시; 1·2·4항 구현, 3항 미구현) |
 | D-972 | 후진 도킹의 위치 근거는 LiDAR V 표지이고, 레일 안에서는 조향하지 않는다 (D-950 후속). [전문](../adr/D-972-rear-docking-lidar-v-straight-reverse.md) | Proposed (2026-11-03; 기본 꺼짐, 실물 수용 전) |
-| D-968 | 통합관제 고유명은 Rosy Fleet이고 사람 계정은 개인 로그인만 쓴다 — 소유자 권한은 `operator`+`policy_admin` 조합, 직함·공유 계정·owner 문자가 들어간 새 역할·계정은 만들지 않는다. [전문](../adr/D-968-rosy-fleet-naming-and-individual-logins.md) | Accepted (2026-11-03, 사용자 결정; 명명·계정 모델 확정, 코드 변경 없음) |
 | D-965 | 외부 업무 앱은 관제 계층의 꼭대기 하나로 들어오고, 팔 작업은 셀로 위임된다. [전문](../adr/D-965-harbor-enters-through-top-control-unit.md) | Accepted (2026-11-03, 사용자 결정; 팔 작업 위임 wire 미구현) |
 | D-964 | 차선 판정·학습 모델 실행 코드를 공유 계층 perception_runtime으로 나눈다. [전문](../adr/D-964-perception-runtime-shared-perception-layer.md) | Accepted (2026-11-03) |
 | D-937 | 제품 앱 입사 문법 — 제품/기능 두 레인과 네 제품 원형, 웹 표면 전체 등록. [전문](../adr/D-937-product-app-entry-grammar.md) | Accepted (2026-10-31, 사용자 합의; 물리 이동·권한 변경 없음) |

@@ -95,6 +95,16 @@ test("message counts update one summary value without replacing its connection o
   assert.equal(nodes["online-pill"].textContent, "2/3");
 });
 
+test("a control-unit instance is named by its unit, not the shared pairing name (D-974)", () => {
+  const nodes = fakeHeader();
+  showFleet({name: "rosy-site", online: 0, total: 0});
+  assert.equal(nodes["fleet-name"].textContent, "rosy-site");
+  showFleet({name: "rosy-site", unit: "R", root: true, online: 0, total: 0});
+  assert.equal(nodes["fleet-name"].textContent, "통합관제 R");
+  showFleet({name: "rosy-site", unit: "CELL-A", root: false, online: 0, total: 0});
+  assert.equal(nodes["fleet-name"].textContent, "CELL-A");
+});
+
 test("role words are Korean; English stays out of the text", () => {
   assert.equal(roleLabel("operator"), "운영자");
   assert.equal(roleLabel("viewer"), "보기 전용");

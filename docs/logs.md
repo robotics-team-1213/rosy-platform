@@ -14057,3 +14057,15 @@ osy-d395-s1d\`.
 - 근거: 연구 `dock_sim.py` 벽 마찰 결과(바퀴 옆면 잠김 μ > 0.16, 롤러 레일 곧게 44 ~ 45/47, 레일 안 조향 12 ~ 27/47), 충전소가 스캔면 아래라 LiDAR에 안 보임.
 - gate 변화: 없음. Safety-Review·실물 수용 전.
 - 예약: D-972(adr_reserve).
+
+## 2026-11-03 · uncommitted · docs(control-terms): 관제 용어 층 분리, 헤더는 관제 단위 이름 (D-974)
+- 변경: D-974 — Rosy Fleet은 제품 이름, 통합관제 R·셀 관제 CELL-x는 단위, PC는 물리 이름(OMX 노트북). D-968 1항 대체. `/api/fleet/state`의 `fleet`에 관제 단위 설정이 있을 때 `unit`·`root`(API v1.358), 헤더가 "통합관제 R"/"CELL-A"를 보인다. `fleet_name`은 페어링·lease 신원으로 그대로. 팔레타이징 준비 화면 표시 문구 "Cell" → "팔레트 적재"(경로·id 그대로, 노출은 기존 `CELL_TRANSFER` 규칙). CONCEPTS·관제 단위 배치표 갱신.
+- 증거: 헤더 node 시험 13개 통과, 서버·화면 pytest는 원격 실행 결과를 따른다. 현장 R·CELL-A 헤더 관측은 배포 뒤 별도.
+- gate 변화: 없음.
+- CE: 해당 없음 — 장애 해결이 아니라 용어 결정, 근거는 D-974.
+
+## 2026-11-04 · uncommitted · docs(control-terms): D-974 착지 준비 — 안전 검토·크기·ADR Log 병합 정리
+- 변경: `console.py` 변경을 줄 수 증가 없이 다시 써(D-766) 독립 안전 검토 trailer와 함께 한 커밋으로 다시 만들었다(D-430 §5). main 병합에서 union으로 겹친 D-968·D-970 ADR Log 행을 하나씩 남겼다(D-970은 main의 최신 상태, D-968은 D-974 대체 표시). D-974 후속 작업 표와 Log 상태를 실제 상태로 갱신했다.
+- 증거: 원격 pytest(관제 단위·서버 앱·브라우저·API 버전) 통과, node 시험 19개 통과, 독립 안전 검토 PASS 2회, lint 0 error. Confluence 2-1 v15 반영. Harbor PR #17 필수 검사 통과, 병합은 팀 승인 대기.
+- gate 변화: 없음.
+- CE: 해당 없음 — 착지 규칙(D-430·D-766·D-510)에 이미 있는 거절이며 그대로 따랐다.

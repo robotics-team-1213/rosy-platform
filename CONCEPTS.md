@@ -8,9 +8,13 @@ Shared domain vocabulary for this project — entities, named processes, and sta
 
 A Control Unit coordinates work within its own scope. It can operate independently or participate as a Sub-control unit under a parent. Integrated Control names its role when coordinating child units; the same unit may coordinate children while participating under another parent. These are logical roles, not PC or process counts. Hierarchical delegation remains a target; device execution authority stays with the existing owners (D-850).
 
+On site the root unit is **통합관제 R**: it relays child summaries, delegation and stop requests, is the entry for external apps, and directly owns devices that have no child unit (now the Pinky robots). An arm set that shares objects and space is a **셀 관제 CELL-x** unit that owns its ledger, named approval, admission and arm stop/release (D-960, D-965). "통합 관제" alone names R's panel that gathers its children, not a unit. The console header shows the unit (`unit_id`), not `fleet_name`, which stays the pairing and lease identity (D-974).
+
+*Avoid:* naming a PC by the unit it runs (Fleet PC, 현장 PC, 관제 PC, 통합관제 PC); units move between hosts. Use the physical name (OMX 노트북, 모델 PC, AI PC) and the placement table in `docs/deployment/control-units.md` (D-893, D-974).
+
 ### App names and supporting surfaces
 
-Rosy Robot, Fleet, Pilot, Cam, Learning and Games name user-facing applications. Rosy Vault and Rosy Device were work applications in the separate `rosy-vault` repository, which was retired on 2026-10-24; the real arm path is the OMX owner, not its device-core service (D-858). Cell is Fleet's palletizing preparation workspace; Account is a shared identity function; the robot face and Pilot connection lobby are supporting surfaces. These names do not count hosts, processes or installed packages. Current roles and source ownership are listed in [app names and roles](docs/reference/app-names-and-roles.md) (D-806).
+Rosy Robot, Fleet, Pilot, Cam, Learning and Games name user-facing applications. Rosy Vault and Rosy Device were work applications in the separate `rosy-vault` repository, which was retired on 2026-10-24; the real arm path is the OMX owner, not its device-core service (D-858). Cell is Fleet's palletizing preparation workspace, shown to operators as "팔레트 적재" so it is not read as a 셀 관제 unit (D-974); Account is a shared identity function; the robot face and Pilot connection lobby are supporting surfaces. These names do not count hosts, processes or installed packages. Current roles and source ownership are listed in [app names and roles](docs/reference/app-names-and-roles.md) (D-806).
 
 ### ROSY Platform
 
@@ -24,7 +28,7 @@ The local contract and control boundary of one robot or workcell. It validates a
 
 ### Fleet
 
-The site mission coordinator and durable task ledger. It selects and sequences admitted device actions through device APIs, records handoffs and evidence, and distinguishes acceptance from completion. It does not publish final base velocity or arm trajectory (D-12, D-290, D-293, D-296).
+The program each control unit runs, with its own durable task ledger; **Rosy Fleet** is the product name and does not count instances (D-974). It selects and sequences admitted device actions through device APIs, records handoffs and evidence, and distinguishes acceptance from completion. It does not publish final base velocity or arm trajectory (D-12, D-290, D-293, D-296).
 
 ### Drawing reference, map draft, active site map
 
