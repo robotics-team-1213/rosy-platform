@@ -355,6 +355,6 @@
 
 - 2026-11-03 · uncommitted · fix(harness): reject stale FULL reuse and validate record composition before FF
 - 2026-11-03 · uncommitted · fix(harness): compose timing plans without inheriting speculation into publication FULL
+- 2026-11-03 · uncommitted · fix(isaac): 야간 재부팅 전 90분 안에는 Isaac 실행을 시작하지 않는다
 - 2026-11-03 · uncommitted · fix(landing): 계측 전용 변경의 시험 범위 선택
 - 2026-11-03 · uncommitted · fix(landing): preserve first queue across a proven rules-refresh stop
-- 2026-11-03 · uncommitted · fix(remote): 배치의 각 시험 입장에서 재부팅 임박 차단
