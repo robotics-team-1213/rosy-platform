@@ -14034,3 +14034,9 @@ osy-d395-s1d\`.
 - gate 변화: 약화 없음 — 재사용 통과는 여전히 land record·게시 증거가 되지 않는다.
 - CE: 기존 교훈 갱신 — landings-gave-the-turn-back-and-reran-everything 12.
 
+## 2026-11-03 · uncommitted · feat(landing): land_async orphans — 재부팅으로 죽은 착지를 찾아 되살림
+- 변경: `land_async.py orphans [--resume]`가 `.stopped` 표시도 살아 있는 supervisor·표도 없고 main에 없는 숨은 착지(가지마다 가장 새 것, 24시간 안)를 보이고 --resume으로 되살린다.
+- 증거: 11-03 20:44 재부팅으로 대기열 착지가 모두 죽고 다음 land_async가 죽은 표를 치워 대기열이 비어 보였다 — 7건을 손으로 찾아 resume. 원격 test_land_async 통과, 새 시험 1개.
+- gate 변화: 없음. resume의 기존 거절(살아 있는 표·main에 있음·미커밋)을 그대로 거친다.
+- CE: 기존 교훈 갱신 — land-async-children…-2026-10-30(재부팅 뒤 orphans), landings-gave-the-turn-back… 13(도구 브랜치는 하나로).
+

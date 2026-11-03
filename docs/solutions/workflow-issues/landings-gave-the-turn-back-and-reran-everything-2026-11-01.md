@@ -125,6 +125,11 @@ reruns. Each cause below was found from `.git/rosy-land-events.jsonl` and `.git/
    `land_selection.eligible` treats like LOAD-FLAKY. Without a tier a landing cannot take the delta path and its turn
    reruns everything. Affected and delta pretests now keep the tier and mark the record `reused`; land.py writes no
    land record from it, so pre-push still reruns. A FULL tier stays strict (a test pins that it gives up its FULL).
+13. **Landing-tool branches in flight conflict with each other.** On 11-03 19:56-22:15, 7 of 8 stops were merge
+   conflicts, all between landing-tool branches that edited the same lines (`land_prepare`'s delta `save`,
+   `test_land_prepare.py`, `test_land_speculate.py`). Keep one landing-tool branch in flight: add a new tool fix to
+   the queued branch and requeue it with `land_async.py --replace`. When resolving such a conflict in a test file,
+   rebuild it from main's version plus your own new tests; keeping both sides once left a test half old, half new.
 
 ## 계측 전용 파일의 불필요한 FULL 승격
 
