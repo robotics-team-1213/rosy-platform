@@ -106,8 +106,7 @@ ROLL_BLOCK_LAG = 1.5
 # Stalled = at its cap, short of its target and still (the cap alone is normal: an elbow lifting out of home).
 PWM_STOP, PWM_STOP_S, STALL_GAP, STALL_MOVE = 285, 0.5, 4.0, 0.3
 TEMP_STOP = 65                    # degrees C; the motors' own limits are 70-72
-MOTORS = [n.split(".")[0] for n in ["shoulder_pan.pos", "shoulder_lift.pos", "elbow_flex.pos", "wrist_flex.pos",
-                                    "wrist_roll.pos", "gripper.pos"]]
+MOTORS = [n.split(".")[0] for n in NAMES]
 
 
 class Runner:
@@ -248,7 +247,8 @@ class Runner:
                 # never below the taught closed value: past the jaws' stop the gripper only pushes at its PWM
                 # cap, and the guard's teacher mode does not bound the gripper (2026-10-25: 40 asked, stuck at 48.4)
                 to = max(float(self.library["gripper_closed"]), min(100.0, float(words[1])))
-                self.grip_from, self.target[5] = (self.target[5] if to < self.target[5] else None), to  # reopen point
+                free = to < self.target[5] and abs(self.present()[5] - self.target[5]) <= EMPTY_MARGIN  # not holding
+                self.grip_from, self.target[5] = (self.target[5] if free else None), to  # reopen point
             elif verb == "retreat" and len(words) == 1:
                 if not self.retreat_frames:
                     raise ValueError("nothing to retreat along")
