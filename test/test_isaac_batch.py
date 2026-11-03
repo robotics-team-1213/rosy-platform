@@ -30,6 +30,9 @@ class Host:
     def hold(self, run_id, active):
         pass
 
+    def seconds_to_reboot(self):
+        return None
+
     def call(self, sha, payload):
         self.calls.append(payload['action'])
         if payload['action'] == 'check':

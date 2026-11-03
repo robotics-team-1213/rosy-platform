@@ -52,6 +52,9 @@ class Remote:
     def hold(self, run_id, active):
         pass
 
+    def seconds_to_reboot(self):
+        return getattr(self, 'reboot', None)
+
     def call(self, sha, payload):
         self.calls.append(payload)
         assert self.receipt.exists(), 'receipt must precede network start'
@@ -398,6 +401,9 @@ class Pipeline:
     def hold(self, run_id, active):
         pass
 
+    def seconds_to_reboot(self):
+        return getattr(self, 'reboot', None)
+
     def call(self, sha, payload):
         self.calls.append(payload['action'])
         if payload['action'] == 'check':
@@ -433,6 +439,15 @@ def test_run_never_starts_when_the_model_pc_stays_busy(tmp_path):
         isaac.run_experiment('omx-f-import', {'seed': 0}, SHA, tmp_path / 'run', remote, attempts=3,
                                 sleep=lambda s: None, fetch=None)
     assert 'start' not in remote.calls and not (tmp_path / 'run/receipt.json').exists()
+
+
+def test_run_never_starts_inside_the_nightly_reboot_budget(tmp_path):
+    remote, isaac = Pipeline([True] * 3, []), module()
+    remote.reboot = 40 * 60  # an hour-long run started now would die in the reboot (run 82e147c7)
+    with pytest.raises(isaac.NotReady, match='nightly reboot in 40 min'):
+        isaac.run_experiment('omx-f-import', {'seed': 0}, SHA, tmp_path / 'run', remote, attempts=3,
+                             sleep=lambda s: None, fetch=None)
+    assert 'start' not in remote.calls
 
 
 def test_run_stops_polling_on_unknown_and_on_too_many_lost_replies(tmp_path):
