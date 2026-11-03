@@ -9,7 +9,7 @@ from __future__ import annotations
 import math
 from collections import deque
 
-from .runner import InferResult
+from perception_runtime.perception.learned.runner import InferResult
 
 SHADOW_SCHEMA = "rosy.perception.learned_shadow/1"
 TOPIC = "perception/learned/shadow"

@@ -2,8 +2,8 @@
 
 import json
 
-from control.sensing.perception.learned.lane_mask import LaneMaskEvidence
-from control.sensing.perception.learned.runner import InferResult
+from perception_runtime.perception.learned.lane_mask import LaneMaskEvidence
+from perception_runtime.perception.learned.runner import InferResult
 from control.sensing.perception.learned.shadow import SHADOW_SCHEMA, shadow_payload
 
 

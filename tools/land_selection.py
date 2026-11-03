@@ -7,6 +7,7 @@ runs as __main__. Keep its public wrappers and defaults in the gateway.
 from __future__ import annotations
 
 import json
+from harness import affected_exclusive
 import sys
 from pathlib import Path
 
@@ -103,7 +104,8 @@ def select(land, wt: Path, base: str, python: str, head: str | None = None,
         try:
             sel = _affected(land, wt, python, base, head, full)
             if full:
-                if sel["mode"] != "full" or not valid_plan(sel["full_invocations"]) or ["test"] not in sel["full_invocations"]:
+                if (sel["mode"] != "full" or not valid_plan(sel["full_invocations"])
+                        or not affected_exclusive.canonical_full(sel["full_invocations"])):
                     raise ValueError("forced selector did not supply the canonical whole FULL plan")
                 return sel["full_invocations"] + all_browsers(land, wt, python), "explicit canonical FULL"
             # D-889 3 (combined affected, not FULL per cycle): a delta that escalated landed on main with its own

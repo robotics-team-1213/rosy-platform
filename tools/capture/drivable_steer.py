@@ -44,11 +44,12 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(REPO / "middleware" / "perception"))
+sys.path.insert(0, str(REPO / "integrations" / "perception"))
 sys.path.insert(0, str(REPO / "contracts" / "foundation"))
 
 from core_common.robot_body import PINKY_PRO  # noqa: E402
-from control.sensing.perception.learned import lane_mask  # noqa: E402
-from control.sensing.perception.learned.manifest import load_manifest, verify_files  # noqa: E402
+from perception_runtime.perception.learned import lane_mask  # noqa: E402
+from perception_runtime.perception.learned.manifest import load_manifest, verify_files  # noqa: E402
 from edge_drive import TOKEN_ENV, Core, lidar_forward_deg, rec_start, rec_stop, tls_context  # noqa: E402
 
 PERIOD_S = 0.15          # cycle; well inside CORE's 500 ms teleop watchdog

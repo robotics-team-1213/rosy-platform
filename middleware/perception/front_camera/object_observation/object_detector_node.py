@@ -27,12 +27,12 @@ from .calibrated_values import finite_overrides, lidar_nose_rad, nominal_camera_
 from .object_detector import STATUS_TOPIC, TOPIC, BoxRanger, ObjectDetectorCore
 from .sensing.body import LIDAR_X
 from .sensing.lidar import enable_simulation_scans, is_robot_scan
-from .sensing.perception.camera_ground import nominal_ground_plane
-from .sensing.perception.image_frame import image_msg_to_frame
-from .sensing.perception.learned.detector import CONFIDENCE, IOU, ObjectDetModel
-from .sensing.perception.learned.runner import ModelSlot
-from .sensing.perception.learned.signature import TRUSTED_KEYS, allow_unsigned_from_env, checked_opener
-from .sensing.perception.learned.slots import slot_pointer
+from perception_runtime.perception.camera_ground import nominal_ground_plane
+from perception_runtime.perception.image_frame import image_msg_to_frame
+from perception_runtime.perception.learned.detector import CONFIDENCE, IOU, ObjectDetModel
+from perception_runtime.perception.learned.runner import ModelSlot
+from perception_runtime.perception.learned.signature import TRUSTED_KEYS, allow_unsigned_from_env, checked_opener
+from perception_runtime.perception.learned.slots import slot_pointer
 
 
 _READ_ONLY = ParameterDescriptor(read_only=True)

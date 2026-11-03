@@ -13,7 +13,7 @@ for _p in (Path(__file__).resolve().parents[3] / 'learning/registry/perception',
         sys.path.insert(0, str(_p))
 
 import intake  # noqa: E402
-from control.sensing.perception.learned.lane_mask import NonFiniteLogits  # noqa: E402
+from perception_runtime.perception.learned.lane_mask import NonFiniteLogits  # noqa: E402
 
 GATE = {"max_host_latency_ms_p50": 400, "max_nan_frames": 0, "min_visible_fraction": 0.30,
         "replay_sources": ["data/teleop/learning/*.mp4"], "max_frames_per_source": 200,
@@ -452,7 +452,7 @@ def test_export_onnx_parity(tmp_path):
     torch = pytest.importorskip("torch")
     pytest.importorskip("onnxruntime")
     import export_onnx
-    from control.sensing.perception.learned.manifest import load_manifest, verify_files
+    from perception_runtime.perception.learned.manifest import load_manifest, verify_files
     ts = tmp_path / "m.torchscript.pt"
     torch.manual_seed(0)
     torch.jit.script(torch.nn.Conv2d(3, 4, 3, padding=1)).save(str(ts))

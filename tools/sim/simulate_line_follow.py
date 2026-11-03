@@ -14,7 +14,7 @@ import numpy as np
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 for _path in (
-    REPO_ROOT / "middleware/perception",
+    REPO_ROOT / "middleware/perception", REPO_ROOT / "integrations/perception",
     REPO_ROOT / "contracts/foundation",
     REPO_ROOT / "middleware/core/events",
     REPO_ROOT / "middleware/core/services",
@@ -22,7 +22,7 @@ for _path in (
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
 
-from control.sensing.perception.lane import IRLineCalibration, detect_ir_line, detect_lane_error
+from perception_runtime.perception.lane import IRLineCalibration, detect_ir_line, detect_lane_error
 from core_events.events.bus import EventBus
 from core_features.line_follow import (
     LineFollowConfig,

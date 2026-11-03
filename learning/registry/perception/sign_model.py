@@ -18,14 +18,14 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-for _p in (ROOT / "deploy" / "robot" / "pinky_pro" / "release", ROOT / "middleware" / "perception",
+for _p in (ROOT / "deploy" / "robot" / "pinky_pro" / "release", ROOT / "middleware" / "perception", ROOT / "integrations" / "perception",
            ROOT / "contracts" / "foundation"):
     if str(_p) not in sys.path:
         sys.path.append(str(_p))
 
 from signing import sign_checksums  # noqa: E402  (deploy/robot/pinky_pro/release/signing.py)
-from control.sensing.perception.learned.manifest import MANIFEST_NAME  # noqa: E402
-from control.sensing.perception.learned.signature import (  # noqa: E402
+from perception_runtime.perception.learned.manifest import MANIFEST_NAME  # noqa: E402
+from perception_runtime.perception.learned.signature import (  # noqa: E402
     SIGNATURE_NAME, SignatureError, verify_manifest_signature)
 
 

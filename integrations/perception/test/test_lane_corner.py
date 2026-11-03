@@ -13,8 +13,8 @@ import math
 import numpy as np
 import pytest
 
-from control.sensing.perception.camera_ground import simulation_ground_plane
-from control.sensing.perception.lane import (
+from perception_runtime.perception.camera_ground import simulation_ground_plane
+from perception_runtime.perception.lane import (
     LaneCornerTracker,
     LaneObservation,
     detect_lane_corner,

@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from control import pilot_recording as pr
-from control.recording import finish_session, ir_range_sample, new_session
+from perception_runtime.recording import finish_session, ir_range_sample, new_session
 from core_common.protocol.recording import (
     MANIFEST_NAME, RecorderStatus, RecordingManifest, recording_id_ok)
 

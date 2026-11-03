@@ -21,7 +21,8 @@ def fixture():
 
 def test_ir_sample_matches_the_recording_contract():
     sys.path.insert(0, str(ROOT / "middleware/perception"))
-    from control.recording import ir_range_sample
+    sys.path.insert(0, str(ROOT / "integrations/perception"))
+    from perception_runtime.recording import ir_range_sample
     samples = ([120, 800, 4095], (0, 0, 0), [1, 2], [1, 2, 4096], [-1, 0, 1],
                [1.0, 2, 3], [True, 2, 3], "no", None)
     for data in samples:

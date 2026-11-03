@@ -31,11 +31,11 @@ import build
 ROOT = Path(__file__).resolve().parents[3]
 _SENSING = str(ROOT / "middleware" / "perception")
 _FOUNDATION = str(ROOT / "contracts" / "foundation")  # core_common (D-424)
-for _p in (_SENSING, _FOUNDATION):
+for _p in (_SENSING, str(ROOT / "integrations" / "perception"), _FOUNDATION):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-from control.recording import SHADOW_TOPIC as SHADOW_KEY  # noqa: E402  extract.py's side key
+from perception_runtime.recording import SHADOW_TOPIC as SHADOW_KEY  # noqa: E402  extract.py's side key
 LANE_MIN_FRACTION = 0.02  # below this share of lane pixels the frame is suspect
 # RGB fallback for classes.yaml entries without a color, by class index.
 DEFAULT_PALETTE = ((0, 0, 0), (230, 25, 75), (60, 180, 75), (255, 225, 25), (0, 130, 200),
@@ -72,7 +72,7 @@ def score_frame(logits: np.ndarray, classes, side: dict, model_revision: str) ->
     """One formula for every row, from the current model: (1 - confidence) + mean
     normalised pixel entropy + lane-pixel shortage. |error_delta| is added only when
     the recorded shadow payload came from this same model revision."""
-    from control.sensing.perception.learned.lane_mask import lane_evidence
+    from perception_runtime.perception.learned.lane_mask import lane_evidence
     ev = lane_evidence(logits, classes)
     z = logits[0].astype(np.float64)
     z -= z.max(axis=0, keepdims=True)
@@ -137,7 +137,7 @@ def write_cvat_zip(path: Path, classes, items) -> None:
 
 def _open_model(folder, providers=None):
     """LaneSegModel plus the raw session it validated (for per-pixel logits)."""
-    from control.sensing.perception.learned.runner import LaneSegModel
+    from perception_runtime.perception.learned.runner import LaneSegModel
     sessions = []
 
     def factory(path, threads):
@@ -167,7 +167,7 @@ def main(argv=None) -> int:
     ap.add_argument("--out", type=Path, required=True)
     args = ap.parse_args(argv)
 
-    from control.sensing.perception.learned.lane_mask import preprocess
+    from perception_runtime.perception.learned.lane_mask import preprocess
     model, session = _open_model(args.model)
     try:
         classes = resolve_classes(build.load_classes(args.classes, require_color=False),

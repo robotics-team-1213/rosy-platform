@@ -26,6 +26,9 @@ import re
 import subprocess
 import sys
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from harness.affected_exclusive import DEDICATED
+
 SHA = re.compile(r"[0-9a-f]{40}")
 MAX_CHAIN = 200
 
@@ -47,6 +50,10 @@ def write(repo: Path, sha: str, base: str, invocations: list[list[str]], logs: l
     selection of main's delta since then on ``sha``; the record keeps both and the prepared tier."""
     extra = {}
     if prepared:
+        # Two fresh execution contexts can cover one plan row; preserve their logs and bridge.
+        # Duplicates within either individual plan remain invalid, rather than being hidden.
+        if prepared["invocations"].count(DEDICATED) == invocations.count(DEDICATED) == 1:
+            invocations = [inv for inv in invocations if inv != DEDICATED]
         invocations, tier = prepared["invocations"] + invocations, prepared["tier"]
         extra = {"prepared_on": prepared["main"], "prepared_candidate": prepared["candidate"]}
     if not (SHA.fullmatch(sha) and SHA.fullmatch(base)):

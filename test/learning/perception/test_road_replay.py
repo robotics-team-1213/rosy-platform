@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'learning/evaluatio
 
 import road_replay as rr  # noqa: E402
 import road_replay_inputs as replay_inputs  # noqa: E402
-from control.recording import SHADOW_TOPIC  # noqa: E402
+from perception_runtime.recording import SHADOW_TOPIC  # noqa: E402
 
 PROFILE, GROUND = rr.lane_replay._nominal_ground()
 X_OFFSET = float(PROFILE["x_offset_m"])

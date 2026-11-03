@@ -46,8 +46,8 @@ from .loc_assist import LocAssist, lane_rules_near, localized_objects, pooled_gr
 from .sensing.body import URDF_RADIUS
 from .sensing.loc_candidates import Mount, reference_squares
 from .sensing.localization import MapAgreement, planar_yaw
-from .sensing.perception.camera_ground import nominal_ground_plane, simulation_ground_plane
-from .sensing.perception.lane_bev import BirdsEye
+from perception_runtime.perception.camera_ground import nominal_ground_plane, simulation_ground_plane
+from perception_runtime.perception.lane_bev import BirdsEye
 from .sensing.perception.paint_hypothesis import camera_paint_points, paint_score
 from .sensing.perception.paint_localizer import PaintMap
 from .sensing.perception.reference_square import HsvSquareDetector

@@ -14,7 +14,7 @@ if str(TRAINING) not in sys.path:
 
 import export_cell  # noqa: E402
 import publish  # noqa: E402
-from control.sensing.perception.learned.manifest import (  # noqa: E402
+from perception_runtime.perception.learned.manifest import (  # noqa: E402
     ManifestError, load_manifest, verify_files)
 
 CLASSES = [("background", "background"), ("lane", "lane_marking"),
@@ -204,7 +204,7 @@ def test_check_manifest_cli_ok_and_tampered(tmp_path):
 def test_export_tiny_torch_model_opens(tmp_path):
     torch = pytest.importorskip("torch")
     pytest.importorskip("onnxruntime")
-    from control.sensing.perception.learned.runner import LaneSegModel
+    from perception_runtime.perception.learned.runner import LaneSegModel
     model = torch.nn.Conv2d(3, 4, 3, padding=1)
     out = tmp_path / "m"
     export_cell.export(model, out, **KW)
@@ -298,7 +298,7 @@ def test_stage_keeps_session_prefixed_names_without_double_prefix(tmp_path):
 
 
 def test_export_roles_match_the_robot_contract_including_wall(tmp_path):
-    from control.sensing.perception.learned.manifest import ROLES
+    from perception_runtime.perception.learned.manifest import ROLES
     assert export_cell.ROLES == ROLES and "wall" in ROLES
     _, doc = _write(tmp_path, classes=CLASSES + [("wall", "wall")])
     assert doc["output"]["classes"][-1] == {"index": 4, "name": "wall", "role": "wall"}

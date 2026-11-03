@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
-- 2026-11-03 · uncommitted · fix(landing): 분할 중복과 중첩 rollup 집계를 보완한다
-- 2026-11-03 · uncommitted · fix(landing): 병렬 준비와 폴백에서 급행 표시를 보존한다
-- 2026-11-03 · uncommitted · feat(isaac): 실물 top·side 카메라 시점과 D-947 Accepted
-- 2026-11-03 · uncommitted · test(publish): held turn의 출처 보존과 실행 증거를 구분한다
-- 2026-11-03 · 3db26622ab · evidence: 재연결 뒤 READY 복구와 수정 검증 동결
+- 2026-11-03 · uncommitted · fix(landing): 계측 전용 변경의 시험 범위 선택
+- 2026-11-03 · uncommitted · fix(landing): preserve first queue across a proven rules-refresh stop
+- 2026-11-03 · uncommitted · fix(remote): 배치의 각 시험 입장에서 재부팅 임박 차단
+- 2026-11-03 · uncommitted · docs(landing): 초기 GC 등록 목록과 추가 복구의 확인 범위
+- 2026-11-03 · uncommitted · fix(remote): 이력 없는 큰 시험 묶음을 기존 비용 추정으로 분할

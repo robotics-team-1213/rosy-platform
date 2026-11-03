@@ -41,7 +41,6 @@ decision/src/rosy/decision/deliberation/contracts small
 decision/src/rosy/decision/deliberation/providers small
 decision/src/rosy/decision/deliberation/evaluation small
 perception/front_camera/perception
-perception/front_camera/perception/learned
 perception/front_camera/perception/drivable
 fleet/web
 fleet/web/devices
