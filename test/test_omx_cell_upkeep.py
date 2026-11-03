@@ -48,7 +48,7 @@ def make_io(bus=None, urls=None, mean=100.0, sessions=(), locked=False, todo=())
                  unit_restart=lambda r: None), bus
 
 
-def setup(tmp, closed=49.0, boards=True, tcp=0.074):
+def arms_setup(tmp, closed=49.0, boards=True, tcp=0.074):
     port, leader = tmp / DEV, tmp / "leader"
     if boards:
         port.write_text("")
@@ -64,7 +64,7 @@ def setup(tmp, closed=49.0, boards=True, tcp=0.074):
 
 def report(tmp, arms=None, fix=False, **kw):
     io, bus = make_io(**kw)
-    out = cu.run(arms or setup(tmp), fix, io=io, out_dir=tmp / "upkeep", incidents=tmp / "incidents", stamp="S")
+    out = cu.run(arms or arms_setup(tmp), fix, io=io, out_dir=tmp / "upkeep", incidents=tmp / "incidents", stamp="S")
     return out["arm_a"], {c["check"]: c for c in out["arm_a"]["checks"]}, bus
 
 
@@ -77,12 +77,12 @@ def test_a_healthy_arm_is_ready_and_the_report_is_written(tmp_path):
 
 def test_an_unmeasured_jaw_tcp_keeps_the_arm_from_ready(tmp_path):
     """arm_b's stock TCP put its tips 18 mm above every planned height until the box-top touch (2026-11-03)."""
-    rep, checks, _ = report(tmp_path, arms=setup(tmp_path, tcp=None))
+    rep, checks, _ = report(tmp_path, arms=arms_setup(tmp_path, tcp=None))
     assert checks["tcp"]["status"] == "warn" and "unmeasured" in checks["tcp"]["detail"] and rep["verdict"] == "needs_person"
 
 
 def test_a_missing_board_fails_and_skips_the_register_read(tmp_path):
-    rep, checks, _ = report(tmp_path, setup(tmp_path, boards=False))
+    rep, checks, _ = report(tmp_path, arms_setup(tmp_path, boards=False))
     assert checks["boards"]["status"] == "fail" and "robot.port" in checks["boards"]["detail"]
     assert checks["registers"]["status"] == "skipped" and rep["verdict"] == "needs_person"
 
@@ -128,12 +128,12 @@ def health_log(path, closed_cmd=46.6, stop=48.84, pwm=-150):
 
 
 def test_a_closed_value_below_the_jaws_stop_is_flagged_with_the_numbers(tmp_path):
-    arms = setup(tmp_path, closed=46.6)
+    arms = arms_setup(tmp_path, closed=46.6)
     health_log(tmp_path / "motor-health-1.jsonl")
     _, checks, _ = report(tmp_path, arms)
     jaw = checks["jaw closed"]
     assert jaw["status"] == "warn" and "target 46.6" in jaw["detail"] and "48.8" in jaw["detail"] and "-150" in jaw["detail"]
-    arms = setup(tmp_path, closed=49.0)  # the library now closes at the stop
+    arms = arms_setup(tmp_path, closed=49.0)  # the library now closes at the stop
     assert report(tmp_path, arms)[1]["jaw closed"]["status"] == "ok"
 
 
@@ -148,7 +148,7 @@ def test_a_missing_map_is_a_motion_step_and_a_hold_needs_a_person(tmp_path):
 
 
 def test_monitors_report_hits_from_logs_newer_than_the_last_report(tmp_path):
-    arms = setup(tmp_path)
+    arms = arms_setup(tmp_path)
     health_log(tmp_path / "motor-health-1.jsonl")
     seen = []
     io, _ = make_io()
