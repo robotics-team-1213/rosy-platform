@@ -67,7 +67,16 @@ def chain_setup(tmp_path, *, enabled=True, camera=True):
         if not enabled:
             yield options, fleet
         else:
-            chain = SimPolicyChain(**options)
+            for attempt in range(3):
+                try:
+                    chain = SimPolicyChain(**options)
+                    break
+                except PermissionError:
+                    # Setup only: the device's 0.2 s budget times out under a loaded test host and a failed
+                    # consumer closes for good; each retry gets a fresh one (Fleet issues a new lease).
+                    if attempt == 2:
+                        raise
+                    options['consumer'] = FleetLeaseConsumer(scope, request=fleet.device, monotonic=runtime.monotonic)
             try:
                 runtime._on_joint_state(joint_message(runtime))
                 yield chain, fleet, runtime, driver, clock

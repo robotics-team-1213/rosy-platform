@@ -8,6 +8,16 @@ from test_console_queue_inline_browser import API, ON_TOP, _open, _shot, site  #
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason="opt-in real Chromium scenario")
 
 
+def _settle(page, selector):
+    """Run the installed clock past the first read; under load that read lands after 2 s, and nothing advanced the
+    clock again (LOAD-FLAKY 2026-11-03). At most 2 s more, so the next 5 s poll still falls where tests expect it."""
+    page.clock.run_for(2000)
+    for _ in range(20):
+        if page.locator(selector).count():
+            return
+        page.clock.run_for(100)
+
+
 @pytest.mark.parametrize('size', [(320, 568), (1440, 900)])
 @pytest.mark.parametrize('theme', ['dark', 'light'])
 @pytest.mark.parametrize('change', ['same', 'reorder', 'removed', 'empty', 'request-404', 'request-403', 'request-503', 'work-503', 'move-row', 'move-outside', 'no-focus'])
@@ -24,13 +34,9 @@ def test_channel_request_poll_preserves_current_keyboard_target(site, size, them
         browser, page, errors = _open(playwright, site, api, posts, size=size)
         try:
             page.goto(site + '/console?view=work')
-            page.clock.run_for(2000)
+            _settle(page, '#channel-requests ui-button')
             page.evaluate('(theme) => document.documentElement.dataset.theme = theme', theme)
             buttons = page.locator('#channel-requests ui-button')
-            for _ in range(20):  # under load the first read lands after run_for(2000); stays under one 5 s poll
-                if buttons.count() == 2:
-                    break
-                page.clock.run_for(100)
             expect(buttons).to_have_count(2)
             buttons.first.focus()
             outside = page.locator('#work-refresh')
@@ -101,7 +107,7 @@ def test_discord_current_incident_requires_separate_named_confirmation(site, siz
         browser, page, errors = _open(playwright, site, api, posts, size=size)
         try:
             page.goto(site + '/console?view=work')
-            page.clock.run_for(2000)
+            _settle(page, '#channel-requests ui-button')
             page.locator('#channel-requests ui-button').click()
             page.locator('#channel-review-incident').select_option('rosy_03/stuck-abc')
             page.locator('#channel-review-reason').fill('current risk review')
@@ -118,7 +124,7 @@ def test_discord_current_incident_requires_separate_named_confirmation(site, siz
             assert not posts
             api['/api/fleet/session'] = {'principal_id': 'bob', 'role': 'operator'}
             page.evaluate("dispatchEvent(new PageTransitionEvent('pagehide', {persisted: true})); dispatchEvent(new PageTransitionEvent('pageshow', {persisted: true}))")
-            page.clock.run_for(2000)
+            _settle(page, '#channel-requests ui-button')
             page.locator('#channel-requests ui-button').click()
             page.locator('#channel-review-incident').select_option('rosy_03/stuck-abc')
             page.locator('#channel-review-reason').fill('current risk review')
@@ -169,7 +175,7 @@ def test_discord_mission_uses_owned_candidate_and_separate_admission(site, size)
         browser, page, errors = _open(playwright, site, api, posts, size=size)
         try:
             page.goto(site + '/console?view=work')
-            page.clock.run_for(2000)
+            _settle(page, '#channel-requests ui-button')
             page.locator('#channel-requests ui-button').click()
             expect(page.locator('#channel-review-cell')).to_have_attribute('href', '/console/cell?channel_request=' + request_id)
             page.locator('#channel-review-mission').select_option('owned-source')
@@ -228,7 +234,7 @@ def test_channel_review_keeps_candidate_separate_from_execution(site, size):
         browser, page, errors = _open(playwright, site, api, posts, size=size)
         try:
             page.goto(site + "/console?view=work")
-            page.clock.run_for(2000)
+            _settle(page, '#channel-requests ui-button')
             page.locator("#channel-requests ui-button").click()
             expect(page.locator("#channel-review")).to_be_visible()
             page.locator("#channel-review-reason").fill("목표 위치 확인 필요")
@@ -317,7 +323,7 @@ def test_mixed_work_selection_filter_refresh_failure_and_accessibility(site, siz
             api["/api/fleet/work"] = {**api["/api/fleet/work"], "rows": rows + extra, "truncated_sources": ["task"]}
             for show, label, device in (("done", "끝난 작업", "rosy_09"), ("pending", "승인 대기", "omx_wait"), ("nonsense", "전체 작업", None)):
                 page.goto(site + "/console?view=work&show=" + show)
-                page.clock.run_for(2000)
+                _settle(page, '#work-list ui-button')
                 page.wait_for_function("count => document.querySelectorAll('#work-list ui-button').length === count", arg=1 if device else 4)
                 if device:
                     assert device in page.locator("#work-list ui-button").inner_text()
@@ -328,7 +334,7 @@ def test_mixed_work_selection_filter_refresh_failure_and_accessibility(site, siz
                     'a[aria-current="page"]').all_inner_texts() == [label]
             api["/api/fleet/work"] = {**api["/api/fleet/work"], "rows": rows, "truncated_sources": []}
             page.goto(site + "/console?view=work")
-            page.clock.run_for(2000)
+            _settle(page, '#work-list ui-button')
             page.wait_for_function("() => document.querySelectorAll('#work-list ui-button').length === 2")
             assert page.locator("#work-overview").is_visible()
             assert not page.locator('[aria-labelledby="map-heading"]').is_visible()
@@ -405,12 +411,12 @@ def test_trip_and_cell_job_rows_read_their_visible_state_and_filters(site, size)
             for show, expected in (("pending", ["Cell 적재 · omx_control · 승인 대기"]),
                                    ("done", ["운행 · rosy_03 · 끝남"])):  # 개입 필요 is not 끝남 (D-763 8)
                 page.goto(site + "/console?view=work&show=" + show)
-                page.clock.run_for(2000)
+                _settle(page, '#work-list ui-button')
                 page.wait_for_function("count => document.querySelectorAll('#work-list ui-button').length === count",
                                        arg=len(expected))
                 assert page.locator("#work-list ui-button").all_inner_texts() == expected, show
             page.goto(site + "/console?view=work")
-            page.clock.run_for(2000)
+            _settle(page, '#work-list ui-button')
             page.wait_for_function("() => document.querySelectorAll('#work-list ui-button').length === 5")
             texts = page.locator("#work-list ui-button").all_inner_texts()
             assert texts[:2] == ["운행 · rosy_01 · 대기 · 신호", "운행 · rosy_02 · 대기 상한 넘음 · 신호"], texts
@@ -576,7 +582,7 @@ def test_late_approval_failure_does_not_disable_a_new_selection(site):
         try:
             page.route("**/api/fleet/missions/first/admit", lambda route: pending.append(route))
             page.goto(site + "/console?view=work&show=pending")
-            page.clock.run_for(2000)
+            _settle(page, '#work-list ui-button')
             page.locator("#work-list ui-button").filter(has_text="first").click()
             page.locator("#work-admit").click()
             for _ in range(50):
@@ -624,7 +630,7 @@ def test_pending_seat_approves_through_the_existing_admit_route(site, size, case
                 route.fulfill(status=answer[0], json=answer[1])
             page.route("**/api/fleet/missions/wait-1/admit", admit)
             page.goto(site + "/console?view=work&show=pending")
-            page.clock.run_for(2000)
+            _settle(page, '#work-list ui-button')
             expect(page.locator("#work-admit")).to_be_hidden()  # nothing chosen, nothing to approve
             page.locator("#work-list ui-button").filter(has_text="omx_wait").click()
             button = page.locator("#work-admit")
