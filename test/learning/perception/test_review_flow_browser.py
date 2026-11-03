@@ -152,7 +152,7 @@ def test_command_shortcuts_do_not_run_while_typing_or_composing(browser_workspac
 def test_command_search_refreshes_functions_that_finish_loading(browser_workspace):
     page, _, expect = browser_workspace
     pending = []
-    page.route('**/api/workspace', lambda route: pending.append(route))
+    page.route('**/api/workspace*', lambda route: pending.append(route))
     page.goto(page.url.split('?')[0], wait_until='domcontentloaded')
     page.keyboard.press('Control+k')
     search = page.get_by_role('textbox', name='기능 검색어')
@@ -780,7 +780,7 @@ def test_object_review_first_use_leads_to_data_registration(browser_workspace):
 def test_workspace_disconnect_shows_reachable_retry(browser_workspace, route, empty, retry, content, width):
     page, _, expect = browser_workspace
     page.set_viewport_size({'width': width, 'height': 844})
-    page.route('**/api/workspace', lambda request: request.abort())
+    page.route('**/api/workspace*', lambda request: request.abort())
     page.goto(page.url.split('?')[0].rstrip('/') + route, wait_until='networkidle')
     expect(page.locator(empty)).to_be_visible()
     expect(page.locator(content)).to_be_hidden()
@@ -797,7 +797,7 @@ def test_workspace_disconnect_shows_reachable_retry(browser_workspace, route, em
         target = Path(output) / f'learning-{"objects" if route == "/" else "pixels"}-disconnect-{width}.png'
         target.parent.mkdir(parents=True, exist_ok=True)
         page.screenshot(path=str(target), full_page=True)
-    page.unroute('**/api/workspace')
+    page.unroute('**/api/workspace*')
     page.locator(retry).click()
     expect(page.locator(content)).to_be_visible()
 
@@ -809,10 +809,10 @@ def test_workspace_disconnect_hides_stale_review(browser_workspace, route, reloa
     page.set_viewport_size({'width': 390, 'height': 844})
     page.goto(page.url.split('?')[0].rstrip('/') + route, wait_until='networkidle')
     expect(page.locator(content)).to_be_visible()
-    page.route('**/api/workspace', lambda request: request.abort())
+    page.route('**/api/workspace*', lambda request: request.abort())
     page.locator(reload).click()
     expect(page.locator(content)).to_be_hidden()
-    page.unroute('**/api/workspace')
+    page.unroute('**/api/workspace*')
     page.locator('#show-all' if route == '/' else '#pixel-reload').click()
     expect(page.locator(content)).to_be_visible()
 
@@ -829,7 +829,7 @@ def test_review_permission_denial_blocks_work_until_reload(
     output = os.getenv('ROSY_UIUX_SCREENSHOT_DIR')
     page.set_viewport_size({'width': width, 'height': 844})
     page.goto(page.url.split('?')[0].rstrip('/') + route, wait_until='networkidle')
-    page.route('**/api/workspace', lambda request: request.fulfill(
+    page.route('**/api/workspace*', lambda request: request.fulfill(
         status=403, content_type='application/json', body='{"error":"local host required"}'))
     page.locator(reload).click()
     expect(page.locator(content)).to_be_hidden()
@@ -842,7 +842,7 @@ def test_review_permission_denial_blocks_work_until_reload(
         target = Path(output) / f'learning-{"objects" if route == "/" else "pixels"}-workspace-denied-{width}.png'
         target.parent.mkdir(parents=True, exist_ok=True)
         page.screenshot(path=str(target))
-    page.unroute('**/api/workspace')
+    page.unroute('**/api/workspace*')
     page.locator('#show-all' if route == '/' else reload).click()
     expect(page.locator(content)).to_be_visible()
 
@@ -875,8 +875,8 @@ def test_review_waiting_workspace_hides_stale_editing(
     page, _, expect = browser_workspace
     page.set_viewport_size({'width': width, 'height': 844})
     pending = []
-    page.route('**/api/workspace', lambda request: pending.append(request))
-    with page.expect_request('**/api/workspace'):
+    page.route('**/api/workspace*', lambda request: pending.append(request))
+    with page.expect_request('**/api/workspace*'):
         page.goto(page.url.split('?')[0].rstrip('/') + route, wait_until='domcontentloaded')
     if route == '/pixels':
         expect(page.locator(empty)).to_be_hidden()
@@ -916,8 +916,8 @@ def test_review_delayed_workspace_shows_wait_age(browser_workspace, route, statu
     page, _, expect = browser_workspace
     page.set_viewport_size({'width': 390, 'height': 844})
     pending = []
-    page.route('**/api/workspace', lambda request: pending.append(request))
-    with page.expect_request('**/api/workspace'):
+    page.route('**/api/workspace*', lambda request: pending.append(request))
+    with page.expect_request('**/api/workspace*'):
         page.goto(page.url.split('?')[0].rstrip('/') + route, wait_until='domcontentloaded')
     expect(page.locator(status)).to_contain_text('서버 응답 대기 3초', timeout=5000)
     expect(page.locator(content)).to_be_hidden()
@@ -1027,7 +1027,8 @@ def test_review_service_unavailable_is_distinct_from_connection_failure(
 ):
     page, _, expect = browser_workspace
     page.set_viewport_size({'width': width, 'height': 844})
-    page.route(f'**/api/{api}', lambda request: request.fulfill(
+    endpoint = f'**/api/{api}' + ('*' if api == 'workspace' else '')
+    page.route(endpoint, lambda request: request.fulfill(
         status=503, content_type='text/html', body='Service Unavailable'))
     page.goto(page.url.split('?')[0].rstrip('/') + route, wait_until='networkidle')
     expect(page.locator(status)).to_contain_text('사용할 수 없습니다')
@@ -1045,7 +1046,7 @@ def test_review_service_unavailable_is_distinct_from_connection_failure(
         target = Path(output) / f'learning-{name}-unavailable-{width}.png'
         target.parent.mkdir(parents=True, exist_ok=True)
         page.screenshot(path=str(target))
-    page.unroute(f'**/api/{api}')
+    page.unroute(endpoint)
     page.locator(retry).click()
     if route in ('/learning', '/catalog'):
         expect(page.locator(recovered)).to_be_enabled()
