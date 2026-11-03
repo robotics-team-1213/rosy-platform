@@ -199,6 +199,14 @@ def test_cell_catalog_fits_the_full_page_and_belongs_to_saved_documents(cell_url
                 return text.getBoundingClientRect().top < cell.getBoundingClientRect().top
                     + parseFloat(style.paddingTop) + parseFloat(style.fontSize);
             }"""), "the mass must be at the top of a long source row"
+            if width == 390:
+                wrapper = table.locator("..")
+                wrapper.focus()
+                page.keyboard.press("ArrowRight")
+                page.wait_for_function("document.getElementById('catalog-table').parentElement.scrollLeft > 0")
+                wrapper.evaluate("el => { el.scrollLeft = el.scrollWidth; }")
+                expect(table.locator("th").last).to_be_in_viewport()
+                wrapper.evaluate("el => { el.scrollLeft = 0; }")
             if os.environ.get("ROSY_CAPTURE_INLINE") == "1":
                 shot = page.screenshot(type="jpeg", quality=35)
                 print(f"ROSY_SCREENSHOT cell-catalog-{theme}-{width} " + base64.b64encode(shot).decode())
