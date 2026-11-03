@@ -4,6 +4,7 @@ import math
 import sys
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "deploy/robot/omx"))
@@ -11,6 +12,7 @@ import cell_look  # noqa: E402
 import cell_pivot  # noqa: E402
 
 REGION = {"radius_mm": 30.0, "phase_deg": 60.0}
+CLEAR = [200.0, 200.0]  # free ground each side of the box, more than the opened jaws need
 
 
 def test_the_tcp_is_the_mark_minus_the_circle_radius_along_yaw_plus_phase():
@@ -60,7 +62,7 @@ def test_looks_move_the_command_onto_the_box_despite_map_error_and_droop(tmp_pat
 
     monkeypatch.setattr(cell_pivot, "mark_to_arm", mark_to_arm)
     target = {"pick": {"x": 0.092, "y": 0.206, "z": 0.02, "yaw_deg": yaw}, "place": {},
-              "object": {"raw_m": [box_true[0] + error[0], box_true[1] + error[1]]}, "bias_region": REGION}
+              "object": {"raw_m": [box_true[0] + error[0], box_true[1] + error[1]], "mark_half_mm": CLEAR}, "bias_region": REGION}
     out = cell_look.look(arm, {"params": None}, {}, "floor", target, write, tmp_path, sleep=lambda s: None)
     assert out["verdict"] == "pass" and len(out["looks"]) == 2
     assert arm.at == pytest.approx(box_true, abs=1e-4)  # the arm, not just the command, is over the box
@@ -89,6 +91,61 @@ def test_an_unseen_jaw_mark_refuses_the_descent(tmp_path, monkeypatch):
     monkeypatch.setattr(cell_pivot, "mark_jaws", lambda cell, config, sleep, near=None: None)
     monkeypatch.setattr(cell_pivot, "mark_pixel", lambda record, config, site, raw, z: (0.0, 0.0))
     monkeypatch.setattr(cell_pivot, "joints_tcp", lambda joints: (0.1, 0.2, 0.08, 0.0))
-    target = {"pick": {"x": 0.1, "y": 0.2}, "place": {}, "object": {"raw_m": [0.1, 0.2]}, "bias_region": REGION}
+    target = {"pick": {"x": 0.1, "y": 0.2}, "place": {}, "object": {"raw_m": [0.1, 0.2], "mark_half_mm": CLEAR}, "bias_region": REGION}
     out = cell_look.look(Arm((0.1, 0.2), (0, 0)), {"params": None}, {}, "floor", target, None, tmp_path, sleep=lambda s: None)
     assert out["verdict"] == "refuse" and "not seen" in out["why"]
+
+
+def dense_row():
+    """arm_b 2026-11-03: four 30 mm boxes 6 mm apart (1 px per mm), the second one the target; jaws close along x."""
+    import cell_finger_room as fr
+
+    mask = np.zeros((200, 300), np.uint8)
+    px = lambda p: (150 + p[0] * 1000, 100 + (p[1] - 0.1) * 1000)  # noqa: E731
+    for centre in (-36, 0, 36, 72):
+        mask[55:146, 150 + centre - 15:150 + centre + 15] = 255
+    box = {"raw_m": [0.0, 0.1], "width_mm": 30, "length_mm": 90, "long_axis_deg": 90.0}
+    room = fr.jaw_margin(fr.own_removed(mask, (0, 0, 300, 200), px, box), (0, 0, 300, 200), px, box, None,
+                         {"auto.finger_mm": 2.0})  # the field value of arm_b's jaws
+    return mask, px, box, room
+
+
+class Mute:
+    """A cell that must see no jaw command and no look: any act or mark is a failure."""
+
+    def act(self, command):
+        raise AssertionError(f"the arm was commanded: {command}")
+
+
+def test_jaws_never_open_for_the_mark_among_neighbours_within_the_opened_width(tmp_path, monkeypatch):
+    import cell_finger_room as fr
+
+    _, _, box, room = dense_row()
+    assert room["margin_mm"] is not None  # the pick itself fits, opened to its box width plus a small margin
+    need = fr.mark_half_gap_mm() + 14.0  # 62 opens about 131 mm: 65.5 each side of the centre, plus the map's error
+    assert max(room["mark_half_mm"]) < need - 40  # the neighbours stand 21 mm from the centre
+    monkeypatch.setattr(cell_pivot, "mark_jaws", lambda *a, **k: pytest.fail("jaws opened among the boxes"))
+    target = {"pick": {"x": 0.0, "y": 0.1}, "place": {}, "object": dict(box, mark_half_mm=room["mark_half_mm"]), "bias_region": REGION}
+    refused = cell_look.look(Mute(), {"params": None}, {}, "pallet", target, None, tmp_path)
+    assert refused["verdict"] == "refuse" and "no room" in refused["why"] and refused["looks"] == []
+    # with a wrist hook behind it the look steps aside and the chain goes on measuring; still no jaw moved
+    skipped = cell_look.look(Mute(), {"params": None}, {}, "pallet", target, None, tmp_path, fallback=True)
+    assert skipped["verdict"] == "skipped" and (skipped["dx_mm"], skipped["dy_mm"]) == (0.0, 0.0)
+    # no measurement of the room at all is no room (a push without a mask, an old object row)
+    target["object"].pop("mark_half_mm")
+    assert cell_look.look(Mute(), {"params": None}, {}, "pallet", target, None, tmp_path)["verdict"] == "refuse"
+
+
+def test_the_mark_room_is_free_only_when_the_whole_opened_gap_is_free_and_inside_the_map():
+    import cell_finger_room as fr
+
+    mask, px, box, room = dense_row()
+    clear = np.zeros_like(mask)
+    free = fr.jaw_margin(clear, (0, 0, 300, 200), px, box)["mark_half_mm"]
+    assert min(free) >= fr.mark_half_gap_mm() + 14.0 - 0.05  # nothing within reach: the jaws may open
+    # a neighbour 70 mm out (past the 65.5 of the gap, inside it with the map's error): not enough
+    clear[55:146, 150 - 85:150 - 70] = 255
+    assert min(fr.jaw_margin(clear, (0, 0, 300, 200), px, box)["mark_half_mm"]) < fr.mark_half_gap_mm() + 14.0
+    # a box too near the edge of what the camera view covers: past it is unknown, not free
+    edge = fr.jaw_margin(np.zeros((200, 300), np.uint8), (0, 0, 300, 200), lambda p: (60 + p[0] * 1000, 100 + (p[1] - 0.1) * 1000), box)
+    assert min(edge["mark_half_mm"]) < 60

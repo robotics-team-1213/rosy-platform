@@ -227,6 +227,8 @@ def test_a_session_raises_the_caps_only_while_recording_and_restores_everything(
     record = s.execute(config(tmp_path), CAPS, teleop_only=False)
     assert record["exit_code"] == 0 and record["caps_restored"] is True and record["safe_end"] is True
     assert (11, "pwm_limit", 300) in arm.writes and (16, "current_limit", 250) in arm.writes
+    # the gripper (mode 5) is limited by Goal Current, not by the cap: it gets the cap too, the others do not
+    assert (16, "goal_current", 250) in arm.writes and not any(n == "goal_current" for k, n, _ in arm.writes if k != 16)
     assert_restored(arm, leader)
     assert ("stop", "rosy-omx-camera@top.service") in calls and ("start", "rosy-omx-camera@top.service") in calls
     assert ("stop", "rosy-omx-camera@front.service") not in calls  # was not running: left alone
@@ -661,7 +663,7 @@ def test_alert_payload_stops_and_restores_caps_but_keeps_fault_and_unsafe_receip
     assert record['hardware_faults'][12] == {'hw_error': 32, 'packet_alert': True}
     assert not record['safe_end'] and record['manual_attention_required']
     assert arm.motors[12]['hw_error'] == 32
-    assert all(name in ('torque', 'pwm_limit', 'current_limit') and (name != 'torque' or value == 0)
+    assert all(name in ('torque', 'pwm_limit', 'current_limit', 'goal_current') and (name != 'torque' or value == 0)
                for _, name, value in arm.writes)
 
 

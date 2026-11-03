@@ -31,11 +31,13 @@ def pick_hooks(config: dict, cell, target: dict, write_library, source: str, des
 
     params, spec = config.get("params"), config.get("wrist") or {}
     gap = 30.0 + (config["plan"]["grip_open"] - prm.get(params, "gripper.held_30mm")) * prm.get(params, "gripper.gap_mm_per_unit")
+    later = [cell_wrist_ref.ref_hook(config, cell, target, write_library, source),
+             cell_fingers.finger_hook(config, cell, target, write_library, gap),
+             cell_wrist.hook(config, cell, target, write_library, emit)]
+    # a look with no room to open the jaws is skipped only when one of these still measures the position
     wrist = cell_reach.chain(cell_reach.hook(config, cell, target, write_library),
-                             cell_look.hook(config, cell, target, write_library, calibration, source),
-                             cell_wrist_ref.ref_hook(config, cell, target, write_library, source),
-                             cell_fingers.finger_hook(config, cell, target, write_library, gap),
-                             cell_wrist.hook(config, cell, target, write_library, emit))
+                             cell_look.hook(config, cell, target, write_library, calibration, source,
+                                            fallback=any(h is not None for h in later)), *later)
     capture = None
     if prm.get(params, "wrist.ref_servo") and spec.get("hsv_min"):
         work, arm = Path(config["work_dir"]).expanduser(), config.get("arm_id", "arm_s")

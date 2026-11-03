@@ -9,12 +9,21 @@ that radius along yaw + phase. The box's raw position comes from the same map in
 local error is in both and cancels: box - TCP is the move. The new command is the runner's own command (FK of its
 target joints) plus that move, so the arm's droop is corrected too: a first field run that set FK + move left y 4.4 mm
 short three times (2026-10-29). Run last among the position hooks; up to look.max_iter looks, every one kept.
+
+The mark opens the jaws to pivot.grip_open (62, about 131 mm of gap, wider than any pick's open_max 56), and it needs that
+travel: opened to 54.8 it left no blob over a box top, to 59.9 about 500 px (arm_b, 2026-11-03). Over a row of boxes 6 mm
+apart the opening swept the neighbours, closed on a box edge (blocked at 54.6) and the park folded that box home. So the
+jaws only move here when the top map shows free ground on both sides of the box, along the closing axis, out to half the
+opened gap plus look.mark_err_mm (the map's worst error): free by the map, not by the jaws' height, so the unsettled TCP
+length (URDF 74 mm, platform yaml 91.9 mm: 18 mm of tip height) does not enter. No room, or no room measured: nothing
+moves; `skipped` when a later hook still measures the position (the wrist), else `refuse`.
 """
 from __future__ import annotations
 
 import math
 import time
 
+import cell_finger_room as fr
 import cell_params as prm
 import cell_pivot
 
@@ -27,9 +36,11 @@ def tcp_from_mark(mark_raw, yaw_deg: float, region: dict):
 
 
 def look(cell, config: dict, record: dict, site: str, target: dict, write_library, work, sleep=time.sleep,
-         goto: str = "goto above_pick", name: str = "look-replan.json", tol_mm: float | None = None) -> dict:
+         goto: str = "goto above_pick", name: str = "look-replan.json", tol_mm: float | None = None,
+         fallback: bool = False) -> dict:
     """Measure point - TCP at the hover and move the target there; verdict pass / refuse with every look kept.
-    `target[\"object\"][\"raw_m\"]` is the raw point the TCP must stand over: a box to pick, or a push's start."""
+    `target[\"object\"][\"raw_m\"]` is the raw point the TCP must stand over: a box to pick, or a push's start;
+    `mark_half_mm` beside it is the free distance each side of that point along the closing axis (cell_finger_room)."""
     params, region = config.get("params"), target.get("bias_region") or {}
     box, start = target["object"]["raw_m"], (target["pick"]["x"], target["pick"]["y"])
     rows, total = [], 0.0
@@ -43,6 +54,11 @@ def look(cell, config: dict, record: dict, site: str, target: dict, write_librar
         moved = (1000 * (target["pick"]["x"] - start[0]), 1000 * (target["pick"]["y"] - start[1]))
         return {"verdict": verdict, "dx_mm": round(moved[0], 1), "dy_mm": round(moved[1], 1), "looks": rows,
                 "total_mm": round(total, 1), **extra}
+    need = fr.mark_half_gap_mm(params, cell_pivot.mark_open(config)) + prm.get(params, "look.mark_err_mm")
+    room = target["object"].get("mark_half_mm")
+    if room is None or min(room) < need - 0.05:  # before any jaw moves (0.05 mm: float noise); never open among neighbours
+        why = f"no room to open the jaws for the mark: {room} mm free each side, {need:.0f} needed"
+        return out("skipped" if fallback else "refuse", why=why)
     for i in range(int(prm.get(params, "look.max_iter")) + 1):
         status = cell.act("state")
         state, commanded = status.get("state"), status.get("target")
@@ -79,8 +95,9 @@ def look(cell, config: dict, record: dict, site: str, target: dict, write_librar
     return out("refuse", why="no look left")
 
 
-def hook(config: dict, cell, target: dict, write_library, calibration: dict, site: str):
-    """The look as the first hover hook (look.enabled), or None: off, no map, or no pivot circle for the box's region."""
+def hook(config: dict, cell, target: dict, write_library, calibration: dict, site: str, fallback: bool = False):
+    """The look as the first hover hook (look.enabled), or None: off, no map, or no pivot circle for the box's region.
+    `fallback`: a later hover hook measures the position, so a look with no room to mark may be skipped."""
     from pathlib import Path
 
     region = target.get("bias_region") or {}
@@ -88,5 +105,5 @@ def hook(config: dict, cell, target: dict, write_library, calibration: dict, sit
     if not prm.get(config.get("params"), "look.enabled") or record is None or "radius_mm" not in region:
         return None
     work = Path(config["work_dir"]).expanduser()
-    return lambda: look(cell, config, record, site, target, write_library, work)
+    return lambda: look(cell, config, record, site, target, write_library, work, fallback=fallback)
 
