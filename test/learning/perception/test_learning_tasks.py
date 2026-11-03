@@ -330,4 +330,4 @@ def test_tampered_transfer_dataset_group_is_rejected_before_writes(store, tmp_pa
     monkeypatch.setattr(clean, '_save', lambda *args, **kwargs: pytest.fail('invalid binding attempted a write'))
     with pytest.raises(ValueError):
         clean.import_task(package, ACTOR)
-    assert clean.snapshot() == {'robots': [], 'tasks': []}
+    assert clean.snapshot() == {'robots': [], 'tasks': [], 'sim_contexts': []}
