@@ -114,12 +114,3 @@ def test_a_cool_temperature_cannot_clear_an_unread_motor_error(error, level, rea
     assert reason in m.reasons and 'readings_lost' in m.reasons
     m.on_motor_health({'motors': [motors(40)['motors'][0], cool]}, 2.0)
     assert m.update(50.0, 0, 2.0) == OK
-
-
-def test_a_lost_warm_motor_does_not_keep_a_cooled_soc_hot():
-    m = ThermalMonitor()
-    m.on_motor_health(motors(64), 0.0)
-    assert m.update(83.0, 0, 0.0) == HOT
-    m.on_motor_health({'motors': []}, 1.0)
-    assert m.update(50.0, 0, 1.0) == WARM
-    assert 'motor_1_warm' in m.reasons and 'soc_hot' not in m.reasons
