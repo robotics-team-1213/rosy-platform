@@ -14052,11 +14052,24 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 세 번째부터는 차례가 시험 폴더를 직접 돈다.
 - CE: 해당 없음 — D-970 1항 상한의 구멍을 메운 것.
 
+
+## 2026-11-03 · uncommitted · docs(control-terms): 관제 용어 층 분리, 헤더는 관제 단위 이름 (D-974)
+- 변경: D-974 — Rosy Fleet은 제품 이름, 통합관제 R·셀 관제 CELL-x는 단위, PC는 물리 이름(OMX 노트북). D-968 1항 대체. `/api/fleet/state`의 `fleet`에 관제 단위 설정이 있을 때 `unit`·`root`(API v1.358), 헤더가 "통합관제 R"/"CELL-A"를 보인다. `fleet_name`은 페어링·lease 신원으로 그대로. 팔레타이징 준비 화면 표시 문구 "Cell" → "팔레트 적재"(경로·id 그대로, 노출은 기존 `CELL_TRANSFER` 규칙). CONCEPTS·관제 단위 배치표 갱신.
+- 증거: 헤더 node 시험 13개 통과, 서버·화면 pytest는 원격 실행 결과를 따른다. 현장 R·CELL-A 헤더 관측은 배포 뒤 별도.
+- gate 변화: 없음.
+- CE: 해당 없음 — 장애 해결이 아니라 용어 결정, 근거는 D-974.
+
 ## 2026-11-03 · uncommitted · D-969 두 팔 ACT 파이프라인: ADR, Isaac 시연 녹화, 데이터셋 내보내기
 - 변경: ADR D-969(첫 학습 정책은 Isaac 정답 IK 시연으로 학습한 ACT 두 팔, 실물 단위, 컨테이너 = 에피소드, 6단계), D-947 2에 범위 확장 연결. Isaac `demo_recording`(옵트인: 실물 top·side 시점 영상과 두 팔 상태·명령 12개를 10 Hz로 `demo.jsonl`), 케이스 `nominal-palletizing-v21-ship-demo`. `learning/curation/omx/isaac_demo_export.py`(→ `rosy.omx.experiment-dataset/1`, 출처 `scripted_teacher`), 학습기가 `scripted_teacher`를 시연으로 받음.
 - 증거: 내보내기 시험(합성 두 실행, 단위·분할·영상 프레임 수), `learning/training/omx/test/`, 컨테이너 적층·녹화 시험 원격 통과. Isaac 시연 실행은 진행 중.
 - gate 변화: 없음. 학습 결과·폐루프 평가·실물 수용 없음. 그리퍼 0~100 대응은 가정(패드 간격/40 mm).
 - CE: 해당 없음 — 새 기능이다.
+
+## 2026-11-04 · uncommitted · docs(control-terms): D-974 착지 준비 — 안전 검토·크기·ADR Log 병합 정리
+- 변경: `console.py` 변경을 줄 수 증가 없이 다시 써(D-766) 독립 안전 검토 trailer와 함께 한 커밋으로 다시 만들었다(D-430 §5). main 병합에서 union으로 겹친 D-968·D-970 ADR Log 행을 하나씩 남겼다(D-970은 main의 최신 상태, D-968은 D-974 대체 표시). D-974 후속 작업 표와 Log 상태를 실제 상태로 갱신했다.
+- 증거: 원격 pytest(관제 단위·서버 앱·브라우저·API 버전) 통과, node 시험 19개 통과, 독립 안전 검토 PASS 2회, lint 0 error. Confluence 2-1 v15 반영. Harbor PR #17 필수 검사 통과, 병합은 팀 승인 대기.
+- gate 변화: 없음.
+- CE: 해당 없음 — 착지 규칙(D-430·D-766·D-510)에 이미 있는 거절이며 그대로 따랐다.
 
 ## 2026-11-04 · uncommitted · feat(sim): MuJoCo 3층 전체 적재 순서, 실측 셀 layout, 실물 site 계획
 - 변경: `tools/sim/ship_stack_sequence.py`(Isaac 순서로 9개 연속 놓기, 놓기 오차·앞 상자 교란), `ship_release_scene.build(cargo=)`, `tools/sim/ship_stack_sites.py`(Isaac 적층 칸 → 한 팔의 실물 site와 `cell_auto_pick` 명령, D-911 범위 표시), `cell_model_inventory.yaml`에 `layout`(자 실측 높이, 받침, 카메라).
