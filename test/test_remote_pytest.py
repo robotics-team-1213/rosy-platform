@@ -66,6 +66,14 @@ def test_most_headroom_first_and_floor_skips_full_hosts():
     assert chosen == []
 
 
+def test_place_remembers_hosts_left_out_for_an_alone_job(monkeypatch):
+    monkeypatch.setattr(rp, "BLOCKED", {"gone@3"})
+    chosen, _ = rp.place("pytest", ["model@1", "ai@2"], [{**host(), "pytest_blocked": True}, host()])
+    assert chosen == ["ai@2"] and rp.BLOCKED == {"model@1", "gone@3"}
+    rp.place("pytest", ["model@1", "gone@3"], [host(), None])  # an unreachable host is no pin either
+    assert rp.BLOCKED == set()
+
+
 def test_lock_budget_reserves_memory_not_yet_used():
     chosen, notes = rp.place("pytest", ["a@1"], [host(avail_gb=12, total_gb=15, lock_gb=12)])
     assert chosen == [] and "3.0 GB free" in notes[0]
@@ -578,6 +586,16 @@ def test_host_alone_suites_go_to_the_first_configured_host_and_fall_back_without
     assert rp.workers(["ai", "model"], [gz], {"model": {"sim_held": 1}}, order) == [("ai", "any")]  # sim on it
     assert rp.workers(["site", "ai"], [gz], {"site": {"site": True}}, ["site", "ai"]) == [("ai", "any")]
     assert wq.guard(None, "main" + wq.SKIP_ALONE, gz) is not None
+    # 2026-11-04: alone browser chunks and explicit ROSY_JOB_ALONE=1 jobs pin too, and a pin that placement left
+    # out for another run's alone job still takes them (queued there) instead of draining the AI PC as well.
+    chunk = ["ROSY_RUN_BROWSER_TESTS=1", wq.ALONE_ENV, "a/test/test_b_browser.py"]
+    timing = ["ROSY_JOB_ALONE=1", "test/test_g1_timing.py"]
+    assert rp.workers(["ai", "model"], [["t"], chunk], {}, order) == [("model", "any"), ("ai", "any" + wq.SKIP_ALONE)]
+    assert rp.workers(["ai"], [timing], {}, order, {"model"}) == [("model", "alone")]
+    assert rp.workers(["ai"], [["t"], timing], {}, order, {"model"}) == [("model", "alone"), ("ai", "any" + wq.SKIP_ALONE)]
+    assert wq.wanted("alone", [["t"], timing])(1) is True and wq.wanted("alone", [["t"], timing])(0) is False
+    assert rp.workers(["ai"], [timing], {}, order) == [("ai", "any")]  # model PC down, not blocked: as before
+    assert rp.workers(["ai"], [["t"]], {}, order, {"model"}) == [("ai", "any")]  # nothing alone: no pin
     work = wq.Work([0, 1, 2])  # largest first: 2 is the smallest, a light host's pick unless it is host-alone
     assert work.take_small(lambda i: i != 2) == 1 and work.take_small() == 2
 
