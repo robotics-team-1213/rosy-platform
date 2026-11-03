@@ -30,6 +30,7 @@ import class_sets, review_return
 from learning_workspace import Workspace, WORKFLOWS
 import review_evidence, review_ingest, review_masks, vlm_mask_feedback, camera_setup_web, omx_web, sim_web, vlm_judge_web
 import review_classes
+import review_context
 import review_versions, omx_center_web, review_upload
 import learning_domains, learning_pipeline, promotion_request
 import learning_tasks_web
@@ -205,22 +206,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                 if path == '/api/learning/storage':
                     return self.send(storage_web.inventory.snapshot() if storage_web.inventory else {'status': 'not_configured', 'roots': []})
                 if path == '/api/workspace':
-                    query = parse_qs(urlparse(self.path).query, strict_parsing=True, keep_blank_values=True)
-                    if set(query) - {'limit', 'offset', 'lane', 'status', 'around', 'after', 'source_session', 'folder_id'} or any(len(v) != 1 for v in query.values()):
-                        raise ValueError('invalid workspace page request')
-                    page = store.frame_page(**{key: int(values[0]) if key in ('limit', 'offset', 'around', 'after') else values[0]
-                                               for key, values in query.items()})
-                    frames = page.pop('frames')
-                    page['context'].update(workspace={'id': project,
-                        'label': review_evidence.metadata(store, 'workspace_label') or '현재 작업공간'},
-                        workspaces=workspace_links or [])
-                    object_set = class_sets.object_set(store)
-                    return self.send({'frames': frames, **page, 'classes': [c['name'] for c in object_set['classes']],
-                                      'object_class_set': object_set,
-                                      'workspace_kind': review_evidence.metadata(store, 'workspace_kind'),
-                                      'token': token, 'exports': store.exports(), 'segmentation_supported': True,
-                                      'pixel_classes': review_masks.served_classes(store),
-                                      'map_reference': review_evidence.map_reference(store)})
+                    return self.send(review_context.workspace(store, self.path, project, workspace_links, token))
                 if path == '/api/classes':
                     if collaboration:
                         accounts.require(self.learning_principal, 'manage')
