@@ -816,3 +816,15 @@ def test_a_box_held_by_its_ends_is_grasped_at_its_middle_never_shifted_toward_an
     o = {"raw_m": [0.20, -0.03], "long_axis_deg": 90.0}
     assert auto.reachable_ends(o, by_the_ends) == []
     assert len(auto.reachable_ends(o, dict(by_the_ends, grasp={"jaw_axis_deg_from_long": 90}))) == 2
+
+
+def test_a_box_held_by_its_ends_needs_room_past_its_ends_not_beside_it():
+    """2026-11-04: three 3-cells 2 mm apart side by side; beside there is no room, past both ends there is."""
+    mask = np.zeros((200, 200), np.uint8)
+    px = lambda p: (100 + p[0] * 1000, 100 + (p[1] - 0.1) * 1000)  # noqa: E731  1 px per mm
+    box = {"raw_m": [0.0, 0.1], "width_mm": 30, "length_mm": 90, "long_axis_deg": 0.0, "object": "container-3"}
+    mask[85:116, 55:146] = 255   # the box, along x
+    mask[53:83, 55:146] = 255    # neighbours 2 mm beside it on both sides, same length
+    mask[118:148, 55:146] = 255
+    assert auto.finger_room(mask, (0, 0, 200, 200), px, box)["margin_mm"] is None  # across its width: blocked
+    assert auto.finger_room(mask, (0, 0, 200, 200), px, box, box["long_axis_deg"])["margin_mm"] is not None  # past its ends

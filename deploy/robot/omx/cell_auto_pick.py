@@ -303,7 +303,10 @@ def choose(cell, config, calibration, site, dest_site, place_xy, roi, objects, m
         elif px is None or not (roi[0] + 12 <= px[0] <= roi[2] - 12 and roi[1] + 12 <= px[1] <= roi[3] - 12):
             why = "not inside the camera view"
         elif not square_entry(entries, o):
-            room = finger_room(mask, roi, pixel_fn, o, None, p)
+            entry = entries[o["object"]]
+            # held by its ends the fingers go past the ends, not beside it: measure the room there (2026-11-04)
+            ends = o["long_axis_deg"] if across(entry) == entry["length_mm"] else None
+            room = finger_room(mask, roi, pixel_fn, o, ends, p)
             if room["margin_mm"] is None:  # a long box packed beside another may have room near one end (2026-11-01)
                 o, room = next(((e, r) for e in reachable_ends(o, entries[o["object"]], p)
                                 if (r := finger_room(mask, roi, pixel_fn, e, None, p))["margin_mm"] is not None), (o, room))
