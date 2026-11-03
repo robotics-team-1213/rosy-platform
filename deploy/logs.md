@@ -4442,3 +4442,10 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 현장 관제 PC의 사용자 유닛에 바인드 유닛이 한 번도 설치되지 않아 옮겨 꽂은 카메라 추적과 Fleet 승인 적용이 일어날 수 없었다. 배포 도구로 `bind`(쓰기 없음)가 쓰기·재시작 없이 네 역할을 확인한 뒤 현장 설정 `unit_files`에 두 파일을 더하고(백업 `.bak-20261103-bind`) 타이머를 켰다. 첫 실행 `write: []`. `test/test_omx_cameras.py` 13 passed(로컬).
 - gate 변화: 없음. 카메라를 꽂아 Fleet에서 승인하는 실물 수용은 아직이다.
 - CE: 해당 없음 — 재발은 예시 설정 시험과 README 설치 단계가 막는다.
+
+## 2026-11-03 · uncommitted · docs(omx): 허브 추천은 자동 배정으로 올리지 않는다
+
+- 변경: `propose`의 허브 추천(`suggest`)을 추천으로 유지하고, 그 이유를 docstring에 적었다.
+- 증거: 셀 재연결 뒤 현장에서 새 `omx_cameras.py`를 임시 경로로 읽기 전용 실행: 팔 보드 허브 `arm_a 3-3`, `arm_b 3-4`; 카메라 `arm_a_wrist 3-3.3`, `arm_b_wrist 3-4.3`, `side 3-4.2`, `top 4-2`(루트). 손목 카메라는 자기 팔 보드와 허브를 공유하지만 side 카메라도 arm_b 허브에 있어 허브만으로는 손목 카메라를 특정할 수 없다.
+- gate 변화: 없음.
+- CE: 해당 없음 — 배선 사실과 판단은 이 기록과 docstring에 있다.
