@@ -61,27 +61,37 @@ def lane_job(inv: list[str]) -> bool:
 
 
 def host_alone(inv: list[str]) -> bool:
-    """An invocation of a suite that takes the whole host (xdist_plan.HOST_ALONE: Gazebo, Isaac)."""
+    """An invocation that takes the whole host: a suite of xdist_plan.HOST_ALONE (Gazebo, Isaac), an alone browser
+    chunk or an explicit ROSY_JOB_ALONE=1 (G1 timing, alone reruns). 2026-11-04: these floated, each waiting on a
+    different PC, so both large PCs drained for two pretests at once."""
+    env = set(itertools.takewhile(ENV_WORD.match, inv))
+    if ALONE_ENV in env or "ROSY_JOB_ALONE=1" in env:
+        return True
     paths = [w.replace("\\", "/") for w in inv if not ENV_WORD.match(w) and not w.startswith("-")]
     return any(p == a or p.startswith(a + "/") or a.startswith(p + "/") for p in paths for a in HOST_ALONE)
 
 
 def workers(hosts: list[str], invocations: list[list[str]], headroom: dict,
-            order: list[str] = ()) -> list[tuple[str, str]]:
+            order: list[str] = (), blocked: set[str] = frozenset()) -> list[tuple[str, str]]:
     """(host, kind) per worker thread. "any" takes everything one at a time (light, site, sim-holding or unmeasured
     hosts, no lane jobs, or the host already runs BROWSER_PER_HOST browser jobs of any run); otherwise "main" takes
     all but lane jobs and each "lane" only lane jobs. A kind ending in SKIP_ALONE never takes a host_alone one.
 
     host_alone suites go to the first host of ``order`` (the configured list: the model PC) when it was placed:
     each one waits for its host to empty, and on 2026-10-30 70 of them (34-40 min each, 10 s-3.5 min of tests)
-    kept the AI PC from new jobs, so 44 of 143 placements found no host. Without that host they run as before."""
-    pin = next((h for h in order if h in hosts and not (headroom.get(h) or {}).get("site")), None)
+    kept the AI PC from new jobs, so 44 of 143 placements found no host. Without that host they run as before.
+    ``blocked``: placement left these out for an alone job running or waiting there. The pin still takes this run's
+    host-alone ones ("alone" worker: those only) and queues behind it, rather than draining a second host."""
+    pin = next((h for h in order if (h in hosts or h in blocked) and not (headroom.get(h) or {}).get("site")), None)
     if (headroom.get(pin) or {}).get("sim_held"):  # Gazebo/Isaac hold it: they would wait there behind the sim
         pin = None
     if pin and any(map(host_alone, invocations)):
         hosts = [pin] if all(map(host_alone, invocations)) else [pin, *(h for h in hosts if h != pin)]
     else:
         pin = None
+    if pin and pin not in headroom and pin in blocked:
+        rest = [(h, k + SKIP_ALONE) for h, k in workers(hosts[1:], invocations, headroom)] if len(hosts) > 1 else []
+        return [(pin, "alone"), *rest]
     hosts = hosts[:len(invocations)]
     lanes = sum(map(lane_job, invocations))
     rest = len(invocations) - lanes
@@ -109,6 +119,8 @@ def main_workers(room: dict, jobs: int) -> int:
 def wanted(kind: str, invocations: list[list[str]]):
     """The Work.take filter of a worker kind (None: anything)."""
     skip, kind = kind.endswith(SKIP_ALONE), kind.removesuffix(SKIP_ALONE)
+    if kind == "alone":
+        return lambda i: host_alone(invocations[i])
     if kind == "any":
         return (lambda i: not host_alone(invocations[i])) if skip else None
     return lambda i: lane_job(invocations[i]) == (kind == "lane") and not (skip and host_alone(invocations[i]))
