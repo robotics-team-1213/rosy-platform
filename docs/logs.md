@@ -13966,6 +13966,12 @@ osy-d395-s1d\`.
 - gate 변화: 이 기록은 결정만 담는다. 게이트를 약하게 하는 항은 없다.
 - 예약: D-966~969는 다른 진행 중 브랜치 예약이라 adr_gaps.txt에 선언했다.
 
+## 2026-11-03 · uncommitted · feat(isaac): 팔마다 정렬 자리·경유점, 완성 적층 실물 시점 렌더, 컨테이너 실행 65분
+- 변경: `leveling_centers_m`·`leveling_vias_m`(팔마다, 없으면 공용 자리), 실측 케이스는 각 팔 앞 자리(받침에서 벨트 반대쪽 170 mm)와 arm_a 경유점. 실측 벨트 통로는 바닥만 28 mm 낮추고 완화 바닥도 따라감. 첫 시행 끝에 `real-top-final.png`·`real-side-final.png`. 컨테이너 실행 한도 2,310→3,900 s(유닛 4,200 s, 카탈로그 같음). top 카메라 시차 중심 기록(검증 기록).
+- 증거: 실측 받침 케이스가 2,310 s 한도에서 8/9까지 놓음(run 5d3a, `runtime_limit`). 계획기 시험(벨트·적층·자기 정렬 자리 도달, 낮춘 벨트 수직 하강, arm_a 경유점) 원격 통과.
+- gate 변화: 없음. CAD 케이스 그대로.
+- CE: 해당 없음 — 원인과 고침이 시험·주석·검증 기록에 있다.
+
 ## 2026-11-03 · uncommitted · fix(landing): 같은 환경 browser chunk의 겹치는 파일 제거
 - 변경: 같은leading환경과실존순수.py파일만인browser계획을합칠때먼저나온chunk에파일을남긴다. 두browser결합경계만적용하며입력·파일합집합·chunk순서·기존basename분리를보존한다. 다른env순서/ALONE/profile/options/node/folder/missing/unknown은기존exactargv규칙이고일반pytest선택은그대로다.
 - 증거: code882915a034 원격새회귀+land_selection+land_browser 88PASS/skip·NEW·known·flaky0, wait0/run26초. RED40ee의3NEW중유지된두결합경계2NEW와97c52에서제거한추가env정규화요구1NEW를구분한다. 실제동일후보c5bf44/동일env의두기존argv를오프라인재생해15file참조→13/unique13/union동일,전체plan이나wall측정은아니다. 로그OS Temp rosy-browser-overlap-{red,green}/run-1.txt,운영자증거는저장소밖기존workspace-records의browser-overlap-selection-evidence-20261103.json.
