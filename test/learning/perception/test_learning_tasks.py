@@ -255,7 +255,7 @@ def test_task_transfer_keeps_semantic_identity_and_local_attribution(store, tmp_
                     dict(task=dict(package['task'], objective='Tampered'))]:
         with pytest.raises(ValueError):
             clean.import_task(dict(package, **changes), ACTOR)
-        assert clean.snapshot() == {'robots': [], 'tasks': []}
+        assert clean.snapshot() == {'robots': [], 'tasks': [], 'sim_contexts': []}
 
 
 @pytest.mark.parametrize('invalid', ['minimal', 'joints', 'cameras', 'action_limits'])
@@ -284,7 +284,7 @@ def test_invalid_profile_with_recomputed_transfer_hashes_is_rejected_before_writ
     monkeypatch.setattr(clean, '_save', lambda *args, **kwargs: pytest.fail('invalid transfer attempted a write'))
     with pytest.raises(ValueError):
         clean.import_task(package, ACTOR)
-    assert clean.snapshot() == {'robots': [], 'tasks': []}
+    assert clean.snapshot() == {'robots': [], 'tasks': [], 'sim_contexts': []}
     with pytest.raises(ValueError):
         store.task(dict(body, request_id=uid()), ACTOR, package['profile'])
 
