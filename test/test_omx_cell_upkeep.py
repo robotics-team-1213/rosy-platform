@@ -137,6 +137,22 @@ def test_a_closed_value_below_the_jaws_stop_is_flagged_with_the_numbers(tmp_path
     assert report(tmp_path, arms)[1]["jaw closed"]["status"] == "ok"
 
 
+def trace(path, pairs):
+    path.write_text("\n".join(json.dumps({"sent": [0] * 5 + [s], "present": [0] * 5 + [p]}) for s, p in pairs))
+
+
+def test_jaws_that_stop_short_of_a_wide_open_command_need_a_person(tmp_path):
+    arms = arms_setup(tmp_path)
+    trace(tmp_path / "trace-arm_a-1.jsonl", [(49.0, 49.0), (58.6, 52.0), (58.6, 53.9)])  # arm_b 2026-11-04 04:55
+    rep, checks, _ = report(tmp_path, arms)
+    assert checks["jaw open"]["status"] == "warn" and "53.90 of 56.00" in checks["jaw open"]["detail"]
+    assert rep["verdict"] == "needs_person"
+    trace(tmp_path / "trace-arm_a-1.jsonl", [(49.0, 49.0), (61.98, 61.17)])  # the same arm at 03:00
+    assert report(tmp_path, arms)[1]["jaw open"]["status"] == "ok"
+    trace(tmp_path / "trace-arm_a-1.jsonl", [(49.0, 49.0), (52.0, 50.0)])  # never asked wide: no verdict
+    assert "nothing to compare" in report(tmp_path, arms)[1]["jaw open"]["detail"]
+
+
 def test_a_missing_map_is_a_motion_step_and_a_hold_needs_a_person(tmp_path):
     rep, checks, _ = report(tmp_path, todo=["remap", "regions"])
     assert checks["map"]["status"] == "warn" and "auto --commissioning --person-at-switch" in checks["map"]["detail"]

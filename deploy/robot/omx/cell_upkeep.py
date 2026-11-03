@@ -7,7 +7,7 @@ The manifest maps an arm name to {"cell": <cell config>, "record": <record confi
 (paths relative to the manifest). Per arm, in this order: held (incidents/HOLD-<arm>.json), boards (record config
 robot.port / teleop.port exist), bus ownership (no record_session.py for the arm, per-arm lock free), follower
 registers (torque 0, no hardware error, caps at the commissioning baseline), cameras (200 + JPEG, top light gate),
-jaw closed value against the latest motor-health log, the calibration map (read-only cell_calibrate.check), the
+jaw closed value against the latest motor-health log, the jaw opening against the newest wide-open trace, the calibration map (read-only cell_calibrate.check), the
 after-session monitors (push_replay, jitter_replay) over the logs newer than the previous report, and the planning TCP.
 
 No motion, ever. With --fix the only write is `commissioning_limits.py --baseline`, and only when every follower
@@ -287,6 +287,24 @@ def check_jaws(arm, device, closed_values, health_logs, params):
     return row("jaw closed", "ok", "no motor-health log for this arm: nothing to compare")
 
 
+def check_jaw_open(traces, params):
+    """The jaws open as wide as the newest wide-open session asked. 2026-11-04: after a wind-up arm_b's jaws stopped
+    at 53.9 against 58.6 sent (61.2 at 03:00) while the frames and the VLM saw nothing; a hold was cleared on them."""
+    import jitter_replay as jr
+
+    open_max, gap = prm.get(params, "gripper.open_max"), prm.get(params, "upkeep.jaw_gap")
+    for path in sorted(traces, key=lambda p: -Path(p).stat().st_mtime):
+        grip = [(r["sent"][5], r["present"][5]) for r in jr.rows_of(path) if r.get("sent") and r.get("present")]
+        if not grip or max(s for s, _ in grip) < open_max - 2.0:
+            continue  # this session never opened wide: says nothing about the range
+        want, reached = min(max(s for s, _ in grip), open_max), max(p for _, p in grip)
+        if reached < want - gap:
+            return row("jaw open", "warn", f"the jaws opened only to {reached:.2f} of {want:.2f} in {Path(path).name}: "
+                                           "something limits them (linkage, cable, wedged object); a person checks before torque ON")
+        return row("jaw open", "ok", f"opened to {reached:.2f} (asked {want:.2f}) in {Path(path).name}")
+    return row("jaw open", "ok", "no wide-open session trace for this arm: nothing to compare")
+
+
 def check_map(config, params, top, io):
     if top is None:
         return row("map", "skipped", "no top frame")
@@ -366,6 +384,7 @@ def upkeep_arm(arm, spec, fix, io, out_dir, incidents, stamp, since=None):
     if plan_path and Path(plan_path).expanduser().exists():
         closed.add(float(json.loads(Path(plan_path).expanduser().read_text())["grip_closed"]))
     checks.append(check_jaws(arm, device, closed, glob.glob(str(logs_dir / "motor-health-*.jsonl")), params))
+    checks.append(check_jaw_open(glob.glob(str(logs_dir / f"trace-{arm}-*.jsonl")), params))
     checks.append(check_map(cell, params, top, io))
     checks.append(check_monitors(arm, device, logs_dir, previous_report(out_dir, arm) if since is None else since, params, io))
     checks.append(check_tcp(cell))
