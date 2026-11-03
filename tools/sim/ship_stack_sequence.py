@@ -167,7 +167,7 @@ V11_SIGMA_MM = [.5, 1., 1.5, 2., 2.5, 3., 3.5]  # the pocket mouth catches +-3.5
 
 def cases(stage='base'):
     if stage == 'v11':  # snap-together ship v11 + container v2: how much release error the pocket and pins absorb
-        for clear, retries, mu, sigma, yaw, seed in product([2., 5.], [0, 1], MU, V11_SIGMA_MM, [.25, 1.], SEEDS):
+        for clear, retries, mu, sigma, yaw, seed in product([2., 5.], [0, 1], MU, V11_SIGMA_MM, [.25, 1.], range(8)):
             yield dict(ship='v11', order=(1, 0, 2), open_gap_m=.0315, mu=mu, sigma_mm=sigma, sigma_yaw=yaw, seed=seed,
                        clearance_mm=clear, retries=retries, retry_sigma_mm=.1)
         return
@@ -207,12 +207,14 @@ def main():
     r.add_argument('out', type=Path)
     r.add_argument('--workers', type=int, default=12)
     r.add_argument('--limit', type=int, default=None, help='first N cases only (smoke)')
+    r.add_argument('--shard', default='0/1', help='K/N: every N-th case from K (split a sweep over hosts)')
     r.add_argument('--stage', choices=('base', 'fix', 'retry', 'v11'), default='base')
     sub.add_parser('table').add_argument('out', type=Path)
     args = parser.parse_args()
     if args.cmd == 'table':
         return table(args.out)
-    todo = list(cases(args.stage))[:args.limit]
+    k, n = map(int, args.shard.split('/'))
+    todo = list(cases(args.stage))[k::n][:args.limit]
     with args.out.open('x', encoding='utf-8') as out, ProcessPoolExecutor(args.workers) as pool:
         for row in pool.map(run, todo, chunksize=4):
             out.write(json.dumps(row)+'\n')
