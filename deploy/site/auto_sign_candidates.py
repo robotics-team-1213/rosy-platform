@@ -16,7 +16,10 @@ invocation:
    ``ahead`` or ``identical``) and the tag to be ``site-<source_commit[:12]>``;
 5. signs with ``sign_candidate.sign_manifest_only`` (expected commit and the
    attested digest), then uploads ``release.json.sig`` without ``--clobber``;
-6. appends one JSON line per decision to ``<state_dir>/audit.jsonl``.
+6. appends one JSON line per decision to ``<state_dir>/audit.jsonl``;
+7. after a run signed something, asks each ``notify_hosts`` target over SSH
+   (fixed command) to start the site updater at once — the host timer stays the
+   fallback — and repairs signed releases whose title still says "(unsigned)".
 
     python auto_sign_candidates.py --config <path-outside-the-repo>.json [--dry-run]
 
@@ -109,10 +112,16 @@ def load_config(path: Path) -> dict:
     if not isinstance(raw, dict):
         raise ConfigError("config must be an object")
     allowed = {"repo", "key_id", "private_key", "public_key", "state_dir", "keep",
-               "max_per_run", "gh"}
+               "max_per_run", "gh", "notify_hosts"}
     unknown = set(raw) - allowed
     if unknown:
         raise ConfigError(f"unknown config keys: {sorted(unknown)}")
+    hosts = raw.get("notify_hosts")
+    # The ssh command is fixed later; still keep shell metacharacters out of targets.
+    if hosts is not None and (not isinstance(hosts, list) or not 1 <= len(hosts) <= 8 or not all(
+            isinstance(host, str) and re.fullmatch(r"[A-Za-z0-9._@-]{1,100}", host)
+            for host in hosts)):
+        raise ConfigError("notify_hosts must be a list of ssh user@host targets")
     repo = raw.get("repo")
     if not isinstance(repo, str) or not _REPO.fullmatch(repo):
         raise ConfigError("repo must be owner/repository")
@@ -135,6 +144,8 @@ def load_config(path: Path) -> dict:
     for name in ("private_key", "public_key"):
         if not config[name].is_file():
             raise ConfigError(f"{name} is not a file")
+    if hosts:
+        config["notify_hosts"] = hosts
     return config
 
 
@@ -182,13 +193,15 @@ class AutoSigner:
             raise RuntimeError(f"gh {args[0]} failed: {detail[0][:200]}")
         return result.stdout or ""
 
-    def list_unsigned(self) -> list[dict]:
+    def list_releases(self) -> dict:
+        """One scan: unsigned site candidates, and signed ones still mislabeled."""
         out = self._gh(
             "api", "--paginate", f"repos/{self.repo}/releases?per_page=100",
-            "--jq", ".[] | {tag: .tag_name, draft: .draft, created_at: .created_at, "
+            "--jq", ".[] | {tag: .tag_name, name: .name, draft: .draft, created_at: .created_at, "
                     "assets: [.assets[].name]}",
         )
-        releases = []
+        unsigned: list[dict] = []
+        mislabeled: list[str] = []
         for line in out.splitlines():
             if not line.strip():
                 continue
@@ -196,11 +209,17 @@ class AutoSigner:
             tag = row.get("tag")
             assets = row.get("assets") or []
             if (not isinstance(tag, str) or not _TAG.fullmatch(tag) or row.get("draft")
-                    or "release.json" not in assets or SIGNATURE_FILENAME in assets):
+                    or "release.json" not in assets):
                 continue
-            releases.append({"tag": tag, "created_at": str(row.get("created_at") or "")})
-        releases.sort(key=lambda row: (row["created_at"], row["tag"]), reverse=True)
-        return releases
+            if SIGNATURE_FILENAME in assets:
+                # Signed releases stopped saying "(unsigned)" three times already
+                # (2026-10-29, 2026-10-31, 2026-11-03); repair them on sight.
+                if str(row.get("name") or "").endswith(" (unsigned)"):
+                    mislabeled.append(tag)
+            else:
+                unsigned.append({"tag": tag, "created_at": str(row.get("created_at") or "")})
+        unsigned.sort(key=lambda row: (row["created_at"], row["tag"]), reverse=True)
+        return {"unsigned": unsigned, "mislabeled": mislabeled}
 
     def _assets(self, tag: str) -> list[str]:
         out = self._gh("api", f"repos/{self.repo}/releases/tags/{tag}",
@@ -321,10 +340,11 @@ class AutoSigner:
             shutil.rmtree(old, ignore_errors=True)
 
     # -- one candidate ------------------------------------------------------
-    def _retitle_signed(self, tag: str) -> None:
+    def _retitle_signed(self, tag: str) -> str:
         """사람은 릴리스 목록의 제목을 읽는다(D-437 3의 취지). 서명이 붙었으면 제목과
         설명도 그렇게 말해야 한다 — "(unsigned)" 제목과 UNSIGNED 설명은 서명 뒤에
-        남기지 않는다. 교정 실패는 서명 자체를 되돌리지 않는다: 감사에만 남긴다."""
+        남기지 않는다. 교정 실패는 서명 자체를 되돌리지 않는다: 감사에만 남긴다.
+        Returns 'edited', 'clean', or 'failed'."""
         try:
             view = json.loads(self._gh("release", "view", tag, "--repo", self.repo,
                                        "--json", "name,body"))
@@ -338,8 +358,9 @@ class AutoSigner:
             for flag, value in edits:
                 self._gh("release", "edit", tag, "--repo", self.repo, flag, value)
         except (RuntimeError, OSError, json.JSONDecodeError) as error:
-            self._audit({"decision": "signed", "tag": tag,
-                         "title_update": "failed", "reason": str(error)})
+            self._audit({"decision": "retitle-failed", "tag": tag, "reason": str(error)})
+            return "failed"
+        return "edited" if edits else "clean"
 
     def _sign_one(self, tag: str, state: dict) -> str:
         work = self.state_dir / "work"
@@ -411,17 +432,38 @@ class AutoSigner:
                      "signing_key_id": result["signing_key_id"]})
         return "signed"
 
+    def _repair_title(self, tag: str) -> None:
+        if self._retitle_signed(tag) == "edited":
+            self._audit({"decision": "retitle-repaired", "tag": tag})
+
+    def _notify_hosts(self) -> None:
+        """Push the update start; the site timer stays the fallback when it fails."""
+        for host in self.config["notify_hosts"]:
+            try:
+                result = self.runner(
+                    ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=15", host,
+                     "sudo -n systemctl start rosy-site-autoupdate.service"],
+                    capture_output=True, text=True, check=False, timeout=90)
+                ok = result.returncode == 0
+                tail = ((result.stderr or "").strip().splitlines()[-1:] or [""])[0][:200]
+            except (OSError, subprocess.SubprocessError) as error:
+                ok, tail = False, f"{type(error).__name__}"
+            record = {"decision": "notify", "host": host, "result": "ok" if ok else "failed"}
+            if not ok:
+                record["reason"] = tail
+            self._audit(record)
+
     def run(self) -> int:
         self.state_dir.mkdir(parents=True, exist_ok=True)
         with _run_lock(self.state_dir):
             state = self._load_state()
             try:
-                candidates = self.list_unsigned()
+                releases = self.list_releases()
             except (RuntimeError, json.JSONDecodeError) as error:
                 self._audit({"decision": "error", "reason": f"listing releases: {error}"})
                 return EXIT_REFUSED
             outcomes = []
-            for row in candidates[: self.config["max_per_run"]]:
+            for row in releases["unsigned"][: self.config["max_per_run"]]:
                 try:
                     outcomes.append(self._sign_one(row["tag"], state))
                 except CiRed as error:
@@ -431,7 +473,11 @@ class AutoSigner:
                 except (RuntimeError, OSError) as error:
                     self._audit({"decision": "error", "tag": row["tag"], "reason": str(error)})
                     outcomes.append("error")
+            for tag in releases["mislabeled"]:
+                self._repair_title(tag)
             self._save_state(state)
+        if "signed" in outcomes and self.config.get("notify_hosts"):
+            self._notify_hosts()
         if any(outcome in {"refused", "error"} for outcome in outcomes):
             return EXIT_REFUSED
         if "signed" in outcomes:
