@@ -52,7 +52,9 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.append(str(Path(__file__).resolve().parents[2] / "test"))
+from harness.affected_exclusive import affected_invocations, dedicated
 import known_failures  # noqa: E402
 import lab_hosts  # noqa: E402
 import memory_history  # noqa: E402
@@ -515,7 +517,8 @@ def one(host: str, name: str, k: int, inv: list[str], log: Path, job: list[str],
         memory_history.record(history, inv, host, peak, sha, memory_history.cpu_cores(text),
                               memory_history.timing(text, queued, time.monotonic() - began))
     failed = known_failures.failed_ids(text)
-    ids = known_failures.rerun_ids(text, quarantine(repo, sha)) if code == 1 and failed else []
+    ids = (known_failures.rerun_ids(text, quarantine(repo, sha))
+           if code == 1 and failed and not dedicated(inv) else [])
     if not known_failures.should_rerun(code, failed, ids):  # D-762 stage 1: once, listed ids only
         return code, None
     print(f"[remote-pytest] rerunning {len(ids)} quarantined failure(s) once", flush=True)
@@ -534,12 +537,6 @@ def one(host: str, name: str, k: int, inv: list[str], log: Path, job: list[str],
         print(f"[remote-pytest] FLAKY (passed on rerun): {' '.join(ids)}", flush=True)
         code = 0  # pre-push reads this exit code
     return code, lost
-
-
-def affected_invocations(selection: dict, skip: set[str]) -> list[list[str]]:
-    """`rosy_harness.py affected --json` -> invocations, as `affected --run` picks them."""
-    invocations = selection["local_invocations" if selection["mode"] == "full" else "invocations"]
-    return [kept for kept in ([p for p in inv if p not in skip] for inv in invocations) if kept]
 
 
 def worst(codes: list[int]) -> int:

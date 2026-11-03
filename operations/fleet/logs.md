@@ -5257,3 +5257,10 @@
 - 증거: `operations/fleet/test/test_usb_camera_decisions.py`(노트북 5건 통과), `usb-camera-panel.test.mjs`.
 - gate 변화: 없음. 실제 USB 카메라를 꽂아 승인하는 현장 수용은 하지 않았다.
 - CE: 해당 없음 — 새 기능이며 장애 해결이 아니다. 결정은 D-963에 있다.
+
+## 2026-11-03 · 9f666845e8 · fix(fleet): platoon 지도 계산 공유와 HTTP 응답성
+
+- 변경: `/api/fleet/platoon`이 활성 지도 버전별 루프·기하·속도표 계산 한 건을 작업 스레드에서 공유한다. 취소된 독자는 공유 계산을 취소하지 않고, NO_LOOP도 재사용하며 계산 실패 뒤에는 다시 시도한다. 로봇 자세·차간 거리는 요청마다 읽고 기존 인증·표시 전용 dispatch=false를 유지한다.
+- 검증: 원격 RED `ec040ca3c5`에서 기존 7건 통과와 새 회귀 3건 실패를 확인했다. 분리 전 `372a05294f`의 집중 시험 12건 통과 뒤, 최종 소스 `9f666845e8`의 mapped affected 3회는 328 passed/28 skipped, 4676 passed/188 skipped/5 subtests passed, Fleet 7550 passed/585 skipped였다. 세 보고서 모두 known_failures 비교 NEW/known/flaky 0이며 size-range도 통과했다. 회귀는 이벤트로 작업을 멈춘 동안 인증 요청 완료, 동시·반복 계산 공유, 취소·실패 복구, 지도 버전 변경, 최신 자세 반영을 확인한다.
+- Gate: 변화 없음. 건너뛴 시험은 검증에 포함하지 않았으며 브라우저·ROS 실행·실물·현장 수용이나 실제 CPU 부하의 응답 지연 상한을 입증하지 않는다.
+- CE: 해당 없음 — 이번 원인과 재발 방지는 코드·회귀 시험으로 설명되며 기존 asyncio/GIL·동시성 교훈을 검토했다.
