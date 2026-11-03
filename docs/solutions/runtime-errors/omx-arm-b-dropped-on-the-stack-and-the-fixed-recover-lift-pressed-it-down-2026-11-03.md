@@ -62,13 +62,20 @@ the weak wrist to lift the arm's end, and the wrist stalled at 62 % PWM, 4.8 deg
   The v2.1 jaws close at 48.6, and the library's 46.6 makes them push each other. The opening map
   (52.3 for 30 mm, 10.4 mm per unit) is still the 10-29 measurement.
 - A dry run measured 26/10 mm of finger room where the live run measured 26/6. Plan with the live numbers.
-- Over the pallet box nearest arm_b, the wrist hid both fingers at the 2.5 cm hover (six looks, no blob). A trial
-  (12:41) looked from the 0.10 m pivot view height instead. The jaws showed there, and the look passed with no
-  correction. Back at the hover, the descent landed about 15 mm beside the box: the wrist camera showed the box
-  next to the jaws, and the grasp came up empty (19 mA). So a look at another height does not vouch for the hover.
-  Keep "jaw mark not seen" a refusal, and do not bring that fallback back (reverted on `feat/omx-look-raise`).
-- After that empty grasp, `lift_pick` with closed jaws tripped wrist_flex (5.1 deg), and the arm came down on the
-  row again. `cell_unwedge` freed it in 21 steps with no block (field `20261103-124327-unwedge-decisions.jsonl`).
-- The attempt record used to keep only the last hover hook's answer, so the unseen looks and the raised look did
-  not show in it. Find them in `chunk-status.jsonl` (the `grip 50.5`/`grip 62.0` pairs are the jaw marks) and in
-  the episode frames. Since `6dbf19e7b9`, the wrist step keeps every hook's answer under `hooks`.
+- Over the pallet box nearest arm_b (11:37-11:49 local), the jaws did open and close (60.9 / 51.3) but no look saw
+  them: there the wrist hides both fingers at the 2.5 cm hover.
+- Over the next box (12:39), the jaws never opened. Every `grip 62` read 49.33 at 50 mA. The gripper runs in mode 5,
+  where Goal Current limits the force. The session raised Current Limit to 250, but Goal Current stayed at the
+  baseline 50. With the library's `gripper_closed` 46.6 (the v2.1 jaws close at 48.67), every park drove them past
+  contact, and 50 mA could not always pull them open again. So the hover saw no jaw mark because the jaws did not move.
+  A trial look from the 0.10 m view height then reported a mark (a false blob) and passed. The descent with closed
+  jaws landed about 15 mm beside the box, empty (19 mA). The trial was reverted on `feat/omx-look-raise`. A look at
+  another height does not vouch for the hover.
+- Fix: the session now writes the gripper's Goal Current with its Current Limit (`d189c9b332`). On arm_b, the jaws
+  then opened to 60 and closed to 49.5. arm_b also has its own plan and chunk library with closed 48.8. Before a
+  look, check that the jaws follow `grip` (state[5] moves) before blaming the camera.
+- After the empty grasp, `lift_pick` tripped wrist_flex (5.1 deg) and the arm came down on the row again.
+  `cell_unwedge` freed it in 21 steps with no block (field `20261103-124327-unwedge-decisions.jsonl`).
+- The attempt record used to keep only the last hover hook's answer, which hid the unseen and false looks. Since
+  `6dbf19e7b9`, the wrist step keeps every hook's answer under `hooks`. Until then, find them in `chunk-status.jsonl`
+  (the `grip 50.5`/`grip 62.0` pairs are the jaw marks; state[5] shows whether the jaws moved).
