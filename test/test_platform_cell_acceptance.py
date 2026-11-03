@@ -18,7 +18,8 @@ from omx_adapter.cell_acceptance import (  # noqa: E402
     CellAcceptanceRefused, CellAcceptanceStore, ValidatedCell, canonical_sha256)
 from rosy.processes.palletizing.cell import load_cell  # noqa: E402
 from rosy.processes.palletizing.recipe import load_recipe  # noqa: E402
-from rosy_agent.omx_cell_documents import PalletizingCellDocumentValidator  # noqa: E402
+from rosy.processes.palletizing.acceptance import CellDocumentRules  # noqa: E402
+from rosy_agent.omx_cell_documents import ProcessCellDocumentValidator  # noqa: E402
 
 EXAMPLES = ROOT / "operations/processes/cell/examples/omx_sim"
 MIXED = ROOT / "operations/processes/palletizing/test/fixtures/mixed_two_arm"
@@ -33,7 +34,7 @@ def _store(tmp_path, kinematics):
     return CellAcceptanceStore(
         tmp_path / "owner.sqlite3", workcell_id="omx_sim", instance_id="omx_sim_01",
         kinematics_revision=kinematics, config_revision="cfg-1",
-        validator=PalletizingCellDocumentValidator(tol_m=0.001), unresolved_actions=list)
+        validator=ProcessCellDocumentValidator(CellDocumentRules(tol_m=0.001)), unresolved_actions=list)
 
 
 def test_accepted_hashes_are_the_palletizing_content_hashes(tmp_path):
@@ -76,7 +77,7 @@ SKUS = {"box:foam_40x30x30": {"grasp_width_m": 0.03, "grasp_depth_m": 0.015, "he
 
 def test_a_recipe3_validates_against_a_cell3_with_one_geometry_per_sku():
     recipe_doc, cell_doc = _mixed_docs()
-    validated = PalletizingCellDocumentValidator(tol_m=0.001).validate_recipe(recipe_doc, cell_doc)
+    validated = ProcessCellDocumentValidator(CellDocumentRules(tol_m=0.001)).validate_recipe(recipe_doc, cell_doc)
     assert validated.sha256 == canonical_sha256(recipe_doc)
     assert dict(validated.items) == SKUS
 
@@ -89,7 +90,7 @@ def test_a_recipe3_is_refused_against_a_single_arm_cell(tmp_path):
         store.accept_recipe(_mixed_docs()[0], actor_id="operator-1")
 
 
-class _Cell3Validator(PalletizingCellDocumentValidator):
+class _Cell3Validator(ProcessCellDocumentValidator):
     """Stand-in: this owner does not accept a cell/3 yet (open item); the recipe rules are real."""
 
     def validate_cell(self, cell):
@@ -103,7 +104,7 @@ def test_capability_matches_a_grant_by_its_sku(tmp_path):
     store = CellAcceptanceStore(
         tmp_path / "owner.sqlite3", workcell_id="omx_01", instance_id="omx_01_control",
         kinematics_revision="omx-test", config_revision="cfg-1",
-        validator=_Cell3Validator(tol_m=0.001), unresolved_actions=list)
+        validator=_Cell3Validator(CellDocumentRules(tol_m=0.001)), unresolved_actions=list)
     store.accept_cell(cell_doc, actor_id="operator-1")
     recipe = store.accept_recipe(recipe_doc, actor_id="operator-1")["recipe_sha256"]
     for key, geometry in SKUS.items():

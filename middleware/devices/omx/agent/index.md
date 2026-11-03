@@ -25,6 +25,7 @@
 
 - `test/test_platform_workcell_coordinator.py`
 - `test/test_platform_owner_barriers.py`
+- `test/test_platform_omx_transfer_provider.py`
 
 ## 최근 기록
 

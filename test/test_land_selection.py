@@ -805,3 +805,16 @@ def test_a_delta_turn_stops_yielding_after_two_delta_records():
     selection = load_selection()
     assert selection.delta_yields("ticket.json", {"tier": "affected", "yields": 1})
     assert not selection.delta_yields("ticket.json", {"tier": "affected", "yields": selection.MAX_DELTA_YIELDS})
+
+
+def test_an_explicit_full_witness_survives_a_relaunch(full_case):
+    """D-970: the witness lived only in the process; 11-03 every relaunch (rules refresh, reboot, resume) reran the
+    whole FULL with no cache, six times for one landing (277 min). The explicit record keeps its env now."""
+    case = full_case
+    args = full_args()
+    land.land_prepare.prepare(land, case.wt, "feat/x", args, sys.executable, None, None)
+    witness = args._full_witness
+    assert witness and json.loads(land.land_full._path(case.wt, "feat/x").read_text())["env"] == witness["env"]
+    relaunched = full_args()  # a new land.py process: no in-memory witness
+    assert land.land_selection.current_main(land, case.wt, relaunched, "feat/x", witness["main"],
+                                            sys.executable) == witness["main"]

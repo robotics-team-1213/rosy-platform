@@ -20,7 +20,7 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
     isolation_guard(ROOT)
     configure_imports()
     sys.path[:0]=[str(ROOT/p) for p in ('learning/training/omx',
-        'middleware/robot_execution/local/src','contracts/learning/src','operations/processes/cell')]
+        'middleware/robot_execution/local/src','contracts/learning/src','operations/processes/palletizing/src')]
     import rclpy
     import torch
     from PIL import Image
@@ -34,9 +34,9 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
     from rosy.execution.local.omx_policy import OwnerPolicySession
     from rosy.execution.local.policy_journal import PolicyExecutionJournal
     from rosy.execution.local.policy_source import capture_source
-    from rosy_cell.cell import load_cell
-    from rosy_cell.recipe import load_recipe
-    from rosy_cell.compiler import compile_job
+    from rosy.processes.palletizing.cell import load_cell
+    from rosy.processes.palletizing.recipe import load_recipe
+    from rosy.processes.palletizing.compiler import compile_job
     from act_inference import ACTInference
     from sim_policy_install import prepare_install, WORLD
     from sim_policy_camera import MAX_CAPTURE_RECORDS, SimPolicyCamera

@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-for relative in ("middleware/devices/omx/adapter/test",):
+for relative in ("middleware/devices/omx/adapter/test", "middleware/devices/omx/agent/src"):
     if str(ROOT / relative) not in sys.path:
         sys.path.insert(0, str(ROOT / relative))
 
@@ -15,7 +15,7 @@ from test_omx_pose_plan import kin, profile  # noqa: E402,F401
 from test_transfer_preflight import _catalog  # noqa: E402
 
 from omx_adapter.transfer_object_bindings import TransferObjectBindings  # noqa: E402
-from rosy.integrations.robots.omx.arm_transfer import ArmTransferInstallation  # noqa: E402
+from rosy_agent.arm_transfer import ArmTransferInstallation  # noqa: E402
 from rosy_agent.omx_cell_owner import sim_gripper_observation  # noqa: E402
 
 
