@@ -60,21 +60,20 @@ from omx_adapter.motion_profile import GUARD_ACCEL_UNITS_S2 as GUARD_ACCEL_UNITS
 from cell_envelope import digest, runtime_context  # noqa: E402
 import cell_params as prm  # noqa: E402
 from episode_recorder import Recorder  # noqa: E402
+import joint_push  # noqa: E402
 
 JOG_MAX = 5.0
 FOLLOW_STOP, FOLLOW_STOP_S = 25.0, 1.0   # body joints, LeRobot units; the clip alone keeps steps small
 SETTLE_TOL, SETTLE_S = 3.0, 3.0
 EMPTY_MARGIN = 2.0
 REL_MAX = 20.0  # largest body-joint correction a relative chunk may carry
-# Motor health (Present_PWM / Present_Current / Present_Temperature, raw): read once per HEALTH_PERIOD_S, and
-# fresh for a grasp verdict. The guard already samples PWM about 5 times a second on the same bus; reading
-# these three every 3 ticks as well doubled the traffic, and on 2026-10-25 a bus read stalled the loop past
-# the guard's 0.5 s sample bound while the arm held over the box, so the guard turned torque off.
+# Motor health (Present_PWM/Current/Temperature, raw): once per HEALTH_PERIOD_S, and fresh for a grasp verdict.
+# The guard samples PWM ~5 Hz on the same bus; reading these every 3 ticks too doubled the traffic and on
+# 2026-10-25 stalled the loop past the guard's 0.5 s sample bound over the box, so it turned torque off.
 HEALTH_PERIOD_S = 1.0
-# Soft contact: during a chunk that can touch something (descend, grasp, release), a body joint that lags the
-# command the guard actually sent by CONTACT_LAG units for CONTACT_TICKS ticks is pressing on something.
-# The runner holds where it is, with torque on, before the guard's 5 degree bound turns torque off and the
-# extended arm drops (three times on 2026-10-25). A body unit is at most 1.8 degrees: 1.5 units <= 2.7.
+# Soft contact: in a chunk that can touch something, a body joint CONTACT_LAG units (<= 2.7 deg) behind the sent
+# command for CONTACT_TICKS ticks presses on something; hold with torque on before the guard's 5 degree bound
+# turns torque off and the extended arm drops (three times on 2026-10-25).
 CONTACT_LAG, CONTACT_TICKS = prm.default("runner.contact_lag"), prm.default("runner.contact_ticks")
 
 
@@ -87,13 +86,11 @@ def contact_limits(start_lags: list, params=None) -> list:
     rise, top = prm.get(params, "runner.contact_rise"), prm.get(params, "runner.contact_loaded_max")
     return [max(base, min(s + rise, top)) for s in start_lags]
 CONTACT_CHUNKS = ("descend", "grasp", "release")
-# Pacing: a body joint behind the guard's sent command by PACE_LAG units holds the next frame until it catches
-# up. On arm S the wrist_flex (XL330) gives ~35 PWM per degree, so a lift or goto grew its lag 0.2 -> 2.6 -> 5
-# degrees at PWM 135-165 of 300 and the guard turned torque off (12 sessions, 2026-10-25..27). 1.6 units is 2.9
-# degrees of the guard's 5. A hold lasts only while the lag shrinks: reached over the conveyor, the wrist sat
-# 2.08 units low with no motion at all (2026-10-28), and waiting for 1.6 there moved one frame per PACE_MAX_S.
-# Where the lag stops shrinking it is the pose's droop (`pace_floor`); frames go on, and hold again only when the
-# lag grows PACE_RISE past it. Contact chunks reach CONTACT_LAG first and keep their contact response.
+# Pacing: a body joint PACE_LAG units (2.9 of the guard's 5 deg) behind the sent command holds the next frame
+# until it catches up: arm S's XL330 wrist grew 0.2 -> 5 deg at PWM 135-165 of 300 and the guard cut torque (12
+# sessions, 2026-10-25..27). A hold lasts only while the lag shrinks; where it stops (a wrist 2.08 units low over
+# the conveyor, 2026-10-28) it is the pose's droop (`pace_floor`) and frames go on until the lag grows PACE_RISE
+# past it. Contact chunks reach CONTACT_LAG first and keep their contact response.
 PACE_LAG, PACE_RISE, PACE_MAX_S = (prm.default(f"runner.{k}") for k in ("pace_lag", "pace_rise", "pace_max_s"))
 # Nobody sent a command for IDLE_PARK_S (a lost link, a crashed caller): fold home. IDLE_STOP_S more at home ends
 # the session, so record_session turns torque OFF and the motors rest instead of holding for hours (a session
@@ -101,24 +98,17 @@ PACE_LAG, PACE_RISE, PACE_MAX_S = (prm.default(f"runner.{k}") for k in ("pace_la
 # A fold a hold stopped (a blocked joint) is tried once more after IDLE_RETRY_S; before 2026-11-03 it was retried
 # every IDLE_PARK_S for good, pushing a blocked joint with torque on. A second hold keeps the arm where it is.
 IDLE_PARK_S, IDLE_STOP_S, IDLE_RETRY_S = (prm.default(f"runner.idle_{k}_s") for k in ("park", "stop", "retry"))
-# Strain, in every other chunk (goto, park, lift): normal travel lags up to about 2.6 units, so CONTACT_LAG would
-# hold there. A shoulder lifting from a reach (2026-10-27) went 2.4 -> 3.1 -> 4.0 -> 4.7 deg at PWM 263 -> 516 of
-# 600 in 0.7 s before the guard's 5 degree stop; a wrist against the wall 2.6 -> 3.6 -> 4.7 deg at PWM 93 -> 165
-# of 300. Hold when a load-bearing joint lags STRAIN_LAG units (3.1 deg), its lag rose by STRAIN_RISE over the
-# last STRAIN_TICKS ticks and the guard's last PWM sample (5 Hz) is at STRAIN_PWM of its cap. Holding needs room:
-# the guard brakes at 10 deg/s^2, so its command still runs v^2/20 deg on (1.5 deg at RISE_SPEED).
-# STRAIN_PWM 0.35 held a normal park out of a sagged reach (lag 1.8 at 263 of 600 = 44 %, 2026-10-27); the
-# real strains were at 55-86 %.
-# STRAIN_LAG 1.7 held every rise out of the container reach (2026-10-27): lifting the extended arm takes 400-500
-# PWM, and P x error builds that only near 1.7-1.9 units, at P 1200 and 1600 alike. At RISE_SPEED 2 the guard
-# runs on v^2/20 = 0.65 deg after a hold, so holding at 2.2 units (4.0 deg) still stops short of 5.
+# Strain, in every other chunk (goto, park, lift), where normal travel lags up to ~2.6 units: hold when a
+# load-bearing joint lags STRAIN_LAG, its lag rose STRAIN_RISE over STRAIN_TICKS ticks and the guard's 5 Hz PWM is
+# at STRAIN_PWM of its cap. Real strains (2026-10-27): a lifting shoulder 2.4 -> 4.7 deg at PWM 263 -> 516 of 600
+# in 0.7 s, a wrist on the wall 2.6 -> 4.7 deg at 93 -> 165 of 300 (55-86 %); 0.35 held a normal park (44 %), and
+# 1.7 units held every rise out of the container reach (400-500 PWM builds only near 1.7-1.9). The guard brakes
+# at 10 deg/s^2 (v^2/20 = 0.65 deg on at RISE_SPEED 2), so 2.2 units (4.0 deg) still stops short of its 5.
 STRAIN_LAG, STRAIN_RISE, STRAIN_TICKS, STRAIN_PWM = 2.2, 0.25, 6, 0.5
-# The wrist roll carries no load, so a blocked roll pushes at low PWM (arm_a stopped dead at 28 % of its cap while
-# the command ran on, 4 times on 2026-11-01) and the PWM test above never fires; it travels within ~0.7 units, so a
-# rising lag of ROLL_BLOCK_LAG (<= 2.7 deg) holds it before the guard's 5 degree stop.
+# A blocked wrist roll pushes at low PWM (arm_a dead at 28 % of its cap, 4 times on 2026-11-01), so the PWM test
+# never fires; it travels within ~0.7 units, so a rising lag of ROLL_BLOCK_LAG (<= 2.7 deg) holds it first.
 ROLL_BLOCK_LAG = 1.5
-# Stalled = pushing at its session cap (300) while short of its target and not moving: blocked or colliding.
-# At the cap alone is normal: the elbow saturates while lifting the arm out of home (2026-10-25).
+# Stalled = at its cap, short of its target and still (the cap alone is normal: an elbow lifting out of home).
 PWM_STOP, PWM_STOP_S, STALL_GAP, STALL_MOVE = 285, 0.5, 4.0, 0.3
 TEMP_STOP = 65                    # degrees C; the motors' own limits are 70-72
 MOTORS = [n.split(".")[0] for n in ["shoulder_pan.pos", "shoulder_lift.pos", "elbow_flex.pos", "wrist_flex.pos",
@@ -148,7 +138,7 @@ class Runner:
         # the contact margin a real run leaves, which live.json's chunk target does not show (2026-10-26)
         self.peak_lag, self.over_ticks = 0.0, 0
         self.live = live  # called about twice a second with the current state (Fleet observation bridge)
-        self.health_present = None
+        self.health_present, self.samples = None, []  # samples: (target, present, pwm) per health read, for joint_push
         self.recorder = Recorder()  # raw training episodes: rows here, encoding after the session
         self.operating_context = operating_context
         self.trend: list = []  # load-bearing joints' lags over the last STRAIN_TICKS ticks of a chunk
@@ -393,6 +383,14 @@ class Runner:
                 chunk, self.chunk = self.chunk, None
                 self.report(command=f"run {chunk}" if chunk else "fault", ok=False, error=reason)
                 return
+            self.samples = (self.samples + [(list(self.target), present, self.health["pwm"])])[-4:]
+            push = joint_push.pushing(self.samples, getattr(getattr(self.robot, "motion", None), "pwm_limits", None),
+                           jaws=self.chunk == "park")
+            if push and self.chunk is not None:
+                return self.hold(present, f"contact in {self.chunk}: {push[1]}")
+            if push:  # at rest: stop the wind-up where the arm is; folded home, idle() ends the session (torque OFF)
+                self.fault, self.target = f"pushing at rest: {push[1]}", present[:5] + [self.target[5]]
+                return self.report(command="fault", ok=False, error=self.fault, person_needed=True)
         if loaded > FOLLOW_STOP:
             self.far_since = self.far_since if self.far_since is not None else now
             if now - self.far_since >= FOLLOW_STOP_S:
@@ -447,8 +445,10 @@ class Runner:
                 self.idle_parks += 1
                 self.command("park")
             return False
-        if self.home_since is not None and min(quiet, self.clock() - self.home_since) >= prm.get(self.params, "runner.idle_stop_s", IDLE_STOP_S):
-            self.report(command="stop", ok=True, reason=f"no command for {quiet:.0f} s; folded home, torque goes OFF")
+        pushed = (self.fault or "").startswith("pushing at rest")
+        if pushed or min(quiet, self.clock() - self.home_since) >= prm.get(self.params, "runner.idle_stop_s", IDLE_STOP_S):
+            self.report(command="stop", ok=True, reason=f"{self.fault if pushed else f'no command for {quiet:.0f} s'}"
+                                                        "; folded home, torque goes OFF")
             return True
         return False
 
