@@ -178,6 +178,8 @@ def test_ai_context_is_cleared_on_empty_filter_and_reload_failure(browser_worksp
     page.route('**/api/workspace*', lambda route: route.fulfill(status=503, json={'error': 'unavailable'}))
     page.locator('#pixel-reload').click()
     expect(page.locator('.pixel-vlm-feedback')).to_be_hidden()
+    expect(page.locator('#pixel-status')).to_be_visible()
+    expect(page.locator('#pixel-status')).to_contain_text('사용할 수 없습니다')
     expect(page.locator('#review-people-summary')).to_contain_text('확인할 수 없습니다')
 
 
