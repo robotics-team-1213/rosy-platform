@@ -370,8 +370,8 @@ class SSH:
         """Seconds until the host's rosy-nightly-reboot.timer fires, or None when it has none."""
         result = self.runner.remote(self.host, 'r=$(systemctl show -P NextElapseUSecRealtime rosy-nightly-reboot.timer 2>/dev/null)'
                                     ' && [ -n "$r" ] && echo $(( $(date -d "$r" +%s) - $(date +%s) ))', capture_output=True, timeout=50)
-        text = result.stdout.decode(errors='replace').strip().split('
-')[-1] if result.returncode == 0 else ''
+        lines = result.stdout.decode(errors='replace').split() if result.returncode == 0 else []
+        text = lines[-1] if lines else ''
         return int(text) if text.lstrip('-').isdigit() else None
 
     def call(self, sha, payload):
