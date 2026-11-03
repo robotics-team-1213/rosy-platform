@@ -195,6 +195,21 @@ class ControlUnitStore:
             self._update(connection, row, {"local_task_id": task_id}, "TASK_BOUND")
         return bind
 
+    def bind_local(self, origin_id, delegation_id, local_id):
+        """Bind an owner-local ARM proposal (D-965); approval stays with that proposal's own admit."""
+        local_id = _identifier(local_id, limit=128)
+        with self._transaction() as connection:
+            row = self._read(connection, origin_id, delegation_id)
+            if row["owner_unit"] != self.unit_id:
+                raise ValueError("LOCAL_BINDING_REFUSED")
+            if row["local_task_id"] == local_id:
+                return self._document(row)
+            if row["local_task_id"]:
+                raise ValueError("LOCAL_TASK_IDENTITY_CONFLICT")
+            if row["cancel_requested"] or row["status"] in TERMINAL:
+                raise ValueError("LOCAL_BINDING_REFUSED")
+            return self._update(connection, row, {"local_task_id": local_id}, "ARM_JOB_BOUND")
+
     def request_cancel(self, origin_id, delegation_id):
         with self._transaction() as connection:
             row = self._read(connection, origin_id, delegation_id)

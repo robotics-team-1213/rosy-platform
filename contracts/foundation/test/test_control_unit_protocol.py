@@ -73,6 +73,38 @@ def test_owner_snapshot_is_bounded_and_explicit():
         Reply(unit_id="A", config_revision="lab-1", delegation=snapshot)
 
 
+def arm_work():
+    return {"delegation_id": "arm-1", "target_unit": "CELL-A", "transfer": {
+        "request_key": "harbor:move-1", "workcell_id": "arm_a", "instance_id": "arm_a",
+        "object_ref": "box-1", "source": "slot-1", "target": "slot-2"}}
+
+
+def test_arm_candidate_is_a_separate_kind_from_navigation():
+    from core_common.protocol.schemas import ControlArmWorkRequest, ControlArmIngressRequest
+    Work, *_ = classes()
+    request = ControlArmWorkRequest(**arm_work())
+    assert request.transfer.workcell_id == "arm_a"
+    assert ControlArmIngressRequest(**arm_work(), origin_id="R", config_revision="lab-1").origin_id == "R"
+    with pytest.raises(ValidationError):
+        Work(**arm_work())
+    with pytest.raises(ValidationError):
+        ControlArmWorkRequest(**work())
+    for extra in [{"robot_id": "a1"}, {"actor_id": "operator-a"}, {"endpoint": "http://untrusted"}]:
+        with pytest.raises(ValidationError):
+            ControlArmWorkRequest(**arm_work(), **extra)
+
+
+def test_snapshot_keeps_the_candidate_kind():
+    _, _, _, Reply, _ = classes()
+    request = {key: value for key, value in arm_work().items() if key != "delegation_id"}
+    snapshot = {"origin_id": "R", "delegation_id": "arm-1", "request": request, "owner_unit": "CELL-A",
+                "config_revision": "lab-1", "status": "PENDING", "revision": 1, "owner_revision": 0,
+                "local_actor": None, "local_task_id": None, "cancel_requested": False, "result": {},
+                "updated_at": "2026-11-03T12:00:00+00:00"}
+    reply = Reply(unit_id="R", config_revision="lab-1", stale=False, delegation=snapshot)
+    assert reply.model_dump(mode="json")["delegation"]["request"] == request
+
+
 def test_ssh_schema_split_preserves_canonical_identity_and_validation():
     from core_common.protocol import schemas, ssh
     assert schemas.SshKeyAddRequest is ssh.SshKeyAddRequest
