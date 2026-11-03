@@ -28,7 +28,7 @@ from job_state import Job, JobError, Rejected, receipt, sha
 HERE = Path(__file__).resolve().parent
 PERCEPTION = Path(__file__).resolve().parents[3] / 'learning/registry/perception'
 ROOT = Path(__file__).resolve().parents[3]
-for path in (PERCEPTION, Path(__file__).resolve().parents[3] / 'learning/curation/perception', ROOT / "middleware/perception",
+for path in (PERCEPTION, Path(__file__).resolve().parents[3] / 'learning/curation/perception', ROOT / "middleware/perception", ROOT / "integrations/perception",
              ROOT / "contracts/foundation", ROOT / 'learning/evaluation/perception'):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
@@ -45,7 +45,7 @@ def check_coverage(classes, train_counts, val_counts):
 
 def validate_drivable_parent(folder, torchscript, dataset_classes):
     """Bind real parent bytes and output order before a drivable candidate can train."""
-    from control.sensing.perception.learned.manifest import ManifestError, load_manifest
+    from perception_runtime.perception.learned.manifest import ManifestError, load_manifest
     from review_provenance import _stable_bytes
 
     folder, torchscript = Path(folder).absolute(), Path(torchscript).absolute()
@@ -98,7 +98,7 @@ def publish_ready(folder, store_root, job_name, *, before_ready=None):
     import handover
     from store import (Store, content_sha, safe_name, publication_group,
                        publication_directory, shared_publication_permissions, refuse_publication_links)
-    from control.sensing.perception.learned.manifest import load_manifest, verify_files
+    from perception_runtime.perception.learned.manifest import load_manifest, verify_files
     folder = Path(folder)
     manifest = load_manifest(folder)
     verify_files(manifest)

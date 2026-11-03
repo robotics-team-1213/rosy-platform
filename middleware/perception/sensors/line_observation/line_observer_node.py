@@ -25,28 +25,17 @@ from .core_law_input import configure_drivable_law, refresh_drivable_law
 from . import executor_choice
 from .route_context_input import RouteContextInput, bend_expected
 from .lane_route_guide_input import LaneRouteGuideInput, subscribe_route_guide
-from .keep_odom_veto import OdomVetoLaneKeeper
+from perception_runtime.keep_odom_veto import OdomVetoLaneKeeper
 from .calibrated_values import calibrated
-from .sensing.perception.camera_ground import (
-    nominal_ground_plane, simulation_ground_allowed, simulation_ground_plane,
-)
-from .sensing.perception.image_frame import image_msg_to_frame
+from perception_runtime.perception.camera_ground import ( nominal_ground_plane, simulation_ground_allowed, simulation_ground_plane, )
+from perception_runtime.perception.image_frame import image_msg_to_frame
 from .sensing.perception.camera_visibility import visibility_reason
-from .sensing.perception.lane import (
-    IRLineCalibration,
-    LaneBetweenKeeper,
-    LaneCornerTracker,
-    detect_ir_line,
-    detect_lane_centre,
-    LaneObservation,
-    detect_lane_error,
-    line_observation_payload,
-)
-from .sensing.perception.lane_bev import LaneEdgeFollower, pose_if_fresh
-from .sensing.perception.lane_boundaries import LaneBoundaryTracker
-from .sensing.perception.lane_keep import LaneKeeper, clean_learned_mask, denoise_white_mask
-from .sensing.perception.lane_keep_lines import HORIZON_MARGIN_PX, drop_small_components
-from .sensing.perception.learned.drivable_paint import boundary_paint, lateral_px_per_m
+from perception_runtime.perception.lane import ( IRLineCalibration, LaneBetweenKeeper, LaneCornerTracker, detect_ir_line, detect_lane_centre, LaneObservation, detect_lane_error, line_observation_payload, )
+from perception_runtime.perception.lane_bev import LaneEdgeFollower, pose_if_fresh
+from perception_runtime.perception.lane_boundaries import LaneBoundaryTracker
+from perception_runtime.perception.lane_keep import LaneKeeper, clean_learned_mask, denoise_white_mask
+from perception_runtime.perception.lane_keep_lines import HORIZON_MARGIN_PX, drop_small_components
+from perception_runtime.perception.learned.drivable_paint import boundary_paint, lateral_px_per_m
 from .sensing.perception.drivable.drivable_keep import keep_step, scan_summary
 from .sensing.perception.evidence_mode import EvidenceModes
 from .sensing.perception.learned.paint_motion import OdomHistory, mask_homography, warp_mask
@@ -357,7 +346,7 @@ class LineObserverNode(Node, RouteFollowerInput):
         target = str(self.get_parameter('learned_paint_target').value)
         if target not in TARGETS:
             raise ValueError(f"learned_paint_target must be one of {TARGETS}, got {target!r}")
-        from .sensing.perception.learned.runner import LaneSegModel, ModelSlot, add_learned_site
+        from perception_runtime.perception.learned.runner import LaneSegModel, ModelSlot, add_learned_site
         add_learned_site()
         pointer = str(self.get_parameter('learned_lane_pointer').value)
         if not pointer:

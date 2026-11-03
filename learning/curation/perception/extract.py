@@ -59,14 +59,15 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'middleware/perception'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'integrations/perception'))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'contracts/foundation'))  # core_common (D-424)
 
 from frames import FrameSelector  # noqa: E402
-from control.recording import (  # noqa: E402
+from perception_runtime.recording import (  # noqa: E402
     CAMERA_GROUND_STATUS_MAX_AGE_NS, CAMERA_GROUND_STATUS_TOPIC,
     CAMERA_TELEMETRY_TOPIC, CAMERA_TOPIC, COMPRESSED_CAMERA_TOPIC, IR_RANGE_TOPIC,
     KEEP_DEBUG_TOPIC, ODOM_TOPIC, SCAN_TOPIC, SHADOW_TOPIC, SIDE_TOPICS, ir_range_sample)
-from control.sensing.perception.image_frame import image_msg_to_frame  # noqa: E402
+from perception_runtime.perception.image_frame import image_msg_to_frame  # noqa: E402
 
 STRING_SCHEMA = "std_msgs/msg/String"
 JPEG_Q = 95

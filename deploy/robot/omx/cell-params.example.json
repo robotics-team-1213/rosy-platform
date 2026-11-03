@@ -25,6 +25,18 @@
    "source": "tuned",
    "evidence": "2026-10-28 real top camera: green container vs grey pinky board (value as shipped in code)"
   },
+  "objects.split_max": {
+   "value": 6,
+   "unit": "count",
+   "source": "default",
+   "evidence": "2026-11-03 arm_b ship plate: five 3-cell containers in a row made one blob; 2-3 was the most tried before"
+  },
+  "objects.split_gap_mm": {
+   "value": 8.0,
+   "unit": "mm",
+   "source": "theory",
+   "evidence": "2026-10-31 ship plate design: 6 mm cell gaps (5-8) for the jaws; the row read about 174 mm for five 30 mm widths"
+  },
   "objects.split_axis_deg": {
    "value": 12.0,
    "unit": "deg",
@@ -188,10 +200,10 @@
    "evidence": "2026-10-28 real arm S: guard/pacing diagnosis (value as shipped in code)"
   },
   "runner.idle_park_s": {
-   "value": 180.0,
+   "value": 60.0,
    "unit": "s",
-   "source": "measured",
-   "evidence": "2026-10-28 facts 5: park then stop on real arm S"
+   "source": "default",
+   "evidence": "2026-11-03 user decision: holding torque minutes after a lost link strains the motors (was 180, 2026-10-28 facts 5: park then stop on real arm S)"
   },
   "safety.bus_watchdog_ms": {
   "value": 0.0,
@@ -200,10 +212,16 @@
   "evidence": "2026-10-31: the site PC dropped off mid-carry; the motors' own link check (Dynamixel Bus Watchdog) stops a motor with no packet for this long. 0 = off until its trip in position mode is observed on arm S (supervised, arm folded)"
  },
  "runner.idle_stop_s": {
-   "value": 180.0,
+   "value": 30.0,
    "unit": "s",
-   "source": "measured",
-   "evidence": "2026-10-28 real arm S: guard/pacing diagnosis (value as shipped in code)"
+   "source": "default",
+   "evidence": "2026-11-03 user decision: torque OFF soon after the idle fold reaches home (was 180)"
+  },
+ "runner.idle_retry_s": {
+   "value": 300.0,
+   "unit": "s",
+   "source": "default",
+   "evidence": "2026-11-03 user decision: an idle fold a hold stopped is tried once more after this; a second hold keeps the arm for a person"
   },
   "runner.contact_lag": {
    "value": 1.5,

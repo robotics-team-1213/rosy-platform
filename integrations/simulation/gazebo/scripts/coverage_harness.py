@@ -63,6 +63,7 @@ def _lane_coverage():
     for name in [n for n in sys.modules if n == "control" or n.startswith("control.")]:
         del sys.modules[name]
     sys.path.insert(0, str(_WORKTREE_CONTROL))
+    sys.path.insert(0, str(_WORKTREE_CONTROL.parents[1] / 'integrations' / 'perception'))
     from control.sensing.perception import lane_coverage
     return lane_coverage
 

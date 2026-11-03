@@ -9,8 +9,8 @@ gap, a reset or a `both` reading does not release it). Odometry never approves a
 """
 import math
 
-from .sensing.perception.lane_bev import ODOM_MAX_STEP_M
-from .sensing.perception.lane_keep import SIDE_X_M, TRACK_HEADING_RAD, TRACK_LATERAL_M, LaneKeeper
+from .perception.lane_bev import ODOM_MAX_STEP_M
+from .perception.lane_keep import SIDE_X_M, TRACK_HEADING_RAD, TRACK_LATERAL_M, LaneKeeper
 
 REASON = 'odom_side_conflict'
 #: D-556 rule 1: the carried line and the seen line must both lie this far on the other side of

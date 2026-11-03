@@ -51,6 +51,8 @@ def serial_reason(inv: list[str], serial: list[str]) -> str | None:
     """Why inv must not get ``-n``, or None when it may."""
     env = list(itertools.takewhile(ENV_WORD.match, inv))
     words = inv[len(env):]
+    if 'ROSY_JOB_ALONE=1' in env:
+        return 'host-exclusive job'
     if any(w.startswith("ROSY_RUN_BROWSER_TESTS=") for w in env):
         return "browser job"
     if any(OWN_XDIST.match(w) for w in words):
@@ -84,7 +86,7 @@ def plan(inv: list[str], headroom: dict | None, serial: list[str] | None = None)
     if serial is None:
         serial = load_serial(SERIAL_FILE.read_text(encoding="utf-8"))
     if headroom is None:
-        return [], [], "serial: host below the floor (D-568 7 fallback)"
+        return [TURN_JOB] if os.environ.get(TURN_ENV) == "1" else [], [], "serial: host below the floor (D-568 7 fallback)"
     why = serial_reason(inv, serial)
     # The host's JOB admission runs these with no other job on the host, from any run (HOST_ALONE, ALONE).
     paths = [w.replace("\\", "/") for w in inv if not ENV_WORD.match(w) and not w.startswith("-")]

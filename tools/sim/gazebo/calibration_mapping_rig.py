@@ -13,6 +13,7 @@ import time
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 sys.path.insert(0, str((Path(__file__).resolve().parents[3] / 'middleware/perception')))
+sys.path.insert(0, str((Path(__file__).resolve().parents[3] / 'integrations/perception')))
 if os.environ.get('ROS_DOMAIN_ID') != '227' or os.environ.get('GZ_PARTITION') != 'pinky_calmap227':
     raise RuntimeError('This rig is restricted to its isolated simulation domain')
 

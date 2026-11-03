@@ -13739,3 +13739,162 @@ osy-d395-s1d\`.
 - 증거: API 버전 pin 8곳 갱신, 구현 시험은 deploy·fleet 로그.
 - gate 변화: 없음. 실제 USB 카메라를 꽂아 승인하는 현장 수용은 하지 않았다.
 - CE: 해당 없음 — 새 기능이며 장애 해결이 아니다. 결정은 D-963에 있다.
+
+## 2026-11-02 · uncommitted · fix(landing): 예측 체인을 실제 우선순위 차단자와 정렬
+- 변경: `land_speculate.chain`이 FIFO 앞줄 대신 정본 `land_queue.blockers`를 재사용한다. TURN 유지, 긴급 요청이 앞지르는 ordinary waiting 제외, 나중 urgent 포함과 stale-bypass를 같은 정책으로 선택한다. preparing/pending 제외와 safety/record 중단 조건은 보존한다.
+- 증거: 미착지 소스 `1f324d765a` 원격 speculation/queue/urgent/prepare/batch 5 suite 133개 통과, NEW 0. 테스트 전용 `daf434afd6`에서 3개 RED를 확인했다. 실제 append-only queue의 ticket/branch/urgent와 당시 관측 status를 고정한 counterfactual은 합성 후보 2개를 실제 TURN 1개로 줄였다. 불필요 후보 제외를 확인한 것이며 절약 시간이나 진행 중인 예측 실행의 새 규칙 적용을 측정한 것은 아니다.
+- gate 변화: 없음. 소스 검증이며 기존 run-spec 작업을 중단하거나 재시작하지 않았다.
+- CE: 해당 없음 — 기존 Oct31 교훈의 우선순위 경계를 적용한 수정이며 정본 helper 재사용과 실제 Git 회귀 시험으로 원인·해결이 드러난다. 새 교훈 문서는 만들지 않는다.
+
+## 2026-11-02 · uncommitted · fix(landing): 실제 준비 anchor를 예측 전에 게시
+- 변경: `land_prepare.prepare`가 저장/유지한 증거를 확정한 뒤 실제 차례와 같은 `land_full.restore` 값을 PREPARING ticket에 게시하고 speculation을 호출한다. 검사 중 main이 움직여도 최신 main으로 위장하지 않고, retained FULL의 원래 anchor와 carried의 빈 anchor를 그대로 따른다. 별도 clean 정책이나 우선순위 정책은 추가하지 않는다.
+- 증거: 미착지 소스 `c0f1c7c7b7` 원격 speculation/queue/urgent/prepare/batch 138개 통과, NEW 0. `930b8940d7` RED에서 실제 prepare의 첫 준비/재준비와 검사 중 main 이동 네 경로가 missing/stale tested로 실패했다. retained FULL 보존도 실제 호출 경로로 확인했다. 앞선 tested 수동 주입 회귀가 놓친 producer 순서를 보완한 것이다.
+- gate 변화: 없음. 기존 실행·동결본을 바꾸거나 중단하지 않았으며 운영 반영은 별도다.
+- CE: 해당 없음 — 호출 순서와 정본 anchor 보존은 코드와 실제 Git 회귀 시험에 직접 남긴다.
+
+## 2026-11-03 · uncommitted · fix(omx): 놀고 있는 팔은 60초에 접고, 막힌 접기는 한 번만 다시 한 뒤 사람을 부른다
+- 변경: `runner.idle_park_s` 180→60, `runner.idle_stop_s` 180→30, 새 `runner.idle_retry_s` 300. 막혀 멈춘 자동 접기는 멈춘 때부터 idle_retry_s 뒤 한 번만 다시 하고, 또 멈추면 토크를 유지한 채 `person_needed`를 보고한다. 명령이 오면 자동 접기 횟수가 되살아난다. 접기는 이전 고장이 있어도 막힘을 감시하고, 실제로 홈에 정착했을 때만 홈으로 친다(토크 OFF의 조건).
+- 증거: 전에는 막힌 자동 접기를 idle_park_s마다 끝없이 다시 했고, 고장 뒤 접기는 막힘 감시가 꺼진 채 SETTLE_S가 지나면 홈으로 쳐서 홈이 아닌 곳에서 토크 OFF가 가능했다(시험으로 재현). 사용자 결정 2026-11-03.
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: `docs/solutions/runtime-errors/omx-blocked-wrist-roll-reached-the-guard-unseen-2026-11-02.md`
+
+## 2026-11-03 · uncommitted · docs(omx): 실물 카메라로 잰 셀 실측과 셀 모델 대장 갱신
+- 변경: 검증 기록 `docs/validation/omx-cell-survey-2026-11-03/result.md`(top·side 카메라 자세, arm_b 받침 FK 맞춤, fixture와의 차이), `learning/envs/isaac/cell_model_inventory.yaml`의 판·팔 받침·top·side 카메라 항목과 벨트 높이 사람 작업, D-947 2의 보강(Gazebo도 같은 대장, 값마다 출처, CAD·실측은 후보).
+- 증거: 돌기 격자 PnP top 0.58 px·side 2.8 px, arm_b 녹화 세션 `live.json`을 읽기만 해 FK 맞춤 3.1 px. 팔 명령·관측기 기동 없음. 스크립트와 겹침 영상은 Git 밖 작업 공간 조사 폴더.
+- gate 변화: 없음. fixture 수치는 바꾸지 않았다(실측 받침 채택은 도달·충돌 비교 뒤).
+- CE: 해당 없음 — 측정 기록이며 해결한 장애가 아니다. 실물과 시뮬레이션의 차이는 대장에 남겼다.
+
+## 2026-11-03 · uncommitted · fix(publish): 실제 FULL·브라우저 실행 근거로 게시와 병합을 검증한다
+
+- 변경: `publish_main.green_full`이 후보 SHA의 정본 FULL·전체 opt-in 브라우저 chunk/ALONE 계획과 정확한 commit·tree·환경·argv·로그 SHA-256 대응을 확인한다. 기존 분할기를 그대로 사용하며 준비 후보는 기존 main 병합 bridge와 최종 계획·환경 일치가 필요하다. `--no-cache`는 재사용만 끄고 새 clean 실행 근거를 남긴다.
+- 증거: `cf16fa8214` 원격 게시·착지·준비·선택·캐시·batch 7파일 318 PASS, 0 SKIP, NEW 0·known 0·flaky 0. 선행 RED `b1cf199195` 3실패, 독립 검토 반례 RED `d4ed8d5348` 4실패 뒤 수정했다. 실제 후보의 정본 41호출·브라우저 13청크 추출을 확인했고 #227 head `8a84c7e359`는 opt-in 브라우저 계획 부재로 거부했다.
+- gate 변화: 기존 FULL 기준을 선택과 열린 PR 병합 양쪽에서 검증한다. 일반 ROS skip과 승인된 quarantine 재실행의 기존 판정은 유지한다. tier-only·hash 없는 과거 근거는 소급 승인하지 않는다.
+- 한계: 캐시 정리·로그 소실·같은 경로의 내용 교체는 게시 거부다. 최종 통합 SHA의 새 FULL, 공개 CI, 배포·실물 수용은 별도 검증이다.
+- 교훈: 기존 `own-full-landing-to-publish-wasted-hours-2026-11-02.md`의 #227 해석은 게시 담당이 최종 검증 뒤 정정한다.
+
+## 2026-11-03 · f8fdc85890 · docs: 게시 성공과 적격 FULL 근거 구분
+
+- 변경: 기존 FULL 교훈의 #227 해석을 정정했다. 실제 병합 사실은 보존하고, 당시 브라우저 실행 근거가 없었다는 후속 검토와 후보·준비 bridge·로그 hash 검증 조건을 구분했다.
+- 증거: 게시 근거 수정의 최종 문서 head f8fdc85890에서도 관련 318개가 원격 통과했고 skip과 NEW/known/flaky는0이었다. 실제 과거 후보는 새 검증기에서 거부됐다. 이 검증은 최종 통합 FULL·공개 CI·장치 수용을 대신하지 않는다.
+- gate 변화: 없음. 과거 실행을 적격 근거로 소급 승인하지 않았다.
+- CE: 기존 교훈 갱신 — 자동화의 병합 성공을 FULL의 적격성으로 해석한 기존 설명이 다음 작업을 오도할 수 있어 바로잡았다.
+
+## 2026-11-03 · 3db26622ab · evidence: 재연결 뒤 READY 복구와 수정 검증 동결
+
+- 변경: `validation/camera-readiness-followup-2026-11-03/result.md`에 실제 USB 재연결 뒤 새 기준선으로 복구한 결과와 세 코드 수정의 원격 검증 근거를 동결했다. 게시 근거 수정 bootstrap 착지 스냅샷을 접수한 뒤, 아직 미착지인 원본 주제 브랜치에서 같은 후속 검증 기록을 준비했다.
+- 증거: 네 역할의 registry/env 일치·단독 소유권·서로 다른 장치를 확인했고, 준비 검사 시작·원본 controls readback·재시작 뒤 별도 READY 3회에서 네 영상 sequence가 모두 증가했다. 실행 source는 기존 landed commit cbfb144767의 불변 snapshot이며 이전 profile/env/state를 보존했다.
+- gate 변화: 이번 실행의 photometric READY 복구. 팔/Pinky 동작·기하 보정·재부팅·새 릴리스 배포는 하지 않았다. 통합 후보의 qualified FULL와 공개 CI를 이 기록으로 대신하지 않는다.
+- CE: 기존 카메라 기준선 전환 절차 적용, 새 교훈 없음. 게시 근거 교훈 정정은 앞 기록과 같다.
+
+## 2026-11-03 · uncommitted · test(publish): held turn의 출처 보존과 실행 증거를 구분한다
+
+- 변경: `test_land_speculate`의 모의 FULL fixture는 출처·held turn의 root 실행·record base/ancestry·선택 보존을 그대로 검사하고, 실제 정본 FULL·브라우저 실행 근거가 없으므로 게시 검증 거부를 기대한다. 생산 관문과 캐시·로그 판정은 바꾸지 않았다.
+- 증거: 기존 bootstrap 후보 `382138de78`의 root 행렬에서 이 기대값 하나가 NEW였고 단독 재실행도 실패했다. 변경 전 main `37cde0e33e`에서는 통과했다. 수정한 최종 SHA는 speculate·prepare·publish 회귀와 speculate 단독 프로세스로 원격 검증한다.
+- gate 변화: 없음. 모의 검사로 기록한 `tier=full`을 실제 게시 근거로 해석하지 않는다.
+- CE: 해당 없음 — 이미 정정한 게시 근거 교훈과 엄격한 게시 회귀가 이 구분을 설명하며, 이번 수정은 남은 모의 fixture 기대값을 그 계약에 맞춘다.
+
+## 2026-11-03 · uncommitted · feat(isaac): 실물 top·side 카메라 시점과 D-947 Accepted
+- 변경: 컨테이너 fixture `real_cameras`(실측 PnP의 자세·기울기·초점거리), `stacking_scene.real_capture`가 첫 시행에 `real-top.png`·`real-side.png`를 렌더, 보고서 허용 그림에 추가, 방향(좌우 반전) 시험. D-947 Accepted(사용자 확인).
+- 증거: Isaac top 렌더와 실물 top 영상의 돌기 36개 평균 1.13 px·최대 1.85 px, side는 겹침으로 확인(PnP 잔차 2.8 px 이내). `test_container_stack.py` 원격 통과.
+- gate 변화: 없음. 팔 받침은 CAD 값 그대로다. 둘째 실행은 모델 PC에서 외부 정지로 적층 결과를 주장하지 않는다.
+- CE: 해당 없음 — 새 기능이다. 카메라 기울기(roll)를 빼면 side가 4.3 px로 한계를 넘는다는 점은 fixture 주석과 검증 기록에 남겼다.
+
+## 2026-11-03 · uncommitted · fix(landing): 병렬 준비와 폴백에서 급행 표시를 보존한다
+- 변경: 병렬 guard/body의 활성 우선순위 호출 수를 Lock으로 관리해 마지막 호출까지 표시를 유지한다. 자원 정보가 없는 serial 폴백에도 TURN_JOB를 전달한다. selector·검증 범위·worker/메모리 한계·host floor·ALONE 정책은 그대로다.
+- 증거: committed RED `d27b7a625c` 의도 실패6/양성2. 수정 `150a10701e`의 flags/remote_pytest/host_admission 원격125 PASS, skip/NEW/known/flaky0. 양쪽 종료 순서·normal 중첩·예외 정리·fallback flag1/0/빈값을 검증했다. 독립 검토 추가P1/P2없음, size2commits PASS, lint0오류42경고.
+- gate 변화: 없음. 소스 검증이며 기존 실행 중 job의 표시 갱신·main 적용·60분 SLO를 주장하지 않는다.
+- CE: 기존 Oct31 교훈 갱신. 공유 환경변수의 진입/종료 순서와 job launch 시점이 다른 문제, 단순 이전값 복원으로 해결되지 않는 이유를 기록했다.
+
+## 2026-11-03 · uncommitted · fix(landing): 분할 중복과 중첩 rollup 집계를 보완한다
+- 변경: 원격 호출 분할 후 전체 argv가 같은 항목만 첫 순서대로 제거한다. rollup의 직접 회원 소유권은 유지하며 자식 metadata를 실제 완료 이벤트에 보존하고, 집계는 부모 candidate·원래 ticket을 검증한 leaf만 닫는다. 순환·중복·미확인 pin은 불완전으로 유지하고 확인 가능한 leaf 영향 범위는 보존한다.
+- 증거: 실제 같은 SHA/tree/환경의 body 중복 5쌍을 확인했다. 소스 `3bb09294bb` 원격 split/isolation/remote_pytest 137 PASS, `d48e9f8e65` 원격 goal/rollup 55 PASS, 모두 skip/NEW/known/flaky 0. 선행 committed RED는 분할 중복 2건·중첩 완료/검증 경계 8건·metadata 손상 보존/기간 scope 2건이었다. `d48e9f8e65`의 독립 검토에 추가 P1/P2가 없었으며 소유권·이벤트 관련 통합 검증은 착지 전에 확인한다.
+- gate 변화: 없음. 기존 legacy 중첩 carrier의 미확인 origin은 추정하지 않으며 소스 검증을 main 착지·SLO 달성으로 보고하지 않는다.
+- CE: 기존 Nov1 교훈 갱신. 직접 소유권 목록과 논리 leaf 완료를 구분해야 하는 이유, 분할 후에야 드러나는 중복 호출을 기록했다.
+
+## 2026-11-03 · uncommitted · feat(omx): 떨어진 팔을 센 관절로 한 단계씩 빼내는 복구
+- 변경: `cell_unwedge.py`. shoulder_lift·elbow_flex만 홈 쪽으로 1단위씩, 손목은 명령 없음. 단계마다 지연을 읽어 1.2단위를 넘으면 반 단계 되돌리고 다른 관절로, 둘 다 막히면 사람을 부름. 단계마다 top·side 사진과 판단 기록. `cell_pipeline.recover`는 쥔 것이 없으면 이 단계를 쓰고 집게를 크게 벌리지 않는다.
+- 증거: 2026-11-03 04:05 arm_b가 피벗 goto 중 wrist_flex 가드로 컨테이너 위에 떨어짐. 고정 recover lift(elbow −5, wrist +4)는 이 자세에서 홈 반대쪽이라 같은 오류로 실패. `cell_unwedge`는 실물에서 21단계, 막힘 없이 빼내고 park.
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: `docs/solutions/runtime-errors/omx-arm-b-dropped-on-the-stack-and-the-fixed-recover-lift-pressed-it-down-2026-11-03.md`
+
+## 2026-11-03 · uncommitted · feat(omx): 세션 서보 튜닝을 기종 → 현장 caps → 로봇 프로필 순서로 겹친다
+- 변경: 기종 기본값 `deploy/robot/omx/omx-ai-follower-tuning.json`(`rosy.omx-servo-tuning.v1`, 팔꿈치 13·손목 14 I 게인 50, 근거 포함). `session_caps.load_caps(model=, robot=)`가 모터·키 단위로 기종 < 현장 `caps.json` < 로봇 프로필 `servo` 순서로 합친 뒤 기존 범위로 검사한다. 튜닝 층은 `p`·`i`·`acc`·`vel`만 받고 PWM·전류는 현장 caps에만 둔다. `cell_robot_profile`이 선택 필드 `servo`를 받고 profile SHA에 넣는다. `record_session`이 세 층을 읽는다. 두 팔 원격조종(`two_arm_config.follower_gains`)도 같은 기종 P·I를 설정 파일 `follower_gains` 아래에 깐다.
+- 증거: D-951 5·6(2026-11-01 두 팔, I 50으로 팔꿈치 +1.52→+0.06, 손목 −0.41→+0.03, TCP 12.3→3.3 mm). 지금까지는 현장 `caps.json`에 손으로 넣어야 했고 빠지면 다시 처졌다.
+- gate 변화: 없음. 가드 한계(`I_GAIN_MAX` 등)는 그대로다.
+- 결정: 없음(D-951 6의 구현)
+- CE: 해당 없음 — 원인과 해결은 D-951과 작업 기록에 이미 있고, 이번은 그 값을 코드 기본값으로 옮긴 일이다.
+
+## 2026-11-03 · uncommitted · feat(omx): 같은 크기 컨테이너가 줄지어 붙어 있으면 개수를 세어 나눈다
+- 변경: `cell_objects.classify`가 2~`objects.split_max`(6)개, 칸 사이 틈 `objects.split_gap_mm`(8)까지 나눠 보고, 줄이 컨테이너 짧은 변·긴 변 어느 쪽으로 늘어서도 시도한다. 엄격 판정을 통과하는 조합 중 조각 폭·길이가 카탈로그에 가장 가까운 것을 고른다. 조각마다 엄격 일치·방향·채움 검사는 그대로다.
+- 증거: 2026-11-03 arm_b 배 위에 3칸 컨테이너 다섯 개가 6 mm 틈으로 놓여 한 덩어리(113 × 100 mm)로 보여 집을 대상이 없었다. 현장 사진에서 셋으로 나뉘어 각각 container-3로 인식됨. 실물 집기는 손목에 가려 집게 확인이 거절해 아직 없음.
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 없음(같은 날 arm_b 낙하 교훈에 이어서 기록 예정)
+
+## 2026-11-03 · uncommitted · fix(harness): isolate G1 timing in a dedicated serial, host-exclusive job
+- Change: CI/lab share one plan that removes G1 timing from ordinary FULL/ROOT/explicit-file/affected invocations and adds exactly one whole-file job. Existing ROSY_JOB_ALONE admission and disabled xdist apply together. The gate requires original collected and actually passed item sets to match, with zero skips. Dedicated results bypass success caches and reruns. Explicit FULL validates both the ROOT exclusion and the complete dedicated companion. The 0.45s threshold, skip helper and production control code are unchanged.
+- Evidence: 72508553f6 remote plan RED: 4 failures. Final 791a884c6c five-file remote regressions: 471 passed / 0 skipped (248.25s), rosy-g1-plan-green-791a/run-1.txt. Separate actual G1 execution used main af46af4666 transport with that same source: 12 passed / 0 skipped (6.31s, peak 68MiB), rosy-g1-timing-exclusive-791a/run-1.txt. Exactly one receipt: expected=12 collected=12 passed=12 skipped=0 clean=1. Formal admission waited for existing jobs to drain; this was the first and only actual attempt, without retry. Pre-enqueue observations were 12 free cores/11.8GB, CPU some avg10 0.13%, IO some avg60 0.18%; they do not prove absence of external I/O during execution. Regression runner resource output (3MiB/CPU 9ms) conflicts with elapsed time and is not accepted as resource evidence. Logs reside outside the repository under OS Temp.
+- Gate: SOURCE/LOCAL remain GO with only these scoped remote results updated. Independent source review at 8867775a10 found no supported findings; 791a884c6c corrects fixtures only. Initial official landing needs dispatcher-owned auto --no-cache bootstrap through the old main consumer, with direct strict receipt inspection. Account explicit FULL must follow after the new main consumer lands. Neither FULL success nor landing is claimed here. Existing collect-only and conditional whole-import checks remain intact. Equivalence or duplication if future control changes add G1 to that separate import context was neither solved nor substituted in this scope.
+- CE: not applicable. Applied the existing read-only-test-dirs-fill-lab-disks lesson; plan/receipt/cache boundaries are retained in code and regressions. External WAL I/O as the cause of the historical wallclock failure remains unconfirmed. Host exclusivity does not establish absence of all external I/O.
+- Native checks: canonical generate completed; harness lint 0 errors / 41 warnings (existing worktree-cap and module freshness warnings). Changed Python AST and YAML valid; diff check and six-commit size_range passed. Secret scan added 0 findings; the two historical docs/logs.md findings match the unchanged baseline.
+
+## 2026-11-03 · uncommitted · fix(harness): retain fresh timing proof through publication
+- Change: after canonical main merge 5172c4f155, publication validates the immutable candidate's canonical FULL SOT and actual recorded timing invocation plan. Legacy ROOT validation applies only when that candidate lacks the G1 helper; import or validation failures cannot trigger fallback. Dedicated rows use the existing exact commit/tree/environment/argv/log-SHA-256 store, with strict receipt validation against the already hash-bound bytes snapshot. Cache lookup excludes dedicated inputs and stored rows from exact and narrow reuse; --no-cache and DED-only execution still preserve fresh clean publication mappings. Ordinary quarantine/cache policy and prepared-to-final bridge checks remain unchanged.
+- Evidence: 6bbd6a7e26 remote RED 4 failed / 2 passed exposed canonical-plan rejection, exact-tree reuse and missing fresh mappings. d7da574084 regression run had 1 failed / 279 passed: the old shard fixture assumed ROOT-with-ignore would split, contrary to the existing splitter. Tests-only 65734705c0 moved the same real-shard/missing-shard proof to the existing option-free policy suite; remote 280 passed / 0 skipped (80.97s), NEW/known/flaky 0. b79ab29afa then exposed two additional duplicate/filtered record acceptance failures with complete clean mappings. b2e9c09207 exposed prepared+turn plan concatenation in two failures with one preservation case passing. Final 9a9ca24543 seven-file remote result: 292 passed / 0 skipped (77.56s), NEW/known/flaky 0. Reports are under OS Temp rosy-g1-publication-red, rosy-g1-publication-green-d7da, rosy-g1-publication-green-6573, rosy-g1-publication-record-red, rosy-g1-prepared-record-red and rosy-g1-publication-green-9a9c. Both the 6573 and final 9a9c runner resource outputs (4MiB/CPU 10ms and 4MiB/CPU 9ms respectively) conflict with elapsed time and are excluded as resource evidence. Final preflight selected the site test host with 5.1 free cores/8.8GB through normal admission; no resource-floor override was used.
+- Gate: SOURCE/LOCAL remain GO only for the scoped evidence above. Fresh evidence storage is required; result reuse is forbidden. Any earlier description of avoiding all dedicated cache writes is superseded by this distinction. Exact 9a9ca24543 independent review found no supported new findings. A prepared FULL and a later turn can legitimately execute G1 in two distinct fresh contexts. Their exact shared canonical plan row is normalized only when each input plan contains exactly one DED; all execution logs/mappings and prepared provenance remain intact. Within-plan duplicates, filtered jobs and ordinary duplicates are not normalized away. A new regression removes the final turn log to verify prepared proof cannot conceal its absence. Actual timing file, gate plugin, thresholds and import-isolation contexts are unchanged from 791a; its 12/12 strict actual execution remains separate evidence and was not repeated. The next official FULL must execute fresh G1, and this record does not claim landing, publication or field acceptance.
+- CE: not applicable. Applied the existing own-full-landing-to-publish-wasted-hours lesson: disabling reuse must retain fresh hash-bound execution proof. The additional producer/consumer rules and counterexamples are retained in code and regression tests, without a new speculative lesson or external-I/O cause claim.
+- Native checks: canonical generate completed; lint 0 errors / 41 existing worktree-cap/module-freshness warnings. Changed Python AST and progress YAML valid; diff check and fourteen-commit size_range passed. Secret scan added 0 findings (two unchanged historical log findings), and no changed path is safety-tagged.
+
+## 2026-11-03 · uncommitted · fix(harness): preserve admission and G1 tests across main merge
+- Change: merged actual main 04877e4058 into the harness topic. The canonical merge helper aborted on the append-location conflict in test_remote_pytest.py; the authorized manual resolution retains both G1 serial/export-admission tests and main's three-parameter unmeasured-host turn-priority regression. Documentation conflicts used the canonical resolver and generated index. xdist_plan retains both G1 serial handling and main's priority propagation; no gate, timing threshold, publication, cache or record production code changed relative to 0729c37dd3.
+- Evidence: merge 111d476ce2. Native AST comparison and independent merge review confirm the union of both parents' definitions, with bodies/decorators intact. Exact 111d476ce2 seven-file remote result: 267 passed / 0 skipped (57.06s, peak 128MiB), NEW/known/flaky 0; formal admission waited 43s for existing jobs. Report: OS Temp rosy-g1-main-admission-merge-111d/run-1.txt. Source preflight selected the normal model test host with 17 free cores/20.7GB, without overriding admission floors. The earlier official 213025 snapshot stopped on the unresolved merge before tests; it is not a failed source-verification result.
+- Gate: SOURCE/LOCAL remain GO only within the stated scopes; no FULL, landing, publication or device acceptance is claimed. Independent exact 111d476ce2 review found no supported findings. ALONE admission still precedes turn priority, so priority does not bypass host exclusivity. Actual G1 file, strict plugin and SOT are unchanged; the prior 12/12 actual G1 proof was not repeated, and the next official FULL still requires fresh execution. Account 714a852af0 and all peer refs/worktrees remain untouched.
+- CE: not applicable. This is a preserved append conflict, and the parent-union proof plus runtime regressions directly explain the resolution; no new operational lesson or external-I/O cause is claimed.
+- Native checks: canonical generate completed; lint 0 errors / 41 existing module-freshness/worktree-cap warnings. Python AST/progress YAML and diff checks passed; sixteen-commit size_range passed before this record-only commit. Secret scan added 0 findings (two unchanged historical log findings). The preserved Account branch still resolves to 714a852af0.
+
+## 2026-11-03 · uncommitted · fix(harness): bootstrap each timing test before canonical imports
+- Change: test_land_selection.py and test_g1_timing_gate.py now add their own repository tools path before importing harness.affected_exclusive. They retain the same canonical module and all test bodies. No global conftest, collection/whole-import gate, production control code or actual G1 timing file was changed.
+- Evidence: official 213833 snapshot run-gpre-3 exposed fresh-process collection failures in exactly those two files: ModuleNotFoundError for harness; wrapper result 2 failed / 58 passed / 1 skipped (111.25s). The earlier broad green result had inherited another test's sys.path bootstrap. Exact fix 45720c033b remote run-1 executed selection whole-file alone: 58 passed / 0 skipped (18.94s, peak 68MiB); run-2 executed G1 gate whole-file alone: 36 passed / 0 skipped (3.76s, peak 67MiB). Separate run-3 used the unchanged collect_alone wrapper with both files explicitly in ROSY_COLLECT_PATHS and ROSY_ALONE_FILES: 4 passed / 0 skipped (19.67s, peak 118MiB), covering both collections and both whole-file child executions. Each log compares NEW/known/flaky 0. Reports and exact three-invocation plan are outside the repository in OS Temp rosy-g1-bootstrap-isolation-4572. Normal model preflight had 5.2 free cores/20.3GB; admission floors were unchanged.
+- Gate: SOURCE/LOCAL remain GO only for these scoped results. Independent exact 45720c033b source review found no supported findings. Standalone and wrapper checks are separate process contexts, not a broad selection that can share import state. Existing whole-import validation remains intact. Actual G1 timing was not executed again; the next official FULL still requires its fresh strict receipt. The old official snapshot and its diagnostic work were not stopped, restarted or edited by this fix, and no FULL success or landing is claimed.
+- CE: not applicable. Applied shared-pytest-process-masks-path-dependent-import-2026-10-26: the existing lesson already describes this exact masking mechanism and requires whole-file fresh-process proof. The fix and the three explicit execution contexts retain the new evidence without duplicating the lesson.
+- Native checks: canonical generate completed; lint 0 errors / 41 existing module-freshness/worktree-cap warnings. Both files retain all original test/fixture definitions and decorators (AST comparison); Python AST/progress YAML and diff checks passed. Eighteen-commit size_range passed before this record-only commit; secret scan added 0 findings (two unchanged historical log findings). Account1077 remains preserved.
+
+## 2026-11-03 · uncommitted · fix(remote): 이력 없는 큰 시험 묶음을 기존 비용 추정으로 분할
+- 변경: `work_queue.split`의 분할 판정과 단일 디렉터리 그룹 수가 같은 기존 `cost()`를 사용한다. 실제 측정값은 0도 포함해 추정보다 우선하며, 기존 240초 경계·분할 상한·제외 조건·환경 복제·정확 argv 중복 제거는 유지한다.
+- 증거: 실제 첫 차례의 83경로 한 묶음이 완료 전 시간 상한으로 취소돼 본문 37개 PASS 0이었다. 재현 3 FAIL/9 PASS 뒤 코드 `8f4cf7e0bc` 원격 관련 3 suite 145 PASS·skip/NEW/known/flaky 0, 독립 검토 P1/P2 없음. 기존 캐시 argv 527개의 분할 계획은 그대로다.
+- 관측 한계: 고정 167e Git blob의 같은 83경로/.py620 합집합으로 1→83묶음, 최대 byte 추정 3468→995초다. 실제 wall·startup 비용은 미측정이며 남는 큰 자식 3개도 있다. 99%를 PASS로 저장하거나 30분이면 끝났다고 추정하지 않는다.
+- gate 변화: 없음. 기존 시간 예산·캐시 적격성·검증 범위·자원 정책을 바꾸지 않고 새 flag·의존성을 추가하지 않는다.
+- CE: 기존 교훈 갱신 — `docs/solutions/workflow-issues/landings-gave-the-turn-back-and-reran-everything-2026-11-01.md`에 cold packet과 부분 완료 증거의 경계를 남겼다. 같은 명령의 기존 PASS 키를 다른 자식 키로 추론하지 않는다.
+
+## 2026-11-03 · uncommitted · docs(landing): 초기 GC 등록 목록과 추가 복구의 확인 범위
+- 변경: 제품 동작은 바꾸지 않고 실제 등록 목록과 추가 Git 복구, 아직 검증하지 못한 파일 보존 범위를 기록한다.
+- 확인된 사실: 초기 정리 전 세션의 실제 porcelain 출력(11월2일01:46:03.182Z)에서 등록된 hidden 워크트리 103곳의 경로·HEAD·브랜치를 복원했다. 고유 HEAD는 101개이며 모두 commit 객체다. 기존 7,276개 복구 참조에서 도달하지 못하던 `3f4cf47078a80d45c7f0a1e6d6db059f5b7b4267`은 객체가 남아 있어 새 `refs/wip/2026-11-03/pre-gc-inventory/<sha>`로 보존했다.
+- 검증: 추가 HEAD의 connectivity 검사 exit0/output0이고, 이후 등록 목록의 고유 HEAD 101개 모두 현재 refs에서 도달 가능함을 확인했다. 추가 전 기존 refs의 commit-graph·connectivity도 exit0/output0이었다. 현재 refs의 정상 판정만으로 삭제 전 등록 HEAD 전체의 보존을 대신할 수 없었다.
+- 근거: 작업 공간의 `Rosy/docs/workspace-records/2026-11-02/pre-gc-registered-worktrees.json`에 원본 세션 39행의 시각·SHA256, 정규화한 103개 등록 항목, 현재 도달 가능 여부와 추가 복구 참조를 보존했다. 연결성 출력은 OS Temp `rosy-pre-gc-inventory-connectivity.txt`다. 원본 세션은 수정하지 않았다.
+- 미해결: 이 목록은 파일 inventory나 성공 삭제 명단이 아니다. 초기 ignored/untracked 자료의 전체 목록·대응 백업을 찾지 못했다. 삭제 전 등록 103곳과 나중의 디렉터리 58개는 조회 범위가 달라 단순 차이로 개별 삭제 성공을 확정하지 않는다. 초기 GC 출력의 삭제 실패 4곳도 성공으로 계산하지 않는다. 후속 sidecar 백업 19개·30개를 초기 정리의 파일 보존 근거로 소급하지 않는다.
+- 다음 확인: 초기 파일 inventory 또는 당시 폴더와 대응하는 백업이 발견될 때 파일별 해시로 대조한다. 그 전에는 미추적 자료의 완전 보존을 주장하지 않고, 기존 backup·복구 refs와 원본 로그를 유지한다. 추가 객체 정리나 reflog 만료는 하지 않았다.
+- gate 변화: 없음. 제품 코드·시험 선택·캐시·자원·착지 조건을 바꾸지 않는 운영 기록이다. 최종 후보의 공식 문서 가드와 착지는 별도 확인한다.
+- CE: 미해결. 일부 Git 이력의 추가 보존은 검증했지만 초기 파일 보존을 해결한 것처럼 새 해결 교훈을 쓰지 않았다. 증상·확인 사실·남은 확인을 이 소유 저장소의 작업 기록으로 남긴다.
+
+## 2026-11-03 · uncommitted · fix(remote): 배치의 각 시험 입장에서 재부팅 임박 차단
+- 변경: 최초 호스트 선택에만 있던 D-889 13의 재부팅 임박 판정을 각 원격 ADMIT에도 적용한다. 차단된 작업은 자원 해제 뒤 같은 Work index로 반환하고 다른 호스트 또는 기존 bounded wait로 이어간다. quarantine 재시험의 원본 실패·로그와 남은 재시험을 보존한다. 기존 단일 호스트 호출 계약도 유지한다.
+- 증거: 원격 재현 15 FAIL/9 PASS, 최종 코드 `95abfc2cdb` 관련 9 suite 228 PASS·skip/NEW/known/flaky 0, 독립 검토 P1/P2 없음, size 3 commits PASS. 관측된 종료143은 시험 PC의 예약 재부팅 경계와 겹쳤다. 기존 착지의 공식 resume에서 PASS31 invocation 재사용을 확인했다.
+- gate 변화: 없음. 기존 재부팅 시각·780초 타이머/서비스 판정·자원 하한·deadline/stop을 유지하며 추가 SSH·새 flag·의존성은 없다. 이미 실행 중인 긴 작업은 기존143/resume 경계다.
+- CE: 기존 교훈 갱신 — `docs/solutions/workflow-issues/landings-gave-the-turn-back-and-reran-everything-2026-11-01.md`의 재부팅 항목에 배치 중간 입장 공백과 검증·복구 범위를 남겼다. 새 실물 재부팅 시험이나 운영 반영 완료를 주장하지 않는다.
+
+## 2026-11-03 · uncommitted · fix(landing): preserve first queue across a proven rules-refresh stop
+- Change: retain the existing exact-PID stop epoch and additionally join a stopped frozen snapshot only when its same-ticket queue records prove a PID handoff, with no competing ticket or completed cycle. A queue-less refresh child STOP after the latest queue can then preserve the original request clock across a new snapshot. Topic-only joins, raw-event changes and guessed completion rows are excluded.
+- Evidence: actual old queue/owner handoff/queue-less child STOP and the new snapshot queue exposed 208.7301 minutes of potential undercount. Test-only d49d9ab33f remote RED: 2 intended failures, 49 passes. Code 98738da589 remote goal/events result: 57 passes, zero skip/NEW/known/flaky; normal Rosy admission wait0/run11 seconds. Logs: OS Temp rosy-landing-clock-red and rosy-landing-clock-green-valid. An earlier request named a nonexistent test_land_stats.py and exited4 before collecting tests; it is excluded from GREEN evidence. No pytest ran locally.
+- Review and limits: independent pinned-code review found no P1/P2 defect. Existing same-PID, competing-ticket, requeue, previous-completion, unfrozen-branch and rollup membership boundaries remain covered. This repairs measurement; it does not demonstrate faster landing or attainment of p90 60 minutes/stall 30 minutes. Canonical main-candidate checks and landing remain pending.
+- gate 변화: 없음. 계측의 최초 대기시간 연결만 보수적으로 복원하며 시험·자원·착지 기준은 유지한다. 공식 후보 검증과 main 착지는 아직 미완료다.
+- CE: updated the existing landings-gave-the-turn-back-and-reran-everything lesson with the actual handoff evidence, conservative join conditions and recovery checks. No new lesson, dependency, flag, admission override or external service was added.
+- Verification scope: this final record changes documentation only. The independently reviewed and remotely tested tools/test tree stays at 98738da589. Native generation/lint and the official landing guard cover the documentation; no duplicate standalone guard pytest is requested. Final-candidate and main verification are still required.
+
+## 2026-11-03 · uncommitted · fix(landing): 계측 전용 변경의 시험 범위 선택
+- 변경: safety 판정 뒤 `tools/land_goal.py`·`tools/land_stats.py` 정확 두 경로만 runtime land global glob에서 분리한다. 기존 reader/local-importer 탐색으로 goal/events와 관련 회귀를 선택하며 추가 매핑·옵션·의존성은 없다. 다른 gate·선택기·remote·미등록·혼합 변경과 빈 coverage의 FULL은 유지한다.
+- 증거: test-only21f186 원격 RED는 의도한 5실패·6negative통과였고, 자기 경로 문자열을 reader로 잡던 fixture1개는32ec1677에서 고쳐 해당 negative1통과를 별도로 확인했다. 최종 코드a193f619 원격 관련4suite281통과와 pre_push_hook 단독29통과, skip/NEW/known/flaky0이다. 로그는 OS Temp rosy-stats-selection-{red,red-fixture,green,prepush}-20261103에 있다. 독립 고정 코드 검토 P1/P2 없음이다.
+- 범위 측정: 같은6b9..987 입력과987 파일 내용·자동without_sim/browser[] 조건에서 FULL27argv/추적 시험 파일2383개→AFFECTED1argv/11개(9guards+goal/events)다. workspace-records/2026-11-02/stats-selection-scope-evidence.json에 원본 argv·파일 union·SHA·조건을 원본과 SHA256 동일하게 보존했다. testcase 수나 실제 wall 절감·SLO 달성으로 해석하지 않는다.
+- gate 변화: 순수 계측 변경의 관련 시험 범위만 바로잡는다. 이 선택기 수정 자체는 정식 FULL이 필요하고, safety·runtime/selector/remote 혼합의 FULL과 기존 문서 guard를 유지한다. 공식 후보 검증·main 착지·변경 후 p90 검증은 아직 남아 있다.
+- CE: 기존 교훈 갱신 — landings-gave-the-turn-back-and-reran-everything의 과다 FULL 원인과 적용 조건을 보완했다. 보고 결과가 승인·실행 경로에 들어가면 분류를 재검토한다. 최종 문서 기록은 검증 코드a193 대비 tools/test 변경이 없으며 같은 guard를 별도 수동 pytest로 반복하지 않고 공식 착지에서 확인한다.

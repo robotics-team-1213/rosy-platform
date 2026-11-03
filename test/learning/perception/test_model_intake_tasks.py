@@ -6,8 +6,8 @@ import numpy as np
 import pytest
 
 from test_model_intake import intake  # path setup lives there
-from control.sensing.perception.learned.detector import DetectResult
-from control.sensing.perception.learned.lane_mask import NonFiniteLogits
+from perception_runtime.perception.learned.detector import DetectResult
+from perception_runtime.perception.learned.lane_mask import NonFiniteLogits
 
 
 def test_gate_file_has_an_object_det_section_without_lane_visibility():

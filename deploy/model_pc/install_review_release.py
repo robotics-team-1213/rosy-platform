@@ -52,7 +52,7 @@ SPLIT_REQUIRED = (
                   'middleware/perception/nodes/pilot_recorder_node.py',
                   'middleware/perception/nodes/pilot_recording.py',
                   'middleware/perception/nodes/record_session.py',
-                  'middleware/perception/nodes/recording.py',
+                  'integrations/perception/perception_runtime/recording.py',
                   'middleware/perception/nodes/road_observer_node.py',
                   'middleware/perception/nodes/road_state_node.py',
                   'middleware/perception/nodes/sensor_provider.py',
@@ -136,7 +136,7 @@ def unit_contents(current: Path, state: Path, python: Path, host: str, port: int
         raise ValueError('review port must leave room for its loopback decisions port')
     dataset = current / "learning/curation/perception"
     paths = (
-        current / "middleware/perception",
+        current / "middleware/perception", current / "integrations/perception",
         current / "contracts/foundation",
         current / "tools/perception",
         current / "learning/registry/perception",
@@ -344,7 +344,7 @@ def install(source: Path | None, release: str, root: Path, state: Path | None,
             "release": release, "source_sha256": source_digest}, indent=2) + "\n", encoding="utf-8")
         env = os.environ.copy()
         env["PYTHONPATH"] = ":".join(str(staging / part) for part in (
-            "middleware/perception", "contracts/foundation", "tools/perception",
+            "middleware/perception", "integrations/perception", "contracts/foundation", "tools/perception",
             "learning/registry/perception", "learning/curation/perception", "learning/training/perception"))
         env["PYTHONDONTWRITEBYTECODE"] = "1"
         subprocess.run((str(python), "-c", "import review_app"), env=env, check=True)

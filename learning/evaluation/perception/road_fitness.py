@@ -6,7 +6,7 @@ from collections import Counter
 import cv2
 import numpy as np
 
-from control.sensing.perception.learned.road_region import observed_road_region, road_masks
+from perception_runtime.perception.learned.road_region import observed_road_region, road_masks
 from core_common.observation import road_region_input_errors
 
 

@@ -9,7 +9,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import drivable_steer as ds  # noqa: E402
-from control.sensing.perception.learned.manifest import ClassSpec  # noqa: E402
+from perception_runtime.perception.learned.manifest import ClassSpec  # noqa: E402
 
 CLASSES = (ClassSpec(0, "background", "background"), ClassSpec(1, "lane_left", "lane_marking"),
            ClassSpec(2, "lane_right", "lane_marking"), ClassSpec(3, "crosswalk", "ignore"),

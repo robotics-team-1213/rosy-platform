@@ -6,8 +6,8 @@ import json
 import numpy as np
 import pytest
 
-from control.sensing.perception.learned.manifest import ManifestError
-from control.sensing.perception.learned.runner import LaneSegModel, ModelSlot
+from perception_runtime.perception.learned.manifest import ManifestError
+from perception_runtime.perception.learned.runner import LaneSegModel, ModelSlot
 
 
 class FakeSession:
@@ -118,7 +118,7 @@ def test_slot_keeps_previous_when_new_model_has_incompatible_road_semantics(tmp_
 
 @pytest.mark.parametrize("signed", [False, True])
 def test_semantic_swap_refusal_preserves_previous_signature_status(tmp_path, monkeypatch, signed):
-    from control.sensing.perception.learned import signature
+    from perception_runtime.perception.learned import signature
 
     good = _model_dir(tmp_path)
     other = _model_dir(tmp_path, "other", "lane-seg-other")
@@ -316,7 +316,7 @@ def test_learned_site_is_appended_after_the_system_paths(tmp_path, monkeypatch):
     import importlib.machinery
     import sys
 
-    from control.sensing.perception.learned import runner
+    from perception_runtime.perception.learned import runner
 
     assert runner.LEARNED_SITE == "/opt/rosy/learned-perception/site-packages"
     site = tmp_path / "site-packages"
@@ -334,7 +334,7 @@ def test_learned_site_is_appended_after_the_system_paths(tmp_path, monkeypatch):
 
 
 def test_missing_learned_site_leaves_the_path_alone(tmp_path, monkeypatch):
-    from control.sensing.perception.learned import runner
+    from perception_runtime.perception.learned import runner
 
     monkeypatch.setenv("ROSY_LEARNED_SITE", str(tmp_path / "absent"))
     path = ["/usr/lib/python3/dist-packages"]

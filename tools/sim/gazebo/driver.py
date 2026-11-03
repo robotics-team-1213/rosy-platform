@@ -13,6 +13,7 @@ import os
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'middleware/perception'))  # ../../tools/sim/gazebo -> repo root
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'integrations/perception'))  # ../../tools/sim/gazebo -> repo root
 
 import rclpy
 # Sim box: rclpy removed RcutilsLogger.warn (the robot's build still has

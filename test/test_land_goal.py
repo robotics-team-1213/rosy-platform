@@ -64,6 +64,38 @@ def test_reemitting_the_same_ticket_cannot_move_the_retry_coverage_cutoff():
     assert land_goal.lead_times(rows, 0, 500) == [5, 280 / 60]
 
 
+@pytest.mark.parametrize("member", [False, True])
+def test_rules_refresh_stop_before_queue_preserves_the_original_ticket_clock(member):
+    old, new = "land/fix/a-20261102204332", "land/fix/a-20261103001242"
+    rows = [ev(0, "queue", branch=old, ticket="original", pid=43728),
+            ev(60, "queue", branch=old, ticket="original", pid=69240),
+            ev(120, "stop", branch=old, pid=75292),
+            ev(180, "queue", branch=new, ticket="new", pid=65856)]
+    completion = (dict(branch="land/fix/land-rollup-x", members=[dict(branch=new, ticket="new")])
+                  if member else dict(branch=new, pid=65856))
+    rows.append(ev(240, "landed", **completion))
+    assert land_goal.lead_times(rows, 0, 300) == [4]
+
+
+@pytest.mark.parametrize("boundary", ["competing-ticket", "requeued", "completed", "unfrozen"])
+def test_unqueued_stop_cannot_claim_another_ticket_or_completed_epoch(boundary):
+    old, new = "land/fix/a-20261102204332", "land/fix/a-20261103001242"
+    if boundary == "unfrozen":
+        old = "fix/a"
+    rows = [ev(0, "queue", branch=old, ticket="original", pid=1),
+            ev(60, "queue", branch=old, ticket="original", pid=2)]
+    if boundary == "competing-ticket":
+        rows.append(ev(90, "queue", branch=old, ticket="other", pid=3))
+    if boundary == "completed":
+        rows.append(ev(90, "landed", branch=old, pid=2))
+    rows.append(ev(120, "stop", branch=old, pid=4))
+    if boundary == "requeued":
+        rows.append(ev(150, "queue", branch=old, ticket="later", pid=5))
+    rows += [ev(180, "queue", branch=new, ticket="new", pid=6),
+             ev(240, "landed", branch=new, pid=6)]
+    assert land_goal.lead_times(rows, 0, 300) == ([1.5, 1] if boundary == "completed" else [1])
+
+
 def test_failed_rollup_does_not_close_member_or_create_a_sample():
     rows = [ev(0, "queue", ticket="a"), ev(60, "stop", members=[{"branch": "land/fix/a", "ticket": "a"}]),
             ev(120, "landed")]
@@ -164,6 +196,83 @@ def goal_repo(tmp_path, monkeypatch):
                     "commit", "-q", "--allow-empty", "-m", "prepared"], env=env, check=True)
     monkeypatch.chdir(tmp_path)
     return tmp_path / ".git" / land_events.EVENTS, 1_793_500_000.0
+
+
+@pytest.fixture
+def nested_completion(goal_repo):
+    events, start = goal_repo
+    base = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+    tips = []
+    for name in ("inner", "outer"):
+        subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q",
+                        "--allow-empty", "-m", name], check=True)
+        tips.append(subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip())
+    a, b, c = [f"land/fix/{name}-20261101000000" for name in "abc"]
+    inner, outer = [f"land/fix/land-rollup-{stamp}-{stamp}" for stamp in ("20261101000100", "20261101000200")]
+    children = [dict(branch=a, ticket="a2", candidate=base), dict(branch=b, ticket="b", candidate=base)]
+    members = [dict(branch=inner, ticket="inner", candidate=tips[0], members=children),
+               dict(branch=c, ticket="c", candidate=tips[1])]
+    rows = [ev(start, "queue", branch=a, ticket="a1"), ev(start + 5, "stop", branch=a),
+            ev(start + 10, "queue", branch=a, ticket="a2", pid=2),
+            ev(start + 20, "queue", branch=b, ticket="b"), ev(start + 30, "queue", branch=c, ticket="c"),
+            ev(start + 40, "queue", branch=inner, ticket="inner"),
+            ev(start + 50, "queue", branch=outer, ticket="outer"),
+            ev(start + 120, "landed", branch=outer, sha=tips[1], members=members)]
+    return events, start, rows
+
+
+def test_nested_completion_closes_only_leaves_at_the_single_actual_ff(nested_completion):
+    events, start, rows = nested_completion
+    raw = json.dumps(rows)
+    newer = "land/fix/a-20261101000300"
+    rows += [ev(start + 150, "queue", branch=newer, ticket="new", pid=9),
+             ev(start + 180, "landed", branch=newer, pid=9)]
+    normalized, warnings = land_goal.normalize(rows, events.parent)
+    assert not warnings
+    assert land_goal.lead_times(normalized, start, start + 200) == [2, 100 / 60, 1.5, .5]
+    assert len([r for r in normalized if r["event"] == "landed"]) == 2
+    assert json.dumps(rows[:-2]) == raw, "nested normalization must not mutate raw members"
+
+
+@pytest.mark.parametrize("bad", ["missing", "cycle", "duplicate", "invalid_pin", "wrong_parent", "unknown_ticket"])
+def test_unproven_nested_completion_stays_incomplete(nested_completion, bad):
+    events, start, rows = nested_completion
+    inner = rows[-1]["members"][0]
+    if bad == "missing":
+        inner.pop("members")
+    elif bad == "cycle":
+        inner["members"] = [{k: v for k, v in inner.items() if k != "members"}]
+    elif bad == "duplicate":
+        rows[-1]["members"][1]["candidate"] = inner["members"][0]["candidate"]
+        inner["members"].append(dict(rows[-1]["members"][1]))
+    elif bad == "invalid_pin":
+        inner["members"][0]["candidate"] = "f" * 40
+    elif bad == "wrong_parent":
+        inner["members"][0]["candidate"] = rows[-1]["sha"]
+    else:
+        inner["members"][0]["ticket"] = "not-recorded"
+    normalized, warnings = land_goal.normalize(rows, events.parent)
+    assert warnings and normalized[-1]["metrics_incomplete"]
+    assert land_goal.lead_times(normalized, start, start + 200) == []
+
+
+@pytest.mark.parametrize("bad", ["invalid_pin", "missing", "cycle", "invalid_branch"])
+def test_nested_incomplete_scope_keeps_known_leaves_and_unknown_trees_closed(nested_completion, bad):
+    events, start, rows = nested_completion
+    inner = rows[-1]["members"][0]
+    if bad == "invalid_pin":
+        inner["members"][0]["candidate"] = "f" * 40
+    elif bad == "missing":
+        inner.pop("members")
+    elif bad == "cycle":
+        inner["members"] = [{k: v for k, v in inner.items() if k != "members"}]
+    else:
+        inner["members"][0]["branch"] = 42
+    rows += [ev(start + 300, "queue", branch="fix/unrelated", ticket="other", pid=9),
+             ev(start + 360, "landed", branch="fix/unrelated", pid=9)]
+    normalized, warnings = land_goal.normalize(rows, events.parent, start + 200, start + 400)
+    assert normalized[-3]["metrics_incomplete"]
+    assert bool(warnings) == (bad != "invalid_pin"), "only a complete leaf name set can prove an unrelated window"
 
 
 def test_goal_cli_stall_uses_landing_events_despite_old_commit_dates(goal_repo, monkeypatch, capsys):

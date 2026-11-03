@@ -33,12 +33,13 @@ import numpy as np
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "middleware" / "perception"))
+sys.path.insert(0, str(REPO / "integrations" / "perception"))
 sys.path.insert(0, str(REPO / "contracts" / "foundation"))  # core_common (D-424)
 
-from control.sensing.perception import lane as lane_mod  # noqa: E402
-from control.sensing.perception.camera_ground import nominal_ground_plane  # noqa: E402
-from control.sensing.perception.lane_boundaries import LaneBoundaryTracker  # noqa: E402
-from control.sensing.perception.lane_keep import LaneKeeper, floor_white_mask  # noqa: E402
+from perception_runtime.perception import lane as lane_mod  # noqa: E402
+from perception_runtime.perception.camera_ground import nominal_ground_plane  # noqa: E402
+from perception_runtime.perception.lane_boundaries import LaneBoundaryTracker  # noqa: E402
+from perception_runtime.perception.lane_keep import LaneKeeper, floor_white_mask  # noqa: E402
 
 PROFILE_PATH = REPO / "middleware" / "devices" / "pinky" / "profile" / "config" / "camera_nominal.yaml"
 LANE_HALF_WIDTH_M = 0.0925

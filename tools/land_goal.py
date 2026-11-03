@@ -14,6 +14,7 @@ import subprocess
 from pathlib import Path
 
 INFRA = ("3221225786", "1073807364", "unusable", "exited 124", "timed out", "lost contact")
+ROLLUP = re.compile(r"land/fix/land-rollup-\d{14}-\d{14}")
 
 
 def topic(branch: str) -> str:
@@ -75,12 +76,23 @@ def train_origins(rows: list[dict], train: dict) -> list[dict]:
 
 
 def stopped_before(rows: list[dict], queued: dict, cutoff: float) -> bool:
-    """A stop in this exact branch/PID queue epoch, already observed when the member queued."""
+    """A stop in this PID epoch or an unambiguous frozen-ticket handoff before the member queued."""
     same = lambda r: r.get("branch") == queued.get("branch") and r.get("pid") == queued.get("pid")  # noqa: E731
     next_queue = min((r["t"] for r in rows if r["event"] == "queue" and same(r)
                       and queued["t"] < r["t"]), default=float("inf"))
-    return any(r["event"] == "stop" and same(r) and queued["t"] <= r["t"] <= cutoff
-               and r["t"] < next_queue for r in rows)
+    if any(r["event"] == "stop" and same(r) and queued["t"] <= r["t"] <= cutoff
+           and r["t"] < next_queue for r in rows):
+        return True
+    # A rules-refresh child can stop in preflight before emitting its own queue event.
+    if not queued.get("ticket") or not re.fullmatch(r"land/.+-\d{14}", queued.get("branch", "")):
+        return False
+    if any(r["event"] == "landed" and queued["t"] <= r["t"] <= cutoff for r in rows):
+        return False
+    previous = max((r["t"] for r in rows if r["event"] == "landed" and r["t"] < queued["t"]), default=-1)
+    epoch = [r for r in rows if r["event"] == "queue" and previous < r["t"] <= cutoff]
+    if {r.get("ticket") for r in epoch} != {queued["ticket"]} or len({r.get("pid") for r in epoch}) < 2:
+        return False
+    return any(r["event"] == "stop" and max(q["t"] for q in epoch) <= r["t"] <= cutoff for r in rows)
 
 
 def lead_times(rows: list[dict], t0: float, t1: float) -> list[float]:
@@ -89,8 +101,8 @@ def lead_times(rows: list[dict], t0: float, t1: float) -> list[float]:
     finished = {}
     runs = {}
     for row in rows:
-        if row["event"] in ("queue", "stop"):
-            runs.setdefault((row.get("branch"), row.get("pid")), []).append(row)
+        if row["event"] in ("queue", "stop", "landed"):
+            runs.setdefault(row.get("branch"), []).append(row)
     for r in sorted(rows, key=lambda r: r["t"]):
         key = topic(r.get("branch", ""))
         if r["event"] == "queue":
@@ -126,7 +138,7 @@ def lead_times(rows: list[dict], t0: float, t1: float) -> list[float]:
                        q.get("branch") == snapshot and (q["t"] <= cutoff or origin_ticket and q.get("ticket") == origin_ticket
                                                         or q.get("ticket") in member.get("retries", []))
                        or finished.get(topic(name), float("-inf")) < q["t"] <= cutoff
-                       and stopped_before(runs.get((q.get("branch"), q.get("pid")), []), q, cutoff)]
+                       and stopped_before(runs.get(q.get("branch"), []), q, cutoff)]
             start = min(q["t"] for q in covered)
             if members is not None:
                 completed.add(origin)
@@ -167,6 +179,72 @@ def affects_window(row: dict, rows: list[dict], t0: float, t1: float) -> bool:
     return False
 
 
+def member_topics(members, seen: set[str]) -> set[str] | None:
+    """A complete child tree proves error scope even when its candidate pins cannot be verified."""
+    if not isinstance(members, list) or known_topics(
+            [m.get("branch") if isinstance(m, dict) else None for m in members]) is None:
+        return None
+    found = set()
+    for m in members:
+        branch = m["branch"]
+        if branch in seen or m.get("members_error"):
+            return None
+        seen.add(branch)
+        if ROLLUP.fullmatch(branch):
+            children = member_topics(m.get("members"), seen)
+            if children is None:
+                return None
+            found.update(children)
+        elif "members" in m:
+            return None
+        else:
+            found.add(topic(branch))
+    return found
+
+
+def member_origins(rows: list[dict], common: Path, members, sha: str, landed_at: float, seen: set[str]) -> list[dict]:
+    """Verify each edge against its pinned parent, returning only unique logical leaves."""
+    if not isinstance(members, list) or not members:
+        raise ValueError("missing members")
+    if known_topics([m.get("branch") if isinstance(m, dict) else None for m in members]) is None:
+        raise ValueError("invalid or duplicate member branches")
+    verified = []
+    for m in members:
+        branch = m["branch"]
+        if branch in seen or m.get("members_error"):
+            raise ValueError("duplicate, cyclic or unavailable member origin")
+        seen.add(branch)
+        origins = [q for q in rows if q["event"] == "queue" and q.get("branch") == branch and q["t"] <= landed_at]
+        candidates = [m] if m.get("candidate") else sorted(
+            (q for q in rows if q["event"] == "isolation" and q.get("kind") == "prepare"
+             and q.get("branch") == branch and q["t"] <= landed_at), key=lambda q: q["t"], reverse=True)[:1]
+        found = None
+        for candidate in candidates:
+            oid = candidate.get("candidate", "")
+            if not re.fullmatch(r"[0-9a-f]{40,64}", oid) or not sha:
+                continue
+            proof = subprocess.run(["git", "--git-dir", str(common), "merge-base", "--is-ancestor", oid, sha],
+                                   capture_output=True)
+            eligible = [q for q in origins if q.get("ticket") == m["ticket"]] if m.get("ticket") else [
+                q for q in origins if q["t"] <= candidate.get("t", landed_at)]
+            if proof.returncode == 0 and eligible:
+                origin = max(eligible, key=lambda q: q["t"])
+                if origin.get("ticket"):
+                    found = dict(branch=branch, ticket=origin["ticket"], candidate=oid)
+                    if branch.startswith("land/") and re.search(r"-\d{14}$", branch):
+                        found["retries"] = [q["ticket"] for q in origins if q["t"] > origin["t"] and q.get("ticket")]
+                    break
+        if found is None:
+            raise ValueError("unproven member origin")
+        if ROLLUP.fullmatch(branch):
+            verified.extend(member_origins(rows, common, m.get("members"), found["candidate"], landed_at, seen))
+        elif "members" in m:
+            raise ValueError("nested metadata on a non-carrier")
+        else:
+            verified.append(found)
+    return verified
+
+
 def normalize(rows: list[dict], common: Path, t0: float | None = None,
               t1: float | None = None) -> tuple[list[dict], list[str]]:
     """Attach proven member origins to actual FF events; never rewrite the append-only log.
@@ -195,53 +273,17 @@ def normalize(rows: list[dict], common: Path, t0: float | None = None,
                and branch in q.get("branches", []) and origin <= q["t"] <= r["t"] for q in rows):
             r["main_move"] = False  # a carried member observes the leader's FF
         path = common / "rosy-land-wt" / (branch.replace("/", "-") + ".members")
-        known = re.fullmatch(r"land/fix/land-rollup-\d{14}-\d{14}", branch)
+        known = ROLLUP.fullmatch(branch)
         members = None
         try:
             if "members" not in r and not path.exists() and not known and not r.get("members_error"):
                 continue
             members = r.get("members") if "members" in r else json.loads(path.read_text(encoding="utf-8"))
-            if not isinstance(members, list) or not members:
-                raise ValueError("missing members")
-            if known_topics([m.get("branch") if isinstance(m, dict) else None for m in members]) is None:
-                raise ValueError("invalid or duplicate member branches")
-            verified = []
-            for m in members:
-                if not isinstance(m, dict) or not isinstance(m.get("branch"), str):
-                    raise ValueError("invalid member")
-                origins = [q for q in rows if q["event"] == "queue" and q.get("branch") == m["branch"]
-                           and q["t"] <= r["t"]]
-                candidates = [m] if m.get("candidate") else sorted(
-                    (q for q in rows if q["event"] == "isolation" and q.get("kind") == "prepare"
-                     and q.get("branch") == m["branch"] and q["t"] <= r["t"]), key=lambda q: q["t"], reverse=True)[:1]
-                found = None
-                for candidate in candidates:
-                    oid = candidate.get("candidate", "")
-                    if not re.fullmatch(r"[0-9a-f]{40,64}", oid) or not r.get("sha"):
-                        continue
-                    proof = subprocess.run(["git", "--git-dir", str(common), "merge-base", "--is-ancestor",
-                                            oid, r["sha"]], capture_output=True)
-                    eligible = [q for q in origins if q.get("ticket") == m["ticket"]] if m.get("ticket") else [
-                        q for q in origins if q["t"] <= candidate.get("t", r["t"])]
-                    if proof.returncode == 0 and eligible:
-                        origin = max(eligible, key=lambda q: q["t"])
-                        if origin.get("ticket"):
-                            found = dict(branch=m["branch"], ticket=origin["ticket"], candidate=oid)
-                            # A frozen snapshot's later resumes are covered too; other snapshots of this topic
-                            # may already queue new work before this FF and must retain their own clock.
-                            if m["branch"].startswith("land/") and re.search(r"-\d{14}$", m["branch"]):
-                                found["retries"] = [q["ticket"] for q in origins if q["t"] > origin["t"]
-                                                    and q.get("ticket")]
-                            break
-                if found is None:
-                    raise ValueError("unproven member origin")
-                verified.append(found)
-            r["members"] = verified
-        except (OSError, ValueError, TypeError, KeyError) as exc:
+            r["members"] = member_origins(rows, common, members, r.get("sha", ""), r["t"], {branch})
+        except (OSError, ValueError, TypeError, KeyError, RecursionError) as exc:
             r["members"] = []  # an incomplete carrier is never substituted for its logical members
             r["metrics_incomplete"] = True
-            r["incomplete_topics"] = known_topics([m.get("branch") if isinstance(m, dict) else None
-                                                   for m in members]) if isinstance(members, list) else None
+            r["incomplete_topics"] = member_topics(members, {branch})
             issues.append((r, f"INCOMPLETE: {branch}: member completion unavailable ({exc})"))
     return result, [message for r, message in issues if t0 is None or t1 is None or affects_window(r, result, t0, t1)]
 

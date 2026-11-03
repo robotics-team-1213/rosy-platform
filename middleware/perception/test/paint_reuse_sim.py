@@ -19,8 +19,8 @@ for _p in (_HERE.parents[1], _HERE.parents[3] / "contracts" / "foundation"):
 
 import yaml  # noqa: E402
 
-from control.sensing.perception.camera_ground import nominal_ground_plane  # noqa: E402
-from control.sensing.perception.lane_keep_lines import HORIZON_MARGIN_PX, drop_small_components  # noqa: E402
+from perception_runtime.perception.camera_ground import nominal_ground_plane  # noqa: E402
+from perception_runtime.perception.lane_keep_lines import HORIZON_MARGIN_PX, drop_small_components  # noqa: E402
 from control.sensing.perception.learned.paint_motion import OdomHistory, mask_homography, warp_mask  # noqa: E402
 from control.sensing.perception.learned.paint_worker import LearnedPaintWorker  # noqa: E402
 
