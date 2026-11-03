@@ -60,7 +60,8 @@ import lab_hosts  # noqa: E402
 import memory_history  # noqa: E402
 import remote_job  # noqa: E402
 import remote_test_tools  # noqa: E402
-from host_probe import DISK_FLOOR_GB, PROBE, disk_full, parse_probe  # noqa: E402,F401
+import host_probe  # noqa: E402
+from host_probe import DISK_FLOOR_GB, PROBE, current_profile, disk_full, parse_probe  # noqa: E402,F401
 import xdist_plan  # noqa: E402
 from work_queue import ALONE_ENV, BROWSER_ENV, Gate, Work, cancelled, cost, guard, history, wanted, workers  # noqa: E402,F401
 
@@ -242,14 +243,6 @@ def refuse_local() -> None:
         raise SystemExit(LOCAL_REFUSED.format(what="ROSY_TEST_LOCAL"))
 
 
-def current_profile(listing: str) -> list[str]:
-    """`tailscale switch --list` -> the columns of the row marked `*` (ID first), [] if none."""
-    for line in listing.splitlines()[1:]:
-        if "*" in line:
-            return line.replace("*", " ").split()
-    return []
-
-
 def check_tailscale_profile(expected: str | None = None, which=shutil.which, run=subprocess.run) -> None:
     """Fail fast when this PC's Tailscale profile is not the one the test PCs are on. Never switches it.
 
@@ -271,31 +264,7 @@ def check_tailscale_profile(expected: str | None = None, which=shutil.which, run
 
 def placed_hosts(cls: str = "pytest", hosts: list[str] | None = None, cores: int = 0) -> list[str]:
     """Hosts for cls by measured headroom (D-568), printing why; empty when none fits."""
-    refuse_local()
-    check_tailscale_profile()
-    if hosts is None:
-        hosts = os.environ.get("ROSY_TEST_HOSTS", DEFAULT_HOSTS).split()
-    if not hosts:
-        print(f"[remote-pytest] {cls} -> no host: set ROSY_TEST_HOSTS or copy "
-              "tools/remote/hosts.example.json to private/lab-hosts.json",
-              file=sys.stderr, flush=True)
-        return []
-    with ThreadPoolExecutor(len(hosts)) as pool:
-        probes = list(pool.map(probe, hosts))
-    SITES.update(h for h, p in zip(hosts, probes) if p and p.get("site"))
-    chosen, notes = place(cls, hosts, probes, cores)
-    for note in notes:
-        print(f"[remote-pytest] {note}", file=sys.stderr, flush=True)
-    if not chosen and cls == "pytest" and cores <= NEEDS[cls][0]:  # a job's own core need waits instead
-        # D-568 7: busy hosts must not stop the gate; the site PC and a full disk never take this fallback.
-        chosen = [h for h, p in zip(hosts, probes)
-                  if p and p["pytest"] and (not p.get("pytest_blocked") or os.environ.get(xdist_plan.TURN_ENV) == "1")
-                  and not p["busy"]
-                  and not disk_full(p) and h not in SITES]
-        if chosen:
-            print("[remote-pytest] WARNING: no host above the pytest floor; using the reachable ones", file=sys.stderr, flush=True)
-    print(f"[remote-pytest] {cls} -> {' '.join(chosen) or 'no host'}", file=sys.stderr, flush=True)
-    return chosen
+    return host_probe.placed_hosts(sys.modules[__name__], cls, hosts, cores)
 
 
 def bundle_base(repo: Path, sha: str) -> str | None:
@@ -384,51 +353,66 @@ def run(invocations: list[list[str]], logs: list[Path], sha: str = "HEAD", repo:
     deadline = clock() + wait
     cores = max((int(w[15:]) for inv in invocations for w in itertools.takewhile(ENV_ARG.match, inv)
                  if w.startswith("ROSY_JOB_CORES=") and w[15:].isdigit()), default=0)
-    hosts = placed_hosts("pytest", cores=cores)
-    while not hosts:
-        if stop is not None and stop.is_set():
-            return [CANCELLED] * len(invocations)
-        if clock() + poll > deadline:
-            raise SystemExit(f"[remote-pytest] no test host reachable (D-584) after {wait:.0f} s;"
-                             " the tests did not run. Report them as not run; do not land or push.")
-        print(f"[remote-pytest] no test host reachable; retrying in {poll:.0f} s (D-584)", file=sys.stderr, flush=True)
-        sleep(poll)
-        hosts = placed_hosts("pytest", cores=cores)
-    plan = workers(hosts, invocations, HEADROOM, os.environ.get("ROSY_TEST_HOSTS", DEFAULT_HOSTS).split())
-    if len(plan) == 1:
-        codes = run_on(plan[0][0], invocations, logs, sha, repo, label,
-                       **({"test_tools": test_tools} if test_tools else {}), **({"on_done": on_done} if on_done else {}),
-                       **({"stop": stop} if stop is not None else {}))
-        return cancelled(invocations, codes) if on_done or stop is not None else codes
     # D-553 4: every host ships and builds its venv once, then takes the next invocation when free.
     work = Work(sorted(range(len(invocations)), key=lambda i, s=history(repo): -cost(repo, invocations[i], s)), on_done, stop=stop)
-    gates = {host: Gate() for host, _ in plan}
+    reruns = {}  # Work index -> original failure and the remaining quarantine rerun; never a completed code
+    hosts = placed_hosts("pytest", cores=cores)
+    while work.todo and not work.stop.is_set():
+        while not hosts:
+            if work.stop.is_set():
+                return cancelled(invocations, [work.codes.get(i) for i in range(len(invocations))])
+            if clock() + poll > deadline:
+                raise SystemExit(f"[remote-pytest] no test host reachable (D-584) after {wait:.0f} s;"
+                                 " the tests did not run. Report them as not run; do not land or push.")
+            print(f"[remote-pytest] no test host reachable; retrying in {poll:.0f} s (D-584)", file=sys.stderr, flush=True)
+            sleep(poll)
+            hosts = placed_hosts("pytest", cores=cores)
+        plan = workers(hosts, invocations, HEADROOM, os.environ.get("ROSY_TEST_HOSTS", DEFAULT_HOSTS).split())
+        if len(plan) == 1 and not work.codes and not reruns:
+            try:
+                codes = run_on(plan[0][0], invocations, logs, sha, repo, label,
+                               **({"test_tools": test_tools} if test_tools else {}),
+                               **({"on_done": on_done} if on_done else {}), **({"stop": stop} if stop is not None else {}))
+                return cancelled(invocations, codes) if on_done or stop is not None else codes
+            except remote_job.RebootSoon as error:
+                work, reruns = error.work, error.reruns
+                hosts = [h for h in placed_hosts("pytest", cores=cores) if h != plan[0][0]]
+                continue
+        gates, deferred = {host: Gate() for host, _ in plan}, set()
 
-    def attempt(slot):
-        host, kind = slot
-        try:
-            run_on(host, invocations, logs, sha, repo, label, work, kind=kind, gate=gates[host],
-                   **({"test_tools": test_tools} if test_tools else {}),
-                   **({"stop": stop} if stop is not None else {}))
-            return True
-        except SystemExit as error:  # ship/venv failed; pytest failures are exit codes, not this
-            print(f"[remote-pytest] {host} failed ({error}); the other hosts take its invocations",
-                  file=sys.stderr, flush=True)
-            return False
+        def attempt(slot):
+            host, kind = slot
+            try:
+                run_on(host, invocations, logs, sha, repo, label, work, kind=kind, gate=gates[host], reruns=reruns,
+                       **({"test_tools": test_tools} if test_tools else {}),
+                       **({"stop": stop} if stop is not None else {}))
+                return True
+            except remote_job.RebootSoon as error:
+                deferred.add(host)
+                print(f"[remote-pytest] {error}; returning unfinished invocation", file=sys.stderr, flush=True)
+                return False
+            except SystemExit as error:  # ship/venv failed; pytest failures are exit codes, not this
+                print(f"[remote-pytest] {host} failed ({error}); the other hosts take its invocations",
+                      file=sys.stderr, flush=True)
+                return False
 
-    with ThreadPoolExecutor(len(plan)) as pool:
-        ok = list(pool.map(attempt, plan))
-    while work.todo and not work.stop.is_set():  # handed back after a mid-run failure, or left by a lost host, once the rest were done
-        working = [h for (h, _), good in zip(plan, ok) if good and h not in work.lost]
-        if not working:
-            if not any(ok):
-                raise SystemExit("[remote-pytest] every test host failed to set up")
-            for i in work.todo:  # the only hosts that set up went silent: as run_on reports a lost host
-                work.codes[i] = remote_job.LOST_EXIT
+        with ThreadPoolExecutor(len(plan)) as pool:
+            ok = list(pool.map(attempt, plan))
+        while work.todo and not work.stop.is_set():
+            working = [h for (h, _), good in zip(plan, ok) if good and h not in work.lost and h not in deferred]
+            if not working:
+                if deferred:
+                    hosts = [h for h in placed_hosts("pytest", cores=cores) if h not in deferred]
+                    break  # same queue, completed codes and original placement deadline
+                if not any(ok):
+                    raise SystemExit("[remote-pytest] every test host failed to set up")
+                for i in work.todo:
+                    work.codes[i] = remote_job.LOST_EXIT
+                break
+            if not attempt((working[0], "any")):
+                ok = [good and h != working[0] for (h, _), good in zip(plan, ok)]
+        if not deferred:
             break
-        run_on(working[0], invocations, logs, sha, repo, label, work,
-               **({"test_tools": test_tools} if test_tools else {}),
-               **({"stop": stop} if stop is not None else {}))
     if on_done or stop is not None:
         return cancelled(invocations, [work.codes.get(i) for i in range(len(invocations))])
     return [work.codes[i] for i in range(len(invocations))]
@@ -443,7 +427,7 @@ def quarantine(repo: Path, sha: str) -> dict[str, str]:
 
 def run_on(host: str, invocations: list[list[str]], logs: list[Path], sha: str, repo: Path,
            label: str | None, work: Work | None = None, test_tools: str | None = None, on_done=None,
-           kind: str = "any", gate: Gate | None = None, stop=None) -> list[int]:
+           kind: str = "any", gate: Gate | None = None, stop=None, reruns: dict | None = None) -> list[int]:
     """Run invocations on host, one at a time; one exit code per invocation.
 
     With a shared work (run() over several hosts) the host takes indices from it until none is left or the
@@ -451,6 +435,7 @@ def run_on(host: str, invocations: list[list[str]], logs: list[Path], sha: str, 
     remote_test_tools.validate(test_tools)
     shared = work is not None
     work = work or Work(range(len(invocations)), on_done, stop=stop)
+    reruns = {} if reruns is None else reruns
     name = f"{label or sha[:10]}-{secrets.token_hex(3)}"
     print(f"[remote-pytest] {sha[:10]} on {host} (~/rosy-test/runs/{name})", flush=True)
     lost = None
@@ -479,9 +464,14 @@ def run_on(host: str, invocations: list[list[str]], logs: list[Path], sha: str, 
                 context = [name, deps_sha, cpu, *([test_tools] if test_tools else [])]
                 with guard(gate, kind, inv):
                     work.codes[i], lost = one(host, name, k, inv, log, context, repo, sha, queued,
+                                              **({"retry": reruns.pop(i)} if i in reruns else {}),
                                               **({"stop": work.stop} if work.on_done or stop is not None else {}))
-            except BaseException:
+            except BaseException as error:
+                if isinstance(error, remote_job.RebootSoon) and error.retry is not None:
+                    reruns[i] = error.retry
                 work.give_back(i)  # never dropped: another host (or run()'s fallback) runs it
+                if isinstance(error, remote_job.RebootSoon):
+                    error.work, error.reruns = work, reruns
                 raise
             k += 1
             if not lost and work.codes[i] != CANCELLED:
@@ -498,35 +488,41 @@ def run_on(host: str, invocations: list[list[str]], logs: list[Path], sha: str, 
 
 
 def one(host: str, name: str, k: int, inv: list[str], log: Path, job: list[str], repo: Path,
-        sha: str, queued: int = 0, **stop) -> tuple[int | str, str | None]:
+        sha: str, queued: int = 0, retry=None, **stop) -> tuple[int | str, str | None]:
     """(exit code, lost message or None) of invocation inv as job k of run dir name on host."""
     words, extra, note, began = *xdist_plan.plan(inv, HEADROOM.get(host)), time.monotonic()
     history = memory_history.path(repo)
     words, note = memory_history.reserve(history, inv, words, note)
     print(f"[remote-pytest] {note}", flush=True)
-    try:
-        code = remote_job.run(host, name, k, log, job, [*words, *inv, *extra, *PYTEST_TAIL], PYTEST_TIMEOUT, SSH, **stop)
-    except remote_job.Lost as error:
-        print(error, file=sys.stderr, flush=True)
-        return remote_job.LOST_EXIT, str(error)
-    if code == CANCELLED:
-        return code, None
-    text = log.read_bytes().decode("utf-8", errors="replace")
-    print("".join(collections.deque(text.splitlines(keepends=True), TAIL_LINES)), end="", flush=True)
-    if (peak := memory_history.peak_mib(text)) is not None:
-        memory_history.record(history, inv, host, peak, sha, memory_history.cpu_cores(text),
-                              memory_history.timing(text, queued, time.monotonic() - began))
-    failed = known_failures.failed_ids(text)
-    ids = (known_failures.rerun_ids(text, quarantine(repo, sha))
-           if code == 1 and failed and not dedicated(inv) else [])
-    if not known_failures.should_rerun(code, failed, ids):  # D-762 stage 1: once, listed ids only
-        return code, None
+    if retry is None:
+        try:
+            code = remote_job.run(host, name, k, log, job, [*words, *inv, *extra, *PYTEST_TAIL], PYTEST_TIMEOUT, SSH, **stop)
+        except remote_job.Lost as error:
+            print(error, file=sys.stderr, flush=True)
+            return remote_job.LOST_EXIT, str(error)
+        if code == CANCELLED:
+            return code, None
+        text = log.read_bytes().decode("utf-8", errors="replace")
+        print("".join(collections.deque(text.splitlines(keepends=True), TAIL_LINES)), end="", flush=True)
+        if (peak := memory_history.peak_mib(text)) is not None:
+            memory_history.record(history, inv, host, peak, sha, memory_history.cpu_cores(text),
+                                  memory_history.timing(text, queued, time.monotonic() - began))
+        failed = known_failures.failed_ids(text)
+        ids = (known_failures.rerun_ids(text, quarantine(repo, sha))
+               if code == 1 and failed and not dedicated(inv) else [])
+        if not known_failures.should_rerun(code, failed, ids):  # D-762 stage 1: once, listed ids only
+            return code, None
+    else:
+        code, failed, ids = retry
     print(f"[remote-pytest] rerunning {len(ids)} quarantined failure(s) once", flush=True)
     rerun, lost = log.with_name(log.stem + "-rerun.txt"), None
     try:
         env = [*words, *itertools.takewhile(ENV_ARG.match, inv)]  # serial: ids, never -n
         rerun_code = remote_job.run(host, name, f"{k}r", rerun, job, [*env, *ids, "-q", "-rA", "-p", "no:cacheprovider", ROOTDIR],
                                     PYTEST_TIMEOUT, SSH, **stop)
+    except remote_job.RebootSoon as error:
+        error.retry = (code, failed, ids)
+        raise
     except remote_job.Lost as error:
         lost, rerun_code = str(error), remote_job.LOST_EXIT
         print(lost, file=sys.stderr, flush=True)

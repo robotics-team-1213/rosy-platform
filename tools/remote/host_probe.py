@@ -10,13 +10,22 @@ from __future__ import annotations
 DISK_FLOOR_GB = 20
 FULL_USE = 99
 
+REBOOT_CHECK = r"""reboot_soon() {
+  local r
+  r=$(systemctl show -P NextElapseUSecRealtime rosy-nightly-reboot.timer 2>/dev/null)
+  [ -n "$r" ] && r=$(date -d "$r" +%s 2>/dev/null)
+  case "$r" in ''|*[!0-9]*) ;; *) [ "$r" -ge "$1" ] && [ $((r - $1)) -lt 780 ] && return 0;; esac
+  systemctl is-active -q rosy-nightly-reboot.service 2>/dev/null
+}
+"""
+
 # One line: ROSYPROBE nproc load1 avail_kb total_kb py312 sim busy lock_cores lock_gb site sim_held browser_jobs,
 # then free_kb use% of ~/rosy-test's and /tmp's filesystems (df -Pk; absent from an older probe). Dead-pid
 # locks and expired reservations (<expiry epoch> <class> <cores> <GB>) go; both count toward the budget, and
 # sim_held counts the live ones of class sim or gpu (gpu: SwiftShader browsers are CPU-heavy, robot-4a; remote_sim, --pick sim, a hand-run Gazebo lock), browser_jobs the
 # live browser job locks of every run (remote_job.JOB), so lanes stay under the per-host cap across runs.
 # py=2 means Python is present but pytest admission is blocked by a live alone job or waiter.
-PROBE = r"""J=~/rosy-jobs; c=0; m=0; g=0; w=0; a=0; now=$(date +%s)
+PROBE = REBOOT_CHECK + r"""J=~/rosy-jobs; c=0; m=0; g=0; w=0; a=0; now=$(date +%s)
 for f in "$J"/*.resv; do
   [ -e "$f" ] || continue; read -r t k fc fm < "$f" || true
   case "$t$fc$fm" in ''|*[!0-9]*) rm -f "$f"; continue;; esac
@@ -46,9 +55,7 @@ b=0; if [ -e "$J/busy" ]; then  # "<expiry epoch> <owner> <pid>" or a bare touch
 fi
 # D-889 13: no new job when this host's nightly reboot is under 15 min away (the timer fires 2 min before it).
 if [ "$b" != 1 ]; then
-  r=$(systemctl show -P NextElapseUSecRealtime rosy-nightly-reboot.timer 2>/dev/null); [ -n "$r" ] && r=$(date -d "$r" +%s 2>/dev/null)
-  case "$r" in ''|*[!0-9]*) ;; *) [ "$r" -ge "$now" ] && [ $((r - now)) -lt 780 ] && b=4;; esac
-  systemctl is-active -q rosy-nightly-reboot.service 2>/dev/null && b=4
+  reboot_soon "$now" && b=4
 fi
 st=0; [ -e "$J/site" ] && st=1
 d=~/rosy-test; [ -d "$d" ] || d=~
@@ -82,3 +89,38 @@ def disk_full(p: dict) -> bool:
 
     2026-10-27: the site PC's /tmp is a 7.4 GB tmpfs at 1%; the floor on it refused that host every time."""
     return "disk_free_gb" in p and (p["disk_free_gb"] < DISK_FLOOR_GB or p["disk_use"] >= FULL_USE)
+
+
+def current_profile(listing: str) -> list[str]:
+    """`tailscale switch --list` -> the columns of the row marked `*` (ID first), [] if none."""
+    for line in listing.splitlines()[1:]:
+        if "*" in line:
+            return line.replace("*", " ").split()
+    return []
+
+
+def placed_hosts(runner, cls: str, hosts: list[str] | None, cores: int) -> list[str]:
+    """Measured placement; runner keeps its public API and injectable host/transport settings."""
+    runner.refuse_local()
+    runner.check_tailscale_profile()
+    if hosts is None:
+        hosts = runner.os.environ.get("ROSY_TEST_HOSTS", runner.DEFAULT_HOSTS).split()
+    if not hosts:
+        print(f"[remote-pytest] {cls} -> no host: set ROSY_TEST_HOSTS or copy "
+              "tools/remote/hosts.example.json to private/lab-hosts.json", file=runner.sys.stderr, flush=True)
+        return []
+    with runner.ThreadPoolExecutor(len(hosts)) as pool:
+        probes = list(pool.map(runner.probe, hosts))
+    runner.SITES.update(h for h, p in zip(hosts, probes) if p and p.get("site"))
+    chosen, notes = runner.place(cls, hosts, probes, cores)
+    for note in notes:
+        print(f"[remote-pytest] {note}", file=runner.sys.stderr, flush=True)
+    if not chosen and cls == "pytest" and cores <= runner.NEEDS[cls][0]:
+        chosen = [h for h, p in zip(hosts, probes)
+                  if p and p["pytest"] and (not p.get("pytest_blocked") or runner.os.environ.get(runner.xdist_plan.TURN_ENV) == "1")
+                  and not p["busy"] and not runner.disk_full(p) and h not in runner.SITES]
+        if chosen:
+            print("[remote-pytest] WARNING: no host above the pytest floor; using the reachable ones",
+                  file=runner.sys.stderr, flush=True)
+    print(f"[remote-pytest] {cls} -> {' '.join(chosen) or 'no host'}", file=runner.sys.stderr, flush=True)
+    return chosen

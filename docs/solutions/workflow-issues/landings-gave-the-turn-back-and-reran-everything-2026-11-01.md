@@ -59,6 +59,24 @@ reruns. Each cause below was found from `.git/rosy-land-events.jsonl` and `.git/
    66 min old main stopped on a MAIN-RED that main fixed meanwhile; it now re-prepares once on the new
    main (D-889 14).
 
+   **2026-11-03 follow-up: check each admission, not just the batch's first host selection.**
+   A batch selected the model PC at 19:42 UTC, but a later job entered at 19:59:36, immediately
+   before the scheduled 20:00 reboot. Its preserved log ended with `Terminated`/143; the host journal
+   confirms shutdown and the next boot. The original `reboot_soon` check ran only at placement.
+   `host_probe` and remote `ADMIT` now share the existing timer/service predicate, and ADMIT checks
+   it on every resource-wait iteration, before TURN/ALONE admission. This adds no SSH calls.
+   A deferred job releases admission resources, returns its exact Work index, and retires that
+   host worker. Another host or the original bounded placement wait handles the remaining work.
+   A deferred quarantine retry carries the original failure/log and retries only the unfinished
+   part; it never publishes a pass or reruns the successful part as compensation.
+   Verification: 15 regression failures before the fix; source `95abfc2cdb` passed 228 tests across
+   nine suites with zero skips/NEW/known/flaky, plus independent review. These are committed-source
+   tests, not a new physical reboot experiment. Already-running long jobs can still be interrupted:
+   keep D-889 13's 143/official-resume boundary and its reboot schedule. Resume of the observed
+   interrupted landing reused 31 passed invocations; do not discard those caches or reset its clock.
+   Recovery is the existing `land_async.py resume <hidden-name> --tests auto`; reverting this
+   admission fix must preserve the host schedule and the other resource/safety gates.
+
 ## Later the same evening
 
 6. **All-or-nothing overlap.** Even with the overlap rule, one reached suite reran *every* own invocation:
