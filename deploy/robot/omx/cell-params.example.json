@@ -229,6 +229,30 @@
    "source": "measured",
    "evidence": "2026-10-28 real arm S: guard/pacing diagnosis (value as shipped in code)"
   },
+  "windup.rest_rise": {
+   "value": 40,
+   "unit": "pwm",
+   "source": "measured",
+   "evidence": "push_replay.py over every follower motor-health log, 2026-11-03 (arm_a 38.1 h, arm_b 5.8 h): normal standstill wind-ups reached a 79 rise but at most PWM 198 of 600; the real presses wound to 273 (arm_b 04:51) and 281 -> 476 (arm_b 13:27 elbow overload); both gates together: 0 hits on arm_a, the 3 real presses on arm_b"
+  },
+  "windup.rest_pwm": {
+   "value": 0.4,
+   "unit": "ratio",
+   "source": "measured",
+   "evidence": "push_replay.py over every follower motor-health log, 2026-11-03 (arm_a 38.1 h, arm_b 5.8 h): normal standstill wind-ups reached a 79 rise but at most PWM 198 of 600; the real presses wound to 273 (arm_b 04:51) and 281 -> 476 (arm_b 13:27 elbow overload); both gates together: 0 hits on arm_a, the 3 real presses on arm_b"
+  },
+  "windup.jaw_pwm": {
+   "value": 0.5,
+   "unit": "ratio",
+   "source": "measured",
+   "evidence": "2026-11-03 13:27 arm_b: jaws caught on a box edge sat 5.8 units short of closed at PWM -278..-291 of 300 for 55 s; closing on air ends within 2 units"
+  },
+  "windup.jaw_gap": {
+   "value": 2.0,
+   "unit": "gripper",
+   "source": "measured",
+   "evidence": "the runner's EMPTY_MARGIN: empty jaws close to within 2 units of their target (grasp holding verdict)"
+  },
   "runner.contact_ticks": {
    "value": 2,
    "unit": "count",

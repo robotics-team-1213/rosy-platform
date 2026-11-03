@@ -1,16 +1,14 @@
 #!/usr/bin/env python3
 """Run taught motion chunks on the follower one at a time, holding torque between them (scripted teacher).
 
-The follower is driven through the guard's teacher mode (guarded_native.py: passive connect, seeded
-torque, 10 deg/s streaming, following-error, effort and fault stops) in LeRobot units at the recorder's
-fps; chunk frames may not move faster than GUARD_UNITS_PER_S. Between chunks the last target is
-held, so an extended arm never drops. A judge (an operator, an agent watching the cameras, later a
-VLA) writes one command per line into the command FIFO and reads one JSON status per command:
+The follower is driven through the guard's teacher mode (guarded_native.py) in LeRobot units at the recorder's
+fps, no faster than GUARD_UNITS_PER_S; between chunks the last target is held, so an extended arm never drops.
+A judge writes one command per line into the command FIFO and reads one JSON status per command:
 
   run <chunk> [rel]       play a chunk, then report the settled state; rel shifts its body joints by
                           the held correction (held target minus the chunk start, at most REL_MAX)
   jog <joint> <delta> ... move one or more joint targets together, each by at most JOG_MAX units
-  grip <value>            set the gripper target
+  grip <value>            set the gripper target; a closing grip that catches something reopens (joint_push)
   state                   report the current state
   goto <chunk>            the same rise-turn-descend path to a chunk's start pose (recovery, re-approach)
   park                    close the jaws, rise, turn at that height and descend into home, slowly
@@ -18,15 +16,12 @@ VLA) writes one command per line into the command FIFO and reads one JSON status
                           contact is cleared like a park
   stop                    end; torque goes OFF where the arm is, so park (or run home) first
 
-Commands apply one per control tick, and a jog may not put its target more than JOG_MAX + SETTLE_TOL
-from the joint's present position, so a burst of commands cannot add up to one large step.
+Commands apply one per tick, and a jog stays within JOG_MAX + SETTLE_TOL of the present position.
 
-A grasp chunk (name starting with "grasp") reports `holding`: false when the gripper closed to within
-EMPTY_MARGIN of the library's closed value, i.e. there was nothing between the jaws. The run stops by
-itself on a read failure or a following error above FOLLOW_STOP for FOLLOW_STOP_S.
+A grasp chunk reports `holding`: false when the jaws closed to within EMPTY_MARGIN of the closed value. The
+run stops by itself on a read failure or a following error above FOLLOW_STOP for FOLLOW_STOP_S.
 
-Outside descend/grasp/release a load-bearing joint whose lag keeps rising past STRAIN_LAG while it pushes
-(PWM at STRAIN_PWM of its cap) holds the same way as a contact, before the guard's 5 degree bound drops the arm.
+Elsewhere a joint whose lag rises past STRAIN_LAG at STRAIN_PWM of its cap holds like a contact (strained()).
 ROSY_CHUNK_TRACE=<file> appends one JSON line per tick (time, chunk, target, sent, present) to measure jitter.
 
 Launched by record_session.py --chunks; never on its own (the session owns caps and cleanup).
@@ -138,7 +133,7 @@ class Runner:
         # the contact margin a real run leaves, which live.json's chunk target does not show (2026-10-26)
         self.peak_lag, self.over_ticks = 0.0, 0
         self.live = live  # called about twice a second with the current state (Fleet observation bridge)
-        self.health_present, self.samples = None, []  # samples: (target, present, pwm) per health read, for joint_push
+        self.health_present, self.samples, self.grip_from = None, [], None  # joint_push's samples and reopen point
         self.recorder = Recorder()  # raw training episodes: rows here, encoding after the session
         self.operating_context = operating_context
         self.trend: list = []  # load-bearing joints' lags over the last STRAIN_TICKS ticks of a chunk
@@ -186,6 +181,7 @@ class Runner:
                     raise ValueError("checked command targets another session")
                 if verb != "load" and digest(self.library) != expected_library:
                     raise ValueError("checked command targets another library")
+            self.grip_from = self.grip_from if verb in ("state", "grip", "episode") else None
             if verb == "stop":
                 self.report(command=line, ok=True)
                 return False
@@ -251,7 +247,8 @@ class Runner:
             elif verb == "grip" and len(words) == 2:
                 # never below the taught closed value: past the jaws' stop the gripper only pushes at its PWM
                 # cap, and the guard's teacher mode does not bound the gripper (2026-10-25: 40 asked, stuck at 48.4)
-                self.target[5] = max(float(self.library["gripper_closed"]), min(100.0, float(words[1])))
+                to = max(float(self.library["gripper_closed"]), min(100.0, float(words[1])))
+                self.grip_from, self.target[5] = (self.target[5] if to < self.target[5] else None), to  # reopen point
             elif verb == "retreat" and len(words) == 1:
                 if not self.retreat_frames:
                     raise ValueError("nothing to retreat along")
@@ -385,7 +382,10 @@ class Runner:
                 return
             self.samples = (self.samples + [(list(self.target), present, self.health["pwm"])])[-4:]
             push = joint_push.pushing(self.samples, getattr(getattr(self.robot, "motion", None), "pwm_limits", None),
-                           jaws=self.chunk == "park")
+                                      self.chunk == "park" or self.grip_from is not None, self.params)
+            if push and push[0] == "gripper" and self.chunk is None:  # a closing grip caught something: let it go
+                self.target[5], self.grip_from = self.grip_from, None
+                return self.report(command="grip", ok=False, caught=True, error=f"{push[1]}; reopened")
             if push and self.chunk is not None:
                 return self.hold(present, f"contact in {self.chunk}: {push[1]}")
             if push:  # at rest: stop the wind-up where the arm is; folded home, idle() ends the session (torque OFF)

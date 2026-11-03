@@ -749,3 +749,13 @@ def test_a_park_with_something_in_the_jaws_holds_instead_of_folding_it_home():
     status = run_with(robot, lifting_library(), ["run approach_pinky", "park", "stop"])
     held = by_command(status, "run park")[0]
     assert held["ok"] is False and "jaws" in held["error"] and held["contact"] is True
+
+
+def test_a_closing_grip_that_catches_something_reopens_where_it_was():
+    """arm_b 2026-11-03 13:27: a jaw-mark close caught a box edge and the park later folded the box home."""
+    robot = Robot(object_at=55.0)
+    robot.pos[5], robot.bus = 62.0, Bus(pwm={"gripper": 65536 - 290})
+    status = run_with(robot, lifting_library(), ["grip 46.6"] + ["state"] * 120 + ["stop"])
+    caught = next(s for s in status if s.get("caught"))
+    assert caught["ok"] is False and "jaws" in caught["error"] and caught["target"][5] == 62.0
+    assert robot.pos[5] == 62.0
