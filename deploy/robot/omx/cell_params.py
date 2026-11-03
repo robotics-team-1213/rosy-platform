@@ -79,6 +79,7 @@ DEFAULTS = {
     "runner.contact_loaded_max": (2.2, "joint_unit", 1.5, 2.3),
     "windup.rest_rise": (40, "pwm", 10, 300), "windup.rest_pwm": (0.4, "ratio", 0.1, 0.9),
     "windup.jaw_pwm": (0.5, "ratio", 0.2, 0.95), "windup.jaw_gap": (2.0, "gripper", 0.5, 20),
+    "upkeep.jaw_gap": (1.0, "gripper", 0.2, 5),
     "jitter.hold_std": (0.4, "joint_unit", 0.05, 3), "jitter.hold_flips_hz": (3.0, "hz", 0.5, 15),
     "jitter.move_std": (0.3, "joint_unit", 0.05, 3), "jitter.move_flips_hz": (4.0, "hz", 0.5, 15),
     "jitter.pwm_std": (25, "pwm", 5, 300), "jitter.pwm_flips_hz": (1.2, "hz", 0.3, 4),

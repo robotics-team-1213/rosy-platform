@@ -253,6 +253,12 @@
    "source": "measured",
    "evidence": "the runner's EMPTY_MARGIN: empty jaws close to within 2 units of their target (grasp holding verdict)"
   },
+  "upkeep.jaw_gap": {
+   "value": 1.0,
+   "unit": "gripper",
+   "source": "measured",
+   "evidence": "2026-11-04 arm_a: library closed value 46.6, jaws stopped at 48.84 at PWM -150 (2.2 units short); empty jaws close to within windup.jaw_gap 2.0 of a reachable target, so a still, loaded gripper more than 1.0 short of its command means the target lies beyond the jaws' stop"
+  },
   "jitter.hold_std": {
    "value": 0.4,
    "unit": "joint_unit",
