@@ -64,6 +64,38 @@ def test_reemitting_the_same_ticket_cannot_move_the_retry_coverage_cutoff():
     assert land_goal.lead_times(rows, 0, 500) == [5, 280 / 60]
 
 
+@pytest.mark.parametrize("member", [False, True])
+def test_rules_refresh_stop_before_queue_preserves_the_original_ticket_clock(member):
+    old, new = "land/fix/a-20261102204332", "land/fix/a-20261103001242"
+    rows = [ev(0, "queue", branch=old, ticket="original", pid=43728),
+            ev(60, "queue", branch=old, ticket="original", pid=69240),
+            ev(120, "stop", branch=old, pid=75292),
+            ev(180, "queue", branch=new, ticket="new", pid=65856)]
+    completion = (dict(branch="land/fix/land-rollup-x", members=[dict(branch=new, ticket="new")])
+                  if member else dict(branch=new, pid=65856))
+    rows.append(ev(240, "landed", **completion))
+    assert land_goal.lead_times(rows, 0, 300) == [4]
+
+
+@pytest.mark.parametrize("boundary", ["competing-ticket", "requeued", "completed", "unfrozen"])
+def test_unqueued_stop_cannot_claim_another_ticket_or_completed_epoch(boundary):
+    old, new = "land/fix/a-20261102204332", "land/fix/a-20261103001242"
+    if boundary == "unfrozen":
+        old = "fix/a"
+    rows = [ev(0, "queue", branch=old, ticket="original", pid=1),
+            ev(60, "queue", branch=old, ticket="original", pid=2)]
+    if boundary == "competing-ticket":
+        rows.append(ev(90, "queue", branch=old, ticket="other", pid=3))
+    if boundary == "completed":
+        rows.append(ev(90, "landed", branch=old, pid=2))
+    rows.append(ev(120, "stop", branch=old, pid=4))
+    if boundary == "requeued":
+        rows.append(ev(150, "queue", branch=old, ticket="later", pid=5))
+    rows += [ev(180, "queue", branch=new, ticket="new", pid=6),
+             ev(240, "landed", branch=new, pid=6)]
+    assert land_goal.lead_times(rows, 0, 300) == ([1.5, 1] if boundary == "completed" else [1])
+
+
 def test_failed_rollup_does_not_close_member_or_create_a_sample():
     rows = [ev(0, "queue", ticket="a"), ev(60, "stop", members=[{"branch": "land/fix/a", "ticket": "a"}]),
             ev(120, "landed")]
