@@ -5,7 +5,7 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.358
+**Version:** v1.359
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -909,6 +909,15 @@ ARM 설치가 없고 관제 단위가 설정된 Fleet(현장 R)은 `/api/fleet/a
 - 셀 쪽 취소: 승인 전 제안은 `HOLD`(`reason=control-unit-cancel`)로 거둬들이고 위임은 CANCELED다. 준비된 시도는 기존 dispatcher 취소로 한 번 보낸다. `cancel_sent`는 정지 확인이 아니다.
 - 기명 admit과 D-938 정책 admit은 취소 요청된 위임에 묶인 제안을 409로 거절한다.
 - 셀의 제안 기록에서 제안 principal은 R의 service principal(`control-unit:R`)이다. R relay는 제안한 앱 자신에게는 `proposal_principal_id`를 그 앱의 principal로 보여 준다(이 Fleet에서 제안한 주체). operator 조회는 셀 기록 그대로다. 같은 앱의 재요청은 같은 위임과 같은 제안을 돌려준다.
+
+### v1.359 Relay forwards evidence and rechecks; requesting app and cancel reason (D-965)
+
+- R relay는 `GET /jobs/{mission_id}/physical-evidence`, `POST /jobs/{mission_id}/rechecks`, `GET /jobs/{mission_id}/rechecks/{recheck_key}`를 그 작업의 위임을 가진 직접 하위 셀로 보낸다. 셀 쪽 경로는 관제 단위 API 안의 `GET .../delegations/{origin}/{id}/arm/physical-evidence`, `POST .../arm/rechecks`, `GET .../arm/rechecks/{key}`다. 관제 단위 자격은 그 밖의 경로에 닿지 않는다(credential scope 유지). 셀은 위임에 결속된 자기 ARM 작업만 찾고, 증거가 없으면 409 `ARM_TRANSFER_PHYSICAL_EVIDENCE_UNAVAILABLE`, recheck 충돌은 409 `ARM_TRANSFER_RECHECK_CONFLICT`, 관측 서비스가 없으면 503이다. 셀의 4xx는 그대로 앱에 돌아간다. recheck 요청은 직접 부모 service만, 조회는 직접 부모 또는 셀 viewer가 한다. relay에서 recheck 요청·취소는 제안한 앱만, 조회는 제안한 앱 또는 operator만 한다. 더 깊은 셀은 409 `ARM_TRANSFER_RELAY_DEPTH`다.
+- `ControlArmTransferCandidate.requested_by`(선택, 표시 전용): R이 인증한 앱 principal. 셀에서 권한을 주지 않는다.
+- `ArmTransferJobSnapshot.delegated_by`(선택): 위임으로 생긴 작업이면 `{origin_unit, requested_by}`이고, 아니면 키 자체가 없다(v1 job 모양을 바꾸지 않는다). 셀 Fleet 콘솔은 「요청한 앱」으로 보여 준다. 제안자·승인 규칙은 바뀌지 않는다.
+- 위임 취소는 선택 본문 `ControlCancelRequest {reason?}`를 받는다(`POST .../delegations/{origin}/{id}/cancel`). 이유는 위임 snapshot의 `cancel_reason`으로 남고 하위로 그대로 전달된다. relay의 앱 취소 reason이 셀의 ARM 취소·거둬들임 reason이 된다(없으면 `control-unit-cancel`).
+- relay가 셀 투영을 잃었을 때 503 detail에 `last_projection {status, updated_at, job_status}`를 덧붙인다. 현재 상태가 아니며 앱은 기존처럼 불명으로 다룬다.
+- relay는 mission ID로 위임을 SQL 색인(`json_extract(result_json,'$.job.mission_id')`)에서 찾는다. 최근 1000개 제한은 없어졌다.
 
 ### v1.292 Candidate trip admission (D-836)
 
@@ -4537,6 +4546,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.359 | 2026-11-04 | D-965: relay가 physical-evidence·rechecks를 셀로 전달, `requested_by`·`delegated_by`(요청한 앱 표시), 위임 취소 reason 전달, 503에 마지막 투영 |
 | v1.358 | 2026-11-03 | D-974: 관제 단위 설정이 있는 Fleet의 `GET /api/fleet/state` `fleet`에 `unit`·`root`. 헤더 표시 전용, `name`(`fleet_name`) 신원은 그대로 |
 | v1.355 | 2026-11-03 | D-965: ARM 설치 없는 꼭대기 관제(R)가 ARM 작업 경로 다섯 개를 하위 셀 위임으로 relay. 셀 result에 job·receipt, 승인 전 취소는 HOLD로 거둠, admit은 취소된 위임 제안 거절 |
 | v1.354 | 2026-11-03 | D-965: 셀 inbox가 팔 작업 위임을 받아 부모 service principal로 기존 ARM 제안을 만들고 결속. 위임 approve는 팔 작업에 409, 승인은 셀 ARM admit |

@@ -102,7 +102,7 @@ def test_snapshot_keeps_the_candidate_kind():
                 "local_actor": None, "local_task_id": None, "cancel_requested": False, "result": {},
                 "updated_at": "2026-11-03T12:00:00+00:00"}
     reply = Reply(unit_id="R", config_revision="lab-1", stale=False, delegation=snapshot)
-    assert reply.model_dump(mode="json")["delegation"]["request"] == request
+    assert reply.model_dump(mode="json")["delegation"]["request"] == dict(request, requested_by=None)
 
 
 def test_ssh_schema_split_preserves_canonical_identity_and_validation():
