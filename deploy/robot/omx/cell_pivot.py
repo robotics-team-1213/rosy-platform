@@ -74,6 +74,11 @@ def jaw_blobs(closed, opened, params=None) -> list:
     return blobs
 
 
+def mark_open(config: dict) -> float:
+    """The value the jaw mark opens the jaws to: the mark's own, never the pick's (a pick's 53.84 left no blob)."""
+    return config.get("jaw_mark", {}).get("open", prm.get(config.get("params"), "pivot.grip_open", config.get("plan", {}).get("grip_open")))
+
+
 def mark_jaws(cell, config: dict, sleep=time.sleep, clock=time.monotonic, max_marks: int = 6, near=None):
     """The jaw mark in the top view as (cx, cy), or None when no two marks agree. `near` = ([pixel, ...], radius_px):
     only blobs that close to one of the places the jaws should show count, nearest first - with the arm stretched out,
@@ -91,7 +96,7 @@ def mark_jaws(cell, config: dict, sleep=time.sleep, clock=time.monotonic, max_ma
         closed = settled_frame(cell, sleep, clock, params=p)
         # the mark's own opening, not the pick's: a pick opened only to its box width (53.84 against 50.5 closed)
         # moved the jaws too little to leave a blob, and every look at the hover saw nothing (2026-10-29)
-        if not cp.grip_to(cell, mark_cfg.get("open", prm.get(p, "pivot.grip_open", plan["grip_open"]))):
+        if not cp.grip_to(cell, mark_open(config)):
             return None
         blobs = jaw_blobs(closed, settled_frame(cell, sleep, clock, params=p), p)
         if marks:
