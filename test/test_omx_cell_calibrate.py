@@ -152,3 +152,11 @@ def test_a_remap_serves_the_sites_the_config_names_and_arm_a_keeps_its_three():
     assert cc.map_sites(arm_a) == ["floor", "belt"]
     arm_b = {"calibrate": {"map_sites": ["pallet", "stack"]}, "sites": {"pallet": {}, "stack": {}}}
     assert cc.map_sites(arm_b) == ["pallet", "stack"]
+
+
+def test_an_arm_with_no_map_for_its_sites_is_remapped():
+    """arm_a joined the pallet cell on 2026-11-03 with no pallet map; the camera had not moved, so nothing ran."""
+    config = {"sites": {"pallet": {"surface_z": -0.01}}, "calibrate": {"map_sites": ["pallet"]}, "calibration_path": "x.json"}
+    found = {"camera_moved": False, "targets": [], "missing_bias": [], "missing_surface": [],
+             "missing_map": [s for s in cc.map_sites(config) if s not in {}]}
+    assert found["missing_map"] == ["pallet"] and cc.stale(found)[:2] == ["remap", "regions"]

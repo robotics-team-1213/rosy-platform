@@ -58,7 +58,7 @@ def clear_point(near_xy, mask, roi, inside, to_px, radius_px: int = 36, max_mm: 
 
 def stale(check: dict) -> list:
     """The steps a check result asks for, in dependency order (a moved camera makes every bias and region stale)."""
-    if check.get("camera_moved"):
+    if check.get("camera_moved") or check.get("missing_map"):  # an arm new to the cell has no map yet (arm_a, 2026-11-03)
         return ["remap", "regions"] + [f"pivot-near {t}" for t in check.get("targets", [])]
     steps = [f"pivot-near {t}" for t in check.get("missing_bias", [])]
     steps += [f"surface {s}" for s in check.get("missing_surface", [])]
@@ -86,6 +86,7 @@ def check(config: dict, calibration: dict, targets: list, frame, params=None) ->
         # floor estimate was 8-10 mm off and every descent met the box (2026-10-29)
         if not cell_pivot.bias_at(bias, site, xy, reach_mm=prm.get(params, "calibrate.bias_near_mm"), params=params):
             out["missing_bias"].append(f"{site}:{xy[0]},{xy[1]}")
+    out["missing_map"] = [s for s in map_sites(config) if s not in calibration.get("sites", {})]
     for name, site in config["sites"].items():
         if "surface_z" not in site:
             out["missing_surface"].append(name)
@@ -266,7 +267,7 @@ def main(argv=None):
     config["params"] = prm.load(config.get("params_path"))["values"]
     config["plan"] = json.loads(Path(config["plan_path"]).expanduser().read_text())
     cal_path = Path(config["calibration_path"]).expanduser()
-    calibration = json.loads(cal_path.read_text())
+    calibration = json.loads(cal_path.read_text()) if cal_path.exists() else {"schema": cal.SCHEMA, "sites": {}}
     targets = [(t.split(":")[0], tuple(float(v) for v in t.split(":")[1].split(","))) for t in args.targets]
     cell = cp.FifoCell(Path(config["io"]).expanduser(), config["cameras"])
     work = Path(config["work_dir"]).expanduser() / "calibrate"
@@ -289,7 +290,8 @@ def main(argv=None):
                 calibration["sites"][site] = dict(record, note="remap by cell_calibrate")
             cal_path.write_text(json.dumps(calibration))
             cell_pivot.bias_path(cal_path).write_text(json.dumps({"schema": cell_pivot.SCHEMA, "regions": []}))
-            move_regions(config, cv2.imread(str(ref_path), cv2.IMREAD_GRAYSCALE), cv2.cvtColor(current, cv2.COLOR_BGR2GRAY))
+            if ref_path.exists():  # a new arm's regions were drawn on the current view: nothing to carry
+                move_regions(config, cv2.imread(str(ref_path), cv2.IMREAD_GRAYSCALE), cv2.cvtColor(current, cv2.COLOR_BGR2GRAY))
             cv2.imwrite(str(ref_path), current)
             done.append({"remap": record["loo_error_mm"]})
         elif step == "regions":
