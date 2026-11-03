@@ -123,6 +123,12 @@ def test_signing_paths_stay_lead_only():
     bad = []
     for pattern, owners in _rules():
         for guarded in ("deploy", "tools/release"):
-            if _matches(pattern, guarded) and owners - lead:
-                bad.append(f"{pattern} names {sorted(owners - lead)} beside the signing path {guarded}/")
+            inside = pattern.strip("/")
+            deep = inside.startswith(guarded + "/")
+            image_lane = inside == "deploy/robot" or inside.startswith("deploy/robot/")
+            if (_matches(pattern, guarded) or deep) and owners - lead and not image_lane:
+                bad.append(
+                    f"{pattern} names {sorted(owners - lead)} beside the signing path {guarded}/"
+                    " (deploy/robot image lanes keep their §5.1 joint review)"
+                )
     assert bad == [], bad
