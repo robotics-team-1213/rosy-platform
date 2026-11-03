@@ -16,7 +16,8 @@ def robot():
 def registered_task(base):
     _, initial = request(base, '/api/learning/tasks', session='reviewer')
     token = initial['token']
-    code, saved = request(base, '/api/learning/robots', robot(), token=token, session='reviewer')
+    code, saved = request(base, '/api/learning/robots', dict(robot(), device_id=str(uuid.uuid4())),
+                          token=token, session='reviewer')
     assert code == 200
     body = dict(request_id=str(uuid.uuid4()), name='Carry sample', objective='Deliver sample',
         success='Sample reaches tray', failure='Sample drops', reset='Return sample',
