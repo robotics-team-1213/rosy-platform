@@ -704,6 +704,7 @@ def test_the_guard_set_and_paths_under_an_ignored_folder_are_no_overlap():
     assert not selection.overlaps([["guard/test/test_a.py"]], [["guard/test/test_a.py"]], ignore=("guard/test",))
 
 
+@pytest.mark.parametrize('wrapped', [False, True])
 @pytest.mark.parametrize('tier, invocations, reusable', [
     ('full', [['test']], False),
     ('full', NORMAL, True),
@@ -715,11 +716,12 @@ def test_the_guard_set_and_paths_under_an_ignored_folder_are_no_overlap():
     ('affected', [['pkg/test']], True),
 ])
 def test_restore_checks_full_plan_against_actual_main_sot_without_rewriting_records(
-        full_case, tier, invocations, reusable):
+        full_case, tier, invocations, reusable, wrapped):
     case = full_case
     base = git(case.main, 'rev-parse', 'HEAD')
     candidate = git(case.wt, 'rev-parse', 'HEAD')
-    land.land_full.save(case.wt, 'feat/x', candidate, base, tier, invocations)
+    land.land_full.save(case.wt, 'feat/x', candidate, base, 'delta' if wrapped else tier, invocations,
+                        base_tier=tier if wrapped else None)
     path = land.land_full._path(case.wt, 'feat/x')
     original = path.read_bytes()
     assert land.land_full.restore(case.wt, 'feat/x') == (base if reusable else None)
@@ -728,13 +730,15 @@ def test_restore_checks_full_plan_against_actual_main_sot_without_rewriting_reco
     assert land.land_full.bridge(case.wt, candidate, base, 'HEAD', 'main')
 
 
-def test_restore_preserves_legacy_main_even_when_topic_has_unlanded_sot(repos):
+@pytest.mark.parametrize('wrapped', [False, True])
+def test_restore_preserves_legacy_main_even_when_topic_has_unlanded_sot(repos, wrapped):
     main, wt = repos
     base = git(main, 'rev-parse', 'HEAD')
     commit(wt, {'tools/harness/affected_exclusive.py': (ROOT / 'tools/harness/affected_exclusive.py').read_text(),
                 exclusive.TARGET: 'def test_stub(): pass\n'}, 'unlanded timing support')
     candidate = git(wt, 'rev-parse', 'HEAD')
-    land.land_full.save(wt, 'feat/x', candidate, base, 'full', [['test']])
+    land.land_full.save(wt, 'feat/x', candidate, base, 'delta' if wrapped else 'full', [['test']],
+                        base_tier='full' if wrapped else None)
     path = land.land_full._path(wt, 'feat/x')
     original = path.read_bytes()
     assert land.land_full.restore(wt, 'feat/x') == base
