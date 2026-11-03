@@ -167,3 +167,11 @@ def test_a_clean_session_is_no_incident_and_a_reopened_catch_is_a_note_without_h
     link = Link()
     out = oi.handle(session(tmp_path / "x", latched=False, windup=False, status=[caught]), "arm_b", link=link)
     assert out["incident"] and not out["decision"]["hold"] and oi.held("arm_b") is None and not link.posted
+
+
+def test_a_session_that_never_reached_the_arm_is_no_incident(tmp_path, monkeypatch):
+    """2026-11-03 23:19: a missing leader port failed the session before the bus opened; it wrote only health keys."""
+    monkeypatch.chdir(tmp_path)
+    path = tmp_path / "session.json"
+    path.write_text(json.dumps({"motor_health_log": "x", "motor_health_snapshot_error": "y"}))
+    assert oi.handle(path, "arm_b") == {"incident": False} and not (tmp_path / "incidents").exists()

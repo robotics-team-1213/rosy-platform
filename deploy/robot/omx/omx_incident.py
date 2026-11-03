@@ -223,6 +223,8 @@ def report_for(source_id: str, session_id: str, f: dict, d: dict, acted):
 def handle(session_path: Path, arm: str, act=None, decisions=Path("decisions.jsonl"), home=None, link=None) -> dict:
     """Run the pipeline for one ended session; returns the incident (or {"incident": False})."""
     session = json.loads(Path(session_path).read_text())
+    if "safe_end" not in session:  # failed before the bus opened (2026-11-03 23:19: a leader port gone): never reached the arm
+        return {"incident": False}
     if home is None and (session.get("chunks") or {}).get("library"):
         library = json.loads(Path(session["chunks"]["library"]).read_text())
         home = (library.get("chunks", {}).get("home") or [None])[0]
