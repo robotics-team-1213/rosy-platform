@@ -1,4 +1,4 @@
-import {node, input, select} from "./control-dom.js";
+import {node, input, select, afterFormReset} from "./control-dom.js";
 import {confirmIrreversible} from "/common/ui.js";
 
 // Errors augment existing native fields; the caller still owns validation and saving.
@@ -78,7 +78,9 @@ export function createFilePicker({id, label, accept = ".json", maxBytes = 1024 *
     onChange(error ? null : file, error);
   };
   field.control.addEventListener("change", change);
-  return {element, control: field.control, result, dispose: () => field.control.removeEventListener("change", change)};
+  const stopReset = afterFormReset(field.control, change);
+  return {element, control: field.control, result,
+    dispose() {field.control.removeEventListener("change", change); stopReset();}};
 }
 
 // Search + native select avoids an incomplete custom combobox keyboard implementation.
@@ -91,9 +93,12 @@ export function createSearchSelect({id, label, choices, onChange = () => {}}) {
   let value = "";
   function paint() {
     const previous = value;
+    value = options.control.value;
     const query = search.control.value.trim().toLocaleLowerCase();
-    const matches = choices.filter(item => item.label.toLocaleLowerCase().includes(query));
-    options.control.replaceChildren(...matches.map(item => new Option(item.label, item.value)));
+    const matches = choices.filter(item => item.value !== "" && item.label.toLocaleLowerCase().includes(query));
+    const emptyChoice = new Option(choices.find(item => item.value === "")?.label ?? "선택하세요", "");
+    emptyChoice.defaultSelected = true;
+    options.control.replaceChildren(emptyChoice, ...matches.map(item => new Option(item.label, item.value)));
     value = matches.some(item => item.value === value) ? value : "";
     options.control.value = value;
     empty.hidden = matches.length > 0;
@@ -104,10 +109,11 @@ export function createSearchSelect({id, label, choices, onChange = () => {}}) {
   const change = () => {value = options.control.value; onChange(value);};
   search.control.addEventListener("input", paint);
   options.control.addEventListener("change", change);
+  const stopReset = afterFormReset(options.control, paint);
   paint();
   return {element, search: search.control, control: options.control,
     update(next) {choices = next; paint();},
-    dispose() {search.control.removeEventListener("input", paint); options.control.removeEventListener("change", change);}};
+    dispose() {search.control.removeEventListener("input", paint); options.control.removeEventListener("change", change); stopReset();}};
 }
 
 export function createDateRange({id, label, onChange = () => {}}) {
@@ -127,8 +133,9 @@ export function createDateRange({id, label, onChange = () => {}}) {
     onChange({start: start.control.value, end: end.control.value, error});
   };
   start.control.addEventListener("input", change); end.control.addEventListener("input", change);
+  const stopReset = afterFormReset(start.control, change);
   return {element, start: start.control, end: end.control, result,
-    dispose() {start.control.removeEventListener("input", change); end.control.removeEventListener("input", change);}};
+    dispose() {start.control.removeEventListener("input", change); end.control.removeEventListener("input", change); stopReset();}};
 }
 
 // Save/reset baselines are explicit; a failed save must never silently clear dirty state.

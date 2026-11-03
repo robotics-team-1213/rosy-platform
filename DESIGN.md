@@ -460,6 +460,8 @@ D-741(Accepted)이 정한, 모든 웹 표면이 같이 쓸 자리다. Rosy Fleet
 | `workflow-controls.js` | `createStatePanel`, `createActionBar`, `createOperationResult` | 로딩·빈 상태·권한·실패·재시도를 구분한다. 요청·접수·실제 재조회·불확실을 표시하며 경과 시간으로 완료를 만들지 않는다. 중요한 동작 이름은 좁은 폭에서도 줄바꿈한다. |
 | `workflow-controls.js` | `createProgress`, `createTimeline`, `createSteps`, `createLogView` | 진행률 미확인은 `null`, 단계는 기존 stage strip을 쓴다. 로그는 호출자가 공개 가능한 내용만 전달한다. 단계·진행률 100%를 물리 완료로 해석하지 않는다. |
 
+파일·검색 선택·날짜 범위는 네이티브 폼 초기화가 끝난 뒤 표시와 호출자 상태를 맞춘다. 검색 선택은 명시적인 미선택 항목으로 시작하며 폼 초기화가 첫 대상을 자동 선택하지 않는다. 취소된 초기화와 그 뒤의 명시적 선택은 유지하고, `dispose()` 뒤에는 늦은 초기화 콜백을 보내지 않는다.
+
 실행 예시는 `/common/component-gallery.html`에 있다. 합성 데이터의 설정 폼·운영 목록·개입·파일 절차를 직접 조작하며 양 테마·작은 화면·오류·복귀를 확인한다. 견본 검증, 실제 제품 적용, 실물 수용은 서로 다른 근거다. 외부 참고 패턴은 Carbon의 목록 도구, PatternFly의 primary-detail/empty state, Fluent의 field/drawer, WAI-ARIA APG의 키보드 동작이다. 색·모션·정지 계약은 ROSY의 기존 ADR이 우선한다.
 
 ### 독립 작업의 선택 — `createTaskChooser()`

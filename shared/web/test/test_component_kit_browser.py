@@ -268,11 +268,29 @@ def test_file_picker_disposal_ignores_pending_form_reset(gallery):
     assert page.evaluate("resetEvents") == 1
 
 
+def test_native_reset_keeps_a_newer_explicit_choice(gallery):
+    from playwright.sync_api import expect
+    page = gallery
+    page.evaluate("""() => {
+      const form = document.createElement('form'); form.id = 'newer-choice-form';
+      form.append(document.getElementById('choice-options').closest('.ui-control-stack'));
+      document.body.append(form);
+      form.reset();
+      const select = document.getElementById('choice-options');
+      select.value = 'camera-20'; select.dispatchEvent(new Event('change', {bubbles:true}));
+    }""")
+    page.evaluate("() => new Promise(resolve => setTimeout(resolve, 0))")
+    expect(page.locator("#choice-options")).to_have_value("camera-20")
+    expect(page.locator("#choice-result")).to_have_text("camera-20")
+
+
 def test_searchable_choice_and_date_validation(gallery):
     from playwright.sync_api import expect
     page = gallery
     page.locator("#choice-search").fill("카메라 20")
-    expect(page.locator("#choice-options option")).to_have_count(1)
+    expect(page.locator("#choice-options option")).to_have_count(2)
+    expect(page.locator('#choice-options option[value=""]')).to_have_text("선택하세요")
+    expect(page.locator('#choice-options option[value="camera-20"]')).to_have_count(1)
     page.locator("#choice-options").select_option("camera-20")
     expect(page.locator("#choice-result")).to_have_text("camera-20")
     page.locator("#period-start").fill("2026-10-23")
