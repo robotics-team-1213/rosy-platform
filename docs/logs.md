@@ -14021,3 +14021,9 @@ osy-d395-s1d\`.
 - 증거: 11-03 rosy-web-unification-final이 15:58·17:28·18:07 세 번 delta로 넘김 — 차례 밖 준비 동안 main이 다시 움직여 새 폴더가 닿음(rosy-land-events). 원격 착지 회귀 27개 파일 + affected_tests 통과, 새 시험 2개.
 - gate 변화: 없음. 세 번째부터는 D-889 27 이전처럼 차례 안에서 같은 시험을 돈다.
 - CE: 해당 없음 — D-970 되돌림 기준(같은 표 반복 넘김)을 코드로 막은 것.
+
+## 2026-11-03 · uncommitted · fix(landing): 추측 사전 시험 기본 끔 (D-889 추가 28)
+- 변경: `land_prepare`가 `ROSY_LAND_SPECULATE=1`일 때만 `land_speculate.prepare`를 부른다.
+- 증거: 11-03 10:00~16:00 rosy-land-events — spec 시험 9.8 h / 전체 43 h, 차례 held 3 / 34, 이미 통과한 호출 재실행 8.1 h. 원격 착지 회귀 27개 파일 + affected_tests 통과, 새 시험 1개.
+- gate 변화: 없음. 차례는 원래 정해진 선택을 그대로 돈다.
+- CE: 기존 교훈 갱신 — landings-gave-the-turn-back-and-reran-everything 11.

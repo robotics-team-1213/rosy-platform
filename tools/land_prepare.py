@@ -15,6 +15,7 @@ passed in so its ``Stop`` is the one the caller catches.
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 import threading
@@ -25,6 +26,9 @@ import land_queue
 
 MAX_PREPARING = 6
 POLL = 15.0
+# D-889 28: speculation (addendum 3) ran 9.8 h of test-PC time in 6 h on 11-03 and its tree was held at 3 of 34
+# turns, while the ticket stayed "preparing" behind it. It runs only when this is "1".
+SPECULATE_ENV = "ROSY_LAND_SPECULATE"
 
 
 def rules() -> str | None:
@@ -233,4 +237,5 @@ def _prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, 
     if ticket is not None:
         land_queue.set_status(ticket, "preparing", tested=land.land_full.restore(wt, branch) or "")
     land.land_events.emit("prepared", tier=tier, seconds=round(time.monotonic() - began))
-    land.land_speculate.prepare(land, wt, branch, args, python, qdir, ticket)
+    if os.environ.get(SPECULATE_ENV) == "1":
+        land.land_speculate.prepare(land, wt, branch, args, python, qdir, ticket)

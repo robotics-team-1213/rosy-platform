@@ -116,6 +116,7 @@ def test_prediction_uses_the_same_stale_bypass_window_as_the_turn(queued, age, p
                                                 (False, True, False), (True, True, False), (True, False, True)])
 def test_real_prepare_publishes_only_its_tested_main_before_predicting(queued, monkeypatch, retry, moves, keep_full):
     main, wt, old, peer, qdir, ticket, *_ = queued
+    monkeypatch.setenv(land.land_prepare.SPECULATE_ENV, "1")  # D-889 28: speculation runs only when asked
     commit(main, {"lib/current.py": "current = 1\n"}, "main before prepare")
     tested = git(main, "rev-parse", "HEAD")
     if retry:
@@ -269,3 +270,15 @@ def test_with_spec_preserves_mains_cross_context_logical_row_policy(queued, monk
         'invocations': [DEDICATED, DEDICATED, ordinary]}})
     with pytest.raises(ValueError):
         spec.with_spec(land, wt, 'feat/x', {'tier': 'full', 'invocations': original})
+
+
+def test_prepare_skips_speculation_unless_asked(queued, monkeypatch):
+    """D-889 28: 11-03 speculation used 9.8 h of test-PC time in 6 h and was held at 3 of 34 turns."""
+    _, wt, *_, qdir, ticket, _, _ = queued
+    monkeypatch.delenv(land.land_prepare.SPECULATE_ENV, raising=False)
+    called = []
+    monkeypatch.setattr(land, "run_tests", lambda *a, **k: [])
+    monkeypatch.setattr(spec, "prepare", lambda *a, **k: called.append(a))
+    land.land_prepare.prepare(land, wt, "feat/x", land.argparse.Namespace(tests="auto", no_cache=True),
+                              sys.executable, qdir, ticket, SELECTED, "")
+    assert called == []
