@@ -115,6 +115,8 @@ reruns. Each cause below was found from `.git/rosy-land-events.jsonl` and `.git/
    older anchor stays and the next turn picks the same folders. D-889 27 (user decision) adds a `delta`
    tier that moves the base forward but reports the tier under it. Judge it on landings started after it
    reaches main; `[land] ... delta tier` lines and `prepared` events with `tier: delta` show it working.
+   A turn yields only over a clean earlier tier: on 11-03 14:18 and 14:34 a LOAD-FLAKY pretest (`prepared`
+   with `tier: null`) yielded twice and saved nothing, a loop that never lands (`land_selection.delta_yields`).
 
 ## 계측 전용 파일의 불필요한 FULL 승격
 
