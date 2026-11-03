@@ -51,6 +51,7 @@ export const MESSAGES = {
   unreachable: "로봇에 닿지 않습니다(주소·포트).",
   code_consumed: "코드가 소모됐습니다 — 로봇을 재시작하거나 관리자 코드를 받으세요.",
   store_unavailable: "자격 키를 읽을 수 없음 — 사이트 관리자가 robot_credential_key를 확인해야 합니다.",
+  control_unit_enrollment_unavailable: "현재 이 관제기는 로봇 명단이 고정되어 새 로봇을 등록할 수 없습니다. 코드는 로봇에 보내지 않았습니다.",
   already_enrolled: "이미 등록된 로봇입니다. 바꾸려면 먼저 등록 해제하세요.",
   conflict: "같은 이름이 여러 주소에 보입니다(신원 충돌) — 코드를 보내지 않습니다.",
   not_discovered: "발견 목록에서 사라졌습니다. 다시 검색되거나 주소로 추가하세요.",
@@ -91,7 +92,7 @@ export const CONSUMED_REASONS = {
   admin_code_refused: "원인: 관리자 역할 코드는 사이트 등록에 쓰지 않습니다.",
   wrong_robot: "원인: 선택한 행과 다른 로봇이 답했습니다.",
   robot_id_conflict: "원인: 같은 robot_id가 이미 로스터에 있습니다.",
-  robot_not_owned_by_control_unit: "원인: 이 관제 단위의 manifest가 이 robot_id를 소유하지 않습니다. 모든 관제의 control-unit.yaml에 robot:<id>를 같은 revision으로 더한 뒤 새 코드로 다시 등록하세요.",
+  robot_not_owned_by_control_unit: "원인: 이 관제기의 고정 로봇 명단에 없는 기기입니다.",
   store_failed: "원인: 자격을 저장하지 못했습니다.",
   verify_failed: "원인: 로봇 신원을 읽지 못했습니다.",
 };
