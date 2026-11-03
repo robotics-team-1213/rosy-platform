@@ -2,6 +2,7 @@
 import asyncio
 import sqlite3
 import threading
+import time
 from types import SimpleNamespace
 
 import pytest
@@ -14,6 +15,8 @@ from fleet.server.control_unit_store import ControlUnitStore
 from fleet.server.task_service import FleetTaskService
 from fleet.server.task_store import FleetTaskStore
 from fleet.server.site_auth import SitePrincipal
+from fleet.server.mission_store import MissionConflict
+import fleet.server.physical_transfer_store as physical_module
 import fleet.server.arm_transfer_policy_admission as policy_module
 import test_arm_transfer_job_api as api
 from test_arm_transfer_job_api import rig as http_rig  # noqa: F401
@@ -196,3 +199,62 @@ def test_failed_delegation_binding_rolls_back_the_physical_proposal(world, tmp_p
     asyncio.run(context.nodes[context.origin].submit(context.request))
     binding = context.nodes["CELL-A"].store.get(context.origin, "arm-1")
     assert rows.proposed_ids() == [(binding["local_task_id"], "control-unit:R")]
+
+
+def direct_admit(world, proposal, checked_at):
+    _, tasks, port, _ = world.rig
+    rows = world.rig[0].app.state.arm_transfer_job_store
+    return rows.admit(proposal["mission_id"], principal=SitePrincipal("operator", "operator"),
+        expected_proposal_digest=proposal["proposal_digest"],
+        expected_generation=tasks.dispatch_control()["generation"],
+        capabilities=tuple(port.capabilities), capabilities_observed_at_ns=time.time_ns(),
+        delegation_checked_at=checked_at)
+
+
+@pytest.mark.parametrize("kind", ["missing", "boolean", "nan", "infinite", "future", "expired"])
+def test_bound_arm_admission_refuses_invalid_parent_proof(world, tmp_path, kind):
+    context = delegated(world, tmp_path)
+    value = {"missing": None, "boolean": True, "nan": float("nan"), "infinite": float("inf"),
+             "future": time.monotonic() + 30, "expired": time.monotonic() - 30}[kind]
+    with pytest.raises(MissionConflict, match="current parent evidence"):
+        direct_admit(world, context.proposal, value)
+    assert_unadmitted(world, context.proposal["mission_id"])
+
+
+def test_parent_proof_expiring_during_reservation_rolls_back_claims(world, tmp_path, monkeypatch):
+    context = delegated(world, tmp_path)
+    checked_at = time.monotonic()
+    readings = iter((checked_at, checked_at + 6.0))
+    monkeypatch.setattr(physical_module, "time", SimpleNamespace(
+        time_ns=time.time_ns, monotonic=lambda: next(readings)))
+    with pytest.raises(MissionConflict, match="current parent evidence"):
+        direct_admit(world, context.proposal, checked_at)
+    assert_unadmitted(world, context.proposal["mission_id"])
+
+
+def test_legacy_unbound_parent_proposal_cannot_be_admitted(world):
+    client, tasks, _, installed = world.rig
+    request = api.body(installed)
+    key = request.pop("request_key")
+    rows = client.app.state.arm_transfer_job_store
+    proposal = rows.create(principal=SitePrincipal("control-unit:R", "service"),
+                           request_key=key, request=request)
+    response = client.post(api.PATH + "/" + proposal["mission_id"] + "/admit",
+        headers=api.headers("operator"), json={"expected_proposal_digest": proposal["proposal_digest"],
+            "expected_generation": tasks.dispatch_control()["generation"]})
+    assert response.status_code == 409
+    assert_unadmitted(world, proposal["mission_id"])
+
+
+def test_legacy_ambiguous_parent_bindings_cannot_be_admitted(world, tmp_path):
+    context = delegated(world, tmp_path)
+    child = context.nodes["CELL-A"].store
+    child.create(context.origin, "arm-2", context.request.model_dump(mode="json", include={"target_unit", "transfer"}),
+                 owner_unit="CELL-A", config_revision="v1")
+    child.bind_local(context.origin, "arm-2", context.proposal["mission_id"])
+    client, tasks, _, _ = world.rig
+    response = client.post(api.PATH + "/" + context.proposal["mission_id"] + "/admit",
+        headers=api.headers("operator"), json={"expected_proposal_digest": context.proposal["proposal_digest"],
+            "expected_generation": tasks.dispatch_control()["generation"]})
+    assert response.status_code == 503
+    assert_unadmitted(world, context.proposal["mission_id"])

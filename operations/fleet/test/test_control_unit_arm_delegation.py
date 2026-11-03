@@ -1,6 +1,8 @@
 """D-965: R delegates arm work to the owning cell; the cell's ARM admit is the only approval."""
 
 import asyncio
+from contextlib import closing
+import sqlite3
 from types import SimpleNamespace
 
 import pytest
@@ -32,7 +34,7 @@ class ArmJobs:
     def __init__(self):
         self.jobs, self.calls, self.cancels, self.receipts = {}, [], [], {}
 
-    def create(self, *, principal, request_key, request):
+    def create(self, *, principal, request_key, request, bind=None):
         if principal is None:
             raise PermissionError("a configured named principal is required")
         self.calls.append((principal.principal_id, request_key, request))
@@ -43,6 +45,10 @@ class ArmJobs:
             "request_digest": DIGEST, "proposal_digest": DIGEST, "transfer": request,
             "resource_policy_digest": DIGEST, "status": "PROPOSED", "authority_epoch": None,
             "dispatch_generation": None, "approved_by": None, "reason": None})
+        if bind is not None:
+            with closing(sqlite3.connect(self.path)) as connection, connection:
+                connection.row_factory = sqlite3.Row
+                bind(connection, self.jobs[key]["mission_id"])
         return self.jobs[key]
 
     def view(self, mission_id):
@@ -77,6 +83,8 @@ def cluster(tmp_path, arm_jobs):
 
     for unit_id, jobs in [("R", None), ("CELL-A", arm_jobs)]:
         path = tmp_path / (unit_id + ".db")
+        if jobs is not None:
+            jobs.path = path
         robots = {r[6:] for r in topology.unit(unit_id).resources if r.startswith("robot:")}
         nodes[unit_id] = ControlUnitService(
             topology, ControlUnitStore(path, unit_id=unit_id), FleetTaskService(FleetTaskStore(path), robot_ids=robots),
