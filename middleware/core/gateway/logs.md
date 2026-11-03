@@ -2050,3 +2050,10 @@ clpy.duration을 추가했다(bridge AGENTS의 두 파일 함께 갱신 규칙).
 - 검증: committed512bf77f89의 pipeline/continuous/lifespan/scheduling/redeployment HTTP 다섯 모듈을 정식 원격 runner로 실행해 31 passed/skip0, known_failures NEW0/known0/flaky0이다. double quiet 출력의 완료 glyph 31개로 실행 수를 확인했다. 외부 rosy-fleet-station-camera-site-fallback/run-1.txt, run512bf77f89-92a705. 두 우선 시험 PC의 alone fence로 대기한 자체 요청만 취소하고 마지막 대상인 현장 PC에서 ROS-free API 시험을 실행했다. 장치·운영 API·물리 시뮬레이터는 호출하지 않았다. 이는 착지·CI 성공을 뜻하지 않는다.
 - gate 변화: 없음. 운영 RPC 제한, fail-closed HOLD/claim, 단독 실행 fence, FULL 요구를 완화하지 않는다. 정상 착지는 별도로 검증한다.
 - CE: 해당 없음 — 기존 오류 지점별 분류 교훈을 적용했고, 이번 최소 교정의 판단은 시험·기존 기록에 남아 새 교훈을 추가하지 않는다. 운영·물리 수용은 별도다.
+
+## 2026-11-03 · e9ee7a7009 · 카메라 SIM 시험의 OpenCV 스레드 범위 제한
+
+- 변경: 공유 `pipeline_sources` fixture가 OpenCV 스레드를 1개로 제한하고, 시험 종료 시 기존 값을 `finally`에서 복원한다. 운영 갱신의 1초 제한, 신선도·인증·HTTP 요청과 기존 파이프라인 판정은 유지한다.
+- 증거: RED745f34a4e6의 공식 원격 회귀는 정상·예외 종료 두 경우 모두 `24 == 1`로 실패했다(NEW2). 수정 e9ee7a7009는 두 자원 회귀와 앞서 실패했던 slow-journal lifespan·shutdown_UNDOCKING 실파이프라인을 함께 실행해 4 passed/skip0, NEW0/known0/flaky0이었다. 환경 5f97eba2cbb43fc8, freeze eb75e06857d6c188. 독립 검토에서 수정 필요 사항은 없었다.
+- 범위: 별도 UI 통합 후보의 main 변경분 시험에서 두 카메라 사례가 LOAD-FLAKY였다. 최초 오류는 SIM 시간이 멈춘 상태의 ASGI 갱신이 내부 1초 실제 시간 제한을 넘긴 것이며, 뒤따른 context 오류를 최초 원인으로 보지 않는다. OpenCV 24스레드는 확인된 자원 설정이지만 시간 초과의 원인이라는 인과관계는 아직 입증하지 않았다. 전체 fixture 소비자 검증은 진행 중이며 착지·CI·장치 수용은 별도다.
+- CE: 미해결 — 자원 제한과 복원은 회귀로 확인했지만, 기존 시간 초과의 정확한 스케줄링 원인은 확정하지 않았다. 해결된 교훈으로 기록하지 않는다.
