@@ -81,4 +81,4 @@
 - 2026-11-03 · b741d370f0 · fix(site): require the configured signed companion before runtime acceptance
 - 2026-11-03 · uncommitted · docs(release): record one reviewed historical Git-tree tuple
 - 2026-11-03 · f81b8315d0 · fix(omx): 실측 순상승과 정착 home 증거로만 복구 완료
-- 2026-11-03 · 3a2fbd1f9a · feat(site): 서명 PC의 사이트 즉시 반영 푸시와 오분류 제목 교정
+- 2026-11-03 · 3309dde54f · fix(site): dry-run에서 공개 릴리스 수정 방지

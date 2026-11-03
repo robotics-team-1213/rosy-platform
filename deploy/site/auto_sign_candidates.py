@@ -434,6 +434,7 @@ class AutoSigner:
 
     def _repair_title(self, tag: str) -> None:
         if self.dry_run:
+            self._audit({"decision": "would-retitle", "tag": tag})
             return
         if self._retitle_signed(tag) == "edited":
             self._audit({"decision": "retitle-repaired", "tag": tag})
@@ -493,7 +494,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--config", required=True, type=Path,
                         help="JSON config kept outside the repository")
     parser.add_argument("--dry-run", action="store_true",
-                        help="run every check, but neither sign nor upload")
+                        help="run every check, but neither sign, upload nor edit releases")
     args = parser.parse_args(argv)
     try:
         config = load_config(args.config)

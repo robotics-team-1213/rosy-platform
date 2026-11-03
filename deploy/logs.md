@@ -4443,6 +4443,13 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - gate 변화: 없음. 사이트 호스트의 D-960 업데이터 교체·hold 해제는 이 커밋 없이 현장에서 이미 시행했다(백업 `/var/backups/rosy-site-d960-20261103`).
 - CE: 해당 없음 — 막힘 원인(hold)은 감사 로그와 상태 파일로 곧바로 보였고, 재발 방지는 이번 구조화 자체가 담당한다.
 
+## 2026-11-03 · 3309dde54f · fix(site): dry-run에서 공개 릴리스 수정 방지
+
+- 변경: 이미 서명됐지만 unsigned 제목이 남은 릴리스를 발견해도 dry-run은 공개 제목·본문을 수정하지 않고 `would-retitle` 감사 기록만 남긴다. 실제 서명·제목 교정·호스트 알림의 기존 조건은 유지한다.
+- 검증: 원격 RED `08bbc9a4fe`에서 release edit 호출을 막는 새 회귀 시험이 예상대로 실패했다. 수정 `3309dde54f`에서 서명 자동화와 후보 서명 시험 48건이 통과했고 known_failures는 0 new/known/flaky다. FakeGh 시험이며 실제 공개 릴리스를 수정하지 않았다.
+- gate 변화: 없음. UI FULL 준비 근거는 별도 보존했고, 이 수정의 착지와 최신 main 통합 검증 후 게시한다.
+- CE: 해당 없음 — 누락된 dry-run 분기와 회귀 조건이 코드·시험에 직접 남는다. 운영 전환은 별도 미완료다.
+
 ## 2026-11-03 · f81b8315d0 · fix(omx): 실측 순상승과 정착 home 증거로만 복구 완료
 
 - 변경: 빈손 jam 복구는 시작 자세 대비 실측 순상승을 계산하고, held target이 home에 도달하면 추가 jog를 멈춘다. 누락·비유한 상태와 거절된 backoff는 중단하며, park는 `settled=true`와 기존 Runner 허용오차 안의 실측 home을 함께 확인해야 recovered를 반환한다. 기존 가드·세션·동작 한계는 유지한다.

@@ -273,6 +273,18 @@ def test_dry_run_preserves_signed_release_with_stale_unsigned_title(tmp_path, ke
     assert calls == []
 
 
+def test_dry_run_reports_stale_signed_release_without_mutating_it(tmp_path, keys):
+    gh = FakeGh(signed=True)
+    original = gh.release_name, gh.release_body
+
+    signer = auto.AutoSigner(_config(tmp_path, keys), runner=gh, dry_run=True)
+    assert signer.run() == auto.EXIT_IDLE
+    assert not any(call[:2] == ["release", "edit"] for call in gh.calls)
+    assert (gh.release_name, gh.release_body) == original
+    assert gh.uploads == []
+    assert _audit(tmp_path)[-1]["decision"] == "would-retitle"
+
+
 def test_signing_pushes_the_site_updater_start_command(tmp_path, keys):
     gh = FakeGh()
     calls: list[list[str]] = []
