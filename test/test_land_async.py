@@ -236,6 +236,16 @@ def test_resume_relaunches_a_stopped_snapshot_and_reports_its_ticket(repo):
         tool.resume(dev, tree.name, [], lander, wait=5, sleep=lambda s: None)
 
 
+def test_resume_without_args_keeps_the_queued_land_args(repo):
+    main, dev = repo
+    snap, log = tool.start(dev, ["--tests", "full", "--no-cache"], NOW, lambda *a: None)
+    tree = log.parent / log.name.removesuffix(".log")
+    (tree.parent / (tree.name + ".stopped")).write_text("land.py exit 1\n")
+    launched = []
+    tool.resume(dev, tree.name, [], lambda argv, log_: launched.append(argv), wait=5, sleep=lambda s: None)
+    assert launched[0][-5:] == [str(tree), snap, "--tests", "full", "--no-cache"]
+
+
 def test_resume_refuses_a_landed_snapshot_and_reports_a_relaunch_without_ticket(repo):
     main, dev = repo
     snap, log = tool.start(dev, [], NOW, lambda *a: None)
