@@ -12,7 +12,7 @@ import pytest
 import g1_layout as g1
 from g1_layout import G1_FIXTURE, MIXED_FIXTURE
 
-from rosy.integrations.robots.omx.mixed_reach import IkReach, ik_reach_from_profile, pose_in_base
+from rosy_agent.mixed_reach import IkReach, ik_reach_from_profile, pose_in_base
 from rosy.processes.palletizing.mixed_cell import CellPose
 from rosy.processes.palletizing.mixed_plan import PlanError
 from rosy.processes.palletizing.mixed_planner import plan_mixed

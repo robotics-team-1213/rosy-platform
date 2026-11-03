@@ -68,6 +68,7 @@ from rosy.execution.site.item_pose import ItemPoseTolerance, centre_above_tcp_m,
 from rosy.processes.palletizing.mixed_cell_doc import load_mixed_cell  # noqa: E402
 from rosy.processes.palletizing.mixed_recipe import load_mixed_recipe  # noqa: E402
 from rosy.processes.palletizing.mixed_submission import ITEM  # noqa: E402
+from rosy.processes.palletizing.acceptance import CellDocumentRules  # noqa: E402
 from rosy_agent.omx_cell_owner import CellOwnerSettings, build_cell_owner  # noqa: E402
 from rosy_agent.workcell_coordinator import OwnerUnavailable, WorkcellCoordinator  # noqa: E402
 
@@ -190,7 +191,8 @@ class SimArm:
         self.owner = build_cell_owner(
             settings, runtime_factory=FakeRuntime, goal_port_factory=lambda runtime: self.port,
             http_app_factory=lambda runtime: None, refuse_second_owner=lambda: None,
-            gripper_readback=self._gripper, fleet_fence_current=lambda epoch, generation: True)
+            gripper_readback=self._gripper, fleet_fence_current=lambda epoch, generation: True,
+            document_rules=CellDocumentRules)
         self.kin = OmxKinematics.load()
         self.owner.acceptance.validator = MixedDocumentValidator(self.kin.revision)
         self.owner.runtime.latest_joint_state = SimpleNamespace(
