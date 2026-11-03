@@ -220,6 +220,52 @@ def test_file_errors_block_native_form_until_corrected_or_cleared(gallery):
     field.set_input_files([])
     assert form.evaluate("el => el.checkValidity()")
     expect(page.locator("#file-result")).to_contain_text("선택한 파일 없음")
+    field.set_input_files({"name": "notes.txt", "mimeType": "text/plain", "buffer": b"x"})
+    form.evaluate("el => el.addEventListener('reset', event => event.preventDefault(), {once:true})")
+    form.evaluate("el => el.reset()")
+    page.evaluate("() => new Promise(resolve => setTimeout(resolve, 0))")
+    assert not form.evaluate("el => el.checkValidity()")
+    assert field.evaluate("el => el.files[0].name") == "notes.txt"
+    form.evaluate("el => el.reset()")
+    expect(page.locator("#file-result")).to_contain_text("선택한 파일 없음")
+    assert form.evaluate("el => el.checkValidity()")
+
+
+def test_native_form_reset_clears_choice_and_date_validation(gallery):
+    from playwright.sync_api import expect
+    page = gallery
+    page.evaluate("""() => {
+      const form = document.createElement('form'); form.id = 'reset-controls';
+      document.body.append(form);
+      form.append(document.getElementById('choice-options').closest('.ui-control-stack'),
+                  document.getElementById('period-start').closest('fieldset'));
+    }""")
+    page.locator("#choice-search").fill("카메라 20")
+    page.locator("#choice-options").select_option("camera-20")
+    page.locator("#period-start").fill("2026-11-04")
+    page.locator("#period-end").fill("2026-11-03")
+    assert not page.locator("#reset-controls").evaluate("el => el.checkValidity()")
+    page.locator("#reset-controls").evaluate("el => el.reset()")
+    expect(page.locator("#choice-options")).to_have_value("")
+    expect(page.locator("#choice-result")).to_have_text("")
+    expect(page.locator("#period-end")).to_have_attribute("aria-invalid", "false")
+    assert page.locator("#reset-controls").evaluate("el => el.checkValidity()")
+
+
+def test_file_picker_disposal_ignores_pending_form_reset(gallery):
+    page = gallery
+    page.evaluate("""async () => {
+      const {createFilePicker} = await import('/common/form-controls.js');
+      window.resetEvents = 0;
+      window.resetPicker = createFilePicker({id:'reset-file',label:'파일',onChange:() => resetEvents++});
+      const form = document.createElement('form'); form.id = 'disposed-file-form';
+      form.append(resetPicker.element); document.body.append(form);
+    }""")
+    page.locator("#reset-file").set_input_files({"name": "notes.txt", "mimeType": "text/plain", "buffer": b"x"})
+    assert page.evaluate("resetEvents") == 1
+    page.evaluate("() => { document.getElementById('disposed-file-form').reset(); resetPicker.dispose(); }")
+    page.evaluate("() => new Promise(resolve => setTimeout(resolve, 0))")
+    assert page.evaluate("resetEvents") == 1
 
 
 def test_searchable_choice_and_date_validation(gallery):
