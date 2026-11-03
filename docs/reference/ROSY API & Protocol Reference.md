@@ -5,7 +5,7 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.351
+**Version:** v1.353
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -859,6 +859,15 @@ Reads stay installed when the deployment profile closes, provided the persistent
 단일 위임 응답은 `{unit_id,config_revision,stale,delegation}`다. `delegation`은 origin/delegation ID, 불변 request `{target_unit,robot_id,goal}`, 직접 결과 소유 `owner_unit`, 최초 config revision, status, 자체 단조 revision, owner_revision, nullable local_actor/local_task_id, cancel_requested, result, updated_at을 포함한다. result는 유한 JSON 최대64KiB다. 상태 값은 PENDING/APPROVING과 기존 REQUESTED/QUEUED/ACCEPTED/RUNNING/UNKNOWN/HOLD/COMPLETED/FAILED/CANCELED/EXPIRED다. cancel_requested는 정지 완료나 상태 전이를 뜻하지 않는다. COMPLETED는 실행 결과이며 앱의 물리 업무 완료를 대신하지 않는다.
 
 같은 발행 관제·delegation ID·정규화 본문은 같은 기록을 반환한다. 구성 revision·재시작·전송 재시도가 identity를 바꾸지 않는다. 다른 본문·owner 결속은 409 충돌이다. 위임 binding·history와 로컬 task 생성은 기존 TaskStore admission transaction 안에서 함께 커밋한다. 인증·관계·본문·현재 안전 검사는 항상 유지하고 이전 권한을 재전달로 복원하지 않는다.
+
+### v1.353 Arm-transfer delegation candidate shape (D-965)
+
+팔 작업 위임 후보의 모양만 정한다. 이 버전의 경로는 아직 navigation 후보만 받는다. 셀 ingress와 R 쪽 변환은 후속 버전에서 연다.
+
+- 모델 정본은 `core_common.protocol.schemas`의 `ControlArmTransferCandidate` `{target_unit,transfer}`, `ControlArmWorkRequest`(+`delegation_id`), `ControlArmIngressRequest`(+`origin_id`,`config_revision`)다.
+- `transfer`는 기존 `ArmTransferJobCreate`와 같다. 추가 필드와 `robot_id`·`goal`을 섞은 본문은 거절한다.
+- `ControlDelegationSnapshot.request`는 navigation 후보와 팔 작업 후보 중 하나다. 두 모양은 필수 필드가 달라 서로 바뀌지 않는다.
+- 셀은 팔 작업 후보를 받으면 기존 ARM 제안(`PROPOSED`)을 만든다. 승인은 셀의 기존 ARM admit(기명 운영자 또는 D-938 정책) 하나뿐이다. 위임 자체에는 별도 approve가 없다.
 
 접수·조회 응답 유실은 새 key나 다른 자식에 재배정하지 않는다. 기존 기록과 같은 identity로 직접 자식을 재조회한다. stale 응답·잘못된 origin/request/owner/revision·낮은 owner_revision으로 현재 사실을 덮지 않는다. 상위 링크 단절에서는 신규 상위 위임과 다음 Action을 막고 현재 admission된 유한 Action의 기존 장치 정책만 유지한다. 재연결 대조 없이 자동 재시작·점유 해제·rearm을 하지 않는다. 오래된 구성·scope·수정된 본문·잘못된 승인 revision은 409, 권한/관계 위반은 403, 미등록 위임은 404, 미설정/DB 불가/불명 peer 응답은 503 또는 stale 읽기 결과로 보존한다. 빈 조회 목록을 장애의 성공 응답으로 만들지 않는다.
 
@@ -4495,6 +4504,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.353 | 2026-11-03 | D-965: 팔 작업 위임 후보 모양(`ControlArmTransferCandidate`·`ControlArmWorkRequest`·`ControlArmIngressRequest`), snapshot request는 두 종류 중 하나. 경로는 아직 navigation만 |
 | v1.351 | 2026-11-03 | 핑키 열 모드: `safety/state.thermal`, `thermal.*` 이벤트, ROS `motor/health`. warm은 직선 상한 절반, hot은 자율 주행 0(수동은 warm 상한) |
 | v1.350 | 2026-11-02 | D-963: 제어 PC의 역할 없는 USB 카메라 보고·운영자 역할 결정 (`workcell-observations/{workcell_id}/usb-devices`) |
 | v1.349 | 2026-11-02 | D-962: 독립 Account authority와 Fleet PKCE receiver, 개발 모드의 익명 세션 폐기·사람 로그인 의무화 |
