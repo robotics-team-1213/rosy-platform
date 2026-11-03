@@ -196,6 +196,33 @@ def test_r_relays_create_read_receipt_and_cancel_for_the_proposing_app_only(tmp_
     assert nodes["R"].store.list()[0]["status"] == "CANCELED"
 
 
+@pytest.mark.parametrize("other_object", ["box-1", "box-2"])
+def test_app_request_keys_remain_separate_at_the_cell(tmp_path, other_object):
+    jobs = ArmJobs()
+    client, _, who = relay(tmp_path, jobs)
+    first = client.post("/api/fleet/arm-transfers/jobs", json=TRANSFER)
+    assert first.status_code == 200, first.text
+    first = first.json()["job"]
+    assert client.post("/api/fleet/arm-transfers/jobs", json=TRANSFER).json()["job"] == first
+
+    who["principal"] = OTHER
+    body = dict(TRANSFER, object_ref=other_object)
+    second = client.post("/api/fleet/arm-transfers/jobs", json=body)
+    assert second.status_code == 200, second.text
+    second = second.json()["job"]
+    assert second["mission_id"] != first["mission_id"]
+    assert first["request_key"] == second["request_key"] == TRANSFER["request_key"]
+    assert client.post("/api/fleet/arm-transfers/jobs", json=body).json()["job"] == second
+    assert len(jobs.jobs) == 2
+
+    who["principal"] = HARBOR
+    canceled = client.post("/api/fleet/arm-transfers/jobs/" + first["mission_id"] + "/cancel",
+                          json={"reason": "origin canceled"})
+    assert canceled.status_code == 200
+    assert jobs.view(first["mission_id"])["status"] == "HOLD"
+    assert jobs.view(second["mission_id"])["status"] == "PROPOSED"
+
+
 def test_r_refuses_a_workcell_no_child_owns_and_reports_an_unreachable_cell(tmp_path):
     client, nodes, _ = relay(tmp_path, ArmJobs())
     other = dict(TRANSFER, workcell_id="arm_z", instance_id="arm_z")
