@@ -3,7 +3,7 @@ import {reviewContext} from '/review-context.js';
 import {accountFetch} from '/account-session.js';
 import {showVersions,resetVersions} from '/versions.js';
 import {showAI,resetAI,updateAI,candidateOrigin} from '/ai-jobs.js';
-import {cssColor, clearPalette} from '/common/ui.js';
+import {cssColor, clearPalette, actionIcon} from '/common/ui.js';
 import {showHistory,resetHistory,feedbackPresentation} from '/history.js';
 import {reviewViewport} from '/viewport.js';
 import '/commands.js';
@@ -107,6 +107,7 @@ addEventListener('resize',()=>revealPixelFocus());
 for(const [id,key] of [['pixel-prev','ArrowLeft'],['pixel-next','ArrowRight'],['pixel-next-pending','N'],['pixel-undo','Control+Z Meta+Z']])$(id).setAttribute('aria-keyshortcuts',key);
 $('pixel-undo').title='마지막 픽셀 수정 되돌리기 · Ctrl+Z';
 const undoCaption=document.createElement('span');undoCaption.textContent='되돌리기 · Ctrl+Z';$('pixel-undo').replaceChildren(undoCaption);
+actionIcon($('pixel-undo'),'undo');
 $('pixel-approve').textContent='완료';$('pixel-approve').setAttribute('aria-label','픽셀 검수 완료');
 for(const [id,label] of [['pixel-prev','이전 사진'],['pixel-next','다음 사진'],['pixel-undo','마지막 픽셀 수정 되돌리기']]){$(id).setAttribute('aria-label',label);$(id).title=label;}
 for(const button of document.querySelectorAll('.pixel-quick-actions ui-button'))button.setAttribute('aria-label',button.title);

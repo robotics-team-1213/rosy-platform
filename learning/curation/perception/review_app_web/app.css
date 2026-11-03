@@ -400,7 +400,9 @@ ui-topbar:has([data-learning-account-entry]) { flex-wrap: wrap; }
   .pixel-editor-column .pixel-ribbon-nav, .pixel-editor-column .review-view-bar { margin-bottom: var(--space-1); }
   .pixel-editor-column { display: flex; flex-direction: column; }
   .pixel-editor-column > [aria-label="검수 작업 범위"] { order: 0; }
+  .pixel-editor-column > [aria-label="검수 작업 범위"] > label { flex: 1 1 calc((100% - var(--gap-workspace)) / 2); max-width: calc((100% - var(--gap-workspace)) / 2); }
   .pixel-editor-column #pixel-photo-navigation { order: 1; }
+  #pixel-photo-navigation #pixel-prev, #pixel-photo-navigation #pixel-next { width: var(--target-secondary); min-width: var(--target-secondary); padding-inline: var(--space-2); }
   .pixel-editor-column > .pixel-photo-surface { order: 2; }
   .pixel-editor-column > .pixel-quick-tools { order: 3; margin-top: 0; }
   .pixel-editor-column > section.pixel-photo-details { order: 4; }
