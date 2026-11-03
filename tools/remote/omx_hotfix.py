@@ -8,7 +8,7 @@
       its exit code. Records the sha in <dir>/omx-hotfix-sha for deploy.
   deploy --sha <sha> --tested-log <dir>/run-1.txt [--host user@host]
       Refuses unless that log came from `test` for this sha and its last pytest summary passed
-      without failures or errors. Unpacks `git archive` of deploy/robot and the OMX adapter plus
+      without failures or errors. Unpacks `git archive` of deploy/robot, the OMX adapter and contracts/foundation plus
       REVISION into ~/rosy-test/omx-tools-<sha10>/ (skipped when its REVISION already matches),
       then switches ~/rosy-test/omx-tools-current to it atomically. Prints folder and old target.
   status [--host user@host]
@@ -28,7 +28,9 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[2]
 HOST_ENV = "OMX_HOTFIX_HOST"
-PATHS = ("deploy/robot", "middleware/devices/omx/adapter")
+# contracts/foundation: the cell scripts import core_common (D-966 control parameters), and the site env puts
+# <tree>/contracts/foundation on PYTHONPATH like the omx_autoupdate tree
+PATHS = ("deploy/robot", "middleware/devices/omx/adapter", "contracts/foundation")
 LINK = "omx-tools-current"
 SHA_FILE = "omx-hotfix-sha"
 SSH = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", "-o", "ServerAliveInterval=15"]
