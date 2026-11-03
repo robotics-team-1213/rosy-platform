@@ -97,7 +97,10 @@ def test_cell_proposes_once_under_the_parent_service_and_r_sees_the_projection(t
     asyncio.run(nodes["R"].submit(request))
     cell = nodes["CELL-A"].store.get("R", "arm-1")
     assert cell["local_task_id"] == "physical-1" and cell["status"] == "QUEUED"
-    assert {call[:2] for call in jobs.calls} == {("control-unit:R", "harbor:move-1")}
+    assert {call[0] for call in jobs.calls} == {"control-unit:R"}
+    assert len({call[1] for call in jobs.calls}) == 1
+    assert jobs.calls[0][1].startswith("control:")
+    assert jobs.calls[0][1] != TRANSFER["request_key"]
     assert "request_key" not in jobs.calls[0][2]
     root = nodes["R"].store.get("R", "arm-1")
     assert root["owner_unit"] == "CELL-A" and root["local_task_id"] is None

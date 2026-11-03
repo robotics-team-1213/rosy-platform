@@ -62,7 +62,8 @@ class ControlUnitService:
         if jobs is None:
             raise ValueError("CONTROL_UNIT_ARM_JOBS_UNAVAILABLE")
         transfer = dict(row["request"]["transfer"])
-        request_key = transfer.pop("request_key")
+        transfer.pop("request_key")
+        request_key = "control:" + sha256("\0".join(self._key(row)).encode()).hexdigest()
         try:
             job = jobs.create(principal=principal, request_key=request_key, request=transfer)
         except PermissionError:
