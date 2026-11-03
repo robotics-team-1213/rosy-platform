@@ -50,8 +50,8 @@
 
 ## 최근 기록
 
-- 2026-11-02 · uncommitted · D-961 웹 제품 통합
-- 2026-11-02 · uncommitted · D-961 공용 이동 조작과 작업 구성
-- 2026-11-02 · 59dbc2136b · D-962 canonical Account scope closure
-- 2026-11-02 · 5f02d723d1 · D-962 independent identity backup and presentation
-- 2026-11-02 · e81af2d7c3 · D-962 independent Account artifact
+- 2026-11-04 · 8acfe2b315 · 표 갱신의 키보드 포커스 격리
+- 2026-11-04 · uncommitted · 네이티브 폼 초기화 뒤 부품 상태 재검증
+- 2026-11-04 · uncommitted · 파일 선택 오류와 네이티브 폼 유효성 일치
+- 2026-11-04 · uncommitted · 검색 선택의 화면과 호출자 상태 일치
+- 2026-11-03 · uncommitted · 자료 표의 공용 표현 연결과 정렬 선택지 입력
