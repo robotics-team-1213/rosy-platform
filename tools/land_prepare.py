@@ -212,7 +212,8 @@ def _prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, 
             except ValueError as exc:
                 raise land.Stop(f"invalid delta preparation plan: {exc}") from exc
             land.land_full.save(wt, branch, candidate, main_sha, "delta", combined,
-                                base_tier=base["tier"], flaky=land.land_full.flaky(wt, branch) + (flaky or []))
+                                base_tier=base["tier"], flaky=land.land_full.flaky(wt, branch) + (flaky or []),
+                                yields=int(base.get("yields") or 0) + 1)
         tier = "delta" if tier is not None and base is not None else None
     # Keeping an older base with --no-cache would repeat overtime on every turn.
     elif tier == "affected" and not args.no_cache:

@@ -798,3 +798,10 @@ def test_load_flaky_ids_keep_the_invocation_environment_and_refuse_unreadable_li
         ["ROSY_RUN_BROWSER_TESTS=1", "ops/test/test_x_browser.py::test_a"]]
     assert selection.load_flaky_ids(["pytest a/test ok (run-pre-1.txt)"]) == []
     assert selection.load_flaky_ids(["LOAD-FLAKY node"]) is None
+
+
+def test_a_delta_turn_stops_yielding_after_two_delta_records():
+    """D-970 1: 11-03 one ticket yielded three times while main kept moving past it."""
+    selection = load_selection()
+    assert selection.delta_yields("ticket.json", {"tier": "affected", "yields": 1})
+    assert not selection.delta_yields("ticket.json", {"tier": "affected", "yields": selection.MAX_DELTA_YIELDS})

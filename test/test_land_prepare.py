@@ -537,3 +537,11 @@ def test_a_load_flaky_pretest_keeps_its_tier_and_hands_the_ids_to_the_turn(full_
     record = json.loads(path.read_text(encoding="utf-8"))
     assert record["tier"] == "affected" and record["flaky"] == [["pkg/test/test_a.py::test_a"]]
     assert land.land_full.flaky(wt, "feat/x") == [["pkg/test/test_a.py::test_a"]]
+
+
+def test_a_delta_record_counts_its_yields(tmp_path, monkeypatch):
+    """D-970 1: each delta record carries how many delta records came before it."""
+    record = tmp_path / "record.json"
+    monkeypatch.setattr(land.land_full, "_path", lambda wt, branch: record)
+    land.land_full.save(tmp_path, "b", "c" * 40, "m" * 40, "delta", [["x/test"]], base_tier="affected", yields=2)
+    assert land.land_full.prepared(tmp_path, "b", "m" * 40)["yields"] == 2
