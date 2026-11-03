@@ -115,6 +115,9 @@ reruns. Each cause below was found from `.git/rosy-land-events.jsonl` and `.git/
    older anchor stays and the next turn picks the same folders. D-889 27 (user decision) adds a `delta`
    tier that moves the base forward but reports the tier under it. Judge it on landings started after it
    reaches main; `[land] ... delta tier` lines and `prepared` events with `tier: delta` show it working.
+11. **Speculation mostly guessed wrong.** On 11-03 (10:00-16:00) speculative prepares used 9.8 h of 43 h of test
+   time and their tree was held at 3 of 34 turns; they also kept the ticket `preparing` until done. Measure the hit
+   rate (`speculation` events, `stage: turn`, `held`) before turning it back on (`ROSY_LAND_SPECULATE=1`, D-889 28).
 
 ## 계측 전용 파일의 불필요한 FULL 승격
 
