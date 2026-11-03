@@ -76,6 +76,27 @@ stacking result is not a claim. Run `00544b84f0685933bf0ce7bb5c2c173c` (final en
 and wrote both camera pictures. The arm bases in the renders are still the CAD values, so the base plates draw toward
 the bow of the real ones, as measured above.
 
+## The real top-camera parallax centre is 143 px off
+
+The deployed object measurement (`cell_objects.top_face`, `cell_calibration.parallax`) moves a box top down to the map
+plane by scaling its pixel about `camera.center_px`, which assumes a camera looking straight down; the live arm_b configs
+use the image centre `[320, 240]` with `height_m 0.596`. The surveyed camera is tilted 13.1 deg toward the stern, so
+vertical lines converge on the nadir vanishing point K R (0, 0, 1) = **pixel (322, 383)**, 143 px lower in the image.
+The resulting error is a constant shift along the stern-bow image axis, proportional to the top's height:
+
+| Top above the map plane | Error |
+|---|---|
+| 30 mm (one layer) | 7 px, about 7 mm |
+| 60 mm | 14 mm |
+| 90 mm (three layers) | 22 mm |
+
+This fits the earlier note in `deploy/robot/omx/cell_look.py` (picks near the board about 1 cm off, map bias changing with
+position). Fix to try: `center_px: [322, 383]` in the arm configs' `cameras.top`, then compare pick offsets with the
+current value. Applied 2026-11-03 16:05 (user decision) to the active arm_b stacking config only
+(`cell-arm-b-stack.json` on the control PC; no arm session was running; backup `cell-arm-b-stack.json.before-nadir-20261103`,
+reason in `cameras.top.center_px_note`). Older configs keep `[320, 240]`. Pick accuracy with the new value is not yet
+measured on the real arm.
+
 ## Step 3: surveyed bases and belt as candidates (D-947 2, 2026-11-03)
 
 Cases `nominal-palletizing-v21-ship-surveyed-bases` (measured arm bases, arm_b yaw -94.3 deg) and
