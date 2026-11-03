@@ -38,6 +38,7 @@ python test/known_failures.py <external-log-dir>/run-1.txt
 - **43 passed, 0 skipped**, NEW/known/flaky 모두 0. Cell 전체 화면 9건, Fleet 화면 검토 4건, 공용 부품 30건이다.
 - Chromium은 승인된 원격 시험 PC에서 실행했다. Fleet 앱과 자산 서빙은 실제 구현을 사용하고, 장치 관측·계정/API 사실은 합성 fixture로 격리했다. 실물 명령·서비스 재시작·배포는 하지 않았다.
 - 캡처 조건은 dark/light, 1366×844·390×844다. 네 캡처를 생성했고 이전/이후 PC·전화 이미지를 육안으로 비교했다. JPEG는 합성 데이터만 담아 선택적 `ROSY_CAPTURE_INLINE=1` 출력으로 시험 로그에 남긴다.
+- 원본 로그의 운영자 외부 보관 위치와 로그·JPEG 바이트의 SHA-256은 [캡처 매니페스트](capture-manifest.json)에 남겼다. 원본 이미지는 Git에 넣지 않았다.
 - 카탈로그 기존 Node 시험 2건은 질량·출처·운반 표기와 API 경로가 유지됨을 확인했다.
 - 하네스 lint는 오류 0건이며 기존 검증 시점 경고는 별도다. 독립 코드 검토는 추가 지적이 없었다. 크기 검사는 통과했다.
 

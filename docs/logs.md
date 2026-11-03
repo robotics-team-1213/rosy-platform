@@ -14027,3 +14027,9 @@ osy-d395-s1d\`.
 - 증거: 11-03 10:00~16:00 rosy-land-events — spec 시험 9.8 h / 전체 43 h, 차례 held 3 / 34, 이미 통과한 호출 재실행 8.1 h. 원격 착지 회귀 27개 파일 + affected_tests 통과, 새 시험 1개.
 - gate 변화: 없음. 차례는 원래 정해진 선택을 그대로 돈다.
 - CE: 기존 교훈 갱신 — landings-gave-the-turn-back-and-reran-everything 11.
+
+## 2026-11-03 · uncommitted · Cell 표·정렬의 전체 화면 검증 기록
+
+- 변경: `validation/ui-collections-2026-11-03/result.md`와 캡처 매니페스트에 공용 표현 연결, 화면 그룹, 계정/요청 수명, 긴 출처의 열 압축·행 정렬 문제와 검증 범위를 남겼다.
+- 증거: 소스 02664861ec4a19857e9a8105c29bc48854371bc8의 원격 Chromium 43 passed/0 skipped/NEW0, 양 테마의 PC·전화 캡처 네 장과 로그의 SHA-256, 독립 코드 검토 지적 없음. 통합 검사와 착지 SHA는 별도 receipt가 소유한다.
+- gate 변화: 없음. 합성 브라우저 검증을 전체 UI/UX GO·실물·현장·배포 수용으로 올리지 않는다. CE: 해당 없음 — 원인과 재발 조건은 코드·전체 페이지 회귀·검증 기록에서 복원할 수 있다.
