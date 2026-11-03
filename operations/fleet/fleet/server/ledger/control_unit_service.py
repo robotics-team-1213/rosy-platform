@@ -152,6 +152,21 @@ class ControlUnitService:
         await self._sync(self.store.get(origin, identity))
         return self.reply(origin, identity)
 
+    async def arm_detail(self, origin, identity, kind, *, key=None, principal_id=None):
+        """D-965: evidence or a recheck of the ARM job this cell bound to the delegation; never a new action."""
+        row = self.store.get(origin, identity)
+        if row["owner_unit"] != self.unit.unit_id or not _is_arm(row["request"]) or not row["local_task_id"]:
+            raise ValueError("CONTROL_UNIT_ARM_JOB_NOT_BOUND")
+        jobs = self.arm_jobs()
+        if jobs is None:
+            raise ConnectionError("CONTROL_UNIT_ARM_JOBS_UNAVAILABLE")
+        mission = row["local_task_id"]
+        if kind == "evidence":
+            return jobs.evidence(mission)
+        if kind == "request_recheck":
+            return jobs.request_recheck(mission, key, principal_id=principal_id)
+        return jobs.read_recheck(mission, key)
+
     async def cancel(self, origin, identity, *, reason=None):
         row = self.store.request_cancel(origin, identity, reason)
         await self._sync(row)

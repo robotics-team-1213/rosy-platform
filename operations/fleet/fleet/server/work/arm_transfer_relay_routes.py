@@ -2,7 +2,7 @@
 
 The relay holds no ARM authority: the cell proposes under this unit's service principal and only the
 cell's ARM admit approves. Job and receipt come back as the cell's delegation projection; evidence and
-rechecks are forwarded to the cell's own ARM routes, which accept this unit only for jobs it proposed.
+rechecks go through the cell's control-unit API for that delegation (peer credentials reach nothing else).
 """
 from hashlib import sha256
 import sqlite3
@@ -87,7 +87,8 @@ def install_arm_transfer_relay_routes(app, *, control, require_viewer, require_p
         if row["owner_unit"] != row["request"]["target_unit"]:
             # shortcut: forwards reach the direct child only; a deeper cell needs each hop to relay too.
             raise HTTPException(409, detail={"code": "ARM_TRANSFER_RELAY_DEPTH"})
-        status, value = await call(control.peer.arm_job(row["owner_unit"], method, projected(row)["job"]["mission_id"],
+        projected(row)
+        status, value = await call(control.peer.arm_job(row["owner_unit"], method, origin, row["delegation_id"],
                                                         tail, body))
         return JSONResponse(value, status_code=status)
 

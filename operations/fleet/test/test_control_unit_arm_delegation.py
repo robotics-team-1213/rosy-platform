@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from core_common.protocol.control_units import ControlArmIngressRequest, ControlArmWorkRequest
+from fleet.server.arm_transfer_relay_routes import delegation_id
 from fleet.server.control_unit_config import ControlUnitTopology
 from fleet.server.control_unit_store import ControlUnitStore
 from fleet.server.task_service import FleetTaskService
@@ -57,6 +58,16 @@ class ArmJobs:
             if job["mission_id"] == mission_id and job["status"] == "PROPOSED":
                 job.update(status="HOLD", reason=reason)
 
+    def evidence(self, mission_id):
+        return {"evidence": {"mission_id": mission_id}}
+
+    def request_recheck(self, mission_id, recheck_key, *, principal_id):
+        self.rechecks = getattr(self, "rechecks", []) + [(mission_id, recheck_key, principal_id)]
+        return {"recheck": {"mission_id": mission_id, "recheck_key": recheck_key}}
+
+    def read_recheck(self, mission_id, recheck_key):
+        return {"recheck": {"mission_id": mission_id, "recheck_key": recheck_key}}
+
     def set(self, **changes):
         next(iter(self.jobs.values())).update(changes)
 
@@ -72,7 +83,7 @@ def cluster(tmp_path, arm_jobs):
             return await node.receive(ControlArmIngressRequest.model_validate(body), parent_id="R", principal=PARENT)
         origin, identity = path.split("/")
         if method == "POST":
-            await node.cancel(origin, identity)
+            await node.cancel(origin, identity, reason=(body or {}).get("reason"))
         return await node.read(origin, identity, for_child="R" if method == "GET" else None)
 
     for unit_id, jobs in [("R", None), ("CELL-A", arm_jobs)]:
@@ -171,8 +182,8 @@ def relay(tmp_path, jobs):
         async def __call__(self, *args, **kwargs):
             return await peer(*args, **kwargs)
 
-        async def arm_job(self, unit, method, mission_id, tail, body=None):
-            forwarded.append((unit, method, mission_id, tail, body))
+        async def arm_job(self, unit, method, origin, identity, tail, body=None):
+            forwarded.append((unit, method, origin, identity, tail, body))
             return 404, {"detail": {"code": "ARM_TRANSFER_JOB_NOT_FOUND"}}
     nodes["R"].peer = Peer()
     who["forwarded"] = forwarded
@@ -209,9 +220,10 @@ def test_r_relays_create_read_receipt_and_cancel_for_the_proposing_app_only(tmp_
     assert evidence.status_code == 404 and evidence.json()["detail"]["code"] == "ARM_TRANSFER_JOB_NOT_FOUND"
     assert client.post("/api/fleet/arm-transfers/jobs/physical-1/rechecks", json={"recheck_key": "r-1"}).status_code == 404
     assert client.get("/api/fleet/arm-transfers/jobs/physical-1/rechecks/r-1").status_code == 404
-    assert who["forwarded"] == [("CELL-A", "GET", "physical-1", "physical-evidence", None),
-                                ("CELL-A", "POST", "physical-1", "rechecks", {"recheck_key": "r-1"}),
-                                ("CELL-A", "GET", "physical-1", "rechecks/r-1", None)]
+    identity = delegation_id("harbor", "harbor:move-1")
+    assert who["forwarded"] == [("CELL-A", "GET", "R", identity, "physical-evidence", None),
+                                ("CELL-A", "POST", "R", identity, "rechecks", {"recheck_key": "r-1"}),
+                                ("CELL-A", "GET", "R", identity, "rechecks/r-1", None)]
     canceled = client.post("/api/fleet/arm-transfers/jobs/physical-1/cancel", json={"reason": "operator changed plan"})
     assert canceled.status_code == 200 and canceled.json()["job"]["status"] == "HOLD"
     assert nodes["R"].store.list()[0]["status"] == "CANCELED"
@@ -243,3 +255,16 @@ def test_a_lost_cell_link_reports_the_last_projection_without_serving_it_as_curr
     response = client.get("/api/fleet/arm-transfers/jobs/physical-1")
     assert response.status_code == 503
     assert response.json()["detail"]["last_projection"]["job_status"] == "PROPOSED"
+
+
+def test_cell_serves_evidence_and_rechecks_only_for_a_bound_arm_delegation(tmp_path):
+    jobs = ArmJobs()
+    nodes = cluster(tmp_path, jobs)
+    asyncio.run(nodes["R"].submit(ControlArmWorkRequest.model_validate(WORK)))
+    cell = nodes["CELL-A"]
+    assert asyncio.run(cell.arm_detail("R", "arm-1", "evidence")) == {"evidence": {"mission_id": "physical-1"}}
+    asyncio.run(cell.arm_detail("R", "arm-1", "request_recheck", key="r-1", principal_id="control-unit:R"))
+    assert jobs.rechecks == [("physical-1", "r-1", "control-unit:R")]
+    assert asyncio.run(cell.arm_detail("R", "arm-1", "read_recheck", key="r-1"))["recheck"]["recheck_key"] == "r-1"
+    with pytest.raises(ValueError, match="CONTROL_UNIT_ARM_JOB_NOT_BOUND"):
+        asyncio.run(nodes["R"].arm_detail("R", "arm-1", "evidence"))  # R owns no ARM job

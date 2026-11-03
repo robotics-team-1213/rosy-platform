@@ -1,7 +1,6 @@
 from dataclasses import dataclass, field
 import asyncio
 import json
-import re
 import ssl
 from pathlib import Path
 from hashlib import sha256
@@ -136,24 +135,23 @@ class ControlUnitPeers:
             suffix = "/delegations/" + path + ("/cancel" if method == "POST" else "")
         return (await self._send(unit_id, method, "/api/fleet/control-unit" + suffix, body, limit))[1]
 
-    async def arm_job(self, unit_id, method, mission_id, tail, body=None):
-        """D-965 relay: the direct child cell's own ARM job route under this unit's service principal.
+    async def arm_job(self, unit_id, method, origin, delegation_id, tail, body=None):
+        """D-965 relay: a delegated ARM job's evidence or rechecks, through the child's control-unit API.
 
-        Returns (status, body) so the cell's 404/409 reach the app unchanged; the cell checks the job is ours.
+        Returns (status, body) so the child's 404/409 reach the app unchanged; the child resolves the job.
         """
         self.config.topology.child(self.config.unit_id, unit_id)
         parts = tail.split("/")
         if not (method == "GET" and tail == "physical-evidence" or method == "POST" and tail == "rechecks"
                 or method == "GET" and len(parts) == 2 and parts[0] == "rechecks"):
             raise ValueError("INVALID_CONTROL_UNIT_PEER_PATH")
-        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,191}", mission_id):
-            raise ValueError("INVALID_CONTROL_UNIT_PEER_PATH")
+        origin, delegation_id = _identifier(origin), _identifier(delegation_id, limit=128)
         if len(parts) == 2:  # a recheck key is any trimmed control-free reference, so it travels encoded
             if not parts[1] or any(ord(c) < 32 or ord(c) == 127 for c in parts[1]) or len(parts[1]) > 160:
                 raise ValueError("INVALID_CONTROL_UNIT_PEER_PATH")
             tail = "rechecks/" + quote(parts[1], safe="")
-        return await self._send(unit_id, method, f"/api/fleet/arm-transfers/jobs/{mission_id}/{tail}", body, 131_072,
-                                raise_status=False)
+        return await self._send(unit_id, method, f"/api/fleet/control-unit/delegations/{origin}/{delegation_id}/arm/{tail}",
+                                body, 131_072, raise_status=False)
 
     async def _send(self, unit_id, method, path, body, limit, *, raise_status=True):
         payload = None if body is None else json.dumps(body, allow_nan=False).encode("utf-8")

@@ -96,8 +96,9 @@ def test_real_apps_relay_at_r_and_propose_in_the_cell_store(tmp_path, monkeypatc
             assert (job["status"], job["proposal_principal_id"]) == ("PROPOSED", "harbor")
             assert job["delegated_by"] == {"origin_unit": "R", "requested_by": "harbor"}
             evidence = await r.get(JOBS + "/" + job["mission_id"] + "/physical-evidence", headers=HARBOR)
-            assert evidence.status_code == 503  # this cell has no observer; the request still went to its own route
-            assert ("cell.test", "GET", "/api/fleet/arm-transfers/jobs/" + job["mission_id"] + "/physical-evidence",
+            assert evidence.status_code == 503  # this cell has no observer; the request still reached its delegation
+            delegation = apps["cell.test"].state.control_unit.store.list()[0]["delegation_id"]
+            assert ("cell.test", "GET", f"/api/fleet/control-unit/delegations/R/{delegation}/arm/physical-evidence",
                     "Bearer peer-R") in apps["seen"]
             cell_job = apps["cell.test"].state.arm_transfer_job_store.peek(job["mission_id"])
             assert cell_job["proposal_principal_id"] == "control-unit:R"

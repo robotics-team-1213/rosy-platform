@@ -907,7 +907,7 @@ ARM 설치가 없고 관제 단위가 설정된 Fleet(현장 R)은 `/api/fleet/a
 
 ### v1.356 Relay forwards evidence and rechecks; requesting app and cancel reason (D-965)
 
-- R relay는 `GET /jobs/{mission_id}/physical-evidence`, `POST /jobs/{mission_id}/rechecks`, `GET /jobs/{mission_id}/rechecks/{recheck_key}`를 그 작업을 가진 직접 하위 셀의 같은 경로로 R의 service principal로 전달한다. 셀이 그 작업의 제안자(R)인지 확인하고, 셀의 4xx 응답은 그대로 앱에 돌아간다. recheck 요청과 취소는 제안한 앱만, 조회는 제안한 앱 또는 operator만 한다. 더 깊은 셀은 409 `ARM_TRANSFER_RELAY_DEPTH`다.
+- R relay는 `GET /jobs/{mission_id}/physical-evidence`, `POST /jobs/{mission_id}/rechecks`, `GET /jobs/{mission_id}/rechecks/{recheck_key}`를 그 작업의 위임을 가진 직접 하위 셀로 보낸다. 셀 쪽 경로는 관제 단위 API 안의 `GET .../delegations/{origin}/{id}/arm/physical-evidence`, `POST .../arm/rechecks`, `GET .../arm/rechecks/{key}`다. 관제 단위 자격은 그 밖의 경로에 닿지 않는다(credential scope 유지). 셀은 위임에 결속된 자기 ARM 작업만 찾고, 증거가 없으면 409 `ARM_TRANSFER_PHYSICAL_EVIDENCE_UNAVAILABLE`, recheck 충돌은 409 `ARM_TRANSFER_RECHECK_CONFLICT`, 관측 서비스가 없으면 503이다. 셀의 4xx는 그대로 앱에 돌아간다. recheck 요청은 직접 부모 service만, 조회는 직접 부모 또는 셀 viewer가 한다. relay에서 recheck 요청·취소는 제안한 앱만, 조회는 제안한 앱 또는 operator만 한다. 더 깊은 셀은 409 `ARM_TRANSFER_RELAY_DEPTH`다.
 - `ControlArmTransferCandidate.requested_by`(선택, 표시 전용): R이 인증한 앱 principal. 셀에서 권한을 주지 않는다.
 - `ArmTransferJobSnapshot.delegated_by`(선택): 위임으로 생긴 작업이면 `{origin_unit, requested_by}`, 아니면 null. 셀 Fleet 콘솔은 「요청한 앱」으로 보여 준다. 제안자·승인 규칙은 바뀌지 않는다.
 - 위임 취소는 선택 본문 `ControlCancelRequest {reason?}`를 받는다(`POST .../delegations/{origin}/{id}/cancel`). 이유는 위임 snapshot의 `cancel_reason`으로 남고 하위로 그대로 전달된다. relay의 앱 취소 reason이 셀의 ARM 취소·거둬들임 reason이 된다(없으면 `control-unit-cancel`).

@@ -44,6 +44,30 @@ class DelegatedArmJobs:
     def receipt(self, mission_id):
         return None if self.observation is None else self.observation.receipt(mission_id)
 
+    def _observed(self):
+        if self.observation is None:
+            raise ConnectionError("ARM transfer observer is not installed")
+        return self.observation
+
+    def evidence(self, mission_id):
+        result = self._observed().evidence(mission_id)
+        if result is None:
+            raise ValueError("ARM_TRANSFER_PHYSICAL_EVIDENCE_UNAVAILABLE")
+        return result
+
+    def request_recheck(self, mission_id, recheck_key, *, principal_id):
+        return self._recheck(lambda: self._observed().rechecks.request(mission_id, recheck_key, principal_id=principal_id))
+
+    def read_recheck(self, mission_id, recheck_key):
+        return self._recheck(lambda: self._observed().rechecks.read(mission_id, recheck_key))
+
+    @staticmethod
+    def _recheck(function):
+        try:
+            return {"recheck": function()}
+        except MissionConflict:
+            raise ValueError("ARM_TRANSFER_RECHECK_CONFLICT") from None
+
     def cancel(self, mission_id, *, reason):
         """Withdraw an unadmitted proposal; cancel a prepared attempt through the existing dispatcher."""
         if self.store.peek(mission_id)["status"] == "PROPOSED":
