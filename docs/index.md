@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-11-03 · uncommitted · feat(isaac): 팔마다 정렬 자리·경유점, 완성 적층 실물 시점 렌더, 컨테이너 실행 65분
 - 2026-11-03 · uncommitted · fix(landing): delta 차례 넘김은 깨끗한 아래 단계가 있을 때만 (D-889 추가 27 보완)
 - 2026-11-03 · 85ec06aec9 · docs(solutions): 사이트 갱신 체인 정지 진단 순서 기록
 - 2026-11-03 · uncommitted · fix(remote): omx_hotfix가 contracts/foundation도 올린다
 - 2026-11-03 · uncommitted · feat(isaac): 실측 팔 받침·벨트 후보 케이스와 이름 있는 계획 장면
-- 2026-11-03 · uncommitted · test(remote): imported fake-host helper의 HEADROOM 격리

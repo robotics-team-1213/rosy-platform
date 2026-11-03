@@ -13940,3 +13940,9 @@ osy-d395-s1d\`.
 - 증거: 14:18·14:34 control-unit-arm-candidate가 tier None(LOAD-FLAKY) 사전 시험 위에서 두 번 넘기고 저장 없이 돌아옴(rosy-land-events). 원격 착지 회귀 27개 파일 + affected_tests 통과, 새 시험 1개.
 - gate 변화: 없음. 단계 없는 착지는 D-889 27 이전처럼 차례 안에서 delta 시험 폴더를 돌린다.
 - CE: 기존 교훈 갱신 — landings-gave-the-turn-back-and-reran-everything 10에 이 조건을 더함.
+
+## 2026-11-03 · uncommitted · feat(isaac): 팔마다 정렬 자리·경유점, 완성 적층 실물 시점 렌더, 컨테이너 실행 65분
+- 변경: `leveling_centers_m`·`leveling_vias_m`(팔마다, 없으면 공용 자리), 실측 케이스는 각 팔 앞 자리(받침에서 벨트 반대쪽 170 mm)와 arm_a 경유점. 실측 벨트 통로는 바닥만 28 mm 낮추고 완화 바닥도 따라감. 첫 시행 끝에 `real-top-final.png`·`real-side-final.png`. 컨테이너 실행 한도 2,310→3,900 s(유닛 4,200 s, 카탈로그 같음). top 카메라 시차 중심 기록(검증 기록).
+- 증거: 실측 받침 케이스가 2,310 s 한도에서 8/9까지 놓음(run 5d3a, `runtime_limit`). 계획기 시험(벨트·적층·자기 정렬 자리 도달, 낮춘 벨트 수직 하강, arm_a 경유점) 원격 통과.
+- gate 변화: 없음. CAD 케이스 그대로.
+- CE: 해당 없음 — 원인과 고침이 시험·주석·검증 기록에 있다.
