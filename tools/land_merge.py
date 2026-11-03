@@ -271,6 +271,30 @@ def plan(wt: Path, conflicts: dict[str, dict[int, str]],
     return resolved, manual
 
 
+def stale_adr_rows(wt: Path) -> tuple[bytes, list[str]]:
+    """The ADR Log without the merge base's copy of a row the other side changed, and the ids fixed.
+
+    The Log merges with merge=union: one side's edit of a row beside the other side's insertion keeps both copies,
+    so lint stopped on "duplicate index row" (D-974: control-terms-v3, learning-image-upload, 2026-11-04). A row
+    both sides changed stays duplicated for a person."""
+    path = wt / ADR_LOG
+    base = subprocess.run(["git", "-C", str(wt), "merge-base", "HEAD", "MERGE_HEAD"], capture_output=True, text=True,
+                          env=ENV).stdout.split()
+    if not path.is_file() or not base:
+        return b"", []
+    old = set(subprocess.run(["git", "-C", str(wt), "show", f"{base[0]}:{ADR_LOG}"], capture_output=True,
+                             env=ENV).stdout.splitlines())
+    lines = path.read_bytes().splitlines(keepends=True)
+    rows: dict[bytes, list[int]] = {}
+    for i, line in enumerate(lines):
+        if m := ADR_ROW.match(line):
+            rows.setdefault(m.group(1), []).append(i)
+    drop = {stale[0]: n for n, at in rows.items() if len(at) == 2
+            and len(stale := [i for i in at if lines[i].rstrip(b"\r\n") in old]) == 1}
+    fixed = sorted({f"D-{int(n)}" for n in drop.values()}, key=lambda i: int(i[2:]))
+    return b"".join(line for i, line in enumerate(lines) if i not in drop), fixed
+
+
 def landed_gaps(wt: Path) -> tuple[bytes, list[str]]:
     """adr_gaps.txt without the lines whose ADR now exists (docs/adr file or Log row), and the ids dropped.
 
