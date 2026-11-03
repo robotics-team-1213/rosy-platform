@@ -113,6 +113,6 @@ for _name, _offset in (('y060', .0006), ('y070', .0007), ('y-060', -.0006), ('y-
 # kept). The belt by D435 depth at the belt end: 28 mm below the CAD face.
 SURVEYED_BASES = dict(arm_bases_m=[[.116, -.164, .072], [.104, .153, .072]], arm_base_yaws_rad=[math.pi/2, math.radians(-94.3)])
 FIXTURE_OVERRIDES['nominal-palletizing-v21-ship-surveyed-bases'] = dict(FIXTURE_OVERRIDES['nominal-palletizing-v21-ship'],
-                                                                        **SURVEYED_BASES)
+                                                                        planning_scene='surveyed-bases-20261103', **SURVEYED_BASES)
 FIXTURE_OVERRIDES['nominal-palletizing-v21-ship-surveyed'] = dict(FIXTURE_OVERRIDES['nominal-palletizing-v21-ship-surveyed-bases'],
-                                                                  belt_drop_m=.028)
+                                                                  planning_scene='surveyed-cell-20261103', belt_drop_m=.028)

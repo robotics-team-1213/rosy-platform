@@ -160,7 +160,8 @@ def test_new_case_is_bound_to_immutable_scene_and_old_case_is_preserved():
     assert len(f.plan(True)) == 3
 
 
-@pytest.mark.parametrize('case',['nominal','column'])
+@pytest.mark.parametrize('case',['nominal','column','nominal-palletizing-v21-ship','nominal-palletizing-v21-ship-surveyed-bases',
+                                 'nominal-palletizing-v21-ship-surveyed'])
 def test_three_layer_carry_and_release_targets_are_reachable_by_the_owner(tmp_path,case):
     from mapped_stack_task import Planner
     fixture = f.container_fixture(layers=3, case=case)
