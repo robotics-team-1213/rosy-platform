@@ -77,8 +77,8 @@
 
 ## 최근 기록
 
+- 2026-11-03 · 2aec802f8d · fix(site): preserve release metadata in signer dry run
 - 2026-11-03 · b741d370f0 · fix(site): require the configured signed companion before runtime acceptance
 - 2026-11-03 · uncommitted · docs(release): record one reviewed historical Git-tree tuple
 - 2026-11-03 · f81b8315d0 · fix(omx): 실측 순상승과 정착 home 증거로만 복구 완료
 - 2026-11-03 · 3a2fbd1f9a · feat(site): 서명 PC의 사이트 즉시 반영 푸시와 오분류 제목 교정
-- 2026-11-02 · 5eff2fd4d0 · fix(omx): 빈 관측과 관측 실패 구분

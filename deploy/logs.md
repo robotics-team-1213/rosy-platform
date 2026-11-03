@@ -4464,3 +4464,11 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - Evidence: commit 8ae0f56199 reproduced four failures/four passes; independently reviewed commit b741d370f0 passed all149 site-updater/publisher tests, zero skips/NEW/known/flaky. The exact historical Git-tree baseline row is agent-reviewed, with no values or broad exceptions.
 - gate 변화: signed image identity, Compose hash, read-only/unprivileged checks and field acceptance boundaries remain enforced. Qualified FULL/public CI are separate pending checks.
 - CE: no additional lesson; explicit presence regressions cover this correction.
+
+
+## 2026-11-03 · 2aec802f8d · fix(site): preserve release metadata in signer dry run
+
+- Change: the stale-title repair entry point returns immediately in dry-run mode. Normal signed-release repair, signing and host notification keep their existing paths.
+- Evidence: test-only commit ff6e90866e reproduced one expected failure because dry-run changed a signed release title and body. Independently reviewed fix tree a06dcd67131c16057626835ccd97c890f99c7f6e then passed all 63 tests in test_site_auto_sign, test_site_candidate_signing and test_site_candidate_workflow, zero skips. Official remote logs are feedback-site-signer-dryrun-red-20261103/run-1.txt and feedback-site-signer-dryrun-green-20261103/run-1.txt in the external temporary log root.
+- gate 변화: none. No actual GitHub release edits, signing-PC changes, host notification, robot motion or physical acceptance were performed by these fake-runner regressions. Qualified FULL and public CI remain pending.
+- CE: no additional lesson; the cause and prevention are explicit in the two-line guard and the mutation regression.
