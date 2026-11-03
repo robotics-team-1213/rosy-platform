@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 
 import land  # noqa: E402
+from harness import affected_exclusive as exclusive  # noqa: E402
 from test_land import commit, git, repos  # noqa: E402,F401  (land.py's fixture repos)
 
 
@@ -490,3 +491,57 @@ def test_a_delta_record_reports_the_tier_under_it_and_is_never_full(tmp_path, mo
     land.land_full.save(tmp_path, "b", "c" * 40, "m" * 40, "delta", [["fleet/test"]])
     assert land.land_full.prepared(tmp_path, "b", "m" * 40) is None
     assert json.loads(record.read_text(encoding="utf-8"))["tier"] == "delta"
+
+
+@pytest.mark.parametrize("malformed", [False, True])
+def test_delta_preparation_validates_contexts_and_preserves_one_timing_plan(repos, monkeypatch, malformed):
+    main, wt = repos
+    commit(main, {"tools/harness/affected_exclusive.py":
+                  (ROOT / "tools/harness/affected_exclusive.py").read_text(encoding="utf-8"),
+                  exclusive.TARGET: "def test_stub(): pass\n"}, "main owns timing support")
+    base = git(main, "rev-parse", "HEAD")
+    git(wt, "merge", "--no-edit", base)
+    candidate = git(wt, "rev-parse", "HEAD")
+    prepared = [["test", "--ignore=" + exclusive.TARGET], list(exclusive.DEDICATED)]
+    land.land_full.save(wt, "feat/x", candidate, base, "full", prepared)
+    path = land.land_full._path(wt, "feat/x")
+    original = path.read_bytes()
+    monkeypatch.setattr(land.land_guards, "first", lambda *a, **k: [])
+    monkeypatch.setattr(land.land_speculate, "prepare", lambda *a, **k: None)
+    monkeypatch.setattr(land, "run_tests", lambda *a, **k: [])
+    delta = [["pkg/test"], ["pkg/test"], list(exclusive.DEDICATED) + (["-k", "filtered"] if malformed else [])]
+    args = land.argparse.Namespace(tests="auto", no_cache=False)
+    def prepare():
+        land.land_prepare.prepare(land, wt, "feat/x", args, sys.executable, None, None,
+                                  delta, land.land_selection.DELTA_NOTE + " fixture")
+    if malformed:
+        with pytest.raises(land.Stop, match="delta.*plan"):
+            prepare()
+        assert path.read_bytes() == original
+    else:
+        prepare()
+        record = json.loads(path.read_text(encoding="utf-8"))
+        assert record["tier"] == "delta" and record["base_tier"] == "full"
+        assert record["invocations"] == prepared + [["pkg/test"], ["pkg/test"]]
+        assert land.land_full.restore(wt, "feat/x") == base
+
+
+def test_a_load_flaky_pretest_keeps_its_tier_and_hands_the_ids_to_the_turn(full_anchor, monkeypatch):
+    """D-970 4: one LOAD-FLAKY id no longer voids the pretest; the record keeps it for the turn to rerun alone.
+    An explicit FULL witness stays strict."""
+    main, wt, base, candidate, path, original = full_anchor
+    line = "pytest pkg/test ok (run-pre-1.txt), LOAD-FLAKY ['pkg/test/test_a.py::test_a']"
+    monkeypatch.setattr(land, "run_tests", lambda *a, **k: [line])
+    args = land.argparse.Namespace(tests="auto", no_cache=True)
+    land.land_prepare.prepare(land, wt, "feat/x", args, sys.executable, None, None, [["pkg/test"]], "")
+    record = json.loads(path.read_text(encoding="utf-8"))
+    assert record["tier"] == "affected" and record["flaky"] == [["pkg/test/test_a.py::test_a"]]
+    assert land.land_full.flaky(wt, "feat/x") == [["pkg/test/test_a.py::test_a"]]
+
+
+def test_a_delta_record_counts_its_yields(tmp_path, monkeypatch):
+    """D-970 1: each delta record carries how many delta records came before it."""
+    record = tmp_path / "record.json"
+    monkeypatch.setattr(land.land_full, "_path", lambda wt, branch: record)
+    land.land_full.save(tmp_path, "b", "c" * 40, "m" * 40, "delta", [["x/test"]], base_tier="affected", yields=2)
+    assert land.land_full.prepared(tmp_path, "b", "m" * 40)["yields"] == 2

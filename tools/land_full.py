@@ -17,6 +17,7 @@ import subprocess
 from pathlib import Path
 
 from land_merge import conflict_stages, resolver
+from harness import affected_exclusive
 
 RECORDS = "rosy-land-full"
 
@@ -32,11 +33,24 @@ def _path(wt: Path, branch: str) -> Path:
 
 
 def save(wt: Path, branch: str, candidate: str, main: str, tier: str | None = None,
-         invocations: list[list[str]] | None = None, base_tier: str | None = None) -> None:
+         invocations: list[list[str]] | None = None, base_tier: str | None = None,
+         flaky: list[list[str]] | None = None, yields: int = 0) -> None:
     path = _path(wt, branch)
     path.parent.mkdir(parents=True, exist_ok=True)
     record = {"candidate": candidate, "main": main, "tier": tier, "invocations": invocations}
-    path.write_text(json.dumps({**record, **({"base_tier": base_tier} if base_tier else {})}), encoding="utf-8")
+    extra = {**({"base_tier": base_tier} if base_tier else {}), **({"flaky": flaky} if flaky else {}),
+             **({"yields": yields} if yields else {})}
+    path.write_text(json.dumps({**record, **extra}), encoding="utf-8")
+
+
+def flaky(wt: Path, branch: str) -> list[list[str]]:
+    """D-970 4: invocations of node ids the saved pretest passed only when rerun alone (LOAD-FLAKY); the turn runs
+    them again."""
+    try:
+        runs = json.loads(_path(wt, branch).read_text(encoding="utf-8")).get("flaky") or []
+    except (OSError, ValueError, AttributeError):
+        return []
+    return [r for r in runs if isinstance(r, list) and r and all(isinstance(w, str) and w for w in r)]
 
 
 def prepared(wt: Path, branch: str, main: str | None) -> dict | None:
@@ -63,6 +77,11 @@ def restore(wt: Path, branch: str) -> str | None:
     try:
         record = json.loads(_path(wt, branch).read_text(encoding="utf-8"))
         candidate, main = record["candidate"], record["main"]
+        tier = record.get("base_tier") if record.get("tier") == "delta" else record.get("tier")
+        if (tier == "full"
+                and _git(wt, "cat-file", "-e", "main:tools/harness/affected_exclusive.py").returncode == 0
+                and not affected_exclusive.canonical_full(record.get("invocations", []))):
+            return None  # Old FULL plans require a fresh prepare once main owns the strict timing plan.
     except (OSError, ValueError, KeyError, TypeError):
         return None
     if record.get("tier") == "carried":

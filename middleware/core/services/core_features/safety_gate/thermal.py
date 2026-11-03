@@ -131,9 +131,18 @@ class ThermalMonitor:
         level = max((level for level, _ in reasons), key=_RANK.__getitem__, default=OK)
         # A reading that raised the level and then vanished (a hot motor stops answering, the
         # probe fails) holds the level instead of reading as cool.
-        motor_known = any(m["temperature_c"] is not None for m in motors)
+        motor_lost = False
+        for reason in self.reasons:
+            if not reason.startswith("motor_"):
+                continue
+            motor = next((m for m in motors if reason.startswith(f"motor_{m['id']}_")), None)
+            fields = (("hardware_error",) if reason.endswith(("_overheating", "_input_voltage"))
+                      else ("temperature_c", "temperature_limit_c"))
+            if motor is None or any(motor[field] is None for field in fields):
+                motor_lost = True
+                break
         lost = ((self.soc_c is None and any(r.startswith("soc_") for r in self.reasons))
-                or (not motor_known and any(r.startswith("motor_") for r in self.reasons)))
+                or motor_lost)
         if lost and _RANK[self.level] > _RANK[level]:
             # Keep the reasons that raised it, so the hold lasts until a fresh reading is cool.
             kept = [r for r in self.reasons if r != "readings_lost"]
