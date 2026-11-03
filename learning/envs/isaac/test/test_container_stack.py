@@ -322,9 +322,10 @@ def test_every_ship_case_is_accepted_by_the_isaac_task_command_line():
 
 
 @pytest.mark.parametrize('case', ['nominal-palletizing-v21-ship-surveyed-bases', 'nominal-palletizing-v21-ship-surveyed'])
-def test_surveyed_bases_reach_belt_and_stack_but_not_the_bow_leveling_spot(tmp_path, case):
-    """Cell survey 2026-11-03: from the measured bases (24-36 mm toward the stern) both arms still reach the belt pickup
-    and every stack target, but arm_a no longer reaches the leveling spot past the bow (x -0.12): it needs a new place."""
+def test_surveyed_bases_reach_belt_stack_and_their_own_leveling_spot(tmp_path, case):
+    """Cell survey 2026-11-03: from the measured bases (24-36 mm toward the stern) arm_a no longer reaches the shared
+    leveling spot past the bow (x -0.12, 0.287 m), so each arm levels on its own spot in front of it; both arms still
+    reach the belt pickup and every stack target."""
     from mapped_stack_task import Planner
     fixture = f.container_fixture(layers=3, case=case)
     planner = Planner(tmp_path, scene=fixture['planning_scene'], tcp_x_m=fixture['tcp_offset_m'][0])
@@ -334,8 +335,13 @@ def test_surveyed_bases_reach_belt_and_stack_but_not_the_bow_leveling_spot(tmp_p
         return planner.request('homes', bases=fixture['arm_bases_m'], base_yaws=fixture['arm_base_yaws_rad'], points=points)
     for arm in (0, 1):
         reach(arm, [*fixture['pickup_center_m'][:2], fixture['carry_height_m']])
+        spot = f.leveling_center(fixture, arm)
+        reach(arm, [*spot[:2], fixture['leveling_carry_height_m']])
+        reach(arm, [*spot[:2], spot[2]+.015+fixture['release_clearance_m']])
         for item in f.plan(True, fixture=fixture):
             if item['arm'] == arm:
                 reach(arm, [*item['target'][:2], fixture['carry_height_m']])
+    shared = f.container_fixture(layers=3, case='nominal-palletizing-v21-ship')['leveling_center_m']
     with pytest.raises(ValueError, match='UNREACHABLE'):
-        reach(0, [*fixture['leveling_center_m'][:2], fixture['leveling_carry_height_m']])
+        reach(0, [*shared[:2], .13])
+    assert all(abs(c[1]) > .096+.045 for c in fixture['leveling_centers_m'])  # off the plate (half width 96 mm) with the box

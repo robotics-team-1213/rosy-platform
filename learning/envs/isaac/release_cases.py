@@ -112,6 +112,10 @@ for _name, _offset in (('y060', .0006), ('y070', .0007), ('y-060', -.0006), ('y-
 # candidates side by side (D-947 2). arm_b (index 1) by FK of its own joint states; arm_a by its base plate centre (no FK, yaw
 # kept). The belt by D435 depth at the belt end: 28 mm below the CAD face.
 SURVEYED_BASES = dict(arm_bases_m=[[.116, -.164, .072], [.104, .153, .072]], arm_base_yaws_rad=[math.pi/2, math.radians(-94.3)])
+# From these bases arm_a cannot reach the shared leveling spot past the bow (0.287 m), so each arm levels on its own spot:
+# the user's slot in front of each arm (plan 2026-10-31: about 170 mm from the base away from the belt, off the plate).
+SURVEYED_BASES.update(leveling_centers_m=[[.116-.17, -.164, .072], [.104-.17, .153, .072]], leveling_via_m=None,
+                      leveling_carry_height_m=.212)
 FIXTURE_OVERRIDES['nominal-palletizing-v21-ship-surveyed-bases'] = dict(FIXTURE_OVERRIDES['nominal-palletizing-v21-ship'],
                                                                         planning_scene='surveyed-bases-20261103', **SURVEYED_BASES)
 FIXTURE_OVERRIDES['nominal-palletizing-v21-ship-surveyed'] = dict(FIXTURE_OVERRIDES['nominal-palletizing-v21-ship-surveyed-bases'],

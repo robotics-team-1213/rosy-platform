@@ -6,7 +6,7 @@ from pathlib import Path
 import subprocess
 
 from guarded_release import descend
-from mapped_stack_fixture import CUBE_FIXTURE, DT, FIXTURE, PROFILE, ROOT, belt_transport_observed, cube_release_ready, cube_release_target, free_lift, grip_duration, home, judge, plan, stable_box, leveling_release_target, leveling_box_stable, leveling_sequence_observed, norm, PackingFootprintUnavailable, prefix_held, measured_motion
+from mapped_stack_fixture import CUBE_FIXTURE, DT, FIXTURE, PROFILE, ROOT, belt_transport_observed, cube_release_ready, cube_release_target, free_lift, grip_duration, home, judge, plan, stable_box, leveling_release_target, leveling_box_stable, leveling_center, leveling_sequence_observed, norm, PackingFootprintUnavailable, prefix_held, measured_motion
 
 
 def stable_window(snapshot,step,ok,failure,check=None,boxes=None):
@@ -146,15 +146,16 @@ def build_map(world, stage, fixture=FIXTURE):
             position=np.array([.3595,.467,.009]),scale=np.array([.245,.760,.018]),
             color=np.array([.65,.64,.54])))
     if fixture.get('leveling_protocol'):
-        center, size = fixture['leveling_center_m'],fixture['leveling_size_m']
-        for axis in (0,1):
-            for side,sign in enumerate((-1,1)):
-                position=np.array([*center[:2],center[2]+.0004])
-                position[1-axis]+=sign*size[1-axis]/2
-                scale=np.array([.0006,.0006,.0006]);scale[axis]=size[axis]
-                name=f'LevelingBoundary{axis}_{side}'
-                world.scene.add(VisualCuboid('/World/'+name,name=name,size=1.,
-                    position=position,scale=scale,color=np.array([.25,.65,.75])))
+        size = fixture['leveling_size_m']
+        for spot, center in enumerate(fixture.get('leveling_centers_m') or [fixture['leveling_center_m']]):
+            for axis in (0,1):
+                for side,sign in enumerate((-1,1)):
+                    position=np.array([*center[:2],center[2]+.0004])
+                    position[1-axis]+=sign*size[1-axis]/2
+                    scale=np.array([.0006,.0006,.0006]);scale[axis]=size[axis]
+                    name=f'LevelingBoundary{axis}_{side}'+(f'_{spot}' if spot else '')
+                    world.scene.add(VisualCuboid('/World/'+name,name=name,size=1.,
+                        position=position,scale=scale,color=np.array([.25,.65,.75])))
     count = 0
     for path in paths:
         for a, b in zip(path, path[1:]):
@@ -411,7 +412,7 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
                     raise ValueError('grasp-hold check complete; placement not attempted')
                 if fixture.get('leveling_protocol'):
                     leveling = layer['leveling'] = dict(arm=arm,grasp_samples=[],lift_samples=[],settle_samples=[])
-                    center = fixture['leveling_center_m']
+                    center = leveling_center(fixture, arm)
                     leveling_yaw = fixture['leveling_yaws_rad'][arm]
                     level_carry = fixture.get('leveling_carry_height_m', carry_height)
 
