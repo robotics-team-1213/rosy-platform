@@ -134,6 +134,35 @@ def test_sample_rejects_unbounded_points_and_stale_version(tmp_path):
     assert review_masks.get(store, 0)['version'] == 0
 
 
+@pytest.mark.parametrize('action', ['sample', 'polygon'])
+def test_protected_selection_preserves_distinct_labels_and_explicit_replacement(tmp_path, action):
+    store = bound_store(tmp_path)
+    marked = review_masks.update(store, 0, {'version': 0, 'action': 'paint',
+                                          'label': 2, 'radius': 0, 'points': [[2, 2]]}, Conflict)
+    before = review_masks.pixels(store, marked).copy()
+    body = {'version': marked['version'], 'label': 3, 'preserve_existing': True,
+            'seeds': [[0, 0]], 'tolerance': 100,
+            'points': [[0, 0], [31, 0], [31, 23], [0, 23]]}
+    if action == 'sample':
+        import cv2
+        png, count, _ = review_masks.preview(store, 0, body, Conflict)
+        preview = cv2.imdecode(np.frombuffer(png, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
+        assert count == before.size - 1
+        assert preview[2, 2] == 255
+    saved = review_masks.update(store, 0, dict(body, action=action), Conflict)
+    after = review_masks.pixels(store, saved)
+    assert after[2, 2] == 2 and np.all(after[before == 255] == 3)
+    assert saved['status'] == 'pending'
+    restored = review_masks.update(store, 0, {'version': saved['version'], 'action': 'undo'}, Conflict)
+    assert np.array_equal(review_masks.pixels(store, restored), before)
+    replaced = review_masks.update(store, 0, dict(body, action=action, version=restored['version'],
+                                                preserve_existing=False), Conflict)
+    assert np.all(review_masks.pixels(store, replaced) == 3)
+    with pytest.raises(ValueError, match='boolean'):
+        review_masks.update(store, 0, dict(body, action=action, version=replaced['version'],
+                                         preserve_existing='true'), Conflict)
+
+
 def test_flood_refused_on_excluded_frame_and_demotes_approval(tmp_path):
     pytest.importorskip('cv2'), pytest.importorskip('numpy')
     store = bound_store(tmp_path)

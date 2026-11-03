@@ -76,6 +76,62 @@ def open_pixels(page, store, expect, index=0):
     expect(page.locator('#pixel-status')).to_contain_text('v0')
 
 
+@pytest.mark.parametrize('width', [1440, 390])
+def test_protected_point_selection_background_completion_and_visible_shortcuts(browser_workspace, width):
+    from review_app import Conflict
+    page, store, expect = browser_workspace
+    page.set_viewport_size({'width': width, 'height': 844})
+    open_pixels(page, store, expect)
+    review_masks.update(store, 0, {'version': 0, 'action': 'paint', 'label': 2,
+                                  'radius': 0, 'points': [[2, 2]]}, Conflict)
+    page.locator('#pixel-reload').click()
+    expect(page.locator('#pixel-status')).to_contain_text('v1')
+    expect(page.locator('#pixel-preserve')).to_be_checked()
+    expect(page.locator('#pixel-shortcuts')).to_contain_text('Ctrl+Z')
+    expect(page.locator('#pixel-shortcuts')).to_contain_text('Esc')
+    expect(page.locator('#pixel-shortcuts')).to_contain_text('Enter')
+    expect(page.locator('#pixel-undo')).to_contain_text('Ctrl+Z')
+    page.locator('#pixel-class').select_option('3')
+    canvas = page.locator('#pixel-canvas')
+    canvas.click(position={'x': 10, 'y': 10})
+    expect(page.locator('#pixel-draft')).to_contain_text('767픽셀 선택')
+    expect(page.locator('#pixel-draft')).to_contain_text('색상 허용치')
+    page.locator('#pixel-sample-apply').click()
+    expect(page.locator('#pixel-status')).to_contain_text('v2')
+    marked = review_masks.pixels(store, review_masks.get(store, 0))
+    assert marked[2, 2] == 2 and marked[10, 10] == 3
+    canvas.focus()
+    page.keyboard.press('Control+z')
+    expect(page.locator('#pixel-status')).to_contain_text('v3')
+    before = review_masks.pixels(store, review_masks.get(store, 0)).copy()
+    finish = page.locator('#pixel-fill-unknown')
+    expect(finish).to_have_text('나머지 배경으로 채우기')
+    expect(finish).to_have_attribute('kind', 'primary')
+    page.once('dialog', lambda dialog: dialog.accept())
+    finish.click()
+    expect(page.locator('#pixel-status')).to_contain_text('v4')
+    after = review_masks.pixels(store, review_masks.get(store, 0))
+    assert np.array_equal(after[before != 255], before[before != 255])
+    assert np.all(after[before == 255] == 0)
+    assert review_masks.get(store, 0)['status'] == 'pending'
+    expect(page.locator('#pixel-approve')).to_be_disabled()
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+        target = Path(output)
+        target.mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(target / f'pixel-protected-background-{width}.png'), full_page=True)
+    canvas.focus()
+    page.keyboard.press('Control+z')
+    expect(page.locator('#pixel-status')).to_contain_text('v5')
+    assert np.array_equal(review_masks.pixels(store, review_masks.get(store, 0)), before)
+    page.locator('#pixel-preserve').uncheck()
+    canvas.click(position={'x': 10, 'y': 10})
+    expect(page.locator('#pixel-draft')).to_contain_text('768픽셀 선택')
+    page.locator('#pixel-sample-apply').click()
+    expect(page.locator('#pixel-status')).to_contain_text('v6')
+    assert np.all(review_masks.pixels(store, review_masks.get(store, 0)) == 3)
+
+
 @pytest.mark.parametrize('width', [320, 390, 768, 1440])
 @pytest.mark.parametrize('theme', ['dark', 'light'])
 @pytest.mark.parametrize('view', ['object', 'pixel'])
