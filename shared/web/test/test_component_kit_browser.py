@@ -89,6 +89,35 @@ def test_bulk_selection_is_explicit_and_survives_sort(gallery):
     expect(page.locator("#select-page")).not_to_be_checked()
 
 
+@pytest.mark.parametrize("control", ["open", "select"])
+def test_table_refresh_preserves_focus_only_inside_its_own_rows(gallery, control):
+    from playwright.sync_api import expect
+    page = gallery
+    page.evaluate("""async () => {
+      const {createDataTable} = await import('/common/collection-controls.js');
+      window.focusTables = ['first-table', 'second-table'].map(id => {
+        const table = createDataTable({id, columns: [{label: '이름', text: item => item.label}],
+          onOpen: () => {}});
+        table.set([{id: 'shared-row', label: id}]);
+        document.body.append(table.element);
+        return table;
+      });
+    }""")
+    first = page.locator(f'#first-table [data-{control}="shared-row"]')
+    second = page.locator(f'#second-table [data-{control}="shared-row"]')
+    second.focus()
+    page.evaluate("focusTables[0].set([{id: 'shared-row', label: '갱신된 첫째'}])")
+    expect(second).to_be_focused()
+    page.evaluate("focusTables[1].set([{id: 'shared-row', label: '갱신된 둘째'}])")
+    expect(second).to_be_focused()
+    first.focus()
+    page.evaluate("focusTables[1].clearSelection()")
+    expect(first).to_be_focused()
+    page.evaluate("focusTables[0].selectPage(true)")
+    expect(first).to_be_focused()
+    expect(page.locator('#first-table [data-select="shared-row"]')).to_be_checked()
+
+
 def test_list_toolbar_uses_owner_sort_choices_and_reports_selected_value(gallery):
     from playwright.sync_api import expect
     page = gallery
