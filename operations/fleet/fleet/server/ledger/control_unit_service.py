@@ -62,7 +62,8 @@ class ControlUnitService:
         if jobs is None:
             raise ValueError("CONTROL_UNIT_ARM_JOBS_UNAVAILABLE")
         transfer = dict(row["request"]["transfer"])
-        request_key = transfer.pop("request_key")
+        transfer.pop("request_key")
+        request_key = "control-unit:" + sha256("\0".join(self._key(row)).encode()).hexdigest()
         try:
             job = jobs.create(principal=principal, request_key=request_key, request=transfer)
         except PermissionError:
@@ -157,6 +158,9 @@ class ControlUnitService:
         return self.reply(origin, identity)
 
     def _local_result(self, row, status, result):
+        if _is_arm(row["request"]) and result.get("job") is not None:
+            result = {**result, "job": {**result["job"],
+                      "request_key": row["request"]["transfer"]["request_key"]}}
         if row["status"] == status and row["result"] == result:
             return row
         return self.store.project(*self._key(row), owner_unit=self.unit.unit_id,
