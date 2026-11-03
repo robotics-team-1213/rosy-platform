@@ -139,3 +139,26 @@ def pad_sweep_bottom_relative_tcp(row):
         sweep = math.hypot(row[0], row[1])*reach
         bottoms.append(sum(row[i]*(pivot[i]-info['tcp'][i]) for i in range(3))-sweep-half_z*abs(row[2])-PAD_CONTACT_OFFSET_M)
     return min(bottoms)
+
+
+# Wrist camera on the B replacement holder b12-u18-span-B (rosy-docs hardware/omx-wrist-camera-mount, out/results.json,
+# 2026-11-04): lens and the point where the optical axis meets the jaw axis, link5 metres; vertical FOV over the 720 rows
+# of the 1280x720 sensor; lowest holder point above the TCP in the top-down pose.
+WRIST_CAMERA_B = dict(name='b12-u18-span-B', lens_m=(.0378, 0., .0531), axis_hit_x_m=.1191, vfov_deg=69.6,
+                      sensor=(1280, 720), lowest_above_tcp_m=.0323)
+
+
+def wrist_camera_pose(spec=WRIST_CAMERA_B):
+    """(position, quaternion w x y z) of the wrist camera in link5 for a camera that looks along its -Z with +Y up (USD and
+    MuJoCo). The optical axis lies in the link5 x-z plane; image up points back toward the wrist (-x side), ASSUMED until
+    compared with a real wrist frame."""
+    lx, _, lz = spec['lens_m']
+    n = math.hypot(spec['axis_hit_x_m']-lx, lz)
+    d = ((spec['axis_hit_x_m']-lx)/n, 0., -lz/n)
+    up = (d[2], 0., -d[0])  # perpendicular to d in the x-z plane, x component < 0 (toward the wrist)
+    z = tuple(-c for c in d)
+    x = (up[1]*z[2]-up[2]*z[1], up[2]*z[0]-up[0]*z[2], up[0]*z[1]-up[1]*z[0])
+    m = [[x[i], up[i], z[i]] for i in range(3)]  # columns are the camera axes in link5
+    w = math.sqrt(max(0., 1+m[0][0]+m[1][1]+m[2][2]))/2
+    q = (w, (m[2][1]-m[1][2])/(4*w), (m[0][2]-m[2][0])/(4*w), (m[1][0]-m[0][1])/(4*w))
+    return spec['lens_m'], q

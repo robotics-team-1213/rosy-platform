@@ -2,6 +2,7 @@
 import math
 
 from container_variants import MASS_RATIO
+from palletizing_gripper import WRIST_CAMERA_B
 from ship_plate import SHIP_PLATE
 
 EVALUATION_CASES = {  # nominal geometry; the release feedback sees a 2-5 mm held-box estimate error
@@ -138,6 +139,10 @@ FIXTURE_OVERRIDES['nominal-palletizing-v21-ship-surveyed-bases-demo'] = dict(
 # geometry the real cell has, with recording on and no debug aids.
 FIXTURE_OVERRIDES['nominal-palletizing-v21-ship-surveyed-bases-demo'] = dict(
     FIXTURE_OVERRIDES['nominal-palletizing-v21-ship-surveyed-bases'], demo_recording=True)
+# Team end part (2026-11-04): the same demonstrations with a wrist camera per arm on the B replacement holder (b12-u18-span-B),
+# so an ACT policy trained here sees the wrist view the real arms will have. Image orientation is ASSUMED (wrist_camera_pose).
+FIXTURE_OVERRIDES['nominal-palletizing-v21-ship-surveyed-bases-wrist-demo'] = dict(
+    FIXTURE_OVERRIDES['nominal-palletizing-v21-ship-surveyed-bases-demo'], wrist_camera=dict(WRIST_CAMERA_B))
 # D-956 in Isaac (2026-11-04): MuJoCo's whole-stack sweep says a 2 mm release plus a seat check and one corrected re-place keeps
 # every stack up to 0.8 mm release error (24/24, plain 2/24). Same deliberate offsets across the channel, with and without it.
 SEAT_REPLACE = dict(height_m=.0005, tilt_rad=math.radians(.5), residual_m=.0001)  # D-956 limits; residual as in MuJoCo

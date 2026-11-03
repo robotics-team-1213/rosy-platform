@@ -142,6 +142,41 @@ def real_camera(cameras, name, spec):
     return cameras[name]
 
 
+WRIST_VIEW_SIZE = (640, 360)  # the 1280x720 wrist sensor at half size
+
+
+def wrist_camera(cameras, name, link_path, spec):
+    """A camera on the arm's link5 at the wrist-holder lens pose (palletizing_gripper.wrist_camera_pose); moves with the arm."""
+    import math
+    import numpy as np
+    from isaacsim.sensors.camera import Camera
+    from palletizing_gripper import wrist_camera_pose
+    if name not in cameras:
+        width, height = WRIST_VIEW_SIZE
+        lens, quat = wrist_camera_pose(spec)
+        camera = Camera(link_path+'/WristCamera', resolution=(width, height))
+        camera.initialize()
+        camera.set_local_pose(np.array(lens), np.array(quat), camera_axes='usd')
+        camera.set_clipping_range(.005, 10.)
+        f_px = height/2/math.tan(math.radians(spec['vfov_deg'])/2)
+        aperture = 36.
+        for key, value in (('horizontalAperture', aperture), ('verticalAperture', aperture*height/width),
+                           ('focalLength', f_px*aperture/width)):
+            camera.prim.GetAttribute(key).Set(value)
+        cameras[name] = camera
+    return cameras[name]
+
+
+def demo_views(cameras, fixture, stage, links):
+    """The surveyed real views, plus one wrist camera per arm (arm_a_wrist, arm_b_wrist) when the case sets wrist_camera."""
+    views = {view: real_camera(cameras, view, fixture['real_cameras'][view]) for view in fixture['real_cameras']}
+    if fixture.get('wrist_camera'):
+        for arm, link in zip(('arm_a', 'arm_b'), links):
+            link5 = str(stage.GetPrimAtPath(link['end_effector_link']).GetParent().GetPath())
+            views[arm+'_wrist'] = wrist_camera(cameras, arm+'_wrist', link5, fixture['wrist_camera'])
+    return views
+
+
 def real_capture(world, cameras, name, spec, path):
     """Render one surveyed real camera and save a PNG at `path`."""
     import numpy as np

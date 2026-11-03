@@ -2,8 +2,8 @@
 
 Geometry: learning/envs/isaac/ship_v11.py (pocket walls, 45 degree pins, container sockets and top cones as convex pieces).
 Jaw, contacts and release drive: ship_release_scene (same as the stud-plate twin). The camera holder is
-b12-u18-span-B (rosy-docs hardware/omx-wrist-camera-mount): a box proxy whose lowest point sits 32.3 mm above the TCP
-in the top-down pose, plus a camera at the measured lens pose. Candidates for Isaac only (D-947 section 1).
+palletizing_gripper.WRIST_CAMERA_B (b12-u18-span-B): a box proxy whose lowest point sits where the design puts the holder's
+lowest point (32.3 mm above the TCP in the top-down pose), plus a camera at the lens pose Isaac uses. Candidates for Isaac only (D-947 section 1).
 """
 import math
 from pathlib import Path
@@ -17,21 +17,21 @@ import ship_v11 as v11  # noqa: E402
 
 mujoco = base.mujoco
 GUIDE = 2  # contype bit shared by pins, top cones and socket wedges; flat faces stay on bit 1
-# Wrist camera B (results.json b12-u18-span-B), link5 mm: lens, optical axis to the jaw axis at x 119.1, vertical FOV 69.6
-LENS_MM, AXIS_HIT_X_MM, VFOV_DEG, LOWEST_ABOVE_TCP_MM = (37.8, 0., 53.1), 119.1, 69.6, 32.3
 HOLDER_HALF_MM = (4., 16., 16.)  # along the axis, across (y), along the board (proxy for board + plate)
 
 
 def camera_frame():
     """Optical axis d, board axis e (both in the link5 x-z plane) and the holder proxy centre in metres."""
-    d = (AXIS_HIT_X_MM-LENS_MM[0], 0., -LENS_MM[2])
+    cam = base.jaw.WRIST_CAMERA_B
+    lens = [c*1e3 for c in cam['lens_m']]
+    d = (cam['axis_hit_x_m']*1e3-lens[0], 0., -lens[2])
     n = math.hypot(d[0], d[2])
     d = (d[0]/n, 0., d[2]/n)
-    e = (-d[2], 0., d[0])  # the board direction away from the jaw tip has e_x > 0 here
+    e = (-d[2], 0., d[0])  # board direction in the x-z plane, x component > 0 (toward the jaw tip)
     hd, _, he = HOLDER_HALF_MM
     tcp_x = base.jaw.description()['tcp'][0]*1e3
     reach = hd*abs(d[0])+he*abs(e[0])  # lowest corner along x (down in the top-down pose)
-    centre = (tcp_x-LOWEST_ABOVE_TCP_MM-reach, 0., LENS_MM[2]-hd*d[2])
+    centre = (tcp_x-cam['lowest_above_tcp_m']*1e3-reach, 0., lens[2]-hd*d[2])
     return d, e, [c/1e3 for c in centre]
 
 
@@ -73,9 +73,8 @@ def build(cargo, camera=True, upper=()):
         mujoco.mju_mat2Quat(quat, base.np.array([d[0], 0., e[0], 0., 1., 0., d[2], 0., e[2]], float))  # columns d, y, e
         wrist.add_geom(name='camera_holder', type=mujoco.mjtGeom.mjGEOM_BOX, size=[h/1e3 for h in HOLDER_HALF_MM],
                        pos=centre, quat=list(quat))
-        cam = wrist.add_camera(name='wrist_b', pos=[c/1e3 for c in LENS_MM], fovy=VFOV_DEG)
-        cam.alt.type = mujoco.mjtOrientation.mjORIENTATION_XYAXES
-        cam.alt.xyaxes = [0., 1., 0., -e[0], 0., -e[2]]  # looks along -z = d; image up points back to the wrist
+        lens, q = base.jaw.wrist_camera_pose()
+        wrist.add_camera(name='wrist_b', pos=list(lens), quat=list(q), fovy=base.jaw.WRIST_CAMERA_B['vfov_deg'])
     return spec.compile(), f
 
 

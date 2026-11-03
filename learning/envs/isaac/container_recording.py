@@ -24,9 +24,9 @@ class ContainerRecording:
         # both arms' state and commanded targets in radians (demo.jsonl); outside the registered video evidence above.
         self.demo_cameras = demo_cameras or {}
         # 300 kbps: run a75d met the 256 MiB run output limit with uncapped 640x480 demo videos (about 110 MB each)
-        self.demo_recorders = {name: NativeRecorder(directory/f'demo-{name}.mp4', width=640, height=480, fps=config['fps'],
-                                                    max_bitrate_kbps=300)
-                               for name in self.demo_cameras}
+        self.demo_recorders = {name: NativeRecorder(directory/f'demo-{name}.mp4', width=camera.get_resolution()[0],
+                                                    height=camera.get_resolution()[1], fps=config['fps'], max_bitrate_kbps=300)
+                               for name, camera in self.demo_cameras.items()}
         self.demo_rows = (directory/'demo.jsonl').open('x', encoding='utf-8') if self.demo_cameras else None
 
     def write(self, tick, pose, *, final=False, demo=None):
