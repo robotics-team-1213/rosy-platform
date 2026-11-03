@@ -27,6 +27,36 @@ def _view(job):
                     "resource_policy_digest": job["installation"]["capabilities"][0]["resource_policy_digest"]}}
 
 
+class DelegatedArmJobs:
+    """In-process ARM owner calls for a control-unit delegation bound to one job (D-965); no HTTP caller."""
+
+    def __init__(self, store, observation):
+        self.store, self.observation = store, observation
+
+    def create(self, *, principal, request_key, request):
+        return self.store.create(principal=principal, request_key=request_key, request=request)
+
+    def view(self, mission_id):
+        job = self.store.peek(mission_id)
+        return None if job is None else _view(job)["job"]
+
+    def receipt(self, mission_id):
+        return None if self.observation is None else self.observation.receipt(mission_id)
+
+    def cancel(self, mission_id, *, reason):
+        """Withdraw an unadmitted proposal; cancel a prepared attempt through the existing dispatcher."""
+        if self.store.peek(mission_id)["status"] == "PROPOSED":
+            self.store.withdraw(mission_id, reason=reason)
+            return
+        if self.observation is None:
+            return
+        try:
+            self.observation.execution.snapshot(mission_id)
+        except KeyError:
+            return
+        self.observation.dispatcher.cancel(mission_id, reason=reason)
+
+
 def install_arm_transfer_job_routes(app, *, installation, deployment_profile, task_store, transport,
                                     socket_root, require_proposer, require_viewer, require_named_operator,
                                     observer, console, principals, other_tokens, other_services, registries,
@@ -54,6 +84,13 @@ def install_arm_transfer_job_routes(app, *, installation, deployment_profile, ta
                                                deployment_profile=deployment_profile)
         service = PhysicalObservationService(dispatcher, observer)
     app.state.arm_transfer_dispatcher = dispatcher
+    app.state.arm_transfer_delegate = None if store is None else DelegatedArmJobs(store, service)
+    control = getattr(app.state, "control_unit", None)
+    if store is None and control is not None:
+        from .arm_transfer_relay_routes import install_arm_transfer_relay_routes
+        install_arm_transfer_relay_routes(app, control=control, require_viewer=require_viewer,
+                                          require_proposer=require_proposer)
+        return
 
     def read_capabilities():
         """Fresh participant capabilities for an admit; the human and policy admits share this read."""

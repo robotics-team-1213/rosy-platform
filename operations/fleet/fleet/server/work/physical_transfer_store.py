@@ -146,6 +146,20 @@ class PhysicalTransferStore:
         with closing(self._journal._connect()) as connection:
             return self._read(connection, mission_id)
 
+    def withdraw(self, mission_id, *, reason):
+        """Hold an unadmitted proposal whose delegation origin canceled it (D-965); no claim was taken."""
+        reason = _nonempty("reason", reason, limit=192)
+        with closing(self._journal._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            changed = connection.execute("UPDATE fleet_cell_jobs SET status='HOLD',reason=?,updated_at=? "
+                "WHERE mission_id=? AND provenance_kind='physical' AND status='PROPOSED'",
+                (reason, datetime.fromtimestamp(self._now_ns() / 1e9, timezone.utc).isoformat(), mission_id)).rowcount
+            if changed:
+                self._journal._event(connection, mission_id, None, "PHYSICAL_TRANSFER_WITHDRAWN", "control-unit",
+                                     {"reason": reason})
+            connection.commit()
+            return self._read(connection, mission_id)
+
     def get_by_request_key(self, request_key, *, principal):
         actor = _principal(principal)
         key = _nonempty("request_key", request_key, limit=160)
@@ -287,6 +301,12 @@ class PhysicalTransferStore:
                 return result
         if row["status"] != "PROPOSED":
             raise MissionConflict("physical operation was already admitted or held")
+        # D-965: both the named and the policy admit pass here, so neither revives work its origin canceled.
+        if connection.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='fleet_control_delegations'"
+                              ).fetchone() and connection.execute(
+                "SELECT 1 FROM fleet_control_delegations WHERE local_task_id=? AND cancel_requested=1",
+                (mission_id,)).fetchone():
+            raise MissionConflict("delegated arm work was canceled by its origin")
         if not reserve(connection, owner_kind="mission", owner_id=mission_id, generation=expected_generation,
                        resources=self.installation.policy.resources, phase="CLAIMED"):
             raise MissionConflict("physical resource claim conflicts with another operation")

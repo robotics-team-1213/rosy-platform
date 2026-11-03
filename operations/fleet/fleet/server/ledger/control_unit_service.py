@@ -164,12 +164,22 @@ class ControlUnitService:
 
     def _local_arm(self, row):
         jobs = self.arm_jobs()
-        job = None if jobs is None else jobs.peek(row["local_task_id"])
+        job = None if jobs is None else jobs.view(row["local_task_id"])
         if job is None:
             raise ValueError("CONTROL_UNIT_BOUND_ARM_JOB_MISSING")
-        # shortcut: an arm cancel request is recorded only; the cell operator cancels the job until a scoped arm cancel exists.
-        self._local_result(row, ARM_STATES[job["status"]],
-                           {key: job[key] for key in ("mission_id", "status", "reason")})
+        if row["cancel_requested"]:
+            if job["status"] == "PROPOSED":
+                # Withdrawn to HOLD; the ARM admit also refuses a canceled delegation, so it can never run.
+                jobs.cancel(job["mission_id"], reason="control-unit-cancel")
+                return self._local_result(row, "CANCELED", {"job": jobs.view(row["local_task_id"]), "receipt": None})
+            if not row["result"].get("cancel_sent"):
+                jobs.cancel(job["mission_id"], reason="control-unit-cancel")
+                job = jobs.view(row["local_task_id"])
+        # The origin app reads job and receipt only through this projection (D-965); cancel_sent is not a stop.
+        result = {"job": job, "receipt": jobs.receipt(job["mission_id"])}
+        if row["cancel_requested"]:
+            result["cancel_sent"] = True
+        self._local_result(row, ARM_STATES[job["status"]], result)
 
     async def _local(self, row):
         if not row["local_task_id"]:
