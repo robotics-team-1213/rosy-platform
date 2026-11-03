@@ -1841,3 +1841,17 @@
 - 증거: a73e4ce0a8의 두 모터 누락 회귀10건은 예상 실패했고 기존8건은 통과했다(NEW10). 수정12574527a793ca8999cea9a67868cd42e934fbb1의 관련5 whole 파일132통과5.41초, 변경 파일 collect/whole wrapper2통과0.51초, skip0·NEW/known/flaky0·실제 driver0이다. 독립 안전 검토 blob4c77b4d699와 committed blob이 같고 Safety-Review trailer를 포함한다. AST·diff·Safety 검사 통과. 로그는 OS Temp rosy-thermal-missing-*에 있다. 첫 wrapper의 PowerShell 옵션 분리로 인한 수집 전 실패는 성공 증거에서 제외하고 isolation-corrected/run-1.txt를 사용한다.
 - gate 변화: SOURCE의 해당 회귀만 확인했다. 정식 착지·게시·실물 및 현장 수용은 별도이며 로봇 동작을 수행하지 않았다. 라이브러리의 ARTIFACT/DEVICE 판정을 올리지 않는다.
 - CE: 해당 없음 — 생산자의 register별 None과 소비자의 제한 유지 조건은 최종 공통 코드·두 모터 회귀로 확인할 수 있다.
+
+## 2026-11-03 · uncommitted · feat(docking): 후진 USB 충전소 단계 approach="rear" (D-972)
+- 변경: `docking/rear_phases.py`(새) — 뒤를 도크 쪽으로 한 스테이징, LiDAR V 관측(ACQUIRING), 레일 입구 밖 후진 정렬(ALIGNING), 레일 안 각속도 0 곧은 후진(새 단계 REVERSING), 진행 멈춤 = 멈춤면 접촉, 멈춘 뒤 기준보다 전압이 오르면 DOCKED(D-350 Phase 1 1소스), 실패는 앞으로 0.55 m 뒤 스테이징부터·3회 뒤 DOCK_FAILED, 언도킹은 앞으로. `DockType` `approach="rear"`·`rail_entry_m`·정렬 허용치와 일관성 검사, `feed.py` 출처별 최신 관측(LIDAR_V, tag_id null), `select_detector` `lidar_v`. `manager.py`는 진입점만(771줄, 래칫 유지). 기본 꺼짐.
+- 증거: `middleware/core/services/test/test_docking_rear.py`(운동학 벤치). 원격 시험 결과는 커밋 본문·착지 기록에.
+- gate 변화: 없음. Safety-Review(D-430 §5)·Gazebo·실물 수용 전.
+- 결정: D-972
+- 교훈: 없음(연구 결과는 Git 밖 `Rosy/docs/research/pinky-usb-dock-guide-2026-11-01`).
+
+## 2026-11-03 · uncommitted · fix(docking): V 검출을 core_features.docking.lidar_v로, 시험 벤치에 레일 구속 (D-972)
+- 변경: V 검출을 perception에서 `docking/lidar_v.py`로 옮기고 스캔 이음매(±180°)에 걸린 날개를 한 덩어리로 잇는다. `rear_phases.py` 문서에서 로봇 이름이 든 경로를 뺐다(`test_robot_literals`). `test_docking_rear.py` 벤치에 레일 안 ±3 mm 구속(차체 목)을 넣었다 — 벽 없이 3.4 mm 어긋난 채 충전 판정에 걸렸다.
+- 증거: `test_docking_lidar_v.py`(검출·CORE 스캔 연결), `test_docking_rear.py`. 원격 시험 결과는 커밋 본문에.
+- gate 변화: 없음.
+- 결정: D-972
+- 교훈: 없음.

@@ -14052,3 +14052,8 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 세 번째부터는 차례가 시험 폴더를 직접 돈다.
 - CE: 해당 없음 — D-970 1항 상한의 구멍을 메운 것.
 
+## 2026-11-03 · uncommitted · docs(adr): D-972 후진 도킹 위치 근거는 LiDAR V 표지, 레일 안 조향 없음
+- 변경: 새 ADR D-972(Proposed, D-950 Decision 3 후속)와 ADR Log 행.
+- 근거: 연구 `dock_sim.py` 벽 마찰 결과(바퀴 옆면 잠김 μ > 0.16, 롤러 레일 곧게 44 ~ 45/47, 레일 안 조향 12 ~ 27/47), 충전소가 스캔면 아래라 LiDAR에 안 보임.
+- gate 변화: 없음. Safety-Review·실물 수용 전.
+- 예약: D-972(adr_reserve).

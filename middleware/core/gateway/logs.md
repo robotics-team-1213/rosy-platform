@@ -2079,3 +2079,17 @@ clpy.duration을 추가했다(bridge AGENTS의 두 파일 함께 갱신 규칙).
 - 증거: navigation_handover·station_departure_api·station_charge_http·station_redeployment_http·station_target_refresh_http·station_return_http를 공식 원격 6개 worker로 실행해 92 passed/skip0/exit0, NEW0/known0/flaky0을 확인했다. 전체 검색에서 확인한 fixture 소비자 11개 모듈을 앞선 다섯 모듈과 나누어 검증했다. 공식 runner·CI에 OpenCV가 이미 설치되는 환경 계약도 독립 검토했다.
 - gate 변화: 없음. 이 소스의 시험 근거이며 최종 UI 통합 FULL·게시·장치 수용을 대신하지 않는다.
 - CE: 미해결 — 기존 시간 초과와 스레드 수 사이의 인과관계는 미확정이다. 운영 제한을 늘리거나 실패를 skip으로 바꾸지 않았다.
+
+## 2026-11-03 · uncommitted · feat(bridge): 후진 충전소 V 표지를 CORE 스캔에서 찾는다 (D-972)
+- 변경: `core/bridge/observation.py` `rear_dock_scan` — 도킹이 ACQUIRING · ALIGNING일 때만 같은 스캔 표본을 `core_features.docking.lidar_v`에 넘겨 `dock_feed`(source LIDAR_V)에 넣는다. `front_clearance` 첫 줄에서 부른다(D-395 미션과 같은 자리). `ros_bridge.py`는 바뀌지 않는다.
+- 증거: `middleware/core/services/test/test_docking_lidar_v.py::test_core_feeds_the_v_from_its_scan_only_while_docking_looks`.
+- gate 변화: 없음. ROS 그래프·실물 C1 수용 전.
+- 결정: D-972
+- 교훈: 없음.
+
+## 2026-11-03 · uncommitted · fix(bridge): rear_dock_scan reads services.docking directly (C6)
+- 변경: `getattr(services, "docking", None)` 대신 `services.docking`을 try 안에서 읽는다. 이중체에 docking이 없으면 기존처럼 조용히 끝난다.
+- 증거: 원격 `test_module_criteria.py::test_c6_seam_reaches_match_the_published_triage`가 새 getattr 이음매를 잡았다.
+- gate 변화: 없음.
+- 결정: D-972
+- 교훈: 없음.

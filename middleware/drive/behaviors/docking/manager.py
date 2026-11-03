@@ -24,6 +24,7 @@ from core_features.docking.detector import DockDetector
 from core_features.docking.model import DockingConfig, DockingExecutor, DockPhase
 from core_features.docking.parking import DockPoseTracker
 from core_features.docking.parking_phases import ParkingPhases
+from core_features.docking.rear_phases import RearPhases
 from core_common.protocol.schemas import (
     BatteryLevel,
     DockingStatus,
@@ -58,8 +59,7 @@ class DockingManager:
         self._cfg = config or DockingConfig()
         self._clock = clock
         self._events = events
-        self._detector_factory = detector_factory
-        self._agent_factory = agent_factory
+        self._detector_factory, self._agent_factory = detector_factory, agent_factory
         self._capability_provider = capability_provider or (lambda: False)
         self._map_id_provider = map_id_provider or (lambda: None)
         self._battery = battery
@@ -74,7 +74,7 @@ class DockingManager:
         # 취소해 버린다 (N1). 모드가 이미 DOCKING 이 아니면 아무것도 안 해야 한다.
         self._release_mode = release_mode or (lambda: None)
         # 주차형 단계의 전략. 자기 락·상태가 없고, 아래 필드와 이 락을 그대로 쓴다.
-        self._parking_phases = ParkingPhases(self)
+        self._parking_phases, self._rear_phases = ParkingPhases(self), RearPhases(self)
         # dock/undock/cancel 은 API 워커에서, tick 은 브리지 타이머에서 온다(D-1).
         # 재진입한다: tick 안의 배터리 복귀가 dock() 을, 모드 이탈 리스너가
         # cancel()/abort() 을 부른다.
@@ -101,11 +101,9 @@ class DockingManager:
             enter_v=self._cfg.full_enter_v, exit_v=self._cfg.full_exit_v)
         self._full_announced = False  # D-350: docking.full 1회 방출 플래그
 
-        self._phase_since = 0.0
-        self._last_seen_at: Optional[float] = None
+        self._phase_since, self._last_seen_at = 0.0, None
         self._nav_state = NavigationState.IDLE
-        self._retries = 0
-        self._reseats = 0
+        self._retries, self._reseats = 0, 0
         self._next_phase_after_backoff: Optional[DockPhase] = None
         self._error: Optional[str] = None
         self._manual_active = False
@@ -163,7 +161,7 @@ class DockingManager:
         """주차형이 움직이는 동안 True — 브리지가 틱을 20 Hz 로 올린다. nav 슬롯은
         0.5 s 에 만료되고, 크리프·정렬은 5 Hz 로는 거칠다."""
         return (self._state in (DockState.DOCKING, DockState.UNDOCKING)
-                and self._parking())
+                and (self._parking() or self._rear_phases.active()))
 
     def bind_clock(self, clock: Callable[[], float]) -> None:
         """시계를 바꾼다 (use_sim_time 의 sim 시계). 검출기 신선도와 같은 시계여야 한다."""
@@ -437,6 +435,8 @@ class DockingManager:
 
     def _tick_docking(self, now: float) -> None:
         phase = self._phase
+        if self._rear_phases.tick(phase, now):   # 후진형(D-950 후속)은 단계를 모두 맡는다
+            return
         if phase is DockPhase.STAGING:
             self._tick_staging(now)
         elif phase is DockPhase.ACQUIRING:
@@ -463,7 +463,7 @@ class DockingManager:
         self._nav_state = NavigationState.PLANNING
         if self.executor is not None and self._dock is not None:
             offset = self._type().staging_offset_m
-            self.executor.navigate_to(self._dock.staging_pose(offset))
+            self.executor.navigate_to(self._rear_phases.staging_pose(self._dock, offset))
 
     def _tick_staging(self, now: float) -> None:
         if self._nav_state is NavigationState.ARRIVED:
@@ -608,7 +608,7 @@ class DockingManager:
                 return
             self._finish_undock()
             return
-        self.executor.drive(-self._cfg.undock_speed, 0.0)
+        self.executor.drive(self._rear_phases.leave_sign() * self._cfg.undock_speed, 0.0)
 
     def _finish_undock(self) -> None:
         if self.executor is not None:
