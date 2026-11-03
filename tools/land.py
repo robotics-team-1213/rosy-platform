@@ -365,7 +365,8 @@ def land(args) -> int:
         size_check(wt, before, "HEAD", python)
         admit(wt, branch, before, python)
         qdir, ticket = land_queue.enter(wt, branch, "preparing", args.urgent,
-                                        batch_auto=land_batch.plain_auto(args, EXTRA))
+                                        batch_auto=land_batch.plain_auto(args, EXTRA),
+                                        alone=land_batch.explicit(args, EXTRA))
         if (code := land_batch.early(sys.modules[__name__], wt, branch, args, python, qdir, ticket, main_co)) is not None:
             return code  # it led a batch at once: one shared pretest instead of one each
         if args.tests == "full" or (args.tests == "auto" and land_full.restore(wt, branch) is None):
