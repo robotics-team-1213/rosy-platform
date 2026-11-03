@@ -5258,6 +5258,12 @@
 - gate 변화: 없음. 실제 USB 카메라를 꽂아 승인하는 현장 수용은 하지 않았다.
 - CE: 해당 없음 — 새 기능이며 장애 해결이 아니다. 결정은 D-963에 있다.
 
+## 2026-11-02 · a7f36cb999 · Web unification follow-up
+
+- 변경: 2026-11-02 · a7f36cb999 · 독립 검토가 확인한 central Account의 사용 불가능한 복귀 링크를 숨겼다. validated return과 로그인 완료 후 원래 앱 복귀는 유지한다. 영상 Chromium fixture에 실제 app-runtime.js 자산을 복원했다. 인증 네 파일 64건과 영상/seat fixture 25건 원격 통과; 운영 SSO·실제 영상·장치 수용을 뜻하지 않는다. CE: 해당 없음 — UI 상태와 자산 계약을 회귀로 검증한다.
+- 증거: committed SHA and remote results are recorded above; final consolidated receipts are retained in the unification validation record.
+- gate 변화: 없음. Source/browser checks do not establish deployment, ARM64, device or field acceptance.
+
 ## 2026-11-03 · 9f666845e8 · fix(fleet): platoon 지도 계산 공유와 HTTP 응답성
 
 - 변경: `/api/fleet/platoon`이 활성 지도 버전별 루프·기하·속도표 계산 한 건을 작업 스레드에서 공유한다. 취소된 독자는 공유 계산을 취소하지 않고, NO_LOOP도 재사용하며 계산 실패 뒤에는 다시 시도한다. 로봇 자세·차간 거리는 요청마다 읽고 기존 인증·표시 전용 dispatch=false를 유지한다.

@@ -39,8 +39,9 @@ def test_authority_and_public_app_links_have_separate_mounts():
 
 def test_account_process_has_own_state_and_no_fleet_runtime_authority():
     account = yaml.safe_load((ROOT/'deploy/site/compose.account.yaml').read_text())['services']['account']
-    assert account['image'] == 'rosy-site-fleet:${ROSY_SITE_IMAGE_TAG:-local}'
-    assert account['command'][1:4] == ['python3', '-m', 'rosy_account']
+    assert account['image'] == 'rosy-site-account:${ROSY_SITE_IMAGE_TAG:-local}'
+    assert account['command'][0] == '--config'
+    assert 'cap_add' not in account
     assert account['environment']['PYTHONPATH'] == (
         '/opt/rosy/src/operations/account:/opt/rosy/src/contracts/foundation')
     assert 'account_state:/var/lib/rosy-account' in account['volumes']
@@ -57,6 +58,6 @@ def test_account_issuer_routes_to_independent_signed_process():
     config = (ROOT/'deploy/site/Caddyfile.account').read_text()
     assert 'reverse_proxy https://account:8098 {' in config
     assert 'reverse_proxy https://fleet:' not in config
-    dockerfile = (ROOT/'deploy/site/Dockerfile.fleet').read_text()
+    dockerfile = (ROOT/'deploy/site/Dockerfile.account').read_text()
     assert 'COPY operations/account/rosy_account/ /opt/rosy/src/operations/account/rosy_account/' in dockerfile
     assert '!operations/account/rosy_account/**' in (ROOT/'deploy/site/Dockerfile.fleet.dockerignore').read_text()

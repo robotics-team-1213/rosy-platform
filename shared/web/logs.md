@@ -1095,3 +1095,38 @@
 - 변경: `tokens.css`에 `--signal-go/-caution/-stop`을 두고 Fleet 신호기 카드·Fleet 지도 램프·로봇 가상 신호 등이 모두 이것만 쓴다. Fleet 카드의 녹색 등이 무색이던 불일치를 녹색으로 통일했다.
 - 증거: `test_every_signal_lamp_paints_with_the_signal_tokens`(등 그림은 신호 토큰만, 신호 토큰은 등 밖 금지).
 - Gate: 없음. CE: 해당 없음.
+
+## 2026-11-02 · e81af2d7c3 · D-962 independent Account artifact
+
+- Change: Moved unchanged display-only role labels into the existing common Account profile helper. Fleet header preserves its named export; Account profile directly imports the common helper so its bundle contains no Fleet header, authorization or E-stop implementation. Role/grant enforcement is unchanged. Actual TLS Account profile and Fleet header browser/Node consumers passed.
+- Evidence: D-962 independent image scope: remote AI-PC closure at e81af2d7c3 passed 320 tests, 0 skipped, 0 NEW. Account TLS login/initial-password/profile/admin, minimal Account/foundation startup, stdlib-only fixed assets, signed legacy/new inventories and reuse, and Fleet header browser/Node compatibility. OCI build and live independent-image acceptance were not run.
+- Log: `rosy-account-image-closure/run-1.txt`; native `size_range.py d7fcc74e43 b9424451a0` checked four commits successfully; native static secret scan found zero findings.
+- Gate: scoped SOURCE/LOCAL verification only; existing artifact, device and field limits remain.
+
+
+## 2026-11-02 · 5f02d723d1 · D-962 independent identity backup and presentation
+
+- Change: Common Account role labels retain their exact values and Fleet named export. Final reduced bundle and identity TLS/browser consumers passed after branding and maintenance closure; no additional shared behavior changed.
+- Evidence: D-962 independent image and identity backup scope at 5f02d723d1: remote 335 backend/signing/image/backup cases plus 71 opted-in identity TLS/browser cases passed, 0 skipped, 0 NEW. Full Account tables including HTTP audit preserved; stale/corrupt backup refusal, strict signed legacy/new groups, reused image pins, branding, login/profile/admin and first-password flows verified. Prior e81af2d7c3 closure also passed 320 cases including Fleet header browser/Node compatibility. OCI construction and live independent-image/timer acceptance remain pending.
+- Logs: `rosy-account-backup-replay/run-1.txt` (335 passed), `rosy-account-identity-replay/run-1.txt` (71 passed); known-failure comparison 0 new/known/flaky. Native size range checked eight commits without a violation.
+- Gate: scoped SOURCE/LOCAL GO; image artifact, installation, timer activation and human field acceptance remain separate.
+
+
+## 2026-11-02 · 59dbc2136b · D-962 canonical Account scope closure
+
+- Change: Registered the three exact Account identity documents as Account-owned web surfaces without launcher identities; nearest path-component ownership preserves Fleet business-page scope. Opposite-brand mutations reject both Account and Fleet title drift, sibling-prefix matches and ambiguous ownership.
+- Evidence: Official FULL snapshot 20261102132628 exposed stale Fleet component/title consumers and stopped; it was not a FULL success. At 59dbc2136b, committed remote shared-web contracts, component/registry/app ownership, Account TLS identity, Fleet header browser/Node and Account image/deploy closure passed 581 tests, with one separately disabled Android native-token-export check skipped and 0 NEW. Exact title-file isolation via tools/collect_alone.py completed one whole-file target (wrapper 1 passed, 1 empty collection parametrization skipped). Independent review found no supported material findings.
+- Logs: `rosy-account-surface-closure/run-1.txt`; `rosy-account-title-isolated/run-1.txt`. Native canonical renderer check, AST, secret scan (0 findings), diff check and one-commit size range passed.
+- Gate: Scoped SOURCE/LOCAL evidence only. Replacement FULL/no-cache, OCI artifact, installation and live field acceptance remain pending. CE: no additional lesson; canonical ownership, propagation and strict mutation regressions retain the cause and fix.
+
+## 2026-11-02 · uncommitted · D-961 공용 이동 조작과 작업 구성
+
+- 변경: 기존 component-controls.css에 네이티브 이동 링크와 task/auth 구성을 추가하고 gallery·styleguide·template에 연결했다. 팔레트·48px 조작·실행 권한은 유지한다.
+- 증거: 130627f04f 원격 AI PC Chromium RED 8 failed, 0 skipped — 링크 높이가 48px 미만임을 재현. 구현 후 GREEN과 공용 계약은 다음 검증 기록에서 확인한다.
+- Gate: 이동 없음. CE: 미해결 — 제품 적용·회귀·배포 화면 검증 전이다.
+
+## 2026-11-02 · uncommitted · D-961 웹 제품 통합
+
+- 변경: 공용 네이티브 이동 조작·task/auth 구성과 같은 레일 표현을 기존 조합 시트에 연결했다. Robot의 48px 바닥·상단 예산과 Fleet의 56px 자리를 함께 보존한다.
+- 증거: 6262b09d30 공용 회귀 81 passed markers·0 skipped; known_failures 0 NEW. 최종 HEAD의 전체 affected는 다음 기록에서 확인한다.
+- Gate: 전체 회차 검증 중이며 운영 배포·DEVICE/FIELD를 주장하지 않는다. CE: 완료 전 판단; 최종 코드·회귀·ADR 외의 비명시 지식이 있는지 확인한다.

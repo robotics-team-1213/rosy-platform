@@ -447,6 +447,8 @@ D-741(Accepted)이 정한, 모든 웹 표면이 같이 쓸 자리다. Rosy Fleet
 
 ### 입력·자료·복구의 조합 부품
 
+[D-961](docs/adr/D-961-shared-task-links-and-page-compositions.md)의 이동 조작은 네이티브 `a.ui-action-link`와 명시적인 `data-kind="primary|quiet"`다. 실행 버튼과 같은 의미 토큰·48px 바닥을 사용하면서 링크의 새 탭·주소 복사·키보드 이동을 유지한다. 같은 시트의 `ui-task-page`는 작업 본문, 추가 `ui-auth-page`는 인증 본문의 폭과 간격을 맡는다. 지도·영상·경기판의 전용 배치를 이 구성에 억지로 맞추지 않는다.
+
 기존 기초 부품과 네이티브 HTML을 조합한다. 쓰는 화면은 `components.css` 다음 `/common/component-controls.css`를 로드한다. 새 팔레트·버튼 사본이나 전체 UI 프레임워크는 추가하지 않는다. 함수가 반환한 `element`를 붙이고 화면을 해제할 때 `dispose`가 있는 부품은 호출한다.
 
 | 모듈 | 공개 부품 | 사용·비사용 조건 |

@@ -15,6 +15,7 @@
 | D-390 | Pilot의 OMX-AI 연습은 시뮬레이션 전용 장치 API를 거쳐 로컬 팔 명령 소유자에 연결한다 |
 | D-411 | Pilot 로봇측 학습 녹화(카메라 유닛 소유, CORE는 시작·정지 요청, `teleop/intent` 원 입력·주체 기록, 1회 10분)와 정지 중에만 허용하는 HTTP 수신(목록·tar·sha256 manifest, `rosy_ml fetch --http`); 기기가 알리는 조작부 서술자 `rosy.controls/1`(base_velocity·joint_jog·gripper, 드라이버는 전송·위젯은 kind별, 팔 조이스틱은 이전 목표 종료 후 순차 제한 목표); OMX 그리퍼 전용 절대 목표·쥠 readback(시뮬레이션만, D-390 유지) |
 | D-432 | 모든 앱·장치는 공통 발견·연결 규약을 쓰고, 개발 모드에서는 코드 없이 연결한다 |
+| D-961 | 공용 작업 이동과 작업·인증 화면 구성. [전문](../adr/D-961-shared-task-links-and-page-compositions.md) |
 
 ## 계획·결과 문서
 
@@ -34,8 +35,8 @@
 
 ## 최근 기록
 
+- 2026-11-02 · uncommitted · D-961 웹 제품 통합
 - 2026-11-02 · uncommitted · sr-only 재정의 제거
 - 2026-11-02 · uncommitted · noscript 안내 (D-945 마무리)
 - 2026-11-01 · uncommitted · skip link 추가 (D-945)
 - 2026-11-01 · a7ebffaf72 · OMX SIM 녹화 화면 다듬기
-- 2026-11-01 · f35a03048e · OMX SIM 녹화 중 종료 카드 고정

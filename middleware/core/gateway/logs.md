@@ -2052,6 +2052,12 @@ clpy.duration을 추가했다(bridge AGENTS의 두 파일 함께 갱신 규칙).
 - gate 변화: 없음. 운영 RPC 제한, fail-closed HOLD/claim, 단독 실행 fence, FULL 요구를 완화하지 않는다. 정상 착지는 별도로 검증한다.
 - CE: 해당 없음 — 기존 오류 지점별 분류 교훈을 적용했고, 이번 최소 교정의 판단은 시험·기존 기록에 남아 새 교훈을 추가하지 않는다. 운영·물리 수용은 별도다.
 
+## 2026-11-02 · c4f15610cc · Web unification follow-up
+
+- 변경: 2026-11-02 · c4f15610cc · WebSocket 종료 회귀를 실제 명시적 zero receipt로 검증한다. TestClient 종료 전 close를 보내고 Event를 기다려 TTL 만료를 정지 증거로 오인하지 않는다. 누락 zero mutation과 AnyIO/반복 asyncio 취소 RED를 확인한 뒤 API owner의 cleanup 수정으로 12건 통과했다. 전체 CORE/API 등을 포함한 후속 소스 4479 passed/164 skipped/exit0; 물리 bridge·장치 지연은 미실행이며 module gate 변화 없음. CE: 해당 없음 — 판단은 명시적 관측·취소·대체 스트림 시험에 남는다.
+- 증거: committed SHA and remote results are recorded above; final consolidated receipts are retained in the unification validation record.
+- gate 변화: 없음. Source/browser checks do not establish deployment, ARM64, device or field acceptance.
+
 ## 2026-11-03 · uncommitted · feat(core): 핑키 열 모드 — 온도·전압으로 속도 낮추기 (API v1.351)
 - 변경: `core_features.safety.thermal`(ThermalPolicy·ThermalMonitor), `SafetyManager.clip`이 열 단계로 상한을 낮춘다(warm 직선 절반, hot 자율 0·수동 warm 상한). `bridge/thermal_policy.py`가 `motor/health`를 받아 두고 1 Hz 진단 tick에서 SoC 온도·`get_throttled`로 단계를 정해 `thermal.*` 이벤트를 낸다. `GET /api/v1/safety/state.thermal`.
 - 증거: rosy_45(Pi 5) 실측 SoC 59 °C, `get_throttled`=0 누구나 읽기 가능, 팬 트립 50/60/67.5/75 °C. 시험 `test_thermal_mode.py`, `test_api.py`, `test_bridge_timers.py`.

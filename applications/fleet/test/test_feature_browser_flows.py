@@ -90,3 +90,72 @@ def test_representative_contract_in_browser(sample_site, monkeypatch, feature):
             assert not engine.unhandled, engine.unhandled
         finally:
             browser.close()
+
+
+@pytest.mark.parametrize('scenario', ['approve', 'poll', 'changed_poll'])
+def test_usb_camera_cookie_operator_keeps_edit_during_poll(sample_site, scenario):
+    """Real cookie login and dialogs, controlled USB observations; no device approval."""
+    from playwright.sync_api import sync_playwright, expect
+    _, origin = sample_site
+    key = 'a' * 64
+    candidate = {'key': key, 'usb_id': '046d:0825', 'roles': ['top'],
+                 'suggest': 'top', 'hub_arm': None, 'decision': None}
+    workcell = {'workcell_id': 'cell-test', 'roles': ['top', 'side'], 'candidates': [candidate]}
+    posts = []
+    reads = 0
+
+    def observations(route):
+        nonlocal reads
+        reads += 1
+        if reads > 1 and scenario == 'changed_poll':
+            candidate['suggest'] = 'side'
+            workcell['candidates'] = [dict(candidate, key='b' * 64, usb_id='1234:5678'), candidate]
+        route.fulfill(json={'workcells': [workcell]})
+
+    def approve(route):
+        request = route.request
+        posts.append(request.post_data_json)
+        assert 'authorization' not in request.headers
+        assert request.headers['origin'] == origin
+        assert 'rosy_sample_session=' in request.all_headers()['cookie']
+        candidate['decision'] = {'role': posts[-1]['role'], 'principal_id': 'sample'}
+        route.fulfill(json={'decision': candidate['decision']})
+
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            context = browser.new_context()
+            login = context.request.post(origin + '/api/fleet/auth/login',
+                headers={'Origin': origin}, data={'login': 'sample', 'password': 'CHANGE_ME'})
+            assert login.status == 204
+            page = context.new_page()
+            page.route('**/api/fleet/workcell-observations/usb-devices', observations)
+            page.route(f'**/usb-devices/{key}/decision', approve)
+            page.goto(origin + '/console/install#cameras')
+            panel = page.locator('#usb-camera-panel')
+            expect(panel).to_be_visible()
+            assert page.evaluate("sessionStorage.getItem('rosy-console-token')") in (None, '')
+            field = panel.get_by_role('combobox', name='USB 046d:0825의 역할', exact=True)
+            field.fill('custom_camera')
+            if scenario == 'approve':
+                panel.get_by_role('button', name='역할 승인', exact=True).click()
+                page.locator('dialog[open]').get_by_role('button', name='역할 승인', exact=True).click()
+                expect(panel).to_contain_text('승인됨: custom_camera (sample)')
+                assert posts == [{'role': 'custom_camera'}]
+            else:
+                field.focus()
+                field.evaluate('(input) => input.setSelectionRange(2, 8)')
+                with page.expect_response('**/api/fleet/workcell-observations/usb-devices', timeout=10000) as reply:
+                    pass
+                reply.value.finished()
+                expect(panel).to_have_attribute('aria-busy', 'false')
+                expect(field).to_have_value('custom_camera')
+                expect(field).to_be_focused()
+                assert field.evaluate('(input) => [input.selectionStart, input.selectionEnd]') == [2, 8]
+                assert reads >= 2
+                if scenario == 'changed_poll':
+                    expect(panel.get_by_role('combobox')).to_have_count(2)
+                    expect(panel).to_contain_text('추천: side')
+                assert not posts
+        finally:
+            browser.close()

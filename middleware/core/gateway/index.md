@@ -79,4 +79,4 @@
 - 2026-11-03 · e9ee7a7009 · 카메라 SIM fixture 소비자 검증
 - 2026-11-03 · e9ee7a7009 · 카메라 SIM 시험의 OpenCV 스레드 범위 제한
 - 2026-11-03 · uncommitted · feat(core): 핑키 열 모드 — 온도·전압으로 속도 낮추기 (API v1.351)
-- 2026-10-29 · 512bf77f89 · 카메라 SIM scheduling 선행 복구
+- 2026-11-02 · c4f15610cc · Web unification follow-up

@@ -123,8 +123,9 @@ def test_degradation_or_owner_rejection_stops_and_preserves_incomplete_attempt(m
     assert (tmp_path/fault/'manifest.json').is_file()
 
 
-def test_successful_terminal_without_reaching_the_target_holds_and_records_no_reach(module, tmp_path):
+def test_successful_terminal_without_reaching_the_target_holds_and_records_no_reach(module, tmp_path, rehearsal_clock):
     backend = Backend('no_motion')
+    backend.clock = rehearsal_clock
     result = module.run_session(profile(), teacher(), tmp_path/'still', backend)
     assert result['episodes'][0]['complete'] is False
     assert 'did not reach' in result['episodes'][0]['reason'] and backend.stops

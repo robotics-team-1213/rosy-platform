@@ -27,7 +27,7 @@ def _page(name):
 
 def _tabs(name):
     page = _page(name).read_text(encoding="utf-8")
-    match = re.search(r'<nav class="doc-tabs" aria-label="Rosy Fleet 문서">(.*?)</nav>', page, re.S)
+    match = re.search(r'<nav class="doc-tabs ui-rail ui-rail-nav" aria-label="Rosy Fleet 문서">(.*?)</nav>', page, re.S)
     assert match, f"{name} has no doc-tabs row"
     links = [dict(re.findall(r'([\w-]+)="([^"]*)"', attributes), text=text)
              for attributes, text in re.findall(r'<a\b([^>]*)>(.*?)</a>', match.group(1))]
@@ -43,6 +43,7 @@ def test_every_document_has_the_same_tabs_and_marks_itself():
         assert all("data-icon-only" not in link for link in links), name
         assert [link["text"] for link in links] == LABELS, name
         assert [link.get("aria-label") for link in links] == NAMES, name
+        assert all(link.get("class") == "ui-rail-item" for link in links), name
         assert all(label in (link.get("aria-label") or label) for link, label in zip(links, LABELS)), name
         assert '/console/assets/doc-tabs.css' in page, name
 
@@ -110,7 +111,7 @@ def test_install_task_list_sits_in_the_shared_subnav_seat():
     assert seat, "install: the task list stands in the shared sub-nav seat between the rail and the workspace"
     assert "install-tasks" not in page and "install-workspace" not in page, "install: no bespoke sidebar layout remains"
     assert '<link rel="stylesheet" href="/common/app-shell.css">' in page
-    assert 'class="fleet-task-page"' in page
+    assert 'class="fleet-task-page ui-task-page"' in page
     entry = (WEB / "installation" / "install.js").read_text(encoding="utf-8")
     assert 'el("install-chooser").append(taskChooser.element);' in entry, "install: the shared chooser fills the seat"
 

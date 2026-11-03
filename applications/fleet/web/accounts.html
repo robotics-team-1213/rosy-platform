@@ -2,10 +2,11 @@
 <html lang="ko">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Rosy Fleet — 계정 관리</title>
+  <title>Rosy Account — 계정 관리</title>
   <link rel="icon" type="image/svg+xml" href="/common/icons/console.svg">
   <link rel="stylesheet" href="/common/tokens.css"><script src="/common/theme.js"></script>
   <link rel="stylesheet" href="/common/components.css">
+  <link rel="stylesheet" href="/common/component-controls.css">
   <link rel="stylesheet" href="/console/assets/fleet-document.css">
   <link rel="stylesheet" href="/console/assets/password-login.css">
   <script type="module" src="/common/ui.js"></script>
@@ -13,12 +14,12 @@
 </head>
 <body><a class="skip-link" href="#accounts-main">본문으로 건너뛰기</a><ui-shell grammar="procedure">
   <!-- fleet:document-header:start -->
-<header class="fleet-document-header"><ui-topbar><ui-brand href="/console"><b>Rosy Fleet</b><small>계정 관리</small></ui-brand><span data-spacer></span><ui-button kind="quiet" data-theme-cycle="" data-icon-only="" type="button" aria-label="테마 변경" data-action-icon="theme-dark"></ui-button></ui-topbar></header>
+<header class="fleet-document-header"><ui-topbar><ui-brand href="/console"><b>Rosy Account</b><small>계정 관리</small></ui-brand><span data-spacer></span><ui-button kind="quiet" data-theme-cycle="" data-icon-only="" type="button" aria-label="테마 변경" data-action-icon="theme-dark"></ui-button></ui-topbar></header>
 <!-- fleet:document-header:end -->
-  <main id="accounts-main" class="fleet-login-main fleet-document" tabindex="-1">
+  <main id="accounts-main" class="fleet-login-main fleet-document ui-task-page" tabindex="-1">
     <h1 class="ui-page-heading">계정 관리</h1>
     <ui-status id="account-status" state="pending" role="status">관리 권한을 확인하고 있습니다.</ui-status>
-    <a id="account-login" class="ui-disclosure-row" href="/console/login?return=%2Fconsole%2Faccounts" hidden data-action-icon="login">로그인</a>
+    <a class="ui-action-link" data-kind="primary" id="account-login" href="/console/login?return=%2Fconsole%2Faccounts" hidden>로그인</a>
     <section id="account-setup" hidden aria-labelledby="account-setup-heading">
       <h2 id="account-setup-heading">통합 로그인과 앱 연결</h2>
       <p id="account-setup-state" role="status"></p>
