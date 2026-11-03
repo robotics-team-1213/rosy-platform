@@ -141,7 +141,7 @@ class FleetConsole(TripAware, TrafficArbitration, FormationControl):
         #: 시험이 가짜 릴레이를 끼우는 자리. 운용에서는 None 이라 세션의 기본값을 쓴다.
         self._relay_factory = relay_factory
         self.formation_relay_factory = None  # D-581: app-injected factory
-        self.fleet_name = fleet_name
+        self.fleet_name, self.control_unit = fleet_name, {}  # D-974: unit/root for the header
         # e-stop 은 hub 의 scatter 를 그대로 쓴다 — 흩뿌림의 규칙을 두 군데 두지 않는다.
         self._hub = SiteHub(list(endpoints), dict(self._clients), fleet_name=fleet_name,
                             event_store=event_store)
@@ -344,7 +344,7 @@ class FleetConsole(TripAware, TrafficArbitration, FormationControl):
             except Exception:
                 pass
         return {
-            "fleet": {"name": self.fleet_name, "online": online, "total": len(robots)},
+            "fleet": {"name": self.fleet_name, "online": online, "total": len(robots), **self.control_unit},
             "robots": robots,
             "signals": self._signals.snapshot() if self._signals is not None else {},
             "alarms": self.alarms(),

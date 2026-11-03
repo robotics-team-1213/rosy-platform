@@ -112,12 +112,12 @@ function refreshControls() {
     const sessionPending = !role && ['recipe-load', 'cell-load', 'read-job'].includes(id);
     const channelBlocked = id === 'new-proposal' && channelRequested;
     $(id).disabled = busy || unavailable || sessionPending || channelBlocked;
-    $(id).setAttribute('reason', busy ? '요청 처리 중' : unavailable ? 'Cell 서비스 구성 확인 필요' : sessionPending ? '접속 상태 확인 필요' : channelBlocked ? '연결된 대화 요청의 검토 필요' : '');
+    $(id).setAttribute('reason', busy ? '요청 처리 중' : unavailable ? '팔레트 적재 서비스 구성 확인 필요' : sessionPending ? '접속 상태 확인 필요' : channelBlocked ? '연결된 대화 요청의 검토 필요' : '');
   }
   for (const id of commands) {
     if (cellServiceUnavailable) {
       $(id).disabled = true;
-      $(id).setAttribute('reason', 'Cell 서비스 구성 확인 필요');
+      $(id).setAttribute('reason', '팔레트 적재 서비스 구성 확인 필요');
       continue;
     }
     const sheetBlocked = id === 'resume' && job?.operator_checkpoints?.some(row => row.status === 'WAITING_ACCESS');
@@ -154,9 +154,9 @@ async function action(fn) {
     $('notice').textContent = error.code === 'PASSWORD_CHANGE_REQUIRED'
       ? '첫 로그인 비밀번호 변경이 필요합니다 · 우상단 비밀번호 변경을 누르세요.'
       : error.status === 403
-      ? '이 계정에는 Cell 작업 권한이 없습니다. 운영자 토큰을 확인하고 다시 접속하세요.'
+      ? '이 계정에는 팔레트 적재 작업 권한이 없습니다. 운영자 토큰을 확인하고 다시 접속하세요.'
       : error.code === 'CELL_APP_UNCONFIGURED'
-        ? 'Cell 작업을 사용할 수 없습니다. 사이트 설치 담당자에게 Cell 서비스 구성을 확인해 달라고 요청하세요.'
+        ? '팔레트 적재 작업을 사용할 수 없습니다. 사이트 설치 담당자에게 팔레트 적재 서비스 구성을 확인해 달라고 요청하세요.'
         : error.message;
     if (error.status === 401 || error.status === 403) $('notice').scrollIntoView({block: 'center'});
   }
@@ -188,7 +188,7 @@ async function list() {
   catch (error) {
     status.setAttribute('state', 'error');
     status.textContent = error.code === 'CELL_APP_UNCONFIGURED'
-      ? 'Cell 서비스 구성을 확인해야 문서를 열 수 있습니다. 사이트 설치 담당자에게 문의하세요.'
+      ? '팔레트 적재 서비스 구성을 확인해야 문서를 열 수 있습니다. 사이트 설치 담당자에게 문의하세요.'
       : '저장된 문서를 확인하지 못했습니다. 접속 상태를 확인하고 다시 시도하세요.';
     throw error;
   }
@@ -472,7 +472,7 @@ async function readJob() {
     if (channelRequested) {
       channelReview = await api(channelPath + '/review');
       if (channelReview.work_kind !== 'cell_job' || channelReview.work_id !== id)
-        throw new Error('현재 대화 요청에 연결된 Cell 작업을 확인하세요.');
+        throw new Error('현재 대화 요청에 연결된 팔레트 적재 작업을 확인하세요.');
     }
     result = await api(`/api/fleet/cell-jobs/${encodeURIComponent(id)}`);
     control = await api('/api/fleet/dispatch-control');
@@ -511,7 +511,7 @@ for (const command of ['admit', 'resume', 'reconcile', 'cancel']) {
       if (busy || role !== 'operator' || !job || job.mission_id !== $('mission-id').value) return;
       const id = job.mission_id, epoch = editEpoch;
       const allowed = await confirmIrreversible({
-        message: command === 'admit' ? `대화 요청에 연결된 Cell 작업 "${id}"의 실행을 승인할까요?` :
+        message: command === 'admit' ? `대화 요청에 연결된 팔레트 적재 작업 "${id}"의 실행을 승인할까요?` :
           `작업 "${id}"을 취소할까요? 작업 취소는 실행 중인 장치를 정지하지 않습니다. 실제 장치 상태를 확인하세요.`,
         action: command === 'admit' ? '실행 승인' : '작업 취소', opener: $(command),
       });

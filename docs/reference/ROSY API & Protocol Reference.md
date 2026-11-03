@@ -5,9 +5,14 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.357
+**Version:** v1.358
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.358 Fleet 상태가 관제 단위 이름을 싣는다 (D-974)
+
+- 관제 단위 설정(`--control-unit-config`)이 있는 Fleet의 `GET /api/fleet/state` 최상위 `fleet`에 `unit`(설정의 `unit_id`)과 `root`(부모가 없으면 `true`)를 더한다. 설정이 없는 Fleet에는 두 필드가 없다.
+- 콘솔 헤더는 `root`면 "통합관제 <unit>", 아니면 `<unit>`을 보이고, 두 필드가 없으면 예전처럼 `name`을 보인다. `name`(`fleet_name`)은 페어링 이름표·site link·lease holder 신원으로 그대로다(D-361, D-391). 표시 전용이며 권한·위임 판정에 쓰지 않는다.
 
 ### v1.357 OMX 팔 사건: 제어 PC 보고, AI PC 설명, 운영자 해제 (D-971)
 
@@ -4545,6 +4550,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.358 | 2026-11-03 | D-974: 관제 단위 설정이 있는 Fleet의 `GET /api/fleet/state` `fleet`에 `unit`·`root`. 헤더 표시 전용, `name`(`fleet_name`) 신원은 그대로 |
 | v1.357 | 2026-11-03 | D-971: OMX 팔 사건. 제어 PC 보고(`arms/{source_id}/incidents`)와 보류 조회(`.../hold`), 운영자 해제(`.../clear`), AI PC 설명(`arm-incidents/unexplained`, `.../explanation`), 사건 사진(`.../frames/{role}`), 작업 셀 관측 스냅샷 팔마다 `incidents` (additive) |
 | v1.355 | 2026-11-03 | D-965: ARM 설치 없는 꼭대기 관제(R)가 ARM 작업 경로 다섯 개를 하위 셀 위임으로 relay. 셀 result에 job·receipt, 승인 전 취소는 HOLD로 거둠, admit은 취소된 위임 제안 거절 |
 | v1.354 | 2026-11-03 | D-965: 셀 inbox가 팔 작업 위임을 받아 부모 service principal로 기존 ARM 제안을 만들고 결속. 위임 approve는 팔 작업에 409, 승인은 셀 ARM admit |
