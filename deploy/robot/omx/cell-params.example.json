@@ -679,6 +679,24 @@
    "source": "tuned",
    "evidence": "2026-10-29: the re-mounted top camera moved 20-45 px (every map stale); a still camera matches its reference within ~1 px"
   },
+  "zone.split_px": {
+   "value": 367.0,
+   "unit": "px",
+   "source": "measured",
+   "evidence": "2026-11-04 top view (D435, 640 px wide): the pallet spans x 265-470 px, its centre column 367 px; arm_b stands left of it, arm_a right"
+  },
+  "zone.middle_px": {
+   "value": 110.0,
+   "unit": "px",
+   "source": "theory",
+   "evidence": "2026-11-04: jaws opened to grip_open 62 span about 131 mm (65 mm each side of the target) and a map misses up to 14 mm; 79 mm at ~1.4 px/mm is 110 px, so nearly the whole pallet is middle and the arms take it in turns. Narrow it once the jaws open less"
+  },
+  "zone.wait_s": {
+   "value": 120.0,
+   "unit": "s",
+   "source": "default",
+   "evidence": "2026-11-04 default: a folded carry (pick, home, place, home) took 1-2 min on arm_b"
+  },
   "calibrate.max_loo_mm": {
    "value": 15.0,
    "unit": "mm",

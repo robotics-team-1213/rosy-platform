@@ -14,12 +14,15 @@ from pathlib import Path
 
 import cell_pipeline as cp
 from cell_envelope import assess, digest, same_session
+from cell_zones import Zones
 
 
 class Gate:
     def __init__(self, cell, config: dict, calibration: dict, *, sequence=cp.SEQUENCE):
         self.cell, self.config, self.calibration, self.assessment = cell, config, calibration, None
-        self.sequence = sequence
+        self.sequence, self.source = sequence, {}
+        # two arms, one pallet (cell_zones): a reach claims its zone before it moves and frees it once folded home
+        self.zones = Zones(config, calibration) if config.get("zone_side") else None
 
     def _assess(self, library) -> dict:
         return assess(self.config, self.calibration, json.loads(Path(library).read_text()), self.cell.act("state"),
@@ -41,6 +44,7 @@ class Gate:
         if command == "state":
             return self.cell.act(command)
         if command.startswith("load "):
+            self.source = json.loads(Path(command[5:]).read_text()).get("source") or {}
             # The unchanged reviewed carry already owns its durable pending intent.
             identical = (self.assessment["mode"] == "automatic"
                          and digest([self.config, self.calibration, self.sequence]) == self.scope_sha
@@ -56,7 +60,16 @@ class Gate:
             faulted = state.get("fault") and same_session(state, self.assessment, recovering=True)
             return {"ok": False, "error": "held: fault" if faulted else "held: session_changed"}
         a = self.assessment
-        return self.cell.act(f"checked {a['session_id']} {a['library_sha256']} {command}")
+        target = {"goto above_pick": "pick", "goto above_place": "place"}.get(command)
+        if self.zones and target:
+            xy = self.source.get(target) or {}
+            allowed, why = self.zones.enter((xy["x"], xy["y"])) if "x" in xy else (False, f"library names no {target} point")
+            if not allowed:
+                return {"ok": False, "error": f"held: zone: {why}"}
+        status = self.cell.act(f"checked {a['session_id']} {a['library_sha256']} {command}")
+        if self.zones and command == "park" and status.get("ok"):
+            self.zones.leave()
+        return status
 
     def frame(self, camera: str):
         return self.cell.frame(camera)
