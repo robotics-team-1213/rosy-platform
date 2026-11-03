@@ -13934,3 +13934,9 @@ osy-d395-s1d\`.
 - 증거: 같은 날 실제 진단·복구로 검증(hold 5분 내 식별, `retitle-repaired` 2건 즉시 교정, `test/test_site_auto_sign.py` 31통과).
 - gate 변화: 없음.
 - CE: 이 문서 자체가 교훈 기록이다.
+
+## 2026-11-03 · uncommitted · fix(landing): delta 차례 넘김은 깨끗한 아래 단계가 있을 때만 (D-889 추가 27 보완)
+- 변경: `land_selection.delta_yields(ticket, base)`를 두고, `land.py`가 표와 `land_full.prepared` 단계가 둘 다 있을 때만 DELTA_NOTE로 차례를 넘긴다.
+- 증거: 14:18·14:34 control-unit-arm-candidate가 tier None(LOAD-FLAKY) 사전 시험 위에서 두 번 넘기고 저장 없이 돌아옴(rosy-land-events). 원격 착지 회귀 27개 파일 + affected_tests 통과, 새 시험 1개.
+- gate 변화: 없음. 단계 없는 착지는 D-889 27 이전처럼 차례 안에서 delta 시험 폴더를 돌린다.
+- CE: 기존 교훈 갱신 — landings-gave-the-turn-back-and-reran-everything 10에 이 조건을 더함.
