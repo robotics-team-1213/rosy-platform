@@ -64,7 +64,8 @@ def restore(wt: Path, branch: str) -> str | None:
     try:
         record = json.loads(_path(wt, branch).read_text(encoding="utf-8"))
         candidate, main = record["candidate"], record["main"]
-        if (record.get("tier") == "full"
+        tier = record.get("base_tier") if record.get("tier") == "delta" else record.get("tier")
+        if (tier == "full"
                 and _git(wt, "cat-file", "-e", "main:tools/harness/affected_exclusive.py").returncode == 0
                 and not affected_exclusive.canonical_full(record.get("invocations", []))):
             return None  # Old FULL plans require a fresh prepare once main owns the strict timing plan.
