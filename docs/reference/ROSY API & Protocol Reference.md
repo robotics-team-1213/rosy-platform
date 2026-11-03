@@ -5,7 +5,7 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.353
+**Version:** v1.354
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -860,6 +860,14 @@ Reads stay installed when the deployment profile closes, provided the persistent
 
 같은 발행 관제·delegation ID·정규화 본문은 같은 기록을 반환한다. 구성 revision·재시작·전송 재시도가 identity를 바꾸지 않는다. 다른 본문·owner 결속은 409 충돌이다. 위임 binding·history와 로컬 task 생성은 기존 TaskStore admission transaction 안에서 함께 커밋한다. 인증·관계·본문·현재 안전 검사는 항상 유지하고 이전 권한을 재전달로 복원하지 않는다.
 
+접수·조회 응답 유실은 새 key나 다른 자식에 재배정하지 않는다. 기존 기록과 같은 identity로 직접 자식을 재조회한다. stale 응답·잘못된 origin/request/owner/revision·낮은 owner_revision으로 현재 사실을 덮지 않는다. 상위 링크 단절에서는 신규 상위 위임과 다음 Action을 막고 현재 admission된 유한 Action의 기존 장치 정책만 유지한다. 재연결 대조 없이 자동 재시작·점유 해제·rearm을 하지 않는다. 오래된 구성·scope·수정된 본문·잘못된 승인 revision은 409, 권한/관계 위반은 403, 미등록 위임은 404, 미설정/DB 불가/불명 peer 응답은 503 또는 stale 읽기 결과로 보존한다. 빈 조회 목록을 장애의 성공 응답으로 만들지 않는다.
+
+`POST /api/v1/navigation/cancel-scoped`는 operator 전용의 새 CORE 경로다. 요청은 UUID `expected_boot_id`, UUID `run_id`, 비어 있지 않은 1~128자 `correlation_id`를 모두 요구한다. 세 값이 현재 owner 실행과 맞을 때 기존 NavigationManager 잠금 안에서만 cancel을 수행한다. 결과는 `{navigation,operation}`이며 operation은 해당 실행의 native receipt다. scope 불일치·이미 다른/종단 실행이면 409 `NAVIGATION_SCOPE_CHANGED`이고 다른 목표·trip lease를 바꾸지 않는다. 잘못된 body는 기존 CORE ERR-101 규약의 400 `VALIDATION_ERROR`다. 기존 `/navigation/cancel`은 바꾸지 않는다. 구버전의 scoped 경로 404는 미지원으로 남기며 무조건 취소로 fallback하지 않는다. Fleet은 owner receipt의 boot/run/attempt 결속이 없으면 이 요청을 만들지 않고 결과 불명으로 보존한다.
+
+scoped 취소는 결속된 navigation run만 취소하며 trip lease를 자동 종료하거나 IDLE로 전환하지 않는다. lease 수명·해제는 기존 소유자 경로에 남는다. 응답 `navigation`은 응답 시점의 현재 facade 상태여서 새 run의 상태일 수 있다. 성공 판단은 `operation`의 원래 boot/run/correlation과 TERMINAL/CANCELED에 결속하고 facade 상태를 원래 run의 결과로 해석하지 않는다. native 취소 receipt도 물리 정지 측정 증거는 아니다.
+
+이 절은 공유 계약이며 HTTP·runtime·UI·배치 및 실물 수용은 각 구현 증거로 닫는다. schema 등록·원격 모델 시험만으로 파이프라인이 완성됐다고 주장하지 않는다.
+
 ### v1.353 Arm-transfer delegation candidate shape (D-965)
 
 팔 작업 위임 후보의 모양만 정한다. 이 버전의 경로는 아직 navigation 후보만 받는다. 셀 ingress와 R 쪽 변환은 후속 버전에서 연다.
@@ -869,13 +877,16 @@ Reads stay installed when the deployment profile closes, provided the persistent
 - `ControlDelegationSnapshot.request`는 navigation 후보와 팔 작업 후보 중 하나다. 두 모양은 필수 필드가 달라 서로 바뀌지 않는다.
 - 셀은 팔 작업 후보를 받으면 기존 ARM 제안(`PROPOSED`)을 만든다. 승인은 셀의 기존 ARM admit(기명 운영자 또는 D-938 정책) 하나뿐이다. 위임 자체에는 별도 approve가 없다.
 
-접수·조회 응답 유실은 새 key나 다른 자식에 재배정하지 않는다. 기존 기록과 같은 identity로 직접 자식을 재조회한다. stale 응답·잘못된 origin/request/owner/revision·낮은 owner_revision으로 현재 사실을 덮지 않는다. 상위 링크 단절에서는 신규 상위 위임과 다음 Action을 막고 현재 admission된 유한 Action의 기존 장치 정책만 유지한다. 재연결 대조 없이 자동 재시작·점유 해제·rearm을 하지 않는다. 오래된 구성·scope·수정된 본문·잘못된 승인 revision은 409, 권한/관계 위반은 403, 미등록 위임은 404, 미설정/DB 불가/불명 peer 응답은 503 또는 stale 읽기 결과로 보존한다. 빈 조회 목록을 장애의 성공 응답으로 만들지 않는다.
+### v1.354 Cell inbox accepts delegated arm work (D-965)
 
-`POST /api/v1/navigation/cancel-scoped`는 operator 전용의 새 CORE 경로다. 요청은 UUID `expected_boot_id`, UUID `run_id`, 비어 있지 않은 1~128자 `correlation_id`를 모두 요구한다. 세 값이 현재 owner 실행과 맞을 때 기존 NavigationManager 잠금 안에서만 cancel을 수행한다. 결과는 `{navigation,operation}`이며 operation은 해당 실행의 native receipt다. scope 불일치·이미 다른/종단 실행이면 409 `NAVIGATION_SCOPE_CHANGED`이고 다른 목표·trip lease를 바꾸지 않는다. 잘못된 body는 기존 CORE ERR-101 규약의 400 `VALIDATION_ERROR`다. 기존 `/navigation/cancel`은 바꾸지 않는다. 구버전의 scoped 경로 404는 미지원으로 남기며 무조건 취소로 fallback하지 않는다. Fleet은 owner receipt의 boot/run/attempt 결속이 없으면 이 요청을 만들지 않고 결과 불명으로 보존한다.
+셀의 `POST /api/fleet/control-unit/inbox`가 `ControlArmIngressRequest`도 받는다. 범위 검사는 `workcell:<transfer.workcell_id>` 자원이 최종 target의 직접 소유인지다.
 
-scoped 취소는 결속된 navigation run만 취소하며 trip lease를 자동 종료하거나 IDLE로 전환하지 않는다. lease 수명·해제는 기존 소유자 경로에 남는다. 응답 `navigation`은 응답 시점의 현재 facade 상태여서 새 run의 상태일 수 있다. 성공 판단은 `operation`의 원래 boot/run/correlation과 TERMINAL/CANCELED에 결속하고 facade 상태를 원래 run의 결과로 해석하지 않는다. native 취소 receipt도 물리 정지 측정 증거는 아니다.
-
-이 절은 공유 계약이며 HTTP·runtime·UI·배치 및 실물 수용은 각 구현 증거로 닫는다. schema 등록·원격 모델 시험만으로 파이프라인이 완성됐다고 주장하지 않는다.
+- 최종 target 셀은 인증된 직접 부모의 `service` principal로 기존 ARM 제안을 만든다. `transfer.request_key`가 그 principal 아래의 제안 key다. 같은 위임의 재전달은 같은 제안을 돌려준다.
+- 제안 mission ID는 위임의 `local_task_id`에 결속된다. 셀에 ARM 설치가 없거나 부모 principal이 제안 권한이 없으면 409(`CONTROL_UNIT_ARM_JOBS_UNAVAILABLE`, `CONTROL_UNIT_ARM_PROPOSAL_FORBIDDEN`)이고 결속하지 않는다.
+- 팔 작업 위임의 `/approve`는 409 `CONTROL_UNIT_ARM_ADMIT_AT_CELL`이다. 승인은 셀의 기존 ARM admit뿐이다.
+- 위임 상태는 ARM 상태를 옮긴다: PROPOSED→QUEUED, READY→ACCEPTED, RUNNING·ACTION_SUCCEEDED→RUNNING, GOAL_CONFIRMED→COMPLETED, HOLD→HOLD. result는 `{mission_id,status,reason}`다.
+- 팔 작업의 취소 요청은 기록만 한다. ARM 제안 취소는 셀 운영자가 기존 ARM 취소 경로로 한다.
+- 외부 앱의 ARM 제안을 R이 위임으로 바꾸는 진입은 아직 없다. 로컬 운영자 `POST /delegations`는 navigation만 받는다.
 
 ### v1.292 Candidate trip admission (D-836)
 
@@ -4504,6 +4515,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.354 | 2026-11-03 | D-965: 셀 inbox가 팔 작업 위임을 받아 부모 service principal로 기존 ARM 제안을 만들고 결속. 위임 approve는 팔 작업에 409, 승인은 셀 ARM admit |
 | v1.353 | 2026-11-03 | D-965: 팔 작업 위임 후보 모양(`ControlArmTransferCandidate`·`ControlArmWorkRequest`·`ControlArmIngressRequest`), snapshot request는 두 종류 중 하나. 경로는 아직 navigation만 |
 | v1.351 | 2026-11-03 | 핑키 열 모드: `safety/state.thermal`, `thermal.*` 이벤트, ROS `motor/health`. warm은 직선 상한 절반, hot은 자율 주행 0(수동은 warm 상한) |
 | v1.350 | 2026-11-02 | D-963: 제어 PC의 역할 없는 USB 카메라 보고·운영자 역할 결정 (`workcell-observations/{workcell_id}/usb-devices`) |

@@ -141,6 +141,11 @@ class PhysicalTransferStore:
             _principal(principal, operator=True)
         return result
 
+    def peek(self, mission_id):
+        """In-process read for the control-unit owner that bound this job (D-965); no HTTP caller reaches it."""
+        with closing(self._journal._connect()) as connection:
+            return self._read(connection, mission_id)
+
     def get_by_request_key(self, request_key, *, principal):
         actor = _principal(principal)
         key = _nonempty("request_key", request_key, limit=160)

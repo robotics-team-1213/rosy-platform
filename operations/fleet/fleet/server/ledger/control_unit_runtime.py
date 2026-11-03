@@ -189,7 +189,9 @@ def install_control_unit(app, path, *, tasks, console, principals, named_logins,
         resources = config.topology.unit(config.unit_id).resources
         enrollment.owned_robot_ids = frozenset(r[6:] for r in resources if r.startswith("robot:"))
     store = ControlUnitStore(tasks.store.path, unit_id=config.unit_id)
-    service = ControlUnitService(config.topology, store, tasks, console, peer=None)
+    # ARM routes install after this; read their store when a delegated arm proposal arrives (D-965).
+    service = ControlUnitService(config.topology, store, tasks, console, peer=None,
+                                 arm_jobs=lambda: getattr(app.state, "arm_transfer_job_store", None))
     http = httpx.AsyncClient(verify=config.tls_context or True, trust_env=False,
                              follow_redirects=False, timeout=3.0)
     service.peer = ControlUnitPeers(config, http)
