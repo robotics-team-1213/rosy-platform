@@ -13971,3 +13971,9 @@ osy-d395-s1d\`.
 - 증거: 실측 받침 케이스가 2,310 s 한도에서 8/9까지 놓음(run 5d3a, `runtime_limit`). 계획기 시험(벨트·적층·자기 정렬 자리 도달, 낮춘 벨트 수직 하강, arm_a 경유점) 원격 통과.
 - gate 변화: 없음. CAD 케이스 그대로.
 - CE: 해당 없음 — 원인과 고침이 시험·주석·검증 기록에 있다.
+
+## 2026-11-03 · uncommitted · fix(landing): 같은 환경 browser chunk의 겹치는 파일 제거
+- 변경: 같은leading환경과실존순수.py파일만인browser계획을합칠때먼저나온chunk에파일을남긴다. 두browser결합경계만적용하며입력·파일합집합·chunk순서·기존basename분리를보존한다. 다른env순서/ALONE/profile/options/node/folder/missing/unknown은기존exactargv규칙이고일반pytest선택은그대로다.
+- 증거: code882915a034 원격새회귀+land_selection+land_browser 88PASS/skip·NEW·known·flaky0, wait0/run26초. RED40ee의3NEW중유지된두결합경계2NEW와97c52에서제거한추가env정규화요구1NEW를구분한다. 실제동일후보c5bf44/동일env의두기존argv를오프라인재생해15file참조→13/unique13/union동일,전체plan이나wall측정은아니다. 로그OS Temp rosy-browser-overlap-{red,green}/run-1.txt,운영자증거는저장소밖기존workspace-records의browser-overlap-selection-evidence-20261103.json.
+- gate 변화: 없음. 축소된실제argv로기존cache계약을계속사용하며whole키나생략시험PASS를추론하지않는다. 독립고정코드검토P1/P2없음. 정식후보검증·main착지는남아있으며진행중UI시험을수정/재시작하지않았다.
+- CE: 기존교훈갱신 — landings-gave-the-turn-back-and-reran-everything에부분파일중복의실제환경증거와보수적결합조건을추가했다. 이미설명된exactargv중복과구분하며성능목표달성으로확대하지않는다.
