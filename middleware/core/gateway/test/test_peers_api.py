@@ -49,4 +49,4 @@ def test_beacon_needs_the_peer_share_grant(core):
     assert refused.json()["error"]["detail"] == {"capability": "PEER_SHARE"}
     malformed = client.post("/api/v1/peers/beacon", headers=OPERATOR,
                             json={"robot_id": "x"})
-    assert malformed.status_code == 422
+    assert malformed.status_code == 400  # the shared INVALID_REQUEST envelope
