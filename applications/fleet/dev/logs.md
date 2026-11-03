@@ -67,3 +67,9 @@
 - 변경: 공용 HTTP 호스트가 Windows에서는 `SO_EXCLUSIVEADDRUSE`를 bind 전에 설정하고 주소 재사용을 끈다. 모든 플랫폼에서 포트 재사용을 명시적으로 끈다. 샘플·실제 API 연결 모두 사용 중인 포트로는 준비 메시지 전에 실패하며, 호출자가 백그라운드 PID·자식 프로세스를 종료한 뒤 워크트리를 제거하도록 README에 기록했다.
 - 증거: `6d812fe216` 원격 RED는 독점 옵션 없이 주소 재사용 bind를 호출해 1 실패·6 통과. 제품 수정 후 `dc0d8f5346`의 Windows 네이티브 소켓 검증은 독점 옵션 값 1, 중복 bind 오류 10048, close 후 재bind 성공을 확인했다. 서버 프로세스는 시작하지 않고 모든 소켓을 닫았다. 같은 SHA의 Linux 원격 샘플 서버·connected proxy 회귀는 15 통과·0 skip, known_failures 0 NEW다.
 - gate 변화: 포트 소유·반환 회귀와 Windows 소켓 수용만 확인한다. 브라우저·장치·현장 수용과 별개다. CE: 기존 Windows 워크트리 교훈 갱신은 상위 작업에서 맡는다.
+
+## 2026-11-03 · 8b38f889ba · fix: 쿠키 운영자 화면의 샘플 USB 목록 연결
+
+- 변경: 쿠키 로그인 운영자의 설치 화면이 요청하는 USB 목록을 샘플 provider가 빈 workcells로 응답한다. 검토된 peer 714a852af0의 handler와 HTTP 회귀 두 파일을 재사용했다.
+- 증거: frozen USB AUTO 후보의 설치 browser는 unhandled GET USB 목록으로 두 번 실패했고 main 5121b7d66b에서는 통과했다. source 8b38f889ba의 원격 샘플 서버 9건과 해당 Chromium 설치 node 1건은 모두 PASS/0 SKIP, known_failures NEW/known/flaky=0이다.
+- gate 변화: 기존 쿠키 인증·Origin 검사와 승인 mutation 거절을 유지한다. 실물 USB 적용이나 장치 수용을 확인한 결과는 아니다. CE: 해당 없음 — 누락 경로와 인증 경계는 handler와 회귀에서 확인된다.

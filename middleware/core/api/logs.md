@@ -1325,3 +1325,11 @@
 - 변경: 기존 Pilot allowlist에 layout.css만 추가했다. 경로 방어·인증·API·정지 명령 owner는 유지한다.
 - 증거: 날짜별 검증 기록 `docs/validation/robot-pilot-learning-ux-2026-10-28/result.md`에 RED·고정 SHA·원격 영향/브라우저 결과·독립 소스/실제 화면 검토를 구분했다. 설치 자산·라우트 회귀 fce9c60216은20 passed, skip0이다.
 - gate 변화: 없음. 실제 장치·APK/ARM64 빌드·현장 수용은 별도다. CE: 해당 없음 — 기존 크기 이력 교훈을 적용하고 이번 경계의 판단을 코드·회귀·D-910에 남겼다.
+
+
+## 2026-11-03 · 6610ceaed5 · fix(api): align the central contract version after merging thermal API
+
+- Change: central `CONTRACT` now names the existing authoritative v1.351 header after merging the central-version migration with the thermal API. The app keeps reading the central value; feature-specific version pins stay removed. No new contract version is reserved.
+- Evidence: merge `0ca7f37163` reproduced one alignment failure/two passes. The independently reviewed one-line commit `6610ceaed5` has tree `7bc30d51e150358a84980246ece4a721f8cb042d`; official remote alignment/API/dashboard/related feature-document tests passed 136, skipped zero, NEW/known/flaky zero.
+- gate 변화: existing header and advertised version now agree; fresh FULL and public CI remain required.
+- Scope: existing header/changelog and bump helper preserved. Fresh canonical FULL, public CI and field acceptance are separate pending gates. CE: no additional lesson; the existing alignment guard and central constant explain this merge correction.

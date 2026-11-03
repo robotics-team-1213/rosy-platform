@@ -1835,3 +1835,9 @@
 - Change: merged main d93c306e3f and pinned C0 commit 94d27806d2 on refactor/swarm-reference-stream-land without production-code conflicts.
 - Evidence: Git blob comparison and [integration record](../../../docs/validation/swarm-lifecycle-extraction-2026-10-25/result.md). Static integration checks only; no new remote pass for this integrated HEAD.
 - gate 변화: unchanged. Official FULL testing and landing await C0 landing confirmation and GO. CE: not applicable.
+
+## 2026-11-03 · 3568bce2a2 · 열 보호의 센서별 읽기 유실 유지
+
+- 변경: 위험을 발생시킨 같은 센서의 필수 읽기가 돌아올 때까지 각 reason의 위험 수준을 유지한다. 다른 모터의 정상 온도로 고온 모터의 보호를 해제하지 않으며, 이전 HOT이 해제된 뒤 다른 WARM source만 유실됐다면 WARM만 유지한다. 문턱·cap·모드·CORE 최종 명령 권한은 보존한다.
+- 증거: test-only RED `d49ad44213`의 공식 원격 결과는 예상 실패 7건/기존 통과 8건, NEW7/known0/flaky0이었다. 독립 Safety-Review가 승인한 tree `4639174988efe39734b09dcd2d39da1d12e6245c`와 production commit `3568bce2a2`의 tree가 같다. thermal·thermal_mode·core_logic·battery 원격 GREEN159건/skip0, NEW/known/flaky0을 확인했다.
+- gate 변화: SOURCE의 해당 회귀만 확인했다. 통합 FULL·공개 CI·설치 산출물·실물 수용은 별도다. CE: 해당 없음 — 최종 source별 상태와 회귀 시험이 판단과 해제 조건을 설명한다.

@@ -13898,3 +13898,23 @@ osy-d395-s1d\`.
 - 범위 측정: 같은6b9..987 입력과987 파일 내용·자동without_sim/browser[] 조건에서 FULL27argv/추적 시험 파일2383개→AFFECTED1argv/11개(9guards+goal/events)다. workspace-records/2026-11-02/stats-selection-scope-evidence.json에 원본 argv·파일 union·SHA·조건을 원본과 SHA256 동일하게 보존했다. testcase 수나 실제 wall 절감·SLO 달성으로 해석하지 않는다.
 - gate 변화: 순수 계측 변경의 관련 시험 범위만 바로잡는다. 이 선택기 수정 자체는 정식 FULL이 필요하고, safety·runtime/selector/remote 혼합의 FULL과 기존 문서 guard를 유지한다. 공식 후보 검증·main 착지·변경 후 p90 검증은 아직 남아 있다.
 - CE: 기존 교훈 갱신 — landings-gave-the-turn-back-and-reran-everything의 과다 FULL 원인과 적용 조건을 보완했다. 보고 결과가 승인·실행 경로에 들어가면 분류를 재검토한다. 최종 문서 기록은 검증 코드a193 대비 tools/test 변경이 없으며 같은 guard를 별도 수동 pytest로 반복하지 않고 공식 착지에서 확인한다.
+
+## 2026-11-03 · f81b8315d0 · docs: unwedge의 측정 기반 성공 조건과 검증 범위
+
+- 변경: 기존 unwedge 교훈의 clearance를 명령 횟수 대신 시작 측정값 대비 순변위로 정정하고, held-target 기준 HOME 한계·park 정착·측정 HOME 확인을 기록했다. 기존 21단계 현장 기록과 후속 호스트 회귀를 구분했다.
+- 증거: 1bd891afdf의 공식 원격 RED는 예상 실패 4건/통과 3건이었다. 독립 안전 검토된 f81b8315d0의 unwedge·pipeline 원격 회귀는 55 PASS/0 SKIP, NEW/known/flaky=0이었다. 교훈은 실제 코드의 SETTLE_TOL·readback 조건과 대조했다.
+- gate 변화: 기존 guard·torque·session 규칙을 유지한다. 수정 revision의 실물 수용에는 감독 시험이 필요하다. CE: 기존 교훈 갱신.
+
+## 2026-11-03 · uncommitted · docs: 측면 카메라 정량 검증 상태 정정
+
+- 변경: 동결된 cell survey 기록에 정정 절을 추가했다. 기존 측면 PnP 잔차로 렌더 오차를 제한할 수 있다는 서술과 양쪽 통과·완료 판정을 철회했다.
+- 증거: 기존 상단 측정 보고 1.13 px는 제안된 평균 3 px 기준을 만족한다. 측면 렌더 대 실물 정량 측정은 UNKNOWN이며 육안 비교와 구분한다. 추가 영상 측정·실물 동작은 수행하지 않았다.
+- gate 변화: 측면 정량 검증 대기. 중단된 run의 적재 수용은 주장하지 않는다. CE: 해당 없음 — 기존 증거의 주장 범위 정정.
+
+
+## 2026-11-03 · uncommitted · test(remote): verify profiles across each planned host worker
+
+- Change: explicitly pin independent host headroom in the dispatch fixture. Unmeasured hosts use one worker each; 4-core/4-GB hosts use two. Exact host/profile assertions cover every planned worker, with no production change.
+- Evidence: test-only `69b5622629` reproduced the whole-root failure deterministically (one expected failure and one pass). `270285542c` passed all 152 tests across remote_test_tools, remote_pytest and reboot admission, with zero skips/NEW/known/flaky. The prior source9752 whole-root run had one profile-fixture failure; its isolated retry passed, demonstrating uncontrolled shared state rather than missing profile propagation.
+- Gate: no quarantine or weakened evidence. The previous FULL was stopped and its 1855 browser passes plus clean 12-test G1 receipt remain audit evidence only; a new tree requires a fresh canonical FULL before publication. No new public CI or field acceptance claim.
+- CE: no additional lesson; the two resource cases and exact assertions explain the correction. Existing workflow/recovery lessons updated earlier remain applicable.

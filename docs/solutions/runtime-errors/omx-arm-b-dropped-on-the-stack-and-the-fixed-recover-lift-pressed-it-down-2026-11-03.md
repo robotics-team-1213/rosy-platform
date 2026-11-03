@@ -1,14 +1,18 @@
 ---
 title: arm_b dropped onto the container stack, and the fixed recover lift pressed it further down
 date: 2026-11-03
+last_updated: 2026-11-03
 category: runtime-errors
 module: deploy/robot/omx (cell_auto_pick.py pivot, cell_pipeline.recover, cell_unwedge.py, cell-params)
 problem_type: runtime_error
 component: deployment
+severity: high
 symptoms:
   - "goto above_pick to an over-target pivot: wrist_flex following error >5 motor degrees; command=3333, current=3276"
   - "the extended arm came down on the stacked containers; one tier fell over"
   - "cell_pipeline --stage recover: the same wrist_flex error again, at 62 % PWM, the arm did not move"
+  - "unwedge counted lift commands as clearance while the shoulder oscillated with zero net displacement"
+  - "park returned ok=true with settled=false but recovery reported success"
 root_cause: wrist_overload_and_a_pose_specific_recovery
 resolution_type: code_fix
 ---
@@ -46,12 +50,35 @@ the weak wrist to lift the arm's end, and the wrist stalled at 62 % PWM, 4.8 deg
   wrist gets no command. After each step a rule reads every body joint's lag:
   - over 1.2 units: back off by half a step and try the other joint;
   - both joints strained in a row: stop for a person;
-  - shoulder up 12 units: park.
+  - measured shoulder displacement reaches 12 units toward home from the initial readback: request park;
+  - report recovered only when park confirms settlement and measured body joints are within the runner's home tolerance.
 
-  Each step keeps top and side frames and a decision row. On the real arm it freed arm_b in 21 steps with no strained
-  step, then parked home.
+  Each step keeps top and side frames and a decision row. The original field report records that arm_b was freed in
+  21 steps with no strained step and then parked. That trial predates the success-condition correction below.
 - `cell_pipeline.recover` with nothing held now uses `cell_unwedge`, and no longer opens the jaws to `grip_open`
   (62). Opened that wide on top of a stack, the fingers push the neighbours. With a box held it keeps the old path.
+
+## 2026-11-03 success-condition correction (host verification)
+
+The following refs identify local review/test commits at this pre-publication checkpoint; their D-868 merge-commit
+publication is pending, and this section does not claim they are deployed.
+
+Review of candidate `0c71fb0e2a` found that its clearance counter counted accepted lift commands. Starting at
+HOME + 0.25, its direction changed at home and the fake actuator oscillated: 21 steps produced zero net shoulder
+displacement but triggered park. The runner also legitimately returns `ok=true, settled=false` after a settlement
+timeout; checking only `ok` reported recovery without proving home.
+
+The correction in `f81b8315d0` fixes the lift direction from the initial measured shoulder and checks signed measured
+displacement. A jog changes the runner's held target, so its step is clamped against that target's remaining distance
+to home. Reaching or crossing home before clearance stops the attempt. Park success requires positive `ok` and
+`settled`, finite body readback and measured home error within the runner's `SETTLE_TOL`. Missing measurements and
+failed backoff stop the attempt. The clearance unit is a shoulder joint unit; this check does not measure TCP height.
+
+The committed RED `1bd891afdf` produced four expected failures and three passes remotely. The reviewed source
+`f81b8315d0` then passed all 55 unwedge and pipeline cases with no skips or new/known/flaky failures. The recovery
+fake now updates measured state and models park settlement instead of always returning unchanged positions.
+These are host regression results; a supervised D-911 trial of the corrected revision remains required for field
+acceptance. Guard, torque and session rules remain in force; preserve stopped/stuck outcomes for operator recovery.
 
 ## Next time
 

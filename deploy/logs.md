@@ -4436,6 +4436,12 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - gate 변화: 없음. 장치·현장 수용을 주장하지 않는다.
 - CE: 해당 없음 — 오류 전달 원인과 해결은 수정 코드 및 회귀 시험에 직접 남아 있다.
 
+## 2026-11-03 · f81b8315d0 · fix(omx): 실측 순상승과 정착 home 증거로만 복구 완료
+
+- 변경: 빈손 jam 복구는 시작 자세 대비 실측 순상승을 계산하고, held target이 home에 도달하면 추가 jog를 멈춘다. 누락·비유한 상태와 거절된 backoff는 중단하며, park는 `settled=true`와 기존 Runner 허용오차 안의 실측 home을 함께 확인해야 recovered를 반환한다. 기존 가드·세션·동작 한계는 유지한다.
+- 증거: test-only RED commit `1bd891afdf60be4819379e40f2bee3e988e17807`의 공식 원격 unwedge 회귀는 예상한 4건 실패·기존 3건 통과(NEW 4)였다. 독립 D-911 사전 검토 후 source commit `f81b8315d087543c34c091c2a49ba56976b2f9f2`의 공식 원격 `test/test_omx_cell_unwedge.py test/test_omx_cell_pipeline.py`는 55 passed, 0 skipped, NEW 0 / known 0 / flaky 0이었다. 로그는 외부 임시 보관소의 `rosy-unwedge-safety-red-20261103/run-1.txt`, `rosy-unwedge-safety-green-20261103/run-1.txt`에 있다.
+- gate 변화: 없음. 장치 동작·배포·현장 수용은 실행하지 않았다.
+- CE: 기존 jam 복구 교훈 갱신은 통합 담당자가 별도로 수행한다. 이 항목은 소스 회귀 검증 기록이다.
 
 ## 2026-11-03 · uncommitted · docs(release): record one reviewed historical Git-tree tuple
 
