@@ -79,3 +79,12 @@ the weak wrist to lift the arm's end, and the wrist stalled at 62 % PWM, 4.8 deg
 - The attempt record used to keep only the last hover hook's answer, which hid the unseen and false looks. Since
   `6dbf19e7b9`, the wrist step keeps every hook's answer under `hooks`. Until then, find them in `chunk-status.jsonl`
   (the `grip 50.5`/`grip 62.0` pairs are the jaw marks; state[5] shows whether the jaws moved).
+- The look's jaw mark opened to 62 (about 131 mm of gap, wider than any pick's open_max 56) at the hover over the dense
+  row (13:24): it swept the neighbours 6 mm away, closed on a box edge (blocked at 54.6) and the park folded the box
+  home (see the elbow-overload lesson). The mark needs that travel (episode top frames: opened to 54.8 no blob, to 59.9
+  about 500 px), so opening it less is no fix. `cell_look` now opens the jaws only when the top map shows free ground
+  on both sides of the box along the closing axis out to half the opened gap plus `look.mark_err_mm`
+  (`cell_finger_room.mark_room`, kept on the object as `mark_half_mm`); else it is skipped when the wrist hooks still
+  measure, refused when nothing else does. It rests on the map, not the jaws' height, so the 18 mm TCP-length
+  question does not enter. Before trusting a hover look near neighbours, read `hooks` in the attempt for `skipped`.
+

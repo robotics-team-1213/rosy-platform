@@ -848,6 +848,12 @@
   "source": "default",
   "evidence": "the full error each re-plan; 2026-11-03 arm_b moved 1.5-2.4 times the correction and swung -4.4 / +2.1 / -2.9 mm round the aim"
  },
+ "look.mark_err_mm": {
+  "value": 14.0,
+  "unit": "mm",
+  "source": "measured",
+  "evidence": "2026-11-03 arm_b dense row: the jaw mark opens to 62 (about 131 mm of gap by the 52.3 / 10.4 line) among boxes 6 mm apart; the mark may only open when the free distance each side of the box centre reaches half that gap plus this error, the top map's worst leave-one-out error (13.6 mm, 2026-10-30)"
+ },
  "look.near_px": {
   "value": 40.0,
   "unit": "px",
