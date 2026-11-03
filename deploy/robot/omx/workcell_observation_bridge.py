@@ -22,6 +22,7 @@ from uuid import uuid4
 
 import yaml
 
+from core_common.protocol.arm_incidents import ArmIncidentAccepted, ArmIncidentHold  # D-971
 from core_common.protocol.workcell_observations import ArmObservation, UsbCameraDecisions, WorkcellObservationManifest
 from core_common.motor_health import read_motor_health_snapshot
 from core_common.protocol.motor_health import MotorHealthResponse
@@ -195,6 +196,61 @@ def post_usb_devices(fleet_url, workcell_id, token, report, *, context):
         if response.status != 200:
             raise OSError('usb camera report was not accepted')
         return UsbCameraDecisions.model_validate_json(response.read(16385))
+
+
+def _arm_url(fleet_url, source_id):
+    return secure_url(fleet_url, 'https') + '/api/fleet/workcell-observations/arms/' + quote(source_id, safe='')
+
+
+def post_arm_incident(fleet_url, source_id, token, report, *, context):
+    """D-971: one ended session's incident (facts and up to two frames); the reply carries the arm's hold."""
+    request = Request(_arm_url(fleet_url, source_id) + '/incidents', data=report.model_dump_json().encode(),
+                      method='POST', headers={'Content-Type': 'application/json', 'X-Workcell-Observation-Token': token})
+    with build_opener(HTTPSHandler(context=_verified(context)), _NoRedirect()).open(request, timeout=10) as response:
+        if response.status != 200:
+            raise OSError('arm incident was not accepted')
+        return ArmIncidentAccepted.model_validate_json(response.read(16385))
+
+
+def get_arm_hold(fleet_url, source_id, token, *, context):
+    """D-971: whether Fleet holds this arm (an incident not cleared by a person)."""
+    request = Request(_arm_url(fleet_url, source_id) + '/hold', method='GET',
+                      headers={'X-Workcell-Observation-Token': token})
+    with build_opener(HTTPSHandler(context=_verified(context)), _NoRedirect()).open(request, timeout=3) as response:
+        if response.status != 200:
+            raise OSError('arm hold was not answered')
+        return ArmIncidentHold.model_validate_json(response.read(16385))
+
+
+class ArmIncidentLink:
+    """One arm's incident channel to Fleet, from the manifest and token variables the bridge already uses."""
+
+    def __init__(self, fleet_url, source_id, token, *, context):
+        self.fleet_url, self.source_id, self.token, self.context = secure_url(fleet_url, 'https'), source_id, token, context
+
+    @classmethod
+    def from_environment(cls, arm_id, environ):
+        """None when this PC has no observation configuration; ValueError when it is wrong."""
+        names = ('ROSY_WORKCELL_OBSERVATIONS', 'ROSY_OBSERVATION_WORKCELL', 'ROSY_OBSERVATION_FLEET_URL')
+        if not all(environ.get(name) for name in names):
+            return None
+        manifest = WorkcellObservationManifest.model_validate(
+            yaml.safe_load(Path(environ[names[0]]).read_text(encoding='utf-8')))
+        cell = next((c for c in manifest.workcells if c.workcell_id == environ[names[1]]), None)
+        # record_session's --arm is the observer instance name; the registered arm_id may carry the owner's suffix
+        arm = next((a for a in cell.arms if arm_id in (a.arm_id, a.source_id, a.arm_id.removesuffix('_follower'))),
+                   None) if cell else None
+        token = environ.get(arm.token_env) if arm else None
+        if (not token or not hmac.compare_digest(sha256(token.encode()).hexdigest(), arm.credential_sha256)):
+            raise ValueError('arm credential missing or fingerprint mismatch')
+        return cls(environ[names[2]], arm.source_id, token,
+                   context=ssl.create_default_context(cafile=environ.get('ROSY_OBSERVATION_CA_FILE') or None))
+
+    def post(self, report):
+        return post_arm_incident(self.fleet_url, self.source_id, self.token, report, context=self.context)
+
+    def hold(self):
+        return get_arm_hold(self.fleet_url, self.source_id, self.token, context=self.context)
 
 
 def run_usb_reports(stop, post, workcell_id, *, interval=20):

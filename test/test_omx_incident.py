@@ -1,5 +1,6 @@
 """omx_incident: an arm session that ends in trouble is collected, decided by measurement, recorded as a decision
-row and an agenda, recovered only by an allowed reboot, and held for a person (arm_b 2026-11-03 13:27)."""
+row, recovered only by an allowed reboot and reported to Fleet, which holds the arm for a person (arm_b 2026-11-03 13:27;
+D-971). Fleet is a fake link here: its own routes are tested in operations/fleet/test/test_arm_incidents.py."""
 import json
 from pathlib import Path
 import sys
@@ -8,7 +9,9 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "deploy/robot/omx"))
 import omx_incident as oi  # noqa: E402
+from core_common.protocol.arm_incidents import ArmIncidentAccepted as Accepted, ArmIncidentHold as Hold  # noqa: E402
 
+SID = "6f1c2a3e-1b2d-4e5f-8a9b-0c1d2e3f4a5b"
 HOME = [0.8, -62.2, 51.8, 51.4, 45.0, 54.4]
 
 
@@ -31,34 +34,123 @@ def session(tmp_path, *, latched=True, last=HOME, status=(), windup=True):
     log.write_text("\n".join(json.dumps(s) for s in samples))
     faults = tmp_path / "faults"
     faults.mkdir()
-    (faults / "arm_b_follower-20261103T042721-a3644c.json").write_text(json.dumps({"session_id": "s1"}))
+    (faults / "arm_b_follower-20261103T042721-a3644c.json").write_text(json.dumps({"session_id": SID}))
+    for view in ("top", "side"):
+        (faults / f"arm_b_follower-20261103T042721-a3644c-{view}.jpg").write_bytes(b"\xff\xd8" + view.encode() * 20)
     record = {"safe_end": not latched, "started": 100.0, "torque_after": {str(i): 0 for i in range(11, 17)},
               "hardware_faults": {"13": {"hw_error": 32, "packet_alert": True}} if latched else {},
               "chunks": {"io": str(io), "library": str(library)}, "motor_health_log": str(log),
               "motor_health_state": str(tmp_path / "motor-health-current.json"), "motor_health_owner": "arm_b_follower",
-              "motor_health_session": "s1"}
+              "motor_health_session": SID}
     path = tmp_path / "session.json"
     path.write_text(json.dumps(record))
     return path
 
 
-def test_the_13_27_overload_is_rebooted_recorded_as_an_agenda_and_held_for_a_person(tmp_path, monkeypatch):
+class Link:
+    """What the control PC sees of Fleet: post a report, ask the hold. `down` is an unreachable Fleet."""
+    source_id = "omx_arm_b"
+
+    def __init__(self):
+        self.posted, self.down, self.held = [], False, False
+
+    def post(self, report):
+        if self.down:
+            raise OSError("Fleet unreachable")
+        self.posted.append(report)
+        self.held = True
+        return Accepted(incident_id="a" * 32, hold=hold(True))
+
+    def hold(self):
+        if self.down:
+            raise OSError("Fleet unreachable")
+        return hold(self.held)
+
+
+def hold(held):
+    return Hold(held=held, incident_ids=["a" * 32] if held else [], reason="1 open arm incident(s): overload" if held else None)
+
+
+def test_the_13_27_overload_is_rebooted_reported_to_fleet_and_held_for_a_person(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    rebooted = []
-    out = oi.handle(session(tmp_path), "arm_b", act=lambda ids: rebooted.append(ids) or {"rebooted": ids})
-    assert rebooted == [[13]] and out["decision"]["hold"] and out["facts"]["folded"]
+    rebooted, link = [], Link()
+    out = oi.handle(session(tmp_path), "arm_b", act=lambda ids: rebooted.append(ids) or {"rebooted": ids}, link=link)
+    assert rebooted == [[13]] and out["decision"]["hold"] and out["facts"]["folded"] and out["reported"]
     assert "overload" in out["decision"]["reason"] and "wind-up" in out["decision"]["reason"]
-    assert out["facts"]["frames"][0].endswith("a3644c-top.jpg")
-    agenda = (Path(out["folder"]) / "agenda.md").read_text()
-    assert "HOLD" in agenda and "omx_incident.py clear --arm arm_b" in agenda
+    [report] = link.posted
+    assert report.source_id == "omx_arm_b" and report.session_id == SID and report.recovery == {"rebooted": [13]}
+    assert [f.role for f in report.frames] == ["top", "side"]
+    assert report.facts["latched"]["13"]["bits"] == ["overload"] and report.facts["folded"] is True
+    assert "frames" not in report.facts and all("/" not in name for name in report.facts["fault_records"])
+    assert not oi.outbox("arm_b")
+    assert not list(Path(out["folder"]).glob("agenda.md"))  # Fleet is the ledger; the local copy is incident.json
     row = json.loads((tmp_path / "decisions.jsonl").read_text().splitlines()[-1])
     assert row["stage"] == "incident" and row["chosen"] == ["reboot_latched", "hold_for_person"]
     with pytest.raises(SystemExit, match="held for a person"):
-        oi.refuse_if_held("arm_b")
-    assert oi.main(["clear", "--arm", "arm_b", "--by", "operator", "--note", "box removed from the jaws"]) == 0
-    oi.refuse_if_held("arm_b")
-    assert json.loads((tmp_path / "decisions.jsonl").read_text().splitlines()[-1])["by"] == "person"
+        oi.refuse_if_held("arm_b", link)  # Fleet says held
+    link.held = False  # a named operator cleared it in the Fleet console
+    oi.refuse_if_held("arm_b", link)
+    assert oi.held("arm_b") is None
 
+
+def test_fleet_unreachable_keeps_the_report_and_the_hold_until_fleet_answers_not_held(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    link = Link()
+    link.down = True
+    out = oi.handle(session(tmp_path), "arm_b", link=link)
+    assert out["incident"] and not out["reported"] and len(oi.outbox("arm_b")) == 1 and oi.held("arm_b")
+    with pytest.raises(SystemExit, match="Fleet not reached"):
+        oi.refuse_if_held("arm_b", link)  # unreachable: the local hold refuses
+    link.down = False
+    with pytest.raises(SystemExit, match="held for a person"):
+        oi.refuse_if_held("arm_b", link)  # the unsent report went first, so Fleet now holds the arm
+    assert not oi.outbox("arm_b") and [r.session_id for r in link.posted] == [SID]
+    link.held = False
+    oi.refuse_if_held("arm_b", link)
+    assert oi.held("arm_b") is None
+
+
+def test_an_unreachable_fleet_does_not_refuse_an_arm_without_a_local_hold_and_no_link_is_the_same(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    link = Link()
+    link.down = True
+    oi.refuse_if_held("arm_b", link)
+    monkeypatch.setattr(oi, "link_for", lambda arm: None)
+    oi.refuse_if_held("arm_b")
+    oi.refuse_if_held(None)
+
+
+def test_fleet_not_held_does_not_lift_a_hold_while_a_report_is_still_unsent(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    link = Link()
+    link.down = True
+    oi.handle(session(tmp_path), "arm_b", link=link)
+
+    class Flaky(Link):  # Fleet answers the hold but refuses the report
+        def post(self, report):
+            raise OSError("422")
+
+        def hold(self):
+            return hold(False)
+
+    with pytest.raises(SystemExit, match="held for a person"):
+        oi.refuse_if_held("arm_b", Flaky())
+    assert oi.held("arm_b") and len(oi.outbox("arm_b")) == 1
+
+
+def test_the_same_session_reported_twice_is_the_same_session_id(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    link = Link()
+    path = session(tmp_path)
+    oi.handle(path, "arm_b", link=link)
+    oi.handle(path, "arm_b", link=link)
+    assert {r.session_id for r in link.posted} == {SID}
+
+
+def test_the_local_clear_command_is_gone(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(SystemExit):
+        oi.main(["clear", "--arm", "arm_b", "--by", "operator", "--note", "x"])
 
 def test_an_arm_that_is_not_folded_is_never_rebooted(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
@@ -72,5 +164,6 @@ def test_a_clean_session_is_no_incident_and_a_reopened_catch_is_a_note_without_h
     assert oi.handle(session(tmp_path, latched=False, windup=False), "arm_b") == {"incident": False}
     caught = {"command": "grip", "ok": False, "caught": True, "error": "the jaws stopped; reopened", "t": 150.0}
     (tmp_path / "x").mkdir()
-    out = oi.handle(session(tmp_path / "x", latched=False, windup=False, status=[caught]), "arm_b")
-    assert out["incident"] and not out["decision"]["hold"] and oi.held("arm_b") is None
+    link = Link()
+    out = oi.handle(session(tmp_path / "x", latched=False, windup=False, status=[caught]), "arm_b", link=link)
+    assert out["incident"] and not out["decision"]["hold"] and oi.held("arm_b") is None and not link.posted

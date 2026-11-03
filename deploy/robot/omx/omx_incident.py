@@ -1,23 +1,29 @@
 #!/usr/bin/env python3
-"""An arm session that ends in trouble is handled by a pipeline, not by hand (2026-11-03).
+"""An arm session that ends in trouble is measured here and reported to Fleet (D-971, 2026-11-03).
 
 arm_b's elbow latched an overload at 13:27 and the way out took an hour of reading logs, frames and registers by
-hand. Every step of that is now this module, run by record_session at the end of every session:
+hand. The control PC now only measures, reports and keeps the device safe; Fleet owns the incident ledger, the AI PC
+explains the frames, and a named operator clears the hold in the Fleet console. record_session runs this at the end
+of every session:
 
 1. collect: session.json, the runner's status rows, the motor-fault records and the health log of the session;
 2. facts (measured only): latched hardware errors (decoded), torque after, folded at home or not, joint_push's
    wind-up hits in the health log, jaws caught or stopped short, the frames kept at the fault;
 3. decide: measurement first (judge_seat's rule): a reboot is offered only for an overload or voltage latch with
    every motor torque OFF and the arm folded at home; any physical sign (a wind-up, a caught jaw, a latch) holds
-   the arm for a person. A decision model, when given, only explains the frames and picks among what is left;
+   the arm for a person;
 4. record: a rosy.omx-cell-decision.v1 row (stage "incident") in decisions.jsonl, which the judge seat reads back
-   as context, and an agenda file (incidents/<stamp>/agenda.md + incident.json) a person reads and closes;
+   as learning context, and incidents/<stamp>-<arm>/incident.json (a local copy, not the ledger);
 5. act: the one automatic recovery, the Dynamixel Reboot of a latched follower motor (no motion, torque stays
-   OFF), with the registers read before and after; then HOLD-<arm>.json refuses the next session until
-   `clear` records who checked the arm.
+   OFF), with the registers read before and after; the hold stays after it;
+6. report: a held incident goes to Fleet (facts, decision, recovery, up to two frames). Unsent reports wait in
+   incidents/outbox/ and go again before the next session.
 
-  omx_incident.py handle --session session.json --arm arm_b [--act] [--model http://127.0.0.1:11434]
-  omx_incident.py clear --arm arm_b --by NAME --note TEXT
+Before a session `refuse_if_held` resends unsent reports and asks Fleet for the hold. Fleet unreachable: refuse only
+when a local hold exists (the last hold Fleet sent, or one made at an incident that could not be reported). A local
+hold is lifted only when Fleet answers that the arm is not held and nothing is unsent. Clearing is Fleet's.
+
+  omx_incident.py handle --session session.json --arm arm_b [--device /dev/serial/by-id/...]
 """
 from __future__ import annotations
 
@@ -25,6 +31,7 @@ import argparse
 import json
 import sys
 import time
+import uuid
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -45,28 +52,83 @@ def hold_path(arm: str) -> Path:
     return INCIDENTS / f"HOLD-{arm}.json"
 
 
+def outbox(arm: str) -> list[Path]:
+    return sorted((INCIDENTS / "outbox").glob(f"{arm}-*.json"))
+
+
 def held(arm: str) -> str | None:
-    """Why the next session of `arm` must not start, or None (record_session refuses on it)."""
+    """Why the next session of `arm` must not start according to the local copy of the hold, or None."""
     path = hold_path(arm)
     return json.loads(path.read_text())["reason"] if path.is_file() else None
 
 
-def refuse_if_held(arm: str | None) -> None:
-    if arm and held(arm):
-        raise SystemExit(f"{arm} held for a person: {held(arm)} (omx_incident.py clear --arm {arm} --by --note)")
+def keep_hold(arm: str, reason: str, incident_ids=(), source="local") -> None:
+    hold_path(arm).parent.mkdir(parents=True, exist_ok=True)
+    hold_path(arm).write_text(json.dumps({"reason": reason, "incident_ids": list(incident_ids), "source": source,
+                                          "since": time.strftime("%Y%m%dT%H%M%S")}))
 
 
-def after_session(arm: str | None, device: str | None, session=Path("session.json")) -> dict:
-    """record_session's end: the pipeline with the reboot on this arm's follower and the model from
-    ROSY_DECISION_MODEL (an Ollama URL; unset = measurement only). No arm name: nothing to hold."""
+def link_for(arm: str):
+    """The Fleet channel of this arm from the environment, or None (not configured or not usable here)."""
     import os
 
+    here = Path(__file__).resolve()
+    for extra in (here.parents[3] / "contracts/foundation", here.parents[3] / "operations/overhead"):
+        if extra.is_dir() and str(extra) not in sys.path:
+            sys.path.append(str(extra))
+    try:
+        from workcell_observation_bridge import ArmIncidentLink
+
+        return ArmIncidentLink.from_environment(arm, os.environ)
+    except (ImportError, OSError, ValueError) as exc:
+        print(f"fleet incident link unavailable: {type(exc).__name__}: {str(exc)[:120]}")
+        return None
+
+
+def send(arm: str, link) -> bool:
+    """Resend the unsent reports of `arm` (each file leaves the outbox only once Fleet accepted it)."""
+    from core_common.protocol.arm_incidents import ArmIncidentReport
+
+    for path in outbox(arm):
+        try:
+            report = ArmIncidentReport.model_validate_json(path.read_text())
+            reply = link.post(report.model_copy(update={"source_id": link.source_id}))  # the registered source name
+        except Exception as exc:  # unreachable, refused, or a bad file: it stays and keeps the arm held
+            print(f"incident report {path.name} not sent: {type(exc).__name__}: {str(exc)[:120]}")
+            return False
+        path.unlink()
+        keep_hold(arm, reply.hold.reason or "arm incident not cleared", reply.hold.incident_ids, "fleet")
+    return True
+
+
+def refuse_if_held(arm: str | None, link=None) -> None:
+    """Before a session: resend unsent reports, ask Fleet for the hold. Fleet unreachable: refuse only on a local hold."""
+    if not arm:
+        return
+    link = link or link_for(arm)
+    sent = send(arm, link) if link and outbox(arm) else not outbox(arm)
+    answer = None
+    if link:
+        try:
+            answer = link.hold()
+        except Exception as exc:
+            print(f"fleet hold unreachable: {type(exc).__name__}: {str(exc)[:120]}")
+    if answer is not None and answer.held:
+        keep_hold(arm, answer.reason or "arm incident not cleared", answer.incident_ids, "fleet")
+        raise SystemExit(f"{arm} held for a person: {answer.reason} (clear it in the Fleet console)")
+    if answer is not None and sent:
+        hold_path(arm).unlink(missing_ok=True)  # only Fleet's "not held", with nothing unsent, lifts a hold
+        return
+    reason = held(arm) or ("an incident report could not be sent to Fleet" if outbox(arm) else None)
+    if reason:
+        raise SystemExit(f"{arm} held for a person: {reason} (Fleet not reached; Fleet clears it)")
+
+
+def after_session(arm: str | None, device: str | None, session=Path("session.json"), link=None) -> dict:
+    """record_session's end: the pipeline with the reboot on this arm's follower. No arm name: nothing to hold."""
     if not arm:
         return {"incident": None, "reason": "no --arm"}
-    import judge_seat
-
-    url = os.environ.get("ROSY_DECISION_MODEL")
-    return handle(session, arm, act=reboot_latched(device) if device else None, model=judge_seat.ollama(url) if url else None)
+    return handle(session, arm, act=reboot_latched(device) if device else None, link=link or link_for(arm))
 
 
 def rows(path, since=0.0):
@@ -132,42 +194,33 @@ def decide(f: dict) -> dict:
             "reason": "; ".join(why) + "; a person checks the arm (jaws, contacts, wedged objects) before torque ON"}
 
 
-def explain(model, f: dict) -> dict | None:
-    """The decision model only explains what the frames show; it never adds an action."""
+def report_for(source_id: str, session_id: str, f: dict, d: dict, acted):
+    """The Fleet report: measured facts without local paths, the decision, the device recovery, up to two frames."""
     import base64
+    import hashlib
 
-    images = [base64.b64encode(Path(p).read_bytes()).decode() for p in f["frames"] if Path(p).is_file()]
-    schema = {"type": "object", "properties": {"seen": {"type": "string"}, "suspected_cause": {"type": "string"}},
-              "required": ["seen", "suspected_cause"]}
-    prompt = ("An OMX arm session ended with these measured facts:\n" + json.dumps({k: f[k] for k in
-              ("latched", "folded", "flagged", "windup_hits")}, default=str)[:3000]
-              + "\nThe images are the top and side cameras at the fault. Say what you see near the arm and the jaws "
-                "(objects caught, leaning, wedged) and the most likely physical cause. Do not suggest motions.")
+    from core_common.protocol.arm_incidents import ARM_INCIDENT_FRAME_BYTES, ArmIncidentReport
+
+    plain = lambda value: json.loads(json.dumps(value, default=str))  # noqa: E731
+    shown = {k: v for k, v in f.items() if k not in ("frames", "fault_records")}
+    shown["windup_hits"] = shown["windup_hits"][:5]
+    shown["fault_records"] = [Path(p).name for p in f["fault_records"]][-3:]
+    frames = []
+    for path in f["frames"]:
+        data = Path(path).read_bytes() if Path(path).is_file() else b""
+        if data[:2] == b"\xff\xd8" and len(data) <= ARM_INCIDENT_FRAME_BYTES:  # a larger or damaged one is left out
+            frames.append({"role": Path(path).stem.rsplit("-", 1)[-1], "sha256": hashlib.sha256(data).hexdigest(),
+                           "jpeg_b64": base64.b64encode(data).decode()})
+    body = {"source_id": source_id, "session_id": session_id, "decision": plain(d), "recovery": plain(acted),
+            "frames": frames}
     try:
-        return model(prompt, images, schema)
-    except Exception as exc:  # an unreachable model must not stop the record
-        return {"error": str(exc)[:200]}
+        return ArmIncidentReport.model_validate({**body, "facts": plain(shown)})
+    except ValueError:  # facts too large for the contract: keep the decisive part
+        keep = {k: shown[k] for k in ("safe_end", "latched", "torque_after", "folded") if k in shown}
+        return ArmIncidentReport.model_validate({**body, "facts": plain({**keep, "truncated": True})})
 
 
-def agenda(stamp, arm, f, d, seen, acted) -> str:
-    lines = [f"# {arm} incident {stamp}", "", f"- decision: {', '.join(d['actions']) or 'none automatic'}; "
-             f"{'HOLD until a person clears it' if d['hold'] else 'no hold'}", f"- why: {d['reason']}",
-             f"- safe end: {f['safe_end']}; folded at home: {f['folded']}; torque after: {f['torque_after']}"]
-    lines += [f"- latched ID {m}: hw_error {l['hw_error']} ({', '.join(l['bits'])})" for m, l in f["latched"].items()]
-    lines += [f"- wind-up: {h['session']} t={h['t']} {h['reason']}" for h in f["windup_hits"][:3]]
-    lines += [f"- runner: {r.get('command')}: {r.get('error') or r.get('fault')}" for r in f["flagged"]]
-    lines += [f"- frames: {', '.join(f['frames'])}" if f["frames"] else "- frames: none kept"]
-    if seen:
-        lines.append(f"- model (explanation only): {json.dumps(seen, ensure_ascii=False)}")
-    if acted:
-        lines.append(f"- automatic recovery: {json.dumps(acted, default=str)}")
-    lines += ["", "## Person", "1. Look at the arm and the jaws: remove anything caught, leaning or wedged.",
-              f"2. `omx_incident.py clear --arm {arm} --by <name> --note <what you found>`",
-              "3. Add the cause to the lesson (docs/solutions) if it is new."]
-    return "\n".join(lines) + "\n"
-
-
-def handle(session_path: Path, arm: str, act=None, model=None, decisions=Path("decisions.jsonl"), home=None) -> dict:
+def handle(session_path: Path, arm: str, act=None, decisions=Path("decisions.jsonl"), home=None, link=None) -> dict:
     """Run the pipeline for one ended session; returns the incident (or {"incident": False})."""
     session = json.loads(Path(session_path).read_text())
     if home is None and (session.get("chunks") or {}).get("library"):
@@ -178,21 +231,33 @@ def handle(session_path: Path, arm: str, act=None, model=None, decisions=Path("d
     if not d["actions"] and not d["hold"] and d["reason"] == "no incident sign":
         return {"incident": False}
     stamp = time.strftime("%Y%m%dT%H%M%S")
-    seen = explain(model, f) if model else None
     acted = act([int(m) for m in f["latched"]]) if act and "reboot_latched" in d["actions"] else None
     folder = INCIDENTS / f"{stamp}-{arm}"
     folder.mkdir(parents=True, exist_ok=True)
     incident = {"schema": "rosy.omx-incident.v1", "arm": arm, "stamp": stamp, "session": str(session_path),
-                "facts": f, "decision": d, "model": seen, "recovery": acted}
-    (folder / "incident.json").write_text(json.dumps(incident, indent=1, default=str))
-    (folder / "agenda.md").write_text(agenda(stamp, arm, f, d, seen, acted))
+                "facts": f, "decision": d, "recovery": acted, "reported": False}
     cell_decisions.append(decisions, {
         "schema": cell_decisions.SCHEMA, "decision_id": f"{stamp}-{arm}-incident", "attempt_id": None,
         "stage": "incident", "facts": {k: f[k] for k in ("latched", "folded", "windup_hits", "flagged", "safe_end")},
         "options": d["offered"] + ["hold_for_person"], "chosen": d["actions"] + (["hold_for_person"] if d["hold"] else []),
         "by": "measurement", "reason": d["reason"], "frames": f["frames"], "arm_id": arm, "t": round(time.time(), 3)})
-    if d["hold"]:
-        hold_path(arm).write_text(json.dumps({"reason": f"{folder}/agenda.md: {d['reason']}", "since": stamp}))
+    if d["hold"]:  # the local hold exists first: if Fleet cannot be reached the next session is still refused
+        keep_hold(arm, f"{folder}: {d['reason']}"[:380])
+        sid = session.get("motor_health_session")
+        try:
+            sid = str(uuid.UUID(str(sid)))
+        except ValueError:
+            sid = str(uuid.uuid5(uuid.NAMESPACE_URL, f"{arm}/{sid or stamp}"))
+        try:
+            report = report_for(link.source_id if link else arm, sid, f, d, acted)
+        except Exception as exc:  # the contract is not importable here: nothing can be sent, the hold stays
+            print(f"incident report not built: {type(exc).__name__}: {str(exc)[:120]}")
+            report = None
+        if report is not None:
+            (INCIDENTS / "outbox").mkdir(parents=True, exist_ok=True)
+            (INCIDENTS / "outbox" / f"{arm}-{sid}.json").write_text(report.model_dump_json())
+            incident["reported"] = bool(link) and send(arm, link)
+    (folder / "incident.json").write_text(json.dumps(incident, indent=1, default=str))
     return {"incident": True, "folder": str(folder), **incident}
 
 
@@ -226,27 +291,10 @@ def main(argv=None):
     h.add_argument("--session", type=Path, default=Path("session.json"))
     h.add_argument("--arm", required=True)
     h.add_argument("--device", help="follower by-id path: reboots an allowed latch (no motion)")
-    h.add_argument("--model", help="Ollama URL of the decision model (explanation only)")
-    c = sub.add_parser("clear")
-    c.add_argument("--arm", required=True)
-    c.add_argument("--by", required=True)
-    c.add_argument("--note", required=True)
     args = parser.parse_args(argv)
-    if args.command == "clear":
-        reason = held(args.arm)
-        if reason is None:
-            print(f"{args.arm}: no hold")
-            return 0
-        cell_decisions.note(Path("decisions.jsonl"), "incident", f"cleared by {args.by}: {args.note} (was: {reason})",
-                            chosen="cleared")
-        hold_path(args.arm).unlink()
-        print(f"{args.arm}: hold cleared")
-        return 0
-    import judge_seat
-
     out = handle(args.session, args.arm, act=reboot_latched(args.device) if args.device else None,
-                 model=judge_seat.ollama(args.model) if args.model else None)  # by hand on an old session.json
-    print(json.dumps({k: out.get(k) for k in ("incident", "folder", "decision", "recovery")}, default=str))
+                 link=link_for(args.arm))  # by hand on an old session.json
+    print(json.dumps({k: out.get(k) for k in ("incident", "folder", "decision", "recovery", "reported")}, default=str))
     return 0
 
 

@@ -4450,3 +4450,10 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - gate 변화: 없음. UI FULL 준비 근거는 별도 보존했고, 이 수정의 착지와 최신 main 통합 검증 후 게시한다.
 - CE: 해당 없음 — 누락된 dry-run 분기와 회귀 조건이 코드·시험에 직접 남는다. 운영 전환은 별도 미완료다.
 
+
+## 2026-11-03 · uncommitted · feat(omx): D-971 제어 PC는 팔 사건을 Fleet에 보고한다
+
+- 변경: `omx_incident.py`가 모델 호출·`agenda.md`·로컬 `clear`를 없애고 사건을 Fleet에 보고한다(`workcell_observation_bridge.ArmIncidentLink`). 세션 전 보내지 못한 보고를 다시 보내고 Fleet에 보류를 묻는다. Fleet에 닿지 않으면 로컬 보류가 있을 때만 막고, Fleet이 보류 아님을 답하고 보내지 못한 보고가 없을 때만 푼다.
+- 증거: `test/test_omx_incident.py`, `test/test_omx_workcell_observation_bridge.py` 원격 통과. 현장 PC에는 배포하지 않았다.
+- gate 변화: 없음.
+- CE: 해당 없음 — 원인 해결 교훈은 기존 문서(2026-11-03 팔꿈치 과부하)에 갱신했다.
