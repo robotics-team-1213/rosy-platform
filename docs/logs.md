@@ -13878,6 +13878,12 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 제품 코드·시험 선택·캐시·자원·착지 조건을 바꾸지 않는 운영 기록이다. 최종 후보의 공식 문서 가드와 착지는 별도 확인한다.
 - CE: 미해결. 일부 Git 이력의 추가 보존은 검증했지만 초기 파일 보존을 해결한 것처럼 새 해결 교훈을 쓰지 않았다. 증상·확인 사실·남은 확인을 이 소유 저장소의 작업 기록으로 남긴다.
 
+## 2026-11-03 · uncommitted · fix(remote): 배치의 각 시험 입장에서 재부팅 임박 차단
+- 변경: 최초 호스트 선택에만 있던 D-889 13의 재부팅 임박 판정을 각 원격 ADMIT에도 적용한다. 차단된 작업은 자원 해제 뒤 같은 Work index로 반환하고 다른 호스트 또는 기존 bounded wait로 이어간다. quarantine 재시험의 원본 실패·로그와 남은 재시험을 보존한다. 기존 단일 호스트 호출 계약도 유지한다.
+- 증거: 원격 재현 15 FAIL/9 PASS, 최종 코드 `95abfc2cdb` 관련 9 suite 228 PASS·skip/NEW/known/flaky 0, 독립 검토 P1/P2 없음, size 3 commits PASS. 관측된 종료143은 시험 PC의 예약 재부팅 경계와 겹쳤다. 기존 착지의 공식 resume에서 PASS31 invocation 재사용을 확인했다.
+- gate 변화: 없음. 기존 재부팅 시각·780초 타이머/서비스 판정·자원 하한·deadline/stop을 유지하며 추가 SSH·새 flag·의존성은 없다. 이미 실행 중인 긴 작업은 기존143/resume 경계다.
+- CE: 기존 교훈 갱신 — `docs/solutions/workflow-issues/landings-gave-the-turn-back-and-reran-everything-2026-11-01.md`의 재부팅 항목에 배치 중간 입장 공백과 검증·복구 범위를 남겼다. 새 실물 재부팅 시험이나 운영 반영 완료를 주장하지 않는다.
+
 ## 2026-11-03 · uncommitted · fix(landing): preserve first queue across a proven rules-refresh stop
 - Change: retain the existing exact-PID stop epoch and additionally join a stopped frozen snapshot only when its same-ticket queue records prove a PID handoff, with no competing ticket or completed cycle. A queue-less refresh child STOP after the latest queue can then preserve the original request clock across a new snapshot. Topic-only joins, raw-event changes and guessed completion rows are excluded.
 - Evidence: actual old queue/owner handoff/queue-less child STOP and the new snapshot queue exposed 208.7301 minutes of potential undercount. Test-only d49d9ab33f remote RED: 2 intended failures, 49 passes. Code 98738da589 remote goal/events result: 57 passes, zero skip/NEW/known/flaky; normal Rosy admission wait0/run11 seconds. Logs: OS Temp rosy-landing-clock-red and rosy-landing-clock-green-valid. An earlier request named a nonexistent test_land_stats.py and exited4 before collecting tests; it is excluded from GREEN evidence. No pytest ran locally.
