@@ -26,6 +26,9 @@ PROJECT = "rosy-site"
 STACK_UNIT = "rosy-site-stack.service"
 MONITORING_OVERLAY = ["-f", "/opt/rosy/candidate/deploy/site/compose.monitoring.yaml"]
 ACCOUNT_OVERLAY = ["-f", "/opt/rosy/candidate/deploy/site/compose.account.yaml"]
+CONTROL_UNIT_OVERLAY = ["-f", "/opt/rosy/candidate/deploy/site/compose.control-unit.yaml"]
+#: Companion services that run another candidate image: service -> image owner.
+COMPANIONS = {"account": "fleet", "monitoring": "fleet", "control-unit-peer": "proxy"}
 SIGNATURE = "release.json.sig"
 EXIT_OK = 0
 EXIT_FAILED = 1
@@ -51,8 +54,7 @@ def allowed_overlays(env: dict[str, str]) -> list[str]:
     allowed = [[], pairing, omx, pairing + omx]  # D-785; Account is appended last.
     workcell = ["-f", "/opt/rosy/candidate/deploy/site/compose.workcell.yaml"]
     allowed += [base + workcell for base in allowed]
-    control_unit = ["-f", "/opt/rosy/candidate/deploy/site/compose.control-unit.yaml"]  # D-960
-    allowed += [base + control_unit for base in allowed]
+    allowed += [base + CONTROL_UNIT_OVERLAY for base in allowed]  # D-960
     allowed += [base + MONITORING_OVERLAY for base in allowed]  # D-936
     if shlex.split(env.get("ROSY_SITE_PAIRING_COMPOSE", "")) not in allowed + [base + account for base in allowed]:
         raise Refused("ROSY_SITE_PAIRING_COMPOSE adds a Compose file other than "
@@ -95,6 +97,9 @@ def check_overrides(env: dict[str, str], commit: str, run, compose, services=SER
     # Older signed Account overlays had only a proxy; preserve their rollback path.
     if ACCOUNT_OVERLAY[1] in overlays and 'account' in configured and 'fleet' in services:
         companions['account'] = 'fleet'
+    # D-960: the control unit's peer proxy runs the candidate's signed proxy image.
+    if CONTROL_UNIT_OVERLAY[1] in overlays and 'proxy' in services:
+        companions['control-unit-peer'] = 'proxy'
     if not isinstance(configured, dict) or set(configured) != set(services) | set(companions):
         raise Refused("Compose service set differs from the signed candidate")
     for service in (*services, *companions):
@@ -415,7 +420,7 @@ def runtime_reason(rows, hashes: dict, run) -> str:
         if not isinstance(row, dict):
             continue
         service = row.get('Service')
-        if service not in (*SERVICES, 'monitoring', 'account'):
+        if service not in (*SERVICES, *COMPANIONS):
             continue
         try:
             details = json.loads(run(['docker', 'container', 'inspect', row['ID']]).stdout)[0]
@@ -438,16 +443,18 @@ def containers_reason(rows, commit: str, accepted: dict, run, services=SERVICES,
            and row['Service'] not in services for row in rows):
         return 'runtime contains a managed service outside the signed candidate'
     companions = {row.get('Service') for row in rows
-                  if isinstance(row, dict) and row.get('Service') in ('account', 'monitoring')}
+                  if isinstance(row, dict) and row.get('Service') in COMPANIONS}
     for service in (*services, *sorted(companions)):
-        owner = 'fleet' if service in companions else service
+        owner = COMPANIONS.get(service, service) if service in companions else service
         matches = [row for row in rows if isinstance(row, dict) and row.get('Service') == service]
         if len(matches) != 1:
             return f'{service} needs exactly one running container'
         row = matches[0]
         if row.get('Image') != (image_references or {}).get(owner, f'rosy-site-{owner}:{commit}'):
             return f"{service} runs {row.get('Image')!r}"
-        if row.get('State') != 'running' or row.get('Health') != 'healthy':
+        # The peer proxy has no healthcheck in candidates up to 480de9e203: running is enough there.
+        healthy = row.get('Health') == 'healthy' or (service == 'control-unit-peer' and not row.get('Health'))
+        if row.get('State') != 'running' or not healthy:
             return f"{service} is {row.get('State')}/{row.get('Health') or 'no health'}"
         if not row.get('ID'):
             return f'{service} container ID is missing'

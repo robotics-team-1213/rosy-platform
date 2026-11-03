@@ -121,6 +121,13 @@ class HostRuntimeProbe:
         except (OSError, ValueError):
             return None
 
+    def throttled(self) -> Optional[int]:
+        """Raspberry Pi firmware throttle bits (under-voltage, capped, throttled, soft limit), or None."""
+        try:
+            return int(self._read_text("sys/devices/platform/soc/soc:firmware/get_throttled"), 16)
+        except (OSError, ValueError):
+            return None
+
     def _storage(self) -> dict[str, Optional[float | int | str]]:
         usage = shutil.disk_usage(self.data_path)
         return {

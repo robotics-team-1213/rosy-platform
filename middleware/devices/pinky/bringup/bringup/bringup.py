@@ -2,6 +2,7 @@
 
 import rclpy
 from rclpy.node import Node
+import json
 import math
 import time
 
@@ -10,7 +11,7 @@ from nav_msgs.msg import Odometry
 from sensor_msgs.msg import JointState
 from tf2_ros import TransformBroadcaster
 from tf_transformations import quaternion_from_euler
-from std_msgs.msg import Bool, Float32
+from std_msgs.msg import Bool, Float32, String
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from rcl_interfaces.msg import ParameterDescriptor
 
@@ -49,6 +50,8 @@ RPM2RAD = 2 * math.pi / 60
 
 BATTERY_VOLTAGE_TOPIC = "battery/voltage"
 MOTOR_READY_TOPIC = "motor/ready"
+MOTOR_HEALTH_TOPIC = "motor/health"  # CORE heat mode reads it (core.bridge.thermal_policy)
+MOTOR_HEALTH_PERIOD_S = 2.0
 LOW_BATTERY_THRESHOLD = 6.8
 
 _MOTOR_READY_QOS = QoSProfile(
@@ -260,6 +263,9 @@ class Rosy(Node):
                 )
             self.tf_broadcaster = TransformBroadcaster(self)
             self.timer = self.create_timer(1.0 / 30.0, self.update_and_publish)
+            # Same single-threaded executor as the 30 Hz loop, so the two never share the bus at once.
+            self.motor_health_pub = self.create_publisher(String, MOTOR_HEALTH_TOPIC, 10)
+            self.health_timer = self.create_timer(MOTOR_HEALTH_PERIOD_S, self.publish_motor_health)
 
             self.battery_sub = self.create_subscription(
                 Float32,
@@ -394,6 +400,9 @@ class Rosy(Node):
         joint_msg.velocity = [rpm_l * RPM2RAD, rpm_r * RPM2RAD]
 
         self.joint_pub.publish(joint_msg)
+
+    def publish_motor_health(self):
+        self.motor_health_pub.publish(String(data=json.dumps({"motors": self.driver.read_health()})))
 
     def battery_voltage_callback(self, msg):
         self.current_voltage = msg.data

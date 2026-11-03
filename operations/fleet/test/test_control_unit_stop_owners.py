@@ -70,3 +70,20 @@ def test_real_app_installs_owner_checks_before_accepting_typed_stop(tmp_path, ki
         create_app(console, task_service=tasks, site_users=users, start_task_dispatcher=False,
                    omx_instances={"foreign": "instance"} if kind == "omx" else None,
                    control_unit_config=config_file(tmp_path))
+
+
+def test_the_real_app_tells_enrollment_which_robots_its_unit_owns(tmp_path):
+    """D-960: enrollment learns the manifest's robots, so it can refuse one the next start would reject."""
+    from hashlib import sha256
+    from enrollment_fakes import build
+    from fakes import FakeRobot
+    from fleet.server.app import create_app
+    from test_control_unit_runtime import config_file
+
+    enrollment, _network, console, _discovery, _store, tasks = build(tmp_path, {}, static=(FakeRobot("a1"),))
+    users = {sha256(token.encode()).hexdigest(): {"principal_id": identity, "role": role}
+             for token, identity, role in [("human-token", "operator-a1", "operator"),
+                                           ("parent-token", "control-unit:A", "service")]}
+    create_app(console, task_service=tasks, site_users=users, start_task_dispatcher=False,
+               control_unit_config=config_file(tmp_path), enrollment=enrollment)
+    assert enrollment.owned_robot_ids == frozenset({"a1"})

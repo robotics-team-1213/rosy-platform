@@ -32,19 +32,24 @@ def _path(wt: Path, branch: str) -> Path:
 
 
 def save(wt: Path, branch: str, candidate: str, main: str, tier: str | None = None,
-         invocations: list[list[str]] | None = None) -> None:
+         invocations: list[list[str]] | None = None, base_tier: str | None = None) -> None:
     path = _path(wt, branch)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps({"candidate": candidate, "main": main, "tier": tier, "invocations": invocations}),
-                    encoding="utf-8")
+    record = {"candidate": candidate, "main": main, "tier": tier, "invocations": invocations}
+    path.write_text(json.dumps({**record, **({"base_tier": base_tier} if base_tier else {})}), encoding="utf-8")
 
 
 def prepared(wt: Path, branch: str, main: str | None) -> dict | None:
-    """The saved tier over ``main`` (tier, invocations, candidate, main) for the land record, or None."""
+    """The saved tier over ``main`` (tier, invocations, candidate, main) for the land record, or None.
+
+    A "delta" record (D-889 27: main's delta suites run before the turn on top of an earlier tier) reports that
+    earlier tier, so a land record never calls it FULL unless the tier under it was."""
     try:
         record = json.loads(_path(wt, branch).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
+    if isinstance(record, dict) and record.get("tier") == "delta":
+        record = {**record, "tier": record.get("base_tier")}
     ok = isinstance(record, dict) and main and record.get("main") == main and record.get("tier") in ("full", "affected")
     return record if ok and isinstance(record.get("invocations"), list) else None
 

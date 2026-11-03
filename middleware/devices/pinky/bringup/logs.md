@@ -68,3 +68,8 @@
 - 변경: D-626 devices/pinky/bringup으로 이동. driver/deadman/launch/setup identity를 유지하고 실제 소비자·Docker 소스·test ancestor를 정렬했다. 최초 logs 이동은 R100이다.
 - 증거: Pinky 통합 후보 원격 885 성공·2 skip, motor/deadman/Dynamixel Safety 포함. 실제 Linux bringup wheel/entrypoint/config/share 설치 확인, 독립 source 리뷰와 known_failures 0 NEW/0 known.
 - gate 변화: 없음. 실물 모터·정지·새 ARM64 설치는 확인하지 않았다.
+
+## 2026-11-03 · uncommitted · feat(bringup): 바퀴 모터 상태를 2초마다 `motor/health`로 낸다
+- 변경: `DynamixelDriver.read_health`(온도 146, 한계 31, 입력 전압 144, 하드웨어 오류 70). 30 Hz 루프와 같은 실행기 타이머라 버스를 동시에 쓰지 않는다. 지금까지 하드웨어 오류는 시작할 때만 읽었다.
+- 증거: `test/test_dynamixel_driver_safety.py` 가짜 SDK로 레지스터 대응 확인.
+- gate 변화: 없음. 실물 레지스터 값은 배포 뒤 확인한다.

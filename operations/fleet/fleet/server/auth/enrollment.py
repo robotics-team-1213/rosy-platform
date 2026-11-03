@@ -31,12 +31,7 @@ from fleet.server.discovery import is_rfc1918
 from fleet.server.enrollment_errors import EnrollmentError  # noqa: F401  (re-exported)
 from fleet.server.enrollment_hub import HubLinkMixin
 from fleet.server.enrollment_release import SafetyReleaseMixin
-from fleet.server.enrollment_store import (
-    EnrollmentStore,
-    SealError,
-    seal,
-    unseal,
-)
+from fleet.server.enrollment_store import EnrollmentStore, SealError, seal, unseal
 from fleet.swarm.robots import RobotEndpoint
 from fleet.swarm.transport import HttpRobotClient, RobotApiError
 
@@ -194,6 +189,8 @@ class EnrolledRobotClient(HttpRobotClient):
 
 
 class EnrollmentService(HubLinkMixin, SafetyReleaseMixin):
+    #: D-960: robots this Fleet's control unit owns (manifest); None = no control unit, any id.
+    owned_robot_ids: frozenset | None = None
     def __init__(self, store: EnrollmentStore, roster, *, key: bytes | None,
                  key_error: str | None = None, fleet_name: str = "rosy-site",
                  discovery=None, transport: httpx.AsyncBaseTransport | None = None,
@@ -544,6 +541,8 @@ class EnrollmentService(HubLinkMixin, SafetyReleaseMixin):
             raise self._consumed("tls_binding_required")  # a bound identity answered over HTTP
         if robot_id in self._roster.robot_ids or self._store.get(robot_id) is not None:
             raise self._consumed("robot_id_conflict")
+        if self.owned_robot_ids is not None and robot_id not in self.owned_robot_ids:
+            raise self._consumed("robot_not_owned_by_control_unit")  # else the next start refuses the roster
         if pending is not None and robot_id != pending.robot_id:
             if not renumber:
                 raise self._consumed("tls_binding_mismatch")

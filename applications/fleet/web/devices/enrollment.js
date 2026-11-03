@@ -91,6 +91,7 @@ export const CONSUMED_REASONS = {
   admin_code_refused: "원인: 관리자 역할 코드는 사이트 등록에 쓰지 않습니다.",
   wrong_robot: "원인: 선택한 행과 다른 로봇이 답했습니다.",
   robot_id_conflict: "원인: 같은 robot_id가 이미 로스터에 있습니다.",
+  robot_not_owned_by_control_unit: "원인: 이 관제 단위의 manifest가 이 robot_id를 소유하지 않습니다. 모든 관제의 control-unit.yaml에 robot:<id>를 같은 revision으로 더한 뒤 새 코드로 다시 등록하세요.",
   store_failed: "원인: 자격을 저장하지 못했습니다.",
   verify_failed: "원인: 로봇 신원을 읽지 못했습니다.",
 };
