@@ -197,6 +197,15 @@ def test_a_row_wider_than_its_gaps_allow_stays_unmatched():
     assert not any(o["matched"] for o in co.classify(mm, CATALOG))  # 260 mm: past six widths and five 8 mm gaps
 
 
+def test_a_row_with_one_box_pushed_along_is_still_four_targets():
+    """2026-11-03: a row put back by hand, the first box 16 mm along from the others: the blob was 16 mm too long."""
+    mm = np.array([(x, k * 36 + y) for k in range(4) for x in np.arange(-45 + (16 if k == 0 else 0), 45.5 + (16 if k == 0 else 0), 1.0)
+                   for y in np.arange(0, 30.5, 1.0)], np.float32)
+    found = co.classify(mm, CATALOG)
+    assert [o["object"] for o in found] == ["container-3"] * 4
+    assert sorted(round(o["centre_mm"][0]) for o in found) == [0, 0, 0, 16]
+
+
 def test_three_3_cells_in_a_row_longer_than_one_box_are_split_along_the_row():
     """2026-11-03: three 3-cells with 6 mm gaps read 113 x 100 mm, the row longer than a box (90)."""
     mm = np.array([(k * 36 + x, y) for k in range(3) for x in np.arange(0, 30.5, 1.0) for y in np.arange(-45, 45.5, 1.0)],

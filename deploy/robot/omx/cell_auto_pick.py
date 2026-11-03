@@ -331,7 +331,7 @@ def choose(cell, config, calibration, site, dest_site, place_xy, roi, objects, m
         if why:
             refused.append({"centre_mm": o["centre_mm"], "object": o["object"], "why": f"place: {why}"})
             continue
-        o, planned = dict(o, jaw_margin_mm=room["margin_mm"], free_mm=room["free_mm"]), "no place"  # jaws open as far as fits
+        o, planned = dict(o, jaw_margin_mm=room["margin_mm"], free_mm=room["free_mm"], mark_half_mm=room["mark_half_mm"]), "no place"  # jaws open as far as fits
         for xy, place_yaw in places:
             planned = plan_pick(config, site, dest_site, xy, o, entry, offset, bias, work, yaw, place_yaw)
             for end in (reachable_ends(o, entry, p) if isinstance(planned, str) and "UNREACHABLE" in planned else []):

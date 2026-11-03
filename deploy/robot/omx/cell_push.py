@@ -129,9 +129,11 @@ def run_push(cell, library_path: Path) -> dict:
     return {"result": "pushed", "steps": steps}
 
 
-def look_first(cell, config, record, site, region, start_raw, slide, bias, yaw, z, speed, lib, work) -> dict:
+def look_first(cell, config, record, site, region, start_raw, slide, bias, yaw, z, speed, lib, work, room=None) -> dict:
     """cell_look before the descent: the jaws over the push start, measured against the start in the same image,
-    since a carried bias left the push 1 cm off and the box did not move (2026-10-29). Off: the plan stands."""
+    since a carried bias left the push 1 cm off and the box did not move (2026-10-29). Off: the plan stands.
+    `room` = (mask, roi, pixel_fn): the mark opens the jaws wide (cell_look), so it needs free ground round the start
+    along either closing axis; none given, none measured, and the look refuses."""
     import cell_look
 
     if not prm.get(config.get("params"), "look.enabled") or not (region or {}).get("radius_mm"):
@@ -140,6 +142,12 @@ def look_first(cell, config, record, site, region, start_raw, slide, bias, yaw, 
         return {"verdict": "refuse", "why": "hover refused"}
     target = {"pick": {"x": float(start_raw[0] - bias[0]), "y": float(start_raw[1] - bias[1]), "z": z, "yaw_deg": yaw},
               "place": {}, "object": {"raw_m": [float(v) for v in start_raw]}, "bias_region": region}
+    if room is not None:  # the tool's closing axis is yaw + 90 in theory, yaw in the alternative: both must be free
+        import cell_finger_room as fr
+
+        sides = [fr.mark_room(room[0], room[1], room[2], start_raw, (-np.sin(np.radians(a)), np.cos(np.radians(a))), 0.0,
+                              config.get("params")) for a in (yaw, yaw + 90.0)]
+        target["object"]["mark_half_mm"] = [min(s[k] for s in sides) for k in (0, 1)]
 
     def write(_config, pick, _place, path):
         s = np.array([pick["x"], pick["y"]])
@@ -248,7 +256,8 @@ def main(argv=None):
         else:
             lib.write_text(json.dumps(library))
             looked = look_first(cell, dict(config, plan=plan), record, args.site, region, start, end - start, bias,
-                                out["yaw_deg"], z, speed, lib, work)
+                                out["yaw_deg"], z, speed, lib, work,
+                                (mask, args.roi, lambda p: predicted_pixel(config, calibration, args.site, p)))
             out["look"] = looked
             out.update(run_push(cell, looked.get("library", lib)) if looked["verdict"] == "pass"
                        else {"result": f"refused: look {looked.get('why')}", "steps": [{"park": cell.act("park").get("ok")}]})
