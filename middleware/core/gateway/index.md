@@ -75,8 +75,8 @@
 
 ## 최근 기록
 
+- 2026-11-03 · b70b380dae · 카메라 fixture의 HTTP·내비게이션 소비자 검증
 - 2026-11-03 · e9ee7a7009 · 카메라 SIM fixture 소비자 검증
 - 2026-11-03 · e9ee7a7009 · 카메라 SIM 시험의 OpenCV 스레드 범위 제한
 - 2026-11-03 · uncommitted · feat(core): 핑키 열 모드 — 온도·전압으로 속도 낮추기 (API v1.351)
 - 2026-10-29 · 512bf77f89 · 카메라 SIM scheduling 선행 복구
-- 2026-10-29 · 7608139018 · Station SIM ASGI 회귀와 운영 제한 변이 검증

@@ -2072,3 +2072,10 @@ clpy.duration을 추가했다(bridge AGENTS의 두 파일 함께 갱신 규칙).
 - 범위: 스레드 자원 정책과 소비 시나리오의 이 소스 검증이다. 단독 실행과 부하 실행의 정확한 인과 대조, UI 최종 통합 SHA의 FULL·게시·운영 수용은 별도다. 기존 시간 초과를 재실행만으로 해결했다고 주장하지 않는다.
 - CE: 미해결 — 스레드 정책은 코드와 회귀로 설명되며, 시간 초과의 정확한 스케줄링 원인은 미확정이다.
 - gate 변화: 없음. 모듈 진행 상태와 운영·물리 수용 상태를 변경하지 않는다.
+
+## 2026-11-03 · b70b380dae · 카메라 fixture의 HTTP·내비게이션 소비자 검증
+
+- 변경: 같은 fixture를 쓰는 추가 여섯 HTTP·내비게이션 시험 모듈의 결과를 기록한다. fixture와 자원 회귀 코드는 e9ee7a7009와 같다.
+- 증거: navigation_handover·station_departure_api·station_charge_http·station_redeployment_http·station_target_refresh_http·station_return_http를 공식 원격 6개 worker로 실행해 92 passed/skip0/exit0, NEW0/known0/flaky0을 확인했다. 전체 검색에서 확인한 fixture 소비자 11개 모듈을 앞선 다섯 모듈과 나누어 검증했다. 공식 runner·CI에 OpenCV가 이미 설치되는 환경 계약도 독립 검토했다.
+- gate 변화: 없음. 이 소스의 시험 근거이며 최종 UI 통합 FULL·게시·장치 수용을 대신하지 않는다.
+- CE: 미해결 — 기존 시간 초과와 스레드 수 사이의 인과관계는 미확정이다. 운영 제한을 늘리거나 실패를 skip으로 바꾸지 않았다.
