@@ -38,3 +38,10 @@
 - 증거: `95ae8d2414` 원격 적색 뒤 `a1ad46665c`의 guard·receiver 검사 48 passed, skip 0. 등록되지 않은 미리 생성된 토큰은 사용하지 않으며 기계 viewer의 실제 API 상태 조회를 확인했다. 독립 계약 검토 지적 없음.
 - gate 변화: SOURCE·LOCAL GO. 통합 FULL, 서명 설치와 실제 사용자 로그인 수용은 아직 완료되지 않았다.
 - CE: 해당 없음 — 선택 조건과 권한 경계는 최종 코드·회귀 시험이 설명한다.
+
+## 2026-11-03 · 472c6ab842 · CI가 Account의 oauthlib를 시스템에 설치
+
+- 변경: CI는 `oauthlib==4.0.0`을 `/tmp/rosy-receiver-crypto` target 대신 시스템 Python에 설치한다. 설치 패키지 시험과 Account 경계 시험은 `python3 -I`나 바꾼 `PYTHONPATH`로 하위 프로세스를 띄워 target 폴더를 보지 못했다. `test_ci_dependencies`가 pin을 target에 다시 넣으면 실패한다.
+- 증거: 게시 PR 228 CI의 root-test-1of3·site-vision-cell이 `ModuleNotFoundError: oauthlib`로 적색. 수정 뒤 `test/test_ci_dependencies.py` 38 passed, 옛 ci.yml에서는 강화한 시험이 실패. 시험 PC는 시스템에 oauthlib가 있어 착지는 녹색이었다.
+- gate 변화: 없음. 공개 CI 녹색은 다음 게시 PR에서 확인한다.
+- CE: 해당 없음 — 재발은 강화한 CI 의존성 시험이 막는다.
