@@ -77,7 +77,7 @@ DEFAULTS = {
     "runner.idle_stop_s": (30.0, "s", 5, 7200), "runner.idle_retry_s": (300.0, "s", 5, 7200), "safety.bus_watchdog_ms": (0.0, "ms", 0, 2540), "runner.contact_lag": (1.5, "joint_unit", 0.1, 5),
     "runner.contact_ticks": (2, "count", 1, 30), "runner.contact_rise": (0.6, "joint_unit", 0.1, 1.5),
     "runner.contact_loaded_max": (2.2, "joint_unit", 1.5, 2.3),
-    "zone.split_px": (367.0, "px", 0, 640), "zone.middle_px": (110.0, "px", 0, 320), "zone.wait_s": (120.0, "s", 0, 1800),
+    "zone.split_px": (367.0, "px", 0, 640), "zone.middle_px": (110.0, "px", 0, 320), "zone.wait_s": (120.0, "s", 0, 1800), "zone.takeover": (1, "flag", 0, 1),
     "windup.rest_rise": (40, "pwm", 10, 300), "windup.rest_pwm": (0.4, "ratio", 0.1, 0.9),
     "windup.jaw_pwm": (0.5, "ratio", 0.2, 0.95), "windup.jaw_gap": (2.0, "gripper", 0.5, 20),
     "upkeep.jaw_gap": (1.0, "gripper", 0.2, 5),

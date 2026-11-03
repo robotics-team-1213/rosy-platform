@@ -697,6 +697,12 @@
    "source": "default",
    "evidence": "2026-11-04 default: a folded carry (pick, home, place, home) took 1-2 min on arm_b"
   },
+  "zone.takeover": {
+   "value": 1,
+   "unit": "flag",
+   "source": "default",
+   "evidence": "2026-11-04 user: when one arm fails the other takes its work; only while the failed arm is held for a person and runs no session"
+  },
   "calibrate.max_loo_mm": {
    "value": 15.0,
    "unit": "mm",

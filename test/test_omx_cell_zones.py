@@ -16,10 +16,10 @@ CAL = {"sites": {"pallet": {"homography": [[0.001, 0, 0], [0, 0.001, 0], [0, 0, 
 PARAMS = {"zone.split_px": 367.0, "zone.middle_px": 30.0, "zone.wait_s": 1.0}
 
 
-def zones(tmp_path, side, clock=None):
+def zones(tmp_path, side, clock=None, peer=None):
     t = clock or [0.0]
-    return cell_zones.Zones({"zone_side": side, "params": PARAMS}, CAL, lock_dir=tmp_path,
-                            clock=lambda: t[0], sleep=lambda s: t.__setitem__(0, t[0] + s))
+    return cell_zones.Zones({"zone_side": side, "zone_peer": peer, "params": PARAMS}, CAL, lock_dir=tmp_path,
+                            incidents=tmp_path / "incidents", clock=lambda: t[0], sleep=lambda s: t.__setitem__(0, t[0] + s))
 
 
 def test_each_arm_enters_its_side_and_never_the_other():
@@ -72,8 +72,39 @@ def test_the_gate_holds_a_reach_into_the_other_side_before_it_moves_and_frees_th
     gate.act(f"load {lib}")
     refused = gate.act("goto above_pick")
     assert refused["ok"] is False and "zone" in refused["error"] and not cell.commands[-1].endswith("goto above_pick")
-    assert gate.act("goto above_place")["ok"] and gate.zones.held is not None
+    assert gate.act("goto above_place")["ok"] and gate.zones.held
     other = zones(tmp_path, "right")
     assert other.enter((0.37, 0.2))[0] is False
     gate.act("park")
-    assert gate.zones.held is None and other.enter((0.37, 0.2)) == (True, "middle")
+    assert not gate.zones.held and other.enter((0.37, 0.2)) == (True, "middle")
+
+
+def test_a_held_idle_peer_side_is_taken_over_and_kept_until_the_taker_folds(tmp_path):
+    """2026-11-04: arm_b's wrist cable held it out of service; arm_a must be able to do its work."""
+    import fcntl
+    import os
+
+    a, b = zones(tmp_path, "right", peer="arm_b"), zones(tmp_path, "left", peer="arm_a")
+    left = (0.30, 0.2)
+    assert a.enter(left) == (False, "left side belongs to the other arm")  # arm_b in service
+    (tmp_path / "incidents").mkdir()
+    (tmp_path / "incidents/HOLD-arm_b.json").write_text("{}")
+    session = os.open(tmp_path / "session-arm_b.lock", os.O_CREAT | os.O_RDWR)
+    fcntl.flock(session, fcntl.LOCK_EX)  # arm_b's record_session still runs
+    assert a.enter(left)[0] is False
+    fcntl.flock(session, fcntl.LOCK_UN)
+    os.close(session)
+    ok, why = a.enter(left)
+    assert ok and "taken over" in why
+    assert b.enter(left) == (False, "the other arm has taken over the left side")  # back too early: kept out
+    a.leave()
+    assert b.enter(left) == (True, "left")
+    b.leave()
+
+
+def test_takeover_is_a_parameter(tmp_path):
+    (tmp_path / "incidents").mkdir()
+    (tmp_path / "incidents/HOLD-arm_b.json").write_text("{}")
+    z = cell_zones.Zones({"zone_side": "right", "zone_peer": "arm_b", "params": dict(PARAMS, **{"zone.takeover": 0})}, CAL,
+                         lock_dir=tmp_path, incidents=tmp_path / "incidents")
+    assert z.enter((0.30, 0.2))[0] is False
