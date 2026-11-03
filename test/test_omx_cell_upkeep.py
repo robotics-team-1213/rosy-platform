@@ -47,13 +47,14 @@ def make_io(bus=None, urls=None, mean=100.0, sessions=(), locked=False, todo=())
                  replays=lambda h, t, p: ({}, {})), bus
 
 
-def setup(tmp, closed=49.0, boards=True):
+def setup(tmp, closed=49.0, boards=True, tcp=0.074):
     port, leader = tmp / DEV, tmp / "leader"
     if boards:
         port.write_text("")
         leader.write_text("")
     (tmp / "cell.json").write_text(json.dumps({
         "calibration_path": str(tmp / "cal.json"),
+        **({"tcp_x_m": tcp, "tcp_x_m_evidence": "box-top touch"} if tcp else {}),
         "cameras": {"top": {"url": "http://v/top.jpg"}, "wrist": {"url": "http://v/wrist.jpg"}}}))
     (tmp / "record.json").write_text(json.dumps({"robot": {"port": str(port)}, "teleop": {"port": str(leader)}}))
     (tmp / "chunks.json").write_text(json.dumps({"gripper_closed": closed}))
@@ -70,7 +71,13 @@ def test_a_healthy_arm_is_ready_and_the_report_is_written(tmp_path):
     rep, checks, _ = report(tmp_path)
     assert rep["verdict"] == "ready" and all(c["status"] == "ok" for c in rep["checks"])
     assert json.loads((tmp_path / "upkeep/S-arm_a.json").read_text())["verdict"] == "ready"
-    assert "stock 0.09193, unmeasured" in checks["tcp"]["detail"]
+    assert "0.074" in checks["tcp"]["detail"]
+
+
+def test_an_unmeasured_jaw_tcp_keeps_the_arm_from_ready(tmp_path):
+    """arm_b's stock TCP put its tips 18 mm above every planned height until the box-top touch (2026-11-03)."""
+    rep, checks, _ = report(tmp_path, arms=setup(tmp_path, tcp=None))
+    assert checks["tcp"]["status"] == "warn" and "unmeasured" in checks["tcp"]["detail"] and rep["verdict"] == "needs_person"
 
 
 def test_a_missing_board_fails_and_skips_the_register_read(tmp_path):
@@ -110,7 +117,7 @@ def test_a_failed_camera_unit_and_a_dark_top_frame_fail(tmp_path):
 
 
 def health_log(path, closed_cmd=46.6, stop=48.84, pwm=-150):
-    cmd, present = round(closed_cmd * 4096 / 360), round(stop * 4096 / 360)
+    cmd, present = round(closed_cmd * 4095 / 100), round(stop * 4095 / 100)  # gripper raw: 1999 reads 48.8
     names = ["shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll", "gripper"]
     rows = [{"event": "sample", "sample_time": 1000 + i, "motors": [
         {"joint": n, "usb_port": f"/dev/serial/by-id/{DEV}", "command_raw": cmd if n == "gripper" else 2048,

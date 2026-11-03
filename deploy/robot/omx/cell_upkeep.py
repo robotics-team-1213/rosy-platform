@@ -37,8 +37,10 @@ TCP_STOCK = 0.09193
 BAD = ("fail", "warn", "skipped")
 
 
-def deg(raw):
-    return raw * 360 / 4096
+def grip_units(raw):
+    """LeRobot's gripper value (RANGE_0_100). shortcut: assumes the arm's calibration range 0..4095 (arm_a, arm_b
+    2026-11-03); read the calibration file's range_min/max when an arm is calibrated differently."""
+    return raw * 100 / 4095
 
 
 def serial_tail(device) -> str:
@@ -227,7 +229,7 @@ def check_jaws(arm, device, closed_values, health_logs, params):
         last = None
         for r in jr.rows_of(path, lambda r: r.get("event") == "sample" and len(r.get("motors", [])) == 6):
             g = next(m for m in r["motors"] if m["joint"] == "gripper")
-            command, present = deg(g["command_raw"]), deg(g["present_raw"])
+            command, present = grip_units(g["command_raw"]), grip_units(g["present_raw"])
             for value, hits in found.items():
                 if (last is not None and abs(command - value) < 0.2 and abs(present - last) < 0.3
                         and abs(g["pwm"]) >= share * g["pwm_limit"] and present - command > gap):
@@ -278,7 +280,8 @@ def check_monitors(arm, device, logs_dir, since, params, io):
 def check_tcp(config):
     if "tcp_x_m" in config:
         return row("tcp", "ok", f"plans with {config['tcp_x_m']} m: {config.get('tcp_x_m_evidence', 'no evidence recorded')}")
-    return row("tcp", "ok", f"stock {TCP_STOCK}, unmeasured (ROSY_OMX_TCP_X_M in the run script decides)")
+    # an unmeasured jaw put arm_b's tips 18 mm above every planned height (2026-11-03): not ready until measured
+    return row("tcp", "warn", f"stock {TCP_STOCK}, unmeasured (ROSY_OMX_TCP_X_M in the run script decides)")
 
 
 # ---- one arm, the run ---------------------------------------------------------------------------------------------
