@@ -23,13 +23,11 @@ independent stop exists while LeRobot holds the bus: keep a hand on the power sw
   record_session.py --config record-config.json --caps caps.json [--task-card task-card.yaml] [--teleop-only]
 
 caps.json: {"11": {"pwm": 300}, ..., "16": {"pwm": 300, "current": 250}}  (all six IDs); optional session-only "p"
-  (Position P Gain; 2026-10-26 the wrist at 400 trailed 4.8 deg, the guard stops at 5) and "acc"+"vel"
-  (Profile_Acceleration/Velocity in guarded_native.PROFILE_ACC/VEL: the servo ramps between tick-quantized goals)
-Tasks plug in and out: the record config holds only what does not change with the task (devices, cameras, fps); a
-task card (tasks/<task>.yaml, schema rosy.omx-task-card.v1) holds the task text, episode timing, dataset name and
-its design (layout, phases, success and failure labels). With --task-card the card's `record` block fills the
-dataset section, the dataset root becomes a new `<root_prefix>/<task_id>-r<revision>-<stamp>`, and the card is
-copied verbatim with its sha256 into session.json, so review knows which design an episode was recorded under.
+  (Position P Gain) and "acc"+"vel" (Profile_Acceleration/Velocity, guarded_native.PROFILE_ACC/VEL)
+A task card (tasks/<task>.yaml, rosy.omx-task-card.v1: task text, timing, dataset, design) fills the dataset
+section with --task-card; the root becomes `<root_prefix>/<task_id>-r<revision>-<stamp>` and the card and its
+sha256 go into session.json. With --arm every end runs omx_incident (it never moves the arm), and an incident it
+holds refuses the next session until a person clears it.
 """
 from __future__ import annotations
 
@@ -206,14 +204,11 @@ class Session:
                 raise SystemExit(f"follower {motor} not idle: model/mode {(model, mode)}, torque {torque}, error {error}")
             caps = {name: bus.read(name) for name in self._cap_registers(motor)}
             if any(caps[name] != BASELINE[name] for name in caps):
-                raise SystemExit(f"follower {motor} caps {caps} are not the commissioning baseline; an earlier "
-                                 "session did not restore them - lower them with commissioning_limits.py --baseline "
-                                 "(torque OFF) before recording")
+                raise SystemExit(f"follower {motor} caps {caps} are not the baseline: an earlier session did not restore "
+                                 "them - commissioning_limits.py --baseline (torque OFF) before recording")
 
     def clear_leader_alerts(self, bus) -> list:
-        """The leader's supply sags below XL330 spec (3.6 V on the S cell, 2026-10-24) and latches an
-        input-voltage alert; LeRobot then reports every leader motor missing. A reboot of a torque-OFF
-        motor clears the latch; a motor whose alert returns at once is refused."""
+        """A sagging leader supply (3.6 V, 2026-10-24) latches input-voltage alerts: reboot torque-OFF ones once."""
         alerted = []
         for motor in LEADER:
             bus.motor = motor
@@ -276,8 +271,7 @@ class Session:
         return state
 
     def torque_off_until_confirmed(self) -> tuple[bool, dict]:
-        """Retry, reopening the port each time (the recorder may still hold it, a USB drop may have
-        re-enumerated it), until every follower motor reads torque 0 or the deadline passes."""
+        """Retry, reopening the port each time (held by the recorder, re-enumerated), until all read torque 0."""
         deadline = self.clock() + TORQUE_OFF_DEADLINE_S
         last = {}
         while True:
@@ -531,8 +525,7 @@ def main(argv=None):
         return done.stdout.strip()
 
     def run(command):
-        """The recorder in its own session: our Ctrl-C/SIGTERM/SIGHUP reaches it only as one SIGINT,
-        with 10 s to save the episode, then it is killed."""
+        """The recorder in its own session: our signals reach it as one SIGINT, 10 s to save, then a kill."""
         child = subprocess.Popen(command, start_new_session=True, preexec_fn=interrupt_on_parent_death,
                                  env={**os.environ, "ROSY_OMX_MONITOR_LOG": str(monitor_path),
                                       'ROSY_OMX_MONITOR_STATE': str(monitor_state),
@@ -564,6 +557,8 @@ def main(argv=None):
         chunks = {"library": str(args.chunks.resolve()), "io": str(args.io.resolve()),
                   "sha256": hashlib.sha256(args.chunks.read_bytes()).hexdigest(),
                   **({"params": str(args.params.resolve())} if args.params else {})}
+    import omx_incident
+    omx_incident.refuse_if_held(args.arm)
     session = Session(open_bus=lambda which: SerialBus(ports[which], 0), systemctl=systemctl, run=run, log=log,
                       replay=replay, chunks=chunks, operating_profile=args.operating_profile)
     lock = session_lock(args.arm)
@@ -591,6 +586,10 @@ def main(argv=None):
             record['motor_health_owner'] = monitor_owner
             record['motor_health_session'] = monitor_session
             Path("session.json").write_text(json.dumps(record, indent=2, default=str))
+            try:  # a failing incident record must never hide how the session ended
+                print(json.dumps(omx_incident.after_session(args.arm, ports.get("follower")), default=str)[:2000])
+            except Exception as exc:
+                print(f"incident pipeline failed: {exc}")
     if not record.get("safe_end"):
         raise SystemExit("UNSAFE END: follower torque or caps not confirmed restored - see session.json")
     raise SystemExit(record.get("exit_code") or 0)

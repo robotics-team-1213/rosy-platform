@@ -106,6 +106,27 @@ i_gain 0, so the session's failed I-gain restore was undone by the reboot. The r
 leaves torque OFF. The latch only goes away; the cause does not. Before torque goes on again, a person checks that
 nothing is wedged in the jaws or against the arm.
 
+## The handling is a pipeline now
+
+Handling this incident by hand took about an hour of reading logs, frames and registers. `omx_incident.py` now does
+the same steps; `record_session --arm` runs it at the end of every session.
+
+1. It collects session.json, the runner status rows, the fault records and frames, and the health log.
+2. It decides by measurement, the judge seat's rule. A reboot is offered only for an overload or voltage latch, with
+   every motor at torque 0 and the arm folded at home. Any physical sign holds the arm for a person.
+3. It writes a `stage: incident` decision row and `incidents/<stamp>-<arm>/agenda.md`.
+4. It runs the allowed reboot.
+5. It writes `incidents/HOLD-<arm>.json`, which refuses the next session until
+   `omx_incident.py clear --by --note` records who checked the arm.
+
+The decision model (`ROSY_DECISION_MODEL`, an Ollama URL) only explains the fault frames. It never chooses an
+action. On the 13:27 frames, qwen3-vl:8b saw "an orange block wedged between the jaws and the platform, the elbow
+blocked". It called arm_b the "right" arm, which shows its left/right cannot be trusted.
+
+Replayed on the real 13:27 `session.json`, the pipeline reached the same decision as the hand diagnosis:
+reboot_latched, then hold for a person. The field PC has no key to the AI PC's model, so on the field the pipeline
+runs measurement-only.
+
 ## Next time
 
 - A hold that is flat is normal. A PWM that climbs on every sample at a standstill is pushing against something:
