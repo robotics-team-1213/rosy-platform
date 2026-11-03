@@ -13899,6 +13899,12 @@ osy-d395-s1d\`.
 - gate 변화: 순수 계측 변경의 관련 시험 범위만 바로잡는다. 이 선택기 수정 자체는 정식 FULL이 필요하고, safety·runtime/selector/remote 혼합의 FULL과 기존 문서 guard를 유지한다. 공식 후보 검증·main 착지·변경 후 p90 검증은 아직 남아 있다.
 - CE: 기존 교훈 갱신 — landings-gave-the-turn-back-and-reran-everything의 과다 FULL 원인과 적용 조건을 보완했다. 보고 결과가 승인·실행 경로에 들어가면 분류를 재검토한다. 최종 문서 기록은 검증 코드a193 대비 tools/test 변경이 없으며 같은 guard를 별도 수동 pytest로 반복하지 않고 공식 착지에서 확인한다.
 
+## 2026-11-03 · uncommitted · fix(isaac): 야간 재부팅 전 90분 안에는 Isaac 실행을 시작하지 않는다
+- 변경: `remote_isaac._run_once`가 준비 확인마다 `rosy-nightly-reboot.timer`까지 남은 초를 읽고, 90분(`RUN_BUDGET_S`) 안이면 준비 안 됨으로 다룬다. 셀 실측 기록의 벨트 높이 정정(영상 폭 추정이 틀렸고 D435 깊이로 벨트 면이 판 윗면 약 64 mm 아래, 시뮬레이션은 36 mm), 같은 카메라 최종 실행 9/9 추가, 대장 벨트 항목과 손목 카메라 사람 작업.
+- 증거: run 82e147c7이 05:01 야간 재부팅(D-889)으로 7층에서 멈춤(`last -x`·타이머 확인). 새 시험 `test_run_never_starts_inside_the_nightly_reboot_budget`.
+- gate 변화: 없음. fixture 벨트 높이는 바꾸지 않았다(재실행이 필요한 변경).
+- CE: 해당 없음 — 원인과 고침이 코드 주석·시험·기록에 있다. 벨트 높이를 영상 폭으로 짐작해 틀린 일은 검증 기록에 정정으로 남겼다.
+
 ## 2026-11-03 · uncommitted · test(remote): imported fake-host helper의 HEADROOM 격리
 - 변경: 공용 `_fake_hosts`가 호출자의 monkeypatch를 통해 시험 전용 HEADROOM dict를 사용하게 한다. 다른 모듈이 helper를 import했을 때 빠지던 module-local autouse fixture의 격리를 helper 자체에서 보장하며, production 코드와 worker/profile 기대값은 유지한다.
 - 증거: main4088d1c1d2에서 기존 reboot producer→profile consumer 두 node를 -n0으로 실행해1FAIL/1PASS·NEW1/known·flaky0을 재현했다. 수정parent69a12까지 관련remote 코드·시험3파일 차이0이다. code63a211f808에서 같은 producer 모듈을 먼저 두고 helper의 모든 호출 모듈과 consumer를 포함한5whole-file -n0은184PASS/skip·NEW·known·flaky0이었다. 정상 입장 wait0/run37초, pytest27.89초다. 로그는 OS Temp rosy-headroom-order-{red,green}-20261103/run-1.txt에 있다.
