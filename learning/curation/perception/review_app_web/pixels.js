@@ -106,7 +106,7 @@ pixelContent.addEventListener('focusin',event=>revealPixelFocus(event.target));
 addEventListener('resize',()=>revealPixelFocus());
 for(const [id,key] of [['pixel-prev','ArrowLeft'],['pixel-next','ArrowRight'],['pixel-next-pending','N'],['pixel-undo','Control+Z Meta+Z']])$(id).setAttribute('aria-keyshortcuts',key);
 $('pixel-undo').title='마지막 픽셀 수정 되돌리기 · Ctrl+Z';
-$('pixel-undo').textContent='되돌리기 · Ctrl+Z';
+const undoCaption=document.createElement('span');undoCaption.textContent='되돌리기 · Ctrl+Z';$('pixel-undo').replaceChildren(undoCaption);
 $('pixel-approve').textContent='완료';$('pixel-approve').setAttribute('aria-label','픽셀 검수 완료');
 for(const [id,label] of [['pixel-prev','이전 사진'],['pixel-next','다음 사진'],['pixel-undo','마지막 픽셀 수정 되돌리기']]){$(id).setAttribute('aria-label',label);$(id).title=label;}
 for(const button of document.querySelectorAll('.pixel-quick-actions ui-button'))button.setAttribute('aria-label',button.title);
@@ -128,7 +128,12 @@ let detailView=false;
 try {detailView=sessionStorage.getItem('rosy.review.detailView')==='true';} catch {}
 let seeds=[],sampleImage=null,samplePixels=0,sampleTolerance=null,previewing=false,previewSerial=0;
 let unknownPixels=null,totalPixels=0;
-function error(value=''){$('pixel-error').textContent=value;$('pixel-error').hidden=!value;}
+function error(value=''){
+ $('pixel-error').textContent=value;$('pixel-error').hidden=!value;
+ if(value){const reload=$('pixel-reload');reload.classList.add('pixel-recovery-reload');$('pixel-error').after(reload);
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{if(!$('pixel-error').hidden){reload.scrollIntoView({block:'center'});if(!reload.disabled)reload.focus({preventScroll:true});}}));
+ }
+}
 async function setView(detail){
  detailView=detail;
  try{sessionStorage.setItem('rosy.review.detailView',String(detail));}catch{}
@@ -235,7 +240,7 @@ function enable(){updatePages(workspace?.page,busy||loading||!!stroke||draft.len
  candidateOptions();
 }
 async function request(path,body){const response=await accountFetch(path,body?{method:'POST',headers:{'Content-Type':'application/json','X-Pinky-Token':workspace.token},body:JSON.stringify(body)}:{});if(response.status>=500){const error=new Error('검수 서비스를 사용할 수 없습니다. 잠시 후 다시 시도하세요.');error.status=response.status;throw error;}const value=await response.json();if(!response.ok){if(response.status===409)conflicted=true;if(response.status===403){forbidden=true;throw new Error('검수 권한이 없습니다. 최신 내용을 다시 불러오고 접근 권한을 확인하세요.');}throw new Error(readableError(value.error));}return value;}
-function options(){const rows=visible(),firstUse=!Object.values(workspace.counts).some(Boolean);if(rows.length)photoNavigation.append($('pixel-reload'));else pixelContent.before($('pixel-reload'));$('pixel-frame').replaceChildren();for(const row of rows){const option=document.createElement('option');option.value=row.index;option.textContent=`사진 ${frameOrdinal(workspace,row.index)} · ${states[row.pixel_status]}`;$('pixel-frame').append(option);}if(frame)$('pixel-frame').value=frame.index;$('pixel-frame').parentElement.hidden=!rows.length;$('pixel-filter').parentElement.hidden=firstUse;for(const id of ['pixel-prev','pixel-next','pixel-next-pending'])$(id).hidden=!rows.length;$('pixel-empty').hidden=!!rows.length;$('pixel-empty').querySelector('h3').textContent=firstUse?'등록된 사진이 없습니다':'이 상태의 픽셀 검수가 없습니다';$('pixel-all').hidden=false;$('pixel-all').textContent=firstUse?'자료 등록 열기':'전체 보기';$('pixel-content').hidden=!rows.length;thumbnails(rows);}
+function options(){const rows=visible(),firstUse=!Object.values(workspace.counts).some(Boolean);if(rows.length&&!conflicted&&!forbidden){$('pixel-reload').classList.remove('pixel-recovery-reload');photoNavigation.append($('pixel-reload'));}else pixelContent.before($('pixel-reload'));$('pixel-frame').replaceChildren();for(const row of rows){const option=document.createElement('option');option.value=row.index;option.textContent=`사진 ${frameOrdinal(workspace,row.index)} · ${states[row.pixel_status]}`;$('pixel-frame').append(option);}if(frame)$('pixel-frame').value=frame.index;$('pixel-frame').parentElement.hidden=!rows.length;$('pixel-filter').parentElement.hidden=firstUse;for(const id of ['pixel-prev','pixel-next','pixel-next-pending'])$(id).hidden=!rows.length;$('pixel-empty').hidden=!!rows.length;$('pixel-empty').querySelector('h3').textContent=firstUse?'등록된 사진이 없습니다':'이 상태의 픽셀 검수가 없습니다';$('pixel-all').hidden=false;$('pixel-all').textContent=firstUse?'자료 등록 열기':'전체 보기';$('pixel-content').hidden=!rows.length;thumbnails(rows);}
 function image(path){return new Promise((resolve,reject)=>{const value=new Image();value.onload=()=>resolve(value);value.onerror=()=>reject(new Error('원본 또는 마스크를 불러오지 못했습니다. 승인할 수 없습니다.'));value.src=path;});}
 let thumbnailKey='',thumbnailSelected=null;
 function thumbnails(rows){const strip=$('pixel-frames'),key=workspace.page.offset+':'+rows.map(row=>row.index).join(',');strip.hidden=!rows.length;

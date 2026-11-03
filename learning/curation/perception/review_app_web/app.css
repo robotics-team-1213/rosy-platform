@@ -265,6 +265,7 @@ ui-topbar:has([data-learning-account-entry]) { flex-wrap: wrap; }
 .pixel-editor-column > [aria-label="검수 작업 범위"] [role="status"] { flex: 1 1 12rem; font-size: var(--text-label); }
 .pixel-editor-column #pixel-photo-navigation { grid-column: 1 / -1; grid-row: 2; margin: 0; grid-template-columns: auto minmax(0, 1fr) auto auto; }
 #pixel-photo-navigation #pixel-reload { width: auto; margin: 0; }
+#pixel-main > #pixel-reload.pixel-recovery-reload { width: 100%; margin-block: var(--space-2); }
 [aria-label="검수 작업 범위"] { display: flex; flex-wrap: wrap; max-width: 100%; min-width: 0; }
 [aria-label="검수 작업 범위"] > label { flex: 1 1 12rem; min-width: 0; max-width: 100%; }
 [aria-label="검수 작업 범위"] select { width: 100%; min-width: 0; max-width: 100%; }
@@ -362,12 +363,11 @@ ui-topbar:has([data-learning-account-entry]) { flex-wrap: wrap; }
 .pixel-editor-column .pixel-vlm-feedback { margin-top: var(--space-3); }
 #pixel-coverage { margin: var(--space-2) 0; font-variant-numeric: tabular-nums; }
 @media (height <= 700px) and (width >= 64rem) {
-  #canvas { width: auto; height: clamp(12rem, calc(100dvh - 20rem), 24rem); max-width: 100%; }
+  .image-stage, .pixel-stage { max-height: clamp(12rem, calc(100dvh - 20rem), 24rem); }
   #pixel-flow ol { display: none; }
   #pixel-main > .ui-workspace-bar { margin-block: var(--space-2); }
   .pixel-frame-strip { margin-block: var(--space-1); }
   .pixel-frame-strip .frame-thumb { width: 2.5rem; }
-  #pixel-canvas { width: auto; height: clamp(12rem, calc(100dvh - 20rem), 24rem); max-width: 100%; }
 }
 @media (width < 64rem) {
   .review-stage { display: flex; flex-direction: column; }

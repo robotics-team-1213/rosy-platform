@@ -318,6 +318,8 @@ def test_short_desktop_view_keeps_entire_photo_in_view(browser_workspace):
     open_pixels(page, store, expect)
     canvas = page.locator('#pixel-canvas').bounding_box()
     assert canvas and canvas['y'] + canvas['height'] <= 632
+    source = store.get(0)['source']
+    assert abs(canvas['width'] / canvas['height'] - source['width'] / source['height']) < .001
 
 
 def test_detail_view_and_mask_toggle_do_not_change_review(tmp_path):
@@ -464,22 +466,26 @@ def test_pixel_decision_and_preparation_result_are_visible(browser_workspace, wi
     open_pixels(page, store, expect)
     assert page.locator('#pixel-approve').bounding_box()['y'] < page.locator('#pixel-class-help').bounding_box()['y']
     if width <= 390:
+        show_advanced_tools(page)
         field_widths = page.evaluate("""() => ({
           available: document.querySelector('.pixel-editor-column > section').getBoundingClientRect().width,
-          labels: [...document.querySelectorAll('.pixel-layout .ui-workspace-bar > label, .pixel-quick-tools > label')]
+          labels: [...document.querySelectorAll('#pixel-advanced-tools .ui-workspace-bar > label, .pixel-quick-tools > label')]
+            .filter(node => node.getClientRects().length && node.querySelector('.ui-field:not([type="checkbox"]):not([type="radio"])'))
+            .map(node => node.getBoundingClientRect().width),
+          fields: [...document.querySelectorAll('#pixel-advanced-tools .ui-workspace-bar .ui-field:not([type="checkbox"]):not([type="radio"]), .pixel-quick-tools > label .ui-field:not([type="checkbox"]):not([type="radio"])')]
             .filter(node => node.getClientRects().length)
             .map(node => node.getBoundingClientRect().width),
-          fields: [...document.querySelectorAll('.pixel-layout .ui-workspace-bar .ui-field, .pixel-quick-tools > label .ui-field')]
-            .filter(node => node.getClientRects().length)
-            .map(node => node.getBoundingClientRect().width),
+          checkbox: document.querySelector('#pixel-preserve').getBoundingClientRect().width,
         })""")
         assert len(field_widths['labels']) >= 3 and len(field_widths['fields']) >= 3
         assert all(value <= field_widths['available'] for value in field_widths['labels']), field_widths
         assert all(abs(label-field) <= 1 for label, field in zip(field_widths['labels'], field_widths['fields'])), field_widths
+        assert field_widths['checkbox'] >= 24
     if width == 320:
         navigation = page.evaluate("""() => ['#pixel-prev', '#pixel-next']
           .map(selector => document.querySelector(selector).getBoundingClientRect().width)""")
-        assert min(navigation) >= 100 and abs(navigation[0] - navigation[1]) <= 1, navigation
+        target_size = page.evaluate("parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--target-secondary'))")
+        assert min(navigation) >= target_size and abs(navigation[0] - navigation[1]) <= 1, navigation
     def shot(state):
         if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
             from pathlib import Path
@@ -632,8 +638,11 @@ def test_stale_pixel_revision_and_excluded_frame_are_guarded(browser_workspace, 
     assert review_masks.get(store, 0) == newer
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
     if width == 390:
+        expect(page.locator('#pixel-reload')).to_be_focused()
         reload = page.locator('#pixel-reload').bounding_box()
         assert reload and reload['width'] >= width * .8 and reload['x'] + reload['width'] <= width
+        assert 0 <= reload['y'] and reload['y'] + reload['height'] <= 844
+        expect(page.locator('#pixel-reload')).to_have_count(1)
     if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
         from pathlib import Path
         target = Path(output) / f'learning-pixels-conflict-{width}.png'
