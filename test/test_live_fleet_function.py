@@ -1,13 +1,16 @@
 """라이브 Fleet 기능 판정 — 배포된 사이트의 읽기 표면을 그대로 잰다 (D-527 현장 수용).
 
-옵트인: ROSY_LIVE_FLEET_URL(사이트 주소)과 ROSY_LIVE_FLEET_TOKEN(읽기 자격)을
-환경으로 주면 실물 Fleet API에 읽기 요청만 보내 각 기능이 살아 있는지 판정한다.
-쓰기·로봇 명령은 없다. 둘 중 하나라도 없으면 건너뛴다(CI에는 영향 없음).
-test_live_surface_gates.py 와 같은 ROSY_LIVE_FLEET_URL 을 쓴다.
+옵트인: ROSY_LIVE_FLEET_URL(사이트 주소)과 읽기 자격(ROSY_LIVE_FLEET_TOKEN, 또는
+ROSY_LIVE_FLEET_TOKEN_FILE 경로)을 환경으로 주면 실물 Fleet API에 읽기 요청만 보내
+각 기능이 살아 있는지 판정한다. 사이트 인증서가 내부 CA면 ROSY_LIVE_FLEET_CA로
+그 CA 파일 경로를 준다. 쓰기·로봇 명령은 없다. 주소·자격이 없으면 건너뛴다
+(CI에는 영향 없음). test_live_surface_gates.py 와 같은 ROSY_LIVE_FLEET_URL 을 쓴다.
 
-실행(원격 시험 PC에서, 현장 사이트가 보이는 망):
-    python tools/remote/remote_pytest.py --log-dir "$ROSY_SCRATCH/field" -- \
-        ROSY_LIVE_FLEET_URL=https://<site-host> ROSY_LIVE_FLEET_TOKEN=<viewer-token> \
+실행(사이트 PC를 시험 호스트로 — 자격 파일과 CA가 거기에 있다):
+    ROSY_TEST_HOSTS=robttt python tools/remote/remote_pytest.py --log-dir "$ROSY_SCRATCH/field" -- \
+        ROSY_LIVE_FLEET_URL=https://<site-host>:8443 \
+        ROSY_LIVE_FLEET_TOKEN_FILE=/etc/rosy/site/secrets/site-update-viewer.token \
+        ROSY_LIVE_FLEET_CA=/etc/rosy/site/secrets/site-ca.crt \
         test/test_live_fleet_function.py -v
 
 판정 기준은 operations/fleet 콘솔 라우트의 실제 응답 계약을 따른다:
@@ -23,10 +26,12 @@ from urllib.parse import urlparse
 
 import httpx
 import pytest
+from pathlib import Path
 
 pytestmark = pytest.mark.skipif(
-    not (os.environ.get("ROSY_LIVE_FLEET_URL") and os.environ.get("ROSY_LIVE_FLEET_TOKEN")),
-    reason="set ROSY_LIVE_FLEET_URL and ROSY_LIVE_FLEET_TOKEN to judge a deployed site",
+    not (os.environ.get("ROSY_LIVE_FLEET_URL")
+         and (os.environ.get("ROSY_LIVE_FLEET_TOKEN") or os.environ.get("ROSY_LIVE_FLEET_TOKEN_FILE"))),
+    reason="set ROSY_LIVE_FLEET_URL and a token (ROSY_LIVE_FLEET_TOKEN or _TOKEN_FILE) to judge a deployed site",
 )
 
 
@@ -38,13 +43,23 @@ def site() -> str:
 
 @pytest.fixture(scope="module")
 def authed(site):
-    headers = {"Authorization": "Bearer " + os.environ["ROSY_LIVE_FLEET_TOKEN"]}
-    with httpx.Client(base_url=site, timeout=15, headers=headers) as client:
+    token = os.environ.get("ROSY_LIVE_FLEET_TOKEN")
+    if not token:
+        token = Path(os.environ["ROSY_LIVE_FLEET_TOKEN_FILE"]).read_text(encoding="utf-8").strip()
+    ca = os.environ.get("ROSY_LIVE_FLEET_CA")
+    headers = {"Authorization": "Bearer " + token}
+    with httpx.Client(base_url=site, timeout=15, headers=headers,
+                      verify=ca if ca else True) as client:
         yield client
 
 
+def _ca():
+    ca = os.environ.get("ROSY_LIVE_FLEET_CA")
+    return ca if ca else True
+
+
 def test_unauthenticated_readback_is_refused(site):
-    with httpx.Client(base_url=site, timeout=15) as client:
+    with httpx.Client(base_url=site, timeout=15, verify=_ca()) as client:
         response = client.get("/api/fleet/platoon")
     assert response.status_code == 401, (
         f"미인증 읽기가 {response.status_code}로 돌아왔다 — 배포 인증이 성립하지 않는다")
