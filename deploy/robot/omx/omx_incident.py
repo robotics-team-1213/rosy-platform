@@ -42,7 +42,9 @@ def bits(code: int) -> list[str]:
 
 
 def hold_path(arm: str) -> Path:
-    return INCIDENTS / f"HOLD-{arm}.json"
+    from joint_tune import lock_root
+
+    return lock_root() / "incidents" / f"HOLD-{arm}.json"
 
 
 def held(arm: str) -> str | None:
@@ -178,10 +180,14 @@ def handle(session_path: Path, arm: str, act=None, model=None, decisions=Path("d
     if not d["actions"] and not d["hold"] and d["reason"] == "no incident sign":
         return {"incident": False}
     stamp = time.strftime("%Y%m%dT%H%M%S")
-    seen = explain(model, f) if model else None
-    acted = act([int(m) for m in f["latched"]]) if act and "reboot_latched" in d["actions"] else None
     folder = INCIDENTS / f"{stamp}-{arm}"
     folder.mkdir(parents=True, exist_ok=True)
+    if d["hold"]:
+        path = hold_path(arm)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"reason": f"{(folder / 'agenda.md').resolve()}: {d['reason']}", "since": stamp}))
+    seen = explain(model, f) if model else None
+    acted = act([int(m) for m in f["latched"]]) if act and "reboot_latched" in d["actions"] else None
     incident = {"schema": "rosy.omx-incident.v1", "arm": arm, "stamp": stamp, "session": str(session_path),
                 "facts": f, "decision": d, "model": seen, "recovery": acted}
     (folder / "incident.json").write_text(json.dumps(incident, indent=1, default=str))
@@ -191,29 +197,50 @@ def handle(session_path: Path, arm: str, act=None, model=None, decisions=Path("d
         "stage": "incident", "facts": {k: f[k] for k in ("latched", "folded", "windup_hits", "flagged", "safe_end")},
         "options": d["offered"] + ["hold_for_person"], "chosen": d["actions"] + (["hold_for_person"] if d["hold"] else []),
         "by": "measurement", "reason": d["reason"], "frames": f["frames"], "arm_id": arm, "t": round(time.time(), 3)})
-    if d["hold"]:
-        hold_path(arm).write_text(json.dumps({"reason": f"{folder}/agenda.md: {d['reason']}", "since": stamp}))
     return {"incident": True, "folder": str(folder), **incident}
 
 
 def reboot_latched(device: str):
     """Reboot the latched follower IDs on `device`, only while every follower motor reads torque 0."""
     def act(ids):
-        from dynamixel_sdk import PacketHandler, PortHandler
+        from dynamixel_sdk import COMM_SUCCESS, PacketHandler, PortHandler
 
         port, packet = PortHandler(device), PacketHandler(2.0)
-        if not (port.openPort() and port.setBaudRate(1_000_000)):
-            return {"error": "port"}
+        before, after = {}, {}
+
+        def verified(result, error):
+            if result != COMM_SUCCESS or error & ~128:
+                raise ValueError(f"bus response failed: communication={result}, packet={error}")
+
+        def read(motor, address):
+            value, result, error = packet.read1ByteTxRx(port, motor, address)
+            verified(result, error)  # alert 0x80 reports the latch; lower bits are packet errors
+            if type(value) is not int or not 0 <= value <= 255:
+                raise ValueError("invalid register readback")
+            return value
+
+        def snapshot():
+            return {i: {"torque": read(i, 64), "hw_error": read(i, 70)} for i in range(11, 17)}
+
         try:
-            read = lambda i, a: packet.read1ByteTxRx(port, i, a)[0]  # noqa: E731
-            before = {i: {"torque": read(i, 64), "hw_error": read(i, 70)} for i in range(11, 17)}
+            if not (port.openPort() and port.setBaudRate(1_000_000)):
+                return {"error": "port"}
+            if not ids or any(type(i) is not int or i not in range(11, 17) for i in ids):
+                return {"refused": "invalid follower reboot IDs"}
+            before = snapshot()
             if any(v["torque"] for v in before.values()):
                 return {"refused": "a follower motor has torque ON", "before": before}
+            if any(v["hw_error"] & ~REBOOTABLE for v in before.values()) or any(not before[i]["hw_error"] for i in ids):
+                return {"refused": "current hardware faults do not permit reboot", "before": before}
             for i in ids:
-                packet.reboot(port, i)
+                verified(*packet.reboot(port, i))
             time.sleep(1.5)
-            return {"rebooted": ids, "before": before,
-                    "after": {i: {"torque": read(i, 64), "hw_error": read(i, 70)} for i in range(11, 17)}}
+            after = snapshot()
+            if any(v["torque"] or v["hw_error"] for v in after.values()):
+                return {"refused": "reboot readback is not torque OFF and fault-free", "before": before, "after": after}
+            return {"rebooted": ids, "before": before, "after": after}
+        except (OSError, RuntimeError, TypeError, ValueError) as exc:
+            return {"error": str(exc), "before": before, "after": after}
         finally:
             port.closePort()
     return act
@@ -232,6 +259,16 @@ def main(argv=None):
     c.add_argument("--by", required=True)
     c.add_argument("--note", required=True)
     args = parser.parse_args(argv)
+    from joint_tune import session_lock
+
+    lock = session_lock(args.arm)
+    try:
+        return _run(args)
+    finally:
+        lock.close()
+
+
+def _run(args):
     if args.command == "clear":
         reason = held(args.arm)
         if reason is None:
