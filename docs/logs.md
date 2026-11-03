@@ -13904,3 +13904,15 @@ osy-d395-s1d\`.
 - 증거: run 82e147c7이 05:01 야간 재부팅(D-889)으로 7층에서 멈춤(`last -x`·타이머 확인). 새 시험 `test_run_never_starts_inside_the_nightly_reboot_budget`.
 - gate 변화: 없음. fixture 벨트 높이는 바꾸지 않았다(재실행이 필요한 변경).
 - CE: 해당 없음 — 원인과 고침이 코드 주석·시험·기록에 있다. 벨트 높이를 영상 폭으로 짐작해 틀린 일은 검증 기록에 정정으로 남겼다.
+
+## 2026-11-03 · uncommitted · fix(landing): main delta의 시험 폴더를 차례 밖 "delta" 단계로 (D-889 추가 27)
+- 변경: `land_selection.select`의 착지된 delta 경로가 가드 밖 시험 폴더 호출에 닿으면 `DELTA_NOTE`를 돌려주고, `land.py`가 `land_prepare.again`으로 차례 밖에서 돌린다. `land_prepare`는 이전 단계 위에 `"delta"`로 저장하고 `land_full.prepared`는 아래 단계를 보고한다.
+- 증거: 원격 착지 회귀(selection·prepare·land·turn_deadline·batch·speculate·mainred_flow) 통과. 새 시험 2개(폴더/파일 구분, delta 기록이 FULL이 아님).
+- gate 변화: FULL·safety 판정과 land record의 FULL 조건은 그대로다. delta 단계는 FULL 증거가 되지 않는다.
+- CE: 기존 교훈 갱신 — landings-gave-the-turn-back-and-reran-everything 9에 차례 안 delta 재실행과 이 결정을 연결.
+
+## 2026-11-03 · uncommitted · test(remote): imported fake-host helper의 HEADROOM 격리
+- 변경: 공용 `_fake_hosts`가 호출자의 monkeypatch를 통해 시험 전용 HEADROOM dict를 사용하게 한다. 다른 모듈이 helper를 import했을 때 빠지던 module-local autouse fixture의 격리를 helper 자체에서 보장하며, production 코드와 worker/profile 기대값은 유지한다.
+- 증거: main4088d1c1d2에서 기존 reboot producer→profile consumer 두 node를 -n0으로 실행해1FAIL/1PASS·NEW1/known·flaky0을 재현했다. 수정parent69a12까지 관련remote 코드·시험3파일 차이0이다. code63a211f808에서 같은 producer 모듈을 먼저 두고 helper의 모든 호출 모듈과 consumer를 포함한5whole-file -n0은184PASS/skip·NEW·known·flaky0이었다. 정상 입장 wait0/run37초, pytest27.89초다. 로그는 OS Temp rosy-headroom-order-{red,green}-20261103/run-1.txt에 있다.
+- gate 변화: 없음. 실패 기준·검증 기대값·자원 정책·테스트 선택·quarantine baseline을 바꾸지 않는다. 독립 고정코드 검토 P1/P2 없음이며, source 검증과 정식 후보 착지는 구분한다.
+- CE: 기존 교훈 갱신 — shared-pytest-process-masks-path-dependent-import의 단독/FULL 컨텍스트 차이에 imported helper의 fixture 범위와 실제 순서 재현을 추가했다. 단독 통과를 곧바로 부하성 flaky로 단정하지 않는다.
