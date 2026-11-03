@@ -116,6 +116,7 @@ def test_explicit_full_refuses_missing_duplicate_partial_or_ordinary_timing(call
 def test_landed_harness_delta_keeps_local_selection(caller, tmp_path):
     selection = load_selection()
     land, payload, _ = caller
+    land.land_guards = SimpleNamespace(GUARDS=("guard/test",))
     payload.update(mode="full", escalations=["tools/harness/x.py" + land.HARNESS_TRIGGER])
     assert selection.select(land, tmp_path, "base", "python", head="main", landed=True) == (
         [["guard/test"], ["ROSY_RUN_BROWSER_TESTS=1", "browser/test"]], None)
@@ -127,6 +128,7 @@ def test_landed_harness_delta_keeps_local_selection(caller, tmp_path):
 def test_landed_full_delta_runs_both_changes_own_suites_unless_safety(caller, tmp_path):
     selection = load_selection()
     land, _, calls = caller
+    land.land_guards = SimpleNamespace(GUARDS=("guard/test",))
     delta = dict(mode="full", escalations=["conftest.py: pytest conftest"], local_invocations=[["guard/test"]],
                  full_invocations=[["test"]])
     mine = dict(mode="affected", escalations=[], invocations=[["mine/test"], ["guard/test"]])
@@ -153,8 +155,9 @@ def test_a_safety_path_in_mains_landed_delta_keeps_only_its_mapped_suites(caller
     answers = [delta, mine]
     land.subprocess = SimpleNamespace(run=lambda command, **kw: calls.append(command) or SimpleNamespace(
         returncode=0, stdout=json.dumps(answers.pop(0)), stderr=""))
-    assert selection.select(land, tmp_path, "base", "python", head="main", landed=True) == (
-        [["guard/test"], ["safe/test"], ["ROSY_RUN_BROWSER_TESTS=1", "browser/test"]], None), "addendum 10: no overlap"
+    invocations, note = selection.select(land, tmp_path, "base", "python", head="main", landed=True)
+    assert invocations == [["guard/test"], ["safe/test"], ["ROSY_RUN_BROWSER_TESTS=1", "browser/test"]], "addendum 10"
+    assert note.startswith(selection.DELTA_NOTE)  # D-889 27: the safety suite folder runs before the turn
     answers[:] = [delta, dict(mine, mode="full", escalations=["safe/y.py" + selection.SAFETY_TRIGGER],
                               local_invocations=[["mine/test"]])]
     assert selection.select(land, tmp_path, "base", "python", head="main", landed=True)[1] is not None

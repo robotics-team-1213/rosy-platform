@@ -141,11 +141,12 @@ def select(land, wt: Path, base: str, python: str, head: str | None = None,
                     return _unique(_guards_only(sel["local_invocations"], guards) + browsers(sel["local_invocations"])), None
                 if len(reached) < len(mine):
                     print(f"[tests] main's delta reaches {len(reached)} of this branch's {len(mine)} invocations: those rerun")
-                chosen = _unique(sel["local_invocations"] + reached + browsers(sel["local_invocations"]))
                 # D-889 27: whole suite folders here ran 15-22 min inside the lock and gave the turn back at its
                 # cap (11-03, 17 stalls over 30 min); land.py runs them before the turn under the "delta" tier.
-                big = [inv for inv in chosen if inv not in _guards_only([inv], guards) and _suite_dirs(inv)]
-                return chosen, (f"{DELTA_NOTE} ({len(big)} suite folder invocation(s))" if big else None)
+                big = [inv for inv in sel["local_invocations"] + reached
+                       if _suite_dirs(inv) and not _guards_only([inv], guards)]
+                note = f"{DELTA_NOTE} ({len(big)} suite folder invocation(s))" if big else None
+                return _unique(sel["local_invocations"] + reached + browsers(sel["local_invocations"])), note
             if sel["mode"] == "full":
                 # D-762 stage 0: a FULL-class landing runs the whole tier on the lab PCs, never
                 # guards alone; not via GitHub, which would publish unpushed main commits.
