@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-11-03 · uncommitted · fix(landing): preserve first queue across a proven rules-refresh stop
 - 2026-11-03 · uncommitted · fix(remote): 이력 없는 큰 시험 묶음을 기존 비용 추정으로 분할
 - 2026-11-03 · uncommitted · fix(harness): bootstrap each timing test before canonical imports
 - 2026-11-03 · uncommitted · fix(harness): preserve admission and G1 tests across main merge
 - 2026-11-03 · uncommitted · fix(harness): retain fresh timing proof through publication
-- 2026-11-03 · uncommitted · fix(harness): isolate G1 timing in a dedicated serial, host-exclusive job
