@@ -207,7 +207,7 @@ def grasp_yaw(config: dict, site: str, o: dict, entry: dict, offset) -> float:
 def across(entry: dict) -> float:
     """The object's size between the jaws: its width when they close across the long axis (jaw_axis_deg_from_long 90),
     its length when they close along it (0): a 90 mm 3-cell held by its ends needs a 90 mm gap, not 30 (2026-11-04)."""
-    return entry["width_mm"] if entry["grasp"].get("jaw_axis_deg_from_long", 90) % 180 == 90 else entry["length_mm"]
+    return entry["width_mm"] if entry.get("grasp", {}).get("jaw_axis_deg_from_long", 90) % 180 == 90 else entry["length_mm"]
 
 
 def jaw_open_for(width_mm: float, params=None, margin_mm: float | None = None) -> float:
