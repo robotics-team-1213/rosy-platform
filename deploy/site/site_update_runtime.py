@@ -29,13 +29,18 @@ else:  # pragma: no cover - installed host CLI
     from verify_candidate import CandidateVerificationError, verified_services
 
 
+def _healthy(service, row):
+    # Older signed peer images have no healthcheck.
+    return row.get('Health') == 'healthy' or (service == 'control-unit-peer' and not row.get('Health'))
+
+
 def runtime_reason(rows, hashes: dict, run) -> str:
     """Detect operational drift without logging inspect output or credentials."""
     for service in COMPANIONS:
         if service in hashes:
             matches = [row for row in rows if isinstance(row, dict) and row.get('Service') == service]
             if (len(matches) != 1 or matches[0].get('State') != 'running'
-                    or (service != 'control-unit-peer' and matches[0].get('Health') != 'healthy')):
+                    or not _healthy(service, matches[0])):
                 health = '' if service == 'control-unit-peer' else 'healthy '
                 return f'{service} needs exactly one {health}running container'
     for row in rows:
@@ -85,8 +90,7 @@ def containers_reason(rows, commit: str, accepted: dict, run, services=SERVICES,
         row = matches[0]
         if row.get('Image') != (image_references or {}).get(owner, f'rosy-site-{owner}:{commit}'):
             return f"{service} runs {row.get('Image')!r}"
-        if (row.get('State') != 'running'
-                or (service != 'control-unit-peer' and row.get('Health') != 'healthy')):
+        if row.get('State') != 'running' or not _healthy(service, row):
             return f"{service} is {row.get('State')}/{row.get('Health') or 'no health'}"
         if not row.get('ID'):
             return f'{service} container ID is missing'
