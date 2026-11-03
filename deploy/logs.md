@@ -4525,3 +4525,10 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: dc818e6d87의 새 health 회귀 네 건은 공식 원격에서 모두 실패/NEW4였다. c03d8552af의 updater·incremental·config·functional-setup·Account 이미지/배포·서명 verifier 일곱 모듈은 310 passed/skip0/exit0, NEW0/known0/flaky0이었다. 환경 9e553f80ef242377, freeze 6d54d7d30696fe34. 독립 계약 검토는 전체 inventory·소유자·참조·immutable ID·hash·hardening·import 경계를 확인했고 지적 없음이다.
 - gate 변화: 없음. 소스·설치 CLI 계약 시험이며 실제 서명 이미지 빌드·helper 설치·운영 authority 전환·현장 수용은 별도다.
 - CE: 해당 없음 — 병합 판단과 health 조건은 코드·회귀로 설명된다. 운영 전환은 미실행 상태로 유지한다.
+
+## 2026-11-03 · 3309dde54f · fix(site): dry-run에서 공개 릴리스 수정 방지
+
+- 변경: 이미 서명됐지만 unsigned 제목이 남은 릴리스를 발견해도 dry-run은 공개 제목·본문을 수정하지 않고 `would-retitle` 감사 기록만 남긴다. 실제 서명·제목 교정·호스트 알림의 기존 조건은 유지한다.
+- 검증: 원격 RED `08bbc9a4fe`에서 release edit 호출을 막는 새 회귀 시험이 예상대로 실패했다. 수정 `3309dde54f`에서 서명 자동화와 후보 서명 시험 48건이 통과했고 known_failures는 0 new/known/flaky다. FakeGh 시험이며 실제 공개 릴리스를 수정하지 않았다.
+- gate 변화: 없음. UI FULL 준비 근거는 별도 보존했고, 이 수정의 착지와 최신 main 통합 검증 후 게시한다.
+- CE: 해당 없음 — 누락된 dry-run 분기와 회귀 조건이 코드·시험에 직접 남는다. 운영 전환은 별도 미완료다.
