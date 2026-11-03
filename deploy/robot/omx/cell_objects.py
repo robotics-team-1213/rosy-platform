@@ -152,12 +152,14 @@ def classify(mm, catalog: list, px_mm2: float | None = None, params=None) -> lis
     for k in range(2, prm.get(params, "objects.split_max") + 1):  # 2026-11-03: five 3-cells in a row on the ship plate
         for o in catalog:
             for row in (m, turned):
-                if not _fits(row, o, k, strict=True, gap_mm=gap, stagger_mm=stagger):
+                # shortcut: the stagger only for rows of 3+ that all read the same entry; at 2 a tangled cluster's
+                # pieces passed it (test_two_side_by_side_pieces_split_but_a_tangled_cluster_is_never_a_target)
+                if not _fits(row, o, k, strict=True, gap_mm=gap, stagger_mm=stagger if k >= 3 else 0.0):
                     continue
                 feasible = True
                 strips = [(g, measure(mm[g])) for g in _strips(mm, row, k)]
                 found = [(match(s, catalog, strict=True), s, g) for g, s in strips]
-                ok = all(e for e, _, _ in found) and all(
+                ok = all(e for e, _, _ in found) and (k < 3 or len({e["id"] for e, _, _ in found}) == 1) and all(
                     abs((s["long_axis_deg"] - row["long_axis_deg"] + 90) % 180 - 90) <= prm.get(params, "objects.split_axis_deg", SPLIT_AXIS_DEG)
                     and (px_mm2 is None or g.sum() * px_mm2 >= prm.get(params, "objects.split_fill", SPLIT_FILL) * s["length_mm"] * s["width_mm"])
                     for _, s, g in found)
