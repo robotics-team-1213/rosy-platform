@@ -12,6 +12,7 @@ owner can read the STOP, fix it on the branch and queue again. Uncommitted chang
 
     python tools/land_async.py [land.py args]      # from the branch's worktree; prints the log path
     python tools/land_async.py resume <tree-name> [land.py args]   # relaunch a stopped landing on its snapshot
+    python tools/land_async.py orphans [--resume]                    # after a reboot: landings that died unstopped
 
 A branch already held by a live ticket is refused; ``--replace`` stops that older lander first (2026-10-31/11-01: the
 same change was queued twice and ran two pretests).
@@ -318,7 +319,41 @@ def resume(cwd: Path, name: str, land_args: list[str], launch, wait: float = 60,
     return None
 
 
+def orphans(cwd: Path, hours: float = 24, now: float | None = None) -> list[str]:
+    """Hidden landings whose supervisor died without landing or stopping (11-03 20:44 a reboot killed the whole
+    queue): no ``.stopped`` marker, no live supervisor or ticket, not in main, and the newest snapshot of its branch."""
+    place, now = holder(cwd), now or time.time()
+    if not place.is_dir():
+        return []
+    held = {r.get("branch") for r in live_owners(cwd)}
+    newest: dict[str, Path] = {}
+    for tree in place.iterdir():
+        if tree.is_dir() and (place / (tree.name + ".land_async.py")).exists():
+            key = tree.name.rsplit("-", 1)[0]
+            if key not in newest or tree.name > newest[key].name:
+                newest[key] = tree
+    found = []
+    for tree in newest.values():
+        if ((place / (tree.name + ".stopped")).exists() or now - tree.stat().st_mtime > hours * 3600
+                or running(tree)):
+            continue
+        snaps = [s for s in git(cwd, "for-each-ref", "--format=%(refname:short)", "refs/heads/land/").splitlines()
+                 if s.replace("/", "-") == tree.name]
+        if not snaps or snaps[0] in held or subprocess.run(
+                ["git", "-C", str(cwd), "merge-base", "--is-ancestor", snaps[0], "main"]).returncode == 0:
+            continue
+        found.append(tree.name)
+    return sorted(found)
+
+
 def main(argv: list[str]) -> int:
+    if argv[:1] == ["orphans"]:
+        names = orphans(Path.cwd())
+        print("\n".join(f"[land-async] orphan {n}" for n in names) or "[land-async] no orphaned landings")
+        if "--resume" in argv:
+            for name in names:
+                main(["resume", name])
+        return 0
     if argv[:1] == ["--supervise"]:
         return supervise(Path(argv[1]), argv[2], argv[3:])
     if argv[:1] == ["resume"] and len(argv) > 1:

@@ -534,3 +534,18 @@ def test_official_stop_ends_starting_supervisors_child_and_releases_ownership(st
         time.sleep(.02)
     assert child_exited(), "stop must end the child as well as its detached supervisor"
     assert tool.resume(dev, tree.name, [], capture, wait=0, sleep=lambda s: None) == "starting"
+
+
+def test_orphans_lists_a_snapshot_whose_supervisor_died_unstopped(repo):
+    """11-03 20:44 a reboot killed every lander; nothing wrote .stopped, and the dead tickets were swept."""
+    main, dev = repo
+    snap, log = tool.start(dev, [], NOW, lambda *a: None)
+    tree = log.parent / log.name.removesuffix(".log")
+    assert tool.orphans(dev, now=tree.stat().st_mtime) == [tree.name]
+    stopped = tree.parent / (tree.name + ".stopped")
+    stopped.write_text("land.py exit 1\n")
+    assert tool.orphans(dev, now=tree.stat().st_mtime) == []  # a stopped landing waits for its owner
+    stopped.unlink()
+    assert tool.orphans(dev, now=tree.stat().st_mtime + 25 * 3600) == []  # older than a day: not a recovery
+    _ticket(main, "0004", branch=snap)
+    assert tool.orphans(dev, now=tree.stat().st_mtime) == []  # a live ticket still owns it
