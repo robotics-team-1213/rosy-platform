@@ -305,3 +305,17 @@ def test_surveyed_case_moves_only_the_bases_and_drops_the_belt_feed_together():
     for key in ('belt_center_m', 'belt_stop_m', 'pickup_center_m', 'infeed_start_m'):
         assert surveyed[key][:2] == cad[key][:2] and surveyed[key][2] == pytest.approx(cad[key][2]-.028)
     assert surveyed['bin_origin_m'] == cad['bin_origin_m'] and surveyed['real_cameras'] == cad['real_cameras']
+
+
+def test_every_ship_case_is_accepted_by_the_isaac_task_command_line():
+    """Run 9302d29b (2026-11-03): a case added to FIXTURE_OVERRIDES but not to stacking_task's --container-case choices
+    reached the model PC and failed at argument parsing, an hour's queue for nothing."""
+    import ast
+    from release_cases import FIXTURE_OVERRIDES
+    source = (Path(f.__file__).parent/'stacking_task.py').read_text(encoding='utf-8')
+    names = {node.value for node in ast.walk(ast.parse(source)) if isinstance(node, ast.Constant) and isinstance(node.value, str)}
+    prefix = 'nominal-palletizing-v21-ship'
+    for case in FIXTURE_OVERRIDES:
+        if case.startswith(prefix+'-'):
+            suffix = case[len(prefix)+1:]
+            assert suffix in names or case in names, case
