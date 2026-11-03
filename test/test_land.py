@@ -761,6 +761,7 @@ def test_new_failure_that_passes_alone_lands_as_load_flaky(repos, monkeypatch, c
     assert "LOAD-FLAKY pkg/test/test_a.py::test_a" in out
     candidates = (main / ".git" / land.land_checks.CANDIDATES).read_text(encoding="utf-8")
     assert candidates.startswith("pkg/test/test_a.py::test_a  # LOAD-FLAKY ") and "flaky_quarantine" in candidates
+    assert (kept := Path(candidates.split("failed in ")[1].split(" on ")[0])).is_file() and "-load-flaky-" in kept.name
     assert "pkg/test/test_a.py" not in (wt / "test" / "known_failures.txt").read_text(encoding="utf-8")
 
 

@@ -218,6 +218,10 @@ def _rerun_alone(wt: Path, inv: list[str], log: Path, verdict: str, logdir: Path
     sha = tested_sha
     common = Path(_git(wt, "rev-parse", "--path-format=absolute", "--git-common-dir").stdout.strip())
     day = time.strftime("%Y-%m-%d")
+    # the next round reuses run-*.txt names: 11-03 a round-2 pass overwrote the only trace of a LOAD-FLAKY failure
+    kept = log.with_name(f"{log.stem}-load-flaky-{sha[:10]}{log.suffix}")
+    kept.write_bytes(log.read_bytes())
+    log = kept
     with open(common / CANDIDATES, "a", encoding="utf-8") as out:
         for nodeid, alone in zip(ids, logs):
             out.write(f"{nodeid}  # LOAD-FLAKY {day}: failed in {log} on {sha[:10]}, passed alone in {alone};"
