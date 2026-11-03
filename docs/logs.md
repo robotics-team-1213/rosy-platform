@@ -13911,6 +13911,30 @@ osy-d395-s1d\`.
 - gate 변화: FULL·safety 판정과 land record의 FULL 조건은 그대로다. delta 단계는 FULL 증거가 되지 않는다.
 - CE: 기존 교훈 갱신 — landings-gave-the-turn-back-and-reran-everything 9에 차례 안 delta 재실행과 이 결정을 연결.
 
+## 2026-11-03 · uncommitted · test(remote): imported fake-host helper의 HEADROOM 격리
+- 변경: 공용 `_fake_hosts`가 호출자의 monkeypatch를 통해 시험 전용 HEADROOM dict를 사용하게 한다. 다른 모듈이 helper를 import했을 때 빠지던 module-local autouse fixture의 격리를 helper 자체에서 보장하며, production 코드와 worker/profile 기대값은 유지한다.
+- 증거: main4088d1c1d2에서 기존 reboot producer→profile consumer 두 node를 -n0으로 실행해1FAIL/1PASS·NEW1/known·flaky0을 재현했다. 수정parent69a12까지 관련remote 코드·시험3파일 차이0이다. code63a211f808에서 같은 producer 모듈을 먼저 두고 helper의 모든 호출 모듈과 consumer를 포함한5whole-file -n0은184PASS/skip·NEW·known·flaky0이었다. 정상 입장 wait0/run37초, pytest27.89초다. 로그는 OS Temp rosy-headroom-order-{red,green}-20261103/run-1.txt에 있다.
+- gate 변화: 없음. 실패 기준·검증 기대값·자원 정책·테스트 선택·quarantine baseline을 바꾸지 않는다. 독립 고정코드 검토 P1/P2 없음이며, source 검증과 정식 후보 착지는 구분한다.
+- CE: 기존 교훈 갱신 — shared-pytest-process-masks-path-dependent-import의 단독/FULL 컨텍스트 차이에 imported helper의 fixture 범위와 실제 순서 재현을 추가했다. 단독 통과를 곧바로 부하성 flaky로 단정하지 않는다.
+
+## 2026-11-03 · uncommitted · feat(isaac): 실측 팔 받침·벨트 후보 케이스와 이름 있는 계획 장면
+- 변경: 케이스 `nominal-palletizing-v21-ship-surveyed-bases`·`-surveyed`(벨트 28 mm 낮춤, `belt_drop_m`), `isaac_stack_plan.SCENES`(장면마다 받침/yaw 쌍과 낮은 벨트 통로 높이), `stacking_task.py` 케이스 등록과 등록 누락을 잡는 시험, 실측 받침 도달 시험.
+- 증거: 호스트 계획기로 실측 받침에서 벨트 집기·적층 9곳 모두 닿고, 뱃머리 정렬 자리(x -0.12)는 arm_a가 닿지 않음(0.287 m). Isaac 실행 두 번은 케이스 등록 누락과 CAD 받침 검사에서 멈춰 결과 없음(검증 기록 Step 3).
+- gate 변화: 없음. CAD 케이스와 fixture는 그대로다.
+- CE: 해당 없음 — 케이스 등록 누락은 시험으로 막았고, 정렬 자리 도달 문제는 검증 기록과 다음 작업(팔마다 정렬 자리)에 남겼다.
+
+## 2026-11-03 · uncommitted · fix(remote): omx_hotfix가 contracts/foundation도 올린다
+- 변경: `tools/remote/omx_hotfix.py` `PATHS`에 `contracts/foundation`. 셀 스크립트가 `core_common`(D-966 제어 파라미터)을 import하므로, 이 도구로 만든 트리만으로 세션이 시작되게 한다(공식 `omx_autoupdate` 트리와 같은 구성).
+- 증거: 관제 PC 실행 환경은 `PYTHONPATH`의 `<tree>/contracts/foundation`에서만 `core_common`을 찾는다(없으면 ModuleNotFoundError, 2026-11-03 확인).
+- gate 변화: 없음
+- 결정: 없음
+
+## 2026-11-03 · 85ec06aec9 · docs(solutions): 사이트 갱신 체인 정지 진단 순서 기록
+- 변경: `solutions/deployment/`에 D-441 체인 정지 진단 교훈을 추가했다. 릴리스 제목("(unsigned)")은 신뢰 금지(10-29·10-31·11-03 세 재발), 정본 신호는 서명 감사 로그·업데이터 hold 상태·journalctl·D-805 관문 순서. 11-03 착지(main 0656574fb674)의 notify 푸시·제목 자동 교정도 해법으로 기록.
+- 증거: 같은 날 실제 진단·복구로 검증(hold 5분 내 식별, `retitle-repaired` 2건 즉시 교정, `test/test_site_auto_sign.py` 31통과).
+- gate 변화: 없음.
+- CE: 이 문서 자체가 교훈 기록이다.
+
 ## 2026-11-03 · b71238da0d · fix(land): a held or records-only turn keeps each job's options
 - 변경: `tools/land_speculate.py` `root_part`가 root test/ 경로와 함께 그 invocation의 옵션·`ROSY_*` 단어를 남긴다(`land.py` records-only 경로도 같은 함수). `with_spec`은 이미 있는 invocation을 다시 붙이지 않는다
 - 증거: 5ec9ef709a 착지 기록이 G1 전용 job 2개와 평문 `test/test_platform_g1_timing.py`를 담아 `publish_main`이 "canonical candidate plan/environment unavailable"로 거부. 원격 `test_land_speculate.py test_land.py test_land_record.py test_publish_evidence.py test_land_selection.py` exit 0

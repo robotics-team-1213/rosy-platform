@@ -125,7 +125,8 @@ def test_deploy_ships_archive_then_switches(fake, tmp_path):
     assert (folder, previous) == (f"~/rosy-test/omx-tools-{SHORT}", "omx-tools-aaaaaaaaaa")
     archive = [cmd for cmd, _ in fake.calls if "archive" in cmd][0]
     assert f"--add-virtual-file=omx-tools-{SHORT}/REVISION:{SHORT}\n" in archive
-    assert archive[-3:] == [SHA, *oh.PATHS]
+    assert archive[-1 - len(oh.PATHS):] == [SHA, *oh.PATHS]
+    assert "contracts/foundation" in oh.PATHS  # core_common: the cell scripts import it (D-966)
     unpack = [(cmd, kw) for cmd, kw in fake.calls if cmd[0] == "ssh" and "tar -xzf -" in cmd[-1]]
     assert len(unpack) == 1 and unpack[0][1]["input"] == b"TARGZ"
     assert f"mv .omx-tools-{SHORT}.part/omx-tools-{SHORT} omx-tools-{SHORT}" in unpack[0][0][-1]

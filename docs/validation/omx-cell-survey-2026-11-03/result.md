@@ -76,6 +76,26 @@ stacking result is not a claim. Run `00544b84f0685933bf0ce7bb5c2c173c` (final en
 and wrote both camera pictures. The arm bases in the renders are still the CAD values, so the base plates draw toward
 the bow of the real ones, as measured above.
 
+## Step 3: surveyed bases and belt as candidates (D-947 2, 2026-11-03)
+
+Cases `nominal-palletizing-v21-ship-surveyed-bases` (measured arm bases, arm_b yaw -94.3 deg) and
+`nominal-palletizing-v21-ship-surveyed` (also the belt 28 mm lower) sit beside the CAD case, with their own planner scenes
+(`isaac_stack_plan.SCENES`: base/yaw pairs and the low belt-corridor band). The host planner (same IK the Isaac runs use)
+gives:
+
+| Target | CAD bases | Surveyed bases |
+|---|---|---|
+| Belt pickup hover (CAD belt and 28 mm lower) | reachable | reachable |
+| All 9 stack targets at carry height | reachable | reachable |
+| Leveling spot past the bow, x -0.12 (`leveling_center_m`) | reachable (arm_a 0.259 m) | **arm_a unreachable** (planar wrist distance 0.287 m) |
+
+So the bow leveling spot works in simulation only because the CAD bases sit 24-36 mm closer to the bow. The real arm_a
+cannot level there. The Isaac runs of both surveyed cases were not completed: the first attempt stopped at argument
+parsing (case not registered with `stacking_task.py`, now covered by a test), the second at the planner's CAD base check
+(now named scenes). A full Isaac run needs a leveling place both real arms reach: the user's temporary slot in front of
+each arm (about 170 mm from the base, away from the belt, off the plate; plan 2026-10-31, "각 팔 앞 작업대의 임시 칸")
+means one leveling place per arm, which the leveling code (one shared `leveling_center_m`) does not support yet.
+
 ## Next
 
 1. Run the D-947 MuJoCo sweep with the surveyed bases as a second candidate next to the CAD ones; adopt them in
