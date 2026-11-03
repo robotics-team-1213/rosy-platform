@@ -4492,6 +4492,13 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 실제 scanner의 한 발견은 review revision이며 독립 검토에서 Git commit으로 해소됐다. 값·excerpt는 추가하지 않으며 agent 검토를 사람 승인으로 표현하지 않는다. 최종 source의 게시 검사를 다시 확인한다.
 - Gate: 서명·운영·실물 수용과 별개. CE: 해당 없음 — 기존 정확한 조합 규약과 Git 출처로 분류를 복원한다.
 
+## 2026-11-03 · 3a2fbd1f9a · feat(site): 서명 PC의 사이트 즉시 반영 푸시와 오분류 제목 교정
+
+- 변경: `auto_sign_candidates.py`가 서명에 성공한 실행 뒤 `notify_hosts` 각 대상에 고정 명령 `sudo -n systemctl start rosy-site-autoupdate.service`를 SSH(BatchMode)로 보내 사이트 설치가 15분 폴링을 기다리지 않게 했다. 푸시 실패는 `notify` 감사 줄로만 남고 호스트 타이머가 대체한다. 같은 릴리스 스캔에서 서명됐는데도 제목이 "(unsigned)"인 site-* 릴리스는 그 자리에서 교정한다(`retitle-repaired`, 2026-10-29·10-31·11-03 재발).
+- 검증: 원격 `test/test_site_auto_sign.py` 31통과(known_failures 0 new). 변이 확인: 알림 호출과 오분류 수집을 끈 commit c5ac955935에서 새 가드 시험 3개만 RED, 복원 3a2fbd1f9a에서 전체 GREEN. 서명 PC 검토 사본 갱신과 `notify_hosts` 기입은 착지 후 별도 운영 단계다.
+- gate 변화: 없음. 사이트 호스트의 D-960 업데이터 교체·hold 해제는 이 커밋 없이 현장에서 이미 시행했다(백업 `/var/backups/rosy-site-d960-20261103`).
+- CE: 해당 없음 — 막힘 원인(hold)은 감사 로그와 상태 파일로 곧바로 보였고, 재발 방지는 이번 구조화 자체가 담당한다.
+
 ## 2026-11-03 · 1c5f6c898a · D-960 서명 peer 동반 서비스 검증
 
 - 변경: canonical control-unit overlay의 peer를 서명된 proxy 이미지의 동반 서비스로 다룬다. 정확한 서비스 구성, 이미지 참조·실제 immutable identity, 현재 Compose hash와 읽기 전용·비특권 실행 조건을 확인한다. 원래 healthcheck가 없는 peer에 가상의 healthy 값을 요구하지 않으며, 기존 Account·Monitoring의 건강 검사와 옛 Account overlay 복구 경로는 유지한다.
