@@ -197,6 +197,31 @@ def test_file_validation_and_cancel_do_not_drop_name(gallery):
     expect(page.locator("#file-result")).to_contain_text("선택한 파일 없음")
 
 
+def test_file_errors_block_native_form_until_corrected_or_cleared(gallery):
+    from playwright.sync_api import expect
+    page = gallery
+    page.evaluate("""() => {
+      const component = document.getElementById('file-example').closest('.ui-control-stack');
+      const form = document.createElement('form'); form.id = 'file-validation-form';
+      component.before(form); form.append(component);
+    }""")
+    field = page.locator("#file-example")
+    form = page.locator("#file-validation-form")
+    field.set_input_files({"name": "notes.txt", "mimeType": "text/plain", "buffer": b"x"})
+    expect(page.locator("#file-result")).to_contain_text("JSON 파일")
+    assert not form.evaluate("el => el.checkValidity()")
+    field.set_input_files({"name": "large.json", "mimeType": "application/json", "buffer": b"x" * (1024 * 1024 + 1)})
+    expect(page.locator("#file-result")).to_contain_text("파일 크기")
+    assert not form.evaluate("el => el.checkValidity()")
+    field.set_input_files({"name": "recipe.json", "mimeType": "application/json", "buffer": b"{}"})
+    assert form.evaluate("el => el.checkValidity()")
+    field.set_input_files({"name": "notes.txt", "mimeType": "text/plain", "buffer": b"x"})
+    assert not form.evaluate("el => el.checkValidity()")
+    field.set_input_files([])
+    assert form.evaluate("el => el.checkValidity()")
+    expect(page.locator("#file-result")).to_contain_text("선택한 파일 없음")
+
+
 def test_searchable_choice_and_date_validation(gallery):
     from playwright.sync_api import expect
     page = gallery
