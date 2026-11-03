@@ -49,7 +49,7 @@ export function createDataTable({id, columns, onOpen, onSelection = () => {}, on
   let visible = [], activeId = null;
   function paint() {
     const focused = document.activeElement;
-    const focusId = focused?.dataset?.open || focused?.dataset?.select;
+    const focusId = body.contains(focused) ? focused.dataset.open || focused.dataset.select : null;
     const selectFocus = focused?.matches?.("input[data-select]");
     body.replaceChildren(...visible.map(item => {
       const tr = node("tr"); tr.dataset.key = item.id;
