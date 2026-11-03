@@ -102,7 +102,7 @@ def test_list_toolbar_uses_owner_sort_choices_and_reports_selected_value(gallery
         onChange: change => window.sortChanges.push(change)});
       document.body.append(toolbar.element);
     }""")
-    sort = page.get_by_label("등록 시각 정렬", exact=True)
+    sort = page.get_by_role("combobox", name="등록 시각 정렬", exact=True)
     expect(sort).to_have_value("recent")
     expect(sort.locator("option")).to_have_text(["최근 등록 먼저", "오래된 등록 먼저"])
     sort.select_option("oldest")
