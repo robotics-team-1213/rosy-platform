@@ -71,14 +71,15 @@ def test_state_snapshot_reports_channel_evidence(authed):
     response = authed.get("/api/v1/robot/state")
     assert response.status_code == 200, response.text[:200]
     body = response.json()
-    assert isinstance(body.get("protocol_version"), str), body.get("protocol_version")
     assert isinstance(body.get("seq"), int), body.get("seq")
     assert body.get("timestamp"), body.get("timestamp")
+    assert isinstance(body.get("robot_id"), str) and body["robot_id"], body.get("robot_id")
     evidence = body.get("evidence")
     assert isinstance(evidence, dict) and evidence, "채널별 evidence(v1.8)가 없다"
     for channel, row in evidence.items():
         assert isinstance(row, dict) and row.get("evidence") in EVIDENCE_STATES, (channel, row)
-    assert "battery" in evidence, f"배터리 채널이 없다: {sorted(evidence)}"
+        assert "stale_after_s" in row, (channel, row)  # 서버가 판정한 임계값, 클라이언트 계산 금지
+    assert {"pose", "velocity", "battery"} <= set(evidence), f"핵심 채널이 없다: {sorted(evidence)}"
     assert isinstance(body.get("diagnostics_summary"), dict), body.get("diagnostics_summary")
 
 
