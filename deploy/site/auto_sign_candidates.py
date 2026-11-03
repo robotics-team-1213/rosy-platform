@@ -433,6 +433,8 @@ class AutoSigner:
         return "signed"
 
     def _repair_title(self, tag: str) -> None:
+        if self.dry_run:
+            return
         if self._retitle_signed(tag) == "edited":
             self._audit({"decision": "retitle-repaired", "tag": tag})
 
