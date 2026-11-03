@@ -34,6 +34,15 @@ arm_a joined the two-arm pallet cell on 2026-11-03/04. There were three faults, 
 - **Reach.** At (0.18, 0.10) arm_a's wrist_flex wound up to 285 of 300 PWM, and `joint_push` held the arm. Keep
   map points within 0.18 m.
 
+## Correction (2026-11-04 03:00, tested)
+
+At (0.13, 0.10) arm_a was tested on a long-exposure frame of mean brightness 142. Its jaws really moved from 49.7
+to 61.1, yet `jaw_blobs` found no changed blob at tool yaw 0, 45 or -45 degrees, and no cable blob either. The black
+v2.1 jaws over the dark navy pallet give too little contrast for `pivot.diff_px` (30). The only marks that held were
+the x = 0.09 column, which lies off the pallet over the yellow table. So the main cause is low contrast between jaw
+and background. The dim room makes it worse but is not the cause on its own, and the cable explanation above is not
+supported. Fix: a white mark on the jaw tips, or map points chosen over bright background.
+
 ## Fix
 
 - `cell_calibrate.check` lists `missing_map`, and `stale()` turns it into a remap.
