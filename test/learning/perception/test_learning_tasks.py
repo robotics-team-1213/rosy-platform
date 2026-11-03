@@ -49,6 +49,47 @@ def store(tmp_path):
     return Tasks(tmp_path / 'review.sqlite', 'project-a')
 
 
+def sim_evidence(run_id='1' * 32):
+    return dict(run_id=run_id, revision=3, status='SUCCEEDED', snapshot='FINAL',
+        input_sha256='c' * 64, input=dict(scenario_id='fixture', source_sha='d' * 40),
+        result=dict(status='SUCCEEDED', task_success=True))
+
+
+def test_sim_context_is_immutable_and_task_scoped(store, tmp_path):
+    body, profile = task_fixture(store)
+    task = store.task(body, ACTOR, profile)
+    request = dict(task_id=task['id'], task_revision=task['revision'], run_id='1' * 32)
+    evidence = sim_evidence()
+    saved = store.attach_sim_context(request, evidence, ACTOR)
+    assert saved['kind'] == 'scenario_validation'
+    assert saved['project_id'] == 'project-a'
+    assert saved['evidence']['result']['task_success'] is True
+    assert saved['created_by'] == {'kind': 'authenticated', 'id': 'alice'}
+    assert store.attach_sim_context(request, evidence, {'user_id': 'bob'}) == saved
+    reopened = Tasks(tmp_path / 'review.sqlite', 'project-a')
+    assert reopened.snapshot()['sim_contexts'] == [saved]
+    other = store.task(dict(body, request_id=uid()), ACTOR, profile)
+    for changed in [dict(request, task_id=other['id'], task_revision=other['revision']),
+                    dict(request, task_revision='0' * 64)]:
+        with pytest.raises(ValueError):
+            store.attach_sim_context(changed, evidence, ACTOR)
+    with pytest.raises(ValueError):
+        store.attach_sim_context(request, dict(evidence, input_sha256='e' * 64), ACTOR)
+    assert reopened.snapshot()['sim_contexts'] == [saved]
+    assert 'sim_contexts' not in store.export_task(task['id'])
+
+
+@pytest.mark.parametrize('changes', [dict(task_id=uid()), dict(task_revision='bad'),
+    dict(run_id='../run'), dict(evidence={'status': 'SUCCEEDED'})])
+def test_sim_context_rejects_unknown_task_and_unexpected_fields(store, changes):
+    body, profile = task_fixture(store)
+    task = store.task(body, ACTOR, profile)
+    request = dict(task_id=task['id'], task_revision=task['revision'], run_id='1' * 32)
+    with pytest.raises(ValueError):
+        store.attach_sim_context(dict(request, **changes), sim_evidence(), ACTOR)
+    assert store.snapshot()['sim_contexts'] == []
+
+
 def test_durable_immutable_references_and_actor_bound_retries(store, tmp_path):
     body = robot_body()
     first = store.robot(body, ACTOR)
@@ -214,7 +255,7 @@ def test_task_transfer_keeps_semantic_identity_and_local_attribution(store, tmp_
                     dict(task=dict(package['task'], objective='Tampered'))]:
         with pytest.raises(ValueError):
             clean.import_task(dict(package, **changes), ACTOR)
-        assert clean.snapshot() == {'robots': [], 'tasks': []}
+        assert clean.snapshot() == {'robots': [], 'tasks': [], 'sim_contexts': []}
 
 
 @pytest.mark.parametrize('invalid', ['minimal', 'joints', 'cameras', 'action_limits'])
@@ -243,7 +284,7 @@ def test_invalid_profile_with_recomputed_transfer_hashes_is_rejected_before_writ
     monkeypatch.setattr(clean, '_save', lambda *args, **kwargs: pytest.fail('invalid transfer attempted a write'))
     with pytest.raises(ValueError):
         clean.import_task(package, ACTOR)
-    assert clean.snapshot() == {'robots': [], 'tasks': []}
+    assert clean.snapshot() == {'robots': [], 'tasks': [], 'sim_contexts': []}
     with pytest.raises(ValueError):
         store.task(dict(body, request_id=uid()), ACTOR, package['profile'])
 
@@ -289,4 +330,4 @@ def test_tampered_transfer_dataset_group_is_rejected_before_writes(store, tmp_pa
     monkeypatch.setattr(clean, '_save', lambda *args, **kwargs: pytest.fail('invalid binding attempted a write'))
     with pytest.raises(ValueError):
         clean.import_task(package, ACTOR)
-    assert clean.snapshot() == {'robots': [], 'tasks': []}
+    assert clean.snapshot() == {'robots': [], 'tasks': [], 'sim_contexts': []}
