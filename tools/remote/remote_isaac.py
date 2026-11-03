@@ -23,6 +23,9 @@ CONTAINER_ARTIFACTS = {
 ARTIFACT_RPC_LIMITS = {key: (size + 2) // 3 * 4 + LIMIT
                        for key, (_, size) in CONTAINER_ARTIFACTS.items()}
 TERMINAL = {'SUCCEEDED', 'FAILED', 'STOPPED'}  # learning/envs/isaac/run_store.py
+# D-889 13 keeps new jobs 13 min clear of a host's nightly reboot; an Isaac container run takes about an hour, and run
+# 82e147c7 (2026-11-03) started early enough for that rule and still died in the 05:01 reboot. So: no start inside this.
+RUN_BUDGET_S = 90 * 60
 
 
 def choose_target(lab, role):
@@ -169,6 +172,9 @@ def _run_once(scenario, config, sha, directory, remote, *, parent, sleep, fetch,
         try:  # nothing has started yet, so a lost SSH reply here is retried (2026-10-31: two runs lost at the check)
             remote.prepare(sha)
             checked = remote.call(sha, {'action': 'check', 'scenario_id': scenario, 'config': config, 'source_sha': sha})
+            reboot = remote.seconds_to_reboot()
+            if checked.get('ready') is True and reboot is not None and reboot < RUN_BUDGET_S:
+                checked = {'reason': f'nightly reboot in {reboot // 60} min, inside the {RUN_BUDGET_S // 60} min run budget'}
         except (ConnectionError, OSError) as exc:
             checked = {'reason': f'model PC unreachable: {exc}'}
         if checked.get('ready') is True:
@@ -359,6 +365,14 @@ class SSH:
 
     def hold(self, run_id, active):
         self._invoke(HOLD, {'run_id': run_id, 'active': active})
+
+    def seconds_to_reboot(self):
+        """Seconds until the host's rosy-nightly-reboot.timer fires, or None when it has none."""
+        result = self.runner.remote(self.host, 'r=$(systemctl show -P NextElapseUSecRealtime rosy-nightly-reboot.timer 2>/dev/null)'
+                                    ' && [ -n "$r" ] && echo $(( $(date -d "$r" +%s) - $(date +%s) ))', capture_output=True, timeout=50)
+        text = result.stdout.decode(errors='replace').strip().split('
+')[-1] if result.returncode == 0 else ''
+        return int(text) if text.lstrip('-').isdigit() else None
 
     def call(self, sha, payload):
         return self._invoke(BOOTSTRAP, {'sha': _sha(sha), 'payload': payload})
