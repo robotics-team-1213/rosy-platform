@@ -226,8 +226,8 @@ def reachable_ends(o: dict, entry: dict, params=None) -> list:
     """Grasp points shifted along a long box's axis, toward the arm's base first: grasp.end_frac of the way from
     the middle to where the jaws would reach the box's end. A square box has none."""
     reach = prm.get(params, "grasp.end_frac") * (entry["length_mm"] - entry["width_mm"]) / 2000
-    if reach <= 0 or "grasp_shift_mm" in o:  # an end is not shifted again
-        return []
+    if reach <= 0 or "grasp_shift_mm" in o or across(entry) == entry["length_mm"]:
+        return []  # an end is not shifted again; jaws holding a box by its ends must straddle it, centred (2026-11-04)
     u = math.radians(o["long_axis_deg"])
     ends = [dict(o, raw_m=[o["raw_m"][0] + k * reach * math.cos(u), o["raw_m"][1] + k * reach * math.sin(u)],
                  grasp_shift_mm=round(1000 * k * reach, 1)) for k in (1, -1)]

@@ -808,3 +808,11 @@ def test_jaws_closing_along_a_box_open_for_its_length_not_its_width():
         auto.jaw_open_for(auto.across(by_the_ends))
     wide = {**auto.prm.load()["values"], "gripper.open_max": 62.0}
     assert auto.jaw_open_for(auto.across(by_the_ends), wide) > auto.jaw_open_for(auto.across(across_short), wide) + 5
+
+
+def test_a_box_held_by_its_ends_is_grasped_at_its_middle_never_shifted_toward_an_end():
+    """2026-11-04 dry run: the end shift moved the pick 50 mm along the box, so one finger would land on it."""
+    by_the_ends = {"width_mm": 30, "length_mm": 90, "grasp": {"jaw_axis_deg_from_long": 0}}
+    o = {"raw_m": [0.20, -0.03], "long_axis_deg": 90.0}
+    assert auto.reachable_ends(o, by_the_ends) == []
+    assert len(auto.reachable_ends(o, dict(by_the_ends, grasp={"jaw_axis_deg_from_long": 90}))) == 2
