@@ -33,8 +33,8 @@ class DelegatedArmJobs:
     def __init__(self, store, observation):
         self.store, self.observation = store, observation
 
-    def create(self, *, principal, request_key, request):
-        return self.store.create(principal=principal, request_key=request_key, request=request)
+    def create(self, *, principal, request_key, request, bind=None):
+        return self.store.create(principal=principal, request_key=request_key, request=request, bind=bind)
 
     def view(self, mission_id):
         job = self.store.peek(mission_id)
@@ -89,6 +89,11 @@ def install_arm_transfer_job_routes(app, *, installation, deployment_profile, ta
     app.state.arm_transfer_dispatcher = dispatcher
     app.state.arm_transfer_delegate = None if store is None else DelegatedArmJobs(store, service)
     control = getattr(app.state, "control_unit", None)
+
+    async def check_parent(mission_id):
+        current = getattr(app.state, "control_unit", None)
+        return None if current is None else await current.check_arm_admission(mission_id)
+
     if store is None and control is not None:
         from .arm_transfer_relay_routes import install_arm_transfer_relay_routes
         install_arm_transfer_relay_routes(app, control=control, require_viewer=require_viewer,
@@ -115,7 +120,8 @@ def install_arm_transfer_job_routes(app, *, installation, deployment_profile, ta
 
         @app.on_event("startup")
         async def arm_transfer_policy_start():
-            app.state.arm_transfer_policy_task = asyncio.create_task(arm_transfer_policy_loop(worker, _log))
+            app.state.arm_transfer_policy_task = asyncio.create_task(
+                arm_transfer_policy_loop(worker, _log, before_admit=check_parent))
 
         @app.on_event("shutdown")
         async def arm_transfer_policy_stop():
@@ -129,9 +135,13 @@ def install_arm_transfer_job_routes(app, *, installation, deployment_profile, ta
             raise HTTPException(503, detail={"code": "ARM_TRANSFER_JOB_UNAVAILABLE"})
         return store
 
-    async def call(function):
+    async def call(function, *, parent_mission_id=None):
         try:
-            result = await asyncio.to_thread(function)
+            if parent_mission_id is None:
+                result = await asyncio.to_thread(function)
+            else:
+                checked_at = await check_parent(parent_mission_id)
+                result = await asyncio.to_thread(function, checked_at)
             return ArmTransferJobResponse.model_validate(result)
         except KeyError:
             raise HTTPException(404, detail={"code": "ARM_TRANSFER_JOB_NOT_FOUND"}) from None
@@ -185,7 +195,7 @@ def install_arm_transfer_job_routes(app, *, installation, deployment_profile, ta
               dependencies=[Depends(write_origin)])
     async def admit(mission_id: ArmActionId, body: ArmTransferJobAdmit, principal=Depends(require_named_operator)):
         rows = installed_store()
-        def approve():
+        def approve(checked_at):
             job = rows.get(mission_id, principal=principal)
             if job is None:
                 raise KeyError(mission_id)
@@ -194,9 +204,10 @@ def install_arm_transfer_job_routes(app, *, installation, deployment_profile, ta
             capabilities, observed_at = read_capabilities()
             job = rows.admit(mission_id, principal=principal,
                 expected_proposal_digest=body.expected_proposal_digest, expected_generation=body.expected_generation,
-                capabilities=capabilities, capabilities_observed_at_ns=observed_at)
+                capabilities=capabilities, capabilities_observed_at_ns=observed_at,
+                delegation_checked_at=checked_at)
             if dispatcher is not None and job["status"] == "READY":
                 dispatcher.prepare(mission_id)
                 job = rows.get(mission_id, principal=principal)
             return _view(job)
-        return await call(approve)
+        return await call(approve, parent_mission_id=mission_id)

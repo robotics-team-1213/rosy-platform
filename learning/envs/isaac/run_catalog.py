@@ -10,7 +10,7 @@ _CATALOG = [
      'reason': '모델·관절 검사이며 물리 집기 성공을 검증하지 않습니다.'},
     {'id': 'omx-map-container-stack', 'name': 'Current map: varied one/three-layer containers with continuous video',
      'implemented': True, 'stage': 'mapped_container_stack', 'seed_effect': 'INFEED_XY_AND_YAW',
-     'timeout_seconds': 2520, 'requirements': ['Approved SDK and model GPU', 'ffmpeg/ffprobe'],
+     'timeout_seconds': 4200, 'requirements': ['Approved SDK and model GPU', 'ffmpeg/ffprobe'],
      'reason': 'Contact reference with declared infeed variation and row order; column is the explicit three-bar 3x1x3 fallback. No learned or hardware acceptance.'},
     {'id': 'omx-map-cube-stack', 'name': 'Rosy Cam: opposed arms, 90 mm square first layer',
      'implemented': True, 'stage': 'mapped_cube_stack', 'seed_effect': 'INFEED_XY_AND_YAW',

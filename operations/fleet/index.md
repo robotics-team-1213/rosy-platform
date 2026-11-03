@@ -107,6 +107,6 @@
 
 - 2026-11-03 · 89d6d3ead1 · fix(fleet): isolate delegated ARM jobs and retain cancellation intent
 - 2026-11-03 · d4e263f5fa · fix(fleet): refuse fixed-unit enrollment before sending a robot code
+- 2026-11-03 · 91f1525146 · fix(fleet): ARM 위임의 요청 키 격리와 상위 승인 검사
 - 2026-11-03 · 9f666845e8 · fix(fleet): platoon 지도 계산 공유와 HTTP 응답성
 - 2026-11-02 · uncommitted · D-963 USB 카메라 역할 결정 라우트
-- 2026-11-02 · uncommitted · D-962 독립 Account 수신과 개발 모드 사람 로그인

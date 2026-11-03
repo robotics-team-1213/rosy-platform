@@ -357,4 +357,4 @@
 - 2026-11-03 · uncommitted · test(remote): verify profiles across each planned host worker
 - 2026-11-03 · uncommitted · docs: 측면 카메라 정량 검증 상태 정정
 - 2026-11-03 · f81b8315d0 · docs: unwedge의 측정 기반 성공 조건과 검증 범위
-- 2026-11-03 · uncommitted · docs(adr): D-970 착지 대기열 — 잠금은 짧게, 같은 시험은 한 번만, 추측 끔, flaky는 시험 단위로
+- 2026-11-03 · uncommitted · feat(isaac): 팔마다 정렬 자리·경유점, 완성 적층 실물 시점 렌더, 컨테이너 실행 65분

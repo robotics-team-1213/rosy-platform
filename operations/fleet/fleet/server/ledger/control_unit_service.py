@@ -63,12 +63,14 @@ class ControlUnitService:
             raise ValueError("CONTROL_UNIT_ARM_JOBS_UNAVAILABLE")
         transfer = dict(row["request"]["transfer"])
         transfer.pop("request_key")
-        request_key = "control-unit:" + sha256("\0".join(self._key(row)).encode()).hexdigest()
+        request_key = "control:" + sha256("\0".join(self._key(row)).encode()).hexdigest()
         try:
-            job = jobs.create(principal=principal, request_key=request_key, request=transfer)
+            jobs.create(principal=principal, request_key=request_key, request=transfer,
+                        bind=lambda connection, identity: self.store.bind_local(
+                            *self._key(row), identity, connection=connection))
         except PermissionError:
             raise ValueError("CONTROL_UNIT_ARM_PROPOSAL_FORBIDDEN") from None
-        return self.store.bind_local(*self._key(row), job["mission_id"])
+        return self.store.get(*self._key(row))
 
     async def submit(self, request):
         row = self._create(self.unit.unit_id, request)
@@ -122,6 +124,20 @@ class ControlUnitService:
         parent = self._peer_row(self.unit.parent, row, response)
         if parent["owner_unit"] != self.unit.unit_id or parent["cancel_requested"] or parent["status"] in TERMINAL:
             raise ValueError("CONTROL_UNIT_PARENT_ADMISSION_REFUSED")
+
+    async def check_arm_admission(self, mission_id):
+        rows = self.store.for_local_task(mission_id)
+        if not rows:
+            return None
+        if len(rows) != 1:
+            raise ValueError("CONTROL_UNIT_AMBIGUOUS_ARM_BINDING")
+        row = rows[0]
+        if (not _is_arm(row["request"]) or row["owner_unit"] != self.unit.unit_id
+                or row["config_revision"] != self.topology.revision or row["cancel_requested"]
+                or row["status"] in TERMINAL):
+            raise ValueError("CONTROL_UNIT_ARM_ADMISSION_REFUSED")
+        await self._parent_current(row)
+        return monotonic()
 
     async def read(self, origin, identity, *, for_child=None):
         row = self.store.get(origin, identity)
