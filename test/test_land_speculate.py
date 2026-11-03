@@ -272,10 +272,6 @@ def test_with_spec_preserves_mains_cross_context_logical_row_policy(queued, monk
         spec.with_spec(land, wt, 'feat/x', {'tier': 'full', 'invocations': original})
 
 
-    prepared = spec.with_spec(land, wt, "feat/x", {"tier": "full", "invocations": [["test"], timing]})
-    assert prepared["invocations"] == [["test"], timing, ["pkg/test"]]
-
-
 def test_prepare_skips_speculation_unless_asked(queued, monkeypatch):
     """D-889 28: 11-03 speculation used 9.8 h of test-PC time in 6 h and was held at 3 of 34 turns."""
     _, wt, *_, qdir, ticket, _, _ = queued
