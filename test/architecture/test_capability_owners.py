@@ -90,3 +90,39 @@ def test_every_owned_root_reaches_its_owners():
         if not wanted <= effective:
             bad.append(f"{root['path']} ({root['capability']}) reviews go to {sorted(effective)}")
     assert bad == [], bad
+
+
+def _reviewers(root: dict) -> set[str]:
+    return set(root.get("reviewers", []))
+
+
+def test_reviewers_only_on_platform_roots_and_known_people():
+    bad = [f"{r['path']}: reviewers on {r['capability']}" for r in MANIFEST["roots"]
+           if _reviewers(r) and r["capability"] != "platform"]
+    assert bad == [], bad
+    people = {login for cap in MANIFEST["capabilities"].values() for login in cap["owners"]}
+    unknown = sorted({o for r in MANIFEST["roots"] for o in _reviewers(r)} - people)
+    assert unknown == [], unknown
+
+
+def test_proxied_roots_reach_reviewers_in_codeowners():
+    rules = _rules()
+    bad = []
+    for root in MANIFEST["roots"]:
+        wanted = _reviewers(root)
+        if not wanted:
+            continue
+        effective = [owners for pattern, owners in rules if _matches(pattern, root["path"])][-1]
+        if not wanted <= effective:
+            bad.append(f"{root['path']} proxy {sorted(wanted)} reviews go to {sorted(effective)}")
+    assert bad == [], bad
+
+
+def test_signing_paths_stay_lead_only():
+    lead = {"livsbittt"}
+    bad = []
+    for pattern, owners in _rules():
+        for guarded in ("deploy", "tools/release"):
+            if _matches(pattern, guarded) and owners - lead:
+                bad.append(f"{pattern} names {sorted(owners - lead)} beside the signing path {guarded}/")
+    assert bad == [], bad
