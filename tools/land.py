@@ -365,7 +365,8 @@ def land(args) -> int:
         size_check(wt, before, "HEAD", python)
         admit(wt, branch, before, python)
         qdir, ticket = land_queue.enter(wt, branch, "preparing", args.urgent,
-                                        batch_auto=land_batch.plain_auto(args, EXTRA))
+                                        batch_auto=land_batch.plain_auto(args, EXTRA),
+                                        alone=land_batch.explicit(args, EXTRA))
         if (code := land_batch.early(sys.modules[__name__], wt, branch, args, python, qdir, ticket, main_co)) is not None:
             return code  # it led a batch at once: one shared pretest instead of one each
         if args.tests == "full" or (args.tests == "auto" and land_full.restore(wt, branch) is None):
@@ -420,6 +421,7 @@ def rounds(args, wt: Path, branch: str, main_co: Path, python: str, qdir, ticket
                     # selection (affected + guards, or FULL again) on this candidate, so peers cannot starve us.
                     invocations, note = select(wt, full_main, python, head=main_sha, landed=True)
                     reusable = reusable and (prepared := land_full.prepared(wt, branch, full_main)) is not None
+                    reusable = reusable and not prepared.get("reused")  # D-970 4: a cross-tree pass is not push evidence
                     summary.append(f"round {round_no}: FULL tier passed over main {full_main[:10]}; main delta"
                                    f" {full_main[:10]}..{main_sha[:10]} runs its {'affected' if not note else 'delta' if note.startswith(land_selection.DELTA_NOTE) else 'FULL'} tier")
                     if args.tests != "full" and (held := land_speculate.held(sys.modules[__name__], wt, branch, full_main, candidate)) is not None:
@@ -436,6 +438,8 @@ def rounds(args, wt: Path, branch: str, main_co: Path, python: str, qdir, ticket
                 if note and ticket is not None:  # a FULL tier never runs in the lock: prepare it, then wait again
                     full_main = land_prepare.again(sys.modules[__name__], wt, branch, args, python, qdir, ticket, invocations, note)
                     continue
+                # D-970 4: the pretest's LOAD-FLAKY ids run again here, each in its own invocation, and must pass
+                invocations += [run for run in land_full.flaky(wt, branch) if run not in invocations]
             else:
                 invocations = [shlex.split(args.tests)]
             if args.dry_run:

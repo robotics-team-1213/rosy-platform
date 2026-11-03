@@ -9,7 +9,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 for relative in ("contracts/foundation", "middleware/devices/omx/adapter",
-                 "integrations/robots/omx/src", "middleware/devices/omx/adapter/test"):
+                 "middleware/devices/omx/agent/src", "middleware/devices/omx/adapter/test"):
     sys.path.insert(0, str(ROOT / relative))
 
 from core_common.protocol.schemas import FleetArmTransferGrant  # noqa: E402
@@ -27,7 +27,7 @@ from test_transfer_preflight import _catalog  # noqa: E402
 
 def api():
     try:
-        return import_module("rosy.integrations.robots.omx.arm_transfer")
+        return import_module("rosy_agent.arm_transfer")
     except ModuleNotFoundError:
         pytest.fail("installed neutral arm phase factory is missing")
 

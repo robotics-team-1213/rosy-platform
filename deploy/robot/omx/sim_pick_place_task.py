@@ -19,10 +19,10 @@ def run(directory):
 
     isolation_guard(ROOT)
     configure_imports()
-    sys.path.insert(0, str(ROOT / 'operations/processes/cell'))
-    from rosy_cell.cell import load_cell
-    from rosy_cell.compiler import compile_job
-    from rosy_cell.recipe import load_recipe
+    sys.path.insert(0, str(ROOT / 'operations/processes/palletizing/src'))
+    from rosy.processes.palletizing.cell import load_cell
+    from rosy.processes.palletizing.compiler import compile_job
+    from rosy.processes.palletizing.recipe import load_recipe
     cell_path = ROOT / 'operations/processes/cell/examples/omx_sim/cell.yaml'
     recipe_path = ROOT / 'operations/processes/cell/examples/omx_sim/recipe.yaml'
     recipe = load_recipe(recipe_path.read_text())

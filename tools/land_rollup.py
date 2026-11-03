@@ -9,8 +9,8 @@ On 2026-11-01 seven paused landings were rolled up by hand this way.
     python tools/land_rollup.py apply               # build land rollup branch, check, queue it, stop the members
     python tools/land_rollup.py split <rollup>      # after a failed rollup: its members as two halves (or alone)
 
-Members: 'pending' land_async tickets on this host, not urgent, not carried and not leading a batch, whose hidden
-tree is at the snapshot tip. A landing that touches a safety path lands alone. Affected-tier and FULL-tier landings
+Members: 'pending' land_async tickets on this host, not urgent, not explicit ('alone': FULL, checks, --no-cache), not
+carried and not leading a batch, whose hidden tree is at the snapshot tip. A landing that touches a safety path lands alone. Affected-tier and FULL-tier landings
 never share a rollup. At most ROLLUP_MAX members; a member that does not merge cleanly (land_merge's record
 auto-resolve aside) is left to land on its own.
 """
@@ -57,7 +57,9 @@ def candidates(rows: list[dict], repo: Path, host: str | None = None) -> list[di
     found = []
     for r in rows:
         tree = Path(r.get("worktree") or "")
+        # 2026-11-03: a --tests full --no-cache landing for publish evidence was rolled up and ran auto (alone)
         if (r.get("status") not in ("pending", "waiting") or land_async.HOLDER not in tree.parts or r.get("urgent")
+                or r.get("alone")
                 or r.get("host") != host or r.get("batch") or r.get("branch") in carried or not tree.is_dir()):
             continue
         tip = git(repo, "rev-parse", "-q", "--verify", f"refs/heads/{r['branch']}", check=False).stdout.strip()

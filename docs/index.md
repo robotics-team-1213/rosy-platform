@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
-- 2026-11-03 · uncommitted · Retain current main's DELTA yielding with isolated FULL composition
-- 2026-11-03 · uncommitted · fix(harness): compose new DELTA preparations through the shared timing policy
-- 2026-11-03 · uncommitted · fix(harness): preserve current-main root projection and speculation semantics
-- 2026-11-03 · uncommitted · fix(harness): reject stale FULL reuse and validate record composition before FF
-- 2026-11-03 · uncommitted · fix(harness): compose timing plans without inheriting speculation into publication FULL
+- 2026-11-03 · uncommitted · fix(landing): 단계 없는 delta 사전 시험도 넘김 횟수에 셈 (D-970 1항 보완)
+- 2026-11-03 · uncommitted · fix(landing): 명시 FULL 증인이 재실행 뒤에도 남음 (D-970 보완)
+- 2026-11-03 · uncommitted · feat(landing): land_async orphans — 재부팅으로 죽은 착지를 찾아 되살림
+- 2026-11-03 · uncommitted · fix(landing): 다른 트리 통과 재사용도 대기열 단계는 남기고 게시 증거는 아님 (D-970 4항)
+- 2026-11-03 · uncommitted · fix(landing): 추측 사전 시험 기본 끔 (D-889 추가 28)

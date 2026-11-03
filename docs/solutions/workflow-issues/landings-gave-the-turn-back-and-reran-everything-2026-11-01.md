@@ -117,6 +117,24 @@ reruns. Each cause below was found from `.git/rosy-land-events.jsonl` and `.git/
    reaches main; `[land] ... delta tier` lines and `prepared` events with `tier: delta` show it working.
    A turn yields only over a clean earlier tier: on 11-03 14:18 and 14:34 a LOAD-FLAKY pretest (`prepared`
    with `tier: null`) yielded twice and saved nothing, a loop that never lands (`land_selection.delta_yields`).
+11. **Speculation mostly guessed wrong.** On 11-03 (10:00-16:00) speculative prepares used 9.8 h of 43 h of test
+   time and their tree was held at 3 of 34 turns; they also kept the ticket `preparing` until done. Measure the hit
+   rate (`speculation` events, `stage: turn`, `held`) before turning it back on (`ROSY_LAND_SPECULATE=1`, D-889 28).
+12. **A reused pass also voided the tier.** After the flaky fix, 9 of 20 pretests (11-03 20:00-23:00) still had no
+   tier: every one had a pass reused from another tree (`land_cache.NARROW`, "reused across trees"), which
+   `land_selection.eligible` treats like LOAD-FLAKY. Without a tier a landing cannot take the delta path and its turn
+   reruns everything. Affected and delta pretests now keep the tier and mark the record `reused`; land.py writes no
+   land record from it, so pre-push still reruns. A FULL tier stays strict (a test pins that it gives up its FULL).
+13. **Landing-tool branches in flight conflict with each other.** On 11-03 19:56-22:15, 7 of 8 stops were merge
+   conflicts, all between landing-tool branches that edited the same lines (`land_prepare`'s delta `save`,
+   `test_land_prepare.py`, `test_land_speculate.py`). Keep one landing-tool branch in flight: add a new tool fix to
+   the queued branch and requeue it with `land_async.py --replace`. When resolving such a conflict in a test file,
+   rebuild it from main's version plus your own new tests; keeping both sides once left a test half old, half new.
+14. **The explicit FULL witness lived only in memory.** An explicit `--tests full` landing (publish evidence) keeps
+   `args._full_witness`; any relaunch (a landing-code change's rules refresh, a reboot, a resume) dropped it and the
+   next prepare reran the whole FULL with no cache: one docs landing did that six times on 11-03 (277 min). The record
+   now keeps the explicit run's `env` and `land_selection.current_main` rebuilds the witness from it; publish still
+   checks the logs and fails closed. Same shape as cause 2: state a relaunch needs must be on disk.
 
 ## 계측 전용 파일의 불필요한 FULL 승격
 

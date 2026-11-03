@@ -171,7 +171,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                 if collaboration and collaboration.get(self, path, token):
                     return
                 if storage_web.get(self, path): return
-                if learning_tasks_web.get(self, path, tasks, omx_center, token):
+                if learning_tasks_web.get(self, path, tasks, omx_center, token, sim_runs):
                     return
                 if omx_center_web.get(self, path, omx_center, learning) or camera_setup_web.get(self, path, store.state) or omx_web.get(self, path, learning, omx_center, store.state) or sim_web.get(self, path, sim_runs) or vlm_judge_web.get(self, path, store, token, collaboration):
                     return
@@ -397,7 +397,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                 if collaboration and collaboration.post(self, path, body, token):
                     return
                 if storage_web.post(self, path, body): return
-                if learning_tasks_web.post(self, path, body, tasks, omx_center, collaboration):
+                if learning_tasks_web.post(self, path, body, tasks, omx_center, collaboration, sim_runs):
                     return
                 if omx_center_web.post(self, path, body, omx_center, learning,
                                        collaboration.accounts if collaboration else None):

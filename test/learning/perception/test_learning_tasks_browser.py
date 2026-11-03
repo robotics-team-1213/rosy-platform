@@ -12,6 +12,63 @@ from review_app import ReviewStore, make_server
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason='requires explicit Chromium run')
 
 
+def test_task_sim_context_persists_without_claiming_policy_or_real_success(tmp_path):
+    from test_learning_collaboration import Accounts
+    from test_learning_tasks_http import registered_task, finished_runs
+    from test_omx_center_http import running
+
+    playwright = pytest.importorskip('playwright.sync_api')
+    runs = finished_runs('FAILED')
+    malicious = '<img src=x onerror="window.simInjected=true">'
+    runs.row['input']['scenario_id'] = malicious
+    with running(tmp_path, accounts=Accounts(), sim_runs=runs) as (base, _):
+        _, body = registered_task(base)
+        _, other = registered_task(base)
+        with playwright.sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            try:
+                context = browser.new_context(viewport={'width': 390, 'height': 900})
+                context.add_cookies([{'name': 'rosy_learning_session', 'value': 'reviewer', 'url': base}])
+                page = context.new_page()
+                errors = []
+                page.on('pageerror', lambda error: errors.append(str(error)))
+                page.goto(base + '/learning/tasks')
+                expect = playwright.expect
+                page.locator('#task-select').select_option(body['task_id'])
+                expect(page.locator('#task-real-status')).to_contain_text('실물 정책 미검증')
+                page.locator('#sim-context-run').fill(body['run_id'])
+                original = runs.call
+                def unavailable(payload):
+                    raise ValueError('connection unavailable')
+                runs.call = unavailable
+                page.locator('#sim-context-save').click()
+                expect(page.locator('#tasks-error')).to_contain_text('다시 등록')
+                expect(page.locator('#sim-context-run')).to_have_value(body['run_id'])
+                runs.call = original
+                page.locator('#sim-context-save').click()
+                expect(page.locator('#task-sim-contexts')).to_contain_text(malicious)
+                expect(page.locator('#task-sim-contexts')).to_contain_text('실행 실패')
+                expect(page.locator('#task-sim-contexts')).to_contain_text('정책 평가 아님')
+                assert page.locator('#task-sim-contexts img').count() == 0
+                assert page.evaluate('window.simInjected === undefined')
+                page.reload()
+                page.locator('#task-select').select_option(body['task_id'])
+                expect(page.locator('#task-sim-contexts')).to_contain_text(body['run_id'])
+                page.locator('#task-select').select_option(other['task_id'])
+                expect(page.locator('#task-sim-contexts')).not_to_contain_text(body['run_id'])
+                context.clear_cookies()
+                context.add_cookies([{'name': 'rosy_learning_session', 'value': 'reader', 'url': base}])
+                page.reload()
+                page.locator('#task-select').select_option(body['task_id'])
+                page.locator('#sim-context-run').fill(body['run_id'])
+                page.locator('#sim-context-save').click()
+                expect(page.locator('#tasks-error')).to_contain_text('권한')
+                expect(page.locator('#task-sim-contexts')).to_contain_text(body['run_id'])
+                assert not errors
+            finally:
+                browser.close()
+
+
 def test_robot_task_launch_and_reconnect(tmp_path):
     playwright = pytest.importorskip('playwright.sync_api')
     profile = {'schema': 'rosy.omx.learning-profile/2', 'name': 'Fixture profile',
@@ -112,6 +169,9 @@ def test_robot_task_launch_and_reconnect(tmp_path):
                 page.locator('#run-dataset').select_option('fixture-data')
                 page.locator('#run-start').click()
                 expect(page.locator('#task-runs')).to_contain_text('0.25')
+                expect(page.locator('#task-runs')).to_contain_text('오프라인 행동 오차')
+                expect(page.locator('#task-runs')).to_contain_text('학습 실행 완료')
+                expect(page.locator('#task-real-status')).to_contain_text('실물 정책 미검증')
                 assert len(center.requests) == 1
                 assert center.requests[0]['compute_host'] == 'model'
                 task_id = center.requests[0]['task_id']

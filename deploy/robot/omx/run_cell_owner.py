@@ -80,6 +80,7 @@ def main() -> None:
     from omx_adapter.pilot_sim.api import create_pilot_sim_app
     from omx_adapter.pilot_sim.runtime import PilotSimRuntime
     from omx_adapter.ros_runtime import RosArmCommandRuntime, RosArmPhaseGoalPort
+    from rosy.processes.palletizing.acceptance import CellDocumentRules
     from rosy_agent.omx_cell_owner import CellOwnerSettings, build_cell_owner, sim_gripper_observation
     from transfer_installation import owner_installation_from_environment
 
@@ -113,6 +114,7 @@ def main() -> None:
         refuse_second_owner=lambda: None,  # checked above, before rclpy
         gripper_readback=gripper_readback,
         fleet_fence_current=fleet_fence,
+        document_rules=CellDocumentRules,
         arm_transfer=owner_installation_from_environment(),  # D-927 C3; unset keeps CELL_TRANSFER only
     )
     holder["owner"] = owner
