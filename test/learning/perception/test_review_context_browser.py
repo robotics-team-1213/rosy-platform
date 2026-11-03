@@ -22,6 +22,7 @@ def test_folder_selection_reloads_scoped_frames_and_clears_stale_navigation(brow
             {'id': 'second', 'label': '다음 자료', 'path': '/private/second'}])))
         db.execute("UPDATE frames SET status='pending',source=json_set(source,'$.source_session',CASE WHEN id=0 THEN 'folder:first:run' ELSE 'folder:second:run' END)")
         db.execute('INSERT INTO frames SELECT 2,source,review,status,version FROM frames WHERE id=0')
+        db.execute("INSERT OR REPLACE INTO metadata VALUES ('review_source_prefix',?)", (json.dumps('folder:first:'),))
     base = page.url.split('?')[0].rstrip('/')
     page.goto(base + path + '?frame=2', wait_until='networkidle')
     expect(page.locator(title)).to_contain_text('사진 2')
@@ -38,3 +39,11 @@ def test_folder_selection_reloads_scoped_frames_and_clears_stale_navigation(brow
         expect(page.locator('#review-folder')).to_be_disabled()
         page.keyboard.press('Escape')
         expect(page.locator('#review-folder')).to_be_enabled()
+    page.goto(page.url + '&source_session=folder%3Asecond%3Arun', wait_until='networkidle')
+    other = '/' if path == '/pixels' else '/pixels'
+    page.locator('.review-kinds a').filter(has_text='객체 검수' if other == '/' else '픽셀 검수').click()
+    expect(page.locator('#frame-title' if other == '/' else '#pixel-title')).to_contain_text('사진 1')
+    expect(page.locator('#review-folder')).to_have_value('second')
+    query = parse_qs(urlparse(page.url).query)
+    assert query['frame'] == ['1']
+    assert query['source_session'] == ['folder:second:run']

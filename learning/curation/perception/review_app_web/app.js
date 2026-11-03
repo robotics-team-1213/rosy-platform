@@ -1,4 +1,4 @@
-import {workspacePage,pageControls,frameOrdinal} from '/review-pages.js';
+import {workspacePage,pageControls,frameOrdinal,reviewLink} from '/review-pages.js';
 import {reviewContext} from '/review-context.js';
 import {accountFetch} from '/account-session.js';
 import {showVersions,resetVersions} from '/versions.js';
@@ -231,7 +231,7 @@ async function select(index) {
   $('empty-review').hidden=true;$('review-content').hidden=false;
   ready = false; frame = structuredClone(workspace.frames.find(f => f.index === index));
   modelDrafts=[];draftPreview=null;$('model-draft-panel').hidden=true;
-  for (const link of document.querySelectorAll('a[href^="/pixels"]')) link.href = `/pixels?frame=${frame.index}`;
+  for (const link of document.querySelectorAll('a[href^="/pixels"]')) link.href = reviewLink('/pixels',frame.index);
   $('complete').checked = false; drawing = false; $('draw').setAttribute('aria-pressed','false');
   $('save-status').textContent='사진을 불러오는 중…';
   $('frame-title').textContent = `사진 ${frameOrdinal(workspace,index)}`; $('status').textContent = statuses[frame.status];

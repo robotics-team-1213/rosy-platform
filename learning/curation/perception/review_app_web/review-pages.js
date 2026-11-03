@@ -3,6 +3,12 @@ export function frameOrdinal(workspace,index) {
   const position=workspace.frames.findIndex(row=>row.index===index);
   return position<0?'—':workspace.page.offset+position+1;
 }
+export function reviewLink(path,frame) {
+  const query=new URLSearchParams({frame});
+  const current=new URLSearchParams(location.search);
+  for(const key of ['folder_id','source_session'])if(current.has(key))query.set(key,current.get(key));
+  return `${path}?${query}`;
+}
 export function workspacePage(lane, status='all', options={}) {
   const query=new URLSearchParams({limit:'60',lane,status});
   const session=new URLSearchParams(location.search).get('source_session');
