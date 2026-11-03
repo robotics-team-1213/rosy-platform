@@ -22,6 +22,7 @@ ROSY_LIVE_FLEET_TOKEN_FILE 경로)을 환경으로 주면 실물 Fleet API에 �
 from __future__ import annotations
 
 import os
+import ssl
 from urllib.parse import urlparse
 
 import httpx
@@ -46,20 +47,18 @@ def authed(site):
     token = os.environ.get("ROSY_LIVE_FLEET_TOKEN")
     if not token:
         token = Path(os.environ["ROSY_LIVE_FLEET_TOKEN_FILE"]).read_text(encoding="utf-8").strip()
-    ca = os.environ.get("ROSY_LIVE_FLEET_CA")
     headers = {"Authorization": "Bearer " + token}
-    with httpx.Client(base_url=site, timeout=15, headers=headers,
-                      verify=ca if ca else True) as client:
+    with httpx.Client(base_url=site, timeout=15, headers=headers, verify=_verify()) as client:
         yield client
 
 
-def _ca():
+def _verify():
     ca = os.environ.get("ROSY_LIVE_FLEET_CA")
-    return ca if ca else True
+    return ssl.create_default_context(cafile=ca) if ca else True
 
 
 def test_unauthenticated_readback_is_refused(site):
-    with httpx.Client(base_url=site, timeout=15, verify=_ca()) as client:
+    with httpx.Client(base_url=site, timeout=15, verify=_verify()) as client:
         response = client.get("/api/fleet/platoon")
     assert response.status_code == 401, (
         f"미인증 읽기가 {response.status_code}로 돌아왔다 — 배포 인증이 성립하지 않는다")
