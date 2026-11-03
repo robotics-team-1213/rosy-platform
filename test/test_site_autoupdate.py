@@ -135,6 +135,10 @@ class FakeHost:
         self.images = {f"rosy-site-{s}:{OLD}" for s in upd.SERVICES} | {
             f"rosy-site-fleet:{'9' * 40}"}
 
+    def _peer(self) -> tuple:
+        compose = upd.read_env(self.paths.site_env).get("ROSY_SITE_PAIRING_COMPOSE", "")
+        return ("control-unit-peer",) if "compose.control-unit.yaml" in compose else ()
+
     def _ok(self, stdout: str = "", code: int = 0) -> SimpleNamespace:
         return SimpleNamespace(returncode=code, stdout=stdout, stderr="")
 
@@ -147,7 +151,7 @@ class FakeHost:
             return self._ok()
         if args[:2] == ["docker", "compose"]:
             if "--hash" in args:
-                return self._ok("\n".join(f"{s} hash-{s}" for s in upd.SERVICES))
+                return self._ok("\n".join(f"{s} hash-{s}" for s in (*upd.SERVICES, *self._peer())))
             if "config" in args:
                 tag = kwargs["env"]["ROSY_SITE_IMAGE_TAG"]
                 services = {s: {"image": f"rosy-site-{s}:{tag}"} for s in upd.SERVICES}
@@ -155,13 +159,18 @@ class FakeHost:
                     services["fleet"]["image"] = self.config_image
                 if "compose.monitoring.yaml" in upd.read_env(self.paths.site_env).get("ROSY_SITE_PAIRING_COMPOSE", ""):
                     services["monitoring"] = {"image": self.monitoring_image or f"rosy-site-fleet:{tag}"}
+                for peer in self._peer():
+                    services[peer] = {"image": f"rosy-site-proxy:{tag}"}
                 return self._ok(json.dumps({"services": services}))
             if "ps" in args:
                 healthy = self.healthy_tags is None or self.running in self.healthy_tags
                 return self._ok("\n".join(json.dumps({
                     "Service": s, "Image": f"rosy-site-{s}:{self.running}", "State": "running",
                     "ID": f'{s}-container',
-                    "Health": "healthy" if healthy else "unhealthy"}) for s in upd.SERVICES))
+                    "Health": "healthy" if healthy else "unhealthy"}) for s in upd.SERVICES)
+                    + "".join("\n" + json.dumps({  # like the site: the peer proxy has no healthcheck
+                        "Service": p, "Image": f"rosy-site-proxy:{self.running}", "State": "running",
+                        "ID": f"{p}-container", "Health": ""}) for p in self._peer()))
         if args[:3] == ["docker", "image", "load"]:
             commit = Path(args[-1]).parent.name
             self.images |= {f"rosy-site-{s}:{commit}" for s in upd.SERVICES}
@@ -169,12 +178,13 @@ class FakeHost:
         if args[:3] == ["docker", "image", "ls"]:
             return self._ok("\n".join(sorted(self.images)))
         if args[:3] == ['docker', 'container', 'inspect']:
-            service = args[-1].split('-')[0]
+            service = args[-1].removesuffix('-container')
+            owner = upd.COMPANIONS.get(service, service)
             if '--format' not in args:
-                return self._ok(json.dumps([{"Image": _image_id(self.running, service),
+                return self._ok(json.dumps([{"Image": _image_id(self.running, owner),
                     "Config": {"Labels": {"com.docker.compose.config-hash": f"hash-{service}"}},
                     "HostConfig": {"ReadonlyRootfs": True, "Privileged": False}}]))
-            return self._ok(_image_id(self.running, service))
+            return self._ok(_image_id(self.running, owner))
         if args[:2] == ["docker", "ps"]:
             return self._ok("\n".join(f"rosy-site-{s}:{self.running}" for s in upd.SERVICES))
         if args[:3] == ["docker", "image", "rm"]:
@@ -1192,3 +1202,21 @@ def test_large_asset_download_gets_longer_idle_timeout(tmp_path):
     client.get('https://example.invalid/release.json', 100)
     client.download('https://example.invalid/part00', tmp_path / 'part00')
     assert client.opener.timeouts == [60, 300]
+
+
+def test_the_control_unit_peer_runs_the_signed_proxy_image_and_needs_to_run_not_to_report_health():
+    """D-960: candidates up to 480de9e203 give the peer proxy no healthcheck; it must still run the proxy image."""
+    def rows(peer_state="running", peer_image=f"rosy-site-proxy:{NEW}"):
+        base = [{"Service": s, "Image": f"rosy-site-{s}:{NEW}", "State": "running", "Health": "healthy",
+                 "ID": f"{s}-container"} for s in upd.SERVICES]
+        return base + [{"Service": "control-unit-peer", "Image": peer_image, "State": peer_state,
+                        "Health": "", "ID": "control-unit-peer-container"}]
+    accepted = {s: [_image_id(NEW, s)] for s in upd.SERVICES}
+
+    def inspect(args, **_kwargs):
+        service = args[-1].removesuffix("-container")
+        return SimpleNamespace(stdout=_image_id(NEW, upd.COMPANIONS.get(service, service)))
+
+    assert upd.containers_reason(rows(), NEW, accepted, inspect) == ""
+    assert "control-unit-peer" in upd.containers_reason(rows(peer_state="exited"), NEW, accepted, inspect)
+    assert "control-unit-peer" in upd.containers_reason(rows(peer_image="caddy:latest"), NEW, accepted, inspect)

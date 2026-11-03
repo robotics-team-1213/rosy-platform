@@ -45,6 +45,14 @@ export const LAMP_REASON = {
   CORE_UNAVAILABLE: "CORE 인계 없음", LAMP_UNAVAILABLE: "램프 없음",
 };
 
+// v1.351 heat mode: CORE caps speed by itself; the card only says so. ok or unknown shows nothing.
+const HEAT = Object.freeze({ warm: ["열: 감속", "warn"], hot: ["열: 정지", "crit"] });
+
+/** Pure: [text, cls] of the heat chip for a CORE state, or null. */
+export function heatChip(state) {
+  return HEAT[state?.safety?.thermal] || null;
+}
+
 export function nodeWithText(tagName, className = "", text) {
   const node = document.createElement(tagName);
   node.className = className;
@@ -130,6 +138,8 @@ export function createRosterSummary({scope, view, openCard, render, attentionIte
     const battery = tag(`배터리 ${power.battery}`, power.problem ? "warn" : "");
     battery.dataset.fact = "battery";
     facts.append(battery, motorHealth.summary(robot));
+    const heat = view.stateUnavailable ? null : heatChip(state);
+    if (heat) facts.append(tag(...heat));
     const guideRow = (view.guide?.robots || []).find(row => row.robot_id === robot.robot_id);
     const loc = view.stateUnavailable ? null : positionTag(robot.localization, guideRow);
     const position = tag(loc?.text || "위치 미확인", loc ? loc.cls : "warn");

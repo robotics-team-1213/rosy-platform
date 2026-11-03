@@ -75,6 +75,7 @@ from core_features.safety.manager import (
     SpeedLimits,
 )
 from core_features.safety.fleet_loss import FleetLossMonitor
+from core_features.safety.thermal import ThermalMonitor, ThermalPolicy
 from core_common.protocol.evidence import CHANNEL_STALE_AFTER_S
 from core_features.state.manager import StateManager
 from core.system.runtime import HostRuntimeProbe
@@ -186,6 +187,7 @@ class CoreServices:
         safety = SafetyManager(limits, battery_policy,
                                fleet_loss_policy=str(safety_cfg.get("fleet_loss_policy", "STOP")),
                                events=events, policy_required=safety_cfg.get('control_policy_required', False))
+        safety.thermal = ThermalMonitor(ThermalPolicy.from_config(safety_cfg))
         # D-137 T4: 와이어 패킷 → 자문 좌석의 유일한 유입점. revision 명부는
         # vision 슬라이스가 등록/게이트하는 몫이다(T3 계약 — "게이트 자체는
         # vision 슬라이스가 건다"). 시계는 ros_bridge가 노드 시계로 맞춘다.
