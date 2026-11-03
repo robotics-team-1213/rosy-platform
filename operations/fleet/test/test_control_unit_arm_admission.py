@@ -59,7 +59,7 @@ def delegated(world, tmp_path, *, fault="healthy"):
     units = ([{"id": "ROOT"}, {"id": "R", "parent": "ROOT"}] if ancestor else [{"id": "R"}])
     units.append({"id": "CELL-A", "parent": "R", "resources": ["workcell:" + installed.policy.primary[0]]})
     topology = ControlUnitTopology.from_mapping({"revision": "v1", "units": units})
-    nodes, reads, faults = {}, [], {"disconnected": False}
+    nodes, reads, faults = {}, [], {"disconnected": False, "blocked": False, "canceled": threading.Event()}
     for unit in units:
         unit_id = unit["id"]
         journal = tasks if unit_id == "CELL-A" else FleetTaskStore(tmp_path / (unit_id + ".sqlite3"))
@@ -72,6 +72,11 @@ def delegated(world, tmp_path, *, fault="healthy"):
                     connection.rollback()
                 if caller == "CELL-A" and faults["disconnected"]:
                     raise ConnectionError("parent unavailable")
+                if caller == "CELL-A" and faults["blocked"]:
+                    try:
+                        await asyncio.Event().wait()
+                    finally:
+                        faults["canceled"].set()
                 origin, identity = path.split("/")
                 return await nodes[target].read(origin, identity, for_child=caller)
             if path == "inbox":
@@ -94,10 +99,12 @@ def delegated(world, tmp_path, *, fault="healthy"):
     if fault in {"canceled", "ancestor_canceled"}:
         nodes[origin].store.request_cancel(origin, "arm-1")
     faults["disconnected"] = fault == "disconnected"
+    faults["blocked"] = fault == "blocked"
     reads.clear()
     binding = nodes["CELL-A"].store.get(origin, "arm-1")
     proposal = rows.peek(binding["local_task_id"]) if binding["local_task_id"] else None
-    return SimpleNamespace(nodes=nodes, origin=origin, request=request, proposal=proposal, reads=reads)
+    return SimpleNamespace(nodes=nodes, origin=origin, request=request, proposal=proposal, reads=reads,
+                           parent_canceled=faults["canceled"])
 
 
 def assert_unadmitted(world, mission_id):
@@ -130,7 +137,7 @@ def test_named_arm_admission_requires_current_parent_chain(world, tmp_path, faul
     assert context.reads
 
 
-@pytest.mark.parametrize("fault", ["healthy", "disconnected", "canceled", "ancestor_canceled"])
+@pytest.mark.parametrize("fault", ["healthy", "disconnected", "canceled", "ancestor_canceled", "blocked"])
 def test_policy_arm_admission_requires_current_parent_chain(world, tmp_path, fault):
     context = delegated(world, tmp_path, fault=fault)
     proposal = context.proposal
@@ -160,6 +167,8 @@ def test_policy_arm_admission_requires_current_parent_chain(world, tmp_path, fau
                 assert_unadmitted(world, proposal["mission_id"])
                 assert world.dispatcher.prepared == []
             assert context.reads
+            if fault == "blocked":
+                assert context.parent_canceled.wait(2), "timed-out parent coroutine was not canceled"
         finally:
             client.portal.call(stop)
 
