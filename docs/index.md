@@ -356,5 +356,5 @@
 - 2026-11-03 · uncommitted · test(remote): verify profiles across each planned host worker
 - 2026-11-03 · uncommitted · docs: 측면 카메라 정량 검증 상태 정정
 - 2026-11-03 · f81b8315d0 · docs: unwedge의 측정 기반 성공 조건과 검증 범위
+- 2026-11-03 · uncommitted · fix(isaac): 야간 재부팅 전 90분 안에는 Isaac 실행을 시작하지 않는다
 - 2026-11-03 · uncommitted · fix(landing): 계측 전용 변경의 시험 범위 선택
-- 2026-11-03 · uncommitted · fix(landing): preserve first queue across a proven rules-refresh stop

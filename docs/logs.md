@@ -13899,6 +13899,12 @@ osy-d395-s1d\`.
 - gate 변화: 순수 계측 변경의 관련 시험 범위만 바로잡는다. 이 선택기 수정 자체는 정식 FULL이 필요하고, safety·runtime/selector/remote 혼합의 FULL과 기존 문서 guard를 유지한다. 공식 후보 검증·main 착지·변경 후 p90 검증은 아직 남아 있다.
 - CE: 기존 교훈 갱신 — landings-gave-the-turn-back-and-reran-everything의 과다 FULL 원인과 적용 조건을 보완했다. 보고 결과가 승인·실행 경로에 들어가면 분류를 재검토한다. 최종 문서 기록은 검증 코드a193 대비 tools/test 변경이 없으며 같은 guard를 별도 수동 pytest로 반복하지 않고 공식 착지에서 확인한다.
 
+## 2026-11-03 · uncommitted · fix(isaac): 야간 재부팅 전 90분 안에는 Isaac 실행을 시작하지 않는다
+- 변경: `remote_isaac._run_once`가 준비 확인마다 `rosy-nightly-reboot.timer`까지 남은 초를 읽고, 90분(`RUN_BUDGET_S`) 안이면 준비 안 됨으로 다룬다. 셀 실측 기록의 벨트 높이 정정(영상 폭 추정이 틀렸고 D435 깊이로 벨트 면이 판 윗면 약 64 mm 아래, 시뮬레이션은 36 mm), 같은 카메라 최종 실행 9/9 추가, 대장 벨트 항목과 손목 카메라 사람 작업.
+- 증거: run 82e147c7이 05:01 야간 재부팅(D-889)으로 7층에서 멈춤(`last -x`·타이머 확인). 새 시험 `test_run_never_starts_inside_the_nightly_reboot_budget`.
+- gate 변화: 없음. fixture 벨트 높이는 바꾸지 않았다(재실행이 필요한 변경).
+- CE: 해당 없음 — 원인과 고침이 코드 주석·시험·기록에 있다. 벨트 높이를 영상 폭으로 짐작해 틀린 일은 검증 기록에 정정으로 남겼다.
+
 ## 2026-11-03 · f81b8315d0 · docs: unwedge의 측정 기반 성공 조건과 검증 범위
 
 - 변경: 기존 unwedge 교훈의 clearance를 명령 횟수 대신 시작 측정값 대비 순변위로 정정하고, held-target 기준 HOME 한계·park 정착·측정 HOME 확인을 기록했다. 기존 21단계 현장 기록과 후속 호스트 회귀를 구분했다.

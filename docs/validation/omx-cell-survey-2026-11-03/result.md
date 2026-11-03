@@ -41,10 +41,12 @@ Pick-by-eye inputs are good to about 5 px, which is about 5 mm on the plate in t
 
 ## What this does not settle
 
-- **Belt height.** The fixture belt top is 30-40 mm below the plate top at the plate end (`cad-stage1-lower-belt-v1`).
-  The belt container's top face in the top frame looks 20-50 mm above the plate, which would put the real belt near the
-  plate top, but one face width is a weak measure. Measure the belt surface against the plate top with a ruler or an
-  arm touch before the belt height is changed.
+- **Belt height (corrected the same day).** The first version of this record read the belt container's top-face width in
+  the top frame and guessed the belt sat near the plate top. That was wrong. The arm_b stacking configuration on the
+  control PC (2026-11-03 05:32, `beltend` site) has the container top at the belt end 25.8 mm *below* the table (D435
+  depth, median of 6 readings), and that session picks containers there with this height. So the belt surface is about
+  56 mm below the table and 64 mm below the plate top. The fixture's belt at the same spot (x about 0.22) is 36 mm below
+  the plate top: about 28 mm too high. One face width in a near-vertical view is not a height measure; use depth or touch.
 - **Joint zero offsets.** The FK fit assumes `norm_to_rad` gives URDF angles. A calibration offset in joint 1 turns the
   fitted yaw (-94.3 deg); offsets in joints 2-4 move the fitted base along the arm. The base plate centre (0.107, 0.164)
   is an independent check that agrees within 3 mm in x.
@@ -70,7 +72,8 @@ Both are inside the limit D-947 proposes (top and side reference points, mean 3 
 `nominal-palletizing-v21-ship`, seed 42. Run `d53cfe92f3475a6da6c1f50aa6633d56` (first camera encoding without roll,
 top 2.04 px mean; 9/9 placed). Run `82e147c7e04f5711834ee96395f01aa3` (final encoding): the camera pictures were written,
 then the run unit was stopped from outside together with an unrelated test job on the model PC during layer 7, so its
-stacking result is not a claim. The arm bases in the renders are still the CAD values, so the base plates draw toward
+stacking result is not a claim. Run `00544b84f0685933bf0ce7bb5c2c173c` (final encoding, same case and seed) placed 9/9
+and wrote both camera pictures. The arm bases in the renders are still the CAD values, so the base plates draw toward
 the bow of the real ones, as measured above.
 
 ## Next
@@ -78,7 +81,8 @@ the bow of the real ones, as measured above.
 1. Run the D-947 MuJoCo sweep with the surveyed bases as a second candidate next to the CAD ones; adopt them in
    `arm_bases_m` only if they change reach or collision results, with the run evidence.
 2. Done: see step 2 above.
-3. Measure the belt height and arm_a by FK when arm_a is back in scope.
+3. Lower the fixture belt by the measured 28 mm (a fixture change with a rerun, not done here); arm_a by FK when arm_a is
+   back in scope; wrist camera intrinsics by checkerboard (person places the board), then the wrist mounts.
 
 ## Evidence correction (2026-11-03)
 
