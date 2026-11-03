@@ -434,6 +434,33 @@ def test_explicit_full_affected_change_executes_canonical_plan_and_real_receipt(
     assert all(no_cache for _, no_cache, invs in case.splits if any("tools/collect_alone.py" in inv for inv in invs))
 
 
+def test_explicit_full_ignores_stale_spec_and_executes_the_actual_main_delta(full_case, monkeypatch):
+    case = full_case
+    delta_source = CANONICAL.replace("invocations=[] if '--head' in sys.argv",
+                                    "invocations=[['pkg/test/test_a.py']] if '--head' in sys.argv")
+    commit(case.main, {'tools/harness/rosy_harness.py': delta_source,
+                       'tools/harness/harness.yaml': 'modules: []\n',
+                       'tools/harness/platform_parts.yaml': 'roots: []\n'}, 'canonical delta fixture')
+    case.mutate = lambda: commit(case.main, {'lib/peer.py': 'peer = 1\n'}, 'main advanced')
+    prepared = land.land_full.prepared
+    def stale_spec(*args):
+        result = prepared(*args)
+        if result:
+            path = land.land_full._path(case.wt, 'feat/x')
+            data = json.loads(path.read_text())
+            data['spec'] = {'invocations': [['test']], 'tree': 'stale'}
+            path.write_text(json.dumps(data))
+        return result
+    monkeypatch.setattr(land.land_full, 'prepared', stale_spec)
+    monkeypatch.setattr(land.land_speculate, 'held', lambda *a: pytest.fail('FULL consumed held speculation'))
+    monkeypatch.setattr(land.land_speculate, 'with_spec', lambda *a: pytest.fail('FULL inherited spec proof'))
+    assert land.main(['--tests', 'full']) == 0
+    assert any(label == 'land-1' for label, _, _ in case.remote)
+    assert_full_plan(body_calls(case))
+    record = land.land_record.read(case.main, git(case.main, 'rev-parse', 'HEAD'))
+    assert record['prepared_candidate'] and record['invocations'].count(exclusive.DEDICATED) == 1
+
+
 @pytest.mark.parametrize("tier, invocations", [("affected", [["pkg/test"]]), ("full", NORMAL),
                                                ("full", NORMAL + [[BROWSER, BROWSER_FILES[0]]])])
 def test_old_or_partial_preparation_never_skips_current_full_prepare(full_case, tier, invocations):
@@ -675,6 +702,82 @@ def test_the_guard_set_and_paths_under_an_ignored_folder_are_no_overlap():
     assert not selection.overlaps([shared + ["fleet/test"]], [shared + ["arm/test"]])
     assert selection.overlaps([shared + ["fleet/test"]], [shared + ["fleet/test/test_x.py"]])
     assert not selection.overlaps([["guard/test/test_a.py"]], [["guard/test/test_a.py"]], ignore=("guard/test",))
+
+
+@pytest.mark.parametrize('wrapped', [False, True])
+@pytest.mark.parametrize('tier, invocations, reusable', [
+    ('full', [['test']], False),
+    ('full', NORMAL, True),
+    ('full', None, False),
+    ('full', NORMAL + [exclusive.DEDICATED], False),
+    ('full', NORMAL + [{'pkg/test': 0}], False),
+    ('full', NORMAL + ['pkg/test'], False),
+    ('full', NORMAL + [[1]], False),
+    ('affected', [['pkg/test']], True),
+])
+def test_restore_checks_full_plan_against_actual_main_sot_without_rewriting_records(
+        full_case, tier, invocations, reusable, wrapped):
+    case = full_case
+    base = git(case.main, 'rev-parse', 'HEAD')
+    candidate = git(case.wt, 'rev-parse', 'HEAD')
+    land.land_full.save(case.wt, 'feat/x', candidate, base, 'delta' if wrapped else tier, invocations,
+                        base_tier=tier if wrapped else None)
+    path = land.land_full._path(case.wt, 'feat/x')
+    original = path.read_bytes()
+    assert land.land_full.restore(case.wt, 'feat/x') == (base if reusable else None)
+    assert path.read_bytes() == original
+    # Immutable publication provenance still uses the unchanged bridge, not reuse eligibility.
+    assert land.land_full.bridge(case.wt, candidate, base, 'HEAD', 'main')
+
+
+@pytest.mark.parametrize('wrapped', [False, True])
+def test_restore_preserves_legacy_main_even_when_topic_has_unlanded_sot(repos, wrapped):
+    main, wt = repos
+    base = git(main, 'rev-parse', 'HEAD')
+    commit(wt, {'tools/harness/affected_exclusive.py': (ROOT / 'tools/harness/affected_exclusive.py').read_text(),
+                exclusive.TARGET: 'def test_stub(): pass\n'}, 'unlanded timing support')
+    candidate = git(wt, 'rev-parse', 'HEAD')
+    land.land_full.save(wt, 'feat/x', candidate, base, 'delta' if wrapped else 'full', [['test']],
+                        base_tier='full' if wrapped else None)
+    path = land.land_full._path(wt, 'feat/x')
+    original = path.read_bytes()
+    assert land.land_full.restore(wt, 'feat/x') == base
+    assert path.read_bytes() == original
+
+
+def test_legacy_root_only_full_record_triggers_normal_fresh_preparation(full_case):
+    case = full_case
+    base = git(case.main, 'rev-parse', 'HEAD')
+    candidate = git(case.wt, 'rev-parse', 'HEAD')
+    land.land_full.save(case.wt, 'feat/x', candidate, base, 'full', [['test']])
+    assert land.land_full.restore(case.wt, 'feat/x') is None
+    assert land.main(['--tests', 'auto']) == 0
+    assert ['pkg/test'] in body_calls(case)
+    record = land.land_record.read(case.main, git(case.main, 'rev-parse', 'HEAD'))
+    assert record['tier'] == 'affected' and ['test'] not in record['invocations']
+
+
+@pytest.mark.parametrize('bad', [
+    [exclusive.DEDICATED, exclusive.DEDICATED],
+    [exclusive.DEDICATED, {'pkg/test': 0}],
+    [exclusive.DEDICATED, 'pkg/test'],
+    [exclusive.DEDICATED, [1]],
+])
+def test_malformed_record_composition_stops_before_ff_and_preserves_existing_record(full_case, monkeypatch, bad):
+    case = full_case
+    before = git(case.main, 'rev-parse', 'HEAD')
+    candidate = git(case.wt, 'rev-parse', 'HEAD')
+    sentinel = land.land_record.write(case.wt, candidate, before, [['pkg/test']], [], tier='affected')
+    original = sentinel.read_bytes()
+    monkeypatch.setattr(land, 'select', lambda *a, **k: (bad, None))
+    monkeypatch.setattr(land.land_guards, 'first', lambda *a, **k: [])
+    monkeypatch.setattr(land, 'run_tests', lambda *a, **k: ['pytest ok'])
+    try:
+        result = land.main(['--tests', 'auto'])
+    finally:
+        assert git(case.main, 'rev-parse', 'HEAD') == before
+        assert sentinel.read_bytes() == original
+    assert result == 1
 
 
 def test_a_delta_turn_yields_only_with_a_ticket_and_a_clean_tier_under_it():
