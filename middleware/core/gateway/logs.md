@@ -2057,3 +2057,9 @@ clpy.duration을 추가했다(bridge AGENTS의 두 파일 함께 갱신 규칙).
 - 증거: RED745f34a4e6의 공식 원격 회귀는 정상·예외 종료 두 경우 모두 `24 == 1`로 실패했다(NEW2). 수정 e9ee7a7009는 두 자원 회귀와 앞서 실패했던 slow-journal lifespan·shutdown_UNDOCKING 실파이프라인을 함께 실행해 4 passed/skip0, NEW0/known0/flaky0이었다. 환경 5f97eba2cbb43fc8, freeze eb75e06857d6c188. 독립 검토에서 수정 필요 사항은 없었다.
 - 범위: 별도 UI 통합 후보의 main 변경분 시험에서 두 카메라 사례가 LOAD-FLAKY였다. 최초 오류는 SIM 시간이 멈춘 상태의 ASGI 갱신이 내부 1초 실제 시간 제한을 넘긴 것이며, 뒤따른 context 오류를 최초 원인으로 보지 않는다. OpenCV 24스레드는 확인된 자원 설정이지만 시간 초과의 원인이라는 인과관계는 아직 입증하지 않았다. 전체 fixture 소비자 검증은 진행 중이며 착지·CI·장치 수용은 별도다.
 - CE: 미해결 — 자원 제한과 복원은 회귀로 확인했지만, 기존 시간 초과의 정확한 스케줄링 원인은 확정하지 않았다. 해결된 교훈으로 기록하지 않는다.
+
+## 2026-11-03 · e9ee7a7009 · 카메라 SIM fixture 소비자 검증
+
+- 검증: fixture·pipeline·continuous·lifespan·scheduling 다섯 모듈을 공식 원격 runner의 6개 worker로 실행해 15 passed/skip0/exit0을 확인했다. known_failures 비교는 NEW0/known0/flaky0이며, 생산 코드·운영 제한·기존 파이프라인 판정을 수정하지 않았다.
+- 범위: 스레드 자원 정책과 소비 시나리오의 이 소스 검증이다. 단독 실행과 부하 실행의 정확한 인과 대조, UI 최종 통합 SHA의 FULL·게시·운영 수용은 별도다. 기존 시간 초과를 재실행만으로 해결했다고 주장하지 않는다.
+- CE: 미해결 — 스레드 정책은 코드와 회귀로 설명되며, 시간 초과의 정확한 스케줄링 원인은 미확정이다.
