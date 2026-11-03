@@ -126,6 +126,7 @@ const serverReasons={'known mask index required':'등록된 픽셀 클래스만 
 function readableError(message){return serverReasons[message]||message;}
 serverReasons['draft has no labels for remaining unknown pixels']='이 초안은 남은 255 영역에 제안한 라벨이 없습니다. 다른 초안을 선택하거나 직접 검수하세요.';
 let workspace,frame,review,original,displayPhoto,maskImage,busy=false,ready=false,loading=true,conflicted=false,forbidden=false,serial=0,stroke=null,draft=[],tool='sample',polygon=[],keyCursor=null;
+let vlmRequest=0;
 const keyboardPosition=document.createElement('p');keyboardPosition.id='pixel-keyboard-position';keyboardPosition.className='quiet';keyboardPosition.setAttribute('role','status');keyboardPosition.hidden=true;document.querySelector('.pixel-stage').after(keyboardPosition);
 $('pixel-keys').querySelector('p').append(' 캔버스 Alt+방향키 1픽셀, Shift를 더하면 10픽셀 · Space 점/꼭짓점 · 브러시 Space를 누른 채 이동하고 놓아 획 종료.');
 let savedPixelSummary='';
@@ -304,11 +305,13 @@ function paint(){if(!ready)return;const canvas=$('pixel-canvas'),ctx=canvas.getC
   if(keyCursor){const [x,y]=keyCursor,scale=canvas.width/Math.max(1,canvas.getBoundingClientRect().width);ctx.save();ctx.strokeStyle=cssColor('--series-primary');ctx.lineWidth=2*scale;ctx.beginPath();ctx.moveTo(x-5*scale,y);ctx.lineTo(x+5*scale,y);ctx.moveTo(x,y-5*scale);ctx.lineTo(x,y+5*scale);ctx.stroke();ctx.restore();}
 }
 async function loadVlm(index,ticket){
+ if(ticket!==serial)return;
+ const requestId=++vlmRequest;
  const state=$('pixel-vlm-state'),note=$('pixel-vlm-note');
  state.setAttribute('state','pending');state.textContent='AI 의견을 불러오는 중…';note.textContent='';
- try{const value=await request(`/api/vlm-feedback/${index}`);if(ticket!==serial)return;
+ try{const value=await request(`/api/vlm-feedback/${index}`);if(ticket!==serial||requestId!==vlmRequest)return;
   const result=feedbackPresentation(value);state.setAttribute('state',result.state);state.textContent=result.title;note.textContent=result.note;
- }catch{if(ticket!==serial)return;state.setAttribute('state','warning');state.textContent='AI 의견 조회 실패';note.textContent='다시 조회를 누르세요. 조회는 AI 검사를 새로 실행하지 않습니다.';}
+ }catch{if(ticket!==serial||requestId!==vlmRequest)return;state.setAttribute('state','warning');state.textContent='AI 의견 조회 실패';note.textContent='다시 조회를 누르세요. 조회는 AI 검사를 새로 실행하지 않습니다.';}
 }
 
 async function select(index){

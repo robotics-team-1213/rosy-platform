@@ -133,6 +133,47 @@ def test_mask_check_automatically_refreshes_opinion_without_replacing_unsaved_pi
         release.set()
 
 
+@pytest.mark.parametrize('old_status', [200, 503])
+def test_delayed_old_opinion_response_cannot_replace_new_check_result(tmp_path, old_status):
+    import review_masks
+    backend = lambda *_: {'feedback': {'verdict': 'concern', 'issue': 'missed_visible_road', 'note': 'Latest saved-mask advice'}}
+    with ai_browser(tmp_path, backend) as (page, store, jobs, expect):
+        page.add_init_script("""const originalFetch=window.fetch;
+          window.fetch=async(...args)=>{
+            const response=await originalFetch(...args);
+            if(String(args[0]).includes('/api/vlm-feedback/0')){
+              if(response.status>=500)setTimeout(()=>{window.feedbackReads=(window.feedbackReads||0)+1;},0);
+              const json=response.json.bind(response);
+              response.json=async()=>{const value=await json();setTimeout(()=>{window.feedbackReads=(window.feedbackReads||0)+1;},0);return value;};
+            }
+            return response;
+          };""")
+        held = []
+        def delay_first(route):
+            if not held:
+                held.append(route)
+            else:
+                route.continue_()
+        page.route('**/api/vlm-feedback/0', delay_first)
+        page.goto(page.url.split('?')[0] + 'pixels?frame=0', wait_until='domcontentloaded')
+        expect(page.locator('#review-ai-mask_check')).to_be_enabled()
+        assert len(held) == 1
+        before = review_masks.get(store, 0)
+        page.locator('#review-ai-mask_check').click()
+        expect(page.locator('.pixel-vlm-feedback')).to_contain_text('Latest saved-mask advice', timeout=15000)
+        page.locator('#pixel-class').select_option('0')
+        page.locator('#pixel-canvas').click(position={'x': 10, 'y': 10})
+        expect(page.locator('#pixel-draft')).to_contain_text('1점 선택')
+        draft = page.locator('#pixel-draft').inner_text()
+        reads = page.evaluate('window.feedbackReads||0')
+        held[0].fulfill(status=old_status, json={'available': False, 'reason': 'not_requested', 'check': {'state': 'not_requested'}, 'error': 'Old request failed'})
+        page.wait_for_function('before => (window.feedbackReads||0)>before', arg=reads)
+        expect(page.locator('.pixel-vlm-feedback')).to_contain_text('Latest saved-mask advice')
+        expect(page.locator('#pixel-vlm-state')).not_to_have_text('AI 의견 조회 실패')
+        expect(page.locator('#pixel-draft')).to_have_text(draft)
+        assert review_masks.get(store, 0) == before
+
+
 @pytest.mark.parametrize('editing', [False, True])
 def test_requested_pixel_ai_previews_completion_only_when_editor_is_clean(tmp_path, editing):
     import base64
