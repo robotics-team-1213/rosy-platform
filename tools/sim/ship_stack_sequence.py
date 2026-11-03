@@ -200,6 +200,12 @@ def table(path):
               f"{ok:2d}/{len(group):2d}   {layer:25} {max(r['worst_disturb_mm'] for r in group):6.2f}")
 
 
+def done_key(row):
+    """A case's identity in a results file (a result row is its case plus outcome fields)."""
+    return json.dumps({k: row[k] for k in ('ship', 'variant', 'order', 'open_gap_m', 'mu', 'sigma_mm', 'sigma_yaw', 'seed',
+                                           'clearance_mm', 'retries') if k in row}, sort_keys=True)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     sub = parser.add_subparsers(dest='cmd', required=True)
@@ -209,13 +215,17 @@ def main():
     r.add_argument('--limit', type=int, default=None, help='first N cases only (smoke)')
     r.add_argument('--shard', default='0/1', help='K/N: every N-th case from K (split a sweep over hosts)')
     r.add_argument('--stage', choices=('base', 'fix', 'retry', 'v11'), default='base')
+    r.add_argument('--resume', action='store_true', help='append to OUT, skipping cases it already has (lab PCs reboot nightly)')
     sub.add_parser('table').add_argument('out', type=Path)
     args = parser.parse_args()
     if args.cmd == 'table':
         return table(args.out)
     k, n = map(int, args.shard.split('/'))
     todo = list(cases(args.stage))[k::n][:args.limit]
-    with args.out.open('x', encoding='utf-8') as out, ProcessPoolExecutor(args.workers) as pool:
+    if args.resume and args.out.exists():
+        done = {done_key(json.loads(line)) for line in args.out.read_text(encoding='utf-8').splitlines() if line.strip()}
+        todo = [case for case in todo if done_key(case) not in done]
+    with args.out.open('a' if args.resume else 'x', encoding='utf-8') as out, ProcessPoolExecutor(args.workers) as pool:
         for row in pool.map(run, todo, chunksize=4):
             out.write(json.dumps(row)+'\n')
             out.flush()
