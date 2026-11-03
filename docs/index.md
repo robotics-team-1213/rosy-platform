@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-11-03 · uncommitted · fix(landing): 단계 없는 delta 사전 시험도 넘김 횟수에 셈 (D-970 1항 보완)
 - 2026-11-03 · uncommitted · fix(landing): 명시 FULL 증인이 재실행 뒤에도 남음 (D-970 보완)
 - 2026-11-03 · uncommitted · feat(landing): land_async orphans — 재부팅으로 죽은 착지를 찾아 되살림
 - 2026-11-03 · uncommitted · fix(landing): 다른 트리 통과 재사용도 대기열 단계는 남기고 게시 증거는 아님 (D-970 4항)
 - 2026-11-03 · uncommitted · fix(landing): 추측 사전 시험 기본 끔 (D-889 추가 28)
-- 2026-11-03 · uncommitted · fix(landing): delta 넘김은 표마다 두 번까지 (D-970 1항 보완)

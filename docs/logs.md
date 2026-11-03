@@ -14046,3 +14046,9 @@ osy-d395-s1d\`.
 - gate 변화: 없음 — 게시는 여전히 로그로 FULL 실행을 확인하고 닫힌 쪽으로 실패한다.
 - CE: 기존 교훈 갱신 — landings-gave-the-turn-back-and-reran-everything 14.
 
+## 2026-11-03 · uncommitted · fix(landing): 단계 없는 delta 사전 시험도 넘김 횟수에 셈 (D-970 1항 보완)
+- 변경: delta 사전 시험이 단계 없이 끝나면 저장 대신 `land_full.count_yield`로 기존 기록의 `yields`만 올린다.
+- 증거: 11-03 omx-layer-violations-r3가 23:20·23:35 delta로 거듭 넘김 — 23:35 사전 시험이 tier None이라 아무것도 저장되지 않아 두 번 상한이 걸리지 않음(rosy-land-events). 원격 착지 회귀 전부 + publish_evidence 통과, 새 시험 1개.
+- gate 변화: 없음. 세 번째부터는 차례가 시험 폴더를 직접 돈다.
+- CE: 해당 없음 — D-970 1항 상한의 구멍을 메운 것.
+
