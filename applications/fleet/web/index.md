@@ -32,8 +32,8 @@
 
 ## 최근 기록
 
+- 2026-11-03 · a5b594ea83 · 로봇 목록의 온도 표시와 안전 정보 신선도 통일
 - 2026-11-03 · 50b5b4340d · 독립 Account 자산 묶음과 웹 통합 보존
 - 2026-11-03 · 91889f3c3e · USB 카메라 승인과 편집 상태 유지
 - 2026-11-03 · e84e4f46b3 · 독립 Account의 자기 화면 복귀 숨김
 - 2026-11-03 · 721b59a094 · D-963 USB approval with Account cookie identity
-- 2026-11-03 · uncommitted · 만료된 Cell 고장 영상 URL 해제
