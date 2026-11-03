@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-11-04 · uncommitted · 검색 선택의 표시·호출자 상태 검증 기록
 - 2026-11-03 · uncommitted · Cell 표·정렬의 전체 화면 검증 기록
 - 2026-11-03 · uncommitted · fix(landing): 추측 사전 시험 기본 끔 (D-889 추가 28)
 - 2026-11-03 · uncommitted · fix(landing): delta 넘김은 표마다 두 번까지 (D-970 1항 보완)
 - 2026-11-03 · uncommitted · fix(landing): LOAD-FLAKY는 사전 시험 전체가 아니라 그 시험만 차례에서 다시 (D-970 4항)
-- 2026-11-03 · uncommitted · Retain current main's DELTA yielding with isolated FULL composition
