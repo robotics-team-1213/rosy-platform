@@ -13928,3 +13928,9 @@ osy-d395-s1d\`.
 - 증거: 관제 PC 실행 환경은 `PYTHONPATH`의 `<tree>/contracts/foundation`에서만 `core_common`을 찾는다(없으면 ModuleNotFoundError, 2026-11-03 확인).
 - gate 변화: 없음
 - 결정: 없음
+
+## 2026-11-03 · uncommitted · docs(workflow): 제어 세션 종료 뒤 남은 synthetic 부하 정리
+- 변경: Windows 부하 시험의 PID·생성시각·부모 트리 확인과 이번 사례의 부모 우선 종료 근거를 교훈으로 남긴다. 프로세스 이름만으로 종료하거나 광범위 정리 명령을 재실행하지 않는다.
+- 증거: 원래 제어 부모가 없는 bash3개와 각 유일한 while-True Python3개를 확인하고 정확한 대상만 종료했다. 직후 대상0, 후속 표본의 동일PID는 새 hook shell로 재사용된 것을 구분했다. 전체CPU96%/다른작업진행으로 전체 지연·p90 개선은 주장하지 않는다.
+- gate 변화: 없음. 제품 코드·자원 기준·시험 선택·실패 baseline은 바꾸지 않는다. 운영자 로컬 증거는 저장소 밖 기존 workspace-records에 보존했다.
+- CE: 새 교훈 기록 — windows-synthetic-load-outlives-controller. 관련 CPU 경합·Windows 자식 수명 교훈과 구분하며 원격·장치 수용을 대신하지 않는다.
