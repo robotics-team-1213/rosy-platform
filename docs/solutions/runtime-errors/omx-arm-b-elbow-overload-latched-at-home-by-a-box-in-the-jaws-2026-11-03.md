@@ -62,6 +62,21 @@ folded home looks like.
 - **Jaws in a park.** The jaws are still, more than 2 units from the park's gripper target, at >= 50 % of their cap
   on two samples. The park holds instead of folding the object home.
 
+- **A closing `grip` that catches something reopens.** This is where the incident started. If a grip closes from
+  free jaws (present within EMPTY_MARGIN of the old target) and the jaws then stop short at load, the runner returns
+  them to where they were and reports `caught: true`. The box is let go where it was pinched. A grip sent while
+  already holding (`recover`'s re-tighten) is not armed, so it cannot drop a held box.
+
+The thresholds are measured cell params (`windup.rest_rise` 40, `windup.rest_pwm` 0.4, `windup.jaw_pwm` 0.5,
+`windup.jaw_gap` 2.0), not constants. `push_replay.py` is the loop that keeps them honest:
+
+1. Run it over the session's motor-health logs after each supervised session.
+2. A hit before a fault is a catch. A hit in a clean session is a real press or a false alarm: look at it.
+3. Compare the per-joint normal envelope with the thresholds before changing them.
+
+On 2026-11-03 the normal standstill wind-ups reached a rise of 79, but only at PWM <= 198 of 600. The real presses
+wound past 273. That gap is what the two gates together keep.
+
 Tests: `test/test_omx_joint_push.py` replays the 13:27 numbers and the normal holds.
 `test/test_omx_chunk_runner.py::test_an_elbow_winding_up_short_of_home_ends_the_session_folded_before_it_overloads`
 and `::test_a_park_with_something_in_the_jaws_holds_instead_of_folding_it_home` cover the runner.
