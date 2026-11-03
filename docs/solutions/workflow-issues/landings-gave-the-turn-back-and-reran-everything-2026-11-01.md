@@ -109,6 +109,12 @@ reruns. Each cause below was found from `.git/rosy-land-events.jsonl` and `.git/
    the queue is nearly empty (few `waiting`/`preparing` tickets), not just after a clock time. Read the
    lines after an escalation before calling a turn FULL; `tests` events are written when a round ends, so
    a turn that gave the turn back shows none.
+10. **Narrowed is not short enough.** Over 11-02 11:30 to 11-03 11:30 main stood over 30 min 17 times; the
+   turns given back were running main's delta suite folders in the lock. Moving them out needed an evidence
+   label decision: saved as `full` the record would claim a run that never happened, saved as `affected` the
+   older anchor stays and the next turn picks the same folders. D-889 27 (user decision) adds a `delta`
+   tier that moves the base forward but reports the tier under it. Judge it on landings started after it
+   reaches main; `[land] ... delta tier` lines and `prepared` events with `tier: delta` show it working.
 
 ## 계측 전용 파일의 불필요한 FULL 승격
 

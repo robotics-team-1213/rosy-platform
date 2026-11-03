@@ -194,10 +194,19 @@ def _prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, 
         raise land.Stop(f"HEAD changed during pretest; {candidate[:10]} was tested; retry the landing")
     clean = land.land_selection.eligible(land, guarded + tested)
     land.land_selection.require_eligible(land, args, clean, guarded + tested)
-    tier = land.land_selection.tier(land, guarded + tested, bool(note))  # carried: restore() refuses it
+    delta = bool(note) and note.startswith(land.land_selection.DELTA_NOTE) and not explicit
+    tier = land.land_selection.tier(land, guarded + tested, bool(note) and not delta)  # carried: restore() refuses it
     anchor = None
+    if delta:
+        # D-889 27: main's delta suites passed here outside the lock. They extend the earlier tier over the new
+        # main ("delta"), never stand in for it; with no clean earlier tier the record stays as it was.
+        base = land.land_full.prepared(wt, branch, land.land_full.restore(wt, branch))
+        if tier is not None and base is not None:
+            land.land_full.save(wt, branch, candidate, main_sha, "delta", base["invocations"] + invocations,
+                                base_tier=base["tier"])
+        tier = "delta" if tier is not None and base is not None else None
     # Keeping an older base with --no-cache would repeat overtime on every turn.
-    if tier == "affected" and not args.no_cache:
+    elif tier == "affected" and not args.no_cache:
         anchor_main = land.land_full.restore(wt, branch)
         anchor = land.land_full.prepared(wt, branch, anchor_main)
     keep_full = (anchor and anchor["tier"] == "full" and anchor["invocations"]
@@ -207,7 +216,7 @@ def _prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, 
     if keep_full:
         # A delta cannot replace a FULL origin; retain its exact base and invocations.
         print(f"[land] retained FULL preparation {anchor['candidate'][:10]} over {anchor['main'][:10]}", flush=True)
-    else:
+    elif not delta:
         land.land_full.save(wt, branch, candidate, main_sha, tier, invocations)
     if explicit:
         args._full_witness = dict(candidate=candidate, main=main_sha, invocations=[list(i) for i in invocations], env=env)

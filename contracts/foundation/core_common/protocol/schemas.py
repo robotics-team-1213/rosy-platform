@@ -49,6 +49,7 @@ from .policy_admission import (  # noqa: F401
 )
 from .control_units import (  # noqa: F401
     ControlGoal, ControlNavigationCandidate, ControlWorkRequest, ControlIngressRequest,
+    ControlArmTransferCandidate, ControlArmWorkRequest, ControlArmIngressRequest,
     ControlApproveRequest, ControlDelegationState, ControlDelegationSnapshot, ControlUnitReply,
 )
 from .integrated_control import (  # noqa: F401
