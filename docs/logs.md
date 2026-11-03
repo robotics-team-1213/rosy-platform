@@ -13922,3 +13922,10 @@ osy-d395-s1d\`.
 - 증거: 호스트 계획기로 실측 받침에서 벨트 집기·적층 9곳 모두 닿고, 뱃머리 정렬 자리(x -0.12)는 arm_a가 닿지 않음(0.287 m). Isaac 실행 두 번은 케이스 등록 누락과 CAD 받침 검사에서 멈춰 결과 없음(검증 기록 Step 3).
 - gate 변화: 없음. CAD 케이스와 fixture는 그대로다.
 - CE: 해당 없음 — 케이스 등록 누락은 시험으로 막았고, 정렬 자리 도달 문제는 검증 기록과 다음 작업(팔마다 정렬 자리)에 남겼다.
+
+## 2026-11-03 · uncommitted · fix(landing): delta 차례 넘김은 깨끗한 아래 단계가 있을 때만 (D-889 추가 27 보완)
+- 변경: `land_selection.delta_yields(ticket, base)`를 두고, `land.py`가 표와 `land_full.prepared` 단계가 둘 다 있을 때만 DELTA_NOTE로 차례를 넘긴다.
+- 증거: 14:18·14:34 control-unit-arm-candidate가 tier None(LOAD-FLAKY) 사전 시험 위에서 두 번 넘기고 저장 없이 돌아옴(rosy-land-events). 원격 착지 회귀 27개 파일 + affected_tests 통과, 새 시험 1개.
+- gate 변화: 없음. 단계 없는 착지는 D-889 27 이전처럼 차례 안에서 delta 시험 폴더를 돌린다.
+- CE: 기존 교훈 갱신 — landings-gave-the-turn-back-and-reran-everything 10에 이 조건을 더함.
+
