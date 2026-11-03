@@ -116,6 +116,7 @@ def test_explicit_full_refuses_missing_duplicate_partial_or_ordinary_timing(call
 def test_landed_harness_delta_keeps_local_selection(caller, tmp_path):
     selection = load_selection()
     land, payload, _ = caller
+    land.land_guards = SimpleNamespace(GUARDS=("guard/test",))
     payload.update(mode="full", escalations=["tools/harness/x.py" + land.HARNESS_TRIGGER])
     assert selection.select(land, tmp_path, "base", "python", head="main", landed=True) == (
         [["guard/test"], ["ROSY_RUN_BROWSER_TESTS=1", "browser/test"]], None)
@@ -127,6 +128,7 @@ def test_landed_harness_delta_keeps_local_selection(caller, tmp_path):
 def test_landed_full_delta_runs_both_changes_own_suites_unless_safety(caller, tmp_path):
     selection = load_selection()
     land, _, calls = caller
+    land.land_guards = SimpleNamespace(GUARDS=("guard/test",))
     delta = dict(mode="full", escalations=["conftest.py: pytest conftest"], local_invocations=[["guard/test"]],
                  full_invocations=[["test"]])
     mine = dict(mode="affected", escalations=[], invocations=[["mine/test"], ["guard/test"]])
@@ -153,8 +155,9 @@ def test_a_safety_path_in_mains_landed_delta_keeps_only_its_mapped_suites(caller
     answers = [delta, mine]
     land.subprocess = SimpleNamespace(run=lambda command, **kw: calls.append(command) or SimpleNamespace(
         returncode=0, stdout=json.dumps(answers.pop(0)), stderr=""))
-    assert selection.select(land, tmp_path, "base", "python", head="main", landed=True) == (
-        [["guard/test"], ["safe/test"], ["ROSY_RUN_BROWSER_TESTS=1", "browser/test"]], None), "addendum 10: no overlap"
+    invocations, note = selection.select(land, tmp_path, "base", "python", head="main", landed=True)
+    assert invocations == [["guard/test"], ["safe/test"], ["ROSY_RUN_BROWSER_TESTS=1", "browser/test"]], "addendum 10"
+    assert note.startswith(selection.DELTA_NOTE)  # D-889 27: the safety suite folder runs before the turn
     answers[:] = [delta, dict(mine, mode="full", escalations=["safe/y.py" + selection.SAFETY_TRIGGER],
                               local_invocations=[["mine/test"]])]
     assert selection.select(land, tmp_path, "base", "python", head="main", landed=True)[1] is not None
@@ -200,6 +203,25 @@ def test_a_landed_delta_reaching_none_of_this_branchs_suites_does_not_rerun_them
         assert selection.select(land, tmp_path, "base", "python", head="main", landed=True)[0] == want + [browser]
     assert selection.overlaps([["a/test"]], [["ROSY_X=1", "a/test/test_b.py::c"]]) and not selection.overlaps(
         [["a/test"]], [["b/test"]])
+
+
+def test_a_landed_delta_reaching_whole_suite_folders_runs_them_before_the_turn(caller, tmp_path):
+    """D-889 27: 11-03 turns ran the delta's suite folders for 15-22 min in the lock and gave the turn back."""
+    selection = load_selection()
+    land, _, _ = caller
+    land.land_guards = SimpleNamespace(GUARDS=("guard/test",))
+    mine = dict(mode="full", escalations=["tools/x.py: harness"], local_invocations=[["fleet/test/test_y.py"]])
+    answers = []
+    land.subprocess = SimpleNamespace(run=lambda command, **kw: SimpleNamespace(
+        returncode=0, stdout=json.dumps(answers.pop(0)), stderr=""))
+    folders = dict(mode="full", escalations=["contracts/foundation/x.py: shared foundation"],
+                   local_invocations=[["guard/test"], ["fleet/test"]], full_invocations=[["test"]])
+    answers[:] = [folders, mine]
+    invocations, note = selection.select(land, tmp_path, "base", "python", head="main", landed=True)
+    assert ["fleet/test"] in invocations and note.startswith(selection.DELTA_NOTE)
+    files = dict(folders, local_invocations=[["guard/test"], ["fleet/test/test_x.py"]])
+    answers[:] = [files, mine]
+    assert selection.select(land, tmp_path, "base", "python", head="main", landed=True)[1] is None  # files stay in the turn
 
 
 def test_safety_trigger_is_the_selectors_text():
