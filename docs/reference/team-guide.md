@@ -275,7 +275,7 @@ git push
 
 소스 경로와 책임은 [폴더 책임표](platform-folder-responsibilities.md), 소유 영역의 정본은 `tools/harness/platform_parts.yaml`을 본다. 경로별 GitHub 리뷰 담당은 [CODEOWNERS](../../.github/CODEOWNERS), 역할별 사람 담당은 아래 표에서 확인한다.
 
-2026-10-27 기준 배정이다. 담당은 리드가 정한다. 각 root의 역할은 `platform_parts.yaml`의 `capability:`이고, 계정은 같은 파일의 `capabilities:`에 둔다. Epic 담당이 바뀌면 그 계정, `CODEOWNERS`, 이 표를 함께 고친다. `test/architecture/test_capability_owners.py`가 앞의 둘이 맞는지 확인한다. `platform`(공통 코드)은 기본 담당(`*`)이 리뷰한다.
+2026-10-27 기준 배정이다. 담당은 리드가 정한다. 각 root의 역할은 `platform_parts.yaml`의 `capability:`이고, 계정은 같은 파일의 `capabilities:`에 둔다. Epic 담당이 바뀌면 그 계정, `CODEOWNERS`, 이 표를 함께 고친다. `test/architecture/test_capability_owners.py`가 앞의 둘이 맞는지 확인한다. `platform`(공통 코드)은 기본 담당(`*`)이 리뷰한다. 안전 분리 예외(27)와 Fleet 원장 writer(20)는 2026-11-04 동결이며 상향은 리드 사전 승인 후 `test/architecture/test_known_lists_freeze.py`의 cap을 함께 고친다.
 
 | Epic | 역할 | 담당 |
 |---|---|---|

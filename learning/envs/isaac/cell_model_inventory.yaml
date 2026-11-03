@@ -65,6 +65,26 @@ models:
     sim: none
     measured: front가 Innomaker 1.3
     differs: arm_a 손목 서비스는 404
+# Measured cell layout: the numbers tools read (ship_stack_sites, real-cell site planning). The map may change a little;
+# re-measure and bump `revision`, keep the old one in git. Heights: work table top = 0, mm. Positions: fixture frame, m.
+layout:
+  revision: ship-cell-2026-11-03
+  heights_mm:
+    arm_b_base_plate: {value: 12, source: ruler, measured: '2026-11-03'}
+    ship_plate_top: {value: 8, source: ruler, measured: '2026-11-03'}
+    stud_top: {value: 11, source: ruler, measured: '2026-11-03'}
+    leveling_spot_table: {value: 0, source: assumed, note: 'table top; the 170 entered was the plate-centre-to-bow distance'}
+    belt_end_surface: {value: -55, source: ruler, measured: '2026-11-03', check: 'D435 depth put it about -56'}
+    container: {value: 30, source: ruler, measured: '2026-11-03'}
+  plate_centre_to_bow_mm: {value: [170, 220], source: user estimate, note: 'bow narrows to a point over this stretch; CAD 198-244'}
+  arm_bases_m:
+    arm_a: {xy: [0.116, -0.164], yaw_deg: 90.0, source: 'top frame, base plate centre (no FK)'}
+    arm_b: {xy: [0.104, 0.153], yaw_deg: -94.3, source: 'FK of live joint states, 3.1 px'}
+  cameras:
+    top: {eye: [-0.0411, 0.0374, 0.6652], focus: [0.0722, 0.0401, 0.1783], up: [0.974, 0.0071, 0.2266], f_px: 615, residual_px: 0.58}
+    side: {eye: [-0.5078, 0.0019, 0.1471], focus: [-0.0082, -0.0166, 0.1445], up: [0.0061, 0.0257, 0.9997], f_px: 950, residual_px: 2.8}
+  top_camera_parallax_centre_px: [322, 383]
+  evidence: docs/validation/omx-cell-survey-2026-11-03/result.md
 photos:
   - id: ceiling
     camera: 천장 Rosy Cam

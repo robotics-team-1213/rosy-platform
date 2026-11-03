@@ -6,7 +6,7 @@ from pathlib import Path
 import subprocess
 
 from guarded_release import descend
-from mapped_stack_fixture import CUBE_FIXTURE, DT, FIXTURE, PROFILE, ROOT, belt_transport_observed, cube_release_ready, cube_release_target, free_lift, grip_duration, home, judge, plan, stable_box, leveling_release_target, leveling_box_stable, leveling_center, leveling_via, leveling_sequence_observed, norm, PackingFootprintUnavailable, prefix_held, measured_motion
+from mapped_stack_fixture import CUBE_FIXTURE, DT, FIXTURE, PROFILE, ROOT, belt_transport_observed, cube_release_ready, cube_release_target, free_lift, grip_duration, home, judge, plan, stable_box, leveling_release_target, leveling_box_stable, leveling_center, leveling_via, seat_check, leveling_sequence_observed, norm, PackingFootprintUnavailable, prefix_held, measured_motion
 
 
 def stable_window(snapshot,step,ok,failure,check=None,boxes=None):
@@ -145,7 +145,7 @@ def build_map(world, stage, fixture=FIXTURE):
         world.scene.add(VisualCuboid('/World/CadStage2',name='cad_stage2',size=1.,
             position=np.array([.3595,.467,.009]),scale=np.array([.245,.760,.018]),
             color=np.array([.65,.64,.54])))
-    if fixture.get('leveling_protocol'):
+    if fixture.get('leveling_protocol') and not (fixture.get('demo_recording') or fixture.get('policy')):  # D-969: no aids in policy frames
         size = fixture['leveling_size_m']
         for spot, center in enumerate(fixture.get('leveling_centers_m') or [fixture['leveling_center_m']]):
             for axis in (0,1):
@@ -173,7 +173,7 @@ def build_map(world, stage, fixture=FIXTURE):
 
 
 def execute(args, world, stage, robots, joints, fingers, cargo, contacts, capture, grasp_probes,
-            planner, initial, tcp_position, *, fixture=None, recording=None, wrists=None):
+            planner, initial, tcp_position, *, fixture=None, recording=None, wrists=None, observe=None, policy=None):
     import numpy as np
     from pxr import UsdGeom
     cube = args.mapped_cube_stack
@@ -181,6 +181,13 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
     targets = [np.zeros(r.num_dof) for r in robots]
     tick = 0
     images, trials = [], []
+    demo_item = [None]  # D-969: the container the current frames belong to (one episode per container)
+
+    def demo():
+        """Both arms' measured state and commanded targets, arm 0 (arm_a) first: joint1..5 then the first finger, radians."""
+        return dict(item=demo_item[0], arm=None if demo_item[0] is None else plan(cube, fixture=fixture)[demo_item[0]]['arm'],
+                    state=[float(v) for i, r in enumerate(robots) for v in r.get_joint_positions()[[*joints[i], fingers[i][0]]]],
+                    action=[float(v) for i in range(len(robots)) for v in targets[i][[*joints[i], fingers[i][0]]]])
     from release_corrector import corrector_command, estimate, load_corrector, load_residual, observation, policy_command
     corrector = load_corrector(fixture) if cube else None
     residual = load_residual(fixture) if cube else None
@@ -231,7 +238,7 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
                 world.step(render=False, update_fabric=True)
         tick += 1
         if recording is not None:
-            recording.write(tick, robots[0].get_joint_positions()[joints[0]])
+            recording.write(tick, robots[0].get_joint_positions()[joints[0]], demo=demo())
         if tick <= 3:
             print('MAPPED_FIRST_STEP', tick, [r.get_joint_positions().tolist() for r in robots], flush=True)
 
@@ -335,7 +342,7 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
         photo('mapped-trial-1.png')
         if recording is not None:
             hold((-tick) % fixture['recording']['every_control_ticks'])
-            recording.write(tick, robots[0].get_joint_positions()[joints[0]], final=True)
+            recording.write(tick, robots[0].get_joint_positions()[joints[0]], final=True, demo=demo())
         trial.update(episodes=episodes)
         trial.update(judge(trial, cube, fixture=fixture))  # no full stack: the verifier recomputes this failure
         return dict(schema='rosy.omx-container-stack/1', fixture=fixture, seed=args.seed, task_success=False,
@@ -374,6 +381,7 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
                    for i, robot in enumerate(robots)):
                 raise ValueError('initial arm tracking exceeds 0.03 rad')
             for index, item in enumerate(plan(cube, fixture=fixture)):
+                demo_item[0] = index
                 arm, box = item['arm'], cargo[index]
                 UsdGeom.Imageable(box.prim).MakeVisible()
                 yaw_limit = fixture.get('infeed_yaw_jitter_rad', .01)
@@ -395,6 +403,21 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
                 layer = dict(item=index, arm=arm, source_center_z=float(p[2]),
                     infeed_start=start.tolist(), infeed_settled=p.tolist(), grasp_samples=[], lift_samples=[], settle_samples=[])
                 trial['layers'].append(layer)
+                if policy is not None:  # D-969 step 5: the learned policy drives both arms from here, the teacher does not
+                    from demo_units import to_radians, to_units
+                    policy.reset()
+                    spec = fixture['policy']
+                    for count in range(1, spec['max_actions']+1):
+                        state = to_units([float(v) for i, r in enumerate(robots) for v in r.get_joint_positions()[[*joints[i], fingers[i][0]]]])
+                        action = to_radians(policy.act(state, observe()))
+                        for i in range(len(robots)):
+                            targets[i][[*joints[i], fingers[i][0]]] = action[6*i:6*i+6]
+                        hold(spec['ticks_per_action'])
+                    layer['policy'] = dict(actions=count, ticks_per_action=spec['ticks_per_action'])
+                    layer['settle_samples'] = samples(132)
+                    photo('mapped-layer-'+str(index+1)+'.png')
+                    print('MAPPED_LAYER', trial_index, index+1, flush=True)
+                    continue
                 carry_height = fixture.get('carry_height_m', .145)
                 move(arm, [p[0], p[1], carry_height], yaw)
                 grip(arm, initial['gripper']['preopen'])
@@ -499,6 +522,27 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
                     layer['opened_sample'] = snapshot()
                 move(arm, [*item['target'][:2], carry_height])
                 move(arm, home(arm, cube, fixture=fixture))
+                if fixture.get('seat_replace'):  # D-956: seat check, one corrected re-place, then HOLD
+                    layer['seat'] = seat_check(snapshot()['boxes'][index], item['target'], fixture['seat_replace'])
+                    if not layer['seat']['seated']:
+                        p = snapshot()['boxes'][index]['position']
+                        move(arm, [p[0], p[1], carry_height])
+                        grip(arm, initial['gripper']['preopen'])
+                        move(arm, [p[0], p[1], p[2]+.002])
+                        grip(arm, initial['gripper']['close'])
+                        move(arm, [p[0], p[1], carry_height])
+                        # The miss is measured and corrected; what is left is an assumed residual along the original offset.
+                        offset = fixture.get('release_offset_m', (0., 0.))
+                        residual = fixture['seat_replace']['residual_m']
+                        fixed = [item['target'][k]+math.copysign(residual, offset[k]) if offset[k] else item['target'][k] for k in (0, 1)]
+                        move(arm, [*fixed, carry_height])
+                        move(arm, [*fixed, item['target'][2]+fixture.get('stack_release_clearance_m', fixture['release_clearance_m'])+.002])
+                        grip(arm, initial['gripper']['release'], release=True)
+                        move(arm, [*fixed, carry_height])
+                        move(arm, home(arm, cube, fixture=fixture))
+                        layer['seat_after_replace'] = seat_check(snapshot()['boxes'][index], item['target'], fixture['seat_replace'])
+                        if not layer['seat_after_replace']['seated']:
+                            raise ValueError('seat check failed after one re-place; HOLD (D-956)')
                 layer['settle_samples'] = (settle_stack(index,snapshot,step,fixture)
                     if fixture.get('packing_strategy') else samples(132))
                 settled = (measured_motion(layer['settle_samples'])[1:] if fixture.get('packing_strategy')
@@ -527,7 +571,7 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
             break
     stage.GetRootLayer().Export(str(args.report.parent/'mapped-scene.usda'))
     if recording is not None:
-        recording.write(tick, robots[0].get_joint_positions()[joints[0]], final=True)
+        recording.write(tick, robots[0].get_joint_positions()[joints[0]], final=True, demo=demo())
     return dict(schema='rosy.omx-container-stack/1' if recording is not None else 'rosy.omx-map-cube-stack/1' if cube else 'rosy.omx-map-long-stack/1', fixture=fixture, seed=args.seed, trials=trials,
         task_success=len(trials) == fixture['trials'] and all(t['task_success'] for t in trials),
         controller=FIXTURE['controller'], attachment_aid=False, images=images)

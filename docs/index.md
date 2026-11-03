@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
-- 2026-11-03 · uncommitted · fix(landing): 단계 없는 delta 사전 시험도 넘김 횟수에 셈 (D-970 1항 보완)
-- 2026-11-03 · uncommitted · fix(landing): 명시 FULL 증인이 재실행 뒤에도 남음 (D-970 보완)
-- 2026-11-03 · uncommitted · feat(landing): land_async orphans — 재부팅으로 죽은 착지를 찾아 되살림
-- 2026-11-03 · uncommitted · fix(landing): 다른 트리 통과 재사용도 대기열 단계는 남기고 게시 증거는 아님 (D-970 4항)
-- 2026-11-03 · uncommitted · fix(landing): 추측 사전 시험 기본 끔 (D-889 추가 28)
+- 2026-11-04 · uncommitted · MuJoCo 3층 적재 개선 후보 비교
+- 2026-11-04 · uncommitted · feat(sim): MuJoCo 3층 전체 적재 순서, 실측 셀 layout, 실물 site 계획
+- 2026-11-04 · uncommitted · docs(control-terms): D-974 착지 준비 — 안전 검토·크기·ADR Log 병합 정리
+- 2026-11-03 · uncommitted · D-969 두 팔 ACT 파이프라인: ADR, Isaac 시연 녹화, 데이터셋 내보내기
+- 2026-11-03 · uncommitted · docs(control-terms): 관제 용어 층 분리, 헤더는 관제 단위 이름 (D-974)

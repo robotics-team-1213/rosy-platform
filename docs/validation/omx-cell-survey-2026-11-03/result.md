@@ -117,6 +117,59 @@ parsing (case not registered with `stacking_task.py`, now covered by a test), th
 each arm (about 170 mm from the base, away from the belt, off the plate; plan 2026-10-31, "각 팔 앞 작업대의 임시 칸")
 means one leveling place per arm, which the leveling code (one shared `leveling_center_m`) does not support yet.
 
+## Step 4: the whole 3-layer stack in MuJoCo, and the measured layout (2026-11-03 night)
+
+`tools/sim/ship_stack_sequence.py` releases all nine containers in the Isaac order (centre row, then outer rows packed
+against the measured centre box, layer by layer) with the floating jaw of `ship_release_scene`, a random release error
+per box, and every earlier box left in place. 1,728 cases: 2 orders x 2 openings (33, 31.5 mm) x friction (0.5, 1.0) x
+release error sigma (0-0.6 mm per axis) x yaw sigma (0-0.5 deg) x 12 seeds. MuJoCo picks candidates only (D-947 1).
+
+| Release position error (sigma, per axis) | Whole stack seated |
+|---|---|
+| 0, 0.1 mm | 288/288 |
+| 0.2 mm | 284/288 |
+| 0.3 mm | 244/288 |
+| 0.4 mm | 214/288 |
+| 0.6 mm | 50/288 |
+
+First failures sit mostly in layer 2 (no studs guide it): xy drift 141, a release disturbing an earlier box 75; layer 1
+`not-seated` 72. Friction 1.0 fails more than 0.5; the row order (centre first or not) makes no difference. So the
+real arm needs release error near 0.2 mm, or a guide for layers 2-3 (D-956 relief foot, interlocking container
+tops), or a seat check with regrasp. Isaac checks the 0.3 mm boundary next.
+
+The ruler measurements of 2026-11-03 (work table top = 0: arm_b base plate 12 mm, plate top 8, stud top 11, belt end
+-55, container 30; leveling spot table 0 assumed) are stored as `layout` in `learning/envs/isaac/cell_model_inventory.yaml`,
+and `tools/sim/ship_stack_sites.py` reads them: arm_b plate top -0.004 m, layers -0.004 / 0.026 / 0.056 m, leveling spot
+-0.012 m in its frame. The belt end comes to -0.067 m against -0.072 in the live arm_b config (D435 depth): 5 mm apart,
+to settle by a touch.
+
+## Step 5: what makes the 3-layer stack tolerate release error (MuJoCo, 2026-11-04)
+
+Same whole-stack sequence (`ship_stack_sequence.py`), order (1, 0, 2), opening 31.5 mm, yaw sigma 0.25 deg, 24 cases per cell
+(friction 0.5 and 1.0, 12 seeds). Stages `fix` (container shape x release height) and `retry` (D-956 seat check and re-place).
+
+| Set-up | 0.3 mm | 0.4 mm | 0.6 mm | 0.8 mm |
+|---|---|---|---|---|
+| plain container, release 5 mm (today) | 20 | 18 | 5 | 1 |
+| plain, release 2 mm | 24 | 23 | 15 | 2 |
+| relief foot r290, release 5 mm | 24 | 24 | 18 | 4 |
+| rail (tongue/groove), release 2 mm | 24 | 23 | 17 | 4 |
+| chamfers c10 / a10 | no better than plain | | | |
+| **plain, release 2 mm, seat check + 1 re-place** | | 24 | 24 | 24 |
+| **r290, release 2 mm, seat check + 1 re-place** | | 24 | 24 | 24 |
+
+- The seat check with one corrected re-place recovers every stack up to 0.8 mm. A second re-place was never used.
+  Re-places used: 60 of 648 releases for plain, 43 for r290.
+- The rail's groove sits badly on the layer-1 studs (first failures `not-seated@L1`), so it adds little.
+- Limits:
+  - The regrasp is idealised (the box returns to the jaw where it lies).
+  - The re-place error is an assumed 0.1 mm.
+  - The real gain therefore depends on measuring the miss: height within 0.3 mm, tilt within 0.5 deg, xy within about 0.1 mm.
+  - MuJoCo picks candidates only (D-947 1).
+- Next:
+  - Isaac checks "release 2 mm + seat check + 1 re-place" at 0.4 to 0.6 mm.
+  - On the real cell, the seat measurement method decides it: wrist camera, touch, or both.
+
 ## Next
 
 1. Run the D-947 MuJoCo sweep with the surveyed bases as a second candidate next to the CAD ones; adopt them in
