@@ -95,6 +95,7 @@ def config(tmp_path):
 @pytest.fixture
 def main_session(tmp_path, monkeypatch):
     from types import SimpleNamespace
+    monkeypatch.syspath_prepend(str(DIRECTORY))
     import omx_incident
 
     monkeypatch.chdir(tmp_path)
