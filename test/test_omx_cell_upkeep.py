@@ -150,7 +150,7 @@ def test_monitors_report_hits_from_logs_newer_than_the_last_report(tmp_path):
     assert {c["check"]: c for c in out["checks"]}["monitors"]["status"] == "warn" and seen[0]
     io.replays = lambda h, t, p: (seen.append(h) or {}, {})
     cu.run(arms, io=io, out_dir=tmp_path / "upkeep", incidents=tmp_path / "i", stamp="T")
-    assert seen[1] == []  # the log is older than the report just written
+    assert len(seen) == 1  # the log is older than the report just written: no replay
 
 
 def test_tcp_evidence_comes_from_the_cell_config():
