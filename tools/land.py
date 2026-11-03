@@ -423,7 +423,7 @@ def rounds(args, wt: Path, branch: str, main_co: Path, python: str, qdir, ticket
                     reusable = reusable and (prepared := land_full.prepared(wt, branch, full_main)) is not None
                     summary.append(f"round {round_no}: FULL tier passed over main {full_main[:10]}; main delta"
                                    f" {full_main[:10]}..{main_sha[:10]} runs its {'affected' if not note else 'delta' if note.startswith(land_selection.DELTA_NOTE) else 'FULL'} tier")
-                    if (held := land_speculate.held(sys.modules[__name__], wt, branch, full_main, candidate)) is not None:
+                    if args.tests != "full" and (held := land_speculate.held(sys.modules[__name__], wt, branch, full_main, candidate)) is not None:
                         invocations, note = held, None  # it passed before the turn on this tree (up to the records)
                         prepared = land_speculate.with_spec(sys.modules[__name__], wt, branch, prepared)
                         summary.append(f"round {round_no}: speculated tree held; main delta passed before the turn")
@@ -487,6 +487,11 @@ def rounds(args, wt: Path, branch: str, main_co: Path, python: str, qdir, ticket
             land_checks.check_turn(sys.modules[__name__], wt, args, round_no)
             if ticket is not None and (turn_epoch is None or not land_queue.owns_turn(ticket, started=turn_epoch)):
                 raise Stop("landing turn ownership changed during checks; refusing to fast-forward main")
+            if reusable:
+                try:
+                    land_record.plan(invocations, prepared, available=(wt / land_record.TARGET).is_file())
+                except (ValueError, TypeError, KeyError) as exc:
+                    raise Stop(f"invalid land-record plan before fast-forward: {exc}") from exc
             on_main(main_co)
             ff = git(main_co, "merge", "--ff-only", candidate, check=False)
             if ff.returncode == 0:
