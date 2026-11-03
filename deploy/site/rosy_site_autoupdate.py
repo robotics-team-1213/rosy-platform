@@ -25,7 +25,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if __package__:
     from .verify_candidate import CandidateVerificationError, verify_candidate
     from .site_update_io import (
-        ConfigError, EXIT_CONFIG, EXIT_FAILED, EXIT_LOCKED, EXIT_OK, Http, Paths,
+        COMPANIONS, ConfigError, EXIT_CONFIG, EXIT_FAILED, EXIT_LOCKED, EXIT_OK, Http, Paths,
         PROJECT, Refused, Rejected, Runner, SERVICES, SIGNATURE, STACK_UNIT, Transient,
         _COMMIT, _LIST_LIMIT, _MAX_PAGES, _PART, _SMALL_LIMIT, _TAG, _now,
         check_overrides, containers_reason, forget_failed, functional_inventory, functional_reason, load_config, load_update_state, log, read_env,
@@ -37,7 +37,7 @@ else:  # pragma: no cover - installed host CLI
         sys.path.insert(0, str(SCRIPT_DIR))
     from verify_candidate import CandidateVerificationError, verify_candidate
     from site_update_io import (
-        ConfigError, EXIT_CONFIG, EXIT_FAILED, EXIT_LOCKED, EXIT_OK, Http, Paths,
+        COMPANIONS, ConfigError, EXIT_CONFIG, EXIT_FAILED, EXIT_LOCKED, EXIT_OK, Http, Paths,
         PROJECT, Refused, Rejected, Runner, SERVICES, SIGNATURE, STACK_UNIT, Transient,
         _COMMIT, _LIST_LIMIT, _MAX_PAGES, _PART, _SMALL_LIMIT, _TAG, _now,
         check_overrides, containers_reason, forget_failed, functional_inventory, functional_reason, load_config, load_update_state, log, read_env,
