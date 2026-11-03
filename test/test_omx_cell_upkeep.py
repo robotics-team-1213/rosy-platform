@@ -141,16 +141,21 @@ def trace(path, pairs):
     path.write_text("\n".join(json.dumps({"sent": [0] * 5 + [s], "present": [0] * 5 + [p]}) for s, p in pairs))
 
 
-def test_jaws_that_stop_short_of_a_wide_open_command_need_a_person(tmp_path):
+def test_jaws_that_stop_short_of_the_last_command_need_a_person(tmp_path):
+    """The site's open_max is 62 while a library asked 58.6: the session's own command is the yardstick."""
     arms = arms_setup(tmp_path)
+    (tmp_path / "cell.json").write_text(json.dumps({**json.loads((tmp_path / "cell.json").read_text()),
+                                                    "params_path": str(tmp_path / "params.json")}))
+    (tmp_path / "params.json").write_text(json.dumps({"schema": "rosy.omx-cell-params.v1", "params": {"gripper.open_max": {
+        "value": 62.0, "unit": "gripper", "source": "measured", "evidence": "the site's value"}}}))
     trace(tmp_path / "trace-arm_a-1.jsonl", [(49.0, 49.0), (58.6, 52.0), (58.6, 53.9)])  # arm_b 2026-11-04 04:55
     rep, checks, _ = report(tmp_path, arms)
-    assert checks["jaw open"]["status"] == "warn" and "53.90 of 56.00" in checks["jaw open"]["detail"]
+    assert checks["jaw open"]["status"] == "warn" and "53.90 of 58.60" in checks["jaw open"]["detail"]
     assert rep["verdict"] == "needs_person"
     trace(tmp_path / "trace-arm_a-1.jsonl", [(49.0, 49.0), (61.98, 61.17)])  # the same arm at 03:00
     assert report(tmp_path, arms)[1]["jaw open"]["status"] == "ok"
-    trace(tmp_path / "trace-arm_a-1.jsonl", [(49.0, 49.0), (52.0, 50.0)])  # never asked wide: no verdict
-    assert "nothing to compare" in report(tmp_path, arms)[1]["jaw open"]["detail"]
+    trace(tmp_path / "trace-arm_a-1.jsonl", [(49.74, 49.74)])  # a closing-only session reaches its command
+    assert report(tmp_path, arms)[1]["jaw open"]["status"] == "ok"
 
 
 def test_a_missing_map_is_a_motion_step_and_a_hold_needs_a_person(tmp_path):
