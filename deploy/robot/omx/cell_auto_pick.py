@@ -204,6 +204,12 @@ def grasp_yaw(config: dict, site: str, o: dict, entry: dict, offset) -> float:
     return round(base + (yaw - base + 90) % 180 - 90, 1)
 
 
+def across(entry: dict) -> float:
+    """The object's size between the jaws: its width when they close across the long axis (jaw_axis_deg_from_long 90),
+    its length when they close along it (0): a 90 mm 3-cell held by its ends needs a 90 mm gap, not 30 (2026-11-04)."""
+    return entry["width_mm"] if entry["grasp"].get("jaw_axis_deg_from_long", 90) % 180 == 90 else entry["length_mm"]
+
+
 def jaw_open_for(width_mm: float, params=None, margin_mm: float | None = None) -> float:
     """The jaw value whose finger gap is the object width plus a margin each side. Measured 2026-10-29 from the wrist
     view: about 10.4 mm of gap per unit, 30 mm held at 52.3. Opening to 62 put the fingers ~40 mm out, onto the 2-cells
@@ -241,7 +247,7 @@ def plan_pick(config: dict, site: str, dest_site: str, place_xy, o: dict, entry:
                      "z": round(surface_z(config, dest_site) + height + s.get("place_dz", 0.0), 4),
                      "yaw_deg": s["yaw_deg"] if place_yaw is None else place_yaw}
             try:
-                jaws = jaw_open_for(entry["width_mm"], config.get("params"), o.get("jaw_margin_mm"))
+                jaws = jaw_open_for(across(entry), config.get("params"), o.get("jaw_margin_mm"))
                 # one file per object: two boxes on the floor planned into one name, and the arm went to the other one (2026-10-29)
                 lib = cp.write_library(dict(config, plan=dict(config["plan"], approach_m=approach, grip_open=jaws)), pick,
                                        place, work / f"auto-{site}-{offset}-{round(1000 * o['raw_m'][0])}_{round(1000 * o['raw_m'][1])}.json")

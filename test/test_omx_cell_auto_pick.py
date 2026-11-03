@@ -795,3 +795,12 @@ def test_after_a_contact_the_gate_still_lets_the_arm_retreat_and_park_but_nothin
         assert cell.commands[-1] == verb  # sent in the Gate's checked form (the fake asserts its session)
     cell.session = "replacement-session"  # another owner: recovery is not this gate's to send
     assert gate.act("park") == {"ok": False, "error": "held: session_changed"}
+
+
+def test_jaws_closing_along_a_box_open_for_its_length_not_its_width():
+    """2026-11-04: three 3-cells side by side leave no room beside them, so the jaws take one by its free ends; sized
+    by the 30 mm width they would come down on the 90 mm box."""
+    across_short = {"width_mm": 30, "length_mm": 90, "grasp": {"jaw_axis_deg_from_long": 90}}
+    by_the_ends = {"width_mm": 30, "length_mm": 90, "grasp": {"jaw_axis_deg_from_long": 0}}
+    assert auto.across(across_short) == 30 and auto.across(by_the_ends) == 90
+    assert auto.jaw_open_for(auto.across(by_the_ends)) > auto.jaw_open_for(auto.across(across_short)) + 5
