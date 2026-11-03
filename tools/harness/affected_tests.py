@@ -249,6 +249,8 @@ def select(repo: Repo, changed: list[str], moved: list[str] = (),
             trigger = None
         elif safety_review.is_safety(path, repo.safety_roots, repo.safety_modules):
             trigger = SAFETY_TRIGGER
+        elif path in ("tools/land_goal.py", "tools/land_stats.py"):
+            trigger = None  # Read-only reports use the existing reader mapping, rather than the landing gate glob.
         else:
             trigger = next((why for pattern, why in FULL_TRIGGERS if _match(path, pattern)), None)
         if trigger and trigger != SAFETY_TRIGGER:

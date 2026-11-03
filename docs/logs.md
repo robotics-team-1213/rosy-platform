@@ -13877,3 +13877,48 @@ osy-d395-s1d\`.
 - 다음 확인: 초기 파일 inventory 또는 당시 폴더와 대응하는 백업이 발견될 때 파일별 해시로 대조한다. 그 전에는 미추적 자료의 완전 보존을 주장하지 않고, 기존 backup·복구 refs와 원본 로그를 유지한다. 추가 객체 정리나 reflog 만료는 하지 않았다.
 - gate 변화: 없음. 제품 코드·시험 선택·캐시·자원·착지 조건을 바꾸지 않는 운영 기록이다. 최종 후보의 공식 문서 가드와 착지는 별도 확인한다.
 - CE: 미해결. 일부 Git 이력의 추가 보존은 검증했지만 초기 파일 보존을 해결한 것처럼 새 해결 교훈을 쓰지 않았다. 증상·확인 사실·남은 확인을 이 소유 저장소의 작업 기록으로 남긴다.
+
+## 2026-11-03 · uncommitted · fix(remote): 배치의 각 시험 입장에서 재부팅 임박 차단
+- 변경: 최초 호스트 선택에만 있던 D-889 13의 재부팅 임박 판정을 각 원격 ADMIT에도 적용한다. 차단된 작업은 자원 해제 뒤 같은 Work index로 반환하고 다른 호스트 또는 기존 bounded wait로 이어간다. quarantine 재시험의 원본 실패·로그와 남은 재시험을 보존한다. 기존 단일 호스트 호출 계약도 유지한다.
+- 증거: 원격 재현 15 FAIL/9 PASS, 최종 코드 `95abfc2cdb` 관련 9 suite 228 PASS·skip/NEW/known/flaky 0, 독립 검토 P1/P2 없음, size 3 commits PASS. 관측된 종료143은 시험 PC의 예약 재부팅 경계와 겹쳤다. 기존 착지의 공식 resume에서 PASS31 invocation 재사용을 확인했다.
+- gate 변화: 없음. 기존 재부팅 시각·780초 타이머/서비스 판정·자원 하한·deadline/stop을 유지하며 추가 SSH·새 flag·의존성은 없다. 이미 실행 중인 긴 작업은 기존143/resume 경계다.
+- CE: 기존 교훈 갱신 — `docs/solutions/workflow-issues/landings-gave-the-turn-back-and-reran-everything-2026-11-01.md`의 재부팅 항목에 배치 중간 입장 공백과 검증·복구 범위를 남겼다. 새 실물 재부팅 시험이나 운영 반영 완료를 주장하지 않는다.
+
+## 2026-11-03 · uncommitted · fix(landing): preserve first queue across a proven rules-refresh stop
+- Change: retain the existing exact-PID stop epoch and additionally join a stopped frozen snapshot only when its same-ticket queue records prove a PID handoff, with no competing ticket or completed cycle. A queue-less refresh child STOP after the latest queue can then preserve the original request clock across a new snapshot. Topic-only joins, raw-event changes and guessed completion rows are excluded.
+- Evidence: actual old queue/owner handoff/queue-less child STOP and the new snapshot queue exposed 208.7301 minutes of potential undercount. Test-only d49d9ab33f remote RED: 2 intended failures, 49 passes. Code 98738da589 remote goal/events result: 57 passes, zero skip/NEW/known/flaky; normal Rosy admission wait0/run11 seconds. Logs: OS Temp rosy-landing-clock-red and rosy-landing-clock-green-valid. An earlier request named a nonexistent test_land_stats.py and exited4 before collecting tests; it is excluded from GREEN evidence. No pytest ran locally.
+- Review and limits: independent pinned-code review found no P1/P2 defect. Existing same-PID, competing-ticket, requeue, previous-completion, unfrozen-branch and rollup membership boundaries remain covered. This repairs measurement; it does not demonstrate faster landing or attainment of p90 60 minutes/stall 30 minutes. Canonical main-candidate checks and landing remain pending.
+- gate 변화: 없음. 계측의 최초 대기시간 연결만 보수적으로 복원하며 시험·자원·착지 기준은 유지한다. 공식 후보 검증과 main 착지는 아직 미완료다.
+- CE: updated the existing landings-gave-the-turn-back-and-reran-everything lesson with the actual handoff evidence, conservative join conditions and recovery checks. No new lesson, dependency, flag, admission override or external service was added.
+- Verification scope: this final record changes documentation only. The independently reviewed and remotely tested tools/test tree stays at 98738da589. Native generation/lint and the official landing guard cover the documentation; no duplicate standalone guard pytest is requested. Final-candidate and main verification are still required.
+
+## 2026-11-03 · uncommitted · fix(landing): 계측 전용 변경의 시험 범위 선택
+- 변경: safety 판정 뒤 `tools/land_goal.py`·`tools/land_stats.py` 정확 두 경로만 runtime land global glob에서 분리한다. 기존 reader/local-importer 탐색으로 goal/events와 관련 회귀를 선택하며 추가 매핑·옵션·의존성은 없다. 다른 gate·선택기·remote·미등록·혼합 변경과 빈 coverage의 FULL은 유지한다.
+- 증거: test-only21f186 원격 RED는 의도한 5실패·6negative통과였고, 자기 경로 문자열을 reader로 잡던 fixture1개는32ec1677에서 고쳐 해당 negative1통과를 별도로 확인했다. 최종 코드a193f619 원격 관련4suite281통과와 pre_push_hook 단독29통과, skip/NEW/known/flaky0이다. 로그는 OS Temp rosy-stats-selection-{red,red-fixture,green,prepush}-20261103에 있다. 독립 고정 코드 검토 P1/P2 없음이다.
+- 범위 측정: 같은6b9..987 입력과987 파일 내용·자동without_sim/browser[] 조건에서 FULL27argv/추적 시험 파일2383개→AFFECTED1argv/11개(9guards+goal/events)다. workspace-records/2026-11-02/stats-selection-scope-evidence.json에 원본 argv·파일 union·SHA·조건을 원본과 SHA256 동일하게 보존했다. testcase 수나 실제 wall 절감·SLO 달성으로 해석하지 않는다.
+- gate 변화: 순수 계측 변경의 관련 시험 범위만 바로잡는다. 이 선택기 수정 자체는 정식 FULL이 필요하고, safety·runtime/selector/remote 혼합의 FULL과 기존 문서 guard를 유지한다. 공식 후보 검증·main 착지·변경 후 p90 검증은 아직 남아 있다.
+- CE: 기존 교훈 갱신 — landings-gave-the-turn-back-and-reran-everything의 과다 FULL 원인과 적용 조건을 보완했다. 보고 결과가 승인·실행 경로에 들어가면 분류를 재검토한다. 최종 문서 기록은 검증 코드a193 대비 tools/test 변경이 없으며 같은 guard를 별도 수동 pytest로 반복하지 않고 공식 착지에서 확인한다.
+
+## 2026-11-03 · uncommitted · fix(isaac): 야간 재부팅 전 90분 안에는 Isaac 실행을 시작하지 않는다
+- 변경: `remote_isaac._run_once`가 준비 확인마다 `rosy-nightly-reboot.timer`까지 남은 초를 읽고, 90분(`RUN_BUDGET_S`) 안이면 준비 안 됨으로 다룬다. 셀 실측 기록의 벨트 높이 정정(영상 폭 추정이 틀렸고 D435 깊이로 벨트 면이 판 윗면 약 64 mm 아래, 시뮬레이션은 36 mm), 같은 카메라 최종 실행 9/9 추가, 대장 벨트 항목과 손목 카메라 사람 작업.
+- 증거: run 82e147c7이 05:01 야간 재부팅(D-889)으로 7층에서 멈춤(`last -x`·타이머 확인). 새 시험 `test_run_never_starts_inside_the_nightly_reboot_budget`.
+- gate 변화: 없음. fixture 벨트 높이는 바꾸지 않았다(재실행이 필요한 변경).
+- CE: 해당 없음 — 원인과 고침이 코드 주석·시험·기록에 있다. 벨트 높이를 영상 폭으로 짐작해 틀린 일은 검증 기록에 정정으로 남겼다.
+
+## 2026-11-03 · uncommitted · fix(landing): main delta의 시험 폴더를 차례 밖 "delta" 단계로 (D-889 추가 27)
+- 변경: `land_selection.select`의 착지된 delta 경로가 가드 밖 시험 폴더 호출에 닿으면 `DELTA_NOTE`를 돌려주고, `land.py`가 `land_prepare.again`으로 차례 밖에서 돌린다. `land_prepare`는 이전 단계 위에 `"delta"`로 저장하고 `land_full.prepared`는 아래 단계를 보고한다.
+- 증거: 원격 착지 회귀(selection·prepare·land·turn_deadline·batch·speculate·mainred_flow) 통과. 새 시험 2개(폴더/파일 구분, delta 기록이 FULL이 아님).
+- gate 변화: FULL·safety 판정과 land record의 FULL 조건은 그대로다. delta 단계는 FULL 증거가 되지 않는다.
+- CE: 기존 교훈 갱신 — landings-gave-the-turn-back-and-reran-everything 9에 차례 안 delta 재실행과 이 결정을 연결.
+
+## 2026-11-03 · uncommitted · test(remote): imported fake-host helper의 HEADROOM 격리
+- 변경: 공용 `_fake_hosts`가 호출자의 monkeypatch를 통해 시험 전용 HEADROOM dict를 사용하게 한다. 다른 모듈이 helper를 import했을 때 빠지던 module-local autouse fixture의 격리를 helper 자체에서 보장하며, production 코드와 worker/profile 기대값은 유지한다.
+- 증거: main4088d1c1d2에서 기존 reboot producer→profile consumer 두 node를 -n0으로 실행해1FAIL/1PASS·NEW1/known·flaky0을 재현했다. 수정parent69a12까지 관련remote 코드·시험3파일 차이0이다. code63a211f808에서 같은 producer 모듈을 먼저 두고 helper의 모든 호출 모듈과 consumer를 포함한5whole-file -n0은184PASS/skip·NEW·known·flaky0이었다. 정상 입장 wait0/run37초, pytest27.89초다. 로그는 OS Temp rosy-headroom-order-{red,green}-20261103/run-1.txt에 있다.
+- gate 변화: 없음. 실패 기준·검증 기대값·자원 정책·테스트 선택·quarantine baseline을 바꾸지 않는다. 독립 고정코드 검토 P1/P2 없음이며, source 검증과 정식 후보 착지는 구분한다.
+- CE: 기존 교훈 갱신 — shared-pytest-process-masks-path-dependent-import의 단독/FULL 컨텍스트 차이에 imported helper의 fixture 범위와 실제 순서 재현을 추가했다. 단독 통과를 곧바로 부하성 flaky로 단정하지 않는다.
+
+## 2026-11-03 · uncommitted · feat(isaac): 실측 팔 받침·벨트 후보 케이스와 이름 있는 계획 장면
+- 변경: 케이스 `nominal-palletizing-v21-ship-surveyed-bases`·`-surveyed`(벨트 28 mm 낮춤, `belt_drop_m`), `isaac_stack_plan.SCENES`(장면마다 받침/yaw 쌍과 낮은 벨트 통로 높이), `stacking_task.py` 케이스 등록과 등록 누락을 잡는 시험, 실측 받침 도달 시험.
+- 증거: 호스트 계획기로 실측 받침에서 벨트 집기·적층 9곳 모두 닿고, 뱃머리 정렬 자리(x -0.12)는 arm_a가 닿지 않음(0.287 m). Isaac 실행 두 번은 케이스 등록 누락과 CAD 받침 검사에서 멈춰 결과 없음(검증 기록 Step 3).
+- gate 변화: 없음. CAD 케이스와 fixture는 그대로다.
+- CE: 해당 없음 — 케이스 등록 누락은 시험으로 막았고, 정렬 자리 도달 문제는 검증 기록과 다음 작업(팔마다 정렬 자리)에 남겼다.

@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
-- 2026-11-03 · uncommitted · docs(landing): 초기 GC 등록 목록과 추가 복구의 확인 범위
-- 2026-11-03 · uncommitted · fix(remote): 이력 없는 큰 시험 묶음을 기존 비용 추정으로 분할
-- 2026-11-03 · uncommitted · fix(harness): bootstrap each timing test before canonical imports
-- 2026-11-03 · uncommitted · fix(harness): preserve admission and G1 tests across main merge
-- 2026-11-03 · uncommitted · fix(harness): retain fresh timing proof through publication
+- 2026-11-03 · uncommitted · feat(isaac): 실측 팔 받침·벨트 후보 케이스와 이름 있는 계획 장면
+- 2026-11-03 · uncommitted · test(remote): imported fake-host helper의 HEADROOM 격리
+- 2026-11-03 · uncommitted · fix(landing): main delta의 시험 폴더를 차례 밖 "delta" 단계로 (D-889 추가 27)
+- 2026-11-03 · uncommitted · fix(isaac): 야간 재부팅 전 90분 안에는 Isaac 실행을 시작하지 않는다
+- 2026-11-03 · uncommitted · fix(landing): 계측 전용 변경의 시험 범위 선택

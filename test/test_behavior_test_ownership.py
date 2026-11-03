@@ -111,6 +111,9 @@ KNOWN_EXTERNAL_BEHAVIOR_TESTS = frozenset({
     "middleware/core/gateway/test/test_sprint2.py",
     "middleware/core/gateway/test/test_swarm_integration.py",
     "middleware/core/gateway/test/test_teleop_watchdog_event.py",
+    # Heat mode bridge seam (core/bridge/thermal_policy.py, host probe, state snapshot), the same kind as
+    # test_bridge_battery_policy; the pure ok/warm/hot decisions live in services/test/test_thermal.py.
+    "middleware/core/gateway/test/test_thermal_mode.py",
     "middleware/core/gateway/test/test_traffic_api.py",
     "middleware/core/gateway/test/test_traffic_policy.py",
     "middleware/core/gateway/test/test_traffic_policy_bridge_contract.py",

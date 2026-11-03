@@ -463,3 +463,14 @@ def test_site_map_view_turn_is_a_quarter_turn_defaulting_to_zero():
     for bad in (45, -90, "90"):
         with pytest.raises(ValueError):
             SiteMap.model_validate({**_line(), "view_turn_deg": bad})
+
+
+def test_the_site_console_store_keeps_drawing_assets_beside_its_database(tmp_path):
+    """A site map with a drawing could not be saved: the CLI built the store without assets (2026-11-03)."""
+    from fleet import cli
+    store, _routing = cli._build_site_map(cli.parse_args(["console"]), tmp_path / "fleet.sqlite3")
+    assert store.drawing_assets is not None
+    assert store.drawing_assets.root == (tmp_path / "fleet.sqlite3.site-map-assets").absolute()
+    store.close()
+    memory, _ = cli._build_site_map(cli.parse_args(["console"]), None)
+    assert memory.drawing_assets is None   # no database, nothing to keep drawings beside

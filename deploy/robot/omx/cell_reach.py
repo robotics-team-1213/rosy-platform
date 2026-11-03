@@ -60,16 +60,17 @@ def hook(config: dict, cell, target: dict, write_library):
 
 
 def chain(*hooks):
-    """Run the hover hooks in order (reach, then wrist); the first refusal stops; the last answer otherwise."""
+    """Run the hover hooks in order (reach, then wrist); the first refusal stops; the last answer otherwise, with every
+    answer under "hooks": the attempt kept only the wrist's pass and hid six unseen looks and a raised one (2026-11-03)."""
     live = [h for h in hooks if h is not None]
     if not live:
         return None
 
     def run():
-        out = None
+        outs = []
         for h in live:
-            out = h()
-            if out["verdict"] == "refuse":
-                return out
-        return out
+            outs.append(h())
+            if outs[-1]["verdict"] == "refuse":
+                break
+        return {**outs[-1], "hooks": outs}
     return run

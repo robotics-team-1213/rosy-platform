@@ -277,7 +277,12 @@ class StateManager:
 
     def set_estop(self, active: bool, source: str = "") -> None:
         with self._lock:
-            self._safety = SafetySummary(estop=active, source=source if active else "")
+            self._safety = self._safety.model_copy(update={"estop": active, "source": source if active else ""})
+            self._mark("safety")
+
+    def set_thermal(self, level: str) -> None:
+        with self._lock:
+            self._safety = self._safety.model_copy(update={"thermal": level})
             self._mark("safety")
 
     def set_swarm(self, status: SwarmStatus) -> None:

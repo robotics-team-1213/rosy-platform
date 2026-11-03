@@ -482,6 +482,8 @@ def test_timeout_is_a_failed_step(monkeypatch):
 
 def _fake_hosts(monkeypatch, tmp_path, hosts, job, venv_fails=()):
     """run() over fake hosts: setup succeeds (venv fails on venv_fails), job(host, inv) is one pytest."""
+    # Imported callers do not receive this module's autouse fixture.
+    monkeypatch.setattr(rp, "HEADROOM", {})
     seen = []
     monkeypatch.setattr(wq, "MAX_MAIN", 1)  # one main worker per host; several: test_host_admission.py
     monkeypatch.delenv("ROSY_TEST_LOCAL", raising=False)

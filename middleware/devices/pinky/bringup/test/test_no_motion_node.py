@@ -143,3 +143,14 @@ def test_stall_without_probe_is_not_detected_but_idle_current_is(world, monkeypa
     world.read2_value = 200  # 538 mA at zero velocity
     with pytest.raises(RuntimeError, match=r"ID 1: 538 mA at zero velocity"):
         _node(world, monkeypatch)
+
+
+def test_motor_health_is_published_every_two_seconds_as_json(world, monkeypatch):
+    import json
+    _node(world, monkeypatch, drive_enabled=False)
+    [callback] = [cb for period, cb in world.timers if period == 2.0]
+    callback()
+    [message] = world.publishers["motor/health"].messages
+    motors = json.loads(message.data)["motors"]
+    assert [m["id"] for m in motors] == [1, 2]
+    assert set(motors[0]) == {"id", "temperature_c", "temperature_limit_c", "input_voltage_v", "hardware_error"}

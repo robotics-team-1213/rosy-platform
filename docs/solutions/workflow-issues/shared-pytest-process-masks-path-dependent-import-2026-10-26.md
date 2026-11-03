@@ -1,12 +1,12 @@
 ---
 module: learning/training/omx + deploy/robot/pinky_pro/image
 date: 2026-10-26
-last_updated: 2026-10-28
+last_updated: 2026-11-03
 problem_type: workflow_issue
 component: testing_framework
 severity: high
-tags: ["land", "full-tier", "pytest", "sys.path", "sys.modules", "test-isolation", "main-red", "standalone-cli"]
-applies_when: "시험이 원본 모듈을 importlib.util.spec_from_file_location으로 읽거나 conftest가 제품 경로를 보충할 때, 원본이 형제 모듈을 맨 이름으로 import할 때, 또는 FULL이 초록인데 파일 단독이나 실제 CLI가 실패할 때"
+tags: ["land", "full-tier", "pytest", "sys.path", "sys.modules", "test-isolation", "main-red", "standalone-cli", "autouse", "HEADROOM"]
+applies_when: "시험이 원본 모듈을 importlib.util.spec_from_file_location으로 읽거나 conftest가 제품 경로를 보충할 때, FULL과 파일 단독 결과가 다를 때, 또는 다른 시험 모듈에서 가짜 호스트 helper를 import할 때"
 ---
 
 # 폴더 단위 pytest 초록은 파일 하나의 초록이 아니다
@@ -67,9 +67,35 @@ attempt1/job122632180302는 이미지 생성 전 lock 해석에서 실패했다.
 플랫폼을 속인 실행을 실제 native 명령의 증거로 쓰지 않는다. 독립 helper import 검증과
 향후 실제 native resolve/build 검증을 구분한다.
 
+## 단독 통과·FULL 실패: imported helper의 fixture 범위 (2026-11-03)
+
+`test_run_dispatches_selected_profile_to_every_host`가 여러 FULL에서 실패했지만
+단독으로는 통과했다. 실제 차이는 profile 값이 아니라 호출 수였다. a/b에 각 한 번을
+기대했는데 각 두 번 호출됐으며, 네 호출의 profile은 모두 올바른 `pinky-raw`였다.
+
+`test_remote_reboot_admission`은 `test_remote_pytest._fake_hosts`를 import한다.
+함수를 import해도 원래 시험 모듈의 `_fresh_headroom` autouse fixture는 적용되지 않는다.
+helper의 실제 placement가 공유 `rp.HEADROOM`에 a/b 여유를 남긴 뒤, 임시 `MAX_MAIN=1`은
+teardown으로 복원됐다. 다음 시험의 `workers()`가 그 여유를 보고 host마다 worker 두 개를
+만들었다. 이를 곧바로 부하나 profile 전달 오류로 분류하면 원인을 놓친다.
+
+main `4088d1c1d2`에서 기존 재부팅 producer 시험과 profile 전달 시험을 순서대로
+`-n 0`으로 원격 실행해 1 FAIL/1 PASS, NEW1/known·flaky0을 재현했다.
+수정 parent `69a12e8f6e`까지 관련 remote 코드와 세 시험 모듈 차이는 없었다.
+코드 `63a211f808`은 공용 helper 안에서 `monkeypatch.setattr(rp, "HEADROOM", {})`로
+시험 전용 dict를 만든다. teardown이 원래 객체를 복원하며 다른 모듈의 호출자도 격리된다.
+제품 worker 계산이나 기대 호출 수·profile 검증은 바꾸지 않았다.
+
+같은 순서를 유지해 reboot→remote_test_tools→remote_pytest→두 deadline 모듈을
+한 프로세스에서 원격 실행한 결과는 184 PASS/skip·NEW·known·flaky0이었다.
+로그는 OS Temp `rosy-headroom-order-red-20261103/run-1.txt`와
+`rosy-headroom-order-green-20261103/run-1.txt`에 있다. 단독 통과만으로 닫지 말고
+오염을 만드는 선행 시험과 소비 시험을 같은 프로세스에서 재현·검증한다.
+
 ## 다음에 적용할 조건
 
 - 착지 뒤 main에서 파일 하나가 빨간데 착지 기록·캐시가 초록이면, 먼저 그 파일을 혼자 원격 실행하고 폴더 실행과 비교한다. 캐시나 known_failures부터 의심하지 않는다.
 - 시험 모듈 최상위의 `sys.path.insert`와 `sys.modules` 적재는 같은 프로세스의 다른 시험 파일 전부에 새어 나간다. 원본 모듈이 import 경로를 시험의 부작용에 기대지 않는지 파일 혼자 실행으로 확인한다.
 - `spec_from_file_location`으로 읽히는 모듈에 형제 import를 추가하는 변경은, 해당 시험 파일을 혼자 돌린 결과를 검증 근거로 남긴다.
 - conftest가 경로를 보충하는 CLI는 파일 단독 pytest만으로 충분하지 않다. 실제 진입점을 빈 cwd의 격리된 자식 프로세스에서도 실행한다.
+- 다른 모듈에서 시험 helper를 import하면 원래 모듈의 autouse fixture까지 따라오지 않는다. helper가 변경하는 공유 상태는 helper 또는 호출자의 fixture에서 격리하고, 선행 시험과 소비 시험의 결합 실행으로 확인한다.

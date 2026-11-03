@@ -7,6 +7,8 @@ from typing import Annotated, Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from .arm_transfer_jobs import ArmTransferJobCreate
+
 
 UnitId = Annotated[str, Field(strict=True, min_length=1, max_length=64,
                               pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]*$")]
@@ -38,6 +40,22 @@ class ControlIngressRequest(ControlWorkRequest):
     config_revision: UnitId
 
 
+class ControlArmTransferCandidate(BaseModel):
+    """D-965 arm work for a cell-owned workcell; the cell's existing ARM admit stays the only approval."""
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    target_unit: UnitId
+    transfer: ArmTransferJobCreate
+
+
+class ControlArmWorkRequest(ControlArmTransferCandidate):
+    delegation_id: DelegationId
+
+
+class ControlArmIngressRequest(ControlArmWorkRequest):
+    origin_id: UnitId
+    config_revision: UnitId
+
+
 class ControlApproveRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     expected_revision: int = Field(ge=1, strict=True)
@@ -62,7 +80,7 @@ class ControlDelegationSnapshot(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     origin_id: UnitId
     delegation_id: DelegationId
-    request: ControlNavigationCandidate
+    request: ControlNavigationCandidate | ControlArmTransferCandidate
     owner_unit: UnitId
     config_revision: UnitId
     status: ControlDelegationState

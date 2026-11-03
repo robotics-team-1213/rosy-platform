@@ -421,13 +421,15 @@ def rounds(args, wt: Path, branch: str, main_co: Path, python: str, qdir, ticket
                     invocations, note = select(wt, full_main, python, head=main_sha, landed=True)
                     reusable = reusable and (prepared := land_full.prepared(wt, branch, full_main)) is not None
                     summary.append(f"round {round_no}: FULL tier passed over main {full_main[:10]}; main delta"
-                                   f" {full_main[:10]}..{main_sha[:10]} runs its {'FULL' if note else 'affected'} tier")
+                                   f" {full_main[:10]}..{main_sha[:10]} runs its {'affected' if not note else 'delta' if note.startswith(land_selection.DELTA_NOTE) else 'FULL'} tier")
                     if (held := land_speculate.held(sys.modules[__name__], wt, branch, full_main, candidate)) is not None:
                         invocations, note = held, None  # it passed before the turn on this tree (up to the records)
                         prepared = land_speculate.with_spec(sys.modules[__name__], wt, branch, prepared)
                         summary.append(f"round {round_no}: speculated tree held; main delta passed before the turn")
                 else:
                     invocations, note = select(wt, main_sha, python, full=True) if args.tests == "full" else select(wt, main_sha, python)
+                if note and note.startswith(land_selection.DELTA_NOTE) and ticket is None:
+                    note = None  # D-889 27: no queue to yield to, so the delta's suites run here as before
                 if note and note not in summary:
                     summary.append(note)
                 if note and ticket is not None:  # a FULL tier never runs in the lock: prepare it, then wait again
@@ -444,8 +446,7 @@ def rounds(args, wt: Path, branch: str, main_co: Path, python: str, qdir, ticket
             delta = lines(wt, "diff", "--name-only", tested_main, main_sha) if tested_main else []
             if tested_main and all(map(record_only, delta)):
                 # Only module-scoped suites may skip; root test/ guards read the records themselves.
-                invocations = [kept for kept in ([p for p in inv if p.startswith("test/") or p == "test"]
-                                                 for inv in invocations) if kept]
+                invocations = land_speculate.root_part(invocations)
                 reusable = False  # module suites ran on an earlier candidate, not this one
                 summary.append(f"round {round_no}: main delta ({len(delta)} file(s)) is records only"
                                " (logs/index/progress/ADR), module suites skipped, root test/ rerun")
