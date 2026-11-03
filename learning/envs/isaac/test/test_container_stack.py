@@ -256,9 +256,11 @@ def test_nine_container_budget_covers_the_measured_run_and_the_mp4_cap():
     import run_worker
     from run_catalog import catalog
     entry = next(e for e in catalog() if e['id'] == 'omx-map-container-stack')
-    assert entry['timeout_seconds'] == 2520
-    assert "timeout = 2520 if scenario == 'omx-map-container-stack'" in inspect.getsource(run_system)
-    assert "'timeout': 2310 if container_task" in inspect.getsource(run_worker)
+    assert entry['timeout_seconds'] == 4200
+    # 2026-11-03: the surveyed bases (waypoint, higher leveling carry) placed 8/9 and met the 2,310 s limit (run 5d3a), and the
+    # D-969 demo recording renders two more cameras per frame: 65 min task inside a 70 min unit, under the 90 min reboot guard.
+    assert "timeout = 4200 if scenario == 'omx-map-container-stack'" in inspect.getsource(run_system)
+    assert "'timeout': 3900 if container_task" in inspect.getsource(run_worker)
 
 
 def test_ship_offset_cases_move_only_the_release_target():
