@@ -11,8 +11,8 @@ sys.path.insert(0, str(OMX))
 import cell_transfer  # noqa: E402
 import cell_zones  # noqa: E402
 
-# a map that puts arm metres straight onto pixels: x 0.30 m -> 300 px
-CAL = {"sites": {"pallet": {"homography": [[1000.0, 0, 0], [0, 1000.0, 0], [0, 0, 1.0]]}}}
+# a map (pixel -> arm metres, as cell_calibrate fits it) of 1 px per mm: x 0.30 m shows at column 300
+CAL = {"sites": {"pallet": {"homography": [[0.001, 0, 0], [0, 0.001, 0], [0, 0, 1.0]]}}}
 PARAMS = {"zone.split_px": 367.0, "zone.middle_px": 30.0, "zone.wait_s": 1.0}
 
 
