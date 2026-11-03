@@ -253,7 +253,7 @@ def run(args):
 
     def capture(name, overview=False):
         if name.startswith('real-'):
-            view = name[len('real-'):-len('.png')]
+            view = name[len('real-'):-len('.png')].removesuffix('-final')
             return scene.real_capture(world, real_cameras, view, FIXTURE['real_cameras'][view], args.report.parent/name)
         scene.capture(world, camera, eye, args.report.parent/name, container=container, overview=overview)
 

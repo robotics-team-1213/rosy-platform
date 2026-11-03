@@ -325,10 +325,22 @@ def leveling_release_target(index, sample, fixture, commanded_tcp=None):
         raise ValueError('Leveling carry is not an unsupported bilateral hold')
     if not prefix_held(sample,index,fixture):
         raise ValueError('Previous pallet prefix moved before leveling release')
-    center = fixture['leveling_center_m']
+    center = leveling_center(fixture, arm)
     desired = [*center[:2],center[2]+.015+fixture['release_clearance_m']]
     anchor = sample['tcps'][arm] if commanded_tcp is None else commanded_tcp
     return [anchor[k]+desired[k]-box['position'][k] for k in range(3)]
+
+
+def leveling_center(fixture, arm):
+    """The leveling spot `arm` uses: its own (`leveling_centers_m`, one per arm) or the shared `leveling_center_m`."""
+    centers = fixture.get('leveling_centers_m')
+    return centers[arm] if centers else fixture['leveling_center_m']
+
+
+def leveling_via(fixture, arm):
+    """The waypoint `arm` passes on its way to and from leveling: its own (`leveling_vias_m`, None for none) or the shared one."""
+    vias = fixture.get('leveling_vias_m')
+    return vias[arm] if vias else fixture.get('leveling_via_m')
 
 
 def leveling_box_stable(box,index,fixture):
@@ -343,7 +355,7 @@ def leveling_box_stable(box,index,fixture):
             or norm(box['velocity']) > .01 or norm(box['angular_velocity']) > .1
             or rotation_matrix(box['orientation'])[2][2] < math.cos(fixture['leveling_flat_tolerance_rad'])):
         return False
-    center = fixture['leveling_center_m']
+    center = leveling_center(fixture, plan(True,fixture=fixture)[index]['arm'])
     return (abs(box['position'][2]-center[2]-.015) <= .0015
         and all(abs(box['position'][axis]-center[axis])+half_extent(box,size,axis)
                 <= fixture['leveling_size_m'][axis]/2 for axis in (0,1)))
