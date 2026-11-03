@@ -14027,3 +14027,9 @@ osy-d395-s1d\`.
 - 증거: 11-03 10:00~16:00 rosy-land-events — spec 시험 9.8 h / 전체 43 h, 차례 held 3 / 34, 이미 통과한 호출 재실행 8.1 h. 원격 착지 회귀 27개 파일 + affected_tests 통과, 새 시험 1개.
 - gate 변화: 없음. 차례는 원래 정해진 선택을 그대로 돈다.
 - CE: 기존 교훈 갱신 — landings-gave-the-turn-back-and-reran-everything 11.
+
+## 2026-11-03 · uncommitted · docs(control-terms): 관제 용어 층 분리, 헤더는 관제 단위 이름 (D-974)
+- 변경: D-974 — Rosy Fleet은 제품 이름, 통합관제 R·셀 관제 CELL-x는 단위, PC는 물리 이름(OMX 노트북). D-968 1항 대체. `/api/fleet/state`의 `fleet`에 관제 단위 설정이 있을 때 `unit`·`root`(API v1.358), 헤더가 "통합관제 R"/"CELL-A"를 보인다. `fleet_name`은 페어링·lease 신원으로 그대로. 팔레타이징 준비 화면 표시 문구 "Cell" → "팔레트 적재"(경로·id 그대로, 노출은 기존 `CELL_TRANSFER` 규칙). CONCEPTS·관제 단위 배치표 갱신.
+- 증거: 헤더 node 시험 13개 통과, 서버·화면 pytest는 원격 실행 결과를 따른다. 현장 R·CELL-A 헤더 관측은 배포 뒤 별도.
+- gate 변화: 없음.
+- CE: 해당 없음 — 장애 해결이 아니라 용어 결정, 근거는 D-974.
