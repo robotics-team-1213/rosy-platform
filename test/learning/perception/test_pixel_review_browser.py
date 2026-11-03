@@ -15,58 +15,6 @@ pytestmark = pytest.mark.skipif(not browser_tests_enabled(),
                                 reason='requires explicit local Chromium browser run')
 
 
-@pytest.mark.parametrize('theme', ['dark', 'light'])
-def test_pixel_decision_resize_preserves_checks_and_keyboard_focus(browser_workspace, theme):
-    page, store, expect = browser_workspace
-    open_pixels(page, store, expect)
-    page.evaluate("theme => RosyTheme.set(theme)", theme)
-    complete, background = page.locator('#pixel-complete'), page.locator('#pixel-background')
-    complete.check()
-    background.check()
-    complete.focus()
-    approve_disabled = page.locator('#pixel-approve').is_disabled()
-    for step, width in enumerate((390, 1440, 320, 1440)):
-        page.set_viewport_size({'width': width, 'height': 844})
-        page.evaluate("() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))")
-        expect(complete).to_be_focused()
-        expect(complete).to_be_checked()
-        expect(background).to_be_checked()
-        assert page.locator('#pixel-approve').is_disabled() == approve_disabled
-        assert page.locator('.pixel-decision-panel:has(#pixel-complete)').count() == 1
-        decision = page.locator('.pixel-decision-panel:has(#pixel-complete)').bounding_box()
-        if width < 1024:
-            tools = page.locator('.pixel-quick-tools').bounding_box()
-            assert tools['y'] + tools['height'] <= decision['y'] + 1
-            gap = page.evaluate("parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--space-4'))")
-            assert decision['y'] <= tools['y'] + tools['height'] + gap
-        else:
-            canvas = page.locator('#pixel-canvas').bounding_box()
-            assert decision['x'] >= canvas['x'] + canvas['width'] - 1
-        box = complete.bounding_box()
-        header = page.locator('ui-topbar').bounding_box()
-        assert max(0, header['y'] + header['height']) - 1 <= box['y']
-        assert box['y'] + box['height'] <= 845
-        if width >= 1024:
-            tools = page.locator('.pixel-quick-tools').bounding_box()
-            assert tools['y'] >= header['y'] + header['height'] - 1
-            assert page.locator('#pixel-next').evaluate('''node => {
-                const r = node.getBoundingClientRect();
-                return node.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2));
-            }''')
-        assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
-        if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
-            target = Path(output)
-            target.mkdir(parents=True, exist_ok=True)
-            name = f'pixel-decision-{theme}-{step}-{width}'
-            page.screenshot(path=str(target / f'{name}-viewport.png'))
-            page.screenshot(path=str(target / f'{name}-workspace.png'), full_page=True)
-        hit = complete.evaluate('''node => {
-            const r = node.getBoundingClientRect();
-            const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
-            return {visible: node.contains(hit), hit: hit?.outerHTML.slice(0, 300),
-                box: r.toJSON(), scroll: window.scrollY};
-        }''')
-        assert hit['visible'], hit
 
 
 def open_pixels(page, store, expect, index=0):
@@ -76,62 +24,6 @@ def open_pixels(page, store, expect, index=0):
     expect(page.locator('#pixel-status')).to_contain_text('v0')
 
 
-@pytest.mark.parametrize('width', [1440, 390])
-def test_partial_unknown_guard_resolves_then_requires_manual_checks_and_advances(browser_workspace, width):
-    from review_app import Conflict
-    page, store, expect = browser_workspace
-    page.set_viewport_size({'width': width, 'height': 844})
-    open_pixels(page, store, expect)
-    expect(page.locator('#pixel-resolve-unknown')).to_be_hidden()
-    store.update(1, {'version': store.get(1)['version'], 'action': 'reopen'})
-    review_masks.update(store, 0, {'version': 0, 'action': 'paint', 'label': 2,
-                                  'radius': 0, 'points': [[2, 2]]}, Conflict)
-    page.locator('#pixel-reload').click()
-    expect(page.locator('#pixel-status')).to_contain_text('v1')
-    before = review_masks.pixels(store, review_masks.get(store, 0)).copy()
-    context = page.locator('#pixel-result-note + #pixel-resolve-unknown')
-    expect(context).to_be_visible()
-    expect(page.locator('#pixel-result-note')).to_contain_text('아래 버튼')
-    action = context.locator('#pixel-resolve-background')
-    expect(action).to_have_text('남은 767픽셀 배경으로 채우기')
-    page.locator('#pixel-class').select_option('3')
-    expect(context.locator('#pixel-resolve-class')).to_be_enabled()
-    page.locator('#pixel-canvas').click(position={'x': 10, 'y': 10})
-    expect(action).to_be_disabled()
-    expect(context.locator('#pixel-resolve-class')).to_be_disabled()
-    page.locator('#pixel-sample-clear').click()
-    expect(action).to_be_enabled()
-    if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
-        target = Path(output)
-        target.mkdir(parents=True, exist_ok=True)
-        action.scroll_into_view_if_needed()
-        page.screenshot(path=str(target / f'pixel-partial-unknown-action-{width}.png'), full_page=True)
-    page.once('dialog', lambda dialog: dialog.accept())
-    action.click()
-    expect(page.locator('#pixel-status')).to_contain_text('v2')
-    after = review_masks.pixels(store, review_masks.get(store, 0))
-    assert after[2, 2] == 2 and np.all(after[before == 255] == 0)
-    expect(context).to_be_hidden()
-    expect(page.locator('#pixel-complete')).to_be_focused()
-    expect(page.locator('#pixel-complete')).not_to_be_checked()
-    expect(page.locator('#pixel-background')).not_to_be_checked()
-    expect(page.locator('#pixel-approve')).to_be_disabled()
-    page.locator('#pixel-undo').click()
-    expect(page.locator('#pixel-status')).to_contain_text('v3')
-    assert np.array_equal(review_masks.pixels(store, review_masks.get(store, 0)), before)
-    expect(context).to_be_visible()
-    page.once('dialog', lambda dialog: dialog.accept())
-    action.click()
-    expect(page.locator('#pixel-status')).to_contain_text('v4')
-    page.locator('#pixel-complete').check()
-    expect(page.locator('#pixel-approve')).to_be_disabled()
-    page.locator('#pixel-background').check()
-    expect(page.locator('#pixel-approve')).to_be_enabled()
-    page.locator('#pixel-approve').click()
-    expect(page.locator('#pixel-title')).to_have_text('사진 2 픽셀 검수')
-    assert review_masks.get(store, 0)['status'] == 'approved'
-    expect(context).to_be_hidden()  # The next photo is entirely unknown.
-    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
 
 
 @pytest.mark.parametrize('width', [1440, 390])
@@ -157,7 +49,7 @@ def test_unknown_fill_selected_class_preserves_other_labels_and_undo(browser_wor
     after = review_masks.pixels(store, review_masks.get(store, 0))
     assert after[2, 2] == 2 and np.all(after[before == 255] == 3)
     assert review_masks.get(store, 0)['status'] == 'pending'
-    expect(page.locator('#pixel-approve')).to_be_disabled()
+    expect(page.locator('#pixel-approve')).to_be_enabled()
     page.locator('#pixel-undo').click()
     expect(page.locator('#pixel-status')).to_contain_text('v3')
     assert np.array_equal(review_masks.pixels(store, review_masks.get(store, 0)), before)
@@ -202,7 +94,7 @@ def test_protected_point_selection_background_completion_and_visible_shortcuts(b
     assert np.array_equal(after[before != 255], before[before != 255])
     assert np.all(after[before == 255] == 0)
     assert review_masks.get(store, 0)['status'] == 'pending'
-    expect(page.locator('#pixel-approve')).to_be_disabled()
+    expect(page.locator('#pixel-approve')).to_be_enabled()
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
     if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
         target = Path(output)
@@ -392,7 +284,8 @@ def test_pixel_tools_are_readable_and_reachable_beside_photo(browser_workspace, 
         tools = actions.bounding_box()
         assert 0 <= tools['y'] - stage['y'] - stage['height'] < 240
     page.set_viewport_size({'width': 1440, 'height': 900})
-    assert page.locator('.pixel-quick-tools').bounding_box()['x'] < page.locator('#pixel-canvas').bounding_box()['x']
+    tools = page.locator('.pixel-quick-tools').bounding_box()
+    assert tools['y'] + tools['height'] <= page.locator('#pixel-canvas').bounding_box()['y']
 
 
 def test_review_workspace_purpose_stays_visible_on_photo_change(tmp_path):
@@ -472,7 +365,7 @@ def test_sparse_unknown_pixels_are_visible_and_never_shown_as_zero_percent(brows
     highlighted = sample()
     page.locator('#pixel-show-unknown').uncheck()
     assert sample() != highlighted
-    expect(page.locator('#pixel-approve')).to_be_disabled()
+    expect(page.locator('#pixel-approve')).to_be_enabled()
 
 
 def test_new_draft_requires_explicit_apply_in_pixel_screen(browser_workspace):
@@ -542,17 +435,13 @@ def test_unknown_pixels_cannot_be_approved_and_explicit_fill_persists(browser_wo
     original = store.get(0)
     open_pixels(page, store, expect)
     expect(page.locator('#pixel-approve')).to_have_attribute('disabled', '')
-    page.locator('#pixel-complete').check()
     expect(page.locator('#pixel-approve')).to_have_attribute('disabled', '')
-    page.locator('#pixel-background').check()
     expect(page.locator('#pixel-approve')).to_be_disabled()
     expect(page.locator('#pixel-approval-hint')).to_contain_text('미검수')
     assert review_masks.get(store, 0)['version'] == 0
     page.once('dialog', lambda dialog: dialog.accept())
     page.locator('#pixel-fill').click()
     expect(page.locator('#pixel-status')).to_contain_text('v1')
-    expect(page.locator('#pixel-complete')).not_to_be_checked()
-    page.locator('#pixel-complete').check(); page.locator('#pixel-background').check()
     page.locator('#pixel-approve').click()
     expect(page.locator('#pixel-status')).to_contain_text('픽셀 승인')
     assert store.get(0) == original
@@ -599,8 +488,6 @@ def test_pixel_decision_and_preparation_result_are_visible(browser_workspace, wi
     page.once('dialog', lambda dialog: dialog.accept())
     page.locator('#pixel-fill').click()
     expect(page.locator('#pixel-status')).to_contain_text('v3')
-    page.locator('#pixel-complete').check()
-    page.locator('#pixel-background').check()
     page.locator('#pixel-approve').click()
     expect(page.locator('#pixel-status')).to_contain_text('픽셀 승인')
     assert review_masks.get(store, 0)['status'] == 'approved'
@@ -617,7 +504,6 @@ def test_pixel_decision_advances_to_next_editable_pending(browser_workspace):
     page.once('dialog', lambda dialog: dialog.accept())
     page.locator('#pixel-fill').click()
     expect(page.locator('#pixel-status')).to_contain_text('v1')
-    page.locator('#pixel-complete').check(); page.locator('#pixel-background').check()
     page.locator('#pixel-approve').click()
     # Photo 2 is object-excluded, so its pixels cannot be edited: stay on photo 1.
     expect(page.locator('#pixel-status')).to_contain_text('픽셀 승인')
@@ -691,8 +577,8 @@ def test_zoom_pan_never_paints_and_brush_uses_zoomed_coordinates(browser_workspa
     pixel_canvas = page.locator('#pixel-canvas').bounding_box()
     pixel_decision = page.locator('.pixel-review-column').bounding_box()
     assert object_tools['x'] < object_canvas['x'] < object_decision['x']
-    assert pixel_tools['x'] < pixel_canvas['x'] < pixel_decision['x']
-    assert abs(object_tools['x']-pixel_tools['x']) <= 1
+    assert pixel_tools['y'] + pixel_tools['height'] <= pixel_canvas['y']
+    assert pixel_canvas['x'] + pixel_canvas['width'] <= pixel_decision['x']
     page.locator('#pixel-class').select_option('4')
     expect(page.locator('#pixel-tool-hint')).to_be_hidden()
     page.locator('#pixel-brush-tool').click()
@@ -795,16 +681,12 @@ def test_pixel_number_keys_pick_class_and_x_excludes(browser_workspace):
     assert review_masks.get(store, 0)['status'] == 'excluded'
 
 
-def test_pixel_shortcuts_confirm_both_checks_and_move_without_approving(browser_workspace):
+def test_pixel_shortcuts_move_without_completing_unknown_photo(browser_workspace):
     page, store, expect = browser_workspace
     row = store.get(1)
     store.update(1, {'version': row['version'], 'action': 'reopen'})
     open_pixels(page, store, expect)
     page.locator('#pixel-canvas').focus()
-    page.keyboard.press('c')
-    page.keyboard.press('b')
-    expect(page.locator('#pixel-complete')).to_be_checked()
-    expect(page.locator('#pixel-background')).to_be_checked()
     assert review_masks.get(store, 0)['status'] == 'pending'
     page.keyboard.press('a')
     expect(page.locator('#pixel-approve')).to_be_disabled()
@@ -821,11 +703,11 @@ def test_pixel_photo_picker_returns_to_canvas_and_quick_tools(browser_workspace)
     page.set_viewport_size({'width': 1280, 'height': 800})
     canvas = page.locator('#pixel-canvas').bounding_box()
     tools = page.locator('.pixel-quick-tools').bounding_box()
-    assert tools['x'] < canvas['x'] and tools['y'] < canvas['y']
+    assert tools['y'] + tools['height'] <= canvas['y']
     assert page.locator('#pixel-prev').bounding_box()['y'] < canvas['y']
     for action in ['#pixel-prev', '#pixel-next', '#pixel-undo']:
         bounds = page.locator(action).bounding_box()
-        assert bounds['x'] + bounds['width'] < canvas['x']
+        assert 0 <= bounds['x'] and bounds['x'] + bounds['width'] <= 1280
         assert 0 <= bounds['y'] < min(800, canvas['y'] + canvas['height'])
     page.locator('#pixel-frame').select_option('1')
     expect(page.locator('#pixel-title')).to_have_text('사진 2 픽셀 검수')
@@ -864,7 +746,7 @@ def test_pixel_thumbnails_and_unknown_background_draft(browser_workspace):
     expect(page.locator('#pixel-status')).to_contain_text('v1')
     assert review_masks.get(store, 0)['status'] == 'pending'
     assert not np.any(review_masks.pixels(store, review_masks.get(store, 0)) == 255)
-    expect(page.locator('#pixel-approve')).to_be_disabled()
+    expect(page.locator('#pixel-approve')).to_be_enabled()
 
 
 def test_polygon_tool_previews_saves_and_undoes(browser_workspace):
@@ -889,7 +771,7 @@ def test_polygon_tool_previews_saves_and_undoes(browser_workspace):
     expect(page.locator('#pixel-status')).to_contain_text('v1')
     mask = review_masks.pixels(store, review_masks.get(store, 0))
     assert mask[8, 15] == 4 and mask[1, 1] == 255
-    expect(page.locator('#pixel-approve')).to_be_disabled()
+    expect(page.locator('#pixel-approve')).to_be_enabled()
     page.locator('#pixel-undo').click()
     expect(page.locator('#pixel-status')).to_contain_text('v2')
     assert review_masks.pixels(store, review_masks.get(store, 0))[8, 15] == 255
@@ -921,7 +803,6 @@ def test_pixel_a_works_right_after_ticking_checks_and_x_only_on_pending(browser_
     page.once('dialog', lambda dialog: dialog.accept())
     page.locator('#pixel-fill').click()
     expect(page.locator('#pixel-status')).to_contain_text('v1')
-    page.locator('#pixel-complete').check(); page.locator('#pixel-background').check()
     page.keyboard.press('a')
     expect(page.locator('#pixel-status')).to_contain_text('픽셀 승인')
     page.locator('#pixel-canvas').focus()

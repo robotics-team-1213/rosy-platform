@@ -1,4 +1,5 @@
 import {workspacePage,pageControls,frameOrdinal} from '/review-pages.js';
+import {reviewContext} from '/review-context.js';
 import {accountFetch} from '/account-session.js';
 import {showVersions,resetVersions} from '/versions.js';
 import {showAI,resetAI,updateAI,candidateOrigin} from '/ai-jobs.js';
@@ -7,7 +8,6 @@ import {showHistory,resetHistory,feedbackPresentation} from '/history.js';
 import {reviewViewport} from '/viewport.js';
 import '/commands.js';
 const $=id=>document.getElementById(id);
-const updatePages=pageControls($('pixel-frames'),offset=>load({offset}).catch(loadError));
 const modeBadge=document.createElement('ui-status');
 modeBadge.id='pixel-workspace-mode';
 modeBadge.setAttribute('role','status');
@@ -24,6 +24,11 @@ $('pixel-reload').setAttribute('aria-label','최신 픽셀 검수 내용 불러�
 pixelContent.insertBefore(document.querySelector('#pixel-main > .ui-workspace-bar'),pixelPreparation);
 pixelContent.insertBefore($('pixel-flow').parentElement,pixelPreparation);
 pixelContent.insertBefore($('pixel-frames'),pixelPreparation);
+const photoList=document.createElement('section');photoList.id='pixel-photo-list';
+const listTitle=document.createElement('h3');listTitle.textContent='\uC0AC\uC9C4 \uBAA9\uB85D';pixelContent.insertBefore(photoList,pixelPreparation);
+photoList.append(listTitle,document.querySelector('#pixel-content > .ui-workspace-bar'),$('pixel-frames'));
+const updatePages=pageControls($('pixel-frames'),offset=>load({offset}).catch(loadError));
+const pageBar=$('pixel-frames').nextElementSibling;pageBar.id='pixel-page-controls';pageBar.setAttribute('role','group');pageBar.setAttribute('aria-label','\uC0AC\uC9C4 \uBAA9\uB85D \uD398\uC774\uC9C0 \uC774\uB3D9');
 const pixelResult=document.createElement('p');pixelResult.id='pixel-result';pixelResult.className='review-result';pixelResult.setAttribute('role','status');
 const pixelResultNote=document.createElement('p');pixelResultNote.id='pixel-result-note';pixelResultNote.className='review-result-note';pixelResultNote.setAttribute('role','status');
 $('pixel-coverage').after(pixelResult,pixelResultNote,$('pixel-legend'),$('pixel-candidate-tools'),$('pixel-candidate-preview'),document.querySelector('.pixel-vlm-feedback'));
@@ -40,7 +45,7 @@ const candidateEmpty=document.createElement('p');candidateEmpty.id='pixel-candid
 $('pixel-candidate-tools').before(candidateEmpty);
 
 // Retry must remain reachable when unavailable/empty state hides the editing content.
-pixelContent.after($('pixel-reload'));
+pixelContent.before($('pixel-reload'));
 document.querySelector('.pixel-quick-tools').prepend(document.querySelector('.pixel-ribbon-nav'));
 document.querySelector('.pixel-stage').after($('pixel-view-status'));
 toolOptions.before($('pixel-coverage'));
@@ -48,7 +53,7 @@ $('pixel-draft').className='quiet';$('pixel-draft').setAttribute('role','status'
 $('pixel-coverage').after($('pixel-draft'));
 const pixelFinish=$('pixel-fill-unknown');
 pixelFinish.setAttribute('kind','primary');
-$('pixel-complete').closest('label').before(pixelFinish);
+$('pixel-approve').closest('.pixel-decision-panel').querySelector('h3').after(pixelFinish);
 const pixelFillClass=document.createElement('ui-button');pixelFillClass.id='pixel-fill-unknown-class';pixelFillClass.setAttribute('kind','quiet');pixelFillClass.textContent='미검수만 선택 클래스로 채우기';pixelFinish.before(pixelFillClass);
 const pixelFinishNote=document.createElement('p');pixelFinishNote.className='quiet';pixelFinishNote.textContent='중요한 영역을 먼저 칠한 뒤 남은 미검수만 배경으로 채우세요. 기존 라벨은 유지되고 Ctrl+Z로 되돌릴 수 있습니다. 승인은 별도입니다.';pixelFinish.after(pixelFinishNote);
 document.querySelector('.pixel-quick-actions').after($('pixel-tool-hint'));
@@ -59,24 +64,29 @@ const pixelResolveBackground=document.createElement('ui-button');pixelResolveBac
 const pixelResolveClass=document.createElement('ui-button');pixelResolveClass.id='pixel-resolve-class';pixelResolveClass.setAttribute('kind','quiet');pixelResolveClass.textContent='남은 픽셀을 선택 클래스로 채우기';pixelResolveClass.onclick=()=>pixelFillClass.click();
 pixelResolve.append(pixelResolveBackground,pixelResolveClass);pixelResultNote.after(pixelResolve);
 const pixelTools=document.querySelector('.pixel-quick-tools');
-const pixelDecision=$('pixel-approve').closest('.pixel-decision-panel');
-const pixelDecisionHome=pixelDecision.parentElement,pixelDecisionNext=pixelDecision.nextSibling;
-const compactTools=matchMedia('(width < 64rem)');
-function placePixelTools(){
- const active=document.activeElement;
- const focused=pixelTools.contains(active)||pixelDecision.contains(active)?active:null;
- if(compactTools.matches){$('pixel-quick-classes').after(pixelTools);pixelTools.after(pixelDecision);pixelTools.append(document.querySelector('.pixel-ribbon-nav'));}
- else {pixelDecisionHome.insertBefore(pixelDecision,pixelDecisionNext);document.querySelector('.pixel-editor-column').append(pixelTools);pixelTools.prepend(document.querySelector('.pixel-ribbon-nav'));}
- if(focused?.isConnected&&!focused.disabled){
-  focused.focus({preventScroll:true});
-  focused.scrollIntoView({block:'nearest',inline:'nearest'});
- }
-}
-compactTools.addEventListener('change',placePixelTools);
-placePixelTools();
+const photoColumn=document.querySelector('.pixel-editor-column');
+const photoNavigation=document.querySelector('.pixel-ribbon-nav');photoNavigation.id='pixel-photo-navigation';photoNavigation.setAttribute('role','group');photoNavigation.setAttribute('aria-label','\uD604\uC7AC \uC0AC\uC9C4 \uC774\uB3D9');
+const photoHeading=document.createElement('div');photoHeading.className='pixel-photo-heading';
+resetHistory();const reviewHistory=document.querySelector('.pixel-review-column .review-history');reviewHistory.before($('review-people-summary'),document.querySelector('.review-history-link'));
+photoHeading.append($('pixel-title'),modeBadge,$('pixel-status'));
+document.querySelector('.pixel-quick-actions').append($('pixel-undo'));
+photoNavigation.replaceChildren($('pixel-prev'),photoHeading,$('pixel-next'));
+photoColumn.prepend(photoNavigation,pixelTools);
+const updateContext=reviewContext(photoNavigation);
+$('pixel-view-status').after($('pixel-coverage'),$('pixel-draft'),$('pixel-tool-hint'));
+const photoSection=photoColumn.querySelector(':scope > section'),viewBar=document.querySelector('.pixel-layout .review-view-bar');
+viewBar.append($('pixel-mask-visible').closest('label'),$('pixel-opacity').closest('label'));
+pixelTools.append($('pixel-quick-classes'),viewBar);
+$('pixel-approve').closest('.pixel-decision-panel').after(aiPanel);
+const photoDetails=document.createElement('section');photoDetails.className='pixel-photo-details';
+for(const child of [...photoSection.children])if(!child.matches('.pixel-stage,#pixel-view-status'))photoDetails.append(child);
+photoColumn.append(photoDetails);
+const responsivePixelLayout=matchMedia('(width < 64rem)');
+responsivePixelLayout.addEventListener('change',()=>{const active=document.activeElement;if(pixelContent.contains(active))requestAnimationFrame(()=>active.scrollIntoView({block:'nearest',inline:'nearest'}));});
 for(const [id,key] of [['pixel-prev','ArrowLeft'],['pixel-next','ArrowRight'],['pixel-next-pending','N'],['pixel-undo','Control+Z Meta+Z']])$(id).setAttribute('aria-keyshortcuts',key);
 $('pixel-undo').title='마지막 픽셀 수정 되돌리기 · Ctrl+Z';
 $('pixel-undo').textContent='되돌리기 · Ctrl+Z';
+$('pixel-approve').textContent='완료';$('pixel-approve').setAttribute('aria-label','픽셀 검수 완료');
 for(const [id,label] of [['pixel-prev','이전 사진'],['pixel-next','다음 사진'],['pixel-undo','마지막 픽셀 수정 되돌리기']]){$(id).setAttribute('aria-label',label);$(id).title=label;}
 for(const button of document.querySelectorAll('.pixel-quick-actions ui-button'))button.setAttribute('aria-label',button.title);
 for(const id of ['pixel-flood','pixel-brush-tool','pixel-polygon-tool'])$(id).setAttribute('aria-describedby','pixel-tool-hint');
@@ -114,7 +124,7 @@ async function setView(detail){
   $('pixel-view-original').setAttribute('aria-pressed','true');$('pixel-view-detail').setAttribute('aria-pressed','false');
   $('pixel-view-status').textContent=`명암 보정을 표시하지 못했습니다. 원본 보기로 돌아왔습니다. ${value.message}`;paint();}
 }
-function evaluationControls(){if(workspace.workspace_kind!=='evaluation')return;const label=document.createElement('label');label.className='ui-check';label.innerHTML='<input class="ui-field" id="pixel-unknown" type="checkbox">가려져 경계를 판단할 수 없는 투명 영역을 모두 확인했습니다 (평가 전용)';$('pixel-background').parentElement.insertAdjacentElement('afterend',label);$('pixel-unknown').onchange=enable;const help=[...label.parentElement.querySelectorAll('p')].find(p=>p.textContent.includes('255'));if(help)help.textContent='평가 전용: 가림 때문에 판단할 수 없는 영역만 255로 남기고 확인하세요. 학습 자료에는 포함되지 않습니다.';$('pixel-preparation').hidden=true;}
+function evaluationControls(){if(workspace.workspace_kind!=='evaluation')return;const label=document.createElement('label');label.className='ui-check';label.innerHTML='<input class="ui-field" id="pixel-unknown" type="checkbox">가려져 경계를 판단할 수 없는 투명 영역을 모두 확인했습니다 (평가 전용)';$('pixel-approve').closest('.pixel-decision-panel').querySelector('h3').after(label);$('pixel-unknown').onchange=enable;const help=[...label.parentElement.querySelectorAll('p')].find(p=>p.textContent.includes('255'));if(help)help.textContent='평가 전용: 가림 때문에 판단할 수 없는 영역만 255로 남기고 확인하세요. 학습 자료에는 포함되지 않습니다.';$('pixel-preparation').hidden=true;}
 let candidateKey='';
 function v13Review(){return !!review?.classes?.classes.some(row=>row.name==='lane_left')&&!!review?.classes?.classes.some(row=>row.name==='lane_right'&&row.role==='lane_marking')&&!!review?.classes?.classes.some(row=>row.name==='drivable');}
 function legacyCandidate(){return v13Review()&&review?.draft_candidates?.find(row=>row.sha256===$('pixel-candidates').value)?.origin==='v12_pixel_mask_candidate';}
@@ -143,6 +153,7 @@ function previewCandidate(){
 function visible(){return workspace?.frames.filter(row=>$('pixel-filter').value==='all'||row.status!=='excluded'&&row.pixel_status===$('pixel-filter').value)||[];}
 function url(){const link=new URL(location.href);if(frame)link.searchParams.set('frame',frame.index);else link.searchParams.delete('frame');if($('pixel-filter').value==='all')link.searchParams.delete('filter');else link.searchParams.set('filter',$('pixel-filter').value);history.replaceState(null,'',link);}
 function enable(){updatePages(workspace?.page,busy||loading||!!stroke||draft.length>0||seeds.length>0||polygon.length>0);updateAI();const dirty=draft.length>0,hasSamples=seeds.length>0,hasPolygon=polygon.length>0,selection=hasSamples||hasPolygon,locked=busy||!ready||loading||conflicted||forbidden||!!stroke,excluded=frame?.status==='excluded'||review?.status==='excluded',editable=!locked&&!excluded&&!!review?.classes,labelReady=editable&&$('pixel-class').value!=='';
+ updateContext(workspace?.context,busy||loading||!!stroke||dirty||selection);
   const step=!ready?0:review?.status!=='pending'?3:dirty||selection||unknownPixels>0?2:3;
   [...$('pixel-flow').children].forEach((item,index)=>{if(index===step)item.setAttribute('aria-current','step');else item.removeAttribute('aria-current');});
   const selectedRole=review?.classes?.classes.find(row=>String(row.index)===$('pixel-class').value)?.role;
@@ -167,7 +178,7 @@ function enable(){updatePages(workspace?.page,busy||loading||!!stroke||draft.len
  for(const id of ['pixel-view-original','pixel-view-detail'])$(id).disabled=!ready||loading;
  for(const [id,mode] of [['pixel-flood','sample'],['pixel-brush-tool','brush'],['pixel-polygon-tool','polygon']]){$(id).disabled=!labelReady||dirty||selection;$(id).setAttribute('aria-pressed',String(tool===mode));}
  $('pixel-preserve').disabled=!editable||dirty;
- for(const id of ['pixel-class','pixel-radius','pixel-tolerance-mode','pixel-tolerance','pixel-complete','pixel-background'])$(id).disabled=!editable;
+ for(const id of ['pixel-class','pixel-radius','pixel-tolerance-mode','pixel-tolerance'])$(id).disabled=!editable;
  if($('pixel-unknown'))$('pixel-unknown').disabled=!editable;
  for(const id of ['pixel-fill','pixel-undo','pixel-exclude','pixel-reopen','pixel-approve']){$(id).disabled=id==='pixel-reopen'?locked||frame?.status==='excluded':!editable;$(id).reason=forbidden?'검수 권한이 없습니다. 최신 내용을 다시 불러오세요.':locked?'사진 불러오기와 저장을 마친 뒤 다시 시도하세요.':excluded?'제외 사진은 먼저 재검수로 돌리세요.':!review?.classes?'자료 등록에서 검증된 class 파일을 연결하세요.':'';
   if((dirty||selection)&&id!=='pixel-undo'){$(id).disabled=true;$(id).reason='현재 초안을 적용하거나 버린 뒤 진행하세요.';}}
@@ -183,8 +194,7 @@ function enable(){updatePages(workspace?.page,busy||loading||!!stroke||draft.len
  $('pixel-save').disabled=!dirty||locked;$('pixel-discard').disabled=!dirty||busy||!!stroke;
  for(const id of ['pixel-save','pixel-discard'])$(id).reason=!dirty?'저장하지 않은 브러시 획이 없습니다.':busy||stroke?'현재 저장·편집을 마친 뒤 다시 시도하세요.':conflicted?'다른 탭에서 바뀌었습니다. 초안을 버리고 다시 불러오세요.':'';
  $('pixel-draft').textContent=hasPolygon?`영역 꼭짓점 ${polygon.length}개 · ${polygon.length<3?'3개 이상 찍으세요':'Enter로 적용하세요'}`:hasSamples?`${seeds.length}점 선택 · ${previewing?'색 영역 계산 중':sampleImage?`선택된 ${samplePixels.toLocaleString()}픽셀 미리보기 · 색상 허용치 ${sampleTolerance}${preserveExisting()?' · 기존 라벨 보호':''}${samplePixels===0?' · 보호를 끄면 기존 라벨을 수정할 수 있습니다.':''}`:'선택 미리보기를 불러오지 못했습니다'}`:dirty?`저장하지 않은 브러시 ${draft.length}획`:!$('pixel-class').value?'먼저 픽셀 클래스를 선택하세요.':tool==='sample'?'원본 사진의 색으로 영역을 찾습니다. 덜 선택되면 다른 명암에 점을 추가하거나 허용치를 높이고, 번지면 낮추세요. 색으로 나누기 어려운 경계는 영역(P)으로 둘러싸세요.':'';
- if((!dirty&&!selection)&&(!$('pixel-complete').checked||!$('pixel-background').checked)){$('pixel-approve').disabled=true;$('pixel-approve').reason='사진 전체와 기본 배경을 각각 확인하세요.';}
- if(ready&&unknownPixels>0){
+ if(ready&&unknownPixels>0&&(workspace.workspace_kind==='evaluation'||unknownPixels===totalPixels)){
   const evaluation=workspace.workspace_kind==='evaluation';
   const canReviewUnknown=evaluation&&frame.source.source_kind==='mcap'&&unknownPixels<totalPixels&&$('pixel-unknown')?.checked;
   if(!canReviewUnknown){
@@ -193,7 +203,7 @@ function enable(){updatePages(workspace?.page,busy||loading||!!stroke||draft.len
   }
  }
  $('pixel-approval-hint').textContent=ready&&$('pixel-approve').disabled?$('pixel-approve').reason:'';
- pixelResultNote.textContent=ready&&$('pixel-approve').disabled?`승인 대기 · ${$('pixel-approve').reason}`:ready?'승인 조건을 충족했습니다. 원본과 경계를 직접 확인한 뒤 결정하세요.':'';
+ pixelResultNote.textContent=ready&&$('pixel-approve').disabled?`완료 대기 · ${$('pixel-approve').reason}`:ready&&unknownPixels>0?'완료를 누르면 남은 미검수를 배경으로 채우고 사진 전체 검수를 기록한 뒤 다음 사진을 엽니다. 아래 버튼은 배경 채우기만 합니다.':ready?'원본과 경계를 확인한 뒤 완료를 누르면 검수를 기록하고 다음 사진을 엽니다.':'';
  if(savedPixelSummary)pixelResult.textContent=`${savedPixelSummary} · ${dirty?`${draft.length}개 미저장 획`:'미저장 획 없음'}`;
  $('pixel-approve').reason='';
  const rows=visible(),pos=rows.findIndex(row=>row.index===frame?.index);
@@ -269,7 +279,7 @@ async function select(index){
  resetAI();resetVersions();review=null;original=displayPhoto=maskImage=null;
  $('pixel-canvas').hidden=true;$('pixel-canvas').getContext('2d').clearRect(0,0,$('pixel-canvas').width,$('pixel-canvas').height);
  $('pixel-status').setAttribute('state','pending');$('pixel-status').textContent='선택한 사진을 불러오는 중…';
- $('pixel-source').textContent='';$('pixel-legend').replaceChildren();$('pixel-view-status').textContent='';aiPanel.hidden=false;const ticket=++serial,selectedClass=$('pixel-class').value;ready=false;keyCursor=null;keyboardPosition.hidden=true;savedPixelSummary='';pixelResult.textContent='사진을 불러오는 중';candidatePreviewDigest='';$('pixel-candidate-preview').hidden=true;$('pixel-candidate-status').textContent='';stroke=null;draft=[];polygon=[];clearSamples();brush.hidden=true;frame=workspace.frames.find(row=>row.index===Number(index));error();$('pixel-coverage').textContent='';$('pixel-decision').hidden=true;$('pixel-complete').checked=$('pixel-background').checked=false;options();url();enable();if(!frame)return;
+ $('pixel-source').textContent='';$('pixel-legend').replaceChildren();$('pixel-view-status').textContent='';aiPanel.hidden=false;const ticket=++serial,selectedClass=$('pixel-class').value;ready=false;keyCursor=null;keyboardPosition.hidden=true;savedPixelSummary='';pixelResult.textContent='사진을 불러오는 중';candidatePreviewDigest='';$('pixel-candidate-preview').hidden=true;$('pixel-candidate-status').textContent='';stroke=null;draft=[];polygon=[];clearSamples();brush.hidden=true;frame=workspace.frames.find(row=>row.index===Number(index));error();$('pixel-coverage').textContent='';$('pixel-decision').hidden=true;options();url();enable();if(!frame)return;
  resetHistory();$('pixel-vlm-state').textContent='AI 의견을 불러오는 중…';$('pixel-vlm-state').setAttribute('state','pending');$('pixel-vlm-note').textContent='';
  request(`/api/history/${frame.index}`).then(value=>{if(ticket===serial)showHistory(value);})
    .catch(()=>{if(ticket===serial)resetHistory('검수 기록을 불러오지 못했습니다. 최신 내용을 다시 불러오세요.');});
@@ -284,8 +294,8 @@ async function select(index){
 async function nextPending(index){const page=await request(workspacePage('pixel','pending',{after:index}));if(!page.frames.length){workspace.counts=page.counts;workspace.pixel_counts=page.pixel_counts;return;}const next=page.frames.find(row=>row.index===page.page.target)||page.frames[0];const current=await request(workspacePage('pixel',$('pixel-filter').value,{around:next.index}));workspace={...workspace,...current};return next;}
 function mutate(action,extra={}){return commit([{action,...extra}]);}
 // Each saved draft stroke leaves the draft, so a failed save keeps only the unsaved rest.
-async function commit(bodies){if(busy||!ready||conflicted||forbidden)return;busy=true;error();enable();const decidedOrdinal=frameOrdinal(workspace,frame.index);let saved=0;try{for(const body of bodies){review=await request(`/api/masks/${frame.index}`,{version:review.version,...body});saved++;if(body.action==='paint')draft.shift();}workspace.pixel_counts[frame.pixel_status]--;workspace.pixel_counts[review.status]++;frame.pixel_status=review.status;const selectedClass=$('pixel-class').value,decided=bodies.length===1&&['approve','exclude'].includes(bodies[0].action),decision=decided?`사진 ${decidedOrdinal} ${states[review.status]}`:'',pending=decided&&['all','pending'].includes($('pixel-filter').value)&&await nextPending(frame.index),next=['all','pending'].includes($('pixel-filter').value)&&pending;if(next){await select(next.index);if([...$('pixel-class').options].some(o=>o.value===selectedClass))$('pixel-class').value=selectedClass;$('pixel-decision').textContent=`${decision} · 다음 검수 대기 사진 ${frameOrdinal(workspace,next.index)}을 열었습니다.`;$('pixel-decision').hidden=false;return;}if($('pixel-filter').value!=='all'&&review.status!==$('pixel-filter').value){$('pixel-filter').value='all';url();workspace={...workspace,...await request(workspacePage('pixel','all',{around:frame.index}))};}await select(frame.index);$('pixel-class').value=selectedClass;if(decided){$('pixel-decision').textContent=pending?decision:`${decision} · 편집 가능한 검수 대기 사진을 모두 처리했습니다.`;$('pixel-decision').hidden=false;}}
- catch(value){const message=value.message,rest=draft;if(saved){await select(frame.index);draft=rest;paint();}error(message);}finally{busy=false;enable();if(saved&&bodies.some(body=>body.action==='fill_unknown')&&ready&&unknownPixels===0&&!$('pixel-complete').disabled){$('pixel-complete').scrollIntoView({block:'center'});$('pixel-complete').focus({preventScroll:true});}}}
+async function commit(bodies){if(busy||!ready||conflicted||forbidden)return false;busy=true;error();enable();const decidedOrdinal=frameOrdinal(workspace,frame.index);let saved=0;try{for(const body of bodies){review=await request(`/api/masks/${frame.index}`,{version:review.version,...body});saved++;if(body.action==='paint')draft.shift();}workspace.pixel_counts[frame.pixel_status]--;workspace.pixel_counts[review.status]++;frame.pixel_status=review.status;const selectedClass=$('pixel-class').value,decided=bodies.length===1&&['approve','exclude'].includes(bodies[0].action),decision=decided?`사진 ${decidedOrdinal} ${states[review.status]}`:'',pending=decided&&['all','pending'].includes($('pixel-filter').value)&&await nextPending(frame.index),next=['all','pending'].includes($('pixel-filter').value)&&pending;if(next){await select(next.index);canvas.scrollIntoView({block:'center'});canvas.focus({preventScroll:true});if([...$('pixel-class').options].some(o=>o.value===selectedClass))$('pixel-class').value=selectedClass;$('pixel-decision').textContent=`${decision} · 다음 검수 대기 사진 ${frameOrdinal(workspace,next.index)}을 열었습니다.`;$('pixel-decision').hidden=false;return true;}if($('pixel-filter').value!=='all'&&review.status!==$('pixel-filter').value){$('pixel-filter').value='all';url();workspace={...workspace,...await request(workspacePage('pixel','all',{around:frame.index}))};}await select(frame.index);$('pixel-class').value=selectedClass;if(decided){$('pixel-decision').textContent=pending?decision:`${decision} · 편집 가능한 검수 대기 사진을 모두 처리했습니다.`;$('pixel-decision').hidden=false;}return true;}
+ catch(value){const message=value.message,rest=draft;if(saved){await select(frame.index);draft=rest;paint();}error(message);return false;}finally{busy=false;enable();if(saved&&bodies.some(body=>body.action==='fill_unknown')&&ready&&unknownPixels===0&&!$('pixel-approve').disabled){$('pixel-approve').scrollIntoView({block:'center'});$('pixel-approve').focus({preventScroll:true});}}}
 function connectAI(){
  const index=frame.index,ticket=serial;
  showAI('pixel',index,request,()=>frame?.index===index?{version:review.version,blocked:!ready||busy||loading||conflicted||forbidden||!!stroke||draft.length>0||seeds.length>0||polygon.length>0}:null,async({candidateSha}={})=>{
@@ -311,12 +321,16 @@ for(const [id,mode] of [['pixel-flood','sample'],['pixel-brush-tool','brush'],['
 $('pixel-undo').onclick=()=>{if(polygon.length){polygon.pop();paint();enable();}else if(seeds.length){seeds.pop();refreshSample();}else if(draft.length){draft.pop();paint();enable();}else mutate('undo');};
 $('pixel-save').onclick=()=>commit(draft.map(({label,radius,points})=>({action:'paint',label,radius,points})));$('pixel-discard').onclick=()=>{draft=[];paint();enable();};
 addEventListener('beforeunload',event=>{if(draft.length||stroke||seeds.length||polygon.length)event.preventDefault();});
-$('pixel-approve').onclick=()=>mutate('approve',{complete_frame_review:$('pixel-complete').checked,background_reviewed:$('pixel-background').checked,unknown_pixels_reviewed:$('pixel-unknown')?.checked===true});$('pixel-exclude').onclick=()=>mutate('exclude');$('pixel-reopen').onclick=()=>mutate('reopen');
+$('pixel-approve').onclick=async()=>{
+ if($('pixel-approve').disabled||busy||!ready||conflicted||forbidden)return;
+ if(unknownPixels>0&&workspace.workspace_kind!=='evaluation'&&!await mutate('fill_unknown'))return;
+ await mutate('approve',{complete_frame_review:true,background_reviewed:true,unknown_pixels_reviewed:$('pixel-unknown')?.checked===true});
+};$('pixel-exclude').onclick=()=>mutate('exclude');$('pixel-reopen').onclick=()=>mutate('reopen');
 $('pixel-apply-candidate').onclick=()=>{if(confirm('새 초안을 적용하면 현재 마스크가 대체되고 픽셀 승인이 해제됩니다. 계속할까요?'))mutate('apply_draft',{draft_sha256:$('pixel-candidates').value});};
 mergeCandidate.onclick=()=>{if(confirm('사람이 칠한 픽셀은 그대로 두고 255 영역 중 초안에 라벨이 있는 픽셀만 채웁니다. 적용 후 전체 사진을 다시 확인하세요.'))mutate('merge_draft',{draft_sha256:$('pixel-candidates').value});};
 $('pixel-candidates').onchange=()=>{candidatePreviewDigest='';$('pixel-candidate-preview').hidden=true;previewCandidate();};
 $('pixel-preview-candidate').onclick=()=>{if(!$('pixel-candidate-preview').hidden){$('pixel-candidate-preview').hidden=true;$('pixel-candidate-status').textContent='현재 검수 마스크 표시 · 초안 미적용';enable();}else previewCandidate();};
-for(const id of ['pixel-complete','pixel-background'])$(id).onchange=enable;$('pixel-opacity').oninput=paint;$('pixel-show-unknown').onchange=paint;$('pixel-mask-visible').onchange=paint;
+$('pixel-opacity').oninput=paint;$('pixel-show-unknown').onchange=paint;$('pixel-mask-visible').onchange=paint;
 $('pixel-view-original').onclick=()=>setView(false);$('pixel-view-detail').onclick=()=>setView(true);
 function clearSamples(){++previewSerial;seeds=[];sampleImage=null;samplePixels=0;sampleTolerance=null;previewing=false;if(ready){paint();enable();}}
 async function refreshSample(){const ticket=++previewSerial;sampleImage=null;samplePixels=0;sampleTolerance=null;if(!seeds.length){previewing=false;paint();enable();return;}previewing=true;paint();enable();try{const result=await request(`/api/mask-preview/${frame.index}`,{version:review.version,label:Number($('pixel-class').value),seeds,preserve_existing:preserveExisting(),tolerance:$('pixel-tolerance-mode').value==='auto'?'auto':Number($('pixel-tolerance').value)});const preview=await image(`data:image/png;base64,${result.mask_png}`);if(ticket!==previewSerial)return;sampleImage=preview;samplePixels=result.selected_pixels;sampleTolerance=result.tolerance;error();}catch(value){if(ticket===previewSerial)error(value.message);}finally{if(ticket===previewSerial){previewing=false;paint();enable();}}}
@@ -392,8 +406,6 @@ canvas.addEventListener('blur',()=>{if(stroke?.id===null)cancel();});
   if(event.key==='Backspace'&&tool==='polygon'&&polygon.length){event.preventDefault();polygon.pop();paint();enable();return;}
   if((event.code==='BracketLeft'||event.code==='BracketRight')&&tool==='brush'&&!$('pixel-radius').disabled){event.preventDefault();$('pixel-radius').value=String(Math.max(0,Math.min(128,Number($('pixel-radius').value)+(event.code==='BracketRight'?1:-1))));enable();return;}
   if(event.key==='Enter'&&event.target===canvas&&!$('pixel-sample-apply').disabled){event.preventDefault();$('pixel-sample-apply').click();return;}
-  if(key==='c'&&!$('pixel-complete').disabled){event.preventDefault();$('pixel-complete').click();return;}
-  if(key==='b'&&!$('pixel-background').disabled){event.preventDefault();$('pixel-background').click();return;}
   if(key==='n'&&!$('pixel-next-pending').disabled){event.preventDefault();$('pixel-next-pending').click();return;}
   const option=/^[1-9]$/.test(key)?[...$('pixel-class').options].filter(o=>o.value!==''&&o.value!=='255')[Number(key)-1]:null;
   if(option&&!$('pixel-class').disabled){event.preventDefault();$('pixel-class').value=option.value;$('pixel-class').dispatchEvent(new Event('change'));}

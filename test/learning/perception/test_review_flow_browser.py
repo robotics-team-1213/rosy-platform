@@ -671,8 +671,6 @@ def test_object_to_pixel_review_keeps_photo_and_shows_decision(browser_workspace
     page.once('dialog', lambda dialog: dialog.accept())
     page.locator('#pixel-fill').click()
     expect(page.locator('#pixel-status')).to_contain_text('v1')
-    page.locator('#pixel-complete').check()
-    page.locator('#pixel-background').check()
     page.locator('#pixel-approve').click()
     expect(page.locator('#pixel-title')).to_have_text('사진 1 픽셀 검수')
     expect(page.locator('#pixel-decision')).to_contain_text('사진 2 픽셀 승인 · 다음 검수 대기 사진 1')
