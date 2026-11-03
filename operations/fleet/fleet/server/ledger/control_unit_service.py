@@ -51,7 +51,8 @@ class ControlUnitService:
 
     def _create(self, origin, request):
         owner = self._owner(request)
-        fields = {"target_unit", "transfer"} if _is_arm(request) else {"target_unit", "robot_id", "goal"}
+        fields = ({"target_unit", "transfer", "requested_by"} if _is_arm(request)
+                  else {"target_unit", "robot_id", "goal"})
         body = request.model_dump(mode="json", include=fields)
         return self.store.create(origin, request.delegation_id, body, owner_unit=owner,
                                  config_revision=self.topology.revision)
@@ -151,8 +152,8 @@ class ControlUnitService:
         await self._sync(self.store.get(origin, identity))
         return self.reply(origin, identity)
 
-    async def cancel(self, origin, identity):
-        row = self.store.request_cancel(origin, identity)
+    async def cancel(self, origin, identity, *, reason=None):
+        row = self.store.request_cancel(origin, identity, reason)
         await self._sync(row)
         return self.reply(origin, identity)
 
@@ -170,10 +171,10 @@ class ControlUnitService:
         if row["cancel_requested"]:
             if job["status"] == "PROPOSED":
                 # Withdrawn to HOLD; the ARM admit also refuses a canceled delegation, so it can never run.
-                jobs.cancel(job["mission_id"], reason="control-unit-cancel")
+                jobs.cancel(job["mission_id"], reason=row.get("cancel_reason") or "control-unit-cancel")
                 return self._local_result(row, "CANCELED", {"job": jobs.view(row["local_task_id"]), "receipt": None})
             if not row["result"].get("cancel_sent"):
-                jobs.cancel(job["mission_id"], reason="control-unit-cancel")
+                jobs.cancel(job["mission_id"], reason=row.get("cancel_reason") or "control-unit-cancel")
                 job = jobs.view(row["local_task_id"])
         # The origin app reads job and receipt only through this projection (D-965); cancel_sent is not a stop.
         result = {"job": job, "receipt": jobs.receipt(job["mission_id"])}
@@ -224,7 +225,8 @@ class ControlUnitService:
                                    delegation_id=row["delegation_id"], config_revision=row["config_revision"])
                 response = await self.peer(row["owner_unit"], "POST", "inbox", incoming.model_dump(mode="json"))
                 if row["cancel_requested"]:
-                    response = await self.peer(row["owner_unit"], "POST", "/".join(self._key(row)), {})
+                    response = await self.peer(row["owner_unit"], "POST", "/".join(self._key(row)),
+                                               {"reason": row["cancel_reason"]} if row.get("cancel_reason") else {})
                 child = self._peer_row(row["owner_unit"], row, response)
                 expected = (self.topology.next_hop(row["owner_unit"], row["request"]["target_unit"])
                             if row["owner_unit"] != row["request"]["target_unit"] else row["owner_unit"])

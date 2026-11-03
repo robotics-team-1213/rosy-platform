@@ -58,7 +58,12 @@ class ControlUnitStore:
                 CREATE INDEX IF NOT EXISTS fleet_control_delegation_active
                     ON fleet_control_delegations(updated_at,origin_id,delegation_id)
                     WHERE status NOT IN ('COMPLETED','FAILED','CANCELED','EXPIRED');
+                CREATE INDEX IF NOT EXISTS fleet_control_delegation_result_mission
+                    ON fleet_control_delegations(origin_id, json_extract(result_json,'$.job.mission_id'));
             """)
+            # D-965 added the origin's cancel reason; older journals gain the column empty.
+            if "cancel_reason" not in {c[1] for c in connection.execute("PRAGMA table_info(fleet_control_delegations)")}:
+                connection.execute("ALTER TABLE fleet_control_delegations ADD COLUMN cancel_reason TEXT")
         with self._transaction() as connection:
             connection.execute("INSERT OR IGNORE INTO fleet_control_unit_identity VALUES (1, ?)",
                                (self.unit_id,))
@@ -133,6 +138,16 @@ class ControlUnitStore:
         with closing(self._connect()) as connection:
             return connection.execute("SELECT 1 FROM fleet_control_delegations "
                                       "WHERE local_task_id=? LIMIT 1", (task_id,)).fetchone() is not None
+
+    def by_result_mission(self, origin_id, mission_id):
+        """The delegation whose owner projected this ARM mission (D-965 relay); KeyError when none."""
+        with closing(self._connect()) as connection:
+            row = connection.execute("SELECT * FROM fleet_control_delegations WHERE origin_id=? "
+                                     "AND json_extract(result_json,'$.job.mission_id')=?",
+                                     (origin_id, mission_id)).fetchone()
+        if row is None:
+            raise KeyError(mission_id)
+        return self._document(row)
 
     def list(self, *, limit=100):
         if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 1000:
@@ -210,12 +225,12 @@ class ControlUnitStore:
                 raise ValueError("LOCAL_BINDING_REFUSED")
             return self._update(connection, row, {"local_task_id": local_id}, "ARM_JOB_BOUND")
 
-    def request_cancel(self, origin_id, delegation_id):
+    def request_cancel(self, origin_id, delegation_id, reason=None):
         with self._transaction() as connection:
             row = self._read(connection, origin_id, delegation_id)
             if row["cancel_requested"] or row["status"] in TERMINAL:
                 return self._document(row)
-            return self._update(connection, row, {"cancel_requested": 1}, "CANCEL_REQUESTED")
+            return self._update(connection, row, {"cancel_requested": 1, "cancel_reason": reason}, "CANCEL_REQUESTED")
 
     def project(self, origin_id, delegation_id, *, owner_unit, owner_revision, status, result):
         if (status not in STATES or isinstance(owner_revision, bool)

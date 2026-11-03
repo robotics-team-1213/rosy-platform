@@ -7,7 +7,7 @@ import httpx
 from fastapi import Depends, HTTPException
 
 from core_common.protocol.control_units import (
-    ControlApproveRequest, ControlArmIngressRequest, ControlIngressRequest, ControlWorkRequest,
+    ControlApproveRequest, ControlArmIngressRequest, ControlCancelRequest, ControlIngressRequest, ControlWorkRequest,
 )
 from fleet.swarm.transport import RobotApiError
 
@@ -107,9 +107,10 @@ def install_control_unit_routes(app, service, *, authorize, require_viewer, requ
                                               expected_revision=body.expected_revision))
 
     @app.post(prefix + "/delegations/{origin}/{identity}/cancel")
-    async def cancel(origin: str, identity: str, principal=Depends(authorize)):
+    async def cancel(origin: str, identity: str, body: ControlCancelRequest | None = None,
+                     principal=Depends(authorize)):
         if principal.role == "service":
             parent_scope(principal, origin)
         else:
             human(require_named_operator(principal))
-        return await execute(service.cancel(origin, identity))
+        return await execute(service.cancel(origin, identity, reason=body.reason if body else None))

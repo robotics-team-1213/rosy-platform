@@ -24,7 +24,8 @@ def _view(job):
               "status", "authority_epoch", "dispatch_generation", "approved_by", "reason")
     return {"job": {**{key: job[key] for key in fields}, "action_kind": "ARM_TRANSFER",
                     "transfer": job["request"],
-                    "resource_policy_digest": job["installation"]["capabilities"][0]["resource_policy_digest"]}}
+                    "resource_policy_digest": job["installation"]["capabilities"][0]["resource_policy_digest"],
+                    "delegated_by": job.get("delegated_by")}}
 
 
 class DelegatedArmJobs:

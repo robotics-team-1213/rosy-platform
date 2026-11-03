@@ -165,6 +165,17 @@ def relay(tmp_path, jobs):
     app, who = FastAPI(), {"principal": HARBOR}
     install_arm_transfer_relay_routes(app, control=nodes["R"], require_viewer=lambda: who["principal"],
                                       require_proposer=lambda: who["principal"])
+    peer, forwarded = nodes["R"].peer, []
+
+    class Peer:
+        async def __call__(self, *args, **kwargs):
+            return await peer(*args, **kwargs)
+
+        async def arm_job(self, unit, method, mission_id, tail, body=None):
+            forwarded.append((unit, method, mission_id, tail, body))
+            return 404, {"detail": {"code": "ARM_TRANSFER_JOB_NOT_FOUND"}}
+    nodes["R"].peer = Peer()
+    who["forwarded"] = forwarded
     return TestClient(app), nodes, who
 
 
@@ -190,10 +201,22 @@ def test_r_relays_create_read_receipt_and_cancel_for_the_proposing_app_only(tmp_
     assert client.get("/api/fleet/arm-transfers/jobs", params={"request_key": "harbor:move-1"}).status_code == 404
     assert client.post("/api/fleet/arm-transfers/jobs/physical-1/cancel", json={"reason": "x"}).status_code == 403
 
+    assert client.post("/api/fleet/arm-transfers/jobs/physical-1/rechecks", json={"recheck_key": "r-1"}).status_code == 403
+
     who["principal"] = HARBOR
+    assert nodes["CELL-A"].store.list()[0]["request"]["requested_by"] == "harbor"
+    evidence = client.get("/api/fleet/arm-transfers/jobs/physical-1/physical-evidence")
+    assert evidence.status_code == 404 and evidence.json()["detail"]["code"] == "ARM_TRANSFER_JOB_NOT_FOUND"
+    assert client.post("/api/fleet/arm-transfers/jobs/physical-1/rechecks", json={"recheck_key": "r-1"}).status_code == 404
+    assert client.get("/api/fleet/arm-transfers/jobs/physical-1/rechecks/r-1").status_code == 404
+    assert who["forwarded"] == [("CELL-A", "GET", "physical-1", "physical-evidence", None),
+                                ("CELL-A", "POST", "physical-1", "rechecks", {"recheck_key": "r-1"}),
+                                ("CELL-A", "GET", "physical-1", "rechecks/r-1", None)]
     canceled = client.post("/api/fleet/arm-transfers/jobs/physical-1/cancel", json={"reason": "operator changed plan"})
     assert canceled.status_code == 200 and canceled.json()["job"]["status"] == "HOLD"
     assert nodes["R"].store.list()[0]["status"] == "CANCELED"
+    assert nodes["CELL-A"].store.list()[0]["cancel_reason"] == "operator changed plan"
+    assert jobs.cancels == [("physical-1", "operator changed plan")]
 
 
 def test_r_refuses_a_workcell_no_child_owns_and_reports_an_unreachable_cell(tmp_path):
@@ -207,3 +230,16 @@ def test_r_refuses_a_workcell_no_child_owns_and_reports_an_unreachable_cell(tmp_
     nodes["R"].peer = down
     response = client.post("/api/fleet/arm-transfers/jobs", json=TRANSFER)
     assert response.status_code == 503 and response.json()["detail"]["code"] == "ARM_TRANSFER_JOB_UNAVAILABLE"
+
+
+def test_a_lost_cell_link_reports_the_last_projection_without_serving_it_as_current(tmp_path):
+    client, nodes, _ = relay(tmp_path, ArmJobs())
+    assert client.post("/api/fleet/arm-transfers/jobs", json=TRANSFER).status_code == 200
+
+    async def down(*args, **kwargs):
+        raise ConnectionError("cell offline")
+    nodes["R"].peer = down
+    asyncio.run(nodes["R"].refresh())
+    response = client.get("/api/fleet/arm-transfers/jobs/physical-1")
+    assert response.status_code == 503
+    assert response.json()["detail"]["last_projection"]["job_status"] == "PROPOSED"
