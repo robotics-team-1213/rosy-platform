@@ -45,6 +45,18 @@ def save(wt: Path, branch: str, candidate: str, main: str, tier: str | None = No
     path.write_text(json.dumps({**record, **extra}), encoding="utf-8")
 
 
+def count_yield(wt: Path, branch: str) -> None:
+    """One more delta yield on the saved record (land_selection.MAX_DELTA_YIELDS), its tier and evidence unchanged."""
+    path = _path(wt, branch)
+    try:
+        record = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return
+    if isinstance(record, dict):
+        record["yields"] = int(record.get("yields") or 0) + 1
+        path.write_text(json.dumps(record), encoding="utf-8")
+
+
 def flaky(wt: Path, branch: str) -> list[list[str]]:
     """D-970 4: invocations of node ids the saved pretest passed only when rerun alone (LOAD-FLAKY); the turn runs
     them again."""

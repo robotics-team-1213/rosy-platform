@@ -223,6 +223,10 @@ def _prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, 
             land.land_full.save(wt, branch, candidate, main_sha, "delta", combined,
                                 base_tier=base["tier"], flaky=land.land_full.flaky(wt, branch) + (flaky or []),
                                 yields=int(base.get("yields") or 0) + 1, reused=reused or bool(base.get("reused")))
+        elif base is not None:
+            # A delta pretest with no tier saves nothing, yet its yield counts toward MAX_DELTA_YIELDS: 11-03
+            # 23:20-23:35 one ticket yielded again and again on an unchanged record (D-970 1).
+            land.land_full.count_yield(wt, branch)
         tier = "delta" if tier is not None and base is not None else None
     # Keeping an older base with --no-cache would repeat overtime on every turn.
     elif tier == "affected" and not args.no_cache:

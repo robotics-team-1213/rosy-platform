@@ -558,3 +558,15 @@ def test_a_pretest_with_a_cross_tree_reuse_keeps_its_tier_but_is_not_push_eviden
     record = json.loads(path.read_text(encoding="utf-8"))
     assert record["tier"] == "affected" and record["reused"] is True
     assert land.land_full.prepared(wt, "feat/x", record["main"])["reused"] is True
+
+
+def test_a_delta_pretest_without_a_tier_still_counts_its_yield(tmp_path, monkeypatch):
+    """D-970 1: 11-03 a ticket kept yielding because a tierless delta pretest saved nothing and the count stood."""
+    record = tmp_path / "record.json"
+    monkeypatch.setattr(land.land_full, "_path", lambda wt, branch: record)
+    land.land_full.save(tmp_path, "b", "c" * 40, "m" * 40, "delta", [["x/test"]], base_tier="affected", yields=1)
+    land.land_full.count_yield(tmp_path, "b")
+    saved = json.loads(record.read_text(encoding="utf-8"))
+    assert saved["yields"] == 2 and saved["tier"] == "delta" and saved["invocations"] == [["x/test"]]
+    import land_selection
+    assert not land_selection.delta_yields("ticket.json", land.land_full.prepared(tmp_path, "b", "m" * 40))
