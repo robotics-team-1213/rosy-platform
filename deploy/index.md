@@ -80,5 +80,5 @@
 - 2026-11-03 · uncommitted · feat(omx): D-971 제어 PC는 팔 사건을 Fleet에 보고한다
 - 2026-11-03 · 3309dde54f · fix(site): dry-run에서 공개 릴리스 수정 방지
 - 2026-11-03 · 3a2fbd1f9a · feat(site): 서명 PC의 사이트 즉시 반영 푸시와 오분류 제목 교정
-- 2026-11-02 · 5eff2fd4d0 · fix(omx): 빈 관측과 관측 실패 구분
-- 2026-11-02 · uncommitted · D-963 제어 PC USB 카메라 역할 보고와 결정 적용
+- 2026-11-03 · uncommitted · docs(omx): 허브 추천은 자동 배정으로 올리지 않는다
+- 2026-11-03 · uncommitted · fix(omx): 기기 업데이터가 카메라 바인드 유닛을 함께 싣는다

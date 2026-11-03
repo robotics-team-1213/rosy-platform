@@ -1146,9 +1146,9 @@ def test_a_full_tier_runs_while_waiting_and_counts_as_the_turns_full_tier(repos,
     monkeypatch.setattr(land, "run_tests", lambda wt_, args, inv, logdir, round_no: rounds.append(round_no) or [])
     real_save = land.land_full.save
 
-    def save(*args):
+    def save(*args, **kw):
         rounds.append("save")
-        return real_save(*args)
+        return real_save(*args, **kw)
 
     monkeypatch.setattr(land.land_full, "save", save)
     assert land.main(["--tests", "auto", "--queue-timeout", "0.001"]) == 1                # the peer never leaves

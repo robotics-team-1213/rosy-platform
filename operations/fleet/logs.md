@@ -5265,6 +5265,14 @@
 - Gate: 변화 없음. 건너뛴 시험은 검증에 포함하지 않았으며 브라우저·ROS 실행·실물·현장 수용이나 실제 CPU 부하의 응답 지연 상한을 입증하지 않는다.
 - CE: 해당 없음 — 이번 원인과 재발 방지는 코드·회귀 시험으로 설명되며 기존 asyncio/GIL·동시성 교훈을 검토했다.
 
+## 2026-11-03 · 91f1525146 · fix(fleet): ARM 위임의 요청 키 격리와 상위 승인 검사
+
+- 변경: 셀 요청 키는 origin/delegation으로 격리하고 앱 응답에는 원래 요청 키를 유지한다. 물리 제안과 위임 연결은 같은 SQLite 트랜잭션에서 커밋한다. 명시적 승인과 정책 worker는 트랜잭션 밖에서 상위·조상 상태를 확인하고, 공유 admit은 연결의 유일성·취소 및 유한한 최근 확인 근거를 자원 점유 전후에 검사한다. 연결이 없는 예약된 control-unit 제안도 승인하지 않는다.
+- 검증: 요청 키 RED `63b32d820f`에서 두 앱이 같은 mission을 받는 2건 실패를 확인했고 `c852a206ac`에서 관련 9건이 통과했다. 실제 journal/HTTP/policy 컴포넌트 RED `ede6a1f67b`는 상위 단절·취소 뒤의 승인과 생성/연결 틈을 재현했다. 수정 `91f1525146`의 5개 모듈 98건, 시간 초과 시 coroutine 취소와 기존 navigation/dispatcher를 포함한 `7efb72e1f3`의 7개 모듈 92건이 건너뜀 없이 통과했다. 최신 main의 HTTP 통합 호출자는 `7fc95c3ac4`에서 실제 상위 확인 근거를 얻도록 연결했고 해당 3건도 건너뜀 없이 통과했다. 세 보고서 모두 known_failures는 0 new/known/flaky이며 겹치는 선택을 고유 시험 수로 합산하지 않는다.
+- gate 변화: 기존 snapshot·generation·capability 신선도·자원·journal 검사를 유지했다. HTTP 입력이나 실행 writer를 추가하지 않았으며 simulation 전용 경계도 유지한다. 독립 source safety review를 통과했고 실물 동작·운영 배포·현장 수용은 하지 않았다.
+- 미해결: 기존 일반 app custom lifespan은 legacy ARM policy startup hook을 호출하지 않는다. 정책 시험은 등록된 start/stop 컴포넌트를 명시 실행한 근거이며 운영 자동승인 실행을 입증하지 않는다.
+- CE: 미해결 — lifecycle 연결은 별도 작업으로 남겼다. 이번 가드 수정의 원인과 재발 방지는 코드·회귀 시험에 직접 남는다.
+
 ## 2026-11-03 · uncommitted · feat(fleet): D-971 OMX 팔 사건 원장·AI PC 설명·운영자 해제
 
 - 변경: `recognition/arm_incidents.py`의 `ArmIncidentStore`(공유 Fleet SQLite, open→explained→cleared, 같은 `(source, session)` 재보고는 같은 사건)와 라우트: 팔 토큰 보고·보류 조회, 이름 있는 운영자 해제(확인 내용 필수, 삭제 없음), 사진 조회(viewer), AI PC 전용 설명 없는 사건 목록·설명 저장. 작업 셀 관측 스냅샷 팔마다 `incidents`. `site_auth.py`가 ai_observer의 설명 POST 한 경로만 더 허용한다. API v1.357.

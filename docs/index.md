@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
-- 2026-11-03 · 85ec06aec9 · docs(solutions): 사이트 갱신 체인 정지 진단 순서 기록
-- 2026-11-03 · uncommitted · fix(remote): omx_hotfix가 contracts/foundation도 올린다
-- 2026-11-03 · uncommitted · feat(isaac): 실측 팔 받침·벨트 후보 케이스와 이름 있는 계획 장면
-- 2026-11-03 · uncommitted · test(remote): imported fake-host helper의 HEADROOM 격리
-- 2026-11-03 · uncommitted · fix(landing): main delta의 시험 폴더를 차례 밖 "delta" 단계로 (D-889 추가 27)
+- 2026-11-03 · uncommitted · fix(landing): 단계 없는 delta 사전 시험도 넘김 횟수에 셈 (D-970 1항 보완)
+- 2026-11-03 · uncommitted · fix(landing): 명시 FULL 증인이 재실행 뒤에도 남음 (D-970 보완)
+- 2026-11-03 · uncommitted · feat(landing): land_async orphans — 재부팅으로 죽은 착지를 찾아 되살림
+- 2026-11-03 · uncommitted · fix(landing): 다른 트리 통과 재사용도 대기열 단계는 남기고 게시 증거는 아님 (D-970 4항)
+- 2026-11-03 · uncommitted · fix(landing): 추측 사전 시험 기본 끔 (D-889 추가 28)

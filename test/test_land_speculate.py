@@ -18,6 +18,32 @@ from test_land import commit, git, repos  # noqa: E402,F401  (land.py's fixture 
 SELECTED = [["pkg/test/test_a.py"], ["test/test_harness_contracts.py"]]
 
 
+def test_explicit_full_never_starts_speculative_preparation(queued, monkeypatch):
+    _, wt, _, _, qdir, ticket, *_ = queued
+    monkeypatch.setattr(spec, '_record', lambda *a: pytest.fail('FULL inspected speculative state'))
+    spec.prepare(land, wt, 'feat/x', land.argparse.Namespace(tests='full'), sys.executable, qdir, ticket)
+
+
+@pytest.mark.parametrize('extra', [
+    ['ROSY_RUN_BROWSER_TESTS=1', 'pkg/test', 'test/test_browser.py'],
+    ['pkg/test', 'test/test_other.py', '-k', 'with spaces'],
+    ['pkg/test', 'test/test_other.py', '--basetemp', 'test/option-value'],
+])
+def test_held_projection_preserves_complete_option_and_environment_invocations(queued, monkeypatch, extra):
+    from harness import affected_exclusive as exclusive
+    main, wt, base, peer, qdir, ticket, *_ = queued
+    commit(wt, {exclusive.TARGET: 'def test_stub(): pass\n'}, 'timing source')
+    land.land_full.save(wt, 'feat/x', git(wt, 'rev-parse', 'HEAD'), base, 'full', [['pkg/test']])
+    root = ['test', '--ignore=' + exclusive.TARGET]
+    plain = ['pkg/test', 'test/test_plain.py']
+    monkeypatch.setattr(land, 'select', lambda *a, **k: ([root, exclusive.DEDICATED, plain, extra], None))
+    _prepare(wt, qdir, ticket)
+    git(main, 'merge', '-q', '--ff-only', peer)
+    git(wt, 'merge', '-q', '--no-edit', 'main')
+    assert spec.held(land, wt, 'feat/x', base, git(wt, 'rev-parse', 'HEAD')) == [
+        root, exclusive.DEDICATED, ['test/test_plain.py'], extra]
+
+
 @pytest.fixture
 def queued(repos, monkeypatch):
     """feat/x prepared FULL over base; feat/peer, ahead of it in the queue, waits with its own candidate."""
@@ -90,6 +116,7 @@ def test_prediction_uses_the_same_stale_bypass_window_as_the_turn(queued, age, p
                                                 (False, True, False), (True, True, False), (True, False, True)])
 def test_real_prepare_publishes_only_its_tested_main_before_predicting(queued, monkeypatch, retry, moves, keep_full):
     main, wt, old, peer, qdir, ticket, *_ = queued
+    monkeypatch.setenv(land.land_prepare.SPECULATE_ENV, "1")  # D-889 28: speculation runs only when asked
     commit(main, {"lib/current.py": "current = 1\n"}, "main before prepare")
     tested = git(main, "rev-parse", "HEAD")
     if retry:
@@ -215,13 +242,43 @@ def test_the_root_part_keeps_each_job_s_options_and_settings():
     """11-03: a held turn ran the G1 timing job as a plain file and browser chunks unopted; publication refused it."""
     timing = ["ROSY_JOB_ALONE=1", "test/test_platform_g1_timing.py", "-pno:xdist", "-ptools.g1_timing_gate"]
     browser = ["ROSY_RUN_BROWSER_TESTS=1", "operations/fleet/test/test_a_browser.py", "test/test_b_browser.py"]
-    assert spec.root_part([timing, browser, ["pkg/test", "--ignore=pkg/test/x.py"], ["test", "--ignore=t.py"]]) == [
-        timing, ["ROSY_RUN_BROWSER_TESTS=1", "test/test_b_browser.py"], ["test", "--ignore=t.py"]]
+    module_browser = ["ROSY_RUN_BROWSER_TESTS=1", "operations/fleet/test/test_a_browser.py"]
+    assert spec.root_part([timing, browser, module_browser, ["pkg/test", "--ignore=pkg/test/x.py"],
+                           ["test", "--ignore=t.py"]]) == [timing, browser, ["test", "--ignore=t.py"]]
 
 
 def test_a_held_turn_record_keeps_one_copy_of_a_repeated_job(queued, monkeypatch):
+    from harness.affected_exclusive import TARGET
     _, wt, *_ = queued
     timing = ["ROSY_JOB_ALONE=1", "test/test_platform_g1_timing.py", "-pno:xdist", "-ptools.g1_timing_gate"]
     monkeypatch.setattr(spec, "_record", lambda *a: {spec.KEY: {"invocations": [timing, ["pkg/test"]]}})
-    prepared = spec.with_spec(land, wt, "feat/x", {"tier": "full", "invocations": [["test"], timing]})
-    assert prepared["invocations"] == [["test"], timing, ["pkg/test"]]
+    root = ["test", "--ignore=" + TARGET]
+    prepared = spec.with_spec(land, wt, "feat/x", {"tier": "full", "invocations": [root, timing]})
+    assert prepared["invocations"] == [root, timing, ["pkg/test"]]
+
+
+def test_with_spec_preserves_mains_cross_context_logical_row_policy(queued, monkeypatch):
+    from harness.affected_exclusive import DEDICATED, TARGET
+    _, wt, *_ = queued
+    root, ordinary, novel = ['test', '--ignore=' + TARGET], ['pkg/test'], ['new/test']
+    original = [root, DEDICATED, ordinary, ordinary]
+    monkeypatch.setattr(spec, '_record', lambda *a: {spec.KEY: {
+        'invocations': [DEDICATED, ordinary, novel, novel]}})
+    prepared = spec.with_spec(land, wt, 'feat/x', {'tier': 'full', 'invocations': original})
+    assert prepared['invocations'] == original + [novel, novel]
+    monkeypatch.setattr(spec, '_record', lambda *a: {spec.KEY: {
+        'invocations': [DEDICATED, DEDICATED, ordinary]}})
+    with pytest.raises(ValueError):
+        spec.with_spec(land, wt, 'feat/x', {'tier': 'full', 'invocations': original})
+
+
+def test_prepare_skips_speculation_unless_asked(queued, monkeypatch):
+    """D-889 28: 11-03 speculation used 9.8 h of test-PC time in 6 h and was held at 3 of 34 turns."""
+    _, wt, *_, qdir, ticket, _, _ = queued
+    monkeypatch.delenv(land.land_prepare.SPECULATE_ENV, raising=False)
+    called = []
+    monkeypatch.setattr(land, "run_tests", lambda *a, **k: [])
+    monkeypatch.setattr(spec, "prepare", lambda *a, **k: called.append(a))
+    land.land_prepare.prepare(land, wt, "feat/x", land.argparse.Namespace(tests="auto", no_cache=True),
+                              sys.executable, qdir, ticket, SELECTED, "")
+    assert called == []

@@ -5,14 +5,13 @@
 
 ## Purpose
 
-Wheel that binds the ROS-free `pallet.transfer` Skill to the OMX analytic cell planner and the local `PickPlaceRunner`. `ActionRunner` validates the Fleet grant, peer, capability revision, stop fence, and Action journal before it calls this provider. The provider does not create destination-pose evidence or ROS-SIM acceptance by itself.
+Wheel with the OMX LeRobot `rosy_omx` Robot, the CORE arm client and the preflight entry point. It imports no middleware. The `pallet.transfer` Skill binding and the mixed-planner IK reach live in the OMX cell owner `rosy_agent` (`middleware/devices/omx/agent`).
 
 ## Key Files
 
 | File | Description |
 |------|-------------|
-| `README.md` | Grant projection, grasp resolution, and what this wheel does not prove |
-| `src/rosy/integrations/robots/omx/mixed_reach.py` | D-402 IK reach in the `mixed_cell.Reach` shape for the mixed planner (per arm base, profile limits, single poses only) |
+| `README.md` | What this wheel holds and where the Skill binding moved |
 | `pyproject.toml` | Integration wheel metadata |
 | `COLCON_IGNORE` | Keeps colcon from building this folder |
 
