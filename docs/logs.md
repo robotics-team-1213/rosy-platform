@@ -13869,6 +13869,7 @@ osy-d395-s1d\`.
 - CE: 기존 교훈 갱신 — `docs/solutions/workflow-issues/landings-gave-the-turn-back-and-reran-everything-2026-11-01.md`에 cold packet과 부분 완료 증거의 경계를 남겼다. 같은 명령의 기존 PASS 키를 다른 자식 키로 추론하지 않는다.
 
 ## 2026-11-03 · uncommitted · docs(landing): 초기 GC 등록 목록과 추가 복구의 확인 범위
+- 변경: 제품 동작은 바꾸지 않고 실제 등록 목록과 추가 Git 복구, 아직 검증하지 못한 파일 보존 범위를 기록한다.
 - 확인된 사실: 초기 정리 전 세션의 실제 porcelain 출력(11월2일01:46:03.182Z)에서 등록된 hidden 워크트리 103곳의 경로·HEAD·브랜치를 복원했다. 고유 HEAD는 101개이며 모두 commit 객체다. 기존 7,276개 복구 참조에서 도달하지 못하던 `3f4cf47078a80d45c7f0a1e6d6db059f5b7b4267`은 객체가 남아 있어 새 `refs/wip/2026-11-03/pre-gc-inventory/<sha>`로 보존했다.
 - 검증: 추가 HEAD의 connectivity 검사 exit0/output0이고, 이후 등록 목록의 고유 HEAD 101개 모두 현재 refs에서 도달 가능함을 확인했다. 추가 전 기존 refs의 commit-graph·connectivity도 exit0/output0이었다. 현재 refs의 정상 판정만으로 삭제 전 등록 HEAD 전체의 보존을 대신할 수 없었다.
 - 근거: 작업 공간의 `Rosy/docs/workspace-records/2026-11-02/pre-gc-registered-worktrees.json`에 원본 세션 39행의 시각·SHA256, 정규화한 103개 등록 항목, 현재 도달 가능 여부와 추가 복구 참조를 보존했다. 연결성 출력은 OS Temp `rosy-pre-gc-inventory-connectivity.txt`다. 원본 세션은 수정하지 않았다.
