@@ -1220,3 +1220,26 @@ def test_the_control_unit_peer_runs_the_signed_proxy_image_and_needs_to_run_not_
     assert upd.containers_reason(rows(), NEW, accepted, inspect) == ""
     assert "control-unit-peer" in upd.containers_reason(rows(peer_state="exited"), NEW, accepted, inspect)
     assert "control-unit-peer" in upd.containers_reason(rows(peer_image="caddy:latest"), NEW, accepted, inspect)
+
+
+@pytest.mark.parametrize('fault', [None, 'missing', 'duplicate', 'stopped', 'unhealthy', 'hash',
+                                 'writable', 'privileged'])
+def test_control_unit_peer_runtime_matches_compose_without_inventing_health(fault):
+    rows = [{'Service': 'control-unit-peer', 'State': 'running', 'ID': 'peer-container'}]
+    if fault == 'missing': rows.clear()
+    if fault == 'duplicate': rows *= 2
+    if fault == 'stopped': rows[0]['State'] = 'exited'
+    if fault == 'unhealthy': rows[0]['Health'] = 'unhealthy'
+    inspected = []
+
+    def inspect(args):
+        inspected.append(args[-1])
+        return SimpleNamespace(stdout=json.dumps([{
+            'HostConfig': {'ReadonlyRootfs': fault != 'writable', 'Privileged': fault == 'privileged'},
+            'Config': {'Labels': {'com.docker.compose.config-hash': 'wrong' if fault == 'hash' else 'peer-hash'}}}]))
+
+    result = upd.runtime_reason(rows, {'control-unit-peer': 'peer-hash'}, inspect)
+    if fault is None:
+        assert result == '' and inspected == ['peer-container']
+    else:
+        assert 'control-unit-peer' in result
