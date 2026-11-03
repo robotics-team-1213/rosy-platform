@@ -803,4 +803,7 @@ def test_jaws_closing_along_a_box_open_for_its_length_not_its_width():
     across_short = {"width_mm": 30, "length_mm": 90, "grasp": {"jaw_axis_deg_from_long": 90}}
     by_the_ends = {"width_mm": 30, "length_mm": 90, "grasp": {"jaw_axis_deg_from_long": 0}}
     assert auto.across(across_short) == 30 and auto.across(by_the_ends) == 90
-    assert auto.jaw_open_for(auto.across(by_the_ends)) > auto.jaw_open_for(auto.across(across_short)) + 5
+    with pytest.raises(SystemExit, match="past gripper.open_max"):  # never clamped onto the box
+        auto.jaw_open_for(auto.across(by_the_ends))
+    wide = {**auto.prm.load()["values"], "gripper.open_max": 62.0}
+    assert auto.jaw_open_for(auto.across(by_the_ends), wide) > auto.jaw_open_for(auto.across(across_short), wide) + 5

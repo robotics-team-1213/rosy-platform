@@ -217,7 +217,9 @@ def jaw_open_for(width_mm: float, params=None, margin_mm: float | None = None) -
     g = lambda name: prm.get(params, name)  # noqa: E731
     margin = g("auto.jaw_margin_mm") if margin_mm is None else margin_mm  # less where a neighbour is near (finger_room)
     value = g("gripper.held_30mm") + (width_mm + 2 * margin - 30.0) / g("gripper.gap_mm_per_unit")
-    return round(min(max(value, g("gripper.held_30mm") + 0.5), g("gripper.open_max")), 2)
+    if value > g("gripper.open_max"):  # clamped, the fingers would come down on the object (2026-11-04)
+        raise SystemExit(f"a {width_mm:.0f} mm object needs the jaws at {value:.1f}, past gripper.open_max {g('gripper.open_max')}")
+    return round(max(value, g("gripper.held_30mm") + 0.5), 2)
 
 
 def reachable_ends(o: dict, entry: dict, params=None) -> list:
