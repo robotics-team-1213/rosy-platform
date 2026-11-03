@@ -45,14 +45,29 @@ class RearPhases:
         self._h = host
         self._progress: Optional[tuple] = None     # (travelled_m, at)
         self._baseline_v: Optional[float] = None
-        # 전압 1소스(D-350 Phase 1) — D-27 억제 입력이 아니다. `update(now=…)` 로 매니저 시계를 쓴다.
-        self._charging = ChargingConfirmation(window_s=host._cfg.charge_confirm_s, instrumented=False)
+        # 전압 1소스(D-350 Phase 1) — D-27 억제 입력이 아니다. 매니저 시계로 만들고
+        # 호출은 늘 `update(now=…)`로 온다(시계 갈아끼우기 후에도 섞이지 않게).
+        self._charging = ChargingConfirmation(clock=host._clock,
+                                              window_s=host._cfg.charge_confirm_s,
+                                              instrumented=False)
 
     # --- 매니저가 부르는 자리 ---------------------------------------------------
 
     def active(self) -> bool:
         dock_type = self._h._type()
         return dock_type is not None and dock_type.approach == "rear"
+
+    def docked_confirm(self, status, voltage, now):
+        """DOCKED 유지 중 충전 확인 1회: (확정, 사용한 확인 인스턴스).
+
+        계측 도크(status 있음)는 매니저의 2소스 확인을, 후진 도크는 여기의
+        전압 1소스 확인을 쓴다(D-350 Phase 1 — 상태·만춫 판정용, D-27 아님).
+        매니저 크기 래칫(D-766) 때문에 이 선택이 여기 있다."""
+        if status is not None:
+            return self._h._charging.update(status, voltage, now=now), self._h._charging
+        if self.active():
+            return self._charging.update(None, voltage, now=now), self._charging
+        return False, self._h._charging
 
     def staging_pose(self, dock, offset_m: float) -> Pose2D:
         """스테이징 자리는 같고, 후진형은 뒤가 도크를 본다."""

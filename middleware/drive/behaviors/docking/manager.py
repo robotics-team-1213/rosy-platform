@@ -240,6 +240,7 @@ class DockingManager:
         self._reseats = 0
         self._error = None
         self._charging.reset()
+        self._agent = None  # 앞선 계측 도킹의 잔존 에이전트가 후진 확인을 가리지 않게
         self._state = DockState.DOCKING
         self._execution('activate')
         self._emit("docking.started", "info", {"dock_id": dock.id})
@@ -569,21 +570,20 @@ class DockingManager:
         """도크에 있는 동안 충전을 확인하고 배터리 정책에 알린다."""
         status = self._agent.poll() if self._agent is not None else None
         voltage = getattr(self._battery, "voltage", None) if self._battery else None
-        confirmed = False
-        if status is not None:
-            confirmed = self._charging.update(status, voltage, now=now)
+        confirmed, charging = self._rear_phases.docked_confirm(status, voltage, now)
 
         if self._battery is not None:
-            self._battery.set_charging(confirmed)
+            self._battery.set_charging(confirmed and charging.source == "instrumented")
 
         target = DockState.CHARGING if confirmed else DockState.DOCKED
         if target is not self._state:
             self._state = target
             self._emit("docking.charging" if confirmed else "docking.charge_lost",
-                       "info", {"dock_id": self._dock.id if self._dock else None})
+                       "info", {"dock_id": self._dock.id if self._dock else None,
+                                "source": charging.source})
 
         # D-350: 만춫 검출 — CHARGING→DOCKED 전이(전류 종단) 또는 전압 유지.
-        self._check_full(self._charging)
+        self._check_full(charging)
 
     def _tick_undocking(self, now: float) -> None:
         if self.executor is None:

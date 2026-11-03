@@ -1855,3 +1855,17 @@
 - gate 변화: 없음.
 - 결정: D-972
 - 교훈: 없음.
+
+## 2026-11-04 · uncommitted · fix(docking): 후진 도크 DOCKED 이후 전압 1소스로 CHARGING 유지 (D-972)
+- 변경: 후진 도크는 도크 에이전트가 없어 `_tick_docked`가 충전을 확인하지 못하던 것을 `rear_phases`의 전압 1소스 확인으로 잇는다. DOCKED↔CHARGING 전이·`docking.charging`/`docking.charge_lost`·만춫 판정(`_check_full`)이 후진 도크에서도 돈다. 전압 단일 소스 확정은 D-350 Phase 1 규칙대로 배터리 인터록(`set_charging`, D-27)에 반영하지 않는다 — 상태·만춫 판정에만 쓴다.
+- 증거: `test_docking_rear.py` 회귀(도킹 후 CHARGING 확인, 인터록 미반영, 전압 하락 시 즉시 charge_lost). 원격 시험 결과는 커밋 본문에.
+- gate 변화: 없음.
+- 결정: D-972
+- 교훈: 없음.
+
+## 2026-11-04 · uncommitted · fix(docking): 후진·계측 도크 혼용 시 오래된 도크 에이전트 가리개 제거 (D-972)
+- 변경: `dock()` 시작 시 `_agent`를 비워 앞선 계측 도킹이 남긴 에이전트가 뒤따르는 후진 도킹의 전압 확인을 가리지 못하게 한다(잘못된 2소스 확정 방지). DOCKED 충전 확인 선택을 `RearPhases.docked_confirm`으로 옮기고(매니저 래칫), rear 전압 확인 인스턴스는 매니저 시계로 만들며, `docking.charging`/`charge_lost`에 `source` 필드를 더한다(API 참조 갱신). D-972 상태 갱신(독립 리뷰·Safety-Review 완료).
+- 증거: 기존 `test_docking.py`(계측 경로 회귀)·`test_docking_rear.py`. 원격 시험은 착지 때.
+- gate 변화: 없음.
+- 결정: D-972
+- 교훈: 없음.

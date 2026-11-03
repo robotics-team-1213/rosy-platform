@@ -84,10 +84,15 @@ class World:
 
 
 class VDetector:
-    """The dock origin and inward axis in base_link, from the true pose, 5 Hz."""
+    """The dock origin and inward axis in base_link, from the true pose, 5 Hz.
+
+    `dead` simulates a feed whose marker is gone for good: retries call
+    start() again (a real FeedDetector restart does not resurrect a lost
+    marker; freshness rules keep it dead)."""
 
     def __init__(self, world, clock):
         self.world, self.clock, self.started, self.latest = world, clock, False, None
+        self.dead = False
 
     def start(self, dock=None):
         self.started = True
@@ -96,6 +101,9 @@ class VDetector:
         self.started = False
 
     def capture(self):
+        if self.dead:
+            self.latest = None
+            return
         x, y, yaw = self.world.pose
         c, s = math.cos(yaw), math.sin(yaw)
         self.latest = DockObservation(x=c * -x + s * -y, y=-s * -x + c * -y,
@@ -134,15 +142,16 @@ def a_rear(*, charges=True, **type_kwargs):
     db.add_type(DockType(**dict(REAR, **type_kwargs)))
     db.add(DockInstance(id="rear", type="rear-usb", x=0.0, y=0.0, yaw=0.0))
     events, safety = [], SimpleNamespace(estop=False)
+    battery = Battery(world, clock, charges)
     manager = DockingManager(
         database=db, safety=safety, config=DockingConfig(), clock=clock,
         detector_factory=lambda dock, dock_type: detector,
-        capability_provider=lambda: True, battery=Battery(world, clock, charges),
+        capability_provider=lambda: True, battery=battery,
         events=SimpleNamespace(publish=lambda t, **kw: events.append((t, kw.get("data")))))
     manager.executor = world
     world.manager = manager
     return SimpleNamespace(manager=manager, world=world, detector=detector, clock=clock,
-                           events=events, safety=safety)
+                           events=events, safety=safety, battery=battery)
 
 
 def run(p, until, max_s=240.0):
@@ -224,6 +233,18 @@ def test_estop_while_reversing_fails_and_stops():
     assert p.world.command == (0.0, 0.0)
 
 
+def test_losing_the_v_during_alignment_retries():
+    """정렬 중 관측이 끊기면 유예 뒤 재시도다 — 유예 안에서 한 프레임 놓치는 건 아니다."""
+    p = a_rear()
+    p.manager.dock()
+    run(p, lambda m: m.phase is DockPhase.ALIGNING)
+    p.detector.dead = True               # 정렬 중 V 표지가 사라진다(되살아나지 않음)
+    run(p, done, max_s=400.0)
+    assert p.manager.state is DockState.DOCK_FAILED, "3회 재시도 뒤 실패"
+    reasons = [d.get("reason") for t, d in p.events if t == "docking.retry"]
+    assert "dock lost during rear alignment" in reasons, reasons
+
+
 def test_undocking_a_rear_dock_drives_forward():
     p = a_rear()
     p.manager.dock()
@@ -235,6 +256,25 @@ def test_undocking_a_rear_dock_drives_forward():
     assert p.manager.state is DockState.UNDOCKED
     assert p.world.commands and all(v > 0.0 for _, (v, _w) in p.world.commands)
     assert p.world.pose[0] < -DOCKED_ALONG - 0.3
+
+
+def test_docked_rear_keeps_confirming_charging_without_latching_the_interlock():
+    """DOCKED 뒤에도 전압 1소스로 CHARGING을 잇는다. 단 그 확정은 D-350
+    Phase 1(1소스)이므로 배터리 인터록(set_charging)에는 반영하지 않는다."""
+    p = a_rear()
+    p.manager.dock()
+    run(p, done)
+    assert p.manager.state is DockState.DOCKED
+    run(p, lambda m: m.state is DockState.CHARGING, max_s=30.0)
+    assert p.manager.state is DockState.CHARGING, "voltage hold should confirm charging"
+    assert any(t == "docking.charging" for t, _ in p.events)
+    assert p.battery.charging_flags and not any(p.battery.charging_flags), \
+        "Phase 1 voltage-only confirm must not arm the D-27 interlock"
+    # 충전이 끊기면(전압 하락) 즉시 DOCKED 로 돌아간다 — 해제는 창을 기다리지 않는다.
+    p.battery.charges = False
+    run(p, lambda m: m.state is DockState.DOCKED, max_s=30.0)
+    assert p.manager.state is DockState.DOCKED
+    assert any(t == "docking.charge_lost" for t, _ in p.events)
 
 
 def test_rear_errors_read_the_observation_in_the_dock_frame():
