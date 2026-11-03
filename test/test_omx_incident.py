@@ -12,6 +12,47 @@ import omx_incident as oi  # noqa: E402
 HOME = [0.8, -62.2, 51.8, 51.4, 45.0, 54.4]
 
 
+@pytest.fixture(autouse=True)
+def isolated_arm_home(tmp_path, monkeypatch):
+    monkeypatch.setenv("ROSY_OMX_HOME", str(tmp_path / "arm-home"))
+
+
+def test_hold_survives_a_new_recording_directory(tmp_path, monkeypatch):
+    first, second = tmp_path / "first", tmp_path / "second"
+    first.mkdir()
+    second.mkdir()
+    monkeypatch.chdir(first)
+    oi.handle(session(first), "arm_b")
+    monkeypatch.chdir(second)
+    with pytest.raises(SystemExit, match="held for a person"):
+        oi.refuse_if_held("arm_b")
+    oi.refuse_if_held("arm_a")
+
+
+@pytest.mark.parametrize("bad_read", ["transport", "packet"])
+def test_reboot_refuses_failed_torque_readback(tmp_path, monkeypatch, bad_read):
+    from types import SimpleNamespace
+
+    rebooted, closed = [], []
+    port = SimpleNamespace(openPort=lambda: True, setBaudRate=lambda baud: True,
+                           closePort=lambda: closed.append(True))
+
+    def read(bus, motor, address):
+        if motor == 13 and address == 64:
+            return (0, -3001, 0) if bad_read == "transport" else (0, 0, 1)
+        return (32 if address == 70 and motor == 13 else 0, 0, 0)
+
+    packet = SimpleNamespace(read1ByteTxRx=read,
+                             reboot=lambda bus, motor: rebooted.append(motor) or (0, 0))
+    monkeypatch.setitem(sys.modules, "dynamixel_sdk", SimpleNamespace(
+        COMM_SUCCESS=0, PortHandler=lambda device: port, PacketHandler=lambda version: packet))
+    monkeypatch.setattr(oi.time, "sleep", lambda seconds: None)
+    result = oi.reboot_latched("fake-follower")([13])
+    assert rebooted == []
+    assert result.get("error") or result.get("refused")
+    assert closed == [True]
+
+
 def session(tmp_path, *, latched=True, last=HOME, status=(), windup=True):
     io = tmp_path / "chunk-io-b"
     io.mkdir()
