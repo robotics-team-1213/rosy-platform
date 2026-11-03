@@ -205,16 +205,14 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                     return self.send(storage_web.inventory.snapshot() if storage_web.inventory else {'status': 'not_configured', 'roots': []})
                 if path == '/api/workspace':
                     query = parse_qs(urlparse(self.path).query, strict_parsing=True, keep_blank_values=True)
-                    if set(query) - {'limit', 'offset', 'lane', 'status', 'around', 'after', 'source_session'} or any(len(v) != 1 for v in query.values()):
+                    if set(query) - {'limit', 'offset', 'lane', 'status', 'around', 'after', 'source_session', 'folder_id'} or any(len(v) != 1 for v in query.values()):
                         raise ValueError('invalid workspace page request')
-                    if query:
-                        page = store.frame_page(**{key: int(values[0]) if key in ('limit', 'offset', 'around', 'after') else values[0]
-                                                   for key, values in query.items()})
-                        frames = page.pop('frames')
-                    else:
-                        page = {}
-                        frames = [dict(row, pixel_status=review_masks.get(store, row['index'])['status'])
-                                  for row in store.list_frames()]
+                    page = store.frame_page(**{key: int(values[0]) if key in ('limit', 'offset', 'around', 'after') else values[0]
+                                               for key, values in query.items()})
+                    frames = page.pop('frames')
+                    page['context'].update(workspace={'id': project,
+                        'label': review_evidence.metadata(store, 'workspace_label') or '현재 작업공간'},
+                        workspaces=workspace_links or [])
                     object_set = class_sets.object_set(store)
                     return self.send({'frames': frames, **page, 'classes': [c['name'] for c in object_set['classes']],
                                       'object_class_set': object_set,
@@ -340,7 +338,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                     return self.send(detail_preview(store, int(path.rsplit('/', 1)[1])),
                                      mime='image/png')
                 files = {'/': 'index.html', '/app.js': 'app.js', '/history.js': 'history.js', '/viewport.js': 'viewport.js', '/commands.js': 'commands.js', '/app.css': 'app.css',
-                         '/review-pages.js': 'review-pages.js', '/box-geometry.mjs': 'box-geometry.mjs', '/learning': 'learning.html',
+                         '/review-pages.js': 'review-pages.js', '/review-context.js': 'review-context.js', '/box-geometry.mjs': 'box-geometry.mjs', '/learning': 'learning.html',
                          '/learning.js': 'learning.js', '/pixels': 'pixels.html', '/pixels.js': 'pixels.js',
                          '/storage.js': 'storage.js', '/storage-settings.js': 'storage-settings.js', '/versions.js': 'versions.js', '/ai-jobs.js': 'ai-jobs.js',
                          '/catalog': 'catalog.html', '/catalog.js': 'catalog.js',

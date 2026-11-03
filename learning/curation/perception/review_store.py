@@ -165,7 +165,7 @@ class ReviewStore:
             return [self.decoded(row) for row in db.execute('SELECT * FROM frames ORDER BY id')]
 
     def frame_page(self, *, lane='object', status='all', limit=60, offset=0,
-                   around=None, after=None, source_session=None):
+                   around=None, after=None, source_session=None, folder_id=None):
         """Bound label decoding and pixel lookups to the visible review page."""
         if lane not in ('object', 'pixel') or status not in ('all', 'pending', 'approved', 'excluded'):
             raise ValueError('invalid review page filter')
@@ -176,14 +176,27 @@ class ReviewStore:
         join = ' FROM frames f LEFT JOIN masks m ON m.frame=f.id'
         pixel = "COALESCE(m.status,'pending')"
         with self.connect() as db:
-            if source_session is None:
+            folders = json.loads(review_evidence.metadata(self, 'image_folders') or '[]')
+            folder_ids = [item['id'] for item in folders]
+            if folder_id is not None and folder_id not in folder_ids and folder_id != 'all':
+                raise ValueError('unknown review folder')
+            selected_folder = folder_id
+            prefix = None
+            if folder_id is not None and folder_id != 'all':
+                prefix = f'folder:{folder_id}:'
+            elif folder_id is None and source_session is None:
                 row = db.execute("SELECT value FROM metadata WHERE key='review_source_prefix'").fetchone()
                 if row:
                     prefix = json.loads(row[0])
                     if not isinstance(prefix, str) or not prefix:
                         raise ValueError('invalid review source prefix')
-                    scope += " AND substr(json_extract(f.source,'$.source_session'),1,?)=?"
-                    args += [len(prefix), prefix]
+                    selected_folder = next((key for key in folder_ids if prefix == f'folder:{key}:'), None)
+                elif folder_ids:
+                    selected_folder = folder_ids[0]
+                    prefix = f'folder:{selected_folder}:'
+            if prefix:
+                scope += " AND substr(json_extract(f.source,'$.source_session'),1,?)=?"
+                args += [len(prefix), prefix]
             where, values = scope, list(args)
             if status != 'all':
                 where += (' AND f.status=?' if lane == 'object' else f" AND f.status!='excluded' AND {pixel}=?")
@@ -206,6 +219,9 @@ class ReviewStore:
             rows = db.execute(f'SELECT f.*,{pixel} AS pixel_status' + join + where + ' ORDER BY f.id LIMIT ? OFFSET ?', values + [limit, offset])
             frames = [dict(self.decoded(row), pixel_status=row['pixel_status']) for row in rows]
         return {'frames': frames, 'counts': counts, 'pixel_counts': pixel_counts,
+                'context': {'folders': [{'id': item['id'], 'label': item['label']} for item in folders],
+                            'folder_id': selected_folder, 'total': sum(counts.values()),
+                            'source_session': source_session is not None, 'default_scope': bool(prefix)},
                 'page': {'offset': offset, 'limit': limit, 'total': total,
                          'target': target if after is not None else around}}
 

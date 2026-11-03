@@ -7,6 +7,8 @@ export function workspacePage(lane, status='all', options={}) {
   const query=new URLSearchParams({limit:'60',lane,status});
   const session=new URLSearchParams(location.search).get('source_session');
   if(session!==null)query.set('source_session',session);
+  const folder=new URLSearchParams(location.search).get('folder_id');
+  if(folder!==null)query.set('folder_id',folder);
   for(const [key,value] of Object.entries(options))if(value!==undefined&&value!==null)query.set(key,value);
   return `/api/workspace?${query}`;
 }

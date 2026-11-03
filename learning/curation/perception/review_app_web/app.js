@@ -1,4 +1,5 @@
 import {workspacePage,pageControls,frameOrdinal} from '/review-pages.js';
+import {reviewContext} from '/review-context.js';
 import {accountFetch} from '/account-session.js';
 import {showVersions,resetVersions} from '/versions.js';
 import {showAI,resetAI,updateAI,candidateOrigin} from '/ai-jobs.js';
@@ -10,6 +11,7 @@ import '/commands.js';
 const font = (role, family) => canvasFont(role, family);
 
 const $ = id => document.getElementById(id);
+const updateContext=reviewContext(document.querySelector('.review-kinds'));
 const updatePages=pageControls($('frames'),offset=>load(undefined,{offset}));
 const modeBadge=document.createElement('ui-status');
 modeBadge.id='object-workspace-mode';
@@ -77,6 +79,7 @@ function setView(detail) {
   next.src=`/api/view-images/${index}`;
 }
 function enable() {
+  updateContext(workspace?.context,busy||loading||!!gesture||!!coordinatePreview);
   updateAI();
   const locked = !ready || busy || loading || conflicted || forbidden || !!gesture;
   const unclassified = frame?.review.boxes.some(box => box.label == null);
