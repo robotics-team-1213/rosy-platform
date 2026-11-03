@@ -1835,3 +1835,9 @@
 - Change: merged main d93c306e3f and pinned C0 commit 94d27806d2 on refactor/swarm-reference-stream-land without production-code conflicts.
 - Evidence: Git blob comparison and [integration record](../../../docs/validation/swarm-lifecycle-extraction-2026-10-25/result.md). Static integration checks only; no new remote pass for this integrated HEAD.
 - gate 변화: unchanged. Official FULL testing and landing await C0 landing confirmation and GO. CE: not applicable.
+
+## 2026-11-03 · uncommitted · 과열 모터의 개별 응답 소실 동안 제한 유지
+- 변경: 공개 준비 범위 검토에서 발견한 P1을12574527a7로 수정했다. 기존 과열·전압 사유를 낸 같은 모터의 온도/limit 또는 해당 hardware-error 응답을 확인한다. 다른 모터의 정상 온도로 응답 소실을 해제하지 않는다. 기존 aggregate hold·문턱·히스테리시스·SoC·manual scope·caps는 그대로다.
+- 증거: a73e4ce0a8의 두 모터 누락 회귀10건은 예상 실패했고 기존8건은 통과했다(NEW10). 수정12574527a793ca8999cea9a67868cd42e934fbb1의 관련5 whole 파일132통과5.41초, 변경 파일 collect/whole wrapper2통과0.51초, skip0·NEW/known/flaky0·실제 driver0이다. 독립 안전 검토 blob4c77b4d699와 committed blob이 같고 Safety-Review trailer를 포함한다. AST·diff·Safety 검사 통과. 로그는 OS Temp rosy-thermal-missing-*에 있다. 첫 wrapper의 PowerShell 옵션 분리로 인한 수집 전 실패는 성공 증거에서 제외하고 isolation-corrected/run-1.txt를 사용한다.
+- gate 변화: SOURCE의 해당 회귀만 확인했다. 정식 착지·게시·실물 및 현장 수용은 별도이며 로봇 동작을 수행하지 않았다. 라이브러리의 ARTIFACT/DEVICE 판정을 올리지 않는다.
+- CE: 해당 없음 — 생산자의 register별 None과 소비자의 제한 유지 조건은 최종 공통 코드·두 모터 회귀로 확인할 수 있다.

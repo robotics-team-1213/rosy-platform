@@ -168,8 +168,9 @@ def test_cell_document_preview_admission_and_terminal_read(sample_site):
             response = context.request.post(origin + '/api/fleet/missions/sample-cell-job-1/admit',
                 headers={'Origin':origin}, data={'expected_generation':1})
             assert response.status == 403
-            with page.expect_navigation(wait_until='load'):
-                page.get_by_role('button', name='검토자로 로그인', exact=True).click()
+            page.get_by_role('button', name='검토자로 로그인', exact=True).click()
+            # the reload itself, not any navigation: under load the field was filled before location.reload() wiped it
+            expect(page.locator('#user-role')).to_have_attribute('title', 'sample-reviewer · operator')
             page.locator('.ui-subnav a[href="#mission-heading"]').click()
             page.locator('#mission-id').fill('sample-cell-job-1')
             page.locator('#read-job').click()

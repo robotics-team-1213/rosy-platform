@@ -4491,6 +4491,19 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 변경: 새로 통합된 카메라 검증 문서의 정확한 commit/path/high-entropy-token 조합 하나만 기존 게시 baseline에 더한다. 이전 양쪽 reviewer 근거와 모든 기존 조합을 보존한다. scanner·검사 제외·비공개 자료 접근은 바꾸지 않는다.
 - 증거: 실제 scanner의 한 발견은 review revision이며 독립 검토에서 Git commit으로 해소됐다. 값·excerpt는 추가하지 않으며 agent 검토를 사람 승인으로 표현하지 않는다. 최종 source의 게시 검사를 다시 확인한다.
 - Gate: 서명·운영·실물 수용과 별개. CE: 해당 없음 — 기존 정확한 조합 규약과 Git 출처로 분류를 복원한다.
+## 2026-11-03 · uncommitted · fix(omx): 기기 업데이터가 카메라 바인드 유닛을 함께 싣는다
+
+- 변경: `omx-devices-autoupdate.json.example`의 `unit_files`에 `rosy-omx-cameras-bind.service`·`.timer`를 더하고 README 설치 5단계에서 바인드 타이머도 켠다. 업데이터는 유닛 파일을 복사만 하고 타이머를 켜지 않으므로 한 번 켜는 단계가 필요하다. `test_omx_cameras`가 예시 설정에 두 파일이 빠지면 실패한다.
+- 증거: 현장 관제 PC의 사용자 유닛에 바인드 유닛이 한 번도 설치되지 않아 옮겨 꽂은 카메라 추적과 Fleet 승인 적용이 일어날 수 없었다. 배포 도구로 `bind`(쓰기 없음)가 쓰기·재시작 없이 네 역할을 확인한 뒤 현장 설정 `unit_files`에 두 파일을 더하고(백업 `.bak-20261103-bind`) 타이머를 켰다. 첫 실행 `write: []`. `test/test_omx_cameras.py` 13 passed(로컬).
+- gate 변화: 없음. 카메라를 꽂아 Fleet에서 승인하는 실물 수용은 아직이다.
+- CE: 해당 없음 — 재발은 예시 설정 시험과 README 설치 단계가 막는다.
+
+## 2026-11-03 · uncommitted · docs(omx): 허브 추천은 자동 배정으로 올리지 않는다
+
+- 변경: `propose`의 허브 추천(`suggest`)을 추천으로 유지하고, 그 이유를 docstring에 적었다.
+- 증거: 셀 재연결 뒤 현장에서 새 `omx_cameras.py`를 임시 경로로 읽기 전용 실행: 팔 보드 허브 `arm_a 3-3`, `arm_b 3-4`; 카메라 `arm_a_wrist 3-3.3`, `arm_b_wrist 3-4.3`, `side 3-4.2`, `top 4-2`(루트). 손목 카메라는 자기 팔 보드와 허브를 공유하지만 side 카메라도 arm_b 허브에 있어 허브만으로는 손목 카메라를 특정할 수 없다.
+- gate 변화: 없음.
+- CE: 해당 없음 — 배선 사실과 판단은 이 기록과 docstring에 있다.
 
 ## 2026-11-03 · 3a2fbd1f9a · feat(site): 서명 PC의 사이트 즉시 반영 푸시와 오분류 제목 교정
 

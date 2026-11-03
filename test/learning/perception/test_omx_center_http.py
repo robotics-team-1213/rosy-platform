@@ -68,10 +68,10 @@ class Center:
 
 
 @contextmanager
-def running(tmp_path, *, enabled=True, accounts=None):
+def running(tmp_path, *, enabled=True, accounts=None, sim_runs=None):
     center = Center() if enabled else None
     store = ReviewStore(tmp_path / 'state', empty_training=True)
-    server = make_server(store, 0, omx_center=center, accounts=accounts)
+    server = make_server(store, 0, omx_center=center, accounts=accounts, sim_runs=sim_runs)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:

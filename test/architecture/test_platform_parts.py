@@ -53,17 +53,7 @@ PACKAGE_DIR_ROOTS = {
 }
 
 #: Frozen §2 violations as (importer target, imported target or "external:<name>") -> reason.
-KNOWN_VIOLATIONS = {
-    ("middleware/apps/device/omx/agent", "operations/processes/palletizing"): (
-        "middleware -> operations: the OMX cell owner loads palletizing cell documents and the compiler"
-    ),
-    ("integrations/robots/omx", "middleware/skills/manipulation"): (
-        "integrations -> middleware: the OMX transfer provider binds the manipulation transfer Skill"
-    ),
-    ("integrations/robots/omx", "middleware/apps/device/omx/adapter"): (
-        "integrations -> middleware: cell_workflow reuses the adapter pick-place journal"
-    ),
-}
+KNOWN_VIOLATIONS: dict[tuple[str, str], str] = {}
 
 
 def _manifest() -> dict:
@@ -413,7 +403,7 @@ def test_import_rules_only_shrink():
 DEPLOY_OMX_IMPORTS = {
     "contracts/foundation", "contracts/learning", "contracts/skill",
     "middleware/apps/device/omx/adapter", "middleware/apps/device/omx/agent", "middleware/execution/local",
-    "operations/execution/src/rosy/execution/site", "operations/fleet", "operations/processes/cell",
+    "operations/execution/src/rosy/execution/site", "operations/fleet", "operations/processes/palletizing",
     "operations/vision",
 }
 

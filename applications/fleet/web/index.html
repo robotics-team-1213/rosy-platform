@@ -121,7 +121,7 @@
       </div>
       <label class="sr-only" for="work-filter">업무 종류</label>
       <select id="work-filter" class="ui-field" data-work-read="" aria-label="업무 종류">
-        <option value="all">전체 업무</option><option value="task">주행</option><option value="mission">팔 작업</option><option value="trip">운행</option><option value="cell_job">Cell 적재</option>
+        <option value="all">전체 업무</option><option value="task">주행</option><option value="mission">팔 작업</option><option value="trip">운행</option><option value="cell_job">팔레트 적재</option>
       </select>
       <p id="work-state" class="hint" role="status">접속 후 조회합니다.</p>
       <p id="work-sources" class="hint"></p>
@@ -138,7 +138,7 @@
         <h3 id="channel-review-heading">대화 요청 검토</h3>
         <p id="channel-review-original"></p>
         <p id="channel-review-state" class="hint" role="status"></p>
-        <span id="channel-review-cell-holder" hidden><a id="channel-review-cell">Cell 작업 준비·승인으로 연결</a></span>
+        <span id="channel-review-cell-holder" hidden><a id="channel-review-cell">팔레트 적재 준비·승인으로 연결</a></span>
         <label for="channel-review-robot">이동할 로봇</label>
         <select id="channel-review-robot" class="ui-field"><option value="">로봇 선택</option></select>
         <label for="channel-review-x">공유 지도 X (m)</label>
@@ -179,7 +179,7 @@
       <h2 id="work-new-heading">새 작업</h2>
       <ul class="work-list" aria-label="새 작업 종류">
         <li id="work-new-move-item" hidden><ui-button kind="toggle" id="work-new-move" type="button" data-work-read="" aria-pressed="false" aria-expanded="false" aria-controls="work-move">이동</ui-button></li>
-        <li id="work-new-cell-item" hidden><a class="ui-disclosure-row" href="/console/cell">Cell 적재</a></li>
+        <li id="work-new-cell-item" hidden><a class="ui-disclosure-row" href="/console/cell">팔레트 적재</a></li>
       </ul>
     </section>
     <section class="panel" aria-labelledby="map-heading">

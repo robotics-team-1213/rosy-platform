@@ -218,14 +218,16 @@ modules:
   # 2026-10-27: concern: control wheels (module-responsibility debate, consensus 3).
   - name: omx_transfer
     path: integrations/robots/omx
-    tests: [test/test_platform_omx_transfer_provider.py]
+    tests: [test/test_omx_client_distribution.py]
     functional_kind: pytest
-    functional: [test/test_platform_omx_transfer_provider.py]
+    functional: [test/test_omx_client_distribution.py]
   - name: omx_agent
     path: middleware/devices/omx/agent
-    tests: [test/test_platform_workcell_coordinator.py, test/test_platform_owner_barriers.py]
+    tests: [test/test_platform_workcell_coordinator.py, test/test_platform_owner_barriers.py,
+            test/test_platform_omx_transfer_provider.py]
     functional_kind: pytest
-    functional: [test/test_platform_workcell_coordinator.py, test/test_platform_owner_barriers.py]
+    functional: [test/test_platform_workcell_coordinator.py, test/test_platform_owner_barriers.py,
+                 test/test_platform_omx_transfer_provider.py]
   - name: execution_local
     path: middleware/robot_execution/local
     tests: [middleware/robot_execution/local/test]

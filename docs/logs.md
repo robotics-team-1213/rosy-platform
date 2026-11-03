@@ -14023,3 +14023,76 @@ osy-d395-s1d\`.
 - Evidence: independent merge review found no new issue. Native AST3 paths, size21 commits, Safety77 commits and lint0errors43warnings passed. Fixed57878d663cb37c5601ccab569e1cc0bf7af60932 fresh remote whole files passed selection85, prepare48, landing115, speculate27 and record22 (297 direct); the unchanged prepare/selection collect-and-whole wrapper passed4 checks. All6 reports have skip0 and NEW/known/flaky0, actual driver exit0, in OS Temp rosy-g1-main-delta-5787. The stopped061346 snapshot remains historical evidence, not this merge's publication proof.
 - Gate: source integration only. Account artifact, public publication and live migration remain pending.
 - CE: not applicable — the conflict preserves both existing tested behaviors; no new undocumented recovery rule was introduced.
+
+## 2026-11-03 · uncommitted · fix(landing): LOAD-FLAKY는 사전 시험 전체가 아니라 그 시험만 차례에서 다시 (D-970 4항)
+- 변경: `land_selection.load_flaky_ids`가 요약의 LOAD-FLAKY id를 그 호출의 ROSY_ 환경 단어와 함께 읽고, `land_prepare`는 그 줄을 빼고 단계를 판정해 id를 `land_full` 기록(`flaky`)에 둔다. `land.py` 차례가 그 id를 하나씩 따로 다시 돌린다. 명시 FULL 증인과 읽을 수 없는 LOAD-FLAKY 줄은 예전처럼 엄격하다.
+- 증거: 11-03 12:53~15:53 사전 시험 28번 중 9번이 단계 없음(LOAD-FLAKY 등)이라 delta도 못 썼다. 원격 착지 회귀 27개 파일 + affected_tests 통과(test_land_async 한 건은 혼자 재실행 통과한 ProcessLookupError 타이밍 문제, 이 변경과 무관), 새 시험 2개.
+- gate 변화: 약화 없음. LOAD-FLAKY id는 차례에서 다시 통과해야 착지하고, 차례 요약에 LOAD-FLAKY가 다시 나오면 land record가 생기지 않아 pre-push가 다시 돈다. publish_evidence의 LOAD-FLAKY 거절도 그대로다.
+- CE: 해당 없음 — 교훈 10·11과 D-970에 이미 있음.
+
+## 2026-11-03 · uncommitted · fix(landing): delta 넘김은 표마다 두 번까지 (D-970 1항 보완)
+- 변경: `land_full` delta 기록에 `yields`(앞선 delta 기록 수)를 두고, `land_selection.delta_yields`는 그것이 `MAX_DELTA_YIELDS`(2) 아래일 때만 넘긴다. 그 뒤에는 차례가 시험 폴더를 직접 돈다(두 번 돌려보낸 뒤 예산 30분).
+- 증거: 11-03 rosy-web-unification-final이 15:58·17:28·18:07 세 번 delta로 넘김 — 차례 밖 준비 동안 main이 다시 움직여 새 폴더가 닿음(rosy-land-events). 원격 착지 회귀 27개 파일 + affected_tests 통과, 새 시험 2개.
+- gate 변화: 없음. 세 번째부터는 D-889 27 이전처럼 차례 안에서 같은 시험을 돈다.
+- CE: 해당 없음 — D-970 되돌림 기준(같은 표 반복 넘김)을 코드로 막은 것.
+
+## 2026-11-03 · uncommitted · fix(landing): 추측 사전 시험 기본 끔 (D-889 추가 28)
+- 변경: `land_prepare`가 `ROSY_LAND_SPECULATE=1`일 때만 `land_speculate.prepare`를 부른다.
+- 증거: 11-03 10:00~16:00 rosy-land-events — spec 시험 9.8 h / 전체 43 h, 차례 held 3 / 34, 이미 통과한 호출 재실행 8.1 h. 원격 착지 회귀 27개 파일 + affected_tests 통과, 새 시험 1개.
+- gate 변화: 없음. 차례는 원래 정해진 선택을 그대로 돈다.
+- CE: 기존 교훈 갱신 — landings-gave-the-turn-back-and-reran-everything 11.
+
+## 2026-11-03 · uncommitted · fix(landing): 다른 트리 통과 재사용도 대기열 단계는 남기고 게시 증거는 아님 (D-970 4항)
+- 변경: `land_prepare`가 affected·delta 사전 시험에서 LOAD-FLAKY와 `land_cache.NARROW` 줄을 빼고 단계를 판정하고, 재사용이 있으면 `land_full` 기록에 `reused`를 둔다. `land.py`는 `reused` 기록으로 land record를 쓰지 않는다(pre-push가 다시 돈다). FULL 단계(명시·승격)는 예전처럼 엄격하다(21:15 착지한 flaky 완화도 FULL에서는 거둠).
+- 증거: 11-03 20:00~23:00 단계 없는 사전 시험 9/20이 모두 "reused across trees" 포함(3건은 LOAD-FLAKY도). 원격 착지 회귀 27개 파일 + affected_tests + harness_contracts 통과, 새 시험 1개, 기존 FULL 엄격 시험 유지.
+- gate 변화: 약화 없음 — 재사용 통과는 여전히 land record·게시 증거가 되지 않는다.
+- CE: 기존 교훈 갱신 — landings-gave-the-turn-back-and-reran-everything 12.
+
+## 2026-11-03 · uncommitted · feat(landing): land_async orphans — 재부팅으로 죽은 착지를 찾아 되살림
+- 변경: `land_async.py orphans [--resume]`가 `.stopped` 표시도 살아 있는 supervisor·표도 없고 main에 없는 숨은 착지(가지마다 가장 새 것, 24시간 안)를 보이고 --resume으로 되살린다.
+- 증거: 11-03 20:44 재부팅으로 대기열 착지가 모두 죽고 다음 land_async가 죽은 표를 치워 대기열이 비어 보였다 — 7건을 손으로 찾아 resume. 원격 test_land_async 통과, 새 시험 1개.
+- gate 변화: 없음. resume의 기존 거절(살아 있는 표·main에 있음·미커밋)을 그대로 거친다.
+- CE: 기존 교훈 갱신 — land-async-children…-2026-10-30(재부팅 뒤 orphans), landings-gave-the-turn-back… 13(도구 브랜치는 하나로).
+
+## 2026-11-03 · uncommitted · fix(landing): 명시 FULL 증인이 재실행 뒤에도 남음 (D-970 보완)
+- 변경: 명시 FULL 사전 시험의 `land_full` 기록에 `env`를 두고, `land_selection.current_main`이 메모리 증인이 없으면 그 기록으로 증인을 되살린다.
+- 증거: 11-03 account-ci-oauthlib-log(명시 FULL)가 규칙 갱신 재실행·재부팅·resume 때마다 FULL 전체를 캐시 없이 6번(277분). 원격 착지 회귀 27개 파일 + affected_tests + harness_contracts + publish_evidence 통과, 새 시험 1개.
+- gate 변화: 없음 — 게시는 여전히 로그로 FULL 실행을 확인하고 닫힌 쪽으로 실패한다.
+- CE: 기존 교훈 갱신 — landings-gave-the-turn-back-and-reran-everything 14.
+
+## 2026-11-03 · uncommitted · fix(landing): 단계 없는 delta 사전 시험도 넘김 횟수에 셈 (D-970 1항 보완)
+- 변경: delta 사전 시험이 단계 없이 끝나면 저장 대신 `land_full.count_yield`로 기존 기록의 `yields`만 올린다.
+- 증거: 11-03 omx-layer-violations-r3가 23:20·23:35 delta로 거듭 넘김 — 23:35 사전 시험이 tier None이라 아무것도 저장되지 않아 두 번 상한이 걸리지 않음(rosy-land-events). 원격 착지 회귀 전부 + publish_evidence 통과, 새 시험 1개.
+- gate 변화: 없음. 세 번째부터는 차례가 시험 폴더를 직접 돈다.
+- CE: 해당 없음 — D-970 1항 상한의 구멍을 메운 것.
+
+
+## 2026-11-03 · uncommitted · docs(control-terms): 관제 용어 층 분리, 헤더는 관제 단위 이름 (D-974)
+- 변경: D-974 — Rosy Fleet은 제품 이름, 통합관제 R·셀 관제 CELL-x는 단위, PC는 물리 이름(OMX 노트북). D-968 1항 대체. `/api/fleet/state`의 `fleet`에 관제 단위 설정이 있을 때 `unit`·`root`(API v1.358), 헤더가 "통합관제 R"/"CELL-A"를 보인다. `fleet_name`은 페어링·lease 신원으로 그대로. 팔레타이징 준비 화면 표시 문구 "Cell" → "팔레트 적재"(경로·id 그대로, 노출은 기존 `CELL_TRANSFER` 규칙). CONCEPTS·관제 단위 배치표 갱신.
+- 증거: 헤더 node 시험 13개 통과, 서버·화면 pytest는 원격 실행 결과를 따른다. 현장 R·CELL-A 헤더 관측은 배포 뒤 별도.
+- gate 변화: 없음.
+- CE: 해당 없음 — 장애 해결이 아니라 용어 결정, 근거는 D-974.
+
+## 2026-11-03 · uncommitted · D-969 두 팔 ACT 파이프라인: ADR, Isaac 시연 녹화, 데이터셋 내보내기
+- 변경: ADR D-969(첫 학습 정책은 Isaac 정답 IK 시연으로 학습한 ACT 두 팔, 실물 단위, 컨테이너 = 에피소드, 6단계), D-947 2에 범위 확장 연결. Isaac `demo_recording`(옵트인: 실물 top·side 시점 영상과 두 팔 상태·명령 12개를 10 Hz로 `demo.jsonl`), 케이스 `nominal-palletizing-v21-ship-demo`. `learning/curation/omx/isaac_demo_export.py`(→ `rosy.omx.experiment-dataset/1`, 출처 `scripted_teacher`), 학습기가 `scripted_teacher`를 시연으로 받음.
+- 증거: 내보내기 시험(합성 두 실행, 단위·분할·영상 프레임 수), `learning/training/omx/test/`, 컨테이너 적층·녹화 시험 원격 통과. Isaac 시연 실행은 진행 중.
+- gate 변화: 없음. 학습 결과·폐루프 평가·실물 수용 없음. 그리퍼 0~100 대응은 가정(패드 간격/40 mm).
+- CE: 해당 없음 — 새 기능이다.
+
+## 2026-11-04 · uncommitted · docs(control-terms): D-974 착지 준비 — 안전 검토·크기·ADR Log 병합 정리
+- 변경: `console.py` 변경을 줄 수 증가 없이 다시 써(D-766) 독립 안전 검토 trailer와 함께 한 커밋으로 다시 만들었다(D-430 §5). main 병합에서 union으로 겹친 D-968·D-970 ADR Log 행을 하나씩 남겼다(D-970은 main의 최신 상태, D-968은 D-974 대체 표시). D-974 후속 작업 표와 Log 상태를 실제 상태로 갱신했다.
+- 증거: 원격 pytest(관제 단위·서버 앱·브라우저·API 버전) 통과, node 시험 19개 통과, 독립 안전 검토 PASS 2회, lint 0 error. Confluence 2-1 v15 반영. Harbor PR #17 필수 검사 통과, 병합은 팀 승인 대기.
+- gate 변화: 없음.
+- CE: 해당 없음 — 착지 규칙(D-430·D-766·D-510)에 이미 있는 거절이며 그대로 따랐다.
+
+## 2026-11-04 · uncommitted · feat(sim): MuJoCo 3층 전체 적재 순서, 실측 셀 layout, 실물 site 계획
+- 변경: `tools/sim/ship_stack_sequence.py`(Isaac 순서로 9개 연속 놓기, 놓기 오차·앞 상자 교란), `ship_release_scene.build(cargo=)`, `tools/sim/ship_stack_sites.py`(Isaac 적층 칸 → 한 팔의 실물 site와 `cell_auto_pick` 명령, D-911 범위 표시), `cell_model_inventory.yaml`에 `layout`(자 실측 높이, 받침, 카메라).
+- 증거: MuJoCo 1,728경우에서 놓기 오차 0.2 mm까지 99%, 0.3 mm 85%, 0.6 mm 17%(검증 기록 Step 4). site → Isaac 목표 왕복 1 mm 이내 시험.
+- gate 변화: 없음. 실물 동작 없음. 정렬 자리 높이 0은 가정.
+- CE: 해당 없음 — 새 도구와 측정 기록이다.
+
+## 2026-11-04 · uncommitted · MuJoCo 3층 적재 개선 후보 비교
+- 변경: `ship_stack_sequence.py`에 컨테이너 모양·놓는 높이·앉음 확인 후 다시 놓기(D-956) 단계, `test/test_ship_stack_sequence.py`.
+- 증거: 검증 기록 Step 5 — 앉음 확인+다시 놓기 1회가 놓기 오차 0.8 mm까지 9개 모두 앉힘(24/24), 바닥 단 r290은 0.4 mm까지 24/24, 놓는 높이 2 mm가 지금 모양에서 큰 개선, 모따기·레일은 거의 효과 없음.
+- gate 변화: 없음. MuJoCo 후보이며 Isaac 확인 전.
+- CE: 해당 없음 — 비교 실험 기록이다.

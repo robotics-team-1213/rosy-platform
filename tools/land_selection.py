@@ -6,6 +6,7 @@ runs as __main__. Keep its public wrappers and defaults in the gateway.
 
 from __future__ import annotations
 
+import ast
 import json
 from harness import affected_exclusive
 import sys
@@ -71,11 +72,35 @@ def _guards_only(invocations: list[list[str]], guards) -> list[list[str]]:
 DELTA_NOTE = "main's landed delta reaches whole suite folders: they run before the turn"  # D-889 27
 
 
+MAX_DELTA_YIELDS = 2  # D-970 1: then the turn (30 min budget after two send-backs) runs the suite folders
+
+
 def delta_yields(ticket, base: dict | None) -> bool:
     """Whether a DELTA_NOTE turn yields to run the suites before the turn: only with a queue ticket and a clean
     earlier tier for the delta record to stand on. 11-03 14:18-14:34 a LOAD-FLAKY pretest (no tier) yielded twice
-    and saved nothing; without a base the suites run in the turn as before (D-889 27)."""
-    return ticket is not None and base is not None
+    and saved nothing; without a base the suites run in the turn as before (D-889 27). After MAX_DELTA_YIELDS the
+    turn runs them itself: 11-03 15:58-18:07 one ticket yielded three times while main kept moving past it."""
+    return ticket is not None and base is not None and int(base.get("yields") or 0) < MAX_DELTA_YIELDS
+
+
+def load_flaky_ids(summary) -> list[list[str]] | None:
+    """D-970 4: one invocation per node id a summary marks LOAD-FLAKY (land_checks: failed under load, passed
+    alone), with its invocation's environment words (ROSY_RUN_BROWSER_TESTS=1: without it a browser id skips and
+    looks green). None when a LOAD-FLAKY line cannot be read, so the caller keeps the evidence unusable as before."""
+    runs: list[list[str]] = []
+    for line in summary:
+        if "LOAD-FLAKY " not in line:
+            continue
+        head, _, tail = line.partition("LOAD-FLAKY ")
+        try:
+            found = ast.literal_eval(tail.strip())
+        except (ValueError, SyntaxError):
+            return None
+        if not isinstance(found, list) or not all(isinstance(i, str) and i for i in found):
+            return None
+        env = [w for w in head.split() if w.startswith("ROSY_") and "=" in w]
+        runs += [env + [i] for i in found]
+    return runs
 
 
 def _suite_dirs(inv: list[str]) -> bool:
@@ -301,7 +326,12 @@ def required(land, wt, main, python):
 def current_main(land, wt, args, branch, main, python):
     witness = getattr(args, "_full_witness", None)
     if not witness:
-        return None
+        # D-970: a relaunch (rules refresh, reboot, resume) loses the in-memory witness and reran the whole FULL
+        # (11-03: six times, 277 min); the explicit prepare's own record, which keeps its env, stands in for it.
+        saved = land.land_full.prepared(wt, branch, land.land_full.restore(wt, branch))
+        if not (saved and saved.get("tier") == "full" and saved.get("env")):
+            return None
+        witness = {key: saved[key] for key in ("candidate", "main", "invocations", "env")}
     plan, _, env = required(land, wt, main, python)
     record = land.land_full.prepared(wt, branch, witness["main"])
     if (plan != witness["invocations"] or env != witness["env"] or not record
