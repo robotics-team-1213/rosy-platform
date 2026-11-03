@@ -34,6 +34,7 @@ def test_pixel_workspace_layout_has_one_photo_navigation_and_unclipped_tools(bro
         page.set_viewport_size({'width': width, 'height': 1120 if width == 2048 else 844})
         page.locator('#pixel-class').focus()
         expect(page.locator('#pixel-class')).to_be_focused()
+        page.evaluate('() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))')
         geometry = page.evaluate('''() => {
           const rect = selector => document.querySelector(selector).getBoundingClientRect().toJSON();
           const tools = document.querySelector('.pixel-quick-tools');
@@ -46,6 +47,11 @@ def test_pixel_workspace_layout_has_one_photo_navigation_and_unclipped_tools(bro
             overflow: getComputedStyle(tools).overflowY, maxHeight: getComputedStyle(tools).maxHeight,
             clientHeight: tools.clientHeight, scrollHeight: tools.scrollHeight};
         }''')
+        if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+            target = Path(output)
+            target.mkdir(parents=True, exist_ok=True)
+            page.screenshot(path=str(target / f'pixel-workspace-{theme}-{width}-viewport.png'))
+            page.screenshot(path=str(target / f'pixel-workspace-{theme}-{width}.png'), full_page=True)
         assert geometry['pageWidth'] <= width
         assert geometry['overflow'] == 'visible' and geometry['maxHeight'] == 'none'
         assert geometry['scrollHeight'] <= geometry['clientHeight'] + 1
@@ -60,11 +66,6 @@ def test_pixel_workspace_layout_has_one_photo_navigation_and_unclipped_tools(bro
         else:
             assert geometry['tools']['top'] >= geometry['photo']['bottom'] - 1
             assert geometry['decision']['top'] >= geometry['tools']['bottom'] - 1
-        if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
-            target = Path(output)
-            target.mkdir(parents=True, exist_ok=True)
-            page.locator('#pixel-photo-navigation').scroll_into_view_if_needed()
-            page.screenshot(path=str(target / f'pixel-workspace-{theme}-{width}.png'), full_page=True)
 
 
 def partial_workspace(page, store, expect):

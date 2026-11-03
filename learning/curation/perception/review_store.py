@@ -179,11 +179,24 @@ class ReviewStore:
         with self.connect() as db:
             folders = json.loads(review_evidence.metadata(self, 'image_folders') or '[]')
             folder_ids = [item['id'] for item in folders]
-            if folder_id is not None and folder_id not in folder_ids and folder_id != 'all':
+            uploads = {}
+            for row in db.execute("SELECT DISTINCT json_extract(source,'$.source_session') AS session FROM frames "
+                                  "WHERE json_extract(source,'$.source_kind')='browser_upload' ORDER BY session"):
+                session = row['session']
+                if not isinstance(session, str) or not session.startswith('upload:'):
+                    continue
+                key = 'upload-' + hashlib.sha256(session.encode()).hexdigest()[:16]
+                name = session[7:].replace('\\', '/').rstrip('/').rsplit('/', 1)[-1]
+                uploads[key] = session
+                folders.append({'id': key, 'label': '개별 업로드' if session == 'upload:files' else '업로드 · ' + name})
+            if folder_id is not None and folder_id not in folder_ids and folder_id not in uploads and folder_id != 'all':
                 raise ValueError('unknown review folder')
             selected_folder = folder_id
             prefix = None
-            if folder_id is not None and folder_id != 'all':
+            if folder_id in uploads:
+                scope += " AND json_extract(f.source,'$.source_kind')='browser_upload' AND json_extract(f.source,'$.source_session')=?"
+                args.append(uploads[folder_id])
+            elif folder_id is not None and folder_id != 'all':
                 prefix = f'folder:{folder_id}:'
             elif folder_id is None and source_session is None:
                 row = db.execute("SELECT value FROM metadata WHERE key='review_source_prefix'").fetchone()

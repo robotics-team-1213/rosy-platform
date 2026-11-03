@@ -81,8 +81,13 @@ $('pixel-approve').closest('.pixel-decision-panel').after(aiPanel);
 const photoDetails=document.createElement('section');photoDetails.className='pixel-photo-details';
 for(const child of [...photoSection.children])if(!child.matches('.pixel-stage,#pixel-view-status'))photoDetails.append(child);
 photoColumn.append(photoDetails);
-const responsivePixelLayout=matchMedia('(width < 64rem)');
-responsivePixelLayout.addEventListener('change',()=>{const active=document.activeElement;if(pixelContent.contains(active))requestAnimationFrame(()=>active.scrollIntoView({block:'nearest',inline:'nearest'}));});
+function revealPixelFocus(active=document.activeElement){
+ if(pixelContent.contains(active))requestAnimationFrame(()=>requestAnimationFrame(()=>{
+  if(document.activeElement===active&&active.isConnected)active.scrollIntoView({block:'nearest',inline:'nearest'});
+ }));
+}
+pixelContent.addEventListener('focusin',event=>revealPixelFocus(event.target));
+addEventListener('resize',()=>revealPixelFocus());
 for(const [id,key] of [['pixel-prev','ArrowLeft'],['pixel-next','ArrowRight'],['pixel-next-pending','N'],['pixel-undo','Control+Z Meta+Z']])$(id).setAttribute('aria-keyshortcuts',key);
 $('pixel-undo').title='마지막 픽셀 수정 되돌리기 · Ctrl+Z';
 $('pixel-undo').textContent='되돌리기 · Ctrl+Z';
