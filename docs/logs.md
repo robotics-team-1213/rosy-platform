@@ -13916,3 +13916,9 @@ osy-d395-s1d\`.
 - 증거: main4088d1c1d2에서 기존 reboot producer→profile consumer 두 node를 -n0으로 실행해1FAIL/1PASS·NEW1/known·flaky0을 재현했다. 수정parent69a12까지 관련remote 코드·시험3파일 차이0이다. code63a211f808에서 같은 producer 모듈을 먼저 두고 helper의 모든 호출 모듈과 consumer를 포함한5whole-file -n0은184PASS/skip·NEW·known·flaky0이었다. 정상 입장 wait0/run37초, pytest27.89초다. 로그는 OS Temp rosy-headroom-order-{red,green}-20261103/run-1.txt에 있다.
 - gate 변화: 없음. 실패 기준·검증 기대값·자원 정책·테스트 선택·quarantine baseline을 바꾸지 않는다. 독립 고정코드 검토 P1/P2 없음이며, source 검증과 정식 후보 착지는 구분한다.
 - CE: 기존 교훈 갱신 — shared-pytest-process-masks-path-dependent-import의 단독/FULL 컨텍스트 차이에 imported helper의 fixture 범위와 실제 순서 재현을 추가했다. 단독 통과를 곧바로 부하성 flaky로 단정하지 않는다.
+
+## 2026-11-03 · uncommitted · feat(isaac): 실측 팔 받침·벨트 후보 케이스와 이름 있는 계획 장면
+- 변경: 케이스 `nominal-palletizing-v21-ship-surveyed-bases`·`-surveyed`(벨트 28 mm 낮춤, `belt_drop_m`), `isaac_stack_plan.SCENES`(장면마다 받침/yaw 쌍과 낮은 벨트 통로 높이), `stacking_task.py` 케이스 등록과 등록 누락을 잡는 시험, 실측 받침 도달 시험.
+- 증거: 호스트 계획기로 실측 받침에서 벨트 집기·적층 9곳 모두 닿고, 뱃머리 정렬 자리(x -0.12)는 arm_a가 닿지 않음(0.287 m). Isaac 실행 두 번은 케이스 등록 누락과 CAD 받침 검사에서 멈춰 결과 없음(검증 기록 Step 3).
+- gate 변화: 없음. CAD 케이스와 fixture는 그대로다.
+- CE: 해당 없음 — 케이스 등록 누락은 시험으로 막았고, 정렬 자리 도달 문제는 검증 기록과 다음 작업(팔마다 정렬 자리)에 남겼다.
