@@ -30,10 +30,16 @@ export function resetHistory(message='검수 주체와 이력을 불러오는 �
 }
 
 export function feedbackPresentation(value) {
-  if(!value.available)return {state:'pending',title:'AI 검사 결과 없음',note:'저장된 AI 의견이 없습니다. 직접 검수하거나 학습 작업에서 검사 실행 구성을 확인하세요.'};
+  const checks={not_requested:'AI 확인 요청 전',queued:'AI 확인 대기',running:'AI 확인 실행 중',failed:'AI 확인 실패',cancelled:'AI 확인 취소됨',stale:'입력 변경 · AI 재확인 필요',succeeded:'AI 확인 완료'};
+  const check=value.check,checkTitle=checks[check?.state]||'AI 확인 상태 확인 필요';
+  const basis=typeof check?.version==='number'?`저장된 픽셀 v${check.version} 기준`:'저장된 마스크 기준';
+  const checkNote=`${checkTitle} · ${basis}${check?.error?' · '+check.error:''}`;
+  if(!value.available)return {state:['failed','stale','cancelled'].includes(check?.state)||['invalid_report','unreadable'].includes(value.reason)?'warning':'pending',
+    title:check?.state==='succeeded'||['invalid_report','unreadable'].includes(value.reason)?'AI 의견을 읽을 수 없습니다':checkTitle,
+    note:`${checkNote} · ${check?.state==='not_requested'?'AI 마스크 확인 실행을 눌러 의견을 요청하세요.':'새 의견이 저장되면 이곳에 표시됩니다. 현재 라벨은 바뀌지 않습니다.'}`};
   const labels={concern:'검토할 문제 있음',no_obvious_concern:'뚜렷한 문제를 찾지 못함',uncertain:'AI 판단 보류',abstain:'AI 응답 없음'};
   const issues={missed_visible_road:'보이는 주행 영역 누락',drivable_outside_lane:'차선 밖 주행 영역',obstacle_as_drivable:'장애물을 주행 영역으로 표시',uncertain_visibility:'시야 불확실',none:'특정 문제 지적 없음'};
-  const model=`검사 AI: ${value.model || '미기록'} · 버전 ${value.model_digest || '미기록'}`;
+  const model=`검사 AI: ${value.model || '미기록'} · 버전 ${value.model_digest || '미기록'}${typeof value.mask_version==='number'?' · 저장된 픽셀 v'+value.mask_version+' 기준':''} · ${checkNote}`;
   if(!value.current)return {state:'warning',title:'이전 마스크의 AI 의견 · 재검사 필요',note:`${model} · 현재 마스크와 일치하지 않습니다. 이전 의견: ${value.feedback.note || '없음'}`};
   return {state:value.review_blocked || value.feedback.verdict!=='no_obvious_concern'?'warning':'ready',
     title:labels[value.feedback.verdict] || 'AI 상태 확인 필요',

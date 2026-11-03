@@ -17,7 +17,7 @@ export function showAI(lane,index,request,context,results){
   panel.append(title,element('p','저장된 버전으로 요청합니다. 결과는 후보·참고 의견이며 사람이 확인한 뒤 적용·승인합니다.'),controls,message,jobs);
   document.querySelector(lane==='object'?'#save-status':'.pixel-vlm-feedback').after(panel);
   const allowed=lane==='object'?['object_draft']:['pixel_draft','mask_check'],buttons=[];
-  let status=null,pending=false;const requestedPixels=new Set();
+  let status=null,pending=false,lastCheck='';const requestedPixels=new Set();
   for(const action of allowed){const button=element('ui-button',actions[action]);button.id=`review-ai-${action}`;controls.append(button);buttons.push([button,action]);button.onclick=()=>run(action);}
   const refresh=element('ui-button','AI 실행 상태 다시 조회'),result=element('ui-button','AI 결과 목록 조회');controls.append(refresh,result);
   updateButtons=()=>{
@@ -35,7 +35,7 @@ export function showAI(lane,index,request,context,results){
       details.append(element('summary','요청·모델 정보'),element('p',`요청 ${actorName(job.actor)} · ${job.created_at}`),element('p',`모델 ${job.model} · ${job.model_digest}`));
       row.append(summary,details);
       if(job.error)row.append(element('p',job.error));
-      if(job.state==='succeeded')row.append(element('p',job.action==='mask_check'?'참고 의견 저장됨 · AI 결과 목록 조회에서 확인하세요.':job.result?.added_pixels===0?'보완할 픽셀 없음 · 새 후보를 만들지 않았습니다.':'초안 후보 저장됨 · AI 결과 목록 조회에서 선택하세요.'));
+      if(job.state==='succeeded')row.append(element('p',job.action==='mask_check'?'참고 의견 저장됨 · AI 의견에 자동 표시됩니다.':job.result?.added_pixels===0?'보완할 픽셀 없음 · 새 후보를 만들지 않았습니다.':'초안 후보 저장됨 · AI 결과 목록 조회에서 선택하세요.'));
       if(active(job)){const cancel=element('ui-button','이 AI 작업 취소');cancel.disabled=pending;cancel.onclick=()=>send(`/api/review-ai-cancel/${job.id}`,{});row.append(cancel);}
       jobs.append(row);
     }
@@ -44,6 +44,8 @@ export function showAI(lane,index,request,context,results){
   async function load(){
     clearTimeout(timer);
     try{const value=await request(`/api/review-ai/${index}`);if(ticket!==generation)return;status=value;render();if(status.jobs.some(active))timer=setTimeout(load,1500);
+      const check=status.jobs.find(job=>job.action==='mask_check');
+      if(lane==='pixel'&&check&&lastCheck!==`${check.id}:${check.state}`){lastCheck=`${check.id}:${check.state}`;await results({feedbackOnly:true});}
       for(const job of status.jobs)if(requestedPixels.has(job.id)&&!active(job)){requestedPixels.delete(job.id);if(job.state==='succeeded'&&job.result?.candidate_sha256&&context()?.blocked===false)await results({candidateSha:job.result.candidate_sha256});}
     }
     catch(error){if(ticket===generation){status=null;message.textContent=error.message;updateAI();}}

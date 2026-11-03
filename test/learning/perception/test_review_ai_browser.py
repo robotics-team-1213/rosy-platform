@@ -105,6 +105,35 @@ def test_pixel_unsaved_gesture_blocks_ai_and_result_reload(tmp_path):
 
 
 @pytest.mark.parametrize('editing', [False, True])
+def test_mask_check_automatically_refreshes_opinion_without_replacing_unsaved_pixels(tmp_path, editing):
+    import review_masks
+    started, release = threading.Event(), threading.Event()
+    def backend(*_):
+        started.set(); assert release.wait(30)
+        return {'feedback': {'verdict': 'concern', 'issue': 'missed_visible_road', 'note': 'Check the visible floor'}}
+    try:
+        with ai_browser(tmp_path, backend) as (page, store, jobs, expect):
+            page.goto(page.url.split('?')[0] + 'pixels?frame=0', wait_until='networkidle')
+            before = review_masks.get(store, 0)
+            expect(page.locator('.pixel-vlm-feedback')).to_contain_text('AI 확인 요청 전')
+            page.locator('#review-ai-mask_check').click()
+            assert started.wait(5)
+            expect(page.locator('.pixel-vlm-feedback')).to_contain_text('AI 확인 실행 중')
+            if editing:
+                page.locator('#pixel-class').select_option('0')
+                page.locator('#pixel-canvas').click(position={'x': 10, 'y': 10})
+                expect(page.locator('#pixel-draft')).to_contain_text('1점 선택')
+            draft = page.locator('#pixel-draft').inner_text()
+            release.set()
+            expect(page.locator('.pixel-vlm-feedback')).to_contain_text('Check the visible floor', timeout=15000)
+            expect(page.locator('.pixel-vlm-feedback')).to_contain_text('저장된 픽셀 v1 기준')
+            expect(page.locator('#pixel-draft')).to_have_text(draft)
+            assert review_masks.get(store, 0) == before
+    finally:
+        release.set()
+
+
+@pytest.mark.parametrize('editing', [False, True])
 def test_requested_pixel_ai_previews_completion_only_when_editor_is_clean(tmp_path, editing):
     import base64
     import numpy as np

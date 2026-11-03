@@ -282,6 +282,7 @@ class Jobs:
         value = vlm_mask_feedback._feedback(result['feedback'])
         meta = self._metadata()
         item = {'frame': job['frame'], 'status_at_snapshot': snapshot['status'],
+                'mask_version': snapshot['version'],
                 'image_sha256': snapshot['image_sha256'], 'mask_sha256': snapshot['mask_sha256'],
                 'unknown_pixels': int(np.count_nonzero(human == 255)),
                 'review_blocked': bool(np.any(human == 255)), 'feedback': value}

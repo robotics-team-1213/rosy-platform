@@ -52,6 +52,26 @@ def test_missing_configuration_disables_actions(tmp_path):
         jobs.close()
 
 
+@pytest.mark.parametrize('state', ['not_requested', 'queued', 'running', 'failed', 'cancelled', 'stale'])
+def test_feedback_absence_reports_latest_check_state_not_blank_result(tmp_path, state):
+    store = workspace(tmp_path)
+    jobs = Jobs(store)
+    try:
+        if state != 'not_requested':
+            with store.connect() as db:
+                jobs._write(db, dict(id='latest-check', frame=0, action='mask_check', state=state,
+                                    version=1, error='Check failed' if state == 'failed' else None))
+        result = read_current_feedback(store.state, 0)
+        assert result['available'] is False
+        assert result['check']['state'] == state
+        if state != 'not_requested':
+            assert result['check']['version'] == 1
+        if state == 'failed':
+            assert result['check']['error'] == 'Check failed'
+    finally:
+        jobs.close()
+
+
 @pytest.mark.parametrize('action', ['pixel_draft', 'mask_check'])
 def test_whole_road_semantic_refuses_lane_only_ai_before_execution(tmp_path, action):
     store = workspace(tmp_path)
@@ -229,6 +249,11 @@ def test_per_frame_feedback_readback_without_approval(tmp_path):
         result = read_current_feedback(store.state, 0)
         assert result['current'] and result['requested_by'] == 'human-a' and result['job_id'] == job['id']
         assert result['feedback']['verdict'] == 'concern'
+        assert result['mask_version'] == before['version']
+        with store.connect() as db:
+            jobs._write(db, dict(id='later-failed', frame=0, action='mask_check', state='failed', version=1, error='Later check failed'))
+        older = read_current_feedback(store.state, 0)
+        assert older['available'] and older['feedback'] == result['feedback'] and older['check']['state'] == 'failed'
         assert review_masks.get(store, 0) == before
     finally:
         jobs.close()

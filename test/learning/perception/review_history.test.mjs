@@ -26,3 +26,14 @@ test('only a current non-blocked no-concern opinion may use ready styling',()=>{
   assert.match(feedbackPresentation(value).note,/revision-a/);
   assert.equal(feedbackPresentation({available:false}).state,'pending');
 });
+
+test('opinion status distinguishes requests, failures and stale jobs without hiding previous advice',()=>{
+  for(const [state,title] of [['not_requested','요청 전'],['queued','대기'],['running','실행 중'],['failed','실패'],['cancelled','취소됨'],['stale','재확인 필요']]){
+    const view=feedbackPresentation({available:false,check:{state,version:4,error:state==='failed'?'runtime unavailable':null}});
+    assert.match(view.title,new RegExp(title));assert.match(view.note,/저장된 픽셀 v4 기준/);
+    if(state==='failed'){assert.equal(view.state,'warning');assert.match(view.note,/runtime unavailable/);}
+  }
+  const old=feedbackPresentation({available:true,current:false,check:{state:'failed',version:5,error:'runtime unavailable'},
+    model:'qwen',mask_version:4,feedback:{note:'previous visible advice'}});
+  assert.match(old.note,/previous visible advice/);assert.match(old.note,/runtime unavailable/);assert.match(old.note,/픽셀 v4 기준/);
+});
