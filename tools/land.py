@@ -484,6 +484,11 @@ def rounds(args, wt: Path, branch: str, main_co: Path, python: str, qdir, ticket
             land_checks.check_turn(sys.modules[__name__], wt, args, round_no)
             if ticket is not None and (turn_epoch is None or not land_queue.owns_turn(ticket, started=turn_epoch)):
                 raise Stop("landing turn ownership changed during checks; refusing to fast-forward main")
+            if reusable:
+                try:
+                    land_record.plan(invocations, prepared, available=(wt / land_record.TARGET).is_file())
+                except (ValueError, TypeError, KeyError) as exc:
+                    raise Stop(f"invalid land-record plan before fast-forward: {exc}") from exc
             on_main(main_co)
             ff = git(main_co, "merge", "--ff-only", candidate, check=False)
             if ff.returncode == 0:

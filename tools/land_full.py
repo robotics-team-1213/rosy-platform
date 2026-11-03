@@ -17,6 +17,7 @@ import subprocess
 from pathlib import Path
 
 from land_merge import conflict_stages, resolver
+from harness import affected_exclusive
 
 RECORDS = "rosy-land-full"
 
@@ -58,6 +59,10 @@ def restore(wt: Path, branch: str) -> str | None:
     try:
         record = json.loads(_path(wt, branch).read_text(encoding="utf-8"))
         candidate, main = record["candidate"], record["main"]
+        if (record.get("tier") == "full"
+                and _git(wt, "cat-file", "-e", "main:tools/harness/affected_exclusive.py").returncode == 0
+                and not affected_exclusive.canonical_full(record.get("invocations", []))):
+            return None  # Old FULL plans require a fresh prepare once main owns the strict timing plan.
     except (OSError, ValueError, KeyError, TypeError):
         return None
     if record.get("tier") == "carried":
