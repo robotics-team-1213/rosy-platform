@@ -411,11 +411,14 @@ def set_hold(updater, reason: str | None) -> int:
 
 def runtime_reason(rows, hashes: dict, run) -> str:
     """Detect operational drift without logging inspect output or credentials."""
-    for service in ('account', 'monitoring'):
+    for service in COMPANIONS:
         if service in hashes:
             matches = [row for row in rows if isinstance(row, dict) and row.get('Service') == service]
-            if len(matches) != 1 or matches[0].get('State') != 'running' or matches[0].get('Health') != 'healthy':
-                return f'{service} needs exactly one healthy running container'
+            if (len(matches) != 1 or matches[0].get('State') != 'running'
+                    or not (matches[0].get('Health') == 'healthy'
+                            or (service == 'control-unit-peer' and not matches[0].get('Health')))):
+                health = '' if service == 'control-unit-peer' else 'healthy '
+                return f'{service} needs exactly one {health}running container'
     for row in rows:
         if not isinstance(row, dict):
             continue
