@@ -130,6 +130,11 @@ reruns. Each cause below was found from `.git/rosy-land-events.jsonl` and `.git/
    `test_land_prepare.py`, `test_land_speculate.py`). Keep one landing-tool branch in flight: add a new tool fix to
    the queued branch and requeue it with `land_async.py --replace`. When resolving such a conflict in a test file,
    rebuild it from main's version plus your own new tests; keeping both sides once left a test half old, half new.
+14. **The explicit FULL witness lived only in memory.** An explicit `--tests full` landing (publish evidence) keeps
+   `args._full_witness`; any relaunch (a landing-code change's rules refresh, a reboot, a resume) dropped it and the
+   next prepare reran the whole FULL with no cache: one docs landing did that six times on 11-03 (277 min). The record
+   now keeps the explicit run's `env` and `land_selection.current_main` rebuilds the witness from it; publish still
+   checks the logs and fails closed. Same shape as cause 2: state a relaunch needs must be on disk.
 
 ## 계측 전용 파일의 불필요한 FULL 승격
 

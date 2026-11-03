@@ -14040,3 +14040,9 @@ osy-d395-s1d\`.
 - gate 변화: 없음. resume의 기존 거절(살아 있는 표·main에 있음·미커밋)을 그대로 거친다.
 - CE: 기존 교훈 갱신 — land-async-children…-2026-10-30(재부팅 뒤 orphans), landings-gave-the-turn-back… 13(도구 브랜치는 하나로).
 
+## 2026-11-03 · uncommitted · fix(landing): 명시 FULL 증인이 재실행 뒤에도 남음 (D-970 보완)
+- 변경: 명시 FULL 사전 시험의 `land_full` 기록에 `env`를 두고, `land_selection.current_main`이 메모리 증인이 없으면 그 기록으로 증인을 되살린다.
+- 증거: 11-03 account-ci-oauthlib-log(명시 FULL)가 규칙 갱신 재실행·재부팅·resume 때마다 FULL 전체를 캐시 없이 6번(277분). 원격 착지 회귀 27개 파일 + affected_tests + harness_contracts + publish_evidence 통과, 새 시험 1개.
+- gate 변화: 없음 — 게시는 여전히 로그로 FULL 실행을 확인하고 닫힌 쪽으로 실패한다.
+- CE: 기존 교훈 갱신 — landings-gave-the-turn-back-and-reran-everything 14.
+
