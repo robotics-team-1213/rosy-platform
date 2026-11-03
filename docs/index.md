@@ -357,4 +357,4 @@
 - 2026-11-03 · uncommitted · fix(harness): preserve current-main root projection and speculation semantics
 - 2026-11-03 · uncommitted · fix(harness): reject stale FULL reuse and validate record composition before FF
 - 2026-11-03 · uncommitted · fix(harness): compose timing plans without inheriting speculation into publication FULL
-- 2026-11-03 · uncommitted · test(remote): imported fake-host helper의 HEADROOM 격리
+- 2026-11-03 · b71238da0d · fix(land): a held or records-only turn keeps each job's options

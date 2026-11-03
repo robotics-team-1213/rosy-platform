@@ -13917,6 +13917,49 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 실패 기준·검증 기대값·자원 정책·테스트 선택·quarantine baseline을 바꾸지 않는다. 독립 고정코드 검토 P1/P2 없음이며, source 검증과 정식 후보 착지는 구분한다.
 - CE: 기존 교훈 갱신 — shared-pytest-process-masks-path-dependent-import의 단독/FULL 컨텍스트 차이에 imported helper의 fixture 범위와 실제 순서 재현을 추가했다. 단독 통과를 곧바로 부하성 flaky로 단정하지 않는다.
 
+## 2026-11-03 · uncommitted · feat(isaac): 실측 팔 받침·벨트 후보 케이스와 이름 있는 계획 장면
+- 변경: 케이스 `nominal-palletizing-v21-ship-surveyed-bases`·`-surveyed`(벨트 28 mm 낮춤, `belt_drop_m`), `isaac_stack_plan.SCENES`(장면마다 받침/yaw 쌍과 낮은 벨트 통로 높이), `stacking_task.py` 케이스 등록과 등록 누락을 잡는 시험, 실측 받침 도달 시험.
+- 증거: 호스트 계획기로 실측 받침에서 벨트 집기·적층 9곳 모두 닿고, 뱃머리 정렬 자리(x -0.12)는 arm_a가 닿지 않음(0.287 m). Isaac 실행 두 번은 케이스 등록 누락과 CAD 받침 검사에서 멈춰 결과 없음(검증 기록 Step 3).
+- gate 변화: 없음. CAD 케이스와 fixture는 그대로다.
+- CE: 해당 없음 — 케이스 등록 누락은 시험으로 막았고, 정렬 자리 도달 문제는 검증 기록과 다음 작업(팔마다 정렬 자리)에 남겼다.
+
+## 2026-11-03 · uncommitted · fix(remote): omx_hotfix가 contracts/foundation도 올린다
+- 변경: `tools/remote/omx_hotfix.py` `PATHS`에 `contracts/foundation`. 셀 스크립트가 `core_common`(D-966 제어 파라미터)을 import하므로, 이 도구로 만든 트리만으로 세션이 시작되게 한다(공식 `omx_autoupdate` 트리와 같은 구성).
+- 증거: 관제 PC 실행 환경은 `PYTHONPATH`의 `<tree>/contracts/foundation`에서만 `core_common`을 찾는다(없으면 ModuleNotFoundError, 2026-11-03 확인).
+- gate 변화: 없음
+- 결정: 없음
+
+## 2026-11-03 · 85ec06aec9 · docs(solutions): 사이트 갱신 체인 정지 진단 순서 기록
+- 변경: `solutions/deployment/`에 D-441 체인 정지 진단 교훈을 추가했다. 릴리스 제목("(unsigned)")은 신뢰 금지(10-29·10-31·11-03 세 재발), 정본 신호는 서명 감사 로그·업데이터 hold 상태·journalctl·D-805 관문 순서. 11-03 착지(main 0656574fb674)의 notify 푸시·제목 자동 교정도 해법으로 기록.
+- 증거: 같은 날 실제 진단·복구로 검증(hold 5분 내 식별, `retitle-repaired` 2건 즉시 교정, `test/test_site_auto_sign.py` 31통과).
+- gate 변화: 없음.
+- CE: 이 문서 자체가 교훈 기록이다.
+
+## 2026-11-03 · uncommitted · fix(landing): delta 차례 넘김은 깨끗한 아래 단계가 있을 때만 (D-889 추가 27 보완)
+- 변경: `land_selection.delta_yields(ticket, base)`를 두고, `land.py`가 표와 `land_full.prepared` 단계가 둘 다 있을 때만 DELTA_NOTE로 차례를 넘긴다.
+- 증거: 14:18·14:34 control-unit-arm-candidate가 tier None(LOAD-FLAKY) 사전 시험 위에서 두 번 넘기고 저장 없이 돌아옴(rosy-land-events). 원격 착지 회귀 27개 파일 + affected_tests 통과, 새 시험 1개.
+- gate 변화: 없음. 단계 없는 착지는 D-889 27 이전처럼 차례 안에서 delta 시험 폴더를 돌린다.
+- CE: 기존 교훈 갱신 — landings-gave-the-turn-back-and-reran-everything 10에 이 조건을 더함.
+
+## 2026-11-03 · uncommitted · docs(workflow): 제어 세션 종료 뒤 남은 synthetic 부하 정리
+- 변경: Windows 부하 시험의 PID·생성시각·부모 트리 확인과 이번 사례의 부모 우선 종료 근거를 교훈으로 남긴다. 프로세스 이름만으로 종료하거나 광범위 정리 명령을 재실행하지 않는다.
+- 증거: 원래 제어 부모가 없는 bash3개와 각 유일한 while-True Python3개를 확인하고 정확한 대상만 종료했다. 직후 대상0, 후속 표본의 동일PID는 새 hook shell로 재사용된 것을 구분했다. 전체CPU96%/다른작업진행으로 전체 지연·p90 개선은 주장하지 않는다.
+- gate 변화: 없음. 제품 코드·자원 기준·시험 선택·실패 baseline은 바꾸지 않는다. 운영자 로컬 증거는 저장소 밖 기존 workspace-records에 보존했다.
+- CE: 새 교훈 기록 — windows-synthetic-load-outlives-controller. 관련 CPU 경합·Windows 자식 수명 교훈과 구분하며 원격·장치 수용을 대신하지 않는다.
+
+## 2026-11-03 · 368f142943 · docs(adr): D-968 통합관제 이름·개인 로그인 계정 모델 확정
+- 변경: 통합관제 고유명은 Rosy Fleet, 사람 계정은 개인 로그인만, 소유자 권한은 operator+policy_admin 조합. 직함·공유 계정과 owner 문자가 들어간 새 역할·계정은 만들지 않고, 콘솔 id/비번 처리는 기존 구조화 경로(rosy_account 라우트·레지스트리 초기 비밀번호·강제 변경)만 쓴다. 2026-11-02~03 콘솔 로그인 실패는 초기 비밀번호 체계로 해결했다.
+- 검증: rosy_harness lint 잔여 오류 0건. D-966/D-967은 타 세션 진행 중 예약이라 adr_gaps.txt에 선언했다(ADR 착지 시 줄 삭제).
+- gate 변화: 없음.
+- CE: 해당 없음 — 진단·명명 결정 기록이며 새 교훈 없음.
+
+## 2026-11-03 · b71238da0d · fix(land): a held or records-only turn keeps each job's options
+- 변경: `tools/land_speculate.py` `root_part`가 root test/ 경로와 함께 그 invocation의 옵션·`ROSY_*` 단어를 남긴다(`land.py` records-only 경로도 같은 함수). `with_spec`은 이미 있는 invocation을 다시 붙이지 않는다
+- 증거: 5ec9ef709a 착지 기록이 G1 전용 job 2개와 평문 `test/test_platform_g1_timing.py`를 담아 `publish_main`이 "canonical candidate plan/environment unavailable"로 거부. 원격 `test_land_speculate.py test_land.py test_land_record.py test_publish_evidence.py test_land_selection.py` exit 0
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 없음(회귀 시험 `test_the_root_part_keeps_each_job_s_options_and_settings`)
+
 ## 2026-11-03 · uncommitted · fix(harness): compose timing plans without inheriting speculation into publication FULL
 - Change: the shared SOT validates each execution context before combining plans, retains every ordinary row in order, and normalizes only canonical G1 DED rows across independently valid contexts. land_record and with_spec use the same composition; malformed within-context duplicates, filtered jobs and missing timing companions cannot borrow completeness from another context. held keeps invocations with environment/options whole, including option values, ROOT ignore and no-xdist/plugin words; option-free mixed invocations retain the existing root projection. Both input and result follow the SOT. Explicit FULL returns before speculative preparation and bypasses held/with_spec, using actual main-delta selection with existing witness/reprepare and exact publication-proof checks. Auto speculation remains supported. The authoritative pr-pipeline explanation gains one sentence defining this explicit-FULL boundary.
 - Evidence: bc6ba7e86d RED had 10 relevant failures plus 5 incorrect fixture-module lookups; tests-only cbd91a044c repaired the lookup and confirmed 5 real three-context failures. Implementation 90e0a7e8a2 passed record/speculate/publication whole-file runs, while the new explicit-FULL delta fixture exposed its blank YAML through the real isolation loader; its standalone case and wrapper child failed. Tests-only 1abd2203e0 supplies valid minimal committed modules/roots YAML, preserving that actual delta/isolation path. Exact 1abd fresh whole-file results: record 13 passed (0.69s, peak 32MiB), speculate 24 passed (3.53s, 54MiB), selection 59 passed (19.98s, 68MiB), publication 49 passed (26.47s, 83MiB), each 0 skipped. Separate unchanged collect_alone wrapper collected and ran all four files in fresh children: 8 passed / 0 skipped (26.57s, 151MiB). All five reports compare NEW/known/flaky 0. Logs and five-invocation plan are outside the repository in OS Temp rosy-g1-spec-composition-green-1abd; normal model preflight was 11 free cores/8.8GB, with unchanged admission floors. Earlier site runner resource outputs were inconsistent with elapsed time and are not resource evidence.

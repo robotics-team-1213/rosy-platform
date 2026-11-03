@@ -1359,7 +1359,8 @@ active.
 Since D-441 the chain runs by itself: a push to `main` builds the candidate,
 the operator's signing PC signs it, and the site host installs it with a health
 check and rollback. Code merged to `main` becomes the site deployment within
-roughly half an hour. The trust anchors do not move: the private key stays on
+roughly half an hour — or within seconds of signing once the signer's
+`notify_hosts` push is configured. The trust anchors do not move: the private key stays on
 the signing PC, and the host verifies with the verifier and public key it got
 by hand (D-301). Placeholders below are filled from private records.
 
@@ -1377,7 +1378,8 @@ repository, for example `C:\RosySigning\auto-sign.json`:
   "public_key": "C:\\RosySigning\\site-release-ed25519.pub.pem",
   "state_dir": "C:\\RosySigning\\state",
   "keep": 10,
-  "max_per_run": 3
+  "max_per_run": 3,
+  "notify_hosts": ["<site-host-user@host>"]
 }
 ```
 
@@ -1407,6 +1409,18 @@ task runs only while that user is logged on. Pause with
 `Disable-ScheduledTask -TaskName RosySiteAutoSign`; remove with
 `Unregister-ScheduledTask -TaskName RosySiteAutoSign -Confirm:$false`. On
 Linux run the same command from a systemd user timer or cron.
+
+Optional `notify_hosts` (list of ssh targets) closes the latency gap after
+signing: a run that signed at least one release then runs, per host,
+`ssh -o BatchMode=yes <host> sudo -n systemctl start rosy-site-autoupdate.service`
+— one fixed command, no host shell — so the site installs within seconds
+instead of waiting for its 15-minute timer. The push is best-effort: a failed
+or unreachable host is only recorded as a `notify` audit line, and the host
+timer still installs the release. `BatchMode` needs the signing user's key on
+the site host; passwordless sudo for that one systemctl start is enough. The
+same release scan repairs signed `site-*` releases whose title still says
+"(unsigned)" (`retitle-repaired` in the audit; the 2026-10-29, 2026-10-31 and
+2026-11-03 recurrences).
 
 **Site host (once, as the administrator).** Install the first candidate by
 hand as above; the updater only replaces a running one. Install the updater

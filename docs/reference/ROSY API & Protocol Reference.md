@@ -5,7 +5,7 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.351
+**Version:** v1.355
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -867,6 +867,43 @@ Reads stay installed when the deployment profile closes, provided the persistent
 scoped 취소는 결속된 navigation run만 취소하며 trip lease를 자동 종료하거나 IDLE로 전환하지 않는다. lease 수명·해제는 기존 소유자 경로에 남는다. 응답 `navigation`은 응답 시점의 현재 facade 상태여서 새 run의 상태일 수 있다. 성공 판단은 `operation`의 원래 boot/run/correlation과 TERMINAL/CANCELED에 결속하고 facade 상태를 원래 run의 결과로 해석하지 않는다. native 취소 receipt도 물리 정지 측정 증거는 아니다.
 
 이 절은 공유 계약이며 HTTP·runtime·UI·배치 및 실물 수용은 각 구현 증거로 닫는다. schema 등록·원격 모델 시험만으로 파이프라인이 완성됐다고 주장하지 않는다.
+
+### v1.353 Arm-transfer delegation candidate shape (D-965)
+
+팔 작업 위임 후보의 모양만 정한다. 이 버전의 경로는 아직 navigation 후보만 받는다. 셀 ingress와 R 쪽 변환은 후속 버전에서 연다.
+
+- 모델 정본은 `core_common.protocol.schemas`의 `ControlArmTransferCandidate` `{target_unit,transfer}`, `ControlArmWorkRequest`(+`delegation_id`), `ControlArmIngressRequest`(+`origin_id`,`config_revision`)다.
+- `transfer`는 기존 `ArmTransferJobCreate`와 같다. 추가 필드와 `robot_id`·`goal`을 섞은 본문은 거절한다.
+- `ControlDelegationSnapshot.request`는 navigation 후보와 팔 작업 후보 중 하나다. 두 모양은 필수 필드가 달라 서로 바뀌지 않는다.
+- 셀은 팔 작업 후보를 받으면 기존 ARM 제안(`PROPOSED`)을 만든다. 승인은 셀의 기존 ARM admit(기명 운영자 또는 D-938 정책) 하나뿐이다. 위임 자체에는 별도 approve가 없다.
+
+### v1.354 Cell inbox accepts delegated arm work (D-965)
+
+셀의 `POST /api/fleet/control-unit/inbox`가 `ControlArmIngressRequest`도 받는다. 범위 검사는 `workcell:<transfer.workcell_id>` 자원이 최종 target의 직접 소유인지다.
+
+- 최종 target 셀은 인증된 직접 부모의 `service` principal로 기존 ARM 제안을 만든다. `transfer.request_key`가 그 principal 아래의 제안 key다. 같은 위임의 재전달은 같은 제안을 돌려준다.
+- 제안 mission ID는 위임의 `local_task_id`에 결속된다. 셀에 ARM 설치가 없거나 부모 principal이 제안 권한이 없으면 409(`CONTROL_UNIT_ARM_JOBS_UNAVAILABLE`, `CONTROL_UNIT_ARM_PROPOSAL_FORBIDDEN`)이고 결속하지 않는다.
+- 팔 작업 위임의 `/approve`는 409 `CONTROL_UNIT_ARM_ADMIT_AT_CELL`이다. 승인은 셀의 기존 ARM admit뿐이다.
+- 위임 상태는 ARM 상태를 옮긴다: PROPOSED→QUEUED, READY→ACCEPTED, RUNNING·ACTION_SUCCEEDED→RUNNING, GOAL_CONFIRMED→COMPLETED, HOLD→HOLD. result는 `{mission_id,status,reason}`다.
+- 팔 작업의 취소 요청은 기록만 한다. ARM 제안 취소는 셀 운영자가 기존 ARM 취소 경로로 한다.
+- 외부 앱의 ARM 제안을 R이 위임으로 바꾸는 진입은 아직 없다. 로컬 운영자 `POST /delegations`는 navigation만 받는다.
+
+### v1.355 Top control unit relays ARM jobs to the owning cell (D-965)
+
+ARM 설치가 없고 관제 단위가 설정된 Fleet(현장 R)은 `/api/fleet/arm-transfers/jobs`의 다섯 경로를 relay로 연다. 본문·응답 모양은 기존 ARM 경로와 같다. admit·observation·recovery 경로는 열지 않는다.
+
+| 경로 | relay 동작 |
+|---|---|
+| `POST /jobs` | proposer. `workcell:<workcell_id>`를 소유한 하위 셀로 팔 작업 위임을 만든다. delegation ID는 `arm-` + sha256(principal ID, request_key) 앞 40자다. 셀이 만든 제안의 `job`을 돌려준다. 그 셀이 없으면 404 `ARM_TRANSFER_WORKCELL_NOT_DELEGATED`, 셀 응답이 없거나 stale이면 503 |
+| `GET /jobs?request_key=` | viewer. 같은 principal의 위임만 찾는다 |
+| `GET /jobs/{mission_id}` | viewer. 제안한 principal 또는 operator만. 다른 서비스는 403 |
+| `GET /jobs/{mission_id}/physical-receipt` | 위와 같은 범위. 셀이 투영한 receipt가 없으면 409 `ARM_TRANSFER_PHYSICAL_RECEIPT_PENDING` |
+| `POST /jobs/{mission_id}/cancel` | 제안한 principal만. 위임 취소를 요청한다. 앱의 reason은 R에만 남고 셀은 자체 reason(`control-unit-cancel`)을 쓴다 |
+
+- 셀의 위임 result는 `{job, receipt, cancel_sent?}`다. `job`은 기존 `ArmTransferJobSnapshot`, `receipt`는 기존 physical receipt 또는 null이다.
+- 셀 쪽 취소: 승인 전 제안은 `HOLD`(`reason=control-unit-cancel`)로 거둬들이고 위임은 CANCELED다. 준비된 시도는 기존 dispatcher 취소로 한 번 보낸다. `cancel_sent`는 정지 확인이 아니다.
+- 기명 admit과 D-938 정책 admit은 취소 요청된 위임에 묶인 제안을 409로 거절한다.
+- 셀의 제안 기록에서 제안 principal은 R의 service principal(`control-unit:R`)이다. R relay는 제안한 앱 자신에게는 `proposal_principal_id`를 그 앱의 principal로 보여 준다(이 Fleet에서 제안한 주체). operator 조회는 셀 기록 그대로다. 같은 앱의 재요청은 같은 위임과 같은 제안을 돌려준다.
 
 ### v1.292 Candidate trip admission (D-836)
 
@@ -4495,6 +4532,9 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.355 | 2026-11-03 | D-965: ARM 설치 없는 꼭대기 관제(R)가 ARM 작업 경로 다섯 개를 하위 셀 위임으로 relay. 셀 result에 job·receipt, 승인 전 취소는 HOLD로 거둠, admit은 취소된 위임 제안 거절 |
+| v1.354 | 2026-11-03 | D-965: 셀 inbox가 팔 작업 위임을 받아 부모 service principal로 기존 ARM 제안을 만들고 결속. 위임 approve는 팔 작업에 409, 승인은 셀 ARM admit |
+| v1.353 | 2026-11-03 | D-965: 팔 작업 위임 후보 모양(`ControlArmTransferCandidate`·`ControlArmWorkRequest`·`ControlArmIngressRequest`), snapshot request는 두 종류 중 하나. 경로는 아직 navigation만 |
 | v1.351 | 2026-11-03 | 핑키 열 모드: `safety/state.thermal`, `thermal.*` 이벤트, ROS `motor/health`. warm은 직선 상한 절반, hot은 자율 주행 0(수동은 warm 상한) |
 | v1.350 | 2026-11-02 | D-963: 제어 PC의 역할 없는 USB 카메라 보고·운영자 역할 결정 (`workcell-observations/{workcell_id}/usb-devices`) |
 | v1.349 | 2026-11-02 | D-962: 독립 Account authority와 Fleet PKCE receiver, 개발 모드의 익명 세션 폐기·사람 로그인 의무화 |
