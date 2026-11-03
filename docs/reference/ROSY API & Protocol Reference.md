@@ -903,7 +903,7 @@ ARM 설치가 없고 관제 단위가 설정된 Fleet(현장 R)은 `/api/fleet/a
 - 셀의 위임 result는 `{job, receipt, cancel_sent?}`다. `job`은 기존 `ArmTransferJobSnapshot`, `receipt`는 기존 physical receipt 또는 null이다.
 - 셀 쪽 취소: 승인 전 제안은 `HOLD`(`reason=control-unit-cancel`)로 거둬들이고 위임은 CANCELED다. 준비된 시도는 기존 dispatcher 취소로 한 번 보낸다. `cancel_sent`는 정지 확인이 아니다.
 - 기명 admit과 D-938 정책 admit은 취소 요청된 위임에 묶인 제안을 409로 거절한다.
-- 제안 principal은 셀에서 R의 service principal(`control-unit:R`)이다. 같은 앱의 재요청은 같은 위임과 같은 제안을 돌려준다.
+- 셀의 제안 기록에서 제안 principal은 R의 service principal(`control-unit:R`)이다. R relay는 제안한 앱 자신에게는 `proposal_principal_id`를 그 앱의 principal로 보여 준다(이 Fleet에서 제안한 주체). operator 조회는 셀 기록 그대로다. 같은 앱의 재요청은 같은 위임과 같은 제안을 돌려준다.
 
 ### v1.292 Candidate trip admission (D-836)
 

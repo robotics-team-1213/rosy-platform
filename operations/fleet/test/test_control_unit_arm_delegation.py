@@ -174,7 +174,8 @@ def test_r_relays_create_read_receipt_and_cancel_for_the_proposing_app_only(tmp_
     created = client.post("/api/fleet/arm-transfers/jobs", json=TRANSFER)
     assert created.status_code == 200, created.text
     job = created.json()["job"]
-    assert job["mission_id"] == "physical-1" and job["proposal_principal_id"] == "control-unit:R"
+    assert job["mission_id"] == "physical-1" and job["proposal_principal_id"] == "harbor"
+    assert jobs.view("physical-1")["proposal_principal_id"] == "control-unit:R"
     assert client.post("/api/fleet/arm-transfers/jobs", json=TRANSFER).json()["job"] == job
     assert len(jobs.jobs) == 1
     assert client.get("/api/fleet/arm-transfers/jobs", params={"request_key": "harbor:move-1"}).json()["job"] == job
@@ -182,6 +183,8 @@ def test_r_relays_create_read_receipt_and_cancel_for_the_proposing_app_only(tmp_
     pending = client.get("/api/fleet/arm-transfers/jobs/physical-1/physical-receipt")
     assert pending.status_code == 409 and pending.json()["detail"]["code"] == "ARM_TRANSFER_PHYSICAL_RECEIPT_PENDING"
 
+    who["principal"] = SimpleNamespace(principal_id="operator-a", role="operator")
+    assert client.get("/api/fleet/arm-transfers/jobs/physical-1").json()["job"]["proposal_principal_id"] == "control-unit:R"
     who["principal"] = OTHER
     assert client.get("/api/fleet/arm-transfers/jobs/physical-1").status_code == 403
     assert client.get("/api/fleet/arm-transfers/jobs", params={"request_key": "harbor:move-1"}).status_code == 404
