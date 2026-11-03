@@ -203,7 +203,7 @@ def test_cell_catalog_fits_the_full_page_and_belongs_to_saved_documents(cell_url
                 wrapper = table.locator("..")
                 wrapper.focus()
                 page.keyboard.press("ArrowRight")
-                page.wait_for_function("document.getElementById('catalog-table').parentElement.scrollLeft > 0")
+                page.wait_for_function("() => document.getElementById('catalog-table').parentElement.scrollLeft > 0")
                 wrapper.evaluate("el => { el.scrollLeft = el.scrollWidth; }")
                 expect(table.locator("th").last).to_be_in_viewport()
                 wrapper.evaluate("el => { el.scrollLeft = 0; }")
@@ -211,7 +211,7 @@ def test_cell_catalog_fits_the_full_page_and_belongs_to_saved_documents(cell_url
                 shot = page.screenshot(type="jpeg", quality=35)
                 print(f"ROSY_SCREENSHOT cell-catalog-{theme}-{width} " + base64.b64encode(shot).decode())
             page.locator('.ui-subnav-nav a[href="#recipe-heading"]').click()
-            expect(page.locator('[aria-labelledby="catalog-heading"]')).to_be_hidden()
+            expect(page.locator('ui-section[aria-labelledby="catalog-heading"]')).to_be_hidden()
             page.locator('.ui-subnav-nav a[href="#saved-heading"]').click()
             expect(table).to_be_visible()
             assert not errors and not state.failed_assets
