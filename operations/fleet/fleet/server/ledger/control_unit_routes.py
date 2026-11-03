@@ -6,7 +6,9 @@ import sqlite3
 import httpx
 from fastapi import Depends, HTTPException
 
-from core_common.protocol.control_units import ControlApproveRequest, ControlIngressRequest, ControlWorkRequest
+from core_common.protocol.control_units import (
+    ControlApproveRequest, ControlArmIngressRequest, ControlIngressRequest, ControlWorkRequest,
+)
 from fleet.swarm.transport import RobotApiError
 
 
@@ -72,9 +74,9 @@ def install_control_unit_routes(app, service, *, authorize, require_viewer, requ
         return await execute(service.submit(body))
 
     @app.post(prefix + "/inbox")
-    async def inbox(body: ControlIngressRequest, principal=Depends(authorize)):
+    async def inbox(body: ControlIngressRequest | ControlArmIngressRequest, principal=Depends(authorize)):
         parent = parent_scope(principal, body.origin_id)
-        return await execute(service.receive(body, parent_id=parent))
+        return await execute(service.receive(body, parent_id=parent, principal=principal))
 
     @app.get(prefix + "/delegations/{origin}/{identity}")
     async def read(origin: str, identity: str, principal=Depends(authorize)):
