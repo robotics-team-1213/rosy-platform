@@ -295,3 +295,13 @@ def test_real_cameras_see_the_studs_unmirrored_where_the_survey_saw_them():
         if name == 'top':
             bow = min(x for x, _ in studs)
             assert uv[x0, y_left][1] < uv[bow, y_left][1]
+
+
+def test_surveyed_case_moves_only_the_bases_and_drops_the_belt_feed_together():
+    cad = f.container_fixture(layers=3, case='nominal-palletizing-v21-ship')
+    bases = f.container_fixture(layers=3, case='nominal-palletizing-v21-ship-surveyed-bases')
+    surveyed = f.container_fixture(layers=3, case='nominal-palletizing-v21-ship-surveyed')
+    assert bases['arm_bases_m'] != cad['arm_bases_m'] and bases['belt_center_m'] == cad['belt_center_m']
+    for key in ('belt_center_m', 'belt_stop_m', 'pickup_center_m', 'infeed_start_m'):
+        assert surveyed[key][:2] == cad[key][:2] and surveyed[key][2] == pytest.approx(cad[key][2]-.028)
+    assert surveyed['bin_origin_m'] == cad['bin_origin_m'] and surveyed['real_cameras'] == cad['real_cameras']

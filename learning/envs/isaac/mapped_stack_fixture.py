@@ -77,6 +77,9 @@ def container_fixture(*, layers, case):
         value.update(FIXTURE_OVERRIDES[case], revision=value['revision']+'-'+case, case=case)
         gap = value['row_gap_m']  # the envelope grows by the two row gaps, as in the D-929 branch below
         value.update(bin_origin_m=[.035, -.045-gap, .074], bin_size_m=[.09, .09+2*gap, .03*layers])
+        if value.get('belt_drop_m'):  # surveyed belt below the CAD face: the belt and its feed points move down together
+            for key in ('belt_center_m', 'belt_stop_m', 'pickup_center_m', 'infeed_start_m'):
+                value[key] = [*value[key][:2], value[key][2]-value['belt_drop_m']]
         return ship_plate.place(value) if 'ship_plate' in value else value
     if case in EVALUATION_CASES:
         value = container_fixture(layers=layers, case='nominal')
