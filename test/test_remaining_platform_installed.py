@@ -81,9 +81,9 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
         archives = tmp_path / 'archives'
         run(['setup.py', 'sdist', '--dist-dir', str(archives)], staging / 'operations/fleet')
         sources[0] = next(archives.glob('fleet-*.tar.gz'))
-        run(['-c', 'import sys; from setuptools import build_meta; build_meta.build_sdist(sys.argv[1])',
-             str(archives)], staging / 'operations/account')
-        sources[1] = next(archives.glob('rosy_account-*.tar.gz'))
+        account_sdist = run(['-c', 'import sys; from setuptools import build_meta; print(build_meta.build_sdist(sys.argv[1]))',
+                             str(archives)], staging / 'operations/account')
+        sources[1] = archives / account_sdist.stdout.splitlines()[-1]
         with tarfile.open(sources[0]) as archive:
             assert any(name.endswith('/_build/fleet_sources.py') for name in archive.getnames())
             assert not any('/_source_roots/account/' in name for name in archive.getnames())
