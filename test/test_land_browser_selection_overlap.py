@@ -53,10 +53,10 @@ def test_options_nodes_folders_and_unknown_words_keep_exact_argv_behavior(caller
     assert choose(caller, tmp_path, own, delta)[1:] == own + delta
 
 
-def test_equivalent_environment_order_keeps_first_chunk_order(caller, tmp_path):
+def test_environment_order_difference_keeps_both_contexts(caller, tmp_path):
     own = [[BROWSER, "ROSY_TEST_PROFILE=one", A, B]]
     delta = [["ROSY_TEST_PROFILE=one", BROWSER, A, C]]
-    assert choose(caller, tmp_path, own, delta)[1:] == own + [["ROSY_TEST_PROFILE=one", BROWSER, C]]
+    assert choose(caller, tmp_path, own, delta)[1:] == own + delta
 
 
 def test_regular_pytest_chunks_are_only_exact_argv_deduplicated(caller, tmp_path):
