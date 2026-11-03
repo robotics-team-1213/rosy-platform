@@ -355,6 +355,6 @@
 
 - 2026-11-03 · b71238da0d · fix(land): a held or records-only turn keeps each job's options
 - 2026-11-03 · 368f142943 · docs(adr): D-968 통합관제 이름·개인 로그인 계정 모델 확정
+- 2026-11-03 · uncommitted · docs(workflow): 제어 세션 종료 뒤 남은 synthetic 부하 정리
 - 2026-11-03 · 85ec06aec9 · docs(solutions): 사이트 갱신 체인 정지 진단 순서 기록
 - 2026-11-03 · uncommitted · fix(remote): omx_hotfix가 contracts/foundation도 올린다
-- 2026-11-03 · uncommitted · feat(isaac): 실측 팔 받침·벨트 후보 케이스와 이름 있는 계획 장면
