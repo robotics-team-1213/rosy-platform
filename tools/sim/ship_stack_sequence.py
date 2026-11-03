@@ -18,6 +18,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import ship_release_scene as scene  # noqa: E402
+import ship_v11_scene  # noqa: E402
 
 mujoco = scene.mujoco
 NAMES = [f'c{i}' for i in range(9)]
@@ -42,31 +43,53 @@ def tilt_deg(q):
     return math.degrees(math.acos(max(-1., min(1., 1-2*(x*x+y*y)))))
 
 
+def v11_targets(order):
+    """v11 hold: layer by layer, rows in the given order; 8 mm between rows, so nothing is packed against a neighbour."""
+    return [(row, layer, ship_v11_scene.v11.target(row, layer)) for layer in range(3) for row in order]
+
+
 def run(case):
     variant = case.get('variant', 'plain')
-    model, f = scene.build(1, variant=variant, cargo=NAMES)
-    nest = scene.variants.NEST_MM/1e3 if scene.variants.VARIANTS[variant].get('rail') else 0.
+    v11 = case.get('ship') == 'v11'
+    if v11:  # snap-together ship v11 + container v2 + wrist camera B holder (2026-11-04)
+        plan, nest = v11_targets(case['order']), 0.
+        model, f = ship_v11_scene.build(NAMES, upper=[NAMES[i] for i, (_, layer, _) in enumerate(plan) if layer])
+    else:
+        model, f = scene.build(1, variant=variant, cargo=NAMES)
+        plan = targets(f, case['order'])
+        nest = scene.variants.NEST_MM/1e3 if scene.variants.VARIANTS[variant].get('rail') else 0.
     data = mujoco.MjData(model)
     model.geom_friction[:, 0] = case['mu']
     rng = random.Random(case['seed'])
     for k, name in enumerate(NAMES):  # parked far away until their turn
         scene._set_free(model, data, name, [.6+.1*k, .6, .2])
+    parked = {}
+    if v11:  # parked containers float without contacts (no work for the solver) until their release
+        for name in NAMES:
+            body = model.body(name).id
+            geoms = [g for g in range(model.ngeom) if model.geom_bodyid[g] == body]
+            parked[name] = (geoms, model.geom_contype[geoms].copy(), model.geom_conaffinity[geoms].copy())
+            model.geom_contype[geoms], model.geom_conaffinity[geoms] = 0, 0
+            model.body_gravcomp[body] = 1
     tcp = scene.jaw.description()['tcp']
     contact = scene.jaw.angle_for_gap(scene.jaw.GRASP_WIDTH_M)
     close, release = scene.jaw.finger_angles(case['open_gap_m'])['close'], scene.jaw.finger_angles(case['open_gap_m'])['release']
     clearance = case['clearance_mm']/1e3 if 'clearance_mm' in case else f['stack_release_clearance_m']
     row_clear = f['row_clearance_m']
-    placed, worst_disturb, rows = [], 0., []
+    placed, worst_disturb, rows, camera_hits = [], 0., [], 0
 
     def step(seconds):
-        for _ in range(round(seconds/scene.DT)):
+        nonlocal camera_hits
+        for n in range(round(seconds/scene.DT)):
             mujoco.mj_step(model, data)
+            if v11 and n % 20 == 0:
+                camera_hits += ship_v11_scene.holder_contacts(model, data)
 
-    for i, (row, layer, target) in enumerate(targets(f, case['order'])):
+    for i, (row, layer, target) in enumerate(plan):
         target = list(target)
         target[2] -= layer*nest  # a rail tongue nests into the groove above: layers are 28 mm, not 30
-        centre = next((scene._pose(data, NAMES[j])[0] for j, (r, l, _) in enumerate(targets(f, case['order'])[:i])
-                       if l == layer and r == 1), None)
+        centre = None if v11 else next((scene._pose(data, NAMES[j])[0] for j, (r, l, _) in enumerate(plan[:i])
+                                        if l == layer and r == 1), None)
         if row != 1 and centre is not None:  # Isaac packed_release_position: beside the measured centre box
             direction = 1 if target[1] > centre[1] else -1
             edge = centre[1]+direction*(.015+.015+row_clear)
@@ -76,6 +99,10 @@ def run(case):
         before = [scene._pose(data, n)[0] for n in placed]
 
         def release_at(box, yaw):
+            if NAMES[i] in parked:
+                geoms, contype, conaffinity = parked.pop(NAMES[i])
+                model.geom_contype[geoms], model.geom_conaffinity[geoms] = contype, conaffinity
+                model.body_gravcomp[model.body(NAMES[i]).id] = 0
             scene._set_free(model, data, NAMES[i], box, yaw)
             for k, sign in enumerate((1, -1)):
                 data.qpos[model.joint(f'q{k}').qposadr[0]] = sign*contact
@@ -126,13 +153,24 @@ def run(case):
             failures.append(f'{i}:xy')
         if r['disturb_mm'] > DISTURB_MM:
             failures.append(f'{i}:disturbed-earlier')
-    return dict(case, ok=not failures, failures=failures, worst_disturb_mm=round(worst_disturb, 3), boxes=rows)
+    if camera_hits:
+        failures.append('camera-holder-contact')
+    return dict(case, ok=not failures, failures=failures, worst_disturb_mm=round(worst_disturb, 3), boxes=rows,
+                camera_hits=camera_hits)
 
 
 FIX_VARIANTS, FIX_CLEARANCE_MM, FIX_SIGMA_MM = ['plain', 'c10', 'a10', 'r290', 'rail', 'c10rail'], [5., 2.], [.3, .4, .6, .8]
 
 
+V11_SIGMA_MM = [.5, 1., 1.5, 2., 2.5, 3., 3.5]  # the pocket mouth catches +-3.5 across, +-3.3 along
+
+
 def cases(stage='base'):
+    if stage == 'v11':  # snap-together ship v11 + container v2: how much release error the pocket and pins absorb
+        for clear, retries, mu, sigma, yaw, seed in product([2., 5.], [0, 1], MU, V11_SIGMA_MM, [.25, 1.], SEEDS):
+            yield dict(ship='v11', order=(1, 0, 2), open_gap_m=.0315, mu=mu, sigma_mm=sigma, sigma_yaw=yaw, seed=seed,
+                       clearance_mm=clear, retries=retries, retry_sigma_mm=.1)
+        return
     if stage == 'retry':  # seat check and re-place (D-956) on the two best set-ups of the fix stage
         for variant, retries, mu, sigma, seed in product(['plain', 'r290'], [0, 1, 2], MU, [.4, .6, .8], SEEDS):
             yield dict(order=(1, 0, 2), open_gap_m=.0315, mu=mu, sigma_mm=sigma, sigma_yaw=.25, seed=seed,
@@ -169,7 +207,7 @@ def main():
     r.add_argument('out', type=Path)
     r.add_argument('--workers', type=int, default=12)
     r.add_argument('--limit', type=int, default=None, help='first N cases only (smoke)')
-    r.add_argument('--stage', choices=('base', 'fix', 'retry'), default='base')
+    r.add_argument('--stage', choices=('base', 'fix', 'retry', 'v11'), default='base')
     sub.add_parser('table').add_argument('out', type=Path)
     args = parser.parse_args()
     if args.cmd == 'table':

@@ -21,3 +21,9 @@ def test_one_corrected_re_place_recovers_a_stack_a_single_release_loses():
     lost = seq.run(dict(BASE, sigma_mm=.8, seed=1, retries=0))
     kept = seq.run(dict(BASE, sigma_mm=.8, seed=1, retries=1))
     assert not lost["ok"] and kept["ok"] and any(b["retried"] for b in kept["boxes"])
+
+
+def test_v11_ship_error_free_stack_seats_on_the_pins_and_the_camera_holder_stays_clear():
+    # snap-together ship v11 + container v2 + wrist camera B holder (2026-11-04)
+    r = seq.run(dict(BASE, ship="v11", mu=.5, sigma_mm=0., seed=1, retries=0))
+    assert r["ok"] and r["camera_hits"] == 0 and max(b["xy_mm"] for b in r["boxes"]) < .3
