@@ -165,3 +165,11 @@ def test_an_arm_with_no_map_for_its_sites_is_remapped():
 def test_a_map_whose_marks_disagree_is_not_kept():
     assert cc.map_agrees({"loo_error_mm": {"max": 5.2, "mean": 3.1}})
     assert not cc.map_agrees({"loo_error_mm": {"max": 52.34, "mean": 26.81}})  # arm_a 2026-11-04 over the boxes
+
+
+def test_marks_so_far_predict_where_the_next_jaws_show():
+    """arm_a 2026-11-04: the x=0.09 column marked cleanly; later blobs 50-80 px off were the shaking link."""
+    marks = [((489.5, 331.7), (0.09, 0.08)), ((490.3, 363.3), (0.09, 0.10)), ((443.1, 332.6), (0.11, 0.08))]
+    assert cc.predicted(marks[:2], (0.11, 0.10)) is None
+    px = cc.predicted(marks, (0.11, 0.10))
+    assert abs(px[0] - 444) < 3 and abs(px[1] - 364) < 3  # not the (434.7, 286.3) blob the remap took

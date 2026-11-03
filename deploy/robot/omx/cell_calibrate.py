@@ -105,12 +105,23 @@ def map_sites(config: dict) -> list:
     return config.get("calibrate", {}).get("map_sites") or [s for s in ("floor", "pinky", "belt") if s in config["sites"]]
 
 
+def predicted(marks: list, point) -> list | None:
+    """Where the jaws over `point` should show, from an affine fit of three or more (pixel, arm) marks; else None."""
+    if len(marks) < 3:
+        return None
+    arm = np.array([[a[0], a[1], 1.0] for _, a in marks])
+    coef, *_ = np.linalg.lstsq(arm, np.array([m for m, _ in marks], float), rcond=None)
+    return [round(float(v), 1) for v in np.array([point[0], point[1], 1.0]) @ coef]
+
+
 def remap(cell, config: dict, points: list, work: Path, log=print) -> dict:
     """Hover the empty jaws at each point (z_view), mark them, fit the map; None marks are skipped."""
     import cell_pipeline as cp
 
     z_view, yaw, marks = config["coarse"]["z_view"], config["sites"][map_sites(config)[0]]["yaw_deg"], []
-    for i, (x, y) in enumerate(points):
+    # least stretched first, then only blobs near where the marks so far put the jaws: opening the jaws of a stretched
+    # arm shakes its link and the largest changed blob is not the jaws (arm_a's first pallet remap, 2026-11-04)
+    for i, (x, y) in enumerate(sorted(points, key=lambda q: math.hypot(*q))):
         view = {"x": x, "y": y, "z": round(z_view - config["plan"]["approach_m"], 4), "yaw_deg": yaw}
         try:
             lib = cp.write_library(config, view, view, work / f"remap-{i}.json")
@@ -121,8 +132,9 @@ def remap(cell, config: dict, points: list, work: Path, log=print) -> dict:
             if not cell.act(command).get("ok"):
                 cell.act("park")
                 raise SystemExit(f"remap stopped at {command} for {[x, y]}")
-        mark = cell_pivot.mark_jaws(cell, config)
-        log({"point": [x, y], "mark": mark})
+        near = predicted(marks, (x, y))
+        mark = cell_pivot.mark_jaws(cell, config, near=near and ([near], prm.get(config.get("params"), "pivot.follow_px")))
+        log({"point": [x, y], "mark": mark, "near": near})
         if mark:
             marks.append((mark, (x, y)))
     cell.act("park")
