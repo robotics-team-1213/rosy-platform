@@ -326,7 +326,12 @@ def required(land, wt, main, python):
 def current_main(land, wt, args, branch, main, python):
     witness = getattr(args, "_full_witness", None)
     if not witness:
-        return None
+        # D-970: a relaunch (rules refresh, reboot, resume) loses the in-memory witness and reran the whole FULL
+        # (11-03: six times, 277 min); the explicit prepare's own record, which keeps its env, stands in for it.
+        saved = land.land_full.prepared(wt, branch, land.land_full.restore(wt, branch))
+        if not (saved and saved.get("tier") == "full" and saved.get("env")):
+            return None
+        witness = {key: saved[key] for key in ("candidate", "main", "invocations", "env")}
     plan, _, env = required(land, wt, main, python)
     record = land.land_full.prepared(wt, branch, witness["main"])
     if (plan != witness["invocations"] or env != witness["env"] or not record
