@@ -27,8 +27,8 @@ models:
     name: 벨트
     cad: {file: 261026_World.STL, sha256: dd91457a4a8d17d7fbb4fbfdb12dff9c2ae98e92e74760231c9ec08aa377f3cc}
     sim: reflected
-    measured: 폭 약 100 mm(World STL)
-    differs: null
+    measured: 폭 약 100 mm(World STL). 벨트 끝 컨테이너 윗면이 작업대보다 25.8 mm 낮다(D435 깊이 6회 중앙값, arm_b 적층 설정 2026-11-03 05:32), 곧 벨트 면은 작업대 약 56 mm·판 윗면 약 64 mm 아래
+    differs: 시뮬레이션 벨트 면은 같은 자리(x 약 0.22)에서 판 윗면 약 36 mm 아래라 실물보다 약 28 mm 높다
   - id: arm_base
     name: 팔 베이스(두 대)
     cad: {file: 261026_World.STL, sha256: dd91457a4a8d17d7fbb4fbfdb12dff9c2ae98e92e74760231c9ec08aa377f3cc}
@@ -95,8 +95,8 @@ person_tasks:
   - task: 배 모양 판(본선) 치수를 재거나 CAD를 전달
     why: World STL·STEP에 없어 시뮬레이션은 평평한 판으로 대신했다(팀 CAD KAN-108, 2026-11-01 전달)
     status: done
-  - task: 벨트 윗면 높이를 판 윗면 기준으로 자나 팔 접촉으로 잰다
-    why: 시뮬레이션 벨트는 판보다 30~40 mm 낮은데 실물 영상으로는 판 높이 근처로 보인다(셀 실측 2026-11-03)
+  - task: 손목 카메라 둘의 렌즈 값(체커보드, cell_checkerboard.py)과 조 위 장착 자세를 잰다
+    why: 손목 영상은 돌기가 2~4개만 보여 렌즈 값 없이 장착 자세를 풀 수 없다(셀 실측 2026-11-03). 체커보드는 사람이 놓는다
     status: open
   - task: arm_a 모터 무응답(Motor 11 ping failed) 전원·케이블 확인
     why: arm_a를 실물로 움직일 수 없다

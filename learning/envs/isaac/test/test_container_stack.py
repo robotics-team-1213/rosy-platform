@@ -295,3 +295,47 @@ def test_real_cameras_see_the_studs_unmirrored_where_the_survey_saw_them():
         if name == 'top':
             bow = min(x for x, _ in studs)
             assert uv[x0, y_left][1] < uv[bow, y_left][1]
+
+
+def test_surveyed_case_moves_only_the_bases_and_drops_the_belt_feed_together():
+    cad = f.container_fixture(layers=3, case='nominal-palletizing-v21-ship')
+    bases = f.container_fixture(layers=3, case='nominal-palletizing-v21-ship-surveyed-bases')
+    surveyed = f.container_fixture(layers=3, case='nominal-palletizing-v21-ship-surveyed')
+    assert bases['arm_bases_m'] != cad['arm_bases_m'] and bases['belt_center_m'] == cad['belt_center_m']
+    for key in ('belt_center_m', 'belt_stop_m', 'pickup_center_m', 'infeed_start_m'):
+        assert surveyed[key][:2] == cad[key][:2] and surveyed[key][2] == pytest.approx(cad[key][2]-.028)
+    assert surveyed['bin_origin_m'] == cad['bin_origin_m'] and surveyed['real_cameras'] == cad['real_cameras']
+
+
+def test_every_ship_case_is_accepted_by_the_isaac_task_command_line():
+    """Run 9302d29b (2026-11-03): a case added to FIXTURE_OVERRIDES but not to stacking_task's --container-case choices
+    reached the model PC and failed at argument parsing, an hour's queue for nothing."""
+    import ast
+    from release_cases import FIXTURE_OVERRIDES
+    source = (Path(f.__file__).parent/'stacking_task.py').read_text(encoding='utf-8')
+    names = {node.value for node in ast.walk(ast.parse(source)) if isinstance(node, ast.Constant) and isinstance(node.value, str)}
+    prefix = 'nominal-palletizing-v21-ship'
+    for case in FIXTURE_OVERRIDES:
+        if case.startswith(prefix+'-'):
+            suffix = case[len(prefix)+1:]
+            assert suffix in names or case in names, case
+
+
+@pytest.mark.parametrize('case', ['nominal-palletizing-v21-ship-surveyed-bases', 'nominal-palletizing-v21-ship-surveyed'])
+def test_surveyed_bases_reach_belt_and_stack_but_not_the_bow_leveling_spot(tmp_path, case):
+    """Cell survey 2026-11-03: from the measured bases (24-36 mm toward the stern) both arms still reach the belt pickup
+    and every stack target, but arm_a no longer reaches the leveling spot past the bow (x -0.12): it needs a new place."""
+    from mapped_stack_task import Planner
+    fixture = f.container_fixture(layers=3, case=case)
+    planner = Planner(tmp_path, scene=fixture['planning_scene'], tcp_x_m=fixture['tcp_offset_m'][0])
+
+    def reach(arm, point):  # IK of one point for `arm`, the other arm at its home
+        points = [point if a == arm else f.home(a, True, fixture=fixture) for a in (0, 1)]
+        return planner.request('homes', bases=fixture['arm_bases_m'], base_yaws=fixture['arm_base_yaws_rad'], points=points)
+    for arm in (0, 1):
+        reach(arm, [*fixture['pickup_center_m'][:2], fixture['carry_height_m']])
+        for item in f.plan(True, fixture=fixture):
+            if item['arm'] == arm:
+                reach(arm, [*item['target'][:2], fixture['carry_height_m']])
+    with pytest.raises(ValueError, match='UNREACHABLE'):
+        reach(0, [*fixture['leveling_center_m'][:2], fixture['leveling_carry_height_m']])
