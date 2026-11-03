@@ -112,8 +112,8 @@ function enable() {
   document.querySelectorAll('#frames ui-button').forEach(el => el.disabled = busy || loading || !!gesture);
   const visible=visibleFrames(),position=visible.findIndex(item=>item.index===frame?.index);
   for(const [id,available,reason] of [
-    ['prev-frame',position>0,'현재 필터의 첫 번째 사진입니다.'],
-    ['next-frame',position>=0&&position<visible.length-1,'현재 필터의 마지막 사진입니다.'],
+    ['prev-frame',position>0||workspace?.page?.offset>0,'현재 필터의 첫 번째 사진입니다.'],
+    ['next-frame',position>=0&&(position<visible.length-1||workspace?.page?.offset+workspace?.page?.limit<workspace?.page?.total),'현재 필터의 마지막 사진입니다.'],
     ['next-pending',(workspace?.counts?.pending??0)>(frame?.status==='pending'?1:0),'다른 검수 대기 사진이 없습니다.']
   ]) {
     $(id).reason=busy||gesture?'현재 작업을 마친 뒤 이동할 수 있습니다.':!ready?'사진을 불러오는 중입니다.':!available?reason:'';
@@ -138,7 +138,7 @@ function list() {
   $('counts').textContent = `승인 ${counts.approved} · 제외 ${counts.excluded} · 대기 ${counts.pending}`;
   const visible=visibleFrames();
   $('filter').parentElement.hidden=!Object.values(workspace.counts).some(Boolean);
-  $('empty-frames').textContent=workspace.frames.length?'이 상태의 사진이 없습니다.':'등록된 사진이 없습니다.';
+  $('empty-frames').textContent=Object.values(workspace.counts).some(Boolean)?'이 상태의 사진이 없습니다.':'등록된 사진이 없습니다.';
   $('empty-frames').hidden=visible.length>0;
   const key=visible.map(f=>f.index).join(',');
   if (key===listKey) {
@@ -534,9 +534,9 @@ async function load(index, pageOptions={}) {
     guide.hidden=!classes.some(c=>c.name==='obstacle');
     guide.textContent='기타 장애물은 주행 경로를 실제로 막는 독립 물체에만 사용하세요. 벽·고정 기둥·바닥 표시·그림자·경로 밖 물체는 제외합니다. 애매하면 승인 전에 박스를 수정하거나 삭제하세요.';
     if(workspace.exports.length) receipt(workspace.exports[0],true);
-    if (!workspace.frames.length) {showEmptyFilter();return;}
     const params=new URLSearchParams(location.search);
     $('filter').value=params.get('filter')||'all';if(!$('filter').value) $('filter').value='all';
+    if (!workspace.frames.length) {showEmptyFilter();return;}
     const candidate=params.has('frame')?Number(params.get('frame')):undefined;
     const visible=visibleFrames(),wanted=pageOptions.last?visible.at(-1)?.index:index??candidate;
     if(visible.length) await select(visible.some(item=>item.index===wanted)?wanted:visible[0].index);else showEmptyFilter();

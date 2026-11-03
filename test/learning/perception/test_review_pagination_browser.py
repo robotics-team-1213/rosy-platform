@@ -37,6 +37,11 @@ def test_review_page_bounds_and_deep_link(tmp_path, path, strip, next_button, ti
             playwright.expect(page.locator(title)).to_have_text('사진 61' + (' 픽셀 검수' if path == '/pixels' else ''))
             playwright.expect(page.locator(next_button)).to_be_enabled()
             assert page.locator(strip + ' .frame-thumb').count() == 60
+            page.locator('#pixel-prev' if path == '/pixels' else '#prev-frame').click()
+            playwright.expect(page.locator(title)).to_have_text('사진 60' + (' 픽셀 검수' if path == '/pixels' else ''))
+            playwright.expect(page.locator(next_button)).to_be_enabled()
+            page.locator(next_button).click()
+            playwright.expect(page.locator(title)).to_have_text('사진 61' + (' 픽셀 검수' if path == '/pixels' else ''))
             page.get_by_text('다음 60장', exact=True).click()
             playwright.expect(page.locator(title)).to_have_text('사진 121' + (' 픽셀 검수' if path == '/pixels' else ''))
             assert page.locator(strip + ' .frame-thumb').count() == 5
