@@ -1113,3 +1113,10 @@
 - 증거: `operations/fleet/test/test_usb_camera_decisions.py`.
 - gate 변화: 없음. 실제 USB 카메라를 꽂아 승인하는 현장 수용은 하지 않았다.
 - CE: 해당 없음 — 새 기능이며 장애 해결이 아니다. 결정은 D-963에 있다.
+
+## 2026-11-04 · uncommitted · feat(foundation): PeerBeacon·PeerRow 스키마와 StateSnapshot.peers
+- 변경: `core_common/protocol/schemas.py`에 `PeerBeacon`(wire, extra 금지)과 `PeerRow` 추가, `StateSnapshot.peers`(선택, 기본 null) — peer pose sharing v1(v1.359, docs/plans/2026-11-04-peer-pose-sharing-design.md). `rosy_default.yaml`에 `peers:` 블록(기본 꺼짐, 토큰 없음)
+- 증거: 게이트 시험은 원격 affected 실행 예정(착지 전). 스키마 직렬화는 services/gateway 신규 시험이 격자로 확인
+- gate 변화: 없음
+- CE: 해당 없음 — 신규 추가 계약, 실물 장애 아님
+
