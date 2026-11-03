@@ -236,7 +236,8 @@ def _prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, 
         # A delta cannot replace a FULL origin; retain its exact base and invocations.
         print(f"[land] retained FULL preparation {anchor['candidate'][:10]} over {anchor['main'][:10]}", flush=True)
     elif not delta:
-        land.land_full.save(wt, branch, candidate, main_sha, tier, invocations, flaky=flaky, reused=reused)
+        land.land_full.save(wt, branch, candidate, main_sha, tier, invocations, flaky=flaky, reused=reused,
+                            env=env if explicit else None)
     if explicit:
         args._full_witness = dict(candidate=candidate, main=main_sha, invocations=[list(i) for i in invocations], env=env)
     if ticket is not None:
