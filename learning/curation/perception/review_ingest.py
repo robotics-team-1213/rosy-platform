@@ -218,7 +218,7 @@ def import_frames(store, body, upstream=None):
     return _import_frames(store, body, upstream)
 
 
-def _import_frames(store, body, upstream=None, capture=None):
+def _import_frames(store, body, upstream=None, capture=None, *, verified_kind='huggingface'):
     if capture:
         catalog, raw = capture.catalog, capture.raw
     else:
@@ -382,7 +382,7 @@ def _import_frames(store, body, upstream=None, capture=None):
                 normalized[key] = row[key]
         normalized['source_session_declared'] = row['source_session']
         if hf:
-            normalized.update(source_kind='huggingface', upstream=hf)
+            normalized.update(source_kind=verified_kind, upstream=hf)
         elif row.get('source_kind') == 'mcap':
             normalized.update(source_kind='mcap', mcap=mcap)
         else:

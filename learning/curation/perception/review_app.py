@@ -29,7 +29,7 @@ import numpy as np
 import class_sets, review_return
 from learning_workspace import Workspace, WORKFLOWS
 import review_evidence, review_ingest, review_masks, vlm_mask_feedback, camera_setup_web, omx_web, sim_web, vlm_judge_web
-import review_versions, omx_center_web
+import review_versions, omx_center_web, review_upload
 import learning_domains, learning_pipeline, promotion_request
 import learning_tasks_web
 from workspace_links import WORKSPACE_LINKS_SCHEMA, check_workspace_links, load_workspace_links
@@ -204,10 +204,19 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                 if path == '/api/learning/storage':
                     return self.send(storage_web.inventory.snapshot() if storage_web.inventory else {'status': 'not_configured', 'roots': []})
                 if path == '/api/workspace':
-                    frames = [dict(row, pixel_status=review_masks.get(store, row['index'])['status'])
-                              for row in store.list_frames()]
+                    query = parse_qs(urlparse(self.path).query, strict_parsing=True, keep_blank_values=True)
+                    if set(query) - {'limit', 'offset', 'lane', 'status', 'around', 'after', 'source_session'} or any(len(v) != 1 for v in query.values()):
+                        raise ValueError('invalid workspace page request')
+                    if query:
+                        page = store.frame_page(**{key: int(values[0]) if key in ('limit', 'offset', 'around', 'after') else values[0]
+                                                   for key, values in query.items()})
+                        frames = page.pop('frames')
+                    else:
+                        page = {}
+                        frames = [dict(row, pixel_status=review_masks.get(store, row['index'])['status'])
+                                  for row in store.list_frames()]
                     object_set = class_sets.object_set(store)
-                    return self.send({'frames': frames, 'classes': [c['name'] for c in object_set['classes']],
+                    return self.send({'frames': frames, **page, 'classes': [c['name'] for c in object_set['classes']],
                                       'object_class_set': object_set,
                                       'workspace_kind': review_evidence.metadata(store, 'workspace_kind'),
                                       'token': token, 'exports': store.exports(), 'segmentation_supported': True,
@@ -227,6 +236,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                     return self.send({'catalog': review_evidence.metadata(store, 'import_catalog'),
                                       'cad_catalog': review_evidence.metadata(store, 'cad_catalog'),
                                       'map_reference': review_evidence.map_reference(store), 'token': token,
+                                      'folders': review_upload.folders(store), 'local_import': not bool(collaboration),
                                       'imports': bool(collaboration)})  # HF imports exist only in collaboration mode
                 if path.startswith('/api/mask-images/'):
                     review = review_masks.get(store, int(path.rsplit('/', 1)[1]))
@@ -330,7 +340,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                     return self.send(detail_preview(store, int(path.rsplit('/', 1)[1])),
                                      mime='image/png')
                 files = {'/': 'index.html', '/app.js': 'app.js', '/history.js': 'history.js', '/viewport.js': 'viewport.js', '/commands.js': 'commands.js', '/app.css': 'app.css',
-                         '/box-geometry.mjs': 'box-geometry.mjs', '/learning': 'learning.html',
+                         '/review-pages.js': 'review-pages.js', '/box-geometry.mjs': 'box-geometry.mjs', '/learning': 'learning.html',
                          '/learning.js': 'learning.js', '/pixels': 'pixels.html', '/pixels.js': 'pixels.js',
                          '/storage.js': 'storage.js', '/storage-settings.js': 'storage-settings.js', '/versions.js': 'versions.js', '/ai-jobs.js': 'ai-jobs.js',
                          '/catalog': 'catalog.html', '/catalog.js': 'catalog.js',
@@ -379,7 +389,8 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                 return deny()
             try:
                 length = int(self.headers.get('Content-Length', '0'))
-                if not 0 < length <= 1048576:
+                limit = review_upload.BODY_LIMIT if path == '/api/catalog/upload' else 1048576
+                if not 0 < length <= limit:
                     raise ValueError('bounded JSON body required')
                 body = json.loads(self.rfile.read(length))
                 if not isinstance(body, dict):
@@ -439,6 +450,10 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                     return self.send(storage_web.inventory.preflight(body))
                 if path == '/api/prepare':
                     return self.send(store.prepare())
+                if path == '/api/catalog/upload':
+                    return self.send(review_upload.import_image(store, body, actor))
+                if path == '/api/catalog/folder':
+                    return self.send(review_upload.import_folder(store, body, actor))
                 if path == '/api/import':
                     if not body.get('path'):
                         body['path'] = review_evidence.metadata(store, 'import_catalog')

@@ -1,3 +1,4 @@
+import {workspacePage,pageControls} from '/review-pages.js';
 import {accountFetch} from '/account-session.js';
 import {showVersions,resetVersions} from '/versions.js';
 import {showAI,resetAI,updateAI,candidateOrigin} from '/ai-jobs.js';
@@ -9,6 +10,7 @@ import '/commands.js';
 const font = (role, family) => canvasFont(role, family);
 
 const $ = id => document.getElementById(id);
+const updatePages=pageControls($('frames'),offset=>load(undefined,{offset}));
 const modeBadge=document.createElement('ui-status');
 modeBadge.id='object-workspace-mode';
 modeBadge.setAttribute('role','status');
@@ -112,11 +114,12 @@ function enable() {
   for(const [id,available,reason] of [
     ['prev-frame',position>0,'현재 필터의 첫 번째 사진입니다.'],
     ['next-frame',position>=0&&position<visible.length-1,'현재 필터의 마지막 사진입니다.'],
-    ['next-pending',workspace?.frames.some(item=>item.status==='pending'&&item.index!==frame?.index),'다른 검수 대기 사진이 없습니다.']
+    ['next-pending',(workspace?.counts?.pending??0)>(frame?.status==='pending'?1:0),'다른 검수 대기 사진이 없습니다.']
   ]) {
     $(id).reason=busy||gesture?'현재 작업을 마친 뒤 이동할 수 있습니다.':!ready?'사진을 불러오는 중입니다.':!available?reason:'';
     $(id).disabled=busy||!!gesture||!ready||!available;
   }
+  updatePages(workspace?.page,busy||loading||!!gesture);
   if(frame)draftStatus();
 }
 async function request(path, body) {
@@ -131,10 +134,10 @@ async function request(path, body) {
   return value;
 }
 function list() {
-  const counts = workspace.frames.reduce((a,f) => {a[f.status]++; return a;}, {approved:0,excluded:0,pending:0});
+  const counts = workspace.counts || workspace.frames.reduce((a,f) => {a[f.status]++; return a;}, {approved:0,excluded:0,pending:0});
   $('counts').textContent = `승인 ${counts.approved} · 제외 ${counts.excluded} · 대기 ${counts.pending}`;
   const visible=visibleFrames();
-  $('filter').parentElement.hidden=!workspace.frames.length;
+  $('filter').parentElement.hidden=!Object.values(workspace.counts).some(Boolean);
   $('empty-frames').textContent=workspace.frames.length?'이 상태의 사진이 없습니다.':'등록된 사진이 없습니다.';
   $('empty-frames').hidden=visible.length>0;
   const key=visible.map(f=>f.index).join(',');
@@ -344,12 +347,13 @@ async function mutate(action, extras={}, restoring=false) {
   const previous=structuredClone(frame.review.boxes);
   try {
     const saved=await request(`/api/frames/${id}`,{version:frame.version,action,...extras});
+    workspace.counts[frame.status]--;workspace.counts[saved.status]++;
     workspace.frames[workspace.frames.findIndex(f=>f.index===id)]=saved; frame=structuredClone(saved);
     $('export-result').textContent=$('export-result').textContent.replace(/^이번 준비 결과 · /,'이전 준비 결과 · 현재 결정을 반영하려면 다시 준비하세요. ');
     undo=restoring?null:['save','candidates','apply_object_draft'].includes(action)?{index:id,boxes:previous}:null;
     // A decision finishes this photo, so open the next pending one (D-461 next task first).
     // Audits inside the approved/excluded filters stay where they are.
-    const decided=['approve','exclude'].includes(action), advance=decided&&['all','pending'].includes($('filter').value)&&nextPending(id);
+    const decided=['approve','exclude'].includes(action), advance=decided&&['all','pending'].includes($('filter').value)&&await nextPending(id);
     if(!advance&&$('filter').value!=='all'&&frame.status!==$('filter').value) {$('filter').value='all';saveView();}
     $('status').textContent=statuses[frame.status]; $('save-status').textContent=`서버 저장됨 · v${frame.version}`;
     if(decided&&['all','pending'].includes($('filter').value)) $('drag-status').textContent=`사진 ${id+1} ${statuses[frame.status]} · ${advance?'다음 검수 대기 사진입니다.':'검수 대기 사진을 모두 처리했습니다.'}`;
@@ -473,7 +477,7 @@ $('view-detail').onclick=()=>setView(true);
 function frameHeading() {
   $('status').setAttribute('status',frame.status==='pending'?'warn':'neutral');
   const visible=visibleFrames();
-  $('frame-progress').textContent=`${visible.findIndex(item=>item.index===frame.index)+1} / ${visible.length} · ${frame.source.width} × ${frame.source.height} · 박스 ${frame.review.boxes.length}개${frame.source.annotation_note?' · '+frame.source.annotation_note:''}`;
+  $('frame-progress').textContent=`${workspace.page.offset+visible.findIndex(item=>item.index===frame.index)+1} / ${workspace.page.total} · ${frame.source.width} × ${frame.source.height} · 박스 ${frame.review.boxes.length}개${frame.source.annotation_note?' · '+frame.source.annotation_note:''}`;
 }
 function saveView() {
   const url=new URL(location.href);if(frame) url.searchParams.set('frame',frame.index);else url.searchParams.delete('frame');
@@ -481,19 +485,25 @@ function saveView() {
   history.replaceState(null,'',url);
 }
 function applyFilter() {
+  saveView();return load(undefined,{offset:0});
+}
+function showEmptyFilter() {
   const visible=visibleFrames();
   if(visible.length) select(visible.some(item=>item.index===frame?.index)?frame.index:visible[0].index);
-  else {++loadSerial;resetAI();resetVersions();cancelGesture();ready=false;frame=undefined;undo=null;selected=null;coordinatePreview=null;$('review-content').hidden=true;$('empty-review').hidden=false;const firstUse=!workspace.frames.length;$('empty-review').querySelector('h2').textContent=firstUse?'등록된 사진이 없습니다':'이 상태의 사진이 없습니다';$('empty-review').querySelector('p').textContent=firstUse?'자료 등록에서 원본 사진을 추가하세요.':'전체 사진을 열거나 다른 검수 상태를 선택하세요.';$('show-all').textContent=firstUse?'자료 등록 열기':'전체 사진 보기';list();saveView();enable();}
+  else {++loadSerial;resetAI();resetVersions();cancelGesture();ready=false;frame=undefined;undo=null;selected=null;coordinatePreview=null;$('review-content').hidden=true;$('empty-review').hidden=false;const firstUse=!Object.values(workspace.counts).some(Boolean);$('empty-review').querySelector('h2').textContent=firstUse?'등록된 사진이 없습니다':'이 상태의 사진이 없습니다';$('empty-review').querySelector('p').textContent=firstUse?'자료 등록에서 원본 사진을 추가하세요.':'전체 사진을 열거나 다른 검수 상태를 선택하세요.';$('show-all').textContent=firstUse?'자료 등록 열기':'전체 사진 보기';list();saveView();enable();}
 }
 $('filter').onchange=applyFilter;
-$('show-all').onclick=()=> {if(loadFailed){load();return;}if(!workspace.frames.length){location.assign('/catalog');return;}$('filter').value='all';applyFilter();};
-$('prev-frame').onclick=()=> {const visible=visibleFrames(),index=visible.findIndex(item=>item.index===frame.index);if(index>0) select(visible[index-1].index);};
-$('next-frame').onclick=()=> {const visible=visibleFrames(),index=visible.findIndex(item=>item.index===frame.index);if(index<visible.length-1) select(visible[index+1].index);};
-function nextPending(index) {
-  const position=workspace.frames.findIndex(item=>item.index===index);
-  return [...workspace.frames.slice(position+1),...workspace.frames.slice(0,position)].find(item=>item.status==='pending');
+$('show-all').onclick=()=> {if(loadFailed){load();return;}if(!Object.values(workspace.counts).some(Boolean)){location.assign('/catalog');return;}$('filter').value='all';applyFilter();};
+$('prev-frame').onclick=()=> {const visible=visibleFrames(),index=visible.findIndex(item=>item.index===frame.index);if(index>0) select(visible[index-1].index);else load(undefined,{offset:workspace.page.offset-workspace.page.limit,last:1});};
+$('next-frame').onclick=()=> {const visible=visibleFrames(),index=visible.findIndex(item=>item.index===frame.index);if(index<visible.length-1) select(visible[index+1].index);else load(undefined,{offset:workspace.page.offset+workspace.page.limit});};
+async function nextPending(index) {
+  const page=await request(workspacePage('object','pending',{after:index}));
+  if(!page.frames.length){workspace.counts=page.counts;workspace.pixel_counts=page.pixel_counts;return;}
+  const next=page.frames.find(row=>row.index===page.page.target)||page.frames[0];
+  const current=await request(workspacePage('object',$('filter').value,{around:next.index}));
+  workspace={...workspace,...current};return next;
 }
-$('next-pending').onclick=()=> {const next=nextPending(frame.index);if(next) {$('filter').value='pending';select(next.index);}};
+$('next-pending').onclick=async()=> {try {$('filter').value='pending';const next=await nextPending(frame.index);if(next) {select(next.index);}}catch(e){error(e.message);}};
 $('reload').onclick=async()=> {if(!busy) await load(frame?.index);};
 document.addEventListener('rosy:theme',()=>{paint();});
 function receipt(value, historical=false) {
@@ -504,12 +514,12 @@ $('prepare').onclick=async()=> {
   if (busy || conflicted || forbidden || workspace?.workspace_kind==='evaluation') return; busy=true; enable(); error(); $('export-result').textContent='원본과 승인 라벨을 검증하는 중…';
   try {receipt(await request('/api/prepare',{}));} catch(e) {error(e.message); $('export-result').textContent=`자료 준비 실패 · ${e.message}`;$('export-result').scrollIntoView({block:'center'});} finally {busy=false; enable();}
 };
-async function load(index) {
+async function load(index, pageOptions={}) {
   resetAI();resetVersions();
   loading=true;ready=false;++loadSerial;cancelGesture();$('counts').textContent='불러오는 중';$('frames').replaceChildren();listKey='';$('filter').parentElement.hidden=true;$('empty-frames').hidden=true;$('review-content').hidden=true;$('empty-review').hidden=false;$('empty-review').querySelector('h2').textContent='검수 내용을 확인하는 중';$('empty-review').querySelector('p').textContent='현재 사진과 결정 내용을 불러오고 있습니다.';$('show-all').hidden=true;enable();
   const started=performance.now();
   const timer=setInterval(()=>{const seconds=Math.floor((performance.now()-started)/1000);if(loading&&seconds>=3)$('empty-review').querySelector('p').textContent=`서버 응답 대기 ${seconds}초 · 현재 사진과 결정 내용을 확인하고 있습니다.`;},1000);
-  try {workspace=await request('/api/workspace'); loading=false; loadFailed=false; conflicted=false; forbidden=false; error();$('show-all').hidden=false;
+  try {workspace=await request(workspacePage('object',new URLSearchParams(location.search).get('filter')||'all',{around:pageOptions.offset===undefined?(index??new URLSearchParams(location.search).get('frame')):undefined,...Object.fromEntries(Object.entries(pageOptions).filter(([key])=>key!=='last'))})); loading=false; loadFailed=false; conflicted=false; forbidden=false; error();$('show-all').hidden=false;
     modeBadge.textContent=workspace.workspace_kind==='evaluation'?'고정 평가 · 학습에서 제외':'학습 후보 · 승인 후 수용 확인';
     modeBadge.setAttribute('state',workspace.workspace_kind==='evaluation'?'warning':'pending');
     document.querySelector('#review-content > .preparation').hidden=workspace.workspace_kind==='evaluation';
@@ -524,12 +534,12 @@ async function load(index) {
     guide.hidden=!classes.some(c=>c.name==='obstacle');
     guide.textContent='기타 장애물은 주행 경로를 실제로 막는 독립 물체에만 사용하세요. 벽·고정 기둥·바닥 표시·그림자·경로 밖 물체는 제외합니다. 애매하면 승인 전에 박스를 수정하거나 삭제하세요.';
     if(workspace.exports.length) receipt(workspace.exports[0],true);
-    if (!workspace.frames.length) {applyFilter();return;}
+    if (!workspace.frames.length) {showEmptyFilter();return;}
     const params=new URLSearchParams(location.search);
     $('filter').value=params.get('filter')||'all';if(!$('filter').value) $('filter').value='all';
     const candidate=params.has('frame')?Number(params.get('frame')):undefined;
-    const visible=visibleFrames(),wanted=index??candidate;
-    if(visible.length) await select(visible.some(item=>item.index===wanted)?wanted:visible[0].index);else applyFilter();
+    const visible=visibleFrames(),wanted=pageOptions.last?visible.at(-1)?.index:index??candidate;
+    if(visible.length) await select(visible.some(item=>item.index===wanted)?wanted:visible[0].index);else showEmptyFilter();
   } catch(e) {loading=false;loadFailed=true;workspace=undefined;frame=undefined;ready=false;listKey='';$('frames').replaceChildren();$('counts').textContent='상태를 확인할 수 없습니다.';$('filter').parentElement.hidden=true;$('empty-frames').textContent='사진 목록을 불러오지 못했습니다.';$('empty-frames').hidden=false;$('review-content').hidden=true;$('empty-review').hidden=false;$('empty-review').querySelector('h2').textContent=forbidden?'검수 권한이 없습니다':e.status>=500?'검수 서비스를 사용할 수 없습니다':'검수 내용을 불러오지 못했습니다';$('empty-review').querySelector('p').textContent=forbidden?'이 작업대의 접근 권한을 확인한 뒤 다시 불러오세요.':e.status>=500?'서비스가 복구되면 다시 불러오세요.':'연결을 확인하고 다시 시도하세요.';$('show-all').hidden=false;$('show-all').textContent='다시 불러오기';enable();} finally {clearInterval(timer);}
 }
 enable();load();

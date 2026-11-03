@@ -9,6 +9,7 @@ import review_masks
 import review_upload
 from test_review_app import open_store
 from test_learning_collaboration import running, request
+from test_review_cycle import CLASSES
 
 
 def payload(name='photo.png'):
@@ -18,6 +19,7 @@ def payload(name='photo.png'):
 
 def test_upload_preserves_decisions_and_retries_without_duplicates(tmp_path):
     store = open_store(tmp_path)
+    review_masks.bind_classes(store, CLASSES)
     before = store.get(0)
     result = review_upload.import_image(store, payload(), 'alice')
     assert result['added'] == 1
@@ -27,7 +29,7 @@ def test_upload_preserves_decisions_and_retries_without_duplicates(tmp_path):
     assert frame['source']['upstream']['registered_by'] == 'alice'
     assert frame['source']['original_video_verified'] is False
     assert frame['source'].get('source_video_sha256') is None
-    assert review_masks.get(store, frame['index'])['status'] == 'pending'
+    assert review_masks.get(store, result['indices'][0])['status'] == 'pending'
     assert review_upload.import_image(store, payload(), 'alice')['added'] == 0
     assert store.get(0) == before
 
@@ -45,6 +47,7 @@ def test_upload_rejects_invalid_input_without_adding_frames(tmp_path, body):
 
 def test_project_upload_requires_import_permission_and_csrf(tmp_path):
     with running(tmp_path) as (url, _, store):
+        review_masks.bind_classes(store, CLASSES)
         _, state = request(url, '/api/workspace', 'reviewer')
         body = payload()
         assert request(url, '/api/catalog/upload', 'reader', body, state['token'])[0] == 403

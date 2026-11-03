@@ -164,6 +164,51 @@ class ReviewStore:
         with self.connect() as db:
             return [self.decoded(row) for row in db.execute('SELECT * FROM frames ORDER BY id')]
 
+    def frame_page(self, *, lane='object', status='all', limit=60, offset=0,
+                   around=None, after=None, source_session=None):
+        """Bound label decoding and pixel lookups to the visible review page."""
+        if lane not in ('object', 'pixel') or status not in ('all', 'pending', 'approved', 'excluded'):
+            raise ValueError('invalid review page filter')
+        if not 1 <= limit <= 60 or offset < 0 or any(
+                value is not None and value < 0 for value in (around, after)):
+            raise ValueError('invalid review page bounds')
+        scope, args = (' WHERE json_extract(f.source, \'$.source_session\')=?', [source_session]) if source_session is not None else (' WHERE 1=1', [])
+        join = ' FROM frames f LEFT JOIN masks m ON m.frame=f.id'
+        pixel = "COALESCE(m.status,'pending')"
+        with self.connect() as db:
+            if source_session is None:
+                row = db.execute("SELECT value FROM metadata WHERE key='review_source_prefix'").fetchone()
+                if row:
+                    prefix = json.loads(row[0])
+                    if not isinstance(prefix, str) or not prefix:
+                        raise ValueError('invalid review source prefix')
+                    scope += " AND substr(json_extract(f.source,'$.source_session'),1,?)=?"
+                    args += [len(prefix), prefix]
+            where, values = scope, list(args)
+            if status != 'all':
+                where += (' AND f.status=?' if lane == 'object' else f" AND f.status!='excluded' AND {pixel}=?")
+                values.append(status)
+            counts = {key: 0 for key in ('pending', 'approved', 'excluded')}
+            for row in db.execute('SELECT f.status,COUNT(*) AS n' + join + scope + ' GROUP BY f.status', args):
+                counts[row['status']] = row['n']
+            pixel_counts = {key: 0 for key in counts}
+            for row in db.execute(f'SELECT {pixel} AS status,COUNT(*) AS n' + join + scope + " AND f.status!='excluded' GROUP BY 1", args):
+                pixel_counts[row['status']] = row['n']
+            total = db.execute('SELECT COUNT(*)' + join + where, values).fetchone()[0]
+            if after is not None:
+                target = db.execute('SELECT MIN(f.id)' + join + where + ' AND f.id>?', values + [after]).fetchone()[0]
+                around = target  # Wrap to the first matching frame when the queue ends.
+                offset = 0
+            if around is not None:
+                position = db.execute('SELECT COUNT(*)' + join + where + ' AND f.id<?', values + [around]).fetchone()[0]
+                offset = position // limit * limit
+            offset = min(offset, max(0, (total - 1) // limit * limit))
+            rows = db.execute(f'SELECT f.*,{pixel} AS pixel_status' + join + where + ' ORDER BY f.id LIMIT ? OFFSET ?', values + [limit, offset])
+            frames = [dict(self.decoded(row), pixel_status=row['pixel_status']) for row in rows]
+        return {'frames': frames, 'counts': counts, 'pixel_counts': pixel_counts,
+                'page': {'offset': offset, 'limit': limit, 'total': total,
+                         'target': target if after is not None else around}}
+
     def history(self, index):
         frame = self.get(index)
         with self.connect() as db:
