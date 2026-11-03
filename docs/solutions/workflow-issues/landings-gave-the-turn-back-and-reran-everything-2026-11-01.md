@@ -120,6 +120,11 @@ reruns. Each cause below was found from `.git/rosy-land-events.jsonl` and `.git/
 11. **Speculation mostly guessed wrong.** On 11-03 (10:00-16:00) speculative prepares used 9.8 h of 43 h of test
    time and their tree was held at 3 of 34 turns; they also kept the ticket `preparing` until done. Measure the hit
    rate (`speculation` events, `stage: turn`, `held`) before turning it back on (`ROSY_LAND_SPECULATE=1`, D-889 28).
+12. **A reused pass also voided the tier.** After the flaky fix, 9 of 20 pretests (11-03 20:00-23:00) still had no
+   tier: every one had a pass reused from another tree (`land_cache.NARROW`, "reused across trees"), which
+   `land_selection.eligible` treats like LOAD-FLAKY. Without a tier a landing cannot take the delta path and its turn
+   reruns everything. Affected and delta pretests now keep the tier and mark the record `reused`; land.py writes no
+   land record from it, so pre-push still reruns. A FULL tier stays strict (a test pins that it gives up its FULL).
 
 ## 계측 전용 파일의 불필요한 FULL 승격
 

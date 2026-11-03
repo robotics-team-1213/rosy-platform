@@ -14027,3 +14027,10 @@ osy-d395-s1d\`.
 - 증거: 11-03 10:00~16:00 rosy-land-events — spec 시험 9.8 h / 전체 43 h, 차례 held 3 / 34, 이미 통과한 호출 재실행 8.1 h. 원격 착지 회귀 27개 파일 + affected_tests 통과, 새 시험 1개.
 - gate 변화: 없음. 차례는 원래 정해진 선택을 그대로 돈다.
 - CE: 기존 교훈 갱신 — landings-gave-the-turn-back-and-reran-everything 11.
+
+## 2026-11-03 · uncommitted · fix(landing): 다른 트리 통과 재사용도 대기열 단계는 남기고 게시 증거는 아님 (D-970 4항)
+- 변경: `land_prepare`가 affected·delta 사전 시험에서 LOAD-FLAKY와 `land_cache.NARROW` 줄을 빼고 단계를 판정하고, 재사용이 있으면 `land_full` 기록에 `reused`를 둔다. `land.py`는 `reused` 기록으로 land record를 쓰지 않는다(pre-push가 다시 돈다). FULL 단계(명시·승격)는 예전처럼 엄격하다(21:15 착지한 flaky 완화도 FULL에서는 거둠).
+- 증거: 11-03 20:00~23:00 단계 없는 사전 시험 9/20이 모두 "reused across trees" 포함(3건은 LOAD-FLAKY도). 원격 착지 회귀 27개 파일 + affected_tests + harness_contracts 통과, 새 시험 1개, 기존 FULL 엄격 시험 유지.
+- gate 변화: 약화 없음 — 재사용 통과는 여전히 land record·게시 증거가 되지 않는다.
+- CE: 기존 교훈 갱신 — landings-gave-the-turn-back-and-reran-everything 12.
+
