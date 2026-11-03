@@ -452,7 +452,7 @@ D-741(Accepted)이 정한, 모든 웹 표면이 같이 쓸 자리다. Rosy Fleet
 | 모듈 | 공개 부품 | 사용·비사용 조건 |
 |---|---|---|
 | `form-controls.js` | `createFormErrors(form, summary)`, `createFilePicker({id,label,accept,maxBytes,onChange})` | 기존 네이티브 폼에 오류 요약·필드 설명을 연결한다. 파일 이름·크기 검사는 서버 검증을 대체하지 않는다. |
-| `form-controls.js` | `createSearchSelect({id,label,choices,onChange})`, `createDateRange({id,label,onChange})`, `createDirtyGuard(form)` | 검색+네이티브 선택, 현지 달력 날짜 범위, 미저장 이탈 확인. 단순 선택은 원래 select를 쓴다. 저장 성공 뒤에만 dirty guard의 `reset()`으로 기준선을 바꾼다. |
+| `form-controls.js` | `createSearchSelect({id,label,choices,onChange})`, `createDateRange({id,label,onChange})`, `createDirtyGuard(form)` | 검색+네이티브 선택, 현지 달력 날짜 범위, 미저장 이탈 확인. 검색·자료 갱신으로 선택이 사라지면 빈 값을 한 번 알리고 유효한 선택은 유지한다. 단순 선택은 원래 select를 쓴다. 저장 성공 뒤에만 dirty guard의 `reset()`으로 기준선을 바꾼다. |
 | `collection-controls.js` | `createListToolbar({id,filters,sortLabel,sortOptions,onChange})`, `createPagination({id,onChange})` | 검색·필터·정렬 의도와 페이지 사실만 처리한다. 정렬 이름과 `{value,label}` 선택지는 호출자가 정하며, 생략하면 기존 이름 오름차순·내림차순을 쓴다. 서버 검색·선택 범위·총량을 추측하지 않는다. |
 | `collection-controls.js` | `createDataTable({id,columns,onOpen,onSelection,onActiveRemoved})`, `createSelectionBar({id,onClear,actions})` | 고유 문자열 ID로 행을 선택한다. `set(items,{allIds,label})`의 `allIds`는 현재 소유자가 유효함을 아는 범위다. 알 수 없는 전체 페이지 선택을 제공하지 않는다. 일괄 동작과 부분 실패는 호출자가 처리하며 선택을 자동 해제하지 않는다. |
 | `collection-controls.js` | `createPrimaryDetail({id,label,list})` | PC는 목록 옆 상세, 전화는 상세 진입과 목록 복귀. `open({title,body},opener)`의 opener는 재렌더 후 대상을 찾는 함수도 된다. 표면은 `onActiveRemoved`를 상세의 `unavailable(message)`에 연결해 사라진 대상을 명시한다. 복귀 대상이 없어졌으면 목록으로 초점을 보낸다. |

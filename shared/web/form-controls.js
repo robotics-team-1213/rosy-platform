@@ -89,20 +89,23 @@ export function createSearchSelect({id, label, choices, onChange = () => {}}) {
   element.append(search.element, options.element, empty);
   let value = "";
   function paint() {
+    const previous = value;
     const query = search.control.value.trim().toLocaleLowerCase();
     const matches = choices.filter(item => item.label.toLocaleLowerCase().includes(query));
     options.control.replaceChildren(...matches.map(item => new Option(item.label, item.value)));
-    options.control.value = matches.some(item => item.value === value) ? value : "";
+    value = matches.some(item => item.value === value) ? value : "";
+    options.control.value = value;
     empty.hidden = matches.length > 0;
     empty.textContent = matches.length ? "" : "검색 결과가 없습니다";
     options.control.disabled = !matches.length;
+    if (value !== previous) onChange(value);
   }
   const change = () => {value = options.control.value; onChange(value);};
   search.control.addEventListener("input", paint);
   options.control.addEventListener("change", change);
   paint();
   return {element, search: search.control, control: options.control,
-    update(next) {choices = next; if (!choices.some(item => item.value === value)) {value = ""; onChange(value);} paint();},
+    update(next) {choices = next; paint();},
     dispose() {search.control.removeEventListener("input", paint); options.control.removeEventListener("change", change);}};
 }
 

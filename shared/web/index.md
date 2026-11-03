@@ -49,8 +49,8 @@
 
 ## 최근 기록
 
+- 2026-11-04 · uncommitted · 검색 선택의 화면과 호출자 상태 일치
 - 2026-11-03 · uncommitted · 자료 표의 공용 표현 연결과 정렬 선택지 입력
 - 2026-11-02 · uncommitted · 신호기 등 역할 토큰 (D-525 보강, 사용자 결정)
 - 2026-11-02 · uncommitted · 공용 skip-link·sr-only 단일화, 같은 뜻 한 말 계약
 - 2026-11-02 · uncommitted · D-945 마무리 — 22rem 칸 경계 허가, 조작 표면 noscript·style 속성 계약
-- 2026-11-02 · uncommitted · 대시보드 두 상태 셸 h1 검사 추가
