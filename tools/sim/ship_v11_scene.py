@@ -39,8 +39,10 @@ def _add_pieces(spec, body, prefix, pieces, meshes):
     for k, (kind, data, guide) in enumerate(pieces):
         bits = {'cone': dict(contype=GUIDE | 1, conaffinity=GUIDE | 1), 'socket': dict(contype=GUIDE, conaffinity=GUIDE)}.get(guide, {})
         if kind == 'box':
-            body.add_geom(name=f'{prefix}{k}', type=mujoco.mjtGeom.mjGEOM_BOX, size=list(data[0]), pos=list(data[1]), **bits)
-            continue
+            # As 8-corner meshes: MuJoCo 3.3.7 (lab PCs) box-box contact threw a seated top-layer container off a lid at
+            # rest (2026-11-04, error-free stack, box 7); the convex-mesh path keeps it seated at the same speed.
+            (hx, hy, hz), (cx, cy, cz) = data
+            data = [(cx+sx*hx, cy+sy*hy, cz+sz*hz) for sx in (-1, 1) for sy in (-1, 1) for sz in (-1, 1)]
         if spec.mesh(f'{meshes}{k}') is None:  # the nine containers share one set of mesh assets
             spec.add_mesh(name=f'{meshes}{k}', uservert=[c for p in data for c in p])
         body.add_geom(name=f'{prefix}{k}', type=mujoco.mjtGeom.mjGEOM_MESH, meshname=f'{meshes}{k}', **bits)
