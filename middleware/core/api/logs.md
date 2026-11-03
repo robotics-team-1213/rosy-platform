@@ -1330,6 +1330,6 @@
 ## 2026-11-03 · 6610ceaed5 · fix(api): align the central contract version after merging thermal API
 
 - Change: central `CONTRACT` now names the existing authoritative v1.351 header after merging the central-version migration with the thermal API. The app keeps reading the central value; feature-specific version pins stay removed. No new contract version is reserved.
-- Evidence: merge `0ca7f37163` reproduced one alignment failure/two passes. The independently reviewed one-line fix `6610ceaed5` has tree `7bc30d51e150358a84980246ece4a721f8cb042d`; official remote alignment/API/dashboard/related feature-document tests passed 136, skipped zero, NEW/known/flaky zero.
+- Evidence: merge `0ca7f37163` reproduced one alignment failure/two passes. The independently reviewed one-line commit `6610ceaed5` has tree `7bc30d51e150358a84980246ece4a721f8cb042d`; official remote alignment/API/dashboard/related feature-document tests passed 136, skipped zero, NEW/known/flaky zero.
 - gate 변화: existing header and advertised version now agree; fresh FULL and public CI remain required.
 - Scope: existing header/changelog and bump helper preserved. Fresh canonical FULL, public CI and field acceptance are separate pending gates. CE: no additional lesson; the existing alignment guard and central constant explain this merge correction.
