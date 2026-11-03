@@ -125,3 +125,19 @@ def test_a_record_names_the_tier_the_landing_ran(repo):
     tool.write(root, commits[1], commits[0], [["test"]], [], "full")
     tool.write(root, commits[2], commits[1], [["pkg/test"]], [])
     assert tool.read(root, commits[1])["tier"] == "full" and "tier" not in tool.read(root, commits[2])
+
+
+def test_record_plan_is_pure_and_is_reused_by_the_writer(repo, monkeypatch):
+    from harness.affected_exclusive import DEDICATED
+    path, c = repo
+    prepared = {'invocations': [DEDICATED], 'tier': 'full', 'candidate': c[2], 'main': c[1]}
+    before = list(path.rglob('*'))
+    assert tool.plan([DEDICATED], prepared, available=False) == [DEDICATED]
+    assert list(path.rglob('*')) == before
+    calls, plan = [], tool.plan
+    def inspect(*args, **kwargs):
+        calls.append((args, kwargs))
+        return plan(*args, **kwargs)
+    monkeypatch.setattr(tool, 'plan', inspect)
+    tool.write(path, c[3], c[2], [DEDICATED], [], prepared=prepared)
+    assert len(calls) == 1

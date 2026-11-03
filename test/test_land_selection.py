@@ -665,3 +665,66 @@ def test_the_guard_set_and_paths_under_an_ignored_folder_are_no_overlap():
     assert not selection.overlaps([shared + ["fleet/test"]], [shared + ["arm/test"]])
     assert selection.overlaps([shared + ["fleet/test"]], [shared + ["fleet/test/test_x.py"]])
     assert not selection.overlaps([["guard/test/test_a.py"]], [["guard/test/test_a.py"]], ignore=("guard/test",))
+
+
+@pytest.mark.parametrize('tier, invocations, reusable', [
+    ('full', [['test']], False),
+    ('full', NORMAL, True),
+    ('full', None, False),
+    ('full', NORMAL + [exclusive.DEDICATED], False),
+    ('affected', [['pkg/test']], True),
+])
+def test_restore_checks_full_plan_against_actual_main_sot_without_rewriting_records(
+        full_case, tier, invocations, reusable):
+    case = full_case
+    base = git(case.main, 'rev-parse', 'HEAD')
+    candidate = git(case.wt, 'rev-parse', 'HEAD')
+    land.land_full.save(case.wt, 'feat/x', candidate, base, tier, invocations)
+    path = land.land_full._path(case.wt, 'feat/x')
+    original = path.read_bytes()
+    assert land.land_full.restore(case.wt, 'feat/x') == (base if reusable else None)
+    assert path.read_bytes() == original
+    # Immutable publication provenance still uses the unchanged bridge, not reuse eligibility.
+    assert land.land_full.bridge(case.wt, candidate, base, 'HEAD', 'main')
+
+
+def test_restore_preserves_legacy_main_even_when_topic_has_unlanded_sot(repos):
+    main, wt = repos
+    base = git(main, 'rev-parse', 'HEAD')
+    commit(wt, {'tools/harness/affected_exclusive.py': (ROOT / 'tools/harness/affected_exclusive.py').read_text(),
+                exclusive.TARGET: 'def test_stub(): pass\n'}, 'unlanded timing support')
+    candidate = git(wt, 'rev-parse', 'HEAD')
+    land.land_full.save(wt, 'feat/x', candidate, base, 'full', [['test']])
+    path = land.land_full._path(wt, 'feat/x')
+    original = path.read_bytes()
+    assert land.land_full.restore(wt, 'feat/x') == base
+    assert path.read_bytes() == original
+
+
+def test_legacy_root_only_full_record_triggers_normal_fresh_preparation(full_case):
+    case = full_case
+    base = git(case.main, 'rev-parse', 'HEAD')
+    candidate = git(case.wt, 'rev-parse', 'HEAD')
+    land.land_full.save(case.wt, 'feat/x', candidate, base, 'full', [['test']])
+    assert land.land_full.restore(case.wt, 'feat/x') is None
+    assert land.main(['--tests', 'auto']) == 0
+    assert ['pkg/test'] in body_calls(case)
+    record = land.land_record.read(case.main, git(case.main, 'rev-parse', 'HEAD'))
+    assert record['tier'] == 'affected' and ['test'] not in record['invocations']
+
+
+def test_malformed_record_composition_stops_before_ff_and_preserves_existing_record(full_case, monkeypatch):
+    case = full_case
+    before = git(case.main, 'rev-parse', 'HEAD')
+    candidate = git(case.wt, 'rev-parse', 'HEAD')
+    sentinel = land.land_record.write(case.wt, candidate, before, [['pkg/test']], [], tier='affected')
+    original = sentinel.read_bytes()
+    monkeypatch.setattr(land, 'select', lambda *a, **k: ([exclusive.DEDICATED, exclusive.DEDICATED], None))
+    monkeypatch.setattr(land.land_guards, 'first', lambda *a, **k: [])
+    monkeypatch.setattr(land, 'run_tests', lambda *a, **k: ['pytest ok'])
+    try:
+        result = land.main(['--tests', 'auto'])
+    finally:
+        assert git(case.main, 'rev-parse', 'HEAD') == before
+        assert sentinel.read_bytes() == original
+    assert result == 1
