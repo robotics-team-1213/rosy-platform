@@ -211,6 +211,35 @@ def test_searchable_choice_and_date_validation(gallery):
     expect(page.locator("#period-result")).to_contain_text("2026-10-24")
 
 
+def test_search_choice_keeps_owner_and_visible_selection_in_sync(gallery):
+    from playwright.sync_api import expect
+    page = gallery
+    page.evaluate("""async () => {
+      const {createSearchSelect} = await import('/common/form-controls.js');
+      window.choiceEvents = [];
+      window.dynamicChoice = createSearchSelect({id:'dynamic-choice',label:'대상 선택',
+        choices:[{value:'a',label:'대상 A'},{value:'b',label:'대상 B'}],
+        onChange:value => window.choiceEvents.push(value)});
+      document.body.append(window.dynamicChoice.element);
+    }""")
+    select = page.locator("#dynamic-choice-options")
+    select.select_option("b")
+    page.evaluate("dynamicChoice.update([{value:'b',label:'새 대상 B'},{value:'a',label:'대상 A'}])")
+    expect(select).to_have_value("b")
+    assert page.evaluate("choiceEvents") == ["b"]
+    page.locator("#dynamic-choice-search").fill("대상 A")
+    expect(select).to_have_value("")
+    assert page.evaluate("choiceEvents") == ["b", ""]
+    page.locator("#dynamic-choice-search").fill("")
+    expect(select).to_have_value("")
+    select.select_option("a")
+    page.evaluate("dynamicChoice.update([{value:'b',label:'대상 B'}])")
+    expect(select).to_have_value("")
+    assert page.evaluate("choiceEvents") == ["b", "", "a", ""]
+    page.evaluate("dynamicChoice.update([{value:'b',label:'대상 B'}])")
+    assert page.evaluate("choiceEvents") == ["b", "", "a", ""]
+
+
 def test_keyboard_tabs_menu_and_panel_restore_focus(gallery):
     from playwright.sync_api import expect
     page = gallery
