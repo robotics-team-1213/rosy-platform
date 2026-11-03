@@ -323,7 +323,7 @@ async function select(index){
  $('pixel-canvas').hidden=true;$('pixel-canvas').getContext('2d').clearRect(0,0,$('pixel-canvas').width,$('pixel-canvas').height);
  $('pixel-status').setAttribute('state','pending');$('pixel-status').textContent='선택한 사진을 불러오는 중…';
  $('pixel-source').textContent='';$('pixel-legend').replaceChildren();$('pixel-view-status').textContent='';aiPanel.hidden=false;const ticket=++serial,selectedClass=$('pixel-class').value;ready=false;keyCursor=null;keyboardPosition.hidden=true;savedPixelSummary='';pixelResult.textContent='사진을 불러오는 중';candidatePreviewDigest='';$('pixel-candidate-preview').hidden=true;$('pixel-candidate-status').textContent='';stroke=null;draft=[];polygon=[];clearSamples();brush.hidden=true;frame=workspace.frames.find(row=>row.index===Number(index));error();$('pixel-coverage').textContent='';$('pixel-decision').hidden=true;options();url();enable();if(!frame)return;
- resetHistory();$('pixel-vlm-state').textContent='AI 의견을 불러오는 중…';$('pixel-vlm-state').setAttribute('state','pending');$('pixel-vlm-note').textContent='';
+ resetHistory();$('pixel-vlm-state').textContent='AI 의견을 불러오는 중…';$('pixel-vlm-state').setAttribute('state','pending');$('pixel-vlm-note').textContent='';aiAdvice.textContent='';
  request(`/api/history/${frame.index}`).then(value=>{if(ticket===serial)showHistory(value);})
    .catch(()=>{if(ticket===serial)resetHistory('검수 기록을 불러오지 못했습니다. 최신 내용을 다시 불러오세요.');});
  $('pixel-title').textContent=`사진 ${frameOrdinal(workspace,frame.index)} 픽셀 검수`;for(const link of document.querySelectorAll('#pixel-object,.review-kinds a[href^="/?frame="],.review-kinds a[href="/"]'))link.href=reviewLink('/',frame.index);if($('pixel-unknown'))$('pixel-unknown').checked=false;
@@ -353,7 +353,7 @@ function connectAI(){
   if(ticket===serial&&!busy&&!stroke&&!draft.length&&!seeds.length&&!polygon.length)previewCandidate();
  });
 }
-function clearReviewContext(){pixelContent.before($('pixel-status'));resetVersions();resetAI();resetHistory('현재 사진의 검수 정보를 확인할 수 없습니다.');aiPanel.hidden=true;$('pixel-vlm-state').textContent='';$('pixel-vlm-note').textContent='';}
+function clearReviewContext(){pixelContent.before($('pixel-status'));resetVersions();resetAI();resetHistory('현재 사진의 검수 정보를 확인할 수 없습니다.');aiPanel.hidden=true;$('pixel-vlm-state').textContent='';$('pixel-vlm-note').textContent='';aiAdvice.textContent='';}
 function filter(){url();return load({offset:0}).catch(loadError);}
 function showEmptyFilter(){const rows=visible();if(rows.length)select(rows.some(row=>row.index===frame?.index)?frame.index:rows[0].index);else{++serial;clearReviewContext();ready=false;frame=null;review=null;error();$('pixel-title').textContent='픽셀 검수';$('pixel-status').setAttribute('state','empty');$('pixel-status').textContent=Object.values(workspace.counts).some(Boolean)?`${$('pixel-filter').selectedOptions[0].textContent} 0장 · 필터 결과가 없습니다.`:'등록된 사진 0장 · 자료 등록에서 원본을 추가하세요.';options();url();enable();}}
 $('pixel-frame').onchange=async()=>{await select($('pixel-frame').value);if(ready)canvas.focus({preventScroll:true});};$('pixel-filter').onchange=filter;$('pixel-all').onclick=()=>{if(!Object.values(workspace.counts).some(Boolean)){location.assign('/catalog');return;}$('pixel-filter').value='all';filter();};

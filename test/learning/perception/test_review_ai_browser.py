@@ -241,12 +241,18 @@ def test_history_pagination_and_pixel_snapshot_do_not_modify_current(tmp_path):
 def test_frame_switch_removes_ai_and_versions_before_delayed_mask_failure(tmp_path):
     with ai_browser(tmp_path) as (page, store, jobs, expect):
         store.update(1, {'version': store.get(1)['version'], 'action': 'reopen'})
+        page.route('**/api/vlm-feedback/0', lambda route: route.fulfill(json={
+            'available': True, 'current': True, 'unknown_pixels': 0,
+            'model': 'fixture-qwen', 'model_digest': 'a' * 64,
+            'feedback': {'verdict': 'no_obvious_concern', 'issue': 'none', 'note': 'Opinion for photo one'}}))
         page.goto(page.url.split('?')[0] + 'pixels?frame=0', wait_until='networkidle')
+        expect(page.locator('#pixel-vlm-advice')).to_have_text('Opinion for photo one')
         expect(page.locator('#review-ai-jobs')).to_have_count(1)
         expect(page.locator('#review-versions')).to_have_count(1)
         held = []
         page.route('**/api/masks/1', lambda route: held.append(route))
         page.locator('.pixel-frame-item[data-index="1"]').click()
+        expect(page.locator('#pixel-vlm-advice')).to_have_text('')
         expect(page.locator('#review-ai-jobs')).to_have_count(0)
         expect(page.locator('#review-versions')).to_have_count(0)
         expect(page.locator('#pixel-title')).to_have_text('사진 2 픽셀 검수')
