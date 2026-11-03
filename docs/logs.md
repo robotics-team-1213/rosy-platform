@@ -13905,6 +13905,24 @@ osy-d395-s1d\`.
 - gate 변화: 없음. fixture 벨트 높이는 바꾸지 않았다(재실행이 필요한 변경).
 - CE: 해당 없음 — 원인과 고침이 코드 주석·시험·기록에 있다. 벨트 높이를 영상 폭으로 짐작해 틀린 일은 검증 기록에 정정으로 남겼다.
 
+## 2026-11-03 · uncommitted · fix(landing): main delta의 시험 폴더를 차례 밖 "delta" 단계로 (D-889 추가 27)
+- 변경: `land_selection.select`의 착지된 delta 경로가 가드 밖 시험 폴더 호출에 닿으면 `DELTA_NOTE`를 돌려주고, `land.py`가 `land_prepare.again`으로 차례 밖에서 돌린다. `land_prepare`는 이전 단계 위에 `"delta"`로 저장하고 `land_full.prepared`는 아래 단계를 보고한다.
+- 증거: 원격 착지 회귀(selection·prepare·land·turn_deadline·batch·speculate·mainred_flow) 통과. 새 시험 2개(폴더/파일 구분, delta 기록이 FULL이 아님).
+- gate 변화: FULL·safety 판정과 land record의 FULL 조건은 그대로다. delta 단계는 FULL 증거가 되지 않는다.
+- CE: 기존 교훈 갱신 — landings-gave-the-turn-back-and-reran-everything 9에 차례 안 delta 재실행과 이 결정을 연결.
+
+## 2026-11-03 · uncommitted · test(remote): imported fake-host helper의 HEADROOM 격리
+- 변경: 공용 `_fake_hosts`가 호출자의 monkeypatch를 통해 시험 전용 HEADROOM dict를 사용하게 한다. 다른 모듈이 helper를 import했을 때 빠지던 module-local autouse fixture의 격리를 helper 자체에서 보장하며, production 코드와 worker/profile 기대값은 유지한다.
+- 증거: main4088d1c1d2에서 기존 reboot producer→profile consumer 두 node를 -n0으로 실행해1FAIL/1PASS·NEW1/known·flaky0을 재현했다. 수정parent69a12까지 관련remote 코드·시험3파일 차이0이다. code63a211f808에서 같은 producer 모듈을 먼저 두고 helper의 모든 호출 모듈과 consumer를 포함한5whole-file -n0은184PASS/skip·NEW·known·flaky0이었다. 정상 입장 wait0/run37초, pytest27.89초다. 로그는 OS Temp rosy-headroom-order-{red,green}-20261103/run-1.txt에 있다.
+- gate 변화: 없음. 실패 기준·검증 기대값·자원 정책·테스트 선택·quarantine baseline을 바꾸지 않는다. 독립 고정코드 검토 P1/P2 없음이며, source 검증과 정식 후보 착지는 구분한다.
+- CE: 기존 교훈 갱신 — shared-pytest-process-masks-path-dependent-import의 단독/FULL 컨텍스트 차이에 imported helper의 fixture 범위와 실제 순서 재현을 추가했다. 단독 통과를 곧바로 부하성 flaky로 단정하지 않는다.
+
+## 2026-11-03 · uncommitted · feat(isaac): 실측 팔 받침·벨트 후보 케이스와 이름 있는 계획 장면
+- 변경: 케이스 `nominal-palletizing-v21-ship-surveyed-bases`·`-surveyed`(벨트 28 mm 낮춤, `belt_drop_m`), `isaac_stack_plan.SCENES`(장면마다 받침/yaw 쌍과 낮은 벨트 통로 높이), `stacking_task.py` 케이스 등록과 등록 누락을 잡는 시험, 실측 받침 도달 시험.
+- 증거: 호스트 계획기로 실측 받침에서 벨트 집기·적층 9곳 모두 닿고, 뱃머리 정렬 자리(x -0.12)는 arm_a가 닿지 않음(0.287 m). Isaac 실행 두 번은 케이스 등록 누락과 CAD 받침 검사에서 멈춰 결과 없음(검증 기록 Step 3).
+- gate 변화: 없음. CAD 케이스와 fixture는 그대로다.
+- CE: 해당 없음 — 케이스 등록 누락은 시험으로 막았고, 정렬 자리 도달 문제는 검증 기록과 다음 작업(팔마다 정렬 자리)에 남겼다.
+
 ## 2026-11-03 · f81b8315d0 · docs: unwedge의 측정 기반 성공 조건과 검증 범위
 
 - 변경: 기존 unwedge 교훈의 clearance를 명령 횟수 대신 시작 측정값 대비 순변위로 정정하고, held-target 기준 HOME 한계·park 정착·측정 HOME 확인을 기록했다. 기존 21단계 현장 기록과 후속 호스트 회귀를 구분했다.

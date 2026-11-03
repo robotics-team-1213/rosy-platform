@@ -95,10 +95,10 @@ class FakeGh:
             return self._ok(json.dumps({"jobs": self.ci_jobs}))
         if args[:2] == ["api", "--paginate"]:
             rows = [
-                {"tag": self.tag, "draft": False, "created_at": "2026-10-04T01:00:00Z",
-                 "assets": self.assets},
-                {"tag": "payload-007", "draft": False, "created_at": "2026-10-04T02:00:00Z",
-                 "assets": ["release.json"]},
+                {"tag": self.tag, "name": self.release_name, "draft": False,
+                 "created_at": "2026-10-04T01:00:00Z", "assets": self.assets},
+                {"tag": "payload-007", "name": "payload", "draft": False,
+                 "created_at": "2026-10-04T02:00:00Z", "assets": ["release.json"]},
             ]
             return self._ok("".join(json.dumps(row) + "\n" for row in rows))
         if args[0] == "api" and "/releases/tags/" in args[1]:
@@ -142,11 +142,12 @@ class FakeGh:
         raise AssertionError(f"unexpected gh call: {args}")
 
 
-def _config(tmp_path: Path, keys) -> dict:
+def _config(tmp_path: Path, keys, **extra) -> dict:
     config_path = tmp_path / "signer.json"
     config_path.write_text(json.dumps({
         "repo": REPO, "key_id": KEY_ID, "private_key": str(keys[0]),
         "public_key": str(keys[1]), "state_dir": str(tmp_path / "state"), "keep": 2,
+        **extra,
     }), encoding="utf-8")
     return auto.load_config(config_path)
 
@@ -228,6 +229,94 @@ def test_already_correct_title_is_not_edited(tmp_path, keys):
     assert signer.run() == auto.EXIT_SIGNED
     assert gh.release_name == f"Site candidate {TAG}"
     assert not any(call[:2] == ["release", "edit"] for call in gh.calls)
+
+
+def _ssh_recording_runner(gh, calls: list, ssh_results: list | None = None):
+    """FakeGh for gh calls; ssh invocations are recorded, not run."""
+    def runner(argv, **kwargs):
+        if argv[0] == "ssh":
+            calls.append(list(argv))
+            returncode = ssh_results.pop(0) if ssh_results else 0
+            return SimpleNamespace(returncode=returncode, stdout="",
+                                   stderr="" if not returncode else "ssh: connect failed\n")
+        return gh(argv, **kwargs)
+    return runner
+
+
+def test_signed_release_with_stale_unsigned_title_is_repaired_on_sight(tmp_path, keys):
+    gh = FakeGh(signed=True)  # signature present, name still says "(unsigned)"
+
+    assert auto.AutoSigner(_config(tmp_path, keys), runner=gh).run() == auto.EXIT_IDLE
+    assert gh.uploads == []
+    assert not any(call[:2] == ["release", "download"] for call in gh.calls)
+    assert gh.release_name == f"Site candidate {TAG} (signed)"
+    assert "SIGNED" in gh.release_body
+    assert _audit(tmp_path)[-1]["decision"] == "retitle-repaired"
+
+    calls = len(gh.calls)  # the next run has nothing left to repair
+    assert auto.AutoSigner(_config(tmp_path, keys), runner=gh).run() == auto.EXIT_IDLE
+    assert not any(call[:2] == ["release", "edit"] for call in gh.calls[calls:])
+
+
+def test_signing_pushes_the_site_updater_start_command(tmp_path, keys):
+    gh = FakeGh()
+    calls: list[list[str]] = []
+    signer = auto.AutoSigner(
+        _config(tmp_path, keys, notify_hosts=["ops@site-host"]),
+        runner=_ssh_recording_runner(gh, calls))
+
+    assert signer.run() == auto.EXIT_SIGNED
+    assert len(calls) == 1
+    assert calls[0][0] == "ssh" and "ops@site-host" in calls[0]
+    assert "BatchMode=yes" in calls[0]
+    assert calls[0][-1] == "sudo -n systemctl start rosy-site-autoupdate.service"
+    record = _audit(tmp_path)[-1]
+    assert (record["decision"], record["result"], record["host"]) == (
+        "notify", "ok", "ops@site-host")
+
+
+def test_failed_push_is_audited_and_signing_still_succeeds(tmp_path, keys):
+    gh = FakeGh()
+    calls: list[list[str]] = []
+    signer = auto.AutoSigner(
+        _config(tmp_path, keys, notify_hosts=["ops@site-host"]),
+        runner=_ssh_recording_runner(gh, calls, ssh_results=[255]))
+
+    assert signer.run() == auto.EXIT_SIGNED
+    assert len(calls) == 1
+    record = _audit(tmp_path)[-1]
+    assert record["decision"] == "notify" and record["result"] == "failed"
+    assert "connect failed" in record["reason"]
+
+
+def test_no_push_without_a_new_signature(tmp_path, keys):
+    gh = FakeGh(signed=True)
+    calls: list[list[str]] = []
+    signer = auto.AutoSigner(
+        _config(tmp_path, keys, notify_hosts=["ops@site-host"]),
+        runner=_ssh_recording_runner(gh, calls))
+
+    assert signer.run() == auto.EXIT_IDLE
+    assert calls == []
+
+
+def test_notify_hosts_config_validation(tmp_path, keys):
+    base = {"repo": REPO, "key_id": KEY_ID, "private_key": str(keys[0]),
+            "public_key": str(keys[1]), "state_dir": str(tmp_path)}
+    path = tmp_path / "notify.json"
+
+    def check(value):
+        path.write_text(json.dumps({**base, "notify_hosts": value}), encoding="utf-8")
+        return auto.load_config(path)
+
+    for bad in ("ops@host;touch", "a b", "ops@host\n", 7, "ops@host",
+                ["ops@site"] * 9):
+        with pytest.raises(auto.ConfigError, match="notify_hosts"):
+            check(bad)
+    config = check(["ops@site-host", "100.82.51.8"])
+    assert config["notify_hosts"] == ["ops@site-host", "100.82.51.8"]
+    path.write_text(json.dumps(base), encoding="utf-8")
+    assert "notify_hosts" not in auto.load_config(path)
 
 
 def test_attestation_digest_mismatch_is_refused(tmp_path, keys):
