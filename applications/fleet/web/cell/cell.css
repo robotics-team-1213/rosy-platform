@@ -1,6 +1,7 @@
 /* D-741 2 — 본문은 칸이다. D-926 3: 하위 탐색이 단계 화면을 하나씩 보여 주므로 레시피와 셀 문서도 한 칸씩 선다. */
 .cell-intro { display: grid; gap: var(--space-1); }
 .cell-intro h1 { margin: 0; }
+#catalog-table { table-layout: fixed; }
 #workcell-observations, #workcell-observations > section { display: grid; gap: var(--space-3); min-width: 0; }
 .cell-observation-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr)); gap: var(--space-3); }
 .cell-observation-card { display: grid; align-content: start; gap: var(--space-2); min-width: 0; padding: var(--space-3); border: 1px solid var(--border-default); border-radius: var(--radius-control); }
