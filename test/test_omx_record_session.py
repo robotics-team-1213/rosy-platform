@@ -663,7 +663,7 @@ def test_alert_payload_stops_and_restores_caps_but_keeps_fault_and_unsafe_receip
     assert record['hardware_faults'][12] == {'hw_error': 32, 'packet_alert': True}
     assert not record['safe_end'] and record['manual_attention_required']
     assert arm.motors[12]['hw_error'] == 32
-    assert all(name in ('torque', 'pwm_limit', 'current_limit') and (name != 'torque' or value == 0)
+    assert all(name in ('torque', 'pwm_limit', 'current_limit', 'goal_current') and (name != 'torque' or value == 0)
                for _, name, value in arm.writes)
 
 
