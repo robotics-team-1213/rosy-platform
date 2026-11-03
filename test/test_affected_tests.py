@@ -918,6 +918,25 @@ GATE_TOOLS = ["tools/land.py", "tools/land_queue.py", "tools/land_cache.py", "to
               "test/browser_scope.py", "tools/remote/serial_suites.txt"]
 
 
+@pytest.mark.parametrize("changed", [["tools/land_goal.py"], ["tools/land_stats.py"],
+    ["tools/land_goal.py", "tools/land_stats.py"],
+    ["tools/land_goal.py", "test/test_land_goal.py", "docs/logs.md"]])
+def test_landing_reports_select_their_readers_without_the_full_runtime_tier(changed):
+    sel = affected.select(affected.Repo.load(ROOT), changed)
+    assert sel.mode == "affected", sel.escalations
+    assert GUARDS | {"test/test_land_goal.py", "test/test_land_events.py"} <= set(sel.reasons)
+    assert "test" not in sel.reasons
+
+
+@pytest.mark.parametrize("other", ["tools/land.py", "tools/land_events.py", "tools/land_queue.py",
+    "tools/harness/affected_tests.py", "tools/remote/remote_pytest.py", "tools/land_future_gate.py",
+    "tools/unknown_future_owner.py"])
+def test_landing_reports_do_not_narrow_other_gates_or_unmapped_changes(other):
+    sel = affected.select(affected.Repo.load(ROOT), ["tools/land_goal.py", "tools/land_stats.py", other])
+    assert sel.mode == "full"
+    assert any(reason.startswith(other + ":") for reason in sel.escalations), sel.escalations
+
+
 @pytest.mark.parametrize("path", GATE_TOOLS)
 def test_real_repo_gate_tools_stay_full(path):
     """A gate tool may not be tested by the narrow selection it would itself make."""
