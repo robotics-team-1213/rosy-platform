@@ -89,7 +89,7 @@ A person reconnected arm_b and later arm_a. The checks below ran in this order, 
   - the guard's 5-degree stop ended the session at +29.
 
   Once the person unwrapped the cable, the free range was -52..+52. Measure the free range with 2-unit jogs, which stay under the guard's 5 degrees, before the first reach.
-- **Configured camera URLs.** The arm_b cell config read its wrist camera from `front.jpg`. That unit had failed and served 503, so the pick preflight stopped. Each arm's config must name that arm's own wrist camera.
+- **Configured camera URLs.** The arm_b cell config read its wrist camera from `front.jpg`. That unit had failed and served 503, so the pick preflight stopped. Each arm's config must name that arm's own wrist camera. The viewer (`omx-camera-view.env`) serves arm_a's wrist as `front.jpg`, not `arm_a_wrist.jpg`. It refuses one topic under two labels, so the name stays. After a reconnect, the preview unit (`rosy-omx-camera@<role>`) kept polling the old device node ("selected camera is unavailable") until it was restarted.
 - **Jaw closed value per arm.** arm_a's library closed its jaws to 46.6, the old jaws' value. The park pushed at PWM -150 against the stop at 48.9, and the jaws-in-park check held the arm. When jaws change, set each arm's `gripper_closed` to its measured closed reading. `joint_push` cannot tell a closed value set too low from a box between the jaws.
 
 ## Not resolved here
