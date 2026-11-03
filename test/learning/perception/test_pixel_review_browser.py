@@ -77,6 +77,64 @@ def open_pixels(page, store, expect, index=0):
 
 
 @pytest.mark.parametrize('width', [1440, 390])
+def test_partial_unknown_guard_resolves_then_requires_manual_checks_and_advances(browser_workspace, width):
+    from review_app import Conflict
+    page, store, expect = browser_workspace
+    page.set_viewport_size({'width': width, 'height': 844})
+    open_pixels(page, store, expect)
+    expect(page.locator('#pixel-resolve-unknown')).to_be_hidden()
+    store.update(1, {'version': store.get(1)['version'], 'action': 'reopen'})
+    review_masks.update(store, 0, {'version': 0, 'action': 'paint', 'label': 2,
+                                  'radius': 0, 'points': [[2, 2]]}, Conflict)
+    page.locator('#pixel-reload').click()
+    expect(page.locator('#pixel-status')).to_contain_text('v1')
+    before = review_masks.pixels(store, review_masks.get(store, 0)).copy()
+    context = page.locator('#pixel-result-note + #pixel-resolve-unknown')
+    expect(context).to_be_visible()
+    expect(page.locator('#pixel-result-note')).to_contain_text('아래 버튼')
+    action = context.locator('#pixel-resolve-background')
+    expect(action).to_have_text('남은 767픽셀 배경으로 채우기')
+    page.locator('#pixel-class').select_option('3')
+    expect(context.locator('#pixel-resolve-class')).to_be_enabled()
+    page.locator('#pixel-canvas').click(position={'x': 10, 'y': 10})
+    expect(action).to_be_disabled()
+    expect(context.locator('#pixel-resolve-class')).to_be_disabled()
+    page.locator('#pixel-sample-clear').click()
+    expect(action).to_be_enabled()
+    if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+        target = Path(output)
+        target.mkdir(parents=True, exist_ok=True)
+        action.scroll_into_view_if_needed()
+        page.screenshot(path=str(target / f'pixel-partial-unknown-action-{width}.png'), full_page=True)
+    page.once('dialog', lambda dialog: dialog.accept())
+    action.click()
+    expect(page.locator('#pixel-status')).to_contain_text('v2')
+    after = review_masks.pixels(store, review_masks.get(store, 0))
+    assert after[2, 2] == 2 and np.all(after[before == 255] == 0)
+    expect(context).to_be_hidden()
+    expect(page.locator('#pixel-complete')).to_be_focused()
+    expect(page.locator('#pixel-complete')).not_to_be_checked()
+    expect(page.locator('#pixel-background')).not_to_be_checked()
+    expect(page.locator('#pixel-approve')).to_be_disabled()
+    page.locator('#pixel-undo').click()
+    expect(page.locator('#pixel-status')).to_contain_text('v3')
+    assert np.array_equal(review_masks.pixels(store, review_masks.get(store, 0)), before)
+    expect(context).to_be_visible()
+    page.once('dialog', lambda dialog: dialog.accept())
+    action.click()
+    expect(page.locator('#pixel-status')).to_contain_text('v4')
+    page.locator('#pixel-complete').check()
+    expect(page.locator('#pixel-approve')).to_be_disabled()
+    page.locator('#pixel-background').check()
+    expect(page.locator('#pixel-approve')).to_be_enabled()
+    page.locator('#pixel-approve').click()
+    expect(page.locator('#pixel-title')).to_have_text('사진 2 픽셀 검수')
+    assert review_masks.get(store, 0)['status'] == 'approved'
+    expect(context).to_be_hidden()  # The next photo is entirely unknown.
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+
+
+@pytest.mark.parametrize('width', [1440, 390])
 def test_unknown_fill_selected_class_preserves_other_labels_and_undo(browser_workspace, width):
     from review_app import Conflict
     page, store, expect = browser_workspace
