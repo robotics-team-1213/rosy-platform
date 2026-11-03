@@ -209,3 +209,19 @@ def test_the_chain_skips_preparing_tickets_and_stops_at_safety(queued, status, e
     land.land_queue.set_status(peer_ticket, status)
     escalations.extend([escalation] if escalation else [])
     assert spec.chain(land, wt, sys.executable, qdir, ticket) == ([peer] if chained else [])
+
+
+def test_the_root_part_keeps_each_job_s_options_and_settings():
+    """11-03: a held turn ran the G1 timing job as a plain file and browser chunks unopted; publication refused it."""
+    timing = ["ROSY_JOB_ALONE=1", "test/test_platform_g1_timing.py", "-pno:xdist", "-ptools.g1_timing_gate"]
+    browser = ["ROSY_RUN_BROWSER_TESTS=1", "operations/fleet/test/test_a_browser.py", "test/test_b_browser.py"]
+    assert spec.root_part([timing, browser, ["pkg/test", "--ignore=pkg/test/x.py"], ["test", "--ignore=t.py"]]) == [
+        timing, ["ROSY_RUN_BROWSER_TESTS=1", "test/test_b_browser.py"], ["test", "--ignore=t.py"]]
+
+
+def test_a_held_turn_record_keeps_one_copy_of_a_repeated_job(queued, monkeypatch):
+    _, wt, *_ = queued
+    timing = ["ROSY_JOB_ALONE=1", "test/test_platform_g1_timing.py", "-pno:xdist", "-ptools.g1_timing_gate"]
+    monkeypatch.setattr(spec, "_record", lambda *a: {spec.KEY: {"invocations": [timing, ["pkg/test"]]}})
+    prepared = spec.with_spec(land, wt, "feat/x", {"tier": "full", "invocations": [["test"], timing]})
+    assert prepared["invocations"] == [["test"], timing, ["pkg/test"]]
