@@ -77,8 +77,8 @@
 
 ## 최근 기록
 
+- 2026-11-03 · 7047306026 · test(omx): make incident fixture independent of neighboring collection
 - 2026-11-03 · 50dc0c7c53 · fix(omx): preserve incident ownership and current-session load limits
 - 2026-11-03 · 2aec802f8d · fix(site): preserve release metadata in signer dry run
 - 2026-11-03 · b741d370f0 · fix(site): require the configured signed companion before runtime acceptance
 - 2026-11-03 · uncommitted · docs(release): record one reviewed historical Git-tree tuple
-- 2026-11-03 · f81b8315d0 · fix(omx): 실측 순상승과 정착 home 증거로만 복구 완료

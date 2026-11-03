@@ -13999,3 +13999,11 @@ osy-d395-s1d\`.
 - Evidence: commit 830bc0db27 reproduced12 failures/6 passes using actual Bash branch stubs and the real reader-to-Pipeline path. Independently reviewed commit bd44ee1305 passed76 remote-Isaac/batch tests, zero skips/NEW/known/flaky. This verifies tooling; it is not a model evaluation or an actual simulator/device run.
 - gate 변화: the90-minute budget, GPU/launcher interfaces and physical motion authority are unchanged. Final combined canonical FULL/public CI remain pending.
 - CE: no additional lesson; explicit negative-path regressions cover this distinction.
+
+
+## 2026-11-03 · 7047306026 · docs(solutions): record recorder fixture import isolation evidence
+
+- Change: extend the existing shared-pytest-process import lesson with the reproduced recorder fixture failure: a loader temporary path disappears before fixture execution, while a neighboring test module can hide the missing import.
+- Evidence: same-commit official remote file-alone 71 passed/2 skipped; actual isolation gate 1 passed/1 empty-input skipped, complete:1. The original FULL child failure and verified own-run stop/log/cleanup receipts remain preserved externally.
+- gate 변화: none. No new testing policy or product behavior; the existing file-alone requirement applies to the execution fixture as well.
+- CE: existing lesson updated; no duplicate solution added.
