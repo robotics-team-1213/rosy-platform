@@ -205,7 +205,7 @@ ui-topbar:has([data-learning-account-entry]) { flex-wrap: wrap; }
 .pixel-frame-strip .pixel-frame-item span { display: grid; min-width: 0; }
 .pixel-frame-strip .frame-badge { color: var(--text-secondary); font-size: var(--text-label); }
 .pixel-editor-column, .pixel-review-column { min-width: 0; container-type: inline-size; }
-.pixel-editor-column { display: grid; grid-template-columns: 13rem minmax(0, 1fr); gap: var(--space-3); align-items: start; }
+.pixel-editor-column { display: grid; grid-template-columns: 13rem minmax(0, 1fr); column-gap: var(--space-3); row-gap: var(--space-1); align-items: start; }
 .pixel-editor-column > section { min-width: 0; }
 .pixel-review-column { border-left: 1px solid var(--surface-line); padding-left: var(--space-5); }
 .pixel-quick-tools { display: flex; flex-direction: column; width: 100%; min-width: 0; gap: var(--space-2); position: static; max-height: none; overflow: visible; grid-column: 1; grid-row: 3 / 5; }
@@ -259,8 +259,9 @@ ui-topbar:has([data-learning-account-entry]) { flex-wrap: wrap; }
 .pixel-completion-actions #pixel-approve { grid-column: 1 / -1; width: 100%; }
 .pixel-review-column .pixel-decision-panel > ui-button, .pixel-review-column .review-draft-bar ui-button { width: 100%; min-width: 0; white-space: normal; }
 .pixel-review-column .review-draft-bar > label, .pixel-review-column .review-draft-bar select { width: 100%; min-width: 0; }
-.pixel-editor-column > [aria-label="검수 작업 범위"] { grid-column: 1 / -1; grid-row: 1; align-items: end; margin: 0; }
-.pixel-editor-column > [aria-label="검수 작업 범위"] > label { flex-basis: 10rem; }
+.pixel-editor-column > [aria-label="검수 작업 범위"] { grid-column: 1 / -1; grid-row: 1; align-items: center; margin: 0; padding-block: 0; }
+.pixel-editor-column > [aria-label="검수 작업 범위"] > label { display: flex; align-items: center; gap: var(--space-2); flex-basis: 14rem; }
+.pixel-editor-column > [aria-label="검수 작업 범위"] select { flex: 1; }
 .pixel-editor-column > [aria-label="검수 작업 범위"] [role="status"] { flex: 1 1 12rem; font-size: var(--text-label); }
 .pixel-editor-column #pixel-photo-navigation { grid-column: 1 / -1; grid-row: 2; margin: 0; grid-template-columns: auto minmax(0, 1fr) auto auto; }
 #pixel-photo-navigation #pixel-reload { width: auto; margin: 0; }
