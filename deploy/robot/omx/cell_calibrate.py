@@ -93,6 +93,12 @@ def check(config: dict, calibration: dict, targets: list, frame, params=None) ->
     return out
 
 
+def map_agrees(record: dict, params=None) -> bool:
+    """Marks that disagree fit a map that misses by centimetres (arm_a 2026-11-04: leave-one-out max 52 mm over the
+    boxes): such a map is never saved."""
+    return record["loo_error_mm"]["max"] <= prm.get(params, "calibrate.max_loo_mm")
+
+
 def map_sites(config: dict) -> list:
     """The sites one remap serves: calibrate.map_sites, else arm A's floor/pinky/belt (arm B's pallet cell names
     its own sites, 2026-11-02)."""
@@ -285,6 +291,9 @@ def main(argv=None):
         if step == "remap":
             ref_path = Path(config["preflight"]["reference_top"]).expanduser()
             record = remap(cell, config, config.get("calibrate", {}).get("map_points", MAP_POINTS), work)
+            if not map_agrees(record, config["params"]):
+                done.append({"remap": record["loo_error_mm"], "refused": "marks disagree; map not saved"})
+                break
             current = cell.frame("top")
             for site in map_sites(config):
                 calibration["sites"][site] = dict(record, note="remap by cell_calibrate")

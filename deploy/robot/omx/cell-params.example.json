@@ -673,6 +673,12 @@
    "source": "tuned",
    "evidence": "2026-10-29: the re-mounted top camera moved 20-45 px (every map stale); a still camera matches its reference within ~1 px"
   },
+  "calibrate.max_loo_mm": {
+   "value": 15.0,
+   "unit": "mm",
+   "source": "measured",
+   "evidence": "leave-one-out max of kept maps: arm_b pallet 5.2 mm (2026-11-03), floor 13.6 mm (2026-10-30); arm_a's first pallet remap over the boxes was 52.3 mm (mean 26.8) and its marks contradicted each other (2026-11-04)"
+  },
   "calibrate.bias_near_mm": {
    "value": 30.0,
    "unit": "mm",

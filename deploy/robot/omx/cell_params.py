@@ -36,7 +36,7 @@ DEFAULTS = {
     "auto.closing_alt_deg": (0, "deg", -180, 180),
     "auto.fold_before_transport": (1, "flag", 0, 1), "auto.bias_from_place": (1, "flag", 0, 1),
     "auto.bias_learn_max_mm": (15.0, "mm", 1, 50),
-    "calibrate.max_shift_px": (6.0, "px", 1, 50), "calibrate.bias_near_mm": (30.0, "mm", 5, 120), "auto.attempts": (3, "count", 1, 6), "diagnose.top_band_mm": (4.0, "mm", 1, 30), "diagnose.surface_band_mm": (3.0, "mm", 0.5, 15),
+    "calibrate.max_shift_px": (6.0, "px", 1, 50), "calibrate.max_loo_mm": (15.0, "mm", 2, 50), "calibrate.bias_near_mm": (30.0, "mm", 5, 120), "auto.attempts": (3, "count", 1, 6), "diagnose.top_band_mm": (4.0, "mm", 1, 30), "diagnose.surface_band_mm": (3.0, "mm", 0.5, 15),
     "auto.jaw_margin_mm": (8.0, "mm", 2, 25), "auto.finger_pad_mm": (20.0, "mm", 5, 60), "auto.min_jaw_margin_mm": (2.0, "mm", 0.5, 10), "auto.own_side_mm": (6.0, "mm", 0, 15), "auto.jaw_margin_max_mm": (16.0, "mm", 2, 25), "preflight.min_mean": (15.0, "grey", 0, 255),
     "place.margin_mm": (5.0, "mm", 0, 30), "place.search_mm": (40.0, "mm", 0, 120), "place.step_mm": (5.0, "mm", 1, 20),
     "track.around_px": (60, "px", 0, 300), "track.reach_px": (120, "px", 0, 400), "track.min_inliers": (25, "count", 6, 1000),

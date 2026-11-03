@@ -160,3 +160,8 @@ def test_an_arm_with_no_map_for_its_sites_is_remapped():
     found = {"camera_moved": False, "targets": [], "missing_bias": [], "missing_surface": [],
              "missing_map": [s for s in cc.map_sites(config) if s not in {}]}
     assert found["missing_map"] == ["pallet"] and cc.stale(found)[:2] == ["remap", "regions"]
+
+
+def test_a_map_whose_marks_disagree_is_not_kept():
+    assert cc.map_agrees({"loo_error_mm": {"max": 5.2, "mean": 3.1}})
+    assert not cc.map_agrees({"loo_error_mm": {"max": 52.34, "mean": 26.81}})  # arm_a 2026-11-04 over the boxes
