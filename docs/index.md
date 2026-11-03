@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-11-03 · uncommitted · fix(landing): LOAD-FLAKY는 사전 시험 전체가 아니라 그 시험만 차례에서 다시 (D-970 4항)
 - 2026-11-03 · 85ec06aec9 · docs(solutions): 사이트 갱신 체인 정지 진단 순서 기록
 - 2026-11-03 · uncommitted · fix(remote): omx_hotfix가 contracts/foundation도 올린다
 - 2026-11-03 · uncommitted · feat(isaac): 실측 팔 받침·벨트 후보 케이스와 이름 있는 계획 장면
 - 2026-11-03 · uncommitted · test(remote): imported fake-host helper의 HEADROOM 격리
-- 2026-11-03 · uncommitted · fix(landing): main delta의 시험 폴더를 차례 밖 "delta" 단계로 (D-889 추가 27)

@@ -13934,3 +13934,10 @@ osy-d395-s1d\`.
 - 증거: 같은 날 실제 진단·복구로 검증(hold 5분 내 식별, `retitle-repaired` 2건 즉시 교정, `test/test_site_auto_sign.py` 31통과).
 - gate 변화: 없음.
 - CE: 이 문서 자체가 교훈 기록이다.
+
+## 2026-11-03 · uncommitted · fix(landing): LOAD-FLAKY는 사전 시험 전체가 아니라 그 시험만 차례에서 다시 (D-970 4항)
+- 변경: `land_selection.load_flaky_ids`가 요약의 LOAD-FLAKY id를 그 호출의 ROSY_ 환경 단어와 함께 읽고, `land_prepare`는 그 줄을 빼고 단계를 판정해 id를 `land_full` 기록(`flaky`)에 둔다. `land.py` 차례가 그 id를 하나씩 따로 다시 돌린다. 명시 FULL 증인과 읽을 수 없는 LOAD-FLAKY 줄은 예전처럼 엄격하다.
+- 증거: 11-03 12:53~15:53 사전 시험 28번 중 9번이 단계 없음(LOAD-FLAKY 등)이라 delta도 못 썼다. 원격 착지 회귀 27개 파일 + affected_tests 통과(test_land_async 한 건은 혼자 재실행 통과한 ProcessLookupError 타이밍 문제, 이 변경과 무관), 새 시험 2개.
+- gate 변화: 약화 없음. LOAD-FLAKY id는 차례에서 다시 통과해야 착지하고, 차례 요약에 LOAD-FLAKY가 다시 나오면 land record가 생기지 않아 pre-push가 다시 돈다. publish_evidence의 LOAD-FLAKY 거절도 그대로다.
+- CE: 해당 없음 — 교훈 10·11과 D-970에 이미 있음.
+
