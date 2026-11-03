@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-11-04 · uncommitted · 공용 폼의 네이티브 유효성·초기화 검증 기록
+- 2026-11-04 · uncommitted · 검색 선택의 표시·호출자 상태 검증 기록
 - 2026-11-04 · uncommitted · docs(control-terms): D-974 착지 준비 — 안전 검토·크기·ADR Log 병합 정리
 - 2026-11-03 · uncommitted · docs(control-terms): 관제 용어 층 분리, 헤더는 관제 단위 이름 (D-974)
 - 2026-11-03 · uncommitted · fix(landing): 단계 없는 delta 사전 시험도 넘김 횟수에 셈 (D-970 1항 보완)
-- 2026-11-03 · uncommitted · fix(landing): 명시 FULL 증인이 재실행 뒤에도 남음 (D-970 보완)
-- 2026-11-03 · uncommitted · feat(landing): land_async orphans — 재부팅으로 죽은 착지를 찾아 되살림
