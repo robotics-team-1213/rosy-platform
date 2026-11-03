@@ -13922,3 +13922,9 @@ osy-d395-s1d\`.
 - 증거: 호스트 계획기로 실측 받침에서 벨트 집기·적층 9곳 모두 닿고, 뱃머리 정렬 자리(x -0.12)는 arm_a가 닿지 않음(0.287 m). Isaac 실행 두 번은 케이스 등록 누락과 CAD 받침 검사에서 멈춰 결과 없음(검증 기록 Step 3).
 - gate 변화: 없음. CAD 케이스와 fixture는 그대로다.
 - CE: 해당 없음 — 케이스 등록 누락은 시험으로 막았고, 정렬 자리 도달 문제는 검증 기록과 다음 작업(팔마다 정렬 자리)에 남겼다.
+
+## 2026-11-03 · uncommitted · fix(remote): omx_hotfix가 contracts/foundation도 올린다
+- 변경: `tools/remote/omx_hotfix.py` `PATHS`에 `contracts/foundation`. 셀 스크립트가 `core_common`(D-966 제어 파라미터)을 import하므로, 이 도구로 만든 트리만으로 세션이 시작되게 한다(공식 `omx_autoupdate` 트리와 같은 구성).
+- 증거: 관제 PC 실행 환경은 `PYTHONPATH`의 `<tree>/contracts/foundation`에서만 `core_common`을 찾는다(없으면 ModuleNotFoundError, 2026-11-03 확인).
+- gate 변화: 없음
+- 결정: 없음
