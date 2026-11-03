@@ -20,6 +20,7 @@ import time
 from pathlib import Path
 
 import remote_test_tools
+from host_probe import REBOOT_CHECK
 
 POLL_S = 10.0
 LAST_POLL = 0.0  # monotonic time of the latest poll in this process (land_watchdog reads it)
@@ -38,11 +39,13 @@ WAIT_CAP = 3  # timeout_s multiples a job may wait for room; new jobs stay out m
 # or serial suites) or one waiting to start, and an alone job only once no other job runs. A job alone on the host
 # always starts, however large. One flock makes check and lock one step across runs. Waiting keeps the laptop
 # polling (its pid is up), so land_watchdog sees it as alive.
-ADMIT = r"""AL=${ROSY_JOB_ALONE:-0}; [ "$AL" = 1 ] && X=alone
+ADMIT = REBOOT_CHECK + r"""AL=${ROSY_JOB_ALONE:-0}; [ "$AL" = 1 ] && X=alone
 CAPC=${ROSY_HOST_CORES:-$(nproc)}; CAPG=${ROSY_HOST_GB:-$(awk '/^MemTotal:/{print int($2 / 1048576)}' /proc/meminfo)}
 exec 9> ~/rosy-jobs/.admit
 while :; do
-  flock 9; uc=0; ug=0; others=0; held=0; pending=0; now=$(date +%s)
+  now=$(date +%s)
+  if reboot_soon "$now"; then echo '[remote-pytest] admission deferred: nightly reboot'; exit 253; fi
+  flock 9; uc=0; ug=0; others=0; held=0; pending=0
   for f in ~/rosy-jobs/*.lock; do
     [ -e "$f" ] || continue; read -r p k fc fm < "$f" || true
     kill -0 "$p" 2>/dev/null || continue
@@ -191,6 +194,12 @@ class Lost(Exception):
     """No contact with the host for the reconnect budget; the job keeps running there."""
 
 
+class RebootSoon(Exception):
+    """Admission refused before pytest; give its invocation back without publishing a verdict."""
+
+    retry = None  # one batch's unfinished quarantine rerun, set by remote_pytest.one
+
+
 def command(script: str, args, prefix: str = "") -> str:
     return prefix + "bash -c " + shlex.quote(script) + " remote " + " ".join(map(shlex.quote, args))
 
@@ -322,6 +331,8 @@ def run(host: str, name: str, k: int, log: Path, job_args: list[str], pytest_arg
                     waiting, deadline, wait_from = True, clock() + WAIT_CAP * timeout_s + 120, clock()
                 offset += len(data)
                 if rc is not None:  # land_checks.timing reads this line into the tests event
+                    if rc == 253 and b"[remote-pytest] admission deferred: nightly reboot\n" in log.read_bytes():
+                        raise RebootSoon(f"{host}: nightly reboot admission deferred")
                     wait = max(0.0, admitted - wait_from) if waiting else 0.0  # user@address: only the user part
                     out.write(f"\n{TIMING} host={host.split('@')[0]} start={start_at:.0f} wait_s={wait:.0f}"
                               f" run_s={clock() - admitted:.0f}\n".encode())

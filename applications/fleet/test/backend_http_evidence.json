@@ -3,6 +3,16 @@
   "scope": "One observed response per route from a passing HTTP test. Success selected where observed; refusal-only receipts do not prove successful configuration or device behavior.",
   "reports": [
     {
+      "source_revision": "e5911e84f3ff9a2c9f9d5fe739848ff1b2c75857",
+      "result": "5 passed; USB camera listing and operator decision HTTP routes (D-963), in-process with real SQLite; no device evidence",
+      "pytest_root": "."
+    },
+    {
+      "source_revision": "023d9915a34efb4cf88bd198badc30101fe196dc",
+      "result": "9 passed, 0 skipped; 15 actual auth HTTP routes, including canonical Account handlers and retired development-session 403. In-process HTTP with synthetic auth/session fixtures and real SQLite; no device or deployed TLS evidence.",
+      "pytest_root": "."
+    },
+    {
       "source_revision": "8e86f34a260d6f8b7ed3d2452516fe76d18ff1ac",
       "result": "40 passed, 0 skipped; 9 actual profile/care HTTP routes, real producer/API/reopened SQLite browser flow, fixture role/refresh presentation and six-task installation workflow. Synthetic inputs; no device or deployed TLS evidence.",
       "pytest_root": "."
@@ -64,6 +74,22 @@
     }
   ],
   "requests": {
+    "GET:/api/fleet/workcell-observations/usb-devices": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_usb_camera_decisions.py",
+        "test_listing_shows_candidates_and_decisions_without_paths_or_tokens_and_hides_stale_reports"
+      ],
+      "source_revision": "e5911e84f3ff9a2c9f9d5fe739848ff1b2c75857"
+    },
+    "POST:/api/fleet/workcell-observations/{workcell_id}/usb-devices/{key}/decision": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_usb_camera_decisions.py",
+        "test_decision_is_dropped_when_the_camera_is_no_longer_reported_and_survives_a_restart"
+      ],
+      "source_revision": "e5911e84f3ff9a2c9f9d5fe739848ff1b2c75857"
+    },
     "GET:/api/fleet/device-profiles": {
       "status": 200,
       "test": [
@@ -254,23 +280,23 @@
         "operations/fleet/test/test_account_authority_routes.py",
         "test_normal_cookie_automatically_authorizes_registered_app"
       ],
-      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+      "source_revision": "023d9915a34efb4cf88bd198badc30101fe196dc"
     },
     "GET:/api/fleet/auth/connection": {
       "status": 200,
       "test": [
-        "operations/fleet/test/test_cli.py",
-        "test_console_development_mode_needs_both_the_flag_and_the_deployment[-development-paired]"
+        "operations/fleet/test/test_development_session.py",
+        "test_connection_metadata_does_not_issue_anonymous_credentials[False]"
       ],
-      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+      "source_revision": "023d9915a34efb4cf88bd198badc30101fe196dc"
     },
     "GET:/api/fleet/auth/session": {
       "status": 200,
       "test": [
-        "operations/fleet/test/test_account_deployment.py",
-        "test_account_management_rejects_previous_browser_family_marker"
+        "operations/fleet/test/test_password_session.py",
+        "test_login_sets_a_strict_http_only_cookie_and_session_reports_it"
       ],
-      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+      "source_revision": "023d9915a34efb4cf88bd198badc30101fe196dc"
     },
     "GET:/api/fleet/session": {
       "status": 200,
@@ -281,20 +307,20 @@
       "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
     },
     "POST:/api/fleet/auth/development-session": {
-      "status": 201,
+      "status": 403,
       "test": [
-        "operations/fleet/test/test_cli.py",
-        "test_console_development_mode_needs_both_the_flag_and_the_deployment[development-development-development]"
+        "operations/fleet/test/test_development_session.py",
+        "test_connection_metadata_does_not_issue_anonymous_credentials[False]"
       ],
-      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+      "source_revision": "023d9915a34efb4cf88bd198badc30101fe196dc"
     },
     "POST:/api/fleet/auth/login": {
       "status": 204,
       "test": [
-        "operations/fleet/test/test_app_frontend_http_contracts.py",
-        "test_managed_account_reset_and_revoke_are_http_transactions"
+        "operations/fleet/test/test_account_ledger.py",
+        "test_account_api_cookie_origin_capability_and_strict_bodies"
       ],
-      "source_revision": "bb9fec5fa4d97d2557dae38102a86b41d3b5bcad"
+      "source_revision": "023d9915a34efb4cf88bd198badc30101fe196dc"
     },
     "POST:/api/fleet/auth/logout": {
       "status": 204,
@@ -302,7 +328,7 @@
         "operations/fleet/test/test_password_session.py",
         "test_logout_ends_the_session"
       ],
-      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+      "source_revision": "023d9915a34efb4cf88bd198badc30101fe196dc"
     },
     "GET:/api/fleet/auth/accounts": {
       "status": 200,
@@ -310,15 +336,15 @@
         "operations/fleet/test/test_account_ledger.py",
         "test_account_api_cookie_origin_capability_and_strict_bodies"
       ],
-      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+      "source_revision": "023d9915a34efb4cf88bd198badc30101fe196dc"
     },
     "GET:/api/fleet/auth/setup": {
       "status": 200,
       "test": [
         "operations/fleet/test/test_account_setup.py",
-        "test_legacy_setup_requires_policy_admin_cookie[policy-admin-200]"
+        "test_managed_setup_uses_live_grant_and_only_public_registration"
       ],
-      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+      "source_revision": "023d9915a34efb4cf88bd198badc30101fe196dc"
     },
     "PATCH:/api/fleet/auth/accounts/{account_id}": {
       "status": 200,
@@ -326,7 +352,7 @@
         "operations/fleet/test/test_account_ledger.py",
         "test_account_api_cookie_origin_capability_and_strict_bodies"
       ],
-      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+      "source_revision": "023d9915a34efb4cf88bd198badc30101fe196dc"
     },
     "POST:/api/fleet/auth/accounts": {
       "status": 201,
@@ -334,7 +360,7 @@
         "operations/fleet/test/test_account_ledger.py",
         "test_account_api_cookie_origin_capability_and_strict_bodies"
       ],
-      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+      "source_revision": "023d9915a34efb4cf88bd198badc30101fe196dc"
     },
     "POST:/api/fleet/auth/accounts/{account_id}/reset-password": {
       "status": 200,
@@ -342,7 +368,7 @@
         "operations/fleet/test/test_app_frontend_http_contracts.py",
         "test_managed_account_reset_and_revoke_are_http_transactions"
       ],
-      "source_revision": "bb9fec5fa4d97d2557dae38102a86b41d3b5bcad"
+      "source_revision": "023d9915a34efb4cf88bd198badc30101fe196dc"
     },
     "POST:/api/fleet/auth/accounts/{account_id}/revoke-sessions": {
       "status": 200,
@@ -350,31 +376,31 @@
         "operations/fleet/test/test_app_frontend_http_contracts.py",
         "test_managed_account_reset_and_revoke_are_http_transactions"
       ],
-      "source_revision": "bb9fec5fa4d97d2557dae38102a86b41d3b5bcad"
+      "source_revision": "023d9915a34efb4cf88bd198badc30101fe196dc"
     },
     "GET:/api/fleet/auth/profile": {
       "status": 200,
       "test": [
         "operations/fleet/test/test_self_profile.py",
-        "test_profile_and_normal_rotation_commit_failure_preserve_old_state"
+        "test_profile_is_cookie_owned_durable_and_bound_to_principal"
       ],
-      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+      "source_revision": "023d9915a34efb4cf88bd198badc30101fe196dc"
     },
     "PATCH:/api/fleet/auth/profile": {
       "status": 200,
       "test": [
         "operations/fleet/test/test_self_profile.py",
-        "test_profile_changes_do_not_touch_another_account"
+        "test_profile_is_cookie_owned_durable_and_bound_to_principal"
       ],
-      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+      "source_revision": "023d9915a34efb4cf88bd198badc30101fe196dc"
     },
     "POST:/api/fleet/auth/change-password": {
       "status": 204,
       "test": [
-        "operations/fleet/test/test_account_ledger.py",
-        "test_managed_operator_requires_exact_site_grant_for_robot_command"
+        "operations/fleet/test/test_self_profile.py",
+        "test_profile_is_cookie_owned_durable_and_bound_to_principal"
       ],
-      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+      "source_revision": "023d9915a34efb4cf88bd198badc30101fe196dc"
     },
     "GET:/api/fleet/policy-governance/workcells": {
       "status": 200,

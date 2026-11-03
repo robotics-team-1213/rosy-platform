@@ -15,6 +15,146 @@ import land_stats  # noqa: E402
 H = 3600.0
 
 
+def test_rollup_closes_member_retry_history_but_preserves_later_work_and_deduplicates():
+    a, b, carrier = "land/fix/a-20261101000000", "land/fix/b-20261101000000", "land/fix/land-rollup-x"
+    members = [{"branch": a, "ticket": "a2", "candidate": "a" * 40},
+               {"branch": b, "ticket": "b1", "candidate": "b" * 40}]
+    rows = [ev(0, "queue", branch=a, ticket="a1"), ev(10, "stop", branch=a),
+            ev(60, "queue", branch=a, ticket="a2"), ev(120, "queue", branch=b, ticket="b1"),
+            ev(180, "queue", branch=carrier, ticket="a2"),
+            ev(240, "landed", branch=carrier, members=members),
+            ev(300, "queue", branch=a, ticket="a3"),
+            ev(330, "landed", branch=carrier, members=members),
+            ev(360, "landed", branch=a)]
+    assert land_goal.lead_times(rows, 0, 400) == [4, 2, 1]
+
+
+@pytest.mark.parametrize("late_stop", [False, True])
+def test_pinned_retry_does_not_consume_an_earlier_unrelated_snapshot(late_stop):
+    a, b = "land/fix/a-20261101000000", "land/fix/a-20261101010000"
+    rows = [ev(0, "queue", branch=a, ticket="a1"), ev(120, "queue", branch=b, ticket="b", pid=2),
+            ev(180, "queue", branch=a, ticket="a2", pid=3),
+            ev(240, "landed", branch="land/fix/land-rollup-x",
+               members=[dict(branch=a, ticket="a2", candidate="a" * 40)]),
+            ev(300, "landed", branch=b, pid=2)]
+    if late_stop:
+        rows.append(ev(200, "stop", branch=b, pid=2))
+    assert land_goal.lead_times(rows, 0, 400) == [4, 3]
+
+
+def test_new_request_retry_does_not_inherit_a_stop_before_the_previous_completion():
+    a, b, c, d = [f"land/fix/a-202611010{i}0000" for i in range(4)]
+    rows = [ev(0, "queue", branch=a, ticket="a"), ev(120, "queue", branch=b, ticket="b", pid=2),
+            ev(200, "stop", branch=b, pid=2),
+            ev(240, "landed", branch="land/fix/land-rollup-x", members=[dict(branch=a, ticket="a")]),
+            ev(300, "queue", branch=c, ticket="c", pid=3), ev(360, "stop", branch=c, pid=3),
+            ev(400, "queue", branch=d, ticket="d", pid=4),
+            ev(500, "landed", branch="land/fix/land-rollup-y", members=[dict(branch=d, ticket="d")])]
+    assert land_goal.lead_times(rows, 0, 600) == [4, 200 / 60]
+
+
+def test_reemitting_the_same_ticket_cannot_move_the_retry_coverage_cutoff():
+    a, b = "land/fix/a-20261101000000", "land/fix/a-20261101010000"
+    rows = [ev(0, "queue", branch=a, ticket="a", pid=1),
+            ev(120, "queue", branch=b, ticket="b1", pid=2), ev(200, "stop", branch=b, pid=2),
+            ev(240, "queue", branch=a, ticket="a", pid=3),
+            ev(300, "landed", branch="land/fix/land-rollup-x", members=[dict(branch=a, ticket="a")]),
+            ev(320, "queue", branch=b, ticket="b2", pid=4),
+            ev(400, "landed", branch="land/fix/land-rollup-y", members=[dict(branch=b, ticket="b2")])]
+    assert land_goal.lead_times(rows, 0, 500) == [5, 280 / 60]
+
+
+@pytest.mark.parametrize("member", [False, True])
+def test_rules_refresh_stop_before_queue_preserves_the_original_ticket_clock(member):
+    old, new = "land/fix/a-20261102204332", "land/fix/a-20261103001242"
+    rows = [ev(0, "queue", branch=old, ticket="original", pid=43728),
+            ev(60, "queue", branch=old, ticket="original", pid=69240),
+            ev(120, "stop", branch=old, pid=75292),
+            ev(180, "queue", branch=new, ticket="new", pid=65856)]
+    completion = (dict(branch="land/fix/land-rollup-x", members=[dict(branch=new, ticket="new")])
+                  if member else dict(branch=new, pid=65856))
+    rows.append(ev(240, "landed", **completion))
+    assert land_goal.lead_times(rows, 0, 300) == [4]
+
+
+@pytest.mark.parametrize("boundary", ["competing-ticket", "requeued", "completed", "unfrozen"])
+def test_unqueued_stop_cannot_claim_another_ticket_or_completed_epoch(boundary):
+    old, new = "land/fix/a-20261102204332", "land/fix/a-20261103001242"
+    if boundary == "unfrozen":
+        old = "fix/a"
+    rows = [ev(0, "queue", branch=old, ticket="original", pid=1),
+            ev(60, "queue", branch=old, ticket="original", pid=2)]
+    if boundary == "competing-ticket":
+        rows.append(ev(90, "queue", branch=old, ticket="other", pid=3))
+    if boundary == "completed":
+        rows.append(ev(90, "landed", branch=old, pid=2))
+    rows.append(ev(120, "stop", branch=old, pid=4))
+    if boundary == "requeued":
+        rows.append(ev(150, "queue", branch=old, ticket="later", pid=5))
+    rows += [ev(180, "queue", branch=new, ticket="new", pid=6),
+             ev(240, "landed", branch=new, pid=6)]
+    assert land_goal.lead_times(rows, 0, 300) == ([1.5, 1] if boundary == "completed" else [1])
+
+
+def test_failed_rollup_does_not_close_member_or_create_a_sample():
+    rows = [ev(0, "queue", ticket="a"), ev(60, "stop", members=[{"branch": "land/fix/a", "ticket": "a"}]),
+            ev(120, "landed")]
+    assert land_goal.lead_times(rows, 0, 200) == [2]
+
+
+def test_legacy_batch_completion_closes_carried_members_before_their_later_exit():
+    a, b = "land/fix/a-20261101000000", "land/fix/b-20261101000000"
+    rows = [ev(0, "queue", branch=a, ticket="a"), ev(60, "queue", branch=b, ticket="b"),
+            ev(120, "train", branch=a, branches=[a, b], result="landed"),
+            ev(121, "landed", branch=a), ev(180, "queue", branch=b, ticket="b2"),
+            ev(181, "landed", branch=b, pid=1), ev(240, "landed", branch=b, pid=2)]
+    # The old member exit must not consume b2, even if the new queue appeared first.
+    rows[1]["pid"], rows[4]["pid"] = 1, 2
+    assert land_goal.lead_times(rows, 0, 300) == [2, 1, 1]
+
+
+def test_historical_batch_observer_is_not_an_extra_main_move(tmp_path):
+    a, b = "land/fix/a", "land/fix/b"
+    rows = [ev(0, "queue", branch=a, pid=1), ev(10, "queue", branch=b, pid=2),
+            ev(60, "train", branch=a, pid=1, branches=[a, b], result="landed"),
+            ev(61, "landed", branch=a, pid=1), ev(62, "landed", branch=b, pid=2),
+            ev(70, "queue", branch=b, pid=3), ev(80, "landed", branch=b, pid=3)]
+    normalized, warnings = land_goal.normalize(rows, tmp_path)
+    assert not warnings
+    assert [r["t"] for r in normalized if r["event"] == "landed" and r.get("main_move", True)] == [61, 80]
+    assert "main_move" not in rows[4], "raw log rows stay immutable"
+
+
+def test_legacy_train_branch_reuse_counts_each_origin_once():
+    a, b = "fix/a", "fix/b"
+    rows = [ev(0, "queue", branch=a, ticket="a1", pid=1), ev(10, "queue", branch=b, ticket="b1", pid=2),
+            ev(60, "train", branch=a, pid=1, branches=[a, b], result="landed"),
+            ev(61, "landed", branch=b, pid=2),
+            ev(100, "queue", branch=a, ticket="a2", pid=3), ev(110, "queue", branch=b, ticket="b2", pid=4),
+            ev(160, "train", branch=a, pid=3, branches=[a, b], result="landed"),
+            ev(161, "landed", branch=b, pid=4)]
+    assert land_goal.lead_times(rows, 0, 200) == [1, 50 / 60, 1, 50 / 60]
+
+
+def test_legacy_train_with_ambiguous_origins_is_incomplete_instead_of_guessing(tmp_path):
+    rows = [ev(0, "queue", branch="fix/a", ticket="a", pid=1),
+            ev(10, "queue", branch="fix/b", ticket="b1", pid=2),
+            ev(20, "queue", branch="fix/b", ticket="b2", pid=3),
+            ev(60, "train", branch="fix/a", branches=["fix/a", "fix/b"], result="landed")]
+    _, warnings = land_goal.normalize(rows, tmp_path)
+    assert warnings and "ambiguous" in warnings[0]
+
+
+def test_competing_train_origins_cannot_be_inferred_from_a_later_successful_request(tmp_path):
+    rows = [ev(0, "queue", branch="fix/a", ticket="a", pid=1),
+            ev(10, "queue", branch="fix/b", ticket="selected-b", pid=2),
+            ev(20, "queue", branch="fix/b", ticket="other-b", pid=3),
+            ev(60, "train", branch="fix/a", branches=["fix/a", "fix/b"], result="landed"),
+            ev(80, "landed", branch="fix/b", pid=3)]
+    _, warnings = land_goal.normalize(rows, tmp_path)
+    assert warnings and "ambiguous" in warnings[0]
+
+
 def ev(t, event, branch="land/fix/a-20261031120000", pid=1, **kw):
     return {"t": t, "event": event, "branch": branch, "pid": pid, **kw}
 
@@ -58,6 +198,83 @@ def goal_repo(tmp_path, monkeypatch):
     return tmp_path / ".git" / land_events.EVENTS, 1_793_500_000.0
 
 
+@pytest.fixture
+def nested_completion(goal_repo):
+    events, start = goal_repo
+    base = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+    tips = []
+    for name in ("inner", "outer"):
+        subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q",
+                        "--allow-empty", "-m", name], check=True)
+        tips.append(subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip())
+    a, b, c = [f"land/fix/{name}-20261101000000" for name in "abc"]
+    inner, outer = [f"land/fix/land-rollup-{stamp}-{stamp}" for stamp in ("20261101000100", "20261101000200")]
+    children = [dict(branch=a, ticket="a2", candidate=base), dict(branch=b, ticket="b", candidate=base)]
+    members = [dict(branch=inner, ticket="inner", candidate=tips[0], members=children),
+               dict(branch=c, ticket="c", candidate=tips[1])]
+    rows = [ev(start, "queue", branch=a, ticket="a1"), ev(start + 5, "stop", branch=a),
+            ev(start + 10, "queue", branch=a, ticket="a2", pid=2),
+            ev(start + 20, "queue", branch=b, ticket="b"), ev(start + 30, "queue", branch=c, ticket="c"),
+            ev(start + 40, "queue", branch=inner, ticket="inner"),
+            ev(start + 50, "queue", branch=outer, ticket="outer"),
+            ev(start + 120, "landed", branch=outer, sha=tips[1], members=members)]
+    return events, start, rows
+
+
+def test_nested_completion_closes_only_leaves_at_the_single_actual_ff(nested_completion):
+    events, start, rows = nested_completion
+    raw = json.dumps(rows)
+    newer = "land/fix/a-20261101000300"
+    rows += [ev(start + 150, "queue", branch=newer, ticket="new", pid=9),
+             ev(start + 180, "landed", branch=newer, pid=9)]
+    normalized, warnings = land_goal.normalize(rows, events.parent)
+    assert not warnings
+    assert land_goal.lead_times(normalized, start, start + 200) == [2, 100 / 60, 1.5, .5]
+    assert len([r for r in normalized if r["event"] == "landed"]) == 2
+    assert json.dumps(rows[:-2]) == raw, "nested normalization must not mutate raw members"
+
+
+@pytest.mark.parametrize("bad", ["missing", "cycle", "duplicate", "invalid_pin", "wrong_parent", "unknown_ticket"])
+def test_unproven_nested_completion_stays_incomplete(nested_completion, bad):
+    events, start, rows = nested_completion
+    inner = rows[-1]["members"][0]
+    if bad == "missing":
+        inner.pop("members")
+    elif bad == "cycle":
+        inner["members"] = [{k: v for k, v in inner.items() if k != "members"}]
+    elif bad == "duplicate":
+        rows[-1]["members"][1]["candidate"] = inner["members"][0]["candidate"]
+        inner["members"].append(dict(rows[-1]["members"][1]))
+    elif bad == "invalid_pin":
+        inner["members"][0]["candidate"] = "f" * 40
+    elif bad == "wrong_parent":
+        inner["members"][0]["candidate"] = rows[-1]["sha"]
+    else:
+        inner["members"][0]["ticket"] = "not-recorded"
+    normalized, warnings = land_goal.normalize(rows, events.parent)
+    assert warnings and normalized[-1]["metrics_incomplete"]
+    assert land_goal.lead_times(normalized, start, start + 200) == []
+
+
+@pytest.mark.parametrize("bad", ["invalid_pin", "missing", "cycle", "invalid_branch"])
+def test_nested_incomplete_scope_keeps_known_leaves_and_unknown_trees_closed(nested_completion, bad):
+    events, start, rows = nested_completion
+    inner = rows[-1]["members"][0]
+    if bad == "invalid_pin":
+        inner["members"][0]["candidate"] = "f" * 40
+    elif bad == "missing":
+        inner.pop("members")
+    elif bad == "cycle":
+        inner["members"] = [{k: v for k, v in inner.items() if k != "members"}]
+    else:
+        inner["members"][0]["branch"] = 42
+    rows += [ev(start + 300, "queue", branch="fix/unrelated", ticket="other", pid=9),
+             ev(start + 360, "landed", branch="fix/unrelated", pid=9)]
+    normalized, warnings = land_goal.normalize(rows, events.parent, start + 200, start + 400)
+    assert normalized[-3]["metrics_incomplete"]
+    assert bool(warnings) == (bad != "invalid_pin"), "only a complete leaf name set can prove an unrelated window"
+
+
 def test_goal_cli_stall_uses_landing_events_despite_old_commit_dates(goal_repo, monkeypatch, capsys):
     events, start = goal_repo
     rows = [ev(start + i * 1200, "queue", branch=f"fix/{i}", pid=i + 1) for i in range(3)]
@@ -80,3 +297,143 @@ def test_goal_cli_defaults_to_sixty_minutes_and_preserves_override(goal_repo, mo
     assert "p90 90 min (goal <= 60)" in capsys.readouterr().out
     assert land_stats.main([*args, "--p90", "120"]) == 0
     assert "p90 90 min (goal <= 120)" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("branch,resolved,code", [("fix/current", False, 0), ("fix/old", False, 1),
+                                                ("fix/old", True, 0)])
+def test_goal_cli_scopes_old_incomplete_trains_to_the_current_origins(goal_repo, monkeypatch, capsys,
+                                                                  branch, resolved, code):
+    events, start = goal_repo
+    rows = [ev(start - 3 * H, "queue", branch="fix/old", ticket="a", pid=3),
+            ev(start - 2.9 * H, "queue", branch="fix/old", ticket="b", pid=4),
+            ev(start - 2.8 * H, "train", branch="fix/leader", branches=["fix/old"], result="landed"),
+            ev(start, "queue", branch=branch), ev(start + 300, "landed", branch=branch)]
+    if resolved:
+        rows.extend([ev(start - 2 * H, "queue", branch="fix/old"), ev(start - 1.5 * H, "landed", branch="fix/old")])
+    events.write_text("\n".join(json.dumps(r) for r in rows), encoding="utf-8")
+    monkeypatch.setattr(land_stats.time, "time", lambda: start + 600)
+    assert land_stats.main(["--goal", "--hours", "1", "--p90", "300", "--stall", "300"]) == code
+    assert ("FAIL: logical landing metrics incomplete" if code else "PASS:") in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("fields", [dict(event="landed", members=[]), dict(event="landed", members=[{}]),
+                                   dict(event="train", branches=[], result="landed"),
+                                   dict(event="train", branches=["fix/old"], members=[], result="landed"),
+                                   dict(event="train", branches=["fix/old"],
+                                        members=[dict(branch=1, ticket="x")], result="landed"),
+                                   dict(event="train", branches=["fix/old"],
+                                        members=[dict(branch="fix/other", ticket="x")], result="landed")])
+def test_goal_cli_unknown_historical_membership_scope_cannot_pass(goal_repo, monkeypatch, capsys, fields):
+    events, start = goal_repo
+    rows = [ev(start - 2 * H, branch="land/fix/land-rollup-x", **fields),
+            ev(start, "queue", branch="fix/current"), ev(start + 300, "landed", branch="fix/current")]
+    events.write_text("\n".join(json.dumps(r) for r in rows), encoding="utf-8")
+    monkeypatch.setattr(land_stats.time, "time", lambda: start + 600)
+    assert land_stats.main(["--goal", "--hours", "1"]) == 1
+    assert "FAIL: logical landing metrics incomplete" in capsys.readouterr().out
+
+
+def test_pinned_train_without_its_recorded_queue_origin_is_incomplete(goal_repo, monkeypatch, capsys):
+    events, start = goal_repo
+    sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+    rows = [ev(start, "queue", branch="fix/a", ticket="actual"),
+            ev(start + 60, "train", branch="fix/a", branches=["fix/a"], result="landed", sha=sha,
+               members=[dict(branch="fix/a", ticket="missing", candidate=sha)]),
+            ev(start + 61, "landed", branch="fix/a", sha=sha)]
+    events.write_text("\n".join(json.dumps(r) for r in rows), encoding="utf-8")
+    monkeypatch.setattr(land_stats.time, "time", lambda: start + 600)
+    assert land_stats.main(["--goal", "--hours", "1"]) == 1
+    assert "FAIL: logical landing metrics incomplete" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("kind", ["train-members", "train-branches", "rollup-members"])
+def test_duplicate_completion_branches_are_incomplete(goal_repo, kind):
+    events, start = goal_repo
+    sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+    members = [dict(branch="fix/a", ticket=t, candidate=sha) for t in ("a1", "a2")]
+    rows = [ev(start, "queue", branch="fix/a", ticket="a1"),
+            ev(start + 10, "queue", branch="fix/a", ticket="a2", pid=2)]
+    if kind == "rollup-members":
+        rows.append(ev(start + 60, "landed", branch="land/fix/land-rollup-x", sha=sha, members=members))
+    else:
+        fields = dict(branches=["fix/a"], members=members) if kind == "train-members" else dict(branches=["fix/a", "fix/a"])
+        rows.append(ev(start + 60, "train", branch="fix/a", sha=sha, result="landed", **fields))
+    _, warnings = land_goal.normalize(rows, events.parent)
+    assert warnings, "one branch cannot become two logical completions through competing tickets"
+
+
+def test_goal_cli_recovers_historical_rollup_members_without_rewriting_events(goal_repo, monkeypatch, capsys):
+    events, start = goal_repo
+    sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+    a, b, carrier = "land/fix/a-20261101000000", "land/fix/b-20261101000000", "land/fix/land-rollup-x"
+    rows = [ev(start, "queue", branch=a, ticket="old-a"), ev(start + 60, "stop", branch=a),
+            ev(start + 120, "queue", branch=a, ticket="a"), ev(start + 180, "queue", branch=b, ticket="b"),
+            ev(start + 200, "isolation", branch=a, kind="prepare", candidate=sha),
+            ev(start + 201, "isolation", branch=b, kind="prepare", candidate=sha),
+            ev(start + 240, "queue", branch=carrier), ev(start + 300, "landed", branch=carrier, sha=sha),
+            ev(start + 360, "queue", branch=a, ticket="next"), ev(start + 420, "landed", branch=a)]
+    raw = "\n".join(json.dumps(r) for r in rows)
+    events.write_text(raw, encoding="utf-8")
+    holder = events.parent / "rosy-land-wt"
+    holder.mkdir()
+    sidecar = holder / (carrier.replace("/", "-") + ".members")
+    sidecar.write_text(json.dumps([{"branch": a}, {"branch": b}]), encoding="utf-8")
+    monkeypatch.setattr(land_stats.time, "time", lambda: start + 600)
+    assert land_stats.main(["--goal", "--hours", "1"]) == 0
+    assert "landed 3, lead time p50 2 / p90 5 min" in capsys.readouterr().out
+    assert events.read_text(encoding="utf-8") == raw
+    normalized, warnings = land_goal.normalize(rows, events.parent)
+    assert not warnings
+    assert land_goal.lead_times(normalized, start, start + 290) == []
+    assert land_goal.lead_times(normalized, start, start + 600) == [5, 2, 1]
+    assert len([r for r in normalized if r["event"] == "landed"]) == 2
+    # A non-ancestor / missing candidate never closes a member by guessing its name.
+    rows[4]["candidate"] = "f" * 40
+    normalized, warnings = land_goal.normalize(rows, events.parent)
+    assert warnings and land_goal.lead_times(normalized, start, start + 600) != [5, 2, 1]
+    events.write_text("\n".join(json.dumps(r) for r in rows), encoding="utf-8")
+    assert land_stats.main(["--goal", "--hours", "1"]) == 1
+    assert "FAIL: logical landing metrics incomplete" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("contents", ['[{"branch":"land/fix/a","ticket":"a","candidate":"abc"}]', '{bad'])
+def test_completion_keeps_the_actual_ff_even_when_member_metadata_is_unusable(tmp_path, monkeypatch, contents):
+    path = tmp_path / land_events.EVENTS
+    holder = tmp_path / "rosy-land-wt"
+    holder.mkdir()
+    branch = "land/fix/land-rollup-20261101000000-20261101000000"
+    (holder / (branch.replace("/", "-") + ".members")).write_text(contents, encoding="utf-8")
+    monkeypatch.setattr(land_events, "_where", dict(path=path, branch=branch))
+    monkeypatch.setattr(land_events.time, "time", lambda: 1234)
+    land_events.landed("a" * 40)
+    rows = land_events.read(path)
+    assert len(rows) == 1 and rows[0]["event"] == "landed" and rows[0]["t"] == 1234
+    assert rows[0]["sha"] == "a" * 40 and rows[0]["main_move"]
+
+
+def test_completion_survives_sidecar_stat_failure(tmp_path, monkeypatch):
+    path = tmp_path / land_events.EVENTS
+    monkeypatch.setattr(land_events, "_where", dict(path=path, branch="land/fix/a"))
+    monkeypatch.setattr(Path, "exists", lambda self: (_ for _ in ()).throw(PermissionError("denied")))
+    land_events.landed("a" * 40)
+    assert land_events.read(path)[0]["event"] == "landed"
+
+
+def test_historical_completion_closes_same_snapshot_retries_but_preserves_new_snapshot(goal_repo):
+    events, start = goal_repo
+    sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+    a, newer, carrier = "land/fix/a-20261101000000", "land/fix/a-20261101010000", "land/fix/land-rollup-x"
+    rows = [ev(start, "queue", branch=a, ticket="original"),
+            ev(start + 60, "isolation", branch=a, kind="prepare", candidate=sha),
+            ev(start + 120, "queue", branch=newer, ticket="new", pid=2),
+            ev(start + 180, "queue", branch=a, ticket="retry", pid=3),
+            ev(start + 240, "landed", branch=carrier, sha=sha),
+            ev(start + 300, "landed", branch=newer, pid=2),
+            ev(start + 360, "queue", branch="land/fix/a-20261101020000", ticket="future", pid=4),
+            ev(start + 420, "landed", branch="land/fix/a-20261101020000", pid=4)]
+    holder = events.parent / "rosy-land-wt"
+    holder.mkdir()
+    (holder / (carrier.replace("/", "-") + ".members")).write_text(json.dumps([{"branch": a}]), encoding="utf-8")
+    normalized, warnings = land_goal.normalize(rows, events.parent)
+    assert not warnings
+    assert land_goal.lead_times(normalized, start, start + 500) == [4, 3, 1]

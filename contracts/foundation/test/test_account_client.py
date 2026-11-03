@@ -104,6 +104,21 @@ def test_expired_flow_and_external_return_are_refused(receiver):
         client.finish(flow, 'state', 'code')
 
 
+def test_trusted_destination_policy_preserves_bound_target_without_changing_default(receiver):
+    from urllib.parse import parse_qs, urlsplit
+    client = receiver[0]
+    target = '/pilot?view=work'
+    with pytest.raises(ValueError):
+        client.start(target)
+    flow, url = client.start(target, destination_allowed=lambda value: value == target)
+    state = parse_qs(urlsplit(url).query)['state'][0]
+    assert client.finish(flow, state, 'auth-code')[1] == target
+    with pytest.raises(ValueError):
+        client.start('/pilot', destination_allowed=lambda value: False)
+    with pytest.raises(ValueError):
+        client.start(target)
+
+
 def test_renewal_is_saved_before_introspection_timeout(receiver):
     client, clock, calls, active = receiver
     cookie = session(client)

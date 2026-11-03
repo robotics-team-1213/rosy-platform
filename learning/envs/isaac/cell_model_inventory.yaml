@@ -3,7 +3,7 @@
 # Real-cell photos stay out of Git (public repository): register the file name here and put the file in
 # cell-photos/ beside the private SIM operator configuration on the review host.
 schema: rosy.cell-model-inventory/1
-checked_at: '2026-10-31'
+checked_at: '2026-11-03'
 models:
   - id: gripper
     name: 그리퍼(OMX 팔레타이징 조 v2.1)
@@ -14,9 +14,9 @@ models:
   - id: ship_plate
     name: 배 모양 판(본선)
     cad: {file: null, sha256: null}
-    sim: stand_in
-    measured: 미측정. 남색 판에 흰 돌기 격자
-    differs: 261026_World.STL과 STEP 두 개에 없다. 시뮬레이션은 평평한 판으로 대신한다
+    sim: reflected
+    measured: 팀 CAD(KAN-108, ship_plate.py). 실물 top 영상의 돌기 격자 36 mm 6×6과 fixture가 약 1 px로 겹친다(셀 실측 2026-11-03)
+    differs: 시뮬레이션은 선미를 첫 돌기 줄 뒤 16 mm, 뱃머리를 x 198 mm에서 자른다(실물은 50.6 mm 뒤·뾰족한 뱃머리)
   - id: workbench
     name: 작업대
     cad: {file: 261026_World.STL, sha256: dd91457a4a8d17d7fbb4fbfdb12dff9c2ae98e92e74760231c9ec08aa377f3cc}
@@ -27,14 +27,14 @@ models:
     name: 벨트
     cad: {file: 261026_World.STL, sha256: dd91457a4a8d17d7fbb4fbfdb12dff9c2ae98e92e74760231c9ec08aa377f3cc}
     sim: reflected
-    measured: 폭 약 100 mm(World STL)
-    differs: null
+    measured: 폭 약 100 mm(World STL). 벨트 끝 컨테이너 윗면이 작업대보다 25.8 mm 낮다(D435 깊이 6회 중앙값, arm_b 적층 설정 2026-11-03 05:32), 곧 벨트 면은 작업대 약 56 mm·판 윗면 약 64 mm 아래
+    differs: 시뮬레이션 벨트 면은 같은 자리(x 약 0.22)에서 판 윗면 약 36 mm 아래라 실물보다 약 28 mm 높다
   - id: arm_base
     name: 팔 베이스(두 대)
     cad: {file: 261026_World.STL, sha256: dd91457a4a8d17d7fbb4fbfdb12dff9c2ae98e92e74760231c9ec08aa377f3cc}
     sim: reflected
-    measured: 두 베이스 중심 사이 약 330 mm(World STL), 시뮬레이션 ±0.165 m와 일치
-    differs: null
+    measured: 두 베이스 중심 사이 약 330 mm(World STL). 셀 실측 2026-11-03(surveyed) arm_b 관절 1 기준 (0.104, 0.153) m, yaw -94.3°(FK 맞춤 3.1 px), 받침 판 중심 arm_b (0.107, 0.164)·arm_a (0.116, -0.164)
+    differs: 실물 받침이 fixture (0.08, ±0.165)보다 선미 쪽(+x)으로 24~36 mm, arm_b는 중심선 쪽으로 12 mm. fixture는 CAD 값 유지, 채택은 도달·충돌 비교 뒤(D-947 2)
   - id: container
     name: 컨테이너
     cad: {file: null, sha256: null}
@@ -51,14 +51,14 @@ models:
     name: 위쪽 카메라(RealSense D435)
     cad: {file: null, sha256: null}
     sim: stand_in
-    measured: USB 2.0(480 Mbps)으로 연결되어 424×240만 나온다
-    differs: 서비스 경로 rosy-realsense-d435-color는 feat/omx-devices-and-realsense-top 착지 전이라 없다
+    measured: 2026-11-03 640×480 컬러. 자세(fixture 좌표) (-0.041, 0.037, 0.662) m, 판 위 588 mm, 선미 쪽으로 13.1° 기움, f 615 px(D435 일반값) 돌기 25개 PnP 0.58 px
+    differs: 시뮬레이션에 같은 시점이 없다(mapped-top은 1.25 m 수직 관찰용)
   - id: camera_side
     name: 옆 카메라(Jieli)
     cad: {file: null, sha256: null}
     sim: stand_in
-    measured: 640×480
-    differs: null
+    measured: 640×480. 자세 (-0.51, 0.00, 0.15) m, 뱃머리 앞에서 수평으로 +x를 본다, f 약 950~1050 px(돌기 21개 PnP 2.8 px, 거리 ±5 cm)
+    differs: mapped-side는 반대편(선미 쪽 x 0.8)에서 본다. 실물과 같은 시점이 없다
   - id: camera_wrist
     name: 손목 카메라 둘(Innomaker)
     cad: {file: null, sha256: null}
@@ -93,7 +93,10 @@ photos:
     sim_view: null
 person_tasks:
   - task: 배 모양 판(본선) 치수를 재거나 CAD를 전달
-    why: World STL·STEP에 없어 시뮬레이션은 평평한 판으로 대신한다
+    why: World STL·STEP에 없어 시뮬레이션은 평평한 판으로 대신했다(팀 CAD KAN-108, 2026-11-01 전달)
+    status: done
+  - task: 손목 카메라 둘의 렌즈 값(체커보드, cell_checkerboard.py)과 조 위 장착 자세를 잰다
+    why: 손목 영상은 돌기가 2~4개만 보여 렌즈 값 없이 장착 자세를 풀 수 없다(셀 실측 2026-11-03). 체커보드는 사람이 놓는다
     status: open
   - task: arm_a 모터 무응답(Motor 11 ping failed) 전원·케이블 확인
     why: arm_a를 실물로 움직일 수 없다

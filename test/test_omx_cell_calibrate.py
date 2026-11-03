@@ -116,6 +116,16 @@ def test_a_pivot_near_a_packed_column_goes_over_it_only_when_the_jaws_clear_both
     assert not cc.over_target(config, "pallet")
 
 
+def test_a_pivot_over_a_packed_column_keeps_its_yaws_inside_the_arc_that_marked():
+    """2026-11-02: over the packed pallet only base -40..+40 marked, so 4 marks need the narrower 20 degree set."""
+    config = {"params": {"pivot.over_target": 1, "pivot.over_top_mm": 71.0}, "pivot": {"z_view": 0.10},
+              "coarse": {"z_view": 0.118}, "sites": {"pallet": {"surface_z": -0.01, "yaw_deg": 90}}}
+    over = cc.pivot_near_yaws(config, "pallet")
+    assert over == [30, 50, 70, 90, 110, 130, 150] and sum(50 <= y <= 130 for y in over) >= 4
+    config["params"]["pivot.over_target"] = 0
+    assert cc.pivot_near_yaws(config, "pallet") == [10, 50, 90, 130, 170, 210]
+
+
 def test_a_jaw_mark_split_into_pieces_over_a_box_top_counts_once_merged_and_noise_does_not():
     """2026-11-02: over a packed column the gripper body hid the fingers; the open-closed change came as 72, 165 and
     260 px pieces a few px apart, each under min_blob 300, and the pivot marked nothing."""
@@ -134,3 +144,11 @@ def test_a_jaw_mark_split_into_pieces_over_a_box_top_counts_once_merged_and_nois
     for x in range(10, 190, 20):  # scattered 4x4 specks, 16 px apart: not one mark at any merge
         noise[50:54, x:x + 4] = 255
     assert cell_pivot.jaw_blobs(closed, noise, {"pivot.merge_px": 3}) == []
+
+
+def test_a_remap_serves_the_sites_the_config_names_and_arm_a_keeps_its_three():
+    """2026-11-02: arm B's pallet cell has no floor site; its remap is named by calibrate.map_sites."""
+    arm_a = {"sites": {"floor": {}, "belt": {}, "board": {}}}
+    assert cc.map_sites(arm_a) == ["floor", "belt"]
+    arm_b = {"calibrate": {"map_sites": ["pallet", "stack"]}, "sites": {"pallet": {}, "stack": {}}}
+    assert cc.map_sites(arm_b) == ["pallet", "stack"]

@@ -6,11 +6,15 @@ import importlib
 import importlib.util
 import json
 from pathlib import Path
+import sys
 from types import SimpleNamespace
 
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "tools"))
+
+from harness import affected_exclusive as exclusive  # noqa: E402
 
 
 def load_selection():
@@ -67,9 +71,52 @@ def test_full_selection_keeps_full_plan_and_reason(caller, tmp_path):
     assert note == "selector escalated to FULL (safety; foundation): full tier on the lab PCs"
 
 
+def test_actual_landing_report_delta_reaches_the_affected_plan(caller, tmp_path):
+    import affected_tests
+
+    land, payload, _ = caller
+    actual = affected_tests.select(affected_tests.Repo.load(ROOT),
+                                   ["tools/land_goal.py", "test/test_land_goal.py"])
+    payload.update(actual.to_json())
+    invocations, note = load_selection().select(land, tmp_path, "base", "python", head="candidate")
+    assert note is None
+    assert invocations == actual.invocations + [["ROSY_RUN_BROWSER_TESTS=1", "browser/test"]]
+    assert "test/test_land_goal.py" in {word for inv in invocations for word in inv}
+    assert "test/test_land_events.py" in {word for inv in invocations for word in inv}
+    assert not any("test" in inv for inv in invocations)
+
+
+def test_explicit_full_accepts_root_exclusion_only_with_strict_timing_companion(caller, tmp_path, monkeypatch):
+    selection = load_selection()
+    owner, payload, _ = caller
+    plan = [['test', '--ignore=' + exclusive.TARGET], exclusive.DEDICATED]
+    payload.update(mode='full', full_invocations=plan)
+    monkeypatch.setattr(selection, 'all_browsers', lambda *args: [['ROSY_RUN_BROWSER_TESTS=1', 'browser/test']])
+    actual, note = selection.select(owner, tmp_path, 'base', 'python', full=True)
+    assert actual == plan + [['ROSY_RUN_BROWSER_TESTS=1', 'browser/test']]
+    assert note == 'explicit canonical FULL'
+
+
+@pytest.mark.parametrize('plan', [
+    [['test', '--ignore=' + exclusive.TARGET]],
+    [exclusive.DEDICATED],
+    [['test', '--ignore=' + exclusive.TARGET], exclusive.DEDICATED, exclusive.DEDICATED],
+    [['test', '--ignore=' + exclusive.TARGET], exclusive.DEDICATED + ['-k', 'one']],
+    [['test', '--ignore=' + exclusive.TARGET], exclusive.DEDICATED[:-1]],
+    [['test'], exclusive.DEDICATED],
+])
+def test_explicit_full_refuses_missing_duplicate_partial_or_ordinary_timing(caller, tmp_path, plan):
+    selection = load_selection()
+    owner, payload, _ = caller
+    payload.update(mode='full', full_invocations=plan)
+    with pytest.raises(owner.Stop):
+        selection.select(owner, tmp_path, 'base', 'python', full=True)
+
+
 def test_landed_harness_delta_keeps_local_selection(caller, tmp_path):
     selection = load_selection()
     land, payload, _ = caller
+    land.land_guards = SimpleNamespace(GUARDS=("guard/test",))
     payload.update(mode="full", escalations=["tools/harness/x.py" + land.HARNESS_TRIGGER])
     assert selection.select(land, tmp_path, "base", "python", head="main", landed=True) == (
         [["guard/test"], ["ROSY_RUN_BROWSER_TESTS=1", "browser/test"]], None)
@@ -81,6 +128,7 @@ def test_landed_harness_delta_keeps_local_selection(caller, tmp_path):
 def test_landed_full_delta_runs_both_changes_own_suites_unless_safety(caller, tmp_path):
     selection = load_selection()
     land, _, calls = caller
+    land.land_guards = SimpleNamespace(GUARDS=("guard/test",))
     delta = dict(mode="full", escalations=["conftest.py: pytest conftest"], local_invocations=[["guard/test"]],
                  full_invocations=[["test"]])
     mine = dict(mode="affected", escalations=[], invocations=[["mine/test"], ["guard/test"]])
@@ -107,8 +155,9 @@ def test_a_safety_path_in_mains_landed_delta_keeps_only_its_mapped_suites(caller
     answers = [delta, mine]
     land.subprocess = SimpleNamespace(run=lambda command, **kw: calls.append(command) or SimpleNamespace(
         returncode=0, stdout=json.dumps(answers.pop(0)), stderr=""))
-    assert selection.select(land, tmp_path, "base", "python", head="main", landed=True) == (
-        [["guard/test"], ["safe/test"], ["ROSY_RUN_BROWSER_TESTS=1", "browser/test"]], None), "addendum 10: no overlap"
+    invocations, note = selection.select(land, tmp_path, "base", "python", head="main", landed=True)
+    assert invocations == [["guard/test"], ["safe/test"], ["ROSY_RUN_BROWSER_TESTS=1", "browser/test"]], "addendum 10"
+    assert note.startswith(selection.DELTA_NOTE)  # D-889 27: the safety suite folder runs before the turn
     answers[:] = [delta, dict(mine, mode="full", escalations=["safe/y.py" + selection.SAFETY_TRIGGER],
                               local_invocations=[["mine/test"]])]
     assert selection.select(land, tmp_path, "base", "python", head="main", landed=True)[1] is not None
@@ -154,6 +203,25 @@ def test_a_landed_delta_reaching_none_of_this_branchs_suites_does_not_rerun_them
         assert selection.select(land, tmp_path, "base", "python", head="main", landed=True)[0] == want + [browser]
     assert selection.overlaps([["a/test"]], [["ROSY_X=1", "a/test/test_b.py::c"]]) and not selection.overlaps(
         [["a/test"]], [["b/test"]])
+
+
+def test_a_landed_delta_reaching_whole_suite_folders_runs_them_before_the_turn(caller, tmp_path):
+    """D-889 27: 11-03 turns ran the delta's suite folders for 15-22 min in the lock and gave the turn back."""
+    selection = load_selection()
+    land, _, _ = caller
+    land.land_guards = SimpleNamespace(GUARDS=("guard/test",))
+    mine = dict(mode="full", escalations=["tools/x.py: harness"], local_invocations=[["fleet/test/test_y.py"]])
+    answers = []
+    land.subprocess = SimpleNamespace(run=lambda command, **kw: SimpleNamespace(
+        returncode=0, stdout=json.dumps(answers.pop(0)), stderr=""))
+    folders = dict(mode="full", escalations=["contracts/foundation/x.py: shared foundation"],
+                   local_invocations=[["guard/test"], ["fleet/test"]], full_invocations=[["test"]])
+    answers[:] = [folders, mine]
+    invocations, note = selection.select(land, tmp_path, "base", "python", head="main", landed=True)
+    assert ["fleet/test"] in invocations and note.startswith(selection.DELTA_NOTE)
+    files = dict(folders, local_invocations=[["guard/test"], ["fleet/test/test_x.py"]])
+    answers[:] = [files, mine]
+    assert selection.select(land, tmp_path, "base", "python", head="main", landed=True)[1] is None  # files stay in the turn
 
 
 def test_safety_trigger_is_the_selectors_text():
@@ -257,9 +325,9 @@ from test_land import GREEN, commit, git, land, repos  # noqa: E402,F401
 Stop = land.Stop  # land_isolation obtains the caller's exception from run_tests.__globals__.
 BROWSER = "ROSY_RUN_BROWSER_TESTS=1"
 ALONE = "ROSY_BROWSER_ALONE=1"
-NORMAL = [["test"], ["pkg/test"]]
+NORMAL = [["test", '--ignore=' + exclusive.TARGET], ["pkg/test"], exclusive.DEDICATED]
 BROWSER_FILES = ["ui/test/test_one_browser.py", "ui/test/test_alone_browser.py"]
-CANONICAL = """import json, sys
+CANONICAL = 'FULL_PLAN = ' + repr(NORMAL) + '\n' + """import json, sys
 from pathlib import Path
 def generated_targets(repo): return {}
 def generate(repo): return []
@@ -267,7 +335,7 @@ if __name__ == '__main__' and sys.argv[1] == 'affected':
     full = '--full' in sys.argv
     print(json.dumps(dict(mode='full' if full else 'affected', escalations=['forced'] if full else [],
           invocations=[] if '--head' in sys.argv else [['pkg/test']], local_invocations=[['test/architecture']],
-          full_invocations=[['test'], ['pkg/test']] if full else [])))
+          full_invocations=FULL_PLAN if full else [])))
 """
 
 
@@ -282,12 +350,14 @@ def full_case(repos, monkeypatch):
     main, wt = repos
     files = {".gitignore": "__pycache__/\n", "tools/harness/rosy_harness.py": CANONICAL, "tools/harness/affected_tests.py": "# selector\n",
              "tools/land_selection.py": (ROOT / "tools/land_selection.py").read_text(),
+             "tools/harness/affected_exclusive.py": (ROOT / "tools/harness/affected_exclusive.py").read_text(),
              "tools/land_browser.py": (ROOT / "tools/land_browser.py").read_text()
                  + "\nALONE=frozenset({'ui/test/test_alone_browser.py'})\n",
              "tools/remote/remote_pytest.py": "BROWSER_ENV='ROSY_RUN_BROWSER_TESTS=1'\nALONE_ENV='ROSY_BROWSER_ALONE=1'\n",
              "test/browser_scope.py": scope_source(BROWSER_FILES),
              "tools/collect_alone.py": "# real orchestration, fixture executor supplies the report\n",
              "test/test_root.py": "def test_root(): pass\n",
+             exclusive.TARGET: "def test_timing_stub(): pass\n",
              "test/architecture/test_guard.py": "def test_guard(): pass\n", "env.txt": "env1"}
     files.update({p: "def test_browser(): pass\n" for p in BROWSER_FILES})
     commit(main, files, "canonical fixture")
@@ -312,6 +382,8 @@ def full_case(repos, monkeypatch):
                 continue
             code, text = GREEN
             text = "1 passed in 0.01s\n"  # Browser gate requires a real pytest-summary shape.
+            if exclusive.dedicated(inv):
+                text += '[g1-timing-gate] expected=1 collected=1 passed=1 skipped=0 clean=1\n'
             if "ROSY_ALONE_FILES=pkg/test/test_a.py" in inv:
                 text += ("[isolation] " + case.report + ": "
                          + ("pkg/test/test_a.py" if case.report == "incomplete" else "1") + "\n"
@@ -362,6 +434,33 @@ def test_explicit_full_affected_change_executes_canonical_plan_and_real_receipt(
     assert all(no_cache for _, no_cache, invs in case.splits if any("tools/collect_alone.py" in inv for inv in invs))
 
 
+def test_explicit_full_ignores_stale_spec_and_executes_the_actual_main_delta(full_case, monkeypatch):
+    case = full_case
+    delta_source = CANONICAL.replace("invocations=[] if '--head' in sys.argv",
+                                    "invocations=[['pkg/test/test_a.py']] if '--head' in sys.argv")
+    commit(case.main, {'tools/harness/rosy_harness.py': delta_source,
+                       'tools/harness/harness.yaml': 'modules: []\n',
+                       'tools/harness/platform_parts.yaml': 'roots: []\n'}, 'canonical delta fixture')
+    case.mutate = lambda: commit(case.main, {'lib/peer.py': 'peer = 1\n'}, 'main advanced')
+    prepared = land.land_full.prepared
+    def stale_spec(*args):
+        result = prepared(*args)
+        if result:
+            path = land.land_full._path(case.wt, 'feat/x')
+            data = json.loads(path.read_text())
+            data['spec'] = {'invocations': [['test']], 'tree': 'stale'}
+            path.write_text(json.dumps(data))
+        return result
+    monkeypatch.setattr(land.land_full, 'prepared', stale_spec)
+    monkeypatch.setattr(land.land_speculate, 'held', lambda *a: pytest.fail('FULL consumed held speculation'))
+    monkeypatch.setattr(land.land_speculate, 'with_spec', lambda *a: pytest.fail('FULL inherited spec proof'))
+    assert land.main(['--tests', 'full']) == 0
+    assert any(label == 'land-1' for label, _, _ in case.remote)
+    assert_full_plan(body_calls(case))
+    record = land.land_record.read(case.main, git(case.main, 'rev-parse', 'HEAD'))
+    assert record['prepared_candidate'] and record['invocations'].count(exclusive.DEDICATED) == 1
+
+
 @pytest.mark.parametrize("tier, invocations", [("affected", [["pkg/test"]]), ("full", NORMAL),
                                                ("full", NORMAL + [[BROWSER, BROWSER_FILES[0]]])])
 def test_old_or_partial_preparation_never_skips_current_full_prepare(full_case, tier, invocations):
@@ -379,7 +478,7 @@ def test_restart_rechecks_fresh_guards_but_reuses_clean_exact_body_cache(full_ca
     assert_full_plan(body_calls(case))
     count = len(body_calls(case)); case.remote.clear(); case.splits.clear()
     assert land.main(["--tests", "full"]) == 0
-    assert body_calls(case) == [], "current prepare may reuse exact clean body, not old guard proof"
+    assert body_calls(case) == [exclusive.DEDICATED], 'ordinary body cache remains; timing needs a fresh receipt'
     assert any(no_cache and any("tools/collect_alone.py" in inv for inv in invs) for _, no_cache, invs in case.splits)
     assert count >= 4
 
@@ -526,7 +625,8 @@ def test_explicit_full_missing_canonical_evidence_fails_closed(full_case, fault)
         git(case.wt, "rm", "tools/harness/affected_tests.py")
         git(case.wt, "commit", "-qm", "missing selector")
     elif fault == "empty_plan":
-        commit(case.wt, {"tools/harness/rosy_harness.py": CANONICAL.replace("[['test'], ['pkg/test']]", "[]")}, fault)
+        commit(case.wt, {"tools/harness/rosy_harness.py": CANONICAL.replace(
+            "full_invocations=FULL_PLAN if full else []", "full_invocations=[]")}, fault)
     elif fault == "bad_json":
         commit(case.wt, {"tools/harness/rosy_harness.py": "print('not-json')\n"}, fault)
     else:
@@ -602,3 +702,106 @@ def test_the_guard_set_and_paths_under_an_ignored_folder_are_no_overlap():
     assert not selection.overlaps([shared + ["fleet/test"]], [shared + ["arm/test"]])
     assert selection.overlaps([shared + ["fleet/test"]], [shared + ["fleet/test/test_x.py"]])
     assert not selection.overlaps([["guard/test/test_a.py"]], [["guard/test/test_a.py"]], ignore=("guard/test",))
+
+
+@pytest.mark.parametrize('wrapped', [False, True])
+@pytest.mark.parametrize('tier, invocations, reusable', [
+    ('full', [['test']], False),
+    ('full', NORMAL, True),
+    ('full', None, False),
+    ('full', NORMAL + [exclusive.DEDICATED], False),
+    ('full', NORMAL + [{'pkg/test': 0}], False),
+    ('full', NORMAL + ['pkg/test'], False),
+    ('full', NORMAL + [[1]], False),
+    ('affected', [['pkg/test']], True),
+])
+def test_restore_checks_full_plan_against_actual_main_sot_without_rewriting_records(
+        full_case, tier, invocations, reusable, wrapped):
+    case = full_case
+    base = git(case.main, 'rev-parse', 'HEAD')
+    candidate = git(case.wt, 'rev-parse', 'HEAD')
+    land.land_full.save(case.wt, 'feat/x', candidate, base, 'delta' if wrapped else tier, invocations,
+                        base_tier=tier if wrapped else None)
+    path = land.land_full._path(case.wt, 'feat/x')
+    original = path.read_bytes()
+    assert land.land_full.restore(case.wt, 'feat/x') == (base if reusable else None)
+    assert path.read_bytes() == original
+    # Immutable publication provenance still uses the unchanged bridge, not reuse eligibility.
+    assert land.land_full.bridge(case.wt, candidate, base, 'HEAD', 'main')
+
+
+@pytest.mark.parametrize('wrapped', [False, True])
+def test_restore_preserves_legacy_main_even_when_topic_has_unlanded_sot(repos, wrapped):
+    main, wt = repos
+    base = git(main, 'rev-parse', 'HEAD')
+    commit(wt, {'tools/harness/affected_exclusive.py': (ROOT / 'tools/harness/affected_exclusive.py').read_text(),
+                exclusive.TARGET: 'def test_stub(): pass\n'}, 'unlanded timing support')
+    candidate = git(wt, 'rev-parse', 'HEAD')
+    land.land_full.save(wt, 'feat/x', candidate, base, 'delta' if wrapped else 'full', [['test']],
+                        base_tier='full' if wrapped else None)
+    path = land.land_full._path(wt, 'feat/x')
+    original = path.read_bytes()
+    assert land.land_full.restore(wt, 'feat/x') == base
+    assert path.read_bytes() == original
+
+
+def test_legacy_root_only_full_record_triggers_normal_fresh_preparation(full_case):
+    case = full_case
+    base = git(case.main, 'rev-parse', 'HEAD')
+    candidate = git(case.wt, 'rev-parse', 'HEAD')
+    land.land_full.save(case.wt, 'feat/x', candidate, base, 'full', [['test']])
+    assert land.land_full.restore(case.wt, 'feat/x') is None
+    assert land.main(['--tests', 'auto']) == 0
+    assert ['pkg/test'] in body_calls(case)
+    record = land.land_record.read(case.main, git(case.main, 'rev-parse', 'HEAD'))
+    assert record['tier'] == 'affected' and ['test'] not in record['invocations']
+
+
+@pytest.mark.parametrize('bad', [
+    [exclusive.DEDICATED, exclusive.DEDICATED],
+    [exclusive.DEDICATED, {'pkg/test': 0}],
+    [exclusive.DEDICATED, 'pkg/test'],
+    [exclusive.DEDICATED, [1]],
+])
+def test_malformed_record_composition_stops_before_ff_and_preserves_existing_record(full_case, monkeypatch, bad):
+    case = full_case
+    before = git(case.main, 'rev-parse', 'HEAD')
+    candidate = git(case.wt, 'rev-parse', 'HEAD')
+    sentinel = land.land_record.write(case.wt, candidate, before, [['pkg/test']], [], tier='affected')
+    original = sentinel.read_bytes()
+    monkeypatch.setattr(land, 'select', lambda *a, **k: (bad, None))
+    monkeypatch.setattr(land.land_guards, 'first', lambda *a, **k: [])
+    monkeypatch.setattr(land, 'run_tests', lambda *a, **k: ['pytest ok'])
+    try:
+        result = land.main(['--tests', 'auto'])
+    finally:
+        assert git(case.main, 'rev-parse', 'HEAD') == before
+        assert sentinel.read_bytes() == original
+    assert result == 1
+
+
+def test_a_delta_turn_yields_only_with_a_ticket_and_a_clean_tier_under_it():
+    """D-889 27: 11-03 a LOAD-FLAKY pretest (no tier) yielded its turn twice and saved nothing."""
+    selection = load_selection()
+    base = {"tier": "affected", "invocations": [["mine/test"]]}
+    assert selection.delta_yields("ticket.json", base)
+    assert not selection.delta_yields("ticket.json", None)
+    assert not selection.delta_yields(None, base)
+
+
+def test_load_flaky_ids_keep_the_invocation_environment_and_refuse_unreadable_lines():
+    """D-970 4: a browser id rerun without ROSY_RUN_BROWSER_TESTS=1 would skip and look green."""
+    selection = load_selection()
+    line = ("pytest ROSY_RUN_BROWSER_TESTS=1 ops/test/test_x_browser.py ok (run-pre-3.txt), "
+            "LOAD-FLAKY ['ops/test/test_x_browser.py::test_a']")
+    assert selection.load_flaky_ids(["pytest a/test ok (run-pre-1.txt)", line]) == [
+        ["ROSY_RUN_BROWSER_TESTS=1", "ops/test/test_x_browser.py::test_a"]]
+    assert selection.load_flaky_ids(["pytest a/test ok (run-pre-1.txt)"]) == []
+    assert selection.load_flaky_ids(["LOAD-FLAKY node"]) is None
+
+
+def test_a_delta_turn_stops_yielding_after_two_delta_records():
+    """D-970 1: 11-03 one ticket yielded three times while main kept moving past it."""
+    selection = load_selection()
+    assert selection.delta_yields("ticket.json", {"tier": "affected", "yields": 1})
+    assert not selection.delta_yields("ticket.json", {"tier": "affected", "yields": selection.MAX_DELTA_YIELDS})

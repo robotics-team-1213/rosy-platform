@@ -3,9 +3,10 @@ turn will most likely test, outside the lock.
 
 On 2026-10-27 a landing took 2.6 turns: a prepare took 15-60 min, two to four landings moved main meanwhile, and
 the turn's selection of main's delta outgrew the turn cap, so the ticket prepared again and main moved again.
-After its own prepare a ticket predicts main as main plus each waiting ticket ahead of it (their land_full
-candidates, in queue order), merges itself on top (``land.merge``, so the records are resolved as at a turn) and
-runs ``select(<its FULL main>, head=<predicted main>, landed=True)`` there: the selection its turn would run. The
+After its own prepare a ticket predicts main as main plus its ready turn blockers (their land_full
+candidates, in queue order, using ``land_queue.blockers``), merges itself on top (``land.merge``, so the records
+are resolved as at a turn) and runs ``select(<its FULL main>, head=<predicted main>, landed=True)`` there:
+the selection its turn would run. The
 predicted tree is kept in its land_full record. At the turn, when the merged candidate's tree equals it up to the
 records ``land_merge.resolver`` regenerates, that selection already passed on this tree: the turn runs only the
 root test/ part (the guards read those records) and lands. Otherwise the turn runs as before, never worse.
@@ -21,8 +22,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from harness.affected_exclusive import ENV
 from land_merge import resolver
 from land_selection import SAFETY_TRIGGER, _affected
+from harness import affected_exclusive
 
 KEY = "spec"
 HOLDER = "rosy-land-spec"  # <git-common-dir>/rosy-land-spec/<branch>: the speculative worktree, like rosy-publish
@@ -37,9 +40,9 @@ def _record(land, wt: Path, branch: str) -> dict | None:
 
 
 def chain(land, wt: Path, python: str, qdir: Path, ticket: Path) -> list[str]:
-    """Candidates of the waiting tickets ahead, in queue order, up to the first that nobody stacks on."""
+    """Candidates of ready turn blockers, in queue order, up to the first that nobody stacks on."""
     found = []
-    for row in land.land_queue.ahead(qdir, ticket):
+    for row in land.land_queue.blockers(qdir, ticket):
         if row.get("status") in ("preparing", "pending"):
             continue
         record = _record(land, wt, str(row.get("branch", "")))
@@ -55,6 +58,8 @@ def chain(land, wt: Path, python: str, qdir: Path, ticket: Path) -> list[str]:
 
 def prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, ticket: Path | None) -> None:
     """After the prepare: test the predicted turn and keep its tree in the land_full record. Never stops the landing."""
+    if args.tests == "full":
+        return
     record = _record(land, wt, branch)
     if ticket is None or not record or record.get("tier") not in ("full", "affected"):
         return
@@ -120,15 +125,36 @@ def held(land, wt: Path, branch: str, full_main: str, candidate: str) -> list[li
                               missing=[c for c in spec["chain"] if c not in landed],
                               outside=None if moved is None else max(0, moved - len(landed)))
         return None
-    root = [kept for kept in ([p for p in inv if p.startswith("test/") or p == "test"] for inv in spec["invocations"])
-            if kept]
+    invocations = affected_exclusive.compose(spec["invocations"], available=(wt / affected_exclusive.TARGET).is_file())
+    root = root_part(invocations)
     land.land_events.emit("speculation", stage="turn", held=True, differ=differ[:20])
     guards = [g for g in land.land_guards.GUARDS if (wt / g).exists()]
-    return root or ([guards] if guards else [])  # never an empty invocation: bare pytest would collect anything
+    return affected_exclusive.compose(root or ([guards] if guards else []),
+                                      available=(wt / affected_exclusive.TARGET).is_file())
 
 
 def with_spec(land, wt: Path, branch: str, prepared: dict | None) -> dict | None:
     """``prepared`` for the land record of a held turn: its tier, plus the speculated selection (it passed on this
     tree up to the records). The record's base stays the turn's main, an ancestor of the landed commit."""
     spec = ((_record(land, wt, branch) or {}).get(KEY) or {})
-    return {**prepared, "invocations": prepared["invocations"] + spec.get("invocations", [])} if prepared else None
+    if not prepared:
+        return None
+    original = prepared["invocations"]
+    combined = affected_exclusive.compose(original, spec.get("invocations", []),
+                                           available=(wt / affected_exclusive.TARGET).is_file())
+    # Keep main's logical-row policy: only remove speculative rows already covered by preparation.
+    more = [inv for inv in combined[len(original):] if inv not in original]
+    return {**prepared, "invocations": original + more}
+
+
+def root_part(invocations: list[list[str]]) -> list[list[str]]:
+    """Omit no-root calls; project plain calls and keep root calls with env/options whole, including values."""
+    result = []
+    for inv in invocations:
+        if not any(p == "test" or p.startswith("test/") for p in inv):
+            continue
+        kept = inv if any(w.startswith('-') or ENV.match(w) for w in inv) else [
+            p for p in inv if p.startswith("test/") or p == "test"]
+        if kept:
+            result.append(kept)
+    return result

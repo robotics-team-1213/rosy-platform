@@ -6,7 +6,9 @@ runs as __main__. Keep its public wrappers and defaults in the gateway.
 
 from __future__ import annotations
 
+import ast
 import json
+from harness import affected_exclusive
 import sys
 from pathlib import Path
 
@@ -67,8 +69,69 @@ def _guards_only(invocations: list[list[str]], guards) -> list[list[str]]:
             if paths(inv) and all(any(p == g or p.startswith(g + "/") for g in guards) for p in paths(inv))]
 
 
+DELTA_NOTE = "main's landed delta reaches whole suite folders: they run before the turn"  # D-889 27
+
+
+MAX_DELTA_YIELDS = 2  # D-970 1: then the turn (30 min budget after two send-backs) runs the suite folders
+
+
+def delta_yields(ticket, base: dict | None) -> bool:
+    """Whether a DELTA_NOTE turn yields to run the suites before the turn: only with a queue ticket and a clean
+    earlier tier for the delta record to stand on. 11-03 14:18-14:34 a LOAD-FLAKY pretest (no tier) yielded twice
+    and saved nothing; without a base the suites run in the turn as before (D-889 27). After MAX_DELTA_YIELDS the
+    turn runs them itself: 11-03 15:58-18:07 one ticket yielded three times while main kept moving past it."""
+    return ticket is not None and base is not None and int(base.get("yields") or 0) < MAX_DELTA_YIELDS
+
+
+def load_flaky_ids(summary) -> list[list[str]] | None:
+    """D-970 4: one invocation per node id a summary marks LOAD-FLAKY (land_checks: failed under load, passed
+    alone), with its invocation's environment words (ROSY_RUN_BROWSER_TESTS=1: without it a browser id skips and
+    looks green). None when a LOAD-FLAKY line cannot be read, so the caller keeps the evidence unusable as before."""
+    runs: list[list[str]] = []
+    for line in summary:
+        if "LOAD-FLAKY " not in line:
+            continue
+        head, _, tail = line.partition("LOAD-FLAKY ")
+        try:
+            found = ast.literal_eval(tail.strip())
+        except (ValueError, SyntaxError):
+            return None
+        if not isinstance(found, list) or not all(isinstance(i, str) and i for i in found):
+            return None
+        env = [w for w in head.split() if w.startswith("ROSY_") and "=" in w]
+        runs += [env + [i] for i in found]
+    return runs
+
+
+def _suite_dirs(inv: list[str]) -> bool:
+    """Whether an invocation names a whole test folder (not single files or node ids)."""
+    return any(not w.startswith(("ROSY_", "-")) and not w.split("::")[0].endswith(".py") for w in inv)
+
+
 def _unique(invocations: list[list[str]]) -> list[list[str]]:
     return [list(inv) for inv in dict.fromkeys(map(tuple, invocations))]
+
+
+
+def _unique_browsers(wt: Path, invocations: list[list[str]]) -> list[list[str]]:
+    """Keep first files per identical browser environment, only by shrinking existing safe chunks."""
+    seen, result = {}, []
+    for inv in _unique(invocations):
+        n = 0
+        while n < len(inv) and affected_exclusive.ENV.match(inv[n]):
+            n += 1
+        env, paths = inv[:n], inv[n:]
+        if ("ROSY_RUN_BROWSER_TESTS=1" not in env or not paths
+                or any(not p.endswith(".py") or p.startswith("-") or "::" in p
+                       or not (wt / p).is_file() for p in paths)):
+            result.append(inv)  # Unknown arguments keep the existing exact-argv rule.
+            continue
+        used = seen.setdefault(tuple(env), set())
+        kept = list(dict.fromkeys(p for p in paths if p not in used))
+        used.update(paths)
+        if kept:
+            result.append(env + kept)
+    return result
 
 
 def select(land, wt: Path, base: str, python: str, head: str | None = None,
@@ -90,20 +153,22 @@ def select(land, wt: Path, base: str, python: str, head: str | None = None,
             return []
         delta = land.browser_tier(wt, base, head)
         if reach is None:
-            return _unique(own + delta)
+            return _unique_browsers(wt, own + delta)
         # D-889 19/24: like the own pytest invocations (18), only the own browser chunks the delta's browser chunks
         # reach. Not its suites: a suite folder (operations/fleet/test) holds the browser files, so every chunk
         # counted as reached (11-02 03:32, a 6-invocation turn ran 7 serial browser chunks for 34 min). The
         # nightly full run covers browser tests (addendum 12).
         # The delta's own chunks too only where this branch's reach them (D-889 22's rule): 11-02 04:06 a turn reran
         # 10 delta chunks of 8 min for a branch whose own chunks touched few of them.
-        return _unique([inv for inv in delta if overlaps(own, [inv])] + [inv for inv in own if overlaps(delta, [inv])])
+        return _unique_browsers(wt, [inv for inv in delta if overlaps(own, [inv])]
+                                + [inv for inv in own if overlaps(delta, [inv])])
 
     if (wt / "tools/harness/affected_tests.py").is_file():
         try:
             sel = _affected(land, wt, python, base, head, full)
             if full:
-                if sel["mode"] != "full" or not valid_plan(sel["full_invocations"]) or ["test"] not in sel["full_invocations"]:
+                if (sel["mode"] != "full" or not valid_plan(sel["full_invocations"])
+                        or not affected_exclusive.canonical_full(sel["full_invocations"])):
                     raise ValueError("forced selector did not supply the canonical whole FULL plan")
                 return sel["full_invocations"] + all_browsers(land, wt, python), "explicit canonical FULL"
             # D-889 3 (combined affected, not FULL per cycle): a delta that escalated landed on main with its own
@@ -131,7 +196,12 @@ def select(land, wt: Path, base: str, python: str, head: str | None = None,
                     return _unique(_guards_only(sel["local_invocations"], guards) + browsers(sel["local_invocations"])), None
                 if len(reached) < len(mine):
                     print(f"[tests] main's delta reaches {len(reached)} of this branch's {len(mine)} invocations: those rerun")
-                return _unique(sel["local_invocations"] + reached + browsers(sel["local_invocations"])), None
+                # D-889 27: whole suite folders here ran 15-22 min inside the lock and gave the turn back at its
+                # cap (11-03, 17 stalls over 30 min); land.py runs them before the turn under the "delta" tier.
+                big = [inv for inv in sel["local_invocations"] + reached
+                       if _suite_dirs(inv) and not _guards_only([inv], guards)]
+                note = f"{DELTA_NOTE} ({len(big)} suite folder invocation(s))" if big else None
+                return _unique(sel["local_invocations"] + reached + browsers(sel["local_invocations"])), note
             if sel["mode"] == "full":
                 # D-762 stage 0: a FULL-class landing runs the whole tier on the lab PCs, never
                 # guards alone; not via GitHub, which would publish unpushed main commits.

@@ -18,7 +18,7 @@ The whole product: device-local execution, site coordination, observation, human
 
 ### Device middleware
 
-The local contract and control boundary of one robot or workcell. It validates and accepts permitted requests, exposes observed state and effective capability, arbitrates the single final command owner, and handles loss or stale state locally. Pinky CORE implements this role for the mobile base. An OMX local controller must own final arm commands after its separate device acceptance; mounting OMX on Pinky does not transfer that authority to CORE or Fleet (D-296).
+The local contract and control boundary of one robot or workcell. It validates and accepts permitted requests, exposes observed state and effective capability, arbitrates the single final command owner, and handles loss or stale state locally. Pinky CORE implements this role for the mobile base. An OMX local controller must own final arm commands after its separate device acceptance; mounting OMX on Pinky does not transfer that authority to CORE or Fleet (D-296). On an OMX control PC the OMX owner is the arm's counterpart of Pinky CORE; the cell control unit beside it (D-960) is a separate role that owns the shared ledger and admission for the whole arm set, co-located only because local stop uses a host-local socket (D-965).
 
 *Avoid:* using `middleware` alone to mean both this local role and the site Fleet service.
 

@@ -646,6 +646,7 @@
         "applications/fleet/web/installation/install.js",
         "applications/fleet/web/shared/account-page.js",
         "applications/fleet/web/shared/development-auth.js",
+        "applications/fleet/web/shared/fleet-header.js",
         "applications/fleet/web/shared/login-page.js",
         "applications/fleet/web/shared/login-return.js",
         "applications/fleet/web/shared/password-login.js",
@@ -709,14 +710,6 @@
           "resolution": "literal-or-template",
           "request_ids": [
             "GET:/api/fleet/auth/session"
-          ]
-        },
-        {
-          "consumer": "applications/fleet/web/shared/development-auth.js",
-          "expression": "/api/fleet/auth/development-session",
-          "resolution": "literal-or-template",
-          "request_ids": [
-            "POST:/api/fleet/auth/development-session"
           ]
         },
         {
@@ -806,6 +799,14 @@
           "request_ids": [
             "GET:/api/fleet/auth/session"
           ]
+        },
+        {
+          "consumer": "applications/fleet/web/shared/fleet-header.js",
+          "expression": "/api/fleet/auth/connection",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/auth/connection"
+          ]
         }
       ],
       "requests": [
@@ -813,7 +814,7 @@
           "id": "GET:/api/fleet/auth/authorize",
           "method": "GET",
           "path": "/api/fleet/auth/authorize",
-          "implementation": "operations/fleet/fleet/server/auth/account_authority_routes.py",
+          "implementation": "operations/account/rosy_account/account_authority_routes.py",
           "handler": "authorize",
           "expected_statuses": [
             302
@@ -838,7 +839,7 @@
           "status": "verified",
           "verification_scope": "Observed passing HTTP test; successful response",
           "contract_tests": [
-            "operations/fleet/test/test_cli.py"
+            "operations/fleet/test/test_development_session.py"
           ],
           "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/auth/connection"
@@ -847,7 +848,7 @@
           "id": "GET:/api/fleet/auth/session",
           "method": "GET",
           "path": "/api/fleet/auth/session",
-          "implementation": "operations/fleet/fleet/server/auth/password_routes.py",
+          "implementation": "operations/account/rosy_account/password_routes.py",
           "handler": "fleet_auth_session",
           "expected_statuses": [
             200
@@ -855,7 +856,8 @@
           "status": "verified",
           "verification_scope": "Observed passing HTTP test; successful response",
           "contract_tests": [
-            "operations/fleet/test/test_account_deployment.py"
+            "operations/fleet/test/test_account_deployment.py",
+            "operations/fleet/test/test_password_session.py"
           ],
           "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/auth/session"
@@ -884,12 +886,12 @@
           "implementation": "operations/fleet/fleet/server/auth/development_session.py",
           "handler": "fleet_development_session",
           "expected_statuses": [
-            201
+            403
           ],
           "status": "verified",
-          "verification_scope": "Observed passing HTTP test; successful response",
+          "verification_scope": "Observed passing HTTP test; retired development credential issuance is refused",
           "contract_tests": [
-            "operations/fleet/test/test_cli.py"
+            "operations/fleet/test/test_development_session.py"
           ],
           "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/auth/development-session"
@@ -898,7 +900,7 @@
           "id": "POST:/api/fleet/auth/login",
           "method": "POST",
           "path": "/api/fleet/auth/login",
-          "implementation": "operations/fleet/fleet/server/auth/password_routes.py",
+          "implementation": "operations/account/rosy_account/password_routes.py",
           "handler": "fleet_auth_login",
           "expected_statuses": [
             204
@@ -906,7 +908,8 @@
           "status": "verified",
           "verification_scope": "Observed passing HTTP test; successful response",
           "contract_tests": [
-            "operations/fleet/test/test_app_frontend_http_contracts.py"
+            "operations/fleet/test/test_app_frontend_http_contracts.py",
+            "operations/fleet/test/test_account_ledger.py"
           ],
           "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/auth/login"
@@ -915,7 +918,7 @@
           "id": "POST:/api/fleet/auth/logout",
           "method": "POST",
           "path": "/api/fleet/auth/logout",
-          "implementation": "operations/fleet/fleet/server/auth/password_routes.py",
+          "implementation": "operations/account/rosy_account/password_routes.py",
           "handler": "fleet_auth_logout",
           "expected_statuses": [
             204
@@ -936,6 +939,7 @@
           "steps": [
             {
               "request_ids": [
+                "GET:/api/fleet/auth/connection",
                 "POST:/api/fleet/auth/login",
                 "POST:/api/fleet/auth/logout",
                 "GET:/api/fleet/auth/session"
@@ -946,8 +950,8 @@
           "scenario_id": "auth.happy",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[auth]",
           "sample_status": "verified",
-          "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
-          "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
+          "source_revision": "023d9915a34efb4cf88bd198badc30101fe196dc",
+          "test_scope": "Passing browser fetch checks connection readiness, refused retired development issuance, password login and logout session readback, then renders the login document; form interactions tested separately"
         },
         {
           "id": "auth.refused",
@@ -955,6 +959,7 @@
           "steps": [
             {
               "request_ids": [
+                "POST:/api/fleet/auth/development-session",
                 "POST:/api/fleet/auth/login",
                 "POST:/api/fleet/auth/logout",
                 "GET:/api/fleet/auth/session"
@@ -965,8 +970,8 @@
           "scenario_id": "auth.refused",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[auth]",
           "sample_status": "verified",
-          "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
-          "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
+          "source_revision": "023d9915a34efb4cf88bd198badc30101fe196dc",
+          "test_scope": "Passing browser fetch checks connection readiness, refused retired development issuance, password login and logout session readback, then renders the login document; form interactions tested separately"
         },
         {
           "id": "auth.terminal",
@@ -984,8 +989,8 @@
           "scenario_id": "auth.terminal",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[auth]",
           "sample_status": "verified",
-          "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
-          "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
+          "source_revision": "023d9915a34efb4cf88bd198badc30101fe196dc",
+          "test_scope": "Passing browser fetch checks connection readiness, refused retired development issuance, password login and logout session readback, then renders the login document; form interactions tested separately"
         }
       ]
     },
@@ -1026,7 +1031,7 @@
           "id": "GET:/api/fleet/auth/accounts",
           "method": "GET",
           "path": "/api/fleet/auth/accounts",
-          "implementation": "operations/fleet/fleet/server/auth/account_routes.py",
+          "implementation": "operations/account/rosy_account/account_routes.py",
           "handler": "accounts",
           "expected_statuses": [
             200
@@ -1043,7 +1048,7 @@
           "id": "GET:/api/fleet/auth/setup",
           "method": "GET",
           "path": "/api/fleet/auth/setup",
-          "implementation": "operations/fleet/fleet/server/auth/account_routes.py",
+          "implementation": "operations/account/rosy_account/account_routes.py",
           "handler": "setup",
           "expected_statuses": [
             200
@@ -1060,7 +1065,7 @@
           "id": "PATCH:/api/fleet/auth/accounts/{account_id}",
           "method": "PATCH",
           "path": "/api/fleet/auth/accounts/{account_id}",
-          "implementation": "operations/fleet/fleet/server/auth/account_routes.py",
+          "implementation": "operations/account/rosy_account/account_routes.py",
           "handler": "update",
           "expected_statuses": [
             200
@@ -1077,7 +1082,7 @@
           "id": "POST:/api/fleet/auth/accounts",
           "method": "POST",
           "path": "/api/fleet/auth/accounts",
-          "implementation": "operations/fleet/fleet/server/auth/account_routes.py",
+          "implementation": "operations/account/rosy_account/account_routes.py",
           "handler": "create",
           "expected_statuses": [
             201
@@ -1094,7 +1099,7 @@
           "id": "POST:/api/fleet/auth/accounts/{account_id}/reset-password",
           "method": "POST",
           "path": "/api/fleet/auth/accounts/{account_id}/reset-password",
-          "implementation": "operations/fleet/fleet/server/auth/account_routes.py",
+          "implementation": "operations/account/rosy_account/account_routes.py",
           "handler": "reset",
           "expected_statuses": [
             200
@@ -1111,7 +1116,7 @@
           "id": "POST:/api/fleet/auth/accounts/{account_id}/revoke-sessions",
           "method": "POST",
           "path": "/api/fleet/auth/accounts/{account_id}/revoke-sessions",
-          "implementation": "operations/fleet/fleet/server/auth/account_routes.py",
+          "implementation": "operations/account/rosy_account/account_routes.py",
           "handler": "revoke",
           "expected_statuses": [
             200
@@ -1222,7 +1227,7 @@
           "id": "GET:/api/fleet/auth/profile",
           "method": "GET",
           "path": "/api/fleet/auth/profile",
-          "implementation": "operations/fleet/fleet/server/auth/password_routes.py",
+          "implementation": "operations/account/rosy_account/password_routes.py",
           "handler": "fleet_auth_profile",
           "expected_statuses": [
             200
@@ -1239,7 +1244,7 @@
           "id": "PATCH:/api/fleet/auth/profile",
           "method": "PATCH",
           "path": "/api/fleet/auth/profile",
-          "implementation": "operations/fleet/fleet/server/auth/password_routes.py",
+          "implementation": "operations/account/rosy_account/password_routes.py",
           "handler": "fleet_auth_profile_update",
           "expected_statuses": [
             200
@@ -1256,7 +1261,7 @@
           "id": "POST:/api/fleet/auth/change-password",
           "method": "POST",
           "path": "/api/fleet/auth/change-password",
-          "implementation": "operations/fleet/fleet/server/auth/password_routes.py",
+          "implementation": "operations/account/rosy_account/password_routes.py",
           "handler": "fleet_auth_change_password",
           "expected_statuses": [
             204
@@ -1264,7 +1269,8 @@
           "status": "verified",
           "verification_scope": "Observed passing HTTP test; successful response",
           "contract_tests": [
-            "operations/fleet/test/test_account_ledger.py"
+            "operations/fleet/test/test_account_ledger.py",
+            "operations/fleet/test/test_self_profile.py"
           ],
           "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/auth/change-password"
@@ -4592,7 +4598,8 @@
       ],
       "consumers": [
         "applications/fleet/web/devices/camera-pairing.js",
-        "applications/fleet/web/installation/camera-peer.js"
+        "applications/fleet/web/installation/camera-peer.js",
+        "applications/fleet/web/installation/usb-camera.js"
       ],
       "availability": "configured capability and authorized role; see backend contract",
       "calls": [
@@ -4637,9 +4644,52 @@
           "request_ids": [
             "GET:/api/fleet/pairing/v1/pending"
           ]
+        },
+        {
+          "consumer": "applications/fleet/web/installation/usb-camera.js",
+          "expression": "/api/fleet/workcell-observations",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/workcell-observations/usb-devices",
+            "POST:/api/fleet/workcell-observations/{workcell_id}/usb-devices/{key}/decision"
+          ]
         }
       ],
       "requests": [
+        {
+          "id": "GET:/api/fleet/workcell-observations/usb-devices",
+          "method": "GET",
+          "path": "/api/fleet/workcell-observations/usb-devices",
+          "implementation": "operations/fleet/fleet/server/recognition/usb_camera_decisions.py",
+          "handler": "listing",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response (D-963, in-process, no device)",
+          "contract_tests": [
+            "operations/fleet/test/test_usb_camera_decisions.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/workcell-observations/usb-devices"
+        },
+        {
+          "id": "POST:/api/fleet/workcell-observations/{workcell_id}/usb-devices/{key}/decision",
+          "method": "POST",
+          "path": "/api/fleet/workcell-observations/{workcell_id}/usb-devices/{key}/decision",
+          "implementation": "operations/fleet/fleet/server/recognition/usb_camera_decisions.py",
+          "handler": "decide",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response (D-963, in-process, no device)",
+          "contract_tests": [
+            "operations/fleet/test/test_usb_camera_decisions.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/workcell-observations/{workcell_id}/usb-devices/{key}/decision"
+        },
         {
           "id": "GET:/api/fleet/pairing/v1/credentials",
           "method": "GET",

@@ -35,7 +35,10 @@ def correct(cell, aim_xy, replan, params=None, fk=fk_xy) -> dict:
             return {"verdict": "pass", "dx_mm": round(dx, 1), "dy_mm": round(dy, 1), "total_mm": round(math.hypot(dx, dy), 1), "iterations": rows}
         if i == int(prm.get(params, "reach.max_iter")) or math.hypot(dx + ex, dy + ey) > top:
             break
-        dx, dy = dx + ex, dy + ey
+        # reach.gain < 1 when the arm moves more than told: arm_b went 6.5 mm for 4.4 and 5 for 2.1 and swung
+        # -4.4 / +2.1 / -2.9 mm round the aim until refused (2026-11-03)
+        g = prm.get(params, "reach.gain")
+        dx, dy = dx + g * ex, dy + g * ey
         for command in (f"load {replan(dx, dy)}", "goto above_pick"):
             if not cell.act(command).get("ok"):
                 rows[-1]["why"] = f"{command.split()[0]} refused"
@@ -60,16 +63,17 @@ def hook(config: dict, cell, target: dict, write_library):
 
 
 def chain(*hooks):
-    """Run the hover hooks in order (reach, then wrist); the first refusal stops; the last answer otherwise."""
+    """Run the hover hooks in order (reach, then wrist); the first refusal stops; the last answer otherwise, with every
+    answer under "hooks": the attempt kept only the wrist's pass and hid six unseen looks and a raised one (2026-11-03)."""
     live = [h for h in hooks if h is not None]
     if not live:
         return None
 
     def run():
-        out = None
+        outs = []
         for h in live:
-            out = h()
-            if out["verdict"] == "refuse":
-                return out
-        return out
+            outs.append(h())
+            if outs[-1]["verdict"] == "refuse":
+                break
+        return {**outs[-1], "hooks": outs}
     return run

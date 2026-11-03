@@ -6,12 +6,12 @@ import sys
 
 import numpy as np
 
-for holder in ('middleware/perception', 'contracts/foundation'):
+for holder in ('middleware/perception', 'integrations/perception', 'contracts/foundation'):
     path = str(Path(__file__).resolve().parents[3] / holder)
     if path not in sys.path:
         sys.path.insert(0, path)
 
-from control.sensing.perception.learned.manifest import road_delivery_error
+from perception_runtime.perception.learned.manifest import road_delivery_error
 
 # D-554 lane-derived labels, or D-563 map-projected labels (same lineage and quality gates).
 V13_ANNOTATIONS = ({"annotation_origin": "derived_from_reviewed_lanes", "adr": "D-554"},

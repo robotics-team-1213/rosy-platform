@@ -15,6 +15,7 @@ passed in so its ``Stop`` is the one the caller catches.
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 import threading
@@ -25,6 +26,9 @@ import land_queue
 
 MAX_PREPARING = 6
 POLL = 15.0
+# D-889 28: speculation (addendum 3) ran 9.8 h of test-PC time in 6 h on 11-03 and its tree was held at 3 of 34
+# turns, while the ticket stayed "preparing" behind it. It runs only when this is "1".
+SPECULATE_ENV = "ROSY_LAND_SPECULATE"
 
 
 def rules() -> str | None:
@@ -194,10 +198,29 @@ def _prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, 
         raise land.Stop(f"HEAD changed during pretest; {candidate[:10]} was tested; retry the landing")
     clean = land.land_selection.eligible(land, guarded + tested)
     land.land_selection.require_eligible(land, args, clean, guarded + tested)
-    tier = land.land_selection.tier(land, guarded + tested, bool(note))  # carried: restore() refuses it
+    delta = bool(note) and note.startswith(land.land_selection.DELTA_NOTE) and not explicit
+    # D-970 4: a LOAD-FLAKY id no longer voids the whole pretest; the record keeps it and the turn reruns it.
+    # An explicit FULL witness stays strict, and so does a summary whose LOAD-FLAKY line cannot be read.
+    flaky = None if explicit else land.land_selection.load_flaky_ids(guarded + tested)
+    judged = [line for line in guarded + tested if "LOAD-FLAKY" not in line] if flaky else guarded + tested
+    tier = land.land_selection.tier(land, judged, bool(note) and not delta)  # carried: restore() refuses it
     anchor = None
+    if delta:
+        # D-889 27: main's delta suites passed here outside the lock. They extend the earlier tier over the new
+        # main ("delta"), never stand in for it; with no clean earlier tier the record stays as it was.
+        base = land.land_full.prepared(wt, branch, land.land_full.restore(wt, branch))
+        if tier is not None and base is not None:
+            try:
+                combined = land.land_record.plan(invocations, base,
+                                                  available=(wt / land.land_record.TARGET).is_file())
+            except ValueError as exc:
+                raise land.Stop(f"invalid delta preparation plan: {exc}") from exc
+            land.land_full.save(wt, branch, candidate, main_sha, "delta", combined,
+                                base_tier=base["tier"], flaky=land.land_full.flaky(wt, branch) + (flaky or []),
+                                yields=int(base.get("yields") or 0) + 1)
+        tier = "delta" if tier is not None and base is not None else None
     # Keeping an older base with --no-cache would repeat overtime on every turn.
-    if tier == "affected" and not args.no_cache:
+    elif tier == "affected" and not args.no_cache:
         anchor_main = land.land_full.restore(wt, branch)
         anchor = land.land_full.prepared(wt, branch, anchor_main)
     keep_full = (anchor and anchor["tier"] == "full" and anchor["invocations"]
@@ -207,9 +230,12 @@ def _prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, 
     if keep_full:
         # A delta cannot replace a FULL origin; retain its exact base and invocations.
         print(f"[land] retained FULL preparation {anchor['candidate'][:10]} over {anchor['main'][:10]}", flush=True)
-    else:
-        land.land_full.save(wt, branch, candidate, main_sha, tier, invocations)
+    elif not delta:
+        land.land_full.save(wt, branch, candidate, main_sha, tier, invocations, flaky=flaky)
     if explicit:
         args._full_witness = dict(candidate=candidate, main=main_sha, invocations=[list(i) for i in invocations], env=env)
+    if ticket is not None:
+        land_queue.set_status(ticket, "preparing", tested=land.land_full.restore(wt, branch) or "")
     land.land_events.emit("prepared", tier=tier, seconds=round(time.monotonic() - began))
-    land.land_speculate.prepare(land, wt, branch, args, python, qdir, ticket)
+    if os.environ.get(SPECULATE_ENV) == "1":
+        land.land_speculate.prepare(land, wt, branch, args, python, qdir, ticket)

@@ -8,7 +8,7 @@
 
 ## Purpose
 
-Static Fleet console UI (vanilla ES modules, no build step), served at `/console/assets/*`. It talks only to the Fleet server (`/api/fleet/*`), never to a robot API directly. The physical source holder is `applications/fleet/web`. Fleet static mapping installs it as the existing `fleet.server.web` package and `fleet/server/web` resource path. Backend source remains `operations/fleet/fleet/server`. D-518 shared-read modules and the two shared stylesheets live in `shared/`. The Cell document lives in `cell/`. Browsers still request `/console/assets/<basename>`.
+Static Fleet console UI (vanilla ES modules, no build step), served at `/console/assets/*`. Operational screens use the Fleet server (`/api/fleet/*`), never a robot API directly. Central login, profile and account administration assets are also served by [Account](../../../operations/account/AGENTS.md); the compatibility URL prefix does not determine backend ownership. The physical source holder is `applications/fleet/web`. Fleet static mapping installs it as the existing `fleet.server.web` package and `fleet/server/web` resource path. Fleet operational backend source remains `operations/fleet/fleet/server`. D-518 shared-read modules and the two shared stylesheets live in `shared/`. The Cell document lives in `cell/`. Browsers still request `/console/assets/<basename>`.
 
 Source-move verification is recorded in [progress.md](progress.md), [logs.md](logs.md), and the generated [index.md](index.md). D-637 keeps the Fleet distribution and installed `fleet.server.web` resource identity.
 
@@ -22,7 +22,7 @@ Source-move verification is recorded in [progress.md](progress.md), [logs.md](lo
 | `shared/fleet-client.js`, `shared/request.js` | Console transport and Fleet response interpretation. New imports use `/console/assets/`; Fleet retains only the two exact former `/common/` URLs as compatibility aliases. |
 | `work/work.css`, `shared/power-action.js`, `shared/area-nav.js` | D-766 splits: the work-area sheet, the robot card sleep/wake button (D-440 6, out of `roster.js`), the address-view area selection (D-741 6·7, out of `console.js`) |
 | `console.js` | Shell: auth state, `call()`, render, polling cadence; composes the modules below |
-| `console-auth.js`, `console-goal.js`, `console-refresh.js` | D-798 3.2 splits of `console.js`: lock/unlock, session, token and password login, development mode; roster keys, click-to-goal and the operator pin; dispatch band and rearm, site path, state poll, cancel-all |
+| `console-auth.js`, `console-goal.js`, `console-refresh.js` | D-798 3.2 splits of `console.js`: lock/unlock, Fleet application session and Account login, development connection metadata; roster keys, click-to-goal and the operator pin; dispatch band and rearm, site path, state poll, cancel-all |
 | `map-view.js` | Site map grid, coordinate transforms, robots, goals, draw order |
 | `map-overlays.js`, `map-polling.js` | D-798 3.2 splits of `map-view.js`: chips, formation, mediation, sightings, camera tracking and site overlays; site-map, grid, traffic, guide and sightings polling and the traffic toggle |
 | `camera-backdrop.js` | D-513 7 / D-515 / D-560 camera picture path: Vision's map plane (`shared/vision-view.js` `createPlaneFeed`) drawn on `toPx`, the D-515 top-down warp (`camera-warp.js` math) only as the fallback, large view/thumbnail turn, Vision frame binding. `map-view.js` passes its draw hook and `toPx` |
@@ -43,7 +43,7 @@ Source-move verification is recorded in [progress.md](progress.md), [logs.md](lo
 | `shared/field-warp.js` | Shared `warpImage` read (D-518). The install proposal screen stays in `field-view.js` |
 | `enrollment.js`, `camera-pairing.js` | Robot enrollment (D-361) and camera pairing approval (D-341) panels |
 | `shared/address-drift.js`, `state-age.js`, `localization-badge.js`, `shared/poll-gate.js`, `shared/authorization.js` | Pure helpers: address drift text, queue state staleness (D-493), localization badge, 404 poll gate, role-lock reasons |
-| `login.html`, `shared/login-page.js`, `shared/login-return.js`, `shared/password-login.js`, `shared/password-login.css` | D-683 우측 로그인/계정과 전용 로그인 문서. D-519 인증 API·HttpOnly 쿠키를 유지하며 허용된 Fleet 업무 주소로만 복귀한다. 지도/Cell은 새 탭 로그인으로 입력을 보존한다. 로그아웃은 세션 부재를 확인하며 Bearer 해제는 서버 폐기가 아니다. 토큰 접속과 화면 표시는 계정 단추 아래에 둔다(D-741) |
+| `login.html`, `shared/login-page.js`, `shared/login-return.js`, `shared/password-login.js`, `shared/password-login.css` | D-683 우측 로그인/계정과 전용 로그인 문서. D-962의 Account 인증과 Fleet receiver 세션을 사용하며 허용된 Fleet 업무 주소로만 복귀한다. 지도/Cell은 새 탭 로그인으로 입력을 보존한다. 로그아웃은 세션 부재를 확인하며 Bearer 해제는 서버 폐기가 아니다. 개발 연결도 사람 로그인이 필요하다. |
 | `shared/fleet-header.js`, `shared/fleet-header.css` | D-540 2 / D-741 3 공통 앱 바 — 네 문서가 같은 `<ui-topbar>` 마크업(`test_fleet_header.py`가 글자 그대로 고정)을 쓰고 연결 글(`실시간`·`지연`·`연결 끊김`)·시계·알림 수·계정 단추의 역할 글·개발 배지·계정 칸 접힘·비상 정지 규칙(401이면 `접속이 필요합니다`, 보기 전용이면 운영자 사유, 모름은 눌림)을 이 모듈 하나로 그린다. 한 줄이고 셸 칸(`.fleet-shell`)의 폭으로 접힌다. 로봇 연결 수는 관제 문서의 지도 머리에 있다. 문서 시트는 머리를 칠하지 않는다 |
 | `package.json` | `{"type": "module"}` so node can run the tests |
 | `calibration/` | Camera field/map proposal views, layer calculations and measured-preview approval view. D-766 size unit. Existing public `/console/assets/<basename>` URLs are preserved by the explicit static map |

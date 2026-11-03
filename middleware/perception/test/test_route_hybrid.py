@@ -8,7 +8,7 @@ import cv2
 import lane_sim
 import numpy as np
 import pytest
-from control.sensing.perception.lane_bev import MEMORY_CONFIDENCE
+from perception_runtime.perception.lane_bev import MEMORY_CONFIDENCE
 from control.sensing.perception.route_hybrid import RouteHybridFollower, ring_entries
 from control.sensing.perception.route_map import MAX_SPREAD_M, MIN_MATCH, confidence_for
 from lane_scenarios import (
@@ -262,8 +262,8 @@ def test_a_lower_confidence_keeps_the_commanded_curvature():
     """CORE's error encodes curvature at the output confidence (lane_bev
     error_for_curvature). Lowering the confidence re-encodes the error so
     the path curvature v / w is unchanged; only the speed drops."""
-    from control.sensing.perception.lane import LaneObservation
-    from control.sensing.perception.lane_bev import error_for_curvature
+    from perception_runtime.perception.lane import LaneObservation
+    from perception_runtime.perception.lane_bev import error_for_curvature
     from control.sensing.perception.route_hybrid import _with_confidence
 
     for curvature in (-8.0, -1.0, 0.0, 2.5, 9.0):

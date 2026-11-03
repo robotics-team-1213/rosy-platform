@@ -5,8 +5,22 @@ D-766 4 나누기: cli.py(레칫 872)에서 그대로 옮겼다(정의 순서·�
 끝난다(cli_config 패턴 그대로).
 """
 
+import os
 import sys
 from pathlib import Path
+
+
+def _account_login_config(args, site_logins, tasks_db):
+    """Resolve Account login sources and require their durable audit database."""
+    account_config = getattr(args, "account_config", None)
+    account_client_path = os.environ.get("ROSY_FLEET_ACCOUNT_CLIENT_CONFIG", "").strip()
+    account_client_config = Path(account_client_path) if account_client_path else None
+    human_login = bool(site_logins or account_config is not None or account_client_config is not None)
+    if account_client_config is not None and tasks_db is None:
+        sys.exit("--tasks-db is required with ROSY_FLEET_ACCOUNT_CLIENT_CONFIG")
+    if account_config is not None and tasks_db is None:
+        sys.exit("--tasks-db is required with --account-config")
+    return account_config, account_client_config, human_login
 
 
 def _goal_lease_ttl_s(args) -> float:
@@ -48,36 +62,14 @@ def _trip_config(args):
 
 
 def _build_site_map(args, tasks_db):
-    """D-488/D-490: site map store (+ first import) and the planner's ``fleet.routing`` costs."""
-    import yaml
+    """D-488/D-490: site map store (+ first import), its drawing assets, and the planner's ``fleet.routing`` costs.
 
-    from fleet.routing.cost import RoutingConfig
-    from fleet.server.site_map_store import SiteMapStore
-    from fleet.site_map import from_lane_graph
+    The one builder lives in ``site_map_bootstrap``; this copy used to build the store without drawing assets,
+    so the site could not save any map that carries a drawing (503 SITE_MAP_DRAWING_UNAVAILABLE, 2026-11-03).
+    """
+    from fleet.server.site_map_bootstrap import build_site_map
 
-    try:
-        site_config = {}
-        if getattr(args, "site_config", None) is not None:
-            site_config = yaml.safe_load(Path(args.site_config).read_text(encoding="utf-8")) or {}
-        routing = ((site_config.get("fleet") or {}).get("routing") if isinstance(site_config, dict) else None)
-        routing_config = RoutingConfig.from_mapping(routing)
-        site_maps = SiteMapStore(tasks_db, routing_config=routing_config)
-        source = getattr(args, "site_map_import", None)
-        if source is not None:
-            site_maps.import_source = Path(source)
-            # map/<map_id>/lane_graph.yaml: the folder names the map frame the sighting sources
-            # report; the default "site" would filter every sighting (map pose UNKNOWN).
-            site_maps.import_if_empty(from_lane_graph(source, map_id=Path(source).parent.name),
-                                      source=Path(source).name)
-    except (OSError, ValueError, TypeError, AttributeError, yaml.YAMLError) as exc:
-        sys.exit(f"site map / routing config: {exc}")
-    if tasks_db is None:
-        print("warning: no --tasks-db; the D-488 site map lives in memory and is lost on restart",
-              file=sys.stderr, flush=True)
-    if site_maps.active() is None:
-        print("warning: no active D-488 site map; /route and /trip are refused until one is "
-              "imported (--site-map-import) or activated", file=sys.stderr, flush=True)
-    return site_maps, routing_config
+    return build_site_map(args, tasks_db)
 
 
 def _map_pose_config(args):

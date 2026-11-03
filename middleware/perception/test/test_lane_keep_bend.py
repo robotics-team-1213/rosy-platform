@@ -16,10 +16,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from control.sensing.perception.camera_ground import simulation_ground_plane
-from control.sensing.perception.lane_keep import LaneKeeper
-from control.sensing.perception.lane_keep_junction import _continues, _junction
-from control.sensing.perception.lane_keep_lines import PAINT_HALF_WIDTH_M
+from perception_runtime.perception.camera_ground import simulation_ground_plane
+from perception_runtime.perception.lane_keep import LaneKeeper
+from perception_runtime.perception.lane_keep_junction import _continues, _junction
+from perception_runtime.perception.lane_keep_lines import PAINT_HALF_WIDTH_M
 from test_lane_keep import GROUND, HALF as NOMINAL_HALF, PROFILE, X, Y, X_OFFSET, _render
 import test_lane_corner as corner_world
 

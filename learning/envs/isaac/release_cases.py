@@ -108,3 +108,17 @@ for _name, _yaw in (('w05', .5), ('w10', 1.)):
 for _name, _offset in (('y060', .0006), ('y070', .0007), ('y-060', -.0006), ('y-070', -.0007)):
     FIXTURE_OVERRIDES['nominal-palletizing-v21-ship-'+_name+'-r290-g315'] = dict(
         FIXTURE_OVERRIDES['nominal-palletizing-v21-ship-r290-g315'], release_offset_m=[0., _offset])
+# Cell survey 2026-11-03 (docs/validation/omx-cell-survey-2026-11-03): the CAD arm bases and belt against the measured ones,
+# candidates side by side (D-947 2). arm_b (index 1) by FK of its own joint states; arm_a by its base plate centre (no FK, yaw
+# kept). The belt by D435 depth at the belt end: 28 mm below the CAD face.
+SURVEYED_BASES = dict(arm_bases_m=[[.116, -.164, .072], [.104, .153, .072]], arm_base_yaws_rad=[math.pi/2, math.radians(-94.3)])
+# From these bases arm_a cannot reach the shared leveling spot past the bow (0.287 m), so each arm levels on its own spot:
+# the user's slot in front of each arm (plan 2026-10-31: about 170 mm from the base away from the belt, off the plate).
+# arm_a's straight path from home to its spot passes 35 mm from its own base axis (a wrist singularity in the planner), so it
+# goes over the empty bow-side cells of the plate; arm_b goes straight.
+SURVEYED_BASES.update(leveling_centers_m=[[.116-.17, -.164, .072], [.104-.17, .153, .072]], leveling_via_m=None,
+                      leveling_vias_m=[[-.004, -.084, .212], None], leveling_carry_height_m=.212)
+FIXTURE_OVERRIDES['nominal-palletizing-v21-ship-surveyed-bases'] = dict(FIXTURE_OVERRIDES['nominal-palletizing-v21-ship'],
+                                                                        planning_scene='surveyed-bases-20261103', **SURVEYED_BASES)
+FIXTURE_OVERRIDES['nominal-palletizing-v21-ship-surveyed'] = dict(FIXTURE_OVERRIDES['nominal-palletizing-v21-ship-surveyed-bases'],
+                                                                  planning_scene='surveyed-cell-20261103', belt_drop_m=.028)

@@ -4382,3 +4382,85 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 사이트·Fleet 관련 원격 pytest(커밋 뒤 실행). 2026-10-31 현장 proxy 컨테이너의 Caddy로 이 Caddyfile을 `caddy validate` → Valid configuration(적용 안 함). 현장 방화벽은 이미 `tailscale0`을 허용한다. 배포 전 현장 443에서 tailnet 주소의 `/api/fleet/vision/sources`는 401, 8443(Account)에서는 목록·lease·`ceiling_north` 프레임 200.
 - gate 변화: 없음. 서명 후보 배포 뒤 443 tailnet readback이 남았다. IP 주소로는 TLS가 실패하므로(인증서 SAN에 IP 없음) 이름으로 접속한다.
 - CE: 해당 없음 — 대역 누락은 이 기록과 Caddyfile 주석으로 복원된다.
+
+## 2026-11-02 · uncommitted · 현장 추가 팔 오버레이 전환 순서를 교훈으로
+- 변경: 10-27부터 현장 자동 업데이트를 막은 미서명 arm-s 오버레이를 정식 매핑으로 바꾼 실제 순서를 `docs/solutions/deployment/site-extra-arm-overlay-switch-needs-a-staged-runtime-2026-11-01.md`에 기록하고, `deploy/site/README.md` 전환 문단에서 그 문서를 가리킨다. 기존 README는 "오버레이를 함께 제거"만 적어 그대로 하면 세 번 거절된다.
+- 증거: 2026-11-02 09:17 KST 현장 candidate 2ba97ac, proxy·fleet·vision·postgres healthy, Fleet에 A/B/S 토큰, dry-run idle.
+- gate 변화: 없음. CE: 새 교훈 기록.
+
+## 2026-11-02 · b101f57783 · fix(hosts): 모델·AI PC 미선언 유닛 선언, review-bridge 알려진 차이
+
+- 변경: `deploy/hosts/services.yaml`에 이미 설치돼 있던 유닛을 관측한 그대로 선언했다. 모델 PC `rosy-harbor-nightly` 서비스·타이머(Harbor 저장소의 `nightly_full_flow.sh`를 `~/rosy-jobs`에 복사, external), `rosy-pilot-prepare-geg6`(서명 model-code, 손으로 시작). AI PC `pinky-rosbridge-d12`·`-d13`(Pinky 스택, 꺼짐). `rosy-review-bridge`에는 `known_drift`를 단다. 설치본이 매일 갱신되는 `bridge-state-20261024`에 쓰고 템플릿의 `bridge-state`는 10-24 뒤 그대로라, 템플릿을 설치하면 오래된 상태로 돌아간다.
+- 같은 점검에서 저장소 변경 없이 처리: AI PC `gpu_tenants.py`를 착지된 main 판으로 교체(해시 일치), 모델 PC의 끝난 Isaac 실행 유닛 5개 reset-failed, 관제 PC `host_storage.py`를 rosy-ops origin/main(#12)으로 교체(self-test 통과, 이전 판 백업), 카메라 뷰 drop-in 폴더의 `.bak`를 백업 폴더로 옮김.
+- 증거: 이 worktree에서 `tools/remote/update_status.py` — model 37 declared 0 findings, ai 23 declared 0 findings(review-bridge는 KNOWN).
+- gate 변화: 없음. 관제 PC의 observer arm_a·arm_b 정지와 카메라(front·천장 폰) 실패는 셀 작업 중인 것으로 보여 손대지 않았다.
+- CE: 해당 없음 — 선언 누락은 update_status가 매번 드러낸다.
+
+## 2026-11-02 · uncommitted · OMX 카메라: 옮긴 카메라는 역할이 따라가고, 새 카메라는 제안 후 승인 한 번
+
+- 변경: `omx_cameras.py bind --apply`(20초 타이머)가 꽂힌 각 역할 카메라의 모델(`usb_id`)을 레지스트리에 기록한다. 역할의 카메라가 사라지고, 같은 모델의 미등록 카메라가 하나뿐이며, 그 모델로 사라진 역할도 하나뿐이면 그 역할을 새 포트로 옮기고 브리지 manifest도 맞춘다. 같은 모델 두 대가 함께 옮겨졌거나 처음 보는 모델은 `propose`가 후보로만 보여 주고 `approve NODE ROLE` 한 번으로 등록한다(새 역할은 `/<role>_camera/image_raw`·`<role>_camera_link`). 새 등록은 커널 by-id 이름을 쓰지 않는다(쌍둥이가 나중에 꽂히면 같은 이름).
+- 증거: `test/test_omx_cameras.py` 11 passed(로컬). 현장 PC에서 새 파일을 임시 경로로 `propose`·`bind`(apply 없음) → 미등록 LG 카메라 1대가 역할 없는 후보로만 나오고 레지스트리 해시 변화 없음.
+- gate 변화: 없음. 현장 `/etc` manifest는 여전히 root로 `manifest --apply`. 기존 역할은 다음 bind 때 모델이 기록된 뒤부터 따라간다. CE: 기존 교훈 갱신.
+
+## 2026-11-02 · uncommitted · 관제 단위 companion 로그 상한 보완
+
+- 변경: 서명 canonical 관제 단위 overlay의 새 `control-unit-peer`에도 기본 스택과 같은 json-file 20m × 3 로그 상한을 명시했다. 이미지·네트워크·명령·권한은 바꾸지 않는다.
+- 증거: `f70298b8c6`의 실제 격리 검사에서 누락으로 적색을 확인했다. `87a7797034` 원격 로그 계약과 같은 파일의 독립 pytest 검사 4 passed, isolation complete 1, skip 0.
+- gate 변화: SOURCE·LOCAL GO. 실제 서명 설치·운영 수용은 별도다. 기존 R overlay와 updater hold를 유지하며 canonical 관제 단위의 자동 adoption 문제를 해결했다고 주장하지 않는다.
+- CE: 해당 없음 — 기존 로그 계약 검사가 누락을 검출했고 최종 설정이 해결을 설명한다.
+
+## 2026-11-02 · 14e64763d9 · fix(hosts): D-795 DDS 가드를 깬 pinky rosbridge 선언 제거
+
+- 변경: b101f57783에서 `services.yaml`에 더한 AI PC `pinky-rosbridge-d12`·`-d13` 선언 두 줄을 뺐다. `test_no_cross_host_dds`는 deploy 파일에 rosbridge를 금지한다(D-795). 두 유닛은 꺼진 채 AI PC에 남아 update_status에 UNDECLARED로 계속 나온다 — D-795상 선언할 대상이 아니라 치울 대상이다(Pinky 스택 소유자 확인 필요).
+- 증거: 착지 land-fix-publish-baseline-checkout-pin가 MAIN-RED로 멈춤(main 06a479abd1에서도 같은 실패). 원격 `test/test_no_cross_host_dds.py`·`test/test_host_services_manifest.py`.
+- gate 변화: main 녹색 복구.
+- CE: 해당 없음 — 가드 시험이 바로 잡았고, 앞 착지가 이 시험을 고르지 않은 것은 시험 선택 범위의 문제다.
+
+## 2026-11-02 · uncommitted · OMX 카메라 후보에 같은 허브의 팔을 표시
+
+- 변경: `omx_cameras.py propose`의 각 후보에 `hub_arm`(카메라와 같은 USB 허브에 관찰 보드가 꽂힌 팔이 하나일 때)과 `suggest`(그 팔의 `<arm>_wrist` 역할이 비어 있을 때)를 더한다. 루트 포트는 모든 장치가 공유하므로 허브로 보지 않는다. 추천일 뿐 역할을 묶지 않는다. 손목 카메라가 팔 보드와 같은 허브에 꽂힌다는 배선은 아직 현장에서 확인하지 않았다(셀 분리 중); 확인되면 자동 배정으로 올린다.
+- 증거: `test/test_omx_cameras.py` 12 passed(로컬).
+- gate 변화: 없음. CE: 해당 없음 — 미확인 가정은 이 기록과 docstring에 있다.
+
+## 2026-11-02 · uncommitted · D-963 제어 PC USB 카메라 역할 보고와 결정 적용
+
+- 변경: `usb_camera_report.py`(읽기 전용 보고, 결정 파일 쓰기)를 추가하고 `workcell_observation_bridge.py`가 20초마다 `POST .../{workcell_id}/usb-devices`로 보내 결정을 받는다. `omx_cameras.py bind --apply`가 결정 파일의 키가 현재 제안과 맞으면 `approve`+`save`로 적용하고 항목을 지운다. 레지스트리의 쓰기 주체는 `bind` 하나로 유지한다.
+- 증거: `test/test_omx_usb_camera_report.py`, `test/test_omx_workcell_observation_bridge.py`, `test/test_omx_cameras.py` 노트북에서 29건 통과(원격 재확인 대기).
+- gate 변화: 없음. 실제 USB 카메라를 꽂아 승인하는 현장 수용은 하지 않았다.
+- CE: 해당 없음 — 새 기능이며 장애 해결이 아니다. 결정은 D-963에 있다.
+
+## 2026-11-02 · 5eff2fd4d0 · fix(omx): 빈 관측과 관측 실패 구분
+
+- 변경: 반복 운반은 observed=0과 정상 관측의 `no usable object`가 함께 있을 때만 source empty를 반환한다. 맵 누락·영상 누락 오류는 원래 실패 결과를 유지하고 다음 운반을 중단한다.
+- 검증: 원격 RED commit 314f571ea0에서 두 회귀 사례가 예상대로 실패했고 기존 9개는 통과했다. 수정 commit 5eff2fd4d0에서 자동 운반·자동 집기 관련 59개가 통과했다. 실제 팔 동작과 현장 배포는 하지 않았다.
+- gate 변화: 없음. 장치·현장 수용을 주장하지 않는다.
+- CE: 해당 없음 — 오류 전달 원인과 해결은 수정 코드 및 회귀 시험에 직접 남아 있다.
+
+## 2026-11-03 · uncommitted · fix(omx): 기기 업데이터가 카메라 바인드 유닛을 함께 싣는다
+
+- 변경: `omx-devices-autoupdate.json.example`의 `unit_files`에 `rosy-omx-cameras-bind.service`·`.timer`를 더하고 README 설치 5단계에서 바인드 타이머도 켠다. 업데이터는 유닛 파일을 복사만 하고 타이머를 켜지 않으므로 한 번 켜는 단계가 필요하다. `test_omx_cameras`가 예시 설정에 두 파일이 빠지면 실패한다.
+- 증거: 현장 관제 PC의 사용자 유닛에 바인드 유닛이 한 번도 설치되지 않아 옮겨 꽂은 카메라 추적과 Fleet 승인 적용이 일어날 수 없었다. 배포 도구로 `bind`(쓰기 없음)가 쓰기·재시작 없이 네 역할을 확인한 뒤 현장 설정 `unit_files`에 두 파일을 더하고(백업 `.bak-20261103-bind`) 타이머를 켰다. 첫 실행 `write: []`. `test/test_omx_cameras.py` 13 passed(로컬).
+- gate 변화: 없음. 카메라를 꽂아 Fleet에서 승인하는 실물 수용은 아직이다.
+- CE: 해당 없음 — 재발은 예시 설정 시험과 README 설치 단계가 막는다.
+
+## 2026-11-03 · uncommitted · docs(omx): 허브 추천은 자동 배정으로 올리지 않는다
+
+- 변경: `propose`의 허브 추천(`suggest`)을 추천으로 유지하고, 그 이유를 docstring에 적었다.
+- 증거: 셀 재연결 뒤 현장에서 새 `omx_cameras.py`를 임시 경로로 읽기 전용 실행: 팔 보드 허브 `arm_a 3-3`, `arm_b 3-4`; 카메라 `arm_a_wrist 3-3.3`, `arm_b_wrist 3-4.3`, `side 3-4.2`, `top 4-2`(루트). 손목 카메라는 자기 팔 보드와 허브를 공유하지만 side 카메라도 arm_b 허브에 있어 허브만으로는 손목 카메라를 특정할 수 없다.
+- gate 변화: 없음.
+- CE: 해당 없음 — 배선 사실과 판단은 이 기록과 docstring에 있다.
+
+## 2026-11-03 · 3a2fbd1f9a · feat(site): 서명 PC의 사이트 즉시 반영 푸시와 오분류 제목 교정
+
+- 변경: `auto_sign_candidates.py`가 서명에 성공한 실행 뒤 `notify_hosts` 각 대상에 고정 명령 `sudo -n systemctl start rosy-site-autoupdate.service`를 SSH(BatchMode)로 보내 사이트 설치가 15분 폴링을 기다리지 않게 했다. 푸시 실패는 `notify` 감사 줄로만 남고 호스트 타이머가 대체한다. 같은 릴리스 스캔에서 서명됐는데도 제목이 "(unsigned)"인 site-* 릴리스는 그 자리에서 교정한다(`retitle-repaired`, 2026-10-29·10-31·11-03 재발).
+- 검증: 원격 `test/test_site_auto_sign.py` 31통과(known_failures 0 new). 변이 확인: 알림 호출과 오분류 수집을 끈 commit c5ac955935에서 새 가드 시험 3개만 RED, 복원 3a2fbd1f9a에서 전체 GREEN. 서명 PC 검토 사본 갱신과 `notify_hosts` 기입은 착지 후 별도 운영 단계다.
+- gate 변화: 없음. 사이트 호스트의 D-960 업데이터 교체·hold 해제는 이 커밋 없이 현장에서 이미 시행했다(백업 `/var/backups/rosy-site-d960-20261103`).
+- CE: 해당 없음 — 막힘 원인(hold)은 감사 로그와 상태 파일로 곧바로 보였고, 재발 방지는 이번 구조화 자체가 담당한다.
+
+## 2026-11-03 · 3309dde54f · fix(site): dry-run에서 공개 릴리스 수정 방지
+
+- 변경: 이미 서명됐지만 unsigned 제목이 남은 릴리스를 발견해도 dry-run은 공개 제목·본문을 수정하지 않고 `would-retitle` 감사 기록만 남긴다. 실제 서명·제목 교정·호스트 알림의 기존 조건은 유지한다.
+- 검증: 원격 RED `08bbc9a4fe`에서 release edit 호출을 막는 새 회귀 시험이 예상대로 실패했다. 수정 `3309dde54f`에서 서명 자동화와 후보 서명 시험 48건이 통과했고 known_failures는 0 new/known/flaky다. FakeGh 시험이며 실제 공개 릴리스를 수정하지 않았다.
+- gate 변화: 없음. UI FULL 준비 근거는 별도 보존했고, 이 수정의 착지와 최신 main 통합 검증 후 게시한다.
+- CE: 해당 없음 — 누락된 dry-run 분기와 회귀 조건이 코드·시험에 직접 남는다. 운영 전환은 별도 미완료다.
+

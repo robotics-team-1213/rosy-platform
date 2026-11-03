@@ -17,6 +17,16 @@ PROFILE = ROOT/'deploy/robot/omx/sim/cell_profile.yaml'
 SCHEMA = 'rosy.omx-sim-stack-plan/1'
 
 
+# Named SIM planning scenes: the arm base/yaw pairs each scene was built for, and the z band of its low belt corridor.
+# The surveyed scenes (cell survey 2026-11-03, D-947 2) are candidates beside the CAD one, not a replacement.
+_CAD_BASES = (([.08,-.165,.072], math.pi/2), ([.08,.165,.072], -math.pi/2))
+_SURVEYED_BASES = (([.116,-.164,.072], math.pi/2), ([.104,.153,.072], math.radians(-94.3)))
+SCENES = {'cad-stage1-lower-belt-v1': (_CAD_BASES, (.040, .077)),
+          'surveyed-bases-20261103': (_SURVEYED_BASES, (.040, .077)),
+          # belt 28 mm below the CAD face: only the corridor floor drops; its top stays where a TCP counts as low
+          'surveyed-cell-20261103': (_SURVEYED_BASES, (.040-.028, .077))}
+
+
 def vector(value, count):
     if (not isinstance(value, list) or len(value) != count
             or not all(type(v) in (int, float) and math.isfinite(v) for v in value)):
@@ -39,7 +49,7 @@ def build(case):
     if control['profile'] != 'simulation':
         raise ValueError('Only the simulation planning profile is allowed')
     scene = case.get('scene')
-    if 'scene' in case and scene != 'cad-stage1-lower-belt-v1':
+    if 'scene' in case and scene not in SCENES:
         raise ValueError('Unknown SIM planning scene')
 
     def solve(base, point, yaw, reference=0., base_yaw=0.):
@@ -48,14 +58,14 @@ def build(case):
         pose = TopDownPose(c*dx+s*dy, -s*dx+c*dy, point[2]-base[2], yaw-base_yaw)
         limits = profile.ik_limits()
         if scene:
-            approved = (([.08,-.165,.072], math.pi/2),([.08,.165,.072],-math.pi/2))
+            approved, (z_low, z_high) = SCENES[scene]
             if not any(all(abs(base[k]-b[k]) <= 1e-9 for k in range(3)) and abs(base_yaw-a) <= 1e-9 for b,a in approved):
                 raise ValueError('CAD scene base/yaw pair differs')
             if pose.z < limits.workspace_min_m[2]:
                 # This scene alone reaches below the raised plate, in the external belt corridor.
-                if not (.201 <= point[0] <= .270 and -.013 <= point[1] <= .027 and .040 <= point[2] <= .077):
+                if not (.201 <= point[0] <= .270 and -.013 <= point[1] <= .027 and z_low <= point[2] <= z_high):
                     raise ValueError('Low TCP must remain outside the Stage1 footprint in its belt corridor')
-                limits = replace(limits,workspace_min_m=(*limits.workspace_min_m[:2],-.04))
+                limits = replace(limits,workspace_min_m=(*limits.workspace_min_m[:2],-.04-(.040-z_low)))  # CAD scene: -0.04
         result = kin.solve_top_down(pose, limits, reference_q5=reference)
         if not result.ok:
             raise ValueError(f'Unreachable SIM target: {result.reason} {result.detail}')

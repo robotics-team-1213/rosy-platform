@@ -38,6 +38,9 @@ class WorkcellObservations:
         self._lock = threading.Lock()
         self._samples = {}
         self._retired = {source: deque(maxlen=64) for source in self._joints}
+        # Guard stops outlive the next sample (arm_a's 2026-11-01 stalls vanished from the screen within a second).
+        # shortcut: memory only, lost on Fleet restart; the field PC keeps faults/*.json durably.
+        self._faults = {source: deque(maxlen=20) for source in self._joints}
         self._workcells = [{
             "workcell_id": cell.workcell_id, "label": cell.label,
             "arms": [{"source_id": arm.source_id, "arm_id": arm.arm_id, "label": arm.label,
@@ -70,6 +73,22 @@ class WorkcellObservations:
                                     expected.encode() if expected is not None else b"")
         if expected is None or not isinstance(token, str) or not valid:
             raise PermissionError("unknown source or invalid observation credential")
+
+    def authorize_workcell(self, workcell_id: str, token: str) -> None:
+        """Any arm token of this workcell identifies its control PC (D-963). KeyError: no such workcell."""
+        sources = [arm["source_id"] for cell in self._workcells if cell["workcell_id"] == workcell_id
+                   for arm in cell["arms"]]
+        if not sources:
+            raise KeyError(workcell_id)
+        results = []
+        for source in sources:  # every token is compared, so timing does not show which arm matched
+            try:
+                self.authorize(source, token)
+                results.append(True)
+            except PermissionError:
+                results.append(False)
+        if not any(results):
+            raise PermissionError("invalid observation credential")
 
     def ingest(self, source_id: str, token: str, observation: ArmObservation) -> None:
         self.authorize(source_id, token)
@@ -107,6 +126,13 @@ class WorkcellObservations:
             if previous and observation.epoch != previous[0].epoch:
                 self._retired[source_id].append(previous[0].epoch)
             self._samples[source_id] = (observation, received)
+            if health is not None and health.status == 'fault' and all(
+                    fault['session_id'] != health.session_id for fault in self._faults[source_id]):
+                self._faults[source_id].appendleft({
+                    'captured_at': observation.captured_at, 'session_id': health.session_id,
+                    'stop_reasons': list(health.stop_reasons),
+                    'motors': [m.model_dump(include={'joint', 'id', 'error_deg', 'command_raw', 'present_raw',
+                                                     'pwm', 'pwm_limit', 'fault'}) for m in health.motors]})
 
     def snapshot(self) -> dict:
         with self._lock:
@@ -115,6 +141,7 @@ class WorkcellObservations:
             for cell in workcells:
                 for arm in cell["arms"]:
                     sample = self._samples.get(arm["source_id"])
+                    arm["faults"] = deepcopy(list(self._faults[arm["source_id"]]))
                     if sample is None:
                         arm.update(fresh=False, epoch=None, sequence=0, captured_at=None,
                                    source_age_s=None, receipt_age_s=None, positions=None, motor_health=None)

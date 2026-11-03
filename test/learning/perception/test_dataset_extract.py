@@ -160,7 +160,7 @@ def _write_side_session(tmp_path, shadow_text, camera="/camera/front", shadow_to
     """One MCAP: a shadow String, a line/observation String, then one camera frame."""
     from mcap_ros2.writer import Writer
 
-    from control.recording import SHADOW_TOPIC
+    from perception_runtime.recording import SHADOW_TOPIC
 
     bag = tmp_path / "sess" / "bag"
     bag.mkdir(parents=True)
@@ -184,7 +184,7 @@ def _write_side_session(tmp_path, shadow_text, camera="/camera/front", shadow_to
 
 
 def test_side_topics_share_the_recording_constants():
-    from control.recording import RECORD_TOPICS, SHADOW_TOPIC, SIDE_TOPICS
+    from perception_runtime.recording import RECORD_TOPICS, SHADOW_TOPIC, SIDE_TOPICS
     assert set(SIDE_TOPICS) <= set(RECORD_TOPICS)
     assert {"cmd_vel", "line/observation", SHADOW_TOPIC, "scan", "odom",
             "camera/calibration/status", "line/keep_debug"} == set(SIDE_TOPICS)
@@ -194,7 +194,7 @@ def test_string_side_data_round_trips_into_prelabel_score(tmp_path):
     """extract-shaped frames.jsonl row -> prelabel.score_frame adds |error_delta|."""
     pytest.importorskip("mcap_ros2")
     import prelabel
-    from control.recording import SHADOW_TOPIC
+    from perception_runtime.recording import SHADOW_TOPIC
     from test_dataset_build import MODEL_CLASSES, _logits
 
     # stamp = the frame's header stamp: the shadow result of that frame
@@ -224,7 +224,7 @@ def test_topic_match_strips_any_namespace():
 
 def test_namespaced_session_extracts_frames_and_side_data(tmp_path):
     pytest.importorskip("mcap_ros2")
-    from control.recording import SHADOW_TOPIC
+    from perception_runtime.recording import SHADOW_TOPIC
 
     sess = _write_side_session(tmp_path, json.dumps({"stamp": 8e-7, "error_delta": 0.1}),
                                camera="/pinky1/camera/front",
@@ -262,7 +262,7 @@ def _write_stamped(tmp_path, events):
     """events: (log_s, kind, stamp_s) for camera and side evidence."""
     from mcap_ros2.writer import Writer
 
-    from control.recording import SHADOW_TOPIC
+    from perception_runtime.recording import SHADOW_TOPIC
 
     bag = tmp_path / "sess" / "bag"
     bag.mkdir(parents=True)
@@ -383,7 +383,7 @@ uint32 nanosec
 def test_scan_is_the_latest_logged_at_or_before_the_frame(tmp_path):
     """Clock rule class (b): no future leakage, even when a later scan is nearer."""
     pytest.importorskip("mcap_ros2")
-    from control.recording import RECORD_TOPICS, SCAN_TOPIC, SIDE_TOPICS
+    from perception_runtime.recording import RECORD_TOPICS, SCAN_TOPIC, SIDE_TOPICS
 
     assert SCAN_TOPIC == "scan" and SCAN_TOPIC in SIDE_TOPICS and SCAN_TOPIC in RECORD_TOPICS
     assert SCAN_TOPIC not in extract.STAMPED_SIDE_TOPICS
@@ -420,7 +420,7 @@ def _rows(sess, tmp_path):
 def test_shadow_logged_after_its_frame_attaches_to_that_frame(tmp_path):
     """WSL lap-1 bug: shadow for frame N (published after inference) landed on N+1."""
     pytest.importorskip("mcap_ros2")
-    from control.recording import SHADOW_TOPIC
+    from perception_runtime.recording import SHADOW_TOPIC
 
     sess = _write_stamped(tmp_path, [
         (0.95, "cmd", 1.0), (1.0, "raw", 1.0), (1.02, "line", 1.0), (1.1, "shadow", 1.0),
@@ -440,7 +440,7 @@ def test_shadow_logged_after_its_frame_attaches_to_that_frame(tmp_path):
 
 def test_side_message_beyond_the_lookahead_window_is_not_attached(tmp_path):
     pytest.importorskip("mcap_ros2")
-    from control.recording import SHADOW_TOPIC
+    from perception_runtime.recording import SHADOW_TOPIC
 
     assert extract.SIDE_LOOKAHEAD_S == 0.5
     sess = _write_stamped(tmp_path, [
@@ -453,7 +453,7 @@ def test_side_message_beyond_the_lookahead_window_is_not_attached(tmp_path):
 
 def test_compressed_camera_is_preferred_over_raw(tmp_path):
     pytest.importorskip("mcap_ros2")
-    from control.recording import SHADOW_TOPIC
+    from perception_runtime.recording import SHADOW_TOPIC
 
     events = []
     for t in (1.0, 2.0, 3.0):
@@ -486,7 +486,7 @@ def test_observation_logged_between_capture_and_its_own_image_attaches(tmp_path)
     image. The window opens at the frame's capture (header stamp), not its log time;
     evidence logged before the capture cannot be about that image."""
     pytest.importorskip("mcap_ros2")
-    from control.recording import SHADOW_TOPIC
+    from perception_runtime.recording import SHADOW_TOPIC
 
     sess = _write_stamped(tmp_path, [
         (1.00004, "line", 1.0),    # after capture 1.0, 60 us before its image's log time
@@ -508,7 +508,7 @@ def _sidecar_row(i, stamp_s, side, dt):
 def test_sidecar_rows_follow_the_same_two_class_clock_rule():
     """mp4 + sidecar input: stamped entries (with stamp_ns) are attached by stamp and
     window from wherever they sit; class (b) stays as the sidecar recorded it."""
-    from control.recording import SHADOW_TOPIC
+    from perception_runtime.recording import SHADOW_TOPIC
 
     cmd = {"linear": 0.03, "angular": 0.0}
     rows = [
@@ -539,7 +539,7 @@ def test_sidecar_rows_follow_the_same_two_class_clock_rule():
 
 def test_old_sidecar_without_stamp_ns_attaches_no_stamped_evidence():
     """Sidecars written before stamp_ns: stamped evidence is null, never shifted."""
-    from control.recording import SHADOW_TOPIC
+    from perception_runtime.recording import SHADOW_TOPIC
 
     rows = [_sidecar_row(0, 1.0, {SHADOW_TOPIC: None, "line/observation": None}, {}),
             _sidecar_row(1, 1.125, {SHADOW_TOPIC: {"stamp": 1.0, "error_delta": 0.1},
@@ -629,7 +629,7 @@ def test_odom_is_attached_as_latest_before_with_pose_twist_and_stamps(tmp_path):
 
     from mcap_ros2.writer import Writer
 
-    from control.recording import SIDE_TOPICS
+    from perception_runtime.recording import SIDE_TOPICS
 
     assert "odom" in SIDE_TOPICS and "odom" not in extract.STAMPED_SIDE_TOPICS
     bag = tmp_path / "sess" / "bag"
@@ -667,7 +667,7 @@ def test_odom_is_attached_as_latest_before_with_pose_twist_and_stamps(tmp_path):
 def test_late_evidence_dt_is_exact_from_integer_nanoseconds(tmp_path):
     """At epoch magnitude, float seconds lose ~0.1 ms in round(t - log_t, 4)."""
     pytest.importorskip("mcap_ros2")
-    from control.recording import SHADOW_TOPIC
+    from perception_runtime.recording import SHADOW_TOPIC
 
     base = 1_759_300_000.0  # 2025-10-01 epoch seconds
     sess = _write_stamped(tmp_path, [(base + 0.00015, "raw", base),
@@ -680,7 +680,7 @@ def test_late_evidence_dt_is_exact_from_integer_nanoseconds(tmp_path):
 def test_mcap_writes_null_for_unmatched_stamped_evidence_like_the_sidecar(tmp_path):
     """D-356: a frame without its stamped evidence says so (null), in both inputs."""
     pytest.importorskip("mcap_ros2")
-    from control.recording import SHADOW_TOPIC
+    from perception_runtime.recording import SHADOW_TOPIC
 
     rows = _rows(_write_stamped(tmp_path, [(1.0, "raw", 1.0), (1.1, "cmd", 1.0)]), tmp_path)
     for topic in extract.STAMPED_SIDE_TOPICS:

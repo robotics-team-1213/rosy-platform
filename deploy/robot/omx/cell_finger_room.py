@@ -20,10 +20,11 @@ import cell_params as prm
 
 
 def free_mm(mask, roi, pixel_fn, start, direction, across_offsets, reach_mm: float, step_mm: float = 1.0,
-            own_mm: float = 0.0) -> float:
+            own_mm: float = 0.0, outside_blocks: bool = False) -> float:
     """Distance (mm) from `start` along `direction` to the first foreground, sampled at each across offset (mm);
     reach_mm when nothing is met. Foreground running on from `start` up to own_mm is the object's own; a 1 mm gap
-    does not end that run (a slightly skewed outline starts the side face a step out on one pad edge)."""
+    does not end that run (a slightly skewed outline starts the side face a step out on one pad edge). With
+    outside_blocks, what the mask does not cover (past the roi or the image) is not known free but a hit."""
     d = np.asarray(direction, float)
     n = np.array([-d[1], d[0]])
     t, clear = step_mm, 0.0
@@ -32,16 +33,37 @@ def free_mm(mask, roi, pixel_fn, start, direction, across_offsets, reach_mm: flo
         for s in across_offsets:
             px = pixel_fn(tuple(np.asarray(start, float) + (t * d + s * n) / 1000))
             if px is None:
+                hit = hit or outside_blocks
                 continue
             col, row = round(px[0]) - roi[0], round(px[1]) - roi[1]
-            hit = hit or (1 <= row < mask.shape[0] - 1 and 1 <= col < mask.shape[1] - 1
-                          and bool(mask[row - 1:row + 2, col - 1:col + 2].any()))
+            inside = 1 <= row < mask.shape[0] - 1 and 1 <= col < mask.shape[1] - 1
+            hit = hit or (not inside and outside_blocks) or (inside and bool(mask[row - 1:row + 2, col - 1:col + 2].any()))
         leaving = clear < 2.0
         if hit and not (leaving and t <= own_mm):
             return t - step_mm
         clear = 0.0 if hit and leaving else clear + step_mm
         t += step_mm
     return reach_mm
+
+
+def mark_half_gap_mm(params=None, open_value: float | None = None) -> float:
+    """Half the finger gap when the jaws are opened to the jaw-mark value (pivot.grip_open unless given), from the 30 mm
+    hold and the gap per unit; past the measured 48.8-55.6 this is a line through the data, and 62 is 6 units past it."""
+    value = prm.get(params, "pivot.grip_open") if open_value is None else open_value
+    return (30.0 + (value - prm.get(params, "gripper.held_30mm")) * prm.get(params, "gripper.gap_mm_per_unit")) / 2
+
+
+def mark_room(mask, roi, pixel_fn, centre, across, half_mm: float, params=None, own_mm: float = 0.0) -> list:
+    """Distance (mm) from `centre` along the closing axis `across` to the first foreground (or the edge of what the mask
+    covers) on each side, as far as the fully opened jaw-mark needs: half the opened gap plus look.mark_err_mm. The lane
+    is the pad's width plus the same error, since the jaws may stand that far off the centre. Returns [side -, side +],
+    each at most the need, so a side that reads the need is clear to the full opening."""
+    err, pad = prm.get(params, "look.mark_err_mm"), prm.get(params, "auto.finger_pad_mm")
+    need, w = mark_half_gap_mm(params) + err, pad / 2 + err
+    centre, across = np.asarray(centre, float), np.asarray(across, float)
+    return [round(half_mm + free_mm(mask, roi, pixel_fn, centre + side * half_mm * across / 1000, side * across,
+                                    (-w, -w / 2, 0.0, w / 2, w), max(need - half_mm, 1.0), own_mm=own_mm, outside_blocks=True), 1)
+            for side in (-1, 1)]
 
 
 def own_removed(mask, roi, pixel_fn, o: dict):
@@ -79,4 +101,6 @@ def jaw_margin(mask, roi, pixel_fn, o: dict, closing_deg: float | None = None, p
     free = [free_mm(mask, roi, pixel_fn, centre + side * half * across / 1000, side * across, (-pad / 2, 0.0, pad / 2),
                     most + finger + 2.0, own_mm=own) for side in (-1, 1)]
     margin = min(most, min(free) - finger)
-    return {"margin_mm": round(margin, 1) if margin >= least else None, "free_mm": [round(f, 1) for f in free]}
+    # the jaw mark opens wider than any pick (62 against open_max 56): its own room, from the box's centre, kept with it
+    return {"margin_mm": round(margin, 1) if margin >= least else None, "free_mm": [round(f, 1) for f in free],
+            "mark_half_mm": mark_room(mask, roi, pixel_fn, centre, across, half, params, own_mm=own)}

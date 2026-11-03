@@ -21,7 +21,8 @@ def test_plan_adds_viewer_preserves_existing_and_selects_enrolled_ids():
  next_users,next_config=module().build_plan(users,cfg,['robot-b','robot-a'],['camera-a'],'b'*64,'/etc/rosy/site-secrets/health.token')
  assert users==USERS and cfg==CONFIG
  assert next_users['users'][0]==USERS['users'][0]
- assert next_users['users'][1]['role']=='viewer'
+ assert next_users['users'][1]=={'principal_id':'site-update-health','role':'viewer',
+                               'token_sha256':'b'*64,'machine':True}
  assert next_config['keep']==3
  assert next_config['functional_checks'][0]['required_ids']=='enrolled'  # D-580
  assert next_config['functional_checks'][1]['required_ids']==['camera-a']
@@ -41,6 +42,39 @@ def test_idempotent_plan_does_not_add_duplicate_user():
  assert users2==users and cfg2==cfg
 
 
+@pytest.mark.parametrize('already_marked',[False,True])
+def test_plan_only_marks_exact_legacy_health_viewer_and_then_is_idempotent(already_marked):
+ m=module()
+ legacy={'principal_id':m.PRINCIPAL,'role':'viewer','token_sha256':'b'*64}
+ health={**legacy,'machine':True} if already_marked else legacy
+ unrelated={'principal_id':'other-reader','role':'viewer','token_sha256':'c'*64}
+ synthetic_hash='$'.join(('scrypt','32768','8','1','A'*22+'==','A'*43+'='))
+ login_only={'principal_id':'human-reader','role':'viewer','login':'reader','password_scrypt':synthetic_hash}
+ users={'users':[USERS['users'][0],health,unrelated,login_only]}
+ original=copy.deepcopy(users)
+ planned,cfg=m.build_plan(users,CONFIG,['r'],['s'],'b'*64,'/etc/rosy/site-secrets/health.token')
+ assert users==original
+ assert planned=={'users':[USERS['users'][0],{**legacy,'machine':True},unrelated,login_only]}
+ repeated,repeated_cfg=m.build_plan(planned,cfg,['r'],['s'],'b'*64,'/etc/rosy/site-secrets/health.token')
+ assert repeated==planned and repeated_cfg==cfg
+
+
+@pytest.mark.parametrize('changes',[
+ {'role':'operator'}, {'token_sha256':'c'*64}, {'principal_id':'another-principal'},
+ {'machine':False}, {'machine':None}, {'machine':1}, {'machine':'true'},
+ {'login':'health'}, {'password_scrypt':'not-a-human-login'}, {'policy_admin':False},
+ {'unexpected':'operator-local-metadata'},
+])
+def test_plan_refuses_nonexact_health_identity_instead_of_upgrading_or_overwriting(changes):
+ m=module()
+ health={'principal_id':m.PRINCIPAL,'role':'viewer','token_sha256':'b'*64,**changes}
+ users={'users':[USERS['users'][0],health]}
+ original=copy.deepcopy(users)
+ with pytest.raises(ValueError):
+  m.build_plan(users,CONFIG,['r'],['s'],'b'*64,'/etc/rosy/site-secrets/health.token')
+ assert users==original
+
+
 class Host:
  def __init__(self, fail=False):self.state={'enabled':False,'active':True};self.events=[];self.fail=fail
  def timer(self):return dict(self.state)
@@ -52,6 +86,73 @@ class Host:
  def verify(self):
   self.events.append('verify')
   if self.fail:self.fail=False;raise RuntimeError('injected unavailable functional API')
+
+
+@pytest.fixture
+def idle_guard(tmp_path,monkeypatch):
+ m=module()
+ health=tmp_path/'health.token'
+ operator=tmp_path/'operator.token'
+ calls=[]
+ host=m.Host.__new__(m.Host)
+ host.token_file=health
+ host.config={'functional_checks':[
+  {'path':'/api/fleet/state','token_file':str(health),'required_ids':'enrolled'},
+  {'path':'/api/fleet/vision/sources','token_file':str(health),'required_ids':['camera-a']}]}
+ def get(path,credential):
+  calls.append((path,credential))
+  return {'queued_tasks':0,'unresolved_actions':0} if path.endswith('dispatch-control') else {'robots':[]}
+ host.get=get
+ monkeypatch.setattr(m,'_secret',lambda name:operator if name=='operator.token' else pytest.fail('unexpected credential'))
+ return m,host,health,operator,calls
+
+
+def test_idle_guard_prefers_provisioned_machine_health_credential_for_both_reads(idle_guard,monkeypatch):
+ m,host,health,_,calls=idle_guard
+ health.write_text('synthetic-health-key',encoding='utf-8')
+ monkeypatch.setattr(m,'_secret',lambda _:pytest.fail('operator bootstrap must not be resolved'))
+ host.guard()
+ assert calls==[('/api/fleet/dispatch-control',health),('/api/fleet/state',health)]
+
+
+def test_idle_guard_without_health_file_keeps_operator_bootstrap_fallback(idle_guard):
+ _,host,health,operator,calls=idle_guard
+ assert not health.exists()
+ host.guard()
+ assert calls==[('/api/fleet/dispatch-control',operator),('/api/fleet/state',operator)]
+
+
+@pytest.mark.parametrize('registered_elsewhere',[False,True])
+def test_idle_guard_preseeded_unregistered_health_file_keeps_operator_bootstrap(idle_guard,registered_elsewhere):
+ _,host,health,operator,calls=idle_guard
+ health.write_text('synthetic-health-key',encoding='utf-8')
+ host.config={'functional_checks':[
+  {'path':'/api/fleet/state','token_file':str(health.parent/'another-health.token'),'required_ids':'enrolled'}
+ ]} if registered_elsewhere else {}
+ host.guard()
+ assert calls==[('/api/fleet/dispatch-control',operator),('/api/fleet/state',operator)]
+
+
+@pytest.mark.parametrize('control,robot',[
+ ({'queued_tasks':1,'unresolved_actions':0},{}),
+ ({'queued_tasks':0,'unresolved_actions':1},{}),
+ ({'unresolved_actions':0},{}),
+ ({'queued_tasks':0},{}),
+ ({'queued_tasks':0,'unresolved_actions':0},{'goal':{'target':'B'}}),
+ ({'queued_tasks':0,'unresolved_actions':0},{'queued':['B']}),
+ ({'queued_tasks':0,'unresolved_actions':0},{'held':True}),
+ ({'queued_tasks':0,'unresolved_actions':0},{'yielding':True}),
+])
+def test_machine_health_idle_guard_still_refuses_pending_or_active_work(idle_guard,control,robot):
+ _,host,health,_,calls=idle_guard
+ health.write_text('synthetic-health-key',encoding='utf-8')
+ def get(path,credential):
+  calls.append((path,credential))
+  return control if path.endswith('dispatch-control') else {'robots':[robot]}
+ host.get=get
+ with pytest.raises(ValueError,match='setup deferred'):
+  host.guard()
+ assert calls and all(credential==health for _,credential in calls)
 
 
 @pytest.fixture

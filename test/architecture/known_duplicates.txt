@@ -19,10 +19,10 @@ contracts/learning/src/rosy/contracts/learning/prediction.py integrations/simula
 operations/fleet/fleet/localization/stuck_heading.py tools/sim/native_gazebo_map_pose.py|_finite  ③ 소형 헬퍼
 contracts/learning/src/rosy/contracts/learning/omx.py middleware/devices/omx/adapter/omx_adapter/demonstration.py|_finite  ③ 로봇 payload에 계약 wheel이 없다, writer-검증자 시험 후속
 contracts/foundation/core_common/face_screen.py middleware/core/gateway/core/system/host_hardware.py|_flag  ③ 소형 헬퍼
-deploy/hosts/common/release/signing.py deploy/site/candidate_signing.py middleware/perception/front_camera/perception/learned/signature.py|_git_for_windows_dirs  ③ deploy 서명 스크립트 경계
+deploy/hosts/common/release/signing.py deploy/site/candidate_signing.py integrations/perception/perception_runtime/perception/learned/signature.py|_git_for_windows_dirs  ③ deploy 서명 스크립트 경계
 contracts/foundation/core_common/observation.py contracts/skill/src/rosy/contracts/skill/invocation.py contracts/skill/src/rosy/contracts/skill/receipts.py middleware/skills/api/src/rosy/skills/api/contracts.py operations/site_execution/src/rosy/execution/api/plan.py|_identifier  ① 후보 contracts 정본 소비(reexport 규칙 확인 후)
 learning/curation/pinky/fleet_observations.py learning/curation/pinky/fleet_rules.py learning/curation/pinky/pinky_episode.py learning/curation/pinky/prepare_behavior.py learning/curation/pinky/verify_raw.py learning/training/omx/act_inference_replay.py learning/training/omx/act_job.py learning/training/pinky/artifact_export.py learning/training/pinky/comparison_job.py middleware/robot_execution/local/src/rosy/execution/local/policy_episode.py operations/fleet/fleet/server/evidence/learning_receiver.py|_in_checkout  ③ D-841 Dec.4가 공인한 소유 모듈 내 복제(in_source_checkout)
-middleware/core/gateway/core/trip_lease.py middleware/core/services/core_features/calibration/session.py operations/fleet/fleet/server/auth/password_session.py|_iso  ③ 타임스탬프 소형 헬퍼, 출력 포맷 통일은 별도 감사 항목
+middleware/core/gateway/core/trip_lease.py middleware/core/services/core_features/calibration/session.py operations/account/rosy_account/password_session.py|_iso  ③ 타임스탬프 소형 헬퍼, 출력 포맷 통일은 별도 감사 항목
 contracts/learning/src/rosy/contracts/learning/omx.py middleware/devices/omx/adapter/omx_adapter/demonstration.py|_json  ③ 로봇 payload에 계약 wheel이 없다, writer-검증자 시험 후속
 contracts/foundation/core_common/protocol/discovery_txt.py deploy/site/fleet-mdns.py|_lan_ipv4  ③ deploy/site mDNS 미러
 contracts/learning/src/rosy/contracts/learning/inference.py learning/training/omx/act_inference.py|_ns  ① 후보 training이 contracts/learning 소비

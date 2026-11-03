@@ -51,6 +51,7 @@ def test_only_plain_pending_landings_at_their_snapshot_tip_roll_up(repo):
     main, snapshot = repo
     a, b = snapshot("fix/a", {"pkg/a.py": "x = 2\n"}), snapshot("fix/b", {"pkg/b.py": "y = 2\n"})
     rows = [a, b, {**snapshot("fix/u", {"pkg/c.py": "z = 2\n"}), "urgent": "the user's words"},
+            {**snapshot("fix/f", {"pkg/c.py": "z = 9\n"}), "alone": True},  # --tests full for publish evidence
             {**snapshot("fix/p", {"pkg/c.py": "z = 3\n"}), "status": "preparing"},
             {**snapshot("fix/o", {"pkg/c.py": "z = 4\n"}), "host": "other"},
             {**snapshot("fix/l", {"pkg/c.py": "z = 5\n"}), "batch": ["land/fix/k"]},
@@ -80,6 +81,9 @@ def test_build_merges_the_members_into_one_branch_and_records_them(repo, monkeyp
     main, snapshot = repo
     rows = [snapshot("fix/a", {"pkg/a.py": "x = 2\n"}), snapshot("fix/clash", {"pkg/a.py": "x = 3\n"}),
             snapshot("fix/b", {"pkg/b.py": "y = 2\n"})]
+    for i, row in enumerate(rows):
+        row["ticket"] = f"member-{i}"
+    expected = {r["branch"]: git(main, "rev-parse", r["branch"]) for r in rows}
     started = []
 
     def start(wt, args, now, launch):
@@ -93,6 +97,56 @@ def test_build_merges_the_members_into_one_branch_and_records_them(repo, monkeyp
     assert git(main, "show", f"{head}:pkg/a.py") == "x = 2" and git(main, "show", f"{head}:pkg/b.py") == "y = 2"
     members = json.loads((land_rollup.land_async.holder(main) / "land-fix-land-rollup-x.members").read_text())
     assert [m["branch"] for m in members] == ["land/fix/a", "land/fix/b"]
+    assert [(m["candidate"], m["ticket"]) for m in members] == [
+        (expected[rows[i]["branch"]], rows[i]["ticket"]) for i in (0, 2)]
+
+
+def test_build_rejects_duplicate_branches_from_legacy_queue_rows(repo):
+    main, snapshot = repo
+    row = snapshot("fix/a", {"pkg/a.py": "x = 2\n"})
+    with pytest.raises(land_rollup.land.Stop, match="duplicate"):
+        land_rollup.build(main, [{**row, "ticket": "a1"}, {**row, "ticket": "a2"}], NOW,
+                          start=lambda *a: pytest.fail("duplicate branch reached admission"))
+
+
+def test_build_persists_nested_children_without_changing_direct_ownership(repo, monkeypatch):
+    import land_events
+
+    main, snapshot = repo
+    leaves = [snapshot("fix/a", {"pkg/a.py": "x = 2\n"}), snapshot("fix/b", {"pkg/b.py": "y = 2\n"})]
+    inner = snapshot("fix/land-rollup-20261101000100-20261101000100", {"pkg/inner.py": "inner = 1\n"})
+    for leaf in leaves:
+        git(Path(inner["worktree"]), "merge", "--no-edit", leaf["branch"])
+    children = [dict(branch=r["branch"], worktree=r["worktree"], ticket=f"leaf-{i}",
+                     candidate=git(main, "rev-parse", r["branch"])) for i, r in enumerate(leaves)]
+    holder = land_rollup.land_async.holder(main)
+    child_sidecar = holder / (inner["branch"].replace("/", "-") + ".members")
+    child_sidecar.write_text(json.dumps(children), encoding="utf-8")
+    sibling = snapshot("fix/c", {"pkg/c.py": "z = 2\n"})
+    rows = [{**inner, "ticket": "inner"}, {**sibling, "ticket": "sibling"}]
+    tip, log = [], holder / "land-fix-land-rollup-x.log"
+
+    def start(wt, args, now, launch):
+        tip.append(git(wt, "rev-parse", "HEAD"))
+        return "land/fix/land-rollup-x", log
+
+    name, _ = land_rollup.build(main, rows, NOW, start=start)
+    members = json.loads(log.with_suffix(".members").read_text())
+    assert [m["branch"] for m in members] == [r["branch"] for r in rows]
+    assert members[0]["members"] == children
+    child_sidecar.unlink()  # completion must survive later collection of the child's sidecar
+    event_log = holder.parent / land_events.EVENTS
+    monkeypatch.setattr(land_events, "_where", dict(path=event_log, branch=name))
+    land_events.landed(tip[0])
+    completed = land_events.read(event_log)
+    assert len(completed) == 1 and completed[0]["members"][0]["members"] == children
+
+
+def test_capture_does_not_turn_invalid_noncarrier_children_into_a_valid_leaf(tmp_path):
+    member = dict(branch="land/fix/a-20261101000000", ticket="a", candidate="a" * 40,
+                  members=[dict(branch="land/fix/b-20261101000000", ticket="b", candidate="b" * 40)])
+    captured = land_rollup.member_metadata(tmp_path, member)
+    assert captured.get("members_error"), "invalid nested metadata must not be silently dropped into a valid leaf"
 
 
 @pytest.mark.parametrize("log, groups", [("[land] STOP: NEW failure in pkg/test", [["a", "b"], ["c", "d", "e"]]),

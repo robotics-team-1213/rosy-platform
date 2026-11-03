@@ -482,6 +482,8 @@ def test_timeout_is_a_failed_step(monkeypatch):
 
 def _fake_hosts(monkeypatch, tmp_path, hosts, job, venv_fails=()):
     """run() over fake hosts: setup succeeds (venv fails on venv_fails), job(host, inv) is one pytest."""
+    # Imported callers do not receive this module's autouse fixture.
+    monkeypatch.setattr(rp, "HEADROOM", {})
     seen = []
     monkeypatch.setattr(wq, "MAX_MAIN", 1)  # one main worker per host; several: test_host_admission.py
     monkeypatch.delenv("ROSY_TEST_LOCAL", raising=False)
@@ -1315,6 +1317,32 @@ def test_plan_gives_xdist_words_and_args_only_to_safe_invocations_on_full_hosts(
     assert xp.plan(["test"], full, ["test"])[:2] == ([], [])  # serial (no -n), not alone on the host
     assert xp.plan(GROUP, None, [])[:2] == ([], [])  # D-568 7 fallback host: unmeasured, serial
     assert xp.plan(GROUP, {**full, "light": True, "mem": 4.7}, [])[:2] == (["ROSY_JOB_MEM_GB=4"], [])
+
+
+def test_explicit_host_exclusive_job_never_gets_xdist_workers():
+    full = {"cores": 14.0, "mem": 10.0, "site": False, "light": False}
+    assert xp.plan(['ROSY_JOB_ALONE=1', 'test/test_platform_g1_timing.py'], full, [])[:2] == ([], [])
+
+
+def test_exclusive_word_reaches_actual_job_export_and_admission(tmp_path):
+    if not shutil.which('setsid') or sys.platform == 'win32':
+        pytest.skip('Linux process/job admission fixture')
+    home, env = _job_env(tmp_path, 'echo "job_alone=${ROSY_JOB_ALONE:-}"\n'
+                        'cat "$HOME"/rosy-jobs/*.lock\necho "args $*"\n')
+    start = _sh(rj.START, env, 'r', 'd', '', '0', '60', rj.JOB,
+                'ROSY_JOB_ALONE=1', 'test/test_platform_g1_timing.py', '-pno:xdist')
+    assert start.returncode == 0, start.stderr
+    assert _poll_until_done(env) == 0
+    out = (home / 'rosy-test/runs/r.jobs/0.log').read_text()
+    assert 'job_alone=1' in out and re.search(r'^\d+ alone 2 6$', out, re.M)
+    assert 'ROSY_JOB_ALONE=1' not in out
+
+
+@pytest.mark.parametrize("flag", ["", "0", "1"])
+def test_unmeasured_host_keeps_only_the_turn_priority_word(monkeypatch, flag):
+    monkeypatch.setenv(xp.TURN_ENV, flag)
+    assert xp.plan([xp.ALONE, *GROUP], None, []) == (
+        [xp.TURN_JOB] if flag == "1" else [], [], "serial: host below the floor (D-568 7 fallback)")
 
 
 def test_run_on_adds_xdist_to_the_run_but_never_to_the_quarantine_rerun(tmp_path, monkeypatch):

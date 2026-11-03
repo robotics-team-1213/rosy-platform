@@ -234,8 +234,8 @@ def test_a_caller_that_keeps_asking_for_state_keeps_the_arm_where_it_is():
     lib["chunks"]["home"] = [HOME]
     status, clock, sent = [], [0.0], []
 
-    def lines():  # a `state` every 100 s for 10 minutes, then stop
-        due = int(clock[0] // 100)
+    def lines():  # a `state` every 50 s (under idle_park_s) for 10 minutes, then stop
+        due = int(clock[0] // 50)
         if due > len(sent):
             sent.append(due)
             return ["stop"] if clock[0] > 600 else ["state"]
@@ -636,15 +636,16 @@ class Straining(Robot):
     """Reports the commanded pose like the guard does; the lift's lag behind it is `lag(n)` at action n, and the
     guard's last PWM sample sits on `motion` the way NativeJointMotion keeps it."""
 
-    def __init__(self, lag, pwm=500):
+    def __init__(self, lag, pwm=500, joint=1):
         super().__init__()
-        self.lag, self.count = lag, 0
-        self.motion = type("Motion", (), {"effort_pwm": {"shoulder_lift": -pwm}, "pwm_limits": {"shoulder_lift": 600}})()
+        self.lag, self.count, self.joint = lag, 0, joint
+        name = m.MOTORS[joint]
+        self.motion = type("Motion", (), {"effort_pwm": {name: -pwm}, "pwm_limits": {name: 600 if joint < 3 else 300}})()
 
     def send_action(self, action):
         self.count += 1
         super().send_action(action)
-        self.pos[1] = action["shoulder_lift.pos"] - self.lag(self.count)
+        self.pos[self.joint] = action[m.NAMES[self.joint]] - self.lag(self.count)
         return dict(action)
 
 
@@ -687,6 +688,27 @@ def test_travel_lag_without_a_rising_push_is_not_strain(lag, pwm):
     assert done["ok"] is True and done["fault"] is None
 
 
+def test_a_blocked_wrist_roll_holds_at_low_pwm_before_the_guard_drops_the_arm():
+    # arm_a 2026-11-01 23:19: the roll stopped dead at PWM 82 of 300 while its command ran on, 1.8 -> 4.6 deg in 1 s
+    status = run_with(Straining(lambda n: min(2.8, max(0.0, 0.05 * (n - 30))), pwm=82, joint=4), goto_library(),
+                      ["goto approach_pinky", "park", "stop"])
+    held = by_command(status, "run goto approach_pinky")[0]
+    assert held["ok"] is False and held["contact"] is True and "wrist_roll" in held["fault"]
+    assert "shoulder_pan" in held["fault"]  # the other joints' lags travel with it
+    lag = float(held["fault"].split("lag rose to ")[1].split()[0])
+    assert m.ROLL_BLOCK_LAG <= lag < 2.7  # held well short of the guard's 5 degrees (~2.8 units)
+
+
+@pytest.mark.parametrize("lag", [
+    lambda n: 1.2,                                 # a steady roll lag is travel, not a block
+    lambda n: min(1.2, max(0.0, 0.05 * (n - 30))),  # rising, but within the roll's normal travel lag
+])
+def test_a_wrist_roll_travel_lag_is_not_a_block(lag):
+    status = run_with(Straining(lag, pwm=20, joint=4), goto_library(), ["goto approach_pinky", "stop"])
+    done = by_command(status, "run goto approach_pinky")[0]
+    assert done["ok"] is True and done["fault"] is None
+
+
 def test_the_trace_gets_one_row_per_tick():
     rows, status, clock, queue = [], [], [0.0], ["run approach_pinky", "stop"]
     r = m.Runner(Pressing(after=10**9), library(), fps=30, status=status.append, clock=lambda: clock[0],
@@ -695,3 +717,45 @@ def test_the_trace_gets_one_row_per_tick():
     r.run(lambda: [queue.pop(0)] if queue and not r.chunk else [])
     assert len(rows) == r.ticks
     assert rows[1]["chunk"] == "approach_pinky" and len(rows[1]["sent"]) == 6 and len(rows[1]["present"]) == 6
+
+
+class Winding(Bus):
+    """The elbow's PWM climbs every read, like an integral winding up against something."""
+
+    def sync_read(self, name):
+        if name == "Present_PWM":
+            self.values[name]["elbow_flex"] += 20
+        return super().sync_read(name)
+
+
+def test_an_elbow_winding_up_short_of_home_ends_the_session_folded_before_it_overloads():
+    """arm_b 2026-11-03: a box wedged the folded elbow 1 deg short of home; PWM 261 -> 476 in 18 s, then overload."""
+    class Wedged(Robot):  # the elbow follows everywhere but stops 1 unit short of home
+        def send_action(self, action):
+            super().send_action(action)
+            self.pos[2] -= 1.0 if action["elbow_flex.pos"] == HOME[2] else 0.0
+
+    robot = Wedged()
+    robot.bus = Winding(pwm={"elbow_flex": 100})
+    status = run_with(robot, lifting_library(), ["park"])
+    pushed = next(s for s in status if (s.get("error") or "").startswith("pushing at rest"))
+    assert "elbow_flex" in pushed["error"] and pushed["person_needed"] is True
+    assert status[-1]["command"] == "stop" and "pushing" in status[-1]["reason"]  # before idle_stop_s ran out
+
+
+def test_a_park_with_something_in_the_jaws_holds_instead_of_folding_it_home():
+    robot = Robot(object_at=55.0)
+    robot.pos[5], robot.bus = 55.0, Bus(pwm={"gripper": 65536 - 290})
+    status = run_with(robot, lifting_library(), ["run approach_pinky", "park", "stop"])
+    held = by_command(status, "run park")[0]
+    assert held["ok"] is False and "jaws" in held["error"] and held["contact"] is True
+
+
+def test_a_closing_grip_that_catches_something_reopens_where_it_was():
+    """arm_b 2026-11-03 13:27: a jaw-mark close caught a box edge and the park later folded the box home."""
+    robot = Robot(object_at=55.0)
+    robot.pos[5], robot.bus = 62.0, Bus(pwm={"gripper": 65536 - 290})
+    status = run_with(robot, lifting_library(), ["grip 46.6"] + ["state"] * 120 + ["stop"])
+    caught = next(s for s in status if s.get("caught"))
+    assert caught["ok"] is False and "jaws" in caught["error"] and caught["target"][5] == 62.0
+    assert robot.pos[5] == 62.0

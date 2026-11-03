@@ -256,9 +256,11 @@ def test_nine_container_budget_covers_the_measured_run_and_the_mp4_cap():
     import run_worker
     from run_catalog import catalog
     entry = next(e for e in catalog() if e['id'] == 'omx-map-container-stack')
-    assert entry['timeout_seconds'] == 2520
-    assert "timeout = 2520 if scenario == 'omx-map-container-stack'" in inspect.getsource(run_system)
-    assert "'timeout': 2310 if container_task" in inspect.getsource(run_worker)
+    assert entry['timeout_seconds'] == 4200
+    # 2026-11-03: the surveyed bases (waypoint, higher leveling carry) placed 8/9 and met the 2,310 s limit (run 5d3a), and the
+    # D-969 demo recording renders two more cameras per frame: 65 min task inside a 70 min unit, under the 90 min reboot guard.
+    assert "timeout = 4200 if scenario == 'omx-map-container-stack'" in inspect.getsource(run_system)
+    assert "'timeout': 3900 if container_task" in inspect.getsource(run_worker)
 
 
 def test_ship_offset_cases_move_only_the_release_target():
@@ -269,3 +271,99 @@ def test_ship_offset_cases_move_only_the_release_target():
         a = f.cube_release_target(i, held_scene(base, i), .04, fixture=base)
         b = f.cube_release_target(i, held_scene(shifted, i), .04, fixture=shifted)
         assert [b[0]-a[0], b[1]-a[1], b[2]-a[2]] == pytest.approx([0., .0006, 0.])
+
+
+def test_real_cameras_see_the_studs_unmirrored_where_the_survey_saw_them():
+    """D-947 3: a pinhole of each surveyed camera puts every stud in frame, the +y column on the image left, and for the
+    top camera the stern row above the bow row (survey frame: stern at the top, arm_b on the left)."""
+    import numpy as np
+    import ship_plate
+    fixture = f.container_fixture(layers=3, case='nominal-palletizing-v21-ship')
+    studs = ship_plate.stud_positions(fixture)
+    z = ship_plate.top_z(fixture)+fixture['ship_plate']['stud_height_m']
+    for name, cam in fixture['real_cameras'].items():
+        eye, forward = np.array(cam['eye']), np.array(cam['focus'])-cam['eye']
+        forward /= np.linalg.norm(forward)
+        right = np.cross(forward, cam['up'])
+        right /= np.linalg.norm(right)
+        down = np.cross(forward, right)
+        uv = {}
+        for x, y in studs:
+            d = np.array([x, y, z])-eye
+            uv[x, y] = (cam['width']/2+cam['f_px']*d @ right/(d @ forward), cam['height']/2+cam['f_px']*d @ down/(d @ forward))
+        assert all(0 < u < cam['width'] and 0 < v < cam['height'] for u, v in uv.values()), name
+        (x0, y_left), (_, y_right) = max(studs), min(studs, key=lambda s: (-s[0], s[1]))
+        assert uv[x0, y_left][0] < uv[x0, y_right][0], name
+        if name == 'top':
+            bow = min(x for x, _ in studs)
+            assert uv[x0, y_left][1] < uv[bow, y_left][1]
+
+
+def test_surveyed_case_moves_only_the_bases_and_drops_the_belt_feed_together():
+    cad = f.container_fixture(layers=3, case='nominal-palletizing-v21-ship')
+    bases = f.container_fixture(layers=3, case='nominal-palletizing-v21-ship-surveyed-bases')
+    surveyed = f.container_fixture(layers=3, case='nominal-palletizing-v21-ship-surveyed')
+    assert bases['arm_bases_m'] != cad['arm_bases_m'] and bases['belt_center_m'] == cad['belt_center_m']
+    for key in ('belt_center_m', 'belt_stop_m', 'pickup_center_m', 'infeed_start_m'):
+        assert surveyed[key][:2] == cad[key][:2] and surveyed[key][2] == pytest.approx(cad[key][2]-.028)
+    assert surveyed['bin_origin_m'] == cad['bin_origin_m'] and surveyed['real_cameras'] == cad['real_cameras']
+
+
+def test_every_ship_case_is_accepted_by_the_isaac_task_command_line():
+    """Run 9302d29b (2026-11-03): a case added to FIXTURE_OVERRIDES but not to stacking_task's --container-case choices
+    reached the model PC and failed at argument parsing, an hour's queue for nothing."""
+    import ast
+    from release_cases import FIXTURE_OVERRIDES
+    source = (Path(f.__file__).parent/'stacking_task.py').read_text(encoding='utf-8')
+    names = {node.value for node in ast.walk(ast.parse(source)) if isinstance(node, ast.Constant) and isinstance(node.value, str)}
+    prefix = 'nominal-palletizing-v21-ship'
+    for case in FIXTURE_OVERRIDES:
+        if case.startswith(prefix+'-'):
+            suffix = case[len(prefix)+1:]
+            assert suffix in names or case in names, case
+
+
+@pytest.mark.parametrize('case', ['nominal-palletizing-v21-ship-surveyed-bases', 'nominal-palletizing-v21-ship-surveyed'])
+def test_surveyed_bases_reach_belt_stack_and_their_own_leveling_spot(tmp_path, case):
+    """Cell survey 2026-11-03: from the measured bases (24-36 mm toward the stern) arm_a no longer reaches the shared
+    leveling spot past the bow (x -0.12, 0.287 m), so each arm levels on its own spot in front of it; both arms still
+    reach the belt pickup and every stack target."""
+    from mapped_stack_task import Planner
+    fixture = f.container_fixture(layers=3, case=case)
+    planner = Planner(tmp_path, scene=fixture['planning_scene'], tcp_x_m=fixture['tcp_offset_m'][0])
+
+    def reach(arm, point):  # IK of one point for `arm`, the other arm at its home
+        points = [point if a == arm else f.home(a, True, fixture=fixture) for a in (0, 1)]
+        return planner.request('homes', bases=fixture['arm_bases_m'], base_yaws=fixture['arm_base_yaws_rad'], points=points)
+    for arm in (0, 1):
+        reach(arm, [*fixture['pickup_center_m'][:2], fixture['carry_height_m']])
+        spot = f.leveling_center(fixture, arm)
+        reach(arm, [*spot[:2], fixture['leveling_carry_height_m']])
+        reach(arm, [*spot[:2], spot[2]+.015+fixture['release_clearance_m']])
+        for item in f.plan(True, fixture=fixture):
+            if item['arm'] == arm:
+                reach(arm, [*item['target'][:2], fixture['carry_height_m']])
+    shared = f.container_fixture(layers=3, case='nominal-palletizing-v21-ship')['leveling_center_m']
+    with pytest.raises(ValueError, match='UNREACHABLE'):
+        reach(0, [*shared[:2], .13])
+    assert all(abs(c[1]) > .096+.045 for c in fixture['leveling_centers_m'])  # off the plate (half width 96 mm) with the box
+
+
+def test_lowered_belt_pick_descends_vertically_and_arm_a_levels_through_its_waypoint(tmp_path):
+    """Isaac 2026-11-03: the 28 mm lower belt was refused at z 0.07 on the vertical descent (the corridor's top dropped too)
+    and below -0.04 (the relaxed floor did not); arm_a's straight path to its own leveling spot is a wrist singularity."""
+    from mapped_stack_task import Planner
+    fixture = f.container_fixture(layers=3, case='nominal-palletizing-v21-ship-surveyed')
+    planner = Planner(tmp_path, scene=fixture['planning_scene'], tcp_x_m=fixture['tcp_offset_m'][0])
+    homes = planner.request('homes', bases=fixture['arm_bases_m'], base_yaws=fixture['arm_base_yaws_rad'],
+                            points=[f.home(0, True, fixture=fixture), f.home(1, True, fixture=fixture)])['homes']
+
+    def path(arm, points):
+        q = homes[arm]
+        for point, yaw in points:
+            q = planner.request('move', base=fixture['arm_bases_m'][arm], base_yaw=fixture['arm_base_yaws_rad'][arm],
+                                start=q, target=[float(v) for v in point], yaw=float(yaw), dt=f.DT)['frames'][-1]
+    pick = fixture['pickup_center_m']
+    path(1, [([*pick[:2], fixture['carry_height_m']], 0.), (pick, 0.)])
+    spot, via, yaw = f.leveling_center(fixture, 0), f.leveling_via(fixture, 0), fixture['leveling_yaws_rad'][0]
+    path(0, [(via, yaw), ([*spot[:2], fixture['leveling_carry_height_m']], yaw), ([*spot[:2], spot[2]+.02], yaw)])

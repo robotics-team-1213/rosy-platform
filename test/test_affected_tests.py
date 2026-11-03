@@ -25,6 +25,37 @@ ROOT = Path(__file__).resolve().parents[1]
 GUARDS = set(affected.GUARD_SET)
 
 
+def _assert_g1_timing_is_dedicated(invocations):
+    target = 'test/test_platform_g1_timing.py'
+    dedicated = [inv for inv in invocations if target in inv and 'ROSY_JOB_ALONE=1' in inv]
+    assert len(dedicated) == 1, invocations
+    assert '-pno:xdist' in dedicated[0] and '-ptools.g1_timing_gate' in dedicated[0]
+    for inv in invocations:
+        if inv == dedicated[0]:
+            continue
+        assert not any(word.split('::', 1)[0] == target for word in inv)
+        if 'test' in inv:
+            assert '--ignore=' + target in inv
+
+
+def test_g1_timing_full_ci_and_lab_have_one_exclusive_whole_file():
+    repo = affected.Repo.load(ROOT)
+    _assert_g1_timing_is_dedicated(affected.lab_full_invocations(repo))
+    matrix = affected.ci_matrix(repo, affected.Selection('full', []))['include']
+    _assert_g1_timing_is_dedicated([inv for entry in matrix for inv in entry['invocations']])
+
+
+@pytest.mark.parametrize('paths', [['test'], ['test/test_platform_g1_timing.py'],
+    ['test/test_platform_g1_timing.py::test_real_uds_round_trip_stays_inside_the_bound',
+     'test/test_affected_tests.py']])
+def test_g1_timing_owner_selections_keep_the_whole_file_exclusive(paths):
+    repo = affected.Repo.load(ROOT)
+    invocations = affected.pack(repo, paths)
+    _assert_g1_timing_is_dedicated(invocations)
+    matrix = affected.ci_matrix(repo, affected.Selection('affected', [], invocations=invocations))['include']
+    _assert_g1_timing_is_dedicated([inv for entry in matrix for inv in entry['invocations']])
+
+
 def test_fleet_development_module_selects_application_contracts():
     repo = affected.Repo.load(ROOT)
     module = repo.module_for('applications/fleet/dev/sample/engine.py')
@@ -541,6 +572,20 @@ def test_ci_fleet_shards_balance_measured_slow_files_without_losing_tests():
     assert affected.ci_matrix(repo, selection)["include"] == matrix
 
 
+def test_account_native_tests_are_required_in_full_and_source_affected_ci():
+    repo = affected.Repo.load(ROOT)
+    suite = 'operations/account/test'
+    assert any(suite in invocation for invocation in affected.lab_full_invocations(repo))
+    selections = [affected.Selection('full', []),
+                  affected.select(repo, ['operations/account/rosy_account/app.py'])]
+    for selection in selections:
+        owners = [entry for entry in affected.ci_matrix(repo, selection)['include']
+                  if any(suite in invocation for invocation in entry['invocations'])]
+        assert len(owners) == 1 and owners[0]['gating'] and owners[0]['ros'] == 'none'
+        if selection.mode == 'full':
+            assert [suite] in owners[0]['invocations']
+
+
 def test_ci_full_matrix_reaches_every_registered_module_suite():
     """D-762 stage 1: CI's full tier runs every registered test file, bar the reasoned exclusions."""
     repo = affected.Repo.load(ROOT)
@@ -596,10 +641,13 @@ def test_ci_affected_whole_root_suite_uses_the_full_tier_groups(flags):
     other = "learning/registry/policy/test"
     sel = affected.Selection("affected", [], invocations=[["test", other, *flags]])
     matrix = [e for e in affected.ci_matrix(repo, sel)["include"] if e["kind"] == "pytest"]
-    assert [e["invocations"][0] for e in matrix] == [[other, *flags], *[group + flags for group in full]]
+    import affected_exclusive
+    assert [e["invocations"][0] for e in matrix] == [
+        [other, *flags], *[group + flags for group in full], affected_exclusive.DEDICATED]
     assert all(e["gating"] for e in matrix)
-    assert [e["ros"] for e in matrix] == ["none", *["overlay"] * len(full)]
-    assert sorted(p for group in full for p in group) == sorted(p for p in repo.test_files if p.startswith("test/"))
+    assert [e["ros"] for e in matrix] == ["none", *["overlay"] * (len(full) + 1)]
+    assert sorted([p for group in full for p in group] + [affected_exclusive.TARGET]) == sorted(
+        p for p in repo.test_files if p.startswith("test/"))
 
 
 def test_ci_affected_matrix_is_one_runner_per_invocation(sample):
@@ -626,7 +674,7 @@ def test_local_run_of_a_full_selection_runs_only_guards_and_direct_suites(sample
     class Done:
         returncode = 0
 
-    monkeypatch.setattr(affected.subprocess, "run", lambda cmd, cwd: ran.append(cmd) or Done())
+    monkeypatch.setattr(affected.subprocess, "run", lambda cmd, cwd, **kwargs: ran.append(cmd) or Done())
     assert affected.run(sample, sel) == 0
     local = {p for cmd in ran for p in cmd[3:] if not p.startswith("-")}
     # core_common's own suite and its direct reverse dependent (sensing imports core_common)
@@ -662,7 +710,7 @@ def test_skip_drops_paths_the_caller_already_ran(sample, monkeypatch):
     class Done:
         returncode = 0
 
-    monkeypatch.setattr(affected.subprocess, "run", lambda cmd, cwd: ran.append(cmd) or Done())
+    monkeypatch.setattr(affected.subprocess, "run", lambda cmd, cwd, **kwargs: ran.append(cmd) or Done())
     affected.run(sample, sel, skip=frozenset(GUARDS))
     paths = {p for cmd in ran for p in cmd[3:] if not p.startswith("-")}
     assert paths == {"test/test_rosy_ssh_enroll.py"}
@@ -868,6 +916,25 @@ GATE_TOOLS = ["tools/land.py", "tools/land_queue.py", "tools/land_cache.py", "to
               "tools/remote/remote_pytest.py", "tools/remote/remote_job.py", "tools/remote/host_probe.py",
               "tools/remote/xdist_plan.py", "test/known_failures.py", "tools/harness/affected_tests.py",
               "test/browser_scope.py", "tools/remote/serial_suites.txt"]
+
+
+@pytest.mark.parametrize("changed", [["tools/land_goal.py"], ["tools/land_stats.py"],
+    ["tools/land_goal.py", "tools/land_stats.py"],
+    ["tools/land_goal.py", "test/test_land_goal.py", "docs/logs.md"]])
+def test_landing_reports_select_their_readers_without_the_full_runtime_tier(changed):
+    sel = affected.select(affected.Repo.load(ROOT), changed)
+    assert sel.mode == "affected", sel.escalations
+    assert GUARDS | {"test/test_land_goal.py", "test/test_land_events.py"} <= set(sel.reasons)
+    assert "test" not in sel.reasons
+
+
+@pytest.mark.parametrize("other", ["tools/land.py", "tools/land_events.py", "tools/land_queue.py",
+    "tools/harness/affected_tests.py", "tools/remote/remote_pytest.py", "tools/land_future_gate.py",
+    "unregistered/" + "future" + "_owner.py"])
+def test_landing_reports_do_not_narrow_other_gates_or_unmapped_changes(other):
+    sel = affected.select(affected.Repo.load(ROOT), ["tools/land_goal.py", "tools/land_stats.py", other])
+    assert sel.mode == "full"
+    assert any(reason.startswith(other + ":") for reason in sel.escalations), sel.escalations
 
 
 @pytest.mark.parametrize("path", GATE_TOOLS)

@@ -130,15 +130,18 @@ export function createControlUnitView({scope, call, anchor, active, approveReaso
     state.textContent = replies.length ? `${replies.length}건 · 최근 위임 기록` : "관제 간 작업 요청이 없습니다.";
     for (const reply of replies) {
       const row = reply.delegation, item = node("li"), actions = node("div", "", "ui-actions");
-      item.append(node("h3", `${row.request.target_unit} · ${row.request.robot_id}`),
+      const transfer = row.request.transfer;
+      item.append(node("h3", `${row.request.target_unit} · ${transfer ? "ARM 이송" : row.request.robot_id}`),
         node("p", `요청 관제 ${row.origin_id} · 직접 위임 담당 관제 ${row.owner_unit}`),
-        node("p", `목표 X ${row.request.goal.x} m · Y ${row.request.goal.y} m · 방향 ${row.request.goal.yaw} rad`),
+        node("p", transfer ? `셀 ${transfer.workcell_id} · 물체 ${transfer.object_ref} · 출발 ${transfer.source} → 도착 ${transfer.target}` :
+          `목표 X ${row.request.goal.x} m · Y ${row.request.goal.y} m · 방향 ${row.request.goal.yaw} rad`),
         node("p", `위임 ${row.origin_id} / ${row.delegation_id}`, "hint"),
         node("p", `${labels[row.status] || "상태 확인 필요"}${row.cancel_requested ? " · 취소 요청 전달 중" : ""}`),
         node("p", reply.stale ? "소유 관제 연결을 확인하세요 · 이전 결과입니다." :
           `원장 확인 ${new Date(row.updated_at).toLocaleString()}`, "hint"));
       const path = `/api/fleet/control-unit/delegations/${encodeURIComponent(row.origin_id)}/${encodeURIComponent(row.delegation_id)}`;
-      if (row.request.target_unit === unit.unit_id && !row.local_task_id && !terminal.has(row.status)) {
+      if (transfer) item.append(node("p", "ARM 승인은 대상 셀의 작업 원장에서 진행합니다.", "hint"));
+      if (!transfer && row.request.target_unit === unit.unit_id && !row.local_task_id && !terminal.has(row.status)) {
         const approve = button("이 관제에서 승인", "primary");
         approve.dataset.delegationAction = JSON.stringify([row.origin_id, row.delegation_id, "approve"]);
         guard(approve, reply.stale ? "소유 관제 연결을 확인하세요" : row.cancel_requested ? "취소 요청된 작업입니다" :

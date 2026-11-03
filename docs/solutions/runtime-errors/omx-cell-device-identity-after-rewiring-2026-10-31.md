@@ -59,8 +59,9 @@ Nothing checked a role's path against what is actually plugged in, or against th
 After anything is plugged, unplugged or moved on the control PC:
 
 1. Run `omx_devices.py scan --session-config <record-config.json>`.
-2. Change cameras only in `~/.config/rosy/omx-cameras.json`, then run `omx_cameras.py bind --apply` and `omx_cameras.py manifest --apply`. Run the second command again with `sudo` and `--manifest` for the site's `/etc/rosy/workcell-observations/<id>/observations.yaml`. Repeat until the scan exits 0.
+2. Change cameras only in `~/.config/rosy/omx-cameras.json`, then run `omx_cameras.py bind --apply` and `omx_cameras.py manifest --apply`. Since 2026-11-02 a manifest camera may omit `device_path` (nothing but the duplicate check read it); once the site candidate and the OMX tools both carry that contract, delete those lines from both manifests and this second step has nothing left to sync. Run the second command again with `sudo` and `--manifest` for the site's `/etc/rosy/workcell-observations/<id>/observations.yaml`. Repeat until the scan exits 0.
    - On 2026-11-02 someone swapped the two wrist ports in the registry and in the site's copy by hand. The bridge's copy kept the old ports. Two hand-kept copies of one fact drift apart.
+   - Since 2026-11-02 no hand edit is needed for a moved camera: the bind timer moves a gone role to the one unregistered camera of its recorded model. Two identical cameras moved at once, or a new model, show in `omx_cameras.py propose`; give each its role with `omx_cameras.py approve /dev/videoN <role>`.
 3. Only then start observers, sessions or a calibration.
 
 Never select a RealSense node, or a camera whose serial another camera shares, by its kernel by-id name.

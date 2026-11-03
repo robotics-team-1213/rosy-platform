@@ -11,8 +11,8 @@ from pathlib import Path
 
 import pytest
 
-from control.sensing.perception.learned.manifest import ManifestError
-from control.sensing.perception.learned.signature import (
+from perception_runtime.perception.learned.manifest import ManifestError
+from perception_runtime.perception.learned.signature import (
     SIGNATURE_NAME, TRUSTED_KEYS, SignatureError, checked_opener, verify_manifest_signature)
 
 REPO = Path(__file__).resolve().parents[3]
@@ -20,7 +20,7 @@ REPO = Path(__file__).resolve().parents[3]
 
 @pytest.mark.parametrize("layout", ["cmd/git.exe", "mingw64/bin/git.exe"])
 def test_git_openssl_candidates_follow_the_installation(monkeypatch, tmp_path, layout):
-    from control.sensing.perception.learned import signature
+    from perception_runtime.perception.learned import signature
 
     root = tmp_path / "custom-git"
     monkeypatch.setattr(signature.shutil, "which", lambda name: str(root / layout))
@@ -29,7 +29,7 @@ def test_git_openssl_candidates_follow_the_installation(monkeypatch, tmp_path, l
 
 
 def _openssl():
-    from control.sensing.perception.learned.signature import openssl_path
+    from perception_runtime.perception.learned.signature import openssl_path
     try:
         return openssl_path()
     except SignatureError:
@@ -37,7 +37,7 @@ def _openssl():
 
 
 def test_git_shim_at_drive_root_keeps_program_files_fallback(monkeypatch, tmp_path):
-    from control.sensing.perception.learned import signature
+    from perception_runtime.perception.learned import signature
 
     git = Path(Path.cwd().anchor) / "git.exe"
     monkeypatch.setattr(signature.shutil, "which", lambda name: str(git))
@@ -144,7 +144,7 @@ def test_a_present_but_bad_signature_is_refused_even_with_the_dev_flag(tmp_path,
 # --- coordinator decisions 2026-10-03: lane warn-only, object_det enforced, env-only dev flag ---
 
 def test_warn_only_check_opens_an_unsigned_lane_model_and_records_why(tmp_path):
-    from control.sensing.perception.learned.signature import SignatureCheck
+    from perception_runtime.perception.learned.signature import SignatureCheck
     folder = model(tmp_path)
     check = SignatureCheck(lambda f: "lane-model", enforce=False, keys_dir=tmp_path)
     assert check(folder) == "lane-model"
@@ -152,7 +152,7 @@ def test_warn_only_check_opens_an_unsigned_lane_model_and_records_why(tmp_path):
 
 
 def test_warn_only_check_reports_a_good_signature(tmp_path, keys):
-    from control.sensing.perception.learned.signature import SignatureCheck
+    from perception_runtime.perception.learned.signature import SignatureCheck
     trusted, pairs = keys
     folder = model(tmp_path)
     sign(folder, pairs["rosy-release-test"])
@@ -162,7 +162,7 @@ def test_warn_only_check_reports_a_good_signature(tmp_path, keys):
 
 
 def test_a_failed_open_keeps_the_previous_signature_state(tmp_path):
-    from control.sensing.perception.learned.signature import SignatureCheck
+    from perception_runtime.perception.learned.signature import SignatureCheck
     def broken(folder):
         raise ManifestError("bad")
     check = SignatureCheck(lambda f: "m", enforce=False, keys_dir=tmp_path)
@@ -176,7 +176,7 @@ def test_a_failed_open_keeps_the_previous_signature_state(tmp_path):
 @pytest.mark.parametrize("value,expected", [
     (None, False), ("false", False), ("1", False), ("TRUE", False), (" true", False), ("true", True)])
 def test_dev_override_comes_from_the_environment_only_and_strictly(value, expected):
-    from control.sensing.perception.learned.signature import ALLOW_UNSIGNED_ENV, allow_unsigned_from_env
+    from perception_runtime.perception.learned.signature import ALLOW_UNSIGNED_ENV, allow_unsigned_from_env
     assert ALLOW_UNSIGNED_ENV == "ROSY_ALLOW_UNSIGNED_MODELS"
     environ = {} if value is None else {ALLOW_UNSIGNED_ENV: value}
     assert allow_unsigned_from_env(environ) is expected
@@ -184,8 +184,8 @@ def test_dev_override_comes_from_the_environment_only_and_strictly(value, expect
 
 def test_an_openssl_process_failure_is_a_signature_error_not_a_crash(tmp_path, keys, monkeypatch):
     """Review M5: warn-only lane must never refuse a model because openssl could not run."""
-    from control.sensing.perception.learned import signature
-    from control.sensing.perception.learned.signature import SignatureCheck
+    from perception_runtime.perception.learned import signature
+    from perception_runtime.perception.learned.signature import SignatureCheck
     trusted, pairs = keys
     folder = model(tmp_path)
     sign(folder, pairs["rosy-release-test"])

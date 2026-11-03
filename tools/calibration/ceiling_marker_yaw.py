@@ -7,7 +7,7 @@ sightings, D-587 4):
 
     docker exec -i [-e ROSY_FLEET_TOKEN] rosy-site-vision-1 python3 - \
         --robot rosy_41 --marker 41 --fleet https://proxy:8443 --insecure \
-        [--dev-session --origin https://127.0.0.1:8443] \
+        [--origin https://127.0.0.1:8443] \
         [--source ceiling_north] [--heading-edge 0,1] [--seconds 12] \
         < tools/calibration/ceiling_marker_yaw.py
 
@@ -28,8 +28,8 @@ more than 5 deg of yaw spread.
 Offline (no Fleet, no token): ``--frames DIR --record record.json`` reads recorded raw
 frames of one straight forward drive (file mtime = capture time) and the approved record.
 
-Token: ``ROSY_FLEET_TOKEN`` (viewer or above), or ``--dev-session`` on a development-mode
-site. The token is never printed. ``estimate`` is stdlib only.
+Token: ``ROSY_FLEET_TOKEN`` (viewer or above) from an authenticated session.
+Development mode also requires login. The token is never printed. ``estimate`` is stdlib only.
 """
 from __future__ import annotations
 
@@ -187,12 +187,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--heading-edge", default="0,1", help="the source's heading_edge corners")
     parser.add_argument("--fleet", default="https://proxy:8443")
     parser.add_argument("--seconds", type=float, default=12.0)
-    parser.add_argument("--dev-session", action="store_true", help="ask a development-mode site for a session")
+    parser.add_argument("--dev-session", action="store_true", help="retired; use ROSY_FLEET_TOKEN")
     parser.add_argument("--insecure", action="store_true", help="skip TLS verification (site self-signed cert)")
     parser.add_argument("--origin", help="Origin header for session requests (default: --fleet)")
     parser.add_argument("--frames", help="offline: folder of recorded raw frames of one straight drive")
     parser.add_argument("--record", help="offline: the approved D-457 record as JSON (with --frames)")
     args = parser.parse_args(argv)
+    if args.dev_session:
+        parser.error("--dev-session is retired; sign in and provide ROSY_FLEET_TOKEN")
     fleet = args.fleet.rstrip("/")
     ORIGIN[:] = [args.origin] if args.origin else []
     edge = tuple(int(v) for v in args.heading_edge.split(","))
@@ -209,8 +211,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(json.dumps(result))
         return 0
     token = os.environ.get("ROSY_FLEET_TOKEN")
-    if args.dev_session:
-        token = _request(fleet, "/api/fleet/auth/development-session", None, context, {})["token"]
     print(f"drive {args.robot} straight forward now; reading marker {args.marker} for {args.seconds:.0f} s",
           flush=True)
     try:

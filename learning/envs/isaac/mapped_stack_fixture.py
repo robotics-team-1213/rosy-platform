@@ -77,6 +77,9 @@ def container_fixture(*, layers, case):
         value.update(FIXTURE_OVERRIDES[case], revision=value['revision']+'-'+case, case=case)
         gap = value['row_gap_m']  # the envelope grows by the two row gaps, as in the D-929 branch below
         value.update(bin_origin_m=[.035, -.045-gap, .074], bin_size_m=[.09, .09+2*gap, .03*layers])
+        if value.get('belt_drop_m'):  # surveyed belt below the CAD face: the belt and its feed points move down together
+            for key in ('belt_center_m', 'belt_stop_m', 'pickup_center_m', 'infeed_start_m'):
+                value[key] = [*value[key][:2], value[key][2]-value['belt_drop_m']]
         return ship_plate.place(value) if 'ship_plate' in value else value
     if case in EVALUATION_CASES:
         value = container_fixture(layers=layers, case='nominal')
@@ -143,6 +146,11 @@ def container_fixture(*, layers, case):
     for key in ('upstream_belt_center_m','upstream_belt_size_m','upstream_velocity_m_s','upstream_scope'):
         value.pop(key)
     value['recording'] = dict(value['recording'], eye=[.69,-.78,.69], focus=[.08,0.,.12])
+    # D-947 3: the real top and side cameras, surveyed by stud-grid PnP (docs/validation/omx-cell-survey-2026-11-03); up is the
+    # image -y axis from the PnP rotation, so the camera roll is kept (side 1.5 deg).
+    value['real_cameras'] = dict(
+        top=dict(eye=[-.0411,.0374,.6652], focus=[.0722,.0401,.1783], up=[.974,.0071,.2266], f_px=615., width=640, height=480),  # D435 nominal f
+        side=dict(eye=[-.5078,.0019,.1471], focus=[-.0082,-.0166,.1445], up=[.0061,.0257,.9997], f_px=950., width=640, height=480))  # f by reprojection
     if case=='column':
         value.update(revision='final-map-cad-container-column-v1',target_cells=[3,1,3],
             row_order=[0],center_row=0,bin_origin_m=[.035,-.015,.074],bin_size_m=[.09,.03,.09])
@@ -317,10 +325,22 @@ def leveling_release_target(index, sample, fixture, commanded_tcp=None):
         raise ValueError('Leveling carry is not an unsupported bilateral hold')
     if not prefix_held(sample,index,fixture):
         raise ValueError('Previous pallet prefix moved before leveling release')
-    center = fixture['leveling_center_m']
+    center = leveling_center(fixture, arm)
     desired = [*center[:2],center[2]+.015+fixture['release_clearance_m']]
     anchor = sample['tcps'][arm] if commanded_tcp is None else commanded_tcp
     return [anchor[k]+desired[k]-box['position'][k] for k in range(3)]
+
+
+def leveling_center(fixture, arm):
+    """The leveling spot `arm` uses: its own (`leveling_centers_m`, one per arm) or the shared `leveling_center_m`."""
+    centers = fixture.get('leveling_centers_m')
+    return centers[arm] if centers else fixture['leveling_center_m']
+
+
+def leveling_via(fixture, arm):
+    """The waypoint `arm` passes on its way to and from leveling: its own (`leveling_vias_m`, None for none) or the shared one."""
+    vias = fixture.get('leveling_vias_m')
+    return vias[arm] if vias else fixture.get('leveling_via_m')
 
 
 def leveling_box_stable(box,index,fixture):
@@ -335,7 +355,7 @@ def leveling_box_stable(box,index,fixture):
             or norm(box['velocity']) > .01 or norm(box['angular_velocity']) > .1
             or rotation_matrix(box['orientation'])[2][2] < math.cos(fixture['leveling_flat_tolerance_rad'])):
         return False
-    center = fixture['leveling_center_m']
+    center = leveling_center(fixture, plan(True,fixture=fixture)[index]['arm'])
     return (abs(box['position'][2]-center[2]-.015) <= .0015
         and all(abs(box['position'][axis]-center[axis])+half_extent(box,size,axis)
                 <= fixture['leveling_size_m'][axis]/2 for axis in (0,1)))

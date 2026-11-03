@@ -22,7 +22,7 @@ TIER2_QUEUE = {
     "web/components.css", "fleet/fleet/server/missions/mission_store.py", "robot_ui/robot/app.js",
     "core/gateway/core/bridge/ros_bridge.py", "deploy/robot/pinky_pro/native/rosy-ssh-access.py",
     "simulation/gazebo/scripts/lane_live_view.html", "fleet/fleet/server/auth/enrollment.py",
-    "tools/harness/rosy_harness.py", "drive/motion_limits/adapter/node.py", "fleet/fleet/server/app.py",
+    "tools/harness/rosy_harness.py", "drive/motion_limits/adapter/node.py",
     "drive/behaviors/line_follow/manager.py", "web/ui.js",
 }
 #: D-949 3: test files over their 1,500-line limit, split by screen or subject in follow-up work.
@@ -32,7 +32,7 @@ TEST_QUEUE = {
     "operations/fleet/test/test_trip_runner.py", "middleware/core/events/test/test_audit.py",
 }
 #: D-949 4: size units over 10,000 lines; each needs a dated split plan before it is cut.
-UNIT_QUEUE = {"control", "perception/front_camera/perception"}
+UNIT_QUEUE = {"control"}  # perception/front_camera/perception: back under 10,000 after the 2026-11-03 perception_runtime split
 
 _CODE = size_limits.CODE_SUFFIXES | size_limits.WEB_SUFFIXES
 

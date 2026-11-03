@@ -1235,6 +1235,15 @@ python deploy/robot/omx/cell_robot_profile.py <private-record-config.json> --pro
 다른 폴더로 복사해 다른 장부를 고르면 재검증이 필요하다. 같은 경로의 `./` 별칭은 동일하다.
 검토 내용은 profile SHA에 넣지 않으므로 검토 파일을 쓰는 작업과 task SHA 사이의 순환은 없다.
 
+세션 서보 튜닝은 기종 → 현장 → 로봇 순서로 겹친다(D-951 6). 뒤 층이 모터·키 단위로 앞 층을 덮는다.
+
+1. 기종 기본값 `omx-ai-follower-tuning.json`: 하중 받는 팔꿈치(13)·손목(14) I 게인 50, 값마다 근거.
+2. 현장 `caps.json`: PWM·전류 한계는 여기에만 둔다.
+3. 로봇 프로필의 선택 필드 `servo`(예: `{"14": {"i": 70}}`): `p`·`i`·`acc`·`vel`만 받는다.
+
+합친 값은 `session_caps`의 기존 범위로 검사하고, 세션이 끝나면 찾은 값으로 되돌린다. `servo`는 profile
+SHA에 들어가므로 값을 바꾸면 바인딩도 바뀐다. 실제 적용값은 세션 기록 `caps`에 남는다.
+
 실제로 승인된 실행을 준비할 때 parent session과 pipeline 양쪽에서 **같은 프로필**을 고른다.
 다음은 사용 형식이며 장치 시작 지시가 아니다.
 
@@ -1324,7 +1333,7 @@ export PYTHONPATH="$release/middleware/devices/omx/adapter:$release/contracts/fo
   2. env 파일의 코드 경로를 `~/.local/share/rosy/omx-devices/current`와 `current-env`로 바꾼다(`observer.env.example`, `observation-bridge.env.example`). 카메라 env는 `ROSY_CAMERA_SOURCE=.../current/middleware/devices/omx/adapter/omx_adapter/camera_source.py`, `ROSY_CAMERA_PIPELINE_ROOT=.../current/deploy/robot/omx`로 바꾼다.
   3. SHA가 이름에 박힌 drop-in(`95-motor-health-*.conf`)을 지운다. health 파일은 이제 템플릿과 `ROSY_OBSERVATION_ARM_HEALTH`가 정한다.
   4. 첫 실행은 저장소 사본으로 `python3 deploy/robot/omx/omx_autoupdate.py --config ~/.config/rosy/omx-devices-autoupdate.json run`.
-  5. 그 뒤 업데이터 유닛 두 개를 복사하고 `systemctl --user enable --now rosy-omx-devices-autoupdate.timer`.
+  5. 그 뒤 업데이터 유닛 두 개와 카메라 바인드 유닛 두 개(`rosy-omx-cameras-bind.service`·`.timer`)를 복사하고 `systemctl --user enable --now rosy-omx-devices-autoupdate.timer rosy-omx-cameras-bind.timer`. 바인드 타이머가 없으면 옮겨 꽂은 카메라 추적과 Fleet 설치 화면의 승인 적용(D-963)이 일어나지 않는다. 업데이터는 `unit_files`의 파일을 복사만 하고 타이머를 켜지 않는다.
 - 관측기가 멈춰 있으면 토크 근거가 없으므로 업데이트는 `follower_torque_not_off`로 보류된다.
 
 실제 owner로 전환할 때는 두 `rosy-omx-observer@arm_a/arm_b` 유닛을 중지하고

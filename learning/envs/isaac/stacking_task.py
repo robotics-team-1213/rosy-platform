@@ -249,7 +249,12 @@ def run(args):
         if mapped and not robot._articulation_view._physics_view.shared_metatype.fixed_base:
             raise RuntimeError('Mapped OMX requires a native fixed base')
 
+    real_cameras = {}
+
     def capture(name, overview=False):
+        if name.startswith('real-'):
+            view = name[len('real-'):-len('.png')].removesuffix('-final')
+            return scene.real_capture(world, real_cameras, view, FIXTURE['real_cameras'][view], args.report.parent/name)
         scene.capture(world, camera, eye, args.report.parent/name, container=container, overview=overview)
 
     if mapped:
@@ -549,7 +554,7 @@ def main():
                                  'release-episodes-rl2', 'release-episodes-rl3', 'nominal-bc-v0-rl3',
                                  'nominal-bc-v0-release8', 'nominal-release3', 'nominal-gap6-release3',
                                  'nominal-palletizing-v21', 'nominal-palletizing-v21-hold', 'nominal-palletizing-v21-ship',
-                                 *('nominal-palletizing-v21-ship-'+n for n in ('y040', 'y050', 'y060', 'y-060', 'x150', 'y020', 'y030', 'x100', 'y-020', 'y-030', 'g315', 'y020-g315', 'y030-g315', 'y040-g315', 'y-020-g315', 'y-030-g315', 'g3225', 'y060-g315', 'y060-guard-g315', 'r290-g315', 'y080-r290-g315', 'y100-r290-guard-g315', 'y050-g315', 'y100-r290-g315', 'y-080-r290-g315', 'w05-g315', 'y060-r290-g315', 'y070-r290-g315', 'y-060-r290-g315', 'y-070-r290-g315', 'w10-g315', 'w05-r290-g315', 'w10-r290-g315', 'y020-g3225', 'y030-g3225', 'y040-g3225', 'y-020-g3225'))),
+                                 *('nominal-palletizing-v21-ship-'+n for n in ('surveyed-bases', 'surveyed', 'y040', 'y050', 'y060', 'y-060', 'x150', 'y020', 'y030', 'x100', 'y-020', 'y-030', 'g315', 'y020-g315', 'y030-g315', 'y040-g315', 'y-020-g315', 'y-030-g315', 'g3225', 'y060-g315', 'y060-guard-g315', 'r290-g315', 'y080-r290-g315', 'y100-r290-guard-g315', 'y050-g315', 'y100-r290-g315', 'y-080-r290-g315', 'w05-g315', 'y060-r290-g315', 'y070-r290-g315', 'y-060-r290-g315', 'y-070-r290-g315', 'w10-g315', 'w05-r290-g315', 'w10-r290-g315', 'y020-g3225', 'y030-g3225', 'y040-g3225', 'y-020-g3225'))),
                         default='nominal')
     args = parser.parse_args()
     check_vendor_manifest()

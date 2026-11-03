@@ -13,7 +13,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from control.sensing.perception.camera_ground import simulation_ground_plane
+from perception_runtime.perception.camera_ground import simulation_ground_plane
 
 ROOT = Path(__file__).resolve().parents[1]
 H = 0.0925

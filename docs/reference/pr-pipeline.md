@@ -53,9 +53,13 @@ python tools/land.py --tests full --no-cache
 
 `full`은 현재 후보의 CI·모듈·전체 root 시험과 등록된 모든 opt-in 브라우저의 chunk·ALONE 계획을 고른다. 매 프로세스 실행마다 정상 준비를 거치고 guard·isolation은 현재 실행에서 cache 없이 확인한다. 본시험은 같은 tree·시험 환경의 clean cache를 재사용할 수 있으며, `--no-cache`는 이 본시험 재사용을 끈다. 한 실행에서 확인한 준비 근거로 main 변경분을 검증하는 흐름은 유지하므로, 이 옵션을 모든 후속 호출의 무조건 재실행으로 설명하지 않는다. main·registry·packing·환경이 달라져 근거가 부족하면 다시 준비한다. `full --no-queue`는 지원하지 않는다.
 
+게시용 explicit FULL은 lookahead speculation을 만들거나 소비하지 않고, 실제 main 변경분의 실행 근거를 사용한다.
+
 LOAD-FLAKY·다른 tree의 좁은 재사용·불완전 본시험·빈 브라우저 통과는 explicit FULL의 저장·착지를 막는다. isolation의 기존 정책은 유지한다. Safety 미도달·새 실패·죽거나 report가 없는 job은 중단하고, 허용된 nonSafety 예산 초과는 미완료로 기록·보고한다. auto의 착지 허용은 그대로지만 부적격 준비·차례 결과는 재사용 가능한 게시 기록이 되지 않는다. 준비 기록의 `tier=full` 문자열만으로 이전 실행을 신뢰하지 않는다.
 
 게시 담당은 `tools/publish_main.py`가 선택한 **실제 SHA**에 요청된 모든 착지가 포함되는지 각각 `git merge-base --is-ancestor <착지-SHA> <선택-SHA>`로 확인한다. 도구가 고른 가장 최근 FULL 조상에 마지막 기능이 없으면 게시하지 않는다. 해당 SHA의 적격 FULL 기록, 같은 PR head의 녹색 `ci-result`, merge commit 병합과 origin 역동기화를 함께 확인한다(D-868). `--force-blocked`는 FULL 근거나 기능 포함 확인을 대신하지 않는다. 실제 FULL·공개 CI·산출물·현장 수용은 별도 근거다.
+
+게시 후보 선택과 열린 게시 PR 병합은 같은 근거 검사를 쓴다. 후보 SHA 자체의 정본 FULL·전체 브라우저 chunk/ALONE 계획과 실행의 commit·tree·시험 환경·정확한 argv·로그 내용 SHA-256 대응을 확인한다. 준비 후보의 FULL은 최종 후보와 계획·환경이 같고, 기존 `land_full` 규칙에 따라 main 병합과 허용된 기록 해결만 이어졌을 때 그 준비 SHA의 근거로 인정한다. `tier=full` 문자열이나 root `["test"]` 표지만 있는 과거 기록, 로그 해시가 없는 과거 실행 대응은 자격이 없다. `--no-cache` 실행도 새 clean 실행 대응을 남긴다. 대응 캐시가 정리됐거나 로그가 없어지거나 바뀌면 안전하게 거부하므로, 게시까지 실행 근거를 보존하고 거부 사유에 맞춰 새 FULL을 준비한다.
 
 `ci-result` 성공이 모든 개별 잡의 통과를 뜻하지는 않는다. 보고용 비게이팅 잡도 읽고 실패·수집 오류·미실행을 별도로 기록한다. 새로 드러난 실패는 원인을 확인하고 해결한다. 기존 실패로 판단하려면 변경 전 기준선의 같은 실패 근거를 남긴다. 시험을 숨기거나 freshness·안전 기준을 느슨하게 바꾸지 않는다. 관리자 예외로 적색 CI를 넘기지 않는다.
 
@@ -107,7 +111,7 @@ Fleet와 명시된 계정 SSO 여정 외의 CORE 브라우저 시험은 기본 �
 |---|---|
 | 공개 범위·기본 브랜치 | public · `main`, Issues 사용 |
 | main 보호 | PR 필요, 삭제·force-push 제한, 관리자 우회도 PR 경로로 제한 |
-| 필수 검사 | `ci-result`, `review-gate`(이 workflow가 녹색으로 보고된 뒤 ruleset에 추가) |
+| 필수 검사 | `ci-result`, `review-gate`(2026-11-02 publish PR #227에서 녹색 확인 뒤 ruleset `main-protection`에 추가) |
 | 사람 승인 | ruleset 0명, code owner 승인 강제 꺼짐. 다른 사람(PR 작성자·에이전트 계정 `codex` 제외)이 최근 14일 `main`에서 바꿨거나 열린 PR에서 바꾸는 파일을 이 PR도 바꾸면 `review-gate`가 작성자 아닌 사람의 승인(그 사람의 마지막 리뷰)을 요구하고 그 사람에게 리뷰를 요청한다. 겹침이 없으면 혼자·병렬 작업 모두 승인 없이 통과. 검사는 대상 브랜치의 `.github/review-gate.sh`로 돌고(workflow 파일 자체는 PR 쪽이 돌므로 그 파일을 바꾸는 PR은 검토자가 직접 확인), `main`이 바뀌거나 다른 PR이 갱신되면 `review-gate-recheck`가 열린 PR의 검사를 다시 돌린다. `CODEOWNERS`의 리뷰 요청과 서버의 승인 강제는 구분 |
 | 병합 | merge commit만 허용(D-868, 2026-10-25), 병합 후 원격 브랜치 자동 삭제 |
 | auto-merge·merge queue | auto-merge 꺼짐, ruleset `main-protection`에 merge queue 있음(`ALLGREEN`·MERGE, 2026-11-02 확인). 필수 검사는 `merge_group`에도 보고해야 한다 |

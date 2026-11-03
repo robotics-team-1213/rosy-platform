@@ -3,23 +3,17 @@ module: docs
 logical_modules: []
 owner: 거버넌스
 last_verified:
-  commit: bed604ef
-  date: 2026-09-30
+  commit: 7c0225640f
+  date: 2026-11-03
 gates:
   SOURCE:
     state: GO
-    evidence: D-61 Accepted, D-72/D-77/D-153/D-154 본문·색인 일치. SD 개인화 설계/실행 계획 정렬; focused
-      ADR/network 계약 검증 (2026-09-21 Windows); D-169/D-170 추가 (2026-09-22); D-177/D-181
-      Proposed 추가 (2026-09-23, 구 D-176은 origin과 번호 충돌로 이명 — D-180은 perf/sd-single-verify
-      브랜치 선점); D-178 Accepted 승격 — 2차 회차 완료+기준선 갱신 (2026-09-23)
+    evidence: Actual-main SOT gates stored FULL reuse; shared strict plan validation runs before FF and again in the writer. Independent 7c0225640f review found no supported findings. Legacy-main/affected behavior and immutable bridge remain unchanged.
     cmd: python tools/harness/rosy_harness.py lint
   LOCAL:
     state: GO
-    evidence: '게이트 cmd 123 passed (2026-09-30 Windows): isaac_sim 스코어카드 잠정 행·fleet
-      크기 재판정·io closure D-84 예외·버전 핀 v1.59를 같은 회차에 정리. 이전 blocker(dashboard malformed
-      heading)는 상류 커밋에서 이미 해소됐고, isaac_sim/fleet 2건도 이번 회차에 해소'
-    cmd: python -m pytest test/test_network_topology_contracts.py test/test_harness_contracts.py
-      test/test_module_scorecard.py test/architecture/test_module_structure.py -q
+    evidence: '7c0225640f fresh whole-file checks: selection 74, record 22, affected selector 171, G1 gate 36 and publication 49 passed, each skip 0; unchanged collect/whole wrapper 4 passed / skip 0. All six reports NEW/known/flaky 0. Base 374f684bfa fresh selection/record/prepare/publication/landing checks and wrapper passed without skips; strict-shape RED was separately reproduced. No FULL, landing, publication or actual timing acceptance is claimed.'
+    cmd: python tools/remote/remote_pytest.py --sha 7c0225640f --affected-json '<OS Temp>/rosy-g1-restore-preff-green-7c02/invocations.json'
   ROS-SIM:
     state: N/A
   ARTIFACT:

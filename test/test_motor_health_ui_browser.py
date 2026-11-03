@@ -169,7 +169,7 @@ def test_cell_arm_health_uses_shared_view_without_double_aging_and_retains_fault
         card=page.locator('[data-arm-source="feedback_a"]')
         expect(card.locator('.motor-health-summary')).to_contain_text('주의 모터 1개')
         assert card.locator('.motor-health-summary').get_attribute('data-evidence')=='fresh'
-        card.locator('summary').click()
+        card.locator('summary.motor-health-summary').click()
         expect(card.locator('.motor-health tbody tr')).to_have_count(5)
         assert '어깨 올림' in card.locator('.motor-health').inner_text()
         local_label(page,'[data-arm-source="feedback_a"] .motor-health')
@@ -187,6 +187,73 @@ def test_cell_arm_health_uses_shared_view_without_double_aging_and_retains_fault
         card.scroll_into_view_if_needed()
         save_temp_screenshot(page,f'motor_health_cell_LOCAL_{width}.png')
         assert not state.failed_assets,state.failed_assets
+        page.unroute_all(behavior='ignoreErrors')
+        browser.close()
+
+
+def test_cell_releases_expired_fault_frames_across_all_arms_and_disposes_survivors(cell_url):
+    from playwright.sync_api import expect, sync_playwright
+    from test_fleet_workcell_observation_browser import observation_feed
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        page = browser.new_page()
+        errors = []
+        page.on('pageerror', lambda error: errors.append(str(error)))
+        state, snapshot = observation_feed(page)
+        # Drive each poll explicitly so 21 deque updates need no wall-clock waits.
+        page.add_init_script('window.setInterval = () => 0')
+        page.goto(cell_url)
+        data = snapshot()
+        for arm in data['workcells'][0]['arms']:
+            arm['faults'] = []
+        data['workcells'].append({'workcell_id': 'second', 'label': '두 번째 셀',
+                                  'arms': [data['workcells'][0]['arms'].pop()], 'cameras': []})
+        page.evaluate("""async data => {
+          const {createCellObservation} = await import('/console/assets/cell-observation.js');
+          const root = document.createElement('section'); root.id = 'fault-lifetime'; document.body.append(root);
+          window.__faultState = data; window.__revoked = [];
+          const revoke = URL.revokeObjectURL.bind(URL);
+          URL.revokeObjectURL = url => { window.__revoked.push(url); revoke(url); };
+          window.__observation = createCellObservation({root, request: async (path, options) => {
+            if (path.endsWith('/workcell-observations')) return structuredClone(window.__faultState);
+            const response = await fetch(path, {...options,
+              headers: {...options?.headers, Authorization: 'Bearer viewer-token'}});
+            return response.json();
+          }});
+          await window.__observation.refresh();
+        }""", data)
+        root = page.locator('#fault-lifetime')
+        for image in root.locator('[data-camera-source] img').all():
+            expect(image).to_be_visible()
+        page.evaluate("""async () => {
+          const arms = window.__faultState.workcells.flatMap(cell => cell.arms);
+          const stop = session_id => ({session_id, captured_at: 1793500000,
+            motors: [], stop_reasons: ['following error']});
+          arms[1].faults = [stop('other-arm')];
+          await window.__observation.refresh();
+          window.__surviving = [...document.querySelectorAll(
+            '#fault-lifetime [data-arm-source="feedback_b"] .cell-fault-frames img')].map(img => img.src);
+          for (let i = 0; i < 21; i++) {
+            arms[0].faults.unshift(stop(`stop-${i}`)); arms[0].faults = arms[0].faults.slice(0, 20);
+            await window.__observation.refresh();
+            if (i === 0) window.__expired = [...document.querySelectorAll(
+              '#fault-lifetime [data-arm-source="feedback_a"] .cell-fault-frames img')].map(img => img.src);
+          }
+        }""")
+        expect(root.locator('[data-arm-source="feedback_a"] .cell-fault-history > li')).to_have_count(20)
+        assert page.evaluate('window.__expired.length === 3 && window.__expired.every(url => window.__revoked.includes(url))')
+        assert page.evaluate('window.__surviving.length === 3 && window.__surviving.every(url => !window.__revoked.includes(url))')
+        for image in root.locator('[data-arm-source="feedback_b"] .cell-fault-frames img').all():
+            expect(image).to_be_visible()
+            assert image.evaluate('img => img.complete && img.naturalWidth > 0')
+        page.evaluate("""() => {
+          window.__remaining = [...document.querySelectorAll('#fault-lifetime img')].map(img => img.src);
+          window.__observation.dispose();
+        }""")
+        assert page.evaluate('window.__remaining.length === 66 && window.__remaining.every(url => window.__revoked.includes(url))')
+        expect(root.locator('img')).to_have_count(0)
+        assert not state.failed_assets, state.failed_assets
+        assert not errors, errors
         page.unroute_all(behavior='ignoreErrors')
         browser.close()
 
@@ -260,4 +327,49 @@ def test_slow_response_counts_browser_transit_against_sample_freshness(console_u
             panel=page.locator('#motor-panel')
             panel.locator('tbody tr').first.wait_for()
             assert panel.get_attribute('data-evidence')=='delayed'
+        browser.close()
+
+
+def test_cell_keeps_a_guard_stop_with_the_lagging_joints_and_the_frames_on_screen(cell_url):
+    from playwright.sync_api import expect, sync_playwright
+    from test_fleet_workcell_observation_browser import observation_feed
+    stop = {'captured_at': 1793500000.0, 'session_id': '22222222-2222-4222-8222-222222222222',
+            'stop_reasons': ['following error'], 'motors': [
+                dict(joint=f'joint{i}', id=10 + i, error_deg=e, command_raw=2000., present_raw=2000. + e * 11.4,
+                     pwm=-82. if i == 5 else 100., pwm_limit=300., fault=i == 5)
+                for i, e in ((1, 2.2), (2, .1), (3, .2), (4, .3), (5, 5.0))]}
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        page = browser.new_page(viewport={'width': 390, 'height': 900})
+        state, snapshot = observation_feed(page)
+        faults = []
+
+        def observations(route):
+            data = snapshot()
+            for arm in data['workcells'][0]['arms']:
+                arm['faults'] = list(faults) if arm['arm_id'] == 'arm_a' else []
+            route.fulfill(json=data)
+        page.route('**/api/fleet/workcell-observations', observations)
+        page.goto(cell_url)
+        card = page.locator('[data-arm-source="feedback_a"]')
+        expect(card).to_contain_text('고장 이력 없음')
+        expect(page.locator('[data-camera-source="top"] img')).to_be_visible()
+        faults.append(stop)  # arrives while the page is open: held with the frames on screen
+        expect(card.locator('details:has(.cell-fault-history)')).to_have_attribute('open', '')
+        history = card.locator('.cell-fault-history')
+        expect(history).to_contain_text('손목 회전(ID 15) 정지 · 오차 5.0°')
+        expect(history).to_contain_text('함께 뒤처진 관절: 어깨 회전 2.2°')
+        expect(history.locator('.cell-fault-frames img')).to_have_count(3)
+        expect(card).to_contain_text('고장 이력 1건')
+        tile = page.locator('[data-camera-source="top"]')
+        tile.focus()
+        page.keyboard.press('Enter')
+        expect(tile).to_have_class('cell-observation-card focused')
+        expect(tile).to_have_attribute('aria-pressed', 'true')
+        page.keyboard.press('Escape')
+        expect(tile).to_have_attribute('aria-pressed', 'false')
+        assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
+        save_temp_screenshot(card, 'cell_fault_history_LOCAL_390.png')
+        assert not state.failed_assets, state.failed_assets
+        page.unroute_all(behavior='ignoreErrors')
         browser.close()

@@ -5,7 +5,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[3]
 for p in (ROOT / "learning/curation/perception", ROOT / "learning/registry/perception",
           ROOT / "learning/training/perception", ROOT / "learning/evaluation/perception",
-          ROOT / "tools/perception", ROOT / "middleware" / "perception",
+          ROOT / "tools/perception", ROOT / "middleware" / "perception", ROOT / "integrations" / "perception",
           ROOT / "contracts" / "foundation"):  # core_common, needed by control (D-424)
     if str(p) not in sys.path:
         sys.path.insert(0, str(p))
@@ -14,6 +14,8 @@ for p in (ROOT / "learning/curation/perception", ROOT / "learning/registry/perce
 _HARNESS = str(Path(__file__).resolve().parents[3] / 'test')
 if _HARNESS not in sys.path:
     sys.path.append(_HARNESS)
+# D-964: manifest/detector fixtures moved with their code to integrations/perception/test.
+sys.path.append(str(ROOT / "integrations" / "perception" / "test"))
 
 
 @pytest.fixture(autouse=True)

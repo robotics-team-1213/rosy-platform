@@ -5,15 +5,26 @@ from time import monotonic
 
 import httpx
 
-from core_common.protocol.control_units import ControlIngressRequest, ControlUnitReply
+from core_common.protocol.control_units import (
+    ControlArmIngressRequest, ControlArmTransferCandidate, ControlIngressRequest, ControlUnitReply,
+)
 from fleet.server.control_unit_store import TERMINAL
 from fleet.swarm.transport import RobotApiError
 
+# ARM job status -> delegation state; the cell's own ARM admit moves PROPOSED onward (D-965).
+ARM_STATES = {"PROPOSED": "QUEUED", "READY": "ACCEPTED", "RUNNING": "RUNNING",
+              "ACTION_SUCCEEDED": "RUNNING", "GOAL_CONFIRMED": "COMPLETED", "HOLD": "HOLD"}
+
+
+def _is_arm(request):
+    return isinstance(request, ControlArmTransferCandidate) or (isinstance(request, dict) and "transfer" in request)
+
 
 class ControlUnitService:
-    def __init__(self, topology, store, tasks, console, *, peer):
+    def __init__(self, topology, store, tasks, console, *, peer, arm_jobs=lambda: None):
         self.topology, self.store = topology, store
         self.tasks, self.console, self.peer = tasks, console, peer
+        self.arm_jobs = arm_jobs
         self.unit = topology.unit(store.unit_id)
         robots = {r[6:] for r in self.unit.resources if r.startswith("robot:")}
         if robots != tasks.robot_ids or store.path.resolve() != tasks.store.path.resolve():
@@ -31,23 +42,42 @@ class ControlUnitService:
 
     def _owner(self, candidate):
         target = self.topology.unit(candidate.target_unit)
-        if "robot:" + candidate.robot_id not in target.resources:
+        resource = ("workcell:" + candidate.transfer.workcell_id if _is_arm(candidate)
+                    else "robot:" + candidate.robot_id)
+        if resource not in target.resources:
             raise ValueError("CONTROL_UNIT_RESOURCE_OUTSIDE_SCOPE")
         return (self.unit.unit_id if target == self.unit
                 else self.topology.next_hop(self.unit.unit_id, target.unit_id))
 
     def _create(self, origin, request):
         owner = self._owner(request)
-        body = request.model_dump(mode="json", include={"target_unit", "robot_id", "goal"})
+        fields = {"target_unit", "transfer"} if _is_arm(request) else {"target_unit", "robot_id", "goal"}
+        body = request.model_dump(mode="json", include=fields)
         return self.store.create(origin, request.delegation_id, body, owner_unit=owner,
                                  config_revision=self.topology.revision)
+
+    def _propose_arm(self, row, principal):
+        """The direct parent's service principal proposes; only the cell's ARM admit approves."""
+        jobs = self.arm_jobs()
+        if jobs is None:
+            raise ValueError("CONTROL_UNIT_ARM_JOBS_UNAVAILABLE")
+        transfer = dict(row["request"]["transfer"])
+        transfer.pop("request_key")
+        request_key = "control:" + sha256("\0".join(self._key(row)).encode()).hexdigest()
+        try:
+            jobs.create(principal=principal, request_key=request_key, request=transfer,
+                        bind=lambda connection, identity: self.store.bind_local(
+                            *self._key(row), identity, connection=connection))
+        except PermissionError:
+            raise ValueError("CONTROL_UNIT_ARM_PROPOSAL_FORBIDDEN") from None
+        return self.store.get(*self._key(row))
 
     async def submit(self, request):
         row = self._create(self.unit.unit_id, request)
         await self._sync(row)
         return self.reply(*self._key(row))
 
-    async def receive(self, request, *, parent_id):
+    async def receive(self, request, *, parent_id, principal=None):
         if parent_id != self.unit.parent or parent_id is None:
             raise ValueError("CONTROL_UNIT_NOT_DIRECT_PARENT")
         ancestor = self.topology.unit(parent_id)
@@ -58,6 +88,9 @@ class ControlUnitService:
         if request.config_revision != self.topology.revision:
             raise ValueError("CONTROL_UNIT_CONFIGURATION_CHANGED")
         row = self._create(request.origin_id, request)
+        if (_is_arm(request) and row["owner_unit"] == self.unit.unit_id and not row["local_task_id"]
+                and not row["cancel_requested"] and row["status"] not in TERMINAL):
+            row = self._propose_arm(row, principal)
         await self._sync(row)
         return self.reply(*self._key(row))
 
@@ -92,6 +125,20 @@ class ControlUnitService:
         if parent["owner_unit"] != self.unit.unit_id or parent["cancel_requested"] or parent["status"] in TERMINAL:
             raise ValueError("CONTROL_UNIT_PARENT_ADMISSION_REFUSED")
 
+    async def check_arm_admission(self, mission_id):
+        rows = self.store.for_local_task(mission_id)
+        if not rows:
+            return None
+        if len(rows) != 1:
+            raise ValueError("CONTROL_UNIT_AMBIGUOUS_ARM_BINDING")
+        row = rows[0]
+        if (not _is_arm(row["request"]) or row["owner_unit"] != self.unit.unit_id
+                or row["config_revision"] != self.topology.revision or row["cancel_requested"]
+                or row["status"] in TERMINAL):
+            raise ValueError("CONTROL_UNIT_ARM_ADMISSION_REFUSED")
+        await self._parent_current(row)
+        return monotonic()
+
     async def read(self, origin, identity, *, for_child=None):
         row = self.store.get(origin, identity)
         if for_child is not None:
@@ -105,6 +152,8 @@ class ControlUnitService:
         row = self.store.get(origin, identity)
         if row["owner_unit"] != self.unit.unit_id:
             raise ValueError("CONTROL_UNIT_LOCAL_APPROVAL_REQUIRED")
+        if _is_arm(row["request"]):
+            raise ValueError("CONTROL_UNIT_ARM_ADMIT_AT_CELL")
         await self._parent_current(row)
         refusal = self.console.trip_refusal([row["request"]["robot_id"]])
         if refusal is not None:
@@ -130,11 +179,32 @@ class ControlUnitService:
         return self.store.project(*self._key(row), owner_unit=self.unit.unit_id,
                                   owner_revision=row["owner_revision"] + 1, status=status, result=result)
 
+    def _local_arm(self, row):
+        jobs = self.arm_jobs()
+        job = None if jobs is None else jobs.view(row["local_task_id"])
+        if job is None:
+            raise ValueError("CONTROL_UNIT_BOUND_ARM_JOB_MISSING")
+        if row["cancel_requested"]:
+            if job["status"] == "PROPOSED":
+                # Withdrawn to HOLD; the ARM admit also refuses a canceled delegation, so it can never run.
+                jobs.cancel(job["mission_id"], reason="control-unit-cancel")
+                return self._local_result(row, "CANCELED", {"job": jobs.view(row["local_task_id"]), "receipt": None})
+            if not row["result"].get("cancel_sent"):
+                jobs.cancel(job["mission_id"], reason="control-unit-cancel")
+                job = jobs.view(row["local_task_id"])
+        # The origin app reads job and receipt only through this projection (D-965); cancel_sent is not a stop.
+        result = {"job": job, "receipt": jobs.receipt(job["mission_id"])}
+        if row["cancel_requested"]:
+            result["cancel_sent"] = True
+        self._local_result(row, ARM_STATES[job["status"]], result)
+
     async def _local(self, row):
         if not row["local_task_id"]:
             if row["cancel_requested"]:
                 self._local_result(row, "CANCELED", {"reason": "CANDIDATE_CANCELED_BEFORE_ADMISSION"})
             return
+        if _is_arm(row["request"]):
+            return self._local_arm(row)
         task = self.tasks.store.get_task(row["local_task_id"])
         if task is None:
             raise ValueError("CONTROL_UNIT_BOUND_TASK_MISSING")
@@ -166,9 +236,9 @@ class ControlUnitService:
             if row["owner_unit"] == self.unit.unit_id:
                 await self._local(row)
             else:
-                incoming = ControlIngressRequest(**row["request"], origin_id=row["origin_id"],
-                                                  delegation_id=row["delegation_id"],
-                                                  config_revision=row["config_revision"])
+                ingress = ControlArmIngressRequest if _is_arm(row["request"]) else ControlIngressRequest
+                incoming = ingress(**row["request"], origin_id=row["origin_id"],
+                                   delegation_id=row["delegation_id"], config_revision=row["config_revision"])
                 response = await self.peer(row["owner_unit"], "POST", "inbox", incoming.model_dump(mode="json"))
                 if row["cancel_requested"]:
                     response = await self.peer(row["owner_unit"], "POST", "/".join(self._key(row)), {})

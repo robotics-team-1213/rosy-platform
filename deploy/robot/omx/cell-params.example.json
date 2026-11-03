@@ -25,6 +25,18 @@
    "source": "tuned",
    "evidence": "2026-10-28 real top camera: green container vs grey pinky board (value as shipped in code)"
   },
+  "objects.split_max": {
+   "value": 6,
+   "unit": "count",
+   "source": "default",
+   "evidence": "2026-11-03 arm_b ship plate: five 3-cell containers in a row made one blob; 2-3 was the most tried before"
+  },
+  "objects.split_gap_mm": {
+   "value": 8.0,
+   "unit": "mm",
+   "source": "theory",
+   "evidence": "2026-10-31 ship plate design: 6 mm cell gaps (5-8) for the jaws; the row read about 174 mm for five 30 mm widths"
+  },
   "objects.split_axis_deg": {
    "value": 12.0,
    "unit": "deg",
@@ -188,10 +200,10 @@
    "evidence": "2026-10-28 real arm S: guard/pacing diagnosis (value as shipped in code)"
   },
   "runner.idle_park_s": {
-   "value": 180.0,
+   "value": 60.0,
    "unit": "s",
-   "source": "measured",
-   "evidence": "2026-10-28 facts 5: park then stop on real arm S"
+   "source": "default",
+   "evidence": "2026-11-03 user decision: holding torque minutes after a lost link strains the motors (was 180, 2026-10-28 facts 5: park then stop on real arm S)"
   },
   "safety.bus_watchdog_ms": {
   "value": 0.0,
@@ -200,16 +212,64 @@
   "evidence": "2026-10-31: the site PC dropped off mid-carry; the motors' own link check (Dynamixel Bus Watchdog) stops a motor with no packet for this long. 0 = off until its trip in position mode is observed on arm S (supervised, arm folded)"
  },
  "runner.idle_stop_s": {
-   "value": 180.0,
+   "value": 30.0,
    "unit": "s",
-   "source": "measured",
-   "evidence": "2026-10-28 real arm S: guard/pacing diagnosis (value as shipped in code)"
+   "source": "default",
+   "evidence": "2026-11-03 user decision: torque OFF soon after the idle fold reaches home (was 180)"
+  },
+ "runner.idle_retry_s": {
+   "value": 300.0,
+   "unit": "s",
+   "source": "default",
+   "evidence": "2026-11-03 user decision: an idle fold a hold stopped is tried once more after this; a second hold keeps the arm for a person"
   },
   "runner.contact_lag": {
    "value": 1.5,
    "unit": "joint_unit",
    "source": "measured",
    "evidence": "2026-10-28 real arm S: guard/pacing diagnosis (value as shipped in code)"
+  },
+  "windup.rest_rise": {
+   "value": 40,
+   "unit": "pwm",
+   "source": "measured",
+   "evidence": "push_replay.py over every follower motor-health log, 2026-11-03 (arm_a 38.1 h, arm_b 5.8 h): normal standstill wind-ups reached a 79 rise but at most PWM 198 of 600; the real presses wound to 273 (arm_b 04:51) and 281 -> 476 (arm_b 13:27 elbow overload); both gates together: 0 hits on arm_a, the 3 real presses on arm_b"
+  },
+  "windup.rest_pwm": {
+   "value": 0.4,
+   "unit": "ratio",
+   "source": "measured",
+   "evidence": "push_replay.py over every follower motor-health log, 2026-11-03 (arm_a 38.1 h, arm_b 5.8 h): normal standstill wind-ups reached a 79 rise but at most PWM 198 of 600; the real presses wound to 273 (arm_b 04:51) and 281 -> 476 (arm_b 13:27 elbow overload); both gates together: 0 hits on arm_a, the 3 real presses on arm_b"
+  },
+  "windup.jaw_pwm": {
+   "value": 0.5,
+   "unit": "ratio",
+   "source": "measured",
+   "evidence": "2026-11-03 13:27 arm_b: jaws caught on a box edge sat 5.8 units short of closed at PWM -278..-291 of 300 for 55 s; closing on air ends within 2 units"
+  },
+  "windup.jaw_gap": {
+   "value": 2.0,
+   "unit": "gripper",
+   "source": "measured",
+   "evidence": "the runner's EMPTY_MARGIN: empty jaws close to within 2 units of their target (grasp holding verdict)"
+  },
+  "loadcheck.risky_share": {
+   "value": 0.5,
+   "unit": "ratio",
+   "source": "measured",
+   "evidence": "load_model.py over every follower motor-health log, 2026-11-03 (arm_a 76255 standstill samples/112 sessions, arm_b 9987/44): the largest standstill |PWM| outside a press was 0.48 of the cap (arm_a shoulder_lift 288/600), 0.41 (arm_a elbow), 0.50 (arm_b wrist 149/300) and 0.48 (arm_b elbow 290/600); the arm_b 13:27 overload (476/600 = 0.79) was a press at home, which the pose model predicts as 0 and no plan check can see. Model predictions over all logged poses stay under 0.32 (arm_a) and 0.45 (arm_b) of the cap, so 0.5 refuses nothing the arms held normally. Also windup.rest_pwm's 0.4 and the strain test's 0.5"
+  },
+  "loadcheck.min_cell": {
+   "value": 20,
+   "unit": "count",
+   "source": "measured",
+   "evidence": "load_model.py over every follower motor-health log, 2026-11-03 (arm_a 76255 standstill samples/112 sessions, arm_b 9987/44): a 5-unit (lift, elbow, wrist) cell is trusted from 20 standstill samples (about 20 s of holding); that keeps 44 cells on arm_a and 22 on arm_b, and of 413 taught/planned libraries on the field PC only 20 (arm_a) and 2 (arm_b) lie fully inside them"
+  },
+  "loadcheck.refuse_unknown": {
+   "value": 0,
+   "unit": "flag",
+   "source": "default",
+   "evidence": "2026-11-03: most new plans leave the logged poses (mean 53 % of frames on arm_a, 83 % on arm_b over 413 field libraries); an unknown pose is reported in the load_check status row and still loads. 1 refuses them"
   },
   "runner.contact_ticks": {
    "value": 2,
@@ -793,6 +853,24 @@
   "unit": "mm",
   "source": "tuned",
   "evidence": "2026-10-29 board pivot point, the same marks: 31.7/33.1/38.3 mm from the circle's centre"
+ },
+ "objects.split_stagger_mm": {
+  "value": 20.0,
+  "unit": "mm",
+  "source": "measured",
+  "evidence": "2026-11-03 arm_b pallet: four 3-cells put back by hand, the leftmost about 15 px along from the others; the row read 116 x 145 mm and no count fit the 90 mm box length within 9"
+ },
+ "reach.gain": {
+  "value": 1.0,
+  "unit": "ratio",
+  "source": "default",
+  "evidence": "the full error each re-plan; 2026-11-03 arm_b moved 1.5-2.4 times the correction and swung -4.4 / +2.1 / -2.9 mm round the aim"
+ },
+ "look.mark_err_mm": {
+  "value": 14.0,
+  "unit": "mm",
+  "source": "measured",
+  "evidence": "2026-11-03 arm_b dense row: the jaw mark opens to 62 (about 131 mm of gap by the 52.3 / 10.4 line) among boxes 6 mm apart; the mark may only open when the free distance each side of the box centre reaches half that gap plus this error, the top map's worst leave-one-out error (13.6 mm, 2026-10-30)"
  },
  "look.near_px": {
   "value": 40.0,

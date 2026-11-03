@@ -9,42 +9,18 @@ from __future__ import annotations
 import hmac
 import logging
 import sqlite3
-from dataclasses import dataclass, field
 from hashlib import sha256
 from typing import Mapping, Optional
 
 from fastapi import Depends, Header, HTTPException, Request
 
+from rosy_account.principal import SitePrincipal, legacy_grants
+from rosy_account.site_users import validate_machine_user
+
 AI_PATHS = frozenset({"/api/fleet/ai/facts", "/api/fleet/ai/heartbeat",  # D-577 4
                       "/api/fleet/ai/proposals"})   # D-577 개정 2026-10-10: proposals, Fleet validates
 
 _LOG = logging.getLogger(__name__)
-
-
-@dataclass(frozen=True)
-class SitePrincipal:
-    principal_id: str
-    role: str
-    password_change_required: bool = False
-    password_fingerprint: str = field(default="", compare=False, repr=False)
-    account_id: Optional[str] = None
-    grants: tuple = ()
-    site_resource: Optional[str] = None
-
-    def permits(self, resource: str, capability: str) -> bool:
-        return bool(self.account_id) and any(
-            scope == resource and capability in capabilities for scope, capabilities in self.grants)
-
-    def permits_site(self, capability: str, legacy_roles=None) -> bool:
-        if self.account_id:
-            return bool(self.site_resource) and self.permits(self.site_resource, capability)
-        # D-793: a users-file grant (policy_admin) adds a capability beside the single legacy role.
-        return (legacy_roles is None or self.role in legacy_roles
-                or any(scope == "legacy" and capability in caps for scope, caps in self.grants))
-
-
-def legacy_grants(details: Mapping) -> tuple:
-    return (("legacy", ("fleet.policy",)),) if details.get("policy_admin") is True else ()
 
 
 def parse_site_principals(site_users: Mapping[str, Mapping[str, str]],
@@ -56,6 +32,7 @@ def parse_site_principals(site_users: Mapping[str, Mapping[str, str]],
     for token, details in site_users.items():
         if not isinstance(token, str) or not isinstance(details, Mapping):
             raise ValueError("site user credential entries must be strings and mappings")
+        validate_machine_user(details)
         principal_id = details.get("principal_id", "")
         role = details.get("role", "")
         if not isinstance(principal_id, str) or not isinstance(role, str):
@@ -131,16 +108,18 @@ def build_authorize(console_token: Optional[str],
     def authorize(request: Request,
                   authorization: Optional[str] = Header(default=None)) -> SitePrincipal:
         bearer = bool(authorization and authorization.startswith("Bearer "))
-        # D-473 3: a live development session is a named operator beside the configured credentials.
-        principal = (development.principal(authorization[len("Bearer "):])
-                     if development is not None and bearer else None)
-        request.state.site_auth_via = "development" if principal is not None else "bearer"
+        principal = None
+        request.state.site_auth_via = "bearer"
+        if (bearer and password_sessions is not None
+                and hasattr(password_sessions, "authenticate_bearer")
+                and authorization[len("Bearer "):].count(".") == 2):
+            principal = password_sessions.authenticate_bearer(authorization[len("Bearer "):], request)
         if principal is None and password_sessions is not None and not bearer:
             # D-519 4: no Bearer header -> the console session cookie, CSRF-checked for unsafe methods.
             principal = password_sessions.authenticate(request)
             if principal is not None:
                 request.state.site_auth_via = "cookie"
-        if principal is None and (principals or password_sessions is not None):
+        if principal is None and (principals or password_sessions is not None or development is not None):
             if not authorization or not authorization.startswith("Bearer "):
                 raise HTTPException(status_code=401, detail={"code": "UNAUTHORIZED",
                                                              "message": "valid site credential required"})
@@ -233,9 +212,8 @@ def build_role_guards(authorize, principals: Mapping[str, SitePrincipal], *, nam
         return principal
 
     def require_named_operator(principal: SitePrincipal = Depends(require_operator)) -> SitePrincipal:
-        # D-473 3: without site-users the only named operator is a development session.
-        # D-519 4: a login (cookie) principal is named, so login-only site-users also count.
-        if not principals and not named_logins and not principal.principal_id.startswith("development-"):
+        # Configured credentials and human login sessions supply the operator identity.
+        if not principals and not named_logins:
             raise HTTPException(status_code=403, detail={
                 "code": "OPERATOR_IDENTITY_REQUIRED",
                 "message": "mission admission requires a configured named operator credential",

@@ -26,6 +26,9 @@ import re
 import subprocess
 import sys
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from harness.affected_exclusive import TARGET, compose
+
 SHA = re.compile(r"[0-9a-f]{40}")
 MAX_CHAIN = 200
 
@@ -39,15 +42,22 @@ def folder(repo: Path) -> Path:
     return (common if common.is_absolute() else repo / common) / "rosy-land"
 
 
+def plan(invocations: list[list[str]], prepared: dict | None = None, *, available: bool = True) -> list[list[str]]:
+    """Validate the writer's context composition without changing records or Git refs."""
+    contexts = [prepared["invocations"], invocations] if prepared else [invocations]
+    return compose(*contexts, available=available)
+
+
 def write(repo: Path, sha: str, base: str, invocations: list[list[str]], logs: list[str],
           tier: str | None = None, prepared: dict | None = None) -> Path:
     """``tier``: the selection the landing ran ("full", "affected" or "records"); the publish script finds a
     green FULL landing by it instead of guessing from the invocations. ``prepared`` (``land_full.prepared``):
     the tier ran before the turn on ``prepared_candidate`` over ``prepared_on``, and the turn ran the D-762
     selection of main's delta since then on ``sha``; the record keeps both and the prepared tier."""
+    invocations = plan(invocations, prepared, available=(repo / TARGET).is_file())
     extra = {}
     if prepared:
-        invocations, tier = prepared["invocations"] + invocations, prepared["tier"]
+        tier = prepared["tier"]
         extra = {"prepared_on": prepared["main"], "prepared_candidate": prepared["candidate"]}
     if not (SHA.fullmatch(sha) and SHA.fullmatch(base)):
         raise ValueError("land record needs full commit ids")

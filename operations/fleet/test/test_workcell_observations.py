@@ -61,6 +61,23 @@ def test_terminal_health_only_never_fabricates_position_freshness(setup):
                        positions=None, motor_health=motor_health())
 
 
+def test_a_guard_stop_stays_in_the_arm_history_after_the_next_sample(setup):
+    service, clock, _, _ = setup
+    assert arms(service)['feedback_a']['faults'] == []
+    fault = ArmObservation(epoch='1'*32, sequence=1, captured_at=clock.wall, positions=None,
+                           motor_health=motor_health(status='fault'))
+    service.ingest('feedback_a', 'arm-a-secret', fault)
+    clock.wall += 1
+    service.ingest('feedback_a', 'arm-a-secret', ArmObservation(**{**fault.model_dump(), 'sequence': 2,
+                                                                  'captured_at': clock.wall}))  # resent: kept once
+    service.ingest('feedback_a', 'arm-a-secret', sample(epoch='1'*32, sequence=3, captured_at=clock.wall + .1))
+    history = arms(service)['feedback_a']['faults']
+    assert len(history) == 1 and history[0]['captured_at'] == 100.0
+    assert history[0]['stop_reasons'] == fault.motor_health.stop_reasons
+    assert [m['joint'] for m in history[0]['motors'] if m['fault']] == ['joint1']
+    assert arms(service)['feedback_b']['faults'] == []
+
+
 @pytest.fixture
 def setup():
     arms = [{"source_id": f"feedback_{side}", "arm_id": f"arm_{side}", "label": f"Arm {side}",
@@ -258,3 +275,16 @@ def test_a_depth_camera_says_so_and_a_camera_without_a_stream_is_colour(setup):
     document["workcells"][0]["cameras"][0]["stream"] = "thermal"
     with pytest.raises(ValueError):
         WorkcellObservationManifest.model_validate(document)
+
+
+def test_a_camera_without_device_path_is_valid_and_round_trips_without_it(setup):
+    """The control PC's camera registry owns the device; the site copy drifted from it (2026-11-02)."""
+    _, _, manifest, _ = setup
+    data = manifest.model_dump(by_alias=True)
+    for camera in data["workcells"][0]["cameras"]:
+        camera.pop("device_path")
+    parsed = WorkcellObservationManifest.model_validate(data)
+    assert all("device_path" not in c for c in parsed.model_dump(by_alias=True)["workcells"][0]["cameras"])
+    data["workcells"][0]["cameras"][1]["device_path"] = data["workcells"][0]["cameras"][2]["device_path"] = "/dev/v4l/by-id/x"
+    with pytest.raises(ValueError, match="duplicate device"):
+        WorkcellObservationManifest.model_validate(data)

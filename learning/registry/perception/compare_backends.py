@@ -19,7 +19,7 @@ def compare_outputs(reference, candidate, *, atol, rtol):
 
 def detection_parity(reference, candidate, *, min_iou, confidence_tolerance):
     """Same labels/counts and one-to-one boxes; no unmatched detections hidden by averages."""
-    from control.sensing.perception.learned.detector import _iou
+    from perception_runtime.perception.learned.detector import _iou
     if len(reference) != len(candidate):
         return False
     remaining = list(candidate)
@@ -38,8 +38,8 @@ def detection_parity(reference, candidate, *, min_iou, confidence_tolerance):
 
 def compare_frames(reference, candidate, manifest, frames, *, atol, rtol, min_iou, confidence_tolerance):
     import cv2
-    from control.sensing.perception.learned.detector import decode, letterbox
-    from control.sensing.perception.learned.lane_mask import preprocess
+    from perception_runtime.perception.learned.detector import decode, letterbox
+    from perception_runtime.perception.learned.lane_mask import preprocess
     spec = manifest.input
     rows = []
     names = tuple(c.name for c in manifest.classes)
@@ -65,7 +65,7 @@ def compare_frames(reference, candidate, manifest, frames, *, atol, rtol, min_io
 
 def compare_lane_frames(reference, candidate, manifest, frames, *, atol, rtol, min_pixel_agreement):
     import cv2
-    from control.sensing.perception.learned.lane_mask import preprocess
+    from perception_runtime.perception.learned.lane_mask import preprocess
     rows = []
     for path in frames:
         image = cv2.imread(str(path))
@@ -89,7 +89,7 @@ def check_ncnn_evidence(manifest):
     """Validate the hashed export proof before an NCNN model enters intake."""
     import json
     import re
-    from control.sensing.perception.learned.manifest import ManifestError
+    from perception_runtime.perception.learned.manifest import ManifestError
     if "export_parity.json" not in {f.name for f in manifest.files}:
         raise ManifestError("ncnn parity: missing hashed export_parity.json")
     try:

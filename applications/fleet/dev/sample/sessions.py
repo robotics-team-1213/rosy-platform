@@ -43,6 +43,8 @@ class Sessions:
     def handle(self, method, path, body, headers):
         if (method, path) == ('GET', '/auth/connection'):
             return reply({'mode': 'paired', 'password_login': True})
+        if (method, path) == ('POST', '/auth/development-session'):
+            return error(403, 'FORBIDDEN', 'human login is required')
         if (method, path) == ('POST', '/auth/login'):
             login = body.get('login')
             account = next((row for row in self.accounts.values() if row['login'] == login), None)

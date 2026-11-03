@@ -33,6 +33,7 @@ import re
 import shlex
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path, PurePosixPath
 
@@ -72,7 +73,8 @@ SAFETY = "tools/harness/safety_review.py"  # D-430 5: the rule CI's scope job en
 ENV = {**os.environ, "PYTHONUTF8": "1"}
 
 
-TURN_CAP_S = 600  # D-889: the acquired turn's budget; expiry yields at safe boundaries (land_prepare.again)
+TURN_CAP_S = 1200  # D-889 26 (20 min): the acquired turn's budget; expiry yields at safe boundaries (land_prepare.again)
+TURN_MAX_S = 1800  # user decision 2026-11-02: every acquired turn yields, even without a waiter
 # 2026-10-27: a landing with a hand-picked --tests skipped its selection, guards and pretest and left main red
 # (3125704e24). A real landing always runs the selection; --tests "<args>" only adds EXTRA, "none" is refused.
 FIXTURE_ENV = "ROSY_LAND_FIXTURE"  # land.py's own test fixtures only: --tests none/"<args>" replace the selection
@@ -288,17 +290,26 @@ def step(wt: Path, command: list[str], log: Path | None, label: str, env: dict =
     return result.returncode, text
 
 
+_priority_lock = threading.Lock()
+_priority_rounds = 0
+
+
 def run_tests(wt: Path, args, invocations: list[list[str]], logdir: Path, round_no: int) -> list[str]:
     """Run lint + pytest (+ node); return a summary line per step. Stop on any NEW failure.
 
     A turn's rounds (``1``, ``g1``; not ``pre``) mark their jobs (xdist_plan.TURN_ENV) to skip the hosts' queues, and
     so does every round of an urgent landing: its pretest got 'no host' behind six others' on full hosts (2026-10-31)."""
     turn = str(round_no).removeprefix("g").isdigit() or bool(getattr(args, "urgent", ""))
-    os.environ[TURN_ENV] = "1" if turn else ""
+    global _priority_rounds
+    with _priority_lock:  # guards and body overlap; either may finish first
+        _priority_rounds += int(turn)
+        os.environ[TURN_ENV] = "1" if _priority_rounds else ""
     try:
         return land_checks.run_tests(sys.modules[__name__], wt, args, invocations, logdir, round_no)
     finally:
-        os.environ[TURN_ENV] = ""
+        with _priority_lock:
+            _priority_rounds -= int(turn)
+            os.environ[TURN_ENV] = "1" if _priority_rounds else ""
 
 
 def main_checkout(wt: Path) -> Path:
@@ -354,7 +365,8 @@ def land(args) -> int:
         size_check(wt, before, "HEAD", python)
         admit(wt, branch, before, python)
         qdir, ticket = land_queue.enter(wt, branch, "preparing", args.urgent,
-                                        batch_auto=land_batch.plain_auto(args, EXTRA))
+                                        batch_auto=land_batch.plain_auto(args, EXTRA),
+                                        alone=land_batch.explicit(args, EXTRA))
         if (code := land_batch.early(sys.modules[__name__], wt, branch, args, python, qdir, ticket, main_co)) is not None:
             return code  # it led a batch at once: one shared pretest instead of one each
         if args.tests == "full" or (args.tests == "auto" and land_full.restore(wt, branch) is None):
@@ -410,18 +422,23 @@ def rounds(args, wt: Path, branch: str, main_co: Path, python: str, qdir, ticket
                     invocations, note = select(wt, full_main, python, head=main_sha, landed=True)
                     reusable = reusable and (prepared := land_full.prepared(wt, branch, full_main)) is not None
                     summary.append(f"round {round_no}: FULL tier passed over main {full_main[:10]}; main delta"
-                                   f" {full_main[:10]}..{main_sha[:10]} runs its {'FULL' if note else 'affected'} tier")
-                    if (held := land_speculate.held(sys.modules[__name__], wt, branch, full_main, candidate)) is not None:
+                                   f" {full_main[:10]}..{main_sha[:10]} runs its {'affected' if not note else 'delta' if note.startswith(land_selection.DELTA_NOTE) else 'FULL'} tier")
+                    if args.tests != "full" and (held := land_speculate.held(sys.modules[__name__], wt, branch, full_main, candidate)) is not None:
                         invocations, note = held, None  # it passed before the turn on this tree (up to the records)
                         prepared = land_speculate.with_spec(sys.modules[__name__], wt, branch, prepared)
                         summary.append(f"round {round_no}: speculated tree held; main delta passed before the turn")
                 else:
                     invocations, note = select(wt, main_sha, python, full=True) if args.tests == "full" else select(wt, main_sha, python)
+                if note and note.startswith(land_selection.DELTA_NOTE) and not land_selection.delta_yields(
+                        ticket, land_full.prepared(wt, branch, full_main) if full_main else None):
+                    note = None
                 if note and note not in summary:
                     summary.append(note)
                 if note and ticket is not None:  # a FULL tier never runs in the lock: prepare it, then wait again
                     full_main = land_prepare.again(sys.modules[__name__], wt, branch, args, python, qdir, ticket, invocations, note)
                     continue
+                # D-970 4: the pretest's LOAD-FLAKY ids run again here, each in its own invocation, and must pass
+                invocations += [run for run in land_full.flaky(wt, branch) if run not in invocations]
             else:
                 invocations = [shlex.split(args.tests)]
             if args.dry_run:
@@ -433,8 +450,7 @@ def rounds(args, wt: Path, branch: str, main_co: Path, python: str, qdir, ticket
             delta = lines(wt, "diff", "--name-only", tested_main, main_sha) if tested_main else []
             if tested_main and all(map(record_only, delta)):
                 # Only module-scoped suites may skip; root test/ guards read the records themselves.
-                invocations = [kept for kept in ([p for p in inv if p.startswith("test/") or p == "test"]
-                                                 for inv in invocations) if kept]
+                invocations = land_speculate.root_part(invocations)
                 reusable = False  # module suites ran on an earlier candidate, not this one
                 summary.append(f"round {round_no}: main delta ({len(delta)} file(s)) is records only"
                                " (logs/index/progress/ADR), module suites skipped, root test/ rerun")
@@ -473,6 +489,11 @@ def rounds(args, wt: Path, branch: str, main_co: Path, python: str, qdir, ticket
             land_checks.check_turn(sys.modules[__name__], wt, args, round_no)
             if ticket is not None and (turn_epoch is None or not land_queue.owns_turn(ticket, started=turn_epoch)):
                 raise Stop("landing turn ownership changed during checks; refusing to fast-forward main")
+            if reusable:
+                try:
+                    land_record.plan(invocations, prepared, available=(wt / land_record.TARGET).is_file())
+                except (ValueError, TypeError, KeyError) as exc:
+                    raise Stop(f"invalid land-record plan before fast-forward: {exc}") from exc
             on_main(main_co)
             ff = git(main_co, "merge", "--ff-only", candidate, check=False)
             if ff.returncode == 0:
@@ -539,7 +560,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.tests == "none":
             land_events.emit("skip", reason=args.skip_reason.strip()[:300])
         if (code := land(args)) == 0 and not args.dry_run:
-            land_events.emit("landed", sha=out(wt, "rev-parse", "HEAD"))
+            land_events.landed(out(wt, "rev-parse", "HEAD"), main_move=not getattr(args, "_carried", False))
         return code
     except (Stop, land_queue.QueueError) as exc:
         print(f"[land] STOP: {exc}", file=sys.stderr)

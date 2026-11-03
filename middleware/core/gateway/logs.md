@@ -2007,6 +2007,7 @@ clpy.duration을 추가했다(bridge AGENTS의 두 파일 함께 갱신 규칙).
 - 증거: 원격 시험 resource-bounds-1(AI PC, run-1) middleware/core/gateway/test/test_bridge_timers.py 통과 — 구조 계약 불변.
 - gate 변화: 없음. ROS 그래프 동작은 호스트 시험이 본래부터 못 본다.
 - CE: 해당 없음 — 정정 사실(기본값 10초)과 근거를 이 기록과 계획 문서가 보존한다.
+
 ## 2026-10-28 · uncommitted · CORE host-file owner 위임 RED 준비
 
 - 변경: 독립 검토된 v3 테스트 6파일을 적용한다. API 2·connection 1·node 1·bridge 1 위임 동작을 실제 기존 경로에서 확인하며 제품 소스는 바꾸지 않는다. 승인 패치의 새 EOF 빈 줄 2개만 제거했고 전체 AST·assertion·parameter는 보존했다.
@@ -2050,3 +2051,31 @@ clpy.duration을 추가했다(bridge AGENTS의 두 파일 함께 갱신 규칙).
 - 검증: committed512bf77f89의 pipeline/continuous/lifespan/scheduling/redeployment HTTP 다섯 모듈을 정식 원격 runner로 실행해 31 passed/skip0, known_failures NEW0/known0/flaky0이다. double quiet 출력의 완료 glyph 31개로 실행 수를 확인했다. 외부 rosy-fleet-station-camera-site-fallback/run-1.txt, run512bf77f89-92a705. 두 우선 시험 PC의 alone fence로 대기한 자체 요청만 취소하고 마지막 대상인 현장 PC에서 ROS-free API 시험을 실행했다. 장치·운영 API·물리 시뮬레이터는 호출하지 않았다. 이는 착지·CI 성공을 뜻하지 않는다.
 - gate 변화: 없음. 운영 RPC 제한, fail-closed HOLD/claim, 단독 실행 fence, FULL 요구를 완화하지 않는다. 정상 착지는 별도로 검증한다.
 - CE: 해당 없음 — 기존 오류 지점별 분류 교훈을 적용했고, 이번 최소 교정의 판단은 시험·기존 기록에 남아 새 교훈을 추가하지 않는다. 운영·물리 수용은 별도다.
+
+## 2026-11-03 · uncommitted · feat(core): 핑키 열 모드 — 온도·전압으로 속도 낮추기 (API v1.351)
+- 변경: `core_features.safety.thermal`(ThermalPolicy·ThermalMonitor), `SafetyManager.clip`이 열 단계로 상한을 낮춘다(warm 직선 절반, hot 자율 0·수동 warm 상한). `bridge/thermal_policy.py`가 `motor/health`를 받아 두고 1 Hz 진단 tick에서 SoC 온도·`get_throttled`로 단계를 정해 `thermal.*` 이벤트를 낸다. `GET /api/v1/safety/state.thermal`.
+- 증거: rosy_45(Pi 5) 실측 SoC 59 °C, `get_throttled`=0 누구나 읽기 가능, 팬 트립 50/60/67.5/75 °C. 시험 `test_thermal_mode.py`, `test_api.py`, `test_bridge_timers.py`.
+- gate 변화: 없음. 실제 고온에서 감속·정지와 모터 한계 값은 실물로 확인하지 않았다.
+
+## 2026-11-03 · e9ee7a7009 · 카메라 SIM 시험의 OpenCV 스레드 범위 제한
+
+- 변경: 공유 `pipeline_sources` fixture가 OpenCV 스레드를 1개로 제한하고, 시험 종료 시 기존 값을 `finally`에서 복원한다. 운영 갱신의 1초 제한, 신선도·인증·HTTP 요청과 기존 파이프라인 판정은 유지한다.
+- 증거: RED745f34a4e6의 공식 원격 회귀는 정상·예외 종료 두 경우 모두 `24 == 1`로 실패했다(NEW2). 수정 e9ee7a7009는 두 자원 회귀와 앞서 실패했던 slow-journal lifespan·shutdown_UNDOCKING 실파이프라인을 함께 실행해 4 passed/skip0, NEW0/known0/flaky0이었다. 환경 5f97eba2cbb43fc8, freeze eb75e06857d6c188. 독립 검토에서 수정 필요 사항은 없었다.
+- 범위: 별도 UI 통합 후보의 main 변경분 시험에서 두 카메라 사례가 LOAD-FLAKY였다. 최초 오류는 SIM 시간이 멈춘 상태의 ASGI 갱신이 내부 1초 실제 시간 제한을 넘긴 것이며, 뒤따른 context 오류를 최초 원인으로 보지 않는다. OpenCV 24스레드는 확인된 자원 설정이지만 시간 초과의 원인이라는 인과관계는 아직 입증하지 않았다. 전체 fixture 소비자 검증은 진행 중이며 착지·CI·장치 수용은 별도다.
+- CE: 미해결 — 자원 제한과 복원은 회귀로 확인했지만, 기존 시간 초과의 정확한 스케줄링 원인은 확정하지 않았다. 해결된 교훈으로 기록하지 않는다.
+- gate 변화: 없음. 모듈 진행 상태와 운영·물리 수용 상태를 변경하지 않는다.
+
+## 2026-11-03 · e9ee7a7009 · 카메라 SIM fixture 소비자 검증
+
+- 변경: 앞선 fixture 수정의 다섯 카메라 시험 모듈 검증 결과를 기록한다. 실행 코드와 시험은 e9ee7a7009와 같다.
+- 검증: fixture·pipeline·continuous·lifespan·scheduling 다섯 모듈을 공식 원격 runner의 6개 worker로 실행해 15 passed/skip0/exit0을 확인했다. known_failures 비교는 NEW0/known0/flaky0이며, 생산 코드·운영 제한·기존 파이프라인 판정을 수정하지 않았다.
+- 범위: 스레드 자원 정책과 소비 시나리오의 이 소스 검증이다. 단독 실행과 부하 실행의 정확한 인과 대조, UI 최종 통합 SHA의 FULL·게시·운영 수용은 별도다. 기존 시간 초과를 재실행만으로 해결했다고 주장하지 않는다.
+- CE: 미해결 — 스레드 정책은 코드와 회귀로 설명되며, 시간 초과의 정확한 스케줄링 원인은 미확정이다.
+- gate 변화: 없음. 모듈 진행 상태와 운영·물리 수용 상태를 변경하지 않는다.
+
+## 2026-11-03 · b70b380dae · 카메라 fixture의 HTTP·내비게이션 소비자 검증
+
+- 변경: 같은 fixture를 쓰는 추가 여섯 HTTP·내비게이션 시험 모듈의 결과를 기록한다. fixture와 자원 회귀 코드는 e9ee7a7009와 같다.
+- 증거: navigation_handover·station_departure_api·station_charge_http·station_redeployment_http·station_target_refresh_http·station_return_http를 공식 원격 6개 worker로 실행해 92 passed/skip0/exit0, NEW0/known0/flaky0을 확인했다. 전체 검색에서 확인한 fixture 소비자 11개 모듈을 앞선 다섯 모듈과 나누어 검증했다. 공식 runner·CI에 OpenCV가 이미 설치되는 환경 계약도 독립 검토했다.
+- gate 변화: 없음. 이 소스의 시험 근거이며 최종 UI 통합 FULL·게시·장치 수용을 대신하지 않는다.
+- CE: 미해결 — 기존 시간 초과와 스레드 수 사이의 인과관계는 미확정이다. 운영 제한을 늘리거나 실패를 skip으로 바꾸지 않았다.

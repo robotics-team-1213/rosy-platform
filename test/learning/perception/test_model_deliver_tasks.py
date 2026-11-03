@@ -117,7 +117,7 @@ def _object_model(models, signed=False):
     sys_path_model = models / "object-det-20261003-00000001"
     sys_path_model.mkdir(parents=True)
     (sys_path_model / "model.onnx").write_bytes(b"onnx")
-    from control.sensing.perception.learned.manifest import OBJECT_CLASSES
+    from perception_runtime.perception.learned.manifest import OBJECT_CLASSES
     doc = {"schema": "rosy.perception.model/1", "model_revision": sys_path_model.name, "task": "object_det",
            "files": [{"name": "model.onnx", "sha256": hashlib.sha256(b"onnx").hexdigest(), "precision": "fp32"}],
            "input": {"shape": [1, 3, 256, 320], "color": "rgb", "scale": 1 / 255, "mean": [0, 0, 0],

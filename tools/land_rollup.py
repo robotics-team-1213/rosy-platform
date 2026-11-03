@@ -9,8 +9,8 @@ On 2026-11-01 seven paused landings were rolled up by hand this way.
     python tools/land_rollup.py apply               # build land rollup branch, check, queue it, stop the members
     python tools/land_rollup.py split <rollup>      # after a failed rollup: its members as two halves (or alone)
 
-Members: 'pending' land_async tickets on this host, not urgent, not carried and not leading a batch, whose hidden
-tree is at the snapshot tip. A landing that touches a safety path lands alone. Affected-tier and FULL-tier landings
+Members: 'pending' land_async tickets on this host, not urgent, not explicit ('alone': FULL, checks, --no-cache), not
+carried and not leading a batch, whose hidden tree is at the snapshot tip. A landing that touches a safety path lands alone. Affected-tier and FULL-tier landings
 never share a rollup. At most ROLLUP_MAX members; a member that does not merge cleanly (land_merge's record
 auto-resolve aside) is left to land on its own.
 """
@@ -57,7 +57,9 @@ def candidates(rows: list[dict], repo: Path, host: str | None = None) -> list[di
     found = []
     for r in rows:
         tree = Path(r.get("worktree") or "")
+        # 2026-11-03: a --tests full --no-cache landing for publish evidence was rolled up and ran auto (alone)
         if (r.get("status") not in ("pending", "waiting") or land_async.HOLDER not in tree.parts or r.get("urgent")
+                or r.get("alone")
                 or r.get("host") != host or r.get("batch") or r.get("branch") in carried or not tree.is_dir()):
             continue
         tip = git(repo, "rev-parse", "-q", "--verify", f"refs/heads/{r['branch']}", check=False).stdout.strip()
@@ -104,9 +106,35 @@ def plan(repo: Path, rows: list[dict], tier_of=tier, reach_of=reach) -> list[dic
     return members if len(members) >= 2 else []
 
 
+def member_metadata(place: Path, member: dict, ancestors=()) -> dict:
+    """Keep direct owners, embedding frozen child metadata before their sidecars can be collected."""
+    data = {k: member[k] for k in ("branch", "worktree", "candidate", "ticket", "members_error") if k in member}
+    branch = data["branch"]
+    if not land_async.ROLLUP.fullmatch(branch):
+        if "members" in member:
+            data["members_error"] = "nested metadata on a non-carrier"
+        return data
+    if data.get("members_error"):
+        return data
+    try:
+        if branch in ancestors:
+            raise ValueError("cyclic nested membership")
+        children = member["members"] if "members" in member else json.loads(
+            (place / (branch.replace("/", "-") + ".members")).read_text(encoding="utf-8"))
+        if not isinstance(children, list) or not children or any(
+                not isinstance(m, dict) or not isinstance(m.get("branch"), str) or not m["branch"] for m in children):
+            raise ValueError("invalid nested members")
+        data["members"] = [member_metadata(place, m, (*ancestors, branch)) for m in children]
+    except (OSError, ValueError, RecursionError):
+        data["members_error"] = "unavailable nested membership"
+    return data
+
+
 def build(repo: Path, members: list[dict], now: datetime, python: str = sys.executable,
           start=land_async.start) -> tuple[str, list[dict]] | None:
     """Merge members into a fresh branch from main, run the stage-0 checks, queue it; (snapshot, merged members)."""
+    if len({r["branch"] for r in members}) != len(members):
+        raise land.Stop("duplicate rollup member branch; preserve the competing tickets for review")
     stamp = f"{now:%Y%m%d%H%M%S}"
     branch, wt = f"fix/land-rollup-{stamp}", land_async.holder(repo) / f"rollup-build-{stamp}"
     git(repo, "worktree", "add", "-q", "-b", branch, str(wt), "main")
@@ -114,9 +142,10 @@ def build(repo: Path, members: list[dict], now: datetime, python: str = sys.exec
         merged = []
         for r in members:
             try:
-                land.merge(wt, git(repo, "rev-parse", r["branch"]).stdout.strip(), branch, python, False,
-                           source=r["branch"])
-                merged.append(r)
+                candidate = git(repo, "rev-parse", r["branch"]).stdout.strip()
+                land.merge(wt, candidate, branch, python, False, source=r["branch"])
+                metadata = member_metadata(land_async.holder(repo), {**r, "candidate": candidate})
+                merged.append({**r, **metadata})
             except land.Stop as exc:
                 print(f"[rollup] {r['branch']} left out: {str(exc).splitlines()[0]}", flush=True)
         if len(merged) < 2:
@@ -134,7 +163,9 @@ def build(repo: Path, members: list[dict], now: datetime, python: str = sys.exec
         finally:
             os.environ.pop(land_queue.TICKET_ENV, None)
         (log.parent / (log.name.removesuffix(".log") + ".members")).write_text(
-            json.dumps([{"branch": r["branch"], "worktree": r["worktree"]} for r in merged], indent=1),
+            json.dumps([{k: r[k] for k in ("branch", "worktree", "candidate", "ticket", "members", "members_error")
+                         if k in r}
+                        for r in merged], indent=1),
             encoding="utf-8")
         return snap, merged
     finally:

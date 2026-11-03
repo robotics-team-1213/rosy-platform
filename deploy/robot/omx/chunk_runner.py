@@ -1,16 +1,14 @@
 #!/usr/bin/env python3
 """Run taught motion chunks on the follower one at a time, holding torque between them (scripted teacher).
 
-The follower is driven through the guard's teacher mode (guarded_native.py: passive connect, seeded
-torque, 10 deg/s streaming, following-error, effort and fault stops) in LeRobot units at the recorder's
-fps; chunk frames may not move faster than GUARD_UNITS_PER_S. Between chunks the last target is
-held, so an extended arm never drops. A judge (an operator, an agent watching the cameras, later a
-VLA) writes one command per line into the command FIFO and reads one JSON status per command:
+The follower is driven through the guard's teacher mode (guarded_native.py) in LeRobot units at the recorder's
+fps, no faster than GUARD_UNITS_PER_S; between chunks the last target is held, so an extended arm never drops.
+A judge writes one command per line into the command FIFO and reads one JSON status per command:
 
   run <chunk> [rel]       play a chunk, then report the settled state; rel shifts its body joints by
                           the held correction (held target minus the chunk start, at most REL_MAX)
   jog <joint> <delta> ... move one or more joint targets together, each by at most JOG_MAX units
-  grip <value>            set the gripper target
+  grip <value>            set the gripper target; a closing grip that catches something reopens (joint_push)
   state                   report the current state
   goto <chunk>            the same rise-turn-descend path to a chunk's start pose (recovery, re-approach)
   park                    close the jaws, rise, turn at that height and descend into home, slowly
@@ -18,15 +16,12 @@ VLA) writes one command per line into the command FIFO and reads one JSON status
                           contact is cleared like a park
   stop                    end; torque goes OFF where the arm is, so park (or run home) first
 
-Commands apply one per control tick, and a jog may not put its target more than JOG_MAX + SETTLE_TOL
-from the joint's present position, so a burst of commands cannot add up to one large step.
+Commands apply one per tick, and a jog stays within JOG_MAX + SETTLE_TOL of the present position.
 
-A grasp chunk (name starting with "grasp") reports `holding`: false when the gripper closed to within
-EMPTY_MARGIN of the library's closed value, i.e. there was nothing between the jaws. The run stops by
-itself on a read failure or a following error above FOLLOW_STOP for FOLLOW_STOP_S.
+A grasp chunk reports `holding`: false when the jaws closed to within EMPTY_MARGIN of the closed value. The
+run stops by itself on a read failure or a following error above FOLLOW_STOP for FOLLOW_STOP_S.
 
-Outside descend/grasp/release a load-bearing joint whose lag keeps rising past STRAIN_LAG while it pushes
-(PWM at STRAIN_PWM of its cap) holds the same way as a contact, before the guard's 5 degree bound drops the arm.
+Elsewhere a joint whose lag rises past STRAIN_LAG at STRAIN_PWM of its cap holds like a contact (strained()).
 ROSY_CHUNK_TRACE=<file> appends one JSON line per tick (time, chunk, target, sent, present) to measure jitter.
 
 Launched by record_session.py --chunks; never on its own (the session owns caps and cleanup).
@@ -60,21 +55,19 @@ from omx_adapter.motion_profile import GUARD_ACCEL_UNITS_S2 as GUARD_ACCEL_UNITS
 from cell_envelope import digest, runtime_context  # noqa: E402
 import cell_params as prm  # noqa: E402
 from episode_recorder import Recorder  # noqa: E402
+import joint_push, load_predict  # noqa: E402
 
 JOG_MAX = 5.0
 FOLLOW_STOP, FOLLOW_STOP_S = 25.0, 1.0   # body joints, LeRobot units; the clip alone keeps steps small
-SETTLE_TOL, SETTLE_S = 3.0, 3.0
-EMPTY_MARGIN = 2.0
+SETTLE_TOL, SETTLE_S, EMPTY_MARGIN = 3.0, 3.0, 2.0
 REL_MAX = 20.0  # largest body-joint correction a relative chunk may carry
-# Motor health (Present_PWM / Present_Current / Present_Temperature, raw): read once per HEALTH_PERIOD_S, and
-# fresh for a grasp verdict. The guard already samples PWM about 5 times a second on the same bus; reading
-# these three every 3 ticks as well doubled the traffic, and on 2026-10-25 a bus read stalled the loop past
-# the guard's 0.5 s sample bound while the arm held over the box, so the guard turned torque off.
+# Motor health (Present_PWM/Current/Temperature, raw): once per HEALTH_PERIOD_S, and fresh for a grasp verdict.
+# The guard samples PWM ~5 Hz on the same bus; reading these every 3 ticks too doubled the traffic and on
+# 2026-10-25 stalled the loop past the guard's 0.5 s sample bound over the box, so it turned torque off.
 HEALTH_PERIOD_S = 1.0
-# Soft contact: during a chunk that can touch something (descend, grasp, release), a body joint that lags the
-# command the guard actually sent by CONTACT_LAG units for CONTACT_TICKS ticks is pressing on something.
-# The runner holds where it is, with torque on, before the guard's 5 degree bound turns torque off and the
-# extended arm drops (three times on 2026-10-25). A body unit is at most 1.8 degrees: 1.5 units <= 2.7.
+# Soft contact: in a chunk that can touch something, a body joint CONTACT_LAG units (<= 2.7 deg) behind the sent
+# command for CONTACT_TICKS ticks presses on something; hold with torque on before the guard's 5 degree bound
+# turns torque off and the extended arm drops (three times on 2026-10-25).
 CONTACT_LAG, CONTACT_TICKS = prm.default("runner.contact_lag"), prm.default("runner.contact_ticks")
 
 
@@ -87,42 +80,36 @@ def contact_limits(start_lags: list, params=None) -> list:
     rise, top = prm.get(params, "runner.contact_rise"), prm.get(params, "runner.contact_loaded_max")
     return [max(base, min(s + rise, top)) for s in start_lags]
 CONTACT_CHUNKS = ("descend", "grasp", "release")
-# Pacing: a body joint behind the guard's sent command by PACE_LAG units holds the next frame until it catches
-# up. On arm S the wrist_flex (XL330) gives ~35 PWM per degree, so a lift or goto grew its lag 0.2 -> 2.6 -> 5
-# degrees at PWM 135-165 of 300 and the guard turned torque off (12 sessions, 2026-10-25..27). 1.6 units is 2.9
-# degrees of the guard's 5. A hold lasts only while the lag shrinks: reached over the conveyor, the wrist sat
-# 2.08 units low with no motion at all (2026-10-28), and waiting for 1.6 there moved one frame per PACE_MAX_S.
-# Where the lag stops shrinking it is the pose's droop (`pace_floor`); frames go on, and hold again only when the
-# lag grows PACE_RISE past it. Contact chunks reach CONTACT_LAG first and keep their contact response.
+# Pacing: a body joint PACE_LAG units (2.9 of the guard's 5 deg) behind the sent command holds the next frame
+# until it catches up: arm S's XL330 wrist grew 0.2 -> 5 deg at PWM 135-165 of 300 and the guard cut torque (12
+# sessions, 2026-10-25..27). A hold lasts only while the lag shrinks; where it stops (a wrist 2.08 units low over
+# the conveyor, 2026-10-28) it is the pose's droop (`pace_floor`) and frames go on until the lag grows PACE_RISE
+# past it. Contact chunks reach CONTACT_LAG first and keep their contact response.
 PACE_LAG, PACE_RISE, PACE_MAX_S = (prm.default(f"runner.{k}") for k in ("pace_lag", "pace_rise", "pace_max_s"))
-# Nobody sent a command for IDLE_PARK_S (a lost link, a crashed caller): fold home. IDLE_STOP_S more at home ends
-# the session, so record_session turns torque OFF and the motors rest instead of holding for hours (a session
-# held home 6 h on 2026-10-27/28 until its health log ran out). A caller that wants the arm held sends `state`.
-IDLE_PARK_S, IDLE_STOP_S = prm.default("runner.idle_park_s"), prm.default("runner.idle_stop_s")
-# Strain, in every other chunk (goto, park, lift): normal travel lags up to about 2.6 units, so CONTACT_LAG would
-# hold there. A shoulder lifting from a reach (2026-10-27) went 2.4 -> 3.1 -> 4.0 -> 4.7 deg at PWM 263 -> 516 of
-# 600 in 0.7 s before the guard's 5 degree stop; a wrist against the wall 2.6 -> 3.6 -> 4.7 deg at PWM 93 -> 165
-# of 300. Hold when a load-bearing joint lags STRAIN_LAG units (3.1 deg), its lag rose by STRAIN_RISE over the
-# last STRAIN_TICKS ticks and the guard's last PWM sample (5 Hz) is at STRAIN_PWM of its cap. Holding needs room:
-# the guard brakes at 10 deg/s^2, so its command still runs v^2/20 deg on (1.5 deg at RISE_SPEED).
-# STRAIN_PWM 0.35 held a normal park out of a sagged reach (lag 1.8 at 263 of 600 = 44 %, 2026-10-27); the
-# real strains were at 55-86 %.
-# STRAIN_LAG 1.7 held every rise out of the container reach (2026-10-27): lifting the extended arm takes 400-500
-# PWM, and P x error builds that only near 1.7-1.9 units, at P 1200 and 1600 alike. At RISE_SPEED 2 the guard
-# runs on v^2/20 = 0.65 deg after a hold, so holding at 2.2 units (4.0 deg) still stops short of 5.
+# Nobody sent a command for IDLE_PARK_S (a lost link, a crashed caller): fold home. IDLE_STOP_S more at home ends the
+# session, so record_session turns torque OFF instead of holding for hours (6 h on 2026-10-27/28). `state` holds.
+# A fold a hold stopped (a blocked joint) is tried once more after IDLE_RETRY_S; before 2026-11-03 it was retried
+# every IDLE_PARK_S for good, pushing a blocked joint with torque on. A second hold keeps the arm where it is.
+IDLE_PARK_S, IDLE_STOP_S, IDLE_RETRY_S = (prm.default(f"runner.idle_{k}_s") for k in ("park", "stop", "retry"))
+# Strain, in every other chunk (goto, park, lift), where normal travel lags up to ~2.6 units: hold when a
+# load-bearing joint lags STRAIN_LAG, its lag rose STRAIN_RISE over STRAIN_TICKS ticks and the guard's 5 Hz PWM is
+# at STRAIN_PWM of its cap. Real strains (2026-10-27): a lifting shoulder 2.4 -> 4.7 deg at PWM 263 -> 516 of 600
+# in 0.7 s, a wrist on the wall 2.6 -> 4.7 deg at 93 -> 165 of 300 (55-86 %); 0.35 held a normal park (44 %), and
+# 1.7 units held every rise out of the container reach (400-500 PWM builds only near 1.7-1.9). The guard brakes
+# at 10 deg/s^2 (v^2/20 = 0.65 deg on at RISE_SPEED 2), so 2.2 units (4.0 deg) still stops short of its 5.
 STRAIN_LAG, STRAIN_RISE, STRAIN_TICKS, STRAIN_PWM = 2.2, 0.25, 6, 0.5
-# Stalled = pushing at its session cap (300) while short of its target and not moving: blocked or colliding.
-# At the cap alone is normal: the elbow saturates while lifting the arm out of home (2026-10-25).
+# A blocked wrist roll pushes at low PWM (arm_a dead at 28 % of its cap, 4 times on 2026-11-01), so the PWM test
+# never fires; it travels within ~0.7 units, so a rising lag of ROLL_BLOCK_LAG (<= 2.7 deg) holds it first.
+ROLL_BLOCK_LAG, TEMP_STOP = 1.5, 65  # TEMP_STOP in degrees C; the motors' own limits are 70-72
+# Stalled = at its cap, short of its target and still (the cap alone is normal: an elbow lifting out of home).
 PWM_STOP, PWM_STOP_S, STALL_GAP, STALL_MOVE = 285, 0.5, 4.0, 0.3
-TEMP_STOP = 65                    # degrees C; the motors' own limits are 70-72
-MOTORS = [n.split(".")[0] for n in ["shoulder_pan.pos", "shoulder_lift.pos", "elbow_flex.pos", "wrist_flex.pos",
-                                    "wrist_roll.pos", "gripper.pos"]]
+MOTORS = [n.split(".")[0] for n in NAMES]
 
 
 class Runner:
     def __init__(self, robot, library: dict, *, fps: int, status, clock=time.monotonic, sleep=time.sleep,
-                 live=None, operating_context=None, params=None):
-        self.params = params  # cell_params values (None = the constants above)
+                 live=None, operating_context=None, params=None, plan_check=None):
+        self.params, self.plan_check = params, plan_check or (lambda library: None)  # cell_params (None = constants); load_predict
         self.robot, self.library, self.fps, self.status = robot, library, fps, status
         self.clock, self.sleep = clock, sleep
         self.target = None
@@ -137,11 +124,12 @@ class Runner:
         self.lag, self.paced, self.paced_ticks = 0.0, 0, 0  # paced_ticks: frames held in the current chunk
         self.pace_floor, self.pace_last = 0.0, None
         self.last_input, self.home_since = 0.0, None  # home_since: a park settled and nothing moved since
+        self.idle_parks = 0  # folds started by idle() since the last command
         # per chunk: the largest lag behind the command the guard sent, and the ticks it spent over CONTACT_LAG;
         # the contact margin a real run leaves, which live.json's chunk target does not show (2026-10-26)
         self.peak_lag, self.over_ticks = 0.0, 0
         self.live = live  # called about twice a second with the current state (Fleet observation bridge)
-        self.health_present = None
+        self.health_present, self.samples, self.grip_from = None, [], None  # joint_push's samples and reopen point
         self.recorder = Recorder()  # raw training episodes: rows here, encoding after the session
         self.operating_context = operating_context
         self.trend: list = []  # load-bearing joints' lags over the last STRAIN_TICKS ticks of a chunk
@@ -189,6 +177,7 @@ class Runner:
                     raise ValueError("checked command targets another session")
                 if verb != "load" and digest(self.library) != expected_library:
                     raise ValueError("checked command targets another library")
+            self.grip_from = self.grip_from if verb in ("state", "grip", "episode") else None
             if verb == "stop":
                 self.report(command=line, ok=True)
                 return False
@@ -254,7 +243,9 @@ class Runner:
             elif verb == "grip" and len(words) == 2:
                 # never below the taught closed value: past the jaws' stop the gripper only pushes at its PWM
                 # cap, and the guard's teacher mode does not bound the gripper (2026-10-25: 40 asked, stuck at 48.4)
-                self.target[5] = max(float(self.library["gripper_closed"]), min(100.0, float(words[1])))
+                to = max(float(self.library["gripper_closed"]), min(100.0, float(words[1])))
+                free = to < self.target[5] and abs(self.present()[5] - self.target[5]) <= EMPTY_MARGIN  # not holding
+                self.grip_from, self.target[5] = (self.target[5] if free else None), to  # reopen point
             elif verb == "retreat" and len(words) == 1:
                 if not self.retreat_frames:
                     raise ValueError("nothing to retreat along")
@@ -272,6 +263,7 @@ class Runner:
                     raise ValueError(f"library fps {library['fps']} differs from the runner fps {self.fps}")
                 if expected_library is not None and digest(library) != expected_library:
                     raise ValueError("checked load content differs from the reviewed library")
+                self.plan_check(library)  # raises: a plan the arm's own load data says it cannot hold is refused here
                 self.library = library
             elif verb != "state":
                 raise ValueError("commands: run <chunk> [rel] | jog <joint> <delta> [...] | grip <value> | goto <chunk> | load <library> | park | state | stop")
@@ -287,11 +279,14 @@ class Runner:
         self.target = list(present[:5]) + [self.target[5]]
         self.fault = reason
         self.chunk, self.played = None, []
+        if chunk == "park":
+            self.last_input = self.clock()  # an idle fold's retry waits idle_retry_s from the hold, not from its start
         self.report(command=f"run {chunk}", ok=False, error=self.fault, contact=True)
 
     def strained(self, sent, present):
-        """(motor, lag, pwm, cap) of a load-bearing joint whose lag keeps rising while it pushes, or None."""
-        lags = [abs(present[i] - sent[n]) if n in sent else 0.0 for i, n in enumerate(NAMES[:4])]
+        """(motor, lag, pwm, cap) of a load-bearing joint whose lag keeps rising while it pushes, or of a wrist roll
+        whose lag keeps rising past ROLL_BLOCK_LAG at any PWM; else None."""
+        lags = [abs(present[i] - sent[n]) if n in sent else 0.0 for i, n in enumerate(NAMES[:5])]
         self.trend = (self.trend + [lags])[-(STRAIN_TICKS + 1):]
         if len(self.trend) <= STRAIN_TICKS:
             return None
@@ -303,6 +298,8 @@ class Runner:
             pushing = motor not in pwm or motor not in limits or abs(pwm[motor]) >= STRAIN_PWM * limits[motor]
             if lags[i] >= STRAIN_LAG and rising and pushing:
                 return motor, lags[i], pwm.get(motor), limits.get(motor)
+        if first[4] < middle[4] < lags[4] and lags[4] >= ROLL_BLOCK_LAG and lags[4] - first[4] >= STRAIN_RISE:
+            return MOTORS[4], lags[4], pwm.get(MOTORS[4]), limits.get(MOTORS[4])
         return None
 
     def tick(self) -> None:
@@ -344,11 +341,15 @@ class Runner:
             self.contact_ticks = self.contact_ticks + 1 if over else 0
             if self.contact_ticks >= prm.get(self.params, "runner.contact_ticks", CONTACT_TICKS):
                 self.hold(present, f"contact in {self.chunk}: a joint lagged the command by {lag:.1f} units")
-        elif isinstance(sent, dict) and not self.fault and self.chunk is not None:
+        elif isinstance(sent, dict) and (not self.fault or self.chunk == "park") and self.chunk is not None:
+            # a fold out of a hold watches too: it pushed a blocked wrist roll until SETTLE_S ran out (2026-11-03)
             strain = self.strained(sent, present)
             if strain:  # named a contact: the judge may retreat or jog, and park clears it
                 motor, lag, pwm, limit = strain
-                self.hold(present, f"contact in {self.chunk}: {motor} lag rose to {lag:.1f} units at PWM {pwm} of {limit}")
+                others = ", ".join(f"{n} {abs(present[i] - sent[f'{n}.pos']):.1f}" for i, n in enumerate(MOTORS[:5])
+                                   if n != motor and f"{n}.pos" in sent)  # a joint lagging with it points outside
+                self.hold(present, f"contact in {self.chunk}: {motor} lag rose to {lag:.1f} units at PWM {pwm} of {limit}"
+                                   f" (lags: {others})")
                 return
         error = max(abs(a - b) for a, b in zip(present[:5], self.target[:5]))
         # Load-bearing joints only: the taught wrist roll lagged its leader by 66 units (2026-10-24 teach r2).
@@ -377,6 +378,17 @@ class Runner:
                 chunk, self.chunk = self.chunk, None
                 self.report(command=f"run {chunk}" if chunk else "fault", ok=False, error=reason)
                 return
+            self.samples = (self.samples + [(list(self.target), present, self.health["pwm"])])[-4:]
+            push = joint_push.pushing(self.samples, getattr(getattr(self.robot, "motion", None), "pwm_limits", None),
+                                      self.chunk == "park" or self.grip_from is not None, self.params)
+            if push and push[0] == "gripper" and self.chunk is None:  # a closing grip caught something: let it go
+                self.target[5], self.grip_from = self.grip_from, None
+                return self.report(command="grip", ok=False, caught=True, error=f"{push[1]}; reopened")
+            if push and self.chunk is not None:
+                return self.hold(present, f"contact in {self.chunk}: {push[1]}")
+            if push:  # at rest: stop the wind-up where the arm is; folded home, idle() ends the session (torque OFF)
+                self.fault, self.target = f"pushing at rest: {push[1]}", present[:5] + [self.target[5]]
+                return self.report(command="fault", ok=False, error=self.fault, person_needed=True)
         if loaded > FOLLOW_STOP:
             self.far_since = self.far_since if self.far_since is not None else now
             if now - self.far_since >= FOLLOW_STOP_S:
@@ -392,7 +404,7 @@ class Runner:
                 fields = dict(command=f"run {self.chunk}", ok=True, settled=error <= SETTLE_TOL,
                               paced_ticks=self.paced_ticks, peak_lag=round(self.peak_lag, 2), over_ticks=self.over_ticks)
                 self.paced_ticks, self.pace_floor, self.peak_lag, self.over_ticks = 0, 0.0, 0.0, 0
-                if self.chunk == "park":
+                if self.chunk == "park" and error <= SETTLE_TOL:  # torque goes OFF from here: only when really home
                     self.home_since = now
                 backed_out = self.chunk == "retreat" and error <= SETTLE_TOL
                 if (self.chunk == "park" or backed_out) and (self.fault or "").startswith("contact"):
@@ -418,12 +430,23 @@ class Runner:
         if self.chunk is not None or self.queue or self.pending:
             return False
         quiet = self.clock() - self.last_input
-        if self.home_since is None and quiet >= prm.get(self.params, "runner.idle_park_s", IDLE_PARK_S):
-            self.last_input = self.clock()  # the stop's quiet time starts once the arm is folded
-            self.command("park")
+        if self.home_since is None:
+            if self.idle_parks >= 2:  # both folds held: dropping the arm is worse than holding it
+                if self.idle_parks == 2:
+                    self.idle_parks, self.fault = 3, f"idle fold held twice ({self.fault}): a person must free the arm"
+                    self.report(command="park", ok=False, error=self.fault, person_needed=True)
+                return False
+            wait = (prm.get(self.params, "runner.idle_retry_s", IDLE_RETRY_S) if self.idle_parks else
+                    prm.get(self.params, "runner.idle_park_s", IDLE_PARK_S))
+            if quiet >= wait:
+                self.last_input = self.clock()  # the stop's quiet time starts once the arm is folded
+                self.idle_parks += 1
+                self.command("park")
             return False
-        if self.home_since is not None and min(quiet, self.clock() - self.home_since) >= prm.get(self.params, "runner.idle_stop_s", IDLE_STOP_S):
-            self.report(command="stop", ok=True, reason=f"no command for {quiet:.0f} s; folded home, torque goes OFF")
+        pushed = (self.fault or "").startswith("pushing at rest")
+        if pushed or min(quiet, self.clock() - self.home_since) >= prm.get(self.params, "runner.idle_stop_s", IDLE_STOP_S):
+            self.report(command="stop", ok=True, reason=f"{self.fault if pushed else f'no command for {quiet:.0f} s'}"
+                                                        "; folded home, torque goes OFF")
             return True
         return False
 
@@ -437,7 +460,7 @@ class Runner:
             started = self.clock()
             arrived = lines()
             if arrived:
-                self.last_input = started
+                self.last_input, self.idle_parks = started, 0
             self.pending += arrived
             # one command per tick: a burst of jogs must not move the target by more than one jog at once
             if self.pending and not self.command(self.pending.pop(0)):
@@ -506,10 +529,12 @@ def main(argv=None):
     parser.add_argument("--io", required=True, type=Path, help="directory for chunk-cmd (FIFO) and chunk-status.jsonl")
     parser.add_argument("--operating-profile", type=Path, help="per-device operating profile; unbound sessions cannot auto-pick")
     parser.add_argument("--params", type=Path, help="cell-params.json (rosy.omx-cell-params.v1); default: the built-in values")
+    parser.add_argument("--load-model", type=Path, help="load-model.json (load_model.py): refuse a library whose holds are predicted risky")
     args = parser.parse_args(argv)
     library = load_library(args.library)
     config = json.loads(args.config.read_text(encoding="utf-8-sig"))
     params = prm.load(args.params)["values"]
+    check = load_predict.plan_check(args.load_model, config["robot"].get("port"), params, library)  # None: no model
     from cell_robot_profile import load as load_operating_profile
 
     profile = load_operating_profile(args.operating_profile, robot_config=config["robot"]) if args.operating_profile else None
@@ -552,7 +577,7 @@ def main(argv=None):
         context = runtime_context(config["robot"], robot.bus, config["dataset"]["fps"],
                                   operating_profile=profile, params=params)
         runner = Runner(guarded, library, fps=config["dataset"]["fps"], status=status, live=live,
-                        operating_context=context, params=params)
+                        operating_context=context, params=params, plan_check=check)
         trace_path = os.environ.get("ROSY_CHUNK_TRACE")
         trace_file = open(trace_path, "a") if trace_path else None  # buffered: no write call per tick
         if trace_file:

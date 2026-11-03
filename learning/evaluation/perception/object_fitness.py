@@ -4,7 +4,7 @@ from copy import deepcopy
 
 import numpy as np
 
-from control.sensing.perception.learned.manifest import OBJECT_CLASSES
+from perception_runtime.perception.learned.manifest import OBJECT_CLASSES
 from core_common.observation import road_region_input_errors
 from object_boxes import _check_human_box, _iou
 

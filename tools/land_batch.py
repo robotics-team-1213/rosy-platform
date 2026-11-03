@@ -105,10 +105,15 @@ def batchable(land, wt: Path, other: Path, name: str, tip: str) -> str | None:
 AUTO = os.environ.get("ROSY_LAND_BATCH") == "1"
 
 
+def explicit(args, extra) -> bool:
+    """A FULL tier, explicit checks or a freshness request: it runs alone, never in a batch or a rollup."""
+    return (args.tests != "auto" or bool(extra) or getattr(args, "node", False)
+            or getattr(args, "no_cache", False))
+
+
 def plain_auto(args, extra) -> bool:
-    """Explicit checks or freshness requests run alone; only plain auto opts into batching, and only while AUTO."""
-    return (AUTO and args.tests == "auto" and not extra and not getattr(args, "node", False)
-            and not getattr(args, "no_cache", False))
+    """Only plain auto opts into batching, and only while AUTO."""
+    return AUTO and not explicit(args, extra)
 
 
 def taken(tickets: list[dict]) -> set[str]:
@@ -186,6 +191,7 @@ def queue(land, wt: Path, branch: str, args, python: str, qdir: Path, ticket: Pa
                               done=lambda: in_main(land, wt, branch), form=form,
                               tested=land_full.restore(wt, branch), changed=lambda: land_prepare.relaunch(land, qdir, ticket))
         if got == "landed":
+            args._carried = True  # this member observes the leader's FF; it did not move main again
             land_full.forget(wt, branch)
             print(f"== landed in a batch (not pushed): main {land.out(wt, 'rev-parse', 'main')[:10]} holds {branch}\n"
                   f"[land] this worktree is now removable. After leaving it, from the main checkout {main_co}:\n"
@@ -254,13 +260,17 @@ def lead(land, wt: Path, branch: str, args, python: str, qdir: Path, ticket: Pat
          joined: list[dict], measured: dict, kind: str = "affected") -> tuple[int | None, list[str]]:
     """Merge, prepare and land the batch: (code, merged members); code None after a stop, back on ``branch``."""
     name, took = f"{branch}-batch{time.strftime('%H%M%S')}-k{len(joined) + 1}", []  # a halved retry gets its own
+    origins = [dict(branch=branch, ticket=ticket.name, candidate=land.out(wt, "rev-parse", "HEAD"))]
     try:
+        if len({branch, *(r["branch"] for r in joined)}) != len(joined) + 1:
+            raise land.Stop("duplicate batch member branch")
         land.git(wt, "switch", "-c", name)
         for row in joined:
             tip = land.out(wt, "rev-parse", f"refs/heads/{row['branch']}")
             try:
                 land.merge(wt, tip, name, python, False, source=row["branch"])
                 took.append(row["branch"])
+                origins.append(dict(branch=row["branch"], ticket=row.get("ticket"), candidate=tip))
             except land.Stop as stop:
                 print(f"[batch] {row['branch']} left out, it lands alone: {str(stop).splitlines()[0]}", flush=True)
         if not took:
@@ -289,5 +299,6 @@ def lead(land, wt: Path, branch: str, args, python: str, qdir: Path, ticket: Pat
     land.git(wt, "branch", "-d", name, check=False)
     land_full.forget(wt, name)
     land_full.forget(wt, branch)
-    land_events.emit("train", branches=[branch, *took], k=len(took) + 1, **measured, result="landed")
+    land_events.emit("train", branches=[branch, *took], k=len(took) + 1, **measured, result="landed",
+                     members=origins, sha=land.out(wt, "rev-parse", "HEAD"))
     return code, took

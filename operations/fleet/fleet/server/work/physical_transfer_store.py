@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from hashlib import sha256
 import json
 from pathlib import Path
+import math
 import re
 import sqlite3
 import time
@@ -64,6 +65,12 @@ def _principal(principal, *, propose=False, operator=False):
     if not allowed:
         raise PermissionError("principal is not permitted to access this physical operation")
     return principal.principal_id
+
+
+def _check_parent_proof(checked_at):
+    if (type(checked_at) is not float or not math.isfinite(checked_at)
+            or not 0 <= time.monotonic() - checked_at <= 5.0):
+        raise MissionConflict("delegated arm approval requires current parent evidence")
 
 
 def _matches(request, installed):
@@ -141,6 +148,25 @@ class PhysicalTransferStore:
             _principal(principal, operator=True)
         return result
 
+    def peek(self, mission_id):
+        """In-process read for the control-unit owner that bound this job (D-965); no HTTP caller reaches it."""
+        with closing(self._journal._connect()) as connection:
+            return self._read(connection, mission_id)
+
+    def withdraw(self, mission_id, *, reason):
+        """Hold an unadmitted proposal whose delegation origin canceled it (D-965); no claim was taken."""
+        reason = _nonempty("reason", reason, limit=192)
+        with closing(self._journal._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            changed = connection.execute("UPDATE fleet_cell_jobs SET status='HOLD',reason=?,updated_at=? "
+                "WHERE mission_id=? AND provenance_kind='physical' AND status='PROPOSED'",
+                (reason, datetime.fromtimestamp(self._now_ns() / 1e9, timezone.utc).isoformat(), mission_id)).rowcount
+            if changed:
+                self._journal._event(connection, mission_id, None, "PHYSICAL_TRANSFER_WITHDRAWN", "control-unit",
+                                     {"reason": reason})
+            connection.commit()
+            return self._read(connection, mission_id)
+
     def get_by_request_key(self, request_key, *, principal):
         actor = _principal(principal)
         key = _nonempty("request_key", request_key, limit=160)
@@ -149,10 +175,12 @@ class PhysicalTransferStore:
                                      "AND proposal_principal_id=? AND request_key=?", (actor, key)).fetchone()
             return self._read(connection, row[0]) if row is not None else None
 
-    def create(self, *, principal, request_key, request):
+    def create(self, *, principal, request_key, request, bind=None):
         with closing(self._journal._connect()) as connection:
             connection.execute("BEGIN IMMEDIATE")
             result = self._create(connection, principal=principal, request_key=request_key, request=request)
+            if bind is not None:
+                bind(connection, result["mission_id"])
             connection.commit()
             return result
 
@@ -195,12 +223,13 @@ class PhysicalTransferStore:
             raise MissionConflict("a physical owner capability or identity changed")
 
     def admit(self, mission_id, *, principal, expected_proposal_digest, expected_generation,
-              capabilities, capabilities_observed_at_ns):
+              capabilities, capabilities_observed_at_ns, delegation_checked_at=None):
         with closing(self._journal._connect()) as connection:
             connection.execute("BEGIN IMMEDIATE")
             result = self._admit(connection, mission_id, principal=principal,
                 expected_proposal_digest=expected_proposal_digest, expected_generation=expected_generation,
-                capabilities=capabilities, capabilities_observed_at_ns=capabilities_observed_at_ns)
+                capabilities=capabilities, capabilities_observed_at_ns=capabilities_observed_at_ns,
+                delegation_checked_at=delegation_checked_at)
             connection.commit()
             return result
 
@@ -213,7 +242,7 @@ class PhysicalTransferStore:
         return [(row["mission_id"], row["proposal_principal_id"]) for row in rows]
 
     def admit_by_policy(self, mission_id, *, scope_revision, enabled_by, proposers,
-                        capabilities, capabilities_observed_at_ns, recheck=None):
+                        capabilities, capabilities_observed_at_ns, recheck=None, delegation_checked_at=None):
         """D-938: the human admit's checks under the policy principal, in one transaction.
 
         The scope's enabling named operator stands for the second person: the proposer must be a
@@ -238,7 +267,8 @@ class PhysicalTransferStore:
             result = self._admit(connection, mission_id, actor=POLICY_ADMISSION_PRINCIPAL,
                 expected_proposal_digest=current["proposal_digest"], expected_generation=control["generation"],
                 capabilities=capabilities, capabilities_observed_at_ns=capabilities_observed_at_ns,
-                event_extra={"policy_scope_revision": scope_revision, "policy_enabled_by": enabled_by})
+                event_extra={"policy_scope_revision": scope_revision, "policy_enabled_by": enabled_by},
+                delegation_checked_at=delegation_checked_at)
             reason = recheck() if recheck is not None else None
             if reason is not None:
                 raise MissionConflict(f"policy admission scope changed before commit: {reason}")
@@ -246,7 +276,8 @@ class PhysicalTransferStore:
             return result
 
     def _admit(self, connection, mission_id, *, principal=None, actor=None, expected_proposal_digest,
-               expected_generation, capabilities, capabilities_observed_at_ns, event_extra=None):
+               expected_generation, capabilities, capabilities_observed_at_ns, event_extra=None,
+               delegation_checked_at=None):
         if actor is None:
             actor = _principal(principal, operator=True)
         elif actor != POLICY_ADMISSION_PRINCIPAL or principal is not None:
@@ -282,6 +313,19 @@ class PhysicalTransferStore:
                 return result
         if row["status"] != "PROPOSED":
             raise MissionConflict("physical operation was already admitted or held")
+        # D-965: both the named and the policy admit pass here, so neither revives work its origin canceled.
+        bindings = []
+        if connection.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='fleet_control_delegations'"
+                              ).fetchone():
+            bindings = connection.execute("SELECT cancel_requested FROM fleet_control_delegations "
+                                          "WHERE local_task_id=?", (mission_id,)).fetchall()
+        if any(row["cancel_requested"] for row in bindings):
+            raise MissionConflict("delegated arm work was canceled by its origin")
+        delegated = bool(bindings) or result["proposal_principal_id"].startswith("control-unit:")
+        if delegated:
+            if len(bindings) != 1:
+                raise MissionConflict("delegated arm proposal requires one local binding")
+            _check_parent_proof(delegation_checked_at)
         if not reserve(connection, owner_kind="mission", owner_id=mission_id, generation=expected_generation,
                        resources=self.installation.policy.resources, phase="CLAIMED"):
             raise MissionConflict("physical resource claim conflicts with another operation")
@@ -289,6 +333,8 @@ class PhysicalTransferStore:
         if boundary < checked_at:
             raise MissionConflict("server clock moved backwards during physical reservation")
         self._check_capabilities(capabilities, capabilities_observed_at_ns, boundary)
+        if delegated:
+            _check_parent_proof(delegation_checked_at)
         connection.execute("INSERT INTO fleet_physical_transfer_approvals VALUES(?,?,?,?,?,?,?)",
             (mission_id, expected_proposal_digest, actor, boundary, boundary, control["authority_epoch"], expected_generation))
         connection.execute("UPDATE fleet_cell_jobs SET status='READY',authority_epoch=?,dispatch_generation=?,updated_at=? "

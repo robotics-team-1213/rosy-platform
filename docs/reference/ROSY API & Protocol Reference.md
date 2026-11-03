@@ -5,9 +5,27 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.348
+**Version:** v1.355
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.351 핑키 열 모드: 온도·전압으로 속도를 낮춘다
+
+- 로봇은 SoC 온도, Raspberry Pi 펌웨어 `get_throttled`(지금 저전압·주파수 제한·스로틀·soft 온도 한계), 바퀴 모터마다 온도·모터 자체 한계·입력 전압·하드웨어 오류를 읽는다. 모터 값은 bringup이 2초마다 ROS `motor/health`(std_msgs/String JSON `{motors:[{id, temperature_c, temperature_limit_c, input_voltage_v, hardware_error}]}`)로 낸다.
+- CORE가 1초마다 열 단계를 정한다. `warm`(SoC 75 °C, 모터 한계 −10 °C, 지금 스로틀·저전압, 모터 입력 전압 오류)이면 직선 상한을 절반으로 줄인다. `hot`(SoC 82 °C, 모터 한계 −4 °C, 모터 과열 오류)이면 Fleet·주행 명령을 0으로 만들고, 수동 조작은 `warm` 상한으로 남겨 차선 밖으로 옮길 수 있게 한다. 단계는 5 °C 아래로 내려가야 풀린다. 래치가 아니며 e-stop을 걸지 않는다. 읽은 값이 없으면 `ok`다. 문턱은 `safety.thermal`로 바꿀 수 있다.
+- 상태 스냅샷 `safety`에 `thermal`(`ok`·`warm`·`hot`)을 더한다(additive). 없으면 Fleet 화면은 `ok`처럼 아무것도 표시하지 않는다. Fleet 로봇 카드는 `warm`이면 "열: 감속", `hot`이면 "열: 정지"를 보인다.
+- `GET /api/v1/safety/state`에 `thermal: {level, reasons, soc_c, throttled, motors}`를 더한다(additive). 단계가 바뀔 때마다 이벤트 `thermal.warm`·`thermal.hot`·`thermal.ok`를 한 번 낸다.
+### v1.350 USB 카메라 역할 승인 (D-963)
+
+- 제어 PC가 역할 없는 USB 카메라를 `POST /api/fleet/workcell-observations/{workcell_id}/usb-devices`로 보고하고, 같은 응답으로 운영자 결정을 받는다. Fleet은 결정만 저장하며(SQLite) 장치 경로·레지스트리를 모른다. 인증은 그 작업셀의 팔 관측 토큰을 재사용한다. 계약은 `core_common.protocol.workcell_observations`의 `UsbCameraReport`·`UsbCameraDecisions`다.
+
+### v1.349 독립 Rosy Account와 개발 모드 사람 로그인 (D-962)
+
+- Rosy Account는 Fleet과 별도 프로세스·계정 DB로 실행한다. 기존 issuer와 Account protocol의 `/api/fleet/auth/*` 주소를 유지한다. Fleet 업무 origin에서는 foundation AccountClient의 PKCE receiver가 로컬 세션을 소유한다. 중앙 로그인 쿠키를 Fleet 자격으로 복제하지 않는다.
+- Fleet `development`는 연결 환경 표식이다. 익명 개발 토큰의 발급·수락·자동 재접속을 폐기하며, `POST /api/fleet/auth/development-session`은 403을 반환한다. 개발 모드도 설정된 사람 로그인 또는 중앙 Account receiver가 필요하다. 로그인한 계정의 실제 역할·자원별 grant·최초 비밀번호 변경·CSRF·회수 검사는 그대로 적용한다.
+- Fleet origin의 `/console/login`은 기존 로컬 복귀 주소를 검증해 중앙 인증으로 이동한다. `/api/fleet/auth/session`과 로그아웃은 Fleet receiver 세션에 적용하며 Account protocol의 session family 회수를 따른다. `/console/profile`·`/console/accounts`는 중앙 계정 화면으로 연결한다. Learning의 기존 등록과 receiver는 유지한다.
+- 읽기 전용 기계 점검 자격은 기존 `viewer` 역할·토큰을 유지하며 site-users에서 `machine: true`로 명시한다. 토큰이 필수이고 사람 login·password·policy 권한과 함께 설정할 수 없다. receiver는 이렇게 명시한 viewer와 기존 service·ai_observer만 기계 Bearer로 수락하며, 사람의 이전 Bearer는 수락하지 않는다. viewer의 명령·제안 권한은 추가하지 않는다.
+- 이는 D-473의 익명 접속 계약을 대체한다. 구현·서명 배포·실제 사용자 수용은 별도 증거다.
 
 ### v1.348 Fleet 보류와 로봇 거절의 구분
 
@@ -446,8 +464,11 @@ It does not enable a physical owner, command, calibration or motion admission.
 
 | Method/path | Authentication and body | Response |
 |---|---|---|
-| `GET /api/fleet/workcell-observations` | Existing Fleet viewer authentication | `{read_only:true,physical_acceptance:false,workcells:[{workcell_id,label,arms,cameras}]}`; no-store. Each arm has `{source_id,arm_id,label,units:"encoder_rad",fresh,epoch,sequence,captured_at,source_age_s,receipt_age_s,positions}`; cameras have `{source_id,label,role,arm_id}`. Missing samples have null data/age/epoch, sequence0. Stale positions are null. No producer secret or serial selector. |
+| `GET /api/fleet/workcell-observations` | Existing Fleet viewer authentication | `{read_only:true,physical_acceptance:false,workcells:[{workcell_id,label,arms,cameras}]}`; no-store. Each arm has `{source_id,arm_id,label,units:"encoder_rad",fresh,epoch,sequence,captured_at,source_age_s,receipt_age_s,positions,motor_health,faults}`; `faults` is the arm's last 20 guard stops, newest first, once per session `{captured_at,session_id,stop_reasons,motors:[{joint,id,error_deg,command_raw,present_raw,pwm,pwm_limit,fault}]}` (memory only: a Fleet restart clears it; the field PC keeps `faults/*.json`); cameras have `{source_id,label,role,arm_id}`. Missing samples have null data/age/epoch, sequence0. Stale positions are null. No producer secret or serial selector. |
 | `POST /api/fleet/workcell-observations/arms/{source_id}` | Source-bound `X-Workcell-Observation-Token`; strict `ArmObservation` `{epoch,sequence,captured_at,positions}`; actual body limit16KiB | 202 `{accepted:true}`; 401 bad/unknown source credential; 409 replay, nonadvancing capture, expired/future capture; 413 `WORKCELL_OBSERVATION_TOO_LARGE`; 422 invalid structure; 503 unconfigured. Identity comes from the registered source, never the payload. |
+| `GET /api/fleet/workcell-observations/usb-devices` | Existing Fleet viewer authentication | `{workcells:[{workcell_id,roles,candidates:[{key,usb_id,roles,suggest,hub_arm,decision}]}]}`; no-store. `key` is a hash of the camera's persistent name; no device path or token. `decision` is `{role,principal_id}` or null. A workcell whose control PC has not reported for 60 s is omitted. (D-963, v1.350) |
+| `POST /api/fleet/workcell-observations/{workcell_id}/usb-devices` | `X-Workcell-Observation-Token` of any arm of that workcell; strict `UsbCameraReport` `{workcell_id,candidates<=16,roles<=32}`; body limit 16KiB | 200 `{decisions:[{key,role}]}` for reported keys an operator decided; the stored report replaces the previous one and decisions for keys no longer reported are dropped. 401 bad token or another workcell's token; 404 unknown workcell; 413 `WORKCELL_OBSERVATION_TOO_LARGE`; 422 `INVALID_USB_CAMERA_REPORT` (incl. `workcell_id` differing from the path). no-store. |
+| `POST /api/fleet/workcell-observations/{workcell_id}/usb-devices/{key}/decision` | Named operator (`require_named_operator`); body `{role}` (Identifier), at most 4096 bytes, duplicate keys and non-finite numbers rejected | 200 `{key,role}`; the decision and operator are stored and audited by the mutation audit. 403 not a named operator; 404 `USB_CAMERA_NOT_REPORTED`; 422 `INVALID_USB_CAMERA_DECISION`. A new role name is allowed (the control PC gives it `/<role>_camera/image_raw`). Fleet applies nothing: the control PC reads the decision from its next report reply and `omx_cameras.py bind --apply` writes its own registry. |
 
 Epoch is lowercase UUID hex32; sequence is a positive strict integer. Original
 UNIX capture seconds and exact registered joint→number positions are finite JSON
@@ -846,6 +867,43 @@ Reads stay installed when the deployment profile closes, provided the persistent
 scoped 취소는 결속된 navigation run만 취소하며 trip lease를 자동 종료하거나 IDLE로 전환하지 않는다. lease 수명·해제는 기존 소유자 경로에 남는다. 응답 `navigation`은 응답 시점의 현재 facade 상태여서 새 run의 상태일 수 있다. 성공 판단은 `operation`의 원래 boot/run/correlation과 TERMINAL/CANCELED에 결속하고 facade 상태를 원래 run의 결과로 해석하지 않는다. native 취소 receipt도 물리 정지 측정 증거는 아니다.
 
 이 절은 공유 계약이며 HTTP·runtime·UI·배치 및 실물 수용은 각 구현 증거로 닫는다. schema 등록·원격 모델 시험만으로 파이프라인이 완성됐다고 주장하지 않는다.
+
+### v1.353 Arm-transfer delegation candidate shape (D-965)
+
+팔 작업 위임 후보의 모양만 정한다. 이 버전의 경로는 아직 navigation 후보만 받는다. 셀 ingress와 R 쪽 변환은 후속 버전에서 연다.
+
+- 모델 정본은 `core_common.protocol.schemas`의 `ControlArmTransferCandidate` `{target_unit,transfer}`, `ControlArmWorkRequest`(+`delegation_id`), `ControlArmIngressRequest`(+`origin_id`,`config_revision`)다.
+- `transfer`는 기존 `ArmTransferJobCreate`와 같다. 추가 필드와 `robot_id`·`goal`을 섞은 본문은 거절한다.
+- `ControlDelegationSnapshot.request`는 navigation 후보와 팔 작업 후보 중 하나다. 두 모양은 필수 필드가 달라 서로 바뀌지 않는다.
+- 셀은 팔 작업 후보를 받으면 기존 ARM 제안(`PROPOSED`)을 만든다. 승인은 셀의 기존 ARM admit(기명 운영자 또는 D-938 정책) 하나뿐이다. 위임 자체에는 별도 approve가 없다.
+
+### v1.354 Cell inbox accepts delegated arm work (D-965)
+
+셀의 `POST /api/fleet/control-unit/inbox`가 `ControlArmIngressRequest`도 받는다. 범위 검사는 `workcell:<transfer.workcell_id>` 자원이 최종 target의 직접 소유인지다.
+
+- 최종 target 셀은 인증된 직접 부모의 `service` principal로 기존 ARM 제안을 만든다. `transfer.request_key`가 그 principal 아래의 제안 key다. 같은 위임의 재전달은 같은 제안을 돌려준다.
+- 제안 mission ID는 위임의 `local_task_id`에 결속된다. 셀에 ARM 설치가 없거나 부모 principal이 제안 권한이 없으면 409(`CONTROL_UNIT_ARM_JOBS_UNAVAILABLE`, `CONTROL_UNIT_ARM_PROPOSAL_FORBIDDEN`)이고 결속하지 않는다.
+- 팔 작업 위임의 `/approve`는 409 `CONTROL_UNIT_ARM_ADMIT_AT_CELL`이다. 승인은 셀의 기존 ARM admit뿐이다.
+- 위임 상태는 ARM 상태를 옮긴다: PROPOSED→QUEUED, READY→ACCEPTED, RUNNING·ACTION_SUCCEEDED→RUNNING, GOAL_CONFIRMED→COMPLETED, HOLD→HOLD. result는 `{mission_id,status,reason}`다.
+- 팔 작업의 취소 요청은 기록만 한다. ARM 제안 취소는 셀 운영자가 기존 ARM 취소 경로로 한다.
+- 외부 앱의 ARM 제안을 R이 위임으로 바꾸는 진입은 아직 없다. 로컬 운영자 `POST /delegations`는 navigation만 받는다.
+
+### v1.355 Top control unit relays ARM jobs to the owning cell (D-965)
+
+ARM 설치가 없고 관제 단위가 설정된 Fleet(현장 R)은 `/api/fleet/arm-transfers/jobs`의 다섯 경로를 relay로 연다. 본문·응답 모양은 기존 ARM 경로와 같다. admit·observation·recovery 경로는 열지 않는다.
+
+| 경로 | relay 동작 |
+|---|---|
+| `POST /jobs` | proposer. `workcell:<workcell_id>`를 소유한 하위 셀로 팔 작업 위임을 만든다. delegation ID는 `arm-` + sha256(principal ID, request_key) 앞 40자다. 셀이 만든 제안의 `job`을 돌려준다. 그 셀이 없으면 404 `ARM_TRANSFER_WORKCELL_NOT_DELEGATED`, 셀 응답이 없거나 stale이면 503 |
+| `GET /jobs?request_key=` | viewer. 같은 principal의 위임만 찾는다 |
+| `GET /jobs/{mission_id}` | viewer. 제안한 principal 또는 operator만. 다른 서비스는 403 |
+| `GET /jobs/{mission_id}/physical-receipt` | 위와 같은 범위. 셀이 투영한 receipt가 없으면 409 `ARM_TRANSFER_PHYSICAL_RECEIPT_PENDING` |
+| `POST /jobs/{mission_id}/cancel` | 제안한 principal만. 위임 취소를 요청한다. 앱의 reason은 R에만 남고 셀은 자체 reason(`control-unit-cancel`)을 쓴다 |
+
+- 셀의 위임 result는 `{job, receipt, cancel_sent?}`다. `job`은 기존 `ArmTransferJobSnapshot`, `receipt`는 기존 physical receipt 또는 null이다.
+- 셀 쪽 취소: 승인 전 제안은 `HOLD`(`reason=control-unit-cancel`)로 거둬들이고 위임은 CANCELED다. 준비된 시도는 기존 dispatcher 취소로 한 번 보낸다. `cancel_sent`는 정지 확인이 아니다.
+- 기명 admit과 D-938 정책 admit은 취소 요청된 위임에 묶인 제안을 409로 거절한다.
+- 셀의 제안 기록에서 제안 principal은 R의 service principal(`control-unit:R`)이다. R relay는 제안한 앱 자신에게는 `proposal_principal_id`를 그 앱의 principal로 보여 준다(이 Fleet에서 제안한 주체). operator 조회는 셀 기록 그대로다. 같은 앱의 재요청은 같은 위임과 같은 제안을 돌려준다.
 
 ### v1.292 Candidate trip admission (D-836)
 
@@ -1937,7 +1995,7 @@ config `control.sensor_adapter.mode` 와 같은 문자열이다(D-400). 일반 �
 | POST | `/api/v1/safety/stop` | Viewer↑ | SAF-001 (누구나). 보정 세션 중에도 막지 않는다 |
 | POST | `/api/v1/safety/release-code` | Operator | v1.337. `{code}`: 래치 중 정지 화면에 보이는 일회용 해제 코드. 래치가 없으면 코드를 쓰지 않고 409 `NOT_LATCHED`, 틀리면 403 `CODE_REJECTED`(다섯 번째에 폐기, `detail.burned`), 맞으면 아래 Admin 해제와 같은 동작 후 `{estop: false}`. 로봇 LAN만, 로그인 코드와 같은 속도 제한. 로그인 토큰을 주지 않는다 |
 | POST | `/api/v1/safety/release` | Admin | SAF-001. 어떤 경로의 래치든(API, control 정책, SAF-005 `battery_policy`·`battery_deep`) E-Stop 은 모드 EMERGENCY 와 함께 걸리므로 이 경로로 풀린다. EMERGENCY 도 아니고 래치도 없으면 409 `MODE_CONFLICT`. 래치가 IDLE 에 남은 경우(v1.196 이전 CORE)도 이 경로로 풀린다 (v1.196). 배터리 래치는 전압이 회복되어도 스스로 풀리지 않는다. 해제는 배터리 정책을 끄지 않으며 Deep 이 이어지면 다음 표본에서 다시 래치한다. 어떤 출처의 E-Stop 이든 배터리 자동 복귀(도크 복귀·`RETURN_HOME`)를 배터리 단계가 OK 로 돌아올 때까지(복귀 히스테리시스 포함) 끄고, 해제는 래치 중 무장된 복귀를 지우며, 그 사이 Critical 통과는 다시 래치한다 — 해제 뒤 로봇은 새 명령 없이 움직이지 않는다(D-502, v1.120) |
-| GET | `/api/v1/safety/state` | Viewer | SAF-001. `battery` 는 정책 `{warning_percent, critical_percent, deep_percent, critical_policy}` 와 지금의 근거 `{evidence, sample_age_s, level, percent}`(D-502, v1.120 additive) — `evidence` 는 `missing`\|`fresh`\|`stale`, `level` 은 `ok`\|`warning`\|`critical`\|`deep`, 표본이 없으면 `sample_age_s`·`percent` 는 `null`. `source: battery_policy`\|`battery_deep` 래치를 풀기 전에 관리자는 `evidence: fresh` 와 `level` 을 본다. `fleet_loss_policy` 와 선택 필드 `fleet_link` (SAF-003, D-419, v1.86) `{configured, connected, lost, timeout_s, applied, correlation_id, disconnected_s, held_goal}` — `configured` 는 FleetAgent 가 돌고 있는가(승인된 `pairing_token` + 주소), `lost` 는 이번 단절에서 정책을 적용했는가, `applied` 는 실제로 한 것(`STOP`·`HOLD`·`RETURN_HOME`·`CONTINUE`·`NONE`), `held_goal` 은 `HOLD` 가 보관한 `{correlation_id, x, y, yaw}`(재접속 이벤트 뒤 비움). 서비스가 없으면 `null` |
+| GET | `/api/v1/safety/state` | Viewer | SAF-001. `thermal` 은 열 모드 `{level: ok\|warm\|hot, reasons, soc_c, throttled, motors}`(v1.351). `battery` 는 정책 `{warning_percent, critical_percent, deep_percent, critical_policy}` 와 지금의 근거 `{evidence, sample_age_s, level, percent}`(D-502, v1.120 additive) — `evidence` 는 `missing`\|`fresh`\|`stale`, `level` 은 `ok`\|`warning`\|`critical`\|`deep`, 표본이 없으면 `sample_age_s`·`percent` 는 `null`. `source: battery_policy`\|`battery_deep` 래치를 풀기 전에 관리자는 `evidence: fresh` 와 `level` 을 본다. `fleet_loss_policy` 와 선택 필드 `fleet_link` (SAF-003, D-419, v1.86) `{configured, connected, lost, timeout_s, applied, correlation_id, disconnected_s, held_goal}` — `configured` 는 FleetAgent 가 돌고 있는가(승인된 `pairing_token` + 주소), `lost` 는 이번 단절에서 정책을 적용했는가, `applied` 는 실제로 한 것(`STOP`·`HOLD`·`RETURN_HOME`·`CONTINUE`·`NONE`), `held_goal` 은 `HOLD` 가 보관한 `{correlation_id, x, y, yaw}`(재접속 이벤트 뒤 비움). 서비스가 없으면 `null` |
 | PUT | `/api/v1/safety/limits` | Admin | SAF-004 — `{manual_linear?, manual_angular?}` 는 프로필 최대값으로 clamp. SAF-005 배터리 임계값 `{battery_warning_percent?, battery_critical_percent?, battery_deep_percent?, battery_critical_policy?}` 과 `{fleet_loss_policy?}` 도 같은 경로로 받는다. 임계값은 `0 < deep < critical < warning <= 100` 을 만족해야 한다. `fleet_loss_policy` 는 `STOP`·`HOLD`·`RETURN_HOME`·`CONTINUE`(`CONTINUE_CURRENT_NAVIGATION` 은 `CONTINUE` 로 저장), 그 밖은 400. `RETURN_HOME` 을 받으면 응답에 선택 필드 `warning`(문자열) — 사이트 Fleet 이 죽으면 이 정책의 로봇이 Fleet 교통정리 없이 동시에 home 으로 간다 — 을 싣고 로그에 경고를 남긴다(거절하지 않음). 판정 시간 `safety.fleet_loss_timeout_s`(기본 5.0, 4–60 s, `1 + fleet.heartbeat_reply_timeout_s + 1` 이상)와 하트비트 답 시한 `fleet.heartbeat_reply_timeout_s`(기본 2.0, 0.5–10 s)는 설정 파일 전용이고, Fleet 링크가 설정된 로봇에서 어기면 CORE 가 기동하지 않는다(Fleet 없는 로봇은 경고 후 기본값) (D-419) |
 
 ## 5.6 이벤트·진단·관리
@@ -2660,6 +2718,9 @@ close code: `4401` 은 토큰이 없거나 틀린 것(`/ws/state` 와 동일), `
 | `safety.fleet_restored` | info | 로봇 | `{applied, correlation_id, disconnected_s, held_goal}` — `safety.fleet_lost` 뒤 링크가 돌아왔다. 아무것도 재개하지 않는다. `held_goal` 은 `HOLD` 가 보관한 `{correlation_id, x, y, yaw}` 또는 `null` (v1.86) |
 | `battery.low` | warning | 로봇 | `{percent}` |
 | `battery.critical` | critical | 로봇 | `{percent, policy}` |
+| `thermal.warm` | warning | 로봇 | `{from, reasons, soc_c}` |
+| `thermal.hot` | critical | 로봇 | `{from, reasons, soc_c}` |
+| `thermal.ok` | info | 로봇 | `{from, reasons, soc_c}` |
 | `battery.deep` | critical | 로봇 | `{percent, voltage, dwell_s}` — D-27 딥 방전. 모터가 서고 셧다운 센티넬이 무장된다 |
 | `battery.shutdown_request_failed` | error | 로봇 | `{path, error, armed}` — D-27 셧다운 센티넬을 쓰지 못했다. 딥배터리 보호가 무장되지 않았다는 뜻이므로 조용히 넘어가면 안 된다 |
 | `command.rejected` | warning | 로봇 | `{source, reason}` |
@@ -3389,7 +3450,7 @@ command. Reusing a key for a different request returns `409 IDEMPOTENCY_CONFLICT
 |---|---|---|---|
 | GET | `/api/fleet/session` | any configured site-user bearer | Returns only the authenticated `principal_id` and role for the current console session. |
 | GET | `/api/fleet/auth/connection` | none | D-473 (v1.108): `{mode: "development"\|"paired"}` with `Cache-Control: no-store`. `development` only when Fleet started with both `ROSY_DEPLOYMENT=development` and `--connection-mode development`; any other combination, or a missing setting, is `paired`. D-519 (v1.137): also `password_login: bool`, true when site-users holds at least one login account; the console then offers 아이디·비밀번호 and folds the token field. |
-| POST | `/api/fleet/auth/development-session` | none (development mode only) | D-473 (v1.108): 201 `{token, principal_id, role: "operator", expires_at}` with `Cache-Control: no-store`. `principal_id` is `development-<8 hex>`; the token is returned once and lives 1 h in Fleet memory only (gone on restart). The caller address (the last `X-Forwarded-For` entry when Fleet runs with `--lan-camera-proxy` behind the site proxy, otherwise the TCP peer) must be loopback, RFC1918, link-local or the Tailscale tailnet `100.64.0.0/10`; `Host` must be a LAN IP literal, `localhost`, a `.local` name or the host name, and a present `Origin` must equal `Host`; otherwise, and always in paired mode, 403 `FORBIDDEN`. More than 6 requests per address per minute is 429 `RATE_LIMITED` with `Retry-After: 60`. At most 8 sessions are live; a ninth evicts the oldest. The session is a named operator: it passes the named-operator gate (missions included), and the issue and every later POST are written to the API audit under that principal; an unavailable audit is 503 `AUDIT_STORAGE_UNAVAILABLE` and no session. Robot credentials (`robots.yaml`, D-361 enrollment) and stop paths are unchanged. |
+| POST | `/api/fleet/auth/development-session` | unavailable | D-962 (v1.349): always 403 `FORBIDDEN`, `Cache-Control: no-store`. Anonymous synthetic development operators are retired in every mode; previously issued development Bearers are no longer accepted. Use normal human login and actual account permissions. Robot credentials, device development markers and stop paths are unchanged. |
 | POST | `/api/fleet/auth/login` | none (site-users login accounts only) | D-519 (v1.137): body `{login, password, remember?: bool}`. 204 with `Cache-Control: no-store` and `Set-Cookie: rosy_fleet_session=<random>; HttpOnly; Secure; SameSite=Strict; Path=/`, plus `Max-Age=2592000` (30 d) only when `remember` is true. Accounts are `site-users.yaml` entries with `login` (`^[a-z0-9._-]{1,32}$`, unique) and `password_scrypt` (`scrypt$<n>$<r>$<p>$<salt b64>$<hash b64>`, made by `python -m fleet.server.site_users hash-password`); `service` cannot have a login. A wrong password and an unknown login give the same 401 `LOGIN_FAILED`. More than 5 failures per address or 10 per login in a minute is 429 `RATE_LIMITED` with `Retry-After: 60`. A present `Origin` must equal `Host`, else 403 `CSRF_REJECTED`; a malformed body is 422 `INVALID_REQUEST`. Success is audited under the principal, failure as `login:<name>` (role `viewer`); 429 is audited the same way at most once per address per minute. A login that does not match the pattern is the same 401 (after the dummy scrypt) and is audited as `login:?`. At most two password checks run at once; one that cannot start within 5 s is 429 `RATE_LIMITED`. Without any login account in site-users this route and logout are 404. The session lives in the `--tasks-db` (SHA-256 of the cookie only) and survives a Fleet restart: idle limit 12 h (sliding), 30 d with `remember`, never more than 30 d after login; account changes take effect when Fleet restarts with the edited site-users file (as for tokens), and then every session whose login's principal, role or password changed, or whose entry was removed, ends at once. A session read that cannot reach the DB is 503 `SESSION_STORAGE_UNAVAILABLE`; a cookie validated in the last 60 s needs no DB, and `POST /api/fleet/estop` also accepts an older cached cookie while the DB is unavailable. |
 | GET | `/api/fleet/auth/profile` | completed human session cookie | D-689 (v1.211): own login, principal_id, email, role and display_name; no-store. |
 | PATCH | `/api/fleet/auth/profile` | completed human session cookie, same-origin | D-689 (v1.211): display_name only, trim 1..80 characters without controls; own profile response. |
@@ -4471,6 +4532,12 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.355 | 2026-11-03 | D-965: ARM 설치 없는 꼭대기 관제(R)가 ARM 작업 경로 다섯 개를 하위 셀 위임으로 relay. 셀 result에 job·receipt, 승인 전 취소는 HOLD로 거둠, admit은 취소된 위임 제안 거절 |
+| v1.354 | 2026-11-03 | D-965: 셀 inbox가 팔 작업 위임을 받아 부모 service principal로 기존 ARM 제안을 만들고 결속. 위임 approve는 팔 작업에 409, 승인은 셀 ARM admit |
+| v1.353 | 2026-11-03 | D-965: 팔 작업 위임 후보 모양(`ControlArmTransferCandidate`·`ControlArmWorkRequest`·`ControlArmIngressRequest`), snapshot request는 두 종류 중 하나. 경로는 아직 navigation만 |
+| v1.351 | 2026-11-03 | 핑키 열 모드: `safety/state.thermal`, `thermal.*` 이벤트, ROS `motor/health`. warm은 직선 상한 절반, hot은 자율 주행 0(수동은 warm 상한) |
+| v1.350 | 2026-11-02 | D-963: 제어 PC의 역할 없는 USB 카메라 보고·운영자 역할 결정 (`workcell-observations/{workcell_id}/usb-devices`) |
+| v1.349 | 2026-11-02 | D-962: 독립 Account authority와 Fleet PKCE receiver, 개발 모드의 익명 세션 폐기·사람 로그인 의무화 |
 | v1.348 | 2026-11-02 | 상태 행 `error`: Fleet 자체 보류(`ADDRESS_UNVERIFIED`)는 `reachable: null, held: true`, 로봇 거절과 구분 |
 | v1.347 | 2026-11-02 | additive (D-941): 장소 `kind` `slow`(감속만, 정지 아님), 속도표가 줄무늬 감속으로 반영 |
 | v1.346 | 2026-11-02 | additive (D-941): `GET /api/fleet/platoon`의 `speed`(고리 속도표, 보내기 없음), 충전 칸 관측을 백그라운드 루프로 |

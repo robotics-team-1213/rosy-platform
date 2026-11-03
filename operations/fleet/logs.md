@@ -5243,3 +5243,32 @@
 - 변경: `test/test_fleet_header.py`의 테마 자리 단정을 계정 접힘 원복으로 되돌렸다(이동 판정 철회).
 - 증거: 원격 시험은 재착지 전 기록한다.
 - Gate: 없음. CE: 해당 없음.
+
+## 2026-11-02 · uncommitted · D-962 독립 Account 수신과 개발 모드 사람 로그인
+
+- 변경: 사람 계정·세션·OAuth 구현은 `operations/account/rosy_account`가 소유하고 Fleet은 foundation AccountClient로 자원 grant를 검증한다. 익명 개발 토큰 발급·수락·자동 재접속을 폐기했다. 개발 모드의 실제 계정 역할과 CSRF·로그아웃 제한을 유지한다.
+- 증거: 개발 인증·CLI·node·브라우저 149건 중 147건은 `1b414063f2`에서 통과했고 두 site-map 저장소 단정은 토큰이 없는 빈 문자열을 허용하도록 보정했다. 최종 direct-page Chromium 10건은 `4d7ea3ac4e`에서 모두 통과/skip 0/NEW 0. Account 기존 회귀 160건 통과 뒤 정렬 단정·callback 시험 보정을 별도로 재검증 중이다. 최종 통합 SHA·운영 전환은 후속 기록으로 구분한다.
+- gate 변화: 없음. 장치 명령과 실물 수용을 수행하지 않았다.
+- CE: 해당 없음 — 개발 우회 방지는 코드·회귀 시험에 남는다. 중앙 로그인 화면 실패의 교훈은 `docs/solutions/logic-errors/fleet-development-mode-hides-central-account-login-2026-11-02.md`를 따른다.
+
+## 2026-11-02 · uncommitted · D-963 USB 카메라 역할 결정 라우트
+
+- 변경: `recognition/usb_camera_decisions.py`가 `GET/POST /api/fleet/workcell-observations/usb-devices…`(보고·목록·이름 있는 운영자 결정)를 낸다. 결정은 작업 DB의 SQLite에, 최신 보고는 메모리에 둔다. 인증은 작업셀 팔 토큰(`authorize_workcell`). API v1.350.
+- 증거: `operations/fleet/test/test_usb_camera_decisions.py`(노트북 5건 통과), `usb-camera-panel.test.mjs`.
+- gate 변화: 없음. 실제 USB 카메라를 꽂아 승인하는 현장 수용은 하지 않았다.
+- CE: 해당 없음 — 새 기능이며 장애 해결이 아니다. 결정은 D-963에 있다.
+
+## 2026-11-03 · 9f666845e8 · fix(fleet): platoon 지도 계산 공유와 HTTP 응답성
+
+- 변경: `/api/fleet/platoon`이 활성 지도 버전별 루프·기하·속도표 계산 한 건을 작업 스레드에서 공유한다. 취소된 독자는 공유 계산을 취소하지 않고, NO_LOOP도 재사용하며 계산 실패 뒤에는 다시 시도한다. 로봇 자세·차간 거리는 요청마다 읽고 기존 인증·표시 전용 dispatch=false를 유지한다.
+- 검증: 원격 RED `ec040ca3c5`에서 기존 7건 통과와 새 회귀 3건 실패를 확인했다. 분리 전 `372a05294f`의 집중 시험 12건 통과 뒤, 최종 소스 `9f666845e8`의 mapped affected 3회는 328 passed/28 skipped, 4676 passed/188 skipped/5 subtests passed, Fleet 7550 passed/585 skipped였다. 세 보고서 모두 known_failures 비교 NEW/known/flaky 0이며 size-range도 통과했다. 회귀는 이벤트로 작업을 멈춘 동안 인증 요청 완료, 동시·반복 계산 공유, 취소·실패 복구, 지도 버전 변경, 최신 자세 반영을 확인한다.
+- Gate: 변화 없음. 건너뛴 시험은 검증에 포함하지 않았으며 브라우저·ROS 실행·실물·현장 수용이나 실제 CPU 부하의 응답 지연 상한을 입증하지 않는다.
+- CE: 해당 없음 — 이번 원인과 재발 방지는 코드·회귀 시험으로 설명되며 기존 asyncio/GIL·동시성 교훈을 검토했다.
+
+## 2026-11-03 · 91f1525146 · fix(fleet): ARM 위임의 요청 키 격리와 상위 승인 검사
+
+- 변경: 셀 요청 키는 origin/delegation으로 격리하고 앱 응답에는 원래 요청 키를 유지한다. 물리 제안과 위임 연결은 같은 SQLite 트랜잭션에서 커밋한다. 명시적 승인과 정책 worker는 트랜잭션 밖에서 상위·조상 상태를 확인하고, 공유 admit은 연결의 유일성·취소 및 유한한 최근 확인 근거를 자원 점유 전후에 검사한다. 연결이 없는 예약된 control-unit 제안도 승인하지 않는다.
+- 검증: 요청 키 RED `63b32d820f`에서 두 앱이 같은 mission을 받는 2건 실패를 확인했고 `c852a206ac`에서 관련 9건이 통과했다. 실제 journal/HTTP/policy 컴포넌트 RED `ede6a1f67b`는 상위 단절·취소 뒤의 승인과 생성/연결 틈을 재현했다. 수정 `91f1525146`의 5개 모듈 98건, 시간 초과 시 coroutine 취소와 기존 navigation/dispatcher를 포함한 `7efb72e1f3`의 7개 모듈 92건이 건너뜀 없이 통과했다. 최신 main의 HTTP 통합 호출자는 `7fc95c3ac4`에서 실제 상위 확인 근거를 얻도록 연결했고 해당 3건도 건너뜀 없이 통과했다. 세 보고서 모두 known_failures는 0 new/known/flaky이며 겹치는 선택을 고유 시험 수로 합산하지 않는다.
+- gate 변화: 기존 snapshot·generation·capability 신선도·자원·journal 검사를 유지했다. HTTP 입력이나 실행 writer를 추가하지 않았으며 simulation 전용 경계도 유지한다. 독립 source safety review를 통과했고 실물 동작·운영 배포·현장 수용은 하지 않았다.
+- 미해결: 기존 일반 app custom lifespan은 legacy ARM policy startup hook을 호출하지 않는다. 정책 시험은 등록된 start/stop 컴포넌트를 명시 실행한 근거이며 운영 자동승인 실행을 입증하지 않는다.
+- CE: 미해결 — lifecycle 연결은 별도 작업으로 남겼다. 이번 가드 수정의 원인과 재발 방지는 코드·회귀 시험에 직접 남는다.

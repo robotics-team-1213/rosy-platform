@@ -73,6 +73,26 @@ line that pins the live version, including the ones above. Rename your own
 `### v1.NNN` changelog row by hand. Then run the tripwires below plus a
 `git grep -n '"\*\*Version:\*\* v1\.'` that should show only the new version.
 
+## Update 2026-11-03: one constant, header-checked
+
+`ac3bac8f6f` collapsed the code-side pins into
+`core_api_web/api/contract_version.py` (`CONTRACT`). `app.py` reads that
+constant for its docstring and `description=`, and
+`test_protocol_version_alignment.py` checks it against the reference header.
+The Fleet feature tests and the line-follow tripwire no longer pin the version.
+They assert their own contract content only.
+
+The trigger was a merge conflict, not a missed pin. The first attempt waited
+in the queue while a parallel landing bumped to v1.350, and the five pinned
+lines conflicted. The landing stopped at merge, a round lost to a number.
+After the change, the parallel v1.351 bump (`9e0b7e3495`) merged by editing
+that one constant.
+
+A bump now touches two places: the reference header, and
+`api_reserve.py bump v1.NNN`, which rewrites `CONTRACT`. Do not add a version
+literal to a feature test again. Check the reference header through the
+alignment test instead.
+
 ## Procedure
 
 Before committing an API Reference MINOR bump, run the two tripwires:

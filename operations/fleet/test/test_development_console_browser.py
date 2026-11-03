@@ -14,6 +14,8 @@ from fakes import FakeRobot
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
 from fleet.server.development_session import DevelopmentSessions
+from fleet.server.site_users import hash_password
+from test_fleet_header_browser import _fleet
 from fleet.server.task_service import FleetTaskService
 from fleet.server.task_store import FleetTaskStore
 from fleet.swarm.robots import RobotEndpoint
@@ -30,13 +32,15 @@ ROOT = Path(__file__).resolve().parents[3]
     ("/console/cell", "#user-role"),
     ("/console/policy", "#user-role"),  # field 2026-10-31: no token → signed out → login bounced to /console
 ])
-def test_direct_development_entry_needs_no_operator_token(tmp_path, path, identity):
+def test_direct_development_entry_uses_human_login(tmp_path, path, identity):
     from playwright.sync_api import expect, sync_playwright
 
     robot = FakeRobot("rosy_01")
     console = FleetConsole([RobotEndpoint("rosy_01", "http://127.0.0.1:8080", "robot-only")], [robot])
     tasks = FleetTaskService(FleetTaskStore(tmp_path / "fleet.sqlite3"), robot_ids=console.robot_ids)
     app = create_app(console, console_token="registry-only", task_service=tasks,
+                     site_logins={"alice": {"principal_id": "alice", "role": "operator",
+                                  "password_scrypt": hash_password("correct horse")}},
                      development_sessions=DevelopmentSessions(), web_common=ROOT / "shared" / "web",
                      start_task_dispatcher=False)
     listener = safe_listener()
@@ -63,7 +67,7 @@ def test_direct_development_entry_needs_no_operator_token(tmp_path, path, identi
                         active_map_requests.append(route)
                 site_map_at, session_at = [], []
                 page.on("requestfinished", lambda request: session_at.append(time.monotonic())
-                        if request.url.endswith("/api/fleet/auth/development-session") else None)
+                        if request.url.endswith("/api/fleet/session") else None)
                 if path == "/console":
                     page.route("**/api/fleet/site-map", lambda route: site_map_at.append(time.monotonic())
                                or route.fulfill(json={"maps": [{
@@ -78,13 +82,16 @@ def test_direct_development_entry_needs_no_operator_token(tmp_path, path, identi
                         "robots": [{"robot_id": "rosy_01", "status": "MARKER",
                                     "camera": {"x": 1, "y": 1}, "pose": None}], "unknown": [],
                     }))
+                login = page.request.post(origin + "/api/fleet/auth/login", headers={"Origin": origin},
+                                          data={"login": "alice", "password": "correct horse"})
+                assert login.status == 204
                 page.goto(origin + path)
-                # D-540 2: the development principal id lives in title; the badge says development once.
-                expect(page.locator(identity)).to_have_attribute("title", re.compile("^development-"), timeout=15000)
+                # The configured identity lives in the title; development remains connection metadata.
+                expect(page.locator(identity)).to_have_attribute("title", re.compile("^alice"), timeout=15000)
                 expect(page.locator(identity)).to_have_text("운영자")
                 expect(page.locator("#development-badge")).to_be_visible()
                 expect(page.locator("#estop")).to_be_enabled()
-                assert page.evaluate("sessionStorage.getItem('rosy-console-token')")
+                assert not page.evaluate("sessionStorage.getItem('rosy-console-token')")
                 expect(page.locator("#console-token")).to_be_hidden()
                 for width in (320, 390, 480, 640, 768, 1366, 1440, 1920):
                     page.set_viewport_size({"width": width, "height": 900})
@@ -155,3 +162,34 @@ def test_direct_development_entry_needs_no_operator_token(tmp_path, path, identi
         worker.join(timeout=20)
         listener.close()
         assert not worker.is_alive()
+
+
+@pytest.mark.parametrize("path", ["/console", "/console/install", "/console/site-map", "/console/cell", "/console/policy"])
+def test_direct_development_entry_requires_login_and_stays_signed_out_after_logout(tmp_path, path):
+    from playwright.sync_api import expect
+    with _fleet(tmp_path, console_token="registry-only", development_sessions=DevelopmentSessions()) as (browser, origin):
+        page = browser.new_page()
+        posts = []
+        page.on("request", lambda request: posts.append(request.url)
+                if request.method == "POST" and request.url.endswith("/auth/development-session") else None)
+        page.goto(origin + path)
+        expect(page.locator("#user-role")).to_have_text("\uc778\uc99d \ud544\uc694", timeout=15000)
+        assert not page.evaluate("sessionStorage.getItem('rosy-console-token')")
+        assert not posts
+        login = page.request.post(origin + "/api/fleet/auth/login", headers={"Origin": origin},
+                                  data={"login": "alice", "password": "correct horse"})
+        assert login.status == 204
+        page.reload()
+        expect(page.locator("#user-role")).to_have_attribute("title", re.compile("^alice"), timeout=15000)
+        expect(page.locator("#user-role")).to_have_text("\uc6b4\uc601\uc790")
+        expect(page.locator("#development-badge")).to_be_visible()
+        expect(page.locator("#development-badge")).to_have_attribute(
+            "aria-label", "개발 연결 모드: 사람 로그인 필요")
+        assert not page.evaluate("sessionStorage.getItem('rosy-console-token')")
+        logout = page.request.post(origin + "/api/fleet/auth/logout", headers={"Origin": origin})
+        assert logout.status == 204
+        page.reload()
+        expect(page.locator("#user-role")).to_have_text("\uc778\uc99d \ud544\uc694", timeout=15000)
+        assert page.request.get(origin + "/api/fleet/session").status == 401
+        assert not posts
+        page.close()

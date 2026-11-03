@@ -8,9 +8,10 @@ import sys
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".."))
 sys.path.insert(0, REPO + "/middleware/perception")
+sys.path.insert(0, REPO + "/integrations/perception")
 sys.path.insert(0, REPO + "/contracts/foundation")  # core_common, imported by control (D-424)
 
-from control.sensing.perception.learned.manifest import (  # noqa: E402
+from perception_runtime.perception.learned.manifest import (  # noqa: E402
     ManifestError, load_manifest, verify_files)
 
 
@@ -18,8 +19,8 @@ def check(folder: str) -> str:
     manifest = load_manifest(folder)
     verify_files(manifest)
     if manifest.backend == "ncnn":
-        from control.sensing.perception.learned.detector import ObjectDetModel
-        from control.sensing.perception.learned.runner import LaneSegModel
+        from perception_runtime.perception.learned.detector import ObjectDetModel
+        from perception_runtime.perception.learned.runner import LaneSegModel
         opener = ObjectDetModel if manifest.task == "object_det" else LaneSegModel
         opener.open(folder)  # missing NCNN is an error, never an unverified OK
         return manifest.model_revision
@@ -28,10 +29,10 @@ def check(folder: str) -> str:
     except ImportError:
         return manifest.model_revision
     if manifest.task == "object_det":
-        from control.sensing.perception.learned.detector import ObjectDetModel
+        from perception_runtime.perception.learned.detector import ObjectDetModel
         ObjectDetModel.open(folder)
         return manifest.model_revision
-    from control.sensing.perception.learned.runner import LaneSegModel
+    from perception_runtime.perception.learned.runner import LaneSegModel
     LaneSegModel.open(folder)
     return manifest.model_revision
 

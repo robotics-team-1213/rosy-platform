@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
-- 2026-11-02 · uncommitted · feat(fleet): 확인된 ARM 시도의 재관측 계약(D-930, API v1.334)
-- 2026-11-02 · 7090702e1f · fix(remote): isaac_batch retries an UNKNOWN run; Step 4c boundary over seeds and yaw; D-958 stage 1 kill test
-- 2026-11-02 · uncommitted · test: 리뷰 관문 스크립트를 시험이 부른다
-- 2026-11-02 · uncommitted · docs(omx): 시범 학습 준비와 왼쪽 손목 진단 기록
-- 2026-11-02 · uncommitted · D-945 5항 이행 완료로 닫음
+- 2026-11-03 · uncommitted · fix(landing): 추측 사전 시험 기본 끔 (D-889 추가 28)
+- 2026-11-03 · uncommitted · fix(landing): delta 넘김은 표마다 두 번까지 (D-970 1항 보완)
+- 2026-11-03 · uncommitted · fix(landing): LOAD-FLAKY는 사전 시험 전체가 아니라 그 시험만 차례에서 다시 (D-970 4항)
+- 2026-11-03 · uncommitted · Retain current main's DELTA yielding with isolated FULL composition
+- 2026-11-03 · uncommitted · fix(harness): compose new DELTA preparations through the shared timing policy
