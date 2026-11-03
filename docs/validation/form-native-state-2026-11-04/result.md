@@ -17,7 +17,7 @@
 
 ## 최종 검증
 
-검증 소스: `92a3d65cfe89e79ffd35f8e7d3f7463009127a9f`.
+검증 소스 commit: `92a3d65cfe89e79ffd35f8e7d3f7463009127a9f`.
 
 ```text
 python tools/remote/remote_pytest.py --log-dir <external-log-dir> -- ROSY_RUN_BROWSER_TESTS=1 ROSY_JOB_CORES=1 shared/web/test/test_component_kit_browser.py -v

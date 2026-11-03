@@ -11,9 +11,9 @@
 
 ## 증거
 
-수정 전 `a1f8376013121d1d5087fda75780be8e43b345d1`의 원격 Chromium에서 표시 값은 빈 값인데 이벤트에는 이전 `b`만 남았다. `test_search_choice_keeps_owner_and_visible_selection_in_sync`는 기대한 `['b', '']` 대신 `['b']`를 받아 실패했으며 NEW1/known0/flaky0이었다.
+수정 전 commit `a1f8376013121d1d5087fda75780be8e43b345d1`의 원격 Chromium에서 표시 값은 빈 값인데 이벤트에는 이전 `b`만 남았다. `test_search_choice_keeps_owner_and_visible_selection_in_sync`는 기대한 `['b', '']` 대신 `['b']`를 받아 실패했으며 NEW1/known0/flaky0이었다.
 
-수정 소스 `9c909ff905a78189f8131459b07b7e63f5e8e7b6`에서 다음을 실행했다.
+수정 소스 commit `9c909ff905a78189f8131459b07b7e63f5e8e7b6`에서 다음을 실행했다.
 
 ```text
 python tools/remote/remote_pytest.py --log-dir <external-log-dir> -- ROSY_RUN_BROWSER_TESTS=1 shared/web/test/test_component_kit_browser.py -v
