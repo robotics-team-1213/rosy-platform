@@ -13910,3 +13910,9 @@ osy-d395-s1d\`.
 - 증거: 원격 착지 회귀(selection·prepare·land·turn_deadline·batch·speculate·mainred_flow) 통과. 새 시험 2개(폴더/파일 구분, delta 기록이 FULL이 아님).
 - gate 변화: FULL·safety 판정과 land record의 FULL 조건은 그대로다. delta 단계는 FULL 증거가 되지 않는다.
 - CE: 기존 교훈 갱신 — landings-gave-the-turn-back-and-reran-everything 9에 차례 안 delta 재실행과 이 결정을 연결.
+
+## 2026-11-03 · uncommitted · feat(isaac): 실측 팔 받침·벨트 후보 케이스와 이름 있는 계획 장면
+- 변경: 케이스 `nominal-palletizing-v21-ship-surveyed-bases`·`-surveyed`(벨트 28 mm 낮춤, `belt_drop_m`), `isaac_stack_plan.SCENES`(장면마다 받침/yaw 쌍과 낮은 벨트 통로 높이), `stacking_task.py` 케이스 등록과 등록 누락을 잡는 시험, 실측 받침 도달 시험.
+- 증거: 호스트 계획기로 실측 받침에서 벨트 집기·적층 9곳 모두 닿고, 뱃머리 정렬 자리(x -0.12)는 arm_a가 닿지 않음(0.287 m). Isaac 실행 두 번은 케이스 등록 누락과 CAD 받침 검사에서 멈춰 결과 없음(검증 기록 Step 3).
+- gate 변화: 없음. CAD 케이스와 fixture는 그대로다.
+- CE: 해당 없음 — 케이스 등록 누락은 시험으로 막았고, 정렬 자리 도달 문제는 검증 기록과 다음 작업(팔마다 정렬 자리)에 남겼다.
