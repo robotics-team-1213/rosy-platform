@@ -20,7 +20,7 @@ def verify_report(path, *, sdk_version, seed, cube=False, container=None):
     images = value.get('images')
     allowed = {'mapped-overview.png', 'mapped-initial.png', 'mapped-grasp-failed.png'} | ({'mapped-top.png', 'mapped-side.png'} if cube else set()) | {
         f'mapped-{kind}-{i}.png' for kind in ('layer', 'trial') for i in range(1, count+1)}
-    allowed |= {'real-'+view+'.png' for view in fixture.get('real_cameras', {})}
+    allowed |= {'real-'+view+end for view in fixture.get('real_cameras', {}) for end in ('.png', '-final.png')}
     if fixture.get('leveling_protocol'):
         allowed |= {f'mapped-leveling-{i}.png' for i in range(1,count+1)}
     if (not isinstance(images, list) or len(set(images)) != len(images) or not set(images) <= allowed

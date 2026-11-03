@@ -354,7 +354,7 @@
 ## 최근 기록
 
 - 2026-11-03 · uncommitted · fix(landing): LOAD-FLAKY는 사전 시험 전체가 아니라 그 시험만 차례에서 다시 (D-970 4항)
-- 2026-11-03 · b71238da0d · fix(land): a held or records-only turn keeps each job's options
-- 2026-11-03 · 368f142943 · docs(adr): D-968 통합관제 이름·개인 로그인 계정 모델 확정
-- 2026-11-03 · uncommitted · docs(workflow): 제어 세션 종료 뒤 남은 synthetic 부하 정리
-- 2026-11-03 · uncommitted · fix(landing): delta 차례 넘김은 깨끗한 아래 단계가 있을 때만 (D-889 추가 27 보완)
+- 2026-11-03 · uncommitted · Retain current main's DELTA yielding with isolated FULL composition
+- 2026-11-03 · uncommitted · fix(harness): compose new DELTA preparations through the shared timing policy
+- 2026-11-03 · uncommitted · fix(harness): preserve current-main root projection and speculation semantics
+- 2026-11-03 · uncommitted · fix(harness): reject stale FULL reuse and validate record composition before FF

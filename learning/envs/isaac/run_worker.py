@@ -232,7 +232,7 @@ def execute(store, binding_file, run_id, *, expected_binding_sha256=None):
                                 '--report', str(report_path)]
                     outcome = supervise(argv, cwd=directory, env=env, descriptors=descriptors,
                                         output=directory, stop_requested=stopped,
-                                        **({'timeout': 2310 if container_task else 870} if stacking_task else {}))
+                                        **({'timeout': 3900 if container_task else 870} if stacking_task else {}))
                     if outcome['exit_code'] == 0 and outcome['reason'] == 'process_exited':
                         if mapped_task:
                             from mapped_stack_report import verify_report as verify_mapped
