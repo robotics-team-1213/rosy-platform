@@ -175,3 +175,12 @@ def test_a_session_that_never_reached_the_arm_is_no_incident(tmp_path, monkeypat
     path = tmp_path / "session.json"
     path.write_text(json.dumps({"motor_health_log": "x", "motor_health_snapshot_error": "y"}))
     assert oi.handle(path, "arm_b") == {"incident": False} and not (tmp_path / "incidents").exists()
+
+
+def test_a_guard_stop_that_ended_the_session_is_an_incident(tmp_path, monkeypatch):
+    """2026-11-03 23:48: the wrist roll stopped at +29 against its cable and the guard ended the session."""
+    monkeypatch.chdir(tmp_path)
+    stop = {"command": "tick", "ok": False, "t": 150.0,
+            "fault": "session ended: ValueError: wrist_roll: following error >5 motor degrees"}
+    out = oi.handle(session(tmp_path, latched=False, windup=False, status=[stop]), "arm_b")
+    assert out["incident"] and out["decision"]["hold"] and "wrist_roll" in out["decision"]["reason"]

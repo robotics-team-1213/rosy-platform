@@ -149,7 +149,7 @@ def facts(session: dict, home=None) -> dict:
     chunks = session.get("chunks") or {}
     status = rows(Path(chunks["io"]) / "chunk-status.jsonl", session.get("started", 0)) if chunks.get("io") else []
     flagged = [r for r in status if r.get("person_needed") or r.get("caught")
-               or str(r.get("error") or r.get("fault") or "").startswith(("pushing", "contact in park"))]
+               or str(r.get("error") or r.get("fault") or "").startswith(("pushing", "contact in park", "session ended"))]
     latched = {str(m): {"hw_error": f.get("hw_error"), "bits": bits(int(f.get("hw_error") or 0)),
                         "packet_alert": f.get("packet_alert")} for m, f in (session.get("hardware_faults") or {}).items()}
     last = next((r["state"] for r in reversed(status) if r.get("state")), None)
