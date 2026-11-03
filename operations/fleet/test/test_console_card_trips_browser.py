@@ -673,7 +673,7 @@ def test_a_viewer_switches_robots_in_new_work_and_reads_each_reason(site):  # no
 
 def test_new_work_shows_only_kinds_that_run_and_the_move_form_fits(site):  # noqa: F811
     """D-763 9 (v1.237): 새 작업은 서버의 종류 목록(`kinds`)만 보인다. 목록에 없는 종류는 꺼진 단추도 아니고 없다.
-    Cell 적재는 /console/cell로 간다. 1366·390에서 이동 폼은 넘치지 않고 비상 정지는 첫 화면에 있다."""
+    팔레트 적재는 /console/cell로 간다. 1366·390에서 이동 폼은 넘치지 않고 비상 정지는 첫 화면에 있다."""
     from playwright.sync_api import expect, sync_playwright
 
     api = {**API, "/api/fleet/work": {**API["/api/fleet/work"], "kinds": []}}
@@ -682,7 +682,7 @@ def test_new_work_shows_only_kinds_that_run_and_the_move_form_fits(site):  # noq
         page.goto(site + "/console?view=work&show=new")
         page.clock.run_for(2500)
         kinds = page.get_by_role("list", name="새 작업 종류", exact=True)
-        cell = kinds.get_by_role("link", name="Cell 적재", exact=True)
+        cell = kinds.get_by_role("link", name="팔레트 적재", exact=True)
         assert page.locator("#work-new-move-item").is_hidden() and page.locator("#work-move").is_hidden()
         assert page.locator("#work-new-cell-item").is_hidden()  # places and robots in the browser do not decide
         assert not page.locator("#work-list").is_visible() and not page.locator("#work-context").is_visible()
