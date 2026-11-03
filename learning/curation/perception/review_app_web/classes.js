@@ -2,7 +2,7 @@ import {accountFetch} from '/account-session.js';
 const $=id=>document.getElementById(id),query=new URLSearchParams(location.search);
 $('kind').value=query.get('kind')==='pixel'?'pixel':'object';
 let current,rows=[],busy=false;
-const rgb=color=>'#'+(color||[128,128,128]).map(v=>v.toString(16).padStart(2,'0')).join('');
+const colorHex=color=>'#'+(color||[128,128,128]).map(v=>v.toString(16).padStart(2,'0')).join('');
 async function request(path,body) {
   const response=await accountFetch(path,body?{method:'POST',headers:{'Content-Type':'application/json','X-Pinky-Token':current.token},body:JSON.stringify(body)}:{});
   const value=await response.json();if(!response.ok)throw Error(value.error||'요청을 처리하지 못했습니다.');return value;
@@ -25,7 +25,7 @@ function render() {
     const section=document.createElement('fieldset'),legend=document.createElement('legend');section.className='ui-form';legend.textContent=`클래스 ${row.index}`;section.append(legend);
     const input=(text,key,type='text',immutable=false)=>{
       const label=document.createElement('label'),field=document.createElement('input');label.className='ui-field-label';label.textContent=text+' ';field.className='ui-field';field.type=type;
-      field.value=type==='color'?rgb(row[key]):row[key]||'';field.disabled=immutable;field.required=type!=='color';field.maxLength=key==='display'?80:64;
+      field.value=type==='color'?colorHex(row[key]):row[key]||'';field.disabled=immutable;field.required=type!=='color';field.maxLength=key==='display'?80:64;
       field.oninput=()=>{row[key]=type==='color'?field.value.slice(1).match(/../g).map(v=>parseInt(v,16)):field.value;$('confirm').checked=false;update();};label.append(field);section.append(label);
     };
     const existing=position<(current.binding?.classes.length||0);

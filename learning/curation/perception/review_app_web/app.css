@@ -502,3 +502,4 @@ ui-topbar:has([data-learning-account-entry]) { flex-wrap: wrap; }
 .workspace-entry h3{flex:1 1 12rem;min-width:0;margin:0;overflow-wrap:anywhere}
 .workspace-entry p{flex-basis:100%;margin:0;overflow-wrap:anywhere}
 #hf-imports ui-actions > a { display: inline-flex; align-items: center; min-height: var(--target-secondary); }
+.review-class-manager { max-width: 70rem; margin: auto; padding: var(--space-4); }

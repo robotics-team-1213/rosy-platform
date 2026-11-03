@@ -21,6 +21,7 @@ export function workspacePage(lane, status='all', options={}) {
 export function pageControls(anchor, move) {
   const bar=document.createElement('div');bar.className='ui-workspace-bar';
   const previous=document.createElement('ui-button'),next=document.createElement('ui-button'),label=document.createElement('span');
+  previous.setAttribute('kind','quiet');next.setAttribute('kind','quiet');
   previous.textContent='이전 60장';next.textContent='다음 60장';label.setAttribute('role','status');
   bar.append(previous,label,next);anchor.after(bar);
   let page;
