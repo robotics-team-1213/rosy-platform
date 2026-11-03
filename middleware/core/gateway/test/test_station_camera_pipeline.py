@@ -28,12 +28,20 @@ async def _sim_call(function, *args, **kwargs):
 @pytest.fixture
 def pipeline_sources(monkeypatch):
     """This cross-domain test must also run alone, without sibling conftest collection."""
+    import cv2
+
     root = Path(__file__).resolve().parents[4]
     for relative in ('operations/fleet', 'operations/fleet/test', 'operations/world/src',
                      'operations/decision/src', 'operations/site_execution/src', 'operations/overhead',
                      'operations/apps/games', 'operations/situation',
                      'middleware/core/services/test'):
         monkeypatch.syspath_prepend(str(root / relative))
+    previous_threads = cv2.getNumThreads()
+    cv2.setNumThreads(1)  # Small SIM images must not consume the host's entire OpenCV pool.
+    try:
+        yield
+    finally:
+        cv2.setNumThreads(previous_threads)
 
 
 # lifespan, shutdown_UNDOCKING and continuous (~100-140 s each) run from test_station_camera_pipeline_{lifespan,
