@@ -9,20 +9,16 @@ commissioning caps (PWM 20, Current 50) keep the follower from following. This w
    supply sags below XL330 spec), again after the session so the next one starts clean;
 2. saves the follower PWM Limit (36) and XL330 Current Limit (38) and writes the caps file values
    with torque OFF, reading each back;
-3. stops the active camera services, because the recorder opens the V4L devices itself (D-770 §3:
-   never two openers);
+3. stops the active camera services: the recorder opens the V4L devices itself (D-770 §3: never two openers);
 4. runs `guarded_native.py record` (or `teleoperate` with --teleop-only, for a dry run without data;
    `record --teacher` for a --replay trajectory, `chunk_runner.py` for --chunks, both inside the guard);
-5. always, however the command ends (Ctrl-C, SIGTERM, a dropped SSH session's SIGHUP): the recorder gets SIGINT
-   and 10 s to finish its episode before it is killed; then, with further interrupts ignored, torque OFF on
-   follower 11-16 (retried for up to 30 s, reopening the port after a USB drop, until every motor reads 0) and on
-   the leader gripper (6), each motor's caps back to the commissioning baseline (PWM 20, Current 50) even if
-   another motor failed, the stopped services started again, session.json written. The exit status is non-zero
-   unless that ending was safe.
+5. always, however the command ends (Ctrl-C, SIGTERM, SIGHUP): SIGINT and 10 s for the recorder's episode, then,
+   interrupts ignored, torque OFF on follower 11-16 (retried 30 s, reopening the port after a USB drop) and leader
+   6, every motor's caps back to the baseline (PWM 20, Current 50) even if one failed, services restarted,
+   session.json written; the exit status is non-zero unless that ending was safe.
 
-The session refuses to start unless the follower caps are at the baseline (an earlier session that did not restore
-them must be fixed first), and caps files may not exceed 400. No independent stop exists while LeRobot holds the
-bus: keep a hand on the follower power switch. Run it inside tmux so a dropped connection does not even reach it.
+The session refuses to start unless the follower caps are at the baseline, and caps files may not exceed 400. No
+independent stop exists while LeRobot holds the bus: keep a hand on the power switch, and run inside tmux.
 
   record_session.py --config record-config.json --caps caps.json [--task-card task-card.yaml] [--teleop-only]
 
@@ -262,6 +258,10 @@ class Session:
                 self.log(step="cap", motor=motor, name=name, value=value, after=after)
                 if after != value:
                     raise RuntimeError(f"follower {motor} {name} readback {after} != {value}")
+                if name == "current_limit" and FOLLOWER[motor][1] == 5:
+                    # mode 5 obeys Goal Current, clamped to 50 by the baseline: v2.1 jaws stuck shut (2026-11-03)
+                    bus.write("goal_current", value)
+                    self.log(step="cap", motor=motor, name="goal_current", value=value, after=bus.read("goal_current"))
 
     def all_torque_off(self, bus) -> dict:
         state = {}
