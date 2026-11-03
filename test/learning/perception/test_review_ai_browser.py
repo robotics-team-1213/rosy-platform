@@ -49,6 +49,10 @@ def test_keyboard_ai_draft_publishes_candidate_without_overwriting_review(tmp_pa
         command(page, 'AI 객체 초안 만들기')
         expect(page.locator('#review-ai-jobs')).to_contain_text('초안 후보 저장됨', timeout=15000)
         expect(page.locator('#review-ai-jobs')).to_contain_text('미인증 로컬 작업자')
+        provenance = page.locator('#review-ai-jobs li details').first
+        expect(provenance.locator('p').first).to_be_hidden()
+        provenance.locator('summary').click()
+        expect(provenance.locator('p').first).to_be_visible()
         assert store.get(0) == before
         assert jobs.status(0)['jobs'][0]['state'] == 'succeeded'
         command(page, 'AI 결과 목록 조회')

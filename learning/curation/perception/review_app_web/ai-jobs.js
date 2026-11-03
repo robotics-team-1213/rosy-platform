@@ -29,8 +29,9 @@ export function showAI(lane,index,request,context,results){
   function render(){
     jobs.replaceChildren();
     for(const job of status.jobs.filter(row=>allowed.includes(row.action))){
-      const row=element('li'),summary=element('p',`${actions[job.action]} · ${states[job.state]||job.state} · v${job.version} · 요청 ${actorName(job.actor)} · ${job.created_at}`);
-      row.append(summary,element('p',`모델 ${job.model} · ${job.model_digest}`));
+      const row=element('li'),summary=element('p',`${actions[job.action]} · ${states[job.state]||job.state} · v${job.version}`),details=element('details');
+      details.append(element('summary','요청·모델 정보'),element('p',`요청 ${actorName(job.actor)} · ${job.created_at}`),element('p',`모델 ${job.model} · ${job.model_digest}`));
+      row.append(summary,details);
       if(job.error)row.append(element('p',job.error));
       if(job.state==='succeeded')row.append(element('p',job.action==='mask_check'?'참고 의견 저장됨 · AI 결과 목록 조회에서 확인하세요.':job.result?.added_pixels===0?'보완할 픽셀 없음 · 새 후보를 만들지 않았습니다.':'초안 후보 저장됨 · AI 결과 목록 조회에서 선택하세요.'));
       if(active(job)){const cancel=element('ui-button','이 AI 작업 취소');cancel.disabled=pending;cancel.onclick=()=>send(`/api/review-ai-cancel/${job.id}`,{});row.append(cancel);}
