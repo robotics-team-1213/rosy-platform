@@ -43,11 +43,12 @@ def look(cell, config: dict, record: dict, site: str, target: dict, write_librar
         moved = (1000 * (target["pick"]["x"] - start[0]), 1000 * (target["pick"]["y"] - start[1]))
         return {"verdict": verdict, "dx_mm": round(moved[0], 1), "dy_mm": round(moved[1], 1), "looks": rows,
                 "total_mm": round(total, 1), **extra}
-    for i in range(int(prm.get(params, "look.max_iter")) + 1):
+
+    def mark():
         status = cell.act("state")
         state, commanded = status.get("state"), status.get("target")
         if state is None or commanded is None:
-            return out("refuse", why="no arm state")
+            return None
         x, y, z, yaw = cell_pivot.joints_tcp(state)
         bias = region.get("bias_mm", [0.0, 0.0])
         expected = []
@@ -56,6 +57,29 @@ def look(cell, config: dict, record: dict, site: str, target: dict, write_librar
             expect = (x + bias[0] / 1000 + f["radius_mm"] / 1000 * math.cos(a), y + bias[1] / 1000 + f["radius_mm"] / 1000 * math.sin(a))
             expected.append(cell_pivot.mark_pixel(record, config, site, expect, z))
         pixel = cell_pivot.mark_jaws(cell, config, sleep, near=(expected, prm.get(params, "look.near_px")))
+        return commanded, (x, y, z, yaw), expected, pixel
+
+    def move():
+        library = write_library(config, target["pick"], target["place"], work / name)
+        return all(cell.act(c).get("ok") for c in (f"load {library}", goto))
+
+    hover_z = None  # the hover's pick z while the look stands at the pivot view height (look.raise_unseen)
+    for i in range(int(prm.get(params, "look.max_iter")) + 1):
+        seen = mark()
+        if seen is None:
+            return out("refuse", why="no arm state")
+        if seen[3] is None and hover_z is None and prm.get(params, "look.raise_unseen"):
+            # 2026-11-03: over the pallet box nearest arm_b the wrist hid both fingers at the 2.5 cm hover, while the
+            # jaws showed at every yaw at the pivot view height (where the circle was measured): look from there
+            view = cell_pivot.pivot_z_view(config, site) - config["plan"]["approach_m"]
+            if view > target["pick"]["z"] + 0.01:
+                rows.append({"look": i, "seen": False, "raised_to_m": round(view, 4)})
+                hover_z, target["pick"] = target["pick"]["z"], dict(target["pick"], z=round(view, 4))
+                if not move():
+                    return out("refuse", why="raise refused")
+                if (seen := mark()) is None:
+                    return out("refuse", why="no arm state")
+        commanded, (x, y, z, yaw), expected, pixel = seen
         if pixel is None:
             rows.append({"look": i, "seen": False, "expected_px": [[round(v, 1) for v in e] for e in expected]})
             # no measurement, no descent: a look that passed unseen let a push come down on a box (2026-10-29)
@@ -67,14 +91,18 @@ def look(cell, config: dict, record: dict, site: str, target: dict, write_librar
         rows.append({"look": i, "mark_px": [round(v, 1) for v in pixel], "finger": k, "fk_m": [round(x, 4), round(y, 4)],
                      "box_minus_tcp_mm": [round(1000 * d[0], 1), round(1000 * d[1], 1)]})
         if off <= (prm.get(params, "look.tol_mm") if tol_mm is None else tol_mm):
-            return out("pass")
+            if hover_z is None:
+                return out("pass")
+            # shortcut: the arm droops a little differently at the hover than at the view height; a look that
+            # sees the jaws at the hover is still the better check when one is possible
+            target["pick"] = dict(target["pick"], z=hover_z)
+            return out("pass", raised=True) if move() else out("refuse", why="return to the hover refused")
         if i == int(prm.get(params, "look.max_iter")) or total + off > prm.get(params, "look.max_total_mm"):
             return out("refuse", why=f"box still {off:.0f} mm from the jaws")
         total += off
         cx, cy, _, _ = cell_pivot.joints_tcp(commanded)  # what the runner was told; the arm stands short of it
         target["pick"] = dict(target["pick"], x=round(cx + d[0], 4), y=round(cy + d[1], 4))
-        library = write_library(config, target["pick"], target["place"], work / name)
-        if not all(cell.act(c).get("ok") for c in (f"load {library}", goto)):
+        if not move():
             return out("refuse", why="re-plan refused")
     return out("refuse", why="no look left")
 

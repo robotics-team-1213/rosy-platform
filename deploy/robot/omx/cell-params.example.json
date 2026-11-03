@@ -812,6 +812,12 @@
   "source": "tuned",
   "evidence": "2026-10-29 board pivot point, the same marks: 31.7/33.1/38.3 mm from the circle's centre"
  },
+ "look.raise_unseen": {
+  "value": 0,
+  "unit": "flag",
+  "source": "assumed",
+  "evidence": "2026-11-03 arm_b pallet: at the 2.5 cm hover over the box nearest the arm both fingers stayed hidden under the wrist (open/close showed no blob), while the pivot circle 6 cm out saw the jaws at all six yaws at the 0.10 m view height; off until a field run confirms the look from the view height"
+ },
  "look.near_px": {
   "value": 40.0,
   "unit": "px",
