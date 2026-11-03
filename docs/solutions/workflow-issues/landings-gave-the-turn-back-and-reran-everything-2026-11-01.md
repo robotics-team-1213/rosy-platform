@@ -259,3 +259,22 @@ pin은 불완전이다. leaf 이름이 모두 확인되면 pin 검증 실패의 
   (`land_checks.landed_copy`); judge it on a window that starts at its landing.
 - Each D-889 addendum appends to the same ADR file; two pending ones conflict (`not in the
   auto-resolvable set`). Merge main before queueing the second.
+
+## 규칙 재시작의 STOP과 최초 대기시간
+
+2026-11-03 실제 원장에서 최초 queue와 같은 ticket을 인수한 queue의 PID는 달랐고,
+충돌로 종료된 다음 자식 PID는 queue 전에 STOP했다. branch와 PID가 모두 같아야 하는
+기존 `stopped_before`는 앞선 두 queue를 연결하지 못했다. 새 snapshot이 완료되면
+11월2일20:44:55.984부터 11월3일00:13:39.790까지의 208.7301분이 빠지는 조인이었다.
+당시 새 snapshot은 미착지였으므로 가짜 완료 행이나 실제 lead 값을 만들지 않았다.
+
+동일 PID 판정은 유지한다. 추가 연결은 정확한 frozen snapshot에서 같은 ticket의
+복수 queue PID가 확인되고, 미완료 구간에 경쟁 ticket이 없으며, STOP이 마지막 queue
+뒤이자 새 접수 전일 때만 허용한다. 다른 snapshot·완료된 cycle·후속 재접수·일반
+브랜치를 topic 이름만으로 합치지 않는다. 이 증거가 없는 인계를 추측해 연결하지 않는다.
+
+`d49d9ab33f` 원격 RED는 직접/rollup 두 사례에서 2실패·49통과였다.
+수정 `98738da589`의 goal/events 원격 회귀는 57통과, skip·NEW·known·flaky0이며,
+실제 원장에서도 앞선 두 queue의 연결을 확인했다. 원장·시각·ticket은 바꾸지 않았다.
+복구 시 원본 queue/STOP과 ticket 인계부터 확인한다. 통계 시계의 복원은 처리시간 단축,
+main 착지 또는 60분 목표 달성의 증거가 아니다.
