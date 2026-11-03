@@ -24,6 +24,12 @@ def open_pixels(page, store, expect, index=0):
     expect(page.locator('#pixel-status')).to_contain_text('v0')
 
 
+def show_advanced_tools(page):
+    advanced = page.locator('#pixel-advanced-tools')
+    if not advanced.evaluate('node => node.open'):
+        advanced.locator('summary').click()
+
+
 
 
 @pytest.mark.parametrize('width', [1440, 390])
@@ -195,6 +201,7 @@ def test_keyboard_pixel_cursor_samples_without_changing_photo(browser_workspace)
 def test_keyboard_pixel_brush_saves_source_coordinates_and_cancels(browser_workspace):
     page, store, expect = browser_workspace
     open_pixels(page, store, expect)
+    show_advanced_tools(page)
     page.locator('#pixel-class').select_option('4')
     page.locator('#pixel-canvas').focus(); page.keyboard.press('t')
     page.locator('#pixel-radius').fill('0')
@@ -272,20 +279,20 @@ def test_pixel_tools_are_readable_and_reachable_beside_photo(browser_workspace, 
     actions = page.locator('.pixel-quick-actions')
     if width >= 1024:
         assert page.locator('.pixel-quick-tools').evaluate('el => el.scrollWidth <= el.clientWidth')
-    for button in actions.locator('ui-button').all():
+    for button in page.locator('.pixel-tool-modes ui-button, .pixel-quick-actions ui-button').all():
         expect(button.locator('span:not(.ui-icon)')).to_be_visible()
         button.scroll_into_view_if_needed()
         assert button.evaluate('''el => {
             const r = el.getBoundingClientRect();
             return el.contains(document.elementFromPoint(r.right - 4, r.y + r.height / 2));
         }''')
-    if width < 1024:
-        stage = page.locator('.pixel-stage').bounding_box()
-        tools = actions.bounding_box()
-        assert 0 <= tools['y'] - stage['y'] - stage['height'] < 240
+    if width < 640:
+        photo = page.locator('.pixel-photo-surface').bounding_box()
+        tools = page.locator('.pixel-quick-tools').bounding_box()
+        assert 0 <= tools['y'] - photo['y'] - photo['height'] < 32
     page.set_viewport_size({'width': 1440, 'height': 900})
     tools = page.locator('.pixel-quick-tools').bounding_box()
-    assert tools['y'] + tools['height'] <= page.locator('#pixel-canvas').bounding_box()['y']
+    assert tools['x'] + tools['width'] <= page.locator('#pixel-canvas').bounding_box()['x']
 
 
 def test_review_workspace_purpose_stays_visible_on_photo_change(tmp_path):
@@ -399,6 +406,7 @@ def test_touch_samples_preview_then_apply_with_explicit_tolerance(browser_worksp
     try:
         page.goto(original_page.url, wait_until='networkidle')
         open_pixels(page, store, expect)
+        show_advanced_tools(page)
         selector = page.locator('#pixel-tolerance-mode')
         expect(selector).to_have_value('auto')
         selector.select_option(mode)
@@ -533,6 +541,7 @@ def test_pending_filter_omits_object_excluded_frame(browser_workspace):
 def test_brush_cancellation_coordinates_and_undo(browser_workspace):
     page, store, expect = browser_workspace
     open_pixels(page, store, expect)
+    show_advanced_tools(page)
     page.locator('#pixel-class').select_option('4')
     page.locator('#pixel-brush-tool').click()
     page.locator('#pixel-radius').fill('2')
@@ -577,7 +586,7 @@ def test_zoom_pan_never_paints_and_brush_uses_zoomed_coordinates(browser_workspa
     pixel_canvas = page.locator('#pixel-canvas').bounding_box()
     pixel_decision = page.locator('.pixel-review-column').bounding_box()
     assert object_tools['x'] < object_canvas['x'] < object_decision['x']
-    assert pixel_tools['y'] + pixel_tools['height'] <= pixel_canvas['y']
+    assert pixel_tools['x'] + pixel_tools['width'] <= pixel_canvas['x']
     assert pixel_canvas['x'] + pixel_canvas['width'] <= pixel_decision['x']
     page.locator('#pixel-class').select_option('4')
     expect(page.locator('#pixel-tool-hint')).to_be_hidden()
@@ -703,7 +712,7 @@ def test_pixel_photo_picker_returns_to_canvas_and_quick_tools(browser_workspace)
     page.set_viewport_size({'width': 1280, 'height': 800})
     canvas = page.locator('#pixel-canvas').bounding_box()
     tools = page.locator('.pixel-quick-tools').bounding_box()
-    assert tools['y'] + tools['height'] <= canvas['y']
+    assert tools['x'] + tools['width'] <= canvas['x']
     assert page.locator('#pixel-prev').bounding_box()['y'] < canvas['y']
     for action in ['#pixel-prev', '#pixel-next', '#pixel-undo']:
         bounds = page.locator(action).bounding_box()
@@ -752,6 +761,7 @@ def test_pixel_thumbnails_and_unknown_background_draft(browser_workspace):
 def test_polygon_tool_previews_saves_and_undoes(browser_workspace):
     page, store, expect = browser_workspace
     open_pixels(page, store, expect)
+    show_advanced_tools(page)
     page.locator('#pixel-class').select_option('4')
     canvas = page.locator('#pixel-canvas')
     canvas.focus()

@@ -34,16 +34,16 @@ def test_pixel_workspace_layout_has_one_photo_navigation_and_unclipped_tools(bro
     expect(page.locator('#pixel-photo-navigation #pixel-undo')).to_have_count(0)
     expect(page.locator('#pixel-photo-list #pixel-page-controls')).to_be_visible()
     for width in (390, 800, 1440, 2048):
-        page.set_viewport_size({'width': width, 'height': 1120 if width == 2048 else 844})
-        page.locator('#pixel-class').focus()
-        expect(page.locator('#pixel-class')).to_be_focused()
+        page.set_viewport_size({'width': width, 'height': 1080 if width == 2048 else 900 if width == 1440 else 844})
+        page.reload(wait_until='networkidle')
+        page.evaluate('scrollTo(0,0)')
         page.evaluate('() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))')
         geometry = page.evaluate('''() => {
           const rect = selector => document.querySelector(selector).getBoundingClientRect().toJSON();
           const tools = document.querySelector('.pixel-quick-tools');
           return {width: innerWidth, pageWidth: document.documentElement.scrollWidth,
             tools: rect('.pixel-quick-tools'), column: rect('.pixel-editor-column'),
-            photo: rect('.pixel-editor-column > section'), decision: rect('.pixel-review-column'),
+            photo: rect('.pixel-photo-surface'), canvas: rect('#pixel-canvas'), decision: rect('.pixel-review-column'),
             nav: rect('#pixel-photo-navigation'), prev: rect('#pixel-prev'),
             title: rect('#pixel-title'), next: rect('#pixel-next'), list: rect('#pixel-photo-list'),
             layout: rect('.pixel-layout'), focused: rect('#pixel-class'), height: innerHeight,
@@ -61,14 +61,27 @@ def test_pixel_workspace_layout_has_one_photo_navigation_and_unclipped_tools(bro
         assert geometry['prev']['right'] <= geometry['title']['left'] + 1
         assert geometry['title']['right'] <= geometry['next']['left'] + 1
         assert geometry['list']['top'] >= geometry['layout']['bottom'] - 1
-        assert 0 <= geometry['focused']['top'] < geometry['height']
-        assert geometry['focused']['bottom'] <= geometry['height'] + 1
         if width >= 1024:
             assert geometry['decision']['left'] >= geometry['column']['right']
-            assert geometry['tools']['bottom'] <= geometry['photo']['top'] + 1
-        else:
-            assert geometry['tools']['top'] >= geometry['photo']['bottom'] - 1
+            assert geometry['tools']['right'] <= geometry['photo']['left']
+            assert geometry['photo']['right'] <= geometry['decision']['left']
+            assert geometry['canvas']['top'] <= 260
+            assert geometry['canvas']['height'] >= 400
+            assert geometry['canvas']['bottom'] <= geometry['height'] - 16
+        elif width >= 640:
+            assert geometry['tools']['right'] <= geometry['photo']['left']
+            assert geometry['canvas']['top'] < 320
             assert geometry['decision']['top'] >= geometry['tools']['bottom'] - 1
+        else:
+            assert geometry['photo']['bottom'] <= geometry['tools']['top'] + 1
+            assert geometry['canvas']['height'] >= 200
+            expect(page.locator('#pixel-advanced-tools')).not_to_have_attribute('open', '')
+        page.locator('#pixel-class').focus()
+        expect(page.locator('#pixel-class')).to_be_focused()
+        page.evaluate('() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))')
+        focused = page.locator('#pixel-class').bounding_box()
+        assert 0 <= focused['y'] < geometry['height']
+        assert focused['y'] + focused['height'] <= geometry['height'] + 1
 
 
 def partial_workspace(page, store, expect):
