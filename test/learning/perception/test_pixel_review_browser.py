@@ -77,6 +77,36 @@ def open_pixels(page, store, expect, index=0):
 
 
 @pytest.mark.parametrize('width', [1440, 390])
+def test_unknown_fill_selected_class_preserves_other_labels_and_undo(browser_workspace, width):
+    from review_app import Conflict
+    page, store, expect = browser_workspace
+    page.set_viewport_size({'width': width, 'height': 844})
+    open_pixels(page, store, expect)
+    review_masks.update(store, 0, {'version': 0, 'action': 'paint', 'label': 2,
+                                  'radius': 0, 'points': [[2, 2]]}, Conflict)
+    page.locator('#pixel-reload').click()
+    expect(page.locator('#pixel-status')).to_contain_text('v1')
+    before = review_masks.pixels(store, review_masks.get(store, 0)).copy()
+    button = page.locator('#pixel-fill-unknown-class')
+    expect(button).to_have_text('미검수만 선택 클래스로 채우기')
+    page.locator('#pixel-class').select_option('255')
+    expect(button).to_be_disabled()
+    page.locator('#pixel-class').select_option('3')
+    expect(button).to_be_enabled()
+    page.once('dialog', lambda dialog: dialog.accept())
+    button.click()
+    expect(page.locator('#pixel-status')).to_contain_text('v2')
+    after = review_masks.pixels(store, review_masks.get(store, 0))
+    assert after[2, 2] == 2 and np.all(after[before == 255] == 3)
+    assert review_masks.get(store, 0)['status'] == 'pending'
+    expect(page.locator('#pixel-approve')).to_be_disabled()
+    page.locator('#pixel-undo').click()
+    expect(page.locator('#pixel-status')).to_contain_text('v3')
+    assert np.array_equal(review_masks.pixels(store, review_masks.get(store, 0)), before)
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+
+
+@pytest.mark.parametrize('width', [1440, 390])
 def test_protected_point_selection_background_completion_and_visible_shortcuts(browser_workspace, width):
     from review_app import Conflict
     page, store, expect = browser_workspace

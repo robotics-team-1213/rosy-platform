@@ -379,12 +379,18 @@ def update(store, index, body, conflict, *, actor=None):
         complete = background = 0
         status = 'pending'
         if action == 'fill_unknown':
-            backgrounds = [c['index'] for c in binding['classes'] if c['role'] == 'background']
-            if len(backgrounds) != 1:
-                raise ValueError('exactly one background class required')
+            if 'label' in body:
+                value = body['label']
+                if type(value) is not int or value not in allowed - {255}:
+                    raise ValueError('known mask index required')
+            else:
+                backgrounds = [c['index'] for c in binding['classes'] if c['role'] == 'background']
+                if len(backgrounds) != 1:
+                    raise ValueError('exactly one background class required')
+                value = backgrounds[0]
             if not np.any(image == 255):
                 raise ValueError('no unknown pixels remain')
-            image[image == 255] = backgrounds[0]
+            image[image == 255] = value
         elif action in ('paint', 'fill', 'flood', 'sample', 'polygon'):
             value = body.get('label')
             if type(value) is not int or value not in allowed:

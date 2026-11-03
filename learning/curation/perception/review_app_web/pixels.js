@@ -49,6 +49,7 @@ $('pixel-coverage').after($('pixel-draft'));
 const pixelFinish=$('pixel-fill-unknown');
 pixelFinish.setAttribute('kind','primary');
 $('pixel-complete').closest('label').before(pixelFinish);
+const pixelFillClass=document.createElement('ui-button');pixelFillClass.id='pixel-fill-unknown-class';pixelFillClass.setAttribute('kind','quiet');pixelFillClass.textContent='미검수만 선택 클래스로 채우기';pixelFinish.before(pixelFillClass);
 const pixelFinishNote=document.createElement('p');pixelFinishNote.className='quiet';pixelFinishNote.textContent='중요한 영역을 먼저 칠한 뒤 남은 미검수만 배경으로 채우세요. 기존 라벨은 유지되고 Ctrl+Z로 되돌릴 수 있습니다. 승인은 별도입니다.';pixelFinish.after(pixelFinishNote);
 document.querySelector('.pixel-quick-actions').after($('pixel-tool-hint'));
 pixelResultNote.after(...document.querySelectorAll('.pixel-layout .review-view-bar label'));
@@ -150,6 +151,8 @@ function enable(){updatePages(workspace?.page,busy||loading||!!stroke||draft.len
  for(const button of $('pixel-quick-classes').querySelectorAll('ui-button')){button.disabled=!editable;button.setAttribute('aria-pressed',String(button.getAttribute('value')===$('pixel-class').value));}
  for(const button of $('pixel-frames').children)button.disabled=busy||loading||!!stroke||dirty||selection;
  $('pixel-fill-unknown').disabled=!editable||dirty||selection||!unknownPixels;
+ pixelFillClass.disabled=$('pixel-fill-unknown').disabled||!$('pixel-class').value||$('pixel-class').value==='255';
+ pixelFillClass.setAttribute('reason',!$('pixel-class').value||$('pixel-class').value==='255'?'채울 픽셀 클래스를 먼저 선택하세요.':!unknownPixels?'남은 미검수가 없습니다.':'');
  $('pixel-fill-unknown').textContent='나머지 배경으로 채우기';
  $('pixel-fill-unknown').setAttribute('aria-label',ready&&unknownPixels?`나머지 배경으로 채우기 · 미검수 ${unknownPixels.toLocaleString()}픽셀`:'나머지 배경으로 채우기');
  for(const id of ['pixel-view-original','pixel-view-detail'])$(id).disabled=!ready||loading;
@@ -276,10 +279,14 @@ async function commit(bodies){if(busy||!ready||conflicted||forbidden)return;busy
  catch(value){const message=value.message,rest=draft;if(saved){await select(frame.index);draft=rest;paint();}error(message);}finally{busy=false;enable();}}
 function connectAI(){
  const index=frame.index,ticket=serial;
- showAI('pixel',index,request,()=>frame?.index===index?{version:review.version,blocked:!ready||busy||loading||conflicted||forbidden||!!stroke||draft.length>0||seeds.length>0||polygon.length>0}:null,async()=>{
+ showAI('pixel',index,request,()=>frame?.index===index?{version:review.version,blocked:!ready||busy||loading||conflicted||forbidden||!!stroke||draft.length>0||seeds.length>0||polygon.length>0}:null,async({candidateSha}={})=>{
   const latest=await request(`/api/masks/${index}`);if(ticket!==serial)return;
   if(latest.version!==review.version)throw new Error('검수 버전이 바뀌었습니다. 새로고침 후 확인하세요.');
-  review.draft_candidates=latest.draft_candidates;candidateOptions();await loadVlm(index,ticket);
+  if(!ready||busy||loading||conflicted||forbidden||stroke||draft.length||seeds.length||polygon.length)return;
+  review.draft_candidates=latest.draft_candidates;candidateOptions();
+  if(candidateSha&&[...$('pixel-candidates').options].some(option=>option.value===candidateSha))$('pixel-candidates').value=candidateSha;
+  await loadVlm(index,ticket);
+  if(ticket===serial&&!busy&&!stroke&&!draft.length&&!seeds.length&&!polygon.length)previewCandidate();
  });
 }
 function clearReviewContext(){resetVersions();resetAI();resetHistory('현재 사진의 검수 정보를 확인할 수 없습니다.');aiPanel.hidden=true;$('pixel-vlm-state').textContent='';$('pixel-vlm-note').textContent='';}
@@ -290,6 +297,7 @@ for(const [id,step] of [['pixel-prev',-1],['pixel-next',1]])$(id).onclick=()=>{c
 $('pixel-next-pending').onclick=async()=>{try{$('pixel-filter').value='pending';const next=await nextPending(frame.index);if(next){select(next.index);}}catch(e){error(e.message);}};
 $('pixel-fill').onclick=()=>{if(confirm('현재 마스크 전체를 선택 클래스로 바꾸고 재검수하시겠습니까?'))mutate('fill',{label:Number($('pixel-class').value)});};
 $('pixel-fill-unknown').onclick=()=>{if(confirm('남은 미검수 영역만 배경으로 채웁니다. 기존 라벨은 유지됩니다. 놓친 선과 물체가 없는지 사진 전체를 확인한 뒤 별도로 승인하세요. 계속할까요?'))mutate('fill_unknown');};
+pixelFillClass.onclick=()=>{const label=Number($('pixel-class').value),name=$('pixel-class').selectedOptions[0]?.textContent;if(!pixelFillClass.disabled&&confirm(`남은 미검수 영역만 ${name} 클래스로 채웁니다. 기존 라벨은 유지되고 승인은 별도입니다. 계속할까요?`))mutate('fill_unknown',{label});};
 for(const [id,mode] of [['pixel-flood','sample'],['pixel-brush-tool','brush'],['pixel-polygon-tool','polygon']])$(id).onclick=()=>{tool=mode;brush.hidden=true;enable();canvas.focus({preventScroll:true});};
 $('pixel-undo').onclick=()=>{if(polygon.length){polygon.pop();paint();enable();}else if(seeds.length){seeds.pop();refreshSample();}else if(draft.length){draft.pop();paint();enable();}else mutate('undo');};
 $('pixel-save').onclick=()=>commit(draft.map(({label,radius,points})=>({action:'paint',label,radius,points})));$('pixel-discard').onclick=()=>{draft=[];paint();enable();};

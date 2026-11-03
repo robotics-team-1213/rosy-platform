@@ -98,6 +98,46 @@ def test_pixel_unsaved_gesture_blocks_ai_and_result_reload(tmp_path):
         assert not jobs.status(0)['jobs']
 
 
+@pytest.mark.parametrize('editing', [False, True])
+def test_requested_pixel_ai_previews_completion_only_when_editor_is_clean(tmp_path, editing):
+    import base64
+    import numpy as np
+    import review_masks
+    started, release = threading.Event(), threading.Event()
+
+    def backend(*_):
+        started.set()
+        assert release.wait(30)
+        return {'mask': base64.b64encode(review_masks.encode(np.zeros((24, 32), np.uint8))).decode()}
+
+    try:
+        with ai_browser(tmp_path, backend) as (page, store, jobs, expect):
+            page.goto(page.url.split('?')[0] + 'pixels?frame=0', wait_until='networkidle')
+            before = review_masks.get(store, 0)
+            before_pixels = review_masks.pixels(store, before).copy()
+            page.locator('#review-ai-pixel_draft').click()
+            assert started.wait(5)
+            if editing:
+                page.locator('#pixel-class').select_option('0')
+                page.locator('#pixel-canvas').click(position={'x': 10, 'y': 10})
+                expect(page.locator('#pixel-draft')).to_contain_text('1점 선택')
+            release.set()
+            expect(page.locator('#review-ai-jobs')).to_contain_text('초안 후보 저장됨', timeout=15000)
+            if editing:
+                expect(page.locator('#pixel-candidate-preview')).to_be_hidden()
+                expect(page.locator('#pixel-draft')).to_contain_text('1점 선택')
+                expect(page.locator('#pixel-candidates option')).to_have_count(0)
+            else:
+                expect(page.locator('#pixel-candidate-preview')).to_be_visible()
+                expect(page.locator('#pixel-candidate-image')).to_have_js_property('naturalWidth', 32)
+                expect(page.locator('#pixel-candidates option')).to_have_count(1)
+                expect(page.locator('#pixel-candidates')).to_have_value(jobs.status(0)['jobs'][0]['result']['candidate_sha256'])
+            assert review_masks.get(store, 0)['version'] == before['version']
+            assert np.array_equal(review_masks.pixels(store, review_masks.get(store, 0)), before_pixels)
+    finally:
+        release.set()
+
+
 def test_history_pagination_and_pixel_snapshot_do_not_modify_current(tmp_path):
     import review_masks
     from review_app import Conflict
