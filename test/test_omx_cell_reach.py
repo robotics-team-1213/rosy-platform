@@ -36,6 +36,24 @@ def test_an_arm_that_does_not_follow_the_correction_is_refused():
     assert out["verdict"] == "refuse" and len(out["iterations"]) == 3
 
 
+def test_a_lower_gain_settles_an_arm_that_moves_more_than_told():
+    """2026-11-03 arm_b: each re-plan moved the arm about twice the correction; the full error swung round the aim."""
+    class Over:
+        def __init__(self):
+            self.at, self.told = -0.0044, 0.0
+
+        def act(self, command):
+            if command.startswith("load "):
+                step = float(command[5:]) / 1000 - self.told
+                self.at, self.told = self.at + 2.0 * step, self.told + step
+            return {"ok": True, "state": [self.at, 0.0]}
+
+    replan = lambda dx, dy: str(dx)  # noqa: E731
+    assert cr.correct(Over(), (0.0, 0.0), replan, fk=lambda s: (s[0], s[1]))["verdict"] == "refuse"
+    out = cr.correct(Over(), (0.0, 0.0), replan, params={"reach.gain": 0.5}, fk=lambda s: (s[0], s[1]))
+    assert out["verdict"] == "pass" and len(out["iterations"]) == 2
+
+
 def test_chain_stops_at_the_first_refusal():
     calls = []
     ok = lambda: calls.append("reach") or {"verdict": "pass"}  # noqa: E731
