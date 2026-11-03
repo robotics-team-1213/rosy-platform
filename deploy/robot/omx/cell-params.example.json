@@ -818,6 +818,12 @@
   "source": "measured",
   "evidence": "2026-11-03 arm_b pallet: four 3-cells put back by hand, the leftmost about 15 px along from the others; the row read 116 x 145 mm and no count fit the 90 mm box length within 9"
  },
+ "reach.gain": {
+  "value": 1.0,
+  "unit": "ratio",
+  "source": "default",
+  "evidence": "the full error each re-plan; 2026-11-03 arm_b moved 1.5-2.4 times the correction and swung -4.4 / +2.1 / -2.9 mm round the aim"
+ },
  "look.near_px": {
   "value": 40.0,
   "unit": "px",

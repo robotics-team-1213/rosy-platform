@@ -46,7 +46,7 @@ DEFAULTS = {
     "gripper.gap_mm_per_unit": (10.4, "mm", 3, 30),
     "gripper.held_30mm": (52.3, "gripper", 45, 60), "gripper.open_max": (56.0, "gripper", 50, 70),
     "reach.enabled": (1, "flag", 0, 1), "reach.tol_mm": (2.0, "mm", 0.5, 10), "reach.max_iter": (2, "count", 0, 5),
-    "reach.max_mm": (20.0, "mm", 2, 50),
+    "reach.max_mm": (20.0, "mm", 2, 50), "reach.gain": (1.0, "ratio", 0.2, 1.0),
     "wrist.enabled": (0, "flag", 0, 1), "wrist.finger_servo": (0, "flag", 0, 1), "wrist.neutral_ring_chroma": (20.0, "lab", 2, 60),
     "wrist.min_blob_px": (3000, "px", 100, 200000), "wrist.servo_gain": (0.5, "ratio", 0.1, 1.0), "wrist.servo_across": (0, "flag", 0, 1), "wrist.ref_servo": (1, "flag", 0, 1),
     "wrist.probe_mm": (6.0, "mm", 2, 15), "wrist.ref_tol_px": (12.0, "px", 3, 60), "wrist.ref_estimate": (1, "flag", 0, 1),
