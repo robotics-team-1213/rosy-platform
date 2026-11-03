@@ -14082,3 +14082,9 @@ osy-d395-s1d\`.
 - 증거: 검증 기록 Step 5 — 앉음 확인+다시 놓기 1회가 놓기 오차 0.8 mm까지 9개 모두 앉힘(24/24), 바닥 단 r290은 0.4 mm까지 24/24, 놓는 높이 2 mm가 지금 모양에서 큰 개선, 모따기·레일은 거의 효과 없음.
 - gate 변화: 없음. MuJoCo 후보이며 Isaac 확인 전.
 - CE: 해당 없음 — 비교 실험 기록이다.
+
+## 2026-11-04 · uncommitted · 조립식 배 v11 MuJoCo 쌍둥이, 손목 카메라 B, D-956 Isaac 결과
+- 변경: `ship_v11.py`·`ship_v11_scene.py`(v11 화물칸 · 컨테이너 v2 · 집게 v2.1 · 카메라 틀 B), `ship_stack_sequence.py --stage v11 --shard --resume`, `palletizing_gripper.WRIST_CAMERA_B`, Isaac 손목 카메라 사례·팀 link5 모양(`assets/omx_wrist_camera_b`), 시연 내보내기 손목 화면.
+- 증거: 검증 기록 Step 6 — v11 1층 1 mm까지 1/192 미착석, 위층은 콘 4개라 약 2.3 mm, 다시 놓기(이상화) 3 mm까지 64/64. D-956 Isaac seed 42는 다시 놓아도 HOLD(48dcb6a4, 3b55bb62).
+- gate 변화: 없음. MuJoCo 후보이며 v11 Isaac 형상 전.
+- CE: 새 교훈 — `docs/solutions/logic-errors/mujoco-version-split-laptop-passes-lab-throws-seated-box-2026-11-04.md` (MuJoCo 3.3.7 box-box, remote_pytest가 MuJoCo 시험을 건너뜀).
