@@ -14009,3 +14009,21 @@ osy-d395-s1d\`.
 - Evidence: independent merge review found no new issue. Native AST3 paths, size21 commits, Safety77 commits and lint0errors43warnings passed. Fixed57878d663cb37c5601ccab569e1cc0bf7af60932 fresh remote whole files passed selection85, prepare48, landing115, speculate27 and record22 (297 direct); the unchanged prepare/selection collect-and-whole wrapper passed4 checks. All6 reports have skip0 and NEW/known/flaky0, actual driver exit0, in OS Temp rosy-g1-main-delta-5787. The stopped061346 snapshot remains historical evidence, not this merge's publication proof.
 - Gate: source integration only. Account artifact, public publication and live migration remain pending.
 - CE: not applicable — the conflict preserves both existing tested behaviors; no new undocumented recovery rule was introduced.
+
+## 2026-11-03 · uncommitted · fix(landing): LOAD-FLAKY는 사전 시험 전체가 아니라 그 시험만 차례에서 다시 (D-970 4항)
+- 변경: `land_selection.load_flaky_ids`가 요약의 LOAD-FLAKY id를 그 호출의 ROSY_ 환경 단어와 함께 읽고, `land_prepare`는 그 줄을 빼고 단계를 판정해 id를 `land_full` 기록(`flaky`)에 둔다. `land.py` 차례가 그 id를 하나씩 따로 다시 돌린다. 명시 FULL 증인과 읽을 수 없는 LOAD-FLAKY 줄은 예전처럼 엄격하다.
+- 증거: 11-03 12:53~15:53 사전 시험 28번 중 9번이 단계 없음(LOAD-FLAKY 등)이라 delta도 못 썼다. 원격 착지 회귀 27개 파일 + affected_tests 통과(test_land_async 한 건은 혼자 재실행 통과한 ProcessLookupError 타이밍 문제, 이 변경과 무관), 새 시험 2개.
+- gate 변화: 약화 없음. LOAD-FLAKY id는 차례에서 다시 통과해야 착지하고, 차례 요약에 LOAD-FLAKY가 다시 나오면 land record가 생기지 않아 pre-push가 다시 돈다. publish_evidence의 LOAD-FLAKY 거절도 그대로다.
+- CE: 해당 없음 — 교훈 10·11과 D-970에 이미 있음.
+
+## 2026-11-03 · uncommitted · fix(landing): delta 넘김은 표마다 두 번까지 (D-970 1항 보완)
+- 변경: `land_full` delta 기록에 `yields`(앞선 delta 기록 수)를 두고, `land_selection.delta_yields`는 그것이 `MAX_DELTA_YIELDS`(2) 아래일 때만 넘긴다. 그 뒤에는 차례가 시험 폴더를 직접 돈다(두 번 돌려보낸 뒤 예산 30분).
+- 증거: 11-03 rosy-web-unification-final이 15:58·17:28·18:07 세 번 delta로 넘김 — 차례 밖 준비 동안 main이 다시 움직여 새 폴더가 닿음(rosy-land-events). 원격 착지 회귀 27개 파일 + affected_tests 통과, 새 시험 2개.
+- gate 변화: 없음. 세 번째부터는 D-889 27 이전처럼 차례 안에서 같은 시험을 돈다.
+- CE: 해당 없음 — D-970 되돌림 기준(같은 표 반복 넘김)을 코드로 막은 것.
+
+## 2026-11-03 · uncommitted · fix(landing): 추측 사전 시험 기본 끔 (D-889 추가 28)
+- 변경: `land_prepare`가 `ROSY_LAND_SPECULATE=1`일 때만 `land_speculate.prepare`를 부른다.
+- 증거: 11-03 10:00~16:00 rosy-land-events — spec 시험 9.8 h / 전체 43 h, 차례 held 3 / 34, 이미 통과한 호출 재실행 8.1 h. 원격 착지 회귀 27개 파일 + affected_tests 통과, 새 시험 1개.
+- gate 변화: 없음. 차례는 원래 정해진 선택을 그대로 돈다.
+- CE: 기존 교훈 갱신 — landings-gave-the-turn-back-and-reran-everything 11.
