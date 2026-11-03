@@ -436,6 +436,8 @@ def rounds(args, wt: Path, branch: str, main_co: Path, python: str, qdir, ticket
                 if note and ticket is not None:  # a FULL tier never runs in the lock: prepare it, then wait again
                     full_main = land_prepare.again(sys.modules[__name__], wt, branch, args, python, qdir, ticket, invocations, note)
                     continue
+                # D-970 4: the pretest's LOAD-FLAKY ids run again here, each in its own invocation, and must pass
+                invocations += [run for run in land_full.flaky(wt, branch) if run not in invocations]
             else:
                 invocations = [shlex.split(args.tests)]
             if args.dry_run:
