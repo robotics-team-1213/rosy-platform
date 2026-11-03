@@ -92,6 +92,7 @@ class OutputGraphTests(unittest.TestCase):
                                  _bounded_trial_guard=None,
                                  _node=node,
                                  _send_twist=send_twist,
+                                 _note_wheels=lambda out: None,
                                  cmd_vel_pub=publisher)
         try:
             if control_obstacle or control_geometry or control_tracking or control_actuation:
