@@ -13935,6 +13935,12 @@ osy-d395-s1d\`.
 - gate 변화: 없음.
 - CE: 이 문서 자체가 교훈 기록이다.
 
+## 2026-11-03 · 368f142943 · docs(adr): D-968 통합관제 이름·개인 로그인 계정 모델 확정
+- 변경: 통합관제 고유명은 Rosy Fleet, 사람 계정은 개인 로그인만, 소유자 권한은 operator+policy_admin 조합. 직함·공유 계정과 owner 문자가 들어간 새 역할·계정은 만들지 않고, 콘솔 id/비번 처리는 기존 구조화 경로(rosy_account 라우트·레지스트리 초기 비밀번호·강제 변경)만 쓴다. 2026-11-02~03 콘솔 로그인 실패는 초기 비밀번호 체계로 해결했다.
+- 검증: rosy_harness lint 잔여 오류 0건. D-966/D-967은 타 세션 진행 중 예약이라 adr_gaps.txt에 선언했다(ADR 착지 시 줄 삭제).
+- gate 변화: 없음.
+- CE: 해당 없음 — 진단·명명 결정 기록이며 새 교훈 없음.
+
 ## 2026-11-03 · b71238da0d · fix(land): a held or records-only turn keeps each job's options
 - 변경: `tools/land_speculate.py` `root_part`가 root test/ 경로와 함께 그 invocation의 옵션·`ROSY_*` 단어를 남긴다(`land.py` records-only 경로도 같은 함수). `with_spec`은 이미 있는 invocation을 다시 붙이지 않는다
 - 증거: 5ec9ef709a 착지 기록이 G1 전용 job 2개와 평문 `test/test_platform_g1_timing.py`를 담아 `publish_main`이 "canonical candidate plan/environment unavailable"로 거부. 원격 `test_land_speculate.py test_land.py test_land_record.py test_publish_evidence.py test_land_selection.py` exit 0
