@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-11-04 · uncommitted · docs(plans): peer pose sharing 설계에 v1 실행 범위 명시
+- 2026-11-04 · uncommitted · docs(plans): 로봇 간 맵 위치 공유(peer pose sharing) 설계
 - 2026-11-04 · uncommitted · docs(control-terms): D-974 Harbor 후속 완료 표시
 - 2026-11-04 · uncommitted · MuJoCo 3층 적재 개선 후보 비교
 - 2026-11-04 · uncommitted · feat(sim): MuJoCo 3층 전체 적재 순서, 실측 셀 layout, 실물 site 계획
-- 2026-11-04 · uncommitted · 공용 폼의 네이티브 유효성·초기화 검증 기록
-- 2026-11-04 · uncommitted · 검색 선택의 표시·호출자 상태 검증 기록

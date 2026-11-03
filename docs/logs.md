@@ -14106,3 +14106,15 @@ osy-d395-s1d\`.
 - 증거: PR #17 필수 검사(unittest·product-web 3.10/3.12, review-gate) 통과 뒤 merge commit 4d80908e82.
 - gate 변화: 없음.
 - CE: 해당 없음.
+## 2026-11-04 · uncommitted · docs(plans): 로봇 간 맵 위치 공유(peer pose sharing) 설계
+- 변경: `docs/plans/2026-11-04-peer-pose-sharing-design.md` 신규 — 탑뷰(천장 카메라) 부재 시 로봇이 CORE↔CORE beacon(1 Hz, peer-pairing D-456 세션)으로 맵 위치를 교환하고, World MapPoseTracker(D-494 3)가 `source: peer` sighting을 최하위 우선순위 앵커로 받아 Fleet `arbitrated_pose`가 유지되는 설계. 권한은 Fleet 중앙 그대로(D-517/541), D-33 도메인 분리·D-2 단일 발행자 무변경. 실행 계획·ADR은 구현 승인 후 별도
+- 증거: 설계 문서만 추가(코드 변경 없음). `rosy_harness.py lint` 통과 확인. 계약 시험(`test_network_topology_contracts.py`, `test_harness_contracts.py`)은 원격 미실시 — 착지 전 실행 필요
+- gate 변화: 없음
+- CE: 해당 없음 — 신규 설계 문서 작성
+
+## 2026-11-04 · uncommitted · docs(plans): peer pose sharing 설계에 v1 실행 범위 명시
+- 변경: `docs/plans/2026-11-04-peer-pose-sharing-design.md` — v1은 CORE beacon·수용·`GET /api/v1/peers`·`StateSnapshot.peers`(하트비트 포함)까지, World 중재는 v2(열린 결정 4: 릴레이된 자기위치 스트림에 맞는 앵커 규칙). API Ref v1.359 행 2개·스냅샷 절·변경 기록
+- 증거: `rosy_harness.py lint` 확인 예정(같은 커밋에서 generate 실행)
+- gate 변화: 없음
+- CE: 해당 없음
+

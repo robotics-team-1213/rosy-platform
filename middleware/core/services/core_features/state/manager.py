@@ -109,6 +109,7 @@ class StateManager:
         self._safety_policy_error: Optional[str] = None  # last logged error type
         self._localization_provider: Optional[Callable[[], object]] = None
         self._trip_lease_provider: Optional[Callable[[], tuple]] = None
+        self._peers_provider: Optional[Callable[[], list]] = None
 
     def set_localization_provider(self, provider: Optional[Callable[[], object]]) -> None:
         """D-395 P2-1: read live, so the stale timeout and the odom frame flag apply."""
@@ -133,6 +134,11 @@ class StateManager:
         """D-400: the safety policy/shadow block, read live on every snapshot."""
         with self._lock:
             self._safety_policy_provider = provider
+
+    def set_peers_provider(self, provider: Optional[Callable[[], list]]) -> None:
+        """Peer pose sharing: peer rows read live; a failing provider degrades to null."""
+        with self._lock:
+            self._peers_provider = provider
 
     def set_capabilities_degraded(self, modules: list[str]) -> None:
         with self._lock:
@@ -388,6 +394,13 @@ class StateManager:
         trip_lease_provider = self._trip_lease_provider
         trip_lease, trip_lease_ended = (trip_lease_provider() if trip_lease_provider is not None
                                         else (None, None))
+        peers = None
+        peers_provider = self._peers_provider
+        if peers_provider is not None:
+            try:
+                peers = list(peers_provider())
+            except Exception:
+                peers = None  # never take the state API down for a peers read
         with self._lock:
             self._seq += 1
             now = self._clock()
@@ -407,6 +420,7 @@ class StateManager:
                 mode=self._mode,
                 navigation=self._navigation,
                 map_id=self._map_id,
+                peers=peers,
                 pose=self._pose.model_copy(),
                 velocity=self._velocity.model_copy(),
                 battery=self._battery.model_copy(),

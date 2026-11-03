@@ -24,13 +24,16 @@ from core_api_web.api.errors import ApiError
 NAVIGATE = "NAVIGATE"
 LOCALIZE_ASSIST = "LOCALIZE_ASSIST"
 STUCK_DECIDE = "STUCK_DECIDE"
+#: Peer pose sharing: post a beacon to another robot's CORE
+#: (docs/plans/2026-11-04-peer-pose-sharing-design.md §4.2).
+PEER_SHARE = "PEER_SHARE"
 
 ROLE_GRANTS: dict[str, frozenset[str]] = {
     "viewer": frozenset(),
     # D-438 §1: Fleet's stuck resolver answers D-407 stucks and reads; rank stays viewer.
     "stuck_resolver": frozenset({STUCK_DECIDE}),
-    "operator": frozenset({NAVIGATE, LOCALIZE_ASSIST, STUCK_DECIDE}),
-    "administrator": frozenset({NAVIGATE, LOCALIZE_ASSIST, STUCK_DECIDE}),
+    "operator": frozenset({NAVIGATE, LOCALIZE_ASSIST, STUCK_DECIDE, PEER_SHARE}),
+    "administrator": frozenset({NAVIGATE, LOCALIZE_ASSIST, STUCK_DECIDE, PEER_SHARE}),
 }
 
 
