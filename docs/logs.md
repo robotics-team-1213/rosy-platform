@@ -13898,3 +13898,9 @@ osy-d395-s1d\`.
 - 범위 측정: 같은6b9..987 입력과987 파일 내용·자동without_sim/browser[] 조건에서 FULL27argv/추적 시험 파일2383개→AFFECTED1argv/11개(9guards+goal/events)다. workspace-records/2026-11-02/stats-selection-scope-evidence.json에 원본 argv·파일 union·SHA·조건을 원본과 SHA256 동일하게 보존했다. testcase 수나 실제 wall 절감·SLO 달성으로 해석하지 않는다.
 - gate 변화: 순수 계측 변경의 관련 시험 범위만 바로잡는다. 이 선택기 수정 자체는 정식 FULL이 필요하고, safety·runtime/selector/remote 혼합의 FULL과 기존 문서 guard를 유지한다. 공식 후보 검증·main 착지·변경 후 p90 검증은 아직 남아 있다.
 - CE: 기존 교훈 갱신 — landings-gave-the-turn-back-and-reran-everything의 과다 FULL 원인과 적용 조건을 보완했다. 보고 결과가 승인·실행 경로에 들어가면 분류를 재검토한다. 최종 문서 기록은 검증 코드a193 대비 tools/test 변경이 없으며 같은 guard를 별도 수동 pytest로 반복하지 않고 공식 착지에서 확인한다.
+
+## 2026-11-03 · uncommitted · test(remote): imported fake-host helper의 HEADROOM 격리
+- 변경: 공용 `_fake_hosts`가 호출자의 monkeypatch를 통해 시험 전용 HEADROOM dict를 사용하게 한다. 다른 모듈이 helper를 import했을 때 빠지던 module-local autouse fixture의 격리를 helper 자체에서 보장하며, production 코드와 worker/profile 기대값은 유지한다.
+- 증거: main4088d1c1d2에서 기존 reboot producer→profile consumer 두 node를 -n0으로 실행해1FAIL/1PASS·NEW1/known·flaky0을 재현했다. 수정parent69a12까지 관련remote 코드·시험3파일 차이0이다. code63a211f808에서 같은 producer 모듈을 먼저 두고 helper의 모든 호출 모듈과 consumer를 포함한5whole-file -n0은184PASS/skip·NEW·known·flaky0이었다. 정상 입장 wait0/run37초, pytest27.89초다. 로그는 OS Temp rosy-headroom-order-{red,green}-20261103/run-1.txt에 있다.
+- gate 변화: 없음. 실패 기준·검증 기대값·자원 정책·테스트 선택·quarantine baseline을 바꾸지 않는다. 독립 고정코드 검토 P1/P2 없음이며, source 검증과 정식 후보 착지는 구분한다.
+- CE: 기존 교훈 갱신 — shared-pytest-process-masks-path-dependent-import의 단독/FULL 컨텍스트 차이에 imported helper의 fixture 범위와 실제 순서 재현을 추가했다. 단독 통과를 곧바로 부하성 flaky로 단정하지 않는다.
