@@ -2,8 +2,9 @@
 
 Geometry: learning/envs/isaac/ship_v11.py (pocket walls, 45 degree pins, container sockets and top cones as convex pieces).
 Jaw, contacts and release drive: ship_release_scene (same as the stud-plate twin). The camera holder is
-palletizing_gripper.WRIST_CAMERA_B (b12-u18-span-B): a box proxy whose lowest point sits where the design puts the holder's
-lowest point (32.3 mm above the TCP in the top-down pose), plus a camera at the lens pose Isaac uses. Candidates for Isaac only (D-947 section 1).
+palletizing_gripper.WRIST_CAMERA_B (rated b16-u16-span-B): a box proxy whose lowest point sits where the design puts the
+holder's (36.6 mm above the TCP in the top-down pose), plus a camera at the lens pose Isaac uses. Candidates for Isaac
+only (D-947 section 1).
 """
 import math
 from pathlib import Path
@@ -17,6 +18,7 @@ import ship_v11 as v11  # noqa: E402
 
 mujoco = base.mujoco
 GUIDE = 2  # contype bit shared by pins, top cones and socket wedges; flat faces stay on bit 1
+BITS = {'cone': dict(contype=GUIDE | 1, conaffinity=GUIDE | 1), 'socket': dict(contype=GUIDE, conaffinity=GUIDE)}
 HOLDER_HALF_MM = (4., 16., 16.)  # along the axis, across (y), along the board (proxy for board + plate)
 
 
@@ -37,7 +39,7 @@ def camera_frame():
 
 def _add_pieces(spec, body, prefix, pieces, meshes):
     for k, (kind, data, guide) in enumerate(pieces):
-        bits = {'cone': dict(contype=GUIDE | 1, conaffinity=GUIDE | 1), 'socket': dict(contype=GUIDE, conaffinity=GUIDE)}.get(guide, {})
+        bits = BITS.get(guide, {})
         if kind == 'box':
             # As 8-corner meshes: MuJoCo 3.3.7 (lab PCs) box-box contact threw a seated top-layer container off a lid at
             # rest (2026-11-04, error-free stack, box 7); the convex-mesh path keeps it seated at the same speed.
