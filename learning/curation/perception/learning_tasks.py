@@ -99,6 +99,8 @@ class Tasks:
                        "ON learning_task_records(json_extract(body,'$.device_id')) WHERE kind='robot'")
             db.execute('CREATE TABLE IF NOT EXISTS learning_task_datasets ('
                        'dataset_id TEXT PRIMARY KEY, dataset_revision TEXT UNIQUE NOT NULL, binding TEXT NOT NULL)')
+            db.execute('CREATE TABLE IF NOT EXISTS learning_task_sim_contexts ('
+                       'run_id TEXT PRIMARY KEY, document TEXT NOT NULL)')
 
     @contextmanager
     def _db(self):
@@ -232,7 +234,34 @@ class Tasks:
     def snapshot(self):
         with self._db() as db:
             return dict(robots=list(self._robots(db).values()), tasks=[self._get(db, row[0], 'task')[1]
-                for row in db.execute("SELECT id FROM learning_task_records WHERE kind='task' ORDER BY rowid")])
+                for row in db.execute("SELECT id FROM learning_task_records WHERE kind='task' ORDER BY rowid")],
+                sim_contexts=[json.loads(row[0]) for row in db.execute(
+                    'SELECT document FROM learning_task_sim_contexts ORDER BY rowid')])
+
+    def attach_sim_context(self, body, evidence, actor=None):
+        """Bind a server-fetched scenario record; this does not evaluate a learned policy."""
+        _fields(body, ('task_id', 'task_revision', 'run_id'))
+        _revision(body['task_revision'])
+        if (not isinstance(body['run_id'], str) or not re.fullmatch('[0-9a-f]{32}', body['run_id'])
+                or not isinstance(evidence, dict) or evidence.get('run_id') != body['run_id']
+                or len(_json(evidence).encode('utf-8')) > 1024 * 1024):
+            raise ValueError('bounded server SIM evidence and run identity required')
+        document = dict(body, project_id=self.project_id, kind='scenario_validation',
+                        evidence=evidence, created_by=_creator(actor))
+        with self._db() as db:
+            _, task = self._get(db, body['task_id'], 'task')
+            if task['revision'] != body['task_revision']:
+                raise ValueError('exact task revision required')
+            row = db.execute('SELECT document FROM learning_task_sim_contexts WHERE run_id=?',
+                             (body['run_id'],)).fetchone()
+            if row:
+                prior = json.loads(row[0])
+                if any(prior.get(key) != value for key, value in document.items() if key != 'created_by'):
+                    raise ValueError('SIM run already bound to another task or evidence')
+                return prior
+            db.execute('INSERT INTO learning_task_sim_contexts VALUES (?,?)',
+                       (body['run_id'], _json(document)))
+            return document
 
     def _dataset_binding(self, task, robots, dataset_id, dataset_revision):
         return dict(task_id=task['id'], task_revision=task['revision'],

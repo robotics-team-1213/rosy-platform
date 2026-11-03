@@ -1,6 +1,8 @@
 """D-965: R delegates arm work to the owning cell; the cell's ARM admit is the only approval."""
 
 import asyncio
+from contextlib import closing
+import sqlite3
 from types import SimpleNamespace
 
 import pytest
@@ -32,7 +34,7 @@ class ArmJobs:
     def __init__(self):
         self.jobs, self.calls, self.cancels, self.receipts = {}, [], [], {}
 
-    def create(self, *, principal, request_key, request):
+    def create(self, *, principal, request_key, request, bind=None):
         if principal is None:
             raise PermissionError("a configured named principal is required")
         self.calls.append((principal.principal_id, request_key, request))
@@ -43,6 +45,10 @@ class ArmJobs:
             "request_digest": DIGEST, "proposal_digest": DIGEST, "transfer": request,
             "resource_policy_digest": DIGEST, "status": "PROPOSED", "authority_epoch": None,
             "dispatch_generation": None, "approved_by": None, "reason": None})
+        if bind is not None:
+            with closing(sqlite3.connect(self.path)) as connection, connection:
+                connection.row_factory = sqlite3.Row
+                bind(connection, self.jobs[key]["mission_id"])
         return self.jobs[key]
 
     def view(self, mission_id):
@@ -77,6 +83,8 @@ def cluster(tmp_path, arm_jobs):
 
     for unit_id, jobs in [("R", None), ("CELL-A", arm_jobs)]:
         path = tmp_path / (unit_id + ".db")
+        if jobs is not None:
+            jobs.path = path
         robots = {r[6:] for r in topology.unit(unit_id).resources if r.startswith("robot:")}
         nodes[unit_id] = ControlUnitService(
             topology, ControlUnitStore(path, unit_id=unit_id), FleetTaskService(FleetTaskStore(path), robot_ids=robots),
@@ -97,7 +105,10 @@ def test_cell_proposes_once_under_the_parent_service_and_r_sees_the_projection(t
     asyncio.run(nodes["R"].submit(request))
     cell = nodes["CELL-A"].store.get("R", "arm-1")
     assert cell["local_task_id"] == "physical-1" and cell["status"] == "QUEUED"
-    assert {call[:2] for call in jobs.calls} == {("control-unit:R", "harbor:move-1")}
+    assert {call[0] for call in jobs.calls} == {"control-unit:R"}
+    assert len({call[1] for call in jobs.calls}) == 1
+    assert jobs.calls[0][1].startswith("control:")
+    assert jobs.calls[0][1] != TRANSFER["request_key"]
     assert "request_key" not in jobs.calls[0][2]
     root = nodes["R"].store.get("R", "arm-1")
     assert root["owner_unit"] == "CELL-A" and root["local_task_id"] is None
@@ -194,6 +205,33 @@ def test_r_relays_create_read_receipt_and_cancel_for_the_proposing_app_only(tmp_
     canceled = client.post("/api/fleet/arm-transfers/jobs/physical-1/cancel", json={"reason": "operator changed plan"})
     assert canceled.status_code == 200 and canceled.json()["job"]["status"] == "HOLD"
     assert nodes["R"].store.list()[0]["status"] == "CANCELED"
+
+
+@pytest.mark.parametrize("other_object", ["box-1", "box-2"])
+def test_app_request_keys_remain_separate_at_the_cell(tmp_path, other_object):
+    jobs = ArmJobs()
+    client, _, who = relay(tmp_path, jobs)
+    first = client.post("/api/fleet/arm-transfers/jobs", json=TRANSFER)
+    assert first.status_code == 200, first.text
+    first = first.json()["job"]
+    assert client.post("/api/fleet/arm-transfers/jobs", json=TRANSFER).json()["job"] == first
+
+    who["principal"] = OTHER
+    body = dict(TRANSFER, object_ref=other_object)
+    second = client.post("/api/fleet/arm-transfers/jobs", json=body)
+    assert second.status_code == 200, second.text
+    second = second.json()["job"]
+    assert second["mission_id"] != first["mission_id"]
+    assert first["request_key"] == second["request_key"] == TRANSFER["request_key"]
+    assert client.post("/api/fleet/arm-transfers/jobs", json=body).json()["job"] == second
+    assert len(jobs.jobs) == 2
+
+    who["principal"] = HARBOR
+    canceled = client.post("/api/fleet/arm-transfers/jobs/" + first["mission_id"] + "/cancel",
+                          json={"reason": "origin canceled"})
+    assert canceled.status_code == 200
+    assert jobs.view(first["mission_id"])["status"] == "HOLD"
+    assert jobs.view(second["mission_id"])["status"] == "PROPOSED"
 
 
 def test_r_refuses_a_workcell_no_child_owns_and_reports_an_unreachable_cell(tmp_path):

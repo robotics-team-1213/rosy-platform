@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
-- 2026-11-03 · uncommitted · feat(isaac): 팔마다 정렬 자리·경유점, 완성 적층 실물 시점 렌더, 컨테이너 실행 65분
-- 2026-11-03 · uncommitted · docs(adr): D-970 착지 대기열 — 잠금은 짧게, 같은 시험은 한 번만, 추측 끔, flaky는 시험 단위로
-- 2026-11-03 · b71238da0d · fix(land): a held or records-only turn keeps each job's options
-- 2026-11-03 · 368f142943 · docs(adr): D-968 통합관제 이름·개인 로그인 계정 모델 확정
-- 2026-11-03 · uncommitted · docs(workflow): 제어 세션 종료 뒤 남은 synthetic 부하 정리
+- 2026-11-03 · uncommitted · Retain current main's DELTA yielding with isolated FULL composition
+- 2026-11-03 · uncommitted · fix(harness): compose new DELTA preparations through the shared timing policy
+- 2026-11-03 · uncommitted · fix(harness): preserve current-main root projection and speculation semantics
+- 2026-11-03 · uncommitted · fix(harness): reject stale FULL reuse and validate record composition before FF
+- 2026-11-03 · uncommitted · fix(harness): compose timing plans without inheriting speculation into publication FULL
