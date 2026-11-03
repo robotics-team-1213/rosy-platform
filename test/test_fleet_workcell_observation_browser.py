@@ -186,13 +186,19 @@ def test_cell_catalog_fits_the_full_page_and_belongs_to_saved_documents(cell_url
             expect(table).to_be_visible()
             expect(table).to_contain_text("20.0 g")
             expect(table).to_contain_text(source.strip())
-            table.scroll_into_view_if_needed()
+            table.locator("thead").scroll_into_view_if_needed()
             assert table.evaluate("el => getComputedStyle(el).borderCollapse") == "collapse"
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
             assert table.locator("tbody td").nth(2).evaluate("""cell => {
                 const text = document.createRange(); text.selectNodeContents(cell);
                 return text.getClientRects().length;
             }""") == 1, "the measured mass must remain readable on one line"
+            assert table.locator("tbody td").nth(2).evaluate("""cell => {
+                const text = document.createRange(); text.selectNodeContents(cell);
+                const style = getComputedStyle(cell);
+                return text.getBoundingClientRect().top < cell.getBoundingClientRect().top
+                    + parseFloat(style.paddingTop) + parseFloat(style.fontSize);
+            }"""), "the mass must be at the top of a long source row"
             if os.environ.get("ROSY_CAPTURE_INLINE") == "1":
                 shot = page.screenshot(type="jpeg", quality=35)
                 print(f"ROSY_SCREENSHOT cell-catalog-{theme}-{width} " + base64.b64encode(shot).decode())
