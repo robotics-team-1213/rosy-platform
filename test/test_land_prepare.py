@@ -545,3 +545,16 @@ def test_a_delta_record_counts_its_yields(tmp_path, monkeypatch):
     monkeypatch.setattr(land.land_full, "_path", lambda wt, branch: record)
     land.land_full.save(tmp_path, "b", "c" * 40, "m" * 40, "delta", [["x/test"]], base_tier="affected", yields=2)
     assert land.land_full.prepared(tmp_path, "b", "m" * 40)["yields"] == 2
+
+
+def test_a_pretest_with_a_cross_tree_reuse_keeps_its_tier_but_is_not_push_evidence(full_anchor, monkeypatch):
+    """D-970 4: 11-03 21:00-23:00 nine of twenty pretests had no tier only because a pass was reused from another
+    tree. The tier now stands for the queue; the record says "reused" so land.py writes no land record from it."""
+    main, wt, base, candidate, path, original = full_anchor
+    line = f"pytest pkg/test ok (run-pre-1.txt), {land.land_cache.NARROW} from c0ffee"
+    monkeypatch.setattr(land, "run_tests", lambda *a, **k: [line])
+    args = land.argparse.Namespace(tests="auto", no_cache=True)
+    land.land_prepare.prepare(land, wt, "feat/x", args, sys.executable, None, None, [["pkg/test"]], "")
+    record = json.loads(path.read_text(encoding="utf-8"))
+    assert record["tier"] == "affected" and record["reused"] is True
+    assert land.land_full.prepared(wt, "feat/x", record["main"])["reused"] is True

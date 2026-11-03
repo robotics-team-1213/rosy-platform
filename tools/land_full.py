@@ -34,12 +34,12 @@ def _path(wt: Path, branch: str) -> Path:
 
 def save(wt: Path, branch: str, candidate: str, main: str, tier: str | None = None,
          invocations: list[list[str]] | None = None, base_tier: str | None = None,
-         flaky: list[list[str]] | None = None, yields: int = 0) -> None:
+         flaky: list[list[str]] | None = None, yields: int = 0, reused: bool = False) -> None:
     path = _path(wt, branch)
     path.parent.mkdir(parents=True, exist_ok=True)
     record = {"candidate": candidate, "main": main, "tier": tier, "invocations": invocations}
     extra = {**({"base_tier": base_tier} if base_tier else {}), **({"flaky": flaky} if flaky else {}),
-             **({"yields": yields} if yields else {})}
+             **({"yields": yields} if yields else {}), **({"reused": True} if reused else {})}
     path.write_text(json.dumps({**record, **extra}), encoding="utf-8")
 
 
