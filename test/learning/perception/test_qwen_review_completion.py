@@ -31,7 +31,7 @@ def test_qwen_initial_draft_does_not_require_existing_human_regions(monkeypatch,
     requests = []
     def post(endpoint, route, body, **kwargs):
         requests.append(body)
-        return {'message': {'content': json.dumps({'background': [], 'drivable': [[3, 3]]})}}
+        return {'message': {'content': json.dumps({'background': [], 'drivable': [[125, 167]]})}}
     monkeypatch.setattr(completion.qwen_points, '_post', post)
     assert completion.ask(np.zeros((6, 8, 3), np.uint8), human, 5, 'http://127.0.0.1:11434')['drivable'] == [[1, 1]]
     message = requests[0]['messages'][0]
@@ -40,6 +40,15 @@ def test_qwen_initial_draft_does_not_require_existing_human_regions(monkeypatch,
         assert 'no human labels' in message['content']
     else:
         assert 'human label overlay' in message['content']
+
+
+def test_normalized_qwen_coordinates_use_both_original_axes():
+    human = np.full((240, 320), 255, np.uint8)
+    result = completion.points({'background': [[575, 380], [1000, 1000]],
+                                'drivable': [[500, 500]]}, human, normalized=True)
+    assert result == {'background': [[184, 91], [319, 239]], 'drivable': [[160, 120]]}
+    with pytest.raises(ValueError, match='coordinate'):
+        completion.points({'background': [[1001, 1]], 'drivable': []}, human, normalized=True)
 
 
 def test_completion_refuses_whole_road_before_network_or_output(tmp_path, monkeypatch):
