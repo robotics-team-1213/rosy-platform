@@ -81,6 +81,8 @@ def spawn(tree: Path, snap: str, args: list[str], log: Path, launch):
         raise SystemExit(f"[land-async] {snap} already has a live supervisor")
     script = tree.parent / (tree.name + ".land_async.py")
     script.write_bytes(Path(__file__).read_bytes())
+    # resume without args reuses these: 11-03 a resumed explicit FULL fell back to --tests auto and landed untested
+    (tree.parent / (tree.name + ".args.json")).write_text(json.dumps(args), encoding="utf-8")
     process = launch([sys.executable, "-X", "utf8", str(script), "--supervise", str(tree), snap, *args], log)
     if process is not None:
         while process.poll() is None and not running(tree):
@@ -295,7 +297,11 @@ def _resume_start(cwd: Path, name: str, land_args: list[str], launch):
     if git(tree, "rev-parse", "--abbrev-ref", "HEAD") != snap:  # land.py had moved it onto a batch candidate
         git(tree, "checkout", "-q", snap)
     (place / (name + ".stopped")).unlink(missing_ok=True)
-    args = land_args or ["--tests", "auto"]
+    try:
+        saved = json.loads((place / (name + ".args.json")).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        saved = None
+    args = land_args or saved or ["--tests", "auto"]
     head = git(tree, "rev-parse", "HEAD")
     process = spawn(tree, snap, args, place / (name + ".resume.log"), launch)
     return snap, head, process
