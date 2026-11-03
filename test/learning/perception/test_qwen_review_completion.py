@@ -22,6 +22,26 @@ def test_background_completion_uses_bound_role_when_named_floor():
     assert result.tolist() == [[0, 0, 3]]
 
 
+@pytest.mark.parametrize('blank', [True, False])
+def test_qwen_initial_draft_does_not_require_existing_human_regions(monkeypatch, blank):
+    import json
+    human = np.full((6, 8), 255, np.uint8)
+    if not blank:
+        human[0, 0] = 0
+    requests = []
+    def post(endpoint, route, body, **kwargs):
+        requests.append(body)
+        return {'message': {'content': json.dumps({'background': [], 'drivable': [[3, 3]]})}}
+    monkeypatch.setattr(completion.qwen_points, '_post', post)
+    assert completion.ask(np.zeros((6, 8, 3), np.uint8), human, 5, 'http://127.0.0.1:11434')['drivable'] == [[1, 1]]
+    message = requests[0]['messages'][0]
+    assert len(message['images']) == (1 if blank else 2)
+    if blank:
+        assert 'no human labels' in message['content']
+    else:
+        assert 'human label overlay' in message['content']
+
+
 def test_completion_refuses_whole_road_before_network_or_output(tmp_path, monkeypatch):
     binding = {'classes': [dict(c, semantic='road_surface/1', role='drivable')
                            if c['name'] == 'drivable' else dict(c) for c in BINDING['classes']]}
