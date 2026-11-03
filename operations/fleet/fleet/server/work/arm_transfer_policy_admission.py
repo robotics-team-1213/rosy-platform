@@ -40,7 +40,7 @@ class ArmTransferPolicyWorker:
         self._audit.append(at=at, mission_id=mission_id, outcome=outcome, scope_revision=scope_revision,
                            generation=generation, reason=reason)
 
-    def tick(self) -> int:
+    def tick(self, *, before_admit=None) -> int:
         """이번 틱에 내린 판정 수(0 또는 1)."""
         status = self._core.status()
         scope = status.scope
@@ -52,7 +52,7 @@ class ArmTransferPolicyWorker:
         for mission_id, proposer in candidates:
             if self._scope_reason(proposer, status.enabled_by) is not None:
                 continue
-            return self._admit(mission_id, proposer, status)
+            return self._admit(mission_id, proposer, status, before_admit=before_admit)
         return 0
 
     def _scope_reason(self, proposer, enabled_by):
@@ -65,16 +65,18 @@ class ArmTransferPolicyWorker:
                 return reason
         return None
 
-    def _admit(self, mission_id, proposer, status) -> int:
+    def _admit(self, mission_id, proposer, status, *, before_admit=None) -> int:
         at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(self._clock()))
         revision = status.scope.scope_revision
         try:
+            checked_at = before_admit(mission_id) if before_admit is not None else None
             capabilities, observed_at = self._read_capabilities()
             job = self._store.admit_by_policy(
                 mission_id, scope_revision=revision, enabled_by=status.enabled_by,
                 proposers=frozenset(status.scope.proposers), capabilities=capabilities,
                 capabilities_observed_at_ns=observed_at,
-                recheck=lambda: self._scope_reason(proposer, status.enabled_by))
+                recheck=lambda: self._scope_reason(proposer, status.enabled_by),
+                delegation_checked_at=checked_at)
         except Exception as exc:  # conflict, stale capability, closed generation: next tick re-judges
             self._log.warning("arm transfer policy admission refused for %s: %s", mission_id, exc)
             self._record(at=at, mission_id=mission_id, outcome="HELD", scope_revision=revision,
@@ -90,11 +92,24 @@ class ArmTransferPolicyWorker:
         return 1
 
 
-async def arm_transfer_policy_loop(worker, log, period_s: float = PERIOD_S) -> None:
+async def arm_transfer_policy_loop(worker, log, period_s: float = PERIOD_S, *, before_admit=None) -> None:
     """한 틱 실패가 감시를 끝내지 않는다(policy_admission_loop와 같은 모양)."""
+    owner_loop = asyncio.get_running_loop()
+
+    def check_parent(mission_id):
+        future = asyncio.run_coroutine_threadsafe(before_admit(mission_id), owner_loop)
+        try:
+            return future.result(timeout=5.0)
+        except BaseException:
+            future.cancel()
+            raise
+
     while True:
         try:
-            await asyncio.to_thread(worker.tick)
+            if before_admit is None:
+                await asyncio.to_thread(worker.tick)
+            else:
+                await asyncio.to_thread(worker.tick, before_admit=check_parent)
         except asyncio.CancelledError:
             raise
         except Exception:

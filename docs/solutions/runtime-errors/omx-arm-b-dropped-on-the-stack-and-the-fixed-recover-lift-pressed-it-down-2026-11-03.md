@@ -62,3 +62,29 @@ the weak wrist to lift the arm's end, and the wrist stalled at 62 % PWM, 4.8 deg
   The v2.1 jaws close at 48.6, and the library's 46.6 makes them push each other. The opening map
   (52.3 for 30 mm, 10.4 mm per unit) is still the 10-29 measurement.
 - A dry run measured 26/10 mm of finger room where the live run measured 26/6. Plan with the live numbers.
+- Over the pallet box nearest arm_b (11:37-11:49 local), the jaws did open and close (60.9 / 51.3) but no look saw
+  them: there the wrist hides both fingers at the 2.5 cm hover.
+- Over the next box (12:39), the jaws never opened. Every `grip 62` read 49.33 at 50 mA. The gripper runs in mode 5,
+  where Goal Current limits the force. The session raised Current Limit to 250, but Goal Current stayed at the
+  baseline 50. With the library's `gripper_closed` 46.6 (the v2.1 jaws close at 48.67), every park drove them past
+  contact, and 50 mA could not always pull them open again. So the hover saw no jaw mark because the jaws did not move.
+  A trial look from the 0.10 m view height then reported a mark (a false blob) and passed. The descent with closed
+  jaws landed about 15 mm beside the box, empty (19 mA). The trial was reverted on `feat/omx-look-raise`. A look at
+  another height does not vouch for the hover.
+- Fix: the session now writes the gripper's Goal Current with its Current Limit (`d189c9b332`). On arm_b, the jaws
+  then opened to 60 and closed to 49.5. arm_b also has its own plan and chunk library with closed 48.8. Before a
+  look, check that the jaws follow `grip` (state[5] moves) before blaming the camera.
+- After the empty grasp, `lift_pick` tripped wrist_flex (5.1 deg) and the arm came down on the row again.
+  `cell_unwedge` freed it in 21 steps with no block (field `20261103-124327-unwedge-decisions.jsonl`).
+- The attempt record used to keep only the last hover hook's answer, which hid the unseen and false looks. Since
+  `6dbf19e7b9`, the wrist step keeps every hook's answer under `hooks`. Until then, find them in `chunk-status.jsonl`
+  (the `grip 50.5`/`grip 62.0` pairs are the jaw marks; state[5] shows whether the jaws moved).
+- The look's jaw mark opened to 62 (about 131 mm of gap, wider than any pick's open_max 56) at the hover over the dense
+  row (13:24): it swept the neighbours 6 mm away, closed on a box edge (blocked at 54.6) and the park folded the box
+  home (see the elbow-overload lesson). The mark needs that travel (episode top frames: opened to 54.8 no blob, to 59.9
+  about 500 px), so opening it less is no fix. `cell_look` now opens the jaws only when the top map shows free ground
+  on both sides of the box along the closing axis out to half the opened gap plus `look.mark_err_mm`
+  (`cell_finger_room.mark_room`, kept on the object as `mark_half_mm`); else it is skipped when the wrist hooks still
+  measure, refused when nothing else does. It rests on the map, not the jaws' height, so the 18 mm TCP-length
+  question does not enter. Before trusting a hover look near neighbours, read `hooks` in the attempt for `skipped`.
+

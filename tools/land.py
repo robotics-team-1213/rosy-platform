@@ -429,8 +429,9 @@ def rounds(args, wt: Path, branch: str, main_co: Path, python: str, qdir, ticket
                         summary.append(f"round {round_no}: speculated tree held; main delta passed before the turn")
                 else:
                     invocations, note = select(wt, main_sha, python, full=True) if args.tests == "full" else select(wt, main_sha, python)
-                if note and note.startswith(land_selection.DELTA_NOTE) and ticket is None:
-                    note = None  # D-889 27: no queue to yield to, so the delta's suites run here as before
+                if note and note.startswith(land_selection.DELTA_NOTE) and not land_selection.delta_yields(
+                        ticket, land_full.prepared(wt, branch, full_main) if full_main else None):
+                    note = None
                 if note and note not in summary:
                     summary.append(note)
                 if note and ticket is not None:  # a FULL tier never runs in the lock: prepare it, then wait again
