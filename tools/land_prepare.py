@@ -201,10 +201,11 @@ def _prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, 
     delta = bool(note) and note.startswith(land.land_selection.DELTA_NOTE) and not explicit
     # D-970 4: a LOAD-FLAKY id no longer voids the whole pretest; the record keeps it and the turn reruns it.
     # An explicit FULL witness stays strict, and so does a summary whose LOAD-FLAKY line cannot be read.
-    flaky = None if explicit else land.land_selection.load_flaky_ids(guarded + tested)
+    relax = not explicit and not (note and not delta)  # a FULL tier (explicit or escalated) stays strict
+    flaky = land.land_selection.load_flaky_ids(guarded + tested) if relax else None
     # D-970 4: a pass reused from another tree (land_cache NARROW) names the tier for the queue too; the record is
     # marked "reused" so land.py writes no land record from it and pre-push still reruns (11-03: 9 of 20 had none).
-    reused = not explicit and any(land.land_cache.NARROW in line for line in guarded + tested)
+    reused = relax and any(land.land_cache.NARROW in line for line in guarded + tested)
     drop = (("LOAD-FLAKY",) if flaky else ()) + ((land.land_cache.NARROW,) if reused else ())
     judged = [line for line in guarded + tested if not any(d in line for d in drop)]
     tier = land.land_selection.tier(land, judged, bool(note) and not delta)  # carried: restore() refuses it
