@@ -13971,3 +13971,10 @@ osy-d395-s1d\`.
 - 증거: 실측 받침 케이스가 2,310 s 한도에서 8/9까지 놓음(run 5d3a, `runtime_limit`). 계획기 시험(벨트·적층·자기 정렬 자리 도달, 낮춘 벨트 수직 하강, arm_a 경유점) 원격 통과.
 - gate 변화: 없음. CAD 케이스 그대로.
 - CE: 해당 없음 — 원인과 고침이 시험·주석·검증 기록에 있다.
+
+## 2026-11-03 · uncommitted · fix(landing): delta 넘김은 표마다 두 번까지 (D-970 1항 보완)
+- 변경: `land_full` delta 기록에 `yields`(앞선 delta 기록 수)를 두고, `land_selection.delta_yields`는 그것이 `MAX_DELTA_YIELDS`(2) 아래일 때만 넘긴다. 그 뒤에는 차례가 시험 폴더를 직접 돈다(두 번 돌려보낸 뒤 예산 30분).
+- 증거: 11-03 rosy-web-unification-final이 15:58·17:28·18:07 세 번 delta로 넘김 — 차례 밖 준비 동안 main이 다시 움직여 새 폴더가 닿음(rosy-land-events). 원격 착지 회귀 27개 파일 + affected_tests 통과, 새 시험 2개.
+- gate 변화: 없음. 세 번째부터는 D-889 27 이전처럼 차례 안에서 같은 시험을 돈다.
+- CE: 해당 없음 — D-970 되돌림 기준(같은 표 반복 넘김)을 코드로 막은 것.
+
