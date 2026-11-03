@@ -22,11 +22,11 @@ from sensor_msgs.msg import Image
 from std_msgs.msg import String
 
 from . import executor_choice
-from .sensing.perception.image_frame import image_msg_to_frame
-from .sensing.perception.learned.lane_mask import VisibleHysteresis
-from .sensing.perception.learned.runner import LaneSegModel, ModelSlot
+from perception_runtime.perception.image_frame import image_msg_to_frame
+from perception_runtime.perception.learned.lane_mask import VisibleHysteresis
+from perception_runtime.perception.learned.runner import LaneSegModel, ModelSlot
 from .sensing.perception.learned.shadow import TOPIC, RuleRing, shadow_payload
-from .sensing.perception.learned.signature import TRUSTED_KEYS, SignatureCheck
+from perception_runtime.perception.learned.signature import TRUSTED_KEYS, SignatureCheck
 from .sensing.perception.learned.status import STATUS_TOPIC, LearnedStatus, rate_limited
 
 

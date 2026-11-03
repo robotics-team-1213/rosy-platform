@@ -5,9 +5,9 @@ import json
 import numpy as np
 import pytest
 
-from control.sensing.perception.learned.detector import (
+from perception_runtime.perception.learned.detector import (
     MAX_DETECTIONS, ObjectDetModel, decode, detection_packet, letterbox)
-from control.sensing.perception.learned.manifest import OBJECT_CLASSES, ManifestError
+from perception_runtime.perception.learned.manifest import OBJECT_CLASSES, ManifestError
 
 H, W = 256, 320          # model input (stride 32)
 C = len(OBJECT_CLASSES)
@@ -147,7 +147,7 @@ def test_open_refuses_a_lane_model(tmp_path):
 
 
 def test_non_finite_output_after_warm_up_is_refused_per_frame(tmp_path):
-    from control.sensing.perception.learned.lane_mask import NonFiniteLogits
+    from perception_runtime.perception.learned.lane_mask import NonFiniteLogits
     model = open_model(tmp_path)
     model._session = FakeSession(nan=True)
     with pytest.raises(NonFiniteLogits):
@@ -156,7 +156,7 @@ def test_non_finite_output_after_warm_up_is_refused_per_frame(tmp_path):
 
 def test_a_flood_of_candidates_is_capped_before_nms():
     """Review M2: an untrained or broken model can score every anchor; NMS stays bounded."""
-    from control.sensing.perception.learned.detector import MAX_CANDIDATES
+    from perception_runtime.perception.learned.detector import MAX_CANDIDATES
     anchors = 5000
     out = np.zeros((1, 4 + C, anchors), np.float32)
     out[0, 0] = np.tile(np.arange(0, 320, 4, dtype=np.float32), anchors // 80 + 1)[:anchors]
@@ -173,7 +173,7 @@ def test_detector_session_options_keep_the_pi_cores_quiet(monkeypatch):
     """Review L5: no spin-waiting threads and one inter-op thread, for this node's session only."""
     import sys
     import types
-    from control.sensing.perception.learned import runner
+    from perception_runtime.perception.learned import runner
 
     class Options:
         def __init__(self):
@@ -194,7 +194,7 @@ def test_detector_session_options_keep_the_pi_cores_quiet(monkeypatch):
     fake = types.SimpleNamespace(SessionOptions=Options, InferenceSession=Session)
     monkeypatch.setitem(sys.modules, 'onnxruntime', fake)
     monkeypatch.setattr(runner, 'add_learned_site', lambda: None)
-    from control.sensing.perception.learned.detector import detector_session
+    from perception_runtime.perception.learned.detector import detector_session
     detector_session('m.onnx', 2)
     opts = made['options']
     assert opts.intra_op_num_threads == 2 and opts.inter_op_num_threads == 1

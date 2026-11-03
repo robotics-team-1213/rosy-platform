@@ -477,6 +477,7 @@ def test_safety_state_includes_battery_policy(client):
     assert body["battery"]["critical_percent"] == pytest.approx(10)
     assert body["battery"]["deep_percent"] == pytest.approx(5)
     assert body["battery"]["critical_policy"] == "RETURN_HOME"
+    assert body["thermal"]["level"] == "ok" and body["thermal"]["reasons"] == []
 
 
 def test_admin_can_update_battery_and_fleet_policy(client, tmp_path, monkeypatch):

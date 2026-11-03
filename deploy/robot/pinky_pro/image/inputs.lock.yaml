@@ -201,6 +201,7 @@ rosy_packages:
     - description
     - navigation
     - control
+    - perception_runtime
     - omx_adapter
     - led
     - sensor_adc

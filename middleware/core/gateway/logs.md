@@ -2007,6 +2007,7 @@ clpy.duration을 추가했다(bridge AGENTS의 두 파일 함께 갱신 규칙).
 - 증거: 원격 시험 resource-bounds-1(AI PC, run-1) middleware/core/gateway/test/test_bridge_timers.py 통과 — 구조 계약 불변.
 - gate 변화: 없음. ROS 그래프 동작은 호스트 시험이 본래부터 못 본다.
 - CE: 해당 없음 — 정정 사실(기본값 10초)과 근거를 이 기록과 계획 문서가 보존한다.
+
 ## 2026-10-28 · uncommitted · CORE host-file owner 위임 RED 준비
 
 - 변경: 독립 검토된 v3 테스트 6파일을 적용한다. API 2·connection 1·node 1·bridge 1 위임 동작을 실제 기존 경로에서 확인하며 제품 소스는 바꾸지 않는다. 승인 패치의 새 EOF 빈 줄 2개만 제거했고 전체 AST·assertion·parameter는 보존했다.
@@ -2050,6 +2051,11 @@ clpy.duration을 추가했다(bridge AGENTS의 두 파일 함께 갱신 규칙).
 - 검증: committed512bf77f89의 pipeline/continuous/lifespan/scheduling/redeployment HTTP 다섯 모듈을 정식 원격 runner로 실행해 31 passed/skip0, known_failures NEW0/known0/flaky0이다. double quiet 출력의 완료 glyph 31개로 실행 수를 확인했다. 외부 rosy-fleet-station-camera-site-fallback/run-1.txt, run512bf77f89-92a705. 두 우선 시험 PC의 alone fence로 대기한 자체 요청만 취소하고 마지막 대상인 현장 PC에서 ROS-free API 시험을 실행했다. 장치·운영 API·물리 시뮬레이터는 호출하지 않았다. 이는 착지·CI 성공을 뜻하지 않는다.
 - gate 변화: 없음. 운영 RPC 제한, fail-closed HOLD/claim, 단독 실행 fence, FULL 요구를 완화하지 않는다. 정상 착지는 별도로 검증한다.
 - CE: 해당 없음 — 기존 오류 지점별 분류 교훈을 적용했고, 이번 최소 교정의 판단은 시험·기존 기록에 남아 새 교훈을 추가하지 않는다. 운영·물리 수용은 별도다.
+
+## 2026-11-03 · uncommitted · feat(core): 핑키 열 모드 — 온도·전압으로 속도 낮추기 (API v1.351)
+- 변경: `core_features.safety.thermal`(ThermalPolicy·ThermalMonitor), `SafetyManager.clip`이 열 단계로 상한을 낮춘다(warm 직선 절반, hot 자율 0·수동 warm 상한). `bridge/thermal_policy.py`가 `motor/health`를 받아 두고 1 Hz 진단 tick에서 SoC 온도·`get_throttled`로 단계를 정해 `thermal.*` 이벤트를 낸다. `GET /api/v1/safety/state.thermal`.
+- 증거: rosy_45(Pi 5) 실측 SoC 59 °C, `get_throttled`=0 누구나 읽기 가능, 팬 트립 50/60/67.5/75 °C. 시험 `test_thermal_mode.py`, `test_api.py`, `test_bridge_timers.py`.
+- gate 변화: 없음. 실제 고온에서 감속·정지와 모터 한계 값은 실물로 확인하지 않았다.
 
 ## 2026-11-03 · e9ee7a7009 · 카메라 SIM 시험의 OpenCV 스레드 범위 제한
 

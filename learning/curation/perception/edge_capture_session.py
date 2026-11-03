@@ -45,7 +45,7 @@ import fetch_http  # noqa: E402
 import operator_ssh  # noqa: E402
 
 RECORDINGS_ROOT = "/var/lib/rosy/pilot-recordings"
-PYTHONPATH = ("middleware/perception", "contracts/foundation", "tools/perception",
+PYTHONPATH = ("middleware/perception", "integrations/perception", "contracts/foundation", "tools/perception",
               "learning/curation/perception", "learning/registry/perception",
               "learning/training/perception")
 DATASET = "learning/curation/perception"

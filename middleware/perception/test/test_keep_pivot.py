@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from control.sensing.perception.lane_bev import ODOM_MAX_SKEW_S, pose_if_fresh
-from control.sensing.perception.lane_keep import LaneKeeper
+from perception_runtime.perception.lane_bev import ODOM_MAX_SKEW_S, pose_if_fresh
+from perception_runtime.perception.lane_keep import LaneKeeper
 from test_lane_keep import GROUND, HALF, X_OFFSET, _render
 
 NODE = (Path(__file__).resolve().parents[1] / "sensors/line_observation" / "line_observer_node.py").read_text(encoding="utf-8")

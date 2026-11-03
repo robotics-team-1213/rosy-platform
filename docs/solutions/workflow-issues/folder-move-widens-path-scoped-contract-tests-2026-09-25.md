@@ -103,6 +103,52 @@ time hiding in four places a folder-move grep of `test/` alone still misses:
 - When a pin's *value* is unchanged but its *key* moved, the fix is a key rename — no re-review of the
   pinned body is required, and the equal hashes are the evidence for that claim.
 
+## Third wave: a package split into a new root (perception_runtime, 2026-11-02)
+
+D-964 moved 28 shared inference modules out of `middleware/perception` and
+`learning/` into a new root `integrations/perception` (package
+`perception_runtime`). Each branch-local check was green. The FULL landing
+still stopped four times. Each stop showed only the next hidden coupling,
+because one stop ends the round:
+
+1. **D-766 per-commit size rule.** One commit in the series shrank a ratcheted
+   file without lowering its ratchet row. `size_range.py main HEAD` checks every
+   commit, not the branch tip. Squashing the move into one commit fixed it.
+2. **Registries keyed by module.** The D-178 scorecard baseline had no row for
+   the new module. `test/test_behavior_test_ownership.py` still listed tests
+   that the move had relocated, and some entries were duplicates. Both checks
+   compare their lists by set equality, so a stale entry fails just like a
+   missing one.
+3. **Test paths through conftest.** 12 NEW `ModuleNotFoundError`s came from
+   suites in other roots, such as `test_learned_runner` and `test_lane_corner`.
+   They had imported the moved modules through their own folder's
+   `sys.path`.
+4. **ALONE isolation.** 38 `No module named 'perception_runtime'` errors
+   appeared only when each file ran alone. The whole-folder run had passed
+   because a sibling conftest had already put the new root on `sys.path`.
+   Every holder that imports the new package needs its own path entry: the
+   middleware and learning conftests, `test_object_fitness_replay.py`'s holder
+   list, and `test_os_operator_overlay.py`. A data-locator helper
+   (`perception_data.py`) that only the moved tests used had to move next to
+   them.
+
+### Prevention (extended 2026-11-03)
+
+- Before queueing a split into a new root, run the landing's isolation step
+  on a remote PC. Use `tools/collect_alone.py` with `ROSY_COLLECT_PATHS` /
+  `ROSY_ALONE_FILES` over every test folder that imports the old or new
+  package. A whole-folder pass does not prove that each file passes alone.
+  This pre-check passed 462 collected and 440 alone, and the next landing went
+  through without another stop.
+- Grep module-keyed registries for the old and new names in the same change:
+  `test_behavior_test_ownership.py`, the D-178 scorecard table, CODEOWNERS,
+  `platform_parts.yaml` `import_rules`, and the packaging lists (Dockerfile
+  `--packages-select`, `required-ros-packages.txt`, `inputs.lock.yaml`).
+- Squash a move series before landing, or run `size_range.py main HEAD`
+  locally. Never raise a ratchet row to get past it.
+- Move test helpers with the tests that use them. A helper left behind is
+  reachable only through another root's conftest path.
+
 ## Related Issues
 - `docs/solutions/workflow-issues/installed-layout-import-passes-repo-tests-2026-09-22.md` (layout
   assumptions in tests)

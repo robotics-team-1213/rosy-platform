@@ -1,8 +1,8 @@
 """D-491 §4: along-lane crosswalk stripes on the keep-mode floor grid."""
 import numpy as np
 
-from control.sensing.perception.crosswalk_stripes import crosswalk_class_extent, crosswalk_extent
-from control.sensing.perception.lane_bev import BEV_CELL_M, BEV_X_MIN_M, BEV_X_MAX_M, BEV_Y_HALF_M
+from perception_runtime.perception.crosswalk_stripes import crosswalk_class_extent, crosswalk_extent
+from perception_runtime.perception.lane_bev import BEV_CELL_M, BEV_X_MIN_M, BEV_X_MAX_M, BEV_Y_HALF_M
 
 ROWS = int(round((BEV_X_MAX_M - BEV_X_MIN_M) / BEV_CELL_M))
 COLS = int(round(2 * BEV_Y_HALF_M / BEV_CELL_M))
@@ -85,7 +85,7 @@ def test_crosswalk_class_beside_the_lane_or_a_speck_is_not_ours():
 
 def test_class_extent_counts_only_the_cells_the_camera_sees():
     import numpy as np
-    from control.sensing.perception.crosswalk_stripes import crosswalk_class_extent
+    from perception_runtime.perception.crosswalk_stripes import crosswalk_class_extent
     x = np.arange(0.10, 0.40, 0.0025)
     y = np.arange(-0.10, 0.1001, 0.005)
     grid = np.zeros((len(x), len(y)), np.uint8)

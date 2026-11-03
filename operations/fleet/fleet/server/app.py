@@ -80,10 +80,7 @@ from fleet.server.task_dispatch_routes import (  # noqa: F401 — GoalRequest �
     fanout_local_omx_stops,
     install_task_dispatch_routes,
 )
-from fleet.server.lane_route_routes import (  # noqa: F401 — RouteRequest 재수출 (D-463)
-    RouteRequest,
-    install_lane_route_routes,
-)
+from fleet.server.lane_route_routes import RouteRequest, install_lane_route_routes  # noqa: F401 — RouteRequest 재수출 (D-463)
 
 _LOG = logging.getLogger(__name__)
 DEPLOYMENT_PROFILES = frozenset({"production", "simulation"})
@@ -413,7 +410,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                          principals=principals, named_logins=app.state.password_sessions is not None,
                          console_token=console_token, authorize=authorize, require_viewer=require_viewer,
                          require_named_operator=require_named_operator, map_snapshot=site_maps.active,
-                         configured_omx=configured_omx, stop_transport=stop_transport, stop_targets=stop_targets)
+                         configured_omx=configured_omx, stop_transport=stop_transport, stop_targets=stop_targets,
+                         enrollment=enrollment)
     install_account_login_routes(app, sessions=app.state.password_sessions, authorize=authorize, task_service=task_service,
                                  development_sessions=development_sessions, account_client_config=account_client_config,
                                  trust_forwarded=lan_camera_proxy)

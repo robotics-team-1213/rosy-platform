@@ -13,12 +13,12 @@ import math
 import cv2
 import numpy as np
 
-from .lane import LaneObservation
+from perception_runtime.perception.lane import LaneObservation
 from .drivable.drivable_preview import drivable
 from .follow_preview import draw_follow_evidence
-from .camera_ground import GroundPlane
-from .lane_bev import BirdsEye
-from .crosswalk_stripes import CORRIDOR_HALF_M, MIN_STRIPES, _stripes, crosswalk_extent
+from perception_runtime.perception.camera_ground import GroundPlane
+from perception_runtime.perception.lane_bev import BirdsEye
+from perception_runtime.perception.crosswalk_stripes import CORRIDOR_HALF_M, MIN_STRIPES, _stripes, crosswalk_extent
 
 
 @dataclass(frozen=True)

@@ -110,13 +110,13 @@ def measure(mm) -> dict:
             "long_axis_deg": round((ang + 90) % 180 - 90, 1)}
 
 
-def _fits(m: dict, o: dict, k: int = 1, strict: bool = False) -> bool:
+def _fits(m: dict, o: dict, k: int = 1, strict: bool = False, gap_mm: float = 0.0) -> bool:
     # lengths come in whole cells, so a lone blob's length may stray up to half a cell; the real top camera read a
     # 60 mm container 47-56 mm long (dark end frames drop out of the mask) while its 30 mm width held within 9
     # (2026-10-28). Pieces split from a merged blob stay strict: with the loose length a tangled cluster's
     # piece matched and would have become a grasp target.
-    t = o["tolerance_mm"]
-    return (abs(m["width_mm"] - k * o["width_mm"]) <= t
+    t = o["tolerance_mm"]  # k side by side: k widths plus up to k - 1 gaps of gap_mm (the ship plate's 6 mm cells)
+    return (-t <= m["width_mm"] - k * o["width_mm"] <= (k - 1) * gap_mm + t
             and abs(m["length_mm"] - o["length_mm"]) <= (t if strict else o.get("length_tolerance_mm", t)))
 
 
@@ -143,18 +143,31 @@ def classify(mm, catalog: list, px_mm2: float | None = None, params=None) -> lis
     o = match(m, catalog)
     if o:
         return [{**m, "object": o["id"], "grasp": o["grasp"], "matched": True}]
-    for k in (2, 3):
+    gap = prm.get(params, "objects.split_gap_mm")
+    # the row may run across the boxes' short side or, once it is longer than a box, along the blob's long side
+    turned = {**m, "length_mm": m["width_mm"], "width_mm": m["length_mm"], "long_axis_deg": (m["long_axis_deg"] + 180) % 180 - 90}
+    feasible, best = False, None
+    for k in range(2, prm.get(params, "objects.split_max") + 1):  # 2026-11-03: five 3-cells in a row on the ship plate
         for o in catalog:
-            if _fits(m, o, k, strict=True):
-                strips = [(g, measure(mm[g])) for g in _strips(mm, m, k)]
+            for row in (m, turned):
+                if not _fits(row, o, k, strict=True, gap_mm=gap):
+                    continue
+                feasible = True
+                strips = [(g, measure(mm[g])) for g in _strips(mm, row, k)]
                 found = [(match(s, catalog, strict=True), s, g) for g, s in strips]
                 ok = all(e for e, _, _ in found) and all(
-                    abs((s["long_axis_deg"] - m["long_axis_deg"] + 90) % 180 - 90) <= prm.get(params, "objects.split_axis_deg", SPLIT_AXIS_DEG)
+                    abs((s["long_axis_deg"] - row["long_axis_deg"] + 90) % 180 - 90) <= prm.get(params, "objects.split_axis_deg", SPLIT_AXIS_DEG)
                     and (px_mm2 is None or g.sum() * px_mm2 >= prm.get(params, "objects.split_fill", SPLIT_FILL) * s["length_mm"] * s["width_mm"])
                     for _, s, g in found)
-                if ok:
-                    return [{**s, "object": e["id"], "grasp": e["grasp"], "matched": True, "split_from": k} for e, s, _ in found]
-                return [{**m, "object": None, "grasp": None, "matched": False, "tangled": True}]
+                # with gaps allowed several counts fit (150 mm: five touching or four with 10 mm gaps): the count whose
+                # strips read nearest their catalogue width wins
+                miss = sum(abs(s["width_mm"] - e["width_mm"]) + abs(s["length_mm"] - e["length_mm"]) for e, s, _ in found) / k if ok else None
+                if ok and (best is None or miss < best[0]):
+                    best = (miss, [{**s, "object": e["id"], "grasp": e["grasp"], "matched": True, "split_from": k} for e, s, _ in found])
+    if best:
+        return best[1]
+    if feasible:
+        return [{**m, "object": None, "grasp": None, "matched": False, "tangled": True}]
     return [{**m, "object": None, "grasp": None, "matched": False}]
 
 

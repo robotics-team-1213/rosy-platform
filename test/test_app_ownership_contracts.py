@@ -60,6 +60,7 @@ def core(monkeypatch):
     safety_owner = SimpleNamespace(
         limits=limits, estop=False, estop_source=None, fleet_loss_policy="STOP", session_linear=0.5,
         battery_policy=SimpleNamespace(warning_percent=30, critical_percent=15, critical_action="STOP"),
+        thermal=SimpleNamespace(status=lambda: {"level": "ok", "reasons": []}),   # v1.351 safety/state.thermal
         trigger_estop=lambda reason: writes.append(("estop", reason)),
         release=lambda **kw: writes.append(("release", kw["by"])),
     )

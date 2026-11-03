@@ -79,6 +79,9 @@ class DynamixelDriver:
         self.ADDR_GOAL_VELOCITY     = 104
         self.ADDR_PROFILE_ACCEL     = 108
         self.ADDR_HARDWARE_ERROR    = 70
+        self.ADDR_TEMPERATURE_LIMIT = 31
+        self.ADDR_PRESENT_INPUT_VOLTAGE = 144
+        self.ADDR_PRESENT_TEMPERATURE = 146
         self.ADDR_PRESENT_CURRENT   = 126
         self.ADDR_PRESENT_VELOCITY  = 128
         self.ADDR_PRESENT_POSITION  = 132
@@ -224,6 +227,25 @@ class DynamixelDriver:
         if comm_result != COMM_SUCCESS or packet_error & 0x7F:
             return None
         return value
+
+    def read_health(self):
+        """Per motor: temperature, its own limit, input voltage and hardware error; None where unread.
+
+        The motor cuts its own torque at the limit (hardware error 0x04), so CORE needs the
+        temperature before that, not the error after it.
+        """
+        read1, read2 = self.packetHandler.read1ByteTxRx, self.packetHandler.read2ByteTxRx
+        rows = []
+        for dxl_id in self.DXL_IDS:
+            voltage = self._read_register(read2, dxl_id, self.ADDR_PRESENT_INPUT_VOLTAGE)
+            rows.append({
+                'id': dxl_id,
+                'temperature_c': self._read_register(read1, dxl_id, self.ADDR_PRESENT_TEMPERATURE),
+                'temperature_limit_c': self._read_register(read1, dxl_id, self.ADDR_TEMPERATURE_LIMIT),
+                'input_voltage_v': None if voltage is None else voltage / 10.0,
+                'hardware_error': self._read_register(read1, dxl_id, self.ADDR_HARDWARE_ERROR),
+            })
+        return rows
 
     def verify_motors(self, expect_torque, check_motion):
         """Return fault strings for motors that are not really ready; [] means healthy.

@@ -33,6 +33,7 @@ FOLDER_TO_PACKAGE = {
     "middleware/core/events": "core_events",
     "middleware/core/gateway": "core",
     "middleware/perception": "control",
+    "integrations/perception": "perception_runtime",  # 2026-11-03: split out of control; domain folder is the word
     "middleware/core/services": "core_features",
     "middleware/drive/planning/nav2": "navigation",  # D-626 preserves ROS identity
     "operations/overhead": "rosy_vision",  # D-377 rosy_<word>; D-427 target folder is the word itself

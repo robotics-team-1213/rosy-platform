@@ -7,8 +7,8 @@ import numpy as np
 import pytest
 
 from core_common.observation import ObservationSnapshot, SnapshotValidity
-from control.sensing.perception.learned.manifest import ManifestError
-from control.sensing.perception.learned.runner import LaneSegModel
+from perception_runtime.perception.learned.manifest import ManifestError
+from perception_runtime.perception.learned.runner import LaneSegModel
 from test_learned_runner import FakeSession, _model_dir
 
 
@@ -38,7 +38,7 @@ def _snapshots():
 
 
 def _observe(model, image=None, anchor=None, seeds=None):
-    from control.sensing.perception.learned.road_observation import observe_model_frame
+    from perception_runtime.perception.learned.road_observation import observe_model_frame
 
     default_image, default_anchor = _snapshots()
     return observe_model_frame(model, np.zeros((8, 8, 3), np.uint8),
