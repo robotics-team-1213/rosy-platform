@@ -14082,3 +14082,9 @@ osy-d395-s1d\`.
 - 증거: 검증 기록 Step 5 — 앉음 확인+다시 놓기 1회가 놓기 오차 0.8 mm까지 9개 모두 앉힘(24/24), 바닥 단 r290은 0.4 mm까지 24/24, 놓는 높이 2 mm가 지금 모양에서 큰 개선, 모따기·레일은 거의 효과 없음.
 - gate 변화: 없음. MuJoCo 후보이며 Isaac 확인 전.
 - CE: 해당 없음 — 비교 실험 기록이다.
+
+## 2026-11-04 · uncommitted · docs(control-terms): D-974 Harbor 후속 완료 표시
+- 변경: Harbor PR robotics-team-1213/harborlogi#17(셀 관제 CELL-A 승인 용어)이 병합되어 D-974 후속 표와 ADR Log 상태를 갱신했다.
+- 증거: PR #17 필수 검사(unittest·product-web 3.10/3.12, review-gate) 통과 뒤 merge commit 4d80908e82.
+- gate 변화: 없음.
+- CE: 해당 없음.

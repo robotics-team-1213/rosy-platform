@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-11-04 · uncommitted · docs(control-terms): D-974 Harbor 후속 완료 표시
 - 2026-11-04 · uncommitted · MuJoCo 3층 적재 개선 후보 비교
 - 2026-11-04 · uncommitted · feat(sim): MuJoCo 3층 전체 적재 순서, 실측 셀 layout, 실물 site 계획
 - 2026-11-04 · uncommitted · docs(control-terms): D-974 착지 준비 — 안전 검토·크기·ADR Log 병합 정리
 - 2026-11-03 · uncommitted · D-969 두 팔 ACT 파이프라인: ADR, Isaac 시연 녹화, 데이터셋 내보내기
-- 2026-11-03 · uncommitted · docs(control-terms): 관제 용어 층 분리, 헤더는 관제 단위 이름 (D-974)
