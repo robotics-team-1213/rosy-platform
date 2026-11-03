@@ -687,6 +687,9 @@ def test_the_guard_set_and_paths_under_an_ignored_folder_are_no_overlap():
     ('full', NORMAL, True),
     ('full', None, False),
     ('full', NORMAL + [exclusive.DEDICATED], False),
+    ('full', NORMAL + [{'pkg/test': 0}], False),
+    ('full', NORMAL + ['pkg/test'], False),
+    ('full', NORMAL + [[1]], False),
     ('affected', [['pkg/test']], True),
 ])
 def test_restore_checks_full_plan_against_actual_main_sot_without_rewriting_records(
@@ -728,13 +731,19 @@ def test_legacy_root_only_full_record_triggers_normal_fresh_preparation(full_cas
     assert record['tier'] == 'affected' and ['test'] not in record['invocations']
 
 
-def test_malformed_record_composition_stops_before_ff_and_preserves_existing_record(full_case, monkeypatch):
+@pytest.mark.parametrize('bad', [
+    [exclusive.DEDICATED, exclusive.DEDICATED],
+    [exclusive.DEDICATED, {'pkg/test': 0}],
+    [exclusive.DEDICATED, 'pkg/test'],
+    [exclusive.DEDICATED, [1]],
+])
+def test_malformed_record_composition_stops_before_ff_and_preserves_existing_record(full_case, monkeypatch, bad):
     case = full_case
     before = git(case.main, 'rev-parse', 'HEAD')
     candidate = git(case.wt, 'rev-parse', 'HEAD')
     sentinel = land.land_record.write(case.wt, candidate, before, [['pkg/test']], [], tier='affected')
     original = sentinel.read_bytes()
-    monkeypatch.setattr(land, 'select', lambda *a, **k: ([exclusive.DEDICATED, exclusive.DEDICATED], None))
+    monkeypatch.setattr(land, 'select', lambda *a, **k: (bad, None))
     monkeypatch.setattr(land.land_guards, 'first', lambda *a, **k: [])
     monkeypatch.setattr(land, 'run_tests', lambda *a, **k: ['pytest ok'])
     try:

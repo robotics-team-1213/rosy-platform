@@ -141,3 +141,10 @@ def test_record_plan_is_pure_and_is_reused_by_the_writer(repo, monkeypatch):
     monkeypatch.setattr(tool, 'plan', inspect)
     tool.write(path, c[3], c[2], [DEDICATED], [], prepared=prepared)
     assert len(calls) == 1
+
+
+@pytest.mark.parametrize('row', [{'pkg/test': 0}, 'pkg/test', [1], [''], []])
+def test_record_plan_rejects_non_plan_shapes_instead_of_coercing_them(row):
+    from harness.affected_exclusive import DEDICATED
+    with pytest.raises(ValueError):
+        tool.plan([DEDICATED, row], available=False)
