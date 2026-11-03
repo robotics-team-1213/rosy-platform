@@ -44,7 +44,8 @@ def make_io(bus=None, urls=None, mean=100.0, sessions=(), locked=False, todo=())
     return cu.Io(fetch=lambda url: urls.get(url, (200, JPEG)), decode=lambda body, gray=False: Frame(mean),
                  bus_read=bus.read, bus_fix=bus.fix, sessions=lambda: list(sessions), lock_free=lambda arm: not locked,
                  calibrate=lambda c, cal, f, p: {"check": {"missing_map": list(todo)}, "todo": list(todo)},
-                 replays=lambda h, t, p: ({}, {})), bus
+                 replays=lambda h, t, p: ({}, {}), labels=lambda: {}, roles=lambda: {}, unit_tail=lambda r: "",
+                 unit_restart=lambda r: None), bus
 
 
 def setup(tmp, closed=49.0, boards=True, tcp=0.074):
@@ -162,3 +163,30 @@ def test_monitors_report_hits_from_logs_newer_than_the_last_report(tmp_path):
 
 def test_tcp_evidence_comes_from_the_cell_config():
     assert "0.074" in cu.check_tcp({"tcp_x_m": 0.074, "tcp_x_m_evidence": "box-top touch"})["detail"]
+
+
+LABELS = {"top": "/top_camera/image_raw", "front": "/arm_a_wrist_camera/image_raw",
+          "arm_b_wrist": "/arm_b_wrist_camera/image_raw"}
+ROLES = {"/arm_a_wrist_camera/image_raw": "arm_a_wrist", "/arm_b_wrist_camera/image_raw": "arm_b_wrist"}
+
+
+def test_a_wrist_url_the_viewer_does_not_serve_names_the_label_that_does():
+    """2026-11-04: arm_a's config read arm_a_wrist.jpg; the viewer serves that topic as front.jpg."""
+    io = cu.Io(fetch=lambda url: (404, b"") if "arm_a_wrist" in url else (200, JPEG), labels=lambda: LABELS, roles=lambda: ROLES)
+    rows, _ = cu.check_cameras("arm_a", {"wrist": {"url": "http://v/frame/arm_a_wrist.jpg"}}, io)
+    assert rows[0]["status"] == "fail" and "http://v/frame/front.jpg" in rows[0]["detail"]
+
+
+def test_a_preview_unit_left_on_a_replaced_device_is_restarted_only_with_fix_and_a_free_bus():
+    """2026-11-04: after a reconnect rosy-omx-camera@arm_a_wrist polled the old node ('selected camera is unavailable')."""
+    state = {"up": False, "restarts": 0}
+
+    def restart(role):
+        state["up"], state["restarts"] = True, state["restarts"] + 1
+    io = cu.Io(fetch=lambda url: (200, JPEG) if state["up"] or "front" not in url else (404, b""), labels=lambda: LABELS,
+               roles=lambda: ROLES, unit_tail=lambda role: "selected camera is unavailable\n", unit_restart=restart)
+    cams = {"wrist": {"url": "http://v/frame/front.jpg"}}
+    assert cu.check_cameras("arm_a", cams, io)[0][0]["status"] == "fail" and state["restarts"] == 0
+    assert cu.check_cameras("arm_a", cams, io, fix=True, bus_free=False)[0][0]["status"] == "fail" and state["restarts"] == 0
+    rows, _ = cu.check_cameras("arm_a", cams, io, fix=True, bus_free=True)
+    assert rows[0]["status"] == "fixed" and "arm_a_wrist" in rows[0]["detail"] and state["restarts"] == 1

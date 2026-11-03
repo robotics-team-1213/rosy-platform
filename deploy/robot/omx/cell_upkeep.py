@@ -86,6 +86,28 @@ def bus_fix(device, out):
     return commissioning_limits.main(["--device", str(device), "--baseline", "--output", str(out)]) == 0
 
 
+def viewer_labels() -> dict:
+    """label -> topic the camera viewer serves at /frame/<label>.jpg (omx-camera-view.env ROSY_VIEW_ARGS)."""
+    env = Path.home() / ".config/rosy/omx-camera-view.env"
+    return dict(re.findall(r"--camera-topic\s+(\w+)=(\S+?)(?=[\s\"]|$)", env.read_text())) if env.exists() else {}
+
+
+def camera_roles() -> dict:
+    """topic -> registry role (its preview unit is rosy-omx-camera@<role>)."""
+    path = Path.home() / ".config/rosy/omx-cameras.json"
+    return {c["topic"]: c["role"] for c in json.loads(path.read_text())["cameras"]} if path.exists() else {}
+
+
+def unit_tail(role) -> str:
+    return subprocess.run(["journalctl", "--user", "-u", f"rosy-omx-camera@{role}", "-n", "1", "-o", "cat", "--no-pager"],
+                          capture_output=True, text=True).stdout
+
+
+def unit_restart(role) -> None:
+    subprocess.run(["systemctl", "--user", "restart", f"rosy-omx-camera@{role}"], check=True)
+    time.sleep(8)  # the preview republishes within a few seconds (2026-11-04)
+
+
 def sessions():
     """Command lines of every running record_session.py: a `--io chunk-io` one is the runner that owns the bus."""
     text = subprocess.run(["ps", "-eo", "args"], capture_output=True, text=True).stdout
@@ -129,6 +151,7 @@ class Io:
     def __init__(self, **seams):
         self.fetch, self.decode, self.bus_read, self.bus_fix = fetch_url, decode_frame, bus_read, bus_fix
         self.sessions, self.lock_free, self.calibrate, self.replays = sessions, lock_free, calibrate_check, replays
+        self.labels, self.roles, self.unit_tail, self.unit_restart = viewer_labels, camera_roles, unit_tail, unit_restart
         for name, fn in seams.items():
             if not hasattr(self, name):
                 raise TypeError(f"unknown seam {name}")
@@ -196,17 +219,40 @@ def check_registers(arm, device, io, fix, out_dir, stamp):
     return row("registers", "fail", f"baseline write did not verify: {(notes + caps)[:3]}")
 
 
-def check_cameras(cameras, io):
-    bad, top = [], None
+def check_cameras(arm, cameras, io, fix=False, bus_free=True):
+    """Every configured frame answers with a JPEG. Two failures of 2026-11-04 are told apart: a label the viewer does
+    not serve (arm_a's wrist is `front`, not `arm_a_wrist`: the config is wrong and the right URL is named) and a
+    preview unit still polling a device node a reconnect replaced ("selected camera is unavailable": restarted with
+    --fix when no session runs)."""
+    bad, fixed, top = [], [], None
     for name, camera in cameras.items():
         code, body = io.fetch(camera["url"])
-        if code != 200 or not body.startswith(b"\xff\xd8"):
-            bad.append(f"{name} {camera['url']}: {code or 'no answer'}" + ("" if code != 200 else ", not a JPEG"))
-        elif name == "top":
-            top = body
-    result = [row("cameras", "fail", "; ".join(bad) + " - point the config at this arm's own working unit") if bad
-              else row("cameras", "ok", f"{len(cameras)} answer 200 with a JPEG")]
-    return result, top
+        if code == 200 and body.startswith(b"\xff\xd8"):
+            top = body if name == "top" else top
+            continue
+        label, labels = Path(camera["url"]).stem, io.labels()
+        if labels and label not in labels:
+            want = f"/{arm}_{name}_camera/image_raw"
+            served = next((k for k, v in labels.items() if v == want), None)
+            bad.append(f"{name}: the viewer serves no '{label}'" + (
+                f"; {want} is served as '{served}': use {camera['url'].replace(label + '.jpg', served + '.jpg')}" if served else ""))
+            continue
+        role = io.roles().get(labels.get(label))
+        if role and "unavailable" in io.unit_tail(role):
+            if fix and bus_free:
+                io.unit_restart(role)
+                code, body = io.fetch(camera["url"])
+                if code == 200 and body.startswith(b"\xff\xd8"):
+                    fixed.append(f"{name}: restarted rosy-omx-camera@{role} (it held a device node a reconnect replaced)")
+                    top = body if name == "top" else top
+                    continue
+            bad.append(f"{name}: rosy-omx-camera@{role} reports the camera unavailable (restart it after a reconnect)")
+            continue
+        bad.append(f"{name} {camera['url']}: {code or 'no answer'}" + ("" if code != 200 else ", not a JPEG"))
+    if bad:
+        return [row("cameras", "fail", "; ".join(bad + fixed))], top
+    return [row("cameras", "fixed", "; ".join(fixed)) if fixed
+            else row("cameras", "ok", f"{len(cameras)} answer 200 with a JPEG")], top
 
 
 def check_light(top, params, io):
@@ -312,7 +358,7 @@ def upkeep_arm(arm, spec, fix, io, out_dir, incidents, stamp, since=None):
         checks.append(row("bus ownership", "ok", "no record_session.py, lock free"))
         checks.append(check_registers(arm, device, io, fix, out_dir, stamp) if Path(device).exists()
                       else row("registers", "skipped", "follower board missing"))
-    cameras, top = check_cameras(cell.get("cameras", {}), io)
+    cameras, top = check_cameras(arm, cell.get("cameras", {}), io, fix, bus_free=owner is None)
     checks += cameras + [check_light(top, params, io)]
     logs_dir = Path(rel(base, spec["record"])).parent
     closed = {float(library["gripper_closed"])} if library.get("gripper_closed") is not None else set()
