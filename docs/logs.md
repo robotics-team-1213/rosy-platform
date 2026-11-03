@@ -13912,7 +13912,7 @@ osy-d395-s1d\`.
 - gate 변화: 측면 정량 검증 대기. 중단된 run의 적재 수용은 주장하지 않는다. CE: 해당 없음 — 기존 증거의 주장 범위 정정.
 
 
-## 2026-11-03 ? uncommitted ? test(remote): verify profiles across each planned host worker
+## 2026-11-03 · uncommitted · test(remote): verify profiles across each planned host worker
 
 - Change: explicitly pin independent host headroom in the dispatch fixture. Unmeasured hosts use one worker each; 4-core/4-GB hosts use two. Exact host/profile assertions cover every planned worker, with no production change.
 - Evidence: test-only `69b5622629` reproduced the whole-root failure deterministically (one expected failure and one pass). `270285542c` passed all 152 tests across remote_test_tools, remote_pytest and reboot admission, with zero skips/NEW/known/flaky. The prior source9752 whole-root run had one profile-fixture failure; its isolated retry passed, demonstrating uncontrolled shared state rather than missing profile propagation.
