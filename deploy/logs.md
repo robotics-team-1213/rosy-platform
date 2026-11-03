@@ -4435,3 +4435,11 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 검증: 원격 RED commit 314f571ea0에서 두 회귀 사례가 예상대로 실패했고 기존 9개는 통과했다. 수정 commit 5eff2fd4d0에서 자동 운반·자동 집기 관련 59개가 통과했다. 실제 팔 동작과 현장 배포는 하지 않았다.
 - gate 변화: 없음. 장치·현장 수용을 주장하지 않는다.
 - CE: 해당 없음 — 오류 전달 원인과 해결은 수정 코드 및 회귀 시험에 직접 남아 있다.
+
+
+## 2026-11-03 · uncommitted · docs(release): record one reviewed historical Git-tree tuple
+
+- Change: add only the independently reviewed exact commit/path/rule tuple for commit 4fe1969cf6 in the API journal. The suspected token resolves as a Git tree and equals the reviewed code commit tree. No values or excerpts are retained.
+- Evidence: official historical scan found exactly one hit; independent agent proof_retry_review checked its Git object type and correspondence. Existing malformed-row/new-commit/new-rule refusal remains required; targeted remote publisher tests and AUTO landing are pending.
+- Gate: no scanner rule, environment input, canonical FULL/browser/G1 plan, runtime authority or field gate changes. This is an agent review, not a human sign-off.
+- CE: no new lesson; existing exact-triple review mechanism covers this case.
