@@ -105,10 +105,15 @@ def batchable(land, wt: Path, other: Path, name: str, tip: str) -> str | None:
 AUTO = os.environ.get("ROSY_LAND_BATCH") == "1"
 
 
+def explicit(args, extra) -> bool:
+    """A FULL tier, explicit checks or a freshness request: it runs alone, never in a batch or a rollup."""
+    return (args.tests != "auto" or bool(extra) or getattr(args, "node", False)
+            or getattr(args, "no_cache", False))
+
+
 def plain_auto(args, extra) -> bool:
-    """Explicit checks or freshness requests run alone; only plain auto opts into batching, and only while AUTO."""
-    return (AUTO and args.tests == "auto" and not extra and not getattr(args, "node", False)
-            and not getattr(args, "no_cache", False))
+    """Only plain auto opts into batching, and only while AUTO."""
+    return AUTO and not explicit(args, extra)
 
 
 def taken(tickets: list[dict]) -> set[str]:
