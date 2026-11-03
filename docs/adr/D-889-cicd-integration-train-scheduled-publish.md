@@ -636,3 +636,5 @@
 **결정.** 착지된 main delta가 이 브랜치의 시험 폴더 단위 호출(가드 제외)에 닿으면 `land_selection.select`가 `DELTA_NOTE`를 돌려주고, `land.py`는 FULL 메모와 같은 길(`land_prepare.again`)로 차례를 반납해 그 호출들을 차례 밖에서 돌린다. 통과 기록은 새 단계 `"delta"`로 저장하며, 그 아래 단계(이전 사전 시험의 `full`/`affected`)와 호출을 합쳐 둔다. `land_full.prepared`는 아래 단계를 보고하므로 land record가 delta를 FULL이라 부르지 않고, 아래 단계가 없으면 아무것도 저장하지 않는다(다음 차례가 같은 delta를 다시 고름). 대기열 표가 없는 실행(`ticket is None`)은 예전처럼 차례 안에서 돈다. 파일 단위 호출만 닿으면 그대로 차례 안이다.
 
 **되돌림.** delta 단계 뒤 차례가 다시 반납되는 일이 하루 5번을 넘거나, delta로 넘긴 착지의 대기→착지 p90이 나빠지면 다시 본다. 속도 회귀 시험의 범위를 바꾸지 않는다.
+
+**추가 27 보완 (2026-11-03 14:4x).** 차례가 delta로 넘기는 것은 대기열 표가 있고 그 아래 깨끗한 단계(`land_full.prepared`)가 있을 때뿐이다(`land_selection.delta_yields`). 14:18·14:34 `control-unit-arm-candidate`는 사전 시험이 LOAD-FLAKY라 단계가 없어, 두 번 넘기고 아무것도 저장하지 못했다. 단계가 없으면 예전처럼 차례 안에서 돈다.

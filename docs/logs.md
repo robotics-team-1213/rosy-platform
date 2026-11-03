@@ -13935,6 +13935,12 @@ osy-d395-s1d\`.
 - gate 변화: 없음.
 - CE: 이 문서 자체가 교훈 기록이다.
 
+## 2026-11-03 · uncommitted · fix(landing): delta 차례 넘김은 깨끗한 아래 단계가 있을 때만 (D-889 추가 27 보완)
+- 변경: `land_selection.delta_yields(ticket, base)`를 두고, `land.py`가 표와 `land_full.prepared` 단계가 둘 다 있을 때만 DELTA_NOTE로 차례를 넘긴다.
+- 증거: 14:18·14:34 control-unit-arm-candidate가 tier None(LOAD-FLAKY) 사전 시험 위에서 두 번 넘기고 저장 없이 돌아옴(rosy-land-events). 원격 착지 회귀 27개 파일 + affected_tests 통과, 새 시험 1개.
+- gate 변화: 없음. 단계 없는 착지는 D-889 27 이전처럼 차례 안에서 delta 시험 폴더를 돌린다.
+- CE: 기존 교훈 갱신 — landings-gave-the-turn-back-and-reran-everything 10에 이 조건을 더함.
+
 ## 2026-11-03 · uncommitted · docs(workflow): 제어 세션 종료 뒤 남은 synthetic 부하 정리
 - 변경: Windows 부하 시험의 PID·생성시각·부모 트리 확인과 이번 사례의 부모 우선 종료 근거를 교훈으로 남긴다. 프로세스 이름만으로 종료하거나 광범위 정리 명령을 재실행하지 않는다.
 - 증거: 원래 제어 부모가 없는 bash3개와 각 유일한 while-True Python3개를 확인하고 정확한 대상만 종료했다. 직후 대상0, 후속 표본의 동일PID는 새 hook shell로 재사용된 것을 구분했다. 전체CPU96%/다른작업진행으로 전체 지연·p90 개선은 주장하지 않는다.
