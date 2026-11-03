@@ -34,9 +34,13 @@ export function feedbackPresentation(value) {
   const check=value.check,checkTitle=checks[check?.state]||'AI 확인 상태 확인 필요';
   const basis=typeof check?.version==='number'?`저장된 픽셀 v${check.version} 기준`:'저장된 마스크 기준';
   const checkNote=`${checkTitle} · ${basis}${check?.error?' · '+check.error:''}`;
+  const nextStep=['queued','running'].includes(check?.state)?'새 의견이 저장되면 이곳에 표시됩니다.':
+    ['failed','cancelled','stale'].includes(check?.state)?'AI 마스크 확인 실행으로 다시 요청하세요.':
+    check?.state==='not_requested'&&!['invalid_report','unreadable'].includes(value.reason)?'AI 마스크 확인 실행을 눌러 의견을 요청하세요.':
+    'AI 실행 상태 다시 조회로 상태를 확인하고 AI 마스크 확인 실행으로 다시 요청하세요.';
   if(!value.available)return {state:['failed','stale','cancelled'].includes(check?.state)||['invalid_report','unreadable'].includes(value.reason)?'warning':'pending',
     title:check?.state==='succeeded'||['invalid_report','unreadable'].includes(value.reason)?'AI 의견을 읽을 수 없습니다':checkTitle,
-    note:`${checkNote} · ${check?.state==='not_requested'?'AI 마스크 확인 실행을 눌러 의견을 요청하세요.':'새 의견이 저장되면 이곳에 표시됩니다. 현재 라벨은 바뀌지 않습니다.'}`};
+    note:`${checkNote} · ${nextStep} 현재 라벨은 바뀌지 않습니다.`};
   const labels={concern:'검토할 문제 있음',no_obvious_concern:'뚜렷한 문제를 찾지 못함',uncertain:'AI 판단 보류',abstain:'AI 응답 없음'};
   const issues={missed_visible_road:'보이는 주행 영역 누락',drivable_outside_lane:'차선 밖 주행 영역',obstacle_as_drivable:'장애물을 주행 영역으로 표시',uncertain_visibility:'시야 불확실',none:'특정 문제 지적 없음'};
   const model=`검사 AI: ${value.model || '미기록'} · 버전 ${value.model_digest || '미기록'}${typeof value.mask_version==='number'?' · 저장된 픽셀 v'+value.mask_version+' 기준':''} · ${checkNote}`;

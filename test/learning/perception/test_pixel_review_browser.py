@@ -452,6 +452,8 @@ def test_unknown_pixels_cannot_be_approved_and_explicit_fill_persists(browser_wo
     expect(page.locator('#pixel-approval-hint')).to_contain_text('미검수')
     assert review_masks.get(store, 0)['version'] == 0
     page.once('dialog', lambda dialog: dialog.accept())
+    if not page.locator('#pixel-whole-frame-tools').evaluate('node => node.open'):
+        page.locator('#pixel-whole-frame-tools > summary').click()
     page.locator('#pixel-fill').click()
     expect(page.locator('#pixel-status')).to_contain_text('v1')
     page.locator('#pixel-approve').click()
@@ -502,6 +504,8 @@ def test_pixel_decision_and_preparation_result_are_visible(browser_workspace, wi
     page.locator('#pixel-reopen').click()
     expect(page.locator('#pixel-status')).to_contain_text('픽셀 검수 대기')
     page.once('dialog', lambda dialog: dialog.accept())
+    if not page.locator('#pixel-whole-frame-tools').evaluate('node => node.open'):
+        page.locator('#pixel-whole-frame-tools > summary').click()
     page.locator('#pixel-fill').click()
     expect(page.locator('#pixel-status')).to_contain_text('v3')
     page.locator('#pixel-approve').click()
@@ -518,6 +522,8 @@ def test_pixel_decision_advances_to_next_editable_pending(browser_workspace):
     page, store, expect = browser_workspace
     open_pixels(page, store, expect)
     page.once('dialog', lambda dialog: dialog.accept())
+    if not page.locator('#pixel-whole-frame-tools').evaluate('node => node.open'):
+        page.locator('#pixel-whole-frame-tools > summary').click()
     page.locator('#pixel-fill').click()
     expect(page.locator('#pixel-status')).to_contain_text('v1')
     page.locator('#pixel-approve').click()
@@ -634,6 +640,8 @@ def test_stale_pixel_revision_and_excluded_frame_are_guarded(browser_workspace, 
     open_pixels(page, store, expect)
     newer = review_masks.update(store, 0, {'version':0, 'action':'fill', 'label':2}, ValueError)
     page.once('dialog', lambda dialog: dialog.accept())
+    if not page.locator('#pixel-whole-frame-tools').evaluate('node => node.open'):
+        page.locator('#pixel-whole-frame-tools > summary').click()
     page.locator('#pixel-fill').click()
     expect(page.locator('#pixel-error')).to_contain_text('다른 탭')
     expect(page.locator('#pixel-approve')).to_have_attribute('disabled', '')
@@ -822,6 +830,8 @@ def test_pixel_a_works_right_after_ticking_checks_and_x_only_on_pending(browser_
     page, store, expect = browser_workspace
     open_pixels(page, store, expect)
     page.once('dialog', lambda dialog: dialog.accept())
+    if not page.locator('#pixel-whole-frame-tools').evaluate('node => node.open'):
+        page.locator('#pixel-whole-frame-tools > summary').click()
     page.locator('#pixel-fill').click()
     expect(page.locator('#pixel-status')).to_contain_text('v1')
     page.keyboard.press('a')

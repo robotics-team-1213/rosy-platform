@@ -28,6 +28,10 @@ a { color: var(--text-primary); text-underline-offset: var(--space-1); }
 main { padding: var(--inset-pane); min-width: 0; }
 .frame-heading { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); }
 .frame-heading h2 { margin: 0; }
+.frame-heading > [aria-label="검수 작업 범위"] { flex: 1; min-width: 0; padding: 0; gap: var(--space-2); }
+.frame-heading > [aria-label="검수 작업 범위"] > label { display: flex; align-items: center; gap: var(--space-2); flex: 1 1 12rem; }
+.frame-heading > [aria-label="검수 작업 범위"] select { flex: 1; min-width: 0; }
+.frame-heading > [aria-label="검수 작업 범위"] [role="status"] { flex: 1 1 100%; }
 #frame-progress { margin-bottom: 0; }
 #source-info { font-family: var(--mono); font-size: var(--text-label); overflow-wrap: anywhere; }
 .review-layout { display: grid; grid-template-columns: minmax(0, 3fr) minmax(18rem, 1fr); gap: var(--space-5); align-items: start; }
@@ -274,7 +278,7 @@ ui-topbar:has([data-learning-account-entry]) { flex-wrap: wrap; }
 [aria-label="검수 작업 범위"] > label { flex: 1 1 12rem; min-width: 0; max-width: 100%; }
 [aria-label="검수 작업 범위"] select { width: 100%; min-width: 0; max-width: 100%; }
 [aria-label="검수 작업 범위"] [role="status"] { flex: 1 1 100%; overflow-wrap: anywhere; }
-#pixel-photo-list { margin-top: var(--space-5); }
+#pixel-photo-list { margin-top: var(--space-5); padding-top: var(--space-4); border-top: 1px solid var(--surface-line); }
 #pixel-photo-list .ui-workspace-bar { flex-wrap: wrap; }
 #pixel-photo-list h3 { margin-bottom: var(--space-2); }
 .pixel-stage { position: relative; padding: var(--space-3); border: 1px solid var(--surface-line); border-radius: var(--radius-control); background: var(--surface-canvas); overflow: auto; max-height: 70vh; }
@@ -403,6 +407,9 @@ ui-topbar:has([data-learning-account-entry]) { flex-wrap: wrap; }
   #pixel-main > h2 { margin-bottom: var(--space-1); }
   .pixel-editor-column .pixel-ribbon-nav, .pixel-editor-column .review-view-bar { margin-bottom: var(--space-1); }
   .pixel-editor-column { display: flex; flex-direction: column; }
+  .frame-heading { flex-wrap: wrap; }
+  .frame-heading > [aria-label="검수 작업 범위"] { flex-basis: 100%; order: 2; }
+  .frame-heading > [aria-label="검수 작업 범위"] > label { flex: 1 1 calc((100% - var(--space-2)) / 2); max-width: calc((100% - var(--space-2)) / 2); }
   .pixel-editor-column > [aria-label="검수 작업 범위"] { order: 0; }
   .pixel-editor-column > [aria-label="검수 작업 범위"] > label { flex: 1 1 calc((100% - var(--gap-workspace)) / 2); max-width: calc((100% - var(--gap-workspace)) / 2); }
   .pixel-editor-column #pixel-photo-navigation { order: 1; }

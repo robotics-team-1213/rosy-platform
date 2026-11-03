@@ -14,11 +14,14 @@ const $ = id => document.getElementById(id);
 const objectWorkspace=document.querySelector('.workspace');
 const updateContext=reviewContext(objectWorkspace);
 objectWorkspace.prepend(objectWorkspace.nextElementSibling);
+const objectScopeBar=objectWorkspace.firstElementChild;
 const updatePages=pageControls($('frames'),offset=>load(undefined,{offset}));
 const modeBadge=document.createElement('ui-status');
 modeBadge.id='object-workspace-mode';
 modeBadge.setAttribute('role','status');
 $('frame-progress').after(modeBadge);
+resetHistory();
+document.querySelector('.label-inspector .review-history').before($('review-people-summary'),document.querySelector('.review-history-link'));
 const inputPurpose=()=>workspace?.workspace_kind==='evaluation'?'고정 평가 · 학습 제외':'학습 후보 · 승인 후 수용 확인';
 reviewViewport(document.querySelector('.image-stage'),$('canvas'),document.querySelector('.review-view-bar'),()=>!gesture);
 document.querySelector('.review-editor-tools').prepend(document.querySelector('.review-tool-ribbon'));
@@ -480,6 +483,7 @@ document.addEventListener('keydown',event=> {
 $('view-original').onclick=()=>setView(false);
 $('view-detail').onclick=()=>setView(true);
 function frameHeading() {
+  document.querySelector('.frame-heading').append(objectScopeBar);
   $('frame-title').textContent = `\uC0AC\uC9C4 ${frameOrdinal(workspace,frame.index)}`;
   $('status').setAttribute('status',frame.status==='pending'?'warn':'neutral');
   const visible=visibleFrames();
@@ -494,6 +498,7 @@ function applyFilter() {
   saveView();return load(undefined,{offset:0});
 }
 function showEmptyFilter() {
+  objectWorkspace.prepend(objectScopeBar);
   const visible=visibleFrames();
   if(visible.length) select(visible.some(item=>item.index===frame?.index)?frame.index:visible[0].index);
   else {++loadSerial;resetAI();resetVersions();cancelGesture();ready=false;frame=undefined;undo=null;selected=null;coordinatePreview=null;$('review-content').hidden=true;$('empty-review').hidden=false;const firstUse=!Object.values(workspace.counts).some(Boolean);$('empty-review').querySelector('h2').textContent=firstUse?'등록된 사진이 없습니다':'이 상태의 사진이 없습니다';$('empty-review').querySelector('p').textContent=firstUse?'자료 등록에서 원본 사진을 추가하세요.':'전체 사진을 열거나 다른 검수 상태를 선택하세요.';$('show-all').textContent=firstUse?'자료 등록 열기':'전체 사진 보기';list();saveView();enable();}
@@ -521,6 +526,7 @@ $('prepare').onclick=async()=> {
   try {receipt(await request('/api/prepare',{}));} catch(e) {error(e.message); $('export-result').textContent=`자료 준비 실패 · ${e.message}`;$('export-result').scrollIntoView({block:'center'});} finally {busy=false; enable();}
 };
 async function load(index, pageOptions={}) {
+  objectWorkspace.prepend(objectScopeBar);
   resetAI();resetVersions();
   loading=true;ready=false;++loadSerial;cancelGesture();$('counts').textContent='불러오는 중';$('frames').replaceChildren();listKey='';$('filter').parentElement.hidden=true;$('empty-frames').hidden=true;$('review-content').hidden=true;$('empty-review').hidden=false;$('empty-review').querySelector('h2').textContent='검수 내용을 확인하는 중';$('empty-review').querySelector('p').textContent='현재 사진과 결정 내용을 불러오고 있습니다.';$('show-all').hidden=true;enable();
   const started=performance.now();

@@ -19,6 +19,8 @@ document.querySelector('.pixel-quick-tools').prepend($('pixel-tool-hint'),$('pix
 document.querySelector('.pixel-quick-actions').after(toolOptions);
 document.querySelector('.pixel-editor-column').append(document.querySelector('.pixel-quick-tools'));
 const pixelContent=$('pixel-content'),pixelPreparation=$('pixel-preparation');
+pixelPreparation.querySelector('h3').textContent='학습 자료 준비 · 사진 검수와 별도 작업';
+pixelPreparation.querySelector('p').textContent='사진별 검수를 마친 뒤 승인된 객체·픽셀과 명시 제외를 묶어 준비합니다. 현재 사진의 완료 상태는 바꾸지 않습니다.';
 $('pixel-reload').textContent='새로고침';
 $('pixel-reload').setAttribute('aria-label','최신 픽셀 검수 내용 불러오기');
 pixelContent.insertBefore(document.querySelector('#pixel-main > .ui-workspace-bar'),pixelPreparation);
@@ -93,6 +95,13 @@ const criteria=document.querySelector('.pixel-review-column aside'),criteriaDeta
 const photoDetails=document.createElement('section');photoDetails.className='pixel-photo-details';
 for(const child of [...photoSection.children])if(!child.matches('.pixel-stage,#pixel-view-status'))photoDetails.append(child);
 photoColumn.append(photoDetails);
+// Viewing controls stay with the photograph; saved counts are secondary information.
+$('pixel-view-status').after($('pixel-coverage'),viewBar);
+viewBar.append($('pixel-show-unknown').closest('label'));
+const reviewInfo=document.createElement('details'),reviewInfoTitle=document.createElement('summary');
+reviewInfo.id='pixel-review-info';reviewInfoTitle.textContent='검수 정보와 클래스 집계';reviewInfo.append(reviewInfoTitle,pixelResult,$('pixel-legend'));photoDetails.append(reviewInfo);
+const wholeFrameTools=document.createElement('details'),wholeFrameTitle=document.createElement('summary');
+wholeFrameTools.id='pixel-whole-frame-tools';wholeFrameTitle.textContent='전체 사진 채우기 · 기존 라벨 교체';wholeFrameTools.append(wholeFrameTitle,$('pixel-fill').closest('ui-actions'));photoDetails.append(wholeFrameTools);
 const referenceHelp=document.createElement('details'),referenceTitle=document.createElement('summary');referenceTitle.textContent='조작 방법과 원본 정보';referenceHelp.append(referenceTitle);
 for(const node of photoDetails.querySelectorAll(':scope > p:not([id]),.stage-help'))referenceHelp.append(node);
 referenceHelp.append($('pixel-source').closest('details'));photoDetails.append(referenceHelp);
@@ -326,7 +335,9 @@ async function commit(bodies){if(busy||!ready||conflicted||forbidden)return fals
  catch(value){const message=value.message,rest=draft;if(saved){await select(frame.index);draft=rest;paint();}error(message);return false;}finally{busy=false;enable();if(saved&&bodies.some(body=>body.action==='fill_unknown')&&ready&&unknownPixels===0&&!$('pixel-approve').disabled){$('pixel-approve').scrollIntoView({block:'center'});$('pixel-approve').focus({preventScroll:true});}}}
 function connectAI(){
  const index=frame.index,ticket=serial;
- showAI('pixel',index,request,()=>frame?.index===index?{version:review.version,blocked:!ready||busy||loading||conflicted||forbidden||!!stroke||draft.length>0||seeds.length>0||polygon.length>0}:null,async({candidateSha}={})=>{
+ showAI('pixel',index,request,()=>frame?.index===index?{version:review.version,blocked:!ready||busy||loading||conflicted||forbidden||!!stroke||draft.length>0||seeds.length>0||polygon.length>0}:null,async({candidateSha,feedbackOnly}={})=>{
+  if(ticket!==serial)return;
+  if(feedbackOnly){await loadVlm(index,ticket);return;}
   const latest=await request(`/api/masks/${index}`);if(ticket!==serial)return;
   if(latest.version!==review.version)throw new Error('검수 버전이 바뀌었습니다. 새로고침 후 확인하세요.');
   if(!ready||busy||loading||conflicted||forbidden||stroke||draft.length||seeds.length||polygon.length)return;

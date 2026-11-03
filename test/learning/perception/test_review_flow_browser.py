@@ -318,6 +318,8 @@ def test_pixel_review_shows_unclassified_coverage(browser_workspace):
     assert photo['y'] + photo['height'] <= coverage['y'] <= photo['y'] + photo['height'] + 96
     page.locator('#pixel-class').select_option('0')
     page.on('dialog', lambda dialog: dialog.accept())
+    if not page.locator('#pixel-whole-frame-tools').evaluate('node => node.open'):
+        page.locator('#pixel-whole-frame-tools > summary').click()
     page.locator('#pixel-fill').click()
     expect(page.locator('#pixel-coverage')).to_contain_text('미검수 0픽셀')
 
@@ -671,6 +673,8 @@ def test_object_to_pixel_review_keeps_photo_and_shows_decision(browser_workspace
     expect(page.locator('#pixel-status')).to_contain_text('픽셀 검수 대기')
     page.locator('#pixel-class').select_option('0')
     page.once('dialog', lambda dialog: dialog.accept())
+    if not page.locator('#pixel-whole-frame-tools').evaluate('node => node.open'):
+        page.locator('#pixel-whole-frame-tools > summary').click()
     page.locator('#pixel-fill').click()
     expect(page.locator('#pixel-status')).to_contain_text('v1')
     page.locator('#pixel-approve').click()
