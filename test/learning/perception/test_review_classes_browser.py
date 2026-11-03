@@ -35,5 +35,5 @@ def test_class_manager_addition_requires_confirmation_and_reloads_binding(browse
     expect(page.locator('#rows fieldset')).to_have_count(count + 1)
     page.locator('#back').click()
     expect(page.locator('#image-message')).to_be_hidden()
-    assert page.locator('#review-folder').input_value() == 'selected'
-    assert page.locator('#review-workspace').input_value() == ''
+    expect(page.locator('#review-folder')).to_have_value('selected')
+    expect(page.locator('#review-workspace')).to_have_value('')
