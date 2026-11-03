@@ -4435,3 +4435,11 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 검증: 원격 RED commit 314f571ea0에서 두 회귀 사례가 예상대로 실패했고 기존 9개는 통과했다. 수정 commit 5eff2fd4d0에서 자동 운반·자동 집기 관련 59개가 통과했다. 실제 팔 동작과 현장 배포는 하지 않았다.
 - gate 변화: 없음. 장치·현장 수용을 주장하지 않는다.
 - CE: 해당 없음 — 오류 전달 원인과 해결은 수정 코드 및 회귀 시험에 직접 남아 있다.
+
+## 2026-11-03 · 3a2fbd1f9a · feat(site): 서명 PC의 사이트 즉시 반영 푸시와 오분류 제목 교정
+
+- 변경: `auto_sign_candidates.py`가 서명에 성공한 실행 뒤 `notify_hosts` 각 대상에 고정 명령 `sudo -n systemctl start rosy-site-autoupdate.service`를 SSH(BatchMode)로 보내 사이트 설치가 15분 폴링을 기다리지 않게 했다. 푸시 실패는 `notify` 감사 줄로만 남고 호스트 타이머가 대체한다. 같은 릴리스 스캔에서 서명됐는데도 제목이 "(unsigned)"인 site-* 릴리스는 그 자리에서 교정한다(`retitle-repaired`, 2026-10-29·10-31·11-03 재발).
+- 검증: 원격 `test/test_site_auto_sign.py` 31통과(known_failures 0 new). 변이 확인: 알림 호출과 오분류 수집을 끈 commit c5ac955935에서 새 가드 시험 3개만 RED, 복원 3a2fbd1f9a에서 전체 GREEN. 서명 PC 검토 사본 갱신과 `notify_hosts` 기입은 착지 후 별도 운영 단계다.
+- gate 변화: 없음. 사이트 호스트의 D-960 업데이터 교체·hold 해제는 이 커밋 없이 현장에서 이미 시행했다(백업 `/var/backups/rosy-site-d960-20261103`).
+- CE: 해당 없음 — 막힘 원인(hold)은 감사 로그와 상태 파일로 곧바로 보였고, 재발 방지는 이번 구조화 자체가 담당한다.
+
