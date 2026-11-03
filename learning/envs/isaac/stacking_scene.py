@@ -122,12 +122,11 @@ def capture(world, camera, eye, path, *, container, overview=False):
     Image.fromarray(rgba.astype(np.uint8)).save(path)
 
 
-def real_capture(world, cameras, name, spec, path):
-    """Render one surveyed real camera (D-947 3): its pose, resolution and focal length in pixels; save a PNG at `path`."""
+def real_camera(cameras, name, spec):
+    """The surveyed real camera `name` (D-947 3): its pose, resolution and focal length in pixels; created once into `cameras`."""
     import numpy as np
     from isaacsim.sensors.camera import Camera
     from pxr import Gf
-    from PIL import Image
     if name not in cameras:
         position, focus, up = (Gf.Vec3d(*spec[k]) for k in ('eye', 'focus', 'up'))
         rotation = Gf.Matrix4d().SetLookAt(position, focus, up).GetInverse().ExtractRotationQuat()
@@ -140,9 +139,17 @@ def real_capture(world, cameras, name, spec, path):
                            ('focalLength', spec['f_px']*aperture/spec['width'])):
             camera.prim.GetAttribute(key).Set(value)
         cameras[name] = camera
+    return cameras[name]
+
+
+def real_capture(world, cameras, name, spec, path):
+    """Render one surveyed real camera and save a PNG at `path`."""
+    import numpy as np
+    from PIL import Image
+    camera = real_camera(cameras, name, spec)
     for _ in range(8):
         world.render()
-    rgba = cameras[name].get_rgba()
+    rgba = camera.get_rgba()
     if rgba is None or rgba.shape != (spec['height'], spec['width'], 4):
         raise RuntimeError('Actual SDK image unavailable')
     Image.fromarray(rgba.astype(np.uint8)).save(path)
