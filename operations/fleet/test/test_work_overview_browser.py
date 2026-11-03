@@ -27,6 +27,10 @@ def test_channel_request_poll_preserves_current_keyboard_target(site, size, them
             page.clock.run_for(2000)
             page.evaluate('(theme) => document.documentElement.dataset.theme = theme', theme)
             buttons = page.locator('#channel-requests ui-button')
+            for _ in range(20):  # under load the first read lands after run_for(2000); stays under one 5 s poll
+                if buttons.count() == 2:
+                    break
+                page.clock.run_for(100)
             expect(buttons).to_have_count(2)
             buttons.first.focus()
             outside = page.locator('#work-refresh')
