@@ -1,6 +1,8 @@
 """Native Cell observations use Fleet auth and expire without a developer viewer."""
 from io import BytesIO
+import base64
 import json
+import os
 from pathlib import Path
 import threading
 import time
@@ -163,3 +165,69 @@ def test_cell_logout_clears_observations_and_ignores_late_responses(cell_url):
         assert not errors
         page.unroute_all(behavior="ignoreErrors")
         browser.close()
+
+
+@pytest.mark.parametrize("width", [1366, 390])
+@pytest.mark.parametrize("theme", ["dark", "light"])
+def test_cell_catalog_fits_the_full_page_and_belongs_to_saved_documents(cell_url, width, theme):
+    from playwright.sync_api import expect, sync_playwright
+    source = "긴 카탈로그 출처 " * 20
+    body = {"objects": [{"id": "example-object", "length_mm": 60, "width_mm": 30,
+                         "top_height_mm": 30, "mass_kg": 0.02,
+                         "mass_measured": {"at": "2026-11-03", "source": source}, "carry": "ok"}]}
+    with sync_playwright() as playwright:
+        browser, page, errors = open_page(playwright, width, 844, url=cell_url)
+        try:
+            state, _ = observation_feed(page)
+            page.route("**/api/fleet/cell-app/object-catalog", lambda route: route.fulfill(json=body))
+            page.goto(cell_url)
+            page.evaluate("theme => window.RosyTheme.set(theme)", theme)
+            table = page.locator("#catalog-table")
+            expect(table).to_be_visible()
+            expect(table).to_contain_text("20.0 g")
+            expect(table).to_contain_text(source.strip())
+            table.scroll_into_view_if_needed()
+            assert table.evaluate("el => getComputedStyle(el).borderCollapse") == "collapse"
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+            if os.environ.get("ROSY_CAPTURE_INLINE") == "1":
+                shot = page.screenshot(type="jpeg", quality=35)
+                print(f"ROSY_SCREENSHOT cell-catalog-{theme}-{width} " + base64.b64encode(shot).decode())
+            page.locator('.ui-subnav-nav a[href="#recipe-heading"]').click()
+            expect(page.locator('[aria-labelledby="catalog-heading"]')).to_be_hidden()
+            page.locator('.ui-subnav-nav a[href="#saved-heading"]').click()
+            expect(table).to_be_visible()
+            assert not errors and not state.failed_assets
+        finally:
+            page.unroute_all(behavior="ignoreErrors")
+            browser.close()
+
+
+@pytest.mark.parametrize("pending", [False, True])
+def test_cell_logout_clears_catalog_and_ignores_its_late_response(cell_url, pending):
+    from playwright.sync_api import expect, sync_playwright
+    held = []
+    body = {"objects": [{"id": "previous-account-object", "mass_kg": 0.02, "carry": "ok"}]}
+    with sync_playwright() as playwright:
+        browser, page, errors = open_page(playwright, 390, 844, url=cell_url)
+        try:
+            observation_feed(page)
+            def catalog(route):
+                held.append(route) if pending else route.fulfill(json=body)
+            page.route("**/api/fleet/cell-app/object-catalog", catalog)
+            with page.expect_request("**/api/fleet/cell-app/object-catalog"):
+                page.goto(cell_url)
+            if not pending:
+                expect(page.locator("#catalog-table")).to_contain_text("previous-account-object")
+            page.locator("#topbar-more").click()
+            page.locator('[data-login="logout"]').click()
+            expect(page.locator("#workcell-observations [data-arm-source]")).to_have_count(0)
+            for route in held:
+                route.fulfill(json=body)
+            page.evaluate("() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))")
+            expect(page.locator("#catalog-table")).to_be_hidden()
+            expect(page.locator("#catalog-rows tr")).to_have_count(0)
+            expect(page.locator("#catalog-status")).to_contain_text("접속하면")
+            assert not errors
+        finally:
+            page.unroute_all(behavior="ignoreErrors")
+            browser.close()
