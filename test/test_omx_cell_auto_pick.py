@@ -827,4 +827,6 @@ def test_a_box_held_by_its_ends_needs_room_past_its_ends_not_beside_it():
     mask[53:83, 55:146] = 255    # neighbours 2 mm beside it on both sides, same length
     mask[118:148, 55:146] = 255
     assert auto.finger_room(mask, (0, 0, 200, 200), px, box)["margin_mm"] is None  # across its width: blocked
-    assert auto.finger_room(mask, (0, 0, 200, 200), px, box, box["long_axis_deg"])["margin_mm"] is not None  # past its ends
+    wide = {**auto.prm.load()["values"], "gripper.open_max": 62.0}  # the field's arm_b: opens ~131 mm
+    assert auto.finger_room(mask, (0, 0, 200, 200), px, box, box["long_axis_deg"], wide)["margin_mm"] is not None
+    assert auto.finger_room(mask, (0, 0, 200, 200), px, box, box["long_axis_deg"])["margin_mm"] is None  # 68 mm < 90
