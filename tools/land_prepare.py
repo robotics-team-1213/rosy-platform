@@ -202,7 +202,12 @@ def _prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, 
         # main ("delta"), never stand in for it; with no clean earlier tier the record stays as it was.
         base = land.land_full.prepared(wt, branch, land.land_full.restore(wt, branch))
         if tier is not None and base is not None:
-            land.land_full.save(wt, branch, candidate, main_sha, "delta", base["invocations"] + invocations,
+            try:
+                combined = land.land_record.plan(invocations, base,
+                                                  available=(wt / land.land_record.TARGET).is_file())
+            except ValueError as exc:
+                raise land.Stop(f"invalid delta preparation plan: {exc}") from exc
+            land.land_full.save(wt, branch, candidate, main_sha, "delta", combined,
                                 base_tier=base["tier"], yields=int(base.get("yields") or 0) + 1)
         tier = "delta" if tier is not None and base is not None else None
     # Keeping an older base with --no-cache would repeat overtime on every turn.

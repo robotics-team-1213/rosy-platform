@@ -91,6 +91,28 @@ def _unique(invocations: list[list[str]]) -> list[list[str]]:
     return [list(inv) for inv in dict.fromkeys(map(tuple, invocations))]
 
 
+
+def _unique_browsers(wt: Path, invocations: list[list[str]]) -> list[list[str]]:
+    """Keep first files per identical browser environment, only by shrinking existing safe chunks."""
+    seen, result = {}, []
+    for inv in _unique(invocations):
+        n = 0
+        while n < len(inv) and affected_exclusive.ENV.match(inv[n]):
+            n += 1
+        env, paths = inv[:n], inv[n:]
+        if ("ROSY_RUN_BROWSER_TESTS=1" not in env or not paths
+                or any(not p.endswith(".py") or p.startswith("-") or "::" in p
+                       or not (wt / p).is_file() for p in paths)):
+            result.append(inv)  # Unknown arguments keep the existing exact-argv rule.
+            continue
+        used = seen.setdefault(tuple(env), set())
+        kept = list(dict.fromkeys(p for p in paths if p not in used))
+        used.update(paths)
+        if kept:
+            result.append(env + kept)
+    return result
+
+
 def select(land, wt: Path, base: str, python: str, head: str | None = None,
            landed: bool = False, full: bool = False) -> tuple[list[list[str]], str | None]:
     """pytest invocations for base...HEAD (or base...head), and a FULL note owed to the summary.
@@ -110,14 +132,15 @@ def select(land, wt: Path, base: str, python: str, head: str | None = None,
             return []
         delta = land.browser_tier(wt, base, head)
         if reach is None:
-            return _unique(own + delta)
+            return _unique_browsers(wt, own + delta)
         # D-889 19/24: like the own pytest invocations (18), only the own browser chunks the delta's browser chunks
         # reach. Not its suites: a suite folder (operations/fleet/test) holds the browser files, so every chunk
         # counted as reached (11-02 03:32, a 6-invocation turn ran 7 serial browser chunks for 34 min). The
         # nightly full run covers browser tests (addendum 12).
         # The delta's own chunks too only where this branch's reach them (D-889 22's rule): 11-02 04:06 a turn reran
         # 10 delta chunks of 8 min for a branch whose own chunks touched few of them.
-        return _unique([inv for inv in delta if overlaps(own, [inv])] + [inv for inv in own if overlaps(delta, [inv])])
+        return _unique_browsers(wt, [inv for inv in delta if overlaps(own, [inv])]
+                                + [inv for inv in own if overlaps(delta, [inv])])
 
     if (wt / "tools/harness/affected_tests.py").is_file():
         try:
