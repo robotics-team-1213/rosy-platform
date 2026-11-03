@@ -43,6 +43,7 @@ const aiHelp=document.createElement('a');aiHelp.href='/learning';aiHelp.textCont
 aiActions.append(refreshAi,aiHelp);aiPanel.append(aiActions);
 const aiDetails=document.createElement('details'),aiSummary=document.createElement('summary');aiSummary.textContent='검사 모델·근거와 다음 단계';
 aiDetails.append(aiSummary,$('pixel-vlm-note'),...aiPanel.querySelectorAll('p'));aiPanel.append(aiDetails);
+const aiAdvice=document.createElement('p');aiAdvice.id='pixel-vlm-advice';aiPanel.insertBefore(aiAdvice,aiActions);
 const candidateEmpty=document.createElement('p');candidateEmpty.id='pixel-candidate-empty';candidateEmpty.className='quiet';
 $('pixel-candidate-tools').before(candidateEmpty);
 
@@ -95,6 +96,7 @@ const criteria=document.querySelector('.pixel-review-column aside'),criteriaDeta
 const photoDetails=document.createElement('section');photoDetails.className='pixel-photo-details';
 for(const child of [...photoSection.children])if(!child.matches('.pixel-stage,#pixel-view-status'))photoDetails.append(child);
 photoColumn.append(photoDetails);
+photoColumn.append(photoList);
 // Viewing controls stay with the photograph; saved counts are secondary information.
 $('pixel-view-status').after($('pixel-coverage'),viewBar);
 viewBar.append($('pixel-show-unknown').closest('label'));
@@ -308,10 +310,11 @@ async function loadVlm(index,ticket){
  if(ticket!==serial)return;
  const requestId=++vlmRequest;
  const state=$('pixel-vlm-state'),note=$('pixel-vlm-note');
- state.setAttribute('state','pending');state.textContent='AI 의견을 불러오는 중…';note.textContent='';
+ state.setAttribute('state','pending');state.textContent='AI 의견을 불러오는 중…';note.textContent='';aiAdvice.textContent='';
  try{const value=await request(`/api/vlm-feedback/${index}`);if(ticket!==serial||requestId!==vlmRequest)return;
   const result=feedbackPresentation(value);state.setAttribute('state',result.state);state.textContent=result.title;note.textContent=result.note;
- }catch{if(ticket!==serial||requestId!==vlmRequest)return;state.setAttribute('state','warning');state.textContent='AI 의견 조회 실패';note.textContent='다시 조회를 누르세요. 조회는 AI 검사를 새로 실행하지 않습니다.';}
+  aiAdvice.textContent=value.available?`${value.current?'':'이전 의견 · '}${value.feedback.note||result.title}`:result.note;
+ }catch{if(ticket!==serial||requestId!==vlmRequest)return;state.setAttribute('state','warning');state.textContent='AI 의견 조회 실패';note.textContent='다시 조회를 누르세요. 조회는 AI 검사를 새로 실행하지 않습니다.';aiAdvice.textContent=note.textContent;}
 }
 
 async function select(index){

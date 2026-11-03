@@ -127,6 +127,8 @@ def test_mask_check_automatically_refreshes_opinion_without_replacing_unsaved_pi
             draft = page.locator('#pixel-draft').inner_text()
             release.set()
             expect(page.locator('.pixel-vlm-feedback')).to_contain_text('Check the visible floor', timeout=15000)
+            expect(page.locator('#pixel-vlm-advice')).to_be_visible()
+            expect(page.locator('#pixel-vlm-advice')).to_have_text('Check the visible floor')
             expect(page.locator('.pixel-vlm-feedback')).to_contain_text('저장된 픽셀 v1 기준')
             expect(page.locator('#pixel-draft')).to_have_text(draft)
             assert review_masks.get(store, 0) == before

@@ -15,6 +15,7 @@ const objectWorkspace=document.querySelector('.workspace');
 const updateContext=reviewContext(objectWorkspace);
 objectWorkspace.prepend(objectWorkspace.nextElementSibling);
 const objectScopeBar=objectWorkspace.firstElementChild;
+document.querySelector('.inspector-heading').append(objectScopeBar.querySelector('a'));
 const updatePages=pageControls($('frames'),offset=>load(undefined,{offset}));
 const modeBadge=document.createElement('ui-status');
 modeBadge.id='object-workspace-mode';
