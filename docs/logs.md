@@ -13833,12 +13833,6 @@ osy-d395-s1d\`.
 - 결정: 없음
 - 교훈: 없음(같은 날 arm_b 낙하 교훈에 이어서 기록 예정)
 
-## 2026-11-03 · uncommitted · fix(remote): 배치의 각 시험 입장에서 재부팅 임박 차단
-- 변경: 최초 호스트 선택에만 있던 D-889 13의 재부팅 임박 판정을 각 원격 ADMIT에도 적용한다. 차단된 작업은 자원 해제 뒤 같은 Work index로 반환하고 다른 호스트 또는 기존 bounded wait로 이어간다. quarantine 재시험의 원본 실패·로그와 남은 재시험을 보존한다. 기존 단일 호스트 호출 계약도 유지한다.
-- 증거: 원격 재현 15 FAIL/9 PASS, 최종 코드 `95abfc2cdb` 관련 9 suite 228 PASS·skip/NEW/known/flaky 0, 독립 검토 P1/P2 없음, size 3 commits PASS. 관측된 종료143은 시험 PC의 예약 재부팅 경계와 겹쳤다. 기존 착지의 공식 resume에서 PASS31 invocation 재사용을 확인했다.
-- gate 변화: 없음. 기존 재부팅 시각·780초 타이머/서비스 판정·자원 하한·deadline/stop을 유지하며 추가 SSH·새 flag·의존성은 없다. 이미 실행 중인 긴 작업은 기존143/resume 경계다.
-- CE: 기존 교훈 갱신 — `docs/solutions/workflow-issues/landings-gave-the-turn-back-and-reran-everything-2026-11-01.md`의 재부팅 항목에 배치 중간 입장 공백과 검증·복구 범위를 남겼다. 새 실물 재부팅 시험이나 운영 반영 완료를 주장하지 않는다.
-
 ## 2026-11-03 · uncommitted · fix(harness): isolate G1 timing in a dedicated serial, host-exclusive job
 - Change: CI/lab share one plan that removes G1 timing from ordinary FULL/ROOT/explicit-file/affected invocations and adds exactly one whole-file job. Existing ROSY_JOB_ALONE admission and disabled xdist apply together. The gate requires original collected and actually passed item sets to match, with zero skips. Dedicated results bypass success caches and reruns. Explicit FULL validates both the ROOT exclusion and the complete dedicated companion. The 0.45s threshold, skip helper and production control code are unchanged.
 - Evidence: 72508553f6 remote plan RED: 4 failures. Final 791a884c6c five-file remote regressions: 471 passed / 0 skipped (248.25s), rosy-g1-plan-green-791a/run-1.txt. Separate actual G1 execution used main af46af4666 transport with that same source: 12 passed / 0 skipped (6.31s, peak 68MiB), rosy-g1-timing-exclusive-791a/run-1.txt. Exactly one receipt: expected=12 collected=12 passed=12 skipped=0 clean=1. Formal admission waited for existing jobs to drain; this was the first and only actual attempt, without retry. Pre-enqueue observations were 12 free cores/11.8GB, CPU some avg10 0.13%, IO some avg60 0.18%; they do not prove absence of external I/O during execution. Regression runner resource output (3MiB/CPU 9ms) conflicts with elapsed time and is not accepted as resource evidence. Logs reside outside the repository under OS Temp.
@@ -13867,6 +13861,44 @@ osy-d395-s1d\`.
 - CE: not applicable. Applied shared-pytest-process-masks-path-dependent-import-2026-10-26: the existing lesson already describes this exact masking mechanism and requires whole-file fresh-process proof. The fix and the three explicit execution contexts retain the new evidence without duplicating the lesson.
 - Native checks: canonical generate completed; lint 0 errors / 41 existing module-freshness/worktree-cap warnings. Both files retain all original test/fixture definitions and decorators (AST comparison); Python AST/progress YAML and diff checks passed. Eighteen-commit size_range passed before this record-only commit; secret scan added 0 findings (two unchanged historical log findings). Account1077 remains preserved.
 
+## 2026-11-03 · uncommitted · fix(remote): 이력 없는 큰 시험 묶음을 기존 비용 추정으로 분할
+- 변경: `work_queue.split`의 분할 판정과 단일 디렉터리 그룹 수가 같은 기존 `cost()`를 사용한다. 실제 측정값은 0도 포함해 추정보다 우선하며, 기존 240초 경계·분할 상한·제외 조건·환경 복제·정확 argv 중복 제거는 유지한다.
+- 증거: 실제 첫 차례의 83경로 한 묶음이 완료 전 시간 상한으로 취소돼 본문 37개 PASS 0이었다. 재현 3 FAIL/9 PASS 뒤 코드 `8f4cf7e0bc` 원격 관련 3 suite 145 PASS·skip/NEW/known/flaky 0, 독립 검토 P1/P2 없음. 기존 캐시 argv 527개의 분할 계획은 그대로다.
+- 관측 한계: 고정 167e Git blob의 같은 83경로/.py620 합집합으로 1→83묶음, 최대 byte 추정 3468→995초다. 실제 wall·startup 비용은 미측정이며 남는 큰 자식 3개도 있다. 99%를 PASS로 저장하거나 30분이면 끝났다고 추정하지 않는다.
+- gate 변화: 없음. 기존 시간 예산·캐시 적격성·검증 범위·자원 정책을 바꾸지 않고 새 flag·의존성을 추가하지 않는다.
+- CE: 기존 교훈 갱신 — `docs/solutions/workflow-issues/landings-gave-the-turn-back-and-reran-everything-2026-11-01.md`에 cold packet과 부분 완료 증거의 경계를 남겼다. 같은 명령의 기존 PASS 키를 다른 자식 키로 추론하지 않는다.
+
+## 2026-11-03 · uncommitted · docs(landing): 초기 GC 등록 목록과 추가 복구의 확인 범위
+- 변경: 제품 동작은 바꾸지 않고 실제 등록 목록과 추가 Git 복구, 아직 검증하지 못한 파일 보존 범위를 기록한다.
+- 확인된 사실: 초기 정리 전 세션의 실제 porcelain 출력(11월2일01:46:03.182Z)에서 등록된 hidden 워크트리 103곳의 경로·HEAD·브랜치를 복원했다. 고유 HEAD는 101개이며 모두 commit 객체다. 기존 7,276개 복구 참조에서 도달하지 못하던 `3f4cf47078a80d45c7f0a1e6d6db059f5b7b4267`은 객체가 남아 있어 새 `refs/wip/2026-11-03/pre-gc-inventory/<sha>`로 보존했다.
+- 검증: 추가 HEAD의 connectivity 검사 exit0/output0이고, 이후 등록 목록의 고유 HEAD 101개 모두 현재 refs에서 도달 가능함을 확인했다. 추가 전 기존 refs의 commit-graph·connectivity도 exit0/output0이었다. 현재 refs의 정상 판정만으로 삭제 전 등록 HEAD 전체의 보존을 대신할 수 없었다.
+- 근거: 작업 공간의 `Rosy/docs/workspace-records/2026-11-02/pre-gc-registered-worktrees.json`에 원본 세션 39행의 시각·SHA256, 정규화한 103개 등록 항목, 현재 도달 가능 여부와 추가 복구 참조를 보존했다. 연결성 출력은 OS Temp `rosy-pre-gc-inventory-connectivity.txt`다. 원본 세션은 수정하지 않았다.
+- 미해결: 이 목록은 파일 inventory나 성공 삭제 명단이 아니다. 초기 ignored/untracked 자료의 전체 목록·대응 백업을 찾지 못했다. 삭제 전 등록 103곳과 나중의 디렉터리 58개는 조회 범위가 달라 단순 차이로 개별 삭제 성공을 확정하지 않는다. 초기 GC 출력의 삭제 실패 4곳도 성공으로 계산하지 않는다. 후속 sidecar 백업 19개·30개를 초기 정리의 파일 보존 근거로 소급하지 않는다.
+- 다음 확인: 초기 파일 inventory 또는 당시 폴더와 대응하는 백업이 발견될 때 파일별 해시로 대조한다. 그 전에는 미추적 자료의 완전 보존을 주장하지 않고, 기존 backup·복구 refs와 원본 로그를 유지한다. 추가 객체 정리나 reflog 만료는 하지 않았다.
+- gate 변화: 없음. 제품 코드·시험 선택·캐시·자원·착지 조건을 바꾸지 않는 운영 기록이다. 최종 후보의 공식 문서 가드와 착지는 별도 확인한다.
+- CE: 미해결. 일부 Git 이력의 추가 보존은 검증했지만 초기 파일 보존을 해결한 것처럼 새 해결 교훈을 쓰지 않았다. 증상·확인 사실·남은 확인을 이 소유 저장소의 작업 기록으로 남긴다.
+
+## 2026-11-03 · uncommitted · fix(remote): 배치의 각 시험 입장에서 재부팅 임박 차단
+- 변경: 최초 호스트 선택에만 있던 D-889 13의 재부팅 임박 판정을 각 원격 ADMIT에도 적용한다. 차단된 작업은 자원 해제 뒤 같은 Work index로 반환하고 다른 호스트 또는 기존 bounded wait로 이어간다. quarantine 재시험의 원본 실패·로그와 남은 재시험을 보존한다. 기존 단일 호스트 호출 계약도 유지한다.
+- 증거: 원격 재현 15 FAIL/9 PASS, 최종 코드 `95abfc2cdb` 관련 9 suite 228 PASS·skip/NEW/known/flaky 0, 독립 검토 P1/P2 없음, size 3 commits PASS. 관측된 종료143은 시험 PC의 예약 재부팅 경계와 겹쳤다. 기존 착지의 공식 resume에서 PASS31 invocation 재사용을 확인했다.
+- gate 변화: 없음. 기존 재부팅 시각·780초 타이머/서비스 판정·자원 하한·deadline/stop을 유지하며 추가 SSH·새 flag·의존성은 없다. 이미 실행 중인 긴 작업은 기존143/resume 경계다.
+- CE: 기존 교훈 갱신 — `docs/solutions/workflow-issues/landings-gave-the-turn-back-and-reran-everything-2026-11-01.md`의 재부팅 항목에 배치 중간 입장 공백과 검증·복구 범위를 남겼다. 새 실물 재부팅 시험이나 운영 반영 완료를 주장하지 않는다.
+
+## 2026-11-03 · uncommitted · fix(landing): preserve first queue across a proven rules-refresh stop
+- Change: retain the existing exact-PID stop epoch and additionally join a stopped frozen snapshot only when its same-ticket queue records prove a PID handoff, with no competing ticket or completed cycle. A queue-less refresh child STOP after the latest queue can then preserve the original request clock across a new snapshot. Topic-only joins, raw-event changes and guessed completion rows are excluded.
+- Evidence: actual old queue/owner handoff/queue-less child STOP and the new snapshot queue exposed 208.7301 minutes of potential undercount. Test-only d49d9ab33f remote RED: 2 intended failures, 49 passes. Code 98738da589 remote goal/events result: 57 passes, zero skip/NEW/known/flaky; normal Rosy admission wait0/run11 seconds. Logs: OS Temp rosy-landing-clock-red and rosy-landing-clock-green-valid. An earlier request named a nonexistent test_land_stats.py and exited4 before collecting tests; it is excluded from GREEN evidence. No pytest ran locally.
+- Review and limits: independent pinned-code review found no P1/P2 defect. Existing same-PID, competing-ticket, requeue, previous-completion, unfrozen-branch and rollup membership boundaries remain covered. This repairs measurement; it does not demonstrate faster landing or attainment of p90 60 minutes/stall 30 minutes. Canonical main-candidate checks and landing remain pending.
+- gate 변화: 없음. 계측의 최초 대기시간 연결만 보수적으로 복원하며 시험·자원·착지 기준은 유지한다. 공식 후보 검증과 main 착지는 아직 미완료다.
+- CE: updated the existing landings-gave-the-turn-back-and-reran-everything lesson with the actual handoff evidence, conservative join conditions and recovery checks. No new lesson, dependency, flag, admission override or external service was added.
+- Verification scope: this final record changes documentation only. The independently reviewed and remotely tested tools/test tree stays at 98738da589. Native generation/lint and the official landing guard cover the documentation; no duplicate standalone guard pytest is requested. Final-candidate and main verification are still required.
+
+## 2026-11-03 · uncommitted · fix(landing): 계측 전용 변경의 시험 범위 선택
+- 변경: safety 판정 뒤 `tools/land_goal.py`·`tools/land_stats.py` 정확 두 경로만 runtime land global glob에서 분리한다. 기존 reader/local-importer 탐색으로 goal/events와 관련 회귀를 선택하며 추가 매핑·옵션·의존성은 없다. 다른 gate·선택기·remote·미등록·혼합 변경과 빈 coverage의 FULL은 유지한다.
+- 증거: test-only21f186 원격 RED는 의도한 5실패·6negative통과였고, 자기 경로 문자열을 reader로 잡던 fixture1개는32ec1677에서 고쳐 해당 negative1통과를 별도로 확인했다. 최종 코드a193f619 원격 관련4suite281통과와 pre_push_hook 단독29통과, skip/NEW/known/flaky0이다. 로그는 OS Temp rosy-stats-selection-{red,red-fixture,green,prepush}-20261103에 있다. 독립 고정 코드 검토 P1/P2 없음이다.
+- 범위 측정: 같은6b9..987 입력과987 파일 내용·자동without_sim/browser[] 조건에서 FULL27argv/추적 시험 파일2383개→AFFECTED1argv/11개(9guards+goal/events)다. workspace-records/2026-11-02/stats-selection-scope-evidence.json에 원본 argv·파일 union·SHA·조건을 원본과 SHA256 동일하게 보존했다. testcase 수나 실제 wall 절감·SLO 달성으로 해석하지 않는다.
+- gate 변화: 순수 계측 변경의 관련 시험 범위만 바로잡는다. 이 선택기 수정 자체는 정식 FULL이 필요하고, safety·runtime/selector/remote 혼합의 FULL과 기존 문서 guard를 유지한다. 공식 후보 검증·main 착지·변경 후 p90 검증은 아직 남아 있다.
+- CE: 기존 교훈 갱신 — landings-gave-the-turn-back-and-reran-everything의 과다 FULL 원인과 적용 조건을 보완했다. 보고 결과가 승인·실행 경로에 들어가면 분류를 재검토한다. 최종 문서 기록은 검증 코드a193 대비 tools/test 변경이 없으며 같은 guard를 별도 수동 pytest로 반복하지 않고 공식 착지에서 확인한다.
+
 ## 2026-11-03 · f81b8315d0 · docs: unwedge의 측정 기반 성공 조건과 검증 범위
 
 - 변경: 기존 unwedge 교훈의 clearance를 명령 횟수 대신 시작 측정값 대비 순변위로 정정하고, held-target 기준 HOME 한계·park 정착·측정 HOME 확인을 기록했다. 기존 21단계 현장 기록과 후속 호스트 회귀를 구분했다.
@@ -13878,3 +13910,11 @@ osy-d395-s1d\`.
 - 변경: 동결된 cell survey 기록에 정정 절을 추가했다. 기존 측면 PnP 잔차로 렌더 오차를 제한할 수 있다는 서술과 양쪽 통과·완료 판정을 철회했다.
 - 증거: 기존 상단 측정 보고 1.13 px는 제안된 평균 3 px 기준을 만족한다. 측면 렌더 대 실물 정량 측정은 UNKNOWN이며 육안 비교와 구분한다. 추가 영상 측정·실물 동작은 수행하지 않았다.
 - gate 변화: 측면 정량 검증 대기. 중단된 run의 적재 수용은 주장하지 않는다. CE: 해당 없음 — 기존 증거의 주장 범위 정정.
+
+
+## 2026-11-03 ? uncommitted ? test(remote): verify profiles across each planned host worker
+
+- Change: explicitly pin independent host headroom in the dispatch fixture. Unmeasured hosts use one worker each; 4-core/4-GB hosts use two. Exact host/profile assertions cover every planned worker, with no production change.
+- Evidence: test-only `69b5622629` reproduced the whole-root failure deterministically (one expected failure and one pass). `270285542c` passed all 152 tests across remote_test_tools, remote_pytest and reboot admission, with zero skips/NEW/known/flaky. The prior source9752 whole-root run had one profile-fixture failure; its isolated retry passed, demonstrating uncontrolled shared state rather than missing profile propagation.
+- Gate: no quarantine or weakened evidence. The previous FULL was stopped and its 1855 browser passes plus clean 12-test G1 receipt remain audit evidence only; a new tree requires a fresh canonical FULL before publication. No new public CI or field acceptance claim.
+- CE: no additional lesson; the two resource cases and exact assertions explain the correction. Existing workflow/recovery lessons updated earlier remain applicable.

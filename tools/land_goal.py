@@ -76,12 +76,23 @@ def train_origins(rows: list[dict], train: dict) -> list[dict]:
 
 
 def stopped_before(rows: list[dict], queued: dict, cutoff: float) -> bool:
-    """A stop in this exact branch/PID queue epoch, already observed when the member queued."""
+    """A stop in this PID epoch or an unambiguous frozen-ticket handoff before the member queued."""
     same = lambda r: r.get("branch") == queued.get("branch") and r.get("pid") == queued.get("pid")  # noqa: E731
     next_queue = min((r["t"] for r in rows if r["event"] == "queue" and same(r)
                       and queued["t"] < r["t"]), default=float("inf"))
-    return any(r["event"] == "stop" and same(r) and queued["t"] <= r["t"] <= cutoff
-               and r["t"] < next_queue for r in rows)
+    if any(r["event"] == "stop" and same(r) and queued["t"] <= r["t"] <= cutoff
+           and r["t"] < next_queue for r in rows):
+        return True
+    # A rules-refresh child can stop in preflight before emitting its own queue event.
+    if not queued.get("ticket") or not re.fullmatch(r"land/.+-\d{14}", queued.get("branch", "")):
+        return False
+    if any(r["event"] == "landed" and queued["t"] <= r["t"] <= cutoff for r in rows):
+        return False
+    previous = max((r["t"] for r in rows if r["event"] == "landed" and r["t"] < queued["t"]), default=-1)
+    epoch = [r for r in rows if r["event"] == "queue" and previous < r["t"] <= cutoff]
+    if {r.get("ticket") for r in epoch} != {queued["ticket"]} or len({r.get("pid") for r in epoch}) < 2:
+        return False
+    return any(r["event"] == "stop" and max(q["t"] for q in epoch) <= r["t"] <= cutoff for r in rows)
 
 
 def lead_times(rows: list[dict], t0: float, t1: float) -> list[float]:
@@ -90,8 +101,8 @@ def lead_times(rows: list[dict], t0: float, t1: float) -> list[float]:
     finished = {}
     runs = {}
     for row in rows:
-        if row["event"] in ("queue", "stop"):
-            runs.setdefault((row.get("branch"), row.get("pid")), []).append(row)
+        if row["event"] in ("queue", "stop", "landed"):
+            runs.setdefault(row.get("branch"), []).append(row)
     for r in sorted(rows, key=lambda r: r["t"]):
         key = topic(r.get("branch", ""))
         if r["event"] == "queue":
@@ -127,7 +138,7 @@ def lead_times(rows: list[dict], t0: float, t1: float) -> list[float]:
                        q.get("branch") == snapshot and (q["t"] <= cutoff or origin_ticket and q.get("ticket") == origin_ticket
                                                         or q.get("ticket") in member.get("retries", []))
                        or finished.get(topic(name), float("-inf")) < q["t"] <= cutoff
-                       and stopped_before(runs.get((q.get("branch"), q.get("pid")), []), q, cutoff)]
+                       and stopped_before(runs.get(q.get("branch"), []), q, cutoff)]
             start = min(q["t"] for q in covered)
             if members is not None:
                 completed.add(origin)

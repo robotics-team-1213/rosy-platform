@@ -355,6 +355,6 @@
 
 - 2026-11-03 · uncommitted · docs: 측면 카메라 정량 검증 상태 정정
 - 2026-11-03 · f81b8315d0 · docs: unwedge의 측정 기반 성공 조건과 검증 범위
-- 2026-11-03 · uncommitted · fix(harness): bootstrap each timing test before canonical imports
-- 2026-11-03 · uncommitted · fix(harness): preserve admission and G1 tests across main merge
-- 2026-11-03 · uncommitted · fix(harness): retain fresh timing proof through publication
+- 2026-11-03 · uncommitted · fix(landing): 계측 전용 변경의 시험 범위 선택
+- 2026-11-03 · uncommitted · fix(landing): preserve first queue across a proven rules-refresh stop
+- 2026-11-03 · uncommitted · fix(remote): 배치의 각 시험 입장에서 재부팅 임박 차단

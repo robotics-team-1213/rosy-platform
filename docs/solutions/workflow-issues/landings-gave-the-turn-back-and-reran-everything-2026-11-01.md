@@ -1,7 +1,7 @@
 ---
 title: Landings gave the turn back over and over and reran every suite; eight causes behind a 783 min p90
 date: 2026-11-01
-last_updated: 2026-11-02
+last_updated: 2026-11-03
 category: workflow-issues
 module: tools/land.py, tools/land_checks.py, tools/land_selection.py, tools/land_cache.py, tools/land_prepare.py, tools/land_goal.py, tools/land_events.py, tools/land_rollup.py, tools/land_batch.py, tools/remote/host_probe.py, tools/harness/affected_tests.py
 problem_type: workflow_issue
@@ -110,6 +110,32 @@ reruns. Each cause below was found from `.git/rosy-land-events.jsonl` and `.git/
    lines after an escalation before calling a turn FULL; `tests` events are written when a round ends, so
    a turn that gave the turn back shows none.
 
+## 계측 전용 파일의 불필요한 FULL 승격
+
+2026-11-03의 실제 계측 수정은 `tools/land_goal.py`와 그 회귀 시험뿐인데도
+`tools/land*.py` 규칙 하나로 FULL을 요청했다. 두 계측 파일의 실제 흐름은 이벤트를
+읽는 `land_stats.py`와 집계용 `land_goal.py`이며, 착지 승인·선택기·원격 실행기가
+보고 결과를 소비하는 경로는 없었다. 기존 FULL 준비 640초는 이 작업에서 관측한
+비용이지, 아래 변경으로 보장되는 절감 시간이 아니다.
+
+safety 우선 판정 뒤 정확히 `land_goal.py`·`land_stats.py`만 해당 global glob에서
+분리한다. 별도 매핑을 만들지 않고 기존 local importer 추적이 goal→stats→events
+시험까지 선택하게 한다. reader가 없으면 기존 unmapped→FULL 판정을 유지한다.
+다른 runtime land 파일·선택기·remote harness·미등록 파일이 섞인 변경도 FULL이다.
+보고 결과를 향후 승인이나 실행 경로가 소비하게 되면 이 분류부터 다시 검토한다.
+
+고정 입력 `6b9f3369a7..98738da589`, 같은 `98738da589` 파일 내용, 자동
+`without_sim`·변경 browser 없음 조건으로 비교했다. 선택기 `477fa4cea0`의
+FULL 27 argv/추적된 시험 파일 2,383개가 `a193f619`에서는 AFFECTED 1 argv/
+11개(기존 guard 9개와 goal/events)다. 수집된 testcase 수나 실제 wall 비교가 아니다.
+선택 범위 근거는 작업 공간의 `stats-selection-scope-evidence.json`에 보존했다.
+
+코드 `a193f619`는 관련 선택기·실제 land_selection 호출자·goal/events 281개와
+pre-push 소비 경로 29개 원격 시험을 통과했다. skip·NEW·known·flaky는 모두 0이다.
+독립 검토는 고정 코드의 safety·mixed FULL·빈 coverage 경계를 확인했다.
+이 변경 자체는 선택기를 고치므로 정식 착지에서는 여전히 FULL을 거쳐야 한다.
+고정 입력의 범위 축소를 전체 p90 60분 달성이나 변경 후 실행시간으로 보고하지 않는다.
+
 ## Measurement trap
 
 `land_goal.py` first took main's stalls from `git log --first-parent --format=%ct main`. A landing's
@@ -201,6 +227,29 @@ pin은 불완전이다. leaf 이름이 모두 확인되면 pin 검증 실패의 
 입력 회귀와 `test_land_goal.py`·`test_land_rollup.py`의 중첩 회귀로 이 경계를 확인한다.
 코드·원격 회귀 통과는 착지 완료나 60분 SLO 달성의 증거가 아니다.
 
+## 2026-11-03: 실행 이력 없는 큰 묶음도 나눈다
+
+새 main을 합친 첫 차례에서 83경로 묶음 하나가 99%까지 진행했지만, 완료 판정 전에
+20분 조기상한을 만나 취소됐다. 본문 37개 중 실제 시작은 하나뿐이었고 PASS는 0개였다.
+99%를 성공으로 저장하거나, 추가 10분이면 전체가 끝났다고 추정하면 안 된다.
+이 묶음은 직렬 제한 대상이 아니며 측정 이력이 없었다. 기존 `cost()`는 파일 크기로
+큰 비용을 추정했지만 `split()`은 없는 이력을 0으로 보고 통째로 뒀다. 완료되지 못하면
+다음에도 완료 시간 이력이 생기지 않아 같은 큰 단위가 남는다.
+
+분할 판정과 단일 디렉터리 그룹 수에 같은 `cost()` 값을 사용한다. 측정 이력은 0을
+포함해 항상 추정보다 우선한다. 기존 240초 경계, 최대 분할 수, ALONE·serial·옵션·node
+범위와 환경 복제, 정확 argv 중복 제거는 유지한다. 선택 범위나 시간 예산을 바꾸지 않는다.
+고정 `167e3738af` Git blob 기준 실제 입력은 1→83묶음으로 나뉘며 83경로/620개 .py의
+합집합이 같다. 최대 byte 기반 추정은 3468→995초다. 현재 체크아웃의 3542초 추정과
+혼합하지 않는다. 기존 한 번 분할 정책 때문에 240초 이상 추정되는 자식 3개는 남는다.
+
+검증: RED 3 FAIL/9 PASS 뒤 코드 `8f4cf7e0bc`의 관련 3 suite 145 PASS·skip/NEW/known/flaky 0,
+독립 P1/P2 없음. 이력이 있는 현재 캐시 argv 527개의 old/new 분할 계획도 동일했다.
+실제 wall 단축과 startup 비용은 미측정이다. 원래 PASS 데이터는 지우지 않지만 분할로
+명령이 달라지면 whole 키를 자식 PASS로 추론하지 않는다. 이력이 없는 과거 whole 키가
+재사용되지 않을 수 있는 한계도 같은 명령·트리·환경을 요구하는 기존 캐시 계약 안에서 다룬다.
+되돌릴 때는 비용 판정과 디렉터리 그룹 수를 함께 되돌리고 완료 캐시·최초 요청 시계는 보존한다.
+
 ## How to verify next time
 
 - Turn bounces: `released` events per hour, and for each the log's `[tests] selector escalated to FULL`
@@ -210,3 +259,22 @@ pin은 불완전이다. leaf 이름이 모두 확인되면 pin 검증 실패의 
   (`land_checks.landed_copy`); judge it on a window that starts at its landing.
 - Each D-889 addendum appends to the same ADR file; two pending ones conflict (`not in the
   auto-resolvable set`). Merge main before queueing the second.
+
+## 규칙 재시작의 STOP과 최초 대기시간
+
+2026-11-03 실제 원장에서 최초 queue와 같은 ticket을 인수한 queue의 PID는 달랐고,
+충돌로 종료된 다음 자식 PID는 queue 전에 STOP했다. branch와 PID가 모두 같아야 하는
+기존 `stopped_before`는 앞선 두 queue를 연결하지 못했다. 새 snapshot이 완료되면
+11월2일20:44:55.984부터 11월3일00:13:39.790까지의 208.7301분이 빠지는 조인이었다.
+당시 새 snapshot은 미착지였으므로 가짜 완료 행이나 실제 lead 값을 만들지 않았다.
+
+동일 PID 판정은 유지한다. 추가 연결은 정확한 frozen snapshot에서 같은 ticket의
+복수 queue PID가 확인되고, 미완료 구간에 경쟁 ticket이 없으며, STOP이 마지막 queue
+뒤이자 새 접수 전일 때만 허용한다. 다른 snapshot·완료된 cycle·후속 재접수·일반
+브랜치를 topic 이름만으로 합치지 않는다. 이 증거가 없는 인계를 추측해 연결하지 않는다.
+
+`d49d9ab33f` 원격 RED는 직접/rollup 두 사례에서 2실패·49통과였다.
+수정 `98738da589`의 goal/events 원격 회귀는 57통과, skip·NEW·known·flaky0이며,
+실제 원장에서도 앞선 두 queue의 연결을 확인했다. 원장·시각·ticket은 바꾸지 않았다.
+복구 시 원본 queue/STOP과 ticket 인계부터 확인한다. 통계 시계의 복원은 처리시간 단축,
+main 착지 또는 60분 목표 달성의 증거가 아니다.
