@@ -313,7 +313,9 @@ def test_pixel_review_shows_unclassified_coverage(browser_workspace):
     unknown = int((review_masks.pixels(store, review_masks.get(store, 0)) == 255).sum())
     page.goto(page.url.split('?')[0].rstrip('/') + '/pixels', wait_until='networkidle')
     expect(page.locator('#pixel-coverage')).to_contain_text(f'미검수 {unknown:,}픽셀')
-    assert page.locator('#pixel-coverage').bounding_box()['y'] < page.locator('#pixel-class').bounding_box()['y']
+    photo = page.locator('#pixel-canvas').bounding_box()
+    coverage = page.locator('#pixel-coverage').bounding_box()
+    assert photo['y'] + photo['height'] <= coverage['y'] <= photo['y'] + photo['height'] + 96
     page.locator('#pixel-class').select_option('0')
     page.on('dialog', lambda dialog: dialog.accept())
     page.locator('#pixel-fill').click()

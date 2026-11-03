@@ -11,7 +11,9 @@ import '/commands.js';
 const font = (role, family) => canvasFont(role, family);
 
 const $ = id => document.getElementById(id);
-const updateContext=reviewContext(document.querySelector('.review-kinds'));
+const objectWorkspace=document.querySelector('.workspace');
+const updateContext=reviewContext(objectWorkspace);
+objectWorkspace.prepend(objectWorkspace.nextElementSibling);
 const updatePages=pageControls($('frames'),offset=>load(undefined,{offset}));
 const modeBadge=document.createElement('ui-status');
 modeBadge.id='object-workspace-mode';
