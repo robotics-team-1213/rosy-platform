@@ -71,6 +71,7 @@ export function createFilePicker({id, label, accept = ".json", maxBytes = 1024 *
     if (file && !suffixes.some(value => value.startsWith(".") ? file.name.toLowerCase().endsWith(value) :
       value.endsWith("/*") ? file.type.startsWith(value.slice(0, -1)) : file.type === value)) error = `${accept.replaceAll(".", "").toUpperCase()} 파일을 선택하세요`;
     if (file && file.size > maxBytes) error = `파일 크기는 ${maxBytes}바이트 이하여야 합니다`;
+    field.control.setCustomValidity(error);
     field.control.setAttribute("aria-invalid", String(Boolean(error)));
     result.textContent = error || (file ? `${file.name} · ${file.size}바이트 · 서버 검증 전` : "선택한 파일 없음");
     result.setAttribute("state", error ? "error" : file ? "ready" : "empty");
