@@ -13898,3 +13898,9 @@ osy-d395-s1d\`.
 - 범위 측정: 같은6b9..987 입력과987 파일 내용·자동without_sim/browser[] 조건에서 FULL27argv/추적 시험 파일2383개→AFFECTED1argv/11개(9guards+goal/events)다. workspace-records/2026-11-02/stats-selection-scope-evidence.json에 원본 argv·파일 union·SHA·조건을 원본과 SHA256 동일하게 보존했다. testcase 수나 실제 wall 절감·SLO 달성으로 해석하지 않는다.
 - gate 변화: 순수 계측 변경의 관련 시험 범위만 바로잡는다. 이 선택기 수정 자체는 정식 FULL이 필요하고, safety·runtime/selector/remote 혼합의 FULL과 기존 문서 guard를 유지한다. 공식 후보 검증·main 착지·변경 후 p90 검증은 아직 남아 있다.
 - CE: 기존 교훈 갱신 — landings-gave-the-turn-back-and-reran-everything의 과다 FULL 원인과 적용 조건을 보완했다. 보고 결과가 승인·실행 경로에 들어가면 분류를 재검토한다. 최종 문서 기록은 검증 코드a193 대비 tools/test 변경이 없으며 같은 guard를 별도 수동 pytest로 반복하지 않고 공식 착지에서 확인한다.
+
+## 2026-11-03 · uncommitted · fix(landing): main delta의 시험 폴더를 차례 밖 "delta" 단계로 (D-889 추가 27)
+- 변경: `land_selection.select`의 착지된 delta 경로가 가드 밖 시험 폴더 호출에 닿으면 `DELTA_NOTE`를 돌려주고, `land.py`가 `land_prepare.again`으로 차례 밖에서 돌린다. `land_prepare`는 이전 단계 위에 `"delta"`로 저장하고 `land_full.prepared`는 아래 단계를 보고한다.
+- 증거: 원격 착지 회귀(selection·prepare·land·turn_deadline·batch·speculate·mainred_flow) 통과. 새 시험 2개(폴더/파일 구분, delta 기록이 FULL이 아님).
+- gate 변화: FULL·safety 판정과 land record의 FULL 조건은 그대로다. delta 단계는 FULL 증거가 되지 않는다.
+- CE: 기존 교훈 갱신 — landings-gave-the-turn-back-and-reran-everything 9에 차례 안 delta 재실행과 이 결정을 연결.
