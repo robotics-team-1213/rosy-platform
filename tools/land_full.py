@@ -34,13 +34,27 @@ def _path(wt: Path, branch: str) -> Path:
 
 def save(wt: Path, branch: str, candidate: str, main: str, tier: str | None = None,
          invocations: list[list[str]] | None = None, base_tier: str | None = None,
-         flaky: list[list[str]] | None = None, yields: int = 0) -> None:
+         flaky: list[list[str]] | None = None, yields: int = 0, reused: bool = False,
+         env: str | None = None) -> None:
     path = _path(wt, branch)
     path.parent.mkdir(parents=True, exist_ok=True)
     record = {"candidate": candidate, "main": main, "tier": tier, "invocations": invocations}
     extra = {**({"base_tier": base_tier} if base_tier else {}), **({"flaky": flaky} if flaky else {}),
-             **({"yields": yields} if yields else {})}
+             **({"yields": yields} if yields else {}), **({"reused": True} if reused else {}),
+             **({"env": env} if env else {})}
     path.write_text(json.dumps({**record, **extra}), encoding="utf-8")
+
+
+def count_yield(wt: Path, branch: str) -> None:
+    """One more delta yield on the saved record (land_selection.MAX_DELTA_YIELDS), its tier and evidence unchanged."""
+    path = _path(wt, branch)
+    try:
+        record = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return
+    if isinstance(record, dict):
+        record["yields"] = int(record.get("yields") or 0) + 1
+        path.write_text(json.dumps(record), encoding="utf-8")
 
 
 def flaky(wt: Path, branch: str) -> list[list[str]]:

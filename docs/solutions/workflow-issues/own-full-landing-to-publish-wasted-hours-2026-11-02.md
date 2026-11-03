@@ -40,6 +40,8 @@ applies_when: "기존 게시 PR이나 FULL 착지 기록으로 로컬 변경을 
 
 폴더 이동·ci.yml·하네스 변경으로 `--tests auto` 착지가 FULL tier로 올라가도 그 계획에는 opt-in 브라우저 chunk가 없다. `publish_main.py`는 이런 기록을 `no opted-in canonical browser chunks`로 거부한다(`publish_evidence.reason`). 그날 확인한 main의 최근 FULL 기록 5개 중 넷은 이 이유로, 하나는 cache 정리로 실행 대응이 사라져 모두 부적격이었다. 브라우저 chunk는 명시 `--tests full`일 때만 `land_selection.all_browsers()`로 붙는다. 게시가 목적이면 처음부터 실제 변경을 담은 브랜치를 `land_async.py --tests full --no-cache`로 줄 세운다. 자동 승격 FULL 착지가 끝나기를 기다렸다가 게시를 기대하지 않는다.
 
+같은 날 그렇게 줄 세운 명시 FULL이 세션 종료로 죽은 뒤 인자 없는 `land_async.py resume`으로 다시 떴고, resume 기본값 `--tests auto`로 돌아 15분 만에 시험 없이 착지했다(로그 마지막 줄 `an earlier run's FULL tier passed ...`는 auto에서만 찍힌다). 이제 `land_async`가 줄 세울 때 인자를 `<이름>.args.json`에 남기고 인자 없는 resume은 그것을 쓴다(`test_resume_without_args_keeps_the_queued_land_args`). 이 수정이 main에 들기 전 착지에는 resume할 때 원래 인자를 직접 넘긴다. 명시 FULL 착지가 끝나면 `publish_main.py`로 실제 적격인지 바로 확인한다.
+
 ## 검증
 
 - #227 head `8a84c7e359`가 `9f5474d961`을 포함했고 실제 병합됐다는 당시 사실은 유지한다. 이후 검토한 FULL 기록·보고서는 opt-in 실행을 입증하지 못했으며, 새 검증기의 작업 브랜치 검사에서도 이 head는 거부됐다.

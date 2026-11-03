@@ -606,7 +606,8 @@ def test_console_page_and_its_assets_are_served():
     assert "SITE CONSOLE" not in page.text
     # D-540 2: the site name is drawn by the shared header module for all four documents.
     script = (Path(__file__).resolve().parents[3] / 'applications/fleet/web' / "shared" / "fleet-header.js").read_text(encoding="utf-8")
-    assert '$("fleet-name").textContent = fleet.name || "사이트";' in script
+    # D-974: a control-unit instance is named by its unit; a lone Fleet keeps its site name.
+    assert '$("fleet-name").textContent = fleet.unit ? (fleet.root ? `통합관제 ${fleet.unit}` : fleet.unit) : fleet.name || "사이트";' in script
     assert client.get("/console/assets/fleet-header.js").status_code == 200
     assert client.get("/console/assets/fleet-header.css").status_code == 200
     assert client.get("/console/assets/console.js").status_code == 200
@@ -639,7 +640,7 @@ def test_cell_page_and_its_entry_are_served():
     """D-518 — Cell stays at /console/cell. The folder is not part of the public URL."""
     client = _client(FakeRobot("rosy_01"))
     page = client.get("/console/cell")
-    assert page.status_code == 200 and "Rosy Fleet — Cell" in page.text
+    assert page.status_code == 200 and "Rosy Fleet — 팔레트 적재" in page.text
     assert "default-src 'self'" in page.headers["content-security-policy"]
     assert client.get("/console/assets/cell.js").status_code == 200
     assert client.get("/console/assets/cell.css").status_code == 200

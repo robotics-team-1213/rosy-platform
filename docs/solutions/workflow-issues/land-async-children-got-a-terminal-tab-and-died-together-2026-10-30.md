@@ -65,6 +65,10 @@ steps used by hand before:
 
 On 2026-10-30, 6 killed landings from other sessions were resumed this way.
 
+After a reboot (2026-11-03 20:44 killed the whole queue), the next `land_async.py` swept the dead tickets, so the
+queue looked empty. `python tools/land_async.py orphans` lists the snapshots that died without a `.stopped` marker
+and are not in main (newest per branch, last 24 h); `orphans --resume` resumes each. 7 were resumed by hand that night.
+
 ## Prevention
 
 - From a detached process on Windows, start every console child with `CREATE_NO_WINDOW` or `DETACHED_PROCESS`.

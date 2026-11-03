@@ -1,4 +1,4 @@
-"""Execute the client build stage and prove offline dependency closure in a fresh target."""
+"""Execute the integrations/robots/omx client build stage and prove offline dependency closure in a fresh target."""
 import os
 from pathlib import Path
 import shlex
@@ -33,7 +33,7 @@ def test_omx_client_workflow_build_and_offline_install(tmp_path):
     assert checked.returncode == 0, checked.stdout + checked.stderr
     installed = tmp_path/'installed'
     result = subprocess.run([sys.executable, '-m', 'pip', 'install', '--no-index', '--find-links', str(stage),
-                             '--target', str(installed), 'rosy-integration-robot-omx==0.1.0'],
+                             '--target', str(installed), 'rosy-integration-robot-omx==0.1.1'],
                             capture_output=True, text=True, timeout=60)
     assert result.returncode == 0, result.stdout + result.stderr
     script = '''

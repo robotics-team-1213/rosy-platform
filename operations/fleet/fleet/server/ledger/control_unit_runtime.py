@@ -188,6 +188,7 @@ def install_control_unit(app, path, *, tasks, console, principals, named_logins,
     if enrollment is not None:  # a robot enrolled outside the manifest would stop the next start
         resources = config.topology.unit(config.unit_id).resources
         enrollment.owned_robot_ids = frozenset(r[6:] for r in resources if r.startswith("robot:"))
+    console.control_unit = {"unit": config.unit_id, "root": config.topology.unit(config.unit_id).parent is None}
     store = ControlUnitStore(tasks.store.path, unit_id=config.unit_id)
     # ARM routes install after this; read their store when a delegated arm proposal arrives (D-965).
     service = ControlUnitService(config.topology, store, tasks, console, peer=None,

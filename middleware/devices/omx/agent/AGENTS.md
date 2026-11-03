@@ -5,7 +5,7 @@
 
 ## Purpose
 
-Wheel `rosy-app-agent` 0.1.1. ROSY agent application compositions. It depends on `rosy-integration-robot-omx` and `rosy-palletizing`. Import root is `rosy_agent`.
+Wheel `rosy-app-agent` 0.1.3. ROSY agent application compositions. It depends on `rosy-contracts-skill` and `rosy-skill-manipulation`. Import root is `rosy_agent`. Palletizing rules are injected by the composition (`build_cell_owner(document_rules=...)`), never imported here (D-413 §1).
 
 ## Key Files
 
@@ -13,7 +13,10 @@ Wheel `rosy-app-agent` 0.1.1. ROSY agent application compositions. It depends on
 |------|-------------|
 | `pyproject.toml` | Wheel name and the integration pins |
 | `src/rosy_agent/fleet_fence.py` | Fleet stop-fence composition |
-| `src/rosy_agent/omx_cell_documents.py` | Cell document reads for the agent |
+| `src/rosy_agent/omx_cell_documents.py` | Wraps injected process rules into the acceptance store's validated types |
+| `src/rosy_agent/transfer_provider.py` | Binds the `pallet.transfer` Skill to the OMX analytic cell planner and the local `PickPlaceRunner`; `ActionRunner` validates grant, peer, revision, stop fence and journal first |
+| `src/rosy_agent/arm_transfer.py`, `cell_workflow.py` | Fleet-managed ARM_TRANSFER installation and the pick-place workflow execution |
+| `src/rosy_agent/mixed_reach.py` | D-402 IK reach in the `mixed_cell.Reach` shape for the mixed planner (per arm base, profile limits, single poses only) |
 | `src/rosy_agent/omx_cell_owner.py` | OMX cell owner composition |
 | `src/rosy_agent/omx_sim.py` | Sim-side composition helper |
 | `src/rosy_agent/barrier_journal.py` | D-780 `PHASE_WAIT`/release/expiry rows in the owner journal (safety-tagged) |
@@ -32,7 +35,7 @@ Wheel `rosy-app-agent` 0.1.1. ROSY agent application compositions. It depends on
 
 ### Working In This Directory
 
-- Compose the existing integration and palletizing owners. Do not publish `/cmd_vel` from this wheel.
+- Compose the device adapter and the manipulation Skill. Take process rules by injection. Do not publish `/cmd_vel` from this wheel.
 - Fleet fence behavior has to match the stop fence the integration README describes. Do not add a second cancel path.
 
 ### Testing Requirements
@@ -47,8 +50,8 @@ Lazy imports of the device adapter. The wheel stays ROS-free at import of the pa
 
 ### Internal
 
-- `integrations/robots/omx/`.
-- `operations/processes/palletizing/` (`rosy-palletizing`).
+- `middleware/devices/omx/adapter/` (`omx_adapter`) and `middleware/skills/manipulation/`.
+- `operations/processes/palletizing/` supplies `CellDocumentRules` through the composition (`deploy/robot/omx`), not by import.
 
 ### External
 

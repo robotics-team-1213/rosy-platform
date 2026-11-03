@@ -20,7 +20,7 @@ OMX on the robot: the ROS adapter, the profile, and the ROS-free agent compositi
 ### Working In This Directory
 
 - The adapter is the ROS workspace package. The agent wheel must not grow a direct ROS import of its own.
-- Keep planner and runtime types in the adapter so the integration wheel can reuse them.
+- Keep planner and runtime types in the adapter so the agent composition can reuse them.
 
 ### Testing Requirements
 
@@ -34,7 +34,7 @@ OMX on the robot: the ROS adapter, the profile, and the ROS-free agent compositi
 
 ### Internal
 
-- `integrations/robots/omx/` and `operations/processes/palletizing/`.
+- `middleware/skills/manipulation/`. Palletizing rules arrive by injection from `deploy/robot/omx`.
 
 ### External
 
