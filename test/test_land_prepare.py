@@ -476,3 +476,17 @@ def test_a_main_red_stop_prepares_once_more_only_when_main_moved(repos, monkeypa
         with pytest.raises(land.Stop, match="MAIN-RED"):
             land.land_prepare.prepare(land, wt, "feat/x", args, sys.executable, None, None)
         assert len(merged) == (2 if main_moves else 1), "once more at most, and only on a moved main"
+
+
+def test_a_delta_record_reports_the_tier_under_it_and_is_never_full(tmp_path, monkeypatch):
+    """D-889 27: main's delta suites run before the turn extend the earlier tier; a land record must not call
+    them FULL unless the tier under them was, and with no tier under them nothing qualifies."""
+    record = tmp_path / "record.json"
+    monkeypatch.setattr(land.land_full, "_path", lambda wt, branch: record)
+    land.land_full.save(tmp_path, "b", "c" * 40, "m" * 40, "delta", [["mine/test"], ["fleet/test"]],
+                        base_tier="affected")
+    got = land.land_full.prepared(tmp_path, "b", "m" * 40)
+    assert got["tier"] == "affected" and got["invocations"] == [["mine/test"], ["fleet/test"]]
+    land.land_full.save(tmp_path, "b", "c" * 40, "m" * 40, "delta", [["fleet/test"]])
+    assert land.land_full.prepared(tmp_path, "b", "m" * 40) is None
+    assert json.loads(record.read_text(encoding="utf-8"))["tier"] == "delta"

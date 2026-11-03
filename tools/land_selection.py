@@ -68,6 +68,14 @@ def _guards_only(invocations: list[list[str]], guards) -> list[list[str]]:
             if paths(inv) and all(any(p == g or p.startswith(g + "/") for g in guards) for p in paths(inv))]
 
 
+DELTA_NOTE = "main's landed delta reaches whole suite folders: they run before the turn"  # D-889 27
+
+
+def _suite_dirs(inv: list[str]) -> bool:
+    """Whether an invocation names a whole test folder (not single files or node ids)."""
+    return any(not w.startswith(("ROSY_", "-")) and not w.split("::")[0].endswith(".py") for w in inv)
+
+
 def _unique(invocations: list[list[str]]) -> list[list[str]]:
     return [list(inv) for inv in dict.fromkeys(map(tuple, invocations))]
 
@@ -133,7 +141,12 @@ def select(land, wt: Path, base: str, python: str, head: str | None = None,
                     return _unique(_guards_only(sel["local_invocations"], guards) + browsers(sel["local_invocations"])), None
                 if len(reached) < len(mine):
                     print(f"[tests] main's delta reaches {len(reached)} of this branch's {len(mine)} invocations: those rerun")
-                return _unique(sel["local_invocations"] + reached + browsers(sel["local_invocations"])), None
+                # D-889 27: whole suite folders here ran 15-22 min inside the lock and gave the turn back at its
+                # cap (11-03, 17 stalls over 30 min); land.py runs them before the turn under the "delta" tier.
+                big = [inv for inv in sel["local_invocations"] + reached
+                       if _suite_dirs(inv) and not _guards_only([inv], guards)]
+                note = f"{DELTA_NOTE} ({len(big)} suite folder invocation(s))" if big else None
+                return _unique(sel["local_invocations"] + reached + browsers(sel["local_invocations"])), note
             if sel["mode"] == "full":
                 # D-762 stage 0: a FULL-class landing runs the whole tier on the lab PCs, never
                 # guards alone; not via GitHub, which would publish unpushed main commits.
