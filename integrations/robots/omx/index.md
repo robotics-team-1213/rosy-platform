@@ -23,7 +23,7 @@
 
 ## 시험
 
-- `test/test_platform_omx_transfer_provider.py`
+- `test/test_omx_client_distribution.py`
 
 ## 최근 기록
 

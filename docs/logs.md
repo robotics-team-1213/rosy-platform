@@ -14028,8 +14028,39 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 차례는 원래 정해진 선택을 그대로 돈다.
 - CE: 기존 교훈 갱신 — landings-gave-the-turn-back-and-reran-everything 11.
 
+## 2026-11-03 · uncommitted · fix(landing): 다른 트리 통과 재사용도 대기열 단계는 남기고 게시 증거는 아님 (D-970 4항)
+- 변경: `land_prepare`가 affected·delta 사전 시험에서 LOAD-FLAKY와 `land_cache.NARROW` 줄을 빼고 단계를 판정하고, 재사용이 있으면 `land_full` 기록에 `reused`를 둔다. `land.py`는 `reused` 기록으로 land record를 쓰지 않는다(pre-push가 다시 돈다). FULL 단계(명시·승격)는 예전처럼 엄격하다(21:15 착지한 flaky 완화도 FULL에서는 거둠).
+- 증거: 11-03 20:00~23:00 단계 없는 사전 시험 9/20이 모두 "reused across trees" 포함(3건은 LOAD-FLAKY도). 원격 착지 회귀 27개 파일 + affected_tests + harness_contracts 통과, 새 시험 1개, 기존 FULL 엄격 시험 유지.
+- gate 변화: 약화 없음 — 재사용 통과는 여전히 land record·게시 증거가 되지 않는다.
+- CE: 기존 교훈 갱신 — landings-gave-the-turn-back-and-reran-everything 12.
+
+## 2026-11-03 · uncommitted · feat(landing): land_async orphans — 재부팅으로 죽은 착지를 찾아 되살림
+- 변경: `land_async.py orphans [--resume]`가 `.stopped` 표시도 살아 있는 supervisor·표도 없고 main에 없는 숨은 착지(가지마다 가장 새 것, 24시간 안)를 보이고 --resume으로 되살린다.
+- 증거: 11-03 20:44 재부팅으로 대기열 착지가 모두 죽고 다음 land_async가 죽은 표를 치워 대기열이 비어 보였다 — 7건을 손으로 찾아 resume. 원격 test_land_async 통과, 새 시험 1개.
+- gate 변화: 없음. resume의 기존 거절(살아 있는 표·main에 있음·미커밋)을 그대로 거친다.
+- CE: 기존 교훈 갱신 — land-async-children…-2026-10-30(재부팅 뒤 orphans), landings-gave-the-turn-back… 13(도구 브랜치는 하나로).
+
+## 2026-11-03 · uncommitted · fix(landing): 명시 FULL 증인이 재실행 뒤에도 남음 (D-970 보완)
+- 변경: 명시 FULL 사전 시험의 `land_full` 기록에 `env`를 두고, `land_selection.current_main`이 메모리 증인이 없으면 그 기록으로 증인을 되살린다.
+- 증거: 11-03 account-ci-oauthlib-log(명시 FULL)가 규칙 갱신 재실행·재부팅·resume 때마다 FULL 전체를 캐시 없이 6번(277분). 원격 착지 회귀 27개 파일 + affected_tests + harness_contracts + publish_evidence 통과, 새 시험 1개.
+- gate 변화: 없음 — 게시는 여전히 로그로 FULL 실행을 확인하고 닫힌 쪽으로 실패한다.
+- CE: 기존 교훈 갱신 — landings-gave-the-turn-back-and-reran-everything 14.
+
+## 2026-11-03 · uncommitted · fix(landing): 단계 없는 delta 사전 시험도 넘김 횟수에 셈 (D-970 1항 보완)
+- 변경: delta 사전 시험이 단계 없이 끝나면 저장 대신 `land_full.count_yield`로 기존 기록의 `yields`만 올린다.
+- 증거: 11-03 omx-layer-violations-r3가 23:20·23:35 delta로 거듭 넘김 — 23:35 사전 시험이 tier None이라 아무것도 저장되지 않아 두 번 상한이 걸리지 않음(rosy-land-events). 원격 착지 회귀 전부 + publish_evidence 통과, 새 시험 1개.
+- gate 변화: 없음. 세 번째부터는 차례가 시험 폴더를 직접 돈다.
+- CE: 해당 없음 — D-970 1항 상한의 구멍을 메운 것.
+
+
 ## 2026-11-03 · uncommitted · docs(control-terms): 관제 용어 층 분리, 헤더는 관제 단위 이름 (D-974)
 - 변경: D-974 — Rosy Fleet은 제품 이름, 통합관제 R·셀 관제 CELL-x는 단위, PC는 물리 이름(OMX 노트북). D-968 1항 대체. `/api/fleet/state`의 `fleet`에 관제 단위 설정이 있을 때 `unit`·`root`(API v1.358), 헤더가 "통합관제 R"/"CELL-A"를 보인다. `fleet_name`은 페어링·lease 신원으로 그대로. 팔레타이징 준비 화면 표시 문구 "Cell" → "팔레트 적재"(경로·id 그대로, 노출은 기존 `CELL_TRANSFER` 규칙). CONCEPTS·관제 단위 배치표 갱신.
 - 증거: 헤더 node 시험 13개 통과, 서버·화면 pytest는 원격 실행 결과를 따른다. 현장 R·CELL-A 헤더 관측은 배포 뒤 별도.
 - gate 변화: 없음.
 - CE: 해당 없음 — 장애 해결이 아니라 용어 결정, 근거는 D-974.
+
+## 2026-11-04 · uncommitted · docs(control-terms): D-974 착지 준비 — 안전 검토·크기·ADR Log 병합 정리
+- 변경: `console.py` 변경을 줄 수 증가 없이 다시 써(D-766) 독립 안전 검토 trailer와 함께 한 커밋으로 다시 만들었다(D-430 §5). main 병합에서 union으로 겹친 D-968·D-970 ADR Log 행을 하나씩 남겼다(D-970은 main의 최신 상태, D-968은 D-974 대체 표시). D-974 후속 작업 표와 Log 상태를 실제 상태로 갱신했다.
+- 증거: 원격 pytest(관제 단위·서버 앱·브라우저·API 버전) 통과, node 시험 19개 통과, 독립 안전 검토 PASS 2회, lint 0 error. Confluence 2-1 v15 반영. Harbor PR #17 필수 검사 통과, 병합은 팀 승인 대기.
+- gate 변화: 없음.
+- CE: 해당 없음 — 착지 규칙(D-430·D-766·D-510)에 이미 있는 거절이며 그대로 따랐다.

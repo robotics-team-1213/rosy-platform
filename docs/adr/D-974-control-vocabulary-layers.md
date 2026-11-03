@@ -49,11 +49,11 @@
 - 옛 PC 이름은 과거 기록(ADR 본문, 날짜별 계획·검증)에 그대로 남는다. 새 문서와 화면에서만 쓰지 않는다.
 - 실제 R·CELL-A 인스턴스의 헤더 확인은 배포 뒤 현장 관측으로 따로 기록한다. 이 결정의 시험은 서버 상태 응답과 헤더 단위 시험까지다.
 
-### 후속 작업 (2026-11-03 기준)
+### 후속 작업 (2026-11-04 기준)
 
 | 항목 | 소유 | 상태 |
 |---|---|---|
-| 플랫폼 용어·헤더·문구·배치표 | 이 저장소 | 브랜치 `docs/control-terms`, 착지 전 |
+| 플랫폼 용어·헤더·문구·배치표 | 이 저장소 | 이 ADR과 같은 커밋으로 로컬 main 착지. 원격 회귀(관제 단위·서버·브라우저·계약) 통과, `console.py` 독립 안전 검토 PASS(D-430 §5), 크기 증가 없음(D-766) |
 | Confluence 「2-1 PC 구성과 역할」 맨 위 용어 안내 | rosy-docs / Confluence | 완료 (2026-11-03, 페이지 버전 15) |
-| Harbor `CONTEXT.md`·`PRODUCT.md`의 "Fleet 승인"·"Fleet 운영자"를 단위 명시로 | Harbor 팀 저장소 PR | PR robotics-team-1213/harborlogi#17 열림, 병합 전 |
+| Harbor `CONTEXT.md`·`PRODUCT.md`의 "Fleet 승인"·"Fleet 운영자"를 단위 명시로 | Harbor 팀 저장소 PR | PR robotics-team-1213/harborlogi#17 필수 검사 모두 통과, 팀 병합 대기 |
 | R·CELL-A 헤더 현장 관측 | 배포 뒤 | 미착수 |

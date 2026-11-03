@@ -17,6 +17,7 @@ from test_omx_pick_place_runner import _GoalPort, _event  # noqa: E402
 from omx_adapter.action_runner import action_grant_digest  # noqa: E402
 from omx_adapter.gripper_contract import GripperObservation  # noqa: E402
 from omx_adapter.kinematics import OmxKinematics  # noqa: E402
+from rosy.processes.palletizing.acceptance import CellDocumentRules  # noqa: E402
 from rosy_agent.omx_cell_owner import build_cell_owner  # noqa: E402
 
 COORDINATOR_UID = 2002
@@ -51,7 +52,8 @@ def _owner(tmp_path, *, coordinator=True, liveness_s=30.0):
     owner = build_cell_owner(
         settings, runtime_factory=FakeRuntime, goal_port_factory=lambda runtime: port,
         http_app_factory=lambda runtime: "http-app", refuse_second_owner=lambda: None,
-        gripper_readback=readback, fleet_fence_current=lambda epoch, generation: True)
+        gripper_readback=readback, fleet_fence_current=lambda epoch, generation: True,
+        document_rules=CellDocumentRules)
     holder["owner"] = owner
     snapshot = _state(OmxKinematics.load(), owner.profile)
     owner.runtime.latest_joint_state = SimpleNamespace(sequence=snapshot.sequence,
