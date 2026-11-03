@@ -519,6 +519,9 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
                     settled.append(snapshot())
         trial.update(judge(trial, cube, fixture=fixture))
         photo('mapped-trial-'+str(trial_index+1)+'.png')
+        if trial_index == 0:  # the finished stack through the real cameras: position-estimate error (D-947 5 order, step 2)
+            for view in fixture.get('real_cameras', {}):
+                photo('real-'+view+'-final.png')
         print('MAPPED_TRIAL', trial_index, trial['task_success'], trial.get('error'), trial['failures'], flush=True)
         if not trial['task_success']:
             break
