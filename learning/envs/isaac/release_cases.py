@@ -122,3 +122,27 @@ FIXTURE_OVERRIDES['nominal-palletizing-v21-ship-surveyed-bases'] = dict(FIXTURE_
                                                                         planning_scene='surveyed-bases-20261103', **SURVEYED_BASES)
 FIXTURE_OVERRIDES['nominal-palletizing-v21-ship-surveyed'] = dict(FIXTURE_OVERRIDES['nominal-palletizing-v21-ship-surveyed-bases'],
                                                                   planning_scene='surveyed-cell-20261103', belt_drop_m=.028)
+# D-969 step 1: the 9/9 CAD ship case with the two-arm demonstration recording on (real top and side views, both arms' state
+# and commanded targets at 10 Hz). Same geometry and teacher as the plain case; only the recording differs.
+FIXTURE_OVERRIDES['nominal-palletizing-v21-ship-demo'] = dict(FIXTURE_OVERRIDES['nominal-palletizing-v21-ship'], demo_recording=True)
+# D-969 step 5 smoke: the 20-step CPU ACT checkpoint (seed 42 demos) drives both arms for 30 s per container, to prove the
+# closed loop runs end to end; it is not expected to stack. Checkpoint: ~/rosy-learning/policies/<sha256> on the model PC.
+FIXTURE_OVERRIDES['nominal-palletizing-v21-ship-policy-smoke'] = dict(FIXTURE_OVERRIDES['nominal-palletizing-v21-ship'], policy=dict(
+    env='act-env-20261103', model_sha256='f98e17296e82e88eb08cfb488f904b9a39bad005ef9387ef5ccab633abe60233',
+    image_size=[320, 240], ticks_per_action=24, max_actions=150))
+# D-969 data production: the surveyed bases placed 9/9 (run 2b27f66c, 2026-11-03), so demonstrations are recorded on the
+# geometry of the real cell.
+FIXTURE_OVERRIDES['nominal-palletizing-v21-ship-surveyed-bases-demo'] = dict(
+    FIXTURE_OVERRIDES['nominal-palletizing-v21-ship-surveyed-bases'], demo_recording=True)
+# D-969 data production default (2026-11-03): the surveyed bases placed 9/9 (run 2b27f66c), so demonstrations come from the
+# geometry the real cell has, with recording on and no debug aids.
+FIXTURE_OVERRIDES['nominal-palletizing-v21-ship-surveyed-bases-demo'] = dict(
+    FIXTURE_OVERRIDES['nominal-palletizing-v21-ship-surveyed-bases'], demo_recording=True)
+# D-956 in Isaac (2026-11-04): MuJoCo's whole-stack sweep says a 2 mm release plus a seat check and one corrected re-place keeps
+# every stack up to 0.8 mm release error (24/24, plain 2/24). Same deliberate offsets across the channel, with and without it.
+SEAT_REPLACE = dict(height_m=.0005, tilt_rad=math.radians(.5), residual_m=.0001)  # D-956 limits; residual as in MuJoCo
+for _name, _offset in (('y060', .0006), ('y080', .0008)):
+    _base = dict(FIXTURE_OVERRIDES['nominal-palletizing-v21-ship'], release_gap_m=.0315, stack_release_clearance_m=.002,
+                 release_offset_m=[0., _offset])
+    FIXTURE_OVERRIDES[f'nominal-palletizing-v21-ship-{_name}-c2-g315'] = _base
+    FIXTURE_OVERRIDES[f'nominal-palletizing-v21-ship-{_name}-c2-seat-g315'] = dict(_base, seat_replace=dict(SEAT_REPLACE))
