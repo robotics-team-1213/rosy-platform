@@ -253,6 +253,42 @@
    "source": "measured",
    "evidence": "the runner's EMPTY_MARGIN: empty jaws close to within 2 units of their target (grasp holding verdict)"
   },
+  "jitter.hold_std": {
+   "value": 0.4,
+   "unit": "joint_unit",
+   "source": "measured",
+   "evidence": "jitter_replay.py over every real log on the field PC, 2026-11-03 (traces: arm_a only, 3.58 h of 10-27, 30 Hz, 2 s windows; health: arm_a 33.3 h, arm_b 5.3 h): hold windows (command still): present-around-command std p99.9 0.05, largest 0.28 (arm_a wrist_roll after the arm was handled, 0.6 crossings/s, lag 2.8) and 0.18 (shoulder_lift, same episode); 0.4 = 1.4x the largest and 8x p99.9, about 0.57 units (6 encoder counts) of swing; no real shaking episode exists in the logs, so this is a margin over normal, not a measured shake"
+  },
+  "jitter.hold_flips_hz": {
+   "value": 3.0,
+   "unit": "hz",
+   "source": "measured",
+   "evidence": "jitter_replay.py over every real log on the field PC, 2026-11-03 (traces: arm_a only, 3.58 h of 10-27, 30 Hz, 2 s windows; health: arm_a 33.3 h, arm_b 5.3 h): hold crossings/s of the 0.5 s-detrended present-sent: p99.9 0, largest 1.0 (shoulder_lift, a slow 1 Hz swing while handled); 3.0 means a sustained 1.5 Hz+ swing across the 0.2-unit deadband; both gates must hold"
+  },
+  "jitter.move_std": {
+   "value": 0.3,
+   "unit": "joint_unit",
+   "source": "measured",
+   "evidence": "jitter_replay.py over every real log on the field PC, 2026-11-03 (traces: arm_a only, 3.58 h of 10-27, 30 Hz, 2 s windows; health: arm_a 33.3 h, arm_b 5.3 h): moving windows: std p99.9 0.14, largest 0.15 (shoulder_lift park, lag 2.3); 18 windows with lag >= the strain test's 2.2 never exceeded std 0.28 / 0.64 crossings/s; 0.3 = 2x the largest"
+  },
+  "jitter.move_flips_hz": {
+   "value": 4.0,
+   "unit": "hz",
+   "source": "measured",
+   "evidence": "jitter_replay.py over every real log on the field PC, 2026-11-03 (traces: arm_a only, 3.58 h of 10-27, 30 Hz, 2 s windows; health: arm_a 33.3 h, arm_b 5.3 h): moving windows crossings/s: p99.9 1.5, largest 2.5 (shoulder_lift) and 2.0 (elbow goto above_3, wrist_flex park); 4.0 is 1.6x the largest, a sustained 2 Hz+ ripple"
+  },
+  "jitter.pwm_std": {
+   "value": 25,
+   "unit": "pwm",
+   "source": "measured",
+   "evidence": "jitter_replay.py over every real log on the field PC, 2026-11-03 (traces: arm_a only, 3.58 h of 10-27, 30 Hz, 2 s windows; health: arm_a 33.3 h, arm_b 5.3 h): 4 s standstill windows at ~4 Hz (aliases above 2 Hz): PWM std p99.9 at most 20.5 (arm_b elbow), 0 hits of both gates on any non-gripper joint over 39 h; the single-window maxima of 51-57 are motion onsets at command-still (flips only 0.28-0.57/s); the gripper is excluded because it dithers holding a box (std up to 29, 2.8 flips/s)"
+  },
+  "jitter.pwm_flips_hz": {
+   "value": 1.2,
+   "unit": "hz",
+   "source": "measured",
+   "evidence": "jitter_replay.py over every real log on the field PC, 2026-11-03 (traces: arm_a only, 3.58 h of 10-27, 30 Hz, 2 s windows; health: arm_a 33.3 h, arm_b 5.3 h): PWM sign changes/s about the window mean, non-gripper joints: largest 0.57 in 39 h (a 4 s window can show at most 4); 1.2 is 2x the largest"
+  },
   "loadcheck.risky_share": {
    "value": 0.5,
    "unit": "ratio",
