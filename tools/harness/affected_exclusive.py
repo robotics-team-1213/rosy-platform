@@ -45,7 +45,15 @@ def dedicated(inv):
     return any(normalize(w) == TARGET for w in inv) and (ALONE in inv or PLUGIN in inv)
 
 
+def _shape(invocations):
+    if (not isinstance(invocations, list) or any(
+            not isinstance(inv, list) or not inv
+            or any(not isinstance(w, str) or not w for w in inv) for inv in invocations)):
+        raise ValueError('pytest plan must contain nonempty lists of nonempty string arguments')
+
+
 def validate(invocations, required):
+    _shape(invocations)
     jobs = [inv for inv in invocations if dedicated(inv)]
     if len(jobs) != int(required) or any(inv != DEDICATED for inv in jobs):
         raise ValueError('G1 timing requires exactly one whole-file exclusive serial job')
@@ -67,6 +75,7 @@ def compose(*contexts, available=True):
 
     result, timing = [], False
     for context in contexts:
+        _shape(context)
         validate(context, required(context))
         for inv in context:
             if inv == DEDICATED:
@@ -121,14 +130,11 @@ def matrix(entries, available):
 
 
 def canonical_full(invocations):
-    root = ['test', '--ignore=' + TARGET]
-    if sum(inv == root for inv in invocations) != 1:
-        return False
     try:
         validate(invocations, True)
     except ValueError:
         return False
-    return True
+    return sum(inv == ['test', '--ignore=' + TARGET] for inv in invocations) == 1
 
 
 def evidence(log, code=None):
