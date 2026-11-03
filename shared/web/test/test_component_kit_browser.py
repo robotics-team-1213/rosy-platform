@@ -3,6 +3,7 @@
 import json
 import os
 from pathlib import Path
+import re
 
 import pytest
 from browser_harness import browser_tests_enabled
@@ -110,6 +111,27 @@ def test_list_toolbar_uses_owner_sort_choices_and_reports_selected_value(gallery
         {"query": "", "filter": "", "sort": "oldest"},
         {"query": "작업", "filter": "", "sort": "oldest"},
     ]
+
+
+@pytest.mark.parametrize("document,table_id", [
+    ("cell/cell.html", "catalog-table"), ("index.html", "tracking-positions"),
+])
+def test_product_table_fragments_load_shared_table_styles(gallery, document, table_id):
+    page = gallery
+    source = (WEB.parents[1] / "applications/fleet/web" / document).read_text(encoding="utf-8")
+    links = "".join(link for link in re.findall(r"<link\b[^>]*>", source)
+                    if 'href="/common/' in link)
+    table = re.search(rf'<table\b[^>]*id="{table_id}"[^>]*>.*?</table>', source, re.S).group()
+    table = table.replace(" hidden", "")
+    table = re.sub(r"(<tbody[^>]*>).*?(</tbody>)",
+                   lambda match: match[1] + "<tr><td>" + "긴출처" * 80 + "</td></tr>" + match[2], table, flags=re.S)
+    for theme in ("dark", "light"):
+        for width in (1366, 390):
+            page.set_viewport_size({"width": width, "height": 844})
+            page.set_content(f'<html data-theme="{theme}"><head>{links}</head><body>{table}</body></html>')
+            assert page.locator(f"#{table_id}").evaluate("el => getComputedStyle(el).borderCollapse") == "collapse"
+            assert page.locator(f"#{table_id} td").evaluate("el => getComputedStyle(el).overflowWrap") == "anywhere"
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
 
 
 def test_pagination_and_no_invented_total(gallery):
