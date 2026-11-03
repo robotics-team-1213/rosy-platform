@@ -92,6 +92,7 @@ NEEDS = {"pytest": (2, 6), "sim": (6, 8)}
 # A host with this many GB (under NEEDS) is "light": serial, MemoryMax = its free GB, smallest invocations first.
 LIGHT_GB = {"pytest": 4}
 HEADROOM: dict[str, dict] = {}  # place(): measured free cores/GB of each placed host, for xdist_plan
+BLOCKED: set[str] = set()  # place(): reachable hosts left out for an alone job, for workers()
 SITE_RESERVE = (2, 4)
 SITE_CPU_QUOTA = "400%"
 # Seconds a placement reservation (~/rosy-jobs/<name>.resv) counts before the job lock replaces it:
@@ -213,6 +214,7 @@ def place(cls: str, hosts: list[str], probes: list[dict | None], cores: int = 0)
     for i, (host, p) in enumerate(zip(hosts, probes)):
         if p is None:
             notes.append(f"{host}: unreachable")
+            BLOCKED.discard(host)
             continue
         site = host in SITES or p.get("site", False)
         cores = p["nproc"] - max(p["load1"], p["lock_cores"]) - (SITE_RESERVE[0] if site else 0)
@@ -225,6 +227,7 @@ def place(cls: str, hosts: list[str], probes: list[dict | None], cores: int = 0)
         disk = f", disk {p['disk_free_gb']:.1f} GB free ({p['disk_use']}%)" if "disk_free_gb" in p else ""
         stale = f"; busy marker {p['busy_ignored']} (ignored)" if p.get("busy_ignored") else ""
         notes.append(f"{host}: {cores:.1f} cores, {mem:.1f} GB free{disk}{' (site PC)' if site else ''} - {why}{stale}")
+        (BLOCKED.add if why.startswith("alone job") else BLOCKED.discard)(host)
         if why == "ok" or why.startswith("light"):
             HEADROOM[host] = {"cores": cores, "mem": mem, "site": site, "light": mem < need_m,
                               "sim_held": p.get("sim_held", 0), "browser_jobs": p.get("browser_jobs", 0)}
@@ -367,7 +370,7 @@ def run(invocations: list[list[str]], logs: list[Path], sha: str = "HEAD", repo:
             print(f"[remote-pytest] no test host reachable; retrying in {poll:.0f} s (D-584)", file=sys.stderr, flush=True)
             sleep(poll)
             hosts = placed_hosts("pytest", cores=cores)
-        plan = workers(hosts, invocations, HEADROOM, os.environ.get("ROSY_TEST_HOSTS", DEFAULT_HOSTS).split())
+        plan = workers(hosts, invocations, HEADROOM, os.environ.get("ROSY_TEST_HOSTS", DEFAULT_HOSTS).split(), BLOCKED)
         if len(plan) == 1 and not work.codes and not reruns:
             try:
                 codes = run_on(plan[0][0], invocations, logs, sha, repo, label,
