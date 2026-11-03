@@ -336,3 +336,22 @@ def test_restart_with_an_inflight_physical_action_retains_unknown_claims(rig):
     assert store.get(proposal["mission_id"], principal=PROPOSER)["status"] == "HOLD"
     assert {row["phase"] for row in claims(path)} == {"UNKNOWN"}
     assert not tasks.dispatch_control()["rearm_available"]
+
+
+def test_admit_refuses_a_delegated_proposal_its_origin_canceled(rig):
+    from fleet.server.control_unit_store import ControlUnitStore
+    path, _, control, store = rig
+    proposed = create(store)
+    assert store.peek(proposed["mission_id"]) == proposed
+    delegations = ControlUnitStore(path, unit_id="CELL-A")
+    delegations.create("R", "arm-1", {"target_unit": "CELL-A"}, owner_unit="CELL-A", config_revision="v1")
+    delegations.bind_local("R", "arm-1", proposed["mission_id"])
+    delegations.request_cancel("R", "arm-1")
+    with pytest.raises(MissionConflict, match="canceled by its origin"):
+        admit(store, proposed, control)
+    assert not claims(path)
+    held = store.withdraw(proposed["mission_id"], reason="control-unit-cancel")
+    assert (held["status"], held["reason"]) == ("HOLD", "control-unit-cancel")
+    assert store.withdraw(proposed["mission_id"], reason="again")["reason"] == "control-unit-cancel"
+    with pytest.raises(MissionConflict):
+        admit(store, proposed, control)
