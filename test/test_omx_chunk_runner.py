@@ -717,3 +717,45 @@ def test_the_trace_gets_one_row_per_tick():
     r.run(lambda: [queue.pop(0)] if queue and not r.chunk else [])
     assert len(rows) == r.ticks
     assert rows[1]["chunk"] == "approach_pinky" and len(rows[1]["sent"]) == 6 and len(rows[1]["present"]) == 6
+
+
+class Winding(Bus):
+    """The elbow's PWM climbs every read, like an integral winding up against something."""
+
+    def sync_read(self, name):
+        if name == "Present_PWM":
+            self.values[name]["elbow_flex"] += 20
+        return super().sync_read(name)
+
+
+def test_an_elbow_winding_up_short_of_home_ends_the_session_folded_before_it_overloads():
+    """arm_b 2026-11-03: a box wedged the folded elbow 1 deg short of home; PWM 261 -> 476 in 18 s, then overload."""
+    class Wedged(Robot):  # the elbow follows everywhere but stops 1 unit short of home
+        def send_action(self, action):
+            super().send_action(action)
+            self.pos[2] -= 1.0 if action["elbow_flex.pos"] == HOME[2] else 0.0
+
+    robot = Wedged()
+    robot.bus = Winding(pwm={"elbow_flex": 100})
+    status = run_with(robot, lifting_library(), ["park"])
+    pushed = next(s for s in status if (s.get("error") or "").startswith("pushing at rest"))
+    assert "elbow_flex" in pushed["error"] and pushed["person_needed"] is True
+    assert status[-1]["command"] == "stop" and "pushing" in status[-1]["reason"]  # before idle_stop_s ran out
+
+
+def test_a_park_with_something_in_the_jaws_holds_instead_of_folding_it_home():
+    robot = Robot(object_at=55.0)
+    robot.pos[5], robot.bus = 55.0, Bus(pwm={"gripper": 65536 - 290})
+    status = run_with(robot, lifting_library(), ["run approach_pinky", "park", "stop"])
+    held = by_command(status, "run park")[0]
+    assert held["ok"] is False and "jaws" in held["error"] and held["contact"] is True
+
+
+def test_a_closing_grip_that_catches_something_reopens_where_it_was():
+    """arm_b 2026-11-03 13:27: a jaw-mark close caught a box edge and the park later folded the box home."""
+    robot = Robot(object_at=55.0)
+    robot.pos[5], robot.bus = 62.0, Bus(pwm={"gripper": 65536 - 290})
+    status = run_with(robot, lifting_library(), ["grip 46.6"] + ["state"] * 120 + ["stop"])
+    caught = next(s for s in status if s.get("caught"))
+    assert caught["ok"] is False and "jaws" in caught["error"] and caught["target"][5] == 62.0
+    assert robot.pos[5] == 62.0

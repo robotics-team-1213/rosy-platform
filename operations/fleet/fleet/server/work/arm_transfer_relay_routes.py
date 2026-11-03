@@ -53,7 +53,8 @@ def install_arm_transfer_relay_routes(app, *, control, require_viewer, require_p
     def seen(row, principal):
         """At this Fleet the proposer is the app; the cell's own record names this unit's service principal."""
         job = projected(row)["job"]
-        return {"job": dict(job, proposal_principal_id=principal.principal_id) if mine(row, principal) else job}
+        return {"job": dict(job, proposal_principal_id=principal.principal_id,
+                            request_key=row["request"]["transfer"]["request_key"]) if mine(row, principal) else job}
 
     def by_mission(mission_id, principal):
         try:
