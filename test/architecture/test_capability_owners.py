@@ -3,8 +3,9 @@
 ``tools/harness/platform_parts.yaml`` gives each root a ``capability:`` whose
 ``owners`` are GitHub logins. ``.github/CODEOWNERS`` must route each owned root
 to those owners (last matching line, as GitHub reads it), and no line may name
-a root without also naming that root's owners. ``platform`` has no owners and
-stays with the ``*`` default. Paths only; the logins themselves are not checked
+a root without also naming that root's owners. ``platform`` has no role owners;
+a root with exactly one consuming role may carry ``reviewers:`` proxies beside
+the ``*`` default. Paths only; the logins themselves are not checked
 against GitHub here.
 """
 
