@@ -1151,23 +1151,23 @@ def test_arrow_keys_move_between_photos(browser_workspace):
     page.keyboard.press('ArrowLeft')
     photo_loaded('사진 1')
     page.locator('#filter').select_option('excluded')
-    photo_loaded('사진 2')
+    photo_loaded('사진 1')
     expect(page.locator('#prev-frame')).to_have_attribute('disabled', '')
     page.locator('#canvas').focus()
     page.keyboard.press('ArrowLeft')
     page.keyboard.press('ArrowRight')
-    photo_loaded('사진 2')
+    photo_loaded('사진 1')
     assert [row['status'] for row in store.list_frames()] == ['approved', 'excluded']
 
 
 def test_filter_selection_empty_recovery_and_reload(browser_workspace):
     page, store, expect = browser_workspace
     page.locator('#filter').select_option('excluded')
-    expect(page.locator('#frame-title')).to_have_text('사진 2')
+    expect(page.locator('#frame-title')).to_have_text('사진 1')
     expect(page.locator('#prev-frame')).to_have_attribute('disabled', '')
     expect(page.locator('#next-frame')).to_have_attribute('disabled', '')
     page.reload(wait_until='networkidle')
-    expect(page.locator('#frame-title')).to_have_text('사진 2')
+    expect(page.locator('#frame-title')).to_have_text('사진 1')
     page.locator('#filter').select_option('pending')
     expect(page.locator('#empty-review')).to_be_visible()
     expect(page.locator('#review-content')).to_be_hidden()
@@ -1189,7 +1189,7 @@ def test_approve_advances_to_next_pending_and_keeps_filter(browser_workspace):
     page.locator('#complete').check()
     page.locator('#approve').click()
     # The reviewer lands on the next pending photo without a third click.
-    expect(page.locator('#frame-title')).to_have_text('사진 2')
+    expect(page.locator('#frame-title')).to_have_text('사진 1')
     expect(page.locator('#filter')).to_have_value('pending')
     expect(page.locator('#drag-status')).to_contain_text('사진 1 승인')
     expect(page.locator('#complete')).not_to_be_checked()

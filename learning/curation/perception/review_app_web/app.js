@@ -1,4 +1,4 @@
-import {workspacePage,pageControls} from '/review-pages.js';
+import {workspacePage,pageControls,frameOrdinal} from '/review-pages.js';
 import {accountFetch} from '/account-session.js';
 import {showVersions,resetVersions} from '/versions.js';
 import {showAI,resetAI,updateAI,candidateOrigin} from '/ai-jobs.js';
@@ -140,7 +140,7 @@ function list() {
   $('filter').parentElement.hidden=!Object.values(workspace.counts).some(Boolean);
   $('empty-frames').textContent=Object.values(workspace.counts).some(Boolean)?'이 상태의 사진이 없습니다.':'등록된 사진이 없습니다.';
   $('empty-frames').hidden=visible.length>0;
-  const key=visible.map(f=>f.index).join(',');
+  const key=workspace.page.offset+":"+visible.map(f=>f.index).join(',');
   if (key===listKey) {
     // Same membership (D-469): refresh badges and selection in place instead of
     // rebuilding every thumbnail, which would refetch all original images.
@@ -158,7 +158,7 @@ function list() {
     const button = document.createElement('ui-button'); button.setAttribute('kind','segment'); button.dataset.index=f.index; button.setAttribute('aria-pressed',String(f.index === frame?.index));
     // loading must precede src: Chromium starts an eager fetch the moment src is set.
     const thumb=document.createElement('img');thumb.loading='lazy';thumb.alt='';thumb.className='frame-thumb';thumb.src=`/api/images/${f.index}`;
-    const name=document.createElement('span');name.className='frame-label';name.textContent=`사진 ${f.index+1}`;button.append(thumb,name);
+    const name=document.createElement('span');name.className='frame-label';name.textContent=`사진 ${frameOrdinal(workspace,f.index)}`;button.append(thumb,name);
     const badge = document.createElement('span'); badge.className = 'frame-badge'; badge.textContent = statuses[f.status]; name.append(badge);
     button.onclick = () => { if (!busy && !gesture) select(f.index); }; $('frames').append(button);
   });
@@ -231,7 +231,7 @@ async function select(index) {
   for (const link of document.querySelectorAll('a[href^="/pixels"]')) link.href = `/pixels?frame=${frame.index}`;
   $('complete').checked = false; drawing = false; $('draw').setAttribute('aria-pressed','false');
   $('save-status').textContent='사진을 불러오는 중…';
-  $('frame-title').textContent = `사진 ${index+1}`; $('status').textContent = statuses[frame.status];
+  $('frame-title').textContent = `사진 ${frameOrdinal(workspace,index)}`; $('status').textContent = statuses[frame.status];
   frameHeading();saveView();
   resetHistory();resetVersions();resetAI();
   request(`/api/history/${index}`).then(value=>{if(serial===loadSerial)showHistory(value);})
@@ -343,7 +343,7 @@ function quickClasses() {
 async function mutate(action, extras={}, restoring=false) {
   if (busy || !ready || conflicted || forbidden) return;
   busy=true; error(); $('complete').checked=false; $('save-status').textContent='서버에 저장 중…'; enable();
-  const id=frame.index;
+  const id=frame.index,decidedOrdinal=frameOrdinal(workspace,frame.index);
   const previous=structuredClone(frame.review.boxes);
   try {
     const saved=await request(`/api/frames/${id}`,{version:frame.version,action,...extras});
@@ -356,7 +356,7 @@ async function mutate(action, extras={}, restoring=false) {
     const decided=['approve','exclude'].includes(action), advance=decided&&['all','pending'].includes($('filter').value)&&await nextPending(id);
     if(!advance&&$('filter').value!=='all'&&frame.status!==$('filter').value) {$('filter').value='all';saveView();workspace={...workspace,...await request(workspacePage('object','all',{around:id}))};}
     $('status').textContent=statuses[frame.status]; $('save-status').textContent=`서버 저장됨 · v${frame.version}`;
-    if(decided&&['all','pending'].includes($('filter').value)) $('drag-status').textContent=`사진 ${id+1} ${statuses[frame.status]} · ${advance?'다음 검수 대기 사진입니다.':'검수 대기 사진을 모두 처리했습니다.'}`;
+    if(decided&&['all','pending'].includes($('filter').value)) $('drag-status').textContent=`사진 ${decidedOrdinal} ${statuses[frame.status]} · ${advance?'다음 검수 대기 사진입니다.':'검수 대기 사진을 모두 처리했습니다.'}`;
     if(advance) {select(advance.index); return;}
     frameHeading();showVersions('object',id);connectAI();
     request(`/api/history/${id}`).then(value=>{if(frame?.index===id)showHistory(value);})
@@ -475,9 +475,10 @@ document.addEventListener('keydown',event=> {
 $('view-original').onclick=()=>setView(false);
 $('view-detail').onclick=()=>setView(true);
 function frameHeading() {
+  $('frame-title').textContent = `\uC0AC\uC9C4 ${frameOrdinal(workspace,frame.index)}`;
   $('status').setAttribute('status',frame.status==='pending'?'warn':'neutral');
   const visible=visibleFrames();
-  $('frame-progress').textContent=`${workspace.page.offset+visible.findIndex(item=>item.index===frame.index)+1} / ${workspace.page.total} · ${frame.source.width} × ${frame.source.height} · 박스 ${frame.review.boxes.length}개${frame.source.annotation_note?' · '+frame.source.annotation_note:''}`;
+  $('frame-progress').textContent=`${frameOrdinal(workspace,frame.index)} / ${workspace.page.total} · ${frame.source.width} × ${frame.source.height} · 박스 ${frame.review.boxes.length}개${frame.source.annotation_note?' · '+frame.source.annotation_note:''}`;
 }
 function saveView() {
   const url=new URL(location.href);if(frame) url.searchParams.set('frame',frame.index);else url.searchParams.delete('frame');

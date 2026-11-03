@@ -1,4 +1,8 @@
 // Each editor keeps only one bounded page of labels and thumbnails in memory.
+export function frameOrdinal(workspace,index) {
+  const position=workspace.frames.findIndex(row=>row.index===index);
+  return position<0?'—':workspace.page.offset+position+1;
+}
 export function workspacePage(lane, status='all', options={}) {
   const query=new URLSearchParams({limit:'60',lane,status});
   const session=new URLSearchParams(location.search).get('source_session');
