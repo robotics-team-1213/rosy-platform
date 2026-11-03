@@ -88,6 +88,30 @@ def test_bulk_selection_is_explicit_and_survives_sort(gallery):
     expect(page.locator("#select-page")).not_to_be_checked()
 
 
+def test_list_toolbar_uses_owner_sort_choices_and_reports_selected_value(gallery):
+    from playwright.sync_api import expect
+    page = gallery
+    page.evaluate("""async () => {
+      const {createListToolbar} = await import('/common/collection-controls.js');
+      window.sortChanges = [];
+      const toolbar = createListToolbar({id: 'history-list',
+        sortLabel: '등록 시각 정렬',
+        sortOptions: [{value: 'recent', label: '최근 등록 먼저'},
+                      {value: 'oldest', label: '오래된 등록 먼저'}],
+        onChange: change => window.sortChanges.push(change)});
+      document.body.append(toolbar.element);
+    }""")
+    sort = page.get_by_label("등록 시각 정렬", exact=True)
+    expect(sort).to_have_value("recent")
+    expect(sort.locator("option")).to_have_text(["최근 등록 먼저", "오래된 등록 먼저"])
+    sort.select_option("oldest")
+    page.locator("#history-list-search").fill("작업")
+    assert page.evaluate("window.sortChanges") == [
+        {"query": "", "filter": "", "sort": "oldest"},
+        {"query": "작업", "filter": "", "sort": "oldest"},
+    ]
+
+
 def test_pagination_and_no_invented_total(gallery):
     from playwright.sync_api import expect
     page = gallery
