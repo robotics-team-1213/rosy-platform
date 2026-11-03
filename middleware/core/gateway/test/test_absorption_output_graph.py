@@ -35,7 +35,8 @@ class OutputGraphTests(unittest.TestCase):
         self.exercise(.1, True, limit, (.04, .06))
 
     def test_control_obstacle_gate_reaches_motor_topic(self):
-        self.exercise(.1, True, None, (0., 0.), control_obstacle=True)
+        # D-424 6(F): a front obstacle cuts translation; a clear turn still goes out in place.
+        self.exercise(.1, True, None, (0., .1), control_obstacle=True)
 
     def test_control_allows_explicit_reverse_past_front_obstacle(self):
         self.exercise(-.1, True, None, (-.1, .1), control_obstacle=True)
