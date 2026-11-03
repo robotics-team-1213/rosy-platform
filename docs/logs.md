@@ -13898,3 +13898,10 @@ osy-d395-s1d\`.
 - 범위 측정: 같은6b9..987 입력과987 파일 내용·자동without_sim/browser[] 조건에서 FULL27argv/추적 시험 파일2383개→AFFECTED1argv/11개(9guards+goal/events)다. workspace-records/2026-11-02/stats-selection-scope-evidence.json에 원본 argv·파일 union·SHA·조건을 원본과 SHA256 동일하게 보존했다. testcase 수나 실제 wall 절감·SLO 달성으로 해석하지 않는다.
 - gate 변화: 순수 계측 변경의 관련 시험 범위만 바로잡는다. 이 선택기 수정 자체는 정식 FULL이 필요하고, safety·runtime/selector/remote 혼합의 FULL과 기존 문서 guard를 유지한다. 공식 후보 검증·main 착지·변경 후 p90 검증은 아직 남아 있다.
 - CE: 기존 교훈 갱신 — landings-gave-the-turn-back-and-reran-everything의 과다 FULL 원인과 적용 조건을 보완했다. 보고 결과가 승인·실행 경로에 들어가면 분류를 재검토한다. 최종 문서 기록은 검증 코드a193 대비 tools/test 변경이 없으며 같은 guard를 별도 수동 pytest로 반복하지 않고 공식 착지에서 확인한다.
+
+## 2026-11-03 · b71238da0d · fix(land): a held or records-only turn keeps each job's options
+- 변경: `tools/land_speculate.py` `root_part`가 root test/ 경로와 함께 그 invocation의 옵션·`ROSY_*` 단어를 남긴다(`land.py` records-only 경로도 같은 함수). `with_spec`은 이미 있는 invocation을 다시 붙이지 않는다
+- 증거: 5ec9ef709a 착지 기록이 G1 전용 job 2개와 평문 `test/test_platform_g1_timing.py`를 담아 `publish_main`이 "canonical candidate plan/environment unavailable"로 거부. 원격 `test_land_speculate.py test_land.py test_land_record.py test_publish_evidence.py test_land_selection.py` exit 0
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 없음(회귀 시험 `test_the_root_part_keeps_each_job_s_options_and_settings`)
