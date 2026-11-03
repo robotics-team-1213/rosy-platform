@@ -106,10 +106,11 @@ def map_sites(config: dict) -> list:
 
 
 def predicted(marks: list, point) -> list | None:
-    """Where the jaws over `point` should show, from an affine fit of three or more (pixel, arm) marks; else None."""
-    if len(marks) < 3:
-        return None
+    """Where the jaws over `point` should show, from an affine fit of three or more (pixel, arm) marks not on one line;
+    else None."""
     arm = np.array([[a[0], a[1], 1.0] for _, a in marks])
+    if len(marks) < 3 or np.linalg.matrix_rank(arm, tol=1e-3) < 3:  # a line of marks fixes no x (arm_a 2026-11-04)
+        return None
     coef, *_ = np.linalg.lstsq(arm, np.array([m for m, _ in marks], float), rcond=None)
     return [round(float(v), 1) for v in np.array([point[0], point[1], 1.0]) @ coef]
 

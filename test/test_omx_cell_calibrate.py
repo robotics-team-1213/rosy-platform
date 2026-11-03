@@ -173,3 +173,9 @@ def test_marks_so_far_predict_where_the_next_jaws_show():
     assert cc.predicted(marks[:2], (0.11, 0.10)) is None
     px = cc.predicted(marks, (0.11, 0.10))
     assert abs(px[0] - 444) < 3 and abs(px[1] - 364) < 3  # not the (434.7, 286.3) blob the remap took
+
+
+def test_marks_on_one_line_predict_nothing():
+    """arm_a 2026-11-04: three marks all at x=0.09 'predicted' every later point at x=0.09."""
+    line = [((489.0, 331.5), (0.09, 0.08)), ((490.1, 363.5), (0.09, 0.10)), ((497.5, 395.2), (0.09, 0.12))]
+    assert cc.predicted(line, (0.13, 0.10)) is None
