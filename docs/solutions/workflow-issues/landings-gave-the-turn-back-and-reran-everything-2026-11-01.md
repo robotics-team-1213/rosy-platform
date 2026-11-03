@@ -1,7 +1,7 @@
 ---
 title: Landings gave the turn back over and over and reran every suite; eight causes behind a 783 min p90
 date: 2026-11-01
-last_updated: 2026-11-02
+last_updated: 2026-11-03
 category: workflow-issues
 module: tools/land.py, tools/land_checks.py, tools/land_selection.py, tools/land_cache.py, tools/land_prepare.py, tools/land_goal.py, tools/land_events.py, tools/land_rollup.py, tools/land_batch.py, tools/remote/host_probe.py, tools/harness/affected_tests.py
 problem_type: workflow_issue
@@ -109,6 +109,32 @@ reruns. Each cause below was found from `.git/rosy-land-events.jsonl` and `.git/
    the queue is nearly empty (few `waiting`/`preparing` tickets), not just after a clock time. Read the
    lines after an escalation before calling a turn FULL; `tests` events are written when a round ends, so
    a turn that gave the turn back shows none.
+
+## 계측 전용 파일의 불필요한 FULL 승격
+
+2026-11-03의 실제 계측 수정은 `tools/land_goal.py`와 그 회귀 시험뿐인데도
+`tools/land*.py` 규칙 하나로 FULL을 요청했다. 두 계측 파일의 실제 흐름은 이벤트를
+읽는 `land_stats.py`와 집계용 `land_goal.py`이며, 착지 승인·선택기·원격 실행기가
+보고 결과를 소비하는 경로는 없었다. 기존 FULL 준비 640초는 이 작업에서 관측한
+비용이지, 아래 변경으로 보장되는 절감 시간이 아니다.
+
+safety 우선 판정 뒤 정확히 `land_goal.py`·`land_stats.py`만 해당 global glob에서
+분리한다. 별도 매핑을 만들지 않고 기존 local importer 추적이 goal→stats→events
+시험까지 선택하게 한다. reader가 없으면 기존 unmapped→FULL 판정을 유지한다.
+다른 runtime land 파일·선택기·remote harness·미등록 파일이 섞인 변경도 FULL이다.
+보고 결과를 향후 승인이나 실행 경로가 소비하게 되면 이 분류부터 다시 검토한다.
+
+고정 입력 `6b9f3369a7..98738da589`, 같은 `98738da589` 파일 내용, 자동
+`without_sim`·변경 browser 없음 조건으로 비교했다. 선택기 `477fa4cea0`의
+FULL 27 argv/추적된 시험 파일 2,383개가 `a193f619`에서는 AFFECTED 1 argv/
+11개(기존 guard 9개와 goal/events)다. 수집된 testcase 수나 실제 wall 비교가 아니다.
+선택 범위 근거는 작업 공간의 `stats-selection-scope-evidence.json`에 보존했다.
+
+코드 `a193f619`는 관련 선택기·실제 land_selection 호출자·goal/events 281개와
+pre-push 소비 경로 29개 원격 시험을 통과했다. skip·NEW·known·flaky는 모두 0이다.
+독립 검토는 고정 코드의 safety·mixed FULL·빈 coverage 경계를 확인했다.
+이 변경 자체는 선택기를 고치므로 정식 착지에서는 여전히 FULL을 거쳐야 한다.
+고정 입력의 범위 축소를 전체 p90 60분 달성이나 변경 후 실행시간으로 보고하지 않는다.
 
 ## Measurement trap
 
