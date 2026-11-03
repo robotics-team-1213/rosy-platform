@@ -85,9 +85,9 @@ def bus_fix(device, out):
 
 
 def sessions():
-    """Command lines of the running record_session.py processes (the preflight's rule: not a chunk-io observer)."""
+    """Command lines of every running record_session.py: a `--io chunk-io` one is the runner that owns the bus."""
     text = subprocess.run(["ps", "-eo", "args"], capture_output=True, text=True).stdout
-    return [line for line in text.splitlines() if "record_session.py" in line and "--io chunk-io" not in line]
+    return [line for line in text.splitlines() if "record_session.py" in line]
 
 
 def lock_free(arm) -> bool:
