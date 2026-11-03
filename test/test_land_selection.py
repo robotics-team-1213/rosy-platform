@@ -202,6 +202,25 @@ def test_a_landed_delta_reaching_none_of_this_branchs_suites_does_not_rerun_them
         [["a/test"]], [["b/test"]])
 
 
+def test_a_landed_delta_reaching_whole_suite_folders_runs_them_before_the_turn(caller, tmp_path):
+    """D-889 27: 11-03 turns ran the delta's suite folders for 15-22 min in the lock and gave the turn back."""
+    selection = load_selection()
+    land, _, _ = caller
+    land.land_guards = SimpleNamespace(GUARDS=("guard/test",))
+    mine = dict(mode="full", escalations=["tools/x.py: harness"], local_invocations=[["fleet/test/test_y.py"]])
+    answers = []
+    land.subprocess = SimpleNamespace(run=lambda command, **kw: SimpleNamespace(
+        returncode=0, stdout=json.dumps(answers.pop(0)), stderr=""))
+    folders = dict(mode="full", escalations=["contracts/foundation/x.py: shared foundation"],
+                   local_invocations=[["guard/test"], ["fleet/test"]], full_invocations=[["test"]])
+    answers[:] = [folders, mine]
+    invocations, note = selection.select(land, tmp_path, "base", "python", head="main", landed=True)
+    assert ["fleet/test"] in invocations and note.startswith(selection.DELTA_NOTE)
+    files = dict(folders, local_invocations=[["guard/test"], ["fleet/test/test_x.py"]])
+    answers[:] = [files, mine]
+    assert selection.select(land, tmp_path, "base", "python", head="main", landed=True)[1] is None  # files stay in the turn
+
+
 def test_safety_trigger_is_the_selectors_text():
     selection = load_selection()
     text = (ROOT / "tools/harness/affected_tests.py").read_text(encoding="utf-8")
