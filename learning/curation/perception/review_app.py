@@ -29,6 +29,7 @@ import numpy as np
 import class_sets, review_return
 from learning_workspace import Workspace, WORKFLOWS
 import review_evidence, review_ingest, review_masks, vlm_mask_feedback, camera_setup_web, omx_web, sim_web, vlm_judge_web
+import review_classes
 import review_versions, omx_center_web, review_upload
 import learning_domains, learning_pipeline, promotion_request
 import learning_tasks_web
@@ -220,6 +221,14 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                                       'token': token, 'exports': store.exports(), 'segmentation_supported': True,
                                       'pixel_classes': review_masks.served_classes(store),
                                       'map_reference': review_evidence.map_reference(store)})
+                if path == '/api/classes':
+                    if collaboration:
+                        accounts.require(self.learning_principal, 'manage')
+                    query = parse_qs(urlparse(self.path).query, strict_parsing=True)
+                    if set(query) != {'kind'} or len(query['kind']) != 1:
+                        raise ValueError('one class kind required')
+                    return self.send(dict(review_classes.snapshot(store, query['kind'][0]), token=token,
+                        workspace_id=project, workspace_label=review_evidence.metadata(store, 'workspace_label') or '현재 작업공간'))
                 if path == '/api/decisions':
                     value = review_evidence.decisions(store)
                     tag = '"' + value['decision_sha256'] + '"'
@@ -268,7 +277,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                     pixel_reviews = review_masks.get_many(store, [f for f in frames if f['status'] != 'excluded'])
                     pixel_statuses = [row['status'] for row in pixel_reviews]
                     with store.connect() as db:
-                        queued_objects = {row[0] for row in db.execute('SELECT DISTINCT frame FROM object_drafts')}
+                        queued_objects = {row[0] for row in db.execute('SELECT DISTINCT frame FROM object_drafts d WHERE NOT EXISTS (SELECT 1 FROM object_draft_quarantine q WHERE q.frame=d.frame AND q.sha256=d.sha256)')}
                     object_draft_indices = [f['index'] for f in frames if f['status'] == 'pending'
                                             and (f['index'] in queued_objects or f['source'].get('objects')
                                                  or f['source'].get('boxes'))]
@@ -338,6 +347,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                     return self.send(detail_preview(store, int(path.rsplit('/', 1)[1])),
                                      mime='image/png')
                 files = {'/': 'index.html', '/app.js': 'app.js', '/history.js': 'history.js', '/viewport.js': 'viewport.js', '/commands.js': 'commands.js', '/app.css': 'app.css',
+                         '/classes': 'classes.html', '/classes.js': 'classes.js',
                          '/review-pages.js': 'review-pages.js', '/review-context.js': 'review-context.js', '/box-geometry.mjs': 'box-geometry.mjs', '/learning': 'learning.html',
                          '/learning.js': 'learning.js', '/pixels': 'pixels.html', '/pixels.js': 'pixels.js',
                          '/storage.js': 'storage.js', '/storage-settings.js': 'storage-settings.js', '/versions.js': 'versions.js', '/ai-jobs.js': 'ai-jobs.js',
@@ -413,6 +423,10 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                 if vlm_judge_web.post(self, path, body, store, collaboration, Conflict):
                     return
                 actor = self.learning_principal['user_id'] if collaboration else None
+                if path == '/api/classes/revisions':
+                    if collaboration:
+                        accounts.require(self.learning_principal, 'manage')
+                    return self.send(review_classes.revise(store, body, actor or 'local-unidentified', Conflict))
                 if omx_web.post(self, path, body, learning, Conflict):
                     return
                 if path.startswith('/api/review-ai/'):

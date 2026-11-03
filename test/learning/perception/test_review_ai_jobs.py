@@ -111,6 +111,59 @@ def test_stale_version_does_not_publish(tmp_path):
         release.set(); jobs.close()
 
 
+@pytest.mark.parametrize('action', ['object_draft', 'pixel_draft'])
+def test_revision_quarantine_only_fresh_validated_same_bytes_can_reactivate(tmp_path, monkeypatch, action):
+    import copy
+    import review_classes
+    import vision_review_drafts
+    from review_store import Conflict
+    store = workspace(tmp_path)
+    lane = 'object' if action == 'object_draft' else 'pixel'
+    if lane == 'object':
+        result = {'boxes': [{'label': 'person', 'bbox_xyxy': [1, 1, 12, 12]}]}
+    else:
+        proposal = review_masks.pixels(store, review_masks.get(store, 0)).copy()
+        proposal[:, 1] = 0
+        result = {'mask': base64.b64encode(review_masks.encode(proposal)).decode()}
+    candidates = lambda: store.object_drafts(0) if lane == 'object' else review_masks.get(store, 0)['draft_candidates']
+    version = lambda: (store.get(0) if lane == 'object' else review_masks.get(store, 0))['version']
+    started, release = threading.Event(), threading.Event()
+    jobs = Jobs(store, backend=lambda *_: result)
+    try:
+        original = jobs.create(0, action, version(), 'first-user')
+        assert finished(jobs)['state'] == 'succeeded'
+        digest = candidates()[0]['sha256']
+        def blocked(*_):
+            started.set(); assert release.wait(5)
+            return result
+        jobs.backend = blocked
+        stale = jobs.create(0, action, version(), 'old-user')
+        assert started.wait(5)
+        current = review_classes.snapshot(store, lane)
+        rows = copy.deepcopy(current['binding']['classes'])
+        if lane == 'object':
+            rows.append(dict(index=len(rows), name='new_object', display='새 물체', color=[13, 27, 49]))
+        else:
+            rows[0]['color'] = [91, 92, 93]
+        review_classes.revise(store, dict(kind=lane, classes=rows, expected_sha=current['expected_sha'], expected_impact=0, confirm=True), 'admin', Conflict)
+        assert not candidates()
+        release.set()
+        assert finished(jobs)['state'] == 'stale'
+        assert not candidates()
+        if lane == 'object':
+            # This fake backend supports the appended class; production model compatibility stays guarded.
+            monkeypatch.setattr(vision_review_drafts, 'CLASSES', store.object_classes())
+        jobs.backend = lambda *_: result
+        fresh = jobs.create(0, action, version(), 'fresh-user')
+        assert finished(jobs)['state'] == 'succeeded'
+        candidate = candidates()[0]
+        assert candidate['sha256'] == digest
+        assert json.loads(candidate['origin'])['job_id'] == fresh['id']
+        assert {job['id'] for job in jobs.status(0)['jobs']} >= {original['id'], stale['id'], fresh['id']}
+    finally:
+        release.set(); jobs.close()
+
+
 def test_cancel_prevents_publication_and_records_canceller(tmp_path):
     store = workspace(tmp_path)
     started = threading.Event()

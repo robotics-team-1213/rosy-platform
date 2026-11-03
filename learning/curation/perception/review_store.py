@@ -158,7 +158,8 @@ class ReviewStore:
         with self.connect() as db:
             return [dict(row, boxes=json.loads(row['boxes'])) for row in db.execute(
                 'SELECT sha256,boxes,origin,catalog_sha256 FROM object_drafts '
-                'WHERE frame=? ORDER BY rowid DESC', (index,))]
+                'WHERE frame=? AND NOT EXISTS (SELECT 1 FROM object_draft_quarantine q '
+                'WHERE q.frame=object_drafts.frame AND q.sha256=object_drafts.sha256) ORDER BY rowid DESC', (index,))]
 
     def list_frames(self):
         with self.connect() as db:
@@ -296,7 +297,9 @@ class ReviewStore:
                 if not isinstance(digest, str) or not re.fullmatch('[0-9a-f]{64}', digest):
                     raise ValueError('object draft SHA required')
                 candidate = db.execute('SELECT boxes,origin,catalog_sha256 FROM object_drafts '
-                                       'WHERE frame=? AND sha256=?', (index, digest)).fetchone()
+                                       'WHERE frame=? AND sha256=? AND NOT EXISTS '
+                                       '(SELECT 1 FROM object_draft_quarantine q WHERE q.frame=object_drafts.frame '
+                                       'AND q.sha256=object_drafts.sha256)', (index, digest)).fetchone()
                 if candidate is None:
                     raise ValueError('selected object draft is unavailable')
                 boxes = json.loads(candidate['boxes'])

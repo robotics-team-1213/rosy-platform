@@ -255,8 +255,10 @@ class Jobs:
             self.store.validate_boxes(snapshot['source'], boxes, classes=self.store.object_classes(), approved=True)
             raw = json.dumps(boxes, sort_keys=True)
             digest = hashlib.sha256(raw.encode()).hexdigest()
-            db.execute('INSERT OR IGNORE INTO object_drafts VALUES (?,?,?,?,?)',
+            db.execute('INSERT INTO object_drafts VALUES (?,?,?,?,?) ON CONFLICT(frame,sha256) DO UPDATE SET '
+                       'boxes=excluded.boxes,origin=excluded.origin,catalog_sha256=excluded.catalog_sha256',
                        (job['frame'], digest, raw, origin, hashlib.sha256(job['id'].encode()).hexdigest()))
+            db.execute('DELETE FROM object_draft_quarantine WHERE frame=? AND sha256=?', (job['frame'], digest))
             return {'candidate_sha256': digest, 'boxes': len(boxes)}
         human = cv2.imdecode(np.frombuffer(base64.b64decode(snapshot['mask']), np.uint8), cv2.IMREAD_UNCHANGED)
         if job['action'] == 'pixel_draft':
@@ -272,7 +274,9 @@ class Jobs:
             if not added:
                 return {'added_pixels': 0}
             path, digest = review_masks.freeze(self.store, raw)
-            db.execute('INSERT OR IGNORE INTO pixel_drafts(frame,sha256,path,catalog_sha256,origin) VALUES (?,?,?,?,?)',
+            db.execute('INSERT INTO pixel_drafts(frame,sha256,path,catalog_sha256,origin) VALUES (?,?,?,?,?) '
+                       'ON CONFLICT(frame,sha256) DO UPDATE SET path=excluded.path,catalog_sha256=excluded.catalog_sha256,'
+                       'origin=excluded.origin,withdrawn=0',
                        (job['frame'], digest, path, hashlib.sha256(job['id'].encode()).hexdigest(), origin))
             return {'candidate_sha256': digest, 'added_pixels': added}
         value = vlm_mask_feedback._feedback(result['feedback'])
