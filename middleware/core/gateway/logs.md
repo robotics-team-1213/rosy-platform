@@ -2067,7 +2067,7 @@ clpy.duration을 추가했다(bridge AGENTS의 두 파일 함께 갱신 규칙).
 
 ## 2026-11-03 · e9ee7a7009 · 카메라 SIM fixture 소비자 검증
 
-- 변경: 앞선 fixture 수정의 전체 소비자 검증 결과를 기록한다. 실행 코드와 시험은 e9ee7a7009와 같다.
+- 변경: 앞선 fixture 수정의 다섯 카메라 시험 모듈 검증 결과를 기록한다. 실행 코드와 시험은 e9ee7a7009와 같다.
 - 검증: fixture·pipeline·continuous·lifespan·scheduling 다섯 모듈을 공식 원격 runner의 6개 worker로 실행해 15 passed/skip0/exit0을 확인했다. known_failures 비교는 NEW0/known0/flaky0이며, 생산 코드·운영 제한·기존 파이프라인 판정을 수정하지 않았다.
 - 범위: 스레드 자원 정책과 소비 시나리오의 이 소스 검증이다. 단독 실행과 부하 실행의 정확한 인과 대조, UI 최종 통합 SHA의 FULL·게시·운영 수용은 별도다. 기존 시간 초과를 재실행만으로 해결했다고 주장하지 않는다.
 - CE: 미해결 — 스레드 정책은 코드와 회귀로 설명되며, 시간 초과의 정확한 스케줄링 원인은 미확정이다.
