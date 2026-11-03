@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from concurrent.futures import CancelledError
 import json
+from harness import affected_exclusive
 import os
 import re
 import subprocess
@@ -148,6 +149,9 @@ def verdict(wt: Path, inv: list[str], log: Path, logdir: Path, tag: str, python:
     check = subprocess.run([python, "test/known_failures.py", str(log), *must], cwd=wt, capture_output=True,
                            text=True, encoding="utf-8", errors="replace", env={**os.environ, "PYTHONUTF8": "1"})
     print(check.stdout, end="")
+    if affected_exclusive.dedicated(inv):
+        why = affected_exclusive.evidence(log)
+        return check.returncode or int(bool(why)), [], why or check.stdout
     if check.returncode == 0:
         return 0, [], ""
     passing = [line.split()[1] for line in check.stdout.splitlines() if line.startswith("MUST-FAIL ")]
@@ -433,7 +437,8 @@ def run_tests(land, wt: Path, args, invocations: list[list[str]], logdir: Path, 
                 cancelled.append(inv)
                 land.land_events.emit("tests", round=round_no, argv=inv, verdict="cancelled", seconds=secs, **timing(log, began_at))
                 continue
-            why = land.land_cache.unusable(code, log) or land.land_browser.vacuous(inv, log)
+            why = (affected_exclusive.evidence(log, code) if affected_exclusive.dedicated(inv)
+                   else land.land_cache.unusable(code, log) or land.land_browser.vacuous(inv, log))
             if why == land.land_cache.NO_EVIDENCE:
                 # 2026-10-28: exit 1 with every test passed and no FAILED/ERROR line stopped 8 landings in a day;
                 # one rerun of the same invocation decides, and a second exit without evidence still stops.
@@ -467,7 +472,7 @@ def run_tests(land, wt: Path, args, invocations: list[list[str]], logdir: Path, 
             land.land_events.emit("tests", round=round_no, argv=inv, seconds=secs, **timing(log, began_at),
                                   verdict="carried" if carried else "flaky" if flaky else "pass")
             if not failed:
-                keep(inv, log)
+                keep(inv, log)  # Timing mappings are publication evidence; split never reuses them.
                 land.land_mainred.passed(inv)  # this round passed it: an earlier round's carry of it is void
                 land.land_mainred.close(wt, log.read_text(encoding="utf-8", errors="replace"), head)
             done.append(f"pytest {' '.join(inv)} ok ({log.name})"

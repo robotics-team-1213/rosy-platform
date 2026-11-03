@@ -25,13 +25,15 @@ CODE_ROOTS = tuple(ROOT / root for root in colcon_roots())
 CORE = SRC / "gateway"
 CONTROL_PKG = ROOT / "middleware/perception"
 _control_layout = runpy.run_path(str(CONTROL_PKG / "control/_source_layout.py"))
+# perception_runtime was split out of control (2026-11-03): same final-topic guard.
 CONTROL_TREES = (CONTROL_PKG, *_control_layout["FLAT_ROOTS"],
-                 _control_layout["PACKAGE_DIRS"]["control.planning"])
+                 _control_layout["PACKAGE_DIRS"]["control.planning"], ROOT / "integrations/perception")
 FLEET = SRC.parent / "operations" / "fleet"
 
 #: Other-domain tops that core production code must never import (S1).
 SLICE_TOPS = (
     "control",
+    "perception_runtime",
     "fleet",
     "bringup",
     "navigation",
@@ -43,6 +45,7 @@ SLICE_TOPS = (
 #: Workspace ROS package name for every intra-tree import top we care about.
 TOP_TO_PACKAGE = {
     "control": "control",
+    "perception_runtime": "perception_runtime",
     "core_common": "core_common",
     "core_events": "core_events",
     "core_features": "core_features",
@@ -74,7 +77,7 @@ LEGACY_FINAL_PUBLISHER = (
 #: training-input capture, never a publish). Pinned read-only exception -
 #: repoint or edit the line and this guard goes red until the pin moves.
 RECORDING_SIDE_TOPIC = (
-    "middleware/perception/nodes/recording.py",
+    "integrations/perception/perception_runtime/recording.py",
     'SIDE_TOPICS = ("cmd_vel", "line/observation", SHADOW_TOPIC, SCAN_TOPIC, ODOM_TOPIC,',
 )
 

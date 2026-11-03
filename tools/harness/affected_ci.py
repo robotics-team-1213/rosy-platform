@@ -12,6 +12,7 @@ from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 
 import affected_ros  # PR #96: per-path full-tier ROS environment for affected runners
+import affected_exclusive
 
 if TYPE_CHECKING:
     from affected_tests import Repo, Selection
@@ -127,11 +128,16 @@ def ci_matrix(repo: Repo, sel: Selection) -> dict:
         whole, out = {e["invocations"][0][0]: e for e in CI_FULL_MATRIX if SUITE_SHARDS.get(e["name"], 1) > 1}, []
         whole["test"] = {"name": "root-test", "invocations": [["test"]]}
         for inv in sel.invocations:
+            if affected_exclusive.dedicated(inv):
+                continue  # ROS environment grouping must not split the job's leading environment.
             split = [p for p in inv if p in whole and _shard_groups(repo, whole[p])]
             rest, flags = [p for p in inv if p not in split], [p for p in inv if p.startswith("-")]
             out += [rest] if any(not p.startswith("-") for p in rest) or not split else []
             out += [[*group, *flags] for p in split for group in _shard_groups(repo, whole[p])]
         entries = affected_ros.entries(out, CI_FULL_MATRIX)
+        exclusive_jobs = [inv for inv in sel.invocations if affected_exclusive.dedicated(inv)]
+        if exclusive_jobs:
+            entries.append({'name': 'g1-timing-exclusive', 'invocations': exclusive_jobs, 'ros': 'overlay'})
         if any(at._under(p.split("::", 1)[0], "learning/training/omx/test")
                for inv in sel.invocations for p in inv):
             entries.append(dict(next(e for e in CI_FULL_MATRIX if e["name"] == "omx-act-cpu")))
@@ -140,4 +146,4 @@ def ci_matrix(repo: Repo, sel: Selection) -> dict:
         entry.setdefault("kind", "pytest")
         entry.setdefault("gating", True)
         entry.setdefault("ros", "overlay")
-    return {"include": entries}
+    return {"include": affected_exclusive.matrix(entries, affected_exclusive.TARGET in repo.test_files)}

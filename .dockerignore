@@ -24,6 +24,9 @@
 !middleware/core/api/**
 !middleware/perception/
 !middleware/perception/**
+!integrations/
+!integrations/perception/
+!integrations/perception/**
 !shared/
 !middleware/
 !middleware/robot_ui/

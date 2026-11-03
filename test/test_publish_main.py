@@ -7,15 +7,17 @@ import importlib.util
 import json
 from pathlib import Path
 import subprocess
+import sys
 
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 _SPEC = importlib.util.spec_from_file_location("publish_main", ROOT / "tools" / "publish_main.py")
 tool = importlib.util.module_from_spec(_SPEC)
+sys.modules[_SPEC.name] = tool
 _SPEC.loader.exec_module(tool)
+from publish_fixtures import FULL, candidate_files, qualified_record
 NOW = datetime(2026, 10, 26, 12, tzinfo=timezone.utc)
-FULL = [["learning/registry/policy/test"], ["test"]]
 AFFECTED = [["test/test_harness_contracts.py", "pkg/test"]]
 
 
@@ -40,6 +42,7 @@ def repo(tmp_path, monkeypatch):
         _git(local, "config", key, value)
     _git(local, "remote", "add", "origin", str(origin))
     base = _commit(local, "app.py", "0")
+    candidate_files(local)
     _commit(local, "docs/logs.md", "base\n")
     _git(local, "push", "-q", "origin", "main")
     _git(local, "fetch", "-q", "origin")
@@ -57,7 +60,7 @@ def _run(local: Path, *argv: str) -> int:
 def test_newest_commit_with_a_green_full_record_is_published(repo, capsys):
     local, _ = repo
     full, affected, bare = (_commit(local, "app.py", str(i)) for i in (1, 2, 3))
-    tool.land_record.write(local, full, _git(local, "rev-parse", f"{full}^"), FULL, [])
+    qualified_record(tool, local, full, _git(local, "rev-parse", f"{full}^"))
     tool.land_record.write(local, affected, full, AFFECTED, [])  # newer, but not FULL
     assert tool.publish_sha(local) == full
     assert _run(local) == 0
@@ -70,11 +73,11 @@ def test_a_hook_edit_on_main_leaves_an_older_green_full_commit_publishable(repo)
     the SHA's own hook copy now, so main's newer hook does not matter."""
     local, _ = repo
     old_hook = _commit(local, "app.py", "1")
-    tool.land_record.write(local, old_hook, _git(local, "rev-parse", f"{old_hook}^"), FULL, [])
+    qualified_record(tool, local, old_hook, _git(local, "rev-parse", f"{old_hook}^"))
     _commit(local, "tools/hooks/pre-push", "new gate")
     assert tool.publish_sha(local) == old_hook
     same_hook = _commit(local, "app.py", "2")
-    tool.land_record.write(local, same_hook, _git(local, "rev-parse", f"{same_hook}^"), FULL, [])
+    qualified_record(tool, local, same_hook, _git(local, "rev-parse", f"{same_hook}^"))
     assert tool.publish_sha(local) == same_hook
 
 
@@ -96,7 +99,7 @@ def test_a_secret_added_and_removed_inside_the_range_still_stops_the_publish(rep
     added = _commit(local, "config/site.env", LEAK + "\n")
     _commit(local, "config/site.env", "# removed\n")  # gone from the tip tree, still in the history
     sha = _commit(local, "app.py", "1")
-    tool.land_record.write(local, sha, _git(local, "rev-parse", f"{sha}^"), FULL, [])
+    qualified_record(tool, local, sha, _git(local, "rev-parse", f"{sha}^"))
     assert _run(local) == 9
     err = capsys.readouterr().err
     assert f"{added[:10]} config/site.env [credential]" in err
@@ -115,12 +118,12 @@ def test_a_reviewed_baseline_hit_passes_but_the_same_path_in_a_new_commit_stops(
     local, _ = repo
     reviewed = _commit(local, "config/site.env", LEAK + "\n")
     sha = _commit(local, "app.py", "1")
-    tool.land_record.write(local, sha, reviewed, FULL, [])
+    qualified_record(tool, local, sha, reviewed)
     _baseline(local, (reviewed, "config/site.env", "credential"))
     assert _run(local) == 0
     assert "1 reviewed baseline hit(s) skipped" in capsys.readouterr().out
     again = _commit(local, "config/site.env", LEAK + " # again\n")
-    tool.land_record.write(local, again, sha, FULL, [])
+    qualified_record(tool, local, again, sha)
     assert _run(local) == 9
     err = capsys.readouterr().err
     assert f"{again[:10]} config/site.env [credential]" in err and reviewed[:10] not in err
@@ -129,7 +132,7 @@ def test_a_reviewed_baseline_hit_passes_but_the_same_path_in_a_new_commit_stops(
 def test_a_baseline_row_carrying_anything_but_the_triple_and_verdict_is_refused(repo, capsys):
     local, _ = repo
     sha = _commit(local, "app.py", "1")
-    tool.land_record.write(local, sha, _git(local, "rev-parse", f"{sha}^"), FULL, [])
+    qualified_record(tool, local, sha, _git(local, "rev-parse", f"{sha}^"))
     _baseline(local, (sha, "app.py", "credential"))
     path = local / tool.BASELINE
     doc = json.loads(path.read_text(encoding="utf-8"))
@@ -142,7 +145,7 @@ def test_a_baseline_row_carrying_anything_but_the_triple_and_verdict_is_refused(
 def test_a_baseline_without_the_agent_reviewer_note_is_refused(repo, capsys):
     local, _ = repo
     sha = _commit(local, "app.py", "1")
-    tool.land_record.write(local, sha, _git(local, "rev-parse", f"{sha}^"), FULL, [])
+    qualified_record(tool, local, sha, _git(local, "rev-parse", f"{sha}^"))
     _baseline(local, (sha, "app.py", "credential"))
     path = local / tool.BASELINE
     doc = json.loads(path.read_text(encoding="utf-8"))
@@ -167,7 +170,7 @@ def test_a_secret_only_a_merge_commit_adds_is_caught(repo, capsys):
     _git(local, "add", "merged.env")
     _git(local, "commit", "-q", "-m", "merge side")
     merge = _git(local, "rev-parse", "HEAD")
-    tool.land_record.write(local, merge, _git(local, "rev-parse", f"{merge}^"), FULL, [])
+    qualified_record(tool, local, merge, _git(local, "rev-parse", f"{merge}^"))
     assert _run(local) == 9
     assert f"{merge[:10]} merged.env [credential]" in capsys.readouterr().err
 
@@ -190,7 +193,7 @@ def test_no_green_full_record_means_nothing_to_publish(repo, capsys):
 def test_a_record_on_the_main_tip_land_py_merged_in_as_second_parent_counts(repo):
     local, base = repo
     tip = _commit(local, "app.py", "main")
-    tool.land_record.write(local, tip, _git(local, "rev-parse", f"{tip}^"), FULL, [])
+    qualified_record(tool, local, tip, _git(local, "rev-parse", f"{tip}^"))
     _git(local, "checkout", "-q", "-b", "topic", base)
     _commit(local, "other.py", "topic")
     _git(local, "merge", "-q", "--no-edit", "main")  # land.py: merge main into the topic, then --ff-only
@@ -233,7 +236,7 @@ def test_code_or_add_add_conflict_stops_for_the_sync_owner(repo, capsys, origin_
 def test_publish_waits_min_hours_unless_a_blocked_teammate_forces_it(repo, capsys):
     local, _ = repo
     sha = _commit(local, "app.py", "1")
-    tool.land_record.write(local, sha, _git(local, "rev-parse", f"{sha}^"), FULL, [])
+    qualified_record(tool, local, sha, _git(local, "rev-parse", f"{sha}^"))
     _git(local, "push", "-q", "origin", "HEAD~1:refs/heads/publish/main-20261026-10")  # 2 h before NOW
     assert _run(local) == 0
     assert "not due" in capsys.readouterr().out
@@ -250,7 +253,7 @@ def _refs(path: Path) -> str:
 def test_dry_run_changes_no_ref_worktree_or_origin(repo, tmp_path):
     local, _ = repo
     sha = _commit(local, "app.py", "1")
-    tool.land_record.write(local, sha, _git(local, "rev-parse", f"{sha}^"), FULL, [])
+    qualified_record(tool, local, sha, _git(local, "rev-parse", f"{sha}^"))
     before = (_refs(local), _refs(tmp_path / "origin.git"), _git(local, "worktree", "list"))
     assert _run(local) == 0
     assert (_refs(local), _refs(tmp_path / "origin.git"), _git(local, "worktree", "list")) == before
@@ -264,12 +267,12 @@ def _record(local: Path, sha: str, **fields) -> None:
     (folder / f"{sha}.json").write_text(json.dumps(record), encoding="utf-8")
 
 
-def test_a_tier_field_wins_over_the_invocation_fallback(repo):
+def test_a_tier_field_without_the_canonical_execution_proof_never_qualifies(repo):
     local, _ = repo
     full, affected = (_commit(local, "app.py", str(i)) for i in (1, 2))
     _record(local, full, tier="full", invocations=[["pkg/test"]])
     _record(local, affected, tier="affected", invocations=FULL)  # runs root test/ but says affected
-    assert tool.publish_sha(local) == full
+    assert tool.publish_sha(local) is None
 
 
 def test_records_of_an_unknown_format_stop_instead_of_nothing_to_publish(repo, capsys):
@@ -285,7 +288,7 @@ def test_apply_pushes_the_chosen_sha_from_a_temporary_worktree_and_opens_a_pr(re
     _git(local, "push", "-q", "origin", "main")
     _git(local, "fetch", "-q", "origin")
     sha = _commit(local, "app.py", "1")
-    tool.land_record.write(local, sha, _git(local, "rev-parse", f"{sha}^"), FULL, [])
+    qualified_record(tool, local, sha, _git(local, "rev-parse", f"{sha}^"))
     after = _commit(local, "app.py", "2")  # main moved on past the green FULL commit: one landing of lag
     # 2026-10-27: a landing reinstalled the shared hook mid-push and bash died rereading it; the push uses its own copy
     shared = local / ".git" / "hooks" / "pre-push"
@@ -321,6 +324,8 @@ def _view(local: Path, sha: str, **over) -> str:
 
 def _merge_gh(local: Path, sha: str, calls: list, **over):
     """gh whose `pr merge` makes origin/main the merge commit M(old origin/main, sha), as GitHub does."""
+    merged = []
+
     def gh(repo_path, *args):
         calls.append(args)
         if args[:2] == ("pr", "merge"):
@@ -328,8 +333,27 @@ def _merge_gh(local: Path, sha: str, calls: list, **over):
             _git(local, "merge", "-q", "--no-ff", "--no-edit", sha)
             _git(local, "push", "-q", "origin", "HEAD:main")
             _git(local, "checkout", "-q", "main")
-        return _view(local, sha, **over) if args[:2] == ("pr", "view") else ""
+            merged.append(True)
+        if args[:2] == ("pr", "view"):
+            return _view(local, sha, **({"state": "MERGED"} if merged else {}), **over)
+        return ""
     return gh
+
+
+def test_a_merge_the_queue_takes_silently_is_reported_as_queued_not_merged(repo, monkeypatch, capsys):
+    """gh exits 0 when main's merge queue takes the PR (PR 227); the PR is still OPEN, not merged."""
+    local, _ = repo
+    sha = _commit(local, "app.py", "1")
+    qualified_record(tool, local, sha, _git(local, "rev-parse", f"{sha}^"))
+    calls = []
+
+    def gh(repo_path, *args):
+        calls.append(args)
+        return _view(local, sha) if args[:2] == ("pr", "view") else ""
+    monkeypatch.setattr(tool, "run_gh", gh)
+    assert _run(local, "--merge-when-green", "7", "--apply") == 0
+    out = capsys.readouterr().out
+    assert "queued PR 7" in out and "not merged yet" in out and "merged PR" not in out
 
 
 @pytest.mark.parametrize("over,code", [
@@ -341,7 +365,7 @@ def _merge_gh(local: Path, sha: str, calls: list, **over):
 def test_merge_when_green_merges_only_a_mergeable_green_pr_at_its_head(repo, monkeypatch, capsys, over, code):
     local, _ = repo
     sha = _commit(local, "app.py", "1")
-    tool.land_record.write(local, sha, _git(local, "rev-parse", f"{sha}^"), FULL, [])
+    qualified_record(tool, local, sha, _git(local, "rev-parse", f"{sha}^"))
     _commit(local, "app.py", "2")  # local main moved past the published SHA
     calls = []
     monkeypatch.setattr(tool, "run_gh", _merge_gh(local, sha, calls, **over))
@@ -357,7 +381,7 @@ def test_a_merge_queue_on_main_enqueues_the_pr_instead_of_merging(repo, monkeypa
     """D-905 pilot: main requires the merge queue, so gh refuses --merge; publish_main enqueues with --auto."""
     local, _ = repo
     sha = _commit(local, "app.py", "1")
-    tool.land_record.write(local, sha, _git(local, "rev-parse", f"{sha}^"), FULL, [])
+    qualified_record(tool, local, sha, _git(local, "rev-parse", f"{sha}^"))
     calls = []
     inner = _merge_gh(local, sha, calls)
 
@@ -376,7 +400,7 @@ def test_a_merge_queue_on_main_enqueues_the_pr_instead_of_merging(repo, monkeypa
 def test_after_the_merge_a_direct_code_push_to_origin_stops_the_sync_back(repo, monkeypatch, capsys):
     local, _ = repo
     sha = _commit(local, "app.py", "1")
-    tool.land_record.write(local, sha, _git(local, "rev-parse", f"{sha}^"), FULL, [])
+    qualified_record(tool, local, sha, _git(local, "rev-parse", f"{sha}^"))
     published = _git(local, "rev-parse", "origin/main")
     _git(local, "checkout", "-q", "-b", "direct", published)
     _commit(local, "lib.py", "origin")  # a teammate pushed straight to origin

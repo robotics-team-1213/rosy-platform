@@ -14,12 +14,14 @@ which every worktree of the clone shares. A later run skips an invocation when
   nothing, and leaves the known-failure lists alone (a shorter list can turn an old pass NEW).
 
 Lint, safety-review, size-range and node never come from here. Bad lines are ignored; the file
-is trimmed to its last ``KEEP`` lines past ``MAX_LINES``. ``--no-cache`` turns it off.
+is trimmed to its last ``KEEP`` lines past ``MAX_LINES``. ``--no-cache`` disables reuse;
+fresh clean executions still leave evidence for publication.
 Standard library only.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import subprocess
@@ -29,6 +31,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "remote"))
 import remote_pytest  # noqa: E402  (deps: the test-environment identity)
+from harness import affected_exclusive
 
 CACHE = "rosy-land-cache.jsonl"
 FAILED = "rosy-land-failed.json"  # argv of invocations whose last run had a NEW failure
@@ -84,8 +87,12 @@ def entries(wt: Path) -> list[dict]:
 
 def record(wt: Path, commit: str, tree: str, env: str, inv: list[str], log: Path) -> None:
     target = path(wt)
+    try:
+        digest = hashlib.sha256(log.read_bytes()).hexdigest()
+    except OSError:
+        digest = None  # Missing historical logs can support cache reuse, never publication.
     line = json.dumps({"tree": tree, "commit": commit, "env": env, "argv": inv, "log": str(log),
-                       "at": time.strftime("%Y-%m-%dT%H:%M:%S")})
+                       "log_sha256": digest, "at": time.strftime("%Y-%m-%dT%H:%M:%S")})
     with open(target, "a", encoding="utf-8") as out:
         out.write(line + "\n")
     if len(target.read_text(encoding="utf-8", errors="replace").splitlines()) > MAX_LINES:
@@ -197,31 +204,36 @@ def split(wt: Path, args, invocations: list[list[str]], head: str, python: str, 
     """(summary lines of reused invocations, invocations still to run, record(inv, log) for each pass)."""
     def skip(inv, log):
         return None
-    if getattr(args, "no_cache", False):
-        print("[cache] off (--no-cache)")
-        return [], invocations, skip
     env = env_id(wt, head)
     if env is None:
         print("[cache] off: the test-environment hash (remote_pytest.deps) is unavailable here")
         return [], invocations, skip
     tree = _git(wt, "rev-parse", f"{head}^{{tree}}").stdout.strip()
-    known = [e for e in entries(wt) if e["env"] == env]
+
+    def keep(inv, log):
+        record(wt, head, tree, env, inv, log)
+
+    if getattr(args, "no_cache", False):
+        print("[cache] off (--no-cache): retaining fresh clean execution evidence")
+        return [], invocations, keep
+    # Dedicated timing rows prove publication, but must never replace a fresh execution.
+    known = [e for e in entries(wt) if e["env"] == env and not affected_exclusive.dedicated(e["argv"])]
     exact = {tuple(e["argv"]) for e in known if e["tree"] == tree}
     reused, todo = [], []
     for inv in invocations:
-        if tuple(inv) in exact:
+        if not affected_exclusive.dedicated(inv) and tuple(inv) in exact:
             reused.append(f"pytest {' '.join(inv)} reused: passed on this tree {tree[:10]} (env {env})")
         else:
             todo.append(inv)
     if todo and args.tests == "auto" and (wt / "tools/harness/affected_tests.py").is_file():
-        wanted = {tuple(inv) for inv in todo}
+        wanted = {tuple(inv) for inv in todo if not affected_exclusive.dedicated(inv)}
         commits = list(dict.fromkeys(e["commit"] for e in reversed(known) if tuple(e["argv"]) in wanted))
         for commit in commits[:NARROW_COMMITS]:
             delta = _delta_paths(wt, commit, head, python, select)
             if delta is None:
                 continue
             passed = {tuple(e["argv"]) for e in known if e["commit"] == commit}
-            for inv in [i for i in todo if tuple(i) in passed]:
+            for inv in [i for i in todo if not affected_exclusive.dedicated(i) and tuple(i) in passed]:
                 paths = _paths(inv)
                 if paths and not any(_overlap(p, d) for p in paths for d in delta):
                     todo.remove(inv)
@@ -230,6 +242,4 @@ def split(wt: Path, args, invocations: list[list[str]], head: str, python: str, 
     for line in reused:
         print(f"[cache] {line}")
 
-    def keep(inv, log):
-        record(wt, head, tree, env, inv, log)
     return reused, todo, keep

@@ -1,4 +1,5 @@
 """Pack affected pytest paths without cross-suite module-cache collisions."""
+import affected_exclusive
 
 # Leave room for the remote runner's SSH command and options.
 MAX_INVOCATION_CHARS = 3000
@@ -47,4 +48,5 @@ def pack(repo, paths: list[str]) -> list[list[str]]:
                 break
         else:
             groups.append(([path], dict(names), alone))
-    return [members for members, _, _ in groups]
+    return affected_exclusive.separate([members for members, _, _ in groups],
+                                       affected_exclusive.TARGET in getattr(repo, 'test_files', ()))

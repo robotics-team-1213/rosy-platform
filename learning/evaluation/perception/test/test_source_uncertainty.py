@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 ROOT = Path(__file__).resolve().parents[4]
-for holder in ('middleware/perception', 'contracts/foundation', 'learning/evaluation/perception'):
+for holder in ('middleware/perception', 'integrations/perception', 'contracts/foundation', 'learning/evaluation/perception'):
     sys.path.insert(0, str(ROOT / holder))
 
 from core_common.observation import ObservationSnapshot, SnapshotValidity

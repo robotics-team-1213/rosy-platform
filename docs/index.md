@@ -354,7 +354,7 @@
 ## 최근 기록
 
 - 2026-11-03 · uncommitted · fix(remote): 배치의 각 시험 입장에서 재부팅 임박 차단
-- 2026-11-03 · uncommitted · docs(omx): 실물 카메라로 잰 셀 실측과 셀 모델 대장 갱신
-- 2026-11-03 · uncommitted · fix(omx): 놀고 있는 팔은 60초에 접고, 막힌 접기는 한 번만 다시 한 뒤 사람을 부른다
-- 2026-11-02 · uncommitted · fix(landing): 실제 준비 anchor를 예측 전에 게시
-- 2026-11-02 · uncommitted · fix(landing): 예측 체인을 실제 우선순위 차단자와 정렬
+- 2026-11-03 · uncommitted · fix(harness): bootstrap each timing test before canonical imports
+- 2026-11-03 · uncommitted · fix(harness): preserve admission and G1 tests across main merge
+- 2026-11-03 · uncommitted · fix(harness): retain fresh timing proof through publication
+- 2026-11-03 · uncommitted · fix(harness): isolate G1 timing in a dedicated serial, host-exclusive job

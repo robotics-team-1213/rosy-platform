@@ -6,8 +6,8 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from control.sensing.perception.lane_bev import BirdsEye
-from control.sensing.perception.lane_boundaries import LaneBoundaryTracker
+from perception_runtime.perception.lane_bev import BirdsEye
+from perception_runtime.perception.lane_boundaries import LaneBoundaryTracker
 from control.sensing.perception.lane_debug import PANEL_H, PANEL_W, keep_debug_payload, next_publish_due, render_debug
 from lane_sim import CAM_X, GROUND, KW, lane
 
