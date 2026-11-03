@@ -53,6 +53,43 @@ def test_reboot_refuses_failed_torque_readback(tmp_path, monkeypatch, bad_read):
     assert closed == [True]
 
 
+@pytest.mark.parametrize("failure", [None, "ack-transport", "ack-packet", "after-transport",
+                                    "after-packet", "torque-on", "still-latched"])
+def test_reboot_requires_valid_ack_and_clean_readback(monkeypatch, failure):
+    from types import SimpleNamespace
+
+    rebooted, closed = [], []
+    port = SimpleNamespace(openPort=lambda: True, setBaudRate=lambda baud: True,
+                           closePort=lambda: closed.append(True))
+
+    def read(bus, motor, address):
+        if rebooted and motor == 13:
+            if failure == "after-transport":
+                return 0, -3001, 0
+            if failure == "after-packet":
+                return 0, 0, 1
+            if failure == "torque-on" and address == 64:
+                return 1, 0, 0
+        fault = motor == 13 and address == 70 and (not rebooted or failure == "still-latched")
+        return (32 if fault else 0), 0, (128 if fault else 0)
+
+    def reboot(bus, motor):
+        rebooted.append(motor)
+        return (-3001 if failure == "ack-transport" else 0), (1 if failure == "ack-packet" else 0)
+
+    packet = SimpleNamespace(read1ByteTxRx=read, reboot=reboot)
+    monkeypatch.setitem(sys.modules, "dynamixel_sdk", SimpleNamespace(
+        COMM_SUCCESS=0, PortHandler=lambda device: port, PacketHandler=lambda version: packet))
+    monkeypatch.setattr(oi.time, "sleep", lambda seconds: None)
+    result = oi.reboot_latched("fake-follower")([13])
+    assert closed == [True]
+    if failure is None:
+        assert result["rebooted"] == [13]
+    else:
+        assert "rebooted" not in result
+        assert result.get("error") or result.get("refused")
+
+
 def session(tmp_path, *, latched=True, last=HOME, status=(), windup=True):
     io = tmp_path / "chunk-io-b"
     io.mkdir()
