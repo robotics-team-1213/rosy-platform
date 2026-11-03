@@ -14,6 +14,14 @@ BINDING = {'classes': [{'name': 'background', 'index': 0},
                        {'name': 'drivable', 'index': 5}]}
 
 
+def test_background_completion_uses_bound_role_when_named_floor():
+    binding = {'classes': [{'name': 'floor', 'index': 0, 'role': 'background'},
+                           {'name': 'drivable', 'index': 3, 'role': 'drivable'}]}
+    human = np.array([[0, 255, 3]], dtype=np.uint8)
+    result = completion.compose(human, {'background': np.array([[True, True, False]])}, binding)
+    assert result.tolist() == [[0, 0, 3]]
+
+
 def test_completion_refuses_whole_road_before_network_or_output(tmp_path, monkeypatch):
     binding = {'classes': [dict(c, semantic='road_surface/1', role='drivable')
                            if c['name'] == 'drivable' else dict(c) for c in BINDING['classes']]}
