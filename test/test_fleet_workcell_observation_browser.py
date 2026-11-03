@@ -1,6 +1,7 @@
 """Native Cell observations use Fleet auth and expire without a developer viewer."""
 from io import BytesIO
 import json
+import re
 from pathlib import Path
 import threading
 import time
@@ -40,7 +41,7 @@ def cell_url():
 
 def observation_feed(page):
     from PIL import Image
-    state = SimpleNamespace(freeze_b=None, sequence=0, stall=False, held=[], failed_assets=[])
+    state = SimpleNamespace(freeze_b=None, sequence=0, stall=False, held=[], failed_assets=[], incidents=[], cleared=[])
     page.on("response", lambda response: state.failed_assets.append(f"{response.status} {response.url}")
             if response.request.resource_type in ("script", "stylesheet") and not response.ok else None)
     encoded = BytesIO()
@@ -56,7 +57,8 @@ def observation_feed(page):
             arms.append({"source_id": f"feedback_{side}", "arm_id": f"arm_{side}", "label": f"팔 {side}",
                          "units": "encoder_rad", "fresh": age <= 2, "epoch": side * 32,
                          "sequence": state.sequence, "captured_at": now - age, "source_age_s": age,
-                         "receipt_age_s": age, "positions": {"joint1": position} if age <= 2 else None})
+                         "receipt_age_s": age, "positions": {"joint1": position} if age <= 2 else None,
+                         "incidents": state.incidents if side == "b" else []})
         return {"read_only": True, "physical_acceptance": False, "workcells": [{
             "workcell_id": "example", "label": "예시 작업 셀", "arms": arms, "cameras": [
                 {"source_id": "top", "label": "공용 상단", "role": "overhead", "arm_id": None},
@@ -70,6 +72,13 @@ def observation_feed(page):
                 state.held.append(route)
                 return
             return route.fulfill(json=snapshot())
+        if path.endswith("/incidents/" + "a" * 32 + "/frames/top"):  # D-971
+            assert route.request.headers.get("authorization") == "Bearer viewer-token"
+            return route.fulfill(content_type="image/jpeg", body=jpeg)
+        if path.endswith("/incidents/" + "a" * 32 + "/clear"):
+            state.cleared.append(route.request.post_data_json)
+            state.incidents[0].update(state="cleared", cleared={"by": "op-7", "at": time.time(), "note": state.cleared[-1]["note"]})
+            return route.fulfill(json={"held": False, "incident_ids": [], "reason": None})
         if path == "/api/fleet/vision/lease":
             source = route.request.post_data_json["source_id"]
             assert route.request.headers.get("authorization") == "Bearer viewer-token"
@@ -161,5 +170,39 @@ def test_cell_logout_clears_observations_and_ignores_late_responses(cell_url):
         expect(root.locator("[data-arm-source]")).to_have_count(0)
         expect(root.locator("img")).to_have_count(0)
         assert not errors
+        page.unroute_all(behavior="ignoreErrors")
+        browser.close()
+
+
+def test_cell_shows_an_arm_incident_with_frames_and_an_explanation_and_clears_it_only_with_a_note(cell_url):
+    from playwright.sync_api import expect, sync_playwright
+    with sync_playwright() as playwright:
+        browser, page, errors = open_page(playwright, 390, 844, url=cell_url)
+        state, _ = observation_feed(page)
+        state.incidents.append({
+            "incident_id": "a" * 32, "source_id": "feedback_b", "session_id": "s", "state": "explained",
+            "reported_at": time.time(), "facts": {"latched": {"13": {"hw_error": 32, "bits": ["overload"]}}, "folded": True,
+                                                  "torque_after": {"13": 0}, "windup_hits": [{}], "flagged": []},
+            "decision": {"hold": True, "reason": "latched ID 13 overload"}, "recovery": {"rebooted": [13]},
+            "frames": [{"role": "top", "sha256": "0" * 64, "bytes": 100}],
+            "explanation": {"seen": "A box between the jaws <b>x</b>", "suspected_cause": "The box blocked home.",
+                            "model": "qwen3-vl:8b", "explained_at": 1.0, "note": "explanation only"}, "cleared": None})
+        page.goto(cell_url)
+        assert not state.failed_assets, state.failed_assets
+        card = page.locator('[data-arm-source="feedback_b"]')
+        expect(card.locator("summary").filter(has_text="보류 중 1건")).to_be_visible()
+        expect(card.get_by_text("설명일 뿐")).to_be_visible()
+        expect(card.get_by_text("<b>x</b>", exact=False)).to_be_visible()  # text, never markup
+        expect(card.locator("li img")).to_have_attribute("src", re.compile("^blob:"))
+        expect(page.locator('[data-arm-source="feedback_a"]').get_by_text("팔 사건 없음")).to_be_visible()
+        card.get_by_text("확인했습니다 · 해제").click()
+        expect(card.get_by_text("확인한 내용을 적어야 해제할 수 있습니다.")).to_be_visible()
+        assert state.cleared == []
+        card.get_by_label("확인한 내용").fill("box removed from the jaws")
+        card.get_by_text("확인했습니다 · 해제").click()
+        expect(card.get_by_text("해제: op-7", exact=False)).to_be_visible()
+        assert state.cleared == [{"note": "box removed from the jaws"}]
+        expect(card.locator("summary").filter(has_text="모두 해제됨")).to_be_visible()
+        assert not errors, errors
         page.unroute_all(behavior="ignoreErrors")
         browser.close()

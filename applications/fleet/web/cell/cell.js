@@ -42,7 +42,7 @@ function jobReasonLabel(reason) {
 const stored = sessionStorage.getItem('rosy-console-token') || '';
 $('console-token').value = stored;
 const request = createFleetClient({credential: () => $('console-token').value, origin: location.origin});
-const observations = createCellObservation({request, root: $('workcell-observations')});
+const observations = createCellObservation({request, root: $('workcell-observations'), credential: () => $('console-token').value});
 bindPrintSheets({request, $});
 window.addEventListener('pagehide', event => event.persisted ? observations.clear() : observations.dispose());
 window.addEventListener('pageshow', event => { if (event.persisted) connect(); });
