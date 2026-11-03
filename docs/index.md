@@ -354,7 +354,7 @@
 ## 최근 기록
 
 - 2026-11-03 · uncommitted · docs(adr): D-970 착지 대기열 — 잠금은 짧게, 같은 시험은 한 번만, 추측 끔, flaky는 시험 단위로
+- 2026-11-03 · b71238da0d · fix(land): a held or records-only turn keeps each job's options
+- 2026-11-03 · 368f142943 · docs(adr): D-968 통합관제 이름·개인 로그인 계정 모델 확정
+- 2026-11-03 · uncommitted · docs(workflow): 제어 세션 종료 뒤 남은 synthetic 부하 정리
 - 2026-11-03 · uncommitted · fix(landing): delta 차례 넘김은 깨끗한 아래 단계가 있을 때만 (D-889 추가 27 보완)
-- 2026-11-03 · 85ec06aec9 · docs(solutions): 사이트 갱신 체인 정지 진단 순서 기록
-- 2026-11-03 · uncommitted · fix(remote): omx_hotfix가 contracts/foundation도 올린다
-- 2026-11-03 · uncommitted · feat(isaac): 실측 팔 받침·벨트 후보 케이스와 이름 있는 계획 장면
