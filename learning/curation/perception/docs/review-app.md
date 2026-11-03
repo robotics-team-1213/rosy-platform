@@ -8,6 +8,33 @@ Python 3.10 이상과 기존 receiver 의존성 `numpy`, `opencv-python`이 필�
 
 다중 HF 저장 대상, 완료된 Isaac 자료 보관과 로컬 사본 회수는 [저장 공간 운영 안내](storage-pool.md)를 따른다. 선택적 보관 기능은 기존 계정 연결과 별도 host 의존성·private 설정을 사용하며 기본값은 비활성이다.
 
+### 사진 업로드와 촬영 폴더 선택
+
+자료 등록(`/catalog`)의 **내 PC에서 사진 올리기**에서 JPEG/PNG 파일 또는 폴더를 선택한다.
+한 장당 8 MiB까지 한 장씩 전송하며, 완료 수와 실패한 파일을 표시한다. 실패 전 완료한
+사진은 보존되고 남은 파일만 재시도한다. 재전송은 같은 출처·해시의 사진을 중복 등록하지 않는다.
+협업 계정은 프로젝트 `import` 권한과 기존 세션·CSRF·Origin 검사를 통과해야 한다.
+사용자 PC의 파일은 브라우저가 직접 전송하므로 서버의 홈 디렉터리 권한을 요구하지 않는다.
+서버 경로를 직접 입력하는 기존 폼은 협업 화면에서 숨긴다.
+
+운영자는 state metadata의 `image_folders`에 JSON 배열
+`[{"id":"capture-day","label":"촬영일","path":"<absolute-server-folder>","pattern":"run_YYYYMMDD_*"}]`을
+설정할 수 있다. 화면에는 등록한 이름만 보이며, 요청은 폴더 ID만 받는다. 등록은 선택한
+촬영 하위 폴더 바로 아래의 원본 JPEG/PNG만 대상으로 하며 보정본 하위 폴더와 링크는 제외한다.
+`review_source_prefix`에 JSON 문자열 `"folder:capture-day:"`를 설정하면 객체·픽셀 검수의
+기본 목록은 그 자료만 보여준다. 원래 자료와 라벨은 삭제하지 않는다.
+업로드·폴더 등록은 빈 객체/픽셀 검수 대기로 시작하고 기존 결정을 보존한다. 원본 영상·촬영
+시각·평가 적합성을 증명하지 않으며 `original_video_verified=false`를 유지한다.
+
+객체·픽셀 화면은 `/api/workspace?limit=60&offset=0&lane=object|pixel&status=all|pending|approved|excluded`로
+한 번에 최대 60장의 라벨과 썸네일만 읽는다. 전체 상태 수는 별도 SQL 집계이며, 이전/다음 페이지와
+다음 대기는 서버에서 위치를 찾는다. 사진 직접 링크(`frame`)와 명시적인 `source_session` 범위도 유지한다.
+기존 쿼리 없는 workspace API는 이전 호출자와의 호환을 위해 남는다.
+
+`POST /api/catalog/upload`는 `{name,data,folder?}`(base64 JPEG/PNG, JSON 본문 최대 12 MiB),
+`POST /api/catalog/folder`는 `{id}`만 받는다. 두 경로는 import 권한만 요구하며 정답 승인 권한을 만들지 않는다.
+`GET /api/catalog`의 `folders`는 `{id,label}` 목록이며 서버 경로를 노출하지 않는다.
+
 첫 실행은 저장소 루트에서 한다. `--images`는 source JSONL의 상대 image 경로가 시작하는 디렉터리다. 아래 경로는 자신의 저장 위치로 바꾼다. 실험실 PC의 일회성 상태·로그·증거는 X 드라이브에 둔다.
 
 ```powershell
