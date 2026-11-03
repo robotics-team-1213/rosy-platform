@@ -253,6 +253,24 @@
    "source": "measured",
    "evidence": "the runner's EMPTY_MARGIN: empty jaws close to within 2 units of their target (grasp holding verdict)"
   },
+  "loadcheck.risky_share": {
+   "value": 0.5,
+   "unit": "ratio",
+   "source": "measured",
+   "evidence": "load_model.py over every follower motor-health log, 2026-11-03 (arm_a 76255 standstill samples/112 sessions, arm_b 9987/44): the largest standstill |PWM| outside a press was 0.48 of the cap (arm_a shoulder_lift 288/600), 0.41 (arm_a elbow), 0.50 (arm_b wrist 149/300) and 0.48 (arm_b elbow 290/600); the arm_b 13:27 overload (476/600 = 0.79) was a press at home, which the pose model predicts as 0 and no plan check can see. Model predictions over all logged poses stay under 0.32 (arm_a) and 0.45 (arm_b) of the cap, so 0.5 refuses nothing the arms held normally. Also windup.rest_pwm's 0.4 and the strain test's 0.5"
+  },
+  "loadcheck.min_cell": {
+   "value": 20,
+   "unit": "count",
+   "source": "measured",
+   "evidence": "load_model.py over every follower motor-health log, 2026-11-03 (arm_a 76255 standstill samples/112 sessions, arm_b 9987/44): a 5-unit (lift, elbow, wrist) cell is trusted from 20 standstill samples (about 20 s of holding); that keeps 44 cells on arm_a and 22 on arm_b, and of 413 taught/planned libraries on the field PC only 20 (arm_a) and 2 (arm_b) lie fully inside them"
+  },
+  "loadcheck.refuse_unknown": {
+   "value": 0,
+   "unit": "flag",
+   "source": "default",
+   "evidence": "2026-11-03: most new plans leave the logged poses (mean 53 % of frames on arm_a, 83 % on arm_b over 413 field libraries); an unknown pose is reported in the load_check status row and still loads. 1 refuses them"
+  },
   "runner.contact_ticks": {
    "value": 2,
    "unit": "count",

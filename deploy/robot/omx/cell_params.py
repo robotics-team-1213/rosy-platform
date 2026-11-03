@@ -79,6 +79,8 @@ DEFAULTS = {
     "runner.contact_loaded_max": (2.2, "joint_unit", 1.5, 2.3),
     "windup.rest_rise": (40, "pwm", 10, 300), "windup.rest_pwm": (0.4, "ratio", 0.1, 0.9),
     "windup.jaw_pwm": (0.5, "ratio", 0.2, 0.95), "windup.jaw_gap": (2.0, "gripper", 0.5, 20),
+    "loadcheck.risky_share": (0.5, "ratio", 0.2, 0.95), "loadcheck.min_cell": (20, "count", 1, 1000),
+    "loadcheck.refuse_unknown": (0, "flag", 0, 1),
     "corridor.half_width_mm": (30.0, "mm", 10, 80), "corridor.clear_z_m": (0.10, "m", 0.04, 0.25),
     "corridor.base_m": (0.10, "m", 0.0, 0.2),
     "corridor.min_px": (40, "px", 1, 100000),

@@ -55,12 +55,11 @@ from omx_adapter.motion_profile import GUARD_ACCEL_UNITS_S2 as GUARD_ACCEL_UNITS
 from cell_envelope import digest, runtime_context  # noqa: E402
 import cell_params as prm  # noqa: E402
 from episode_recorder import Recorder  # noqa: E402
-import joint_push  # noqa: E402
+import joint_push, load_predict  # noqa: E402
 
 JOG_MAX = 5.0
 FOLLOW_STOP, FOLLOW_STOP_S = 25.0, 1.0   # body joints, LeRobot units; the clip alone keeps steps small
-SETTLE_TOL, SETTLE_S = 3.0, 3.0
-EMPTY_MARGIN = 2.0
+SETTLE_TOL, SETTLE_S, EMPTY_MARGIN = 3.0, 3.0, 2.0
 REL_MAX = 20.0  # largest body-joint correction a relative chunk may carry
 # Motor health (Present_PWM/Current/Temperature, raw): once per HEALTH_PERIOD_S, and fresh for a grasp verdict.
 # The guard samples PWM ~5 Hz on the same bus; reading these every 3 ticks too doubled the traffic and on
@@ -87,9 +86,8 @@ CONTACT_CHUNKS = ("descend", "grasp", "release")
 # the conveyor, 2026-10-28) it is the pose's droop (`pace_floor`) and frames go on until the lag grows PACE_RISE
 # past it. Contact chunks reach CONTACT_LAG first and keep their contact response.
 PACE_LAG, PACE_RISE, PACE_MAX_S = (prm.default(f"runner.{k}") for k in ("pace_lag", "pace_rise", "pace_max_s"))
-# Nobody sent a command for IDLE_PARK_S (a lost link, a crashed caller): fold home. IDLE_STOP_S more at home ends
-# the session, so record_session turns torque OFF and the motors rest instead of holding for hours (a session
-# held home 6 h on 2026-10-27/28 until its health log ran out). A caller that wants the arm held sends `state`.
+# Nobody sent a command for IDLE_PARK_S (a lost link, a crashed caller): fold home. IDLE_STOP_S more at home ends the
+# session, so record_session turns torque OFF instead of holding for hours (6 h on 2026-10-27/28). `state` holds.
 # A fold a hold stopped (a blocked joint) is tried once more after IDLE_RETRY_S; before 2026-11-03 it was retried
 # every IDLE_PARK_S for good, pushing a blocked joint with torque on. A second hold keeps the arm where it is.
 IDLE_PARK_S, IDLE_STOP_S, IDLE_RETRY_S = (prm.default(f"runner.idle_{k}_s") for k in ("park", "stop", "retry"))
@@ -102,17 +100,16 @@ IDLE_PARK_S, IDLE_STOP_S, IDLE_RETRY_S = (prm.default(f"runner.idle_{k}_s") for 
 STRAIN_LAG, STRAIN_RISE, STRAIN_TICKS, STRAIN_PWM = 2.2, 0.25, 6, 0.5
 # A blocked wrist roll pushes at low PWM (arm_a dead at 28 % of its cap, 4 times on 2026-11-01), so the PWM test
 # never fires; it travels within ~0.7 units, so a rising lag of ROLL_BLOCK_LAG (<= 2.7 deg) holds it first.
-ROLL_BLOCK_LAG = 1.5
+ROLL_BLOCK_LAG, TEMP_STOP = 1.5, 65  # TEMP_STOP in degrees C; the motors' own limits are 70-72
 # Stalled = at its cap, short of its target and still (the cap alone is normal: an elbow lifting out of home).
 PWM_STOP, PWM_STOP_S, STALL_GAP, STALL_MOVE = 285, 0.5, 4.0, 0.3
-TEMP_STOP = 65                    # degrees C; the motors' own limits are 70-72
 MOTORS = [n.split(".")[0] for n in NAMES]
 
 
 class Runner:
     def __init__(self, robot, library: dict, *, fps: int, status, clock=time.monotonic, sleep=time.sleep,
-                 live=None, operating_context=None, params=None):
-        self.params = params  # cell_params values (None = the constants above)
+                 live=None, operating_context=None, params=None, plan_check=None):
+        self.params, self.plan_check = params, plan_check or (lambda library: None)  # cell_params (None = constants); load_predict
         self.robot, self.library, self.fps, self.status = robot, library, fps, status
         self.clock, self.sleep = clock, sleep
         self.target = None
@@ -266,6 +263,7 @@ class Runner:
                     raise ValueError(f"library fps {library['fps']} differs from the runner fps {self.fps}")
                 if expected_library is not None and digest(library) != expected_library:
                     raise ValueError("checked load content differs from the reviewed library")
+                self.plan_check(library)  # raises: a plan the arm's own load data says it cannot hold is refused here
                 self.library = library
             elif verb != "state":
                 raise ValueError("commands: run <chunk> [rel] | jog <joint> <delta> [...] | grip <value> | goto <chunk> | load <library> | park | state | stop")
@@ -531,10 +529,12 @@ def main(argv=None):
     parser.add_argument("--io", required=True, type=Path, help="directory for chunk-cmd (FIFO) and chunk-status.jsonl")
     parser.add_argument("--operating-profile", type=Path, help="per-device operating profile; unbound sessions cannot auto-pick")
     parser.add_argument("--params", type=Path, help="cell-params.json (rosy.omx-cell-params.v1); default: the built-in values")
+    parser.add_argument("--load-model", type=Path, help="load-model.json (load_model.py): refuse a library whose holds are predicted risky")
     args = parser.parse_args(argv)
     library = load_library(args.library)
     config = json.loads(args.config.read_text(encoding="utf-8-sig"))
     params = prm.load(args.params)["values"]
+    check = load_predict.plan_check(args.load_model, config["robot"].get("port"), params, library)  # None: no model
     from cell_robot_profile import load as load_operating_profile
 
     profile = load_operating_profile(args.operating_profile, robot_config=config["robot"]) if args.operating_profile else None
@@ -577,7 +577,7 @@ def main(argv=None):
         context = runtime_context(config["robot"], robot.bus, config["dataset"]["fps"],
                                   operating_profile=profile, params=params)
         runner = Runner(guarded, library, fps=config["dataset"]["fps"], status=status, live=live,
-                        operating_context=context, params=params)
+                        operating_context=context, params=params, plan_check=check)
         trace_path = os.environ.get("ROSY_CHUNK_TRACE")
         trace_file = open(trace_path, "a") if trace_path else None  # buffered: no write call per tick
         if trace_file:
