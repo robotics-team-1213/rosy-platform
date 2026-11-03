@@ -92,7 +92,10 @@ The resulting error is a constant shift along the stern-bow image axis, proporti
 
 This fits the earlier note in `deploy/robot/omx/cell_look.py` (picks near the board about 1 cm off, map bias changing with
 position). Fix to try: `center_px: [322, 383]` in the arm configs' `cameras.top`, then compare pick offsets with the
-current value. Not changed here: the live configs belong to the session running arm_b.
+current value. Applied 2026-11-03 16:05 (user decision) to the active arm_b stacking config only
+(`cell-arm-b-stack.json` on the control PC; no arm session was running; backup `cell-arm-b-stack.json.before-nadir-20261103`,
+reason in `cameras.top.center_px_note`). Older configs keep `[320, 240]`. Pick accuracy with the new value is not yet
+measured on the real arm.
 
 ## Step 3: surveyed bases and belt as candidates (D-947 2, 2026-11-03)
 
