@@ -11,6 +11,7 @@
 | ID | 제목 | Status |
 |---|---|---|
 | D-974 | 관제 용어는 제품·관제 단위·호스트·화면 층을 섞지 않는다 — Rosy Fleet은 제품 이름, 통합관제 R·셀 관제 CELL-x는 단위, PC는 물리 이름(OMX 노트북), 헤더는 `unit_id`, Cell 표시 문구는 팔레트 적재. [전문](../adr/D-974-control-vocabulary-layers.md) | Accepted (2026-11-03, 사용자 결정; D-968 1항 대체, 헤더·문구 구현, Confluence·Harbor 반영, 현장 헤더 관측 미수용) |
+| D-969 | OMX 두 팔 적층의 첫 학습 정책은 Isaac 정답 IK 시연으로 학습한 ACT 두 팔이다 — 실물 단위(`normalized_-100_100`·`0_100`, arm_a→arm_b), 컨테이너 하나 = 에피소드, 녹화 옵트인, 6단계 순서, D-947 학습 범위 확장. [전문](../adr/D-969-omx-two-arm-act-from-isaac-ik-demonstrations.md) | Accepted (2026-11-03, 사용자 결정; 코드·학습·실물 수용 없음) |
 | D-968 | 통합관제 고유명은 Rosy Fleet이고 사람 계정은 개인 로그인만 쓴다 — 소유자 권한은 `operator`+`policy_admin` 조합, 직함·공유 계정·owner 문자가 들어간 새 역할·계정은 만들지 않는다. [전문](../adr/D-968-rosy-fleet-naming-and-individual-logins.md) | Accepted (2026-11-03, 사용자 결정; 명명·계정 모델 확정, 코드 변경 없음; 1항은 D-974가 대체) |
 | D-970 | 착지 대기열: 잠금은 짧게, 같은 시험은 한 번만, 추측은 끄고, flaky는 시험 단위로. [전문](../adr/D-970-landing-queue-stages-dedup-speculation-flaky.md) | Proposed (2026-11-03, 사용자 지시; 1·2·4항 구현, 3항 미구현) |
 | D-965 | 외부 업무 앱은 관제 계층의 꼭대기 하나로 들어오고, 팔 작업은 셀로 위임된다. [전문](../adr/D-965-harbor-enters-through-top-control-unit.md) | Accepted (2026-11-03, 사용자 결정; 팔 작업 위임 wire 미구현) |

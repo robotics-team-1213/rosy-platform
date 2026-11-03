@@ -123,7 +123,9 @@ def run(args):
         from mapped_stack_task import build_map
         build_map(world, stage, FIXTURE)
     origin = np.array(FIXTURE['bin_origin_m'])
-    for axis in range(3):
+    # D-969: the real cameras never see these aids, so frames that train or drive a policy are drawn without them
+    aids = not (FIXTURE.get('demo_recording') or FIXTURE.get('policy'))
+    for axis in range(3 if aids else 0):
         others = [i for i in range(3) if i != axis]
         for ai, a in enumerate((0., FIXTURE['bin_size_m'][others[0]])):
             for bi, b in enumerate((0., FIXTURE['bin_size_m'][others[1]])):
@@ -294,19 +296,27 @@ def run(args):
             def reference_time():
                 og.Controller.evaluate_sync(graph_id=graph)
                 return reference.get_data()
+            # D-969: created before the warm-up renders; one created after them still returned no image on the first frame
+            views = ({view: scene.real_camera(real_cameras, view, FIXTURE['real_cameras'][view]) for view in FIXTURE['real_cameras']}
+                     if FIXTURE.get('demo_recording') or FIXTURE.get('policy') else None)
+            demo_cameras = views if FIXTURE.get('demo_recording') else None
             for _ in range(20):
                 world.render()
             print('CONTAINER_RENDER_RECEIPT', type(video_camera.get_current_frame().get('rendering_frame')).__name__, reference_time(), flush=True)
-            recording = ContainerRecording(args.report.parent, world, video_camera, config, reference_time)
+            recording = ContainerRecording(args.report.parent, world, video_camera, config, reference_time, demo_cameras=demo_cameras)
+        from policy_client import start
+        policy, observe = start(FIXTURE['policy'], views) if container and FIXTURE.get('policy') else (None, None)
         try:
             if recording is not None:
                 recording.write(0, robots[0].get_joint_positions()[joint_indices[0]])
             report = execute(args, world, stage, robots, joint_indices, fingers, cargo, contacts, capture, grasp_probes,
                 planner, initial, tcp_position, fixture=FIXTURE, recording=recording,
-                wrists=wrist_views if container else None)
+                wrists=wrist_views if container else None, observe=observe, policy=policy)
         finally:
             if recording is not None:
                 recording.close()
+            if policy is not None:
+                policy.close()
         if recording is not None:
             report['video'] = recording.manifest()
         return report
@@ -554,7 +564,7 @@ def main():
                                  'release-episodes-rl2', 'release-episodes-rl3', 'nominal-bc-v0-rl3',
                                  'nominal-bc-v0-release8', 'nominal-release3', 'nominal-gap6-release3',
                                  'nominal-palletizing-v21', 'nominal-palletizing-v21-hold', 'nominal-palletizing-v21-ship',
-                                 *('nominal-palletizing-v21-ship-'+n for n in ('surveyed-bases', 'surveyed', 'y040', 'y050', 'y060', 'y-060', 'x150', 'y020', 'y030', 'x100', 'y-020', 'y-030', 'g315', 'y020-g315', 'y030-g315', 'y040-g315', 'y-020-g315', 'y-030-g315', 'g3225', 'y060-g315', 'y060-guard-g315', 'r290-g315', 'y080-r290-g315', 'y100-r290-guard-g315', 'y050-g315', 'y100-r290-g315', 'y-080-r290-g315', 'w05-g315', 'y060-r290-g315', 'y070-r290-g315', 'y-060-r290-g315', 'y-070-r290-g315', 'w10-g315', 'w05-r290-g315', 'w10-r290-g315', 'y020-g3225', 'y030-g3225', 'y040-g3225', 'y-020-g3225'))),
+                                 *('nominal-palletizing-v21-ship-'+n for n in ('y060-c2-g315', 'y060-c2-seat-g315', 'y080-c2-g315', 'y080-c2-seat-g315', 'surveyed-bases-demo', 'policy-smoke', 'demo', 'surveyed-bases', 'surveyed', 'y040', 'y050', 'y060', 'y-060', 'x150', 'y020', 'y030', 'x100', 'y-020', 'y-030', 'g315', 'y020-g315', 'y030-g315', 'y040-g315', 'y-020-g315', 'y-030-g315', 'g3225', 'y060-g315', 'y060-guard-g315', 'r290-g315', 'y080-r290-g315', 'y100-r290-guard-g315', 'y050-g315', 'y100-r290-g315', 'y-080-r290-g315', 'w05-g315', 'y060-r290-g315', 'y070-r290-g315', 'y-060-r290-g315', 'y-070-r290-g315', 'w10-g315', 'w05-r290-g315', 'w10-r290-g315', 'y020-g3225', 'y030-g3225', 'y040-g3225', 'y-020-g3225'))),
                         default='nominal')
     args = parser.parse_args()
     check_vendor_manifest()
