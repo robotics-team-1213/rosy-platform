@@ -55,5 +55,5 @@
 |---|---|---|
 | 플랫폼 용어·헤더·문구·배치표 | 이 저장소 | 이 ADR과 같은 커밋으로 로컬 main 착지. 원격 회귀(관제 단위·서버·브라우저·계약) 통과, `console.py` 독립 안전 검토 PASS(D-430 §5), 크기 증가 없음(D-766) |
 | Confluence 「2-1 PC 구성과 역할」 맨 위 용어 안내 | rosy-docs / Confluence | 완료 (2026-11-03, 페이지 버전 15) |
-| Harbor `CONTEXT.md`·`PRODUCT.md`의 "Fleet 승인"·"Fleet 운영자"를 단위 명시로 | Harbor 팀 저장소 PR | PR robotics-team-1213/harborlogi#17 필수 검사 모두 통과, 팀 병합 대기 |
+| Harbor `CONTEXT.md`·`PRODUCT.md`의 "Fleet 승인"·"Fleet 운영자"를 단위 명시로 | Harbor 팀 저장소 PR | 완료 (2026-11-04, PR robotics-team-1213/harborlogi#17 병합, merge commit 4d80908e82) |
 | R·CELL-A 헤더 현장 관측 | 배포 뒤 | 미착수 |

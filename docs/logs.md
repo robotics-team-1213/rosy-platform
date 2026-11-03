@@ -14064,3 +14064,9 @@ osy-d395-s1d\`.
 - 증거: 원격 pytest(관제 단위·서버 앱·브라우저·API 버전) 통과, node 시험 19개 통과, 독립 안전 검토 PASS 2회, lint 0 error. Confluence 2-1 v15 반영. Harbor PR #17 필수 검사 통과, 병합은 팀 승인 대기.
 - gate 변화: 없음.
 - CE: 해당 없음 — 착지 규칙(D-430·D-766·D-510)에 이미 있는 거절이며 그대로 따랐다.
+
+## 2026-11-04 · uncommitted · docs(control-terms): D-974 Harbor 후속 완료 표시
+- 변경: Harbor PR robotics-team-1213/harborlogi#17(셀 관제 CELL-A 승인 용어)이 병합되어 D-974 후속 표와 ADR Log 상태를 갱신했다.
+- 증거: PR #17 필수 검사(unittest·product-web 3.10/3.12, review-gate) 통과 뒤 merge commit 4d80908e82.
+- gate 변화: 없음.
+- CE: 해당 없음.
