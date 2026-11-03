@@ -23,9 +23,11 @@ class ContainerRecording:
         # D-969 demonstrations (opt-in): the real-camera views on the same ticks and receipts, and one row per frame with
         # both arms' state and commanded targets in radians (demo.jsonl); outside the registered video evidence above.
         self.demo_cameras = demo_cameras or {}
-        # 300 kbps: run a75d met the 256 MiB run output limit with uncapped 640x480 demo videos (about 110 MB each)
+        # Run output limit 256 MiB: uncapped 640x480 demo videos were about 110 MB each (run a75d), so 300 kbps for two views;
+        # four views (wrist cameras) at 300 kbps reached 237 MB on the last container (run f3c208d1), so 180 kbps there.
+        kbps = 180 if len(self.demo_cameras) > 2 else 300
         self.demo_recorders = {name: NativeRecorder(directory/f'demo-{name}.mp4', width=camera.get_resolution()[0],
-                                                    height=camera.get_resolution()[1], fps=config['fps'], max_bitrate_kbps=300)
+                                                    height=camera.get_resolution()[1], fps=config['fps'], max_bitrate_kbps=kbps)
                                for name, camera in self.demo_cameras.items()}
         self.demo_rows = (directory/'demo.jsonl').open('x', encoding='utf-8') if self.demo_cameras else None
 
