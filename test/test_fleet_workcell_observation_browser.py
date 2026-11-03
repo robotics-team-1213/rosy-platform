@@ -202,8 +202,8 @@ def test_cell_catalog_fits_the_full_page_and_belongs_to_saved_documents(cell_url
             browser.close()
 
 
-@pytest.mark.parametrize("pending", [False, True])
-def test_cell_logout_clears_catalog_and_ignores_its_late_response(cell_url, pending):
+@pytest.mark.parametrize("pending,status", [(False, 200), (True, 200), (True, 503)])
+def test_cell_logout_clears_catalog_and_ignores_its_late_response(cell_url, pending, status):
     from playwright.sync_api import expect, sync_playwright
     held = []
     body = {"objects": [{"id": "previous-account-object", "mass_kg": 0.02, "carry": "ok"}]}
@@ -212,7 +212,10 @@ def test_cell_logout_clears_catalog_and_ignores_its_late_response(cell_url, pend
         try:
             observation_feed(page)
             def catalog(route):
-                held.append(route) if pending else route.fulfill(json=body)
+                if pending:
+                    held.append(route)
+                else:
+                    route.fulfill(json=body)
             page.route("**/api/fleet/cell-app/object-catalog", catalog)
             with page.expect_request("**/api/fleet/cell-app/object-catalog"):
                 page.goto(cell_url)
@@ -222,7 +225,7 @@ def test_cell_logout_clears_catalog_and_ignores_its_late_response(cell_url, pend
             page.locator('[data-login="logout"]').click()
             expect(page.locator("#workcell-observations [data-arm-source]")).to_have_count(0)
             for route in held:
-                route.fulfill(json=body)
+                route.fulfill(status=status, json=body)
             page.evaluate("() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))")
             expect(page.locator("#catalog-table")).to_be_hidden()
             expect(page.locator("#catalog-rows tr")).to_have_count(0)
