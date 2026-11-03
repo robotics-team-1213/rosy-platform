@@ -313,8 +313,10 @@ def test_setup_failure_starts_no_job(monkeypatch, tmp_path):
         rp.run_on("h", [["test/x.py"]], [tmp_path / "log"], BASE, ROOT, None, test_tools=PROFILE)
 
 
-@pytest.mark.parametrize("room", [None, {"cores": 4, "mem": 4, "site": False, "light": False}])
-def test_run_dispatches_selected_profile_to_every_host(monkeypatch, tmp_path, room):
+@pytest.mark.parametrize("room, copies", [
+    (None, 1), ({"cores": 4, "mem": 4, "site": False, "light": False}, 2),
+])
+def test_run_dispatches_selected_profile_to_every_host(monkeypatch, tmp_path, room, copies):
     monkeypatch.setattr(rp, "git", lambda repo, *args: str(ROOT) if args[-1] == "--show-toplevel" else BASE)
     monkeypatch.setattr(rp, "placed_hosts", lambda *a, **k: ["a", "b"])
     monkeypatch.setattr(rp, "HEADROOM", {h: dict(room) for h in ("a", "b")} if room else {})
@@ -327,7 +329,7 @@ def test_run_dispatches_selected_profile_to_every_host(monkeypatch, tmp_path, ro
     monkeypatch.setattr(rp, "run_on", run_on)
     assert rp.run([["x"], ["y"]], [tmp_path / "x", tmp_path / "y"],
                   repo=ROOT, test_tools=PROFILE) == [0, 0]
-    assert sorted(contexts) == [("a", PROFILE), ("b", PROFILE)]
+    assert sorted(contexts) == sorted([("a", PROFILE), ("b", PROFILE)] * copies)
 
 
 def test_cli_passes_selected_profile_to_run(monkeypatch, tmp_path):
