@@ -29,9 +29,10 @@ def world(request, monkeypatch, tmp_path, installation):
                     proposers=frozenset({"control-unit:R"}))
     core.audit_log = PolicyAdmissionAuditLog(str(tmp_path / "policy-audit.sqlite3"))
     create_app, worker_type = api.create_app, policy_module.ArmTransferPolicyWorker
-    workers, dispatcher = [], FakeDispatcher()
+    workers, services, dispatcher = [], [], FakeDispatcher()
 
     def app_factory(*args, **kwargs):
+        services.append(kwargs["task_service"])
         return create_app(*args, **{**kwargs, "policy_admission_core": core})
 
     def worker_factory(**kwargs):
@@ -44,7 +45,8 @@ def world(request, monkeypatch, tmp_path, installation):
     monkeypatch.setattr(policy_module, "ArmTransferPolicyWorker", worker_factory)
     rig = request.getfixturevalue("http_rig")
     assert len(workers) == 1
-    return SimpleNamespace(rig=rig, core=core, worker=workers[0], dispatcher=dispatcher)
+    return SimpleNamespace(rig=rig, core=core, worker=workers[0], dispatcher=dispatcher,
+                           task_service=services[0])
 
 
 def delegated(world, tmp_path, *, fault="healthy"):
@@ -78,7 +80,8 @@ def delegated(world, tmp_path, *, fault="healthy"):
 
         nodes[unit_id] = ControlUnitService(
             topology, ControlUnitStore(journal.path, unit_id=unit_id),
-            FleetTaskService(journal, robot_ids=()), FleetConsole([], []), peer=peer,
+            world.task_service if unit_id == "CELL-A" else FleetTaskService(journal, robot_ids=()),
+            FleetConsole([], []), peer=peer,
             arm_jobs=lambda unit_id=unit_id: client.app.state.arm_transfer_delegate if unit_id == "CELL-A" else None)
     client.app.state.control_unit = nodes["CELL-A"]
     origin = "ROOT" if ancestor else "R"
@@ -139,15 +142,23 @@ def test_policy_arm_admission_requires_current_parent_chain(world, tmp_path, fau
             done.set()
 
     world.worker.tick = tick
-    with world.rig[0]:
-        assert done.wait(10), "the real policy loop did not finish its first tick"
-        if fault == "healthy":
-            assert world.rig[0].app.state.arm_transfer_job_store.peek(proposal["mission_id"])["status"] == "READY"
-            assert world.dispatcher.prepared == [proposal["mission_id"]]
-        else:
-            assert_unadmitted(world, proposal["mission_id"])
-            assert world.dispatcher.prepared == []
-        assert context.reads
+    client = world.rig[0]
+    start = next(f for f in client.app.router.on_startup if f.__name__ == "arm_transfer_policy_start")
+    stop = next(f for f in client.app.router.on_shutdown if f.__name__ == "arm_transfer_policy_stop")
+    # The custom app lifespan does not start this legacy hook; exercise its installed component explicitly.
+    with client:
+        client.portal.call(start)
+        try:
+            assert done.wait(10), "the real policy loop did not finish its first tick"
+            if fault == "healthy":
+                assert client.app.state.arm_transfer_job_store.peek(proposal["mission_id"])["status"] == "READY"
+                assert world.dispatcher.prepared == [proposal["mission_id"]]
+            else:
+                assert_unadmitted(world, proposal["mission_id"])
+                assert world.dispatcher.prepared == []
+            assert context.reads
+        finally:
+            client.portal.call(stop)
 
 
 def test_policy_never_sees_an_unbound_delegated_proposal(world, tmp_path, monkeypatch):
