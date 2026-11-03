@@ -9,8 +9,8 @@ import importlib.util
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-SAFETY_CAP = 26  # RED 변이: 실제 27보다 1 낮춰 검사가 실패함을 증명한다
-WRITER_CAP = 19  # RED 변이: 실제 20보다 1 낮춰 검사가 실패함을 증명한다
+SAFETY_CAP = 27  # 2026-11-04 동결(패널 보고서 쟁점 C). 상향은 리드 사전 승인 필요
+WRITER_CAP = 20  # 2026-11-04 동결(패널 보고서 쟁점 C). 상향은 리드 사전 승인 필요
 
 
 def _count(file_name: str, attr: str) -> int:
