@@ -548,16 +548,29 @@ SIM 실험의 셀 모델 대장·사람 할 일은 저장소의 `learning/envs/i
 
 | 경로 | 계약 |
 |---|---|
-| GET `/api/learning/tasks` | 현재 프로젝트의 robots/tasks, 저장 프로필, 자료, 작업, 실행기 가용 상태, 서버 `host_id`, CSRF token. |
+| GET `/api/learning/tasks` | 현재 프로젝트의 robots/tasks, 저장 프로필, 자료, 작업, 실행기 가용 상태, 서버 `host_id`, CSRF token, `sim_contexts`, `sim_configured`, `physical_learning_verified=false`. |
 | POST `/api/learning/robots` | `request_id` UUID, `name`, `kind`, `model_revision`, `device_id`. 불변 학습 대상이며 `device_verified=false`. |
 | POST `/api/learning/tasks` | `request_id`, `name`, `objective`, `success`, `failure`, `reset`, `mode`, `adapter`, 순서 있는 `participants=[{robot_id,component_id,role}]`. OMX에는 서버가 읽을 `profile_id`가 필요하다. |
 | GET `/api/learning/tasks/export?id=<UUID>` | 같은 프로젝트 안에서 전달할 과제·참여 로봇·프로필 메타데이터. 단일 identity만 허용한다. |
 | POST `/api/learning/tasks/import` | `rosy.learning.task-transfer/1` 패키지. 프로젝트·과제 revision·실제 OMX 프로필 스키마·참여 구성을 검증한 뒤 원자적으로 반영한다. |
+| POST `/api/learning/tasks/sim-context` | `task_id` UUID, `task_revision` SHA256, `run_id` 32자리 소문자 hex만 받는다. 기존 서버의 SIM adapter에서 종료 기록을 조회해 현재 프로젝트의 정확한 과제 revision에 고정한다. |
 
 조회는 기존 view, 생성·가져오기는 manage 권한을 요구한다. POST는 기존 세션·CSRF·Origin과
 1 MiB 본문 제한을 사용하며 작성자는 서버 신원이다. 비협업 loopback 작업은 `local_unverified`다.
 다른 사용자·프로젝트 신원, 실행 명령·소스 경로·자격을 입력해 권위를 만들 수 없다.
 전달 파일은 계정·세션·HF 연결·키를 포함하지 않으며 가져온 관리자의 로컬 신원을 기록한다.
+
+SIM 참고 등록도 기존 manage·CSRF·Origin 검사를 따른다. SIM 미설정·연결 실패는 503,
+종료되지 않았거나 식별자·소스·입력 지문·결과가 맞지 않는 서버 기록은 502다. 어댑터가
+확인한 `FINAL` snapshot의 `SUCCEEDED`·`FAILED`·`STOPPED`만 보존하며 실패·중단을 성공으로
+바꾸지 않는다. 저장 내용은 기존 SIM 공개 필드로 제한하며 private runtime 정보는 제외한다.
+같은 run·과제·증거 재시도는 첫 작성자와 행을 유지한다. 다른 과제나 다른 증거로 재지정하면
+거절한다. 이 로컬 참고 연결은 과제 transfer 파일에 포함되지 않는다.
+
+참고 연결의 종류는 `scenario_validation`이다. 운영자가 연결한 시나리오가 해당 학습 정책을
+실행했다는 증거는 아니며 모델·보정 revision의 평가 결속을 대신하지 않는다. 화면은 학습 실행
+완료, 오프라인 행동 오차, SIM 시나리오 결과, 실물 정책 미검증을 구분한다. 독립된 실물 평가가
+연결되지 않은 현재 경로에서는 SIM 성공이나 MAE만으로 실물 성공·승격을 표시하지 않는다.
 
 계산 호스트는 불변 과제가 아닌 각 실행의 속성이다. private `omx-center.json`의 선택적
 `host_id`를 `model` 또는 `ai`로 설정한다. 미설정이면 기존 과거 OMX 경로는 유지하되
