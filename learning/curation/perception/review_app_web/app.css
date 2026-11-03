@@ -333,7 +333,7 @@ ui-topbar:has([data-learning-account-entry]) { flex-wrap: wrap; }
 .review-editor-canvas > .review-class-row { display: flex; flex-wrap: nowrap; gap: var(--space-2); max-height: none; overflow-x: auto; overflow-y: hidden; padding-bottom: var(--space-2); }
 .pixel-editor-column section > .pixel-quick-classes { flex-wrap: wrap; max-height: none; overflow: visible; padding-bottom: var(--space-2); }
 #pixel-content > .ui-workspace-bar, #pixel-content > .review-flow, #pixel-content > .pixel-frame-strip { margin-top: var(--space-4); }
-.pixel-editor-column .pixel-ribbon-nav { display: grid; gap: var(--space-2); margin-bottom: var(--space-1); align-items: center; }
+.pixel-editor-column .pixel-ribbon-nav { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--space-2); margin-bottom: var(--space-1); align-items: center; }
 .pixel-editor-column .pixel-ribbon-nav ui-button { flex: 1; min-width: 0; }
 @media (width >= 64rem) {
   .pixel-editor-column .pixel-ribbon-nav { grid-template-columns: auto minmax(0, 1fr) auto; }
