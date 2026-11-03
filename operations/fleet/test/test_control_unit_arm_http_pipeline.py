@@ -38,7 +38,7 @@ def transfer(installation, key):
 
 
 def site(tmp_path, rig):
-    path, _, control, store = rig
+    path, _, _, store = rig
     topology = ControlUnitTopology.from_mapping(MANIFEST)
     principals = {sha256(t.encode()).hexdigest(): SitePrincipal(i, r) for t, i, r in TOKENS}
     paths = {"R": tmp_path / "r.db", "CELL-A": path}
@@ -61,6 +61,9 @@ def site(tmp_path, rig):
         async def handle_async_request(self, request):
             return await httpx.ASGITransport(app=apps[request.url.host.upper()]).handle_async_request(request)
 
+    # Starting the cell's task service closes dispatch, as on a real restart; reopen it like the rig did.
+    cell = nodes["CELL-A"].tasks.store
+    control = cell.rearm_dispatch(expected_generation=cell.dispatch_control()["generation"], actor_id="operator-1")
     network = httpx.AsyncClient(transport=Network())
     for unit, node in nodes.items():
         peer = "CELL-A" if unit == "R" else "R"
