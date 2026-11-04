@@ -21,6 +21,7 @@ from core_common.protocol.schemas import DeviceActionReceipt
 
 from .action_receipts import verify_phase_receipt
 from .cell_job_store import CellJobStore
+from .device_identity import device_trial_identity_ok
 from .local_action_transport import DeviceActionTransport, LocalActionRejected
 from .mission_store import MissionConflict
 from .step_action_kinds import dispatch_open, open_kinds, rejection_reason, step_action_kind, step_grant_digest
@@ -213,9 +214,8 @@ class StepJobDispatcher:
         expected = self.grant_revisions[instance_id]["commissioning_revision"]
         return self._checked_identity(
             self._device_identity, workcell_id, instance_id, "device_trial",
-            lambda identity: (identity.get("device") is True and identity.get("simulation") is not True
-                              and isinstance(expected, str) and expected != ""
-                              and identity.get("commissioning_revision") == expected))
+            lambda identity: device_trial_identity_ok(identity, workcell_id=workcell_id,
+                                                      instance_id=instance_id, expected=expected))
 
     def _checked_identity(self, cache, workcell_id: str, instance_id: str, label: str, accept) -> bool:
         cached = cache.get(instance_id)

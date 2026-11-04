@@ -194,15 +194,21 @@ def test_ci_provides_the_site_account_oauth_runtime():
 
     site_requirements = (ROOT / 'deploy/site/requirements-fleet.txt').read_text(encoding='utf8')
     oauth_pin = re.search(r'^oauthlib==[^\s]+', site_requirements, re.MULTILINE).group()
+    jose_pin = re.search(r'^joserfc==[^\s]+', site_requirements, re.MULTILINE).group()
     steps = yaml.safe_load(WORKFLOW.read_text(encoding='utf8'))['jobs']['test']['steps']
     test_index = next(i for i, step in enumerate(steps) if step['name'] == 'Test (matrix suite, D-436)')
     tokens = shlex.split('\n'.join(step.get('run', '') for step in steps[:test_index]
                                   if not step.get('if')).replace('\\\n', ' '), comments=True)
     assert oauth_pin in tokens, f'CI account authority lacks site runtime {oauth_pin}'
+    assert jose_pin in tokens, f'CI account authority lacks site runtime {jose_pin}'
     # Installed-package tests run python3 -I, which ignores a --target dir on PYTHONPATH.
     lines = [line for step in steps[:test_index] if not step.get('if')
              for line in step.get('run', '').replace('\\\n', ' ').splitlines() if oauth_pin in line]
     assert lines and not any('--target' in line for line in lines), f'{oauth_pin} must be system-wide'
+    # The receiver --target copy is not enough: boundary tests replace PYTHONPATH.
+    jose_lines = [line for step in steps[:test_index] if not step.get('if')
+                  for line in step.get('run', '').replace('\\\n', ' ').splitlines() if jose_pin in line]
+    assert any('--target' not in line for line in jose_lines), f'{jose_pin} must be system-wide'
 
 
 def test_fleet_account_oauth_pin_matches_site_runtime():
