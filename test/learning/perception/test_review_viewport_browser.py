@@ -120,6 +120,12 @@ def test_review_photo_and_result_are_in_first_view(browser_workspace, theme):
                 target = Path(output) / f'review-hierarchy-{route.strip("/") or "objects"}-{theme}-{width}x{height}.png'
                 target.parent.mkdir(parents=True, exist_ok=True)
                 page.screenshot(path=str(target), full_page=True)
+                import json
+                target.with_suffix('.json').write_text(json.dumps(dict(
+                    state='review first view', route=route, theme=theme, viewport=page.viewport_size,
+                    canvas=box, filename=target.name,
+                    footer=page.locator('.pixel-canvas-footer').bounding_box() if route == '/pixels' else None),
+                    ensure_ascii=False, indent=2), encoding='utf-8')
             assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
             if width == 390:
                 actions = ['#prev-frame', '#next-frame', '#next-pending'] if route == '/' else ['#pixel-prev', '#pixel-next', '#pixel-undo']
