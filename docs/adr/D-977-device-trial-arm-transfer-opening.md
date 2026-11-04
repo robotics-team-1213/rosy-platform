@@ -6,6 +6,8 @@
 - **Proposed (사람 결정 필요):** Decision 4 owner의 ARM 목표 수락(별도 안전 결정, 코드는 이 변경에서 바뀌지 않아 실물은 움직이지 않는다), 신원 캐시 10초 창, watchdog·토크 상한, Decision 6 위임 종류 추가(D-855 후속), 하달 뒤 확인이 없을 때 HOLD까지의 시간.
 - **구현 범위의 한계:** `operator_attested` 레코드는 Fleet 기록용이다. 하달 전 확인(`SOURCE_CLEAR`)을 하달의 필수 조건으로 거는 것은 owner 수락이 열릴 때 같은 안전 결정에서 정한다. 지금은 하달 경로가 기존 독립 관측자 근거를 그대로 요구한다.
 
+**독립 안전 검토(2026-11-04, 읽기 전용 별도 에이전트): PASS with notes.** 실물 동작 경로 없음, `production`·시뮬레이션 불변, identity 판정 단일 함수, 무인 정책 승인 worker는 `device_trial`에서 꺼짐. 메모: `operator_attested`의 만료는 기록만 하며 소비자가 생기면 그쪽에서 강제해야 한다.
+
 ### `operator_attested` wire (v1.362)
 
 `POST /api/fleet/arm-transfers/jobs/{mission_id}/operator-attestations`, `GET` 같은 경로(목록). `device_trial`에서만 설치. 본문 `{kind: SOURCE_CLEAR|TARGET_PLACED, expected_request_digest, expected_proposal_digest}`; 서버가 시각을 찍고 45초(60초 미만) 유효 시간을 붙인다. 확인자는 기명 operator이고 제안자·승인자와 달라야 한다. (작업, kind)당 1건이고 반복은 409다. 응답 `evidence_source: "operator_attested"`, `goal_confirmed: false`. 작업 상태·claim·receipt는 바뀌지 않으므로 `GOAL_CONFIRMED`가 되지 않는다. Harbor 쪽 사람 확인(ADR 0023)은 Harbor 업무 장부 안에서 소비되고, 이 경로는 Fleet 기록용이며 둘은 서로를 대신하지 않는다.
