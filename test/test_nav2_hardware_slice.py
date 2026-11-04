@@ -234,7 +234,22 @@ def test_write_prefixed_nav2_params_writes_a_unique_file(tmp_path):
     assert out.parent == tmp_path
     assert out.name.startswith("rosy_nav2_params_")
     data = yaml.safe_load(out.read_text(encoding="utf-8"))
-    assert data["amcl"]["ros__parameters"]["odom_frame_id"] == "rosy_01/odom"
+    assert data["/rosy_01/amcl"]["ros__parameters"]["odom_frame_id"] == "rosy_01/odom"
+
+
+def test_hardware_launch_runs_nav2_standalone_not_composed():
+    """합성 로드는 이 Jazzy 빌드에서 조용히 죽는다 (2026-11-03 문서).
+
+    load_composable_node 항목이 건너뛰기거나 이름공간을 잃어서, 합성 경로로는
+    Nav2 노드가 device 에 아예 뜨지 않았다. hardware.launch.py 는 device 검증이
+    끝난 standalone 경로(use_composition False)만 골라야 한다.
+    """
+    launch = (
+        NAV_LAUNCH / "hardware.launch.py"
+    ).read_text(encoding="utf-8")
+
+    assert launch.count('"use_composition": "False"') == 2
+    assert '"use_composition": "True"' not in launch
 
 
 def test_nav2_composition_loads_into_the_namespaced_container():
