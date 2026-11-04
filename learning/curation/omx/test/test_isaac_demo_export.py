@@ -12,8 +12,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import isaac_demo_export as export  # noqa: E402
 
 
-def run(root, name, items):
-    """A recorded run: two rows per container item plus an idle row, two 640x480 videos with one frame per row."""
+def run(root, name, items, views=export.CAMERAS):
+    """A recorded run: two rows per container item plus an idle row, one 640x480 video per view with one frame per row."""
     path = root/name
     path.mkdir()
     rows = [dict(item=None, state=[0.]*12, action=[0.]*12)]
@@ -21,7 +21,7 @@ def run(root, name, items):
         other = .05*(name == 'run-b')  # runs differ, as real seeds do: the loader refuses duplicate episode bytes
         rows += [dict(item=item, state=[.1*item]*5+[.3]+[other]*6, action=[.1*item+.01]*5+[.3]+[other]*6)]*2
     (path/'demo.jsonl').write_text(''.join(json.dumps(r)+'\n' for r in rows), encoding='utf-8')
-    for camera in export.CAMERAS:
+    for camera in views:
         video = cv2.VideoWriter(str(path/f'demo-{camera}.mp4'), cv2.VideoWriter_fourcc(*'mp4v'), 10, (640, 480))
         for i in range(len(rows)):
             video.write(np.full((480, 640, 3), 20*i, np.uint8))
@@ -59,3 +59,18 @@ def test_the_same_episodes_become_a_lerobot_dataset_for_the_official_act_trainer
     assert reader.meta.total_episodes == 2 and reader.meta.total_frames == 4 and reader.meta.robot_type == 'bi_omx_follower'
     frame = reader[0]
     assert tuple(frame['observation.state'].shape) == (12,) and tuple(frame['observation.images.top'].shape) == (3, 24, 32)
+
+
+def test_wrist_views_are_exported_per_arm_when_every_run_recorded_them(tmp_path):
+    views = export.CAMERAS+export.WRIST
+    data = export.export(tmp_path/'out', [run(tmp_path, 'run-a', [0], views), run(tmp_path, 'run-b', [0], views)], every=1)
+    document = json.loads((tmp_path/'out'/'dataset.json').read_text(encoding='utf-8'))
+    wrist = [c for c in document['profile']['cameras'] if c['placement'] == 'wrist']
+    assert len(data.episodes) == 2 and [(c['id'], c['arm_id'], c['role']) for c in wrist] == [
+        ('arm_a_wrist', 'arm_a', 'front'), ('arm_b_wrist', 'arm_b', 'front')]
+
+
+def test_runs_with_and_without_wrist_views_are_not_mixed(tmp_path):
+    runs = [run(tmp_path, 'run-a', [0], export.CAMERAS+export.WRIST), run(tmp_path, 'run-b', [0])]
+    with pytest.raises(ValueError, match='wrist'):
+        export.export(tmp_path/'out', runs, every=1)

@@ -6,7 +6,7 @@
 
 - 팀 앱이 실물 OMX 팔에 기술 단위 작업을 맡기던 유일한 경로는 비공개 저장소 rosy-vault의 `device_core/`였다. 앱이 HTTP `POST /tasks`로 기술 이름을 보내고, 서비스가 Dynamixel 버스에 직접 쓴다. 가짜 드라이버 시험만 통과했고 실물 팔을 움직인 기록은 없다. rosy-vault는 2026-10-24 은퇴해 archived되었다. 보존 기준 커밋은 `9a744a3`이다.
 - 플랫폼 쪽 실물 팔 실행은 닫혀 있다. `omx_hardware_owner.py`는 동작 port를 `enabled=False`로 두고 `goals_enabled: False`를 보고한다(D-785). `step_action_kinds.py`의 `CELL_TRANSFER`는 `open_profiles={"simulation"}`이다. `pose_plan.py`는 simulation이 아닌 profile을 거부한다.
-- 실물 하달 설계는 D-797(Proposed, 2026-10-18)에 있다. 팔은 새 배포 프로필 `device_trial`에서 장치 증거로만 연다. 이 문서는 main에 착지하지 않았고 archive 브랜치 커밋 `4d218631f5`에만 있다.
+- 실물 하달 설계는 D-797(Proposed, 2026-10-18)에 있다. 팔은 새 배포 프로필 `device_trial`에서 장치 증거로만 연다. 이 문서는 S4 착지 시점에 main에 있으며(2026-11-04 확인), §2·§3이 S4에서 Accepted가 되었다.
 - D-856(Accepted 2026-10-24)은 외부 앱에 raw servo·장치 owner 호출을 열지 않고, 앱이 장치를 직접 제어하는 방식을 채택하지 않았다. D-282 §5는 계약 없는 OMX 원격 작업 API를 두지 않는다.
 - device-core를 플랫폼에 그대로 옮기면 같은 팔을 두 갈래 코드가 제어한다. 정지 · 래치 · 관절 한계 · 작업 하나 원칙이 두 번 구현되고, 버스 writer가 둘이 된다.
 
@@ -67,7 +67,7 @@ rosy-vault의 git 이력은 가져오지 않는다. 파일을 옮기고 출처 �
 | D-282 §5 | 유지. 앱용 OMX 원격 작업 API를 만들지 않는다 |
 | D-336 · D-442 | 유지. owner 한 경로, 정지 · 복구 경계 |
 | D-404 · D-785 | 유지. 이 결정만으로는 실물 동작이 열리지 않는다 |
-| D-797 (Proposed, 미착지) | 팔 실물 하달 설계의 근거. S4에서 main에 복원해 결정한다 |
+| D-797 (§2·§3 Accepted 2026-11-04, 나머지 Proposed) | 팔 실물 하달 설계의 근거. S4가 §2·§3을 결정·구현했다 |
 | D-793 | 정책 실물 실행 관문. 그 전에는 거부 |
 | D-856 | 앱과 동작의 경계. 흡수는 그 실물 수용 계획의 입력이다 |
 

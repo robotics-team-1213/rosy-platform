@@ -18,6 +18,11 @@ export function mount(el, ctx) {
   status.setAttribute("state", "pending");
   const summary = createNode("dl", "ui-readout");
   summary.hidden = true;
+  // D-978 머리 수치 띠: 상태 응답의 값만 옮긴다. 판정은 서버(모드·배터리 수준·증거)가 한다.
+  const strip = createNode("dl", "ui-readout");
+  strip.dataset.form = "strip";
+  strip.setAttribute("aria-label", "로봇 요약");
+  strip.hidden = true;
   // D-321 부록: 보정 세션이 살아 있는 동안 로봇 카드 맨 위에 경고 칩을 단다.
   const calibration = document.createElement("ui-tag");
   calibration.setAttribute("status", "warn");
@@ -35,6 +40,7 @@ export function mount(el, ctx) {
   function render(state) {
     status.hidden = true;
     summary.hidden = false;
+    strip.hidden = false;
     renderCalibration(state.activity);
     summary.replaceChildren();
     const pose = state.pose;
@@ -82,11 +88,19 @@ export function mount(el, ctx) {
       if (values[field]?.title) value.title = values[field].title;
       summary.append(label, value);
     }
+    strip.replaceChildren(
+      ...[["모드", values.mode?.text], ["배터리", percent], ["내비게이션", values.navigation?.text],
+        ["위치", values.pose?.text]].map(([label, text]) => {
+        const cell = createNode("div", "");
+        cell.append(createNode("dt", "", label), createNode("dd", "", text ?? "—"));
+        return cell;
+      }));
   }
   function fail(error) {
     calibration.remove();
     summary.replaceChildren();
     summary.hidden = true;
+    strip.hidden = true;
     status.textContent = `상태를 불러오지 못했습니다: ${error.message}`;
     status.setAttribute("state", "error");
     status.hidden = false;
@@ -95,6 +109,6 @@ export function mount(el, ctx) {
   const pilot = createNode("a", "", "Rosy Pilot · 직접 운전");
   pilot.href = "/pilot";
   apps.append(pilot);
-  el.append(head, status, summary, apps);
+  el.append(head, status, strip, summary, apps);
   return ctx.store.state(render, fail);
 }
