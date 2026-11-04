@@ -1,6 +1,6 @@
 // Native training uses an explicit saved human review, never current editor drafts.
 import {accountFetch} from '/account-session.js';
-import {journeyContext} from '/omx-journey.js';
+import {journeyContext,contextUrl} from '/omx-journey.js';
 const $=id=>document.getElementById(id);
 let sets=[],busy=false,pending=null;
 function uuid(){
@@ -14,9 +14,7 @@ function selection(){
   const blocked=journeyContext.blocked||!!journeyContext.task;
   $('native-train-workflow').hidden=!blocked;
   if(blocked){
-    const next=new URL($('journey-task-link').href,location.origin);
-    if(journeyContext.task)next.pathname='/learning/tasks';
-    $('native-train-workflow').href=next.pathname+next.search;
+    $('native-train-workflow').href=contextUrl('',journeyContext.task?'/learning/tasks':'/learning/tasks/manage');
   }
   const valid=!blocked&&!!row&&!row.error&&!row.fixture_only&&!!review;
   $('native-train-start').disabled=busy||!valid;
@@ -26,6 +24,7 @@ function selection(){
     '등록 시연과 저장 검수를 선택하세요. 아직 저장하지 않은 검수나 시험 fixture는 학습할 수 없습니다.';
   return valid?{prepared_id:row.id,...(mode==='episodes'?{review_id:review}:{segment_version:review})}:null;
 }
+document.addEventListener('omx-journey-context-changed',selection);
 document.addEventListener('omx-prepared-loaded',event=>{sets=event.detail?.sets||[];pending=null;selection();});
 document.addEventListener('omx-segments-saved',event=>{
   const row=sets.find(row=>row.id===event.detail.id);

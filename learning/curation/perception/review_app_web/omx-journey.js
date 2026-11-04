@@ -6,9 +6,9 @@ const requested=Object.fromEntries(keys.map(key=>[key,params.get(key)||'']));
 let invalid=keys.some(key=>params.getAll(key).length>1||params.has(key)&&!requested[key]||requested[key].length>128);
 let tasks=null,contextError='',loading=false,profileKey='',latest=null,planSaved=false;
 export const journeyContext={task:null,blocked:keys.some(key=>requested[key])||invalid};
-function contextUrl(hash='run-title'){
-  const url=new URL('/learning/tasks/manage',location.origin);
-  for(const key of keys){const value=key==='dataset'?$('dataset').value:requested[key];if(value)url.searchParams.set(key,value);}
+export function contextUrl(hash='run-title',path='/learning/tasks/manage'){
+  const url=new URL(path,location.origin);
+  for(const key of keys){const value=key==='dataset'?requested.dataset||$('dataset').value:requested[key];if(value)url.searchParams.set(key,value);}
   if(journeyContext.task?.profile_id)url.searchParams.set('profile',journeyContext.task.profile_id);
   url.hash=hash;return url.pathname+url.search+url.hash;
 }
@@ -18,12 +18,14 @@ export function initJourney(refresh){
     tasks=null;contextError='';invalid=false;journeyContext.task=null;journeyContext.blocked=false;
     const url=new URL(location.href);for(const key of keys)url.searchParams.delete(key);
     history.replaceState(null,'',url.pathname+url.search+url.hash);profileKey='';refresh();
+    document.dispatchEvent(new Event('omx-journey-context-changed'));
   };
   $('dataset').addEventListener('change',()=>{
     requested.dataset=$('dataset').value;
     const url=new URL(location.href);
     if(requested.dataset)url.searchParams.set('dataset',requested.dataset);else url.searchParams.delete('dataset');
     history.replaceState(null,'',url.pathname+url.search+url.hash);
+    document.dispatchEvent(new Event('omx-journey-context-changed'));
   });
   $('followup-form').addEventListener('input',()=>{planSaved=false;});
   window.addEventListener('beforeunload',event=>{
@@ -77,6 +79,7 @@ export function applyJourneyContext(snapshot){
   $('journey-task-status').textContent=task&&!message?`학습 과제: ${task.name}`:'학습 과제를 선택해 목표와 성공 조건을 정하세요.';
   $('journey-task-link').href=contextUrl();
   $('journey-task-link').textContent=task&&!message?'이 과제에서 자료 선택·학습 실행':'학습 과제 선택·만들기';
+  document.dispatchEvent(new Event('omx-journey-context-changed'));
   if(message)return;
   if(requested.dataset&&$('dataset').dataset.journeySelection!==requested.dataset){
     $('dataset').value=requested.dataset;$('dataset').dataset.journeySelection=requested.dataset;
@@ -91,18 +94,19 @@ export function selectJourneyProfile(profile){
   requested.profile=profile.id;
   const url=new URL(location.href);url.searchParams.set('profile',profile.id);
   history.replaceState(null,'',url.pathname+url.search+url.hash);
-  if(!requested.task)return;
-  const task=tasks?.tasks?.find(row=>row.id===requested.task);
+  const task=requested.task&&tasks?.tasks?.find(row=>row.id===requested.task);
   if(task&&(task.profile_id!==profile.id||task.profile_revision!==profile.revision)){
     journeyContext.blocked=true;$('journey-context-status').textContent='선택한 프로필이 과제에 고정된 설정과 다릅니다. 과제 화면에서 다시 선택하세요.';
     $('journey-context-reset').hidden=false;
   }
+  document.dispatchEvent(new Event('omx-journey-context-changed'));
 }
 export function clearJourneyProfile(){
   if(requested.task)return;
   requested.profile='';profileKey='';
   const url=new URL(location.href);url.searchParams.delete('profile');
   history.replaceState(null,'',url.pathname+url.search+url.hash);
+  document.dispatchEvent(new Event('omx-journey-context-changed'));
 }
 export function updateJourneyEvidence({snapshot,preparedSets,preparedReady,centerReady}){
   latest=snapshot;
