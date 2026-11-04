@@ -57,11 +57,7 @@ def build(layer, variant='plain', clearance_mm=None, weld=False, cargo=None):
     f = fixture()
     if clearance_mm is not None:
         f['ship_plate'] = dict(f['ship_plate'], stud_diameter_m=f['ship_plate']['pitch_m']-BOX[1]-2*clearance_mm/1e3)
-    spec = mujoco.MjSpec()
-    spec.option.timestep = DT
-    spec.compiler.degree = False  # joint ranges in radians
-    spec.option.cone, spec.option.impratio = mujoco.mjtCone.mjCONE_ELLIPTIC, 10
-    spec.default.geom.solref, spec.default.geom.solimp = SOLREF, SOLIMP
+    spec = new_spec()
     world, top, p = spec.worldbody, plate.top_z(f), f['ship_plate']['pitch_m']
     thick = f['ship_plate']['thickness_m']
     world.add_geom(name='floor', type=mujoco.mjtGeom.mjGEOM_PLANE, size=[1, 1, .1], pos=[0, 0, top-thick])
@@ -80,6 +76,22 @@ def build(layer, variant='plain', clearance_mm=None, weld=False, cargo=None):
         body = world.add_body(name=name, pos=[.3+.1*len(world.bodies), 0, .5])
         body.add_freejoint(name=name)
         variants.add_container(spec, body, name, variants.VARIANTS[variant], mass/(BOX[0]*BOX[1]*BOX[2]))
+    add_jaw(spec, weld)
+    return spec.compile(), f
+
+
+def new_spec():
+    spec = mujoco.MjSpec()
+    spec.option.timestep = DT
+    spec.compiler.degree = False  # joint ranges in radians
+    spec.option.cone, spec.option.impratio = mujoco.mjtCone.mjCONE_ELLIPTIC, 10
+    spec.default.geom.solref, spec.default.geom.solimp = SOLREF, SOLIMP
+    return spec
+
+
+def add_jaw(spec, weld=False):
+    """The v2.1 jaw on link5 (mocap, or a free body welded to a mocap target), two pad colliders and the mimic-coupled drive."""
+    world = spec.worldbody
     if weld:
         world.add_body(name='target', mocap=True, pos=[0, 0, 1])
         wrist = world.add_body(name='jaw', pos=[0, 0, 1], gravcomp=1, mass=.05, inertia=[1e-5]*3, explicitinertial=True)
@@ -99,7 +111,7 @@ def build(layer, variant='plain', clearance_mm=None, weld=False, cargo=None):
                       gainprm=[KP]+[0]*9, biastype=mujoco.mjtBias.mjBIAS_AFFINE, biasprm=[0, -KP, -KV]+[0]*7,
                       forcelimited=mujoco.mjtLimited.mjLIMITED_TRUE, forcerange=[-FINGER_NM, FINGER_NM])
     spec.add_equality(type=mujoco.mjtEq.mjEQ_JOINT, name1='q1', name2='q0', data=([0, -1, 0, 0, 0]+[0]*7)[:mujoco.mjNEQDATA], solref=[.002, 1])
-    return spec.compile(), f
+    return wrist
 
 
 def _set_free(model, data, name, pos, yaw=0.):

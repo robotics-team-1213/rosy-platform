@@ -114,3 +114,13 @@ def test_planner_uses_the_requested_tcp_only_when_asked(tmp_path):
     (_, stock), (_, short) = homes(), homes(tcp_x_m=.074)
     assert stock['homes'][0] != short['homes'][0]  # a shorter TCP puts the wrist further out
     assert homes(tcp_x_m=.5)[0].returncode != 0
+
+
+def test_wrist_camera_b_looks_where_the_holder_design_says():
+    # b16-u16-span-B: optical axis 30.4 deg below the jaw axis, meeting it at x 120.9 mm; image up toward the wrist
+    lens, (w, x, y, z) = g.wrist_camera_pose()
+    view = (-(2*(x*z+w*y)), -(2*(y*z-w*x)), -(1-2*(x*x+y*y)))  # camera -Z in link5
+    up = (2*(x*y-w*z), 1-2*(x*x+z*z), 2*(y*z+w*x))
+    assert abs(math.degrees(math.atan2(-view[2], view[0]))-30.4) < .1 and abs(view[1]) < 1e-9 and up[0] < 0
+    hit = lens[0]+view[0]*(-lens[2]/view[2])
+    assert abs(hit-g.WRIST_CAMERA_B['axis_hit_x_m']) < 1e-9
