@@ -2760,7 +2760,7 @@ close code: `4401` 은 토큰이 없거나 틀린 것(`/ws/state` 와 동일), `
 | `motion.rotate_to` | info | 로봇 | `{delta_deg, yaw_odom, tol_deg, max_rate_dps, timeout_s, lease_owner, operator_name, by}` — D-603 회전 요청을 받았다 (v1.194) |
 | `docking.started` | info | 로봇 | `{dock_id}` (DNC-003) |
 | `docking.docked` | info | 로봇 | `{dock_id}` — dock native 종결이면 추가 `run_id`, `boot_id`, `kind`, `result`, `native_reason`가 붙는다 (D-732) |
-| `docking.charging` / `docking.charge_lost` | info | 로봇 | `{dock_id}` — 독립된 두 소스로 확인한 충전 상태 (D-28) |
+| `docking.charging` / `docking.charge_lost` | info | 로봇 | `{dock_id, source}` — 확인된 충전 상태. `source: instrumented`(2소스, D-28) 또는 `voltage_only`(후진 도크 D-350 Phase 1 — 배터리 인터록에는 반영되지 않는다) |
 | `docking.full` | info | 로봇 | `{dock_id, source, voltage_v}` — 만춫 감지, 1회 방출. `source: instrumented` 또는 `voltage_only` (D-350) |
 | `docking.undock_started` | info | 로봇 | `{dock_id}` |
 | `docking.undocked` | info | 로봇 | `{}` — undock native 종결이면 추가 `run_id`, `boot_id`, `kind`, `result`, `native_reason`가 붙는다 (D-732) |

@@ -52,6 +52,11 @@ def select_detector(dock: DockInstance, dock_type, *,
         from core_features.docking.feed import FeedDetector
 
         return FeedDetector(feed, tag_id=getattr(dock_type, "tag_id", None), clock=clock)
+    if dock_type.detector == "lidar_v" and feed is not None:
+        # Rear dock (D-950): control's dock_lidar_observer_node finds the V marker.
+        from core_features.docking.feed import LIDAR_V, FeedDetector
+
+        return FeedDetector(feed, tag_id=None, clock=clock, source=LIDAR_V)
     if (dock_type.detector == "aruco"
             and getattr(dock_type, "tag_id", None) is not None
             and getattr(dock_type, "tag_size_m", None) is not None

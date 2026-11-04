@@ -14072,6 +14072,11 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 세 번째부터는 차례가 시험 폴더를 직접 돈다.
 - CE: 해당 없음 — D-970 1항 상한의 구멍을 메운 것.
 
+## 2026-11-03 · uncommitted · docs(adr): D-972 후진 도킹 위치 근거는 LiDAR V 표지, 레일 안 조향 없음
+- 변경: 새 ADR D-972(Proposed, D-950 Decision 3 후속)와 ADR Log 행.
+- 근거: 연구 `dock_sim.py` 벽 마찰 결과(바퀴 옆면 잠김 μ > 0.16, 롤러 레일 곧게 44 ~ 45/47, 레일 안 조향 12 ~ 27/47), 충전소가 스캔면 아래라 LiDAR에 안 보임.
+- gate 변화: 없음. Safety-Review·실물 수용 전.
+- 예약: D-972(adr_reserve).
 
 ## 2026-11-03 · uncommitted · docs(control-terms): 관제 용어 층 분리, 헤더는 관제 단위 이름 (D-974)
 - 변경: D-974 — Rosy Fleet은 제품 이름, 통합관제 R·셀 관제 CELL-x는 단위, PC는 물리 이름(OMX 노트북). D-968 1항 대체. `/api/fleet/state`의 `fleet`에 관제 단위 설정이 있을 때 `unit`·`root`(API v1.358), 헤더가 "통합관제 R"/"CELL-A"를 보인다. `fleet_name`은 페어링·lease 신원으로 그대로. 팔레타이징 준비 화면 표시 문구 "Cell" → "팔레트 적재"(경로·id 그대로, 노출은 기존 `CELL_TRANSFER` 규칙). CONCEPTS·관제 단위 배치표 갱신.
@@ -14138,3 +14143,9 @@ osy-d395-s1d\`.
 - 증거: 11-04 lint 정지 4건 중 2건이 D-974 "duplicate index row"(control-terms-v3, learning-image-upload). 실제 커밋 7516e33a49·22ca11cfa5의 merge-tree로 union이 두 행을 남기는 것을 재현. 원격 `test_land.py` 외 4파일 177 통과.
 - gate 변화: 없음
 - CE: 해당 없음 — 원인과 기준은 코드 docstring·회귀 시험·D-889 추가 30에 있다.
+
+## 2026-11-04 · uncommitted · fix(remote): 작은 host에만 놓인 실행은 큰 PC가 비면 옮겨 간다 (D-889 추가 31)
+- 변경: `work_queue.upgrade_watch`·`small_only`·`Work.retired`, `remote_pytest.run`이 작은 host만으로 시작한 실행을 5분마다 다시 배치한다.
+- 증거: 11-04 06:48~08:57 ui-landing-merge-repair delta 사전 시험이 작업 256개 중 253개를 현장 PC에서 직렬로 131분 실행(timing 줄 집계), 같은 시각 AI PC 23코어 여유. 원격 `test_work_queue_upgrade.py`·`test_remote_pytest.py` 외 165 통과, `test_land_isolation.py`·`test_publish_evidence.py` 79 통과.
+- gate 변화: 없음
+- CE: 해당 없음 — 원인과 기준은 docstring·회귀 시험·D-889 추가 31에 있다.
