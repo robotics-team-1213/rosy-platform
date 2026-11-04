@@ -57,6 +57,21 @@ export function executionVerdict(state) {
   return {state: 'warning', text: `${WINDOW_LABELS[active.kind]} 승인 창 ${left} 남음 — ${active.policy_revision}이(가) 실물을 움직일 수 있습니다. 1–2초마다 다시 확인하고, 확인 요청이나 사고가 생기면 멈춥니다.`};
 }
 
+// 화면 머리 수치 띠(D-975 지도). 서버 응답의 개수만 세고 새 판정을 만들지 않는다.
+export function policyFigures(state) {
+  const locked = state.incidents.filter(item => item.cleared_ns === null).length;
+  const open = state.confirmations.filter(item => item.resolution === null).length;
+  const active = state.windows.find(item => item.active);
+  const pending = (state.proposals || []).filter(item => item.state === 'PENDING').length;
+  return [
+    {id: 'incidents', label: '사고 잠금', value: String(locked), note: locked ? '해제 전 실행 안 함' : '없음', alert: locked > 0},
+    {id: 'confirmations', label: '확인 요청', value: String(open), note: open ? '해결 전 실행 안 함' : '없음', alert: open > 0},
+    {id: 'window', label: '열린 승인 창', value: active ? WINDOW_LABELS[active.kind] : '없음',
+      note: active ? `${remaining(active.expires_ns, state.now_ns)} 남음` : '실물 움직이지 않음', alert: !!active && active.kind !== 'shadow'},
+    {id: 'proposals', label: '대기 제안', value: String(pending), note: `등록 정책 ${(state.policies || []).length}개`, alert: false},
+  ];
+}
+
 // 서버가 거절할 승인을 미리 잠그는 사유. 빈 글이면 누를 수 있다.
 export function proposalLock(proposal, rules, who) {
   if (!who.admin) return ADMIN_REASON;

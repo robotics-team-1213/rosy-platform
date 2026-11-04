@@ -146,9 +146,9 @@ jobs:
           grep -o '^[A-Za-z0-9._-]*==[^ ]*' deploy/robot/pinky_pro/image/device-python-requirements.txt > /tmp/rosy-runtime-constraints.txt
           pip3 install --no-cache-dir --break-system-packages -c /tmp/rosy-runtime-constraints.txt \
             flake8 httpx pyyaml jsonschema ext4 playwright
-          # Account authority imports oauthlib at module top; installed-package and boundary
+          # Account authority imports oauthlib and joserfc at module top; installed-package and boundary
           # tests start their own python3 (-I or a replaced PYTHONPATH), so it must be system-wide.
-          pip3 install --no-cache-dir --break-system-packages --no-deps oauthlib==4.0.0
+          pip3 install --no-cache-dir --break-system-packages --no-deps oauthlib==4.0.0 joserfc==1.7.5
           # Browser modules import the SDK during collection, even with browser tests disabled.
           # Chromium stays scoped to the browser verification step below.
 

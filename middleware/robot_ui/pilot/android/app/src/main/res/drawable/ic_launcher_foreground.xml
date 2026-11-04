@@ -9,19 +9,19 @@
     <!-- ring -->
     <path
         android:pathData="M34,58A20,20 0 1,1 74,58A20,20 0 1,1 34,58Z"
-        android:strokeColor="#FFF697E7"
+        android:strokeColor="#FFE796F3"
         android:strokeWidth="5"
         android:strokeLineCap="round"
         android:strokeLineJoin="round" />
     <!-- chevron -->
     <path
         android:pathData="M44,64L54,52L64,64"
-        android:strokeColor="#FFF697E7"
+        android:strokeColor="#FFE796F3"
         android:strokeWidth="5"
         android:strokeLineCap="round"
         android:strokeLineJoin="round" />
     <!-- brand-dot -->
     <path
-        android:fillColor="#FFF697E7"
+        android:fillColor="#FFE796F3"
         android:pathData="M70,34A4,4 0 1,1 78,34A4,4 0 1,1 70,34Z" />
 </vector>

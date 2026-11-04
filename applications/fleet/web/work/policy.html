@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="/common/tokens.css"><script src="/common/theme.js"></script>
   <link rel="stylesheet" href="/common/components.css">
   <link rel="stylesheet" href="/common/component-controls.css">
+  <link rel="stylesheet" href="/common/readout-strip.css">
   <link rel="stylesheet" href="/common/motor-health.css">
   <link rel="stylesheet" href="/common/app-shell.css">
   <link rel="stylesheet" href="/console/assets/policy.css">
@@ -98,6 +99,7 @@
     <ui-status id="policy-message" role="alert" hidden></ui-status>
 
     <div id="policy-content" hidden>
+    <dl id="policy-figures" class="ui-readout" data-form="strip" aria-label="정책 실행 요약"></dl>
     <ui-section aria-labelledby="policy-incidents-heading">
       <ui-head><h2 class="ui-section-heading" id="policy-incidents-heading">사고 잠금</h2></ui-head>
       <ul id="policy-incidents" class="policy-list"></ul>
@@ -134,7 +136,10 @@
       <ui-head><h2 class="ui-section-heading" id="policy-stages-heading">정책 단계</h2></ui-head>
       <ul id="policy-stages" class="policy-list"></ul>
       <h3>대기 중인 단계 제안</h3>
-      <ul id="policy-proposals" class="policy-list"></ul>
+      <div class="ui-table-scroll" role="region" aria-label="단계 제안 표" tabindex="0">
+        <table class="ui-data-table" aria-label="단계 제안"><thead><tr><th scope="col">상태</th><th scope="col">정책</th><th scope="col">단계</th><th scope="col">제안</th><th scope="col">근거</th><th scope="col"><span class="sr-only">동작</span></th></tr></thead>
+          <tbody id="policy-proposals"></tbody></table>
+      </div>
       <form id="policy-proposal-form" class="ui-form">
         <label for="policy-proposal-revision" class="ui-field-label">정책 버전 (새 학습 결과는 0단계로 등록)</label>
         <input id="policy-proposal-revision" class="ui-field" maxlength="128" required>

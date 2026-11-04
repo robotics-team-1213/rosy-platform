@@ -110,6 +110,8 @@ export function createArmTransferView({scope, call, anchor, active, approveReaso
     if (job) {
       field("상태", states[job.status] || "상태 확인 필요"); field("작업 식별자", job.mission_id);
       field("제안자", job.proposal_principal_id); field("승인자", job.approved_by);
+      // D-965: a relayed job names the relaying unit as proposer; show who actually asked.
+      if (job.delegated_by) field("요청한 앱", `${job.delegated_by.requested_by || "알 수 없음"} (${job.delegated_by.origin_unit} 경유)`);
       for (const [key, title] of [["workcell_id", "작업 공간"], ["instance_id", "장치"], ["object_ref", "물체 참조"], ["source", "출발 참조"], ["target", "목표 참조"]]) field(title, job.transfer[key]);
       field("제안 다이제스트", job.proposal_digest); field("조회한 실행 세대", control?.generation);
       field("승인된 실행 세대", job.dispatch_generation); field("사유", job.reason);

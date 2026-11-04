@@ -1,0 +1,25 @@
+/* `.ui-readout[data-form="strip"]` — 화면 머리 수치 띠(DESIGN.md 배치 묶음). components.css 크기 상한(D-766)으로 따로 둔다.
+   쓰는 화면은 components.css 뒤에 이 시트를 싣는다. 칸 질의는 표면이 정한 칸(container-type)에 반응한다. */
+.ui-readout[data-form="strip"] {
+  grid-template-columns: none;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 0;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-panel);
+  background: var(--surface-raised);
+}
+.ui-readout[data-form="strip"] > div { min-width: 0; display: grid; align-content: start; gap: var(--gap-readout-strip); padding: var(--inset-readout-strip); }
+.ui-readout[data-form="strip"] > div + div { border-inline-start: 1px solid var(--border-subtle); }
+.ui-readout[data-form="strip"] dt { font-size: var(--text-micro); line-height: var(--leading-label); }
+.ui-readout[data-form="strip"] dd { font: var(--weight-strong) var(--text-value)/var(--leading-compact) var(--mono); }
+.ui-readout[data-form="strip"] dd[data-note] { font: var(--text-micro)/var(--leading-label) var(--body); color: var(--text-secondary); }
+.ui-readout[data-form="strip"] > [data-alert] > dd:not([data-note]) { color: var(--status-warn); }
+
+/* 수치 띠는 네 칸이 한 줄에 들어가지 않는 compact 칸에서 두 열로 접는다. */
+@container (width < 30rem) {
+  .ui-readout[data-form="strip"] { grid-auto-flow: row; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0; }
+  .ui-readout[data-form="strip"] dd { margin-bottom: 0; }
+  .ui-readout[data-form="strip"] > div:nth-child(odd) { border-inline-start: 0; }
+  .ui-readout[data-form="strip"] > div:nth-child(n + 3) { border-block-start: 1px solid var(--border-subtle); }
+}

@@ -1,17 +1,20 @@
 """D-965: a top control unit without an ARM installation relays an app's ARM job to the owning cell.
 
 The relay holds no ARM authority: the cell proposes under this unit's service principal and only the
-cell's ARM admit approves. Job and receipt come back as the cell's delegation projection.
+cell's ARM admit approves. Job and receipt come back as the cell's delegation projection; evidence and
+rechecks go through the cell's control-unit API for that delegation (peer credentials reach nothing else).
 """
 from hashlib import sha256
 import sqlite3
 
 import httpx
 from fastapi import Depends, HTTPException, Request
+from fastapi.responses import JSONResponse
 
 from core_common.protocol.arm_transfer import ArmActionId
 from core_common.protocol.arm_transfer_jobs import ArmTransferJobCreate, ArmTransferJobResponse, ArmTransferRequestKey
 from core_common.protocol.arm_transfer_observations import ArmTransferCancelRequest, ArmTransferPhysicalReceiptResponse
+from core_common.protocol.arm_transfer_recheck import ArmTransferRecheckCreate
 from core_common.protocol.control_units import ControlArmWorkRequest
 from fleet.swarm.transport import RobotApiError
 from .password_session import same_origin
@@ -29,8 +32,12 @@ def install_arm_transfer_relay_routes(app, *, control, require_viewer, require_p
         if request.headers.get("origin") is not None and not same_origin(request):
             raise HTTPException(403, detail={"code": "ARM_TRANSFER_JOB_FORBIDDEN"})
 
-    def unavailable(code="ARM_TRANSFER_JOB_UNAVAILABLE"):
-        return HTTPException(503, detail={"code": code})
+    def unavailable(row=None):
+        detail = {"code": "ARM_TRANSFER_JOB_UNAVAILABLE"}
+        if row is not None:  # what this unit last saw, for operators; never a current job state
+            detail["last_projection"] = {"status": row["status"], "updated_at": row["updated_at"],
+                                         "job_status": row["result"].get("job", {}).get("status")}
+        return HTTPException(503, detail=detail)
 
     def target(workcell_id):
         resource = "workcell:" + workcell_id
@@ -43,7 +50,7 @@ def install_arm_transfer_relay_routes(app, *, control, require_viewer, require_p
         reply = control.snapshot(row)
         result = row["result"]
         if reply["stale"] or "job" not in result:
-            raise unavailable()
+            raise unavailable(row)
         return result
 
     def mine(row, principal):
@@ -56,19 +63,16 @@ def install_arm_transfer_relay_routes(app, *, control, require_viewer, require_p
         return {"job": dict(job, proposal_principal_id=principal.principal_id,
                             request_key=row["request"]["transfer"]["request_key"]) if mine(row, principal) else job}
 
-    def by_mission(mission_id, principal):
+    def by_mission(mission_id, principal, *, own=False):
         try:
-            rows = control.store.list(limit=1000)
+            row = control.store.by_result_mission(origin, mission_id)
+        except KeyError:
+            raise HTTPException(404, detail={"code": "ARM_TRANSFER_JOB_NOT_FOUND"}) from None
         except sqlite3.Error:
             raise unavailable() from None
-        # shortcut: linear scan of the newest 1000 delegations; index result mission IDs if the relay grows past that.
-        for row in rows:
-            if (row["origin_id"] == origin and "transfer" in row["request"]
-                    and row["result"].get("job", {}).get("mission_id") == mission_id):
-                if not (mine(row, principal) or principal.role == "operator"):
-                    raise HTTPException(403, detail={"code": "ARM_TRANSFER_JOB_FORBIDDEN"})
-                return row
-        raise HTTPException(404, detail={"code": "ARM_TRANSFER_JOB_NOT_FOUND"})
+        if "transfer" not in row["request"] or not (mine(row, principal) or not own and principal.role == "operator"):
+            raise HTTPException(403, detail={"code": "ARM_TRANSFER_JOB_FORBIDDEN"})
+        return row
 
     async def call(operation):
         try:
@@ -80,10 +84,20 @@ def install_arm_transfer_relay_routes(app, *, control, require_viewer, require_p
         except (ConnectionError, OSError, sqlite3.Error, RobotApiError, httpx.HTTPError):
             raise unavailable() from None
 
+    async def forward(row, method, tail, body=None):
+        if row["owner_unit"] != row["request"]["target_unit"]:
+            # shortcut: forwards reach the direct child only; a deeper cell needs each hop to relay too.
+            raise HTTPException(409, detail={"code": "ARM_TRANSFER_RELAY_DEPTH"})
+        projected(row)
+        status, value = await call(control.peer.arm_job(row["owner_unit"], method, origin, row["delegation_id"],
+                                                        tail, body))
+        return JSONResponse(value, status_code=status)
+
     @app.post(path, response_model=ArmTransferJobResponse, tags=["fleet-work"], dependencies=[Depends(write_origin)])
     async def create(body: ArmTransferJobCreate, principal=Depends(require_proposer)):
         request = ControlArmWorkRequest(delegation_id=delegation_id(principal.principal_id, body.request_key),
-                                        target_unit=target(body.workcell_id), transfer=body)
+                                        target_unit=target(body.workcell_id), transfer=body,
+                                        requested_by=principal.principal_id)
         reply = await call(control.submit(request))
         return seen(control.store.get(origin, reply["delegation"]["delegation_id"]), principal)
 
@@ -109,12 +123,24 @@ def install_arm_transfer_relay_routes(app, *, control, require_viewer, require_p
             raise HTTPException(409, detail={"code": "ARM_TRANSFER_PHYSICAL_RECEIPT_PENDING"})
         return {"receipt": result["receipt"]}
 
+    @app.get(path + "/{mission_id}/physical-evidence", tags=["fleet-work"])
+    async def evidence(mission_id: ArmActionId, principal=Depends(require_viewer)):
+        return await forward(by_mission(mission_id, principal), "GET", "physical-evidence")
+
+    @app.post(path + "/{mission_id}/rechecks", tags=["fleet-work"], dependencies=[Depends(write_origin)])
+    async def request_recheck(mission_id: ArmActionId, body: ArmTransferRecheckCreate,
+                              principal=Depends(require_proposer)):
+        return await forward(by_mission(mission_id, principal, own=True), "POST", "rechecks",
+                             body.model_dump(mode="json"))
+
+    @app.get(path + "/{mission_id}/rechecks/{recheck_key}", tags=["fleet-work"])
+    async def read_recheck(mission_id: ArmActionId, recheck_key: ArmTransferRequestKey,
+                           principal=Depends(require_viewer)):
+        return await forward(by_mission(mission_id, principal), "GET", "rechecks/" + recheck_key)
+
     @app.post(path + "/{mission_id}/cancel", response_model=ArmTransferJobResponse, tags=["fleet-work"],
               dependencies=[Depends(write_origin)])
     async def cancel(mission_id: ArmActionId, body: ArmTransferCancelRequest, principal=Depends(require_proposer)):
-        row = by_mission(mission_id, principal)
-        if not mine(row, principal):
-            raise HTTPException(403, detail={"code": "ARM_TRANSFER_JOB_FORBIDDEN"})
-        # The app's reason stays here; the cell records its own cancel reason.
-        await call(control.cancel(origin, row["delegation_id"]))
+        row = by_mission(mission_id, principal, own=True)
+        await call(control.cancel(origin, row["delegation_id"], reason=body.reason))
         return seen(control.store.get(origin, row["delegation_id"]), principal)

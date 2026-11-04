@@ -43,6 +43,7 @@ Harbor 용어의 정본은 팀 저장소 `harborlogi/CONTEXT.md`(2026-10-24 확�
 | 운송 작업 | `POST /api/fleet/trip-jobs`; `trips/trip_job_routes.py` | named operator, 현재 TRIP simulation profile | 기존 `robot_id` 또는 v1.292의 `candidate_robot_ids`+`request_key`. Fleet의 기존 lease/claim으로 배정하며 재접수는 같은 원장을 읽는다. |
 | 공정 문서 제안 | `POST /api/fleet/cell-app/compile`, `/proposals`; `cell/cell_app_routes.py` | named operator, 설정된 service·compiler, 문서 digest 확인 | 설치된 공정의 재컴파일·제안이다. 승인이나 물리 실행 완료가 아니다. |
 | 장치별 이동 | `POST /api/fleet/robots/{robot_id}/goal`; `ledger/task_dispatch_routes.py` | 기존 operator·admission 검사 | 임의 장치 명령 또는 업무 완료 근거로 사용하지 않는다. |
+| 실행 프로필 | `GET /api/fleet/execution-profile`; `execution_profile_routes.py` | viewer(service 포함), 쓰기 없음 | v1.361/D-979. `arm_execution`은 `physical`(device_trial에서 owner 신원·커미셔닝 revision 일치 동안만)·`simulated`·`closed`. 신호가 없거나 오래되면 앱은 거짓으로 본다. 등록·인증된 생산자만 나열(없으면 빈 목록) |
 | 취소·정지 | `/api/fleet/tasks/{task_id}/cancel`, `/robots/{robot_id}/cancel`, `/cancel-all`, `/estop`; 같은 route | 기존 route의 operator·dispatch 검사 | 취소 요청은 물리 정지·화물 해제 확인이 아니다. 앱이 자동 rearm하지 않는다. |
 | 목표 근거 수신 | `POST /api/fleet/goal-evidence`; `missions/mission_routes.py` | 인증된 evidence producer | 업무 앱이 계획을 관측으로 위조하는 쓰기 경로로 쓰지 않는다. |
 
