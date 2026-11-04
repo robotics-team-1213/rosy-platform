@@ -106,8 +106,43 @@
       </ui-head>
       <ui-status id="map-status" state="empty">관제 접속 필요</ui-status>
       <ui-text id="map-scroll-hint" class="map-scroll-hint" hidden>좁은 화면에서는 지도를 좌우로 밀어 확인하세요.</ui-text>
+      <div class="map-board">
       <div id="map-viewport" class="map-viewport" role="region" aria-label="현장 지도 가로 이동" tabindex="0" hidden>
         <svg id="site-map-svg" viewBox="0 0 800 480" role="img" aria-label="현장 지도 · 장소와 방향 있는 차로" tabindex="0"></svg>
+      </div>
+      <!-- 선택 검사 치 — 지도에서 고른 요소의 속성과 초안 반영·저장·활성화. 시안의 오른쪽 치. -->
+      <aside class="map-inspector" aria-label="선택 검사">
+        <h3 class="ui-section-heading">선택 검사</h3>
+        <ui-text id="selection">선택 없음</ui-text>
+        <div id="place-form" class="form" hidden>
+          <label>주소 이름<input class="ui-field" id="place-name" maxlength="64"></label>
+          <label>장소 종류<select class="ui-field" id="place-kind"></select></label>
+        </div>
+        <div id="edge-form" class="form" hidden>
+          <label>통행 방향<select class="ui-field" id="edge-direction">
+            <option value="one_way">일방</option><option value="two_way">양방향</option></select></label>
+          <label>주행 방식<select class="ui-field" id="edge-mode">
+            <option value="lane">차선 따라가기</option><option value="free">지도 좌표 추종</option></select></label>
+          <label>속도 상한 (m/s)<input class="ui-field" id="edge-speed" type="number" min="0.01" max="5" step="0.01"></label>
+        </div>
+        <div id="crosswalk-form" class="form" hidden>
+          <ui-text id="crosswalk-lanes"></ui-text>
+          <label>대기 뜴<select class="ui-field" id="crosswalk-band" aria-label="이 효단보도의 대기 뜴"></select></label>
+          <div class="actions">
+            <ui-button id="band-draw" kind="quiet">대기 뜴 그리기</ui-button>
+            <ui-button id="band-finish" kind="quiet" disabled>뜴 닫기</ui-button>
+            <ui-button id="band-delete" kind="quiet" disabled>뜴 지우기</ui-button>
+          </div>
+          <ui-text>효단보도 면은 lane_graph에서 가져오고 고치지 않습니다. 대기 뜴는 보도 쪽에 차로에 닿게, 바닥(차로 + 0.30 m) 안에 그립니다. 벽에 닿는 뜴는 저장할 때 거불됩니다.</ui-text>
+        </div>
+        <ui-button id="import-crosswalks" kind="quiet" disabled>lane_graph 효단보도 가져오기</ui-button>
+        <div class="actions draft-actions">
+          <ui-button id="apply-edit" kind="quiet" disabled>초안에 반영</ui-button>
+          <ui-button id="save-draft" kind="primary" disabled>초안 저장</ui-button>
+          <ui-button id="activate" kind="irreversible" disabled>초안 활성화</ui-button>
+        </div>
+        <ui-status id="draft-status" state="empty">관제 접속 필요</ui-status>
+      </aside>
       </div>
       <ui-text id="map-legend" hidden>점은 주소, 선은 차로, 화살표는 통행 방향입니다. 지도 위 장소나 차로를 누르면 아래에서 고칩니다.
         <details class="hint-more"><summary class="ui-disclosure-row">기호 안내</summary>
@@ -320,35 +355,6 @@
         <label id="camera-connect-check" class="ui-check" hidden><input class="ui-field" id="camera-connect-confirm" type="checkbox">후보 장소와 실제 도로 연결을 확인했습니다</label>
         <ui-button id="merge-camera-map" kind="quiet" disabled>현재 초안에 관측 누적</ui-button>
         <ui-text>가져온 차로의 연결·통행 방향을 검토하세요. 활성 지도는 초안 활성화 전까지 바뀌지 않습니다.</ui-text>
-        <ui-text id="selection">선택 없음</ui-text>
-        <div id="place-form" class="form" hidden>
-          <label>주소 이름<input class="ui-field" id="place-name" maxlength="64"></label>
-          <label>장소 종류<select class="ui-field" id="place-kind"></select></label>
-        </div>
-        <div id="edge-form" class="form" hidden>
-          <label>통행 방향<select class="ui-field" id="edge-direction">
-            <option value="one_way">일방</option><option value="two_way">양방</option></select></label>
-          <label>주행 방식<select class="ui-field" id="edge-mode">
-            <option value="lane">차선 따라가기</option><option value="free">지도 좌표 추종</option></select></label>
-          <label>속도 상한 (m/s)<input class="ui-field" id="edge-speed" type="number" min="0.01" max="5" step="0.01"></label>
-        </div>
-        <div id="crosswalk-form" class="form" hidden>
-          <ui-text id="crosswalk-lanes"></ui-text>
-          <label>대기 띠<select class="ui-field" id="crosswalk-band" aria-label="이 횡단보도의 대기 띠"></select></label>
-          <div class="actions">
-            <ui-button id="band-draw" kind="quiet">대기 띠 그리기</ui-button>
-            <ui-button id="band-finish" kind="quiet" disabled>띠 닫기</ui-button>
-            <ui-button id="band-delete" kind="quiet" disabled>띠 지우기</ui-button>
-          </div>
-          <ui-text>횡단보도 면은 lane_graph에서 가져오고 고치지 않습니다. 대기 띠는 보도 쪽에 차로에 닿게, 바닥(차로 + 0.30 m) 안에 그립니다. 벽에 닿는 띠는 저장할 때 거절됩니다.</ui-text>
-        </div>
-        <ui-button id="import-crosswalks" kind="quiet" disabled>lane_graph 횡단보도 가져오기</ui-button>
-        <div class="actions draft-actions">
-          <ui-button id="apply-edit" kind="quiet" disabled>초안에 반영</ui-button>
-          <ui-button id="save-draft" kind="primary" disabled>초안 저장</ui-button>
-          <ui-button id="activate" kind="irreversible" disabled>초안 활성화</ui-button>
-        </div>
-        <ui-status id="draft-status" state="empty">관제 접속 필요</ui-status>
       </ui-section>
     </div>
     <ui-section aria-labelledby="teach-heading">

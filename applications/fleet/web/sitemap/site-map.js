@@ -314,8 +314,9 @@ async function connect(credentialChange = false) {
   const localEdit = state.dirty || state.band !== null || state.selected ? {working: state.working,
     draft: state.draft, selected: state.selected, band: state.band, dirty: state.dirty} : null;
   const editFields = [...document.querySelectorAll(
-    '[aria-labelledby="edit-heading"] input:not([type="file"]), [aria-labelledby="edit-heading"] select, '
-    + '[aria-labelledby="edit-heading"] textarea')].map(field => ({field, value: field.value, checked: field.checked}));
+    ':is([aria-labelledby="edit-heading"], .map-inspector) input:not([type="file"]), '
+    + ':is([aria-labelledby="edit-heading"], .map-inspector) select, '
+    + ':is([aria-labelledby="edit-heading"], .map-inspector) textarea')].map(field => ({field, value: field.value, checked: field.checked}));
   state.sessionEpoch = (state.sessionEpoch || 0) + 1;
   sourcePanel.reset(); calibrations = [];
   gate('token-save', '접속 중');

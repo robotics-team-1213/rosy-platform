@@ -615,9 +615,9 @@ def test_site_map_fits_declared_widths(page_site, width, height):
 
 
 # The wide layout stands from a 60rem body: a 1296px shell. 1349 is a 1366 laptop window with a classic scrollbar.
-@pytest.mark.parametrize("width,height,panels,fields", [(360, 740, 1, 1), (1024, 768, 1, 1), (1100, 800, 1, 1),
-                                                       (1349, 768, 1, 3), (1366, 768, 1, 3)])
-def test_site_map_body_keeps_usable_columns_beside_the_sub_nav(page_site, width, height, panels, fields):
+@pytest.mark.parametrize("width,height,panels", [(360, 740, 1), (1024, 768, 1), (1100, 800, 1),
+                                                       (1349, 768, 1), (1366, 768, 1)])
+def test_site_map_body_keeps_usable_columns_beside_the_sub_nav(page_site, width, height, panels):
     """D-741 2: the rail and the sub-nav take 304px. The body picks its columns from its own width: one panel column
     and one-column forms until the body has 60rem, then two and three. There is no sideways overflow, no control
     past the window or with cut text, no multi-column cell under 9rem (what these forms had at the sheet's own
@@ -645,8 +645,8 @@ def test_site_map_body_keeps_usable_columns_beside_the_sub_nav(page_site, width,
         assert top["unreachable"] == [] and end["unreachable"] == [], (top, end)
     assert top["cut"] == [] and top["outside"] == [] and end["outside"] == [], (top, end)
     columns = {grid["name"]: grid["columns"] for grid in top["grids"]}
-    assert columns == {"map-workflow": panels, "place-form": fields,  # D-926 3: other screens' forms are hidden
-                       "actions draft-actions": 1 if width < 480 else 3}, top["grids"]
+    assert columns == {"map-workflow": panels, "place-form": 1,  # D-926 3: other screens' forms are hidden
+                       "actions draft-actions": 1}, top["grids"]
     assert all(grid["narrowest"] >= 144 for grid in top["grids"] if grid["columns"] > 1), top["grids"]
     assert label >= 12, label
 
