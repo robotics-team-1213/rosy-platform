@@ -358,4 +358,3 @@
 - 2026-11-04 · uncommitted · feat(accounts): 계정 화면의 역할 선택이 권한 묶음을 채움 (D-955 화면 보완)
 - 2026-11-04 · uncommitted · fix(remote): 작은 host에만 놓인 실행은 큰 PC가 비면 옮겨 간다 (D-889 추가 31)
 - 2026-11-04 · uncommitted · fix(land): ADR Log union 병합의 옛 행을 착지가 지운다 (D-889 추가 30)
-- 2026-11-04 · uncommitted · docs(plans): peer pose sharing 설계에 v1 실행 범위 명시
