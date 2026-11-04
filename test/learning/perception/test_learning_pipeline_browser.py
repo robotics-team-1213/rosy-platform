@@ -74,6 +74,15 @@ def test_learning_pipeline_prepares_current_reviews_in_app(browser_workspace, wi
     action = page.locator('#pipeline-action')
     expect(action).to_have_text('승인 자료 준비')
     expect(action).to_be_enabled()
+    track = page.locator('#pipeline-stages')
+    expect(track).to_have_class(re.compile(r'(^|\s)ui-stage-track(\s|$)'))
+    expect(track).to_have_attribute('data-line', 'learning')
+    payload = page.request.get(page.url.split('/learning')[0] + '/api/learning').json()
+    for step in payload['pipeline']['stages']:
+        station = track.locator(f'[data-stage="{step["id"]}"]')
+        expect(station).to_have_class(re.compile(r'(^|\s)ui-stage(\s|$)'))
+        expect(station).to_have_attribute('data-status', step['state'])
+        expect(station).to_contain_text(step['detail'])
     assert action.bounding_box()['y'] + action.bounding_box()['height'] <= 844
     page.route('**/api/prepare', lambda route: route.fulfill(status=400,
                content_type='application/json', body=json.dumps({'error': '자료 준비 실패'})))
