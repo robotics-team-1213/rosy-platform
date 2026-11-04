@@ -7,7 +7,7 @@ from pathlib import Path
 import re
 
 from experiment_io import identifier, read_json, write_json
-from experiment_native import _profile, native
+from experiment_native import native, validate_source_profile
 import collection_pipeline as pipeline
 from experiment_reviews import canonical, source_revision
 
@@ -48,23 +48,10 @@ def _source(raw, profile, review=None):
         originals, report, _, _ = pipeline._validate_review_inputs(originals, decision_bytes)
     else:
         originals, report, _, _ = pipeline._review_inputs(root, root / 'decisions.json')
-    checked, layout = _profile(profile, report)
     files = native.dataset_files(root)
     if files != report.get('files'):
         raise ValueError('native preparation source bytes differ from inspection')
-    info = read_json(root / 'meta/info.json')
-    features = info.get('features', {})
-    try:
-        actual = native.joint_layout(info)
-    except ValueError:
-        actual = None
-    if actual != layout:
-        raise ValueError('native preparation joint order or metadata differs')
-    cameras = {key: value.get('shape') for key, value in features.items()
-               if key.startswith('observation.images.')}
-    expected = {camera['input_key']: [*camera['shape'][1:], 3] for camera in checked['cameras']}
-    if cameras != expected:
-        raise ValueError('profile camera keys or shapes differ from prepared native metadata')
+    checked, _ = validate_source_profile(profile, report, root)
     hashes = {name: hashlib.sha256(raw).hexdigest() for name, raw in originals.items()}
     if review is not None and source_revision(hashes, files) != review['source_revision']:
         raise ValueError('source changed since human review snapshot')
