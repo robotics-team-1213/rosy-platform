@@ -287,6 +287,8 @@ git push
 
 KAN-23은 특정 경로의 담당이 아니다. Epic의 역할을 GitHub 경로 소유권으로 확대하지 않는다. 실물 팔·로봇 장치·이미지 경로(`middleware/devices/`, `middleware/drivers/`, `deploy/robot/`, OMX 연동)는 역할 담당과 기본 담당이 함께 리뷰한다.
 
+`platform` root 가운데 소비 역할이 하나뿐인 것은 대리 리뷰어를 둔다(2026-11-04 리드 승인, 패널 보고서 쟁점 A). 대상 목록의 정본은 `platform_parts.yaml`의 `reviewers:`이고 CODEOWNERS가 같은 계정을 나열하며, `test_capability_owners.py`가 둘의 일치와 서명 경로(`deploy/`, `tools/release/`)의 리드 단독을 검사한다. 적용 후 1~2주간 대리 승인 품질을 관찰해 확대 여부를 정하고, 회귀가 반복되면 대리를 줄인다.
+
 ### 5.2 처음 잡기 좋은 일
 
 장치 없이 할 수 있는 열린 이슈부터 고른다. CI 문제는 실패한 실행 링크와 SHA를 확인하고, 모듈 작업은 [STATUS.md](../../STATUS.md)의 검증 상태와 완료 조건을 읽는다. 같은 일이 이미 진행 중이면 §3.6에 따라 순서를 정한다.

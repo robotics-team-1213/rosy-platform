@@ -25,6 +25,7 @@
 | D-962 | Rosy Account 독립 서비스와 개발 모드의 사람 로그인. [전문](../adr/D-962-independent-account-and-authenticated-development.md) | Accepted (2026-11-02, 사용자 승인; 구현·배포·운영 수용 별도) |
 | D-963 | 제어 PC의 USB 카메라 역할은 Fleet 설치 화면에서 승인한다. [전문](../adr/D-963-usb-camera-role-approval-in-fleet.md) | Accepted (2026-11-02, 사용자 요청; 현장 수용 별도) |
 | D-957 | 업데이트 운영 CLI: 운영자의 즉시 시도·홀드·해제를 하나의 명령으로 구조화한다. 게이트(유휴·배터리·서명·freeze) 우회는 없다. [전문](../adr/D-957-update-ops-cli.md) | Accepted (2026-11-02, 사용자 결정; 호스트 코드 불변, 원격 시험·착지는 파이프라인 기록) |
+| D-961 | 공용 작업 이동과 작업·인증 화면 구성. [전문](../adr/D-961-shared-task-links-and-page-compositions.md) | Accepted (2026-11-02, 사용자 승인 통합 설계) |
 | D-960 | 실제 제어는 암 세트마다 붙은 관제가 하고, 통합관제 R은 그 위에서 조정한다. [전문](../adr/D-960-control-unit-per-arm-set-under-integrated-r.md) | Accepted (2026-11-02, 사용자 결정) |
 | D-930 | 확인된 ARM 시도의 재관측(새 측정 사실만, 실행·claim·완료 권한 없음, API v1.334). [전문](../adr/D-930-arm-transfer-recheck-of-confirmed-attempt.md) | Accepted (2026-10-30, 계약·simulation 구현 결정; 실물 수용 별도) |
 | D-907 | Native v2 read-only signed component profile contract. [전문](../adr/D-907-native-v2-readonly-profile-contract.md) | Accepted (2026-10-28) |
@@ -1442,6 +1443,9 @@ LCD 코드 페어링과 도달 확인 읽기는 Tailscale tailnet(`100.64.0.0/10
 
 프레임마다 REST와 같은 검사(`apply_teleop`)를 하고, 최신 seq만 적용하며, 움직이던 소켓이 끊기면 0을 적용한다. Pilot은 소켓이 없거나 ack가 1 s 넘게 없으면 REST로 보낸다. 전문은 [D-948](../adr/D-948-teleop-websocket-stream.md).
 
+## D-961 공용 작업 이동과 작업·인증 화면 구성
+
+**Status:** Accepted (2026-11-02, 사용자 승인 통합 설계). 네이티브 이동 링크의 공용 조작·본문 구성을 기존 토큰과 조합 부품에 연결한다. 인증·정지·도메인 owner를 바꾸지 않는다. 전문은 [D-961](../adr/D-961-shared-task-links-and-page-compositions.md).
 ## D-953 Pi 4·Pi 5 CPU는 이미 있는 네이티브 경로로 먼저 줄인다 — 자체 Rust 확장은 Pi 4 실측이 요구할 때만
 
 **Status:** Accepted (2026-11-01). D-185를 대체하지 않는다. 기체 실측은 남아 있다.

@@ -140,7 +140,7 @@ class Work:
     A filtered take scans todo, so every take and give_back holds one lock. Once stop is set nothing more is taken."""
 
     def __init__(self, order, on_done=None, stop=None):
-        self.todo, self.codes, self.lost = collections.deque(order), {}, set()
+        self.todo, self.codes, self.lost, self.retired = collections.deque(order), {}, set(), set()
         self.on_done, self._asking = on_done, threading.Lock()
         self.stop = stop if stop is not None else threading.Event()
         self._queue, self.began = threading.Lock(), time.monotonic()  # began: an invocation's queue wait starts here
@@ -166,9 +166,10 @@ class Work:
             if cancel:
                 self.stop.set()
 
-    def take(self, wanted=None) -> int | None:
-        """The first queued index (largest first) that wanted(index) accepts; any index when wanted is None."""
-        if self.stop.is_set():
+    def take(self, wanted=None, host=None) -> int | None:
+        """The first queued index (largest first) that wanted(index) accepts; any index when wanted is None.
+        None for a host upgrade_watch retired."""
+        if self.stop.is_set() or host in self.retired:
             return None
         with self._queue:
             for i in self.todo:
@@ -177,9 +178,9 @@ class Work:
                     return i
         return None
 
-    def take_small(self, wanted=None) -> int | None:
+    def take_small(self, wanted=None, host=None) -> int | None:
         """The last queued index (the smallest, largest-first order) wanted(index) accepts: a light host's pick."""
-        if self.stop.is_set():
+        if self.stop.is_set() or host in self.retired:
             return None
         with self._queue:
             for i in reversed(self.todo):
@@ -192,6 +193,38 @@ class Work:
         """i first in line again: its host failed mid-run, so another host (or run()'s fallback) runs it."""
         with self._queue:
             self.todo.appendleft(i)
+
+
+UPGRADE_S = 300  # how often a run on small hosts only looks for a lab PC again
+
+
+def small_only(plan: list[tuple[str, str]], headroom: dict) -> bool:
+    """Every worker's host is the site PC or a light one (place(): the lab PCs were full or held)."""
+    return all((headroom.get(h) or {}).get("site") or (headroom.get(h) or {}).get("light") for h, _ in plan)
+
+
+def upgrade_watch(work: Work, plan, headroom: dict, place, deferred: set, every: float = UPGRADE_S):
+    """While a run has small hosts only, re-place every ``every`` s; once a lab PC fits, those hosts finish their
+    job, take nothing more and are deferred, so run() places the rest again. Returns the event that ends the watch.
+
+    2026-11-04 06:48: a pretest placed while both lab PCs were held ran 253 of its 256 jobs serially on the site
+    PC for 131 min, and the AI PC sat idle with 23 free cores from about 07:40: placement never looked again."""
+    done, mine = threading.Event(), {h for h, _ in plan}
+    work.retired.clear()
+
+    def watch():
+        while not done.wait(every):
+            if not work.todo or work.stop.is_set():
+                return
+            if any(h not in mine and not small_only([(h, "")], headroom) for h in place()):
+                print(f"[remote-pytest] a lab PC has room again: {sorted(mine)} finish their jobs, the rest is placed anew",
+                      file=sys.stderr, flush=True)
+                deferred.update(mine)
+                work.retired.update(mine)
+                return
+    if small_only(plan, headroom):
+        threading.Thread(target=watch, name="upgrade-watch", daemon=True).start()
+    return done
 
 
 class Gate:

@@ -35,7 +35,8 @@ class OutputGraphTests(unittest.TestCase):
         self.exercise(.1, True, limit, (.04, .06))
 
     def test_control_obstacle_gate_reaches_motor_topic(self):
-        self.exercise(.1, True, None, (0., 0.), control_obstacle=True)
+        # D-424 6(F): a front obstacle cuts translation; a clear turn still goes out in place.
+        self.exercise(.1, True, None, (0., .1), control_obstacle=True)
 
     def test_control_allows_explicit_reverse_past_front_obstacle(self):
         self.exercise(-.1, True, None, (-.1, .1), control_obstacle=True)
@@ -64,8 +65,9 @@ class OutputGraphTests(unittest.TestCase):
                    if isinstance(n, ast.ClassDef) and n.name == 'RosBridge')
         method = next(n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == '_publish_cmd_vel')
         # _publish_cmd_vel delegates to the module-level cmd_vel_cycle (core.bridge.cmd_vel).
+        from core.bridge import docking_mode
         from core.bridge.cmd_vel import cmd_vel_cycle
-        scope = dict(Twist=Twist, cmd_vel_cycle=cmd_vel_cycle)
+        scope = dict(Twist=Twist, cmd_vel_cycle=cmd_vel_cycle, docking_mode=docking_mode)
         exec(compile(ast.Module(body=[method], type_ignores=[]), str(path), 'exec'), scope)
         modes = ModeMachine()
         modes.transition(Mode.NAVIGATION)
@@ -86,12 +88,13 @@ class OutputGraphTests(unittest.TestCase):
             msg.linear.x, msg.angular.z = out.linear, out.angular
             publisher.publish(msg)
 
-        bridge = SimpleNamespace(_svc=SimpleNamespace(command=command,
+        bridge = SimpleNamespace(_svc=SimpleNamespace(command=command, modes=modes, station_docking=None,
                                                       power=Mock(motion_ready=lambda: True)),
                                  _readiness=None,
                                  _bounded_trial_guard=None,
                                  _node=node,
                                  _send_twist=send_twist,
+                                 _note_wheels=lambda out: None,
                                  cmd_vel_pub=publisher)
         try:
             if control_obstacle or control_geometry or control_tracking or control_actuation:

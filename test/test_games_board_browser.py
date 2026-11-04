@@ -453,6 +453,7 @@ def test_match_board_initial_state_before_any_publish(width, height):
             page.wait_for_function(
                 "() => document.getElementById('phase')?.textContent === '대기'"
             )
+            assert page.get_by_role('heading', name='Rosy Games — 경기 운영', level=1).count() == 1
             assert page.locator("#home-score").inner_text() == "—"
             assert page.locator("#connection").inner_text() == "경기 데이터 대기 중"
             assert page.locator("#field-evidence").inner_text() == "경기장 정보 대기 중"

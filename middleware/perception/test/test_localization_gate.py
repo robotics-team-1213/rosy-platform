@@ -12,7 +12,7 @@ from control.safety.node import SafetyNode
 def fake_gate():
     command = Twist()
     command.linear.x = .01
-    return SimpleNamespace(estop=False, last_cmd=command, last_cmd_time=object(),
+    return SimpleNamespace(estop=False, _sensor_only=False, last_cmd=command, last_cmd_time=object(),
         localization_status={'ready': True, 'stamp_ns': 1000000000},
         get_parameter=lambda _: SimpleNamespace(value=True),
         now=lambda: SimpleNamespace(nanoseconds=1200000000), _publish_zero=lambda: None,

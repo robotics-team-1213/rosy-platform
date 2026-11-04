@@ -3,6 +3,7 @@
 import json
 import os
 from pathlib import Path
+import re
 
 import pytest
 from browser_harness import browser_tests_enabled
@@ -88,6 +89,80 @@ def test_bulk_selection_is_explicit_and_survives_sort(gallery):
     expect(page.locator("#select-page")).not_to_be_checked()
 
 
+@pytest.mark.parametrize("control", ["open", "select"])
+def test_table_refresh_preserves_focus_only_inside_its_own_rows(gallery, control):
+    from playwright.sync_api import expect
+    page = gallery
+    page.evaluate("""async () => {
+      const {createDataTable} = await import('/common/collection-controls.js');
+      window.focusTables = ['first-table', 'second-table'].map(id => {
+        const table = createDataTable({id, columns: [{label: '이름', text: item => item.label}],
+          onOpen: () => {}});
+        table.set([{id: 'shared-row', label: id}]);
+        document.body.append(table.element);
+        return table;
+      });
+    }""")
+    first = page.locator(f'#first-table [data-{control}="shared-row"]')
+    second = page.locator(f'#second-table [data-{control}="shared-row"]')
+    second.focus()
+    page.evaluate("focusTables[0].set([{id: 'shared-row', label: '갱신된 첫째'}])")
+    expect(second).to_be_focused()
+    page.evaluate("focusTables[1].set([{id: 'shared-row', label: '갱신된 둘째'}])")
+    expect(second).to_be_focused()
+    first.focus()
+    page.evaluate("focusTables[1].clearSelection()")
+    expect(first).to_be_focused()
+    page.evaluate("focusTables[0].selectPage(true)")
+    expect(first).to_be_focused()
+    expect(page.locator('#first-table [data-select="shared-row"]')).to_be_checked()
+
+
+def test_list_toolbar_uses_owner_sort_choices_and_reports_selected_value(gallery):
+    from playwright.sync_api import expect
+    page = gallery
+    page.evaluate("""async () => {
+      const {createListToolbar} = await import('/common/collection-controls.js');
+      window.sortChanges = [];
+      const toolbar = createListToolbar({id: 'history-list',
+        sortLabel: '등록 시각 정렬',
+        sortOptions: [{value: 'recent', label: '최근 등록 먼저'},
+                      {value: 'oldest', label: '오래된 등록 먼저'}],
+        onChange: change => window.sortChanges.push(change)});
+      document.body.append(toolbar.element);
+    }""")
+    sort = page.get_by_role("combobox", name="등록 시각 정렬", exact=True)
+    expect(sort).to_have_value("recent")
+    expect(sort.locator("option")).to_have_text(["최근 등록 먼저", "오래된 등록 먼저"])
+    sort.select_option("oldest")
+    page.locator("#history-list-search").fill("작업")
+    assert page.evaluate("window.sortChanges") == [
+        {"query": "", "filter": "", "sort": "oldest"},
+        {"query": "작업", "filter": "", "sort": "oldest"},
+    ]
+
+
+@pytest.mark.parametrize("document,table_id", [
+    ("cell/cell.html", "catalog-table"), ("index.html", "tracking-positions"),
+])
+def test_product_table_fragments_load_shared_table_styles(gallery, document, table_id):
+    page = gallery
+    source = (WEB.parents[1] / "applications/fleet/web" / document).read_text(encoding="utf-8")
+    links = "".join(link for link in re.findall(r"<link\b[^>]*>", source)
+                    if 'href="/common/' in link)
+    table = re.search(rf'<table\b[^>]*id="{table_id}"[^>]*>.*?</table>', source, re.S).group()
+    table = table.replace(" hidden", "")
+    table = re.sub(r"(<tbody[^>]*>).*?(</tbody>)",
+                   lambda match: match[1] + "<tr><td>" + "긴출처" * 80 + "</td></tr>" + match[2], table, flags=re.S)
+    for theme in ("dark", "light"):
+        for width in (1366, 390):
+            page.set_viewport_size({"width": width, "height": 844})
+            page.set_content(f'<html data-theme="{theme}"><head>{links}</head><body>{table}</body></html>')
+            assert page.locator(f"#{table_id}").evaluate("el => getComputedStyle(el).borderCollapse") == "collapse"
+            assert page.locator(f"#{table_id} td").evaluate("el => getComputedStyle(el).overflowWrap") == "anywhere"
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+
+
 def test_pagination_and_no_invented_total(gallery):
     from playwright.sync_api import expect
     page = gallery
@@ -151,11 +226,100 @@ def test_file_validation_and_cancel_do_not_drop_name(gallery):
     expect(page.locator("#file-result")).to_contain_text("선택한 파일 없음")
 
 
+def test_file_errors_block_native_form_until_corrected_or_cleared(gallery):
+    from playwright.sync_api import expect
+    page = gallery
+    page.evaluate("""() => {
+      const component = document.getElementById('file-example').closest('.ui-control-stack');
+      const form = document.createElement('form'); form.id = 'file-validation-form';
+      component.before(form); form.append(component);
+    }""")
+    field = page.locator("#file-example")
+    form = page.locator("#file-validation-form")
+    field.set_input_files({"name": "notes.txt", "mimeType": "text/plain", "buffer": b"x"})
+    expect(page.locator("#file-result")).to_contain_text("JSON 파일")
+    assert not form.evaluate("el => el.checkValidity()")
+    field.set_input_files({"name": "large.json", "mimeType": "application/json", "buffer": b"x" * (1024 * 1024 + 1)})
+    expect(page.locator("#file-result")).to_contain_text("파일 크기")
+    assert not form.evaluate("el => el.checkValidity()")
+    field.set_input_files({"name": "recipe.json", "mimeType": "application/json", "buffer": b"{}"})
+    assert form.evaluate("el => el.checkValidity()")
+    field.set_input_files({"name": "notes.txt", "mimeType": "text/plain", "buffer": b"x"})
+    assert not form.evaluate("el => el.checkValidity()")
+    field.set_input_files([])
+    assert form.evaluate("el => el.checkValidity()")
+    expect(page.locator("#file-result")).to_contain_text("선택한 파일 없음")
+    field.set_input_files({"name": "notes.txt", "mimeType": "text/plain", "buffer": b"x"})
+    form.evaluate("el => el.addEventListener('reset', event => event.preventDefault(), {once:true})")
+    form.evaluate("el => el.reset()")
+    page.evaluate("() => new Promise(resolve => setTimeout(resolve, 0))")
+    assert not form.evaluate("el => el.checkValidity()")
+    assert field.evaluate("el => el.files[0].name") == "notes.txt"
+    form.evaluate("el => el.reset()")
+    expect(page.locator("#file-result")).to_contain_text("선택한 파일 없음")
+    assert form.evaluate("el => el.checkValidity()")
+
+
+def test_native_form_reset_clears_choice_and_date_validation(gallery):
+    from playwright.sync_api import expect
+    page = gallery
+    page.evaluate("""() => {
+      const form = document.createElement('form'); form.id = 'reset-controls';
+      document.body.append(form);
+      form.append(document.getElementById('choice-options').closest('.ui-control-stack'),
+                  document.getElementById('period-start').closest('fieldset'));
+    }""")
+    page.locator("#choice-search").fill("카메라 20")
+    page.locator("#choice-options").select_option("camera-20")
+    page.locator("#period-start").fill("2026-11-04")
+    page.locator("#period-end").fill("2026-11-03")
+    assert not page.locator("#reset-controls").evaluate("el => el.checkValidity()")
+    page.locator("#reset-controls").evaluate("el => el.reset()")
+    expect(page.locator("#choice-options")).to_have_value("")
+    expect(page.locator("#choice-result")).to_have_text("")
+    expect(page.locator("#period-end")).to_have_attribute("aria-invalid", "false")
+    assert page.locator("#reset-controls").evaluate("el => el.checkValidity()")
+
+
+def test_file_picker_disposal_ignores_pending_form_reset(gallery):
+    page = gallery
+    page.evaluate("""async () => {
+      const {createFilePicker} = await import('/common/form-controls.js');
+      window.resetEvents = 0;
+      window.resetPicker = createFilePicker({id:'reset-file',label:'파일',onChange:() => resetEvents++});
+      const form = document.createElement('form'); form.id = 'disposed-file-form';
+      form.append(resetPicker.element); document.body.append(form);
+    }""")
+    page.locator("#reset-file").set_input_files({"name": "notes.txt", "mimeType": "text/plain", "buffer": b"x"})
+    assert page.evaluate("resetEvents") == 1
+    page.evaluate("() => { document.getElementById('disposed-file-form').reset(); resetPicker.dispose(); }")
+    page.evaluate("() => new Promise(resolve => setTimeout(resolve, 0))")
+    assert page.evaluate("resetEvents") == 1
+
+
+def test_native_reset_keeps_a_newer_explicit_choice(gallery):
+    from playwright.sync_api import expect
+    page = gallery
+    page.evaluate("""() => {
+      const form = document.createElement('form'); form.id = 'newer-choice-form';
+      form.append(document.getElementById('choice-options').closest('.ui-control-stack'));
+      document.body.append(form);
+      form.reset();
+      const select = document.getElementById('choice-options');
+      select.value = 'camera-20'; select.dispatchEvent(new Event('change', {bubbles:true}));
+    }""")
+    page.evaluate("() => new Promise(resolve => setTimeout(resolve, 0))")
+    expect(page.locator("#choice-options")).to_have_value("camera-20")
+    expect(page.locator("#choice-result")).to_have_text("camera-20")
+
+
 def test_searchable_choice_and_date_validation(gallery):
     from playwright.sync_api import expect
     page = gallery
     page.locator("#choice-search").fill("카메라 20")
-    expect(page.locator("#choice-options option")).to_have_count(1)
+    expect(page.locator("#choice-options option")).to_have_count(2)
+    expect(page.locator('#choice-options option[value=""]')).to_have_text("선택하세요")
+    expect(page.locator('#choice-options option[value="camera-20"]')).to_have_count(1)
     page.locator("#choice-options").select_option("camera-20")
     expect(page.locator("#choice-result")).to_have_text("camera-20")
     page.locator("#period-start").fill("2026-10-23")
@@ -163,6 +327,35 @@ def test_searchable_choice_and_date_validation(gallery):
     expect(page.locator("#period-result")).to_contain_text("종료일")
     page.locator("#period-end").fill("2026-10-24")
     expect(page.locator("#period-result")).to_contain_text("2026-10-24")
+
+
+def test_search_choice_keeps_owner_and_visible_selection_in_sync(gallery):
+    from playwright.sync_api import expect
+    page = gallery
+    page.evaluate("""async () => {
+      const {createSearchSelect} = await import('/common/form-controls.js');
+      window.choiceEvents = [];
+      window.dynamicChoice = createSearchSelect({id:'dynamic-choice',label:'대상 선택',
+        choices:[{value:'a',label:'대상 A'},{value:'b',label:'대상 B'}],
+        onChange:value => window.choiceEvents.push(value)});
+      document.body.append(window.dynamicChoice.element);
+    }""")
+    select = page.locator("#dynamic-choice-options")
+    select.select_option("b")
+    page.evaluate("dynamicChoice.update([{value:'b',label:'새 대상 B'},{value:'a',label:'대상 A'}])")
+    expect(select).to_have_value("b")
+    assert page.evaluate("choiceEvents") == ["b"]
+    page.locator("#dynamic-choice-search").fill("대상 A")
+    expect(select).to_have_value("")
+    assert page.evaluate("choiceEvents") == ["b", ""]
+    page.locator("#dynamic-choice-search").fill("")
+    expect(select).to_have_value("")
+    select.select_option("a")
+    page.evaluate("dynamicChoice.update([{value:'b',label:'대상 B'}])")
+    expect(select).to_have_value("")
+    assert page.evaluate("choiceEvents") == ["b", "", "a", ""]
+    page.evaluate("dynamicChoice.update([{value:'b',label:'대상 B'}])")
+    assert page.evaluate("choiceEvents") == ["b", "", "a", ""]
 
 
 def test_keyboard_tabs_menu_and_panel_restore_focus(gallery):

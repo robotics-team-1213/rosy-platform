@@ -50,7 +50,7 @@ def test_console_login_survives_reload_and_new_tab_then_logs_out(tmp_path):
                 page.locator('#fleet-login').click()
                 form = page.locator("#password-login [data-login=form]")
                 expect(form).to_be_visible(timeout=15000)
-                expect(page.get_by_role('region', name='관제 로그인')).to_be_visible()
+                expect(page.get_by_role('region', name='계정 로그인')).to_be_visible()
                 for width in (320, 390, 1440):
                     page.set_viewport_size({'width': width, 'height': 844})
                     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')

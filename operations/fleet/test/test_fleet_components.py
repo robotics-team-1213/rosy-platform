@@ -29,6 +29,26 @@ def test_lightweight_documents_use_one_canonical_header_without_consuming_server
     assert '{{model_origin}}' in api['render'](root, 'learning.html')
 
 
+def test_document_brand_scope_propagates_from_one_component_without_touching_task_content(tmp_path):
+    import re
+    api = component_api()
+    shutil.copytree(WEB, tmp_path / 'web')
+    root = tmp_path / 'web'
+    component = root / 'shared/fleet-document-header.html.inc'
+    component.write_text(component.read_text(encoding='utf-8').replace(
+        '{{document-brand}}', '{{document-brand}} fixture'), encoding='utf-8')
+    assert set(api['check'](root)) == set(api['DOCUMENT_PAGES'])
+    slot = r'<!-- fleet:document-header:start -->.*?<!-- fleet:document-header:end -->'
+    for name in api['DOCUMENT_PAGES']:
+        before = (root / name).read_text(encoding='utf-8')
+        after = api['render'](root, name)
+        expected = 'Rosy Fleet' if name == 'learning.html' else 'Rosy Account'
+        assert '<b>' + expected + ' fixture</b>' in after
+        assert re.sub(slot, '', before, flags=re.S) == re.sub(slot, '', after, flags=re.S)
+        if name != 'learning.html':
+            assert 'id="estop"' not in after
+
+
 def test_component_change_propagates_without_changing_page_task_content(tmp_path):
     api = component_api()
     shutil.copytree(WEB, tmp_path/'web')
@@ -77,8 +97,10 @@ def test_layout_values_have_one_role_owner_and_no_per_page_duplicates():
         assert f'--{role}:' in tokens and f'var(--{role})' in sheet
     assert '.token { width:' not in header
     document = (WEB/'shared/fleet-document.css').read_text(encoding='utf-8')
+    composition = (ROOT/'shared/web/component-controls.css').read_text(encoding='utf-8')
     policy = (WEB/'work/policy.css').read_text(encoding='utf-8')
-    for role, sheet in [('content-auth-max', document), ('content-learning-max', document),
+    for role, sheet in [('content-auth-max', composition), ('content-learning-max', document),
                         ('content-policy-form-max', policy),
                         ('block-policy-evidence-max', policy), ('measure-login-identity', login)]:
         assert f'--{role}:' in tokens and f'var(--{role})' in sheet
+    assert 'var(--content-auth-max)' not in document

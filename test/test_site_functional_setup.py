@@ -242,7 +242,7 @@ def test_real_host_verification_initializes_signed_runtime_during_recovery(monke
  paths.link.mkdir()
  io=types.SimpleNamespace(Http=lambda:None,Paths=lambda:paths,
   functional_reason=lambda *a:'',load_config=lambda p:{'health_url':'https://site.example.invalid/healthz','health_ca':None,'public_key':str(tmp_path/'key')},
-  SERVICES=('fleet',),runtime_reason=lambda *a:'',read_env=lambda p:{'ROSY_SITE_IMAGE_TAG':'candidate'})
+  SERVICES=('fleet',),read_env=lambda p:{'ROSY_SITE_IMAGE_TAG':'candidate'})
  class Updater:
   def __init__(self,*a,**k):calls.append('init');self._accepted_images={'candidate':{'fleet':['sha256:approved']}}
   def _verify(self,*a,**k):calls.append('signed')
@@ -250,6 +250,7 @@ def test_real_host_verification_initializes_signed_runtime_during_recovery(monke
   def _run(self,*a):return types.SimpleNamespace(stdout='sha256:approved')
   def _containers_reason(self,*a):calls.append('containers');return ''
  monkeypatch.setitem(sys.modules,'site_update_io',io)
+ monkeypatch.setitem(sys.modules,'site_update_runtime',types.SimpleNamespace(runtime_reason=lambda *a:''))
  monkeypatch.setitem(sys.modules,'rosy_site_autoupdate',types.SimpleNamespace(SiteUpdater=Updater))
  host=m.Host({},tmp_path/'token');host.http=types.SimpleNamespace(status=lambda *a:200)
  host.verify()

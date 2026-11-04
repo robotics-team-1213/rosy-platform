@@ -47,6 +47,31 @@ KNOWN_WRITERS = {
                                                           "fleet_action_claims"},
 }
 
+#: Why each listed module writes (#233). These are reviewed transaction owners (D-750), not temporary
+#: exceptions, so none has an expiry; a writer that should move under another owner says so here.
+WRITER_REASONS = {
+    "server/ledger/task_store.py": "task ledger owner: creates tasks, appends history, cancels queued tasks",
+    "server/ledger/task_dispatch_control.py": "dispatch authority: rearm/abort and release task resources",
+    "server/ledger/task_dispatch_queue.py": "queue admission: claims the next task and its robot reservation",
+    "server/ledger/control_stop_store.py": "control-unit stop journal and local latch owner (D-862)",
+    "server/ledger/task_results.py": "closes a dispatch attempt from CORE navigation events",
+    "server/ledger/action_claims.py": "releases per-Action arm and zone claims (D-779 5)",
+    "server/dispatch_admission.py": "reserves and releases claims inside the caller's transaction (D-750)",
+    "server/ledger/charge_store.py": "charging sessions hold their claims in the work admission transaction (D-772)",
+    "server/ledger/task_schema.py": "one-time migration of legacy reservations into claims",
+    "server/cancel_all_store.py": "durable site-wide cancel-all record (D-421, safety path)",
+    "server/missions/mission_store.py": "Mission admission moves its claims with the Mission (D-664)",
+    "server/cell/cell_job_store.py": "fixed-cell job admission and hold move its claims (D-403)",
+    "server/cell/cell_arm_claims.py": "per-Action arm and zone claim phases of a multi-arm job (D-779 5-6)",
+    "server/cell/cell_arm_jobs.py": "multi-arm job creation, hold and recovery move its claims (D-779)",
+    "server/cell/cell_sheet_checkpoints.py": "manual-sheet barrier holds the job's claims",
+    "server/work/physical_transfer_schema.py": "site stop holds physical transfer claims (D-856)",
+    "server/work/physical_transfer_execution.py": "physical preparation, hold and confirmation move claims (D-856)",
+    "server/channel/execution/journal.py": "channel execution steps link and finish their claims",
+    "server/channel/execution/outcomes/reconcile.py": "native evidence closes exactly one claim by CAS",
+    "server/channel/execution/outcomes/task_receipt.py": "binds the first native task response by attempt CAS",
+}
+
 
 def _writers() -> dict[str, set[str]]:
     found: dict[str, set[str]] = {}
@@ -74,3 +99,9 @@ def test_only_the_listed_modules_write_the_ledger_tables():
             for path, tables in KNOWN_WRITERS.items() if tables - found.get(path, set())}
     assert not new, f"new Fleet ledger writers; review and list them in KNOWN_WRITERS: {new}"
     assert not gone, f"listed ledger writes no longer occur; remove them from KNOWN_WRITERS: {gone}"
+
+
+def test_every_ledger_writer_states_why_it_writes():
+    """#233: a listed writer without a reason would turn the list into a standing permit."""
+    assert set(WRITER_REASONS) == set(KNOWN_WRITERS)
+    assert all(reason.strip() for reason in WRITER_REASONS.values())
