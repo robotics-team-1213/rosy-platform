@@ -55,7 +55,9 @@ def test_arm_and_navigation_delegations_render_with_cell_owned_approval(site, lo
             arm["stale"] = False
             page.locator("#work-refresh").click()
             page.clock.run_for(1500)
-            cancel.click()
+            # Wait for the routed response: nothing on screen confirms the POST, and under load the assert raced it.
+            with page.expect_response(lambda response: response.request.method == "POST" and response.url.endswith(cancel_path)):
+                cancel.click()
             assert posts[-1] == (cancel_path, "{}")
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
             assert not errors

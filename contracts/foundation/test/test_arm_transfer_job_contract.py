@@ -33,6 +33,16 @@ def test_canonical_exports_and_frozen_json_round_trip():
         request.target = "changed"
 
 
+def test_delegated_by_appears_only_on_delegated_jobs():
+    module = api()
+    data = fixture()
+    assert "delegated_by" not in module.ArmTransferJobResponse(job=data["proposed"]).model_dump(mode="json")["job"]
+    assert "delegated_by" not in module.ArmTransferJobResponse(
+        job={**data["proposed"], "delegated_by": None}).model_dump(mode="json")["job"]
+    delegated = {**data["proposed"], "delegated_by": {"origin_unit": "R", "requested_by": "harbor"}}
+    assert module.ArmTransferJobResponse(job=delegated).model_dump(mode="json") == {"job": delegated}
+
+
 @pytest.mark.parametrize("changes", [
     {"resources": []}, {"capabilities": []}, {"claim_released": True}, {"satisfied": True},
     {"owner_journal_id": "caller-selected"}, {"grant": {}}, {"recipe": {}}, {"workflow": "UNLOAD"},
