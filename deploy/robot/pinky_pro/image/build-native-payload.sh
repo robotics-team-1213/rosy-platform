@@ -157,9 +157,9 @@ mkdir -p "$RELEASE_ROOT/deploy/robot"
 # profile.${ROSY_RUNTIME_MODE}.yaml on a fresh device without a hand install
 # (2026-11-03 solution doc, symptom 1).
 mkdir -p "$RELEASE_ROOT/deploy/robot/config"
-for mode in core motor hardware; do
-    cp "$ROBOT_CONFIG_SOURCE/profile.$mode.yaml" "$RELEASE_ROOT/deploy/robot/config/profile.$mode.yaml"
-done
+cp "$ROBOT_CONFIG_SOURCE/profile.core.yaml" "$RELEASE_ROOT/deploy/robot/config/profile.core.yaml"
+cp "$ROBOT_CONFIG_SOURCE/profile.motor.yaml" "$RELEASE_ROOT/deploy/robot/config/profile.motor.yaml"
+cp "$ROBOT_CONFIG_SOURCE/profile.hardware.yaml" "$RELEASE_ROOT/deploy/robot/config/profile.hardware.yaml"
 # D456 auxiliary import runtime is signed inside the payload; base runtime stays unchanged.
 mkdir -p "$RELEASE_ROOT/deploy/robot/release"
 cp "$SCRIPT_DIR/../release/native_tls_provision.py" "$RELEASE_ROOT/deploy/robot/release/native_tls_provision.py"
