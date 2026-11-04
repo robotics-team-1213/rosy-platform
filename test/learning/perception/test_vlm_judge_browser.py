@@ -69,6 +69,12 @@ def test_label_by_keyboard_and_mouse_at_phone_width(tmp_path):
                 expect(scroll.locator('table')).to_have_class('ui-data-table')
                 scroll.focus()
                 expect(scroll).to_be_focused()
+                text_lines = '''selector => [...document.querySelectorAll(selector)]
+                    .filter(cell => /^(wrist\.|\d+(\.\d+)?%$)/.test(cell.textContent))
+                    .map(cell => { const range = document.createRange(); range.selectNodeContents(cell);
+                        return {text: cell.textContent, lines: range.getClientRects().length}; })'''
+                cells = page.evaluate(text_lines, '#vlm-eval td')
+                assert cells and all(cell['lines'] == 1 for cell in cells), cells
                 assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
                 import os
                 if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
@@ -88,6 +94,8 @@ def test_label_by_keyboard_and_mouse_at_phone_width(tmp_path):
                     else:
                         assert promotion['y'] >= sources['y'] + sources['height'] - 1
                     assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
+                    cells = page.evaluate(text_lines, '#evaluate-sources td')
+                    assert cells and all(cell['lines'] == 1 for cell in cells), cells
                     if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
                         for theme in ('dark', 'light'):
                             page.evaluate('theme => document.documentElement.dataset.theme = theme', theme)
