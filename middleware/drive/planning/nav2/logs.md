@@ -291,3 +291,9 @@
 - 증거: 위 검증 기록 본문(odom·map-pose·LiDAR 교차).
 - gate 변화: 없음.
 - CE: 해당 없음 — 측정 기록.
+## 2026-11-04 · uncommitted · fix(nav2): 이름공간 노드에 닿는 파라미터 섹션 키와 standalone 실행
+
+- 변경: `write_prefixed_nav2_params`가 최상위 섹션 키도 `/{ns}/{node}`로 쓴다. bare `slam_toolbox:` 섹션은 이름공간 노드(`/rosy_42/slam_toolbox`)에 조용히 무시되어 노드가 기본값(`/scan`, `odom`)으로 살았다(2026-11-03 문서 벤치 우회의 원인). `hardware.launch.py`는 `use_composition`을 False로 바꾼다 — 이 Jazzy 빌드에서 load_composable_node 항목은 건너뛰기거나 이름공간을 잃고, device에서 검증된 경로는 standalone이다(2026-11-03 벤치 전 노드 active).
+- 증거: geg6 실측(2026-11-04) — FQN 섹션(`/rosy_42/slam_probe:`)의 `--params-file`가 raw 실행 노드에 값 적용(`scan_topic=/rosy_42/scan` 구독 확인), bare 섹션은 미적용. 착지 시험 묶음에 새 가드 2개(섹션 FQN 단정, composition False 단정)를 변이 증명과 함께 추가.
+- gate 변화: 없음.
+- CE: 기존 교훈 갱신 대상 — [native-hardware-mode-profile-and-canonical-runtime-env-2026-11-03.md](../../../docs/solutions/deployment/native-hardware-mode-profile-and-canonical-runtime-env-2026-11-03.md)의 벤치 우회가 제품 수정으로 해소되는 항목.
