@@ -128,3 +128,11 @@ ros2 service call /$ROSY_NAMESPACE/slam_toolbox/save_map slam_toolbox/srv/SaveMa
 0.43초의 API 0 속도 관찰, 약 0.026m 오도메트리 변화 및 현장 정상 방향 관찰을
 얻었다. G4의 나머지 시험, 승인 마커, navigation 실행과 G5 맵 산출물은 없었다.
 이 수치는 G4/G5 수용 값이 아니다.
+
+**2026-11-04 KST 운영자 메모 — 후진 목표:** `allow_reversing`이 참이면
+Nav2 목표로 후진 이동이 가능하다. 이때 **목표 yaw는 현재 yaw 그대로** 보낸다.
+목표 yaw를 현재 yaw + π로 보내면 "뒤돌아 서기" 목표가 되어 `rotate_to_heading`이
+제자리 회전을 먼저 수행한다(geg6 실측: 회전 중 LiDAR 전방거리 급변, AMCL 믿음
+자세 점프, STUCK). yaw 유지 + 후방 15cm 목표는 회전 없이 순수 후진
+0.069m로 `SUCCEEDED`([검증 기록](../validation/nav2-reversing-goal-2026-11-04/result.md)).
+`xy_goal_tolerance` 0.10 안에서 멈추므로 실제 변위는 5–8cm가 된다.
