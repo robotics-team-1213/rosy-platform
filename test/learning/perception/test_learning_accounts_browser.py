@@ -201,7 +201,7 @@ def sign_in(page, url, accounts, name):
     page.reload(wait_until='networkidle')
 
 
-@pytest.mark.parametrize('width', [320, 1366])
+@pytest.mark.parametrize('width', [320, 390, 1366])
 @pytest.mark.parametrize('theme', ['dark', 'light'])
 def test_account_path_follows_real_session_without_losing_drafts_or_focus(tmp_path, accounts, width, theme):
     """A missing signed-in path or a path surviving a real 401/logout breaks account navigation."""
@@ -213,7 +213,7 @@ def test_account_path_follows_real_session_without_losing_drafts_or_focus(tmp_pa
     url = f'http://127.0.0.1:{server.server_port}'
     try:
         with playwright.sync_playwright() as runtime:
-            browser, page, errors = open_page(runtime, width, 844, url=url)
+            browser, page, errors = open_page(runtime, width, 768 if width == 1366 else 844, url=url)
             try:
                 expect = playwright.expect
                 page.add_init_script('localStorage.setItem("rosy.theme", "' + theme + '")')
