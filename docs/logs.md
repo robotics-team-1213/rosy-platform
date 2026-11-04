@@ -14156,3 +14156,10 @@ osy-d395-s1d\`.
 - 증거: 검증 기록 Step 6 — v11 1층 1 mm까지 1/192 미착석, 위층은 콘 4개라 약 2.3 mm, 다시 놓기(이상화) 3 mm까지 64/64. D-956 Isaac seed 42는 다시 놓아도 HOLD(48dcb6a4, 3b55bb62).
 - gate 변화: 없음. MuJoCo 후보이며 v11 Isaac 형상 전.
 - CE: 새 교훈 — `docs/solutions/logic-errors/mujoco-version-split-laptop-passes-lab-throws-seated-box-2026-11-04.md` (MuJoCo 3.3.7 box-box, remote_pytest가 MuJoCo 시험을 건너뜀).
+
+## 2026-11-04 · uncommitted · OMX 잠금과 물리적 구역 비움의 차이
+
+- 변경: [교훈](solutions/logic-errors/omx-zone-lock-release-is-not-physical-clearance-2026-11-04.md)에 불확실한 park·unsafe-end HOLD·프로세스 종료·디렉터리 동기화와 혼합 reader 배포 제한을 기록했다.
+- 증거: 소스 edc23d4559의 원격 252 passed, 0 skipped, known_failures NEW 0 및 독립 안전 재검토에서 P1 두 건·P2 한 건 해소. 실물·전원 차단·운영 배포 수용은 수행하지 않았다.
+- gate 변화: 없음. 로컬 수정 검증이며 공식 FULL 착지·배포는 별도다.
+- CE: 새 교훈 기록 — OS 잠금의 수명과 물리 점유가 다르며, 정상 종료만 고친 구현이 중단·재시작과 옛 reader에서 다시 위험해지는 연결 판단을 보존한다.
