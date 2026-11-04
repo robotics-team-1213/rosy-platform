@@ -14157,6 +14157,12 @@ osy-d395-s1d\`.
 - gate 변화: 없음. MuJoCo 후보이며 v11 Isaac 형상 전.
 - CE: 새 교훈 — `docs/solutions/logic-errors/mujoco-version-split-laptop-passes-lab-throws-seated-box-2026-11-04.md` (MuJoCo 3.3.7 box-box, remote_pytest가 MuJoCo 시험을 건너뜀).
 
+## 2026-11-04 · uncommitted · test(D-762): 격리 cell 문서 미리보기 부하 결함 3회 근거
+- 변경: `test/flaky_quarantine.txt`에 `applications/fleet/test/test_sample_browser.py::test_cell_document_preview_admission_and_terminal_read` 한 줄 추가. 2026-11-04 하루 3회(sha ff82336996, 6a299d39cf, 86d7abd782) 병렬 브라우저 청크에서 실패·단독 재실행 통과(rosy-flaky-candidates.txt). 실패 내용은 5 s 안에 `#recipe-revision` 글자가 바뀌지 않는 부하 타임아웃이라 제품 결함이 아니다.
+- 증거: 세 LOAD-FLAKY 기록과 단독 통과 로그(각 `alone-pre-*.txt`). 이 id가 explicit FULL 착지를 막아 게시(D-868)도 막고 있어 격리가 D-762 증거 규칙의 정해진 해법이다.
+- gate 변화: 없음
+- CE: 해당 없음 — 격리 규칙대로 근거·해제 조건을 줄에 남겼다.
+
 ## 2026-11-04 · uncommitted · docs(deployment): 후진 목표 운영자 메모
 
 - 변경: `pinky-native-mapping-recovery.md`에 2026-11-04 메모 — 후진 목표는 목표 yaw를 현재 유지로 보내야 하고 yaw+π는 rotate_to_heading 회전을 먼저 일으킨다는 geg6 실측 규칙. [nav2-reversing-goal-2026-11-04](../../validation/nav2-reversing-goal-2026-11-04/result.md)로 연결.
