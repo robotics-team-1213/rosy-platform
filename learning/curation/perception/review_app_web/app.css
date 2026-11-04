@@ -553,6 +553,8 @@ ui-topbar:has([data-learning-account-entry]) { flex-wrap: wrap; }
 .evaluate-source p{margin-block:0 var(--space-2)}
 .evaluate-source a{display:inline-flex;align-items:center;min-block-size:var(--target-secondary)}
 .evaluate-source .ui-table-scroll{margin-block-end:var(--space-2);font-size:var(--text-label)}
+/* Model/question IDs and percentages stay intact inside their named horizontal scroll regions. */
+.vlm-eval .ui-data-table,.evaluate-source .ui-data-table{white-space:nowrap}
 .evaluate-runs{display:grid;gap:var(--space-2);margin:0 0 var(--space-2);padding:0;list-style:none}
 .evaluate-runs li,#promote-result{overflow-wrap:anywhere}
 #promote-pick select{max-inline-size:100%}
