@@ -102,7 +102,7 @@ def test_review_documents_share_the_app_bar_and_the_screen_rail():
               ('check', '/learning/evaluate', '평가·승격', '평가·승격')]
     subs = {'/learning': None, '/catalog': ['/catalog', '/learning/camera', '/learning/workspaces'],
             '/': ['/', '/pixels', '/learning/omx', '/learning/vlm'],
-            '/learning/tasks': ['/learning/tasks', '/learning#pipeline', '/learning/sim'], '/learning/evaluate': None}
+            '/learning/tasks': ['/learning/tasks', '/learning/tasks/manage', '/learning#pipeline', '/learning/sim'], '/learning/evaluate': None}
     rails = set()
     for name, stage, here in [('learning.html', '/learning', None), ('index.html', '/', '/'),
                               ('pixels.html', '/', '/pixels'), ('omx.html', '/', '/learning/omx'),
