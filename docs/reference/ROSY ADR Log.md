@@ -12,7 +12,6 @@
 |---|---|---|
 | D-977 | `device_trial`에서 승인된 ARM 이송(`arm-transfers`)을 단일 팔 하달로 잇는다 — 설계 초안(기명 현장 운영자 확인은 `operator_attested`로 구분) | 부분 Accepted(Fleet 쪽 개방), owner 목표 수락은 Proposed |
 | D-979 | 앱이 읽는 실행 프로필 신호: `GET /api/fleet/execution-profile`은 읽기 전용이고 증명되지 않으면 닫힘이다. [전문](../adr/D-979-fleet-execution-profile-read-signal.md) | Accepted (2026-11-04, 사용자 지시; 읽기 API·시험 구현, 실물 미사용) |
-| D-977 | `device_trial`에서 승인된 ARM 이송(`arm-transfers`)을 단일 팔 하달로 잇는다 — 설계 초안(기명 현장 운영자 확인은 `operator_attested`로 구분) | Proposed |
 | D-978 | 화면 머리(노선·수치 띠)는 서버 응답만 보이고, 화면별 적용은 「조합 어휘」 표 한 곳에서 관리한다. [전문](../adr/D-978-screen-heads-show-server-answers-and-one-composition-table.md) | Accepted (2026-11-04, 사용자 지시; 표·쓰기 금지 시험 구현) |
 | D-976 | 팔레트 값은 실제 제품 색 체계의 단계에서 고르고, 넓은 화면 도구는 36px 단계를 쓴다 — D-82 값 출처·D-629 크기 규칙 개정. [전문](../adr/D-976-palette-from-product-scales-and-dense-tool-targets.md) | Accepted (2026-11-04, 사용자 결정; 두 테마 팔레트·사본·도구 토큰 구현, LCD 실물 판독 미수용) |
 | D-975 | 단계 스트립은 노선 모양이고 앱마다 노선 색 하나를 갖는다 — 흐름은 노선, 단계는 번호 역. [전문](../adr/D-975-line-map-stage-track-and-app-lines.md) | Accepted (2026-11-04, 사용자 결정; 공용 단계 스트립·앱 노선 색 구현, 화면 적용은 단계별 미착수) |
