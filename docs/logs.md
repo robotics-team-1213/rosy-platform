@@ -14149,3 +14149,9 @@ osy-d395-s1d\`.
 - 증거: 11-04 06:48~08:57 ui-landing-merge-repair delta 사전 시험이 작업 256개 중 253개를 현장 PC에서 직렬로 131분 실행(timing 줄 집계), 같은 시각 AI PC 23코어 여유. 원격 `test_work_queue_upgrade.py`·`test_remote_pytest.py` 외 165 통과, `test_land_isolation.py`·`test_publish_evidence.py` 79 통과.
 - gate 변화: 없음
 - CE: 해당 없음 — 원인과 기준은 docstring·회귀 시험·D-889 추가 31에 있다.
+## 2026-11-04 · uncommitted · docs(deployment): 후진 목표 운영자 메모
+
+- 변경: `pinky-native-mapping-recovery.md`에 2026-11-04 메모 — 후진 목표는 목표 yaw를 현재 유지로 보내야 하고 yaw+π는 rotate_to_heading 회전을 먼저 일으킨다는 geg6 실측 규칙. [nav2-reversing-goal-2026-11-04](../../validation/nav2-reversing-goal-2026-11-04/result.md)로 연결.
+- 증거: 위 검증 기록. 이번 착지는 게시용 정본 FULL 근거 생성을 겸한다(pr-pipeline 「로컬 FULL 근거와 게시 SHA」).
+- gate 변화: 없음.
+- CE: 해당 없음 — 운영 문서.
