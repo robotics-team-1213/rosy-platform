@@ -51,7 +51,9 @@ class DockType(BaseModel):
     # 주차형 도크 (차선망 미션 3단계, docs/plans/2026-09-23-lane-network-parking-design.md).
     # 기본값은 원래 도크의 동작 그대로다 — 이 필드들을 바꾼 기종만 달라진다.
     staging: bool = True                # False: Nav2 스테이징 없이 진입 회전부터
-    approach: Literal["bearing", "pose"] = "bearing"   # pose: 도크 좌표계 정렬 접근
+    # pose: 도크 좌표계 정렬 접근. rear: 후진 충전소(D-950 후속) — LiDAR V 표지로 레일 입구
+    # 밖에서 맞추고 레일 안은 각속도 0 으로 곧게 후진한다(`rear_phases.py`).
+    approach: Literal["bearing", "pose", "rear"] = "bearing"
     settle: Literal["agent", "pose"] = "agent"         # pose: 접점 없이 포즈로 정착
     tag_offset_m: Optional[float] = None  # 주차점 → 태그 중심, 도크 축 방향 (pose 접근)
     acquire_creep_m: float = 0.0        # 태그가 안 보일 때 주차점 쪽으로 기어갈 거리
@@ -59,6 +61,10 @@ class DockType(BaseModel):
     undock_turn_rad: float = 0.0        # 언도킹 후진 뒤 목표 방위 = 도크 yaw + 이 값
     pose_tolerance_m: float = 0.012     # pose 정착 판정 (위치, 축 방향·횡 각각)
     pose_tolerance_rad: float = 0.0524  # pose 정착 판정 (방위, 3 deg)
+    # 후진 충전소 (approach="rear"). 거리는 멈춤면 → base_link, 도크 축 방향.
+    rail_entry_m: float = 0.45          # 여기까지 오기 전에 정렬을 끝낸다(바퀴가 레일 입구에 닿기 전)
+    rear_align_tolerance_m: float = 0.010
+    rear_align_tolerance_rad: float = 0.035
 
     @field_validator("staging_offset_m")
     @classmethod
@@ -88,6 +94,21 @@ class DockType(BaseModel):
             raise ValueError("creep and backoff distances must be positive")
         if self.pose_tolerance_m <= 0.0 or self.pose_tolerance_rad <= 0.0:
             raise ValueError("pose tolerances must be positive")
+        return self
+
+    @model_validator(mode="after")
+    def _rear_is_consistent(self) -> "DockType":
+        if self.approach != "rear":
+            return self
+        # 레일 안에서는 아무것도 보지 않고 곧게 간다 — 정렬은 V 표지로 레일 밖에서만.
+        if self.detector != "lidar_v":
+            raise ValueError("a rear approach needs the lidar_v detector")
+        if not self.staging or self.settle != "agent":
+            raise ValueError("a rear approach stages by Nav2 and settles by charge")
+        if not 0.0 < self.rail_entry_m < self.staging_offset_m:
+            raise ValueError("rail_entry_m must be positive and short of staging_offset_m")
+        if self.rear_align_tolerance_m <= 0.0 or self.rear_align_tolerance_rad <= 0.0:
+            raise ValueError("rear alignment tolerances must be positive")
         return self
 
 

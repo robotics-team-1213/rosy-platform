@@ -20,6 +20,8 @@ from typing import Callable, Optional
 from core_features.docking.detector import DockObservation
 
 SOURCE = "CAMERA_TAG"
+LIDAR_V = "LIDAR_V"   # rear dock V marker (D-950 follow-up), from dock_lidar_observer_node
+SOURCES = (SOURCE, LIDAR_V)
 
 
 def _finite(value) -> float:
@@ -32,27 +34,30 @@ def _finite(value) -> float:
 
 
 class DockObservationFeed:
-    """The latest tag observation. A not-visible payload clears it: a lost
-    tag must read as lost, not as its last sighting."""
+    """The latest observation per source (camera tag, rear LiDAR V). A
+    not-visible payload clears its own source: a lost dock must read as lost,
+    not as its last sighting, and one sensor's miss does not erase another's."""
 
     def __init__(self) -> None:
-        self._latest: Optional[tuple[int, DockObservation]] = None
+        self._latest: dict[str, tuple[Optional[int], DockObservation]] = {}
 
     def ingest(self, payload, *, received_at: float, source_now: float) -> bool:
-        """One wire payload; True when it carried a visible tag. Raises
-        ValueError on a malformed payload (and clears the feed first)."""
+        """One wire payload; True when it carried a visible dock. Raises
+        ValueError on a malformed payload (and clears that source first)."""
+        source = payload.get("source") if isinstance(payload, dict) else None
         try:
-            if not isinstance(payload, dict) or payload.get("source") != SOURCE:
-                raise ValueError("not a CAMERA_TAG dock observation")
+            if source not in SOURCES:
+                raise ValueError("not a CAMERA_TAG or LIDAR_V dock observation")
             if type(payload.get("visible")) is not bool:
                 raise ValueError("visible must be a boolean")
             stamp = _finite(payload.get("stamp"))
             if not payload["visible"]:
-                self._latest = None
+                self._latest.pop(source, None)
                 return False
             tag_id = payload.get("tag_id")
-            if type(tag_id) is not int:
-                raise ValueError("tag_id must be an integer")
+            # The V marker has no identity; a tag without an integer id is malformed.
+            if (type(tag_id) is not int) if source == SOURCE else tag_id is not None:
+                raise ValueError("tag_id must be an integer (CAMERA_TAG) or null (LIDAR_V)")
             age = max(0.0, _finite(source_now) - stamp)
             observation = DockObservation(
                 x=_finite(payload.get("x")), y=_finite(payload.get("y")),
@@ -60,15 +65,19 @@ class DockObservationFeed:
                 confidence=min(1.0, max(0.0, _finite(payload.get("confidence")))),
                 at=_finite(received_at) - age)
         except (ValueError, TypeError):
-            self._latest = None
+            # Garbage of unknown origin clears every source: lost, not guessed.
+            if source in SOURCES:
+                self._latest.pop(source, None)
+            else:
+                self._latest.clear()
             raise
-        self._latest = (tag_id, observation)
+        self._latest[source] = (tag_id, observation)
         return True
 
-    def latest(self, tag_id: Optional[int] = None) -> Optional[DockObservation]:
-        if self._latest is None:
+    def latest(self, tag_id: Optional[int] = None, source: str = SOURCE) -> Optional[DockObservation]:
+        if source not in self._latest:
             return None
-        seen_id, observation = self._latest
+        seen_id, observation = self._latest[source]
         if tag_id is not None and seen_id != tag_id:
             return None
         return observation
@@ -81,9 +90,10 @@ class FeedDetector:
 
     def __init__(self, feed: DockObservationFeed, *, tag_id: Optional[int],
                  clock: Callable[[], float] = time.monotonic,
-                 staleness_s: float = 0.6) -> None:
+                 staleness_s: float = 0.6, source: str = SOURCE) -> None:
         self._feed = feed
         self._tag_id = tag_id
+        self._source = source
         self._clock = clock
         self._staleness_s = float(staleness_s)
         self._started = False
@@ -94,7 +104,7 @@ class FeedDetector:
     def relative_pose(self) -> Optional[DockObservation]:
         if not self._started:
             return None
-        observation = self._feed.latest(self._tag_id)
+        observation = self._feed.latest(self._tag_id, self._source)
         if observation is None:
             return None
         age = self._clock() - observation.at

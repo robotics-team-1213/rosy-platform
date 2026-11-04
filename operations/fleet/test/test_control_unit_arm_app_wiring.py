@@ -50,10 +50,11 @@ def config(tmp_path, unit, peer, url):
 
 
 def site(tmp_path, monkeypatch, installation):
-    apps = {}
+    apps, seen = {}, []
 
     class Network(httpx.AsyncBaseTransport):
         async def handle_async_request(self, request):
+            seen.append((request.url.host, request.method, request.url.path, request.headers.get("authorization")))
             return await httpx.ASGITransport(app=apps[request.url.host]).handle_async_request(request)
 
     real = httpx.AsyncClient
@@ -72,6 +73,7 @@ def site(tmp_path, monkeypatch, installation):
         start_task_dispatcher=False, deployment_profile="simulation", arm_transfer_installation=installation,
         omx_stop_transport=StopPort(), control_unit_config=config(tmp_path, "CELL-A", "R", "http://r.test"),
         site_users=users(("op-token", "operator-a", "operator"), ("peer-R", "control-unit:R", "service")))
+    apps["seen"] = seen
     return apps
 
 
@@ -92,6 +94,12 @@ def test_real_apps_relay_at_r_and_propose_in_the_cell_store(tmp_path, monkeypatc
             assert created.status_code == 200, created.text
             job = created.json()["job"]
             assert (job["status"], job["proposal_principal_id"]) == ("PROPOSED", "harbor")
+            assert job["delegated_by"] == {"origin_unit": "R", "requested_by": "harbor"}
+            evidence = await r.get(JOBS + "/" + job["mission_id"] + "/physical-evidence", headers=HARBOR)
+            assert evidence.status_code == 503  # this cell has no observer; the request still reached its delegation
+            delegation = apps["cell.test"].state.control_unit.store.list()[0]["delegation_id"]
+            assert ("cell.test", "GET", f"/api/fleet/control-unit/delegations/R/{delegation}/arm/physical-evidence",
+                    "Bearer peer-R") in apps["seen"]
             cell_job = apps["cell.test"].state.arm_transfer_job_store.peek(job["mission_id"])
             assert cell_job["proposal_principal_id"] == "control-unit:R"
             admit = await r.post(JOBS + "/" + job["mission_id"] + "/admit", headers=OPERATOR,
