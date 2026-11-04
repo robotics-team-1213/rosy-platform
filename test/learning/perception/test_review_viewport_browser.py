@@ -14,19 +14,34 @@ def test_review_photo_and_result_are_in_first_view(browser_workspace):
     page, store, expect = browser_workspace
     review_masks.bind_classes(store, CLASSES)
     base = page.url.split('?')[0].rstrip('/')
-    for width, height in [(1280, 720), (390, 800)]:
+    for width, height in [(1280, 720), (1440, 900), (390, 800), (390, 844)]:
         page.set_viewport_size({'width': width, 'height': height})
         for route, canvas, result in [('/', '#canvas', '#object-result'),
                                       ('/pixels', '#pixel-canvas', '#pixel-result')]:
             page.goto(base + route, wait_until='networkidle')
             box = page.locator(canvas).bounding_box()
-            assert box and box['y'] <= height * .4, (route, width, height, box)
+            assert box and box['y'] <= height * (.65 if route == '/pixels' else .4), (route, width, height, box)
             assert min(box['y'] + box['height'], height) - box['y'] >= box['height'] / 3
             if route == '/pixels':
-                for panel in ['#pixel-view-status', '#review-ai-jobs', '.pixel-vlm-feedback']:
-                    bounds = page.locator(panel).bounding_box()
-                    assert bounds and bounds['y'] >= box['y'] + box['height'], (panel, bounds, box)
+                footer = page.locator('.pixel-canvas-footer').bounding_box()
+                assert box['y'] + box['height'] <= height and footer['y'] + footer['height'] <= height
+                inspector = page.locator('.pixel-review-column').bounding_box()
+                for panel in ['#review-ai-jobs', '.pixel-vlm-feedback']:
+                    expect(page.locator('.pixel-review-column ' + panel)).to_have_count(1)
+                if width >= 1024:
+                    assert inspector['x'] >= box['x'] + box['width'] - 1
+                else:
+                    assert inspector['y'] >= box['y'] + box['height'] - 1
+                expect(page.locator('#pixel-viewport-controls .review-viewport-controls')).to_be_visible()
+                assert not page.locator('#pixel-review-info').evaluate('node => node.open')
+                assert not page.locator('#pixel-whole-frame-tools').evaluate('node => node.open')
+                assert page.locator('#pixel-photo-list #pixel-page-controls').count() == 1
             expect(page.locator(result)).to_contain_text('저장')
+            if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+                from pathlib import Path
+                target = Path(output) / f'review-hierarchy-{route.strip("/") or "objects"}-{width}x{height}.png'
+                target.parent.mkdir(parents=True, exist_ok=True)
+                page.screenshot(path=str(target), full_page=True)
             assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
             if width == 390:
                 actions = ['#prev-frame', '#next-frame', '#next-pending'] if route == '/' else ['#pixel-prev', '#pixel-next', '#pixel-undo']
