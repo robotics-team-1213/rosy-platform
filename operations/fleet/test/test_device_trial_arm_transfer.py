@@ -13,7 +13,7 @@ from fleet.server.mission_store import MissionStore
 from fleet.server.proposal_store import ProposalStore
 from fleet.server.task_service import FleetTaskService
 from fleet.server.task_store import FleetTaskStore
-from fleet.server.work.physical_transfer_observer import PhysicalTransferObserver
+from fleet.server.physical_transfer_observer import PhysicalTransferObserver
 from test_arm_transfer_job_api import CapabilityPort, PATH, body, headers
 from test_physical_transfer_evidence import geometry, policy  # noqa: F401  (fixtures)
 from test_physical_transfer_store import installation  # noqa: F401

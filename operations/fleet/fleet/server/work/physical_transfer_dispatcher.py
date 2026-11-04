@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 import logging
 
 from core_common.protocol.arm_transfer import ArmTransferCapability, FleetArmTransferGrant
-from ..device_identity import device_trial_identity_ok
+from .device_identity import device_trial_identity_ok
 from .physical_transfer_store import ARM_TRANSFER_PROFILES, PhysicalTransferRequest
 from .local_action_transport import LocalActionUnavailable
 from .physical_transfer_io import physical_io
