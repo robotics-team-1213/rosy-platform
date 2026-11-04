@@ -169,7 +169,8 @@ def test_mode_panel_names_modes_in_korean_and_keeps_the_enum_in_title(panel):
 def test_overview_mode_and_navigation_carry_evidence_like_every_other_row(panel):
     page = panel("console/overview.js", width=390)
     status = page.locator("#root > ui-status")
-    summary = page.locator("dl.ui-readout")
+    # D-978 머리 수치 띠(dl[data-form="strip"])와 구분해 근거 요약 dl만 잡는다.
+    summary = page.locator('dl.ui-readout:not([data-form="strip"])')
     assert status.inner_text() == "로봇 상태를 확인하는 중입니다."
     assert status.get_attribute("state") == "pending" and status.get_attribute("role") == "status"
     assert summary.is_hidden()

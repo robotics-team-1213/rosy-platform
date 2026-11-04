@@ -67,6 +67,10 @@ def _principal(principal, *, propose=False, operator=False):
     return principal.principal_id
 
 
+#: D-977 2: production stays closed; device_trial additionally needs exactly one participating arm.
+ARM_TRANSFER_PROFILES = frozenset({"simulation", "device_trial"})
+
+
 def _check_parent_proof(checked_at):
     if (type(checked_at) is not float or not math.isfinite(checked_at)
             or not 0 <= time.monotonic() - checked_at <= 5.0):
@@ -93,8 +97,8 @@ def _delegated_by(connection, mission_id):
 
 class PhysicalTransferStore:
     def __init__(self, path, *, installation, deployment_profile, clock_ns=time.time_ns):
-        if deployment_profile != "simulation" or not Path(path).is_file():
-            raise ValueError("physical transfers require an existing simulation Fleet journal")
+        if deployment_profile not in ARM_TRANSFER_PROFILES or not Path(path).is_file():
+            raise ValueError("physical transfers require an existing simulation or device_trial Fleet journal")
         self.installation = TransferInstallation.model_validate(installation)
         expected = {
             "fleet_tasks": ("task_id", {"task_id"}),

@@ -1,4 +1,4 @@
-"""Installed simulation proposal/admission HTTP; no Action submission or claim release."""
+"""Installed simulation or device_trial proposal/admission HTTP; no claim release (D-977)."""
 import asyncio
 import logging
 import sqlite3
@@ -12,7 +12,8 @@ from core_common.protocol.arm_transfer_jobs import (
 )
 from .local_action_transport import LocalActionUnavailable, UnixLocalActionTransport
 from .mission_store import MissionConflict
-from .physical_transfer_store import PhysicalTransferStore
+from .physical_transfer_attestations import PhysicalOperatorAttestations
+from .physical_transfer_store import ARM_TRANSFER_PROFILES, PhysicalTransferStore
 from .password_session import same_origin
 
 
@@ -85,17 +86,26 @@ class DelegatedArmJobs:
 def install_arm_transfer_job_routes(app, *, installation, deployment_profile, task_store, transport,
                                     socket_root, require_proposer, require_viewer, require_named_operator,
                                     observer, console, principals, other_tokens, other_services, registries,
-                                    policy_admission_core=None):
+                                    policy_admission_core=None, grant_revisions=None):
     store = reader = None
+    commissioning = {}
     if installation is not None:
-        if deployment_profile != "simulation":
-            raise ValueError("ARM transfer HTTP requires the simulation profile")
+        if deployment_profile not in ARM_TRANSFER_PROFILES:
+            raise ValueError("ARM transfer HTTP requires the simulation or device_trial profile")
         if task_store is None:
             raise ValueError("ARM transfer HTTP requires the shared Mission and API audit journal")
         reader = transport if transport is not None else UnixLocalActionTransport(socket_root)
         if not callable(getattr(reader, "transfer_capability", None)):
             raise ValueError("ARM transfer HTTP requires a capability SDK reader")
         store = PhysicalTransferStore(task_store.path, installation=installation, deployment_profile=deployment_profile)
+        if deployment_profile == "device_trial":
+            # D-977 2: one arm only; the owner must also match its configured commissioning revision (D-797 3).
+            if len(store.installation.policy.participants) != 1:
+                raise ValueError("device_trial ARM transfer HTTP opens a single arm only")
+            commissioning = {p.instance_id: (grant_revisions or {}).get(p.instance_id, {}).get("commissioning_revision")
+                             for p in store.installation.policy.participants}
+            if any(not isinstance(v, str) or not v for v in commissioning.values()):
+                raise ValueError("device_trial ARM transfer HTTP requires a commissioning_revision for its arm")
     app.state.arm_transfer_job_store = store
     from .physical_transfer_observer import PhysicalObservationService, validate_observer
     from .physical_transfer_observer_routes import install_physical_observer_routes
@@ -106,7 +116,8 @@ def install_arm_transfer_job_routes(app, *, installation, deployment_profile, ta
         validate_observer(observer, None if store is None else store.installation, console=console,
             principals=principals, other_tokens=other_tokens, other_services=other_services, registries=registries)
         dispatcher = PhysicalTransferDispatcher(PhysicalTransferExecution(store), reader, task_store,
-                                               deployment_profile=deployment_profile)
+                                               deployment_profile=deployment_profile,
+                                               commissioning_revisions=commissioning)
         service = PhysicalObservationService(dispatcher, observer)
     app.state.arm_transfer_dispatcher = dispatcher
     app.state.arm_transfer_delegate = None if store is None else DelegatedArmJobs(store, service)
@@ -135,7 +146,8 @@ def install_arm_transfer_job_routes(app, *, installation, deployment_profile, ta
         return tuple(capabilities), observed_at
 
     audit_log = getattr(policy_admission_core, "audit_log", None)
-    if store is not None and audit_log is not None:
+    # D-977: a real arm is approved only by a named operator at the cell; the unattended policy worker stays simulation-only.
+    if store is not None and audit_log is not None and deployment_profile == "simulation":
         from .arm_transfer_policy_admission import ArmTransferPolicyWorker, arm_transfer_policy_loop
         worker = ArmTransferPolicyWorker(core=policy_admission_core, store=store, read_capabilities=read_capabilities,
                                          dispatcher=dispatcher, audit_log=audit_log, log=_log)
@@ -186,6 +198,12 @@ def install_arm_transfer_job_routes(app, *, installation, deployment_profile, ta
     install_transfer_recovery_routes(app, dispatcher=dispatcher, principals=principals, observer_auth=observer_auth,
         job_view=_view, require_viewer=require_viewer, require_proposer=require_proposer,
         require_named_operator=require_named_operator, write_origin=write_origin)
+
+    if store is not None and deployment_profile == "device_trial":
+        from .physical_transfer_attestation_routes import install_operator_attestation_routes
+        install_operator_attestation_routes(app, attestations=PhysicalOperatorAttestations(store),
+            require_viewer=require_viewer, require_named_operator=require_named_operator, write_origin=write_origin,
+            store=store)
 
     @app.post(path, response_model=ArmTransferJobResponse, tags=["fleet-work"], dependencies=[Depends(write_origin)])
     async def create(body: ArmTransferJobCreate, principal=Depends(require_proposer)):
