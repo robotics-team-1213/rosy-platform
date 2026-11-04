@@ -14162,3 +14162,9 @@ osy-d395-s1d\`.
 - 증거: 세 LOAD-FLAKY 기록과 단독 통과 로그(각 `alone-pre-*.txt`). 이 id가 explicit FULL 착지를 막아 게시(D-868)도 막고 있어 격리가 D-762 증거 규칙의 정해진 해법이다.
 - gate 변화: 없음
 - CE: 해당 없음 — 격리 규칙대로 근거·해제 조건을 줄에 남겼다.
+
+## 2026-11-04 · uncommitted · docs(D-871): 학습센터 타이머 미활용 발견·활성화 개정
+- 변경: D-871에 2026-11-04 현장 점검 절 추가. 모델 PC `rosy-learning-center-update.timer`가 `disabled`+`inactive`였던 것을 `enable --now`로 복구하고, 사용자 유닛 타이머 감사 규칙(`systemctl --user list-timers`, `timers.target.wants/`)을 남겼다.
+- 증거: 모델 PC에서 타이머 enabled+active 확인, 1회 실행으로 게이트 통과·`idle`(`center_not_running`, 설계 동작) 확인. 로봇·현장 PC·OMX·AI PC 전 표면 타이머 실측은 작업 기록 `Rosy/docs/workspace-records/2026-11-04/auto-update-audit.md`.
+- gate 변화: 없음
+- CE: 해당 없음 — 운영 조치이며 함정은 D-871 개정과 작업 기록에 남겼다.
