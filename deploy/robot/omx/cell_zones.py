@@ -20,6 +20,7 @@ import numpy as np
 
 import cell_calibration as cal
 import cell_params as prm
+from collection_store import sync_directory
 
 SCHEMA = "rosy.omx-zone-occupancy.v1"
 
@@ -39,7 +40,7 @@ class Zones:
         self.side, self.site = config["zone_side"], config.get("zone_map_site", "pallet")
         self.peer = config.get("zone_peer")
         self.params, self.calibration, self.clock, self.sleep = config.get("params"), calibration, clock, sleep
-        self.dir = Path(lock_dir or Path.home() / "rosy-omx")
+        self.dir = Path(lock_dir or Path.home() / "rosy-omx").expanduser().resolve()
         self.incidents = Path(incidents or config.get("incidents_dir", "incidents"))
         self.held = {}  # lock name -> fd, all released on leave()
         self.owner, self.session_id = None, None
@@ -78,6 +79,9 @@ class Zones:
                 if os.write(fd, record) != len(record):
                     raise OSError("incomplete zone occupancy write")
                 os.fsync(fd)
+                # Persist the filename and every possibly new ancestor before any reach is admitted.
+                for directory in (self.dir, *self.dir.parents):
+                    sync_directory(directory)
                 self.held[name] = fd
                 return True
             except BlockingIOError:
