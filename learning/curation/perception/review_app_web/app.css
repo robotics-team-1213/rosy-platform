@@ -552,8 +552,7 @@ ui-topbar:has([data-learning-account-entry]) { flex-wrap: wrap; }
 .evaluate-source h3{margin:0 0 var(--space-2);font-size:var(--text-body)}
 .evaluate-source p{margin-block:0 var(--space-2)}
 .evaluate-source a{display:inline-flex;align-items:center;min-block-size:var(--target-secondary)}
-.evaluate-source table{display:block;max-inline-size:100%;overflow-x:auto;border-collapse:collapse;margin-block-end:var(--space-2);font-size:var(--text-label)}
-.evaluate-source th,.evaluate-source td{text-align:start;padding:var(--space-1) var(--space-2);border-block-end:1px solid var(--border-subtle)}
+.evaluate-source .ui-table-scroll{margin-block-end:var(--space-2);font-size:var(--text-label)}
 .evaluate-runs{display:grid;gap:var(--space-2);margin:0 0 var(--space-2);padding:0;list-style:none}
 .evaluate-runs li,#promote-result{overflow-wrap:anywhere}
 #promote-pick select{max-inline-size:100%}

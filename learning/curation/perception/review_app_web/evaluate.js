@@ -40,8 +40,11 @@ async function vlm(workspace){
   const data=await read('/api/learning/vlm/evaluation');
   text(block,'p',`확정 정답 ${data.labelled}장 기준 · 모델 ${data.models.length}개`);
   if(data.models.length){
-    const table=text(block,'table','','evaluate-table');const head=table.createTHead().insertRow();
-    for(const name of ['모델','런타임','질문','n','일치율'])text(head,'th',name);
+    const scroll=text(block,'div','','ui-table-scroll');scroll.tabIndex=0;
+    scroll.setAttribute('role','region');scroll.setAttribute('aria-label','VLM 모델별 확정 정답 비교');
+    const table=text(scroll,'table','','ui-data-table');table.setAttribute('aria-label','VLM 모델별 확정 정답 비교');
+    const head=table.createTHead().insertRow();
+    for(const name of ['모델','런타임','질문','n','일치율'])text(head,'th',name).scope='col';
     const body=table.createTBody();
     for(const model of data.models)for(const row of model.questions){
       const line=body.insertRow();
