@@ -4,7 +4,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends python3 && rm -
 COPY operations/account/rosy_account/ /source/operations/account/rosy_account/
 COPY applications/fleet/web/assets.json applications/fleet/web/login.html applications/fleet/web/profile.html applications/fleet/web/accounts.html /source/applications/fleet/web/
 COPY applications/fleet/web/shared/fleet-document.css applications/fleet/web/shared/password-login.css applications/fleet/web/shared/password-login.js applications/fleet/web/shared/login-page.js applications/fleet/web/shared/login-return.js applications/fleet/web/shared/profile-page.js applications/fleet/web/shared/account-page.js applications/fleet/web/shared/account-permissions.js /source/applications/fleet/web/shared/
-COPY shared/web/shared-assets.json shared/web/tokens.css shared/web/components.css shared/web/component-controls.css shared/web/theme.js shared/web/ui.js shared/web/ui-wiring.js shared/web/confirmation.js shared/web/live-dialog-geometry.js shared/web/fleet-client.js shared/web/request.js shared/web/account-profile.js /source/shared/web/
+COPY shared/web/shared-assets.json shared/web/tokens.css shared/web/app-shell.css shared/web/components.css shared/web/component-controls.css shared/web/theme.js shared/web/ui.js shared/web/ui-wiring.js shared/web/confirmation.js shared/web/live-dialog-geometry.js shared/web/fleet-client.js shared/web/request.js shared/web/account-profile.js /source/shared/web/
 COPY shared/web/icons/console.svg /source/shared/web/icons/console.svg
 COPY shared/web/brand/mark.svg /source/shared/web/brand/mark.svg
 RUN PYTHONPATH=/source/operations/account python3 -m rosy_account.web_assets --repo /source --output /account-web
