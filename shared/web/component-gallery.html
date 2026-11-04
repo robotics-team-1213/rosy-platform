@@ -14,7 +14,7 @@
 </head>
 <body>
 <ui-shell grammar="procedure">
-  <ui-topbar class="kit-topbar">
+  <ui-topbar class="kit-topbar" role="banner">
     <ui-brand><b>ROSY UI</b><small>상호작용 견본</small></ui-brand>
     <span data-spacer></span>
     <ui-button kind="quiet" type="button" data-theme-cycle data-action-icon="theme-dark" aria-label="테마 변경" data-icon-only></ui-button>
@@ -22,7 +22,7 @@
   </ui-topbar>
   <nav class="kit-nav" aria-label="견본 이동">
     <a href="#forms">입력·저장</a><a href="#collections">목록·상세</a><a href="#states">상태·결과</a>
-    <a href="#interactions">탐색·편집</a><a href="#procedure">절차·기록</a>
+    <a href="#interactions">탐색·편집</a><a href="#procedure">절차·기록</a><a href="#task-links">작업 이동</a>
   </nav>
   <main class="kit-main">
     <section aria-labelledby="gallery-title">
@@ -31,6 +31,16 @@
         제품 화면은 같은 부품을 사용하면서 데이터·권한·API와 결과 확인을 직접 소유합니다.</p>
       <ui-status id="kit-ready" state="pending">견본 불러오는 중</ui-status>
       <ui-status id="stop-result" state="empty"></ui-status>
+    </section>
+    <section id="task-links" aria-labelledby="task-links-title">
+      <h2 id="task-links-title">다음 작업으로 이동하기</h2>
+      <p>이동은 링크, 실행은 버튼입니다. 같은 크기와 강조를 쓰면서 링크의 새 탭·주소 복사·키보드 이동을 유지합니다.</p>
+      <div class="ui-task-page ui-auth-page">
+        <h3>로그인하고 작업 이어가기</h3>
+        <p>인증 화면은 필요한 안내와 다음 행동에 집중합니다.</p>
+        <a class="ui-action-link" data-kind="primary" href="#forms">입력·저장 견본으로 이동</a>
+        <a class="ui-action-link" data-kind="quiet" href="#collections">자료 목록으로 돌아가기</a>
+      </div>
     </section>
     <section id="forms" aria-labelledby="forms-title">
       <h2 id="forms-title">입력하고, 오류를 고치고, 다시 확인하기</h2>

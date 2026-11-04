@@ -235,7 +235,8 @@ class Host:
 
     def signed(self):
         """Bind the current containers to signed images/config even if APIs are unavailable."""
-        from site_update_io import Paths, SERVICES, read_env, runtime_reason
+        from site_update_io import Paths, SERVICES, read_env
+        from site_update_runtime import runtime_reason
         from rosy_site_autoupdate import SiteUpdater
         paths = Paths()
         config = dict(self.config)

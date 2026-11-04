@@ -19,7 +19,7 @@ from deploy.site.verify_candidate import verify_candidate
 
 COMMIT = "a" * 40
 TEST_KEY_ID = "rosy-site-test-1"
-SERVICES = ("fleet", "vision", "proxy", "postgres")
+SERVICES = ("fleet", "vision", "proxy", "postgres", "account")
 
 
 def _generate_key(directory: Path, name: str) -> tuple[Path, Path]:

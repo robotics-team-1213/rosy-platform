@@ -12,23 +12,39 @@ export function catalogRows(body) {
   ]);
 }
 
-export async function showObjectCatalog({request, $}) {
+export function createObjectCatalog({request, $}) {
   const status = $('catalog-status');
-  try {
-    const rows = catalogRows(await request(CATALOG_PATH));
-    $('catalog-rows').replaceChildren(...rows.map(cells => {
-      const tr = document.createElement('tr');
-      for (const value of cells) {
-        const td = document.createElement('td');
-        td.textContent = value;
-        tr.append(td);
-      }
-      return tr;
-    }));
-    $('catalog-table').hidden = !rows.length;
-    status.textContent = rows.length ? `물체 ${rows.length}개` : '카탈로그에 물체가 없습니다.';
-  } catch (error) {
+  let generation = 0;
+  function clear() {
+    generation++;
     $('catalog-table').hidden = true;
-    status.textContent = `물체 카탈로그를 읽지 못했습니다: ${error.message}`;
+    $('catalog-rows').replaceChildren();
+    status.textContent = '접속하면 물체 카탈로그를 확인할 수 있습니다.';
   }
+  async function refresh() {
+    clear();
+    const current = generation;
+    status.textContent = '물체 카탈로그를 확인하는 중입니다.';
+    try {
+      const body = await request(CATALOG_PATH);
+      if (current !== generation) return;
+      const rows = catalogRows(body);
+      $('catalog-rows').replaceChildren(...rows.map(cells => {
+        const tr = document.createElement('tr');
+        for (const value of cells) {
+          const td = document.createElement('td');
+          td.textContent = value;
+          tr.append(td);
+        }
+        return tr;
+      }));
+      $('catalog-table').hidden = !rows.length;
+      status.textContent = rows.length ? `물체 ${rows.length}개` : '카탈로그에 물체가 없습니다.';
+    } catch (error) {
+      if (current !== generation) return;
+      $('catalog-table').hidden = true;
+      status.textContent = `물체 카탈로그를 읽지 못했습니다: ${error.message}`;
+    }
+  }
+  return {refresh, clear};
 }

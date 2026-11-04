@@ -127,9 +127,10 @@ export function createRosterSummary({scope, view, openCard, render, attentionIte
     const status = view.stateUnavailable ? "Fleet 상태 확인 불가" : !robot.online ? (link?.word || "오프라인")
       : !robot.state ? "상태 확인 불가" : link?.word || "연결됨";
     const estop = state.safety?.estop;
-    const safety = view.stateUnavailable || !robot.online || !robot.state ? "안전 확인 불가"
-      : staleAgeS(robot, view.receivedAtMs, Date.now()) !== null ? "안전 확인 불가"
-        : estop === true ? estopText(state, "비상 정지") : estop === false ? "안전 정상" : "안전 확인 불가";
+    const stateCurrent = !view.stateUnavailable && robot.online && robot.state
+      && staleAgeS(robot, view.receivedAtMs, Date.now()) === null;
+    const safety = !stateCurrent ? "안전 확인 불가"
+      : estop === true ? estopText(state, "비상 정지") : estop === false ? "안전 정상" : "안전 확인 불가";
     const facts = nodeWithText("div", "robot-summary-status");
     facts.append(tag(status, view.stateUnavailable || !robot.online ? "warn" : ""),
       tag(safety, estop === true ? "crit" : safety === "안전 정상" ? "" : "warn"));
@@ -138,7 +139,7 @@ export function createRosterSummary({scope, view, openCard, render, attentionIte
     const battery = tag(`배터리 ${power.battery}`, power.problem ? "warn" : "");
     battery.dataset.fact = "battery";
     facts.append(battery, motorHealth.summary(robot));
-    const heat = view.stateUnavailable ? null : heatChip(state);
+    const heat = stateCurrent ? heatChip(state) : null;
     if (heat) facts.append(tag(...heat));
     const guideRow = (view.guide?.robots || []).find(row => row.robot_id === robot.robot_id);
     const loc = view.stateUnavailable ? null : positionTag(robot.localization, guideRow);

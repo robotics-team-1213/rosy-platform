@@ -11,7 +11,7 @@ function entry(label,tag,note,url){
   const title=document.createElement('h3');title.textContent=label;
   const badge=document.createElement('ui-tag');badge.textContent=tag;
   item.append(title,badge);
-  if(url){const link=document.createElement('a');link.className='workspace-link';link.href=url;link.textContent='열기';link.setAttribute('aria-label',`${label} 열기`);item.append(link);}
+  if(url){const link=document.createElement('a');link.className='ui-action-link';link.dataset.kind='quiet';link.href=url;link.textContent='열기';link.setAttribute('aria-label',`${label} 열기`);item.append(link);}
   if(note){const text=document.createElement('p');text.className='quiet';text.textContent=note;item.append(text);}
   return item;
 }

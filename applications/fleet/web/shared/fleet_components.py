@@ -5,7 +5,8 @@ import re
 
 PAGES = {'index.html': 'console', 'installation/install.html': 'install',
          'sitemap/site-map.html': 'map', 'cell/cell.html': 'work', 'work/policy.html': 'work'}
-DOCUMENT_PAGES = {'accounts.html': '계정 관리', 'profile.html': '내 계정', 'login.html': '관제 로그인', 'learning.html': '학습'}
+DOCUMENT_PAGES = {'accounts.html': ('Rosy Account', '계정 관리'), 'profile.html': ('Rosy Account', '내 계정'),
+                  'login.html': ('Rosy Account', '계정 로그인'), 'learning.html': ('Rosy Fleet', '학습')}
 
 
 def render(root, name):
@@ -25,7 +26,8 @@ def render(root, name):
             for key in ('console', 'work', 'records', 'map', 'install'):
                 fragment = fragment.replace(' {{'+key+'}}', ' aria-current="page"' if key == PAGES[name] else '')
         if component == 'document-header':
-            fragment = fragment.replace('{{document-title}}', DOCUMENT_PAGES[name])
+            brand, title = DOCUMENT_PAGES[name]
+            fragment = fragment.replace('{{document-brand}}', brand).replace('{{document-title}}', title)
         if '{{' in fragment or '<!-- fleet:' in fragment:
             raise ValueError('unresolved or nested Fleet component')
         document = pattern.sub(lambda _: start+'\n'+fragment+'\n'+end, document)

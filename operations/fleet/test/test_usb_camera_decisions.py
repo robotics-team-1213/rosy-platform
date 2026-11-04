@@ -118,3 +118,35 @@ def test_listing_shows_candidates_and_decisions_without_paths_or_tokens_and_hide
     assert "/dev/" not in listing.text and "one-a" not in listing.text
     clock[0] = FRESH_S + 1
     assert client.get(f"{PATH}/usb-devices", headers=VIEWER).json() == {"workcells": []}
+
+
+def test_usb_decision_accepts_named_operator_cookie_but_keeps_viewer_and_csrf_guards(parts, tmp_path):
+    from fleet.server.password_session import COOKIE, PasswordSessions
+    from fleet.server.site_auth import build_authorize, build_role_guards
+    from fleet.server.site_users import hash_password
+
+    original, store, _, _ = parts
+    send(original, report(KEY))
+    app = original.app
+    logins = {role: {"principal_id": role + "-human", "role": role,
+                     "password_scrypt": hash_password("usb-cookie-fixture")}
+              for role in ("operator", "viewer")}
+    sessions = PasswordSessions(tmp_path / "usb-cookie-sessions.sqlite3", logins)
+    authorize = build_authorize(None, {}, None, None, sessions)
+    read, _, decide, _ = build_role_guards(authorize, {}, named_logins=True)
+    app.dependency_overrides[viewer] = read
+    app.dependency_overrides[named_operator] = decide
+    origin = "https://fleet.example"
+    path = f"{PATH}/one/usb-devices/{KEY}/decision"
+    with TestClient(app, base_url=origin) as client:
+        assert client.get(f"{PATH}/usb-devices").status_code == 401
+        assert client.post(path, json={"role": "top"}, headers={"Origin": origin}).status_code == 401
+        for role in ("viewer", "operator"):
+            client.cookies.set(COOKIE, sessions.issue(role, remember=False))
+            assert client.get(f"{PATH}/usb-devices").status_code == 200
+            assert client.post(path, json={"role": "top"}).status_code == 403
+            result = client.post(path, json={"role": "top"}, headers={"Origin": origin})
+            assert result.status_code == (200 if role == "operator" else 403)
+            if role == "viewer":
+                assert store._decisions("one") == {}
+        assert store._decisions("one") == {KEY: ("top", "operator-human")}

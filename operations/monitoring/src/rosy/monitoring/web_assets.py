@@ -5,8 +5,8 @@ import shutil
 import tempfile
 
 
-COMMON = ('tokens.css', 'components.css', 'app-shell.css', 'theme.js', 'core_ui_logic.js',
-          'ui.js', 'ui-wiring.js', 'confirmation.js', 'live-dialog-geometry.js')
+COMMON = ('tokens.css', 'components.css', 'component-controls.css', 'app-shell.css', 'theme.js', 'core_ui_logic.js',
+          'ui.js', 'ui-wiring.js', 'confirmation.js', 'live-dialog-geometry.js', 'brand/mark.svg')
 ASSETS = {'/': 'index.html', '/monitoring.js': 'monitoring.js', '/monitoring.css': 'monitoring.css',
           **{f'/common/{name}': f'common/{name}' for name in COMMON}}
 
@@ -19,7 +19,8 @@ def build_web(repo: Path, output: Path):
     sources = {}
     for name in ASSETS.values():
         owner = repo / ('shared/web' if name.startswith('common/') else 'applications/monitoring/web')
-        source = (owner / Path(name).name).resolve(strict=True)
+        relative = Path(name).relative_to('common') if name.startswith('common/') else Path(name)
+        source = (owner / relative).resolve(strict=True)
         if not source.is_relative_to(owner.resolve(strict=True)) or not source.is_file():
             raise ValueError('invalid monitoring asset')
         sources[name] = source
@@ -27,6 +28,7 @@ def build_web(repo: Path, output: Path):
         stage = Path(temporary) / 'web'
         (stage / 'common').mkdir(parents=True)
         for name, source in sources.items():
+            (stage / name).parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(source, stage / name)
         stage.rename(output)
 

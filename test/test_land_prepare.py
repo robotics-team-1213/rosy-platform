@@ -570,3 +570,24 @@ def test_a_delta_pretest_without_a_tier_still_counts_its_yield(tmp_path, monkeyp
     assert saved["yields"] == 2 and saved["tier"] == "delta" and saved["invocations"] == [["x/test"]]
     import land_selection
     assert not land_selection.delta_yields("ticket.json", land.land_full.prepared(tmp_path, "b", "m" * 40))
+
+
+def test_full_pretests_beyond_max_full_wait_for_older_ones_and_affected_ones_do_not(tmp_path):
+    """2026-11-04: five FULL pretests shared the lab PCs at once and none finished for 45 min."""
+    queue, prep = land.land_queue, land.land_prepare
+    older = [queue.take(tmp_path, f"feat/full-{n}", status="preparing") for n in range(prep.MAX_FULL)]
+    for ticket in older:
+        queue.set_status(ticket, "preparing", tier="full")
+    mine = queue.take(tmp_path, "feat/mine", status="preparing")
+    naps = []
+
+    def finish_one(_):
+        naps.append(1)
+        queue.set_status(older[0], "waiting")  # its pretest ended: the turn's wait, no longer preparing
+
+    prep.full_slot(tmp_path, mine, sleep=finish_one)
+    assert naps == [1] and json.loads(mine.read_text())["tier"] == "full"
+    later = queue.take(tmp_path, "feat/later", status="preparing")
+    queue.set_status(later, "preparing", tier="")  # an affected pretest never counts against FULL ones
+    urgent = queue.take(tmp_path, "feat/urgent", status="preparing", urgent="hotfix")
+    prep.full_slot(tmp_path, urgent, sleep=lambda _: pytest.fail("an urgent FULL pretest waited"))
