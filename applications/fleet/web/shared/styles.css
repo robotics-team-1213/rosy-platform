@@ -440,7 +440,7 @@ main {
 
 /* D-359 US-009 — 로봇 패널의 두 묶음. 넓은 창에서는 상자가 없어 자식이 위 격자에 선다. */
 @media (width < 64rem) {
-  main { grid-template-columns: minmax(0, 1fr); }
+  #fleet-main { grid-template-columns: minmax(0, 1fr); grid-template-areas: none; grid-template-rows: auto; }
   .console-primary, .console-secondary { display: contents; }
   .queues-panel { order: 0; }
   .panel[aria-labelledby="map-heading"] { order: 2; }
