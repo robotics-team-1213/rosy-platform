@@ -28,6 +28,8 @@ from core_features.line_follow.clearance import return_scan_view as _return_scan
 from core_features.line_follow.crosswalk.gate import scan_rays
 from core_features.line_follow.model import SOURCE_FUTURE_TOLERANCE_S
 from core_features.vision import accept_preview
+from core_features.docking.lidar_v import DockVSpec, detect_dock_v, lidar_v_payload
+from core_features.docking.model import DockPhase
 from core_common.protocol.lane_containment import LaneContainmentEvidence
 from core_common.robot_body import inside_body
 
@@ -162,6 +164,7 @@ def road_observation(services, raw: str, *, source_now: float,
 
 #: D-407 body clearances only need the robot's near field.
 BODY_POINTS_RANGE_M = 0.6
+_DOCK_LOOKING = (DockPhase.ACQUIRING, DockPhase.ALIGNING)   # D-972: inside the rails nothing is looked at
 
 
 def _range_min(sample) -> Optional[float]:
@@ -172,10 +175,30 @@ def _range_min(sample) -> Optional[float]:
     return max(0.0, float(value))
 
 
+def rear_dock_scan(services, sample, *, received_at: float) -> None:
+    """D-972: 도킹이 도크를 찾고 맞추는 동안, 같은 스캔에서 후진 충전소의 V 표지를 찾아
+    `dock_feed`(source LIDAR_V)에 넣는다. 못 찾으면 보이지 않음 — 잃은 것으로 읽힌다."""
+    try:
+        docking = services.docking
+        if not docking.active or docking.phase not in _DOCK_LOOKING:
+            return
+        config = services.line_follow.config
+        points = _scan_points(sample, forward_deg=config.lidar_forward_deg,
+                              max_range=DockVSpec.max_range_m, self_mask=config.lidar_self_mask)
+        shift = config.body_lidar_x_m or 0.0          # laser -> base_link along x
+        found = detect_dock_v([(x + shift, y) for x, y in points])
+        services.dock_feed.ingest(lidar_v_payload(sample["source_stamp_ns"] * 1e-9, found),
+                                  received_at=received_at, source_now=sample["source_now_ns"] * 1e-9)
+    except (AttributeError, KeyError, TypeError, ValueError):
+        return
+
+
 def front_clearance(services, sample, *, received_at: float) -> None:
     """D-344 §11: LiDAR 를 차선 추종 정지 판정에 넘긴다 — path 는 점, sector 는 정면 최소 거리.
 
-    D-395 P2-7 미션도 같은 표본을 받는다(정면 여유는 미션이 필요할 때만 잰다)."""
+    D-395 P2-7 미션도 같은 표본을 받는다(정면 여유는 미션이 필요할 때만 잰다). 후진 충전소의
+    V 표지도 같은 표본에서 찾는다(D-972, 도킹이 찾는 동안만)."""
+    rear_dock_scan(services, sample, received_at=received_at)
     mission = services.loc_mission
     if mission is not None:
         mission.observe_scan(sample)

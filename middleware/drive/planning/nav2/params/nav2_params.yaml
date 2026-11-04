@@ -85,7 +85,7 @@ controller_server:
 
       # 기본 주행 및 속도
       desired_linear_vel: 0.2                # [m/s] 목표 기본 직진 속도
-      allow_reversing: false                 # 후진 허용 여부 (false: 무조건 전진/제자리 회전으로 해결)
+      allow_reversing: true                  # 후진 허용 (뒤 목표도 제자리 회전 없이 후진으로 주행; CORE/프로파일 상한은 그대로 적용)
       max_angular_accel: 3.2                 # [rad/s^2] 최대 각가속도 (회전할 때 얼마나 빨리 가속할지)
 
       # 경로 추종 (Lookahead, 시선 두기)
