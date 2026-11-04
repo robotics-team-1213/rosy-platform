@@ -412,9 +412,9 @@ def test_every_learning_rail_destination_renders_content(empty_learning_center):
             for href in links:
                 opened(f'.ui-rail-nav a[href="{href}"]', href)
                 # The two editors carry the 정답 pages in their title row (.review-kinds), the others in the sub-menu.
-                for sub in page.locator('.ui-subnav-nav a, .review-kinds a').evaluate_all(hrefs):
+                for sub in page.locator('.ui-subnav-nav a, .ui-app-main > .review-kinds a').evaluate_all(hrefs):
                     opened(f'.ui-rail-nav a[href="{href}"]', href)
-                    opened(f':is(.ui-subnav-nav, .review-kinds) a[href="{sub}"]', sub)
+                    opened(f'.ui-subnav-nav a[href="{sub}"], .ui-app-main > .review-kinds a[href="{sub}"]', sub)
                     reached.add(sub)
             assert reached == {'/catalog', '/learning/camera', '/', '/pixels', '/learning/omx', '/learning/vlm',
                                '/learning/tasks', '/learning/tasks/manage', '/learning/imitate',

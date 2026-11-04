@@ -93,7 +93,7 @@ def test_answer_links_never_cover_the_title_at_768(browser_workspace, route):
     origin = urlsplit(page.url)
     page.set_viewport_size({'width': 768, 'height': 900})
     page.goto(f'{origin.scheme}://{origin.netloc}{route}', wait_until='networkidle')
-    title, nav = page.locator('.ui-pathbar h1').bounding_box(), page.locator('.review-kinds').bounding_box()
+    title, nav = page.locator('.ui-pathbar h1').bounding_box(), page.locator('.ui-app-main > .review-kinds').bounding_box()
     apart = (title['x'] + title['width'] <= nav['x'] or nav['x'] + nav['width'] <= title['x']
              or title['y'] + title['height'] <= nav['y'] or nav['y'] + nav['height'] <= title['y'])
     assert apart, (route, title, nav)
@@ -106,7 +106,7 @@ def test_answer_links_come_right_after_the_title_in_focus_order(browser_workspac
     page, _, _ = browser_workspace
     origin = urlsplit(page.url)
     page.goto(f'{origin.scheme}://{origin.netloc}{route}', wait_until='networkidle')
-    links = page.locator('.review-kinds a').evaluate_all('links => links.map(link => link.pathname)')  # / adds ?frame=
+    links = page.locator('.ui-app-main > .review-kinds a').evaluate_all('links => links.map(link => link.pathname)')  # / adds ?frame=
     page.locator('.ui-pathbar h1').evaluate('title => { title.tabIndex = -1; title.focus(); }')
     if route == '/pixels':
         page.keyboard.press('Tab')

@@ -139,6 +139,7 @@ def test_pixel_unsaved_gesture_blocks_ai_and_result_reload(tmp_path):
         expect(page.locator('#pixel-draft')).to_contain_text('1획')
         before = page.locator('#pixel-draft').inner_text()
         expect(page.locator('#review-ai-mask_check')).to_be_disabled()
+        open_action_disclosure(page, '#review-ai-jobs')
         expect(page.locator('#review-ai-jobs').get_by_role('button', name='AI 결과 목록 조회')).to_be_disabled()
         command(page, 'AI 실행 상태 다시 조회')
         expect(page.locator('#pixel-draft')).to_have_text(before)

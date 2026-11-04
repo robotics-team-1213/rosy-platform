@@ -241,13 +241,16 @@ def test_object_workspace_purpose_and_eval_export_guard(tmp_path):
     with serve(store) as (page, _, expect):
         expect(page.locator('#object-workspace-mode')).to_contain_text('학습 후보')
         expect(page.locator('#view-status')).to_contain_text('학습 후보')
+        open_action_disclosure(page, '#prepare')
         expect(page.locator('#prepare')).to_be_visible()
     with store.connect() as db:
         db.execute("INSERT OR REPLACE INTO metadata (key,value) VALUES ('workspace_kind','evaluation')")
     with serve(store) as (page, _, expect):
         expect(page.locator('#object-workspace-mode')).to_contain_text('고정 평가')
         expect(page.locator('#view-status')).to_contain_text('학습 제외')
+        page.locator('.review-tool-nav a[href="#prepare-heading"]').click()
         expect(page.locator('#prepare')).to_be_hidden()
+        page.locator('.review-tool-nav a[href="#object-review"]').click()
         page.locator('#next-frame').click()
         expect(page.locator('#view-status')).to_contain_text('학습 제외')
 
@@ -856,7 +859,7 @@ def test_review_permission_denial_blocks_work_until_reload(
         target = Path(output) / f'learning-{"objects" if route == "/" else "pixels"}-prepare-denied-{width}.png'
         page.screenshot(path=str(target))
     page.unroute('**/api/prepare')
-    page.locator(reload).click()
+    page.keyboard.press('r')
     expect(page.locator(prepare)).to_be_enabled()
 
 
@@ -1076,11 +1079,14 @@ def test_object_decision_and_preparation_result_are_visible(browser_workspace, w
     expect(page.locator('#status')).to_have_text('승인')
     assert store.get(0)['status'] == 'approved'
     shot('approved')
+    open_action_disclosure(page, '#prepare')
     page.locator('#prepare').click()
     expect(page.locator('#export-result')).to_contain_text('승인 1장 준비 완료')
     expect(page.locator('#export-result')).to_contain_text('이번 준비 결과')
     page.reload()
     expect(page.locator('#export-result')).to_contain_text('이전 준비 결과')
+    shot('prepared-result')
+    page.locator('.review-tool-nav a[href="#object-review"]').click()
     assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
     if width <= 390:
         navigation = page.locator('.frame-navigation').bounding_box()
@@ -1243,11 +1249,11 @@ def test_undo_restores_boxes_without_restoring_approval(browser_workspace):
     page.locator('#filter').select_option('approved')
     expect(page.locator('#image-message')).to_be_hidden()
     page.get_by_role('button', name='박스 1 삭제', exact=True).click()
-    expect(page.locator('#boxes details')).to_have_count(0)
+    expect(page.locator('#boxes .box-row')).to_have_count(0)
     expect(page.locator('#filter')).to_have_value('all')
     expect(page.locator('#undo')).not_to_have_attribute('disabled', '')
     page.locator('#undo').focus(); page.keyboard.press('Control+z')
-    expect(page.locator('#boxes details')).to_have_count(1)
+    expect(page.locator('#boxes .box-row')).to_have_count(1)
     expect(page.locator('#undo')).to_have_attribute('disabled', '')
     assert store.get(0)['review']['boxes'] == original
     assert store.get(0)['status'] == 'pending'
