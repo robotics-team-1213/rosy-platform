@@ -231,6 +231,13 @@ def test_records_area_raises_incidents_into_the_body_and_the_judgment_to_the_sid
                 document.getElementById('incident-refresh').dispatchEvent(new Event('click')); }""")
             page.wait_for_function("""() => document.querySelector('#incident-judgment > div') !== window.oldSeat
                 && document.activeElement.matches('#incident-judgment > [data-report-key="rosy_01|closed-new"] select')""")
+            # Restoring an open fold during refresh must not pull a reader back down to its form.
+            page.evaluate("""() => { document.activeElement.blur(); window.scrollTo(0, 0);
+                window.oldSeat = document.querySelector('#incident-judgment > div');
+                document.getElementById('incident-refresh').dispatchEvent(new Event('click')); }""")
+            page.wait_for_function("() => document.querySelector('#incident-judgment > div') !== window.oldSeat")
+            page.clock.run_for(100)
+            assert page.evaluate('window.scrollY') == 0
             side.locator("select").select_option("obstacle")
             side.locator("input").fill("현장 상자 확인")
             side.locator("ui-button[type=submit]").click()
