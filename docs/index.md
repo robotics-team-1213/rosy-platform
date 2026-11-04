@@ -354,7 +354,7 @@
 ## 최근 기록
 
 - 2026-11-04 · uncommitted · docs(D-871): 학습센터 타이머 미활용 발견·활성화 개정
+- 2026-11-04 · uncommitted · test(D-762): 격리 cell 문서 미리보기 부하 결함 3회 근거
+- 2026-11-04 · uncommitted · 조립식 배 v11 MuJoCo 쌍둥이, 손목 카메라 B, D-956 Isaac 결과
 - 2026-11-04 · uncommitted · fix(remote): 작은 host에만 놓인 실행은 큰 PC가 비면 옮겨 간다 (D-889 추가 31)
 - 2026-11-04 · uncommitted · fix(land): ADR Log union 병합의 옛 행을 착지가 지운다 (D-889 추가 30)
-- 2026-11-04 · uncommitted · docs(plans): peer pose sharing 설계에 v1 실행 범위 명시
-- 2026-11-04 · uncommitted · docs(plans): 로봇 간 맵 위치 공유(peer pose sharing) 설계
