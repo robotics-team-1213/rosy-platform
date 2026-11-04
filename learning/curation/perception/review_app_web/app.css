@@ -359,7 +359,7 @@ ui-topbar:has([data-learning-account-entry]) { flex-wrap: wrap; }
 }
 @media (width < 40rem) {
   .ui-app-main:has(#pixel-main) > .ui-pathbar { row-gap: 0; }
-  #pixel-main .pixel-frame-controls { margin-block: 0; }
+  #pixel-main .pixel-frame-controls { margin-block: 0; row-gap: 0; }
   /* 전화 폭: 경로 줄은 화면 이름 한 줄뿐이라 얇게 둔다. 사진이 첫 화면 안에 남는다. */
   .ui-pathbar { min-block-size: 0; padding-block: var(--space-1); }
   #editor, #pixel-main { padding-block: var(--space-3); }
@@ -470,8 +470,8 @@ ui-topbar:has([data-learning-account-entry]) { flex-wrap: wrap; }
   #pixel-main .pixel-frame-strip .pixel-frame-item { flex-basis: 8rem; }
   #pixel-main .pixel-frame-strip .frame-thumb { width: 2.5rem; }
   #pixel-main .pixel-frame-strip { margin-block: var(--space-1); }
-  #pixel-main .pixel-editor-column { gap: var(--space-1); }
-  #pixel-main .pixel-tool-options { gap: var(--space-1); margin-block-end: var(--space-1); }
+  #pixel-main .pixel-editor-column { gap: var(--space-1); row-gap: 0; }
+  #pixel-main .pixel-tool-options { gap: var(--space-1); row-gap: 0; margin-block-end: 0; }
   .pixel-tool-options .pixel-selection-actions { flex: 0 0 auto; }
   .pixel-selection-actions > ui-button { flex: 1 1 0; }
   .pixel-canvas-footer { gap: var(--space-1); padding-block: var(--space-1); }
