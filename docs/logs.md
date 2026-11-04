@@ -14138,3 +14138,9 @@ osy-d395-s1d\`.
 - 증거: 11-04 lint 정지 4건 중 2건이 D-974 "duplicate index row"(control-terms-v3, learning-image-upload). 실제 커밋 7516e33a49·22ca11cfa5의 merge-tree로 union이 두 행을 남기는 것을 재현. 원격 `test_land.py` 외 4파일 177 통과.
 - gate 변화: 없음
 - CE: 해당 없음 — 원인과 기준은 코드 docstring·회귀 시험·D-889 추가 30에 있다.
+
+## 2026-11-04 · uncommitted · fix(remote): 작은 host에만 놓인 실행은 큰 PC가 비면 옮겨 간다 (D-889 추가 31)
+- 변경: `work_queue.upgrade_watch`·`small_only`·`Work.retired`, `remote_pytest.run`이 작은 host만으로 시작한 실행을 5분마다 다시 배치한다.
+- 증거: 11-04 06:48~08:57 ui-landing-merge-repair delta 사전 시험이 작업 256개 중 253개를 현장 PC에서 직렬로 131분 실행(timing 줄 집계), 같은 시각 AI PC 23코어 여유. 원격 `test_work_queue_upgrade.py`·`test_remote_pytest.py` 외 165 통과, `test_land_isolation.py`·`test_publish_evidence.py` 79 통과.
+- gate 변화: 없음
+- CE: 해당 없음 — 원인과 기준은 docstring·회귀 시험·D-889 추가 31에 있다.
