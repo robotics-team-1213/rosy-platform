@@ -72,7 +72,7 @@ _KINDS = {
         approval="two_person",
     ),
     # D-763 7: a 운행 step is a Fleet trip (``job_trip_steps``), never a device Action; SIM until device proof.
-    # D-797 2: device_trial runs on one Fleet with the real Pinky; production stays closed (D-797 1 is not decided).
+    # D-797 2: device_trial runs on one Fleet with the real mobile robot; production stays closed (D-797 1 is not decided).
     "TRIP": StepActionKind(action_kind="TRIP", open_profiles=frozenset({"simulation", "device_trial"}),
                            grant_model=None, body_field="trip", body=None, phase_ids=(), rejection_reasons={},
                            approval="one_person"),
