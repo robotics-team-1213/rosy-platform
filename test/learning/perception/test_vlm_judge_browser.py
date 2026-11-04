@@ -63,6 +63,14 @@ def test_label_by_keyboard_and_mouse_at_phone_width(tmp_path):
                 assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
                 page.locator('#tab-eval').click()
                 expect(page.locator('#vlm-eval')).to_contain_text('정답 있는 사진 2장')
+                scroll = page.locator('#vlm-eval .ui-table-scroll').first
+                expect(scroll).to_have_attribute('tabindex', '0')
+                expect(scroll.locator('table')).to_have_class('ui-data-table')
+                scroll.focus()
+                expect(scroll).to_be_focused()
+                assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
+                page.goto(f'http://127.0.0.1:{server.server_port}/learning/evaluate?domain=vlm', wait_until='networkidle')
+                expect(page.locator('.evaluate-source[data-domain="vlm"] .ui-table-scroll table.ui-data-table')).to_be_visible()
                 assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
                 assert errors == []
             finally:
