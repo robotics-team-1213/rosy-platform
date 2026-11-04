@@ -224,6 +224,45 @@ def test_invalid_occupancy_is_never_adopted_or_cleared(tmp_path, contents):
     assert lock.read_text() == contents
 
 
+def test_a_foreign_guarded_owner_cannot_clear_interrupted_occupancy(tmp_path):
+    import os
+
+    first = zones(tmp_path, "left")
+    assert first.enter((0.37, 0.2))[0]
+    for fd in first.held.values():
+        os.close(fd)
+    first.held = {}
+    lock = tmp_path / "zone-middle.lock"
+    before = lock.read_bytes()
+    foreign = zones(tmp_path, "right")
+    foreign.leave()
+    assert lock.read_bytes() == before
+    assert not foreign.enter((0.37, 0.2))[0]
+
+
+@pytest.mark.parametrize("bad", ["stale", "other_session", "fault"])
+def test_park_receipt_must_be_fresh_and_from_the_guarded_session(tmp_path, monkeypatch, bad):
+    import time
+    from cell_envelope import same_session
+
+    gate, cell = held_gate(tmp_path, monkeypatch)
+    gate.assessment.update(scope="simulation", runtime_sha256="c" * 64)
+    context = {"scope": "simulation", "sha256": "c" * 64, "session_id": "1" * 32,
+               "operating_profile": owner("left")}
+    original = cell.act
+    cell.act = lambda command: ({"ok": True, "t": time.time(), "operating_context": context}
+                                if command == "state" else original(command))
+    monkeypatch.setattr(cell_transfer, "same_session", same_session)
+    good = {"ok": True, "settled": True, "state": [0] * 6, "t": time.time(), "operating_context": context}
+    cell.park = {**good, **({"t": 0} if bad == "stale" else {"fault": "unsafe"} if bad == "fault" else
+                          {"operating_context": {**context, "session_id": "2" * 32}})}
+    assert not gate.act("park")["ok"]
+    assert gate.zones.held
+    cell.park = good
+    assert gate.act("park")["ok"]
+    assert not gate.zones.held
+
+
 def test_takeover_is_a_parameter(tmp_path):
     (tmp_path / "incidents").mkdir()
     (tmp_path / "incidents/HOLD-arm_b.json").write_text("{}")
