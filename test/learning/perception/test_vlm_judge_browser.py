@@ -75,6 +75,9 @@ def test_label_by_keyboard_and_mouse_at_phone_width(tmp_path):
                         return {text: cell.textContent, lines: range.getClientRects().length}; })'''
                 cells = page.evaluate(text_lines, '#vlm-eval td')
                 assert cells and all(cell['lines'] == 1 for cell in cells), cells
+                scroll.press('ArrowRight')
+                page.wait_for_function("document.querySelector('#vlm-eval .ui-table-scroll').scrollLeft > 0")
+                scroll.evaluate('node => node.scrollLeft = 0')
                 assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
                 import os
                 if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
