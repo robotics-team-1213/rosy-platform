@@ -1,6 +1,7 @@
 ---
 module: applications/fleet/web/shared/password-login.js
 date: 2026-11-02
+last_updated: 2026-11-02
 problem_type: ui_bug
 component: frontend
 severity: high
@@ -44,15 +45,35 @@ and exact return URL survive; it is not production PKCE exchange acceptance.
 
 On the actual Learning-to-Account path, replacing only the script response in
 the diagnostic browser restored the visible form without JavaScript errors.
-No production credential was entered, and the deployed server was unchanged.
-Operational release and real-user login acceptance remain pending.
+No production credential was entered in that diagnostic.
+
+Before the new signed module release, a reviewed incident repair used the
+existing signed image and its supported connection-mode setting to restore the
+production password form temporarily. The installed independent verifier bound
+the loaded image to the signed archive, and the Compose preview changed exactly
+one Fleet command argument, `development` to `paired`. Only Fleet was recreated;
+the existing updater hold, enrollment/work state and other containers were
+verified unchanged. A non-pruning SQLite backup passed integrity verification.
+The real Learning-to-Account path then returned HTTP 200 and showed one visible
+password input in Edge with normal DNS and certificate verification enabled.
+Anonymous state access and development-session issuance were refused.
+
+This observation verifies form availability, not a completed human password or
+PKCE login. The final signed Account service deployment and real-user acceptance
+remain pending. The original development mode must be restored with the new
+authenticated-development implementation.
 
 ## Recovery and prevention
 
-Ship through the signed site release process. Until then the production symptom
-remains. Do not switch Fleet to paired mode or bypass project permissions to
-repair a presentation error. If a release must be reverted, use the existing
-release rollback; this change has no data migration.
+Ship the permanent fix through the signed site release process and verify it in
+development mode. A temporary paired-mode incident repair does not discharge that
+requirement. Preserve the original configuration, independently verify the signed
+image and exact Compose change, retain existing holds, and restore development
+only with the corrected implementation. Do not clear enrollment holds or change
+grants to make a login probe pass. Roll back a temporary configuration change by
+restoring only its own env edit with a fresh comparison; never restore an older
+database over later writes. The standalone Account rollout also requires its
+explicit stopped-writer migration and recovery procedure in D-962.
 
 For cross-app login checks, assert the form is visible and complete a synthetic
 cookie login/return flow. Run the enabled-account case with Fleet in development

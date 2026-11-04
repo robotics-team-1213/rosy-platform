@@ -138,6 +138,8 @@ def test_installed_network_entrypoints_import_without_source_checkout(tmp_path):
     assert result.returncode == 0, result.stderr
     assert (destination / 'image-layer/boot/catalog.json').is_file()
     assert (destination / 'recovery-web/tokens.css').is_file()
+    for name in ('component-controls.css', 'theme.js'):
+        assert (destination / 'recovery-web' / name).read_bytes() == (NATIVE.parents[3] / 'shared/web' / name).read_bytes()
 
 
 def test_network_units_and_installer_keep_lane_scope_separate():

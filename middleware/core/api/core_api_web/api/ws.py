@@ -20,6 +20,7 @@ import collections
 import functools
 import json
 
+import anyio
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
 
@@ -307,15 +308,30 @@ async def ws_teleop(websocket: WebSocket):
     finally:
         stopping = True
         wake.set()
-        try:
-            await applier_task       # let an apply in flight finish before the zero
-        except Exception:  # noqa: BLE001
-            pass
-        replaced = sockets.get(token_id) is not websocket
-        if not replaced:
-            del sockets[token_id]
-        if moving and not replaced:   # a replacing socket owns the drive now; its frames win
-            await drive(TeleopRequest())   # fail-safe: do not leave the last motion running
+
+        async def finish():
+            try:
+                await applier_task       # let an apply in flight finish before the zero
+            except Exception:  # noqa: BLE001
+                pass
+            replaced = sockets.get(token_id) is not websocket
+            if not replaced:
+                del sockets[token_id]
+            if moving and not replaced:   # a replacing socket owns the drive now; its frames win
+                await drive(TeleopRequest())
+
+        # ASGI cancellation must not interrupt the in-flight apply or its final zero.
+        cleanup = asyncio.create_task(finish())
+        interrupted = False
+        with anyio.CancelScope(shield=True):
+            while not cleanup.done():
+                try:
+                    await asyncio.shield(cleanup)
+                except asyncio.CancelledError:
+                    interrupted = True
+            cleanup.result()
+        if interrupted:
+            raise asyncio.CancelledError
 
 
 async def _first_message_token(websocket: WebSocket) -> str:

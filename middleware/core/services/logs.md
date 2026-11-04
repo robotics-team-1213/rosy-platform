@@ -1869,3 +1869,9 @@
 - gate 변화: 없음.
 - 결정: D-972
 - 교훈: 없음.
+
+## 2026-11-04 · uncommitted · feat(peers): 로봇 간 맵 위치 공유 CORE 조각 v1
+- 변경: `core_features/peers/`(manager — 수용·단조 seq·boot 재설정·시한 제거, beacon — LOCALIZED일 때만 pose 실어 1 Hz 송신, transport — stdlib TLS POST). `state/manager.py` `set_peers_provider`(실패해도 스냅숏은 null 로 하강). 시험 `test_peers.py`(순수, 시계·전송 주입)
+- 증거: 게이트 시험 원격 affected 실행 예정(착지 전)
+- gate 변화: 없음
+- CE: 해당 없음 — 신규 기능, 장애 해결 아님

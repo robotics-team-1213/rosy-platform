@@ -10,7 +10,8 @@
 
 | ID | 제목 | Status |
 |---|---|---|
-| D-974 | 관제 용어는 제품·관제 단위·호스트·화면 층을 섞지 않는다 — Rosy Fleet은 제품 이름, 통합관제 R·셀 관제 CELL-x는 단위, PC는 물리 이름(OMX 노트북), 헤더는 `unit_id`, Cell 표시 문구는 팔레트 적재. [전문](../adr/D-974-control-vocabulary-layers.md) | Accepted (2026-11-03, 사용자 결정; D-968 1항 대체, 헤더·문구 구현, Confluence 반영, Harbor PR 병합 대기, 현장 헤더 관측 미수용) |
+| D-974 | 관제 용어는 제품·관제 단위·호스트·화면 층을 섞지 않는다 — Rosy Fleet은 제품 이름, 통합관제 R·셀 관제 CELL-x는 단위, PC는 물리 이름(OMX 노트북), 헤더는 `unit_id`, Cell 표시 문구는 팔레트 적재. [전문](../adr/D-974-control-vocabulary-layers.md) | Accepted (2026-11-03, 사용자 결정; D-968 1항 대체, 헤더·문구 구현, Confluence·Harbor 반영, 현장 헤더 관측 미수용) |
+| D-969 | OMX 두 팔 적층의 첫 학습 정책은 Isaac 정답 IK 시연으로 학습한 ACT 두 팔이다 — 실물 단위(`normalized_-100_100`·`0_100`, arm_a→arm_b), 컨테이너 하나 = 에피소드, 녹화 옵트인, 6단계 순서, D-947 학습 범위 확장. [전문](../adr/D-969-omx-two-arm-act-from-isaac-ik-demonstrations.md) | Accepted (2026-11-03, 사용자 결정; 코드·학습·실물 수용 없음) |
 | D-968 | 통합관제 고유명은 Rosy Fleet이고 사람 계정은 개인 로그인만 쓴다 — 소유자 권한은 `operator`+`policy_admin` 조합, 직함·공유 계정·owner 문자가 들어간 새 역할·계정은 만들지 않는다. [전문](../adr/D-968-rosy-fleet-naming-and-individual-logins.md) | Accepted (2026-11-03, 사용자 결정; 명명·계정 모델 확정, 코드 변경 없음; 1항은 D-974가 대체) |
 | D-970 | 착지 대기열: 잠금은 짧게, 같은 시험은 한 번만, 추측은 끄고, flaky는 시험 단위로. [전문](../adr/D-970-landing-queue-stages-dedup-speculation-flaky.md) | Proposed (2026-11-03, 사용자 지시; 1·2·4항 구현, 3항 미구현) |
 | D-972 | 후진 도킹의 위치 근거는 LiDAR V 표지이고, 레일 안에서는 조향하지 않는다 (D-950 후속). [전문](../adr/D-972-rear-docking-lidar-v-straight-reverse.md) | Proposed (2026-11-03; 기본 꺼짐, 실물 수용 전) |
@@ -24,6 +25,7 @@
 | D-962 | Rosy Account 독립 서비스와 개발 모드의 사람 로그인. [전문](../adr/D-962-independent-account-and-authenticated-development.md) | Accepted (2026-11-02, 사용자 승인; 구현·배포·운영 수용 별도) |
 | D-963 | 제어 PC의 USB 카메라 역할은 Fleet 설치 화면에서 승인한다. [전문](../adr/D-963-usb-camera-role-approval-in-fleet.md) | Accepted (2026-11-02, 사용자 요청; 현장 수용 별도) |
 | D-957 | 업데이트 운영 CLI: 운영자의 즉시 시도·홀드·해제를 하나의 명령으로 구조화한다. 게이트(유휴·배터리·서명·freeze) 우회는 없다. [전문](../adr/D-957-update-ops-cli.md) | Accepted (2026-11-02, 사용자 결정; 호스트 코드 불변, 원격 시험·착지는 파이프라인 기록) |
+| D-961 | 공용 작업 이동과 작업·인증 화면 구성. [전문](../adr/D-961-shared-task-links-and-page-compositions.md) | Accepted (2026-11-02, 사용자 승인 통합 설계) |
 | D-960 | 실제 제어는 암 세트마다 붙은 관제가 하고, 통합관제 R은 그 위에서 조정한다. [전문](../adr/D-960-control-unit-per-arm-set-under-integrated-r.md) | Accepted (2026-11-02, 사용자 결정) |
 | D-930 | 확인된 ARM 시도의 재관측(새 측정 사실만, 실행·claim·완료 권한 없음, API v1.334). [전문](../adr/D-930-arm-transfer-recheck-of-confirmed-attempt.md) | Accepted (2026-10-30, 계약·simulation 구현 결정; 실물 수용 별도) |
 | D-907 | Native v2 read-only signed component profile contract. [전문](../adr/D-907-native-v2-readonly-profile-contract.md) | Accepted (2026-10-28) |
@@ -1441,6 +1443,9 @@ LCD 코드 페어링과 도달 확인 읽기는 Tailscale tailnet(`100.64.0.0/10
 
 프레임마다 REST와 같은 검사(`apply_teleop`)를 하고, 최신 seq만 적용하며, 움직이던 소켓이 끊기면 0을 적용한다. Pilot은 소켓이 없거나 ack가 1 s 넘게 없으면 REST로 보낸다. 전문은 [D-948](../adr/D-948-teleop-websocket-stream.md).
 
+## D-961 공용 작업 이동과 작업·인증 화면 구성
+
+**Status:** Accepted (2026-11-02, 사용자 승인 통합 설계). 네이티브 이동 링크의 공용 조작·본문 구성을 기존 토큰과 조합 부품에 연결한다. 인증·정지·도메인 owner를 바꾸지 않는다. 전문은 [D-961](../adr/D-961-shared-task-links-and-page-compositions.md).
 ## D-953 Pi 4·Pi 5 CPU는 이미 있는 네이티브 경로로 먼저 줄인다 — 자체 Rust 확장은 Pi 4 실측이 요구할 때만
 
 **Status:** Accepted (2026-11-01). D-185를 대체하지 않는다. 기체 실측은 남아 있다.

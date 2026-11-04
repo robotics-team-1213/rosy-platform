@@ -13,7 +13,7 @@ import pytest
 from deploy.site import build_candidate as builder
 from deploy.site import verify_candidate as verifier
 from test_site_candidate_verifier import (
-    COMMIT, TEST_KEY_ID, _image_blobs, _sha, _verify_with, candidate,
+    COMMIT, TEST_KEY_ID, _image_blobs, _sha, _verify_with, candidate, _add_account,
 )
 import test_site_autoupdate as site_tests
 from test_site_autoupdate import host
@@ -86,12 +86,22 @@ def test_invalid_reuse_proof_is_rejected(candidate, value):
     (["deploy/site/Caddyfile"], set()),
     (["deploy/site/Dockerfile.proxy"], {"proxy"}),
     (["deploy/site/Dockerfile.fleet.dockerignore"], {"fleet"}),
+    (["applications/fleet/web/login.html"], {"fleet", "account"}),
+    (["operations/account/rosy_account/web_assets.py"], {"fleet", "account"}),
+    (["deploy/site/requirements-account.txt"], {"account"}),
+    (["deploy/site/site_db.py"], {"fleet", "account"}),
+    (["contracts/foundation/core_common/protocol/account_access.py"], {"fleet", "vision", "account"}),
 ])
-def test_builder_only_builds_and_ships_affected_images(candidate, tmp_path, changed, expected):
+@pytest.mark.parametrize('independent_base', [False, True])
+def test_builder_only_builds_and_ships_affected_images(candidate, tmp_path, changed, expected, independent_base):
+    if independent_base:
+        _add_account(candidate)
+    else:
+        expected = expected | {'account'}  # First transition must build the missing signed artifact.
     repo = tmp_path / "repo"
     site = repo / "deploy/site"
     site.mkdir(parents=True)
-    for name in (*builder.DEPLOY_FILES, "Dockerfile.fleet", "Dockerfile.vision", "Dockerfile.proxy"):
+    for name in (*builder.DEPLOY_FILES, "Dockerfile.fleet", "Dockerfile.vision", "Dockerfile.proxy", "Dockerfile.account"):
         shutil.copyfile(ROOT / "deploy/site" / name, site / name)
     for name in builder.DOC_FILES:
         path = repo / name
@@ -126,9 +136,13 @@ def test_builder_only_builds_and_ships_affected_images(candidate, tmp_path, chan
     if saves:
         assert set(saves[0][5:]) == {f"rosy-site-{s}:{NEW}" for s in expected}
     assert not any(c[:2] == ["docker", "pull"] for c in calls)
-    compose = (output / "deploy/site/compose.yaml").read_text()
     for s in set(candidate[2]) - expected:
+        compose = (output / ('deploy/site/compose.account.yaml' if s == 'account' else
+                              'deploy/site/compose.yaml')).read_text()
         assert f"rosy-site-{s}:{COMMIT}" in compose
+        if s == 'account':
+            maintenance = (output / 'deploy/site/compose.account-backup.yaml').read_text()
+            assert f'rosy-site-account:{COMMIT}' in maintenance
 
 
 def test_runtime_reconciles_incremental_stack_without_down_or_restart(tmp_path):

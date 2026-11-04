@@ -64,7 +64,7 @@ def load_dataset(root: Path, *, method='act'):
     per_arm = document['schema'] == 'rosy.omx.experiment-dataset/2'
     if per_arm and profile['mode'] != 'independent':
         raise ValueError('per-arm dataset schema requires independent mode')
-    if document['source'] not in ('synthetic_smoke', 'reviewed_demonstration', 'robot_rollout'):
+    if document['source'] not in ('synthetic_smoke', 'reviewed_demonstration', 'scripted_teacher', 'robot_rollout'):
         raise ValueError('explicit dataset source required')
     rows = document['episodes']
     if not isinstance(rows, list) or not 2 <= len(rows) <= 10000:

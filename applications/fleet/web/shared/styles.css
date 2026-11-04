@@ -676,8 +676,7 @@ main {
 .map-traffic-status { list-style: none; padding: 0; margin: 0; font-size: var(--text-body); overflow-wrap: anywhere; }
 .map-traffic-status li { padding-block: var(--space-2); border-bottom: 1px solid var(--border-subtle); }
 .tracking-bar { display: flex; flex-direction: column; align-items: stretch; gap: var(--space-2); min-width: 0; }
-.tracking-bar table { width: 100%; table-layout: fixed; font-variant-numeric: tabular-nums; }
-.tracking-bar th, .tracking-bar td { overflow-wrap: anywhere; }
+.tracking-bar table { table-layout: fixed; }
 @media (width < 64rem), (height < 40rem) {
   #fleet-main .map-stage { flex: none; block-size: clamp(20rem, calc(100dvh - 28rem), 48rem); min-height: 20rem; }
 }

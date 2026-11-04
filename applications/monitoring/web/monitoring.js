@@ -179,5 +179,3 @@ const resume = () => { if (state.key) { state.stale = true; render(); refresh();
 document.addEventListener('visibilitychange', () => { if (document.hidden) { state.stale = true; render(); } else resume(); });
 window.addEventListener('pageshow', resume); window.addEventListener('focus', resume);
 setInterval(refresh, 5000); setInterval(() => { if (state.packet) render(); }, 1000);
-for (const choice of window.RosyTheme.choices) { const option = el('option', choice.label); option.value = choice.value; $('theme').append(option); }
-$('theme').value = window.RosyTheme.get(); $('theme').addEventListener('change', () => window.RosyTheme.set($('theme').value));

@@ -24,6 +24,9 @@ def write_json(path, value):
     temporary.replace(path)
 
 
+# D-969: Isaac IK teacher demonstrations train ACT like reviewed human ones; rollouts stay apart.
+DEMONSTRATIONS = ('reviewed_demonstration', 'scripted_teacher')
+
 def training_indices(dataset, method):
     indices = [(episode, index) for episode in dataset.split('train')
                for index in range(len(episode.arrays['action']))]
@@ -164,10 +167,10 @@ def train_dataset(dataset, output, *, method, steps, batch_size, device, seed,
                 converted[key] = torch.from_numpy(values).to(device)
         tensors[episode.metadata['id']] = converted
     demonstration = [(e, i) for e, i in indices
-                     if e.metadata.get('source', dataset.source) == 'reviewed_demonstration'
+                     if e.metadata.get('source', dataset.source) in DEMONSTRATIONS
                      or 'is_intervention' in e.arrays and e.arrays['is_intervention'][i]]
     rollout = [(e, i) for e, i in indices
-               if e.metadata.get('source', dataset.source) != 'reviewed_demonstration'
+               if e.metadata.get('source', dataset.source) not in DEMONSTRATIONS
                and 'is_intervention' in e.arrays and not e.arrays['is_intervention'][i]]
     if state:
         optimizers = state['optimizers']

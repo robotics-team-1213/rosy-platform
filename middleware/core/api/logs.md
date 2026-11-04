@@ -1325,3 +1325,15 @@
 - 변경: 기존 Pilot allowlist에 layout.css만 추가했다. 경로 방어·인증·API·정지 명령 owner는 유지한다.
 - 증거: 날짜별 검증 기록 `docs/validation/robot-pilot-learning-ux-2026-10-28/result.md`에 RED·고정 SHA·원격 영향/브라우저 결과·독립 소스/실제 화면 검토를 구분했다. 설치 자산·라우트 회귀 fce9c60216은20 passed, skip0이다.
 - gate 변화: 없음. 실제 장치·APK/ARM64 빌드·현장 수용은 별도다. CE: 해당 없음 — 기존 크기 이력 교훈을 적용하고 이번 경계의 판단을 코드·회귀·D-910에 남겼다.
+
+## 2026-11-02 · c4f15610cc · Web unification follow-up
+
+- 변경: 2026-11-02 · c4f15610cc · WebSocket teleop 종료 정지의 취소 보호: 수신 취소 후 진행 중 적용을 마치고 같은 CommandManager 경로로 명시적 zero를 제출한다. AnyIO scope와 반복 asyncio 취소를 모두 보호하며, 같은 token의 대체 스트림은 정지시키지 않는다. `test_ws_teleop.py` 12건 원격 통과; 정상 close의 실제 zero 관측, scope/native 취소, 진행 중 적용, 대체 스트림을 포함한다. CORE 계약 독립 검토에서 새 writer·admission 우회 없음. 장치 정지 지연 수용은 별도이며 module gate는 바꾸지 않는다. CE: 해당 없음 — 취소 조건과 보존 조건이 구현·회귀 시험에 명시돼 있다.
+- 증거: committed SHA and remote results are recorded above; final consolidated receipts are retained in the unification validation record.
+- gate 변화: 없음. Source/browser checks do not establish deployment, ARM64, device or field acceptance.
+
+## 2026-11-04 · uncommitted · feat(api): /api/v1/peers 경로와 PEER_SHARE 부여
+- 변경: `v1/peers.py`(GET 목록 viewer, POST beacon — 부여 `PEER_SHARE`, 오래된 seq는 202 updated:false), `grants.py` operator/administrator에 `PEER_SHARE`, `deps.py` CoreServicesLike.peers, app/routes 등록. 시험 `middleware/core/gateway/test/test_peers_api.py`(부여 경계·왕복·스냅샷 필드)
+- 증거: 게이트 시험 원격 affected 실행 예정(착지 전). API Ref v1.359 행 추가·CONTRACT 동기화(api_reserve release)
+- gate 변화: 없음
+- CE: 해당 없음

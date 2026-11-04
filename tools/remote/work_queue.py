@@ -61,27 +61,37 @@ def lane_job(inv: list[str]) -> bool:
 
 
 def host_alone(inv: list[str]) -> bool:
-    """An invocation of a suite that takes the whole host (xdist_plan.HOST_ALONE: Gazebo, Isaac)."""
+    """An invocation that takes the whole host: a suite of xdist_plan.HOST_ALONE (Gazebo, Isaac), an alone browser
+    chunk or an explicit ROSY_JOB_ALONE=1 (G1 timing, alone reruns). 2026-11-04: these floated, each waiting on a
+    different PC, so both large PCs drained for two pretests at once."""
+    env = set(itertools.takewhile(ENV_WORD.match, inv))
+    if ALONE_ENV in env or "ROSY_JOB_ALONE=1" in env:
+        return True
     paths = [w.replace("\\", "/") for w in inv if not ENV_WORD.match(w) and not w.startswith("-")]
     return any(p == a or p.startswith(a + "/") or a.startswith(p + "/") for p in paths for a in HOST_ALONE)
 
 
 def workers(hosts: list[str], invocations: list[list[str]], headroom: dict,
-            order: list[str] = ()) -> list[tuple[str, str]]:
+            order: list[str] = (), blocked: set[str] = frozenset()) -> list[tuple[str, str]]:
     """(host, kind) per worker thread. "any" takes everything one at a time (light, site, sim-holding or unmeasured
     hosts, no lane jobs, or the host already runs BROWSER_PER_HOST browser jobs of any run); otherwise "main" takes
     all but lane jobs and each "lane" only lane jobs. A kind ending in SKIP_ALONE never takes a host_alone one.
 
     host_alone suites go to the first host of ``order`` (the configured list: the model PC) when it was placed:
     each one waits for its host to empty, and on 2026-10-30 70 of them (34-40 min each, 10 s-3.5 min of tests)
-    kept the AI PC from new jobs, so 44 of 143 placements found no host. Without that host they run as before."""
-    pin = next((h for h in order if h in hosts and not (headroom.get(h) or {}).get("site")), None)
+    kept the AI PC from new jobs, so 44 of 143 placements found no host. Without that host they run as before.
+    ``blocked``: placement left these out for an alone job running or waiting there. The pin still takes this run's
+    host-alone ones ("alone" worker: those only) and queues behind it, rather than draining a second host."""
+    pin = next((h for h in order if (h in hosts or h in blocked) and not (headroom.get(h) or {}).get("site")), None)
     if (headroom.get(pin) or {}).get("sim_held"):  # Gazebo/Isaac hold it: they would wait there behind the sim
         pin = None
     if pin and any(map(host_alone, invocations)):
         hosts = [pin] if all(map(host_alone, invocations)) else [pin, *(h for h in hosts if h != pin)]
     else:
         pin = None
+    if pin and pin not in headroom and pin in blocked:
+        rest = [(h, k + SKIP_ALONE) for h, k in workers(hosts[1:], invocations, headroom)] if len(hosts) > 1 else []
+        return [(pin, "alone"), *rest]
     hosts = hosts[:len(invocations)]
     lanes = sum(map(lane_job, invocations))
     rest = len(invocations) - lanes
@@ -109,6 +119,8 @@ def main_workers(room: dict, jobs: int) -> int:
 def wanted(kind: str, invocations: list[list[str]]):
     """The Work.take filter of a worker kind (None: anything)."""
     skip, kind = kind.endswith(SKIP_ALONE), kind.removesuffix(SKIP_ALONE)
+    if kind == "alone":
+        return lambda i: host_alone(invocations[i])
     if kind == "any":
         return (lambda i: not host_alone(invocations[i])) if skip else None
     return lambda i: lane_job(invocations[i]) == (kind == "lane") and not (skip and host_alone(invocations[i]))
@@ -128,7 +140,7 @@ class Work:
     A filtered take scans todo, so every take and give_back holds one lock. Once stop is set nothing more is taken."""
 
     def __init__(self, order, on_done=None, stop=None):
-        self.todo, self.codes, self.lost = collections.deque(order), {}, set()
+        self.todo, self.codes, self.lost, self.retired = collections.deque(order), {}, set(), set()
         self.on_done, self._asking = on_done, threading.Lock()
         self.stop = stop if stop is not None else threading.Event()
         self._queue, self.began = threading.Lock(), time.monotonic()  # began: an invocation's queue wait starts here
@@ -154,9 +166,10 @@ class Work:
             if cancel:
                 self.stop.set()
 
-    def take(self, wanted=None) -> int | None:
-        """The first queued index (largest first) that wanted(index) accepts; any index when wanted is None."""
-        if self.stop.is_set():
+    def take(self, wanted=None, host=None) -> int | None:
+        """The first queued index (largest first) that wanted(index) accepts; any index when wanted is None.
+        None for a host upgrade_watch retired."""
+        if self.stop.is_set() or host in self.retired:
             return None
         with self._queue:
             for i in self.todo:
@@ -165,9 +178,9 @@ class Work:
                     return i
         return None
 
-    def take_small(self, wanted=None) -> int | None:
+    def take_small(self, wanted=None, host=None) -> int | None:
         """The last queued index (the smallest, largest-first order) wanted(index) accepts: a light host's pick."""
-        if self.stop.is_set():
+        if self.stop.is_set() or host in self.retired:
             return None
         with self._queue:
             for i in reversed(self.todo):
@@ -180,6 +193,38 @@ class Work:
         """i first in line again: its host failed mid-run, so another host (or run()'s fallback) runs it."""
         with self._queue:
             self.todo.appendleft(i)
+
+
+UPGRADE_S = 300  # how often a run on small hosts only looks for a lab PC again
+
+
+def small_only(plan: list[tuple[str, str]], headroom: dict) -> bool:
+    """Every worker's host is the site PC or a light one (place(): the lab PCs were full or held)."""
+    return all((headroom.get(h) or {}).get("site") or (headroom.get(h) or {}).get("light") for h, _ in plan)
+
+
+def upgrade_watch(work: Work, plan, headroom: dict, place, deferred: set, every: float = UPGRADE_S):
+    """While a run has small hosts only, re-place every ``every`` s; once a lab PC fits, those hosts finish their
+    job, take nothing more and are deferred, so run() places the rest again. Returns the event that ends the watch.
+
+    2026-11-04 06:48: a pretest placed while both lab PCs were held ran 253 of its 256 jobs serially on the site
+    PC for 131 min, and the AI PC sat idle with 23 free cores from about 07:40: placement never looked again."""
+    done, mine = threading.Event(), {h for h, _ in plan}
+    work.retired.clear()
+
+    def watch():
+        while not done.wait(every):
+            if not work.todo or work.stop.is_set():
+                return
+            if any(h not in mine and not small_only([(h, "")], headroom) for h in place()):
+                print(f"[remote-pytest] a lab PC has room again: {sorted(mine)} finish their jobs, the rest is placed anew",
+                      file=sys.stderr, flush=True)
+                deferred.update(mine)
+                work.retired.update(mine)
+                return
+    if small_only(plan, headroom):
+        threading.Thread(target=watch, name="upgrade-watch", daemon=True).start()
+    return done
 
 
 class Gate:

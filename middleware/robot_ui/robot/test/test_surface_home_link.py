@@ -36,7 +36,7 @@ class _Handler(SimpleHTTPRequestHandler):
 def test_the_role_surface_declares_the_home_link_on_the_shared_brand():
     html = (ROOT / "surface.html").read_text(encoding="utf-8")
     assert '<ui-brand href="/dashboard" aria-label="Rosy Robot 홈">' in html
-    assert "<a " not in html.split("<ui-topbar>", 1)[1].split("</ui-topbar>", 1)[0], (
+    assert "<a " not in html.split("<ui-topbar", 1)[1].split(">", 1)[1].split("</ui-topbar>", 1)[0], (
         "topbar는 앵커를 따로 적지 않는다 — ui-brand href가 링크를 만든다"
     )
 

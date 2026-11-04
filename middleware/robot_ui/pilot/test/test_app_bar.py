@@ -15,7 +15,7 @@ PILOT = Path(__file__).resolve().parents[1]
 
 def _bar() -> list[str]:
     html = (PILOT / "index.html").read_text(encoding="utf-8")
-    bar = re.search(r"<ui-topbar>(.*?)</ui-topbar>", html, re.S)
+    bar = re.search(r"<ui-topbar\b[^>]*>(.*?)</ui-topbar>", html, re.S)
     assert bar, "index.html 에 ui-topbar 가 없다"
     return [line.strip() for line in bar.group(1).strip().splitlines()]
 

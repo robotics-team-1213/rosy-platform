@@ -123,6 +123,23 @@ def load(root=None) -> list[dict]:
     return [row for row in raw_rows(root) if isinstance(row, dict)]
 
 
+def owner_for_page(page, root=None, rows=None) -> dict:
+    """The nearest registered path owns a page; exact file scopes override folders."""
+    base = REPO if root is None else Path(root)
+    page = Path(page)
+    page = (page if page.is_absolute() else base / page).resolve()
+    matches = []
+    for row in load(base) if rows is None else rows:
+        target = (base / row['path']).resolve()
+        if page == target or target in page.parents:
+            matches.append((len(target.parts), row))
+    depth = max((d for d, _ in matches), default=0)
+    nearest = [row for candidate_depth, row in matches if candidate_depth == depth]
+    if len(nearest) != 1:
+        raise ValueError('page must have one most-specific registered surface owner')
+    return nearest[0]
+
+
 def for_contract(root=None, name: str | None = None) -> list[Path]:
     """`name` 계약을 받는 표면의 경로(등록 순서 그대로, 절대 경로)."""
     base = REPO if root is None else Path(root)
