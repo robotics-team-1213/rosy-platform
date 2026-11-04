@@ -63,7 +63,8 @@ import remote_test_tools  # noqa: E402
 import host_probe  # noqa: E402
 from host_probe import DISK_FLOOR_GB, PROBE, current_profile, disk_full, parse_probe  # noqa: E402,F401
 import xdist_plan  # noqa: E402
-from work_queue import ALONE_ENV, BROWSER_ENV, Gate, Work, cancelled, cost, guard, history, wanted, workers  # noqa: E402,F401
+from work_queue import (ALONE_ENV, BROWSER_ENV, Gate, Work, cancelled, cost, guard, history,  # noqa: E402,F401
+                        small_only, upgrade_watch, wanted, workers)
 
 CANCELLED = remote_job.CANCELLED
 
@@ -371,7 +372,7 @@ def run(invocations: list[list[str]], logs: list[Path], sha: str = "HEAD", repo:
             sleep(poll)
             hosts = placed_hosts("pytest", cores=cores)
         plan = workers(hosts, invocations, HEADROOM, os.environ.get("ROSY_TEST_HOSTS", DEFAULT_HOSTS).split(), BLOCKED)
-        if len(plan) == 1 and not work.codes and not reruns:
+        if len(plan) == 1 and not work.codes and not reruns and not small_only(plan, HEADROOM):
             try:
                 codes = run_on(plan[0][0], invocations, logs, sha, repo, label,
                                **({"test_tools": test_tools} if test_tools else {}),
@@ -382,6 +383,7 @@ def run(invocations: list[list[str]], logs: list[Path], sha: str = "HEAD", repo:
                 hosts = [h for h in placed_hosts("pytest", cores=cores) if h != plan[0][0]]
                 continue
         gates, deferred = {host: Gate() for host, _ in plan}, set()
+        watch = upgrade_watch(work, plan, HEADROOM, lambda: placed_hosts("pytest", cores=cores), deferred)
 
         def attempt(slot):
             host, kind = slot
@@ -414,6 +416,7 @@ def run(invocations: list[list[str]], logs: list[Path], sha: str = "HEAD", repo:
                 break
             if not attempt((working[0], "any")):
                 ok = [good and h != working[0] for (h, _), good in zip(plan, ok)]
+        watch.set()
         if not deferred:
             break
     if on_done or stop is not None:
@@ -456,7 +459,7 @@ def run_on(host: str, invocations: list[list[str]], logs: list[Path], sha: str, 
         cpu = SITE_CPU_QUOTA if host in SITES else ""
         k = 0  # job number on this host's run dir
         pick = wanted(kind, invocations)
-        take = (lambda: work.take_small(pick)) if HEADROOM.get(host, {}).get("light") else lambda: work.take(pick)
+        take = (lambda: work.take_small(pick, host)) if HEADROOM.get(host, {}).get("light") else lambda: work.take(pick, host)
         while not (lost and shared) and (i := take()) is not None:
             inv, log, queued = invocations[i], logs[i], round(time.monotonic() - work.began)
             print(f"[remote-pytest] pytest {' '.join(inv)}  -> {log}", flush=True)
