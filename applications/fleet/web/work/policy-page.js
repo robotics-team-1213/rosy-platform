@@ -5,7 +5,7 @@ import {developmentToken} from '/console/assets/development-auth.js';
 import {bindEstop, bindTopbarToggle, showSession, showSignedOut, tickClock, watchFleet} from '/console/assets/fleet-header.js';
 import {
   ADMIN_REASON, OPERATOR_REASON, REASON_LABELS, RESOLUTION_LABELS, STAGE_LABELS, WINDOW_LABELS,
-  errorText, executionVerdict, incidentLock, nextStage, proposalLock, remaining, roles, windowLock,
+  errorText, executionVerdict, incidentLock, nextStage, policyFigures, proposalLock, remaining, roles, windowLock,
 } from '/console/assets/policy-model.js';
 
 // A development or token session lives in this tab's storage, not a cookie (same as the other work pages).
@@ -115,13 +115,21 @@ function renderStage(item) {
   return element('li', `${item.policy_revision} — ${STAGE_LABELS[item.stage]} · 작업대 ${item.rig_revision} · 보정 ${item.calibration_revision}`);
 }
 
+function cell(...children) {
+  const td = element('td');
+  td.append(...children);
+  return td;
+}
+
 function renderProposal(item) {
-  const row = element('li');
-  row.append(element('ui-tag', item.state === 'PENDING' ? '대기' : item.state === 'APPROVED' ? '승인됨' : '거절됨',
-    {status: item.state === 'PENDING' ? 'warn' : 'neutral'}),
-  element('span', ` ${item.policy_revision}: ${STAGE_LABELS[item.from_stage] || '미등록'} → ${STAGE_LABELS[item.to_stage]} — 제안 ${item.proposed_by} · ${item.note}`));
+  const row = element('tr');
+  const actions = element('ui-actions');
+  row.append(cell(element('ui-tag', item.state === 'PENDING' ? '대기' : item.state === 'APPROVED' ? '승인됨' : '거절됨',
+    {status: item.state === 'PENDING' ? 'warn' : 'neutral'})),
+  cell(item.policy_revision), cell(`${STAGE_LABELS[item.from_stage] || '미등록'} → ${STAGE_LABELS[item.to_stage]}`),
+  cell(item.proposed_by), cell(item.note), cell(actions));
   if (item.state === 'PENDING') {
-    row.append(button('승인…', proposalLock(item, state.rules, who), node => confirmed(node,
+    actions.append(button('승인…', proposalLock(item, state.rules, who), node => confirmed(node,
       `${item.policy_revision}을(를) ${STAGE_LABELS[item.to_stage]}로 올릴까요? 근거 ${item.evidence_sha256.slice(0, 12)}…`,
       '단계 승인', `/proposals/${item.proposal_id}/decision`, {operator_confirmed: true, approve: true}, '단계를 승인했습니다.')),
     button('거절…', who.admin ? '' : ADMIN_REASON, node => confirmed(node,
@@ -135,11 +143,21 @@ function render() {
   $('policy-content').hidden = false;
   const verdict = executionVerdict(state);
   $('policy-verdict').textContent = verdict.text; $('policy-verdict').setAttribute('state', verdict.state);
+  $('policy-figures').replaceChildren(...policyFigures(state).map(item => {
+    const cell = element('div', '', item.alert ? {'data-alert': ''} : {});
+    cell.append(element('dt', item.label), element('dd', item.value), element('dd', item.note, {'data-note': ''}));
+    return cell;
+  }));
   list('policy-incidents', state.incidents, renderIncident, '사고 기록이 없습니다.');
   list('policy-confirmations', state.confirmations, renderConfirmation, '확인 요청이 없습니다.');
   list('policy-windows', state.windows, renderWindow, '승인 창 기록이 없습니다.');
   list('policy-stages', state.policies, renderStage, '등록된 정책이 없습니다. 학습 결과를 0단계로 등록하세요.');
-  list('policy-proposals', state.proposals, renderProposal, '단계 제안 기록이 없습니다.');
+  const proposals = $('policy-proposals');
+  proposals.replaceChildren(...(state.proposals.length ? state.proposals.map(renderProposal) : [(() => {
+    const row = element('tr'), empty = element('td', '단계 제안 기록이 없습니다.', {colspan: '6'});
+    row.append(empty);
+    return row;
+  })()]));
   const policies = $('policy-window-policy'), chosen = policies.value;
   policies.replaceChildren(...state.policies.map(item => element('option', `${item.policy_revision} (${STAGE_LABELS[item.stage] || item.stage})`, {value: item.policy_revision})));
   if (chosen) policies.value = chosen;

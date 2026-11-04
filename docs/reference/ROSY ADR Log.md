@@ -10,6 +10,10 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-977 | `device_trial`에서 승인된 ARM 이송(`arm-transfers`)을 단일 팔 하달로 잇는다 — 설계 초안(기명 현장 운영자 확인은 `operator_attested`로 구분) | Proposed |
+| D-978 | 화면 머리(노선·수치 띠)는 서버 응답만 보이고, 화면별 적용은 「조합 어휘」 표 한 곳에서 관리한다. [전문](../adr/D-978-screen-heads-show-server-answers-and-one-composition-table.md) | Accepted (2026-11-04, 사용자 지시; 표·쓰기 금지 시험 구현) |
+| D-976 | 팔레트 값은 실제 제품 색 체계의 단계에서 고르고, 넓은 화면 도구는 36px 단계를 쓴다 — D-82 값 출처·D-629 크기 규칙 개정. [전문](../adr/D-976-palette-from-product-scales-and-dense-tool-targets.md) | Accepted (2026-11-04, 사용자 결정; 두 테마 팔레트·사본·도구 토큰 구현, LCD 실물 판독 미수용) |
+| D-975 | 단계 스트립은 노선 모양이고 앱마다 노선 색 하나를 갖는다 — 흐름은 노선, 단계는 번호 역. [전문](../adr/D-975-line-map-stage-track-and-app-lines.md) | Accepted (2026-11-04, 사용자 결정; 공용 단계 스트립·앱 노선 색 구현, 화면 적용은 단계별 미착수) |
 | D-974 | 관제 용어는 제품·관제 단위·호스트·화면 층을 섞지 않는다 — Rosy Fleet은 제품 이름, 통합관제 R·셀 관제 CELL-x는 단위, PC는 물리 이름(OMX 노트북), 헤더는 `unit_id`, Cell 표시 문구는 팔레트 적재. [전문](../adr/D-974-control-vocabulary-layers.md) | Accepted (2026-11-03, 사용자 결정; D-968 1항 대체, 헤더·문구 구현, Confluence·Harbor 반영, 현장 헤더 관측 미수용) |
 | D-969 | OMX 두 팔 적층의 첫 학습 정책은 Isaac 정답 IK 시연으로 학습한 ACT 두 팔이다 — 실물 단위(`normalized_-100_100`·`0_100`, arm_a→arm_b), 컨테이너 하나 = 에피소드, 녹화 옵트인, 6단계 순서, D-947 학습 범위 확장. [전문](../adr/D-969-omx-two-arm-act-from-isaac-ik-demonstrations.md) | Accepted (2026-11-03, 사용자 결정; 코드·학습·실물 수용 없음) |
 | D-968 | 통합관제 고유명은 Rosy Fleet이고 사람 계정은 개인 로그인만 쓴다 — 소유자 권한은 `operator`+`policy_admin` 조합, 직함·공유 계정·owner 문자가 들어간 새 역할·계정은 만들지 않는다. [전문](../adr/D-968-rosy-fleet-naming-and-individual-logins.md) | Accepted (2026-11-03, 사용자 결정; 명명·계정 모델 확정, 코드 변경 없음; 1항은 D-974가 대체) |
@@ -943,7 +947,7 @@
 | D-795 | DDS는 호스트 하나 안에서만 흐른다 — 기계 사이 DDS 금지(OMX LOCALHOST·lo 프로파일, AI PC Nav2/rosbridge 유닛 제거, 회귀 시험) | Accepted |
 | D-799 | 원격 pytest를 호스트 안에서 병렬로(pytest-xdist, 직렬 목록) 돌리고, 메모리 하한 아래 호스트도 가벼운 일을 받는다(D-568 2항 개정) | Proposed |
 | D-802 | 실험실 PC의 Python 설치 도구는 uv 하나 — host-state가 해시 고정 휠(`wheel-tool`)로 배포하고, 원격 도구는 pip·venv 대체 경로를 쓰지 않는다 | Proposed |
-| D-797 | 실물 하달 개방 — 운행(`TRIP`)은 `production`, 팔(`CELL_TRANSFER`)은 새 프로필 `device_trial`에서 장치 증거로만(실물 identity, 하달 전 인계 장벽, 카메라 목표 증거, 다팔은 계속 시뮬레이션) | Proposed |
+| D-797 | 실물 하달 개방 — 운행(`TRIP`)은 `production`, 팔(`CELL_TRANSFER`)은 새 프로필 `device_trial`에서 장치 증거로만(실물 identity, 하달 전 인계 장벽, 카메라 목표 증거, 다팔은 계속 시뮬레이션) | §2·§3 Accepted (2026-11-04, D-858 S4); 나머지 Proposed |
 | D-796 | 사이트 문맥·로그 저장소(Postgres 미러) | Accepted |
 | D-798 | 한도에 걸린 크기 단위는 미리 나눠 여유를 만든다 — fleet·site_ui/console·rosy_auto_update 분할 지도, 95% 선에서 나누기 브랜치 먼저, 상속된 초과 커밋의 재적층 | Accepted (2026-10-18, 사용자 결정) |
 | D-807 | Account 인증 서비스의 자격 소유 책임과 운영 완료 기준 | Accepted |
