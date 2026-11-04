@@ -97,6 +97,9 @@ class Tasks:
                        'semantic TEXT NOT NULL, creator TEXT NOT NULL, document TEXT NOT NULL)')
             db.execute('CREATE UNIQUE INDEX IF NOT EXISTS learning_robot_device '
                        "ON learning_task_records(json_extract(body,'$.device_id')) WHERE kind='robot'")
+            db.execute('CREATE TABLE IF NOT EXISTS learning_task_native_inputs ('
+                       'prepared_id TEXT PRIMARY KEY, source_revision TEXT UNIQUE NOT NULL, '
+                       'request_id TEXT UNIQUE NOT NULL, binding TEXT NOT NULL)')
             db.execute('CREATE TABLE IF NOT EXISTS learning_task_datasets ('
                        'dataset_id TEXT PRIMARY KEY, dataset_revision TEXT UNIQUE NOT NULL, binding TEXT NOT NULL)')
             db.execute('CREATE TABLE IF NOT EXISTS learning_task_sim_contexts ('
@@ -309,8 +312,25 @@ class Tasks:
             return dict(dataset, compute_host=host_id, component_ids=list(component_ids),
                 participants=[p for p in task['participants'] if p['component_id'] in component_ids])
 
+    def bind_native(self, task_id, prepared_id, source_revision, profile_revision,
+                    component_ids, actor, request_id=None):
+        from learning_native_inputs import bind_native
+        return bind_native(self, task_id, prepared_id, source_revision, profile_revision,
+                           component_ids, actor, request_id)
+
+    def native_bindings(self, task_id=None):
+        from learning_native_inputs import native_bindings
+        return native_bindings(self, task_id)
+
+    def resolve_native(self, task_id, prepared_id, source_revision, profile_revision, component_ids, host_id):
+        from learning_native_inputs import resolve_native
+        return resolve_native(self, task_id, prepared_id, source_revision, profile_revision, component_ids, host_id)
+
     def export_task(self, task_id):
         with self._db() as db:
+            if db.execute("SELECT 1 FROM learning_task_native_inputs WHERE json_extract(binding,'$.task_id')=?",
+                          (task_id,)).fetchone():
+                raise ValueError('native source associations cannot be transferred by task export')
             row, task = self._get(db, task_id, 'task')
             ids = list(dict.fromkeys(p['robot_id'] for p in task['participants']))
             robots = [json.loads(self._get(db, uid, 'robot')[0][1]) for uid in ids]
