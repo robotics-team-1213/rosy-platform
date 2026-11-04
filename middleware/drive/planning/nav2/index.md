@@ -42,8 +42,8 @@
 
 ## 최근 기록
 
+- 2026-11-04 · uncommitted · fix(nav2): RPP 후진 허용
 - 2026-10-19 · uncommitted · (origin #92 2026-10-17) 실제 static14건과 같은 SHA native30건 수용 기록
 - 2026-10-19 · uncommitted · (origin #92 2026-10-17) rejected configure 시험의 실제 TF callback 시작 동기화
 - 2026-10-19 · uncommitted · (origin #92 2026-10-17) 거절된 native configure의 fixture 자원 정리
 - 2026-10-19 · uncommitted · (origin #92 2026-10-17) 첫 원본 지도의 실제 static application 소유자 구현
-- 2026-10-19 · uncommitted · (origin #92 2026-10-17) 실제 global StaticLayer application RED 준비

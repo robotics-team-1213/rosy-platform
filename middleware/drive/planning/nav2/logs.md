@@ -279,3 +279,9 @@
 - 변경: 실제 전역 plugin·원본 full application/reset/retire와 fixture 정리/TF 동기화의 revision별 실패·진단·최종 검증을 [validation](../../../../docs/validation/station-native-map-static-2026-10-17/result.md)에 기록했다.
 - 증거: 83db3b1da4 승인 AI 시험 PC에서 같은 SHA interfaces/native navigation 생성·compile/link, 실제 gtest grid6+AMCL10+static14=30 PASS/0 FAIL/0 ERROR/0 SKIP, 설치 AMCL 초기 graph/정상 종료 별도 PASS, exit0. source-sha/exit-code/세 XML을 직접 확인했다. source00945893a5 guard207 PASS/1 FAIL/0 SKIP/NEW1은 기존 branch exception ancestry 한 건이다.
 - gate 변화: LOCAL GO는 검증한 native slice로 갱신한다. SOURCE HOLD(CORE 연결·운영 failed-config 정리·FULL CI·branch guard), ROS-SIM/ARTIFACT/DEVICE HOLD·FIELD PARKED를 유지한다. 현장 담당자는 나중에 확인 가능하며 전체 목표 ACTIVE다.
+## 2026-11-04 · uncommitted · fix(nav2): RPP 후진 허용
+
+- 변경: `params/nav2_params.yaml` `FollowPath.allow_reversing` false → true. 뒤 목표를 제자리 회전 없이 후진 주행으로 해결한다. CORE/Device 프로파일 상한(`profile_limits`, CommandManager 클립)은 그대로 적용된다. MAP 260905 RPP 시험 프로파일은 검토된 전진 전용 동작이므로 `prepare_sim_params.py`가 base 값과 무관하게 시험 출력에서 `allow_reversing=false`로 고정한다(기존 base 단정은 제거).
+- 증거: 실물 geg6에서 후방 15cm 목표가 회전·STUCK 없이 후진하는지 확인 예정(착지 후 별도 기록). 시험 묶음은 착지 pre-push로 실행.
+- gate 변화: 없음.
+- CE: 해당 없음 — 설정 기본값 변경.
