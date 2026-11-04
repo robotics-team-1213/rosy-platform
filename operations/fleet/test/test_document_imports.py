@@ -118,6 +118,7 @@ OWN = {
         "file-picker.js",  # D-926 C7: one Korean file picker
         "cell-print-sheets.js",  # 보정 인쇄물 PDF 내려받기
         "cell-object-catalog.js",  # 물체 카탈로그(무게) 읽기 전용
+        "cell-line.js",  # D-975: 준비 노선(응답이 채운 요소만 읽음)
     },
     "site-map.js": {
         "map-authoring.js", "map-editor.js", "drawing-import.js", "geometry-edit.js", "edit-history.js",

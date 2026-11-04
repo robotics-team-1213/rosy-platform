@@ -43,3 +43,4 @@ pre { max-height: 24rem; overflow: auto; white-space: pre-wrap; overflow-wrap: a
   ui-head:has(#compile) { flex-direction: column; align-items: stretch; }
   #compile { box-sizing: border-box; width: 100%; }
 }
+#cell-line { padding: var(--space-2) var(--space-4); }

@@ -59,3 +59,14 @@ def test_the_page_mounts_one_fleet_line_with_the_stage_sheet():
     assert '<ol id="install-line" class="ui-stage-track" data-line="fleet"' in page
     assert '/common/stage-strip.css' in page
     assert page.count('id="install-line"') == 1
+
+
+def test_station_links_name_install_tasks_the_page_can_open():
+    """역 링크는 작업 선택기가 여는 작업 id여야 한다 — 숨은 패널 앵커는 눌러도 아무 일이 없다."""
+    import re
+    web = ROOT / "applications" / "fleet" / "web"
+    page = (web / "installation" / "install.js").read_text(encoding="utf-8")
+    tasks = set(re.findall(r'\{id: "([a-z-]+)", title:', page))
+    anchors = set(re.findall(r'anchor: "#([a-z-]+)"', (web / "installation" / "install-line.js").read_text(encoding="utf-8")))
+    assert anchors and anchors <= tasks, anchors - tasks
+    assert 'addEventListener("hashchange"' in page

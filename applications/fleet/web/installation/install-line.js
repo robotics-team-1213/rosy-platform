@@ -2,16 +2,16 @@
 // 근거를 읽지 못한 역은 완료로 그리지 않고 "확인 못 함"을 단다. 버튼·조작은 없다: 역은 그 구획으로 가는 링크다.
 
 export const STATIONS = [
-  { id: "robots", label: "로봇 등록", anchor: "#robot-enrollment", path: "/api/fleet/enrollment/robots",
+  { id: "robots", label: "로봇 등록", anchor: "#robots", path: "/api/fleet/enrollment/robots",
     done: (body) => (body.robots || []).length > 0,
     note: (body) => `${(body.robots || []).length}대` },
-  { id: "cameras", label: "카메라 승인", anchor: "#camera-link", path: "/api/fleet/pairing/v1/credentials/summary",
+  { id: "cameras", label: "카메라 승인", anchor: "#cameras", path: "/api/fleet/pairing/v1/credentials/summary",
     done: (body) => (body.credentials || []).some((row) => row.state !== "revoked"),
     note: (body) => `${(body.credentials || []).filter((row) => row.state !== "revoked").length}대` },
-  { id: "calibration", label: "카메라 보정", anchor: "#camera-calibration", path: "/api/fleet/calibrations",
+  { id: "calibration", label: "카메라 보정", anchor: "#calibration", path: "/api/fleet/calibrations",
     done: (body) => (body.calibrations || []).length > 0,
     note: (body) => `${(body.calibrations || []).length}개` },
-  { id: "start", label: "시작점", anchor: "#start-point-heading", path: "/api/fleet/start-points",
+  { id: "start", label: "시작점", anchor: "#calibration", path: "/api/fleet/start-points",
     done: (body) => (body.start_points || []).some((row) => row.valid),
     note: (body) => ((body.start_points || []).some((row) => row.valid) ? "저장됨" : "없음") },
 ];
