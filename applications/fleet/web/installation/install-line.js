@@ -38,6 +38,8 @@ export function createInstallLine({ root, call, scope }) {
     link.href = station.anchor;
     link.textContent = station.label;
     const note = document.createElement("small");
+    // 첫 응답 전에도 메모 줄 높이를 잡아 둔다 — 응답 뒤 줄이 생기며 본문이 밀리지 않게.
+    note.textContent = "확인 중";
     item.append(link, " ", note);
     root.append(item);
     return { item, note };
