@@ -9,6 +9,7 @@ from .arm_transfer_preflight import ArmDigest, ArmPhysicalRef
 ArmTransferRequestKey = Annotated[ArmPhysicalRef, Field(max_length=160)]
 _Counter = Annotated[int, Field(strict=True, ge=0, lt=2**63)]
 _Principal = Annotated[ArmPhysicalRef, Field(max_length=96)]
+ArmTransferPrincipal = _Principal
 
 
 class ArmTransferRequest(BaseModel):
@@ -36,6 +37,13 @@ class ArmTransferJobAdmit(BaseModel):
     expected_generation: _Counter
 
 
+class ArmTransferDelegation(BaseModel):
+    """D-965: the job came from a control-unit delegation; display only, the proposer stays the authority."""
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+    origin_unit: ArmScopeId
+    requested_by: _Principal | None
+
+
 class ArmTransferJobSnapshot(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
     mission_id: ArmActionId
@@ -51,6 +59,8 @@ class ArmTransferJobSnapshot(BaseModel):
     dispatch_generation: _Counter | None
     approved_by: _Principal | None
     reason: ArmPhysicalRef | None
+    # Absent rather than null when not delegated, so the frozen v1 job shape stays byte-identical.
+    delegated_by: ArmTransferDelegation | None = Field(default=None, exclude_if=lambda value: value is None)
 
     @model_validator(mode="after")
     def _approval(self):

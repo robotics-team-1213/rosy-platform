@@ -58,6 +58,12 @@ class WorkcellObservations:
         """Declared source configuration, excluding labels and credentials; no hardware attestation."""
         return dict(self._bindings[source_id])
 
+    def producers(self) -> list[dict]:
+        """Registered, credentialed sources only (each has a distinct token, checked at construction)."""
+        return [{"id": item["source_id"], "kind": kind}
+                for cell in self._workcells for kind, key in (("arm_joint", "arms"), ("camera", "cameras"))
+                for item in cell[key]]
+
     def camera_source_ids(self) -> tuple[str, ...]:
         return tuple(camera["source_id"] for cell in self._workcells for camera in cell["cameras"])
 
