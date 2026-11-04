@@ -198,7 +198,7 @@ def test_records_area_raises_incidents_into_the_body_and_the_judgment_to_the_sid
                 body, right = panel.bounding_box(), side.bounding_box()
                 assert body["x"] + body["width"] <= right["x"], (body, right)
             first = rows.first
-            first.locator(":scope > details > summary").click()
+            first.locator(":scope > details > summary").press("Enter" if size[0] < 1024 else "Space")
             expect(first).to_contain_text("해소 확인")
             expect(side).to_contain_text("담당 인수: 아직 없음")
             expect(side).to_contain_text("사람 검토: 아직 없음")
@@ -231,6 +231,13 @@ def test_records_area_raises_incidents_into_the_body_and_the_judgment_to_the_sid
                 document.getElementById('incident-refresh').dispatchEvent(new Event('click')); }""")
             page.wait_for_function("""() => document.querySelector('#incident-judgment > div') !== window.oldSeat
                 && document.activeElement.matches('#incident-judgment > [data-report-key="rosy_01|closed-new"] select')""")
+            # Restoring an open fold during refresh must not pull a reader back down to its form.
+            page.evaluate("""() => { document.activeElement.blur(); window.scrollTo(0, 0);
+                window.oldSeat = document.querySelector('#incident-judgment > div');
+                document.getElementById('incident-refresh').dispatchEvent(new Event('click')); }""")
+            page.wait_for_function("() => document.querySelector('#incident-judgment > div') !== window.oldSeat")
+            page.clock.run_for(100)
+            assert page.evaluate('window.scrollY') == 0
             side.locator("select").select_option("obstacle")
             side.locator("input").fill("현장 상자 확인")
             side.locator("ui-button[type=submit]").click()
