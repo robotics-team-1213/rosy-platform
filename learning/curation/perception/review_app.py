@@ -32,6 +32,7 @@ import review_evidence, review_ingest, review_masks, vlm_mask_feedback, camera_s
 import review_versions, omx_center_web
 import learning_domains, learning_pipeline, promotion_request
 import learning_tasks_web
+import learning_recording_web
 from workspace_links import WORKSPACE_LINKS_SCHEMA, check_workspace_links, load_workspace_links
 from learning_tasks import Tasks
 from review_ai_jobs import Jobs
@@ -86,7 +87,7 @@ def check_link(url):
     return url
 
 
-def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=None, oauth=None, imports=None, storage=None, storage_jobs=None, ai_jobs=None, repos=None, omx_center=None, sim_runs=None, vlm_eval_url=None, workspace_links=None):
+def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=None, oauth=None, imports=None, storage=None, storage_jobs=None, ai_jobs=None, repos=None, omx_center=None, sim_runs=None, vlm_eval_url=None, workspace_links=None, recordings=None, recording_config=None):
     check_bind_host(host)
     if workspace_links is not None:
         workspace_links = check_workspace_links({'schema': WORKSPACE_LINKS_SCHEMA, 'workspaces': workspace_links})
@@ -104,6 +105,8 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
     if omx_center is not None:
         omx_center.bind_workspace(project)
         omx_center.tasks = tasks
+    if recordings is None:
+        recordings = learning_recording_web.create(store, omx_center, recording_config)
     if storage and storage.project_id != project:
         raise ValueError('storage project must match workspace project')
     storage_web = StorageWeb(storage, accounts, storage_jobs, store.db, sim_runs=sim_runs, omx_center=omx_center)
@@ -114,6 +117,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
         collaboration = Collaboration(accounts, store, oauth=oauth, imports=imports, repos=repos)
     token = secrets.token_urlsafe(32)
     learning = Workspace(store.db)
+    native_workflow_cache = {}
     ai_jobs = ai_jobs if ai_jobs is not None else Jobs(store)
     sim_seen = {}
 
@@ -169,7 +173,9 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                 if collaboration and collaboration.get(self, path, token):
                     return
                 if storage_web.get(self, path): return
-                if learning_tasks_web.get(self, path, tasks, omx_center, token, sim_runs):
+                if learning_recording_web.get(self, path, recordings):
+                    return
+                if learning_tasks_web.get(self, path, tasks, omx_center, token, learning, native_workflow_cache, sim_runs=sim_runs):
                     return
                 if omx_center_web.get(self, path, omx_center, learning) or camera_setup_web.get(self, path, store.state) or omx_web.get(self, path, learning, omx_center, store.state) or sim_web.get(self, path, sim_runs) or vlm_judge_web.get(self, path, store, token, collaboration):
                     return
@@ -354,12 +360,14 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
 
         def do_POST(self):
             self.extra_headers = []
+            body_limit = (4*1048576 if urlparse(self.path).path ==
+                          '/api/learning/omx/center/lerobot-study' else 1048576)
             # Consume bounded rejected bodies before responding; Windows may otherwise
             # reset the connection while the client is still transmitting its request.
             def deny():
                 try:
                     length = int(self.headers.get('Content-Length', '0'))
-                    if 0 < length <= 1048576:
+                    if 0 < length <= body_limit:
                         self.connection.settimeout(5)
                         self.rfile.read(length)
                 except (ValueError, OSError):
@@ -379,7 +387,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                 return deny()
             try:
                 length = int(self.headers.get('Content-Length', '0'))
-                if not 0 < length <= 1048576:
+                if not 0 < length <= body_limit:
                     raise ValueError('bounded JSON body required')
                 body = json.loads(self.rfile.read(length))
                 if not isinstance(body, dict):
@@ -392,7 +400,9 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                 if collaboration and collaboration.post(self, path, body, token):
                     return
                 if storage_web.post(self, path, body): return
-                if learning_tasks_web.post(self, path, body, tasks, omx_center, collaboration, sim_runs):
+                if learning_recording_web.post(self, path, body, recordings):
+                    return
+                if learning_tasks_web.post(self, path, body, tasks, omx_center, collaboration, learning, sim_runs=sim_runs):
                     return
                 if omx_center_web.post(self, path, body, omx_center, learning,
                                        collaboration.accounts if collaboration else None):
@@ -480,6 +490,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
 
     class Server(ThreadingHTTPServer):
         def server_close(self):
+            recordings.close()
             storage_web.close()
             ai_jobs.close()
             if collaboration:
@@ -489,6 +500,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
     try:
         return Server((host, port), Handler)
     except Exception:
+        recordings.close()
         storage_web.close()
         ai_jobs.close()
         if collaboration:
@@ -512,6 +524,7 @@ def main():
     parser.add_argument('--storage-config', type=Path, help='private registered project storage roots and quota estimates')
     parser.add_argument('--review-ai-config', type=Path, help='private workspace-bound model-PC AI execution configuration')
     parser.add_argument('--omx-center-config', type=Path, help='private isolated OMX learning root and pinned host learner interpreters')
+    parser.add_argument('--recording-config', type=Path, help='private local observer recording sources and exporter configuration')
     parser.add_argument('--sim-config', type=Path, help='private workspace-bound local SIM subprocess configuration')
     parser.add_argument('--vlm-eval-url', help='link from 평가·승격 to a separate VLM evaluation state instance (D-857)')
     parser.add_argument('--workspace-links', type=Path, help='private JSON listing the center\'s other review workspaces (D-857 §2)')
@@ -573,9 +586,11 @@ def main():
         from experiment_center import Center
         omx_center = Center(json.loads(args.omx_center_config.read_text(encoding='utf-8')))
     sim_runs = sim_web.LocalRuns(args.sim_config, review_evidence.metadata(store, 'workspace_id')) if args.sim_config else None
+    recording_config = learning_recording_web.load_config(args.recording_config, parser)
     server = make_server(store, args.port, args.host, control=control, accounts=accounts, oauth=oauth, imports=imports,
                          storage=storage, ai_jobs=ai_jobs, omx_center=omx_center, sim_runs=sim_runs,
-                         vlm_eval_url=args.vlm_eval_url, workspace_links=workspace_links)
+                         vlm_eval_url=args.vlm_eval_url, workspace_links=workspace_links,
+                         recording_config=recording_config)
     print(f'Pinky review: http://{args.host}:{server.server_port}', flush=True)
     serve_review(server, store, args.decisions_port)
 

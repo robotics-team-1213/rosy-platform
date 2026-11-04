@@ -22,6 +22,7 @@ PAGES = {'/learning/omx': ('omx.html', 'text/html; charset=utf-8'),
          '/omx-hub.js': ('omx-hub.js', 'text/javascript; charset=utf-8'),
          '/omx-profiles.js': ('omx-profiles.js', 'text/javascript; charset=utf-8'),
          '/omx-review.js': ('omx-review.js', 'text/javascript; charset=utf-8'),
+         '/omx-native-train.js': ('omx-native-train.js', 'text/javascript; charset=utf-8'),
          '/omx.js': ('omx.js', 'text/javascript; charset=utf-8')}
 LIMIT = 8 * 1024 * 1024
 
@@ -158,10 +159,12 @@ def review_db(workspace):
     return db
 
 
-def latest(workspace, identifier):
+def latest(workspace, identifier, version=None):
     with review_db(workspace) as db:
         row = db.execute('SELECT version,document FROM omx_segment_reviews WHERE id=? '
-                         'ORDER BY version DESC LIMIT 1', (identifier,)).fetchone()
+                         + ('AND version=? ' if version is not None else '')
+                         + 'ORDER BY version DESC LIMIT 1',
+                         (identifier, version) if version is not None else (identifier,)).fetchone()
     return {'version': row[0], 'document': json.loads(row[1])} if row else {'version': 0, 'document': None}
 
 
