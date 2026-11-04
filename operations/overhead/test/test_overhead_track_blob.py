@@ -375,6 +375,38 @@ def test_sign_bases_poles_and_strips_in_the_background_are_not_guessed():
     assert detector.detect(Frame(_sign_floor(), 11.0), CAL).detections == ()
 
 
+# D-547 addendum (site 2026-11-05): robots parked in adjacent charge bays merge into one dark
+# blob (a cable or touching bodies bridge them) that the aspect test rejected, so none was guessed.
+
+def _bay_floor(count):
+    image = _floor()
+    for index in range(count):
+        _with_square(18, cx=300 + 24 * index, image=image)
+        if index:
+            image[148:152, 285 + 24 * index:291 + 24 * index] = 30  # cable across the 6 px gap
+    return image
+
+
+@pytest.mark.parametrize("count", [2, 3])
+def test_robots_parked_side_by_side_are_guessed_one_each(count):
+    floor = lambda: _bay_floor(count)
+    detector = _learned(floor=floor)
+    result = detector.detect(Frame(floor(), 11.0), CAL)
+    assert result.status == "OK"
+    xs = sorted(d.x for d in result.detections)
+    assert xs == pytest.approx([2.995 + 0.24 * index for index in range(count)], abs=0.02)
+    assert all(0.0 < d.score <= BAKED_SCORE_MAX for d in result.detections)
+
+
+def test_a_robot_wide_dark_bar_is_not_split_into_guesses():
+    def floor():
+        image = _floor()
+        image[141:159, 270:330] = 30  # 60 x 18: one ridge, not robot bodies
+        return image
+    detector = _learned(floor=floor)
+    assert detector.detect(Frame(floor(), 11.0), CAL).detections == ()
+
+
 def test_a_ghost_is_not_reported_and_its_spot_is_relearned():
     detector = _learned(floor=_parked_robot_floor)
     for index in range(5):  # the parked robot drove off the mat
