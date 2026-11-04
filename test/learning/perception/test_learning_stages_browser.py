@@ -42,7 +42,8 @@ def test_task_pages_share_body_and_native_navigation_controls(browser_workspace,
         import os
         if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
             from pathlib import Path
-            page.wait_for_load_state('networkidle')
+            page.wait_for_load_state('load')
+            page.wait_for_function("customElements.get('ui-button') !== undefined")
             destination = Path(output) / f'learning-map-{target.strip("/").replace("/", "-")}-{theme}-{width}.png'
             destination.parent.mkdir(parents=True, exist_ok=True)
             page.screenshot(path=str(destination))
