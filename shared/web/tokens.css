@@ -251,8 +251,8 @@
   --inset-workspace-bar: var(--space-4);
   --inset-task-row: var(--space-5);
   --gap-task-detail: var(--space-3);
-  --gap-stage-track: var(--space-3);
   --gap-stage-mark: var(--space-2);
+  --gap-stage-segment: var(--space-5);
   --inset-topbar: 0 var(--space-4);
   --inset-topbar-focal: var(--space-4) var(--space-5) var(--space-2);
   --gap-button-detail: var(--space-1);

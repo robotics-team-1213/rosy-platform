@@ -95,17 +95,20 @@
 @media (width < 30rem) {
   .ui-stage-track {
     flex-direction: column;
-    gap: var(--gap-stage-track);
   }
+  /* 세로 노선: 역 아래 여백이 다음 역까지의 구간 자리다. 여백이 없으면 구간 높이가 0 이하가 된다. */
   .ui-stage {
     flex-direction: row;
     text-align: start;
-    padding: 0;
+    padding: 0 0 var(--gap-stage-segment);
+  }
+  .ui-stage:last-child {
+    padding-block-end: 0;
   }
   .ui-stage::after {
-    inset-block-start: calc(var(--size-stage-mark) + var(--space-2));
+    inset-block-start: calc(var(--size-stage-mark) + var(--space-1));
     inset-inline-start: calc((var(--size-stage-mark) - var(--size-stage-line)) / 2);
     inline-size: var(--size-stage-line);
-    block-size: calc(100% - var(--size-stage-mark) - 2 * var(--space-2) + var(--gap-stage-track));
+    block-size: calc(100% - var(--size-stage-mark) - 2 * var(--space-1));
   }
 }
