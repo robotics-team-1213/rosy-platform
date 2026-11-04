@@ -351,7 +351,23 @@
         <li class="ui-stage" data-state="blocked">배터리 교체</li>
         <li class="ui-stage" data-state="todo">재시동</li>
       </ol>
-      <p class="rule">단계는 class-only 조합이다. 상태는 태그와 같은 done·now·blocked·todo 넷이고, 지금 단계는 <code>aria-current="step"</code>과 채운 표식이 함께 나른다.</p>
+      <ol class="ui-stage-track" data-line="learning" aria-label="Learning 학습 노선">
+        <li class="ui-stage" data-state="done">과제</li>
+        <li class="ui-stage" data-state="done">시연 검수</li>
+        <li class="ui-stage" data-state="now" aria-current="step">학습</li>
+        <li class="ui-stage" data-state="todo">평가</li>
+      </ol>
+      <ol class="ui-stage-track" data-line="fleet" aria-label="Fleet 작업 노선">
+        <li class="ui-stage" data-state="done">변경 지시</li>
+        <li class="ui-stage" data-state="now" aria-current="step">이송</li>
+        <li class="ui-stage" data-state="todo">내려놓기</li>
+      </ol>
+      <ol class="ui-stage-track" data-line="robot" aria-label="Robot 주행 노선">
+        <li class="ui-stage" data-state="done">출구</li>
+        <li class="ui-stage" data-state="blocked">교차 지점</li>
+        <li class="ui-stage" data-state="todo">도착</li>
+      </ol>
+      <p class="rule">단계는 class-only 조합이다(D-975 노선 모양). 상태는 태그와 같은 done·now·blocked·todo 넷이고, 지금 단계는 <code>aria-current="step"</code>과 채운 표식이 함께 나른다. <code>data-line</code>은 앱 노선 색(learning·fleet·robot)을 고르며 지난 구간에만 칠한다. 없으면 중립 선이다.</p>
     </section>
 
     <section class="entry" id="task-choice">

@@ -1,56 +1,89 @@
 /* D-461 조합의 다음 칸: 단계 스트립. class-only — 마크업이 순서와 상태를 나르고 JS는 없다.
    `<ol class="ui-stage-track">` 안에 `<li class="ui-stage" data-state>`를 둔다. 상태 어휘는
-   `ui-tag`와 같다. done은 지난 단계(조용한 글자), now는 지금(밝은 글자와 잉크로 채운 표식 —
-   정상은 색이 아니다, D-82), blocked는 주의 글자, todo는 남은 단계다. 긴 절차는 줄바꿈해
-   흐르고, 표식은 `--size-stage-mark` 원에 순번을 넣는다.
+   `ui-tag`와 같다. done은 지난 단계, now는 지금(잉크로 채운 표식 — 정상은 색이 아니다, D-82),
+   blocked는 주의 글자·테, todo는 남은 단계다.
+
+   D-975 노선 모양: 단계는 번호 역이고, 역 사이를 굵은 선이 잇는다. 지난 역에서 나가는 선만
+   앱 노선 색(`--stage-line`)이고 남은 구간은 중립 선이다. 화면은 `data-line`으로 앱 노선을
+   고른다. 노선 색은 앱 정체성이지 상태가 아니다 — 막힘·위험은 여전히 status 색과 글자가 나른다.
+   좁은 폭(30rem 미만)에서는 세로 노선으로 접는다.
 
    components.css가 D-766 한도에 닿아(942줄 동결) 이 묶음은 자기 시트에 산다. 쓰는 화면은
    components.css 뒤에 /common/stage-strip.css를 링크한다. */
 .ui-stage-track {
+  --stage-line: var(--border-strong);
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--gap-stage-track);
+  align-items: flex-start;
   margin: 0;
   padding: 0;
   list-style: none;
   counter-reset: ui-stage;
 }
+.ui-stage-track[data-line="learning"] { --stage-line: var(--app-line-learning); }
+.ui-stage-track[data-line="fleet"] { --stage-line: var(--app-line-fleet); }
+.ui-stage-track[data-line="robot"] { --stage-line: var(--app-line-robot); }
 .ui-stage {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
   display: flex;
+  flex-direction: column;
   align-items: center;
   gap: var(--gap-stage-mark);
-  min-width: 0;
+  padding: 0 var(--space-1);
   color: var(--text-secondary);
   font: var(--weight-label) var(--text-label)/var(--leading-control) var(--body);
+  text-align: center;
   counter-increment: ui-stage;
-  overflow-wrap: anywhere;
+  word-break: keep-all;
+  overflow-wrap: break-word;
 }
 .ui-stage::before {
   content: counter(ui-stage);
   flex: none;
   display: grid;
   place-items: center;
+  box-sizing: border-box;
   inline-size: var(--size-stage-mark);
   block-size: var(--size-stage-mark);
-  border: 1px solid var(--border-default);
+  border: var(--size-stage-ring) solid var(--border-strong);
   border-radius: var(--radius-flag);
   font-family: var(--mono);
   font-size: var(--text-micro);
   font-weight: var(--weight-label);
   line-height: var(--leading-flat);
 }
+/* 이 역에서 다음 역까지의 구간. 표식과 겹치지 않게 양쪽에 한 칸씩 띄운다. */
+.ui-stage::after {
+  content: "";
+  position: absolute;
+  inset-block-start: calc((var(--size-stage-mark) - var(--size-stage-line)) / 2);
+  inset-inline-start: calc(50% + var(--size-stage-mark) / 2 + var(--space-2));
+  inline-size: calc(100% - var(--size-stage-mark) - 2 * var(--space-2));
+  block-size: var(--size-stage-line);
+  border-radius: var(--radius-flag);
+  background: var(--border-default);
+}
+.ui-stage:last-child::after {
+  content: none;
+}
 .ui-stage[data-state="done"]::before {
-  border-color: var(--border-strong);
-  background: var(--surface-raised);
+  border-color: var(--stage-line);
+  color: var(--text-primary);
+}
+.ui-stage[data-state="done"]::after {
+  background: var(--stage-line);
 }
 .ui-stage[data-state="now"] {
   color: var(--text-primary);
+  font-weight: var(--weight-emphasis);
 }
 .ui-stage[data-state="now"]::before {
   border-color: var(--text-primary);
   background: var(--text-primary);
   color: var(--surface-canvas);
+  outline: var(--size-stage-ring) solid var(--stage-line);
+  outline-offset: var(--size-stage-ring);
 }
 .ui-stage[data-state="blocked"] {
   color: var(--status-warn);
@@ -58,4 +91,21 @@
 .ui-stage[data-state="blocked"]::before {
   border-color: var(--status-warn);
   color: var(--status-warn);
+}
+@media (width < 30rem) {
+  .ui-stage-track {
+    flex-direction: column;
+    gap: var(--gap-stage-track);
+  }
+  .ui-stage {
+    flex-direction: row;
+    text-align: start;
+    padding: 0;
+  }
+  .ui-stage::after {
+    inset-block-start: calc(var(--size-stage-mark) + var(--space-2));
+    inset-inline-start: calc((var(--size-stage-mark) - var(--size-stage-line)) / 2);
+    inline-size: var(--size-stage-line);
+    block-size: calc(100% - var(--size-stage-mark) - 2 * var(--space-2) + var(--gap-stage-track));
+  }
 }

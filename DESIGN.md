@@ -20,6 +20,9 @@ colors:
   robot-1: "#b6ddfe"
   robot-2: "#24a6fd"
   robot-3: "#0774b6"
+  app-line-learning: "#16d3c3"
+  app-line-fleet: "#8a81ef"
+  app-line-robot: "#b670d5"
   raster-unknown: "#111213"
   raster-free: "#1f2123"
   raster-uncertain: "#45484d"
@@ -275,7 +278,7 @@ Fleet 앱 바의 오른쪽은 연결·알림·나·정지 순서다. 연결은 `
 
 ### 세 층 토큰
 
-1. **팔레트** — 테마마다 바뀌는 유일한 값. 키 목록은 닫혀 있다(위 frontmatter 24개). 원시 색은 이 블록에만 있다.
+1. **팔레트** — 테마마다 바뀌는 유일한 값. 키 목록은 닫혀 있다(위 frontmatter 27개). 원시 색은 이 블록에만 있다.
 2. **파생** — 팔레트만 참조한다. 선(`--line-*`), 장막(`--scrim*`), 세척(`--status-crit-a07` 등)은 `color-mix(in oklab, var(--팔레트) N%, transparent | var(--ground…))`다. 원시 색 리터럴이 있으면 시험이 막는다.
 3. **역할** — 부품이 읽는 이름: `--surface-*`, `--button-*`, `--field-*`, `--flag-*`, `--focus-ring`, `--gauge-*`, `--nominal*`. 표면 CSS는 팔레트보다 역할을 먼저 쓴다.
 
@@ -516,8 +519,9 @@ D-741(Accepted)이 정한, 모든 웹 표면이 같이 쓸 자리다. Rosy Fleet
 
 ### 단계 스트립 — `<ol class="ui-stage-track">` · `.ui-stage`
 - 절차(`procedure` 문법)가 몇 번째 단계인지 한 줄로 말한다. JS가 없다: `<ol class="ui-stage-track">` 안에 `<li class="ui-stage" data-state="done|now|blocked|todo">순번이 붙은 라벨</li>`을 두고, 지금 단계에 `aria-current="step"`을 단다.
-- 표식은 `--size-stage-mark` 원이고 순번은 `--mono`다. 긴 절차는 줄바꿈해 흐르며 한 단계의 라벨만 `overflow-wrap: anywhere`로 접힌다.
-- 상태는 `ui-tag`와 같은 어휘다. `done`은 지난 단계(조용한 글자, `--surface-raised` 채움 — 빈 테인 `todo`와 라이트에서도 구분된다), `now`는 지금(가장 밝은 중립 글자와 그 잉크로 채운 표식 — 정상은 색이 아니다, D-82), `blocked`는 주의 글자·테(`--status-warn`), `todo`는 남은 단계(빈 테). `data-state`가 없으면 `todo`다.
+- 모양은 노선이다([D-975](docs/adr/D-975-line-map-stage-track-and-app-lines.md)): 단계는 번호 역(`--size-stage-mark` 원, 순번 `--mono`)이고 역 사이를 `--size-stage-line` 굵기의 선이 잇는다. 단계는 같은 폭을 나눠 쓰고 라벨은 어절에서 줄바꿈한다. 30rem 미만에서는 세로 노선으로 접는다.
+- 노선 색은 `data-line="learning|fleet|robot"`이 고른다(`--app-line-*`, 없으면 중립 `--border-strong`). 앱 정체성이지 상태가 아니며 지난 역의 테와 지난 구간에만 칠한다. 남은 구간은 `--border-default`다. 노선 팔레트는 단계 스트립 밖에서 쓰지 않는다(`test_palette_gates.py`).
+- 상태는 `ui-tag`와 같은 어휘다. `done`은 지난 단계(노선 색 테), `now`는 지금(가장 밝은 중립 글자와 그 잉크로 채운 표식, 바깥에 노선 색 고리 — 정상은 색이 아니다, D-82), `blocked`는 주의 글자·테(`--status-warn`), `todo`는 남은 단계(중립 테). `data-state`가 없으면 `todo`다.
 - 지금 단계의 뜻은 색 하나가 아니라 `aria-current`, 순번, 채움 셋이 함께 나른다.
 - 규칙은 `/common/stage-strip.css`에 산다 — `components.css`는 D-766 한도(942줄)에서 동결됐으므로 쓰는 화면은 `components.css` 뒤에 이 시트를 링크한다.
 
