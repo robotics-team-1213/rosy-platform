@@ -71,7 +71,16 @@ def test_label_by_keyboard_and_mouse_at_phone_width(tmp_path):
                 assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
                 page.goto(f'http://127.0.0.1:{server.server_port}/learning/evaluate?domain=vlm', wait_until='networkidle')
                 expect(page.locator('.evaluate-source[data-domain="vlm"] .ui-table-scroll table.ui-data-table')).to_be_visible()
-                assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
+                for width in (1366, 390):
+                    page.set_viewport_size({'width': width, 'height': 844})
+                    sources = page.locator('[aria-labelledby="sources-title"]').bounding_box()
+                    promotion = page.locator('[aria-labelledby="promote-title"]').bounding_box()
+                    if width >= 1024:
+                        assert promotion['x'] >= sources['x'] + sources['width'] - 1
+                        assert abs(promotion['y'] - sources['y']) <= 1
+                    else:
+                        assert promotion['y'] >= sources['y'] + sources['height'] - 1
+                    assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
                 assert errors == []
             finally:
                 browser.close()
