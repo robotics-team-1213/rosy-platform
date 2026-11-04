@@ -285,3 +285,9 @@
 - 증거: 실물 geg6에서 후방 15cm 목표가 회전·STUCK 없이 후진하는지 확인 예정(착지 후 별도 기록). 시험 묶음은 착지 pre-push로 실행.
 - gate 변화: 없음.
 - CE: 해당 없음 — 설정 기본값 변경.
+## 2026-11-04 · uncommitted · docs(validation): 후진 허용 실물 수용 기록
+
+- 변경: [nav2-reversing-goal-2026-11-04](../../../docs/validation/nav2-reversing-goal-2026-11-04/result.md) — allow_reversing=true의 geg6 실측(후방 15cm 목표 yaw 유지 → SUCCEEDED, 순수 후진 0.069 m, LiDAR 후방거리 −0.078 m와 오차 9 mm). 목표 yaw+π는 rotate_to_heading 회전을 먼저 일으키므로 후진 이동에는 yaw 유지가 필요함을 함께 기록.
+- 증거: 위 검증 기록 본문(odom·map-pose·LiDAR 교차).
+- gate 변화: 없음.
+- CE: 해당 없음 — 측정 기록.
