@@ -263,6 +263,54 @@ def test_park_receipt_must_be_fresh_and_from_the_guarded_session(tmp_path, monke
     assert not gate.zones.held
 
 
+def test_zone_admission_waits_for_file_and_all_directory_entries_to_be_durable(tmp_path, monkeypatch):
+    import os
+
+    directory = tmp_path / "new-parent" / "new-child" / "locks"
+    z = zones(directory, "left")
+    synced = []
+    original = os.fsync
+
+    def sync(fd):
+        assert not z.held, "zone cannot be admitted before durability completes"
+        synced.append(Path(os.readlink(f"/proc/self/fd/{fd}")))
+        original(fd)
+
+    monkeypatch.setattr(os, "fsync", sync)
+    assert z.enter((0.37, 0.2))[0]
+    assert synced == [directory / "zone-middle.lock", directory, *directory.parents]
+    monkeypatch.setattr(os, "fsync", original)
+    z.leave()
+
+
+@pytest.mark.parametrize("failure", range(5))
+def test_sync_failure_keeps_occupancy_and_never_submits_the_reach(tmp_path, monkeypatch, failure):
+    import os
+
+    gate, cell = held_gate(tmp_path, monkeypatch, claim=False)
+    directory = tmp_path / "new-parent" / "new-child" / "locks"
+    gate.zones = zones(directory, "left")
+    gate.source = {"pick": {"x": 0.37, "y": 0.2}}
+    original, calls = os.fsync, []
+
+    def sync(fd):
+        calls.append(fd)
+        assert not gate.zones.held
+        if len(calls) - 1 == failure:
+            raise OSError("durability injected")
+        original(fd)
+
+    monkeypatch.setattr(os, "fsync", sync)
+    with pytest.raises(OSError, match="durability injected"):
+        gate.act("goto above_pick")
+    assert not any(command.endswith("goto above_pick") for command in cell.commands)
+    assert not gate.zones.held
+    marker = directory / "zone-middle.lock"
+    assert json.loads(marker.read_text())["owner"] == owner("left")
+    monkeypatch.setattr(os, "fsync", original)
+    assert not zones(directory, "right").enter((0.37, 0.2))[0]
+
+
 def test_takeover_is_a_parameter(tmp_path):
     (tmp_path / "incidents").mkdir()
     (tmp_path / "incidents/HOLD-arm_b.json").write_text("{}")
