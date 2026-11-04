@@ -538,18 +538,18 @@ D-741(Accepted)이 정한, 모든 웹 표면이 같이 쓸 자리다. Rosy Fleet
 - **`.ui-readback`**: 쓰기 뒤 되읽기 결과 묶음.
 
 ### 조합 어휘
-표면마다 다른 이름으로 다시 만들던 묶음을 한 이름으로 부른다. 새 부품이나 화면별 사본을 만들기 전에 이 표를 먼저 본다. 표에 없는 묶음이 두 표면에 필요해지면 구현을 옮긴 뒤 이 표에 한 줄을 더한다. 이름은 `test_content_vocabulary.py`가 지킨다. 화면 머리 두 줄(절차 단계·수치 띠)의 "지금 쓰는 곳"은 HTML 경로이고, 같은 시험이 실제로 그 부품을 쓰는 페이지와 대조한다. 값은 서버 응답만 보이고 노선·띠 모듈은 쓰기 요청을 보내지 않는다([D-978](docs/adr/D-978-screen-heads-show-server-answers-and-one-composition-table.md)).
+표면마다 다른 이름으로 다시 만들던 묶음을 한 이름으로 부른다. 새 부품이나 화면별 사본을 만들기 전에 이 표를 먼저 본다. 표에 없는 묶음이 두 표면에 필요해지면 구현을 옮긴 뒤 이 표에 한 줄을 더한다. 이름은 `test_content_vocabulary.py`가 지킨다. 화면 머리 두 줄(절차 단계·수치 띠)과 세 칸 틀 줄의 "지금 쓰는 곳"은 HTML 경로이고, 같은 시험이 실제로 그 부품을 쓰는 페이지와 대조한다. 값은 서버 응답만 보이고 노선·띠 모듈은 쓰기 요청을 보내지 않는다([D-978](docs/adr/D-978-screen-heads-show-server-answers-and-one-composition-table.md)).
 
 | 개념 | 정본 이름 | 지금 쓰는 곳 |
 | --- | --- | --- |
 | 측정 행(이름–값) | `.ui-readout` · `.ui-readback` | 로봇 카드, Fleet 상세, 견본 |
 | 작업 목록 행 | `.ui-task-row` · `taskRow()` | 로봇 작업, Fleet 작업 선택 |
 | 절차 단계 | `.ui-stage-track` · `.ui-stage` | `applications/fleet/web/installation/install.html` · `applications/fleet/web/cell/cell.html` · `middleware/robot_ui/robot/styleguide.html` · `learning/curation/perception/review_app_web/learning.html` |
-| 화면 머리 수치 띠 | `.ui-readout[data-form="strip"]` | `applications/fleet/web/work/policy.html` · `applications/fleet/web/cell/cell.html` · `middleware/robot_ui/robot/styleguide.html` |
-| 세 칸 틀 | `.ui-stage-grid` | `learning/curation/perception/review_app_web/evaluate.html` · `middleware/robot_ui/robot/styleguide.html` · `shared/web/template.html` |
+| 화면 머리 수치 띠 | `.ui-readout[data-form="strip"]` | `applications/fleet/web/work/policy.html` · `applications/fleet/web/cell/cell.html` · `middleware/robot_ui/robot/styleguide.html` · `middleware/robot_ui/robot/panels/host/system.js` |
 | 증거 블록 | `<ui-evidence>` · `<ui-empty>` | 로봇 카드, Fleet 큐 |
 | 절차 작업 열 | `.ui-sidebar` | 설치·정비, Fleet 작업 선택 |
 | 매체 칸 | `.ui-pane[data-pane]` | 로봇 셸, 감지·카메라 |
+| 세 칸 틀 | `.ui-stage-grid` | `applications/fleet/web/index.html` · `learning/curation/perception/review_app_web/evaluate.html` · `middleware/robot_ui/robot/styleguide.html` · `shared/web/template.html` |
 
 ### 상단바 — `<ui-topbar>` (D-466)
 - 자리는 셋이다. `brand`(장미색 워드마크 + 조용한 부제), `cluster`(화면 전환·상태·조용한 도구), `estop`(오른쪽 끝 비상 정지). cluster 안의 순서는 표면이 정하고, 바깥 자리는 더 만들지 않는다.
