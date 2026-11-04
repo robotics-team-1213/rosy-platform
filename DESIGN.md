@@ -534,6 +534,7 @@ D-741(Accepted)이 정한, 모든 웹 표면이 같이 쓸 자리다. Rosy Fleet
 - **`ui-actions`**: 버튼 줄. 줄바꿈하고, 좁은 칸에서 한 열로 늘어난다.
 - **`.ui-form` / `.ui-field-label`**: 네이티브 폼의 필드 묶음. 좁은 칸에서 한 열.
 - **`.ui-readout`**: `dl` 이름–값 두 열. 값은 등폭. 좁은 칸에서 한 열.
+- **`.ui-readout[data-form="strip"]`** (`/common/readout-strip.css`): 화면 머리의 핵심 수치 띠. 항목은 `<div><dt>이름</dt><dd>값</dd><dd data-note>근거</dd></div>`. 한 상자를 1px 선으로 나누고 아이콘·색 면을 쓰지 않는다. 값이 주의일 때만 상태색. 좁은 칸에서 두 열. 수치는 서버가 준 값만 — 화면이 셈을 지어내지 않는다.
 - **`.ui-readback`**: 쓰기 뒤 되읽기 결과 묶음.
 
 ### 조합 어휘

@@ -249,6 +249,8 @@
   --gap-form: var(--space-2);
   --gap-field-label: var(--space-1);
   --gap-readout: var(--space-2) var(--space-4);
+  --gap-readout-strip: var(--space-1);             /* 수치 띠 한 칸: 이름·값·근거 사이 */
+  --inset-readout-strip: var(--space-2) var(--space-3);
   --gap-readout-mobile: var(--space-1);
   --gap-readback: var(--space-2);
   --gap-heading: var(--space-2);

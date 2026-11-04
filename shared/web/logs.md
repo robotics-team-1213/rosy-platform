@@ -1173,3 +1173,9 @@
 - 변경: 두 테마 팔레트 값을 Radix Colors(slate·red·amber·green·teal·indigo·iris·violet·cyan·plum)·GitHub Primer 단계와 모니터용 근흑 바탕(#0c0d0f)으로 바꿨다. 키·의미·파생·역할은 그대로이고 각 줄 주석이 출처다. 밝게 주의는 빨강으로 읽혀 Primer 주황 #bc4c00. `--target-tool` 36px·`--row-dense` 34px를 더했다(넓은 화면 도구 전용). 정적 theme-color 6개·Pilot 매니페스트·Android 런처 바탕·앱 아이콘 SVG·얼굴 LCD 색 튜플을 같이 맞췄다.
 - 증거: `test_palette_gates.py`가 두 테마에서 통과(로컬). 시안 캔버스 24장을 두 테마로 렌더해 확인했다.
 - Gate: 이동 없음. 얼굴 LCD 실물 판독은 미수용. CE: 해당 없음 — 장애 해결이 아닌 사용자 승인 디자인 변경.
+
+## 2026-11-04 · uncommitted · 화면 머리 수치 띠 `.ui-readout[data-form="strip"]`
+
+- 변경: 화면 지도(실제 30화면 대 시안)에서 모든 시안이 쓰는데 공용 부품이 없던 KPI 띠를 `.ui-readout`의 변형으로 더했다(components.css 942줄 상한(D-766) 때문에 새 시트 `readout-strip.css`에 둠). 한 상자를 1px 선으로 나누고 아이콘·색 면 없이 값만 등폭으로 크게, `data-alert` 칸만 주의색. 칸 폭 30rem 미만에서 두 열(허용 목록의 compact 경계). 간격은 역할 토큰 `--gap-readout-strip`·`--inset-readout-strip`. 로봇 styleguide 견본·DESIGN.md 부품 목록을 같이 고쳤다. 첫 소비처는 Fleet 학습 정책 승인.
+- 증거: 로컬 `shared/web/test` 355 PASS(UTF-8, 브라우저 94 skip, Windows 전용 webrtc 1 제외). 첫 시도에서 띠 규칙을 첫 `@container` 블록 앞에 둬 `test_responsive_tiers`가, 기초 간격을 직접 써 `test_ui_token_contracts`가 거절해 고쳤다. 샘플 서버에서 1440·390 × 어둡게·밝게 렌더 확인 — 390에서 22rem 기준으로는 접히지 않아 30rem으로 옮겼다.
+- Gate: 이동 없음. 원격 브라우저 회귀는 커밋 후. CE: 해당 없음 — 계획된 부품 추가.

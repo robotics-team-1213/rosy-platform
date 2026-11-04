@@ -5,7 +5,7 @@ import {developmentToken} from '/console/assets/development-auth.js';
 import {bindEstop, bindTopbarToggle, showSession, showSignedOut, tickClock, watchFleet} from '/console/assets/fleet-header.js';
 import {
   ADMIN_REASON, OPERATOR_REASON, REASON_LABELS, RESOLUTION_LABELS, STAGE_LABELS, WINDOW_LABELS,
-  errorText, executionVerdict, incidentLock, nextStage, proposalLock, remaining, roles, windowLock,
+  errorText, executionVerdict, incidentLock, nextStage, policyFigures, proposalLock, remaining, roles, windowLock,
 } from '/console/assets/policy-model.js';
 
 // A development or token session lives in this tab's storage, not a cookie (same as the other work pages).
@@ -135,6 +135,11 @@ function render() {
   $('policy-content').hidden = false;
   const verdict = executionVerdict(state);
   $('policy-verdict').textContent = verdict.text; $('policy-verdict').setAttribute('state', verdict.state);
+  $('policy-figures').replaceChildren(...policyFigures(state).map(item => {
+    const cell = element('div', '', item.alert ? {'data-alert': ''} : {});
+    cell.append(element('dt', item.label), element('dd', item.value), element('dd', item.note, {'data-note': ''}));
+    return cell;
+  }));
   list('policy-incidents', state.incidents, renderIncident, '사고 기록이 없습니다.');
   list('policy-confirmations', state.confirmations, renderConfirmation, '확인 요청이 없습니다.');
   list('policy-windows', state.windows, renderWindow, '승인 창 기록이 없습니다.');

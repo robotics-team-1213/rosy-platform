@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="/common/components.css">
   <link rel="stylesheet" href="/common/component-controls.css">
   <link rel="stylesheet" href="/common/stage-strip.css">
+  <link rel="stylesheet" href="/common/readout-strip.css">
   <link rel="stylesheet" href="/common/task-chooser.css">
   <link rel="stylesheet" href="/common/app-shell.css">
   <link rel="stylesheet" href="/styleguide/assets/styleguide.css">
@@ -177,6 +178,16 @@
           <dt>실행 모드</dt><dd>내비게이션</dd>
           <dt>배터리</dt><dd>12.8 V</dd>
           <dt>연결</dt><dd>최신</dd>
+        </dl>
+      </div>
+      <p class="rule"><code>data-form="strip"</code>은 화면 머리의 핵심 수치 띠 — 한 상자를 1px 선으로 나누고
+      아이콘·색 면 없이 값만 크게 둔다. 좁은 칸에서 두 열로 접힌다.</p>
+      <div class="demo demo-wide">
+        <dl class="ui-readout" data-form="strip">
+          <div><dt>등록 로봇</dt><dd>2</dd><dd data-note>pinky-01 · pinky-02</dd></div>
+          <div><dt>승인 카메라</dt><dd>1</dd><dd data-note>cam-top</dd></div>
+          <div><dt>보정</dt><dd>0</dd><dd data-note>제안 대기</dd></div>
+          <div><dt>시작점</dt><dd>없음</dd><dd data-note>보정 뒤 저장</dd></div>
         </dl>
       </div>
       <div class="ui-readback">
