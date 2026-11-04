@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="/common/components.css">
   <link rel="stylesheet" href="/common/component-controls.css">
   <link rel="stylesheet" href="/common/stage-strip.css">
+  <link rel="stylesheet" href="/common/readout-strip.css">
   <link rel="stylesheet" href="/common/task-chooser.css">
   <link rel="stylesheet" href="/common/app-shell.css">
   <link rel="stylesheet" href="/styleguide/assets/styleguide.css">
@@ -177,6 +178,16 @@
           <dt>실행 모드</dt><dd>내비게이션</dd>
           <dt>배터리</dt><dd>12.8 V</dd>
           <dt>연결</dt><dd>최신</dd>
+        </dl>
+      </div>
+      <p class="rule"><code>data-form="strip"</code>은 화면 머리의 핵심 수치 띠 — 한 상자를 1px 선으로 나누고
+      아이콘·색 면 없이 값만 크게 둔다. 좁은 칸에서 두 열로 접힌다.</p>
+      <div class="demo demo-wide">
+        <dl class="ui-readout" data-form="strip">
+          <div><dt>등록 로봇</dt><dd>2</dd><dd data-note>pinky-01 · pinky-02</dd></div>
+          <div><dt>승인 카메라</dt><dd>1</dd><dd data-note>cam-top</dd></div>
+          <div><dt>보정</dt><dd>0</dd><dd data-note>제안 대기</dd></div>
+          <div><dt>시작점</dt><dd>없음</dd><dd data-note>보정 뒤 저장</dd></div>
         </dl>
       </div>
       <div class="ui-readback">
@@ -351,7 +362,23 @@
         <li class="ui-stage" data-state="blocked">배터리 교체</li>
         <li class="ui-stage" data-state="todo">재시동</li>
       </ol>
-      <p class="rule">단계는 class-only 조합이다. 상태는 태그와 같은 done·now·blocked·todo 넷이고, 지금 단계는 <code>aria-current="step"</code>과 채운 표식이 함께 나른다.</p>
+      <ol class="ui-stage-track" data-line="learning" aria-label="Learning 학습 노선">
+        <li class="ui-stage" data-state="done">과제</li>
+        <li class="ui-stage" data-state="done">시연 검수</li>
+        <li class="ui-stage" data-state="now" aria-current="step">학습</li>
+        <li class="ui-stage" data-state="todo">평가</li>
+      </ol>
+      <ol class="ui-stage-track" data-line="fleet" aria-label="Fleet 작업 노선">
+        <li class="ui-stage" data-state="done">변경 지시</li>
+        <li class="ui-stage" data-state="now" aria-current="step">이송</li>
+        <li class="ui-stage" data-state="todo">내려놓기</li>
+      </ol>
+      <ol class="ui-stage-track" data-line="robot" aria-label="Robot 주행 노선">
+        <li class="ui-stage" data-state="done">출구</li>
+        <li class="ui-stage" data-state="blocked">교차 지점</li>
+        <li class="ui-stage" data-state="todo">도착</li>
+      </ol>
+      <p class="rule">단계는 class-only 조합이다(D-975 노선 모양). 상태는 태그와 같은 done·now·blocked·todo 넷이고, 지금 단계는 <code>aria-current="step"</code>과 채운 표식이 함께 나른다. <code>data-line</code>은 앱 노선 색(learning·fleet·robot)을 고르며 지난 구간에만 칠한다. 없으면 중립 선이다.</p>
     </section>
 
     <section class="entry" id="task-choice">

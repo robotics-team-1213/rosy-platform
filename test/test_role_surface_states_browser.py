@@ -97,14 +97,14 @@ def test_shared_components_apply_button_size_palette_and_status_contracts():
         }""")
         assert page.evaluate("window.__sharedContract") == {
             "sizes": ["48px", "48px", "48px"],
-            "activeSegment": "rgb(53, 56, 60)",
+            "activeSegment": "rgb(46, 49, 53)",
             "defaultRole": "status",
             "live": "polite",
             "state": "warning",
             "hiddenDisplay": "none",
-            "warningColor": "rgb(254, 180, 50)",
+            "warningColor": "rgb(255, 197, 61)",
             "actionDisplay": "flex",
-            "scrollbar": "rgb(53, 56, 60) rgb(16, 18, 20)",
+            "scrollbar": "rgb(46, 49, 53) rgb(17, 17, 19)",
         }
         assert errors == []
         browser.close()
