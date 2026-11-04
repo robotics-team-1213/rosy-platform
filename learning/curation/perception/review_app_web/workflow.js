@@ -111,6 +111,9 @@ function render(){
   }));
   $('workflow-list').hidden=!!task;$('workflow-detail').hidden=!task;
   if(!task){if(queryTask)$('workflow-status').textContent='선택한 과제를 찾을 수 없습니다. 목록에서 다시 선택하세요.';return;}
+  const expert=new URL('/learning/tasks/manage'+location.search,location.origin);
+  expert.searchParams.set('task',task.id);if(task.profile_id)expert.searchParams.set('profile',task.profile_id);expert.hash='run-title';
+  $('workflow-expert-link').href=expert.pathname+expert.search+expert.hash;
   $('workflow-task-title').textContent=task.name;$('workflow-objective').textContent=task.objective||'';
   if(!journey){$('workflow-detail').hidden=true;$('workflow-list').hidden=false;$('workflow-status').textContent='과제 진행 근거를 읽을 수 없습니다. 다시 확인하세요.';return;}
   if($('workflow-detail').dataset.task!==task.id){

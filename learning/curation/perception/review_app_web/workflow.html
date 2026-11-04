@@ -14,7 +14,7 @@
 <!-- review:rail:end --></nav></div>
 <div class="ui-subnav"><nav class="ui-subnav-nav" aria-label="학습 하위 메뉴"><span class="ui-subnav-head">학습</span><a class="ui-subnav-item" href="/learning/tasks" aria-current="page">학습 과제</a><a class="ui-subnav-item" href="/learning/imitate">LeRobot 자료로 모방학습</a><a class="ui-subnav-item" href="/learning/tasks/manage">전문가 설정</a><a class="ui-subnav-item" href="/learning#pipeline">인식 학습</a><a class="ui-subnav-item" href="/learning/sim">SIM 실험</a></nav></div>
 <div class="ui-app-main"><div class="ui-pathbar"><h1>학습 과제</h1><span data-spacer></span><ui-button id="workflow-refresh" kind="quiet" data-action-icon="refresh">다시 확인</ui-button></div>
-<main id="workflow-main" class="learning-main" tabindex="-1">
+<main id="workflow-main" class="learning-main ui-task-page" tabindex="-1">
 <ui-status id="workflow-error" state="error" role="alert" hidden></ui-status><p id="workflow-status" role="status">저장한 과제를 확인하는 중입니다.</p>
 <section id="workflow-list" aria-label="저장 과제"><p class="learning-lede">사람의 시연 따라 배우기를 시작하거나, 저장한 과제에서 이어서 진행하세요.</p><p><a class="workspace-link" href="/learning/tasks/manage#task-title">새 학습 과제</a></p><ui-empty id="workflow-empty" hidden>저장된 학습 과제가 없습니다. 로봇 구성을 확인하고 새 과제를 만드세요.</ui-empty><div id="workflow-tasks"></div></section>
 <article id="workflow-detail" hidden><a class="workflow-back" href="/learning/tasks">과제 목록으로</a><header class="workflow-heading"><div><h2 id="workflow-task-title"></h2><p id="workflow-objective"></p></div><span id="workflow-current" class="workflow-badge"></span></header>

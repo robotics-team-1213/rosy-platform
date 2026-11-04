@@ -295,3 +295,12 @@ def test_review_selects_an_explicit_source_shared_with_training(workflow_page):
     page.get_by_role('tab',name='학습',exact=True).click()
     page.locator('#workflow-refresh').click()
     expect(page.locator('#workflow-train-source')).to_have_value(other['prepared_id'])
+
+
+def test_selected_task_expert_link_retains_task_profile_and_dataset(workflow_page):
+    page, state, base, expect = workflow_page
+    selected(state)
+    state['tasks'][0]['profile_id'] = 'profile-one'
+    page.goto(base+'/learning/tasks?task='+TASK+'&dataset=data-one',wait_until='networkidle')
+    expected='/learning/tasks/manage?task='+TASK+'&dataset=data-one&profile=profile-one#run-title'
+    expect(page.locator('#workflow-expert-link')).to_have_attribute('href',expected)

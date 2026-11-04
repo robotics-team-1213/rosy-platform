@@ -123,6 +123,8 @@ function workbenchURL(section,dataset=$('run-dataset').value){
   return '/learning/omx'+(query.size?'?'+query.toString():'')+'#'+section;
 }
 function updateWorkbenchLinks(){
+  const workflow=new URL(workbenchURL(''),location.origin);workflow.pathname='/learning/tasks';workflow.hash='';
+  $('task-workflow-link').href=workflow.pathname+workflow.search;
   for(const link of document.querySelectorAll('[data-workbench-section]'))link.href=workbenchURL(link.dataset.workbenchSection);
   for(const link of document.querySelectorAll('[data-task-comparison]'))link.href=workbenchURL('comparison-section',link.dataset.taskComparison);
 }

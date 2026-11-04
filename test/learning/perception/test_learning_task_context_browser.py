@@ -43,6 +43,9 @@ def test_task_url_restores_loaded_context_and_workbench_links(tmp_path):
             expect = playwright.expect
             expect(page.locator('#task-select')).to_have_value('task-one')
             expect(page.locator('#run-dataset')).to_have_value('data-one')
+            workflow=urlsplit(page.locator('#task-workflow-link').get_attribute('href'))
+            assert workflow.path == '/learning/tasks'
+            assert parse_qs(workflow.query) == dict(task=['task-one'],profile=['profile-one'],dataset=['data-one'])
             for selector, section in [('#task-workbench-profile', 'profile-panel'),
                                       ('#task-workbench-review', 'dataset-section'),
                                       ('#task-workbench-training', 'train-section'),
