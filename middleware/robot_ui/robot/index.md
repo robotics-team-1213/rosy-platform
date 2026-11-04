@@ -38,8 +38,8 @@
 
 ## 최근 기록
 
+- 2026-11-04 · uncommitted · 장치 화면 호스트 사용률 수치 띠(D-978)
 - 2026-11-02 · uncommitted · D-961 웹 제품 통합
 - 2026-11-02 · uncommitted · 가상 신호 등 역할 토큰
 - 2026-11-02 · uncommitted · skip-link 재정의 제거
 - 2026-11-02 · uncommitted · noscript 안내 (D-945 마무리)
-- 2026-11-02 · uncommitted · D-945 이행 완료 선언 — 대시보드 두 상태 셸 h1 규칙으로 준수
