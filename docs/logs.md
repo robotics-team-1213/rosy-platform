@@ -14149,3 +14149,9 @@ osy-d395-s1d\`.
 - 증거: 11-04 06:48~08:57 ui-landing-merge-repair delta 사전 시험이 작업 256개 중 253개를 현장 PC에서 직렬로 131분 실행(timing 줄 집계), 같은 시각 AI PC 23코어 여유. 원격 `test_work_queue_upgrade.py`·`test_remote_pytest.py` 외 165 통과, `test_land_isolation.py`·`test_publish_evidence.py` 79 통과.
 - gate 변화: 없음
 - CE: 해당 없음 — 원인과 기준은 docstring·회귀 시험·D-889 추가 31에 있다.
+
+## 2026-11-04 · uncommitted · test(D-762): 격리 cell 문서 미리보기 부하 결함 3회 근거
+- 변경: `test/flaky_quarantine.txt`에 `applications/fleet/test/test_sample_browser.py::test_cell_document_preview_admission_and_terminal_read` 한 줄 추가. 2026-11-04 하루 3회(sha ff82336996, 6a299d39cf, 86d7abd782) 병렬 브라우저 청크에서 실패·단독 재실행 통과(rosy-flaky-candidates.txt). 실패 내용은 5 s 안에 `#recipe-revision` 글자가 바뀌지 않는 부하 타임아웃이라 제품 결함이 아니다.
+- 증거: 세 LOAD-FLAKY 기록과 단독 통과 로그(각 `alone-pre-*.txt`). 이 id가 explicit FULL 착지를 막아 게시(D-868)도 막고 있어 격리가 D-762 증거 규칙의 정해진 해법이다.
+- gate 변화: 없음
+- CE: 해당 없음 — 격리 규칙대로 근거·해제 조건을 줄에 남겼다.
