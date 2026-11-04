@@ -27,6 +27,9 @@ a:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outl
 .map-inspector .draft-actions { grid-template-columns: minmax(0, 1fr); }
 @media (width >= 80rem) {
   .map-board { grid-template-columns: minmax(0, 1fr) 360px; align-items: start; }
+  /* 검사 칸 옆에서도 지도는 좁은 화면과 같은 50rem 바닥폭을 지킨다(SVG 라벨 최소 글자 계약). */
+  .map-viewport { overflow-x: auto; }
+  #site-map-svg { min-width: 50rem; }
 }
 .map-scroll-hint { display: none; }
 #site-map-svg { width: 100%; height: 30rem; background: var(--surface-flat); border: 1px solid var(--border-default); border-radius: var(--radius-control); }
