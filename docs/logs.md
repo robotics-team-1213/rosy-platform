@@ -1,4 +1,4 @@
-﻿# docs logs
+# docs logs
 
 ## 2026-09-15 · uncommitted · docs(harness): start the docs harness pilot
 - 변경: `progress.md`, `logs.md` 추가
@@ -12833,6 +12833,13 @@ osy-d395-s1d\`.
 - gate 변화: 없음.
 - CE: 해당 없음 — 규칙이 D-889 추가 4와 시험에 남는다.
 
+## 2026-10-28 · 9c2ea19fae · 저장 텔레옵 검수에서 native ACT 학습·독립 평가
+
+- 변경: 학습센터에서 전체 시연 또는 정확한 저장 파지 구간 버전으로 native ACT worker를 시작하고 기존 중단·재접속·ZIP 다운로드를 사용한다. 원본/검수·분할·cycle·모델 해시와 별도 프로세스 재적재 평가를 결속한다.
+- 검증: 영향 범위 3,141 PASS/337 SKIP, 별도 명시 Chromium 6 PASS, 실제 CPU ACT 100단계씩 두 경로를 실행하는 수치 통합 1 PASS. 모두 known_failures NEW 0. 상세 SHA·산출물·제한은 [검증 기록](validation/teleop-act-pipeline-2026-10-28/result.md)에 있다.
+- gate 변화: 없음. 수치 자료는 합성 시험용이며 실제 텔레옵/실물 수용이나 운영 배포가 아니다.
+- CE: 해당 없음 — 기존 learner 환경 교훈을 적용했고 새 연결·검토 수정은 코드·회귀시험에 남는다.
+
 ## 2026-10-28 · 55117575a3 · 녹화·검수·학습·HF 보관 연결 검증
 
 - 변경: 고정 OMX 자료의 보관 인계, 검수 유실 방지, 변환 상태와 API v1.328, signed runtime closure의 구현·화면·원격 증거를 `docs/validation/recording-learning-handoff-2026-10-28/`에 보존한다. HTTP 이름의 Chromium 시험도 선택되도록 브라우저 선택기를 고쳤다.
@@ -12895,6 +12902,20 @@ osy-d395-s1d\`.
 - 변경: 설계/검출·화면 독립 검토와 카메라 입력/응답·조회 복구·Pilot 키보드 회귀를 날짜별 검증 기록에 결속했다. 최초 이미지/접힌 폼 fixture 실패를 정상 RED·최종 성공과 구분했다.
 - 증거: 집중42 passed, 공식 영향3994 passed/601 skipped, 브라우저 선택은 교정한7번33건과 나머지392건으로425 passed/skip0/NEW0이다. 독립 검토가 최종41PNG 전체를 확인했다. 원본 SHA와 fixture 실패는 `docs/validation/learning-state-consistency-2026-10-28/result.md`에 구분한다.
 - gate 변화: 없음. 실제 장치·모델·사람 라벨·승격 수용·배포·merge/push는 수행하지 않았다. CE: 해당 없음 — 상태 수명·입력·초점 경계가 코드와 회귀에 남는다.
+
+## 2026-10-29 · 2cac25d227 · 학습 과제 중심 구조와 native ACT 연결
+
+- 변경: 학습 과제의 준비·녹화·검수·학습·결과를 한 흐름으로 연결하고 전문가 등록 화면은 기존 경로에서 분리한다. native 원본·과제·프로필·참여 순서의 불변 연결을 worker·평가·모델 ZIP까지 보존한다. 실물 조종 미연결 상태, 녹화 준비서와 다른 방법의 실제 준비 요건을 표시한다.
+- 증거: `docs/validation/learning-task-workflow-2026-10-29/result.md`. 원격 affected 3642 passed / 368 skipped / NEW0, Chromium 8 passed / skip0 / NEW0. 합성 자료의 전체 시연·저장 구간을 정상 HTTP로 각각100단계 학습하고 새 프로세스 재로딩·독립 평가·두 ZIP의 파일 해시와 과제 계보를 확인했다. 두 테마·세 화면 폭 캡처6개를 직접 확인했다.
+- gate 변화: 없음. 실물 녹화의 웹 전송, 실물 학습·추론·평가·적용 승인, 온라인 HIL actor와 VLA/SIM 공통 어댑터는 별도 수용이다. 운영 배포·main 착지·push는 하지 않았다.
+- CE: 해당 없음. pinned learner 교훈을 적용했고, 수정 판단은 코드·회귀 시험·검증 기록으로 재구성할 수 있다.
+
+## 2026-10-29 · 95c5598ba6 · 주제별 탭·상태 카드와 실제 브라우저 학습 완주
+
+- 변경: MLflow 실행/평가 구분과 Carbon 탭 패턴을 참고해 준비·녹화·검수·학습·결과를 분리한다. 공통 시연 선택, 상태 카드·평가 표·모델 다운로드, 키보드·URL 보존, 시작/중지 대기·실패 안내를 구현했다. 진행 중 작업과 다중 시연에 대한 독립 검토 지적을 수정했다.
+- 증거: `docs/validation/learning-topic-workspace-2026-10-29/result.md`. 원격 영향 3379 passed/362 skipped/NEW0, 최종 Chromium12 passed/skip0/NEW0, workflow·HTTP15 passed, 정상 브라우저 연결·영상 디코딩·검수 저장·ACT100단계·새 프로세스 평가·ZIP 다운로드/해시·계보 검증1 passed. 두 테마·세 화면 폭 캡처6개를 직접 확인했다.
+- gate 변화: 없음. 합성 자료 소프트웨어 완주 근거다. 실물 녹화 웹 전송·장치 통합·현장 성능·운영 배포·상용 출시 수용·main 착지·push는 수행하지 않았다.
+- CE: 해당 없음. 기존 pinned 환경 교훈을 적용했고 코드·회귀·제품 검증 기록에 판단이 남는다.
 
 ## 2026-10-29 · uncommitted · deploy: GitHub OS 전송과 부분 업데이트 정책 연결
 
@@ -13029,11 +13050,25 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 미완료: 전체108 browser 회차는 진행 중이며 실패 표시를 포함한다. 리본 sticky 후속 GREEN·native exporter·primary focus의 실제 SDK/DPAD RED/수정·최종 소비자 수용은 남는다. 전체 목표 완료·배포·FIELD를 주장하지 않는다.
 - CE: 해당 없음 — 기존 clipping 교훈과 코드·회귀·검증 기록으로 판단을 보존한다. 미해결 항목은 해결 교훈으로 쓰지 않는다.
 
+## 2026-10-29 · dc03344511 · LeRobot 자료 업로드와 모방학습 완주 기록
+
+- 변경: `validation/lerobot-upload-imitation-2026-10-29/result.md`에 원본 업로드·분할·실제 ACT·새 프로세스 평가·ZIP 바이트 검증과 단일관절 호환 수정의 실패/성공 근거를 보존했다.
+- 증거: 실제 무모킹 Chromium 완주1 passed, 새 계약40 passed, 일반 회귀559 passed/22 skipped, main 통합 메뉴23 passed. 각 소스와 수용 범위를 결과 문서에 분리했다.
+- gate 변화: 없음. 실물·웹 HF 게시·운영 배포·상용 출시·착지/게시 완료를 선언하지 않는다.
+- CE: 해당 없음 — 최종 코드·회귀·검증 기록으로 판단을 복원할 수 있다.
+
 ## 2026-10-29 · 535d81ae8b · D-301 서버 서비스 이미지 증분 형식
 
 - 변경: D-301에 전체 목표를 서명하는 manifest v2, 재사용 Docker/OCI 신원, 빌드 입력 비교, 선택 교체와 rollback 이미지 보존을 추가 결정으로 기록했다. 기본/Account Caddyfile의 서로 다른 내용 해시 label로 기존 파일 bind inode가 남는 경우를 예방한다. 운영 절차는 deploy/site/README.md가 소유한다.
 - 증거: 공식 원격 집중 회귀 205 passed/skip0/NEW0, 별도 source 재검토 통과. workflow 변경에 필요한 FULL은 별도로 기록한다.
 - gate 변화: 없음. source/원격 계약 시험은 실제 Docker·서버 설치·현장 수용을 대신하지 않는다. CE: 해당 없음 — 판단은 결정·구현·회귀에 남는다.
+
+## 2026-10-29 · d17e4c8178 · 업로드 모방학습의 착지 게이트 수정 기록
+
+- 변경: `validation/lerobot-upload-imitation-2026-10-29/result.md`에 앞선 착지 실패, 코드·시험 분류 수정, 원격 재검증과 내보낸 ZIP 모델 재적재를 구분해 보존했다.
+- 증거: 게이트152 passed, 일반 Chromium32 passed/skip0/NEW0, 운영자 기존 결과/다운로드 재확인1 passed. 시험을 약화하지 않았다는 독립 검토 통과.
+- gate 변화: 없음. main 착지·운영 배포·실물 수용 완료를 이 기록만으로 선언하지 않는다.
+- CE: 해당 없음 — 코드·회귀·검증 기록으로 원인과 판단을 복원할 수 있다.
 
 ## 2026-10-29 · 66ba49bef8 · D-915 원문 물리 근거와 Harbor 연결 기록
 
