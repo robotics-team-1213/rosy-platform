@@ -43,8 +43,17 @@ function accountShell(signedIn) {
   document.querySelector('.ui-rail').hidden=!signedIn;
   document.querySelector('[data-learning-account-entry]').hidden=!signedIn;
   $('review-command-open').hidden=!signedIn;
-  $('accounts-main').classList.toggle('ui-auth-page',!signedIn);
-  $('account-title').textContent=signedIn?'계정과 연결':'Learning에 로그인';
+  const main=$('accounts-main'), title=$('account-title');
+  let path=$('account-path');
+  if(signedIn&&!path) {
+    path=document.createElement('div');path.id='account-path';path.className='ui-pathbar';
+    path.innerHTML='<nav class="ui-crumbs" aria-label="현재 위치"><a href="/learning">Learning</a><span aria-hidden="true">/</span></nav>';
+    main.before(path);path.append(title);
+  } else if(!signedIn&&path) {
+    main.prepend(title);path.remove();
+  }
+  main.classList.toggle('ui-auth-page',!signedIn);
+  title.textContent=signedIn?'계정과 연결':'Learning에 로그인';
 }
 function signedOut() {
   token=null; session=null; active=false;
