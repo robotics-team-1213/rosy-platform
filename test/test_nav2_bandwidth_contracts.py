@@ -39,7 +39,11 @@ def _params(source=NAV_PARAMS):
 
 
 def _costmap(params, name):
-    return params[name][name]["ros__parameters"]
+    section = params.get(name)
+    if section is None:
+        # namespaced rewrite prefixes top-level sections (D-4): `/rosy_02/local_costmap`
+        section = next(value for key, value in params.items() if key.endswith(f"/{name}"))
+    return section[name]["ros__parameters"]
 
 
 @pytest.mark.parametrize("name", COSTMAPS)
