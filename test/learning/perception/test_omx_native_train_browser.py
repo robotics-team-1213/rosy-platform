@@ -1,10 +1,11 @@
 """Chromium exercises explicit saved-review submission and acknowledgement-loss retry."""
 import threading
+import os
 from types import SimpleNamespace
 import uuid
 
 import pytest
-from browser_harness import browser_tests_enabled, free_port
+from browser_harness import browser_tests_enabled, free_port, save_temp_screenshot
 from review_app import ReviewStore, make_server
 
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason='requires explicit Chromium run')
@@ -48,13 +49,25 @@ def test_native_act_requires_saved_selection_and_retries_the_same_request(tmp_pa
                 expect(page.locator('#native-train-start')).to_be_disabled()
                 page.locator('#native-train-review').select_option('episodes')
                 if context:
+                    expect(page.locator('#native-train-selection')).to_contain_text('학습 과제 화면')
                     expect(page.locator('#native-train-start')).to_be_disabled()
+                    if os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+                        kind = 'duplicate' if context.count('task=') > 1 else 'missing' if 'missing' in context else 'selected'
+                        for width in (1440, 390):
+                            page.set_viewport_size({'width': width, 'height': 900})
+                            page.locator('#native-train-form').scroll_into_view_if_needed()
+                            save_temp_screenshot(page, f'native-{kind}-{width}.png')
                     page.locator('#native-train-form').evaluate("form => form.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}))")
                     page.wait_for_timeout(100)
                     assert posts == [] and not errors
                     return
                 expect(page.locator('#native-train-selection')).to_contain_text(review_id)
                 expect(page.locator('#native-train-start')).to_be_enabled()
+                if os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+                    for width in (1440, 390):
+                        page.set_viewport_size({'width': width, 'height': 900})
+                        page.locator('#native-train-form').scroll_into_view_if_needed()
+                        save_temp_screenshot(page, f'native-standalone-{width}.png')
                 page.locator('#native-train-steps').fill('2')
                 page.locator('#native-train-start').click()
                 expect(page.locator('#native-train-status')).to_contain_text('reply lost')

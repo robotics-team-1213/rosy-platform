@@ -1,10 +1,11 @@
 """Task navigation preserves loaded selections without admitting stale URL IDs."""
 import re
+import os
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
-from browser_harness import browser_tests_enabled
+from browser_harness import browser_tests_enabled, save_temp_screenshot
 from test_omx_center_http import running
 
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason='requires explicit Chromium run')
@@ -46,6 +47,11 @@ def test_task_url_restores_loaded_context_and_workbench_links(tmp_path):
             workflow=urlsplit(page.locator('#task-workflow-link').get_attribute('href'))
             assert workflow.path == '/learning/tasks'
             assert parse_qs(workflow.query) == dict(task=['task-one'],profile=['profile-one'],dataset=['data-one'])
+            if os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+                for width in (1440, 390):
+                    page.set_viewport_size({'width': width, 'height': 900})
+                    page.evaluate('scrollTo(0,0)')
+                    save_temp_screenshot(page, f'task-editor-{width}.png')
             for selector, section in [('#task-workbench-profile', 'profile-panel'),
                                       ('#task-workbench-review', 'dataset-section'),
                                       ('#task-workbench-training', 'train-section'),

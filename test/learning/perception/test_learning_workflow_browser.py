@@ -5,7 +5,7 @@ import threading
 from types import SimpleNamespace
 
 import pytest
-from browser_harness import browser_tests_enabled, free_port
+from browser_harness import browser_tests_enabled, free_port, save_temp_screenshot
 from review_app import ReviewStore, make_server
 
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason='requires explicit Chromium run')
@@ -299,8 +299,16 @@ def test_review_selects_an_explicit_source_shared_with_training(workflow_page):
 
 def test_selected_task_expert_link_retains_task_profile_and_dataset(workflow_page):
     page, state, base, expect = workflow_page
+    errors = []
+    page.on('pageerror', lambda error: errors.append(str(error)))
     selected(state)
     state['tasks'][0]['profile_id'] = 'profile-one'
     page.goto(base+'/learning/tasks?task='+TASK+'&dataset=data-one',wait_until='networkidle')
     expected='/learning/tasks/manage?task='+TASK+'&dataset=data-one&profile=profile-one#run-title'
     expect(page.locator('#workflow-expert-link')).to_have_attribute('href',expected)
+    assert not errors
+    if os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+        for width in (1440, 390):
+            page.set_viewport_size({'width': width, 'height': 900})
+            page.evaluate('scrollTo(0,0)')
+            save_temp_screenshot(page, f'task-workflow-{width}.png')
