@@ -32,6 +32,15 @@ function section(title) {
   return {wrap, body};
 }
 
+// D-978 머리 수치 띠: 런타임 응답의 값만 옮긴다. 주의 판정은 서버(runtimeGap·위험 목록)가 한다.
+function figures(strip, values) {
+  strip.replaceChildren(...values.map(([label, value, unit]) => {
+    const cell = el("div", "");
+    cell.append(el("dt", "", label), el("dd", "", value == null || value === "" ? "—" : `${value}${unit}`));
+    return cell;
+  }));
+}
+
 function fields(body, values) {
   body.replaceChildren();
   for (const [label, value] of values) {
@@ -100,9 +109,16 @@ export function mount(root, ctx) {
     identity.wrap.append(form);
   }
   identity.wrap.append(message);
-  root.append(head, overview, detail);
+  const strip = el("dl", "ui-readout");
+  strip.dataset.form = "strip";
+  strip.setAttribute("aria-label", "호스트 사용률");
+  strip.hidden = true;
+  root.append(head, strip, overview, detail);
 
   const stopRuntime = ctx.store.poll("/api/v1/system/runtime", 10_000, (data) => {
+    figures(strip, [["CPU", data.cpu?.usage_percent, "%"], ["메모리", data.memory?.used_percent, "%"],
+      ["저장소", data.storage?.used_percent, "%"], ["온도", data.temperature_c, "°C"]]);
+    strip.hidden = false;
     fields(runtime.body, [["호스트", data.hostname], ["운영체제", data.os?.pretty_name || data.os?.name],
       ["커널 / 아키텍처", [data.kernel, data.architecture].filter(Boolean).join(" / ")],
       ["가동 시간(초)", data.uptime_seconds], ["CPU 사용률", data.cpu?.usage_percent],
@@ -121,6 +137,7 @@ export function mount(root, ctx) {
     if (gap) runtimeStatus.title = gap.title; else runtimeStatus.removeAttribute("title");
     runtimeStatus.setAttribute("state", gap ? "warning" : "ready");
   }, (error) => {
+    strip.hidden = true;
     fields(runtime.body, []);
     runtimeStatus.textContent = `호스트 런타임 확인 불가: ${error.message}`;
     runtimeStatus.removeAttribute("title");
