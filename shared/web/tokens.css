@@ -159,7 +159,7 @@
   --raster-occupied: #1c2024;  /* Radix slate 12 */
 
   /* brand — 워드마크 전용. L .52 C .18 H 335 (밝은 바탕 위 5.6:1) */
-  --brand-rose: #bb42a4;  /* Radix pink 색상 336 · L .58 */
+  --brand-rose: #b13295;  /* Radix pink 계열 H338 L .542 — 현재 위치 글자가 rose-wash 위 4.56:1, 위험과 색약 대비 1.85 (#bb42a4는 wash 위 3.93) */
 
   --shadow-base: #000000;
 }

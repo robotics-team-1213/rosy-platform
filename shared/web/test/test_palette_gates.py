@@ -283,6 +283,13 @@ def test_rosy_brand_wash_is_a_subtle_tinted_surface(palette):
     assert hue_delta <= 12, f"brand wash 색상 방향이 rose와 {hue_delta:.1f}° 다름"
 
 
+def test_current_location_text_reads_on_its_wash(palette):
+    """현재 위치 레일 항목은 wash 바탕 위 장미색 글자다. 바탕 대비만 보면 놓친다
+    (2026-11-04 밝게 #bb42a4: 바탕 4.74, wash 위 3.93 — 원격 브라우저 대비 시험이 찾음)."""
+    ratio = contrast(palette["brand-rose"], palette["brand-rose-wash"])
+    assert ratio >= 4.5, f"장미색 글자 대 rose-wash {ratio:.2f}:1"
+
+
 def test_rosy_brand_tokens_are_used_by_wordmark_and_surface_navigation():
     components = WEB_COMPONENTS.read_text(encoding="utf-8")
     legacy_shell = (DASHBOARD / "styles.css").read_text(encoding="utf-8")

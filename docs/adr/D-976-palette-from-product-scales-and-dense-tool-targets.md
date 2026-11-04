@@ -14,7 +14,7 @@
 
 1. **값의 출처.** 무채색은 Radix Colors slate, 상태·계열·앱 노선·장미색은 Radix Colors와 GitHub Primer의 단계에서 고른다. 어두운 페이지 바탕은 taste-skill이 모니터용으로 권하는 차가운 근흑(#0c0d0f)과 slate 1을 쓴다. tokens.css 각 줄 주석이 출처다.
 2. **바꾸지 않는 것.** 팔레트 키 집합·의미 집합·파생·역할·`test_palette_gates.py`의 모든 기준. `ink`·`ink-on-crit`은 `#eeeeef` 그대로다(slate 12 `#edeef0`와 사실상 같고 사본 변경을 줄인다).
-3. **기록한 값.** 어둡게: ground `#111113`·deep `#0c0d0f`, 위험 `#b54548`(Radix red 8), 주의 `#ffc53d`(Radix amber 9), 계열 `#58a6ff`(Primer)·`#2870bd`(Radix blue 8), 좋음·목표 `#3dd68c`(Radix green 11), 노선 `#0eb39e`·`#9eb1ff`·`#b1a9ff`, 장미 `#e796f3`(Radix plum 11). 밝게: ground `#f9f9fb`, 위험 `#82071e`, 주의 `#bc4c00`(Primer 주황), 계열 `#0d74ce`·`#0d419d`, 노선 `#107d98`·`#5753c6`·`#6550b9`, 장미 `#bb42a4`. 로봇 사다리는 계열 파랑의 색상으로 밝기만 바꾼다.
+3. **기록한 값.** 어둡게: ground `#111113`·deep `#0c0d0f`, 위험 `#b54548`(Radix red 8), 주의 `#ffc53d`(Radix amber 9), 계열 `#58a6ff`(Primer)·`#2870bd`(Radix blue 8), 좋음·목표 `#3dd68c`(Radix green 11), 노선 `#0eb39e`·`#9eb1ff`·`#b1a9ff`, 장미 `#e796f3`(Radix plum 11). 밝게: ground `#f9f9fb`, 위험 `#82071e`, 주의 `#bc4c00`(Primer 주황), 계열 `#0d74ce`·`#0d419d`, 노선 `#107d98`·`#5753c6`·`#6550b9`, 장미 `#b13295`(같은 날 정정: 처음 고른 `#bb42a4`는 현재 위치 레일 글자가 rose-wash 위 3.93:1이라 원격 브라우저 대비 시험이 거절 — 게이트 `test_current_location_text_reads_on_its_wash` 추가). 로봇 사다리는 계열 파랑의 색상으로 밝기만 바꾼다.
 4. **밝게 주의는 주황이다.** 빨강 쪽 주의(`#d13415`)는 밝은 화면에서 「지연」이 오류처럼 읽혔다(캔버스 렌더 관측). 주황(H 45)은 위험과 색약 대비 2.03을 지킨다.
 5. **색의 면적.** 같은 색이 넓은 면을 칠하지 않는다. 끝난 진행·정상 칸은 중립이고, 색은 지금 도는 것과 주의가 필요한 것에만 둔다(DESIGN.md 「색」).
 6. **도구 단계.** `--target-tool` 36px(도구 막대·표 행 동작의 아이콘 단추)와 `--row-dense` 34px(표·목록 행)를 둔다. 넓은 화면(64rem 이상) 마우스 작업 면에서만 쓰고, 64rem 미만에서는 소비 시트가 `--target-secondary`로 되돌린다. 주 동작·비상 정지·되돌릴 수 없는 조작·폼 입력은 48px 그대로다.

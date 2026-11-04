@@ -1179,3 +1179,10 @@
 - 변경: 화면 지도(실제 30화면 대 시안)에서 모든 시안이 쓰는데 공용 부품이 없던 KPI 띠를 `.ui-readout`의 변형으로 더했다(components.css 942줄 상한(D-766) 때문에 새 시트 `readout-strip.css`에 둠). 한 상자를 1px 선으로 나누고 아이콘·색 면 없이 값만 등폭으로 크게, `data-alert` 칸만 주의색. 칸 폭 30rem 미만에서 두 열(허용 목록의 compact 경계). 간격은 역할 토큰 `--gap-readout-strip`·`--inset-readout-strip`. 로봇 styleguide 견본·DESIGN.md 부품 목록을 같이 고쳤다. 첫 소비처는 Fleet 학습 정책 승인.
 - 증거: 로컬 `shared/web/test` 355 PASS(UTF-8, 브라우저 94 skip, Windows 전용 webrtc 1 제외). 첫 시도에서 띠 규칙을 첫 `@container` 블록 앞에 둬 `test_responsive_tiers`가, 기초 간격을 직접 써 `test_ui_token_contracts`가 거절해 고쳤다. 샘플 서버에서 1440·390 × 어둡게·밝게 렌더 확인 — 390에서 22rem 기준으로는 접히지 않아 30rem으로 옮겼다.
 - Gate: 이동 없음. 원격 브라우저 회귀는 커밋 후. CE: 해당 없음 — 계획된 부품 추가.
+
+## 2026-11-04 · uncommitted · 밝게 장미색 정정 — 현재 위치 글자 대 rose-wash 대비 게이트(D-976 정정)
+
+- 증상: D-976 원격 affected(51bb8ff968, 10,303 PASS)에서 `test_console_queue_inline_browser.py` 밝게 4개가 `span.ui-icon-label 3.93 "기록"`으로 실패. 현재 위치 레일 항목은 rose-wash 바탕 위 장미색 글자인데, 게이트는 장미색 대 바탕(4.74)만 봤다.
+- 변경: 밝게 `--brand-rose` `#bb42a4` → `#b13295`(H338·L .542, wash 위 4.56·위험과 색약 대비 1.85 — 두 조건이 반대로 당겨 창이 좁다). 게이트 `test_current_location_text_reads_on_its_wash`를 더해 예전 값(3.93)을 거절함을 확인. D-976 ADR 값 정정.
+- 증거: 로컬 `test_palette_gates.py` 41 PASS. 원격 브라우저 재실행은 커밋 후.
+- Gate: 이동 없음. CE: 기존 교훈 검토 대상 — 하네스(팔레트 게이트)가 놓친 대비를 원격 브라우저가 찾음.
