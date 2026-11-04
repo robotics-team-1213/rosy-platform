@@ -12,6 +12,12 @@ function selection(){
   const row=sets.find(row=>row.id===$('prepared-set').value),mode=$('native-train-review').value;
   const review=mode==='episodes'?row?.latest_review_id:mode==='segments'?row?.segment_review?.version:null;
   const blocked=journeyContext.blocked||!!journeyContext.task;
+  $('native-train-workflow').hidden=!blocked;
+  if(blocked){
+    const next=new URL($('journey-task-link').href,location.origin);
+    if(journeyContext.task)next.pathname='/learning/tasks';
+    $('native-train-workflow').href=next.pathname+next.search;
+  }
   const valid=!blocked&&!!row&&!row.error&&!row.fixture_only&&!!review;
   $('native-train-start').disabled=busy||!valid;
   $('native-train-selection').textContent=blocked?

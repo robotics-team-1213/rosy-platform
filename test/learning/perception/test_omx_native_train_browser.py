@@ -3,6 +3,7 @@ import threading
 import os
 from types import SimpleNamespace
 import uuid
+from urllib.parse import urlsplit, parse_qs
 
 import pytest
 from browser_harness import browser_tests_enabled, free_port, save_temp_screenshot
@@ -51,6 +52,10 @@ def test_native_act_requires_saved_selection_and_retries_the_same_request(tmp_pa
                 if context:
                     expect(page.locator('#native-train-selection')).to_contain_text('학습 과제 화면')
                     expect(page.locator('#native-train-start')).to_be_disabled()
+                    expect(page.locator('#native-train-workflow')).to_be_visible()
+                    next_url=urlsplit(page.locator('#native-train-workflow').get_attribute('href'))
+                    assert next_url.path == ('/learning/tasks' if context == '&task=task-one' else '/learning/tasks/manage')
+                    assert parse_qs(next_url.query)['task'][0] in ('task-one','missing')
                     if os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
                         kind = 'duplicate' if context.count('task=') > 1 else 'missing' if 'missing' in context else 'selected'
                         for width in (1440, 390):
