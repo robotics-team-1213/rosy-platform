@@ -158,7 +158,7 @@ def test_composition_vocabulary_names_real_code():
 # D-978 — 화면 머리 두 부품의 "지금 쓰는 곳"은 HTML 경로이고 실제 사용과 같아야 한다.
 HEAD_PARTS = {
     '`.ui-stage-track`': re.compile(r'class="ui-stage-track"'),
-    '`.ui-readout[data-form="strip"]`': re.compile(r'class="ui-readout"[^>]*data-form="strip"'),
+    '`.ui-readout[data-form="strip"]`': re.compile(r'class="ui-readout"[^>]*data-form="strip"|\.dataset\.form = "strip"'),
     '`.ui-stage-grid`': re.compile(r'class="ui-stage-grid'),
 }
 
@@ -181,7 +181,7 @@ def _tracked(*patterns: str) -> list[str]:
 def test_screen_head_parts_are_listed_where_they_are_used():
     for name, pattern in HEAD_PARTS.items():
         listed = _listed_pages(name)
-        used = {path for path in _tracked("*.html") if "/test/" not in path
+        used = {path for path in _tracked("*.html", "*.js") if "/test/" not in path
                 and pattern.search((REPO / path).read_text(encoding="utf-8", errors="replace"))}
         assert listed == used, (f"{name}: 표에만 {sorted(listed - used)}, 코드에만 {sorted(used - listed)}"
                                 " — DESIGN.md 「조합 어휘」를 같은 커밋에서 고친다")
