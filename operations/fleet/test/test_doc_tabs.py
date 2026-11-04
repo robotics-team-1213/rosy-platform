@@ -27,7 +27,7 @@ def _page(name):
 
 def _tabs(name):
     page = _page(name).read_text(encoding="utf-8")
-    match = re.search(r'<nav class="doc-tabs" aria-label="Rosy Fleet 문서">(.*?)</nav>', page, re.S)
+    match = re.search(r'<nav class="doc-tabs ui-rail ui-rail-nav" aria-label="Rosy Fleet 문서">(.*?)</nav>', page, re.S)
     assert match, f"{name} has no doc-tabs row"
     links = [dict(re.findall(r'([\w-]+)="([^"]*)"', attributes), text=text)
              for attributes, text in re.findall(r'<a\b([^>]*)>(.*?)</a>', match.group(1))]
@@ -43,6 +43,7 @@ def test_every_document_has_the_same_tabs_and_marks_itself():
         assert all("data-icon-only" not in link for link in links), name
         assert [link["text"] for link in links] == LABELS, name
         assert [link.get("aria-label") for link in links] == NAMES, name
+        assert all(link.get("class") == "ui-rail-item" for link in links), name
         assert all(label in (link.get("aria-label") or label) for link, label in zip(links, LABELS)), name
         assert '/console/assets/doc-tabs.css' in page, name
 
@@ -75,10 +76,10 @@ def test_work_area_screens_are_the_same_subnav_in_the_console_and_cell():
         links = re.findall(r'<a class="ui-subnav-item" href="(/console[^"#]*)"( aria-current="page")?>(.*?)</a>', seat.group(1))
         assert [(href, text) for href, _, text in links] == screens, name
         assert [href for href, mark, _ in links if mark] == current, name
-    # D-763 9: 종류는 실행할 수 있을 때만 선다. 이동은 꺼진 단추가 아니라 숨은 항목이고, Cell 적재는 /console/cell이다.
+    # D-763 9: 종류는 실행할 수 있을 때만 선다. 이동은 꺼진 단추가 아니라 숨은 항목이고, 팔레트 적재는 /console/cell이다.
     kinds = re.search(r'<ul class="work-list" aria-label="새 작업 종류">(.*?)</ul>', _page("index.html").read_text(encoding="utf-8"), re.S)
     assert kinds and '<li id="work-new-move-item" hidden><ui-button kind="toggle" id="work-new-move"' in kinds.group(1)
-    assert re.findall(r'<a [^>]*href="([^"]+)">(.*?)</a>', kinds.group(1)) == [("/console/cell", "Cell 적재")]
+    assert re.findall(r'<a [^>]*href="([^"]+)">(.*?)</a>', kinds.group(1)) == [("/console/cell", "팔레트 적재")]
     assert "disabled" not in kinds.group(1) and 'id="work-kind"' not in _page("cell.html").read_text(encoding="utf-8")
     work_view = (WEB / "work" / "work-view.js").read_text(encoding="utf-8")
     assert 'pending: ["approval_pending"]' in work_view and "doc-tabs" not in work_view
@@ -110,7 +111,7 @@ def test_install_task_list_sits_in_the_shared_subnav_seat():
     assert seat, "install: the task list stands in the shared sub-nav seat between the rail and the workspace"
     assert "install-tasks" not in page and "install-workspace" not in page, "install: no bespoke sidebar layout remains"
     assert '<link rel="stylesheet" href="/common/app-shell.css">' in page
-    assert 'class="fleet-task-page"' in page
+    assert 'class="fleet-task-page ui-task-page"' in page
     entry = (WEB / "installation" / "install.js").read_text(encoding="utf-8")
     assert 'el("install-chooser").append(taskChooser.element);' in entry, "install: the shared chooser fills the seat"
 

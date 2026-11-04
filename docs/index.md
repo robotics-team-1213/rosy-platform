@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
-- 2026-11-03 · uncommitted · Retain current main's DELTA yielding with isolated FULL composition
-- 2026-11-03 · uncommitted · fix(harness): compose new DELTA preparations through the shared timing policy
-- 2026-11-03 · uncommitted · fix(harness): preserve current-main root projection and speculation semantics
-- 2026-11-03 · uncommitted · fix(harness): reject stale FULL reuse and validate record composition before FF
-- 2026-11-03 · uncommitted · fix(harness): compose timing plans without inheriting speculation into publication FULL
+- 2026-11-04 · uncommitted · 조립식 배 v11 MuJoCo 쌍둥이, 손목 카메라 B, D-956 Isaac 결과
+- 2026-11-04 · uncommitted · fix(remote): 작은 host에만 놓인 실행은 큰 PC가 비면 옮겨 간다 (D-889 추가 31)
+- 2026-11-04 · uncommitted · fix(land): ADR Log union 병합의 옛 행을 착지가 지운다 (D-889 추가 30)
+- 2026-11-04 · uncommitted · docs(plans): peer pose sharing 설계에 v1 실행 범위 명시
+- 2026-11-04 · uncommitted · docs(plans): 로봇 간 맵 위치 공유(peer pose sharing) 설계

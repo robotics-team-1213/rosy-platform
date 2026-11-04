@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#101214">
+  <meta name="theme-color" content="#111113">
   <title>Rosy Robot — {{title}}</title>
   <link rel="icon" type="image/svg+xml" href="/common/icons/robot.svg">
   <link rel="stylesheet" href="/common/tokens.css">
@@ -18,7 +18,7 @@
 <body data-surface="{{surface}}">
   <a class="skip-link" href="#surface-main">본문으로 건너뛰기</a>
   <ui-shell grammar="{{grammar}}" class="ui-app-shell">
-    <ui-topbar>
+    <ui-topbar role="banner">
       <ui-brand href="/dashboard" aria-label="Rosy Robot 홈"><b>Rosy Robot</b><small>{{title}}</small></ui-brand>
       <span data-spacer></span>
       <ui-text id="shell-notice" scale="label" role="status"></ui-text>

@@ -180,3 +180,10 @@ def test_twin_wrist_cameras_are_suggested_for_the_arm_whose_board_shares_their_h
                                                                          (None, None, None)]  # root port: no hub
     assert oc.learn(reg, facts, rows, present, realpath) == []  # a hint only: nothing is bound
     assert oc.hub("3-1.3.2") == "3-1.3" and oc.hub("3-2") is None
+
+
+def test_the_devices_updater_ships_the_bind_units():
+    # 2026-11-03: the site never had the bind timer, so moved cameras and Fleet approvals were never applied.
+    units = json.loads((OMX / "omx-devices-autoupdate.json.example").read_text(encoding="utf-8"))["unit_files"]
+    for name in ("rosy-omx-cameras-bind.service", "rosy-omx-cameras-bind.timer"):
+        assert f"deploy/robot/omx/{name}" in units and (OMX / name).is_file()

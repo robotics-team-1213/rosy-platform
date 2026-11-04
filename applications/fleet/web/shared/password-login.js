@@ -8,7 +8,7 @@ const cookieRequest = createFleetClient();
 const sessionRequest = createFleetClient({credential: () => document.getElementById('console-token')?.value
   ?? sessionStorage.getItem('rosy-console-token') ?? ''});
 const FORM = `
-  <form class="password-login-form ui-form" data-login="form" aria-label="관제 로그인">
+  <form class="password-login-form ui-form" data-login="form" aria-label="계정 로그인">
     <label class="ui-field-label" for="fleet-login-name">아이디
     <input id="fleet-login-name" class="ui-field password-login-field" data-login="login" autocomplete="username"
            autocapitalize="none" spellcheck="false" required></label>

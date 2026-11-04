@@ -5,7 +5,7 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.355
+**Version:** v1.359
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -1925,6 +1925,8 @@ config `control.sensor_adapter.mode` 와 같은 문자열이다(D-400). 일반 �
 | POST | `/api/v1/navigation/cancel` | Operator | NAV-002 |
 | POST | `/api/v1/navigation/home` | Operator | NAV-003. 기능 보류 시 409 `CAPABILITY_WITHHELD`. D-395 로봇이 `LOCALIZED` 가 아니면 409 `NOT_LOCALIZED` (v1.72) |
 | GET | `/api/v1/navigation/state` | Viewer | NAV-004. `mapping_active: bool`은 CORE가 수락한 맵핑 세션 상태다. SLAM Toolbox의 실제 실행·지도 갱신 성공을 증명하지 않는다. |
+| GET | `/api/v1/peers` | Viewer | Peer pose sharing(v1.359, docs/plans/2026-11-04-peer-pose-sharing-design.md). 이 CORE가 보는 peer 로봇 `{peers:[{robot_id, boot_id, seq, map_id, pose, localization_state, age_s}]}`. `max_age_s`(기본 5 s)를 넘겨 침묵한 행은 사라진다. 기능이 꺼져 있으면 빈 목록 |
+| POST | `/api/v1/peers/beacon` | Grant `PEER_SHARE`(operator 이상) | Peer pose sharing beacon(v1.359): `{schema_version:1, robot_id, boot_id, seq, map_id?, pose?, localization_state?, stamp}`. sender가 `LOCALIZED`일 때만 `pose`가 있다. 오래된·중복 `seq`와 `boot_id` 재설정 뒤의 낮은 `seq`는 표를 움직이지 않지만 그대로 202 `{accepted:true, updated:false}`다. 경로의 신뢰 경계는 이 부여다 — 본문의 `robot_id` 주장만으로는 신원이 되지 않는다 |
 | GET | `/api/v1/navigation/path` | Viewer | MAP-003. `{poses}`; 경로 메시지를 받은 뒤에는 `map_id`(그때 로봇 지도 ID 또는 null), `frame_id`(`nav_msgs/Path.header.frame_id` 또는 null), `age_s`(CORE 수신 뒤 경과 초, 서버 monotonic 시계)를 함께 반환한다. 최초 수신 전은 `{poses: []}`. 이 응답은 마지막 수신 계획이며 현재 목표와의 동일성은 증명하지 않는다. |
 | GET | `/api/v1/line-follow/perception` | Viewer | 저장된 `paint_source`(threshold / denoise / learned), `camera_lane_mode`, 서명·해시 확인 `model_ready`와 `model_revision`. 별도 `applied_paint_source`는 실제 최신 keeper 프레임의 threshold / denoise / learned / denoise_fallback 또는 null; `applied_source_age_s`는 monotonic 수신 나이(2초 이내), `applied_model_revision`은 실제 사용한 learned mask의 producer revision(없으면 null). stale·malformed·설정 불일치·재시작 전 증거는 null. 운전 모드와 독립이며 물체 검출이나 주행 허가가 아니다. |
 | PUT | `/api/v1/line-follow/perception` | Administrator | `{paint_source: threshold\|denoise\|learned}`만 허용. IDLE·line-follow OFF·보정 비활성, Host Agent가 fresh 정지 및 active mission 부재를 재확인. 기존 기하 보존, learned는 고정 signed model pointer 검증, camera만 재시작·실패 복구. `applied: true`는 설정/서비스 적용이며 live 추론이나 실제 주행 성공이 아니다. |
@@ -2252,6 +2254,8 @@ v1.70 추가 경로(모두 Bearer 인증):
 - `unmapped_objects`(v1.75, 선택, ≤16, 기본 `[]`): `LOCALIZED` 로봇의 LiDAR 가 전체 스캔에서 지도로 설명하지 못한 물체 `{x, y}`(base_link, 앞 x·왼쪽 y, m; 자기 차체 안쪽은 뺀다). `objects_stamp`(v1.74, 선택): 그 스캔의 로봇 시각 s. 시계가 동기되지 않으므로 Fleet 은 스캔을 구별하는 데만 쓰고 신선도는 처음 본 때부터 잰다. `LOCALIZED` 밖에서는 빈 목록이다(후보 물체는 `CandidateReport` 에 실린다). CORE 는 그대로 넘기되 `pose_frame` 이 `odom` 이거나 상태가 끊겨 `state_stale` 이면 둘 다 비운다. Fleet 감시(D-395 9항, 개정 4 5항 후속)가 닻 로봇의 보고 자세로 이 물체를 놓아 다른 `LOCALIZED` 로봇의 거울 잠금을 잡는 데 쓴다.
 
 `odom_pose` 는 v1.112 additive 다(D-494 2). `{x, y, yaw, stamp}` 는 로봇 odom 프레임의 자세와 CORE 가 그 odom 메시지를 받은 시각(ROS 헤더 시각이 아님)이다. 유한하지 않은 표본은 버리고 이전 값을 둔다. `stamp` 는 UTC epoch 초(실수)로, sighting 의 `captured_at` 과 같은 형식이다(로봇 단조 시각이 아니다). `pose` 가 map 프레임이어도 같이 싣는다. odom 이 한 번도 오지 않은 로봇과 D-494 이전 로봇은 `null` 이다. odom 이 끊겨도 마지막 값이 남으므로 소비자는 `stamp` 로 신선도를 판단한다. 같은 값이 Fleet 하트비트(1 Hz)의 상태 스냅샷에도 실린다.
+
+`peers` 는 v1.359 additive 다(peer pose sharing). 이 CORE가 받은 peer beacon 행들의 목록(`GET /api/v1/peers` 와 같은 모양)이고, `peers` 설정이 꺼져 있으면 `null` 이다(빈 목록이 아니라). 각 행의 `age_s` 는 이 CORE의 단조 시계로 잰 마지막 수신 나이다. 같은 목록이 Fleet 하트비트 상태 스냅샷에도 실려, 카메라 없는 현장에서 관제가 각 로봇의 상대 관측을 볼 수 있다.
 
 ```json
 "odom_pose": { "x": 1.204, "y": -0.311, "yaw": 1.57, "stamp": 1791374400.123, "epoch": 0, "mono_s": 5123.875 }
@@ -2747,7 +2751,7 @@ close code: `4401` 은 토큰이 없거나 틀린 것(`/ws/state` 와 동일), `
 | `motion.rotate_to` | info | 로봇 | `{delta_deg, yaw_odom, tol_deg, max_rate_dps, timeout_s, lease_owner, operator_name, by}` — D-603 회전 요청을 받았다 (v1.194) |
 | `docking.started` | info | 로봇 | `{dock_id}` (DNC-003) |
 | `docking.docked` | info | 로봇 | `{dock_id}` — dock native 종결이면 추가 `run_id`, `boot_id`, `kind`, `result`, `native_reason`가 붙는다 (D-732) |
-| `docking.charging` / `docking.charge_lost` | info | 로봇 | `{dock_id}` — 독립된 두 소스로 확인한 충전 상태 (D-28) |
+| `docking.charging` / `docking.charge_lost` | info | 로봇 | `{dock_id, source}` — 확인된 충전 상태. `source: instrumented`(2소스, D-28) 또는 `voltage_only`(후진 도크 D-350 Phase 1 — 배터리 인터록에는 반영되지 않는다) |
 | `docking.full` | info | 로봇 | `{dock_id, source, voltage_v}` — 만춫 감지, 1회 방출. `source: instrumented` 또는 `voltage_only` (D-350) |
 | `docking.undock_started` | info | 로봇 | `{dock_id}` |
 | `docking.undocked` | info | 로봇 | `{}` — undock native 종결이면 추가 `run_id`, `boot_id`, `kind`, `result`, `native_reason`가 붙는다 (D-732) |
@@ -4532,6 +4536,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.359 | 2026-11-04 | Additive: peer pose sharing(탑뷰 부재 대비) — `GET /api/v1/peers`, `POST /api/v1/peers/beacon`(부여 `PEER_SHARE`, operator 이상), `StateSnapshot.peers`(기능이 꺼져 있으면 null). 설계 docs/plans/2026-11-04-peer-pose-sharing-design.md |
 | v1.355 | 2026-11-03 | D-965: ARM 설치 없는 꼭대기 관제(R)가 ARM 작업 경로 다섯 개를 하위 셀 위임으로 relay. 셀 result에 job·receipt, 승인 전 취소는 HOLD로 거둠, admit은 취소된 위임 제안 거절 |
 | v1.354 | 2026-11-03 | D-965: 셀 inbox가 팔 작업 위임을 받아 부모 service principal로 기존 ARM 제안을 만들고 결속. 위임 approve는 팔 작업에 409, 승인은 셀 ARM admit |
 | v1.353 | 2026-11-03 | D-965: 팔 작업 위임 후보 모양(`ControlArmTransferCandidate`·`ControlArmWorkRequest`·`ControlArmIngressRequest`), snapshot request는 두 종류 중 하나. 경로는 아직 navigation만 |

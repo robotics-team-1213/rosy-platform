@@ -10,6 +10,19 @@ from browser_harness import browser_tests_enabled
 playwright_sync = pytest.importorskip("playwright.sync_api", reason="Playwright 없음")
 
 
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
+@pytest.mark.parametrize("width,height", [(2000, 1200), (1200, 2000), (390, 844), (320, 568)])
+def test_lobby_skip_link_moves_keyboard_focus_to_the_main(tablet_page, width, height):
+    base_url, page, errors = tablet_page
+    page.set_viewport_size({"width": width, "height": height})
+    page.goto(f"{base_url}/pilot")
+    page.wait_for_selector("form[data-pilot-token-form] ui-field input")
+    page.locator('.skip-link').focus()
+    page.keyboard.press('Enter')
+    playwright_sync.expect(page.locator('#pilot-main')).to_be_focused()
+    assert errors == [], errors
+
+
 @pytest.mark.skipif(not browser_tests_enabled(),
                     reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
 def test_lobby_lists_neighbours_and_points_to_their_origin(tablet_page):

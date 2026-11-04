@@ -10,6 +10,7 @@
 .start-point-fields label { display: grid; gap: var(--space-2); min-width: 0; }
 .start-point-fields .ui-field { width: 100%; min-width: 0; }
 .start-point-camera { grid-column: 1 / -1; }
+#install-line { padding: var(--space-2) var(--space-4); }
 .install-step { margin-top: var(--space-4); padding-top: var(--space-3); border-top: 1px solid var(--border-default); }
 .install-step h3 { margin: 0; font-size: var(--text-label); font-weight: var(--weight-label); }
 .field-rectified canvas.picking { cursor: crosshair; outline: var(--focus-ring-width) solid var(--focus-ring); }
@@ -676,8 +677,7 @@ main {
 .map-traffic-status { list-style: none; padding: 0; margin: 0; font-size: var(--text-body); overflow-wrap: anywhere; }
 .map-traffic-status li { padding-block: var(--space-2); border-bottom: 1px solid var(--border-subtle); }
 .tracking-bar { display: flex; flex-direction: column; align-items: stretch; gap: var(--space-2); min-width: 0; }
-.tracking-bar table { width: 100%; table-layout: fixed; font-variant-numeric: tabular-nums; }
-.tracking-bar th, .tracking-bar td { overflow-wrap: anywhere; }
+.tracking-bar table { table-layout: fixed; }
 @media (width < 64rem), (height < 40rem) {
   #fleet-main .map-stage { flex: none; block-size: clamp(20rem, calc(100dvh - 28rem), 48rem); min-height: 20rem; }
 }

@@ -73,6 +73,7 @@ def main():
     from omx_adapter.pilot_sim.runtime import PilotSimRuntime
     from omx_adapter.ros_runtime import RosArmCommandRuntime, RosArmPhaseGoalPort
     from omx_adapter.gripper_contract import verify_held_object
+    from rosy.processes.palletizing.acceptance import CellDocumentRules
     from rosy_agent.omx_cell_owner import CellOwnerSettings, build_cell_owner, sim_gripper_observation
     from rosy_agent.fleet_fence import HttpFleetFenceReadback
     run = args.run.resolve()
@@ -143,7 +144,8 @@ def main():
             http_app_factory=http_app_factory,
             refuse_second_owner=lambda: None,
             gripper_readback=gripper_readback,
-            fleet_fence_current=fleet_fence)
+            fleet_fence_current=fleet_fence,
+            document_rules=CellDocumentRules)
         holder["owner"] = owner
         accepted_cell = owner.acceptance.accept_cell(json.loads((run / "cell.json").read_text()),
                                                      actor_id="g2-sim-acceptor")

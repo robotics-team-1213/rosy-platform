@@ -205,7 +205,8 @@ def propose(registry: dict, facts: dict, names: dict, present, realpath=os.path.
     `follow` when it is the only such camera and the only such role (the same camera moved to another port).
 
     `hub_arm` is the one arm whose board shares the camera's USB hub, and `suggest` its `<arm>_wrist` role when that
-    role is gone: a hint for the person approving, not a binding, until the cell's wiring is checked to be that way."""
+    role is gone: a hint for the person approving, not a binding. 2026-11-03 on the cell each wrist camera shared its
+    arm board's hub, but so did the side camera (arm_b's hub), so a hub alone does not name a wrist camera."""
     gone = [c for c in registry["cameras"] if not present(c["device"])]
     used = {realpath(c["device"]) for c in registry["cameras"] if present(c["device"])}
     free = [n for n in sorted(facts) if n not in used]

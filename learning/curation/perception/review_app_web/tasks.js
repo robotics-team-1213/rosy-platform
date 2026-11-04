@@ -117,7 +117,7 @@ function renderTask(){
       if(evaluation)section.append(node('p',`평가 프레임 ${evaluation.frames??'미기록'} · 오프라인 행동 오차 (action MAE) ${evaluation.action_mae??'미기록'} · 기준 MAE ${evaluation.constant_train_mean_mae??'미기록'}`));
       else section.append(node('p','저장된 평가 결과가 없습니다. 완료 상태만으로 품질을 판단하지 마세요.'));
       if(run.error)section.append(node('p',typeof run.error==='string'?run.error:JSON.stringify(run.error)));
-      if(run.status==='succeeded'||run.progress?.latest_version!=null){const link=node('a','모델·평가·과제 근거 ZIP 내려받기','workspace-link');link.href='/api/learning/omx/center/artifact/'+encodeURIComponent(run.id);link.download='';section.append(link);}
+      if(run.status==='succeeded'||run.progress?.latest_version!=null){const link=node('a','모델·평가·과제 근거 ZIP 내려받기','ui-action-link');link.dataset.kind='quiet';link.href='/api/learning/omx/center/artifact/'+encodeURIComponent(run.id);link.download='';section.append(link);}
       if(result?.source)section.append(node('p',`출처: ${result.source}`,'quiet'));
       if(run.execution_mode==='online_experience'&&run.status==='running')section.append(continuousControls(run));
       list.append(section);

@@ -9,12 +9,8 @@ services:
       ROSY_ACCOUNT_CONFIG: ""
       ROSY_FLEET_ACCOUNT_CLIENT_CONFIG: "${ROSY_FLEET_ACCOUNT_CLIENT_CONFIG:?set ROSY_FLEET_ACCOUNT_CLIENT_CONFIG}"
   account:
-    image: rosy-site-fleet:${ROSY_SITE_IMAGE_TAG:-local}
+    image: rosy-site-account:${ROSY_SITE_IMAGE_TAG:-local}
     command:
-      - --
-      - python3
-      - -m
-      - rosy_account
       - --config
       - "${ROSY_ACCOUNT_CONFIG:?set ROSY_ACCOUNT_CONFIG}"
       - --db
@@ -24,9 +20,9 @@ services:
       - --port
       - "8098"
       - --web-root
-      - /opt/rosy/src/site/fleet/_source_roots/console
+      - /opt/rosy/account-web/console
       - --web-common
-      - /opt/rosy/web-common
+      - /opt/rosy/account-web/common
       - --tls-cert
       - /run/secrets/site_cert
       - --tls-key
@@ -44,7 +40,6 @@ services:
     security_opt:
       - no-new-privileges:true
     cap_drop: [ALL]
-    cap_add: [SETUID, SETGID]
     mem_limit: 256m
     pids_limit: 64
     restart: unless-stopped

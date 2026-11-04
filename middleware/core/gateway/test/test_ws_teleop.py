@@ -77,18 +77,189 @@ def test_refusal_is_an_ack_with_the_rest_code(core_client):
         assert socket.receive_json() == {"type": "ack", "seq": 1, "accepted": False, "code": "MODE_CONFLICT"}
 
 
-def test_disconnect_after_motion_applies_zero(drive):
+def test_disconnect_after_motion_applies_zero(drive, monkeypatch):
+    from threading import Event
+    import core_api_web.api.ws as ws_module
+
+    zero_applied = Event()
+    real_apply = ws_module.apply_teleop
+
+    def observe_apply(request, auth, services):
+        result = real_apply(request, auth, services)
+        if request.linear == 0.0 and request.angular == 0.0:
+            zero_applied.set()
+        return result
+
+    monkeypatch.setattr(ws_module, "apply_teleop", observe_apply)
     tc, svc = drive()
     with tc.websocket_connect(TELEOP) as socket:
         socket.send_text(json.dumps({"type": "auth", "token": OPERATOR}))
         socket.send_text(_frame(1, 0.1))
         assert socket.receive_json()["accepted"] is True
         assert svc.command.select_output().linear == pytest.approx(0.1)
-    # the server's finally applies the zero after the client has closed, on the portal thread
-    deadline = time.monotonic() + 5
-    while svc.command.select_output().linear != 0.0 and time.monotonic() < deadline:
-        time.sleep(0.01)
+        # TestClient cancels the ASGI task on context exit; observe disconnect cleanup first.
+        socket.close()
+        assert zero_applied.wait(1), "disconnect did not apply an explicit zero command"
     assert svc.command.select_output().linear == 0.0
+
+
+@pytest.mark.parametrize("cancel_method", ["anyio-scope", "asyncio-task", "asyncio-during-zero"])
+def test_cancelled_teleop_handler_applies_explicit_zero(drive, monkeypatch, cancel_method):
+    import asyncio
+    from threading import Event
+    from types import SimpleNamespace
+
+    import anyio
+    import core_api_web.api.ws as ws_module
+
+    tc, svc = drive()
+    auth = ws_module.authenticate(svc.config, None, OPERATOR)
+    zero_applied = Event()
+    real_apply = ws_module.apply_teleop
+
+    async def authorize(_socket, **_kwargs):
+        return svc
+
+    def observe_apply(request, context, services):
+        result = real_apply(request, context, services)
+        if request.linear == 0.0 and request.angular == 0.0:
+            zero_applied.set()
+        return result
+
+    monkeypatch.setattr(ws_module, "_authorize", authorize)
+    monkeypatch.setattr(ws_module, "apply_teleop", observe_apply)
+
+    async def exercise():
+        acknowledged = anyio.Event()
+        zero_started = anyio.Event()
+        release_zero = anyio.Event()
+        handler_task = []
+        real_pool = ws_module.run_in_threadpool
+
+        async def gated_pool(func, request, context, services):
+            if cancel_method == "asyncio-during-zero" and request.linear == request.angular == 0.0:
+                zero_started.set()
+                await release_zero.wait()
+            return await real_pool(func, request, context, services)
+
+        monkeypatch.setattr(ws_module, "run_in_threadpool", gated_pool)
+
+        class Socket:
+            app = tc.app
+            state = SimpleNamespace(token_id=auth.token_id, auth=auth)
+            sent = False
+
+            async def receive_text(self):
+                if not self.sent:
+                    self.sent = True
+                    return _frame(1, 0.1)
+                await anyio.sleep_forever()
+
+            async def send_json(self, message):
+                assert message["accepted"] is True
+                acknowledged.set()
+
+        async def handle():
+            handler_task.append(asyncio.current_task())
+            await ws_module.ws_teleop(Socket())
+
+        async with anyio.create_task_group() as group:
+            try:
+                group.start_soon(handle)
+                with anyio.fail_after(2):
+                    await acknowledged.wait()
+                assert svc.command.select_output().linear == pytest.approx(0.1)
+                if cancel_method == "anyio-scope":
+                    group.cancel_scope.cancel()
+                else:
+                    handler_task[0].cancel()
+                    if cancel_method == "asyncio-during-zero":
+                        with anyio.fail_after(2):
+                            await zero_started.wait()
+                        handler_task[0].cancel()
+                        await anyio.sleep(0)
+            finally:
+                release_zero.set()
+        assert zero_applied.is_set(), "handler cancellation bypassed the explicit zero"
+        assert svc.command.select_output().linear == 0.0
+        assert handler_task[0].cancelled(), "cleanup must preserve caller cancellation"
+
+    anyio.run(exercise)
+
+
+@pytest.mark.parametrize("replaced", [False, True])
+def test_cancelled_inflight_apply_finishes_before_zero_and_preserves_replacement(drive, monkeypatch, replaced):
+    import asyncio
+    from threading import Event
+    from types import SimpleNamespace
+
+    import anyio
+    import core_api_web.api.ws as ws_module
+
+    tc, svc = drive()
+    auth = ws_module.authenticate(svc.config, None, OPERATOR)
+    applying, release, zero_applied = Event(), Event(), Event()
+    real_apply = ws_module.apply_teleop
+
+    async def authorize(_socket, **_kwargs):
+        return svc
+
+    def observe_apply(request, context, services):
+        result = real_apply(request, context, services)
+        if request.linear == 0.1:
+            applying.set()
+            release.wait()
+        if request.linear == request.angular == 0.0:
+            zero_applied.set()
+        return result
+
+    monkeypatch.setattr(ws_module, "_authorize", authorize)
+    monkeypatch.setattr(ws_module, "apply_teleop", observe_apply)
+
+    async def exercise():
+        handler_task = []
+
+        class Socket:
+            app = tc.app
+            state = SimpleNamespace(token_id=auth.token_id, auth=auth)
+            sent = False
+
+            async def receive_text(self):
+                if not self.sent:
+                    self.sent = True
+                    return _frame(1, 0.1)
+                await anyio.sleep_forever()
+
+            async def send_json(self, message):
+                assert message["accepted"] is True
+
+        async def handle():
+            handler_task.append(asyncio.current_task())
+            await ws_module.ws_teleop(Socket())
+
+        async with anyio.create_task_group() as group:
+            try:
+                group.start_soon(handle)
+                assert await anyio.to_thread.run_sync(applying.wait, 2)
+                assert svc.command.select_output().linear == pytest.approx(0.1)
+                handler_task[0].cancel()
+                await anyio.sleep(0)
+                handler_task[0].cancel()
+                if replaced:
+                    replacement = object()
+                    tc.app.state.ws_teleop_sockets[auth.token_id] = replacement
+                    real_apply(ws_module.TeleopRequest(linear=0.05), auth, svc)
+            finally:
+                release.set()
+        assert handler_task[0].cancelled()
+        assert zero_applied.is_set() is (not replaced)
+        if replaced:
+            assert tc.app.state.ws_teleop_sockets[auth.token_id] is replacement
+            assert svc.command.select_output().linear == pytest.approx(0.05)
+        else:
+            assert svc.command.select_output().linear == 0.0
+
+    anyio.run(exercise)
 
 
 def test_socket_cap_and_same_token_replacement(drive):

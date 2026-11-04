@@ -11,7 +11,7 @@ from stacking_report import read_regular
 
 
 class ContainerRecording:
-    def __init__(self, directory, world, camera, config, reference):
+    def __init__(self, directory, world, camera, config, reference, *, demo_cameras=None):
         sys.path.insert(0, str(ROOT/'tools/sim/isaac'))
         from native_recording import NativeRecorder
         self.world, self.camera, self.config = world, camera, config
@@ -20,8 +20,18 @@ class ContainerRecording:
         self.last_reference = -1.
         self.recorder = NativeRecorder(directory/config['file'], width=config['width'],
                                        height=config['height'], fps=config['fps'], max_bitrate_kbps=220)
+        # D-969 demonstrations (opt-in): the real-camera views on the same ticks and receipts, and one row per frame with
+        # both arms' state and commanded targets in radians (demo.jsonl); outside the registered video evidence above.
+        self.demo_cameras = demo_cameras or {}
+        # Run output limit 256 MiB: uncapped 640x480 demo videos were about 110 MB each (run a75d), so 300 kbps for two views;
+        # four views (wrist cameras) at 300 kbps reached 237 MB on the last container (run f3c208d1), so 180 kbps there.
+        kbps = 180 if len(self.demo_cameras) > 2 else 300
+        self.demo_recorders = {name: NativeRecorder(directory/f'demo-{name}.mp4', width=camera.get_resolution()[0],
+                                                    height=camera.get_resolution()[1], fps=config['fps'], max_bitrate_kbps=kbps)
+                               for name, camera in self.demo_cameras.items()}
+        self.demo_rows = (directory/'demo.jsonl').open('x', encoding='utf-8') if self.demo_cameras else None
 
-    def write(self, tick, pose, *, final=False):
+    def write(self, tick, pose, *, final=False, demo=None):
         if tick == self.last_tick or not final and tick % self.config['every_control_ticks']:
             return
         for _ in range(self.config['max_render_updates']):
@@ -40,11 +50,20 @@ class ContainerRecording:
         self.recorder.write(self.camera.get_rgba(), render_frame=frame,
             render_time=frame['referenceTimeNumerator']/frame['referenceTimeDenominator'],
             sim_s=tick*DT, pose=list(map(float, pose)))
+        if self.demo_rows is not None and demo is not None:  # demo frames and rows stay one to one
+            for name, camera in self.demo_cameras.items():
+                self.demo_recorders[name].write(camera.get_rgba(), render_frame=frame, render_time=stamp,
+                                                sim_s=tick*DT, pose=list(map(float, pose)))
+            self.demo_rows.write(json.dumps(dict(video_frame=self.recorder.frames-1, tick=tick, sim_s=tick*DT, **demo)) + '\n')
         self.last_tick = tick
         self.last_reference = stamp
 
     def close(self):
         self.recorder.close()
+        for recorder in self.demo_recorders.values():
+            recorder.close()
+        if self.demo_rows is not None:
+            self.demo_rows.close()
 
     def manifest(self):
         paths = [(self.recorder.path, 'mapped-video', 'video/mp4'),

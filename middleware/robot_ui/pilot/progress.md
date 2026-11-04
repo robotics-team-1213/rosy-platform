@@ -26,7 +26,7 @@ gates:
     evidence: "사용자 직접 확인 (2026-10-05, '건했어. pilot 는 돌아'). 정량 측정값 회차는 별도 보강 예정 — docs/validation/pilot-device-user-confirmed-2026-10-05 (D-444 §2 R2)"
   FIELD:
     state: N/A
-adrs: [D-323, D-365, D-366, D-390, D-411, D-432]
+adrs: [D-323, D-365, D-366, D-390, D-411, D-432, D-961]
 plans:
   - docs/plans/2026-10-01-omx-demonstration-lerobot-design.md
   - docs/plans/2026-09-29-rosy-pilot-teleop-app-design.md

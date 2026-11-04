@@ -11,5 +11,5 @@
   인증/범위 거부, 원천 오류, API 단절. SAFE_STOP 조작·불가역 확인은 이 읽기 계약의 대상이 아니다.
   CORE가 보고한 건강 판정은 원천 판정으로 표시하며 장치 안전·운영 수용을 새로 판단하지 않는다.
 - G3: D-153의 정직·증거·색·위계·불가역·어휘·질문·문법을 근거 셀/코드와 대조한다.
-- 현재 판정: **LOCAL GO**. 실제 backend Chromium·G1, 선언한 G2 40셀과 G3 대표 검토를 통과했다.
-  [검증 기록](../../docs/validation/uiux-surfaces-2026-10-26/monitoring/README.md)을 따른다. 실제 PC/LAN/TLS는 별도 HOLD다.
+- 기존 판정: 2026-10-26 회차 **LOCAL GO**. 당시 실제 backend Chromium·G1, 선언한 G2 40셀과 G3 대표 검토는
+  [검증 기록](../../docs/validation/uiux-surfaces-2026-10-26/monitoring/README.md)에 있다. D-961 공용 앱바·본문 변경 회차는 재검증 중이며, 그 이전 기록으로 새 화면의 수용을 대신하지 않는다. 실제 PC/LAN/TLS는 별도 HOLD다.

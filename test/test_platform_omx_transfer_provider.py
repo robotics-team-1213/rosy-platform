@@ -14,7 +14,7 @@ for package_root in (
     ROOT / "middleware/skills/manipulation/src",
     ROOT / "contracts/foundation",
     ROOT / "middleware/devices/omx/adapter",
-    ROOT / "integrations/robots/omx/src",
+    ROOT / "middleware/devices/omx/agent/src",
     ROOT / "middleware/devices/omx/adapter/test",
 ):
     if str(package_root) not in sys.path:
@@ -22,7 +22,7 @@ for package_root in (
 
 from core_common.protocol.schemas import FleetCellTransferGrant  # noqa: E402
 from omx_adapter.pose_plan import CellPlanningProfile  # noqa: E402
-from rosy.integrations.robots.omx.transfer_provider import (  # noqa: E402
+from rosy_agent.transfer_provider import (  # noqa: E402
     OMXAnalyticTransferPlanner,
     cell_transfer_invocation,
     create_cell_transfer_phase_factory,
@@ -253,7 +253,7 @@ def test_composed_cell_skill_runs_real_analytic_plan_and_phase_journal(
     from omx_adapter.command_owner import TrajectoryCommand
     from omx_adapter.gripper_contract import GripperObservation
     from omx_adapter.kinematics import OmxKinematics
-    from rosy.integrations.robots.omx.transfer_provider import create_omx_cell_transfer_phase_factory
+    from rosy_agent.transfer_provider import create_omx_cell_transfer_phase_factory
     from test_omx_action_api import _cell_transfer_grant, _runner
     from test_omx_pick_place_runner import _event, _GoalPort
     from test_omx_pose_plan import _request, _planner, _state
@@ -468,7 +468,7 @@ def test_cell_transaction_rejects_gripper_identity_mismatch(field, value):
 def test_cell_cancel_timeout_records_workflow_hold_and_blocks_late_success(tmp_path):
     from omx_adapter.action_api import ActionApi
     from omx_adapter.pick_place.pick_place_transaction import PickPlaceTransaction, PickPlaceWorkflowJournal
-    from rosy.integrations.robots.omx.cell_workflow import CellTransferWorkflowExecution
+    from rosy_agent.cell_workflow import CellTransferWorkflowExecution
     from test_omx_action_api import FakePhaseExecution, _cell_transfer_grant, _runner
 
     executions = []

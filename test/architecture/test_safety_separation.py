@@ -290,6 +290,27 @@ KNOWN_SAFETY_VIOLATIONS = {
         "OMX local stop fan-out; a public entry point once the stop path is carved"),
 }
 
+_CARVE = "the Fleet stop-path carve (D-430 Validation wave 0 item 2) moves the stop code out of this mixed file"
+#: When each file's exceptions retire (#233). Every entry above is temporary; its reason is the value.
+SAFETY_RETIRE = {
+    "operations/fleet/fleet/server/cancel_all.py": "its error text and RobotApiError come from a safety-side module",
+    "operations/fleet/fleet/server/console/console.py": _CARVE,
+    "operations/fleet/fleet/server/console/traffic_arbitration.py": _CARVE,
+    "operations/fleet/fleet/server/console/formation_control.py": _CARVE,
+    "operations/fleet/fleet/server/ledger/task_dispatch_routes.py": _CARVE,
+    "operations/fleet/fleet/server/ledger/task_store.py": (
+        "cancel_all_store.ensure_schema becomes a listed safety anchor or the schema moves to task_schema"),
+    "operations/fleet/fleet/server/cell/cell_job_store.py": "normalize_resources becomes a public dispatch_admission anchor",
+    "operations/fleet/fleet/server/app.py": "the carve makes these task_dispatch_routes names public entry points",
+}
+
+
+def test_every_safety_exception_has_a_reason_and_a_retire_condition():
+    """#233: an exception without a reason or an end turns the frozen list into a standing permit."""
+    assert all(isinstance(reason, str) and reason.strip() for reason in KNOWN_SAFETY_VIOLATIONS.values())
+    assert set(SAFETY_RETIRE) == {path for _, path, _ in KNOWN_SAFETY_VIOLATIONS}
+    assert all(condition.strip() for condition in SAFETY_RETIRE.values())
+
 
 def _frozen(rule: str) -> tuple[list, list]:
     violations, _ = _separation_edges()

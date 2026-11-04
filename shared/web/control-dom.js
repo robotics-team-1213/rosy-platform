@@ -36,3 +36,17 @@ export function select(id, label, choices) {
   element.append(control);
   return {element, control};
 }
+
+export function afterFormReset(control, onReset) {
+  let disposed = false;
+  const reset = event => {
+    if (event.target !== control.form) return;
+    // Native fields reset after the event; read their new values in the next task.
+    setTimeout(() => {
+      if (!disposed && !event.defaultPrevented && event.target === control.form) onReset();
+    }, 0);
+  };
+  const owner = control.ownerDocument;
+  owner.addEventListener("reset", reset, true);
+  return () => {disposed = true; owner.removeEventListener("reset", reset, true);};
+}

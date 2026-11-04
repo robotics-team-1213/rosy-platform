@@ -15,6 +15,8 @@ passed in so its ``Stop`` is the one the caller catches.
 
 from __future__ import annotations
 
+import json
+import os
 import subprocess
 import sys
 import threading
@@ -25,6 +27,12 @@ import land_queue
 
 MAX_PREPARING = 6
 POLL = 15.0
+# 2026-11-04 05:42: five FULL pretests shared the two lab PCs at once, so none finished for 45 min and main stood
+# still with nothing ready. FULL pretests beyond this many wait (oldest first), so one finishes and takes the turn.
+MAX_FULL = 2
+# D-889 28: speculation (addendum 3) ran 9.8 h of test-PC time in 6 h on 11-03 and its tree was held at 3 of 34
+# turns, while the ticket stayed "preparing" behind it. It runs only when this is "1".
+SPECULATE_ENV = "ROSY_LAND_SPECULATE"
 
 
 def rules() -> str | None:
@@ -82,6 +90,24 @@ def slot(qdir: Path, ticket: Path, sleep=time.sleep, held=None, changed=None) ->
             raise SystemExit(code)  # main's land.py ran this landing to its end on this ticket
         sleep(POLL)
     land_queue.set_status(ticket, "preparing")
+
+
+def full_slot(qdir: Path, ticket: Path, sleep=time.sleep, changed=None) -> None:
+    """Mark this preparing ticket FULL and wait while MAX_FULL older FULL pretests run; an urgent one never waits."""
+    land_queue.set_status(ticket, "preparing", tier="full")
+    if json.loads(ticket.read_text(encoding="utf-8")).get("urgent"):
+        return
+    said = False
+    def older() -> int:
+        return sum(r.get("status") == "preparing" and r.get("tier") == "full" for r in land_queue.ahead(qdir, ticket))
+    while older() >= MAX_FULL:
+        if not said:
+            print(f"[land] FULL pretest waits for {MAX_FULL} older FULL pretest(s) to finish", flush=True)
+            said = True
+        land_queue.touch(ticket)
+        if changed and (code := changed()) is not None:
+            raise SystemExit(code)
+        sleep(POLL)
 
 
 def again(land, wt: Path, branch: str, args, python: str, qdir: Path, ticket: Path, invocations, note) -> str | None:
@@ -170,6 +196,11 @@ def _prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, 
             return  # main's delta stands in for an affected tier only where the D-436 selector maps it
     print(f"[land] {'FULL' if note else 'affected'} tier before the turn, ticket preparing (main {main_sha[:10]})",
           flush=True)
+    if ticket is not None:
+        if note:
+            full_slot(qdir, ticket, changed=lambda: relaunch(land, qdir, ticket))
+        else:
+            land_queue.set_status(ticket, "preparing", tier="")
     logdir, began = land.tmp_dir(branch), time.monotonic()
     guard_args = land.argparse.Namespace(**{**vars(args), "no_cache": True}) if explicit else args
     # The guard round (with land_isolation's alone runs: here only) beside the selection, not before it: on
@@ -195,7 +226,16 @@ def _prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, 
     clean = land.land_selection.eligible(land, guarded + tested)
     land.land_selection.require_eligible(land, args, clean, guarded + tested)
     delta = bool(note) and note.startswith(land.land_selection.DELTA_NOTE) and not explicit
-    tier = land.land_selection.tier(land, guarded + tested, bool(note) and not delta)  # carried: restore() refuses it
+    # D-970 4: a LOAD-FLAKY id no longer voids the whole pretest; the record keeps it and the turn reruns it.
+    # An explicit FULL witness stays strict, and so does a summary whose LOAD-FLAKY line cannot be read.
+    relax = not explicit and not (note and not delta)  # a FULL tier (explicit or escalated) stays strict
+    flaky = land.land_selection.load_flaky_ids(guarded + tested) if relax else None
+    # D-970 4: a pass reused from another tree (land_cache NARROW) names the tier for the queue too; the record is
+    # marked "reused" so land.py writes no land record from it and pre-push still reruns (11-03: 9 of 20 had none).
+    reused = relax and any(land.land_cache.NARROW in line for line in guarded + tested)
+    drop = (("LOAD-FLAKY",) if flaky else ()) + ((land.land_cache.NARROW,) if reused else ())
+    judged = [line for line in guarded + tested if not any(d in line for d in drop)]
+    tier = land.land_selection.tier(land, judged, bool(note) and not delta)  # carried: restore() refuses it
     anchor = None
     if delta:
         # D-889 27: main's delta suites passed here outside the lock. They extend the earlier tier over the new
@@ -208,7 +248,12 @@ def _prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, 
             except ValueError as exc:
                 raise land.Stop(f"invalid delta preparation plan: {exc}") from exc
             land.land_full.save(wt, branch, candidate, main_sha, "delta", combined,
-                                base_tier=base["tier"])
+                                base_tier=base["tier"], flaky=land.land_full.flaky(wt, branch) + (flaky or []),
+                                yields=int(base.get("yields") or 0) + 1, reused=reused or bool(base.get("reused")))
+        elif base is not None:
+            # A delta pretest with no tier saves nothing, yet its yield counts toward MAX_DELTA_YIELDS: 11-03
+            # 23:20-23:35 one ticket yielded again and again on an unchanged record (D-970 1).
+            land.land_full.count_yield(wt, branch)
         tier = "delta" if tier is not None and base is not None else None
     # Keeping an older base with --no-cache would repeat overtime on every turn.
     elif tier == "affected" and not args.no_cache:
@@ -222,10 +267,12 @@ def _prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, 
         # A delta cannot replace a FULL origin; retain its exact base and invocations.
         print(f"[land] retained FULL preparation {anchor['candidate'][:10]} over {anchor['main'][:10]}", flush=True)
     elif not delta:
-        land.land_full.save(wt, branch, candidate, main_sha, tier, invocations)
+        land.land_full.save(wt, branch, candidate, main_sha, tier, invocations, flaky=flaky, reused=reused,
+                            env=env if explicit else None)
     if explicit:
         args._full_witness = dict(candidate=candidate, main=main_sha, invocations=[list(i) for i in invocations], env=env)
     if ticket is not None:
         land_queue.set_status(ticket, "preparing", tested=land.land_full.restore(wt, branch) or "")
     land.land_events.emit("prepared", tier=tier, seconds=round(time.monotonic() - began))
-    land.land_speculate.prepare(land, wt, branch, args, python, qdir, ticket)
+    if os.environ.get(SPECULATE_ENV) == "1":
+        land.land_speculate.prepare(land, wt, branch, args, python, qdir, ticket)

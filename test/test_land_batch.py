@@ -33,6 +33,18 @@ def test_automatic_batching_is_off_unless_turned_back_on(monkeypatch):
     assert land_batch.plain_auto(plain, [])
 
 
+def test_an_explicit_request_is_alone_whether_batching_is_on_or_off(monkeypatch, tmp_path):
+    """2026-11-03: with batching off a --tests full --no-cache ticket looked like any other and was rolled up."""
+    full = type("Args", (), {"tests": "full", "node": False, "no_cache": True})()
+    plain = type("Args", (), {"tests": "auto", "node": False, "no_cache": False})()
+    monkeypatch.setattr(land_batch, "AUTO", False)
+    assert land_batch.explicit(full, []) and not land_batch.explicit(plain, [])
+    assert land_batch.explicit(plain, ["--check", "x"])
+    ticket = queue.take(tmp_path, "land/fix/f", alone=land_batch.explicit(full, []))
+    assert json.loads(ticket.read_text(encoding="utf-8"))["alone"] is True
+    assert "alone" not in json.loads(queue.take(tmp_path, "land/fix/p").read_text(encoding="utf-8"))
+
+
 def info(ticket: Path) -> dict:
     return json.loads(ticket.read_text(encoding="utf-8"))
 
