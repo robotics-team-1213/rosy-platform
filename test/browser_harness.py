@@ -165,7 +165,9 @@ def accept_confirm(page) -> None:
 
 
 def save_temp_screenshot(page, name: str, **options) -> Path:
-    shot = Path(os.environ.get("TEMP", "/tmp")) / name
+    root = os.environ.get("ROSY_UIUX_SCREENSHOT_DIR") or os.environ.get("TEMP", "/tmp")
+    shot = Path(root) / name
+    shot.parent.mkdir(parents=True, exist_ok=True)
     page.screenshot(path=str(shot), **options)
     print(f"\nscreenshot: {shot}")
     return shot
