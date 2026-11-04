@@ -25,10 +25,7 @@ from typing import Any, Optional
 from core_features.docking.charging import ChargingConfirmation
 from core_features.docking.database import Pose2D
 from core_features.docking.model import DockPhase
-
-
-def _wrap(angle: float) -> float:
-    return math.atan2(math.sin(angle), math.cos(angle))
+from core_features.docking.parking import wrap as _wrap
 
 
 def rear_errors(observation) -> tuple[float, float, float]:
