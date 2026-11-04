@@ -68,6 +68,7 @@ drive/motion_limits
 drive/calibration
 drive/recovery
 perception/sensors/line_observation
+perception/calibration
 fleet/web/shared
 fleet/web/calibration
 fleet/web/sitemap

@@ -1837,3 +1837,16 @@
 - gate 변화: 없음.
 - 결정: D-972
 - 교훈: 없음.
+
+## 2026-11-04 · uncommitted · refactor(control): calibration* 9파일을 calibration/ 홀더로 순수 이동 (D-766 #109)
+
+- 변경: `nodes/calibration_*.py` 9개(1,837줄)를 `middleware/perception/calibration/`으로 옮기고 CONTROL_ROOTS에 등록. 임포트 신원(`control.calibration_*` 평면)·엔트리포인트·설치 동작 불변. `size_units.txt`에 `perception/calibration` 등록, ratchet control 행 낮춤, 경로 문자열 참조 4건(deploy 2·시험 2)과 AGENTS 2건 갱신.
+- 증거: 원격 affected 실행과 순수 이동 확인(split_check)은 커밋 후 실행해 이 행에 보탠다.
+- gate 변화: 없음. 소스 배치만 바뀜.
+- CE: 해당 없음.
+
+## 2026-11-04 · uncommitted · test(control): 시작 보정 노드의 매개변수 검사 경로 수정
+- 변경: 이동된 camera mixin의 이웃 경로 대신 실제 `nodes/startup_calibration_node.py`를 읽는다. 사용·선언 매개변수 비교와 비어 있지 않음 검사는 유지한다.
+- 증거: 공식 FULL의 파일 단독 재시험에서 기존 경로 오류 1건을 재현했고 main의 같은 검사는 통과했다. 변경 전 커밋 범위의 크기 검사 5개는 통과했다.
+- gate 변화: 없음
+- CE: 해당 없음 — 소스 이동에 따른 시험 경로 정정이며 계약 검사는 그대로다.
