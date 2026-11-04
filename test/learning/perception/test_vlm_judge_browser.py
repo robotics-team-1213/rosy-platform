@@ -1,5 +1,6 @@
 """VLM 판단 labels one photo by keyboard and one by mouse on a phone without sideways scroll."""
 import threading
+from pathlib import Path
 
 import pytest
 from browser_harness import browser_tests_enabled, free_port
@@ -71,6 +72,7 @@ def test_label_by_keyboard_and_mouse_at_phone_width(tmp_path):
                 assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
                 import os
                 if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+                    Path(output).mkdir(parents=True, exist_ok=True)
                     for theme in ('dark', 'light'):
                         page.evaluate('theme => document.documentElement.dataset.theme = theme', theme)
                         page.screenshot(path=str(Path(output) / f'vlm-table-{theme}-390.png'), full_page=True)
