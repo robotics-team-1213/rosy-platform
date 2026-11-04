@@ -66,6 +66,7 @@ def test_view_toggle_changes_only_view_and_retains_history_context(empty_learnin
             page = browser.new_page()
             expect = playwright.expect
             page.goto(empty_learning_center+'/learning/omx?source=fixed-context#dataset-section', wait_until='networkidle')
+            page.locator('.omx-stage-intro > details > summary').click()
             page.locator('#workflow-view').click()
             assert page.evaluate('new URL(location.href).searchParams.get("source")') == 'fixed-context'
             expect(page.locator('#train-section')).to_be_visible()
@@ -193,13 +194,14 @@ def test_purposeful_workspace_keeps_goal_and_explains_one_next_action(empty_lear
             expect = playwright.expect
             page.goto(empty_learning_center+'/learning/omx', wait_until='networkidle')
             expect(page.locator('#journey-goal')).to_contain_text('아직 선택하지 않았습니다')
-            expect(page.locator('#journey-next')).to_have_attribute('href', '#profile-panel')
+            expect(page.locator('#journey-next')).to_have_attribute('href', empty_learning_center+'/learning/tasks#run-title')
             expect(page.locator('#journey-reason')).to_contain_text('같은 과제')
             expect(page.locator('#stage-question')).to_contain_text('무엇을 성공')
             expect(page.locator('#profile-panel')).to_be_visible()
             expect(page.locator('#train-section')).to_be_hidden()
             page.locator('#profile-task').fill('블록을 집고 유지 · 낙하 실패 · 트레이 복원')
             page.locator('#profile-add-arm').click()
+            page.locator('.omx-stage-intro > details > summary').click()
             page.locator('#workflow-view').click()
             expect(page.locator('#train-section')).to_be_visible()
             expect(page.locator('#profile-task')).to_have_value('블록을 집고 유지 · 낙하 실패 · 트레이 복원')
@@ -323,6 +325,7 @@ def test_empty_learning_choices_keep_explanation_and_account_return_path(empty_l
             expect(page.locator('#kind')).to_have_value('omx')
             expect(page.locator('#name')).to_be_focused()
             page.goto(empty_learning_center+'/learning/omx', wait_until='networkidle')
+            page.locator('#learning-entry-heading').click()
             page.locator('#learning-account-link').click()
             expect(page.locator('#account-setup')).to_be_visible()
             expect(page.locator('#login-panel')).to_be_visible()
@@ -405,6 +408,7 @@ def test_owner_observation_is_separate_from_control_and_failure_clears_previous_
                 expect = playwright.expect
                 expect(page.locator('#learning-account-link')).to_have_attribute('href', '/accounts')
                 expect(page.locator('#learning-account-state')).to_contain_text('계정 서버 연결 준비 중')
+                page.locator('#learning-entry-heading').click()
                 page.locator('#learning-task-link').click()
                 expect(page.locator('#profile-panel')).to_have_attribute('open', '')
                 expect(page.locator('#profile-task')).to_be_focused()

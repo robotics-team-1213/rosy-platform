@@ -73,8 +73,11 @@ def test_failed_save_message_survives_successful_background_reads(task_page):
     page, state, url, errors = task_page
     page.goto(url)
     expect(page.locator('#tasks-status')).to_contain_text('최신 기록 확인됨')
-    for key in ['robot-name', 'robot-kind', 'robot-model', 'robot-device']:
+    page.locator('#robot-setup > summary').click()
+    page.locator('#robot-manual-toggle').click()
+    for key in ['robot-name', 'robot-model', 'robot-device']:
         page.locator('#' + key).fill('fixture-value')
+    page.locator('#robot-kind').select_option('pinky')
     page.locator('#robot-save').click()
     expect(page.locator('#tasks-error')).to_contain_text('fixture save rejected')
     state['status'] = 503

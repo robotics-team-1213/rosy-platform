@@ -141,11 +141,14 @@ def test_robot_task_launch_and_reconnect(tmp_path):
                 expect = playwright.expect
 
                 def robot(name, kind, device):
-                    for key, value in [('robot-name', name), ('robot-kind', kind),
-                                       ('robot-model', 'fixture-v1'), ('robot-device', device)]:
+                    if page.locator('#robot-form').is_hidden():
+                        page.locator('#robot-manual-toggle').click()
+                    for key, value in [('robot-name', name), ('robot-model', 'fixture-v1'), ('robot-device', device)]:
                         page.locator('#' + key).fill(value)
+                    page.locator('#robot-kind').select_option(kind)
                     page.locator('#robot-save').click()
                     expect(page.locator('#robots')).to_contain_text(name)
+                    expect(page.locator('#robots')).to_contain_text('Fleet 미확인')
 
                 def task(name):
                     for key, value in [('task-name', name), ('task-objective', 'Move fixture'),
@@ -154,9 +157,11 @@ def test_robot_task_launch_and_reconnect(tmp_path):
                     page.locator('#task-save').click()
                     expect(page.locator('#selected-task')).to_contain_text(name)
 
-                robot('Mobile fixture', 'mobile', 'mobile-1')
+                expect(page.locator('#owner-state')).to_contain_text('Fleet 연결 미설정')
+                robot('Mobile fixture', 'pinky', 'mobile-1')
                 page.locator('#task-adapter').fill('mobile')
                 page.locator('[data-component]').fill('base')
+                page.locator('[data-robot]').select_option(label='Mobile fixture · Pinky 주행 로봇 · mobile-1')
                 task('Mobile task')
                 expect(page.locator('#run-readiness')).to_contain_text('어댑터')
                 expect(page.locator('#run-start')).to_be_disabled()
@@ -219,6 +224,7 @@ def test_robot_task_launch_and_reconnect(tmp_path):
                 assert imported.value.ok
                 expect(page.locator('#task-select')).to_have_value(task_id)
                 expect(page.locator('#selected-task')).to_contain_text(task_id)
+                page.locator('#task-setup > summary').click()
                 page.locator('#task-name').fill('Unsaved next task')
                 page.locator('#tasks-refresh').click()
                 expect(page.locator('#task-name')).to_have_value('Unsaved next task')

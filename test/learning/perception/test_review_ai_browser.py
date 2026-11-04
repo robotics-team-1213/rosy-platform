@@ -42,6 +42,46 @@ def command(page, text):
     page.keyboard.press('Enter')
 
 
+@pytest.mark.parametrize('state,title', [
+    ('not_requested', 'AI 확인 요청 전'), ('queued', 'AI 확인 대기'), ('running', 'AI 확인 실행 중'),
+    ('failed', 'AI 확인 실패'), ('cancelled', 'AI 확인 취소됨'), ('stale', '입력 변경 · AI 재확인 필요'),
+    ('succeeded', '저장된 AI 의견 없음')])
+def test_pixel_missing_opinion_shows_request_state_instead_of_read_error(tmp_path, state, title):
+    with ai_browser(tmp_path) as (page, store, jobs, expect):
+        value = {'available': False, 'reason': 'not_requested' if state == 'not_requested' else 'no_report',
+                 'check': {'state': state, 'version': 1}}
+        page.route('**/api/vlm-feedback/0', lambda route: route.fulfill(json=value))
+        page.goto(page.url.split('/?')[0] + '/pixels?frame=0', wait_until='networkidle')
+        expect(page.locator('#pixel-vlm-state')).to_have_text(title)
+        expect(page.locator('#pixel-vlm-note')).not_to_contain_text('읽을 수 없습니다')
+        expect(page.locator('#pixel-vlm-note')).to_contain_text('저장된 픽셀 v1 기준')
+
+
+def test_existing_opinion_does_not_hide_a_new_pending_or_failed_ai_check(tmp_path):
+    with ai_browser(tmp_path) as (page, _, _, _):
+        for state, title in [('queued', 'AI 확인 대기'), ('running', 'AI 확인 실행 중'),
+                             ('failed', 'AI 확인 실패'), ('cancelled', 'AI 확인 취소됨'),
+                             ('stale', '입력 변경 · AI 재확인 필요')]:
+            result = page.evaluate("""async state => {
+              const {feedbackPresentation} = await import('/history.js');
+              return feedbackPresentation({available:true,current:true,unknown_pixels:0,review_blocked:false,
+                feedback:{verdict:'no_obvious_concern',issue:'none',note:'earlier saved opinion'},
+                check:{state,version:1},model:'fixture',model_digest:'e'.repeat(64)});
+            }""", state)
+            assert result['title'] == title and result['state'] != 'ready'
+            assert 'earlier saved opinion' in result['details']
+
+
+def test_feedback_presentation_rejects_bad_count_without_throwing(tmp_path):
+    with ai_browser(tmp_path) as (page, store, jobs, expect):
+        value = page.evaluate("""async () => {
+            const {feedbackPresentation} = await import('/history.js');
+            return feedbackPresentation({available:true,current:true,unknown_pixels:null,
+                feedback:{verdict:'no_obvious_concern',issue:'none',note:'Fixture'}});
+        }""")
+        assert value['state'] == 'warning'
+
+
 def test_keyboard_ai_draft_publishes_candidate_without_overwriting_review(tmp_path):
     with ai_browser(tmp_path, lambda *_: {'boxes': [{'label': 'person', 'bbox_xyxy': [1, 1, 12, 12]}]}) as (page, store, jobs, expect):
         before = store.get(0)
@@ -49,6 +89,12 @@ def test_keyboard_ai_draft_publishes_candidate_without_overwriting_review(tmp_pa
         command(page, 'AI 객체 초안 만들기')
         expect(page.locator('#review-ai-jobs')).to_contain_text('초안 후보 저장됨', timeout=15000)
         expect(page.locator('#review-ai-jobs')).to_contain_text('미인증 로컬 작업자')
+        provenance = page.locator('#review-ai-jobs li details').first
+        expect(provenance.locator('p').first).to_be_hidden()
+        provenance.locator('summary').click()
+        expect(provenance.locator('p').first).to_be_visible()
+        page.get_by_role('button', name='AI 실행 상태 다시 조회').click()
+        expect(provenance.locator('p').first).to_be_visible()
         assert store.get(0) == before
         assert jobs.status(0)['jobs'][0]['state'] == 'succeeded'
         command(page, 'AI 결과 목록 조회')
@@ -86,6 +132,7 @@ def test_pixel_unsaved_gesture_blocks_ai_and_result_reload(tmp_path):
         page.goto(page.url.split('?')[0] + 'pixels?frame=0', wait_until='networkidle')
         expect(page.locator('#pixel-title')).to_have_text('사진 1 픽셀 검수')
         expect(page.locator('#review-ai-mask_check')).to_be_enabled()
+        page.locator('.pixel-vlm-feedback > summary').click()
         page.locator('#pixel-class').select_option('0')
         page.locator('#pixel-canvas').focus(); page.keyboard.press('t')
         page.keyboard.down('Space'); page.keyboard.press('Alt+ArrowRight'); page.keyboard.up('Space')
@@ -93,9 +140,136 @@ def test_pixel_unsaved_gesture_blocks_ai_and_result_reload(tmp_path):
         before = page.locator('#pixel-draft').inner_text()
         expect(page.locator('#review-ai-mask_check')).to_be_disabled()
         expect(page.locator('#review-ai-jobs').get_by_role('button', name='AI 결과 목록 조회')).to_be_disabled()
-        page.locator('#review-ai-jobs').get_by_role('button', name='AI 실행 상태 다시 조회').click()
+        command(page, 'AI 실행 상태 다시 조회')
         expect(page.locator('#pixel-draft')).to_have_text(before)
         assert not jobs.status(0)['jobs']
+
+
+@pytest.mark.parametrize('editing', [False, True])
+def test_mask_check_automatically_refreshes_opinion_without_replacing_unsaved_pixels(tmp_path, editing):
+    import review_masks
+    started, release = threading.Event(), threading.Event()
+    def backend(*_):
+        started.set(); assert release.wait(30)
+        return {'feedback': {'verdict': 'concern', 'issue': 'missed_visible_road', 'note': 'Check the visible floor'}}
+    try:
+        with ai_browser(tmp_path, backend) as (page, store, jobs, expect):
+            page.goto(page.url.split('?')[0] + 'pixels?frame=0', wait_until='networkidle')
+            before = review_masks.get(store, 0)
+            expect(page.locator('#pixel-ai-summary')).to_contain_text('AI 확인 요청 전')
+            page.locator('#review-ai-mask_check').click()
+            assert started.wait(5)
+            expect(page.locator('#pixel-vlm-state')).to_contain_text('AI 확인 실행 중')
+            if editing:
+                page.locator('#pixel-class').select_option('0')
+                page.locator('#pixel-canvas').click(position={'x': 10, 'y': 10})
+                expect(page.locator('#pixel-draft')).to_contain_text('1점 선택')
+                expect(page.locator('#pixel-draft')).to_contain_text('픽셀 미리보기')
+            draft = page.locator('#pixel-draft').inner_text()
+            release.set()
+            expect(page.locator('#review-ai-jobs')).to_contain_text('참고 의견 저장됨', timeout=15000)
+            if editing:
+                expect(page.locator('#pixel-draft')).to_have_text(draft)
+                expect(page.locator('#pixel-vlm-note')).not_to_contain_text('Check the visible floor')
+                page.keyboard.press('Escape')
+            expect(page.locator('#pixel-vlm-note')).to_be_visible()
+            expect(page.locator('#pixel-vlm-note')).to_contain_text('Check the visible floor', timeout=15000)
+            expect(page.locator('#pixel-vlm-details')).to_contain_text('저장된 픽셀 v1 기준')
+            if not editing:
+                expect(page.locator('#pixel-draft')).to_have_text(draft)
+            assert review_masks.get(store, 0) == before
+    finally:
+        release.set()
+
+
+@pytest.mark.parametrize('old_status', [200, 503])
+def test_delayed_old_opinion_response_cannot_replace_new_check_result(tmp_path, old_status):
+    import review_masks
+    backend = lambda *_: {'feedback': {'verdict': 'concern', 'issue': 'missed_visible_road', 'note': 'Latest saved-mask advice'}}
+    with ai_browser(tmp_path, backend) as (page, store, jobs, expect):
+        page.add_init_script("""const originalFetch=window.fetch;
+          window.fetch=async(...args)=>{
+            const response=await originalFetch(...args);
+            if(String(args[0]).includes('/api/vlm-feedback/0')){
+              if(response.status>=500)setTimeout(()=>{window.feedbackReads=(window.feedbackReads||0)+1;},0);
+              const json=response.json.bind(response);
+              response.json=async()=>{const value=await json();setTimeout(()=>{window.feedbackReads=(window.feedbackReads||0)+1;},0);return value;};
+            }
+            return response;
+          };""")
+        held = []
+        def delay_first(route):
+            if not held:
+                held.append(route)
+            else:
+                route.continue_()
+        page.route('**/api/vlm-feedback/0', delay_first)
+        page.goto(page.url.split('?')[0] + 'pixels?frame=0', wait_until='domcontentloaded')
+        expect(page.locator('#review-ai-mask_check')).to_be_enabled()
+        assert len(held) == 1
+        before = review_masks.get(store, 0)
+        page.locator('#review-ai-mask_check').click()
+        expect(page.locator('#pixel-vlm-note')).to_contain_text('Latest saved-mask advice', timeout=15000)
+        page.locator('#pixel-class').select_option('0')
+        page.locator('#pixel-canvas').click(position={'x': 10, 'y': 10})
+        expect(page.locator('#pixel-draft')).to_contain_text('1점 선택')
+        expect(page.locator('#pixel-draft')).to_contain_text('픽셀 미리보기')
+        draft = page.locator('#pixel-draft').inner_text()
+        reads = page.evaluate('window.feedbackReads||0')
+        held[0].fulfill(status=old_status, json={'available': False, 'reason': 'not_requested', 'check': {'state': 'not_requested'}, 'error': 'Old request failed'})
+        page.wait_for_function('before => (window.feedbackReads||0)>before', arg=reads)
+        expect(page.locator('#pixel-vlm-note')).to_contain_text('Latest saved-mask advice')
+        expect(page.locator('#pixel-vlm-state')).not_to_have_text('AI 의견 조회 실패')
+        expect(page.locator('#pixel-draft')).to_have_text(draft)
+        assert review_masks.get(store, 0) == before
+
+
+@pytest.mark.parametrize('editing', [False, True])
+def test_requested_pixel_ai_previews_completion_only_when_editor_is_clean(tmp_path, editing):
+    import base64
+    import numpy as np
+    import review_masks
+    started, release = threading.Event(), threading.Event()
+
+    def backend(*_):
+        started.set()
+        assert release.wait(30)
+        return {'mask': base64.b64encode(review_masks.encode(np.zeros((24, 32), np.uint8))).decode()}
+
+    try:
+        with ai_browser(tmp_path, backend) as (page, store, jobs, expect):
+            page.goto(page.url.split('?')[0] + 'pixels?frame=0', wait_until='networkidle')
+            before = review_masks.get(store, 0)
+            before_pixels = review_masks.pixels(store, before).copy()
+            canvas = page.locator('#pixel-canvas')
+            before_pixel = canvas.evaluate('node => Array.from(node.getContext("2d").getImageData(15,15,1,1).data)')
+            page.locator('#review-ai-pixel_draft').click()
+            assert started.wait(5)
+            if editing:
+                page.locator('#pixel-class').select_option('0')
+                page.locator('#pixel-canvas').click(position={'x': 10, 'y': 10})
+                expect(page.locator('#pixel-draft')).to_contain_text('1점 선택')
+                expect(page.locator('#pixel-draft')).to_contain_text('픽셀 미리보기')
+                draft = page.locator('#pixel-draft').inner_text()
+            release.set()
+            expect(page.locator('#review-ai-jobs')).to_contain_text('초안 후보 저장됨', timeout=15000)
+            if editing:
+                expect(page.locator('#pixel-candidate-preview')).to_be_hidden()
+                expect(page.locator('#pixel-preview-candidate')).to_have_attribute('aria-pressed', 'false')
+                expect(page.locator('#pixel-draft')).to_have_text(draft)
+                expect(page.locator('#pixel-candidates option')).to_have_count(0)
+                page.keyboard.press('Escape')
+            expect(page.locator('#pixel-preview-candidate')).to_have_attribute('aria-pressed', 'true')
+            expect(page.locator('#pixel-candidate-preview')).to_be_hidden()
+            expect(canvas).to_have_js_property('width', 32)
+            expect(canvas).to_have_js_property('height', 24)
+            expect(page.locator('#pixel-candidates option')).to_have_count(1)
+            expect(page.locator('#pixel-candidates')).to_have_value(jobs.status(0)['jobs'][0]['result']['candidate_sha256'])
+            assert canvas.evaluate('node => Array.from(node.getContext("2d").getImageData(15,15,1,1).data)') != before_pixel
+            assert review_masks.get(store, 0)['version'] == before['version']
+            assert np.array_equal(review_masks.pixels(store, review_masks.get(store, 0)), before_pixels)
+    finally:
+        release.set()
 
 
 def test_history_pagination_and_pixel_snapshot_do_not_modify_current(tmp_path):
@@ -121,12 +295,21 @@ def test_history_pagination_and_pixel_snapshot_do_not_modify_current(tmp_path):
 def test_frame_switch_removes_ai_and_versions_before_delayed_mask_failure(tmp_path):
     with ai_browser(tmp_path) as (page, store, jobs, expect):
         store.update(1, {'version': store.get(1)['version'], 'action': 'reopen'})
+        page.route('**/api/vlm-feedback/0', lambda route: route.fulfill(json={
+            'available': True, 'current': True, 'unknown_pixels': 0,
+            'model': 'fixture-qwen', 'model_digest': 'a' * 64,
+            'feedback': {'verdict': 'no_obvious_concern', 'issue': 'none', 'note': 'Opinion for photo one'}}))
         page.goto(page.url.split('?')[0] + 'pixels?frame=0', wait_until='networkidle')
+        expect(page.locator('#pixel-vlm-details')).to_contain_text('Opinion for photo one')
         expect(page.locator('#review-ai-jobs')).to_have_count(1)
         expect(page.locator('#review-versions')).to_have_count(1)
         held = []
         page.route('**/api/masks/1', lambda route: held.append(route))
+        page.locator('.pixel-frame-item[data-index="1"]').evaluate("node => { for (let parent=node.parentElement; parent; parent=parent.parentElement) if (parent.tagName==='DETAILS') parent.open=true; }")
         page.locator('.pixel-frame-item[data-index="1"]').click()
+        expect(page.locator('#pixel-vlm-note')).to_have_text('')
+        expect(page.locator('#pixel-vlm-details')).to_have_text('')
+        expect(page.locator('#pixel-ai-summary')).to_be_hidden()
         expect(page.locator('#review-ai-jobs')).to_have_count(0)
         expect(page.locator('#review-versions')).to_have_count(0)
         expect(page.locator('#pixel-title')).to_have_text('사진 2 픽셀 검수')

@@ -92,12 +92,16 @@ def test_answer_links_never_cover_the_title_at_768(browser_workspace, route):
 
 @pytest.mark.parametrize('route', ['/', '/pixels'])
 def test_answer_links_come_right_after_the_title_in_focus_order(browser_workspace, route):
-    """WCAG 2.4.3: Tab from the title row reaches the 정답 links before the editor and canvas controls."""
+    """WCAG 2.4.3: title-row scope, answer links, then editor controls follow visual order."""
     page, _, _ = browser_workspace
     origin = urlsplit(page.url)
     page.goto(f'{origin.scheme}://{origin.netloc}{route}', wait_until='networkidle')
     links = page.locator('.review-kinds a').evaluate_all('links => links.map(link => link.pathname)')  # / adds ?frame=
     page.locator('.ui-pathbar h1').evaluate('title => { title.tabIndex = -1; title.focus(); }')
+    if route == '/pixels':
+        page.keyboard.press('Tab')
+        assert page.locator('.pixel-review-context > summary').evaluate('node => node === document.activeElement')
+        assert not page.locator('.pixel-review-context').evaluate('node => node.open')
     focused = []
     for _ in links:
         page.keyboard.press('Tab')
