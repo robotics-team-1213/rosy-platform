@@ -1171,6 +1171,13 @@ session lock은 실제 접힘·이격의 증거가 아니다. 상대 팔의 HOLD
 함께 갱신한 뒤 사용한다. 빈 옛 lock 파일 자체는 물리 이격의 증거가 아니다. 이 변경은 host 회귀
 시험으로 확인했으며 전원 차단 시험·실물 양팔 수용은 하지 않았다.
 
+공개 main의 녹색 CI 뒤에는 `rosy-omx-autoupdate.timer`가 별도 Learning 서명 릴리스를
+기다리지 않고 OMX 도구를 갱신할 수 있다. 기존 session lock·serial 사용·torque OFF 확인은
+실제 접힘이나 구/신 reader의 동시 전환을 보장하지 않는다. 공개 게시 전에 설치된 timer·freeze와
+진행 중인 updater를 확인하고, 위 배포 조건이 충족될 때까지 OMX 자동 갱신을 보류한다.
+전용 timer를 보류했다면 보류 전 상태를 남기고, updater가 inactive임을 확인한다. 두 팔의
+전환·물리 이격을 확인하기 전에는 timer를 다시 켜지 않는다. 다른 updater의 보류는 해제하지 않는다.
+
 ## 검증된 native 셀 작업 범위 (D-911)
 
 최대 도달범위·전체 경로의 계획 가능성·실물로 검증한 운용범위를 구분한다.
