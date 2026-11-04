@@ -121,6 +121,14 @@ ui-topbar:has([data-learning-account-entry]) { flex-wrap: wrap; }
 .learning-panel { min-width: 0; padding: var(--space-4); border: 1px solid var(--border-subtle); border-radius: var(--radius-control); background: var(--surface-flat); }
 #journey-goal { overflow-wrap: anywhere; font-weight: var(--weight-medium); }
 .learning-next-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.learning-home-nav { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-block: var(--space-4); }
+.learning-routes { list-style: none; padding: 0; margin: 0; border-top: 1px solid var(--surface-line); }
+.learning-routes > li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3) var(--space-5); padding-block: var(--space-4); border-bottom: 1px solid var(--surface-line); }
+.learning-routes > li > div { flex: 1 1 22rem; min-width: 0; }
+.learning-routes p { margin-block: var(--space-2) 0; max-width: 65ch; color: var(--text-secondary); }
+.learning-route-steps { display: flex; flex-wrap: wrap; gap: var(--space-3); }
+.learning-route-steps a { display: inline-flex; align-items: center; min-height: var(--target-secondary); }
+#learning-main > [tabindex="-1"] { scroll-margin-block-start: var(--space-5); }
 .learning-workflow-layout { display: grid; grid-template-columns: minmax(11rem, 14rem) minmax(0, 1fr); gap: var(--space-5); align-items: start; margin-top: var(--space-5); }
 .learning-workflow-content { min-width: 0; }
 .learning-workflow-content > :first-child { margin-top: 0; }

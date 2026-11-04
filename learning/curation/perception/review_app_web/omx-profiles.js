@@ -1,6 +1,7 @@
 // Guided input declarations; saved versions never acquire device authority.
 import {accountFetch} from '/account-session.js';
-const $=id=>document.getElementById(id),API='/api/learning/omx/center';
+const $=id=>document.getElementById(id),recordingStore=new URL(location.href).searchParams.get('profile-store')==='recording';
+const API=recordingStore?'/api/learning/recording':'/api/learning/omx/center';
 const PURPOSES=['policy','record','reward','evaluation','monitor'];
 const copy=value=>structuredClone(value);
 export function profileDocumentKey(value){
@@ -18,7 +19,7 @@ function uuid(){const b=crypto.getRandomValues(new Uint8Array(16));b[6]=(b[6]&15
 async function request(path,body){
   const options={cache:'no-store'};
   if(body!==undefined){
-    if(!token){const response=await accountFetch('/api/learning');token=(await response.json()).token;}
+    if(!token){const response=await accountFetch(recordingStore?'/api/learning/tasks':'/api/learning');token=(await response.json()).token;}
     options.method='POST';options.headers={'Content-Type':'application/json','X-Pinky-Token':token};options.body=JSON.stringify(body);
   }
   const response=await accountFetch(path,options),value=await response.json();
@@ -128,6 +129,16 @@ $('profile-add-camera').onclick=()=>{if(saving||draft.cameras.length>=64)return;
 $('profile-record').onchange=recordSelection;$('profiles-refresh').onclick=()=>loadProfiles();
 $('profile-clone').onclick=()=>{const selected=record();if(saving||!selected)return;parent=copy(selected);draft=copy(selected.profile);pending=null;render();};
 $('profile-new').onclick=()=>{if(saving)return;parent=null;draft=empty();pending=null;render();};
+function preset(kind){
+  if(saving)return;
+  parent=null;draft=empty();draft.mode='independent';pending=null;
+  const arms=kind==='bimanual'?['arm_a','arm_b']:['arm_a'];
+  draft.arms=arms.map(id=>({id,joint_names:[],units:''}));
+  const camera=(id,arm_id,role)=>({id,input_key:'observation.images.'+id,arm_id,role,source_identity:'',placement:role,shape:[3,'',''],purposes:['policy']});
+  draft.cameras=[camera('top',null,'top'),...arms.map(id=>camera(id+'_wrist',id,'wrist'))];
+  $('profile-panel').open=true;render();$('profiles-status').textContent='미검증 구성 초안 · 실제 출처·관절·단위·해상도를 직접 확인하세요. 팔·카메라 수와 순서·역할은 계속 편집할 수 있습니다.';
+}
+for(const kind of ['single','bimanual']){const button=$('profile-preset-'+kind);if(button){button.hidden=!recordingStore;button.onclick=()=>preset(kind);}}
 document.addEventListener('omx-dataset-profile',event=>{datasetProfile=event.detail;$('profile-import-dataset').disabled=!datasetProfile?.schema;});
 $('profile-bench').onchange=async()=>{
   const file=$('profile-bench').files[0];$('profile-bench').value='';if(saving||!file)return;
@@ -152,3 +163,9 @@ $('profile-form').onsubmit=async event=>{
   finally{saving=false;$('profile-fields').disabled=false;$('profile-fields').inert=false;}
 };
 render();loadProfiles();
+if(recordingStore){
+  $('profile-recording-return').hidden=false;
+  $('profile-use').textContent='선택한 구성으로 녹화 준비';
+  $('profile-use').onclick=()=>{const selected=record();if(selected)location.href='/learning/record?profile='+encodeURIComponent(selected.id);};
+  const selectedPreset=new URL(location.href).searchParams.get('profile-preset');if(['single','bimanual'].includes(selectedPreset))preset(selectedPreset);
+}
