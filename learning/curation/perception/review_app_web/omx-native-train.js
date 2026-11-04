@@ -1,5 +1,6 @@
 // Native training uses an explicit saved human review, never current editor drafts.
 import {accountFetch} from '/account-session.js';
+import {journeyContext} from '/omx-journey.js';
 const $=id=>document.getElementById(id);
 let sets=[],busy=false,pending=null;
 function uuid(){
@@ -10,9 +11,11 @@ function uuid(){
 function selection(){
   const row=sets.find(row=>row.id===$('prepared-set').value),mode=$('native-train-review').value;
   const review=mode==='episodes'?row?.latest_review_id:mode==='segments'?row?.segment_review?.version:null;
-  const valid=!!row&&!row.error&&!row.fixture_only&&!!review;
+  const blocked=journeyContext.blocked||!!journeyContext.task;
+  const valid=!blocked&&!!row&&!row.error&&!row.fixture_only&&!!review;
   $('native-train-start').disabled=busy||!valid;
-  $('native-train-selection').textContent=valid?
+  $('native-train-selection').textContent=blocked?
+    '과제 연결을 확인하고 학습 과제 화면에서 실행하세요. 이 화면에서는 과제 연결을 생략해 실행하지 않습니다.':valid?
     `${row.name} · ${mode==='episodes'?'전체 시연 검수 '+review:'저장 파지 구간 v'+review} · 분할과 원본은 서버가 다시 검증합니다.`:
     '등록 시연과 저장 검수를 선택하세요. 아직 저장하지 않은 검수나 시험 fixture는 학습할 수 없습니다.';
   return valid?{prepared_id:row.id,...(mode==='episodes'?{review_id:review}:{segment_version:review})}:null;

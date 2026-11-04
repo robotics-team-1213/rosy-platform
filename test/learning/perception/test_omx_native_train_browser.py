@@ -10,7 +10,8 @@ from review_app import ReviewStore, make_server
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason='requires explicit Chromium run')
 
 
-def test_native_act_requires_saved_selection_and_retries_the_same_request(tmp_path):
+@pytest.mark.parametrize('context', ['', '&task=task-one', '&task=missing', '&task=task-one&task=other'])
+def test_native_act_requires_saved_selection_and_retries_the_same_request(tmp_path, context):
     playwright = pytest.importorskip('playwright.sync_api')
     prepared_id, review_id = 'a'*32, str(uuid.uuid4())
     saved = dict(id=prepared_id, name='Native workflow browser fixture', episodes=[],
@@ -38,11 +39,20 @@ def test_native_act_requires_saved_selection_and_retries_the_same_request(tmp_pa
                     else:
                         route.fulfill(json={'id': 'native-job', 'status': 'running'})
                 page.route('**/center/native-run', submit)
-                base = f'http://127.0.0.1:{server.server_port}/learning/omx?view=all#dataset-section'
+                page.route('**/api/learning/tasks',lambda route:route.fulfill(json={
+                    'project_id':'fixture','tasks':[{'id':'task-one','name':'Bound task'}],
+                    'profiles':[],'robots':[],'datasets':[],'runs':[]}))
+                base = f'http://127.0.0.1:{server.server_port}/learning/omx?view=all'+context+'#dataset-section'
                 page.goto(base, wait_until='domcontentloaded')
                 expect = playwright.expect
                 expect(page.locator('#native-train-start')).to_be_disabled()
                 page.locator('#native-train-review').select_option('episodes')
+                if context:
+                    expect(page.locator('#native-train-start')).to_be_disabled()
+                    page.locator('#native-train-form').evaluate("form => form.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}))")
+                    page.wait_for_timeout(100)
+                    assert posts == [] and not errors
+                    return
                 expect(page.locator('#native-train-selection')).to_contain_text(review_id)
                 expect(page.locator('#native-train-start')).to_be_enabled()
                 page.locator('#native-train-steps').fill('2')
