@@ -38,8 +38,23 @@ class Owner(CapabilityPort):
         self.submits.append(grant)
         raise LocalActionUnavailable("owner does not accept goals")
 
+    def get(self, grant):
+        raise LocalActionUnavailable("owner does not accept goals")
 
-def build(tmp_path, installation, *, profile="device_trial", revisions=True):
+    def cancel(self, grant, *, reason):
+        raise LocalActionUnavailable("owner does not accept goals")
+
+
+def one_arm(installation):
+    """D-977 2: the single-arm installation device_trial accepts."""
+    policy = installation.policy.model_copy(update=dict(participants=installation.policy.participants[:1]))
+    caps = tuple(c.model_copy(update=dict(resource_policy_digest=policy.digest)) for c in installation.capabilities[:1])
+    return installation.model_copy(update=dict(policy=policy, capabilities=caps))
+
+
+def build(tmp_path, installation, *, profile="device_trial", revisions=True, multi=False):
+    if profile == "device_trial" and not multi:
+        installation = one_arm(installation)
     db = tmp_path / "fleet.sqlite3"
     tasks = FleetTaskStore(db)
     port = Owner(installation, db)
@@ -54,7 +69,7 @@ def build(tmp_path, installation, *, profile="device_trial", revisions=True):
         omx_cell_grant_revisions={instance: dict(capability_revision="c", config_revision="k",
                                                  commissioning_revision=REVISION)} if revisions else None)
     tasks.rearm_dispatch(expected_generation=tasks.dispatch_control()["generation"], actor_id="op-a")
-    return TestClient(app), tasks, port
+    return TestClient(app), tasks, port, installation
 
 
 def propose_and_admit(client, tasks, installed):
@@ -65,8 +80,8 @@ def propose_and_admit(client, tasks, installed):
 
 
 def test_device_trial_prepares_for_a_device_owner_and_submits_nothing(tmp_path, installation):
-    client, tasks, port = build(tmp_path, installation)
-    _, admitted = propose_and_admit(client, tasks, installation)
+    client, tasks, port, installed = build(tmp_path, installation)
+    _, admitted = propose_and_admit(client, tasks, installed)
     assert admitted.status_code == 200 and admitted.json()["job"]["status"] == "READY"
     assert port.submits == []
     # D-977: a real arm is never approved by the unattended policy worker.
@@ -74,10 +89,10 @@ def test_device_trial_prepares_for_a_device_owner_and_submits_nothing(tmp_path, 
 
 
 def test_simulation_owner_is_refused_by_device_trial_and_the_job_is_held_without_retry(tmp_path, installation):
-    client, tasks, port = build(tmp_path, installation)
-    port.owner_identity = lambda i: dict(simulation=True, workcell_id=installation.policy.primary[0], instance_id=i,
+    client, tasks, port, installed = build(tmp_path, installation)
+    port.owner_identity = lambda i: dict(simulation=True, workcell_id=installed.policy.primary[0], instance_id=i,
                                          journal_id="journal-" + i)
-    job, admitted = propose_and_admit(client, tasks, installation)
+    job, admitted = propose_and_admit(client, tasks, installed)
     assert admitted.status_code == 503
     assert client.get(f"{PATH}/{job['mission_id']}", headers=headers("op-a")).json()["job"]["status"] == "HOLD"
     assert client.app.state.arm_transfer_job_store.peek(job["mission_id"])["reason"] == "PHYSICAL_PREPARATION_UNAVAILABLE"
@@ -85,22 +100,24 @@ def test_simulation_owner_is_refused_by_device_trial_and_the_job_is_held_without
 
 
 def test_wrong_commissioning_revision_is_refused(tmp_path, installation):
-    client, _, port = build(tmp_path, installation)
+    client, _, port, _ = build(tmp_path, installation)
     inner = port.owner_identity
     port.owner_identity = lambda i: {**inner(i), "commissioning_revision": "other"}
     with pytest.raises(LocalActionUnavailable):
         client.app.state.arm_transfer_dispatcher._capabilities()
 
 
-def test_production_and_missing_revision_stay_closed(tmp_path, installation):
+def test_production_two_arms_and_missing_revision_stay_closed(tmp_path, installation):
     with pytest.raises(ValueError):
         build(tmp_path, installation, profile="production")
+    with pytest.raises(ValueError, match="single arm"):
+        build(tmp_path, installation, multi=True)
     with pytest.raises(ValueError, match="commissioning_revision"):
         build(tmp_path, installation, revisions=False)
 
 
 def test_simulation_still_requires_a_simulation_owner(tmp_path, installation):
-    client, _, _ = build(tmp_path, installation, profile="simulation")
+    client, _, _, _ = build(tmp_path, installation, profile="simulation")
     with pytest.raises(LocalActionUnavailable):
         client.app.state.arm_transfer_dispatcher._capabilities()
 
@@ -112,8 +129,8 @@ def att(client, mission_id, who, job, kind="SOURCE_CLEAR", **changes):
 
 
 def test_operator_attestation_is_single_use_role_separated_and_never_confirms_the_goal(tmp_path, installation):
-    client, tasks, port = build(tmp_path, installation)
-    job, admitted = propose_and_admit(client, tasks, installation)
+    client, tasks, port, installed = build(tmp_path, installation)
+    job, admitted = propose_and_admit(client, tasks, installed)
     mid = job["mission_id"]
     assert admitted.json()["job"]["status"] == "READY"
     assert att(client, mid, "op-a", job).status_code == 403  # the approver
@@ -136,5 +153,5 @@ def test_operator_attestation_is_single_use_role_separated_and_never_confirms_th
 
 
 def test_attestation_route_is_absent_in_simulation(tmp_path, installation):
-    client, _, _ = build(tmp_path, installation, profile="simulation")
+    client, _, _, _ = build(tmp_path, installation, profile="simulation")
     assert client.post(f"{PATH}/x/operator-attestations", headers=headers("op-b"), json={}).status_code in {404, 405}
