@@ -179,6 +179,26 @@ def test_mask_check_automatically_refreshes_opinion_without_replacing_unsaved_pi
             if not editing:
                 expect(page.locator('#pixel-draft')).to_have_text(draft)
             assert review_masks.get(store, 0) == before
+            open_action_disclosure(page, '#pixel-vlm-details')
+            for width, height in [(1366, 768), (390, 844)]:
+                page.set_viewport_size({'width': width, 'height': height})
+                for theme in ['dark', 'light']:
+                    page.evaluate('theme=>document.documentElement.dataset.theme=theme', theme)
+                    folds = page.locator('details:visible').count()
+                    import os
+                    if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+                        import json
+                        from pathlib import Path
+                        root = Path(output).expanduser()
+                        root.mkdir(parents=True, exist_ok=True)
+                        name = f'pixel-configured-evidence-{editing}-{theme}-{width}x{height}'
+                        page.screenshot(path=str(root / f'{name}.png'), full_page=True)
+                        (root / f'{name}.json').write_text(json.dumps(dict(
+                            state='configured AI evidence', editing=editing, theme=theme,
+                            viewport=page.viewport_size, visible_folds=folds, filename=f'{name}.png'),
+                            ensure_ascii=False, indent=2), encoding='utf-8')
+                    assert folds < 3
+                    assert page.locator('details details').count() == 0
     finally:
         release.set()
 
