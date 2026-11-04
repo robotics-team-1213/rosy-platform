@@ -63,7 +63,7 @@ def test_object_preparation_keeps_valid_commands_and_excludes_denied_work(browse
     nav = page.get_by_role('navigation', name='객체 검수 도구')
     nav.get_by_role('link', name='자료 준비', exact=True).click()
     page.keyboard.press('Control+k')
-    page.get_by_role('textbox', name='기능 검색어').fill('최신 내용 불러오기')
+    page.get_by_role('textbox', name='기능 검색어').fill('새로고침')
     expect(page.locator('#review-command-results ui-button')).to_have_count(1)
     page.keyboard.press('Enter')
     expect(page.locator('#reload')).to_be_visible()

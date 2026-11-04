@@ -132,7 +132,10 @@ def test_review_documents_share_the_app_bar_and_the_screen_rail():
         assert [(href, current) for _, href, _, current, _ in items if current] == [
             (stage, 'page' if here in (None, stage) else 'true')], name
         assert all(short in full for _, _, full, _, short in items), 'the stored label is part of the accessible name'
-        sub = (re.search(r'<div class="ui-pathbar"><h1>[^<]+</h1>(?:<span data-spacer></span>'
+        pathbar = (r'<div class="ui-pathbar"><nav class="ui-crumbs" aria-label="현재 위치">'
+                   r'<a href="/learning">Learning</a><span aria-hidden="true">/</span></nav>'
+                   r'<h1>[^<]+</h1><span class="ui-crumbs" id="learning-tool-path"></span>')
+        sub = (re.search(pathbar + r'(?:<span data-spacer></span>'
                          r'(?:<ui-button [^>]*>[^<]*</ui-button>|<a class="workspace-link" href="/learning#learning-start">학습센터 작업 선택</a>))?</div>'
                          r'<nav class="review-kinds" aria-label="정답 하위 메뉴">(.*?)</nav>', body, re.S) if merged else
                re.search(r'</nav></div><div class="ui-subnav"><nav class="ui-subnav-nav" aria-label="[^"]+ 하위 메뉴">'
@@ -143,7 +146,7 @@ def test_review_documents_share_the_app_bar_and_the_screen_rail():
             links = re.findall(r'<a class="ui-subnav-item" href="([^"]+)"( aria-current="page")?[^>]*>[^<]+</a>', sub.group(1))
             assert [href for href, _ in links] == subs[stage], name
             assert [href for href, current in links if current] == [here], name
-        assert re.search(r'<div class="ui-app-main"><div class="ui-pathbar"><h1>[^<]+</h1>', body)
+        assert re.search(r'<div class="ui-app-main">' + pathbar, body), name
         assert not merged or '<div class="ui-subnav">' not in body, name
         assert html.count('<h1') == 1
         rails.add(re.sub(r' aria-current="(?:page|true)"', '', rail))
