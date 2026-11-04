@@ -108,7 +108,7 @@ def test_review_documents_share_the_app_bar_and_the_screen_rail():
                               ('pixels.html', '/', '/pixels'), ('omx.html', '/', '/learning/omx'),
                               ('vlm.html', '/', '/learning/vlm'), ('catalog.html', '/catalog', '/catalog'),
                               ('camera.html', '/catalog', '/learning/camera'),
-                              ('workspaces.html', '/catalog', '/learning/workspaces'), ('tasks.html', '/learning/tasks', '/learning/tasks'),
+                              ('workspaces.html', '/catalog', '/learning/workspaces'), ('tasks.html', '/learning/tasks', '/learning/tasks/manage'),
                               ('sim.html', '/learning/tasks', '/learning/sim'), ('evaluate.html', '/learning/evaluate', None)]:
         html = (web / name).read_text(encoding='utf-8')
         assert html.index('/common/components.css') < html.index('/common/app-shell.css') < html.index('/app.css')
