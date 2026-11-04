@@ -14163,3 +14163,15 @@ osy-d395-s1d\`.
 - 증거: 소스 edc23d4559의 원격 252 passed, 0 skipped, known_failures NEW 0 및 독립 안전 재검토에서 P1 두 건·P2 한 건 해소. 실물·전원 차단·운영 배포 수용은 수행하지 않았다.
 - gate 변화: 없음. 로컬 수정 검증이며 공식 FULL 착지·배포는 별도다.
 - CE: 새 교훈 기록 — OS 잠금의 수명과 물리 점유가 다르며, 정상 종료만 고친 구현이 중단·재시작과 옛 reader에서 다시 위험해지는 연결 판단을 보존한다.
+
+## 2026-11-04 · uncommitted · test(D-762): 격리 cell 문서 미리보기 부하 결함 3회 근거
+- 변경: `test/flaky_quarantine.txt`에 `applications/fleet/test/test_sample_browser.py::test_cell_document_preview_admission_and_terminal_read` 한 줄 추가. 2026-11-04 하루 3회(sha ff82336996, 6a299d39cf, 86d7abd782) 병렬 브라우저 청크에서 실패·단독 재실행 통과(rosy-flaky-candidates.txt). 실패 내용은 5 s 안에 `#recipe-revision` 글자가 바뀌지 않는 부하 타임아웃이라 제품 결함이 아니다.
+- 증거: 세 LOAD-FLAKY 기록과 단독 통과 로그(각 `alone-pre-*.txt`). 이 id가 explicit FULL 착지를 막아 게시(D-868)도 막고 있어 격리가 D-762 증거 규칙의 정해진 해법이다.
+- gate 변화: 없음
+- CE: 해당 없음 — 격리 규칙대로 근거·해제 조건을 줄에 남겼다.
+
+## 2026-11-04 · uncommitted · docs(D-871): 학습센터 타이머 미활용 발견·활성화 개정
+- 변경: D-871에 2026-11-04 현장 점검 절 추가. 모델 PC `rosy-learning-center-update.timer`가 `disabled`+`inactive`였던 것을 `enable --now`로 복구하고, 사용자 유닛 타이머 감사 규칙(`systemctl --user list-timers`, `timers.target.wants/`)을 남겼다.
+- 증거: 모델 PC에서 타이머 enabled+active 확인, 1회 실행으로 게이트 통과·`idle`(`center_not_running`, 설계 동작) 확인. 로봇·현장 PC·OMX·AI PC 전 표면 타이머 실측은 작업 기록 `Rosy/docs/workspace-records/2026-11-04/auto-update-audit.md`.
+- gate 변화: 없음
+- CE: 해당 없음 — 운영 조치이며 함정은 D-871 개정과 작업 기록에 남겼다.

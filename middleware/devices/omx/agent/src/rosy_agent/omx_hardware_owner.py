@@ -60,6 +60,7 @@ class HardwareOwnerSettings:
     socket_root: Path
     fleet_peer_uid: int
     calibration_revision: str
+    commissioning_root: Path | None = None  # D-797 3: the owner reports ``device: true`` from this record
 
     def __post_init__(self) -> None:
         for name in ("workcell_id", "instance_id"):
@@ -85,7 +86,8 @@ class HardwareOwner:
 def build_hardware_owner(settings: HardwareOwnerSettings, owner_config: ArmCommandConfig, *,
                          runtime_factory: Callable[[ArmCommandConfig], Any],
                          refuse_second_owner: Callable[[], None],
-                         fleet_fence_current: Callable[[int, int], bool]) -> HardwareOwner:
+                         fleet_fence_current: Callable[[int, int], bool],
+                         commissioning_revision: Callable[[], str | None] | None = None) -> HardwareOwner:
     refuse_second_owner()
     if not owner_config.enabled:
         raise ValueError("hardware owner requires an explicitly enabled, measured owner policy")
@@ -126,13 +128,31 @@ def build_hardware_owner(settings: HardwareOwnerSettings, owner_config: ArmComma
                             fleet_fence_current=fleet_fence_current)
     recovery_api = OwnerRecoveryApi(runtime.owner, stop, store, allowed_peer_uids={fleet_uid},
                                     current_fence=current_fence)
-    action_api = ActionApi(runner, stop_api=stop_api, recovery_api=recovery_api, identity={
+    action_api = ActionApi(runner, stop_api=stop_api, recovery_api=recovery_api,
+                           live_identity=_device_identity(commissioning_revision), identity={
         "workcell_id": settings.workcell_id, "instance_id": settings.instance_id,
         "simulation": False, "profile": HARDWARE_PROFILE, "goals_enabled": False,
         "journal_id": journal_identity(store.path)})
     uds_server = UnixActionServer(
         action_api, Path(settings.socket_root) / settings.instance_id / "control.sock")
     return HardwareOwner(settings, runtime, store, stop, runner, action_api, uds_server)
+
+
+def _device_identity(commissioning_revision: Callable[[], str | None] | None):
+    """D-797 3: ``device: true`` only while a commissioning record exists; read at every request, fail closed."""
+    if commissioning_revision is None:
+        return None
+
+    def live() -> dict[str, Any]:
+        try:
+            revision = commissioning_revision()
+        except Exception:
+            _LOG.exception("commissioning record is unreadable")
+            revision = None
+        return ({"device": True, "commissioning_revision": revision} if isinstance(revision, str) and revision
+                else {"device": False, "commissioning_revision": None})
+
+    return live
 
 
 class _NoGoalDriver:
