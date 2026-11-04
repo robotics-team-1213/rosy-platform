@@ -4,10 +4,10 @@
 
 ## 고정 소스와 결과
 
-- `6082dfd39585f59c80dfb43806c6946e4f75c9c3`: 원격 지도·단계·과제·셸·객체/픽셀·VLM·공용 어휘 51 passed, 0 skipped, NEW 0. 두 테마와 320~1440px 캡처 80장.
+- commit `6082dfd39585f59c80dfb43806c6946e4f75c9c3`: 원격 지도·단계·과제·셸·객체/픽셀·VLM·공용 어휘 51 passed, 0 skipped, NEW 0. 두 테마와 320~1440px 캡처 80장.
 - 독립 소스 리뷰는 위 SHA에서 차단 문제 없음. 독립 시각 리뷰는 대표 12장과 원래 시안 4장을 비교하여 모바일 표의 식별자·백분율 줄분할을 지적했다.
-- `d5a83b0d48`의 실제 텍스트 줄 수 검사로 실패를 재현했다. `5af9177f099746026b8ef5027b60896fce8c30b0`은 두 비교 영역만 nowrap으로 수정했다. 전역 표 최소 폭을 복구하지 않았다.
-- 최종 제품/시험 `ba6993cea6e7c585f8ae0b043fa0c3c6febeded7`: 원격 VLM·단계 14 passed, 0 skipped, NEW 0. 실제 ArrowRight 키로 표의 가로 스크롤을 확인했다. CSP는 유지하고 시험 대기는 함수로 전달한다.
+- `d5a83b0d48`의 실제 텍스트 줄 수 검사로 실패를 재현했다. commit `5af9177f099746026b8ef5027b60896fce8c30b0`은 두 비교 영역만 nowrap으로 수정했다. 전역 표 최소 폭을 복구하지 않았다.
+- 최종 제품/시험 commit `ba6993cea6e7c585f8ae0b043fa0c3c6febeded7`: 원격 VLM·단계 14 passed, 0 skipped, NEW 0. 실제 ArrowRight 키로 표의 가로 스크롤을 확인했다. CSP는 유지하고 시험 대기는 함수로 전달한다.
 - 최종 독립 소스 리뷰: 차단 문제 없음. 수정된 VLM·평가 모바일 두 테마 4장 재검토: 이전 가독성 문제 해결, 새 겹침 없음.
 
 원격 로그는 작업 PC TEMP의 `rosy-ui-map-20261105/learning-final-6082/run-1.txt`, `learning-comparison-csp-final/run-1.txt`다. 보존 캡처와 상세 기록은 Robot 작업 공간의 `Rosy/docs/workspace-records/2026-11-05/ui-map/learning-6082/`, `learning-comparison-final/`, `ui-map-completion.md`에 있다. 원래 Claude 캔버스에 없던 작업 공간 화면은 실제 선택 목록을 기준으로 별도 시각 기준을 기록했다.
