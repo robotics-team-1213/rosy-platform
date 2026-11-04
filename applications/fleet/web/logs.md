@@ -974,3 +974,9 @@
 - 변경: `/console/cell` 적재 계획 아래에 공용 수치 띠(놓기·팔레트·층·전체 단계). 미리보기 응답이 `#preview`에 쓴 작업 JSON만 세며 `cell.js`는 마운트 한 줄만 늘었다. Cell 본문을 칸 질의 칸으로 지정해 좁은 화면에서 두 열로 접힌다.
 - 증거: `test_cell_line.py` 5 PASS(띠는 응답의 놓기 단계만 셈). 샘플 서버에서 예제 문서 `sample`을 불러와 미리보기 — 요약 "18회 전송"과 띠 놓기 18·팔레트 2·층 4·전체 단계 38 일치, 노선도 레시피·셀·계획 완료로 바뀜. 1440 어둡게·390 밝게 렌더 확인.
 - gate 변화: SOURCE 로컬 GO.
+
+## 2026-11-04 · uncommitted · 관제 두 칸을 공용 세 칸 틀로(D-978 첫 생산 적용)
+
+- 변경: `/console`의 `#fleet-main`이 공용 `.ui-stage-grid[data-layout="watch"]`(2:1)를 쓰고, 지도 칸은 `data-pane="stage"`, 상태·대응 열은 `data-pane="now"`다. 화면 전용 열 지정(`.console-primary`·`.console-secondary`의 grid-column) 두 줄을 지웠다. 좁은 칸 순서는 공용 기본(now 먼저)과 기존 동작(D-201 예외 먼저)이 같다. 기존 클래스·스크롤 규칙은 그대로다. `DESIGN.md` 「조합 어휘」에 세 칸 틀 줄(HTML 경로)을 더하고 같은 대조 시험에 넣었다.
+- 증거: 샘플 서버 1440·390 두 테마 렌더가 바꾸기 전 캡처와 같음(지도 2 : 상태 1, 폰은 상태 먼저). 로컬 `test_console_queues_contract.py`·`test_content_vocabulary.py` 16 PASS.
+- gate 변화: SOURCE 로컬 GO. 관제 브라우저 회귀는 원격.

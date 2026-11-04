@@ -176,8 +176,6 @@ main {
   /* D-493 — 지도가 주인공이다: 왼쪽 3, 오른쪽 열 2. 오른쪽 열은 발행·예외·로봇·카메라·대형·기록을 쌓는다.
      지도는 첫 화면 높이를 채운다(D-201: 1920×1080에서 문서가 스크롤되지 않는다). */
   main { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
-  .console-primary { grid-column: 1; }
-  .console-secondary { grid-column: 2; }
   .map-stage #map-canvas, .map-birdseye { height: max(20rem, calc(100dvh - 20rem)); }
   /* 접속 안내 띠가 보이는 동안은 그 높이만큼 지도가 줄어 첫 화면에 머문다. */
   body:has(#connection-guide:not([hidden])) :is(.map-stage #map-canvas, .map-birdseye) { height: max(20rem, calc(100dvh - 27rem)); }

@@ -159,6 +159,7 @@ def test_composition_vocabulary_names_real_code():
 HEAD_PARTS = {
     '`.ui-stage-track`': re.compile(r'class="ui-stage-track"'),
     '`.ui-readout[data-form="strip"]`': re.compile(r'class="ui-readout"[^>]*data-form="strip"'),
+    '`.ui-stage-grid`': re.compile(r'class="ui-stage-grid'),
 }
 
 
