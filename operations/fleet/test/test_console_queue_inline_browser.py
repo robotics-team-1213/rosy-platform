@@ -391,7 +391,7 @@ def test_context_tabs_keep_map_and_current_intervention_available(site, theme):
     with sync_playwright() as playwright:
         browser, page, errors = _open(playwright, site, API, [])
         page.evaluate("theme => document.documentElement.dataset.theme = theme", theme)
-        for width, height in [(1920, 1080), (1366, 768), (390, 844), (320, 568)]:
+        for width, height in [(1920, 1080), (1366, 768), (900, 900), (390, 844), (320, 568)]:
             page.set_viewport_size({"width": width, "height": height})
             page.clock.run_for(1100)
             status = page.get_by_role("tab", name="로봇·작업")
@@ -430,6 +430,9 @@ def test_context_tabs_keep_map_and_current_intervention_available(site, theme):
                 assert left["width"] / right["width"] == pytest.approx(2, abs=0.05)
                 assert page.locator("#roster-heading").evaluate("node => getComputedStyle(node).fontSize") == "16px"
                 assert page.locator("#map-heading").evaluate("node => getComputedStyle(node).fontSize") == "20px"
+            else:
+                assert page.locator("#fleet-main").evaluate(
+                    "node => getComputedStyle(node).gridTemplateColumns.split(' ').length") == 1
         assert not errors
         browser.close()
 

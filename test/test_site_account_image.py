@@ -10,7 +10,7 @@ import sys
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-COMMON = {'tokens.css', 'components.css', 'component-controls.css', 'theme.js', 'ui.js', 'ui-wiring.js',
+COMMON = {'tokens.css', 'app-shell.css', 'components.css', 'component-controls.css', 'theme.js', 'ui.js', 'ui-wiring.js',
           'confirmation.js', 'live-dialog-geometry.js', 'fleet-client.js', 'request.js',
           'account-profile.js', 'icons/console.svg', 'brand/mark.svg'}
 

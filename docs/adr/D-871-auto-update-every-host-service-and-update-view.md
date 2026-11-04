@@ -84,4 +84,10 @@
 - 확인: 가드 1회 실행 뒤 `site` 줄에 `updates`(gate open, 업데이터 3개, 사이트 스택 상태)가 들어왔다. host-state `check`는 fixed·drift·errors가 모두 0이다.
 - AI·모델 PC(같은 날): 각 PC에서 root `--dry-run`으로 바뀌는 줄이 `rosy-host-guard-remote` 하나뿐임을 확인했다. 그다음 `rosy-host-state install <role> --approve /usr/local/sbin/rosy-host-guard-remote`와 `install-guard-remote.sh`(인자 없음, 유닛 목록·키 유지)를 실행했다. 가드 1회 실행 뒤 site·ai·model 세 줄 모두 `updates`(gate open)를 보고했고, 업데이터 8개 모두 6시간 안에 정상 판정이 있었다. 세 PC의 host-state `check`는 fixed·drift·errors 0이다. 로봇 줄은 업데이트 호스트가 아니라 `updates`가 없다.
 
+### 현장 점검 2026-11-04 (모델 PC 학습센터 타이머)
+
+- 발견: 모델 PC의 `rosy-learning-center-update.timer`가 `disabled`+`inactive`였다. 유닛 파일은 10-27에 설치됐고 10-31 마지막 실행도 오류 없이 `up_to_date`로 끝났으며, hold 대장(`private/update-holds.json`)과 프리즈 마커는 없었다. 즉 설치 뒤 `enable --now`가 빠진 상태로 남아 있었다.
+- 조치: `systemctl --user enable --now rosy-learning-center-update.timer`로 복구하고 1회 실행으로 검증했다(프리즈 게이트 통과, 센터가 꺼져 있어 설계대로 `idle`/`center_not_running`). 다른 전 표면(로봇·현장 PC 스택/도구·OMX 셀 도구·셀 카메라·AI PC 상황·모델 PC review/model-code)의 타이머는 모두 활성 상태였다.
+- 규칙: 호스트 사용자 유닛 설치는 `systemctl --user enable --now <unit>.timer`까지가 설치다. 또 업데이터 점검은 `systemctl --user list-timers --all 'rosy-*'`와 `~/.config/systemd/user/timers.target.wants/`까지 봐야 한다. 시스템 타이머(`systemctl list-timers`)만 보면 사용자 유닛 업데이터가 전부 빠져 이번처럼 "자동업데이트가 없다"는 오탐이 난다(모델 PC·AI PC에서 반복 확인).
+
 **References:** D-805, D-852, D-530, D-441, D-446, D-454, D-270, D-757, D-785.
