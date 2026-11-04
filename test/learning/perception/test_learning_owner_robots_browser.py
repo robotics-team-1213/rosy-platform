@@ -44,7 +44,7 @@ def owner_page(tmp_path):
                     'owner': {'source': 'fleet'}})
                 route.fulfill(json=state['data']['robots'][-1])
             page.route('**/api/learning/robots', register)
-            yield page, state, f'http://127.0.0.1:{server.server_port}/learning/tasks', errors
+            yield page, state, f'http://127.0.0.1:{server.server_port}/learning/tasks/manage', errors
             browser.close()
     finally:
         server.shutdown(); server.server_close(); thread.join(timeout=5)

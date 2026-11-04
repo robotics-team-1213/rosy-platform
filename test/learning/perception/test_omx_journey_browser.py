@@ -62,6 +62,7 @@ def test_task_workbench_restores_context_and_routes_training_to_task(tmp_path):
             expect(page.locator('#selected-profile-status')).to_contain_text('profile-one')
             link = page.locator('#journey-task-link')
             expect(link).to_contain_text('과제')
+            assert urlsplit(link.get_attribute('href')).path == '/learning/tasks/manage'
             query = parse_qs(urlsplit(link.get_attribute('href')).query)
             assert query == dict(task=['task-one'], profile=['profile-one'], dataset=['data-two'])
             expect(page.locator('#start')).to_be_disabled()

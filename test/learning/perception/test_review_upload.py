@@ -125,6 +125,7 @@ def test_project_upload_requires_import_permission_and_csrf(tmp_path):
         body = payload()
         assert request(url, '/api/catalog/upload', 'reader', body, state['token'])[0] == 403
         assert request(url, '/api/catalog/upload', 'reviewer', body)[0] == 403
+        assert request(url, '/api/catalog/upload', 'reviewer', body)[0] == 403
         code, result = request(url, '/api/catalog/upload', 'reviewer', body, state['token'])
         assert code == 200 and result['added'] == 1
 
@@ -162,5 +163,6 @@ def test_upload_http_accepts_image_larger_than_default_json_limit(tmp_path):
     with running(tmp_path) as (url, _, store):
         review_masks.bind_classes(store, CLASSES)
         _, state = request(url, '/api/workspace', 'reviewer')
+        assert request(url, '/api/catalog/upload', 'reviewer', body)[0] == 403
         code, result = request(url, '/api/catalog/upload', 'reviewer', body, state['token'])
         assert code == 200 and result['added'] == 1

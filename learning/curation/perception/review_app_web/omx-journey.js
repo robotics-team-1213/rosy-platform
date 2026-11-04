@@ -7,7 +7,7 @@ let invalid=keys.some(key=>params.getAll(key).length>1||params.has(key)&&!reques
 let tasks=null,contextError='',loading=false,profileKey='',latest=null,planSaved=false;
 export const journeyContext={task:null,blocked:keys.some(key=>requested[key])||invalid};
 function contextUrl(hash='run-title'){
-  const url=new URL('/learning/tasks',location.origin);
+  const url=new URL('/learning/tasks/manage',location.origin);
   for(const key of keys){const value=key==='dataset'?$('dataset').value:requested[key];if(value)url.searchParams.set(key,value);}
   if(journeyContext.task?.profile_id)url.searchParams.set('profile',journeyContext.task.profile_id);
   url.hash=hash;return url.pathname+url.search+url.hash;

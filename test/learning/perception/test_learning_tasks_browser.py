@@ -32,7 +32,7 @@ def test_task_sim_context_persists_without_claiming_policy_or_real_success(tmp_p
                 page = context.new_page()
                 errors = []
                 page.on('pageerror', lambda error: errors.append(str(error)))
-                page.goto(base + '/learning/tasks')
+                page.goto(base + '/learning/tasks/manage')
                 expect = playwright.expect
                 page.locator('#task-select').select_option(body['task_id'])
                 expect(page.locator('#task-real-status')).to_contain_text('실물 정책 미검증')
@@ -137,7 +137,7 @@ def test_robot_task_launch_and_reconnect(tmp_path):
             browser = p.chromium.launch(headless=True)
             try:
                 page = browser.new_page()
-                page.goto(f'http://127.0.0.1:{server.server_port}/learning/tasks', wait_until='networkidle')
+                page.goto(f'http://127.0.0.1:{server.server_port}/learning/tasks/manage', wait_until='networkidle')
                 expect = playwright.expect
 
                 def robot(name, kind, device):

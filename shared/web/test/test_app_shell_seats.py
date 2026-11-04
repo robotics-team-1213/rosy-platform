@@ -132,7 +132,8 @@ def test_review_documents_share_the_app_bar_and_the_screen_rail():
         assert [(href, current) for _, href, _, current, _ in items if current] == [
             (stage, 'page' if here in (None, stage) else 'true')], name
         assert all(short in full for _, _, full, _, short in items), 'the stored label is part of the accessible name'
-        sub = (re.search(r'<div class="ui-pathbar"><h1>[^<]+</h1>(?:<span data-spacer></span><ui-button [^>]*>[^<]*</ui-button>)?</div>'
+        sub = (re.search(r'<div class="ui-pathbar"><h1>[^<]+</h1>(?:<span data-spacer></span>'
+                         r'(?:<ui-button [^>]*>[^<]*</ui-button>|<a class="workspace-link" href="/learning#learning-start">학습센터 작업 선택</a>))?</div>'
                          r'<nav class="review-kinds" aria-label="정답 하위 메뉴">(.*?)</nav>', body, re.S) if merged else
                re.search(r'</nav></div><div class="ui-subnav"><nav class="ui-subnav-nav" aria-label="[^"]+ 하위 메뉴">'
                          r'<span class="ui-subnav-head">[^<]+</span>(.*?)</nav></div>', body, re.S))

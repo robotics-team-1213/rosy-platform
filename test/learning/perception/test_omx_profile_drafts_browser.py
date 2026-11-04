@@ -170,3 +170,21 @@ def test_context_query_change_keeps_the_same_editor_draft(profile_editor):
     page.evaluate("history.replaceState(null, '', '/learning/omx?view=all')")
     page.reload(wait_until='networkidle')
     expect(page.locator('#profile-name')).to_have_value('Keep after context reset')
+
+
+def test_recording_preset_keeps_draft_confirmation_and_separate_store(profile_editor):
+    page, expect, url, saves = profile_editor
+    page.locator('#profile-name').fill('Center draft')
+    page.on('dialog', lambda dialog: dialog.accept())
+    page.goto(url+'&profile-store=recording', wait_until='networkidle')
+    page.locator('#profile-panel').evaluate('node => node.open = true')
+    page.locator('#profile-name').fill('Recording draft')
+    page.locator('#profile-preset-single').click()
+    expect(page.locator('dialog.ui-confirm')).to_be_visible()
+    page.locator('dialog.ui-confirm ui-button[kind="quiet"]').click()
+    expect(page.locator('#profile-name')).to_have_value('Recording draft')
+    page.reload(wait_until='networkidle')
+    expect(page.locator('#profile-name')).to_have_value('Recording draft')
+    page.goto(url, wait_until='networkidle')
+    expect(page.locator('#profile-name')).to_have_value('Center draft')
+    assert saves == []

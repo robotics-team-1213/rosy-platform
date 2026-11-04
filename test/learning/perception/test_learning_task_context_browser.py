@@ -39,7 +39,7 @@ def test_task_url_restores_loaded_context_and_workbench_links(tmp_path):
             errors = []
             page.on('pageerror', lambda error: errors.append(str(error)))
             page.route('**/api/learning/tasks', lambda route: route.fulfill(json=state))
-            page.goto(base + '/learning/tasks?task=task-one&profile=profile-one&dataset=data-one')
+            page.goto(base + '/learning/tasks/manage?task=task-one&profile=profile-one&dataset=data-one')
             expect = playwright.expect
             expect(page.locator('#task-select')).to_have_value('task-one')
             expect(page.locator('#run-dataset')).to_have_value('data-one')
@@ -72,7 +72,7 @@ def test_stale_or_ambiguous_context_is_recoverable_without_substitution(tmp_path
         try:
             page = browser.new_page()
             page.route('**/api/learning/tasks', lambda route: route.fulfill(json=state))
-            page.goto(base + '/learning/tasks?' + query)
+            page.goto(base + '/learning/tasks/manage?' + query)
             expect = playwright.expect
             expect(page.locator('#tasks-context-error')).to_be_visible()
             expect(page.locator('#tasks-context-error')).to_contain_text('선택')

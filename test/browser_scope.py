@@ -88,7 +88,12 @@ ACCOUNTS = ["test/learning/perception/test_learning_accounts_browser.py",
 TASKS = ["test/learning/perception/test_learning_tasks_browser.py",
          "test/learning/perception/test_learning_task_recovery_browser.py",
          "test/learning/perception/test_learning_task_context_browser.py",
-         "test/learning/perception/test_learning_owner_robots_browser.py"]
+         "test/learning/perception/test_learning_owner_robots_browser.py",
+         "test/learning/perception/test_learning_workflow_browser.py",
+         "test/learning/perception/test_learning_workflow_pipeline_browser.py",
+         "test/learning/perception/test_public_learning_browser.py",
+         "test/learning/perception/test_imitation_browser.py",
+]
 STAGES = ["test/learning/perception/test_learning_stages_browser.py", "test/learning/perception/test_vlm_judge_browser.py",
           "test/learning/perception/test_promotion_request_browser.py"]
 # These HTTP suites also contain opt-in Chromium flows; filename discovery alone misses them.
@@ -116,6 +121,7 @@ SCOPE: dict[str, list[str]] = {
     "operations/apps/games/": GAMES,
     "learning/curation/perception/": REVIEW,
     "learning/curation/perception/review_app.py": LEARNING,
+    "learning/curation/perception/review_static.py": LEARNING,
     "learning/curation/perception/review_app_web/app.css": LEARNING,
     "learning/curation/perception/review_app_web/commands.js": LEARNING,
     "learning/curation/perception/review_app_web/account-session.js": LEARNING,
@@ -133,7 +139,11 @@ SCOPE: dict[str, list[str]] = {
         "storage_web.py", "storage_source.py", "storage_setup.py", "storage_prepare.py", "storage_omx.py",
         "review_app_web/storage.js", "review_app_web/storage-settings.js")},
     **{f"learning/curation/perception/{name}": TASKS for name in
-       ("learning_tasks.py", "learning_tasks_web.py", "owner_robots.py", "review_app_web/tasks.html", "review_app_web/tasks.js")},
+       ("owner_robots.py", "learning_tasks.py", "learning_tasks_web.py", "learning_native_inputs.py", "learning_native_catalog.py",
+        "learning_workflow.py", "learning_recording_card.py", "review_app_web/tasks.html", "review_app_web/tasks.js",
+        "review_app_web/workflow.html", "review_app_web/workflow.js", "review_app_web/workflow.css",
+        "review_app_web/public-learning.html", "review_app_web/public-learning.js", "review_app_web/public-learning.css",
+        "review_app_web/imitate.html", "review_app_web/imitate.js", "review_app_web/imitate.css")},
     **{f"learning/curation/perception/{name}": CAMERA for name in
        ("camera_setup.py", "camera_setup_web.py", "review_app_web/camera.html", "review_app_web/camera.js")},
     "contracts/learning/src/rosy/contracts/learning/camera_setup.py": CAMERA,

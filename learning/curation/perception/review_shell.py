@@ -9,7 +9,9 @@ PAGES = {'learning.html': ('home', 'page'), 'catalog.html': ('catalog', 'page'),
          'camera.html': ('catalog', 'true'), 'workspaces.html': ('catalog', 'true'),
          'omx.html': ('review', 'true'), 'pixels.html': ('review', 'true'),
          'vlm.html': ('review', 'true'), 'sim.html': ('tasks', 'true'),
-         'classes.html': ('review', 'true')}
+         'classes.html': ('review', 'true'),
+         'record.html': ('catalog', 'true'), 'imitate.html': ('catalog', 'true'),
+         'public-learning.html': ('tasks', 'true'), 'workflow.html': ('tasks', 'page')}
 
 
 def render(root, name):

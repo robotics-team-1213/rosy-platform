@@ -102,7 +102,8 @@ class Reviews:
                    'source_revision TEXT NOT NULL, binding TEXT NOT NULL, document TEXT NOT NULL,'
                    'committed INTEGER NOT NULL DEFAULT 0)')
 
-    def source(self, prepared_row):
+    @staticmethod
+    def source(prepared_row):
         if (not isinstance(prepared_row, dict) or prepared_row.get('kind') != 'omx'
                 or not isinstance(prepared_row.get('id'), str)
                 or not re.fullmatch('[0-9a-f]{32}', prepared_row['id'])):

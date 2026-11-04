@@ -3,11 +3,17 @@ import {accountFetch} from '/account-session.js';
 import {confirmIrreversible} from '/common/ui.js';
 import '/commands.js';
 import '/omx-review.js';
+import '/omx-native-train.js';
 import {profileDocumentKey} from '/omx-profiles.js';
 import {renderExportRuns} from '/omx-export.js';
 import {initHub,updateHubRuns} from '/omx-hub.js';
 import {initJourney,refreshJourneyContext,applyJourneyContext,selectJourneyProfile,clearJourneyProfile,updateJourneyEvidence,renderJourneyComparison,journeyContext} from '/omx-journey.js';
 const $=id=>document.getElementById(id);
+const workflowContext=new URLSearchParams(location.search),workflowTask=workflowContext.get('task');
+if(workflowTask&&/^[0-9a-f-]{36}$/.test(workflowTask)){
+  $('workflow-return').href='/learning/tasks?task='+encodeURIComponent(workflowTask);
+  $('workflow-context').hidden=false;
+}
 const VERDICT={ok:'맞음',adjust:'조정 필요',unmeasurable:'측정 불가'};
 const SPLIT={train:'학습',eval:'평가',test:'시험',exclude:'제외'};
 const OUTCOME={success:'성공',failure:'실패',unknown:'미정'};
@@ -125,6 +131,7 @@ function segmentReview(set,section){
       body:JSON.stringify({id:set.id,version:saved.version,segments:JSON.parse(submitted)})});
     const value=await response.json();if(!response.ok)throw new Error(value.error||'저장 실패');
     saved=value;if(JSON.stringify(rows)===submitted)rows=structuredClone(value.document.segments);
+    document.dispatchEvent(new CustomEvent('omx-segments-saved',{detail:{id:set.id,saved:value}}));
   }catch(error){saveError=`저장하지 못했습니다: ${error.message}. 입력 내용은 유지됩니다.`;}finally{saving=false;savesInFlight--;show();}};
   download.onclick=()=>{
     const url=URL.createObjectURL(new Blob([JSON.stringify(saved.document,null,2)+'\n'],{type:'application/json'}));
@@ -174,13 +181,13 @@ async function load(){
     if(!response.ok)throw new Error(response.status===403?'이 작업대의 권한이 없습니다.':value.error||'요청 실패');
     if(generation!==editGeneration){$('omx-status').setAttribute('state','warning');$('omx-status').textContent='불러오는 동안 편집이 바뀌어 기존 화면을 보존했습니다. 필요하면 다시 확인하세요.';return;}
     preparedSets=value.sets;preparedReady=true;
-    const selected=$('prepared-set').value;
+    const selected=$('prepared-set').value||workflowContext.get('prepared');
     $('prepared-set').replaceChildren(...(preparedSets.length?preparedSets.map(set=>{const option=el('option',set.name);option.value=set.id;return option;}):[new Option('등록된 검수 시연 없음','')]));
     if(preparedSets.some(set=>set.id===selected))$('prepared-set').value=selected;
     if(!preparedSets.length)$('prepared-set').value='';
     $('prepared-set').disabled=!preparedSets.length;exportSelection();
     $('empty-prepared').hidden=!!preparedSets.length;
-    document.dispatchEvent(new CustomEvent('omx-prepared-loaded'));
+    document.dispatchEvent(new CustomEvent('omx-prepared-loaded',{detail:{sets:preparedSets}}));
     editors.clear();$('sets').replaceChildren(...value.sets.map(render));
     $('omx-status').setAttribute('state',value.sets.length?'ready':'empty');
     $('omx-status').textContent=value.sets.length?`세트 ${value.sets.length}개`:'연결된 OMX 준비 세트가 없습니다.';
@@ -401,8 +408,8 @@ function renderRuns(){
   const nodes=snapshot.runs.filter(run=>run.execution_mode!=='native_export'&&(!journeyContext.task||run.learning_task?.task_id===journeyContext.task.id)).map(run=>{
     const online=run.execution_mode==='online_experience',section=el('section',null,'learning-section');
     section.append(el('h3',`${online?'지속 SAC·경험 수신':run.method==='act'?'ACT 시범/교정':'HIL-SERL SAC 오프라인 재학습'} · ${STATE[run.status]||run.status}`));
-    section.append(el('p',`작업 ${run.id} · 데이터 ${run.dataset_id}`,'quiet'));
-    section.append(el('p',targetLabel(run)));
+    section.append(el('p',`작업 ${run.id} · ${run.execution_mode==='native_train'?'원본 시연 '+run.prepared_id:'데이터 '+run.dataset_id}`,'quiet'));
+    section.append(el('p',run.execution_mode==='native_train'?`native 전체 입력 · ${run.review_id?'저장 검수 '+run.review_id:'구간 검수 v'+run.segment_version} · 독립 평가와 모델 재적재`:targetLabel(run)));
     if(trainingScope(run)){const details=el('details');details.append(el('summary','학습 입력 범위 기록'),el('pre',JSON.stringify(trainingScope(run),null,2)));section.append(details);}
     const progress=run.progress??{};
     if(online){
