@@ -10,7 +10,8 @@ from test_review_flow_browser import browser_workspace
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason='requires explicit Chromium run')
 
 
-def test_review_photo_and_result_are_in_first_view(browser_workspace):
+@pytest.mark.parametrize('theme', ['dark', 'light'])
+def test_review_photo_and_result_are_in_first_view(browser_workspace, theme):
     page, store, expect = browser_workspace
     review_masks.bind_classes(store, CLASSES)
     base = page.url.split('?')[0].rstrip('/')
@@ -19,6 +20,7 @@ def test_review_photo_and_result_are_in_first_view(browser_workspace):
         for route, canvas, result in [('/', '#canvas', '#object-result'),
                                       ('/pixels', '#pixel-canvas', '#pixel-result')]:
             page.goto(base + route, wait_until='networkidle')
+            page.evaluate('(theme)=>document.documentElement.dataset.theme=theme', theme)
             box = page.locator(canvas).bounding_box()
             assert box and box['y'] <= height * (.65 if route == '/pixels' else .4), (route, width, height, box)
             assert min(box['y'] + box['height'], height) - box['y'] >= box['height'] / 3
@@ -39,7 +41,7 @@ def test_review_photo_and_result_are_in_first_view(browser_workspace):
             expect(page.locator(result)).to_contain_text('저장')
             if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
                 from pathlib import Path
-                target = Path(output) / f'review-hierarchy-{route.strip("/") or "objects"}-{width}x{height}.png'
+                target = Path(output) / f'review-hierarchy-{route.strip("/") or "objects"}-{theme}-{width}x{height}.png'
                 target.parent.mkdir(parents=True, exist_ok=True)
                 page.screenshot(path=str(target), full_page=True)
             assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0

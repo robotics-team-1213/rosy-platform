@@ -29,7 +29,7 @@ def test_task_pages_share_body_and_native_navigation_controls(browser_workspace,
     base = f'{origin.scheme}://{origin.netloc}'
     page.set_viewport_size({'width': width, 'height': 844})
     targets = ['/learning', '/catalog', '/learning/camera', '/learning/workspaces', '/learning/omx',
-               '/learning/vlm', '/learning/tasks', '/learning/sim', '/learning/evaluate']
+               '/learning/vlm', '/learning/tasks', '/learning/sim', '/learning/evaluate', '/accounts']
     for target in targets:
         page.goto(base + target, wait_until='domcontentloaded')
         page.evaluate('theme => document.documentElement.dataset.theme = theme', theme)
@@ -39,6 +39,13 @@ def test_task_pages_share_body_and_native_navigation_controls(browser_workspace,
         for link in page.locator('a.ui-action-link:visible').all():
             assert link.get_attribute('data-kind') in ('primary', 'quiet'), target
             assert link.bounding_box()['height'] >= 48, (target, link.inner_text())
+        import os
+        if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+            from pathlib import Path
+            page.wait_for_load_state('networkidle')
+            destination = Path(output) / f'learning-map-{target.strip("/").replace("/", "-")}-{theme}-{width}.png'
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            page.screenshot(path=str(destination))
 
 
 @pytest.mark.parametrize('width', [1280, 390])

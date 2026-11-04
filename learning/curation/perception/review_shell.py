@@ -4,7 +4,7 @@ from pathlib import Path
 import re
 
 PAGES = {'learning.html': ('home', 'page'), 'catalog.html': ('catalog', 'page'),
-         'index.html': ('review', 'page'), 'tasks.html': ('tasks', 'page'),
+         'index.html': ('review', 'page'), 'tasks.html': ('tasks', 'true'),
          'evaluate.html': ('evaluate', 'page'), 'accounts.html': (None, None),
          'camera.html': ('catalog', 'true'), 'workspaces.html': ('catalog', 'true'),
          'omx.html': ('review', 'true'), 'pixels.html': ('review', 'true'),

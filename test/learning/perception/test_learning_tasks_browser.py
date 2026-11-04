@@ -35,6 +35,7 @@ def test_task_sim_context_persists_without_claiming_policy_or_real_success(tmp_p
                 page.goto(base + '/learning/tasks/manage')
                 expect = playwright.expect
                 expect(page.get_by_role('link', name='전문가 설정', exact=True)).to_have_attribute('aria-current', 'page')
+                expect(page.get_by_role('link', name='학습 실행', exact=True)).to_have_attribute('aria-current', 'true')
                 page.locator('#task-select').select_option(body['task_id'])
                 expect(page.locator('#task-real-status')).to_contain_text('실물 정책 미검증')
                 page.locator('#sim-context-run').fill(body['run_id'])
