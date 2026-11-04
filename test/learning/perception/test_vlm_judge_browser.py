@@ -69,6 +69,11 @@ def test_label_by_keyboard_and_mouse_at_phone_width(tmp_path):
                 scroll.focus()
                 expect(scroll).to_be_focused()
                 assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
+                import os
+                if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+                    for theme in ('dark', 'light'):
+                        page.evaluate('theme => document.documentElement.dataset.theme = theme', theme)
+                        page.screenshot(path=str(Path(output) / f'vlm-table-{theme}-390.png'), full_page=True)
                 page.goto(f'http://127.0.0.1:{server.server_port}/learning/evaluate?domain=vlm', wait_until='networkidle')
                 expect(page.locator('.evaluate-source[data-domain="vlm"] .ui-table-scroll table.ui-data-table')).to_be_visible()
                 for width in (1366, 390):
@@ -81,6 +86,10 @@ def test_label_by_keyboard_and_mouse_at_phone_width(tmp_path):
                     else:
                         assert promotion['y'] >= sources['y'] + sources['height'] - 1
                     assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
+                    if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+                        for theme in ('dark', 'light'):
+                            page.evaluate('theme => document.documentElement.dataset.theme = theme', theme)
+                            page.screenshot(path=str(Path(output) / f'evaluation-context-{theme}-{width}.png'), full_page=True)
                 assert errors == []
             finally:
                 browser.close()
