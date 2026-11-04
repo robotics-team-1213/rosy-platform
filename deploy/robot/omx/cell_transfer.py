@@ -10,6 +10,7 @@ any path a person has not reviewed exactly; supervised trials run with config["_
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 
 import cell_pipeline as cp
@@ -20,7 +21,7 @@ from cell_zones import Zones
 class Gate:
     def __init__(self, cell, config: dict, calibration: dict, *, sequence=cp.SEQUENCE):
         self.cell, self.config, self.calibration, self.assessment = cell, config, calibration, None
-        self.sequence, self.source = sequence, {}
+        self.sequence, self.source, self.home = sequence, {}, None
         # two arms, one pallet (cell_zones): a reach claims its zone before it moves and frees it once folded home
         self.zones = Zones(config, calibration) if config.get("zone_side") else None
 
@@ -44,7 +45,8 @@ class Gate:
         if command == "state":
             return self.cell.act(command)
         if command.startswith("load "):
-            self.source = json.loads(Path(command[5:]).read_text()).get("source") or {}
+            library = json.loads(Path(command[5:]).read_text())
+            self.source = library.get("source") or {}
             # The unchanged reviewed carry already owns its durable pending intent.
             identical = (self.assessment["mode"] == "automatic"
                          and digest([self.config, self.calibration, self.sequence]) == self.scope_sha
@@ -60,6 +62,8 @@ class Gate:
             faulted = state.get("fault") and same_session(state, self.assessment, recovering=True)
             return {"ok": False, "error": "held: fault" if faulted else "held: session_changed"}
         a = self.assessment
+        if self.zones:
+            self.zones.bind(a.get("operating_profile"), a["session_id"])
         target = {"goto above_pick": "pick", "goto above_place": "place"}.get(command)
         if self.zones and target:
             xy = self.source.get(target) or {}
@@ -67,8 +71,23 @@ class Gate:
             if not allowed:
                 return {"ok": False, "error": f"held: zone: {why}"}
         status = self.cell.act(f"checked {a['session_id']} {a['library_sha256']} {command}")
-        if self.zones and command == "park" and status.get("ok"):
-            self.zones.leave()
+        if command.startswith("load ") and status.get("ok"):
+            self.home = ((library.get("chunks", {}).get("home") or [None])[-1]
+                         if digest(library) == a["library_sha256"] else None)
+        if self.zones and command == "park":
+            from chunk_runner import SETTLE_TOL
+
+            present, home = status.get("state"), self.home
+            # Runner timeouts report ok=True; only measured, settled home clears physical occupancy.
+            confirmed = (status.get("ok") is True and status.get("settled") is True and not status.get("fault")
+                         and same_session(status, a)
+                         and isinstance(present, list) and isinstance(home, list) and len(present) == len(home) == 6
+                         and all(type(v) in (int, float) and math.isfinite(v) for v in present[:5] + home[:5])
+                         and all(abs(p - h) <= SETTLE_TOL for p, h in zip(present[:5], home[:5])))
+            if confirmed:
+                self.zones.leave()
+            elif status.get("ok"):
+                return {**status, "ok": False, "error": "held: park_home_unconfirmed; zone reservations retained"}
         return status
 
     def frame(self, camera: str):

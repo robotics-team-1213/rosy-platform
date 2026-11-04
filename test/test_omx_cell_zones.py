@@ -25,8 +25,7 @@ def zones(tmp_path, side, clock=None, peer=None):
     t = clock or [0.0]
     z = cell_zones.Zones({"zone_side": side, "zone_peer": peer, "params": PARAMS}, CAL, lock_dir=tmp_path,
                          incidents=tmp_path / "incidents", clock=lambda: t[0], sleep=lambda s: t.__setitem__(0, t[0] + s))
-    if hasattr(z, "bind"):
-        z.bind(owner(side), "1" * 32)
+    z.bind(owner(side), "1" * 32)
     return z
 
 
@@ -78,7 +77,8 @@ def test_the_gate_holds_a_reach_into_the_other_side_before_it_moves_and_frees_th
     cell = Cell()
     gate = cell_transfer.Gate(cell, {"zone_side": "left", "params": PARAMS}, CAL)
     gate.zones = zones(tmp_path, "left")
-    gate.assessment, gate.scope_sha = {"mode": "automatic", "session_id": "s", "library_sha256": "same"}, "same"
+    gate.assessment, gate.scope_sha = {"mode": "automatic", "session_id": "1" * 32,
+                                      "operating_profile": owner("left"), "library_sha256": "same"}, "same"
     lib = tmp_path / "lib.json"
     lib.write_text(json.dumps({"chunks": {"home": [[0] * 6]},
                                "source": {"pick": {"x": 0.42, "y": 0.2}, "place": {"x": 0.37, "y": 0.2}}}))
