@@ -7,7 +7,8 @@ from typing import Annotated, Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from .arm_transfer_jobs import ArmTransferJobCreate
+from .arm_transfer_jobs import ArmTransferJobCreate, ArmTransferPrincipal
+from .arm_transfer_preflight import ArmPhysicalRef
 
 
 UnitId = Annotated[str, Field(strict=True, min_length=1, max_length=64,
@@ -15,6 +16,7 @@ UnitId = Annotated[str, Field(strict=True, min_length=1, max_length=64,
 DelegationId = Annotated[str, Field(strict=True, min_length=1, max_length=128,
                                     pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]*$")]
 Coordinate = Annotated[float, Field(strict=True, allow_inf_nan=False)]
+CancelReason = Annotated[ArmPhysicalRef, Field(max_length=192)]
 
 
 class ControlGoal(BaseModel):
@@ -45,6 +47,8 @@ class ControlArmTransferCandidate(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     target_unit: UnitId
     transfer: ArmTransferJobCreate
+    # Display only: the app the relaying unit authenticated; it grants nothing at the cell.
+    requested_by: ArmTransferPrincipal | None = None
 
 
 class ControlArmWorkRequest(ControlArmTransferCandidate):
@@ -54,6 +58,12 @@ class ControlArmWorkRequest(ControlArmTransferCandidate):
 class ControlArmIngressRequest(ControlArmWorkRequest):
     origin_id: UnitId
     config_revision: UnitId
+
+
+class ControlCancelRequest(BaseModel):
+    """D-965: why the origin asked to cancel; recorded with the request, never a stop claim."""
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    reason: CancelReason | None = None
 
 
 class ControlApproveRequest(BaseModel):
@@ -90,6 +100,7 @@ class ControlDelegationSnapshot(BaseModel):
                                    pattern=r"^[^\x00-\x1f\x7f]+$")
     local_task_id: DelegationId | None = None
     cancel_requested: bool = Field(strict=True)
+    cancel_reason: CancelReason | None = None
     result: dict[str, Any]
     updated_at: datetime
 

@@ -5,7 +5,8 @@ from datetime import datetime, timezone
 import logging
 
 from core_common.protocol.arm_transfer import ArmTransferCapability, FleetArmTransferGrant
-from .physical_transfer_store import PhysicalTransferRequest
+from .device_identity import device_trial_identity_ok
+from .physical_transfer_store import ARM_TRANSFER_PROFILES, PhysicalTransferRequest
 from .local_action_transport import LocalActionUnavailable
 from .physical_transfer_io import physical_io
 from .physical_transfer_recovery import find_recovery, recover_transfer, retained_snapshot
@@ -14,9 +15,11 @@ _LOG = logging.getLogger(__name__)
 
 
 class PhysicalTransferDispatcher:
-    def __init__(self, execution, transport, task_store, *, deployment_profile):
-        if deployment_profile != "simulation":
-            raise ValueError("physical SDK dispatch requires the simulation profile")
+    def __init__(self, execution, transport, task_store, *, deployment_profile, commissioning_revisions=None):
+        if deployment_profile not in ARM_TRANSFER_PROFILES:
+            raise ValueError("physical SDK dispatch requires the simulation or device_trial profile")
+        self.deployment_profile = deployment_profile
+        self._commissioning = dict(commissioning_revisions or {})
         if execution.store._journal.path.resolve() != task_store.path.resolve():
             raise ValueError("physical SDK dispatch requires the shared Fleet journal")
         if any(not callable(getattr(transport, name, None)) for name in (
@@ -24,6 +27,12 @@ class PhysicalTransferDispatcher:
             raise ValueError("physical SDK dispatch requires the complete owner SDK")
         self.execution, self.transport, self.task_store = execution, transport, task_store
         self._journal_path = execution.store._journal.path.resolve()
+
+    def _owner_kind_ok(self, identity, participant):
+        if self.deployment_profile == "simulation":
+            return identity.get("simulation") is True
+        return device_trial_identity_ok(identity, workcell_id=participant.workcell_id, instance_id=participant.instance_id,
+                                        expected=self._commissioning.get(participant.instance_id))
 
     def _capabilities(self):
         store = self.execution.store
@@ -33,7 +42,7 @@ class PhysicalTransferDispatcher:
             identity = self.transport.owner_identity(participant.instance_id)
             cap = ArmTransferCapability.model_validate(self.transport.transfer_capability(
                 participant.instance_id, workcell_id=participant.workcell_id))
-            if (identity.get("simulation") is not True
+            if (not self._owner_kind_ok(identity, participant)
                     or (identity.get("workcell_id"), identity.get("instance_id"), identity.get("journal_id"))
                        != (participant.workcell_id, participant.instance_id, cap.journal_id)
                     or (cap.workcell_id, cap.instance_id) != (participant.workcell_id, participant.instance_id)):

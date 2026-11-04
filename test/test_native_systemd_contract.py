@@ -1268,7 +1268,7 @@ def test_core_program_scan_follows_imports_into_the_control_package():
     resolved = {path.relative_to(ROOT).as_posix()
                 for path in _imported_modules("middleware/core/gateway/test", "control", "middleware/perception")}
     assert "middleware/perception/nodes/sensor_provider.py" in resolved
-    assert "middleware/perception/nodes/calibration_storage.py" in resolved
+    assert "middleware/perception/calibration/calibration_storage.py" in resolved
 
 
 # D-373: the operator's on-device switch for camera_preview.launch.py learned_shadow/capture.

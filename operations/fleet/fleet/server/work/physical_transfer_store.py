@@ -67,6 +67,10 @@ def _principal(principal, *, propose=False, operator=False):
     return principal.principal_id
 
 
+#: D-977 2: production stays closed; device_trial additionally needs exactly one participating arm.
+ARM_TRANSFER_PROFILES = frozenset({"simulation", "device_trial"})
+
+
 def _check_parent_proof(checked_at):
     if (type(checked_at) is not float or not math.isfinite(checked_at)
             or not 0 <= time.monotonic() - checked_at <= 5.0):
@@ -79,10 +83,22 @@ def _matches(request, installed):
             and request.source == installed.source and request.target == installed.target)
 
 
+def _delegated_by(connection, mission_id):
+    """D-965 display: which unit delegated this job and for which app; None for a local proposal."""
+    if not connection.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='fleet_control_delegations'"
+                              ).fetchone():
+        return None
+    row = connection.execute("SELECT origin_id,request_json FROM fleet_control_delegations WHERE local_task_id=?",
+                             (mission_id,)).fetchone()
+    if row is None:
+        return None
+    return {"origin_unit": row[0], "requested_by": json.loads(row[1]).get("requested_by")}
+
+
 class PhysicalTransferStore:
     def __init__(self, path, *, installation, deployment_profile, clock_ns=time.time_ns):
-        if deployment_profile != "simulation" or not Path(path).is_file():
-            raise ValueError("physical transfers require an existing simulation Fleet journal")
+        if deployment_profile not in ARM_TRANSFER_PROFILES or not Path(path).is_file():
+            raise ValueError("physical transfers require an existing simulation or device_trial Fleet journal")
         self.installation = TransferInstallation.model_validate(installation)
         expected = {
             "fleet_tasks": ("task_id", {"task_id"}),
@@ -138,6 +154,7 @@ class PhysicalTransferStore:
         result["installation"] = installed.model_dump(mode="json")
         result["proposal_digest"] = sha256(row["job_json"].encode()).hexdigest()
         result["resources"] = json.loads(row["resources_json"])
+        result["delegated_by"] = _delegated_by(connection, mission_id)
         return result
 
     def get(self, mission_id, *, principal):

@@ -447,7 +447,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         task_store=task_service.store if mission_configured else None, transport=action_transport,
         socket_root=omx_socket_root, require_proposer=require_proposer, require_viewer=require_viewer,
         require_named_operator=require_named_operator, observer=arm_transfer_observer, console=console,
-        principals=principals, other_tokens=other_tokens, other_services=(sightings, policy_evidence),
+        grant_revisions=omx_cell_grant_revisions, principals=principals, other_tokens=other_tokens, other_services=(sightings, policy_evidence),
         registries=(cell_goal_registry, goal_evidence_service.registry if goal_evidence_service is not None else None))
 
     from fleet.server.peer_routes import install_peer_catalogue
