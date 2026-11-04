@@ -13,18 +13,35 @@
 <a class="ui-rail-item" data-action-icon="list" href="/learning" aria-label="홈">홈</a><a class="ui-rail-item" data-action-icon="folder" href="/catalog" aria-label="자료 등록">자료</a><a class="ui-rail-item" data-action-icon="pencil" href="/" aria-label="정답 달기">정답</a><a class="ui-rail-item" data-action-icon="robot" href="/learning/tasks" aria-label="학습 실행" aria-current="page">학습</a><a class="ui-rail-item" data-action-icon="check" href="/learning/evaluate" aria-label="평가·승격">평가·승격</a>
 <!-- review:rail:end --></nav></div><div class="ui-subnav"><nav class="ui-subnav-nav" aria-label="학습 하위 메뉴"><span class="ui-subnav-head">학습</span><a class="ui-subnav-item" href="/learning/tasks" aria-current="page">학습 과제</a><a class="ui-subnav-item" href="/learning#pipeline">인식 학습</a><a class="ui-subnav-item" href="/learning/sim">SIM 실험</a></nav></div>
 <div class="ui-app-main"><div class="ui-pathbar"><h1>로봇·과제 학습</h1><span data-spacer></span><ui-button id="tasks-refresh" kind="quiet" data-action-icon="refresh">다시 확인</ui-button></div><main id="tasks-main" class="learning-main ui-task-page" tabindex="-1">
-<p class="learning-lede">로봇을 등록하고 참여 구성을 정한 뒤, 자료와 학습 결과를 같은 과제에 연결합니다.</p>
-<ui-status id="tasks-error" state="error" role="alert" hidden></ui-status><p id="tasks-status" role="status">작업 공간 연결을 확인하는 중입니다.</p><a data-kind="quiet" id="tasks-login" class="ui-action-link" href="/accounts" hidden>로그인·계정에서 권한 확인</a>
-<section class="learning-section" aria-labelledby="robots-title"><h2 id="robots-title">1 · 학습할 로봇 등록</h2>
-<p class="quiet">기존 device ID를 참조하는 학습용 등록입니다. 실제 장치 연결·제어 권한이 확인되었다는 뜻은 아닙니다. 현재 정책 학습 실행은 OMX를 지원합니다.</p>
-<ul id="robots"><li>등록된 로봇을 확인하는 중입니다.</li></ul>
-<form id="robot-form" class="ui-form learning-form">
+<p class="learning-lede">과제를 선택하고 시범 자료로 학습을 실행한 뒤, 같은 과제에서 결과를 비교하고 교정 자료를 준비합니다.</p>
+<ui-status id="tasks-error" state="error" role="alert" hidden></ui-status><p id="tasks-status" role="status">작업 공간 연결을 확인하는 중입니다.</p><a id="tasks-login" class="ui-action-link" data-kind="quiet" href="/accounts" hidden>로그인·계정에서 권한 확인</a>
+<div id="tasks-context-error" hidden><ui-status id="tasks-context-message" state="error" role="alert"></ui-status><ui-button id="tasks-context-reset" kind="quiet">링크의 선택 초기화</ui-button></div>
+<p id="task-next" role="status"></p><ui-button id="task-next-setup" kind="quiet">과제 만들기 열기</ui-button>
+<section id="task-run-section" class="learning-section" aria-labelledby="run-title"><h2 id="run-title">과제 선택·자료·학습 시작</h2>
+<label class="ui-field-label">저장 과제 <select id="task-select" class="ui-field"><option value="">과제 선택</option></select></label><div id="selected-task" aria-live="polite"></div>
+<form id="run-form" class="ui-form learning-form">
+<label class="ui-field-label">등록 자료 <select id="run-dataset" class="ui-field" required><option value="">자료 선택</option></select></label>
+<label class="ui-field-label">학습 방법 <select id="run-method" class="ui-field"><option value="act">ACT · 시범·교정</option><option value="hilserl">HIL-SERL · 경험</option></select></label>
+<label class="ui-field-label">실행 방식 <select id="run-execution" class="ui-field"><option value="offline">저장 자료로 학습</option><option value="online">지속 경험 학습</option></select></label>
+<label id="run-arm-field" class="ui-field-label" hidden>학습할 참여 요소 <select id="run-arm" class="ui-field"></select></label>
+<label class="ui-field-label">학습 단계 <input id="run-steps" class="ui-field" type="number" min="1" max="1000000" value="100" required></label>
+<label class="ui-field-label">배치 크기 <input id="run-batch" class="ui-field" type="number" min="1" max="4096" value="8" required></label>
+<p id="run-host" role="status"></p><p id="run-readiness" role="status"></p><p id="run-data-status" class="quiet"></p>
+<p><a id="task-workbench-review" class="ui-action-link" data-kind="quiet" data-workbench-section="dataset-section" href="/learning/omx#dataset-section">시범 검수·자료 등록</a> · 자료의 과제·프로필·참여 범위는 실행 전에 서버에서 다시 확인합니다. 기존 자료는 첫 실행에서 이 과제에 고정하여 사후 연결됩니다. 수집 당시의 과제를 입증하지는 않습니다.</p>
+<ui-button id="run-start" kind="primary" type="submit" disabled>선택 과제 학습 시작</ui-button></form></section>
+<section id="task-results-section" class="learning-section" aria-labelledby="results-title"><h2 id="results-title">이 과제의 실행·평가 결과</h2><p class="quiet">저장된 실행 기록은 다시 접속해도 확인할 수 있습니다. 실행 중인 지속 학습에는 경험 자료를 추가하거나 학습을 중지할 수 있습니다. 중지는 이 호스트의 학습 실행기에만 적용됩니다. 합성 시험 결과는 실물 연결이나 현장 수용을 뜻하지 않습니다.</p><p><a id="task-workbench-training" class="ui-action-link" data-kind="quiet" data-workbench-section="train-section" href="/learning/omx#train-section">선택 자료의 학습 준비·작업대 확인</a></p><div id="task-runs" aria-live="polite"></div></section>
+<details id="robot-setup" class="learning-section" open><summary id="robots-title">학습할 로봇 등록·목록</summary>
+<p class="quiet">Fleet에 이미 등록된 로봇·팔을 골라 학습 대상으로 등록합니다. 목록에 있다는 것은 연결·제어 권한 확인이 아니며, 정책 학습 실행은 OMX만 지원합니다.</p>
+<h3 id="owner-title">Fleet 등록 장치</h3><div id="owner-robots" aria-labelledby="owner-title"></div><p id="owner-detail" class="quiet" role="status"></p>
+<h3 id="registered-title">이 프로젝트의 학습 로봇</h3><div id="robots" aria-labelledby="registered-title"></div>
+<ui-button id="robot-manual-toggle" kind="quiet" aria-expanded="false" aria-controls="robot-form">목록에 없는 로봇 직접 입력</ui-button>
+<form id="robot-form" class="ui-form learning-form" hidden><p class="quiet">시뮬 전용이거나 아직 Fleet에 없는 로봇입니다. 직접 입력한 로봇은 'Fleet 미확인'으로 표시됩니다.</p>
 <label class="ui-field-label">로봇 이름 <input id="robot-name" class="ui-field" maxlength="1024" required></label>
-<label class="ui-field-label">로봇 종류 <input id="robot-kind" class="ui-field" maxlength="128" value="omx" placeholder="omx, mobile 등" required></label>
-<label class="ui-field-label">모델 revision <input id="robot-model" class="ui-field" maxlength="128" placeholder="예: omx-v1" required></label>
-<label class="ui-field-label">기존 device ID <input id="robot-device" class="ui-field" maxlength="128" required></label>
-<ui-button id="robot-save" kind="primary" type="submit" disabled>로봇 등록</ui-button></form></section>
-<section class="learning-section" aria-labelledby="task-title"><h2 id="task-title">2 · 과제와 참여 구성 저장</h2>
+<label class="ui-field-label">로봇 종류 <select id="robot-kind" class="ui-field" required><option value="omx">OMX 팔</option><option value="pinky">Pinky 주행 로봇</option><option value="robot">기타 로봇</option></select></label>
+<label class="ui-field-label">모델 revision <input id="robot-model" class="ui-field" maxlength="128" pattern="[A-Za-z0-9][A-Za-z0-9_.:\-]*" placeholder="예: omx-v1" required></label>
+<label class="ui-field-label">기존 device ID <input id="robot-device" class="ui-field" maxlength="128" pattern="[A-Za-z0-9][A-Za-z0-9_.:\-]*" required></label>
+<ui-button id="robot-save" kind="quiet" type="submit" disabled>직접 입력한 로봇 등록</ui-button></form></details>
+<details id="task-setup" class="learning-section" open><summary id="task-title">새 과제·참여 구성 만들기</summary>
 <p class="quiet">저장한 과제·참여 구성은 고정됩니다. 조건을 바꾸려면 새 과제로 저장하세요.</p>
 <form id="task-form" class="ui-form learning-form">
 <label class="ui-field-label">과제 이름 <input id="task-name" class="ui-field" maxlength="1024" required></label>
@@ -35,28 +52,15 @@
 <label class="ui-field-label">어댑터 <input id="task-adapter" class="ui-field" maxlength="128" value="omx" required></label>
 <label class="ui-field-label">참여 방식 <select id="task-mode" class="ui-field"><option value="independent">개별 학습</option><option value="cooperative">협동 학습</option></select></label>
 <label id="task-profile-field" class="ui-field-label">저장 OMX 프로필 <select id="task-profile" class="ui-field"><option value="">저장 프로필 선택</option></select></label>
-<p><a data-kind="quiet" class="ui-action-link" href="/learning/omx#profile-panel">OMX 팔·카메라·리더·게임패드 설정</a> · OMX 프로필을 선택하면 저장한 팔 순서대로 참여 요소를 만듭니다.</p>
+<p><a id="task-workbench-profile" class="ui-action-link" data-kind="quiet" data-workbench-section="profile-panel" href="/learning/omx#profile-panel">OMX 팔·카메라·리더·게임패드 설정</a> · OMX 프로필을 선택하면 저장한 팔 순서대로 참여 요소를 만듭니다.</p>
 <div id="task-participants" class="task-participants"></div><ui-button id="participant-add" kind="quiet">참여 요소 추가</ui-button>
-<ui-button id="task-save" kind="primary" type="submit" disabled>과제 저장</ui-button></form></section>
-<section class="learning-section" aria-labelledby="run-title"><h2 id="run-title">3 · 과제 선택·자료·학습 시작</h2>
-<label class="ui-field-label">저장 과제 <select id="task-select" class="ui-field"><option value="">과제 선택</option></select></label><div id="selected-task" aria-live="polite"></div>
-<form id="run-form" class="ui-form learning-form">
-<label class="ui-field-label">등록 자료 <select id="run-dataset" class="ui-field" required><option value="">자료 선택</option></select></label>
-<label class="ui-field-label">학습 방법 <select id="run-method" class="ui-field"><option value="act">ACT · 시범·교정</option><option value="hilserl">HIL-SERL · 경험</option></select></label>
-<label class="ui-field-label">실행 방식 <select id="run-execution" class="ui-field"><option value="offline">저장 자료로 학습</option><option value="online">지속 경험 학습</option></select></label>
-<label id="run-arm-field" class="ui-field-label" hidden>학습할 참여 요소 <select id="run-arm" class="ui-field"></select></label>
-<label class="ui-field-label">학습 단계 <input id="run-steps" class="ui-field" type="number" min="1" max="1000000" value="100" required></label>
-<label class="ui-field-label">배치 크기 <input id="run-batch" class="ui-field" type="number" min="1" max="4096" value="8" required></label>
-<p id="run-host" role="status"></p><p id="run-readiness" role="status"></p><p id="run-data-status" class="quiet"></p>
-<p><a data-kind="quiet" class="ui-action-link" href="/learning/omx#dataset-section">시범 검수·자료 등록</a> · 자료의 과제·프로필·참여 범위는 실행 전에 서버에서 다시 확인합니다. 기존 자료는 첫 실행에서 이 과제에 고정하여 사후 연결됩니다. 수집 당시의 과제를 입증하지는 않습니다.</p>
-<ui-button id="run-start" kind="primary" type="submit" disabled>선택 과제 학습 시작</ui-button></form></section>
-<section class="learning-section" aria-labelledby="results-title"><h2 id="results-title">4 · 이 과제의 실행·평가 결과</h2><p class="quiet">저장된 실행 기록은 다시 접속해도 확인할 수 있습니다. 실행 중인 지속 학습에는 경험 자료를 추가하거나 학습을 중지할 수 있습니다. 중지는 이 호스트의 학습 실행기에만 적용됩니다. 합성 시험 결과는 실물 연결이나 현장 수용을 뜻하지 않습니다.</p><div id="task-runs" aria-live="polite"></div></section>
-<section class="learning-section" aria-labelledby="sim-context-title"><h2 id="sim-context-title">5 · SIM 시나리오 참고 증거</h2>
+<ui-button id="task-save" kind="primary" type="submit" disabled>과제 저장</ui-button></form></details>
+<section class="learning-section" aria-labelledby="sim-context-title"><h2 id="sim-context-title">SIM 시나리오 참고 증거</h2>
 <p>기존 SIM 실험의 종료 기록을 선택 과제에 연결합니다. 이 연결은 운영자가 지정한 참고 관계이며, 해당 시나리오가 학습된 정책을 실행했다는 뜻은 아닙니다.</p>
 <p id="task-real-status" role="status"></p><p id="sim-context-readiness" class="quiet"></p>
 <form id="sim-context-form" class="ui-form learning-form"><label class="ui-field-label">종료된 SIM run ID <input id="sim-context-run" class="ui-field" pattern="[0-9a-f]{32}" minlength="32" maxlength="32" required autocomplete="off"></label>
 <ui-button id="sim-context-save" kind="primary" type="submit" disabled>선택 과제에 SIM 기록 연결</ui-button></form>
-<p><a class="workspace-link" href="/learning/sim">SIM 실험·종료 기록 확인</a></p><div id="task-sim-contexts" aria-live="polite"></div></section>
+<p><a class="ui-action-link" data-kind="quiet" href="/learning/sim">SIM 실험·종료 기록 확인</a></p><div id="task-sim-contexts" aria-live="polite"></div></section>
 <details class="learning-section"><summary>다른 호스트로 과제 메타데이터 전달</summary><p>같은 프로젝트의 Model·AI 호스트 사이에서 파일로 전달합니다. 자동 동기화되지 않으며 세션·키·장치 권한은 전달하지 않습니다. 대상 호스트에 일치하는 프로필과 자료가 필요합니다.</p>
 <ui-button id="task-export" kind="quiet" disabled>선택 과제 파일 내려받기</ui-button><form id="import-form" class="ui-form learning-form"><label class="ui-field-label">과제 메타데이터 JSON (최대 1 MiB) <input id="task-import-file" class="ui-field" type="file" accept=".json,application/json" required></label><ui-button id="task-import" kind="quiet" type="submit" disabled>과제 파일 가져오기</ui-button></form></details>
 </main></div></div></ui-shell></body></html>
