@@ -277,7 +277,7 @@ def test_console_has_no_setup_tools_and_connection_guide_recovers(browser_site):
     expect(page.locator('#topbar-more')).to_be_focused()
     page.locator('#connection-guide-action').click()
     expect(page).to_have_url(page.origin + '/console/login?return=%2Fconsole')
-    expect(page.get_by_role('heading', name='관제 로그인')).to_be_visible()
+    expect(page.get_by_role('heading', name='계정 로그인')).to_be_visible()
     expect(page.locator('#login-availability')).to_be_visible()
     expect(page.locator('#login-availability')).to_have_text(
         '이 현장에는 사람 로그인이 설정되지 않았습니다. 현장 관리자에게 계정 설정을 요청하세요.')

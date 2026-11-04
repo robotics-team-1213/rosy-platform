@@ -354,7 +354,7 @@
 ## 최근 기록
 
 - 2026-11-04 · uncommitted · 조립식 배 v11 MuJoCo 쌍둥이, 손목 카메라 B, D-956 Isaac 결과
-- 2026-11-04 · uncommitted · MuJoCo 3층 적재 개선 후보 비교
-- 2026-11-04 · uncommitted · feat(sim): MuJoCo 3층 전체 적재 순서, 실측 셀 layout, 실물 site 계획
-- 2026-11-04 · uncommitted · docs(control-terms): D-974 착지 준비 — 안전 검토·크기·ADR Log 병합 정리
-- 2026-11-03 · uncommitted · D-969 두 팔 ACT 파이프라인: ADR, Isaac 시연 녹화, 데이터셋 내보내기
+- 2026-11-04 · uncommitted · fix(remote): 작은 host에만 놓인 실행은 큰 PC가 비면 옮겨 간다 (D-889 추가 31)
+- 2026-11-04 · uncommitted · fix(land): ADR Log union 병합의 옛 행을 착지가 지운다 (D-889 추가 30)
+- 2026-11-04 · uncommitted · docs(plans): peer pose sharing 설계에 v1 실행 범위 명시
+- 2026-11-04 · uncommitted · docs(plans): 로봇 간 맵 위치 공유(peer pose sharing) 설계

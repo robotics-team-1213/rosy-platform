@@ -1,5 +1,6 @@
 """Real Chromium recovery flow; intercepted HTTPS isolates UI from physical radios."""
 from pathlib import Path
+import os
 
 import pytest
 
@@ -10,7 +11,8 @@ pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt
 
 
 @pytest.mark.parametrize("width,height", [(320, 568), (390, 844), (1366, 768)])
-def test_recovery_keyboard_confirmation_disconnect_and_reconnect(rig, width, height):
+@pytest.mark.parametrize("theme", ["dark", "light"])
+def test_recovery_keyboard_confirmation_disconnect_and_reconnect(rig, width, height, theme):
     playwright = pytest.importorskip("playwright.sync_api")
     _, http, _, _, calls, coordinator, code = rig
     assets = Path(__file__).resolve().parents[1] / "shared/web"
@@ -45,6 +47,10 @@ def test_recovery_keyboard_confirmation_disconnect_and_reconnect(rig, width, hei
         page.route("https://10.42.0.1:8443/**", intercept)
         try:
             page.goto("https://10.42.0.1:8443/")
+            playwright.expect(page).to_have_title("Rosy Robot — Wi-Fi 연결 복구")
+            page.evaluate("theme => RosyTheme.set(theme)", theme)
+            if width >= 600:
+                assert page.locator('main').bounding_box()['width'] <= 600
             page.get_by_label("물리 화면과 전체 지문", exact=False).check()
             page.get_by_label("화면에 표시된 복구 코드", exact=True).fill("WRONG123")
             page.get_by_role("button", name="복구 코드 확인", exact=True).click()
@@ -57,6 +63,9 @@ def test_recovery_keyboard_confirmation_disconnect_and_reconnect(rig, width, hei
             page.get_by_label("Wi-Fi 비밀번호", exact=True).fill("password")
             page.locator("#psk").press("Enter")
             assert page.locator("#apply").evaluate("el => el === document.activeElement")
+            primary = page.locator('#apply').evaluate('el => getComputedStyle(el).backgroundColor')
+            for target in ('#cancel', '#review'):
+                assert page.locator(target).evaluate('el => getComputedStyle(el).backgroundColor') != primary
             page.get_by_role("button", name="Wi-Fi 연결 적용", exact=True).click()
             page.get_by_text("작업 접수됨 · 연결 적용 대기", exact=True).wait_for()
             assert page.locator("#psk").input_value() == ""
@@ -70,7 +79,11 @@ def test_recovery_keyboard_confirmation_disconnect_and_reconnect(rig, width, hei
             page.reload()
             page.get_by_text("연결 저장 완료", exact=True).wait_for()
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
-            save_temp_screenshot(page, f"network-recovery-{width}.png")
+            shot = f"network-recovery-{width}-{theme}.png"
+            if directory := os.environ.get('ROSY_SHOT_DIR'):
+                Path(directory).mkdir(parents=True, exist_ok=True)
+                shot = str(Path(directory) / shot)
+            save_temp_screenshot(page, shot)
             assert errors == []
         finally:
             browser.close()

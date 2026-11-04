@@ -393,3 +393,9 @@ recording:
 fleet:
   enabled: false                  # 읽히지 않는다 (D-419): FleetAgent 는 pairing_token + hub_url|discovery 로 켜진다
   heartbeat_reply_timeout_s: 2.0  # D-419: 하트비트(1 Hz) 답(ERROR 답 포함)이 이 안에 없으면 소켓을 끊는다 (0.5–10 s; 어기면 Fleet 링크가 있는 로봇만 기동 실패)
+
+peers:                            # 로봇 간 맵 위치 공유 (docs/plans/2026-11-04-peer-pose-sharing-design.md)
+  enabled: false                  # 꺼져 있으면 StateSnapshot.peers 는 null 이고 beacon 스레드도 없다
+  rate_hz: 1.0                    # beacon 주기 (0.2–5 Hz)
+  max_age_s: 5.0                  # 이보다 오래 침묵한 peer 행은 GET /peers 에서 사라진다
+  hosts: []                       # [{host: rosy-pinky-<id>.local, port: 8080, token: <상대 기기 operator 토큰>, ca_file: 선택}]

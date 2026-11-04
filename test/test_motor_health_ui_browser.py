@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 from browser_harness import browser_tests_enabled, save_temp_screenshot
-from test_fleet_console_browser import ROOT, console_url, _open_console, _robot, MAP_GRID  # noqa: F401
+from test_fleet_console_browser import ROOT, console_url, _open_console, _open_cards, _robot, MAP_GRID  # noqa: F401
 from test_fleet_workcell_observation_browser import cell_url  # noqa: F401
 
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason='set ROSY_RUN_BROWSER_TESTS=1')
@@ -372,4 +372,59 @@ def test_cell_keeps_a_guard_stop_with_the_lagging_joints_and_the_frames_on_scree
         save_temp_screenshot(card, 'cell_fault_history_LOCAL_390.png')
         assert not state.failed_assets, state.failed_assets
         page.unroute_all(behavior='ignoreErrors')
+        browser.close()
+
+
+@pytest.mark.parametrize("thermal,label", [("warm", "열: 감속"), ("hot", "열: 정지")])
+def test_power_health_card_keeps_stale_evidence_unknown_and_safety_latched(console_url, thermal, label):
+    from playwright.sync_api import expect, sync_playwright
+
+    robot = _robot("rosy_01", {"x": 1.0, "y": 1.0, "yaw": 0.0})
+    robot["state_age_s"] = 0.0
+    robot["state"]["safety"]["thermal"] = thermal
+    robot["power_health_age_s"] = 0.2
+    robot["power_health"] = {"battery": {
+        "evidence": "fresh", "sample_age_s": 0.2, "stale_after_s": 5,
+        "level": "ok", "percent": 63, "charging_state": "confirmed",
+        "charging_evidence_age_s": 0.2,
+    }}
+    api = {"/api/fleet/state": {"fleet": {"name": "site", "online": 1, "total": 1},
+                                 "robots": [robot], "ts": 0.0},
+           "/api/fleet/map": MAP_GRID,
+           "/api/fleet/formation": {"active": False, "state": "IDLE"}}
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(playwright, api)
+        page.goto(console_url, wait_until="networkidle")
+        _open_cards(page)
+        card = page.locator('#robot-workspace article[data-robot-id="rosy_01"]')
+        summary = page.locator('#roster article[data-robot-id="rosy_01"]')
+        heat = summary.get_by_text(label, exact=True)
+        expect(heat).to_be_visible()
+        page.wait_for_function("() => document.querySelector('#robot-workspace [data-fact=battery] strong')?.textContent === '63%'")
+        assert "충전 확인" in card.locator('[data-charging]').inner_text()
+
+        robot["power_health_age_s"] = 6.0
+        page.wait_for_function("() => document.querySelector('#robot-workspace [data-fact=battery] strong')?.textContent === '확인 불가'")
+        assert card.locator('[data-charging]').get_attribute("data-charging") == "확인 불가"
+
+        robot["power_health_age_s"] = 0.2
+        robot["state_age_s"] = 10.0
+        expect(heat).to_have_count(0)
+        expect(summary.get_by_text("안전 확인 불가", exact=True)).to_be_visible()
+        robot["state_age_s"] = 0.0
+        expect(heat).to_be_visible()
+        robot["online"] = False
+        robot["error"] = {"reachable": False, "held": False, "code": "CONNECT_ERROR"}
+        api["/api/fleet/state"]["fleet"]["online"] = 0
+        expect(heat).to_have_count(0)
+        expect(summary.get_by_text("안전 확인 불가", exact=True)).to_be_visible()
+        robot["online"] = True
+        robot["error"] = None
+        api["/api/fleet/state"]["fleet"]["online"] = 1
+        expect(heat).to_be_visible()
+        robot["state"]["safety"]["estop"] = True
+        page.wait_for_function("() => document.querySelector('#robot-workspace [data-fact=safety]')?.textContent.includes('비상 정지')")
+        assert "충전 확인" in card.locator('[data-charging]').inner_text()
+        assert "비상정지 해제…" in card.inner_text()
+        assert not errors
         browser.close()

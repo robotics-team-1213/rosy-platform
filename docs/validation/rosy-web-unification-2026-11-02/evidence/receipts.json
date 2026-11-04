@@ -1,0 +1,1083 @@
+{
+  "scope": "Source and UI receipts. Historical failed phases remain failed; replacements are separate. No deployment, ARM64, device or field acceptance.",
+  "log_location": "Session scratch rosy-web-unify; private absolute host paths removed. Original selection/logs/manifests are retained in workspace-records/2026-11-02/rosy-ui-unification and session scratch.",
+  "phases": {
+    "FULL-source-delta-receipt-c4f15610cc.json": {
+      "source_revision": "c4f15610cc529a4908d71dc60c7b1ab26a80fdd1",
+      "selection": "FULL-followup-c4f15610cc.json",
+      "source_paths": 24,
+      "log": "<session-scratch>/rosy-web-unify/FULL-followup-c4f15610cc/run-1.txt",
+      "sha256": "2c67636b2d3b4376e880531aa9809ec05e896cc15f102dfb73a5726c797d65d0",
+      "remote_receipt": {
+        "source_k0": {
+          "rc": 0,
+          "alive": false
+        },
+        "duplicate_browser_k1": {
+          "rc": 143,
+          "alive": false,
+          "reason": "Stopped duplicate only after source rc0; browser phase separately completed113files"
+        }
+      },
+      "passed": 4479,
+      "skipped": 164,
+      "count_method": "Single/double quiet progress glyph totals;4643 collected separately is only collection crosscheck, not acceptance",
+      "known_failures": "0 new,0 known,0 flaky",
+      "cleanup": "Own completed run requested after receipt; no other jobs touched"
+    },
+    "FULL-source-6d7e296033-receipts.json": {
+      "source_revision": "6d7e296033eb41c8648720cdc8097dcf4638a21c",
+      "runner_exit": 1,
+      "selection": "FULL-source-6d7e296033.json",
+      "receipts": [
+        {
+          "run": 1,
+          "log": "<session-scratch>/rosy-web-unify/FULL-source-6d7e296033/run-1.txt",
+          "sha256": "2414a6cf1f6823c61fa3c8dac05082de6d085410d46cdb27c70c4b5cae7816a9",
+          "summary": [
+            "35 passed, 9 skipped in 5.38s"
+          ],
+          "known_rc": 0,
+          "known": [
+            "0 new, 0 known, 0 flaky, 0 listed but not failing"
+          ],
+          "new": [],
+          "vacuous": null,
+          "runner_exit": 0
+        },
+        {
+          "run": 2,
+          "log": "<session-scratch>/rosy-web-unify/FULL-source-6d7e296033/run-2.txt",
+          "sha256": "d9df27dbcdd0336c325f12b94b7639af385c3e856e27e7d497d2e095c3ec4c8b",
+          "summary": [
+            "117 passed, 6 skipped in 6.09s"
+          ],
+          "known_rc": 0,
+          "known": [
+            "0 new, 0 known, 0 flaky, 0 listed but not failing"
+          ],
+          "new": [],
+          "vacuous": null,
+          "runner_exit": 0
+        },
+        {
+          "run": 3,
+          "log": "<session-scratch>/rosy-web-unify/FULL-source-6d7e296033/run-3.txt",
+          "sha256": "4f945a363044e554525e19adb4c3b0273b30c1deabdb92358ac03b77d1e6b53d",
+          "summary": [
+            "426 passed, 21 skipped in 13.03s"
+          ],
+          "known_rc": 0,
+          "known": [
+            "0 new, 0 known, 0 flaky, 0 listed but not failing"
+          ],
+          "new": [],
+          "vacuous": null,
+          "runner_exit": 0
+        },
+        {
+          "run": 4,
+          "log": "<session-scratch>/rosy-web-unify/FULL-source-6d7e296033/run-4.txt",
+          "sha256": "730892a62a41ee140d64d1564302b0806a754815746d33a4cec8388f73ebf423",
+          "summary": [
+            "6 passed, 6 skipped in 0.68s"
+          ],
+          "known_rc": 0,
+          "known": [
+            "0 new, 0 known, 0 flaky, 0 listed but not failing"
+          ],
+          "new": [],
+          "vacuous": null,
+          "runner_exit": 0
+        },
+        {
+          "run": 5,
+          "log": "<session-scratch>/rosy-web-unify/FULL-source-6d7e296033/run-5.txt",
+          "sha256": "042585e767f015000dfcbd832c986f95d8def9b16ba6caec558468cac79e8241",
+          "summary": [
+            "328 passed, 10 skipped in 2.05s"
+          ],
+          "known_rc": 0,
+          "known": [
+            "0 new, 0 known, 0 flaky, 0 listed but not failing"
+          ],
+          "new": [],
+          "vacuous": null,
+          "runner_exit": 0
+        },
+        {
+          "run": 6,
+          "log": "<session-scratch>/rosy-web-unify/FULL-source-6d7e296033/run-6.txt",
+          "sha256": "868e349b27fbc6f222584e11cdc00789d48a20156fdf4ea269c1a582525b7add",
+          "summary": [
+            "21 passed, 28 skipped in 0.51s"
+          ],
+          "known_rc": 0,
+          "known": [
+            "0 new, 0 known, 0 flaky, 0 listed but not failing"
+          ],
+          "new": [],
+          "vacuous": null,
+          "runner_exit": 0
+        },
+        {
+          "run": 7,
+          "log": "<session-scratch>/rosy-web-unify/FULL-source-6d7e296033/run-7.txt",
+          "sha256": "97737728e0b52fc8ebbc99ccc9c50227924b54c15ff740631de7818d449fe69d",
+          "summary": [
+            "3 passed in 0.49s"
+          ],
+          "known_rc": 0,
+          "known": [
+            "0 new, 0 known, 0 flaky, 0 listed but not failing"
+          ],
+          "new": [],
+          "vacuous": null,
+          "runner_exit": 0
+        },
+        {
+          "run": 8,
+          "log": "<session-scratch>/rosy-web-unify/FULL-source-6d7e296033/run-8.txt",
+          "sha256": "3f96a02810603fd2b3d4c954a96bd080ce212641656065b52716350a35a07f5d",
+          "summary": [
+            "4 passed in 0.71s"
+          ],
+          "known_rc": 0,
+          "known": [
+            "0 new, 0 known, 0 flaky, 0 listed but not failing"
+          ],
+          "new": [],
+          "vacuous": null,
+          "runner_exit": 0
+        },
+        {
+          "run": 9,
+          "log": "<session-scratch>/rosy-web-unify/FULL-source-6d7e296033/run-9.txt",
+          "sha256": "ea95358a25c220d3a1c62408c824f8ef3a9787e0c23f767484bd7cf926fc2f55",
+          "summary": [
+            "12 passed in 0.38s"
+          ],
+          "known_rc": 0,
+          "known": [
+            "0 new, 0 known, 0 flaky, 0 listed but not failing"
+          ],
+          "new": [],
+          "vacuous": null,
+          "runner_exit": 0
+        },
+        {
+          "run": 10,
+          "log": "<session-scratch>/rosy-web-unify/FULL-source-6d7e296033/run-10.txt",
+          "sha256": "95bce02e249aaa8a2f206fe3f32a9fd4efa79371ddc078307a757ce6dc08da6a",
+          "summary": [
+            "7856 passed, 99 skipped, 8 warnings, 5 subtests passed in 368.49s (0:06:08)"
+          ],
+          "known_rc": 0,
+          "known": [
+            "0 new, 0 known, 0 flaky, 0 listed but not failing"
+          ],
+          "new": [],
+          "vacuous": null,
+          "runner_exit": 0
+        },
+        {
+          "run": 11,
+          "log": "<session-scratch>/rosy-web-unify/FULL-source-6d7e296033/run-11.txt",
+          "sha256": "1bf285a0ceaad2d72fdbbf964f4725e1e3716d20219a907b3bcdf979c1abf7f6",
+          "summary": [
+            "6 passed, 2 skipped, 8 warnings in 14.72s"
+          ],
+          "known_rc": 0,
+          "known": [
+            "0 new, 0 known, 0 flaky, 0 listed but not failing"
+          ],
+          "new": [],
+          "vacuous": null,
+          "runner_exit": 0
+        },
+        {
+          "run": 12,
+          "log": "<session-scratch>/rosy-web-unify/FULL-source-6d7e296033/run-12.txt",
+          "sha256": "733710f9f6e5a9bdbe5dbe5189fa50de3908daf97f0f7a0b849658e455a73d44",
+          "summary": [
+            "3566 passed, 113 skipped, 62 subtests passed in 71.25s (0:01:11)"
+          ],
+          "known_rc": 0,
+          "known": [
+            "0 new, 0 known, 0 flaky, 0 listed but not failing"
+          ],
+          "new": [],
+          "vacuous": null,
+          "runner_exit": 0
+        },
+        {
+          "run": 13,
+          "log": "<session-scratch>/rosy-web-unify/FULL-source-6d7e296033/run-13.txt",
+          "sha256": "315708e21ef09ba6d3109ac18a00133922fb4617a90da20229e57aecb8275f57",
+          "summary": [
+            "7521 passed, 603 skipped, 26 warnings in 412.18s (0:06:52)"
+          ],
+          "known_rc": 0,
+          "known": [
+            "0 new, 0 known, 0 flaky, 0 listed but not failing"
+          ],
+          "new": [],
+          "vacuous": null,
+          "runner_exit": 0
+        },
+        {
+          "run": 14,
+          "log": "<session-scratch>/rosy-web-unify/FULL-source-6d7e296033/run-14.txt",
+          "sha256": "7cf99fe3ede0e8dbd96043f67ef2d9d9b5a8c78a51e4aa4584c358e357e1fac2",
+          "summary": [
+            "67 passed, 35 skipped, 2 warnings in 5.00s"
+          ],
+          "known_rc": 0,
+          "known": [
+            "0 new, 0 known, 0 flaky, 0 listed but not failing"
+          ],
+          "new": [],
+          "vacuous": null,
+          "runner_exit": 0
+        },
+        {
+          "run": 15,
+          "log": "<session-scratch>/rosy-web-unify/FULL-source-6d7e296033/run-15.txt",
+          "sha256": "f9090eeaba059f430c3d603af7c2b079b10dffa2f353fec9ab6fb8f26caac736",
+          "summary": [
+            "18 skipped in 0.46s"
+          ],
+          "known_rc": 0,
+          "known": [
+            "0 new, 0 known, 0 flaky, 0 listed but not failing"
+          ],
+          "new": [],
+          "vacuous": null,
+          "runner_exit": 0
+        },
+        {
+          "run": 16,
+          "log": "<session-scratch>/rosy-web-unify/FULL-source-6d7e296033/run-16.txt",
+          "sha256": "72aeea8e1c5fcff12b28eec8ec5ef57f1e575a52c185ab00acd052e43690259f",
+          "summary": [
+            "785 passed in 27.70s"
+          ],
+          "known_rc": 0,
+          "known": [
+            "0 new, 0 known, 0 flaky, 0 listed but not failing"
+          ],
+          "new": [],
+          "vacuous": null,
+          "runner_exit": 0
+        },
+        {
+          "run": 17,
+          "log": "<session-scratch>/rosy-web-unify/FULL-source-6d7e296033/run-17.txt",
+          "sha256": "634a2bd7a48d1b1e25fad4aae61c0590a36ffeb0a9e1480d8636048e6a6bdafe",
+          "summary": [
+            "155 passed in 0.54s"
+          ],
+          "known_rc": 0,
+          "known": [
+            "0 new, 0 known, 0 flaky, 0 listed but not failing"
+          ],
+          "new": [],
+          "vacuous": null,
+          "runner_exit": 0
+        },
+        {
+          "run": 18,
+          "log": "<session-scratch>/rosy-web-unify/FULL-source-6d7e296033/run-18.txt",
+          "sha256": "16487a53a648408543ffc5c33d7a009e04e971617f3f7ca496f09b9677bd687a",
+          "summary": [
+            "126 passed, 8 warnings in 4.24s"
+          ],
+          "known_rc": 0,
+          "known": [
+            "0 new, 0 known, 0 flaky, 0 listed but not failing"
+          ],
+          "new": [],
+          "vacuous": null,
+          "runner_exit": 0
+        },
+        {
+          "run": 19,
+          "log": "<session-scratch>/rosy-web-unify/FULL-source-6d7e296033/run-19.txt",
+          "sha256": "a594ed81662cb7e751156caebc11b9f7c0f3d8158e291a3e2b8ff601332e02fd",
+          "summary": [
+            "42 passed in 1.92s"
+          ],
+          "known_rc": 0,
+          "known": [
+            "0 new, 0 known, 0 flaky, 0 listed but not failing"
+          ],
+          "new": [],
+          "vacuous": null,
+          "runner_exit": 0
+        },
+        {
+          "run": 20,
+          "log": "<session-scratch>/rosy-web-unify/FULL-source-6d7e296033/run-20.txt",
+          "sha256": "ff1d21501dc5dbdd33b0770d9afcef9b46c8b7c96b154ffdf2861b567c647570",
+          "summary": [
+            "112 passed, 1 skipped, 8 warnings in 8.96s"
+          ],
+          "known_rc": 0,
+          "known": [
+            "0 new, 0 known, 0 flaky, 0 listed but not failing"
+          ],
+          "new": [],
+          "vacuous": null,
+          "runner_exit": 0
+        },
+        {
+          "run": 21,
+          "log": "<session-scratch>/rosy-web-unify/FULL-source-6d7e296033/run-21.txt",
+          "sha256": "bc437a63686b73901175ca5c32fa51158454a432846703df4354db3376939083",
+          "summary": [
+            "26 passed in 1.93s"
+          ],
+          "known_rc": 0,
+          "known": [
+            "0 new, 0 known, 0 flaky, 0 listed but not failing"
+          ],
+          "new": [],
+          "vacuous": null,
+          "runner_exit": 0
+        },
+        {
+          "run": 22,
+          "log": "<session-scratch>/rosy-web-unify/FULL-source-6d7e296033/run-22.txt",
+          "sha256": "ea55c7bfb4004dde89ed63d2cd2b025cc3e94828a4def6415e48959607de9c88",
+          "summary": [
+            "328 passed, 28 skipped in 13.46s"
+          ],
+          "known_rc": 0,
+          "known": [
+            "0 new, 0 known, 0 flaky, 0 listed but not failing"
+          ],
+          "new": [],
+          "vacuous": null,
+          "runner_exit": 0
+        },
+        {
+          "run": 23,
+          "log": "<session-scratch>/rosy-web-unify/FULL-source-6d7e296033/run-23.txt",
+          "sha256": "d36eba604a990e07f0ab4e18d7eb8c9d61af11221bfd47578f38ea9451efe30a",
+          "summary": [
+            "473 passed in 1.08s"
+          ],
+          "known_rc": 0,
+          "known": [
+            "0 new, 0 known, 0 flaky, 0 listed but not failing"
+          ],
+          "new": [],
+          "vacuous": null,
+          "runner_exit": 0
+        },
+        {
+          "run": 24,
+          "log": "<session-scratch>/rosy-web-unify/FULL-source-6d7e296033/run-24.txt",
+          "sha256": "f44f5ca5e864ceb4bb7e8629e4bb499d300ad7706841f9f1de5411d6e6891c05",
+          "summary": [
+            "14325 passed, 1474 skipped, 247 warnings in 516.70s (0:08:36)"
+          ],
+          "known_rc": 0,
+          "known": [
+            "0 new, 0 known, 0 flaky, 0 listed but not failing"
+          ],
+          "new": [],
+          "vacuous": null,
+          "runner_exit": 0
+        },
+        {
+          "run": 25,
+          "log": "<session-scratch>/rosy-web-unify/FULL-source-6d7e296033/run-25.txt",
+          "sha256": "c2413e623a9e488128767144d741f28dc832ec93c0df826314c4b1835d23812f",
+          "summary": [
+            "1 failed, 2065 passed, 432 skipped, 8 warnings in 59.00s"
+          ],
+          "known_rc": 1,
+          "known": [
+            "1 new, 0 known, 0 flaky, 0 listed but not failing"
+          ],
+          "new": [
+            "NEW       middleware/devices/omx/adapter/test/test_control_seat_admission.py::test_canonical_cli_forwards_exact_terminal_to_shared_pilot"
+          ],
+          "vacuous": null,
+          "runner_exit": 1
+        },
+        {
+          "run": 26,
+          "log": "<session-scratch>/rosy-web-unify/FULL-source-6d7e296033/run-26.txt",
+          "sha256": "bf17b042152e623f64477151b8a32c976fe12376172377aa84864c26012c2a72",
+          "summary": [
+            "192 passed, 13 skipped, 8 warnings, 25 subtests passed in 4.62s"
+          ],
+          "known_rc": 0,
+          "known": [
+            "0 new, 0 known, 0 flaky, 0 listed but not failing"
+          ],
+          "new": [],
+          "vacuous": null,
+          "runner_exit": 0
+        },
+        {
+          "run": 27,
+          "log": "<session-scratch>/rosy-web-unify/FULL-source-6d7e296033/run-27.txt",
+          "sha256": "40cefe6261049318b347fd42cb9430090bd13c48304c58fd0a451f01159c88df",
+          "summary": [
+            "618 passed, 1 skipped in 30.98s"
+          ],
+          "known_rc": 0,
+          "known": [
+            "0 new, 0 known, 0 flaky, 0 listed but not failing"
+          ],
+          "new": [],
+          "vacuous": null,
+          "runner_exit": 0
+        }
+      ],
+      "status": "Completed original phase; source25 seat fixture and browser5 video fixture failed. Corrected checks and whole invocation replacements are recorded separately, never relabel this phase green."
+    },
+    "FULL-browser-receipts-c4f15610cc.json": {
+      "head_revision": "c4f15610cc529a4908d71dc60c7b1ab26a80fdd1",
+      "runner_exit": 0,
+      "browser_files": 113,
+      "passed": 1911,
+      "skipped": 0,
+      "receipts": [
+        {
+          "run": 1,
+          "log": "<session-scratch>/rosy-web-unify/FULL-browser-c4f15610cc/run-1.txt",
+          "sha256": "35054e30eaf91bfab4ddab58a17a67cdedd44d66505fb46b51740e9bd464c904",
+          "summary": "120 passed, 2 warnings in 313.80s (0:05:13)",
+          "known_failures": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+          "known_failure_rc": 0,
+          "vacuous": null,
+          "exit_code": 0
+        },
+        {
+          "run": 2,
+          "log": "<session-scratch>/rosy-web-unify/FULL-browser-c4f15610cc/run-2.txt",
+          "sha256": "a657eeaa40fcbcc5f1bba025b628c4d3e1adce60351f1c881e50bc2e5779bd06",
+          "summary": "118 passed in 330.74s (0:05:30)",
+          "known_failures": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+          "known_failure_rc": 0,
+          "vacuous": null,
+          "exit_code": 0
+        },
+        {
+          "run": 3,
+          "log": "<session-scratch>/rosy-web-unify/FULL-browser-c4f15610cc/run-3.txt",
+          "sha256": "c54b32211a5a6c7044773b55d9fb5396aa5372e6dc4b6f4bd00d32bb786aa123",
+          "summary": "132 passed in 202.45s (0:03:22)",
+          "known_failures": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+          "known_failure_rc": 0,
+          "vacuous": null,
+          "exit_code": 0
+        },
+        {
+          "run": 4,
+          "log": "<session-scratch>/rosy-web-unify/FULL-browser-c4f15610cc/run-4.txt",
+          "sha256": "9dfefd539245d39c15c49ec02dc580480665e95c0c260488e448c9c585e83db3",
+          "summary": "148 passed, 2 warnings in 303.65s (0:05:03)",
+          "known_failures": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+          "known_failure_rc": 0,
+          "vacuous": null,
+          "exit_code": 0
+        },
+        {
+          "run": 5,
+          "log": "<session-scratch>/rosy-web-unify/FULL-browser-c4f15610cc/run-5.txt",
+          "sha256": "49dad6235addf41c7ec668ed307d7bf8b5099dfb7e6f8bd578ff4c4a2a979b0a",
+          "summary": "122 passed, 2 warnings in 287.44s (0:04:47)",
+          "known_failures": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+          "known_failure_rc": 0,
+          "vacuous": null,
+          "exit_code": 0
+        },
+        {
+          "run": 6,
+          "log": "<session-scratch>/rosy-web-unify/FULL-browser-c4f15610cc/run-6.txt",
+          "sha256": "41d63f37c73b0e8178a87d38b88392b2e6f33ad707a58bfef8d0915892ee2395",
+          "summary": "87 passed, 2 warnings in 146.99s (0:02:26)",
+          "known_failures": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+          "known_failure_rc": 0,
+          "vacuous": null,
+          "exit_code": 0
+        },
+        {
+          "run": 7,
+          "log": "<session-scratch>/rosy-web-unify/FULL-browser-c4f15610cc/run-7.txt",
+          "sha256": "00c392c019e6eecf29f045514c79dd9120644f2cf53cb54b1a0c49f46fd2a6e4",
+          "summary": "243 passed, 2 warnings in 598.86s (0:09:58)",
+          "known_failures": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+          "known_failure_rc": 0,
+          "vacuous": null,
+          "exit_code": 0
+        },
+        {
+          "run": 8,
+          "log": "<session-scratch>/rosy-web-unify/FULL-browser-c4f15610cc/run-8.txt",
+          "sha256": "f579bb677314420bae8ecbdd1fbcbea35ba997573c57dfa3e273e93f6682527b",
+          "summary": "111 passed in 326.79s (0:05:26)",
+          "known_failures": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+          "known_failure_rc": 0,
+          "vacuous": null,
+          "exit_code": 0
+        },
+        {
+          "run": 9,
+          "log": "<session-scratch>/rosy-web-unify/FULL-browser-c4f15610cc/run-9.txt",
+          "sha256": "f2943c7851524a1ceb89b9dab93b76160ff49c5202a0895818f07f5236ef94e7",
+          "summary": "115 passed, 2 warnings in 307.63s (0:05:07)",
+          "known_failures": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+          "known_failure_rc": 0,
+          "vacuous": null,
+          "exit_code": 0
+        },
+        {
+          "run": 10,
+          "log": "<session-scratch>/rosy-web-unify/FULL-browser-c4f15610cc/run-10.txt",
+          "sha256": "7b417f132e76b3d46193159307522ec77836df3eaf14f5b269e576ec925c85a9",
+          "summary": "214 passed, 2 warnings in 542.12s (0:09:02)",
+          "known_failures": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+          "known_failure_rc": 0,
+          "vacuous": null,
+          "exit_code": 0
+        },
+        {
+          "run": 11,
+          "log": "<session-scratch>/rosy-web-unify/FULL-browser-c4f15610cc/run-11.txt",
+          "sha256": "3232c511368957296b25cac88b78ce3329362db71e907c88d83397398ba1ea56",
+          "summary": "164 passed, 2 warnings in 460.48s (0:07:40)",
+          "known_failures": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+          "known_failure_rc": 0,
+          "vacuous": null,
+          "exit_code": 0
+        },
+        {
+          "run": 12,
+          "log": "<session-scratch>/rosy-web-unify/FULL-browser-c4f15610cc/run-12.txt",
+          "sha256": "b16953ac364b3d94082964fc08ed15efef449d5570665369823f89dbea826b29",
+          "summary": "192 passed, 2 warnings in 425.58s (0:07:05)",
+          "known_failures": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+          "known_failure_rc": 0,
+          "vacuous": null,
+          "exit_code": 0
+        },
+        {
+          "run": 13,
+          "log": "<session-scratch>/rosy-web-unify/FULL-browser-c4f15610cc/run-13.txt",
+          "sha256": "23d554bf746f3b0b76d9cc6e740e8c7b12fb227d494bb0b510dbb4d340e6f56e",
+          "summary": "145 passed, 2 warnings in 379.59s (0:06:19)",
+          "known_failures": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+          "known_failure_rc": 0,
+          "vacuous": null,
+          "exit_code": 0
+        }
+      ]
+    },
+    "FULL-extra-browser-6d7e296033-receipts.json": {
+      "source_revision": "6d7e296033eb41c8648720cdc8097dcf4638a21c",
+      "runner_exit": 1,
+      "selection": "FULL-extra-browser-6d7e296033.json",
+      "receipts": [
+        {
+          "run": 1,
+          "log": "<session-scratch>/rosy-web-unify/FULL-extra-browser-6d7e296033/run-1.txt",
+          "sha256": "606a0fd79d3bbf6cef1e688c2bf3277eda617c09251077cb27ce8c8237f47406",
+          "summary": [
+            "49 passed in 119.55s (0:01:59)"
+          ],
+          "known_rc": 0,
+          "known": [
+            "0 new, 0 known, 0 flaky, 0 listed but not failing"
+          ],
+          "new": [],
+          "vacuous": null,
+          "runner_exit": 0
+        },
+        {
+          "run": 2,
+          "log": "<session-scratch>/rosy-web-unify/FULL-extra-browser-6d7e296033/run-2.txt",
+          "sha256": "912e88e6655cba279e2f7fcb847a503ddebd4658196cd725456133b66a690231",
+          "summary": [
+            "28 passed in 49.48s"
+          ],
+          "known_rc": 0,
+          "known": [
+            "0 new, 0 known, 0 flaky, 0 listed but not failing"
+          ],
+          "new": [],
+          "vacuous": null,
+          "runner_exit": 0
+        },
+        {
+          "run": 3,
+          "log": "<session-scratch>/rosy-web-unify/FULL-extra-browser-6d7e296033/run-3.txt",
+          "sha256": "5b0c0662f9c6ac68cefe17a25aca77af6855cd5049cfca193837e132cfbde06b",
+          "summary": [
+            "5 passed in 12.10s"
+          ],
+          "known_rc": 0,
+          "known": [
+            "0 new, 0 known, 0 flaky, 0 listed but not failing"
+          ],
+          "new": [],
+          "vacuous": null,
+          "runner_exit": 0
+        },
+        {
+          "run": 4,
+          "log": "<session-scratch>/rosy-web-unify/FULL-extra-browser-6d7e296033/run-4.txt",
+          "sha256": "4e4cd74247e6e44cd4f5465c9647f3500765712d3332069231fbfd91a07d478f",
+          "summary": [
+            "2 passed in 5.45s"
+          ],
+          "known_rc": 0,
+          "known": [
+            "0 new, 0 known, 0 flaky, 0 listed but not failing"
+          ],
+          "new": [],
+          "vacuous": null,
+          "runner_exit": 0
+        },
+        {
+          "run": 5,
+          "log": "<session-scratch>/rosy-web-unify/FULL-extra-browser-6d7e296033/run-5.txt",
+          "sha256": "dab44b55646dbdfbb47fe354210e3e059e41b7ac59ad6e2e4261c6de59d9045f",
+          "summary": [
+            "3 failed in 93.01s (0:01:33)"
+          ],
+          "known_rc": 1,
+          "known": [
+            "3 new, 0 known, 0 flaky, 0 listed but not failing"
+          ],
+          "new": [
+            "NEW       test/test_console_robot_video_browser.py::test_tile_opens_with_header_only_token_and_closes_when_the_tab_hides",
+            "NEW       test/test_console_robot_video_browser.py::test_grid_is_capped_at_six_tiles",
+            "NEW       test/test_console_robot_video_browser.py::test_refused_grant_shows_no_video_and_opens_no_session"
+          ],
+          "runner_exit": 1
+        },
+        {
+          "run": 6,
+          "log": "<session-scratch>/rosy-web-unify/FULL-extra-browser-6d7e296033/run-6.txt",
+          "sha256": "cd2e09fd0a04dfdee0fd49f92be80605a734840283a100ff992864a7314f7667",
+          "summary": [
+            "10 passed in 76.57s (0:01:16)"
+          ],
+          "known_rc": 0,
+          "known": [
+            "0 new, 0 known, 0 flaky, 0 listed but not failing"
+          ],
+          "new": [],
+          "vacuous": null,
+          "runner_exit": 0
+        },
+        {
+          "run": 7,
+          "log": "<session-scratch>/rosy-web-unify/FULL-extra-browser-6d7e296033/run-7.txt",
+          "sha256": "a252a57b60944f09514173766027482ed5c7fd5e2e89b164ebbae90515a28e79",
+          "summary": [
+            "35 passed in 49.42s"
+          ],
+          "known_rc": 0,
+          "known": [
+            "0 new, 0 known, 0 flaky, 0 listed but not failing"
+          ],
+          "new": [],
+          "vacuous": null,
+          "runner_exit": 0
+        },
+        {
+          "run": 8,
+          "log": "<session-scratch>/rosy-web-unify/FULL-extra-browser-6d7e296033/run-8.txt",
+          "sha256": "908b08d5379553f2b845b662a78a7ec971c3bcbf2f4aee591c475dbb04e57088",
+          "summary": [
+            "6 passed in 6.98s"
+          ],
+          "known_rc": 0,
+          "known": [
+            "0 new, 0 known, 0 flaky, 0 listed but not failing"
+          ],
+          "new": [],
+          "vacuous": null,
+          "runner_exit": 0
+        },
+        {
+          "run": 9,
+          "log": "<session-scratch>/rosy-web-unify/FULL-extra-browser-6d7e296033/run-9.txt",
+          "sha256": "610378faf40f8c78fadf3e35d14981d8c4c37984186d837f3987dba6a7b900d7",
+          "summary": [
+            "1 passed in 3.38s"
+          ],
+          "known_rc": 0,
+          "known": [
+            "0 new, 0 known, 0 flaky, 0 listed but not failing"
+          ],
+          "new": [],
+          "vacuous": null,
+          "runner_exit": 0
+        },
+        {
+          "run": 10,
+          "log": "<session-scratch>/rosy-web-unify/FULL-extra-browser-6d7e296033/run-10.txt",
+          "sha256": "4f259ea8f483be34a38b26c419b3163ae67bc26122bd0f5f346fb63a79b5ac1b",
+          "summary": [
+            "9 passed in 25.21s"
+          ],
+          "known_rc": 0,
+          "known": [
+            "0 new, 0 known, 0 flaky, 0 listed but not failing"
+          ],
+          "new": [],
+          "vacuous": null,
+          "runner_exit": 0
+        },
+        {
+          "run": 11,
+          "log": "<session-scratch>/rosy-web-unify/FULL-extra-browser-6d7e296033/run-11.txt",
+          "sha256": "07ff81f393888ef87c31ac5a2a10c90ae8c8394c523dd2b9ca5dfb63fa3486e9",
+          "summary": [
+            "4 passed in 7.04s"
+          ],
+          "known_rc": 0,
+          "known": [
+            "0 new, 0 known, 0 flaky, 0 listed but not failing"
+          ],
+          "new": [],
+          "vacuous": null,
+          "runner_exit": 0
+        },
+        {
+          "run": 12,
+          "log": "<session-scratch>/rosy-web-unify/FULL-extra-browser-6d7e296033/run-12.txt",
+          "sha256": "13fe53872869bb727c1c04483e0df39a19cd611ddfeaa9f7034831516b0873ad",
+          "summary": [
+            "11 passed in 20.36s"
+          ],
+          "known_rc": 0,
+          "known": [
+            "0 new, 0 known, 0 flaky, 0 listed but not failing"
+          ],
+          "new": [],
+          "vacuous": null,
+          "runner_exit": 0
+        }
+      ],
+      "status": "Completed original phase; source25 seat fixture and browser5 video fixture failed. Corrected checks and whole invocation replacements are recorded separately, never relabel this phase green."
+    },
+    "final-delta-browser-receipts-9ffb4a4944.json": {
+      "source_revision": "9ffb4a49447fc485c0ed68b1d98fd8d5280a56f1",
+      "runner_exit": 0,
+      "browser_files": 82,
+      "chunks": 13,
+      "passed": 1316,
+      "skipped": 0,
+      "receipts": [
+        {
+          "run": 1,
+          "source_revision": "9ffb4a49447fc485c0ed68b1d98fd8d5280a56f1",
+          "log": "<session-scratch>/rosy-web-unify/final-delta-browser-9ffb4a4944/run-1.txt",
+          "sha256": "a8009edd6dee4b638e78e550e997578a8d8aef51d0cb8eca273a36d6f26935c0",
+          "summary": "114 passed, 2 warnings in 305.83s (0:05:05)",
+          "runner_exit": 0,
+          "known_failures": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+          "vacuous": null
+        },
+        {
+          "run": 2,
+          "source_revision": "9ffb4a49447fc485c0ed68b1d98fd8d5280a56f1",
+          "log": "<session-scratch>/rosy-web-unify/final-delta-browser-9ffb4a4944/run-2.txt",
+          "sha256": "923c2b28c65db4d1c143494ccd44da1e807ee13482ce709196eb645df96c28b1",
+          "summary": "118 passed in 307.28s (0:05:07)",
+          "runner_exit": 0,
+          "known_failures": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+          "vacuous": null
+        },
+        {
+          "run": 3,
+          "source_revision": "9ffb4a49447fc485c0ed68b1d98fd8d5280a56f1",
+          "log": "<session-scratch>/rosy-web-unify/final-delta-browser-9ffb4a4944/run-3.txt",
+          "sha256": "3e278ab8e0d279b9358155e53a05e4485b1ac2f6aac86f798f72a19aa348a878",
+          "summary": "17 passed, 2 warnings in 192.62s (0:03:12)",
+          "runner_exit": 0,
+          "known_failures": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+          "vacuous": null
+        },
+        {
+          "run": 4,
+          "source_revision": "9ffb4a49447fc485c0ed68b1d98fd8d5280a56f1",
+          "log": "<session-scratch>/rosy-web-unify/final-delta-browser-9ffb4a4944/run-4.txt",
+          "sha256": "ad5eacdb42561d624aeb4c5afc878e9f2ee312575c89ac62a421bde1bf7d2d38",
+          "summary": "162 passed in 426.40s (0:07:06)",
+          "runner_exit": 0,
+          "known_failures": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+          "vacuous": null
+        },
+        {
+          "run": 5,
+          "source_revision": "9ffb4a49447fc485c0ed68b1d98fd8d5280a56f1",
+          "log": "<session-scratch>/rosy-web-unify/final-delta-browser-9ffb4a4944/run-5.txt",
+          "sha256": "1593d8f0a2ae6f4d01f2fc01934aee69d7e50c5582465f57cc4dcfe5bc08fa17",
+          "summary": "46 passed, 2 warnings in 166.31s (0:02:46)",
+          "runner_exit": 0,
+          "known_failures": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+          "vacuous": null
+        },
+        {
+          "run": 6,
+          "source_revision": "9ffb4a49447fc485c0ed68b1d98fd8d5280a56f1",
+          "log": "<session-scratch>/rosy-web-unify/final-delta-browser-9ffb4a4944/run-6.txt",
+          "sha256": "fca819e246675ebb389075dee4bea40a247b58a0b66b615dbef564568ddb2649",
+          "summary": "111 passed, 2 warnings in 276.30s (0:04:36)",
+          "runner_exit": 0,
+          "known_failures": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+          "vacuous": null
+        },
+        {
+          "run": 7,
+          "source_revision": "9ffb4a49447fc485c0ed68b1d98fd8d5280a56f1",
+          "log": "<session-scratch>/rosy-web-unify/final-delta-browser-9ffb4a4944/run-7.txt",
+          "sha256": "c95a0fda0070822e210fd1abd1378affc14d9014f9011baddaf035aaae933e3b",
+          "summary": "141 passed, 2 warnings in 394.83s (0:06:34)",
+          "runner_exit": 0,
+          "known_failures": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+          "vacuous": null
+        },
+        {
+          "run": 8,
+          "source_revision": "9ffb4a49447fc485c0ed68b1d98fd8d5280a56f1",
+          "log": "<session-scratch>/rosy-web-unify/final-delta-browser-9ffb4a4944/run-8.txt",
+          "sha256": "d4900101f48aac39fc4b7f584833e6bd2169d90d2e08fcfff7d06f835f1261dd",
+          "summary": "146 passed, 2 warnings in 442.91s (0:07:22)",
+          "runner_exit": 0,
+          "known_failures": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+          "vacuous": null
+        },
+        {
+          "run": 9,
+          "source_revision": "9ffb4a49447fc485c0ed68b1d98fd8d5280a56f1",
+          "log": "<session-scratch>/rosy-web-unify/final-delta-browser-9ffb4a4944/run-9.txt",
+          "sha256": "db97e3ae9866c23abfdc80c881282547b058f8169364a6ef6d00105d52a49aaa",
+          "summary": "136 passed, 2 warnings in 362.08s (0:06:02)",
+          "runner_exit": 0,
+          "known_failures": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+          "vacuous": null
+        },
+        {
+          "run": 10,
+          "source_revision": "9ffb4a49447fc485c0ed68b1d98fd8d5280a56f1",
+          "log": "<session-scratch>/rosy-web-unify/final-delta-browser-9ffb4a4944/run-10.txt",
+          "sha256": "cb710e4f8ef9f4f169792ada3a8738232510ef40fc826a012ddc57fc9bf2d73d",
+          "summary": "78 passed, 2 warnings in 267.67s (0:04:27)",
+          "runner_exit": 0,
+          "known_failures": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+          "vacuous": null
+        },
+        {
+          "run": 11,
+          "source_revision": "9ffb4a49447fc485c0ed68b1d98fd8d5280a56f1",
+          "log": "<session-scratch>/rosy-web-unify/final-delta-browser-9ffb4a4944/run-11.txt",
+          "sha256": "fa6264896c3d3dc7aae99a44c16bfbdba58e1cc15349781764e1a38922c74b01",
+          "summary": "97 passed, 2 warnings in 288.74s (0:04:48)",
+          "runner_exit": 0,
+          "known_failures": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+          "vacuous": null
+        },
+        {
+          "run": 12,
+          "source_revision": "9ffb4a49447fc485c0ed68b1d98fd8d5280a56f1",
+          "log": "<session-scratch>/rosy-web-unify/final-delta-browser-9ffb4a4944/run-12.txt",
+          "sha256": "3d2a85a28d528b331f336d16a6c30266356d2f2d224f7d2e39f4b5454409f9f3",
+          "summary": "79 passed, 2 warnings in 199.61s (0:03:19)",
+          "runner_exit": 0,
+          "known_failures": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+          "vacuous": null
+        },
+        {
+          "run": 13,
+          "source_revision": "9ffb4a49447fc485c0ed68b1d98fd8d5280a56f1",
+          "log": "<session-scratch>/rosy-web-unify/final-delta-browser-9ffb4a4944/run-13.txt",
+          "sha256": "3a8d79d759826ab169e47e8c9b55dbaf505c7cd70f8fac765f96366205810098",
+          "summary": "71 passed in 236.26s (0:03:56)",
+          "runner_exit": 0,
+          "known_failures": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+          "vacuous": null
+        }
+      ]
+    },
+    "corrected-targeted-receipts.json": [
+      {
+        "name": "green-auth-return-loop",
+        "source": "c1af0160f4",
+        "log": "<session-scratch>/rosy-web-unify/green-auth-return-loop/run-1.txt",
+        "sha256": "3d48114686ac8e60df0eddde5f1ff122c3ab8fe9f0272ae75b886aa95edbdbe8",
+        "runner_exit": 0,
+        "summary": [],
+        "quiet_progress_count": 64,
+        "known_failures": "0 new, 0 known, 0 flaky, 0 listed but not failing"
+      },
+      {
+        "name": "green-video-and-seat-fixtures",
+        "source": "a7f36cb999",
+        "log": "<session-scratch>/rosy-web-unify/green-video-and-seat-fixtures/run-1.txt",
+        "sha256": "85aa30f22cdbf4f5537735b11e133532bb5b89de59e867de8d904d699fca4207",
+        "runner_exit": 0,
+        "summary": [],
+        "quiet_progress_count": 25,
+        "known_failures": "0 new, 0 known, 0 flaky, 0 listed but not failing"
+      },
+      {
+        "name": "FULL-source-rerun25-9ffb4a4944",
+        "source": "9ffb4a4944",
+        "log": "<session-scratch>/rosy-web-unify/FULL-source-rerun25-9ffb4a4944/run-1.txt",
+        "sha256": "f0c288fc66f3f04fce6b37450141d859e5ba932bb3276390a9fecd72c9fac49b",
+        "runner_exit": 0,
+        "summary": [
+          "2066 passed, 432 skipped, 2 warnings in 82.36s (0:01:22)"
+        ],
+        "quiet_progress_count": 2492,
+        "known_failures": "0 new, 0 known, 0 flaky, 0 listed but not failing"
+      },
+      {
+        "name": "green-bootstrap-and-registry",
+        "source": "6d7e296033",
+        "log": "<session-scratch>/rosy-web-unify/green-bootstrap-and-registry/run-1.txt",
+        "sha256": "5e67c5f98c03eed31c293f29daa16e6108e93d67e53e4ee730afdd53113945ad",
+        "runner_exit": 0,
+        "summary": [],
+        "quiet_progress_count": 39,
+        "known_failures": "0 new, 0 known, 0 flaky, 0 listed but not failing"
+      },
+      {
+        "name": "green-ws-inflight-replacement",
+        "source": "c4f15610cc",
+        "log": "<session-scratch>/rosy-web-unify/green-ws-inflight-replacement/run-1.txt",
+        "sha256": "1b5a24c20ee8f9cf5184453e64661c1cc33a6d4a44eb2749dd310e8f696ab0e7",
+        "runner_exit": 0,
+        "summary": [],
+        "quiet_progress_count": 12,
+        "known_failures": "0 new, 0 known, 0 flaky, 0 listed but not failing"
+      }
+    ],
+    "final-delta-source-b1eafb186f-receipt.json": {
+      "source_revision": "b1eafb186f528622ef404b7ebf4431845457235c",
+      "runner_exit": 0,
+      "log": "<session-scratch>/rosy-web-unify/final-delta-source-b1eafb186f/run-1.txt",
+      "sha256": "ff59162f9b2754be03e24127e81acbf3c4fd741c7263c8bdf73be138db598077",
+      "summary": "10544 passed, 1155 skipped, 109 warnings in 1219.01s (0:20:19)",
+      "known_failures": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "new": []
+    },
+    "final-delta-source-9ffb4a4944-receipt.json": {
+      "source_revision": "9ffb4a49447fc485c0ed68b1d98fd8d5280a56f1",
+      "runner_exit": 1,
+      "log": "<session-scratch>/rosy-web-unify/final-delta-source-9ffb4a4944/run-1.txt",
+      "sha256": "bbd06831779ef7f100d50b0868e01f8653a119473b67404b33412cf3f9718268",
+      "summary": "1 failed, 10543 passed, 1155 skipped, 115 warnings in 433.92s (0:07:13)",
+      "known_failures": "1 new, 0 known, 0 flaky, 0 listed but not failing",
+      "new": [
+        "NEW       test/test_harness_contracts.py::test_full_lint_including_git_history_checks"
+      ]
+    }
+  },
+  "render_artifacts": {
+    "scope": "Final auth and bootstrap source artifacts; synthetic backend/fingerprint, not deployment acceptance",
+    "files": [
+      {
+        "path": "source-preview/a7f36cb999/account-login-1366-dark.png",
+        "bytes": 25505,
+        "sha256": "0166d9d978570fa54f00919bf4ae871a6f0fe0774f00024e50833dd60c626b8d"
+      },
+      {
+        "path": "source-preview/a7f36cb999/account-login-1366-light.png",
+        "bytes": 25608,
+        "sha256": "74dbec5ea5f5a1f311aca0f155a1c7ed8c1b5e28b6ce0c316818a959d3761b64"
+      },
+      {
+        "path": "source-preview/a7f36cb999/account-login-390-dark.png",
+        "bytes": 21780,
+        "sha256": "f9daf47e972440c2707aebfcd8ee696abfccb2659e82b2b589a22b868100498b"
+      },
+      {
+        "path": "source-preview/a7f36cb999/account-login-390-light.png",
+        "bytes": 22040,
+        "sha256": "e5414cfe68fb63cf9f4028b799dea655395e907df8059c70859073ff8b0e4176"
+      },
+      {
+        "path": "source-preview/a7f36cb999/axe-audit.json",
+        "bytes": 10248,
+        "sha256": "cb94b67e0f03ac305f4ff33a6bd1d3044c89e95d1af31a1ab51425519f3ea860"
+      },
+      {
+        "path": "source-preview/a7f36cb999/learning-login-1366-dark.png",
+        "bytes": 16415,
+        "sha256": "00fbe4944755e92acb7cab5a1815ad1957c1ef2126b191b0f0f4a6d2c4e5c75d"
+      },
+      {
+        "path": "source-preview/a7f36cb999/learning-login-1366-light.png",
+        "bytes": 16541,
+        "sha256": "9fb833d3f6274760d2cf078be84556eff51d541fe7894bae963b96713afe2f40"
+      },
+      {
+        "path": "source-preview/a7f36cb999/learning-login-390-dark.png",
+        "bytes": 13428,
+        "sha256": "4fce115e23a58d7d0c2a7d70eed705175b542683c512eec745fdd343cf3fc77c"
+      },
+      {
+        "path": "source-preview/a7f36cb999/learning-login-390-light.png",
+        "bytes": 13529,
+        "sha256": "50b82942f9b5dbed8025cd1552a83c2d6abb0b37c15ce92f7508baa1b12d5f2c"
+      },
+      {
+        "path": "source-preview/a7f36cb999/manifest.json",
+        "bytes": 7049,
+        "sha256": "c15ef40a6957bcd0f2701949d4fae4a665ba72d7d59af5f33faceec85cbf8dba"
+      },
+      {
+        "path": "source-preview/a7f36cb999/rendered-audit.json",
+        "bytes": 8742,
+        "sha256": "e9efb541c91543ffebc9abb13fa3e312d391ef8154e158038bf736095773e162"
+      },
+      {
+        "path": "source-preview/5bde1f6d5b/recovery-entry-1366-dark.png",
+        "bytes": 39012,
+        "sha256": "d41c3eb68a50684f8e3e08722efc670d58779e6cd9467364291c7210242e421d"
+      },
+      {
+        "path": "source-preview/5bde1f6d5b/recovery-entry-1366-light.png",
+        "bytes": 39522,
+        "sha256": "76efa5701ec783d6877ac9310aa34e2e19e3e948e0a85ff5fbf7d78b89607ee7"
+      },
+      {
+        "path": "source-preview/5bde1f6d5b/recovery-entry-320-dark.png",
+        "bytes": 30042,
+        "sha256": "a12893aa431e55781cd95cff4da8aa7e45eab997b43b6929726ff6f4ca0dbdcf"
+      },
+      {
+        "path": "source-preview/5bde1f6d5b/recovery-entry-320-light.png",
+        "bytes": 30326,
+        "sha256": "4054b31c81cdb8fdde7345b8edde730ad356179e1db2887bf07c9209c320c78c"
+      },
+      {
+        "path": "source-preview/5bde1f6d5b/recovery-entry-390-dark.png",
+        "bytes": 30939,
+        "sha256": "fe37d2f27e2652a25575eaa97300fca886d1d567a5944a35b44b26f97fb0ae82"
+      },
+      {
+        "path": "source-preview/5bde1f6d5b/recovery-entry-390-light.png",
+        "bytes": 31365,
+        "sha256": "425ebdf42f8d9f09d41127df5ac716dc9b7618bf63caeb29680d77f484fd3e71"
+      },
+      {
+        "path": "source-preview/5bde1f6d5b/recovery-manifest.json",
+        "bytes": 1136,
+        "sha256": "a40e4f6642c868f062626fa75b35658f5b22bd216b27f434d0f7d99808608cf7"
+      }
+    ]
+  }
+}

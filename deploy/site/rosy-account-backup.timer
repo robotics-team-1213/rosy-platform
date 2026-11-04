@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily independent Account backup timer
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+RandomizedDelaySec=15m
+Unit=rosy-account-backup.service
+
+[Install]
+WantedBy=timers.target

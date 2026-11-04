@@ -4436,6 +4436,61 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - gate 변화: 없음. 장치·현장 수용을 주장하지 않는다.
 - CE: 해당 없음 — 오류 전달 원인과 해결은 수정 코드 및 회귀 시험에 직접 남아 있다.
 
+## 2026-11-02 · e81af2d7c3 · D-962 independent Account artifact
+
+- Change: Added dedicated Account image/SBOM/archive and guarded build inputs. Verifier accepts only authenticated legacy3/legacy4/new5 inventories. Disabled Account still has its signed image checked; enabled Account must match its own signed reference and immutable identity. Incremental reuse and rollback keep historical signed references; no new-manifest Fleet fallback. No image build, service change or deployment occurred in this scope.
+- Evidence: D-962 independent image scope: remote AI-PC closure at e81af2d7c3 passed 320 tests, 0 skipped, 0 NEW. Account TLS login/initial-password/profile/admin, minimal Account/foundation startup, stdlib-only fixed assets, signed legacy/new inventories and reuse, and Fleet header browser/Node compatibility. OCI build and live independent-image acceptance were not run.
+- Log: `rosy-account-image-closure/run-1.txt`; native `size_range.py d7fcc74e43 b9424451a0` checked four commits successfully; native static secret scan found zero findings.
+- Gate: scoped SOURCE/LOCAL verification only; existing artifact, device and field limits remain.
+
+
+## 2026-11-02 · 5f02d723d1 · D-962 independent identity backup and presentation
+
+- Change: Signed deployment inventory includes the complete five-file Account maintenance group. New five-image candidates require every file; historical authenticated three/four-image candidates must omit the group. Separate maintenance Compose cannot create the external authority volume and has image-only/no-pull jobs, nonoptional site.env, mandatory tag, protected existing host bind, UID10001, no network/privileges/keys. Reused Account image references stay pinned. No OCI build, restore, service restart or timer activation was performed.
+- Evidence: D-962 independent image and identity backup scope at 5f02d723d1: remote 335 backend/signing/image/backup cases plus 71 opted-in identity TLS/browser cases passed, 0 skipped, 0 NEW. Full Account tables including HTTP audit preserved; stale/corrupt backup refusal, strict signed legacy/new groups, reused image pins, branding, login/profile/admin and first-password flows verified. Prior e81af2d7c3 closure also passed 320 cases including Fleet header browser/Node compatibility. OCI construction and live independent-image/timer acceptance remain pending.
+- Logs: `rosy-account-backup-replay/run-1.txt` (335 passed), `rosy-account-identity-replay/run-1.txt` (71 passed); known-failure comparison 0 new/known/flaky. Native size range checked eight commits without a violation.
+- Gate: scoped SOURCE/LOCAL GO; image artifact, installation, timer activation and human field acceptance remain separate.
+
+## 2026-11-02 · uncommitted · Account 통합 게시 범위의 검증 문서 오탐 분류
+
+- 변경: 최신 main 병합 뒤 게시 검사에 걸린 다른 검증 문서의 정확한 commit/path/rule 한 건만 기존 historical baseline에 추가했다. 탐지 규칙·경로 전체 예외·다른 commit의 처리는 바꾸지 않는다.
+- 근거: 독립 검토가 `16737449b4d6368a9f374eae2c24c0d9ef24e1f6`의 camera-readiness 검증 문서 13행을 확인했다. 탐지된 값은 독립 검토 문장의 Git revision이며 실제 commit으로 해석되고 해당 증거 commit의 조상이다. 값·본문은 기록하지 않았고 개인 자료와 대조하지 않았다. 에이전트 분류이며 사람의 서명 승인이 아니다.
+- 확인: 현재 작업 트리의 게시 범위 319 commits clean, 기존 검토된 정확한 예외 두 건만 제외됐다. Account 최종 전체 검사·공개 CI·서명·운영 수용은 아직 별도다.
+- gate 변화: SOURCE·LOCAL 유지, FULL·ARTIFACT·FIELD HOLD. 실제 서명·운영 수용을 이 문서 분류로 대신하지 않는다.
+- CE: 해당 없음 — 기존 역사적 오탐 처리 계약과 baseline 항목이 판단을 설명한다.
+
+## 2026-11-02 · 6d7e296033 · Web unification follow-up
+
+- 변경: 2026-11-02 · 6d7e296033 · D-961의 공용 작업·인증 조합을 native Wi-Fi 복구 HTML에도 적용했다. 제목·폭·버튼 위계·테마를 통일하고 component-controls.css/theme.js를 기존 recovery-web 이미지 자산에 포함했다. CORE·Account 없이 복구하는 구조, 물리 지문·코드·세션·CSRF·NetworkAgent 쓰기 권한은 유지한다. registry/native asset/실제 Chromium 복구 39건 원격 통과; dark/light 및 320/390/1366px 포함. 이미지 ARM64 빌드·AP·물리 네트워크 수용은 미실행이며 gate 변화 없음. CE: 해당 없음 — 자산·독립성 계약은 코드와 회귀가 설명한다.
+- 증거: committed SHA and remote results are recorded above; final consolidated receipts are retained in the unification validation record.
+- gate 변화: 없음. Source/browser checks do not establish deployment, ARM64, device or field acceptance.
+
+## 2026-11-02 · ee09871413 · 웹 통합 게시 이력의 공개 무결성 식별자 검토
+
+- 변경: publish_secret_baseline에 독립 검토한 정확한 commit/path/high-entropy-token 조합 세 개만 더했다. 과거 두 UI 증거 JSON의 Git commit·blob과 main의 actions/checkout 고정 revision이다. 값·excerpt는 기록하지 않으며 scanner·public provenance·검사 제외 목록·테스트 기준은 유지한다.
+- 증거: 독립 검토가 증거 JSON의 Git 식별자와 workflow pin을 확인했고, 별도 GitHub API 확인으로 checkout의 정확한 upstream commit이 존재함을 검증했다. 최신 main 통합 ee09871413의 충돌 처리도 독립 검토에서 지적0이다. 최종 FULL 착지·공개 CI와 배포는 아직 실행 결과가 필요하다.
+- gate 변화: 없음. 공개 식별자의 이력 분류는 서명·현장·실물 수용을 대신하지 않는다. agent review이며 사람의 GitHub 승인이 아니다.
+- CE: 해당 없음 — 기존 exact-tuple 게시 규약과 공개 무결성 문맥으로 판단을 복원할 수 있다.
+
+## 2026-11-02 · 2ec8698993 · 수집 rehearsal의 미도달 시험도 같은 모의 시계 사용
+
+- 변경: 목표에 도달하지 않은 성공 terminal을 검사하는 한 시험에서 기존 rehearsal_clock을 생산자와 소비자에 함께 연결했다. 관측 시각이 실제 저장·스케줄 지연으로 만료돼 의도한 미도달 검사 전에 중단되는 것을 막는다. 운영 100ms 신선도, 실제 저장 지연을 검증하는 시험, TERMINAL/REACHED/ABORT·정지 요청 검사는 유지한다.
+- 증거: FULL run-pre-32에서 미도달 대신 observation clock stale/future로 실패했다. 독립 진단에서 main과 시험·생산 코드가 같고, 이전 d2d68c334679의 같은 시계 수정에서 이 사례가 빠졌음을 확인했다. 수정한 committed SHA의 전체 파일·조정기 시간 검사는 원격으로 확인한다.
+- gate 변화: 없음. 모의 시간의 단위 시험은 실제 기계 정지 지연이나 배포 성공을 뜻하지 않는다.
+- CE: 해당 없음 — 기존 sim-wall-clock-step-and-line-staleness-clock 교훈의 모든 참여자 시계 결속을 적용했고 판단을 시험에 남겼다.
+
+## 2026-11-02 · c61e4fcdc1 · RAUC 시험 패키지는 정확한 pin만 수용하고 다운로드 실패 근거 보존
+
+- 변경: 시험 fixture의 외부 패키지 획득만 최대 세 번으로 제한해 재시도한다. 정확한 기존 크기·SHA256과 실제 RAUC 버전 검사, 추출 위치와 서명 시험은 유지한다. 응답 크기·해시·HTTP 메타데이터 또는 예외 종류를 모으고, 재시도로 복구해도 경고로 남긴다. 세 번 모두 검증하지 못하면 실패하며 URL·예외 원문은 기록하지 않는다. 운영 다운로드 도구·quarantine·검사 기준은 바꾸지 않는다.
+- 증거: FULL run-pre-31의 한 외부 패키지 setup이 기존 무결성 assertion에서 실패했다. 같은 모델 PC와 개발 PC의 독립 HTTPS 재획득은 모두 기존 pin과 일치했다. 최초 응답은 보존되지 않아 그 실패 원인은 미확정이며, 잘림이나 upstream 변경으로 단정하지 않는다. 먼저 추가한 다섯 결정적 시험은 원격 committed revision에서 helper 부재로 실패했고, 구현 뒤에는 같은 시험과 실제 RAUC 소비자들을 확인한다.
+- gate 변화: 없음. 검증하지 않은 바이트·실패한 추출·다른 RAUC 버전은 재시도 성공이나 통과로 인정하지 않는다.
+- CE: 미해결 — 최초 응답의 원인은 복원할 수 없어 작업 기록에 제한을 남긴다. 획득 계약과 진단 보강은 코드·결정적 시험으로 검증한다.
+
+## 2026-11-02 · 6be78e9139 · 카메라 검증 문서의 공개 Git 식별자 이력 분류
+
+- 변경: 새로 통합된 카메라 검증 문서의 정확한 commit/path/high-entropy-token 조합 하나만 기존 게시 baseline에 더한다. 이전 양쪽 reviewer 근거와 모든 기존 조합을 보존한다. scanner·검사 제외·비공개 자료 접근은 바꾸지 않는다.
+- 증거: 실제 scanner의 한 발견은 review revision이며 독립 검토에서 Git commit으로 해소됐다. 값·excerpt는 추가하지 않으며 agent 검토를 사람 승인으로 표현하지 않는다. 최종 source의 게시 검사를 다시 확인한다.
+- Gate: 서명·운영·실물 수용과 별개. CE: 해당 없음 — 기존 정확한 조합 규약과 Git 출처로 분류를 복원한다.
 ## 2026-11-03 · uncommitted · fix(omx): 기기 업데이터가 카메라 바인드 유닛을 함께 싣는다
 
 - 변경: `omx-devices-autoupdate.json.example`의 `unit_files`에 `rosy-omx-cameras-bind.service`·`.timer`를 더하고 README 설치 5단계에서 바인드 타이머도 켠다. 업데이터는 유닛 파일을 복사만 하고 타이머를 켜지 않으므로 한 번 켜는 단계가 필요하다. `test_omx_cameras`가 예시 설정에 두 파일이 빠지면 실패한다.
@@ -4457,10 +4512,36 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - gate 변화: 없음. 사이트 호스트의 D-960 업데이터 교체·hold 해제는 이 커밋 없이 현장에서 이미 시행했다(백업 `/var/backups/rosy-site-d960-20261103`).
 - CE: 해당 없음 — 막힘 원인(hold)은 감사 로그와 상태 파일로 곧바로 보였고, 재발 방지는 이번 구조화 자체가 담당한다.
 
+## 2026-11-03 · 1c5f6c898a · D-960 서명 peer 동반 서비스 검증
+
+- 변경: canonical control-unit overlay의 peer를 서명된 proxy 이미지의 동반 서비스로 다룬다. 정확한 서비스 구성, 이미지 참조·실제 immutable identity, 현재 Compose hash와 읽기 전용·비특권 실행 조건을 확인한다. 원래 healthcheck가 없는 peer에 가상의 healthy 값을 요구하지 않으며, 기존 Account·Monitoring의 건강 검사와 옛 Account overlay 복구 경로는 유지한다.
+- 증거: 운영 hold가 peer 서비스 검사 누락을 기록했다. 실제 companion을 내보내지 않던 FakeHost를 서비스·hash·실행 row·이미지 owner에 맞게 고친 committed 원격 회귀는 21 failed/112 passed/NEW21로 재현했다. cc5f657ce9의 네 관련 모듈은 원격 204 passed/0 skipped/NEW0이며, 세 companion의 동시 전환·복구 및 설치 CLI도 포함한다. 독립 계약 검토에서 수정 필요 사항은 없었다.
+- Gate: 운영 hold·설정·writer·컨테이너는 바꾸지 않았다. 검토된 외부 updater helper 설치와 실제 운영 수용은 별도다. CE: 미해결 — 소스 수정본은 검증했으며 실제 helper 전환이 아직 남았다.
+
+## 2026-11-03 · 50b5b4340d · Account 이미지와 공용 이미지 도우미 통합
+
+- 변경: 대기 중인 독립 Account 이미지 변경과 USB 제어 PC 도우미 검사를 함께 통합한다. 전체 서명 이미지 목록과 켜진 런타임 서비스 목록을 구분하고, 구형 Account→Fleet·독립 Account→Account·Monitoring→Fleet·제어 PC 도우미→proxy 신원을 각각 검증한다. 런타임 검사 두 함수를 기존 site_update_runtime으로 옮겨 I/O 모듈의 크기를 줄이고 실제 호출자와 복구 경로를 맞춘다. 외부 updater의 공개 re-export와 기존 검증 경계는 유지한다.
+- 증거: source 50b5b4340d의 새 계약 4건이 공식 원격 AI PC에서 모두 실패/NEW4로 재현됐다. 구형·신형 성공 전환과 구형으로의 복구, 선택 해제·누락·중복·종료·잘못된 소유자·재사용 이미지 ID를 기존 fixture로 검증한다. 수정본 GREEN은 후속 기록에 남긴다.
+- Gate: 통합 SOURCE 검증 전. 원격 서버의 hold·writer·설정·서명 작업·로봇 상태는 변경하지 않았다. CE: 미해결 — 실제 설치 helper 전환과 운영 수용은 남아 있다.
+
+- 후속 검증: 통합 source 21f1dcd378의 updater·incremental·config·functional-setup 4개 모듈은 공식 원격 248 passed/0 skipped/exit 0/NEW 0이다. 독립 계약 검토는 전체 서명 목록·선택 런타임·신원·복구·함수 이동·import 경로에서 지적 없음이다. 환경 d8fff8b263b691df, freeze eb75e06857d6c188. 이는 해당 소스와 helper 계약의 증거이며 전체 FULL·설치·운영 수용은 아니다. 실제 설치는 matching updater·I/O·runtime·verifier 및 호출 helper 묶음을 함께 바꿔야 한다.
+
+## 2026-11-03 · bfd53106b3 · 독립 Account의 공용 스타일 빌드 입력 폐쇄성
+
+- 변경: 필수 component-controls.css를 Account Docker COPY와 전용 dockerignore의 정확한 허용 목록에 연결했다. 고정 common 자산 집합·정본 CSS 바이트·COPY 원본·명시적 빌드 문맥 허용을 검사해 실제 이미지 입력까지 전파한다. 빌드 입력 해시는 COPY에서 계산되므로 CSS 변경이 Account 이미지 재사용을 막는다. 최초 authority 전환은 기존 수동 서명 설치 절차와 연결하고 updater의 현재 컨테이너 건강 검사·정상 갱신 시 의미를 README에 명시했다.
+- 증거: e3f6ddc8e7의 공식 FULL 파일 단독 실행에서 자산 목록 불일치 1 NEW를 확인했다. 수정 전 source 3f56c1dbd1의 구성 검사와 공식 모델 PC 시험은 Docker COPY의 필수 스타일 누락을 재현했다(원격 1 failed/NEW 1). bfd53106b3의 이미지·후보·workflow 회귀 37 passed/0 skipped/exit 0/NEW 0, 같은 파일의 원래 전체 단독 실행 가드 1 passed/complete 1/0 skipped/exit 0/NEW 0이다. 환경 88f52f4345196f6d, freeze eb75e06857d6c188. 독립 빌드 경로 검토 지적 없음이다.
+- Gate: 소스·빌드 입력 계약 검증이다. 실제 OCI 빌드·서명·설치·운영 authority 전환은 아직 수행하지 않았다. e3f6 FULL은 실패 이력이며 게시 자격으로 쓰지 않는다. CE: 해당 없음 — 새 코드·시험과 기존 설치 절차가 원인·보존 조건을 설명하며 운영 전환 수용은 남아 있다.
+
+## 2026-11-03 · c03d8552af · 최신 main의 peer 검사와 독립 Account 검증 통합
+
+- 변경: 서비스 소유자 표를 COMPANIONS 하나로 통일하고, 전체 서명 목록과 선택 런타임의 구분 및 독립 Account 신원 검증을 보존했다. runtime 검사 함수는 기존 모듈에 유지한다. peer의 healthcheck 부재는 구형 후보 호환으로 허용하되 명시적인 unhealthy·starting 상태는 두 runtime 검사에서 거절한다.
+- 증거: dc818e6d87의 새 health 회귀 네 건은 공식 원격에서 모두 실패/NEW4였다. c03d8552af의 updater·incremental·config·functional-setup·Account 이미지/배포·서명 verifier 일곱 모듈은 310 passed/skip0/exit0, NEW0/known0/flaky0이었다. 환경 9e553f80ef242377, freeze 6d54d7d30696fe34. 독립 계약 검토는 전체 inventory·소유자·참조·immutable ID·hash·hardening·import 경계를 확인했고 지적 없음이다.
+- gate 변화: 없음. 소스·설치 CLI 계약 시험이며 실제 서명 이미지 빌드·helper 설치·운영 authority 전환·현장 수용은 별도다.
+- CE: 해당 없음 — 병합 판단과 health 조건은 코드·회귀로 설명된다. 운영 전환은 미실행 상태로 유지한다.
+
 ## 2026-11-03 · 3309dde54f · fix(site): dry-run에서 공개 릴리스 수정 방지
 
 - 변경: 이미 서명됐지만 unsigned 제목이 남은 릴리스를 발견해도 dry-run은 공개 제목·본문을 수정하지 않고 `would-retitle` 감사 기록만 남긴다. 실제 서명·제목 교정·호스트 알림의 기존 조건은 유지한다.
 - 검증: 원격 RED `08bbc9a4fe`에서 release edit 호출을 막는 새 회귀 시험이 예상대로 실패했다. 수정 `3309dde54f`에서 서명 자동화와 후보 서명 시험 48건이 통과했고 known_failures는 0 new/known/flaky다. FakeGh 시험이며 실제 공개 릴리스를 수정하지 않았다.
 - gate 변화: 없음. UI FULL 준비 근거는 별도 보존했고, 이 수정의 착지와 최신 main 통합 검증 후 게시한다.
 - CE: 해당 없음 — 누락된 dry-run 분기와 회귀 조건이 코드·시험에 직접 남는다. 운영 전환은 별도 미완료다.
-

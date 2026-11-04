@@ -15,10 +15,12 @@ DEPLOY = ROOT / 'operations/monitoring/deploy'
 def test_bundle_contains_canonical_bytes_and_refuses_existing_output(tmp_path):
     target = tmp_path / 'web'
     build_web(ROOT, target)
+    assert (target / 'common/brand/mark.svg').is_file()
     assert {p.relative_to(target).as_posix() for p in target.rglob('*') if p.is_file()} == set(ASSETS.values())
     for name in ASSETS.values():
         owner = 'shared/web' if name.startswith('common/') else 'applications/monitoring/web'
-        assert (target / name).read_bytes() == (ROOT / owner / Path(name).name).read_bytes()
+        relative = Path(name).relative_to('common') if name.startswith('common/') else Path(name)
+        assert (target / name).read_bytes() == (ROOT / owner / relative).read_bytes()
     with pytest.raises(FileExistsError):
         build_web(ROOT, target)
     assert (target / 'index.html').is_file()

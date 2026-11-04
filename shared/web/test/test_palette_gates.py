@@ -283,6 +283,13 @@ def test_rosy_brand_wash_is_a_subtle_tinted_surface(palette):
     assert hue_delta <= 12, f"brand wash 색상 방향이 rose와 {hue_delta:.1f}° 다름"
 
 
+def test_current_location_text_reads_on_its_wash(palette):
+    """현재 위치 레일 항목은 wash 바탕 위 장미색 글자다. 바탕 대비만 보면 놓친다
+    (2026-11-04 밝게 #bb42a4: 바탕 4.74, wash 위 3.93 — 원격 브라우저 대비 시험이 찾음)."""
+    ratio = contrast(palette["brand-rose"], palette["brand-rose-wash"])
+    assert ratio >= 4.5, f"장미색 글자 대 rose-wash {ratio:.2f}:1"
+
+
 def test_rosy_brand_tokens_are_used_by_wordmark_and_surface_navigation():
     components = WEB_COMPONENTS.read_text(encoding="utf-8")
     legacy_shell = (DASHBOARD / "styles.css").read_text(encoding="utf-8")
@@ -390,6 +397,52 @@ def test_robot_identity_is_a_lightness_ladder(palette):
     for a, b in zip(robots, robots[1:]):
         ratio = contrast(deuteranope(palette[a]), deuteranope(palette[b]))
         assert ratio >= 1.5, f"{a} 대 {b} 색약 대비 {ratio:.2f}:1"
+
+
+APP_LINES = ("app-line-learning", "app-line-fleet", "app-line-robot")
+#: 노선이 섞이면 안 되는 의미 색 — 상태·계열·브랜드.
+_LINE_NEIGHBOURS = ("status-crit", "status-warn", "status-good", *SERIES, "brand-rose")
+
+
+def _oklab_distance(a: str, b: str) -> float:
+    (l1, c1, h1), (l2, c2, h2) = oklch(a), oklch(b)
+    first = (l1, c1 * math.cos(math.radians(h1)), c1 * math.sin(math.radians(h1)))
+    second = (l2, c2 * math.cos(math.radians(h2)), c2 * math.sin(math.radians(h2)))
+    return math.dist(first, second)
+
+
+def test_app_lines_are_identity_not_status(palette):
+    """D-975 — 앱 노선은 단계 스트립의 지난 구간에만 쓰는 정체 색이다.
+
+    굵은 선이라 바탕·올린 면 위 3:1(비글자 표식)이면 읽힌다. 차가운 띠에 두되 장미색
+    대역(320 이상)에는 들어가지 않고, 상태·계열·브랜드와 지각 거리 0.08 이상 떨어져
+    '좋음'이나 지도 경로로 읽히지 않는다. 밝은 청록은 색역이 좁아 채도 하한은 0.08이다.
+    """
+    for name in APP_LINES:
+        colour = palette[name]
+        _, chroma, hue = oklch(colour)
+        assert 150 <= hue < 320, f"{name} 색상 {hue:.0f} — 차가운 띠, 장미색 대역 밖"
+        assert chroma >= 0.08, f"{name} 채도 {chroma:.3f}"
+        for ground in ("ground", "ground-card"):
+            assert contrast(colour, palette[ground]) >= 3.0, f"{name} {ground} 대비"
+        near = {other: round(_oklab_distance(colour, palette[other]), 3)
+                for other in _LINE_NEIGHBOURS if _oklab_distance(colour, palette[other]) < 0.08}
+        assert not near, f"{name}이 의미 색과 너무 가깝다(ΔE_OK < 0.08): {near}"
+
+
+def test_app_lines_live_only_in_the_stage_strip():
+    """노선 팔레트는 tokens.css에서 나고 단계 스트립만 소비한다. 다른 시트가 쓰면 상태처럼 번진다."""
+    import surface_registry as registry
+
+    pattern = re.compile(r"var\(--app-line-")
+    allowed = {TOKENS.resolve(), (TOKENS.parent / "stage-strip.css").resolve()}
+    offenders = []
+    for row in registry.load():
+        target = registry.REPO / row["path"]
+        sheets = target.rglob("*.css") if target.is_dir() else ()
+        offenders += [str(sheet.relative_to(registry.REPO)) for sheet in sheets
+                      if sheet.resolve() not in allowed and pattern.search(sheet.read_text(encoding="utf-8"))]
+    assert not offenders, offenders
 
 
 def test_the_primary_command_is_an_ink_fill(palette):

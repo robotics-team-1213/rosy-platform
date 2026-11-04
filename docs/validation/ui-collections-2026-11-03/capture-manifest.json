@@ -1,0 +1,16 @@
+{
+  "source_commit": "02664861ec4a19857e9a8105c29bc48854371bc8",
+  "source": {
+    "type": "pytest-stdout",
+    "location": "<operator-system-temp>/rosy-catalog-accepted/run-1.txt",
+    "record_prefix": "ROSY_SCREENSHOT",
+    "sha256": "e71da2077b519add2a83dac6d5e7c9177c898c368a2e86996ad6451ed26bb121"
+  },
+  "format": "JPEG bytes embedded as base64; synthetic fixtures only; raw captures are not committed",
+  "captures": [
+    {"id": "cell-catalog-dark-1366", "viewport": [1366, 844], "sha256": "9cbb827f5e11e3ff954ac4b083c49c6fa7adc410ae2870dbc6ffe95fe4a636da"},
+    {"id": "cell-catalog-dark-390", "viewport": [390, 844], "sha256": "486478b632ac5bee9e20f79a7fda61e3f559c55fd003494ca674cbb2a166acd9"},
+    {"id": "cell-catalog-light-1366", "viewport": [1366, 844], "sha256": "bcee39ac15351e4a834f54d516526a5a901fdaa2246ae0540b66d96df0a34ab8"},
+    {"id": "cell-catalog-light-390", "viewport": [390, 844], "sha256": "3d5ad029808874d8a912c177ef6b28cf87e02a5ad1301722b11174efd06cd99e"}
+  ]
+}

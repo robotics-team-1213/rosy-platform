@@ -51,12 +51,12 @@ DEFAULT_SIZE = DEFAULT_PROFILE.size
 #
 # 정상에는 색이 없다: 배터리가 넉넉할 때는 잉크로 쓴다. 초록을 쓰면 화면
 # 대부분이 색을 갖게 되고 임계 경보가 눈에 띌 대비 예산이 남지 않는다.
-_BG = (16, 18, 20)          # --ground   #101214
+_BG = (17, 17, 19)          # --ground   #111113
 _FG = (238, 238, 239)       # --ink        #eeeeef
-_MUTED = (148, 153, 160)    # --ink-quiet  #9499a0
+_MUTED = (176, 180, 186)    # --ink-quiet  #b0b4ba
 _NOMINAL = _FG              # --nominal  정상은 잉크다
-_WARN = (254, 180, 50)      # --status-warn #feb432
-_CRIT = (196, 9, 33)        # --status-crit #c40921
+_WARN = (255, 197, 61)      # --status-warn #ffc53d
+_CRIT = (181, 69, 72)       # --status-crit #b54548
 
 def battery_color(percent: float) -> tuple[int, int, int]:
     if percent >= 60.0:
@@ -88,7 +88,7 @@ def _draw_alarm(draw: ImageDraw.ImageDraw, xy, text: str, font) -> None:
 def _draw_caution(draw: ImageDraw.ImageDraw, xy, text: str, font) -> None:
     """주의 문장도 채움이다 — 도움 요청은 OK 와 같은 무게로 읽히지 않는다.
 
-    warn 채움 위에 ground 잉크(#feb432 대비 10:1 이상)로 얹는다. crit 칩과
+    warn 채움 위에 ground 잉크(#ffc53d 대비 10:1 이상)로 얹는다. crit 칩과
     형태는 같고 색만 다른 어휘다.
     """
     x, y = xy
@@ -400,7 +400,7 @@ def render_boot(payload: dict, size: tuple[int, int] = DEFAULT_SIZE,
     # The mark breathes with the stage while the robot is still waiting.
     lines = boot_lines(payload)
     kind = str(payload.get("stage") or "BOOTING").split(":", 1)[0]
-    rose = (246, 151, 231)  # --brand-rose #f697e7
+    rose = (231, 150, 243)  # --brand-rose #e796f3
     waiting = profile.animation and frame % 2 == 1 and kind in ("BOOTING", "PROVISIONED")
     if waiting:
         rose = _dim(rose)

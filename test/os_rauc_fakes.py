@@ -1,10 +1,12 @@
 """Pinned native RAUC extracted into pytest storage; never installs a package or service."""
 import hashlib
+from http.client import IncompleteRead
 import os
 from pathlib import Path
 import platform
 import shutil
 import subprocess
+import warnings
 from urllib.request import urlopen
 
 import pytest
@@ -34,6 +36,27 @@ def expired_pem(certificate, key) -> bytes:
     return dated.stdout if dated.returncode == 0 else run([*base, "-days", "-1"])
 
 
+def download_package(pin):
+    failures = []
+    for attempt in range(1, 4):
+        try:
+            with urlopen(pin["url"], timeout=30) as response:
+                package = response.read(pin["size_bytes"] + 1)
+                digest = hashlib.sha256(package).hexdigest()
+                observed = (f"length={len(package)} sha256={digest} status={response.status} "
+                            f"content-length={response.headers.get('Content-Length')} "
+                            f"content-type={response.headers.get('Content-Type')}")
+            if len(package) == pin["size_bytes"] and digest == pin["sha256"]:
+                if failures:
+                    warnings.warn("Pinned RAUC package recovered after " + "; ".join(failures), RuntimeWarning)
+                return package
+        except (OSError, IncompleteRead) as error:
+            observed = type(error).__name__
+        failures.append(f"attempt {attempt}: {observed}")
+    raise AssertionError(f"Pinned RAUC package unavailable: expected length={pin['size_bytes']} "
+                         f"sha256={pin['sha256']}; " + "; ".join(failures))
+
+
 @pytest.fixture(scope="session")
 def rauc_tool(tmp_path_factory):
     if platform.system() != "Linux":
@@ -41,9 +64,7 @@ def rauc_tool(tmp_path_factory):
     assert platform.machine() in PACKAGES, "no verified native RAUC test package for this architecture"
     assert shutil.which("dpkg-deb") and shutil.which("mksquashfs") and shutil.which("openssl")
     pin = PACKAGES[platform.machine()]
-    with urlopen(pin["url"], timeout=30) as response:
-        package = response.read(pin["size_bytes"] + 1)
-    assert len(package) == pin["size_bytes"] and hashlib.sha256(package).hexdigest() == pin["sha256"]
+    package = download_package(pin)
     directory = tmp_path_factory.mktemp("isolated-rauc")
     archive = directory / "rauc.deb"
     archive.write_bytes(package)
