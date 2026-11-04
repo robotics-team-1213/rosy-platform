@@ -90,10 +90,13 @@ def test_keyboard_ai_draft_publishes_candidate_without_overwriting_review(tmp_pa
         command(page, 'AI 객체 초안 만들기')
         expect(page.locator('#review-ai-jobs')).to_contain_text('초안 후보 저장됨', timeout=15000)
         expect(page.locator('#review-ai-jobs')).to_contain_text('미인증 로컬 작업자')
-        provenance = page.locator('#review-ai-jobs li details').first
+        provenance = page.locator('#review-ai-provenance')
         expect(provenance.locator('p').first).to_be_hidden()
         provenance.locator('summary').click()
         expect(provenance.locator('p').first).to_be_visible()
+        with page.expect_response('**/api/review-ai/0'):
+            page.get_by_role('button', name='AI 실행 상태 다시 조회').evaluate('node=>node.click()')
+        expect(provenance.locator('summary')).to_be_focused()
         page.get_by_role('button', name='AI 실행 상태 다시 조회').click()
         expect(provenance.locator('p').first).to_be_visible()
         assert store.get(0) == before
@@ -104,6 +107,7 @@ def test_keyboard_ai_draft_publishes_candidate_without_overwriting_review(tmp_pa
         expect(page.locator('#model-candidates')).to_be_enabled()
         assert store.get(0) == before
         open_action_disclosure(page, '#review-versions')
+        page.locator('#review-versions').get_by_role('button', name='이력 불러오기', exact=True).click()
         expect(page.locator('#review-versions li ui-button')).to_have_count(1)
         page.locator('#review-versions li ui-button').first.click()
         expect(page.locator('#review-versions section')).to_contain_text('이전 버전 v1')
@@ -121,6 +125,7 @@ def test_no_configuration_explains_disabled_pixel_ai_and_history_missing(tmp_pat
         expect(page.locator('#review-ai-jobs')).to_contain_text('AI 실행 설정이 없습니다')
         assert '설정' in page.locator('#review-ai-mask_check').get_attribute('reason')
         open_action_disclosure(page, '#review-versions')
+        page.locator('#review-versions').get_by_role('button', name='이력 불러오기', exact=True).click()
         expect(page.locator('#review-versions')).to_contain_text('아직 저장된 이력이 없습니다')
         page.locator('#pixel-filter').select_option('approved')
         expect(page.locator('#review-ai-jobs')).to_have_count(0)
@@ -179,7 +184,17 @@ def test_mask_check_automatically_refreshes_opinion_without_replacing_unsaved_pi
             if not editing:
                 expect(page.locator('#pixel-draft')).to_have_text(draft)
             assert review_masks.get(store, 0) == before
+            expect(page.locator('#review-ai-mask_check')).to_be_enabled()
+            page.locator('#review-ai-mask_check').click()
+            expect(page.locator('#review-ai-jobs > ul > li')).to_have_count(2)
             open_action_disclosure(page, '#pixel-vlm-details')
+            provenance = page.locator('#review-ai-provenance')
+            provenance.locator('summary').click()
+            with page.expect_response('**/api/review-ai/0'):
+                page.get_by_role('button', name='AI 실행 상태 다시 조회').evaluate('node=>node.click()')
+            expect(provenance.locator('summary')).to_be_focused()
+            assert set(provenance.locator('[data-job]').evaluate_all('nodes=>nodes.map(node=>node.dataset.job)')) == {job['id'] for job in jobs.status(0)['jobs']}
+            provenance.locator('summary').click()
             for width, height in [(1366, 768), (390, 844)]:
                 page.set_viewport_size({'width': width, 'height': height})
                 for theme in ['dark', 'light']:
@@ -302,6 +317,7 @@ def test_history_pagination_and_pixel_snapshot_do_not_modify_current(tmp_path):
         before = review_masks.get(store, 0)
         page.goto(page.url.split('?')[0] + 'pixels?frame=0', wait_until='networkidle')
         open_action_disclosure(page, '#review-versions')
+        page.locator('#review-versions').get_by_role('button', name='이력 불러오기', exact=True).click()
         expect(page.locator('#review-versions li ui-button')).to_have_count(20)
         page.locator('#review-versions').get_by_role('button', name='이전 이력 더 보기').click()
         expect(page.locator('#review-versions li ui-button')).to_have_count(23)

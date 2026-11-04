@@ -13,9 +13,10 @@ function element(tag,text){const node=document.createElement(tag);if(tag==='ui-b
 export function resetAI(){generation++;clearTimeout(timer);clearTimeout(autoTimer);autoTimer=null;updateButtons=()=>{};document.getElementById('review-ai-jobs')?.remove();for(const id of ['pixel-mask-check-controls','pixel-draft-create-controls'])document.getElementById(id)?.replaceChildren();const state=document.getElementById('pixel-ai-generation-state');if(state){state.textContent='';state.hidden=true;}}
 export function updateAI(){updateButtons();}
 export function showAI(lane,index,request,context,results){
-  resetAI();const ticket=generation,panel=element('section'),title=element('h3','AI 초안과 확인'),controls=element('div'),message=element('p'),jobs=element('ul');
+  resetAI();const ticket=generation,panel=element('section'),title=element('h3','AI 초안과 확인'),controls=element('div'),message=element('p'),jobs=element('ul'),provenance=element('details'),provenanceRows=element('div');
   panel.id='review-ai-jobs';panel.className='review-history';panel.setAttribute('aria-label','AI 실행');controls.className='review-ai-actions';message.setAttribute('role','status');
-  panel.append(title,element('p','저장된 버전으로 요청합니다. 결과는 후보·참고 의견이며 사람이 확인한 뒤 적용·승인합니다.'),controls,message,jobs);
+  provenance.id='review-ai-provenance';provenance.append(element('summary','AI 요청·모델 정보'),provenanceRows);
+  panel.append(title,element('p','저장된 버전으로 요청합니다. 결과는 후보·참고 의견이며 사람이 확인한 뒤 적용·승인합니다.'),controls,message,jobs,provenance);
   if(lane==='object')document.querySelector('#save-status').after(panel);
   else document.querySelector('.pixel-vlm-feedback').append(panel);
   const allowed=lane==='object'?['object_draft']:['pixel_draft','mask_check'],buttons=[];
@@ -66,13 +67,13 @@ export function showAI(lane,index,request,context,results){
     finally{if(ticket===generation){pending=false;updateAI();}}
   }
   function render(){
-    const expanded=new Set([...jobs.querySelectorAll('details[open]')].map(node=>node.dataset.job));
-    jobs.replaceChildren();
-    for(const job of status.jobs.filter(row=>allowed.includes(row.action))){
-      const row=element('li'),summary=element('p',`${actions[job.action]} · ${states[job.state]||job.state} · v${job.version}`),details=element('details');
-      details.dataset.job=job.id;details.open=expanded.has(job.id);
-      details.append(element('summary','요청·모델 정보'),element('p',`요청 ${actorName(job.actor)} · ${job.created_at}`),element('p',`모델 ${job.model} · ${job.model_digest}`));
-      row.append(summary,details);
+    jobs.replaceChildren();provenanceRows.replaceChildren();
+    const visibleJobs=status.jobs.filter(row=>allowed.includes(row.action));provenance.hidden=!visibleJobs.length;
+    for(const job of visibleJobs){
+      const row=element('li'),summary=element('p',`${actions[job.action]} · ${states[job.state]||job.state} · v${job.version}`),details=element('section');
+      details.dataset.job=job.id;
+      details.append(element('h4',`${actions[job.action]} · v${job.version}`),element('p',`요청 ${actorName(job.actor)} · ${job.created_at}`),element('p',`모델 ${job.model} · ${job.model_digest}`));
+      row.append(summary);provenanceRows.append(details);
       if(job.error)row.append(element('p',job.error));
       if(job.state==='succeeded')row.append(element('p',job.action==='mask_check'?'참고 의견 저장됨 · AI 의견에 자동 표시됩니다.':job.result?.added_pixels===0?'보완할 픽셀 없음 · 새 후보를 만들지 않았습니다.':'초안 후보 저장됨 · AI 결과 목록 조회에서 선택하세요.'));
       if(active(job)){const cancel=element('ui-button','이 AI 작업 취소');cancel.disabled=pending;cancel.onclick=()=>send(`/api/review-ai-cancel/${job.id}`,{});row.append(cancel);}

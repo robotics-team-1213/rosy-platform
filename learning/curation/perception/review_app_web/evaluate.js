@@ -96,6 +96,7 @@ $('promote-request').onclick=async()=>{
   if(refreshing||requesting)return;
   requesting=true;$('promote-request').disabled=true;$('evaluate-refresh').disabled=true;
   fail(null);$('promote-result').hidden=true;
+  $('promote-request-hash').textContent='';
   try{
     const response=await accountFetch('/api/learning/promotion-requests',{method:'POST',headers:{'Content-Type':'application/json','X-Pinky-Token':token},body:JSON.stringify({id:$('promote-candidate').value})});
     const value=await response.json();

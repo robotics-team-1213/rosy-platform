@@ -244,6 +244,7 @@ function render() {
         const group=text(card,'div','','job-images');
         for(const image of report.images) {
           const link=text(group,'a',`결과 JPG 열기 · ${image.name}`,'ui-action-link');
+          link.dataset.kind='quiet';
           link.dataset.kind='quiet';link.href=`/api/learning/images/${encodeURIComponent(item.id)}/${encodeURIComponent(image.name)}`;
           link.target='_blank';link.rel='noopener';
         }
@@ -254,7 +255,7 @@ function render() {
       for(const step of report.steps||[]) if(step.error) text(card,'p',`${step.name}: ${step.error}`,'job-reason');
       if(report.error) text(card,'p',report.error,'job-reason');
     }
-    const link=text(card,'a','단계·결과 파일 및 연결 관리','ui-action-link');link.href='#job-'+encodeURIComponent(item.id);
+    const link=text(card,'a','단계·결과 파일 및 연결 관리','ui-action-link');link.dataset.kind='quiet';link.href='#job-'+encodeURIComponent(item.id);
     const details=text($('job-detail-content'),'section','');details.dataset.jobDetail=item.id;details.hidden=true;
     text(details,'h3',item.name);
     for(const report of item.reports) {
