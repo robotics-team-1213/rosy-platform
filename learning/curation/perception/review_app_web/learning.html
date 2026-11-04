@@ -2,7 +2,7 @@
 <html lang="ko" data-theme="dark">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Rosy Learning — 학습 작업</title><link rel="stylesheet" href="/common/tokens.css"><script src="/common/theme.js"></script>
-<link rel="stylesheet" href="/common/components.css"><link rel="stylesheet" href="/common/component-controls.css"><link rel="stylesheet" href="/common/app-shell.css"><link rel="stylesheet" href="/app.css">
+<link rel="stylesheet" href="/common/components.css"><link rel="stylesheet" href="/common/component-controls.css"><link rel="stylesheet" href="/common/app-shell.css"><link rel="stylesheet" href="/common/stage-strip.css"><link rel="stylesheet" href="/app.css">
 <script type="module" src="/learning.js"></script></head>
 <body><a class="skip-link" href="#learning-main">학습 작업으로 이동</a>
 <ui-shell grammar="procedure" class="ui-app-shell"><!-- review:header:start -->
@@ -32,7 +32,7 @@
 <div class="ui-workspace-bar"><h2 id="pipeline-title" class="ui-section-heading">현재 인식 자료의 학습 흐름</h2><span data-spacer></span><ui-button id="refresh" data-action-icon="refresh" kind="quiet">최신 결과 확인</ui-button></div>
 <p id="pipeline-status" role="status">현재 자료와 학습 결과를 연결하는 중입니다.</p>
 <div class="ui-workspace-bar pipeline-next"><ui-button id="pipeline-action" kind="primary" disabled>진행 상태 확인 중</ui-button><a data-kind="quiet" id="pipeline-link" class="ui-action-link" hidden>다음 작업</a></div>
-<ol id="pipeline-stages" class="pipeline-stages"></ol>
+<ol id="pipeline-stages" class="pipeline-stages ui-stage-track" data-line="learning" aria-label="현재 인식 자료의 학습 단계"></ol>
 <div class="ui-workspace-bar owner-controls" aria-label="학습 실행 제어"><p id="owner-control-status" role="status" tabindex="-1">실행기 연결 확인 중</p>
 <ui-button id="owner-control-start" kind="quiet" aria-label="학습 시작" disabled>시작</ui-button><ui-button id="owner-control-stop" kind="quiet" aria-label="학습 중지" disabled>중지</ui-button><ui-button id="owner-control-retry" kind="quiet" aria-label="학습 재시도" disabled>재시도</ui-button></div>
 <details id="pipeline-evidence"><summary>현재 자료·모델의 연결 근거</summary><div id="pipeline-records"></div></details>
