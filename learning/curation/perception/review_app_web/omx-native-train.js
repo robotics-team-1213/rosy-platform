@@ -14,7 +14,7 @@ function selection(){
   const blocked=journeyContext.blocked||!!journeyContext.task;
   $('native-train-workflow').hidden=!blocked;
   if(blocked){
-    $('native-train-workflow').href=contextUrl('',journeyContext.task?'/learning/tasks':'/learning/tasks/manage');
+    $('native-train-workflow').href=contextUrl('',journeyContext.task&&!journeyContext.blocked?'/learning/tasks':'/learning/tasks/manage');
   }
   const valid=!blocked&&!!row&&!row.error&&!row.fixture_only&&!!review;
   $('native-train-start').disabled=busy||!valid;

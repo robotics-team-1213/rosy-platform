@@ -9,7 +9,7 @@ export const journeyContext={task:null,blocked:keys.some(key=>requested[key])||i
 export function contextUrl(hash='run-title',path='/learning/tasks/manage'){
   const url=new URL(path,location.origin);
   for(const key of keys){const value=key==='dataset'?requested.dataset||$('dataset').value:requested[key];if(value)url.searchParams.set(key,value);}
-  if(journeyContext.task?.profile_id)url.searchParams.set('profile',journeyContext.task.profile_id);
+  if(!requested.profile&&journeyContext.task?.profile_id)url.searchParams.set('profile',journeyContext.task.profile_id);
   url.hash=hash;return url.pathname+url.search+url.hash;
 }
 export function initJourney(refresh){
