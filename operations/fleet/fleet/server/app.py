@@ -84,7 +84,7 @@ from fleet.server.task_dispatch_routes import (  # noqa: F401 — GoalRequest �
 from fleet.server.lane_route_routes import RouteRequest, install_lane_route_routes  # noqa: F401 — RouteRequest 재수출 (D-463)
 
 _LOG = logging.getLogger(__name__)
-DEPLOYMENT_PROFILES = frozenset({"production", "simulation"})
+DEPLOYMENT_PROFILES = frozenset({"production", "simulation", "device_trial"})  # D-797 2
 
 
 from fleet.server.vision_preview_routes import VisionLeaseRequest, configure_vision_previews, install_vision_preview_routes
