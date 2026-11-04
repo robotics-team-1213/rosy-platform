@@ -4,7 +4,10 @@ import json
 import threading
 import urllib.request
 
+import base64
+import numpy as np
 import pytest
+import review_masks
 
 from review_app import make_server
 from review_ai_jobs import Jobs
@@ -69,6 +72,31 @@ def test_success_uses_authenticated_actor_and_stale_request_is_conflict(tmp_path
         assert store.get(0)['status'] == 'pending'
 
 
+def test_sam_point_http_binds_authenticated_clicks_and_returns_unapplied_selection(tmp_path):
+    selected = np.full((24, 32), 255, np.uint8)
+    selected[:, 1] = 0
+    snapshots = []
+    def backend(snapshot, cancel):
+        snapshots.append(snapshot)
+        return {'mask': base64.b64encode(review_masks.encode(selected)).decode()}
+    with running(tmp_path, backend) as (url, store, jobs, _):
+        csrf = token(url)
+        body = {'action': 'sam_points', 'version': 1, 'label': 0, 'points': [[1, 2]]}
+        assert request(url, '/api/review-ai/0', 'reader', body, csrf)[0] == 403
+        assert request(url, '/api/review-ai/0', 'editor', dict(body, actor='forged'), csrf)[0] == 400
+        assert request(url, '/api/review-ai/0', 'editor', dict(body, version=0), csrf)[0] == 409
+        code, job = request(url, '/api/review-ai/0', 'editor', body, csrf)
+        assert code == 200 and job['actor'] == 'editor'
+        jobs.thread.join(5)
+        done = jobs.status(0)['jobs'][0]
+        assert done['state'] == 'succeeded' and done['result']['selected_pixels'] == 24
+        assert done['result']['selection_sha256'] == done['result']['candidate_sha256']
+        assert snapshots[0]['sam_prompt'] == {'label': 0, 'points': [[1, 2]]}
+        current = review_masks.get(store, 0)
+        assert current['version'] == 1 and current['status'] == 'pending'
+        assert np.all(review_masks.pixels(store, current)[:, 1] == 255)
+
+
 @pytest.mark.parametrize('canceller', ['editor', 'reviewer'])
 def test_cancel_requires_owner_or_manager_and_editor_capability(tmp_path, canceller):
     started = threading.Event()
@@ -87,6 +115,30 @@ def test_cancel_requires_owner_or_manager_and_editor_capability(tmp_path, cancel
         done = jobs.status(0)['jobs'][0]
         assert done['state'] == 'cancelled' and done['cancelled_by'] == canceller
         assert not store.object_drafts(0)
+
+
+def test_ai_status_exposes_request_capability_and_other_photo_busy_without_writing(tmp_path):
+    started, release = threading.Event(), threading.Event()
+    def backend(_, cancel):
+        started.set()
+        assert release.wait(10)
+        return {'boxes': []}
+    with running(tmp_path, backend) as (url, store, jobs, _):
+        before = store.get(0)
+        assert request(url, '/api/review-ai/0', 'reader')[1]['can_request'] is False
+        assert request(url, '/api/review-ai/0', 'editor')[1]['can_request'] is True
+        assert request(url, '/api/review-ai/0', 'editor')[1]['busy'] is False
+        csrf = token(url)
+        try:
+            assert request(url, '/api/review-ai/0', 'editor', {'action': 'object_draft', 'version': 1}, csrf)[0] == 200
+            assert started.wait(5)
+            other = request(url, '/api/review-ai/1', 'reader')[1]
+            assert other['busy'] is True and other['can_request'] is False
+        finally:
+            release.set()
+            if jobs.thread:
+                jobs.thread.join(5)
+        assert store.get(0) == before
 
 
 def test_revoked_session_cannot_publish_finished_ai_result(tmp_path):

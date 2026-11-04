@@ -39,6 +39,76 @@ def _workspace(tmp_path, mask_path="mask.png"):
     return state
 
 
+def _stored_report(state):
+    report = analyze(state, lambda *_: {'verdict': 'uncertain', 'issue': 'none', 'note': 'Inspect original'},
+                     model_digest='model-sha')
+    (state / 'vlm-feedback.json').write_text(json.dumps(report), encoding='utf-8')
+    return report
+
+
+def test_partial_legacy_report_missing_frame_is_not_a_read_error(tmp_path):
+    state = _workspace(tmp_path)
+    report = _stored_report(state)
+    report['frames'] = [dict(report['frames'][0], frame=index) for index in range(23, 43)]
+    report['generation'] = '6'
+    (state / 'vlm-feedback.json').write_text(json.dumps(report), encoding='utf-8')
+    with sqlite3.connect(state / 'reviews.sqlite3') as db:
+        db.execute('INSERT INTO frames SELECT 23,source FROM frames WHERE id=0')
+        db.execute('INSERT INTO masks SELECT 23,status,path,? FROM masks WHERE frame=0', ('0' * 64,))
+    before = (state / 'reviews.sqlite3').read_bytes()
+    missing = read_current_feedback(state, 0)
+    assert missing['available'] is False and missing['reason'] == 'not_requested'
+    assert missing['check']['state'] == 'not_requested'
+    stale = read_current_feedback(state, 23)
+    assert stale['available'] is True and stale['current'] is False
+    assert stale['workspace_changed'] is True and stale['feedback']['note'] == 'Inspect original'
+    assert (state / 'reviews.sqlite3').read_bytes() == before
+
+
+@pytest.mark.parametrize('job_state', ['not_requested', 'queued', 'running', 'failed', 'cancelled', 'stale', 'succeeded'])
+def test_missing_report_preserves_latest_mask_check_state(tmp_path, job_state):
+    state = _workspace(tmp_path)
+    with sqlite3.connect(state / 'reviews.sqlite3') as db:
+        db.execute('CREATE TABLE review_ai_jobs(id TEXT PRIMARY KEY, frame INTEGER, document TEXT)')
+        if job_state != 'not_requested':
+            job = {'id': 'a' * 32, 'action': 'mask_check', 'state': job_state, 'version': 3,
+                   'model': 'qwen3-vl:8b-instruct', 'error': 'retry' if job_state == 'failed' else None}
+            db.execute('INSERT INTO review_ai_jobs VALUES (?,?,?)', (job['id'], 0, json.dumps(job)))
+    value = read_current_feedback(state, 0)
+    assert value['available'] is False
+    assert value['reason'] == ('not_requested' if job_state == 'not_requested' else 'no_report')
+    assert value['check']['state'] == job_state
+    if job_state != 'not_requested':
+        assert value['check']['version'] == 3 and value['check']['job_id'] == 'a' * 32
+
+
+def test_corrupt_report_remains_an_explicit_read_error(tmp_path):
+    state = _workspace(tmp_path)
+    (state / 'vlm-feedback.json').write_text('{broken json', encoding='utf-8')
+    value = read_current_feedback(state, 0)
+    assert value['available'] is False and value['reason'] == 'unreadable'
+
+
+@pytest.mark.parametrize('unknown', [None, '7', False, -1, 65])
+def test_feedback_rejects_invalid_unknown_pixel_counts(tmp_path, unknown):
+    state = _workspace(tmp_path)
+    report = _stored_report(state)
+    report['frames'][0]['unknown_pixels'] = unknown
+    (state / 'vlm-feedback.json').write_text(json.dumps(report), encoding='utf-8')
+    value = read_current_feedback(state, 0)
+    assert value['available'] is False and value['reason'] == 'invalid_report'
+
+
+def test_fixed_eval_does_not_expose_learned_mask_opinions(tmp_path):
+    state = _workspace(tmp_path)
+    _stored_report(state)
+    with sqlite3.connect(state / 'reviews.sqlite3') as db:
+        db.execute("INSERT INTO metadata VALUES ('workspace_kind','evaluation')")
+    value = read_current_feedback(state, 0)
+    assert value['available'] is False and value['reason'] == 'policy_blocked'
+    assert 'feedback' not in value
+
+
 def test_feedback_reports_unknown_pixels_without_changing_review(tmp_path):
     state = _workspace(tmp_path)
     before = (state / "reviews.sqlite3").read_bytes()

@@ -143,6 +143,26 @@ def test_fill_unknown_preserves_known_labels_and_stays_pending(tmp_path):
     assert np.array_equal(review_masks.pixels(store, restored), before)
 
 
+def test_fill_unknown_selected_class_preserves_labels_and_undo(tmp_path):
+    store = open_store(tmp_path)
+    review_masks.bind_classes(store, CLASSES)
+    marked = review_masks.update(store, 0, {'version': 0, 'action': 'paint',
+                                           'label': 1, 'radius': 0, 'points': [[8, 9]]}, Conflict)
+    before = review_masks.pixels(store, marked).copy()
+    filled = review_masks.update(store, 0, {'version': marked['version'],
+                                           'action': 'fill_unknown', 'label': 3}, Conflict)
+    after = review_masks.pixels(store, filled)
+    assert after[9, 8] == 1 and np.all(after[before == 255] == 3)
+    assert filled['status'] == 'pending' and filled['approval'] is None
+    restored = review_masks.update(store, 0, {'version': filled['version'], 'action': 'undo'}, Conflict)
+    assert np.array_equal(review_masks.pixels(store, restored), before)
+    for invalid in (255, True, '3', 999):
+        with pytest.raises(ValueError, match='known mask index'):
+            review_masks.update(store, 0, {'version': restored['version'],
+                                           'action': 'fill_unknown', 'label': invalid}, Conflict)
+    assert review_masks.get(store, 0)['version'] == restored['version']
+
+
 def test_polygon_paints_only_selected_pixels_and_undoes(tmp_path):
     store = open_store(tmp_path)
     review_masks.bind_classes(store, CLASSES)
