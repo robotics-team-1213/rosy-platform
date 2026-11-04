@@ -105,6 +105,7 @@ OWN = {
         "measured-calibration-view.js",
         "peer-picker.js",
         "start-point-view.js",  # D-540 5: 카메라 설치·보정
+        "install-line.js",  # D-975: 설치 노선
         "start-point-layer.js",
         "tracking-relearn.js",  # D-540 5 / D-539: 배경 다시 학습
         "host-services.js",  # D-524 / D-530: 호스트 여유와 닫힌 서비스 제어

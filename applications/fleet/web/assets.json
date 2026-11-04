@@ -162,6 +162,10 @@
       "path": "confirmed-action.js",
       "media_type": "application/javascript"
     },
+    "install-line.js": {
+      "path": "installation/install-line.js",
+      "media_type": "application/javascript"
+    },
     "install.js": {
       "path": "installation/install.js",
       "media_type": "application/javascript"

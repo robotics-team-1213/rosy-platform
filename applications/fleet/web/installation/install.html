@@ -10,6 +10,7 @@
   <script src="/common/theme.js"></script>
   <link rel="stylesheet" href="/common/components.css">
   <link rel="stylesheet" href="/common/component-controls.css">
+  <link rel="stylesheet" href="/common/stage-strip.css">
   <link rel="stylesheet" href="/common/task-chooser.css">
   <link rel="stylesheet" href="/common/app-shell.css">
   <link rel="stylesheet" href="/console/assets/styles.css">
@@ -86,6 +87,8 @@
 
   <!-- D-926 2 — 경로 줄: 문서 제목과 현재 화면을 본문 머리에도 보인다(부품은 app-shell.css). -->
   <div class="ui-pathbar"><h1>설치·보정</h1><strong id="install-screen">장비 찾기</strong></div>
+  <!-- D-975 설치 노선 — 역마다 서버 근거로만 완료를 그린다. 역은 install-line.js가 채운다. -->
+  <ol id="install-line" class="ui-stage-track" data-line="fleet" aria-label="설치 진행"></ol>
 
   <main id="install-main" class="fleet-task-page ui-task-page" tabindex="-1">
     <!-- D-410 — 설치 화면. 운용(감시·목표·정지)은 /console에 있다. -->
