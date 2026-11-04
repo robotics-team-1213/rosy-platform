@@ -142,6 +142,69 @@ def real_camera(cameras, name, spec):
     return cameras[name]
 
 
+WRIST_VIEW_SIZE = (640, 360)  # the 1280x720 wrist sensor at half size
+
+
+def wrist_camera(cameras, name, link_path, spec):
+    """A camera on the arm's link5 at the wrist-holder lens pose (palletizing_gripper.wrist_camera_pose); moves with the arm."""
+    import math
+    import numpy as np
+    from isaacsim.sensors.camera import Camera
+    from palletizing_gripper import wrist_camera_pose
+    if name not in cameras:
+        width, height = WRIST_VIEW_SIZE
+        lens, quat = wrist_camera_pose(spec)
+        camera = Camera(link_path+'/WristCamera', resolution=(width, height))
+        camera.initialize()
+        camera.set_local_pose(np.array(lens), np.array(quat), camera_axes='usd')
+        camera.set_clipping_range(.005, 10.)
+        f_px = height/2/math.tan(math.radians(spec['vfov_deg'])/2)
+        aperture = 36.
+        for key, value in (('horizontalAperture', aperture), ('verticalAperture', aperture*height/width),
+                           ('focalLength', f_px*aperture/width)):
+            camera.prim.GetAttribute(key).Set(value)
+        cameras[name] = camera
+    return cameras[name]
+
+
+WRIST_PARTS = ('link5_gripper', 'gripper_plate_F6', 'b16-u16-span-B-holder-assembly')  # assets/omx_wrist_camera_b
+
+
+def team_wrist_visual(stage, link5):
+    """Draw link5 as the team's wrist (gripper body, plate F6, B camera holder) instead of the stock mesh, whose ROBOTIS
+    camera frame F9 sits 2.6 mm from the B lens and filled a third of the wrist image (run f3c208d1). Visual only:
+    the colliders, link6 and link7 stay as imported."""
+    from pathlib import Path
+    from pxr import Gf, UsdGeom, Vt
+    from palletizing_gripper import _triangles
+    # The importer puts link5's mesh in instanceable children (follower_06_pan_Revised = visual, ..._1 = guide collider);
+    # visibility never changes physics, so every child but the finger links is hidden.
+    stock = [c for c in stage.GetPrimAtPath(link5).GetChildren() if c.GetName() not in ('link6', 'link7')]
+    if not stock:
+        raise RuntimeError(f'no stock visual found under {link5}')
+    for prim in stock:
+        UsdGeom.Imageable(prim).MakeInvisible()
+    for name in WRIST_PARTS:
+        tris = _triangles(Path(__file__).resolve().parent/'assets/omx_wrist_camera_b'/f'{name}.stl')
+        mesh = UsdGeom.Mesh.Define(stage, f'{link5}/team_visuals/{name.replace("-", "_")}')
+        mesh.CreatePointsAttr(Vt.Vec3fArray([Gf.Vec3f(t[3*i]/1e3, t[3*i+1]/1e3, t[3*i+2]/1e3) for t in tris for i in range(3)]))
+        mesh.CreateFaceVertexCountsAttr(Vt.IntArray([3]*len(tris)))
+        mesh.CreateFaceVertexIndicesAttr(Vt.IntArray(list(range(3*len(tris)))))
+        mesh.CreateSubdivisionSchemeAttr('none')
+        mesh.CreateDisplayColorAttr(Vt.Vec3fArray([Gf.Vec3f(.12, .12, .13)]))
+
+
+def demo_views(cameras, fixture, stage, links):
+    """The surveyed real views, plus one wrist camera per arm (arm_a_wrist, arm_b_wrist) when the case sets wrist_camera."""
+    views = {view: real_camera(cameras, view, fixture['real_cameras'][view]) for view in fixture['real_cameras']}
+    if fixture.get('wrist_camera'):
+        for arm, link in zip(('arm_a', 'arm_b'), links):
+            link5 = str(stage.GetPrimAtPath(link['end_effector_link']).GetParent().GetPath())
+            team_wrist_visual(stage, link5)
+            views[arm+'_wrist'] = wrist_camera(cameras, arm+'_wrist', link5, fixture['wrist_camera'])
+    return views
+
+
 def real_capture(world, cameras, name, spec, path):
     """Render one surveyed real camera and save a PNG at `path`."""
     import numpy as np

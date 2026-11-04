@@ -20,6 +20,7 @@ REPO = Path(__file__).resolve().parents[3]
 WEB = REPO / "shared" / "web"
 COMPONENTS = WEB / "components.css"
 STAGE_STRIP = WEB / "stage-strip.css"
+READOUT_STRIP = WEB / "readout-strip.css"
 APP_SHELL = WEB / "app-shell.css"
 UI = WEB / "ui.js"
 WORKSPACE = WEB / "workspace.js"
@@ -69,7 +70,8 @@ def declared(name: str) -> bool:
     """표의 한 이름이 코드에 실제로 있는가."""
     styles = (COMPONENTS.read_text(encoding="utf-8")
               + APP_SHELL.read_text(encoding="utf-8")
-              + STAGE_STRIP.read_text(encoding="utf-8"))
+              + STAGE_STRIP.read_text(encoding="utf-8")
+              + READOUT_STRIP.read_text(encoding="utf-8"))
     if name.startswith("<"):
         return f'"{name.strip("<>")}"' in UI.read_text(encoding="utf-8")
     if name.endswith("()"):
@@ -151,3 +153,46 @@ def test_composition_vocabulary_names_real_code():
     missing = [name for name in names if not declared(name)]
     assert missing == [], f"「조합 어휘」가 코드에 없는 이름을 부른다: {missing}"
     assert not declared(".ui-not-a-real-part"), "탐지기가 없는 이름을 통과시킨다"
+
+
+# D-978 — 화면 머리 두 부품의 "지금 쓰는 곳"은 HTML 경로이고 실제 사용과 같아야 한다.
+HEAD_PARTS = {
+    '`.ui-stage-track`': re.compile(r'class="ui-stage-track"'),
+    '`.ui-readout[data-form="strip"]`': re.compile(r'class="ui-readout"[^>]*data-form="strip"'),
+}
+
+
+def _listed_pages(name_cell: str) -> set[str]:
+    section = DESIGN.read_text(encoding="utf-8").split("### 조합 어휘", 1)[1].split("\n### ", 1)[0]
+    for line in section.splitlines():
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        if len(cells) == 3 and cells[1].startswith(name_cell):
+            return {token.strip().strip("`") for token in cells[2].split("·") if token.strip()}
+    raise AssertionError(f"「조합 어휘」에 {name_cell} 줄이 없다")
+
+
+def _tracked(*patterns: str) -> list[str]:
+    import subprocess
+    return subprocess.run(["git", "-C", str(REPO), "ls-files", *patterns], capture_output=True, text=True,
+                          check=True).stdout.split()
+
+
+def test_screen_head_parts_are_listed_where_they_are_used():
+    for name, pattern in HEAD_PARTS.items():
+        listed = _listed_pages(name)
+        used = {path for path in _tracked("*.html") if "/test/" not in path
+                and pattern.search((REPO / path).read_text(encoding="utf-8", errors="replace"))}
+        assert listed == used, (f"{name}: 표에만 {sorted(listed - used)}, 코드에만 {sorted(used - listed)}"
+                                " — DESIGN.md 「조합 어휘」를 같은 커밋에서 고친다")
+
+
+WRITE_REQUEST = re.compile(r"""method\s*:\s*["'](?:POST|PUT|PATCH|DELETE)["']|\bpost\(|\.(?:post|put|patch|delete)\(""", re.I)
+
+
+def test_screen_head_modules_never_write():
+    """노선 모듈(`*-line.js`)과 수치 띠 계산 모듈은 이미 받은 응답만 읽는다(D-978 1)."""
+    files = _tracked("*-line.js", "*/policy-model.js")
+    assert any(path.endswith("install-line.js") for path in files), files
+    offenders = [path for path in files if WRITE_REQUEST.search((REPO / path).read_text(encoding="utf-8"))]
+    assert offenders == [], f"화면 머리 모듈이 쓰기 요청을 보낸다: {offenders}"
+    assert WRITE_REQUEST.search("request(path, {method: 'POST'})") and WRITE_REQUEST.search("api.post(x)")

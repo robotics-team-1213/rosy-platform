@@ -33,6 +33,7 @@ for _part in ("contracts/foundation", "middleware/devices/omx/adapter", "middlew
 SCHEMA = "rosy.omx-hardware-owner.v1"
 KEYS = {"schema", "workcell_id", "instance_id", "namespace", "fleet_peer_uid", "journal_path",
         "socket_root", "owner_config"}
+OPTIONAL_KEYS = {"commissioning_root"}  # D-797 3: set only for a device_trial owner
 
 
 def _private_file(path: Path) -> str:
@@ -56,14 +57,15 @@ def load_config(path: Path | str, environ=None, *, read=_private_file):
 
     environ = os.environ if environ is None else environ
     document = json.loads(read(Path(path)), parse_constant=_reject_constant)
-    if not isinstance(document, dict) or set(document) != KEYS or document["schema"] != SCHEMA:
+    if (not isinstance(document, dict) or not KEYS <= set(document) <= KEYS | OPTIONAL_KEYS
+            or document["schema"] != SCHEMA):
         raise ValueError(f"hardware owner config must be exactly {SCHEMA}")
     if "<" in json.dumps(document):
         raise ValueError("hardware owner config still holds placeholder values")
     names = InstanceNames(document["namespace"])
     if namespace_from_environment(environ) != names.namespace:
         raise ValueError("ROSY_OMX_ROS_NAMESPACE must equal the configured namespace")
-    for key in ("journal_path", "socket_root"):
+    for key in ("journal_path", "socket_root", *(k for k in OPTIONAL_KEYS if k in document)):
         if not isinstance(document[key], str) or not Path(document[key]).is_absolute():
             raise ValueError(f"{key} must be an absolute path")
     raw = document["owner_config"]
@@ -82,7 +84,8 @@ def load_config(path: Path | str, environ=None, *, read=_private_file):
     settings = HardwareOwnerSettings(
         workcell_id=document["workcell_id"], instance_id=document["instance_id"],
         journal_path=Path(document["journal_path"]), socket_root=Path(document["socket_root"]),
-        fleet_peer_uid=document["fleet_peer_uid"], calibration_revision=config.calibration_revision)
+        fleet_peer_uid=document["fleet_peer_uid"], calibration_revision=config.calibration_revision,
+        commissioning_root=Path(document["commissioning_root"]) if "commissioning_root" in document else None)
     return settings, config, names
 
 
@@ -148,6 +151,11 @@ def main(argv=None) -> int:
     from omx_adapter.ros_runtime import RosArmCommandRuntime
     from rosy_agent.omx_hardware_owner import build_hardware_owner
 
+    commissioning_revision = None
+    if settings.commissioning_root is not None:
+        from omx_adapter.real.commissioning_record import CommissioningStore
+        commissioning_revision = CommissioningStore(
+            settings.commissioning_root, workcell_id=settings.workcell_id, instance_id=settings.instance_id).revision
     rclpy.init()
     node = rclpy.create_node("rosy_omx_hardware_owner")
     if node.get_parameter("use_sim_time").value:
@@ -158,7 +166,7 @@ def main(argv=None) -> int:
             node, cfg, joint_state_topic=names.joint_state_topic,
             trajectory_action=names.trajectory_action, owner_clock="steady"),
         refuse_second_owner=lambda: refuse_second_owner(namespace=names.namespace),
-        fleet_fence_current=fleet_fence)
+        fleet_fence_current=fleet_fence, commissioning_revision=commissioning_revision)
     executor = OwnerMultiThreadedExecutor(num_threads=4)
     executor.add_node(node)
     threading.Thread(target=executor.spin, daemon=True).start()

@@ -1186,3 +1186,9 @@
 - 변경: 밝게 `--brand-rose` `#bb42a4` → `#b13295`(H338·L .542, wash 위 4.56·위험과 색약 대비 1.85 — 두 조건이 반대로 당겨 창이 좁다). 게이트 `test_current_location_text_reads_on_its_wash`를 더해 예전 값(3.93)을 거절함을 확인. D-976 ADR 값 정정.
 - 증거: 로컬 `test_palette_gates.py` 41 PASS. 원격 브라우저 재실행은 커밋 후.
 - Gate: 이동 없음. CE: 기존 교훈 검토 대상 — 하네스(팔레트 게이트)가 놓친 대비를 원격 브라우저가 찾음.
+
+## 2026-11-04 · uncommitted · 화면 머리 규칙을 한 곳으로(D-978)
+
+- 변경: D-978 — 노선·수치 띠는 서버 응답만 보이고 쓰기 요청을 보내지 않는다. `DESIGN.md` 「조합 어휘」의 절차 단계·수치 띠 두 줄이 "지금 쓰는 곳"을 HTML 경로로 적는 정본이 되고, `test_content_vocabulary.py`가 표와 실제 사용 페이지를 대조한다(표의 이름 확인 범위에 `readout-strip.css` 추가). 같은 시험이 `*-line.js`·`policy-model.js`의 쓰기 요청 문자열을 거절한다.
+- 증거: 로컬 `test_content_vocabulary.py` 6 PASS. 표에서 Cell을 빼면 "코드에만 cell.html"로 실패함을 확인한 뒤 되돌림.
+- Gate: 이동 없음. CE: 해당 없음 — 규칙 정본화.
