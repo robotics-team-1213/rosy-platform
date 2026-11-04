@@ -5,7 +5,7 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.359
+**Version:** v1.361
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -761,6 +761,17 @@ their canonical imports from `core_common.protocol.schemas` remain available.
 Simulation-only and disabled on an owner without an installed
 physical catalog. This adds read-only planning, not Action admission or dispatch.
 The existing envelope protocol_version remains 1.0 and local Action IPC remains v2.
+
+`GET /api/fleet/execution-profile` (v1.361, D-979) is a read-only signal for apps. Auth is
+`require_viewer` like trip-jobs, so the service role reads it; there is no write method.
+Response: `profile` (`simulation`|`device_trial`|`production`, as configured),
+`arm_execution` (`physical`|`simulated`|`closed`), `revision` (single arm's commissioning
+revision, else config revision, else null), `observation_producers` and `evidence_producers`
+(`[{id, kind, authenticated}]`, only registered unexpired producers, empty if none) and
+`checked_at` (server time, UTC). `simulation` gives `simulated`; `device_trial` gives `physical`
+only while exactly one arm's owner reports `device: true`, the same workcell/instance and the
+configured `commissioning_revision` (cached identity query, no device command); everything else
+is `closed`. An app treats a missing or stale signal as `closed`.
 
 `POST /api/fleet/arm-transfers/preflight` requires existing `require_proposer`
 authorization (`fleet.operate`, operator/service), including the normal POST Origin
@@ -4536,6 +4547,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.361 | 2026-11-04 | Additive: `GET /api/fleet/execution-profile`(D-979) — 앱이 읽는 읽기 전용 실행 프로필(`arm_execution` physical/simulated/closed, 등록·인증된 생산자 목록, `checked_at`). viewer·service 읽기, 쓰기 없음, 증명되지 않으면 closed. |
 | v1.359 | 2026-11-04 | Additive: peer pose sharing(탑뷰 부재 대비) — `GET /api/v1/peers`, `POST /api/v1/peers/beacon`(부여 `PEER_SHARE`, operator 이상), `StateSnapshot.peers`(기능이 꺼져 있으면 null). 설계 docs/plans/2026-11-04-peer-pose-sharing-design.md |
 | v1.355 | 2026-11-03 | D-965: ARM 설치 없는 꼭대기 관제(R)가 ARM 작업 경로 다섯 개를 하위 셀 위임으로 relay. 셀 result에 job·receipt, 승인 전 취소는 HOLD로 거둠, admit은 취소된 위임 제안 거절 |
 | v1.354 | 2026-11-03 | D-965: 셀 inbox가 팔 작업 위임을 받아 부모 service principal로 기존 ARM 제안을 만들고 결속. 위임 approve는 팔 작업에 409, 승인은 셀 ARM admit |
