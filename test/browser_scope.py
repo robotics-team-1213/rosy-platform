@@ -100,7 +100,7 @@ SCOPE: dict[str, list[str]] = {
     "applications/fleet/test/": FLEET,
     "operations/fleet/fleet/server/": FLEET,
     "applications/fleet/web/": FLEET,
-    "middleware/robot_ui/robot/": ROBOT,
+    "middleware/robot_ui/robot/": ROBOT + ["middleware/core/api/test/test_d283_console_browser.py"],
     "middleware/core/api/": API_WEB,
     "middleware/robot_ui/pilot/": PILOT,
     "middleware/devices/omx/adapter/": OMX_PILOT,
