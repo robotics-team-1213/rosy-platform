@@ -2,32 +2,32 @@
 name: ROSY
 description: 로봇·플릿 관제 웹 표면의 시각 체계 — 차분한 지능에 은은한 따뜻함
 colors:
-  ground: "#101214"
-  ground-deep: "#08090b"
-  ground-raise: "#191b1d"
-  ground-soft: "#1d1f21"
-  ground-card: "#2b2d30"
-  ground-card-2: "#35383c"
+  ground: "#111113"
+  ground-deep: "#0c0d0f"
+  ground-raise: "#18191b"
+  ground-soft: "#212225"
+  ground-card: "#272a2d"
+  ground-card-2: "#2e3135"
   ink: "#eeeeef"
-  ink-quiet: "#9499a0"
+  ink-quiet: "#b0b4ba"
   ink-on-crit: "#eeeeef"
-  status-crit: "#c40921"
-  status-warn: "#feb432"
-  status-good: "#12bb81"
-  series-primary: "#49affd"
-  series-secondary: "#0777bb"
-  series-goal: "#12bb81"
-  robot-1: "#b6ddfe"
-  robot-2: "#24a6fd"
-  robot-3: "#0774b6"
-  app-line-learning: "#16d3c3"
-  app-line-fleet: "#8a81ef"
-  app-line-robot: "#b670d5"
-  raster-unknown: "#111213"
-  raster-free: "#1f2123"
-  raster-uncertain: "#45484d"
-  raster-occupied: "#d7d7d8"
-  brand-rose: "#f697e7"
+  status-crit: "#b54548"
+  status-warn: "#ffc53d"
+  status-good: "#3dd68c"
+  series-primary: "#58a6ff"
+  series-secondary: "#2870bd"
+  series-goal: "#3dd68c"
+  robot-1: "#bddafe"
+  robot-2: "#63abfe"
+  robot-3: "#2f76c4"
+  app-line-learning: "#0eb39e"
+  app-line-fleet: "#9eb1ff"
+  app-line-robot: "#b1a9ff"
+  raster-unknown: "#0c0d0f"
+  raster-free: "#18191b"
+  raster-uncertain: "#43484e"
+  raster-occupied: "#b0b4ba"
+  brand-rose: "#e796f3"
   shadow-base: "#000000"
 typography:
   display:
@@ -214,7 +214,7 @@ D-280 다섯 원칙은 시각에서 이렇게 묶인다.
 5. **현대성은 정교한 품질로.** 닫힌 척도(글자 6단, 간격 6단, 모서리 4종)만 쓴다. 장식 움직임은 없다([D-220](docs/adr/D-220-stillness-contract-zero-motion-budget.md)).
 
 **Key Characteristics:**
-- 무채색 바탕(H 258, C ≤ 0.012) 위 한 가족 글꼴, 숫자만 등폭
+- 차가운 무채색 바탕(Radix slate, C ≤ 0.010) 위 한 가족 글꼴, 숫자만 등폭
 - 색은 네 의미 집합(ground·status·series·brand)에서만, 서로 섞지 않는다
 - 정상에는 색이 없다 — 정상은 `ink`다
 - 주 명령은 초록이 아니라 가장 대비가 큰 중립(ink 채움)이다
@@ -255,7 +255,7 @@ Fleet 앱 바의 오른쪽은 연결·알림·나·정지 순서다. 연결은 `
 
 변경자는 원시 색 금지, 역할 우선, 테마 키·대비·native parity 시험을 원격으로 실행한다. 새 역할은 ADR·사용처·시험을 같은 커밋에 넣는다. G1 시험 통과와 G2 화면 검증, G3 사용자 작업 검토를 구분해 기록한다. 모든 표면의 G2/G3가 없으면 제품 전체 디자인 완료로 선언하지 않는다.
 
-색은 뜻의 예산이다. 한 화면에서 색이 적을수록 색이 뜻하는 바가 강하다. 의미 집합은 [D-82](docs/adr/D-82-oklch.md)가, 대비 바닥은 [D-202](docs/adr/D-202-danger-is-a-fill-alarm-text-contrast-contract.md)·[D-214](docs/adr/D-214-text-contrast-floor.md)가 정한다. 값은 OKLCH에서 생성했다.
+색은 뜻의 예산이다. 한 화면에서 색이 적을수록 색이 뜻하는 바가 강하다. 의미 집합은 [D-82](docs/adr/D-82-oklch.md)가, 대비 바닥은 [D-202](docs/adr/D-202-danger-is-a-fill-alarm-text-contrast-contract.md)·[D-214](docs/adr/D-214-text-contrast-floor.md)가 정한다. 값은 실제 제품 색 체계(Radix Colors·GitHub Primer)의 단계에서 골라 팔레트 게이트로 걸렀다([D-976](docs/adr/D-976-palette-from-product-scales-and-dense-tool-targets.md)). 같은 색이 넓은 면을 칠하지 않는다 — 끝난 진행·정상 칸은 중립이고 색은 지금 도는 것과 주의가 필요한 것에만 간다.
 
 ### Primary
 - **ROSY 장미(Rosy Rose)** (`brand-rose`): 워드마크와 현재 선택된 역할 메뉴(위치 표식)에만 쓴다 — D-277 원문의 두 자리다. 상태·포커스·데이터 계열·인터랙션에 쓰지 않고, 조작 상태는 `--focus-ring`이다. 옅은 바탕은 파생 `--brand-rose-wash`다.
@@ -415,6 +415,8 @@ D-741(Accepted)이 정한, 모든 웹 표면이 같이 쓸 자리다. Rosy Fleet
 - `--target-irreversible` 48px: 비상 정지·되돌릴 수 없는 조작.
 
 **공통 조작 법칙.** 비상 정지를 포함한 모든 버튼은 종류에 관계없이 48px·라벨 글자·좌우 여백을 공유한다. 폭은 라벨 길이로 정하고 아이콘 전용은 같은 누름 면의 정사각형이다. 크기는 최소값이므로 긴 문구·비활성 사유는 늘어날 수 있다. 버튼의 의미는 채움과 상태, 아이콘과 보이는 동사로 구분한다. 위험 조작의 크기 예외나 화면별 작은 버튼을 만들지 않는다.
+
+**도구 단계(D-976, D-629 개정).** 넓은 화면(64rem 이상)의 마우스 작업 면에서만 도구 막대·표 행 동작의 아이콘 단추는 `--target-tool` 36px, 표·목록 행은 `--row-dense` 34px를 쓸 수 있다. 아이콘 단독 도구에는 `aria-label`이 있다. 주 동작·비상 정지·되돌릴 수 없는 조작·폼 입력은 48px 그대로이고, 64rem 미만에서는 소비 시트가 `--target-secondary`로 되돌린다.
 
 ### 관제의 정보 위계와 배치 이유
 

@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-976 | 팔레트 값은 실제 제품 색 체계의 단계에서 고르고, 넓은 화면 도구는 36px 단계를 쓴다 — D-82 값 출처·D-629 크기 규칙 개정. [전문](../adr/D-976-palette-from-product-scales-and-dense-tool-targets.md) | Accepted (2026-11-04, 사용자 결정; 두 테마 팔레트·사본·도구 토큰 구현, LCD 실물 판독 미수용) |
 | D-975 | 단계 스트립은 노선 모양이고 앱마다 노선 색 하나를 갖는다 — 흐름은 노선, 단계는 번호 역. [전문](../adr/D-975-line-map-stage-track-and-app-lines.md) | Accepted (2026-11-04, 사용자 결정; 공용 단계 스트립·앱 노선 색 구현, 화면 적용은 단계별 미착수) |
 | D-974 | 관제 용어는 제품·관제 단위·호스트·화면 층을 섞지 않는다 — Rosy Fleet은 제품 이름, 통합관제 R·셀 관제 CELL-x는 단위, PC는 물리 이름(OMX 노트북), 헤더는 `unit_id`, Cell 표시 문구는 팔레트 적재. [전문](../adr/D-974-control-vocabulary-layers.md) | Accepted (2026-11-03, 사용자 결정; D-968 1항 대체, 헤더·문구 구현, Confluence·Harbor 반영, 현장 헤더 관측 미수용) |
 | D-969 | OMX 두 팔 적층의 첫 학습 정책은 Isaac 정답 IK 시연으로 학습한 ACT 두 팔이다 — 실물 단위(`normalized_-100_100`·`0_100`, arm_a→arm_b), 컨테이너 하나 = 에피소드, 녹화 옵트인, 6단계 순서, D-947 학습 범위 확장. [전문](../adr/D-969-omx-two-arm-act-from-isaac-ik-demonstrations.md) | Accepted (2026-11-03, 사용자 결정; 코드·학습·실물 수용 없음) |

@@ -1167,3 +1167,9 @@
 - 증거: `test_palette_gates.py`에 노선 색 게이트(차가운 띠·장미색 밖·대비 3:1·의미 색과 OKLab 0.08)와 소비 범위 게이트를 더했다.
 - 화면 확인: styleguide 견본을 1366·390, 어둡게·밝게로 캡처했다. 첫 캡처에서 30rem 미만 세로 노선의 구간 높이가 0 이하라 선이 사라지는 것을 보고, 역 아래 여백(`--gap-stage-segment`)을 구간 자리로 바꿨다. 쓰지 않게 된 `--gap-stage-track`은 지웠다.
 - Gate: 이동 없음. 생산 화면은 아직 이 부품을 쓰지 않는다(P2부터). CE: 해당 없음 — 장애 해결이 아닌 계획된 부품 변경.
+
+## 2026-11-04 · uncommitted · 실제 제품 색 체계로 팔레트 값 교체와 도구 밀도 토큰(D-976)
+
+- 변경: 두 테마 팔레트 값을 Radix Colors(slate·red·amber·green·teal·indigo·iris·violet·cyan·plum)·GitHub Primer 단계와 모니터용 근흑 바탕(#0c0d0f)으로 바꿨다. 키·의미·파생·역할은 그대로이고 각 줄 주석이 출처다. 밝게 주의는 빨강으로 읽혀 Primer 주황 #bc4c00. `--target-tool` 36px·`--row-dense` 34px를 더했다(넓은 화면 도구 전용). 정적 theme-color 6개·Pilot 매니페스트·Android 런처 바탕·앱 아이콘 SVG·얼굴 LCD 색 튜플을 같이 맞췄다.
+- 증거: `test_palette_gates.py`가 두 테마에서 통과(로컬). 시안 캔버스 24장을 두 테마로 렌더해 확인했다.
+- Gate: 이동 없음. 얼굴 LCD 실물 판독은 미수용. CE: 해당 없음 — 장애 해결이 아닌 사용자 승인 디자인 변경.

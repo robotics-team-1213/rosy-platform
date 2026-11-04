@@ -17,7 +17,7 @@ from PIL import Image, ImageChops
 PILOT = Path(__file__).resolve().parents[1]
 REPO = PILOT.parents[2]
 SVG = REPO / "shared/web/icons/pilot.svg"
-GROUND = "#101214"
+GROUND = "#111113"
 
 
 def _render(size: int):

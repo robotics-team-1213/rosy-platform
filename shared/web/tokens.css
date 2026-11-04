@@ -19,8 +19,12 @@
  * 밝기 차는 0.009였다 — 적록 색약 시야에서 위험과 주의의 대비가 1.07:1로
  * 무너져 있었다. 자세한 근거는 D-82.
  *
+ * D-976(2026-11-04) — 값의 출처를 실제 제품 색 체계로 바꿨다: 무채색은 Radix
+ * slate, 상태·노선은 Radix와 GitHub Primer의 단계에서 고르고, 위 게이트로 걸렀다.
+ * 각 줄의 주석이 출처다. 키·의미·파생·역할은 그대로다.
+ *
  * 팔레트의 의미 집합은 닫혀 있고 서로 섞이지 않는다.
- *   ground   바탕·글자(ink)·선. 기본값이다. 색상 258, 채도 거의 0.
+ *   ground   바탕·글자(ink)·선. 기본값이다. 차가운 중성(색상 250–286), 채도 0.01 이하.
  *   status   임계를 넘었을 때만. 따뜻한 띠에만 있다.
  *   series   계열 정체성. 차가운 띠에만 있다. 상태에 쓰지 않는다.
  *   brand    ROSY 이름을 식별할 때만. 상태·포커스·데이터 계열에 쓰지 않는다.
@@ -35,52 +39,52 @@
 :root, [data-theme="dark"] {
   color-scheme: dark;
 
-  /* ---- ground: 바탕과 글자 (OKLCH H 258, C <= 0.012) ----------------- */
-  --ground: #101214;
-  --ground-deep: #08090b;
-  --ground-raise: #191b1d;
-  --ground-soft: #1d1f21;
-  --ground-card: #2b2d30;
-  --ground-card-2: #35383c;
+  /* ---- ground: 바탕과 글자 (Radix slate, C <= 0.010) ------------------ */
+  --ground: #111113;  /* Radix slate 1 */
+  --ground-deep: #0c0d0f;  /* 모니터용 어두운 바탕(taste-skill 연구) */
+  --ground-raise: #18191b;  /* Radix slate 2 */
+  --ground-soft: #212225;  /* Radix slate 3 */
+  --ground-card: #272a2d;  /* Radix slate 4 */
+  --ground-card-2: #2e3135;  /* Radix slate 5 */
   --ink: #eeeeef;
-  --ink-quiet: #9499a0;
+  --ink-quiet: #b0b4ba;  /* Radix slate 11 */
   /* 위험 채움 위 글자 — 테마와 무관하게 밝다. */
   --ink-on-crit: #eeeeef;
 
   /* ---- status: 임계에만. 따뜻한 띠(H 25 / H 76)에만 있다 -------------
-   * 위험은 글자가 아니라 채움이다 — 잉크를 얹어 쓴다(대비 5.3:1).
-   * 주의와 위험은 지각 밝기로 0.30 떨어져 있고 색약 대비 2.05:1이다.
+   * 위험은 글자가 아니라 채움이다 — 잉크를 얹어 쓴다(대비 4.6:1).
+   * 주의와 위험은 지각 밝기로 0.31 떨어져 있고 색약 대비 2.37:1이다.
    */
-  --status-crit: #c40921;
-  --status-warn: #feb432;
-  --status-good: #12bb81;
+  --status-crit: #b54548;  /* Radix red 8 — 위 글자 ink-on-crit 4.7:1 */
+  --status-warn: #ffc53d;  /* Radix amber 9 — 위험과 색약 대비 2.37 */
+  --status-good: #3dd68c;  /* Radix green 11 */
 
   /* ---- series: 계열. 차가운 띠에만 있다 -------------------------------
    * 남은 경로와 후보 경로는 다른 종류가 아니라 확신도가 다른 같은 것이다.
-   * 색상이 아니라 밝기로 인코딩하므로 색약 시야에서도 갈린다(2.06:1).
+   * 색상이 아니라 밝기로 인코딩하므로 색약 시야에서도 갈린다(2.01:1).
    * secondary는 같은 계열 쌍의 두 번째 — 형태가 같을 때 밝기로 가른다.
    */
-  --series-primary: #49affd;
-  --series-secondary: #0777bb;
-  --series-goal: #12bb81;
+  --series-primary: #58a6ff;  /* Primer blue */
+  --series-secondary: #2870bd;  /* Radix blue 8 */
+  --series-goal: #3dd68c;  /* Radix green 11 */
 
   /* ---- 로봇 식별 — fleet 표면 ----------------------------------------
    * 네 대를 네 색상으로 가르는 것은 sRGB에서 불가능하다. 식별은 라벨이
    * 나르고 색은 같은 색상의 밝기 사다리 세 단이며 N>3이면 순환한다(D-82).
    * D-129로 단일 파일에 살고, 사다리 성질은 fleet 시험이 지킨다.
    */
-  --robot-1: #b6ddfe;
-  --robot-2: #24a6fd;
-  --robot-3: #0774b6;
+  --robot-1: #bddafe;  /* series-primary 색상(H 253) 밝기 사다리 */
+  --robot-2: #63abfe;  /* 같은 색상 · 중간 */
+  --robot-3: #2f76c4;  /* 같은 색상 · 짙음 */
 
   /* ---- 앱 노선 — 단계 스트립의 지난 구간 전용(D-975) -------------------
    * 앱 정체성이지 상태도 계열도 아니다. 차가운 띠에서 status·series·brand와
-   * 지각 거리(ΔE_OK) 0.08 이상 떨어진 색상각만 쓴다(청록 185 · 남보라 285 · 보라 315).
+   * 지각 거리(ΔE_OK) 0.08 이상 떨어진 색상각만 쓴다(청록 · 남보라 · 아이리스, D-976).
    * 한 화면에는 자기 앱 노선 하나만 보인다.
    */
-  --app-line-learning: #16d3c3;  /* L .781 C .135 H 185 */
-  --app-line-fleet: #8a81ef;     /* L .661 C .160 H 285 */
-  --app-line-robot: #b670d5;     /* L .660 C .161 H 315 */
+  --app-line-learning: #0eb39e;  /* Radix teal 10 */
+  --app-line-fleet: #9eb1ff;  /* Radix indigo 11 */
+  --app-line-robot: #b1a9ff;  /* Radix iris 11 */
 
   /* ---- 지도 래스터 — 무채색 --------------------------------------------
    * core는 `/api/v1/map`에서 클라이언트가 직접 그린다(map.js). control의
@@ -88,21 +92,20 @@
    * 서버-클라이언트 색 계약(그쪽은 map_raster.py가 소유) 대상이 아니다.
    * 지형은 계열이 아니라 바탕이므로 채도를 쓰지 않고 밝기만 단조 증가한다.
    */
-  --raster-unknown: #111213;
-  --raster-free: #1f2123;
-  --raster-uncertain: #45484d;
-  --raster-occupied: #d7d7d8;
+  --raster-unknown: #0c0d0f;  /* 바탕과 같음 */
+  --raster-free: #18191b;  /* Radix slate 2 */
+  --raster-uncertain: #43484e;  /* Radix slate 7 */
+  --raster-occupied: #b0b4ba;  /* Radix slate 11 */
 
-  /* ---- brand: ROSY 정체성 전용. OKLCH L .80 / C .15 / H 333 -------- */
-  --brand-rose: #f697e7;
+  /* ---- brand: ROSY 정체성 전용. OKLCH L .79 / C .15 / H 322 -------- */
+  --brand-rose: #e796f3;  /* Radix plum 11 */
 
   /* 그림자의 바탕. 음영(shade)은 이 색의 알파다. */
   --shadow-base: #000000;
 }
 
 /* ---- 밝게 (D-359 §3) — 같은 키, 같은 의미 집합, 값만 다르다 ---------
- * OKLCH에서 생성했다(목표 L/C/H → sRGB, 색역 밖이면 채도만 줄인다). 괄호는
- * 실제 값의 OKLCH다. 제품 기본값이 아니다 — 사람 G3·현장 조명 관측 전까지
+ * 값은 각 줄 주석의 Radix·Primer 단계에서 골랐다(D-976). 제품 기본값이 아니다 — 사람 G3·현장 조명 관측 전까지
  * 운용 권장 테마가 아니다.
  *
  * 바탕 사다리는 어둡게와 같은 뜻이다: `deep`에서 `card-2`로 갈수록 잉크 쪽이다.
@@ -110,52 +113,53 @@
  * 바탕보다 조금 짙고, `deep`은 가장 흰 면이다. 파생 공식(선·장막·세척)은
  * 그대로 두 테마에서 뜻이 맞는다.
  *
- * 밝은 바탕 위 글자는 짙어야 4.5:1을 넘는다. 그래서 주의는 짙은 호박색(H 55)이고,
- * 위험 채움은 주의보다 지각 밝기로 0.21 낮은 짙은 적색이다(색약 대비 2.32:1).
+ * 밝은 바탕 위 글자는 짙어야 4.5:1을 넘는다. 그래서 주의는 짙은 주황(H 45, 4.8:1)이고 —
+ * 빨강 쪽 주의는 밝은 화면에서 위험으로 읽혀 쓰지 않는다 — 위험 채움은 주의보다
+ * 지각 밝기로 0.17 낮은 짙은 적색이다(색약 대비 2.03:1).
  * 위험 채움 위 글자(`--ink-on-crit`)는 테마와 무관하게 밝다.
  */
 [data-theme="light"] {
   color-scheme: light;
 
-  /* ground (H 258, C <= 0.013) */
-  --ground: #f4f6f8;          /* L .972 C .003 */
-  --ground-deep: #fdfdff;     /* L .995 C .003 */
-  --ground-raise: #edeff2;    /* L .951 C .005 */
-  --ground-soft: #e9ebee;     /* L .939 C .005 */
-  --ground-card: #dfe1e5;     /* L .909 C .006 */
-  --ground-card-2: #d2d5d9;   /* L .872 C .006 */
-  --ink: #191c20;             /* L .225 C .009 — 바탕 대비 15.8:1 */
-  --ink-quiet: #54585f;       /* L .459 C .012 — 6.6:1, card-2 위 4.9:1 */
+  /* ground (Radix slate, C <= 0.010) */
+  --ground: #f9f9fb;  /* Radix slate 2 */
+  --ground-deep: #fcfcfd;  /* Radix slate 1 */
+  --ground-raise: #f0f0f3;  /* Radix slate 3 */
+  --ground-soft: #e8e8ec;  /* Radix slate 4 */
+  --ground-card: #e0e1e6;  /* Radix slate 5 */
+  --ground-card-2: #d9d9e0;  /* Radix slate 6 */
+  --ink: #1c2024;  /* Radix slate 12 */
+  --ink-quiet: #60646c;  /* Radix slate 11 */
   --ink-on-crit: #eeeeef;     /* L .949 — 위험 채움 위 10.9:1 */
 
   /* status — 따뜻한 띠 */
-  --status-crit: #6e000c;     /* L .339 C .137 H 25 — 바탕 대비 11.6:1 */
-  --status-warn: #ad5802;     /* L .553 C .136 H 55 — 글자 4.6:1, 위험과 ΔL .21 */
+  --status-crit: #82071e;  /* Primer red (light) */
+  --status-warn: #bc4c00;  /* Primer orange (light) — 위험과 색약 대비 2.03 */
   --status-good: #008040;     /* L .525 C .138 H 152 */
 
   /* series — 차가운 띠 */
-  --series-primary: #0067c8;  /* L .521 C .171 H 255 — 5.1:1 */
-  --series-secondary: #11338a; /* L .360 C .150 H 264 — primary와 색약 1.59:1 */
+  --series-primary: #0d74ce;  /* Radix blue 11 */
+  --series-secondary: #0d419d;  /* Primer blue (light) */
   --series-goal: #008040;     /* L .525 C .138 H 152 — 4.7:1 */
 
-  /* 로봇 사다리 — 한 색상(H 246), 밝기 내림차순, 모두 바탕 대비 3:1 이상 */
-  --robot-1: #1c8cda;         /* L .620 C .150 — 3.3:1 */
-  --robot-2: #0268a7;         /* L .501 C .128 — 5.5:1 */
-  --robot-3: #01406a;         /* L .360 C .092 — 10.0:1 */
+  /* 로봇 사다리 — 한 색상(H 252), 밝기 내림차순, 모두 바탕 대비 3:1 이상 */
+  --robot-1: #3789dd;  /* series-primary 색상(H 252) 밝기 사다리 */
+  --robot-2: #1464b0;  /* 같은 색상 · 중간 */
+  --robot-3: #0d4172;  /* 같은 색상 · 짙음 */
 
-  /* 앱 노선 — 밝은 청록은 sRGB 색역이 좁아 채도 .085가 한계다. 바탕 대비 5:1 이상 */
-  --app-line-learning: #017272;  /* L .500 C .085 H 195 */
-  --app-line-fleet: #5343ac;     /* L .460 C .161 H 285 */
-  --app-line-robot: #783394;     /* L .460 C .161 H 315 */
+  /* 앱 노선 — 밝은 바탕 위 4.5:1 이상, 의미 색과 ΔE_OK 0.08 이상 */
+  --app-line-learning: #107d98;  /* Radix cyan 11 */
+  --app-line-fleet: #5753c6;  /* Radix iris 11 */
+  --app-line-robot: #6550b9;  /* Radix violet 11 */
 
   /* 래스터 — 무채색. 바탕에서 잉크 쪽으로 단조: 미지 ≈ 바탕 → 점유 ≈ 잉크 */
-  --raster-unknown: #f2f3f5;  /* L .964 */
-  --raster-free: #e5e6e8;     /* L .925 */
-  --raster-uncertain: #afb1b5; /* L .760 */
-  --raster-occupied: #303337; /* L .320 */
+  --raster-unknown: #f9f9fb;  /* 바탕과 같음 */
+  --raster-free: #e8e8ec;  /* Radix slate 4 */
+  --raster-uncertain: #b9bbc6;  /* Radix slate 8 */
+  --raster-occupied: #1c2024;  /* Radix slate 12 */
 
   /* brand — 워드마크 전용. L .52 C .18 H 335 (밝은 바탕 위 5.6:1) */
-  --brand-rose: #a33391;
+  --brand-rose: #bb42a4;  /* Radix pink 색상 336 · L .58 */
 
   --shadow-base: #000000;
 }
@@ -215,6 +219,11 @@
   --target-secondary: 48px;
   --target-primary: 48px;
   --target-irreversible: 48px;
+  /* D-976 — 넓은 화면(64rem 이상) 마우스 작업 면의 도구 막대·표 행 동작 아이콘 단추와
+   * 표·목록 행 높이. 주 동작·비상 정지·폼 입력은 위 48px 그대로이고, 64rem 미만에서는
+   * 소비 시트가 --target-secondary로 되돌린다. */
+  --target-tool: 36px;
+  --row-dense: 34px;
 
   /* 단계 표식 지름 — 누름 면이 아니라 글자 옆 표식이다. 노선 굵기·역 테는 D-975. */
   --size-stage-mark: 28px;
