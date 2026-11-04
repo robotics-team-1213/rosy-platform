@@ -54,9 +54,12 @@ def test_the_rule_is_a_parameter_not_code():
 class Cell:
     def __init__(self):
         self.commands = []
+        self.park = {"ok": True, "settled": True, "state": [0] * 6}
 
     def act(self, command):
         self.commands.append(command)
+        if command.endswith(" park"):
+            return self.park
         return {"ok": True, "state": [0] * 6}
 
 
@@ -68,7 +71,8 @@ def test_the_gate_holds_a_reach_into_the_other_side_before_it_moves_and_frees_th
     gate.zones = zones(tmp_path, "left")
     gate.assessment, gate.scope_sha = {"mode": "automatic", "session_id": "s", "library_sha256": "same"}, "same"
     lib = tmp_path / "lib.json"
-    lib.write_text(json.dumps({"source": {"pick": {"x": 0.42, "y": 0.2}, "place": {"x": 0.37, "y": 0.2}}}))
+    lib.write_text(json.dumps({"chunks": {"home": [[0] * 6]},
+                               "source": {"pick": {"x": 0.42, "y": 0.2}, "place": {"x": 0.37, "y": 0.2}}}))
     gate.act(f"load {lib}")
     refused = gate.act("goto above_pick")
     assert refused["ok"] is False and "zone" in refused["error"] and not cell.commands[-1].endswith("goto above_pick")
@@ -79,8 +83,9 @@ def test_the_gate_holds_a_reach_into_the_other_side_before_it_moves_and_frees_th
     assert not gate.zones.held and other.enter((0.37, 0.2)) == (True, "middle")
 
 
-def test_a_held_idle_peer_side_is_taken_over_and_kept_until_the_taker_folds(tmp_path):
-    """2026-11-04: arm_b's wrist cable held it out of service; arm_a must be able to do its work."""
+@pytest.mark.parametrize("hold", [{}, {"facts": {"folded": False}}, {"facts": {"folded": True}, "t": 0}])
+def test_a_hold_and_free_session_lock_do_not_prove_peer_clearance(tmp_path, hold):
+    """HOLD may follow an unsafe extended end; even an old folded report is not fresh clearance."""
     import fcntl
     import os
 
@@ -88,18 +93,80 @@ def test_a_held_idle_peer_side_is_taken_over_and_kept_until_the_taker_folds(tmp_
     left = (0.30, 0.2)
     assert a.enter(left) == (False, "left side belongs to the other arm")  # arm_b in service
     (tmp_path / "incidents").mkdir()
-    (tmp_path / "incidents/HOLD-arm_b.json").write_text("{}")
+    (tmp_path / "incidents/HOLD-arm_b.json").write_text(json.dumps(hold))
     session = os.open(tmp_path / "session-arm_b.lock", os.O_CREAT | os.O_RDWR)
     fcntl.flock(session, fcntl.LOCK_EX)  # arm_b's record_session still runs
     assert a.enter(left)[0] is False
     fcntl.flock(session, fcntl.LOCK_UN)
     os.close(session)
-    ok, why = a.enter(left)
-    assert ok and "taken over" in why
-    assert b.enter(left) == (False, "the other arm has taken over the left side")  # back too early: kept out
-    a.leave()
+    assert a.enter(left)[0] is False
+    assert not a.held
     assert b.enter(left) == (True, "left")
     b.leave()
+
+
+def held_gate(tmp_path, monkeypatch):
+    monkeypatch.setattr(cell_transfer, "same_session", lambda *a, **k: True)
+    monkeypatch.setattr(cell_transfer, "digest", lambda value: "same")
+    cell = Cell()
+    gate = cell_transfer.Gate(cell, {"zone_side": "left", "params": PARAMS}, CAL)
+    gate.zones = zones(tmp_path, "left")
+    gate.assessment, gate.scope_sha = {"mode": "automatic", "session_id": "s", "library_sha256": "same"}, "same"
+    lib = tmp_path / "lib.json"
+    lib.write_text(json.dumps({"chunks": {"home": [[0] * 6]}}))
+    assert gate.act(f"load {lib}")["ok"]
+    assert gate.zones.enter((0.37, 0.2))[0]
+    return gate, cell
+
+
+@pytest.mark.parametrize("park", [
+    {"ok": True, "state": [0] * 6},
+    {"ok": True, "settled": False, "state": [0] * 6},
+    {"ok": True, "settled": True, "state": [10] * 6},
+    *[{"ok": True, "settled": True, "state": [bad] + [0] * 5}
+      for bad in (float("nan"), float("inf"), None)],
+    {"ok": True, "settled": True},
+    {"ok": True, "settled": True, "state": []},
+    {"ok": False, "settled": True, "state": [0] * 6},
+])
+def test_park_without_confirmed_finite_home_keeps_reservations(tmp_path, monkeypatch, park):
+    gate, cell = held_gate(tmp_path, monkeypatch)
+    cell.park = park
+    gate.act("park")
+    assert gate.zones.held
+    assert not zones(tmp_path, "right").enter((0.37, 0.2))[0]
+    cell.park = {"ok": True, "settled": True, "state": [0] * 6}
+    gate.act("park")
+    assert not gate.zones.held
+
+
+def test_real_runner_park_timeout_keeps_middle_until_successful_retry(tmp_path, monkeypatch):
+    import chunk_runner
+
+    class BlockedRobot:
+        def send_action(self, action):
+            pass
+
+        def get_observation(self):
+            return dict(zip(chunk_runner.NAMES, [10] + [0] * 5))
+
+    reports = []
+    runner = chunk_runner.Runner(BlockedRobot(), {"chunks": {"home": [[0] * 6]}},
+                                  fps=30, status=reports.append, clock=lambda: 4.0)
+    runner.target, runner.chunk, runner.settle_since = [0] * 6, "park", 0.0
+    runner.tick()
+    assert reports[-1]["ok"] and reports[-1]["settled"] is False and runner.home_since is None
+    gate, cell = held_gate(tmp_path, monkeypatch)
+    cell.park = reports[-1]
+    gate.act("park")
+    assert gate.zones.held
+    runner.robot.get_observation = lambda: dict(zip(chunk_runner.NAMES, [0] * 6))
+    runner.chunk, runner.settle_since = "park", None
+    runner.tick()
+    assert reports[-1]["settled"] is True and runner.home_since == 4.0
+    cell.park = reports[-1]
+    gate.act("park")
+    assert not gate.zones.held
 
 
 def test_takeover_is_a_parameter(tmp_path):
