@@ -22,8 +22,8 @@ HOLD는 팔이 뻗은 채 끝난 고장에도 남으므로 물리 이격을 증�
 
 | 커밋 | 로그 | 관측 |
 |---|---|---|
-| `cb1b96e77be6760f16b6ffc81fe497fd81e9e15a` | `red/run-1.txt` | 5 failed, 1 passed. 디렉터리 fsync 순서 및 해당 지점 오류 주입이 NEW 5건으로 재현됨. 파일 fsync 오류는 이미 이동을 막았음 |
-| `190ce99d1e918e21f0e5cfab1251cbb13f770340` | `green/run-1.txt` | 231 passed, skipped 0. known_failures: new/known/flaky 모두 0 |
+| `cb1b96e77be6` | `red/run-1.txt` | 5 failed, 1 passed. 디렉터리 fsync 순서 및 해당 지점 오류 주입이 NEW 5건으로 재현됨. 파일 fsync 오류는 이미 이동을 막았음 |
+| `190ce99d1e91` | `green/run-1.txt` | 231 passed, skipped 0. known_failures: new/known/flaky 모두 0 |
 
 GREEN 대상은 `test/test_omx_cell_zones.py`, `test/test_omx_cell_envelope.py`,
 `test/test_omx_chunk_runner.py`, `test/test_omx_cell_auto_pick.py`,
