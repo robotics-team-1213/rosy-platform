@@ -21,11 +21,16 @@ DEV_ASSETS = {'runtime-sample.js': 'application/javascript', 'browser-platform.j
 
 
 def static_response(path):
+    focus = {'/console/learning': '', '/console/learning/model': 'model',
+             '/console/learning/ai': 'ai'}.get(path)
     if path == '/':
         return DevResponse(302, [('Location', '/console')], b'')
     if path == '/healthz':
         return reply({'status': 'ok', 'service': 'fleet-app-dev'})
-    if path in ASSETS['pages']:
+    if focus is not None:
+        # Production Learning routes render protected host configuration; previews never use it.
+        entry = (WEB / 'learning.html', 'text/html')
+    elif path in ASSETS['pages']:
         entry = REGISTRY['resolve_entry'](WEB, ASSETS['pages'], path)
     elif path.startswith('/console/assets/'):
         entry = REGISTRY['resolve_entry'](WEB, ASSETS['assets'], path.removeprefix('/console/assets/'))
@@ -38,8 +43,17 @@ def static_response(path):
     if entry is None:
         return error(404, 'NOT_FOUND')
     try:
-        return DevResponse(200, [('Content-Type', entry[1]), ('Cache-Control', 'no-store'),
-                                ('X-Content-Type-Options', 'nosniff')], entry[0].read_bytes())
+        body = entry[0].read_bytes()
+        if focus is not None:
+            values = {'focus': focus, 'model_state': 'neutral', 'ai_state': 'neutral',
+                      'model_status': '미등록', 'ai_status': '미등록',
+                      'model_origin': '샘플에는 운영 연결이 없습니다',
+                      'ai_origin': '샘플에는 운영 연결이 없습니다'}
+            for name, value in values.items():
+                body = body.replace(('{{' + name + '}}').encode(), value.encode())
+        return DevResponse(503 if focus else 200,
+                           [('Content-Type', entry[1]), ('Cache-Control', 'no-store'),
+                            ('X-Content-Type-Options', 'nosniff')], body)
     except OSError:
         return error(404, 'NOT_FOUND')
 

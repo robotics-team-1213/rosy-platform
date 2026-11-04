@@ -31,10 +31,6 @@
     "/console/install": {
       "path": "installation/install.html",
       "media_type": "text/html"
-    },
-    "/console/learning": {
-      "path": "learning.html",
-      "media_type": "text/html"
     }
   },
   "assets": {

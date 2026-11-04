@@ -85,7 +85,7 @@ def test_learning_preview_names_unconfigured_hosts_without_template_slots(http_h
     body = response.body.decode('utf-8')
     assert '{{' not in body
     assert '미등록' in body
-    assert f'data-host-focus="{focus.lstrip(chr(47))}"' in body
+    assert f'data-host-focus="{focus.removeprefix("/")}"' in body
     assert 'Fleet 작업으로 돌아가기' in body
 
 

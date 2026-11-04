@@ -85,7 +85,7 @@ def test_resolution_rechecks_files_and_symlinks(tmp_path):
 
 def test_registry_loads_without_fleet_or_ros():
     loader()
-    code = "import runpy,sys; from pathlib import Path; a=runpy.run_path(sys.argv[1]); r=a['load_registry'](Path(sys.argv[2])); assert len(r['pages'])==9; assert not any(n=='fleet' or n.startswith('rclpy') for n in sys.modules)"
+    code = "import runpy,sys; from pathlib import Path; a=runpy.run_path(sys.argv[1]); r=a['load_registry'](Path(sys.argv[2])); assert len(r['pages'])==8; assert not any(n=='fleet' or n.startswith('rclpy') for n in sys.modules)"
     result = subprocess.run([sys.executable, "-I", "-c", code, str(LOADER), str(WEB)],
                             capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
