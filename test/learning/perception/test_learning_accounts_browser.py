@@ -201,6 +201,116 @@ def sign_in(page, url, accounts, name):
     page.reload(wait_until='networkidle')
 
 
+@pytest.mark.parametrize('width', [320, 1366])
+@pytest.mark.parametrize('theme', ['dark', 'light'])
+def test_account_path_follows_real_session_without_losing_drafts_or_focus(tmp_path, accounts, width, theme):
+    """A missing signed-in path or a path surviving a real 401/logout breaks account navigation."""
+    playwright = pytest.importorskip('playwright.sync_api')
+    imports = LearningImports(tmp_path / 'imports', accounts.authorize, accounts.credential)
+    folder = tmp_path / 'review'; folder.mkdir()
+    server = make_server(open_store(folder), free_port(), accounts=accounts, imports=imports)
+    thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
+    url = f'http://127.0.0.1:{server.server_port}'
+    try:
+        with playwright.sync_playwright() as runtime:
+            browser, page, errors = open_page(runtime, width, 844, url=url)
+            try:
+                expect = playwright.expect
+                page.add_init_script('localStorage.setItem("rosy.theme", "' + theme + '")')
+
+                def auth_frame():
+                    expect(page.locator('#accounts-main')).to_have_attribute('aria-busy', 'false')
+                    expect(page.locator('.ui-app-body')).to_have_attribute('data-seats', 'none')
+                    expect(page.locator('#accounts-main.ui-auth-page > h1:first-child')).to_have_text('Learning에 로그인')
+                    expect(page.locator('h1')).to_have_count(1)
+                    expect(page.locator('.ui-pathbar')).to_have_count(0)
+                    for selector in ['.ui-rail', '#review-command-open', '[data-learning-account-entry]', '#signed-in']:
+                        expect(page.locator(selector)).to_be_hidden()
+                    expect(page.locator('#login-panel')).to_have_attribute('aria-labelledby', 'account-title')
+                    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+
+                def signed_frame():
+                    expect(page.locator('#accounts-main')).to_have_attribute('aria-busy', 'false')
+                    expect(page.locator('.ui-app-body')).to_have_attribute('data-seats', 'rail')
+                    expect(page.locator('.ui-app-main > .ui-pathbar > #account-title')).to_have_text('계정과 연결')
+                    expect(page.locator('h1')).to_have_count(1)
+                    expect(page.locator('#accounts-main.ui-auth-page')).to_have_count(0)
+                    expect(page.locator('.ui-pathbar .ui-crumbs[aria-label="현재 위치"] a')).to_have_attribute('href', '/learning')
+                    expect(page.locator('.ui-pathbar .ui-crumbs a')).to_have_text('Learning')
+                    expect(page.locator('[data-learning-account-entry]')).to_have_attribute('aria-current', 'page')
+                    for selector in ['.ui-rail', '#review-command-open', '#signed-in']:
+                        expect(page.locator(selector)).to_be_visible()
+                    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+
+                def capture(state):
+                    import os
+                    import subprocess
+                    from pathlib import Path
+                    if not (output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR')):
+                        return
+                    root = Path(output).expanduser(); root.mkdir(parents=True, exist_ok=True)
+                    name = f'account-context-{state}-{theme}-{width}'
+                    page.evaluate('scrollTo(0, 0)')
+                    shot = page.screenshot(path=str(root / f'{name}.png'))
+                    source = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+                    (root / f'{name}.json').write_text(json.dumps(dict(state=state, source_sha=source,
+                        fixture='real SQLite account session', viewport=page.viewport_size, theme=theme,
+                        path=page.locator('.ui-pathbar').all_text_contents(), title=page.locator('h1').inner_text(),
+                        screenshot_sha256=hashlib.sha256(shot).hexdigest()), ensure_ascii=False, indent=2), encoding='utf-8')
+
+                page.goto(url + '/accounts', wait_until='networkidle')
+                auth_frame(); capture('anonymous')
+                sign_in(page, url, accounts, 'alice')
+                signed_frame(); capture('signed-in')
+                title = page.locator('#account-title').element_handle()
+                expect(page.locator('#identity')).to_contain_text('작업자 alice')
+                page.get_by_text('토큰으로 연결', exact=True).click()
+                page.locator('#provider-token').fill('hf_unsent_fixture')
+                page.locator('#repo-id').fill('fixture/unsent')
+                page.locator('#rights-evidence').fill('fixture permission draft')
+                page.locator('#internal-use').check()
+                page.locator('#repo-id').focus()
+                with page.expect_response('**/api/accounts/session'):
+                    page.locator('#reload').dispatch_event('click')
+                signed_frame()
+                expect(page.locator('#repo-id')).to_be_focused()
+                expect(page.locator('#repo-id')).to_have_value('fixture/unsent')
+                expect(page.locator('#provider-token')).to_have_value('hf_unsent_fixture')
+                expect(page.locator('#rights-evidence')).to_have_value('fixture permission draft')
+                expect(page.locator('#internal-use')).to_be_checked()
+                assert title.evaluate('node => node === document.getElementById("account-title")')
+                cookie = next(item['value'] for item in page.context.cookies() if item['name'] == 'rosy_learning_session')
+                accounts.logout(cookie)
+                with page.expect_response('**/api/accounts/session') as expired:
+                    page.locator('#reload').dispatch_event('click')
+                assert expired.value.status == 401
+                auth_frame(); capture('expired')
+                assert title.evaluate('node => node === document.getElementById("account-title")')
+                for selector in ['#identity', '#connections', '#imports']:
+                    expect(page.locator(selector)).to_have_text('')
+                for selector in ['#provider-token', '#repo-id', '#rights-evidence']:
+                    expect(page.locator(selector)).to_have_value('')
+                expect(page.locator('#internal-use')).not_to_be_checked()
+                assert 'alice' not in page.locator('body').inner_text()
+                sign_in(page, url, accounts, 'bob')
+                signed_frame()
+                expect(page.locator('#identity')).to_contain_text('작업자 bob')
+                page.locator('#logout').click()
+                auth_frame(); capture('logged-out')
+                expect(page.locator('#identity')).to_have_text('')
+                assert page.request.get(url + '/api/accounts/session').status == 401
+                sign_in(page, url, accounts, 'bob')
+                signed_frame()
+                home = page.locator('.ui-pathbar .ui-crumbs a')
+                home.focus(); page.keyboard.press('Enter')
+                page.wait_for_url(url + '/learning')
+                assert not errors, errors
+            finally:
+                browser.close()
+    finally:
+        server.shutdown(); server.server_close(); thread.join(timeout=5)
+
+
 class SelectedAccountTransport(Transport):
     def __init__(self):
         super().__init__()
