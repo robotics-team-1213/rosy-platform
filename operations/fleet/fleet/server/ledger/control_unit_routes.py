@@ -6,8 +6,9 @@ import sqlite3
 import httpx
 from fastapi import Depends, HTTPException
 
+from core_common.protocol.arm_transfer_recheck import ArmTransferRecheckCreate
 from core_common.protocol.control_units import (
-    ControlApproveRequest, ControlArmIngressRequest, ControlIngressRequest, ControlWorkRequest,
+    ControlApproveRequest, ControlArmIngressRequest, ControlCancelRequest, ControlIngressRequest, ControlWorkRequest,
 )
 from fleet.swarm.transport import RobotApiError
 
@@ -106,10 +107,34 @@ def install_control_unit_routes(app, service, *, authorize, require_viewer, requ
         return await execute(service.approve(origin, identity, actor_id=principal.principal_id,
                                               expected_revision=body.expected_revision))
 
+    def parent_or_viewer(principal, origin):
+        if principal.role == "service":
+            parent_scope(principal, origin)
+        else:
+            require_viewer(principal)
+
+    # D-965: the parent's relay reads evidence and asks for rechecks of the ARM job bound to its delegation.
+    @app.get(prefix + "/delegations/{origin}/{identity}/arm/physical-evidence")
+    async def arm_evidence(origin: str, identity: str, principal=Depends(authorize)):
+        parent_or_viewer(principal, origin)
+        return await execute(service.arm_detail(origin, identity, "evidence"))
+
+    @app.post(prefix + "/delegations/{origin}/{identity}/arm/rechecks")
+    async def arm_recheck(origin: str, identity: str, body: ArmTransferRecheckCreate, principal=Depends(authorize)):
+        parent_scope(principal, origin)
+        return await execute(service.arm_detail(origin, identity, "request_recheck", key=body.recheck_key,
+                                                principal_id=principal.principal_id))
+
+    @app.get(prefix + "/delegations/{origin}/{identity}/arm/rechecks/{recheck_key}")
+    async def arm_recheck_read(origin: str, identity: str, recheck_key: str, principal=Depends(authorize)):
+        parent_or_viewer(principal, origin)
+        return await execute(service.arm_detail(origin, identity, "read_recheck", key=recheck_key))
+
     @app.post(prefix + "/delegations/{origin}/{identity}/cancel")
-    async def cancel(origin: str, identity: str, principal=Depends(authorize)):
+    async def cancel(origin: str, identity: str, body: ControlCancelRequest | None = None,
+                     principal=Depends(authorize)):
         if principal.role == "service":
             parent_scope(principal, origin)
         else:
             human(require_named_operator(principal))
-        return await execute(service.cancel(origin, identity))
+        return await execute(service.cancel(origin, identity, reason=body.reason if body else None))

@@ -34,6 +34,14 @@ def write_prefixed_nav2_params(
             for key in path:
                 target = target[key]
             target["footprint"] = footprint
+    # D-4: standalone nodes match params-file sections by fully qualified name, so a
+    # bare `slam_toolbox:` section never reaches `/rosy_42/slam_toolbox` and the node
+    # silently runs on defaults (2026-11-04 geg6 probe verified FQN sections apply).
+    if prefix:
+        params = {
+            key if key.startswith("/") else "/" + prefix + key: value
+            for key, value in params.items()
+        }
     dest = tempfile.NamedTemporaryFile(
         prefix="rosy_nav2_params_",
         suffix=".yaml",

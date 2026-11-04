@@ -1,6 +1,16 @@
-## D-977 `device_trial`에서 승인된 ARM 이송을 단일 팔 하달로 잇는다 — 설계 초안
+## D-977 `device_trial`에서 승인된 ARM 이송을 단일 팔 하달로 잇는다
 
-**Status:** Proposed (2026-11-04). 구현하지 않는다. D-797 §2·§3(Accepted 2026-11-04)이 연 `device_trial` 프로필과 실물 owner identity 위에 중립 `arm-transfers` 경로(D-856)를 얹는 방법만 정한다. 결정되기 전에는 어떤 플래그도 바뀌지 않는다.
+**Status:** 부분 Accepted (2026-11-04). 사용자 결정(2026-11-04): "ROSY 실물 ARM 경로를 지금 열기 시작"(구현·원격 시험·착지 승인, 첫 실물 동작은 사용자 입회), "업무 완료 근거는 자동 생산자 전까지 기명 현장 운영자 확인".
+
+- **Accepted (Fleet 쪽 개방, v1.362):** Decision 1~3(같은 경로 재사용, `device_trial` 단일 팔 한정과 `production` 닫힘, 모듈 수준 owner identity 함수 `fleet/server/device_identity.py`)과 Decision 5의 `operator_attested` 수신(아래 wire). 설정의 `commissioning_revision`은 `omx_cell_grant_revisions`에서 가져오고 grant에 넣지 않는다. `device_trial`에서는 무인 정책 승인 worker를 켜지 않는다(기명 운영자 승인만). owner가 거절하면 작업은 `HOLD`(`PHYSICAL_PREPARATION_UNAVAILABLE`)로 남고 자동 재시도는 없다.
+- **Proposed (사람 결정 필요):** Decision 4 owner의 ARM 목표 수락(별도 안전 결정, 코드는 이 변경에서 바뀌지 않아 실물은 움직이지 않는다), 신원 캐시 10초 창, watchdog·토크 상한, Decision 6 위임 종류 추가(D-855 후속), 하달 뒤 확인이 없을 때 HOLD까지의 시간.
+- **구현 범위의 한계:** `operator_attested` 레코드는 Fleet 기록용이다. 하달 전 확인(`SOURCE_CLEAR`)을 하달의 필수 조건으로 거는 것은 owner 수락이 열릴 때 같은 안전 결정에서 정한다. 지금은 하달 경로가 기존 독립 관측자 근거를 그대로 요구한다.
+
+**독립 안전 검토(2026-11-04, 읽기 전용 별도 에이전트): PASS with notes.** 실물 동작 경로 없음, `production`·시뮬레이션 불변, identity 판정 단일 함수, 무인 정책 승인 worker는 `device_trial`에서 꺼짐. 메모: `operator_attested`의 만료는 기록만 하며 소비자가 생기면 그쪽에서 강제해야 한다.
+
+### `operator_attested` wire (v1.362)
+
+`POST /api/fleet/arm-transfers/jobs/{mission_id}/operator-attestations`, `GET` 같은 경로(목록). `device_trial`에서만 설치. 본문 `{kind: SOURCE_CLEAR|TARGET_PLACED, expected_request_digest, expected_proposal_digest}`; 서버가 시각을 찍고 45초(60초 미만) 유효 시간을 붙인다. 확인자는 기명 operator이고 제안자·승인자와 달라야 한다. (작업, kind)당 1건이고 반복은 409다. 응답 `evidence_source: "operator_attested"`, `goal_confirmed: false`. 작업 상태·claim·receipt는 바뀌지 않으므로 `GOAL_CONFIRMED`가 되지 않는다. Harbor 쪽 사람 확인(ADR 0023)은 Harbor 업무 장부 안에서 소비되고, 이 경로는 Fleet 기록용이며 둘은 서로를 대신하지 않는다.
 
 ### Context
 
