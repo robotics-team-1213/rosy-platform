@@ -48,6 +48,8 @@ MAX_IO_PER_TICK = 8
 IDENTITY_TTL_S = 10.0
 NEGATIVE_IDENTITY_TTL_S = 5.0
 READBACK_BACKOFF_S = (0.5, 1.0, 2.0, 4.0)
+#: D-797 2: the deployment profile for real devices before acceptance (production means accepted).
+DEVICE_TRIAL = "device_trial"
 
 
 class StepJobDispatcher:
@@ -64,15 +66,19 @@ class StepJobDispatcher:
         if (store is not None and task_store is not None
                 and Path(store.path).resolve() != Path(task_store.path).resolve()):
             raise ValueError("Cell journal and dispatch control must share the same database")
-        if not open_kinds(deployment_profile):
+        # D-797: only device-Action kinds count; an open TRIP (no grant model) never opens this dispatcher
+        if not any(step_action_kind(kind).grant_model is not None for kind in open_kinds(deployment_profile)):
             raise ValueError(f"step-ledger dispatch is closed for profile {deployment_profile!r} (D-403 §7)")
         self.omx_instances = dict(omx_instances)
         if not self.omx_instances:
             raise ValueError("step-ledger dispatcher requires configured OMX workcells")
+        # D-797 3: a device_trial owner must also match its commissioning revision (never put in the grant)
+        required = {"capability_revision", "config_revision"} | (
+            {"commissioning_revision"} if deployment_profile == DEVICE_TRIAL else set())
         missing = [instance for instance in self.omx_instances.values()
-                   if set(grant_revisions.get(instance, {})) != {"capability_revision", "config_revision"}]
+                   if set(grant_revisions.get(instance, {})) != required]
         if missing:
-            raise ValueError(f"simulation grant revisions are missing for instances {missing}")
+            raise ValueError(f"grant revisions {sorted(required)} are missing for instances {missing}")
         if (isinstance(grant_ttl_s, bool) or not isinstance(grant_ttl_s, (int, float))
                 or not 1.0 <= float(grant_ttl_s) <= 60.0):
             raise ValueError("Action grant TTL must be between 1 and 60 seconds")
@@ -85,6 +91,8 @@ class StepJobDispatcher:
         self.monotonic = monotonic
         self._readback: dict[str, tuple[int, float]] = {}  # action_id -> (failures, next read at)
         self._identity: dict[str, tuple[bool, float, str | None]] = {}  # instance -> (sim, until, journal)
+        # D-797 3: kept apart so the multi-arm pass, which shares ``_identity``, never sees a device answer
+        self._device_identity: dict[str, tuple[bool, float, str | None]] = {}
         self._cursor = ""  # round-robin position (mission_id of the last Job visited)
         self._io = 0
 
@@ -148,14 +156,18 @@ class StepJobDispatcher:
         if job["status"] != "READY":
             return self._view(job, index, job["status"])
         step = job["steps"][index]
-        if not self._simulation_identity(job["workcell_id"], job["instance_id"]):
+        device = self.deployment_profile == DEVICE_TRIAL
+        if device and not self._device_trial_identity(job["workcell_id"], job["instance_id"]):
+            return self._view(job, index, "NOT_DEVICE_IDENTITY")
+        if not device and not self._simulation_identity(job["workcell_id"], job["instance_id"]):
             return self._view(job, index, "NOT_SIMULATION")
+        cache = self._device_identity if device else self._identity
         try:
             grant = self._grant(job, step)
             started = self.store.start_step(job["mission_id"], step_index=index, action_id=grant.action_id,
                                             attempt_id=grant.attempt_id, grant=grant.model_dump(mode="json"),
                                             now=self.now(),
-                                            owner_journal_id=self._identity.get(job["instance_id"], (0, 0, None))[2])
+                                            owner_journal_id=cache.get(job["instance_id"], (0, 0, None))[2])
         except MissionConflict:
             return self._view(self.store.get(job["mission_id"]), index, None)
         except KeyError:
@@ -192,21 +204,35 @@ class StepJobDispatcher:
 
     def _simulation_identity(self, workcell_id: str, instance_id: str) -> bool:
         """D-403 §7 / D-390 §5: the target owner itself must report a simulation identity."""
-        cached = self._identity.get(instance_id)
+        return self._checked_identity(self._identity, workcell_id, instance_id, "simulation",
+                                      lambda identity: identity.get("simulation") is True)
+
+    def _device_trial_identity(self, workcell_id: str, instance_id: str) -> bool:
+        """D-797 3: a real owner reports ``device: true``, no simulation, and the commissioning revision
+        configured for this instance; anything else is not a device_trial identity."""
+        expected = self.grant_revisions[instance_id]["commissioning_revision"]
+        return self._checked_identity(
+            self._device_identity, workcell_id, instance_id, "device_trial",
+            lambda identity: (identity.get("device") is True and identity.get("simulation") is not True
+                              and isinstance(expected, str) and expected != ""
+                              and identity.get("commissioning_revision") == expected))
+
+    def _checked_identity(self, cache, workcell_id: str, instance_id: str, label: str, accept) -> bool:
+        cached = cache.get(instance_id)
         if cached is not None and cached[1] > self.monotonic():
             return cached[0]
         self._io += 1
         journal = None
         try:
             identity = self.transport.owner_identity(instance_id)
-            ok = (identity.get("simulation") is True and identity.get("instance_id") == instance_id
+            ok = (accept(identity) and identity.get("instance_id") == instance_id
                   and identity.get("workcell_id") == workcell_id)
             journal = identity.get("journal_id")
         except Exception:
-            _LOG.warning("OMX owner %s did not report a simulation identity", instance_id)
+            _LOG.warning("OMX owner %s did not report a %s identity", instance_id, label)
             ok = False
         ttl = IDENTITY_TTL_S if ok else NEGATIVE_IDENTITY_TTL_S
-        self._identity[instance_id] = (ok, self.monotonic() + ttl, journal if isinstance(journal, str) else None)
+        cache[instance_id] = (ok, self.monotonic() + ttl, journal if isinstance(journal, str) else None)
         return ok
 
     def _current_journal(self, instance_id: str) -> str | None:
@@ -220,6 +246,7 @@ class StepJobDispatcher:
     def _forget_identity(self, instance_id: str) -> None:
         """Any transport error re-checks the owner's identity before the next submit (1c item 6)."""
         self._identity.pop(instance_id, None)
+        self._device_identity.pop(instance_id, None)
 
     def _grant(self, job: Mapping[str, Any], step: Mapping[str, Any]):
         kind = step_action_kind(step["action_kind"])
@@ -341,6 +368,6 @@ class StepJobDispatcher:
                 "action_id": grant.action_id if grant is not None else None}
 
 
-_SKIPPED = {"NOT_OPEN", "NOT_CONFIGURED", "NOT_SIMULATION"}
+_SKIPPED = {"NOT_OPEN", "NOT_CONFIGURED", "NOT_SIMULATION", "NOT_DEVICE_IDENTITY"}
 
 __all__ = ["READBACK_FAILURE_LIMIT", "StepJobDispatcher"]
