@@ -98,3 +98,47 @@ def test_native_act_requires_saved_selection_and_retries_the_same_request(tmp_pa
         server.shutdown()
         server.server_close()
         thread.join(timeout=5)
+
+
+@pytest.mark.parametrize('resolved', [False, True])
+def test_native_task_link_keeps_context_when_prepared_list_precedes_journey(tmp_path, resolved):
+    from test_omx_center_http import running
+    from test_omx_journey_browser import configure_snapshots
+    playwright = pytest.importorskip('playwright.sync_api')
+    with running(tmp_path) as (base, _), playwright.sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        try:
+            page = browser.new_page()
+            errors, pending = [], []
+            page.on('pageerror', lambda error: errors.append(str(error)))
+            center, tasks = configure_snapshots(page)
+            ready = False
+
+            def delayed(route, value):
+                if ready:
+                    route.fulfill(json=value)
+                else:
+                    pending.append((route, value))
+
+            page.route('**/api/learning/omx/center', lambda route: delayed(route, center))
+            page.route('**/api/learning/tasks', lambda route: delayed(route, tasks))
+            page.route('**/api/learning/omx', lambda route: route.fulfill(json={'sets': [dict(
+                id='a'*32, name='Prepared first', latest_review_id=str(uuid.uuid4()),
+                fixture_only=False, segment_review={'version': 1})]}))
+            query = '?task=task-one&profile=profile-one&dataset=data-one'
+            page.goto(base+'/learning/omx'+query+'&view=all#dataset-section', wait_until='domcontentloaded')
+            expect = playwright.expect
+            page.locator('#native-train-review').select_option('episodes')
+            expect(page.locator('#native-train-workflow')).to_be_visible()
+            expect(page.locator('#native-train-start')).to_be_disabled()
+            if resolved:
+                ready = True
+                for route, value in pending:
+                    route.fulfill(json=value)
+                expect(page.locator('#journey-task-status')).to_contain_text('Move sample task')
+            page.locator('#native-train-workflow').click()
+            target = '/learning/tasks' if resolved else '/learning/tasks/manage'
+            expect(page).to_have_url(base+target+query)
+            assert not errors
+        finally:
+            browser.close()
