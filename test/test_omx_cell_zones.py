@@ -22,12 +22,13 @@ def zones(tmp_path, side, clock=None, peer=None):
                             incidents=tmp_path / "incidents", clock=lambda: t[0], sleep=lambda s: t.__setitem__(0, t[0] + s))
 
 
-def test_each_arm_enters_its_side_and_never_the_other():
-    b, a = cell_zones.Zones({"zone_side": "left", "params": PARAMS}, CAL), cell_zones.Zones({"zone_side": "right", "params": PARAMS}, CAL)
+def test_each_arm_enters_its_side_and_never_the_other(tmp_path):
+    b, a = zones(tmp_path, "left"), zones(tmp_path, "right")
     assert b.zone_of((0.30, 0.2)) == "left" and b.zone_of((0.37, 0.2)) == "middle" and b.zone_of((0.42, 0.2)) == "right"
     assert b.enter((0.30, 0.2)) == (True, "left")
     ok, why = a.enter((0.30, 0.2))
     assert not ok and "other arm" in why
+    b.leave()
 
 
 def test_the_middle_holds_one_arm_until_it_folds_home(tmp_path):
@@ -167,6 +168,21 @@ def test_real_runner_park_timeout_keeps_middle_until_successful_retry(tmp_path, 
     cell.park = reports[-1]
     gate.act("park")
     assert not gate.zones.held
+
+
+@pytest.mark.parametrize("side,xy", [("left", (0.30, 0.2)), ("right", (0.37, 0.2))])
+def test_process_exit_does_not_prove_zone_clearance(tmp_path, side, xy):
+    import os
+
+    first = zones(tmp_path, "left")
+    assert first.enter(xy)[0]
+    # Process exit closes descriptors and releases flock without physically folding the arm.
+    for fd in first.held.values():
+        os.close(fd)
+    first.held = {}
+    restarted = zones(tmp_path, side)
+    assert not restarted.enter(xy)[0]
+    assert not restarted.held
 
 
 def test_takeover_is_a_parameter(tmp_path):
