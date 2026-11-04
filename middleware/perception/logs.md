@@ -1823,3 +1823,10 @@
 - gate 변화: 없음. 로봇 이미지 빌드와 실물 기동은 미실행이다.
 - 결정: D-964
 - 교훈: 없음.
+
+## 2026-11-04 · uncommitted · refactor(control): calibration* 9파일을 calibration/ 홀더로 순수 이동 (D-766 #109)
+
+- 변경: `nodes/calibration_*.py` 9개(1,837줄)를 `middleware/perception/calibration/`으로 옮기고 CONTROL_ROOTS에 등록. 임포트 신원(`control.calibration_*` 평면)·엔트리포인트·설치 동작 불변. `size_units.txt`에 `perception/calibration` 등록, ratchet control 행 낮춤, 경로 문자열 참조 4건(deploy 2·시험 2)과 AGENTS 2건 갱신.
+- 증거: 원격 affected 실행과 순수 이동 확인(split_check)은 커밋 후 실행해 이 행에 보탠다.
+- gate 변화: 없음. 소스 배치만 바뀜.
+- CE: 해당 없음.
