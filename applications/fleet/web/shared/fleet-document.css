@@ -6,3 +6,5 @@ body { margin: 0; }
 .fleet-document:not(.ui-auth-page) { max-inline-size: var(--content-learning-max); }
 .fleet-document > * { min-inline-size: 0; }
 .fleet-document #account-list ui-button { min-inline-size: 0; max-inline-size: 100%; overflow-wrap: anywhere; }
+/* 계정 표는 칸을 쪼개지 않고, 좁으면 표 영역이 가로로 스크롤한다. */
+#account-list td { white-space: nowrap; }
