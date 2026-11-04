@@ -211,10 +211,12 @@ class Tasks:
             raise ValueError('duplicate learning device reference') from exc
         return json.loads(_json(record))
 
-    def robot(self, body, actor):
+    def robot(self, body, actor, owner=None):
+        """owner records that the owner listed this device at registration; it never verifies the device."""
         semantic = self._robot(body)
         with self._db() as db:
-            return self._save(db, 'robot', body, semantic, actor, {'device_verified': False})
+            return self._save(db, 'robot', body, semantic, actor,
+                              {'device_verified': False, **({'owner': owner} if owner else {})})
 
     def _robots(self, db):
         return {record['id']: record for _, record in (self._get(db, row[0], 'robot')
