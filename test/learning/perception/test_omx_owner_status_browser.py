@@ -22,6 +22,8 @@ def capture(page, name, selector=None):
 def empty_learning_center(tmp_path):
     center = SimpleNamespace(bind_workspace=lambda project: None,
         profiles=SimpleNamespace(list=lambda: []),
+        studies=SimpleNamespace(snapshot=lambda: {'configured': False, 'host_id': None,
+            'methods': {}, 'studies': [], 'busy': False, 'active_run': None}),
         snapshot=lambda: {'datasets': [], 'runs': [], 'methods': {},
             'owner_status': {'configured': False, 'targets': []}})
     server = make_server(ReviewStore(tmp_path/'review', empty_training=True),
@@ -272,7 +274,10 @@ def test_learning_cards_and_submenus_open_real_sections_and_restore_task(empty_l
             page.on('pageerror', lambda error: errors.append(str(error)))
             expect = playwright.expect
             page.goto(empty_learning_center+'/learning', wait_until='networkidle')
-            expect(page.locator('#learning-start')).to_contain_text('成功'.replace('成功', '성공률'))
+            expect(page.locator('#learning-start-title')).to_have_text('어떤 작업을 하시겠어요?')
+            expect(page.locator('#learning-start .learning-routes h3')).to_have_text(
+                ['로봇 동작 학습', '시각 인식 학습', '시뮬레이션 실험', 'VLM 판단 검수'])
+            page.locator('#learning-start summary').click()
             page.locator('#learning-start a[href="/learning/omx#profile-panel"]').click()
             expect(page.locator('#profile-panel')).to_have_attribute('open', '')
             expect(page.locator('#profile-task')).to_be_focused()
@@ -360,7 +365,8 @@ def test_every_learning_rail_destination_renders_content(empty_learning_center):
                 if href=='/':
                     playwright.expect(page.locator('#empty-review h2')).not_to_have_text('검수 내용을 확인하는 중')
                 assert len(page.locator('main').inner_text().strip()) > 40
-                assert page.url == empty_learning_center+href
+                expected=empty_learning_center+href+('?panel=upload' if href=='/learning/imitate' else '')
+                assert page.url == expected
             reached = set()
             for href in links:
                 opened(f'.ui-rail-nav a[href="{href}"]', href)
@@ -370,7 +376,8 @@ def test_every_learning_rail_destination_renders_content(empty_learning_center):
                     opened(f':is(.ui-subnav-nav, .review-kinds) a[href="{sub}"]', sub)
                     reached.add(sub)
             assert reached == {'/catalog', '/learning/camera', '/', '/pixels', '/learning/omx', '/learning/vlm',
-                               '/learning/tasks', '/learning#pipeline', '/learning/sim', '/learning/workspaces'}
+                               '/learning/tasks', '/learning/tasks/manage', '/learning/imitate',
+                               '/learning#pipeline', '/learning/sim', '/learning/workspaces'}
             assert not errors
         finally:
             browser.close()

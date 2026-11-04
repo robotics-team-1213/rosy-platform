@@ -49,7 +49,7 @@ def task_page(tmp_path):
                     route.fulfill(status=503, json={'error': 'fixture save rejected'})
             page.route('**/api/learning/tasks**', serve)
             page.route('**/api/learning/robots', serve)
-            yield page, state, f'http://127.0.0.1:{server.server_port}/learning/tasks', errors
+            yield page, state, f'http://127.0.0.1:{server.server_port}/learning/tasks/manage', errors
             browser.close()
     finally:
         server.shutdown(); server.server_close(); thread.join(timeout=5)

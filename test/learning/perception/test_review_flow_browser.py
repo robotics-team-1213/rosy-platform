@@ -685,7 +685,7 @@ def test_object_to_pixel_review_keeps_photo_and_shows_decision(browser_workspace
     page.locator('.workspace-tabs a[href="/learning"]').click()
     expect(page.locator('#review-counts')).to_contain_text('검수 대기 1장')
     expect(page.locator('#pixel-counts')).to_contain_text('승인 1장 · 검수 대기 1장')
-    page.locator('a[href="/pixels?filter=pending"]').click()
+    page.locator('#pixel-review-link').click()
     expect(page.locator('#pixel-title')).to_have_text('사진 1 픽셀 검수')
 
 
