@@ -164,8 +164,8 @@ def accept_confirm(page) -> None:
     )
 
 
-def save_temp_screenshot(page, name: str) -> Path:
+def save_temp_screenshot(page, name: str, **options) -> Path:
     shot = Path(os.environ.get("TEMP", "/tmp")) / name
-    page.screenshot(path=str(shot))
+    page.screenshot(path=str(shot), **options)
     print(f"\nscreenshot: {shot}")
     return shot
