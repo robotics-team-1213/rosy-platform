@@ -62,7 +62,8 @@ def test_home_return_from_other_learning_areas(browser_workspace,route):
 
 
 @pytest.mark.parametrize('width', [1440, 390, 320])
-def test_learning_pipeline_prepares_current_reviews_in_app(browser_workspace, width):
+@pytest.mark.parametrize('theme', ['dark', 'light'])
+def test_learning_pipeline_prepares_current_reviews_in_app(browser_workspace, width, theme):
     page, store, expect = browser_workspace
     review_masks.bind_classes(store, CLASSES)
     review_masks.update(store, 0, {'version': 0, 'action': 'fill', 'label': 0}, Conflict)
@@ -70,6 +71,7 @@ def test_learning_pipeline_prepares_current_reviews_in_app(browser_workspace, wi
                                    'complete_frame_review': True, 'background_reviewed': True}, Conflict)
     page.set_viewport_size({'width': width, 'height': 844})
     page.goto(page.url.split('?')[0].rstrip('/') + '/learning', wait_until='domcontentloaded')
+    page.evaluate('(theme)=>document.documentElement.dataset.theme=theme', theme)
     page.get_by_role('link',name='인식 자료·학습 열기',exact=True).click()
     action = page.locator('#pipeline-action')
     expect(action).to_have_text('승인 자료 준비')
@@ -95,6 +97,10 @@ def test_learning_pipeline_prepares_current_reviews_in_app(browser_workspace, wi
     expect(page.locator('#pipeline-link')).to_have_text('학습 실행기 연결 안내')
     assert store.exports()
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+        target = Path(output) / f'learning-stations-{theme}-{width}.png'
+        target.parent.mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(target))
 
 
 def test_learning_pipeline_automatically_connects_owner_and_invalidates_new_decisions(tmp_path):
