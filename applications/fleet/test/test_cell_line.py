@@ -39,3 +39,13 @@ def test_page_mounts_the_line_without_new_requests():
     assert '<ol id="cell-line" class="ui-stage-track" data-line="fleet"' in html
     assert '/common/stage-strip.css' in html
     assert "/api/" not in (WEB / "cell-line.js").read_text(encoding="utf-8")
+
+
+def test_plan_figures_count_only_the_previewed_job():
+    script = f"""import {{planFigures}} from {json.dumps((WEB / 'cell-line.js').as_uri())};
+console.log(JSON.stringify(planFigures({json.dumps({"steps": [
+        {"kind": "pick"}, {"kind": "place", "target": "A1", "pallet": "P1", "layer": 0},
+        {"kind": "place", "target": "A2", "pallet": "P1", "layer": 1}, {"kind": "place", "target": "B1", "pallet": "P2", "layer": 0},
+        {"kind": "place"}]})})));"""
+    out = json.loads(subprocess.run(["node", "--input-type=module", "-e", script], capture_output=True, text=True, check=True).stdout)
+    assert [f["value"] for f in out] == ["3", "2", "3", "5"]

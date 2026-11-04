@@ -61,3 +61,32 @@ export function createCellLine({ root, $ }) {
   render();
   return { render };
 }
+
+// 적재 계획 수치 띠. 미리보기 응답이 `#preview`에 쓴 작업 JSON만 센다.
+export function planFigures(job) {
+  const places = (job?.steps || []).filter((step) => step.kind === "place" && step.target);
+  return [
+    { label: "놓기", value: String(places.length), note: "놓을 위치" },
+    { label: "팔레트", value: String(new Set(places.map((step) => step.pallet)).size), note: "계획에 든 팔레트" },
+    { label: "층", value: String(new Set(places.map((step) => `${step.pallet}|${step.layer}`)).size), note: "팔레트별 층 합계" },
+    { label: "전체 단계", value: String((job?.steps || []).length), note: "집기·이동 포함" },
+  ];
+}
+
+export function createPlanFigures({ root, $ }) {
+  function render() {
+    let job = null;
+    try { job = $("preview").textContent ? JSON.parse($("preview").textContent) : null; } catch { job = null; }
+    root.hidden = !job;
+    root.replaceChildren(...(job ? planFigures(job) : []).map((item) => {
+      const cell = document.createElement("div");
+      const dt = document.createElement("dt"); dt.textContent = item.label;
+      const dd = document.createElement("dd"); dd.textContent = item.value;
+      const note = document.createElement("dd"); note.dataset.note = ""; note.textContent = item.note;
+      cell.append(dt, dd, note);
+      return cell;
+    }));
+  }
+  new MutationObserver(render).observe($("preview"), { childList: true, characterData: true, subtree: true });
+  render();
+}

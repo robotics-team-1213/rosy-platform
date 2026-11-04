@@ -11,7 +11,7 @@ import {bindScreens} from '/console/assets/subnav-screens.js';
 import '/console/assets/file-picker.js';
 import {bindPrintSheets} from '/console/assets/cell-print-sheets.js';
 import {createObjectCatalog} from '/console/assets/cell-object-catalog.js';
-import {createCellLine} from '/console/assets/cell-line.js';
+import {createCellLine, createPlanFigures} from '/console/assets/cell-line.js';
 
 const $ = id => document.getElementById(id);
 // D-926 3: each Cell step is its own screen; the first one shows the live cell, its calibration printouts and the saved documents.
@@ -46,6 +46,7 @@ const request = createFleetClient({credential: () => $('console-token').value, o
 const observations = createCellObservation({request, root: $('workcell-observations')});
 const catalog = createObjectCatalog({request, $});
 createCellLine({root: $('cell-line'), $});
+createPlanFigures({root: $('plan-figures'), $});
 bindPrintSheets({request, $});
 window.addEventListener('pagehide', event => {
   catalog.clear();

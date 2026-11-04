@@ -44,3 +44,5 @@ pre { max-height: 24rem; overflow: auto; white-space: pre-wrap; overflow-wrap: a
   #compile { box-sizing: border-box; width: 100%; }
 }
 #cell-line { padding: var(--space-2) var(--space-4); }
+#cell-main { container-type: inline-size; }
+#plan-figures { margin: 0; }

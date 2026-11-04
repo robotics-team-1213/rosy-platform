@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="/common/components.css">
   <link rel="stylesheet" href="/common/component-controls.css">
   <link rel="stylesheet" href="/common/stage-strip.css">
+  <link rel="stylesheet" href="/common/readout-strip.css">
   <link rel="stylesheet" href="/common/motor-health.css">
   <link rel="stylesheet" href="/common/app-shell.css">
   <link rel="stylesheet" href="/console/assets/cell.css">
@@ -150,6 +151,7 @@
     <ui-section aria-labelledby="preview-heading">
       <ui-head><h2 class="ui-section-heading" id="preview-heading">적재 계획</h2><ui-button id="compile" kind="primary">미리보기</ui-button></ui-head>
       <ui-status id="summary" state="unavailable">저장한 레시피와 셀을 기준으로 계획을 계산합니다.</ui-status>
+      <dl id="plan-figures" class="ui-readout" data-form="strip" aria-label="적재 계획 요약" hidden></dl>
       <details><summary class="ui-disclosure-row">계산된 계획 상세</summary><pre id="preview" aria-label="컴파일된 적재 계획"></pre></details>
       <div id="layout-preview" hidden>
         <label for="layout-layer">팔레트 · 층 선택</label><select class="ui-field" id="layout-layer" aria-label="팔레트와 층"></select>

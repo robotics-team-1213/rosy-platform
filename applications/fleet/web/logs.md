@@ -968,3 +968,9 @@
 - 변경: `/console/cell` 머리에 공용 노선 다섯 역(레시피·셀 설정·적재 계획·작업 제안·승인·진행). `cell-line.js`가 서버 응답으로 이미 채워지는 요소(`#recipe-revision`·`#cell-revision`·`#summary`의 state, `#proposal` 글, `#job-state` 작업 JSON)만 지켜보고, 새 요청·판정을 만들지 않는다. 목표 확인(GOAL_CONFIRMED)만 마지막 역 완료, 사유 있는 보류는 막힘. 역 링크는 하위 메뉴와 같은 화면 해시. 설치 노선의 역 링크가 숨은 패널 앵커라 눌러도 화면이 바뀌지 않던 것을 작업 id(`#robots`·`#cameras`·`#calibration`)로 바꾸고, 설치 화면이 해시 변경을 작업 선택으로 받게 했다.
 - 증거: `test_cell_line.py` 4·`test_install_line.py` 6 PASS(역 링크가 작업 id인지 검사 추가). 샘플 서버에서 역 링크 클릭으로 설치(카메라 승인·보정·로봇 등록)와 Cell(적재 계획) 화면 전환 확인, Cell 1440·390 두 테마 렌더.
 - gate 변화: SOURCE 로컬 GO. 원격 브라우저는 커밋 후.
+
+## 2026-11-04 · uncommitted · 적재 계획 수치 띠
+
+- 변경: `/console/cell` 적재 계획 아래에 공용 수치 띠(놓기·팔레트·층·전체 단계). 미리보기 응답이 `#preview`에 쓴 작업 JSON만 세며 `cell.js`는 마운트 한 줄만 늘었다. Cell 본문을 칸 질의 칸으로 지정해 좁은 화면에서 두 열로 접힌다.
+- 증거: `test_cell_line.py` 5 PASS(띠는 응답의 놓기 단계만 셈). 샘플 서버에서 예제 문서 `sample`을 불러와 미리보기 — 요약 "18회 전송"과 띠 놓기 18·팔레트 2·층 4·전체 단계 38 일치, 노선도 레시피·셀·계획 완료로 바뀜. 1440 어둡게·390 밝게 렌더 확인.
+- gate 변화: SOURCE 로컬 GO.
