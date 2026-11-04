@@ -320,7 +320,7 @@ ui-topbar:has([data-learning-account-entry]) { flex-wrap: wrap; }
 #review-content > .frame-heading { order: 0; }
 #review-content > .frame-navigation { order: 1; }
 .frame-navigation { padding-block: var(--space-1); }
-#review-content > .review-layout { order: 2; }
+#review-content > .review-layout, #review-content > [data-review-workspace] { order: 2; }
 #review-content > .review-flow { order: 3; }
 #review-content > .preparation { order: 4; }
 .review-stage > .review-editor-canvas { grid-column: 2; grid-row: 1; }
@@ -362,6 +362,8 @@ ui-topbar:has([data-learning-account-entry]) { flex-wrap: wrap; }
   .pixel-editor-column { grid-template-columns: 12rem minmax(0, 1fr); }
 }
 @media (width < 40rem) {
+  .ui-app-main:has(#pixel-main) > .ui-pathbar { row-gap: 0; }
+  #pixel-main .pixel-frame-controls { margin-block: 0; }
   /* 전화 폭: 경로 줄은 화면 이름 한 줄뿐이라 얇게 둔다. 사진이 첫 화면 안에 남는다. */
   .ui-pathbar { min-block-size: 0; padding-block: var(--space-1); }
   #editor, #pixel-main { padding-block: var(--space-3); }
@@ -471,10 +473,10 @@ ui-topbar:has([data-learning-account-entry]) { flex-wrap: wrap; }
   #pixel-main .pixel-frame-strip .pixel-frame-item { flex-basis: 8rem; }
   #pixel-main .pixel-frame-strip .frame-thumb { width: 2.5rem; }
   #pixel-main .pixel-frame-strip { margin-block: var(--space-1); }
-  .pixel-tool-options { margin-block-end: var(--space-2); }
+  #pixel-main .pixel-tool-options { margin-block-end: var(--space-1); }
   .pixel-tool-options .pixel-selection-actions { flex: 0 0 auto; }
   .pixel-selection-actions > ui-button { flex: 1 1 0; }
-  .pixel-canvas-footer { gap: var(--space-1); }
+  .pixel-canvas-footer { gap: var(--space-1); padding-block: var(--space-1); }
 }
 
 /* Peer editing actions share a column; content length cannot change the target. */

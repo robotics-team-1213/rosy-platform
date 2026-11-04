@@ -484,6 +484,7 @@ document.addEventListener('omx-profile-selected',event=>{
   selectJourneyProfile(event.detail);
   selectedProfileRecord=event.detail;exportProfile=structuredClone(event.detail.profile);pendingExport=null;pendingRequest=null;
   $('export-profile').value='';$('export-profile').required=false;
+  $('export-profile-filename').textContent='선택한 파일 없음';
   $('export-status').textContent=`저장 프로필 ${event.detail.id} · revision ${event.detail.revision} 선택됨. 현재 native 변환 지원 조건은 별도로 검증합니다.`;selection();
 });
 $('profile-clear').onclick=()=>{

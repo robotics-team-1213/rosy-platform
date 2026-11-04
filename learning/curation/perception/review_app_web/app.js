@@ -563,19 +563,24 @@ enable();load();
 for(const node of document.querySelectorAll('.label-inspector > :not([data-review-tool])')){
  const view=document.createElement('div');view.dataset.reviewTool='review';node.before(view);view.append(node);
 }
+const reviewWorkspace=document.createElement('div');reviewWorkspace.dataset.reviewWorkspace='';
+const reviewLayout=document.querySelector('.review-layout');reviewLayout.before(reviewWorkspace);reviewWorkspace.append(reviewLayout);
 function showReviewTool(focus=false){
   const requested=document.getElementById(location.hash.slice(1));
   const tool=requested?.closest('[data-review-tool]')?.dataset.reviewTool||'review';
-  document.querySelector('.review-layout').hidden=tool==='preparation';
+  reviewWorkspace.hidden=tool==='preparation';
   for(const section of document.querySelectorAll('[data-review-tool]'))section.hidden=section.dataset.reviewTool!==tool;
   const links=[...document.querySelectorAll('.review-tool-nav a')];
   const link=links.find(node=>node.hash===location.hash)||links.find(node=>document.getElementById(node.hash.slice(1))?.closest('[data-review-tool]')?.dataset.reviewTool===tool)||links[0];
   for(const node of links){if(node===link)node.setAttribute('aria-current','location');else node.removeAttribute('aria-current');}
   document.getElementById('learning-tool-path').textContent=' / '+link.textContent;
-  if(focus){const target=requested||document.getElementById('canvas');if(target){target.tabIndex=-1;target.focus({preventScroll:true});target.scrollIntoView({block:'nearest'});}}
+  if(focus){const target=requested||document.getElementById('canvas');if(target){if(target.tabIndex<0)target.tabIndex=-1;target.focus({preventScroll:true});target.scrollIntoView({block:'nearest'});}}
 }
 window.addEventListener('hashchange',()=>showReviewTool(true));
-window.addEventListener('popstate',()=>showReviewTool(true));
-document.addEventListener('review-tool-open',event=>{const section=event.detail.closest('[data-review-tool]');if(section){history.pushState(null,'','#'+(section.id||section.querySelector('[id]')?.id));showReviewTool();}});
+document.addEventListener('review-tool-open',event=>{
+ const section=event.detail.closest('[data-review-tool]');
+ const id=section?(section.id||section.querySelector('[id]')?.id):event.detail.closest('[data-review-workspace]')?'object-review':null;
+ if(id){history.pushState(null,'','#'+id);showReviewTool();}
+});
 document.querySelector('.review-tool-nav').addEventListener('click',event=>{const link=event.target.closest('a');if(link?.hash===location.hash)showReviewTool(true);});
 showReviewTool();

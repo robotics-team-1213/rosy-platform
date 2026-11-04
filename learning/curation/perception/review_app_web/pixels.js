@@ -510,10 +510,9 @@ function showReviewTool(focus=false){
   const link=links.find(node=>node.hash===location.hash)||links.find(node=>document.getElementById(node.hash.slice(1))?.closest('[data-review-tool]')?.dataset.reviewTool===tool)||links[0];
   for(const node of links){if(node===link)node.setAttribute('aria-current','location');else node.removeAttribute('aria-current');}
   document.getElementById('learning-tool-path').textContent=' / '+link.textContent;
-  if(focus){const target=requested||document.getElementById('pixel-canvas');if(target){target.tabIndex=-1;target.focus({preventScroll:true});target.scrollIntoView({block:'nearest'});}}
+  if(focus){const target=requested||document.getElementById('pixel-canvas');if(target){if(target.tabIndex<0)target.tabIndex=-1;target.focus({preventScroll:true});target.scrollIntoView({block:'nearest'});}}
 }
 window.addEventListener('hashchange',()=>showReviewTool(true));
-window.addEventListener('popstate',()=>showReviewTool(true));
 document.addEventListener('review-tool-open',event=>{const section=event.detail.closest('[data-review-tool]');if(section){history.pushState(null,'','#'+(section.id||section.querySelector('[id]')?.id));showReviewTool();}});
 document.querySelector('.review-tool-nav').addEventListener('click',event=>{const link=event.target.closest('a');if(link?.hash===location.hash)showReviewTool(true);});
 showReviewTool();

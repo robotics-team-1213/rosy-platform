@@ -24,7 +24,7 @@ const disabled=el=>el.matches(':disabled,[disabled],[aria-disabled="true"]');
 function reachable(el){
   if(!el.isConnected||dialog.contains(el)||el===trigger)return false;
   for(let node=el;node&&node!==document.body;node=node.parentElement){
-    if(node.hasAttribute('data-review-tool'))continue;
+    if(node.hasAttribute('data-review-tool')||node.hasAttribute('data-review-workspace'))continue;
     if(node.hidden||getComputedStyle(node).display==='none'||getComputedStyle(node).visibility==='hidden')return false;
   }
   return true;
