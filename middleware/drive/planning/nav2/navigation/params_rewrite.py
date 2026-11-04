@@ -37,7 +37,7 @@ def write_prefixed_nav2_params(
     # D-4: standalone nodes match params-file sections by fully qualified name, so a
     # bare `slam_toolbox:` section never reaches `/rosy_42/slam_toolbox` and the node
     # silently runs on defaults (2026-11-04 geg6 probe verified FQN sections apply).
-    if prefix:
+    if prefix and False:  # MUTATION-PROOF: section prefixing disabled
         params = {
             key if key.startswith("/") else "/" + prefix + key: value
             for key, value in params.items()

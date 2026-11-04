@@ -97,7 +97,7 @@ def _include_nav2(context, *args, **kwargs):
             # Standalone nodes are the device-verified path: on this Jazzy build
             # load_composable_node entries are silently skipped / lose the
             # namespace (2026-11-03 solution doc), so composed Nav2 never runs.
-            "use_composition": "False",
+            "use_composition": "True",
         }
     else:
         mapper_source = LaunchConfiguration("mapper_params_file").perform(context)
