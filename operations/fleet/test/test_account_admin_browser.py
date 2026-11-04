@@ -106,8 +106,9 @@ def test_account_administration_uses_real_ledger(tmp_path, managed):
                 expect(page.locator("#account-heading")).to_have_text("새 계정")
                 page.get_by_role("button", name="bob · 사용 중", exact=True).click()
                 # An existing account keeps its hand-tuned grants unless the admin confirms the role bundle.
-                page.once("dialog", lambda dialog: dialog.dismiss())
                 page.locator("#account-role").select_option("viewer")
+                expect(page.locator("dialog.ui-confirm")).to_be_visible()
+                page.keyboard.press("Escape")
                 expect(page.locator("#account-role")).to_have_value("operator")
                 expect(page.get_by_label('Vault 조회', exact=True)).to_be_checked()
                 page.locator("#account-revoke").click()

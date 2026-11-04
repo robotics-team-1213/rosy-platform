@@ -1,4 +1,5 @@
 import {createFleetClient} from '/common/fleet-client.js';
+import {confirmIrreversible} from '/common/ui.js';
 import {canManageAccounts, canViewAccountSetup, CAPABILITIES, roleGrants} from '/console/assets/account-permissions.js';
 
 const rawRequest = createFleetClient(), $ = id => document.getElementById(id), endpoint = '/api/fleet/auth/accounts';
@@ -116,10 +117,14 @@ function grants() {
 }
 $('account-new').addEventListener('click', () => edit());
 $('account-add-grant').addEventListener('click', () => grantRow());
-$('account-role').addEventListener('change', () => {
+$('account-role').addEventListener('change', async () => {
   // An existing account may hold hand-tuned grants; replace them only when the admin says so.
-  if (selected && !confirm('이 계정의 자원별 권한을 선택한 역할의 묶음으로 바꿀까요? 직접 조정한 권한은 사라집니다.')) {
-    $('account-role').value = shownRole; return;
+  const target = selected;
+  if (target) {
+    const allowed = await confirmIrreversible({message: '이 계정의 자원별 권한을 선택한 역할의 묶음으로 바꿀까요? 직접 조정한 권한은 사라집니다.',
+      action: '권한 묶음 적용', opener: $('account-role')});
+    if (selected !== target) return;  // another account was opened meanwhile
+    if (!allowed) { $('account-role').value = shownRole; return; }
   }
   shownRole = $('account-role').value;
   $('account-grants').replaceChildren(); for (const grant of roleGrants(shownRole, siteResource)) grantRow(grant);
