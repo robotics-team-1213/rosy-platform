@@ -153,8 +153,6 @@ def check_layout(base: dict, use_rpp: bool, use_progress: bool) -> None:
             raise ValueError('Collision detection must already be explicitly enabled in the base.')
         number(get(base,C+('FollowPath','max_allowed_time_to_collision_up_to_carrot')),
                'collision prediction time')
-        if get(base,C+('FollowPath','allow_reversing')) is not False:
-            raise ValueError('This trial profile expects allow_reversing=false; review manually.')
         if get(base,C+('FollowPath','use_rotate_to_heading')) is not True:
             raise ValueError('This trial profile expects use_rotate_to_heading=true.')
         if 'inflation_layer' not in get(base,L+('plugins',)):
@@ -230,6 +228,8 @@ def prepare(base: dict, map_path: Path, use_rpp: bool=False, use_progress: bool=
         olddist=number(get(base,C+('FollowPath','cost_scaling_dist')),'RPP cost scaling distance')
         put(out,C+('FollowPath','cost_scaling_dist'),min(olddist,radius))
         put(out,C+('FollowPath','inflation_cost_scaling_factor'),factor)
+        # Reviewed forward-only trial: pin it; the product base now allows reversing.
+        put(out,C+('FollowPath','allow_reversing'),False)
         desired=get(out,C+('FollowPath','desired_linear_vel'))
         for name in ['min_approach_linear_velocity','regulated_linear_scaling_min_speed']:
             p=C+('FollowPath',name)

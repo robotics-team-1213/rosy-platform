@@ -1842,9 +1842,36 @@
 - gate 변화: SOURCE의 해당 회귀만 확인했다. 정식 착지·게시·실물 및 현장 수용은 별도이며 로봇 동작을 수행하지 않았다. 라이브러리의 ARTIFACT/DEVICE 판정을 올리지 않는다.
 - CE: 해당 없음 — 생산자의 register별 None과 소비자의 제한 유지 조건은 최종 공통 코드·두 모터 회귀로 확인할 수 있다.
 
+## 2026-11-03 · uncommitted · feat(docking): 후진 USB 충전소 단계 approach="rear" (D-972)
+- 변경: `docking/rear_phases.py`(새) — 뒤를 도크 쪽으로 한 스테이징, LiDAR V 관측(ACQUIRING), 레일 입구 밖 후진 정렬(ALIGNING), 레일 안 각속도 0 곧은 후진(새 단계 REVERSING), 진행 멈춤 = 멈춤면 접촉, 멈춘 뒤 기준보다 전압이 오르면 DOCKED(D-350 Phase 1 1소스), 실패는 앞으로 0.55 m 뒤 스테이징부터·3회 뒤 DOCK_FAILED, 언도킹은 앞으로. `DockType` `approach="rear"`·`rail_entry_m`·정렬 허용치와 일관성 검사, `feed.py` 출처별 최신 관측(LIDAR_V, tag_id null), `select_detector` `lidar_v`. `manager.py`는 진입점만(771줄, 래칫 유지). 기본 꺼짐.
+- 증거: `middleware/core/services/test/test_docking_rear.py`(운동학 벤치). 원격 시험 결과는 커밋 본문·착지 기록에.
+- gate 변화: 없음. Safety-Review(D-430 §5)·Gazebo·실물 수용 전.
+- 결정: D-972
+- 교훈: 없음(연구 결과는 Git 밖 `Rosy/docs/research/pinky-usb-dock-guide-2026-11-01`).
+
+## 2026-11-03 · uncommitted · fix(docking): V 검출을 core_features.docking.lidar_v로, 시험 벤치에 레일 구속 (D-972)
+- 변경: V 검출을 perception에서 `docking/lidar_v.py`로 옮기고 스캔 이음매(±180°)에 걸린 날개를 한 덩어리로 잇는다. `rear_phases.py` 문서에서 로봇 이름이 든 경로를 뺐다(`test_robot_literals`). `test_docking_rear.py` 벤치에 레일 안 ±3 mm 구속(차체 목)을 넣었다 — 벽 없이 3.4 mm 어긋난 채 충전 판정에 걸렸다.
+- 증거: `test_docking_lidar_v.py`(검출·CORE 스캔 연결), `test_docking_rear.py`. 원격 시험 결과는 커밋 본문에.
+- gate 변화: 없음.
+- 결정: D-972
+- 교훈: 없음.
+
+## 2026-11-04 · uncommitted · fix(docking): 후진 도크 DOCKED 이후 전압 1소스로 CHARGING 유지 (D-972)
+- 변경: 후진 도크는 도크 에이전트가 없어 `_tick_docked`가 충전을 확인하지 못하던 것을 `rear_phases`의 전압 1소스 확인으로 잇는다. DOCKED↔CHARGING 전이·`docking.charging`/`docking.charge_lost`·만춫 판정(`_check_full`)이 후진 도크에서도 돈다. 전압 단일 소스 확정은 D-350 Phase 1 규칙대로 배터리 인터록(`set_charging`, D-27)에 반영하지 않는다 — 상태·만춫 판정에만 쓴다.
+- 증거: `test_docking_rear.py` 회귀(도킹 후 CHARGING 확인, 인터록 미반영, 전압 하락 시 즉시 charge_lost). 원격 시험 결과는 커밋 본문에.
+- gate 변화: 없음.
+- 결정: D-972
+- 교훈: 없음.
+
+## 2026-11-04 · uncommitted · fix(docking): 후진·계측 도크 혼용 시 오래된 도크 에이전트 가리개 제거 (D-972)
+- 변경: `dock()` 시작 시 `_agent`를 비워 앞선 계측 도킹이 남긴 에이전트가 뒤따르는 후진 도킹의 전압 확인을 가리지 못하게 한다(잘못된 2소스 확정 방지). DOCKED 충전 확인 선택을 `RearPhases.docked_confirm`으로 옮기고(매니저 래칫), rear 전압 확인 인스턴스는 매니저 시계로 만들며, `docking.charging`/`charge_lost`에 `source` 필드를 더한다(API 참조 갱신). D-972 상태 갱신(독립 리뷰·Safety-Review 완료).
+- 증거: 기존 `test_docking.py`(계측 경로 회귀)·`test_docking_rear.py`. 원격 시험은 착지 때.
+- gate 변화: 없음.
+- 결정: D-972
+- 교훈: 없음.
+
 ## 2026-11-04 · uncommitted · feat(peers): 로봇 간 맵 위치 공유 CORE 조각 v1
 - 변경: `core_features/peers/`(manager — 수용·단조 seq·boot 재설정·시한 제거, beacon — LOCALIZED일 때만 pose 실어 1 Hz 송신, transport — stdlib TLS POST). `state/manager.py` `set_peers_provider`(실패해도 스냅숏은 null 로 하강). 시험 `test_peers.py`(순수, 시계·전송 주입)
 - 증거: 게이트 시험 원격 affected 실행 예정(착지 전)
 - gate 변화: 없음
 - CE: 해당 없음 — 신규 기능, 장애 해결 아님
-
