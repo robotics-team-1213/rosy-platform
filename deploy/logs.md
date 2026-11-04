@@ -4545,3 +4545,9 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 검증: 원격 RED `08bbc9a4fe`에서 release edit 호출을 막는 새 회귀 시험이 예상대로 실패했다. 수정 `3309dde54f`에서 서명 자동화와 후보 서명 시험 48건이 통과했고 known_failures는 0 new/known/flaky다. FakeGh 시험이며 실제 공개 릴리스를 수정하지 않았다.
 - gate 변화: 없음. UI FULL 준비 근거는 별도 보존했고, 이 수정의 착지와 최신 main 통합 검증 후 게시한다.
 - CE: 해당 없음 — 누락된 dry-run 분기와 회귀 조건이 코드·시험에 직접 남는다. 운영 전환은 별도 미완료다.
+## 2026-11-04 · uncommitted · fix(deploy): native payload가 모드별 프로파일 오버레이를 싣는다
+
+- 변경: `image/build-native-payload.sh`가 `deploy/robot/pinky_pro/config/profile.{core,motor,hardware}.yaml`을 release 트리 `deploy/robot/config/`로 복사한다. `hardware.launch.py`의 프로파일 기본값(navigation/profile_source, 같은 날 착지)이 `/etc/rosy/profile.yaml`이 없는 기기에서 이 파일로 내려간다. 지금까지 native 기기의 hardware 모드는 손 설치 전까지 `cannot read Device profile`로 시작 실패였다(2026-11-03 문서 증상1).
+- 검증: payload 적재 계약시험(세 모드 cp 단정) 추가, 변이 증명으로 cp 루프를 지웠을 때 빨강 확인. 착지 시험 묶음은 원격 pre-push.
+- gate 변화: 없음 — payload는 서명·활성화 게이트를 그대로 탄다.
+- CE: [2026-11-03 native hardware 문서](../docs/solutions/deployment/native-hardware-mode-profile-and-canonical-runtime-env-2026-11-03.md) 증상1의 제품 해소, 같은 문서 갱신 대상.

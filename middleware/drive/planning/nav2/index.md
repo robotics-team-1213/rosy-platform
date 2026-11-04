@@ -42,8 +42,8 @@
 
 ## 최근 기록
 
+- 2026-11-04 · uncommitted · fix(nav2): launch 프로파일 기본값이 payload 모드 오버레이로 내려간다
 - 2026-11-04 · uncommitted · docs(validation): 후진 허용 실물 수용 기록
 - 2026-11-04 · uncommitted · fix(nav2): RPP 후진 허용
 - 2026-10-19 · uncommitted · (origin #92 2026-10-17) 실제 static14건과 같은 SHA native30건 수용 기록
 - 2026-10-19 · uncommitted · (origin #92 2026-10-17) rejected configure 시험의 실제 TF callback 시작 동기화
-- 2026-10-19 · uncommitted · (origin #92 2026-10-17) 거절된 native configure의 fixture 자원 정리

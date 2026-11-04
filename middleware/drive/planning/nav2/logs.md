@@ -291,3 +291,9 @@
 - 증거: 위 검증 기록 본문(odom·map-pose·LiDAR 교차).
 - gate 변화: 없음.
 - CE: 해당 없음 — 측정 기록.
+## 2026-11-04 · uncommitted · fix(nav2): launch 프로파일 기본값이 payload 모드 오버레이로 내려간다
+
+- 변경: `navigation/profile_source.py` 신설 — `ROSY_PROFILE` → 운영자 설치 `/etc/rosy/profile.yaml` → payload가 실은 `deploy/robot/config/profile.${ROSY_RUNTIME_MODE}.yaml` 순서로 기본 프로파일을 고르고 `hardware.launch.py`가 이를 쓴다. compose는 같은 파일을 모드별 bind-mount하지만 native payload에는 이 연결이 없어, 새 기기의 hardware 모드는 손 설치 전까지 `cannot read Device profile`로 죽었다(2026-11-03 문서 증상1, 같은 날 y8xs 재발).
+- 증거: 우선순위 단위시험 + launch import 단정 + payload 적재 계약시험(build-native-payload.sh이 세 모드 프로파일을 release 트리에 복사)을 변이 증명과 함께 추가. 파라미터 섹션 접두·standalone 전환은 같은 날 별도 착지(fix/nav2-params-section-keys).
+- gate 변화: 없음.
+- CE: [native-hardware-mode-profile-and-canonical-runtime-env-2026-11-03.md](../../../docs/solutions/deployment/native-hardware-mode-profile-and-canonical-runtime-env-2026-11-03.md) 증상1의 제품 해소 — 같은 문서 갱신 대상.

@@ -115,3 +115,35 @@ def test_navigation_package_declares_slam_runtime_dependency():
         ROOT / "middleware" / "drive" / "planning" / "nav2" / "package.xml"
     ).read_text(encoding="utf-8")
     assert "<exec_depend>slam_toolbox</exec_depend>" in package_xml
+
+
+def test_launch_profile_default_prefers_override_then_operator_then_shipped_mode(tmp_path, monkeypatch):
+    """native 기기는 /etc/rosy/profile.yaml 이 없어도 프로파일을 찾는다 (2026-11-03 문서 증상1).
+
+    compose 는 모드별 오버레이를 bind-mount 한다. native payload 는 같은 파일을
+    deploy/robot/config/ 로 싣고, launch 기본값은 ROSY_PROFILE → 운영자 설치 파일 →
+    모드 오버레이 순서로 고른다.
+    """
+    import sys
+
+    package = ROOT / "middleware" / "drive" / "planning" / "nav2"
+    if str(package) not in sys.path:
+        sys.path.append(str(package))
+    from navigation import profile_source
+
+    assert (
+        profile_source.default_profile_path({"ROSY_PROFILE": "/bench/profile.yaml"})
+        == "/bench/profile.yaml"
+    )
+    operator = tmp_path / "profile.yaml"
+    operator.write_text("profile: {}\n", encoding="utf-8")
+    monkeypatch.setattr(profile_source, "OPERATOR_PROFILE", operator)
+    assert profile_source.default_profile_path({}) == str(operator)
+    monkeypatch.setattr(profile_source, "OPERATOR_PROFILE", tmp_path / "absent.yaml")
+    assert (
+        profile_source.default_profile_path({"ROSY_RUNTIME_MODE": "hardware"})
+        == "/opt/rosy/current/deploy/robot/config/profile.hardware.yaml"
+    )
+    assert profile_source.default_profile_path({}).endswith("/profile.core.yaml")
+    launch = (NAV_LAUNCH / "hardware.launch.py").read_text(encoding="utf-8")
+    assert "from navigation.profile_source import default_profile_path" in launch
