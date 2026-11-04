@@ -33,6 +33,7 @@ def test_pixel_workspace_layout_has_one_photo_navigation_and_unclipped_tools(bro
     expect(page.locator('#pixel-photo-navigation #pixel-next')).to_have_count(1)
     expect(page.locator('#pixel-photo-navigation #pixel-undo')).to_have_count(0)
     expect(page.locator('#pixel-photo-list #pixel-page-controls')).to_be_visible()
+    expect(page.locator('.pixel-editor-column > #pixel-photo-list')).to_have_count(1)
     for width in (390, 800, 1440, 2048):
         page.set_viewport_size({'width': width, 'height': 1080 if width == 2048 else 900 if width == 1440 else 844})
         page.reload(wait_until='networkidle')
@@ -46,7 +47,7 @@ def test_pixel_workspace_layout_has_one_photo_navigation_and_unclipped_tools(bro
             photo: rect('.pixel-photo-surface'), canvas: rect('#pixel-canvas'), decision: rect('.pixel-review-column'),
             nav: rect('#pixel-photo-navigation'), prev: rect('#pixel-prev'),
             title: rect('#pixel-title'), next: rect('#pixel-next'), list: rect('#pixel-photo-list'),
-            layout: rect('.pixel-layout'), focused: rect('#pixel-class'), height: innerHeight,
+            details: rect('.pixel-photo-details'), focused: rect('#pixel-class'), height: innerHeight,
             overflow: getComputedStyle(tools).overflowY, maxHeight: getComputedStyle(tools).maxHeight,
             clientHeight: tools.clientHeight, scrollHeight: tools.scrollHeight};
         }''')
@@ -60,7 +61,11 @@ def test_pixel_workspace_layout_has_one_photo_navigation_and_unclipped_tools(bro
         assert geometry['scrollHeight'] <= geometry['clientHeight'] + 1
         assert geometry['prev']['right'] <= geometry['title']['left'] + 1
         assert geometry['title']['right'] <= geometry['next']['left'] + 1
-        assert geometry['list']['top'] >= geometry['layout']['bottom'] - 1
+        assert geometry['list']['top'] >= geometry['details']['bottom'] - 1
+        assert abs(geometry['list']['left'] - geometry['photo']['left']) <= 1
+        assert abs(geometry['list']['right'] - geometry['photo']['right']) <= 1
+        if width < 1024:
+            assert geometry['decision']['top'] >= geometry['column']['bottom'] - 1
         if width >= 1024:
             assert geometry['decision']['left'] >= geometry['column']['right']
             assert geometry['tools']['right'] <= geometry['photo']['left']
