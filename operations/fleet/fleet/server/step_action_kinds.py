@@ -60,8 +60,8 @@ def _cell_transfer_body(job: Mapping[str, Any], step_index: int,
 _KINDS = {
     "CELL_TRANSFER": StepActionKind(
         action_kind="CELL_TRANSFER",
-        # D-403 §7: simulation only; every other profile, and every other kind, stays closed.
-        open_profiles=frozenset({"simulation"}),
+        # D-403 §7: simulation; D-797 2-3 (D-858 S4): device_trial, a real owner identity only. production stays closed.
+        open_profiles=frozenset({"simulation", "device_trial"}),
         grant_model=FleetCellTransferGrant,
         body_field="cell_transfer",
         body=_cell_transfer_body,
@@ -72,8 +72,10 @@ _KINDS = {
         approval="two_person",
     ),
     # D-763 7: a 운행 step is a Fleet trip (``job_trip_steps``), never a device Action; SIM until device proof.
-    "TRIP": StepActionKind(action_kind="TRIP", open_profiles=frozenset({"simulation"}), grant_model=None,
-                           body_field="trip", body=None, phase_ids=(), rejection_reasons={}, approval="one_person"),
+    # D-797 2: device_trial runs on one Fleet with the real Pinky; production stays closed (D-797 1 is not decided).
+    "TRIP": StepActionKind(action_kind="TRIP", open_profiles=frozenset({"simulation", "device_trial"}),
+                           grant_model=None, body_field="trip", body=None, phase_ids=(), rejection_reasons={},
+                           approval="one_person"),
 }
 
 

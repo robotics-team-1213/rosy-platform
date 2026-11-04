@@ -108,3 +108,5 @@ D-967 reserved in another in-flight branch (refs/adr/D-967), absent from this D-
 D-971 reserved in another in-flight branch (refs/adr/D-971), absent from this D-974 branch; remove when its ADR lands
 D-972 reserved in another in-flight branch (refs/adr/D-972), absent from this D-974 branch; remove when its ADR lands
 D-973 reserved in another in-flight branch (refs/adr/D-973), absent from this D-974 branch; remove when its ADR lands
+D-975 reserved in another in-flight branch (refs/adr/D-975), absent from this D-977 branch; remove when its ADR lands
+D-976 reserved in another in-flight branch (refs/adr/D-976), absent from this D-977 branch; remove when its ADR lands
