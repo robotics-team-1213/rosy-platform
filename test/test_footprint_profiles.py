@@ -75,8 +75,8 @@ def test_prefixed_nav2_params_can_receive_the_measured_polygon(tmp_path):
     )
     data = yaml.safe_load(output.read_text(encoding="utf-8"))
 
-    local = data["local_costmap"]["local_costmap"]["ros__parameters"]
-    global_map = data["global_costmap"]["global_costmap"]["ros__parameters"]
+    local = data["/rosy_01/local_costmap"]["local_costmap"]["ros__parameters"]
+    global_map = data["/rosy_01/global_costmap"]["global_costmap"]["ros__parameters"]
     assert local["footprint"] == "[[-0.2,-0.15],[0.2,-0.15],[0.2,0.15],[-0.2,0.15]]"
     assert global_map["footprint"] == local["footprint"]
     assert local["robot_base_frame"] == "rosy_01/base_footprint"
