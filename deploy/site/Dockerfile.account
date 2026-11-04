@@ -1,0 +1,35 @@
+FROM ubuntu:24.04 AS assets
+ENV DEBIAN_FRONTEND=noninteractive PYTHONDONTWRITEBYTECODE=1
+RUN apt-get update && apt-get install -y --no-install-recommends python3 && rm -rf /var/lib/apt/lists/*
+COPY operations/account/rosy_account/ /source/operations/account/rosy_account/
+COPY applications/fleet/web/assets.json applications/fleet/web/login.html applications/fleet/web/profile.html applications/fleet/web/accounts.html /source/applications/fleet/web/
+COPY applications/fleet/web/shared/fleet-document.css applications/fleet/web/shared/password-login.css applications/fleet/web/shared/password-login.js applications/fleet/web/shared/login-page.js applications/fleet/web/shared/login-return.js applications/fleet/web/shared/profile-page.js applications/fleet/web/shared/account-page.js applications/fleet/web/shared/account-permissions.js /source/applications/fleet/web/shared/
+COPY shared/web/shared-assets.json shared/web/tokens.css shared/web/components.css shared/web/component-controls.css shared/web/theme.js shared/web/ui.js shared/web/ui-wiring.js shared/web/confirmation.js shared/web/live-dialog-geometry.js shared/web/fleet-client.js shared/web/request.js shared/web/account-profile.js /source/shared/web/
+COPY shared/web/icons/console.svg /source/shared/web/icons/console.svg
+COPY shared/web/brand/mark.svg /source/shared/web/brand/mark.svg
+RUN PYTHONPATH=/source/operations/account python3 -m rosy_account.web_assets --repo /source --output /account-web
+
+FROM ubuntu:24.04
+ENV DEBIAN_FRONTEND=noninteractive PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 \
+    PATH=/opt/rosy-venv/bin:$PATH \
+    PYTHONPATH=/opt/rosy/src/operations/account:/opt/rosy/src/contracts/foundation
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates python3 python3-venv \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --gid 10001 rosy \
+    && useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin rosy \
+    && install -d -o 10001 -g 10001 -m 0700 /var/lib/rosy-account
+COPY deploy/site/requirements-account.txt /opt/rosy/requirements.txt
+COPY deploy/site/site_db.py /opt/rosy/site_db.py
+RUN python3 -m venv /opt/rosy-venv \
+    && pip install --no-cache-dir -r /opt/rosy/requirements.txt \
+    && rm /opt/rosy/requirements.txt
+COPY operations/account/rosy_account/ /opt/rosy/src/operations/account/rosy_account/
+COPY contracts/foundation/core_common/__init__.py /opt/rosy/src/contracts/foundation/core_common/__init__.py
+COPY contracts/foundation/core_common/protocol/__init__.py contracts/foundation/core_common/protocol/account_access.py /opt/rosy/src/contracts/foundation/core_common/protocol/
+COPY --from=assets /account-web /opt/rosy/account-web
+RUN python3 -c "import rosy_account.app; import rosy_account.healthcheck"
+WORKDIR /opt/rosy
+EXPOSE 8098
+USER 10001:10001
+ENTRYPOINT ["python3", "-m", "rosy_account"]

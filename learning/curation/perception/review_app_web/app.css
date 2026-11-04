@@ -102,6 +102,7 @@ summary { cursor: pointer; }
 .preparation { border-top: 1px solid var(--surface-line); margin-top: var(--space-6); padding-top: var(--space-5); }
 pre { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-secondary); font-size: var(--text-label); }
 .learning-main { width: 100%; min-width: 0; }
+main.ui-task-page > .learning-section { margin-top: 0; }
 #catalog-main { container-type: inline-size; }
 #catalog-main .ui-form > .ui-field-label, #catalog-main .ui-form > ui-button { flex: 1 1 10rem; min-width: 0; max-width: 30rem; }
 #catalog-main .ui-form .ui-field { width: 100%; }
@@ -132,7 +133,6 @@ ui-topbar:has([data-learning-account-entry]) { flex-wrap: wrap; }
 .learning-panel > summary { min-height: var(--target-secondary); cursor: pointer; font-weight: var(--weight-medium); }
 .learning-panel .ui-field-label { min-width: 0; }
 .learning-panel .ui-field-label > .ui-field { max-width: 100%; }
-.learning-panel .workspace-link { white-space: normal; }
 @media (width < 64rem) {
   .learning-workflow-layout { grid-template-columns: minmax(0, 1fr); }
   .learning-step-menu { position: static; grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -141,7 +141,6 @@ ui-topbar:has([data-learning-account-entry]) { flex-wrap: wrap; }
 /* Account pages compose shared sections and fields; only placement lives here. */
 #accounts-main { container-type: inline-size; }
 #accounts-main ui-section > p { margin: 0; }
-#accounts-main #login-panel { max-width: 30rem; }
 .account-form { display: grid; gap: var(--gap-form); min-width: 0; }
 .account-form .ui-field-label { min-width: 0; }
 .account-form .ui-field { width: 100%; box-sizing: border-box; min-width: 0; }
@@ -183,7 +182,6 @@ ui-topbar:has([data-learning-account-entry]) { flex-wrap: wrap; }
 .review-summary p { color: var(--text-secondary); margin-bottom: 0; }
 .review-summary > .quiet { font-size: var(--text-label); }
 #review-stage-summary { margin-block: 0 var(--space-2); font-variant-numeric: tabular-nums; }
-.workspace-link { display: inline-flex; align-items: center; gap: var(--space-2); min-height: var(--target-secondary); padding-inline: var(--inset-button); border: 1px solid var(--control-line); border-radius: var(--radius-button); font-size: var(--text-label); text-decoration: none; white-space: nowrap; }
 .work-filters { align-items: end; padding-block: var(--space-2); }
 .search-field { flex: 1; min-width: min(100%, 16rem); }
 .work-filters label { min-width: 0; }
@@ -437,7 +435,6 @@ ui-topbar:has([data-learning-account-entry]) { flex-wrap: wrap; }
 .evaluate-source table{display:block;max-inline-size:100%;overflow-x:auto;border-collapse:collapse;margin-block-end:var(--space-2);font-size:var(--text-label)}
 .evaluate-source th,.evaluate-source td{text-align:start;padding:var(--space-1) var(--space-2);border-block-end:1px solid var(--border-subtle)}
 .evaluate-runs{display:grid;gap:var(--space-2);margin:0 0 var(--space-2);padding:0;list-style:none}
-.evaluate-runs .workspace-link{white-space:normal;overflow-wrap:anywhere}
 .evaluate-runs li,#promote-result{overflow-wrap:anywhere}
 #promote-pick select{max-inline-size:100%}
 @media (width < 64rem){.domain-row{grid-template-columns:minmax(0,1fr);grid-template-areas:"name" "stages" "truth" "blocked" "next"}.domain-stages{grid-template-columns:repeat(3,minmax(0,1fr))}}

@@ -13752,6 +13752,20 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 기존 실행·동결본을 바꾸거나 중단하지 않았으며 운영 반영은 별도다.
 - CE: 해당 없음 — 호출 순서와 정본 anchor 보존은 코드와 실제 Git 회귀 시험에 직접 남긴다.
 
+## 2026-11-02 · b1eafb186f · D-961 웹 제품 통합 검증 기록
+
+- 변경: [동결 검증 기록](validation/rosy-web-unification-2026-11-02/result.md)에 공통 화면·이동 조작, 로그인·상태·탐색과 접근성 적용, 원본 실패와 수정 후 결과를 모았다. 내부 주소·계정 경로를 제외한 실행 영수증·로그 해시와 126개 브라우저 파일별 시험 기준을 함께 둔다.
+- 증거: FULL source27묶음과 실패 묶음 재실행, 최종 source b1eafb186f의 10544 passed/1155 skipped/exit0, 최종 browser9ffb4a4944의82파일·1316 passed/skip0/exit0 및 각 known_failures NEW0. 두 로그인 axe8회 위반0/판단보류0, 화면 캡처와 독립 소스·CORE 계약 검토를 분리했다.
+- gate 변화: 없음. 착지·공개 게시·운영 배포·실제 SSO·스크린리더·ARM64 이미지·실물/현장 수용은 이 기록으로 통과시키지 않는다.
+- CE: 해당 없음 — 원인·보존 조건·시험 구성의 범위가 구현·회귀·ADR·검증 기록으로 복원돼 별도 교훈을 늘리지 않는다.
+
+## 2026-11-02 · 131087f3b1 · 공개 Git 무결성 증거의 필드 명확화
+
+- 변경: [후속 기록](validation/rosy-web-unification-2026-11-02b/result.md)에 공개 Git OID가 비밀 토큰으로 분류된 문서 검사 실패를 남겼다. 증거 JSON의 commit/revision/oid 필드만 명확히 하고 관측·해시·실패 이력은 유지했다. scanner와 제외 목록은 수정하지 않는다.
+- 증거: 원본 문서 영향 320 passed/1 failed, 두 JSON에 대한 실제 scanner 정적 발견0. committed 수정본의 동일 영향 검사는 별도 재실행 영수증으로 확인한다.
+- gate 변화: 없음. 원래 소스·브라우저 검증을 다시 쓰거나 운영·실물 수용으로 올리지 않는다.
+- CE: 해당 없음 — 기존 공개 무결성 문맥과 이번 필드 이름으로 원인을 복원할 수 있다.
+
 ## 2026-11-03 · uncommitted · fix(omx): 놀고 있는 팔은 60초에 접고, 막힌 접기는 한 번만 다시 한 뒤 사람을 부른다
 - 변경: `runner.idle_park_s` 180→60, `runner.idle_stop_s` 180→30, 새 `runner.idle_retry_s` 300. 막혀 멈춘 자동 접기는 멈춘 때부터 idle_retry_s 뒤 한 번만 다시 하고, 또 멈추면 토크를 유지한 채 `person_needed`를 보고한다. 명령이 오면 자동 접기 횟수가 되살아난다. 접기는 이전 고장이 있어도 막힘을 감시하고, 실제로 홈에 정착했을 때만 홈으로 친다(토크 OFF의 조건).
 - 증거: 전에는 막힌 자동 접기를 idle_park_s마다 끝없이 다시 했고, 고장 뒤 접기는 막힘 감시가 꺼진 채 SETTLE_S가 지나면 홈으로 쳐서 홈이 아닌 곳에서 토크 OFF가 가능했다(시험으로 재현). 사용자 결정 2026-11-03.
@@ -13972,6 +13986,110 @@ osy-d395-s1d\`.
 - gate 변화: 없음. CAD 케이스 그대로.
 - CE: 해당 없음 — 원인과 고침이 시험·주석·검증 기록에 있다.
 
+## 2026-11-03 · uncommitted · fix(landing): 같은 환경 browser chunk의 겹치는 파일 제거
+- 변경: 같은leading환경과실존순수.py파일만인browser계획을합칠때먼저나온chunk에파일을남긴다. 두browser결합경계만적용하며입력·파일합집합·chunk순서·기존basename분리를보존한다. 다른env순서/ALONE/profile/options/node/folder/missing/unknown은기존exactargv규칙이고일반pytest선택은그대로다.
+- 증거: code882915a034 원격새회귀+land_selection+land_browser 88PASS/skip·NEW·known·flaky0, wait0/run26초. RED40ee의3NEW중유지된두결합경계2NEW와97c52에서제거한추가env정규화요구1NEW를구분한다. 실제동일후보c5bf44/동일env의두기존argv를오프라인재생해15file참조→13/unique13/union동일,전체plan이나wall측정은아니다. 로그OS Temp rosy-browser-overlap-{red,green}/run-1.txt,운영자증거는저장소밖기존workspace-records의browser-overlap-selection-evidence-20261103.json.
+- gate 변화: 없음. 축소된실제argv로기존cache계약을계속사용하며whole키나생략시험PASS를추론하지않는다. 독립고정코드검토P1/P2없음. 정식후보검증·main착지는남아있으며진행중UI시험을수정/재시작하지않았다.
+- CE: 기존교훈갱신 — landings-gave-the-turn-back-and-reran-everything에부분파일중복의실제환경증거와보수적결합조건을추가했다. 이미설명된exactargv중복과구분하며성능목표달성으로확대하지않는다.
+
+## 2026-11-03 · uncommitted · fix(harness): compose timing plans without inheriting speculation into publication FULL
+- Change: the shared SOT validates each execution context before combining plans, retains every ordinary row in order, and normalizes only canonical G1 DED rows across independently valid contexts. land_record and with_spec use the same composition; malformed within-context duplicates, filtered jobs and missing timing companions cannot borrow completeness from another context. held keeps invocations with environment/options whole, including option values, ROOT ignore and no-xdist/plugin words; option-free mixed invocations retain the existing root projection. Both input and result follow the SOT. Explicit FULL returns before speculative preparation and bypasses held/with_spec, using actual main-delta selection with existing witness/reprepare and exact publication-proof checks. Auto speculation remains supported. The authoritative pr-pipeline explanation gains one sentence defining this explicit-FULL boundary.
+- Evidence: bc6ba7e86d RED had 10 relevant failures plus 5 incorrect fixture-module lookups; tests-only cbd91a044c repaired the lookup and confirmed 5 real three-context failures. Implementation 90e0a7e8a2 passed record/speculate/publication whole-file runs, while the new explicit-FULL delta fixture exposed its blank YAML through the real isolation loader; its standalone case and wrapper child failed. Tests-only 1abd2203e0 supplies valid minimal committed modules/roots YAML, preserving that actual delta/isolation path. Exact 1abd fresh whole-file results: record 13 passed (0.69s, peak 32MiB), speculate 24 passed (3.53s, 54MiB), selection 59 passed (19.98s, 68MiB), publication 49 passed (26.47s, 83MiB), each 0 skipped. Separate unchanged collect_alone wrapper collected and ran all four files in fresh children: 8 passed / 0 skipped (26.57s, 151MiB). All five reports compare NEW/known/flaky 0. Logs and five-invocation plan are outside the repository in OS Temp rosy-g1-spec-composition-green-1abd; normal model preflight was 11 free cores/8.8GB, with unchanged admission floors. Earlier site runner resource outputs were inconsistent with elapsed time and are not resource evidence.
+- Gate: SOURCE/LOCAL remain GO only for these scoped results. Independent exact 90e0 source review found no supported findings; Independent exact 49ab758412 fixture/documentation review also found no supported findings; production code is unchanged from reviewed 90e0. Real Git prepared/speculative/turn contexts exercise with_spec, record creation and immutable-candidate publication. Positive publication is supported by existing exact prepared/final mappings; a unique speculative-SHA-only mapping remains insufficient and is rejected, as are missing final logs and broken bridge provenance. No speculative provenance schema/ledger or policy fallback was added. Explicit-FULL orchestration separately proves stale speculative state is not consumed and actual main-delta work executes; it does not claim a synthetic fixture is a real platform FULL. No actual G1 test, threshold, strict receipt gate, isolation or conftest changed, and actual G1 was not rerun. The successful immutable 222158 bootstrap was not cancelled/replaced; this follow-up is queued only by the dispatcher after that first bootstrap reaches actual main. Account1077 and peer refs remain preserved.
+- CE: not applicable. Applied the existing publication-proof and shared-pytest-process lessons. The composition counterexamples, exact-provenance limitation and explicit-FULL decision are directly retained in tests, code and the authoritative mode explanation; a separate lesson would duplicate those artifacts.
+- Native checks: canonical generate completed; lint 0 errors / 40 existing module-freshness warnings. Changed Python AST/progress YAML and diff checks passed; twenty-four-commit size_range passed before this record-only commit. Secret scan added 0 findings (two unchanged historical log findings); no changed source path is safety-tagged. Account1077 remains preserved.
+
+## 2026-11-03 · uncommitted · fix(harness): reject stale FULL reuse and validate record composition before FF
+- Change: restore checks stored FULL plans only when the target repository's actual main tracks the G1 SOT. A noncanonical old ROOT-only, incomplete or malformed FULL returns None for normal fresh preparation; topic-only/unlanded support does not change legacy-main behavior, and affected ordinary records retain their policy. Historical argv is not rewritten and no timing companion is fabricated. bridge and immutable publication provenance reads remain unchanged. A pure land_record.plan helper supplies the same context composition to the writer and a reusable-record preflight before on_main/FF; invalid composition produces STOP while main and any existing landed record remain unchanged. Writer validation remains in place. Shared SOT shape validation rejects non-list contexts/rows and nonstring/empty arguments before iteration, while preserving an empty outer context.
+- Evidence: committed 42a22d856e RED: 6 failed / 3 passed (1.05s), including fixture main advancing before a later writer failure; canonical FULL, affected ordinary and legacy-main controls passed. Canonical actual-main merge abf3e2d4b6 brought 5ec9ef709a into this source with no code conflict. Base fix 374f684bfa fresh per-file runs passed selection 68, record 14, prepare 45, publication 49 and landing 115, with wrapper 4 checks, all skip 0. Independent review then found iterable dict/string rows and nonstring words could evade validation or raise AttributeError; fbaf87e3fa RED confirmed 6 failed / 2 passed. Strict-shape fix 7c0225640f uses validation rather than coercion or a broader exception catch. Final exact 7c0225640f fresh whole-file results: selection 74 passed (17.33s, peak 183MiB), record 22 passed (0.46s, 35MiB), affected selector 171 passed (96.53s, 217MiB), G1 gate 36 passed (3.56s, 51MiB), publication 49 passed (23.98s, 176MiB), each 0 skipped. Separate unchanged collect/whole wrapper: 4 passed / 0 skipped (25.01s, 200MiB). Both revisions' six reports compare NEW/known/flaky 0. Final normal AI light placement had 10.7 free cores/5.8GB and MemoryMax 5GB; existing admission waited for room without an override. Logs and invocation plans are outside the repository under OS Temp rosy-g1-restore-preff-red-42a2, rosy-g1-restore-preff-green-374f, rosy-g1-plan-shape-red-fbaf and rosy-g1-restore-preff-green-7c02. The shape RED's site resource output was inconsistent and is not resource evidence.
+- Gate: SOURCE/LOCAL remain GO only for the stated scoped checks. Independent exact 7c0225640f review resolved the shape finding and found no supported new finding. Per-file and unchanged collect/whole wrapper execution are required separately; no broad shared-process pass substitutes for them. The first f53 bootstrap already reached actual main at 6b9f3369a7; this follow-up has not been queued, landed or published by the worker. No G1 actual execution, threshold, receipt criteria, isolation, conftest, bridge policy, schema or proof ledger changed. Account1077 and peer refs are preserved.
+- CE: not applicable. Applied the existing FULL/publication-proof lesson. The pre-FF order, actual-main rollout boundary, historical read compatibility and malformed-data counterexamples are explicit in the implementation and negative ref/record immutability tests, so no additional lesson duplicates them.
+- Native checks: canonical generate and lint completed with 0 errors / 42 existing module-freshness/worktree-cap warnings. Python AST/progress YAML/diff checks and twelve-commit size_range passed before this record-only commit. bridge and prepared bodies exactly match actual main 5ec9; secret scan added 0 findings (two unchanged historical log findings). Account1077 remains preserved.
+
+## 2026-11-03 · uncommitted · fix(harness): preserve current-main root projection and speculation semantics
+- Change: merged actual main 69a12e8f6e, then canonical main 2b2b876f25, preserving its root_part API and records-only callsite. Calls without a root test word remain omitted; root calls with options/environment retain every argument and option value. with_spec validates original contexts before applying main's prepared-based tail filter, retaining prepared duplicates and duplicates inside novel ordinary spec rows. Strict DED composition and explicit-FULL speculation exclusion remain unchanged.
+- Evidence: fixed merge source 5514ce4465 fresh remote whole-file results were speculate 27, selection 74, publication 49 and landing 115 passed; the unchanged speculate collect/whole wrapper passed 2 checks. All five reports had zero skips and NEW/known/flaky 0. Logs and invocation plan remain in OS Temp rosy-g1-spec-main-merge-5514. Independent fixed-SHA merge review found no supported issue. Inconsistent runner resource counters are excluded from performance evidence.
+- Gate: scoped source checks only; first bootstrap landed at 6b9f3369a7, while this follow-up still requires official landing. No actual timing test, threshold, isolation, robot command or deployment changed. Account source remains on its separate branch.
+- CE: not applicable — the retained caller semantics and regression cases explain the integration; existing publication-proof and import-isolation lessons were applied.
+
+## 2026-11-03 · uncommitted · fix(harness): compose new DELTA preparations through the shared timing policy
+- Change: merged actual main096ffc275f at c35b25e21b, preserving its DELTA summary/outside-turn handling and the explicit-FULL held exclusion plus pre-FF validation. Independent merge review found the new DELTA save concatenated two valid timing contexts and wrapped FULL bypassed restore validation. Source60124e2c02 reuses land_record.plan before saving, translates invalid composition to STOP without overwriting the earlier record, and applies the existing canonical guard to the effective FULL tier. Ordinary repetitions, legacy-main readers and immutable bridge/provenance policy remain unchanged; no schema or proof ledger was added.
+- Evidence: snapshot044058 completed35 prepared invocation reports in2513s, including fresh run-pre-35 timing receipt expected12/collected12/passed12/skipped0/clean1 and12 passed8.12s, then stopped on the main096 land.py merge conflict; this is old-candidate auto preparation, not final source or publication evidence. c35 baseline4 whole files passed239 cases, skip0. Tests-only7c5ba554da fresh RED reproduced8 failures with12 controls passed1.78s: duplicate DED storage, missing malformed-input rejection, and six wrapped invalid FULL plans. Fixed60124e2c02 fresh whole files passed prepare48, selection84, landing115, speculate27 and record22; separate unchanged collect/whole wrapper passed4 checks. All6 GREEN reports have skip0 and NEW/known/flaky0. Independent fixed-source review resolved the integration finding with no new issue. Logs remain in OS Temp rosy-g1-main-delta-c35b, rosy-g1-delta-composition-red-fresh and rosy-g1-delta-final-6012.
+- Gate: scoped source verification only; formal landing still required. Actual timing tests/deadlines, isolation, Account52bd, public PR and live deployment were not changed. Native Python AST/diff checks and19-commit size range passed; scanner found0 findings in the four new changed paths.
+- CE: not applicable — the new DELTA integration boundary is explicit in code, positive cases and record-immutability regressions. Existing publication-proof, fixed-hook and import-isolation lessons were applied; the unresolved controller observation is not recorded as a solved lesson.
+
+## 2026-11-03 · uncommitted · Retain current main's DELTA yielding with isolated FULL composition
+- Change: merge57878d663c combines reviewed04ce19e879 with actual main1624e8a65e. The sole manual code conflict was adjacent additions at the end of test_land_selection.py; both parents' tests remain intact. Canonical record resolution and generation handled the log/index conflicts. Main's delta_yields condition remains together with explicit FULL exclusion, checked DELTA composition and wrapped FULL restore validation.
+- Evidence: independent merge review found no new issue. Native AST3 paths, size21 commits, Safety77 commits and lint0errors43warnings passed. Fixed57878d663cb37c5601ccab569e1cc0bf7af60932 fresh remote whole files passed selection85, prepare48, landing115, speculate27 and record22 (297 direct); the unchanged prepare/selection collect-and-whole wrapper passed4 checks. All6 reports have skip0 and NEW/known/flaky0, actual driver exit0, in OS Temp rosy-g1-main-delta-5787. The stopped061346 snapshot remains historical evidence, not this merge's publication proof.
+- Gate: source integration only. Account artifact, public publication and live migration remain pending.
+- CE: not applicable — the conflict preserves both existing tested behaviors; no new undocumented recovery rule was introduced.
+
+## 2026-11-03 · uncommitted · fix(landing): LOAD-FLAKY는 사전 시험 전체가 아니라 그 시험만 차례에서 다시 (D-970 4항)
+- 변경: `land_selection.load_flaky_ids`가 요약의 LOAD-FLAKY id를 그 호출의 ROSY_ 환경 단어와 함께 읽고, `land_prepare`는 그 줄을 빼고 단계를 판정해 id를 `land_full` 기록(`flaky`)에 둔다. `land.py` 차례가 그 id를 하나씩 따로 다시 돌린다. 명시 FULL 증인과 읽을 수 없는 LOAD-FLAKY 줄은 예전처럼 엄격하다.
+- 증거: 11-03 12:53~15:53 사전 시험 28번 중 9번이 단계 없음(LOAD-FLAKY 등)이라 delta도 못 썼다. 원격 착지 회귀 27개 파일 + affected_tests 통과(test_land_async 한 건은 혼자 재실행 통과한 ProcessLookupError 타이밍 문제, 이 변경과 무관), 새 시험 2개.
+- gate 변화: 약화 없음. LOAD-FLAKY id는 차례에서 다시 통과해야 착지하고, 차례 요약에 LOAD-FLAKY가 다시 나오면 land record가 생기지 않아 pre-push가 다시 돈다. publish_evidence의 LOAD-FLAKY 거절도 그대로다.
+- CE: 해당 없음 — 교훈 10·11과 D-970에 이미 있음.
+
+## 2026-11-03 · uncommitted · fix(landing): delta 넘김은 표마다 두 번까지 (D-970 1항 보완)
+- 변경: `land_full` delta 기록에 `yields`(앞선 delta 기록 수)를 두고, `land_selection.delta_yields`는 그것이 `MAX_DELTA_YIELDS`(2) 아래일 때만 넘긴다. 그 뒤에는 차례가 시험 폴더를 직접 돈다(두 번 돌려보낸 뒤 예산 30분).
+- 증거: 11-03 rosy-web-unification-final이 15:58·17:28·18:07 세 번 delta로 넘김 — 차례 밖 준비 동안 main이 다시 움직여 새 폴더가 닿음(rosy-land-events). 원격 착지 회귀 27개 파일 + affected_tests 통과, 새 시험 2개.
+- gate 변화: 없음. 세 번째부터는 D-889 27 이전처럼 차례 안에서 같은 시험을 돈다.
+- CE: 해당 없음 — D-970 되돌림 기준(같은 표 반복 넘김)을 코드로 막은 것.
+
+## 2026-11-03 · uncommitted · fix(landing): 추측 사전 시험 기본 끔 (D-889 추가 28)
+- 변경: `land_prepare`가 `ROSY_LAND_SPECULATE=1`일 때만 `land_speculate.prepare`를 부른다.
+- 증거: 11-03 10:00~16:00 rosy-land-events — spec 시험 9.8 h / 전체 43 h, 차례 held 3 / 34, 이미 통과한 호출 재실행 8.1 h. 원격 착지 회귀 27개 파일 + affected_tests 통과, 새 시험 1개.
+- gate 변화: 없음. 차례는 원래 정해진 선택을 그대로 돈다.
+- CE: 기존 교훈 갱신 — landings-gave-the-turn-back-and-reran-everything 11.
+
+## 2026-11-03 · uncommitted · Cell 표·정렬의 전체 화면 검증 기록
+
+- 변경: `validation/ui-collections-2026-11-03/result.md`와 캡처 매니페스트에 공용 표현 연결, 화면 그룹, 계정/요청 수명, 긴 출처의 열 압축·행 정렬 문제와 검증 범위를 남겼다.
+- 증거: 소스 02664861ec4a19857e9a8105c29bc48854371bc8의 원격 Chromium 43 passed/0 skipped/NEW0, 양 테마의 PC·전화 캡처 네 장과 로그의 SHA-256, 독립 코드 검토 지적 없음. 통합 검사와 착지 SHA는 별도 receipt가 소유한다.
+- gate 변화: 없음. 합성 브라우저 검증을 전체 UI/UX GO·실물·현장·배포 수용으로 올리지 않는다. CE: 해당 없음 — 원인과 재발 조건은 코드·전체 페이지 회귀·검증 기록에서 복원할 수 있다.
+
+## 2026-11-03 · uncommitted · fix(landing): 다른 트리 통과 재사용도 대기열 단계는 남기고 게시 증거는 아님 (D-970 4항)
+- 변경: `land_prepare`가 affected·delta 사전 시험에서 LOAD-FLAKY와 `land_cache.NARROW` 줄을 빼고 단계를 판정하고, 재사용이 있으면 `land_full` 기록에 `reused`를 둔다. `land.py`는 `reused` 기록으로 land record를 쓰지 않는다(pre-push가 다시 돈다). FULL 단계(명시·승격)는 예전처럼 엄격하다(21:15 착지한 flaky 완화도 FULL에서는 거둠).
+- 증거: 11-03 20:00~23:00 단계 없는 사전 시험 9/20이 모두 "reused across trees" 포함(3건은 LOAD-FLAKY도). 원격 착지 회귀 27개 파일 + affected_tests + harness_contracts 통과, 새 시험 1개, 기존 FULL 엄격 시험 유지.
+- gate 변화: 약화 없음 — 재사용 통과는 여전히 land record·게시 증거가 되지 않는다.
+- CE: 기존 교훈 갱신 — landings-gave-the-turn-back-and-reran-everything 12.
+
+## 2026-11-03 · uncommitted · feat(landing): land_async orphans — 재부팅으로 죽은 착지를 찾아 되살림
+- 변경: `land_async.py orphans [--resume]`가 `.stopped` 표시도 살아 있는 supervisor·표도 없고 main에 없는 숨은 착지(가지마다 가장 새 것, 24시간 안)를 보이고 --resume으로 되살린다.
+- 증거: 11-03 20:44 재부팅으로 대기열 착지가 모두 죽고 다음 land_async가 죽은 표를 치워 대기열이 비어 보였다 — 7건을 손으로 찾아 resume. 원격 test_land_async 통과, 새 시험 1개.
+- gate 변화: 없음. resume의 기존 거절(살아 있는 표·main에 있음·미커밋)을 그대로 거친다.
+- CE: 기존 교훈 갱신 — land-async-children…-2026-10-30(재부팅 뒤 orphans), landings-gave-the-turn-back… 13(도구 브랜치는 하나로).
+
+## 2026-11-03 · uncommitted · fix(landing): 명시 FULL 증인이 재실행 뒤에도 남음 (D-970 보완)
+- 변경: 명시 FULL 사전 시험의 `land_full` 기록에 `env`를 두고, `land_selection.current_main`이 메모리 증인이 없으면 그 기록으로 증인을 되살린다.
+- 증거: 11-03 account-ci-oauthlib-log(명시 FULL)가 규칙 갱신 재실행·재부팅·resume 때마다 FULL 전체를 캐시 없이 6번(277분). 원격 착지 회귀 27개 파일 + affected_tests + harness_contracts + publish_evidence 통과, 새 시험 1개.
+- gate 변화: 없음 — 게시는 여전히 로그로 FULL 실행을 확인하고 닫힌 쪽으로 실패한다.
+- CE: 기존 교훈 갱신 — landings-gave-the-turn-back-and-reran-everything 14.
+
+## 2026-11-03 · uncommitted · fix(landing): 단계 없는 delta 사전 시험도 넘김 횟수에 셈 (D-970 1항 보완)
+- 변경: delta 사전 시험이 단계 없이 끝나면 저장 대신 `land_full.count_yield`로 기존 기록의 `yields`만 올린다.
+- 증거: 11-03 omx-layer-violations-r3가 23:20·23:35 delta로 거듭 넘김 — 23:35 사전 시험이 tier None이라 아무것도 저장되지 않아 두 번 상한이 걸리지 않음(rosy-land-events). 원격 착지 회귀 전부 + publish_evidence 통과, 새 시험 1개.
+- gate 변화: 없음. 세 번째부터는 차례가 시험 폴더를 직접 돈다.
+- CE: 해당 없음 — D-970 1항 상한의 구멍을 메운 것.
+
+## 2026-11-03 · uncommitted · docs(adr): D-972 후진 도킹 위치 근거는 LiDAR V 표지, 레일 안 조향 없음
+- 변경: 새 ADR D-972(Proposed, D-950 Decision 3 후속)와 ADR Log 행.
+- 근거: 연구 `dock_sim.py` 벽 마찰 결과(바퀴 옆면 잠김 μ > 0.16, 롤러 레일 곧게 44 ~ 45/47, 레일 안 조향 12 ~ 27/47), 충전소가 스캔면 아래라 LiDAR에 안 보임.
+- gate 변화: 없음. Safety-Review·실물 수용 전.
+- 예약: D-972(adr_reserve).
+
+## 2026-11-03 · uncommitted · docs(control-terms): 관제 용어 층 분리, 헤더는 관제 단위 이름 (D-974)
+- 변경: D-974 — Rosy Fleet은 제품 이름, 통합관제 R·셀 관제 CELL-x는 단위, PC는 물리 이름(OMX 노트북). D-968 1항 대체. `/api/fleet/state`의 `fleet`에 관제 단위 설정이 있을 때 `unit`·`root`(API v1.358), 헤더가 "통합관제 R"/"CELL-A"를 보인다. `fleet_name`은 페어링·lease 신원으로 그대로. 팔레타이징 준비 화면 표시 문구 "Cell" → "팔레트 적재"(경로·id 그대로, 노출은 기존 `CELL_TRANSFER` 규칙). CONCEPTS·관제 단위 배치표 갱신.
+- 증거: 헤더 node 시험 13개 통과, 서버·화면 pytest는 원격 실행 결과를 따른다. 현장 R·CELL-A 헤더 관측은 배포 뒤 별도.
+- gate 변화: 없음.
+- CE: 해당 없음 — 장애 해결이 아니라 용어 결정, 근거는 D-974.
+
+## 2026-11-03 · uncommitted · D-969 두 팔 ACT 파이프라인: ADR, Isaac 시연 녹화, 데이터셋 내보내기
+- 변경: ADR D-969(첫 학습 정책은 Isaac 정답 IK 시연으로 학습한 ACT 두 팔, 실물 단위, 컨테이너 = 에피소드, 6단계), D-947 2에 범위 확장 연결. Isaac `demo_recording`(옵트인: 실물 top·side 시점 영상과 두 팔 상태·명령 12개를 10 Hz로 `demo.jsonl`), 케이스 `nominal-palletizing-v21-ship-demo`. `learning/curation/omx/isaac_demo_export.py`(→ `rosy.omx.experiment-dataset/1`, 출처 `scripted_teacher`), 학습기가 `scripted_teacher`를 시연으로 받음.
+- 증거: 내보내기 시험(합성 두 실행, 단위·분할·영상 프레임 수), `learning/training/omx/test/`, 컨테이너 적층·녹화 시험 원격 통과. Isaac 시연 실행은 진행 중.
+- gate 변화: 없음. 학습 결과·폐루프 평가·실물 수용 없음. 그리퍼 0~100 대응은 가정(패드 간격/40 mm).
+- CE: 해당 없음 — 새 기능이다.
+
 ## 2026-11-03 · f81b8315d0 · docs: unwedge의 측정 기반 성공 조건과 검증 범위
 
 - 변경: 기존 unwedge 교훈의 clearance를 명령 횟수 대신 시작 측정값 대비 순변위로 정정하고, held-target 기준 HOME 한계·park 정착·측정 HOME 확인을 기록했다. 기존 21단계 현장 기록과 후속 호스트 회귀를 구분했다.
@@ -14007,3 +14125,64 @@ osy-d395-s1d\`.
 - Evidence: same-commit official remote file-alone 71 passed/2 skipped; actual isolation gate 1 passed/1 empty-input skipped, complete:1. The original FULL child failure and verified own-run stop/log/cleanup receipts remain preserved externally.
 - gate 변화: none. No new testing policy or product behavior; the existing file-alone requirement applies to the execution fixture as well.
 - CE: existing lesson updated; no duplicate solution added.
+
+## 2026-11-04 · uncommitted · docs(control-terms): D-974 착지 준비 — 안전 검토·크기·ADR Log 병합 정리
+- 변경: `console.py` 변경을 줄 수 증가 없이 다시 써(D-766) 독립 안전 검토 trailer와 함께 한 커밋으로 다시 만들었다(D-430 §5). main 병합에서 union으로 겹친 D-968·D-970 ADR Log 행을 하나씩 남겼다(D-970은 main의 최신 상태, D-968은 D-974 대체 표시). D-974 후속 작업 표와 Log 상태를 실제 상태로 갱신했다.
+- 증거: 원격 pytest(관제 단위·서버 앱·브라우저·API 버전) 통과, node 시험 19개 통과, 독립 안전 검토 PASS 2회, lint 0 error. Confluence 2-1 v15 반영. Harbor PR #17 필수 검사 통과, 병합은 팀 승인 대기.
+- gate 변화: 없음.
+- CE: 해당 없음 — 착지 규칙(D-430·D-766·D-510)에 이미 있는 거절이며 그대로 따랐다.
+
+## 2026-11-04 · uncommitted · 검색 선택의 표시·호출자 상태 검증 기록
+
+- 변경: `validation/search-choice-2026-11-04/result.md`에 필터·자료 갱신 뒤 선택 일치와 이벤트 중복 방지 결과를 남겼다. 현재 소비자가 갤러리라는 적용 범위를 명시했다.
+- 증거: a1f8376013에서 원격 NEW1을 재현하고 9c909ff905의 공용 부품 Chromium 31 passed/0 skipped/NEW0, 문법 검사와 독립 검토 지적 없음을 확인했다.
+- gate 변화: 없음. main 통합·실제 제품 채택·실물 수용은 별도다. CE: 해당 없음 — 코드·회귀·부품 사용 설명에 원인과 동작 경계를 남겼다.
+
+## 2026-11-04 · uncommitted · 공용 폼의 네이티브 유효성·초기화 검증 기록
+
+- 변경: `validation/form-native-state-2026-11-04/result.md`에 파일 유효성·폼 초기화·새 선택 보존·dispose 경계의 재현과 최종 결과를 남겼다.
+- 증거: 92a3d65cfe의 실제 원격 Chromium 공용 부품 35 passed/0 skipped/NEW0, 독립 재사용·품질·효율 검토 지적 없음. 초기화 전 값 읽기 문제와 중간 호스트 점검 미실행을 구분했다.
+- gate 변화: 없음. 현재 소비자는 갤러리이며 실제 제품 채택·배포·실물 수용과 구분한다. CE: 해당 없음 — 시점·상태·복구 판단을 코드·회귀·검증 기록으로 복원할 수 있다.
+
+## 2026-11-04 · uncommitted · feat(sim): MuJoCo 3층 전체 적재 순서, 실측 셀 layout, 실물 site 계획
+- 변경: `tools/sim/ship_stack_sequence.py`(Isaac 순서로 9개 연속 놓기, 놓기 오차·앞 상자 교란), `ship_release_scene.build(cargo=)`, `tools/sim/ship_stack_sites.py`(Isaac 적층 칸 → 한 팔의 실물 site와 `cell_auto_pick` 명령, D-911 범위 표시), `cell_model_inventory.yaml`에 `layout`(자 실측 높이, 받침, 카메라).
+- 증거: MuJoCo 1,728경우에서 놓기 오차 0.2 mm까지 99%, 0.3 mm 85%, 0.6 mm 17%(검증 기록 Step 4). site → Isaac 목표 왕복 1 mm 이내 시험.
+- gate 변화: 없음. 실물 동작 없음. 정렬 자리 높이 0은 가정.
+- CE: 해당 없음 — 새 도구와 측정 기록이다.
+
+## 2026-11-04 · uncommitted · MuJoCo 3층 적재 개선 후보 비교
+- 변경: `ship_stack_sequence.py`에 컨테이너 모양·놓는 높이·앉음 확인 후 다시 놓기(D-956) 단계, `test/test_ship_stack_sequence.py`.
+- 증거: 검증 기록 Step 5 — 앉음 확인+다시 놓기 1회가 놓기 오차 0.8 mm까지 9개 모두 앉힘(24/24), 바닥 단 r290은 0.4 mm까지 24/24, 놓는 높이 2 mm가 지금 모양에서 큰 개선, 모따기·레일은 거의 효과 없음.
+- gate 변화: 없음. MuJoCo 후보이며 Isaac 확인 전.
+- CE: 해당 없음 — 비교 실험 기록이다.
+
+## 2026-11-04 · uncommitted · docs(control-terms): D-974 Harbor 후속 완료 표시
+- 변경: Harbor PR robotics-team-1213/harborlogi#17(셀 관제 CELL-A 승인 용어)이 병합되어 D-974 후속 표와 ADR Log 상태를 갱신했다.
+- 증거: PR #17 필수 검사(unittest·product-web 3.10/3.12, review-gate) 통과 뒤 merge commit 4d80908e82.
+- gate 변화: 없음.
+- CE: 해당 없음.
+
+## 2026-11-04 · uncommitted · docs(plans): 로봇 간 맵 위치 공유(peer pose sharing) 설계
+- 변경: `docs/plans/2026-11-04-peer-pose-sharing-design.md` 신규 — 탑뷰(천장 카메라) 부재 시 로봇이 CORE↔CORE beacon(1 Hz, peer-pairing D-456 세션)으로 맵 위치를 교환하고, World MapPoseTracker(D-494 3)가 `source: peer` sighting을 최하위 우선순위 앵커로 받아 Fleet `arbitrated_pose`가 유지되는 설계. 권한은 Fleet 중앙 그대로(D-517/541), D-33 도메인 분리·D-2 단일 발행자 무변경. 실행 계획·ADR은 구현 승인 후 별도
+- 증거: 설계 문서만 추가(코드 변경 없음). `rosy_harness.py lint` 통과 확인. 계약 시험(`test_network_topology_contracts.py`, `test_harness_contracts.py`)은 원격 미실시 — 착지 전 실행 필요
+- gate 변화: 없음
+- CE: 해당 없음 — 신규 설계 문서 작성
+
+## 2026-11-04 · uncommitted · docs(plans): peer pose sharing 설계에 v1 실행 범위 명시
+- 변경: `docs/plans/2026-11-04-peer-pose-sharing-design.md` — v1은 CORE beacon·수용·`GET /api/v1/peers`·`StateSnapshot.peers`(하트비트 포함)까지, World 중재는 v2(열린 결정 4: 릴레이된 자기위치 스트림에 맞는 앵커 규칙). API Ref v1.359 행 2개·스냅샷 절·변경 기록
+- 증거: `rosy_harness.py lint` 확인 예정(같은 커밋에서 generate 실행)
+- gate 변화: 없음
+- CE: 해당 없음
+
+
+## 2026-11-04 · uncommitted · fix(land): ADR Log union 병합의 옛 행을 착지가 지운다 (D-889 추가 30)
+- 변경: `land_merge.stale_adr_rows`·`land.merge` — 병합 뒤 행이 둘인 ID에서 merge-base와 같은 행을 지우고 기록을 다시 만든다. D-889에 추가 29(단독 작업 한 PC 고정, 06:02 착지분)·30을 적었다.
+- 증거: 11-04 lint 정지 4건 중 2건이 D-974 "duplicate index row"(control-terms-v3, learning-image-upload). 실제 커밋 7516e33a49·22ca11cfa5의 merge-tree로 union이 두 행을 남기는 것을 재현. 원격 `test_land.py` 외 4파일 177 통과.
+- gate 변화: 없음
+- CE: 해당 없음 — 원인과 기준은 코드 docstring·회귀 시험·D-889 추가 30에 있다.
+
+## 2026-11-04 · uncommitted · fix(remote): 작은 host에만 놓인 실행은 큰 PC가 비면 옮겨 간다 (D-889 추가 31)
+- 변경: `work_queue.upgrade_watch`·`small_only`·`Work.retired`, `remote_pytest.run`이 작은 host만으로 시작한 실행을 5분마다 다시 배치한다.
+- 증거: 11-04 06:48~08:57 ui-landing-merge-repair delta 사전 시험이 작업 256개 중 253개를 현장 PC에서 직렬로 131분 실행(timing 줄 집계), 같은 시각 AI PC 23코어 여유. 원격 `test_work_queue_upgrade.py`·`test_remote_pytest.py` 외 165 통과, `test_land_isolation.py`·`test_publish_evidence.py` 79 통과.
+- gate 변화: 없음
+- CE: 해당 없음 — 원인과 기준은 docstring·회귀 시험·D-889 추가 31에 있다.

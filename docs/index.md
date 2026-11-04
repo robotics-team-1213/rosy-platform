@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
-- 2026-11-03 · 7047306026 · docs(solutions): record recorder fixture import isolation evidence
-- 2026-11-03 · bd44ee1305 · fix(isaac): keep unverified reboot state outside run admission
-- 2026-11-03 · uncommitted · test(remote): verify profiles across each planned host worker
-- 2026-11-03 · uncommitted · docs: 측면 카메라 정량 검증 상태 정정
-- 2026-11-03 · f81b8315d0 · docs: unwedge의 측정 기반 성공 조건과 검증 범위
+- 2026-11-04 · uncommitted · fix(remote): 작은 host에만 놓인 실행은 큰 PC가 비면 옮겨 간다 (D-889 추가 31)
+- 2026-11-04 · uncommitted · fix(land): ADR Log union 병합의 옛 행을 착지가 지운다 (D-889 추가 30)
+- 2026-11-04 · uncommitted · docs(plans): peer pose sharing 설계에 v1 실행 범위 명시
+- 2026-11-04 · uncommitted · docs(plans): 로봇 간 맵 위치 공유(peer pose sharing) 설계
+- 2026-11-04 · uncommitted · docs(control-terms): D-974 Harbor 후속 완료 표시

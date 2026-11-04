@@ -19,6 +19,28 @@ STAGE_PAGES = [('홈', None, None, '/learning'), ('자료 등록', '자료 하�
                ('평가·승격', None, None, '/learning/evaluate')]
 
 
+@pytest.mark.parametrize('width', [320, 1366])
+@pytest.mark.parametrize('theme', ['dark', 'light'])
+def test_task_pages_share_body_and_native_navigation_controls(browser_workspace, width, theme):
+    import re
+
+    page, _, expect = browser_workspace
+    origin = urlsplit(page.url)
+    base = f'{origin.scheme}://{origin.netloc}'
+    page.set_viewport_size({'width': width, 'height': 844})
+    targets = ['/learning', '/catalog', '/learning/camera', '/learning/workspaces', '/learning/omx',
+               '/learning/vlm', '/learning/tasks', '/learning/sim', '/learning/evaluate']
+    for target in targets:
+        page.goto(base + target, wait_until='domcontentloaded')
+        page.evaluate('theme => document.documentElement.dataset.theme = theme', theme)
+        expect(page.locator('main')).to_have_class(re.compile(r'\bui-task-page\b'))
+        expect(page.locator('h1')).to_have_count(1)
+        assert page.evaluate('document.documentElement.scrollWidth <= innerWidth'), target
+        for link in page.locator('a.ui-action-link:visible').all():
+            assert link.get_attribute('data-kind') in ('primary', 'quiet'), target
+            assert link.bounding_box()['height'] >= 48, (target, link.inner_text())
+
+
 @pytest.mark.parametrize('width', [1280, 390])
 def test_five_stage_menu_reaches_every_page_in_two_clicks(browser_workspace, width):
     page, _, expect = browser_workspace

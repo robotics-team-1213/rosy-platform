@@ -65,6 +65,8 @@ function readiness(){
   $('robot-save').disabled=$('task-import').disabled=busy||!connected||!token;
   $('task-save').disabled=busy||!connected||!token||!state.robots.length;
   $('task-export').disabled=busy||!connected||!current;
+  $('sim-context-save').disabled=busy||!connected||!current||!token||!state.sim_configured;
+  $('sim-context-readiness').textContent=!current?'참고 기록을 연결할 과제를 선택하세요.':!state.sim_configured?'이 호스트의 SIM 실행 연결을 설정한 뒤 다시 확인하세요.':'서버가 종료 기록을 조회해 과제와 고정합니다. 과제 파일 내보내기에는 이 참고 기록이 포함되지 않습니다.';
   for(const panel of $('task-runs').querySelectorAll('[data-continuous-run]')){
     const select=panel.querySelector('select'),unavailable=busy||!connected||!token;
     select.disabled=unavailable||select.options.length===0;
@@ -109,16 +111,28 @@ function renderTask(){
     if(!runs.length)list.append(node('p','이 과제의 실행 기록이 없습니다. 자료와 방법을 선택해 학습을 시작하세요.'));
     for(const run of runs){const section=node('article',null,'learning-panel'),result=run.result,evaluation=result?.evaluation;
       section.dataset.taskRun=run.id;
-      const statuses={queued:'대기 중',running:'진행 중',stopping:'중지 중',succeeded:'완료',failed:'실패',cancelled:'취소됨'};
+      const statuses={queued:'대기 중',running:'진행 중',stopping:'중지 중',succeeded:'학습 실행 완료',failed:'실패',cancelled:'취소됨'};
       const heading=node('h3',`${run.method||'학습'} · ${statuses[run.status]||run.status}`);heading.tabIndex=-1;
       section.append(heading,node('p',run.id),node('p',`자료 ${run.dataset_id||'미기록'} · 계산 호스트 ${run.learning_task?.compute_host||run.compute_host||'미기록'}`));
-      if(evaluation)section.append(node('p',`평가 프레임 ${evaluation.frames??'미기록'} · action MAE ${evaluation.action_mae??'미기록'} · 기준 MAE ${evaluation.constant_train_mean_mae??'미기록'}`));
+      if(evaluation)section.append(node('p',`평가 프레임 ${evaluation.frames??'미기록'} · 오프라인 행동 오차 (action MAE) ${evaluation.action_mae??'미기록'} · 기준 MAE ${evaluation.constant_train_mean_mae??'미기록'}`));
       else section.append(node('p','저장된 평가 결과가 없습니다. 완료 상태만으로 품질을 판단하지 마세요.'));
       if(run.error)section.append(node('p',typeof run.error==='string'?run.error:JSON.stringify(run.error)));
-      if(run.status==='succeeded'||run.progress?.latest_version!=null){const link=node('a','모델·평가·과제 근거 ZIP 내려받기','workspace-link');link.href='/api/learning/omx/center/artifact/'+encodeURIComponent(run.id);link.download='';section.append(link);}
+      if(run.status==='succeeded'||run.progress?.latest_version!=null){const link=node('a','모델·평가·과제 근거 ZIP 내려받기','ui-action-link');link.dataset.kind='quiet';link.href='/api/learning/omx/center/artifact/'+encodeURIComponent(run.id);link.download='';section.append(link);}
       if(result?.source)section.append(node('p',`출처: ${result.source}`,'quiet'));
       if(run.execution_mode==='online_experience'&&run.status==='running')section.append(continuousControls(run));
       list.append(section);
+    }
+  }
+  $('task-real-status').textContent=current?'실물 정책 미검증 · 이 화면에는 독립 실물 평가가 연결되지 않았습니다.':'';
+  const contexts=(state.sim_contexts||[]).filter(row=>row.task_id===current?.id&&row.task_revision===current?.revision),contextList=$('task-sim-contexts'),contextSignature=JSON.stringify([current?.id,contexts]);
+  if(contextList.dataset.value!==contextSignature){contextList.dataset.value=contextSignature;contextList.replaceChildren();
+    if(!contexts.length)contextList.append(node('p',current?'이 과제에 연결한 SIM 참고 기록이 없습니다.':'과제를 선택하면 연결된 기록을 확인할 수 있습니다.'));
+    for(const row of contexts){const evidence=row.evidence,section=node('article',null,'learning-panel'),statuses={SUCCEEDED:'실행 종료',FAILED:'실행 실패',STOPPED:'실행 중단'};
+      section.append(node('h3',`${evidence.input.scenario_id||'SIM 시나리오'} · ${statuses[evidence.status]||evidence.status}`),node('p','정책 평가 아님 · SIM 결과만으로 실물 성공을 판단하지 않습니다.'));
+      const outcome=evidence.result?.task_success;
+      section.append(node('p',`시나리오 과제 결과: ${outcome===true?'성공':outcome===false?'실패':'미기록'}`));
+      const link=node('a',row.run_id,'workspace-link');link.href='/learning/sim?run='+encodeURIComponent(row.run_id);section.append(link);
+      section.append(node('p',`실행 소스 ${evidence.input.source_sha} · 입력 지문 ${evidence.input_sha256}`,'quiet'));contextList.append(section);
     }
   }
   readiness();
@@ -164,6 +178,9 @@ $('run-form').onsubmit=event=>{event.preventDefault();if($('run-start').disabled
   const body={task_id:task().id,compute_host:state.host_id,dataset_id:$('run-dataset').value,method:$('run-method').value,steps:Number($('run-steps').value),batch_size:Number($('run-batch').value),device:'cpu',seed:0};
   if(task().mode==='independent'&&task().participants.length>1)body.arm_id=$('run-arm').value;
   await save('run','/api/learning/omx/center/'+($('run-execution').value==='online'?'online-run':'run'),body);await refresh();
+});};
+$('sim-context-form').onsubmit=event=>{event.preventDefault();if($('sim-context-save').disabled)return;action(async()=>{
+  const current=task();await request(API+'/sim-context',{task_id:current.id,task_revision:current.revision,run_id:$('sim-context-run').value.trim()});await refresh();
 });};
 $('import-form').onsubmit=event=>{event.preventDefault();action(async()=>{
   const file=$('task-import-file').files[0];if(!file||file.size>1024*1024)throw new Error('1 MiB 이하의 과제 JSON 파일을 선택하세요.');

@@ -37,12 +37,12 @@ from omx_adapter.local_stop import LocalStopController
 from omx_adapter.owner_recovery_api import OwnerRecoveryApi
 from omx_adapter.manipulation_plan import ExecutionStateSnapshot
 from omx_adapter.pose_plan import AnalyticCellTransferPlanner, CellPlanningProfile
-from rosy.integrations.robots.omx.transfer_provider import create_omx_cell_transfer_phase_factory
+from .transfer_provider import create_omx_cell_transfer_phase_factory
 
 from .barrier_journal import BarrierJournal
 from .barrier_supervisor import BarrierSupervisor, make_coordinator_hold
 from .coordinator_api import CoordinatorPeerApi
-from .omx_cell_documents import PalletizingCellDocumentValidator
+from .omx_cell_documents import CellDocumentRules, ProcessCellDocumentValidator
 
 ALLOWED_OWNERS = ("pilot_sim", "rule_based")
 GRIPPER_SENSOR_REVISION = "omx-sim-gripper-joint-position-v2"
@@ -142,8 +142,12 @@ def build_cell_owner(settings: CellOwnerSettings, *,
                      refuse_second_owner: Callable[[], None],
                      gripper_readback: Callable[[Any], Any],
                      fleet_fence_current: Callable[[int, int], bool],
+                     document_rules: Callable[..., CellDocumentRules],
                      transfer_catalog=None, arm_transfer=None) -> CellOwner:
-    """``arm_transfer`` (an ``ArmTransferInstallation``) also installs Fleet-managed ARM_TRANSFER
+    """``document_rules(tol_m=...)`` builds the process rules (palletizing ``CellDocumentRules``) the
+    composition injects, so this device owner imports no process code (D-413 §1).
+
+    ``arm_transfer`` (an ``ArmTransferInstallation``) also installs Fleet-managed ARM_TRANSFER
     beside CELL_TRANSFER and binds the owner to its policy, which excludes Pilot seats (D-927 C)."""
     refuse_second_owner()
     if arm_transfer is not None:
@@ -174,7 +178,7 @@ def build_cell_owner(settings: CellOwnerSettings, *,
     acceptance = CellAcceptanceStore(
         store.path, workcell_id=settings.workcell_id, instance_id=settings.instance_id,
         kinematics_revision=kinematics.revision, config_revision=profile.revision,
-        validator=PalletizingCellDocumentValidator(tol_m=settings.stack_tol_m),
+        validator=ProcessCellDocumentValidator(document_rules(tol_m=settings.stack_tol_m)),
         unresolved_actions=lambda: store.unresolved_actions(workcell_id=settings.workcell_id),
     )
     planner = AnalyticCellTransferPlanner(
@@ -240,7 +244,7 @@ def build_cell_owner(settings: CellOwnerSettings, *,
         return execution
     factories, capability_current = {"CELL_TRANSFER": phase_factory}, acceptance.capability_current
     if arm_transfer is not None:
-        from rosy.integrations.robots.omx.arm_transfer import create_arm_transfer_phase_factory
+        from .arm_transfer import create_arm_transfer_phase_factory
         arm_grant = []  # the gripper port has no grant argument; one arm runs one Action at a time
         installed = create_arm_transfer_phase_factory(
             installation=arm_transfer, profile=profile, kinematics=kinematics, execution_state=execution_state,

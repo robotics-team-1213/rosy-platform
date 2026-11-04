@@ -134,3 +134,40 @@ def test_a_missing_warm_soc_does_not_hold_a_cleared_motor_hot_level():
     m.on_motor_health(motors(40, limit=80), 1.0)
     assert m.update(None, 0, 1.0) == WARM
     assert "soc_warm" in m.reasons and "motor_1_hot" not in m.reasons
+
+
+@pytest.mark.parametrize('initial_temp,level', [(64, WARM), (69, HOT)])
+@pytest.mark.parametrize('missing', ['row', 'temperature_c', 'temperature_limit_c'])
+def test_another_cool_motor_cannot_clear_the_missing_motor_temperature(initial_temp, level, missing):
+    m = ThermalMonitor()
+    cool = {**motors(40)['motors'][0], 'id': 2}
+    m.on_motor_health({'motors': [motors(initial_temp)['motors'][0], cool]}, 0.0)
+    assert m.update(50.0, 0, 0.0) == level
+    unread = {**motors(40)['motors'][0], missing: None}
+    m.on_motor_health({'motors': [cool] if missing == 'row' else [unread, cool]}, 1.0)
+    assert m.update(50.0, 0, 1.0) == level
+    assert 'readings_lost' in m.reasons
+    assert m.caps(0.2, 0.8, 'fleet') == ((0.0, 0.0) if level == HOT else (0.1, 0.8))
+    assert m.caps(0.2, 0.8, 'manual') == (0.1, 0.8)
+    # Only this motor's fresh temperature/limit can release its hold; hysteresis still applies.
+    m.on_motor_health({'motors': [motors(initial_temp - 5)['motors'][0], cool]}, 2.0)
+    assert m.update(50.0, 0, 2.0) == level
+    m.on_motor_health({'motors': [motors(55)['motors'][0], cool]}, 3.0)
+    assert m.update(50.0, 0, 3.0) == OK
+    assert 'readings_lost' not in m.reasons
+
+
+@pytest.mark.parametrize('error,level,reason', [
+    (0x04, HOT, 'motor_1_overheating'), (0x01, WARM, 'motor_1_input_voltage')])
+@pytest.mark.parametrize('missing', ['row', 'hardware_error'])
+def test_a_cool_temperature_cannot_clear_an_unread_motor_error(error, level, reason, missing):
+    m = ThermalMonitor()
+    cool = {**motors(40)['motors'][0], 'id': 2}
+    m.on_motor_health({'motors': [motors(40, error=error)['motors'][0], cool]}, 0.0)
+    assert m.update(50.0, 0, 0.0) == level
+    unread = {**motors(40)['motors'][0], 'hardware_error': None}
+    m.on_motor_health({'motors': [cool] if missing == 'row' else [unread, cool]}, 1.0)
+    assert m.update(50.0, 0, 1.0) == level
+    assert reason in m.reasons and 'readings_lost' in m.reasons
+    m.on_motor_health({'motors': [motors(40)['motors'][0], cool]}, 2.0)
+    assert m.update(50.0, 0, 2.0) == OK

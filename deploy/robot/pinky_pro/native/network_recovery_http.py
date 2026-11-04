@@ -20,24 +20,26 @@ from network_recovery import RecoveryError
 MAX_BODY = 4096
 IO_SECONDS = 5
 COOKIE = "__Host-rosy-recovery"
-ASSETS = {"tokens.css", "components.css"}
+ASSETS = {"tokens.css", "components.css", "component-controls.css", "theme.js"}
 
 PAGE = r'''<!doctype html>
-<html lang="ko" data-theme="light"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><title>ROSY Wi-Fi 복구</title>
-<link rel="stylesheet" href="/common/tokens.css"><link rel="stylesheet" href="/common/components.css">
+<html lang="ko" data-theme="dark"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Rosy Robot — Wi-Fi 연결 복구</title>
+<link rel="stylesheet" href="/common/tokens.css"><script nonce="{nonce}" src="/common/theme.js"></script>
+<link rel="stylesheet" href="/common/components.css"><link rel="stylesheet" href="/common/component-controls.css">
 <style nonce="{nonce}">
 *{box-sizing:border-box}body{margin:0;background:var(--surface-canvas);color:var(--ink);font-family:var(--body);font-size:var(--text-body);line-height:var(--leading-copy)}
-main{max-width:42rem;margin:auto;padding:var(--space-5)}h1{font-size:var(--text-display)}h2{font-size:var(--text-title)}
 section,form{margin-block:var(--space-5)}label{display:block;margin-block:var(--space-3)}
+.ui-task-page>section,.ui-task-page>form{margin:0}
 .ui-field{width:100%}button{min-height:var(--target-primary);padding:var(--inset-button-primary);border:0;border-radius:var(--radius-button);background:var(--button-primary-bg);color:var(--button-primary-ink);font:inherit;cursor:pointer}
 button:disabled{opacity:var(--disabled-opacity);cursor:default}button:focus-visible,a:focus-visible{outline:var(--focus-ring-width) solid var(--focus-ring);outline-offset:var(--focus-ring-offset-outer)}
+#cancel,#refresh,form:has(#confirm:not([hidden])) #review,main:has(#job:not([hidden])) #review{background:transparent;color:var(--text-primary);border:1px solid var(--control-line)}
 code,p{overflow-wrap:anywhere}code{font-family:var(--mono)}[hidden]{display:none!important}
-.ui-check{min-height:var(--target-secondary)}#message{min-height:var(--target-secondary)}
-</style></head><body><main>
-<h1>Wi-Fi 연결 복구</h1>
+.ui-check{min-height:var(--target-secondary)}#message{min-height:var(--target-secondary)}#message:empty{display:contents}
+</style></head><body><main class="ui-task-page ui-auth-page">
+<h1 class="ui-page-heading">Wi-Fi 연결 복구</h1>
 <p>로봇의 초기 연결을 복구합니다. 먼저 이 장치의 인증서를 확인하세요.</p>
-<section aria-labelledby="trust-title"><h2 id="trust-title">장치 확인</h2>
+<section aria-labelledby="trust-title"><h2 id="trust-title" class="ui-section-heading">장치 확인</h2>
 <p>로봇 LCD 또는 물리 콘솔의 장치명과 전체 SHA-256 지문을 브라우저 인증서 보기에서 비교하세요.
 일치하면 이 장치 인증서만 운영 PC에 등록한 뒤 복구 코드를 입력하세요.</p>
 <p>이 페이지의 지문은 비교용입니다. 반드시 물리 화면과 확인하세요.</p><code id="fingerprint">{fingerprint}</code></section>
@@ -51,10 +53,10 @@ code,p{overflow-wrap:anywhere}code{font-family:var(--mono)}[hidden]{display:none
 <label for="psk">Wi-Fi 비밀번호</label><input class="ui-field" id="psk" type="password" minlength="8" maxlength="63" autocomplete="new-password" required>
 <p>연결을 적용하면 현재 복구 AP가 잠시 끊길 수 있습니다. 실패하면 같은 AP로 다시 접속해 결과를 확인하세요.</p>
 <button id="review" type="submit">연결 내용 확인</button>
-<section id="confirm" hidden aria-labelledby="confirm-title"><h2 id="confirm-title">이 Wi-Fi로 연결할까요?</h2>
-<p id="target"></p><button id="apply" type="button">Wi-Fi 연결 적용</button> <button id="cancel" type="button">취소</button></section></form>
-<section id="job" hidden><h2>연결 작업</h2><p id="job-id"></p><p id="job-state" role="status"></p>
-<button id="refresh" type="button">결과 다시 확인</button> <button id="resume" type="button" hidden>접수된 연결 적용</button></section>
+<section id="confirm" hidden aria-labelledby="confirm-title"><h2 id="confirm-title" class="ui-section-heading">이 Wi-Fi로 연결할까요?</h2>
+<p id="target"></p><div class="ui-action-bar"><button id="apply" type="button">Wi-Fi 연결 적용</button> <button id="cancel" type="button">취소</button></div></section></form>
+<section id="job" hidden><h2 class="ui-section-heading">연결 작업</h2><p id="job-id"></p><p id="job-state" role="status"></p>
+<div class="ui-action-bar"><button id="refresh" type="button">결과 다시 확인</button> <button id="resume" type="button" hidden>접수된 연결 적용</button></div></section>
 <noscript>이 복구 화면에는 JavaScript가 필요합니다. 운영 PC 브라우저에서 허용한 뒤 다시 여세요.</noscript>
 </main><script nonce="{nonce}">
 const el=id=>document.getElementById(id);let csrf='',job=sessionStorage.getItem('rosy-recovery-job')||'';
@@ -118,7 +120,7 @@ class RecoveryHTTP:
                     query = parse_qs(route.query, max_num_fields=1)
                     return result(200, self.coordinator.status(session, query.get("request_id", [None])[0]))
                 if route.path.startswith("/common/") and route.path[8:] in ASSETS and self.assets_dir:
-                    response_headers["Content-Type"] = "text/css; charset=utf-8"
+                    response_headers["Content-Type"] = ("text/javascript" if route.path.endswith(".js") else "text/css") + "; charset=utf-8"
                     return 200, response_headers, (self.assets_dir / route.path[8:]).read_bytes()
             if method == "POST":
                 if headers.get("Content-Type", "").split(";", 1)[0] != "application/json":

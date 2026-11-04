@@ -1,6 +1,8 @@
 """Native Cell observations use Fleet auth and expire without a developer viewer."""
 from io import BytesIO
+import base64
 import json
+import os
 from pathlib import Path
 import threading
 import time
@@ -163,3 +165,90 @@ def test_cell_logout_clears_observations_and_ignores_late_responses(cell_url):
         assert not errors
         page.unroute_all(behavior="ignoreErrors")
         browser.close()
+
+
+@pytest.mark.parametrize("width", [1366, 390])
+@pytest.mark.parametrize("theme", ["dark", "light"])
+def test_cell_catalog_fits_the_full_page_and_belongs_to_saved_documents(cell_url, width, theme):
+    from playwright.sync_api import expect, sync_playwright
+    source = "긴 카탈로그 출처 " * 20
+    body = {"objects": [{"id": "example-object", "length_mm": 60, "width_mm": 30,
+                         "top_height_mm": 30, "mass_kg": 0.02,
+                         "mass_measured": {"at": "2026-11-03", "source": source}, "carry": "ok"}]}
+    with sync_playwright() as playwright:
+        browser, page, errors = open_page(playwright, width, 844, url=cell_url)
+        try:
+            state, _ = observation_feed(page)
+            page.route("**/api/fleet/cell-app/object-catalog", lambda route: route.fulfill(json=body))
+            page.goto(cell_url)
+            page.evaluate("theme => window.RosyTheme.set(theme)", theme)
+            table = page.locator("#catalog-table")
+            expect(table).to_be_visible()
+            expect(table).to_contain_text("20.0 g")
+            expect(table).to_contain_text(source.strip())
+            table.locator("thead").scroll_into_view_if_needed()
+            assert table.evaluate("el => getComputedStyle(el).borderCollapse") == "collapse"
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+            assert table.locator("tbody td").nth(2).evaluate("""cell => {
+                const text = document.createRange(); text.selectNodeContents(cell);
+                return text.getClientRects().length;
+            }""") == 1, "the measured mass must remain readable on one line"
+            assert table.locator("tbody td").nth(2).evaluate("""cell => {
+                const text = document.createRange(); text.selectNodeContents(cell);
+                const style = getComputedStyle(cell);
+                return text.getBoundingClientRect().top < cell.getBoundingClientRect().top
+                    + parseFloat(style.paddingTop) + parseFloat(style.fontSize);
+            }"""), "the mass must be at the top of a long source row"
+            if width == 390:
+                wrapper = table.locator("..")
+                wrapper.focus()
+                page.keyboard.press("ArrowRight")
+                page.wait_for_function("() => document.getElementById('catalog-table').parentElement.scrollLeft > 0")
+                wrapper.evaluate("el => { el.scrollLeft = el.scrollWidth; }")
+                expect(table.locator("th").last).to_be_in_viewport()
+                wrapper.evaluate("el => { el.scrollLeft = 0; }")
+            if os.environ.get("ROSY_CAPTURE_INLINE") == "1":
+                shot = page.screenshot(type="jpeg", quality=35)
+                print(f"ROSY_SCREENSHOT cell-catalog-{theme}-{width} " + base64.b64encode(shot).decode())
+            page.locator('.ui-subnav-nav a[href="#recipe-heading"]').click()
+            expect(page.locator('ui-section[aria-labelledby="catalog-heading"]')).to_be_hidden()
+            page.locator('.ui-subnav-nav a[href="#saved-heading"]').click()
+            expect(table).to_be_visible()
+            assert not errors and not state.failed_assets
+        finally:
+            page.unroute_all(behavior="ignoreErrors")
+            browser.close()
+
+
+@pytest.mark.parametrize("pending,status", [(False, 200), (True, 200), (True, 503)])
+def test_cell_logout_clears_catalog_and_ignores_its_late_response(cell_url, pending, status):
+    from playwright.sync_api import expect, sync_playwright
+    held = []
+    body = {"objects": [{"id": "previous-account-object", "mass_kg": 0.02, "carry": "ok"}]}
+    with sync_playwright() as playwright:
+        browser, page, errors = open_page(playwright, 390, 844, url=cell_url)
+        try:
+            observation_feed(page)
+            def catalog(route):
+                if pending:
+                    held.append(route)
+                else:
+                    route.fulfill(json=body)
+            page.route("**/api/fleet/cell-app/object-catalog", catalog)
+            with page.expect_request("**/api/fleet/cell-app/object-catalog"):
+                page.goto(cell_url)
+            if not pending:
+                expect(page.locator("#catalog-table")).to_contain_text("previous-account-object")
+            page.locator("#topbar-more").click()
+            page.locator('[data-login="logout"]').click()
+            expect(page.locator("#workcell-observations [data-arm-source]")).to_have_count(0)
+            for route in held:
+                route.fulfill(status=status, json=body)
+            page.evaluate("() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))")
+            expect(page.locator("#catalog-table")).to_be_hidden()
+            expect(page.locator("#catalog-rows tr")).to_have_count(0)
+            expect(page.locator("#catalog-status")).to_contain_text("접속하면")
+            assert not errors
+        finally:
+            page.unroute_all(behavior="ignoreErrors")
+            browser.close()

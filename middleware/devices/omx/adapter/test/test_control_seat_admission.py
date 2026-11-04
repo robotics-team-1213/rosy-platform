@@ -286,6 +286,7 @@ def test_clock_failure_cannot_extend_or_dispatch_seat(tmp_path, bad_clock):
 
 
 def test_canonical_cli_forwards_exact_terminal_to_shared_pilot(tmp_path, monkeypatch):
+    from dataclasses import replace
     import importlib.util
     from pathlib import Path
     from uuid import uuid4
@@ -297,6 +298,8 @@ def test_canonical_cli_forwards_exact_terminal_to_shared_pilot(tmp_path, monkeyp
     cli = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(cli)
     arm = Arm()
+    # SQLite setup must not age the fixture past the unrelated joint-state freshness gate.
+    arm.owner.config = replace(arm.owner.config, max_joint_state_age_s=60.0)
     arm.owner.run_admission_policy = lambda operation: operation(arm.owner.state)
     store = ActionStore(tmp_path / "cli.sqlite3")
     admission = ControlSeatAdmission(arm.owner, store)
@@ -305,7 +308,8 @@ def test_canonical_cli_forwards_exact_terminal_to_shared_pilot(tmp_path, monkeyp
     facade = PilotSimRuntime(arm)
     holder = {"pilot": facade}
     facade.snapshot()
-    facade.submit(jog())
+    submitted = facade.submit(jog())
+    assert submitted["state"] == "LOCAL_ACCEPTED", submitted
     ros_goal = str(uuid4())
     cli.forward_pilot_event(holder, event("GOAL_ACCEPTED", ros_goal))
     admission.release("token", "seat")

@@ -19,7 +19,7 @@ function source(key){
   text(block,'h3',DOMAINS[key]);
   return block;
 }
-function go(parent,label,href){const anchor=text(parent,'a',label,'workspace-link');anchor.href=href;return anchor;}
+function go(parent,label,href){const anchor=text(parent,'a',label,'ui-action-link');anchor.dataset.kind='quiet';anchor.href=href;return anchor;}
 function stages(workspace){
   // The 평가 and 승격 기록 stages of every domain from /api/learning; unknown stays 없음 with its reason.
   for(const row of workspace.domains||[]){
@@ -113,7 +113,7 @@ async function load(){
   let promotionReason=null;
   try{
   $('evaluate-filter').textContent=domain?`${DOMAINS[domain]}만 보는 중`:'모든 도메인';
-  if(domain){const all=go($('evaluate-filter'),' · 전체 보기','/learning/evaluate');all.classList.remove('workspace-link');}
+  if(domain){const all=go($('evaluate-filter'),' · 전체 보기','/learning/evaluate');all.classList.remove('ui-action-link');}
   const workspace=await read('/api/learning');
   token=workspace.token;  // the server swaps in the account CSRF token in collaboration mode
   promotionReason=await promotion(keep);

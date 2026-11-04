@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  ADMIN_REASON, TWO_PERSON_REASON, executionVerdict, incidentLock, nextStage, proposalLock, remaining, roles, windowLock,
+  ADMIN_REASON, TWO_PERSON_REASON, executionVerdict, incidentLock, nextStage, policyFigures, proposalLock, remaining, roles, windowLock,
 } from "../../../../applications/fleet/web/work/policy-model.js";
 
 const RULES = {
@@ -47,4 +47,21 @@ test("stages advance one at a time and time left is readable", () => {
   assert.equal(nextStage(RULES, "LIMITED"), null);
   assert.equal(remaining(75e9, 0), "1분 15초");
   assert.equal(remaining(0, 5e9), "0분 00초");
+});
+
+test("the figure strip only counts what the server returned", () => {
+  const figures = Object.fromEntries(policyFigures({...empty, proposals: [], policies: []}).map(f => [f.id, f]));
+  assert.equal(figures.incidents.value, "0"); assert.equal(figures.incidents.alert, false);
+  assert.equal(figures.window.value, "없음"); assert.equal(figures.window.note, "실물 움직이지 않음");
+  const busy = Object.fromEntries(policyFigures({
+    incidents: [{cleared_ns: null}, {cleared_ns: 5}], confirmations: [{resolution: null}, {resolution: "abort"}],
+    windows: [{active: true, kind: "supervised", expires_ns: 90e9}], now_ns: 0,
+    proposals: [{state: "PENDING"}, {state: "APPROVED"}], policies: [{}, {}],
+  }).map(f => [f.id, f]));
+  assert.deepEqual([busy.incidents.value, busy.confirmations.value, busy.proposals.value], ["1", "1", "1"]);
+  assert.equal(busy.incidents.alert, true);
+  assert.equal(busy.window.value, "입회 시험"); assert.equal(busy.window.note, "1분 30초 남음"); assert.equal(busy.window.alert, true);
+  assert.equal(busy.proposals.note, "등록 정책 2개");
+  const shadow = policyFigures({...empty, windows: [{active: true, kind: "shadow", expires_ns: 60e9}]}).find(f => f.id === "window");
+  assert.equal(shadow.alert, false);
 });

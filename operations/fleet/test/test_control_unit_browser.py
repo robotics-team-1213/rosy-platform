@@ -10,6 +10,59 @@ from test_console_queue_inline_browser import API, _open, _shot, site  # noqa: F
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason="opt-in real Chromium scenario")
 
 
+@pytest.mark.parametrize("local_task_id", [None, "physical-1"])
+def test_arm_and_navigation_delegations_render_with_cell_owned_approval(site, local_task_id):
+    from playwright.sync_api import expect, sync_playwright
+    prefix = "/api/fleet/control-unit"
+    arm = {"unit_id": "CELL-A", "config_revision": "v1", "stale": False, "delegation": {
+        "origin_id": "R", "delegation_id": "arm-1", "owner_unit": "CELL-A", "status": "PENDING",
+        "revision": 7, "local_actor": None, "local_task_id": local_task_id, "cancel_requested": False,
+        "updated_at": "2026-11-03T00:00:00Z", "result": {}, "request": {
+            "target_unit": "CELL-A", "transfer": {"request_key": "app:move-1", "workcell_id": "arm_a",
+                "instance_id": "arm_a", "object_ref": "box-1", "source": "slot-1", "target": "slot-2"}}}}
+    navigation = {**arm, "delegation": {**arm["delegation"], "delegation_id": "nav-1",
+        "local_task_id": None, "request": {"target_unit": "CELL-A", "robot_id": "p1",
+            "goal": {"x": 1, "y": 2, "yaw": 0}}}}
+    api = {**API, prefix: {"unit_id": "CELL-A", "config_revision": "v1", "parent": "R",
+        "children": [], "resources": ["workcell:arm_a", "robot:p1"]},
+        prefix + "/delegations": {"delegations": [arm, navigation]},
+        "/api/fleet/work": {"rows": [], "kinds": [], "observed_at": "2026-11-03T00:00:00Z",
+            "tasks_available": True, "missions_available": False, "truncated_sources": []}}
+    with sync_playwright() as playwright:
+        posts = []
+        cancel_path = prefix + "/delegations/R/arm-1/cancel"
+        browser, page, errors = _open(playwright, site, api, posts, size=(320, 568),
+            answers={cancel_path: (200, arm)})
+        try:
+            page.goto(site + "/console?view=work")
+            page.clock.run_for(2000)
+            page.locator("#work-integrations > summary").click()
+            panel = page.locator("#control-unit-work")
+            item = panel.locator("li").filter(has_text="위임 R / arm-1")
+            expect(item).to_contain_text("ARM 이송")
+            for value in ("arm_a", "box-1", "slot-1", "slot-2"):
+                expect(item).to_contain_text(value)
+            expect(item).to_contain_text("ARM 승인은 대상 셀의 작업 원장에서 진행합니다.")
+            expect(item.get_by_role("button", name="이 관제에서 승인", exact=True)).to_have_count(0)
+            expect(panel).to_contain_text("목표 X 1 m · Y 2 m · 방향 0 rad")
+            expect(panel).not_to_contain_text("관제 원장 조회 실패")
+            cancel = item.get_by_role("button", name="취소 요청", exact=True)
+            expect(cancel).to_be_enabled()
+            arm["stale"] = True
+            page.locator("#work-refresh").click()
+            page.clock.run_for(1500)
+            expect(cancel).to_be_disabled()
+            arm["stale"] = False
+            page.locator("#work-refresh").click()
+            page.clock.run_for(1500)
+            cancel.click()
+            assert posts[-1] == (cancel_path, "{}")
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+            assert not errors
+        finally:
+            browser.close()
+
+
 @pytest.mark.parametrize("size", [(1366, 768), (320, 568)])
 @pytest.mark.parametrize("theme", ["dark", "light"])
 def test_control_unit_approval_uses_current_revision_and_stale_read_blocks_actions(site, size, theme, tmp_path, monkeypatch):

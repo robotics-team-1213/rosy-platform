@@ -1836,8 +1836,48 @@
 - Evidence: Git blob comparison and [integration record](../../../docs/validation/swarm-lifecycle-extraction-2026-10-25/result.md). Static integration checks only; no new remote pass for this integrated HEAD.
 - gate 변화: unchanged. Official FULL testing and landing await C0 landing confirmation and GO. CE: not applicable.
 
+## 2026-11-03 · uncommitted · 과열 모터의 개별 응답 소실 동안 제한 유지
+- 변경: 공개 준비 범위 검토에서 발견한 P1을12574527a7로 수정했다. 기존 과열·전압 사유를 낸 같은 모터의 온도/limit 또는 해당 hardware-error 응답을 확인한다. 다른 모터의 정상 온도로 응답 소실을 해제하지 않는다. 기존 aggregate hold·문턱·히스테리시스·SoC·manual scope·caps는 그대로다.
+- 증거: a73e4ce0a8의 두 모터 누락 회귀10건은 예상 실패했고 기존8건은 통과했다(NEW10). 수정12574527a793ca8999cea9a67868cd42e934fbb1의 관련5 whole 파일132통과5.41초, 변경 파일 collect/whole wrapper2통과0.51초, skip0·NEW/known/flaky0·실제 driver0이다. 독립 안전 검토 blob4c77b4d699와 committed blob이 같고 Safety-Review trailer를 포함한다. AST·diff·Safety 검사 통과. 로그는 OS Temp rosy-thermal-missing-*에 있다. 첫 wrapper의 PowerShell 옵션 분리로 인한 수집 전 실패는 성공 증거에서 제외하고 isolation-corrected/run-1.txt를 사용한다.
+- gate 변화: SOURCE의 해당 회귀만 확인했다. 정식 착지·게시·실물 및 현장 수용은 별도이며 로봇 동작을 수행하지 않았다. 라이브러리의 ARTIFACT/DEVICE 판정을 올리지 않는다.
+- CE: 해당 없음 — 생산자의 register별 None과 소비자의 제한 유지 조건은 최종 공통 코드·두 모터 회귀로 확인할 수 있다.
+
+## 2026-11-03 · uncommitted · feat(docking): 후진 USB 충전소 단계 approach="rear" (D-972)
+- 변경: `docking/rear_phases.py`(새) — 뒤를 도크 쪽으로 한 스테이징, LiDAR V 관측(ACQUIRING), 레일 입구 밖 후진 정렬(ALIGNING), 레일 안 각속도 0 곧은 후진(새 단계 REVERSING), 진행 멈춤 = 멈춤면 접촉, 멈춘 뒤 기준보다 전압이 오르면 DOCKED(D-350 Phase 1 1소스), 실패는 앞으로 0.55 m 뒤 스테이징부터·3회 뒤 DOCK_FAILED, 언도킹은 앞으로. `DockType` `approach="rear"`·`rail_entry_m`·정렬 허용치와 일관성 검사, `feed.py` 출처별 최신 관측(LIDAR_V, tag_id null), `select_detector` `lidar_v`. `manager.py`는 진입점만(771줄, 래칫 유지). 기본 꺼짐.
+- 증거: `middleware/core/services/test/test_docking_rear.py`(운동학 벤치). 원격 시험 결과는 커밋 본문·착지 기록에.
+- gate 변화: 없음. Safety-Review(D-430 §5)·Gazebo·실물 수용 전.
+- 결정: D-972
+- 교훈: 없음(연구 결과는 Git 밖 `Rosy/docs/research/pinky-usb-dock-guide-2026-11-01`).
+
+## 2026-11-03 · uncommitted · fix(docking): V 검출을 core_features.docking.lidar_v로, 시험 벤치에 레일 구속 (D-972)
+- 변경: V 검출을 perception에서 `docking/lidar_v.py`로 옮기고 스캔 이음매(±180°)에 걸린 날개를 한 덩어리로 잇는다. `rear_phases.py` 문서에서 로봇 이름이 든 경로를 뺐다(`test_robot_literals`). `test_docking_rear.py` 벤치에 레일 안 ±3 mm 구속(차체 목)을 넣었다 — 벽 없이 3.4 mm 어긋난 채 충전 판정에 걸렸다.
+- 증거: `test_docking_lidar_v.py`(검출·CORE 스캔 연결), `test_docking_rear.py`. 원격 시험 결과는 커밋 본문에.
+- gate 변화: 없음.
+- 결정: D-972
+- 교훈: 없음.
+
 ## 2026-11-03 · 3568bce2a2 · 열 보호의 센서별 읽기 유실 유지
 
 - 변경: 위험을 발생시킨 같은 센서의 필수 읽기가 돌아올 때까지 각 reason의 위험 수준을 유지한다. 다른 모터의 정상 온도로 고온 모터의 보호를 해제하지 않으며, 이전 HOT이 해제된 뒤 다른 WARM source만 유실됐다면 WARM만 유지한다. 문턱·cap·모드·CORE 최종 명령 권한은 보존한다.
 - 증거: test-only RED `d49ad44213`의 공식 원격 결과는 예상 실패 7건/기존 통과 8건, NEW7/known0/flaky0이었다. 독립 Safety-Review가 승인한 tree `4639174988efe39734b09dcd2d39da1d12e6245c`와 production commit `3568bce2a2`의 tree가 같다. thermal·thermal_mode·core_logic·battery 원격 GREEN159건/skip0, NEW/known/flaky0을 확인했다.
 - gate 변화: SOURCE의 해당 회귀만 확인했다. 통합 FULL·공개 CI·설치 산출물·실물 수용은 별도다. CE: 해당 없음 — 최종 source별 상태와 회귀 시험이 판단과 해제 조건을 설명한다.
+
+## 2026-11-04 · uncommitted · fix(docking): 후진 도크 DOCKED 이후 전압 1소스로 CHARGING 유지 (D-972)
+- 변경: 후진 도크는 도크 에이전트가 없어 `_tick_docked`가 충전을 확인하지 못하던 것을 `rear_phases`의 전압 1소스 확인으로 잇는다. DOCKED↔CHARGING 전이·`docking.charging`/`docking.charge_lost`·만춫 판정(`_check_full`)이 후진 도크에서도 돈다. 전압 단일 소스 확정은 D-350 Phase 1 규칙대로 배터리 인터록(`set_charging`, D-27)에 반영하지 않는다 — 상태·만춫 판정에만 쓴다.
+- 증거: `test_docking_rear.py` 회귀(도킹 후 CHARGING 확인, 인터록 미반영, 전압 하락 시 즉시 charge_lost). 원격 시험 결과는 커밋 본문에.
+- gate 변화: 없음.
+- 결정: D-972
+- 교훈: 없음.
+
+## 2026-11-04 · uncommitted · fix(docking): 후진·계측 도크 혼용 시 오래된 도크 에이전트 가리개 제거 (D-972)
+- 변경: `dock()` 시작 시 `_agent`를 비워 앞선 계측 도킹이 남긴 에이전트가 뒤따르는 후진 도킹의 전압 확인을 가리지 못하게 한다(잘못된 2소스 확정 방지). DOCKED 충전 확인 선택을 `RearPhases.docked_confirm`으로 옮기고(매니저 래칫), rear 전압 확인 인스턴스는 매니저 시계로 만들며, `docking.charging`/`charge_lost`에 `source` 필드를 더한다(API 참조 갱신). D-972 상태 갱신(독립 리뷰·Safety-Review 완료).
+- 증거: 기존 `test_docking.py`(계측 경로 회귀)·`test_docking_rear.py`. 원격 시험은 착지 때.
+- gate 변화: 없음.
+- 결정: D-972
+- 교훈: 없음.
+
+## 2026-11-04 · uncommitted · feat(peers): 로봇 간 맵 위치 공유 CORE 조각 v1
+- 변경: `core_features/peers/`(manager — 수용·단조 seq·boot 재설정·시한 제거, beacon — LOCALIZED일 때만 pose 실어 1 Hz 송신, transport — stdlib TLS POST). `state/manager.py` `set_peers_provider`(실패해도 스냅숏은 null 로 하강). 시험 `test_peers.py`(순수, 시계·전송 주입)
+- 증거: 게이트 시험 원격 affected 실행 예정(착지 전)
+- gate 변화: 없음
+- CE: 해당 없음 — 신규 기능, 장애 해결 아님

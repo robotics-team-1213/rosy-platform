@@ -392,7 +392,7 @@ def test_first_password_change_waits_for_readback_and_recovers_expired_login(acc
     page.locator('[data-login=confirm]').fill('new-credential-123')
     page.locator('[data-login=submit]').click()
     expect(page.locator('[data-login=error]')).to_contain_text('로그인이 만료')
-    expect(page.locator('[data-login=form]')).to_have_attribute('aria-label', '관제 로그인')
+    expect(page.locator('[data-login=form]')).to_have_attribute('aria-label', '계정 로그인')
     expect(page.locator('[data-login=login]')).to_be_focused()
     expect(page.locator('[data-login=password]')).to_have_value('')
 

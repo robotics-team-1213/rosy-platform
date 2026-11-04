@@ -131,12 +131,39 @@ def test_learning_changes_select_the_screens_that_use_them():
         assert set(browser_scope.LEARNING) <= set(browser_scope.targets([source]))
 
 
+def test_auth_entry_regression_is_selected_by_its_sources_and_the_full_registry():
+    target = "test/learning/perception/test_learning_auth_surface_browser.py"
+    for source in ("learning/curation/perception/review_app_web/accounts.js",
+                   "learning/curation/perception/learning_rosy_accounts.py", "shared/web/component-controls.css"):
+        assert target in browser_scope.targets([source])
+    assert target in browser_scope.all_targets()
+
+
 def test_empty_selection_exits_3_without_targets(capsys):
     assert browser_scope.main(["docs/logs.md"]) == 3
     out = capsys.readouterr()
     assert out.out == "" and "no browser tests" in out.err
     assert browser_scope.main(["test/test_games_board_browser.py"]) == 0
     assert capsys.readouterr().out.strip() == "test/test_games_board_browser.py"
+
+
+def test_full_registry_keeps_browser_files_after_splitting_them():
+    import subprocess
+    from pathlib import PurePosixPath
+
+    tracked = subprocess.check_output(
+        ["git", "-C", str(browser_scope.ROOT), "ls-files", "*.py"], text=True).splitlines()
+    # This file tests the selector/chunker itself, rather than a rendered page.
+    unit_only = {"test/test_land_browser.py"}
+    expected = {path for path in tracked if PurePosixPath(path).name.startswith("test_")
+                and path.endswith("_browser.py") and path not in unit_only}
+    assert not (expected - set(browser_scope.all_targets())), sorted(expected - set(browser_scope.all_targets()))
+
+
+def test_recovery_page_and_shared_styles_select_the_offline_browser_flow():
+    for source in ("deploy/robot/pinky_pro/native/network_recovery_http.py",
+                   "deploy/robot/pinky_pro/native/install-native-runtime.sh", "shared/web/components.css"):
+        assert "test/test_network_recovery_browser.py" in browser_scope.targets([source])
 
 
 def test_sim_sources_select_sim_browser():
@@ -150,9 +177,11 @@ def test_sim_sources_select_sim_browser():
 
 def test_common_robot_tasks_select_real_browser_flow():
     expected = 'test/learning/perception/test_learning_tasks_browser.py'
+    recovery = 'test/learning/perception/test_learning_task_recovery_browser.py'
     for source in ('learning_tasks.py', 'learning_tasks_web.py', 'review_app.py',
                    'review_app_web/tasks.js', 'review_app_web/tasks.html', 'review_app_web/learning.html'):
         assert expected in browser_scope.targets(['learning/curation/perception/' + source])
+        assert recovery in browser_scope.targets(['learning/curation/perception/' + source])
     assert expected in browser_scope.targets(['learning/training/omx/experiment_center.py'])
 
 

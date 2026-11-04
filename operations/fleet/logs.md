@@ -5258,12 +5258,25 @@
 - gate 변화: 없음. 실제 USB 카메라를 꽂아 승인하는 현장 수용은 하지 않았다.
 - CE: 해당 없음 — 새 기능이며 장애 해결이 아니다. 결정은 D-963에 있다.
 
+## 2026-11-02 · a7f36cb999 · Web unification follow-up
+
+- 변경: 2026-11-02 · a7f36cb999 · 독립 검토가 확인한 central Account의 사용 불가능한 복귀 링크를 숨겼다. validated return과 로그인 완료 후 원래 앱 복귀는 유지한다. 영상 Chromium fixture에 실제 app-runtime.js 자산을 복원했다. 인증 네 파일 64건과 영상/seat fixture 25건 원격 통과; 운영 SSO·실제 영상·장치 수용을 뜻하지 않는다. CE: 해당 없음 — UI 상태와 자산 계약을 회귀로 검증한다.
+- 증거: committed SHA and remote results are recorded above; final consolidated receipts are retained in the unification validation record.
+- gate 변화: 없음. Source/browser checks do not establish deployment, ARM64, device or field acceptance.
+
 ## 2026-11-03 · 9f666845e8 · fix(fleet): platoon 지도 계산 공유와 HTTP 응답성
 
 - 변경: `/api/fleet/platoon`이 활성 지도 버전별 루프·기하·속도표 계산 한 건을 작업 스레드에서 공유한다. 취소된 독자는 공유 계산을 취소하지 않고, NO_LOOP도 재사용하며 계산 실패 뒤에는 다시 시도한다. 로봇 자세·차간 거리는 요청마다 읽고 기존 인증·표시 전용 dispatch=false를 유지한다.
 - 검증: 원격 RED `ec040ca3c5`에서 기존 7건 통과와 새 회귀 3건 실패를 확인했다. 분리 전 `372a05294f`의 집중 시험 12건 통과 뒤, 최종 소스 `9f666845e8`의 mapped affected 3회는 328 passed/28 skipped, 4676 passed/188 skipped/5 subtests passed, Fleet 7550 passed/585 skipped였다. 세 보고서 모두 known_failures 비교 NEW/known/flaky 0이며 size-range도 통과했다. 회귀는 이벤트로 작업을 멈춘 동안 인증 요청 완료, 동시·반복 계산 공유, 취소·실패 복구, 지도 버전 변경, 최신 자세 반영을 확인한다.
 - Gate: 변화 없음. 건너뛴 시험은 검증에 포함하지 않았으며 브라우저·ROS 실행·실물·현장 수용이나 실제 CPU 부하의 응답 지연 상한을 입증하지 않는다.
 - CE: 해당 없음 — 이번 원인과 재발 방지는 코드·회귀 시험으로 설명되며 기존 asyncio/GIL·동시성 교훈을 검토했다.
+
+## 2026-11-03 · a5b594ea83 · 온도 칩의 실제 렌더링 전환 회귀
+
+- 변경: 기존 heat-chip Node spec에 실제 목록 renderer의 신선함·오래됨·오프라인·상태 없음·Fleet 미확인 및 복구 전환을 추가했다. 화면 소스의 공통 판정과 기존 Chromium 신선도 시험을 함께 검증한다.
+- 증거: 6821652b57의 Node wrapper는 stale 상태의 현재 온도 표시로 1 NEW였고, ec01f283db의 wrapper는 1 passed/skip0/NEW0이다. a5b594ea83의 등록된 실제 브라우저 시험은 5 passed/skip0/NEW0이며 기존 안전 latch와 모바일 연락 두절 검사를 유지한다. 화면 변경 기록은 applications/fleet/web/logs.md에 있다.
+- gate 변화: 없음. 읽기 전용 합성 화면 시험이며 플랫폼 원장·admission·dispatch·CORE 최종 명령 권한은 바꾸지 않았다.
+- CE: 해당 없음 — 실패와 복구 조건은 회귀에 남겼으며 실제 배포·현장 수용으로 확대하지 않는다.
 
 ## 2026-11-03 · 91f1525146 · fix(fleet): ARM 위임의 요청 키 격리와 상위 승인 검사
 

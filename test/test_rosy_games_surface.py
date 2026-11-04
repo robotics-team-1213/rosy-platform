@@ -123,7 +123,7 @@ def test_two_robot_stop_is_the_last_control_of_the_top_bar():
 
     web = ROOT / "operations" / "apps" / "games" / "games" / "web"
     html = (web / "index.html").read_text(encoding="utf-8")
-    bar = re.search(r"<ui-topbar>(.*?)</ui-topbar>", html, re.S).group(1)
+    bar = re.search(r"<ui-topbar\b[^>]*>(.*?)</ui-topbar>", html, re.S).group(1)
     # D-757 exposes the host stop only after a verified games.operate grant.
     stop = '<ui-button id="halt" kind="irreversible" data-always-live type="button" hidden disabled>두 로봇 정지</ui-button>'
     assert html.count('id="halt"') == 1 and stop in bar

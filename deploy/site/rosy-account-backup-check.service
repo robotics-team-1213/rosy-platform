@@ -1,0 +1,10 @@
+[Unit]
+Description=Check independent Account backup freshness and integrity
+Documentation=file:/opt/rosy/candidate/deploy/site/README.md
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/rosy/site/site.env
+UMask=0077
+TimeoutStartSec=5min
+ExecStart=/usr/bin/docker compose --project-name rosy-site --env-file /etc/rosy/site/site.env -f /opt/rosy/candidate/deploy/site/compose.account-backup.yaml run --rm --no-deps --pull never account-backup-check

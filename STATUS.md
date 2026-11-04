@@ -6,17 +6,17 @@
 | 모듈 | owner | last verified | SOURCE | LOCAL | ROS-SIM | ARTIFACT | DEVICE | FIELD |
 |---|---|---|---|---|---|---|---|---|
 | [core](middleware/core/gateway/progress.md) | CORE | 4e99d92e (2026-10-02) | GO | GO | GO | HOLD | HOLD | PARKED |
-| [deploy](deploy/progress.md) | 릴리스·플랫폼 | 4e99d92e (2026-10-02) | GO | GO | N/A | HOLD | HOLD | N/A |
+| [deploy](deploy/progress.md) | 릴리스·플랫폼 | 5f02d723d1 (2026-11-02) | GO | GO | N/A | HOLD | HOLD | N/A |
 | [control](middleware/perception/progress.md) | CONTROL | 4e99d92e (2026-10-02) | GO | GO | HOLD | HOLD | HOLD | PARKED |
 | [fleet](operations/fleet/progress.md) | FLEET | bed604ef (2026-09-30) | GO | GO | HOLD | PARKED | PARKED | PARKED |
-| [account](operations/account/progress.md) | ACCOUNT | dd9d55404f (2026-11-02) | GO | GO | N/A | HOLD | N/A | HOLD |
+| [account](operations/account/progress.md) | ACCOUNT | 5f02d723d1 (2026-11-02) | GO | GO | N/A | HOLD | N/A | HOLD |
 | [monitoring](operations/monitoring/progress.md) | MONITORING | 6b0f7568f5 (2026-10-26) | GO | GO | N/A | GO | GO | GO |
 | [fleet_decision](operations/decision/progress.md) | fleet_decision | 587c0b4c8c (2026-10-29) | GO | GO | HOLD | HOLD | HOLD | HOLD |
 | [situation](operations/situation/progress.md) | SITUATION | 3627ec21fb (2026-10-28) | GO | HOLD | N/A | HOLD | HOLD | HOLD |
 | [media](operations/site_ui/media/progress.md) | SITE MEDIA | 2190ba6889 (2026-10-18) | GO | GO | N/A | HOLD | HOLD | HOLD |
 | [media_edge](middleware/media/progress.md) | ROBOT MEDIA | abd6ce7cab (2026-10-30) | GO | GO | N/A | HOLD | HOLD | HOLD |
-| [console_source](applications/fleet/web/progress.md) | console_source | d4988bffba (2026-10-11) | GO | GO | HOLD | HOLD | HOLD | HOLD |
-| [fleet_app_dev](applications/fleet/dev/progress.md) | fleet_app_dev | c000a57004 (2026-10-21) | GO | GO | HOLD | HOLD | HOLD | HOLD |
+| [console_source](applications/fleet/web/progress.md) | console_source | 721b59a094 (2026-11-03) | GO | GO | HOLD | HOLD | HOLD | HOLD |
+| [fleet_app_dev](applications/fleet/dev/progress.md) | fleet_app_dev | 0b8bb631a5 (2026-11-03) | GO | GO | HOLD | HOLD | HOLD | HOLD |
 | [perception_curation](learning/curation/perception/progress.md) | perception_curation | d4988bffba (2026-10-11) | GO | GO | HOLD | HOLD | HOLD | HOLD |
 | [perception_registry](learning/registry/perception/progress.md) | perception_registry | d4988bffba (2026-10-11) | GO | GO | HOLD | HOLD | HOLD | HOLD |
 | [perception_training](learning/training/perception/progress.md) | perception_training | d4988bffba (2026-10-11) | GO | GO | HOLD | HOLD | HOLD | HOLD |
@@ -40,7 +40,7 @@
 | [core_events](middleware/core/events/progress.md) | CORE | bed604ef (2026-09-30) | GO | GO | N/A | N/A | N/A | N/A |
 | [core_features](middleware/core/services/progress.md) | CORE | 4e99d92e (2026-10-02) | GO | GO | N/A | N/A | N/A | N/A |
 | [core_api_web](middleware/core/api/progress.md) | CORE | 4e99d92e (2026-10-02) | GO | GO | N/A | N/A | N/A | N/A |
-| [web_common](shared/web/progress.md) | CORE | 1c8923b441 (2026-10-29) | GO | GO | N/A | N/A | N/A | N/A |
+| [web_common](shared/web/progress.md) | CORE | 59dbc2136b (2026-11-02) | GO | GO | N/A | N/A | N/A | N/A |
 | [dashboard](middleware/robot_ui/robot/progress.md) | 화면 | e7cdf490 (2026-09-29) | GO | GO | N/A | HOLD | N/A | N/A |
 | [pilot](middleware/robot_ui/pilot/progress.md) | 화면 | 10daaae5 (2026-10-02) | GO | HOLD | HOLD | HOLD | GO | N/A |
 | [omx_transfer](integrations/robots/omx/progress.md) | OMX workcell | uncommitted (2026-10-27) | GO | PARKED | PARKED | PARKED | PARKED | PARKED |
@@ -56,7 +56,7 @@
 | [description](middleware/devices/pinky/description/progress.md) | 로봇 통합 | c0bb0393c (2026-10-12) | GO | GO | HOLD | HOLD | HOLD | PARKED |
 | [dock](operations/site_devices/dock/progress.md) | 도킹 | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | HOLD | PARKED |
 | [signal](operations/site_devices/signal/progress.md) | 사이트 인프라 | uncommitted (2026-09-22) | GO | GO | PARKED | HOLD | HOLD | PARKED |
-| [docs](docs/progress.md) | 거버넌스 | 45720c033b (2026-11-03) | GO | GO | N/A | N/A | N/A | N/A |
+| [docs](docs/progress.md) | 거버넌스 | 7c0225640f (2026-11-03) | GO | GO | N/A | N/A | N/A | N/A |
 | [isaac_sim](learning/envs/isaac/progress.md) | sim | bb39f438a5 (2026-10-30) | GO | GO | HOLD | N/A | N/A | N/A |
 
 ## HOLD blockers
@@ -69,7 +69,7 @@
 - control ARTIFACT: 서명된 ARM64 manifest·immutable digest 발행 전. 흡수된 코드는 deploy가 소유하는 OS 이미지에 번들된다
 - control DEVICE: Pi bench Device 설치와 device-readback.sh --json 증거 없음. Control sensor adapter 활성화는 Device 보정 generation에 묶인다(D-47)
 - fleet ROS-SIM: D-87: 현재 트리의 colcon install/setup.bash가 없다. 2026-09-17 WSL Task 14 로그는 설계 입력이며 GO가 아니다 (D-89)
-- account ARTIFACT: 독립 Account 서비스를 포함한 서명 사이트 후보의 게시·검증·설치 대기.
+- account ARTIFACT: Independent Account OCI build, signed candidate construction/verification and installation are pending.
 - account FIELD: 운영 단일 writer 이관·실제 로그인 진입·Fleet 중단 중 독립성 수용 전.
 - fleet_decision ROS-SIM: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
 - fleet_decision ARTIFACT: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.

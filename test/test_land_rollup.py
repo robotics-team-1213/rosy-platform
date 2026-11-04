@@ -51,6 +51,7 @@ def test_only_plain_pending_landings_at_their_snapshot_tip_roll_up(repo):
     main, snapshot = repo
     a, b = snapshot("fix/a", {"pkg/a.py": "x = 2\n"}), snapshot("fix/b", {"pkg/b.py": "y = 2\n"})
     rows = [a, b, {**snapshot("fix/u", {"pkg/c.py": "z = 2\n"}), "urgent": "the user's words"},
+            {**snapshot("fix/f", {"pkg/c.py": "z = 9\n"}), "alone": True},  # --tests full for publish evidence
             {**snapshot("fix/p", {"pkg/c.py": "z = 3\n"}), "status": "preparing"},
             {**snapshot("fix/o", {"pkg/c.py": "z = 4\n"}), "host": "other"},
             {**snapshot("fix/l", {"pkg/c.py": "z = 5\n"}), "batch": ["land/fix/k"]},

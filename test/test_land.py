@@ -761,6 +761,7 @@ def test_new_failure_that_passes_alone_lands_as_load_flaky(repos, monkeypatch, c
     assert "LOAD-FLAKY pkg/test/test_a.py::test_a" in out
     candidates = (main / ".git" / land.land_checks.CANDIDATES).read_text(encoding="utf-8")
     assert candidates.startswith("pkg/test/test_a.py::test_a  # LOAD-FLAKY ") and "flaky_quarantine" in candidates
+    assert (kept := Path(candidates.split("failed in ")[1].split(" on ")[0])).is_file() and "-load-flaky-" in kept.name
     assert "pkg/test/test_a.py" not in (wt / "test" / "known_failures.txt").read_text(encoding="utf-8")
 
 
@@ -1146,9 +1147,9 @@ def test_a_full_tier_runs_while_waiting_and_counts_as_the_turns_full_tier(repos,
     monkeypatch.setattr(land, "run_tests", lambda wt_, args, inv, logdir, round_no: rounds.append(round_no) or [])
     real_save = land.land_full.save
 
-    def save(*args):
+    def save(*args, **kw):
         rounds.append("save")
-        return real_save(*args)
+        return real_save(*args, **kw)
 
     monkeypatch.setattr(land.land_full, "save", save)
     assert land.main(["--tests", "auto", "--queue-timeout", "0.001"]) == 1                # the peer never leaves

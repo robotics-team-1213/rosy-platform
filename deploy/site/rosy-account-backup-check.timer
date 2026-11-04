@@ -1,0 +1,10 @@
+[Unit]
+Description=Periodically check independent Account backup freshness
+
+[Timer]
+OnBootSec=30min
+OnUnitInactiveSec=6h
+Unit=rosy-account-backup-check.service
+
+[Install]
+WantedBy=timers.target

@@ -842,11 +842,101 @@
 - gate 변화: 없음. 실제 USB 카메라를 꽂아 승인하는 현장 수용은 하지 않았다.
 - CE: 해당 없음 — 새 기능이며 장애 해결이 아니다. 결정은 D-963에 있다.
 
+## 2026-11-02 · e81af2d7c3 · D-962 independent Account artifact
+
+- Change: Account profile uses the common Account role-label helper; Fleet header compatibility export retains exact labels. Canonical login/profile/admin sources produce the reduced Account-only bundle. Real TLS browser exercised existing cookie resume, profile edit, administrator list and initial-password flow without missing resource responses or page errors.
+- Evidence: D-962 independent image scope: remote AI-PC closure at e81af2d7c3 passed 320 tests, 0 skipped, 0 NEW. Account TLS login/initial-password/profile/admin, minimal Account/foundation startup, stdlib-only fixed assets, signed legacy/new inventories and reuse, and Fleet header browser/Node compatibility. OCI build and live independent-image acceptance were not run.
+- Log: `rosy-account-image-closure/run-1.txt`; native `size_range.py d7fcc74e43 b9424451a0` checked four commits successfully; native static secret scan found zero findings.
+- Gate: scoped SOURCE/LOCAL verification only; existing artifact, device and field limits remain.
+
+
+## 2026-11-02 · 5f02d723d1 · D-962 independent identity backup and presentation
+
+- Change: Login/profile/admin identity pages now display Rosy Account. Plain login and accessible form use the Account login label; the existing OAuth Account heading remains compatible with Learning. Return links, theme and layout are unchanged. Actual standalone TLS browser confirms all three brands, profile edit, admin listing, cookie resume and first-password return; all affected identity browser suites passed.
+- Evidence: D-962 independent image and identity backup scope at 5f02d723d1: remote 335 backend/signing/image/backup cases plus 71 opted-in identity TLS/browser cases passed, 0 skipped, 0 NEW. Full Account tables including HTTP audit preserved; stale/corrupt backup refusal, strict signed legacy/new groups, reused image pins, branding, login/profile/admin and first-password flows verified. Prior e81af2d7c3 closure also passed 320 cases including Fleet header browser/Node compatibility. OCI construction and live independent-image/timer acceptance remain pending.
+- Logs: `rosy-account-backup-replay/run-1.txt` (335 passed), `rosy-account-identity-replay/run-1.txt` (71 passed); known-failure comparison 0 new/known/flaky. Native size range checked eight commits without a violation.
+- Gate: scoped SOURCE/LOCAL GO; image artifact, installation, timer activation and human field acceptance remain separate.
+
+
+## 2026-11-02 · 59dbc2136b · D-962 canonical Account scope closure
+
+- Change: Canonical lightweight header now takes the document brand and title from one renderer: Account login/profile/admin, Fleet learning. Existing component propagation checks remain; a brand mutation proves form/task bytes outside the header are unchanged. Identity HTML needs no manual regeneration delta.
+- Evidence: Official FULL snapshot 20261102132628 exposed stale Fleet component/title consumers and stopped; it was not a FULL success. At 59dbc2136b, committed remote shared-web contracts, component/registry/app ownership, Account TLS identity, Fleet header browser/Node and Account image/deploy closure passed 581 tests, with one separately disabled Android native-token-export check skipped and 0 NEW. Exact title-file isolation via tools/collect_alone.py completed one whole-file target (wrapper 1 passed, 1 empty collection parametrization skipped). Independent review found no supported material findings.
+- Logs: `rosy-account-surface-closure/run-1.txt`; `rosy-account-title-isolated/run-1.txt`. Native canonical renderer check, AST, secret scan (0 findings), diff check and one-commit size range passed.
+- Gate: Scoped SOURCE/LOCAL evidence only. Replacement FULL/no-cache, OCI artifact, installation and live field acceptance remain pending. CE: no additional lesson; canonical ownership, propagation and strict mutation regressions retain the cause and fix.
+
+
+## 2026-11-02 · uncommitted · D-961 웹 제품 통합
+
+- 변경: Account/Fleet 로그인 맥락의 앱바·제목·폼·복귀를 맞췄다. 문서 본문과 영역 레일의 공용 구성을 재사용하고 중복 외형을 제거했다. 권한·원장·실행 owner는 유지한다.
+- 증거: d58538d018 실제 Fleet 헤더·Robot 작은 화면·Pilot 포커스 4 passed markers. 전체 작업·권한 상태의 최종 HEAD 검증은 진행 중이다.
+- Gate: 전체 회차 검증 중이며 운영 배포·DEVICE/FIELD를 주장하지 않는다. CE: 완료 전 판단; 최종 코드·회귀·ADR 외의 비명시 지식이 있는지 확인한다.
+
+## 2026-11-02 · d90ee50ad3 · 독립 Account 진입도 같은 계정 제품으로 표시
+
+- 변경: 공용 로그인은 Account owner 표식을 읽어 직접 진입과 프로필 경유 진입에도 같은 Account 제목·폼 이름·도움말을 사용한다. 기존 Fleet 맥락과 등록 authorize 복귀 조건은 유지한다. Account 프로필의 의미 없는 자기 복귀 링크는 숨긴다.
+- 증거: 독립 Account 서버가 제공한 실제 HTML과 TLS Chromium의 직접·프로필·계정 관리 진입을 회귀에 더해 적색 4건을 확인했다. 수정본은 동일 시험과 기존 Fleet 로그인·등록 앱 복귀를 함께 원격 검증한다.
+- Gate: 운영 수용 전. CE: 해당 없음 — 명시적 owner 맥락과 회귀로 재현·보존 조건을 복원한다.
+
 ## 2026-11-03 · uncommitted · 만료된 Cell 고장 영상 URL 해제
 
 - 변경: 성공한 관측 응답의 모든 작업 셀·팔에 남은 고장 세션을 모아, 이력에서 사라진 세션의 JPEG URL만 해제한다. 처음 접속할 때 있던 이력의 영상 처리와 다른 팔의 영상은 유지한다.
 - 증거: 기존 Chromium fixture에서 21회 고장으로 20건 이력을 넘기고, 서로 다른 셀의 두 팔에서 만료 URL 해제·생존 영상·dispose 정리를 확인한다. 수정 전 `f0423a0364` 원격 실행은 만료 URL assertion에서 실패했고 known_failures 판정은 NEW 1 / known 0 / flaky 0이었다.
 - Gate: 수정 커밋의 집중 원격 Chromium 검증 대상. 장치·현장 수용과 별개. CE: 해당 없음 — URL 수명 규칙과 재현 조건은 코드와 회귀 시험으로 복원 가능.
+
+## 2026-11-03 · 721b59a094 · D-963 USB approval with Account cookie identity
+
+- Change: USB camera approval now uses the verified named operator identity and lock state instead of requiring a Bearer header. The same gate runs before and after confirmation. Shared request transport retains same-origin cookies, current Bearer compatibility, no-store and redirect refusal; anonymous/unnamed/viewer identities remain hidden. Backend authority and CSRF policy are unchanged.
+- Evidence: After canonical main merge 4b374d64c7 (D-963 e5911e84f3 ancestor), committed remote 721b59a094 passed 64 tests, 0 skipped, 0 NEW. Existing USB backend and all Fleet Node specs cover cookie/Bearer list/approve, viewer/unnamed/locked refusal and stale controls; real PasswordSessions checks preserve cookie operator success, viewer/anonymous denial and CSRF rejection. Account receiver plus actual standalone TLS, navigation and password-login browsers also passed; this is not an Account completion claim based only on legacy PasswordSessions.
+- Log: `rosy-account-usb-cookie-closure/run-1.txt`; official supported light/serial host, 14 free cores and 4.8 GB at preflight, MemoryMax4GB, measured peak642MiB, 72s. No below-floor fallback or ALONE bypass. Independent exact-source review found no supported findings. Native JS syntax, Python AST, secret scan0, diff check and one-commit size range passed.
+- Gate: Scoped SOURCE/LOCAL verification only. Existing FULL142019 snapshot was not changed or restarted; landing/publication, OCI artifact and live acceptance remain separate. CE: no additional lesson; the cookie transport and authorization distinction is retained directly in regression tests.
+
+## 2026-11-03 · e84e4f46b3 · 독립 Account의 자기 화면 복귀 숨김
+
+- 변경: 직접·프로필·계정 관리 경유 Account 로그인에서 다시 로그인 안내로 이어지는 복귀 링크를 숨긴다. Fleet 문서 복귀, 검증된 목적지, 로그인 성공 후 이동은 유지한다.
+- 증거: 최신 커밋의 실제 정적 owner HTML 캡처에서 발견했고, committed TLS 브라우저 회귀는 링크가 보이는 상태를 1 failed/NEW1로 재현했다. 수정 후 기존 Fleet·등록 앱·최초 비밀번호 흐름을 함께 원격 확인한다.
+- Gate: 서명 배포·운영 로그인 수용 전. CE: 해당 없음 — 한 조건과 직접 진입 회귀가 원인과 보존 조건을 설명한다.
+
+## 2026-11-03 · 91889f3c3e · USB 카메라 승인과 편집 상태 유지
+
+- 변경: 정상 쿠키 로그인 운영자도 USB 카메라 역할 승인 화면을 사용한다. 주기 조회는 계정·작업 셀·카메라별 입력 요소를 재사용해 작성값·포커스·선택 범위를 보존하면서 추천과 승인 상태를 갱신한다. 대상 제거·권한 상실·페이지 수명 종료 시 이전 편집 상태를 지운다. 실제 승인 확인 대화상자와 서버 권한·감사 책임은 유지한다.
+- 증거: 실제 sample host 쿠키 로그인과 공용 확인 대화상자를 사용하는 원격 Chromium 회귀가 숨겨진 패널을 3 NEW로 재현했다. 쿠키 수정과 입력 역할 선택자 보정 후 승인은 통과했고, 주기 조회 2건은 작성값 대신 추천값으로 돌아가는 실패를 재현했다. 수정본의 전체 브라우저 파일 및 쿠키·USB 백엔드 회귀 결과는 후속 기록에 남긴다. 독립 검토는 91889f3c3e에서 지적 없음이다.
+- 후속 검증: 91889f3c3e의 USB·쿠키 백엔드 원격 시험은 exit 0/NEW 0이다. 전체 브라우저 파일에서 sample provider의 빠진 USB 읽기 경로가 기존 설치 흐름 3건의 미처리 요청으로 검출되어, 8ce38e2a61에 장비가 없는 sample의 빈 목록 응답을 추가했다. 그 커밋의 상태별 흐름·sample 페이지 2개 브라우저 파일은 36 passed/0 skipped/exit 0/NEW 0이다. 원격 환경 05ef7ad25a10607e, freeze eb75e06857d6c188이며 독립 검토는 두 수정 모두 지적 없음이다.
+- Gate: SOURCE 회귀 통과. USB 응답만 제어한 브라우저 시험이므로 운영 카메라 승인·실물 적용·배포 수용을 주장하지 않는다. CE: 해당 없음 — 원인과 보존 조건을 코드·회귀가 설명한다.
+
+## 2026-11-03 · 50b5b4340d · 독립 Account 자산 묶음과 웹 통합 보존
+
+- 변경: 독립 Account 이미지의 최소 자산 묶음에 실제 페이지가 쓰는 canonical component-controls.css를 포함한다. 계정 로그인 문서의 제품 이름과 공용 집중 작업 구성을 함께 보존하고 USB 승인에는 named operator 검사를 적용하면서 작성값·포커스 유지와 실제 쿠키 회귀를 유지한다. Node의 DOM fixture는 표준 노드 이동·제거 연산을 지원한다.
+- 증거: 앞선 8ce38e2a61의 브라우저 36건 통과는 그 소스의 증거다. 이번 병합의 설치 자산·독립 서버·브라우저·Node 검증은 새 committed source로 확인한다. 기존 증거를 새 소스의 통과로 대신하지 않는다.
+- Gate: 통합 SOURCE 검증 전. 인증·권한·확인 대화상자와 실제 장치 승인 경계는 유지한다. CE: 해당 없음 — 자산 폐쇄성·owner 표식·실제 브라우저 회귀가 보존 조건을 설명한다.
+
+- 후속 검증: 21f1dcd378에서 Node wrapper·Account 최소 자산·화면 제목 16건은 통과했으나 브라우저는 87 passed/1 failed/NEW 1로 raw 로그인 문구 부식을 검출했다. PowerShell 5.1 native pipe의 ASCII 인코딩을 무쓰기 실험으로 확인하고 네이티브 편집으로 문구·저널을 복원했다. 기존 PowerShell 한글 파이프 교훈을 적용했으며 중복 교훈은 만들지 않았다. 수정 source 4493982d05의 로그인 신원·실제 독립 Account·기존 Fleet 계정·설치/sample 브라우저 6개 파일은 112 passed/0 skipped/exit 0/NEW 0이다. 제목·안내·복귀·autocomplete·320/1366 폭·1/2/4배 텍스트 검사를 보존한다. 환경 da0de26b4df3720c, freeze eb75e06857d6c188. 독립 UI 재검토 지적 없음이며 같은 소스의 익명 owner 미리보기 30개도 통과했다. 운영 배포·실제 사용자 비밀번호 수용은 별도다.
+
+## 2026-11-03 · a5b594ea83 · 로봇 목록의 온도 표시와 안전 정보 신선도 통일
+
+- 변경: 로봇 목록의 안전·온도 칩이 같은 가용성·신선도 판정을 사용한다. 오래되거나 오프라인·상태 없음·Fleet 상태 미확인인 데이터의 온도 경고를 현재 사실처럼 표시하지 않고, 새 상태를 받으면 복구한다. 기존 정지·배터리·권한 판정은 유지한다.
+- 증거: 6821652b57의 실제 renderer Node 회귀는 오래된 온도가 현재 칩으로 남아 실패했다(공식 wrapper 1 failed/NEW1). ec01f283db의 같은 Node wrapper는 1 passed/skip0/NEW0이다. a5b594ea83의 실제 Chromium은 warm/hot 신선도·오프라인·복구와 1920·390·320 폭 연락 두절 시나리오에서 5 passed/skip0/exit0/NEW0이었다. 기존 배터리·안전 latch assertion과 페이지 오류·모바일 넘침 검사는 보존했다.
+- gate 변화: 없음. 최신 main의 화면 변경은 독립 UI 검토했으며 소스 회귀의 증거다. 최종 FULL·게시·운영 화면 반영은 별도다.
+- CE: 해당 없음 — 동일한 신선도 판정과 renderer·실제 브라우저 회귀가 보존 조건을 설명한다.
+
+## 2026-11-03 · beb649c13f · fix: ARM 위임과 이동 위임의 작업 요약 분리
+
+- 변경: 위임 목록의 새 ARM 요청에는 이동 목표가 없어 기존 공통 렌더러가 목록 갱신에 실패했다. ARM은 셀·물체·출발·도착을 표시하고, 이동 요청은 기존 목표를 유지한다. ARM 승인 안내는 대상 셀의 작업 원장을 가리키며 일반 이동 승인 버튼을 표시하지 않는다. 취소 API·권한·오래된 상태 차단은 보존했다.
+- 증거: 원격 Chromium c5368a720d에서 새 2개 사례 실패/NEW2를 재현한 뒤 beb649c13f에서 기존 포함 8개 사례 통과/skip0/NEW0을 확인했다. 결속 전·후 ARM, 이동 항목 혼합, 오래된 상태와 복구 후 취소, 320px 재배치와 페이지 오류를 검사했다. 원격 서버 계약 70개 통과/NEW0, 기존 자산 resolver로 Node 413 passed/skip0, 문법·크기·안전 검사 통과. 독립 소스·증거 검토 지적 없음.
+- gate 변화: 소스·원격 브라우저 확인이다. 최종 통합 FULL·게시·서명 배포·운영 로그인 수용은 별도이며 아직 완료하지 않았다.
+- CE: 해당 없음 — 원인과 재발 조건을 공통 코드와 회귀 시험으로 설명하고 검증한다.
+
+## 2026-11-03 · uncommitted · Cell 카탈로그의 화면·계정 수명 연결
+
+- 변경: 카탈로그를 저장된 문서 화면 그룹에 포함하고, 접속 갱신·계정 변경·로그아웃·pagehide 때 표를 비운다. 카탈로그 읽기 응답은 요청 세대를 대조해 이전 계정/화면의 성공·실패가 새 화면을 덮지 못하게 한다. 무게 표기·운반 판정·서버 권한은 유지한다.
+- 증거: 전체 Fleet 앱을 서빙하는 기존 Chromium fixture에서 양 테마·1366/390 폭의 긴 출처 표시와 단계 전환, 기존 데이터 로그아웃, 보류된 응답의 로그아웃 후 도착을 검사했다. 수정 전 dcef6b5fd4의 6개 사례가 예상 실패했고 NEW6/known0/flaky0이었다. 늦은 오류도 동일 수명 조건으로 검증한다.
+- gate 변화: 없음. 원격 화면 회귀는 실물·현장 수용과 구분한다. CE: 코드와 경계 회귀에 원인·해결을 남기며, 추가 교훈 필요성은 검증 뒤 판단한다.
+
+## 2026-11-03 · uncommitted · 긴 출처가 카탈로그 무게 열을 압축하지 않도록 배치
+
+- 변경: 카탈로그 표의 표면 배치를 fixed로 지정해 긴 출처 한 칸이 다른 열의 폭을 가져가지 못하게 했다. 공용 표의 색·글자·여백과 기존 값은 유지하며 열별 숫자 너비·새 토큰은 만들지 않았다.
+- 증거: 전체 페이지의 양 테마·1366/390 캡처에서 가로 넘침 없이도 무게가 여러 줄로 갈라진 것을 육안 확인했다. 텍스트 Range의 줄 수를 검사하는 회귀가 수정 전 06747e3b10에서 네 경우 모두 실패했다. 최종 원격 재검증과 캡처를 함께 확인한다.
+- gate 변화: 없음. CE: 전체 페이지·긴 값에서 읽힘을 확인해야 한다는 조건을 회귀 시험에 반영했다.
 
 ## 2026-11-03 · 12aa681800 · USB 카메라 역할 승인에 쿠키 운영자 로그인 허용
 
@@ -862,3 +952,40 @@
 - Evidence: native JavaScript syntax check exit0; the official remote console Node-unit wrapper passed1, skipped0, NEW/known/flaky0. Backend real-application refusal and preserved enrollment flows passed106 tests.
 - gate 변화: existing response rendering, transport and authorization remain in use. Qualified FULL/public CI and physical acceptance are separate.
 - CE: no additional lesson; existing error mapping and regression evidence explain the change.
+
+## 2026-11-04 · uncommitted · 설치 화면 맨 위 설치 노선 (D-975 P3)
+
+- 변경: 설치·보정 화면 머리에 공용 단계 노선(`ui-stage-track`, Fleet 노선색)을 붙였다. 로봇 등록 → 카메라 승인 → 카메라 보정 → 시작점 네 역이며, 각 역은 기존 GET 응답(등록 로봇, 폐기되지 않은 카메라 자격, 보정, 유효한 시작점)으로만 완료를 그린다. 읽지 못한 역은 완료로 그리지 않고 "확인 못 함"으로 둔다. 역 링크는 기존 구획으로 이동만 하고 새 API·권한·명령은 없다. 기존 `install-step` 구획 상자는 그대로다.
+- 증거: Node 단위 시험 `test_install_line.py`(현재 역 순서, 폐기 카메라·무효 시작점 제외, 읽기 실패 비완료, 전부 완료 시 현재 역 없음, 페이지 마운트). 자산 allowlist·문서 import·기능 매트릭스 갱신. 원격 브라우저 회귀는 커밋 후 별도.
+- gate 변화: SOURCE 로컬 단위 시험 GO. 원격 브라우저 회귀·main 착지·배포·현장 설치 화면 확인은 후속 gate다. 완료 판정은 서버 응답에서만 오며 화면이 설치 상태를 바꾸지 않는다.
+
+## 2026-11-04 · uncommitted · 학습 정책 승인 머리 수치 띠와 넓은 화면 두 열
+
+- 변경: `/console/policy` 내용 맨 위에 공용 수치 띠(사고 잠금·확인 요청·열린 승인 창·대기 제안). 값은 이미 받은 응답의 개수만 세는 순수 함수 `policyFigures()`가 만들고 새 판정은 없다. 잠금·확인 요청이 있거나 실물 승인 창이 열려 있으면 그 칸만 주의색. 넓은 화면(64rem 이상)에서 네 구획을 두 열로 놓되 문서 순서(사고 잠금 먼저)는 그대로다.
+- 증거: `policy-model.test.mjs`에 띠 시험 추가(서버가 준 것만 셈, 해제된 사고·해결된 요청·따라 보기 창은 주의 아님), `test_policy_console.py` 통과. 샘플 서버 1440·390 × 두 테마 렌더 확인.
+- gate 변화: SOURCE 로컬 GO. 원격 브라우저 회귀·착지·배포는 후속.
+
+## 2026-11-04 · uncommitted · 설치 노선 원격 회귀 정정
+
+- 증상: P3(370ee3ee3d) 원격 affected 9,668 PASS 중 설치 노선 관련 NEW — 헤더 시험이 설치 화면에서 `main`이 응답 뒤 14px 내려감(빈 메모 줄이 채워지며 밀림), 문법 분리 시험의 설치 스타일시트 목록에 `stage-strip.css` 누락. 밝게 관제 4건은 장미색 정정(a8c3a2d3ff)으로 별도 처리. `test_measured_calibration_browser.py[1440]` 1건은 원인 미확정 — 반복 재실행으로 확인 중.
+- 변경: 역 메모를 처음부터 "확인 중"으로 채워 줄 높이를 잡았다. 시험의 기대 시트 목록에 `stage-strip.css` 추가.
+- 증거: 원격 run `remote-p3/b1/run-1.txt` NEW 8건 분류, 로컬 `test_install_line.py` 5 PASS.
+- gate 변화: 없음. 원격 재실행 후 판단.
+
+## 2026-11-04 · uncommitted · 학습 정책 승인 — 단계 제안을 공용 표로
+
+- 변경: 대기 중인 단계 제안 목록을 공용 `.ui-data-table`(상태·정책·단계·제안·근거·동작)로 바꿨다. 승인·거절 잠금과 확인 대화는 그대로다. 브라우저 시험의 행 선택자를 `li`에서 `tr`로 맞췄다. 설치 화면은 노선이 상태를 이미 보여 주고 설치 기록이 넓은 화면에서 오른쪽 칸이라 하위 메뉴 칩을 더하지 않았다(공용 작업 선택기에 항목 상태가 없음).
+- 증거: 샘플 서버 1440 전체 페이지 두 테마 렌더(빈 상태 한 줄), `test_policy_console.py` 통과. 원격 브라우저는 커밋 후.
+- gate 변화: SOURCE 로컬 GO.
+
+## 2026-11-04 · uncommitted · 팔레트 적재 준비 노선과 설치 노선 역 링크 정정
+
+- 변경: `/console/cell` 머리에 공용 노선 다섯 역(레시피·셀 설정·적재 계획·작업 제안·승인·진행). `cell-line.js`가 서버 응답으로 이미 채워지는 요소(`#recipe-revision`·`#cell-revision`·`#summary`의 state, `#proposal` 글, `#job-state` 작업 JSON)만 지켜보고, 새 요청·판정을 만들지 않는다. 목표 확인(GOAL_CONFIRMED)만 마지막 역 완료, 사유 있는 보류는 막힘. 역 링크는 하위 메뉴와 같은 화면 해시. 설치 노선의 역 링크가 숨은 패널 앵커라 눌러도 화면이 바뀌지 않던 것을 작업 id(`#robots`·`#cameras`·`#calibration`)로 바꾸고, 설치 화면이 해시 변경을 작업 선택으로 받게 했다.
+- 증거: `test_cell_line.py` 4·`test_install_line.py` 6 PASS(역 링크가 작업 id인지 검사 추가). 샘플 서버에서 역 링크 클릭으로 설치(카메라 승인·보정·로봇 등록)와 Cell(적재 계획) 화면 전환 확인, Cell 1440·390 두 테마 렌더.
+- gate 변화: SOURCE 로컬 GO. 원격 브라우저는 커밋 후.
+
+## 2026-11-04 · uncommitted · 적재 계획 수치 띠
+
+- 변경: `/console/cell` 적재 계획 아래에 공용 수치 띠(놓기·팔레트·층·전체 단계). 미리보기 응답이 `#preview`에 쓴 작업 JSON만 세며 `cell.js`는 마운트 한 줄만 늘었다. Cell 본문을 칸 질의 칸으로 지정해 좁은 화면에서 두 열로 접힌다.
+- 증거: `test_cell_line.py` 5 PASS(띠는 응답의 놓기 단계만 셈). 샘플 서버에서 예제 문서 `sample`을 불러와 미리보기 — 요약 "18회 전송"과 띠 놓기 18·팔레트 2·층 4·전체 단계 38 일치, 노선도 레시피·셀·계획 완료로 바뀜. 1440 어둡게·390 밝게 렌더 확인.
+- gate 변화: SOURCE 로컬 GO.

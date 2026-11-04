@@ -117,6 +117,24 @@ reruns. Each cause below was found from `.git/rosy-land-events.jsonl` and `.git/
    reaches main; `[land] ... delta tier` lines and `prepared` events with `tier: delta` show it working.
    A turn yields only over a clean earlier tier: on 11-03 14:18 and 14:34 a LOAD-FLAKY pretest (`prepared`
    with `tier: null`) yielded twice and saved nothing, a loop that never lands (`land_selection.delta_yields`).
+11. **Speculation mostly guessed wrong.** On 11-03 (10:00-16:00) speculative prepares used 9.8 h of 43 h of test
+   time and their tree was held at 3 of 34 turns; they also kept the ticket `preparing` until done. Measure the hit
+   rate (`speculation` events, `stage: turn`, `held`) before turning it back on (`ROSY_LAND_SPECULATE=1`, D-889 28).
+12. **A reused pass also voided the tier.** After the flaky fix, 9 of 20 pretests (11-03 20:00-23:00) still had no
+   tier: every one had a pass reused from another tree (`land_cache.NARROW`, "reused across trees"), which
+   `land_selection.eligible` treats like LOAD-FLAKY. Without a tier a landing cannot take the delta path and its turn
+   reruns everything. Affected and delta pretests now keep the tier and mark the record `reused`; land.py writes no
+   land record from it, so pre-push still reruns. A FULL tier stays strict (a test pins that it gives up its FULL).
+13. **Landing-tool branches in flight conflict with each other.** On 11-03 19:56-22:15, 7 of 8 stops were merge
+   conflicts, all between landing-tool branches that edited the same lines (`land_prepare`'s delta `save`,
+   `test_land_prepare.py`, `test_land_speculate.py`). Keep one landing-tool branch in flight: add a new tool fix to
+   the queued branch and requeue it with `land_async.py --replace`. When resolving such a conflict in a test file,
+   rebuild it from main's version plus your own new tests; keeping both sides once left a test half old, half new.
+14. **The explicit FULL witness lived only in memory.** An explicit `--tests full` landing (publish evidence) keeps
+   `args._full_witness`; any relaunch (a landing-code change's rules refresh, a reboot, a resume) dropped it and the
+   next prepare reran the whole FULL with no cache: one docs landing did that six times on 11-03 (277 min). The record
+   now keeps the explicit run's `env` and `land_selection.current_main` rebuilds the witness from it; publish still
+   checks the logs and fails closed. Same shape as cause 2: state a relaunch needs must be on disk.
 
 ## 계측 전용 파일의 불필요한 FULL 승격
 
@@ -234,6 +252,31 @@ pin은 불완전이다. leaf 이름이 모두 확인되면 pin 검증 실패의 
 별도 guard와 다음 batch의 실행은 합치지 않는다. `test_work_queue_split.py`의 실제
 입력 회귀와 `test_land_goal.py`·`test_land_rollup.py`의 중첩 회귀로 이 경계를 확인한다.
 코드·원격 회귀 통과는 착지 완료나 60분 SLO 달성의 증거가 아니다.
+
+### 2026-11-03: 같은 환경의 브라우저 chunk가 일부 파일을 공유할 때
+
+UI 착지의 run-pre-240과 run-pre-257은 같은 candidate `c5bf44b034`, 같은 AI 호스트,
+같은 env/freeze에서 실행됐지만, 4파일과 11파일 묶음 양쪽에 arm-transfer-console과
+console-queue-inline 파일이 들어 있었다. nodeid·추가 옵션·G1·ALONE 차이는 없었다.
+전체 argv가 달라 정확 argv 중복 제거로는 이 반복을 잡지 못했다. 두 호출이 각각 own/delta에서
+왔다는 원래 계획 표식은 남지 않아 그 출처까지 추정하지 않는다.
+
+`tools/land_selection.py`의 `_unique_browsers`는 두 browser 결합 경계에서만 사용한다.
+leading 환경 단어의 순서까지 같고 모든 대상이 실제 존재하는 순수 `.py` 파일일 때만,
+같은 파일을 먼저 나온 chunk에 남긴다. 기존 chunk를 줄일 뿐 다시 pack하지 않아
+파일 합집합·기존 순서·basename 분리와 입력 불변성을 유지한다. ALONE/profile 또는
+환경 순서가 다르거나 옵션·nodeid·folder·missing/unknown 인자가 있으면 기존 정확 argv
+규칙을 유지한다. 일반 pytest 선택과 실패 기준은 바꾸지 않는다. 캐시는 축소된 실제 argv로
+조회·기록하며, 원래 whole 키를 축소 호출의 PASS로 추론하지 않는다.
+
+실제 두 호출을 코드 `882915a034`의 helper에 오프라인 재생한 결과는 파일 참조 15→13,
+고유 파일 13개·합집합 동일이었다. 이 측정은 전체 UI 계획이나 실제 wall 절감의 측정이 아니다.
+운영자 로컬 원본 argv와 결과는 저장소 밖 기존 작업 기록의
+`browser-overlap-selection-evidence-20261103.json`에 보존했다.
+원격 RED의 유지된 두 결합 경계는 2실패였고, 추가 환경 순서 정규화 기대의 1실패는
+범위 밖 요구라 최종 시험에서 서로 다른 순서를 보존하는 기대와 구분했다.
+최종 새 회귀·land-selection·land-browser 세 suite는 88 PASS, skip·NEW·known·flaky 0,
+독립 P1/P2 없음이었다. 아직 이 소스 검증을 main 착지나 60분 SLO 달성으로 계산하지 않는다.
 
 ## 2026-11-03: 실행 이력 없는 큰 묶음도 나눈다
 

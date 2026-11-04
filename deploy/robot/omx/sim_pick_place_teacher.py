@@ -76,7 +76,7 @@ def release_clearance_evidence(observation,tcp,box,goal):
 def run(directory, world, observer_path, *, home_only=False, plan_kind='analytic', box_turn_deg=0.0):
     isolation_guard(ROOT)
     configure_imports()
-    sys.path.insert(0, str(ROOT/'operations/processes/cell'))
+    sys.path.insert(0, str(ROOT/'operations/processes/palletizing/src'))
     import rclpy
     import yaml
     from rclpy.node import Node
@@ -90,9 +90,9 @@ def run(directory, world, observer_path, *, home_only=False, plan_kind='analytic
     from omx_adapter.manipulation_plan import ExecutionStateSnapshot
     from omx_adapter.pose_plan import CellPlanningProfile, AnalyticCellTransferPlanner, CellTransferRequest
     from omx_adapter.gripper_contract import GripperObservation, verify_held_object, verify_released_object
-    from rosy_cell.cell import load_cell
-    from rosy_cell.recipe import load_recipe
-    from rosy_cell.compiler import compile_job
+    from rosy.processes.palletizing.cell import load_cell
+    from rosy.processes.palletizing.recipe import load_recipe
+    from rosy.processes.palletizing.compiler import compile_job
     from cell_sim_tools import SimAid, refuse_second_owner
     from instance_names import names_from_environment
 

@@ -19,7 +19,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 SPEC = ROOT / 'deploy/robot/omx/sim/transfer_installation.yaml'
 ASSETS = ROOT / 'learning/envs/isaac/assets/open_manipulator_description'
-for _part in ('contracts/foundation', 'middleware/devices/omx/adapter', 'integrations/robots/omx/src',
+for _part in ('contracts/foundation', 'middleware/devices/omx/adapter', 'middleware/devices/omx/agent/src',
               'operations/processes/palletizing/src', 'operations/world/src', 'operations/fleet'):
     if str(ROOT / _part) not in sys.path:
         sys.path.append(str(ROOT / _part))
@@ -134,7 +134,7 @@ def policy(spec, installed):
 
 def owner_installation(spec, policy_digest):
     """What run_cell_owner.py installs: the same bindings, bound to the Fleet policy digest."""
-    from rosy.integrations.robots.omx.arm_transfer import ArmTransferInstallation
+    from rosy_agent.arm_transfer import ArmTransferInstallation
     return ArmTransferInstallation(bindings(spec), spec['capability_revision'], spec['config_revision'],
                                    policy_digest)
 

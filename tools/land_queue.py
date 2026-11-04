@@ -76,20 +76,21 @@ def queue_dir(wt: Path) -> Path:
 
 
 def take(qdir: Path, branch: str, worktree: str = "", status: str = "waiting", urgent: str = "", *,
-         batch_auto: bool = False) -> Path:
+         batch_auto: bool = False, alone: bool = False) -> Path:
     """Write this process's ticket at the end of the queue and return its path.
 
     ``status``: ``pending`` (waiting for a preparation slot) or ``preparing`` (tests outside the lock: keeps its
     place, blocks no one; ``land_prepare.py``), ``waiting``,
     or ``turn`` (merging, testing, landing). A ticket without one (an older land.py) counts as waiting.
-    ``batch_auto`` explicitly opts an uncustomized automatic request into batch membership."""
+    ``batch_auto`` explicitly opts an uncustomized automatic request into batch membership; ``alone`` marks an
+    explicit request (FULL, checks, --no-cache) that no rollup may take."""
     qdir.mkdir(parents=True, exist_ok=True)
     stamp = time.time_ns()
     while (qdir / f"{stamp:020d}-{os.getpid()}.json").exists():  # one process, one clock tick (Windows)
         stamp += 1
     name = f"{stamp:020d}-{os.getpid()}.json"
     info = {"pid": os.getpid(), "host": socket.gethostname(), "start": time.time(), "branch": branch,
-            "worktree": worktree, "status": status, "batch_auto": batch_auto, **({"urgent": urgent} if urgent else {})}
+            "worktree": worktree, "status": status, "batch_auto": batch_auto, **({"urgent": urgent} if urgent else {}), **({"alone": True} if alone else {})}
     tmp = qdir / f".{name}.tmp"
     tmp.write_text(json.dumps(info), encoding="utf-8")
     os.replace(tmp, qdir / name)
@@ -306,7 +307,7 @@ def full(qdir: Path) -> str | None:
 
 
 def enter(wt: Path, branch: str, status: str = "waiting", urgent: str = "", *,
-          batch_auto: bool = False) -> tuple[Path, Path]:
+          batch_auto: bool = False, alone: bool = False) -> tuple[Path, Path]:
     """Take a ticket (its place in the queue) and release it at exit whatever happens; (queue dir, ticket)."""
     qdir = queue_dir(wt)
     adopted = Path(os.environ.pop(TICKET_ENV, "") or "~")  # land_prepare.relaunch: keep the parent's place
@@ -319,7 +320,7 @@ def enter(wt: Path, branch: str, status: str = "waiting", urgent: str = "", *,
     elif not urgent and (why := full(qdir)):
         raise QueueError(why)
     else:
-        ticket = take(qdir, branch, str(wt), status, urgent, batch_auto=batch_auto)
+        ticket = take(qdir, branch, str(wt), status, urgent, batch_auto=batch_auto, alone=alone)
     if urgent:
         land_events.emit("urgent", ticket=ticket.name, reason=urgent)
     _held.append(ticket)
