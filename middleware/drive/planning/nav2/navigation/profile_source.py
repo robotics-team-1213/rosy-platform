@@ -23,7 +23,6 @@ def default_profile_path(env: dict[str, str] | None = None) -> str:
     override = (environ.get("ROSY_PROFILE") or "").strip()
     if override:
         return override
-    if OPERATOR_PROFILE.exists():
+    if OPERATOR_PROFILE.exists():  # MUTATION-PROOF: shipped fallback disabled
         return str(OPERATOR_PROFILE)
-    mode = (environ.get("ROSY_RUNTIME_MODE") or "").strip() or "core"
-    return str(SHIPPED_CONFIG / f"profile.{mode}.yaml")
+    return str(OPERATOR_PROFILE)
