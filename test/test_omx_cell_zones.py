@@ -16,10 +16,18 @@ CAL = {"sites": {"pallet": {"homography": [[0.001, 0, 0], [0, 0.001, 0], [0, 0, 
 PARAMS = {"zone.split_px": 367.0, "zone.middle_px": 30.0, "zone.wait_s": 1.0}
 
 
+def owner(side):
+    return {"device_id": f"device-{side}", "instance_id": f"arm-{side}_follower",
+            "robot_config_sha256": "a" * 64, "profile_sha256": "b" * 64}
+
+
 def zones(tmp_path, side, clock=None, peer=None):
     t = clock or [0.0]
-    return cell_zones.Zones({"zone_side": side, "zone_peer": peer, "params": PARAMS}, CAL, lock_dir=tmp_path,
-                            incidents=tmp_path / "incidents", clock=lambda: t[0], sleep=lambda s: t.__setitem__(0, t[0] + s))
+    z = cell_zones.Zones({"zone_side": side, "zone_peer": peer, "params": PARAMS}, CAL, lock_dir=tmp_path,
+                         incidents=tmp_path / "incidents", clock=lambda: t[0], sleep=lambda s: t.__setitem__(0, t[0] + s))
+    if hasattr(z, "bind"):
+        z.bind(owner(side), "1" * 32)
+    return z
 
 
 def test_each_arm_enters_its_side_and_never_the_other(tmp_path):
@@ -98,6 +106,7 @@ def test_a_hold_and_free_session_lock_do_not_prove_peer_clearance(tmp_path, hold
     session = os.open(tmp_path / "session-arm_b.lock", os.O_CREAT | os.O_RDWR)
     fcntl.flock(session, fcntl.LOCK_EX)  # arm_b's record_session still runs
     assert a.enter(left)[0] is False
+    assert a.enter((0.37, 0.2))[0] is False
     fcntl.flock(session, fcntl.LOCK_UN)
     os.close(session)
     assert a.enter(left)[0] is False
@@ -106,17 +115,19 @@ def test_a_hold_and_free_session_lock_do_not_prove_peer_clearance(tmp_path, hold
     b.leave()
 
 
-def held_gate(tmp_path, monkeypatch):
+def held_gate(tmp_path, monkeypatch, claim=True):
     monkeypatch.setattr(cell_transfer, "same_session", lambda *a, **k: True)
     monkeypatch.setattr(cell_transfer, "digest", lambda value: "same")
     cell = Cell()
     gate = cell_transfer.Gate(cell, {"zone_side": "left", "params": PARAMS}, CAL)
     gate.zones = zones(tmp_path, "left")
-    gate.assessment, gate.scope_sha = {"mode": "automatic", "session_id": "s", "library_sha256": "same"}, "same"
+    gate.assessment, gate.scope_sha = {"mode": "automatic", "session_id": "1" * 32,
+                                      "operating_profile": owner("left"), "library_sha256": "same"}, "same"
     lib = tmp_path / "lib.json"
     lib.write_text(json.dumps({"chunks": {"home": [[0] * 6]}}))
     assert gate.act(f"load {lib}")["ok"]
-    assert gate.zones.enter((0.37, 0.2))[0]
+    if claim:
+        assert gate.zones.enter((0.37, 0.2))[0]
     return gate, cell
 
 
@@ -183,6 +194,34 @@ def test_process_exit_does_not_prove_zone_clearance(tmp_path, side, xy):
     restarted = zones(tmp_path, side)
     assert not restarted.enter(xy)[0]
     assert not restarted.held
+
+
+def test_same_guarded_owner_can_recover_stale_occupancy_only_after_confirmed_park(tmp_path, monkeypatch):
+    import os
+
+    first, _ = held_gate(tmp_path, monkeypatch)
+    for fd in first.zones.held.values():
+        os.close(fd)
+    first.zones.held = {}
+    recovered, cell = held_gate(tmp_path, monkeypatch, claim=False)
+    cell.park = {"ok": True, "settled": False, "state": [10] * 6}
+    recovered.act("park")
+    assert not zones(tmp_path, "right").enter((0.37, 0.2))[0]
+    cell.park = {"ok": True, "settled": True, "state": [0] * 6}
+    recovered.act("park")
+    peer = zones(tmp_path, "right")
+    assert peer.enter((0.37, 0.2))[0]
+    peer.leave()
+
+
+@pytest.mark.parametrize("contents", ["broken", "{}", '{"schema":"other"}'])
+def test_invalid_occupancy_is_never_adopted_or_cleared(tmp_path, contents):
+    lock = tmp_path / "zone-middle.lock"
+    lock.write_text(contents)
+    z = zones(tmp_path, "left")
+    assert not z.enter((0.37, 0.2))[0]
+    z.leave()
+    assert lock.read_text() == contents
 
 
 def test_takeover_is_a_parameter(tmp_path):
