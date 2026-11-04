@@ -14150,7 +14150,7 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - CE: 해당 없음 — 원인과 기준은 docstring·회귀 시험·D-889 추가 31에 있다.
 
-## 2026-11-04 · docs/publish-full-bridge · docs(D-871): 학습센터 타이머 미활용 발견·활성화 개정
+## 2026-11-04 · uncommitted · docs(D-871): 학습센터 타이머 미활용 발견·활성화 개정
 - 변경: D-871에 2026-11-04 현장 점검 절 추가. 모델 PC `rosy-learning-center-update.timer`가 `disabled`+`inactive`였던 것을 `enable --now`로 복구하고, 사용자 유닛 타이머 감사 규칙(`systemctl --user list-timers`, `timers.target.wants/`)을 남겼다.
 - 증거: 모델 PC에서 타이머 enabled+active 확인, 1회 실행으로 게이트 통과·`idle`(`center_not_running`, 설계 동작) 확인. 로봇·현장 PC·OMX·AI PC 전 표면 타이머 실측은 작업 기록 `Rosy/docs/workspace-records/2026-11-04/auto-update-audit.md`.
 - gate 변화: 없음
