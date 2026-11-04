@@ -3,11 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="theme-color" content="#101214">
-  <title>시스템 상태 · ROSY Monitoring</title>
+  <meta name="theme-color" content="#111113">
+  <title>Rosy Monitoring — 시스템 상태</title>
   <link rel="stylesheet" href="./common/tokens.css">
   <script src="./common/theme.js"></script>
   <link rel="stylesheet" href="./common/components.css">
+  <link rel="stylesheet" href="./common/component-controls.css">
   <link rel="stylesheet" href="./common/app-shell.css">
   <link rel="stylesheet" href="./monitoring.css">
   <script type="module" src="./monitoring.js"></script>
@@ -15,12 +16,14 @@
 </head>
 <body>
   <a class="skip-link" href="#main">본문으로 이동</a>
-  <ui-shell grammar="exception">
-  <ui-topbar class="topbar">
-    <div><p class="brand">ROSY Monitoring</p><h1>시스템 상태</h1></div>
-    <label class="theme-field">화면 테마 <select id="theme" class="ui-field" aria-label="화면 테마"></select></label>
+  <ui-shell grammar="exception" class="ui-app-shell">
+  <ui-topbar role="banner">
+    <ui-brand href="./" aria-label="Rosy Monitoring 홈"><b>Monitoring</b></ui-brand>
+    <span data-spacer></span>
+    <ui-button kind="quiet" type="button" data-theme-cycle data-icon-only aria-label="테마 변경" data-action-icon="theme-dark"></ui-button>
   </ui-topbar>
-  <main id="main" tabindex="-1">
+  <main id="main" class="ui-task-page" tabindex="-1">
+    <h1 class="ui-page-heading">시스템 상태</h1>
     <section class="connection" aria-labelledby="connection-heading">
       <div><h2 id="connection-heading">조회 연결</h2><p id="connection-status" role="status" aria-live="polite">등록된 조회 키로 시작하세요.</p></div>
       <form id="login" autocomplete="off">

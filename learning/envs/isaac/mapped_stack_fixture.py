@@ -5,6 +5,7 @@ import xml.etree.ElementTree as ET
 
 import ship_plate
 from pad_sweep import pad_sweep_bottom_relative_tcp, rotation_matrix  # noqa: F401  (split out, D-766)
+from stack_spots import leveling_center, leveling_via, seat_check  # noqa: F401  (split out, D-766)
 from stacking_fixture import DT, PROFILE
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -331,18 +332,6 @@ def leveling_release_target(index, sample, fixture, commanded_tcp=None):
     return [anchor[k]+desired[k]-box['position'][k] for k in range(3)]
 
 
-def leveling_center(fixture, arm):
-    """The leveling spot `arm` uses: its own (`leveling_centers_m`, one per arm) or the shared `leveling_center_m`."""
-    centers = fixture.get('leveling_centers_m')
-    return centers[arm] if centers else fixture['leveling_center_m']
-
-
-def leveling_via(fixture, arm):
-    """The waypoint `arm` passes on its way to and from leveling: its own (`leveling_vias_m`, None for none) or the shared one."""
-    vias = fixture.get('leveling_vias_m')
-    return vias[arm] if vias else fixture.get('leveling_via_m')
-
-
 def leveling_box_stable(box,index,fixture):
     size = plan(True,fixture=fixture)[index]['size']
     values = [*box['position'],*box['orientation'],*box['velocity'],*box['angular_velocity'],
@@ -559,6 +548,13 @@ def judge(trial, cube=False, *, fixture=None):
     if len(layers) != len(plan(cube, fixture=fixture)):
         return dict(task_success=False, failures=['first_layer_not_completed' if cube else 'three_layers_not_completed'])
     for i, layer in enumerate(layers):
+        if 'policy' in layer:  # D-969: a learned policy is judged on the outcome only (where the boxes settled)
+            if layer.get('item') != i or layer.get('arm') != plan(cube, fixture=fixture)[i]['arm']:
+                failures.append(f'layer_{i+1}:wrong_item_or_arm')
+            settles = layer.get('settle_samples', [])
+            if len(settles) < 10 or not all(stable_box(s['boxes'][j], j, cube, fixture=fixture) for s in settles for j in range(i+1)):
+                failures.append(f'layer_{i+1}:policy_box_not_settled_at_target')
+            continue
         if fixture and fixture.get('leveling_protocol') and not leveling_sequence_observed(layer,i,fixture):
             failures.append(f'layer_{i+1}:leveling_or_regrasp_not_observed')
         if layer.get('item') != i or layer.get('arm') != plan(cube, fixture=fixture)[i]['arm']:

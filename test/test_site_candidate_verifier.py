@@ -109,7 +109,8 @@ def candidate(tmp_path):
     sbom_dir.mkdir()
     docs.mkdir(parents=True)
 
-    deploy_files = (*DEPLOY_FILES, "verify_candidate.py", "site_users.py")
+    deploy_files = (*(n for n in DEPLOY_FILES if n not in _load_verifier().ACCOUNT_BACKUP_FILES),
+                    "verify_candidate.py", "site_users.py")
     for name in deploy_files:
         (deploy / name).write_text(f"candidate:{name}\n", encoding="utf-8")
     (deploy / ".env.example").write_text(
@@ -178,6 +179,36 @@ def _verify(candidate):
     return _load_verifier().verify_candidate(
         root, trusted_key_id=TEST_KEY_ID, trusted_public_key=trusted_key, runner=runner,
     )
+
+
+def _add_account(candidate):
+    root, _, image_ids, _ = candidate
+    manifest = json.loads((root / 'release.json').read_text())
+    ids = _write_images_tar(root / 'images.tar', services=(*SERVICES, 'account'))
+    sbom = root / 'sbom/account.spdx'
+    sbom.write_text('Account SPDX fixture')
+    image_ids['account'] = ids['account'][0]
+    manifest['images']['account'] = {'reference': f'rosy-site-account:{COMMIT}',
+        'image_id': image_ids['account'], 'platform': 'linux/amd64',
+        'sbom': 'sbom/account.spdx', 'sbom_sha256': hashlib.sha256(sbom.read_bytes()).hexdigest()}
+    manifest['image_archive_sha256'] = hashlib.sha256((root / 'images.tar').read_bytes()).hexdigest()
+    for name in _load_verifier().ACCOUNT_BACKUP_FILES:
+        path = root / 'deploy/site' / name
+        path.write_text('signed Account maintenance fixture')
+        manifest['deployment_file_sha256'][name] = hashlib.sha256(path.read_bytes()).hexdigest()
+    (root / 'release.json').write_text(json.dumps(manifest))
+    return candidate
+
+
+def test_verifies_independent_account_image_and_rejects_its_tampered_sbom(candidate):
+    _add_account(candidate)
+    root, _, image_ids, _ = candidate
+    summary = _verify(candidate)
+    assert summary['verified_images'] == [*SERVICES, 'account']
+    assert summary['image_ids']['account'] == image_ids['account']
+    (root / 'sbom/account.spdx').write_text('tampered Account SPDX')
+    with pytest.raises(_load_verifier().CandidateVerificationError, match='account.*SBOM'):
+        _verify(candidate)
 
 
 def test_verifies_manifest_files_sboms_archive_and_loaded_image_ids(candidate):

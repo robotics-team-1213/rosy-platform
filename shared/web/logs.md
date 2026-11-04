@@ -1095,3 +1095,100 @@
 - 변경: `tokens.css`에 `--signal-go/-caution/-stop`을 두고 Fleet 신호기 카드·Fleet 지도 램프·로봇 가상 신호 등이 모두 이것만 쓴다. Fleet 카드의 녹색 등이 무색이던 불일치를 녹색으로 통일했다.
 - 증거: `test_every_signal_lamp_paints_with_the_signal_tokens`(등 그림은 신호 토큰만, 신호 토큰은 등 밖 금지).
 - Gate: 없음. CE: 해당 없음.
+
+## 2026-11-02 · e81af2d7c3 · D-962 independent Account artifact
+
+- Change: Moved unchanged display-only role labels into the existing common Account profile helper. Fleet header preserves its named export; Account profile directly imports the common helper so its bundle contains no Fleet header, authorization or E-stop implementation. Role/grant enforcement is unchanged. Actual TLS Account profile and Fleet header browser/Node consumers passed.
+- Evidence: D-962 independent image scope: remote AI-PC closure at e81af2d7c3 passed 320 tests, 0 skipped, 0 NEW. Account TLS login/initial-password/profile/admin, minimal Account/foundation startup, stdlib-only fixed assets, signed legacy/new inventories and reuse, and Fleet header browser/Node compatibility. OCI build and live independent-image acceptance were not run.
+- Log: `rosy-account-image-closure/run-1.txt`; native `size_range.py d7fcc74e43 b9424451a0` checked four commits successfully; native static secret scan found zero findings.
+- Gate: scoped SOURCE/LOCAL verification only; existing artifact, device and field limits remain.
+
+
+## 2026-11-02 · 5f02d723d1 · D-962 independent identity backup and presentation
+
+- Change: Common Account role labels retain their exact values and Fleet named export. Final reduced bundle and identity TLS/browser consumers passed after branding and maintenance closure; no additional shared behavior changed.
+- Evidence: D-962 independent image and identity backup scope at 5f02d723d1: remote 335 backend/signing/image/backup cases plus 71 opted-in identity TLS/browser cases passed, 0 skipped, 0 NEW. Full Account tables including HTTP audit preserved; stale/corrupt backup refusal, strict signed legacy/new groups, reused image pins, branding, login/profile/admin and first-password flows verified. Prior e81af2d7c3 closure also passed 320 cases including Fleet header browser/Node compatibility. OCI construction and live independent-image/timer acceptance remain pending.
+- Logs: `rosy-account-backup-replay/run-1.txt` (335 passed), `rosy-account-identity-replay/run-1.txt` (71 passed); known-failure comparison 0 new/known/flaky. Native size range checked eight commits without a violation.
+- Gate: scoped SOURCE/LOCAL GO; image artifact, installation, timer activation and human field acceptance remain separate.
+
+
+## 2026-11-02 · 59dbc2136b · D-962 canonical Account scope closure
+
+- Change: Registered the three exact Account identity documents as Account-owned web surfaces without launcher identities; nearest path-component ownership preserves Fleet business-page scope. Opposite-brand mutations reject both Account and Fleet title drift, sibling-prefix matches and ambiguous ownership.
+- Evidence: Official FULL snapshot 20261102132628 exposed stale Fleet component/title consumers and stopped; it was not a FULL success. At 59dbc2136b, committed remote shared-web contracts, component/registry/app ownership, Account TLS identity, Fleet header browser/Node and Account image/deploy closure passed 581 tests, with one separately disabled Android native-token-export check skipped and 0 NEW. Exact title-file isolation via tools/collect_alone.py completed one whole-file target (wrapper 1 passed, 1 empty collection parametrization skipped). Independent review found no supported material findings.
+- Logs: `rosy-account-surface-closure/run-1.txt`; `rosy-account-title-isolated/run-1.txt`. Native canonical renderer check, AST, secret scan (0 findings), diff check and one-commit size range passed.
+- Gate: Scoped SOURCE/LOCAL evidence only. Replacement FULL/no-cache, OCI artifact, installation and live field acceptance remain pending. CE: no additional lesson; canonical ownership, propagation and strict mutation regressions retain the cause and fix.
+
+## 2026-11-02 · uncommitted · D-961 공용 이동 조작과 작업 구성
+
+- 변경: 기존 component-controls.css에 네이티브 이동 링크와 task/auth 구성을 추가하고 gallery·styleguide·template에 연결했다. 팔레트·48px 조작·실행 권한은 유지한다.
+- 증거: 130627f04f 원격 AI PC Chromium RED 8 failed, 0 skipped — 링크 높이가 48px 미만임을 재현. 구현 후 GREEN과 공용 계약은 다음 검증 기록에서 확인한다.
+- Gate: 이동 없음. CE: 미해결 — 제품 적용·회귀·배포 화면 검증 전이다.
+
+## 2026-11-02 · uncommitted · D-961 웹 제품 통합
+
+- 변경: 공용 네이티브 이동 조작·task/auth 구성과 같은 레일 표현을 기존 조합 시트에 연결했다. Robot의 48px 바닥·상단 예산과 Fleet의 56px 자리를 함께 보존한다.
+- 증거: 6262b09d30 공용 회귀 81 passed markers·0 skipped; known_failures 0 NEW. 최종 HEAD의 전체 affected는 다음 기록에서 확인한다.
+- Gate: 전체 회차 검증 중이며 운영 배포·DEVICE/FIELD를 주장하지 않는다. CE: 완료 전 판단; 최종 코드·회귀·ADR 외의 비명시 지식이 있는지 확인한다.
+
+## 2026-11-03 · uncommitted · 자료 표의 공용 표현 연결과 정렬 선택지 입력
+
+- 변경: Cell 물체 카탈로그의 누락된 `component-controls.css`를 연결하고 카탈로그·카메라 좌표 표가 기존 `ui-data-table` 표현을 소비한다. 공용 목록 도구는 `sortLabel`·`sortOptions`를 받아 호출자의 정렬 의미를 전달하며 기존 기본값을 유지한다. 새 토큰·컴포넌트·서버 정렬은 추가하지 않았다.
+- 증거: 실제 문서의 표 조각과 CSS 의존성을 양 테마·1366/390 폭에서 검사하고, 사용자 정의 정렬 이름·값·검색 뒤 선택 유지를 검사한다. 원격 RED는 정렬 1건(`0e7a6e90c9`), 두 표 2건(`ca8947a8fc`)으로 수정 전 누락을 재현했다. 첫 개선 실행에서 두 표는 통과했으며, 정렬은 접근성 트리에 올바른 이름이 있는데 wrapping label의 옵션 글자 때문에 get_by_label이 찾지 못해 역할·이름 기반 선택기로 고쳤다. 최종 GREEN은 후속 원격 결과로 별도 확인한다.
+- Gate: 이동 없음. 실제 전체 제품 화면과 실물 수용은 별도다. CE: 기존 코드·회귀 시험으로 원인이 드러나므로 별도 교훈 문서를 늘리지 않는다.
+
+## 2026-11-04 · uncommitted · 검색 선택의 화면과 호출자 상태 일치
+
+- 변경: `createSearchSelect`가 필터·선택지 갱신 뒤 화면에 남은 선택과 내부 값을 함께 맞추고, 실제 값이 바뀔 때만 호출자에게 알린다. 재정렬·이름 갱신 후 유효한 선택은 보존하고, 사라진 선택은 해제하며 빈 값의 반복 통지를 없앴다.
+- 증거: a1f8376013의 원격 Chromium에서 표시 값은 빈 값인데 호출자 이벤트는 이전 b만 남는 것을 재현했다(NEW1/known0/flaky0). 회귀는 유효 ID 유지, 필터 해제, 데이터에서 삭제, 이미 빈 값인 상태의 재갱신을 함께 검사한다.
+- Gate: 이동 없음. 현재 사용처는 공용 갤러리이며 실제 제품 선택기에서 발견한 장애로 올려 말하지 않는다. CE: 코드·회귀·공개 부품 설명에 판단과 상태 경계를 남긴다.
+
+## 2026-11-04 · uncommitted · 파일 선택 오류와 네이티브 폼 유효성 일치
+
+- 변경: 공용 파일 선택기가 표시하는 형식·크기 오류를 `setCustomValidity`로 네이티브 폼 검사에도 연결한다. 올바른 파일이나 선택 해제 시 오류를 지우며, 기존 콜백·파일 보존·서버 검증 경계는 유지한다.
+- 증거: d5083dd93e의 원격 Chromium에서 JSON 파일 오류가 표시되는데도 실제 form.checkValidity가 true여서 새 회귀가 실패했다(NEW1). 회귀는 형식 오류·크기 초과 차단과 수정·선택 해제 후 유효성 복구를 검사한다.
+- Gate: 이동 없음. 현재 소비자는 공용 갤러리다. CE: 원인과 복구 조건을 네이티브 동작·회귀·공개 부품 설명으로 남긴다.
+
+## 2026-11-04 · uncommitted · 네이티브 폼 초기화 뒤 부품 상태 재검증
+
+- 변경: 공용 DOM 헬퍼가 기본 폼 초기화 뒤 콜백을 실행하며, 파일·검색 선택·날짜 범위가 이를 소비한다. 취소된 reset과 dispose 뒤에는 콜백을 막고 이벤트 리스너를 해제한다. 초기화는 선택을 비우고 날짜·파일의 기존 검증을 다시 적용한다.
+- 증거: deaaa8f6e6에서 파일 초기화와 검색/날짜 초기화 회귀 2건이 예상 실패했고 폐기 후 콜백 방지 사례는 통과했다. 파일 수정·해제·취소된 초기화·초기화 후 복구, 검색 해제·날짜 오류 해제, 초기화 직후 dispose를 실제 Chromium에서 검사한다.
+- Gate: 이동 없음. 세 부품은 현재 갤러리 소비다. CE: 기본 reset 이벤트와 값 변경의 순서 차이를 헬퍼 주석·사용 설명·회귀 시험에 남긴다.
+
+## 2026-11-04 · 8acfe2b315 · 표 갱신의 키보드 포커스 격리
+
+- 변경: 공용 표는 자신의 tbody 안에 있던 포커스만 갱신 뒤 복원한다. 다른 표가 같은 행 ID를 써도 포커스를 가져오지 않는다. 기존 정렬·선택·상세 진입과 현재 표 내부의 포커스 복원은 유지한다.
+- 증거: f9b3b2540e에서 두 표 사이 상세 버튼·체크박스 포커스 회귀 2건이 원격 Chromium에서 예상 실패했다(NEW2). 수정 소스 8acfe2b315에서 공용 갤러리 전체 37 passed/0 skipped, NEW0/known0/flaky0. 같은 표의 재조회·선택 변경 후 포커스와 선택 보존도 검사한다. 읽기 전용 독립 리뷰 추가 지적 없음.
+- Gate: 이동 없음. 현재 소비자는 공용 갤러리이며 합성 브라우저 증거다. 운영 화면·실물 수용을 주장하지 않는다. CE: 해당 없음 — 원인과 복원 경계는 한 줄 containment 검사와 회귀 시험에 드러난다.
+
+## 2026-11-04 · uncommitted · 단계 스트립 노선 모양과 앱 노선 색(D-975)
+
+- 변경: `stage-strip.css`의 `ui-stage-track`을 번호 역과 굵은 선의 노선 모양으로 바꿨다(30rem 미만 세로). `data-line="learning|fleet|robot"`이 `--app-line-*`를 골라 지난 구간·지난 역 테·지금 역 고리에만 칠한다. 두 테마 팔레트에 노선 색 세 개, 표식 28px·선 6px·테 3px 크기 토큰을 더했다. 로봇 styleguide에 앱 노선 견본 셋을 더했다.
+- 증거: `test_palette_gates.py`에 노선 색 게이트(차가운 띠·장미색 밖·대비 3:1·의미 색과 OKLab 0.08)와 소비 범위 게이트를 더했다.
+- 화면 확인: styleguide 견본을 1366·390, 어둡게·밝게로 캡처했다. 첫 캡처에서 30rem 미만 세로 노선의 구간 높이가 0 이하라 선이 사라지는 것을 보고, 역 아래 여백(`--gap-stage-segment`)을 구간 자리로 바꿨다. 쓰지 않게 된 `--gap-stage-track`은 지웠다.
+- Gate: 이동 없음. 생산 화면은 아직 이 부품을 쓰지 않는다(P2부터). CE: 해당 없음 — 장애 해결이 아닌 계획된 부품 변경.
+
+## 2026-11-04 · uncommitted · 실제 제품 색 체계로 팔레트 값 교체와 도구 밀도 토큰(D-976)
+
+- 변경: 두 테마 팔레트 값을 Radix Colors(slate·red·amber·green·teal·indigo·iris·violet·cyan·plum)·GitHub Primer 단계와 모니터용 근흑 바탕(#0c0d0f)으로 바꿨다. 키·의미·파생·역할은 그대로이고 각 줄 주석이 출처다. 밝게 주의는 빨강으로 읽혀 Primer 주황 #bc4c00. `--target-tool` 36px·`--row-dense` 34px를 더했다(넓은 화면 도구 전용). 정적 theme-color 6개·Pilot 매니페스트·Android 런처 바탕·앱 아이콘 SVG·얼굴 LCD 색 튜플을 같이 맞췄다.
+- 증거: `test_palette_gates.py`가 두 테마에서 통과(로컬). 시안 캔버스 24장을 두 테마로 렌더해 확인했다.
+- Gate: 이동 없음. 얼굴 LCD 실물 판독은 미수용. CE: 해당 없음 — 장애 해결이 아닌 사용자 승인 디자인 변경.
+
+## 2026-11-04 · uncommitted · 화면 머리 수치 띠 `.ui-readout[data-form="strip"]`
+
+- 변경: 화면 지도(실제 30화면 대 시안)에서 모든 시안이 쓰는데 공용 부품이 없던 KPI 띠를 `.ui-readout`의 변형으로 더했다(components.css 942줄 상한(D-766) 때문에 새 시트 `readout-strip.css`에 둠). 한 상자를 1px 선으로 나누고 아이콘·색 면 없이 값만 등폭으로 크게, `data-alert` 칸만 주의색. 칸 폭 30rem 미만에서 두 열(허용 목록의 compact 경계). 간격은 역할 토큰 `--gap-readout-strip`·`--inset-readout-strip`. 로봇 styleguide 견본·DESIGN.md 부품 목록을 같이 고쳤다. 첫 소비처는 Fleet 학습 정책 승인.
+- 증거: 로컬 `shared/web/test` 355 PASS(UTF-8, 브라우저 94 skip, Windows 전용 webrtc 1 제외). 첫 시도에서 띠 규칙을 첫 `@container` 블록 앞에 둬 `test_responsive_tiers`가, 기초 간격을 직접 써 `test_ui_token_contracts`가 거절해 고쳤다. 샘플 서버에서 1440·390 × 어둡게·밝게 렌더 확인 — 390에서 22rem 기준으로는 접히지 않아 30rem으로 옮겼다.
+- Gate: 이동 없음. 원격 브라우저 회귀는 커밋 후. CE: 해당 없음 — 계획된 부품 추가.
+
+## 2026-11-04 · uncommitted · 밝게 장미색 정정 — 현재 위치 글자 대 rose-wash 대비 게이트(D-976 정정)
+
+- 증상: D-976 원격 affected(51bb8ff968, 10,303 PASS)에서 `test_console_queue_inline_browser.py` 밝게 4개가 `span.ui-icon-label 3.93 "기록"`으로 실패. 현재 위치 레일 항목은 rose-wash 바탕 위 장미색 글자인데, 게이트는 장미색 대 바탕(4.74)만 봤다.
+- 변경: 밝게 `--brand-rose` `#bb42a4` → `#b13295`(H338·L .542, wash 위 4.56·위험과 색약 대비 1.85 — 두 조건이 반대로 당겨 창이 좁다). 게이트 `test_current_location_text_reads_on_its_wash`를 더해 예전 값(3.93)을 거절함을 확인. D-976 ADR 값 정정.
+- 증거: 로컬 `test_palette_gates.py` 41 PASS. 원격 브라우저 재실행은 커밋 후.
+- Gate: 이동 없음. CE: 기존 교훈 검토 대상 — 하네스(팔레트 게이트)가 놓친 대비를 원격 브라우저가 찾음.
+
+## 2026-11-04 · uncommitted · 화면 머리 규칙을 한 곳으로(D-978)
+
+- 변경: D-978 — 노선·수치 띠는 서버 응답만 보이고 쓰기 요청을 보내지 않는다. `DESIGN.md` 「조합 어휘」의 절차 단계·수치 띠 두 줄이 "지금 쓰는 곳"을 HTML 경로로 적는 정본이 되고, `test_content_vocabulary.py`가 표와 실제 사용 페이지를 대조한다(표의 이름 확인 범위에 `readout-strip.css` 추가). 같은 시험이 `*-line.js`·`policy-model.js`의 쓰기 요청 문자열을 거절한다.
+- 증거: 로컬 `test_content_vocabulary.py` 6 PASS. 표에서 Cell을 빼면 "코드에만 cell.html"로 실패함을 확인한 뒤 되돌림.
+- Gate: 이동 없음. CE: 해당 없음 — 규칙 정본화.

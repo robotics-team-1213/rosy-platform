@@ -105,6 +105,7 @@ OWN = {
         "measured-calibration-view.js",
         "peer-picker.js",
         "start-point-view.js",  # D-540 5: 카메라 설치·보정
+        "install-line.js",  # D-975: 설치 노선
         "start-point-layer.js",
         "tracking-relearn.js",  # D-540 5 / D-539: 배경 다시 학습
         "host-services.js",  # D-524 / D-530: 호스트 여유와 닫힌 서비스 제어
@@ -117,6 +118,7 @@ OWN = {
         "file-picker.js",  # D-926 C7: one Korean file picker
         "cell-print-sheets.js",  # 보정 인쇄물 PDF 내려받기
         "cell-object-catalog.js",  # 물체 카탈로그(무게) 읽기 전용
+        "cell-line.js",  # D-975: 준비 노선(응답이 채운 요소만 읽음)
     },
     "site-map.js": {
         "map-authoring.js", "map-editor.js", "drawing-import.js", "geometry-edit.js", "edit-history.js",

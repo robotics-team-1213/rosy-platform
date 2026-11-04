@@ -15,6 +15,7 @@ passed in so its ``Stop`` is the one the caller catches.
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
@@ -26,6 +27,9 @@ import land_queue
 
 MAX_PREPARING = 6
 POLL = 15.0
+# 2026-11-04 05:42: five FULL pretests shared the two lab PCs at once, so none finished for 45 min and main stood
+# still with nothing ready. FULL pretests beyond this many wait (oldest first), so one finishes and takes the turn.
+MAX_FULL = 2
 # D-889 28: speculation (addendum 3) ran 9.8 h of test-PC time in 6 h on 11-03 and its tree was held at 3 of 34
 # turns, while the ticket stayed "preparing" behind it. It runs only when this is "1".
 SPECULATE_ENV = "ROSY_LAND_SPECULATE"
@@ -86,6 +90,24 @@ def slot(qdir: Path, ticket: Path, sleep=time.sleep, held=None, changed=None) ->
             raise SystemExit(code)  # main's land.py ran this landing to its end on this ticket
         sleep(POLL)
     land_queue.set_status(ticket, "preparing")
+
+
+def full_slot(qdir: Path, ticket: Path, sleep=time.sleep, changed=None) -> None:
+    """Mark this preparing ticket FULL and wait while MAX_FULL older FULL pretests run; an urgent one never waits."""
+    land_queue.set_status(ticket, "preparing", tier="full")
+    if json.loads(ticket.read_text(encoding="utf-8")).get("urgent"):
+        return
+    said = False
+    def older() -> int:
+        return sum(r.get("status") == "preparing" and r.get("tier") == "full" for r in land_queue.ahead(qdir, ticket))
+    while older() >= MAX_FULL:
+        if not said:
+            print(f"[land] FULL pretest waits for {MAX_FULL} older FULL pretest(s) to finish", flush=True)
+            said = True
+        land_queue.touch(ticket)
+        if changed and (code := changed()) is not None:
+            raise SystemExit(code)
+        sleep(POLL)
 
 
 def again(land, wt: Path, branch: str, args, python: str, qdir: Path, ticket: Path, invocations, note) -> str | None:
@@ -174,6 +196,11 @@ def _prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, 
             return  # main's delta stands in for an affected tier only where the D-436 selector maps it
     print(f"[land] {'FULL' if note else 'affected'} tier before the turn, ticket preparing (main {main_sha[:10]})",
           flush=True)
+    if ticket is not None:
+        if note:
+            full_slot(qdir, ticket, changed=lambda: relaunch(land, qdir, ticket))
+        else:
+            land_queue.set_status(ticket, "preparing", tier="")
     logdir, began = land.tmp_dir(branch), time.monotonic()
     guard_args = land.argparse.Namespace(**{**vars(args), "no_cache": True}) if explicit else args
     # The guard round (with land_isolation's alone runs: here only) beside the selection, not before it: on

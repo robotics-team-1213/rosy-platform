@@ -107,6 +107,6 @@
 
 - 2026-11-03 · uncommitted · feat(fleet): D-971 OMX 팔 사건 원장·AI PC 설명·운영자 해제
 - 2026-11-03 · 91f1525146 · fix(fleet): ARM 위임의 요청 키 격리와 상위 승인 검사
+- 2026-11-03 · a5b594ea83 · 온도 칩의 실제 렌더링 전환 회귀
 - 2026-11-03 · 9f666845e8 · fix(fleet): platoon 지도 계산 공유와 HTTP 응답성
-- 2026-11-02 · uncommitted · D-963 USB 카메라 역할 결정 라우트
-- 2026-11-02 · uncommitted · D-962 독립 Account 수신과 개발 모드 사람 로그인
+- 2026-11-02 · a7f36cb999 · Web unification follow-up

@@ -28,10 +28,10 @@ if __package__:
         COMPANIONS, ConfigError, EXIT_CONFIG, EXIT_FAILED, EXIT_LOCKED, EXIT_OK, Http, Paths,
         PROJECT, Refused, Rejected, Runner, SERVICES, SIGNATURE, STACK_UNIT, Transient,
         _COMMIT, _LIST_LIMIT, _MAX_PAGES, _PART, _SMALL_LIMIT, _TAG, _now,
-        check_overrides, containers_reason, forget_failed, functional_inventory, functional_reason, load_config, load_update_state, log, read_env,
-        run_lock, runtime_reason, safe_extract, set_hold, swap_link, write_env_tag,
+        check_overrides, forget_failed, functional_inventory, functional_reason, load_config, load_update_state, log, read_env,
+        run_lock, safe_extract, set_hold, swap_link, write_env_tag,
     )
-    from .site_update_runtime import SiteRuntimeIO
+    from .site_update_runtime import SiteRuntimeIO, containers_reason, runtime_reason
 else:  # pragma: no cover - installed host CLI
     if str(SCRIPT_DIR) not in sys.path:
         sys.path.insert(0, str(SCRIPT_DIR))
@@ -40,10 +40,10 @@ else:  # pragma: no cover - installed host CLI
         COMPANIONS, ConfigError, EXIT_CONFIG, EXIT_FAILED, EXIT_LOCKED, EXIT_OK, Http, Paths,
         PROJECT, Refused, Rejected, Runner, SERVICES, SIGNATURE, STACK_UNIT, Transient,
         _COMMIT, _LIST_LIMIT, _MAX_PAGES, _PART, _SMALL_LIMIT, _TAG, _now,
-        check_overrides, containers_reason, forget_failed, functional_inventory, functional_reason, load_config, load_update_state, log, read_env,
-        run_lock, runtime_reason, safe_extract, set_hold, swap_link, write_env_tag,
+        check_overrides, forget_failed, functional_inventory, functional_reason, load_config, load_update_state, log, read_env,
+        run_lock, safe_extract, set_hold, swap_link, write_env_tag,
     )
-    from site_update_runtime import SiteRuntimeIO
+    from site_update_runtime import SiteRuntimeIO, containers_reason, runtime_reason
 
 
 class SiteUpdater(SiteRuntimeIO):

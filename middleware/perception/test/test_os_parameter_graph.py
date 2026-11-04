@@ -270,8 +270,12 @@ class ParameterGraphTests(unittest.TestCase):
                 if selector == '/**':
                     continue
                 name = selector.rsplit('/', 1)[-1]
+                # An empty list has no type to infer; its node declares the typed array itself.
+                settings = {'ros__parameters': {k: v for k, v in settings['ros__parameters'].items() if v != []}}
+                typed_path = Path(tempfile.mkdtemp()) / path.name
+                typed_path.write_text(yaml.safe_dump({selector: settings}), encoding='utf-8')
                 for namespace in ('', 'rosy_01', 'rosy_02'):
-                    rclpy.init(args=['--ros-args', '--params-file', str(path)])
+                    rclpy.init(args=['--ros-args', '--params-file', str(typed_path)])
                     node = None
                     try:
                         node = Node(name, namespace=namespace,

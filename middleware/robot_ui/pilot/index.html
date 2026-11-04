@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#101214">
+  <meta name="theme-color" content="#111113">
   <title>Rosy Pilot</title>
   <link rel="icon" type="image/svg+xml" href="/common/icons/pilot.svg">
   <link rel="stylesheet" href="/common/tokens.css">
@@ -18,7 +18,7 @@
   <a class="skip-link" href="#pilot-main">본문으로 건너뛰기</a>
   <noscript><ui-status state="error">이 화면은 브라우저 스크립트를 사용합니다. 스크립트를 허용한 뒤 다시 여세요. 비상 정지는 로봇 본체의 물리 스위치로 항상 사용할 수 있습니다.</ui-status></noscript>
   <ui-shell grammar="focal">
-    <ui-topbar>
+    <ui-topbar role="banner">
       <ui-brand><a href="/pilot" data-pilot-home aria-label="Rosy Pilot 접속 홈"><b>Pilot</b><small data-pilot-robot hidden></small></a></ui-brand>
       <span data-spacer></span>
       <ui-text id="pilot-notice" scale="label" role="status"></ui-text>
@@ -26,7 +26,7 @@
       <ui-button kind="quiet" type="button" data-goto="/console">운용 지도</ui-button>
       <ui-button kind="irreversible" type="button" data-estop data-always-live>비상 정지</ui-button>
     </ui-topbar>
-    <main id="pilot-main" class="pilot-main">
+    <main id="pilot-main" class="pilot-main" tabindex="-1">
       <a data-account-profile hidden></a>
       <h1 class="sr-only">Rosy Pilot — 접속 게이트</h1>
       <ui-empty data-pilot-note hidden>Pinky CORE 연결을 확인합니다.</ui-empty>

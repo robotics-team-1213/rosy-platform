@@ -2,31 +2,37 @@
 import json
 from pathlib import Path
 
-from fastapi import HTTPException
-from fastapi.responses import FileResponse, RedirectResponse
-
 PAGES = frozenset(('/console/login', '/console/profile', '/console/accounts'))
 ASSETS = frozenset(('fleet-document.css', 'password-login.css', 'password-login.js', 'login-page.js',
-                    'login-return.js', 'profile-page.js', 'account-page.js', 'account-permissions.js',
-                    'fleet-header.js', 'authorization.js'))
+                    'login-return.js', 'profile-page.js', 'account-page.js', 'account-permissions.js'))
 CSP = "default-src 'self'; connect-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; frame-ancestors 'none'; base-uri 'self'"
 
 
 def install_static(app, web_root, web_common):
+    from fastapi import HTTPException
+    from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
     root, common = Path(web_root).resolve(), Path(web_common).resolve()
     registry = json.loads((root / 'assets.json').read_text(encoding='utf-8'))
     common_assets = json.loads((common / 'shared-assets.json').read_text(encoding='utf-8'))['shared_assets']
 
-    def serve(base, entry):
+    def serve(base, entry, *, account_page=False):
         path = (base / entry['path']).resolve()
         if base not in path.parents or not path.is_file():
             raise HTTPException(404)
-        return FileResponse(path, media_type=entry['media_type'],
-                            headers={'Cache-Control': 'no-cache', 'Content-Security-Policy': CSP})
+        headers = {'Cache-Control': 'no-cache', 'Content-Security-Policy': CSP}
+        if account_page:
+            text = path.read_text(encoding='utf-8')
+            text = text.replace('<html ', '<html data-app="account" ', 1)
+            text = text.replace('<title>Rosy Fleet —', '<title>Rosy Account —', 1)
+            text = text.replace('<b>Rosy Fleet</b>', '<b>Rosy Account</b>', 1)
+            text = text.replace('href="/common/icons/console.svg"', 'href="/common/brand/mark.svg"', 1)
+            text = text.replace('계정 로그인', 'Rosy Account 로그인')
+            return HTMLResponse(text, headers=headers)
+        return FileResponse(path, media_type=entry['media_type'], headers=headers)
 
     def page_handler(url):
         def page():
-            return serve(root, registry['pages'][url])
+            return serve(root, registry['pages'][url], account_page=True)
         return page
 
     for url in PAGES:

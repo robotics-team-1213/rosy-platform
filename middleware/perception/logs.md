@@ -1823,3 +1823,17 @@
 - gate 변화: 없음. 로봇 이미지 빌드와 실물 기동은 미실행이다.
 - 결정: D-964
 - 교훈: 없음.
+
+## 2026-11-03 · uncommitted · feat(perception): 후진 충전소 LiDAR V 표지 관측 (D-972)
+- 변경: `sensors/sensing/dock_lidar_v.py`(새, ROS 무의존) — 스캔 점을 이웃 간격으로 묶고 split-and-merge로 선분을 찾아, 날개 둘의 사이각·꼭짓점 거리·열린 방향이 선언한 V와 맞을 때만 멈춤면 가운데와 안쪽 축을 낸다. `nodes/dock_lidar_observer_node.py`(새) — `scan` + TF(base_link ← 레이저, 기울면 거절) → `dock/observation`(source LIDAR_V). 모션 출력 없음. `setup.py` 진입점 추가.
+- 증거: `test/test_dock_lidar_v.py`(광선 추적 합성 스캔: 깨끗·잡음 2 mm·한 날개 반 가림·날개 하나·평평한 벽·직각 V·뒤에서 본 V). 원격 시험 결과는 커밋 본문·착지 기록에.
+- gate 변화: 없음. ROS 그래프·실물 C1 스캔 수용 전.
+- 결정: D-972
+- 교훈: 없음.
+
+## 2026-11-03 · uncommitted · revert(perception): 후진 충전소 LiDAR V 관측을 CORE로 옮김 (D-972)
+- 변경: 바로 앞 항목의 `sensors/sensing/dock_lidar_v.py`·`nodes/dock_lidar_observer_node.py`·`setup.py` 진입점을 뺐다. `control` 패키지는 크기 래칫(15555, D-766 4)에 묶여 줄을 늘릴 수 없고, CORE가 같은 스캔을 이미 받는다. 검출은 `core_features.docking.lidar_v`, 연결은 `core/bridge/observation.py`.
+- 증거: 원격 시험 `test_ratchet_rows_are_the_measured_counts_and_only_go_down`(control 15555 → 15630)과 노드 목록 시험 3건 실패 뒤 옮김.
+- gate 변화: 없음.
+- 결정: D-972
+- 교훈: 없음.

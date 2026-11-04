@@ -29,7 +29,8 @@ class DockPhase(str, enum.Enum):
     CHARGED_HOLD = "charged_hold"  # D-350: 만춫 확인, Fleet/운영자 지시 대기
     BACKOFF = "backoff"          # 실패 후 뒤로 빠져 재시도 준비
     TURNING = "turning"          # 주차형: 제자리 회전 (진입, 언도킹 뒤)
-    ALIGNING = "aligning"        # 주차형: 주차점에서 방위만 맞춘다
+    ALIGNING = "aligning"        # 주차형: 주차점에서 방위만 맞춘다. 후진형: 레일 입구 밖 정렬
+    REVERSING = "reversing"      # 후진형: 레일 안 곧은 후진(각속도 0), 접촉에서 멈춘다
 
 
 class DockingExecutor(Protocol):
@@ -80,3 +81,15 @@ class DockingConfig:
     acquire_look_s: float = 0.5         # 기어가기 전에 먼저 본다 (5 Hz 두 프레임 + 지연)
     backoff_timeout_s: float = 10.0
     aim_min_m: float = 0.05             # 이보다 가까우면 주차점이 아니라 도크 yaw 를 겨눈다
+
+    # 후진형 (approach="rear", D-950 후속). 레일 안에서 조향하면 벽과 다퉈 끼인다
+    # (연구 dock_sim: 조향 12 ~ 27/47, 곧게 44 ~ 45/47) — 레일 안은 각속도 0 이다.
+    rear_align_speed: float = 0.03      # m/s, 레일 입구 밖 후진 정렬
+    rear_align_gain_lateral: float = 8.0   # rad/m — 횡 오차 → 목표 방위 (±40 mm·±6° → 0.40 m 뒤 2 mm·1°)
+    rear_align_max_heading: float = 0.17   # rad, 목표 방위 상한
+    rear_align_gain_yaw: float = 2.0
+    rear_speed: float = 0.025           # m/s, 레일 안 곧은 후진
+    contact_stall_s: float = 0.5        # 이만큼 진행이 없으면 멈춤면 접촉
+    contact_progress_m: float = 0.002   # 이보다 덜 가면 진행이 없다
+    rear_backoff_m: float = 0.55        # 재시도 전진 거리(레일 밖으로)
+    rear_charge_rise_v: float = 0.02    # 멈춘 뒤 기준보다 이만큼 올라야 충전으로 본다(팩 실측 후 조정)

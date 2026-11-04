@@ -13,6 +13,7 @@ import { createFieldView } from "./field-view.js";
 import { createMapFitView } from "./map-fit-view.js";
 import { createMeasuredCalibrationView } from './measured-calibration-view.js';
 import { createStartPointView } from "./start-point-view.js";
+import { createInstallLine } from "./install-line.js";
 import { createTrackingRelearn } from "./tracking-relearn.js";
 import { createHostServices } from "./host-services.js";
 import { createDeviceProfiles } from "./device-profiles.js";
@@ -154,6 +155,8 @@ taskChooser.setReady();
 // 주소의 #작업-id가 첫 화면을 고른다(공유·새로고침 보존). task id ≠ 패널 id라 스크롤 점프도 없다.
 const initialTask = location.hash.slice(1);
 if (installTasks.some(task => task.id === initialTask)) void taskChooser.choose(initialTask);
+// 설치 노선의 역 링크(#작업-id)도 같은 작업을 고른다 — 숨은 패널로의 앵커는 아무 일도 하지 않는다.
+addEventListener("hashchange", () => { const id = location.hash.slice(1); if (installTasks.some(task => task.id === id)) void taskChooser.choose(id); });
 pageScope.subscribe(() => {
   taskChooser.resume();
   return () => { void taskChooser.pause().then(() => { if (pageScope.capture().current()) taskChooser.resume(); }); };
@@ -202,6 +205,7 @@ mapFit = createMapFitView({ scope: pageScope, el, view, call, visionView, onChan
 measuredCalibration = createMeasuredCalibrationView({scope:pageScope,root:el('measured-calibration'),call,visionView,auth});
 // D-540 5 — 시작점(D-513)과 배경 다시 학습(D-539)은 `카메라 설치·보정`이 가진다. 관제 문서에는 없다.
 startPoints = createStartPointView({ scope: pageScope, el, view, call, auth, onChanged: () => mapFit.render() });
+const installLine = createInstallLine({ root: el("install-line"), call, scope: pageScope });
 const relearn = createTrackingRelearn({ scope: pageScope, el, call, auth, confirm: confirmIrreversible });
 peerPicker = createPeerPicker({scope: pageScope, el, call,
   isLocked: () => auth.locked || !auth.role,
@@ -337,6 +341,7 @@ async function refreshAuthorization(renewed = false, credentialChange = false) {
       refreshDiscovery(),
       peerPicker.refresh(),
       startPoints.refresh(),
+      installLine.refresh(),
       relearn.refresh(),
       hostServices.refresh(),
       deviceProfiles.refresh(),
@@ -369,6 +374,7 @@ pageScope.interval(refreshDiscovery, MAP_MS);
 pageScope.interval(() => peerPicker.refresh(), MAP_MS);
 pageScope.interval(() => visionView.refreshFrame(), STATE_MS + 500);
 pageScope.interval(() => hostServices.refresh().catch(() => {}), 30000);
+pageScope.interval(() => installLine.refresh().catch(() => {}), 30000);
 pageScope.interval(() => {
   if (!auth.locked && taskChooser.selectedId === 'device-profiles') deviceProfiles.refresh();
 }, 30000);

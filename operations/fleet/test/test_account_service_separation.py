@@ -32,6 +32,7 @@ def standalone(tmp_path):
     from rosy_account.account_authority import AccountAuthority
     from rosy_account.app import create_app
     from rosy_account.migration import migrate_authority
+    from rosy_account.web_assets import build_web
     from test_account_ledger import activated, cookie
     sessions = activated(tmp_path)
     value = cookie(sessions)
@@ -51,11 +52,87 @@ def standalone(tmp_path):
     settings.pop('private_key')
     config.write_text(json.dumps({**settings, 'site_id': 'test-site', 'private_key_file': 'key.pem'}))
     config.chmod(0o600)
-    app = create_app(config=config, db=target, web_root=ROOT / 'applications/fleet/web',
-                     web_common=ROOT / 'shared/web')
+    web = tmp_path / 'account-web'
+    build_web(ROOT, web)
+    app = create_app(config=config, db=target, web_root=web / 'console', web_common=web / 'common')
     client = TestClient(app, base_url='https://account.test', follow_redirects=False)
     client.cookies.set('rosy_fleet_session', value)
     return app, client, context, config
+
+
+def test_minimal_account_image_sources_start_without_fleet(standalone, tmp_path):
+    import os
+    import shutil
+    import subprocess
+    import sys
+    app, _, _, config = standalone
+    source = tmp_path / 'image'
+    shutil.copytree(ROOT / 'operations/account/rosy_account', source / 'account/rosy_account')
+    for relative in ('__init__.py', 'protocol/__init__.py', 'protocol/account_access.py'):
+        target = source / 'foundation/core_common' / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(ROOT / 'contracts/foundation/core_common' / relative, target)
+    code = '''import importlib.abc,sys
+class Boundary(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, *args):
+        if fullname.split('.')[0] in {'fleet','drive','rclpy','rospy','rosy'}:
+            raise ImportError('Account attempted a control runtime import')
+sys.meta_path.insert(0,Boundary())
+from rosy_account.app import create_app
+from fastapi.testclient import TestClient
+import rosy_account,core_common.protocol.account_access
+from pathlib import Path
+assert Path(rosy_account.__file__).is_relative_to(Path(sys.argv[1]))
+assert Path(core_common.protocol.account_access.__file__).is_relative_to(Path(sys.argv[1]))
+app=create_app(config=Path(sys.argv[2]),db=Path(sys.argv[3]),
+               web_root=Path(sys.argv[4])/'console',web_common=Path(sys.argv[4])/'common')
+client=TestClient(app,base_url='https://account.test')
+assert client.get('/healthz').status_code==200
+assert client.get('/console/login').status_code==200
+assert not any(n=='fleet' or n.startswith('fleet.') for n in sys.modules)
+'''
+    env = {**os.environ, 'PYTHONPATH': os.pathsep.join(str(source / name) for name in ('account', 'foundation'))}
+    result = subprocess.run([sys.executable, '-c', code, str(source), str(config),
+                             str(app.state.password_sessions.path), str(tmp_path / 'account-web')],
+                            cwd=source, env=env, capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+
+
+def test_account_backup_preserves_all_auth_tables_and_refuses_stale_or_corrupt_copies(standalone, tmp_path):
+    import os
+    import stat
+    import subprocess
+    import sys
+    import time
+    app, client, _, _ = standalone
+    assert client.patch('/api/fleet/auth/profile', json={'display_name': 'Backup administrator'},
+                        headers={'Origin': 'https://account.test'}).status_code == 200
+    path = app.state.password_sessions.path
+    def rows(database):
+        with sqlite3.connect(database) as db:
+            tables = [r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")]
+            return {table: db.execute('SELECT * FROM "' + table + '"').fetchall() for table in tables}
+    original = rows(path)
+    assert original['account_http_audit']
+    destination = tmp_path / 'account-backups'
+    tool = [sys.executable, '-I', str(ROOT / 'deploy/site/site_db.py')]
+    def run(*args):
+        return subprocess.run([*tool, *args], capture_output=True, text=True)
+    result = run('backup', '--source', str(path), '--dest-dir', str(destination), '--prune', '14',
+                 '--prune-history', '0', '--prune-audit', '0')
+    assert result.returncode == 0, result.stderr
+    copies = list(destination.glob('fleet-backup-*.sqlite3'))
+    assert len(copies) == 1
+    assert rows(copies[0]) == original == rows(path)
+    assert stat.S_IMODE(copies[0].stat().st_mode) == 0o600
+    assert run('verify', '--path', str(copies[0])).returncode == 0
+    assert run('check', '--dest-dir', str(destination), '--max-age-hours', '48').returncode == 0
+    os.utime(copies[0], (time.time() - 50 * 3600,) * 2)
+    assert run('check', '--dest-dir', str(destination), '--max-age-hours', '48').returncode != 0
+    os.utime(copies[0], None)
+    copies[0].write_bytes(b'corrupt synthetic backup')
+    assert run('check', '--dest-dir', str(destination), '--max-age-hours', '48').returncode != 0
+    assert rows(path) == original
 
 
 def test_standalone_preserves_session_profile_and_durable_audit(standalone):
@@ -75,6 +152,19 @@ def test_standalone_preserves_session_profile_and_durable_audit(standalone):
                         headers={'Origin': 'https://account.test'}).status_code == 200
     with sqlite3.connect(app.state.password_sessions.path) as db:
         assert db.execute('SELECT status_code FROM account_http_audit').fetchall() == [(200,)]
+
+
+@pytest.mark.parametrize('path', ['/console/login', '/console/profile', '/console/accounts'])
+def test_standalone_pages_identify_the_account_owner(standalone, path):
+    response = standalone[1].get(path)
+    assert response.status_code == 200
+    assert '<html data-app="account" ' in response.text
+    assert '<title>Rosy Account —' in response.text
+    assert '<b>Rosy Account</b>' in response.text
+    assert '<b>Rosy Fleet</b>' not in response.text
+    assert 'href="/common/brand/mark.svg"' in response.text
+    assert response.headers['cache-control'] == 'no-cache'
+    assert "script-src 'self'" in response.headers['content-security-policy']
 
 
 def test_standalone_login_fails_closed_when_audit_is_unavailable(standalone, monkeypatch):

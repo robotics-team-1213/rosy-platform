@@ -15,18 +15,92 @@ import subprocess
 
 if __package__:
     from .site_update_io import (
-        PROJECT, STACK_UNIT, Rejected, Transient, allowed_overlays, containers_reason,
-        functional_inventory, functional_reason, runtime_reason,
+        ACCOUNT_OVERLAY, COMPANIONS, PROJECT, SERVICES, STACK_UNIT, Rejected,
+        Transient, allowed_overlays, companion_services, functional_inventory, functional_reason,
         read_env,
     )
     from .verify_candidate import CandidateVerificationError, verified_services
 else:  # pragma: no cover - installed host CLI
     from site_update_io import (
-        PROJECT, STACK_UNIT, Rejected, Transient, allowed_overlays, containers_reason,
-        functional_inventory, functional_reason, runtime_reason,
+        ACCOUNT_OVERLAY, COMPANIONS, PROJECT, SERVICES, STACK_UNIT, Rejected,
+        Transient, allowed_overlays, companion_services, functional_inventory, functional_reason,
         read_env,
     )
     from verify_candidate import CandidateVerificationError, verified_services
+
+
+def _healthy(service, row):
+    # Older signed peer images have no healthcheck.
+    return row.get('Health') == 'healthy' or (service == 'control-unit-peer' and not row.get('Health'))
+
+
+def runtime_reason(rows, hashes: dict, run) -> str:
+    """Detect operational drift without logging inspect output or credentials."""
+    for service in COMPANIONS:
+        if service in hashes:
+            matches = [row for row in rows if isinstance(row, dict) and row.get('Service') == service]
+            if (len(matches) != 1 or matches[0].get('State') != 'running'
+                    or not _healthy(service, matches[0])):
+                health = '' if service == 'control-unit-peer' else 'healthy '
+                return f'{service} needs exactly one {health}running container'
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        service = row.get('Service')
+        if service not in (*SERVICES, *COMPANIONS):
+            continue
+        try:
+            details = json.loads(run(['docker', 'container', 'inspect', row['ID']]).stdout)[0]
+            host = details['HostConfig']
+            labels = details['Config'].get('Labels') or {}
+            if not hashes.get(service) or labels.get('com.docker.compose.config-hash') != hashes[service]:
+                return f'{service} runtime differs from current Compose configuration'
+            if host.get('ReadonlyRootfs') is not True or host.get('Privileged') is not False:
+                return f'{service} runtime no longer has a read-only unprivileged root'
+        except (ValueError, KeyError, IndexError, TypeError, AttributeError):
+            return f'{service} runtime configuration cannot be verified'
+    return ''
+
+
+def containers_reason(rows, commit: str, accepted: dict, run, services=SERVICES,
+                      image_references: dict | None = None, companions=None) -> str:
+    if not isinstance(rows, list):
+        return 'docker compose ps output is not a list'
+    independent = 'account' in services or 'account' in accepted or 'account' in (image_references or {})
+    if independent and (not accepted.get('account') or not (image_references or {}).get('account')):
+        return 'account signed image identity proof is incomplete'
+    if any(isinstance(row, dict) and row.get('Service') in SERVICES
+           and row['Service'] not in services for row in rows):
+        return 'runtime contains a managed service outside the signed candidate'
+    present = {row.get('Service') for row in rows
+               if isinstance(row, dict) and row.get('Service') in COMPANIONS}
+    if companions is None:
+        companions = present - {'control-unit-peer'} - ({'account'} if independent else set())
+    if present - (set(services) | companions):
+        return 'runtime contains an unconfigured companion'
+    if ('account' in present and not independent and
+            (tuple(services) not in (SERVICES[:3], SERVICES) or set(accepted) != set(services)
+             or (image_references is not None and set(image_references) != set(services)))):
+        return 'account legacy signed inventory proof is incomplete'
+    for service in (*services, *sorted(companions - set(services))):
+        owner = 'account' if service == 'account' and independent else COMPANIONS.get(service, service)
+        matches = [row for row in rows if isinstance(row, dict) and row.get('Service') == service]
+        if len(matches) != 1:
+            return f'{service} needs exactly one running container'
+        row = matches[0]
+        if row.get('Image') != (image_references or {}).get(owner, f'rosy-site-{owner}:{commit}'):
+            return f"{service} runs {row.get('Image')!r}"
+        if row.get('State') != 'running' or not _healthy(service, row):
+            return f"{service} is {row.get('State')}/{row.get('Health') or 'no health'}"
+        if not row.get('ID'):
+            return f'{service} container ID is missing'
+        try:
+            identity = run(['docker', 'container', 'inspect', '--format', '{{.Image}}', row['ID']]).stdout.strip()
+        except Transient as error:
+            return str(error)
+        if identity not in accepted.get(owner, ()):
+            return f'{service} running image identity differs from signed candidate'
+    return ''
 
 
 class SiteRuntimeIO:
@@ -61,6 +135,8 @@ class SiteRuntimeIO:
                 raise Rejected('signed manifest commit differs from candidate commit')
             services = verified_services(manifest.get('verified_images'))
             refs = manifest.get('image_references')
+            if 'account' in services and refs is None:
+                raise Rejected('independent Account signed image reference proof is missing')
             if refs is not None:
                 if (not isinstance(refs, dict) or set(refs) != set(services)
                         or any(not isinstance(refs[s], str)
@@ -113,9 +189,11 @@ class SiteRuntimeIO:
             self.sleep(5)
 
     def _containers_reason(self, env: dict[str, str], commit: str) -> str:
-        services = self._runtime_proofs.get(commit)
-        if services is None:
+        inventory = self._runtime_proofs.get(commit)
+        if inventory is None:
             return 'runtime has no verified service-set proof'
+        overlays = allowed_overlays(env)
+        services = tuple(s for s in inventory if s != 'account' or ACCOUNT_OVERLAY[1] in overlays)
         try:
             out = self._compose(env, "ps", "--all", "--format", "json").stdout.strip()
         except Transient as error:
@@ -125,18 +203,17 @@ class SiteRuntimeIO:
                 json.loads(line) for line in out.splitlines() if line.strip()]
         except json.JSONDecodeError:
             return "docker compose ps output is not JSON"
-        reason = containers_reason(rows, commit, self._accepted_images.get(commit, {}), self._run, services,
-                                   self._image_references.get(commit))
-        if reason:
-            return reason
         try:
             output = self._compose(env, 'config', '--hash', '*', tag=commit).stdout
             hashes = dict(line.split() for line in output.splitlines() if line.strip())
-            return runtime_reason(rows, hashes, self._run)
         except Transient as error:
             return str(error)
         except ValueError:
             return 'Compose configuration hashes cannot be verified'
+        companions = companion_services(overlays, inventory, hashes)
+        reason = containers_reason(rows, commit, self._accepted_images.get(commit, {}), self._run, services,
+                                   self._image_references.get(commit), companions=companions)
+        return reason or runtime_reason(rows, hashes, self._run)
 
     def _restart(self) -> None:
         env = read_env(self.paths.site_env)
@@ -157,6 +234,9 @@ class SiteRuntimeIO:
         outgoing = self._runtime_proofs[commit]
         self.check_overrides(env, commit, folder=folder, env_file=self.paths.env_backup,
                              services=outgoing)
+        # Account remains an optional overlay across old Fleet-owned and new independent images.
+        outgoing = tuple(s for s in outgoing if s != 'account')
+        incoming = tuple(s for s in incoming if s != 'account')
         if outgoing == incoming:
             return
         if set(outgoing) - set(incoming) != {'postgres'}:

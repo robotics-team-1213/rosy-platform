@@ -27,16 +27,33 @@ function error(message,owner='action') {
 }
 function status(text, state) {
   $('account-status').textContent=text; $('account-status').setAttribute('state',state);
+  $('account-status').hidden=state==='empty';
+  $('account-retry').hidden=!['error','unavailable','forbidden'].includes(state);
+  loginControls();
 }
 function loginControls() {
+  $('account-home').hidden=!active && loginOptions?.rosy_account !== false;
+  const denied=$('account-status').getAttribute('state')==='forbidden';
   $('account-login').hidden=!loginOptions?.enabled || !loginOptions?.rosy_account;
+  $('account-login').dataset.kind=denied?'quiet':'primary';
+  $('account-login').textContent=denied?'다른 계정으로 로그인':'Rosy Account로 로그인';
+}
+function accountShell(signedIn) {
+  document.querySelector('.ui-app-body').dataset.seats=signedIn?'rail':'none';
+  document.querySelector('.ui-rail').hidden=!signedIn;
+  document.querySelector('[data-learning-account-entry]').hidden=!signedIn;
+  $('review-command-open').hidden=!signedIn;
+  $('accounts-main').classList.toggle('ui-auth-page',!signedIn);
+  $('account-title').textContent=signedIn?'계정과 연결':'Learning에 로그인';
 }
 function signedOut() {
   token=null; session=null; active=false;
   connectionChoiceRequired.fill(false);actionError=pollError='';error('');
   $('login-panel').hidden=false; $('signed-in').hidden=true;
-  status(loginOptions?.enabled?'Rosy Account로 로그인하세요.':'계정 서버 연결 준비 중입니다.', loginOptions?.enabled?'empty':'unavailable');
-  $('login-help').textContent=loginOptions?.enabled?'아래 버튼으로 Rosy Account 로그인 화면을 여세요. 로그인 후 이 Learning 화면으로 돌아옵니다.':'계정 서버 연결 준비 중입니다. 연결 후 Rosy Account로 로그인할 수 있습니다.';
+  accountShell(false);
+  const available=loginOptions?.enabled && loginOptions?.rosy_account;
+  status(available?'로그인이 필요합니다.':'계정 서버 연결 준비 중입니다.', available?'empty':'unavailable');
+  $('login-help').textContent=available?'Rosy Account로 로그인해 학습 작업을 이어가세요.':'계정 서버 연결 준비 중입니다. 연결 후 Rosy Account로 로그인할 수 있습니다.';
   loginControls();
   for(const id of ['identity','connections','connection','imports','repos','repo-connection']) $(id).replaceChildren();
   for(const id of ['connect-form','import-form','repo-list-form','repo-create-form','repo-delete-form']) $(id).reset();
@@ -109,13 +126,14 @@ async function refresh() {
   try { session=await api('/api/accounts/session'); }
   catch(e) {
     if (e.status === 403) {
-      // Signed in to Rosy Account without this project's grant; another login would loop.
-      signedOut(); status(e.message, 'forbidden'); $('account-retry').hidden=false; return;
+      // Keep denial visible; changing accounts is an explicit action, never an automatic redirect.
+      signedOut(); status('이 학습 작업에 접근할 권한이 없습니다. 관리자에게 권한을 요청하거나 다른 계정으로 로그인하세요.', 'forbidden'); return;
     }
     if (e.status !== 401) throw e;
     signedOut(); return;
   }
   token=session.token; active=true; $('login-panel').hidden=true; $('signed-in').hidden=false;
+  accountShell(true);
   status('로그인됨', 'ready');
   $('identity').textContent=`프로젝트 ${session.project_id} · 작업자 ${session.user_id} · 권한 ${session.capabilities.join(', ')}`;
   const canPublish=session.capabilities.includes('publish');
@@ -244,4 +262,5 @@ $('account-retry').addEventListener('click',()=>perform(async()=>{
   await refresh();
 }));
 setInterval(()=>{if(active&&!pending&&!document.hidden&&$('account-status').getAttribute('state')==='ready')perform(jobs,'poll');},5000);
+accountShell(false);
 perform(refresh);

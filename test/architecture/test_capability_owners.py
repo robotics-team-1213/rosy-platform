@@ -3,8 +3,9 @@
 ``tools/harness/platform_parts.yaml`` gives each root a ``capability:`` whose
 ``owners`` are GitHub logins. ``.github/CODEOWNERS`` must route each owned root
 to those owners (last matching line, as GitHub reads it), and no line may name
-a root without also naming that root's owners. ``platform`` has no owners and
-stays with the ``*`` default. Paths only; the logins themselves are not checked
+a root without also naming that root's owners. ``platform`` has no role owners;
+a root with exactly one consuming role may carry ``reviewers:`` proxies beside
+the ``*`` default. Paths only; the logins themselves are not checked
 against GitHub here.
 """
 
@@ -89,4 +90,46 @@ def test_every_owned_root_reaches_its_owners():
         effective = [owners for pattern, owners in rules if _matches(pattern, root["path"])][-1]
         if not wanted <= effective:
             bad.append(f"{root['path']} ({root['capability']}) reviews go to {sorted(effective)}")
+    assert bad == [], bad
+
+
+def _reviewers(root: dict) -> set[str]:
+    return set(root.get("reviewers", []))
+
+
+def test_reviewers_only_on_platform_roots_and_known_people():
+    bad = [f"{r['path']}: reviewers on {r['capability']}" for r in MANIFEST["roots"]
+           if _reviewers(r) and r["capability"] != "platform"]
+    assert bad == [], bad
+    people = {login for cap in MANIFEST["capabilities"].values() for login in cap["owners"]}
+    unknown = sorted({o for r in MANIFEST["roots"] for o in _reviewers(r)} - people)
+    assert unknown == [], unknown
+
+
+def test_proxied_roots_reach_reviewers_in_codeowners():
+    rules = _rules()
+    bad = []
+    for root in MANIFEST["roots"]:
+        wanted = _reviewers(root)
+        if not wanted:
+            continue
+        effective = [owners for pattern, owners in rules if _matches(pattern, root["path"])][-1]
+        if not wanted <= effective:
+            bad.append(f"{root['path']} proxy {sorted(wanted)} reviews go to {sorted(effective)}")
+    assert bad == [], bad
+
+
+def test_signing_paths_stay_lead_only():
+    lead = {"livsbittt"}
+    bad = []
+    for pattern, owners in _rules():
+        for guarded in ("deploy", "tools/release"):
+            inside = pattern.strip("/")
+            deep = inside.startswith(guarded + "/")
+            image_lane = inside == "deploy/robot" or inside.startswith("deploy/robot/")
+            if (_matches(pattern, guarded) or deep) and owners - lead and not image_lane:
+                bad.append(
+                    f"{pattern} names {sorted(owners - lead)} beside the signing path {guarded}/"
+                    " (deploy/robot image lanes keep their §5.1 joint review)"
+                )
     assert bad == [], bad

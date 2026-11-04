@@ -3,11 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Rosy Fleet — 로그인</title>
+  <title>Rosy Account — 로그인</title>
   <link rel="icon" type="image/svg+xml" href="/common/icons/console.svg">
   <link rel="stylesheet" href="/common/tokens.css">
   <script src="/common/theme.js"></script>
   <link rel="stylesheet" href="/common/components.css">
+  <link rel="stylesheet" href="/common/component-controls.css">
   <link rel="stylesheet" href="/console/assets/fleet-document.css">
   <link rel="stylesheet" href="/console/assets/password-login.css">
   <script type="module" src="/common/ui.js"></script>
@@ -17,23 +18,23 @@
   <a class="skip-link" href="#login-main">로그인 입력으로 이동</a>
   <ui-shell grammar="procedure">
     <!-- fleet:document-header:start -->
-<header class="fleet-document-header"><ui-topbar><ui-brand href="/console"><b>Rosy Fleet</b><small>관제 로그인</small></ui-brand><span data-spacer></span><ui-button kind="quiet" data-theme-cycle="" data-icon-only="" type="button" aria-label="테마 변경" data-action-icon="theme-dark"></ui-button></ui-topbar></header>
+<header class="fleet-document-header"><ui-topbar><ui-brand href="/console"><b>Rosy Account</b><small>계정 로그인</small></ui-brand><span data-spacer></span><ui-button kind="quiet" data-theme-cycle="" data-icon-only="" type="button" aria-label="테마 변경" data-action-icon="theme-dark"></ui-button></ui-topbar></header>
 <!-- fleet:document-header:end -->
-    <main id="login-main" class="fleet-login-main fleet-document" tabindex="-1">
+    <main id="login-main" class="fleet-login-main ui-task-page ui-auth-page" tabindex="-1">
       <ui-section aria-labelledby="login-title">
-      <h1 id="login-title" class="ui-page-heading">관제 로그인</h1>
-      <p>이 현장의 계정으로 로그인하세요.</p>
-      <p id="login-site"></p>
-      <p id="login-context">로그인 후 원래 업무로 돌아갑니다.</p>
+      <h1 id="login-title" class="ui-page-heading">계정 로그인</h1>
+      <p id="login-intro">이 현장의 계정으로 로그인하세요.</p>
+      <p id="login-context" hidden></p>
       <ui-section id="login-recovery" aria-labelledby="login-recovery-title" hidden>
         <h2 id="login-recovery-title" class="ui-section-heading">앱 접근을 확인해 주세요</h2>
         <ui-status id="login-recovery-status" state="forbidden" role="alert"></ui-status>
-        <ui-actions><a id="login-profile" class="ui-disclosure-row" href="/console/profile">내 계정·권한 확인</a><a id="login-retry" class="ui-disclosure-row">접근 다시 확인</a></ui-actions>
+        <ui-actions><a class="ui-action-link" data-kind="quiet" id="login-profile" href="/console/profile">내 계정·권한 확인</a><a class="ui-action-link" data-kind="quiet" id="login-retry">접근 다시 확인</a></ui-actions>
       </ui-section>
       <div id="password-login" class="password-login"></div>
       <ui-status id="login-availability" state="pending">로그인 설정을 확인하고 있습니다.</ui-status>
-      <p>계정이 없거나 비밀번호를 잊었다면 현장 관리자에게 문의하세요.</p>
-      <a id="login-back" class="ui-disclosure-row" href="/console" data-action-icon="back">원래 업무로 돌아가기</a>
+      <p id="login-support">계정이 없거나 비밀번호를 잊었다면 현장 관리자에게 문의하세요.</p>
+      <a id="login-back" class="ui-action-link" data-kind="quiet" href="/console">원래 업무로 돌아가기</a>
+      <details class="ui-disclosure"><summary>연결 정보</summary><p id="login-site"></p></details>
       </ui-section>
     </main>
   </ui-shell>

@@ -46,7 +46,7 @@ def test_login_entry_and_unconfigured_panel_recover_when_accounts_connect(tmp_pa
                 assert page.url == url+'/accounts'
                 expect(page.locator('#account-setup')).to_be_hidden()
                 page.route('**/api/accounts/options', lambda route: route.fulfill(status=503, json={'error': 'connection unavailable'}))
-                page.locator('#account-retry').click()
+                page.reload(wait_until='domcontentloaded')
                 expect(page.locator('#login-help')).to_contain_text('연결을 확인할 수 없습니다')
                 expect(page.locator('#account-login')).to_be_hidden()
                 assert not posts
@@ -247,8 +247,9 @@ def test_named_multi_account_import_logout_real_browser(tmp_path, monkeypatch, a
                 page.goto(url + '/accounts', wait_until='networkidle')
                 expect = playwright.expect
                 expect(page.locator('#login-panel')).to_be_visible()
-                expect(page.locator('#account-status')).to_have_attribute('state', 'empty')
-                expect(page.get_by_role('region', name='Rosy Account 로그인')).to_be_visible()
+                expect(page.locator('#account-status')).to_have_attribute('state', 'unavailable')
+                expect(page.get_by_role('region', name='Learning에 로그인')).to_be_visible()
+                expect(page.locator('#account-login')).to_be_hidden()
                 expect(page.locator('#account-login')).to_have_attribute('href', '/api/account/login?return=/accounts')
                 assert page.locator('#login-panel input').count() == 0
                 sign_in(page, url, accounts, 'alice')

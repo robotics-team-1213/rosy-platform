@@ -101,11 +101,9 @@ D-952 no refs/adr/D-952 and no ADR file in any worktree when D-954 was written (
 D-952 unused: no refs/adr/D-952; the D-953 draft held the number outside the repo before adr_reserve.py assigned D-953 (2026-11-01)
 D-952 no refs/adr/D-952 and no ADR file in any worktree when D-954 was written (worktree pi45 owner note names it); remove if it lands
 D-959 unused: a D-960 draft first took this number without a reservation, adr_reserve then issued D-960; no refs/adr/D-959
-D-961 reserved in another in-flight branch (refs/adr/D-961), absent from this D-962 branch; remove when its ADR lands
 D-966 reserved in another in-flight branch (refs/adr/D-966), absent from this D-970 branch; remove when its ADR lands
 D-967 reserved in another in-flight branch (refs/adr/D-967), absent from this D-970 branch; remove when its ADR lands
-D-969 reserved in another in-flight branch (refs/adr/D-969), absent from this D-970 branch; remove when its ADR lands
 D-966 reserved in another in-flight branch (refs/adr/D-966), absent from this D-968 branch; remove when its ADR lands
 D-967 reserved in another in-flight branch (refs/adr/D-967), absent from this D-968 branch; remove when its ADR lands
-D-972 reserved in another in-flight branch (refs/adr/D-972), absent from this D-974 branch; remove when its ADR lands
 D-973 reserved in another in-flight branch (refs/adr/D-973), absent from this D-974 branch; remove when its ADR lands
+D-977 reserved by a concurrent session (device_trial owner identity, refs/adr/D-977); remove this line when its ADR lands

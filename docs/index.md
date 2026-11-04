@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
-- 2026-11-04 · uncommitted · docs(control-terms): D-974 착지 준비 — 안전 검토·크기·ADR Log 병합 정리
-- 2026-11-03 · uncommitted · docs(control-terms): 관제 용어 층 분리, 헤더는 관제 단위 이름 (D-974)
-- 2026-11-03 · uncommitted · fix(landing): 단계 없는 delta 사전 시험도 넘김 횟수에 셈 (D-970 1항 보완)
-- 2026-11-03 · uncommitted · fix(landing): 명시 FULL 증인이 재실행 뒤에도 남음 (D-970 보완)
-- 2026-11-03 · uncommitted · feat(landing): land_async orphans — 재부팅으로 죽은 착지를 찾아 되살림
+- 2026-11-04 · uncommitted · 조립식 배 v11 MuJoCo 쌍둥이, 손목 카메라 B, D-956 Isaac 결과
+- 2026-11-04 · uncommitted · fix(remote): 작은 host에만 놓인 실행은 큰 PC가 비면 옮겨 간다 (D-889 추가 31)
+- 2026-11-04 · uncommitted · fix(land): ADR Log union 병합의 옛 행을 착지가 지운다 (D-889 추가 30)
+- 2026-11-04 · uncommitted · docs(plans): peer pose sharing 설계에 v1 실행 범위 명시
+- 2026-11-04 · uncommitted · docs(plans): 로봇 간 맵 위치 공유(peer pose sharing) 설계

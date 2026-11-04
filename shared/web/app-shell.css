@@ -46,7 +46,7 @@
   .ui-app-main { flex: 1 1 auto; }
   .ui-rail, .ui-subnav { border-inline-end: 0; border-block-end: 1px solid var(--border-default); }
   .ui-rail-nav { flex-direction: row; overflow-x: auto; }
-  .ui-rail-item { flex: none; flex-direction: row; align-self: auto; white-space: nowrap; min-block-size: var(--target-secondary); padding: var(--inset-button); font-size: var(--text-label); }
+  .ui-rail-item { flex: none; flex-direction: column; align-self: auto; white-space: nowrap; inline-size: var(--size-rail-item); min-block-size: var(--target-secondary); padding: 0; font-size: var(--text-micro); }
   .ui-subnav-nav { flex-direction: row; overflow-x: auto; padding: var(--inset-rail); }
   .ui-subnav-head { display: none; }
   .ui-stage-grid[data-layout="sense"] { grid-template-columns: minmax(0, 1fr) var(--context-track); grid-template-rows: auto; align-content: start; grid-template-areas: "stage now" "cam now" "sense sense"; }
