@@ -211,3 +211,55 @@ def test_a_preview_unit_left_on_a_replaced_device_is_restarted_only_with_fix_and
     assert cu.check_cameras("arm_a", cams, io, fix=True, bus_free=False)[0][0]["status"] == "fail" and state["restarts"] == 0
     rows, _ = cu.check_cameras("arm_a", cams, io, fix=True, bus_free=True)
     assert rows[0]["status"] == "fixed" and "arm_a_wrist" in rows[0]["detail"] and state["restarts"] == 1
+
+
+class Usb:
+    """A D435 whose first direct reads give nothing; `late` reads after the re-enable fail before one streams."""
+
+    def __init__(self, boards=(), late=3, speed=480):
+        self.boards, self.late, self.speed = list(boards), late, speed
+        self.log, self.cycled = [], False
+
+    def io(self):
+        def frames(device):
+            self.log.append("read")
+            if not self.cycled:
+                return False
+            self.late -= 1
+            return self.late < 0
+        return cu.Io(fetch=lambda url: (200, JPEG) if self.cycled else (503, b""), labels=lambda: LABELS, roles=lambda: ROLES,
+                     unit_tail=lambda role: "watchdog", unit_restart=lambda role: None, device=lambda role: "/dev/cam",
+                     usb_port=lambda device: {"ports": ["root", "peer"], "speed": self.speed, "boards": self.boards},
+                     frames=frames, ports=self.ports, units=lambda role, up: self.log.append("units up" if up else "units down"),
+                     sleep=lambda s: self.log.append(f"sleep {s}"))
+
+    def ports(self, ports, disabled):
+        self.log.append(f"{'off' if disabled else 'on'} {','.join(ports)}")
+        self.cycled = self.cycled or not disabled
+
+
+CAMS = {"wrist": {"url": "http://v/frame/front.jpg"}}
+
+
+def test_a_camera_with_no_frames_gets_its_root_port_and_peer_cycled_and_a_late_first_frame_is_waited_for():
+    """2026-11-05: a D435 on a USB2 root port gave 0 bytes until port and peer were off 30 s and a minute passed."""
+    usb = Usb()
+    rows, _ = cu.check_cameras("arm_a", CAMS, usb.io(), fix=True, bus_free=True)
+    assert rows[0]["status"] == "fixed" and "480 Mbit/s" in rows[0]["detail"] and "WARN: USB2" in rows[0]["detail"]
+    log = usb.log
+    assert log[0] == "units down" and log[-1] == "units up"
+    assert log.index("off root,peer") < log.index("sleep 30") < log.index("on root,peer")
+    assert log.count("read") == 1 + 4  # one before the cycle, three late misses, then the frame
+
+
+def test_a_port_shared_with_an_arm_board_is_never_cycled():
+    usb = Usb(boards=["usb-ROBOTIS_OpenRB-150_AAAA-if00"])
+    rows, _ = cu.check_cameras("arm_a", CAMS, usb.io(), fix=True, bus_free=True)
+    assert rows[0]["status"] == "fail" and "OpenRB-150" in rows[0]["detail"]
+    assert usb.log == []
+
+
+def test_without_fix_the_dead_camera_is_only_reported():
+    usb = Usb()
+    rows, _ = cu.check_cameras("arm_a", CAMS, usb.io(), fix=False, bus_free=True)
+    assert rows[0]["status"] == "fail" and usb.log == []
