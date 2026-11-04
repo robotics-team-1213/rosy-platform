@@ -14158,7 +14158,7 @@ osy-d395-s1d\`.
 - CE: 새 교훈 — `docs/solutions/logic-errors/mujoco-version-split-laptop-passes-lab-throws-seated-box-2026-11-04.md` (MuJoCo 3.3.7 box-box, remote_pytest가 MuJoCo 시험을 건너뜀).
 
 ## 2026-11-04 · uncommitted · feat(accounts): 계정 화면의 역할 선택이 권한 묶음을 채움 (D-955 화면 보완)
-- 변경: 계정 화면의 "기본 역할 표시"를 "역할"(조회자·운영자·관리자)로 바꾸고, 고르면 자원별 권한 편집기가 그 역할 묶음으로 바뀐다(`roleGrants`: 조회자=조회만, 운영자=`teamGrants`, 관리자=모든 capability). 새 계정은 운영자로 시작. "팀원 기본 권한으로 채우기" 단추는 운영자 선택으로 대체. 헤더의 `policy-admin` 표기를 "관리자"로.
+- 변경: 계정 화면의 "기본 역할 표시"를 "역할"(조회자·운영자·관리자)로 바꾸고, 고르면 자원별 권한 편집기가 그 역할 묶음으로 바뀐다(`roleGrants`: 조회자=조회만, 운영자=`teamGrants`, 관리자=Vault 외 모든 capability, Vault는 은퇴라 손으로만). 새 계정은 운영자로 시작. "팀원 기본 권한으로 채우기" 단추는 운영자 선택으로 대체. 헤더의 `policy-admin` 표기를 "관리자"로.
 - 서버 변경 없음: 저장·검증은 여전히 grant만 본다(D-757·D-955 원칙 유지). 마지막 계정 관리자 보호도 그대로.
 - 증거: test_account_admin_browser에 역할 전환 검사 추가.
 - gate 변화: 없음.

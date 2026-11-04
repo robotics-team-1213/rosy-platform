@@ -27,7 +27,8 @@ export function roleGrants(role, siteResource) {
   }
   if (role === 'policy-admin') {
     return [[siteResource, 'site'], ['robot:*', 'robot'], ['project:*', 'project']]
-      .map(([resource, kind]) => ({resource, capabilities: Object.keys(CAPABILITIES[kind])}));
+      // Vault retired 2026-10-24; its rights stay grantable by hand only.
+      .map(([resource, kind]) => ({resource, capabilities: Object.keys(CAPABILITIES[kind]).filter(c => !c.startsWith('vault.'))}));
   }
   return teamGrants(siteResource);
 }
