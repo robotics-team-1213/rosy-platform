@@ -198,7 +198,7 @@ def test_records_area_raises_incidents_into_the_body_and_the_judgment_to_the_sid
                 body, right = panel.bounding_box(), side.bounding_box()
                 assert body["x"] + body["width"] <= right["x"], (body, right)
             first = rows.first
-            first.locator(":scope > details > summary").click()
+            first.locator(":scope > details > summary").press("Enter" if size[0] < 1024 else "Space")
             expect(first).to_contain_text("해소 확인")
             expect(side).to_contain_text("담당 인수: 아직 없음")
             expect(side).to_contain_text("사람 검토: 아직 없음")
