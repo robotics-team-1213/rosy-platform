@@ -44,6 +44,7 @@ CAMERA_PROFILE = "middleware/devices/pinky/profile/config/camera_nominal.yaml"
 CAMERA_MAP_FILES = tuple("operations/overhead/rosy_vision/" + name
                          for name in ("__init__.py", "lane_map.py", "map_register.py"))
 SPLIT_CODE_PREFIXES = ("middleware/perception/nodes/", "middleware/perception/localization/",
+                       "middleware/perception/calibration/",
                        "middleware/perception/graph_health/", "middleware/perception/snapshots/",
                        "middleware/perception/sensors/", "middleware/perception/front_camera/",
                        "middleware/perception/package.xml",

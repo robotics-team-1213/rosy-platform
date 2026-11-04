@@ -14144,3 +14144,8 @@ osy-d395-s1d\`.
 - 증거: 11-04 06:48~08:57 ui-landing-merge-repair delta 사전 시험이 작업 256개 중 253개를 현장 PC에서 직렬로 131분 실행(timing 줄 집계), 같은 시각 AI PC 23코어 여유. 원격 `test_work_queue_upgrade.py`·`test_remote_pytest.py` 외 165 통과, `test_land_isolation.py`·`test_publish_evidence.py` 79 통과.
 - gate 변화: 없음
 - CE: 해당 없음 — 원인과 기준은 docstring·회귀 시험·D-889 추가 31에 있다.
+
+## 2026-11-04 · fix(deploy): calibration 분리 경로를 서명 모델 코드 아카이브에 포함
+- 변경: `model_code_layout.SPLIT_CODE_PREFIXES`에 `middleware/perception/calibration/`을 추가해 필수 소스 목록과 아카이브 입력을 맞췄다.
+- 증거: 변경 전 원격 `test_committed_review_archive_starts_without_checkout_imports`가 누락된 perception·Drive 의존성으로 실패했다. 변경 커밋의 `test_model_pc_autoupdate.py`·`test_model_review_release.py` 원격 검증 결과는 작업 인계에 남긴다.
+- CE: 해당 없음 — 원인과 재발 검사는 소스 목록과 기존 실제 Git 아카이브 부팅 시험에 드러난다.
