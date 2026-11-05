@@ -14189,6 +14189,12 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - CE: 해당 없음 — 원인과 재발 검사는 소스 목록과 기존 실제 Git 아카이브 부팅 시험에 드러난다.
 
+## 2026-11-05 · uncommitted · fix(harness): 동시 계정 로그 두 원문의 무결성 고정
+- 변경: 로그 검증 loop·필드 상수를 `log_validation.py`로 분리했다(기존 842→811줄, 새 57줄; ratchet도 842→811, 증가·면제 없음). 알려진 계정 로그 제목의 실제 두 parsed body가 각각 고정 SHA256과 한 번씩 일치할 때만 공존을 허용하며, 필드·날짜·순서·legacy·append-only 검증은 유지한다. body 내부 BOM을 지우던 재정규화는 이미 파싱된 body의 `strip()`으로 고쳤다. 비밀 스캐너·예외·공개 provenance 설정은 바꾸지 않았다.
+- 증거: 원본 RED는 2 FAIL/11 PASS/NEW 2, 정정한 6-suite GREEN은 483 PASS/0 skip/NEW 0이며 파일명 누락 exit 5 실행은 무효다. body BOM RED와 document BOM positive를 분리했고, commit 3c8104b386620524913be376cbfc451db8897e29 전체 대상은 512 PASS/1 FAIL/0 skip/NEW 1이다(`TEMP/rosy-ui-log-body-bom-green-20261105/run-1.txt`). 남은 실패는 공개 commit·SHA256 literal의 기존 비밀 guard 분류이며, 현재 후속 변경은 지원되는 같은 줄 표기를 보충한 주석뿐이다(값·AST·줄 수 동일). 독립 검토는 body BOM 지적 해소와 실제 pins·공개 fixture·legacy·날짜·필드 보존을 확인했다. 변조·동일 원문 반복·세 번째 항목·임의 중복 거부는 회귀 시험에 남겼다. 금지된 두 amend가 발생한 중간 네 버전은 `refs/rosy-preserved/...`와 작업공간 `artifacts/worktree-backups/`의 전체 검증 bundle로 보존했으며 이후 커밋은 root가 정상 커밋으로만 진행한다.
+- gate 변화: 주석 표기 정정 뒤 secret closure와 최종 metadata SHA 원격 검증, 공식 AUTO/FULL, main 착지는 아직 미실행이다. 현재 전체 통과로 판정하지 않는다.
+- CE: 해당 없음 — 실제 코드·회귀 시험·고정 provenance로 판단과 재발 방지를 재구성할 수 있다.
+
 ## 2026-11-05 · uncommitted · test(games): 복구 시 진행 중인 overlay route handler를 기다린다
 
 - 변경: 오류 모의 해제6곳에 `unroute_all(behavior="wait")`를 사용했다. 해당 시점에는 overlay 모의만 있으며 점수·연결·복구·레이아웃·정지 표시와 오류 단언을 유지한다. 오류를 삼키거나 실패 baseline을 바꾸지 않았다.
