@@ -1,5 +1,11 @@
 # docs logs
 
+## 2026-11-05 · uncommitted · 화면 지도 UI·UX 최종 후보 근거 결속
+- 변경: validation/uiux-surfaces-2026-11-05에30카드·실제 상태/뷰포트 계약·G3·원본1656 PNG 해시·Robot60셀·구현 판단15개를 보존했다. 이전 실패 이력과 최종 통과를 구분한다.
+- 증거: 제품42c97133c1에서 관련440개·홈25개·공통 G1241개가 각각0 skip/NEW0. 최종 독립 Learning G3는12표면·여덟 항 PASS,439개 파일 해시 불일치0. R3/R4/R6/R8은 각 독립 task review와 실제 상태 캡처로 결속했다. 이후 시험 query 보완36개 통과,6478fe9b27까지 제품 동일.
+- gate 변화: 최종 전 브랜치 리뷰·공식 AUTO/FULL·main 착지는 대기. 실물·모델 품질·운영 배포 수용은 별도.
+- CE: 해당 없음 — 기존 인코딩/실제 산출물 fixture 교훈을 적용했고 이번 보장 조건은 코드와 행동 회귀에 남는다.
+
 ## 2026-09-15 · uncommitted · docs(harness): start the docs harness pilot
 - 변경: `progress.md`, `logs.md` 추가
 - 증거: `python tools/harness/rosy_harness.py lint` 0 errors, 2 warnings(rosy_core·deploy last_verified uncommitted, docs 자체 오류 아님); `python -m pytest test/test_network_topology_contracts.py test/test_harness_contracts.py -q` 64 passed (2026-09-15 Windows). `docs` 경로에 미커밋 변경이 있어(`git status --short -- docs` 비어 있지 않음) `last_verified.commit`은 `uncommitted`
