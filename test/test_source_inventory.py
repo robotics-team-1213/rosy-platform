@@ -91,7 +91,8 @@ def test_ambiguous_paths_close_inventory(path):
 
 @pytest.mark.parametrize("case", ["commit-sha", "commit-tree", "tree-sha", "truncated", "no-truncated",
                                      "false-integer", "not-list", "not-entry", "duplicate", "bad-sha",
-                                     "bad-mode", "bad-type", "parent-missing", "parent-is-blob"])
+                                     "bad-mode", "bad-type", "list-mode", "list-type",
+                                     "parent-missing", "parent-is-blob"])
 def test_incomplete_or_inconsistent_api_identity_is_never_classified(case):
     data = responses(new=[entry("asset")])
     commit = data[f"git/commits/{HEAD}"]
@@ -108,6 +109,8 @@ def test_incomplete_or_inconsistent_api_identity_is_never_classified(case):
     elif case == "bad-sha": tree["tree"][0]["sha"] = "E" * 40
     elif case == "bad-mode": tree["tree"][0]["mode"] = "040000"
     elif case == "bad-type": tree["tree"][0]["type"] = "unknown"
+    elif case == "list-mode": tree["tree"][0]["mode"] = []
+    elif case == "list-type": tree["tree"][0]["type"] = []
     elif case == "parent-missing": tree["tree"] = [entry("missing/child")]
     elif case == "parent-is-blob": tree["tree"] += [entry("asset/child")]
     assert changes(data) is None
