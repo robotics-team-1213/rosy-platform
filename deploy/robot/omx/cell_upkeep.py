@@ -10,8 +10,9 @@ registers (torque 0, no hardware error, caps at the commissioning baseline), cam
 jaw closed value against the latest motor-health log, the jaw opening against the newest session trace, the calibration map (read-only cell_calibrate.check), the
 after-session monitors (push_replay, jitter_replay) over the logs newer than the previous report, and the planning TCP.
 
-No motion, ever. With --fix the only write is `commissioning_limits.py --baseline`, and only when every follower
-motor reads torque 0 with no hardware error and nothing owns the bus. A latched hardware error is reported, not
+No motion, ever. With --fix, `commissioning_limits.py --baseline` writes only when every follower
+motor reads torque 0 with no hardware error and nothing owns the bus; camera recovery may cycle board-free USB ports.
+A latched hardware error is reported, not
 rebooted (omx_incident.py owns that). Each arm's report goes to <out>/<stamp>-<arm>.json; exit 0 only when every arm is ready.
 Verdicts: ready | needs_motion_step (only the supervised cell_calibrate steps are left) | needs_person.
 """
@@ -117,20 +118,44 @@ def camera_device(role):
 
 def usb_port(device):
     """Root port of the camera behind a /dev/v4l/by-id name: {"ports": [port, peer], "speed": Mbit/s, "boards": by-id
-    serial names below that root port}. Raises OSError when sysfs does not show the chain."""
-    node = Path(os.path.realpath(device)).name
-    dev = Path(os.path.realpath(f"/sys/class/video4linux/{node}/device"))
+    serial names below ANY port being cycled}. Raises OSError when sysfs does not show the chain."""
+    node = Path(device).resolve(strict=True).name
+    dev = Path(f"/sys/class/video4linux/{node}/device").resolve(strict=True)
     while not (dev / "idVendor").exists():
+        if dev.parent == dev:
+            raise OSError("USB device ancestor is missing")
         dev = dev.parent
     bus, _, path = dev.name.partition("-")
     root = dev
     while root.name != f"{bus}-{path.split('.')[0]}":
+        if root.parent == root:
+            raise OSError("USB root device ancestor is missing")
         root = root.parent
-    port = Path(f"/sys/bus/usb/devices/{bus}-0:1.0/usb{bus}-port{path.split('.')[0]}")
-    peer = os.path.realpath(port / "peer") if (port / "peer").exists() else None
-    boards = [Path(b).name for b in glob.glob("/dev/serial/by-id/*")
-              if os.path.realpath(f"/sys/class/tty/{Path(os.path.realpath(b)).name}/device").startswith(str(root))]
-    return {"ports": [str(port)] + ([peer] if peer else []), "speed": int((dev / "speed").read_text()), "boards": boards}
+    port = Path(f"/sys/bus/usb/devices/{bus}-0:1.0/usb{bus}-port{path.split('.')[0]}").resolve(strict=True)
+    ports = [port]
+    peer = port / "peer"
+    if peer.exists() or peer.is_symlink():
+        ports.append(peer.resolve(strict=True))
+    roots = []
+    for powered in ports:
+        identity = re.fullmatch(r"usb(\d+)-port(\d+)", powered.name)
+        if (not identity or powered.parent.name != f"{identity[1]}-0:1.0"
+                or powered.parent.parent.name != f"usb{identity[1]}"):
+            raise OSError("USB powered-port identity is missing or inconsistent")
+        # An unattached peer has no child device yet, but its port/controller
+        # identity still defines the complete subtree whose power is affected.
+        roots.append(powered.parent.parent / f"{identity[1]}-{identity[2]}")
+    if roots[0] != root:
+        raise OSError("USB camera root differs from its powered port")
+    if any((p / "disable").read_text().strip() != "0" for p in ports):
+        raise OSError(f"USB port or peer is already disabled: {ports}")
+    boards = []
+    for name in glob.glob("/dev/serial/by-id/*"):
+        tty = Path(name).resolve(strict=True).name
+        serial_device = Path(f"/sys/class/tty/{tty}/device").resolve(strict=True)
+        if any(serial_device.is_relative_to(affected) for affected in roots):
+            boards.append(Path(name).name)
+    return {"ports": [str(p) for p in ports], "speed": int((dev / "speed").read_text()), "boards": boards}
 
 
 def frames_flow(device) -> bool:
@@ -144,9 +169,17 @@ def frames_flow(device) -> bool:
 
 
 def port_set(ports, disabled) -> None:
+    error = None
     for port in ports:
-        subprocess.run(["sudo", "-n", "tee", f"{port}/disable"], input="1" if disabled else "0", text=True,
-                       capture_output=True, check=True)
+        try:
+            subprocess.run(["sudo", "-n", "tee", f"{port}/disable"], input="1" if disabled else "0", text=True,
+                           capture_output=True, check=True)
+        except (OSError, subprocess.SubprocessError) as failure:
+            if disabled:
+                raise
+            error = error or failure
+    if error is not None:
+        raise error
 
 
 def camera_units(role, up) -> None:
@@ -226,9 +259,11 @@ def usb_recover(role, io):
     try:
         if io.frames(device):
             return f"{role} streams when read directly (not a USB fault)"
-        io.ports(port["ports"], True)
-        io.sleep(30)
-        io.ports(port["ports"], False)
+        try:
+            io.ports(port["ports"], True)
+            io.sleep(30)
+        finally:
+            io.ports(port["ports"], False)
         for _ in range(9):  # the first read right after re-enable still gave nothing; one a minute later streamed
             io.sleep(10)
             if io.frames(device):
@@ -430,8 +465,11 @@ def check_monitors(arm, device, logs_dir, since, params, io):
     notes = [f"wind-up {h['session']} t={h['t']}: {h['reason']}" for h in mine.get("hits", [])[:3]]
     notes += [f"jitter {f['session']} {f['joint']}: {f['reason']}" for f in shake.get("flagged", [])[:3]]
     total = len(mine.get("hits", [])) + len(shake.get("flagged", []))
-    return row("monitors", "warn" if total else "ok",
+    if "trace" in jitter:
+        notes.append(f"unassigned trace identity; cannot clear {arm} from these logs")
+    return row("monitors", "warn" if total or "trace" in jitter else "ok",
                (f"{total} hits/flags over {len(health)} health + {len(traces)} trace logs; " + "; ".join(notes)) if total
+               else "; ".join(notes) if notes
                else f"no wind-up hits or jitter flags over {len(health)} health + {len(traces)} trace logs")
 
 
