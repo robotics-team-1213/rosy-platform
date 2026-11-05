@@ -15,7 +15,7 @@ from fleet.server.proposal_store import ProposalStore
 from fleet.server.task_service import FleetTaskService
 from fleet.server.task_store import FleetTaskStore
 from test_physical_transfer_evidence import geometry, policy
-from test_physical_transfer_store import installation
+from test_physical_transfer_store import NOW, installation
 
 PATH = "/api/fleet/arm-transfers/jobs"
 
@@ -43,7 +43,7 @@ def headers(who):
 
 
 @pytest.fixture
-def rig(tmp_path, installation):
+def rig(tmp_path, installation, monkeypatch):
     db = tmp_path / "fleet.sqlite3"
     tasks = FleetTaskStore(db)
     port = CapabilityPort(installation, db)
@@ -54,6 +54,9 @@ def rig(tmp_path, installation):
         mission_service=MissionService(MissionStore(db)), proposal_store=ProposalStore(db),
         site_users=users, deployment_profile="simulation", omx_action_transport=port,
         arm_transfer_installation=installation)
+    # Route contract tests share one logical clock; freshness boundaries are tested in the store suite.
+    app.state.arm_transfer_job_store._clock_ns = lambda: NOW
+    monkeypatch.setattr("fleet.server.arm_transfer_job_routes.time.time_ns", lambda: NOW)
     tasks.rearm_dispatch(expected_generation=tasks.dispatch_control()["generation"], actor_id="operator")
     return TestClient(app), tasks, port, installation
 
