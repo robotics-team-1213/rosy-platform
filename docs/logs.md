@@ -1,4 +1,4 @@
-# docs logs
+﻿# docs logs
 
 ## 2026-09-15 · uncommitted · docs(harness): start the docs harness pilot
 - 변경: `progress.md`, `logs.md` 추가
@@ -14192,6 +14192,7 @@ osy-d395-s1d\`.
 - 증거: test_account_admin_browser에 역할 전환 검사 추가.
 - gate 변화: 없음.
 - CE: 해당 없음 — 화면 동작 추가.
+
 ## 2026-11-04 · uncommitted · 조립식 배 v11 MuJoCo 쌍둥이, 손목 카메라 B, D-956 Isaac 결과
 - 변경: `ship_v11.py`·`ship_v11_scene.py`(v11 화물칸 · 컨테이너 v2 · 집게 v2.1 · 카메라 틀 B), `ship_stack_sequence.py --stage v11 --shard --resume`, `palletizing_gripper.WRIST_CAMERA_B`, Isaac 손목 카메라 사례·팀 link5 모양(`assets/omx_wrist_camera_b`), 시연 내보내기 손목 화면.
 - 증거: 검증 기록 Step 6 — v11 1층 1 mm까지 1/192 미착석, 위층은 콘 4개라 약 2.3 mm, 다시 놓기(이상화) 3 mm까지 64/64. D-956 Isaac seed 42는 다시 놓아도 HOLD(48dcb6a4, 3b55bb62).
@@ -14319,3 +14320,24 @@ osy-d395-s1d\`.
 - 변경: main-merge-followup.md에 정상 Learning 27경로·docs 2경로 병합, AI feedback/draft 경합과 미저장 preview 완료 guard의 실제 RED/GREEN을 소스별로 기록하고 새236행 main-merge.sha256을 추가했다. 기존153/203목록과 로그 원문은 보존했다.
 - 증거: commit 7893474ba454ef1a8f33a0ee13a18c30232cd338의 browser385·backend408·Node8은 각 별도 실행이다. 메뉴 source0111의14PASS/130원본·G3실제22PNG/8기준PASS와9route/static51소비처 alias만 결속한다. commit 10d7133e66b44153b5e65cf4fa7e8205d3adc087의 Pixel24PASS/0skip/NEW0·106원본은 별도 실행이고789→10d는 시험3파일56추가/1삭제·제품변경0이다. 새236원본 재해시 일치·경로중복0, 후보6개 사람mask/version불변·pending/완료disabled와 좁은 화면control의viewport한계를 기록했다.
 - gate 변화: Pixel독립G3는실제10d새27PNG/106원본전수재해시/8기준PASS·새차단0이다. 실제canvas초점과geometry.focused를구분하며좁은화면control동시가시성/scrollinteraction은미검증이다. 선행main3caa의공식39개NEW0·로컬착지는 별도이며22raw의skip사유미출력/cache재사용한계를 유지한다. UI최종G1·공식AUTO/FULL·main·배포·실물수용은 대기다. CE: 해당 없음 — 코드·회귀·실제원본·소스별후속문서로 판단을 복원한다.
+
+## 2026-11-05 · uncommitted · docs(calibration): 마커 번호의 정본 참조 수정
+
+- 변경: 보정 카드에 남은 D-933 초기 slot1/2 번호를 D-954의 정본 인쇄 생성기 arm_ids 참조로 바꿨다. cell_frame의 번호와 현장 markers.slot을 맞추도록 경로를 명시하고 감독·소유권·보정 조건은 유지했다.
+- 증거: 현재 생성기와 cell_frame은 slot1의 gripper50·slot2의 gripper65부터 각각15개를 사용한다. 실제 생성 PDF3개의 A4 geometry·hash와 Poppler 렌더를 확인했다. 현장 마커 부착·보정·정확도 수용을 뜻하지 않는다.
+- gate 변화: 없음. 번호표를 카드에 다시 복제하지 않으며 실물 동작과 D-911 확인은 기존 절차를 따른다.
+- CE: 해당 없음 — 오래된 번호와 정정 근거는 지침 diff·D-954·정본 생성기로 직접 확인 가능하다.
+
+## 2026-11-05 · uncommitted · docs(test): 로컬 Chromium 모듈의 네트워크 변경 실패 관측
+
+- 변경: [초기 모듈 로드 교훈](solutions/test-failures/chromium-network-change-breaks-local-module-load-2026-11-05.md)에 HTML 표시·스크립트 요청 실패·실제 pointer 경로를 구분하고, 관측한 초기 네트워크 변경만 제한적으로 복구하는 범위를 기록했다.
+- 증거: dfa0363e2b에서 실패2건/통과99건과 모듈 ERR_NETWORK_CHANGED를 함께 수집했고 d3ae2203af의 원격 harness10건 및 현장 PC 전체 브라우저101건은 skip0/NEW0이다. 최종 FULL·게시 수용은 별도다.
+- gate 변화: 없음. 이전 UI hotfix 수용과 서명 model-code45의 작업 잠금 HOLD를 구분하며, PR #235는 병합 대기열 실패 후 미병합 상태다.
+- CE: 새 교훈 기록. 표준 Chromium 오류에는 새 도메인 용어를 만들지 않았으며 기존 solutions 진입 경로를 유지했다.
+
+## 2026-11-05 · uncommitted · docs(learning): 서명 코드45의 정상 자동 적용 재조회
+
+- 변경: 앞선 작업 잠금 보류 이후의 실제 수락을 후속 수용 기록에 추가했다. model-code updater의 applied 사건, current45·서명 원본의 핵심3파일 hash와 검수 UI의 같은 소스 전환을 구분해 확인했다.
+- 증거: 12:05:53 UTC applied 사건의 source7ad5b751489f·sequence45·환경지문이 승인 manifest와 일치했다. 후속 조회는 current45·실패목록 비어 있음·검수 UI의 model-code45 경로 및 loopback/HTTPS accounts200을 확인했다. 그 뒤의 held는 새 점검이 다른 작업 때문에 보류된 상태이며 설치 취소가 아니다.
+- gate 변화: 코드 설치와 검수 웹 서비스 수용이다. 원본 자료 학습·모델 품질·모델 승격·장치 실행 수용으로 확대하지 않는다. 최종 FULL과 정본 PR 병합은 별도 진행한다.
+- CE: 기존 Learning Center 배포 교훈 적용. 작업 소유권과 기존 가드를 유지했고 강제 중단·잠금 우회는 하지 않았다.

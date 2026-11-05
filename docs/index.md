@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-11-05 · uncommitted · docs(learning): 서명 코드45의 정상 자동 적용 재조회
+- 2026-11-05 · uncommitted · docs(test): 로컬 Chromium 모듈의 네트워크 변경 실패 관측
+- 2026-11-05 · uncommitted · docs(calibration): 마커 번호의 정본 참조 수정
 - 2026-11-05 · uncommitted · docs(ui): 정상 main 병합의 회귀와 새 캡처 원본 결속
 - 2026-11-05 · b955085656 · docs(ui): Learning 여백 후속과 최종 캡처 가드 증거 결속
-- 2026-11-05 · uncommitted · 캡처 목록 지문의 정규화 기준 명시
-- 2026-11-05 · uncommitted · 사용자 제보의 동일 위계 UI 통일 결속
-- 2026-11-05 · uncommitted · 완료 감사의 장치 항목명 가독성 차단 해소
