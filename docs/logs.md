@@ -14272,3 +14272,10 @@ osy-d395-s1d\`.
 - 증거: 최초 RED faf1b29fcf에서 새 OS helper 부재9실패/닫힌 rollout 거절1통과. bdb97cc7a8 원격193통과/1실패는 고정 snapshot의 실제 import 폐쇄성 검사에서 native helper3개 누락을 찾았다. 후속541621bd8a는 snapshot import·기존/OS coordinator·publisher·preparer·source inventory·rollout·영향 분류219통과/skip0, known-failures NEW/known/flaky0이다. 독립 source 검토는 누락 해결과 run ID/attempt·source·publication-only 경계에서 추가 발견이 없었다.
 - gate 변화: source·원격 회귀 확인이다. 실제 이미지 workflow dispatch·운영 키 서명·Release 게시·Windows task 실행·OS 설치·재부팅·새 G4/SLAM 수용은 실행하지 않았다. production BUILD_GO와 장치의 claim/idle/source health/trial/rollback은 유지한다.
 - CE: 해당 없음. 새 route의 판단은 코드·회귀·정본 운영 절차에 직접 남겼다. frozen OS 소유·no-update의 systemd 부작용은 기존 검증 교훈을 참조하고 중복 교훈을 만들지 않았다.
+
+## 2026-11-06 · uncommitted · fix(release): 큰 변경의 완전 inventory와 실제 소비자 분류
+
+- 변경: compare 파일300개 상한에서 exact commit/tree inventory를 검증하며 SHA·개수·truncated·경로·type/mode·중복을 확인한다. delta로 처리할 수 없는 변경도 경로 분류에 남긴다. 실제 빌드/복사 소비자가 있는 support와 SD/checkout 입력은 native/OS로, 검토된 PC 역할과 exact 파일만 none으로 두었다. 새 tools/host/Pinky guard unknown은 계속 review다. [분류 경계](deployment/pinky-release-artifact-selection.md)에 운영 기준을 추가했다.
+- 증거: helper RED4실패→75ca741ec4 원격108통과, mapping RED4실패/10통과→3832c3e788 원격122통과, 추가 operator guard exact 회귀 RED1실패→6dd3dcb9f5 원격123통과/skip0·NEW/known/flaky0이다. 실제 GitHub complete trees11946/12861의 변경2211paths는 같은 SHA의 complete local git와 정확히 일치했다. a613→통합6dd의2238paths는 OS15/native1236/none987/review0으로 os-image에 도달했다. 독립 소유 source·문서 검토는 지원되는 중요 문제를 찾지 못했다.
+- gate 변화: source와 읽기 전용 비교 검증이다. 설치 baseline 혼재와 기존004 publisher 소유를 별도 운영 기록에 보존했으며 baseline 진전·개인키 출력·프로세스 중단·새 빌드/게시/장치 활성화는 하지 않았다. 최종 통합 FULL과 실제 예약 설치는 별도다.
+- CE: 해당 없음. 완전 비교·소비자 분류·mixed baseline의 판단은 코드·실행 회귀·정본 운영 문서에 직접 남았다. 운영 설치와 자동 Release 수용은 아직 미해결이며 해결 교훈으로 앞당겨 기록하지 않는다.
