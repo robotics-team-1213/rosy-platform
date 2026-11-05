@@ -7,7 +7,7 @@ name = "rosy-integration-robot-omx"
 version = "0.1.2"
 description = "OMX LeRobot robot, CORE arm client and preflight entry points"
 requires-python = ">=3.12"
-dependencies = ["rosy-contracts-learning>=0.1.16,<0.2"]
+dependencies = ["rosy-contracts-learning==0.1.16"]
 
 [project.scripts]
 rosy-omx-record = "lerobot_robot_rosy_omx:record"
