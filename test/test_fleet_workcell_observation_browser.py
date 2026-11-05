@@ -176,10 +176,11 @@ def test_cell_logout_clears_observations_and_ignores_late_responses(cell_url):
         browser.close()
 
 
-def test_cell_shows_an_arm_incident_with_frames_and_an_explanation_and_clears_it_only_with_a_note(cell_url):
+@pytest.mark.parametrize("width,height", [(390, 844), (1440, 900)])
+def test_cell_shows_an_arm_incident_with_frames_and_an_explanation_and_clears_it_only_with_a_note(cell_url, width, height):
     from playwright.sync_api import expect, sync_playwright
     with sync_playwright() as playwright:
-        browser, page, errors = open_page(playwright, 390, 844, url=cell_url)
+        browser, page, errors = open_page(playwright, width, height, url=cell_url)
         state, _ = observation_feed(page)
         state.incidents.append({
             "incident_id": "a" * 32, "source_id": "feedback_b", "session_id": "s", "state": "explained",
@@ -197,6 +198,29 @@ def test_cell_shows_an_arm_incident_with_frames_and_an_explanation_and_clears_it
         expect(card.get_by_text("<b>x</b>", exact=False)).to_be_visible()  # text, never markup
         expect(card.locator("li img")).to_have_attribute("src", re.compile("^blob:"))
         expect(page.locator('[data-arm-source="feedback_a"]').get_by_text("팔 사건 없음")).to_be_visible()
+        if os.environ.get("ROSY_UIUX_SCREENSHOT_DIR"):
+            from browser_harness import save_temp_screenshot
+            page.wait_for_function("img => img.complete && img.naturalWidth > 0",
+                                   arg=card.locator("li img").element_handle())
+            name = f"cell-incident-explained-held-{width}x{height}"
+            metrics = card.evaluate("""card => {
+                const list = card.querySelector('.cell-incident-history'), details = list.parentElement;
+                const rect = node => node.getBoundingClientRect().toJSON();
+                return {viewport: {width: innerWidth, height: innerHeight},
+                    theme: document.documentElement.dataset.theme, resolvedTheme: window.RosyTheme?.resolved(),
+                    overflow: document.documentElement.scrollWidth - innerWidth,
+                    scroll: {x: scrollX, y: scrollY}, activeElement: document.activeElement?.id,
+                    card: rect(card), incident: rect(details), open: details.open,
+                    summary: details.querySelector('summary').textContent, text: list.textContent,
+                    frames: [...list.querySelectorAll('img')].map(img => ({rect: rect(img),
+                        blob: img.src.startsWith('blob:'), complete: img.complete,
+                        width: img.naturalWidth, height: img.naturalHeight}))};
+            }""")
+            viewport = save_temp_screenshot(page, f"{name}-viewport.png")
+            full = save_temp_screenshot(page, f"{name}-full.png", full_page=True)
+            metrics.update(state=state.incidents[0]["state"], held=state.incidents[0]["decision"]["hold"],
+                           cleared_requests=len(state.cleared), filenames=[viewport.name, full.name])
+            viewport.with_name(f"{name}.json").write_text(json.dumps(metrics, ensure_ascii=False, indent=2), encoding="utf-8")
         card.get_by_text("확인했습니다 · 해제").click()
         expect(card.get_by_text("확인한 내용을 적어야 해제할 수 있습니다.")).to_be_visible()
         assert state.cleared == []
