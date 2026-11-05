@@ -98,6 +98,11 @@ def training_environment(policy_type):
     return dict(python=sys.version, packages=packages)
 
 
+def code_files():
+    paths = [Path(__file__), Path(smolvla_training.__file__), Path(smolvla_training.assets.__file__)]
+    return {path.name: smolvla_training.assets.file_hash(path) for path in paths}
+
+
 def _invoke(command, output, environment, timeout, *, lease_fd=None):
     with output.open('x', encoding='utf-8') as log:
         result = subprocess.run(command, stdout=log, stderr=subprocess.STDOUT,
@@ -188,6 +193,7 @@ def _run_cycle(splits, output, *, steps, batch_size, device, timeout, lease_fd,
     receipt = validate_split(splits)
     receipt_hash = hashlib.sha256((splits / 'split-receipt.json').read_bytes()).hexdigest()
     runtime = training_environment(policy_type)
+    execution_code = code_files()
     # Verify actual train/eval readers before starting any training process. Final test remains sealed.
     for name in ('train', 'eval'):
         data = native.load_dataset(splits / name, receipt['source']['repo_id'] + '_' + name)
@@ -228,7 +234,10 @@ def _run_cycle(splits, output, *, steps, batch_size, device, timeout, lease_fd,
             raise ValueError('split inputs or model bytes changed during training/evaluation')
         if prepared is not None and smolvla_training.input_files(output/'inputs') != prepared['input_files']:
             raise ValueError('snapshotted model inputs changed during training/evaluation')
+        if code_files() != execution_code:
+            raise ValueError('training or asset validation code changed during the cycle')
         result = dict(offline_only=True, source_mode=receipt['source']['source_mode'], training_environment=runtime,
+                      code_files=execution_code,
                       split_receipt_sha256=receipt_hash, split_files=receipt['outputs'], artifact_files=before,
                       policy_revision=policy_revision(before, policy_type=policy_type), policy_type=policy_type,
                       rig_revision=receipt['source']['rig_revision'],

@@ -154,6 +154,7 @@ ACT가 기본이다. SmolVLA는 이미 설치된 로컬 기반 정책과 VLM met
 실행 Python에는 LeRobot 0.4.4와 SmolVLA의 `transformers`·tokenizers·huggingface-hub·safetensors·accelerate가 필요하다.
 ACT용 공용 CPU 환경에 의존성이 없으면 그 환경을 수정하지 말고 별도 SmolVLA SDK 환경을 사용한다.
 누락된 패키지는 데이터 읽기나 모델 복사 전에 거부하며 실제 패키지 버전은 environment.json과 cycle receipt에 남긴다.
+cycle receipt는 학습 진입점·SmolVLA snapshot 도구·공용 자산 검증기의 코드 SHA-256도 결속하고 실행 중 변경을 거부한다.
 
 ```text
 python learning/curation/omx/collection_pipeline.py train <prepared-directory> --decisions <human-decisions.json> --out <new-run> --policy smolvla --base-model <local-smolvla-checkpoint> --vlm-assets <local-vlm-snapshot> --device cpu --steps 100 --batch-size 1
