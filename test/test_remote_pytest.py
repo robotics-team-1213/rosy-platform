@@ -246,7 +246,7 @@ def test_probe_script_busy_marker_needs_a_live_expiry_or_this_boot(tmp_path):
         pytest.skip("POSIX bash with /proc is required")
     jobs = tmp_path / "rosy-jobs"
     jobs.mkdir()
-    now, script = int(time.time()), rp.PROBE.replace("J=~/rosy-jobs", f"J={shlex.quote(str(jobs))}")
+    now, script = int(time.time()), "systemctl() { return 1; }\n" + rp.PROBE.replace("J=~/rosy-jobs", f"J={shlex.quote(str(jobs))}")
 
     def busy_field(text, mtime=None):
         (jobs / "busy").write_text(text)
@@ -867,7 +867,6 @@ def _one_main_worker(monkeypatch):
 
 
 def _job_env(tmp_path, python_body):
-    """A fake host home: run dir, venv whose python runs python_body, systemd-run that just execs."""
     home = tmp_path / "home"
     (home / "rosy-test" / "runs" / "r").mkdir(parents=True)
     venv = home / "rosy-test" / "venvs" / "d"
@@ -877,7 +876,8 @@ def _job_env(tmp_path, python_body):
     fakebin = tmp_path / "bin"
     fakebin.mkdir()
     (fakebin / "systemd-run").write_text('#!/bin/bash\nwhile [ "$1" != -- ]; do shift; done; shift; exec "$@"\n')
-    for f in (venv / "bin" / "python", fakebin / "systemd-run"):
+    (fakebin / "systemctl").write_text("#!/bin/sh\nexit 1\n")
+    for f in (venv / "bin" / "python", fakebin / "systemd-run", fakebin / "systemctl"):
         f.chmod(0o755)
     return home, {"HOME": str(home), "PATH": f"{fakebin}:/usr/bin:/bin"}
 
