@@ -152,3 +152,58 @@ def test_retired_source_root_requires_review_instead_of_implicit_payload():
         "src/node.py": "review",
         "middleware/perception/control/node.py": "native-payload",
     }
+
+
+def test_shipped_support_is_not_hidden_by_host_tool_rules():
+    for path in ("tools/packaging/fleet_sources.py",
+                 "deploy/robot/pinky_pro/release/host_lane_perception.py"):
+        assert classify_paths([path]).impact == "native-payload", path
+    # This implementation is also copied by the Pinky installer. A host folder
+    # name must never become permission to discard an unreviewed dependency.
+    assert classify_paths(["deploy/hosts/common/release/signing.py"]).impact != "none"
+
+
+def test_checkout_and_sd_closure_require_os_delivery():
+    for path in (".gitattributes", "deploy/robot/pinky_pro/sd/media-layout.ps1",
+                 "deploy/robot/pinky_pro/sd/test/Setup-MovedDevice.Tests.ps1",
+                 "deploy/robot/pinky_pro/sd/new-install-helper.py"):
+        assert classify_paths([path]).impact == "flashable-image", path
+
+
+def test_host_role_prefixes_and_reviewed_exact_tools_need_no_device_artifact():
+    for path in ("deploy/ai_pc/host-state/manifest", "deploy/model_pc/install_review_release.py",
+                 "deploy/hosts/common/host-state/manifest", "deploy/hosts/gpu_tenants.py",
+                 "deploy/hosts/common/release/native_profiles.py",
+                 "tools/calibration/analyze_session.py", "tools/capture/drivable_steer.py",
+                 "tools/perception_prototype/realrun/replay.py", "tools/remote/robot_status.py",
+                 "tools/sim/transfer_observer.py", "tools/release/robot_cd.py",
+                 "tools/land_selection.py", "tools/graphify_pipeline.py",
+                 "tools/hooks/land_record.py", "tools/publish_main.py", "tools/worktrees.py"):
+        assert classify_paths([path]).impact == "none", path
+
+
+def test_exact_development_and_policy_files_do_not_change_native_artifacts():
+    for path in (".dockerignore", "CONCEPTS.md", "DESIGN.md",
+                 "deploy/robot/pinky_pro/Dockerfile", "deploy/robot/pinky_pro/compose.yaml",
+                 "deploy/robot/pinky_pro/release/artifact_impact.py",
+                 "deploy/robot/pinky_pro/release/public_provenance.json",
+                 "deploy/robot/pinky_pro/release/publish_secret_baseline.json"):
+        assert classify_paths([path]).impact == "none", path
+
+
+def test_new_tool_and_host_paths_remain_review_even_beside_known_scopes():
+    for path in ("tools/new_device_writer.py", "tools/packaging/unreviewed.py",
+                 "tools/land_future.py", "deploy/hosts/new-service.py",
+                 "deploy/hosts/common/release/unreviewed.py",
+                 "deploy/robot/pinky_pro/Dockerfile.future", ".gitattributes.future"):
+        assert classify_paths([path]).impact == "review", path
+        assert classify_paths([path, ".gitattributes",
+                               "middleware/core/gateway/core/api.py"]).impact == "review", path
+
+
+def test_operator_calibration_probe_is_exact_host_scope_not_a_pinky_prefix():
+    # Push/ship execute the guard on the PC; its helper is a read-only SSH stdin
+    # probe, not a persistent image/payload install destination.
+    for name in ("calibration_tls_read.py", "rosy-calibration-guard.ps1"):
+        assert classify_paths([f"deploy/robot/pinky_pro/{name}"]).impact == "none", name
+    assert classify_paths(["deploy/robot/pinky_pro/unreviewed-guard.ps1"]).impact == "review"

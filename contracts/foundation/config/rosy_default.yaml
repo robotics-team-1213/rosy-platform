@@ -351,6 +351,7 @@ navigation:
     stale_after_s: 2.0
     required_components: [amcl, map_server, controller_server, local_costmap, global_costmap, motor_adapter]
     profiles:
+      motor: [motor_adapter]
       localization: [amcl, map_server, controller_server, local_costmap, global_costmap, motor_adapter]
       slam: [slam_toolbox, controller_server, local_costmap, global_costmap, motor_adapter]
   # map_id: warehouse_a           # 설정 or slam/save 로 갱신 (MAP-001, D-13)

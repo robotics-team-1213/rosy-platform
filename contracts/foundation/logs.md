@@ -1120,3 +1120,9 @@
 - gate 변화: 없음
 - CE: 해당 없음 — 신규 추가 계약, 실물 장애 아님
 
+## 2026-11-06 · 051927f313 · fix(config): 명시적인 motor readiness 기본 profile
+- 변경: `rosy_default.yaml`의 readiness profiles에 `motor: [motor_adapter]`를 추가했다. required 기본값과 기존 localization/SLAM 목록은 그대로다.
+- 증거: AI PC의 gateway/native 관련6suite 346passed/skip0. default를 실제 CoreServices/API로 소비해 motor 준비·lease 거절·hardware HOLD를 확인했다. 소스 계약 검토는 무발견이다.
+- gate 변화: 장치 반영은 없으며 새 payload의 G4 승인은 실제 원시 자료로 다시 받아야 한다.
+- CE: 기존 교훈 갱신 — native hardware mode·canonical runtime 기존 기록에 motor 재커미셔닝을 추가했다.
+

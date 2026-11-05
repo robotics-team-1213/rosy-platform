@@ -32,6 +32,7 @@ FLEET = FLEET_SAMPLE + [
     "test/test_motor_health_ui_browser.py",
     "test/test_fleet_workcell_observation_browser.py",
     "test/test_fleet_console_browser.py",
+    "test/test_fleet_manual_control_browser.py",
     "test/test_console_lifetime_browser.py",
     "test/test_console_session_browser.py",
     "test/test_fleet_workflows_browser.py",
