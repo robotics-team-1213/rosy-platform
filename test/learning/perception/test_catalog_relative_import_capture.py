@@ -21,6 +21,8 @@ def fd_count():
 
 def _fifo_import_worker(sender, store, folder):
     """Run the genuine importer; report both refusal and owned-FD cleanup."""
+    # Reap unreachable resources inherited from pytest before measuring this import.
+    gc.collect()
     baseline = fd_count()
     try:
         import_relative(store, folder)
