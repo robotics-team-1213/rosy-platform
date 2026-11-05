@@ -14294,3 +14294,10 @@ osy-d395-s1d\`.
 - 증거: RED b8237ae684 원격 새 회귀10실패/문자열 전달1통과. source3072f6f86a 원격 land_async/GC/land/queue 226통과·skip0, known-failures NEW/known/flaky0. 실제 CLI -h/--help/resume --help는 Git 없는 격리 fixture에서도 상태 파일을 쓰지 않았다. scratch land-help-{red,green}/run-1.txt. 독립 source 검토 미해결 finding 없음.
 - gate 변화: scoped source 회귀이며 영향 선택은 FULL이다. 사용자 지시에 따라 새 main 착지/FULL 제출은 대기한다. 기존 manual224244와 도움말 STOP224214·old212723 snapshot/기록을 보존했다.
 - CE: 해당 없음 — 반복된 부작용의 원인·정확 토큰 범위·변경 전 무부작용 보장은 최종 코드와 회귀로 직접 재현되며, 별도 환경 조건이나 복구 지식이 필요하지 않다.
+
+## 2026-11-06 · uncommitted · fix(tools): 보존된 도움말 수정을 현재 main과 통합
+
+- 변경: main ce2670e864에서 보존 source aab728fa56를 정상 병합했다. 도움말 첫 분기3줄과 기존 회귀는 aab와 바이트가 같으며 선행 main의 OMX 수정·기록을 보존했다. 정확한 -h/--help 토큰은 Git/착지 작업 전에 usage 출력/0 종료하며 --tests 값 문자열 안의 --help는 그대로 전달한다.
+- 증거: source e8f0568a4a 원격 AI PC landing/GC/queue 기존226개와 선행 OMX38개, 총264통과·skip0·NEW/known/flaky0; scratch land-help-integration-green/run-1.txt. Git 없는 fixture의 실제 도움말 CLI와 mutation 경로 거절 회귀를 포함한다. 고정 source 독립 병합 검토 미해결 finding 없음.
+- gate 변화: SOURCE 통합 회귀 확인이다. 영향 선택 FULL은 유지하며 새 canonical 제출은 게시 담당의 조율을 기다린다. 실행 중인 관제·사건·metadata snapshot을 취소하거나 수정하지 않았다.
+- CE: 해당 없음 — 기존 도움말 수정·회귀가 원인과 재발 경계를 직접 보존하며 이번 변경은 정상 통합이다.
