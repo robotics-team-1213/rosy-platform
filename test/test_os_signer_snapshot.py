@@ -12,6 +12,16 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def test_installer_preserves_the_private_archive_repository_when_worktree_is_removed():
+    installer = (ROOT / "tools/release/install_robot_cd.ps1").read_text(encoding="utf-8")
+    # This cross-language contract keeps the only assignment conditional on
+    # property absence, rather than silently replacing an operator's stable repo.
+    assignments = re.findall(r'^.*Add-Member -NotePropertyName source_repository.*$', installer, re.MULTILINE)
+    assert len(assignments) == 1
+    assert re.search(r"if \(-not \$config\.PSObject\.Properties\['source_repository'\]\)\s*\{\s*"
+                     r"\$config \| Add-Member -NotePropertyName source_repository -NotePropertyValue \$repo\s*\}", installer)
+
+
 def test_installer_snapshot_contains_the_os_import_closure(tmp_path):
     installer = (ROOT / "tools/release/install_robot_cd.ps1").read_text(encoding="utf-8")
     files = re.findall(r'^    "([^"]+)"', installer, re.MULTILINE)
