@@ -113,3 +113,16 @@ def test_unconfirmed_torque_off_skips_restore_and_camera_io():
     assert bus.reg['torque'] == 1
     assert (bus.reg['profile_acc'], bus.reg['profile_vel'], bus.reg['goal_current']) == (1, 1, 50)
     assert bus.reg['goal_pos'] == bus.reg['present_pos']
+
+
+def test_after_frame_failure_cannot_skip_register_restoration():
+    bus = configured_motor()
+    before = dict(bus.reg)
+
+    def grab(label):
+        if label == 'after':
+            raise RuntimeError('frame output failed')
+
+    with pytest.raises(RuntimeError, match='frame output failed'):
+        hold(bus, grab)
+    assert bus.reg == before
