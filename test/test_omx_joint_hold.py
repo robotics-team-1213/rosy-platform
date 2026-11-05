@@ -16,6 +16,16 @@ def configured_motor():
     return bus
 
 
+def test_initial_torque_on_is_refused_before_camera_io_or_register_writes():
+    bus = Motor(torque=1)
+    frames = []
+    args = m.parse(['--device', 'unused', 'move', '--delta', '0'])
+    with pytest.raises(SystemExit, match='precondition failed'):
+        m.Run(bus, 16, log=lambda **row: None, grab=frames.append).execute(args)
+    assert frames == []
+    assert bus.writes == []
+
+
 def test_hold_has_no_second_goal_or_camera_io_at_torque_on_and_restores_configuration():
     bus = configured_motor()
     before = dict(bus.reg)
