@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 import uvicorn
-from browser_harness import BODY_FIT, browser_tests_enabled, open_token_access, safe_listener
+from browser_harness import BODY_FIT, browser_tests_enabled, goto_with_network_change_retry, open_token_access, safe_listener
 
 from test_site_map_trip import _app, _on_ring_s
 
@@ -452,49 +452,8 @@ def page_site(tmp_path, request):
                                               args=[f"--explicitly-allowed-ports={listener.getsockname()[1]}"])
             try:
                 page = browser.new_page(viewport={"width": 1440, "height": 1000})
-                script_errors = []
-                if os.environ.get('ROSY_TOKEN_TRACE') == '1':
-                    page.on('pageerror', lambda error: script_errors.append(str(error)))
-                    page.on('requestfailed', lambda request: script_errors.append(
-                        request.url.split('?')[0] + ': ' + str(request.failure)))
-                    page.on('response', lambda response: script_errors.append(
-                        str(response.status) + ': ' + response.url.split('?')[0])
-                        if response.status >= 400 and response.url.split('?')[0].endswith('.js') else None)
-                    page.add_init_script('''
-                        window.tokenTrace = [];
-                        function trace(kind, target) {
-                            if (window.tokenTrace.length >= 100) return;
-                            const ids = ['topbar-more', 'topbar-extra', 'token-access', 'token-save'];
-                            window.tokenTrace.push({time: performance.now(), kind, target,
-                                state: ids.map(id => {
-                                    const e = document.getElementById(id);
-                                    return e && {id, expanded: e.getAttribute('aria-expanded'),
-                                        open: e.getAttribute('open'), dataOpen: e.dataset.open,
-                                        label: e.getAttribute('aria-label'),
-                                        disabled: e.hasAttribute('disabled'),
-                                        hidden: e.hidden, display: getComputedStyle(e).display,
-                                        width: e.getBoundingClientRect().width};
-                                })});
-                        }
-                        for (const type of ['pointerdown', 'pointerup', 'click'])
-                            document.addEventListener(type, e => trace(type,
-                                e.composedPath().map(n => n.id || n.tagName).filter(Boolean).join('/')), true);
-                        document.addEventListener('keydown', e => {
-                            if (e.key === 'Escape') trace('escape', e.target.id);
-                        }, true);
-                        new MutationObserver(records => records.forEach(r => {
-                            if (['topbar-more', 'topbar-extra', 'token-access'].includes(r.target.id))
-                                trace(r.attributeName, r.target.id);
-                        })).observe(document, {subtree: true, attributes: true,
-                            attributeFilter: ['aria-expanded', 'data-open', 'open', 'hidden']});
-                    ''')
-                page.goto(origin + "/console/site-map")
-                try:
-                    yield page, store, robot
-                finally:
-                    if os.environ.get('ROSY_TOKEN_TRACE') == '1':
-                        print('TOKEN_TRACE', request.node.nodeid, json.dumps(page.evaluate('window.tokenTrace')))
-                        print('SCRIPT_ERRORS', request.node.nodeid, json.dumps(script_errors))
+                goto_with_network_change_retry(page, origin + "/console/site-map")
+                yield page, store, robot
             finally:
                 browser.close()
     finally:
@@ -507,7 +466,7 @@ def test_requested_recording_robot_never_falls_back_to_another_robot(page_site):
     from playwright.sync_api import expect
 
     page, store, robot = page_site
-    page.goto(page.url + '?robot=not-in-roster#teach-heading')
+    goto_with_network_change_retry(page, page.url + '?robot=not-in-roster#teach-heading')
     open_token_access(page)
     page.locator('#console-token').fill('operator-token')
     page.locator('#token-save').click()
@@ -528,7 +487,7 @@ def test_recording_target_survives_refresh_and_names_offline_or_removed_robots(p
     recording = {'recording': None, 'pending': []}
     page.route('**/api/fleet/state', lambda route: route.fulfill(content_type='application/json', body=json.dumps(roster)))
     page.route('**/api/fleet/teach', lambda route: route.fulfill(content_type='application/json', body=json.dumps(recording)))
-    page.goto(page.url + '?robot=beta#teach-heading')
+    goto_with_network_change_retry(page, page.url + '?robot=beta#teach-heading')
     open_token_access(page)
     page.locator('#console-token').fill('operator-token')
     page.locator('#token-save').click()
