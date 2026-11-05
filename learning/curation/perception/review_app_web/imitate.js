@@ -6,7 +6,7 @@ const active=new Set(['launching','running','stopping']);
 const labels={launching:'시작 준비 중',running:'실행 중',stopping:'중지 처리 중',failed:'실패',interrupted:'중단됨',cancelled:'취소됨',succeeded:'완료'};
 const phases={validating:'원본 확인 중',inspecting:'시연 검사 중',preparing:'학습 자료 준비 중',training:'ACT 학습 중',evaluating:'남겨 둔 자료 평가 중',finished:'완료'};
 const panels=['upload','inspect','learn','results'];
-let study=null,listing={},token='',project='',connected=false,working=false,polling=false;
+let study=null,listing={},token='',project='',connected=false,working=false,polling=false,resourceGeneration=0,refreshQueued=false;
 let studyId=new URL(location.href).searchParams.get('study')||'',selected=[],manifest=[],matched=false;
 let pending=null,inspectionKey='',splitSaved='',dirty=false,resultSignature='',selectionGeneration=0;
 function node(tag,text,cls){const n=document.createElement(tag);if(text!=null)n.textContent=text;if(cls)n.className=cls;return n;}
@@ -100,10 +100,12 @@ function results(){
   }
 }
 async function refresh(){
-  if(polling)return;polling=true;$('imitate-refresh').disabled=true;
-  try{const auth=await request('/api/learning/tasks');token=auth.token||'';const nextProject=auth.project_id||auth.project?.id||'';if(project!==nextProject){project=nextProject;readPending();}listing=await request(API+'/lerobot-studies');if(studyId){try{study=await request(API+'/lerobot-study/'+encodeURIComponent(studyId));}catch(exc){if(pending?.kind!=='create')throw exc;}}connected=true;render();}
-  catch(exc){connected=false;error(`${exc.message} 다시 확인을 눌러 연결을 확인하세요.`);availability();}
-  finally{polling=false;$('imitate-refresh').disabled=false;}
+  if(polling){refreshQueued=true;return;}const generation=resourceGeneration;polling=true;$('imitate-refresh').disabled=true;
+  try{const auth=await request('/api/learning/tasks');if(generation!==resourceGeneration)return;token=auth.token||'';const nextProject=auth.project_id||auth.project?.id||'';if(project!==nextProject){project=nextProject;readPending();}
+    const value=await request(API+'/lerobot-studies');if(generation!==resourceGeneration)return;listing=value;
+    if(studyId){const id=studyId;try{const selected=await request(API+'/lerobot-study/'+encodeURIComponent(id));if(generation!==resourceGeneration||id!==studyId)return;study=selected;}catch(exc){if(generation!==resourceGeneration)return;if(pending?.kind!=='create')throw exc;}}connected=true;render();}
+  catch(exc){if(generation===resourceGeneration){connected=false;error(`${exc.message} 다시 확인을 눌러 연결을 확인하세요.`);availability();}}
+  finally{polling=false;$('imitate-refresh').disabled=false;if(refreshQueued||generation!==resourceGeneration){refreshQueued=false;void refresh();}}
 }
 const paths=[/^meta\/(info|stats)\.json$/,/^meta\/tasks\.parquet$/,/^meta\/episodes\/chunk-\d{3}\/file-\d{3}\.parquet$/,/^data\/chunk-\d{3}\/file-\d{3}\.parquet$/,/^videos\/observation\.images\.[A-Za-z0-9_-]+\/chunk-\d{3}\/file-\d{3}\.mp4$/,/^(README\.md|LICEN[CS]E|LICENSE\.txt|LICENSE\.md|UPSTREAM_README\.md|source-provenance\.json)$/];
 function sameManifest(a,b){return a.length===b.length&&a.every((f,i)=>f.name===b[i].name&&f.size===b[i].size&&f.sha256===b[i].sha256);}
@@ -146,7 +148,7 @@ $('inspect-start').onclick=async()=>{if($('inspect-start').disabled)return;try{a
 $('split-save').onclick=async()=>{if($('split-save').disabled)return;try{const saved=await mutate('split','/lerobot-split',{study_id:studyId,source_revision:study.source_revision,...splitSelection(),request_id:uuid()});study=saved;dirty=false;splitSaved='';render();}catch{}};
 $('train-start').onclick=async()=>{if($('train-start').disabled)return;try{await mutate('train','/lerobot-run',{study_id:studyId,split_revision:study.split.revision,steps:Number($('train-steps').value),batch_size:Number($('train-batch').value),seed:Number($('train-seed').value),request_id:uuid()});panel('results');await refresh();}catch{}};
 $('active-stop').onclick=async()=>{if($('active-stop').disabled)return;const id=$('active-stop').dataset.run;$('active-stop').disabled=true;try{await request(API+'/stop',{id});$('action-status').textContent='중지를 요청했습니다. 현재 실행의 처리 결과를 확인하세요.';await refresh();}catch(exc){error(exc.message);}finally{availability();}};
-function reset(){study=null;selected=[];manifest=[];matched=false;inspectionKey=null;splitSaved='';dirty=false;resultSignature='';selectionGeneration++;$('source-folder').value='';$('study-name').value='';$('upload-status').textContent='선택한 자료가 없습니다.';$('upload-progress').value=0;$('upload-excluded').replaceChildren();error('');readPending();setURL();render();}
+function reset(){resourceGeneration++;study=null;selected=[];manifest=[];matched=false;inspectionKey=null;splitSaved='';dirty=false;resultSignature='';selectionGeneration++;$('source-folder').value='';$('study-name').value='';$('upload-status').textContent='선택한 자료가 없습니다.';$('upload-progress').value=0;$('upload-excluded').replaceChildren();error('');readPending();setURL();render();}
 $('study-new').onclick=()=>{studyId='';reset();panel('upload');};
 $('study-select').onchange=async()=>{studyId=$('study-select').value;reset();await refresh();};
 $('study-name').oninput=availability;for(const id of ['train-steps','train-batch','train-seed'])$(id).oninput=availability;

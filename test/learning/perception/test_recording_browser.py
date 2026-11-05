@@ -66,37 +66,43 @@ def test_recording_selection_rejects_late_session_and_refreshes_latest(recording
     expect(page.locator('#record-name')).to_have_value(session['name'])
     delayed = []
     page.route('**/recording/session/' + SESSION, lambda route: delayed.append(route))
-    with page.expect_request('**/recording/session/' + SESSION):
-        page.locator('#record-refresh').click()
-    expect(page.locator('#record-refresh')).to_be_disabled()
-    if target == 'new':
-        page.locator('#record-new').click()
-    else:
-        page.locator('#record-session').select_option(other['id'])
-    assert len(delayed) == 1
-    if target == 'new':
-        delayed.pop().fulfill(json=session)
-    else:
-        with page.expect_request('**/recording/session/' + other['id']):
+    try:
+        with page.expect_request('**/recording/session/' + SESSION):
+            page.locator('#record-refresh').click()
+        expect(page.locator('#record-refresh')).to_be_disabled()
+        if target == 'new':
+            page.locator('#record-new').click()
+        else:
+            page.locator('#record-session').select_option(other['id'])
+        assert len(delayed) == 1
+        if target == 'new':
             delayed.pop().fulfill(json=session)
-        expect(page.locator('#episode-start')).to_be_disabled()
-        assert len(latest) == 1
-        latest.pop().fulfill(json=other)
-    expect(page.locator('#record-refresh')).to_be_enabled()
-    if target == 'new':
-        expect(page.locator('#record-session')).to_have_value('')
-        expect(page.locator('#record-name')).to_have_value('')
-        expect(page.locator('#record-name')).to_be_enabled()
-        expect(page.locator('#episode-start')).to_be_disabled()
-        expect(page.locator('#record-export')).to_be_disabled()
-    else:
-        expect(page.locator('#record-name')).to_have_value(other['name'])
-        expect(page.locator('#record-session')).to_have_value(other['id'])
-        posts = []
-        page.route('**/recording/start', lambda route: (posts.append(route.request.post_data_json), route.fulfill(json=other)))
-        page.locator('#episode-start').click()
-        expect(page.locator('#record-status')).to_contain_text('요청 접수')
-        assert posts[0]['session_id'] == other['id']
+        else:
+            with page.expect_request('**/recording/session/' + other['id']):
+                delayed.pop().fulfill(json=session)
+            expect(page.locator('#episode-start')).to_be_disabled()
+            assert len(latest) == 1
+            latest.pop().fulfill(json=other)
+        expect(page.locator('#record-refresh')).to_be_enabled()
+        if target == 'new':
+            expect(page.locator('#record-session')).to_have_value('')
+            expect(page.locator('#record-name')).to_have_value('')
+            expect(page.locator('#record-name')).to_be_enabled()
+            expect(page.locator('#episode-start')).to_be_disabled()
+            expect(page.locator('#record-export')).to_be_disabled()
+        else:
+            expect(page.locator('#record-name')).to_have_value(other['name'])
+            expect(page.locator('#record-session')).to_have_value(other['id'])
+            posts = []
+            page.route('**/recording/start', lambda route: (posts.append(route.request.post_data_json), route.fulfill(json=other)))
+            page.locator('#episode-start').click()
+            expect(page.locator('#record-status')).to_contain_text('요청 접수')
+            assert posts[0]['session_id'] == other['id']
+    finally:
+        while delayed:
+            delayed.pop().fulfill(json=session)
+        while latest:
+            latest.pop().fulfill(json=other)
 
 
 def test_setup_fields_survive_poll_and_preview_only_blocks_start(recording_page):

@@ -512,13 +512,16 @@ $('show-all').onclick=()=> {if(loadFailed){load();return;}if(!Object.values(work
 $('prev-frame').onclick=()=> {const visible=visibleFrames(),index=visible.findIndex(item=>item.index===frame.index);if(index>0) select(visible[index-1].index);else load(undefined,{offset:workspace.page.offset-workspace.page.limit,last:1});};
 $('next-frame').onclick=()=> {const visible=visibleFrames(),index=visible.findIndex(item=>item.index===frame.index);if(index<visible.length-1) select(visible[index+1].index);else load(undefined,{offset:workspace.page.offset+workspace.page.limit});};
 async function nextPending(index) {
+  const ticket=loadSerial;
   const page=await request(workspacePage('object','pending',{after:index}));
+  if(ticket!==loadSerial||frame?.index!==index)return;
   if(!page.frames.length){workspace.counts=page.counts;workspace.pixel_counts=page.pixel_counts;return;}
   const next=page.frames.find(row=>row.index===page.page.target)||page.frames[0];
   const current=await request(workspacePage('object',$('filter').value,{around:next.index}));
+  if(ticket!==loadSerial||frame?.index!==index)return;
   workspace={...workspace,...current};return next;
 }
-$('next-pending').onclick=async()=> {try {$('filter').value='pending';const next=await nextPending(frame.index);if(next) {select(next.index);}}catch(e){error(e.message);}};
+$('next-pending').onclick=async()=> {if($('next-pending').disabled)return;const previous=$('filter').value,ticket=loadSerial;busy=true;error();enable();try {$('filter').value='pending';const next=await nextPending(frame.index);if(next)await select(next.index);else if(ticket===loadSerial)$('filter').value=previous;}catch(e){if(ticket===loadSerial){$('filter').value=previous;error(e.message);}}finally{busy=false;enable();if(ready)canvas.focus({preventScroll:true});}};
 $('reload').onclick=async()=> {if(!busy) await load(frame?.index);};
 document.addEventListener('rosy:theme',()=>{paint();});
 function receipt(value, historical=false) {

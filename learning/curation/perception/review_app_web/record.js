@@ -5,7 +5,7 @@ import {createRecordingReview} from '/record-review.js';
 const $=id=>document.getElementById(id),API='/api/learning/recording';
 const timingFields={'record-fps':'fps','record-camera-age':'max_camera_age_s','record-arm-age':'max_arm_age_s','record-camera-skew':'max_camera_skew_s','record-arm-skew':'max_arm_skew_s','record-gap':'max_gap_s'};
 const statusLabels={idle:'대기',arming:'입력 준비 중',recording:'녹화 중',exporting:'자료 변환 중',ready:'준비됨',failed:'실패',draft:'확인 대기',kept:'보관됨',discarded:'제외됨',invalid:'기록 무효'};
-let snapshot={},session=null,token='',project='',connected=false,polling=false,pending={},mutations=0,stopping=false;
+let snapshot={},session=null,token='',project='',connected=false,polling=false,pending={},mutations=0,stopping=false,selectionGeneration=0,refreshQueued=false;
 let sessionId=new URL(location.href).searchParams.get('session')||'',loadedSession='',profileSignature='',sourceSignature='',initialProfile=new URL(location.href).searchParams.get('profile')||'';
 const episodeNodes=new Map();
 const savedReview=createRecordingReview({request,onChange:availability});
@@ -79,14 +79,23 @@ function render(){
   $('record-host').textContent=`녹화 호스트: ${snapshot.host_id||'미설정'} · 현재 접속한 호스트의 등록된 입력만 사용합니다.`;
   renderProfile();renderSources();renderEpisodes();renderExport();availability();
 }
-async function refresh(){if(polling)return;polling=true;$('record-refresh').disabled=true;try{const auth=await request('/api/learning/tasks');token=auth.token||'';const next=auth.project_id||auth.project?.id||'';if(next!==project){project=next;readPending();}snapshot=await request(API+'/snapshot');if(!sessionId&&snapshot.active?.id){sessionId=snapshot.active.id;readPending();setURL();}if(sessionId){try{session=await request(API+'/session/'+encodeURIComponent(sessionId));}catch(exc){if(!pending.create)throw exc;}}connected=true;render();}catch(exc){connected=false;error(`${exc.message} 다시 확인을 눌러 연결을 확인하세요.`);availability();}finally{polling=false;$('record-refresh').disabled=false;}}
+async function refresh(){
+  if(polling){refreshQueued=true;return;}const generation=selectionGeneration;polling=true;$('record-refresh').disabled=true;
+  try{const auth=await request('/api/learning/tasks');if(generation!==selectionGeneration)return;token=auth.token||'';const next=auth.project_id||auth.project?.id||'';if(next!==project){project=next;readPending();}
+    const value=await request(API+'/snapshot');if(generation!==selectionGeneration)return;snapshot=value;
+    if(!sessionId&&snapshot.active?.id){sessionId=snapshot.active.id;readPending();setURL();}
+    if(sessionId){const id=sessionId;try{const selected=await request(API+'/session/'+encodeURIComponent(id));if(generation!==selectionGeneration||id!==sessionId)return;session=selected;}catch(exc){if(generation!==selectionGeneration)return;if(!pending.create)throw exc;}}
+    connected=true;render();
+  }catch(exc){if(generation===selectionGeneration){connected=false;error(`${exc.message} 다시 확인을 눌러 연결을 확인하세요.`);availability();}}
+  finally{polling=false;$('record-refresh').disabled=false;if(refreshQueued||generation!==selectionGeneration){refreshQueued=false;void refresh();}}
+}
 async function act(kind,path,body){if(kind==='stop'?stopping:mutations)return;const isStop=kind==='stop';if(isStop)stopping=true;else mutations++;error('');try{if(kind!=='stop')await savedReview.close();if(!pending[kind]){pending[kind]=body;savePending();}availability();const result=await request(API+path,pending[kind]);delete pending[kind];savePending();if(kind==='publish'){const url=safeLocalURL(result.url);if(!url||!url.startsWith('/learning/imitate?'))throw new Error('학습센터 전달 주소를 확인하지 못했습니다. 다시 확인하세요.');$('record-study-link').href=url;$('record-study-link').hidden=false;$('record-status').textContent='학습센터 자료 전달 완료. 원본 검사·분할로 이동하세요.';}else{session=result;if(kind==='create'){sessionId=session.id;setURL();}render();$('record-status').textContent='요청 접수를 확인했습니다. 저장된 기록을 확인하세요.';}await refresh();}catch(exc){error(`${exc.message} 같은 요청 다시 확인으로 접수 여부를 확인할 수 있습니다. 자동으로 다시 실행하지 않습니다.`);}finally{if(isStop)stopping=false;else mutations--;availability();}}
 $('record-create').onclick=()=>{if($('record-create').disabled)return;if(!sessionId){sessionId=uuid();setURL();readPending();}const selected=profile();act('create','/session',{request_id:sessionId,name:$('record-name').value.trim(),profile_id:selected.id,profile_revision:selected.revision,timing:timing()});};
 $('episode-start').onclick=()=>{if(!$('episode-start').disabled)act('start','/start',{session_id:sessionId,request_id:uuid()});};
 $('episode-stop').onclick=()=>{const live=active();if(live&&!$('episode-stop').disabled)act('stop','/stop',{session_id:live.id,request_id:uuid()});};
 $('record-export').onclick=()=>{if(!$('record-export').disabled)act('export','/export',{session_id:sessionId,request_id:uuid()});};
 $('record-publish').onclick=()=>{if(!$('record-publish').disabled)act('publish','/publish',{session_id:sessionId,request_id:uuid()});};
-function reset(){savedReview.close();session=null;loadedSession='';profileSignature='';episodeNodes.clear();$('record-episodes').replaceChildren();$('record-study-link').hidden=true;readPending();setURL();error('');}
+function reset(){selectionGeneration++;savedReview.close();session=null;loadedSession='';profileSignature='';episodeNodes.clear();$('record-episodes').replaceChildren();$('record-study-link').hidden=true;readPending();setURL();error('');}
 $('record-new').onclick=()=>{if(active()){error('현재 회차를 먼저 정지하세요. 새 구성은 다음 세션에 적용합니다.');return;}sessionId='';reset();$('record-name').value='';render();};
 $('record-session').onchange=async()=>{if(active()){error('현재 회차를 먼저 정지하세요.');render();return;}sessionId=$('record-session').value;reset();await refresh();};
 $('record-profile').onchange=()=>{renderProfile();availability();};for(const id of ['record-name',...Object.keys(timingFields)])$(id).oninput=availability;

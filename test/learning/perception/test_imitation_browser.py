@@ -59,38 +59,44 @@ def test_study_selection_rejects_late_response_and_refreshes_latest(imitation_pa
     expect(page.locator('#study-name')).to_have_value(study['name'])
     delayed = []
     page.route('**/center/lerobot-study/' + STUDY, lambda route: delayed.append(route))
-    with page.expect_request('**/center/lerobot-study/' + STUDY):
-        page.locator('#imitate-refresh').click()
-    expect(page.locator('#imitate-refresh')).to_be_disabled()
-    if target == 'new':
-        page.locator('#study-new').click()
-    else:
-        page.locator('#study-select').select_option(other['id'])
-    assert len(delayed) == 1
-    if target == 'new':
-        delayed.pop().fulfill(json=study)
-    else:
-        with page.expect_request('**/center/lerobot-study/' + other['id']):
+    try:
+        with page.expect_request('**/center/lerobot-study/' + STUDY):
+            page.locator('#imitate-refresh').click()
+        expect(page.locator('#imitate-refresh')).to_be_disabled()
+        if target == 'new':
+            page.locator('#study-new').click()
+        else:
+            page.locator('#study-select').select_option(other['id'])
+        assert len(delayed) == 1
+        if target == 'new':
             delayed.pop().fulfill(json=study)
-        expect(page.locator('#split-save')).to_be_disabled()
-        expect(page.locator('#train-start')).to_be_disabled()
-        assert len(latest) == 1
-        latest.pop().fulfill(json=other)
-    expect(page.locator('#imitate-refresh')).to_be_enabled()
-    if target == 'new':
-        expect(page.locator('#study-select')).to_have_value('')
-        expect(page.locator('#study-name')).to_have_value('')
-        expect(page.locator('#inspect-start')).to_be_disabled()
-        expect(page.locator('#train-start')).to_be_disabled()
-    else:
-        expect(page.locator('#study-name')).to_have_value(other['name'])
-        expect(page.locator('#study-select')).to_have_value(other['id'])
-        page.locator('[data-episode="8"]').select_option('validation')
-        posts = []
-        page.route('**/center/lerobot-split', lambda route: (posts.append(route.request.post_data_json), route.fulfill(json=other)))
-        with page.expect_request('**/center/lerobot-split'):
-            page.locator('#split-save').click()
-        assert posts[0]['study_id'] == other['id']
+        else:
+            with page.expect_request('**/center/lerobot-study/' + other['id']):
+                delayed.pop().fulfill(json=study)
+            expect(page.locator('#split-save')).to_be_disabled()
+            expect(page.locator('#train-start')).to_be_disabled()
+            assert len(latest) == 1
+            latest.pop().fulfill(json=other)
+        expect(page.locator('#imitate-refresh')).to_be_enabled()
+        if target == 'new':
+            expect(page.locator('#study-select')).to_have_value('')
+            expect(page.locator('#study-name')).to_have_value('')
+            expect(page.locator('#inspect-start')).to_be_disabled()
+            expect(page.locator('#train-start')).to_be_disabled()
+        else:
+            expect(page.locator('#study-name')).to_have_value(other['name'])
+            expect(page.locator('#study-select')).to_have_value(other['id'])
+            page.locator('[data-episode="8"]').select_option('validation')
+            posts = []
+            page.route('**/center/lerobot-split', lambda route: (posts.append(route.request.post_data_json), route.fulfill(json=other)))
+            with page.expect_request('**/center/lerobot-split'):
+                page.locator('#split-save').click()
+            assert posts[0]['study_id'] == other['id']
+    finally:
+        while delayed:
+            delayed.pop().fulfill(json=study)
+        while latest:
+            latest.pop().fulfill(json=other)
 
 
 def test_split_must_be_saved_and_poll_preserves_edits(imitation_page):
