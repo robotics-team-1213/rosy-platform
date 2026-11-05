@@ -453,6 +453,7 @@ def test_device_procedure_places_status_and_actions_before_long_readouts(tmp_pat
               return lines[0]?.textContent.includes('site-fixture') && lines[1]?.textContent.includes('이전 r1');
             }""")
             _select_task(page, "host.operations")
+            header_metrics = {}
             for title in ("네트워크", "릴리스", "커미셔닝"):
                 table = page.get_by_role("table", name=f"{title} 원본 조회값", exact=True)
                 assert table.is_visible()
@@ -463,6 +464,7 @@ def test_device_procedure_places_status_and_actions_before_long_readouts(tmp_pat
                   return {label:node.textContent, content:box.width-parseFloat(style.paddingLeft)-parseFloat(style.paddingRight), glyph:parseFloat(style.fontSize)};
                 })""")
                 assert header_widths and all(row["content"] >= 4 * row["glyph"] for row in header_widths), (width, title, header_widths)
+                header_metrics[title] = header_widths
                 region = page.get_by_role("region", name=f"{title} 원본 조회값 스크롤", exact=True)
                 assert region.evaluate("node => getComputedStyle(node).overflowX") == "auto"
                 region.focus()
@@ -487,6 +489,9 @@ def test_device_procedure_places_status_and_actions_before_long_readouts(tmp_pat
             capture_dir = CAPTURES / "host-original-readbacks"
             capture_dir.mkdir(parents=True, exist_ok=True)
             page.screenshot(path=str(capture_dir / f"administrator-device-long-values-{width}x{height}.png"), full_page=True)
+            (capture_dir / f"administrator-device-long-values-{width}x{height}.json").write_text(json.dumps({
+                "viewport": page.viewport_size, "headers": header_metrics, "theme": page.evaluate("document.documentElement.dataset.theme"),
+                "filename": f"administrator-device-long-values-{width}x{height}.png", "state": "long host readouts"}, ensure_ascii=False, indent=2), encoding="utf-8")
             if width == 390:
                 assert result["operationsTop"] < height, result
             button = page.get_by_role("button", name="사업장 Wi-Fi로 전환", exact=True)
