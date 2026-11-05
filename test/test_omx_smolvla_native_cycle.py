@@ -55,6 +55,7 @@ receipt = run_cycle(splits, run, policy_type='smolvla', base_model=base, vlm_ass
 assert (splits/'split-receipt.json').read_bytes() == before
 assert receipt['policy_type'] == 'smolvla' and receipt['policy_revision'].startswith('smolvla-')
 assert receipt['offline_only'] and not receipt['promotion'] and not receipt['device_execution']
+assert set(receipt['code_files']) == {'native_cycle.py', 'smolvla_training.py', 'policy_assets.py'}
 assert receipt['evaluation']['joint_names'] == names
 assert receipt['evaluation']['samples'] == 4 and receipt['evaluation']['physical_task_success'] is None
 model = (run/'trainer/checkpoints/last/pretrained_model').resolve()
@@ -68,8 +69,25 @@ subprocess.run([sys.executable, str(root/'learning/training/omx/native_cycle.py'
     '--model', str(moved), '--splits', str(splits), '--repo-id', repo_id,
     '--out', str(tmp/'moved-evaluation.json')], env=env, check=True, timeout=180)
 assert json.loads((tmp/'moved-evaluation.json').read_text())['samples'] == 4
+probe = r"""
+import math, sys
+from pathlib import Path
+import numpy as np
+root, model, size = Path(sys.argv[1]), Path(sys.argv[2]), int(sys.argv[3])
+sys.path[:0] = [str(root/'integrations/robots/omx/src'), str(root/'contracts/learning/src')]
+from rosy.integrations.robots.omx.policy_runner import LeRobotAdapter, BENCH_POLICY_TYPES, ALLOWED_POLICY_TYPES
+assert 'smolvla' not in ALLOWED_POLICY_TYPES
+adapter = LeRobotAdapter(str(model), 'cpu', joint_names=[str(i) for i in range(size)],
+    cameras=['front'], unit='lerobot_norm_v1', allowed_types=BENCH_POLICY_TYPES)
+frame = dict(positions=[20.]*size, images={'front':np.full((32,32,3), 60, dtype=np.uint8)})
+action = adapter.postprocess(adapter.infer(adapter.preprocess(frame, 'synthetic wiring verification only')))
+assert len(action) == size and all(math.isfinite(value) for value in action)
+"""
+subprocess.run([sys.executable, '-I', '-B', '-c', probe, str(root), str(moved), str(size)],
+               env=env, check=True, timeout=180)
 print(json.dumps(dict(policy_type='smolvla', joints=size, optimizer_steps=1,
-    relocated_offline_reload=True, physical_task_success=None, policy_revision=receipt['policy_revision'])))
+    relocated_offline_reload=True, runner_reloaded=True, physical_task_success=None,
+    policy_revision=receipt['policy_revision'])))
 '''
 
 

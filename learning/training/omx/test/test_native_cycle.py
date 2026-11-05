@@ -80,6 +80,18 @@ def test_act_environment_does_not_require_optional_vla_packages(module, monkeypa
     assert 'transformers' not in module.training_environment('act')['packages']
 
 
+def test_cycle_code_identity_changes_when_execution_source_changes(module, tmp_path, monkeypatch):
+    path = tmp_path/'native_cycle.py'
+    path.write_text('synthetic execution source revision one')
+    monkeypatch.setattr(module, '__file__', str(path))
+    before = module.code_files()
+    assert set(before) == {'native_cycle.py', 'smolvla_training.py', 'policy_assets.py'}
+    path.write_text('synthetic execution source revision two')
+    after = module.code_files()
+    assert before['native_cycle.py'] != after['native_cycle.py']
+    assert before['policy_assets.py'] == after['policy_assets.py']
+
+
 @pytest.mark.parametrize('fault', ['unknown_source', 'unreviewed', 'missing_hash', 'split_ids', 'cycle'])
 def test_invalid_split_receipts_cannot_start_trainer(module, splits, fault):
     root, receipt = splits
