@@ -182,6 +182,9 @@ def test_motor_profile_accepts_manual_api_without_navigation_components(core_cli
     services.readiness.observe("motor_adapter", True, lease=True)
     assert services.readiness.required_components == ("motor_adapter",)
     assert services.readiness.required and services.readiness.is_ready()
+    capabilities = client.get("/api/v1/system/capabilities", headers={"Authorization": "Bearer rosy-dev-viewer"}).json()
+    assert capabilities["navigation"]["goal_navigation"] is False
+    assert capabilities["slam"] is False
     headers = {"Authorization": "Bearer rosy-dev-operator"}
     assert client.post("/api/v1/mode", json={"mode": "MANUAL"}, headers=headers).status_code == 200
     response = client.post("/api/v1/teleop", json={"linear": 0.02, "angular": 0.0}, headers=headers)

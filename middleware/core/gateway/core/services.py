@@ -172,6 +172,7 @@ class CoreServices:
         if readiness_profiles is not None and not isinstance(readiness_profiles, dict):
             raise ValueError("navigation.readiness.profiles must be a mapping")
         readiness_profile = navigation_backend
+        # Disabled legacy motor configurations keep their historical backend profile.
         if runtime_mode == "motor" and (
             readiness_required or (readiness_profiles is not None and "motor" in readiness_profiles)
         ):
