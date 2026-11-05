@@ -1,0 +1,44 @@
+# Opt-in maintenance only; never append this file to ROSY_SITE_PAIRING_COMPOSE.
+x-account-maintenance: &account-maintenance
+  image: rosy-site-account:${ROSY_SITE_IMAGE_TAG:?set ROSY_SITE_IMAGE_TAG}
+  pull_policy: never
+  profiles: [backup]
+  entrypoint: [python3, /opt/rosy/site_db.py]
+  user: "10001:10001"
+  read_only: true
+  tmpfs: ["/tmp:rw,noexec,nosuid,size=32m"]
+  security_opt: [no-new-privileges:true]
+  cap_drop: [ALL]
+  network_mode: none
+  logging:
+    driver: json-file
+    options: {max-size: "20m", max-file: "3"}
+
+services:
+  account-backup:
+    <<: *account-maintenance
+    command: [backup, --source, /var/lib/rosy-account/account.sqlite3, --dest-dir, /backup,
+              --prune, "14", --prune-history, "0", --prune-audit, "0"]
+    volumes:
+      # RW only for the existing utility's best-effort WAL checkpoint; no row pruning.
+      - type: volume
+        source: account_state
+        target: /var/lib/rosy-account
+      - type: bind
+        source: ${ROSY_ACCOUNT_BACKUP_DIR:-/var/backups/rosy-account}
+        target: /backup
+        bind: {create_host_path: false}
+  account-backup-check:
+    <<: *account-maintenance
+    command: [check, --dest-dir, /backup, --max-age-hours, "48"]
+    volumes:
+      - type: bind
+        source: ${ROSY_ACCOUNT_BACKUP_DIR:-/var/backups/rosy-account}
+        target: /backup
+        read_only: true
+        bind: {create_host_path: false}
+
+volumes:
+  account_state:
+    external: true
+    name: rosy-site_account_state

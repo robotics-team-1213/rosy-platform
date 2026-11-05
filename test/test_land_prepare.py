@@ -545,3 +545,49 @@ def test_a_delta_record_counts_its_yields(tmp_path, monkeypatch):
     monkeypatch.setattr(land.land_full, "_path", lambda wt, branch: record)
     land.land_full.save(tmp_path, "b", "c" * 40, "m" * 40, "delta", [["x/test"]], base_tier="affected", yields=2)
     assert land.land_full.prepared(tmp_path, "b", "m" * 40)["yields"] == 2
+
+
+def test_a_pretest_with_a_cross_tree_reuse_keeps_its_tier_but_is_not_push_evidence(full_anchor, monkeypatch):
+    """D-970 4: 11-03 21:00-23:00 nine of twenty pretests had no tier only because a pass was reused from another
+    tree. The tier now stands for the queue; the record says "reused" so land.py writes no land record from it."""
+    main, wt, base, candidate, path, original = full_anchor
+    line = f"pytest pkg/test ok (run-pre-1.txt), {land.land_cache.NARROW} from c0ffee"
+    monkeypatch.setattr(land, "run_tests", lambda *a, **k: [line])
+    args = land.argparse.Namespace(tests="auto", no_cache=True)
+    land.land_prepare.prepare(land, wt, "feat/x", args, sys.executable, None, None, [["pkg/test"]], "")
+    record = json.loads(path.read_text(encoding="utf-8"))
+    assert record["tier"] == "affected" and record["reused"] is True
+    assert land.land_full.prepared(wt, "feat/x", record["main"])["reused"] is True
+
+
+def test_a_delta_pretest_without_a_tier_still_counts_its_yield(tmp_path, monkeypatch):
+    """D-970 1: 11-03 a ticket kept yielding because a tierless delta pretest saved nothing and the count stood."""
+    record = tmp_path / "record.json"
+    monkeypatch.setattr(land.land_full, "_path", lambda wt, branch: record)
+    land.land_full.save(tmp_path, "b", "c" * 40, "m" * 40, "delta", [["x/test"]], base_tier="affected", yields=1)
+    land.land_full.count_yield(tmp_path, "b")
+    saved = json.loads(record.read_text(encoding="utf-8"))
+    assert saved["yields"] == 2 and saved["tier"] == "delta" and saved["invocations"] == [["x/test"]]
+    import land_selection
+    assert not land_selection.delta_yields("ticket.json", land.land_full.prepared(tmp_path, "b", "m" * 40))
+
+
+def test_full_pretests_beyond_max_full_wait_for_older_ones_and_affected_ones_do_not(tmp_path):
+    """2026-11-04: five FULL pretests shared the lab PCs at once and none finished for 45 min."""
+    queue, prep = land.land_queue, land.land_prepare
+    older = [queue.take(tmp_path, f"feat/full-{n}", status="preparing") for n in range(prep.MAX_FULL)]
+    for ticket in older:
+        queue.set_status(ticket, "preparing", tier="full")
+    mine = queue.take(tmp_path, "feat/mine", status="preparing")
+    naps = []
+
+    def finish_one(_):
+        naps.append(1)
+        queue.set_status(older[0], "waiting")  # its pretest ended: the turn's wait, no longer preparing
+
+    prep.full_slot(tmp_path, mine, sleep=finish_one)
+    assert naps == [1] and json.loads(mine.read_text())["tier"] == "full"
+    later = queue.take(tmp_path, "feat/later", status="preparing")
+    queue.set_status(later, "preparing", tier="")  # an affected pretest never counts against FULL ones
+    urgent = queue.take(tmp_path, "feat/urgent", status="preparing", urgent="hotfix")
+    prep.full_slot(tmp_path, urgent, sleep=lambda _: pytest.fail("an urgent FULL pretest waited"))

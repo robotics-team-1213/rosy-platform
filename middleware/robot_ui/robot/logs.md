@@ -1413,3 +1413,15 @@
 - 변경: `panels/surface-panels.css` 등 색을 `--signal-*`로(값 동일).
 - 증거: 공용 신호 등 계약 시험.
 - Gate: 없음. CE: 해당 없음.
+
+## 2026-11-02 · uncommitted · D-961 웹 제품 통합
+
+- 변경: 앱바의 banner 의미를 명시했다. 공용 레일 변화가 320×568 상단 예산을 넘긴 회귀를 확인한 뒤 공용 바닥과 Fleet 배치 치수를 분리했다. 역할·정지·장치 명령은 유지한다.
+- 증거: d58538d018 관련 작은 화면·Fleet·Pilot 회귀 4 passed markers. 전체 역할 G2와 최종 HEAD는 별도 검증한다.
+- Gate: 전체 회차 검증 중이며 운영 배포·DEVICE/FIELD를 주장하지 않는다. CE: 완료 전 판단; 최종 코드·회귀·ADR 외의 비명시 지식이 있는지 확인한다.
+
+## 2026-11-04 · uncommitted · 장치 화면 호스트 사용률 수치 띠(D-978)
+
+- 변경: 설치·정비의 「시스템 및 기능 상태」 머리에 공용 수치 띠(CPU·메모리·저장소·온도). 이미 10초마다 읽는 `/api/v1/system/runtime` 응답 값만 옮기고 주의 판정은 서버(`runtimeGap`·위험 목록)에 그대로 둔다. 응답 실패 시 띠를 숨긴다. `surface.html`이 `/common/readout-strip.css`를 싣고, `DESIGN.md` 「조합 어휘」 수치 띠 줄에 `panels/host/system.js`를 더했다(대조 시험이 JS로 만든 띠도 본다).
+- 증거: 로컬 G2 캡처(`test_role_g2_browser.py` device) 1366·390 렌더 — 고정 데이터에 있는 저장소 85.73%만 값, 나머지 "—", 390에서 두 열. 로봇 비브라우저 시험 93 PASS.
+- gate 변화: SOURCE 로컬 GO. 원격 브라우저는 커밋 후.

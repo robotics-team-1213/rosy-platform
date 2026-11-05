@@ -78,6 +78,17 @@ def test_sample_starts_without_backend_and_never_creates_upstream():
     assert 'sample ready' in result.stdout
 
 
+@pytest.mark.parametrize('focus', ['', '/model', '/ai'])
+def test_learning_preview_names_unconfigured_hosts_without_template_slots(http_host, focus):
+    response = http_host.static_response('/console/learning' + focus)
+    assert response.status == (503 if focus else 200)
+    body = response.body.decode('utf-8')
+    assert '{{' not in body
+    assert '미등록' in body
+    assert f'data-host-focus="{focus.removeprefix("/")}"' in body
+    assert 'Fleet 작업으로 돌아가기' in body
+
+
 def test_sample_profile_reads_report_absent_storage_without_hiding_unknown_requests():
     engine = load_engine()
     headers = {'Authorization': 'Bearer sample-operator'}
@@ -103,6 +114,51 @@ def test_sample_session_ignores_real_fleet_credentials():
     cookie = next(v for k, v in response.headers if k.lower() == 'set-cookie')
     assert cookie.startswith('rosy_sample_session=')
     assert 'rosy_fleet_session' not in cookie
+
+
+@pytest.mark.parametrize('scenario', ['normal', 'viewer'])
+def test_sample_usb_listing_is_empty_over_http_without_relaxing_auth_or_origin(http_host, scenario):
+    from http.client import HTTPConnection
+    from threading import Thread
+
+    engine = load_engine()
+    engine.reset(scenario)
+    server = http_host.make_server(engine, 'http://localhost:0')
+    worker = Thread(target=server.serve_forever, daemon=True)
+    worker.start()
+    port = server.server_address[1]
+    origin = f'http://localhost:{port}'
+    listing = '/api/fleet/workcell-observations/usb-devices'
+
+    def request(method, path, data=None, headers=None):
+        connection = HTTPConnection('localhost', port, timeout=5)
+        try:
+            connection.request(method, path, body=json.dumps(data) if data is not None else None,
+                               headers=headers or {})
+            response = connection.getresponse()
+            return response.status, dict(response.getheaders()), response.read()
+        finally:
+            connection.close()
+
+    try:
+        assert request('GET', listing)[0] == 401
+        status, response_headers, _ = request('POST', '/api/fleet/auth/login',
+            {'login': 'sample', 'password': 'CHANGE_ME'}, {'Origin': origin})
+        assert status == 204
+        session_header = response_headers['Set-Cookie'].split(';', 1)[0]
+        headers = {'Cookie': session_header}
+        assert request('GET', listing, headers={**headers, 'Origin': 'https://other.example'})[0] == 403
+        status, _, body = request('GET', listing, headers=headers)
+        assert status == 200 and json.loads(body) == {'workcells': []}
+        assert engine.unhandled == []
+        decision = '/api/fleet/workcell-observations/sample-cell/usb-devices/' + 'a' * 32 + '/decision'
+        assert request('POST', decision, {'role': 'top'}, headers)[0] == 403
+        assert request('POST', decision, {'role': 'top'}, {**headers, 'Origin': origin})[0] == (
+            403 if scenario == 'viewer' else 501)
+    finally:
+        server.shutdown()
+        server.server_close()
+        worker.join(5)
 
 
 def test_local_vision_frame_needs_its_lease_and_preserves_binary_headers():

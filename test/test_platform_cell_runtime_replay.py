@@ -10,7 +10,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 for relative in ("contracts/skill/src", "middleware/skills/api/src", "middleware/skills/manipulation/src",
-                 "integrations/robots/omx/src", "middleware/devices/omx/adapter",
+                 "middleware/devices/omx/agent/src", "middleware/devices/omx/adapter",
                  "middleware/devices/omx/adapter/test", "operations/fleet/test", "operations/site_execution/src"):
     sys.path.insert(0, str(ROOT / relative))
 
@@ -33,7 +33,7 @@ from omx_adapter.gripper_contract import GripperObservation
 from omx_adapter.kinematics import OmxKinematics
 from omx_adapter.local_stop import LocalStopController
 from omx_adapter.pose_plan import CellPlanningProfile
-from rosy.integrations.robots.omx.transfer_provider import create_omx_cell_transfer_phase_factory
+from rosy_agent.transfer_provider import create_omx_cell_transfer_phase_factory
 from test_cell_job_store import _submission
 from test_omx_action_api import FakeDriver
 from test_omx_command_owner import FakeActionClient, make_config

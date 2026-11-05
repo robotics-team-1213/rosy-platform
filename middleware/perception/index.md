@@ -72,8 +72,8 @@
 
 ## 최근 기록
 
+- 2026-11-04 · uncommitted · test(control): 시작 보정 노드의 매개변수 검사 경로 수정
+- 2026-11-04 · uncommitted · refactor(control): calibration* 9파일을 calibration/ 홀더로 순수 이동 (D-766 #109)
+- 2026-11-03 · uncommitted · revert(perception): 후진 충전소 LiDAR V 관측을 CORE로 옮김 (D-972)
+- 2026-11-03 · uncommitted · feat(perception): 후진 충전소 LiDAR V 표지 관측 (D-972)
 - 2026-11-03 · uncommitted · refactor(perception): perception_runtime 분리 (D-964)
-- 2026-10-28 · 8325da055d · 거울 위치 가설의 좌표 비교 형식 정렬
-- 2026-10-27 · fe49e767b3 · A/B OS에서 operator overlay와 참조 프로필 보존
-- 2026-10-27 · uncommitted · deepinit 소스 위치 안내 정렬
-- 2026-10-21 · uncommitted · 진단 화면 색을 토큰으로

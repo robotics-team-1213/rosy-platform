@@ -40,6 +40,7 @@
 | D-681 | 교체 가능한 판정 모델과 모델 주도 사건 종결 |
 | D-859 | 현장 NTP 계층과 공통 UTC 시간 동기화 |
 | D-861 | 모든 기기는 동일한 현장 NTP 서버 하나를 사용한다 |
+| D-961 | 공용 작업 이동과 작업·인증 화면 구성. [전문](../adr/D-961-shared-task-links-and-page-compositions.md) |
 
 ## 계획·결과 문서
 
@@ -77,8 +78,8 @@
 
 ## 최근 기록
 
+- 2026-11-05 · uncommitted · fix(publish): Decision·VLA 검증 revision의 이력 오탐을 정확한 tuple로 기록
+- 2026-11-04 · uncommitted · fix(deploy): native payload가 모드별 프로파일 오버레이를 싣는다
 - 2026-11-03 · 3309dde54f · fix(site): dry-run에서 공개 릴리스 수정 방지
-- 2026-11-03 · 3a2fbd1f9a · feat(site): 서명 PC의 사이트 즉시 반영 푸시와 오분류 제목 교정
-- 2026-11-03 · uncommitted · docs(omx): 허브 추천은 자동 배정으로 올리지 않는다
-- 2026-11-03 · uncommitted · fix(omx): 기기 업데이터가 카메라 바인드 유닛을 함께 싣는다
-- 2026-11-02 · 5eff2fd4d0 · fix(omx): 빈 관측과 관측 실패 구분
+- 2026-11-03 · c03d8552af · 최신 main의 peer 검사와 독립 Account 검증 통합
+- 2026-11-03 · bfd53106b3 · 독립 Account의 공용 스타일 빌드 입력 폐쇄성

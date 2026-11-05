@@ -42,6 +42,7 @@ def core(core_client):
     loc.publish_decision = sent["decision"].append
     loc.publish_suspect = sent["suspect"].append
     loc.clock = lambda: 777.25
+    loc.bind_clock(_Clock())
     services.sent = sent
     return client, services
 

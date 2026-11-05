@@ -275,7 +275,7 @@ git push
 
 소스 경로와 책임은 [폴더 책임표](platform-folder-responsibilities.md), 소유 영역의 정본은 `tools/harness/platform_parts.yaml`을 본다. 경로별 GitHub 리뷰 담당은 [CODEOWNERS](../../.github/CODEOWNERS), 역할별 사람 담당은 아래 표에서 확인한다.
 
-2026-10-27 기준 배정이다. 담당은 리드가 정한다. 각 root의 역할은 `platform_parts.yaml`의 `capability:`이고, 계정은 같은 파일의 `capabilities:`에 둔다. Epic 담당이 바뀌면 그 계정, `CODEOWNERS`, 이 표를 함께 고친다. `test/architecture/test_capability_owners.py`가 앞의 둘이 맞는지 확인한다. `platform`(공통 코드)은 기본 담당(`*`)이 리뷰한다.
+2026-10-27 기준 배정이다. 담당은 리드가 정한다. 각 root의 역할은 `platform_parts.yaml`의 `capability:`이고, 계정은 같은 파일의 `capabilities:`에 둔다. Epic 담당이 바뀌면 그 계정, `CODEOWNERS`, 이 표를 함께 고친다. `test/architecture/test_capability_owners.py`가 앞의 둘이 맞는지 확인한다. `platform`(공통 코드)은 기본 담당(`*`)이 리뷰한다. 안전 분리 예외(27)와 Fleet 원장 writer(20)는 2026-11-04 동결이며 상향은 리드 사전 승인 후 `test/architecture/test_known_lists_freeze.py`의 cap을 함께 고친다.
 
 | Epic | 역할 | 담당 |
 |---|---|---|
@@ -286,6 +286,8 @@ git push
 | KAN-23 | 통합 시나리오·시연·일정 | 민주환 (@WINNAKEN, PM) 조율, 전원 참여 |
 
 KAN-23은 특정 경로의 담당이 아니다. Epic의 역할을 GitHub 경로 소유권으로 확대하지 않는다. 실물 팔·로봇 장치·이미지 경로(`middleware/devices/`, `middleware/drivers/`, `deploy/robot/`, OMX 연동)는 역할 담당과 기본 담당이 함께 리뷰한다.
+
+`platform` root 가운데 소비 역할이 하나뿐인 것은 대리 리뷰어를 둔다(2026-11-04 리드 승인, 패널 보고서 쟁점 A). 대상 목록의 정본은 `platform_parts.yaml`의 `reviewers:`이고 CODEOWNERS가 같은 계정을 나열하며, `test_capability_owners.py`가 둘의 일치와 서명 경로(`deploy/`, `tools/release/`)의 리드 단독을 검사한다. 적용 후 1~2주간 대리 승인 품질을 관찰해 확대 여부를 정하고, 회귀가 반복되면 대리를 줄인다.
 
 ### 5.2 처음 잡기 좋은 일
 

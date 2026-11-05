@@ -108,3 +108,8 @@ h2 {
   justify-content: center;
   min-height: var(--space-6);
 }
+
+/* 견본의 노선 여러 개를 한 줄씩 띄운다(D-975). 배치는 표면 몫이다. */
+#stage-track .ui-stage-track + .ui-stage-track {
+  margin-block-start: var(--space-5);
+}

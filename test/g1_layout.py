@@ -1,7 +1,7 @@
 """D-778/D-781 G1 SIM layout support: IK reach audit, swept separation, step timing (pure Python, no ROS).
 
 Test support, not production. It composes the palletizing mixed planner, the OMX analytic IK and
-planner (D-402) and the IK reach of ``rosy.integrations.robots.omx.mixed_reach``; the palletizing
+planner (D-402) and the IK reach of ``rosy_agent.mixed_reach``; the palletizing
 process itself never imports the adapter (D-413).
 
 What the numbers mean and do not mean:
@@ -33,7 +33,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 for _relative in ("operations/processes/palletizing/src", "middleware/devices/omx/adapter",
-                  "integrations/robots/omx/src"):
+                  "middleware/devices/omx/agent/src"):
     if str(ROOT / _relative) not in sys.path:
         sys.path.insert(0, str(ROOT / _relative))
 
@@ -42,7 +42,7 @@ from omx_adapter.manipulation_plan import ExecutionStateSnapshot  # noqa: E402
 from omx_adapter.swept_volume import capsules as arm_capsules  # noqa: E402
 from omx_adapter.pose_plan import (  # noqa: E402
     AnalyticCellTransferPlanner, CellPlanningProfile, CellTransferPlanRejected, CellTransferRequest)
-from rosy.integrations.robots.omx.mixed_reach import IkReach, workcell_bases  # noqa: E402
+from rosy_agent.mixed_reach import IkReach, workcell_bases  # noqa: E402
 from rosy.processes.palletizing.mixed_cell import CellPose, Workcell, annulus_reach, workcell_from_dict  # noqa: E402
 from rosy.processes.palletizing.mixed_cell_doc import load_mixed_cell  # noqa: E402
 from rosy.processes.palletizing.mixed_plan import PlanError, descendants  # noqa: E402

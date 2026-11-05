@@ -5,7 +5,7 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.355
+**Version:** v1.361
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -549,6 +549,7 @@ for the observer. Default and production execution stay closed.
 | `GET /api/fleet/arm-transfers/jobs/{mission_id}/physical-receipt` | Creator or permitted named operator, same scoped read rule as the job. Returns `{receipt: ArmTransferPhysicalReceipt}`. Known job with no receipt is409 `ARM_TRANSFER_PHYSICAL_RECEIPT_PENDING`, unknown job404. |
 | `GET /api/fleet/arm-transfers/jobs/{mission_id}/physical-evidence` | v1.330 scoped immutable proof export (D-915); requires complete source joint facts. Does not refresh measurements or change claims. |
 | `POST /api/fleet/arm-transfers/jobs/{mission_id}/rechecks`, `GET .../rechecks/{recheck_key}` | v1.334 fresh measured facts for a confirmed attempt (D-930). No Action, claim, status or receipt change. |
+| `POST /api/fleet/arm-transfers/jobs/{mission_id}/operator-attestations`, `GET .../operator-attestations` | v1.362 (D-977 5), installed only when Fleet runs the `device_trial` profile (absent in `simulation`; `production` never installs the ARM job routes). POST: a named operator who is neither the proposer nor the approver (service and observer tokens are refused), present-Origin check. Closed `ArmTransferOperatorAttestationCreate`: `kind` (`SOURCE_CLEAR` only while the job is `READY`; `TARGET_PLACED` only while `ACTION_SUCCEEDED`), `expected_request_digest`, `expected_proposal_digest`. Returns `{attestation}` with `evidence_source: "operator_attested"`, `attested_by`, `proposed_by`, `approved_by`, digests, `job_status`, server-stamped `attested_at_ns`, `expires_at_ns` (45 s, below 60 s) and `goal_confirmed: false`. One record per (job, kind): a repeat is 409 `ARM_TRANSFER_ATTESTATION_CONFLICT`; 403 `ARM_TRANSFER_ATTESTATION_FORBIDDEN`. GET (same scoped job read) returns `{attestations: [...]}`. A Fleet record only: it never changes the job, a claim, the receipt or `GOAL_CONFIRMED`, and it is not shown as automatic evidence. Harbor's own human confirmation (ADR 0023) is consumed inside Harbor's ledger. |
 | `POST /api/fleet/arm-transfers/jobs/{mission_id}/cancel` | Creator service/operator or permitted named operator, same scoped job access and present-Origin check. Closed `ArmTransferCancelRequest` has only trimmed nonempty `reason` (max192). Returns the job snapshot; cancellation ACK is not stop/clearance proof. |
 
 With an execution profile, admission also prepares stable step/action/attempt and
@@ -762,6 +763,17 @@ Simulation-only and disabled on an owner without an installed
 physical catalog. This adds read-only planning, not Action admission or dispatch.
 The existing envelope protocol_version remains 1.0 and local Action IPC remains v2.
 
+`GET /api/fleet/execution-profile` (v1.361, D-979) is a read-only signal for apps. Auth is
+`require_viewer` like trip-jobs, so the service role reads it; there is no write method.
+Response: `profile` (`simulation`|`device_trial`|`production`, as configured),
+`arm_execution` (`physical`|`simulated`|`closed`), `revision` (single arm's commissioning
+revision, else config revision, else null), `observation_producers` and `evidence_producers`
+(`[{id, kind, authenticated}]`, only registered unexpired producers, empty if none) and
+`checked_at` (server time, UTC). `simulation` gives `simulated`; `device_trial` gives `physical`
+only while exactly one arm's owner reports `device: true`, the same workcell/instance and the
+configured `commissioning_revision` (cached identity query, no device command); everything else
+is `closed`. An app treats a missing or stale signal as `closed`.
+
 `POST /api/fleet/arm-transfers/preflight` requires existing `require_proposer`
 authorization (`fleet.operate`, operator/service), including the normal POST Origin
 and audit rules. Viewer, policy-admin and device/ingest credentials cannot call it.
@@ -904,6 +916,15 @@ ARM 설치가 없고 관제 단위가 설정된 Fleet(현장 R)은 `/api/fleet/a
 - 셀 쪽 취소: 승인 전 제안은 `HOLD`(`reason=control-unit-cancel`)로 거둬들이고 위임은 CANCELED다. 준비된 시도는 기존 dispatcher 취소로 한 번 보낸다. `cancel_sent`는 정지 확인이 아니다.
 - 기명 admit과 D-938 정책 admit은 취소 요청된 위임에 묶인 제안을 409로 거절한다.
 - 셀의 제안 기록에서 제안 principal은 R의 service principal(`control-unit:R`)이다. R relay는 제안한 앱 자신에게는 `proposal_principal_id`를 그 앱의 principal로 보여 준다(이 Fleet에서 제안한 주체). operator 조회는 셀 기록 그대로다. 같은 앱의 재요청은 같은 위임과 같은 제안을 돌려준다.
+
+### v1.356 Relay forwards evidence and rechecks; requesting app and cancel reason (D-965)
+
+- R relay는 `GET /jobs/{mission_id}/physical-evidence`, `POST /jobs/{mission_id}/rechecks`, `GET /jobs/{mission_id}/rechecks/{recheck_key}`를 그 작업의 위임을 가진 직접 하위 셀로 보낸다. 셀 쪽 경로는 관제 단위 API 안의 `GET .../delegations/{origin}/{id}/arm/physical-evidence`, `POST .../arm/rechecks`, `GET .../arm/rechecks/{key}`다. 관제 단위 자격은 그 밖의 경로에 닿지 않는다(credential scope 유지). 셀은 위임에 결속된 자기 ARM 작업만 찾고, 증거가 없으면 409 `ARM_TRANSFER_PHYSICAL_EVIDENCE_UNAVAILABLE`, recheck 충돌은 409 `ARM_TRANSFER_RECHECK_CONFLICT`, 관측 서비스가 없으면 503이다. 셀의 4xx는 그대로 앱에 돌아간다. recheck 요청은 직접 부모 service만, 조회는 직접 부모 또는 셀 viewer가 한다. relay에서 recheck 요청·취소는 제안한 앱만, 조회는 제안한 앱 또는 operator만 한다. 더 깊은 셀은 409 `ARM_TRANSFER_RELAY_DEPTH`다.
+- `ControlArmTransferCandidate.requested_by`(선택, 표시 전용): R이 인증한 앱 principal. 셀에서 권한을 주지 않는다.
+- `ArmTransferJobSnapshot.delegated_by`(선택): 위임으로 생긴 작업이면 `{origin_unit, requested_by}`이고, 아니면 키 자체가 없다(v1 job 모양을 바꾸지 않는다). 셀 Fleet 콘솔은 「요청한 앱」으로 보여 준다. 제안자·승인 규칙은 바뀌지 않는다.
+- 위임 취소는 선택 본문 `ControlCancelRequest {reason?}`를 받는다(`POST .../delegations/{origin}/{id}/cancel`). 이유는 위임 snapshot의 `cancel_reason`으로 남고 하위로 그대로 전달된다. relay의 앱 취소 reason이 셀의 ARM 취소·거둬들임 reason이 된다(없으면 `control-unit-cancel`).
+- relay가 셀 투영을 잃었을 때 503 detail에 `last_projection {status, updated_at, job_status}`를 덧붙인다. 현재 상태가 아니며 앱은 기존처럼 불명으로 다룬다.
+- relay는 mission ID로 위임을 SQL 색인(`json_extract(result_json,'$.job.mission_id')`)에서 찾는다. 최근 1000개 제한은 없어졌다.
 
 ### v1.292 Candidate trip admission (D-836)
 
@@ -1925,6 +1946,8 @@ config `control.sensor_adapter.mode` 와 같은 문자열이다(D-400). 일반 �
 | POST | `/api/v1/navigation/cancel` | Operator | NAV-002 |
 | POST | `/api/v1/navigation/home` | Operator | NAV-003. 기능 보류 시 409 `CAPABILITY_WITHHELD`. D-395 로봇이 `LOCALIZED` 가 아니면 409 `NOT_LOCALIZED` (v1.72) |
 | GET | `/api/v1/navigation/state` | Viewer | NAV-004. `mapping_active: bool`은 CORE가 수락한 맵핑 세션 상태다. SLAM Toolbox의 실제 실행·지도 갱신 성공을 증명하지 않는다. |
+| GET | `/api/v1/peers` | Viewer | Peer pose sharing(v1.359, docs/plans/2026-11-04-peer-pose-sharing-design.md). 이 CORE가 보는 peer 로봇 `{peers:[{robot_id, boot_id, seq, map_id, pose, localization_state, age_s}]}`. `max_age_s`(기본 5 s)를 넘겨 침묵한 행은 사라진다. 기능이 꺼져 있으면 빈 목록 |
+| POST | `/api/v1/peers/beacon` | Grant `PEER_SHARE`(operator 이상) | Peer pose sharing beacon(v1.359): `{schema_version:1, robot_id, boot_id, seq, map_id?, pose?, localization_state?, stamp}`. sender가 `LOCALIZED`일 때만 `pose`가 있다. 오래된·중복 `seq`와 `boot_id` 재설정 뒤의 낮은 `seq`는 표를 움직이지 않지만 그대로 202 `{accepted:true, updated:false}`다. 경로의 신뢰 경계는 이 부여다 — 본문의 `robot_id` 주장만으로는 신원이 되지 않는다 |
 | GET | `/api/v1/navigation/path` | Viewer | MAP-003. `{poses}`; 경로 메시지를 받은 뒤에는 `map_id`(그때 로봇 지도 ID 또는 null), `frame_id`(`nav_msgs/Path.header.frame_id` 또는 null), `age_s`(CORE 수신 뒤 경과 초, 서버 monotonic 시계)를 함께 반환한다. 최초 수신 전은 `{poses: []}`. 이 응답은 마지막 수신 계획이며 현재 목표와의 동일성은 증명하지 않는다. |
 | GET | `/api/v1/line-follow/perception` | Viewer | 저장된 `paint_source`(threshold / denoise / learned), `camera_lane_mode`, 서명·해시 확인 `model_ready`와 `model_revision`. 별도 `applied_paint_source`는 실제 최신 keeper 프레임의 threshold / denoise / learned / denoise_fallback 또는 null; `applied_source_age_s`는 monotonic 수신 나이(2초 이내), `applied_model_revision`은 실제 사용한 learned mask의 producer revision(없으면 null). stale·malformed·설정 불일치·재시작 전 증거는 null. 운전 모드와 독립이며 물체 검출이나 주행 허가가 아니다. |
 | PUT | `/api/v1/line-follow/perception` | Administrator | `{paint_source: threshold\|denoise\|learned}`만 허용. IDLE·line-follow OFF·보정 비활성, Host Agent가 fresh 정지 및 active mission 부재를 재확인. 기존 기하 보존, learned는 고정 signed model pointer 검증, camera만 재시작·실패 복구. `applied: true`는 설정/서비스 적용이며 live 추론이나 실제 주행 성공이 아니다. |
@@ -2252,6 +2275,8 @@ v1.70 추가 경로(모두 Bearer 인증):
 - `unmapped_objects`(v1.75, 선택, ≤16, 기본 `[]`): `LOCALIZED` 로봇의 LiDAR 가 전체 스캔에서 지도로 설명하지 못한 물체 `{x, y}`(base_link, 앞 x·왼쪽 y, m; 자기 차체 안쪽은 뺀다). `objects_stamp`(v1.74, 선택): 그 스캔의 로봇 시각 s. 시계가 동기되지 않으므로 Fleet 은 스캔을 구별하는 데만 쓰고 신선도는 처음 본 때부터 잰다. `LOCALIZED` 밖에서는 빈 목록이다(후보 물체는 `CandidateReport` 에 실린다). CORE 는 그대로 넘기되 `pose_frame` 이 `odom` 이거나 상태가 끊겨 `state_stale` 이면 둘 다 비운다. Fleet 감시(D-395 9항, 개정 4 5항 후속)가 닻 로봇의 보고 자세로 이 물체를 놓아 다른 `LOCALIZED` 로봇의 거울 잠금을 잡는 데 쓴다.
 
 `odom_pose` 는 v1.112 additive 다(D-494 2). `{x, y, yaw, stamp}` 는 로봇 odom 프레임의 자세와 CORE 가 그 odom 메시지를 받은 시각(ROS 헤더 시각이 아님)이다. 유한하지 않은 표본은 버리고 이전 값을 둔다. `stamp` 는 UTC epoch 초(실수)로, sighting 의 `captured_at` 과 같은 형식이다(로봇 단조 시각이 아니다). `pose` 가 map 프레임이어도 같이 싣는다. odom 이 한 번도 오지 않은 로봇과 D-494 이전 로봇은 `null` 이다. odom 이 끊겨도 마지막 값이 남으므로 소비자는 `stamp` 로 신선도를 판단한다. 같은 값이 Fleet 하트비트(1 Hz)의 상태 스냅샷에도 실린다.
+
+`peers` 는 v1.359 additive 다(peer pose sharing). 이 CORE가 받은 peer beacon 행들의 목록(`GET /api/v1/peers` 와 같은 모양)이고, `peers` 설정이 꺼져 있으면 `null` 이다(빈 목록이 아니라). 각 행의 `age_s` 는 이 CORE의 단조 시계로 잰 마지막 수신 나이다. 같은 목록이 Fleet 하트비트 상태 스냅샷에도 실려, 카메라 없는 현장에서 관제가 각 로봇의 상대 관측을 볼 수 있다.
 
 ```json
 "odom_pose": { "x": 1.204, "y": -0.311, "yaw": 1.57, "stamp": 1791374400.123, "epoch": 0, "mono_s": 5123.875 }
@@ -2747,7 +2772,7 @@ close code: `4401` 은 토큰이 없거나 틀린 것(`/ws/state` 와 동일), `
 | `motion.rotate_to` | info | 로봇 | `{delta_deg, yaw_odom, tol_deg, max_rate_dps, timeout_s, lease_owner, operator_name, by}` — D-603 회전 요청을 받았다 (v1.194) |
 | `docking.started` | info | 로봇 | `{dock_id}` (DNC-003) |
 | `docking.docked` | info | 로봇 | `{dock_id}` — dock native 종결이면 추가 `run_id`, `boot_id`, `kind`, `result`, `native_reason`가 붙는다 (D-732) |
-| `docking.charging` / `docking.charge_lost` | info | 로봇 | `{dock_id}` — 독립된 두 소스로 확인한 충전 상태 (D-28) |
+| `docking.charging` / `docking.charge_lost` | info | 로봇 | `{dock_id, source}` — 확인된 충전 상태. `source: instrumented`(2소스, D-28) 또는 `voltage_only`(후진 도크 D-350 Phase 1 — 배터리 인터록에는 반영되지 않는다) |
 | `docking.full` | info | 로봇 | `{dock_id, source, voltage_v}` — 만춫 감지, 1회 방출. `source: instrumented` 또는 `voltage_only` (D-350) |
 | `docking.undock_started` | info | 로봇 | `{dock_id}` |
 | `docking.undocked` | info | 로봇 | `{}` — undock native 종결이면 추가 `run_id`, `boot_id`, `kind`, `result`, `native_reason`가 붙는다 (D-732) |
@@ -4532,6 +4557,11 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.362 | 2026-11-04 | Additive: D-977 `device_trial` opens the neutral `arm-transfers` jobs for exactly one arm (owner identity: `device: true`, matching `commissioning_revision`); `production` stays closed. New `operator_attested` record: `POST/GET .../jobs/{mission_id}/operator-attestations` (named operator distinct from proposer and approver, single-use, 45 s validity, `goal_confirmed: false`). The owner still refuses goals. |
+| v1.361 | 2026-11-04 | Additive: `GET /api/fleet/execution-profile`(D-979) — 앱이 읽는 읽기 전용 실행 프로필(`arm_execution` physical/simulated/closed, 등록·인증된 생산자 목록, `checked_at`). viewer·service 읽기, 쓰기 없음, 증명되지 않으면 closed. |
+| v1.359 | 2026-11-04 | Additive: peer pose sharing(탑뷰 부재 대비) — `GET /api/v1/peers`, `POST /api/v1/peers/beacon`(부여 `PEER_SHARE`, operator 이상), `StateSnapshot.peers`(기능이 꺼져 있으면 null). 설계 docs/plans/2026-11-04-peer-pose-sharing-design.md |
+| v1.358 | 2026-11-03 | D-974: 관제 단위 설정이 있는 Fleet의 `GET /api/fleet/state` `fleet`에 `unit`·`root`. 헤더 표시 전용, `name`(`fleet_name`) 신원은 그대로 |
+| v1.356 | 2026-11-04 | D-965: relay가 physical-evidence·rechecks를 셀로 전달, `requested_by`·`delegated_by`(요청한 앱 표시), 위임 취소 reason 전달, 503에 마지막 투영 |
 | v1.355 | 2026-11-03 | D-965: ARM 설치 없는 꼭대기 관제(R)가 ARM 작업 경로 다섯 개를 하위 셀 위임으로 relay. 셀 result에 job·receipt, 승인 전 취소는 HOLD로 거둠, admit은 취소된 위임 제안 거절 |
 | v1.354 | 2026-11-03 | D-965: 셀 inbox가 팔 작업 위임을 받아 부모 service principal로 기존 ARM 제안을 만들고 결속. 위임 approve는 팔 작업에 409, 승인은 셀 ARM admit |
 | v1.353 | 2026-11-03 | D-965: 팔 작업 위임 후보 모양(`ControlArmTransferCandidate`·`ControlArmWorkRequest`·`ControlArmIngressRequest`), snapshot request는 두 종류 중 하나. 경로는 아직 navigation만 |
@@ -5131,6 +5161,12 @@ Read-only closure preserves immutable original-request linkage after expiry/with
 current authorization still controls delivery and access. A revoked recipient's reply
 intent may be SUPERSEDED while result evidence remains in the existing Fleet database.
 
+
+### D-973 관리자 클래스 개정
+
+`GET /api/classes?kind=object|pixel`은 현재 서버에 결합된 작업공간의 바인딩, 전체 바인딩 문서 해시 `expected_sha`, 현재 승인 수 `approved_count`와 CSRF 토큰을 반환한다. 협업 모드는 현재 프로젝트의 `manage` 권한이 필요하다.
+
+`POST /api/classes/revisions`는 정확히 `kind`, `classes`, `expected_sha`, `expected_impact`, `confirm:true`를 받는다. 기존 CSRF·Origin 검사와 `manage` 권한을 적용한다. `classes`는 기존 순서·번호·정본 이름·역할·의미를 보존한 전체 목록이며 표시 이름·색상 수정과 미사용 번호 추가만 허용한다. `expected_impact`는 실제 검수 대기로 돌릴 승인 수이며 표시 정보만 바꿀 때는 0이다. 바인딩 해시 또는 영향 수 불일치는 409, 잘못된 필드·식별자 변경은 400, 권한·CSRF 실패는 403이다. 폴더·프로젝트·파일 경로를 입력받지 않으며 모든 폴더가 현재 작업공간 클래스셋을 함께 사용한다. 승인 이력·라벨 바이트와 제외 상태를 보존한다. [D-973](../adr/D-973-explicit-managed-review-class-revisions.md)을 따른다.
 
 ### D-755 검수 앱 협업 HTTP 경계
 

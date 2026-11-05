@@ -60,7 +60,7 @@ import land_selection  # noqa: E402  (selection with this caller's Stop and help
 import land_mainred  # noqa: E402  (D-889 addendum 2: a NEW that main already fails alike may be carried)
 import land_batch  # noqa: E402  (waiting landings behind a turn land as one batch)
 from land_checks import ahead_of_origin, tmp_dir  # noqa: E402
-from land_merge import (ADR_GAPS, ADR_LOG, conflict_stages, landed_gaps, plan,  # noqa: E402,F401  (auto-resolve)
+from land_merge import (ADR_GAPS, ADR_LOG, conflict_stages, landed_gaps, plan, stale_adr_rows,  # noqa: E402,F401  (auto-resolve)
                         generate_records, resolver)
 import worktree_rules  # noqa: E402  (D-790: stale-history refusal)
 
@@ -137,6 +137,12 @@ def merge(wt: Path, main_sha: str, branch: str, python: str, dry_run: bool, sour
         for path, data in resolved.items():
             (wt / path).write_bytes(data)
             git(wt, "add", "--", path)
+        adr, fixed = stale_adr_rows(wt)
+        if fixed:  # before generate: docs/index.md is rendered from the Log
+            (wt / ADR_LOG).write_bytes(adr)
+            git(wt, "add", "--", ADR_LOG)
+            print(f"[merge] {ADR_LOG}: dropped the merge base's row of {fixed}; the other side changed it")
+            resolved[ADR_LOG] = adr
         if (wt / HARNESS).is_file():
             existing_untracked = set(lines(wt, "ls-files", "--others", "--exclude-standard"))
             written = generate_records(wt, python, HARNESS)
@@ -421,6 +427,7 @@ def rounds(args, wt: Path, branch: str, main_co: Path, python: str, qdir, ticket
                     # selection (affected + guards, or FULL again) on this candidate, so peers cannot starve us.
                     invocations, note = select(wt, full_main, python, head=main_sha, landed=True)
                     reusable = reusable and (prepared := land_full.prepared(wt, branch, full_main)) is not None
+                    reusable = reusable and not prepared.get("reused")  # D-970 4: a cross-tree pass is not push evidence
                     summary.append(f"round {round_no}: FULL tier passed over main {full_main[:10]}; main delta"
                                    f" {full_main[:10]}..{main_sha[:10]} runs its {'affected' if not note else 'delta' if note.startswith(land_selection.DELTA_NOTE) else 'FULL'} tier")
                     if args.tests != "full" and (held := land_speculate.held(sys.modules[__name__], wt, branch, full_main, candidate)) is not None:

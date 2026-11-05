@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#101214">
+  <meta name="theme-color" content="#111113">
   <title>Rosy Fleet</title>
   <link rel="icon" type="image/svg+xml" href="/common/icons/console.svg">
   <link rel="stylesheet" href="/common/tokens.css">
@@ -73,12 +73,12 @@
   <!-- D-741 2 — Fleet 문서 넷은 같은 탐색 레일을 쓴다. 영역은 관제·작업·기록·지도·설치 다섯이다. -->
   <div class="fleet-body">
   <!-- fleet:nav:start -->
-<nav class="doc-tabs" aria-label="Rosy Fleet 문서">
-    <a href="/console" aria-current="page" data-action-icon="fleet">관제</a>
-    <a href="/console?view=work" data-action-icon="list">작업</a>
-    <a href="/console?view=records" data-action-icon="history">기록</a>
-    <a href="/console/site-map" data-action-icon="map" aria-label="현장 지도">지도</a>
-    <a href="/console/install" data-action-icon="install" aria-label="설치·보정">설치</a>
+<nav class="doc-tabs ui-rail ui-rail-nav" aria-label="Rosy Fleet 문서">
+    <a class="ui-rail-item" href="/console" aria-current="page" data-action-icon="fleet">관제</a>
+    <a class="ui-rail-item" href="/console?view=work" data-action-icon="list">작업</a>
+    <a class="ui-rail-item" href="/console?view=records" data-action-icon="history">기록</a>
+    <a class="ui-rail-item" href="/console/site-map" data-action-icon="map" aria-label="현장 지도">지도</a>
+    <a class="ui-rail-item" href="/console/install" data-action-icon="install" aria-label="설치·보정">설치</a>
   </nav>
 <!-- fleet:nav:end -->
   <!-- D-741 7 — 영역의 화면은 하위 탐색 자리에 선다. 주소의 view가 고른 영역 것만 보인다(console.js). -->
@@ -112,8 +112,9 @@
   </section>
 
   <div class="assistant-layout">
-  <main id="fleet-main" tabindex="-1">
-    <div class="console-primary">
+  <!-- D-978: 관제 두 칸은 공용 틀 watch(2:1). 좁은 칸에서는 공용 기본 순서대로 지금 상태(now)가 먼저다(D-201 예외 먼저). -->
+  <main id="fleet-main" class="ui-stage-grid" data-layout="watch" tabindex="-1">
+    <div class="console-primary" data-pane="stage">
     <section class="panel work-overview" id="work-overview" aria-labelledby="work-heading" hidden>
       <div class="map-head">
         <h2 id="work-heading">작업</h2><span class="spacer"></span>
@@ -121,7 +122,7 @@
       </div>
       <label class="sr-only" for="work-filter">업무 종류</label>
       <select id="work-filter" class="ui-field" data-work-read="" aria-label="업무 종류">
-        <option value="all">전체 업무</option><option value="task">주행</option><option value="mission">팔 작업</option><option value="trip">운행</option><option value="cell_job">Cell 적재</option>
+        <option value="all">전체 업무</option><option value="task">주행</option><option value="mission">팔 작업</option><option value="trip">운행</option><option value="cell_job">팔레트 적재</option>
       </select>
       <p id="work-state" class="hint" role="status">접속 후 조회합니다.</p>
       <p id="work-sources" class="hint"></p>
@@ -138,7 +139,7 @@
         <h3 id="channel-review-heading">대화 요청 검토</h3>
         <p id="channel-review-original"></p>
         <p id="channel-review-state" class="hint" role="status"></p>
-        <span id="channel-review-cell-holder" hidden><a id="channel-review-cell">Cell 작업 준비·승인으로 연결</a></span>
+        <span id="channel-review-cell-holder" hidden><a id="channel-review-cell">팔레트 적재 준비·승인으로 연결</a></span>
         <label for="channel-review-robot">이동할 로봇</label>
         <select id="channel-review-robot" class="ui-field"><option value="">로봇 선택</option></select>
         <label for="channel-review-x">공유 지도 X (m)</label>
@@ -179,7 +180,7 @@
       <h2 id="work-new-heading">새 작업</h2>
       <ul class="work-list" aria-label="새 작업 종류">
         <li id="work-new-move-item" hidden><ui-button kind="toggle" id="work-new-move" type="button" data-work-read="" aria-pressed="false" aria-expanded="false" aria-controls="work-move">이동</ui-button></li>
-        <li id="work-new-cell-item" hidden><a class="ui-disclosure-row" href="/console/cell">Cell 적재</a></li>
+        <li id="work-new-cell-item" hidden><a class="ui-disclosure-row" href="/console/cell">팔레트 적재</a></li>
       </ul>
     </section>
     <section class="panel" aria-labelledby="map-heading">
@@ -249,7 +250,7 @@
       </div>
       <div class="tracking-bar">
         <p class="hint tracking-state" id="tracking-state" role="status" data-state="none" hidden></p>
-        <table id="tracking-positions" aria-label="카메라 관측 지도 좌표" hidden>
+        <table id="tracking-positions" class="ui-data-table" aria-label="카메라 관측 지도 좌표" hidden>
           <caption>지도 좌표 · m · 카메라 관측</caption>
           <thead><tr><th scope="col">대상</th><th scope="col">X (m)</th><th scope="col">Y (m)</th><th scope="col">관측 기준</th></tr></thead>
           <tbody id="tracking-position-rows"></tbody>
@@ -277,7 +278,7 @@
       </details>
     </section>
     </div>
-    <aside class="console-secondary" aria-label="현재 상태와 대응">
+    <aside class="console-secondary" data-pane="now" aria-label="현재 상태와 대응">
       <!-- ADR-1000: Warning / Critical State Queues (MON-002). D-493 — 오른쪽 열 맨 위. -->
       <section class="panel queues-panel" aria-labelledby="queues-heading">
         <h2 id="queues-heading" class="sr-only">주의 및 개입 요망</h2>

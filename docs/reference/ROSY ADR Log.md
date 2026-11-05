@@ -10,8 +10,17 @@
 
 | ID | 제목 | Status |
 |---|---|---|
-| D-970 | 착지 대기열: 잠금은 짧게, 같은 시험은 한 번만, 추측은 끄고, flaky는 시험 단위로. [전문](../adr/D-970-landing-queue-stages-dedup-speculation-flaky.md) | Proposed (2026-11-03, 사용자 지시; 1·2항 구현, 3·4항 미구현) |
-| D-968 | 통합관제 고유명은 Rosy Fleet이고 사람 계정은 개인 로그인만 쓴다 — 소유자 권한은 `operator`+`policy_admin` 조합, 직함·공유 계정·owner 문자가 들어간 새 역할·계정은 만들지 않는다. [전문](../adr/D-968-rosy-fleet-naming-and-individual-logins.md) | Accepted (2026-11-03, 사용자 결정; 명명·계정 모델 확정, 코드 변경 없음) |
+| D-973 | 검수 작업공간의 명시적 관리자 클래스 개정. [전문](../adr/D-973-explicit-managed-review-class-revisions.md) | Accepted (2026-11-03, 사용자 요청; 실제 클래스 변경·재검수 수용 별도) |
+| D-977 | `device_trial`에서 승인된 ARM 이송(`arm-transfers`)을 단일 팔 하달로 잇는다 — 설계 초안(기명 현장 운영자 확인은 `operator_attested`로 구분) | 부분 Accepted(Fleet 쪽 개방), owner 목표 수락은 Proposed |
+| D-979 | 앱이 읽는 실행 프로필 신호: `GET /api/fleet/execution-profile`은 읽기 전용이고 증명되지 않으면 닫힘이다. [전문](../adr/D-979-fleet-execution-profile-read-signal.md) | Accepted (2026-11-04, 사용자 지시; 읽기 API·시험 구현, 실물 미사용) |
+| D-978 | 화면 머리(노선·수치 띠)는 서버 응답만 보이고, 화면별 적용은 「조합 어휘」 표 한 곳에서 관리한다. [전문](../adr/D-978-screen-heads-show-server-answers-and-one-composition-table.md) | Accepted (2026-11-04, 사용자 지시; 표·쓰기 금지 시험 구현) |
+| D-976 | 팔레트 값은 실제 제품 색 체계의 단계에서 고르고, 넓은 화면 도구는 36px 단계를 쓴다 — D-82 값 출처·D-629 크기 규칙 개정. [전문](../adr/D-976-palette-from-product-scales-and-dense-tool-targets.md) | Accepted (2026-11-04, 사용자 결정; 두 테마 팔레트·사본·도구 토큰 구현, LCD 실물 판독 미수용) |
+| D-975 | 단계 스트립은 노선 모양이고 앱마다 노선 색 하나를 갖는다 — 흐름은 노선, 단계는 번호 역. [전문](../adr/D-975-line-map-stage-track-and-app-lines.md) | Accepted (2026-11-04, 사용자 결정; 공용 단계 스트립·앱 노선 색 구현, 화면 적용은 단계별 미착수) |
+| D-974 | 관제 용어는 제품·관제 단위·호스트·화면 층을 섞지 않는다 — Rosy Fleet은 제품 이름, 통합관제 R·셀 관제 CELL-x는 단위, PC는 물리 이름(OMX 노트북), 헤더는 `unit_id`, Cell 표시 문구는 팔레트 적재. [전문](../adr/D-974-control-vocabulary-layers.md) | Accepted (2026-11-03, 사용자 결정; D-968 1항 대체, 헤더·문구 구현, Confluence·Harbor 반영, 현장 헤더 관측 미수용) |
+| D-969 | OMX 두 팔 적층의 첫 학습 정책은 Isaac 정답 IK 시연으로 학습한 ACT 두 팔이다 — 실물 단위(`normalized_-100_100`·`0_100`, arm_a→arm_b), 컨테이너 하나 = 에피소드, 녹화 옵트인, 6단계 순서, D-947 학습 범위 확장. [전문](../adr/D-969-omx-two-arm-act-from-isaac-ik-demonstrations.md) | Accepted (2026-11-03, 사용자 결정; 코드·학습·실물 수용 없음) |
+| D-968 | 통합관제 고유명은 Rosy Fleet이고 사람 계정은 개인 로그인만 쓴다 — 소유자 권한은 `operator`+`policy_admin` 조합, 직함·공유 계정·owner 문자가 들어간 새 역할·계정은 만들지 않는다. [전문](../adr/D-968-rosy-fleet-naming-and-individual-logins.md) | Accepted (2026-11-03, 사용자 결정; 명명·계정 모델 확정, 코드 변경 없음; 1항은 D-974가 대체) |
+| D-970 | 착지 대기열: 잠금은 짧게, 같은 시험은 한 번만, 추측은 끄고, flaky는 시험 단위로. [전문](../adr/D-970-landing-queue-stages-dedup-speculation-flaky.md) | Proposed (2026-11-03, 사용자 지시; 1·2·4항 구현, 3항 미구현) |
+| D-972 | 후진 도킹의 위치 근거는 LiDAR V 표지이고, 레일 안에서는 조향하지 않는다 (D-950 후속). [전문](../adr/D-972-rear-docking-lidar-v-straight-reverse.md) | Proposed (2026-11-03; 기본 꺼짐, 실물 수용 전) |
 | D-965 | 외부 업무 앱은 관제 계층의 꼭대기 하나로 들어오고, 팔 작업은 셀로 위임된다. [전문](../adr/D-965-harbor-enters-through-top-control-unit.md) | Accepted (2026-11-03, 사용자 결정; 팔 작업 위임 wire 미구현) |
 | D-964 | 차선 판정·학습 모델 실행 코드를 공유 계층 perception_runtime으로 나눈다. [전문](../adr/D-964-perception-runtime-shared-perception-layer.md) | Accepted (2026-11-03) |
 | D-937 | 제품 앱 입사 문법 — 제품/기능 두 레인과 네 제품 원형, 웹 표면 전체 등록. [전문](../adr/D-937-product-app-entry-grammar.md) | Accepted (2026-10-31, 사용자 합의; 물리 이동·권한 변경 없음) |
@@ -22,6 +31,7 @@
 | D-962 | Rosy Account 독립 서비스와 개발 모드의 사람 로그인. [전문](../adr/D-962-independent-account-and-authenticated-development.md) | Accepted (2026-11-02, 사용자 승인; 구현·배포·운영 수용 별도) |
 | D-963 | 제어 PC의 USB 카메라 역할은 Fleet 설치 화면에서 승인한다. [전문](../adr/D-963-usb-camera-role-approval-in-fleet.md) | Accepted (2026-11-02, 사용자 요청; 현장 수용 별도) |
 | D-957 | 업데이트 운영 CLI: 운영자의 즉시 시도·홀드·해제를 하나의 명령으로 구조화한다. 게이트(유휴·배터리·서명·freeze) 우회는 없다. [전문](../adr/D-957-update-ops-cli.md) | Accepted (2026-11-02, 사용자 결정; 호스트 코드 불변, 원격 시험·착지는 파이프라인 기록) |
+| D-961 | 공용 작업 이동과 작업·인증 화면 구성. [전문](../adr/D-961-shared-task-links-and-page-compositions.md) | Accepted (2026-11-02, 사용자 승인 통합 설계) |
 | D-960 | 실제 제어는 암 세트마다 붙은 관제가 하고, 통합관제 R은 그 위에서 조정한다. [전문](../adr/D-960-control-unit-per-arm-set-under-integrated-r.md) | Accepted (2026-11-02, 사용자 결정) |
 | D-930 | 확인된 ARM 시도의 재관측(새 측정 사실만, 실행·claim·완료 권한 없음, API v1.334). [전문](../adr/D-930-arm-transfer-recheck-of-confirmed-attempt.md) | Accepted (2026-10-30, 계약·simulation 구현 결정; 실물 수용 별도) |
 | D-907 | Native v2 read-only signed component profile contract. [전문](../adr/D-907-native-v2-readonly-profile-contract.md) | Accepted (2026-10-28) |
@@ -939,7 +949,7 @@
 | D-795 | DDS는 호스트 하나 안에서만 흐른다 — 기계 사이 DDS 금지(OMX LOCALHOST·lo 프로파일, AI PC Nav2/rosbridge 유닛 제거, 회귀 시험) | Accepted |
 | D-799 | 원격 pytest를 호스트 안에서 병렬로(pytest-xdist, 직렬 목록) 돌리고, 메모리 하한 아래 호스트도 가벼운 일을 받는다(D-568 2항 개정) | Proposed |
 | D-802 | 실험실 PC의 Python 설치 도구는 uv 하나 — host-state가 해시 고정 휠(`wheel-tool`)로 배포하고, 원격 도구는 pip·venv 대체 경로를 쓰지 않는다 | Proposed |
-| D-797 | 실물 하달 개방 — 운행(`TRIP`)은 `production`, 팔(`CELL_TRANSFER`)은 새 프로필 `device_trial`에서 장치 증거로만(실물 identity, 하달 전 인계 장벽, 카메라 목표 증거, 다팔은 계속 시뮬레이션) | Proposed |
+| D-797 | 실물 하달 개방 — 운행(`TRIP`)은 `production`, 팔(`CELL_TRANSFER`)은 새 프로필 `device_trial`에서 장치 증거로만(실물 identity, 하달 전 인계 장벽, 카메라 목표 증거, 다팔은 계속 시뮬레이션) | §2·§3 Accepted (2026-11-04, D-858 S4); 나머지 Proposed |
 | D-796 | 사이트 문맥·로그 저장소(Postgres 미러) | Accepted |
 | D-798 | 한도에 걸린 크기 단위는 미리 나눠 여유를 만든다 — fleet·site_ui/console·rosy_auto_update 분할 지도, 95% 선에서 나누기 브랜치 먼저, 상속된 초과 커밋의 재적층 | Accepted (2026-10-18, 사용자 결정) |
 | D-807 | Account 인증 서비스의 자격 소유 책임과 운영 완료 기준 | Accepted |
@@ -1439,6 +1449,9 @@ LCD 코드 페어링과 도달 확인 읽기는 Tailscale tailnet(`100.64.0.0/10
 
 프레임마다 REST와 같은 검사(`apply_teleop`)를 하고, 최신 seq만 적용하며, 움직이던 소켓이 끊기면 0을 적용한다. Pilot은 소켓이 없거나 ack가 1 s 넘게 없으면 REST로 보낸다. 전문은 [D-948](../adr/D-948-teleop-websocket-stream.md).
 
+## D-961 공용 작업 이동과 작업·인증 화면 구성
+
+**Status:** Accepted (2026-11-02, 사용자 승인 통합 설계). 네이티브 이동 링크의 공용 조작·본문 구성을 기존 토큰과 조합 부품에 연결한다. 인증·정지·도메인 owner를 바꾸지 않는다. 전문은 [D-961](../adr/D-961-shared-task-links-and-page-compositions.md).
 ## D-953 Pi 4·Pi 5 CPU는 이미 있는 네이티브 경로로 먼저 줄인다 — 자체 Rust 확장은 Pi 4 실측이 요구할 때만
 
 **Status:** Accepted (2026-11-01). D-185를 대체하지 않는다. 기체 실측은 남아 있다.
@@ -1455,3 +1468,9 @@ Account는 전용 계정 DB·키를 갖는 독립 프로세스가 되고 Fleet�
 **Status:** Accepted (2026-11-02, 사용자 요청). 현장 카메라 수용은 별도다.
 
 새 USB 카메라의 역할을 셸 명령 대신 Rosy Cam 승인 옆 패널에서 이름 있는 운영자가 승인한다. 레지스트리는 제어 PC의 `bind --apply`만 쓰고, Fleet은 결정만 저장하며 장치 경로는 PC 밖으로 나가지 않는다. 인증은 작업셀의 팔 관측 토큰을 재사용하고 보고와 결정 수령은 한 요청이다. 전문은 [D-963](../adr/D-963-usb-camera-role-approval-in-fleet.md).
+
+## D-973 검수 작업공간의 명시적 관리자 클래스 개정
+
+**Status:** Accepted (2026-11-03, 사용자 요청). 실제 클래스 변경·재검수 수용은 별도다.
+
+최초 바인딩 가드를 유지하고 현재 프로젝트의 관리자가 별도 개정 화면에서 표시 수정·클래스 추가를 수행한다. 기존 번호·정본 이름·역할·의미를 유지하며 전체 작업공간 범위, 바인딩 SHA, 재검수 건수를 확인한다. 의미가 확장된 종류의 승인만 이력과 라벨 바이트를 보존한 채 검수 대기로 돌리고 기존 AI 초안을 격리한다. 전문은 [D-973](../adr/D-973-explicit-managed-review-class-revisions.md).

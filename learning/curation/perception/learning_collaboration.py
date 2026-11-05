@@ -218,7 +218,7 @@ class Collaboration:
             capability = 'publish'
         elif path.startswith('/api/learning/omx/center/hub-'):
             capability = 'publish'
-        elif path.startswith('/api/learning/imports/'):
+        elif path in ('/api/catalog/upload', '/api/catalog/folder') or path.startswith('/api/learning/imports/'):
             capability = 'import'
         elif path.startswith('/api/accounts/'):
             capability = 'view'

@@ -1,11 +1,11 @@
 import {node, action, input, select} from "./control-dom.js";
 
-export function createListToolbar({id, filters = [], onChange}) {
+export function createListToolbar({id, filters = [], sortLabel = "이름 정렬",
+  sortOptions = [{value: "ascending", label: "오름차순"}, {value: "descending", label: "내림차순"}], onChange}) {
   const element = node("div", "", "ui-list-toolbar");
   const search = input(`${id}-search`, "검색", "search");
   const filter = select(`${id}-filter`, "필터", [{value: "", label: "모두"}, ...filters]);
-  const sort = select(`${id}-sort`, "이름 정렬", [{value: "ascending", label: "오름차순"},
-    {value: "descending", label: "내림차순"}]);
+  const sort = select(`${id}-sort`, sortLabel, sortOptions);
   const count = node("ui-status"); count.id = `${id}-count`; count.setAttribute("state", "ready");
   const changed = () => onChange({query: search.control.value, filter: filter.control.value, sort: sort.control.value});
   const reset = action("검색·필터 초기화", () => {search.control.value = ""; filter.control.value = ""; changed();});
@@ -49,7 +49,7 @@ export function createDataTable({id, columns, onOpen, onSelection = () => {}, on
   let visible = [], activeId = null;
   function paint() {
     const focused = document.activeElement;
-    const focusId = focused?.dataset?.open || focused?.dataset?.select;
+    const focusId = body.contains(focused) ? focused.dataset.open || focused.dataset.select : null;
     const selectFocus = focused?.matches?.("input[data-select]");
     body.replaceChildren(...visible.map(item => {
       const tr = node("tr"); tr.dataset.key = item.id;

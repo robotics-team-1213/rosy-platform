@@ -57,7 +57,7 @@ def test_face_captures_write_all_four_cards():
         assert len(pixels) > 1, "검정/빈 카드가 아니어야 한다"
     empty = Image.open(out / "robot-face_info-card_320x240_first-boot-empty-local.png")
     # F-04 — 결측 배터리가 0% 위경보(crit 색)로 보이면 안 된다.
-    assert (196, 9, 33) not in {color for _count, color in empty.getcolors(maxcolors=1 << 16)}
+    assert (181, 69, 72) not in {color for _count, color in empty.getcolors(maxcolors=1 << 16)}
 
 
 def test_face_captures_write_operating_cards():

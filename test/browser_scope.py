@@ -22,6 +22,7 @@ ROOT = Path(__file__).resolve().parents[1]
 FLEET_SAMPLE = [
     "applications/fleet/test/test_sample_browser.py",
     "applications/fleet/test/test_feature_browser_flows.py",
+    "applications/fleet/test/test_integrated_sample_browser.py",
     "applications/fleet/test/test_browser_adapters.py",
     "applications/fleet/test/test_integrated_sample_browser.py",
 ]
@@ -37,6 +38,8 @@ FLEET = FLEET_SAMPLE + [
     "test/test_host_recovery_browser.py",
     "test/test_overhead_tracking_browser.py",
     "test/test_peer_picker_browser.py",
+    "test/test_console_robot_video_browser.py",
+    "test/test_fleet_ui_review_browser.py",
     "operations/fleet/test/*_browser.py",
 ]
 ROBOT = [
@@ -60,18 +63,12 @@ API_WEB = [
 ]
 OMX_PILOT = ["middleware/devices/omx/adapter/test/test_pilot_sim_browser.py"]
 PILOT = [
-    "middleware/robot_ui/pilot/test/test_pilot_browser.py",
-    "middleware/robot_ui/pilot/test/test_recordings_browser.py",
-    "middleware/robot_ui/pilot/test/test_lobby_browser.py",
+    "middleware/robot_ui/pilot/test/*_browser.py",
 ] + OMX_PILOT
 GAMES = ["test/test_games_board_browser.py"]
 REVIEW = [
-    "test/learning/perception/test_sim_browser.py",
-    "test/learning/perception/test_vlm_judge_browser.py",
+    "test/learning/perception/*_browser.py",
     "test/learning/perception/test_storage_inventory_http.py",
-    "test/learning/perception/test_review_flow_browser.py",
-    "test/learning/perception/test_learning_pipeline_browser.py",
-    "test/learning/perception/test_pixel_review_browser.py",
     "test/learning/perception/test_review_app_smoke.py",
 ]
 OMX_LEARNING = ["test/learning/perception/test_omx_" + name + "_browser.py" for name in
@@ -79,7 +76,8 @@ OMX_LEARNING = ["test/learning/perception/test_omx_" + name + "_browser.py" for 
 CAMERA = ["test/learning/perception/test_camera_setup_browser.py"]
 SIM = ["test/learning/perception/test_sim_browser.py"]
 PIPELINE = ["test/learning/perception/test_learning_pipeline_browser.py"]
-ACCOUNTS = ["test/learning/perception/test_learning_accounts_browser.py"]
+ACCOUNTS = ["test/learning/perception/test_learning_accounts_browser.py",
+            "test/learning/perception/test_learning_auth_surface_browser.py"]
 TASKS = ["test/learning/perception/test_learning_tasks_browser.py",
          "test/learning/perception/test_learning_task_recovery_browser.py"]
 STAGES = ["test/learning/perception/test_learning_stages_browser.py", "test/learning/perception/test_vlm_judge_browser.py",
@@ -92,7 +90,8 @@ GAZEBO = ["integrations/simulation/gazebo/test/test_lane_live_view_browser.py"]
 SHARED = ["shared/web/test/*_browser.py"]
 COMMISSIONING = ["test/test_omx_commissioning_view.py"]
 MONITORING = ["test/test_monitoring_browser.py"]
-EVERYTHING = FLEET + ROBOT + API_WEB + PILOT + GAMES + REVIEW + LEARNING + GAZEBO + SHARED + COMMISSIONING + MONITORING
+RECOVERY = ["test/test_network_recovery_browser.py"]
+EVERYTHING = FLEET + ROBOT + API_WEB + PILOT + GAMES + REVIEW + LEARNING + GAZEBO + SHARED + COMMISSIONING + MONITORING + RECOVERY
 
 SCOPE: dict[str, list[str]] = {
     "applications/monitoring/": MONITORING,
@@ -101,7 +100,7 @@ SCOPE: dict[str, list[str]] = {
     "applications/fleet/test/": FLEET,
     "operations/fleet/fleet/server/": FLEET,
     "applications/fleet/web/": FLEET,
-    "middleware/robot_ui/robot/": ROBOT,
+    "middleware/robot_ui/robot/": ROBOT + ["middleware/core/api/test/test_d283_console_browser.py"],
     "middleware/core/api/": API_WEB,
     "middleware/robot_ui/pilot/": PILOT,
     "middleware/devices/omx/adapter/": OMX_PILOT,
@@ -145,8 +144,10 @@ SCOPE: dict[str, list[str]] = {
         "review_app_web/accounts.html", "review_app_web/accounts.js")},
     "integrations/simulation/gazebo/scripts/": GAZEBO,
     "deploy/robot/omx/commissioning_view.py": COMMISSIONING,
+    **{f"deploy/robot/pinky_pro/native/{name}": RECOVERY for name in
+       ("network_recovery.py", "network_recovery_http.py", "recovery_launcher.py", "install-native-runtime.sh")},
     # Every surface loads /common (ui.js, components.css, tokens.css).
-    "shared/web/": SHARED + FLEET + ROBOT + API_WEB[:1] + PILOT + GAMES + REVIEW + LEARNING + MONITORING + GAZEBO,
+    "shared/web/": SHARED + FLEET + ROBOT + API_WEB[:1] + PILOT + GAMES + REVIEW + LEARNING + MONITORING + GAZEBO + RECOVERY,
     "test/browser_harness.py": EVERYTHING,
 }
 

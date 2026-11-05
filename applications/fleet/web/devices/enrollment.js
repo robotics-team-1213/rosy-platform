@@ -188,6 +188,7 @@ export function discoveryActions(device, manage, blockedUntil, now) {
 
 export const HELP = [
   "운영자 동작: 로봇 전원 켜기 → 등록 → 로봇 화면의 8자 입력. SSH·파일 편집·재시작이 없습니다.",
+  "SSH 연결이 필요하면 해당 핑키 웹의 설치·정비 → 보안 및 안전 정책에서 기체 관리자에게 접속 설정을 요청하세요.",
   "LCD가 있고 카드 login.boot_code가 기본(operator)인 로봇만 이렇게 됩니다. 그 밖에는 관리자 등록 코드나 SSH rosy-login-code가 코드의 출처입니다.",
   "비상정지 해제: 로봇 앞에서 안전을 확인 → 행의 '비상정지 해제…' → 그 로봇 정지 화면의 'Release code' 8자. 해제만 하는 코드라 로그인은 되지 않습니다.",
   "새 화면 코드는 부팅마다 하나입니다: 첫 등록, 토큰 만료(현 이미지 7일), 코드를 소모한 실패 뒤마다 전원 재투입이나 관리자 코드가 필요합니다.",

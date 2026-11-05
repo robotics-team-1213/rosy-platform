@@ -1,17 +1,12 @@
-/* Fleet procedure documents share geometry; their task-specific widths keep distinct roles. */
+/* Task geometry belongs to the shared composition; document owners keep their content measure. */
 body { margin: 0; }
-.fleet-document {
-  box-sizing: border-box;
-  container-type: inline-size;
-  inline-size: 100%;
-  max-inline-size: var(--content-auth-max);
-  min-inline-size: 0;
-  margin: var(--space-5) auto;
-  padding: var(--inset-task-page);
-  display: grid;
-  gap: var(--gap-section);
-  overflow-wrap: anywhere;
-}
+.fleet-document-header ui-brand { container-type: inline-size; flex: 1; }
+.fleet-document-header ui-brand a { flex-wrap: wrap; }
+.fleet-document { container-type: inline-size; overflow-wrap: anywhere; }
+.fleet-document:not(.ui-auth-page) { max-inline-size: var(--content-learning-max); }
 .fleet-document > * { min-inline-size: 0; }
-.fleet-document.learning-main { max-inline-size: var(--content-learning-max); }
 .fleet-document #account-list ui-button { min-inline-size: 0; max-inline-size: 100%; overflow-wrap: anywhere; }
+/* 계정 표는 칸을 쪼개지 않고, 좁으면 표 영역이 가로로 스크롤한다. */
+#account-list td { white-space: nowrap; }
+/* nowrap 표가 넓어져도 sr-only 머리글 같은 절대 위치 자식이 문서 폭을 늘리지 않게 한다. */
+.ui-table-scroll { position: relative; }

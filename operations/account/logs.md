@@ -39,9 +39,51 @@
 - gate 변화: SOURCE·LOCAL GO. 통합 FULL, 서명 설치와 실제 사용자 로그인 수용은 아직 완료되지 않았다.
 - CE: 해당 없음 — 선택 조건과 권한 경계는 최종 코드·회귀 시험이 설명한다.
 
+## 2026-11-02 · e81af2d7c3 · D-962 independent Account artifact
+
+- Change: Account image is independently built from Account and its minimal foundation contract; no Fleet or Control Unit runtime/build service is required. Fixed UI bundle keeps three pages, eight Account assets and twelve common assets. Account has UID/GID10001 and no setuid capabilities. Remote minimal-source startup and real TLS login/initial-password/profile/admin passed. ARTIFACT/FIELD stay HOLD pending OCI construction and independent-image deployment. CE: no separate lesson; the artifact boundary and regressions encode this change.
+- Evidence: D-962 independent image scope: remote AI-PC closure at e81af2d7c3 passed 320 tests, 0 skipped, 0 NEW. Account TLS login/initial-password/profile/admin, minimal Account/foundation startup, stdlib-only fixed assets, signed legacy/new inventories and reuse, and Fleet header browser/Node compatibility. OCI build and live independent-image acceptance were not run.
+- Log: `rosy-account-image-closure/run-1.txt`; native `size_range.py d7fcc74e43 b9424451a0` checked four commits successfully; native static secret scan found zero findings.
+- Gate: scoped SOURCE/LOCAL verification only; existing artifact, device and field limits remain.
+
+
+## 2026-11-02 · 5f02d723d1 · D-962 independent identity backup and presentation
+
+- Change: Independent identity maintenance uses the dedicated signed Account image and exact existing external Account volume, never a replacement empty volume or Fleet fallback. Existing stdlib SQLite utility is packaged unchanged. Explicit history/audit retention0 preserves every authority table, including account_http_audit; daily backup keeps14 files and six-hour checks require integrity and age<=48h. Backup/check units are opt-in only after healthy migration; no timer was enabled. Account identity pages use the common Account brand. CE: no new lesson; code, tests and runbook encode the new boundary.
+- Evidence: D-962 independent image and identity backup scope at 5f02d723d1: remote 335 backend/signing/image/backup cases plus 71 opted-in identity TLS/browser cases passed, 0 skipped, 0 NEW. Full Account tables including HTTP audit preserved; stale/corrupt backup refusal, strict signed legacy/new groups, reused image pins, branding, login/profile/admin and first-password flows verified. Prior e81af2d7c3 closure also passed 320 cases including Fleet header browser/Node compatibility. OCI construction and live independent-image/timer acceptance remain pending.
+- Logs: `rosy-account-backup-replay/run-1.txt` (335 passed), `rosy-account-identity-replay/run-1.txt` (71 passed); known-failure comparison 0 new/known/flaky. Native size range checked eight commits without a violation.
+- Gate: scoped SOURCE/LOCAL GO; image artifact, installation, timer activation and human field acceptance remain separate.
+
+## 2026-11-02 · d90ee50ad3 · 독립 Account 페이지의 명시적 제품 맥락
+
+- 변경: Account 정적 페이지 owner가 로그인·프로필·계정 관리에 Account 맥락과 이름·아이콘을 표시한다. 공용 로그인 모듈은 이 표시를 사용하고 기존 authorize 복귀 판단과 검증은 유지한다. 독립 프로필의 기본 복귀가 자기 화면으로 되돌아가는 링크는 숨긴다. Fleet 페이지·쿠키·scope·권한·이관·writer는 바꾸지 않는다.
+- 증거: 최신 main 통합의 독립 검토에서 직접 로그인과 프로필 경유 로그인에 Fleet 이름이 남음을 발견했다. 추가한 committed 서버·실제 TLS Chromium 회귀는 적색 4 failed/6 passed로 재현했다. 구현 후 같은 경로와 기존 등록 앱·최초 비밀번호 흐름을 함께 검증한다.
+- gate 변화: 없음. 소스·브라우저 확인은 서명 배포나 운영 단일 writer 이관·실제 사용자 로그인 수용을 대신하지 않는다.
+- CE: 해당 없음 — owner 표식과 회귀 시험이 제품 맥락 보존 조건을 설명한다.
+
 ## 2026-11-03 · 472c6ab842 · CI가 Account의 oauthlib를 시스템에 설치
 
 - 변경: CI는 `oauthlib==4.0.0`을 `/tmp/rosy-receiver-crypto` target 대신 시스템 Python에 설치한다. 설치 패키지 시험과 Account 경계 시험은 `python3 -I`나 바꾼 `PYTHONPATH`로 하위 프로세스를 띄워 target 폴더를 보지 못했다. `test_ci_dependencies`가 pin을 target에 다시 넣으면 실패한다.
 - 증거: 게시 PR 228 CI의 root-test-1of3·site-vision-cell이 `ModuleNotFoundError: oauthlib`로 적색. 수정 뒤 `test/test_ci_dependencies.py` 38 passed, 옛 ci.yml에서는 강화한 시험이 실패. 시험 PC는 시스템에 oauthlib가 있어 착지는 녹색이었다.
 - gate 변화: 없음. 공개 CI 녹색은 다음 게시 PR에서 확인한다.
 - CE: 해당 없음 — 재발은 강화한 CI 의존성 시험이 막는다.
+
+## 2026-11-03 · e84e4f46b3 · 로그인 전 자기 화면 복귀 제거
+
+- 변경: Account owner의 로그인 전 복귀 링크를 숨겨 직접·프로필·관리 진입에서 같은 로그인 요구 화면으로 되돌아가는 동작을 없앤다. authorize 복귀 검증·자동 계속·등록 앱 callback은 유지한다.
+- 증거: 실제 owner HTML의 최신 소스 캡처와 원격 TLS 브라우저 회귀의 적색 1건. 직접·프로필·관리 진입의 숨김을 회귀로 보존한다. 운영 authority·세션·권한·설정·writer는 바꾸지 않는다.
+- Gate: 원격 수정본 확인 및 배포 전. CE: 해당 없음 — 공유 조건과 회귀로 동작을 복원할 수 있다.
+
+## 2026-11-03 · 50b5b4340d · 최소 Account 이미지의 공용 작업면 통합
+
+- 변경: 최소 Account 자산 묶음은 기존 공용 조작 스타일의 정확한 파일을 포함한다. static module의 표준 라이브러리 전용 import를 보존하며 FastAPI 응답은 설치 함수 안에서 가져온다. 실행 시 Account owner 표식·제품 제목·CSP·경로 검증을 보존한다. 익명 직접·프로필·관리 진입과 로그인 후 흐름 모두 자산 오류를 수집한다.
+- 증거: 새 committed 통합본의 독립 import·bundle 폐쇄성·실제 TLS 브라우저 확인이 필요하다. 이전 소스의 통과는 해당 소스의 범위로 남긴다.
+- Gate: 통합 SOURCE 검증 전이며 운영 authority의 계정·세션·토큰·비밀번호·키를 변경하지 않았다. CE: 해당 없음 — 설치 자산 검사와 owner 회귀로 검증한다.
+
+- 후속 검증: 21f1dcd378의 독립 import·최소 bundle·Node·화면 제목 16건 통과 후, 4493982d05에서 정확한 한국어 heading/intro와 static owner 치환을 보정했다. 해당 수정본의 실제 독립 TLS fixture·등록 callback·최초 비밀번호·기존 Fleet·sample을 포함한 브라우저 112건은 원격 PASS/0 SKIP/exit 0/NEW 0이다. 독립 재검토 지적 없음이다. 테스트 authority/합성 fixture와 익명 소스 미리보기의 범위이며 운영 계정이나 운영 callback 수용으로 대신하지 않는다.
+
+## 2026-11-03 · bfd53106b3 · 최소 Account 이미지의 실제 스타일 입력 연결
+
+- 변경: 공용 조작 스타일이 최소 bundle뿐 아니라 Docker COPY·전용 제외 목록·이미지 재사용 입력까지 연결되도록 했다. 고정 자산 목록의 정확성과 공용 원본 바이트 일치를 보존한다.
+- 증거: 수정 전 Docker 문맥 시험 1 NEW를 재현했고, 수정본의 이미지·후보·workflow 37건과 원래 파일 전체 단독 실행 1건이 공식 원격 PASS/0 SKIP/NEW 0이다. 독립 경로 검토는 전파 누락·검증 약화 지적 없음이다.
+- Gate: 실제 OCI 아티팩트와 운영 수용 전이다. 계정·세션·키·토큰·writer 상태는 바꾸지 않았다. CE: 해당 없음 — 고정 파일 계약과 원본·COPY·허용 검사로 재발 조건을 검증한다.

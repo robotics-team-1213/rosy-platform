@@ -28,8 +28,8 @@ function renderExportRun(run,{states,request,refresh,selectDataset}){
     section.append(el('p',`데이터 ${id} · revision ${revision}`));
     section.append(el('p',run.result.act_only?'ACT 전용 데이터 · 정책 학습은 별도로 시작하세요.':'정책 학습은 별도로 시작하세요.'));
     const actions=el('div');actions.className='learning-next-actions';
-    const learn=el('a','이 데이터로 학습 준비');learn.dataset.exportAction='learn';learn.className='workspace-link';learn.href='#train-section';learn.onclick=()=>selectDataset(id);
-    const archive=el('a','이 데이터 HF 보관 준비');archive.dataset.exportAction='archive';archive.className='workspace-link';
+    const learn=el('a','이 데이터로 학습 준비');learn.dataset.exportAction='learn';learn.className='ui-action-link';learn.dataset.kind='quiet';learn.href='#train-section';learn.onclick=()=>selectDataset(id);
+    const archive=el('a','이 데이터 HF 보관 준비');archive.dataset.exportAction='archive';archive.className='ui-action-link';archive.dataset.kind='quiet';
     archive.href=`/learning?archive=omx&dataset=${encodeURIComponent(id)}&revision=${encodeURIComponent(revision)}#storage-preparation`;
     actions.append(learn,archive);section.append(actions);
     section.append(el('p','HF 보관은 파일 사본과 바이트를 검증합니다. LeRobot 형식 게시·reader 검증과 학습·현장 수용은 별도입니다.'));

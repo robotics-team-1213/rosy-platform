@@ -24,6 +24,7 @@ from launch.substitutions import LaunchConfiguration
 
 from navigation.footprint_profile import load_footprint_profile
 from navigation.params_rewrite import write_prefixed_nav2_params
+from navigation.profile_source import default_profile_path
 from navigation.profile_limits import (
     load_motion_limits,
     validate_nav2_parameters,
@@ -94,7 +95,10 @@ def _include_nav2(context, *args, **kwargs):
             "use_sim_time": LaunchConfiguration("use_sim_time").perform(context),
             "map": map_yaml,
             "params_file": rewritten_nav,
-            "use_composition": "True",
+            # Standalone nodes are the device-verified path: on this Jazzy build
+            # load_composable_node entries are silently skipped / lose the
+            # namespace (2026-11-03 solution doc), so composed Nav2 never runs.
+            "use_composition": "False",
         }
     else:
         mapper_source = LaunchConfiguration("mapper_params_file").perform(context)
@@ -106,7 +110,8 @@ def _include_nav2(context, *args, **kwargs):
             "slam_params_file": write_prefixed_nav2_params(
                 mapper_source, namespace
             ),
-            "use_composition": "True",
+            # Standalone nodes are the device-verified path (see above).
+            "use_composition": "False",
         }
     return [
         IncludeLaunchDescription(
@@ -194,7 +199,7 @@ def generate_launch_description():
         DeclareLaunchArgument("require_measured_footprint", default_value="false"),
         DeclareLaunchArgument(
             "profile_file",
-            default_value=os.environ.get("ROSY_PROFILE", "/etc/rosy/profile.yaml"),
+            default_value=default_profile_path(),
         ),
 
         IncludeLaunchDescription(

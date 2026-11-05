@@ -22,7 +22,7 @@ def test_fleet_area_documents_keep_the_seat_order_and_one_h1():
         page = _page(WEB, name)
         body = page[page.index("<body"):]
         order = [body.index(marker) for marker in
-                 ("<ui-topbar", 'class="doc-tabs"', 'class="ui-subnav"', 'class="ui-pathbar"', "<main")]
+                 ("<ui-topbar", 'class="doc-tabs ui-rail ui-rail-nav"', 'class="ui-subnav"', 'class="ui-pathbar"', "<main")]
         assert order == sorted(order), f"{name}: seat order"
         assert page.count("<h1") == 1 and '<div class="ui-pathbar"><h1>' in page, f"{name}: one h1, in the path bar"
 
@@ -34,7 +34,7 @@ def test_fleet_light_documents_are_header_then_main_with_one_h1():
         body = page[page.index("<body"):]
         assert body.index("<ui-topbar") < body.index("<main"), name
         assert 'class="fleet-document-header"' in page and page.count("<h1") == 1, name
-        assert 'class="doc-tabs"' not in page and 'class="ui-subnav"' not in page, name
+        assert not re.search(r'class="[^"]*\bdoc-tabs\b', page) and 'class="ui-subnav"' not in page, name
 
 
 def test_current_markers_use_only_the_three_agreed_words():
@@ -77,10 +77,18 @@ def test_focal_surfaces_keep_topbar_first_main_and_a_skip_link():
     assert entry_shell.count("<h1") == 1 and compat_shell.count("<h1") == 1
 
 
-def test_review_pages_head_the_body_with_one_pathbar_h1():
+def test_review_pages_have_one_title_in_their_declared_composition():
     for path in sorted(REVIEW.glob("*.html")):
         page = path.read_text(encoding="utf-8")
-        assert page.count("<h1") == 1 and '<div class="ui-pathbar"><h1>' in page, path.name
+        assert page.count("<h1") == 1, path.name
+        if path.name == "accounts.html":
+            # D-961: anonymous auth uses a focused main; signed-in navigation is restored by the account owner.
+            assert 'ui-task-page ui-auth-page' in page
+            assert page.index('<main') < page.index('<h1') < page.index('id="account-login"')
+            assert 'data-seats="none"' in page and 'class="ui-rail" hidden' in page
+            assert 'class="ui-action-link" data-kind="primary" hidden' in page
+        else:
+            assert '<div class="ui-pathbar"><h1>' in page, path.name
 
 
 def test_robot_operating_surfaces_explain_no_script_and_keep_styles_out_of_markup():

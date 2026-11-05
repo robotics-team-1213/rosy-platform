@@ -1119,3 +1119,9 @@
 - 변경: `styles.css`의 `.sr-only`(clip-path 방식) 사본을 지우고 공용 규칙을 쓴다.
 - 증거: 원격 계약 시험.
 - Gate: 없음. CE: 해당 없음.
+
+## 2026-11-02 · uncommitted · D-961 웹 제품 통합
+
+- 변경: 본문 건너뛰기가 main 포커스로 이어지도록 tabindex를 추가하고 앱바 banner를 명시했다. focal·영상·운전·정지 배치와 hold-to-drive는 유지한다.
+- 증거: 06cc93b377 RED에서 main 포커스 실패 재현; d58538d018 GREEN에서 태블릿 viewport 회귀 통과. 실물 주행 수용을 대신하지 않는다.
+- Gate: 전체 회차 검증 중이며 운영 배포·DEVICE/FIELD를 주장하지 않는다. CE: 완료 전 판단; 최종 코드·회귀·ADR 외의 비명시 지식이 있는지 확인한다.

@@ -159,9 +159,9 @@ def main() -> int:
         AnalyticCellTransferPlanner, CellPlanningProfile, CellTransferPlanRejected, CellTransferRequest,
     )
     from omx_adapter.ros_runtime import RosArmCommandRuntime, RosArmPhaseGoalPort
-    from rosy_cell.cell import load_cell
-    from rosy_cell.compiler import compile_job
-    from rosy_cell.recipe import load_recipe
+    from rosy.processes.palletizing.cell import load_cell
+    from rosy.processes.palletizing.compiler import compile_job
+    from rosy.processes.palletizing.recipe import load_recipe
 
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)

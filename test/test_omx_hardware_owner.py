@@ -86,6 +86,35 @@ def test_identity_is_hardware_no_goal_and_never_simulation(tmp_path):
     assert owner.uds_server.socket_path == tmp_path / "run" / "omx_cell_a_01" / "control.sock"
 
 
+def _identity(owner):
+    return owner.action_api.dispatch({"version": 2, "operation": "GetOwnerIdentity"}, peer_uid=FLEET_UID)["identity"]
+
+
+def test_device_identity_follows_the_commissioning_record_and_fails_closed(tmp_path):
+    state = {"revision": "c7"}
+
+    def revision():
+        if state["revision"] == "boom":
+            raise ValueError("damaged record")
+        return state["revision"]
+
+    owner = build_hardware_owner(
+        _settings(tmp_path), _config(), runtime_factory=FakeRuntime, refuse_second_owner=lambda: None,
+        fleet_fence_current=lambda epoch, generation: True, commissioning_revision=revision)
+    assert (_identity(owner)["device"], _identity(owner)["commissioning_revision"]) == (True, "c7")
+    assert _identity(owner)["simulation"] is False and _identity(owner)["goals_enabled"] is False
+    state["revision"] = "c8"  # re-commissioned while running: the next answer carries the new revision
+    assert _identity(owner)["commissioning_revision"] == "c8"
+    for bad in (None, "", "boom"):  # no record, empty, unreadable: never a device identity
+        state["revision"] = bad
+        assert _identity(owner)["device"] is False and _identity(owner)["commissioning_revision"] is None
+
+
+def test_owner_without_a_commissioning_source_reports_no_device_field(tmp_path):
+    owner, _ = _build(tmp_path)
+    assert "device" not in _identity(owner)
+
+
 def _grant():
     now = datetime.now(timezone.utc)
     value = {
@@ -256,6 +285,14 @@ def test_loader_builds_settings_config_and_names():
 def test_loader_refuses_incomplete_or_foreign_documents(document, message):
     with pytest.raises(ValueError, match=message):
         _load(document)
+
+
+def test_loader_takes_an_optional_absolute_commissioning_root():
+    settings, _, _ = _load(_document(commissioning_root="/var/lib/rosy-omx/commissioning"))
+    assert settings.commissioning_root == Path("/var/lib/rosy-omx/commissioning")
+    assert _load(_document())[0].commissioning_root is None
+    with pytest.raises(ValueError, match="absolute"):
+        _load(_document(commissioning_root="commissioning"))
 
 
 def test_loader_requires_the_environment_namespace():

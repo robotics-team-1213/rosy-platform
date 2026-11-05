@@ -41,10 +41,10 @@ class TestBatteryColor:
     @pytest.mark.parametrize("percent,expected", [
         (100.0, (238, 238, 239)),
         (60.0, (238, 238, 239)),
-        (59.9, (254, 180, 50)),
-        (30.0, (254, 180, 50)),
-        (29.9, (196, 9, 33)),
-        (0.0, (196, 9, 33)),
+        (59.9, (255, 197, 61)),
+        (30.0, (255, 197, 61)),
+        (29.9, (181, 69, 72)),
+        (0.0, (181, 69, 72)),
     ])
     def test_thresholds(self, percent, expected):
         assert battery_color(percent) == expected
@@ -329,6 +329,6 @@ class TestBootCardRoseMark:
 
     def test_the_boot_card_has_a_rose_pixel(self):
         image = self._boot()
-        rose = (246, 151, 231)  # --brand-rose #f697e7
+        rose = (231, 150, 243)  # --brand-rose #e796f3
         colours = {colour for _count, colour in image.getcolors(maxcolors=1 << 16)}
         assert rose in colours, f"로즈색 점이 없다: {sorted(c for c in colours if c != _BG)[:8]}"

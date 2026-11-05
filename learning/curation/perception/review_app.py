@@ -29,7 +29,9 @@ import numpy as np
 import class_sets, review_return
 from learning_workspace import Workspace, WORKFLOWS
 import review_evidence, review_ingest, review_masks, vlm_mask_feedback, camera_setup_web, omx_web, sim_web, vlm_judge_web
-import review_versions, omx_center_web
+import review_classes
+import review_context
+import review_versions, omx_center_web, review_upload
 import learning_domains, learning_pipeline, promotion_request
 import learning_tasks_web
 from workspace_links import WORKSPACE_LINKS_SCHEMA, check_workspace_links, load_workspace_links
@@ -204,15 +206,15 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                 if path == '/api/learning/storage':
                     return self.send(storage_web.inventory.snapshot() if storage_web.inventory else {'status': 'not_configured', 'roots': []})
                 if path == '/api/workspace':
-                    frames = [dict(row, pixel_status=review_masks.get(store, row['index'])['status'])
-                              for row in store.list_frames()]
-                    object_set = class_sets.object_set(store)
-                    return self.send({'frames': frames, 'classes': [c['name'] for c in object_set['classes']],
-                                      'object_class_set': object_set,
-                                      'workspace_kind': review_evidence.metadata(store, 'workspace_kind'),
-                                      'token': token, 'exports': store.exports(), 'segmentation_supported': True,
-                                      'pixel_classes': review_masks.served_classes(store),
-                                      'map_reference': review_evidence.map_reference(store)})
+                    return self.send(review_context.workspace(store, self.path, project, workspace_links, token))
+                if path == '/api/classes':
+                    if collaboration:
+                        accounts.require(self.learning_principal, 'manage')
+                    query = parse_qs(urlparse(self.path).query, strict_parsing=True)
+                    if set(query) != {'kind'} or len(query['kind']) != 1:
+                        raise ValueError('one class kind required')
+                    return self.send(dict(review_classes.snapshot(store, query['kind'][0]), token=token,
+                        workspace_id=project, workspace_label=review_evidence.metadata(store, 'workspace_label') or '현재 작업공간'))
                 if path == '/api/decisions':
                     value = review_evidence.decisions(store)
                     tag = '"' + value['decision_sha256'] + '"'
@@ -227,6 +229,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                     return self.send({'catalog': review_evidence.metadata(store, 'import_catalog'),
                                       'cad_catalog': review_evidence.metadata(store, 'cad_catalog'),
                                       'map_reference': review_evidence.map_reference(store), 'token': token,
+                                      'folders': review_upload.folders(store), 'local_import': not bool(collaboration),
                                       'imports': bool(collaboration)})  # HF imports exist only in collaboration mode
                 if path.startswith('/api/mask-images/'):
                     review = review_masks.get(store, int(path.rsplit('/', 1)[1]))
@@ -260,7 +263,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                     pixel_reviews = review_masks.get_many(store, [f for f in frames if f['status'] != 'excluded'])
                     pixel_statuses = [row['status'] for row in pixel_reviews]
                     with store.connect() as db:
-                        queued_objects = {row[0] for row in db.execute('SELECT DISTINCT frame FROM object_drafts')}
+                        queued_objects = {row[0] for row in db.execute('SELECT DISTINCT frame FROM object_drafts d WHERE NOT EXISTS (SELECT 1 FROM object_draft_quarantine q WHERE q.frame=d.frame AND q.sha256=d.sha256)')}
                     object_draft_indices = [f['index'] for f in frames if f['status'] == 'pending'
                                             and (f['index'] in queued_objects or f['source'].get('objects')
                                                  or f['source'].get('boxes'))]
@@ -330,7 +333,8 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                     return self.send(detail_preview(store, int(path.rsplit('/', 1)[1])),
                                      mime='image/png')
                 files = {'/': 'index.html', '/app.js': 'app.js', '/history.js': 'history.js', '/viewport.js': 'viewport.js', '/commands.js': 'commands.js', '/app.css': 'app.css',
-                         '/box-geometry.mjs': 'box-geometry.mjs', '/learning': 'learning.html',
+                         '/classes': 'classes.html', '/classes.js': 'classes.js',
+                         '/review-pages.js': 'review-pages.js', '/review-context.js': 'review-context.js', '/box-geometry.mjs': 'box-geometry.mjs', '/learning': 'learning.html',
                          '/learning.js': 'learning.js', '/pixels': 'pixels.html', '/pixels.js': 'pixels.js',
                          '/storage.js': 'storage.js', '/storage-settings.js': 'storage-settings.js', '/versions.js': 'versions.js', '/ai-jobs.js': 'ai-jobs.js',
                          '/catalog': 'catalog.html', '/catalog.js': 'catalog.js',
@@ -379,7 +383,8 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                 return deny()
             try:
                 length = int(self.headers.get('Content-Length', '0'))
-                if not 0 < length <= 1048576:
+                limit = review_upload.BODY_LIMIT if path == '/api/catalog/upload' else 1048576
+                if not 0 < length <= limit:
                     raise ValueError('bounded JSON body required')
                 body = json.loads(self.rfile.read(length))
                 if not isinstance(body, dict):
@@ -404,6 +409,10 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                 if vlm_judge_web.post(self, path, body, store, collaboration, Conflict):
                     return
                 actor = self.learning_principal['user_id'] if collaboration else None
+                if path == '/api/classes/revisions':
+                    if collaboration:
+                        accounts.require(self.learning_principal, 'manage')
+                    return self.send(review_classes.revise(store, body, actor or 'local-unidentified', Conflict))
                 if omx_web.post(self, path, body, learning, Conflict):
                     return
                 if path.startswith('/api/review-ai/'):
@@ -439,6 +448,10 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                     return self.send(storage_web.inventory.preflight(body))
                 if path == '/api/prepare':
                     return self.send(store.prepare())
+                if path == '/api/catalog/upload':
+                    return self.send(review_upload.import_image(store, body, actor))
+                if path == '/api/catalog/folder':
+                    return self.send(review_upload.import_folder(store, body, actor))
                 if path == '/api/import':
                     if not body.get('path'):
                         body['path'] = review_evidence.metadata(store, 'import_catalog')

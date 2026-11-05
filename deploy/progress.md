@@ -2,15 +2,15 @@
 module: deploy
 logical_modules: [M01, M13, M14]
 owner: 릴리스·플랫폼
-last_verified: { commit: "4e99d92e", date: 2026-10-02 }
+last_verified: {commit: 5f02d723d1, date: 2026-11-02}
 gates:
   SOURCE:
     state: GO
-    evidence: "unsigned handoff importer 40 passed; release/device 집중 370 passed, 2 skipped; 실제 397bb25 artifact 17 files + 2 linux/arm64 images bounded-stream import PASS (2026-09-21)"
+    evidence: "unsigned handoff importer 40 passed; release/device 집중 370 passed, 2 skipped; 실제 397bb25 artifact 17 files + 2 linux/arm64 images bounded-stream import PASS (2026-09-21) D-962 independent image and identity backup scope at 5f02d723d1: remote 335 backend/signing/image/backup cases plus 71 opted-in identity TLS/browser cases passed, 0 skipped, 0 NEW. Full Account tables including HTTP audit preserved; stale/corrupt backup refusal, strict signed legacy/new groups, reused image pins, branding, login/profile/admin and first-password flows verified. Prior e81af2d7c3 closure also passed 320 cases including Fleet header browser/Node compatibility. OCI construction and live independent-image/timer acceptance remain pending."
     cmd: "python3 -m pytest test/test_unsigned_handoff_import.py test/test_arm64_release_builder.py test/test_release_manifest.py test/test_release_signing.py test/test_release_bundle.py test/test_pinky_commissioning.py test/test_device_readback.py -q"
   LOCAL:
     state: GO
-    evidence: "1093 passed, 13 skipped, 6 known harness warnings (2026-09-21 Windows, uncommitted)"
+    evidence: "1093 passed, 13 skipped, 6 known harness warnings (2026-09-21 Windows, uncommitted) D-962 independent image and identity backup scope at 5f02d723d1: remote 335 backend/signing/image/backup cases plus 71 opted-in identity TLS/browser cases passed, 0 skipped, 0 NEW. Full Account tables including HTTP audit preserved; stale/corrupt backup refusal, strict signed legacy/new groups, reused image pins, branding, login/profile/admin and first-password flows verified. Prior e81af2d7c3 closure also passed 320 cases including Fleet header browser/Node compatibility. OCI construction and live independent-image/timer acceptance remain pending."
     cmd: "python3 -m pytest test -q"
   ROS-SIM:
     state: N/A
@@ -22,7 +22,7 @@ gates:
     blocker: "Ubuntu native product image의 SD write/readback, Pi 5 boot, ROS graph, 장치 ACL, deadman 실기 증거 없음"
   FIELD:
     state: N/A
-adrs: [D-679, D-681, D-22, D-26, D-30, D-33, D-36, D-46, D-53, D-124, D-144, D-145, D-146, D-161, D-164, D-165, D-179, D-291, D-311, D-312, D-314, D-319, D-321, D-325, D-373, D-389, D-411, D-433, D-472, D-859, D-861]
+adrs: [D-679, D-681, D-22, D-26, D-30, D-33, D-36, D-46, D-53, D-124, D-144, D-145, D-146, D-161, D-164, D-165, D-179, D-291, D-311, D-312, D-314, D-319, D-321, D-325, D-373, D-389, D-411, D-433, D-472, D-859, D-861, D-961]
 plans:
   - docs/plans/2026-09-01-rosy-os-v1-image-release-design.md
   - docs/plans/2026-09-08-release-delivery-design.md

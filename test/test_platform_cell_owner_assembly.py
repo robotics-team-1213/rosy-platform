@@ -19,6 +19,7 @@ for relative in ("contracts/skill/src", "middleware/devices/omx/agent/src", "ope
 from core_common.protocol.schemas import FleetCellTransferGrant  # noqa: E402
 from omx_adapter.action_runner import action_grant_digest  # noqa: E402
 from omx_adapter.command_owner import ArmCommandOwner  # noqa: E402
+from rosy.processes.palletizing.acceptance import CellDocumentRules  # noqa: E402
 from rosy_agent.omx_cell_owner import CellOwnerSettings, build_cell_owner  # noqa: E402
 
 EXAMPLES = ROOT / "operations/processes/cell/examples/omx_sim"
@@ -60,7 +61,7 @@ def _build(tmp_path, **overrides):
         runtime_factory=runtime_factory, goal_port_factory=lambda runtime: object(),
         http_app_factory=lambda runtime: calls["http"].append(runtime) or "http-app",
         refuse_second_owner=guard, gripper_readback=lambda: None,
-        fleet_fence_current=lambda epoch, generation: True,
+        fleet_fence_current=lambda epoch, generation: True, document_rules=CellDocumentRules,
     )
     kwargs.update(overrides)
     return build_cell_owner(_settings(tmp_path), **kwargs), calls
