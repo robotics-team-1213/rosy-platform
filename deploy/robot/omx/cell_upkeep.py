@@ -118,30 +118,44 @@ def camera_device(role):
 
 def usb_port(device):
     """Root port of the camera behind a /dev/v4l/by-id name: {"ports": [port, peer], "speed": Mbit/s, "boards": by-id
-    serial names below either root port}. Raises OSError when sysfs does not show an enabled port chain."""
-    node = Path(os.path.realpath(device)).name
-    dev = Path(os.path.realpath(f"/sys/class/video4linux/{node}/device"))
-    dev = next((p for p in (dev, *dev.parents) if (p / "idVendor").exists()), None)
-    if dev is None:
-        raise OSError(f"no USB device chain for {device}")
+    serial names below ANY port being cycled}. Raises OSError when sysfs does not show the chain."""
+    node = Path(device).resolve(strict=True).name
+    dev = Path(f"/sys/class/video4linux/{node}/device").resolve(strict=True)
+    while not (dev / "idVendor").exists():
+        if dev.parent == dev:
+            raise OSError("USB device ancestor is missing")
+        dev = dev.parent
     bus, _, path = dev.name.partition("-")
-    root = next((p for p in (dev, *dev.parents) if p.name == f"{bus}-{path.split('.')[0]}"), None)
-    if root is None:
-        raise OSError(f"no USB root device for {device}")
-    port = Path(f"/sys/bus/usb/devices/{bus}-0:1.0/usb{bus}-port{path.split('.')[0]}")
-    peer = os.path.realpath(port / "peer") if (port / "peer").exists() else None
-    ports, roots = [str(port)] + ([peer] if peer else []), [root]
-    if peer:
-        match = re.fullmatch(r"usb(\d+)-port(\d+)", Path(peer).name)
-        if match is None:
-            raise OSError(f"cannot resolve peer root of {port}")
-        roots.append(Path(os.path.realpath(f"/sys/bus/usb/devices/{match[1]}-{match[2]}")))
-    if any((Path(p) / "disable").read_text().strip() != "0" for p in ports):
+    root = dev
+    while root.name != f"{bus}-{path.split('.')[0]}":
+        if root.parent == root:
+            raise OSError("USB root device ancestor is missing")
+        root = root.parent
+    port = Path(f"/sys/bus/usb/devices/{bus}-0:1.0/usb{bus}-port{path.split('.')[0]}").resolve(strict=True)
+    ports = [port]
+    peer = port / "peer"
+    if peer.exists() or peer.is_symlink():
+        ports.append(peer.resolve(strict=True))
+    roots = []
+    for powered in ports:
+        identity = re.fullmatch(r"usb(\d+)-port(\d+)", powered.name)
+        if (not identity or powered.parent.name != f"{identity[1]}-0:1.0"
+                or powered.parent.parent.name != f"usb{identity[1]}"):
+            raise OSError("USB powered-port identity is missing or inconsistent")
+        # An unattached peer has no child device yet, but its port/controller
+        # identity still defines the complete subtree whose power is affected.
+        roots.append(powered.parent.parent / f"{identity[1]}-{identity[2]}")
+    if roots[0] != root:
+        raise OSError("USB camera root differs from its powered port")
+    if any((p / "disable").read_text().strip() != "0" for p in ports):
         raise OSError(f"USB port or peer is already disabled: {ports}")
-    boards = [Path(b).name for b in glob.glob("/dev/serial/by-id/*")
-              if any(Path(os.path.realpath(f"/sys/class/tty/{Path(os.path.realpath(b)).name}/device")).is_relative_to(r)
-                     for r in roots)]
-    return {"ports": ports, "speed": int((dev / "speed").read_text()), "boards": boards}
+    boards = []
+    for name in glob.glob("/dev/serial/by-id/*"):
+        tty = Path(name).resolve(strict=True).name
+        serial_device = Path(f"/sys/class/tty/{tty}/device").resolve(strict=True)
+        if any(serial_device.is_relative_to(affected) for affected in roots):
+            boards.append(Path(name).name)
+    return {"ports": [str(p) for p in ports], "speed": int((dev / "speed").read_text()), "boards": boards}
 
 
 def frames_flow(device) -> bool:
@@ -451,8 +465,11 @@ def check_monitors(arm, device, logs_dir, since, params, io):
     notes = [f"wind-up {h['session']} t={h['t']}: {h['reason']}" for h in mine.get("hits", [])[:3]]
     notes += [f"jitter {f['session']} {f['joint']}: {f['reason']}" for f in shake.get("flagged", [])[:3]]
     total = len(mine.get("hits", [])) + len(shake.get("flagged", []))
-    return row("monitors", "warn" if total else "ok",
+    if "trace" in jitter:
+        notes.append(f"unassigned trace identity; cannot clear {arm} from these logs")
+    return row("monitors", "warn" if total or "trace" in jitter else "ok",
                (f"{total} hits/flags over {len(health)} health + {len(traces)} trace logs; " + "; ".join(notes)) if total
+               else "; ".join(notes) if notes
                else f"no wind-up hits or jitter flags over {len(health)} health + {len(traces)} trace logs")
 
 

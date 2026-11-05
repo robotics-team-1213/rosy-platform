@@ -8,8 +8,8 @@ Run after every supervised session (and before changing a `jitter.*` cell param)
 
 Trace (30 Hz, ROSY_CHUNK_TRACE): per joint the std of present around the command (0.5 s moving mean removed), the
 crossings per second of that residual and the peak-to-peak of present, in holds and in moves. Health (~4 Hz, so only
-"PWM varies / flips at a standstill"): PWM std and sign changes per second. Each trace is filed under the arm of the
-motor-health log written by the same session (same mtime within 90 s), else "trace". Percentiles are over 2 s (trace)
+"PWM varies / flips at a standstill"): PWM std and sign changes per second. A trace uses its explicit trace-arm_a-*
+or trace-arm_b-* name (as upkeep's jaw check does), else "trace"; mtime cannot establish an arm. Percentiles are over 2 s (trace)
 or ~4 s (health) windows; `worst` is the three highest-std windows per joint with the chunk, lag and pose they had.
 """
 from __future__ import annotations
@@ -17,7 +17,6 @@ from __future__ import annotations
 import argparse
 import glob
 import json
-import os
 import sys
 from pathlib import Path
 
@@ -61,7 +60,7 @@ def health_windows(path, batch=4096):
 
 
 def replay(trace_paths, health_paths=(), params=None):
-    arms, sessions = {}, {}
+    arms = {}
 
     def arm_of(label):
         return arms.setdefault(label, {"trace_h": 0.0, "health_h": 0.0, "faults": [], "flagged": [], "joints": {
@@ -79,14 +78,12 @@ def replay(trace_paths, health_paths=(), params=None):
         port, wins, faults = health_windows(path)
         if port:
             label = ARMS.get(port, port)
-            sessions[path.stat().st_mtime] = label
             arm = arm_of(label)
             arm["health_h"] += len(wins) / 6 * jj.HEALTH_WINDOW / 4 / 3600
             arm["faults"] += [{"session": path.stem, "fault": f} for f in faults]
             add(arm, wins, path.stem, path.stem)
     for path in map(Path, trace_paths):
-        mtime = path.stat().st_mtime
-        label = next((v for k, v in sessions.items() if abs(k - mtime) <= 90), "trace")
+        label = next((arm for arm in ARMS.values() if path.name.startswith(f"trace-{arm}-")), "trace")
         wins = jj.trace_windows(rows_of(path, lambda r: "present" in r and "t" in r))
         arm = arm_of(label)
         arm["trace_h"] += len(wins) / 6 * jj.WINDOW_S / 3600
