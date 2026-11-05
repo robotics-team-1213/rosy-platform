@@ -14231,6 +14231,13 @@ osy-d395-s1d\`.
 - gate 변화: 모델 코드 수락·학습 실행·모델 품질·실물 수용으로 승격하지 않는다. 병합 대기열의 추가 CI는 별도 진행 중이다.
 - CE: 기존 교훈 갱신 — [Learning Center 배포](solutions/deployment/learning-center-upgrade-needs-the-identical-unit-first-2026-10-23.md). 기존 floor와 작업 소유권을 유지하는 검증된 UI 갱신 절차다.
 
+## 2026-11-05 · uncommitted · docs(calibration): 마커 번호의 정본 참조 수정
+
+- 변경: 보정 카드에 남은 D-933 초기 slot1/2 번호를 D-954의 정본 인쇄 생성기 arm_ids 참조로 바꿨다. cell_frame의 번호와 현장 markers.slot을 맞추도록 경로를 명시하고 감독·소유권·보정 조건은 유지했다.
+- 증거: 현재 생성기와 cell_frame은 slot1의 gripper50·slot2의 gripper65부터 각각15개를 사용한다. 실제 생성 PDF3개의 A4 geometry·hash와 Poppler 렌더를 확인했다. 현장 마커 부착·보정·정확도 수용을 뜻하지 않는다.
+- gate 변화: 없음. 번호표를 카드에 다시 복제하지 않으며 실물 동작과 D-911 확인은 기존 절차를 따른다.
+- CE: 해당 없음 — 오래된 번호와 정정 근거는 지침 diff·D-954·정본 생성기로 직접 확인 가능하다.
+
 ## 2026-11-05 · uncommitted · docs(test): 로컬 Chromium 모듈의 네트워크 변경 실패 관측
 
 - 변경: [초기 모듈 로드 교훈](solutions/test-failures/chromium-network-change-breaks-local-module-load-2026-11-05.md)에 HTML 표시·스크립트 요청 실패·실제 pointer 경로를 구분하고, 관측한 초기 네트워크 변경만 제한적으로 복구하는 범위를 기록했다.
