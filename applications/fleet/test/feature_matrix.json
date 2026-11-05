@@ -1697,7 +1697,7 @@
         {
           "consumer": "applications/fleet/web/manual-control.js",
           "expression": "/api/fleet/do",
-          "resolution": "literal; named operator move intent and terminal zero for the selected robot",
+          "resolution": "literal; confirmed fixed manual mode, guarded named move and terminal zero for the selected robot",
           "request_ids": [
             "POST:/api/fleet/do"
           ]

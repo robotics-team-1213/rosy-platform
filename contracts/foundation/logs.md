@@ -1120,3 +1120,10 @@
 - gate 변화: 없음
 - CE: 해당 없음 — 신규 추가 계약, 실물 장애 아님
 
+
+## 2026-11-06 · uncommitted · feat(fleet): 관제 수동 모드 전환
+- 변경: bodyless robot-scope manual 문법; 호출자 mode/운동 인자 거절
+- 증거: 원격 AI PC 16028faad6 backend 231 passed/skip0; c7ce250026 Chromium 17 passed/skip0. 신규 backend RED 29 failed/7 passed, UI RED6 failed/11 passed 후 구현. 로그는 외부 scratch pinky-manual-{red,backend-green,ui-red,ui-green}/run-1.txt.
+- gate 변화: SOURCE 회귀 검증; ARTIFACT/DEVICE/FIELD 수용 근거로 사용하지 않음. 최종 재조립 SHA 원격 회귀와 FULL은 별도.
+- 결정: API v1.363; 기존 CORE 최종 명령·모드 owner 유지.
+- 교훈: CE 해당 없음 — 최종 코드·회귀 시험·API 계약으로 판단 근거를 재현할 수 있음.

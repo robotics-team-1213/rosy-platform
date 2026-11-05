@@ -5299,3 +5299,10 @@
 - gate 변화: 없음. 286524aef8 원격 API/store/observer 회귀66건이 skip0/NEW0으로 통과했고 독립 검토가 승인했다. 원래 CI 실패의 내부 거절 분기와 별도로 시험의 시계 의존성만 제거한다.
 - 증거: 게시 CI에서 승인 HTTP 200 기대가 409로 실패했고, 같은 원본 커밋의 원격 단독 모듈 18건은 skip0/NEW0으로 통과했다. 원래 CI 응답에는 내부 거절 분기가 없어 500ms 경과를 원인으로 확정하지 않는다. 이번 변경은 계약 시험의 불필요한 실제 시계 의존성을 제거한다. 변경 후 계약 및 기존 stale/future/역행 시계 거절 시험은 별도 검증한다.
 - CE: 미해결 — 원래 CI의 거절 분기는 확인되지 않았다. 해결 교훈으로 등록하지 않는다.
+
+## 2026-11-06 · uncommitted · feat(fleet): 관제 수동 모드 전환
+- 변경: manual/nonzero move의 dispatch generation·미완료 Task·claim·순수 trip/engaged 재검사; terminal zero 전달 보존
+- 증거: 원격 AI PC 16028faad6 backend 231 passed/skip0; c7ce250026 Chromium 17 passed/skip0. 신규 backend RED 29 failed/7 passed, UI RED6 failed/11 passed 후 구현. 로그는 외부 scratch pinky-manual-{red,backend-green,ui-red,ui-green}/run-1.txt.
+- gate 변화: SOURCE 회귀 검증; ARTIFACT/DEVICE/FIELD 수용 근거로 사용하지 않음. 최종 재조립 SHA 원격 회귀와 FULL은 별도.
+- 결정: API v1.363; 기존 CORE 최종 명령·모드 owner 유지.
+- 교훈: CE 해당 없음 — 최종 코드·회귀 시험·API 계약으로 판단 근거를 재현할 수 있음.

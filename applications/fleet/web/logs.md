@@ -993,3 +993,10 @@
 - 증거: RED 후 source `7e81c40e5d`의 원격 affected는8806 PASS/847 SKIP, 별도 실제 Chromium 신규11개는 SKIP0이다. 앞선 기존 관제·세션·수명 포함138개도 원격 PASS/SKIP0이다. 착지 중 기존 모바일4개가 선택 상태를844px 아래로 미는 실제 NEW를 잡았고, source `a9210f10f9`의 순서 수정 후 해당4개와 신규11개 모두 원격 PASS/SKIP0이다. 독립 계약 검토에 수정 필요 사항이 없었고 로컬 main `68fe84b488`에 착지했다. 게시용 canonical FULL은 별도 진행한다.
 - 범위: 브라우저 회귀는 mocked Fleet 응답에서 실제 DOM·입력 수명·요청을 검사한다. HTTP 시험은 실제 Fleet route에서 fake robot transport로 이동과0 전달을 검사한다. 이 결과를 배포된 패드의 실물 수용으로 세지 않는다. 현장의42·45·46은 기존 실제 Fleet API 경로에서 케이블을 유지한 작은 구동·raw 정지를 확인했으며 새 패드 배포나 차체 이동의 독립 현장 확인과는 별도다.
 - gate 변화: 이 변경의 SOURCE/관련 원격 회귀 GO, 로컬 착지 확인. GitHub 게시·서명 사이트 배포·배포 UI 실물 조작·자동 위치·지도 도착 검증은 미완료다. 기존 전체 모듈의 ARTIFACT/DEVICE/FIELD gate를 올리지 않는다.
+
+## 2026-11-06 · uncommitted · feat(fleet): 관제 수동 모드 전환
+- 변경: 선택 기체의 수동 전환 확인과 fresh mode readback; 발행 차단 시 기존 hold를 terminal zero로 종료
+- 증거: 원격 AI PC 16028faad6 backend 231 passed/skip0; c7ce250026 Chromium 17 passed/skip0. 신규 backend RED 29 failed/7 passed, UI RED6 failed/11 passed 후 구현. 로그는 외부 scratch pinky-manual-{red,backend-green,ui-red,ui-green}/run-1.txt.
+- gate 변화: SOURCE 회귀 검증; ARTIFACT/DEVICE/FIELD 수용 근거로 사용하지 않음. 최종 재조립 SHA 원격 회귀와 FULL은 별도.
+- 결정: API v1.363; 기존 CORE 최종 명령·모드 owner 유지.
+- 교훈: CE 해당 없음 — 최종 코드·회귀 시험·API 계약으로 판단 근거를 재현할 수 있음.
