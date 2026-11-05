@@ -130,7 +130,11 @@ export function createManualControl({scope, view, call, namedReason}) {
     root.hidden = !view.focusRobot;
     heading.textContent = `${view.robotNames?.[view.focusRobot] || view.focusRobot || "로봇"} 수동 조종`;
     const why = blocked();
-    for (const {button} of buttons) button.disabled = Boolean(why);
+    for (const {button} of buttons) {
+      button.disabled = Boolean(why);
+      if (why) button.setAttribute("reason", why);
+      else button.removeAttribute("reason");
+    }
     if (!active && !stopping) reason.textContent = why || failure || "누르는 동안만 이동 · 최대 2초 · 전후진 0.03m/s · 회전 0.10rad/s";
   }
   scope.interval(update, 100);
