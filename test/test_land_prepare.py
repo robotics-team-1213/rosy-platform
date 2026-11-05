@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import sys
@@ -23,6 +24,47 @@ SIZE_BOTH = ("import subprocess, sys\n"
              "both = all(subprocess.run(['git', 'cat-file', '-e', f'{sys.argv[2]}:{p}']).returncode == 0\n"
              "           for p in ('mine.txt', 'peer.txt'))\n"
              "print('tools/x.py 601 > 600' if both else 'ok', file=sys.stderr)\nsys.exit(1 if both else 0)\n")
+
+
+def test_repreparation_preserves_each_candidates_raw_logs_and_cache_hashes(repos, monkeypatch):
+    main, wt = repos
+    guard = "test/test_behavior_test_ownership.py"
+    harness = ("def generated_targets(repo): return {}\ndef generate(repo): return []\n"
+               "if __name__ == '__main__': print('lint fixture')\n")
+    commit(wt, {land.HARNESS: harness, guard: "def test_guard(): pass\n"}, "branch checks")
+    monkeypatch.setattr(land.land_cache, "env_id", lambda *a: "fixture")
+    run, observed = land.remote_pytest.run, []
+
+    def capture(invocations, logs, sha="HEAD", **kwargs):
+        observed.extend((sha, log) for log in logs)
+        return run(invocations, logs, sha, **kwargs)
+
+    monkeypatch.setattr(land.remote_pytest, "run", capture)
+    args = land.argparse.Namespace(tests="auto", node=False, no_cache=True)
+    land.land_prepare.prepare(land, wt, "feat/x", args, sys.executable, None, None, [["pkg/test"]], "")
+    first = git(wt, "rev-parse", "HEAD")
+    first_dir = next(log.parent for sha, log in observed if sha == first)
+    original = {path: path.read_bytes() for path in first_dir.glob("*.txt")}
+
+    commit(main, {"lib/peer.py": "peer = 1\n"}, "main advances between preparations")
+    land.land_prepare.prepare(land, wt, "feat/x", args, sys.executable, None, None, [["pkg/test"]], "")
+    second = git(wt, "rev-parse", "HEAD")
+    assert second != first
+    epochs = {sha: {log.parent for source, log in observed if source == sha} for sha in (first, second)}
+    assert len(epochs[first]) == len(epochs[second]) == 1, "guards and primary share one preparation directory"
+    second_dir = next(iter(epochs[second]))
+    assert first_dir != second_dir, "a later preparation must not overwrite earlier raw logs"
+    for sha, directory in ((first, first_dir), (second, second_dir)):
+        assert directory.parent == land.tmp_dir("feat/x")
+        assert {log.name for source, log in observed if source == sha} == {"run-pre-1.txt", "run-gpre-1.txt"}
+        assert {"lint-pre.txt", "lint-gpre.txt"} <= {path.name for path in directory.glob("*.txt")}
+    assert all(path.read_bytes() == data for path, data in original.items())
+    entries = [row for row in land.land_cache.entries(wt) if row["argv"] == ["pkg/test"]]
+    assert {row["commit"] for row in entries} == {first, second} and len(entries) == 2
+    for row in entries:
+        raw = Path(row["log"])
+        assert raw.parent == next(iter(epochs[row["commit"]]))
+        assert hashlib.sha256(raw.read_bytes()).hexdigest() == row["log_sha256"]
 
 
 def test_pretest_guards_run_beside_the_selection_and_their_stop_still_stops(repos, monkeypatch):
