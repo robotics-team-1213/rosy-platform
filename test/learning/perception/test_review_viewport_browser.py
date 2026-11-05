@@ -20,6 +20,45 @@ def test_learning_page_has_visible_current_path(browser_workspace, route):
     expect(path).to_contain_text('/')
     expect(path.locator('h1')).to_be_visible()
     assert path.evaluate('n => n.scrollWidth <= n.clientWidth')
+    if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+        import json
+        from pathlib import Path
+        previous_viewport = page.viewport_size
+        previous_theme = page.evaluate("document.documentElement.getAttribute('data-theme')")
+        page.wait_for_load_state('load')
+        destination = Path(output)
+        destination.mkdir(parents=True, exist_ok=True)
+        try:
+            for width, height in ((390, 844), (320, 568)):
+                page.set_viewport_size(dict(width=width, height=height))
+                for theme in ('dark', 'light'):
+                    page.evaluate('theme=>document.documentElement.dataset.theme=theme', theme)
+                    navigation = page.locator('.ui-subnav-nav').first
+                    items = navigation.locator('.ui-subnav-item')
+                    current = navigation.locator('.ui-subnav-item[aria-current]:not([aria-current="false"])')
+                    if items.count():
+                        item = current.first if current.count() else items.first
+                        item.focus()
+                        page.keyboard.press('Tab')
+                        page.keyboard.press('Shift+Tab')
+                    metrics = navigation.evaluate("""nav=>{const s=getComputedStyle(nav),outer=nav.closest('.ui-subnav'),
+                      main=document.querySelector('.ui-app-main')||document.querySelector('main'),
+                      current=[...nav.querySelectorAll('.ui-subnav-item[aria-current]')].filter(n=>n.getAttribute('aria-current')!=='false'),
+                      item=current[0]||nav.querySelector('.ui-subnav-item');return {
+                        outerPaddingTop:s.paddingTop,outerPaddingBottom:s.paddingBottom,expectedInset:s.getPropertyValue('--inset-rail').trim(),
+                        containerPaddingTop:outer?getComputedStyle(outer).paddingTop:null,containerPaddingBottom:outer?getComputedStyle(outer).paddingBottom:null,
+                        currentCount:current.length,currentLabels:current.map(n=>n.textContent.trim()),currentValues:current.map(n=>n.getAttribute('aria-current')),
+                        itemLabel:item?.textContent.trim()||null,focus:item===document.activeElement,focusVisible:item?.matches(':focus-visible')||false,
+                        navRect:nav.getBoundingClientRect().toJSON(),containerRect:outer?.getBoundingClientRect().toJSON()||null,
+                        mainRect:main?.getBoundingClientRect().toJSON()||null,itemRect:item?.getBoundingClientRect().toJSON()||null,
+                        overflow:document.documentElement.scrollWidth-innerWidth};}""")
+                    capture = destination / f'learning-padding-{route.strip("/").replace("/", "-")}-{theme}-{width}x{height}.png'
+                    page.screenshot(path=str(capture))
+                    capture.with_suffix('.json').write_text(json.dumps(dict(route=route,viewport=page.viewport_size,
+                        theme=theme,filename=capture.name,**metrics),ensure_ascii=False,indent=2),encoding='utf-8')
+        finally:
+            page.set_viewport_size(previous_viewport)
+            page.evaluate("theme=>theme===null?document.documentElement.removeAttribute('data-theme'):document.documentElement.setAttribute('data-theme',theme)", previous_theme)
 
 
 @pytest.mark.parametrize('route', ['/learning/evaluate', '/learning/vlm'])
