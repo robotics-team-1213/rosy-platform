@@ -14237,3 +14237,10 @@ osy-d395-s1d\`.
 - 증거: dfa0363e2b에서 실패2건/통과99건과 모듈 ERR_NETWORK_CHANGED를 함께 수집했고 d3ae2203af의 원격 harness10건 및 현장 PC 전체 브라우저101건은 skip0/NEW0이다. 최종 FULL·게시 수용은 별도다.
 - gate 변화: 없음. 이전 UI hotfix 수용과 서명 model-code45의 작업 잠금 HOLD를 구분하며, PR #235는 병합 대기열 실패 후 미병합 상태다.
 - CE: 새 교훈 기록. 표준 Chromium 오류에는 새 도메인 용어를 만들지 않았으며 기존 solutions 진입 경로를 유지했다.
+
+## 2026-11-05 · uncommitted · docs(learning): 서명 코드45의 정상 자동 적용 재조회
+
+- 변경: 앞선 작업 잠금 보류 이후의 실제 수락을 후속 수용 기록에 추가했다. model-code updater의 applied 사건, current45·서명 원본의 핵심3파일 hash와 검수 UI의 같은 소스 전환을 구분해 확인했다.
+- 증거: 12:05:53 UTC applied 사건의 source7ad5b751489f·sequence45·환경지문이 승인 manifest와 일치했다. 후속 조회는 current45·실패목록 비어 있음·검수 UI의 model-code45 경로 및 loopback/HTTPS accounts200을 확인했다. 그 뒤의 held는 새 점검이 다른 작업 때문에 보류된 상태이며 설치 취소가 아니다.
+- gate 변화: 코드 설치와 검수 웹 서비스 수용이다. 원본 자료 학습·모델 품질·모델 승격·장치 실행 수용으로 확대하지 않는다. 최종 FULL과 정본 PR 병합은 별도 진행한다.
+- CE: 기존 Learning Center 배포 교훈 적용. 작업 소유권과 기존 가드를 유지했고 강제 중단·잠금 우회는 하지 않았다.
