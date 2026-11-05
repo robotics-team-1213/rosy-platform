@@ -29,7 +29,9 @@ SIZE_BOTH = ("import subprocess, sys\n"
 def test_repreparation_preserves_each_candidates_raw_logs_and_cache_hashes(repos, monkeypatch):
     main, wt = repos
     guard = "test/test_behavior_test_ownership.py"
-    commit(wt, {land.HARNESS: "print('lint fixture')\n", guard: "def test_guard(): pass\n"}, "branch checks")
+    harness = ("def generated_targets(repo): return {}\ndef generate(repo): return []\n"
+               "if __name__ == '__main__': print('lint fixture')\n")
+    commit(wt, {land.HARNESS: harness, guard: "def test_guard(): pass\n"}, "branch checks")
     monkeypatch.setattr(land.land_cache, "env_id", lambda *a: "fixture")
     run, observed = land.remote_pytest.run, []
 
