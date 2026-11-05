@@ -15,7 +15,11 @@ from test_site_map_trip import _app, _on_ring_s
 
 def show_screen(page, heading):
     """D-926 3: the site-map sub-nav shows one screen at a time; the map stays above it."""
+    from playwright.sync_api import expect
+
     page.evaluate("heading => { location.hash = heading }", "#" + heading)
+    expect(page.locator(f'.ui-subnav-nav a[href="#{heading}"]')).to_have_attribute('aria-current', 'page')
+    expect(page.locator(f'#{heading}')).to_be_visible()
 
 
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(),
