@@ -171,7 +171,7 @@ function candidateOptions(){const rows=ready?review?.draft_candidates||[]:[],key
  $('pixel-apply-candidate').textContent=legacyCandidate()?'v12 참고 마스크로 전체 교체':'선택 초안으로 전체 교체';
  $('pixel-preview-candidate').disabled=select.disabled||!rows.length;
  $('pixel-preview-candidate').setAttribute('aria-pressed',String(candidateVisible));}
-async function previewCandidate(){
+async function previewCandidate(allow=()=>true){
  const digest=$('pixel-candidates').value,index=frame?.index,ticket=serial;
  if(workspace?.workspace_kind==='evaluation'||frame?.status==='excluded'||review?.status==='excluded'){resetCandidatePreview();return;}
  if(!ready||!digest)return;
@@ -181,6 +181,7 @@ async function previewCandidate(){
  try{
   const proposal=await image(`/api/draft-images/${index}/${digest}`);
   if(ticket!==serial||generation!==candidateRequest||frame?.index!==index||$('pixel-candidates').value!==digest)return;
+  if(!allow()){resetCandidatePreview();paint();enable();return false;}
   if(proposal.naturalWidth!==original.naturalWidth||proposal.naturalHeight!==original.naturalHeight)throw new Error('초안 크기가 원본 사진과 다릅니다.');
   const off=document.createElement('canvas');off.width=proposal.naturalWidth;off.height=proposal.naturalHeight;
   const ctx=off.getContext('2d');ctx.drawImage(proposal,0,0);candidateData=ctx.getImageData(0,0,off.width,off.height).data;candidateVisible=true;candidateLoading=false;
@@ -335,7 +336,7 @@ async function loadVlm(index,ticket){
 
 async function select(index){
  resetAI();resetVersions();review=null;original=displayPhoto=maskImage=null;
- $('pixel-ai-summary').hidden=true;$('pixel-vlm-details').textContent='';
+ $('pixel-ai-summary').hidden=true;$('pixel-vlm-note').textContent='';$('pixel-vlm-details').textContent='';
  $('pixel-canvas').hidden=true;$('pixel-canvas').getContext('2d').clearRect(0,0,$('pixel-canvas').width,$('pixel-canvas').height);
  $('pixel-status').setAttribute('state','pending');$('pixel-status').textContent='선택한 사진을 불러오는 중…';
  $('pixel-source').textContent='';$('pixel-legend').replaceChildren();$('pixel-view-status').textContent='';aiPanel.hidden=false;const ticket=++serial,selectedClass=$('pixel-class').value;ready=false;keyCursor=null;keyboardPosition.hidden=true;savedPixelSummary='';pixelResult.textContent='사진을 불러오는 중';resetCandidatePreview();$('pixel-candidate-status').textContent='';stroke=null;draft=[];polygon=[];clearSamples();brush.hidden=true;frame=workspace.frames.find(row=>row.index===Number(index));error();$('pixel-coverage').textContent='';$('pixel-decision').hidden=true;options();url();enable();if(!frame)return;
@@ -361,13 +362,23 @@ function connectAI(){
   autoDraft:workspace?.workspace_kind!=='evaluation'&&frame.status!=='excluded'&&review.status==='pending'&&unknownPixels===totalPixels&&totalPixels>0&&!review.draft_candidates?.some(row=>row.origin!=='v12_pixel_mask_candidate'),
   autoKey:`${workspace?.workspace_id||''}:${index}:${frame.source.image_sha256}:${review.classes?.sha256||''}`,
   image_sha256:frame.source.image_sha256,classes_sha256:review.classes?.sha256}:null,async(changes=null)=>{
-  const latest=await request(`/api/masks/${index}`);if(ticket!==serial)return;
-  if(latest.version!==review.version)throw new Error('검수 버전이 바뀌었습니다. 새로고침 후 확인하세요.');
+  const matching=()=>ticket===serial&&frame?.index===index;
+  if(!matching())return false;
+  const checks=changes?.some(job=>job.action==='mask_check');
+  if(checks)await loadVlm(index,ticket);
+  if(changes?.every(job=>job.action==='mask_check'))return matching();
+  const version=review?.version;
+  const clean=()=>matching()&&review?.version===version&&ready&&!busy&&!loading&&!conflicted&&!forbidden&&!stroke&&!draft.length&&!seeds.length&&!polygon.length;
+  if(!clean())return false;
+  const latest=await request(`/api/masks/${index}`);if(!clean())return false;
+  if(latest.version!==version)throw new Error('검수 버전이 바뀌었습니다. 새로고침 후 확인하세요.');
+  if(!checks)await loadVlm(index,ticket);
+  if(!clean())return false;
   review.draft_candidates=latest.draft_candidates;candidateOptions();
-  const generated=changes?.find(job=>job.action==='pixel_draft'&&job.state==='succeeded'&&job.result?.candidate_sha256);
-  if(generated&&latest.draft_candidates.some(row=>row.sha256===generated.result.candidate_sha256))$('pixel-candidates').value=generated.result.candidate_sha256;
-  if(generated||changes===null)await previewCandidate();
-  await loadVlm(index,ticket);
+  const generated=changes?.find(job=>job.action==='pixel_draft'&&job.state==='succeeded'&&job.result?.added_pixels!==0&&latest.draft_candidates.some(row=>row.sha256===job.result?.candidate_sha256));
+  if(generated)$('pixel-candidates').value=generated.result.candidate_sha256;
+  if(generated||changes===null)await previewCandidate(clean);
+  return clean();
  });
 }
 function clearReviewContext(){resetVersions();resetAI();resetHistory('현재 사진의 검수 정보를 확인할 수 없습니다.');aiPanel.hidden=true;$('pixel-ai-summary').hidden=true;$('pixel-vlm-state').textContent='';$('pixel-vlm-note').textContent='';$('pixel-vlm-details').textContent='';}

@@ -60,9 +60,14 @@ export function showAI(lane,index,request,context,results){
     },700);
   }
   async function deliverChanges(){
-    const current=context();if(ticket!==generation||pending||!changedJobs.size||!current||current.blocked)return;
-    const changes=[...changedJobs.values()];changedJobs.clear();pending=true;updateAI();
-    try{await results(changes);if(ticket===generation)message.textContent='현재 사진의 AI 결과를 확인했습니다. 라벨은 자동 저장하지 않습니다.';}
+    const current=context();if(ticket!==generation||pending||!changedJobs.size||!current)return;
+    const changes=[...changedJobs.values()].filter(job=>job.action==='mask_check'||!current.blocked);
+    if(!changes.length)return;
+    for(const job of changes)changedJobs.delete(job.id);pending=true;updateAI();
+    try{const applied=await results(changes);if(ticket===generation){
+      if(applied===false){for(const job of changes)if(job.action!=='mask_check'&&!changedJobs.has(job.id))changedJobs.set(job.id,job);}
+      else message.textContent='현재 사진의 AI 결과를 확인했습니다. 라벨은 자동 저장하지 않습니다.';
+    }}
     catch(error){if(ticket===generation)message.textContent=error.message;}
     finally{if(ticket===generation){pending=false;updateAI();}}
   }
