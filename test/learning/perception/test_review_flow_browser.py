@@ -1089,8 +1089,10 @@ def test_object_decision_and_preparation_result_are_visible(browser_workspace, w
     page.locator('.review-tool-nav a[href="#object-review"]').click()
     assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
     if width <= 390:
-        navigation = page.locator('.frame-navigation').bounding_box()
-        buttons = [page.locator(f'#{name}').bounding_box() for name in ('prev-frame', 'next-frame', 'next-pending')]
+        expect(page.locator('#add')).to_be_visible()
+        expect(page.locator('#add')).to_be_enabled()
+        layout = page.locator('.frame-navigation').evaluate("nav => ({navigation:nav.getBoundingClientRect().toJSON(),buttons:['prev-frame','next-frame','next-pending'].map(id=>document.getElementById(id).getBoundingClientRect().toJSON())})")
+        navigation, buttons = layout['navigation'], layout['buttons']
         assert abs(buttons[0]['y'] - buttons[1]['y']) <= 1
         assert buttons[0]['x'] + buttons[0]['width'] <= buttons[1]['x']
         assert abs(buttons[2]['width'] - navigation['width']) <= 1
