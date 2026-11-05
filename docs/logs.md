@@ -14236,6 +14236,21 @@ osy-d395-s1d\`.
 - gate 변화: 주석 표기 정정 뒤 secret closure와 최종 metadata SHA 원격 검증, 공식 AUTO/FULL, main 착지는 아직 미실행이다. 현재 전체 통과로 판정하지 않는다.
 - CE: 해당 없음 — 실제 코드·회귀 시험·고정 provenance로 판단과 재발 방지를 재구성할 수 있다.
 
+## 2026-11-05 · uncommitted · test(games): 복구 시 진행 중인 overlay route handler를 기다린다
+
+- 변경: 오류 모의 해제6곳에 `unroute_all(behavior="wait")`를 사용했다. 해당 시점에는 overlay 모의만 있으며 점수·연결·복구·레이아웃·정지 표시와 오류 단언을 유지한다. 오류를 삼키거나 실패 baseline을 바꾸지 않았다.
+- 증거: 원래 FULL chunk1 failed/158 passed의 오류는 `Route.fulfill: Route is already handled!`였다. 같은 case의 단독1 passed는 LOAD-FLAKY이며 FULL 통과가 아니다. 수정 commitd21cd5e7a1의 원격 opt-in 파일전체61 passed/0 skipped/163.27초, exit0/NEW0 및 독립 리뷰를 확인했다. 최종 수정 소스의 정본 FULL은 별도다.
+- gate 변화: 없음. 브라우저 시험 fixture 보완은 모델 품질·실물 수용을 대체하지 않는다.
+- CE: [route 해제와 실행 중 handler의 경합](solutions/test-failures/playwright-overlay-route-removal-needs-handler-drain-2026-11-05.md). 환경이 다른 두 실행으로 부하 재발률을 주장하지 않는다.
+
+## 2026-11-05 · uncommitted · test(curation): FIFO 자식 FD 기준값 전에 상속된 미수거 자원을 정리
+
+- 변경: FIFO 격리 자식에서 descriptor 기준값 직전 `gc.collect()`를 한 번 호출한다. importer 이후에는 수거하지 않으며 `fd_delta == 0`, 부모 FD 수·snapshot 동일, 5초 watchdog과 자식 회수 단언을 유지한다. 생산 importer와 실패·격리 baseline은 변경하지 않았다.
+- 근거: 원래 FULL의 fifo-image는 거부와 부모 보존 단언은 통과했으나 child FD delta=-5로 실패했고 단독 재실행은 LOAD-FLAKY였다. 원본 FD의 생산자는 미확정이다. `ReviewStore.connect()`는 이미 finally로 닫히므로 SQLite 누수로 단정하지 않는다.
+- 검증: commit a02c3ed1d5의 신규 control은 상속된 cyclic FD 5개를 수거할 때 정상 -5/의도적 누수 -4/살아 있는 FD 닫힘 -6으로 RED 3 failed/NEW 3이다. 수정 commit f3dbbef6e6은 정상 0/누수 +1/닫힘 -1을 구분하고 파일 전체 원격 42 passed/0 skipped, exit 0/NEW 0이다. fork 경고 5건을 보존했다. 고정 SHA·명령·runner·비교 출력·해시는 작업공간 후속 수용 evidence의 fifo-descriptors/20261105T072116Z에 결속했고 독립 리뷰가 확인했다. 최종 FULL은 별도다.
+- gate 변화: 없음. fixture의 측정 경계 수정은 실제 자료 품질·모델·장치 수용을 뜻하지 않는다.
+- CE: 해당 없음 — 원인 조건과 보호 범위가 코드 주석·정상/누수/닫힘 세 회귀 control에 직접 남고, 기존 [간헐 실패 귀속 교훈](solutions/workflow-issues/attribute-intermittent-failure-by-line-then-interleaved-comparison.md)을 적용했다.
+
 ## 2026-11-05 · uncommitted · 화면 지도 UI·UX 최종 후보 근거 결속
 - 변경: validation/uiux-surfaces-2026-11-05에30카드·실제 상태/뷰포트 계약·G3·원본1656 PNG 해시·Robot60셀·구현 판단15개를 보존했다. 이전 실패 이력과 최종 통과를 구분한다.
 - 증거: 제품42c97133c1에서 관련440개·홈25개·공통 G1241개가 각각0 skip/NEW0. 최종 독립 Learning G3는12표면·여덟 항 PASS,439개 파일 해시 불일치0. R3/R4/R6/R8은 각 독립 task review와 실제 상태 캡처로 결속했다. 이후 시험 query 보완36개 통과,6478fe9b27까지 제품 동일.
