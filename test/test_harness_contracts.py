@@ -294,6 +294,20 @@ def test_concurrent_account_logs_reject_unpinned_duplicates(blocks):
     assert any("duplicate" in e for e in harness.validate_log("\n\n".join(blocks)))
 
 
+@pytest.mark.parametrize("indices", [(0,), (1,), (0, 1)], ids=["first", "second", "both"])
+def test_concurrent_account_logs_reject_body_leading_bom(indices):
+    blocks = ACCOUNT_BLOCKS.copy()
+    for index in indices:
+        blocks[index] = blocks[index].replace("\n", "\n\ufeff\n", 1)
+    errors = harness.validate_log("\n\n".join(blocks))
+    assert any("duplicate" in e for e in errors), errors
+    assert not any("missing" in e for e in errors), errors
+
+
+def test_concurrent_account_logs_accept_document_leading_bom():
+    assert harness.validate_log("\ufeff" + ACCOUNT_LOGS) == []
+
+
 @pytest.mark.parametrize("index", [0, 1])
 def test_concurrent_account_logs_still_validate_fields_and_preservation(index):
     blocks = ACCOUNT_BLOCKS.copy()
