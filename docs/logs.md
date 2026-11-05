@@ -14195,6 +14195,13 @@ osy-d395-s1d\`.
 - gate 변화: 주석 표기 정정 뒤 secret closure와 최종 metadata SHA 원격 검증, 공식 AUTO/FULL, main 착지는 아직 미실행이다. 현재 전체 통과로 판정하지 않는다.
 - CE: 해당 없음 — 실제 코드·회귀 시험·고정 provenance로 판단과 재발 방지를 재구성할 수 있다.
 
+## 2026-11-05 · uncommitted · test(games): 복구 시 진행 중인 overlay route handler를 기다린다
+
+- 변경: 오류 모의 해제6곳에 `unroute_all(behavior="wait")`를 사용했다. 해당 시점에는 overlay 모의만 있으며 점수·연결·복구·레이아웃·정지 표시와 오류 단언을 유지한다. 오류를 삼키거나 실패 baseline을 바꾸지 않았다.
+- 증거: 원래 FULL chunk1 failed/158 passed의 오류는 `Route.fulfill: Route is already handled!`였다. 같은 case의 단독1 passed는 LOAD-FLAKY이며 FULL 통과가 아니다. 수정 commitd21cd5e7a1의 원격 opt-in 파일전체61 passed/0 skipped/163.27초, exit0/NEW0 및 독립 리뷰를 확인했다. 최종 수정 소스의 정본 FULL은 별도다.
+- gate 변화: 없음. 브라우저 시험 fixture 보완은 모델 품질·실물 수용을 대체하지 않는다.
+- CE: [route 해제와 실행 중 handler의 경합](solutions/test-failures/playwright-overlay-route-removal-needs-handler-drain-2026-11-05.md). 환경이 다른 두 실행으로 부하 재발률을 주장하지 않는다.
+
 ## 2026-11-05 · uncommitted · test(curation): FIFO 자식 FD 기준값 전에 상속된 미수거 자원을 정리
 
 - 변경: FIFO 격리 자식에서 descriptor 기준값 직전 `gc.collect()`를 한 번 호출한다. importer 이후에는 수거하지 않으며 `fd_delta == 0`, 부모 FD 수·snapshot 동일, 5초 watchdog과 자식 회수 단언을 유지한다. 생산 importer와 실패·격리 baseline은 변경하지 않았다.
