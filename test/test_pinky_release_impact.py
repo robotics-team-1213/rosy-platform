@@ -199,3 +199,11 @@ def test_new_tool_and_host_paths_remain_review_even_beside_known_scopes():
         assert classify_paths([path]).impact == "review", path
         assert classify_paths([path, ".gitattributes",
                                "middleware/core/gateway/core/api.py"]).impact == "review", path
+
+
+def test_operator_calibration_probe_is_exact_host_scope_not_a_pinky_prefix():
+    # Push/ship execute the guard on the PC; its helper is a read-only SSH stdin
+    # probe, not a persistent image/payload install destination.
+    for name in ("calibration_tls_read.py", "rosy-calibration-guard.ps1"):
+        assert classify_paths([f"deploy/robot/pinky_pro/{name}"]).impact == "none", name
+    assert classify_paths(["deploy/robot/pinky_pro/unreviewed-guard.ps1"]).impact == "review"
