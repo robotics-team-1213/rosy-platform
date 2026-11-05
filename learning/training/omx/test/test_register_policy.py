@@ -38,6 +38,19 @@ def test_offline_cycle_becomes_an_l0_proposal_bound_to_its_receipt(tmp_path):
     assert 'eval MAE 0.12' in body['note']
 
 
+def test_smolvla_l0_proposal_names_the_actual_policy_type_without_execution(tmp_path):
+    body = register.proposal(_cycle(tmp_path, policy_type='smolvla', policy_revision='smolvla-0123456789abcdef'))
+    assert body['to_stage'] == 'L0'
+    assert body['policy_revision'] == 'smolvla-0123456789abcdef'
+    assert body['note'].startswith('SmolVLA offline cycle')
+
+
+@pytest.mark.parametrize('policy_type', ['unknown', 'smolvla'])
+def test_declared_model_type_cannot_disagree_with_revision(tmp_path, policy_type):
+    with pytest.raises(ValueError, match='policy'):
+        register.proposal(_cycle(tmp_path, policy_type=policy_type))
+
+
 @pytest.mark.parametrize('override', [
     {'offline_only': False}, {'device_execution': True}, {'promotion': True},
     {'policy_revision': None}, {'rig_revision': 'bad rig'}, {'calibration_revision': ''}])
