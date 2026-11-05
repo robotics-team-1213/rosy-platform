@@ -467,7 +467,9 @@ def page_site(tmp_path, request):
                                         width: e.getBoundingClientRect().width};
                                 })});
                         }
-                        document.addEventListener('click', e => trace('click', e.target.id), true);
+                        for (const type of ['pointerdown', 'pointerup', 'click'])
+                            document.addEventListener(type, e => trace(type,
+                                e.composedPath().map(n => n.id || n.tagName).filter(Boolean).join('/')), true);
                         document.addEventListener('keydown', e => {
                             if (e.key === 'Escape') trace('escape', e.target.id);
                         }, true);
@@ -482,7 +484,7 @@ def page_site(tmp_path, request):
                     yield page, store, robot
                 finally:
                     if os.environ.get('ROSY_TOKEN_TRACE') == '1':
-                        print('TOKEN_TRACE', json.dumps(page.evaluate('window.tokenTrace')))
+                        print('TOKEN_TRACE', request.node.nodeid, json.dumps(page.evaluate('window.tokenTrace')))
             finally:
                 browser.close()
     finally:
