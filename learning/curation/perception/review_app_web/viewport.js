@@ -28,7 +28,8 @@ export function reviewViewport(stage, canvas, viewBar, canChange=()=>true) {
   function size(){
     const style=getComputedStyle(stage);
     const padding=parseFloat(style.paddingLeft)+parseFloat(style.paddingRight);
-    const base=Math.min(768,Math.max(1,stage.clientWidth-padding));
+    const fitHeight=parseFloat(style.maxHeight)-parseFloat(style.paddingTop)-parseFloat(style.paddingBottom)-parseFloat(style.borderTopWidth)-parseFloat(style.borderBottomWidth);
+    const base=Math.min(768,Math.max(1,stage.clientWidth-padding),Number.isFinite(fitHeight)?Math.max(1,fitHeight)*canvas.width/canvas.height:Infinity);
     const oldWidth=canvas.getBoundingClientRect().width||base;
     const centerX=(stage.scrollLeft+stage.clientWidth/2)/oldWidth;
     const centerY=(stage.scrollTop+stage.clientHeight/2)/(canvas.getBoundingClientRect().height||1);

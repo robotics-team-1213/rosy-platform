@@ -14,7 +14,7 @@ def test_review_photo_and_result_are_in_first_view(browser_workspace):
     page, store, expect = browser_workspace
     review_masks.bind_classes(store, CLASSES)
     base = page.url.split('?')[0].rstrip('/')
-    for width, height in [(1280, 720), (390, 800)]:
+    for width, height in [(1280, 720), (1440, 900), (390, 800), (390, 844)]:
         page.set_viewport_size({'width': width, 'height': height})
         for route, canvas, result in [('/', '#canvas', '#object-result'),
                                       ('/pixels', '#pixel-canvas', '#pixel-result')]:
@@ -23,10 +23,19 @@ def test_review_photo_and_result_are_in_first_view(browser_workspace):
             assert box and box['y'] <= height * .4, (route, width, height, box)
             assert min(box['y'] + box['height'], height) - box['y'] >= box['height'] / 3
             if route == '/pixels':
+                expect(page.locator('.pixel-photo-surface .review-view-bar')).to_be_visible()
+                assert not page.locator('#pixel-review-info').evaluate('node => node.open')
+                assert not page.locator('#pixel-whole-frame-tools').evaluate('node => node.open')
+                assert page.locator('#pixel-photo-list #pixel-page-controls').count() == 1
                 for panel in ['#pixel-view-status', '#review-ai-jobs', '.pixel-vlm-feedback']:
                     bounds = page.locator(panel).bounding_box()
                     assert bounds and bounds['y'] >= box['y'] + box['height'], (panel, bounds, box)
             expect(page.locator(result)).to_contain_text('저장')
+            if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+                from pathlib import Path
+                target = Path(output) / f'review-hierarchy-{route.strip("/") or "objects"}-{width}x{height}.png'
+                target.parent.mkdir(parents=True, exist_ok=True)
+                page.screenshot(path=str(target), full_page=True)
             assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
             if width == 390:
                 actions = ['#prev-frame', '#next-frame', '#next-pending'] if route == '/' else ['#pixel-prev', '#pixel-next', '#pixel-undo']

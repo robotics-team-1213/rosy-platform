@@ -5181,6 +5181,12 @@ current authorization still controls delivery and access. A revoked recipient's 
 intent may be SUPERSEDED while result evidence remains in the existing Fleet database.
 
 
+### D-973 관리자 클래스 개정
+
+`GET /api/classes?kind=object|pixel`은 현재 서버에 결합된 작업공간의 바인딩, 전체 바인딩 문서 해시 `expected_sha`, 현재 승인 수 `approved_count`와 CSRF 토큰을 반환한다. 협업 모드는 현재 프로젝트의 `manage` 권한이 필요하다.
+
+`POST /api/classes/revisions`는 정확히 `kind`, `classes`, `expected_sha`, `expected_impact`, `confirm:true`를 받는다. 기존 CSRF·Origin 검사와 `manage` 권한을 적용한다. `classes`는 기존 순서·번호·정본 이름·역할·의미를 보존한 전체 목록이며 표시 이름·색상 수정과 미사용 번호 추가만 허용한다. `expected_impact`는 실제 검수 대기로 돌릴 승인 수이며 표시 정보만 바꿀 때는 0이다. 바인딩 해시 또는 영향 수 불일치는 409, 잘못된 필드·식별자 변경은 400, 권한·CSRF 실패는 403이다. 폴더·프로젝트·파일 경로를 입력받지 않으며 모든 폴더가 현재 작업공간 클래스셋을 함께 사용한다. 승인 이력·라벨 바이트와 제외 상태를 보존한다. [D-973](../adr/D-973-explicit-managed-review-class-revisions.md)을 따른다.
+
 ### D-755 검수 앱 협업 HTTP 경계
 
 검수 앱의 선택적 `--collaboration`은 모델 PC의 HTTPS 프록시 뒤 loopback HTTP에 적용한다. CORE `/api/v1`, Fleet 역할, ROS와 장치 실행 프로토콜을 추가하거나 변경하지 않는다. 사용자·프로젝트 membership, 개인별 HF 연결, 자료 가져오기 경로와 요청 필드는 [검수 앱 공동 계정 설명](../../learning/curation/perception/docs/review-app.md#공동-계정과-hugging-face-가져오기-d-755)을 따른다.

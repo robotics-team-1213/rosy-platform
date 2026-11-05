@@ -9,6 +9,7 @@ D-153 회차2 — 게임 호스트 G2 캡처 수단. CORE `/dashboard` 자산을
 from __future__ import annotations
 
 import sys
+import os
 from pathlib import Path
 
 import pytest
@@ -215,7 +216,10 @@ def test_match_board_renders_published_play_state():
             assert "필수 마커·공 관측 미완료" in page.locator("#stair1").inner_text()
             assert page.locator("#markers li.on").count() == 4
             assert not errors, f"페이지 오류: {errors}"
-            save_temp_screenshot(page, "games_board_play.png")
+            # The shared helper prefixes TEMP unless the output name is absolute.
+            shot = (Path(os.environ.get('ROSY_SHOT_DIR') or os.environ.get('TEMP', '/tmp')) / 'games_board_play.png').resolve()
+            shot.parent.mkdir(parents=True, exist_ok=True)
+            save_temp_screenshot(page, str(shot))
             browser.close()
     finally:
         server.close()
@@ -263,7 +267,9 @@ def test_match_board_names_server_judged_delay():
             assert "마지막 생성 3.0초 전" in announcement.inner_text()
             assert page.evaluate("window.__announcementChanges") == []
             assert not errors
-            save_temp_screenshot(page, "games_board_delayed.png")
+            shot = (Path(os.environ.get('ROSY_SHOT_DIR') or os.environ.get('TEMP', '/tmp')) / 'games_board_delayed.png').resolve()
+            shot.parent.mkdir(parents=True, exist_ok=True)
+            save_temp_screenshot(page, str(shot))
             browser.close()
     finally:
         server.close()
@@ -332,7 +338,7 @@ def test_first_overlay_failure_has_no_last_match_claim():
                 "document.documentElement.scrollHeight <= innerHeight"
             )
             save_temp_screenshot(page, "games_board_first_error.png")
-            page.unroute("**/overlay.json")
+            page.unroute_all(behavior="wait")
             board.publish(_play_payload(), jpeg=None)
             page.wait_for_function("() => document.getElementById('phase')?.dataset.phase === 'play'")
             assert page.locator("#connection").inner_text() == "호스트 연결됨"
@@ -874,7 +880,7 @@ def test_overlay_failure_marks_last_received_match_as_stale():
             assert page.evaluate("document.documentElement.scrollHeight <= innerHeight")
             assert "마지막 수신 값" in page.locator("#match-announcement").inner_text()
             save_temp_screenshot(page, "games_board_host_disconnected.png")
-            page.unroute("**/overlay.json")
+            page.unroute_all(behavior="wait")
             board.publish(_play_payload(), jpeg=None)
             page.wait_for_function("() => document.getElementById('connection')?.dataset.evidence === 'fresh'")
             assert page.locator("#field-evidence").is_hidden()
@@ -928,7 +934,7 @@ def test_compact_board_recovery_keeps_equal_panels_and_stop_visible(width, heigh
                 save_temp_screenshot(page, f"games_board_{state}_{width}x{height}.png")
 
             check_layout("first_error")
-            page.unroute("**/overlay.json")
+            page.unroute_all(behavior="wait")
             board.publish(_play_payload(), jpeg=None)
             page.wait_for_function("() => document.querySelector('#phase')?.dataset.phase === 'play'")
             page.route("**/overlay.json", lambda route: route.fulfill(status=503))
@@ -936,7 +942,7 @@ def test_compact_board_recovery_keeps_equal_panels_and_stop_visible(width, heigh
             assert "현재 위치 아님" in page.locator("#field-evidence").inner_text()
             assert page.locator(".score").get_attribute("aria-label") == "마지막 수신 점수"
             check_layout("lost_after_live")
-            page.unroute("**/overlay.json")
+            page.unroute_all(behavior="wait")
             board.publish(_play_payload(), jpeg=None)
             page.wait_for_function("() => document.querySelector('#connection')?.dataset.evidence === 'fresh'")
             assert page.locator("#connection").inner_text() == "호스트 연결됨"
@@ -1153,7 +1159,7 @@ def test_board_evidence_matrix_on_declared_widths(width, height):
             page.wait_for_function("() => document.querySelector('#connection')?.dataset.evidence === 'disconnected'")
             assert page.locator("#home-score").inner_text() == "—"
             capture("first_error")
-            page.unroute("**/overlay.json")
+            page.unroute_all(behavior="wait")
             board.publish(_play_payload(), jpeg=None)
             page.wait_for_function("() => document.querySelector('#connection')?.dataset.evidence === 'fresh'")
             capture("fresh")
@@ -1164,7 +1170,7 @@ def test_board_evidence_matrix_on_declared_widths(width, height):
             page.route("**/overlay.json", lambda route: route.fulfill(status=503))
             page.wait_for_function("() => document.querySelector('#connection')?.dataset.evidence === 'disconnected'")
             capture("disconnected")
-            page.unroute("**/overlay.json")
+            page.unroute_all(behavior="wait")
             legacy = board.snapshot()[0]
             for key in ("generated_at", "age_s", "stale_after_s", "evidence"):
                 legacy.pop(key, None)

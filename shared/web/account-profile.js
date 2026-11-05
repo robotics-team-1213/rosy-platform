@@ -1,5 +1,5 @@
 // Display-only account context. Authorization remains with the receiving service.
-const ROLE = {operator: "운영자", viewer: "보기 전용", "policy-admin": "정책 관리자"};
+const ROLE = {operator: "운영자", viewer: "보기 전용", "policy-admin": "관리자"};
 export const roleLabel = role => ROLE[role] || "권한 없음";
 
 export function profileView(session) {

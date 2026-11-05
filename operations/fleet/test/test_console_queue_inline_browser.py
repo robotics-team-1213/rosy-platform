@@ -198,7 +198,7 @@ def test_records_area_raises_incidents_into_the_body_and_the_judgment_to_the_sid
                 body, right = panel.bounding_box(), side.bounding_box()
                 assert body["x"] + body["width"] <= right["x"], (body, right)
             first = rows.first
-            first.locator(":scope > details > summary").click()
+            first.locator(":scope > details > summary").press("Enter" if size[0] < 1024 else "Space")
             expect(first).to_contain_text("해소 확인")
             expect(side).to_contain_text("담당 인수: 아직 없음")
             expect(side).to_contain_text("사람 검토: 아직 없음")
@@ -231,6 +231,13 @@ def test_records_area_raises_incidents_into_the_body_and_the_judgment_to_the_sid
                 document.getElementById('incident-refresh').dispatchEvent(new Event('click')); }""")
             page.wait_for_function("""() => document.querySelector('#incident-judgment > div') !== window.oldSeat
                 && document.activeElement.matches('#incident-judgment > [data-report-key="rosy_01|closed-new"] select')""")
+            # Restoring an open fold during refresh must not pull a reader back down to its form.
+            page.evaluate("""() => { document.activeElement.blur(); window.scrollTo(0, 0);
+                window.oldSeat = document.querySelector('#incident-judgment > div');
+                document.getElementById('incident-refresh').dispatchEvent(new Event('click')); }""")
+            page.wait_for_function("() => document.querySelector('#incident-judgment > div') !== window.oldSeat")
+            page.clock.run_for(100)
+            assert page.evaluate('window.scrollY') == 0
             side.locator("select").select_option("obstacle")
             side.locator("input").fill("현장 상자 확인")
             side.locator("ui-button[type=submit]").click()
@@ -391,7 +398,7 @@ def test_context_tabs_keep_map_and_current_intervention_available(site, theme):
     with sync_playwright() as playwright:
         browser, page, errors = _open(playwright, site, API, [])
         page.evaluate("theme => document.documentElement.dataset.theme = theme", theme)
-        for width, height in [(1920, 1080), (1366, 768), (390, 844), (320, 568)]:
+        for width, height in [(1920, 1080), (1366, 768), (900, 900), (390, 844), (320, 568)]:
             page.set_viewport_size({"width": width, "height": height})
             page.clock.run_for(1100)
             status = page.get_by_role("tab", name="로봇·작업")
@@ -430,6 +437,9 @@ def test_context_tabs_keep_map_and_current_intervention_available(site, theme):
                 assert left["width"] / right["width"] == pytest.approx(2, abs=0.05)
                 assert page.locator("#roster-heading").evaluate("node => getComputedStyle(node).fontSize") == "16px"
                 assert page.locator("#map-heading").evaluate("node => getComputedStyle(node).fontSize") == "20px"
+            else:
+                assert page.locator("#fleet-main").evaluate(
+                    "node => getComputedStyle(node).gridTemplateColumns.split(' ').length") == 1
         assert not errors
         browser.close()
 

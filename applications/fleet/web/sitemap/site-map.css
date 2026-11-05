@@ -20,6 +20,17 @@ a:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outl
 
 .map-viewport { min-width: 0; max-width: 100%; }
 .map-viewport:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
+/* 선택 검사 칸 — 지도 옆 360px. 좁은 화면에서는 지도 아래에 쌓인다. */
+.map-board { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
+.map-inspector { container-type: inline-size; display: grid; gap: var(--space-3); align-content: start; min-width: 0; }
+.map-inspector .form { grid-template-columns: 1fr; }  /* 360px 칸 안에서는 한 줄 */
+.map-inspector .draft-actions { grid-template-columns: minmax(0, 1fr); }
+/* 검사 칸은 지도 칸이 800px보다 넓어 라벨 최소 글자(≥12px)와 모서리 찍기 여백 계약을 지키는 폭부터 옆에 둔다(≈95rem). */
+@media (width >= 95rem) {
+  .map-board { grid-template-columns: minmax(0, 1fr) 360px; align-items: start; }
+  .map-viewport { overflow-x: auto; }
+  #site-map-svg { min-width: 50rem; }
+}
 .map-scroll-hint { display: none; }
 #site-map-svg { width: 100%; height: 30rem; background: var(--surface-flat); border: 1px solid var(--border-default); border-radius: var(--radius-control); }
 #site-map-svg.picking { cursor: crosshair; }

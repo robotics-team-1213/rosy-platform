@@ -99,7 +99,7 @@ export function createCellObservation({request, root, credential = () => ''}) {
         historyList.className = 'cell-fault-history'; history.append(historySummary, historyList);
         const incidents = element('details'), incidentsSummary = element('summary'), incidentsList = element('ol');
         incidentsSummary.className = 'ui-disclosure-row'; incidentsSummary.textContent = '팔 사건 없음';
-        incidentsList.className = 'cell-fault-history'; incidents.append(incidentsSummary, incidentsList);
+        incidentsList.className = 'cell-incident-history'; incidents.append(incidentsSummary, incidentsList);
         const entry = {status, values, expires: 0, health: createMotorHealthState(), healthDetails, healthSummary, healthView,
           history, historySummary, historyList, faults: '', incidents, incidentsSummary, incidentsList, incidentKey: ''};
         healthDetails.addEventListener('toggle', () => paintHealth(entry));

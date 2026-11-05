@@ -538,17 +538,18 @@ D-741(Accepted)이 정한, 모든 웹 표면이 같이 쓸 자리다. Rosy Fleet
 - **`.ui-readback`**: 쓰기 뒤 되읽기 결과 묶음.
 
 ### 조합 어휘
-표면마다 다른 이름으로 다시 만들던 묶음을 한 이름으로 부른다. 새 부품이나 화면별 사본을 만들기 전에 이 표를 먼저 본다. 표에 없는 묶음이 두 표면에 필요해지면 구현을 옮긴 뒤 이 표에 한 줄을 더한다. 이름은 `test_content_vocabulary.py`가 지킨다. 화면 머리 두 줄(절차 단계·수치 띠)의 "지금 쓰는 곳"은 HTML 경로이고, 같은 시험이 실제로 그 부품을 쓰는 페이지와 대조한다. 값은 서버 응답만 보이고 노선·띠 모듈은 쓰기 요청을 보내지 않는다([D-978](docs/adr/D-978-screen-heads-show-server-answers-and-one-composition-table.md)).
+표면마다 다른 이름으로 다시 만들던 묶음을 한 이름으로 부른다. 새 부품이나 화면별 사본을 만들기 전에 이 표를 먼저 본다. 표에 없는 묶음이 두 표면에 필요해지면 구현을 옮긴 뒤 이 표에 한 줄을 더한다. 이름은 `test_content_vocabulary.py`가 지킨다. 화면 머리 두 줄(절차 단계·수치 띠)과 세 칸 틀 줄의 "지금 쓰는 곳"은 HTML 경로이고, 같은 시험이 실제로 그 부품을 쓰는 페이지와 대조한다. 값은 서버 응답만 보이고 노선·띠 모듈은 쓰기 요청을 보내지 않는다([D-978](docs/adr/D-978-screen-heads-show-server-answers-and-one-composition-table.md)).
 
 | 개념 | 정본 이름 | 지금 쓰는 곳 |
 | --- | --- | --- |
 | 측정 행(이름–값) | `.ui-readout` · `.ui-readback` | 로봇 카드, Fleet 상세, 견본 |
 | 작업 목록 행 | `.ui-task-row` · `taskRow()` | 로봇 작업, Fleet 작업 선택 |
 | 절차 단계 | `.ui-stage-track` · `.ui-stage` | `applications/fleet/web/installation/install.html` · `applications/fleet/web/cell/cell.html` · `middleware/robot_ui/robot/styleguide.html` |
-| 화면 머리 수치 띠 | `.ui-readout[data-form="strip"]` | `applications/fleet/web/work/policy.html` · `applications/fleet/web/cell/cell.html` · `middleware/robot_ui/robot/styleguide.html` |
+| 화면 머리 수치 띠 | `.ui-readout[data-form="strip"]` | `applications/fleet/web/work/policy.html` · `applications/fleet/web/cell/cell.html` · `middleware/robot_ui/robot/styleguide.html` · `middleware/robot_ui/robot/panels/host/system.js` |
 | 증거 블록 | `<ui-evidence>` · `<ui-empty>` | 로봇 카드, Fleet 큐 |
 | 절차 작업 열 | `.ui-sidebar` | 설치·정비, Fleet 작업 선택 |
 | 매체 칸 | `.ui-pane[data-pane]` | 로봇 셸, 감지·카메라 |
+| 세 칸 틀 | `.ui-stage-grid` | `applications/fleet/web/index.html` · `middleware/robot_ui/robot/styleguide.html` · `shared/web/template.html` |
 
 ### 상단바 — `<ui-topbar>` (D-466)
 - 자리는 셋이다. `brand`(장미색 워드마크 + 조용한 부제), `cluster`(화면 전환·상태·조용한 도구), `estop`(오른쪽 끝 비상 정지). cluster 안의 순서는 표면이 정하고, 바깥 자리는 더 만들지 않는다.
@@ -595,6 +596,22 @@ D-741(Accepted)이 정한, 모든 웹 표면이 같이 쓸 자리다. Rosy Fleet
 - **증거가 있는 값은 증거와 함께 말한다.** 지연은 `지연 · N초 전`, 끊김은 `연결 끊김`, 모름은 `정보 없음`이고 `data-evidence`를 단다. 카드에 홀로 붙는 알약은 무엇의 증거인지 말한다(`릴레이 끊김`).
 - **한 원인은 한 번 말한다.** 같은 원인이 여러 버튼을 막으면 원인과 다음 할 일은 묶음 상태 한 줄에 두고, 버튼 사유는 짧은 `위 사유`로 `aria-describedby`가 그 줄을 가리킨다.
 - **빈 목록·읽기 실패는 `ui-empty`다.** 목록 밖 한 줄로 두고(목록은 숨김), 지도 같은 무대에서는 무대 위에 얹고 다시 시도를 곁에 둔다.
+
+## 픽셀 검수 화면 (Operate)
+
+`learning/curation/perception/review_app_web/pixels.html`을 바꿀 때는 사진 확인 → 필요한 영역 표시 → 완료의 순서로 배치한다. 이 절이 픽셀 검수 화면 배치의 정본이다.
+
+- 사진 바로 위 한 줄에 이전 사진·현재 사진 순번과 제목·다음 사진을 둔다. 순번은 현재 자료 범위와 필터에서의 순서이며, 저장된 사진 ID와 URL은 바꾸지 않는다. 60장 단위 이전·범위·다음은 별도 「사진 목록」 안에서 썸네일과 함께 둔다.
+- 64rem 이상에서는 왼쪽 약 13rem 편집 도구·가운데 사진·오른쪽 약 18rem 완료/AI 영역의 세 열을 쓴다. 상단에는 압축된 작업 범위와 사진 이동만 두며, 도구 전체를 사진 위에 펼치지 않는다. 1440×900·2048×1080 첫 화면에서 사진 위쪽은 260px 이내, 표시 높이는 400px 이상이어야 한다. 태블릿은 편집 도구와 사진을 나란히 두고 결정 영역을 아래로 옮긴다.
+- 왼쪽은 점·브러시·영역, 선택 클래스, 적용·취소·되돌리기, 세부 허용치 순서로 묶는다. 사진 보기·확대·마스크 표시 설정은 사진 곁에 둔다. 오른쪽은 완료를 먼저 보여주고, 별도 채우기와 AI 후보 비교·보완을 이어 둔다. AI 후보 보기·적용은 찾을 수 있는 이름으로 드러내고 긴 기준·원본 정보·과거 이력은 접는다.
+- 사진 아래에는 미검수 수와 보기 설정을 먼저 둔다. 저장 결과·클래스 집계는 「검수 정보와 클래스 집계」, 기존 라벨까지 바꾸는 전체 채우기는 별도 이름의 접힘 안에 둔다. 현재 선택 클래스와 미검수만 채우는 조작은 편집·완료 영역에서 유지한다. 사진 목록은 제목·현재 범위·페이지 이동을 함께 묶고, 학습 자료 준비는 한 사진의 완료와 구분하는 별도 구획으로 둔다.
+- 객체 검수의 작업 범위 선택은 사진이 준비되면 사진 제목 줄에 두고, 불러오기·빈 자료 상태에는 작업 영역 앞에 둔다. 같은 조작을 이동하며 선택값과 이벤트를 유지한다. 작업자·검수 이력은 결정 영역에서 확인한다.
+- 40rem 미만에서는 범위·사진 이동 → 사진 → 핵심 편집 도구·선택 클래스 → 완료 순서로 읽힌다. 세부 브러시·허용치만 접을 수 있으며 사진을 전체 도구보다 먼저 보여준다. 도구는 자체 스크롤이나 잘림으로 숨기지 않는다. 확대된 사진의 이동 영역과 가로 썸네일 목록만 내부 스크롤을 허용한다. 화면 폭이 바뀌어도 포커스와 편집 상태를 유지하고, 포커스를 받은 조작은 페이지 스크롤로 보이게 한다.
+- 사람의 명시적인 「완료」 한 번이 남은 미검수의 배경 채우기·저장·전체 사진과 배경 확인 기록·승인·다음 대기 사진 열기를 이어간다. 채우기 성공의 새 버전으로만 승인을 요청한다. 채우기 실패 시 승인을 보내지 않고, 승인 실패 시 저장된 결과는 대기로 남긴다. 전체가 미검수인 사진은 중요한 영역을 먼저 표시하거나 별도 배경 채우기를 실행해야 완료할 수 있다.
+- 별도 전체 확인·배경 확인 체크박스를 만들지 않는다. 완료 버튼 설명이 확인 범위를 밝힌다. 별도 채우기 버튼과 AI 후보 완료는 승인하지 않으며, 기존 라벨 보호·되돌리기·버전 충돌·권한·기하 검사와 평가 전용 가림 확인은 유지한다.
+- 390·800·1440·2048px에서 사진 이동 묶음, 목록 페이지 이동, 도구 전체, 결정 버튼, 키보드 포커스와 가로 넘침을 실제 Chromium으로 확인한다. 자동 시험은 `test/learning/perception/test_pixel_review_browser.py`가 맡고, 화면 캡처를 함께 남긴다.
+
+배치 참고는 [CVAT의 annotation editor](https://docs.cvat.ai/docs/annotation/annotation-editor/)가 구분하는 탐색·작업 영역·도구·보조 정보의 역할이다. 해당 제품의 스타일이나 기능을 복사하지 않고 ROSY 토큰과 기존 `ui-*` 조작을 유지한다. 첫 화면의 사진 가시성과 세 열 배치는 `test/learning/perception/test_pixel_workspace_browser.py`로 확인한다.
 
 ## Do's and Don'ts
 

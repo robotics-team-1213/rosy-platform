@@ -65,13 +65,25 @@ def test_account_administration_uses_real_ledger(tmp_path, managed):
                     expect(page.get_by_label(label, exact=True)).to_be_checked()
                 for label in ['계정 관리', '관제 정책', '카메라 관리', '로봇 관리', '학습 승인', '모델 게시', '프로젝트 관리']:
                     expect(page.get_by_label(label, exact=True)).not_to_be_checked()
+                expect(page.locator("#account-role")).to_have_value("operator")
+                # Choosing a role swaps the editor to that role's bundle.
+                page.locator("#account-role").select_option("policy-admin")
+                for label in ['계정 관리', '관제 정책', '카메라 관리', '로봇 관리', '학습 승인', '모델 게시', '프로젝트 관리']:
+                    expect(page.get_by_label(label, exact=True)).to_be_checked()
+                expect(page.get_by_label('Vault 조회', exact=True)).not_to_be_checked()
+                page.locator("#account-role").select_option("viewer")
+                for label in ['관제 조회', '로봇 조회', '학습 조회']:
+                    expect(page.get_by_label(label, exact=True)).to_be_checked()
+                for label in ['관제 조작', '로봇 조작', '학습 편집', '계정 관리']:
+                    expect(page.get_by_label(label, exact=True)).not_to_be_checked()
+                page.locator("#account-role").select_option("operator")
                 for label in ['Vault 조회', 'Vault 조작', 'Vault 장부 정리']:
                     expect(page.get_by_label(label, exact=True)).not_to_be_checked()
                     page.get_by_label(label, exact=True).check()
                 page.locator("#account-save").click()
                 expect(page.locator("#account-list")).to_contain_text("bob")
                 expect(page.locator("#account-password")).to_have_value("")
-                page.get_by_role("button", name="bob · 사용 중", exact=True).click()
+                page.get_by_role("button", name="bob 편집", exact=True).click()
                 page.locator("#account-reset-password").fill("bob!")
                 page.locator("#account-reset").click()
                 expect(page.locator("#account-status")).to_contain_text("처리했습니다")
@@ -92,10 +104,16 @@ def test_account_administration_uses_real_ledger(tmp_path, managed):
                     bob_page.close()
                 page.locator("#account-reload").click()
                 expect(page.locator("#account-heading")).to_have_text("새 계정")
-                page.get_by_role("button", name="bob · 사용 중", exact=True).click()
+                page.get_by_role("button", name="bob 편집", exact=True).click()
+                # An existing account keeps its hand-tuned grants unless the admin confirms the role bundle.
+                page.locator("#account-role").select_option("viewer")
+                expect(page.locator("dialog.ui-confirm")).to_be_visible()
+                page.keyboard.press("Escape")
+                expect(page.locator("#account-role")).to_have_value("operator")
+                expect(page.get_by_label('Vault 조회', exact=True)).to_be_checked()
                 page.locator("#account-revoke").click()
                 expect(page.locator("#account-heading")).to_have_text("새 계정")
-                page.get_by_role("button", name="bob · 사용 중", exact=True).click()
+                page.get_by_role("button", name="bob 편집", exact=True).click()
                 value = next(c["value"] for c in page.context.cookies() if c["name"] == "rosy_fleet_session")
                 bob = next(row for row in sessions.list_accounts(value) if row["login"] == "bob")
                 sessions.update_account(value, bob["account_id"], revision=bob["revision"], role="operator")
@@ -104,10 +122,10 @@ def test_account_administration_uses_real_ledger(tmp_path, managed):
                 expect(page.locator("#account-status")).to_contain_text("다른 관리자가 변경했습니다")
                 page.locator("#account-reload").click()
                 expect(page.locator("#account-heading")).to_have_text("새 계정")
-                page.get_by_role("button", name="bob · 사용 중", exact=True).click()
+                page.get_by_role("button", name="bob 편집", exact=True).click()
                 page.locator("#account-enabled").uncheck()
                 page.locator("#account-save").click()
-                expect(page.locator("#account-list")).to_contain_text("bob · 정지됨")
+                expect(page.locator("#account-list tr", has_text="bob")).to_contain_text("정지됨")
                 bob = next(row for row in sessions.list_accounts(value) if row["login"] == "bob")
                 assert bob["enabled"] is False and bob["revision"] == 6
                 assert bob["grants"] == [

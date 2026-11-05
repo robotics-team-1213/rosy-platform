@@ -14164,6 +14164,13 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 로컬 수정 검증이며 공식 FULL 착지·배포는 별도다.
 - CE: 새 교훈 기록 — OS 잠금의 수명과 물리 점유가 다르며, 정상 종료만 고친 구현이 중단·재시작과 옛 reader에서 다시 위험해지는 연결 판단을 보존한다.
 
+## 2026-11-04 · uncommitted · feat(accounts): 계정 화면의 역할 선택이 권한 묶음을 채움 (D-955 화면 보완)
+- 변경: 계정 화면의 "기본 역할 표시"를 "역할"(조회자·운영자·관리자)로 바꾸고, 고르면 자원별 권한 편집기가 그 역할 묶음으로 바뀐다(`roleGrants`: 조회자=조회만, 운영자=`teamGrants`, 관리자=Vault 외 모든 capability, Vault는 은퇴라 손으로만). 새 계정은 운영자로 시작. "팀원 기본 권한으로 채우기" 단추는 운영자 선택으로 대체. 헤더의 `policy-admin` 표기를 "관리자"로.
+- 서버 변경 없음: 저장·검증은 여전히 grant만 본다(D-757·D-955 원칙 유지). 마지막 계정 관리자 보호도 그대로.
+- 증거: test_account_admin_browser에 역할 전환 검사 추가. 기존 계정에서 역할을 바꾸면 확인 후에만 권한을 교체(독립 리뷰 지적).
+- gate 변화: 없음.
+- CE: 해당 없음 — 화면 동작 추가.
+
 ## 2026-11-04 · uncommitted · test(D-762): 격리 cell 문서 미리보기 부하 결함 3회 근거
 - 변경: `test/flaky_quarantine.txt`에 `applications/fleet/test/test_sample_browser.py::test_cell_document_preview_admission_and_terminal_read` 한 줄 추가. 2026-11-04 하루 3회(sha ff82336996, 6a299d39cf, 86d7abd782) 병렬 브라우저 청크에서 실패·단독 재실행 통과(rosy-flaky-candidates.txt). 실패 내용은 5 s 안에 `#recipe-revision` 글자가 바뀌지 않는 부하 타임아웃이라 제품 결함이 아니다.
 - 증거: 세 LOAD-FLAKY 기록과 단독 통과 로그(각 `alone-pre-*.txt`). 이 id가 explicit FULL 착지를 막아 게시(D-868)도 막고 있어 격리가 D-762 증거 규칙의 정해진 해법이다.
@@ -14175,3 +14182,29 @@ osy-d395-s1d\`.
 - 증거: 모델 PC에서 타이머 enabled+active 확인, 1회 실행으로 게이트 통과·`idle`(`center_not_running`, 설계 동작) 확인. 로봇·현장 PC·OMX·AI PC 전 표면 타이머 실측은 작업 기록 `Rosy/docs/workspace-records/2026-11-04/auto-update-audit.md`.
 - gate 변화: 없음
 - CE: 해당 없음 — 운영 조치이며 함정은 D-871 개정과 작업 기록에 남겼다.
+
+## 2026-11-04 · uncommitted · docs(deployment): 후진 목표 운영자 메모
+
+- 변경: `pinky-native-mapping-recovery.md`에 2026-11-04 메모 — 후진 목표는 목표 yaw를 현재 유지로 보내야 하고 yaw+π는 rotate_to_heading 회전을 먼저 일으킨다는 geg6 실측 규칙. [nav2-reversing-goal-2026-11-04](../../validation/nav2-reversing-goal-2026-11-04/result.md)로 연결.
+- 증거: 위 검증 기록. 이번 착지는 게시용 정본 FULL 근거 생성을 겸한다(pr-pipeline 「로컬 FULL 근거와 게시 SHA」).
+- gate 변화: 없음.
+- CE: 해당 없음 — 운영 문서.
+
+## 2026-11-04 · uncommitted · fix(deploy): calibration 분리 경로를 서명 모델 코드 아카이브에 포함
+- 변경: `model_code_layout.SPLIT_CODE_PREFIXES`에 `middleware/perception/calibration/`을 추가해 필수 소스 목록과 아카이브 입력을 맞췄다.
+- 증거: 변경 전 원격 `test_committed_review_archive_starts_without_checkout_imports`가 누락된 perception·Drive 의존성으로 실패했다. 변경 커밋의 `test_model_pc_autoupdate.py`·`test_model_review_release.py` 원격 검증 결과는 작업 인계에 남긴다.
+- gate 변화: 없음
+- CE: 해당 없음 — 원인과 재발 검사는 소스 목록과 기존 실제 Git 아카이브 부팅 시험에 드러난다.
+
+## 2026-11-05 · uncommitted · fix(harness): 동시 계정 로그 두 원문의 무결성 고정
+- 변경: 로그 검증 loop·필드 상수를 `log_validation.py`로 분리했다(기존 842→811줄, 새 57줄; ratchet도 842→811, 증가·면제 없음). 알려진 계정 로그 제목의 실제 두 parsed body가 각각 고정 SHA256과 한 번씩 일치할 때만 공존을 허용하며, 필드·날짜·순서·legacy·append-only 검증은 유지한다. body 내부 BOM을 지우던 재정규화는 이미 파싱된 body의 `strip()`으로 고쳤다. 비밀 스캐너·예외·공개 provenance 설정은 바꾸지 않았다.
+- 증거: 원본 RED는 2 FAIL/11 PASS/NEW 2, 정정한 6-suite GREEN은 483 PASS/0 skip/NEW 0이며 파일명 누락 exit 5 실행은 무효다. body BOM RED와 document BOM positive를 분리했고, commit 3c8104b386620524913be376cbfc451db8897e29 전체 대상은 512 PASS/1 FAIL/0 skip/NEW 1이다(`TEMP/rosy-ui-log-body-bom-green-20261105/run-1.txt`). 남은 실패는 공개 commit·SHA256 literal의 기존 비밀 guard 분류이며, 현재 후속 변경은 지원되는 같은 줄 표기를 보충한 주석뿐이다(값·AST·줄 수 동일). 독립 검토는 body BOM 지적 해소와 실제 pins·공개 fixture·legacy·날짜·필드 보존을 확인했다. 변조·동일 원문 반복·세 번째 항목·임의 중복 거부는 회귀 시험에 남겼다. 금지된 두 amend가 발생한 중간 네 버전은 `refs/rosy-preserved/...`와 작업공간 `artifacts/worktree-backups/`의 전체 검증 bundle로 보존했으며 이후 커밋은 root가 정상 커밋으로만 진행한다.
+- gate 변화: 주석 표기 정정 뒤 secret closure와 최종 metadata SHA 원격 검증, 공식 AUTO/FULL, main 착지는 아직 미실행이다. 현재 전체 통과로 판정하지 않는다.
+- CE: 해당 없음 — 실제 코드·회귀 시험·고정 provenance로 판단과 재발 방지를 재구성할 수 있다.
+
+## 2026-11-05 · uncommitted · test(games): 복구 시 진행 중인 overlay route handler를 기다린다
+
+- 변경: 오류 모의 해제6곳에 `unroute_all(behavior="wait")`를 사용했다. 해당 시점에는 overlay 모의만 있으며 점수·연결·복구·레이아웃·정지 표시와 오류 단언을 유지한다. 오류를 삼키거나 실패 baseline을 바꾸지 않았다.
+- 증거: 원래 FULL chunk1 failed/158 passed의 오류는 `Route.fulfill: Route is already handled!`였다. 같은 case의 단독1 passed는 LOAD-FLAKY이며 FULL 통과가 아니다. 수정 commitd21cd5e7a1의 원격 opt-in 파일전체61 passed/0 skipped/163.27초, exit0/NEW0 및 독립 리뷰를 확인했다. 최종 수정 소스의 정본 FULL은 별도다.
+- gate 변화: 없음. 브라우저 시험 fixture 보완은 모델 품질·실물 수용을 대체하지 않는다.
+- CE: [route 해제와 실행 중 handler의 경합](solutions/test-failures/playwright-overlay-route-removal-needs-handler-drain-2026-11-05.md). 환경이 다른 두 실행으로 부하 재발률을 주장하지 않는다.
