@@ -210,6 +210,102 @@ def test_human_eval_publication_is_immutable_and_keeps_reviewed_unknown(tmp_path
         review_eval_bootstrap.publish(root, state, 'heldout', tmp_path)
 
 
+@pytest.mark.parametrize('mode', ['manual', 'requested_only', 'sam', 'sam_undone'])
+def test_human_eval_publication_records_applied_sam_assistance_through_edits_and_undo(tmp_path, mode):
+    import copy
+    import numpy as np
+    from test_review_masks_flood import indexed_selection
+
+    catalog, classes = _catalog(tmp_path)
+    digest = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
+    root, state = tmp_path / 'store', tmp_path / 'eval-state'
+    review_eval_bootstrap.start(root, state, catalog, classes,
+                                catalog_sha256=digest(catalog), classes_sha256=digest(classes))
+    review = ReviewStore(state)
+    mask = review_masks.update(review, 0, {'version': 1, 'action': 'fill', 'label': 0}, Conflict)
+    uses = []
+    if mode != 'manual':
+        candidate = np.full((4, 6), 255, np.uint8)
+        candidate[1:3, 1:4] = 3
+        _, selection = indexed_selection(review, candidate)
+        job = {'id': 'a' * 32, 'frame': 0, 'version': mask['version'], 'action': 'sam_points',
+               'state': 'succeeded', 'label': 3, 'points': [[1, 1]], 'actor': 'fixture-reviewer',
+               'workspace_id': review_evidence.metadata(review, 'workspace_id'),
+               'image_sha256': review.get(0)['source']['image_sha256'],
+               'mask_sha256': mask['sha256'], 'classes_sha256': review_masks.classes(review)['sha256'],
+               'model': 'sam3', 'model_digest': 'b' * 64, 'sam_checkpoint_sha256': 'b' * 64,
+               'result': {'selection_sha256': selection, 'candidate_sha256': selection, 'selected_pixels': 6}}
+        with review.connect() as db:
+            db.execute('CREATE TABLE review_ai_jobs(id TEXT PRIMARY KEY, frame INTEGER NOT NULL, document TEXT NOT NULL)')
+            db.execute('INSERT INTO review_ai_jobs VALUES (?,?,?)', (job['id'], 0, json.dumps(job)))
+        body = {'version': mask['version'], 'label': 3, 'seeds': [[1, 1]],
+                'selection_sha256': selection, 'preserve_existing': True}
+        assert review_masks.preview(review, 0, body, Conflict)[1] == 6
+        assert review_evidence.decisions(review)['frames'][0].get('sam_assistance', []) == []
+        if mode != 'requested_only':
+            mask = review_masks.update(review, 0, dict(body, action='sample'), Conflict)
+            uses = [{'selection_sha256': selection, 'job_id': job['id'], 'requested_by': job['actor'],
+                     'label': 3, 'points': [[1, 1]], 'model': 'sam3', 'model_digest': 'b' * 64,
+                     'sam_checkpoint_sha256': 'b' * 64, 'image_sha256': job['image_sha256'],
+                     'classes_sha256': job['classes_sha256'], 'applied_version': mask['version'],
+                     'applied_mask_sha256': mask['sha256']}]
+            with review.connect() as db:
+                event = db.execute("SELECT review FROM pixel_events WHERE frame=0 AND action='sample'").fetchone()
+            assert json.loads(event[0])['sam_assistance'] == uses[0]
+            brushed = review_masks.update(review, 0, {'version': mask['version'], 'action': 'paint',
+                                                      'label': 1, 'radius': 0, 'points': [[5, 3]]}, Conflict)
+            mask = review_masks.update(review, 0, {'version': brushed['version'], 'action': 'undo'}, Conflict)
+            if mode == 'sam_undone':
+                mask = review_masks.update(review, 0, {'version': mask['version'], 'action': 'undo'}, Conflict)
+    approved = review_masks.update(review, 0, {'version': mask['version'], 'action': 'approve',
+                                              'complete_frame_review': True, 'background_reviewed': True}, Conflict)
+    result = review_eval_bootstrap.publish(root, state, 'heldout', tmp_path)
+    folder = Path(result['path'])
+    manifest = json.loads((folder / 'manifest.json').read_text())
+    authority = json.loads((folder / 'authority.json').read_text())
+    assert manifest['frames'][0]['sam_assistance'] == uses
+    assert authority['frames'][0].get('sam_assistance', []) == uses
+    assert authority['frames'][0]['mask_version'] == approved['version']
+    assert authority['frames'][0]['mask_sha256'] == approved['sha256']
+    assert manifest['authority_sha256'] == authority['decision_sha256']
+    assert review_evidence.validate_authority(authority)
+    if uses:
+        invalid = copy.deepcopy(authority)
+        invalid['frames'][0]['sam_assistance'][0]['applied_version'] = approved['version'] + 1
+        invalid['decision_sha256'] = review_evidence.sha(review_evidence.encoded(
+            {key: value for key, value in invalid.items() if key != 'decision_sha256'}))
+        with pytest.raises(ValueError, match='assistance'):
+            review_evidence.validate_authority(invalid)
+
+
+def test_human_eval_companion_rejects_assistance_different_from_frozen_authority(tmp_path):
+    from review_eval_package import package_mcap_eval_companion
+    from store import content_sha
+
+    catalog, classes = _catalog(tmp_path)
+    digest = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
+    root, state = tmp_path / 'store', tmp_path / 'eval-state'
+    review_eval_bootstrap.start(root, state, catalog, classes,
+                                catalog_sha256=digest(catalog), classes_sha256=digest(classes))
+    review = ReviewStore(state)
+    painted = review_masks.update(review, 0, {'version': 1, 'action': 'fill', 'label': 0}, Conflict)
+    review_masks.update(review, 0, {'version': painted['version'], 'action': 'approve',
+                                   'complete_frame_review': True, 'background_reviewed': True}, Conflict)
+    folder = Path(review_eval_bootstrap.publish(root, state, 'heldout', tmp_path)['path'])
+    manifest = json.loads((folder / 'manifest.json').read_text())
+    manifest['frames'][0]['sam_assistance'] = [{
+        'selection_sha256': 'c' * 64, 'job_id': 'a' * 32, 'requested_by': 'fixture-reviewer',
+        'label': 0, 'points': [[1, 1]], 'model': 'sam3', 'model_digest': 'b' * 64,
+        'sam_checkpoint_sha256': 'b' * 64, 'image_sha256': review.get(0)['source']['image_sha256'],
+        'classes_sha256': review_masks.classes(review)['sha256'],
+        'applied_version': painted['version'], 'applied_mask_sha256': painted['sha256']}]
+    (folder / 'manifest.json').write_bytes(review_evidence.encoded(manifest))
+    changed = folder.parent / content_sha(folder)
+    folder.rename(changed)
+    with pytest.raises(ValueError, match='assistance'):
+        package_mcap_eval_companion(changed, tmp_path / 'companion')
+
+
 def test_human_eval_mcap_companion_reproves_source_and_never_admits(tmp_path):
     catalog, classes = _catalog(tmp_path)
     digest = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()

@@ -109,11 +109,21 @@ def launch(center, db, request_id, request, row, stamp):
     db.commit()
     env = dict(os.environ, OMP_NUM_THREADS='2', MKL_NUM_THREADS='2', OPENBLAS_NUM_THREADS='2',
                HF_HUB_OFFLINE='1', TOKENIZERS_PARALLELISM='false')
+    if row['execution_mode'] == 'public_train':
+        from experiment_public_train import public_environment
+        env = public_environment()
+    if row['execution_mode'] in ('lerobot_inspect', 'lerobot_train'):
+        from experiment_lerobot_worker import offline_environment
+        env = offline_environment(root/'output')
     child = None
     try:
         with (root / 'worker.log').open('wb') as log:
             worker = {'online_experience': 'experiment_online.py',
-                      'native_export': 'experiment_export.py'}.get(row['execution_mode'], 'experiment_train.py')
+                      'public_train': 'experiment_public_train.py',
+                      'lerobot_inspect': 'experiment_lerobot_worker.py',
+                      'lerobot_train': 'experiment_lerobot_worker.py',
+                      'native_export': 'experiment_export.py',
+                      'native_train': 'experiment_native_train.py'}.get(row['execution_mode'], 'experiment_train.py')
             child = subprocess.Popen([center.python[row['method']], str(Path(__file__).with_name(worker)),
                 '--request', str(root / 'request.json'), '--out', str(root / 'output')],
                 stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT, env=env, start_new_session=True)

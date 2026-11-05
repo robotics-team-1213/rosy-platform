@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-973 | 검수 작업공간의 명시적 관리자 클래스 개정. [전문](../adr/D-973-explicit-managed-review-class-revisions.md) | Accepted (2026-11-03, 사용자 요청; 실제 클래스 변경·재검수 수용 별도) |
 | D-977 | `device_trial`에서 승인된 ARM 이송(`arm-transfers`)을 단일 팔 하달로 잇는다 — 설계 초안(기명 현장 운영자 확인은 `operator_attested`로 구분) | 부분 Accepted(Fleet 쪽 개방), owner 목표 수락은 Proposed |
 | D-979 | 앱이 읽는 실행 프로필 신호: `GET /api/fleet/execution-profile`은 읽기 전용이고 증명되지 않으면 닫힘이다. [전문](../adr/D-979-fleet-execution-profile-read-signal.md) | Accepted (2026-11-04, 사용자 지시; 읽기 API·시험 구현, 실물 미사용) |
 | D-978 | 화면 머리(노선·수치 띠)는 서버 응답만 보이고, 화면별 적용은 「조합 어휘」 표 한 곳에서 관리한다. [전문](../adr/D-978-screen-heads-show-server-answers-and-one-composition-table.md) | Accepted (2026-11-04, 사용자 지시; 표·쓰기 금지 시험 구현) |
@@ -1467,3 +1468,9 @@ Account는 전용 계정 DB·키를 갖는 독립 프로세스가 되고 Fleet�
 **Status:** Accepted (2026-11-02, 사용자 요청). 현장 카메라 수용은 별도다.
 
 새 USB 카메라의 역할을 셸 명령 대신 Rosy Cam 승인 옆 패널에서 이름 있는 운영자가 승인한다. 레지스트리는 제어 PC의 `bind --apply`만 쓰고, Fleet은 결정만 저장하며 장치 경로는 PC 밖으로 나가지 않는다. 인증은 작업셀의 팔 관측 토큰을 재사용하고 보고와 결정 수령은 한 요청이다. 전문은 [D-963](../adr/D-963-usb-camera-role-approval-in-fleet.md).
+
+## D-973 검수 작업공간의 명시적 관리자 클래스 개정
+
+**Status:** Accepted (2026-11-03, 사용자 요청). 실제 클래스 변경·재검수 수용은 별도다.
+
+최초 바인딩 가드를 유지하고 현재 프로젝트의 관리자가 별도 개정 화면에서 표시 수정·클래스 추가를 수행한다. 기존 번호·정본 이름·역할·의미를 유지하며 전체 작업공간 범위, 바인딩 SHA, 재검수 건수를 확인한다. 의미가 확장된 종류의 승인만 이력과 라벨 바이트를 보존한 채 검수 대기로 돌리고 기존 AI 초안을 격리한다. 전문은 [D-973](../adr/D-973-explicit-managed-review-class-revisions.md).

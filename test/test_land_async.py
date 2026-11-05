@@ -536,7 +536,7 @@ def test_official_stop_ends_starting_supervisors_child_and_releases_ownership(st
         state = Path(f"/proc/{child}/stat")
         try:
             return state.is_file() and state.read_text().split()[2] == "Z"  # killed orphan awaiting OS reaping
-        except FileNotFoundError:
+        except (FileNotFoundError, ProcessLookupError):
             return True
 
     until = time.monotonic() + 5

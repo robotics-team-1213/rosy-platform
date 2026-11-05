@@ -1,5 +1,7 @@
 """Unified Learning workflow, isolated from the frozen review editor suite."""
 import json
+import os
+from pathlib import Path
 import re
 
 import pytest
@@ -14,8 +16,54 @@ import review_masks
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason='requires explicit Chromium browser run')
 
 
+@pytest.mark.parametrize('width,theme', [(1440,'dark'),(1440,'light'),(320,'dark'),(320,'light')])
+def test_home_routes_and_keyboard_section_navigation(browser_workspace,width,theme):
+    page,_,expect=browser_workspace
+    base=page.url.split('?')[0].rstrip('/')
+    page.set_viewport_size(dict(width=width,height=900))
+    page.goto(base+'/learning',wait_until='networkidle')
+    page.evaluate('(theme)=>document.documentElement.dataset.theme=theme',theme)
+    routes=page.get_by_role('navigation',name='학습 작업 선택',exact=True)
+    expect(routes.get_by_role('link',name='시연 학습 과제 열기')).to_have_attribute('href','/learning/tasks')
+    expect(routes.get_by_role('link',name='인식 자료·학습 열기')).to_have_attribute('href','#pipeline')
+    expect(routes.get_by_role('link',name='SIM 실험 열기')).to_have_attribute('href','/learning/sim')
+    expect(routes.get_by_role('link',name='VLM 판단 검수 열기')).to_have_attribute('href','/learning/vlm')
+    navigation=page.get_by_role('navigation',name='학습센터 작업 이동',exact=True)
+    for name,target in [('인식 자료·학습','pipeline'),('검수 대기','review-section'),
+                        ('실행·평가 결과','learning-results'),('저장·계정','storage-section'),
+                        ('작업 선택','learning-start')]:
+        link=navigation.get_by_role('link',name=name,exact=True)
+        link.focus()
+        page.keyboard.press('Enter')
+        expect(page).to_have_url(base+'/learning#'+target)
+        expect(page.locator('#'+target)).to_be_focused()
+    assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
+    if output:=os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+        target=Path(output)/f'learning-home-routes-{theme}-{width}.png'
+        target.parent.mkdir(parents=True,exist_ok=True)
+        page.evaluate('() => { document.activeElement?.blur(); window.scrollTo(0,0); }')
+        page.screenshot(path=str(target))
+
+
+@pytest.mark.parametrize('route',['/catalog','/learning/sim','/learning/vlm','/learning/evaluate'])
+def test_home_return_from_other_learning_areas(browser_workspace,route):
+    page,_,expect=browser_workspace
+    base=page.url.split('?')[0].rstrip('/')
+    page.goto(base+route,wait_until='domcontentloaded')
+    home=page.get_by_role('navigation',name='학습 화면',exact=True).get_by_role('link',name='홈',exact=True)
+    home.focus()
+    page.keyboard.press('Enter')
+    expect(page).to_have_url(base+'/learning')
+    start=page.get_by_role('navigation',name='학습센터 작업 이동',exact=True).get_by_role('link',name='작업 선택',exact=True)
+    start.focus()
+    page.keyboard.press('Enter')
+    expect(page).to_have_url(base+'/learning#learning-start')
+    expect(page.locator('#learning-start')).to_be_focused()
+
+
 @pytest.mark.parametrize('width', [1440, 390, 320])
-def test_learning_pipeline_prepares_current_reviews_in_app(browser_workspace, width):
+@pytest.mark.parametrize('theme', ['dark', 'light'])
+def test_learning_pipeline_prepares_current_reviews_in_app(browser_workspace, width, theme):
     page, store, expect = browser_workspace
     review_masks.bind_classes(store, CLASSES)
     review_masks.update(store, 0, {'version': 0, 'action': 'fill', 'label': 0}, Conflict)
@@ -23,9 +71,20 @@ def test_learning_pipeline_prepares_current_reviews_in_app(browser_workspace, wi
                                    'complete_frame_review': True, 'background_reviewed': True}, Conflict)
     page.set_viewport_size({'width': width, 'height': 844})
     page.goto(page.url.split('?')[0].rstrip('/') + '/learning', wait_until='domcontentloaded')
+    page.evaluate('(theme)=>document.documentElement.dataset.theme=theme', theme)
+    page.get_by_role('link',name='인식 자료·학습 열기',exact=True).click()
     action = page.locator('#pipeline-action')
     expect(action).to_have_text('승인 자료 준비')
     expect(action).to_be_enabled()
+    track = page.locator('#pipeline-stages')
+    expect(track).to_have_class(re.compile(r'(^|\s)ui-stage-track(\s|$)'))
+    expect(track).to_have_attribute('data-line', 'learning')
+    payload = page.request.get(page.url.split('/learning')[0] + '/api/learning').json()
+    for step in payload['pipeline']['stages']:
+        station = track.locator(f'[data-stage="{step["id"]}"]')
+        expect(station).to_have_class(re.compile(r'(^|\s)ui-stage(\s|$)'))
+        expect(station).to_have_attribute('data-status', step['state'])
+        expect(station).to_contain_text(step['detail'])
     assert action.bounding_box()['y'] + action.bounding_box()['height'] <= 844
     page.route('**/api/prepare', lambda route: route.fulfill(status=400,
                content_type='application/json', body=json.dumps({'error': '자료 준비 실패'})))
@@ -38,6 +97,10 @@ def test_learning_pipeline_prepares_current_reviews_in_app(browser_workspace, wi
     expect(page.locator('#pipeline-link')).to_have_text('학습 실행기 연결 안내')
     assert store.exports()
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+        target = Path(output) / f'learning-stations-{theme}-{width}.png'
+        target.parent.mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(target))
 
 
 def test_learning_pipeline_automatically_connects_owner_and_invalidates_new_decisions(tmp_path):

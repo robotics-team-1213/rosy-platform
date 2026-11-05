@@ -1,5 +1,5 @@
 import {createFleetClient} from '/common/fleet-client.js';
-import {canManageAccounts, canViewAccountSetup, CAPABILITIES, teamGrants} from '/console/assets/account-permissions.js';
+import {canManageAccounts, canViewAccountSetup, CAPABILITIES, roleGrants} from '/console/assets/account-permissions.js';
 
 const rawRequest = createFleetClient(), $ = id => document.getElementById(id), endpoint = '/api/fleet/auth/accounts';
 let owner = null, rows = [], selected = null, busy = false, siteResource = '';
@@ -93,10 +93,10 @@ function edit(row = null) {
   for (const [id, key] of [['account-name', 'login'], ['account-principal', 'principal_id']]) {
     $(id).value = row?.[key] || ''; $(id).readOnly = !!row;
   }
-  $('account-role').value = row?.role || 'viewer'; $('account-enabled').checked = row?.enabled ?? true;
+  $('account-role').value = row?.role || 'operator'; $('account-enabled').checked = row?.enabled ?? true;
   $('account-enabled').closest('label').hidden = !row; $('account-initial-password').hidden = !!row;
   $('account-password').required = !row; $('account-actions').hidden = !row;
-  $('account-grants').replaceChildren(); for (const grant of row?.grants || teamGrants(siteResource)) grantRow(grant);
+  $('account-grants').replaceChildren(); for (const grant of row?.grants || roleGrants('operator', siteResource)) grantRow(grant);
 }
 async function load() {
   rows = await request(endpoint); $('account-list').replaceChildren();
@@ -122,8 +122,8 @@ function grants() {
 }
 $('account-new').addEventListener('click', () => edit());
 $('account-add-grant').addEventListener('click', () => grantRow());
-$('account-team-grants').addEventListener('click', () => {
-  $('account-grants').replaceChildren(); for (const grant of teamGrants(siteResource)) grantRow(grant);
+$('account-role').addEventListener('change', () => {
+  $('account-grants').replaceChildren(); for (const grant of roleGrants($('account-role').value, siteResource)) grantRow(grant);
 });
 $('account-reload').addEventListener('click', () => perform(async () => { await load(); status('최신 계정 상태입니다.'); }));
 $('account-save').addEventListener('click', () => {

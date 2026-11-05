@@ -184,14 +184,57 @@ def _png(raw):
         raise ValueError('PNG signature and IHDR required for catalog-relative image')
 
 
+def image_dimensions(raw):
+    """Read bounded JPEG/PNG dimensions before a decoder can allocate image pixels."""
+    if raw.startswith(b'\x89PNG\r\n\x1a\n'):
+        _png(raw)
+        width, height = int.from_bytes(raw[16:20], 'big'), int.from_bytes(raw[20:24], 'big')
+        depths = {0: (1, 2, 4, 8, 16), 2: (8, 16), 3: (1, 2, 4, 8), 4: (8, 16), 6: (8, 16)}
+        if raw[24] not in depths.get(raw[25], ()) or raw[26:28] != b'\0\0' or raw[28] not in (0, 1):
+            raise ValueError('invalid PNG image header')
+    elif raw.startswith(b'\xff\xd8'):
+        offset, dimensions = 2, None
+        while offset < len(raw):
+            if raw[offset] != 255:
+                raise ValueError('invalid JPEG image header')
+            while offset < len(raw) and raw[offset] == 255:
+                offset += 1
+            if offset >= len(raw):
+                raise ValueError('truncated JPEG image header')
+            marker, offset = raw[offset], offset + 1
+            if marker in (0, 0xD8, 0xD9) or offset + 2 > len(raw):
+                raise ValueError('invalid JPEG image header')
+            length = int.from_bytes(raw[offset:offset + 2], 'big')
+            if length < 2 or offset + length > len(raw):
+                raise ValueError('truncated JPEG image segment')
+            if marker in (0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF):
+                if dimensions or length < 8 or length != 8 + 3 * raw[offset + 7] or raw[offset + 7] == 0 or raw[offset + 2] not in (8, 12, 16):
+                    raise ValueError('invalid JPEG frame header')
+                height = int.from_bytes(raw[offset + 3:offset + 5], 'big')
+                width = int.from_bytes(raw[offset + 5:offset + 7], 'big')
+                if not 1 <= width <= 4096 or not 1 <= height <= 4096:
+                    raise ValueError('bounded image dimensions required')
+                dimensions = width, height
+            if marker == 0xDA:
+                if dimensions is None:
+                    raise ValueError('JPEG frame header required before scan')
+                return dimensions
+            offset += length
+        raise ValueError('JPEG scan header required')
+    else:
+        raise ValueError('JPEG/PNG original required')
+    if not 1 <= width <= 4096 or not 1 <= height <= 4096:
+        raise ValueError('bounded image dimensions required')
+    return width, height
+
+
 def image(raw, digest, width, height):
     if review_masks.sha(raw) != digest:
         raise ValueError('source image hash differs')
+    image_dimensions(raw)  # EXIF may rotate the decoded axes; bound both header dimensions first.
     pixels = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
     if pixels is None or pixels.shape[:2] != (height, width):
         raise ValueError('source image dimensions differ')
-    if not 1 <= width <= 4096 or not 1 <= height <= 4096:
-        raise ValueError('bounded image dimensions required')
 
 
 def freeze_image(store, raw, suffix):
@@ -218,7 +261,7 @@ def import_frames(store, body, upstream=None):
     return _import_frames(store, body, upstream)
 
 
-def _import_frames(store, body, upstream=None, capture=None):
+def _import_frames(store, body, upstream=None, capture=None, *, verified_kind='huggingface'):
     if capture:
         catalog, raw = capture.catalog, capture.raw
     else:
@@ -382,7 +425,7 @@ def _import_frames(store, body, upstream=None, capture=None):
                 normalized[key] = row[key]
         normalized['source_session_declared'] = row['source_session']
         if hf:
-            normalized.update(source_kind='huggingface', upstream=hf)
+            normalized.update(source_kind=verified_kind, upstream=hf)
         elif row.get('source_kind') == 'mcap':
             normalized.update(source_kind='mcap', mcap=mcap)
         else:
@@ -523,7 +566,9 @@ def import_hf(store, job, files, registered_by):
         if not entry['path'].lower().endswith(('.jpg', '.jpeg', '.png')):
             continue
         path = str(files[entry['path']])
-        pixels = cv2.imdecode(np.frombuffer(bounded(path), np.uint8), cv2.IMREAD_COLOR)
+        raw = bounded(path)
+        image_dimensions(raw)
+        pixels = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
         if pixels is None:
             raise ValueError(f"가져온 사진을 읽을 수 없습니다: {entry['path']}")
         rows.append({'image': path, 'image_sha256': entry['sha256'], 'width': pixels.shape[1],

@@ -213,6 +213,7 @@ def test_model_archive_refuses_undeclared_control_holders(tmp_path, keys, path):
     "learning/curation/perception/camera_setup_web.py",
     "learning/curation/perception/learning_tasks.py",
     "learning/curation/perception/learning_tasks_web.py",
+    "learning/curation/perception/owner_robots.py",
     "learning/curation/perception/review_app_web/tasks.html",
     "learning/curation/perception/review_app_web/tasks.js",
     "learning/curation/perception/review_app_web/omx.html",

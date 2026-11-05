@@ -1,5 +1,6 @@
 """VLM 판단 labels one photo by keyboard and one by mouse on a phone without sideways scroll."""
 import threading
+from pathlib import Path
 
 import pytest
 from browser_harness import browser_tests_enabled, free_port
@@ -63,7 +64,45 @@ def test_label_by_keyboard_and_mouse_at_phone_width(tmp_path):
                 assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
                 page.locator('#tab-eval').click()
                 expect(page.locator('#vlm-eval')).to_contain_text('정답 있는 사진 2장')
+                scroll = page.locator('#vlm-eval .ui-table-scroll').first
+                expect(scroll).to_have_attribute('tabindex', '0')
+                expect(scroll.locator('table')).to_have_class('ui-data-table')
+                scroll.focus()
+                expect(scroll).to_be_focused()
+                text_lines = r'''selector => [...document.querySelectorAll(selector)]
+                    .filter(cell => /^(wrist\.|\d+(\.\d+)?%$)/.test(cell.textContent))
+                    .map(cell => { const range = document.createRange(); range.selectNodeContents(cell);
+                        return {text: cell.textContent, lines: range.getClientRects().length}; })'''
+                cells = page.evaluate(text_lines, '#vlm-eval td')
+                assert cells and all(cell['lines'] == 1 for cell in cells), cells
+                scroll.press('ArrowRight')
+                page.wait_for_function("() => document.querySelector('#vlm-eval .ui-table-scroll').scrollLeft > 0")
+                scroll.evaluate('node => node.scrollLeft = 0')
                 assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
+                import os
+                if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+                    Path(output).mkdir(parents=True, exist_ok=True)
+                    for theme in ('dark', 'light'):
+                        page.evaluate('theme => document.documentElement.dataset.theme = theme', theme)
+                        page.screenshot(path=str(Path(output) / f'vlm-table-{theme}-390.png'), full_page=True)
+                page.goto(f'http://127.0.0.1:{server.server_port}/learning/evaluate?domain=vlm', wait_until='networkidle')
+                expect(page.locator('.evaluate-source[data-domain="vlm"] .ui-table-scroll table.ui-data-table')).to_be_visible()
+                for width in (1366, 390):
+                    page.set_viewport_size({'width': width, 'height': 844})
+                    sources = page.locator('[aria-labelledby="sources-title"]').bounding_box()
+                    promotion = page.locator('[aria-labelledby="promote-title"]').bounding_box()
+                    if width >= 1024:
+                        assert promotion['x'] >= sources['x'] + sources['width'] - 1
+                        assert abs(promotion['y'] - sources['y']) <= 1
+                    else:
+                        assert promotion['y'] >= sources['y'] + sources['height'] - 1
+                    assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
+                    cells = page.evaluate(text_lines, '#evaluate-sources td')
+                    assert cells and all(cell['lines'] == 1 for cell in cells), cells
+                    if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+                        for theme in ('dark', 'light'):
+                            page.evaluate('theme => document.documentElement.dataset.theme = theme', theme)
+                            page.screenshot(path=str(Path(output) / f'evaluation-context-{theme}-{width}.png'), full_page=True)
                 assert errors == []
             finally:
                 browser.close()

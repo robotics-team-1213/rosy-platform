@@ -67,6 +67,7 @@ function setBusy(value) {
   updatePipelineAction();
 }
 const stageStates={waiting:'대기',running:'진행 중',done:'완료',attention:'확인 필요',connection:'연결 필요'};
+const stageAppearance={waiting:'todo',running:'now',done:'done',attention:'blocked',connection:'blocked'};
 function updatePipelineAction() {
   const next=workspace?.pipeline?.next,button=$('pipeline-action');
   const action=next?.action;
@@ -88,12 +89,15 @@ function renderPipeline() {
   $('pipeline-status').textContent=`다음 작업 · ${next.label}`;
   let current=false;
   for(const step of pipeline.stages) {
-    const row=text($('pipeline-stages'),'li','','pipeline-stage');
-    row.dataset.stage=step.id;row.dataset.state=step.state;
-    if(!current&&step.state!=='done'){row.setAttribute('aria-current','step');current=true;}
-    const heading=text(row,'div','','pipeline-stage-heading');
+    const row=text($('pipeline-stages'),'li','','pipeline-stage ui-stage');
+    const selected=!current&&step.state!=='done';
+    row.dataset.stage=step.id;row.dataset.status=step.state;
+    row.dataset.state=selected&&step.state==='waiting'?'now':stageAppearance[step.state]||'todo';
+    if(selected){row.setAttribute('aria-current','step');current=true;}
+    const copy=text(row,'div','','pipeline-stage-copy');
+    const heading=text(copy,'div','','pipeline-stage-heading');
     text(heading,'h3',step.label);text(heading,'span',stageStates[step.state]||'확인 필요');
-    text(row,'p',step.detail);
+    text(copy,'p',step.detail);
   }
   $('pipeline-action').hidden=!!next.href;$('pipeline-action').textContent=next.label;
   if(next.href) {

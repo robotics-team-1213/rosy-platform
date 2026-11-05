@@ -1,6 +1,7 @@
 ---
 title: Upgrading the model-PC Learning Center in place needs the new commit's exact unit written first
 date: 2026-10-23
+last_updated: 2026-11-03
 category: deployment
 module: deploy/model_pc/install_learning_center.py (rosy-learning-center.service), deploy/model_pc/install_review_release.py
 problem_type: deployment_error
@@ -50,6 +51,18 @@ Procedure that worked:
 5. After `INSTALLED`, check the HTTPS front by the host's Tailscale name: `curl -sS -o /dev/null -w '%{http_code}\n' https://<host-tailscale-name>:<port>/accounts`. Using the IP address gives a TLS internal error, because the front serves its certificate by name only. That error is not an install failure.
 
 Evidence: protected Learning center, 2026-10-24, sequence 32. The installer exited 1 on the release folder (symlink), 1 on the copy inside `--root` (not separate), then 0 on the sibling copy outside `--root`.
+
+### A manual hotfix must also advance the review updater's accepted-sequence floor
+
+On 2026-11-03 a verified hotfix activated successfully on both review services, then the periodic review updater reactivated an older accepted signed release. Immediate HTTP readiness and a matching `current` link had not proved the hotfix would remain active. The updater's environment still allowed that older sequence.
+
+`auto_review_release.apply_locked()` stops when the accepted model-code sequence is at or below `minimum_sequence`. Otherwise an existing `model-code-<sequence>-<commit>` directory is eligible for activation again even when a newer manual review hotfix is active. It does not compare the hotfix's Git ancestry.
+
+Before activating a manual hotfix, inspect the accepted model-code `state.json` and the review updater's `EnvironmentFile`. Back up the environment file and raise `MINIMUM_SEQUENCE` to at least that currently accepted sequence. Do not invent a future sequence or disable signature checks. Keep the updater enabled so a later accepted sequence remains eligible. Then activate the hotfix with the supported installer and verify both the `current` links and the next updater execution. A run that only reports waiting for a learning lock is separate from exercising the sequence guard.
+
+Verification: the old accepted source matched its Git ancestor across 812 installed files; both services had reverted to that release. After advancing the floor from 19 to the accepted 44, the installer restored the hotfix on both services and an explicit updater execution left their links unchanged. That execution reported waiting for the learning lock. A separate read-only `apply_locked()` check with the real accepted state and floor returned `waiting for a newer accepted model-code release`, exercising the sequence guard without activating code. The operational label database was not restored or replaced.
+
+Prevention: for manual hotfixes, include automatic update eligibility and a later activation check in acceptance evidence; an immediate successful restart is insufficient. Restore the backed-up environment only when returning to the corresponding signed release policy, without overwriting newer review labels.
 
 The source rule is also stated in `deploy/model_pc/README.md` beside the project install command.
 

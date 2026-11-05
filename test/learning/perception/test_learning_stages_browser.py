@@ -29,7 +29,7 @@ def test_task_pages_share_body_and_native_navigation_controls(browser_workspace,
     base = f'{origin.scheme}://{origin.netloc}'
     page.set_viewport_size({'width': width, 'height': 844})
     targets = ['/learning', '/catalog', '/learning/camera', '/learning/workspaces', '/learning/omx',
-               '/learning/vlm', '/learning/tasks', '/learning/sim', '/learning/evaluate']
+               '/learning/vlm', '/learning/tasks', '/learning/sim', '/learning/evaluate', '/accounts']
     for target in targets:
         page.goto(base + target, wait_until='domcontentloaded')
         page.evaluate('theme => document.documentElement.dataset.theme = theme', theme)
@@ -39,6 +39,14 @@ def test_task_pages_share_body_and_native_navigation_controls(browser_workspace,
         for link in page.locator('a.ui-action-link:visible').all():
             assert link.get_attribute('data-kind') in ('primary', 'quiet'), target
             assert link.bounding_box()['height'] >= 48, (target, link.inner_text())
+        import os
+        if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+            from pathlib import Path
+            page.wait_for_load_state('load')
+            page.wait_for_function("() => customElements.get('ui-button') !== undefined")
+            destination = Path(output) / f'learning-map-{target.strip("/").replace("/", "-")}-{theme}-{width}.png'
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            page.screenshot(path=str(destination))
 
 
 @pytest.mark.parametrize('width', [1280, 390])
@@ -92,12 +100,16 @@ def test_answer_links_never_cover_the_title_at_768(browser_workspace, route):
 
 @pytest.mark.parametrize('route', ['/', '/pixels'])
 def test_answer_links_come_right_after_the_title_in_focus_order(browser_workspace, route):
-    """WCAG 2.4.3: Tab from the title row reaches the 정답 links before the editor and canvas controls."""
+    """WCAG 2.4.3: title-row scope, answer links, then editor controls follow visual order."""
     page, _, _ = browser_workspace
     origin = urlsplit(page.url)
     page.goto(f'{origin.scheme}://{origin.netloc}{route}', wait_until='networkidle')
     links = page.locator('.review-kinds a').evaluate_all('links => links.map(link => link.pathname)')  # / adds ?frame=
     page.locator('.ui-pathbar h1').evaluate('title => { title.tabIndex = -1; title.focus(); }')
+    if route == '/pixels':
+        page.keyboard.press('Tab')
+        assert page.locator('.pixel-review-context > summary').evaluate('node => node === document.activeElement')
+        assert not page.locator('.pixel-review-context').evaluate('node => node.open')
     focused = []
     for _ in links:
         page.keyboard.press('Tab')

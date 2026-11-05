@@ -3,10 +3,17 @@ import {accountFetch} from '/account-session.js';
 import {confirmIrreversible} from '/common/ui.js';
 import '/commands.js';
 import '/omx-review.js';
+import '/omx-native-train.js';
 import {profileDocumentKey} from '/omx-profiles.js';
 import {renderExportRuns} from '/omx-export.js';
 import {initHub,updateHubRuns} from '/omx-hub.js';
+import {initJourney,refreshJourneyContext,applyJourneyContext,selectJourneyProfile,clearJourneyProfile,updateJourneyEvidence,renderJourneyComparison,journeyContext} from '/omx-journey.js';
 const $=id=>document.getElementById(id);
+const workflowContext=new URLSearchParams(location.search),workflowTask=workflowContext.get('task');
+if(workflowTask&&/^[0-9a-f-]{36}$/.test(workflowTask)){
+  $('workflow-return').href='/learning/tasks?task='+encodeURIComponent(workflowTask);
+  $('workflow-context').hidden=false;
+}
 const VERDICT={ok:'맞음',adjust:'조정 필요',unmeasurable:'측정 불가'};
 const SPLIT={train:'학습',eval:'평가',test:'시험',exclude:'제외'};
 const OUTCOME={success:'성공',failure:'실패',unknown:'미정'};
@@ -124,6 +131,7 @@ function segmentReview(set,section){
       body:JSON.stringify({id:set.id,version:saved.version,segments:JSON.parse(submitted)})});
     const value=await response.json();if(!response.ok)throw new Error(value.error||'저장 실패');
     saved=value;if(JSON.stringify(rows)===submitted)rows=structuredClone(value.document.segments);
+    document.dispatchEvent(new CustomEvent('omx-segments-saved',{detail:{id:set.id,saved:value}}));
   }catch(error){saveError=`저장하지 못했습니다: ${error.message}. 입력 내용은 유지됩니다.`;}finally{saving=false;savesInFlight--;show();}};
   download.onclick=()=>{
     const url=URL.createObjectURL(new Blob([JSON.stringify(saved.document,null,2)+'\n'],{type:'application/json'}));
@@ -173,13 +181,13 @@ async function load(){
     if(!response.ok)throw new Error(response.status===403?'이 작업대의 권한이 없습니다.':value.error||'요청 실패');
     if(generation!==editGeneration){$('omx-status').setAttribute('state','warning');$('omx-status').textContent='불러오는 동안 편집이 바뀌어 기존 화면을 보존했습니다. 필요하면 다시 확인하세요.';return;}
     preparedSets=value.sets;preparedReady=true;
-    const selected=$('prepared-set').value;
+    const selected=$('prepared-set').value||workflowContext.get('prepared');
     $('prepared-set').replaceChildren(...(preparedSets.length?preparedSets.map(set=>{const option=el('option',set.name);option.value=set.id;return option;}):[new Option('등록된 검수 시연 없음','')]));
     if(preparedSets.some(set=>set.id===selected))$('prepared-set').value=selected;
     if(!preparedSets.length)$('prepared-set').value='';
     $('prepared-set').disabled=!preparedSets.length;exportSelection();
     $('empty-prepared').hidden=!!preparedSets.length;
-    document.dispatchEvent(new CustomEvent('omx-prepared-loaded'));
+    document.dispatchEvent(new CustomEvent('omx-prepared-loaded',{detail:{sets:preparedSets}}));
     editors.clear();$('sets').replaceChildren(...value.sets.map(render));
     $('omx-status').setAttribute('state',value.sets.length?'ready':'empty');
     $('omx-status').textContent=value.sets.length?`세트 ${value.sets.length}개`:'연결된 OMX 준비 세트가 없습니다.';
@@ -200,6 +208,7 @@ let centerReady=false;
 function updateJourney(){
   const row=snapshot.datasets.find(d=>d.id===$('dataset').value),profile=selectedProfileRecord?.profile||row?.profile;
   $('journey-goal').textContent=profile?.task?`${profile.name||'선택한 과제'} · ${profile.task}`:'과제는 아직 선택하지 않았습니다.';
+  $('journey-goal').hidden=!profile?.task;
   $('journey-data').textContent=row?`현재 데이터: ${row.name} · 작업 팔 ${(row.profile?.arms||[]).length}대 · 카메라 ${(row.profile?.cameras||[]).length}개`:'현재 선택된 학습 데이터가 없습니다.';
   let target='profile-panel',label='과제와 성공 조건 정하기',reason='같은 과제를 비교하려면 목표와 성공 조건을 먼저 정하고 저장 설정을 선택하세요.';
   if(!centerReady){reason='학습 데이터 상태를 아직 확인하지 못했습니다. 다시 확인한 뒤 다음 작업을 결정하세요.';}
@@ -209,7 +218,7 @@ function updateJourney(){
     }else if(!row){
       target=preparedSets.length?'dataset-section':'capture-section';label=preparedSets.length?'등록 시연 검수·변환':'시범과 교정 기록 준비';reason='선택한 과제의 학습 데이터가 필요합니다. 현장 수집 연결 여부를 확인하거나 이미 수집한 시연을 연결하세요.';
     }else{
-      const runs=snapshot.runs.filter(run=>run.dataset_id===row.id&&run.execution_mode!=='native_export'&&matchingTarget(run,row));
+      const runs=snapshot.runs.filter(run=>run.dataset_id===row.id&&run.execution_mode!=='native_export'&&matchingTarget(run,row)&&(!journeyContext.task||run.learning_task?.task_id===journeyContext.task.id));
       const active=runs.some(run=>['running','queued'].includes(run.status));
       if(active){target='train-section';label='진행 중인 학습 확인';reason='현재 데이터에서 시작한 학습이 있습니다. 소비한 입력과 작업 상태를 확인하세요.';}
       else if(runs.some(run=>run.result?.evaluation)){target='comparison-section';label='같은 조건의 저장 평가 비교';reason='현재 데이터와 팔 범위의 평가가 있습니다. 실제 성공률은 별도 실물 시험 기록으로 확인해야 합니다.';}
@@ -217,6 +226,11 @@ function updateJourney(){
     }
   }
   $('journey-reason').textContent=reason;$('journey-next').textContent=label;$('journey-next').href='#'+target;
+  updateJourneyEvidence({snapshot,preparedSets,preparedReady,centerReady});
+  $('journey-task-link').hidden=!profile?.task&&!journeyContext.blocked;
+  if(!profile?.task&&!journeyContext.blocked){$('journey-next').href=$('journey-task-link').href;$('journey-next').textContent='학습 과제 선택·만들기';}
+  if(journeyContext.blocked){$('journey-reason').textContent=$('journey-context-status').textContent;$('start').disabled=true;}
+  if(journeyContext.task&&target==='train-section'){$('journey-next').href=$('journey-task-link').href;$('journey-next').textContent='이 과제에서 학습 준비';}
 }
 async function loadLearningEntry(){
   const status=$('learning-account-state');
@@ -323,7 +337,7 @@ function exportSelection(){
   $('export-saved-review').disabled=!saved&&!chosenSaved;
   $('export-review-status').textContent=chosenSaved&&!saved?'저장 검수 사용 대기 · 현재 원본에 맞는 저장 검수가 없습니다. 검수를 저장하거나 유효한 검수를 다시 불러오세요. 원본 결정을 쓰려면 위 선택을 해제하세요.':chosenSaved?`저장 검수 ${saved} 사용 · 원본 revision ${loadedReview.source_revision}${savedPending?' · 미저장 편집 또는 검수 처리 중입니다. 저장·다시 불러오기를 마치거나 원본 검수 사용을 선택하세요.':''}`:`원본 검수 결정 사용${saved?' · 저장 검수 '+saved+'를 사용하려면 위 항목을 선택하세요.':' · 저장 검수는 검수를 불러온 뒤 선택할 수 있습니다.'}`;
   $('prepared-status').textContent=!preparedReady?'등록 자료 연결을 다시 확인하세요.':!prepared?'검수 시연을 자료 등록 화면에서 연결하세요.':prepared.trainable?.ok?'검수 분할 준비됨 · 실제 변환 입력은 서버가 다시 검증합니다.':`변환 준비 안 됨: ${prepared.error||prepared.trainable?.reason||'검수·분할을 확인하세요.'}`;
-  $('native-export').disabled=exporting||savedPending||!token||!preparedReady||!prepared?.trainable?.ok||!exportProfile||!$('export-name').value.trim();
+  $('native-export').disabled=exporting||savedPending||!token||!preparedReady||!prepared?.trainable?.ok||!exportProfile||!$('export-name').value.trim()||journeyContext.blocked;
 }
 function onlineReady(row){return row?.profile?.schema==='rosy.omx.learning-profile/2';}
 function needsArm(dataset){return dataset?.profile?.mode==='independent'&&dataset.profile.arms?.length>1;}
@@ -373,45 +387,15 @@ function selection(){
   $('method-status').textContent=method?.available?(online?'지속 SAC·경험 수신 실행기 준비됨':'오프라인 경험 학습 실행기 준비됨'):`실행 불가: ${method?.reason||method?.error||'실행기 준비를 확인하세요.'}`;
   const needsBounds=!!row&&!onlineReady(row);
   if(online&&needsBounds)$('method-status').textContent='지속 SAC는 관절별 고정 action_limits가 검증된 프로필 schema 2 자료가 필요합니다. 기존 자료는 오프라인 재학습에서 사용할 수 있습니다.';
-  $('start').disabled=submitting||!token||!row||!method?.available||(online&&needsBounds)||!compatible||(needsArm(row)&&!$('arm-target').value);
-  $('add-experience').disabled=addingExperience||!token||!row||needsBounds||!$('experience-run').value;
+  $('start').disabled=submitting||!token||!row||!method?.available||(online&&needsBounds)||!compatible||(needsArm(row)&&!$('arm-target').value)||journeyContext.blocked||!!journeyContext.task;
+  $('add-experience').disabled=addingExperience||!token||!row||needsBounds||!$('experience-run').value||journeyContext.blocked||!!journeyContext.task;
   if($('experience-run').value&&needsBounds)$('experience-status').textContent='경험 추가에는 관절별 고정 action_limits가 있는 프로필 schema 2 자료를 선택하세요.';
   renderComparison(row);
   exportSelection();
   updateJourney();
 }
 function renderComparison(dataset){
-  const area=$('comparison');area.replaceChildren();
-  if(!dataset){area.append(el('p','초기 학습 데이터를 선택하면 같은 자료에서 시작한 작업의 평가를 볼 수 있습니다.','quiet'));return;}
-  if(needsArm(dataset)&&!$('arm-target').value){area.append(el('p','학습 팔을 선택하면 같은 팔의 입력 범위가 기록된 평가만 비교합니다.','quiet'));return;}
-  const runs=snapshot.runs.filter(run=>run.execution_mode!=='native_export'&&run.dataset_id===dataset.id&&run.result?.evaluation&&matchingTarget(run,dataset));
-  if(!runs.length){area.append(el('p','선택한 초기 데이터에 저장된 평가 결과가 없습니다. 정책과 평가가 저장되면 표시됩니다.','quiet'));return;}
-  const table=el('table',null,'omx-episodes');
-  table.append(el('caption',`동일 초기 데이터: ${dataset.name}${needsArm(dataset)?' · 개별 팔 '+$('arm-target').value:''} · 저장된 평가 ${runs.length}개`));
-  const head=el('thead'),headers=el('tr');
-  for(const text of ['방법·작업','학습 입력 범위','자료 출처','상태','학습 단계','누적 입력','평가 프레임','행동 MAE','학습 평균 기준 MAE','시범 프레임','롤아웃 프레임','현장 성공','사람 개입 시간','초기화 횟수','낙하 횟수','사이클 시간']){
-    const cell=el('th',text);cell.scope='col';headers.append(cell);
-  }
-  head.append(headers);table.append(head);
-  const body=el('tbody');
-  for(const run of runs){
-    const result=run.result,evaluation=result.evaluation,replay=result.replay||{};
-    const online=run.execution_mode==='online_experience',version=result.version??run.progress?.latest_version;
-    const label=online?`지속 SAC · 정책 버전 ${version??'미수집'}`:run.method==='act'?'ACT 시범/교정':'SAC 오프라인 재학습';
-    const row=el('tr'),method=el('th');method.scope='row';method.append(el('span',label),el('p',run.id,'quiet'));row.append(method);
-    const total=result.total_steps??result.steps??run.steps;
-    const inputs=result.inputs??run.progress?.consumed_inputs;
-    const values=[targetLabel(run),result.source??dataset.source,STATE[run.status]||run.status,
-      online?`${total??'미수집'} (입력당 ${run.steps})`:total,
-      online?(Array.isArray(inputs)?`초기 포함 ${inputs.length}개`:'미수집'):'초기 자료만',
-      evaluation.frames,evaluation.action_mae,evaluation.constant_train_mean_mae,
-      replay.demonstration_frames,replay.rollout_frames,'미검증','미수집','미수집','미수집','미수집'];
-    for(const value of values)row.append(el('td',value==null?'미수집':String(value)));
-    body.append(row);
-  }
-  table.append(body);
-  const wrap=el('div',null,'omx-table-wrap');wrap.append(table);area.append(wrap);
-  if(runs.length===1)area.append(el('p','평가 기록이 1개입니다. 같은 초기 자료의 다른 학습 결과가 저장되면 함께 표시됩니다.','quiet'));
+  renderJourneyComparison(dataset,{allRuns:snapshot.runs,needsArm,matchingTarget,targetLabel,states:STATE});
 }
 function renderRuns(){
   const selected=$('experience-run').value,live=snapshot.runs.filter(run=>run.execution_mode==='online_experience'&&run.status==='running');
@@ -420,12 +404,12 @@ function renderRuns(){
   if(!live.length)$('experience-run').value='';
   $('experience-run').disabled=!live.length;
   renderExportRuns($('export-runs'),snapshot.runs.filter(run=>run.execution_mode==='native_export'),{states:STATE,request,refresh:refreshCenter,
-    selectDataset:id=>{$('dataset').value=id;pendingRequest=null;selection();}});
-  const nodes=snapshot.runs.filter(run=>run.execution_mode!=='native_export').map(run=>{
+    selectDataset:id=>{$('dataset').value=id;pendingRequest=null;$('dataset').dispatchEvent(new Event('change'));}});
+  const nodes=snapshot.runs.filter(run=>run.execution_mode!=='native_export'&&(!journeyContext.task||run.learning_task?.task_id===journeyContext.task.id)).map(run=>{
     const online=run.execution_mode==='online_experience',section=el('section',null,'learning-section');
     section.append(el('h3',`${online?'지속 SAC·경험 수신':run.method==='act'?'ACT 시범/교정':'HIL-SERL SAC 오프라인 재학습'} · ${STATE[run.status]||run.status}`));
-    section.append(el('p',`작업 ${run.id} · 데이터 ${run.dataset_id}`,'quiet'));
-    section.append(el('p',targetLabel(run)));
+    section.append(el('p',`작업 ${run.id} · ${run.execution_mode==='native_train'?'원본 시연 '+run.prepared_id:'데이터 '+run.dataset_id}`,'quiet'));
+    section.append(el('p',run.execution_mode==='native_train'?`native 전체 입력 · ${run.review_id?'저장 검수 '+run.review_id:'구간 검수 v'+run.segment_version} · 독립 평가와 모델 재적재`:targetLabel(run)));
     if(trainingScope(run)){const details=el('details');details.append(el('summary','학습 입력 범위 기록'),el('pre',JSON.stringify(trainingScope(run),null,2)));section.append(details);}
     const progress=run.progress??{};
     if(online){
@@ -461,6 +445,7 @@ async function refreshCenter(){
     $('dataset').replaceChildren(...(snapshot.datasets.length?[new Option('이번 과제의 데이터를 선택하세요',''),...snapshot.datasets.map(row=>{const option=el('option',row.name);option.value=row.id;return option;})]:[new Option('등록된 학습 데이터 없음','')]));
     $('dataset').value=snapshot.datasets.some(row=>row.id===selected)?selected:'';
     $('dataset').disabled=!snapshot.datasets.length;
+    await refreshJourneyContext(request);applyJourneyContext(snapshot);
     $('empty-datasets').hidden=!!snapshot.datasets.length;
     renderRuns();selection();updateHubRuns(snapshot.runs);
     $('center-read-error').hidden=true;$('center-read-error').textContent='';
@@ -480,6 +465,7 @@ document.addEventListener('omx-review-loaded',event=>{if(loadedReview?.prepared_
 document.addEventListener('omx-review-saved',()=>{load();refreshCenter();});
 $('export-name').oninput=()=>{pendingExport=null;exportSelection();};
 $('export-profile').onchange=async()=>{
+  clearJourneyProfile();
   exportProfile=null;selectedProfileRecord=null;$('export-profile').required=true;pendingExport=null;pendingRequest=null;selection();
   const file=$('export-profile').files[0];
   if(!file){$('export-status').textContent='프로필 JSON 파일을 선택하세요.';return;}
@@ -493,11 +479,13 @@ $('export-profile').onchange=async()=>{
   exportSelection();
 };
 document.addEventListener('omx-profile-selected',event=>{
+  selectJourneyProfile(event.detail);
   selectedProfileRecord=event.detail;exportProfile=structuredClone(event.detail.profile);pendingExport=null;pendingRequest=null;
   $('export-profile').value='';$('export-profile').required=false;
   $('export-status').textContent=`저장 프로필 ${event.detail.id} · revision ${event.detail.revision} 선택됨. 현재 native 변환 지원 조건은 별도로 검증합니다.`;selection();
 });
 $('profile-clear').onclick=()=>{
+  clearJourneyProfile();
   selectedProfileRecord=null;exportProfile=null;pendingRequest=null;pendingExport=null;$('export-profile').required=true;
   $('export-status').textContent='저장 프로필 선택을 해제했습니다. 변환하려면 프로필 파일을 선택하거나 저장 프로필을 다시 선택하세요.';selection();
 };
@@ -562,10 +550,11 @@ $('upload-form').onsubmit=async event=>{
     }
     const published=await request(CENTER+'/publish',{upload_id,name:$('dataset-name').value});
     $('upload-status').textContent='업로드와 데이터 검증을 마쳤습니다.';await refreshCenter();
-    const id=published.id||published.dataset?.id;if(id){$('dataset').value=id;selection();}
+    const id=published.id||published.dataset?.id;if(id){$('dataset').value=id;$('dataset').dispatchEvent(new Event('change'));}
   }catch(exc){$('upload-status').textContent='업로드 또는 검증 실패. 새 업로드로 다시 시도하세요.';error(exc.message);}
   finally{uploading=false;$('upload').disabled=false;}
 };
 $('refresh').addEventListener('click',()=>{load();refreshCenter();loadLearningEntry();});
 load();refreshCenter();loadLearningEntry();
+initJourney(()=>refreshCenter());
 setInterval(()=>{if(!document.hidden)refreshCenter();},3000);

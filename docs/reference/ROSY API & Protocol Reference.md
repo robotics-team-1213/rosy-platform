@@ -9,6 +9,13 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
+### v1.360 Learning 점 선택 수정과 SAM 영역 후보
+
+- 기존 `POST /api/review-ai/{index}`에 `sam_points`를 더한다. 정확한 입력은 `{action:"sam_points", version, label, points}`다. label은 현재 등록된 픽셀 클래스의 0..254 인덱스이며 points는 원본 사진 안의 정수 `[x,y]` 1..16개다. 기존 세 동작은 action/version만 받는다.
+- SAM은 한 사진의 포함점으로 원시 영역 후보를 만든다. Qwen 없이 SAM 체크포인트·SHA와 서버 설정 Python을 사용한다. 성공 result의 `selection_sha256`와 `candidate_sha256`는 같은 검증된 후보를 가리키며 `selected_pixels`는 선택된 픽셀 수다. 영역 밖은 255다. 결과 게시만으로 현재 마스크·승인은 바뀌지 않는다. 기존 edit 권한·원본/클래스/모델 해시·version·취소·stale 검사는 유지한다.
+- 기존 mask preview/sample에 선택적 `preserve_existing` 불리언(생략 시 false)과 `selection_sha256`를 더한다. 보호 시 직접 찍은 기존 라벨의 4방향 연결 영역과 255만 수정 대상이며, 같은 클래스라도 떨어진 영역은 보호한다. 후보 digest가 있으면 검증된 후보에서 선택 label의 영역을 읽고 색상 flood를 다시 실행하지 않는다. SAM의 tolerance 반환은 0이며 255 지우기는 받지 않는다. 미리보기와 적용은 같은 선택·보호 규칙을 사용한다.
+- UI의 AI 기본 표시는 미저장 제안이다. 저장은 기존 255 보완과 직접 수정으로 이루어지며 사람의 전체 확인·승인은 별개다. CORE 명령·로봇 장치 권한은 변경하지 않는다.
+
 ### v1.351 핑키 열 모드: 온도·전압으로 속도를 낮춘다
 
 - 로봇은 SoC 온도, Raspberry Pi 펌웨어 `get_throttled`(지금 저전압·주파수 제한·스로틀·soft 온도 한계), 바퀴 모터마다 온도·모터 자체 한계·입력 전압·하드웨어 오류를 읽는다. 모터 값은 bringup이 2초마다 ROS `motor/health`(std_msgs/String JSON `{motors:[{id, temperature_c, temperature_limit_c, input_voltage_v, hardware_error}]}`)로 낸다.
@@ -4559,6 +4566,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 |---|---|---|
 | v1.362 | 2026-11-04 | Additive: D-977 `device_trial` opens the neutral `arm-transfers` jobs for exactly one arm (owner identity: `device: true`, matching `commissioning_revision`); `production` stays closed. New `operator_attested` record: `POST/GET .../jobs/{mission_id}/operator-attestations` (named operator distinct from proposer and approver, single-use, 45 s validity, `goal_confirmed: false`). The owner still refuses goals. |
 | v1.361 | 2026-11-04 | Additive: `GET /api/fleet/execution-profile`(D-979) — 앱이 읽는 읽기 전용 실행 프로필(`arm_execution` physical/simulated/closed, 등록·인증된 생산자 목록, `checked_at`). viewer·service 읽기, 쓰기 없음, 증명되지 않으면 closed. |
+| v1.360 | 2026-11-04 | Learning SAM 점 선택·보호 규칙·적용 출처, 현재 사진 AI 자동 초안과 검사 상태·의견 없음 구분. 기존 라벨과 별도 승인 경계 유지 |
 | v1.359 | 2026-11-04 | Additive: peer pose sharing(탑뷰 부재 대비) — `GET /api/v1/peers`, `POST /api/v1/peers/beacon`(부여 `PEER_SHARE`, operator 이상), `StateSnapshot.peers`(기능이 꺼져 있으면 null). 설계 docs/plans/2026-11-04-peer-pose-sharing-design.md |
 | v1.358 | 2026-11-03 | D-974: 관제 단위 설정이 있는 Fleet의 `GET /api/fleet/state` `fleet`에 `unit`·`root`. 헤더 표시 전용, `name`(`fleet_name`) 신원은 그대로 |
 | v1.356 | 2026-11-04 | D-965: relay가 physical-evidence·rechecks를 셀로 전달, `requested_by`·`delegated_by`(요청한 앱 표시), 위임 취소 reason 전달, 503에 마지막 투영 |
@@ -5162,6 +5170,12 @@ current authorization still controls delivery and access. A revoked recipient's 
 intent may be SUPERSEDED while result evidence remains in the existing Fleet database.
 
 
+### D-973 관리자 클래스 개정
+
+`GET /api/classes?kind=object|pixel`은 현재 서버에 결합된 작업공간의 바인딩, 전체 바인딩 문서 해시 `expected_sha`, 현재 승인 수 `approved_count`와 CSRF 토큰을 반환한다. 협업 모드는 현재 프로젝트의 `manage` 권한이 필요하다.
+
+`POST /api/classes/revisions`는 정확히 `kind`, `classes`, `expected_sha`, `expected_impact`, `confirm:true`를 받는다. 기존 CSRF·Origin 검사와 `manage` 권한을 적용한다. `classes`는 기존 순서·번호·정본 이름·역할·의미를 보존한 전체 목록이며 표시 이름·색상 수정과 미사용 번호 추가만 허용한다. `expected_impact`는 실제 검수 대기로 돌릴 승인 수이며 표시 정보만 바꿀 때는 0이다. 바인딩 해시 또는 영향 수 불일치는 409, 잘못된 필드·식별자 변경은 400, 권한·CSRF 실패는 403이다. 폴더·프로젝트·파일 경로를 입력받지 않으며 모든 폴더가 현재 작업공간 클래스셋을 함께 사용한다. 승인 이력·라벨 바이트와 제외 상태를 보존한다. [D-973](../adr/D-973-explicit-managed-review-class-revisions.md)을 따른다.
+
 ### D-755 검수 앱 협업 HTTP 경계
 
 검수 앱의 선택적 `--collaboration`은 모델 PC의 HTTPS 프록시 뒤 loopback HTTP에 적용한다. CORE `/api/v1`, Fleet 역할, ROS와 장치 실행 프로토콜을 추가하거나 변경하지 않는다. 사용자·프로젝트 membership, 개인별 HF 연결, 자료 가져오기 경로와 요청 필드는 [검수 앱 공동 계정 설명](../../learning/curation/perception/docs/review-app.md#공동-계정과-hugging-face-가져오기-d-755)을 따른다.
@@ -5199,8 +5213,8 @@ manage도 필요하다. actor는 서버 세션에서 정하며 비협업 모드�
 
 | 경로 | 입력과 반환 |
 |---|---|
-| `GET /api/review-ai/{index}` | 동작별 available/reason과 최신 30개 작업. 작업에는 id/frame/action/version/state/actor/model/model_digest/created_at/updated_at/error/result와 입력 해시가 포함된다. 비밀·서버 경로는 반환하지 않는다. |
-| `POST /api/review-ai/{index}` | 정확히 action과 version. action은 object_draft/pixel_draft/mask_check, version은 해당 객체/픽셀 저장 revision 정수. 새 작업 반환. |
+| `GET /api/review-ai/{index}` | 동작별 available/reason, worker 실행 여부 busy, 현재 세션의 요청 권한 can_request와 최신 30개 작업. 작업에는 id/frame/action/version/state/actor/model/model_digest/created_at/updated_at/error/result와 입력 해시가 포함된다. 비밀·서버 경로는 반환하지 않는다. |
+| `POST /api/review-ai/{index}` | object_draft/pixel_draft/mask_check는 정확히 action과 version. sam_points는 추가로 등록된 label과 원본 정수 좌표 points 1..16개를 요구한다. version은 해당 객체/픽셀 저장 revision 정수. 새 작업 반환. |
 | `POST /api/review-ai-cancel/{id}` | 빈 JSON 객체. 작업 ID는 32자리 hex. 종료된 작업의 취소는 상태 유지. |
 | `GET /api/review-history/{lane}/{index}` | lane은 object/pixel. 선택적 before 양의 정수, limit 1..100(기본 20). events와 next_before, version 내림차순. |
 | `GET /api/review-versions/{lane}/{index}/{version}` | 저장 snapshot metadata, available, actor/ts/status(기록된 경우). 객체 boxes 또는 픽셀 해시·크기·클래스. 미보존은 available=false. |
@@ -5210,6 +5224,15 @@ AI 작업 상태는 queued/running/succeeded/failed/cancelled/stale다. 성공�
 승인·학습 투입이 아니다. 생성 시 stale version은 409, 잘못된 입력·미설정은 400,
 권한 거부는 403이다. 결과 등록 전 요청자의 세션/권한과 입력을 재검사한다.
 재시도는 현재 revision으로 새 POST다. 기존 작업 이력은 유지한다.
+
+픽셀 화면은 편집 가능한 전체 미검수 사진에 후보가 없을 때 현재 사진만 자동 요청한다.
+저장·승인은 별도이며 제외·고정 평가·부분 라벨 사진은 자동 생성하지 않는다.
+`GET /api/vlm-feedback/{index}`는 기존 의견과 최신 검사 `check` 상태를 함께 반환한다.
+의견 없음 `not_requested`/`no_report`, 정책 차단 `policy_blocked`, 읽기 실패 `unreadable`,
+구조 오류 `invalid_report`를 구분한다. 이전 의견이 있어도 최신 검사 실패·실행 상태를 감추지 않는다.
+적용한 SAM 출처는 이력·고정 평가 권위 자료 및 manifest의 `sam_assistance`에 함께 보존하고 대조한다.
+적용 후 관리 클래스 개정이 있으면 원래 `classes_sha256`을 유지하고 선택적 `class_history`에
+당시부터 현재까지의 고정 클래스 YAML을 담는다. 각 원본 해시와 D-973의 불변 클래스 계보를 검증한다.
 
 
 ## 실측 카메라 지도 미리보기 (D-775, v1.256)

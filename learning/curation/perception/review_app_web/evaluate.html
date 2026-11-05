@@ -16,12 +16,13 @@
 <main id="evaluate-main" class="learning-main ui-task-page" tabindex="-1">
 <ui-status id="evaluate-error" state="error" role="alert" hidden></ui-status>
 <ui-actions><ui-button id="evaluate-refresh" kind="quiet" type="button" data-action-icon="refresh">다시 확인</ui-button></ui-actions>
-<section class="learning-section" aria-labelledby="sources-title">
+<div class="ui-stage-grid" data-layout="watch" data-order="stage-first">
+<section class="learning-section ui-pane" data-pane="stage" aria-labelledby="sources-title">
 <h2 id="sources-title">지금 있는 평가 근거</h2><p id="evaluate-filter" class="quiet" role="status">평가 근거를 불러오는 중입니다.</p>
 <p class="quiet">읽기 전용입니다. 지표와 모델 합의(임시 정답)는 측정값이며 무엇도 승인하지 않습니다. 승격 평가에는 사람이 확정한 정답만 씁니다(D-857).</p>
 <div id="evaluate-sources" class="evaluate-sources" aria-live="polite"></div>
 </section>
-<section class="learning-section" aria-labelledby="promote-title">
+<section class="learning-section ui-pane" data-pane="now" aria-labelledby="promote-title">
 <h2 id="promote-title">승격 요청</h2>
 <p>승격 승인과 배포는 Fleet에서 승인권자가 합니다(D-793). Learning은 확정 정답 평가 근거를 모아 넘기는 데까지입니다.</p>
 <p id="promote-status" role="status">승격 요청 후보를 확인하는 중입니다.</p>
@@ -31,4 +32,4 @@
 <p id="promote-result" role="status" hidden></p>
 <h3>보낸 승격 요청</h3><ul id="promote-requests" class="evaluate-runs"></ul>
 </section>
-</main></div></div></ui-shell></body></html>
+</div></main></div></div></ui-shell></body></html>

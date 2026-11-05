@@ -1,6 +1,8 @@
 // Guided input declarations; saved versions never acquire device authority.
 import {accountFetch} from '/account-session.js';
-const $=id=>document.getElementById(id),API='/api/learning/omx/center';
+import {confirmIrreversible} from '/common/ui.js';
+const $=id=>document.getElementById(id),recordingStore=new URL(location.href).searchParams.get('profile-store')==='recording';
+const API=recordingStore?'/api/learning/recording':'/api/learning/omx/center';
 const PURPOSES=['policy','record','reward','evaluation','monitor'];
 const copy=value=>structuredClone(value);
 export function profileDocumentKey(value){
@@ -13,12 +15,57 @@ export function profileDocumentKey(value){
 }
 const empty=()=>({schema:'rosy.omx.learning-profile/1',name:'',task:'',mode:'',arms:[],cameras:[]});
 let records=[],parent=null,draft=empty(),datasetProfile=null,pending=null,saving=false,token='';
+let draftKey='',storageWarning='',editVersion=0,confirming=false;
+const draftStatus=el('p');draftStatus.id='profile-draft-status';draftStatus.setAttribute('role','status');$('profile-form').before(draftStatus);
+function modified(){return profileDocumentKey(draft)!==profileDocumentKey(parent?.profile||empty());}
+function draftNotice(restored=false){
+  draftStatus.textContent=storageWarning||((modified()||restored)?`${restored?'복원한 ':''}로컬 초안 · 서버에 저장되지 않았습니다. 이 탭에서만 보관하며 탭을 닫으면 사라집니다.`:'서버 저장과 로컬 편집은 별개입니다. 새 불변 버전 저장으로 확정하세요.');
+}
+function preserveDraft(){
+  if(draftKey)try{
+    sessionStorage.setItem(draftKey,JSON.stringify({draft,parent,pending}));storageWarning='';
+  }catch{storageWarning='로컬 초안을 보관하지 못했습니다. 편집은 계속할 수 있습니다. 화면을 떠나기 전에 서버에 저장하세요.';}
+  draftNotice();
+}
+async function restoreDraft(){
+  const version=editVersion;
+  try{
+    const [workspace,options]=await Promise.all([request('/api/learning/tasks'),request('/api/accounts/options')]);
+    if(typeof workspace.project_id!=='string'||!workspace.project_id)throw new Error('프로젝트 확인 필요');
+    const session=options.enabled?await request('/api/accounts/session'):null;
+    const identity=options.enabled?(options.rosy_account?session?.account_session:session?.user_id):'local';
+    if(typeof identity!=='string'||!identity||options.enabled&&session?.project_id!==workspace.project_id||typeof options.enabled!=='boolean')throw new Error('계정 확인 필요');
+    draftKey='rosy.omx.profile-draft:'+JSON.stringify([workspace.project_id,options.enabled?(options.rosy_account?'rosy':'user'):'local',identity])+(recordingStore?':recording':'');
+    if(editVersion!==version){preserveDraft();return;}
+    const saved=JSON.parse(sessionStorage.getItem(draftKey)||'null');
+    if(saved){
+      if(!saved.draft?.schema?.startsWith('rosy.omx.learning-profile/')||!Array.isArray(saved.draft.arms)||!Array.isArray(saved.draft.cameras))throw new Error('초안 형식 확인 필요');
+      const previous={draft,parent,pending};
+      try{draft=saved.draft;parent=saved.parent;pending=saved.pending||null;render();}
+      catch(error){({draft,parent,pending}=previous);render();throw error;}
+      try{if(profileDocumentKey(pending?.profile)!==profileDocumentKey(documentValue())||pending?.parent_id!==parent?.id)pending=null;}catch{pending=null;}
+      $('profile-panel').open=true;draftNotice(true);
+    }else draftNotice();
+  }catch{
+    storageWarning='로컬 초안을 보관하지 못했습니다. 프로젝트·계정 또는 브라우저 저장소를 확인하고 화면을 떠나기 전에 서버에 저장하세요.';draftNotice();
+  }
+}
+window.addEventListener('beforeunload',event=>{if(modified()||saving){event.preventDefault();event.returnValue='';}});
+async function replaceDraft(value,source=null){
+  if(saving||confirming)return false;
+  if(modified()){
+    const version=editVersion;confirming=true;
+    try{if(!await confirmIrreversible({message:'서버에 저장하지 않은 프로필 입력이 있습니다. 로컬 초안을 버리고 바꿀까요?',action:'초안 버리고 바꾸기'})||version!==editVersion)return false;}
+    finally{confirming=false;}
+  }
+  parent=copy(source);draft=copy(value);edited();render();return true;
+}
 function el(tag,text){const node=document.createElement(tag);if(text!=null)node.textContent=text;return node;}
 function uuid(){const b=crypto.getRandomValues(new Uint8Array(16));b[6]=(b[6]&15)|64;b[8]=(b[8]&63)|128;const h=Array.from(b,x=>x.toString(16).padStart(2,'0')).join('');return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`;}
 async function request(path,body){
   const options={cache:'no-store'};
   if(body!==undefined){
-    if(!token){const response=await accountFetch('/api/learning');token=(await response.json()).token;}
+    if(!token){const response=await accountFetch(recordingStore?'/api/learning/tasks':'/api/learning');token=(await response.json()).token;}
     options.method='POST';options.headers={'Content-Type':'application/json','X-Pinky-Token':token};options.body=JSON.stringify(body);
   }
   const response=await accountFetch(path,options),value=await response.json();
@@ -55,7 +102,7 @@ function diff(){
     .map(field=>({field,before:before[field]??null,after:after[field]}));
   $('profile-diff').textContent=`부모 ${parent?.id||'없음'} · revision ${parent?.revision||'새 작성'}\n`+(changes.length?JSON.stringify(changes,null,2):'변경 없음');
 }
-function edited(){pending=null;diff();}
+function edited(){editVersion++;pending=null;diff();preserveDraft();}
 function field(label,value,key,update,{type='text',change=false}={}){
   const wrap=el('label',label);wrap.className='ui-field-label';const input=el('input');input.className='ui-field';input.type=type;
   if(type==='number')input.step='any';input.value=value??'';input.dataset.field=key;
@@ -126,29 +173,51 @@ $('profile-bounds').onchange=()=>{draft.schema='rosy.omx.learning-profile/'+($('
 $('profile-add-arm').onclick=()=>{if(saving||draft.arms.length>=32)return;draft.arms.push({id:'',joint_names:[],units:''});edited();render();};
 $('profile-add-camera').onclick=()=>{if(saving||draft.cameras.length>=64)return;draft.cameras.push({id:'',input_key:'',arm_id:null,role:'',source_identity:'',placement:'',shape:[3,'',''],purposes:[]});edited();render();};
 $('profile-record').onchange=recordSelection;$('profiles-refresh').onclick=()=>loadProfiles();
-$('profile-clone').onclick=()=>{const selected=record();if(saving||!selected)return;parent=copy(selected);draft=copy(selected.profile);pending=null;render();};
-$('profile-new').onclick=()=>{if(saving)return;parent=null;draft=empty();pending=null;render();};
+$('profile-clone').onclick=()=>{const selected=record();if(selected)replaceDraft(selected.profile,selected);};
+$('profile-new').onclick=()=>replaceDraft(empty());
+async function preset(kind){
+  const value=empty();value.mode='independent';
+  const arms=kind==='bimanual'?['arm_a','arm_b']:['arm_a'];
+  value.arms=arms.map(id=>({id,joint_names:[],units:''}));
+  const camera=(id,arm_id,role)=>({id,input_key:'observation.images.'+id,arm_id,role,source_identity:'',placement:role,shape:[3,'',''],purposes:['policy']});
+  value.cameras=[camera('top',null,'top'),...arms.map(id=>camera(id+'_wrist',id,'wrist'))];
+  if(!await replaceDraft(value))return;
+  $('profile-panel').open=true;$('profiles-status').textContent='미검증 구성 초안 · 실제 출처·관절·단위·해상도를 직접 확인하세요. 팔·카메라 수와 순서·역할은 계속 편집할 수 있습니다.';
+}
+for(const kind of ['single','bimanual']){const button=$('profile-preset-'+kind);if(button){button.hidden=!recordingStore;button.onclick=()=>preset(kind);}}
 document.addEventListener('omx-dataset-profile',event=>{datasetProfile=event.detail;$('profile-import-dataset').disabled=!datasetProfile?.schema;});
 $('profile-bench').onchange=async()=>{
   const file=$('profile-bench').files[0];$('profile-bench').value='';if(saving||!file)return;
   try{
     const inventory=JSON.parse(await file.text());
     if(inventory?.schema!=='rosy.omx-bench-inventory/1'||!inventory.draft)throw new Error('작업대 장치 목록(inventory.json) 파일이 아닙니다.');
-    parent=null;draft=copy(inventory.draft);pending=null;render();
+    if(!await replaceDraft(inventory.draft))return;
     const left=inventory.unassigned_boards||[];
     $('profile-bench-status').textContent=`팔 ${draft.arms.length}대 · 카메라 ${draft.cameras.length}대를 채웠습니다. 이름·과제·사용 방식과 카메라 해상도를 확인하세요.`+(left.length?` 역할 미지정 보드 ${left.length}개(리더 등)는 직접 지정하세요: ${left.join(', ')}`:'');
   }catch(exc){$('profile-bench-status').textContent=`불러오기 실패: ${exc.message}`;}
 };
-$('profile-import-dataset').onclick=()=>{if(saving||!datasetProfile)return;parent=null;draft=copy(datasetProfile);pending=null;render();};
+$('profile-import-dataset').onclick=()=>{if(datasetProfile)replaceDraft(datasetProfile);};
 $('profile-use').onclick=()=>{const selected=record();if(selected)document.dispatchEvent(new CustomEvent('omx-profile-selected',{detail:{id:selected.id,revision:selected.revision,profile:copy(selected.profile)}}));};
 $('profile-form').onsubmit=async event=>{
   event.preventDefault();if(saving)return;
   try{
     const profile=documentValue();pending??={profile,request_id:uuid()};if(parent)pending.parent_id=parent.id;
+    const version=editVersion;preserveDraft();
     saving=true;$('profile-fields').disabled=true;$('profile-fields').inert=true;
-    const saved=await request(API+'/profile',pending);pending=null;parent=copy(saved);draft=copy(saved.profile);
+    const saved=await request(API+'/profile',pending);pending=null;
+    if(version===editVersion){
+      parent=copy(saved);draft=copy(saved.profile);
+      if(draftKey)try{sessionStorage.removeItem(draftKey);storageWarning='';}catch{storageWarning='서버에는 저장됐지만 로컬 초안을 지우지 못했습니다. 다시 열면 남은 초안을 확인하세요.';}
+      draftNotice();
+    }else preserveDraft();
     await loadProfiles(saved.id);render();$('profiles-status').textContent=`새 불변 프로필 저장됨 ${saved.id} · revision ${saved.revision}`;
   }catch(error){$('profiles-status').textContent=`프로필 저장: ${error.message}`;}
   finally{saving=false;$('profile-fields').disabled=false;$('profile-fields').inert=false;}
 };
-render();loadProfiles();
+render();loadProfiles();const draftRestored=restoreDraft();
+if(recordingStore){
+  $('profile-recording-return').hidden=false;
+  $('profile-use').textContent='선택한 구성으로 녹화 준비';
+  $('profile-use').onclick=()=>{const selected=record();if(selected)location.href='/learning/record?profile='+encodeURIComponent(selected.id);};
+  const selectedPreset=new URL(location.href).searchParams.get('profile-preset');if(['single','bimanual'].includes(selectedPreset))draftRestored.then(()=>preset(selectedPreset));
+}

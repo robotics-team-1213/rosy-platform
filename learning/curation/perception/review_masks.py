@@ -10,6 +10,7 @@ import yaml
 
 import build
 import class_sets
+import review_sam_assistance
 
 
 def sha(data):
@@ -309,6 +310,9 @@ def sampled_region_photo(photo_bgr, seeds, tolerance):
 
 
 def sample_selection(store, index, review, body):
+    preserve = body.get('preserve_existing', False)
+    if type(preserve) is not bool:
+        raise ValueError('preserve_existing must be boolean')
     seeds = body.get('seeds')
     if (not isinstance(seeds, list) or not 1 <= len(seeds) <= 32 or
             any(not isinstance(seed, list) or len(seed) != 2 or
@@ -319,11 +323,32 @@ def sample_selection(store, index, review, body):
     tolerance = body.get('tolerance', 'auto')
     if tolerance != 'auto' and (type(tolerance) is not int or not 0 <= tolerance <= 100):
         raise ValueError('bounded flood tolerance required')
-    raw = store.image(index).read_bytes()
-    photo = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
-    if photo is None or (photo.shape[1], photo.shape[0]) != (review['width'], review['height']):
-        raise ValueError('source image dimensions differ')
-    return sampled_region_photo(photo, seeds, tolerance)
+    if 'selection_sha256' in body:
+        digest = body['selection_sha256']
+        if not isinstance(digest, str) or body['label'] == 255:
+            raise ValueError('indexed selection requires a draft SHA and a non-ignore class')
+        raw = draft_image(store, index, digest)
+        with store.connect() as db:
+            kind = db.execute("SELECT value FROM metadata WHERE key='workspace_kind'").fetchone()
+            if kind and kind[0] == 'evaluation':
+                if not review_sam_assistance.reference(db, index, digest, body['label'], seeds,
+                        store.get(index)['source']['image_sha256'], review['classes']['sha256']):
+                    raise ValueError('evaluation selection requires recorded human SAM points')
+        region = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_UNCHANGED) == body['label']
+        tolerance = 0
+    else:
+        raw = store.image(index).read_bytes()
+        photo = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
+        if photo is None or (photo.shape[1], photo.shape[0]) != (review['width'], review['height']):
+            raise ValueError('source image dimensions differ')
+        region, tolerance = sampled_region_photo(photo, seeds, tolerance)
+    if preserve:
+        editable = pixels(store, review).copy()
+        # Explicit points admit their original-label components; other known labels stay protected.
+        for x, y in seeds:
+            cv2.floodFill(editable, None, (x, y), 255, flags=4)
+        region &= editable == 255
+    return region, tolerance
 
 
 def preview(store, index, body, conflict):
@@ -373,12 +398,18 @@ def update(store, index, body, conflict, *, actor=None):
         complete = background = 0
         status = 'pending'
         if action == 'fill_unknown':
-            backgrounds = [c['index'] for c in binding['classes'] if c['role'] == 'background']
-            if len(backgrounds) != 1:
-                raise ValueError('exactly one background class required')
+            if 'label' in body:
+                value = body['label']
+                if type(value) is not int or value not in allowed - {255}:
+                    raise ValueError('known mask index required')
+            else:
+                backgrounds = [c['index'] for c in binding['classes'] if c['role'] == 'background']
+                if len(backgrounds) != 1:
+                    raise ValueError('exactly one background class required')
+                value = backgrounds[0]
             if not np.any(image == 255):
                 raise ValueError('no unknown pixels remain')
-            image[image == 255] = backgrounds[0]
+            image[image == 255] = value
         elif action in ('paint', 'fill', 'flood', 'sample', 'polygon'):
             value = body.get('label')
             if type(value) is not int or value not in allowed:
@@ -400,6 +431,9 @@ def update(store, index, body, conflict, *, actor=None):
                     raise ValueError('bounded flood tolerance required')
                 image[flood_region(store, index, review, seed, tolerance)] = value
             elif action == 'polygon':
+                preserve = body.get('preserve_existing', False)
+                if type(preserve) is not bool:
+                    raise ValueError('preserve_existing must be boolean')
                 points = body.get('points')
                 if not isinstance(points, list) or not 3 <= len(points) <= 128:
                     raise ValueError('3..128 polygon points required')
@@ -408,7 +442,10 @@ def update(store, index, body, conflict, *, actor=None):
                             any(type(v) is not int for v in point) or
                             not 0 <= point[0] < review['width'] or not 0 <= point[1] < review['height']):
                         raise ValueError('polygon point outside original image')
-                cv2.fillPoly(image, [np.asarray(points, dtype=np.int32)], value)
+                region = np.zeros(image.shape, dtype=np.uint8)
+                cv2.fillPoly(region, [np.asarray(points, dtype=np.int32)], 1)
+                selected = region.astype(bool) & (image == 255) if preserve else region.astype(bool)
+                image[selected] = value
             else:
                 points, radius = body.get('points'), body.get('radius')
                 if type(radius) is not int or not 0 <= radius <= 128:
@@ -502,6 +539,11 @@ def update(store, index, body, conflict, *, actor=None):
         if actor:
             previous['actor'] = actor
         previous['saved_version'] = version
+        if action == 'sample' and body.get('selection_sha256') and region.any():
+            assistance = review_sam_assistance.reference(db, index, body['selection_sha256'], value, body['seeds'],
+                                                       frame['source']['image_sha256'], binding['sha256'])
+            if assistance:
+                previous['sam_assistance'] = dict(assistance, applied_version=version, applied_mask_sha256=digest)
         if action == 'undo':
             previous['restored_version'] = prior['version']
         db.execute('INSERT INTO pixel_events(frame,version,action,review) VALUES (?,?,?,?)',

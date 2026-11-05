@@ -203,7 +203,7 @@ Perception 결과로 out_path를 연결하면 시작·중지·재시도 버튼�
 
 ## Learning SIM 실행 연결
 
-기존 검수 state의 `sim-config.json`을 소유자 전용 일반 파일(0600)로 마련하면 설치기는 대상 앱의 CLI 지원 여부를 확인해 `--sim-config`를 연결한다. 이전 앱으로 복귀하면 지원하지 않는 인자는 제거하고, 지원하는 앱으로 돌아오면 같은 state의 연결을 복원한다. 잘못된 파일 권한이나 링크는 서비스 전환 전에 거절한다.
+Fleet 로봇 목록 읽기용 `fleet-owner.json`(`{"url": "https://FLEET", "token_file": "/PRIVATE/viewer-token", "ca_file": "/선택/CA.pem"}`, Viewer 역할 토큰)도 같은 규칙으로 `--fleet-owner-config`에 연결된다. 기존 검수 state의 `sim-config.json`을 소유자 전용 일반 파일(0600)로 마련하면 설치기는 대상 앱의 CLI 지원 여부를 확인해 `--sim-config`를 연결한다. 이전 앱으로 복귀하면 지원하지 않는 인자는 제거하고, 지원하는 앱으로 돌아오면 같은 state의 연결을 복원한다. 잘못된 파일 권한이나 링크는 서비스 전환 전에 거절한다.
 
 설정은 기존 `sim_web.LocalRuns`의 정확한 여섯 필드(`workspace_id`, `source_sha`, `source_root`, `binding_file`, `binding_sha256`, `entry_sha256`)를 사용한다. 실제 workspace와 별도로 설치된 clean Git 실행 소스·binding·entry 지문을 결속한다. SDK 실행 소스를 검수 release에 복제하지 않는다. 앱 시작과 독립 운영 조회에서 실제 결속을 검증하며, 페이지 HTTP 200만으로 실행 연결을 수용하지 않는다. 기존 실행의 보고서·단계별 PNG를 조회해 검증하고 신규 실행은 별도로 판단한다.
 

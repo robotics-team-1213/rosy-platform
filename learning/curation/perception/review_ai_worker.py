@@ -21,10 +21,11 @@ def execute(snapshot, config, folder):
     if snapshot.get('action') == 'mask_check':
         if feedback.feedback_binding(snapshot['binding']) != snapshot.get('review_binding'):
             raise ValueError('feedback prompt binding differs')
-    models = feedback._get_json(feedback.ENDPOINT + '/api/tags')['models']
-    model = next((m for m in models if m['name'] == objects.MODEL), None)
-    if model is None or model['digest'] != config['model_digest']:
-        raise ValueError('configured model digest differs')
+    if snapshot.get('action') != 'sam_points':
+        models = feedback._get_json(feedback.ENDPOINT + '/api/tags')['models']
+        model = next((m for m in models if m['name'] == objects.MODEL), None)
+        if model is None or model['digest'] != config['model_digest']:
+            raise ValueError('configured model digest differs')
     image = base64.b64decode(snapshot['image'], validate=True)
     if hashlib.sha256(image).hexdigest() != snapshot['image_sha256']:
         raise ValueError('image snapshot differs')
@@ -52,16 +53,18 @@ def execute(snapshot, config, folder):
             'format': feedback.FORMAT, 'stream': False, 'think': False,
             'options': {'temperature': 0, 'num_predict': 240}})
         return {'feedback': feedback._feedback(json.loads(response['message']['content']))}
-    if action != 'pixel_draft':
+    if action not in ('pixel_draft', 'sam_points'):
         raise ValueError('unknown action')
     checkpoint = Path(config['sam_checkpoint'])
     with checkpoint.open('rb') as stream:
         if hashlib.file_digest(stream, 'sha256').hexdigest() != config['sam_checkpoint_sha256']:
             raise ValueError('configured checkpoint digest differs')
-    seeds = completion.ask(photo, human, ids['drivable'], feedback.ENDPOINT)
+    seeds = ({'selected': snapshot['sam_prompt']['points']} if action == 'sam_points'
+             else completion.ask(photo, human, ids['drivable'], feedback.ENDPOINT))
     if not any(seeds.values()):
         return {'mask': base64.b64encode(raw).decode('ascii'), 'added_pixels': 0}
-    completion.qwen_points.unload(feedback.ENDPOINT, objects.MODEL)
+    if action != 'sam_points':
+        completion.qwen_points.unload(feedback.ENDPOINT, objects.MODEL)
     import torch
     from sam3.model_builder import build_sam3_video_model
     model_sam = build_sam3_video_model(checkpoint_path=str(checkpoint), load_from_HF=False)
@@ -69,6 +72,12 @@ def execute(snapshot, config, folder):
     tracker.backbone = model_sam.detector.backbone
     with torch.inference_mode():
         proposals = completion.segment(tracker, folder / 'single-frame', photo, seeds, torch)
+        if action == 'sam_points':
+            selected = proposals['selected']
+            draft = np.full(human.shape, 255, dtype=np.uint8)
+            draft[selected] = snapshot['sam_prompt']['label']
+            return {'mask': base64.b64encode(review_masks.encode(draft)).decode('ascii'),
+                    'selected_pixels': int(np.count_nonzero(selected))}
         draft = completion.compose(human, proposals, snapshot['binding'])
     return {'mask': base64.b64encode(review_masks.encode(draft)).decode('ascii'),
             'added_pixels': int(np.count_nonzero((human == 255) & (draft != 255)))}

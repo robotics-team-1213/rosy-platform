@@ -1,11 +1,14 @@
 """Sealed native demonstrations to ACT arrays; never invent online transitions."""
+from functools import lru_cache
 import hashlib
+import importlib.util
 import json
 from pathlib import Path
 
 import numpy as np
 
 from experiment_dataset import load_dataset
+from experiment_io import read_json
 from experiment_profile import validate_profile
 from native_cycle import native, validate_split
 
@@ -27,6 +30,33 @@ def _profile(profile, source):
             raise ValueError('native wrist camera requires its explicit arm binding')
     layout = native.JOINTS[:] if len(arms) == 1 else [f'{arm}.{joint}' for arm in ids for joint in native.JOINTS]
     return profile, layout
+
+
+@lru_cache(maxsize=1)
+def native_inputs_api():
+    path = Path(__file__).resolve().parents[2] / 'curation/perception/learning_native_inputs.py'
+    spec = importlib.util.spec_from_file_location('rosy_native_inputs', path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def validate_source_profile(profile, report, root):
+    """Match the complete native layout against actual sealed metadata."""
+    checked, layout = _profile(profile, report)
+    info = read_json(Path(root) / 'meta/info.json')
+    try:
+        actual = native.joint_layout(info)
+    except ValueError:
+        actual = None
+    if actual != layout:
+        raise ValueError('native preparation joint order or metadata differs')
+    cameras = {key: value.get('shape') for key, value in info.get('features', {}).items()
+               if key.startswith('observation.images.')}
+    expected = {camera['input_key']: [*camera['shape'][1:], 3] for camera in checked['cameras']}
+    if cameras != expected:
+        raise ValueError('profile camera keys or shapes differ from prepared native metadata')
+    return checked, layout
 
 
 def convert_native(splits: Path, output: Path, *, profile: dict) -> dict:

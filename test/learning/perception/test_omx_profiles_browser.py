@@ -196,10 +196,12 @@ def test_guided_profiles_preserve_order_bounds_lineage_and_explicit_export_selec
                 page.locator('#profile-task').fill('Unsaved task edit')
                 page.locator('#profiles-refresh').click()
                 expect(page.locator('#profile-task')).to_have_value('Unsaved task edit')
+                page.on('dialog', lambda dialog: dialog.accept())
                 page.reload(wait_until='networkidle')
-                page.locator('#profile-panel > summary').click()
+                page.locator('#profile-panel').evaluate('node => node.open = true')
                 page.locator('#profile-record').select_option(records[-1]['id'])
                 page.locator('#profile-clone').click()
+                page.locator('dialog.ui-confirm ui-button[kind="irreversible"]').click()
                 expect(page.locator('[data-camera="0"] [data-field="placement"]')).to_have_value('above_shifted')
                 page.locator('[data-arm="1"] [data-action="remove"]').click()
                 expect(page.locator('[data-camera="2"] [data-field="arm_id"]')).to_have_value('left')
@@ -207,6 +209,7 @@ def test_guided_profiles_preserve_order_bounds_lineage_and_explicit_export_selec
                 expect(page.locator('#profiles-status')).to_contain_text('알 수 없는 팔')
                 assert len(requests) == 2
                 page.locator('#profile-clone').click()
+                page.locator('dialog.ui-confirm ui-button[kind="irreversible"]').click()
                 with page.expect_download() as download:
                     page.locator('#profile-download').click()
                 assert download.value.suggested_filename == 'omx-profile-' + records[-1]['id'] + '.json'
