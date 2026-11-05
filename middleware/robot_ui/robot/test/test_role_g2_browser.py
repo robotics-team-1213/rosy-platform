@@ -38,11 +38,7 @@ def _select_task(page, panel_id):
     """Select through the shipped navigation at either responsive tier."""
     page.locator('.ui-task-chooser[aria-busy="false"]').wait_for()
     page.wait_for_function("() => [...document.styleSheets].some(sheet => sheet.href?.endsWith('/common/task-chooser.css'))")
-    chooser = page.get_by_role("combobox", name="작업 선택", exact=True)
-    if chooser.is_visible():
-        chooser.select_option(panel_id)
-    else:
-        page.locator(f'[role="tab"][aria-controls="procedure-{panel_id}"]').click()
+    page.locator(f'[role="tab"][aria-controls="procedure-{panel_id}"]').click()
     page.locator(f'[id="procedure-{panel_id}"]:not([hidden])').wait_for()
 
 

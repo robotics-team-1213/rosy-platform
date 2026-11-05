@@ -129,8 +129,7 @@ def open_install(page, lanes=SITE_LANES):
         headers={'X-Frame-Rectified':'false','X-Frame-Seq':'42','X-Frame-Age-Ms':'20'}))
     page.goto(page.origin+'/console/install')
     tab=page.get_by_role('tab',name='카메라 설치·보정')
-    if tab.is_visible(): tab.click()
-    else: page.locator('.ui-task-compact select').select_option('calibration')
+    tab.click()
 
 
 def test_markerless_pick_on_the_install_picture_save_reload_and_recalibration(browser_site):

@@ -55,10 +55,7 @@ def install_url(console):
 
 def choose(page, title):
     tab = page.get_by_role('tab', name=title, exact=True)
-    if tab.is_visible():
-        tab.click()
-    else:
-        page.get_by_role('combobox', name='작업 선택').select_option(label=title)
+    tab.click()
 
 
 def _approved_robot_peer(**changes):
@@ -248,11 +245,11 @@ def test_install_tasks_stay_mounted_and_navigate_while_role_locked(console_url):
         assert page.evaluate('retainedEnrollment===document.querySelector("#robot-enrollment")')
         expect(page.locator('#enroll-address')).to_have_value('192.0.2.55:8080')
         page.set_viewport_size({'width': 390, 'height': 844})
-        compact = page.get_by_role('combobox', name='작업 선택')
-        expect(compact).to_be_enabled()
-        compact.select_option('device-profiles')
+        device_tab = page.get_by_role('tab',name='장치 정보',exact=True)
+        expect(device_tab).to_be_enabled()
+        device_tab.click()
         expect(page.locator('#device-profiles')).to_be_visible()
-        compact.select_option('calibration')
+        page.get_by_role('tab',name='카메라 설치·보정',exact=True).click()
         expect(page.locator('#camera-calibration')).to_be_visible()
         assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
         assert errors == []

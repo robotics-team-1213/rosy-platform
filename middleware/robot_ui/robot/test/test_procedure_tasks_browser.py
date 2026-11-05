@@ -151,7 +151,7 @@ def test_guard_veto_rejection_and_pending_switch_leave_stop_live(page):
     expect(page.get_by_role('tab', name='첫 작업')).to_have_attribute('aria-selected','true')
 
 
-def test_keyboard_compact_chooser_and_teardown(page):
+def test_keyboard_narrow_subnav_and_teardown(page):
     first = page.get_by_role('tab', name='첫 작업')
     first.focus()
     page.keyboard.press('End')
@@ -162,16 +162,15 @@ def test_keyboard_compact_chooser_and_teardown(page):
     expect(page.get_by_role('tab', name='다음 작업')).to_be_focused()
     expect(page.get_by_role('tab', name='다음 작업')).to_have_attribute('aria-selected','true')
     page.set_viewport_size({'width':320,'height':844})
-    chooser = page.get_by_role('combobox', name='작업 선택', exact=True)
+    chooser = page.get_by_role('tablist', name='작업 선택', exact=True)
     expect(chooser).to_be_visible()
-    chooser.focus()
-    chooser.select_option('setup.first')
+    first.click()
     expect(page.get_by_role('textbox', name='작업 초안', exact=True)).to_be_visible()
-    expect(chooser).to_be_focused()
+    expect(first).to_be_focused()
     page.evaluate('window.blocked=true')
-    chooser.select_option('setup.second')
-    expect(chooser).to_have_value('setup.first')
-    expect(chooser).to_be_focused()
+    chooser.get_by_role('tab',name='다음 작업',exact=True).click()
+    expect(first).to_have_attribute('aria-selected','true')
+    expect(first).to_be_focused()
     page.evaluate('window.blocked=false')
     assert page.evaluate('document.documentElement.scrollWidth-innerWidth') == 0
     page.evaluate('window.mounted.unmountAll()')

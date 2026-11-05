@@ -479,9 +479,10 @@ D-741(Accepted)이 정한, 모든 웹 표면이 같이 쓸 자리다. Rosy Fleet
 기존 공간 문법을 유지한다.
 
 [`task-chooser.js`](shared/web/task-chooser.js)와
-[`task-chooser.css`](shared/web/task-chooser.css)는 기존 segment/field/status를 조합한다.
-큰 창은 세로 작업 목록, 64rem 미만은 네이티브 선택이다. 현재 작업과 선택은 중립 표현을 쓰며
-현재 역할의 장미색 위치 표식(D-277)과 구별한다. 새 팔레트나 간격 척도를 추가하지 않는다.
+[`task-chooser.css`](shared/web/task-chooser.css)는 공용 하위 탐색과 status를 조합한다.
+같은 위계의 화면 링크와 작업 탭은 `.ui-subnav-nav`·`.ui-subnav-item`의 정렬·치수·선택·초점을 공유한다.
+링크는 주소로 이동하고 native button 탭은 mounted 패널을 전환한다. 좁은 배치는 같은 컨테이너 질의가 소유하며 별도 선택기로 바꾸지 않는다.
+현재 위치(`aria-current`)와 선택된 탭(`aria-selected`)은 같은 장미색 위치 표식을 쓴다. 실제 폼의 segment·권한·상태·위험 동작은 바꾸지 않는다.
 모든 허용 작업은 mounted 상태로 입력·결과를 유지한다. 표면이 manifest, 권한, 요청과
 `beforeHide`/polling을 소유하고 공용 선택기는 표현·초점·전환 잠금만 소유한다. 전환·종료
 거절이나 시간 초과 뒤에는 현재 작업을 유지한다. 정지는 작업 선택 영역 밖에서 계속 접근한다.

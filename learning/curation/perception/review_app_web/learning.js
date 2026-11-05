@@ -366,5 +366,5 @@ function showSection(focus=true) {
 }
 window.addEventListener('hashchange',()=>showSection());
 window.addEventListener('popstate',()=>showSection());
-$('learning-main').addEventListener('click',event=>{const link=event.target.closest('a[href^="#"]');if(link&&link.hash===location.hash)showSection();});
+document.querySelector('.ui-app-body').addEventListener('click',event=>{const link=event.target.closest('a[href^="#"]');if(link&&link.hash===location.hash)showSection();});
 showSection();

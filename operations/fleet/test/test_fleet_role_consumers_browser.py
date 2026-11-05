@@ -128,11 +128,7 @@ def test_fleet_role_styles_reach_fields_disclosures_and_headings(tmp_path, theme
                         _assert_control(summary)
                     page.locator("#context-status-tab").click()
                 elif path == "/console/install":
-                    chooser = page.locator(".ui-task-compact select")
-                    if chooser.is_visible():
-                        chooser.select_option("robots")
-                    else:
-                        page.get_by_role("tab", name="로봇 등록", exact=True).click()
+                    page.get_by_role("tab", name="로봇 등록", exact=True).click()
                     # Only reveal the existing form to measure its paint; no enrollment request.
                     expect(page.locator("#enroll-controls")).to_be_visible()
                     page.locator("#enroll-dialog").evaluate("node => node.showModal()")
@@ -141,10 +137,7 @@ def test_fleet_role_styles_reach_fields_disclosures_and_headings(tmp_path, theme
                     assert field.evaluate("node => getComputedStyle(node).paddingLeft") == "12px"
                     assert field.evaluate("node => getComputedStyle(node).borderRadius") == "6px"
                     page.locator("#enroll-dialog").evaluate("node => node.close()")
-                    if chooser.is_visible():
-                        chooser.select_option("calibration")
-                    else:
-                        page.get_by_role("tab", name="카메라 설치·보정", exact=True).click()
+                    page.get_by_role("tab", name="카메라 설치·보정", exact=True).click()
                     page.locator("#field-options").evaluate("node => node.open = true")
                     for field_id in ["#field-width", "#field-height"]:
                         field = page.locator(field_id)

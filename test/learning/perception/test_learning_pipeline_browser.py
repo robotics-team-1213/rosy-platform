@@ -46,6 +46,9 @@ def test_home_routes_and_keyboard_section_navigation(browser_workspace,width,the
             if other!=target:
                 expect(page.locator('#'+other)).to_be_hidden()
         expect(link).to_have_attribute('aria-current','location')
+        link.focus()
+        page.keyboard.press('Enter')
+        expect(page.locator('#'+target)).to_be_focused()
         paint = link.evaluate("""node=>{const s=getComputedStyle(node),other=node.closest('nav').querySelector('a:not([aria-current])');
           return {alignment:s.textAlign,selected:s.backgroundColor,other:getComputedStyle(other).backgroundColor};}""")
         assert paint['alignment'] == 'start' and paint['selected'] != paint['other'], paint
