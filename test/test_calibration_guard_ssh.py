@@ -1,10 +1,12 @@
 """Run the operator guard through pinned-SSH stdin with a real loopback CORE."""
 import json
+import importlib.util
 import os
 from pathlib import Path
 import shutil
 import subprocess
 import sys
+from types import SimpleNamespace
 
 import pytest
 
@@ -96,3 +98,36 @@ def test_ssh_loopback_does_not_turn_malformed_reply_into_idle(fake_core, ssh_pro
     result = invoke(fake_core, ssh_probe)
     assert 'no active calibration session' not in result.stdout
     assert fake_core['auth'] == ['Bearer '+TOKEN]
+
+
+@pytest.mark.skipif(os.name == 'nt', reason='Linux device CORE process evidence')
+@pytest.mark.parametrize('mode, second_pid, accepted', [('none', '123', True), ('required', '123', True),
+                                                      ('unknown', '123', False), ('none', '124', False)])
+def test_tls_producer_runs_as_core_and_binds_the_service_generation(monkeypatch, mode, second_pid, accepted):
+    import pwd
+    spec = importlib.util.spec_from_file_location('calibration_probe', GUARD.parent/'calibration_tls_read.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    pids = iter(['123', second_pid])
+    monkeypatch.setattr(subprocess, 'check_output', lambda *a, **kw: next(pids))
+    read_bytes = Path.read_bytes
+    monkeypatch.setattr(Path, 'read_bytes', lambda path: b'HOME=/var/lib/rosy/core\0PYTHONPATH=/opt/rosy/current/install/lib\0'
+                        if str(path) == '/proc/123/environ' else read_bytes(path))
+    stat = Path.stat
+    monkeypatch.setattr(Path, 'stat', lambda path, **kw: SimpleNamespace(st_uid=123)
+                        if str(path) == '/proc/123' else stat(path, **kw))
+    monkeypatch.setattr(pwd, 'getpwnam', lambda name: SimpleNamespace(pw_uid=123, pw_gid=456))
+    monkeypatch.setattr(os, 'getgrouplist', lambda *a: [456])
+    observed = {}
+    def run(command, **kwargs):
+        observed.update(command=command, **kwargs)
+        return SimpleNamespace(returncode=0, stdout=mode+'\n')
+    monkeypatch.setattr(subprocess, 'run', run)
+    if accepted:
+        assert module.core_tls_mode() == mode
+    else:
+        with pytest.raises(ValueError):
+            module.core_tls_mode()
+    assert observed['user'] == 123 and observed['group'] == 456
+    assert observed['env']['HOME'] == '/var/lib/rosy/core'
+    assert 'server_tls_options' in observed['command'][-1]
