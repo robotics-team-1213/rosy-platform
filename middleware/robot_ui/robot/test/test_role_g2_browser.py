@@ -458,6 +458,11 @@ def test_device_procedure_places_status_and_actions_before_long_readouts(tmp_pat
                 assert table.is_visible()
                 assert "fixture-" in table.inner_text()
                 assert table.locator("td").last.evaluate("node => getComputedStyle(node).overflowWrap") == "anywhere"
+                header_widths = table.locator("th").evaluate_all("""nodes => nodes.map(node => {
+                  const style = getComputedStyle(node), box = node.getBoundingClientRect();
+                  return {label:node.textContent, content:box.width-parseFloat(style.paddingLeft)-parseFloat(style.paddingRight), glyph:parseFloat(style.fontSize)};
+                })""")
+                assert header_widths and all(row["content"] >= 4 * row["glyph"] for row in header_widths), (width, title, header_widths)
                 region = page.get_by_role("region", name=f"{title} 원본 조회값 스크롤", exact=True)
                 assert region.evaluate("node => getComputedStyle(node).overflowX") == "auto"
                 region.focus()
