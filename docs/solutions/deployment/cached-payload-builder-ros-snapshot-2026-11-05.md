@@ -47,8 +47,7 @@ snapshot 날짜와 Debian 버전 안의 패키지 빌드 날짜를 같은 날짜
 - 실제 payload: [run42046327994](https://github.com/robotics-team-1213/rosy-platform/actions/runs/42046327994),
   `2026.11.05-004`, source `5adbcc36536de3bb64344b149f069c0ad1fe001b`.
   실행 로그에서 같은 새 builder digest를 사용했음을 확인했다.
-- 새 artifact의 ROS inventory SHA-256은
-  `9f3c510c4a734e015053bc45c573a8cb9294dad49e7ad2ebc102f4adff0b492c`다.
+- 새 artifact의 ROS inventory SHA-256은 `9f3c510c4a734e015053bc45c573a8cb9294dad49e7ad2ebc102f4adff0b492c`다.
   두 대에서 각각 읽은319개 설치 목록과 공유314개가 모두 일치했고 불일치는0개다.
   release-only28개는 공유 비교에서 제외되므로 전체 OS package 동일성으로 보고하지 않는다.
 - 공식 준비 도구는 ABI 검사 후4684개 파일의 서명을 검증하고5183개 member를 포장했다.
