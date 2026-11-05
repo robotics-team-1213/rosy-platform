@@ -62,6 +62,24 @@ def test_smolvla_revision_cannot_be_mistaken_for_act(module):
         module.policy_revision(files, policy_type='unknown')
 
 
+def test_smolvla_missing_optional_sdk_is_reported_before_data_or_model_copy(module, monkeypatch):
+    def version(name):
+        if name == 'transformers':
+            raise module.importlib.metadata.PackageNotFoundError(name)
+        return '0.4.4' if name == 'lerobot' else 'synthetic-version'
+    monkeypatch.setattr(module.importlib.metadata, 'version', version)
+    with pytest.raises(ValueError, match='isolated SmolVLA.*transformers'):
+        module.training_environment('smolvla')
+
+
+def test_act_environment_does_not_require_optional_vla_packages(module, monkeypatch):
+    def version(name):
+        assert name != 'transformers'
+        return 'synthetic-version'
+    monkeypatch.setattr(module.importlib.metadata, 'version', version)
+    assert 'transformers' not in module.training_environment('act')['packages']
+
+
 @pytest.mark.parametrize('fault', ['unknown_source', 'unreviewed', 'missing_hash', 'split_ids', 'cycle'])
 def test_invalid_split_receipts_cannot_start_trainer(module, splits, fault):
     root, receipt = splits
