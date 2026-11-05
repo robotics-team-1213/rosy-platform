@@ -4586,3 +4586,10 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 사전 test-only e2d52bf653 원격 RED8failed/10passed, 추가8d4556a458의 torque ON 전제 거부 순서 RED1failed를 보존했다. 독립 Safety-Review 후 b8920ff0e6 원격 GREEN은 새 hold19개를 포함해208passed/2skipped·NEW0/known0/flaky0이다.2skip은 기존 녹화 정적 episode 검사의 실제 LeRobot 환경 의존이며 새 hold 통과에 포함하지 않는다. 최초 GREEN 명령의 존재하지 않는 시험 파일명으로0수집/exit5였던 원본도 별도 보존하고 증거에서 제외했다. 전체6개 시험 경로의 존재를 확인한 수정 명령으로 검증했다. 실제 토크·이동·카메라 서비스 변경은 하지 않았다.
 - gate 변화: 없음 — 소프트웨어 회귀를 확인했으며 DEVICE/FIELD·실제 모델 작업 수용은 미완료다. 현장은 landed main과 해당 단계 현장 감독 확인 후에만 사용한다.
 - CE: 해당 없음 — 새 도구 동작·오류/복원 조건을 코드와 회귀 및 기존 README에서 직접 확인할 수 있다. 미실행 실물 결과를 해결 교훈으로 기록하지 않는다.
+
+## 2026-11-06 · uncommitted · docs(omx): hold 회귀 skip 의존성 정정
+
+- 변경: 앞선 hold-only 항목의2skip을 LeRobot 환경 의존이라고 설명한 부분을 정정한다. 두 테스트의 실제 importorskip은 pandas와pyarrow이며, 어느 패키지가 없었는지는 해당 원본 로그만으로 확정하지 않는다. 원래 항목은 append-only 이력으로 남기고 이 항목을 해석 기준으로 삼는다. 실행 코드와 수치는 바꾸지 않는다.
+- 증거: `test/test_omx_record_session.py::test_episodes_with_an_untouched_leader_are_flagged_after_recording`의 두 인자 경우와 sourceb8920ff0e6의 원본208passed/2skipped·NEW0, 새 hold19개 실제PASS를 독립 검토했다. 실제 설치 대상 source2986d9b8ee는 정본 배포 시험112passed/skip0·NEW0과 archive974경로 readback도 통과했다. 장치 동작은 아직 수행하지 않았다.
+- gate 변화: 없음 — 소프트웨어 전달과 실물 감독·학습 모델의 작업 수용은 별개다.
+- CE: 해당 없음 — 기존 증거의 설명을 바로잡는 사실 정정이다.
