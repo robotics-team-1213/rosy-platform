@@ -1,7 +1,7 @@
 // 지도 위 로봇 경로(지나온 길)와 D-512 테더 원(D-526 감시 정지면 위험 색). 표시 전용 — 목표·교통정리에 쓰지 않는다.
 // D-594: 경로는 Fleet 이 1 s 마다 기록한 지도 좌표다(GET /api/fleet/robots/{id}/path). 범위를 고르면 그 범위를
 // 한 번 받고, 그 뒤로는 PATH_POLL_MS 마다 마지막 점 뒤만 받는다. 새로 고쳐도 남는다. 선 모양이 상태다:
-// LOCALIZED 실선, DEGRADED 파선, CAMERA_ONLY(천장 카메라 추적만) 점선. 위치 미보고(모터 모드)·odom pose 는
+// LOCALIZED 실선, DEGRADED 파선, CAMERA_ONLY(천장 카메라 추적만) 점선. 현재 지도와 map_id가 일치하는 구간만 그린다. 위치 미보고(모터 모드)·odom pose 는
 // Fleet 이 기록하지 않으므로 지도에 그려지지 않는다. 테더 밖 판정도 LOCALIZED·map 보고만 쓴다(D-526 감시와 같다).
 // map-view 가 자기 toPx(격자 칸 또는 D-513 7 로 돌린 미터 뷰)를 넘기므로 지도와 같이 돈다.
 export const PATH_POLL_MS = 2000, TRIPS_POLL_MS = 10000, TETHER_POLL_MS = 5000, WATCH_STALE_S = 2, MAX_POINTS = 20000;
@@ -108,6 +108,7 @@ export function drawTrails(ctx, view, toPx, lineWidth, call) {
     call("/api/fleet/tethers").then((r) => { view.tethers = r.tethers || []; view.watchAge = r.watch_age_s; }, () => {}); // 실패하면 직전 목록을 둔다
   }
   const rangeS = (view.trailRange || "120") === "trip" ? null : Number(view.trailRange || "120");
+  const mapId = view.map ? view.map.map_id : view.activeSiteMap?.map?.map_id;
   let drawn = 0;
   ctx.save();
   ctx.lineWidth = lineWidth;
@@ -119,6 +120,7 @@ export function drawTrails(ctx, view, toPx, lineWidth, call) {
     for (let i = 1; i < points.length; i += 1) {
       const p = points[i - 1], q = points[i];
       if (p.seg !== q.seg) continue; // 기록이 끊긴 곳은 잇지 않는다
+      if (!mapId || p.map_id !== mapId || q.map_id !== mapId) continue;
       const a = toPx(p.x, p.y), b = toPx(q.x, q.y);
       ctx.setLineDash((DASH[q.state] || DASH.CAMERA_ONLY).map((d) => d * lineWidth));
       ctx.globalAlpha = rangeS == null ? 0.8 : 0.8 * Math.max(0.15, 1 - (entry.now - q.t) / rangeS); // 오래될수록 흐리게
