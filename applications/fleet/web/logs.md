@@ -1014,3 +1014,10 @@
 - gate 변화: SOURCE 회귀 확인; canonical FULL194811의 NEW는 수정했으나 새 정식 FULL 결과와 실제 장치 수용은 별도다.
 - 결정: 기존 공용 quiet 버튼을 사용하며 검사 예외나 기본 kind 추론을 추가하지 않는다.
 - 교훈: CE 해당 없음 — 기존 공용 kind 계약과 한 줄 수정이 원인·해결을 직접 설명한다.
+
+## 2026-11-06 · uncommitted · fix(fleet): 수동 관제 API 설명의 동시 삽입 충돌 조정
+- 변경: 보존 source ad2de3ea05를 main1fd024ee90에 정상 병합했다. API Reference의 수동 의도 v1.363과 기존 Fleet unit v1.358·OMX incident v1.357 설명을 모두 보존했다. 기존 v1.363 예약·header·runtime pin을 유지하며 새 번호·계약 의미·guard 변경은 없다.
+- 증거: sourcecb4d0d403a 원격 AI PC 공용 control/API/CORE/Fleet/Task/channel/OMX incident/Node 286passed/skip0, 실제 수동 조종 Chromium18passed/skip0; scratch pinky-manual-api-{green,browser}/run-1.txt. 독립 source 검토 미해결 finding 없음.
+- gate 변화: SOURCE 회귀 확인; old canonical212723 STOP은 보존하고 재개하지 않는다. 새 canonical FULL·공개·장치 수용은 별도다.
+- 결정: 양쪽 설명을 버전 순서363/358/357로 두고 API gateway bump363의 already 확인을 기록한다. 충돌 밖 기존 main의 incident 등록·trail frame·motor 변경을 보존했다.
+- 교훈: CE 해당 없음 — 일반 문서 삽입 충돌이며 최종 병합과 API alignment 회귀가 조정 근거를 보존한다.
