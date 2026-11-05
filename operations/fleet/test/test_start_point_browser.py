@@ -347,7 +347,7 @@ def test_trail_only_draws_segments_in_the_displayed_map(browser_site, surface):
                                          None, map_id, map_id], start=1)]
     page.route('**/api/fleet/robots/robot-a/path?*', lambda route: route.fulfill(json={'now': 7, 'points': points}))
     page.goto(page.origin + '/console')
-    expect(page.locator('#map-stage')).to_have_attribute('data-map-state', surface, timeout=15000)
+    expect(page.locator('#map-stage')).to_have_attribute('data-map-state', 'site' if surface == 'site' else 'ready', timeout=15000)
     deadline = time.monotonic() + 10
     while page.evaluate('window.__trailOverlay?.segments || 0') == 0 and time.monotonic() < deadline:
         page.wait_for_timeout(100)
