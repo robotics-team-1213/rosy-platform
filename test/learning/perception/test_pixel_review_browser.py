@@ -158,8 +158,72 @@ def open_pixel_tool(page, selector):
     page.wait_for_function('(selector)=>document.querySelector(selector).getBoundingClientRect().height>0', arg=selector)
 
 
+@pytest.fixture
+def pixel_focus_trace(browser_workspace, request):
+    output = os.getenv('ROSY_PIXEL_FOCUS_TRACE_DIR')
+    gated = os.getenv('ROSY_PIXEL_FOCUS_GATE') == '1'
+    if not output:
+        assert not gated, 'ROSY_PIXEL_FOCUS_GATE requires ROSY_PIXEL_FOCUS_TRACE_DIR'
+        yield lambda label: None
+        return
+    page, _, _ = browser_workspace
+    page.add_init_script('''(() => {
+      const trace = window.__pixelFocusTrace = {events: [], armed: false, held: null};
+      const describe = node => node && {id: node.id, tag: node.tagName, tabIndex: node.tabIndex};
+      trace.snapshot = (kind, extra = {}) => {
+        trace.events.push({kind, time: performance.now(), hash: location.hash,
+          active: describe(document.activeElement), current: [...document.querySelectorAll('.review-tool-nav a')]
+            .filter(node => node.hasAttribute('aria-current')).map(node => ({hash: node.hash, current: node.getAttribute('aria-current')})),
+          sections: [...document.querySelectorAll('[data-review-tool]')]
+            .map(node => ({id: node.id, tool: node.dataset.reviewTool, hidden: node.hidden})), ...extra});
+      };
+      const focus = HTMLElement.prototype.focus;
+      HTMLElement.prototype.focus = function(...args) {
+        trace.snapshot('focus-call', {target: describe(this), stack: new Error().stack});
+        return focus.apply(this, args);
+      };
+      for (const type of ['click', 'keydown', 'keyup', 'focusin', 'focusout', 'popstate'])
+        window.addEventListener(type, event => trace.snapshot(type,
+          {target: describe(event.target), key: event.key, shift: event.shiftKey}), true);
+      window.addEventListener('hashchange', event => {
+        trace.snapshot('hashchange', {oldURL: event.oldURL, newURL: event.newURL});
+        if (trace.armed && new URL(event.newURL).hash === '#pixel-review') {
+          trace.armed = false;
+          trace.held = {oldURL: event.oldURL, newURL: event.newURL};
+          event.stopImmediatePropagation();
+          trace.snapshot('hashchange-held');
+        }
+      }, true);
+      trace.release = () => {
+        if (!trace.held) throw new Error('Return-review hashchange was not held');
+        const event = trace.held;
+        trace.held = null;
+        trace.snapshot('hashchange-release');
+        window.dispatchEvent(new HashChangeEvent('hashchange', event));
+        trace.snapshot('hashchange-released');
+      };
+    })();''')
+
+    def checkpoint(label):
+        page.evaluate('label => window.__pixelFocusTrace.snapshot(label)', label)
+        if gated and label == 'before-review-click':
+            page.evaluate('window.__pixelFocusTrace.armed = true')
+        elif gated and label == 'after-review-click':
+            page.wait_for_function('window.__pixelFocusTrace.held !== null')
+        elif gated and label == 'after-shift-tab':
+            page.evaluate('window.__pixelFocusTrace.release()')
+
+    yield checkpoint
+    page.evaluate("window.__pixelFocusTrace.snapshot('finalizer')")
+    target = Path(output)
+    target.mkdir(parents=True, exist_ok=True)
+    name = request.node.name.replace('[', '-').replace(']', '')
+    (target / f'{name}.json').write_text(json.dumps(page.evaluate('window.__pixelFocusTrace.events'),
+        ensure_ascii=False, indent=2), encoding='utf-8')
+
+
 @pytest.mark.parametrize('width', [390, 1366])
-def test_pixel_tool_navigation_preserves_draft_and_has_no_task_folds(browser_workspace, width):
+def test_pixel_tool_navigation_preserves_draft_and_has_no_task_folds(browser_workspace, width, pixel_focus_trace):
     page, store, expect = browser_workspace
     page.set_viewport_size({'width': width, 'height': 844})
     open_pixels(page, store, expect, panels=False)
@@ -182,13 +246,18 @@ def test_pixel_tool_navigation_preserves_draft_and_has_no_task_folds(browser_wor
     assert page.locator('#pixel-export').evaluate("n => !n.closest('details')")
     page.go_back()
     expect(page.locator('#pixel-display-options')).to_be_visible()
+    pixel_focus_trace('before-review-click')
     nav.get_by_role('link', name='사진 검수', exact=True).click()
+    pixel_focus_trace('after-review-click')
     expect(page.locator('#pixel-draft')).to_have_text(draft)
     expect(page.locator('#pixel-radius')).to_have_value('3')
     expect(page.locator('#pixel-canvas')).to_have_attribute('tabindex', '0')
     page.locator('#pixel-canvas').focus()
+    pixel_focus_trace('after-canvas-focus')
     page.keyboard.press('Shift+Tab')
+    pixel_focus_trace('after-shift-tab')
     page.keyboard.press('Tab')
+    pixel_focus_trace('after-tab')
     expect(page.locator('#pixel-canvas')).to_be_focused()
     page.locator('#pixel-canvas').focus()
     page.keyboard.press('?')
