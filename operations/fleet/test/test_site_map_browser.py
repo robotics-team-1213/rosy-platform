@@ -457,6 +457,9 @@ def page_site(tmp_path, request):
                     page.on('pageerror', lambda error: script_errors.append(str(error)))
                     page.on('requestfailed', lambda request: script_errors.append(
                         request.url.split('?')[0] + ': ' + str(request.failure)))
+                    page.on('response', lambda response: script_errors.append(
+                        str(response.status) + ': ' + response.url.split('?')[0])
+                        if response.status >= 400 and response.url.split('?')[0].endswith('.js') else None)
                     page.add_init_script('''
                         window.tokenTrace = [];
                         function trace(kind, target) {
@@ -467,6 +470,8 @@ def page_site(tmp_path, request):
                                     const e = document.getElementById(id);
                                     return e && {id, expanded: e.getAttribute('aria-expanded'),
                                         open: e.getAttribute('open'), dataOpen: e.dataset.open,
+                                        label: e.getAttribute('aria-label'),
+                                        disabled: e.hasAttribute('disabled'),
                                         hidden: e.hidden, display: getComputedStyle(e).display,
                                         width: e.getBoundingClientRect().width};
                                 })});
