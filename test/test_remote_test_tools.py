@@ -208,6 +208,7 @@ os.execv({sys.executable!r}, [{sys.executable!r}, *a])
                + f"cp {shlex.quote(str(interpreter))} \"$N/bin/python\"\n"
                + 'printf \'#!%s/bin/python\\nprint("fixture console")\\n\' "$N" > "$N/bin/fixture-console"\n')
     executable(fakebin / "systemd-run", '#!/bin/bash\nwhile [ "$1" != -- ]; do shift; done; shift; exec "$@"\n')
+    executable(fakebin / "systemctl", "#!/bin/sh\nexit 1\n")
     return {**os.environ, "PATH": f"{fakebin}:/usr/bin:/bin"}
 
 
