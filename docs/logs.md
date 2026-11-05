@@ -14353,3 +14353,8 @@ osy-d395-s1d\`.
 - 변경: completion-followup-2026-11-06.md와 기존 README/표면 카드의 추가 링크로 원래 30범위를 보존하면서 정상 병합5fe·viewer 후속·Gallery DEV 계약·공식 수용 대기를 기록했다. 기존 frozen 결과/421경합 기록/모든 로그 본문은 고치지 않았다.
 - 증거: commit c48929874d84ec05f6f60c1dab6be680d4e18787의 6파일 160 PASS/0 skip/NEW-known-flaky 0와 b7cb RED 1은 각 실제 source/run/raw 지문·독립 GO에 결속한다. Gallery 정상 합성 렌더의 generic 파일명을 접속 실패로 세지 않고 source48의 opt-in 13파일 192 PASS를 KIT 단독 개수로 바꾸지 않았다. 한정된 Gallery 소비 입력 동일성은 새 외부 환경 검증이 아니다.
 - gate 변화: 공식151711 actual prepared D2 FULL은 진행 중이며 terminal/실제 main 수용은 대기다. c489 후속과 옛48 Gallery를 그 실행에 합산하지 않고 완료 시 새 날짜 수용 기록으로 결속한다. CE: 해당 없음 — 코드/회귀와 기존 BOM 교훈을 적용했고 별도 새 교훈은 필요 없다.
+
+## 2026-11-06 · uncommitted · docs(ui): 착지 재시도와 epoch 선행 검증 분리
+- 변경: landing-recovery-2026-11-06.md와 README 추가 링크에 원래 30개 범위를 유지하며 정상 86e/faf 병합, registry 한 항목 보완, 로그 epoch 선행 조건과 실제 수용 대기를 기록했다. 기존 본문·표면 카드·progress/last_verified·web 모듈 로그는 수정하지 않았다.
+- 증거: 초기 D2 qualifying FULL 72와 이후 63fa 성공 116/registry 직접·isolation 실패·취소·STOP은 별도다. 기존 c489 160/b8 문서145의 원래 출처를 보존했다. registry 148의26 PASS/빈 미사용 collection skip1, 유효74f RED1→commit c01edde6dec95cf39408982aa58bf2b8a476da68의7파일301 unique PASS/0 skip·독립 GO를 구분했다. 덮인 D2 raw는 조사한 위치에서13개만 확보됐고59개는 복구하지 않았다. 최종147 artifact/phase129/초기 strict4는 별도 보존돼 있다.
+- gate 변화: UIe4와 C01의 두 수정 파일은 같지만 native는 main tooling을 쓴다. 선행183254의 prepared71c4/main2986 FULL은 admission 대기이며 아직 수용되지 않았다. 그 뒤 새 UI G1/공식 FULL·실제 main·게시/현장 수용은 후속이다. cache·selector·guard 정책을 바꾸거나 우회하지 않았다. CE: 해당 없음 — 고유 epoch의 설명·실제 회귀와 날짜별 근거가 원인·예방을 보존한다.
