@@ -993,3 +993,10 @@
 - 증거: RED 후 source `7e81c40e5d`의 원격 affected는8806 PASS/847 SKIP, 별도 실제 Chromium 신규11개는 SKIP0이다. 앞선 기존 관제·세션·수명 포함138개도 원격 PASS/SKIP0이다. 착지 중 기존 모바일4개가 선택 상태를844px 아래로 미는 실제 NEW를 잡았고, source `a9210f10f9`의 순서 수정 후 해당4개와 신규11개 모두 원격 PASS/SKIP0이다. 독립 계약 검토에 수정 필요 사항이 없었고 로컬 main `68fe84b488`에 착지했다. 게시용 canonical FULL은 별도 진행한다.
 - 범위: 브라우저 회귀는 mocked Fleet 응답에서 실제 DOM·입력 수명·요청을 검사한다. HTTP 시험은 실제 Fleet route에서 fake robot transport로 이동과0 전달을 검사한다. 이 결과를 배포된 패드의 실물 수용으로 세지 않는다. 현장의42·45·46은 기존 실제 Fleet API 경로에서 케이블을 유지한 작은 구동·raw 정지를 확인했으며 새 패드 배포나 차체 이동의 독립 현장 확인과는 별도다.
 - gate 변화: 이 변경의 SOURCE/관련 원격 회귀 GO, 로컬 착지 확인. GitHub 게시·서명 사이트 배포·배포 UI 실물 조작·자동 위치·지도 도착 검증은 미완료다. 기존 전체 모듈의 ARTIFACT/DEVICE/FIELD gate를 올리지 않는다.
+
+## 2026-11-06 · uncommitted · fix(fleet): 표시 지도와 다른 좌표계의 궤적 숨김
+- 변경: trail-view가 격자 map_id 또는 현재 활성 도로 map_id와 양 끝점이 명시적으로 일치하는 구간만 그린다. 좌표계 경계·누락 ID는 연결하지 않는다. 기록 수집·다른 소비자·테더·권한·API는 유지한다.
+- 증거: 9eb08222ec 원격 site test host Chromium 시작점 전체·공용 Node 시험·path_history 22 passed/skip0; scratch fleet-trail-green/run-1.txt. 수정 전 실제 site/grid는 각각6개 선분을 그려 기대2개보다 많았고 Node frame 시험도 RED였다.
+- gate 변화: SOURCE 회귀 확인. 실제 지도 보정·로봇 위치·장치 주행 수용 근거는 아님.
+- 결정: 기존 map_id를 그리기 직전에 검증하며 임의 좌표 변환이나 기록 삭제를 추가하지 않는다.
+- 교훈: CE 해당 없음 — 필터와 grid/site·누락 ID·frame 경계 회귀가 판단 근거를 직접 보존한다.

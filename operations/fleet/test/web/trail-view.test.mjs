@@ -5,7 +5,7 @@ import {quarterTurn} from '../../../../applications/fleet/web/map/site-layer.js'
 
 const LOCALIZED = {state: 'LOCALIZED', pose_frame: 'map'};
 const at = (x, y, id = 'a', localization = LOCALIZED) => [{robot_id: id, state: {pose: {x, y, yaw: 0}, localization}}];
-const pt = (t, x, state = 'LOCALIZED', seg = 0) => ({t, x, y: 0, state, seg});
+const pt = (t, x, state = 'LOCALIZED', seg = 0) => ({t, x, y: 0, state, seg, map_id: 'track'});
 const recordingCtx = () => {
   const lines = [], dashes = [], strokes = [], arcs = [];
   return {lines, dashes, strokes, arcs, save() {}, restore() {}, beginPath() {}, fill() {},
@@ -51,7 +51,7 @@ test('line style is the recorded state and a recording gap is not joined', () =>
   globalThis.window = {RosyPalette: {cssColor: name => name}};
   const ctx = recordingCtx();
   const points = [pt(1, 0), pt(2, 1), pt(3, 2, 'DEGRADED'), pt(4, 3, 'CAMERA_ONLY'), pt(5, 4, 'LOCALIZED', 9)];
-  const view = {robots: at(4, 0), colors: ['c'], trailRange: 'trip', paths: new Map([['a', {now: 5, points}]]), watchAge: 0.5};
+  const view = {map: {map_id: 'track'}, robots: at(4, 0), colors: ['c'], trailRange: 'trip', paths: new Map([['a', {now: 5, points}]]), watchAge: 0.5};
   drawTrails(ctx, view, (x, y) => ({x, y}), 2);
   assert.deepEqual(ctx.dashes.slice(0, 3), [[], [8, 6], [2, 5]]);
   assert.equal(window.__trailOverlay.segments, 3);
@@ -79,7 +79,7 @@ test('trail and tether draw through the caller projection, so they turn with the
   const ctx = recordingCtx();
   const turn = quarterTurn(90, 100, 50);
   const toPx = (x, y) => turn.point(x, y);
-  const view = {robots: at(30, 0), colors: ['robot-colour'], trailRange: '120', watchAge: 0.5,
+  const view = {map: {map_id: 'track'}, robots: at(30, 0), colors: ['robot-colour'], trailRange: '120', watchAge: 0.5,
     paths: new Map([['a', {now: 100, points: [pt(99, 10), pt(100, 30)]}]]),
     tethers: [{robot_id: 'a', anchor_xy: [10, 20], radius_m: 5}]};
   drawTrails(ctx, view, toPx, 1);
@@ -87,6 +87,20 @@ test('trail and tether draw through the caller projection, so they turn with the
   assert.deepEqual(ctx.arcs, [[toPx(10, 20).x, toPx(10, 20).y]]);
   assert.deepEqual(ctx.strokes, ['robot-colour', '--status-warn']); // robot 30 m from anchor: outside
   assert.deepEqual(window.__trailOverlay, {segments: 1, tethers: 1, tripped: [], watchRunning: true});
+});
+
+test('both endpoints must explicitly match the displayed map; frame boundaries never join', () => {
+  globalThis.window = {RosyPalette: {cssColor: name => name}};
+  for (const map of [{map: {map_id: 'track'}, activeSiteMap: {map: {map_id: 'other'}}},
+    {activeSiteMap: {map: {map_id: 'track'}}}, {}, {map: {}}]) {
+    const points = [pt(1, 0), pt(2, 1), {...pt(3, 2), map_id: 'other'},
+      {...pt(4, 3), map_id: 'other'}, {...pt(5, 4), map_id: null}, pt(6, 5), pt(7, 6)];
+    const ctx = recordingCtx();
+    drawTrails(ctx, {...map, robots: at(1, 0), colors: ['c'],
+      paths: new Map([['a', {now: 7, points}]])}, (x, y) => ({x, y}), 1);
+    assert.equal(window.__trailOverlay.segments, map.map?.map_id || map.activeSiteMap ? 2 : 0);
+    assert.deepEqual(ctx.lines, map.map?.map_id || map.activeSiteMap ? [[0, 0], [1, 0], [5, 0], [6, 0]] : []);
+  }
 });
 
 test('an unlocalized robot is never judged outside its tether from a maybe-odom pose', () => {
