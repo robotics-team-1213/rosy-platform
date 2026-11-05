@@ -216,6 +216,8 @@ def test_cell_shows_an_arm_incident_with_frames_and_an_explanation_and_clears_it
         assert not errors, errors
         page.unroute_all(behavior="ignoreErrors")
         browser.close()
+
+
 def test_incident_lines_accept_bounded_json_without_assuming_measurement_shapes(cell_url):
     from playwright.sync_api import sync_playwright
     facts = [
@@ -223,6 +225,9 @@ def test_incident_lines_accept_bounded_json_without_assuming_measurement_shapes(
         {"latched": {"13": None}}, {"latched": {"13": {"bits": {}}}},
         {"latched": "unknown"}, {"latched": [None]}, {"windup_hits": "unknown"},
         {"folded": "unknown"}, {"detail": "<b>measurement</b>"},
+        {"flagged": [{"command": {"toString": {}}}]},
+        {"latched": {"13": {"hw_error": {"toString": {}}, "bits": []}}},
+        {"latched": {"13": {"hw_error": 32, "bits": [None]}}},
     ]
     with sync_playwright() as playwright:
         browser, page, errors = open_page(playwright, 390, 844, url=cell_url)
