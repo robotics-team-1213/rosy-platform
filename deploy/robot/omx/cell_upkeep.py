@@ -10,8 +10,9 @@ registers (torque 0, no hardware error, caps at the commissioning baseline), cam
 jaw closed value against the latest motor-health log, the jaw opening against the newest session trace, the calibration map (read-only cell_calibrate.check), the
 after-session monitors (push_replay, jitter_replay) over the logs newer than the previous report, and the planning TCP.
 
-No motion, ever. With --fix the only write is `commissioning_limits.py --baseline`, and only when every follower
-motor reads torque 0 with no hardware error and nothing owns the bus. A latched hardware error is reported, not
+No motion, ever. With --fix, `commissioning_limits.py --baseline` writes only when every follower
+motor reads torque 0 with no hardware error and nothing owns the bus; camera recovery may cycle board-free USB ports.
+A latched hardware error is reported, not
 rebooted (omx_incident.py owns that). Each arm's report goes to <out>/<stamp>-<arm>.json; exit 0 only when every arm is ready.
 Verdicts: ready | needs_motion_step (only the supervised cell_calibrate steps are left) | needs_person.
 """
@@ -117,20 +118,30 @@ def camera_device(role):
 
 def usb_port(device):
     """Root port of the camera behind a /dev/v4l/by-id name: {"ports": [port, peer], "speed": Mbit/s, "boards": by-id
-    serial names below that root port}. Raises OSError when sysfs does not show the chain."""
+    serial names below either root port}. Raises OSError when sysfs does not show an enabled port chain."""
     node = Path(os.path.realpath(device)).name
     dev = Path(os.path.realpath(f"/sys/class/video4linux/{node}/device"))
-    while not (dev / "idVendor").exists():
-        dev = dev.parent
+    dev = next((p for p in (dev, *dev.parents) if (p / "idVendor").exists()), None)
+    if dev is None:
+        raise OSError(f"no USB device chain for {device}")
     bus, _, path = dev.name.partition("-")
-    root = dev
-    while root.name != f"{bus}-{path.split('.')[0]}":
-        root = root.parent
+    root = next((p for p in (dev, *dev.parents) if p.name == f"{bus}-{path.split('.')[0]}"), None)
+    if root is None:
+        raise OSError(f"no USB root device for {device}")
     port = Path(f"/sys/bus/usb/devices/{bus}-0:1.0/usb{bus}-port{path.split('.')[0]}")
     peer = os.path.realpath(port / "peer") if (port / "peer").exists() else None
+    ports, roots = [str(port)] + ([peer] if peer else []), [root]
+    if peer:
+        match = re.fullmatch(r"usb(\d+)-port(\d+)", Path(peer).name)
+        if match is None:
+            raise OSError(f"cannot resolve peer root of {port}")
+        roots.append(Path(os.path.realpath(f"/sys/bus/usb/devices/{match[1]}-{match[2]}")))
+    if any((Path(p) / "disable").read_text().strip() != "0" for p in ports):
+        raise OSError(f"USB port or peer is already disabled: {ports}")
     boards = [Path(b).name for b in glob.glob("/dev/serial/by-id/*")
-              if os.path.realpath(f"/sys/class/tty/{Path(os.path.realpath(b)).name}/device").startswith(str(root))]
-    return {"ports": [str(port)] + ([peer] if peer else []), "speed": int((dev / "speed").read_text()), "boards": boards}
+              if any(Path(os.path.realpath(f"/sys/class/tty/{Path(os.path.realpath(b)).name}/device")).is_relative_to(r)
+                     for r in roots)]
+    return {"ports": ports, "speed": int((dev / "speed").read_text()), "boards": boards}
 
 
 def frames_flow(device) -> bool:
@@ -144,9 +155,17 @@ def frames_flow(device) -> bool:
 
 
 def port_set(ports, disabled) -> None:
+    error = None
     for port in ports:
-        subprocess.run(["sudo", "-n", "tee", f"{port}/disable"], input="1" if disabled else "0", text=True,
-                       capture_output=True, check=True)
+        try:
+            subprocess.run(["sudo", "-n", "tee", f"{port}/disable"], input="1" if disabled else "0", text=True,
+                           capture_output=True, check=True)
+        except (OSError, subprocess.SubprocessError) as failure:
+            if disabled:
+                raise
+            error = error or failure
+    if error is not None:
+        raise error
 
 
 def camera_units(role, up) -> None:
@@ -226,9 +245,11 @@ def usb_recover(role, io):
     try:
         if io.frames(device):
             return f"{role} streams when read directly (not a USB fault)"
-        io.ports(port["ports"], True)
-        io.sleep(30)
-        io.ports(port["ports"], False)
+        try:
+            io.ports(port["ports"], True)
+            io.sleep(30)
+        finally:
+            io.ports(port["ports"], False)
         for _ in range(9):  # the first read right after re-enable still gave nothing; one a minute later streamed
             io.sleep(10)
             if io.frames(device):
