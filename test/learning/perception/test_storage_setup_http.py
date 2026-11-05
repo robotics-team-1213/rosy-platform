@@ -144,12 +144,12 @@ def test_setup_browser_completes_first_use_without_json(setup_server, accounts, 
             page.context.add_cookies([dict(name='rosy_learning_session', value=session, url=url)])
             # Quota measurements must share the backend fixture clock across minute boundaries and reloads.
             page.add_init_script(f'Date.now = () => {now[0] * 1000};')
-            page.goto(url + '/learning', wait_until='networkidle')
+            page.goto(url + '/learning#storage-section', wait_until='networkidle')
             if theme == 'light': page.locator('[data-theme-cycle]').click()
             playwright.expect(page.locator('html')).to_have_attribute('data-theme', theme)
             expect = playwright.expect
             expect(page.locator('#storage-setup')).to_be_visible()
-            page.locator('#storage-settings-open').click()
+            page.locator('a[href="#storage-settings"]').click()
             for target in body['targets']:
                 page.get_by_role('button', name='저장 대상 추가', exact=True).click()
                 row = page.locator('.storage-settings-target').last
@@ -161,6 +161,10 @@ def test_setup_browser_completes_first_use_without_json(setup_server, accounts, 
                 row.locator('[data-field=remaining_bytes]').fill('1')
                 row.locator('[data-field=reserve_bytes]').fill('0')
             assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+            page.locator('#storage-cache-limit').fill('12')
+            page.locator('.learning-home-nav a[href="#pipeline"]').click()
+            page.go_back()
+            expect(page.locator('#storage-cache-limit')).to_have_value('12')
             page.locator('#storage-settings-open').scroll_into_view_if_needed()
             save_temp_screenshot(page, f'learning-storage-settings-{width}-{theme}.png')
             page.get_by_role('button', name='저장 설정 저장', exact=True).click()
@@ -213,7 +217,7 @@ def test_setup_browser_completes_first_use_without_json(setup_server, accounts, 
             save_temp_screenshot(page, f'learning-storage-setup-{width}-{theme}.png')
             page.reload(wait_until='networkidle')
             expect(page.locator('#storage-setup-status')).to_contain_text('활성화')
-            page.locator('#storage-settings-open').click()
+            page.locator('a[href="#storage-settings"]').click()
             page.locator('#storage-cache-limit').fill('11')
             expect(page.locator('#storage-verify')).to_be_disabled()
             expect(page.locator('#storage-prepare-submit')).to_be_disabled()

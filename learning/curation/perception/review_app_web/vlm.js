@@ -115,12 +115,15 @@ function move(step){
   const position=list.findIndex(row=>row.id===current?.id)+step;
   if(list[position])work(()=>open(list[position].id));
 }
-function table(head,rows){
-  const element=document.createElement('table');const top=element.createTHead().insertRow();
-  for(const name of head){const cell=document.createElement('th');cell.textContent=name;top.append(cell);}
+function table(head,rows,label){
+  const scroll=document.createElement('div');scroll.className='ui-table-scroll';scroll.tabIndex=0;
+  scroll.setAttribute('role','region');scroll.setAttribute('aria-label',label);
+  const element=document.createElement('table');element.className='ui-data-table';element.setAttribute('aria-label',label);
+  scroll.append(element);const top=element.createTHead().insertRow();
+  for(const name of head){const cell=document.createElement('th');cell.scope='col';cell.textContent=name;top.append(cell);}
   const body=element.createTBody();
   for(const row of rows){const line=body.insertRow();for(const value of row){const cell=line.insertCell();cell.append(value);}}
-  return element;
+  return scroll;
 }
 const percent=value=>value==null?'—':`${(value*100).toFixed(1)}%`;
 async function evaluate(){
@@ -128,14 +131,14 @@ async function evaluate(){
   const count=document.createElement('p');count.textContent=`정답 있는 사진 ${data.labelled}장 기준`;box.append(count);
   // Audits were answered with the consensus shown; the frozen evaluation set was answered blind.
   const blind=document.createElement('h2');blind.textContent=`고정 평가셋만(모델 답 없이 단 ${data.eval_set.labelled}장)`;box.append(blind);
-  box.append(table(['모델','런타임','질문','n','일치율','balanced accuracy'],data.eval_set.models.flatMap(model=>model.questions.map(row=>[model.model,model.runtime,row.question,String(row.n),percent(row.agreement),percent(row.balanced_accuracy)]))));
+  box.append(table(['모델','런타임','질문','n','일치율','balanced accuracy'],data.eval_set.models.flatMap(model=>model.questions.map(row=>[model.model,model.runtime,row.question,String(row.n),percent(row.agreement),percent(row.balanced_accuracy)])),blind.textContent));
   const tiers=document.createElement('h2');tiers.textContent='임시 정답 범위(대기 사진)';box.append(tiers);
-  box.append(table(['질문','대기','임시 정답','토론으로 합의','범위'],data.provisional.map(row=>[row.question,String(row.pending),String(row.provisional),String(row.debate),percent(row.coverage)])));
+  box.append(table(['질문','대기','임시 정답','토론으로 합의','범위'],data.provisional.map(row=>[row.question,String(row.pending),String(row.provisional),String(row.debate),percent(row.coverage)]),tiers.textContent));
   const audit=document.createElement('h2');audit.textContent='임시 정답 점검';box.append(audit);
-  if(data.audits.length)box.append(table(['질문','점검','틀림','오류율','상태'],data.audits.map(row=>[row.question,String(row.n),String(row.errors),percent(row.rate),row.paused?'멈춤':'사용'])));
+  if(data.audits.length)box.append(table(['질문','점검','틀림','오류율','상태'],data.audits.map(row=>[row.question,String(row.n),String(row.errors),percent(row.rate),row.paused?'멈춤':'사용']),audit.textContent));
   else{const none=document.createElement('p');none.textContent='아직 점검한 임시 정답이 없습니다.';box.append(none);}
   const caption=document.createElement('h2');caption.textContent='사람 정답의 unclear 비율';box.append(caption);
-  box.append(table(['질문','n','unclear'],data.human.map(row=>[row.question,String(row.n),percent(row.unclear_rate)])));
+  box.append(table(['질문','n','unclear'],data.human.map(row=>[row.question,String(row.n),percent(row.unclear_rate)]),caption.textContent));
   for(const model of data.models){
     const title=document.createElement('h2');title.textContent=`${model.model} · ${model.runtime} · 모순 답(물체 쥠=yes·빈 집게=yes) ${model.contradictions}장`;
     box.append(title,table(['질문','n','일치율','balanced accuracy','혼동표'],model.questions.map(row=>{
@@ -149,7 +152,7 @@ async function evaluate(){
         $('vlm-confusion').textContent=lines.join('\n');$('vlm-confusion').hidden=false;
       });
       return [row.question,String(row.n),percent(row.agreement),percent(row.balanced_accuracy),button];
-    })));
+    }),title.textContent));
   }
   if(!data.models.length){const empty=document.createElement('p');empty.textContent='비교할 모델 답이 없거나 정답 있는 사진이 없습니다.';box.append(empty);}
 }
@@ -171,7 +174,10 @@ async function importRows(){
   for(const view of Object.keys(summary.views))if(!views.has(view))$('vlm-view').append(new Option(view,view));
 }
 function tab(name){
-  for(const button of document.querySelectorAll('.vlm-tabs ui-button'))button.setAttribute('aria-pressed',String(button.dataset.tab===name));
+  for(const button of document.querySelectorAll('.vlm-tabs ui-button')){
+    button.setAttribute('aria-pressed',String(button.dataset.tab===name));
+    button.parentElement.dataset.state=button.dataset.tab===name?'now':'todo';
+  }
   for(const key of ['label','eval','import'])$('panel-'+key).hidden=key!==name;
   if(name==='eval')work(evaluate);
 }
@@ -214,6 +220,7 @@ work(async()=>{
   const account=await session.json();  // read the local-mode 404 too; an unread body stays an open request
   if(session.ok){editor=account.capabilities.includes('edit');manager=false;}
   $('tab-import').hidden=!manager;
+  $('tab-import').parentElement.hidden=!manager;
   $('vlm-export').hidden=session.ok&&!account.capabilities.includes('manage');  // the export carries provisional answers
   await load(null);
   if(location.hash==='#eval')tab('eval');  // the 평가·승격 page links here

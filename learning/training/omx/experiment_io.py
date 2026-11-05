@@ -16,8 +16,8 @@ def write_json(path, value):
     temporary.replace(path)
 
 
-def read_json(path):
-    if path.is_symlink() or path.stat().st_size > 1024 * 1024:
+def read_json(path, *, max_bytes=1024 * 1024):
+    if path.is_symlink() or path.stat().st_size > max_bytes:
         raise ValueError('bounded regular result required')
     return json.loads(path.read_bytes())
 

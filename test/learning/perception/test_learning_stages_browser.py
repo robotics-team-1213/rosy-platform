@@ -4,6 +4,8 @@ from urllib.parse import urlsplit
 import pytest
 
 from browser_harness import browser_tests_enabled
+import review_masks
+from test_review_cycle import CLASSES
 from test_review_app import open_store
 from test_review_flow_browser import browser_workspace, serve  # noqa: F401
 
@@ -19,7 +21,7 @@ STAGE_PAGES = [('홈', None, None, '/learning'), ('자료 등록', '자료 하�
                ('평가·승격', None, None, '/learning/evaluate')]
 
 
-@pytest.mark.parametrize('width', [320, 1366])
+@pytest.mark.parametrize('width', [320, 390, 1366])
 @pytest.mark.parametrize('theme', ['dark', 'light'])
 def test_task_pages_share_body_and_native_navigation_controls(browser_workspace, width, theme):
     import re
@@ -27,9 +29,9 @@ def test_task_pages_share_body_and_native_navigation_controls(browser_workspace,
     page, _, expect = browser_workspace
     origin = urlsplit(page.url)
     base = f'{origin.scheme}://{origin.netloc}'
-    page.set_viewport_size({'width': width, 'height': 844})
+    page.set_viewport_size({'width': width, 'height': 768 if width == 1366 else 844})
     targets = ['/learning', '/catalog', '/learning/camera', '/learning/workspaces', '/learning/omx',
-               '/learning/vlm', '/learning/tasks', '/learning/sim', '/learning/evaluate']
+               '/learning/vlm', '/learning/tasks', '/learning/sim', '/learning/evaluate', '/accounts']
     for target in targets:
         page.goto(base + target, wait_until='domcontentloaded')
         page.evaluate('theme => document.documentElement.dataset.theme = theme', theme)
@@ -39,6 +41,14 @@ def test_task_pages_share_body_and_native_navigation_controls(browser_workspace,
         for link in page.locator('a.ui-action-link:visible').all():
             assert link.get_attribute('data-kind') in ('primary', 'quiet'), target
             assert link.bounding_box()['height'] >= 48, (target, link.inner_text())
+        import os
+        if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+            from pathlib import Path
+            page.wait_for_load_state('load')
+            page.wait_for_function("() => customElements.get('ui-button') !== undefined")
+            destination = Path(output) / f'learning-map-{target.strip("/").replace("/", "-")}-{theme}-{width}.png'
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            page.screenshot(path=str(destination))
 
 
 @pytest.mark.parametrize('width', [1280, 390])
@@ -83,7 +93,7 @@ def test_answer_links_never_cover_the_title_at_768(browser_workspace, route):
     origin = urlsplit(page.url)
     page.set_viewport_size({'width': 768, 'height': 900})
     page.goto(f'{origin.scheme}://{origin.netloc}{route}', wait_until='networkidle')
-    title, nav = page.locator('.ui-pathbar h1').bounding_box(), page.locator('.review-kinds').bounding_box()
+    title, nav = page.locator('.ui-pathbar h1').bounding_box(), page.locator('.ui-app-main > .review-kinds').bounding_box()
     apart = (title['x'] + title['width'] <= nav['x'] or nav['x'] + nav['width'] <= title['x']
              or title['y'] + title['height'] <= nav['y'] or nav['y'] + nav['height'] <= title['y'])
     assert apart, (route, title, nav)
@@ -92,12 +102,16 @@ def test_answer_links_never_cover_the_title_at_768(browser_workspace, route):
 
 @pytest.mark.parametrize('route', ['/', '/pixels'])
 def test_answer_links_come_right_after_the_title_in_focus_order(browser_workspace, route):
-    """WCAG 2.4.3: Tab from the title row reaches the 정답 links before the editor and canvas controls."""
+    """WCAG 2.4.3: title-row scope, answer links, then editor controls follow visual order."""
     page, _, _ = browser_workspace
     origin = urlsplit(page.url)
     page.goto(f'{origin.scheme}://{origin.netloc}{route}', wait_until='networkidle')
-    links = page.locator('.review-kinds a').evaluate_all('links => links.map(link => link.pathname)')  # / adds ?frame=
+    links = page.locator('.ui-app-main > .review-kinds a').evaluate_all('links => links.map(link => link.pathname)')  # / adds ?frame=
     page.locator('.ui-pathbar h1').evaluate('title => { title.tabIndex = -1; title.focus(); }')
+    if route == '/pixels':
+        page.keyboard.press('Tab')
+        assert page.locator('.pixel-review-context > summary').evaluate('node => node === document.activeElement')
+        assert not page.locator('.pixel-review-context').evaluate('node => node.open')
     focused = []
     for _ in links:
         page.keyboard.press('Tab')
@@ -135,3 +149,42 @@ def test_workspaces_page_lists_this_center_first_then_same_tab_links(tmp_path, w
         assert all(link.bounding_box()['height'] >= 44 for link in links.all())
         expect(page.locator('#workspaces-status')).to_have_text('연결된 작업 공간 2개')
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+
+
+@pytest.mark.parametrize('width', [1366, 390])
+@pytest.mark.parametrize('theme', ['dark', 'light'])
+def test_review_studio_steps_and_keyboard_help_share_the_same_flow(browser_workspace, width, theme):
+    page, store, expect = browser_workspace
+    page.set_viewport_size({'width': width, 'height': 844})
+    page.evaluate('(theme) => document.documentElement.dataset.theme = theme', theme)
+    expect(page.locator('#object-flow')).to_have_class('ui-stage-track')
+    expect(page.locator('#object-flow')).to_have_attribute('data-line', 'learning')
+    expect(page.locator('#object-flow > .ui-stage')).to_have_count(4)
+    expect(page.locator('#object-flow [aria-current="step"]')).to_have_text('전체 확인 · 결정')
+    expect(page.locator('#object-flow [data-state="now"]')).to_have_text('전체 확인 · 결정')
+    expect(page.locator('#object-flow [data-state="done"]')).to_have_count(0)
+    page.keyboard.press('Shift+/')
+    expect(page.locator('#object-keys')).to_be_visible()
+    page.locator('#filter').focus()
+    page.keyboard.press('Shift+/')
+    expect(page.locator('#object-keys')).to_be_visible()
+    review_masks.bind_classes(store, CLASSES)
+    page.goto(page.url.split('?')[0].rstrip('/') + '/pixels?frame=0', wait_until='networkidle')
+    page.evaluate('(theme) => document.documentElement.dataset.theme = theme', theme)
+    expect(page.locator('#pixel-flow')).to_have_class('ui-stage-track')
+    expect(page.locator('#pixel-flow')).to_have_attribute('data-line', 'learning')
+    expect(page.locator('#pixel-flow > .ui-stage')).to_have_count(4)
+    expect(page.locator('#pixel-flow')).to_be_visible()
+    assert page.locator('#pixel-flow').evaluate("node => !node.closest('details')")
+    expect(page.locator('#pixel-flow [aria-current="step"]')).to_have_text('영역 수정 · 초안 저장')
+    expect(page.locator('#pixel-flow [data-state="now"]')).to_have_text('영역 수정 · 초안 저장')
+    expect(page.locator('#pixel-flow [data-state="done"]')).to_have_count(0)
+    page.keyboard.press('Shift+/')
+    expect(page.locator('#pixel-keys')).to_be_visible()
+    page.locator('#pixel-brush-tool').click()
+    expect(page.locator('#pixel-brush-tool')).to_have_attribute('aria-pressed', 'true')
+    expect(page.locator('#pixel-keyboard-help')).to_contain_text('Alt+방향키')
+    expect(page.locator('#pixel-keyboard-help')).to_contain_text('Space')
+    assert store.get(0)['status'] == 'approved'
+    assert review_masks.get(store, 0)['status'] == 'pending'
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')

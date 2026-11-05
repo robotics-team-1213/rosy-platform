@@ -88,7 +88,9 @@ def test_review_pages_have_one_title_in_their_declared_composition():
             assert 'data-seats="none"' in page and 'class="ui-rail" hidden' in page
             assert 'class="ui-action-link" data-kind="primary" hidden' in page
         else:
-            assert '<div class="ui-pathbar"><h1>' in page, path.name
+            assert re.search(r'<div class="ui-pathbar"><nav class="ui-crumbs" aria-label="현재 위치">'
+                             r'<a href="/learning">Learning</a><span aria-hidden="true">/</span></nav>'
+                             r'<h1>[^<]+</h1><span class="ui-crumbs" id="learning-tool-path"></span>', page), path.name
 
 
 def test_robot_operating_surfaces_explain_no_script_and_keep_styles_out_of_markup():

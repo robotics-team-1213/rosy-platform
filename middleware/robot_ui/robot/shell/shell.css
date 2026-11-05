@@ -49,10 +49,8 @@ body:is([data-surface="setup"], [data-surface="device"]) #safety-mode-status:not
   font-weight: var(--weight-emphasis);
 }
 ui-section[data-failed="true"] { border-style: dashed; }
-/* D-741 6 — 작업 목록은 공용 하위 탐색 자리에 선다. 자리의 배치는 app-shell.css가 갖고
-   여기서는 그 안의 여백만 주고, 작업이 없는 화면(/console)에서는 빈 자리를 접는다. */
+/* D-741 6 — 작업 목록의 배치/여백은 공용 하위 탐색이 소유한다. 빈 자리는 접는다. */
 .ui-subnav:empty { display: none; }
-.ui-subnav > .ui-task-chooser { padding: var(--space-3); }
 body:is([data-surface="setup"], [data-surface="device"]) .surface-slot[data-slot="main"] {
   align-items: start;
   gap: var(--space-4);
@@ -174,7 +172,6 @@ body:is([data-surface="setup"], [data-surface="device"]) .procedure-panel {
     min-width: 0;
     white-space: nowrap;
   }
-  .ui-subnav > .ui-task-chooser { padding: var(--inset-subnav); }
   body[data-surface="setup"] [data-panel="setup.traffic_policy"] {
     display: grid;
     grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.5fr);
@@ -250,7 +247,6 @@ body:is([data-surface="setup"], [data-surface="device"]) .procedure-panel {
 
 @media (30rem <= width < 64rem) {
   .surface-main { padding: var(--space-4); }
-  .ui-subnav > .ui-task-chooser { padding-inline: var(--space-4); }
   body[data-surface="console"] .surface-slot[data-slot="act"] {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     align-items: start;

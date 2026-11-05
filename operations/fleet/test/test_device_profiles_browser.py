@@ -43,10 +43,7 @@ def test_installation_device_information_save_reload_and_viewer_guard(site, widt
     def open_information(page):
         page.goto(site + '/console/install')
         tab = page.get_by_role('tab', name='장치 정보', exact=True)
-        if tab.is_visible():
-            tab.click()
-        else:
-            page.locator('.ui-task-compact select').select_option('device-profiles')
+        tab.click()
         expect(page.locator('#device-profiles')).to_be_visible()
         expect(page.locator('[data-profile="list"]')).to_be_enabled()
 

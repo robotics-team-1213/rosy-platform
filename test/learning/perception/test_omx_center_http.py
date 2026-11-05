@@ -47,6 +47,9 @@ class Center:
     def start_export(self, body, prepared):
         return self.record('export', {'request': body, 'prepared_id': prepared['id'], 'kind': prepared['kind']})
 
+    def start_native(self, body, prepared, segments=None):
+        return self.record('native', {'request': body, 'prepared_id': prepared['id'], 'segments': segments})
+
     def review(self, prepared):
         return self.record('review', {'prepared_id': prepared['id']})
 
@@ -142,7 +145,7 @@ def test_collaboration_center_writes_still_require_live_manage_permission(tmp_pa
         assert request(base, PREFIX, session='reader') == (200, center.snapshot())
         _, learning = request(base, '/api/learning', session='reader')
         for session in ('reader', 'editor'):
-            for route in ('run', 'online-run', 'experience', 'export', 'review', 'profile'):
+            for route in ('run', 'online-run', 'experience', 'export', 'review', 'profile', 'native-run'):
                 assert request(base, PREFIX + '/' + route, {}, token=learning['token'], session=session)[0] == 403
         assert center.calls == []
         body = {'dataset_id': 'reviewed', 'method': 'act', 'steps': 1}
@@ -219,6 +222,27 @@ def test_human_review_and_frame_read_bind_project_registration_and_server_actor(
         accounts.active = False
         assert request(base, path, session='reader')[0] == 401
         assert request(base, frame_set_path, session='reader')[0] == 401
+
+
+def test_native_train_uses_registered_source_and_the_exact_saved_segment_version(tmp_path, monkeypatch):
+    from learning_workspace import Workspace
+    import omx_web
+    row = {'id': 'a'*32, 'kind': 'omx', 'path': str(tmp_path/'prepared'), 'name': 'Native'}
+    monkeypatch.setattr(Workspace, 'list', lambda self: [row])
+    with running(tmp_path) as (base, center):
+        workspace = Workspace(tmp_path/'state/reviews.sqlite3')
+        with omx_web.review_db(workspace) as db:
+            db.executemany('INSERT INTO omx_segment_reviews VALUES (?,?,?)',
+                [(row['id'], v, json.dumps({'version_marker': v})) for v in (1, 2)])
+        _, learning = request(base, '/api/learning')
+        token = learning['token']
+        body = {'prepared_id': row['id'], 'segment_version': 1, 'request_id': 'request'}
+        assert request(base, PREFIX+'/native-run', body)[0] == 403
+        assert request(base, PREFIX+'/native-run', dict(body, prepared_id='unregistered'), token=token)[0] == 400
+        assert not center.calls
+        code, result = request(base, PREFIX+'/native-run', body, token=token)
+        assert code == 200 and result['method'] == 'native'
+        assert result['request']['segments'] == {'version': 1, 'document': {'version_marker': 1}}
 
 
 def test_profile_storage_and_download_use_existing_project_permissions(tmp_path):

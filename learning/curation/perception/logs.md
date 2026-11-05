@@ -358,6 +358,54 @@
 - CE: 해당 없음 — 복구·무결성·중복 방지 판단은 코드·회귀·운영 문서에 남는다. 로봇 접속 실패는 해결된 사실로 기록하지 않는다.
 - 후속 검증: d2d68c3346의 공식 affected 전체 13,602 passed/1,285 skipped/NEW 0, 실제 기존 녹화와 pinned raw 집중 88 passed/skip0/NEW 0. 생산 코드는 66e86cb0fb와 같으며, 중간 전체 회귀의 OMX 합성 시계 실패 두 건은 기존 시계 fixture를 공유해 보완했다. 원본 실패·대조·취소·skip은 검증 정본에 보존했다.
 
+## 2026-10-29 · f3a32e7e5f · 공개 SO100 시연의 ACT 학습·HF 게시 완주
+
+- 변경: 고정 공개 시연의 출처·분할 확인, 별도 `public_train` 실행·중지·오차 비교·모델 다운로드 화면을 추가했다. 원래 SO100 관절·단위를 유지하고 OMX native 검증을 우회하지 않는다. 웹 요청은 CLI HF 자격을 사용하지 않는다.
+- 증거: `730bac48cb` 원격 영향 선택 3,515 passed / 376 skipped / NEW0, 공개 화면·공통 UI 107 passed. 실제 Chromium이 `663ccdfc89` 서비스에서 10에피소드·3,977프레임으로 ACT 1,000단계를 접수했고 별도 프로세스 평가와 `63ecbc2ff6`의 완료 모델 ZIP 해시 검증까지 통과했다. 실제 완료 화면에서 찾은 진행 문구를 고친 `f3a32e7e5f` 공개 Chromium 9 passed / NEW0.
+- 게시: 사용자 요청으로 새 HF 비공개 dataset/model에 게시하고 고정 commit을 재다운로드해 파일 해시·공식 reader·동일 snapshot 모델/전후처리기·검증/평가 예측과 MAE 일치를 확인했다. 내부 경로가 든 선택형 train_config는 게시 사본에서 제외하고 원본을 보존했다. 출처·커밋·실패 수정·검증 한계는 [검증 기록](../../../docs/validation/public-lerobot-hub-2026-10-29/result.md)에 있다.
+- gate 변화: 실물·현장·승격 gate 변화 없음. 오프라인 평균 MAE 개선은 실물 성공률이 아니며 일부 관절은 기준보다 나빴다. FULL 선택의 mapped 원격 결과는 GitHub FULL CI 수용이 아니다. 운영 배포·착지·push는 수행하지 않았다.
+- CE: 해당 없음. 고정 learner venv의 기존 교훈을 적용했고 출처·게시·재로딩 경계와 원본 보존은 코드·회귀·검증 기록에 남겼다.
+
+## 2026-10-29 · 9c9d26941a · 홈의 목적별 시작과 Learning 영역 간 이동
+
+- 변경: 홈에서 로봇 시연 학습·시각 인식·SIM·VLM 검수를 목적별로 선택하고 기존 인식 흐름·검수·결과·저장 설정에는 native fragment와 키보드 초점으로 이동한다. 자료 등록·SIM·VLM·평가의 경로 줄에서 같은 홈 작업 선택으로 돌아온다. 중복 상단 버튼을 줄이고 기존 자료·폼·권한과 shell 영역은 유지했다.
+- 증거: `9c9d26941a` 공식 원격 Chromium 22 passed / skip0 / NEW0, 영향 선택 2,871 passed / 382 skipped / NEW0. dark/light 1440/320px 캡처를 만들고 1440px 어둡게·320px 밝게 화면을 직접 확인했다. 공통 메뉴 parser와 새 바로가기의 기존 검수 locator를 정확히 고치고 원래 메뉴·사진·승인 assertion은 유지했다. [검증 기록](../../../docs/validation/learning-home-navigation-2026-10-29/result.md).
+- gate 변화: 없음. 기존 기능으로 이동하는 UI 개선이며 새 학습·실물·HF 게시·승격·운영 배포를 실행하지 않았다. main 머지·push도 수행하지 않았다.
+- CE: 해당 없음. 목적 선택·이동·초점과 기존 검수 보존의 근거를 코드·브라우저 회귀·검증 기록에 남겼다.
+
+## 2026-10-29 · dc03344511 · LeRobot 업로드에서 ACT 평가·모델까지 연결
+
+- 변경: 자료 업로드·확인/분할·ACT 학습·평가/모델 탭을 추가하고 기존 Center의 프로젝트·권한·실행/중지·artifact 경계를 재사용한다. 파일 해시와 위치를 보존해 같은 폴더로 이어 올리고 검사한 원본과 저장한 분할을 worker/평가/ZIP까지 고정한다.
+- 증거: `docs/validation/lerobot-upload-imitation-2026-10-29/result.md`. 실제 Chromium이 공개 SO100 파생 폴더 155,900,813바이트를 올려 1,000단계 ACT·새 프로세스 평가·모델 ZIP 해시 확인을 완주했다. 일반 회귀 559 passed/22 skipped, 새 계약40 passed, UI5 passed, main 통합 메뉴 회귀23 passed. 상태7/행동5 및 단일관절 자료는 pinned learner에서 각각2단계/새 프로세스 평가/ZIP을 별도 확인했다.
+- gate 변화: 없음. v3 ACT CPU 오프라인 범위다. 실물·다른 학습법·웹 HF 게시·운영 배포·상용 출시 수용을 올리지 않는다. 기존 착지의 메뉴 회귀는 시험을 유지하고 공통 메뉴를 복구했으며 새 착지는 별도 확인한다.
+- CE: 해당 없음. 원인과 해결 판단이 코드·회귀·검증 기록에 남는다.
+
+## 2026-10-29 · d17e4c8178 · 업로드 학습의 착지 게이트 복구
+
+- 변경: 디자인 의미 토큰·nose 호환 시험 helper·공개 Git commit 표기를 고쳤다. 운영자 자료/서비스가 필요한 실제 학습 수용은 명시 실행 파일로 옮기고 일반 UI 회귀의 필수 선택은 유지했다. 게이트와 실패 baseline은 완화하지 않았다.
+- 증거: 원격 게이트/Study152 passed, 일반 Chromium32 passed/skip0/NEW0. 옮긴 운영자 시험은 기존 완료 run 조회·ZIP 다운로드/해시1 passed이며 새 학습 완료가 아니다. 독립 변경 검토 통과. 실패/통과 원본은 `docs/validation/lerobot-upload-imitation-2026-10-29/result.md`에 구분했다.
+- gate 변화: 없음. 전체 통합 착지를 재시도하며 실물·HF 자동 게시·운영 배포는 수행하지 않았다.
+- CE: 해당 없음. 기존 게이트의 원인과 운영자 시험 범위가 코드·회귀·검증 기록에 남는다.
+
+## 2026-10-29 · 4aec66cc8a · 변경 가능한 장비 구성의 시연 녹화
+
+- 변경: 로컬 등록 장비의 추가·교체·삭제를 앱 재시작 없이 반영하며 저장 프로필·녹화 세션은 불변 버전으로 고정한다. top/wrist 역할, 정책 입력과 검수 영상, 상태와 실제 수락 참조를 구분한다. 관찰 전용 녹화·재시작 후 검수·LeRobot 변환·기존 Studies 업로드를 연결했다.
+- 증거: 원격 기능·브라우저 74 passed/skip 0/NEW 0, 독립 코드 검토 승인. 단일 팔/wrist와 양팔/4카메라 합성 입력을 각각 실제 HTTP 녹화→재시작→변환→업로드→ACT 2단계→별도 평가·다운로드 모델 재로딩까지 완주했다. 상세는 [검증 기록](../../../docs/validation/lerobot-upload-imitation-2026-10-29/result.md), 운영 경로는 [녹화 안내](docs/learning-recording.md)에 있다.
+- gate 변화: 없음. 실제 팔의 등록된 상태·수락 참조 피드는 확인되지 않았으며 실물 동작·생산자 배포·현장 성공·정책 적용을 수용하지 않는다. 공식 통합 착지는 별도 실행한다.
+- CE: 해당 없음. 프로세스 exec 경합은 기존 launcher 패턴과 회귀로, 저장 오류·복구 경계는 코드·오류 주입 회귀·운영 안내로 보존했다.
+
+## 2026-10-29 · bd956e42a4 · 저장 시연 영상·관절값 재생 검수
+
+- 변경: 저장 원본의 카메라별 JPEG와 측정/수락 참조·단위·시각을 함께 조회한다. 백그라운드 검증·취소·128MiB 인덱스·변조 거절·회차 전환 응답 무효화로 원본과 녹화 정지 경계를 유지한다.
+- 증거: 원격 관련 74 passed/skip 0/NEW 0, 독립 검토 승인, 16개 데스크톱/모바일·테마별 화면 확인. 단일 팔/wrist 및 양팔/4카메라의 실제 합성 observer HTTP 녹화→재시작→저장 조회→LeRobot→Studies→ACT 2단계→독립 평가→모델 재로딩도 완료했다. 정본은 `docs/validation/lerobot-upload-imitation-2026-10-29/result.md`다.
+- gate: SOURCE 수용. 공식 main 착지·실물 시연·새 PC 설치·운영 배포는 별도다. CE: 해당 없음 — 코드·시험·정본 증거로 판단을 재구성할 수 있다.
+
+2026-10-11: D-637 folder move in progress; committed-SHA verification pending.
+
+2026-10-11: source d4988bffba landed on local main after independent review, remote regressions/known_failures 0 NEW and installed wheel/sdist/HTTP proof. SOURCE/LOCAL GO only; CI FULL and ROS-SIM/ARM64/device/field remain unverified. See docs/validation/d637-remaining-folders-2026-10-11/result.md.
+
+2026-10-11: D-663 semantic 보존/검증과 새 road_surface_v1 classes를 추가했다. 6353771b7 원격 builder/export/intake 관련 회귀 terminal exit 0, NEW 0. 실제 road_surface 독립 검수와 승인·새 dataset publication은 미완료다.
+
 ## 2026-11-01 · uncommitted · curation/perception: content_sha stand-in을 정본 소비로 대체
 
 - 변경: `build.py`의 로컬 `content_sha` stand-in 제거(D-373 정본 착지 후에도 남아 있던 사본)하고 `learning/registry/perception/store.py` 정본을 import로 소비(D-940 ①갈래). `manifest_bytes` 옵션은 정본으로 이식했다.
@@ -370,13 +418,11 @@
 - 증거: `test_layout_canon.py` 통과. 원격 시험은 착지 전 기록.
 - Gate: 없음. CE: 해당 없음.
 
-
 ## 2026-11-02 · uncommitted · 로봇암 검수 프레임 이미지의 style 속성 제거 (CSP)
 
 - 변경: `omx.html`의 `#review-image`가 지닌 `style="max-width:100%;height:auto"`는 `style-src 'self'` CSP가 조용히 무시해 큰 프레임이 칸을 넘을 수 있었다. 규칙을 `app.css`(갤러리 이미지와 같은 줄)로 옮기고 `omx-review.js`의 cssText 복사를 지웠다.
 - 증거: `test_layout_canon.py` 새 검사가 표면 HTML의 style 속성을 거절한다(되돌리면 실패 확인).
 - Gate: 없음. CE: 해당 없음.
-
 
 ## 2026-11-02 · uncommitted · 권한 거부 문구 통일·행간 토큰
 
@@ -403,3 +449,17 @@
 - Gate: 수정본 원격 확인 및 FULL 완료 전. CE: 해당 없음 — 실제 요청 대기와 DOM 표식이 원인·보존 조건을 설명한다.
 
 - 후속: 전체 파일의 첫 수정본 원격 실행은 decode·refresh를 포함해 24 passed, 늦은 판정의 네 입력 변형은 아직 held 요청이 도착하지 않아 4 failed/NEW4였다. 이 시험도 실제 check 요청을 보류한 뒤 입력을 바꾸도록 같은 요청 대기를 명시했다. canvas 표시나 disabled 상태가 요청 도착을 대신하지 않으며 기존 미제출·판정 무효화·편집 값 검증은 유지한다.
+
+
+
+## 2026-11-05 · a4a0251917 · fix(learning): 지연 응답 중 검수·선택 상태 보호
+
+- 변경: 객체·픽셀의 다음 검수 대기 조회 전에 기존 편집 잠금을 적용하고, 두 조회 응답을 현재 사진·세대와 대조한다. 녹화·시연 학습은 선택 변경 때 이전 응답을 버리고 최신 선택의 조회를 이어 간다. 녹화 선택 직후 이전 세션의 행동 버튼도 즉시 비활성화한다. 승인·사람 정답·출처·권한·같은 생성 요청 재확인 규칙은 유지한다.
+- 증거: 원격 Chromium cb52a1a3db에서 실제 응답을 보류한 12개 회귀가 실패했고, 제품 42188e5096에서 모두 통과했다(0 skipped, NEW0). 연결된 전체 파일·권한·편집·이동·크기 검사 193개는 192 통과/1 실패였다. 그 실패는 재진입 직후 여러 시점의 좌표를 읽던 시험이었으며, 준비 완료 뒤 한 DOM 시점에서 같은 기준을 검사하도록 바꾼 a4a0251917의 전체 결정 매개변수 4개가 통과했다(NEW0). 최초 NEW1은 이전 실행 기록에 그대로 보존한다.
+- gate 변화: 합성 자료의 SOURCE/LOCAL 브라우저 동작 근거다. 지연 상태의 새 캡처는 만들지 않았고, 기존 정상 배치 화면의 G2 근거와 구분한다. 실제 녹화·학습·장치·현장 수용이나 최종 저장소 FULL gate를 입증하지 않는다. 명령·각 SHA·제외한 잘못된 시험과 로그는 작업 SDD의 learning-depth-report.md에 남겼다.
+
+## 2026-11-05 · a27e97c186 · uiux: Learning 홈 하위 메뉴를 정본 subnav 자리에 배치
+
+- 변경: 기존5개 home hash 링크가 공용 subnav seat·선택·초점 표현을 소비한다. 본문 안 별도 메뉴 layout을 제거하고 같은 hash 재활성화 click은 옮긴 자리에서도 기존 화면 초점을 복원한다. IDs/hash/back/forward/query·retained DOM·common refresh·권한·사람 정답·학습 입력은 보존한다. 다른 하위 화면 흐름은 변경하지 않았다.
+- 증거: f8cb261e26의 home3폭×2테마 RED 뒤0de561052a의13개 공용 렌더/의미 회귀가 PASS/0 skipped/NEW0. 1a390c9d40 caller317개는315 PASS/NEW2이며 Learning pipeline/stages/state-consistency/data-recovery·review viewport/pixel workspace의 실제 phone 본문/사진 크기 예산·문맥·보존 상태 검사에 실패가 없다. 두 Fleet 실패는a27e97c186의 관련 전체파일36 PASS/NEW0으로 별도 폐쇄했다. review_shell.py --check도 통과해 기존 복사 범위 일치를 확인했다.
+- gate 변화: 합성 자료 SOURCE/LOCAL과 독립 G3의 source1a 화면 근거다. home focus는65/66이며 storage dark320의 content focus1셀을 제외했다. 실학습·모델 승격·설치본·장치·현장 수용이나 공식 FULL을 입증하지 않는다. CE: 해당 없음 — 공용 계약·회귀 시험에서 원인과 보존 조건을 복원한다.

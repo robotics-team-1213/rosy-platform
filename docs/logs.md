@@ -1,4 +1,4 @@
-﻿# docs logs
+# docs logs
 
 ## 2026-09-15 · uncommitted · docs(harness): start the docs harness pilot
 - 변경: `progress.md`, `logs.md` 추가
@@ -12833,6 +12833,13 @@ osy-d395-s1d\`.
 - gate 변화: 없음.
 - CE: 해당 없음 — 규칙이 D-889 추가 4와 시험에 남는다.
 
+## 2026-10-28 · 9c2ea19fae · 저장 텔레옵 검수에서 native ACT 학습·독립 평가
+
+- 변경: 학습센터에서 전체 시연 또는 정확한 저장 파지 구간 버전으로 native ACT worker를 시작하고 기존 중단·재접속·ZIP 다운로드를 사용한다. 원본/검수·분할·cycle·모델 해시와 별도 프로세스 재적재 평가를 결속한다.
+- 검증: 영향 범위 3,141 PASS/337 SKIP, 별도 명시 Chromium 6 PASS, 실제 CPU ACT 100단계씩 두 경로를 실행하는 수치 통합 1 PASS. 모두 known_failures NEW 0. 상세 SHA·산출물·제한은 [검증 기록](validation/teleop-act-pipeline-2026-10-28/result.md)에 있다.
+- gate 변화: 없음. 수치 자료는 합성 시험용이며 실제 텔레옵/실물 수용이나 운영 배포가 아니다.
+- CE: 해당 없음 — 기존 learner 환경 교훈을 적용했고 새 연결·검토 수정은 코드·회귀시험에 남는다.
+
 ## 2026-10-28 · 55117575a3 · 녹화·검수·학습·HF 보관 연결 검증
 
 - 변경: 고정 OMX 자료의 보관 인계, 검수 유실 방지, 변환 상태와 API v1.328, signed runtime closure의 구현·화면·원격 증거를 `docs/validation/recording-learning-handoff-2026-10-28/`에 보존한다. HTTP 이름의 Chromium 시험도 선택되도록 브라우저 선택기를 고쳤다.
@@ -12895,6 +12902,20 @@ osy-d395-s1d\`.
 - 변경: 설계/검출·화면 독립 검토와 카메라 입력/응답·조회 복구·Pilot 키보드 회귀를 날짜별 검증 기록에 결속했다. 최초 이미지/접힌 폼 fixture 실패를 정상 RED·최종 성공과 구분했다.
 - 증거: 집중42 passed, 공식 영향3994 passed/601 skipped, 브라우저 선택은 교정한7번33건과 나머지392건으로425 passed/skip0/NEW0이다. 독립 검토가 최종41PNG 전체를 확인했다. 원본 SHA와 fixture 실패는 `docs/validation/learning-state-consistency-2026-10-28/result.md`에 구분한다.
 - gate 변화: 없음. 실제 장치·모델·사람 라벨·승격 수용·배포·merge/push는 수행하지 않았다. CE: 해당 없음 — 상태 수명·입력·초점 경계가 코드와 회귀에 남는다.
+
+## 2026-10-29 · 2cac25d227 · 학습 과제 중심 구조와 native ACT 연결
+
+- 변경: 학습 과제의 준비·녹화·검수·학습·결과를 한 흐름으로 연결하고 전문가 등록 화면은 기존 경로에서 분리한다. native 원본·과제·프로필·참여 순서의 불변 연결을 worker·평가·모델 ZIP까지 보존한다. 실물 조종 미연결 상태, 녹화 준비서와 다른 방법의 실제 준비 요건을 표시한다.
+- 증거: `docs/validation/learning-task-workflow-2026-10-29/result.md`. 원격 affected 3642 passed / 368 skipped / NEW0, Chromium 8 passed / skip0 / NEW0. 합성 자료의 전체 시연·저장 구간을 정상 HTTP로 각각100단계 학습하고 새 프로세스 재로딩·독립 평가·두 ZIP의 파일 해시와 과제 계보를 확인했다. 두 테마·세 화면 폭 캡처6개를 직접 확인했다.
+- gate 변화: 없음. 실물 녹화의 웹 전송, 실물 학습·추론·평가·적용 승인, 온라인 HIL actor와 VLA/SIM 공통 어댑터는 별도 수용이다. 운영 배포·main 착지·push는 하지 않았다.
+- CE: 해당 없음. pinned learner 교훈을 적용했고, 수정 판단은 코드·회귀 시험·검증 기록으로 재구성할 수 있다.
+
+## 2026-10-29 · 95c5598ba6 · 주제별 탭·상태 카드와 실제 브라우저 학습 완주
+
+- 변경: MLflow 실행/평가 구분과 Carbon 탭 패턴을 참고해 준비·녹화·검수·학습·결과를 분리한다. 공통 시연 선택, 상태 카드·평가 표·모델 다운로드, 키보드·URL 보존, 시작/중지 대기·실패 안내를 구현했다. 진행 중 작업과 다중 시연에 대한 독립 검토 지적을 수정했다.
+- 증거: `docs/validation/learning-topic-workspace-2026-10-29/result.md`. 원격 영향 3379 passed/362 skipped/NEW0, 최종 Chromium12 passed/skip0/NEW0, workflow·HTTP15 passed, 정상 브라우저 연결·영상 디코딩·검수 저장·ACT100단계·새 프로세스 평가·ZIP 다운로드/해시·계보 검증1 passed. 두 테마·세 화면 폭 캡처6개를 직접 확인했다.
+- gate 변화: 없음. 합성 자료 소프트웨어 완주 근거다. 실물 녹화 웹 전송·장치 통합·현장 성능·운영 배포·상용 출시 수용·main 착지·push는 수행하지 않았다.
+- CE: 해당 없음. 기존 pinned 환경 교훈을 적용했고 코드·회귀·제품 검증 기록에 판단이 남는다.
 
 ## 2026-10-29 · uncommitted · deploy: GitHub OS 전송과 부분 업데이트 정책 연결
 
@@ -13029,11 +13050,25 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 미완료: 전체108 browser 회차는 진행 중이며 실패 표시를 포함한다. 리본 sticky 후속 GREEN·native exporter·primary focus의 실제 SDK/DPAD RED/수정·최종 소비자 수용은 남는다. 전체 목표 완료·배포·FIELD를 주장하지 않는다.
 - CE: 해당 없음 — 기존 clipping 교훈과 코드·회귀·검증 기록으로 판단을 보존한다. 미해결 항목은 해결 교훈으로 쓰지 않는다.
 
+## 2026-10-29 · dc03344511 · LeRobot 자료 업로드와 모방학습 완주 기록
+
+- 변경: `validation/lerobot-upload-imitation-2026-10-29/result.md`에 원본 업로드·분할·실제 ACT·새 프로세스 평가·ZIP 바이트 검증과 단일관절 호환 수정의 실패/성공 근거를 보존했다.
+- 증거: 실제 무모킹 Chromium 완주1 passed, 새 계약40 passed, 일반 회귀559 passed/22 skipped, main 통합 메뉴23 passed. 각 소스와 수용 범위를 결과 문서에 분리했다.
+- gate 변화: 없음. 실물·웹 HF 게시·운영 배포·상용 출시·착지/게시 완료를 선언하지 않는다.
+- CE: 해당 없음 — 최종 코드·회귀·검증 기록으로 판단을 복원할 수 있다.
+
 ## 2026-10-29 · 535d81ae8b · D-301 서버 서비스 이미지 증분 형식
 
 - 변경: D-301에 전체 목표를 서명하는 manifest v2, 재사용 Docker/OCI 신원, 빌드 입력 비교, 선택 교체와 rollback 이미지 보존을 추가 결정으로 기록했다. 기본/Account Caddyfile의 서로 다른 내용 해시 label로 기존 파일 bind inode가 남는 경우를 예방한다. 운영 절차는 deploy/site/README.md가 소유한다.
 - 증거: 공식 원격 집중 회귀 205 passed/skip0/NEW0, 별도 source 재검토 통과. workflow 변경에 필요한 FULL은 별도로 기록한다.
 - gate 변화: 없음. source/원격 계약 시험은 실제 Docker·서버 설치·현장 수용을 대신하지 않는다. CE: 해당 없음 — 판단은 결정·구현·회귀에 남는다.
+
+## 2026-10-29 · d17e4c8178 · 업로드 모방학습의 착지 게이트 수정 기록
+
+- 변경: `validation/lerobot-upload-imitation-2026-10-29/result.md`에 앞선 착지 실패, 코드·시험 분류 수정, 원격 재검증과 내보낸 ZIP 모델 재적재를 구분해 보존했다.
+- 증거: 게이트152 passed, 일반 Chromium32 passed/skip0/NEW0, 운영자 기존 결과/다운로드 재확인1 passed. 시험을 약화하지 않았다는 독립 검토 통과.
+- gate 변화: 없음. main 착지·운영 배포·실물 수용 완료를 이 기록만으로 선언하지 않는다.
+- CE: 해당 없음 — 코드·회귀·검증 기록으로 원인과 판단을 복원할 수 있다.
 
 ## 2026-10-29 · 66ba49bef8 · D-915 원문 물리 근거와 Harbor 연결 기록
 
@@ -14151,6 +14186,12 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - CE: 해당 없음 — 원인과 기준은 docstring·회귀 시험·D-889 추가 31에 있다.
 
+## 2026-11-04 · uncommitted · feat(accounts): 계정 화면의 역할 선택이 권한 묶음을 채움 (D-955 화면 보완)
+- 변경: 계정 화면의 "기본 역할 표시"를 "역할"(조회자·운영자·관리자)로 바꾸고, 고르면 자원별 권한 편집기가 그 역할 묶음으로 바뀐다(`roleGrants`: 조회자=조회만, 운영자=`teamGrants`, 관리자=모든 capability). 새 계정은 운영자로 시작. "팀원 기본 권한으로 채우기" 단추는 운영자 선택으로 대체. 헤더의 `policy-admin` 표기를 "관리자"로.
+- 서버 변경 없음: 저장·검증은 여전히 grant만 본다(D-757·D-955 원칙 유지). 마지막 계정 관리자 보호도 그대로.
+- 증거: test_account_admin_browser에 역할 전환 검사 추가.
+- gate 변화: 없음.
+- CE: 해당 없음 — 화면 동작 추가.
 ## 2026-11-04 · uncommitted · 조립식 배 v11 MuJoCo 쌍둥이, 손목 카메라 B, D-956 Isaac 결과
 - 변경: `ship_v11.py`·`ship_v11_scene.py`(v11 화물칸 · 컨테이너 v2 · 집게 v2.1 · 카메라 틀 B), `ship_stack_sequence.py --stage v11 --shard --resume`, `palletizing_gripper.WRIST_CAMERA_B`, Isaac 손목 카메라 사례·팀 link5 모양(`assets/omx_wrist_camera_b`), 시연 내보내기 손목 화면.
 - 증거: 검증 기록 Step 6 — v11 1층 1 mm까지 1/192 미착석, 위층은 콘 4개라 약 2.3 mm, 다시 놓기(이상화) 3 mm까지 64/64. D-956 Isaac seed 42는 다시 놓아도 HOLD(48dcb6a4, 3b55bb62).
@@ -14188,3 +14229,27 @@ osy-d395-s1d\`.
 - 증거: 변경 전 원격 `test_committed_review_archive_starts_without_checkout_imports`가 누락된 perception·Drive 의존성으로 실패했다. 변경 커밋의 `test_model_pc_autoupdate.py`·`test_model_review_release.py` 원격 검증 결과는 작업 인계에 남긴다.
 - gate 변화: 없음
 - CE: 해당 없음 — 원인과 재발 검사는 소스 목록과 기존 실제 Git 아카이브 부팅 시험에 드러난다.
+
+## 2026-11-05 · uncommitted · 화면 지도 UI·UX 최종 후보 근거 결속
+- 변경: validation/uiux-surfaces-2026-11-05에30카드·실제 상태/뷰포트 계약·G3·원본1656 PNG 해시·Robot60셀·구현 판단15개를 보존했다. 이전 실패 이력과 최종 통과를 구분한다.
+- 증거: 제품42c97133c1에서 관련440개·홈25개·공통 G1241개가 각각0 skip/NEW0. 최종 독립 Learning G3는12표면·여덟 항 PASS,439개 파일 해시 불일치0. R3/R4/R6/R8은 각 독립 task review와 실제 상태 캡처로 결속했다. 이후 시험 query 보완36개 통과,6478fe9b27까지 제품 동일.
+- gate 변화: 최종 전 브랜치 리뷰·공식 AUTO/FULL·main 착지는 대기. 실물·모델 품질·운영 배포 수용은 별도.
+- CE: 해당 없음 — 기존 인코딩/실제 산출물 fixture 교훈을 적용했고 이번 보장 조건은 코드와 행동 회귀에 남는다.
+
+## 2026-11-05 · uncommitted · 화면 지도 최종 비동기 경합 해소 근거
+- 변경: validation/uiux-surfaces-2026-11-05/final-closure.md에30카드의 통합 조건·실행 소스·최종 독립 재검토를 결속했다. 두 Important는 단일 수정 wave에서 모두 ADDRESSED, 새 차단 사항 없음이다.
+- 증거: 제품42188e5096의 실제 지연 회귀12 pass/0 skip/NEW0. 확장192 pass/1 fail은 당시 결과로 유지하고, 소비자a4a0251917의 준비/동시 측정4 pass/0 skip/NEW0로 해당 NEW1을 별도 해소했다. 기준값4개와 제품은 유지했다. 기록 후보2821506a0a의 size-range7커밋·harness lint0오류, 독립 scoped 승인 확인.
+- gate 변화: 관련 검증·독립 리뷰 완료, 공식 AUTO/FULL·로컬 main 대기. GitHub·배포·실물/모델 품질 수용은 별도.
+- CE: 해당 없음 — 원인과 보장 조건은 generation/잠금 코드·지연 응답/준비 상태 회귀에 남는다.
+
+## 2026-11-05 · uncommitted · 캡처 지문 목록의 정본 checksum 형식
+- 변경: 캡처1656개 목록을 기존 scanner가 지원하는 sha256sum 형식의 captures.sha256으로 이름만 바꾸고 참조 링크2개를 갱신했다. 목록의 바이트·해시·파일명은 그대로다.
+- 증거: ec1의 공식014641은 FULL 전에 .txt의 공개 SHA256을 high-entropy-token으로 분류해 STOP했다. 기존 secret_scan_syntax의 .sha256 계약을 사용하며 검사기·면제 목록·공개 provenance 설정은 고치지 않는다. 파일명 열과 자격 증명 검사는 유지한다.
+- gate 변화: 크기87·안전87·새 SHA 문서149·독립 소스 동등성은 이미 통과. checksum 이름과 링크 수정 후 기존 비밀 경계/문서 검증 및 기본 공식 AUTO/FULL을 다시 수행한다.
+- CE: 해당 없음 — 정본 scanner의 기존 checksum 분기/시험과 본 기록에 형식 조건이 드러난다.
+
+## 2026-11-05 · uncommitted · 완료 감사의 장치 항목명 가독성 차단 해소
+- 변경: validation/uiux-surfaces-2026-11-05/readback-header-followup.md와 표준 sha256 manifest에 실제 긴 값 P2/RED·Robot 전용 열 배치·새5장·폭 측정·scoped G3·부분 gate 취소를 결속했다.
+- 증거: df46d9a2f4의 capture2개/넓은171개는 각각0skip/NEW0,320/390 항목폭101.59/129.59px. 독립 검토자가 새5장과2CSS규칙을 보고 P2 ADDRESSED/새 문제0으로 승인했다. metadata0cc의 전체92 size/safety와lint0오류를 확인했다.
+- gate 변화: UI 차단 사항은 해소됐으며 최신 G1에 실제styleguide route/dialog 계약을 포함해 재실행하고 새 source의 기본 공식 AUTO/FULL·main을 확인한다. 취소015709의 부분 결과는 FULL로 세지 않는다.
+- CE: 해당 없음 — 기존 디자인 요구와 실제 폭/화면 회귀에 원인·보장을 남겼다.

@@ -90,6 +90,25 @@ def page():
         thread.join(timeout=2)
 
 
+def test_task_navigation_keeps_tab_semantics_while_container_resizes(page):
+    page.get_by_role('textbox',name='작업 초안',exact=True).fill('resize retained draft')
+    for width in [1366,390,320,1366]:
+        page.set_viewport_size({'width':width,'height':844})
+        rail = page.get_by_role('tablist',name='작업 선택')
+        expect(rail).to_be_visible()
+        expect(rail).to_have_attribute('aria-orientation','vertical' if width>=1024 else 'horizontal')
+        first = rail.get_by_role('tab',name='첫 작업',exact=True)
+        assert first.evaluate('node=>node.tagName') == 'BUTTON'
+        expect(first).to_have_attribute('type','button')
+        first.focus()
+        page.keyboard.press('ArrowRight')
+        expect(rail.get_by_role('tab',name='다음 작업',exact=True)).to_be_focused()
+        page.keyboard.press('Home')
+        expect(first).to_be_focused()
+        expect(page.get_by_role('textbox',name='작업 초안',exact=True)).to_have_value('resize retained draft')
+        assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
+
+
 def test_selection_retains_all_panels_drafts_and_failure_isolation(page):
     assert page.get_by_role('tab').count() == 3
     assert page.get_by_role('tabpanel').count() == 1
@@ -132,7 +151,7 @@ def test_guard_veto_rejection_and_pending_switch_leave_stop_live(page):
     expect(page.get_by_role('tab', name='첫 작업')).to_have_attribute('aria-selected','true')
 
 
-def test_keyboard_compact_chooser_and_teardown(page):
+def test_keyboard_narrow_subnav_and_teardown(page):
     first = page.get_by_role('tab', name='첫 작업')
     first.focus()
     page.keyboard.press('End')
@@ -143,16 +162,15 @@ def test_keyboard_compact_chooser_and_teardown(page):
     expect(page.get_by_role('tab', name='다음 작업')).to_be_focused()
     expect(page.get_by_role('tab', name='다음 작업')).to_have_attribute('aria-selected','true')
     page.set_viewport_size({'width':320,'height':844})
-    chooser = page.get_by_role('combobox', name='작업 선택', exact=True)
+    chooser = page.get_by_role('tablist', name='작업 선택', exact=True)
     expect(chooser).to_be_visible()
-    chooser.focus()
-    chooser.select_option('setup.first')
+    first.click()
     expect(page.get_by_role('textbox', name='작업 초안', exact=True)).to_be_visible()
-    expect(chooser).to_be_focused()
+    expect(first).to_be_focused()
     page.evaluate('window.blocked=true')
-    chooser.select_option('setup.second')
-    expect(chooser).to_have_value('setup.first')
-    expect(chooser).to_be_focused()
+    chooser.get_by_role('tab',name='다음 작업',exact=True).click()
+    expect(first).to_have_attribute('aria-selected','true')
+    expect(first).to_be_focused()
     page.evaluate('window.blocked=false')
     assert page.evaluate('document.documentElement.scrollWidth-innerWidth') == 0
     page.evaluate('window.mounted.unmountAll()')

@@ -2,54 +2,60 @@
 <html lang="ko" data-theme="dark">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Rosy Learning — 학습 작업</title><link rel="stylesheet" href="/common/tokens.css"><script src="/common/theme.js"></script>
-<link rel="stylesheet" href="/common/components.css"><link rel="stylesheet" href="/common/component-controls.css"><link rel="stylesheet" href="/common/app-shell.css"><link rel="stylesheet" href="/app.css">
+<link rel="stylesheet" href="/common/components.css"><link rel="stylesheet" href="/common/component-controls.css"><link rel="stylesheet" href="/common/app-shell.css"><link rel="stylesheet" href="/common/stage-strip.css"><link rel="stylesheet" href="/app.css">
 <script type="module" src="/learning.js"></script></head>
 <body><a class="skip-link" href="#learning-main">학습 작업으로 이동</a>
 <ui-shell grammar="procedure" class="ui-app-shell"><!-- review:header:start -->
 <ui-topbar role="banner"><ui-brand href="/learning" aria-label="Rosy Learning"><b>Learning</b></ui-brand><span data-spacer></span><a data-kind="quiet" class="ui-action-link" data-action-icon="account" data-learning-account-entry href="/accounts" title="로그인·계정">로그인·계정</a>
 <ui-button kind="quiet" data-theme-cycle="" data-icon-only="" type="button" aria-label="테마 변경" data-action-icon="theme-dark"></ui-button></ui-topbar>
 <!-- review:header:end -->
-<div class="ui-app-body" data-seats="rail"><div class="ui-rail"><nav class="ui-rail-nav workspace-tabs" aria-label="학습 화면"><!-- review:rail:start -->
+<div class="ui-app-body"><div class="ui-rail"><nav class="ui-rail-nav workspace-tabs" aria-label="학습 화면"><!-- review:rail:start -->
 <a class="ui-rail-item" data-action-icon="list" href="/learning" aria-label="홈" aria-current="page">홈</a><a class="ui-rail-item" data-action-icon="folder" href="/catalog" aria-label="자료 등록">자료</a><a class="ui-rail-item" data-action-icon="pencil" href="/" aria-label="정답 달기">정답</a><a class="ui-rail-item" data-action-icon="robot" href="/learning/tasks" aria-label="학습 실행">학습</a><a class="ui-rail-item" data-action-icon="check" href="/learning/evaluate" aria-label="평가·승격">평가·승격</a>
 <!-- review:rail:end --></nav></div>
-<div class="ui-app-main"><div class="ui-pathbar"><h1>학습센터</h1><span data-spacer></span><div class="heading-links"><a data-kind="quiet" class="ui-action-link" data-action-icon="robot" href="/learning/tasks">로봇·과제 등록하고 학습 시작</a><a data-kind="quiet" class="ui-action-link" data-action-icon="robot" href="/learning/sim">SIM 실험</a><a data-kind="quiet" class="ui-action-link" data-action-icon="account" href="/accounts">계정·외부 자료</a></div></div>
+<div class="ui-subnav"><nav class="ui-subnav-nav learning-home-nav" aria-label="학습센터 작업 이동"><a class="ui-subnav-item" href="#learning-start">작업 선택</a><a class="ui-subnav-item" href="#pipeline">인식 자료·학습</a><a class="ui-subnav-item" href="#review-section">검수 대기</a><a class="ui-subnav-item" href="#learning-results">실행·평가 결과</a><a class="ui-subnav-item" href="#storage-section">저장·계정</a></nav></div>
+<div class="ui-app-main"><div class="ui-pathbar"><nav class="ui-crumbs" aria-label="현재 위치"><a href="/learning">Learning</a><span aria-hidden="true">/</span></nav><h1>학습센터</h1><span class="ui-crumbs" id="learning-tool-path"></span><span data-spacer></span><div class="heading-links"><a data-kind="quiet" class="ui-action-link" data-action-icon="robot" href="/learning/tasks">로봇·과제 등록하고 학습 시작</a><a data-kind="quiet" class="ui-action-link" data-action-icon="robot" href="/learning/sim">SIM 실험</a><a data-kind="quiet" class="ui-action-link" data-action-icon="account" href="/accounts">계정·외부 자료</a></div></div>
 <main id="learning-main" class="learning-main ui-task-page" tabindex="-1">
-<p class="learning-lede">로봇·과제별 자료와 모델을 연결하고 개선 근거를 확인합니다.</p>
+<p class="learning-lede">할 일을 선택해 시작하거나, 아래 진행 상태에서 이어서 작업하세요.</p>
+<div class="ui-workspace-bar"><ui-status id="learning-status" state="pending">작업을 불러오는 중입니다.</ui-status><span data-spacer></span><ui-button id="refresh" data-action-icon="refresh" kind="quiet">최신 결과 확인</ui-button></div>
+<section id="learning-start" class="learning-section" aria-labelledby="learning-start-title" tabindex="-1">
+<h2 id="learning-start-title">어떤 작업을 하시겠어요?</h2>
+<nav aria-label="학습 작업 선택"><ul class="learning-routes">
+<li><div><h3>로봇 동작 학습</h3><p>작업 팔·카메라 구성을 선택해 시연을 녹화하고 검수·분할·모방학습을 이어갑니다.</p><p class="learning-route-steps"><a href="/learning/tasks">시연 학습 과제 열기</a><a href="/learning/imitate">자료 올리고 모방학습</a></p></div><a data-kind="quiet" class="ui-action-link" href="/learning/record">시연 녹화 시작</a></li>
+<li><div><h3>시각 인식 학습</h3><p>사진을 등록하고 객체·픽셀 정답을 검수한 뒤 승인 자료로 학습합니다.</p><p class="learning-route-steps"><a href="/catalog">자료 등록</a><a href="/?filter=pending">객체 검수</a><a href="/pixels?filter=pending">픽셀 검수</a></p></div><a data-kind="quiet" class="ui-action-link" href="#pipeline">인식 자료·학습 열기</a></li>
+<li><div><h3>시뮬레이션 실험</h3><p>시나리오 조건을 확인하고 실행 기록·결과를 살펴봅니다.</p></div><a data-kind="quiet" class="ui-action-link" href="/learning/sim">SIM 실험 열기</a></li>
+<li><div><h3>VLM 판단 검수</h3><p>사진의 질문별 정답과 모델 간 의견 갈림을 확인합니다.</p></div><a data-kind="quiet" class="ui-action-link" href="/learning/vlm">VLM 판단 검수 열기</a></li>
+</ul></nav>
+<p id="public-study-title" class="quiet">시연이 아직 없다면 <a href="/learning/public">공개 LeRobot 시연 학습 열기</a>에서 공개 SO100 자료로 흐름을 확인하세요. 우리 로봇의 녹화·보정·현장 수용과는 구분합니다.</p>
+<a data-kind="quiet" class="ui-action-link" href="#expert-tools">로봇별 지원과 전문가 도구</a>
+</section>
 <ui-status id="notice" state="ready" hidden></ui-status><ui-status id="learning-error" state="error" role="alert" hidden></ui-status>
-<ui-section class="learning-section pipeline" aria-labelledby="pipeline-title" aria-busy="true" id="pipeline">
-<div class="ui-workspace-bar"><h2 id="pipeline-title" class="ui-section-heading">현재 인식 자료의 학습 흐름</h2><span data-spacer></span><ui-button id="refresh" data-action-icon="refresh" kind="quiet">최신 결과 확인</ui-button></div>
+<ui-section class="learning-section pipeline" aria-labelledby="pipeline-title" aria-busy="true" id="pipeline" tabindex="-1">
+<div class="ui-workspace-bar"><h2 id="pipeline-title" class="ui-section-heading">현재 인식 자료의 학습 흐름</h2><span data-spacer></span></div>
 <p id="pipeline-status" role="status">현재 자료와 학습 결과를 연결하는 중입니다.</p>
 <div class="ui-workspace-bar pipeline-next"><ui-button id="pipeline-action" kind="primary" disabled>진행 상태 확인 중</ui-button><a data-kind="quiet" id="pipeline-link" class="ui-action-link" hidden>다음 작업</a></div>
-<ol id="pipeline-stages" class="pipeline-stages"></ol>
+<ol id="pipeline-stages" class="ui-stage-track" data-line="learning" aria-label="현재 인식 자료의 학습 단계"></ol>
 <div class="ui-workspace-bar owner-controls" aria-label="학습 실행 제어"><p id="owner-control-status" role="status" tabindex="-1">실행기 연결 확인 중</p>
 <ui-button id="owner-control-start" kind="quiet" aria-label="학습 시작" disabled>시작</ui-button><ui-button id="owner-control-stop" kind="quiet" aria-label="학습 중지" disabled>중지</ui-button><ui-button id="owner-control-retry" kind="quiet" aria-label="학습 재시도" disabled>재시도</ui-button></div>
 <details id="pipeline-evidence"><summary>현재 자료·모델의 연결 근거</summary><div id="pipeline-records"></div></details>
-<details id="pipeline-setup"><summary>학습 실행기 연결 안내</summary><p>이 작업대의 소유 학습 실행기를 연결하면 데이터셋 확인과 학습을 여기서 시작할 수 있습니다. 운영 담당자에게 이 작업대의 실행기 연결을 요청하세요.</p><p class="quiet">연결된 실행기는 승인 자료의 최신 결정, 학습·평가 데이터 분리와 시도 한도를 확인합니다.</p></details>
+<a data-kind="quiet" class="ui-action-link" href="#pipeline-setup">학습 실행기 연결 안내</a>
 </ui-section>
 <section id="domain-home" class="learning-section" aria-labelledby="domain-title"><h2 id="domain-title">도메인별 진행</h2><p id="domain-filter" class="quiet" role="status">도메인 상태를 불러오는 중입니다.</p>
 <ol id="domain-rows" class="domain-rows"></ol></section>
-<section id="learning-start" class="learning-section learning-panel" aria-labelledby="learning-start-title"><h2 id="learning-start-title">어떤 로봇의 어떤 과제를 개선할까요?</h2>
-<p>로봇 종류와 개별 장치·그룹, 과제의 성공 조건을 먼저 정합니다. 사용할 자료와 학습 방법을 연결하고, 같은 조건의 성공률과 사람이 들인 시간을 비교하세요.</p>
-<p class="quiet">현재 인식 학습은 위 자료 흐름에서 이어갑니다. 행동 정책 학습은 OMX 로봇암의 ACT 시범·교정 학습과 HIL-SERL 경험 학습을 지원하며, 다른 로봇의 정책 학습과 현장 실행은 아직 연결되지 않았습니다.</p>
-<div class="learning-next-actions"><a data-kind="quiet" class="ui-action-link" href="/learning/omx#profile-panel">OMX 로봇암 과제·팔·카메라 정하기</a></div>
-<details><summary>OMX 시범이나 학습 결과가 있다면</summary><p><a data-kind="quiet" class="ui-action-link" href="/learning/omx#dataset-section">기존 시범 검수·데이터 선택</a> · <a data-kind="quiet" class="ui-action-link" href="/learning/omx#train-section">학습 진행 확인</a> · <a data-kind="quiet" class="ui-action-link" href="/learning/omx#comparison-section">같은 조건의 결과 비교</a></p></details>
-</section>
-
-<ui-section class="learning-section" aria-labelledby="next-review-title"><h2 id="next-review-title" class="ui-section-heading">현재 검수 작업</h2>
+<ui-section id="review-section" class="learning-section" aria-labelledby="next-review-title" tabindex="-1"><h2 id="next-review-title" class="ui-section-heading">현재 검수 작업</h2>
 <p id="review-stage-summary" class="quiet" role="status">등록·승인 상태를 확인하는 중입니다.</p>
 <p class="quiet">사진을 열어 원본과 초안을 확인한 뒤 각 검수 화면에서 승인하세요. 객체 승인과 픽셀 승인은 별도로 기록됩니다.</p>
-<div class="review-summary" aria-labelledby="review-summary-title"><div><h3 id="review-summary-title">1 · 객체 박스 확인</h3><p id="review-counts">불러오는 중</p></div><a data-kind="quiet" id="object-review-link" class="ui-action-link" data-action-icon="next" href="/?filter=pending">검수 대기 사진 열기</a></div>
-<div class="review-summary" aria-labelledby="pixel-summary-title"><div><h3 id="pixel-summary-title">2 · 픽셀 마스크 확인</h3><p id="pixel-counts">불러오는 중</p></div><a data-kind="quiet" id="pixel-review-link" class="ui-action-link" data-action-icon="next" href="/pixels?filter=pending">검수 대기 마스크 열기</a></div>
-<div class="review-summary" aria-labelledby="data-summary-title"><div><h3 id="data-summary-title">3 · 학습 데이터 수용</h3><p id="training-data-state">현재 검수분의 데이터셋 수용 여부는 이 화면에서 확인할 수 없습니다.</p><p id="preparation-status" class="quiet" role="status">준비 상태를 확인하는 중입니다.</p></div><a data-kind="quiet" href="/pixels#pixel-preparation" class="ui-action-link">승인 자료 준비로 이동</a></div></ui-section>
-<section class="learning-section" aria-labelledby="job-heading"><div class="ui-workspace-bar"><h2 id="job-heading">실행·평가 결과</h2><span data-spacer></span><ui-button id="new-task" data-action-icon="plus" kind="quiet" disabled>작업 결과 연결</ui-button></div>
-<ui-status id="learning-status" state="pending">작업을 불러오는 중입니다.</ui-status>
+<div class="review-summary" aria-labelledby="review-summary-title"><div><h3 id="review-summary-title">1 · 객체 박스 확인</h3><p id="review-counts">불러오는 중</p></div><a id="object-review-link" data-kind="quiet" class="ui-action-link" data-action-icon="next" href="/?filter=pending">검수 대기 사진 열기</a></div>
+<div class="review-summary" aria-labelledby="pixel-summary-title"><div><h3 id="pixel-summary-title">2 · 픽셀 마스크 확인</h3><p id="pixel-counts">불러오는 중</p></div><a id="pixel-review-link" data-kind="quiet" class="ui-action-link" data-action-icon="next" href="/pixels?filter=pending">검수 대기 마스크 열기</a></div>
+<div class="review-summary" aria-labelledby="data-summary-title"><div><h3 id="data-summary-title">3 · 학습 데이터 수용</h3><p id="training-data-state">현재 검수분의 데이터셋 수용 여부는 이 화면에서 확인할 수 없습니다.</p><p id="preparation-status" class="quiet" role="status">준비 상태를 확인하는 중입니다.</p></div><a href="/pixels#pixel-preparation" data-kind="quiet" class="ui-action-link">승인 자료 준비로 이동</a></div></ui-section>
+<section id="learning-results" class="learning-section" aria-labelledby="job-heading" tabindex="-1"><div class="ui-workspace-bar"><h2 id="job-heading">실행·평가 결과</h2><span data-spacer></span><ui-button id="new-task" data-action-icon="plus" kind="quiet" disabled>작업 결과 연결</ui-button></div>
+<a data-kind="quiet" class="ui-action-link" href="#connection-panel">기존 결과 폴더 연결</a><a data-kind="quiet" class="ui-action-link" href="#supported-tools">지원 기능과 다음 작업</a>
 <p class="quiet">아래는 연결된 기존 작업 결과입니다. 현재 검수 중인 사진의 학습 완료를 뜻하지 않습니다.</p>
 <div id="work-filters" class="ui-workspace-bar work-filters"><label class="ui-field-label search-field">작업 검색 <input id="search" class="ui-field" type="search" placeholder="작업 이름·종류로 검색"></label>
 <label class="ui-field-label">종류 <select id="kind-filter" class="ui-field"><option value="all">전체 종류</option></select></label>
 <label class="ui-field-label">상태 <select id="state-filter" class="ui-field"><option value="all">전체 상태</option><option value="attention">확인 필요</option></select></label></div>
 <p id="updated" class="quiet" role="status"></p><div id="jobs" aria-live="polite"></div>
 <ui-empty id="empty-jobs" hidden><h3 id="empty-title">연결한 작업이 없습니다</h3><p id="empty-description">작업 결과 연결에서 기존 결과 폴더를 연결하세요.</p><ui-button id="reset-filters" data-action-icon="refresh" kind="quiet" hidden>검색·필터 초기화</ui-button></ui-empty></section>
-<section id="storage-section" class="learning-section" aria-labelledby="storage-title"><h2 id="storage-title">수집·저장 공간</h2>
+<section id="storage-section" class="learning-section" aria-labelledby="storage-title" tabindex="-1"><h2 id="storage-title">수집·저장 공간</h2>
 <section id="storage-setup" class="storage-setup" aria-labelledby="storage-setup-title" hidden>
 <h3 id="storage-setup-title">보관 준비와 다음 작업</h3>
 <p id="storage-setup-status" role="status">저장 설정 확인 중</p>
@@ -57,7 +63,7 @@
 <ui-status id="storage-setup-error" state="error" role="alert" hidden></ui-status>
 <p id="storage-setup-result" role="status" tabindex="-1"></p>
 <div id="storage-manager" hidden>
-<details id="storage-settings"><summary id="storage-settings-open">저장 대상·용량 설정</summary>
+<a data-kind="quiet" class="ui-action-link" href="#storage-settings">저장 대상·용량 설정</a><section id="storage-settings" tabindex="-1"><h3 id="storage-settings-open">저장 대상·용량 설정</h3>
 <p class="quiet">계정 연결의 쓰기 권한과 허용한 저장소를 사용합니다. 같은 계정·조직의 용량은 한 번만 입력합니다. 저장하면 새 보관 배정을 일시중지하며, 기존 자료의 복원과 이력은 유지합니다.</p>
 <form id="storage-settings-form">
 <div id="storage-settings-targets"></div>
@@ -72,13 +78,13 @@
 </div>
 <ui-button id="storage-settings-save" kind="primary" type="submit">저장 설정 저장</ui-button>
 </form>
-</details>
+</section>
 <div class="storage-setup-checks">
 <p id="storage-check-reason" class="quiet">설정을 저장한 뒤 소량 전송으로 비공개 보관·읽기를 확인하세요.</p>
 <label class="ui-check"><input id="storage-check-consent" class="ui-field" type="checkbox">작은 검증 파일을 각 비공개 저장소에 보관하는 데 동의합니다.</label>
 <ui-actions><ui-button id="storage-verify" kind="quiet" disabled>소량 전송으로 연결 검증</ui-button><ui-button id="storage-activate" kind="primary" disabled>새 보관 활성화</ui-button></ui-actions>
 </div>
-<details id="storage-preparation"><summary>완료 자료 준비하고 보관</summary>
+<a data-kind="quiet" class="ui-action-link" href="#storage-preparation">완료 자료 준비하고 보관</a><section id="storage-preparation" tabindex="-1"><h3>완료 자료 준비하고 보관</h3>
 <p class="quiet">등록된 OMX 학습 데이터, 준비된 폴더 또는 종료된 Isaac 결과를 별도 사본으로 보관합니다. 파일 바이트 검증과 LeRobot reader 검증·학습·현장 수용은 구분합니다.</p>
 <ui-button id="storage-sources-refresh" kind="quiet">준비할 자료 새로 확인</ui-button>
 <form id="storage-prepare-form" class="storage-prepare-form">
@@ -96,7 +102,7 @@
 <label class="ui-check"><input id="storage-completed-consent" class="ui-field" type="checkbox">선택한 자료의 쓰기가 끝났고 출처와 보관 범위를 확인했습니다.</label>
 <ui-actions><ui-button id="storage-prepare-submit" kind="primary" type="submit" disabled>준비하고 보관</ui-button></ui-actions>
 </form>
-</details>
+</section>
 </div>
 </section>
 <p id="storage-status" role="status">저장 현황을 확인하는 중입니다.</p>
@@ -141,12 +147,12 @@
 </form>
 </div>
 </section>
-<details id="connection-panel" class="learning-section"><summary>기존 결과 폴더 연결</summary>
+<section id="connection-panel" class="learning-section" tabindex="-1"><h3>기존 결과 폴더 연결</h3>
 <p class="quiet">이미 실행한 작업의 결과를 연결합니다. 목록은 자동 저장되며 원본 파일을 수정하지 않습니다.</p>
 <form id="register" class="ui-form learning-form"><label class="ui-field-label">작업 종류 <select id="kind" class="ui-field" required></select></label>
 <label class="ui-field-label">작업 이름 <input id="name" class="ui-field" maxlength="100" required placeholder="예: 독립 세션 평가"></label>
 <label class="ui-field-label">결과 폴더 <input id="path" class="ui-field" required placeholder="이 PC의 결과 폴더 전체 경로"></label>
-<p id="expected-files" class="quiet"></p><ui-button id="connect" data-action-icon="check" kind="primary" disabled>연결 저장</ui-button></form></details>
-<details class="learning-section"><summary>지원 기능과 다음 작업</summary><div id="capabilities"></div>
-<p class="quiet">자료 등록과 픽셀 검수는 이 앱에서 이어갑니다. 연결된 소유 학습 실행기는 시작·중지·재시도할 수 있습니다. 기존 CLI 작업 결과도 여기서 확인합니다. CVAT 서버 연결과 정책 승격은 별도입니다.</p></details>
-</main></div></div></ui-shell></body></html>
+<p id="expected-files" class="quiet"></p><ui-button id="connect" data-action-icon="check" kind="primary" disabled>연결 저장</ui-button></form></section>
+<section class="learning-section" id="supported-tools" tabindex="-1"><h3>지원 기능과 다음 작업</h3><div id="capabilities"></div>
+<p class="quiet">자료 등록과 픽셀 검수는 이 앱에서 이어갑니다. 연결된 소유 학습 실행기는 시작·중지·재시도할 수 있습니다. 기존 CLI 작업 결과도 여기서 확인합니다. CVAT 서버 연결과 정책 승격은 별도입니다.</p></section>
+<section id="job-detail" class="learning-section" tabindex="-1"><a data-kind="quiet" class="ui-action-link" href="#learning-results">실행·평가 결과</a><h2 id="job-detail-title">실행·평가 결과</h2><div id="job-detail-content"></div></section><section id="expert-tools" class="learning-section" tabindex="-1"><h3>로봇별 지원과 전문가 도구</h3><p>행동 정책 학습은 OMX 로봇암의 ACT 시범·교정 학습과 HIL-SERL 경험 학습을 지원하며, 다른 로봇의 정책 학습과 현장 실행은 아직 연결되지 않았습니다.</p><p><a data-kind="quiet" class="ui-action-link" href="/learning/omx#profile-panel">OMX 로봇암 과제·팔·카메라 정하기</a> · <a data-kind="quiet" class="ui-action-link" href="/learning/omx#dataset-section">기존 시범 검수·데이터 선택</a> · <a data-kind="quiet" class="ui-action-link" href="/learning/omx#train-section">학습 진행 확인</a> · <a data-kind="quiet" class="ui-action-link" href="/learning/omx#comparison-section">같은 조건의 결과 비교</a></p></section><section id="pipeline-setup" class="learning-section" tabindex="-1"><h3>학습 실행기 연결 안내</h3><p>이 작업대의 소유 학습 실행기를 연결하면 데이터셋 확인과 학습을 여기서 시작할 수 있습니다. 운영 담당자에게 이 작업대의 실행기 연결을 요청하세요.</p><p class="quiet">연결된 실행기는 승인 자료의 최신 결정, 학습·평가 데이터 분리와 시도 한도를 확인합니다.</p></section></main></div></div></ui-shell></body></html>

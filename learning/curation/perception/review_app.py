@@ -1,7 +1,5 @@
 """Pinky persistent review with optional model-PC draft jobs; no robot control.
 
-Run: python review_app.py --state <persistent-directory> --source source.jsonl
-     --human human.jsonl --images <image-root> [--port 8767]
 Restart with the same --state only. Local HTTP contract: docs/review-app.md.
 """
 from __future__ import annotations
@@ -14,11 +12,7 @@ import json
 import mimetypes
 import re
 import secrets
-import sqlite3
-import threading
 import time
-import uuid
-from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse, urlsplit
@@ -29,9 +23,11 @@ import numpy as np
 import class_sets, review_return
 from learning_workspace import Workspace, WORKFLOWS
 import review_evidence, review_ingest, review_masks, vlm_mask_feedback, camera_setup_web, omx_web, sim_web, vlm_judge_web
-import review_versions, omx_center_web
+import review_classes, review_context, review_versions, omx_center_web, review_upload
 import learning_domains, learning_pipeline, promotion_request
+import review_static
 import learning_tasks_web
+import learning_recording_web
 from workspace_links import WORKSPACE_LINKS_SCHEMA, check_workspace_links, load_workspace_links
 from learning_tasks import Tasks
 from review_ai_jobs import Jobs
@@ -40,9 +36,7 @@ from review_decisions import make_decisions_server, serve_review
 from storage_web import StorageWeb
 from learning_control import Control, ControlConflict
 
-STATIC = Path(__file__).with_name('review_app_web')
-COMMON = Path(__file__).resolve().parents[3] / 'shared/web'
-SHARED_ASSETS = json.loads((COMMON / 'shared-assets.json').read_text(encoding='utf-8'))['shared_assets']
+
 
 
 def detail_preview(store, index):
@@ -86,7 +80,7 @@ def check_link(url):
     return url
 
 
-def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=None, oauth=None, imports=None, storage=None, storage_jobs=None, ai_jobs=None, repos=None, omx_center=None, sim_runs=None, vlm_eval_url=None, workspace_links=None):
+def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=None, oauth=None, imports=None, storage=None, storage_jobs=None, ai_jobs=None, repos=None, omx_center=None, sim_runs=None, vlm_eval_url=None, workspace_links=None, owners=None, recordings=None, recording_config=None):
     check_bind_host(host)
     if workspace_links is not None:
         workspace_links = check_workspace_links({'schema': WORKSPACE_LINKS_SCHEMA, 'workspaces': workspace_links})
@@ -104,6 +98,8 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
     if omx_center is not None:
         omx_center.bind_workspace(project)
         omx_center.tasks = tasks
+    if recordings is None:
+        recordings = learning_recording_web.create(store, omx_center, recording_config)
     if storage and storage.project_id != project:
         raise ValueError('storage project must match workspace project')
     storage_web = StorageWeb(storage, accounts, storage_jobs, store.db, sim_runs=sim_runs, omx_center=omx_center)
@@ -114,6 +110,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
         collaboration = Collaboration(accounts, store, oauth=oauth, imports=imports, repos=repos)
     token = secrets.token_urlsafe(32)
     learning = Workspace(store.db)
+    native_workflow_cache = {}
     ai_jobs = ai_jobs if ai_jobs is not None else Jobs(store)
     sim_seen = {}
 
@@ -169,7 +166,9 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                 if collaboration and collaboration.get(self, path, token):
                     return
                 if storage_web.get(self, path): return
-                if learning_tasks_web.get(self, path, tasks, omx_center, token, sim_runs):
+                if learning_recording_web.get(self, path, recordings):
+                    return
+                if learning_tasks_web.get(self, path, tasks, omx_center, token, learning, native_workflow_cache, sim_runs=sim_runs, owners=owners):
                     return
                 if omx_center_web.get(self, path, omx_center, learning) or camera_setup_web.get(self, path, store.state) or omx_web.get(self, path, learning, omx_center, store.state) or sim_web.get(self, path, sim_runs) or vlm_judge_web.get(self, path, store, token, collaboration):
                     return
@@ -179,7 +178,9 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                     match = re.fullmatch(r'/api/review-ai/(\d+)', path)
                     if not match:
                         raise ValueError('invalid AI frame path')
-                    return self.send(ai_jobs.status(int(match[1])))
+                    value = ai_jobs.status(int(match[1]))
+                    value['can_request'] = not collaboration or 'edit' in self.learning_principal['capabilities']
+                    return self.send(value)
                 if path.startswith('/api/review-history/'):
                     match = re.fullmatch(r'/api/review-history/(object|pixel)/(\d+)', path)
                     query = parse_qs(urlparse(self.path).query, strict_parsing=True, keep_blank_values=True)
@@ -204,15 +205,15 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                 if path == '/api/learning/storage':
                     return self.send(storage_web.inventory.snapshot() if storage_web.inventory else {'status': 'not_configured', 'roots': []})
                 if path == '/api/workspace':
-                    frames = [dict(row, pixel_status=review_masks.get(store, row['index'])['status'])
-                              for row in store.list_frames()]
-                    object_set = class_sets.object_set(store)
-                    return self.send({'frames': frames, 'classes': [c['name'] for c in object_set['classes']],
-                                      'object_class_set': object_set,
-                                      'workspace_kind': review_evidence.metadata(store, 'workspace_kind'),
-                                      'token': token, 'exports': store.exports(), 'segmentation_supported': True,
-                                      'pixel_classes': review_masks.served_classes(store),
-                                      'map_reference': review_evidence.map_reference(store)})
+                    return self.send(review_context.workspace(store, self.path, project, workspace_links, token))
+                if path == '/api/classes':
+                    if collaboration:
+                        accounts.require(self.learning_principal, 'manage')
+                    query = parse_qs(urlparse(self.path).query, strict_parsing=True)
+                    if set(query) != {'kind'} or len(query['kind']) != 1:
+                        raise ValueError('one class kind required')
+                    return self.send(dict(review_classes.snapshot(store, query['kind'][0]), token=token,
+                        workspace_id=project, workspace_label=review_evidence.metadata(store, 'workspace_label') or '현재 작업공간'))
                 if path == '/api/decisions':
                     value = review_evidence.decisions(store)
                     tag = '"' + value['decision_sha256'] + '"'
@@ -227,6 +228,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                     return self.send({'catalog': review_evidence.metadata(store, 'import_catalog'),
                                       'cad_catalog': review_evidence.metadata(store, 'cad_catalog'),
                                       'map_reference': review_evidence.map_reference(store), 'token': token,
+                                      'folders': review_upload.folders(store), 'local_import': not bool(collaboration),
                                       'imports': bool(collaboration)})  # HF imports exist only in collaboration mode
                 if path.startswith('/api/mask-images/'):
                     review = review_masks.get(store, int(path.rsplit('/', 1)[1]))
@@ -260,7 +262,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                     pixel_reviews = review_masks.get_many(store, [f for f in frames if f['status'] != 'excluded'])
                     pixel_statuses = [row['status'] for row in pixel_reviews]
                     with store.connect() as db:
-                        queued_objects = {row[0] for row in db.execute('SELECT DISTINCT frame FROM object_drafts')}
+                        queued_objects = {row[0] for row in db.execute('SELECT DISTINCT frame FROM object_drafts d WHERE NOT EXISTS (SELECT 1 FROM object_draft_quarantine q WHERE q.frame=d.frame AND q.sha256=d.sha256)')}
                     object_draft_indices = [f['index'] for f in frames if f['status'] == 'pending'
                                             and (f['index'] in queued_objects or f['source'].get('objects')
                                                  or f['source'].get('boxes'))]
@@ -329,23 +331,8 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                 if path.startswith('/api/view-images/'):
                     return self.send(detail_preview(store, int(path.rsplit('/', 1)[1])),
                                      mime='image/png')
-                files = {'/': 'index.html', '/app.js': 'app.js', '/history.js': 'history.js', '/viewport.js': 'viewport.js', '/commands.js': 'commands.js', '/app.css': 'app.css',
-                         '/box-geometry.mjs': 'box-geometry.mjs', '/learning': 'learning.html',
-                         '/learning.js': 'learning.js', '/pixels': 'pixels.html', '/pixels.js': 'pixels.js',
-                         '/storage.js': 'storage.js', '/storage-settings.js': 'storage-settings.js', '/versions.js': 'versions.js', '/ai-jobs.js': 'ai-jobs.js',
-                         '/catalog': 'catalog.html', '/catalog.js': 'catalog.js',
-                         '/accounts': 'accounts.html', '/accounts.js': 'accounts.js', '/account-session.js':'account-session.js',
-                         '/learning/evaluate': 'evaluate.html', '/evaluate.js': 'evaluate.js',
-                         '/learning/workspaces': 'workspaces.html', '/workspaces.js': 'workspaces.js'}
-                name = path.removeprefix('/common/')
-                if path.startswith('/common/') and name in SHARED_ASSETS:
-                    file = COMMON / name
-                    return self.send(file.read_bytes(), mime=SHARED_ASSETS[name])
-                if path in files:
-                    file = STATIC / files[path]
-                    types = {'.html': 'text/html', '.css': 'text/css',
-                             '.js': 'text/javascript', '.mjs': 'text/javascript'}
-                    return self.send(file.read_bytes(), mime=types[file.suffix] + '; charset=utf-8')
+                if review_static.get(self, path):
+                    return
                 self.send({'error': 'not found'}, 404)
             except PermissionError:
                 self.send({'error': '프로젝트 접근 권한이 없습니다.'}, 403)
@@ -354,18 +341,20 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
 
         def do_POST(self):
             self.extra_headers = []
+            path = urlparse(self.path).path
+            body_limit = (review_upload.BODY_LIMIT if path == '/api/catalog/upload' else
+                          4*1048576 if path == '/api/learning/omx/center/lerobot-study' else 1048576)
             # Consume bounded rejected bodies before responding; Windows may otherwise
             # reset the connection while the client is still transmitting its request.
             def deny():
                 try:
                     length = int(self.headers.get('Content-Length', '0'))
-                    if 0 < length <= 1048576:
+                    if 0 < length <= body_limit:
                         self.connection.settimeout(5)
                         self.rfile.read(length)
                 except (ValueError, OSError):
                     pass
                 return self.send({'error': 'local workspace authorization required'}, 403)
-            path = urlparse(self.path).path
             login_request = collaboration and path == '/api/accounts/logout'
             expected_token = collaboration.csrf(self, token) if collaboration else token
             if not self.allowed_host() or (not login_request and self.headers.get('X-Pinky-Token') != expected_token):
@@ -379,20 +368,24 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                 return deny()
             try:
                 length = int(self.headers.get('Content-Length', '0'))
-                if not 0 < length <= 1048576:
+                if not 0 < length <= body_limit:
                     raise ValueError('bounded JSON body required')
                 body = json.loads(self.rfile.read(length))
                 if not isinstance(body, dict):
                     raise ValueError('JSON object required')
                 path = urlparse(self.path).path
-                if path.startswith('/api/review-ai/') and set(body) != {'action', 'version'}:
-                    raise ValueError('AI request accepts only action and version')
+                if path.startswith('/api/review-ai/'):
+                    expected = {'action', 'version', 'label', 'points'} if body.get('action') == 'sam_points' else {'action', 'version'}
+                    if set(body) != expected:
+                        raise ValueError('AI request fields do not match its action')
                 if path.startswith('/api/review-ai-cancel/') and body:
                     raise ValueError('AI cancellation accepts an empty object only')
                 if collaboration and collaboration.post(self, path, body, token):
                     return
                 if storage_web.post(self, path, body): return
-                if learning_tasks_web.post(self, path, body, tasks, omx_center, collaboration, sim_runs):
+                if learning_recording_web.post(self, path, body, recordings):
+                    return
+                if learning_tasks_web.post(self, path, body, tasks, omx_center, collaboration, learning, sim_runs=sim_runs, owners=owners):
                     return
                 if omx_center_web.post(self, path, body, omx_center, learning,
                                        collaboration.accounts if collaboration else None):
@@ -404,11 +397,15 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                 if vlm_judge_web.post(self, path, body, store, collaboration, Conflict):
                     return
                 actor = self.learning_principal['user_id'] if collaboration else None
+                if path == '/api/classes/revisions':
+                    if collaboration:
+                        accounts.require(self.learning_principal, 'manage')
+                    return self.send(review_classes.revise(store, body, actor or 'local-unidentified', Conflict))
                 if omx_web.post(self, path, body, learning, Conflict):
                     return
                 if path.startswith('/api/review-ai/'):
                     match = re.fullmatch(r'/api/review-ai/(\d+)', path)
-                    if not match or body['action'] not in ('object_draft', 'pixel_draft', 'mask_check') or type(body['version']) is not int:
+                    if not match or body['action'] not in ('object_draft', 'pixel_draft', 'mask_check', 'sam_points') or type(body['version']) is not int:
                         raise ValueError('invalid AI request')
                     index = int(match[1])
                     principal = self.learning_principal if collaboration else None
@@ -417,8 +414,9 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                         current = store.get(index) if body['action'] == 'object_draft' else review_masks.get(store, index)
                         if current['version'] != body['version']:
                             raise Conflict('검수 버전이 바뀌었습니다. 사진을 다시 불러오세요.')
+                        prompt = {'label': body['label'], 'points': body['points']} if body['action'] == 'sam_points' else None
                         job = ai_jobs.create(index, body['action'], body['version'],
-                                             actor or 'local-unidentified', authorize=authorize)
+                                             actor or 'local-unidentified', authorize=authorize, prompt=prompt)
                     return self.send(job)
                 if path.startswith('/api/review-ai-cancel/'):
                     match = re.fullmatch(r'/api/review-ai-cancel/([a-f0-9]{32})', path)
@@ -439,6 +437,10 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                     return self.send(storage_web.inventory.preflight(body))
                 if path == '/api/prepare':
                     return self.send(store.prepare())
+                if path == '/api/catalog/upload':
+                    return self.send(review_upload.import_image(store, body, actor))
+                if path == '/api/catalog/folder':
+                    return self.send(review_upload.import_folder(store, body, actor))
                 if path == '/api/import':
                     if not body.get('path'):
                         body['path'] = review_evidence.metadata(store, 'import_catalog')
@@ -480,6 +482,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
 
     class Server(ThreadingHTTPServer):
         def server_close(self):
+            recordings.close()
             storage_web.close()
             ai_jobs.close()
             if collaboration:
@@ -489,6 +492,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
     try:
         return Server((host, port), Handler)
     except Exception:
+        recordings.close()
         storage_web.close()
         ai_jobs.close()
         if collaboration:
@@ -512,7 +516,9 @@ def main():
     parser.add_argument('--storage-config', type=Path, help='private registered project storage roots and quota estimates')
     parser.add_argument('--review-ai-config', type=Path, help='private workspace-bound model-PC AI execution configuration')
     parser.add_argument('--omx-center-config', type=Path, help='private isolated OMX learning root and pinned host learner interpreters')
+    parser.add_argument('--recording-config', type=Path, help='private local observer recording sources and exporter configuration')
     parser.add_argument('--sim-config', type=Path, help='private workspace-bound local SIM subprocess configuration')
+    parser.add_argument('--fleet-owner-config', type=Path, help='private Fleet url, Viewer token file and CA for the read-only robot list')
     parser.add_argument('--vlm-eval-url', help='link from 평가·승격 to a separate VLM evaluation state instance (D-857)')
     parser.add_argument('--workspace-links', type=Path, help='private JSON listing the center\'s other review workspaces (D-857 §2)')
     parser.add_argument('--host', default='127.0.0.1', help='bind address; default loopback (D-478)')
@@ -573,9 +579,16 @@ def main():
         from experiment_center import Center
         omx_center = Center(json.loads(args.omx_center_config.read_text(encoding='utf-8')))
     sim_runs = sim_web.LocalRuns(args.sim_config, review_evidence.metadata(store, 'workspace_id')) if args.sim_config else None
+    try:
+        from owner_robots import FleetOwners
+        owners = FleetOwners(json.loads(args.fleet_owner_config.read_text(encoding='utf-8'))) if args.fleet_owner_config else None
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        parser.error(f'--fleet-owner-config: {exc}')
+    recording_config = learning_recording_web.load_config(args.recording_config, parser)
     server = make_server(store, args.port, args.host, control=control, accounts=accounts, oauth=oauth, imports=imports,
                          storage=storage, ai_jobs=ai_jobs, omx_center=omx_center, sim_runs=sim_runs,
-                         vlm_eval_url=args.vlm_eval_url, workspace_links=workspace_links)
+                         vlm_eval_url=args.vlm_eval_url, workspace_links=workspace_links, owners=owners,
+                         recording_config=recording_config)
     print(f'Pinky review: http://{args.host}:{server.server_port}', flush=True)
     serve_review(server, store, args.decisions_port)
 

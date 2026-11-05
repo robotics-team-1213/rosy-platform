@@ -365,11 +365,21 @@ def test_camera_decision_chain_names_the_layer_that_stops(panel):
       stuck:{stuck_id:'stuck-3d', cause:'no_motion', phase:'WAITING_CONSOLE', held_s:5.5, last_answer:'WAIT'}})""")
     rows = page.locator('.surface-camera-chain ui-status')
     assert rows.count() == 4
-    assert rows.nth(0).inner_text().startswith('STOPPED BY: 3 CORE GATES - lane_departure')
+    assert rows.nth(0).inner_text().startswith('정지 사유: 3 로봇 안전 확인 - 차선 이탈')
     assert rows.nth(0).get_attribute('state') == 'error'
     assert rows.nth(3).get_attribute('state') == 'warning'
+    page.evaluate("""() => window.__callbacks['/api/v1/line-follow'].onData({state:'HOLD', reason:'pose_stale',
+      crosswalk:{state:'unknown', reason:'pose_stale'}})""")
+    assert '횡단보도 확인 전 · 위치 정보 지연' in rows.nth(1).inner_text()
+    assert 'pose_stale' not in page.inner_text('#root')
+    page.evaluate("() => window.__callbacks['/api/v1/line-follow'].onData({state:'HOLD', reason:'future_gate'})")
+    assert '해석되지 않은 사유' in rows.nth(0).inner_text()
+    assert 'future_gate' not in page.inner_text('#root')
+    page.locator('.surface-camera-legend summary').click()
+    assert 'future_gate' in page.locator('.surface-camera-legend pre').inner_text()
     page.evaluate("() => window.__callbacks['/api/v1/line-follow'].onError(new Error('down'))")
     assert rows.count() == 1
+    assert 'future_gate' not in page.locator('.surface-camera-legend pre').inner_text()
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
 
 

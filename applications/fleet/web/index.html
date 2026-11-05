@@ -208,15 +208,16 @@
         <!-- D-517 10 — 교통 층 하나. Fleet 블록 표가 있을 때만 보인다. 표시 선호라 권한과 무관하다. -->
         <ui-button kind="quiet" id="traffic-toggle" type="button" aria-pressed="true" aria-controls="map-canvas" hidden>교통 켬</ui-button>
         <!-- D-594 — Fleet 이 기록한 지나온 길. 범위와 로봇은 표시 선호라 권한과 무관하다(trail-view.js). -->
-        <details class="trail-control" id="trail-control">
-          <summary class="ui-disclosure-row">지나온 길</summary>
+        <fieldset class="trail-control" id="trail-control">
+          <legend>지나온 길</legend>
           <div class="trail-panel">
             <label>범위 <select class="ui-field" id="trail-range"><option value="120">최근 2분</option><option value="600">최근 10분</option><option value="trip">이번 운행</option></select></label>
             <div class="trail-robots" id="trail-robots" role="group" aria-label="경로를 보일 로봇"></div>
             <p class="hint">실선 위치 확정 · 파선 추정 · 점선 천장 카메라만</p>
           </div>
-        </details>
+        </fieldset>
         <ui-tag id="map-tag" status="neutral">맵 대기</ui-tag>
+        <p id="fleet-scope-note" class="hint">이 화면은 Rosy Fleet 사이트 관제입니다. 위에서 내려다본 천장 카메라와 지도로 여러 로봇을 봅니다. 로봇 한 대의 전방 카메라·수동 조작·비상정지는 그 로봇의 Rosy Robot 화면에 있고, 관제 PC가 꺼져도 살아 있습니다. 여기서는 목표·취소·정지 같은 원자 액션을 내리며 바퀴 속도는 로봇 안에서만 만들어집니다.</p>
         </div>
       </details>
       <div class="map-board">
@@ -272,10 +273,7 @@
         <span id="legend-traffic" hidden><i class="sw traffic-occupied"></i>블록 점유 <i class="sw traffic-granted"></i>허가 <i class="sw traffic-unknown"></i>위치 불명</span>
       </div>
       <p class="hint" id="hint" aria-live="polite" title="로봇 카드의 목표 지정을 누른 뒤 지도를 찍으면 그 로봇에게만 목표가 갑니다" hidden></p>
-      <details class="note">
-        <summary class="ui-disclosure-row">관제 범위 안내</summary>
-        <p>이 화면은 Rosy Fleet 사이트 관제입니다. 위에서 내려다본 천장 카메라와 지도로 여러 로봇을 봅니다. 로봇 한 대의 전방 카메라·수동 조작·비상정지는 그 로봇의 Rosy Robot 화면에 있고, 관제 PC가 꺼져도 살아 있습니다. 여기서는 목표·취소·정지 같은 원자 액션을 내리며 바퀴 속도는 로봇 안에서만 만들어집니다.</p>
-      </details>
+
     </section>
     </div>
     <aside class="console-secondary" data-pane="now" aria-label="현재 상태와 대응">

@@ -10,21 +10,13 @@ export function createTaskChooser({ tasks, beforeSelect = () => true, timeoutMs 
   const root = document.createElement("div");
   root.className = "ui-task-chooser";
   const rail = document.createElement("div");
-  rail.className = "ui-task-rail ui-sidebar";
+  rail.className = "ui-subnav-nav";
   rail.setAttribute("role", "tablist");
   rail.setAttribute("aria-label", "작업 선택");
   rail.setAttribute("aria-orientation", "vertical");
-  const label = document.createElement("label");
-  label.className = "ui-task-compact";
-  const caption = document.createElement("span");
-  caption.textContent = "작업 선택";
-  const select = document.createElement("select");
-  select.className = "ui-field";
-  select.setAttribute("aria-label", "작업 선택");
-  label.append(caption, select);
   const status = document.createElement("ui-status");
   status.hidden = true;
-  root.append(rail, label, status);
+  root.append(rail, status);
   const listeners = new AbortController();
   const tabs = new Map();
   let selected = tasks[0].id;
@@ -37,9 +29,17 @@ export function createTaskChooser({ tasks, beforeSelect = () => true, timeoutMs 
   let timer = null;
   let cancelPending = null;
 
+  function orientation() {
+    if (!disposed && rail.isConnected) {
+      rail.setAttribute("aria-orientation", getComputedStyle(rail).flexDirection === "row" ? "horizontal" : "vertical");
+    }
+  }
+  const resize = new ResizeObserver(orientation);
+  try { resize.observe(rail); }
+  catch (error) { resize.disconnect(); listeners.abort(); throw error; }
+
   function render() {
-    select.value = selected;
-    select.disabled = busy || paused || !ready;
+    orientation();
     root.setAttribute("aria-busy", String(busy || paused || !ready));
     for (const task of tasks) {
       const tab = tabs.get(task.id);
@@ -52,12 +52,10 @@ export function createTaskChooser({ tasks, beforeSelect = () => true, timeoutMs 
 
   async function selectTask(id, focusTab = false) {
     if (disposed || paused || busy || !ready || id === selected || !tabs.has(id)) {
-      select.value = selected;
       return false;
     }
     busy = true;
     const attempt = generation;
-    const restoreSelect = document.activeElement === select;
     status.hidden = false;
     status.setAttribute("state", "pending");
     status.textContent = "작업 전환 확인 중입니다.";
@@ -94,10 +92,9 @@ export function createTaskChooser({ tasks, beforeSelect = () => true, timeoutMs 
       if (!disposed) {
         render();
         const focusStayedHere = document.activeElement === document.body
-          || document.activeElement === select || [...tabs.values()].includes(document.activeElement);
+          || [...tabs.values()].includes(document.activeElement);
         if (!paused && focusStayedHere) {
-          if (restoreSelect) select.focus();
-          else if (focusTab) tabs.get(selected).focus();
+          if (focusTab) tabs.get(selected).focus();
         }
       }
     }
@@ -110,8 +107,9 @@ export function createTaskChooser({ tasks, beforeSelect = () => true, timeoutMs 
   }
 
   for (const task of tasks) {
-    const tab = document.createElement("ui-button");
-    tab.setAttribute("kind", "segment");
+    const tab = document.createElement("button");
+    tab.type = "button";
+    tab.className = "ui-subnav-item";
     tab.setAttribute("role", "tab");
     tab.id = `${task.panel.id}-tab`;
     tab.setAttribute("aria-controls", task.panel.id);
@@ -121,10 +119,6 @@ export function createTaskChooser({ tasks, beforeSelect = () => true, timeoutMs 
     task.panel.tabIndex = 0;
     tabs.set(task.id, tab);
     rail.append(tab);
-    const option = document.createElement("option");
-    option.value = task.id;
-    option.textContent = task.title;
-    select.append(option);
     tab.addEventListener("click", () => { choose(task.id, true); }, {signal: listeners.signal});
     tab.addEventListener("keydown", event => {
       if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return;
@@ -135,7 +129,6 @@ export function createTaskChooser({ tasks, beforeSelect = () => true, timeoutMs 
       choose(tasks[next].id, true);
     }, {signal: listeners.signal});
   }
-  select.addEventListener("change", () => { choose(select.value); }, {signal: listeners.signal});
   render();
   return {
     element: root,
@@ -163,6 +156,7 @@ export function createTaskChooser({ tasks, beforeSelect = () => true, timeoutMs 
       disposed = true;
       clearTimeout(timer);
       cancelPending?.();
+      resize.disconnect();
       listeners.abort();
       root.remove();
     },

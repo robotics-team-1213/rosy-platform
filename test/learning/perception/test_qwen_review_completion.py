@@ -14,6 +14,43 @@ BINDING = {'classes': [{'name': 'background', 'index': 0},
                        {'name': 'drivable', 'index': 5}]}
 
 
+def test_background_completion_uses_bound_role_when_named_floor():
+    binding = {'classes': [{'name': 'floor', 'index': 0, 'role': 'background'},
+                           {'name': 'drivable', 'index': 3, 'role': 'drivable'}]}
+    human = np.array([[0, 255, 3]], dtype=np.uint8)
+    result = completion.compose(human, {'background': np.array([[True, True, False]])}, binding)
+    assert result.tolist() == [[0, 0, 3]]
+
+
+@pytest.mark.parametrize('blank', [True, False])
+def test_qwen_initial_draft_does_not_require_existing_human_regions(monkeypatch, blank):
+    import json
+    human = np.full((6, 8), 255, np.uint8)
+    if not blank:
+        human[0, 0] = 0
+    requests = []
+    def post(endpoint, route, body, **kwargs):
+        requests.append(body)
+        return {'message': {'content': json.dumps({'background': [], 'drivable': [[125, 167]]})}}
+    monkeypatch.setattr(completion.qwen_points, '_post', post)
+    assert completion.ask(np.zeros((6, 8, 3), np.uint8), human, 5, 'http://127.0.0.1:11434')['drivable'] == [[1, 1]]
+    message = requests[0]['messages'][0]
+    assert len(message['images']) == (1 if blank else 2)
+    if blank:
+        assert 'no human labels' in message['content']
+    else:
+        assert 'human label overlay' in message['content']
+
+
+def test_normalized_qwen_coordinates_use_both_original_axes():
+    human = np.full((240, 320), 255, np.uint8)
+    result = completion.points({'background': [[575, 380], [1000, 1000]],
+                                'drivable': [[500, 500]]}, human, normalized=True)
+    assert result == {'background': [[184, 91], [319, 239]], 'drivable': [[160, 120]]}
+    with pytest.raises(ValueError, match='coordinate'):
+        completion.points({'background': [[1001, 1]], 'drivable': []}, human, normalized=True)
+
+
 def test_completion_refuses_whole_road_before_network_or_output(tmp_path, monkeypatch):
     binding = {'classes': [dict(c, semantic='road_surface/1', role='drivable')
                            if c['name'] == 'drivable' else dict(c) for c in BINDING['classes']]}

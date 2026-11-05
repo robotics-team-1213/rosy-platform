@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="ko" data-theme="dark"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Learning · 클래스 관리</title>
+<link rel="stylesheet" href="/common/tokens.css"><script src="/common/theme.js"></script><link rel="stylesheet" href="/common/components.css"><link rel="stylesheet" href="/common/component-controls.css"><link rel="stylesheet" href="/common/app-shell.css"><link rel="stylesheet" href="/app.css"><script type="module" src="/classes.js"></script></head>
+<body><a class="skip-link" href="#classes-main">클래스 관리로 이동</a><ui-shell grammar="procedure" class="ui-app-shell"><!-- review:header:start -->
+<ui-topbar role="banner"><ui-brand href="/learning" aria-label="Rosy Learning"><b>Learning</b></ui-brand><span data-spacer></span><a data-kind="quiet" class="ui-action-link" data-action-icon="account" data-learning-account-entry href="/accounts" title="로그인·계정">로그인·계정</a>
+<ui-button kind="quiet" data-theme-cycle="" data-icon-only="" type="button" aria-label="테마 변경" data-action-icon="theme-dark"></ui-button></ui-topbar>
+<!-- review:header:end -->
+<div class="ui-app-body" data-seats="rail"><div class="ui-rail"><nav class="ui-rail-nav workspace-tabs" aria-label="학습 화면"><!-- review:rail:start -->
+<a class="ui-rail-item" data-action-icon="list" href="/learning" aria-label="홈">홈</a><a class="ui-rail-item" data-action-icon="folder" href="/catalog" aria-label="자료 등록">자료</a><a class="ui-rail-item" data-action-icon="pencil" href="/" aria-label="정답 달기" aria-current="true">정답</a><a class="ui-rail-item" data-action-icon="robot" href="/learning/tasks" aria-label="학습 실행">학습</a><a class="ui-rail-item" data-action-icon="check" href="/learning/evaluate" aria-label="평가·승격">평가·승격</a>
+<!-- review:rail:end --></nav></div><div class="ui-app-main"><div class="ui-pathbar"><nav class="ui-crumbs" aria-label="현재 위치"><a href="/learning">Learning</a><span aria-hidden="true">/</span></nav><h1>클래스 관리</h1><span class="ui-crumbs" id="learning-tool-path"></span></div><main id="classes-main" class="review-class-manager" tabindex="-1"><a id="back" href="/">검수로 돌아가기</a><p id="workspace" role="status">작업공간을 확인하는 중…</p>
+<p>클래스는 이 프로젝트의 현재 작업공간 전체에 적용됩니다. 선택한 자료 폴더를 포함한 모든 폴더가 같은 클래스셋을 사용합니다.</p>
+<label>검수 종류 <select id="kind" class="ui-field"><option value="object">객체</option><option value="pixel">픽셀</option></select></label>
+<p>기존 클래스는 표시 이름과 색상만 수정할 수 있습니다. 기존 번호·정본 이름·역할·의미는 유지됩니다. 새 클래스는 사용하지 않은 번호로 추가합니다.</p>
+<p>클래스 추가나 픽셀 색상 변경 후에는 다른 탭의 미저장 작업도 최신 클래스와 검수 버전을 다시 불러와야 합니다. 제외·검수 대기 상태는 유지됩니다.</p>
+<form id="form"><div id="rows"></div><button id="add" type="button">클래스 추가</button><p id="impact" role="status"></p>
+<label class="ui-check"><input id="confirm" class="ui-field" type="checkbox">이 작업공간 전체의 변경 범위와 재검수 대상을 확인했습니다.</label><p><button id="apply" type="submit" disabled>클래스 개정 적용</button> <button id="reload" type="button">다시 불러오기</button></p></form>
+<p id="result" role="status"></p><p id="error" role="alert"></p></main></div></div></ui-shell></body></html>

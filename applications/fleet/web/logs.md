@@ -986,3 +986,9 @@
 - 변경: `/console/accounts`의 계정 목록을 공용 `.ui-data-table`(로그인 ID·사용자 식별·기본 역할·상태·편집)로 바꿨다. 상태는 `ui-tag`(사용 중/정지됨), 편집 버튼은 "편집"이고 접근 이름이 "<로그인> 편집"이다. 칸을 쪼개지 않고 좁으면 표 영역이 가로로 스크롤한다. 시안은 Rosy Account 틀(D-962)로 고쳤다(캔버스 v37, 로그인 전 앱 상태 카드 제거).
 - 증거: 샘플 서버 1440·390 두 테마 렌더(처음 렌더에서 390에 "ope rato r"처럼 단어가 끊겨 칸 줄바꿈을 막음). 관리 브라우저 시험의 버튼 이름 선택자를 새 접근 이름으로 맞춤.
 - gate 변화: SOURCE 로컬 GO. 원격 브라우저는 커밋 후.
+
+## 2026-11-05 · a27e97c186 · uiux: 설치 작업 메뉴와 지도 하위 메뉴의 같은 표현
+
+- 변경: 설치 chooser가 공용 subnav native tab을 소비하며 Fleet 전용 chooser padding·compact select·wrap 덧칠을 제거했다. 실제 입력·권한·위험 행동·장치 명령은 변경하지 않았다. 삭제된 select의 직접 시험 caller를 실제 탭 클릭으로 맞췄다.
+- 증거: production Fleet map/install의3폭×2테마에서21개 computed 속성·native tab/link 의미·키보드 초점을 대조한6개를 포함해0de561052a의13개 회귀 PASS/NEW0. 1a390c9d40의 넓은 caller315 PASS/NEW2 뒤 a27e97c186의 start-point/workflows 두 전체파일36 PASS/0 skipped/NEW0. 옛 관제 안내 selector는 실제 지도옵션 안4개 권한 문구와 가시성을 검사하고,401 후 열린 계정 overlay는 Escape로 닫으며 탭 초점 보존과 aria-expanded=false를 확인한다. 기존 role lock·draft·stop·복구 단언을 유지했다.
+- gate 변화: source-bound SOURCE/LOCAL 증거이며 서로 다른 SHA의 실행을 합산하지 않는다. 제품과 캡처 hook은1a 이후 동일하고 독립 G3 Task10 PASS다. 공식 FULL·착지·실설치·현장 수용은 후속이다. CE: 해당 없음 — 실제 사용자 경로와 공용 contract 시험이 판단을 보존한다.

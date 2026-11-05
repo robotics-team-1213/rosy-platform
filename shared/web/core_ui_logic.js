@@ -188,31 +188,67 @@ export function operatorModeLabel(value, fallback = "—") {
 // ui-status states: ready = passing, warning = limiting, error = stopping. Only reported fields are shown.
 const PERCEPTION_REASONS = new Set(["no_observation", "stale", "observation_stale", "perception_stale", "low_confidence",
   "camera_observation_stale", "camera_line_not_visible", "camera_reselection_required", "reselection_required"]);
+// Display vocabulary only; unknown protocol values remain in the camera's diagnostic readback.
+const LINE_DECISION_LABEL = Object.freeze({
+  ...LINE_STATE_LABEL, ...TRAFFIC_REASON_LABEL,
+  tracking: "차선 추종", following: "차선 추종", lane_departure: "차선 이탈", obstacle_ahead: "전방 장애물",
+  pose_stale: "위치 정보 지연", no_observation: "인식 정보 없음", stale: "정보 지연",
+  observation_stale: "인식 정보 지연", perception_stale: "인식 정보 지연", low_confidence: "인식 신뢰도 부족",
+  camera_observation_stale: "카메라 인식 정보 지연", camera_line_not_visible: "카메라에서 차선 확인 불가",
+  camera_reselection_required: "카메라 차선 다시 선택 필요", reselection_required: "차선 다시 선택 필요",
+  line_not_visible: "차선 확인 불가", invalid_observation: "인식 정보 유효하지 않음",
+  motion_unconfirmed: "실제 움직임 미확인", driver_released: "주행 제어 해제", angular_limit_zero: "회전 허용량 없음",
+  limit_level_too_low: "주행 허용량 부족", obstacle_sensor_stale: "장애물 센서 정보 지연", lane_guard_stale: "차로 안전 정보 지연",
+  nominal_ground_requires_driver: "바닥 기준 확인을 위한 운전자 필요", low_light: "조도 부족", overexposed: "과노출",
+  fleet_wrong_way: "관제 역방향 감지", fleet_off_lane: "관제 차로 이탈 감지", fleet_off_map: "관제 지도 이탈 감지",
+  lane_return_fleet_required: "차로 복귀를 위한 관제 판단 필요", stuck_back_off: "막힘 복구 후진",
+  stuck_yield: "막힘 복구 양보", stuck_realign: "막힘 복구 방향 정렬", stuck_asking: "막힘 해소 요청 중",
+  stuck_waiting_console: "막힘 해소 관제 응답 대기", no_motion: "움직임 없음",
+  lane_lost: "차선 놓침", crosswalk_blocked: "횡단보도 막힘", no_progress: "전진하지 못함", dithering: "방향 흔들림",
+  ASKING: "응답 요청 중", WAITING_CONSOLE: "관제 응답 대기", BACKING: "후진 중", SETTLING: "정지 후 안정 대기",
+  TURNING: "양보 회전 중", CRAWLING: "양보 서행 중", YIELDED: "양보 후 대기",
+  REALIGNING: "방향 정렬 중", REALIGN_SETTLING: "방향 정렬 후 안정 대기",
+  WAIT: "대기", RESUME: "재개", BACK_AND_RETRY: "후진 후 재시도", MANUAL: "수동 조작", ABORT: "중단",
+  YIELD: "양보", REALIGN: "방향 정렬",
+  stuck_backing: "막힘 복구 후진 중", stuck_settling: "막힘 복구 정지 후 안정 대기",
+  stuck_turning: "막힘 복구 양보 회전 중", stuck_crawling: "막힘 복구 양보 서행 중", stuck_yielded: "막힘 복구 양보 후 대기",
+  stuck_realigning: "막힘 복구 방향 정렬 중", stuck_realign_settling: "막힘 복구 방향 정렬 후 안정 대기",
+  armed: "확인 준비", approaching: "접근 중", looking: "주변 확인 중", waiting: "대기 중", crossing: "건너는 중",
+  inside: "구역 안", ahead: "전방에 있음", unknown: "확인 전", clear: "통과 가능",
+  person_present: "보행자 있음", look_unknown: "주변 확인 불가", sensor_stale: "센서 정보 지연",
+  zone_lost: "구역 정보 놓침", not_watched: "관측하지 않음", zone_unplaced: "구역 위치 미설정",
+  FREE: "통행 가능", HOLDING: "통행 대기", EXPIRED: "기한 만료", NONE: "없음", granted: "허용",
+  authority_end: "허용 구간 끝", authority_odom_stale: "주행 거리 정보 지연",
+  ON_LANE: "차로 안", OFF_LANE: "차로 밖", WRONG_WAY: "역방향", OFF_MAP: "지도 밖",
+  green: "초록", yellow: "노랑", red: "빨강",
+});
 export function lineDecisionChain(status) {
   const s = status || {}; const stuck = s.stuck; const reason = String(s.reason || "");
+  const word = (value, fallback = "확인 전") => value ? LINE_DECISION_LABEL[value] || "해석되지 않은 사유 · 진단 확인 필요" : fallback;
+  const diagnostic = JSON.stringify(s, null, 2);
   const fixed = (v, n = 2) => (typeof v === "number" && Number.isFinite(v) ? v.toFixed(n) : "-");
-  const gates = [`${s.state || "OFF"} ${reason}`, `v ${fixed(s.linear)} w ${fixed(s.angular)}`];
-  if (s.body_gap_m != null || s.stop_gap_m != null) gates.push(`body gap ${fixed(s.body_gap_m)}/${fixed(s.stop_gap_m)} m`);
-  if (s.crosswalk) gates.push(`crosswalk ${s.crosswalk.state}${s.crosswalk.reason ? ` ${s.crosswalk.reason}` : ""}`);
-  if (s.authority) gates.push(`authority ${s.authority.state}${s.authority.reason ? ` ${s.authority.reason}` : ""}`);
+  const gates = [`${word(s.state || "OFF")}${reason ? ` · ${word(reason)}` : ""}`, `전진 속도 ${fixed(s.linear)} m/s · 회전 속도 ${fixed(s.angular)} rad/s`];
+  if (s.body_gap_m != null || s.stop_gap_m != null) gates.push(`차체 여유 거리 ${fixed(s.body_gap_m)}/정지 기준 ${fixed(s.stop_gap_m)} m`);
+  if (s.crosswalk) gates.push(`횡단보도 ${word(s.crosswalk.state)}${s.crosswalk.reason ? ` · ${word(s.crosswalk.reason)}` : ""}`);
+  if (s.authority) gates.push(`통행권 ${word(s.authority.state)}${s.authority.reason ? ` · ${word(s.authority.reason)}` : ""}`);
   const asking = stuck && ["ASKING", "WAITING_CONSOLE"].includes(stuck.phase);
-  const fleet = [stuck?.last_answer ? `last answer ${stuck.last_answer}` : "no stuck answer",
-    s.lane_cue ? `lane_cue ${s.lane_cue.state}` : "lane_cue not reported", "tier not reported by CORE"];
-  if (s.advice?.signal) fleet.push(`signal ${s.advice.signal.lamp}`);
+  const fleet = [stuck?.last_answer ? `최근 응답 ${word(stuck.last_answer)}` : "막힘 해소 응답 없음",
+    s.lane_cue ? `차로 정보 ${word(s.lane_cue.state)}` : "차로 정보 수신 없음", "판단 방식 수신 없음"];
+  if (s.advice?.signal) fleet.push(`신호 ${word(s.advice.signal.lamp)}`);
   const fleetHold = reason.startsWith("fleet_") || reason === "lane_return_fleet_required";
   const rows = [
-    {layer: "3 CORE GATES", text: gates.join(" · "),
+    {layer: "3 로봇 안전 확인", text: gates.join(" · "),
       level: s.state === "TRACKING" ? "ready" : s.state === "RECOVERING" ? "warning" : "error"},
-    {layer: "4 STUCK", level: !stuck ? "ready" : asking ? "error" : "warning",
-      text: !stuck ? "none" : `${stuck.cause}${stuck.detail ? `/${stuck.detail}` : ""} · ${stuck.phase} · ${fixed(stuck.held_s, 0)} s · ${stuck.stuck_id}`},
-    {layer: "5 FLEET/AI", text: fleet.join(" · "),
+    {layer: "4 막힘", level: !stuck ? "ready" : asking ? "error" : "warning",
+      text: !stuck ? "없음" : `${word(stuck.cause)}${stuck.detail ? `/${word(stuck.detail)}` : ""} · ${word(stuck.phase)} · ${fixed(stuck.held_s, 0)}초`},
+    {layer: "5 관제 판단", text: fleet.join(" · "),
       level: fleetHold ? "error" : stuck?.last_answer === "WAIT" || ["OFF_LANE", "WRONG_WAY", "OFF_MAP"].includes(s.lane_cue?.state) ? "warning" : "ready"},
   ];
-  if (s.state === "OFF" || !s.state) return {headline: {level: "unavailable", text: "LINE FOLLOW OFF"}, rows};
-  if (s.state === "TRACKING") return {headline: {level: stuck ? "warning" : "ready", text: stuck ? `MOVING? stuck open: ${stuck.cause}` : "MOVING - TRACKING"}, rows};
-  const layer = PERCEPTION_REASONS.has(reason) ? "1-2 PERCEPTION/STEERING (camera rows)" : fleetHold ? "5 FLEET/AI"
-    : reason.startsWith("stuck_") ? "4 STUCK" : "3 CORE GATES";
-  const context = [stuck ? `stuck ${fixed(stuck.held_s, 0)} s` : "", stuck?.last_answer ? `Fleet ${stuck.last_answer}` : ""].filter(Boolean);
+  if (s.state === "OFF" || !s.state) return {headline: {level: "unavailable", text: "차선 추종 꺼짐"}, rows, diagnostic};
+  if (s.state === "TRACKING") return {headline: {level: stuck ? "warning" : "ready", text: stuck ? `주행 상태 확인 필요 · 막힘 미해소: ${word(stuck.cause)}` : "주행 중 · 차선 추종"}, rows, diagnostic};
+  const layer = PERCEPTION_REASONS.has(reason) ? "1–2 인식·조향 (카메라 영상)" : fleetHold ? "5 관제 판단"
+    : reason.startsWith("stuck_") ? "4 막힘" : "3 로봇 안전 확인";
+  const context = [stuck ? `막힘 ${fixed(stuck.held_s, 0)}초` : "", stuck?.last_answer ? `관제 ${word(stuck.last_answer)}` : ""].filter(Boolean);
   return {headline: {level: s.state === "RECOVERING" ? "warning" : "error",
-    text: `${s.state === "RECOVERING" ? "RECOVERING BY" : "STOPPED BY"}: ${layer} - ${reason}${context.length ? ` (${context.join(", ")})` : ""}`}, rows};
+    text: `${s.state === "RECOVERING" ? "복구 중" : "정지 사유"}: ${layer} - ${word(reason)}${context.length ? ` (${context.join(", ")})` : ""}`}, rows, diagnostic};
 }
