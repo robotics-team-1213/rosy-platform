@@ -27,8 +27,8 @@
 
 ## 최근 기록
 
+- 2026-11-05 · a4a0251917 · fix(learning): 지연 응답 중 검수·선택 상태 보호
 - 2026-11-03 · f987a0b10e · 상태 일관성 브라우저 시험의 실제 대기 지점
 - 2026-11-02 · c1af0160f4 · Web unification follow-up
 - 2026-11-02 · uncommitted · D-961 웹 제품 통합
 - 2026-11-02 · uncommitted · 권한 거부 문구 통일·행간 토큰
-- 2026-11-02 · uncommitted · 로봇암 검수 프레임 이미지의 style 속성 제거 (CSP)
