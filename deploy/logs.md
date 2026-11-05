@@ -4579,3 +4579,10 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 검증: 프로필 적재 계약시험(세 모드 cp 단정)은 착지 시험 묶음으로 통과. 위 2026-11-05 항의 빌드 41988562801은 이 회귀 이전 base(ed455ea)에서 만든 것이므로, main에서의 재빌드는 게시 전 새 dispatch로 확인한다.
 - gate 변화: 없음.
 - CE: 해당 없음 — 원인·재현 경로가 커밋 메시지와 D-482 부록에 남는다. 계약시험이 실제 빌드 순서를 못 잡은 구멍은 빌드 스크립트 자체가 계약의 대상이라는 교훈인데, 이미 같은 교훈이 solutions에 여러 번 기록되어 있다(예: installed-layout import).
+
+## 2026-11-06 · uncommitted · fix(omx): 빈 집게 현재 위치 유지 전용 commissioning
+
+- 변경: 기존 `move --delta 0`은 초기 hold 뒤 별도 settle에 진입하므로 유지 전용 시험으로 쓰지 않는다. 기존 joint_tune에 motor16·baseline caps·1/1 profile·목적지/게인 변경 없는 hold를 추가한다. EEPROM을 쓰지 않고 hold 전 구간을 초기 위치 기준으로 관측하며, torque ON 동안 카메라 I/O를 하지 않는다. OFF 확인 뒤 바뀐 volatile 설정을 원복한다. cleanup의 카메라는 복원 성공 뒤에만 실행하며 unsafe end에서는 생략한다. 기존 소유권·상한·실물 감독 규칙은 유지한다.
+- 증거: 사전 test-only e2d52bf653 원격 RED8failed/10passed — 기존 CLI에 hold가 없어 실패한 원본을 보존했다. 구현 후 기존 소비자·새 hold 회귀의 원격 검증과 독립 검토를 이어간다. 실제 토크·이동·카메라 서비스 변경은 하지 않았다.
+- gate 변화: 없음 — 소프트웨어 회귀 검증은 진행 중이며 DEVICE/FIELD·실제 모델 작업 수용은 미완료다. 현장은 landed main과 해당 단계 현장 감독 확인 후에만 사용한다.
+- CE: 해당 없음 — 새 도구 동작·오류/복원 조건을 코드와 회귀 및 기존 README에서 직접 확인할 수 있다. 미실행 실물 결과를 해결 교훈으로 기록하지 않는다.
