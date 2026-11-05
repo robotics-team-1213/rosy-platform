@@ -2,7 +2,7 @@
 
 ## 범위와 소스
 
-기준 `3a004fad06c025af0f39d0055c05596810e17d5e`, 최종 구현 `348778e549ba963ed6a7e4d1d4f3cda8cf0c8d00`.
+기준 commit `3a004fad06c025af0f39d0055c05596810e17d5e`, 최종 구현 commit `348778e549ba963ed6a7e4d1d4f3cda8cf0c8d00`.
 작업 branch는 `feat/omx-smolvla-reviewed-cycle`다. 이 기록 뒤 문서만 바뀐 head와 시험한 구현 SHA를 구분한다.
 main 착지·게시·서비스 배포·모델 승격·장치 동작은 수행하지 않았다.
 
@@ -41,7 +41,7 @@ python test/known_failures.py <each-run-log>
 ```
 
 SmolVLA 시험은 기존 별도 SDK의 LeRobot0.4.4, torch2.7.1+cu128, transformers4.57.6, tokenizers0.22.2를 CPU로 사용했다.
-기반 정책 snapshot은 `lerobot/smolvla_base`의 `5e8d12a6e2975b0e5e5fce7c8caf47c371d257b6`, VLM metadata snapshot은 `HuggingFaceTB/SmolVLM2-500M-Video-Instruct`의 `7b375e1b73b11138ff12fe22c8f2822d8fe03467`다.
+기반 정책 snapshot commit은 `lerobot/smolvla_base`의 `5e8d12a6e2975b0e5e5fce7c8caf47c371d257b6`, VLM metadata snapshot commit은 `HuggingFaceTB/SmolVLM2-500M-Video-Instruct`의 `7b375e1b73b11138ff12fe22c8f2822d8fe03467`다.
 ACT 시험은 현재 `deploy/robot/omx/requirements-lerobot-export.txt`의 9개 pin과 일치하는 CPU 환경을 썼다. SmolVLA 시험 환경을 ACT 정본 환경과 동일하다고 표시하지 않는다.
 
 원시 로그는 작업 공간의 `Rosy/docs/workspace-records/2026-11-05/decision-vla-pipeline/evidence-smolvla/`에 보존한다. 공개 저장소에는 실제 host 경로가 든 로그를 넣지 않는다.

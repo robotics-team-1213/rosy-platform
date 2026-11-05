@@ -17,7 +17,7 @@ tags: [git, land-async, help, ancestry, stopped]
 
 2026-11-05 옵션 조회를 위해 `python tools/land_async.py --help`를 실행했지만 새 snapshot과 비동기 표가 만들어졌다. 자식 `land.py`는 도움말을 출력하고0으로 종료했으나 실제 main에는 반영하지 않았다. supervisor는 숨은 worktree를 보존하고 `land.py exit 0`이라는 `.stopped` 기록을 남겼다.
 
-이 관측 당시 snapshot 소스는 `7883232cb56fffae24a3b0504a6c7366c2376ffd`였다. 이는 당시 로컬 미게시 식별자이며 공개 PR 병합 사실을 주장하지 않는다. main ancestry 검사 결과는1이었다. 이후 정식 검증·착지의 결과와 이 도움말 실행을 섞지 않는다.
+이 관측 당시 snapshot 소스 commit은 `7883232cb56fffae24a3b0504a6c7366c2376ffd`였다. 이는 당시 로컬 미게시 식별자이며 공개 PR 병합 사실을 주장하지 않는다. main ancestry 검사 결과는1이었다. 이후 정식 검증·착지의 결과와 이 도움말 실행을 섞지 않는다.
 
 ## 원인과 안전한 사용
 
