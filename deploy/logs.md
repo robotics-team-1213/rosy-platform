@@ -4583,6 +4583,6 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 ## 2026-11-06 · uncommitted · fix(omx): 빈 집게 현재 위치 유지 전용 commissioning
 
 - 변경: 기존 `move --delta 0`은 초기 hold 뒤 별도 settle에 진입하므로 유지 전용 시험으로 쓰지 않는다. 기존 joint_tune에 motor16·baseline caps·1/1 profile·목적지/게인 변경 없는 hold를 추가한다. EEPROM을 쓰지 않고 hold 전 구간을 초기 위치 기준으로 관측하며, torque ON 동안 카메라 I/O를 하지 않는다. OFF 확인 뒤 바뀐 volatile 설정을 원복한다. cleanup의 카메라는 복원 성공 뒤에만 실행하며 unsafe end에서는 생략한다. 기존 소유권·상한·실물 감독 규칙은 유지한다.
-- 증거: 사전 test-only e2d52bf653 원격 RED8failed/10passed — 기존 CLI에 hold가 없어 실패한 원본을 보존했다. 구현 후 기존 소비자·새 hold 회귀의 원격 검증과 독립 검토를 이어간다. 실제 토크·이동·카메라 서비스 변경은 하지 않았다.
-- gate 변화: 없음 — 소프트웨어 회귀 검증은 진행 중이며 DEVICE/FIELD·실제 모델 작업 수용은 미완료다. 현장은 landed main과 해당 단계 현장 감독 확인 후에만 사용한다.
+- 증거: 사전 test-only e2d52bf653 원격 RED8failed/10passed, 추가8d4556a458의 torque ON 전제 거부 순서 RED1failed를 보존했다. 독립 Safety-Review 후 b8920ff0e6 원격 GREEN은 새 hold19개를 포함해208passed/2skipped·NEW0/known0/flaky0이다.2skip은 기존 녹화 정적 episode 검사의 실제 LeRobot 환경 의존이며 새 hold 통과에 포함하지 않는다. 최초 GREEN 명령의 존재하지 않는 시험 파일명으로0수집/exit5였던 원본도 별도 보존하고 증거에서 제외했다. 전체6개 시험 경로의 존재를 확인한 수정 명령으로 검증했다. 실제 토크·이동·카메라 서비스 변경은 하지 않았다.
+- gate 변화: 없음 — 소프트웨어 회귀를 확인했으며 DEVICE/FIELD·실제 모델 작업 수용은 미완료다. 현장은 landed main과 해당 단계 현장 감독 확인 후에만 사용한다.
 - CE: 해당 없음 — 새 도구 동작·오류/복원 조건을 코드와 회귀 및 기존 README에서 직접 확인할 수 있다. 미실행 실물 결과를 해결 교훈으로 기록하지 않는다.
