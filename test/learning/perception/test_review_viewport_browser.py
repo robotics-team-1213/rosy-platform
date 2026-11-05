@@ -20,7 +20,7 @@ def test_learning_page_has_visible_current_path(browser_workspace, route):
     expect(path).to_contain_text('/')
     expect(path.locator('h1')).to_be_visible()
     assert path.evaluate('n => n.scrollWidth <= n.clientWidth')
-    if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+    if (output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR')) and page.locator('.ui-subnav-nav').count():
         import json
         from pathlib import Path
         previous_viewport = page.viewport_size
