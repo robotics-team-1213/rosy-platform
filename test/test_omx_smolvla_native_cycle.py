@@ -76,6 +76,10 @@ probe = r"""
 import json, math, sys
 from pathlib import Path
 import numpy as np
+import draccus
+from lerobot.configs.default import DatasetConfig
+from lerobot.configs.train import TrainPipelineConfig
+from lerobot.datasets.factory import make_dataset
 root, model, size = Path(sys.argv[1]), Path(sys.argv[2]), int(sys.argv[3])
 splits, policy_type = Path(sys.argv[4]), sys.argv[5]
 sys.path[:0] = [str(root/'integrations/robots/omx/src'), str(root/'contracts/learning/src'), str(root/'test')]
@@ -88,17 +92,30 @@ adapter = LeRobotAdapter(str(model), 'cpu', joint_names=[str(i) for i in range(s
 normalizer = next(step for step in adapter.pre.steps if type(step).__name__ == 'NormalizerProcessorStep')
 unnormalizer = next(step for step in adapter.post.steps if type(step).__name__ == 'UnnormalizerProcessorStep')
 stats = {split:json.loads((splits/split/'meta/stats.json').read_text()) for split in ('train','eval','test')}
-assert_train_statistics(normalizer.stats, unnormalizer.stats, stats['train'], [stats['eval'], stats['test']])
+training_config = json.loads(Path(sys.argv[6]).read_text())
+reference_config = TrainPipelineConfig(dataset=draccus.decode(DatasetConfig, training_config['dataset']),
+                                      policy=adapter.policy.config)
+assert Path(reference_config.dataset.root).resolve() == (splits/'train').resolve()
+if 'tolerance_s' in training_config:
+    reference_config.tolerance_s = training_config['tolerance_s']
+effective_train = make_dataset(reference_config).meta.stats
+features = {'action', 'observation.state', 'observation.images.front'}
+assert set(normalizer.features) == features and set(unnormalizer.features) == {'action'}
+# The configured SDK may use fixed ImageNet visual stats; index/timestamp are not policy inputs.
+assert_train_statistics({key:normalizer.stats[key] for key in features},
+    {key:unnormalizer.stats[key] for key in features},
+    {key:effective_train[key] for key in features}, [stats['eval'], stats['test']])
 assert len(stats['train']['action']['mean']) == size
 assert len(set(stats['train']['action']['mean'])) == size
 frame = dict(positions=[20.]*size, images={'front':np.full((32,32,3), 60, dtype=np.uint8)})
 action = adapter.postprocess(adapter.infer(adapter.preprocess(frame, 'synthetic wiring verification only')))
 assert len(action) == size and all(math.isfinite(value) for value in action)
 """
-subprocess.run([sys.executable, '-I', '-B', '-c', probe, str(root), str(moved), str(size), str(splits), policy_type],
+subprocess.run([sys.executable, '-I', '-B', '-c', probe, str(root), str(moved), str(size), str(splits), policy_type,
+                str(run/'train-config.json')],
                env=env, check=True, timeout=180)
 print(json.dumps(dict(policy_type=policy_type, joints=size, optimizer_steps=1,
-    relocated_offline_reload=True, runner_reloaded=True, normalization_train_only=True, physical_task_success=None,
+    relocated_offline_reload=True, runner_reloaded=True, training_statistics_verified=True, physical_task_success=None,
     policy_revision=receipt['policy_revision'])))
 '''
 
@@ -130,5 +147,5 @@ def _run_actual_cycle(tmp_path, joints, policy_type):
                             capture_output=True, text=True, env=env, timeout=720)
     assert result.returncode == 0, (result.stdout+'\n'+result.stderr)[-7000:]
     assert '"relocated_offline_reload": true' in result.stdout
-    assert '"normalization_train_only": true' in result.stdout
+    assert '"training_statistics_verified": true' in result.stdout
     print(result.stdout.splitlines()[-1])
