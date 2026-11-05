@@ -74,6 +74,15 @@ def policy_revision(artifact_files, *, policy_type='act'):
     return policy_type + '-' + hashlib.sha256(canonical).hexdigest()[:16]
 
 
+def policy_options(policy_type, base_model=None, vlm_assets=None):
+    if policy_type == 'act' and base_model is None and vlm_assets is None:
+        return {}
+    if (policy_type == 'smolvla' and isinstance(base_model, (str, Path)) and base_model
+            and isinstance(vlm_assets, (str, Path)) and vlm_assets):
+        return dict(policy_type=policy_type, base_model=base_model, vlm_assets=vlm_assets)
+    raise ValueError('SmolVLA policy requires local base and VLM metadata; ACT policy uses neither')
+
+
 def _invoke(command, output, environment, timeout, *, lease_fd=None):
     with output.open('x', encoding='utf-8') as log:
         result = subprocess.run(command, stdout=log, stderr=subprocess.STDOUT,
@@ -160,10 +169,7 @@ def _run_cycle(splits, output, *, steps, batch_size, device, timeout, lease_fd,
     if (type(steps) is not int or steps < 1 or type(batch_size) is not int or batch_size < 1
             or device not in ('cpu', 'cuda') or type(timeout) not in (int, float) or not 0 < timeout <= 86400):
         raise ValueError('explicit positive training budgets and cpu/cuda device are required')
-    if (policy_type not in ('act', 'smolvla') or
-            (policy_type == 'act' and (base_model is not None or vlm_assets is not None)) or
-            (policy_type == 'smolvla' and (not base_model or not vlm_assets))):
-        raise ValueError('SmolVLA requires explicit local base policy and VLM metadata; ACT uses neither')
+    policy_options(policy_type, base_model, vlm_assets)
     receipt = validate_split(splits)
     receipt_hash = hashlib.sha256((splits / 'split-receipt.json').read_bytes()).hexdigest()
     # Verify actual train/eval readers before starting any training process. Final test remains sealed.

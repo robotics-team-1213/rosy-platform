@@ -148,6 +148,22 @@ final test는 학습·eval 지표 계산에서 제외한다. 모델은 예시의
 train/eval의 관절 layout이 같아야 하며 결과의 `joint_names`와 MAE 배열은 해당 6/12관절 순서다.
 실물 과제 성공률은 `null`로 유지한다. 결과는 offline-only이며 장치 실행·승격·업로드를 하지 않는다.
 
+### 검수 자료로 SmolVLA 미세 조정
+
+ACT가 기본이다. SmolVLA는 이미 설치된 로컬 기반 정책과 VLM metadata를 명시해 같은 검수·분할 경로로 실행한다.
+
+```text
+python learning/curation/omx/collection_pipeline.py train <prepared-directory> --decisions <human-decisions.json> --out <new-run> --policy smolvla --base-model <local-smolvla-checkpoint> --vlm-assets <local-vlm-snapshot> --device cpu --steps 100 --batch-size 1
+```
+
+이미 봉인한 분할은 `native_cycle.py run --splits <splits> --out <new-run>`에 같은 policy/base/vlm 옵션을 전달한다.
+기반 정책의 weights/config/전후처리와 VLM의 config/tokenizer/processor metadata를 새 run에 snapshot하고 hash를 결속한다.
+외부 모델 다운로드·Hub 업로드는 하지 않는다. 기반 정책의 과거 카메라·관절 feature와 정규화는 학습 자료의 feature·train 통계로 교체한다.
+완료 모델에는 VLM metadata와 검증 manifest를 포함하고 새 프로세스에서 재적재한다. 파일 이동 뒤에도 이 bundle로 적재하며 누락·변조는 거부한다.
+`cycle-receipt.json`의 `policy_type`은 `smolvla`, revision은 `smolvla-...`다. ACT의 기존 revision 형식은 보존한다.
+Learning 화면의 ACT/SAC 선택에 SmolVLA가 추가된 것은 아니며 이 경로는 명시적인 오프라인 CLI다.
+오프라인 MAE·합성 연결 시험은 집기 성공률·승격·실물 실행 승인이 아니다. 모델 종류의 실행 허용 목록과 단위 변환·owner 가드는 그대로 적용된다.
+
 ## 학습과 저장된 모델 확인
 
 `learning/training/omx/native-act.example.json`의 dataset을 생성된 `train/`에 연결한다.
