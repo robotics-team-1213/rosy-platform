@@ -14194,3 +14194,11 @@ osy-d395-s1d\`.
 - 증거: 원본 RED는 2 FAIL/11 PASS/NEW 2, 정정한 6-suite GREEN은 483 PASS/0 skip/NEW 0이며 파일명 누락 exit 5 실행은 무효다. body BOM RED와 document BOM positive를 분리했고, commit 3c8104b386620524913be376cbfc451db8897e29 전체 대상은 512 PASS/1 FAIL/0 skip/NEW 1이다(`TEMP/rosy-ui-log-body-bom-green-20261105/run-1.txt`). 남은 실패는 공개 commit·SHA256 literal의 기존 비밀 guard 분류이며, 현재 후속 변경은 지원되는 같은 줄 표기를 보충한 주석뿐이다(값·AST·줄 수 동일). 독립 검토는 body BOM 지적 해소와 실제 pins·공개 fixture·legacy·날짜·필드 보존을 확인했다. 변조·동일 원문 반복·세 번째 항목·임의 중복 거부는 회귀 시험에 남겼다. 금지된 두 amend가 발생한 중간 네 버전은 `refs/rosy-preserved/...`와 작업공간 `artifacts/worktree-backups/`의 전체 검증 bundle로 보존했으며 이후 커밋은 root가 정상 커밋으로만 진행한다.
 - gate 변화: 주석 표기 정정 뒤 secret closure와 최종 metadata SHA 원격 검증, 공식 AUTO/FULL, main 착지는 아직 미실행이다. 현재 전체 통과로 판정하지 않는다.
 - CE: 해당 없음 — 실제 코드·회귀 시험·고정 provenance로 판단과 재발 방지를 재구성할 수 있다.
+
+## 2026-11-05 · uncommitted · test(curation): FIFO 자식 FD 기준값 전에 상속된 미수거 자원을 정리
+
+- 변경: FIFO 격리 자식에서 descriptor 기준값 직전 `gc.collect()`를 한 번 호출한다. importer 이후에는 수거하지 않으며 `fd_delta == 0`, 부모 FD 수·snapshot 동일, 5초 watchdog과 자식 회수 단언을 유지한다. 생산 importer와 실패·격리 baseline은 변경하지 않았다.
+- 근거: 원래 FULL의 fifo-image는 거부와 부모 보존 단언은 통과했으나 child FD delta=-5로 실패했고 단독 재실행은 LOAD-FLAKY였다. 원본 FD의 생산자는 미확정이다. `ReviewStore.connect()`는 이미 finally로 닫히므로 SQLite 누수로 단정하지 않는다.
+- 검증: commit a02c3ed1d5의 신규 control은 상속된 cyclic FD 5개를 수거할 때 정상 -5/의도적 누수 -4/살아 있는 FD 닫힘 -6으로 RED 3 failed/NEW 3이다. 수정 commit f3dbbef6e6은 정상 0/누수 +1/닫힘 -1을 구분하고 파일 전체 원격 42 passed/0 skipped, exit 0/NEW 0이다. fork 경고 5건을 보존했다. 고정 SHA·명령·runner·비교 출력·해시는 작업공간 후속 수용 evidence의 fifo-descriptors/20261105T072116Z에 결속했고 독립 리뷰가 확인했다. 최종 FULL은 별도다.
+- gate 변화: 없음. fixture의 측정 경계 수정은 실제 자료 품질·모델·장치 수용을 뜻하지 않는다.
+- CE: 해당 없음 — 원인 조건과 보호 범위가 코드 주석·정상/누수/닫힘 세 회귀 control에 직접 남고, 기존 [간헐 실패 귀속 교훈](solutions/workflow-issues/attribute-intermittent-failure-by-line-then-interleaved-comparison.md)을 적용했다.
