@@ -14199,6 +14199,13 @@ osy-d395-s1d\`.
 - gate 변화: 없음. MuJoCo 후보이며 v11 Isaac 형상 전.
 - CE: 새 교훈 — `docs/solutions/logic-errors/mujoco-version-split-laptop-passes-lab-throws-seated-box-2026-11-04.md` (MuJoCo 3.3.7 box-box, remote_pytest가 MuJoCo 시험을 건너뜀).
 
+## 2026-11-04 · uncommitted · OMX 잠금과 물리적 구역 비움의 차이
+
+- 변경: [교훈](solutions/logic-errors/omx-zone-lock-release-is-not-physical-clearance-2026-11-04.md)에 불확실한 park·unsafe-end HOLD·프로세스 종료·디렉터리 동기화와 혼합 reader 배포 제한을 기록했다.
+- 증거: 소스 edc23d4559의 원격 252 passed, 0 skipped, known_failures NEW 0 및 독립 안전 재검토에서 P1 두 건·P2 한 건 해소. 실물·전원 차단·운영 배포 수용은 수행하지 않았다.
+- gate 변화: 없음. 로컬 수정 검증이며 공식 FULL 착지·배포는 별도다.
+- CE: 새 교훈 기록 — OS 잠금의 수명과 물리 점유가 다르며, 정상 종료만 고친 구현이 중단·재시작과 옛 reader에서 다시 위험해지는 연결 판단을 보존한다.
+
 ## 2026-11-04 · uncommitted · feat(accounts): 계정 화면의 역할 선택이 권한 묶음을 채움 (D-955 화면 보완)
 - 변경: 계정 화면의 "기본 역할 표시"를 "역할"(조회자·운영자·관리자)로 바꾸고, 고르면 자원별 권한 편집기가 그 역할 묶음으로 바뀐다(`roleGrants`: 조회자=조회만, 운영자=`teamGrants`, 관리자=Vault 외 모든 capability, Vault는 은퇴라 손으로만). 새 계정은 운영자로 시작. "팀원 기본 권한으로 채우기" 단추는 운영자 선택으로 대체. 헤더의 `policy-admin` 표기를 "관리자"로.
 - 서버 변경 없음: 저장·검증은 여전히 grant만 본다(D-757·D-955 원칙 유지). 마지막 계정 관리자 보호도 그대로.

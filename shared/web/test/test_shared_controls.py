@@ -787,6 +787,8 @@ DISABLED_WITHOUT_REASON = {
     ("applications/fleet/web/shared/vision-view.js", "fieldset.disabled = !source;"): NATIVE + " (vision-state 태그)",
     ("applications/fleet/web/shared/vision-view.js", "select.disabled = result.sources.length === 0;"): NATIVE + " (vision-state 태그)",
     ("applications/fleet/web/shared/vision-view.js", "select.disabled = true;"): NATIVE + " (vision-state 태그)",
+    ("applications/fleet/web/cell/cell-observation.js", "button.disabled = true;"): TRANSIENT + " (팔 사건 해제 제출 중)",
+    ("applications/fleet/web/cell/cell-observation.js", "button.disabled = false;"): TRANSIENT + " (실패 시 다시 시도 허용)",
 }
 #: Keys that cover more than one site on purpose. Every other key covers exactly one,
 #: so an identical line added elsewhere in the same file is a new unexplained site.

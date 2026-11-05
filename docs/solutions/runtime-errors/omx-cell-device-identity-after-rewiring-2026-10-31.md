@@ -78,6 +78,20 @@ On 2026-11-01 the left arm's `belt` and `board` polygons were slivers near x≈5
 - An all-empty foreground on a frame that shows objects means the site settings are stale. It never means the path is clear.
 - The black arm links read as the black belt, so the other arm is not foreground. Its position must come from its joint state.
 
+### After a person reconnects an arm (2026-11-03/04)
+
+A person reconnected arm_b and later arm_a. The checks below ran in this order, with the arms not moving. Each one found something.
+
+- **Follower caps.** All six arm_b motors read `pwm_limit` 885, the factory value, not the baseline 20. `record_session` refuses such an arm. With torque OFF, `commissioning_limits.py --baseline` set the caps back. Read the registers before the first session.
+- **Session board ports.** `record-config-arm-b.json` named a leader board (`…FF053322`) that was no longer connected. The session failed with "a physically confirmed /dev/serial/by-id symlink is required". Ping the connected boards and point the config at the one that answers IDs 1-6.
+- **Wrist cable wrap.** Turned by hand, the wrist roll's free range moved from about -13..+50 to -49..+29. Each time, a jog toward the other end stopped on the cable:
+  - the roll-block hold stopped it at -13;
+  - the guard's 5-degree stop ended the session at +29.
+
+  Once the person unwrapped the cable, the free range was -52..+52. Measure the free range with 2-unit jogs, which stay under the guard's 5 degrees, before the first reach.
+- **Configured camera URLs.** The arm_b cell config read its wrist camera from `front.jpg`. That unit had failed and served 503, so the pick preflight stopped. Each arm's config must name that arm's own wrist camera. The viewer (`omx-camera-view.env`) serves arm_a's wrist as `front.jpg`, not `arm_a_wrist.jpg`. It refuses one topic under two labels, so the name stays. After a reconnect, the preview unit (`rosy-omx-camera@<role>`) kept polling the old device node ("selected camera is unavailable") until it was restarted.
+- **Jaw closed value per arm.** arm_a's library closed its jaws to 46.6, the old jaws' value. The park pushed at PWM -150 against the stop at 48.9, and the jaws-in-park check held the arm. When jaws change, set each arm's `gripper_closed` to its measured closed reading. `joint_push` cannot tell a closed value set too low from a box between the jaws.
+
 ## Not resolved here
 
 The D435 gave colour but no depth on USB 2.0 when plugged directly into a PC port (no frames; UVC control errors -32 and -110). Behind a hub it had given depth at the same USB 2.0 speed.

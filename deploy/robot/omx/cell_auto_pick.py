@@ -204,6 +204,12 @@ def grasp_yaw(config: dict, site: str, o: dict, entry: dict, offset) -> float:
     return round(base + (yaw - base + 90) % 180 - 90, 1)
 
 
+def across(entry: dict) -> float:
+    """The object's size between the jaws: its width when they close across the long axis (jaw_axis_deg_from_long 90),
+    its length when they close along it (0): a 90 mm 3-cell held by its ends needs a 90 mm gap, not 30 (2026-11-04)."""
+    return entry["width_mm"] if entry.get("grasp", {}).get("jaw_axis_deg_from_long", 90) % 180 == 90 else entry["length_mm"]
+
+
 def jaw_open_for(width_mm: float, params=None, margin_mm: float | None = None) -> float:
     """The jaw value whose finger gap is the object width plus a margin each side. Measured 2026-10-29 from the wrist
     view: about 10.4 mm of gap per unit, 30 mm held at 52.3. Opening to 62 put the fingers ~40 mm out, onto the 2-cells
@@ -211,15 +217,17 @@ def jaw_open_for(width_mm: float, params=None, margin_mm: float | None = None) -
     g = lambda name: prm.get(params, name)  # noqa: E731
     margin = g("auto.jaw_margin_mm") if margin_mm is None else margin_mm  # less where a neighbour is near (finger_room)
     value = g("gripper.held_30mm") + (width_mm + 2 * margin - 30.0) / g("gripper.gap_mm_per_unit")
-    return round(min(max(value, g("gripper.held_30mm") + 0.5), g("gripper.open_max")), 2)
+    if value > g("gripper.open_max"):  # clamped, the fingers would come down on the object (2026-11-04)
+        raise SystemExit(f"a {width_mm:.0f} mm object needs the jaws at {value:.1f}, past gripper.open_max {g('gripper.open_max')}")
+    return round(max(value, g("gripper.held_30mm") + 0.5), 2)
 
 
 def reachable_ends(o: dict, entry: dict, params=None) -> list:
     """Grasp points shifted along a long box's axis, toward the arm's base first: grasp.end_frac of the way from
     the middle to where the jaws would reach the box's end. A square box has none."""
     reach = prm.get(params, "grasp.end_frac") * (entry["length_mm"] - entry["width_mm"]) / 2000
-    if reach <= 0 or "grasp_shift_mm" in o:  # an end is not shifted again
-        return []
+    if reach <= 0 or "grasp_shift_mm" in o or across(entry) == entry["length_mm"]:
+        return []  # an end is not shifted again; jaws holding a box by its ends must straddle it, centred (2026-11-04)
     u = math.radians(o["long_axis_deg"])
     ends = [dict(o, raw_m=[o["raw_m"][0] + k * reach * math.cos(u), o["raw_m"][1] + k * reach * math.sin(u)],
                  grasp_shift_mm=round(1000 * k * reach, 1)) for k in (1, -1)]
@@ -241,7 +249,7 @@ def plan_pick(config: dict, site: str, dest_site: str, place_xy, o: dict, entry:
                      "z": round(surface_z(config, dest_site) + height + s.get("place_dz", 0.0), 4),
                      "yaw_deg": s["yaw_deg"] if place_yaw is None else place_yaw}
             try:
-                jaws = jaw_open_for(entry["width_mm"], config.get("params"), o.get("jaw_margin_mm"))
+                jaws = jaw_open_for(across(entry), config.get("params"), o.get("jaw_margin_mm"))
                 # one file per object: two boxes on the floor planned into one name, and the arm went to the other one (2026-10-29)
                 lib = cp.write_library(dict(config, plan=dict(config["plan"], approach_m=approach, grip_open=jaws)), pick,
                                        place, work / f"auto-{site}-{offset}-{round(1000 * o['raw_m'][0])}_{round(1000 * o['raw_m'][1])}.json")
@@ -295,7 +303,10 @@ def choose(cell, config, calibration, site, dest_site, place_xy, roi, objects, m
         elif px is None or not (roi[0] + 12 <= px[0] <= roi[2] - 12 and roi[1] + 12 <= px[1] <= roi[3] - 12):
             why = "not inside the camera view"
         elif not square_entry(entries, o):
-            room = finger_room(mask, roi, pixel_fn, o, None, p)
+            entry = entries[o["object"]]
+            # held by its ends the fingers go past the ends, not beside it: measure the room there (2026-11-04)
+            ends = o["long_axis_deg"] if across(entry) == entry["length_mm"] else None
+            room = finger_room(mask, roi, pixel_fn, o, ends, p)
             if room["margin_mm"] is None:  # a long box packed beside another may have room near one end (2026-11-01)
                 o, room = next(((e, r) for e in reachable_ends(o, entries[o["object"]], p)
                                 if (r := finger_room(mask, roi, pixel_fn, e, None, p))["margin_mm"] is not None), (o, room))

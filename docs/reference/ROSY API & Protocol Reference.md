@@ -16,6 +16,18 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 - 기존 mask preview/sample에 선택적 `preserve_existing` 불리언(생략 시 false)과 `selection_sha256`를 더한다. 보호 시 직접 찍은 기존 라벨의 4방향 연결 영역과 255만 수정 대상이며, 같은 클래스라도 떨어진 영역은 보호한다. 후보 digest가 있으면 검증된 후보에서 선택 label의 영역을 읽고 색상 flood를 다시 실행하지 않는다. SAM의 tolerance 반환은 0이며 255 지우기는 받지 않는다. 미리보기와 적용은 같은 선택·보호 규칙을 사용한다.
 - UI의 AI 기본 표시는 미저장 제안이다. 저장은 기존 255 보완과 직접 수정으로 이루어지며 사람의 전체 확인·승인은 별개다. CORE 명령·로봇 장치 권한은 변경하지 않는다.
 
+### v1.358 Fleet 상태가 관제 단위 이름을 싣는다 (D-974)
+
+- 관제 단위 설정(`--control-unit-config`)이 있는 Fleet의 `GET /api/fleet/state` 최상위 `fleet`에 `unit`(설정의 `unit_id`)과 `root`(부모가 없으면 `true`)를 더한다. 설정이 없는 Fleet에는 두 필드가 없다.
+- 콘솔 헤더는 `root`면 "통합관제 <unit>", 아니면 `<unit>`을 보이고, 두 필드가 없으면 예전처럼 `name`을 보인다. `name`(`fleet_name`)은 페어링 이름표·site link·lease holder 신원으로 그대로다(D-361, D-391). 표시 전용이며 권한·위임 판정에 쓰지 않는다.
+
+### v1.357 OMX 팔 사건: 제어 PC 보고, AI PC 설명, 운영자 해제 (D-971)
+
+- 제어 PC가 세션이 사람 확인이 필요한 상태로 끝나면 그 팔의 관측 토큰으로 `POST /api/fleet/workcell-observations/arms/{source_id}/incidents`를 보낸다. 내용은 세션 ID(UUID), 측정 사실(잠긴 모터와 오류 비트, 종료 후 토크, 홈 접힘, 출력 상승 감지, 실행기 표시 행), 측정 판단, 장치 안전 재부팅 결과, 사진 최대 2장(상단·측면 JPEG, sha256, 장당 200,000 bytes 이하)이다. 같은 `(source_id, session_id)`의 재보고는 같은 사건이다.
+- Fleet이 사건을 SQLite에 두고 `open` → `explained` → `cleared`로 센다. 해제되지 않은 사건이 있는 팔은 보류다. 제어 PC는 세션 시작 전에 `GET .../arms/{source_id}/hold`로 묻는다. 해제는 이름 있는 운영자가 확인 내용과 함께 `POST .../incidents/{incident_id}/clear`로만 하며 사건은 지워지지 않는다.
+- AI PC 상황 서비스가 `ai_observer`로 설명 없는 열린 사건(사진 포함)을 가져가 로컬 시각 모델로 설명하고 `POST .../incidents/{incident_id}/explanation`으로 돌려준다. 설명은 저장·표시만 하고 어떤 처리도 고르지 않는다.
+- 이 보류는 Cell Job의 팔 claim `HELD`(D-779)와 별개다. 관측 토큰은 여전히 명령 권한이 없고 사건 쓰기와 보류 읽기만 더한다. 계약은 `core_common.protocol.arm_incidents`다.
+
 ### v1.351 핑키 열 모드: 온도·전압으로 속도를 낮춘다
 
 - 로봇은 SoC 온도, Raspberry Pi 펌웨어 `get_throttled`(지금 저전압·주파수 제한·스로틀·soft 온도 한계), 바퀴 모터마다 온도·모터 자체 한계·입력 전압·하드웨어 오류를 읽는다. 모터 값은 bringup이 2초마다 ROS `motor/health`(std_msgs/String JSON `{motors:[{id, temperature_c, temperature_limit_c, input_voltage_v, hardware_error}]}`)로 낸다.
@@ -475,6 +487,12 @@ It does not enable a physical owner, command, calibration or motion admission.
 | `POST /api/fleet/workcell-observations/arms/{source_id}` | Source-bound `X-Workcell-Observation-Token`; strict `ArmObservation` `{epoch,sequence,captured_at,positions}`; actual body limit16KiB | 202 `{accepted:true}`; 401 bad/unknown source credential; 409 replay, nonadvancing capture, expired/future capture; 413 `WORKCELL_OBSERVATION_TOO_LARGE`; 422 invalid structure; 503 unconfigured. Identity comes from the registered source, never the payload. |
 | `GET /api/fleet/workcell-observations/usb-devices` | Existing Fleet viewer authentication | `{workcells:[{workcell_id,roles,candidates:[{key,usb_id,roles,suggest,hub_arm,decision}]}]}`; no-store. `key` is a hash of the camera's persistent name; no device path or token. `decision` is `{role,principal_id}` or null. A workcell whose control PC has not reported for 60 s is omitted. (D-963, v1.350) |
 | `POST /api/fleet/workcell-observations/{workcell_id}/usb-devices` | `X-Workcell-Observation-Token` of any arm of that workcell; strict `UsbCameraReport` `{workcell_id,candidates<=16,roles<=32}`; body limit 16KiB | 200 `{decisions:[{key,role}]}` for reported keys an operator decided; the stored report replaces the previous one and decisions for keys no longer reported are dropped. 401 bad token or another workcell's token; 404 unknown workcell; 413 `WORKCELL_OBSERVATION_TOO_LARGE`; 422 `INVALID_USB_CAMERA_REPORT` (incl. `workcell_id` differing from the path). no-store. |
+| `POST /api/fleet/workcell-observations/arms/{source_id}/incidents` | D-971. Source-bound `X-Workcell-Observation-Token`; strict `ArmIncidentReport` `{source_id,session_id,facts,decision,recovery?,frames<=2 [{role top\|side,sha256,jpeg_b64}]}`, `facts`/`decision`/`recovery` each a finite JSON object of at most 12,288 bytes and depth 6, each frame a JPEG of at most 200,000 bytes whose sha256 Fleet recomputes; body limit 700,000 bytes (413); `source_id` must equal the path (422) | 200 `{incident_id,hold:{held,incident_ids<=64,reason}}`; no-store. The same `(source_id, session_id)` returns the same incident |
+| `GET /api/fleet/workcell-observations/arms/{source_id}/hold` | D-971. Source-bound `X-Workcell-Observation-Token` | 200 `{held,incident_ids,reason}`; held while an incident of that arm is not cleared; no-store |
+| `POST /api/fleet/workcell-observations/arms/{source_id}/incidents/{incident_id}/clear` | D-971. Named operator (`require_named_operator`); body `{note}` (1-400 characters, no control characters; required) | 200 the arm's new hold; 404 unknown incident of that arm; 409 already cleared. Records who, when and the note; nothing is deleted |
+| `GET /api/fleet/workcell-observations/arms/{source_id}/incidents/{incident_id}/frames/{role}` | D-971. Existing Fleet viewer authentication; `role` is `top` or `side` | `image/jpeg`; no-store; 404 unknown |
+| `GET /api/fleet/workcell-observations/arm-incidents/unexplained` | D-971. `ai_observer` only | `{incidents:[{incident_id,source_id,session_id,facts,decision,recovery,frames:[{role,sha256,jpeg_b64}],...}]}` open incidents without an explanation, oldest first (at most 8); no-store |
+| `POST /api/fleet/workcell-observations/arms/{source_id}/incidents/{incident_id}/explanation` | D-971. `ai_observer` only (the one new write path of that role besides facts, heartbeat and proposals); body `{seen,suspected_cause,model}` (strict, text 1-400 characters) | 200 `{incident_id,explained:true}`; 404 unknown; 409 already explained or cleared. Stored and shown; it never changes the hold and starts nothing |
 | `POST /api/fleet/workcell-observations/{workcell_id}/usb-devices/{key}/decision` | Named operator (`require_named_operator`); body `{role}` (Identifier), at most 4096 bytes, duplicate keys and non-finite numbers rejected | 200 `{key,role}`; the decision and operator are stored and audited by the mutation audit. 403 not a named operator; 404 `USB_CAMERA_NOT_REPORTED`; 422 `INVALID_USB_CAMERA_DECISION`. A new role name is allowed (the control PC gives it `/<role>_camera/image_raw`). Fleet applies nothing: the control PC reads the decision from its next report reply and `omx_cameras.py bind --apply` writes its own registry. |
 
 Epoch is lowercase UUID hex32; sequence is a positive strict integer. Original
@@ -4569,6 +4587,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 | v1.360 | 2026-11-04 | Learning SAM 점 선택·보호 규칙·적용 출처, 현재 사진 AI 자동 초안과 검사 상태·의견 없음 구분. 기존 라벨과 별도 승인 경계 유지 |
 | v1.359 | 2026-11-04 | Additive: peer pose sharing(탑뷰 부재 대비) — `GET /api/v1/peers`, `POST /api/v1/peers/beacon`(부여 `PEER_SHARE`, operator 이상), `StateSnapshot.peers`(기능이 꺼져 있으면 null). 설계 docs/plans/2026-11-04-peer-pose-sharing-design.md |
 | v1.358 | 2026-11-03 | D-974: 관제 단위 설정이 있는 Fleet의 `GET /api/fleet/state` `fleet`에 `unit`·`root`. 헤더 표시 전용, `name`(`fleet_name`) 신원은 그대로 |
+| v1.357 | 2026-11-03 | D-971: OMX 팔 사건. 제어 PC 보고(`arms/{source_id}/incidents`)와 보류 조회(`.../hold`), 운영자 해제(`.../clear`), AI PC 설명(`arm-incidents/unexplained`, `.../explanation`), 사건 사진(`.../frames/{role}`), 작업 셀 관측 스냅샷 팔마다 `incidents` (additive) |
 | v1.356 | 2026-11-04 | D-965: relay가 physical-evidence·rechecks를 셀로 전달, `requested_by`·`delegated_by`(요청한 앱 표시), 위임 취소 reason 전달, 503에 마지막 투영 |
 | v1.355 | 2026-11-03 | D-965: ARM 설치 없는 꼭대기 관제(R)가 ARM 작업 경로 다섯 개를 하위 셀 위임으로 relay. 셀 result에 job·receipt, 승인 전 취소는 HOLD로 거둠, admit은 취소된 위임 제안 거절 |
 | v1.354 | 2026-11-03 | D-965: 셀 inbox가 팔 작업 위임을 받아 부모 service principal로 기존 ARM 제안을 만들고 결속. 위임 approve는 팔 작업에 409, 승인은 셀 ARM admit |

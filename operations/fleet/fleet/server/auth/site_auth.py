@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hmac
 import logging
+import re
 import sqlite3
 from hashlib import sha256
 from typing import Mapping, Optional
@@ -19,6 +20,8 @@ from rosy_account.site_users import validate_machine_user
 
 AI_PATHS = frozenset({"/api/fleet/ai/facts", "/api/fleet/ai/heartbeat",  # D-577 4
                       "/api/fleet/ai/proposals"})   # D-577 개정 2026-10-10: proposals, Fleet validates
+# D-971: the AI PC also posts an explanation of one OMX arm incident (stored and shown, never acted on)
+AI_EXPLANATION = re.compile(r"^/api/fleet/workcell-observations/arms/[A-Za-z0-9_-]{1,32}/incidents/[0-9a-f]{32}/explanation$")
 
 _LOG = logging.getLogger(__name__)
 
@@ -160,7 +163,7 @@ def build_authorize(console_token: Optional[str],
         # D-577 4: the AI PC reads like a viewer and writes only facts and heartbeats; it never reaches
         # a stop, a stuck answer, a trip or any robot-moving route, whatever that route's own guard is.
         if (principal.role == "ai_observer" and request.method not in ("GET", "HEAD")
-                and request.url.path not in AI_PATHS):
+                and request.url.path not in AI_PATHS and not AI_EXPLANATION.match(request.url.path)):
             raise HTTPException(status_code=403, detail={"code": "AI_OBSERVER_FACTS_ONLY",
                                                          "message": "ai_observer may post only facts and heartbeats"})
         if (task_service is not None and request.method == "POST"
@@ -168,6 +171,7 @@ def build_authorize(console_token: Optional[str],
                 and request.url.path != "/api/fleet/sightings"
                 and request.url.path != "/api/fleet/policy-evidence"
                 and request.url.path not in AI_PATHS   # D-577 4: audited in fleet_ai_facts
+                and not AI_EXPLANATION.match(request.url.path)   # D-971: the explanation row is its own record
                 # D-525 rev 4: a signal demand repeats every 0.5 s; the route audits only a new one
                 and not (request.url.path.startswith("/api/fleet/traffic/signals/")
                          and request.url.path.endswith("/demand"))):

@@ -61,6 +61,7 @@ import urllib.request
 from pathlib import Path
 
 DEFAULT_PATHS = ("deploy/robot/omx", "contracts/foundation", "middleware/devices/omx/adapter",
+                 "operations/overhead/rosy_vision",  # omx_incident's Fleet link (D-971)
                  "integrations/robots/omx", "learning/curation/omx", "test/test_omx_joint_tune.py",
                  "test/test_omx_record_session.py")
 LOCK = "deploy/robot/omx/requirements-cell.lock"
