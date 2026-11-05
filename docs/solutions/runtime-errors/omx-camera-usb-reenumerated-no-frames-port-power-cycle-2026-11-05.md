@@ -50,11 +50,21 @@ The camera had also physically moved about 50 px, so the arms' maps were stale. 
 
 The earlier root-only board check was incomplete: a USB3 camera can have an OpenRB on the USB2 companion subtree, yet recovery powers both ports. Discovery must match serial devices against both complete subtrees, using path components so a neighboring port such as `3-20` is not mistaken for `3-2`. Missing camera/sysfs links, a dangling peer or an incomplete USB ancestor chain must raise `OSError` before unit or port writes; an ancestor walk must stop at the filesystem root. Do not recover from unknown topology by guessing a port or omitting its boards.
 
+### 2026-11-06 correction: inspect the whole power domain before recovery
+
+The initial implementation inspected serial boards below only the camera's USB root, although it disabled both that port and its peer. A USB3 camera and a USB2 OpenRB behind the same connector can therefore appear below different roots. An arm-local session check does not protect another arm's board on that peer. The [kernel USB power-management documentation](https://www.kernel.org/doc/html/latest/driver-api/usb/power-management.html#usb-port-power-control) describes the USB2/USB3 peer relationship; the power action's complete domain, rather than the camera's ancestry alone, determines what must be checked.
+
+The correction resolves both roots and checks serial descendants with path boundaries (`3-4` must not match `3-40`). All affected ports must initially report `disable=0`; otherwise recovery refuses without changing them. Missing device/root ancestry terminates with `OSError`, instead of climbing forever at `/`. After entering the power cycle, a `finally` block attempts to enable every affected port even after partial disable or an interrupted wait. An enable failure does not prevent attempts on the remaining ports, and the error is still propagated. Camera-unit cleanup remains separate. This restores the initially enabled state as far as writes succeed; it does not guarantee recovery after an unwritable port, process kill or host failure.
+
+Use this condition on both the normal and peer port before applying the manual procedure above. Do not perform the cycle when the topology or initial port state cannot be established. Never infer that another arm is safe from the current arm's session lock alone.
+
 ## Verification evidence
 
 Recovery verified 2026-11-05 on the site control PC by hand (steps above): direct read, HTTP 200, no further watchdog kills. The code path is covered by fakes only until it runs there.
 
 2026-11-06 source candidate `f24dc07253664399b0b446c280a6286ca1ee4069` fixes the discovery gap. Test-only candidate `89df767de3` reproduced eight failures and two controls; the USB cases cover a peer-only OpenRB and five missing-chain cases without an unbounded test. Remote execution of `test/test_omx_upkeep_identity.py`, `test/test_omx_cell_upkeep.py` and `test/test_omx_joint_jitter.py` then passed 31 tests, skip 0, NEW/known/flaky 0. These use filesystem and diagnostic-trace fixtures. No real USB power cycle, SSH operation, service change or new hardware acceptance was performed. Publication and deployment of this source are separate gates.
+
+The independently developed recovery-cleanup correction has landed locally; publication is a separate gate. On the model test PC, the test-only revision reproduced all seven added cases as expected failures (16 existing tests passed); the corrected revision passed all 23 tests, with no skips or NEW failures. Both used environment `35327e86830df3ba`, freeze `906d7aca580f620b`. Topology cases use temporary filesystem symlinks and recovery writes use fakes; no USB power or arm was operated. These regressions do not establish actual camera recovery or field acceptance.
 
 ## When to apply
 

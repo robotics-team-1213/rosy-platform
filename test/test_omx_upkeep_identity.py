@@ -27,6 +27,7 @@ def sysfs(tmp_path, monkeypatch, board_root='3-2'):
     link(tmp_path/'sys/class/video4linux/video0/device',usb)
     root=tmp_path/'sys/devices/pci/usb4/4-0:1.0/usb4-port2';root.mkdir(parents=True)
     peer=tmp_path/'sys/devices/pci/usb3/3-0:1.0/usb3-port2';peer.mkdir(parents=True)
+    touch(root/'disable','0');touch(peer/'disable','0')
     link(root/'peer',peer)
     link(tmp_path/'sys/bus/usb/devices/4-0:1.0',root.parent)
     tty=tmp_path/'dev/ttyACM0';touch(tty)

@@ -2,7 +2,10 @@
 value below the jaws' stop, a missing map, a hold. No hardware, no motion."""
 import json
 from pathlib import Path
+import subprocess
 import sys
+
+import pytest
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "deploy/robot/omx"))
 import cell_upkeep as cu  # noqa: E402
@@ -263,3 +266,119 @@ def test_without_fix_the_dead_camera_is_only_reported():
     usb = Usb()
     rows, _ = cu.check_cameras("arm_a", CAMS, usb.io(), fix=False, bus_free=True)
     assert rows[0]["status"] == "fail" and usb.log == []
+
+
+def usb_tree(tmp_path, monkeypatch, board_root="4-4"):
+    """A USB3 camera and a USB2 serial board behind paired root ports, using real symlinks."""
+    ports = []
+    for bus in (3, 4):
+        root = tmp_path / f"sys/devices/platform/usb{bus}"
+        (root / f"{bus}-4").mkdir(parents=True)
+        port = root / f"{bus}-0:1.0/usb{bus}-port4"
+        port.mkdir(parents=True)
+        (port / "disable").write_text("0")
+        link = tmp_path / f"sys/bus/usb/devices/{bus}-0:1.0"
+        link.parent.mkdir(parents=True, exist_ok=True)
+        link.symlink_to(port.parent, target_is_directory=True)
+        (link.parent / f"{bus}-4").symlink_to(root / f"{bus}-4", target_is_directory=True)
+        ports.append(port)
+    (ports[0] / "peer").symlink_to(ports[1], target_is_directory=True)
+    camera = tmp_path / "sys/devices/platform/usb3/3-4/3-4.2"
+    camera.mkdir()
+    (camera / "idVendor").write_text("8086")
+    (camera / "speed").write_text("5000")
+    (camera / "3-4.2:1.0").mkdir()
+    video = tmp_path / "sys/class/video4linux/video0/device"
+    video.parent.mkdir(parents=True)
+    video.symlink_to(camera / "3-4.2:1.0", target_is_directory=True)
+    dev = tmp_path / "dev"
+    (dev / "serial/by-id").mkdir(parents=True)
+    (dev / "video0").touch()
+    (dev / "cam").symlink_to(dev / "video0")
+    board = tmp_path / f"sys/devices/platform/usb{board_root[0]}/{board_root}/{board_root}.1"
+    board.mkdir(parents=True)
+    tty = tmp_path / "sys/class/tty/ttyUSB0/device"
+    tty.parent.mkdir(parents=True)
+    tty.symlink_to(board, target_is_directory=True)
+    (dev / "ttyUSB0").touch()
+    (dev / "serial/by-id" / DEV).symlink_to(dev / "ttyUSB0")
+
+    def redirect(path):
+        path = Path(path)
+        return tmp_path / str(path).lstrip("/") if path.is_absolute() and path.parts[1] in ("sys", "dev") else path
+
+    realpath, glob = cu.os.path.realpath, cu.glob.glob
+    monkeypatch.setattr(cu, "Path", redirect)
+    monkeypatch.setattr(cu.os.path, "realpath", lambda p, **kw: realpath(redirect(p), **kw))
+    monkeypatch.setattr(cu.glob, "glob", lambda p: glob(str(redirect(p))))
+    return ports
+
+
+def test_usb_recovery_refuses_a_board_below_the_peer_root(tmp_path, monkeypatch):
+    usb_tree(tmp_path, monkeypatch)
+    usb = Usb()
+    io = usb.io()
+    io.usb_port = cu.usb_port
+    assert "refused" in cu.usb_recover("arm_a_wrist", io)
+    assert usb.log == []
+
+
+def test_usb_root_matching_does_not_include_a_neighboring_port(tmp_path, monkeypatch):
+    usb_tree(tmp_path, monkeypatch, board_root="3-40")
+    assert cu.usb_port("/dev/cam")["boards"] == []
+
+
+def test_usb_recovery_leaves_an_already_disabled_peer_alone(tmp_path, monkeypatch):
+    ports = usb_tree(tmp_path, monkeypatch)
+    (ports[1] / "disable").write_text("1")
+    with pytest.raises(OSError):
+        cu.usb_port("/dev/cam")
+
+
+def test_missing_camera_sysfs_chain_terminates_with_a_resolution_error(tmp_path):
+    code = ("import cell_upkeep as c\ntry: c.usb_port(" + repr(str(tmp_path / "missing-camera")) + ")\n"
+            "except OSError: pass\nelse: raise AssertionError('missing chain accepted')")
+    try:
+        result = subprocess.run([sys.executable, "-c", "import sys; sys.path.insert(0, "
+                                 + repr(str(Path(cu.__file__).parent)) + "); " + code],
+                                capture_output=True, text=True, timeout=3)
+    except subprocess.TimeoutExpired:
+        pytest.fail("missing camera sysfs traversal did not terminate")
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize("failure", ["partial-disable", "interrupted-wait"])
+def test_usb_recovery_reenables_ports_after_a_failed_cycle(failure):
+    usb = Usb()
+    io = usb.io()
+    disabled = set()
+
+    def ports(names, off):
+        for name in names:
+            if off and failure == "partial-disable" and name == "peer":
+                raise OSError("peer write failed")
+            disabled.add(name) if off else disabled.discard(name)
+
+    def sleep(seconds):
+        if seconds == 30:
+            raise KeyboardInterrupt("interrupted wait")
+
+    io.ports, io.sleep = ports, sleep
+    with pytest.raises(OSError if failure == "partial-disable" else KeyboardInterrupt):
+        cu.usb_recover("arm_a_wrist", io)
+    assert disabled == set()
+    assert usb.log[-1] == "units up"
+
+
+def test_port_restore_attempts_the_peer_even_when_the_first_write_fails(monkeypatch):
+    restored = []
+
+    def run(argv, **kw):
+        if argv[-1] == "root/disable":
+            raise subprocess.CalledProcessError(1, argv)
+        restored.append(argv[-1])
+
+    monkeypatch.setattr(cu.subprocess, "run", run)
+    with pytest.raises(subprocess.CalledProcessError):
+        cu.port_set(["root", "peer"], False)
+    assert restored == ["peer/disable"]

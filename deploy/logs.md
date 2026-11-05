@@ -4600,3 +4600,10 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: `test/test_omx_record_session.py::test_episodes_with_an_untouched_leader_are_flagged_after_recording`의 두 인자 경우와 sourceb8920ff0e6의 원본208passed/2skipped·NEW0, 새 hold19개 실제PASS를 독립 검토했다. 실제 설치 대상 source2986d9b8ee는 정본 배포 시험112passed/skip0·NEW0과 archive974경로 readback도 통과했다. 장치 동작은 아직 수행하지 않았다.
 - gate 변화: 없음 — 소프트웨어 전달과 실물 감독·학습 모델의 작업 수용은 별개다.
 - CE: 해당 없음 — 기존 증거의 설명을 바로잡는 사실 정정이다.
+
+## 2026-11-06 · uncommitted · fix(omx): USB peer 보호와 중단 복원
+
+- 변경: 카메라 USB 복구에서 primary·peer 양쪽 root의 OpenRB를 검사하고 경로 경계를 구분한다. 사라진 sysfs chain은 유한하게 종료하며, 이미 비활성인 포트는 변경하지 않는다. 부분 차단·대기 중 예외에는 전체 포트 복원을 시도하고 첫 복원 실패 뒤에도 나머지를 시도한 후 오류를 전파한다. 팔 동작·토크·incident 권한은 바꾸지 않는다.
+- 증거: 모델 PC test-only985add1704에서 추가7건 RED/기존16pass, 수정721399d3e1에서 전체23pass/skip0/NEW0을 확인했다(env35327e86830df3ba/freeze906d7aca580f620b). 독립 검토 지적 없음이다. 실제 임시 symlink topology와 가짜 전원·서비스 경계만 사용했으며 실물 조작은 하지 않았다.
+- gate 변화: 없음 — 실제 USB 전원 복구·장치·현장 수용은 미확인이다.
+- CE: 기존 교훈 갱신 — `docs/solutions/runtime-errors/omx-camera-usb-reenumerated-no-frames-port-power-cycle-2026-11-05.md`의 초기 보호 범위를 정정했다. 물리 공유 전원 범위는 두 USB root에 걸치므로 현재 팔 잠금만으로 다른 팔을 보호할 수 없다. 문서 claim·frontmatter 검사 통과이며 일반 USB 용어는 CONCEPTS에 추가하지 않았다.

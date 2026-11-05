@@ -10,8 +10,9 @@ registers (torque 0, no hardware error, caps at the commissioning baseline), cam
 jaw closed value against the latest motor-health log, the jaw opening against the newest session trace, the calibration map (read-only cell_calibrate.check), the
 after-session monitors (push_replay, jitter_replay) over the logs newer than the previous report, and the planning TCP.
 
-No motion, ever. With --fix the only write is `commissioning_limits.py --baseline`, and only when every follower
-motor reads torque 0 with no hardware error and nothing owns the bus. A latched hardware error is reported, not
+No motion, ever. With --fix, `commissioning_limits.py --baseline` writes only when every follower
+motor reads torque 0 with no hardware error and nothing owns the bus; camera recovery may cycle board-free USB ports.
+A latched hardware error is reported, not
 rebooted (omx_incident.py owns that). Each arm's report goes to <out>/<stamp>-<arm>.json; exit 0 only when every arm is ready.
 Verdicts: ready | needs_motion_step (only the supervised cell_calibrate steps are left) | needs_person.
 """
@@ -146,6 +147,8 @@ def usb_port(device):
         roots.append(powered.parent.parent / f"{identity[1]}-{identity[2]}")
     if roots[0] != root:
         raise OSError("USB camera root differs from its powered port")
+    if any((p / "disable").read_text().strip() != "0" for p in ports):
+        raise OSError(f"USB port or peer is already disabled: {ports}")
     boards = []
     for name in glob.glob("/dev/serial/by-id/*"):
         tty = Path(name).resolve(strict=True).name
@@ -166,9 +169,17 @@ def frames_flow(device) -> bool:
 
 
 def port_set(ports, disabled) -> None:
+    error = None
     for port in ports:
-        subprocess.run(["sudo", "-n", "tee", f"{port}/disable"], input="1" if disabled else "0", text=True,
-                       capture_output=True, check=True)
+        try:
+            subprocess.run(["sudo", "-n", "tee", f"{port}/disable"], input="1" if disabled else "0", text=True,
+                           capture_output=True, check=True)
+        except (OSError, subprocess.SubprocessError) as failure:
+            if disabled:
+                raise
+            error = error or failure
+    if error is not None:
+        raise error
 
 
 def camera_units(role, up) -> None:
@@ -248,9 +259,11 @@ def usb_recover(role, io):
     try:
         if io.frames(device):
             return f"{role} streams when read directly (not a USB fault)"
-        io.ports(port["ports"], True)
-        io.sleep(30)
-        io.ports(port["ports"], False)
+        try:
+            io.ports(port["ports"], True)
+            io.sleep(30)
+        finally:
+            io.ports(port["ports"], False)
         for _ in range(9):  # the first read right after re-enable still gave nothing; one a minute later streamed
             io.sleep(10)
             if io.frames(device):
