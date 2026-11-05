@@ -1,7 +1,8 @@
 [Unit]
 Description=ROSY frozen whole OS transaction lifecycle
 Requires=rosy-os-storage.service
-Wants=rosy-os-motion-guard.service rosy-release-recover.service rosy-core.service rosy-io.service
+# Polling must not start I/O, whose Conflicts would stop an active navigation runtime.
+Wants=rosy-os-motion-guard.service rosy-release-recover.service rosy-core.service
 After=rosy-os-storage.service rosy-os-motion-guard.service rosy-first-boot.service rosy-sd-provision.service
 After=rosy-release-recover.service rosy-core.service rosy-io.service
 ConditionPathExists=/etc/rosy/os-slot.json
