@@ -5,6 +5,7 @@ import { createFormation } from "./formation.js";
 import { motionCommandReason } from "./motion-readiness.js";
 import { createMapView } from "./map-view.js";
 import { createRoster } from "./roster.js";
+import { createManualControl } from "./manual-control.js";
 import { cardTripLine, placeOptions } from "./card-trip.js";
 import { createInboxPanel } from "./inbox.js";
 import { createWorkView } from "./work-view.js";
@@ -227,6 +228,7 @@ function render() {
     }
   }
   roster.workspace();
+  manualControl.update();
   if (focusedId && document.activeElement !== focused) {  // a kept workspace picker still has it
     const nextCard = [...focusedBox.querySelectorAll("article")]
       .find((card) => card.dataset.robotId === focusedId);
@@ -306,6 +308,9 @@ const mapView = createMapView({ scope: pageScope,
 const roster = createRoster({ scope: pageScope, el, view, log, call, render,
   streamEvidence: mapView.streamEvidence, isOperator: () => auth.role === "operator", namedReason, confirmedAction,
   onSelectionChanged: () => { clearPinStart(); } });
+const manualControl = createManualControl({scope: pageScope, view, call: fleetClient,
+  namedReason: () => auth.locked ? "관제에 다시 접속하세요." : namedReason()});
+el("robot-workspace").after(manualControl.root);
 if (el("robot-choice")) pageScope.listen(el("robot-choice"), "change", () => {
   roster.openCard(el("robot-choice").value || null);
   render();
