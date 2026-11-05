@@ -1,4 +1,4 @@
-"""Reviewed native splits -> official ACT -> fresh-process reload and offline evaluation."""
+"""Reviewed native splits -> official ACT/SmolVLA -> fresh-process offline evaluation."""
 import argparse
 import hashlib
 import importlib.metadata
@@ -12,6 +12,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'curation/omx'))
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # experiment_dataset sits beside this file
 import native_review as native
 from experiment_dataset import dataset_lease
+import smolvla_training
+from rosy.integrations.robots.omx.policy_assets import loading_overrides
 
 
 def validate_split(root):
@@ -64,10 +66,12 @@ def _artifact_files(root):
     return files
 
 
-def policy_revision(artifact_files):
+def policy_revision(artifact_files, *, policy_type='act'):
     """D-793: the stage ledger names a trained model by the hash of its exact file set."""
+    if policy_type not in ('act', 'smolvla'):
+        raise ValueError('unsupported native policy type')
     canonical = json.dumps(dict(sorted(artifact_files.items())), separators=(',', ':')).encode()
-    return 'act-' + hashlib.sha256(canonical).hexdigest()[:16]
+    return policy_type + '-' + hashlib.sha256(canonical).hexdigest()[:16]
 
 
 def _invoke(command, output, environment, timeout, *, lease_fd=None):
@@ -98,16 +102,23 @@ def _evaluate_inputs(model, splits, repo_id, output):
         raise ValueError('evaluation repo identity differs from reviewed source')
     _artifact_files(model)
     import torch
-    from lerobot.policies.act.modeling_act import ACTPolicy
-    from lerobot.policies.factory import make_pre_post_processors
+    from lerobot.configs.policies import PreTrainedConfig
+    from lerobot.policies.factory import get_policy_class, make_pre_post_processors
 
     torch.set_num_threads(2)
     train = native.load_dataset(splits / 'train', repo_id + '_train')
     evaluation = native.load_dataset(splits / 'eval', repo_id + '_eval')
     names = evaluation_joints(train.meta.info, evaluation.meta.info)
     size = len(names)
-    policy = ACTPolicy.from_pretrained(model)
-    pre, post = make_pre_post_processors(policy.config, pretrained_path=str(model))
+    config = PreTrainedConfig.from_pretrained(model)
+    if config.type not in ('act', 'smolvla'):
+        raise ValueError('unsupported native policy type')
+    if config.type == 'smolvla' and config.vlm_model_name != smolvla_training.assets.MARKER:
+        raise ValueError('reviewed SmolVLA evaluation requires bundled VLM metadata')
+    overrides = loading_overrides(model, config)
+    policy = get_policy_class(config.type).from_pretrained(model, config=config)
+    pre, post = make_pre_post_processors(config, pretrained_path=str(model),
+        preprocessor_overrides={**overrides, 'device_processor': {'device': config.device}})
     policy.eval()
     mean = torch.as_tensor(train.meta.stats['action']['mean'], dtype=torch.float32).reshape(1, size)
     error, baseline, samples, previous = torch.zeros(size), torch.zeros(size), 0, None
@@ -134,18 +145,25 @@ def _evaluate_inputs(model, splits, repo_id, output):
                                        native.validate_environment(receipt['source']), receipt['decisions'])))
 
 
-def run_cycle(splits, output, *, steps=100, batch_size=8, device='cpu', timeout=5400):
+def run_cycle(splits, output, *, steps=100, batch_size=8, device='cpu', timeout=5400,
+              policy_type='act', base_model=None, vlm_assets=None):
     with dataset_lease(splits) as lease_fd:
         return _run_cycle(splits, output, steps=steps, batch_size=batch_size,
-                          device=device, timeout=timeout, lease_fd=lease_fd)
+                          device=device, timeout=timeout, lease_fd=lease_fd,
+                          policy_type=policy_type, base_model=base_model, vlm_assets=vlm_assets)
 
 
-def _run_cycle(splits, output, *, steps, batch_size, device, timeout, lease_fd):
+def _run_cycle(splits, output, *, steps, batch_size, device, timeout, lease_fd,
+               policy_type, base_model, vlm_assets):
     splits = Path(splits).resolve()
     output = native._new_output(output, splits)
     if (type(steps) is not int or steps < 1 or type(batch_size) is not int or batch_size < 1
             or device not in ('cpu', 'cuda') or type(timeout) not in (int, float) or not 0 < timeout <= 86400):
         raise ValueError('explicit positive training budgets and cpu/cuda device are required')
+    if (policy_type not in ('act', 'smolvla') or
+            (policy_type == 'act' and (base_model is not None or vlm_assets is not None)) or
+            (policy_type == 'smolvla' and (not base_model or not vlm_assets))):
+        raise ValueError('SmolVLA requires explicit local base policy and VLM metadata; ACT uses neither')
     receipt = validate_split(splits)
     receipt_hash = hashlib.sha256((splits / 'split-receipt.json').read_bytes()).hexdigest()
     # Verify actual train/eval readers before starting any training process. Final test remains sealed.
@@ -154,15 +172,20 @@ def _run_cycle(splits, output, *, steps, batch_size, device, timeout, lease_fd):
         native.inspect_frames(data.meta.info, (data[i] for i in range(len(data))))
     train_info = json.loads((splits / 'train/meta/info.json').read_text())
     config = json.loads(Path(__file__).with_name('native-act.example.json').read_text())
-    config['dataset'].update(root=str(splits / 'train'), repo_id=receipt['source']['repo_id'] + '_train')
-    config['policy']['device'] = device
-    config.update(output_dir=str(output / 'trainer'), steps=steps, save_freq=steps,
-                  batch_size=min(batch_size, train_info['total_frames']), log_freq=1)
     output.mkdir()
-    native.write_json(output / 'train-config.json', config)
     environment = {**os.environ, 'HF_HUB_OFFLINE': '1', 'HF_DATASETS_OFFLINE': '1',
                    'OMP_NUM_THREADS': '2', 'OPENBLAS_NUM_THREADS': '2'}
     try:
+        prepared = None
+        if policy_type == 'smolvla':
+            prepared = smolvla_training.prepare(base_model, vlm_assets, output/'inputs', device=device)
+            config['policy'] = prepared['policy']
+            config['job_name'] = 'omx-native-smolvla'
+        config['dataset'].update(root=str(splits / 'train'), repo_id=receipt['source']['repo_id'] + '_train')
+        config['policy']['device'] = device
+        config.update(output_dir=str(output / 'trainer'), steps=steps, save_freq=steps,
+                      batch_size=min(batch_size, train_info['total_frames']), log_freq=1)
+        native.write_json(output / 'train-config.json', config)
         native.write_json(output / 'environment.json', dict(
             python=sys.version, packages={name: importlib.metadata.version(name)
                                          for name in ('lerobot', 'torch', 'torchvision', 'av', 'datasets')}))
@@ -172,6 +195,8 @@ def _run_cycle(splits, output, *, steps, batch_size, device, timeout, lease_fd):
         model = (output / 'trainer/checkpoints/last/pretrained_model').resolve()
         if not model.is_relative_to(output):
             raise ValueError('trainer model resolved outside the new run')
+        if prepared is not None:
+            smolvla_training.seal(model, output/'inputs/vlm')
         before = _artifact_files(model)
         _invoke([sys.executable, str(Path(__file__).resolve()), 'verify', '--model', str(model),
                  '--splits', str(splits), '--repo-id', receipt['source']['repo_id'],
@@ -181,9 +206,12 @@ def _run_cycle(splits, output, *, steps, batch_size, device, timeout, lease_fd):
                 or hashlib.sha256((splits / 'split-receipt.json').read_bytes()).hexdigest() != receipt_hash
                 or _artifact_files(model) != before):
             raise ValueError('split inputs or model bytes changed during training/evaluation')
+        if prepared is not None and smolvla_training.input_files(output/'inputs') != prepared['input_files']:
+            raise ValueError('snapshotted model inputs changed during training/evaluation')
         result = dict(offline_only=True, source_mode=receipt['source']['source_mode'],
                       split_receipt_sha256=receipt_hash, split_files=receipt['outputs'], artifact_files=before,
-                      policy_revision=policy_revision(before), rig_revision=receipt['source']['rig_revision'],
+                      policy_revision=policy_revision(before, policy_type=policy_type), policy_type=policy_type,
+                      rig_revision=receipt['source']['rig_revision'],
                       calibration_revision=receipt['source']['calibration_revision'],
                       evaluation=json.loads((output / 'evaluation.json').read_text()),
                       body_units=receipt['source']['body_units'], gripper_units='normalized_0_100',
@@ -191,6 +219,8 @@ def _run_cycle(splits, output, *, steps, batch_size, device, timeout, lease_fd):
                       environment_coverage=native.split_coverage(
                           native.validate_environment(receipt['source']), receipt['decisions']),
                       device_execution=False, promotion=False)
+        if prepared is not None:
+            result['pretrained_inputs'] = dict(source_files=prepared['source_files'], input_files=prepared['input_files'])
         native.write_json(output / 'cycle-receipt.json', result)
         return result
     except Exception as exc:
@@ -207,6 +237,9 @@ def main():
     run.add_argument('--steps', type=int, default=100)
     run.add_argument('--batch-size', type=int, default=8)
     run.add_argument('--device', choices=('cpu', 'cuda'), default='cpu')
+    run.add_argument('--policy', dest='policy_type', choices=('act', 'smolvla'), default='act')
+    run.add_argument('--base-model', type=Path)
+    run.add_argument('--vlm-assets', type=Path)
     verify = commands.add_parser('verify')
     verify.add_argument('--model', type=Path, required=True)
     verify.add_argument('--splits', type=Path, required=True)
@@ -215,7 +248,8 @@ def main():
     args = parser.parse_args()
     try:
         if args.command == 'run':
-            run_cycle(args.splits, args.out, steps=args.steps, batch_size=args.batch_size, device=args.device)
+            run_cycle(args.splits, args.out, steps=args.steps, batch_size=args.batch_size, device=args.device,
+                      policy_type=args.policy_type, base_model=args.base_model, vlm_assets=args.vlm_assets)
         else:
             _evaluate(args.model, args.splits, args.repo_id, args.out)
     except (ValueError, OSError, ImportError, subprocess.TimeoutExpired) as exc:
