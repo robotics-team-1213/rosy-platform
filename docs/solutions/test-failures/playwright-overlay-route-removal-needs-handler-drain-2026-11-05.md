@@ -20,6 +20,8 @@ The games board polls `overlay.json`. Its browser tests inject 503 responses, re
 
 The full chunk returned 1 failed/158 passed. The unchanged case then passed alone and was classified LOAD-FLAKY. That pass is not green FULL evidence, and neither observation establishes that the Decision/VLA changes caused the failure.
 
+The cited revisions are local investigation sources; no public PR merge or publication is claimed here.
+
 ## Change and boundary
 
 The [official Playwright API](https://playwright.dev/python/docs/api/class-page#page-unroute-all) provides `page.unroute_all(behavior="wait")` to wait for running handlers. Use it at the six overlay teardown points in this file instead of removing the route while its callbacks may still be completing. Do not use `ignoreErrors`: it swallows handler errors.
