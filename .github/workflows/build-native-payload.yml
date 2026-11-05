@@ -21,7 +21,7 @@ on:
         description: Payload builder image pinned by digest (build-payload-builder.yml)
         required: true
         type: string
-        default: ghcr.io/robotics-team-1213/rosy-payload-builder@sha256:01aa35089dd1a392d41b04678f5dd0bbea569d727162d121ead9ad61097d6762
+        default: ghcr.io/robotics-team-1213/rosy-payload-builder@sha256:62d8c7356bb4551da24b7201a5b652cef5d1bda0edbd41e08e12387f0375421f
 
 permissions:
   contents: read
@@ -61,6 +61,21 @@ jobs:
           test -z "$(git status --porcelain)"
           [[ "$RELEASE_ID" =~ ^[0-9]{4}\.[0-9]{2}\.[0-9]{2}-[0-9]{3}$ ]]
           df -h /
+
+      - name: Verify payload builder ROS snapshot
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import yaml
+          lock = yaml.safe_load(Path("deploy/robot/pinky_pro/image/inputs.lock.yaml").read_text(encoding="utf-8"))
+          expected = lock["ros"]["apt_snapshot_url"]
+          sources = Path("/etc/apt/sources.list.d/ros2-snapshots.sources").read_text(encoding="utf-8")
+          observed = [line.partition(":")[2].strip() for line in sources.splitlines() if line.startswith("URIs:")]
+          if observed != [expected]:
+              raise SystemExit(f"payload builder ROS snapshot mismatch: expected {expected}, observed {observed}; rebuild the builder and pass its digest")
+          print(f"payload builder ROS snapshot matches lock: {expected}")
+          PY
 
       - name: Prepare the payload builder container
         shell: bash

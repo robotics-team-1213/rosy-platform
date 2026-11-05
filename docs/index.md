@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
-- 2026-11-05 · uncommitted · test(games): 복구 시 진행 중인 overlay route handler를 기다린다
-- 2026-11-05 · uncommitted · fix(harness): 동시 계정 로그 두 원문의 무결성 고정
-- 2026-11-04 · uncommitted · fix(deploy): calibration 분리 경로를 서명 모델 코드 아카이브에 포함
-- 2026-11-04 · uncommitted · docs(deployment): 후진 목표 운영자 메모
-- 2026-11-04 · uncommitted · docs(D-871): 학습센터 타이머 미활용 발견·활성화 개정
+- 2026-11-06 · uncommitted · fix(release): 큰 변경의 완전 inventory와 실제 소비자 분류
+- 2026-11-06 · uncommitted · feat(release): 단일 coordinator의 닫힌 OS engineering 게시
+- 2026-11-06 · uncommitted · fix(release): 자동 게시의 v2 번호와 SSH pin 경로를 보존
+- 2026-11-05 · uncommitted · docs(omx): D435 시작 프레임의 측정 준비 여부를 구분
+- 2026-11-05 · uncommitted · docs(learning): 서명 코드45의 정상 자동 적용 재조회

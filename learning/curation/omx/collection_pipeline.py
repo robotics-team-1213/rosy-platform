@@ -1,4 +1,4 @@
-"""Offline collection preparation and human-reviewed ACT training entrypoint."""
+"""Offline collection preparation and human-reviewed ACT/SmolVLA training entrypoint."""
 from __future__ import annotations
 
 import argparse
@@ -54,13 +54,15 @@ def _validate_review_inputs(originals, decision_bytes):
     return originals, report, decision_bytes, reviewed
 
 
-def train(prepared, decisions, output, *, steps=100, batch_size=8, device='cpu'):
+def train(prepared, decisions, output, *, steps=100, batch_size=8, device='cpu',
+          policy_type='act', base_model=None, vlm_assets=None):
     """Preflight all review decisions, then preserve and compose existing split/train receipts."""
     prepared, decisions = Path(prepared).resolve(), Path(decisions).resolve()
     output = native._new_output(output, prepared)
     if (type(steps) is not int or steps < 1 or type(batch_size) is not int or batch_size < 1
             or device not in ('cpu', 'cuda')):
         raise ValueError('positive training budgets and cpu/cuda device are required')
+    options = cycle.policy_options(policy_type, base_model, vlm_assets)
     originals, report, decision_bytes, reviewed = _review_inputs(prepared, decisions)
     output.mkdir(parents=True)
     evidence = output/'prepared-evidence'
@@ -70,7 +72,7 @@ def train(prepared, decisions, output, *, steps=100, batch_size=8, device='cpu')
     (output/'reviewed-decisions.json').write_bytes(decision_bytes)
     splits, training = output/'splits', output/'training'
     native.split_reviewed(prepared, report, reviewed, splits)
-    cycle.run_cycle(splits, training, steps=steps, batch_size=batch_size, device=device)
+    cycle.run_cycle(splits, training, steps=steps, batch_size=batch_size, device=device, **options)
     if (any((prepared/name).read_bytes() != raw for name, raw in originals.items())
             or decisions.read_bytes() != decision_bytes):
         raise ValueError('prepared evidence or human decisions changed during training')
@@ -81,7 +83,7 @@ def train(prepared, decisions, output, *, steps=100, batch_size=8, device='cpu')
                    split_receipt_sha256=_hash((splits/'split-receipt.json').read_bytes()),
                    cycle_receipt_sha256=_hash((training/'cycle-receipt.json').read_bytes()),
                    splits=str(splits), training=str(training), steps=steps, batch_size=batch_size,
-                   device=device, uploaded=False, device_execution=False, promotion=False)
+                   device=device, policy_type=policy_type, uploaded=False, device_execution=False, promotion=False)
     native.write_json(output/'pipeline-receipt.json', receipt)
     return receipt
 
@@ -144,6 +146,9 @@ def main():
     training.add_argument('--steps', type=int, default=100)
     training.add_argument('--batch-size', type=int, default=8)
     training.add_argument('--device', choices=('cpu', 'cuda'), default='cpu')
+    training.add_argument('--policy', dest='policy_type', choices=('act', 'smolvla'), default='act')
+    training.add_argument('--base-model', type=Path)
+    training.add_argument('--vlm-assets', type=Path)
     export = commands.add_parser('export-experiment', help='reviewed intake to Learning upload folder')
     export.add_argument('prepared', type=Path)
     export.add_argument('--decisions', type=Path, required=True)
@@ -166,7 +171,8 @@ def main():
             result = export_experiment(args.prepared, args.decisions, args.profile, args.out)
         else:
             result = train(args.prepared, args.decisions, args.out, steps=args.steps,
-                           batch_size=args.batch_size, device=args.device)
+                           batch_size=args.batch_size, device=args.device, policy_type=args.policy_type,
+                           base_model=args.base_model, vlm_assets=args.vlm_assets)
     except (ValueError, OSError, ImportError, subprocess.TimeoutExpired) as exc:
         parser.exit(2, f'refused: {exc}\n')
     print(json.dumps(result, ensure_ascii=False, indent=2, allow_nan=False))

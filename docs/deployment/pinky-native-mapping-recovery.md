@@ -28,6 +28,14 @@ G4의 선행 조건이 아니다. G5 맵핑 전에는 `ros2 node list`에서
 `/api/v1/navigation/state`의 필수 readiness를 읽는다. `cmd_vel`은
 `ros2 topic info /<namespace>/cmd_vel -v`에서 CORE 발행자 하나여야 한다.
 
+`navigation.readiness.required=true`를 유지한 motor 커미셔닝은 명시적인
+`navigation.readiness.profiles.motor: [motor_adapter]`를 사용한다. 이 profile이 없거나
+모터 어댑터 항목이 없으면 설정 오류로 중단하며, localization/SLAM profile로 대체하지 않는다.
+hardware 모드는 기존 backend별 Nav2·위치 추정 요구를 그대로 사용한다. 서명 payload 갱신 뒤
+기존 G4 봉인이 source/release 불일치로 무효가 되면 motor 모드에서 새 원시 G4를 획득한다.
+readiness를 끄거나 승인 없이 Nav2를 먼저 올려 이 순서를 피하지 않는다. 원시 odom·현장 시야·
+단일 publisher 확인은 G4/UI의 관측 조건이며 범용 CORE teleop의 추가 odom 차단 조건을 뜻하지 않는다.
+
 ## 2. G4: 제한된 지면 이동과 정지 수용
 
 원격 조작자가 Rosy Cam 시야와 기존 정지 경로를 확인한다. `test_surface=floor`를 기록하고 각 시험에서
@@ -96,6 +104,14 @@ sudo -n python3 -B /opt/rosy/native-runtime/mapping_approval.py approve \
 새 서명 이미지 또는 기록된 벤치 설치로 unit·승인 도구를 함께 갱신하고
 파일 해시와 `systemd-analyze verify`를 읽어 확인한다. 봉인 도구가 릴리스
 payload에만 들어갔다고 unit이 갱신된 것으로 취급하지 않는다.
+
+옛 frozen OS의 `rosy-os-update.service`가 `Wants=rosy-io.service`를 포함하면
+업데이트 없음 점검도 I/O를 시작해 항법을 중지시킨다. 감독 시험 전에 frozen 제어기의
+`status`에서 pending 없음과 업데이트 service 비실행을 확인하고, 기존 타이머 활성 상태를
+기록한 뒤 시험 동안 타이머만 정지한다. 진행 중인 업데이트를 중단하지 않는다.
+시험 종료 시 항법 정지·최종 0·원래 runtime 복귀를 먼저 확인하고, 원래 활성 상태였던
+타이머를 다시 시작한다. 이는 임시 복구다. 영구 수정의 frozen OS 배포 경계와
+회귀 근거는 [해결 기록](../solutions/deployment/os-update-poll-starts-conflicting-io-2026-11-05.md)을 따른다.
 
 ## 4. G5: 짧은 바닥 맵핑
 

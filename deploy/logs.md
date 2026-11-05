@@ -4567,3 +4567,36 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 검증: 정본 `publish_main.py --secret-scan`을 현재 FULL 후보에 실행해 전후 결과를 작업 공간 증거에 보존한다. 원격 관련 회귀와 공식 착지를 거치며 scanner 규칙·경로 일괄 예외·이력은 변경하지 않는다.
 - gate 변화: 없음. 전체 FULL·공개 CI·배포·실물 수용은 별도다.
 - CE: 해당 없음 — 기존 정본의 독립 오탐 검토 절차 적용이며 새 절차를 만들지 않았다.
+
+## 2026-11-05 · uncommitted · fix(publish): review pinned concurrent log digests
+- 변경: 게시 이력 스캔에서 고정 로그 무결성 값으로 확인한 세 commit/path/rule 조합만 secret baseline에 추가했다.
+- 증거: 독립 에이전트가 탐지10건을 Git commit 객체 및 과거 본문/fixture의 정규화 SHA-256과 대조해 모두 일치함을 확인했다. 사람 승인이 아니며 원격 회귀 결과는 착지 로그에 연결한다.
+- gate 변화: 비밀값 탐지 규칙과 일반 경로 예외는 바꾸지 않았다. 새 커밋/파일/규칙은 계속 차단한다.
+
+## 2026-11-05 · 5197ea53bf · fix(payload): ROS 스냅샷 핀 2026-10-05 재선정 (D-482 재적용)
+
+- 변경: 채널 payload(2026.10.10-164 이후 없음) 준비 중 ABI 검사가 314개 중 211개 불일치로 실패했다. 기체(os-pinky-pro-2026.10.29)의 ros-jazzy는 이미지 빌드 당시 롤링 저장소 세트로, 기존 핀 2026-09-11 스냅샷과 어긋났다. b8xy 설치 318개 전부와 일치하는 2026-10-05 스냅샷으로 `inputs.lock.yaml` URL을 옮겼다.
+- 검증: b8xy `dpkg-query` 목록과 두 스냅샷의 arm64 `Packages` 색인을 전수 대조(09-11: 211 불일치, 10-05: 318/318 일치). 원격 영향 등급 통과 후 로컬 main 착지. 새 핀 payload 빌드(41988562801)의 ABI 재검사 314개 공유 일치 통과. 절차·증거는 D-482 부록(2026-11-05)에 보존.
+- gate 변화: 없음 — payload는 서명·활성화 게이트를 그대로 탄다.
+- CE: 해당 없음 — D-482의 확립된 절차를 새 데이터로 재적용한 해결이며 증거는 ADR 부록에 보존.
+
+## 2026-11-05 · c8c9bd6279 · fix(payload): 모드 프로필 복사를 native 런타임 설치 뒤로 이동
+
+- 변경: 0e1a9d2cd2(948bfeef37 포함)가 프로필 복사를 `install-native-runtime.sh`보다 앞에 두면서, 그 설치기의 기존-거부 가드가 main의 모든 payload 빌드를 즉시 실패시켰다(`destination already exists`, run 41986831152). 프로필 3종 복사를 설치 뒤로 옮겼다. 최종 payload 구조는 동일하다.
+- 검증: 프로필 적재 계약시험(세 모드 cp 단정)은 착지 시험 묶음으로 통과. 위 2026-11-05 항의 빌드 41988562801은 이 회귀 이전 base(ed455ea)에서 만든 것이므로, main에서의 재빌드는 게시 전 새 dispatch로 확인한다.
+- gate 변화: 없음.
+- CE: 해당 없음 — 원인·재현 경로가 커밋 메시지와 D-482 부록에 남는다. 계약시험이 실제 빌드 순서를 못 잡은 구멍은 빌드 스크립트 자체가 계약의 대상이라는 교훈인데, 이미 같은 교훈이 solutions에 여러 번 기록되어 있다(예: installed-layout import).
+
+## 2026-11-06 · uncommitted · fix(omx): 빈 집게 현재 위치 유지 전용 commissioning
+
+- 변경: 기존 `move --delta 0`은 초기 hold 뒤 별도 settle에 진입하므로 유지 전용 시험으로 쓰지 않는다. 기존 joint_tune에 motor16·baseline caps·1/1 profile·목적지/게인 변경 없는 hold를 추가한다. EEPROM을 쓰지 않고 hold 전 구간을 초기 위치 기준으로 관측하며, torque ON 동안 카메라 I/O를 하지 않는다. OFF 확인 뒤 바뀐 volatile 설정을 원복한다. cleanup의 카메라는 복원 성공 뒤에만 실행하며 unsafe end에서는 생략한다. 기존 소유권·상한·실물 감독 규칙은 유지한다.
+- 증거: 사전 test-only e2d52bf653 원격 RED8failed/10passed, 추가8d4556a458의 torque ON 전제 거부 순서 RED1failed를 보존했다. 독립 Safety-Review 후 b8920ff0e6 원격 GREEN은 새 hold19개를 포함해208passed/2skipped·NEW0/known0/flaky0이다.2skip은 기존 녹화 정적 episode 검사의 실제 LeRobot 환경 의존이며 새 hold 통과에 포함하지 않는다. 최초 GREEN 명령의 존재하지 않는 시험 파일명으로0수집/exit5였던 원본도 별도 보존하고 증거에서 제외했다. 전체6개 시험 경로의 존재를 확인한 수정 명령으로 검증했다. 실제 토크·이동·카메라 서비스 변경은 하지 않았다.
+- gate 변화: 없음 — 소프트웨어 회귀를 확인했으며 DEVICE/FIELD·실제 모델 작업 수용은 미완료다. 현장은 landed main과 해당 단계 현장 감독 확인 후에만 사용한다.
+- CE: 해당 없음 — 새 도구 동작·오류/복원 조건을 코드와 회귀 및 기존 README에서 직접 확인할 수 있다. 미실행 실물 결과를 해결 교훈으로 기록하지 않는다.
+
+## 2026-11-06 · uncommitted · docs(omx): hold 회귀 skip 의존성 정정
+
+- 변경: 앞선 hold-only 항목의2skip을 LeRobot 환경 의존이라고 설명한 부분을 정정한다. 두 테스트의 실제 importorskip은 pandas와pyarrow이며, 어느 패키지가 없었는지는 해당 원본 로그만으로 확정하지 않는다. 원래 항목은 append-only 이력으로 남기고 이 항목을 해석 기준으로 삼는다. 실행 코드와 수치는 바꾸지 않는다.
+- 증거: `test/test_omx_record_session.py::test_episodes_with_an_untouched_leader_are_flagged_after_recording`의 두 인자 경우와 sourceb8920ff0e6의 원본208passed/2skipped·NEW0, 새 hold19개 실제PASS를 독립 검토했다. 실제 설치 대상 source2986d9b8ee는 정본 배포 시험112passed/skip0·NEW0과 archive974경로 readback도 통과했다. 장치 동작은 아직 수행하지 않았다.
+- gate 변화: 없음 — 소프트웨어 전달과 실물 감독·학습 모델의 작업 수용은 별개다.
+- CE: 해당 없음 — 기존 증거의 설명을 바로잡는 사실 정정이다.

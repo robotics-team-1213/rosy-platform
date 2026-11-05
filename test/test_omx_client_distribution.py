@@ -33,7 +33,7 @@ def test_omx_client_workflow_build_and_offline_install(tmp_path):
     assert checked.returncode == 0, checked.stdout + checked.stderr
     installed = tmp_path/'installed'
     result = subprocess.run([sys.executable, '-m', 'pip', 'install', '--no-index', '--find-links', str(stage),
-                             '--target', str(installed), 'rosy-integration-robot-omx==0.1.1'],
+                             '--target', str(installed), 'rosy-integration-robot-omx==0.1.2'],
                             capture_output=True, text=True, timeout=60)
     assert result.returncode == 0, result.stdout + result.stderr
     script = '''
@@ -42,6 +42,8 @@ sys.path.insert(0, sys.argv[1])
 from importlib.metadata import distribution
 from rosy.integrations.robots.omx.core_arm_client import CoreArmClient
 from rosy.integrations.robots.omx.deployment import main
+from rosy.contracts.learning.policy_assets import MARKER
+assert MARKER == 'rosy-bundled-vlm'
 entries = {item.name: item.value for item in distribution('rosy-integration-robot-omx').entry_points}
 assert entries['rosy-omx-preflight'] == 'rosy.integrations.robots.omx.deployment:main'
 assert entries['rosy-omx-record'] == 'lerobot_robot_rosy_omx:record'

@@ -776,6 +776,22 @@ or a hardware error, voltage out of range, caps left raised (`commissioning_limi
 --baseline`), or camera readiness not READY. The leader is checked for presence only.
 Run it before `joint_tune.py` or `record_session.py`.
 
+### Supervised empty-gripper hold only
+
+`joint_tune.py --device <confirmed-follower-by-id> hold --hold 0.5 --sag 3` tests only
+motor 16 at its current position. It requires the resting PWM20/current50 caps,
+uses 1/1 profiles, refuses target/gain changes and writes no EEPROM. It does not
+enter the separate `move` or `sweep` stage. Camera frames are taken before torque
+ON and after confirmed torque OFF and register restoration. The hold monitors
+position drift, feedback gaps, clock progress and hardware errors; after confirmed
+OFF it restores the prior profiles, goal current and goal position. An unsafe end
+skips camera I/O and unconfirmed-OFF restoration. Other joints remain untouched.
+
+Use only with an empty gripper, a supported stationary arm, an exclusive session
+and a person at the power switch for this stage (D-911). Torque enable can cause
+settling. The hold interval and polling guards are not an independent hard stop.
+This is a commissioning check, not object grasp or learned-policy acceptance.
+
 ### Torque-off commissioning limits
 
 `commissioning_limits.py` is a separate exclusive configuration procedure. It

@@ -14208,3 +14208,81 @@ osy-d395-s1d\`.
 - 증거: 원래 FULL chunk1 failed/158 passed의 오류는 `Route.fulfill: Route is already handled!`였다. 같은 case의 단독1 passed는 LOAD-FLAKY이며 FULL 통과가 아니다. 수정 commitd21cd5e7a1의 원격 opt-in 파일전체61 passed/0 skipped/163.27초, exit0/NEW0 및 독립 리뷰를 확인했다. 최종 수정 소스의 정본 FULL은 별도다.
 - gate 변화: 없음. 브라우저 시험 fixture 보완은 모델 품질·실물 수용을 대체하지 않는다.
 - CE: [route 해제와 실행 중 handler의 경합](solutions/test-failures/playwright-overlay-route-removal-needs-handler-drain-2026-11-05.md). 환경이 다른 두 실행으로 부하 재발률을 주장하지 않는다.
+
+## 2026-11-05 · uncommitted · test(curation): FIFO 자식 FD 기준값 전에 상속된 미수거 자원을 정리
+
+- 변경: FIFO 격리 자식에서 descriptor 기준값 직전 `gc.collect()`를 한 번 호출한다. importer 이후에는 수거하지 않으며 `fd_delta == 0`, 부모 FD 수·snapshot 동일, 5초 watchdog과 자식 회수 단언을 유지한다. 생산 importer와 실패·격리 baseline은 변경하지 않았다.
+- 근거: 원래 FULL의 fifo-image는 거부와 부모 보존 단언은 통과했으나 child FD delta=-5로 실패했고 단독 재실행은 LOAD-FLAKY였다. 원본 FD의 생산자는 미확정이다. `ReviewStore.connect()`는 이미 finally로 닫히므로 SQLite 누수로 단정하지 않는다.
+- 검증: commit a02c3ed1d5의 신규 control은 상속된 cyclic FD 5개를 수거할 때 정상 -5/의도적 누수 -4/살아 있는 FD 닫힘 -6으로 RED 3 failed/NEW 3이다. 수정 commit f3dbbef6e6은 정상 0/누수 +1/닫힘 -1을 구분하고 파일 전체 원격 42 passed/0 skipped, exit 0/NEW 0이다. fork 경고 5건을 보존했다. 고정 SHA·명령·runner·비교 출력·해시는 작업공간 후속 수용 evidence의 fifo-descriptors/20261105T072116Z에 결속했고 독립 리뷰가 확인했다. 최종 FULL은 별도다.
+- gate 변화: 없음. fixture의 측정 경계 수정은 실제 자료 품질·모델·장치 수용을 뜻하지 않는다.
+- CE: 해당 없음 — 원인 조건과 보호 범위가 코드 주석·정상/누수/닫힘 세 회귀 control에 직접 남고, 기존 [간헐 실패 귀속 교훈](solutions/workflow-issues/attribute-intermittent-failure-by-line-then-interleaved-comparison.md)을 적용했다.
+
+## 2026-11-05 · 348778e549 · docs(validation): 검수 ACT·SmolVLA 학습 연결 증거
+
+- 변경: [학습 연결 검증 기록](validation/omx-smolvla-reviewed-cycle-2026-11-05/result.md)에 고정 소스·실제 SDK 결과·회귀 실패/수정·독립 리뷰·남은 품질/현장 수용 조건을 기록했다.
+- 증거: 실제 SmolVLA6/12관절 학습·이동 후 오프라인·bench runner2 passed와 정본 ACT CPU 왕복2 passed, 각각 exit0/NEW0. 최종 구현348778e549의 FULL29개 모두 exit0/NEW0이며 실제 Decision3함수도 exit0/NEW0다. 시험 SHA별 판정과 skip은 위 기록을 따른다.
+- gate 변화: 없음. 모델 품질·시뮬 작업·실물·게시 승인은 독립 조건이다.
+- CE: 해당 없음 — 기존 환경 분리 교훈을 적용했고 새 검사는 코드·회귀·README에 남는다.
+
+## 2026-11-05 · 7883232cb5 · test(learning): 저장한 ACT·SmolVLA 통계를 실제 train 설정과 비교
+
+- 변경: [후속 수용 기록](validation/decision-vla-acceptance-2026-11-05/result.md)에 실제4개 정책/관절 조합과 실자료/정답/현장 입력 상태를 고정했다. 작은 누출·변조 회귀와 SDK 재적재 비교를 추가하고 ImageNet/count 의미를 README에 명시했다.
+- 증거: sourcecb9f4a77d3의 helper14개+ACT6/12는16 passed, SmolVLA6/12는2 passed, 모두 skip0/exit0/NEW0. main 통합7883232cb5 전후 해당 코드/시험에 차이가 없다.
+- gate 변화: 없음. 독립 실자료 품질·시뮬 작업·실물 수용을 합성 통계 검증으로 올리지 않는다. 착지·게시·배포는 후속 검증을 따른다.
+- CE: 새 교훈 기록 — [도움말과 비동기 착지](solutions/workflow-issues/land-async-help-is-a-stopped-snapshot-2026-11-05.md). 실제 main ancestry로 도움말 snapshot의 미착지를 확인했다.
+
+## 2026-11-05 · uncommitted · docs(deploy): 작업 잠금을 보존하며 검수 UI만 갱신한 수용 조건
+
+- 변경: 기존 Learning Center 배포 교훈에 model-code 보류와 독립 UI hotfix를 구분하고, 외부 접수 차단·AI/center 작업과 cgroup 확인·원복 및 최종 HTTPS 수용 조건을 보완했다.
+- 증거: PR #235의 동일 head에서 공개 검사28개와 CI 통과 후 지원 설치기로 UI를 갱신했다. HTTPS200·Serve 설정 원복·라벨/이력8테이블 hash 일치·기존 설정 및 Isaac 작업 보존을 확인했다. 공통 model-code 후보는 작업 잠금 때문에 보류된 상태다.
+- gate 변화: 모델 코드 수락·학습 실행·모델 품질·실물 수용으로 승격하지 않는다. 병합 대기열의 추가 CI는 별도 진행 중이다.
+- CE: 기존 교훈 갱신 — [Learning Center 배포](solutions/deployment/learning-center-upgrade-needs-the-identical-unit-first-2026-10-23.md). 기존 floor와 작업 소유권을 유지하는 검증된 UI 갱신 절차다.
+
+## 2026-11-05 · uncommitted · docs(calibration): 마커 번호의 정본 참조 수정
+
+- 변경: 보정 카드에 남은 D-933 초기 slot1/2 번호를 D-954의 정본 인쇄 생성기 arm_ids 참조로 바꿨다. cell_frame의 번호와 현장 markers.slot을 맞추도록 경로를 명시하고 감독·소유권·보정 조건은 유지했다.
+- 증거: 현재 생성기와 cell_frame은 slot1의 gripper50·slot2의 gripper65부터 각각15개를 사용한다. 실제 생성 PDF3개의 A4 geometry·hash와 Poppler 렌더를 확인했다. 현장 마커 부착·보정·정확도 수용을 뜻하지 않는다.
+- gate 변화: 없음. 번호표를 카드에 다시 복제하지 않으며 실물 동작과 D-911 확인은 기존 절차를 따른다.
+- CE: 해당 없음 — 오래된 번호와 정정 근거는 지침 diff·D-954·정본 생성기로 직접 확인 가능하다.
+
+## 2026-11-05 · uncommitted · docs(test): 로컬 Chromium 모듈의 네트워크 변경 실패 관측
+
+- 변경: [초기 모듈 로드 교훈](solutions/test-failures/chromium-network-change-breaks-local-module-load-2026-11-05.md)에 HTML 표시·스크립트 요청 실패·실제 pointer 경로를 구분하고, 관측한 초기 네트워크 변경만 제한적으로 복구하는 범위를 기록했다.
+- 증거: dfa0363e2b에서 실패2건/통과99건과 모듈 ERR_NETWORK_CHANGED를 함께 수집했고 d3ae2203af의 원격 harness10건 및 현장 PC 전체 브라우저101건은 skip0/NEW0이다. 최종 FULL·게시 수용은 별도다.
+- gate 변화: 없음. 이전 UI hotfix 수용과 서명 model-code45의 작업 잠금 HOLD를 구분하며, PR #235는 병합 대기열 실패 후 미병합 상태다.
+- CE: 새 교훈 기록. 표준 Chromium 오류에는 새 도메인 용어를 만들지 않았으며 기존 solutions 진입 경로를 유지했다.
+
+## 2026-11-05 · uncommitted · docs(learning): 서명 코드45의 정상 자동 적용 재조회
+
+- 변경: 앞선 작업 잠금 보류 이후의 실제 수락을 후속 수용 기록에 추가했다. model-code updater의 applied 사건, current45·서명 원본의 핵심3파일 hash와 검수 UI의 같은 소스 전환을 구분해 확인했다.
+- 증거: 12:05:53 UTC applied 사건의 source7ad5b751489f·sequence45·환경지문이 승인 manifest와 일치했다. 후속 조회는 current45·실패목록 비어 있음·검수 UI의 model-code45 경로 및 loopback/HTTPS accounts200을 확인했다. 그 뒤의 held는 새 점검이 다른 작업 때문에 보류된 상태이며 설치 취소가 아니다.
+- gate 변화: 코드 설치와 검수 웹 서비스 수용이다. 원본 자료 학습·모델 품질·모델 승격·장치 실행 수용으로 확대하지 않는다. 최종 FULL과 정본 PR 병합은 별도 진행한다.
+- CE: 기존 Learning Center 배포 교훈 적용. 작업 소유권과 기존 가드를 유지했고 강제 중단·잠금 우회는 하지 않았다.
+
+## 2026-11-05 · uncommitted · docs(omx): D435 시작 프레임의 측정 준비 여부를 구분
+
+- 변경: 완전한 Z16 첫 프레임과 측정 준비를 혼동하지 않는 현장 교훈을 추가했다. 사용자가 요청한 마커 없는 관측 준비 중 확인한 사실이며 마커 사용을 요구하지 않는다.
+- 증거: 같은640x480/6fps의 독립 스트림 시작에서 첫 프레임2건의 nonzero 비율은20.59/20.28%, 12프레임을 건너뛴2건은88.05/88.99%였다. 모두614400bytes이며 촬영 명령·해시·원본을 별도 보존했다. 깊이 엔진 결과와 비동기 색상 한계도 남겼다.
+- gate 변화: 없음. nonzero를 정확한 깊이로 간주하지 않으며 높이·팔 좌표·실물 수용은 미완료다.
+- CE: 새 교훈 기록 — docs/solutions/workflow-issues/d435-first-depth-frame-is-not-a-ready-measurement-2026-11-05.md. 경량 검토의 frontmatter와 기계적 claim 검사는 통과했고, 어휘는 새 도메인 용어 없음·발견 경로는 기존 solutions 안내로 유지한다. 의미 검증 전담 리뷰는 경량 절차에서 생략했다.
+
+## 2026-11-06 · uncommitted · fix(release): 자동 게시의 v2 번호와 SSH pin 경로를 보존
+
+- 변경: robot_cd의 다음 번호와 superseded 검사가 legacy/v2 공개 tag를 함께 읽는다. 선택한 공개 known_hosts를 버전·ABI·publisher 조회에 동일하게 적용하며 strict SSH와 source/CI/ABI/서명 가드는 유지한다. [자동 게시 운영](deployment/pinky-automatic-release.md)에 고정 snapshot 설치·기준선·거래 재개·OS 경계를 기록했다.
+- 증거: 회귀만 추가한 1489498e90은 원격9실패/52통과, 수정6c6982d520은 robot_cd·prepare·publish·ship·artifact-impact 전체210통과/skip0, known-failures NEW/known/flaky0이다. 공개004의 main 출처·rollout 서명·tar digest는 별도 읽기 전용으로 확인했으며 canary_ok=false를 유지했다.
+- gate 변화: source 회귀 확인이며 독립 검토·최종 통합 검증은 별도다. 예약 설치·새 Release 게시·로봇 활성화·주행은 실행하지 않았다. frozen OS는 기존 os-image 경로로 유지한다.
+- CE: 해당 없음. v2 누락과 pin 전달의 재발 방지는 최종 코드·실행 회귀에 직접 남고 설치 부재/고정 snapshot 판단은 기존 D-553 및 운영 문서로 설명된다. 운영 자동화 수용은 아직 미해결이다.
+
+## 2026-11-06 · uncommitted · feat(release): 단일 coordinator의 닫힌 OS engineering 게시
+
+- 변경: 명시적 OS opt-in을 기존 coordinator의 예약·비동기 빌드 관측·운영 PC 서명·소유 초안 재개·공개 자산 재조회에 연결했다. 고정 설치 tools SHA와 이미지 source SHA를 분리하고 원래 Git 저장소는 정확한 tools SHA archive의 데이터원으로만 쓴다. 빈 canary와 닫힌 wave를 서명하며 장치 기준선은 진전시키지 않는다. [운영 절차](deployment/pinky-automatic-release.md)에 설정·실패 재개·실행 한계를 기록했다.
+- 증거: 최초 RED faf1b29fcf에서 새 OS helper 부재9실패/닫힌 rollout 거절1통과. bdb97cc7a8 원격193통과/1실패는 고정 snapshot의 실제 import 폐쇄성 검사에서 native helper3개 누락을 찾았다. 후속541621bd8a는 snapshot import·기존/OS coordinator·publisher·preparer·source inventory·rollout·영향 분류219통과/skip0, known-failures NEW/known/flaky0이다. 독립 source 검토는 누락 해결과 run ID/attempt·source·publication-only 경계에서 추가 발견이 없었다.
+- gate 변화: source·원격 회귀 확인이다. 실제 이미지 workflow dispatch·운영 키 서명·Release 게시·Windows task 실행·OS 설치·재부팅·새 G4/SLAM 수용은 실행하지 않았다. production BUILD_GO와 장치의 claim/idle/source health/trial/rollback은 유지한다.
+- CE: 해당 없음. 새 route의 판단은 코드·회귀·정본 운영 절차에 직접 남겼다. frozen OS 소유·no-update의 systemd 부작용은 기존 검증 교훈을 참조하고 중복 교훈을 만들지 않았다.
+
+## 2026-11-06 · uncommitted · fix(release): 큰 변경의 완전 inventory와 실제 소비자 분류
+
+- 변경: compare 파일300개 상한에서 exact commit/tree inventory를 검증하며 SHA·개수·truncated·경로·type/mode·중복을 확인한다. delta로 처리할 수 없는 변경도 경로 분류에 남긴다. 실제 빌드/복사 소비자가 있는 support와 SD/checkout 입력은 native/OS로, 검토된 PC 역할과 exact 파일만 none으로 두었다. 새 tools/host/Pinky guard unknown은 계속 review다. [분류 경계](deployment/pinky-release-artifact-selection.md)에 운영 기준을 추가했다.
+- 증거: helper RED4실패→75ca741ec4 원격108통과, mapping RED4실패/10통과→3832c3e788 원격122통과, 추가 operator guard exact 회귀 RED1실패→6dd3dcb9f5 원격123통과/skip0·NEW/known/flaky0이다. 실제 GitHub complete trees11946/12861의 변경2211paths는 같은 SHA의 complete local git와 정확히 일치했다. a613→통합6dd의2238paths는 OS15/native1236/none987/review0으로 os-image에 도달했다. 독립 소유 source·문서 검토는 지원되는 중요 문제를 찾지 못했다.
+- gate 변화: source와 읽기 전용 비교 검증이다. 설치 baseline 혼재와 기존004 publisher 소유를 별도 운영 기록에 보존했으며 baseline 진전·개인키 출력·프로세스 중단·새 빌드/게시/장치 활성화는 하지 않았다. 최종 통합 FULL과 실제 예약 설치는 별도다.
+- CE: 해당 없음. 완전 비교·소비자 분류·mixed baseline의 판단은 코드·실행 회귀·정본 운영 문서에 직접 남았다. 운영 설치와 자동 Release 수용은 아직 미해결이며 해결 교훈으로 앞당겨 기록하지 않는다.

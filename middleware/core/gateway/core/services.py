@@ -171,19 +171,27 @@ class CoreServices:
         readiness_profiles = readiness_cfg.get("profiles")
         if readiness_profiles is not None and not isinstance(readiness_profiles, dict):
             raise ValueError("navigation.readiness.profiles must be a mapping")
+        readiness_profile = navigation_backend
+        # Disabled legacy motor configurations keep their historical backend profile.
+        if runtime_mode == "motor" and (
+            readiness_required or (readiness_profiles is not None and "motor" in readiness_profiles)
+        ):
+            readiness_profile = "motor"
         readiness_components = readiness_cfg.get("required_components")
-        if readiness_profiles is not None:
-            readiness_components = readiness_profiles.get(navigation_backend)
+        if readiness_profiles is not None or (runtime_mode == "motor" and readiness_required):
+            readiness_components = (readiness_profiles or {}).get(readiness_profile)
             if readiness_components is None:
                 raise ValueError(
                     "navigation readiness profile is missing for "
-                    f"{navigation_backend}"
+                    f"{readiness_profile}"
                 )
         readiness = NavigationReadinessGate(
             required=readiness_required,
             stale_after_s=readiness_cfg.get("stale_after_s", 2.0),
             required_components=readiness_components,
         )
+        if runtime_mode == "motor" and readiness_required and "motor_adapter" not in readiness.required_components:
+            raise ValueError("motor readiness profile must require motor_adapter")
         limits = SpeedLimits.from_config(profile=profile, nav_cfg=nav_cfg, safety_cfg=safety_cfg)
         battery_policy = BatteryPolicy(
             warning_percent=float(safety_cfg.get("battery_warning_percent", 20)),

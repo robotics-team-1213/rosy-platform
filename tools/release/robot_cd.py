@@ -29,7 +29,7 @@ from urllib.parse import quote
 ROOT = Path(__file__).resolve().parents[2]
 SHA = re.compile(r"[0-9a-f]{40}")
 MAX_STATE_DIR = 64
-RELEASE = re.compile(r"(?:payload-(?:reserved-)?)?(\d{4}\.\d{2}\.\d{2})-(\d{3})")
+RELEASE = re.compile(r"(?:payload-(?:reserved-|v2-)?)?(\d{4}\.\d{2}\.\d{2})-(\d{3})")
 
 
 def approved_run(run, *, sha, repo_id, workflow_id, event):
@@ -186,13 +186,19 @@ class Coordinator:
         """A newer published payload exists; signing this one could only roll robots back."""
         mine = int(RELEASE.fullmatch(release_id).group(2))
         for ref in self.api("git/matching-refs/tags/payload-"):
-            match = re.fullmatch(r"payload-\d{4}\.\d{2}\.\d{2}-(\d{3})", ref["ref"].removeprefix("refs/tags/"))
+            match = re.fullmatch(r"payload-(?:v2-)?\d{4}\.\d{2}\.\d{2}-(\d{3})", ref["ref"].removeprefix("refs/tags/"))
             if match and int(match.group(1)) > mine:
                 return True
         return False
 
     def ssh(self, argv):
         import prepare_payload_release as prepare
+        if self.config.get("ssh_known_hosts"):
+            argv = list(argv)
+            pins = [i for i, arg in enumerate(argv) if arg.startswith("UserKnownHostsFile=")]
+            if len(pins) != 1:
+                raise ValueError("CD SSH request must select exactly one known_hosts file")
+            argv[pins[0]] = "UserKnownHostsFile=" + self.config["ssh_known_hosts"]
         if self.config.get("ssh_jump"):
             argv = argv[:1] + ["-J", self.config["ssh_jump"]] + argv[1:]
         return prepare.run_ssh(argv)
@@ -204,8 +210,11 @@ class Coordinator:
         files = comparison.get("files")
         # GitHub's comparison inventory is limited to 300 files. Never classify
         # a possibly truncated list as harmless or delta eligible.
-        if comparison.get("status") not in ("ahead", "identical") or not isinstance(files, list) or len(files) >= 300:
+        if comparison.get("status") not in ("ahead", "identical") or not isinstance(files, list):
             return None
+        if len(files) >= 300:
+            from source_inventory import changes
+            return changes(self.api, base, head)
         return files
 
     def delivery_plan(self, head):
@@ -262,6 +271,9 @@ class Coordinator:
         ci = self.ci(sha)
         if active and self.api(f"compare/{sha}...main")["status"] not in ("ahead", "identical"):
             raise ValueError("pending source is no longer on main")
+        if active and self.state.get("phase", "").startswith("os_"):
+            from robot_cd_os import advance
+            return advance(self, sha, ci)
         if not active:
             if ci == "failed":
                 return self.audit("ci_failed")
@@ -269,6 +281,13 @@ class Coordinator:
                 return self.audit(self.state["phase"])
             policy, reason = self.delivery_plan(sha)
             self.baseline_initialized = False
+            if policy == "os-image" and self.config.get("os_engineering") is True:
+                # Main was read before CI; independently prove this exact
+                # candidate is still on main before reserving an immutable tag.
+                if self.api(f"compare/{sha}...main")["status"] not in ("ahead", "identical"):
+                    raise ValueError("OS candidate is no longer on main")
+                from robot_cd_os import advance
+                return advance(self, sha, ci, reason)
             if policy in ("none", "os-image", "review"):
                 comparison_base = self.state.get("delivery_base_sha") or self.state.get("deployed_sha")
                 self.save(sha=sha, phase="done" if policy == "none" else "failed",
@@ -444,8 +463,19 @@ class Coordinator:
 def load_config(path):
     config = json.loads(Path(path).read_text(encoding="utf-8"))
     required = {"repo", "repo_id", "state_dir", "robots", "canary", "key_name", "trusted_root"}
-    if set(config) - required - {"ssh_jump", "base_source_revision"} or not required <= set(config):
+    if set(config) - required - {"ssh_jump", "ssh_known_hosts", "base_source_revision", "os_engineering",
+                                "os_cms_private_key", "source_repository"} or not required <= set(config):
         raise ValueError("invalid robot CD configuration fields")
+    if "os_engineering" in config and type(config["os_engineering"]) is not bool:
+        raise ValueError("os_engineering must be an explicit boolean")
+    if config.get("os_engineering") is True:
+        if config.get("repo") != "robotics-team-1213/rosy-platform":
+            raise ValueError("OS engineering publisher is bound to the reviewed repository")
+        for field in ("source_repository", "os_cms_private_key"):
+            if not isinstance(config.get(field), str) or not Path(config[field]).is_absolute():
+                raise ValueError("OS engineering requires absolute source_repository and local CMS key paths")
+        if not Path(config["source_repository"]).is_dir() or not Path(config["os_cms_private_key"]).is_file():
+            raise ValueError("OS engineering local source or CMS key is unavailable")
     if "base_source_revision" in config and (not isinstance(config["base_source_revision"], str)
                                              or not SHA.fullmatch(config["base_source_revision"])):
         raise ValueError("base_source_revision must be an operator-verified full source revision")
@@ -467,6 +497,11 @@ def load_config(path):
         raise ValueError(f"state_dir longer than {MAX_STATE_DIR} characters; payload paths would pass MAX_PATH")
     if config.get("ssh_jump") and not re.fullmatch(r"[A-Za-z0-9_.@-]+", config["ssh_jump"]):
         raise ValueError("invalid SSH jump")
+    if "ssh_known_hosts" in config:
+        pins = config["ssh_known_hosts"]
+        if (not isinstance(pins, str) or not pins or any(ch.isspace() or ch in "\"'" for ch in pins)
+                or not Path(pins).is_absolute() or not Path(pins).is_file()):
+            raise ValueError("ssh_known_hosts must name an existing absolute public pin file without spaces or quotes")
     if Path(config["trusted_root"]).resolve() != ROOT.resolve():
         raise ValueError("run the installed trusted snapshot, not a source checkout")
     verify_snapshot(ROOT)
