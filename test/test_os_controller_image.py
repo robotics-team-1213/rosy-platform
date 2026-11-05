@@ -46,6 +46,18 @@ def test_controller_unit_has_runtime_configuration_without_waiting_for_its_own_d
     assert "rosy-os-trial-deadline" not in unit  # Independent deadline cannot wait for this controller.
 
 
+def test_update_poll_does_not_start_a_conflicting_motion_runtime():
+    unit = (BASE / "native/rosy-os-update.service").read_text()
+    pulled = {
+        dependency
+        for line in unit.splitlines()
+        if line.startswith(("Wants=", "Requires=", "BindsTo=", "Upholds="))
+        for dependency in line.split("=", 1)[1].split()
+    }
+    assert not pulled.intersection({"rosy-io.service", "rosy-navigation.service", "rosy-runtime.target"})
+    assert {"rosy-os-storage.service", "rosy-os-motion-guard.service", "rosy-release-recover.service", "rosy-core.service"} <= pulled
+
+
 def test_actual_systemd_parser_checks_timer_and_boot_dependency_graph(tmp_path):
     units = tmp_path / "etc/systemd/system"
     units.mkdir(parents=True)

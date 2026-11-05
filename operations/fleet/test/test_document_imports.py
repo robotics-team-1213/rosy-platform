@@ -64,6 +64,7 @@ OWN = {
         "console-goal.js",  # D-798 3.2: console.js goal targeting and operator pin
         "console-refresh.js",  # D-798 3.2: console.js dispatch, site path, state poll, cancel-all
         "roster.js",
+        "manual-control.js",
         "roster-cards.js",  # Retains focused cards only within the robot workspace.
         "motor-health-view.js",  # Fleet robot rows adapt shared read-only motor evidence.
         "roster-presentation.js",

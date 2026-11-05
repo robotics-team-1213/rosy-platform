@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+import pytest
 import yaml
 
 
@@ -27,6 +28,34 @@ def _run_text() -> str:
 def _ros_install_text() -> str:
     """D-553 addendum 3: the ROS prerequisites moved into the payload-builder image script."""
     return PREREQS.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("sources, accepted", [
+    (None, True),
+    ("URIs: http://snapshots.ros.org/jazzy/2026-09-11/ubuntu\n", False),
+    ("Types: deb\n", False),
+])
+def test_builder_snapshot_guard_executes_before_apt(sources, accepted, monkeypatch):
+    steps = _job()["steps"]
+    guard = next((step for step in steps if step.get("name") == "Verify payload builder ROS snapshot"), None)
+    assert guard is not None, "the cached builder must be checked against the current lock"
+    assert steps.index(guard) < next(i for i, step in enumerate(steps) if "apt-get update" in step.get("run", ""))
+    script = guard["run"].split("<<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
+    lock = yaml.safe_load((ROOT / "deploy/robot/pinky_pro/image/inputs.lock.yaml").read_text(encoding="utf-8"))
+    expected = lock["ros"]["apt_snapshot_url"]
+    if sources is None:
+        sources = f"Types: deb\nURIs: {expected}\nSuites: noble\n"
+    original = Path.read_text
+    def read(path, *args, **kwargs):
+        if path == Path("/etc/apt/sources.list.d/ros2-snapshots.sources"):
+            return sources
+        return original(ROOT / path if not path.is_absolute() else path, *args, **kwargs)
+    monkeypatch.setattr(Path, "read_text", read)
+    if accepted:
+        exec(compile(script, "builder-snapshot-guard", "exec"), {})
+    else:
+        with pytest.raises(SystemExit, match="payload builder ROS snapshot mismatch"):
+            exec(compile(script, "builder-snapshot-guard", "exec"), {})
 
 
 def test_manual_native_arm64_and_read_only():

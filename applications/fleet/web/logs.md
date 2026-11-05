@@ -992,3 +992,10 @@
 - 변경: 설치 chooser가 공용 subnav native tab을 소비하며 Fleet 전용 chooser padding·compact select·wrap 덧칠을 제거했다. 실제 입력·권한·위험 행동·장치 명령은 변경하지 않았다. 삭제된 select의 직접 시험 caller를 실제 탭 클릭으로 맞췄다.
 - 증거: production Fleet map/install의3폭×2테마에서21개 computed 속성·native tab/link 의미·키보드 초점을 대조한6개를 포함해0de561052a의13개 회귀 PASS/NEW0. 1a390c9d40의 넓은 caller315 PASS/NEW2 뒤 a27e97c186의 start-point/workflows 두 전체파일36 PASS/0 skipped/NEW0. 옛 관제 안내 selector는 실제 지도옵션 안4개 권한 문구와 가시성을 검사하고,401 후 열린 계정 overlay는 Escape로 닫으며 탭 초점 보존과 aria-expanded=false를 확인한다. 기존 role lock·draft·stop·복구 단언을 유지했다.
 - gate 변화: source-bound SOURCE/LOCAL 증거이며 서로 다른 SHA의 실행을 합산하지 않는다. 제품과 캡처 hook은1a 이후 동일하고 독립 G3 Task10 PASS다. 공식 FULL·착지·실설치·현장 수용은 후속이다. CE: 해당 없음 — 실제 사용자 경로와 공용 contract 시험이 판단을 보존한다.
+
+## 2026-11-06 · a9210f10f9 · 선택 로봇 홀드 조종과 모바일 상태 우선 배치
+
+- 변경: `manual-control.js`를 Console 소유 자산으로 등록하고 기존 인증된 Fleet move intent에 연결했다. 한 번에 한 요청만 보내고 버튼 해제·선택 변경·창 이탈·페이지 종료·상태 상실 때 원래 기체로0을 보낸다. 비동기 이동 요청이 늦게 끝나도 마지막0이 뒤따른다. 정지 거절은 화면에 남긴다. 모바일의 기존 작업면 order에 패드를 맞춰 로봇 상태가 조종보다 먼저 보이게 했다.
+- 증거: RED 후 source `7e81c40e5d`의 원격 affected는8806 PASS/847 SKIP, 별도 실제 Chromium 신규11개는 SKIP0이다. 앞선 기존 관제·세션·수명 포함138개도 원격 PASS/SKIP0이다. 착지 중 기존 모바일4개가 선택 상태를844px 아래로 미는 실제 NEW를 잡았고, source `a9210f10f9`의 순서 수정 후 해당4개와 신규11개 모두 원격 PASS/SKIP0이다. 독립 계약 검토에 수정 필요 사항이 없었고 로컬 main `68fe84b488`에 착지했다. 게시용 canonical FULL은 별도 진행한다.
+- 범위: 브라우저 회귀는 mocked Fleet 응답에서 실제 DOM·입력 수명·요청을 검사한다. HTTP 시험은 실제 Fleet route에서 fake robot transport로 이동과0 전달을 검사한다. 이 결과를 배포된 패드의 실물 수용으로 세지 않는다. 현장의42·45·46은 기존 실제 Fleet API 경로에서 케이블을 유지한 작은 구동·raw 정지를 확인했으며 새 패드 배포나 차체 이동의 독립 현장 확인과는 별도다.
+- gate 변화: 이 변경의 SOURCE/관련 원격 회귀 GO, 로컬 착지 확인. GitHub 게시·서명 사이트 배포·배포 UI 실물 조작·자동 위치·지도 도착 검증은 미완료다. 기존 전체 모듈의 ARTIFACT/DEVICE/FIELD gate를 올리지 않는다.
