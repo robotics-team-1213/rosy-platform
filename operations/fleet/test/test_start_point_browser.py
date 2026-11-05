@@ -337,7 +337,8 @@ def test_trail_only_draws_segments_in_the_displayed_map(browser_site, surface):
     errors = []
     page.on('pageerror', lambda error: errors.append(str(error)))
     map_id = 'track' if surface == 'site' else 'occupancy:local'
-    page.route('**/api/fleet/site-map/active', lambda route: route.fulfill(json={'map': {'map_id': 'track'}}))
+    active_id = 'track' if surface == 'site' else 'other-site'
+    page.route('**/api/fleet/site-map/active', lambda route: route.fulfill(json={'map': {'map_id': active_id}}))
     if surface == 'grid':
         page.route('**/api/fleet/map', lambda route: route.fulfill(json={
             'map_id': map_id, 'width': 20, 'height': 20, 'resolution': 0.5,
