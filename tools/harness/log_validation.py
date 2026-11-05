@@ -4,8 +4,6 @@ import datetime as dt
 import re
 from hashlib import sha256
 
-from generated_records import _normalize
-
 LOG_FIELDS = ("변경", "증거", "gate 변화")
 LOG_FIELD_ALIASES = {
     "변경": ("Change",),
@@ -14,7 +12,7 @@ LOG_FIELD_ALIASES = {
 }
 
 # Both immutable docs/logs.md versions survive the ordinary 5fa2afae0f merge.
-# Hash UTF-8 bodies after _normalize (BOM removal, CRLF -> LF) and strip(); no heading.
+# The scanner normalizes the document; hash body.strip() as UTF-8, retaining body BOMs.
 CONCURRENT_HEADING = (
     "## 2026-11-04 · uncommitted · feat(accounts): "
     "계정 화면의 역할 선택이 권한 묶음을 채움 (D-955 화면 보완)"
@@ -30,7 +28,7 @@ CONCURRENT_BODIES = frozenset({
 def validate_entries(entries, errors: list[str], legacy_headings: frozenset[str]) -> list[str]:
     concurrent = [entry for entry in entries if entry.heading == CONCURRENT_HEADING]
     pinned_pair = len(concurrent) == 2 and {
-        sha256(_normalize(entry.body).strip().encode("utf-8")).hexdigest()
+        sha256(entry.body.strip().encode("utf-8")).hexdigest()
         for entry in concurrent
     } == CONCURRENT_BODIES
     seen: set[str] = set()
