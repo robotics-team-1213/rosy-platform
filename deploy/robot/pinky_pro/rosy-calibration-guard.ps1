@@ -66,7 +66,7 @@ function Read-StoredToken([string]$Path) {
 
 # --- device hostname lookup ---------------------------------------------------
 # Every ssh here uses the release push's settings: key auth only (BatchMode),
-# known host keys only, no stdin (-n), a connect timeout, keepalives that drop
+# known host keys only, private stdin only for the loopback probe, a connect timeout, keepalives that drop
 # a dead session, and a wall-clock limit after which the process tree is
 # killed, so this soft guard can never hang a push. ssh is started as a
 # process (not with &) because only that can be bounded; the command line is
@@ -77,11 +77,24 @@ $script:verifiedAlias = ""
 $sshWallClockMs = ($TimeoutSec + 5) * 1000
 
 function Format-NativeArgument([string]$Value) {
-    if ($Value -notmatch '\s') { return $Value }
-    return '"' + $Value + '"'
+    if ($Value -notmatch '[\s"]') { return $Value }
+    $escaped = [regex]::Replace($Value, '(\\*)"', '$1$1\"')
+    $escaped = [regex]::Replace($escaped, '(\\+)$', '$1$1')
+    return '"' + $escaped + '"'
 }
 
-function Invoke-BoundedSsh([string[]]$Arguments) {
+function Stop-ProbeProcess([Diagnostics.Process]$Process) {
+    try {
+        if ($env:OS -eq "Windows_NT") {
+            & taskkill.exe /T /F /PID $Process.Id *> $null
+        } else {
+            $Process.Kill($true)
+        }
+    } catch { }
+    try { if (-not $Process.HasExited) { $Process.Kill() } } catch { }
+}
+
+function Invoke-BoundedSsh([string[]]$Arguments, [string]$InputText = "") {
     $info = New-Object System.Diagnostics.ProcessStartInfo
     $info.FileName = $script:sshPath
     $info.Arguments = ($Arguments | ForEach-Object { Format-NativeArgument $_ }) -join " "
@@ -92,20 +105,20 @@ function Invoke-BoundedSsh([string[]]$Arguments) {
     $info.RedirectStandardError = $true
     $process = [System.Diagnostics.Process]::Start($info)
     try {
-        $process.StandardInput.Close()
+        $clock = [Diagnostics.Stopwatch]::StartNew()
         $stdout = $process.StandardOutput.ReadToEndAsync()
         [void]$process.StandardError.ReadToEndAsync()
-        if (-not $process.WaitForExit($sshWallClockMs)) {
+        $write = $process.StandardInput.WriteAsync($InputText)
+        $exited = $false
+        if ($write.Wait($sshWallClockMs)) {
+            $process.StandardInput.Close()
+            $remaining = [Math]::Max(1, $sshWallClockMs - $clock.ElapsedMilliseconds)
+            $exited = $process.WaitForExit([int]$remaining)
+        }
+        if (-not $exited) {
             # Kill the whole tree: a wrapper (.cmd) would otherwise leave its
             # child holding the output pipes.
-            $previous = $ErrorActionPreference
-            try {
-                $ErrorActionPreference = "Continue"
-                & taskkill.exe /T /F /PID $process.Id *> $null
-            } finally {
-                $ErrorActionPreference = $previous
-            }
-            try { if (-not $process.HasExited) { $process.Kill() } } catch { }
+            Stop-ProbeProcess $process
             return @{ timed_out = $true; exit_code = $null; lines = @() }
         }
         $process.WaitForExit()
@@ -118,11 +131,12 @@ function Invoke-BoundedSsh([string[]]$Arguments) {
     }
 }
 
-function Get-SshArguments([string]$RemoteCommand, [string]$HostKeyAlias = "") {
-    $arguments = @("-n", "-i", $KeyPath, "-o", "UserKnownHostsFile=$KnownHosts",
+function Get-SshArguments([string]$RemoteCommand, [string]$HostKeyAlias = "", [bool]$ReadInput = $false) {
+    $arguments = @("-i", $KeyPath, "-o", "UserKnownHostsFile=$KnownHosts",
                    "-o", "StrictHostKeyChecking=yes", "-o", "BatchMode=yes",
                    "-o", "ConnectTimeout=$TimeoutSec", "-o", "ServerAliveInterval=2",
                    "-o", "ServerAliveCountMax=2")
+    if (-not $ReadInput) { $arguments = @("-n") + $arguments }
     if ($HostKeyAlias) { $arguments += @("-o", "HostKeyAlias=$HostKeyAlias") }
     return $arguments + @("${RosyUser}@${Robot}", $RemoteCommand)
 }
@@ -242,8 +256,7 @@ function Invoke-TlsProbe([string]$TlsHost, [string]$CaFile) {
         $process.StandardInput.Write((@{ token = $token } | ConvertTo-Json -Compress))
         $process.StandardInput.Close()
         if (-not $process.WaitForExit(($TimeoutSec + 5) * 1000)) {
-            & taskkill.exe /T /F /PID $process.Id *> $null
-            try { if (-not $process.HasExited) { $process.Kill() } } catch { }
+            Stop-ProbeProcess $process
             throw "Probe timed out."
         }
         if ($process.ExitCode -ne 0 -or -not $stdout.Wait(2000)) { throw "Probe failed." }
@@ -283,6 +296,33 @@ function Get-TlsReplyOverPinnedSsh {
         } finally {
             Remove-Item -LiteralPath $caFile -Force -ErrorAction SilentlyContinue
         }
+    } catch {
+        return $null
+    }
+}
+
+function Get-LegacyReplyOverPinnedSsh {
+    try {
+        # The TLS lookup initializes the same strict pinned SSH transport first.
+        if (-not $script:sshPath) { return $null }
+        $entry = @'
+import json,sys
+private=json.loads(sys.stdin.buffer.read(32769))
+namespace={'__name__':'calibration_probe'}
+exec(compile(private['source'],'calibration-probe-source','exec'),namespace)
+sys.exit(namespace['legacy_loopback'](private))
+'@
+        $encoded = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($entry))
+        $remote = "sudo -n python3 -I -c 'import base64;exec(base64.b64decode(`"$encoded`"))'"
+        $helper = Join-Path $PSScriptRoot "calibration_tls_read.py"
+        $private = @{ token = $token; port = $ApiPort; timeout = $TimeoutSec;
+                      source = [IO.File]::ReadAllText($helper, [Text.Encoding]::UTF8) } | ConvertTo-Json -Compress
+        $probe = Invoke-BoundedSsh (Get-SshArguments $remote $script:verifiedAlias $true) $private
+        if ($probe.timed_out -or $probe.exit_code -ne 0) { return $null }
+        $reply = ($probe.lines -join "`n") | ConvertFrom-Json -ErrorAction Stop
+        if ($null -eq $reply -or -not ($reply.PSObject.Properties.Name -contains "session")) { return $null }
+        Write-Host "calibration check: legacy CORE checked through pinned SSH loopback on $Robot"
+        return $reply
     } catch {
         return $null
     }
@@ -355,6 +395,7 @@ try {
                     "API Ref v1.68. Make sure nobody is calibrating before $Action.")
     } else {
         $reply = Get-TlsReplyOverPinnedSsh
+        if ($null -eq $reply) { $reply = Get-LegacyReplyOverPinnedSsh }
     }
     if ($null -eq $reply -and $null -eq $status) {
         Write-Loud ("CALIBRATION CHECK UNREACHABLE for ${Robot} ($($_.Exception.Message)). CORE may " +

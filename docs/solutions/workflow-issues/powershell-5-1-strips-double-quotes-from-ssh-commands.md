@@ -1,6 +1,7 @@
 ---
 title: PowerShell 5.1 drops the double quotes inside an ssh command, so the remote line arrives mangled
 date: 2026-10-23
+last_updated: 2026-11-06
 category: workflow-issues
 module: robot ssh operations
 problem_type: workflow_issue
@@ -82,3 +83,41 @@ the original text byte for byte.
 - Related Windows-layer traps that produced misleading remote symptoms:
   [pkill -f over ssh kills its own shell](../workflow-issues/pkill-f-over-ssh-kills-its-own-shell-2026-10-10.md),
   [PowerShell UTF-8 append mangles Korean journals](../workflow-issues/powershell-utf8-append-mangles-korean-journals.md).
+
+## 2026-11-06 — a green fake SSH did not exercise native serialization
+
+The operator calibration guard reproduced this symptom on Windows PowerShell 5.1 with native
+OpenSSH. Its private stdin write completed and the pinned SSH connection succeeded, but the remote
+Python entry failed with `SyntaxError`. This instance was in the tool's handwritten
+`ProcessStartInfo.Arguments` formatter: it enclosed a whitespace-containing argument in double quotes
+without escaping the double quotes already inside it. Base64 did not avoid that layer because the
+remote bootstrap still contained `base64.b64decode("...")`.
+
+The first Linux PowerShell tests were green because their fake SSH read the packet and invoked the
+expected helper directly. They never executed the actual remote `-c` command. Requiring the fake to
+parse and execute that command reproduced the serialization failure on the test PC as well. This is
+a missing transport boundary in the test, not proof that one PowerShell version is sufficient.
+
+The pending operator fix uses one native argument formatter for SSH and the local TLS helper. It
+escapes embedded quotes and their preceding backslashes, and doubles trailing backslashes before a
+closing quote. Existing hostname lookups retain `-n`; only the private-stdin probe removes it. The
+helper source and credential travel inside encrypted SSH stdin, never inside the native command line.
+
+Verification for commit a3241cc6e5:
+
+- The strengthened remote-command tests were RED before the formatter fix. All existing calibration,
+  TLS and SSH PowerShell tests then ran through the fixed official test-tools profile: 66 passed,
+  zero skipped. The profile also exposed a Windows-only `taskkill.exe` timeout path; process-tree
+  termination now uses the Windows tool there and the .NET tree-kill API on PowerShell Core.
+- A read-only run against the attended Pinky using Windows PowerShell 5.1 and native OpenSSH changed
+  the remote result from exit1/no output to exit0/one reply and the explicit
+  `no active calibration session` message. The temporary API credential was logged out with204.
+- Transport policy was checked separately. Missing `ROSY_API_TLS` in an old runtime file was not
+  assumed to mean plaintext. The existing CORE TLS producer was queried with the live service PID's
+  environment and user, with stable PID and owner checks. Required or unverified TLS cannot use the
+  HTTP loopback path; the explicit TLS path keeps its certificate and hostname verification.
+
+Keep diagnostic output to stage, exit status and exception type. Do not print private stdin, bearer
+tokens, receiver bodies or complete SSH commands to discover an argument error. An unchanged
+soft-guard warning with exit0 is still not positive admission: require the explicit idle message.
+These observations verify the operator read-only guard, not payload activation or robot motion.
