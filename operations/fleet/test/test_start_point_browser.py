@@ -303,6 +303,8 @@ def test_map_draws_the_travelled_trail_and_a_tether(browser_site):
     """D-594 trail from Fleet's recorded path (survives a reload) and a D-512 tether circle on the metre site view.
     The robot reports LOCALIZED in the map frame: a robot without localization (motor mode) may report odom."""
     page, robot, tracking = browser_site
+    robot._state['map_id'] = 'track'
+    page.route('**/api/fleet/site-map/active', lambda route: route.fulfill(json={'map': {'map_id': 'track'}}))
     errors = []; page.on('pageerror', lambda error: errors.append(str(error)))
     from playwright.sync_api import expect
     page.goto(page.origin+'/console')
@@ -325,4 +327,29 @@ def test_map_draws_the_travelled_trail_and_a_tether(browser_site):
     page.fleet_app.state.tethers['robot-a'] = {'anchor_xy': [2.0, 1.5], 'radius_m': 1.0, 'set_by': 'op'}
     assert overlay('tethers', 1) == 1
     capture_console(page, 'map-trail-tether.png')
+    assert not errors
+
+
+@pytest.mark.parametrize('surface', ['site', 'grid'])
+def test_trail_only_draws_segments_in_the_displayed_map(browser_site, surface):
+    from playwright.sync_api import expect
+    page, _robot, _tracking = browser_site
+    errors = []
+    page.on('pageerror', lambda error: errors.append(str(error)))
+    map_id = 'track' if surface == 'site' else 'occupancy:local'
+    page.route('**/api/fleet/site-map/active', lambda route: route.fulfill(json={'map': {'map_id': 'track'}}))
+    if surface == 'grid':
+        page.route('**/api/fleet/map', lambda route: route.fulfill(json={
+            'map_id': map_id, 'width': 20, 'height': 20, 'resolution': 0.5,
+            'origin': {'x': 0, 'y': 0, 'yaw': 0}, 'data': [0] * 400}))
+    points = [{'t': t, 'x': t / 10, 'y': 1, 'state': 'LOCALIZED', 'seg': 1, 'map_id': frame}
+              for t, frame in enumerate([map_id, map_id, 'different-frame', 'different-frame',
+                                         None, map_id, map_id], start=1)]
+    page.route('**/api/fleet/robots/robot-a/path?*', lambda route: route.fulfill(json={'now': 7, 'points': points}))
+    page.goto(page.origin + '/console')
+    expect(page.locator('#map-stage')).to_have_attribute('data-map-state', surface, timeout=15000)
+    deadline = time.monotonic() + 10
+    while page.evaluate('window.__trailOverlay?.segments || 0') == 0 and time.monotonic() < deadline:
+        page.wait_for_timeout(100)
+    assert page.evaluate('window.__trailOverlay.segments') == 2
     assert not errors
