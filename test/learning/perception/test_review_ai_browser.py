@@ -462,8 +462,9 @@ def test_pixel_result_read_rechecks_dirty_state_after_held_mask_response(tmp_pat
         page.route('**/api/masks/0', hold_mask)
         try:
             open_action_disclosure(page, '#review-ai-jobs')
+            result_button = page.locator('#review-ai-jobs .review-ai-actions > ui-button').filter(has_text='AI 결과 목록 조회')
             with page.expect_request('**/api/masks/0'):
-                page.get_by_role('button', name='AI 결과 목록 조회', exact=True).click()
+                result_button.click()
             assert len(held) == 1
             page.get_by_role('navigation', name='픽셀 검수 도구').get_by_role('link', name='사진 검수', exact=True).click()
             page.locator('#pixel-class').select_option('0')
@@ -473,7 +474,7 @@ def test_pixel_result_read_rechecks_dirty_state_after_held_mask_response(tmp_pat
             with page.expect_response('**/api/masks/0'):
                 held.pop().fulfill(json=review_masks.get(store, 0))
             expect(page.locator('#review-ai-jobs')).to_contain_text('AI 결과 목록을 조회했습니다.')
-            expect(page.get_by_role('button', name='AI 결과 목록 조회', exact=True)).to_be_disabled()
+            expect(result_button).to_be_disabled()
             expect(page.locator('#pixel-candidates option')).to_have_count(0)
             expect(page.locator('#pixel-preview-candidate')).to_have_attribute('aria-pressed', 'false')
             expect(page.locator('#pixel-draft')).to_have_text(draft)
