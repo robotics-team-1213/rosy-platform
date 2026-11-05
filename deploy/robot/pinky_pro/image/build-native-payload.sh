@@ -152,6 +152,14 @@ sha256sum "$SCRIPT_DIR/device-python-requirements.txt" | awk '{print $1}' \
 printf '%s\n' "$RELEASE_ID" > "$INSTALL_ROOT/.rosy-release"
 cp "$SCRIPT_DIR/required-ros-packages.txt" "$RELEASE_ROOT/required-ros-packages.txt"
 mkdir -p "$RELEASE_ROOT/deploy/robot"
+# D-4 native profile wiring: compose bind-mounts these mode overlays over
+# /etc/rosy/profile.yaml; the payload ships them so hardware.launch.py can pick
+# profile.${ROSY_RUNTIME_MODE}.yaml on a fresh device without a hand install
+# (2026-11-03 solution doc, symptom 1).
+mkdir -p "$RELEASE_ROOT/deploy/robot/native/config"
+cp "$ROBOT_CONFIG_SOURCE/profile.core.yaml" "$RELEASE_ROOT/deploy/robot/native/config/profile.core.yaml"
+cp "$ROBOT_CONFIG_SOURCE/profile.motor.yaml" "$RELEASE_ROOT/deploy/robot/native/config/profile.motor.yaml"
+cp "$ROBOT_CONFIG_SOURCE/profile.hardware.yaml" "$RELEASE_ROOT/deploy/robot/native/config/profile.hardware.yaml"
 # D456 auxiliary import runtime is signed inside the payload; base runtime stays unchanged.
 mkdir -p "$RELEASE_ROOT/deploy/robot/release"
 cp "$SCRIPT_DIR/../release/native_tls_provision.py" "$RELEASE_ROOT/deploy/robot/release/native_tls_provision.py"
