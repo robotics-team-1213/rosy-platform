@@ -10,8 +10,75 @@ from review_app import make_server
 from test_review_app import open_store
 from test_review_cycle import CLASSES
 import review_masks
+from test_review_flow_browser import browser_workspace
 
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason='requires explicit Chromium browser run')
+
+
+@pytest.mark.parametrize('pixel', [False, True])
+@pytest.mark.parametrize('lookup', ['after', 'around'])
+@pytest.mark.parametrize('failed', [False, True])
+def test_next_pending_locks_editing_until_both_lookups_finish(browser_workspace, pixel, lookup, failed):
+    page, store, expect = browser_workspace
+    base = page.url.split('?')[0].rstrip('/')
+    if pixel:
+        review_masks.bind_classes(store, CLASSES)
+        page.goto(base + '/pixels?frame=0', wait_until='networkidle')
+        page.locator('#pixel-class').select_option('4')
+        page.locator('#pixel-brush-tool').click()
+    else:
+        page.locator('#reopen').click()
+    prefix = 'pixel-' if pixel else ''
+    canvas = page.locator('#pixel-canvas' if pixel else '#canvas')
+    edit = page.locator('#pixel-brush-tool' if pixel else '#add')
+    expect(edit).to_be_enabled()
+    delayed = []
+    def hold(route):
+        query = parse_qs(urlparse(route.request.url).query)
+        if lookup in query:
+            delayed.append(route)
+        else:
+            route.continue_()
+    page.route('**/api/workspace?*', hold)
+    try:
+        with page.expect_request(lambda request: lookup in parse_qs(urlparse(request.url).query)):
+            page.locator('#' + prefix + 'next-pending').click()
+        expect(edit).to_be_disabled()
+        expect(page.locator('#pixel-next' if pixel else '#next-frame')).to_be_disabled()
+        canvas.click(position={'x': 15, 'y': 15})
+        if pixel:
+            expect(page.locator('#pixel-save')).to_be_disabled()
+            assert review_masks.get(store, 0)['version'] == 0
+        else:
+            assert len(store.get(0)['review']['boxes']) == 1
+        assert len(delayed) == 1
+        if failed:
+            delayed.pop().fulfill(status=503, json={'error': 'held lookup failed'})
+            expect(page.locator('#pixel-error' if pixel else '#error')).to_contain_text('held lookup failed')
+        else:
+            route = delayed.pop()
+            route.fulfill(response=route.fetch())
+        expect(edit).to_be_enabled()
+        expect(canvas).to_be_focused()
+        expected_frame = '0' if failed else '1'
+        assert parse_qs(urlparse(page.url).query)['frame'] == [expected_frame]
+        if pixel:
+            canvas.click(position={'x': 20, 'y': 20})
+            expect(page.locator('#pixel-save')).to_be_enabled()
+            expect(page.locator('#pixel-next-pending')).to_be_disabled()
+            page.locator('#pixel-save').click()
+            expect(page.locator('#pixel-status')).to_contain_text('v1')
+            assert review_masks.get(store, int(expected_frame))['version'] == 1
+            if not failed:
+                assert review_masks.get(store, 0)['version'] == 0
+        else:
+            page.locator('#add').click()
+            expect(page.locator('#boxes .box-row')).to_have_count(2)
+            assert len(store.get(int(expected_frame))['review']['boxes']) == 2
+    finally:
+        page.unroute('**/api/workspace?*', hold)
+        for route in delayed:
+            route.fulfill(status=503, json={'error': 'test cleanup'})
 
 
 @pytest.mark.parametrize('path,strip,next_button,title', [

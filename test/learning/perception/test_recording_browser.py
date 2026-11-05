@@ -55,6 +55,42 @@ def recording_page(tmp_path):
         thread.join(timeout=5)
 
 
+@pytest.mark.parametrize('target', ['new', 'other'])
+def test_recording_selection_rejects_late_session_and_refreshes_latest(recording_page, target):
+    page, snapshot, session, url, expect = recording_page
+    other = dict(session, id='b5a810e4-6fb6-4ce7-af8c-3d93c600baec', name='Other capture')
+    snapshot['sessions'] = [session, other]
+    page.route('**/recording/session/' + other['id'], lambda route: route.fulfill(json=other))
+    page.goto(url + '?session=' + SESSION, wait_until='networkidle')
+    expect(page.locator('#record-name')).to_have_value(session['name'])
+    delayed = []
+    page.route('**/recording/session/' + SESSION, lambda route: delayed.append(route))
+    with page.expect_request('**/recording/session/' + SESSION):
+        page.locator('#record-refresh').click()
+    expect(page.locator('#record-refresh')).to_be_disabled()
+    if target == 'new':
+        page.locator('#record-new').click()
+    else:
+        page.locator('#record-session').select_option(other['id'])
+    assert len(delayed) == 1
+    delayed.pop().fulfill(json=session)
+    expect(page.locator('#record-refresh')).to_be_enabled()
+    if target == 'new':
+        expect(page.locator('#record-session')).to_have_value('')
+        expect(page.locator('#record-name')).to_have_value('')
+        expect(page.locator('#record-name')).to_be_enabled()
+        expect(page.locator('#episode-start')).to_be_disabled()
+        expect(page.locator('#record-export')).to_be_disabled()
+    else:
+        expect(page.locator('#record-name')).to_have_value(other['name'])
+        expect(page.locator('#record-session')).to_have_value(other['id'])
+        posts = []
+        page.route('**/recording/start', lambda route: (posts.append(route.request.post_data_json), route.fulfill(json=other)))
+        page.locator('#episode-start').click()
+        expect(page.locator('#record-status')).to_contain_text('요청 접수')
+        assert posts[0]['session_id'] == other['id']
+
+
 def test_setup_fields_survive_poll_and_preview_only_blocks_start(recording_page):
     page, snapshot, session, url, expect = recording_page
     snapshot['sources'][0].update(status='unavailable', reason='accepted-reference producer missing')
