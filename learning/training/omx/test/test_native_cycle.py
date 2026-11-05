@@ -54,6 +54,14 @@ def test_split_bytes_and_review_groups_are_bound_before_training(module, splits)
         module.validate_split(root)
 
 
+def test_smolvla_revision_cannot_be_mistaken_for_act(module):
+    files = {'model.safetensors': 'a'*64, 'config.json': 'b'*64}
+    assert module.policy_revision(files, policy_type='smolvla').startswith('smolvla-')
+    assert module.policy_revision(files, policy_type='smolvla') != module.policy_revision(files)
+    with pytest.raises(ValueError):
+        module.policy_revision(files, policy_type='unknown')
+
+
 @pytest.mark.parametrize('fault', ['unknown_source', 'unreviewed', 'missing_hash', 'split_ids', 'cycle'])
 def test_invalid_split_receipts_cannot_start_trainer(module, splits, fault):
     root, receipt = splits
