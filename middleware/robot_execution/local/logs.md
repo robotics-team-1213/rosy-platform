@@ -10,3 +10,10 @@
 - gate 변화: 신규 기록. SOURCE GO, 나머지 gate는 등록 시점에 평가하지 않아 PARKED.
 - 결정: D-61, D-168
 - 교훈: 없음
+
+## 2026-11-05 · 348778e549 · fix(learning): 공용 학습 계약 wheel pin 정합
+
+- 변경: learning contract의 정확 pin을0.1.16으로 맞췄다. 설치 검사·owner session·HOLD 동작은 변경하지 않았다.
+- 증거: [검증 기록](../../../docs/validation/omx-smolvla-reviewed-cycle-2026-11-05/result.md). 이전 정확 pin과 새 wheel의 충돌은 실제 원격 venv pip check에서 재현했고 수정 후 설치·아키텍처 회귀를 확인했다. 최종 FULL 결과는 위 기록을 따른다.
+- gate 변화: 없음. 기존 SOURCE GO와 나머지 PARKED를 유지한다.
+- CE: 해당 없음 — 의존성 metadata와 설치 회귀가 원인·수정을 설명한다.

@@ -14209,3 +14209,17 @@ osy-d395-s1d\`.
 - 검증: commit a02c3ed1d5의 신규 control은 상속된 cyclic FD 5개를 수거할 때 정상 -5/의도적 누수 -4/살아 있는 FD 닫힘 -6으로 RED 3 failed/NEW 3이다. 수정 commit f3dbbef6e6은 정상 0/누수 +1/닫힘 -1을 구분하고 파일 전체 원격 42 passed/0 skipped, exit 0/NEW 0이다. fork 경고 5건을 보존했다. 고정 SHA·명령·runner·비교 출력·해시는 작업공간 후속 수용 evidence의 fifo-descriptors/20261105T072116Z에 결속했고 독립 리뷰가 확인했다. 최종 FULL은 별도다.
 - gate 변화: 없음. fixture의 측정 경계 수정은 실제 자료 품질·모델·장치 수용을 뜻하지 않는다.
 - CE: 해당 없음 — 원인 조건과 보호 범위가 코드 주석·정상/누수/닫힘 세 회귀 control에 직접 남고, 기존 [간헐 실패 귀속 교훈](solutions/workflow-issues/attribute-intermittent-failure-by-line-then-interleaved-comparison.md)을 적용했다.
+
+## 2026-11-05 · 348778e549 · docs(validation): 검수 ACT·SmolVLA 학습 연결 증거
+
+- 변경: [학습 연결 검증 기록](validation/omx-smolvla-reviewed-cycle-2026-11-05/result.md)에 고정 소스·실제 SDK 결과·회귀 실패/수정·독립 리뷰·남은 품질/현장 수용 조건을 기록했다.
+- 증거: 실제 SmolVLA6/12관절 학습·이동 후 오프라인·bench runner2 passed와 정본 ACT CPU 왕복2 passed, 각각 exit0/NEW0. 최종 구현348778e549의 FULL29개 모두 exit0/NEW0이며 실제 Decision3함수도 exit0/NEW0다. 시험 SHA별 판정과 skip은 위 기록을 따른다.
+- gate 변화: 없음. 모델 품질·시뮬 작업·실물·게시 승인은 독립 조건이다.
+- CE: 해당 없음 — 기존 환경 분리 교훈을 적용했고 새 검사는 코드·회귀·README에 남는다.
+
+## 2026-11-05 · 7883232cb5 · test(learning): 저장한 ACT·SmolVLA 통계를 실제 train 설정과 비교
+
+- 변경: [후속 수용 기록](validation/decision-vla-acceptance-2026-11-05/result.md)에 실제4개 정책/관절 조합과 실자료/정답/현장 입력 상태를 고정했다. 작은 누출·변조 회귀와 SDK 재적재 비교를 추가하고 ImageNet/count 의미를 README에 명시했다.
+- 증거: sourcecb9f4a77d3의 helper14개+ACT6/12는16 passed, SmolVLA6/12는2 passed, 모두 skip0/exit0/NEW0. main 통합7883232cb5 전후 해당 코드/시험에 차이가 없다.
+- gate 변화: 없음. 독립 실자료 품질·시뮬 작업·실물 수용을 합성 통계 검증으로 올리지 않는다. 착지·게시·배포는 후속 검증을 따른다.
+- CE: 새 교훈 기록 — [도움말과 비동기 착지](solutions/workflow-issues/land-async-help-is-a-stopped-snapshot-2026-11-05.md). 실제 main ancestry로 도움말 snapshot의 미착지를 확인했다.

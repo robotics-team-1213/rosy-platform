@@ -58,6 +58,7 @@ for i in range(3):
     for fact in ledger:
         append(source/'events.jsonl', fact)
     observation = dict(time_ns=start+1, observation_state=[0.]*6, action=[float(i+1)]*6,
+                       joint_positions=[.01, .02, .03, .04, .05, .06],
                        joint_source_stamp=1.+i, reference_source_stamp=1.+i,
                        images={r:dict(data=bytes([100,110,120])*1024, width=32, height=32,
                                       source_stamp=1.+i) for r in ('top','front')})
@@ -67,6 +68,9 @@ for i in range(3):
         for image in observation['images'].values():
             image['source_stamp'] = 1.+i+frame/10
         store.sample(episode, observation, [0.]*6)
+    recorded = [json.loads(line) for line in (source/episode['samples_path']).read_text().splitlines()]
+    assert len(recorded) == 2
+    assert all(row['joint_positions_rad'] == observation['joint_positions'] for row in recorded)
     episode.update(complete=True, reason='', end_ns=start+10)
     store.close(dict(hold_requested=True, terminal_observed=True, physical_stop_verified=False))
     sessions.append(source)

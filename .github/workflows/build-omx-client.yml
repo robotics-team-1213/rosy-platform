@@ -26,7 +26,7 @@ jobs:
           stage="$RUNNER_TEMP/omx-client"
           mkdir -p "$stage"
           python -m pip wheel --no-deps --no-build-isolation --wheel-dir "$stage" \
-            contracts/skill middleware/skills/api middleware/skills/manipulation integrations/robots/omx
+            contracts/skill contracts/learning middleware/skills/api middleware/skills/manipulation integrations/robots/omx
           echo "$GITHUB_SHA" > "$stage/source-sha.txt"
           cd "$stage"
           sha256sum *.whl source-sha.txt > SHA256SUMS

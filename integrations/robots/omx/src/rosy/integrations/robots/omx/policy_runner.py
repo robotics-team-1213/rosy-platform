@@ -13,6 +13,8 @@ from pathlib import Path
 import statistics
 import time
 
+from rosy.contracts.learning.policy_assets import loading_overrides
+
 #: Policy types the runner may load for execution (D-854 §1). Adding one needs an ADR revision and adapter tests.
 ALLOWED_POLICY_TYPES = frozenset({'act'})
 #: The latency bench may also time these before they are allowed for execution (D-854 step 5).
@@ -69,9 +71,10 @@ class LeRobotAdapter:
                 raise ValueError('n_action_steps=1 required; pass single_step_override to bench full inference')
             config.n_action_steps = 1
         config.pretrained_path, config.device = checkpoint, device
+        overrides = loading_overrides(checkpoint, config)
         self.policy = get_policy_class(config.type).from_pretrained(checkpoint, config=config)
         self.pre, self.post = make_pre_post_processors(policy_cfg=config, pretrained_path=checkpoint,
-            preprocessor_overrides={'device_processor': {'device': device}})
+            preprocessor_overrides={**overrides, 'device_processor': {'device': device}})
         for part in (self.policy, self.pre, self.post):
             part.reset()
         self.policy_type, self.n_action_steps, self.unit = config.type, config.n_action_steps, unit
