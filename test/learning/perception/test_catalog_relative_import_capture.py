@@ -1,4 +1,5 @@
 """Actual descriptor witnesses for contained, finite, stable catalog capture."""
+import gc
 import os
 import multiprocessing
 from pathlib import Path
@@ -67,6 +68,46 @@ def bounded_fifo_import(store, folder):
         sender.close()
     assert fd_count() == baseline, 'FIFO watchdog leaked parent descriptors'
     return result
+
+
+@pytest.mark.parametrize('fd_change', [0, 1, -1])
+def test_fifo_fd_sample_ignores_inherited_garbage_but_detects_leak_and_close(tmp_path, monkeypatch, fd_change):
+    folder, rows = prepared(tmp_path)
+    fifo = folder / 'nonregular.png'
+    os.mkfifo(fifo)
+    rows[-1]['image'] = fifo.name
+    write_catalog(folder, rows)
+    store = ReviewStore(tmp_path / 'state', empty_training=True)
+    genuine_import = import_relative
+    was_enabled = gc.isenabled()
+    gc.collect()
+    gc.disable()
+    try:
+        with (tmp_path / 'live-fd').open('wb') as live:
+            live_identity = identity(os.fstat(live.fileno()))
+            for _ in range(5):
+                cycle = [(tmp_path / 'unreachable-fd').open('wb')]
+                cycle.append(cycle)
+                del cycle
+
+            def collect_then_import(store, folder):
+                gc.collect()
+                assert identity(os.fstat(live.fileno())) == live_identity
+                if fd_change == 1:
+                    os.open(tmp_path / 'leaked-fd', os.O_CREAT | os.O_WRONLY, 0o600)
+                elif fd_change == -1:
+                    os.close(live.fileno())
+                return genuine_import(store, folder)
+
+            monkeypatch.setattr(__import__(__name__), 'import_relative', collect_then_import)
+            result, detail, delta = bounded_fifo_import(store, folder)
+            assert result == 'refused', detail
+            assert delta == fd_change
+            assert identity(os.fstat(live.fileno())) == live_identity
+    finally:
+        gc.collect()
+        if was_enabled:
+            gc.enable()
 
 
 @pytest.mark.parametrize('target', ['catalog', 'selected-directory', 'selected-ancestor',
