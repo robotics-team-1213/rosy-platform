@@ -38,6 +38,7 @@ IMAGE_PREFIXES = (
     "deploy/robot/pinky_pro/config/",
     "deploy/robot/pinky_pro/udev/",
     "deploy/robot/pinky_pro/modprobe/",
+    "deploy/robot/pinky_pro/sd/",
 )
 NO_PINKY_PREFIXES = (
     "docs/",
@@ -48,6 +49,15 @@ NO_PINKY_PREFIXES = (
     ".impeccable/",
     "deploy/site/",
     "deploy/robot/omx/",
+    "deploy/ai_pc/",
+    "deploy/model_pc/",
+    "deploy/hosts/common/host-state/",
+    "tools/calibration/",
+    "tools/capture/",
+    "tools/perception_prototype/",
+    "tools/remote/",
+    "tools/sim/",
+    "tools/release/",
 )
 NO_PINKY_FILES = {
     "AGENTS.md",
@@ -56,7 +66,62 @@ NO_PINKY_FILES = {
     "deploy/index.md",
     "deploy/logs.md",
     "deploy/progress.md",
+    "CONCEPTS.md",
+    "DESIGN.md",
+    # Docker Compose is the development/CI path, not the native product image.
+    ".dockerignore",
+    "deploy/robot/pinky_pro/Dockerfile",
+    "deploy/robot/pinky_pro/compose.yaml",
+    "deploy/robot/pinky_pro/calibration_tls_read.py",
+    "deploy/robot/pinky_pro/rosy-calibration-guard.ps1",
+    "deploy/hosts/gpu_tenants.py",
+    "deploy/hosts/rosy-gpu-tenants.service",
+    "deploy/hosts/rosy-gpu-tenants.timer",
+    "deploy/hosts/services.yaml",
+    "deploy/hosts/common/release/native_profiles.py",
+    "deploy/robot/pinky_pro/release/artifact_impact.py",
+    "deploy/robot/pinky_pro/release/public_provenance.json",
+    "deploy/robot/pinky_pro/release/publish_secret_baseline.json",
+    "tools/decision_replay.py",
+    "tools/drivable_branch_replay.py",
+    "tools/g1_timing_gate.py",
+    "tools/graphify_documents.py",
+    "tools/graphify_pipeline.py",
+    "tools/hooks/land_record.py",
+    "tools/land.py",
+    "tools/land_async.py",
+    "tools/land_batch.py",
+    "tools/land_browser.py",
+    "tools/land_cache.py",
+    "tools/land_checks.py",
+    "tools/land_events.py",
+    "tools/land_full.py",
+    "tools/land_gc.py",
+    "tools/land_goal.py",
+    "tools/land_guards.py",
+    "tools/land_isolation.py",
+    "tools/land_merge.py",
+    "tools/land_nightly.py",
+    "tools/land_prepare.py",
+    "tools/land_queue.py",
+    "tools/land_rollup.py",
+    "tools/land_selection.py",
+    "tools/land_speculate.py",
+    "tools/land_stall.py",
+    "tools/land_stats.py",
+    "tools/lane_replay.py",
+    "tools/publish_evidence.py",
+    "tools/publish_main.py",
+    "tools/ui_design_inventory.py",
+    "tools/worktrees.py",
 }
+
+# setup.py executes Fleet packaging support; the native installer copies the
+# perception helper. Neither is host-only merely because of its source folder.
+NATIVE_SUPPORT_FILES = frozenset({
+    "tools/packaging/fleet_sources.py",
+    "deploy/robot/pinky_pro/release/host_lane_perception.py",
+})
 
 # These execute from the frozen OS/bootstrap closure, not the switchable SDK.
 # Policy is trusted snapshot data; never import candidate OS code to classify it.
@@ -100,10 +165,14 @@ def _classify_path(path: str) -> PathImpact:
         return PathImpact(path, "review", "path is not a normalized repository-relative path")
 
     name = normalized.rsplit("/", 1)[-1]
+    if normalized == ".gitattributes":
+        return PathImpact(path, "flashable-image", "checkout byte rules affect image and payload build inputs")
+    if normalized in NATIVE_SUPPORT_FILES:
+        return PathImpact(path, "native-payload", "native build or runtime consumes this support file")
     if normalized in NO_PINKY_FILES or name in {"AGENTS.md", "README.md"}:
-        return PathImpact(path, "none", "repository guidance or deployment harness record")
+        return PathImpact(path, "none", "reviewed host-only input or repository guidance")
     if normalized.startswith(NO_PINKY_PREFIXES):
-        return PathImpact(path, "none", "documentation, tests, CI, or a separate product/site surface")
+        return PathImpact(path, "none", "documentation, tests, or a reviewed host-only/separate-product surface")
     if normalized.startswith(COLCON_ROOT_PREFIXES):
         return PathImpact(path, "native-payload", "workspace source is built into the native payload")
     if normalized in {'deploy/robot/pinky_pro/image/first-boot/' + name

@@ -20,6 +20,33 @@ python deploy\robot\pinky_pro\release\artifact_impact.py `
 
 혼합 변경은 image가 payload보다 우선하고, 미분류 경로 하나라도 있으면 review가 우선한다. Selector는 변경 경로의 필요 artifact만 제안한다. 실제 release는 기존 테스트, native ARM64 build, 오프라인 서명과 검증을 통과해야 한다. 장치 설치는 명시적으로 선택한 target에만 수행하고 signed artifact·identity·release revision·health·ROS graph·최종 `cmd_vel` publisher를 readback으로 확인한다. 안전·동작·정지·지도 변경은 해당 DEVICE/FIELD 수용 게이트를 별도로 통과해야 한다.
 
+## 자동 게시의 비교와 분류 경계
+
+coordinator의 `base_source_revision`은 실제 설치된 서명 image/payload에서 인증한
+기준선이다. 여러 장치의 설치 revision이 다르면 각각을 보존하고, 공통 비교 기준은
+그 설치 source들의 입증된 공통 조상으로 둔다. 새 main을 이미 전달된 기준선으로
+넣어 변경을 건너뛰지 않는다. 이 기준선은 앞의 이미지 출처 검증을 대신하지 않는다.
+
+GitHub compare의 파일 목록은 큰 변경에서 잘릴 수 있다. `source_inventory.py`는
+300개 이상인 응답에 한해 exact commit→tree 두 쌍을 읽고 returned SHA,
+`truncated: false`, 개수 상한·정상 경로·중복·type/mode를 확인한다. 완전한 증거가
+없으면 HOLD한다. 디렉터리 hash는 leaf 변경으로 풀고 rename은 추가/삭제로 처리한다.
+mode/type 변경·symlink·submodule은 경로 분류에 남기되 byte-only delta에는 쓰지 않는다.
+incoming main의 코드를 운영 PC에서 실행해서 분류하지 않는다.
+
+분류는 파일 확장자보다 실제 소비자를 따른다. `tools/packaging/fleet_sources.py`는
+Fleet setup의 실행 입력이고 `release/host_lane_perception.py`는 native installer와
+OTA mirror가 복사하므로 payload 대상이다. `sd/`는 builder가 image-overlay에 통째로
+복사하는 closure이며 테스트를 포함해 OS 대상으로 둔다. `.gitattributes`도 checkout
+bytes에 영향을 주므로 보수적으로 OS 대상으로 분류한다.
+
+PC 전용의 검토된 exact 파일과 좁은 host 역할 폴더만 `none`으로 둔다. 개발용 Pinky
+Dockerfile/Compose, PC에서 실행하는 calibration guard와 SSH stdin probe helper는
+제품의 영속 설치 closure에 포함되지 않는다. 이 guard 두 파일은 exact 예외이며
+Pinky operator 폴더 전체를 제외하지 않는다. `tools/`나 `deploy/hosts/` 전체를
+제외하지 않으며 새 미분류 경로는 계속 review다. `none`은 Pinky artifact가 필요 없다는
+뜻이다. 호스트 배포·검토된 고정 signer snapshot 갱신·실행 권한 승인을 대신하지 않는다.
+
 ## 측정 근거
 
 2026-09-27/28 GitHub Actions 기록:
