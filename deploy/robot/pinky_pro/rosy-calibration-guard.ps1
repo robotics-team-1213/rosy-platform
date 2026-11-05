@@ -83,6 +83,17 @@ function Format-NativeArgument([string]$Value) {
     return '"' + $escaped + '"'
 }
 
+function Stop-ProbeProcess([Diagnostics.Process]$Process) {
+    try {
+        if ($env:OS -eq "Windows_NT") {
+            & taskkill.exe /T /F /PID $Process.Id *> $null
+        } else {
+            $Process.Kill($true)
+        }
+    } catch { }
+    try { if (-not $Process.HasExited) { $Process.Kill() } } catch { }
+}
+
 function Invoke-BoundedSsh([string[]]$Arguments, [string]$InputText = "") {
     $info = New-Object System.Diagnostics.ProcessStartInfo
     $info.FileName = $script:sshPath
@@ -107,14 +118,7 @@ function Invoke-BoundedSsh([string[]]$Arguments, [string]$InputText = "") {
         if (-not $exited) {
             # Kill the whole tree: a wrapper (.cmd) would otherwise leave its
             # child holding the output pipes.
-            $previous = $ErrorActionPreference
-            try {
-                $ErrorActionPreference = "Continue"
-                & taskkill.exe /T /F /PID $process.Id *> $null
-            } finally {
-                $ErrorActionPreference = $previous
-            }
-            try { if (-not $process.HasExited) { $process.Kill() } } catch { }
+            Stop-ProbeProcess $process
             return @{ timed_out = $true; exit_code = $null; lines = @() }
         }
         $process.WaitForExit()
@@ -252,8 +256,7 @@ function Invoke-TlsProbe([string]$TlsHost, [string]$CaFile) {
         $process.StandardInput.Write((@{ token = $token } | ConvertTo-Json -Compress))
         $process.StandardInput.Close()
         if (-not $process.WaitForExit(($TimeoutSec + 5) * 1000)) {
-            & taskkill.exe /T /F /PID $process.Id *> $null
-            try { if (-not $process.HasExited) { $process.Kill() } } catch { }
+            Stop-ProbeProcess $process
             throw "Probe timed out."
         }
         if ($process.ExitCode -ne 0 -or -not $stdout.Wait(2000)) { throw "Probe failed." }
