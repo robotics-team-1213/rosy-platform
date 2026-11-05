@@ -389,7 +389,7 @@ def test_a_hanging_ssh_is_killed_at_the_wall_clock_limit(fake_core, tmp_path):
     out = done.stdout + done.stderr
     assert done.returncode == 0, out
     assert fake_core["auth"] == [], out
-    assert "CALIBRATION CHECK SKIPPED" in out and "timedout" in "".join(out.split())
+    assert "CALIBRATION CHECK SKIPPED" in out and "timedout" in "".join(out.split()), out
     assert elapsed < 30, f"the guard waited {elapsed:.0f}s for a hanging ssh"
 
 
