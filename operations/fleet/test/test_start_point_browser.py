@@ -253,7 +253,7 @@ def test_missing_calibration_shows_next_action_on_mobile(browser_site):
 
 
 def test_console_has_no_setup_tools_and_connection_guide_recovers(browser_site):
-    """D-540 3: under the operate map only the legend and 관제 범위 안내 remain."""
+    """Operating keeps setup tools out and explains authority in the map options."""
     from playwright.sync_api import expect
     page, robot, tracking = browser_site
     errors = []; page.on('pageerror', lambda error: errors.append(str(error)))
@@ -261,7 +261,12 @@ def test_console_has_no_setup_tools_and_connection_guide_recovers(browser_site):
     expect(page.locator('#dispatch-control')).to_be_visible(timeout=15000)
     for absent in ('#start-point-tools', '#start-point-save', '#tracking-relearn'):
         expect(page.locator(absent)).to_have_count(0)
-    expect(page.locator('details.note > summary', has_text='관제 범위 안내')).to_have_count(1)
+    page.locator('#map-options > summary').click()
+    scope = page.locator('#map-options #fleet-scope-note')
+    expect(scope).to_be_visible()
+    for contract in ('Rosy Fleet 사이트 관제', 'Rosy Robot 화면', '목표·취소·정지 같은 원자 액션', '바퀴 속도는 로봇 안에서만'):
+        expect(scope).to_contain_text(contract)
+    page.locator('#map-options > summary').click()
     open_token_access(page)
     page.locator('#console-token').fill('')
     page.locator('#token-save').click()
