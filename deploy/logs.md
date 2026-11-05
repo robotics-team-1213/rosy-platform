@@ -4491,6 +4491,7 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 변경: 새로 통합된 카메라 검증 문서의 정확한 commit/path/high-entropy-token 조합 하나만 기존 게시 baseline에 더한다. 이전 양쪽 reviewer 근거와 모든 기존 조합을 보존한다. scanner·검사 제외·비공개 자료 접근은 바꾸지 않는다.
 - 증거: 실제 scanner의 한 발견은 review revision이며 독립 검토에서 Git commit으로 해소됐다. 값·excerpt는 추가하지 않으며 agent 검토를 사람 승인으로 표현하지 않는다. 최종 source의 게시 검사를 다시 확인한다.
 - Gate: 서명·운영·실물 수용과 별개. CE: 해당 없음 — 기존 정확한 조합 규약과 Git 출처로 분류를 복원한다.
+
 ## 2026-11-03 · uncommitted · fix(omx): 기기 업데이터가 카메라 바인드 유닛을 함께 싣는다
 
 - 변경: `omx-devices-autoupdate.json.example`의 `unit_files`에 `rosy-omx-cameras-bind.service`·`.timer`를 더하고 README 설치 5단계에서 바인드 타이머도 켠다. 업데이터는 유닛 파일을 복사만 하고 타이머를 켜지 않으므로 한 번 켜는 단계가 필요하다. `test_omx_cameras`가 예시 설정에 두 파일이 빠지면 실패한다.
@@ -4545,6 +4546,7 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 검증: 원격 RED `08bbc9a4fe`에서 release edit 호출을 막는 새 회귀 시험이 예상대로 실패했다. 수정 `3309dde54f`에서 서명 자동화와 후보 서명 시험 48건이 통과했고 known_failures는 0 new/known/flaky다. FakeGh 시험이며 실제 공개 릴리스를 수정하지 않았다.
 - gate 변화: 없음. UI FULL 준비 근거는 별도 보존했고, 이 수정의 착지와 최신 main 통합 검증 후 게시한다.
 - CE: 해당 없음 — 누락된 dry-run 분기와 회귀 조건이 코드·시험에 직접 남는다. 운영 전환은 별도 미완료다.
+
 ## 2026-11-04 · uncommitted · fix(deploy): native payload가 모드별 프로파일 오버레이를 싣는다
 
 - 변경: `image/build-native-payload.sh`가 `deploy/robot/pinky_pro/config/profile.{core,motor,hardware}.yaml`을 release 트리 `deploy/robot/config/`로 복사한다. `hardware.launch.py`의 프로파일 기본값(navigation/profile_source, 같은 날 착지)이 `/etc/rosy/profile.yaml`이 없는 기기에서 이 파일로 내려간다. 지금까지 native 기기의 hardware 모드는 손 설치 전까지 `cannot read Device profile`로 시작 실패였다(2026-11-03 문서 증상1).
@@ -4563,3 +4565,17 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 변경: 게시 이력 스캔에서 고정 로그 무결성 값으로 확인한 세 commit/path/rule 조합만 secret baseline에 추가했다.
 - 증거: 독립 에이전트가 탐지10건을 Git commit 객체 및 과거 본문/fixture의 정규화 SHA-256과 대조해 모두 일치함을 확인했다. 사람 승인이 아니며 원격 회귀 결과는 착지 로그에 연결한다.
 - gate 변화: 비밀값 탐지 규칙과 일반 경로 예외는 바꾸지 않았다. 새 커밋/파일/규칙은 계속 차단한다.
+
+## 2026-11-05 · 5197ea53bf · fix(payload): ROS 스냅샷 핀 2026-10-05 재선정 (D-482 재적용)
+
+- 변경: 채널 payload(2026.10.10-164 이후 없음) 준비 중 ABI 검사가 314개 중 211개 불일치로 실패했다. 기체(os-pinky-pro-2026.10.29)의 ros-jazzy는 이미지 빌드 당시 롤링 저장소 세트로, 기존 핀 2026-09-11 스냅샷과 어긋났다. b8xy 설치 318개 전부와 일치하는 2026-10-05 스냅샷으로 `inputs.lock.yaml` URL을 옮겼다.
+- 검증: b8xy `dpkg-query` 목록과 두 스냅샷의 arm64 `Packages` 색인을 전수 대조(09-11: 211 불일치, 10-05: 318/318 일치). 원격 영향 등급 통과 후 로컬 main 착지. 새 핀 payload 빌드(41988562801)의 ABI 재검사 314개 공유 일치 통과. 절차·증거는 D-482 부록(2026-11-05)에 보존.
+- gate 변화: 없음 — payload는 서명·활성화 게이트를 그대로 탄다.
+- CE: 해당 없음 — D-482의 확립된 절차를 새 데이터로 재적용한 해결이며 증거는 ADR 부록에 보존.
+
+## 2026-11-05 · c8c9bd6279 · fix(payload): 모드 프로필 복사를 native 런타임 설치 뒤로 이동
+
+- 변경: 0e1a9d2cd2(948bfeef37 포함)가 프로필 복사를 `install-native-runtime.sh`보다 앞에 두면서, 그 설치기의 기존-거부 가드가 main의 모든 payload 빌드를 즉시 실패시켰다(`destination already exists`, run 41986831152). 프로필 3종 복사를 설치 뒤로 옮겼다. 최종 payload 구조는 동일하다.
+- 검증: 프로필 적재 계약시험(세 모드 cp 단정)은 착지 시험 묶음으로 통과. 위 2026-11-05 항의 빌드 41988562801은 이 회귀 이전 base(ed455ea)에서 만든 것이므로, main에서의 재빌드는 게시 전 새 dispatch로 확인한다.
+- gate 변화: 없음.
+- CE: 해당 없음 — 원인·재현 경로가 커밋 메시지와 D-482 부록에 남는다. 계약시험이 실제 빌드 순서를 못 잡은 구멍은 빌드 스크립트 자체가 계약의 대상이라는 교훈인데, 이미 같은 교훈이 solutions에 여러 번 기록되어 있다(예: installed-layout import).
