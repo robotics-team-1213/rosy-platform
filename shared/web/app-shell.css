@@ -19,6 +19,7 @@
 /* D-926 3 — 'step'는 같은 문서 안 현재 단계다. 'page'와 같은 자리 표식을 쓴다(빈칸 무표식은 아니한다). */
 .ui-subnav-item[aria-current="page"], .ui-subnav-item[aria-current="step"], .ui-subnav-item[aria-current="location"], .ui-subnav-item[aria-selected="true"] { background: var(--brand-rose-wash); color: var(--text-primary); }
 .ui-subnav-item:disabled { cursor: not-allowed; opacity: var(--disabled-opacity); }
+.ui-subnav-item:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 
 .ui-app-main { min-width: 0; display: flex; flex-direction: column; container-type: inline-size; }
 .ui-pathbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap-pathbar); min-block-size: var(--pathbar-height); padding: var(--inset-pathbar); border-block-end: 1px solid var(--border-default); }
