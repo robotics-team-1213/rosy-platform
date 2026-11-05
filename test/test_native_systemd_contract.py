@@ -561,6 +561,8 @@ DECLARED_READS = {
     },
     "rosy-navigation.service": {
         "/var/lib/rosy/maps/site.yaml", "/etc/rosy/line_follow.yaml", "/etc/rosy/profile.yaml",
+        # navigation/profile_source.py SHIPPED_CONFIG: shipped mode profiles, read-only.
+        "/opt/rosy/current/deploy/robot/native/config",
     },
     # D-344 §12: the optional per-robot IR calibration overlay for line_observer.
     # D-373: root:rosy-camera 0750 models, written only by the operator's sudo install.
