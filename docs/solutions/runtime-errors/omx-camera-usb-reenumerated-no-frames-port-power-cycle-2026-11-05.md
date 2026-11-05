@@ -1,6 +1,7 @@
 ---
 title: A re-enumerated D435 gives zero frames until its root port and peer are powered off for 30 s; a unit restart never fixes it
 date: 2026-11-05
+last_updated: 2026-11-06
 category: runtime-errors
 module: deploy/robot/omx (cell_upkeep.py, camera_source.py, rosy-omx-cameras-bind.timer)
 problem_type: runtime_error
@@ -45,11 +46,15 @@ The camera had also physically moved about 50 px, so the arms' maps were stale. 
 
 ## Prevention
 
-`cell_upkeep.py --fix` now does this for a camera that fails after the unit restart and gives no frames on a direct read (`usb_recover`): resolve the root port and peer through sysfs, refuse (and report) when an OpenRB-150 board sits below that root port, stop timer and unit, hold 30 s, retry the read up to 90 s, start timer and unit, and report the link speed with a warning on USB2. No arm motion. Tests: `test/test_omx_cell_upkeep.py` (late first frame, shared port refused, no `--fix` reports only). Not verified on the real PC at the time of writing.
+`cell_upkeep.py --fix` does this for a camera that fails after the unit restart and gives no frames on a direct read (`usb_recover`): resolve the root port and peer through sysfs, refuse (and report) when an OpenRB-150 board sits below **any port that will be cycled**, stop timer and unit, hold 30 s, retry the read up to 90 s, start timer and unit, and report the link speed with a warning on USB2. No arm motion. Tests: `test/test_omx_cell_upkeep.py` (late first frame, shared port refused, no `--fix` reports only). The recovery implementation has not been accepted on the real PC.
+
+The earlier root-only board check was incomplete: a USB3 camera can have an OpenRB on the USB2 companion subtree, yet recovery powers both ports. Discovery must match serial devices against both complete subtrees, using path components so a neighboring port such as `3-20` is not mistaken for `3-2`. Missing camera/sysfs links, a dangling peer or an incomplete USB ancestor chain must raise `OSError` before unit or port writes; an ancestor walk must stop at the filesystem root. Do not recover from unknown topology by guessing a port or omitting its boards.
 
 ## Verification evidence
 
 Recovery verified 2026-11-05 on the site control PC by hand (steps above): direct read, HTTP 200, no further watchdog kills. The code path is covered by fakes only until it runs there.
+
+2026-11-06 source candidate `f24dc07253664399b0b446c280a6286ca1ee4069` fixes the discovery gap. Test-only candidate `89df767de3` reproduced eight failures and two controls; the USB cases cover a peer-only OpenRB and five missing-chain cases without an unbounded test. Remote execution of `test/test_omx_upkeep_identity.py`, `test/test_omx_cell_upkeep.py` and `test/test_omx_joint_jitter.py` then passed 31 tests, skip 0, NEW/known/flaky 0. These use filesystem and diagnostic-trace fixtures. No real USB power cycle, SSH operation, service change or new hardware acceptance was performed. Publication and deployment of this source are separate gates.
 
 ## When to apply
 
