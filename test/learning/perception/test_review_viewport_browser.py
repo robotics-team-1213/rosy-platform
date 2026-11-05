@@ -81,7 +81,7 @@ def test_object_preparation_keeps_valid_commands_and_excludes_denied_work(browse
     page.locator('#reload').click()
     expect(page.locator('#review-content')).to_be_hidden()
     page.keyboard.press('Control+k')
-    page.get_by_role('textbox', name='기능 검색어').fill('좌표로 박스 추가')
+    page.get_by_role('textbox', name='기능 검색어').fill('새로고침')
     expect(page.locator('#review-command-results ui-button')).to_have_count(0)
     page.keyboard.press('Escape')
 
