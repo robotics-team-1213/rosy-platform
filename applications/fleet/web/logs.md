@@ -992,3 +992,8 @@
 - 변경: 설치 chooser가 공용 subnav native tab을 소비하며 Fleet 전용 chooser padding·compact select·wrap 덧칠을 제거했다. 실제 입력·권한·위험 행동·장치 명령은 변경하지 않았다. 삭제된 select의 직접 시험 caller를 실제 탭 클릭으로 맞췄다.
 - 증거: production Fleet map/install의3폭×2테마에서21개 computed 속성·native tab/link 의미·키보드 초점을 대조한6개를 포함해0de561052a의13개 회귀 PASS/NEW0. 1a390c9d40의 넓은 caller315 PASS/NEW2 뒤 a27e97c186의 start-point/workflows 두 전체파일36 PASS/0 skipped/NEW0. 옛 관제 안내 selector는 실제 지도옵션 안4개 권한 문구와 가시성을 검사하고,401 후 열린 계정 overlay는 Escape로 닫으며 탭 초점 보존과 aria-expanded=false를 확인한다. 기존 role lock·draft·stop·복구 단언을 유지했다.
 - gate 변화: source-bound SOURCE/LOCAL 증거이며 서로 다른 SHA의 실행을 합산하지 않는다. 제품과 캡처 hook은1a 이후 동일하고 독립 G3 Task10 PASS다. 공식 FULL·착지·실설치·현장 수용은 후속이다. CE: 해당 없음 — 실제 사용자 경로와 공용 contract 시험이 판단을 보존한다.
+
+## 2026-11-06 · uncommitted · fix(fleet): viewer 주기 갱신 잠금의 실제 RED/GREEN 후속
+- 변경: 정상 병합5fe 뒤 commit c48929874d84ec05f6f60c1dab6be680d4e18787의 manual reason closure 한 줄과 범위 안내 한 문단을 후속 문서에 결속한다. 서버 권한·CORE·원래 8종료 조건·기존 단언은 보존했다.
+- 증거: b7cb viewer가 250ms 뒤 enabled인 실제 RED 1 FAIL/NEW 1→동일 시험 blob의 c489 6전체파일 160 PASS/0 skip/NEW-known-flaky 0, 492.06초/runner 499·의존성 경고 2다. 새 viewer와 기존 8ending이 실제 PASS이며 독립 코드/실행 GO를 확인했다. pointer/Tab skip/Space 현재 focus 범위이고 disabled 직접 주입·active 역할 전환·실제 서버403·물리 정지는 미검증이다. docs/validation/uiux-surfaces-2026-11-05/completion-followup-2026-11-06.md에 원본 지문·정확 6파일·source/run을 남겼다.
+- gate 변화: frozen151711의 actual prepared D2는 진행 중이며 c489 160을 그 FULL에 합산하지 않는다. 최종 G1·공식 FULL·실제 main·배포·현장 수용은 별도다. progress/last_verified는 넓히지 않았다. CE: 해당 없음 — closure와 250ms 회귀가 원인·보호 조건을 직접 설명한다.

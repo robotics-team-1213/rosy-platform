@@ -14348,3 +14348,8 @@ osy-d395-s1d\`.
 - 증거: 같은640x480/6fps의 독립 스트림 시작에서 첫 프레임2건의 nonzero 비율은20.59/20.28%, 12프레임을 건너뛴2건은88.05/88.99%였다. 모두614400bytes이며 촬영 명령·해시·원본을 별도 보존했다. 깊이 엔진 결과와 비동기 색상 한계도 남겼다.
 - gate 변화: 없음. nonzero를 정확한 깊이로 간주하지 않으며 높이·팔 좌표·실물 수용은 미완료다.
 - CE: 새 교훈 기록 — docs/solutions/workflow-issues/d435-first-depth-frame-is-not-a-ready-measurement-2026-11-05.md. 경량 검토의 frontmatter와 기계적 claim 검사는 통과했고, 어휘는 새 도메인 용어 없음·발견 경로는 기존 solutions 안내로 유지한다. 의미 검증 전담 리뷰는 경량 절차에서 생략했다.
+
+## 2026-11-06 · uncommitted · docs(ui): viewer 후속과 Gallery 근거의 완료 경계 기록
+- 변경: completion-followup-2026-11-06.md와 기존 README/표면 카드의 추가 링크로 원래 30범위를 보존하면서 정상 병합5fe·viewer 후속·Gallery DEV 계약·공식 수용 대기를 기록했다. 기존 frozen 결과/421경합 기록/모든 로그 본문은 고치지 않았다.
+- 증거: commit c48929874d84ec05f6f60c1dab6be680d4e18787의 6파일 160 PASS/0 skip/NEW-known-flaky 0와 b7cb RED 1은 각 실제 source/run/raw 지문·독립 GO에 결속한다. Gallery 정상 합성 렌더의 generic 파일명을 접속 실패로 세지 않고 source48의 opt-in 13파일 192 PASS를 KIT 단독 개수로 바꾸지 않았다. 한정된 Gallery 소비 입력 동일성은 새 외부 환경 검증이 아니다.
+- gate 변화: 공식151711 actual prepared D2 FULL은 진행 중이며 terminal/실제 main 수용은 대기다. c489 후속과 옛48 Gallery를 그 실행에 합산하지 않고 완료 시 새 날짜 수용 기록으로 결속한다. CE: 해당 없음 — 코드/회귀와 기존 BOM 교훈을 적용했고 별도 새 교훈은 필요 없다.

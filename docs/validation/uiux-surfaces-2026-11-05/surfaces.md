@@ -83,3 +83,5 @@ Account/login/profile는 rosy_account/web_assets.py의 계정 표면이며 CORE 
 현장 지도6abcb21272는 공식 main3a004fad06에 착지했고 source ancestry를 확인했다. R3 장치 표·R6 문구·R4 지도 설정의 현재 G1은 위 공통241개에 포함되며 각 독립 G3 승인과 관련 회귀는 README에 결속한다. 나머지 표의 전체 상태 결속 대기는 기존 실행·원본 셀을 아래 source 상태 목록과 함께 대조해야 하며 PNG 존재만으로 일반 GO를 선언하지 않는다.
 
 전체 G3는 정직·증거 상태·색·위계·불가역·어휘·질문·문법을 [README](README.md)에 결속한다. 서로 다른 SHA 그림은 수정 전/후 이력을 유지한다. 새 코드와 다른 그림을 최신 증거로 간주하지 않는다.
+
+2026-11-06의 [완료 후속 기록](completion-followup-2026-11-06.md)은 원래 30개 카드 범위를 유지하며 viewer 후속·Gallery DEV 근거·공식 수용 대기를 구분한다. 이 표의 기존 소스/판정은 수정하지 않는다.

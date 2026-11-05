@@ -160,3 +160,5 @@ account-context-final 루트의16 PNG는320×844·1366×844, 1f3ffb26e7/의16 PN
 commit a9d0f95a6918d30953ad65743f097b18b5a2578f의14PASS와 commit b95508565644877ac8aae619360b4bcd8c9a4c09의 원래16경로 전체PASS는 각각0skip/NEW0이다. 마지막 JUnit의 실패·오류·skip0을 직접 확인했다. no-nav7경로는 원래 본문PASS/추가촬영N/A로 구분한다. SIM320 current 항목의 일부 잘림과 키보드/resize 자동 노출 미검증은 남은 한계이며 focusVisible을 전체 가시성으로 바꾸지 않는다. 서로 다른 소스의 결과를 한 SHA의 전체 PASS로 합산하지 않는다.
 
 별도 로그 무결성 선행 작업의148PASS·독립 검토는 공식 착지 대기다. **UI 최종 G1/FULL·실제 main 반영은 아직 미완료**이며 이번 문서가 배포·실학습·실물 수용을 승인하지 않는다. CE: 해당 없음 — 공용 계약·기존 회귀와 소스별 원본으로 판단을 재구성한다.
+
+2026-11-06 후속은 [완료 후속 기록](completion-followup-2026-11-06.md)에 정상 병합 뒤 viewer RED/GREEN·Gallery의 원래 DEV 계약·진행 중인 공식 FULL을 소스별로 추가한다. 위 당시 결과는 보존한다.
