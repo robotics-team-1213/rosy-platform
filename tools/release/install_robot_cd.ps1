@@ -23,6 +23,22 @@ $revision = (& git -C $repo rev-parse HEAD).Trim()
 if ($LASTEXITCODE -ne 0 -or $revision -notmatch '^[0-9a-f]{40}$') { throw "No source revision." }
 $files = @(
     "tools/release/robot_cd.py",
+    "tools/release/robot_cd_os.py",
+    "tools/release/source_inventory.py",
+    "tools/release/prepare_os_release.py",
+    "tools/release/publish_os_release.py",
+    "tools/release/prepare_os_tools.py",
+    "tools/release/os_tools_vm.py",
+    "tools/release/os_system_vm_inputs.json",
+    "tools/release/os_public_inputs.py",
+    "tools/release/external_os_signing.py",
+    "tools/release/deployment_targets.py",
+    "deploy/robot/pinky_pro/deployment-target.json",
+    "deploy/robot/pinky_pro/image/inputs.lock.yaml",
+    "deploy/robot/pinky_pro/native/os_update_manifest.py",
+    "deploy/robot/pinky_pro/native/os_update_rollout.py",
+    "deploy/robot/pinky_pro/native/os_update_transport.py",
+    "deploy/robot/pinky_pro/native/os_state_layout.py",
     "tools/release/prepare_payload_release.py",
     "tools/release/publish_payload_release.py",
     "tools/release/payload_inspection.py",
@@ -64,6 +80,7 @@ if ($BaseSourceRevision) {
     $config | Add-Member -NotePropertyName base_source_revision -NotePropertyValue $BaseSourceRevision -Force
 }
 $config | Add-Member -NotePropertyName trusted_root -NotePropertyValue $snapshot -Force
+$config | Add-Member -NotePropertyName source_repository -NotePropertyValue $repo -Force
 New-Item -ItemType Directory -Path $base -Force | Out-Null
 $installedConfig = Join-Path $base "config.json"
 [IO.File]::WriteAllText($installedConfig, ($config | ConvertTo-Json -Depth 8), $utf8)
@@ -72,7 +89,11 @@ $entry = Join-Path $snapshot "tools/release/robot_cd.py"
 $log = Join-Path $config.state_dir "task-output.log"
 $action = New-ScheduledTaskAction -Execute "cmd.exe" -Argument ('/c ""{0}" -B "{1}" --config "{2}" >> "{3}" 2>&1"' -f $Python, $entry, $installedConfig, $log) -WorkingDirectory $snapshot
 $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes $IntervalMinutes)
-$settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Minutes 60) -StartWhenAvailable
+# Image CI is polled across ticks. The opted-in operator preparation has four
+# 1-hour guest stages, 1-hour resumable download, the existing 8-hour verified
+# guest transfer and bounded VM startup. Payload-only installations retain 60m.
+$taskLimit = if ($config.os_engineering -eq $true) { New-TimeSpan -Hours 16 } else { New-TimeSpan -Minutes 60 }
+$settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -ExecutionTimeLimit $taskLimit -StartWhenAvailable
 $principal = New-ScheduledTaskPrincipal -UserId ([System.Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive -RunLevel Limited
 Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Description "ROSY robot CD: successful main CI, unsigned ARM64 build, local signing, guarded rollout" | Out-Null
 Write-Host "Installed approved snapshot $revision; task $TaskName checks every $IntervalMinutes minutes while logged on."

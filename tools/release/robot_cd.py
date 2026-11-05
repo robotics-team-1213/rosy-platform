@@ -210,8 +210,11 @@ class Coordinator:
         files = comparison.get("files")
         # GitHub's comparison inventory is limited to 300 files. Never classify
         # a possibly truncated list as harmless or delta eligible.
-        if comparison.get("status") not in ("ahead", "identical") or not isinstance(files, list) or len(files) >= 300:
+        if comparison.get("status") not in ("ahead", "identical") or not isinstance(files, list):
             return None
+        if len(files) >= 300:
+            from source_inventory import changes
+            return changes(self.api, base, head)
         return files
 
     def delivery_plan(self, head):
@@ -268,6 +271,9 @@ class Coordinator:
         ci = self.ci(sha)
         if active and self.api(f"compare/{sha}...main")["status"] not in ("ahead", "identical"):
             raise ValueError("pending source is no longer on main")
+        if active and self.state.get("phase", "").startswith("os_"):
+            from robot_cd_os import advance
+            return advance(self, sha, ci)
         if not active:
             if ci == "failed":
                 return self.audit("ci_failed")
@@ -275,6 +281,13 @@ class Coordinator:
                 return self.audit(self.state["phase"])
             policy, reason = self.delivery_plan(sha)
             self.baseline_initialized = False
+            if policy == "os-image" and self.config.get("os_engineering") is True:
+                # Main was read before CI; independently prove this exact
+                # candidate is still on main before reserving an immutable tag.
+                if self.api(f"compare/{sha}...main")["status"] not in ("ahead", "identical"):
+                    raise ValueError("OS candidate is no longer on main")
+                from robot_cd_os import advance
+                return advance(self, sha, ci, reason)
             if policy in ("none", "os-image", "review"):
                 comparison_base = self.state.get("delivery_base_sha") or self.state.get("deployed_sha")
                 self.save(sha=sha, phase="done" if policy == "none" else "failed",
@@ -450,8 +463,19 @@ class Coordinator:
 def load_config(path):
     config = json.loads(Path(path).read_text(encoding="utf-8"))
     required = {"repo", "repo_id", "state_dir", "robots", "canary", "key_name", "trusted_root"}
-    if set(config) - required - {"ssh_jump", "ssh_known_hosts", "base_source_revision"} or not required <= set(config):
+    if set(config) - required - {"ssh_jump", "ssh_known_hosts", "base_source_revision", "os_engineering",
+                                "os_cms_private_key", "source_repository"} or not required <= set(config):
         raise ValueError("invalid robot CD configuration fields")
+    if "os_engineering" in config and type(config["os_engineering"]) is not bool:
+        raise ValueError("os_engineering must be an explicit boolean")
+    if config.get("os_engineering") is True:
+        if config.get("repo") != "robotics-team-1213/rosy-platform":
+            raise ValueError("OS engineering publisher is bound to the reviewed repository")
+        for field in ("source_repository", "os_cms_private_key"):
+            if not isinstance(config.get(field), str) or not Path(config[field]).is_absolute():
+                raise ValueError("OS engineering requires absolute source_repository and local CMS key paths")
+        if not Path(config["source_repository"]).is_dir() or not Path(config["os_cms_private_key"]).is_file():
+            raise ValueError("OS engineering local source or CMS key is unavailable")
     if "base_source_revision" in config and (not isinstance(config["base_source_revision"], str)
                                              or not SHA.fullmatch(config["base_source_revision"])):
         raise ValueError("base_source_revision must be an operator-verified full source revision")
