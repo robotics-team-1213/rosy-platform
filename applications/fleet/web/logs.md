@@ -1004,3 +1004,10 @@
 - 변경: 정상 병합5fe 뒤 commit c48929874d84ec05f6f60c1dab6be680d4e18787의 manual reason closure 한 줄과 범위 안내 한 문단을 후속 문서에 결속한다. 서버 권한·CORE·원래 8종료 조건·기존 단언은 보존했다.
 - 증거: b7cb viewer가 250ms 뒤 enabled인 실제 RED 1 FAIL/NEW 1→동일 시험 blob의 c489 6전체파일 160 PASS/0 skip/NEW-known-flaky 0, 492.06초/runner 499·의존성 경고 2다. 새 viewer와 기존 8ending이 실제 PASS이며 독립 코드/실행 GO를 확인했다. pointer/Tab skip/Space 현재 focus 범위이고 disabled 직접 주입·active 역할 전환·실제 서버403·물리 정지는 미검증이다. docs/validation/uiux-surfaces-2026-11-05/completion-followup-2026-11-06.md에 원본 지문·정확 6파일·source/run을 남겼다.
 - gate 변화: frozen151711의 actual prepared D2는 진행 중이며 c489 160을 그 FULL에 합산하지 않는다. 최종 G1·공식 FULL·실제 main·배포·현장 수용은 별도다. progress/last_verified는 넓히지 않았다. CE: 해당 없음 — closure와 250ms 회귀가 원인·보호 조건을 직접 설명한다.
+
+## 2026-11-06 · uncommitted · fix(fleet): 표시 지도와 다른 좌표계의 궤적 숨김
+- 변경: trail-view가 격자 map_id 또는 현재 활성 도로 map_id와 양 끝점이 명시적으로 일치하는 구간만 그린다. 좌표계 경계·누락 ID는 연결하지 않는다. 기록 수집·다른 소비자·테더·권한·API는 유지한다.
+- 증거: 9eb08222ec 원격 site test host Chromium 시작점 전체·공용 Node 시험·path_history 22 passed/skip0; scratch fleet-trail-green/run-1.txt. 수정 전 실제 site/grid는 각각6개 선분을 그려 기대2개보다 많았고 Node frame 시험도 RED였다.
+- gate 변화: SOURCE 회귀 확인. 실제 지도 보정·로봇 위치·장치 주행 수용 근거는 아님.
+- 결정: 기존 map_id를 그리기 직전에 검증하며 임의 좌표 변환이나 기록 삭제를 추가하지 않는다.
+- 교훈: CE 해당 없음 — 필터와 grid/site·누락 ID·frame 경계 회귀가 판단 근거를 직접 보존한다.
