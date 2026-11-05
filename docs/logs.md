@@ -14230,3 +14230,31 @@ osy-d395-s1d\`.
 - 증거: PR #235의 동일 head에서 공개 검사28개와 CI 통과 후 지원 설치기로 UI를 갱신했다. HTTPS200·Serve 설정 원복·라벨/이력8테이블 hash 일치·기존 설정 및 Isaac 작업 보존을 확인했다. 공통 model-code 후보는 작업 잠금 때문에 보류된 상태다.
 - gate 변화: 모델 코드 수락·학습 실행·모델 품질·실물 수용으로 승격하지 않는다. 병합 대기열의 추가 CI는 별도 진행 중이다.
 - CE: 기존 교훈 갱신 — [Learning Center 배포](solutions/deployment/learning-center-upgrade-needs-the-identical-unit-first-2026-10-23.md). 기존 floor와 작업 소유권을 유지하는 검증된 UI 갱신 절차다.
+
+## 2026-11-05 · uncommitted · docs(calibration): 마커 번호의 정본 참조 수정
+
+- 변경: 보정 카드에 남은 D-933 초기 slot1/2 번호를 D-954의 정본 인쇄 생성기 arm_ids 참조로 바꿨다. cell_frame의 번호와 현장 markers.slot을 맞추도록 경로를 명시하고 감독·소유권·보정 조건은 유지했다.
+- 증거: 현재 생성기와 cell_frame은 slot1의 gripper50·slot2의 gripper65부터 각각15개를 사용한다. 실제 생성 PDF3개의 A4 geometry·hash와 Poppler 렌더를 확인했다. 현장 마커 부착·보정·정확도 수용을 뜻하지 않는다.
+- gate 변화: 없음. 번호표를 카드에 다시 복제하지 않으며 실물 동작과 D-911 확인은 기존 절차를 따른다.
+- CE: 해당 없음 — 오래된 번호와 정정 근거는 지침 diff·D-954·정본 생성기로 직접 확인 가능하다.
+
+## 2026-11-05 · uncommitted · docs(test): 로컬 Chromium 모듈의 네트워크 변경 실패 관측
+
+- 변경: [초기 모듈 로드 교훈](solutions/test-failures/chromium-network-change-breaks-local-module-load-2026-11-05.md)에 HTML 표시·스크립트 요청 실패·실제 pointer 경로를 구분하고, 관측한 초기 네트워크 변경만 제한적으로 복구하는 범위를 기록했다.
+- 증거: dfa0363e2b에서 실패2건/통과99건과 모듈 ERR_NETWORK_CHANGED를 함께 수집했고 d3ae2203af의 원격 harness10건 및 현장 PC 전체 브라우저101건은 skip0/NEW0이다. 최종 FULL·게시 수용은 별도다.
+- gate 변화: 없음. 이전 UI hotfix 수용과 서명 model-code45의 작업 잠금 HOLD를 구분하며, PR #235는 병합 대기열 실패 후 미병합 상태다.
+- CE: 새 교훈 기록. 표준 Chromium 오류에는 새 도메인 용어를 만들지 않았으며 기존 solutions 진입 경로를 유지했다.
+
+## 2026-11-05 · uncommitted · docs(learning): 서명 코드45의 정상 자동 적용 재조회
+
+- 변경: 앞선 작업 잠금 보류 이후의 실제 수락을 후속 수용 기록에 추가했다. model-code updater의 applied 사건, current45·서명 원본의 핵심3파일 hash와 검수 UI의 같은 소스 전환을 구분해 확인했다.
+- 증거: 12:05:53 UTC applied 사건의 source7ad5b751489f·sequence45·환경지문이 승인 manifest와 일치했다. 후속 조회는 current45·실패목록 비어 있음·검수 UI의 model-code45 경로 및 loopback/HTTPS accounts200을 확인했다. 그 뒤의 held는 새 점검이 다른 작업 때문에 보류된 상태이며 설치 취소가 아니다.
+- gate 변화: 코드 설치와 검수 웹 서비스 수용이다. 원본 자료 학습·모델 품질·모델 승격·장치 실행 수용으로 확대하지 않는다. 최종 FULL과 정본 PR 병합은 별도 진행한다.
+- CE: 기존 Learning Center 배포 교훈 적용. 작업 소유권과 기존 가드를 유지했고 강제 중단·잠금 우회는 하지 않았다.
+
+## 2026-11-05 · uncommitted · docs(omx): D435 시작 프레임의 측정 준비 여부를 구분
+
+- 변경: 완전한 Z16 첫 프레임과 측정 준비를 혼동하지 않는 현장 교훈을 추가했다. 사용자가 요청한 마커 없는 관측 준비 중 확인한 사실이며 마커 사용을 요구하지 않는다.
+- 증거: 같은640x480/6fps의 독립 스트림 시작에서 첫 프레임2건의 nonzero 비율은20.59/20.28%, 12프레임을 건너뛴2건은88.05/88.99%였다. 모두614400bytes이며 촬영 명령·해시·원본을 별도 보존했다. 깊이 엔진 결과와 비동기 색상 한계도 남겼다.
+- gate 변화: 없음. nonzero를 정확한 깊이로 간주하지 않으며 높이·팔 좌표·실물 수용은 미완료다.
+- CE: 새 교훈 기록 — docs/solutions/workflow-issues/d435-first-depth-frame-is-not-a-ready-measurement-2026-11-05.md. 경량 검토의 frontmatter와 기계적 claim 검사는 통과했고, 어휘는 새 도메인 용어 없음·발견 경로는 기존 solutions 안내로 유지한다. 의미 검증 전담 리뷰는 경량 절차에서 생략했다.

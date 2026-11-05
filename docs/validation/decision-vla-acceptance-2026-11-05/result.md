@@ -56,3 +56,11 @@
 원본 로그·실행 원장·사람 입력 요청·후속 배포 결과는 작업 공간의 `Rosy/docs/workspace-records/2026-11-05/decision-vla-acceptance/`에 보존한다. 실제 host 주소·계정·녹화 경로는 공개 저장소에 넣지 않는다.
 
 CE: 새 교훈 기록 — [비동기 도움말 표와 실제 착지를 구분](../../solutions/workflow-issues/land-async-help-is-a-stopped-snapshot-2026-11-05.md). 통계의 유효 설정과 scalar 처리 근거는 코드·회귀·이 README/검증 기록에 남겨 별도 중복 교훈을 만들지 않았다.
+## 소프트웨어 배포 후속 관측 — 2026-11-05
+
+서명 코드 source `7ad5b751489fa5b972a726b3f12a587bd9ae73fc`, sequence45는 정상 model-code updater의 12:05:53 UTC `applied` 사건으로 수락됐다. 재조회한 `current`는45이며 실패목록은 비어 있다. 승인 archive의 native-cycle·SmolVLA-training·policy-assets 핵심3파일 해시가 설치 경로와 일치했다. archive는 Windows 체크아웃 줄바꿈 변환을 포함하며 Git blob과의 동일성은 LF 정규화 비교 근거다.
+
+검수 UI는 같은 서명 source의 model-code45 설치 경로를 사용하고 서비스가 active이며 loopback과 HTTPS의 `/accounts`가 모두200·9394bytes·같은 본문 해시를 반환했다. 이전 독립 UI hotfix와 온라인 자료 백업은 롤백 근거로 보존했다. 그 뒤 상태 파일의 `held`는 다른 작업을 감지한 후속 점검 결과로, current45와 applied 사건을 함께 읽어 설치 상태를 판단했다. 타 세션 작업을 강제 중단하거나 잠금을 우회하지 않았다.
+
+이는 코드 설치와 검수 웹 서비스 수용이다. 실자료 학습·미사용 사람 정답 평가·학습 모델의 물체 작업 시뮬·실물 실행·모델 승격은 입증하지 않는다. PR #235는 병합 대기열 CI 실패 후 미병합이며, 후속 브라우저 수정의 원격 harness10건/전체101건은 통과했다. 최종 통합본의 공식 FULL과 정본 게시·병합은 진행 중이다. 원본 자료와 채워진 운영 설정은 공개 저장소에 넣지 않았다.
+

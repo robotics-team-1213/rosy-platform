@@ -5285,3 +5285,17 @@
 - gate 변화: 기존 snapshot·generation·capability 신선도·자원·journal 검사를 유지했다. HTTP 입력이나 실행 writer를 추가하지 않았으며 simulation 전용 경계도 유지한다. 독립 source safety review를 통과했고 실물 동작·운영 배포·현장 수용은 하지 않았다.
 - 미해결: 기존 일반 app custom lifespan은 legacy ARM policy startup hook을 호출하지 않는다. 정책 시험은 등록된 start/stop 컴포넌트를 명시 실행한 근거이며 운영 자동승인 실행을 입증하지 않는다.
 - CE: 미해결 — lifecycle 연결은 별도 작업으로 남겼다. 이번 가드 수정의 원인과 재발 방지는 코드·회귀 시험에 직접 남는다.
+
+## 2026-11-05 · uncommitted · test(fleet): 지도 화면 전환 대기와 초기 모듈 로드 복구
+
+- 변경: site-map 브라우저 helper가 활성 subnav와 보이는 heading을 확인한 뒤 레이아웃을 측정한다. 초기 document/script 요청의 정확한 Chromium ERR_NETWORK_CHANGED에만 탐색 1회 재시도를 적용하고 기존 데이터·권한·BODY_FIT assertion은 유지한다.
+- 증거: 지연 hashchange RED 6ae6baea4d는 즉시 반환을 재현했다. dfa0363e2b의 현장 PC 101사례 중 실패2건은 실제 모듈 요청의 ERR_NETWORK_CHANGED와 같은 사건으로 결속했다. d3ae2203af 원격 harness10건과 같은 현장 PC의 전체 브라우저101건은 skip0/NEW0이다. 최종 FULL은 별도 검증한다.
+- gate 변화: 없음. 탐색 복구는 시험 본문·토큰 제출·API 호출·안전 조건의 재시도가 아니다. 공개 병합·서비스·장치 수용과 구분한다.
+- CE: 새 교훈 기록 — docs/solutions/test-failures/chromium-network-change-breaks-local-module-load-2026-11-05.md. 보이는 로컬 HTML만으로 모듈 초기화를 판단하지 않는 관측 근거를 남겼다.
+
+## 2026-11-05 · uncommitted · test(fleet): 팔 승인 HTTP 계약 시험의 논리 시계 통일
+
+- 변경: 승인 API fixture의 capability 읽기 시각과 store 시각에 기존 observer API fixture와 같은 고정 논리 시계를 주입한다. 실제 capability 신선도 제한과 승인 코드는 바꾸지 않는다.
+- gate 변화: 없음. 286524aef8 원격 API/store/observer 회귀66건이 skip0/NEW0으로 통과했고 독립 검토가 승인했다. 원래 CI 실패의 내부 거절 분기와 별도로 시험의 시계 의존성만 제거한다.
+- 증거: 게시 CI에서 승인 HTTP 200 기대가 409로 실패했고, 같은 원본 커밋의 원격 단독 모듈 18건은 skip0/NEW0으로 통과했다. 원래 CI 응답에는 내부 거절 분기가 없어 500ms 경과를 원인으로 확정하지 않는다. 이번 변경은 계약 시험의 불필요한 실제 시계 의존성을 제거한다. 변경 후 계약 및 기존 stale/future/역행 시계 거절 시험은 별도 검증한다.
+- CE: 미해결 — 원래 CI의 거절 분기는 확인되지 않았다. 해결 교훈으로 등록하지 않는다.

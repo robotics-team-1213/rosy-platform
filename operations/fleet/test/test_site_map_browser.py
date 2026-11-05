@@ -9,18 +9,37 @@ from pathlib import Path
 
 import pytest
 import uvicorn
-from browser_harness import BODY_FIT, browser_tests_enabled, open_token_access, safe_listener
+from browser_harness import BODY_FIT, browser_tests_enabled, goto_with_network_change_retry, open_token_access, safe_listener
 
 from test_site_map_trip import _app, _on_ring_s
 
 def show_screen(page, heading):
     """D-926 3: the site-map sub-nav shows one screen at a time; the map stays above it."""
+    from playwright.sync_api import expect
+
     page.evaluate("heading => { location.hash = heading }", "#" + heading)
+    expect(page.locator(f'.ui-subnav-nav a[href="#{heading}"]')).to_have_attribute('aria-current', 'page')
+    expect(page.locator(f'#{heading}')).to_be_visible()
 
 
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(),
                                 reason="opt-in real Chromium browser scenario")
 ROOT = Path(__file__).resolve().parents[3]
+
+
+def test_show_screen_waits_for_deferred_hashchange(page_site):
+    from playwright.sync_api import expect
+
+    page, _, _ = page_site
+    expect(page.locator('.ui-subnav-nav a[href="#map-heading"]')).to_have_attribute('aria-current', 'page')
+    # Replay the interval after the URL changes but before its queued screen handler runs.
+    page.evaluate('''() => {
+        history.replaceState(null, '', '#edit-heading');
+        setTimeout(() => dispatchEvent(new HashChangeEvent('hashchange')), 1000);
+    }''')
+    show_screen(page, 'edit-heading')
+    assert page.locator('.ui-subnav-nav a[href="#edit-heading"]').get_attribute('aria-current') == 'page'
+    assert page.locator('#edit-heading').is_visible()
 
 
 @pytest.mark.parametrize('width', [1440, 390])
@@ -433,7 +452,7 @@ def page_site(tmp_path, request):
                                               args=[f"--explicitly-allowed-ports={listener.getsockname()[1]}"])
             try:
                 page = browser.new_page(viewport={"width": 1440, "height": 1000})
-                page.goto(origin + "/console/site-map")
+                goto_with_network_change_retry(page, origin + "/console/site-map")
                 yield page, store, robot
             finally:
                 browser.close()
@@ -447,7 +466,7 @@ def test_requested_recording_robot_never_falls_back_to_another_robot(page_site):
     from playwright.sync_api import expect
 
     page, store, robot = page_site
-    page.goto(page.url + '?robot=not-in-roster#teach-heading')
+    goto_with_network_change_retry(page, page.url + '?robot=not-in-roster#teach-heading')
     open_token_access(page)
     page.locator('#console-token').fill('operator-token')
     page.locator('#token-save').click()
@@ -468,7 +487,7 @@ def test_recording_target_survives_refresh_and_names_offline_or_removed_robots(p
     recording = {'recording': None, 'pending': []}
     page.route('**/api/fleet/state', lambda route: route.fulfill(content_type='application/json', body=json.dumps(roster)))
     page.route('**/api/fleet/teach', lambda route: route.fulfill(content_type='application/json', body=json.dumps(recording)))
-    page.goto(page.url + '?robot=beta#teach-heading')
+    goto_with_network_change_retry(page, page.url + '?robot=beta#teach-heading')
     open_token_access(page)
     page.locator('#console-token').fill('operator-token')
     page.locator('#token-save').click()

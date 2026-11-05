@@ -5,9 +5,52 @@ from __future__ import annotations
 from http.server import BaseHTTPRequestHandler
 import socket
 import threading
+from types import SimpleNamespace
 from urllib.request import urlopen
 
 import browser_harness
+import pytest
+
+
+@pytest.mark.parametrize('outcomes,expected_error', [
+    (['ok'], None),
+    (['asset', 'ok'], None),
+    (['navigation', 'ok'], None),
+    (['asset', 'asset'], 'ERR_NETWORK_CHANGED'),
+    (['other'], 'ERR_CONNECTION_REFUSED'),
+])
+def test_navigation_recovers_only_one_observed_network_change(outcomes, expected_error):
+    class Page:
+        def __init__(self):
+            self.calls = []
+            self.listeners = {}
+
+        def on(self, event, callback):
+            self.listeners[event] = callback
+
+        def remove_listener(self, event, callback):
+            assert self.listeners.pop(event) is callback
+
+        def goto(self, url):
+            result = outcomes[len(self.calls)]
+            self.calls.append(url)
+            if result == 'asset':
+                self.listeners['requestfailed'](SimpleNamespace(
+                    resource_type='script', failure='net::ERR_NETWORK_CHANGED'))
+            elif result != 'ok':
+                raise RuntimeError('net::' + ('ERR_NETWORK_CHANGED' if result == 'navigation'
+                                             else 'ERR_CONNECTION_REFUSED'))
+            return 'loaded'
+
+    page = Page()
+    if expected_error:
+        with pytest.raises(RuntimeError, match=expected_error):
+            browser_harness.goto_with_network_change_retry(page, 'http://127.0.0.1/console/site-map')
+    else:
+        assert browser_harness.goto_with_network_change_retry(
+            page, 'http://127.0.0.1/console/site-map') == 'loaded'
+    assert len(page.calls) == len(outcomes)
+    assert not page.listeners
 
 
 def test_safe_listener_skips_a_restricted_port(monkeypatch):

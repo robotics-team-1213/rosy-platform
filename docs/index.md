@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-11-05 · uncommitted · docs(omx): D435 시작 프레임의 측정 준비 여부를 구분
+- 2026-11-05 · uncommitted · docs(learning): 서명 코드45의 정상 자동 적용 재조회
+- 2026-11-05 · uncommitted · docs(test): 로컬 Chromium 모듈의 네트워크 변경 실패 관측
+- 2026-11-05 · uncommitted · docs(calibration): 마커 번호의 정본 참조 수정
 - 2026-11-05 · uncommitted · docs(deploy): 작업 잠금을 보존하며 검수 UI만 갱신한 수용 조건
-- 2026-11-05 · 7883232cb5 · test(learning): 저장한 ACT·SmolVLA 통계를 실제 train 설정과 비교
-- 2026-11-05 · 348778e549 · docs(validation): 검수 ACT·SmolVLA 학습 연결 증거
-- 2026-11-05 · uncommitted · test(curation): FIFO 자식 FD 기준값 전에 상속된 미수거 자원을 정리
-- 2026-11-05 · uncommitted · test(games): 복구 시 진행 중인 overlay route handler를 기다린다
