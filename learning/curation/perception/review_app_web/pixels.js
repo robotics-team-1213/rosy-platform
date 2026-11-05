@@ -157,7 +157,7 @@ async function setView(detail){
   $('pixel-view-original').setAttribute('aria-pressed','true');$('pixel-view-detail').setAttribute('aria-pressed','false');
   $('pixel-view-status').textContent=`명암 보정을 표시하지 못했습니다. 원본 보기로 돌아왔습니다. ${value.message}`;paint();}
 }
-function evaluationControls(){if(workspace.workspace_kind!=='evaluation')return;const label=document.createElement('label');label.className='ui-check';label.innerHTML='<input class="ui-field" id="pixel-unknown" type="checkbox">가려져 경계를 판단할 수 없는 투명 영역을 모두 확인했습니다 (평가 전용)';$('pixel-background').parentElement.insertAdjacentElement('afterend',label);$('pixel-unknown').onchange=enable;$('pixel-unknown-help').textContent='평가 전용: 가림 때문에 판단할 수 없는 영역만 255로 남기고 확인하세요. 학습 자료에는 포함되지 않습니다.';$('pixel-preparation').hidden=true;}
+function evaluationControls(){if(workspace.workspace_kind!=='evaluation')return;const label=document.createElement('label');label.className='ui-check';label.innerHTML='<input class="ui-field" id="pixel-unknown" type="checkbox">가려져 경계를 판단할 수 없는 투명 영역을 모두 확인했습니다 (평가 전용)';$('pixel-approval-hint').before(label);$('pixel-unknown').onchange=enable;$('pixel-unknown-help').textContent='평가 전용: 가림 때문에 판단할 수 없는 영역만 255로 남기고 확인하세요. 학습 자료에는 포함되지 않습니다.';$('pixel-preparation').hidden=true;}
 let candidateKey='';
 function v13Review(){return !!review?.classes?.classes.some(row=>row.name==='lane_left')&&!!review?.classes?.classes.some(row=>row.name==='lane_right'&&row.role==='lane_marking')&&!!review?.classes?.classes.some(row=>row.name==='drivable');}
 function legacyCandidate(){return v13Review()&&review?.draft_candidates?.find(row=>row.sha256===$('pixel-candidates').value)?.origin==='v12_pixel_mask_candidate';}
@@ -246,8 +246,7 @@ function enable(){updatePages(workspace?.page,busy||loading||!!stroke||draft.len
  $('pixel-preserve').title=protectionHint;
  $('pixel-tool-hint').textContent=toolHint;
  $('pixel-tool-hint').hidden=!$('pixel-tool-hint').textContent;
- if((!dirty&&!selection)&&(!$('pixel-complete').checked||!$('pixel-background').checked)){$('pixel-approve').disabled=true;$('pixel-approve').reason='사진 전체와 기본 배경을 각각 확인하세요.';}
- if(ready&&unknownPixels>0){
+ if(ready&&unknownPixels>0&&(workspace.workspace_kind==='evaluation'||unknownPixels===totalPixels)){
   const evaluation=workspace.workspace_kind==='evaluation';
   const canReviewUnknown=evaluation&&frame.source.source_kind==='mcap'&&unknownPixels<totalPixels&&$('pixel-unknown')?.checked;
   if(!canReviewUnknown){
@@ -256,7 +255,7 @@ function enable(){updatePages(workspace?.page,busy||loading||!!stroke||draft.len
   }
  }
  $('pixel-approval-hint').textContent=ready&&$('pixel-approve').disabled?$('pixel-approve').reason:'';
- pixelResultNote.textContent=ready&&!$('pixel-approve').disabled?'원본과 경계를 확인한 뒤 승인하세요.':'';
+ pixelResultNote.textContent=ready&&$('pixel-approve').disabled?`완료 대기 · ${$('pixel-approve').reason}`:ready&&unknownPixels>0?'완료를 누르면 남은 미검수를 배경으로 채우고 사진 전체 검수를 기록한 뒤 다음 사진을 엽니다. 아래 버튼은 배경 채우기만 합니다.':ready?'원본과 경계를 확인한 뒤 완료를 누르면 검수를 기록하고 다음 사진을 엽니다.':'';
  pixelResultNote.hidden=!pixelResultNote.textContent;
  if(savedPixelSummary)pixelResult.textContent=`${savedPixelSummary} · ${dirty?`${draft.length}개 미저장 획`:'미저장 획 없음'}`;
  $('pixel-approve').reason='';
@@ -339,7 +338,7 @@ async function select(index){
  $('pixel-ai-summary').hidden=true;$('pixel-vlm-details').textContent='';
  $('pixel-canvas').hidden=true;$('pixel-canvas').getContext('2d').clearRect(0,0,$('pixel-canvas').width,$('pixel-canvas').height);
  $('pixel-status').setAttribute('state','pending');$('pixel-status').textContent='선택한 사진을 불러오는 중…';
- $('pixel-source').textContent='';$('pixel-legend').replaceChildren();$('pixel-view-status').textContent='';aiPanel.hidden=false;const ticket=++serial,selectedClass=$('pixel-class').value;ready=false;keyCursor=null;keyboardPosition.hidden=true;savedPixelSummary='';pixelResult.textContent='사진을 불러오는 중';resetCandidatePreview();$('pixel-candidate-status').textContent='';stroke=null;draft=[];polygon=[];clearSamples();brush.hidden=true;frame=workspace.frames.find(row=>row.index===Number(index));error();$('pixel-coverage').textContent='';$('pixel-decision').hidden=true;$('pixel-complete').checked=$('pixel-background').checked=false;options();url();enable();if(!frame)return;
+ $('pixel-source').textContent='';$('pixel-legend').replaceChildren();$('pixel-view-status').textContent='';aiPanel.hidden=false;const ticket=++serial,selectedClass=$('pixel-class').value;ready=false;keyCursor=null;keyboardPosition.hidden=true;savedPixelSummary='';pixelResult.textContent='사진을 불러오는 중';resetCandidatePreview();$('pixel-candidate-status').textContent='';stroke=null;draft=[];polygon=[];clearSamples();brush.hidden=true;frame=workspace.frames.find(row=>row.index===Number(index));error();$('pixel-coverage').textContent='';$('pixel-decision').hidden=true;options();url();enable();if(!frame)return;
  resetHistory();$('pixel-vlm-state').textContent='AI 의견을 불러오는 중…';$('pixel-vlm-state').setAttribute('state','pending');$('pixel-vlm-note').textContent='';
  request(`/api/history/${frame.index}`).then(value=>{if(ticket===serial)showHistory(value);})
    .catch(()=>{if(ticket===serial)resetHistory('검수 기록을 불러오지 못했습니다. 최신 내용을 다시 불러오세요.');});
@@ -385,12 +384,12 @@ $('pixel-undo').onclick=()=>{if(polygon.length){polygon.pop();paint();enable();}
 $('pixel-save').onclick=()=>{if($('pixel-save').disabled)return;const bodies=[];if(candidateDraftReady())bodies.push({action:'merge_draft',draft_sha256:candidatePreviewDigest});bodies.push(...draft.map(({label,radius,points})=>({action:'paint',label,radius,points})));return commit(bodies);};
 $('pixel-discard').onclick=()=>{draft=[];resetCandidatePreview();$('pixel-candidate-status').textContent='저장된 마스크 표시 · AI 초안 미적용';paint();enable();};
 addEventListener('beforeunload',event=>{if(draft.length||stroke||seeds.length||polygon.length)event.preventDefault();});
-$('pixel-approve').onclick=()=>mutate('approve',{complete_frame_review:$('pixel-complete').checked,background_reviewed:$('pixel-background').checked,unknown_pixels_reviewed:$('pixel-unknown')?.checked===true});$('pixel-exclude').onclick=()=>mutate('exclude');$('pixel-reopen').onclick=()=>mutate('reopen');
+$('pixel-approve').onclick=async()=>{if($('pixel-approve').disabled||busy||!ready||conflicted||forbidden)return;if(unknownPixels>0&&workspace.workspace_kind!=='evaluation'&&!await mutate('fill_unknown'))return;await mutate('approve',{complete_frame_review:true,background_reviewed:true,unknown_pixels_reviewed:$('pixel-unknown')?.checked===true});};$('pixel-exclude').onclick=()=>mutate('exclude');$('pixel-reopen').onclick=()=>mutate('reopen');
 $('pixel-apply-candidate').onclick=()=>{if(workspace?.workspace_kind==='evaluation')return;if(confirm('새 초안을 적용하면 현재 마스크가 대체되고 픽셀 승인이 해제됩니다. 계속할까요?'))mutate('apply_draft',{draft_sha256:$('pixel-candidates').value});};
 mergeCandidate.onclick=()=>{if(workspace?.workspace_kind==='evaluation')return;if(confirm('사람이 칠한 픽셀은 그대로 두고 255 영역 중 초안에 라벨이 있는 픽셀만 채웁니다. 적용 후 전체 사진을 다시 확인하세요.'))mutate('merge_draft',{draft_sha256:$('pixel-candidates').value});};
 $('pixel-candidates').onchange=()=>{resetCandidatePreview();previewCandidate();};
 $('pixel-preview-candidate').onclick=()=>{if(candidateVisible||candidateLoading){resetCandidatePreview();$('pixel-candidate-status').textContent='저장된 마스크 표시 · AI 초안 미적용';paint();enable();}else previewCandidate();};
-for(const id of ['pixel-complete','pixel-background'])$(id).onchange=enable;$('pixel-opacity').oninput=paint;$('pixel-show-unknown').onchange=paint;$('pixel-mask-visible').onchange=paint;
+$('pixel-opacity').oninput=paint;$('pixel-show-unknown').onchange=paint;$('pixel-mask-visible').onchange=paint;
 $('pixel-view-original').onclick=()=>setView(false);$('pixel-view-detail').onclick=()=>setView(true);
 function clearSamples(){++previewSerial;resetSam(true);seeds=[];sampleImage=null;samplePixels=0;sampleTolerance=null;previewing=false;if(ready){paint();enable();}}
 async function refreshSample(){
@@ -477,8 +476,6 @@ canvas.addEventListener('blur',()=>{if(stroke?.id===null)cancel();});
   if(event.key==='Backspace'&&tool==='polygon'&&polygon.length){event.preventDefault();polygon.pop();paint();enable();return;}
   if((event.code==='BracketLeft'||event.code==='BracketRight')&&tool==='brush'&&!$('pixel-radius').disabled){event.preventDefault();$('pixel-radius').value=String(Math.max(0,Math.min(128,Number($('pixel-radius').value)+(event.code==='BracketRight'?1:-1))));enable();return;}
   if(event.key==='Enter'&&event.target===canvas&&!$('pixel-sample-apply').disabled){event.preventDefault();$('pixel-sample-apply').click();return;}
-  if(key==='c'&&!$('pixel-complete').disabled){event.preventDefault();$('pixel-complete').click();return;}
-  if(key==='b'&&!$('pixel-background').disabled){event.preventDefault();$('pixel-background').click();return;}
   if(key==='n'&&!$('pixel-next-pending').disabled){event.preventDefault();$('pixel-next-pending').click();return;}
   const option=/^[1-9]$/.test(key)?[...$('pixel-class').options].filter(o=>o.value!==''&&o.value!=='255')[Number(key)-1]:null;
   if(option&&!$('pixel-class').disabled){event.preventDefault();$('pixel-class').value=option.value;$('pixel-class').dispatchEvent(new Event('change'));}

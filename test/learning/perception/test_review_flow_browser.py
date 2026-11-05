@@ -314,7 +314,9 @@ def test_pixel_review_shows_unclassified_coverage(browser_workspace):
     unknown = int((review_masks.pixels(store, review_masks.get(store, 0)) == 255).sum())
     page.goto(page.url.split('?')[0].rstrip('/') + '/pixels', wait_until='networkidle')
     expect(page.locator('#pixel-coverage')).to_contain_text(f'미검수 {unknown:,}픽셀')
-    assert page.locator('#pixel-coverage').bounding_box()['y'] < page.locator('#pixel-class').bounding_box()['y']
+    photo, coverage = page.evaluate("() => ['#pixel-canvas','#pixel-coverage'].map(id=>document.querySelector(id).getBoundingClientRect().toJSON())")
+    assert (photo['x'] + photo['width'] <= coverage['x'] + 1 if page.viewport_size['width'] >= 1024 else photo['y'] + photo['height'] <= coverage['y'] <= photo['y'] + photo['height'] + 96)
+    assert coverage['y'] < page.locator('#pixel-class').bounding_box()['y']
     page.locator('#pixel-class').select_option('0')
     page.on('dialog', lambda dialog: dialog.accept())
     open_action_disclosure(page, '#pixel-fill')
@@ -666,8 +668,6 @@ def test_object_to_pixel_review_keeps_photo_and_shows_decision(browser_workspace
     open_action_disclosure(page, '#pixel-fill')
     page.locator('#pixel-fill').click()
     expect(page.locator('#pixel-status')).to_contain_text('v1')
-    page.locator('#pixel-complete').check()
-    page.locator('#pixel-background').check()
     page.locator('#pixel-approve').click()
     expect(page.locator('#pixel-title')).to_have_text('사진 1 픽셀 검수')
     expect(page.locator('#pixel-decision')).to_contain_text('사진 2 픽셀 승인 · 다음 검수 대기 사진 1')

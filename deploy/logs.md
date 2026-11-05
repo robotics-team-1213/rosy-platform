@@ -4551,3 +4551,10 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 검증: payload 적재 계약시험(세 모드 cp 단정) 추가, 변이 증명으로 cp 루프를 지웠을 때 빨강 확인. 착지 시험 묶음은 원격 pre-push.
 - gate 변화: 없음 — payload는 서명·활성화 게이트를 그대로 탄다.
 - CE: [2026-11-03 native hardware 문서](../docs/solutions/deployment/native-hardware-mode-profile-and-canonical-runtime-env-2026-11-03.md) 증상1의 제품 해소, 같은 문서 갱신 대상.
+
+## 2026-11-05 · uncommitted · fix(publish): Decision·VLA 검증 revision의 이력 오탐을 정확한 tuple로 기록
+
+- 변경: 게시 이력 검사4건을 독립 에이전트가 검토했다. 로컬 Git commit 객체5개와 기존 실제 SDK runner의 HF 고정 snapshot 경로2개에 대응하며 비밀값이 아니다. 사람 승인으로 기록하지 않는다. 정본 baseline에 해당3개 commit/path/high-entropy-token tuple만 추가했고 값·발췌문은 넣지 않았다.
+- 검증: 정본 `publish_main.py --secret-scan`을 현재 FULL 후보에 실행해 전후 결과를 작업 공간 증거에 보존한다. 원격 관련 회귀와 공식 착지를 거치며 scanner 규칙·경로 일괄 예외·이력은 변경하지 않는다.
+- gate 변화: 없음. 전체 FULL·공개 CI·배포·실물 수용은 별도다.
+- CE: 해당 없음 — 기존 정본의 독립 오탐 검토 절차 적용이며 새 절차를 만들지 않았다.

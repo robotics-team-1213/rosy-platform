@@ -23,10 +23,11 @@ def test_pixel_workspace_layout_has_one_photo_navigation_and_unclipped_tools(bro
                        [(index, source, review, 'pending') for index in range(2, 70)])
     open_pixels(page, store, expect)
     page.evaluate('theme => RosyTheme.set(theme)', theme)
-    expect(page.locator('#pixel-complete, #pixel-background')).to_have_count(2)
+    expect(page.locator('#pixel-complete, #pixel-background')).to_have_count(0)
     expect(page.locator('#pixel-approve')).to_contain_text('완료')
-    expect(page.locator('#pixel-keys')).to_contain_text('C 전체 확인')
-    expect(page.locator('#pixel-keys')).to_contain_text('B 배경 확인')
+    expect(page.locator('#pixel-keys')).to_contain_text('A 완료')
+    expect(page.locator('#pixel-keys')).not_to_contain_text('C 전체 확인')
+    expect(page.locator('#pixel-keys')).not_to_contain_text('B 배경 확인')
     expect(page.locator('#pixel-photo-navigation')).to_have_count(1)
     expect(page.locator('#pixel-photo-navigation #pixel-prev')).to_have_count(1)
     expect(page.locator('#pixel-photo-navigation #pixel-next')).to_have_count(1)
@@ -91,7 +92,7 @@ def partial_workspace(page, store, expect):
 
 
 @pytest.mark.parametrize('width', [1440, 390])
-def test_context_fill_preserves_undo_and_explicit_approval_advances(browser_workspace, width):
+def test_context_fill_preserves_undo_and_one_complete_click_approves_then_advances(browser_workspace, width):
     page, store, expect = browser_workspace
     page.set_viewport_size({'width': width, 'height': 844})
     before = partial_workspace(page, store, expect)
@@ -103,29 +104,21 @@ def test_context_fill_preserves_undo_and_explicit_approval_advances(browser_work
     expect(context.locator('#pixel-resolve-background')).to_be_disabled()
     expect(page.locator('#pixel-approve')).to_be_disabled()
     page.locator('#pixel-sample-clear').click()
-    expect(page.locator('#pixel-approve')).to_be_disabled()
+    expect(page.locator('#pixel-approve')).to_be_enabled()
     page.once('dialog', lambda dialog: dialog.accept())
     context.locator('#pixel-resolve-background').click()
     expect(page.locator('#pixel-status')).to_contain_text('v2')
-    expect(page.locator('#pixel-approve')).to_be_disabled()
-    page.locator('#pixel-complete').focus()
-    expect(page.locator('#pixel-complete')).to_be_focused()
+    expect(page.locator('#pixel-approve')).to_be_focused()
     assert review_masks.get(store, 0)['status'] == 'pending'
     after = review_masks.pixels(store, review_masks.get(store, 0))
     assert after[2, 2] == 2 and np.all(after[before == 255] == 0)
     page.locator('#pixel-undo').click()
     expect(page.locator('#pixel-status')).to_contain_text('v3')
     assert np.array_equal(review_masks.pixels(store, review_masks.get(store, 0)), before)
-    expect(page.locator('#pixel-approve')).to_be_disabled()
+    expect(page.locator('#pixel-approve')).to_be_enabled()
     requests = []
     page.on('request', lambda request: requests.append(request.post_data_json)
             if request.method == 'POST' and request.url.endswith('/api/masks/0') else None)
-    page.once('dialog', lambda dialog: dialog.accept())
-    context.locator('#pixel-resolve-background').click()
-    expect(page.locator('#pixel-status')).to_contain_text('v4')
-    expect(page.locator('#pixel-approve')).to_be_disabled()
-    page.locator('#pixel-complete').check()
-    page.locator('#pixel-background').check()
     page.locator('#pixel-approve').click()
     expect(page.locator('#pixel-title')).to_have_text('사진 2 픽셀 검수')
     assert [body['action'] for body in requests] == ['fill_unknown', 'approve']
@@ -156,8 +149,7 @@ def test_completion_fill_failure_does_not_send_approval(browser_workspace):
 
     page.route('**/api/masks/0', fail_fill)
     expect(page.locator('#pixel-resolve-unknown')).to_be_visible()
-    page.once('dialog', lambda dialog: dialog.accept())
-    page.locator('#pixel-resolve-background').click()
+    page.locator('#pixel-approve').click()
     expect(page.locator('#pixel-error')).to_be_visible()
     assert [body['action'] for body in requests] == ['fill_unknown']
     assert review_masks.get(store, 0)['version'] == 1

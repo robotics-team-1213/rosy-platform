@@ -176,7 +176,7 @@ def test_mask_check_automatically_refreshes_opinion_without_replacing_unsaved_pi
             expect(page.locator('#review-ai-jobs')).to_contain_text('참고 의견 저장됨', timeout=15000)
             if editing:
                 expect(page.locator('#pixel-draft')).to_have_text(draft)
-                expect(page.locator('#pixel-vlm-note')).not_to_contain_text('Check the visible floor')
+                expect(page.locator('#pixel-vlm-note')).to_contain_text('Check the visible floor', timeout=15000)
                 page.keyboard.press('Escape')
             expect(page.locator('#pixel-vlm-note')).to_be_visible()
             expect(page.locator('#pixel-vlm-note')).to_contain_text('Check the visible floor', timeout=15000)
@@ -372,3 +372,112 @@ def test_frame_switch_removes_ai_and_versions_before_delayed_mask_failure(tmp_pa
         expect(page.locator('#review-ai-jobs')).to_have_count(1)
         expect(page.locator('#review-versions')).to_have_count(1)
         assert not jobs.status(0)['jobs'] and not jobs.status(1)['jobs']
+
+
+def test_dirty_pixel_editor_receives_mixed_check_states_without_consuming_candidate(tmp_path):
+    import base64
+    import copy
+    import numpy as np
+    import review_masks
+    from test_review_ai_jobs import finished
+    from vlm_mask_feedback import read_current_feedback
+
+    def backend(snapshot, _):
+        if snapshot['action'] == 'mask_check':
+            return {'feedback': {'verdict': 'concern', 'issue': 'missed_visible_road', 'note': 'Fresh collaborator opinion'}}
+        return {'mask': base64.b64encode(review_masks.encode(np.zeros((24, 32), np.uint8))).decode()}
+
+    with ai_browser(tmp_path, backend) as (page, store, jobs, expect):
+        page.goto(page.url.split('?')[0] + 'pixels?frame=0', wait_until='networkidle')
+        expect(page.locator('#review-ai-pixel_draft')).to_be_enabled()
+        before = review_masks.get(store, 0)
+        page.locator('#pixel-class').select_option('0')
+        page.locator('#pixel-brush-tool').click()
+        page.locator('#pixel-canvas').click(position={'x': 10, 'y': 10})
+        draft = page.locator('#pixel-draft').inner_text()
+        jobs.create(0, 'pixel_draft', before['version'], 'fixture-collaborator')
+        generated = finished(jobs)
+        assert generated['state'] == 'succeeded'
+        jobs.create(0, 'mask_check', before['version'], 'fixture-collaborator')
+        assert finished(jobs)['state'] == 'succeeded'
+        status = jobs.status(0)
+        feedback = read_current_feedback(store.state, 0)
+        phase = {'state': 'queued'}
+
+        def status_response(route):
+            value = copy.deepcopy(status)
+            for job in value['jobs']:
+                if job['action'] == 'mask_check':
+                    job['state'] = phase['state']
+            route.fulfill(json=value)
+
+        def feedback_response(route):
+            value = copy.deepcopy(feedback)
+            value['check']['state'] = phase['state']
+            route.fulfill(json=value)
+
+        page.route('**/api/review-ai/0', status_response)
+        page.route('**/api/vlm-feedback/0', feedback_response)
+        open_action_disclosure(page, '#review-ai-jobs')
+        for state, title in [('queued', 'AI 확인 대기'), ('running', 'AI 확인 실행 중'),
+                             ('failed', 'AI 확인 실패'), ('cancelled', 'AI 확인 취소됨'),
+                             ('stale', '입력 변경 · AI 재확인 필요'), ('succeeded', '검토할 문제 있음')]:
+            phase['state'] = state
+            page.get_by_role('button', name='AI 실행 상태 다시 조회', exact=True).click()
+            expect(page.locator('#pixel-vlm-state')).to_have_text(title)
+            expect(page.locator('#pixel-draft')).to_have_text(draft)
+            expect(page.locator('#pixel-candidates option')).to_have_count(0)
+            expect(page.locator('#pixel-preview-candidate')).to_have_attribute('aria-pressed', 'false')
+            assert review_masks.get(store, 0)['version'] == before['version']
+        expect(page.locator('#pixel-vlm-note')).to_contain_text('Fresh collaborator opinion')
+        page.get_by_role('navigation', name='픽셀 검수 도구').get_by_role('link', name='사진 검수', exact=True).click()
+        previews = []
+        page.on('request', lambda request: previews.append(request.url) if '/api/draft-images/' in request.url else None)
+        page.locator('#pixel-save').click()
+        expect(page.locator('#pixel-status')).to_contain_text('v2')
+        expect(page.locator('#pixel-preview-candidate')).to_have_attribute('aria-pressed', 'true')
+        expect(page.locator('#pixel-candidates')).to_have_value(generated['result']['candidate_sha256'])
+        assert len(previews) == 1
+        assert review_masks.get(store, 0)['status'] == 'pending'
+
+
+def test_pixel_result_read_rechecks_dirty_state_after_held_mask_response(tmp_path):
+    import base64
+    import numpy as np
+    import review_masks
+    from test_review_ai_jobs import finished
+
+    backend = lambda *_: {'mask': base64.b64encode(review_masks.encode(np.zeros((24, 32), np.uint8))).decode()}
+    with ai_browser(tmp_path, backend) as (page, store, jobs, expect):
+        page.goto(page.url.split('?')[0] + 'pixels?frame=0', wait_until='networkidle')
+        expect(page.locator('#review-ai-pixel_draft')).to_be_enabled()
+        before = review_masks.get(store, 0)
+        jobs.create(0, 'pixel_draft', before['version'], 'fixture-collaborator')
+        assert finished(jobs)['state'] == 'succeeded'
+        held = []
+
+        def hold_mask(route):
+            held.append(route)
+
+        page.route('**/api/masks/0', hold_mask)
+        try:
+            open_action_disclosure(page, '#review-ai-jobs')
+            with page.expect_request('**/api/masks/0'):
+                page.get_by_role('button', name='AI 결과 목록 조회', exact=True).click()
+            assert len(held) == 1
+            page.get_by_role('navigation', name='픽셀 검수 도구').get_by_role('link', name='사진 검수', exact=True).click()
+            page.locator('#pixel-class').select_option('0')
+            page.locator('#pixel-brush-tool').click()
+            page.locator('#pixel-canvas').click(position={'x': 10, 'y': 10})
+            draft = page.locator('#pixel-draft').inner_text()
+            with page.expect_response('**/api/masks/0'):
+                held.pop().fulfill(json=review_masks.get(store, 0))
+            expect(page.locator('#review-ai-jobs')).to_contain_text('AI 결과 목록을 조회했습니다.')
+            expect(page.get_by_role('button', name='AI 결과 목록 조회', exact=True)).to_be_disabled()
+            expect(page.locator('#pixel-candidates option')).to_have_count(0)
+            expect(page.locator('#pixel-preview-candidate')).to_have_attribute('aria-pressed', 'false')
+            expect(page.locator('#pixel-draft')).to_have_text(draft)
+            assert review_masks.get(store, 0)['version'] == before['version']
+        finally:
+            for route in held:
+                route.fulfill(json=review_masks.get(store, 0))
