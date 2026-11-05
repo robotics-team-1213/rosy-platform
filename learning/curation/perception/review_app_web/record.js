@@ -18,7 +18,7 @@ function savePending(){localStorage.setItem(storageKey(),JSON.stringify(pending)
 function setURL(){const u=new URL(location.href);if(sessionId)u.searchParams.set('session',sessionId);else u.searchParams.delete('session');history.replaceState(null,'',u);}
 async function request(path,body){const options={cache:'no-store',signal:AbortSignal.timeout(30000)};if(body!==undefined){options.method='POST';options.headers={'Content-Type':'application/json','X-Pinky-Token':token};options.body=JSON.stringify(body);}const response=await accountFetch(path,options),value=await response.json();if(!response.ok)throw new Error(response.status===401?'로그인·계정에서 접속한 뒤 다시 확인하세요.':response.status===403?'프로젝트의 녹화 관리 권한을 확인하세요.':value.error||`요청 실패 (${response.status})`);return value;}
 function button(id,reason){$(id).disabled=!!reason;$(id).reason=reason;}
-function baseReason(){return !connected?'연결을 다시 확인하세요.':!token?'로그인·계정에서 관리 권한을 확인하세요.':!snapshot.configured?'이 호스트에 로컬 녹화 입력을 설정하세요.':'';}
+function baseReason(){return !connected?'연결을 다시 확인하세요.':!token?'로그인·계정에서 관리 권한을 확인하세요.':!snapshot.configured?'이 호스트에 로컬 녹화 입력을 설정하세요.':sessionId&&!session&&!pending.create?'선택한 녹화 세션을 먼저 확인하세요.':'';}
 function active(){return snapshot.active||(['arming','recording'].includes(session?.status)?session:null);}
 function profile(){const id=session?.profile_id||$('record-profile').value;return (snapshot.profiles||[]).find(p=>p.id===id);}
 function readiness(){
@@ -95,7 +95,7 @@ $('episode-start').onclick=()=>{if(!$('episode-start').disabled)act('start','/st
 $('episode-stop').onclick=()=>{const live=active();if(live&&!$('episode-stop').disabled)act('stop','/stop',{session_id:live.id,request_id:uuid()});};
 $('record-export').onclick=()=>{if(!$('record-export').disabled)act('export','/export',{session_id:sessionId,request_id:uuid()});};
 $('record-publish').onclick=()=>{if(!$('record-publish').disabled)act('publish','/publish',{session_id:sessionId,request_id:uuid()});};
-function reset(){selectionGeneration++;savedReview.close();session=null;loadedSession='';profileSignature='';episodeNodes.clear();$('record-episodes').replaceChildren();$('record-study-link').hidden=true;readPending();setURL();error('');}
+function reset(){selectionGeneration++;savedReview.close();session=null;loadedSession='';$('record-name').value='';profileSignature='';episodeNodes.clear();$('record-episodes').replaceChildren();$('record-study-link').hidden=true;readPending();setURL();error('');render();}
 $('record-new').onclick=()=>{if(active()){error('현재 회차를 먼저 정지하세요. 새 구성은 다음 세션에 적용합니다.');return;}sessionId='';reset();$('record-name').value='';render();};
 $('record-session').onchange=async()=>{if(active()){error('현재 회차를 먼저 정지하세요.');render();return;}sessionId=$('record-session').value;reset();await refresh();};
 $('record-profile').onchange=()=>{renderProfile();availability();};for(const id of ['record-name',...Object.keys(timingFields)])$(id).oninput=availability;

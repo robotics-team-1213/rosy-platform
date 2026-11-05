@@ -56,7 +56,7 @@ def test_next_pending_locks_editing_until_both_lookups_finish(browser_workspace,
         assert len(delayed) == 1
         if failed:
             delayed.pop().fulfill(status=503, json={'error': 'held lookup failed'})
-            expect(page.locator('#pixel-error' if pixel else '#error')).to_contain_text('held lookup failed')
+            expect(page.locator('#pixel-error' if pixel else '#error')).to_contain_text('검수 서비스를 사용할 수 없습니다')
         else:
             route = delayed.pop()
             route.fulfill(response=route.fetch())
