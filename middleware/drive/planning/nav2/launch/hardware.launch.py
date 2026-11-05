@@ -24,6 +24,7 @@ from launch.substitutions import LaunchConfiguration
 
 from navigation.footprint_profile import load_footprint_profile
 from navigation.params_rewrite import write_prefixed_nav2_params
+from navigation.profile_source import default_profile_path
 from navigation.profile_limits import (
     load_motion_limits,
     validate_nav2_parameters,
@@ -198,7 +199,7 @@ def generate_launch_description():
         DeclareLaunchArgument("require_measured_footprint", default_value="false"),
         DeclareLaunchArgument(
             "profile_file",
-            default_value=os.environ.get("ROSY_PROFILE", "/etc/rosy/profile.yaml"),
+            default_value=default_profile_path(),
         ),
 
         IncludeLaunchDescription(
