@@ -22,6 +22,7 @@ export function createManualControl({scope, view, call, namedReason, confirmedAc
   actions.setAttribute("aria-label", "누르는 동안만 움직이는 저속 조종");
   const mode = document.createElement("ui-button");
   mode.type = "button";
+  mode.setAttribute("kind", "quiet");
   mode.textContent = "수동 모드로 전환…";
   mode.dataset.manualMode = "";
   mode.setAttribute("aria-describedby", reason.id);
