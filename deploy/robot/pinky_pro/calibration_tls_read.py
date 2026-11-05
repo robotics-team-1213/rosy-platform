@@ -3,6 +3,7 @@ import argparse
 import http.client
 import json
 import math
+from pathlib import Path
 import re
 import socket
 import ssl
@@ -60,6 +61,52 @@ def metadata(body):
                                   'label': public_text(session['owner'].get('label'))}}}
 
 
+def credential(private):
+    token = private.get('token') if type(private) is dict else None
+    if type(token) is not str or not token or len(token) > 4096 or not token.isascii() or any(ord(c) < 33 or ord(c) > 126 for c in token):
+        raise ValueError('credential')
+    return token
+
+
+def session_reply(connection, token):
+    connection.request('GET', '/api/v1/calibration/session', headers={'Authorization': 'Bearer '+token})
+    response = connection.getresponse()
+    if response.status != 200:
+        raise ValueError('status')
+    raw = response.read(LIMIT+1)
+    if len(raw) > LIMIT:
+        raise ValueError('body')
+    rendered = json.dumps(metadata(strict_json(raw)), allow_nan=False)
+    if token in rendered:
+        raise ValueError('credential_echo')
+    return rendered
+
+
+def legacy_loopback(private):
+    """Called inside pinned SSH; an explicit device legacy mode is required."""
+    connection = None
+    try:
+        runtime = Path('/etc/rosy/runtime.env').read_text(encoding='utf-8')
+        modes = [line.partition('=')[2].strip() for line in runtime.splitlines()
+                 if line.startswith('ROSY_API_TLS=')]
+        if modes != ['none']:
+            raise ValueError('transport')
+        port, timeout = private.get('port'), private.get('timeout')
+        if (type(port) is not int or not 1 <= port <= 65535
+                or type(timeout) not in (int, float) or not 0 < timeout <= 30):
+            raise ValueError('parameters')
+        token = credential(private)
+        connection = http.client.HTTPConnection('127.0.0.1', port, timeout=timeout)
+        print(session_reply(connection, token))
+        return 0
+    except Exception:
+        print('SSH loopback calibration check failed.', file=sys.stderr)
+        return 2
+    finally:
+        if connection is not None:
+            connection.close()
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--address', required=True)
@@ -78,28 +125,14 @@ def main():
         if len(supplied) > 8192:
             raise ValueError('credential')
         private = strict_json(supplied)
-        token = private.get('token') if type(private) is dict else None
-        if type(token) is not str or not token or len(token) > 4096 or not token.isascii() or any(ord(c) < 33 or ord(c) > 126 for c in token):
-            raise ValueError('credential')
+        token = credential(private)
         context = ssl.create_default_context(cafile=args.ca_file)
         context.minimum_version = ssl.TLSVersion.TLSv1_2
         connection = VerifiedConnection(args.address, args.hostname, args.port, context, args.timeout)
         # CA chain, validity and exact hostname/SNI verification complete BEFORE
         # the Authorization header is constructed or any HTTP bytes are sent.
         connection.connect()
-        connection.request('GET', '/api/v1/calibration/session', headers={'Authorization': 'Bearer '+token})
-        response = connection.getresponse()
-        if response.status != 200:
-            raise ValueError('status')
-        raw = response.read(LIMIT+1)
-        if len(raw) > LIMIT:
-            raise ValueError('body')
-        result = metadata(strict_json(raw))
-        # Receiver metadata cannot echo the credential through public fields.
-        rendered = json.dumps(result, allow_nan=False)
-        if token in rendered:
-            raise ValueError('credential_echo')
-        print(rendered)
+        print(session_reply(connection, token))
         return 0
     except Exception:
         print('Secure calibration check failed.', file=sys.stderr)
