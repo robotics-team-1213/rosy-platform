@@ -24,6 +24,47 @@ def _api():
     }
 
 
+def test_viewer_manual_controls_stay_locked_and_send_no_move(console_url):
+    from playwright.sync_api import expect, sync_playwright
+
+    api, sent = _api(), []
+    api["/api/fleet/session"] = {"principal_id": "test-viewer", "role": "viewer"}
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(playwright, api)
+        try:
+            def move(route):
+                sent.append(route.request.post_data_json)
+                route.fulfill(status=403, json={"detail": "operator required"})
+
+            page.route("**/api/fleet/do", move)
+            page.goto(console_url, wait_until="load")
+            expect(page.locator("#user-role")).to_contain_text("보기 전용")
+            _open_cards(page, "rosy_45")
+            page.wait_for_timeout(250)
+            controls = page.locator("[data-manual-direction]")
+            expect(controls).to_have_count(4)
+            for button in controls.all():
+                expect(button).to_be_disabled()
+                expect(button).to_have_attribute("reason", "운영자 권한이 필요합니다")
+            expect(page.locator("[data-manual-reason]")).to_contain_text("운영자 권한이 필요합니다")
+            button = page.locator('[data-manual-direction="forward"]')
+            button.hover()
+            page.mouse.down()
+            page.wait_for_timeout(250)
+            page.mouse.up()
+            page.keyboard.press("Tab")
+            for control in controls.all():
+                expect(control).not_to_be_focused()
+            page.keyboard.down("Space")
+            page.wait_for_timeout(250)
+            page.keyboard.up("Space")
+            expect(button).to_have_attribute("aria-pressed", "false")
+            assert sent == []
+            assert not errors
+        finally:
+            browser.close()
+
+
 @pytest.mark.parametrize("ending", ["release", "blur", "selection", "timeout", "keyboard", "cancel", "hidden", "pagehide"])
 def test_selected_robot_hold_ends_with_zero(console_url, ending):
     from playwright.sync_api import expect, sync_playwright
