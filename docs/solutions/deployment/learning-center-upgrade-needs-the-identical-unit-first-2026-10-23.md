@@ -1,7 +1,7 @@
 ---
 title: Upgrading the model-PC Learning Center in place needs the new commit's exact unit written first
 date: 2026-10-23
-last_updated: 2026-11-03
+last_updated: 2026-11-05
 category: deployment
 module: deploy/model_pc/install_learning_center.py (rosy-learning-center.service), deploy/model_pc/install_review_release.py
 problem_type: deployment_error
@@ -73,3 +73,19 @@ The source rule is also stated in `deploy/model_pc/README.md` beside the project
 - **Bridge job state.** Changing the bridge config (for example switching `authority` to `state`) makes the next run fail with `job inputs changed; use a new job directory`, because the job state is bound to the input signature. Point the unit's `--out` to a new folder (keep the old one) and `daemon-reload`.
 
 Evidence: sequence 33 was refused for the environment (packages added at 20:14 the same day), sequence 34 (same commit, new environment) applied. Sequence 35 installed on the center only after the `~/rosy-ml/bin` installer was replaced; the unit then carried `--workspace-links`. The bridge recovered after the `--out` move (authority `verified`, delivery `available: true`).
+
+### A model-code work lock need not block an independent review UI hotfix
+
+On 2026-11-05, active collection, review-pipeline and Isaac work held the model-code lock. The signed candidate was supplied normally but the updater returned `held: work lock busy`. The separate review service still needed the verified code from [PR #235](https://github.com/robotics-team-1213/rosy-platform/pull/235), which was queued for merge after its PR CI passed. This was a UI installation problem; model-code activation remained pending.
+
+[D-545](../../adr/D-545-model-pc-review-versioned-release.md) supports a separately versioned review release. `install_review_release.py` checks center jobs but does not acquire the model-code work lock or check GPU idle. Its successful UI install is therefore not model-code acceptance. Before using this path:
+
+1. Preserve the current accepted sequence as the review updater's minimum floor, the model-code current link/state, registered key, environments and configuration. Verify the signed archive and use a link-free source copy outside the review root/state.
+2. Check the review service's AI jobs as well as center jobs. `review_ai_jobs.Jobs.close()` stops its worker, so an empty center alone does not establish that a restart preserves active work. Require no queued/running review AI jobs and only the main review process in that unit's cgroup. Confirm unrelated jobs are outside it.
+3. Prevent new requests before the final idle check. For a dedicated Tailscale Serve front, record the full configuration, disable only that review HTTPS port, verify all other routes are unchanged, and wait for existing backend connections to drain. The documented `serve --https=<port> off` operation is scoped; do not reset Serve or stop the daemon. Restore the original background/proxy settings in `finally` and compare normalized configuration values. See the [official Serve CLI](https://tailscale.com/docs/reference/tailscale-cli/serve).
+4. With intake isolated, repeat the idle checks and run the supported installer using the existing Python, state, root and service. On failure retain the installer result and restore the prior unit/link. Keep database backups for recovery; do not replace newer human decisions with an older backup during a code rollback.
+5. Read back the new current link and source assets, active unit, restored routing, HTTPS authentication entry, configuration and label/history integrity. Installation exit zero alone is insufficient: HTTP 200 with a nonempty response and the restored front must also pass before reporting success.
+
+Verification on that date: helper compatibility was updated from the same verified source, the installer exited zero, the versioned review current link advanced, the authentication entry returned HTTPS 200, all Serve routes/configuration were restored, eight label/history tables matched their pre-upgrade snapshot hashes, and existing configuration and the Isaac process were preserved. The normal review updater subsequently reported waiting for the model-code/learning lock and left the hotfix active; this exercises lock deferral, not the sequence-floor branch. Runtime receipts remain in operator records without publishing raw labels or host configuration.
+
+The signed model-code candidate stayed queued with READY and its timer active. Do not report the held candidate as accepted. UI activation also does not establish learner execution, model quality or physical acceptance; a native-cycle dataset lease is not proof of exclusive GPU ownership.

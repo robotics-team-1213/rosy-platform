@@ -31,6 +31,33 @@ def browser_tests_enabled() -> bool:
     return "1" in (os.environ.get("ROSY_RUN_BROWSER_TESTS"), os.environ.get("ROSY_BROWSER_TESTS"))
 
 
+def goto_with_network_change_retry(page, url):
+    """Retry initial navigation once when Chromium aborts a document/script on network change."""
+    changes = []
+
+    def failed(request):
+        if request.resource_type in ('document', 'script') and request.failure == 'net::ERR_NETWORK_CHANGED':
+            changes.append(request.failure)
+
+    page.on('requestfailed', failed)
+    try:
+        for attempt in range(2):
+            changes.clear()
+            try:
+                response = page.goto(url)
+            except Exception as error:
+                if 'net::ERR_NETWORK_CHANGED' not in str(error):
+                    raise
+                changes.append(str(error))
+            if not changes:
+                return response
+            if attempt:
+                raise RuntimeError('net::ERR_NETWORK_CHANGED persisted across initial navigation retry')
+            print('Chromium ERR_NETWORK_CHANGED: retrying initial navigation once')
+    finally:
+        page.remove_listener('requestfailed', failed)
+
+
 def open_token_access(page) -> None:
     """Open the paired console's token fallback before using its controls."""
     try:  # a polling console may never go idle; the wait only covers the auth refresh
