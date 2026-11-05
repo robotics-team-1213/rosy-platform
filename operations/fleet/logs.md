@@ -5292,3 +5292,9 @@
 - 증거: 지연 hashchange RED 6ae6baea4d는 즉시 반환을 재현했다. dfa0363e2b의 현장 PC 101사례 중 실패2건은 실제 모듈 요청의 ERR_NETWORK_CHANGED와 같은 사건으로 결속했다. d3ae2203af 원격 harness10건과 같은 현장 PC의 전체 브라우저101건은 skip0/NEW0이다. 최종 FULL은 별도 검증한다.
 - gate 변화: 없음. 탐색 복구는 시험 본문·토큰 제출·API 호출·안전 조건의 재시도가 아니다. 공개 병합·서비스·장치 수용과 구분한다.
 - CE: 새 교훈 기록 — docs/solutions/test-failures/chromium-network-change-breaks-local-module-load-2026-11-05.md. 보이는 로컬 HTML만으로 모듈 초기화를 판단하지 않는 관측 근거를 남겼다.
+
+## 2026-11-05 · uncommitted · test(fleet): 팔 승인 HTTP 계약 시험의 논리 시계 통일
+
+- 변경: 승인 API fixture의 capability 읽기 시각과 store 시각에 기존 observer API fixture와 같은 고정 논리 시계를 주입한다. 실제 capability 신선도 제한과 승인 코드는 바꾸지 않는다.
+- 증거: 게시 CI에서 승인 HTTP 200 기대가 409로 실패했고, 같은 원본 커밋의 원격 단독 모듈 18건은 skip0/NEW0으로 통과했다. 원래 CI 응답에는 내부 거절 분기가 없어 500ms 경과를 원인으로 확정하지 않는다. 이번 변경은 계약 시험의 불필요한 실제 시계 의존성을 제거한다. 변경 후 계약 및 기존 stale/future/역행 시계 거절 시험은 별도 검증한다.
+- CE: 미해결 — 원래 CI의 거절 분기는 확인되지 않았다. 해결 교훈으로 등록하지 않는다.
