@@ -14278,3 +14278,8 @@ osy-d395-s1d\`.
 - 검증: remote-original manifest와 실제 원본203개 및 receipt PNG digest를 재대조해 unique203/누락0/불일치0, checksum LF/마지막개행을 확인했다. 제품107→02와 RED72→df97의 해당 blob diff0도 직접 확인했다. 이번 문서 작업에서 제품·시험·Git 이력을 변경하지 않았다.
 - 한계: no-nav7경로는 원래 본문PASS/추가capture N/A이며 pytest skip0이다. SIM320 현재 항목의 오른쪽31.453125px 잘림과 키보드/resize 자동 노출 미검증을 명시했다. focusVisible을 전체항목 가시성으로 세지 않는다.
 - gate 변화: 소스별 scoped 증거와 문서 결속이다. 별도 로그 무결성 선행3caa의148PASS는 공식 착지 대기이며 현행 UI 최종 G1/FULL·main·배포·실물 수용은 미완료다. CE: 해당 없음 — 공용 계약·정확한 가드·기존회귀와 원본으로 판단을 복원한다.
+
+## 2026-11-05 · uncommitted · docs(ui): 정상 main 병합의 회귀와 새 캡처 원본 결속
+- 변경: main-merge-followup.md에 정상 Learning 27경로·docs 2경로 병합, AI feedback/draft 경합과 미저장 preview 완료 guard의 실제 RED/GREEN을 소스별로 기록하고 새236행 main-merge.sha256을 추가했다. 기존153/203목록과 로그 원문은 보존했다.
+- 증거: commit 7893474ba454ef1a8f33a0ee13a18c30232cd338의 browser385·backend408·Node8은 각 별도 실행이다. 메뉴 source0111의14PASS/130원본·G3실제22PNG/8기준PASS와9route/static51소비처 alias만 결속한다. commit 10d7133e66b44153b5e65cf4fa7e8205d3adc087의 Pixel24PASS/0skip/NEW0·106원본은 별도 실행이고789→10d는 시험3파일56추가/1삭제·제품변경0이다. 새236원본 재해시 일치·경로중복0, 후보6개 사람mask/version불변·pending/완료disabled와 좁은 화면control의viewport한계를 기록했다.
+- gate 변화: Pixel독립G3는실제10d새27PNG/106원본전수재해시/8기준PASS·새차단0이다. 실제canvas초점과geometry.focused를구분하며좁은화면control동시가시성/scrollinteraction은미검증이다. 선행main3caa의공식39개NEW0·로컬착지는 별도이며22raw의skip사유미출력/cache재사용한계를 유지한다. UI최종G1·공식AUTO/FULL·main·배포·실물수용은 대기다. CE: 해당 없음 — 코드·회귀·실제원본·소스별후속문서로 판단을 복원한다.

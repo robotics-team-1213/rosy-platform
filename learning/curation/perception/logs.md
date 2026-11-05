@@ -470,3 +470,8 @@
 - 증거: 이전72의2PASS/4FAIL(outer0/0 대 inset8)→107의6PASS, 별도107의98PASS/NEW0과02의 제품 alias를 구분했다. a9d의14PASS/130원본은 유지하고, 새 optional capture의 no-nav timeout RED1 뒤 b955의 원래16경로 전체PASS/0skip/NEW0·JUnit실패/오류0을 확인했다. 추가203원본 digest는 모두 일치한다.
 - 한계:7개 no-nav 경로는 원래 본문PASS이며 추가capture만 N/A다. SIM320 current item right351.453125 대 nav right320은 일부 잘림이며 focusVisible=true를 온전한 노출로 오인하지 않는다. 키보드/resize 자동 노출은 미검증이다. source1a의 기존153개 및 다른SHA 실행을 새 전체PASS로 합산하지 않는다.
 - gate 변화: scoped source/화면 증거와 문서 결속이다. 별도3caa148PASS는 공식 착지 대기이고 UI 최종 G1/FULL·main·실학습·승격·실물/현장 수용은 미완료다. CE: 해당 없음 — 공용 여백·정확한 가드·원래route 회귀가 판단 근거를 보존한다.
+
+## 2026-11-05 · uncommitted · docs(learning): main 병합 뒤 AI 권한 가드와 Pixel 캡처 검증 결속
+- 변경: 정상main병합의 producer/consumer·권한·사람정답·draft/generation보존, 편집중AI feedback과지연후보분리, await뒤편집상태재검사, 미저장preview의완료/shortcut차단을 후속검증문서에 결속했다. optionalG2는 시험capture hook3파일만56추가/1삭제하며제품변경0이다. 기존모든로그본문과153/203목록은 보존한다.
+- 증거: 실제merge RED의selector오류1개를제품회귀와분리했고 정정RED1→AI경합GREEN2, preview완료enabled RED1→guard보완을기록했다. commit 7893474ba454ef1a8f33a0ee13a18c30232cd338의browser385/backend408/Node8, source0111메뉴14·9route51소비처alias, commit 10d7133e66b44153b5e65cf4fa7e8205d3adc087의Pixel24는각별도근거다. Pixel은후보6/class Enter12/workspace2/resize2/opinion2이며0skip/NEW0·106원본을확인했다. 후보6개의overflow0·사람mask/version불변·완료disabled와viewport밖control한계를보존했고메뉴130+Pixel106의새236원본은재해시일치/경로중복0이다.
+- gate 변화: Pixel독립G3는실제10d새27PNG/106전수재해시/8기준PASS·새차단0이며실제canvas초점과geometry.focused를구분했다. 좁은control동시viewport가시성/scrollinteraction은미검증이다. 선행main3caa의공식39개NEW0·로컬착지와22raw skip/cache한계는별도다. UI최종G1·공식AUTO/FULL·main·실학습·모델승격·배포·실물/현장수용은대기다. CE: 해당 없음 — 실제코드·회귀·원본과 docs/validation/uiux-surfaces-2026-11-05/main-merge-followup.md로판단을재구성한다.
