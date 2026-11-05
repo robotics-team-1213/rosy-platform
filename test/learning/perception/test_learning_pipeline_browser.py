@@ -57,7 +57,20 @@ def test_home_routes_and_keyboard_section_navigation(browser_workspace,width,the
         if output:=os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
             capture=Path(output)/f'learning-home-{target}-{theme}-{width}.png'
             capture.parent.mkdir(parents=True,exist_ok=True)
+            link.focus()
+            page.keyboard.press('Tab')
+            page.keyboard.press('Shift+Tab')
+            expect(link).to_be_focused()
+            metrics=link.evaluate("""node=>{const s=getComputedStyle(node),nav=node.closest('nav');
+              return {paint:Object.fromEntries(['display','alignItems','justifyContent','textAlign','paddingTop','paddingRight','paddingBottom','paddingLeft',
+                'minHeight','fontSize','fontWeight','lineHeight','borderRadius','borderTopWidth','backgroundColor','color','appearance',
+                'outlineStyle','outlineWidth','outlineColor','outlineOffset'].map(key=>[key,s[key]])),item:node.getBoundingClientRect().toJSON(),
+                nav:nav.getBoundingClientRect().toJSON(),gap:getComputedStyle(nav).gap,current:node.getAttribute('aria-current'),
+                focus:document.activeElement===node,focusVisible:node.matches(':focus-visible'),overflow:document.documentElement.scrollWidth-innerWidth};}""")
             page.screenshot(path=str(capture))
+            capture.with_suffix('.json').write_text(json.dumps(dict(viewport=page.viewport_size,theme=theme,
+                state=target,filename=capture.name,**metrics),ensure_ascii=False,indent=2),encoding='utf-8')
+            page.locator('#'+target).focus()
     assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
     if output:=os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
         target=Path(output)/f'learning-home-routes-{theme}-{width}.png'

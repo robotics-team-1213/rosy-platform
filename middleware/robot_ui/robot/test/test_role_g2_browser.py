@@ -488,6 +488,24 @@ def test_device_procedure_places_status_and_actions_before_long_readouts(tmp_pat
             (capture_dir / f"administrator-device-long-values-{width}x{height}.json").write_text(json.dumps({
                 "viewport": page.viewport_size, "headers": header_metrics, "theme": page.evaluate("document.documentElement.dataset.theme"),
                 "filename": f"administrator-device-long-values-{width}x{height}.png", "state": "long host readouts"}, ensure_ascii=False, indent=2), encoding="utf-8")
+            if os.getenv("ROSY_SCREENSHOT_DIR"):
+                previous_theme = page.evaluate("document.documentElement.getAttribute('data-theme')")
+                for theme in ("dark", "light"):
+                    page.evaluate("theme=>document.documentElement.dataset.theme=theme", theme)
+                    for panel in ("host.system", "host.operations"):
+                        _select_task(page, panel)
+                        selected = page.get_by_role("tab", selected=True)
+                        selected.focus(); page.keyboard.press("Tab"); page.keyboard.press("Shift+Tab")
+                        metrics = selected.evaluate("""node=>{const s=getComputedStyle(node),nav=node.closest('nav');return {
+                          paint:Object.fromEntries(['display','alignItems','justifyContent','textAlign','paddingTop','paddingRight','paddingBottom','paddingLeft',
+                            'minHeight','fontSize','fontWeight','lineHeight','borderRadius','borderTopWidth','backgroundColor','color','appearance',
+                            'outlineStyle','outlineWidth','outlineColor','outlineOffset'].map(key=>[key,s[key]])),item:node.getBoundingClientRect().toJSON(),
+                          nav:nav.getBoundingClientRect().toJSON(),gap:getComputedStyle(nav).gap,selected:node.getAttribute('aria-selected'),
+                          focus:document.activeElement===node,focusVisible:node.matches(':focus-visible'),overflow:document.documentElement.scrollWidth-innerWidth};}""")
+                        target = capture_dir / f"robot-subnav-{panel.replace('.', '-')}-{theme}-{width}x{height}.png"
+                        page.screenshot(path=str(target))
+                        target.with_suffix('.json').write_text(json.dumps(dict(viewport=page.viewport_size,theme=theme,state=panel,filename=target.name,**metrics),ensure_ascii=False,indent=2),encoding="utf-8")
+                page.evaluate("theme=>theme===null?document.documentElement.removeAttribute('data-theme'):document.documentElement.setAttribute('data-theme',theme)", previous_theme)
             if width == 390:
                 assert result["operationsTop"] < height, result
             button = page.get_by_role("button", name="사업장 Wi-Fi로 전환", exact=True)

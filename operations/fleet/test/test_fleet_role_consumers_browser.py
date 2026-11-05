@@ -1,6 +1,9 @@
 """Measure shared role styles on the actual Fleet consumers; no device writes."""
 
 from urllib.parse import urlparse
+import json
+import os
+from pathlib import Path
 import re
 
 import pytest
@@ -65,6 +68,30 @@ def test_same_hierarchy_links_and_task_tabs_share_rendered_subnav(tmp_path, widt
                 expect(panel).to_have_attribute('aria-labelledby',selected.get_attribute('id'))
                 expect(page.get_by_role('tablist',name='작업 선택')).to_have_attribute('aria-orientation','vertical' if width>=1024 else 'horizontal')
             assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
+            if output := os.getenv('ROSY_SHOT_DIR'):
+                for state in ('initial', 'second'):
+                    if state == 'second':
+                        selected = page.get_by_role('link', name='지도 설정', exact=True) if path.endswith('site-map') else page.get_by_role('tab', name='로봇 등록', exact=True)
+                        selected.click()
+                    if path.endswith('site-map'):
+                        expect(selected).to_have_attribute('aria-current', re.compile('^(page|step)$'))
+                    else:
+                        expect(selected).to_have_attribute('aria-selected', 'true')
+                    selected.focus()
+                    page.keyboard.press('Tab')
+                    page.keyboard.press('Shift+Tab')
+                    expect(selected).to_be_focused()
+                    metrics = selected.evaluate("""(node,keys)=>{const s=getComputedStyle(node),nav=node.closest('nav');
+                      return {paint:Object.fromEntries(keys.map(key=>[key,s[key]])),item:node.getBoundingClientRect().toJSON(),
+                        nav:nav.getBoundingClientRect().toJSON(),gap:getComputedStyle(nav).gap,
+                        current:node.getAttribute('aria-current'),selected:node.getAttribute('aria-selected'),
+                        focus:document.activeElement===node,focusVisible:node.matches(':focus-visible'),
+                        overflow:document.documentElement.scrollWidth-innerWidth};}""", list(rendered[-1]))
+                    target = Path(output) / f'hierarchy-{path.rsplit("/",1)[-1]}-{state}-{theme}-{width}x{height}.png'
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    page.screenshot(path=str(target))
+                    target.with_suffix('.json').write_text(json.dumps(dict(viewport=page.viewport_size, theme=theme,
+                        route=path, state=state, filename=target.name, **metrics), ensure_ascii=False, indent=2), encoding='utf-8')
         assert not writes
         page.close()
 
