@@ -14265,6 +14265,13 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 독립 실자료 품질·시뮬 작업·실물 수용을 합성 통계 검증으로 올리지 않는다. 착지·게시·배포는 후속 검증을 따른다.
 - CE: 새 교훈 기록 — [도움말과 비동기 착지](solutions/workflow-issues/land-async-help-is-a-stopped-snapshot-2026-11-05.md). 실제 main ancestry로 도움말 snapshot의 미착지를 확인했다.
 
+## 2026-11-05 · uncommitted · docs(deploy): 작업 잠금을 보존하며 검수 UI만 갱신한 수용 조건
+
+- 변경: 기존 Learning Center 배포 교훈에 model-code 보류와 독립 UI hotfix를 구분하고, 외부 접수 차단·AI/center 작업과 cgroup 확인·원복 및 최종 HTTPS 수용 조건을 보완했다.
+- 증거: PR #235의 동일 head에서 공개 검사28개와 CI 통과 후 지원 설치기로 UI를 갱신했다. HTTPS200·Serve 설정 원복·라벨/이력8테이블 hash 일치·기존 설정 및 Isaac 작업 보존을 확인했다. 공통 model-code 후보는 작업 잠금 때문에 보류된 상태다.
+- gate 변화: 모델 코드 수락·학습 실행·모델 품질·실물 수용으로 승격하지 않는다. 병합 대기열의 추가 CI는 별도 진행 중이다.
+- CE: 기존 교훈 갱신 — [Learning Center 배포](solutions/deployment/learning-center-upgrade-needs-the-identical-unit-first-2026-10-23.md). 기존 floor와 작업 소유권을 유지하는 검증된 UI 갱신 절차다.
+
 ## 2026-11-05 · uncommitted · 화면 지도 UI·UX 최종 후보 근거 결속
 - 변경: validation/uiux-surfaces-2026-11-05에30카드·실제 상태/뷰포트 계약·G3·원본1656 PNG 해시·Robot60셀·구현 판단15개를 보존했다. 이전 실패 이력과 최종 통과를 구분한다.
 - 증거: 제품42c97133c1에서 관련440개·홈25개·공통 G1241개가 각각0 skip/NEW0. 최종 독립 Learning G3는12표면·여덟 항 PASS,439개 파일 해시 불일치0. R3/R4/R6/R8은 각 독립 task review와 실제 상태 캡처로 결속했다. 이후 시험 query 보완36개 통과,6478fe9b27까지 제품 동일.
