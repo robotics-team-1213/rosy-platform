@@ -228,7 +228,7 @@ function enable(){updatePages(workspace?.page,busy||loading||!!stroke||draft.len
  for(const id of ['pixel-class','pixel-radius','pixel-tolerance-mode','pixel-tolerance'])$(id).disabled=!editable;
  if($('pixel-unknown'))$('pixel-unknown').disabled=!editable;
  for(const id of ['pixel-fill','pixel-undo','pixel-exclude','pixel-reopen','pixel-approve']){$(id).disabled=id==='pixel-reopen'?locked||frame?.status==='excluded':!editable;$(id).reason=forbidden?'검수 권한이 없습니다. 최신 내용을 다시 불러오세요.':locked?'사진 불러오기와 저장을 마친 뒤 다시 시도하세요.':excluded?'제외 사진은 먼저 재검수로 돌리세요.':!review?.classes?'자료 등록에서 검증된 class 파일을 연결하세요.':'';
-  if((dirty||selection)&&id!=='pixel-undo'){$(id).disabled=true;$(id).reason='현재 초안을 적용하거나 버린 뒤 진행하세요.';}}
+  if((dirty||selection||id==='pixel-approve'&&candidateDraftReady())&&id!=='pixel-undo'){$(id).disabled=true;$(id).reason=id==='pixel-approve'&&candidateDraftReady()?'미저장 AI 초안을 저장하거나 버린 뒤 완료하세요.':'현재 초안을 적용하거나 버린 뒤 진행하세요.';}}
  $('pixel-fill').disabled=!labelReady||dirty||selection;
  if(!labelReady)$('pixel-fill').reason='먼저 픽셀 클래스를 선택하세요.';
  $('pixel-sample-apply').disabled=!labelReady||locked||dirty||(tool==='polygon'?polygon.length<3:!hasSamples||previewing||samplePixels===0);
