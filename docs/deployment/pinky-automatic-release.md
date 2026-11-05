@@ -108,7 +108,7 @@ claim·source health·trial/rollback 가드를 바꾸지 않는다. 실제 OS �
 수용은 별도다. 기존 unit 문제와 frozen OS 소유 경계는
 [검증된 OS poll 교훈](../solutions/deployment/os-update-poll-starts-conflicting-io-2026-11-05.md)을 따른다.
 
-검증 기록(2026-11-06): 소스 `541621bd8a47a1752a1e4efb565d0696bec8cf02`를 원격 시험 PC에서
+검증 기록(2026-11-06): source commit `541621bd8a47a1752a1e4efb565d0696bec8cf02`를 원격 시험 PC에서
 OS coordinator·기존 payload coordinator·publisher·preparer·고정 snapshot·완전 source inventory·
 rollout·영향 분류의 8개 시험 파일로 확인했다. **219 passed, skip 0, NEW/known/flaky 0**.
 고정 설치본의 import 폐쇄성, run/attempt 고정, artifact 오류 거절, 실제 coordinator의 OS
