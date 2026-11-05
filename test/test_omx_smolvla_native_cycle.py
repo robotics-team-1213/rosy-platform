@@ -63,7 +63,8 @@ assert receipt['evaluation']['samples'] == 4 and receipt['evaluation']['physical
 model = (run/'trainer/checkpoints/last/pretrained_model').resolve()
 moved = tmp/'moved-policy'
 shutil.move(str(model), moved)
-shutil.move(str(run/'inputs'), tmp/'hidden-original-inputs')
+if policy_type == 'smolvla':
+    shutil.move(str(run/'inputs'), tmp/'hidden-original-inputs')
 assert _artifact_files(moved) == receipt['artifact_files']
 env = dict(os.environ, HF_HOME=str(tmp/'empty-cache'), HF_HUB_CACHE=str(tmp/'empty-cache/hub'),
            HF_HUB_OFFLINE='1', HF_DATASETS_OFFLINE='1')
