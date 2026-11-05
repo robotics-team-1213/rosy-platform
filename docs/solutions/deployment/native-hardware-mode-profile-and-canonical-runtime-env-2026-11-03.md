@@ -1,8 +1,9 @@
 ---
 title: Native hardware mode needs profile.yaml shipped and /etc/rosy edits canonicalized; direct file edits brick CORE restart admission
 date: 2026-11-03
+last_updated: 2026-11-06
 category: deployment
-module: deploy/robot/pinky_pro/native, deploy/robot/pinky_pro/config, middleware/drive/planning/nav2
+module: deploy/robot/pinky_pro/native, deploy/robot/pinky_pro/config, middleware/drive/planning/nav2, middleware/core/gateway, contracts/foundation
 problem_type: deployment_error
 component: deployment
 symptoms:
@@ -10,6 +11,7 @@ symptoms:
   - "after a hand edit of /etc/rosy/runtime.env (sed), rosy-core restart fails 'A dependency job for rosy-core.service failed'; rosy-sd-provision prints {\"phase\":\"HOLD\",\"reason\":\"OS_STATE_HOLD\"}"
   - "verify_ready fails with 'root setting differs from canonical projection' or 'shared data owner/group/permissions differ'"
   - "SLAM backend starts slam_toolbox with odom_frame 'odom', scan_topic '/scan' although the robot is namespaced"
+  - "motor commissioning still requires Nav2 after restoring runtime.mode=motor with navigation.readiness.required=true"
 root_cause: missing_rollout_step
 resolution_type: procedure
 applies_when:
@@ -27,7 +29,7 @@ restart at all. Each failure surfaced as a different error; none named its cause
 ## Cause
 
 - The native payload never installs a device profile. Compose bind-mounts
-  `config/profile.hardware.yaml` → `/etc/rosy/profile.yaml`
+  `deploy/robot/pinky_pro/config/profile.hardware.yaml` → `/etc/rosy/profile.yaml`
   (`deploy/robot/pinky_pro/compose.yaml`), but the native deployment path has no
   equivalent install, so `hardware.launch.py` aborts: no profile, no hardware
   graph.
@@ -49,7 +51,7 @@ restart at all. Each failure surfaced as a different error; none named its cause
 ## Fix (bench procedure, robot-side)
 
 1. Install the profile from the repo:
-   `install -m 0644 config/profile.hardware.yaml /etc/rosy/profile.yaml`.
+   `install -m 0644 deploy/robot/pinky_pro/config/profile.hardware.yaml /etc/rosy/profile.yaml`.
 2. Change runtime mode only through the supported path (sudo, `python3 -I -B`):
    `from os_state_config import commit_runtime, common_lock` — read live bytes,
    `expected = shared._generation()[2]['etc/rosy/runtime.env']`, then
@@ -77,3 +79,28 @@ restart at all. Each failure surfaced as a different error; none named its cause
 Ship `profile.hardware.yaml` in the native payload install (repo change, not
 done in this bench session) and consider a native equivalent of the compose
 readiness/profile wiring; until then every native unit hits symptom 1.
+
+## 2026-11-06 후속 — motor 복귀에도 남는 Nav2 readiness 요구
+
+위 Next와 장치 관찰은 2026-11-03 시점 기록이다. 후속 소스 검증에서
+`navigation.readiness.required=true`를 유지한 motor 모드도 backend profile만 선택해
+Nav2를 요구하는 문제를 재현했다. payload 갱신 후 G4 봉인은 이전 source/release와 결속돼
+무효가 되고, navigation unit은 새 G4 승인 전에는 시작할 수 있다. 이때 G4용 motor 조종까지
+Nav2에 의존시키면 재커미셔닝 순서가 막힌다.
+
+후보 수정은 `CoreServices.build`가 motor 모드의 명시 `profiles.motor`를 선택하게 하고,
+shipped default에 `[motor_adapter]`를 둔다. 필수 gate에서 profile 자체가 없거나
+`motor_adapter`가 빠지면 설정 오류로 거절한다. hardware의 localization/SLAM 요구 목록,
+required 설정, lease 수명, CORE 최종 writer·E-Stop·watchdog·navigation 승인 조건은 바꾸지 않는다.
+gate가 꺼진 legacy core/motor 설정은 기존 backend 구성을 유지한다.
+
+원격 RED `ac6386a96d`에서 motor 통과·lease 실패·잘못된 profile에 관한 6개 실패를 확인했고,
+후보 source `051927f313`에서 관련 6개 suite 346개를 통과했다(skip 0). 실제 API의
+fresh motor lease 수락, 누락·만료 시 409와 CommandManager 최종 0, hardware 두 backend의
+각 구성요소 누락 HOLD 및 기존 G4 승인 거절을 포함한다. 이 SHA는 미게시 검증 후보이며
+실물에 반영됐다는 뜻이 아니다.
+
+복구는 검토된 서명 소스로 갱신한 뒤 정본 runtime 설정 경로로 motor/localization을 선택하고,
+필수 readiness를 유지한 채 새 G4를 측정·봉인하는 순서다. UI/G4에서는 현장 영상·원시 odom·
+단일 CORE publisher를 별도로 확인한다. 범용 CORE teleop에 새 odom freshness 하드가드가
+추가됐다고 보고하지 않는다. 이 후속 변경의 실제 장치 G4·SLAM 수용은 별도로 남는다.

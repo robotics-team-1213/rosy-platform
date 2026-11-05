@@ -45,7 +45,7 @@ class GitHub:
             assert fields["draft"] == fields["prerelease"] == "true"
             self.operations.append("create")
             self.release = dict(id=17, tag_name=fields["tag_name"], target_commitish=fields["target_commitish"],
-                                draft=True, prerelease=True)
+                                draft=True, prerelease=True, body=fields["body"])
             result = dict(self.release)
             if self.fault == "id_missing": result.pop("id")
             if self.fault == "id_bool": result["id"] = True
@@ -60,7 +60,7 @@ class GitHub:
             raw = path.read_bytes()
             self.uploaded[path.name] = raw
             assert "Content-Length: " + str(len(raw)) in argv
-            self.assets[path.name] = dict(name=path.name, size=len(raw), digest="sha256:" + hashlib.sha256(raw).hexdigest())
+            self.assets[path.name] = dict(id=100 + len(self.assets), name=path.name, size=len(raw), digest="sha256:" + hashlib.sha256(raw).hexdigest())
             result = self.assets[path.name]
             if self.fault == "partial": self.assets.pop(next(iter(self.assets)))
             if self.fault == "extra": self.assets["extra"] = dict(name="extra", size=1, digest="sha256:" + "0" * 64)
@@ -76,7 +76,15 @@ class GitHub:
             assert "draft=false" in argv and "prerelease=true" in argv
             self.operations.append("publish")
             self.release["draft"] = False
+            self.refs = [dict(ref="refs/tags/" + self.release["tag_name"],
+                              object=dict(type="commit", sha=self.release["target_commitish"]))]
             result = self.release
+        elif "/releases/assets/" in endpoint:
+            asset_id = int(endpoint.rsplit("/", 1)[-1])
+            asset = next(item for item in self.assets.values() if item["id"] == asset_id)
+            raw = self.uploaded[asset["name"]]
+            if self.fault == "readback": raw += b"tampered"
+            return 0, raw.decode("utf-8"), ""
         elif endpoint.endswith("/releases/17"):
             result = dict(self.release, assets=list(self.assets.values()))
             if self.fault == "source": result["target_commitish"] = "a" * 40
@@ -119,6 +127,67 @@ def test_default_dry_run_has_no_github_mutations(prepared):
     hub = GitHub()
     publish(prepared, hub)
     assert not hub.calls
+
+
+def closed(prepared):
+    directory, _, value, private = prepared
+    policy = rollout(value)
+    policy["canary"] = []
+    policy["canary_ok"] = False
+    raw = json.dumps(policy).encode()
+    (directory / "os-rollout.json").write_bytes(raw)
+    (directory / "os-rollout.json.sig").write_text(sign_checksums(raw, private) + "\n")
+
+
+def test_publication_only_refuses_a_real_canary_before_github(prepared):
+    hub = GitHub()
+    with pytest.raises(ValueError, match="authorize no canary"):
+        publish(prepared, hub, apply=True, publication_only=True)
+    assert not hub.calls
+
+
+def test_owned_draft_resumes_matching_upload_without_duplicate_release(prepared):
+    closed(prepared)
+    hub, transaction = GitHub(), {"nonce": "a" * 32}
+    checkpoints = []
+
+    def journal(record):
+        checkpoints.append(record.copy())
+        transaction.update(record)
+
+    hub.fault = "upload"
+    with pytest.raises(ValueError):
+        publish(prepared, hub, apply=True, publication_only=True, transaction=transaction, journal=journal)
+    assert checkpoints[0]["assets"] and "release_id" not in checkpoints[0]
+    assert transaction["release_id"] == 17 and len(hub.assets) == 1
+    hub.fault = None
+    result = publish(prepared, hub, apply=True, publication_only=True, transaction=transaction, journal=journal)
+    assert result["applied"] and transaction["published"] is True
+    assert hub.operations.count("create") == 1 and hub.operations.count("upload") == 5
+    # Lost final journal acknowledgement resumes public readback, never PATCHes twice.
+    publish(prepared, hub, apply=True, publication_only=True, transaction=transaction, journal=journal)
+    assert hub.operations.count("publish") == 1
+
+
+def test_unknown_nonce_cannot_adopt_an_existing_draft(prepared):
+    closed(prepared)
+    hub, transaction = GitHub(), {"nonce": "a" * 32}
+    hub.fault = "upload"
+    with pytest.raises(ValueError):
+        publish(prepared, hub, apply=True, publication_only=True, transaction=transaction,
+                journal=lambda row: transaction.update(row))
+    hub.fault = None
+    with pytest.raises(ValueError, match="identity"):
+        publish(prepared, hub, apply=True, publication_only=True, transaction={"nonce": "b" * 32}, journal=lambda row: None)
+    assert hub.operations.count("create") == 1
+
+
+def test_actual_remote_signed_sidecar_bytes_are_read_back(prepared):
+    closed(prepared)
+    hub = GitHub()
+    hub.fault = "readback"
+    with pytest.raises(ValueError, match="sidecar bytes"):
+        publish(prepared, hub, apply=True, publication_only=True)
 
 
 @pytest.mark.parametrize("size", [16 * 1024**3 + 1, 16 * 1024**3 + 2])
@@ -291,7 +360,8 @@ def test_tag_replacement_after_verification_cannot_publish_the_replacement(prepa
         return result
 
     directory, public, value, _ = prepared
-    module().publish(directory, public, release_id=value["release_id"], source_revision=value["source_revision"],
-                     gh=transport, apply=True)
+    with pytest.raises(ValueError, match="public tag"):
+        module().publish(directory, public, release_id=value["release_id"], source_revision=value["source_revision"],
+                         gh=transport, apply=True)
     assert created["draft"] is False
     assert replacement["draft"] is True

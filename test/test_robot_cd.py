@@ -47,6 +47,13 @@ def test_release_ids_include_reservations_and_device_versions():
         "payload-reserved-2026.10.05-045", "2026.10.05-044"]) == "2026.10.06-046"
 
 
+def test_feature_release_ids_share_the_existing_sequence():
+    assert module().next_release_id("2026.11.06", [
+        "payload-v2-2026.11.05-165", "payload-reserved-2026.11.05-164",
+        "payload-2026.10.10-163", "2026.11.05-004",
+    ]) == "2026.11.06-166"
+
+
 def artifact(path, sha=SHA, link=False):
     with tarfile.open(path, "w:gz") as bundle:
         for name, content in [("source-revision.txt", sha + "\n"),
@@ -554,14 +561,72 @@ def test_finished_build_waits_for_ci_before_signing(tmp_path):
     assert json.loads((tmp_path / "state.json").read_text())["phase"] == "preparing"
 
 
-def test_older_release_than_a_published_one_is_never_signed(tmp_path):
+@pytest.mark.parametrize("prefix", ["payload-", "payload-v2-"])
+def test_older_release_than_a_published_one_is_never_signed(tmp_path, prefix):
     tool = module()
     tool.write_json(tmp_path / "state.json", {"sha": SHA, "phase": "preparing", "release_id": "2026.10.05-045"})
     coordinator = tool.Coordinator({**CONFIG, "state_dir": tmp_path},
                                    gh=github_for([run()], tags=["payload-reserved-2026.10.06-050",
-                                                                "payload-2026.10.08-054"]))
+                                                                f"{prefix}2026.10.08-054"]))
     assert coordinator.tick() == "superseded"
     assert json.loads((tmp_path / "state.json").read_text())["phase"] == "failed"
+
+
+def test_explicit_host_pin_is_used_by_abi_and_publisher_ssh(tmp_path, monkeypatch):
+    tool = module()
+    monkeypatch.syspath_prepend(str(ROOT / "tools/release"))
+    import prepare_payload_release as prepare
+    import publish_payload_release as publish
+    pins = tmp_path / "verified_known_hosts"
+    pins.write_text("public host pins\n")
+    calls = []
+    monkeypatch.setattr(prepare, "run_ssh", lambda argv: (calls.append(argv) or (0, "ok", "")))
+    coordinator = tool.Coordinator({**CONFIG, "state_dir": tmp_path / "state",
+                                   "ssh_known_hosts": str(pins), "ssh_jump": "approved-jump"})
+    coordinator.ssh(prepare.ssh_argv("robot-a", tmp_path))
+    publisher = publish.Publisher(
+        release_id="2026.11.06-166", repo="team/robots", work_dir=tmp_path / "publish",
+        key_name="release-key", private_key=tmp_path / "key", public_key=tmp_path / "public",
+        local_appdata=tmp_path, evidence_dir=tmp_path, gh=None, ssh=coordinator.ssh,
+        now=None, monotonic=None, sleep=None)
+    publisher.ssh("robot-a", "hostname")
+    assert len(calls) == 2
+    for argv in calls:
+        assert [a for a in argv if a.startswith("UserKnownHostsFile=")] == [f"UserKnownHostsFile={pins}"]
+        assert "StrictHostKeyChecking=yes" in argv
+        assert "BatchMode=yes" in argv
+        assert argv[1:3] == ["-J", "approved-jump"]
+        assert argv[-2] == "rosy@robot-a"
+
+
+@pytest.mark.parametrize("kind", ["relative", "missing", "directory", "whitespace", "quote"])
+def test_config_refuses_unusable_explicit_host_pin(tmp_path, monkeypatch, kind):
+    tool = module()
+    monkeypatch.setattr(tool, "MAX_STATE_DIR", 4096)
+    monkeypatch.setattr(tool, "verify_snapshot", lambda _: None)
+    pins = tmp_path / {"whitespace": "bad pins", "quote": "bad'pins"}.get(kind, "pins")
+    if kind == "directory":
+        pins.mkdir()
+    elif kind != "missing":
+        pins.write_text("public pins")
+    configured = "relative-pins" if kind == "relative" else str(pins)
+    path = tmp_path / "config.json"
+    tool.write_json(path, {**CONFIG, "state_dir": str(tmp_path), "trusted_root": str(ROOT),
+                          "ssh_known_hosts": configured})
+    with pytest.raises(ValueError, match="ssh_known_hosts"):
+        tool.load_config(path)
+
+
+def test_config_accepts_explicit_public_host_pin(tmp_path, monkeypatch):
+    tool = module()
+    monkeypatch.setattr(tool, "MAX_STATE_DIR", 4096)
+    monkeypatch.setattr(tool, "verify_snapshot", lambda _: None)
+    pins = tmp_path / "pins"
+    pins.write_text("public pins")
+    path = tmp_path / "config.json"
+    tool.write_json(path, {**CONFIG, "state_dir": str(tmp_path), "trusted_root": str(ROOT),
+                          "ssh_known_hosts": str(pins)})
+    assert tool.load_config(path)["ssh_known_hosts"] == str(pins)
 
 
 def test_preparation_refusal_ends_after_three_ticks(tmp_path, monkeypatch):

@@ -2105,3 +2105,9 @@ clpy.duration을 추가했다(bridge AGENTS의 두 파일 함께 갱신 규칙).
 - 증거: 게이트 시험 원격 affected 실행 예정(착지 전). 기본 설정(끄임)에서는 스냅샷 모양 불변 — 신규 gateway 시험이 확인
 - gate 변화: 없음
 - CE: 해당 없음
+
+## 2026-11-06 · 051927f313 · fix(core): motor 커미셔닝 readiness profile
+- 변경: 필수 motor gate는 명시적인 `profiles.motor`와 `motor_adapter`를 요구한다. hardware의 backend별 Nav2 요구와 disabled legacy 구성은 유지한다.
+- 증거: 원격 RED ac6386a96d 6개 실패 후 AI PC에서 관련6suite 346passed/skip0. 실제 API fresh motor lease 수락·누락/만료409·CommandManager 최종0, hardware 각 성분 HOLD 및 기존 G4 승인 거절을 확인했다. 독립 계약 검토 무발견이다.
+- gate 변화: 소스 회귀 근거이며 배포·실물 G4/SLAM 수용은 미실행이다. 게시용 canonical FULL은 후속 전체 source에서 별도 조정한다.
+- CE: 기존 교훈 갱신 — `docs/solutions/deployment/native-hardware-mode-profile-and-canonical-runtime-env-2026-11-03.md`에 갱신 후 재커미셔닝 순환 의존과 복구 경계를 추가했다.

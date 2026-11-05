@@ -126,6 +126,33 @@ def _tools_revision():
         raise ValueError('operator preparation requires a committed source checkout') from error
 
 
+def _snapshot_tools_source(repository, revision):
+    """Authenticate the installed signer against immutable operator Git objects.
+
+    The repository is only an archive source; neither its HEAD nor worktree code
+    is imported. In particular this revision is NOT the incoming image revision.
+    """
+    from tools.release.robot_cd import verify_snapshot
+    verify_snapshot(ROOT)
+    manifest = json.loads((ROOT / 'trusted-snapshot.json').read_text(encoding='utf-8'))
+    if revision != manifest['source_revision']:
+        raise ValueError('OS tools revision differs from the installed trusted snapshot')
+    repository = Path(repository).resolve(strict=True)
+    try:
+        kind = subprocess.run(['git', '-C', str(repository), 'cat-file', '-t', revision],
+            check=True, capture_output=True, timeout=30).stdout.strip()
+        if kind != b'commit':
+            raise ValueError('OS tools source is not a commit')
+        for name in manifest['files']:
+            raw = subprocess.run(['git', '-C', str(repository), 'show', revision + ':' + name],
+                check=True, capture_output=True, timeout=30).stdout
+            if raw.replace(b'\r', b'') != (ROOT / name).read_bytes().replace(b'\r', b''):
+                raise ValueError('OS tools archive differs from the authenticated signer snapshot')
+    except (OSError, subprocess.SubprocessError) as error:
+        raise ValueError('OS tools immutable source objects are unavailable') from error
+    return repository, revision
+
+
 def _approved_cms():
     import yaml
     section = yaml.safe_load((ROOT / 'deploy/robot/pinky_pro/image/inputs.lock.yaml').read_bytes())['os_updates']
@@ -152,7 +179,7 @@ def _guest_bytes(guest, path, limit):
     return result.stdout
 
 
-def _stage(guest, action):
+def _stage(guest, action, timeout=8 * 3600):
     arguments = {
         'prepare': '--dist /work/dist --output /work/prepared --public-key /work/operator-release.pub.pem --certificate /work/operator-cms.pem',
         'finalize': '--prepared /work/prepared --output /work/finalized --cms /work/operator.cms --certificate /work/operator-cms.pem',
@@ -161,7 +188,7 @@ def _stage(guest, action):
                   '--public-key /work/operator-release.pub.pem --certificate /work/operator-cms.pem',
     }
     result = guest.run('cd /work/source && python3 deploy/robot/pinky_pro/release/os_bundle_external.py '
-                       + action + ' ' + arguments[action], timeout=8 * 3600)
+                       + action + ' ' + arguments[action], timeout=timeout)
     if result.strip() != 'OS_EXTERNAL_' + action.upper() + '_VERIFIED':
         raise ValueError('owned guest did not confirm the requested OS stage')
 
@@ -182,7 +209,8 @@ def _remove_owned(path, parent):
 
 
 def prepare_release(target, dist, output, private_key, public_key, cms_private_key, *,
-                    release_id, source_revision, canary, guest_factory=None):
+                    release_id, source_revision, canary, guest_factory=None, tools_source=None,
+                    stage_timeout=8 * 3600):
     """Prepare exactly five signed assets; never publishes or contacts a robot."""
     from tools.release.os_public_inputs import serve_inputs, RECEIVE_SCRIPT
     profile = require_image_backend(target)
@@ -197,7 +225,10 @@ def prepare_release(target, dist, output, private_key, public_key, cms_private_k
     _policy(release_id, '0' * 64, canary)
     snapshot = authenticated_distribution(dist, public_key, release_id=release_id, source_revision=source_revision)
     approved = _approved_cms()
-    tools_revision = _tools_revision()
+    if type(stage_timeout) is not int or not 60 <= stage_timeout <= 8 * 3600:
+        raise ValueError('OS preparation stage timeout is outside its allowed bound')
+    tools_root, tools_revision = (_snapshot_tools_source(*tools_source) if tools_source is not None
+                                  else (ROOT, _tools_revision()))
     private_key, cms_private_key = _local_private_key(private_key), _local_private_key(cms_private_key)
     cache = prepare_tools()
     if any(key.is_relative_to(parent) for key in (private_key, cms_private_key) for parent in (dist, output, cache)):
@@ -213,10 +244,10 @@ def prepare_release(target, dist, output, private_key, public_key, cms_private_k
             guest_directory = work / 'guest'
             ensure_private_directory(guest_directory)
             with (guest_factory or WindowsGuest)(guest_directory) as guest:
-                guest.provision_source(ROOT, revision=tools_revision)
+                guest.provision_source(tools_root, revision=tools_revision)
                 guest.run('cd /work/source && python3 -c ' + shlex.quote(RECEIVE_SCRIPT),
-                          data=json.dumps(description).encode(), timeout=8 * 3600)
-                _stage(guest, 'prepare')
+                          data=json.dumps(description).encode(), timeout=stage_timeout)
+                _stage(guest, 'prepare', timeout=stage_timeout)
                 request = json.loads(_guest_bytes(guest, '/work/prepared/request.json', 65536), object_pairs_hook=_pairs)
                 _fields(request, {'schema_version', 'kind', 'inputs', 'images', 'prepared_bundle', 'manifest_sha256',
                                   'certificate_sha256', 'cms_signer_spki_sha256'})
@@ -250,7 +281,7 @@ def prepare_release(target, dist, output, private_key, public_key, cms_private_k
                     approved['certificate'], certificate_sha256=approved['certificate_sha256'],
                     signer_spki_sha256=approved['cms_signer_spki_sha256'])
                 guest.run('cat > /work/operator.cms', data=replacement)
-                _stage(guest, 'finalize')
+                _stage(guest, 'finalize', timeout=stage_timeout)
                 raw_metadata = _guest_bytes(guest, '/work/finalized/metadata.json', 16384)
                 metadata = validate_metadata(json.loads(raw_metadata, object_pairs_hook=_pairs))
                 expected = dict(release_id=release_id, source_revision=source_revision,
@@ -279,7 +310,7 @@ def prepare_release(target, dist, output, private_key, public_key, cms_private_k
                         os.fsync(handle.fileno())
                     guest_name = name.replace('os-update', 'operator-update').replace('os-rollout', 'operator-rollout')
                     guest.run('cat > /work/' + guest_name, data=raw)
-                _stage(guest, 'verify')
+                _stage(guest, 'verify', timeout=stage_timeout)
         # Guest shutdown and HTTP cleanup must succeed before output becomes visible.
         if output.exists() or output.is_symlink():
             raise FileExistsError('signed OS output appeared during preparation')
