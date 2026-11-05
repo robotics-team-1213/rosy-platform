@@ -546,8 +546,6 @@ ui-topbar:has([data-learning-account-entry]) { flex-wrap: wrap; }
 .evaluate-runs li,#promote-result{overflow-wrap:anywhere}
 #promote-pick select{max-inline-size:100%}
 @media (width < 64rem){.domain-row{grid-template-columns:minmax(0,1fr);grid-template-areas:"name" "stages" "truth" "blocked" "next"}.domain-stages{grid-template-columns:repeat(3,minmax(0,1fr))}}
-/* D-857 §3: on phones the stage sub-menu row is only its 48px targets, so the review photo keeps its first view. */
-@container (width < 64rem){.ui-subnav-nav{padding-block:0}}
 /* D-857 §3, D-542 §2: on the two editors the 정답 pages sit in the title row on wide screens and after the editor
    on phones, so no extra row pushes the review photo down. The nav follows the title in the DOM (focus order) and has
    its own column, so it never covers the title. */
