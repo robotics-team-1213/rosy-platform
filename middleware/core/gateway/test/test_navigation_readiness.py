@@ -166,3 +166,89 @@ def test_navigation_request_is_rejected_before_mode_change_when_hardware_is_held
     assert response.json()["error"]["code"] == "CAPABILITY_WITHHELD"
     assert response.json()["error"]["detail"]["capability"] == "navigation.goal_navigation"
     assert services.modes.mode is Mode.IDLE
+
+
+def _runtime_config(mode, backend="localization"):
+    defaults = Path(__file__).resolve().parents[4] / "contracts/foundation/config/rosy_default.yaml"
+    config = yaml.safe_load(defaults.read_text(encoding="utf-8"))
+    config["runtime"] = {"mode": mode, "navigation_backend": backend}
+    config["navigation"]["readiness"]["required"] = True
+    return {"runtime": config["runtime"], "navigation": config["navigation"]}
+
+
+def test_motor_profile_accepts_manual_api_without_navigation_components(core_client):
+    client, services = core_client(config_overrides=_runtime_config("motor"))
+    services.state.set_velocity(0.0, 0.0)
+    services.readiness.observe("motor_adapter", True, lease=True)
+    assert services.readiness.required_components == ("motor_adapter",)
+    assert services.readiness.required and services.readiness.is_ready()
+    headers = {"Authorization": "Bearer rosy-dev-operator"}
+    assert client.post("/api/v1/mode", json={"mode": "MANUAL"}, headers=headers).status_code == 200
+    response = client.post("/api/v1/teleop", json={"linear": 0.02, "angular": 0.0}, headers=headers)
+    assert response.status_code == 200, response.text
+    assert services.command.select_output() == Twist(0.02, 0.0)
+
+
+@pytest.mark.parametrize("lease", ["missing", "expired"])
+def test_required_motor_profile_rejects_missing_or_expired_lease_and_outputs_zero(core_client, lease):
+    client, services = core_client(config_overrides=_runtime_config("motor"))
+    services.state.set_velocity(0.0, 0.0)
+    now = [10.0]
+    services.readiness._monotonic = lambda: now[0]
+    headers = {"Authorization": "Bearer rosy-dev-operator"}
+    assert client.post("/api/v1/mode", json={"mode": "MANUAL"}, headers=headers).status_code == 200
+    if lease == "expired":
+        services.readiness.observe("motor_adapter", True, lease=True)
+        response = client.post("/api/v1/teleop", json={"linear": 0.02}, headers=headers)
+        assert response.status_code == 200, response.text
+        assert services.command.select_output().linear == 0.02
+        now[0] += services.readiness.stale_after_s + 0.01
+    response = client.post("/api/v1/teleop", json={"linear": 0.02}, headers=headers)
+    assert response.status_code == 409, response.text
+    assert response.json()["error"]["code"] == "CAPABILITY_WITHHELD"
+    assert services.readiness.snapshot().missing == ("motor_adapter",)
+    assert services.command.select_output() == Twist(0.0, 0.0)
+
+
+@pytest.mark.parametrize("profile", ["missing_mapping", "missing_motor", "missing_adapter"])
+def test_required_motor_profile_cannot_fall_back_or_omit_the_adapter(core_client, profile):
+    config = _runtime_config("motor")
+    readiness = config["navigation"]["readiness"]
+    if profile == "missing_mapping":
+        readiness.pop("profiles")
+        readiness["required_components"] = ["motor_adapter"]
+    elif profile == "missing_motor":
+        readiness["profiles"].pop("motor", None)
+        readiness["profiles"]["localization"] = ["motor_adapter"]
+    else:
+        readiness["profiles"]["motor"] = ["controller_server"]
+    with pytest.raises(ValueError, match="motor"):
+        core_client(config_overrides=config)
+
+
+@pytest.mark.parametrize("mode", ["core", "motor"])
+def test_disabled_legacy_gate_without_motor_profile_keeps_backend_configuration(core_client, mode):
+    config = _runtime_config(mode)
+    readiness = config["navigation"]["readiness"]
+    readiness["required"] = False
+    readiness["profiles"].pop("motor", None)
+    _, services = core_client(config_overrides=config)
+    assert not services.readiness.required
+    assert services.readiness.is_ready()
+    assert services.readiness.required_components == tuple(readiness["profiles"]["localization"])
+
+
+@pytest.mark.parametrize("backend,components", [
+    ("localization", ("amcl", "map_server", "controller_server", "local_costmap", "global_costmap", "motor_adapter")),
+    ("slam", ("slam_toolbox", "controller_server", "local_costmap", "global_costmap", "motor_adapter")),
+])
+def test_hardware_profiles_still_require_every_existing_component(core_client, backend, components):
+    _, services = core_client(config_overrides=_runtime_config("hardware", backend))
+    assert services.readiness.required and services.readiness.required_components == components
+    services.modes.transition(Mode.MANUAL)
+    for missing in components:
+        for component in components:
+            services.readiness.observe(component, component != missing, lease=component == "motor_adapter")
+        assert services.readiness.snapshot().missing == (missing,)
+        assert services.command.teleop(0.02, 0.0) == (False, "HARDWARE_NOT_READY")
+        assert services.command.select_output() == Twist(0.0, 0.0)
