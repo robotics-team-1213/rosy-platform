@@ -185,7 +185,8 @@ def test_cell_shows_an_arm_incident_with_frames_and_an_explanation_and_clears_it
         state.incidents.append({
             "incident_id": "a" * 32, "source_id": "feedback_b", "session_id": "s", "state": "explained",
             "reported_at": time.time(), "facts": {"latched": {"13": {"hw_error": 32, "bits": ["overload"]}}, "folded": True,
-                                                  "torque_after": {"13": 0}, "windup_hits": [{}], "flagged": []},
+                                                  "torque_after": {"13": 0}, "windup_hits": [{}],
+                                                  "flagged": [{"command": "home", "error": "blocked", "fault": None}]},
             "decision": {"hold": True, "reason": "latched ID 13 overload"}, "recovery": {"rebooted": [13]},
             "frames": [{"role": "top", "sha256": "0" * 64, "bytes": 100}],
             "explanation": {"seen": "A box between the jaws <b>x</b>", "suspected_cause": "The box blocked home.",
@@ -202,6 +203,7 @@ def test_cell_shows_an_arm_incident_with_frames_and_an_explanation_and_clears_it
             assert card.locator("b").count() == 0
         else:
             expect(card.get_by_text("ID 13 오류 32 (overload)", exact=False)).to_be_visible()
+            expect(card.get_by_text("실행기: home blocked", exact=False)).to_be_visible()
         expect(card.get_by_text("<b>x</b>", exact=False)).to_be_visible()  # text, never markup
         expect(card.locator("li img")).to_have_attribute("src", re.compile("^blob:"))
         expect(page.locator('[data-arm-source="feedback_a"]').get_by_text("팔 사건 없음")).to_be_visible()
@@ -228,6 +230,7 @@ def test_incident_lines_accept_bounded_json_without_assuming_measurement_shapes(
         {"flagged": [{"command": {"toString": {}}}]},
         {"latched": {"13": {"hw_error": {"toString": {}}, "bits": []}}},
         {"latched": {"13": {"hw_error": 32, "bits": [None]}}},
+        {"flagged": [], "detail": "evidence"}, {"flagged": None}, {"latched": None},
     ]
     with sync_playwright() as playwright:
         browser, page, errors = open_page(playwright, 390, 844, url=cell_url)

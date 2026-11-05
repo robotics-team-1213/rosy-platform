@@ -36,23 +36,24 @@ const when = seconds => new Date(seconds * 1000).toLocaleString('ko-KR');
 export const incidentLines = incident => {
   const {facts = {}, decision = {}, recovery = null} = incident;
   const record = value => value !== null && typeof value === 'object' && !Array.isArray(value);
-  const latched = facts.latched ?? {}, flagged = facts.flagged ?? [];
+  const latched = facts.latched === undefined ? {} : facts.latched, flagged = facts.flagged === undefined ? [] : facts.flagged;
   const measured = ['latched', 'flagged', 'folded', 'torque_after', 'windup_hits'].some(key => key in facts)
     && record(latched) && Object.values(latched).every(latch => record(latch)
       && typeof latch.hw_error === 'number'
       && (latch.bits === undefined || (Array.isArray(latch.bits) && latch.bits.every(bit => typeof bit === 'string'))))
     && Array.isArray(flagged) && flagged.every(row => record(row) && typeof row.command === 'string'
-      && ['error', 'fault'].every(key => row[key] === undefined || typeof row[key] === 'string'))
+      && ['error', 'fault'].every(key => row[key] == null || typeof row[key] === 'string'))
     && (facts.folded === undefined || typeof facts.folded === 'boolean')
     && (facts.windup_hits === undefined || Array.isArray(facts.windup_hits));
-  return [
-    typeof decision.reason === 'string' ? decision.reason : JSON.stringify(decision.reason),
-    ...(measured ? [
+  const measurements = measured ? [
     Object.entries(facts.latched || {}).map(([id, latch]) => `ID ${id} 오류 ${latch.hw_error} (${(latch.bits || []).join('/')})`).join(', '),
     facts.folded === undefined ? '' : `홈 접힘 ${facts.folded ? '예' : '아니오'} · 종료 후 토크 ${JSON.stringify(facts.torque_after || {})}`,
     (facts.windup_hits || []).length ? `출력 상승 감지 ${facts.windup_hits.length}건` : '',
     (facts.flagged || []).map(row => `실행기: ${row.command} ${row.error || row.fault || ''}`).join(' · '),
-    ] : [Object.keys(facts).length ? JSON.stringify(facts) : '']),
+  ].filter(Boolean) : [];
+  return [
+    typeof decision.reason === 'string' ? decision.reason : JSON.stringify(decision.reason),
+    ...(measurements.length ? measurements : [Object.keys(facts).length ? JSON.stringify(facts) : '']),
     recovery ? `장치 안전 재부팅: ${JSON.stringify(recovery).slice(0, 300)}` : '',
   ].filter(Boolean);
 };
