@@ -76,7 +76,8 @@ def test_ssh_loopback_confirms_idle_and_refuses_active(fake_core, ssh_probe):
         assert 'BatchMode=yes' in call['args'] and '-n' not in call['args']
 
 
-@pytest.mark.parametrize('runtime, effective', [('ROSY_API_TLS=required\n', 'none'), ('', 'required'), ('', 'unknown')])
+@pytest.mark.parametrize('runtime, effective', [('ROSY_API_TLS=required\n', 'none'), ('', 'required'),
+                                               ('', 'unknown'), ('ROSY_API_TLS=none\n', 'required')])
 def test_ssh_loopback_never_downgrades_required_or_unknown_tls(fake_core, ssh_probe, runtime, effective):
     ssh_probe[2].write_text(runtime)
     ssh_probe[1]['SSH_TEST_TLS'] = effective

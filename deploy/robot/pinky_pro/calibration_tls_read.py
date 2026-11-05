@@ -82,6 +82,37 @@ def session_reply(connection, token):
     return rendered
 
 
+def core_tls_mode():
+    """Ask the installed TLS producer as the same user/environment as live CORE."""
+    import os
+    import pwd
+    import subprocess
+
+    command = ['systemctl', 'show', 'rosy-core', '--property=MainPID', '--value']
+    pid = subprocess.check_output(command, text=True, timeout=2).strip()
+    if not pid.isdigit() or int(pid) <= 0:
+        raise ValueError('CORE unavailable')
+    account = pwd.getpwnam('rosy-core')
+    process = Path('/proc/'+pid)
+    if process.stat().st_uid != account.pw_uid:
+        raise ValueError('CORE owner')
+    environment = {key.decode(): value.decode()
+                   for row in (process/'environ').read_bytes().split(b'\0') if b'=' in row
+                   for key, value in [row.split(b'=', 1)]}
+    probe = ("import os,sys;sys.path[:0]=[p for p in os.environ.get('PYTHONPATH','').split(':') if p];"
+             "from core_common.config import load_config;from core.api_tls import server_tls_options;"
+             "print('none' if not server_tls_options(load_config()) else 'required')")
+    result = subprocess.run(['/usr/bin/python3', '-I', '-B', '-c', probe], env=environment,
+                            user=account.pw_uid, group=account.pw_gid,
+                            extra_groups=os.getgrouplist('rosy-core', account.pw_gid),
+                            stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                            text=True, timeout=3)
+    if (result.returncode != 0 or result.stdout.strip() not in ('none', 'required')
+            or subprocess.check_output(command, text=True, timeout=2).strip() != pid):
+        raise ValueError('CORE transport unverified')
+    return result.stdout.strip()
+
+
 def legacy_loopback(private):
     """Called inside pinned SSH; an explicit device legacy mode is required."""
     connection = None
@@ -89,7 +120,7 @@ def legacy_loopback(private):
         runtime = Path('/etc/rosy/runtime.env').read_text(encoding='utf-8')
         modes = [line.partition('=')[2].strip() for line in runtime.splitlines()
                  if line.startswith('ROSY_API_TLS=')]
-        if modes != ['none']:
+        if modes not in ([], ['none']) or core_tls_mode() != 'none':
             raise ValueError('transport')
         port, timeout = private.get('port'), private.get('timeout')
         if (type(port) is not int or not 1 <= port <= 65535

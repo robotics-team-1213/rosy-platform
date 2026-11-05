@@ -77,8 +77,10 @@ $script:verifiedAlias = ""
 $sshWallClockMs = ($TimeoutSec + 5) * 1000
 
 function Format-NativeArgument([string]$Value) {
-    if ($Value -notmatch '\s') { return $Value }
-    return '"' + $Value + '"'
+    if ($Value -notmatch '[\s"]') { return $Value }
+    $escaped = [regex]::Replace($Value, '(\\*)"', '$1$1\"')
+    $escaped = [regex]::Replace($escaped, '(\\+)$', '$1$1')
+    return '"' + $escaped + '"'
 }
 
 function Invoke-BoundedSsh([string[]]$Arguments, [string]$InputText = "") {
