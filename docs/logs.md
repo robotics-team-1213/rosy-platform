@@ -14258,3 +14258,10 @@ osy-d395-s1d\`.
 - 증거: 같은640x480/6fps의 독립 스트림 시작에서 첫 프레임2건의 nonzero 비율은20.59/20.28%, 12프레임을 건너뛴2건은88.05/88.99%였다. 모두614400bytes이며 촬영 명령·해시·원본을 별도 보존했다. 깊이 엔진 결과와 비동기 색상 한계도 남겼다.
 - gate 변화: 없음. nonzero를 정확한 깊이로 간주하지 않으며 높이·팔 좌표·실물 수용은 미완료다.
 - CE: 새 교훈 기록 — docs/solutions/workflow-issues/d435-first-depth-frame-is-not-a-ready-measurement-2026-11-05.md. 경량 검토의 frontmatter와 기계적 claim 검사는 통과했고, 어휘는 새 도메인 용어 없음·발견 경로는 기존 solutions 안내로 유지한다. 의미 검증 전담 리뷰는 경량 절차에서 생략했다.
+
+## 2026-11-06 · uncommitted · fix(release): 자동 게시의 v2 번호와 SSH pin 경로를 보존
+
+- 변경: robot_cd의 다음 번호와 superseded 검사가 legacy/v2 공개 tag를 함께 읽는다. 선택한 공개 known_hosts를 버전·ABI·publisher 조회에 동일하게 적용하며 strict SSH와 source/CI/ABI/서명 가드는 유지한다. [자동 게시 운영](deployment/pinky-automatic-release.md)에 고정 snapshot 설치·기준선·거래 재개·OS 경계를 기록했다.
+- 증거: 회귀만 추가한 1489498e90은 원격9실패/52통과, 수정6c6982d520은 robot_cd·prepare·publish·ship·artifact-impact 전체210통과/skip0, known-failures NEW/known/flaky0이다. 공개004의 main 출처·rollout 서명·tar digest는 별도 읽기 전용으로 확인했으며 canary_ok=false를 유지했다.
+- gate 변화: source 회귀 확인이며 독립 검토·최종 통합 검증은 별도다. 예약 설치·새 Release 게시·로봇 활성화·주행은 실행하지 않았다. frozen OS는 기존 os-image 경로로 유지한다.
+- CE: 해당 없음. v2 누락과 pin 전달의 재발 방지는 최종 코드·실행 회귀에 직접 남고 설치 부재/고정 snapshot 판단은 기존 D-553 및 운영 문서로 설명된다. 운영 자동화 수용은 아직 미해결이다.
