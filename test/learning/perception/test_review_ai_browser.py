@@ -484,17 +484,23 @@ def test_pixel_result_read_rechecks_dirty_state_after_held_mask_response(tmp_pat
                 route.fulfill(json=review_masks.get(store, 0))
 
 
-def test_unsaved_pixel_candidate_preview_blocks_completion_and_shortcut(tmp_path):
+@pytest.mark.parametrize('width,height', [(1440, 1000), (390, 844), (320, 568)])
+@pytest.mark.parametrize('theme', ['dark', 'light'])
+def test_unsaved_pixel_candidate_preview_blocks_completion_and_shortcut(tmp_path, width, height, theme):
     import base64
     import numpy as np
     import review_masks
 
     backend = lambda *_: {'mask': base64.b64encode(review_masks.encode(np.zeros((24, 32), np.uint8))).decode()}
     with ai_browser(tmp_path, backend) as (page, store, jobs, expect):
+        page.set_viewport_size({'width': width, 'height': height})
+        page.evaluate('theme => RosyTheme.set(theme)', theme)
         before = review_masks.get(store, 0)
         pixels = review_masks.pixels(store, before).copy()
         assert np.any(pixels != 255) and np.any(pixels == 255)
         page.goto(page.url.split('?')[0] + 'pixels?frame=0', wait_until='networkidle')
+        expect(page.locator('html')).to_have_attribute('data-theme', theme)
+        assert page.evaluate('RosyTheme.get()') == theme
         expect(page.locator('#review-ai-pixel_draft')).to_be_enabled()
         page.locator('#review-ai-pixel_draft').click()
         expect(page.locator('#pixel-preview-candidate')).to_have_attribute('aria-pressed', 'true', timeout=15000)
@@ -513,3 +519,31 @@ def test_unsaved_pixel_candidate_preview_blocks_completion_and_shortcut(tmp_path
         assert review_masks.get(store, 0)['version'] == before['version']
         assert review_masks.get(store, 0)['status'] == 'pending'
         assert np.array_equal(review_masks.pixels(store, review_masks.get(store, 0)), pixels)
+        expect(page.locator('#pixel-approve')).to_be_disabled()
+        expect(page.locator('#pixel-discard')).to_be_enabled()
+        import os
+        if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+            import json
+            from pathlib import Path
+            root = Path(output).expanduser()
+            root.mkdir(parents=True, exist_ok=True)
+            name = f'pixel-unsaved-candidate-{theme}-{width}x{height}'
+            metrics = page.evaluate("""() => {
+              const rect = selector => document.querySelector(selector).getBoundingClientRect().toJSON();
+              return {actualTheme:RosyTheme.resolved(),themePreference:RosyTheme.get(),
+                htmlTheme:document.documentElement.dataset.theme,ground:getComputedStyle(document.documentElement).getPropertyValue('--ground').trim(),
+                viewport:{width:innerWidth,height:innerHeight},scroll:{x:scrollX,y:scrollY},overflow:document.documentElement.scrollWidth-innerWidth,
+                candidate:document.querySelector('#pixel-candidates').value,previewPressed:document.querySelector('#pixel-preview-candidate').getAttribute('aria-pressed'),
+                activeElement:document.activeElement?.id,canvas:rect('#pixel-canvas'),layout:rect('.pixel-layout'),decision:rect('.pixel-review-column'),
+                controls:Object.fromEntries(['pixel-approve','pixel-save','pixel-discard'].map(id=>{const node=document.getElementById(id);
+                  return [id,{disabled:node.disabled,disabledAttribute:node.hasAttribute('disabled'),ariaDisabled:node.getAttribute('aria-disabled'),
+                    label:node.textContent.trim(),reason:node.getAttribute('reason'),rect:node.getBoundingClientRect().toJSON()}];}))};
+            }""")
+            stored = review_masks.get(store, 0)
+            page.screenshot(path=str(root / f'{name}-viewport.png'))
+            page.screenshot(path=str(root / f'{name}-full.png'), full_page=True)
+            (root / f'{name}.json').write_text(json.dumps(dict(state='unsaved candidate preview after guarded A shortcut',
+                theme=theme,job_action=generated['action'],job_state=generated['state'],version_before=before['version'],
+                version_after=stored['version'],stored_status=stored['status'],human_mask_unchanged=bool(np.array_equal(review_masks.pixels(store, stored), pixels)),
+                known_pixels_before=int(np.count_nonzero(pixels != 255)),unknown_pixels_before=int(np.count_nonzero(pixels == 255)),
+                filenames=[f'{name}-viewport.png',f'{name}-full.png'],**metrics),ensure_ascii=False,indent=2),encoding='utf-8')

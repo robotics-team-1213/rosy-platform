@@ -1,4 +1,5 @@
 """Pixel workspace layout and explicit background fill, confirmation and approval."""
+import json
 import os
 from pathlib import Path
 
@@ -55,6 +56,12 @@ def test_pixel_workspace_layout_has_one_photo_navigation_and_unclipped_tools(bro
             target.mkdir(parents=True, exist_ok=True)
             page.screenshot(path=str(target / f'pixel-workspace-{theme}-{width}-viewport.png'))
             page.screenshot(path=str(target / f'pixel-workspace-{theme}-{width}.png'), full_page=True)
+            (target / f'pixel-workspace-{theme}-{width}.json').write_text(json.dumps(dict(
+                state='pixel workspace layout',theme=theme,renderedTheme=page.locator('html').get_attribute('data-theme'),
+                viewport=page.viewport_size,selected_class=page.locator('#pixel-class').input_value(),
+                activeElement=page.evaluate('document.activeElement?.id'),geometry=geometry,
+                filenames=[f'pixel-workspace-{theme}-{width}-viewport.png',f'pixel-workspace-{theme}-{width}.png']),
+                ensure_ascii=False,indent=2),encoding='utf-8')
         assert geometry['pageWidth'] <= width
         assert geometry['overflow'] == 'visible' and geometry['maxHeight'] == 'none'
         assert geometry['scrollHeight'] <= geometry['clientHeight'] + 1

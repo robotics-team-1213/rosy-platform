@@ -1,4 +1,5 @@
 """Real browser pixel editing and approval guards on isolated synthetic originals."""
+import json
 import os
 from pathlib import Path
 
@@ -130,6 +131,11 @@ def test_pixel_decision_resize_preserves_selection_and_keyboard_focus(browser_wo
             name = f'pixel-decision-{theme}-{step}-{width}'
             page.screenshot(path=str(target / f'{name}-viewport.png'))
             page.screenshot(path=str(target / f'{name}-workspace.png'), full_page=True)
+            (target / f'{name}.json').write_text(json.dumps(dict(state='pixel decision resize',theme=theme,
+                renderedTheme=page.locator('html').get_attribute('data-theme'),viewport=page.viewport_size,step=step,
+                selected_class=selected,approve_disabled=complete.is_disabled(),focused=complete.evaluate('node=>node===document.activeElement'),
+                canvas=canvas,decision=decision,approve=box,header=header,overflow=page.evaluate('document.documentElement.scrollWidth-innerWidth'),
+                filenames=[f'{name}-viewport.png',f'{name}-workspace.png']),ensure_ascii=False,indent=2),encoding='utf-8')
         hit = complete.evaluate('''node => {
             const r = node.getBoundingClientRect();
             const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
@@ -329,6 +335,14 @@ def test_class_choices_use_shared_controls_and_keep_keyboard_editing(browser_wor
         destination.mkdir(parents=True, exist_ok=True)
         page.locator(f'#{view}-quick-classes').scroll_into_view_if_needed()
         page.screenshot(path=str(destination / f'class-controls-{view}-{theme}-{width}.png'))
+        metrics=chip.evaluate("""node=>{const s=getComputedStyle(node);return {control:node.getBoundingClientRect().toJSON(),
+          kind:node.getAttribute('kind'),selected:node.getAttribute('aria-pressed'),value:node.getAttribute('value'),
+          activeElement:document.activeElement?.id,overflow:document.documentElement.scrollWidth-innerWidth,
+          controlStyles:Object.fromEntries(['height','fontSize','paddingLeft','paddingRight','borderRadius'].map(key=>[key,s[key]]))};}""")
+        (destination / f'class-controls-{view}-{theme}-{width}.json').write_text(json.dumps(dict(
+            state='shared class controls after keyboard selection',view=view,key=key,theme=theme,
+            renderedTheme=page.locator('html').get_attribute('data-theme'),viewport=page.viewport_size,
+            filename=f'class-controls-{view}-{theme}-{width}.png',**metrics),ensure_ascii=False,indent=2),encoding='utf-8')
 
 
 def test_ai_context_is_cleared_on_empty_filter_and_reload_failure(browser_workspace):
