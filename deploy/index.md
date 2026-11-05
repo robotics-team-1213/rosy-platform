@@ -78,8 +78,8 @@
 
 ## 최근 기록
 
+- 2026-11-06 · uncommitted · fix(omx): 빈 집게 현재 위치 유지 전용 commissioning
 - 2026-11-05 · c8c9bd6279 · fix(payload): 모드 프로필 복사를 native 런타임 설치 뒤로 이동
 - 2026-11-05 · 5197ea53bf · fix(payload): ROS 스냅샷 핀 2026-10-05 재선정 (D-482 재적용)
 - 2026-11-05 · uncommitted · fix(publish): review pinned concurrent log digests
 - 2026-11-05 · uncommitted · fix(publish): Decision·VLA 검증 revision의 이력 오탐을 정확한 tuple로 기록
-- 2026-11-04 · uncommitted · fix(deploy): native payload가 모드별 프로파일 오버레이를 싣는다
