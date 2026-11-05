@@ -14230,3 +14230,10 @@ osy-d395-s1d\`.
 - 증거: PR #235의 동일 head에서 공개 검사28개와 CI 통과 후 지원 설치기로 UI를 갱신했다. HTTPS200·Serve 설정 원복·라벨/이력8테이블 hash 일치·기존 설정 및 Isaac 작업 보존을 확인했다. 공통 model-code 후보는 작업 잠금 때문에 보류된 상태다.
 - gate 변화: 모델 코드 수락·학습 실행·모델 품질·실물 수용으로 승격하지 않는다. 병합 대기열의 추가 CI는 별도 진행 중이다.
 - CE: 기존 교훈 갱신 — [Learning Center 배포](solutions/deployment/learning-center-upgrade-needs-the-identical-unit-first-2026-10-23.md). 기존 floor와 작업 소유권을 유지하는 검증된 UI 갱신 절차다.
+
+## 2026-11-05 · uncommitted · docs(test): 로컬 Chromium 모듈의 네트워크 변경 실패 관측
+
+- 변경: [초기 모듈 로드 교훈](solutions/test-failures/chromium-network-change-breaks-local-module-load-2026-11-05.md)에 HTML 표시·스크립트 요청 실패·실제 pointer 경로를 구분하고, 관측한 초기 네트워크 변경만 제한적으로 복구하는 범위를 기록했다.
+- 증거: dfa0363e2b에서 실패2건/통과99건과 모듈 ERR_NETWORK_CHANGED를 함께 수집했고 d3ae2203af의 원격 harness10건 및 현장 PC 전체 브라우저101건은 skip0/NEW0이다. 최종 FULL·게시 수용은 별도다.
+- gate 변화: 없음. 이전 UI hotfix 수용과 서명 model-code45의 작업 잠금 HOLD를 구분하며, PR #235는 병합 대기열 실패 후 미병합 상태다.
+- CE: 새 교훈 기록. 표준 Chromium 오류에는 새 도메인 용어를 만들지 않았으며 기존 solutions 진입 경로를 유지했다.

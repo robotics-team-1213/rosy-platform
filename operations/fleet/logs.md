@@ -5285,3 +5285,10 @@
 - gate 변화: 기존 snapshot·generation·capability 신선도·자원·journal 검사를 유지했다. HTTP 입력이나 실행 writer를 추가하지 않았으며 simulation 전용 경계도 유지한다. 독립 source safety review를 통과했고 실물 동작·운영 배포·현장 수용은 하지 않았다.
 - 미해결: 기존 일반 app custom lifespan은 legacy ARM policy startup hook을 호출하지 않는다. 정책 시험은 등록된 start/stop 컴포넌트를 명시 실행한 근거이며 운영 자동승인 실행을 입증하지 않는다.
 - CE: 미해결 — lifecycle 연결은 별도 작업으로 남겼다. 이번 가드 수정의 원인과 재발 방지는 코드·회귀 시험에 직접 남는다.
+
+## 2026-11-05 · uncommitted · test(fleet): 지도 화면 전환 대기와 초기 모듈 로드 복구
+
+- 변경: site-map 브라우저 helper가 활성 subnav와 보이는 heading을 확인한 뒤 레이아웃을 측정한다. 초기 document/script 요청의 정확한 Chromium ERR_NETWORK_CHANGED에만 탐색 1회 재시도를 적용하고 기존 데이터·권한·BODY_FIT assertion은 유지한다.
+- 증거: 지연 hashchange RED 6ae6baea4d는 즉시 반환을 재현했다. dfa0363e2b의 현장 PC 101사례 중 실패2건은 실제 모듈 요청의 ERR_NETWORK_CHANGED와 같은 사건으로 결속했다. d3ae2203af 원격 harness10건과 같은 현장 PC의 전체 브라우저101건은 skip0/NEW0이다. 최종 FULL은 별도 검증한다.
+- gate 변화: 없음. 탐색 복구는 시험 본문·토큰 제출·API 호출·안전 조건의 재시도가 아니다. 공개 병합·서비스·장치 수용과 구분한다.
+- CE: 새 교훈 기록 — docs/solutions/test-failures/chromium-network-change-breaks-local-module-load-2026-11-05.md. 보이는 로컬 HTML만으로 모듈 초기화를 판단하지 않는 관측 근거를 남겼다.
