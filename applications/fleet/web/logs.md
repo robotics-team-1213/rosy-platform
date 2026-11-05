@@ -1000,3 +1000,10 @@
 - gate 변화: SOURCE 회귀 확인. 실제 지도 보정·로봇 위치·장치 주행 수용 근거는 아님.
 - 결정: 기존 map_id를 그리기 직전에 검증하며 임의 좌표 변환이나 기록 삭제를 추가하지 않는다.
 - 교훈: CE 해당 없음 — 필터와 grid/site·누락 ID·frame 경계 회귀가 판단 근거를 직접 보존한다.
+
+## 2026-11-06 · uncommitted · feat(fleet): 관제 수동 모드 전환
+- 변경: 선택 기체의 수동 전환 확인과 fresh mode readback; 발행 차단 시 기존 hold를 terminal zero로 종료
+- 증거: 원격 AI PC 16028faad6 backend 231 passed/skip0; c7ce250026 Chromium 17 passed/skip0. 신규 backend RED 29 failed/7 passed, UI RED6 failed/11 passed 후 구현. 로그는 외부 scratch pinky-manual-{red,backend-green,ui-red,ui-green}/run-1.txt.
+- gate 변화: SOURCE 회귀 검증; ARTIFACT/DEVICE/FIELD 수용 근거로 사용하지 않음. 최종 재조립 SHA 원격 회귀와 FULL은 별도.
+- 결정: API v1.363; 기존 CORE 최종 명령·모드 owner 유지.
+- 교훈: CE 해당 없음 — 최종 코드·회귀 시험·API 계약으로 판단 근거를 재현할 수 있음.

@@ -31,8 +31,8 @@
 
 ## 최근 기록
 
+- 2026-11-06 · uncommitted · feat(fleet): 관제 수동 모드 전환
 - 2026-11-04 · uncommitted · feat(api): /api/v1/peers 경로와 PEER_SHARE 부여
 - 2026-11-02 · c4f15610cc · Web unification follow-up
 - 2026-10-28 · fce9c60216 · 분리한 Pilot 배치 CSS 서빙
 - 2026-10-28 · uncommitted · host-file 실행을 CORE owner에 위임
-- 2026-10-27 · uncommitted · deepinit Dashboard 소스 링크 복구
