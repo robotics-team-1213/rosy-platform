@@ -25,13 +25,17 @@ def approved_image_run(run, *, sha, ref, repo_id, workflow_id):
             and run.get("status") == "completed" and run.get("conclusion") == "success"
             and run.get("repository", {}).get("id") == repo_id
             and run.get("head_repository", {}).get("id") == repo_id
-            and type(run.get("id")) is int and run["id"] > 0)
+            and type(run.get("id")) is int and run["id"] > 0
+            and type(run.get("run_attempt")) is int and run["run_attempt"] > 0)
 
 
 def _identity(c, run):
-    return approved_image_run(dict(run, status="completed", conclusion="success"),
+    return (isinstance(run, dict)
+        and (not c.state.get("build_run") or run.get("id") == c.state["build_run"])
+        and (not c.state.get("os_run_attempt") or run.get("run_attempt") == c.state["os_run_attempt"])
+        and approved_image_run(dict(run, status="completed", conclusion="success"),
         sha=c.state["sha"], ref=c.state["os_build_ref"], repo_id=c.config["repo_id"],
-        workflow_id=c.state["os_workflow_id"])
+        workflow_id=c.state["os_workflow_id"]))
 
 
 def _artifact(c):
@@ -48,7 +52,7 @@ def _artifact(c):
     bound = item.get("workflow_run", {})
     if (type(item.get("id")) is not int or item["id"] <= 0 or item.get("expired") is not False
             or type(item.get("size_in_bytes")) is not int or not 0 < item["size_in_bytes"] <= 32 * 1024**3
-            or not re.fullmatch(r"sha256:[0-9a-f]{64}", item.get("digest", ""))
+            or not isinstance(item.get("digest"), str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", item["digest"])
             or bound.get("id") != state["build_run"] or bound.get("head_sha") != state["sha"]
             or bound.get("head_branch") != state["os_build_ref"]
             or bound.get("repository_id") != c.config["repo_id"]
@@ -173,9 +177,10 @@ def advance(c, sha, ci, reason=None):
         refs = c.api("git/matching-refs/tags/" + state["os_build_ref"])
         exact = [row for row in refs if row.get("ref") == "refs/tags/" + state["os_build_ref"]]
         if exact:
-            obj = exact[0].get("object", {})
-            if len(exact) != 1 or obj.get("type") != "commit" or obj.get("sha") != sha:
-                raise ValueError("OS reservation source differs")
+            # A lost POST acknowledgement and another signer winning this ID
+            # are indistinguishable. Never adopt even a matching source ref;
+            # that could dispatch the same build from two signing PCs.
+            raise ValueError("OS reservation has no durable receipt; review before dispatch")
         else:
             c.gh("api", "--method", "POST", f"repos/{c.repo}/git/refs", "-f",
                  "ref=refs/tags/" + state["os_build_ref"], "-f", "sha=" + sha)
@@ -201,7 +206,7 @@ def advance(c, sha, ci, reason=None):
             run = rows[0]
         if not _identity(c, run):
             raise ValueError("OS build source, repository, workflow or ref differs")
-        c.save(build_run=run["id"])
+        c.save(build_run=run["id"], os_run_attempt=run["run_attempt"])
         if run.get("status") != "completed":
             return c.audit("waiting_os_build")
         if not approved_image_run(run, sha=sha, ref=state["os_build_ref"], repo_id=c.config["repo_id"], workflow_id=state["os_workflow_id"]):
@@ -211,7 +216,7 @@ def advance(c, sha, ci, reason=None):
         return c.audit("os_build_verified")
     if state["phase"] == "os_preparing":
         run = c.api(f"actions/runs/{state['build_run']}")
-        if not approved_image_run(run, sha=sha, ref=state["os_build_ref"], repo_id=c.config["repo_id"], workflow_id=state["os_workflow_id"]):
+        if not _identity(c, run) or not approved_image_run(run, sha=sha, ref=state["os_build_ref"], repo_id=c.config["repo_id"], workflow_id=state["os_workflow_id"]):
             raise ValueError("accepted OS build changed before signing")
         output, public = _prepare(c)
         c.save(phase="os_publishing", os_output=str(output), os_public_key=str(public))

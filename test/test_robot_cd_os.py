@@ -20,7 +20,7 @@ def module():
 
 
 def run(**changes):
-    return dict(id=11, workflow_id=9, head_sha=SHA, head_branch="payload-reserved-2026.11.05-100",
+    return dict(id=11, run_attempt=1, workflow_id=9, head_sha=SHA, head_branch="payload-reserved-2026.11.05-100",
                 event="workflow_dispatch", status="completed", conclusion="success",
                 repository={"id": 7}, head_repository={"id": 7}, **changes)
 
@@ -101,6 +101,27 @@ def test_pending_ci_cannot_reserve_build_or_sign(tmp_path):
     assert not c.calls and not c.checkpoints
 
 
+def test_ambiguous_reservation_is_never_adopted_even_for_matching_source(tmp_path):
+    helper, c = module(), Coordinator(tmp_path)
+    c.state.update(sha=SHA, phase="os_reserving", release_id="2026.11.05-100", os_build_ref=run()["head_branch"])
+    c.api = lambda path: [dict(ref="refs/tags/" + run()["head_branch"], object=dict(type="commit", sha=SHA))]
+    with pytest.raises(ValueError, match="no durable receipt"):
+        helper.advance(c, SHA, "success")
+    assert not c.calls
+
+
+@pytest.mark.parametrize("field,value", [("id", 12), ("run_attempt", 2)])
+def test_bound_build_id_and_attempt_cannot_change_between_ticks(tmp_path, field, value):
+    helper, c = module(), Coordinator(tmp_path)
+    helper.advance(c, SHA, "success")
+    c.candidate.update(head_branch=c.state["os_build_ref"], status="in_progress", conclusion=None)
+    helper.advance(c, SHA, "success")
+    c.candidate[field] = value
+    with pytest.raises(ValueError, match="build source"):
+        helper.advance(c, SHA, "success")
+    assert c.state["build_run"] == 11 and c.state["os_run_attempt"] == 1
+
+
 def test_published_os_does_not_advance_either_device_baseline(tmp_path, monkeypatch):
     helper, c = module(), Coordinator(tmp_path)
     import tools.release.publish_os_release as publisher
@@ -128,3 +149,39 @@ def test_unsigned_identity_mismatch_stops_before_key_signing(tmp_path):
     (dist / "os-bundle-inputs/inputs.json").write_text(json.dumps(dict(source_revision=SHA, release_id="2026.11.05-100", boot_abi=2)))
     with pytest.raises(ValueError, match="approved build source"):
         module()._unsigned_identity(dist, "2026.11.05-100", SHA)
+
+
+@pytest.mark.parametrize("mutation", ["digest", "repo", "source", "ref", "run", "expired", "duplicate"])
+def test_artifact_is_bound_to_exact_successful_run_and_source(tmp_path, mutation):
+    helper, c = module(), Coordinator(tmp_path)
+    c.state.update(sha=SHA, release_id="2026.11.05-100", build_run=11, os_build_ref=run()["head_branch"])
+    artifact = dict(id=12, name=f"rosy-pinky-image-unsigned-2026.11.05-100-{SHA}", expired=False,
+        size_in_bytes=123, digest="sha256:" + "b" * 64, workflow_run=dict(id=11, head_sha=SHA,
+            head_branch=run()["head_branch"], repository_id=7, head_repository_id=7))
+    if mutation == "digest": artifact["digest"] = None
+    if mutation == "repo": artifact["workflow_run"]["head_repository_id"] = 8
+    if mutation == "source": artifact["workflow_run"]["head_sha"] = "b" * 40
+    if mutation == "ref": artifact["workflow_run"]["head_branch"] = "main"
+    if mutation == "run": artifact["workflow_run"]["id"] = 13
+    if mutation == "expired": artifact["expired"] = True
+    rows = [artifact, artifact] if mutation == "duplicate" else [artifact]
+    c.api = lambda path: {"artifacts": rows, "total_count": len(rows)}
+    with pytest.raises(ValueError):
+        helper._artifact(c)
+
+
+def test_real_coordinator_routes_opted_in_os_without_robot_contact(tmp_path, monkeypatch):
+    helper = module()
+    from robot_cd import Coordinator as RealCoordinator
+    c = RealCoordinator(dict(repo="robotics-team-1213/rosy-platform", repo_id=7,
+        state_dir=tmp_path, os_engineering=True, base_source_revision="b" * 40), gh=lambda *args: "")
+    backend = Coordinator(tmp_path)
+    api = backend.api
+    c.api = lambda path: ({"object": {"sha": SHA}} if path == "git/ref/heads/main" else
+                         {"status": "ahead"} if path.startswith("compare/") else api(path))
+    c.ci = lambda sha: "success"
+    c.delivery_plan = lambda sha: ("os-image", "frozen unit changed")
+    c.ssh = lambda *args: pytest.fail("OS publication must never contact a robot")
+    monkeypatch.setitem(sys.modules, "robot_cd_os", helper)
+    assert c.tick() == "os_build_dispatched"
+    assert c.state["deployed_sha"] == "b" * 40 and c.state["delivery_base_sha"] == "b" * 40
