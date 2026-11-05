@@ -14,6 +14,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -244,8 +245,22 @@ def _known_hosts(tmp_path: Path, *names: str) -> Path:
 
 def _fake_ssh(tmp_path: Path, env: dict, hostname: str = "", exit_code: int = 0,
               alias_exit: int = 0, sleep: int = 0) -> tuple[Path, Path]:
-    fake = tmp_path / "fake-ssh.cmd"
-    fake.write_bytes(FAKE_SSH.encode("ascii"))
+    fake = tmp_path / ("fake-ssh.cmd" if os.name == "nt" else "fake-ssh")
+    if os.name == "nt":
+        fake.write_bytes(FAKE_SSH.encode("ascii"))
+    else:
+        fake.write_text(f'#!{sys.executable}\n' + '''import json,os,sys,time
+from pathlib import Path
+args=sys.argv[1:]
+with open(os.environ['ROSY_FAKE_LOG'],'a') as out:
+    out.write(' '.join(json.dumps(arg) if any(c.isspace() for c in arg) else arg for arg in args)+'\\n')
+if any('HostKeyAlias=' in arg for arg in args):sys.exit(int(os.environ['ROSY_FAKE_ALIAS_EXIT']))
+time.sleep(int(os.environ.get('ROSY_FAKE_SLEEP','0')))
+answer=Path(os.environ['ROSY_FAKE_ANSWER'])
+if answer.exists():print(answer.read_text(),end='')
+sys.exit(int(os.environ['ROSY_FAKE_EXIT']))
+''')
+        fake.chmod(0o755)
     log = tmp_path / "ssh.log"
     answer = tmp_path / "answer.txt"
     if hostname:
