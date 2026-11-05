@@ -1,4 +1,5 @@
 """cell_calibrate: a clear pivot point is found next to a target; a moved camera makes every later step stale."""
+import math
 import sys
 from pathlib import Path
 
@@ -179,3 +180,34 @@ def test_marks_on_one_line_predict_nothing():
     """arm_a 2026-11-04: three marks all at x=0.09 'predicted' every later point at x=0.09."""
     line = [((489.0, 331.5), (0.09, 0.08)), ((490.1, 363.5), (0.09, 0.10)), ((497.5, 395.2), (0.09, 0.12))]
     assert cc.predicted(line, (0.13, 0.10)) is None
+
+
+def test_a_refused_move_folds_and_keeps_the_marks_so_far(tmp_path, monkeypatch):
+    """arm_b 2026-11-05: 8 marks in, the next goto stalled on wrist roll -13; the remap threw them all away."""
+    import types
+
+    monkeypatch.setitem(sys.modules, "cell_pipeline", types.SimpleNamespace(write_library=lambda c, p, q, path: path))
+    monkeypatch.setattr(cc.cell_pivot, "mark_jaws", lambda cell, config, near=None: to_px(cell.at))
+    points = [[0.10, 0.10], [0.12, 0.12], [0.10, 0.14], [0.14, 0.10], [0.15, 0.15], [0.17, 0.12], [0.30, 0.30]]
+
+    class Cell:
+        def __init__(self, park_ok=True):
+            self.at, self.cmds, self.park_ok, self.next = None, [], park_ok, None
+
+        def act(self, command):
+            self.cmds.append(command)
+            if command.startswith("load"):
+                self.next = next(p for p in points if f"remap-{sorted(points, key=lambda q: math.hypot(*q)).index(p)}." in command)
+            if command == "goto above_pick":
+                if self.next == [0.30, 0.30]:
+                    return {"ok": False, "error": "contact in goto above_pick: wrist_roll lag"}
+                self.at = self.next
+            return {"ok": command != "park" or self.park_ok}
+
+    config = {"coarse": {"z_view": 0.14}, "plan": {"approach_m": 0.04}, "sites": {"pallet": {"yaw_deg": 0.0}},
+              "calibrate": {"map_sites": ["pallet"]}}
+    cell = Cell()
+    record = cc.remap(cell, config, points, tmp_path, log=lambda row: None)
+    assert len(record["points"]) == 6 and cell.cmds[-1] == "park"
+    with pytest.raises(SystemExit, match="park failed"):
+        cc.remap(Cell(park_ok=False), config, points, tmp_path, log=lambda row: None)
