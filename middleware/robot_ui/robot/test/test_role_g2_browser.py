@@ -496,7 +496,7 @@ def test_device_procedure_places_status_and_actions_before_long_readouts(tmp_pat
                         _select_task(page, panel)
                         selected = page.get_by_role("tab", selected=True)
                         selected.focus(); page.keyboard.press("Tab"); page.keyboard.press("Shift+Tab")
-                        metrics = selected.evaluate("""node=>{const s=getComputedStyle(node),nav=node.closest('nav');return {
+                        metrics = selected.evaluate("""node=>{const s=getComputedStyle(node),nav=node.closest('.ui-subnav-nav');return {
                           paint:Object.fromEntries(['display','alignItems','justifyContent','textAlign','paddingTop','paddingRight','paddingBottom','paddingLeft',
                             'minHeight','fontSize','fontWeight','lineHeight','borderRadius','borderTopWidth','backgroundColor','color','appearance',
                             'outlineStyle','outlineWidth','outlineColor','outlineOffset'].map(key=>[key,s[key]])),item:node.getBoundingClientRect().toJSON(),

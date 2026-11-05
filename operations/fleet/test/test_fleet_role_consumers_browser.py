@@ -81,7 +81,7 @@ def test_same_hierarchy_links_and_task_tabs_share_rendered_subnav(tmp_path, widt
                     page.keyboard.press('Tab')
                     page.keyboard.press('Shift+Tab')
                     expect(selected).to_be_focused()
-                    metrics = selected.evaluate("""(node,keys)=>{const s=getComputedStyle(node),nav=node.closest('nav');
+                    metrics = selected.evaluate("""(node,keys)=>{const s=getComputedStyle(node),nav=node.closest('.ui-subnav-nav');
                       return {paint:Object.fromEntries(keys.map(key=>[key,s[key]])),item:node.getBoundingClientRect().toJSON(),
                         nav:nav.getBoundingClientRect().toJSON(),gap:getComputedStyle(nav).gap,
                         current:node.getAttribute('aria-current'),selected:node.getAttribute('aria-selected'),
