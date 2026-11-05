@@ -452,7 +452,11 @@ def page_site(tmp_path, request):
                                               args=[f"--explicitly-allowed-ports={listener.getsockname()[1]}"])
             try:
                 page = browser.new_page(viewport={"width": 1440, "height": 1000})
+                script_errors = []
                 if os.environ.get('ROSY_TOKEN_TRACE') == '1':
+                    page.on('pageerror', lambda error: script_errors.append(str(error)))
+                    page.on('requestfailed', lambda request: script_errors.append(
+                        request.url.split('?')[0] + ': ' + str(request.failure)))
                     page.add_init_script('''
                         window.tokenTrace = [];
                         function trace(kind, target) {
@@ -485,6 +489,7 @@ def page_site(tmp_path, request):
                 finally:
                     if os.environ.get('ROSY_TOKEN_TRACE') == '1':
                         print('TOKEN_TRACE', request.node.nodeid, json.dumps(page.evaluate('window.tokenTrace')))
+                        print('SCRIPT_ERRORS', request.node.nodeid, json.dumps(script_errors))
             finally:
                 browser.close()
     finally:
