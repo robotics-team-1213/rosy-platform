@@ -355,6 +355,6 @@
 
 - 2026-11-05 · 7883232cb5 · test(learning): 저장한 ACT·SmolVLA 통계를 실제 train 설정과 비교
 - 2026-11-05 · 348778e549 · docs(validation): 검수 ACT·SmolVLA 학습 연결 증거
-- 2026-11-04 · uncommitted · fix(deploy): calibration 분리 경로를 서명 모델 코드 아카이브에 포함
-- 2026-11-04 · uncommitted · docs(deployment): 후진 목표 운영자 메모
-- 2026-11-04 · uncommitted · docs(D-871): 학습센터 타이머 미활용 발견·활성화 개정
+- 2026-11-05 · uncommitted · test(curation): FIFO 자식 FD 기준값 전에 상속된 미수거 자원을 정리
+- 2026-11-05 · uncommitted · test(games): 복구 시 진행 중인 overlay route handler를 기다린다
+- 2026-11-05 · uncommitted · fix(harness): 동시 계정 로그 두 원문의 무결성 고정

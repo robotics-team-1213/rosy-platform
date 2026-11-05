@@ -72,7 +72,8 @@ def _snapshot(store, lane, index, number):
                                     'ORDER BY version ASC', (index, number)):
                 prior = json.loads(later['review'])
                 if prior.get('version') == number:
-                    snapshot = dict(review, path=prior.get('path'), sha256=prior.get('sha256'))
+                    snapshot = dict(review, path=prior.get('path'), sha256=prior.get('sha256'),
+                                    classes=prior.get('classes', review['classes']), historical_status=prior.get('status'))
                     break
         if snapshot is None or not snapshot.get('path') or not review['classes']:
             return result, None
@@ -80,14 +81,16 @@ def _snapshot(store, lane, index, number):
             pixels = review_masks.pixels(store, snapshot)
         except FileNotFoundError:
             return result, None
-        allowed = {entry['index'] for entry in review['classes']['classes']} | {255}
+        allowed = {entry['index'] for entry in snapshot['classes']['classes']} | {255}
         if not set(np.unique(pixels)).issubset(allowed):
             raise ValueError('snapshot contains unknown class index')
         result.update(available=True, mask_sha256=snapshot['sha256'], width=review['width'],
-                      height=review['height'], classes=review['classes'],
+                      height=review['height'], classes=snapshot['classes'],
                       current=number == review['version'])
         if number == review['version']:
             result['status'] = review['status']
+        elif snapshot.get('historical_status'):
+            result['status'] = snapshot['historical_status']
         elif row:
             result['status'] = {'approve': 'approved', 'exclude': 'excluded'}.get(row['action'], 'pending')
         return result, pixels

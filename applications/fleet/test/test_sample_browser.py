@@ -142,13 +142,15 @@ def test_cell_document_preview_admission_and_terminal_read(sample_site):
         browser = pw.chromium.launch(headless=True)
         try:
             context = browser.new_context()
-            context.request.post(origin + '/api/fleet/auth/login', headers={'Origin':origin},
-                                 data={'login':'sample', 'password':'CHANGE_ME'})
+            response = context.request.post(origin + '/api/fleet/auth/login', headers={'Origin':origin},
+                                            data={'login':'sample', 'password':'CHANGE_ME'})
+            assert response.status == 204
             page = context.new_page()
             reads = []
             page.on('response', lambda response: reads.append((urlsplit(response.url).path, response.status))
                     if '/api/fleet/cell-jobs/' in response.url or '/api/fleet/dispatch-control' in response.url else None)
             page.goto(origin + '/console/cell')
+            expect(page.locator('#notice')).to_have_text('접속 완료 · 문서를 준비하세요.')
             for kind in ('recipe', 'cell'):
                 page.locator(f'.ui-subnav a[href="#{kind}-heading"]').click()  # D-926 3: one step screen at a time
                 page.locator(f'#{kind}-id').fill('sample')

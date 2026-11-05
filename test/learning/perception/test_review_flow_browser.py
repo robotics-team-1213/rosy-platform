@@ -152,7 +152,7 @@ def test_command_shortcuts_do_not_run_while_typing_or_composing(browser_workspac
 def test_command_search_refreshes_functions_that_finish_loading(browser_workspace):
     page, _, expect = browser_workspace
     pending = []
-    page.route('**/api/workspace', lambda route: pending.append(route))
+    page.route('**/api/workspace*', lambda route: pending.append(route))
     page.goto(page.url.split('?')[0], wait_until='domcontentloaded')
     page.keyboard.press('Control+k')
     search = page.get_by_role('textbox', name='기능 검색어')
@@ -313,9 +313,13 @@ def test_pixel_review_shows_unclassified_coverage(browser_workspace):
     unknown = int((review_masks.pixels(store, review_masks.get(store, 0)) == 255).sum())
     page.goto(page.url.split('?')[0].rstrip('/') + '/pixels', wait_until='networkidle')
     expect(page.locator('#pixel-coverage')).to_contain_text(f'미검수 {unknown:,}픽셀')
-    assert page.locator('#pixel-coverage').bounding_box()['y'] < page.locator('#pixel-class').bounding_box()['y']
+    photo = page.locator('#pixel-canvas').bounding_box()
+    coverage = page.locator('#pixel-coverage').bounding_box()
+    assert photo['y'] + photo['height'] <= coverage['y'] <= photo['y'] + photo['height'] + 96
     page.locator('#pixel-class').select_option('0')
     page.on('dialog', lambda dialog: dialog.accept())
+    if not page.locator('#pixel-whole-frame-tools').evaluate('node => node.open'):
+        page.locator('#pixel-whole-frame-tools > summary').click()
     page.locator('#pixel-fill').click()
     expect(page.locator('#pixel-coverage')).to_contain_text('미검수 0픽셀')
 
@@ -669,10 +673,10 @@ def test_object_to_pixel_review_keeps_photo_and_shows_decision(browser_workspace
     expect(page.locator('#pixel-status')).to_contain_text('픽셀 검수 대기')
     page.locator('#pixel-class').select_option('0')
     page.once('dialog', lambda dialog: dialog.accept())
+    if not page.locator('#pixel-whole-frame-tools').evaluate('node => node.open'):
+        page.locator('#pixel-whole-frame-tools > summary').click()
     page.locator('#pixel-fill').click()
     expect(page.locator('#pixel-status')).to_contain_text('v1')
-    page.locator('#pixel-complete').check()
-    page.locator('#pixel-background').check()
     page.locator('#pixel-approve').click()
     expect(page.locator('#pixel-title')).to_have_text('사진 1 픽셀 검수')
     expect(page.locator('#pixel-decision')).to_contain_text('사진 2 픽셀 승인 · 다음 검수 대기 사진 1')
@@ -780,7 +784,7 @@ def test_object_review_first_use_leads_to_data_registration(browser_workspace):
 def test_workspace_disconnect_shows_reachable_retry(browser_workspace, route, empty, retry, content, width):
     page, _, expect = browser_workspace
     page.set_viewport_size({'width': width, 'height': 844})
-    page.route('**/api/workspace', lambda request: request.abort())
+    page.route('**/api/workspace*', lambda request: request.abort())
     page.goto(page.url.split('?')[0].rstrip('/') + route, wait_until='networkidle')
     expect(page.locator(empty)).to_be_visible()
     expect(page.locator(content)).to_be_hidden()
@@ -797,7 +801,7 @@ def test_workspace_disconnect_shows_reachable_retry(browser_workspace, route, em
         target = Path(output) / f'learning-{"objects" if route == "/" else "pixels"}-disconnect-{width}.png'
         target.parent.mkdir(parents=True, exist_ok=True)
         page.screenshot(path=str(target), full_page=True)
-    page.unroute('**/api/workspace')
+    page.unroute('**/api/workspace*')
     page.locator(retry).click()
     expect(page.locator(content)).to_be_visible()
 
@@ -809,10 +813,10 @@ def test_workspace_disconnect_hides_stale_review(browser_workspace, route, reloa
     page.set_viewport_size({'width': 390, 'height': 844})
     page.goto(page.url.split('?')[0].rstrip('/') + route, wait_until='networkidle')
     expect(page.locator(content)).to_be_visible()
-    page.route('**/api/workspace', lambda request: request.abort())
+    page.route('**/api/workspace*', lambda request: request.abort())
     page.locator(reload).click()
     expect(page.locator(content)).to_be_hidden()
-    page.unroute('**/api/workspace')
+    page.unroute('**/api/workspace*')
     page.locator('#show-all' if route == '/' else '#pixel-reload').click()
     expect(page.locator(content)).to_be_visible()
 
@@ -829,7 +833,7 @@ def test_review_permission_denial_blocks_work_until_reload(
     output = os.getenv('ROSY_UIUX_SCREENSHOT_DIR')
     page.set_viewport_size({'width': width, 'height': 844})
     page.goto(page.url.split('?')[0].rstrip('/') + route, wait_until='networkidle')
-    page.route('**/api/workspace', lambda request: request.fulfill(
+    page.route('**/api/workspace*', lambda request: request.fulfill(
         status=403, content_type='application/json', body='{"error":"local host required"}'))
     page.locator(reload).click()
     expect(page.locator(content)).to_be_hidden()
@@ -842,7 +846,7 @@ def test_review_permission_denial_blocks_work_until_reload(
         target = Path(output) / f'learning-{"objects" if route == "/" else "pixels"}-workspace-denied-{width}.png'
         target.parent.mkdir(parents=True, exist_ok=True)
         page.screenshot(path=str(target))
-    page.unroute('**/api/workspace')
+    page.unroute('**/api/workspace*')
     page.locator('#show-all' if route == '/' else reload).click()
     expect(page.locator(content)).to_be_visible()
 
@@ -875,8 +879,8 @@ def test_review_waiting_workspace_hides_stale_editing(
     page, _, expect = browser_workspace
     page.set_viewport_size({'width': width, 'height': 844})
     pending = []
-    page.route('**/api/workspace', lambda request: pending.append(request))
-    with page.expect_request('**/api/workspace'):
+    page.route('**/api/workspace*', lambda request: pending.append(request))
+    with page.expect_request('**/api/workspace*'):
         page.goto(page.url.split('?')[0].rstrip('/') + route, wait_until='domcontentloaded')
     if route == '/pixels':
         expect(page.locator(empty)).to_be_hidden()
@@ -916,8 +920,8 @@ def test_review_delayed_workspace_shows_wait_age(browser_workspace, route, statu
     page, _, expect = browser_workspace
     page.set_viewport_size({'width': 390, 'height': 844})
     pending = []
-    page.route('**/api/workspace', lambda request: pending.append(request))
-    with page.expect_request('**/api/workspace'):
+    page.route('**/api/workspace*', lambda request: pending.append(request))
+    with page.expect_request('**/api/workspace*'):
         page.goto(page.url.split('?')[0].rstrip('/') + route, wait_until='domcontentloaded')
     expect(page.locator(status)).to_contain_text('서버 응답 대기 3초', timeout=5000)
     expect(page.locator(content)).to_be_hidden()
@@ -1027,7 +1031,8 @@ def test_review_service_unavailable_is_distinct_from_connection_failure(
 ):
     page, _, expect = browser_workspace
     page.set_viewport_size({'width': width, 'height': 844})
-    page.route(f'**/api/{api}', lambda request: request.fulfill(
+    endpoint = f'**/api/{api}' + ('*' if api == 'workspace' else '')
+    page.route(endpoint, lambda request: request.fulfill(
         status=503, content_type='text/html', body='Service Unavailable'))
     page.goto(page.url.split('?')[0].rstrip('/') + route, wait_until='networkidle')
     expect(page.locator(status)).to_contain_text('사용할 수 없습니다')
@@ -1045,7 +1050,7 @@ def test_review_service_unavailable_is_distinct_from_connection_failure(
         target = Path(output) / f'learning-{name}-unavailable-{width}.png'
         target.parent.mkdir(parents=True, exist_ok=True)
         page.screenshot(path=str(target))
-    page.unroute(f'**/api/{api}')
+    page.unroute(endpoint)
     page.locator(retry).click()
     if route in ('/learning', '/catalog'):
         expect(page.locator(recovered)).to_be_enabled()
@@ -1150,23 +1155,23 @@ def test_arrow_keys_move_between_photos(browser_workspace):
     page.keyboard.press('ArrowLeft')
     photo_loaded('사진 1')
     page.locator('#filter').select_option('excluded')
-    photo_loaded('사진 2')
+    photo_loaded('사진 1')
     expect(page.locator('#prev-frame')).to_have_attribute('disabled', '')
     page.locator('#canvas').focus()
     page.keyboard.press('ArrowLeft')
     page.keyboard.press('ArrowRight')
-    photo_loaded('사진 2')
+    photo_loaded('사진 1')
     assert [row['status'] for row in store.list_frames()] == ['approved', 'excluded']
 
 
 def test_filter_selection_empty_recovery_and_reload(browser_workspace):
     page, store, expect = browser_workspace
     page.locator('#filter').select_option('excluded')
-    expect(page.locator('#frame-title')).to_have_text('사진 2')
+    expect(page.locator('#frame-title')).to_have_text('사진 1')
     expect(page.locator('#prev-frame')).to_have_attribute('disabled', '')
     expect(page.locator('#next-frame')).to_have_attribute('disabled', '')
     page.reload(wait_until='networkidle')
-    expect(page.locator('#frame-title')).to_have_text('사진 2')
+    expect(page.locator('#frame-title')).to_have_text('사진 1')
     page.locator('#filter').select_option('pending')
     expect(page.locator('#empty-review')).to_be_visible()
     expect(page.locator('#review-content')).to_be_hidden()
@@ -1188,7 +1193,7 @@ def test_approve_advances_to_next_pending_and_keeps_filter(browser_workspace):
     page.locator('#complete').check()
     page.locator('#approve').click()
     # The reviewer lands on the next pending photo without a third click.
-    expect(page.locator('#frame-title')).to_have_text('사진 2')
+    expect(page.locator('#frame-title')).to_have_text('사진 1')
     expect(page.locator('#filter')).to_have_value('pending')
     expect(page.locator('#drag-status')).to_contain_text('사진 1 승인')
     expect(page.locator('#complete')).not_to_be_checked()

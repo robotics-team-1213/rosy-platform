@@ -241,6 +241,114 @@ def test_duplicate_log_entries_are_rejected():
     assert any("duplicate" in e for e in errors), errors
 
 
+# Unchanged public docs/logs.md blocks, respectively from these immutable commits.
+# SHA-256 uses UTF-8 after CRLF -> LF and body.strip(); headings are excluded.
+ACCOUNT_LOG_SOURCES = (
+    ("0f98efc00cfc39bdc3e3758c74231288e0785e42",  # commit
+     "b21a721f83d1926f3f99ea25e90683124df9755db7145d5266490132bf99437f"),  # body SHA256
+    ("5501425d1dd9b9771b28dec0ec858b91d17167b5",  # commit
+     "55176e616c6882b6de3d2a85daaad8bfce88e043ee96af34e583bc31466fb0af"),  # body SHA256
+)
+ACCOUNT_BLOCK_HASHES = (
+    "85f94adf2fecf59b28901958c3366776987e111dd8315c2a6198e5d8e145d9f7",  # block SHA256
+    "487b7c825bf791fc63a770a3711012f07be1b390c726adf7335ccde7b67e59fc",  # block SHA256
+)
+ACCOUNT_LOGS = (ROOT / "test/fixtures/concurrent-account-logs.txt").read_text(encoding="utf-8")
+ACCOUNT_ENTRIES = harness.parse_log(ACCOUNT_LOGS)
+ACCOUNT_BLOCKS = [entry.heading + "\n" + entry.body.strip() for entry in ACCOUNT_ENTRIES]
+
+
+def test_concurrent_account_log_fixture_pins_committed_bodies():
+    import log_validation
+
+    assert len(ACCOUNT_ENTRIES) == 2
+    assert ACCOUNT_ENTRIES[0].heading == ACCOUNT_ENTRIES[1].heading
+    assert [sha256(entry.body.strip().encode("utf-8")).hexdigest()
+            for entry in ACCOUNT_ENTRIES] == [digest for _, digest in ACCOUNT_LOG_SOURCES]
+    assert [sha256(block.encode("utf-8")).hexdigest() for block in ACCOUNT_BLOCKS] == list(ACCOUNT_BLOCK_HASHES)
+    assert log_validation.CONCURRENT_HEADING == ACCOUNT_ENTRIES[0].heading
+    assert log_validation.CONCURRENT_BODIES == {digest for _, digest in ACCOUNT_LOG_SOURCES}
+
+
+@pytest.mark.parametrize("blocks", [ACCOUNT_BLOCKS, ACCOUNT_BLOCKS[::-1]])
+def test_concurrent_account_logs_keep_both_committed_versions(blocks):
+    merged = "\n\n".join(blocks)
+    assert harness.validate_log(merged) == []
+    assert harness.validate_log("\ufeff" + merged.replace("\n", "\r\n") + "\r\n\r\n") == []
+    for old in blocks:
+        assert harness.is_append_only(old, merged)
+        assert not harness.is_append_only(merged, old)
+
+
+@pytest.mark.parametrize("blocks", [
+    [ACCOUNT_BLOCKS[0], ACCOUNT_BLOCKS[0]],
+    [ACCOUNT_BLOCKS[1], ACCOUNT_BLOCKS[1]],
+    [*ACCOUNT_BLOCKS, ACCOUNT_BLOCKS[0]],
+    [*ACCOUNT_BLOCKS, ACCOUNT_BLOCKS[1]],
+    [*ACCOUNT_BLOCKS, ACCOUNT_BLOCKS[0] + "\nextra"],
+    [ACCOUNT_BLOCKS[0] + "\nextra", ACCOUNT_BLOCKS[1]],
+    [ACCOUNT_BLOCKS[0], ACCOUNT_BLOCKS[1] + "\nextra"],
+    [block.replace("역할", "arbitrary") for block in ACCOUNT_BLOCKS],
+])
+def test_concurrent_account_logs_reject_unpinned_duplicates(blocks):
+    assert any("duplicate" in e for e in harness.validate_log("\n\n".join(blocks)))
+
+
+@pytest.mark.parametrize("indices", [(0,), (1,), (0, 1)], ids=["first", "second", "both"])
+def test_concurrent_account_logs_reject_body_leading_bom(indices):
+    blocks = ACCOUNT_BLOCKS.copy()
+    for index in indices:
+        blocks[index] = blocks[index].replace("\n", "\n\ufeff\n", 1)
+    errors = harness.validate_log("\n\n".join(blocks))
+    assert any("duplicate" in e for e in errors), errors
+    assert not any("missing" in e for e in errors), errors
+
+
+def test_concurrent_account_logs_accept_document_leading_bom():
+    assert harness.validate_log("\ufeff" + ACCOUNT_LOGS) == []
+
+
+@pytest.mark.parametrize("index", [0, 1])
+def test_concurrent_account_logs_still_validate_fields_and_preservation(index):
+    blocks = ACCOUNT_BLOCKS.copy()
+    blocks[index] = blocks[index].replace("- 증거:", "- removed:")
+    merged = "\n\n".join(blocks)
+    errors = harness.validate_log(merged)
+    assert any("duplicate" in e for e in errors)
+    assert any("missing '- 증거:'" in e for e in errors)
+    assert not harness.is_append_only(ACCOUNT_LOGS, merged)
+
+
+def test_concurrent_account_logs_still_validate_dates():
+    errors = harness.validate_log(ACCOUNT_LOGS.replace("2026-11-04", "2026-19-45"))
+    assert any("invalid date" in e for e in errors)
+    assert any("duplicate" in e for e in errors)
+
+
+def test_concurrent_account_body_pins_never_bypass_field_validation(monkeypatch):
+    import log_validation
+
+    malformed = ACCOUNT_LOGS.replace("- 증거:", "- removed:")
+    monkeypatch.setattr(log_validation, "CONCURRENT_BODIES", {
+        sha256(entry.body.strip().encode("utf-8")).hexdigest()
+        for entry in harness.parse_log(malformed)
+    })
+    errors = harness.validate_log(malformed)
+    assert not any("duplicate" in e for e in errors)
+    assert sum("missing '- 증거:'" in e for e in errors) == 2
+
+
+def test_concurrent_account_body_pins_never_bypass_date_validation(monkeypatch):
+    import log_validation
+
+    monkeypatch.setattr(log_validation, "CONCURRENT_HEADING",
+                        ACCOUNT_ENTRIES[0].heading.replace("2026-11-04", "2026-19-45"))
+    errors = harness.validate_log(ACCOUNT_LOGS.replace("2026-11-04", "2026-19-45"))
+    assert not any("duplicate" in e for e in errors)
+    assert sum("invalid date" in e for e in errors) == 2
+    assert any("out of order" in e for e in harness.validate_log(ACCOUNT_LOGS + "\n" + GOOD_LOG))
+
+
 @pytest.mark.parametrize(
     "broken, fragment",
     [

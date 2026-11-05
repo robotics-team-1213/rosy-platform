@@ -52,6 +52,26 @@ def test_missing_configuration_disables_actions(tmp_path):
         jobs.close()
 
 
+@pytest.mark.parametrize('state', ['not_requested', 'queued', 'running', 'failed', 'cancelled', 'stale'])
+def test_feedback_absence_reports_latest_check_state_not_blank_result(tmp_path, state):
+    store = workspace(tmp_path)
+    jobs = Jobs(store)
+    try:
+        if state != 'not_requested':
+            with store.connect() as db:
+                jobs._write(db, dict(id='latest-check', frame=0, action='mask_check', state=state,
+                                    version=1, error='Check failed' if state == 'failed' else None))
+        result = read_current_feedback(store.state, 0)
+        assert result['available'] is False
+        assert result['check']['state'] == state
+        if state != 'not_requested':
+            assert result['check']['version'] == 1
+        if state == 'failed':
+            assert result['check']['error'] == 'Check failed'
+    finally:
+        jobs.close()
+
+
 @pytest.mark.parametrize('action', ['pixel_draft', 'mask_check'])
 def test_whole_road_semantic_refuses_lane_only_ai_before_execution(tmp_path, action):
     store = workspace(tmp_path)
@@ -107,6 +127,59 @@ def test_stale_version_does_not_publish(tmp_path):
         release.set()
         assert finished(jobs)['state'] == 'stale'
         assert not store.object_drafts(0)
+    finally:
+        release.set(); jobs.close()
+
+
+@pytest.mark.parametrize('action', ['object_draft', 'pixel_draft'])
+def test_revision_quarantine_only_fresh_validated_same_bytes_can_reactivate(tmp_path, monkeypatch, action):
+    import copy
+    import review_classes
+    import vision_review_drafts
+    from review_store import Conflict
+    store = workspace(tmp_path)
+    lane = 'object' if action == 'object_draft' else 'pixel'
+    if lane == 'object':
+        result = {'boxes': [{'label': 'person', 'bbox_xyxy': [1, 1, 12, 12]}]}
+    else:
+        proposal = review_masks.pixels(store, review_masks.get(store, 0)).copy()
+        proposal[:, 1] = 0
+        result = {'mask': base64.b64encode(review_masks.encode(proposal)).decode()}
+    candidates = lambda: store.object_drafts(0) if lane == 'object' else review_masks.get(store, 0)['draft_candidates']
+    version = lambda: (store.get(0) if lane == 'object' else review_masks.get(store, 0))['version']
+    started, release = threading.Event(), threading.Event()
+    jobs = Jobs(store, backend=lambda *_: result)
+    try:
+        original = jobs.create(0, action, version(), 'first-user')
+        assert finished(jobs)['state'] == 'succeeded'
+        digest = candidates()[0]['sha256']
+        def blocked(*_):
+            started.set(); assert release.wait(5)
+            return result
+        jobs.backend = blocked
+        stale = jobs.create(0, action, version(), 'old-user')
+        assert started.wait(5)
+        current = review_classes.snapshot(store, lane)
+        rows = copy.deepcopy(current['binding']['classes'])
+        if lane == 'object':
+            rows.append(dict(index=len(rows), name='new_object', display='새 물체', color=[13, 27, 49]))
+        else:
+            rows[0]['color'] = [91, 92, 93]
+        review_classes.revise(store, dict(kind=lane, classes=rows, expected_sha=current['expected_sha'], expected_impact=0, confirm=True), 'admin', Conflict)
+        assert not candidates()
+        release.set()
+        assert finished(jobs)['state'] == 'stale'
+        assert not candidates()
+        if lane == 'object':
+            # This fake backend supports the appended class; production model compatibility stays guarded.
+            monkeypatch.setattr(vision_review_drafts, 'CLASSES', store.object_classes())
+        jobs.backend = lambda *_: result
+        fresh = jobs.create(0, action, version(), 'fresh-user')
+        assert finished(jobs)['state'] == 'succeeded'
+        candidate = candidates()[0]
+        assert candidate['sha256'] == digest
+        assert json.loads(candidate['origin'])['job_id'] == fresh['id']
+        assert {job['id'] for job in jobs.status(0)['jobs']} >= {original['id'], stale['id'], fresh['id']}
     finally:
         release.set(); jobs.close()
 
@@ -176,6 +249,11 @@ def test_per_frame_feedback_readback_without_approval(tmp_path):
         result = read_current_feedback(store.state, 0)
         assert result['current'] and result['requested_by'] == 'human-a' and result['job_id'] == job['id']
         assert result['feedback']['verdict'] == 'concern'
+        assert result['mask_version'] == before['version']
+        with store.connect() as db:
+            jobs._write(db, dict(id='later-failed', frame=0, action='mask_check', state='failed', version=1, error='Later check failed'))
+        older = read_current_feedback(store.state, 0)
+        assert older['available'] and older['feedback'] == result['feedback'] and older['check']['state'] == 'failed'
         assert review_masks.get(store, 0) == before
     finally:
         jobs.close()

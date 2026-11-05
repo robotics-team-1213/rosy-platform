@@ -1,8 +1,9 @@
 import {createFleetClient} from '/common/fleet-client.js';
-import {canManageAccounts, canViewAccountSetup, CAPABILITIES, teamGrants} from '/console/assets/account-permissions.js';
+import {confirmIrreversible} from '/common/ui.js';
+import {canManageAccounts, canViewAccountSetup, CAPABILITIES, roleGrants} from '/console/assets/account-permissions.js';
 
 const rawRequest = createFleetClient(), $ = id => document.getElementById(id), endpoint = '/api/fleet/auth/accounts';
-let owner = null, rows = [], selected = null, busy = false, siteResource = '';
+let owner = null, rows = [], selected = null, busy = false, siteResource = '', shownRole = 'operator';
 const lifetime = new AbortController();
 let invalidated = false;
 function changed() { return Object.assign(new Error(), {code:'ACCOUNT_CHANGED'}); }
@@ -93,10 +94,10 @@ function edit(row = null) {
   for (const [id, key] of [['account-name', 'login'], ['account-principal', 'principal_id']]) {
     $(id).value = row?.[key] || ''; $(id).readOnly = !!row;
   }
-  $('account-role').value = row?.role || 'viewer'; $('account-enabled').checked = row?.enabled ?? true;
+  $('account-role').value = shownRole = row?.role || 'operator'; $('account-enabled').checked = row?.enabled ?? true;
   $('account-enabled').closest('label').hidden = !row; $('account-initial-password').hidden = !!row;
   $('account-password').required = !row; $('account-actions').hidden = !row;
-  $('account-grants').replaceChildren(); for (const grant of row?.grants || teamGrants(siteResource)) grantRow(grant);
+  $('account-grants').replaceChildren(); for (const grant of row?.grants || roleGrants('operator', siteResource)) grantRow(grant);
 }
 async function load() {
   rows = await request(endpoint); $('account-list').replaceChildren();
@@ -122,8 +123,17 @@ function grants() {
 }
 $('account-new').addEventListener('click', () => edit());
 $('account-add-grant').addEventListener('click', () => grantRow());
-$('account-team-grants').addEventListener('click', () => {
-  $('account-grants').replaceChildren(); for (const grant of teamGrants(siteResource)) grantRow(grant);
+$('account-role').addEventListener('change', async () => {
+  // An existing account may hold hand-tuned grants; replace them only when the admin says so.
+  const target = selected;
+  if (target) {
+    const allowed = await confirmIrreversible({message: '이 계정의 자원별 권한을 선택한 역할의 묶음으로 바꿀까요? 직접 조정한 권한은 사라집니다.',
+      action: '권한 묶음 적용', opener: $('account-role')});
+    if (selected !== target) return;  // another account was opened meanwhile
+    if (!allowed) { $('account-role').value = shownRole; return; }
+  }
+  shownRole = $('account-role').value;
+  $('account-grants').replaceChildren(); for (const grant of roleGrants(shownRole, siteResource)) grantRow(grant);
 });
 $('account-reload').addEventListener('click', () => perform(async () => { await load(); status('최신 계정 상태입니다.'); }));
 $('account-save').addEventListener('click', () => {

@@ -117,7 +117,7 @@ def bridge(wt: Path, candidate: str, tested_main: str, head: str, main: str) -> 
         tree = _git(wt, "merge-tree", "--write-tree", "--no-messages", first, others[0])
         if tree.returncode == 0:
             # land.merge regenerates index.md and drops landed gap lines in the merge commit itself
-            edited = _git(wt, "diff", "--name-only", tree.stdout.split()[0], sha).stdout.split()
+            edited = _git(wt, "diff", "--name-only", tree.stdout.split()[0], sha).stdout.splitlines()
             if not all(map(resolver, edited)):
                 return False  # the merge commit changed more than git's own merge and those records
         elif tree.returncode != 1 or not all(map(resolver, conflict_stages(tree.stdout))):

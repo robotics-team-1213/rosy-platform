@@ -36,6 +36,15 @@ def configure(store):
             frame INTEGER NOT NULL, sha256 TEXT NOT NULL, boxes TEXT NOT NULL,
             origin TEXT, catalog_sha256 TEXT NOT NULL,
             PRIMARY KEY(frame,sha256));''')
+        db.executescript('''CREATE TABLE IF NOT EXISTS object_draft_quarantine (
+            frame INTEGER NOT NULL, sha256 TEXT NOT NULL, PRIMARY KEY(frame,sha256));
+            CREATE TABLE IF NOT EXISTS class_revisions (
+            id INTEGER PRIMARY KEY, ts TEXT DEFAULT CURRENT_TIMESTAMP, kind TEXT NOT NULL,
+            old_binding TEXT NOT NULL, new_binding TEXT NOT NULL, actor TEXT NOT NULL, impact INTEGER NOT NULL);
+            CREATE TRIGGER IF NOT EXISTS class_revisions_no_update BEFORE UPDATE ON class_revisions
+            BEGIN SELECT RAISE(ABORT,'class revisions are immutable'); END;
+            CREATE TRIGGER IF NOT EXISTS class_revisions_no_delete BEFORE DELETE ON class_revisions
+            BEGIN SELECT RAISE(ABORT,'class revisions are immutable'); END;''')
         db.execute("INSERT OR IGNORE INTO metadata VALUES ('workspace_id',?)", (uuid.uuid4().hex,))
         db.execute("INSERT OR IGNORE INTO metadata VALUES ('generation','1')")
         for row in db.execute('SELECT id,source FROM frames').fetchall():
