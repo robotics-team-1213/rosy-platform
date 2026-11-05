@@ -14181,3 +14181,10 @@ osy-d395-s1d\`.
 - 증거: 변경 전 원격 `test_committed_review_archive_starts_without_checkout_imports`가 누락된 perception·Drive 의존성으로 실패했다. 변경 커밋의 `test_model_pc_autoupdate.py`·`test_model_review_release.py` 원격 검증 결과는 작업 인계에 남긴다.
 - gate 변화: 없음
 - CE: 해당 없음 — 원인과 재발 검사는 소스 목록과 기존 실제 Git 아카이브 부팅 시험에 드러난다.
+
+## 2026-11-05 · 348778e549 · docs(validation): 검수 ACT·SmolVLA 학습 연결 증거
+
+- 변경: [학습 연결 검증 기록](validation/omx-smolvla-reviewed-cycle-2026-11-05/result.md)에 고정 소스·실제 SDK 결과·회귀 실패/수정·독립 리뷰·남은 품질/현장 수용 조건을 기록했다.
+- 증거: 실제 SmolVLA6/12관절 학습·이동 후 오프라인·bench runner2 passed와 정본 ACT CPU 왕복2 passed, 각각 exit0/NEW0. 최종 구현348778e549의 FULL29개 모두 exit0/NEW0이며 실제 Decision3함수도 exit0/NEW0다. 시험 SHA별 판정과 skip은 위 기록을 따른다.
+- gate 변화: 없음. 모델 품질·시뮬 작업·실물·게시 승인은 독립 조건이다.
+- CE: 해당 없음 — 기존 환경 분리 교훈을 적용했고 새 검사는 코드·회귀·README에 남는다.
