@@ -244,14 +244,14 @@ def test_duplicate_log_entries_are_rejected():
 # Unchanged public docs/logs.md blocks, respectively from these immutable commits.
 # SHA-256 uses UTF-8 after CRLF -> LF and body.strip(); headings are excluded.
 ACCOUNT_LOG_SOURCES = (
-    ("0f98efc00cfc39bdc3e3758c74231288e0785e42",
-     "b21a721f83d1926f3f99ea25e90683124df9755db7145d5266490132bf99437f"),
-    ("5501425d1dd9b9771b28dec0ec858b91d17167b5",
-     "55176e616c6882b6de3d2a85daaad8bfce88e043ee96af34e583bc31466fb0af"),
+    ("0f98efc00cfc39bdc3e3758c74231288e0785e42",  # commit
+     "b21a721f83d1926f3f99ea25e90683124df9755db7145d5266490132bf99437f"),  # body SHA256
+    ("5501425d1dd9b9771b28dec0ec858b91d17167b5",  # commit
+     "55176e616c6882b6de3d2a85daaad8bfce88e043ee96af34e583bc31466fb0af"),  # body SHA256
 )
 ACCOUNT_BLOCK_HASHES = (
-    "85f94adf2fecf59b28901958c3366776987e111dd8315c2a6198e5d8e145d9f7",
-    "487b7c825bf791fc63a770a3711012f07be1b390c726adf7335ccde7b67e59fc",
+    "85f94adf2fecf59b28901958c3366776987e111dd8315c2a6198e5d8e145d9f7",  # block SHA256
+    "487b7c825bf791fc63a770a3711012f07be1b390c726adf7335ccde7b67e59fc",  # block SHA256
 )
 ACCOUNT_LOGS = (ROOT / "test/fixtures/concurrent-account-logs.txt").read_text(encoding="utf-8")
 ACCOUNT_ENTRIES = harness.parse_log(ACCOUNT_LOGS)

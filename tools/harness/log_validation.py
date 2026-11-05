@@ -18,10 +18,10 @@ CONCURRENT_HEADING = (
     "계정 화면의 역할 선택이 권한 묶음을 채움 (D-955 화면 보완)"
 )
 CONCURRENT_BODIES = frozenset({
-    # 0f98efc00cfc39bdc3e3758c74231288e0785e42:docs/logs.md
-    "b21a721f83d1926f3f99ea25e90683124df9755db7145d5266490132bf99437f",
-    # 5501425d1dd9b9771b28dec0ec858b91d17167b5:docs/logs.md
-    "55176e616c6882b6de3d2a85daaad8bfce88e043ee96af34e583bc31466fb0af",
+    # commit 0f98efc00cfc39bdc3e3758c74231288e0785e42:docs/logs.md
+    "b21a721f83d1926f3f99ea25e90683124df9755db7145d5266490132bf99437f",  # body SHA256
+    # commit 5501425d1dd9b9771b28dec0ec858b91d17167b5:docs/logs.md
+    "55176e616c6882b6de3d2a85daaad8bfce88e043ee96af34e583bc31466fb0af",  # body SHA256
 })
 
 
