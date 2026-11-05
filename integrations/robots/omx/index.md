@@ -27,4 +27,5 @@
 
 ## 최근 기록
 
+- 2026-11-05 · 348778e549 · feat(learning): 검수 SmolVLA의 이동 후 오프라인 재적재
 - 2026-10-27 · uncommitted · refactor(harness): register omx_transfer as a control wheel module
