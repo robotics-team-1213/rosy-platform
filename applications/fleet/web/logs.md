@@ -1000,3 +1000,9 @@
 - gate 변화: SOURCE 회귀 확인. 실제 지도 보정·로봇 위치·장치 주행 수용 근거는 아님.
 - 결정: 기존 map_id를 그리기 직전에 검증하며 임의 좌표 변환이나 기록 삭제를 추가하지 않는다.
 - 교훈: CE 해당 없음 — 필터와 grid/site·누락 ID·frame 경계 회귀가 판단 근거를 직접 보존한다.
+
+## 2026-11-06 · uncommitted · fix(fleet): 사건 facts의 미지 JSON 형태에서도 본문과 해제 입력 유지
+- 변경: D-971 facts는 BoundedJson이므로 알려진 측정 형태만 기존 문구로 표시한다. flagged 객체·문자열·null 행, 미지 latch/bits, 비정상 folded/windup 형태와 빈 측정에 남은 미지 자료는 원본 JSON 텍스트로 보존한다. 정상 runner의 error/fault null은 기존 측정 문구를 유지한다. 권한·CSRF·해제 요청·사건 상태 처리는 변경하지 않았다.
+- 증거: RED5ef2b034c4 실제 Chromium 사건 회귀2실패/정상1통과에서 flagged.map TypeError와 본문·해제 버튼 누락을 재현했다. source4ddb9eef8b 원격 workcell/motor-health Chromium28통과·공용 controls/계약/기존 incident API/Node/API pin61통과, skip0·NEW/known/flaky0; scratch incident-facts-{red,final-green,contracts}/run-1.txt. 미지 facts의 markup은 텍스트로만 보이고, 메모 없는 해제 거절과 메모 후 원래 해제 흐름도 확인했다.
+- gate 변화: SOURCE/관련 원격 회귀 확인이다. 최종 통합 착지는 게시 담당과 조율하며 공개 배포·운영 로그인·기체·서비스 수용 근거로 확대하지 않는다.
+- 교훈: CE 해당 없음 — BoundedJson 계약과 실제 렌더·해제 회귀가 원인과 방어 경계를 직접 보존하며 별도 숨은 복구 조건이 없다.
