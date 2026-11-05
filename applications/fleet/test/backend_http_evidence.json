@@ -3,6 +3,11 @@
   "scope": "One observed response per route from a passing HTTP test. Success selected where observed; refusal-only receipts do not prove successful configuration or device behavior.",
   "reports": [
     {
+      "source_revision": "c6025ea57207b74c2fba25434f04e684741b6b6a",
+      "result": "5 passed, skip 0; includes named move and terminal-zero HTTP forwarding through the existing Fleet intent/resource boundary. In-process HTTP with a synthetic robot transport; physical movement and stopping are separate evidence.",
+      "pytest_root": "."
+    },
+    {
       "source_revision": "e5911e84f3ff9a2c9f9d5fe739848ff1b2c75857",
       "result": "5 passed; USB camera listing and operator decision HTTP routes (D-963), in-process with real SQLite; no device evidence",
       "pytest_root": "."
@@ -74,6 +79,14 @@
     }
   ],
   "requests": {
+    "POST:/api/fleet/do": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_server_app.py",
+        "test_named_manual_move_forwards_drive_and_terminal_zero"
+      ],
+      "source_revision": "c6025ea57207b74c2fba25434f04e684741b6b6a"
+    },
     "GET:/api/fleet/workcell-observations/usb-devices": {
       "status": 200,
       "test": [
