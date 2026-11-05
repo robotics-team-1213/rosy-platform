@@ -158,7 +158,8 @@ def test_profile_entry_preserves_work_context_and_verifies_own_name(account_page
     expect(profile.locator('#profile-role')).to_have_text('운영자')
     if account_backend == 'managed':
         expect(profile.locator('#profile-grants')).to_be_visible()
-        expect(profile.locator('#profile-grant-list')).to_contain_text('site:test-site')
+        expect(profile.locator('#profile-grant-list')).to_contain_text('현장 test-site')
+        assert 'site:test-site' not in profile.locator('#profile-grant-list').inner_text()
         expect(profile.locator('#profile-grant-list')).to_contain_text('계정 관리')
     else:
         expect(profile.locator('#profile-grants')).to_be_hidden()
@@ -486,3 +487,27 @@ def test_empty_cell_token_uses_cookie_despite_stale_storage(account_page):
     expect(page.locator('[data-login=logout]')).to_be_visible()
     expect(page.locator('[data-login=logout]')).to_have_text('로그아웃')
     expect(page.locator('[data-login=logout]')).to_be_enabled()
+
+
+def test_profile_permissions_use_common_rows_and_keep_unknown_codes_in_diagnostics(account_page):
+    from playwright.sync_api import expect
+    page, origin = account_page
+    page.route('**/api/fleet/auth/profile', lambda route: route.fulfill(json={
+        'login': 'alice', 'principal_id': 'alice', 'role': 'operator', 'display_name': '운영자',
+        'grants': [{'resource': 'site:layout', 'capabilities': ['accounts.manage']},
+                   {'resource': 'robot:*', 'capabilities': ['robot.read', 'robot.operate']},
+                   {'resource': 'project:one', 'capabilities': ['learning.view']},
+                   {'resource': 'future:opaque', 'capabilities': ['future.right']}]}))
+    page.goto(origin + '/console/profile')
+    expect(page.locator('#profile-content')).to_be_visible()
+    expect(page.locator('#profile-grant-list [role=listitem].ui-task-row')).to_have_count(4)
+    expect(page.locator('#profile-grant-list')).to_contain_text('현장 layout · 계정 관리')
+    expect(page.locator('#profile-grant-list')).to_contain_text('모든 로봇 · 로봇 조회, 로봇 조작')
+    expect(page.locator('#profile-grant-list')).to_contain_text('학습 프로젝트 one · 학습 조회')
+    expect(page.locator('#profile-grant-list')).to_contain_text('기타 권한 · 해석되지 않은 권한')
+    assert 'future.right' not in page.inner_text('main')
+    expect(page.locator('#profile-content ui-button[kind=primary]')).to_have_count(1)
+    expect(page.locator('#profile-password-save')).to_have_attribute('kind', 'primary')
+    page.locator('#profile-grant-diagnostics summary').click()
+    expect(page.locator('#profile-grant-raw')).to_contain_text('future:opaque · future.right')
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')

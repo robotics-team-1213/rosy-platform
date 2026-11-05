@@ -76,6 +76,10 @@ def test_pixel_workspace_failure_reason_stays_visible_when_editor_is_hidden(brow
     expect(page.locator('#pixel-error')).to_be_visible()
     expect(page.locator('#pixel-error')).to_contain_text(reason)
     expect(page.locator('#pixel-reload')).to_be_enabled()
+    page.keyboard.press('Control+k')
+    page.get_by_role('textbox', name='기능 검색어').fill('승인 자료 준비')
+    expect(page.locator('#review-command-results ui-button')).to_have_count(0)
+    page.keyboard.press('Escape')
 
 
 @pytest.mark.parametrize('theme', ['dark', 'light'])
@@ -136,11 +140,60 @@ def open_pixels(page, store, expect, index=0, *, panels=True):
     base = page.url.split('?')[0].rstrip('/')
     page.goto(base + f'/pixels?frame={index}', wait_until='networkidle')
     expect(page.locator('#pixel-status')).to_contain_text('v0')
-    if panels:
-        for control in ['#pixel-opacity', '#pixel-quick-classes', '#pixel-candidates', '#pixel-fill', '#pixel-tool-hint', '#pixel-class-help', '#pixel-frames', '#pixel-export']:
-            details = page.locator(control).locator('xpath=ancestor::details[1]')
-            if details.count() and details.is_visible() and details.get_attribute('open') is None:
-                details.locator(':scope > summary').click()
+
+
+def open_pixel_tool(page, selector):
+    target = page.locator(selector).first.evaluate("n => {const view=n.closest('[data-review-tool]');return view && (view.querySelector('[id]')?.id);}")
+    if target:
+        page.evaluate('(id)=>location.hash=id', target)
+        page.wait_for_function('(selector)=>document.querySelector(selector).getBoundingClientRect().height>0', arg=selector)
+
+
+@pytest.mark.parametrize('width', [390, 1366])
+def test_pixel_tool_navigation_preserves_draft_and_has_no_task_folds(browser_workspace, width):
+    page, store, expect = browser_workspace
+    page.set_viewport_size({'width': width, 'height': 844})
+    open_pixels(page, store, expect, panels=False)
+    assert page.locator('ui-button[kind="primary"]:visible').count() == 1
+    expect(page.locator('#pixel-canvas')).to_be_visible()
+    page.locator('#pixel-class').select_option('1')
+    page.locator('#pixel-brush-tool').click()
+    page.locator('#pixel-radius').fill('3')
+    page.locator('#pixel-canvas').click(position={'x': 8, 'y': 8})
+    draft = page.locator('#pixel-draft').inner_text()
+    nav = page.get_by_role('navigation', name='픽셀 검수 도구')
+    nav.get_by_role('link', name='사진 표시·목록', exact=True).click()
+    expect(page.locator('#pixel-display-options')).to_be_visible()
+    expect(page.locator('#pixel-whole-frame-tools')).to_be_hidden()
+    expect(page.locator('.ui-pathbar')).to_contain_text('사진 표시·목록')
+    nav.get_by_role('link', name='승인 자료 준비', exact=True).click()
+    expect(page.locator('#pixel-export')).to_be_visible()
+    expect(page.locator('#pixel-approve')).to_be_hidden()
+    assert page.locator('ui-button[kind="primary"]:visible').count() == 1
+    assert page.locator('#pixel-export').evaluate("n => !n.closest('details')")
+    page.go_back()
+    expect(page.locator('#pixel-display-options')).to_be_visible()
+    nav.get_by_role('link', name='사진 검수', exact=True).click()
+    expect(page.locator('#pixel-draft')).to_have_text(draft)
+    expect(page.locator('#pixel-radius')).to_have_value('3')
+    expect(page.locator('#pixel-canvas')).to_have_attribute('tabindex', '0')
+    page.locator('#pixel-canvas').focus()
+    page.keyboard.press('Shift+Tab')
+    page.keyboard.press('Tab')
+    expect(page.locator('#pixel-canvas')).to_be_focused()
+    page.locator('#pixel-canvas').focus()
+    page.keyboard.press('?')
+    expect(page.locator('#pixel-keys')).to_be_visible()
+    expect(page.locator('#pixel-keys')).to_be_focused()
+    assert page.locator('details details').count() == 0
+    assert page.locator('details:visible').count() < 3
+    nav.get_by_role('link', name='사진 검수', exact=True).click()
+    page.locator('#pixel-save').click()
+    expect(page.locator('#pixel-status')).to_contain_text('v1')
+    page.locator('#pixel-canvas').focus()
+    page.keyboard.press('e')
+    expect(page.locator('#pixel-export')).to_be_visible()
+    expect(page.locator('#pixel-export-result')).to_contain_text('준비 시점 결과')
 
 
 
@@ -389,8 +442,8 @@ def test_command_search_preserves_fill_confirmation_and_reaches_ai_notes(browser
     page.keyboard.press('Control+k')
     page.get_by_role('textbox', name='기능 검색어').fill('AI 참고 의견')
     page.keyboard.press('Enter')
-    expect(page.locator('.pixel-vlm-feedback')).to_have_attribute('open', '')
-    expect(page.locator('.pixel-vlm-feedback > summary')).to_be_focused()
+    expect(page.locator('.pixel-vlm-feedback')).to_be_visible()
+    expect(page.locator('.pixel-vlm-feedback')).to_be_focused()
     assert review_masks.get(store, 0)['version'] == 0
 
 
@@ -452,16 +505,19 @@ def test_detail_view_and_mask_toggle_do_not_change_review(tmp_path):
         open_pixels(page, store, expect)
         before = store.image(0).read_bytes()
         mask = review_masks.get(store, 0)
+        open_pixel_tool(page, '#pixel-mask-visible')
         page.locator('#pixel-mask-visible').uncheck()
         pixel = lambda: page.evaluate("""() => Array.from(document.querySelector('#pixel-canvas')
             .getContext('2d').getImageData(16, 12, 1, 1).data)""")
         original = pixel()
+        open_pixel_tool(page, '#pixel-view-detail')
         page.locator('#pixel-view-detail').click()
         expect(page.locator('#pixel-view-status')).to_contain_text('명암 보정 보기')
         assert pixel() != original
         page.keyboard.press('v')
         expect(page.locator('#pixel-view-original')).to_have_attribute('aria-pressed', 'true')
         assert pixel() == original
+        open_pixel_tool(page, '#pixel-mask-visible')
         page.locator('#pixel-mask-visible').check()
         assert pixel() != original
         assert store.image(0).read_bytes() == before
@@ -478,6 +534,7 @@ def test_unknown_highlight_is_visual_only(browser_workspace):
     y, x = np.argwhere(review_masks.pixels(store, review_masks.get(store, 0)) == 255)[0]
     pixel = lambda: page.evaluate("""([x, y]) => Array.from(document.querySelector('#pixel-canvas')
         .getContext('2d').getImageData(x, y, 1, 1).data)""", [int(x), int(y)])
+    open_pixel_tool(page, '#pixel-show-unknown')
     highlight = page.locator('#pixel-show-unknown')
     expect(highlight).to_be_checked()
     marked = pixel()
@@ -497,7 +554,8 @@ def test_sparse_unknown_pixels_are_visible_and_never_shown_as_zero_percent(brows
     sample = lambda: page.evaluate("""() => Array.from(document.querySelector('#pixel-canvas')
         .getContext('2d').getImageData(10, 10, 1, 1).data)""")
     highlighted = sample()
-    page.locator('#pixel-display-options > summary').click()
+    open_pixel_tool(page, '#pixel-display-options')
+    open_pixel_tool(page, '#pixel-show-unknown')
     page.locator('#pixel-show-unknown').uncheck()
     assert sample() != highlighted
     expect(page.locator('#pixel-approve')).to_be_disabled()
@@ -514,7 +572,7 @@ def test_new_draft_requires_explicit_apply_in_pixel_screen(browser_workspace):
                    (0, digest, path, 'c' * 64, 'sam3_obstacle_unknown_v12_base'))
     page.goto(page.url.split('?')[0].rstrip('/') + '/pixels?frame=0', wait_until='networkidle')
     button = page.locator('#pixel-apply-candidate')
-    button.locator('xpath=ancestor::details[1]').locator(':scope > summary').click()
+    # Candidate replacement remains an explicit editing action beside the photo.
     expect(button).to_be_visible()
     expect(page.locator('#pixel-candidates')).to_contain_text('SAM3 장애물 보류 · 사람 확인 필요')
     expect(page.locator('#pixel-preview-candidate')).to_have_attribute('aria-pressed', 'true')
@@ -783,7 +841,9 @@ def test_pixel_decision_and_preparation_result_are_visible(browser_workspace, wi
     page, store, expect = browser_workspace
     page.set_viewport_size({'width': width, 'height': 844})
     open_pixels(page, store, expect)
-    assert page.locator('#pixel-approve').bounding_box()['y'] < page.locator('#pixel-class-help').bounding_box()['y']
+    open_pixel_tool(page, '#pixel-approve')
+    expect(page.locator('#pixel-approve')).to_be_visible()
+    expect(page.locator('#pixel-class-help')).to_be_hidden()
     if width <= 390:
         field_widths = page.evaluate("""() => ({
           available: document.querySelector('.pixel-editor-column > section').getBoundingClientRect().width,
@@ -823,6 +883,7 @@ def test_pixel_decision_and_preparation_result_are_visible(browser_workspace, wi
     expect(page.locator('#pixel-status')).to_contain_text('픽셀 승인')
     assert review_masks.get(store, 0)['status'] == 'approved'
     shot('approved')
+    open_pixel_tool(page, '#pixel-export')
     page.locator('#pixel-export').click()
     expect(page.locator('#pixel-export-result')).to_contain_text('픽셀 승인 1장 준비')
     expect(page.locator('#pixel-class-help')).to_contain_text('255는 클래스가 아닙니다')
@@ -951,8 +1012,7 @@ def test_stale_pixel_revision_and_excluded_frame_are_guarded(browser_workspace, 
     open_pixels(page, store, expect)
     newer = review_masks.update(store, 0, {'version':0, 'action':'fill', 'label':2}, ValueError)
     page.once('dialog', lambda dialog: dialog.accept())
-    if not page.locator('#pixel-whole-frame-tools').evaluate('node => node.open'):
-        page.locator('#pixel-whole-frame-tools > summary').click()
+    expect(page.locator('#pixel-whole-frame-tools')).to_be_visible()
     page.locator('#pixel-fill').click()
     expect(page.locator('#pixel-error')).to_contain_text('다른 탭')
     expect(page.locator('#pixel-approve')).to_have_attribute('disabled', '')
@@ -995,7 +1055,7 @@ def test_drivable_class_can_be_selected_painted_and_saved(browser_workspace):
     expect(page.locator('#pixel-status')).to_contain_text('v0')
     chip = page.locator('#pixel-quick-classes ui-button').nth(5)
     expect(chip).to_contain_text('주행 가능 영역')
-    page.locator('#pixel-quick-classes').locator('xpath=ancestor::details[1]').locator(':scope > summary').click()
+    expect(page.locator('#pixel-quick-classes')).to_be_visible()
     chip.click()
     expect(page.locator('#pixel-class')).to_have_value('5')
     expect(page.locator('#pixel-tool-hint')).to_contain_text('경계선 안쪽')
@@ -1078,6 +1138,7 @@ def test_pixel_photo_picker_returns_to_canvas_and_quick_tools(browser_workspace)
 def test_pixel_thumbnails_and_unknown_background_draft(browser_workspace):
     page, store, expect = browser_workspace
     open_pixels(page, store, expect)
+    open_pixel_tool(page, '#pixel-frames .pixel-frame-item')
     thumbs = page.locator('#pixel-frames .pixel-frame-item')
     expect(thumbs).to_have_count(2)
     expect(thumbs.nth(0).locator('img')).to_have_attribute('loading', 'lazy')
@@ -1085,6 +1146,7 @@ def test_pixel_thumbnails_and_unknown_background_draft(browser_workspace):
     expect(page.locator('#pixel-title')).to_have_text('사진 2 픽셀 검수')
     thumbs.nth(0).click()
     expect(page.locator('#pixel-title')).to_have_text('사진 1 픽셀 검수')
+    open_pixel_tool(page, '#pixel-fill-unknown')
     page.once('dialog', lambda dialog: dialog.accept())
     page.locator('#pixel-fill-unknown').click()
     expect(page.locator('#pixel-status')).to_contain_text('v1')

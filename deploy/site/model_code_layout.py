@@ -5,6 +5,7 @@ LEARNING_CODE_PREFIXES = ("learning/curation/perception/", "learning/registry/pe
                           "learning/curation/omx/", "learning/training/omx/", PREFIX)
 # Only these two policy-registry files: the Learning HF button (D-943) needs them, the rest of the folder stays out.
 HUB_FILES = ("learning/registry/policy/hub_sync.py", "learning/registry/policy/policy_output_paths.py")
+FILE_PICKER_FILES = ("applications/fleet/web/shared/file-picker.css", "applications/fleet/web/shared/file-picker.js")
 LEARNING_REQUIRED = ("learning/registry/perception/watch.py", PREFIX + "rosy_ml.py",
                      # D-964: the lane/learned runtime the review and training tools import
                      "integrations/perception/perception_runtime/recording.py",
@@ -33,7 +34,7 @@ LEARNING_REQUIRED = ("learning/registry/perception/watch.py", PREFIX + "rosy_ml.
                        ("native_review.py", "native_capture.py", "native_environment.py", "native_segments.py",
                         "collection_intake.py", "collection_pipeline.py", "camera_reference.py")),
                      "learning/training/omx/native_cycle.py",
-                     *HUB_FILES,
+                     *HUB_FILES, *FILE_PICKER_FILES,
                      *("learning/training/omx/experiment_" + name + ".py" for name in
                        ("artifact", "catalog", "center", "dataset", "evaluation", "export", "hub", "inbox", "io",
                         "jobs", "native", "online", "owner_status", "preview", "process", "profile",
@@ -115,7 +116,7 @@ FITNESS_ENTRY = "learning/evaluation/perception/road_fitness_replay.py"
 FITNESS_CONTRACT_FILES = ("contracts/foundation/core_common/observation.py",)
 CODE_PREFIXES = (*LEARNING_CODE_PREFIXES, "middleware/perception/control/", "integrations/perception/perception_runtime/",
                  "contracts/foundation/core_common/",
-                 "contracts/learning/src/", "shared/web/", "tools/data_paths.py", *HUB_FILES, CAMERA_PROFILE, *CAMERA_MAP_FILES, *SPLIT_CODE_PREFIXES)
+                 "contracts/learning/src/", "shared/web/", "tools/data_paths.py", *HUB_FILES, *FILE_PICKER_FILES, CAMERA_PROFILE, *CAMERA_MAP_FILES, *SPLIT_CODE_PREFIXES)
 # Observe enrolled pre-migration checkouts too; new signed archives stay canonical.
 CHECKOUT_PREFIXES = CODE_PREFIXES + (*LEGACY_LEARNING_PREFIXES, "src/runtime/sensing/control/",
                                     "src/contracts/foundation/core_common/")

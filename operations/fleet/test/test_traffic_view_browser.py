@@ -187,18 +187,34 @@ def _shots(page, name, fits=False):
             assert overflow <= 1, f"1920x1080 scrolls {overflow}px: {fit}"
 
 
-def test_console_traffic_layer_card_line_and_queue_row(site):
+@pytest.mark.parametrize('theme', ['dark', 'light'])
+def test_console_traffic_layer_card_line_and_queue_row(site, theme):
     from playwright.sync_api import expect, sync_playwright
 
     posts = []
     with sync_playwright() as playwright:
         browser, page, errors = _open(playwright, site, "/console", posts)
         try:
+            page.evaluate('theme => document.documentElement.dataset.theme = theme', theme)
             expect(page.locator("#user-role")).to_have_attribute("title", "bob · operator")
             page.clock.run_for(1500)  # the first 1 s traffic poll
             expect(page.locator("#traffic-toggle")).to_be_hidden()
             page.locator("#map-options > summary").click()
             expect(page.locator("#traffic-toggle")).to_be_visible(timeout=15000)
+            map_panel = page.locator('[aria-labelledby="map-heading"]')
+            expect(map_panel.locator('details details')).to_have_count(0)
+            assert map_panel.locator('details').count() < 3
+            expect(page.locator('#trail-range')).to_be_visible()
+            page.locator('#trail-range').select_option('600')
+            for width, height in [(1920, 1080), (390, 844)]:
+                page.set_viewport_size({'width': width, 'height': height})
+                expect(page.locator('#trail-range')).to_be_visible()
+                assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+                stop = page.locator('#estop').bounding_box()
+                assert stop and stop['y'] >= 0 and stop['y'] + stop['height'] <= height
+                if out := os.environ.get('ROSY_SHOT_DIR'):
+                    Path(out).mkdir(parents=True, exist_ok=True)
+                    page.screenshot(path=str(Path(out) / f'console-preferences-{theme}-{width}.png'))
             page.wait_for_function("() => window.__trafficLayer?.zones === 1", timeout=15000)
             assert page.evaluate("window.__trafficLayer") == {"bands": 4, "zones": 1, "ticks": 2, "convoys": 0, "signals": 0}
             expect(page.locator("#legend-traffic")).to_be_visible()
@@ -216,9 +232,10 @@ def test_console_traffic_layer_card_line_and_queue_row(site):
             expect(page.locator("#site-path-list")).to_contain_text("프록시")
             page.locator("#site-path summary").click()
             page.locator("#map-options > summary").click()
-            _shots(page, "console-traffic", fits=True)
+            _shots(page, f"console-traffic-{theme}", fits=True)
             page.set_viewport_size({"width": 1920, "height": 1080})
             page.locator("#map-options > summary").click()
+            expect(page.locator('#trail-range')).to_have_value('600')
             before = page.locator("#map-canvas").evaluate("c => c.toDataURL()")
             page.locator("#traffic-toggle").click()
             expect(page.locator("#traffic-toggle")).to_have_attribute("aria-pressed", "false")

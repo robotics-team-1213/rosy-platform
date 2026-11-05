@@ -13,7 +13,9 @@ from test_review_upload import payload
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason='requires explicit Chromium browser run')
 
 
-def test_catalog_uploads_selected_client_image(tmp_path):
+@pytest.mark.parametrize('source', ['image-files', 'image-directory'])
+@pytest.mark.parametrize('reset', ['clear', 'upload'])
+def test_catalog_uploads_selected_client_image(tmp_path, source, reset):
     playwright = pytest.importorskip('playwright.sync_api')
     store = open_store(tmp_path)
     review_masks.bind_classes(store, CLASSES)
@@ -28,11 +30,25 @@ def test_catalog_uploads_selected_client_image(tmp_path):
             page.on('pageerror', lambda error: errors.append(str(error)))
             page.goto(f'http://127.0.0.1:{server.server_port}/catalog', wait_until='domcontentloaded')
             playwright.expect(page.locator('#image-files')).to_be_enabled()
-            page.locator('#image-files').set_input_files({'name': 'client.png', 'mimeType': 'image/png',
-                                                        'buffer': base64.b64decode(payload()['data'])})
+            directory = tmp_path / 'selected'
+            directory.mkdir()
+            raw = base64.b64decode(payload()['data'])
+            (directory / 'client.png').write_bytes(raw)
+            selection = str(directory) if source == 'image-directory' else {'name': 'client.png', 'mimeType': 'image/png', 'buffer': raw}
+            picker = page.locator('.file-picker').filter(has=page.locator('#'+source))
+            playwright.expect(picker.locator('.file-picker-button')).to_contain_text('선택')
+            page.locator('#'+source).set_input_files(selection)
             playwright.expect(page.locator('#upload-selection')).to_have_text('선택한 사진 1장')
+            playwright.expect(picker.locator('[data-file-name]')).to_have_text('client.png')
+            if reset == 'clear':
+                page.locator('#upload-clear').click()
+                playwright.expect(picker.locator('[data-file-name]')).to_have_text('선택한 파일 없음')
+                assert page.locator('#'+source).evaluate('n=>n.files.length') == 0
+                page.locator('#'+source).set_input_files(selection)
             page.locator('#image-upload').click()
             playwright.expect(page.locator('#upload-status')).to_contain_text('업로드 완료 1장')
+            playwright.expect(picker.locator('[data-file-name]')).to_have_text('선택한 파일 없음')
+            assert page.locator('#'+source).evaluate('n=>n.files.length') == 0
             assert len(store.list_frames()) == 3
             assert not errors
             browser.close()

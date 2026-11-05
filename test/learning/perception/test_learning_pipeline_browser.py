@@ -16,7 +16,7 @@ import review_masks
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason='requires explicit Chromium browser run')
 
 
-@pytest.mark.parametrize('width,theme', [(1440,'dark'),(1440,'light'),(320,'dark'),(320,'light')])
+@pytest.mark.parametrize('width,theme', [(1366,'dark'),(1366,'light'),(390,'dark'),(390,'light')])
 def test_home_routes_and_keyboard_section_navigation(browser_workspace,width,theme):
     page,_,expect=browser_workspace
     base=page.url.split('?')[0].rstrip('/')
@@ -37,6 +37,15 @@ def test_home_routes_and_keyboard_section_navigation(browser_workspace,width,the
         page.keyboard.press('Enter')
         expect(page).to_have_url(base+'/learning#'+target)
         expect(page.locator('#'+target)).to_be_focused()
+        expect(page.locator('#'+target)).to_be_visible()
+        for other in ['learning-start','pipeline','review-section','learning-results','storage-section']:
+            if other!=target:
+                expect(page.locator('#'+other)).to_be_hidden()
+        expect(link).to_have_attribute('aria-current','location')
+        if output:=os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+            capture=Path(output)/f'learning-home-{target}-{theme}-{width}.png'
+            capture.parent.mkdir(parents=True,exist_ok=True)
+            page.screenshot(path=str(capture))
     assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
     if output:=os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
         target=Path(output)/f'learning-home-routes-{theme}-{width}.png'
@@ -124,7 +133,7 @@ def test_learning_pipeline_automatically_connects_owner_and_invalidates_new_deci
     (out / 'state.json').write_text(json.dumps(doc))
     target = Control(file, current['workspace_id'], home=home, runner=runner)
     with serve(store, target) as (page, _, expect):
-        page.goto(page.url.split('?')[0].rstrip('/') + '/learning', wait_until='domcontentloaded')
+        page.goto(page.url.split('?')[0].rstrip('/') + '/learning#pipeline', wait_until='domcontentloaded')
         expect(page.locator('[data-stage="evaluation"]')).to_have_attribute('data-state', 'done')
         page.locator('#pipeline-evidence summary').click()
         expect(page.locator('#pipeline-evidence')).to_contain_text('current-model')
@@ -147,3 +156,112 @@ def test_learning_pipeline_automatically_connects_owner_and_invalidates_new_deci
         expect(page.locator('#pipeline-action')).to_be_disabled(timeout=12000)
         expect(page.locator('#pipeline-stages')).to_be_empty(timeout=12000)
         expect(page.get_by_role('button', name='학습 시작', exact=True)).to_be_disabled()
+
+
+def test_home_nested_tools_keep_drafts_and_history(browser_workspace):
+    page,_,expect=browser_workspace
+    base=page.url.split('?')[0].rstrip('/')
+    page.goto(base+'/learning#connection-panel',wait_until='networkidle')
+    expect(page.locator('#name')).to_be_focused()
+    page.locator('#name').fill('keep my draft')
+    page.locator('#path').fill('/draft/report')
+    if output:=os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+        capture=Path(output)/'learning-home-connection-draft.png'
+        capture.parent.mkdir(parents=True,exist_ok=True)
+        page.screenshot(path=str(capture))
+    navigation=page.locator('.learning-home-nav')
+    navigation.locator('a[href="#pipeline"]').click()
+    expect(page.locator('#connection-panel')).to_be_hidden()
+    track=page.locator('#pipeline-stages')
+    for stage,href in [('data','/catalog'),('review','/pixels?filter=pending'),
+                       ('preparation','/pixels#pixel-preparation'),('dataset','#pipeline-evidence'),
+                       ('training','#pipeline-setup'),('evaluation','#pipeline-evidence'),
+                       ('application','/learning/evaluate')]:
+        expect(track.locator(f'[data-stage="{stage}"] a')).to_have_attribute('href',href)
+    track.locator('[data-stage="training"] a').click()
+    expect(page.locator('#pipeline-setup')).to_be_visible()
+    if output:=os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+        capture=Path(output)/'learning-home-pipeline-setup.png'
+        capture.parent.mkdir(parents=True,exist_ok=True)
+        page.screenshot(path=str(capture))
+    expect(page.locator('#pipeline-evidence')).to_be_hidden()
+    page.go_back()
+    expect(page.locator('#pipeline')).to_be_visible()
+    page.go_back()
+    expect(page.locator('#name')).to_have_value('keep my draft')
+    expect(page.locator('#path')).to_have_value('/draft/report')
+    expect(page.locator('#connection-panel')).to_be_visible()
+    page.go_forward()
+    expect(page.locator('#pipeline')).to_be_visible()
+    assert page.locator('details').count()<=1
+
+
+@pytest.mark.parametrize('width,theme',[(1366,'dark'),(1366,'light'),(390,'dark'),(390,'light')])
+def test_home_many_jobs_use_selected_detail_without_extra_folds(browser_workspace,width,theme):
+    page,_,expect=browser_workspace
+    base=page.url.split('?')[0].rstrip('/')
+    payload=page.request.get(base+'/api/learning').json()
+    kind=payload['workflows'][0]['id']
+    payload['items']=[dict(id=f'job-{n}',name=f'Example {n}',kind=kind,path=f'/result/{n}',version=1,
+                           reports=[dict(name='report.json',status='unchanged',declared={},steps=[],metrics=[],images=[])])
+                      for n in range(8)]
+    page.route('**/api/learning',lambda route:route.fulfill(json=payload))
+    page.set_viewport_size(dict(width=width,height=900))
+    page.goto(base+'/learning#learning-results',wait_until='networkidle')
+    page.evaluate('(theme)=>document.documentElement.dataset.theme=theme',theme)
+    expect(page.locator('#jobs [data-job]')).to_have_count(8)
+    assert page.locator('details').count()==1
+    page.locator('#jobs [data-job="job-3"] a[href^="#job-"]').click()
+    expect(page.locator('#jobs')).to_be_hidden()
+    expect(page.locator('[data-job-detail="job-3"]')).to_be_visible()
+    expect(page.locator('[data-job-detail="job-2"]')).to_be_hidden()
+    expect(page.locator('[data-job-detail="job-3"]')).to_contain_text('/result/3')
+    assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
+    page.go_back()
+    expect(page.locator('#jobs [data-job]')).to_have_count(8)
+    expect(page.locator('#job-detail')).to_be_hidden()
+
+
+@pytest.mark.parametrize('fragment',['#job-%','#job-missing'])
+def test_home_invalid_job_link_falls_back_without_losing_draft(browser_workspace,fragment):
+    page,_,expect=browser_workspace
+    base=page.url.split('?')[0].rstrip('/')
+    page.goto(base+'/learning#connection-panel',wait_until='networkidle')
+    page.locator('#name').fill('saved draft')
+    page.locator('#path').fill('/draft/unchanged')
+    page.evaluate('(fragment)=>location.hash=fragment',fragment)
+    expect(page.locator('#learning-start')).to_be_visible()
+    expect(page.locator('#job-detail')).to_be_hidden()
+    expect(page.locator('#connection-panel')).to_be_hidden()
+    page.go_back()
+    expect(page.locator('#connection-panel')).to_be_visible()
+    expect(page.locator('#name')).to_have_value('saved draft')
+    expect(page.locator('#path')).to_have_value('/draft/unchanged')
+
+
+@pytest.mark.parametrize('status',[401,403,503])
+def test_home_selected_job_is_cleared_when_polling_loses_access(browser_workspace,status):
+    page,_,expect=browser_workspace
+    base=page.url.split('?')[0].rstrip('/')
+    payload=page.request.get(base+'/api/learning').json()
+    kind=payload['workflows'][0]['id']
+    payload['items']=[dict(id='protected-job',name='Protected result',kind=kind,
+                           path='/private/result-path',version=1,
+                           reports=[dict(name='report.json',status='unchanged',declared={},steps=[],metrics=[],images=[])])]
+    page.route('**/api/learning',lambda route:route.fulfill(json=payload))
+    page.clock.install()
+    page.goto(base+'/learning#learning-results',wait_until='networkidle')
+    page.locator('#jobs a[href="#job-protected-job"]').click()
+    expect(page.locator('#job-detail-content')).to_contain_text('/private/result-path')
+    page.route('**/api/learning',lambda route:route.fulfill(status=status,json={'error':'unavailable'}))
+    page.clock.fast_forward(5000)
+    expect(page.locator('#learning-status')).to_have_attribute('state','error')
+    expect(page.locator('#job-detail-content')).to_be_empty()
+    expect(page.locator('#jobs')).to_be_empty()
+    page.locator('.learning-home-nav a[href="#learning-start"]').click()
+    page.go_back()
+    expect(page).to_have_url(base+'/learning#job-protected-job')
+    expect(page.locator('#learning-start')).to_be_visible()
+    expect(page.locator('#job-detail')).to_be_hidden()
+    expect(page.locator('#job-detail-content')).to_be_empty()
+    expect(page.locator('#refresh')).to_be_enabled()

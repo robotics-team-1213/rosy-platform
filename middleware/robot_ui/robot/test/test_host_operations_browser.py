@@ -350,6 +350,12 @@ def test_host_status_cards_render_only_server_evidence_and_block_untrusted_actio
                     assert result["disabled"] is not enabled, result
                     if label == "지연":
                         assert "지연" in result["actionNote"], result
+                release_table = page.get_by_role("table", name="릴리스 원본 조회값", exact=True)
+                if enabled or label == "지연":
+                    expect(release_table.get_by_role("rowheader", name="이전 버전", exact=True).locator("+ td")).to_have_text("r1")
+                else:
+                    expect(release_table).to_contain_text("확인할 수 없음")
+                    assert "r1" not in release_table.text_content()
             page.evaluate("""() => {
               const fresh = {available:true, ok:true, detail:'old detail', recovery:'old recovery',
                 evidence:{evidence:'fresh', age_s:0}, data:{mode:'SITE_STA',ssid:'old-ssid',state:'IDLE',previous:'old-release'}};
@@ -360,10 +366,9 @@ def test_host_status_cards_render_only_server_evidence_and_block_untrusted_actio
             }""")
             for section in page.locator("section.ui-readback").all()[:2]:
                 assert "old-" not in section.inner_text()
-                assert "확인할 수 없음" in section.locator("dl").text_content()
-                assert section.locator("details").first.get_attribute("open") is None
-                assert section.locator("details.surface-disclosure").nth(1).is_hidden()
-                assert section.locator("details.surface-disclosure").nth(2).is_hidden()
+                assert "확인할 수 없음" in section.locator("table").text_content()
+                for disclosure in section.locator("details.surface-disclosure").all():
+                    assert disclosure.is_hidden()
             assert "호스트 에이전트 연결을 확인" in page.locator("section.ui-readback").nth(0).inner_text()
             assert "관리자 권한을 확인" in page.locator("section.ui-readback").nth(1).inner_text()
             assert errors == []
@@ -373,3 +378,57 @@ def test_host_status_cards_render_only_server_evidence_and_block_untrusted_actio
         server.shutdown()
         server.server_close()
         thread.join(timeout=2)
+
+
+@pytest.mark.parametrize("width", [320, 390, 1366])
+def test_host_original_readbacks_are_visible_semantic_tables(network_job_page, width):
+    page = network_job_page
+    page.set_viewport_size({"width": width, "height": 844})
+    page.evaluate("""() => {
+      for (const href of ['/common/tokens.css', '/common/components.css', '/common/component-controls.css',
+          '/middleware/robot_ui/robot/panels/surface-panels.css']) {
+        const link = document.createElement('link'); link.rel = 'stylesheet'; link.href = href;
+        document.head.append(link);
+      }
+      window.__readbacks = [
+        ['network', {available:true,ok:true,evidence:{evidence:'fresh',age_s:0},
+          data:{mode:'SITE_STA',ssid:'<fixture-ssid>',ipv4:'192.0.2.7',dns:['x'.repeat(240)]}}],
+        ['release', {available:true,ok:true,evidence:{evidence:'fresh',age_s:0},
+          data:{state:'IDLE',current:'fixture-release',previous:'r1',git_revision:'a'.repeat(240)}}],
+        ['commissioning', {runtime_mode:'fixture-runtime',detail:'d'.repeat(240),motor_hold:false}]
+      ];
+      window.__restoreReadbacks = () => {
+        for (const [name, payload] of window.__readbacks) window.__callbacks['/api/v1/host/'+name].onData(payload);
+      };
+      window.__restoreReadbacks();
+    }""")
+    for title, label, value, rows in [
+        ("네트워크", "SSID", "<fixture-ssid>", 8),
+        ("릴리스", "현재 버전", "fixture-release", 7),
+        ("커미셔닝", "실행 모드", "fixture-runtime", 9),
+    ]:
+        table = page.get_by_role("table", name=f"{title} 원본 조회값", exact=True)
+        expect(table).to_be_visible()
+        expect(table.get_by_role("row")).to_have_count(rows)
+        header = table.get_by_role("rowheader", name=label, exact=True)
+        assert header.get_attribute("scope") == "row"
+        expect(header.locator("+ td")).to_have_text(value)
+        expect(header.locator("+ td")).to_be_visible()
+        region = page.get_by_role("region", name=f"{title} 원본 조회값 스크롤", exact=True)
+        region.focus()
+        assert region.evaluate("node => node === document.activeElement")
+        assert table.locator("details").count() == 0
+    page.wait_for_function("document.styleSheets.length >= 4")
+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+    for status in (403, 503):
+        page.evaluate("""status => {
+          for (const [name] of window.__readbacks)
+            window.__callbacks['/api/v1/host/'+name].onError({status,message:'fixture denial'});
+        }""", status)
+        for table in page.get_by_role("table").all():
+            expect(table).to_contain_text("확인할 수 없음")
+            assert "fixture-" not in table.text_content()
+        page.evaluate("window.__restoreReadbacks()")
+        for title, value in [("네트워크", "<fixture-ssid>"), ("릴리스", "fixture-release"),
+                             ("커미셔닝", "fixture-runtime")]:
+            expect(page.get_by_role("table", name=f"{title} 원본 조회값", exact=True)).to_contain_text(value)

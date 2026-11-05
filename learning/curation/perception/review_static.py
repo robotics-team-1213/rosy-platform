@@ -18,6 +18,11 @@ def get(handler, path):
              '/learning/evaluate': 'evaluate.html', '/evaluate.js': 'evaluate.js',
              '/learning/workspaces': 'workspaces.html', '/workspaces.js': 'workspaces.js'}
     name = path.removeprefix('/common/')
+    if path in {'/file-picker.css', '/file-picker.js'}:
+        file = COMMON.parents[1] / 'applications/fleet/web/shared' / path[1:]
+        mime = 'text/css' if file.suffix == '.css' else 'text/javascript'
+        handler.send(file.read_bytes(), mime=mime + '; charset=utf-8')
+        return True
     if path.startswith('/common/') and name in SHARED_ASSETS:
         file = COMMON / name
         handler.send(file.read_bytes(), mime=SHARED_ASSETS[name])

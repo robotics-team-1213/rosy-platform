@@ -7,6 +7,7 @@ from browser_harness import browser_tests_enabled, free_port
 from review_app import make_server
 from review_ai_jobs import Jobs
 from test_review_ai_jobs import workspace
+from test_review_flow_browser import open_action_disclosure
 
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason='requires explicit Chromium run')
 
@@ -102,7 +103,7 @@ def test_keyboard_ai_draft_publishes_candidate_without_overwriting_review(tmp_pa
         expect(page.locator('#model-draft-select')).to_contain_text('미인증 로컬 작업자')
         expect(page.locator('#model-candidates')).to_be_enabled()
         assert store.get(0) == before
-        page.locator('#review-versions summary').click()
+        open_action_disclosure(page, '#review-versions')
         expect(page.locator('#review-versions li ui-button')).to_have_count(1)
         page.locator('#review-versions li ui-button').first.click()
         expect(page.locator('#review-versions section')).to_contain_text('이전 버전 v1')
@@ -119,7 +120,7 @@ def test_no_configuration_explains_disabled_pixel_ai_and_history_missing(tmp_pat
         expect(page.locator('#review-ai-mask_check')).to_be_disabled()
         expect(page.locator('#review-ai-jobs')).to_contain_text('AI 실행 설정이 없습니다')
         assert '설정' in page.locator('#review-ai-mask_check').get_attribute('reason')
-        page.locator('#review-versions summary').click()
+        open_action_disclosure(page, '#review-versions')
         expect(page.locator('#review-versions')).to_contain_text('아직 저장된 이력이 없습니다')
         page.locator('#pixel-filter').select_option('approved')
         expect(page.locator('#review-ai-jobs')).to_have_count(0)
@@ -132,7 +133,6 @@ def test_pixel_unsaved_gesture_blocks_ai_and_result_reload(tmp_path):
         page.goto(page.url.split('?')[0] + 'pixels?frame=0', wait_until='networkidle')
         expect(page.locator('#pixel-title')).to_have_text('사진 1 픽셀 검수')
         expect(page.locator('#review-ai-mask_check')).to_be_enabled()
-        page.locator('.pixel-vlm-feedback > summary').click()
         page.locator('#pixel-class').select_option('0')
         page.locator('#pixel-canvas').focus(); page.keyboard.press('t')
         page.keyboard.down('Space'); page.keyboard.press('Alt+ArrowRight'); page.keyboard.up('Space')
@@ -280,7 +280,7 @@ def test_history_pagination_and_pixel_snapshot_do_not_modify_current(tmp_path):
             review_masks.update(store, 0, {'version': number, 'action': 'fill', 'label': 0}, Conflict, actor='human-reviewer')
         before = review_masks.get(store, 0)
         page.goto(page.url.split('?')[0] + 'pixels?frame=0', wait_until='networkidle')
-        page.locator('#review-versions summary').click()
+        open_action_disclosure(page, '#review-versions')
         expect(page.locator('#review-versions li ui-button')).to_have_count(20)
         page.locator('#review-versions').get_by_role('button', name='이전 이력 더 보기').click()
         expect(page.locator('#review-versions li ui-button')).to_have_count(23)
@@ -305,7 +305,7 @@ def test_frame_switch_removes_ai_and_versions_before_delayed_mask_failure(tmp_pa
         expect(page.locator('#review-versions')).to_have_count(1)
         held = []
         page.route('**/api/masks/1', lambda route: held.append(route))
-        page.locator('.pixel-frame-item[data-index="1"]').evaluate("node => { for (let parent=node.parentElement; parent; parent=parent.parentElement) if (parent.tagName==='DETAILS') parent.open=true; }")
+        open_action_disclosure(page, '.pixel-frame-item[data-index="1"]')
         page.locator('.pixel-frame-item[data-index="1"]').click()
         expect(page.locator('#pixel-vlm-note')).to_have_text('')
         expect(page.locator('#pixel-vlm-details')).to_have_text('')

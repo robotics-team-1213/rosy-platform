@@ -10,6 +10,82 @@ from test_review_flow_browser import browser_workspace
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason='requires explicit Chromium run')
 
 
+@pytest.mark.parametrize('route', ['/learning', '/', '/pixels', '/catalog', '/learning/omx', '/learning/vlm', '/learning/evaluate', '/learning/camera', '/learning/workspaces', '/learning/record', '/learning/tasks', '/learning/sim', '/classes', '/learning/imitate', '/learning/public', '/learning/tasks/manage'])
+def test_learning_page_has_visible_current_path(browser_workspace, route):
+    page, _, expect = browser_workspace
+    page.set_viewport_size({'width': 390, 'height': 844})
+    page.goto(page.url.split('?')[0].rstrip('/') + route, wait_until='domcontentloaded')
+    path = page.locator('.ui-pathbar')
+    expect(path.get_by_role('link', name='Learning', exact=True)).to_have_attribute('href', '/learning')
+    expect(path).to_contain_text('/')
+    expect(path.locator('h1')).to_be_visible()
+    assert path.evaluate('n => n.scrollWidth <= n.clientWidth')
+
+
+@pytest.mark.parametrize('route', ['/learning/evaluate', '/learning/vlm'])
+def test_learning_authority_copy_hides_internal_adr_ids(browser_workspace, route):
+    page, _, expect = browser_workspace
+    page.goto(page.url.split('?')[0].rstrip('/') + route, wait_until='networkidle')
+    text = page.locator('main').inner_text()
+    import re
+    assert not re.search(r'D-\d{3}', text)
+    expect(page.locator('main')).to_contain_text('확정 정답')
+
+
+def test_object_tools_use_real_views_without_hiding_approval(browser_workspace):
+    page, _, expect = browser_workspace
+    nav = page.get_by_role('navigation', name='객체 검수 도구')
+    nav.get_by_role('link', name='자료 준비', exact=True).click()
+    expect(page.locator('#prepare')).to_be_visible()
+    expect(page.locator('#approve')).to_be_hidden()
+    assert page.locator('ui-button[kind="primary"]:visible').count() == 1
+    expect(page.locator('#object-keys')).to_be_hidden()
+    nav.get_by_role('link', name='사진 검수', exact=True).click()
+    expect(page.locator('#canvas')).to_be_visible()
+    expect(page.locator('#approve')).to_be_visible()
+    expect(page.locator('#canvas')).to_have_attribute('tabindex', '0')
+    page.locator('#canvas').focus()
+    page.keyboard.press('Shift+Tab')
+    page.keyboard.press('Tab')
+    expect(page.locator('#canvas')).to_be_focused()
+    assert page.locator('details:visible').count() < 3
+    page.locator('#canvas').focus()
+    page.keyboard.press('?')
+    expect(page.locator('#object-keys')).to_be_visible()
+    page.go_back()
+    expect(page.locator('#canvas')).to_be_visible()
+
+
+def test_object_preparation_keeps_valid_commands_and_excludes_denied_work(browser_workspace):
+    page, store, expect = browser_workspace
+    page.locator('#reopen').click()
+    expect(page.locator('#add')).to_be_enabled()
+    nav = page.get_by_role('navigation', name='객체 검수 도구')
+    nav.get_by_role('link', name='자료 준비', exact=True).click()
+    page.keyboard.press('Control+k')
+    page.get_by_role('textbox', name='기능 검색어').fill('최신 내용 불러오기')
+    expect(page.locator('#review-command-results ui-button')).to_have_count(1)
+    page.keyboard.press('Enter')
+    expect(page.locator('#reload')).to_be_visible()
+    expect(page.locator('#reload')).to_be_enabled()
+    nav.get_by_role('link', name='자료 준비', exact=True).click()
+    with page.expect_response(lambda response: '/api/workspace?' in response.url):
+        page.keyboard.press('r')
+    expect(page.locator('#reload')).to_be_visible()
+    expect(page.locator('#reload')).to_be_enabled()
+    nav.get_by_role('link', name='자료 준비', exact=True).click()
+    before = len(store.get(0)['review']['boxes'])
+    page.keyboard.press('Insert')
+    expect(page.locator('#boxes .box-row')).to_have_count(before + 1)
+    page.route('**/api/workspace*', lambda route: route.fulfill(status=403, json={'error': 'denied'}))
+    page.locator('#reload').click()
+    expect(page.locator('#review-content')).to_be_hidden()
+    page.keyboard.press('Control+k')
+    page.get_by_role('textbox', name='기능 검색어').fill('좌표로 박스 추가')
+    expect(page.locator('#review-command-results ui-button')).to_have_count(0)
+    page.keyboard.press('Escape')
+
+
 @pytest.mark.parametrize('theme', ['dark', 'light'])
 def test_review_photo_and_result_are_in_first_view(browser_workspace, theme):
     page, store, expect = browser_workspace

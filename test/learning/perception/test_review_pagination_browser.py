@@ -44,7 +44,7 @@ def test_review_page_bounds_and_deep_link(tmp_path, path, strip, next_button, ti
             page.on('pageerror', lambda error: errors.append(str(error)))
             page.goto(f'http://127.0.0.1:{server.server_port}{path}?frame={first_id + 59 * stride}', wait_until='domcontentloaded')
             if path == '/pixels':
-                page.locator('#pixel-frames').locator('..').locator('summary').click()
+                page.locator('.review-tool-nav a[href="#pixel-display-options"]').click()
             playwright.expect(page.locator(title)).to_have_text('사진 60' + (' 픽셀 검수' if path == '/pixels' else ''))
             playwright.expect(page.locator(f'{strip} [data-index="{first_id + 59 * stride}"]')).to_contain_text('사진 60')
             playwright.expect(page.locator(next_button)).to_be_enabled()
@@ -81,6 +81,7 @@ def test_review_page_bounds_and_deep_link(tmp_path, path, strip, next_button, ti
             assert parse_qs(urlparse(page.url).query)['frame'] == [str(first_id + 60 * stride)]
             if path == '/pixels':
                 playwright.expect(page.locator('#pixel-frame option:checked')).to_contain_text('사진 51')
+                page.locator('.review-tool-nav a[href="#pixel-review"]').click()
                 page.locator('#pixel-exclude').click()
                 playwright.expect(page.locator('#pixel-decision')).to_contain_text('사진 51 픽셀 제외')
                 playwright.expect(page.locator('#pixel-decision')).to_contain_text('다음 검수 대기 사진 51')

@@ -1192,3 +1192,9 @@
 - 변경: D-978 — 노선·수치 띠는 서버 응답만 보이고 쓰기 요청을 보내지 않는다. `DESIGN.md` 「조합 어휘」의 절차 단계·수치 띠 두 줄이 "지금 쓰는 곳"을 HTML 경로로 적는 정본이 되고, `test_content_vocabulary.py`가 표와 실제 사용 페이지를 대조한다(표의 이름 확인 범위에 `readout-strip.css` 추가). 같은 시험이 `*-line.js`·`policy-model.js`의 쓰기 요청 문자열을 거절한다.
 - 증거: 로컬 `test_content_vocabulary.py` 6 PASS. 표에서 Cell을 빼면 "코드에만 cell.html"로 실패함을 확인한 뒤 되돌림.
 - Gate: 이동 없음. CE: 해당 없음 — 규칙 정본화.
+
+## 2026-11-05 · 4c8a3858e0 · 운용 카메라 판단 사슬의 평문 표시
+
+- 변경: lineDecisionChain의 표시 문구만 한국어로 정리하고 실제 line-follow API/복구 producer의 응답·단계·원인·파생 사유를 대조했다. 알 수 없는 값은 진단 확인 안내로 남긴다. 분류 조건·severity·명령·정지 계약은 유지한다. 원본은 Robot 카메라의 기존 진단 깊이에 보존하며 읽기 실패 시 비운다.
+- 검증: 0f8368eabb의 관련7개 전체 시험 파일170 passed/0 skipped/NEW0. 독립 리뷰가 현행 복구 값의 누락을 찾아90496c23e0에서 RED1개를 재현했고4c8a3858e0의 line-decision/panel-copy 전체27 passed/0 skipped/NEW0, 같은 검토자의 scoped 재검토 ADDRESSED·spec/quality 승인이다. 서로 다른 SHA의 결과를 합산하지 않는다.
+- Gate: 이동 없음. source-bound LOCAL 화면 수집·최종 통합/착지는 별도 기록을 따른다. CE: 해당 없음 — producer 대조와 회귀 시험으로 판단을 복원한다.

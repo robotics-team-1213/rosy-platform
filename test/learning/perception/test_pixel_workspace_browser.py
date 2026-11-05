@@ -97,7 +97,7 @@ def test_context_fill_preserves_undo_and_explicit_approval_advances(browser_work
     before = partial_workspace(page, store, expect)
     context = page.locator('#pixel-resolve-unknown')
     expect(context).to_be_visible()
-    context.locator('summary').click()
+    expect(context.locator('#pixel-resolve-background')).to_be_visible()
     expect(context.locator('#pixel-resolve-background')).to_have_text('남은 767픽셀 배경으로 채우기')
     page.locator('#pixel-canvas').click(position={'x': 10, 'y': 10})
     expect(context.locator('#pixel-resolve-background')).to_be_disabled()
@@ -155,7 +155,7 @@ def test_completion_fill_failure_does_not_send_approval(browser_workspace):
             route.continue_()
 
     page.route('**/api/masks/0', fail_fill)
-    page.locator('#pixel-resolve-unknown > summary').click()
+    expect(page.locator('#pixel-resolve-unknown')).to_be_visible()
     page.once('dialog', lambda dialog: dialog.accept())
     page.locator('#pixel-resolve-background').click()
     expect(page.locator('#pixel-error')).to_be_visible()

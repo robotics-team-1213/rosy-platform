@@ -254,6 +254,8 @@ def test_role_procedure_g2_local_matrix(tmp_path):
                         assert expected in card_status, records[-1]
                         page.get_by_text("고급 네트워크 작업", exact=True).click()
                         assert page.get_by_role("button", name="사업장 Wi-Fi로 전환", exact=True).is_disabled(), records[-1]
+                    if role == "administrator" and surface == "device":
+                        _select_task(page, "host.operations")
                         task_image = f"administrator-device-{scenario}-host-operations-{width}x{height}.png"
                         page.screenshot(path=str(CAPTURES / task_image), full_page=True)
                         records[-1]["hostOperationsImage"] = task_image
@@ -403,8 +405,8 @@ def test_device_host_cards_clear_old_values_on_forbidden_and_recover(tmp_path):
         phase["scenario"] = "forbidden"
         page.wait_for_function("""() => [...document.querySelectorAll('[data-panel="host.operations"] section.ui-readback')]
           .slice(0, 2).every(card => card.querySelector('ui-status')?.textContent.includes('권한'))""", timeout=30_000)
-        assert "site-fixture" not in cards.nth(0).locator("dl").text_content()
-        assert "r1" not in cards.nth(1).locator("dl").text_content()
+        assert "site-fixture" not in cards.nth(0).get_by_role("table").text_content()
+        assert "r1" not in cards.nth(1).get_by_role("table").text_content()
         cards.nth(0).get_by_text("고급 네트워크 작업", exact=True).click()
         assert page.get_by_role("button", name="사업장 Wi-Fi로 전환", exact=True).is_disabled()
         assert page.get_by_role("button", name="이전 릴리스로 복귀", exact=True).is_disabled()
@@ -422,7 +424,7 @@ def test_device_procedure_places_status_and_actions_before_long_readouts(tmp_pat
     client = _core_client(tmp_path)
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
-        for width, height in ((1366, 768), (390, 844)):
+        for width, height in ((1366, 768), (390, 844), (320, 844)):
             page = browser.new_page(viewport={"width": width, "height": height})
             errors = []
             page.on("pageerror", lambda error: errors.append(str(error)))
@@ -431,9 +433,18 @@ def test_device_procedure_places_status_and_actions_before_long_readouts(tmp_pat
             def serve(route):
                 path = urlsplit(route.request.url).path
                 response = _response(client, path, TOKENS["administrator"], "normal", "device")
+                body = response.content if hasattr(response, "content") else response.body
+                if path in {"/api/v1/host/network", "/api/v1/host/release", "/api/v1/host/commissioning"}:
+                    payload = json.loads(body)
+                    if path.endswith("commissioning"):
+                        payload["detail"] = "commissioning-fixture-" + "c" * 240
+                    else:
+                        key = "default_route" if path.endswith("network") else "git_revision"
+                        payload["data"][key] = "long-fixture-" + "x" * 240
+                    body = json.dumps(payload)
                 route.fulfill(status=response.status_code, headers={
                     "content-type": response.headers.get("content-type", "application/octet-stream"),
-                }, body=response.content if hasattr(response, "content") else response.body)
+                }, body=body)
 
             page.route("**/*", serve)
             page.goto("http://rosy.test/device", wait_until="domcontentloaded")
@@ -442,6 +453,15 @@ def test_device_procedure_places_status_and_actions_before_long_readouts(tmp_pat
               return lines[0]?.textContent.includes('site-fixture') && lines[1]?.textContent.includes('이전 r1');
             }""")
             _select_task(page, "host.operations")
+            for title in ("네트워크", "릴리스", "커미셔닝"):
+                table = page.get_by_role("table", name=f"{title} 원본 조회값", exact=True)
+                assert table.is_visible()
+                assert "fixture-" in table.inner_text()
+                assert table.locator("td").last.evaluate("node => getComputedStyle(node).overflowWrap") == "anywhere"
+                region = page.get_by_role("region", name=f"{title} 원본 조회값 스크롤", exact=True)
+                assert region.evaluate("node => getComputedStyle(node).overflowX") == "auto"
+                region.focus()
+                assert region.evaluate("node => document.activeElement === node")
             page.locator('[data-panel="host.operations"] section.ui-readback').first.get_by_text(
                 "고급 네트워크 작업", exact=True).click()
             result = page.evaluate("""() => {
@@ -450,7 +470,7 @@ def test_device_procedure_places_status_and_actions_before_long_readouts(tmp_pat
               const network = operations.querySelector('section.ui-readback');
               const button = [...network.querySelectorAll('ui-button')]
                 .find(item => item.textContent === '사업장 Wi-Fi로 전환');
-              const readout = network.querySelector('dl');
+              const readout = network.querySelector('table.ui-data-table');
               return {hostBottom: host.getBoundingClientRect().bottom,
                 operationsTop: operations.getBoundingClientRect().top,
                 buttonTop: button.getBoundingClientRect().top,
@@ -459,6 +479,9 @@ def test_device_procedure_places_status_and_actions_before_long_readouts(tmp_pat
             }""")
             assert result["overflow"] == 0
             assert result["buttonTop"] < result["readoutTop"], result
+            capture_dir = CAPTURES / "host-original-readbacks"
+            capture_dir.mkdir(parents=True, exist_ok=True)
+            page.screenshot(path=str(capture_dir / f"administrator-device-long-values-{width}x{height}.png"), full_page=True)
             if width == 390:
                 assert result["operationsTop"] < height, result
             button = page.get_by_role("button", name="사업장 Wi-Fi로 전환", exact=True)

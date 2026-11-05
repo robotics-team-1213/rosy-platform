@@ -126,7 +126,7 @@ function result(data){
 async function refresh(current){
   const data=await send('/api/learning/storage/settings');if(current!==generation)return;
   const redraw=!state||state.revision!==data.revision;
-  if(data.enabled&&!state?.enabled){$('storage-settings').open=false;$('storage-preparation').open=true;}
+  if(data.enabled&&state&&!state.enabled)location.hash='storage-preparation';
   state=data;$('storage-setup').hidden=false;$('storage-manager').hidden=!data.can_manage;
   $('storage-setup-status').textContent=!data.can_manage?'저장 대상 설정은 프로젝트의 게시·관리 권한이 필요합니다.':
     data.enabled?'새 보관 활성화됨 · 완료 자료를 준비하거나 기존 자료를 복원하세요.':
@@ -200,8 +200,8 @@ async function sources(){
       !rows.length?'준비할 완료 자료가 없습니다. 등록된 완료 자료 위치 또는 SIM 실험의 종료 결과를 확인하세요.':
         omx?'선택한 고정 버전의 별도 사본을 만듭니다. 원본 학습 데이터는 보존하며 확인 후에만 전송합니다.':'파일의 쓰기가 끝난 자료만 선택하세요. 이미 준비한 목록은 다시 작성하지 않습니다.';
     if(omx&&archiveArrivalPending&&requestedOmx){
-      archiveArrivalPending=false;$('storage-preparation').open=true;
-      const heading=$('storage-preparation').querySelector('summary');heading.focus({preventScroll:true});heading.scrollIntoView({block:'center'});
+      archiveArrivalPending=false;location.hash='storage-preparation';
+      const heading=$('storage-preparation');heading.focus({preventScroll:true});heading.scrollIntoView({block:'center'});
     }
   }catch(failure){if(current===generation&&ticket===sourceRequest){if(omx){omxSources=[];showOmx();}error(failureMessage(failure));}}
   finally{if(current===generation&&ticket===sourceRequest)controls();}

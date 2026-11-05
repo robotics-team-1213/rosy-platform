@@ -56,7 +56,7 @@ async function vlm(workspace){
 async function sim(){
   // Recent SIM runs, only fields sim_web.public() sends; each opens its run on /learning/sim.
   const block=source('sim');text(block,'h4','최근 SIM 실험');
-  text(block,'p','SIM 판정과 과제 성공은 실험 근거일 뿐 승인·승격이 아닙니다(D-793, D-857).','quiet');
+  text(block,'p','SIM 판정과 과제 성공은 실험 근거일 뿐 승인·승격이 아닙니다.','quiet');
   let runs;
   try{runs=(await read('/api/learning/sim/runs')).runs;}catch(error){text(block,'p',`없음 · ${error.message}`).dataset.state='not_available';return;}
   if(!runs.length){text(block,'p','SIM 실험 기록이 없습니다.');return;}
@@ -77,7 +77,7 @@ function fail(error,owner='action'){
   $('evaluate-error').hidden=!$('evaluate-error').textContent;
 }
 async function promotion(keep){
-  // Only the server decides who qualifies; this page shows its reasons and never calls Fleet (D-874).
+  // Only the server decides who qualifies; this page shows its reasons and never calls Fleet .
   const data=await read('/api/learning/promotion-requests');
   $('promote-candidates').replaceChildren();$('promote-requests').replaceChildren();
   for(const row of data.candidates)text($('promote-candidates'),'li',`${row.name} · ${row.qualified?'요청 가능 · '+row.model_revision:row.reason}`).dataset.state=row.qualified?'done':'blocked';
@@ -100,7 +100,8 @@ $('promote-request').onclick=async()=>{
     const response=await accountFetch('/api/learning/promotion-requests',{method:'POST',headers:{'Content-Type':'application/json','X-Pinky-Token':token},body:JSON.stringify({id:$('promote-candidate').value})});
     const value=await response.json();
     if(!response.ok)throw new Error(value.error||'승격 요청을 만들지 못했습니다.');
-    $('promote-result').textContent=`요청 해시 ${value.sha256} · Fleet에서 승인권자가 이 해시로 제안을 만든다(D-793).`;$('promote-result').hidden=false;
+    $('promote-result').textContent='평가 근거를 준비했습니다. Fleet에서 승인권자가 이 요청을 확인하고 승격 제안을 만듭니다.';$('promote-result').hidden=false;
+    $('promote-request-hash').textContent=value.sha256;
   }catch(error){fail(error);}
   finally{requesting=false;}
   await load();

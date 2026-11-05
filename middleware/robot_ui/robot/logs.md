@@ -1425,3 +1425,9 @@
 - 변경: 설치·정비의 「시스템 및 기능 상태」 머리에 공용 수치 띠(CPU·메모리·저장소·온도). 이미 10초마다 읽는 `/api/v1/system/runtime` 응답 값만 옮기고 주의 판정은 서버(`runtimeGap`·위험 목록)에 그대로 둔다. 응답 실패 시 띠를 숨긴다. `surface.html`이 `/common/readout-strip.css`를 싣고, `DESIGN.md` 「조합 어휘」 수치 띠 줄에 `panels/host/system.js`를 더했다(대조 시험이 JS로 만든 띠도 본다).
 - 증거: 로컬 G2 캡처(`test_role_g2_browser.py` device) 1366·390 렌더 — 고정 데이터에 있는 저장소 85.73%만 값, 나머지 "—", 390에서 두 열. 로봇 비브라우저 시험 93 PASS.
 - gate 변화: SOURCE 로컬 GO. 원격 브라우저는 커밋 후.
+
+## 2026-11-05 · 22935ec44f / 4c8a3858e0 · 장치 읽기 표와 운용 문구
+
+- 변경: host.operations의 네트워크·릴리스·커미셔닝 읽기값을 공용 native 표로 노출했다. 조작을 긴 표보다 먼저 유지하고 기존 거부/실패 정리·복원을 보존한다. 실제 역할 셸에 component-controls.css를 연결해 standalone fixture만 통과하던 로딩 누락을 닫았다. 운용 카메라는 표시 문구만 평문으로 바꾸고 원본 진단·실패 시 비움은 유지한다.
+- 검증: 장치 실제 역할 셸·전체 role matrix·직접 소비자22935ec44f에서171 passed/0 skipped/NEW0. 새138 PNG와60셀을 회수했고 문서 넘침0/page errors0이다. 독립 scoped 소스/시각 검토는 표 수정 여덟 항을 승인했다. 카메라의 관련7파일170개(0f8368eabb), 현재 producer 어휘 보완 후27개(4c8a3858e0)도 각각 NEW0·독립 재검토 승인이다.
+- Gate: 기존 실물/현장 판정 이동 없음. 위 증거는 고정 fixture LOCAL이며 정지 응답·실물 조작·배포 수용이 아니다. 최종 G1/G2/G3·통합·착지는 docs/validation/uiux-surfaces-2026-11-05에서 결속한다. CE: 해당 없음 — 원인과 방지 조건은 실제 역할 셸 회귀 및 producer 값 시험에 드러난다.

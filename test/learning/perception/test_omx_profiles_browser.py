@@ -61,7 +61,7 @@ def test_saved_profile_training_requires_semantic_dataset_match_and_can_be_clear
                 if page.locator('#dataset option').count() > 1:
                     page.locator('#dataset').select_option(index=1)
                 expect = playwright.expect
-                page.locator('#profile-panel > summary').click()
+                page.locator('#profile-panel > h2').click()
                 page.locator('#profile-record').select_option(parent_id)
                 page.locator('#profile-clone').click()
                 expect(page.locator('#profile-diff')).to_contain_text('변경 없음')
@@ -78,7 +78,11 @@ def test_saved_profile_training_requires_semantic_dataset_match_and_can_be_clear
                 expect(page.locator('#profiles-status')).to_contain_text(saved_id)
                 assert 'parent_id' not in saves[0]
                 expect(page.locator('#profile-diff')).to_contain_text('변경 없음')
+                page.locator('#export-profile').set_input_files({'name': 'candidate.json', 'mimeType': 'application/json', 'buffer': json.dumps(profile).encode()})
+                expect(page.locator('#export-profile-filename')).to_have_text('candidate.json')
                 page.locator('#profile-use').click()
+                expect(page.locator('#export-profile-filename')).to_have_text('선택한 파일 없음')
+                assert page.locator('#export-profile').evaluate('n=>n.files.length') == 0
                 expect(page.locator('#selected-profile-status')).to_contain_text('일치')
                 expect(page.locator('#start')).to_be_enabled()
                 page.locator('#start').click()
@@ -165,7 +169,7 @@ def test_guided_profiles_preserve_order_bounds_lineage_and_explicit_export_selec
                 if page.locator('#dataset option').count() > 1:
                     page.locator('#dataset').select_option(index=1)
                 expect = playwright.expect
-                page.locator('#profile-panel > summary').click()
+                page.locator('#profile-panel > h2').click()
                 page.locator('#profile-record').select_option(records[0]['id'])
                 page.locator('#profile-clone').click()
                 expect(page.locator('#profile-arms [data-arm]')).to_have_count(2)
@@ -198,7 +202,7 @@ def test_guided_profiles_preserve_order_bounds_lineage_and_explicit_export_selec
                 expect(page.locator('#profile-task')).to_have_value('Unsaved task edit')
                 page.on('dialog', lambda dialog: dialog.accept())
                 page.reload(wait_until='networkidle')
-                page.locator('#profile-panel').evaluate('node => node.open = true')
+                page.locator('#omx-sections a[href="#profile-panel"]').click()
                 page.locator('#profile-record').select_option(records[-1]['id'])
                 page.locator('#profile-clone').click()
                 page.locator('dialog.ui-confirm ui-button[kind="irreversible"]').click()

@@ -13,6 +13,23 @@ from test_vlm_judge import QUESTIONS, open_store, wrist
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason='requires explicit Chromium run')
 
 
+def _capture(page, state, **details):
+    import json
+    import os
+    from pathlib import Path
+    if not (output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR') or os.getenv('ROSY_SHOT_DIR')):
+        return
+    root = Path(output).expanduser()
+    root.mkdir(parents=True, exist_ok=True)
+    viewport = page.viewport_size
+    theme = page.evaluate('document.documentElement.dataset.theme || "default"')
+    name = f'{state}-{theme}-{viewport["width"]}x{viewport["height"]}'
+    page.screenshot(path=str(root / f'{name}.png'), full_page=True)
+    (root / f'{name}.json').write_text(json.dumps(
+        dict(state=state, viewport=viewport, theme=theme, filename=f'{name}.png', **details),
+        ensure_ascii=False, indent=2), encoding='utf-8')
+
+
 def test_label_by_keyboard_and_mouse_at_phone_width(tmp_path):
     playwright = pytest.importorskip('playwright.sync_api')
     cv2 = pytest.importorskip('cv2')
@@ -36,7 +53,14 @@ def test_label_by_keyboard_and_mouse_at_phone_width(tmp_path):
             try:
                 expect = playwright.expect
                 page.goto(f'http://127.0.0.1:{server.server_port}/learning/vlm', wait_until='networkidle')
+                page.set_input_files('#vlm-questions-file', {'name': 'questions.json', 'mimeType': 'application/json', 'buffer': json.dumps(QUESTIONS).encode()})
+                expect(page.locator('#vlm-questions-file-filename')).to_have_text('questions.json')
                 expect(page.locator('#vlm-progress')).to_contain_text('목록 1 / 2')
+                expect(page.locator('#vlm-stations')).to_have_class('ui-stage-track')
+                expect(page.locator('#vlm-stations')).to_have_attribute('data-line', 'learning')
+                expect(page.locator('#tab-label').locator('..')).to_have_attribute('data-state', 'now')
+                assert page.locator('#tab-import').evaluate('node => node.hidden === node.parentElement.hidden')
+                expect(page.locator('#vlm-stations [data-state="done"]')).to_have_count(0)
                 expect(page.locator('#vlm-image-message')).to_be_hidden()
                 in_view = '''id => { const r = document.getElementById(id).getBoundingClientRect();
                                      return r.top >= 0 && r.bottom <= innerHeight && r.height > 0; }'''
@@ -103,6 +127,17 @@ def test_label_by_keyboard_and_mouse_at_phone_width(tmp_path):
                         for theme in ('dark', 'light'):
                             page.evaluate('theme => document.documentElement.dataset.theme = theme', theme)
                             page.screenshot(path=str(Path(output) / f'evaluation-context-{theme}-{width}.png'), full_page=True)
+                page.route('**/api/accounts/session', lambda route: route.fulfill(json={'capabilities': ['edit']}))
+                page.goto(f'http://127.0.0.1:{server.server_port}/learning/vlm', wait_until='networkidle')
+                expect(page.locator('#vlm-progress')).to_contain_text('목록')
+                expect(page.locator('#tab-import')).to_be_hidden()
+                expect(page.locator('#vlm-import-stage')).to_be_hidden()
+                expect(page.locator('#vlm-stations > .ui-stage:visible')).to_have_count(2)
+                assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+                if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+                    for theme in ('dark', 'light'):
+                        page.evaluate('theme => document.documentElement.dataset.theme = theme', theme)
+                        page.locator('#vlm-stations').screenshot(path=str(Path(output) / f'vlm-collaborator-stations-{theme}-390.png'))
                 assert errors == []
             finally:
                 browser.close()
@@ -156,19 +191,23 @@ def test_audit_shows_the_consensus_and_records_confirm_and_fix(tmp_path, monkeyp
                 for button in (confirm, fix):
                     assert button.bounding_box()['height'] >= 44
                 expect(page.locator('#vlm-save')).to_be_hidden()
+                _capture(page, 'vlm-audit-temporary-consensus')
                 confirm.click()  # 맞음: the consensus becomes the confirmed answer
                 expect(page.locator('#vlm-progress')).to_contain_text('목록 1 / 1')
                 expect(page.locator('#vlm-image-message')).to_be_hidden()
+                _capture(page, 'vlm-audit-after-human-confirm')
                 page.keyboard.press('e')  # 고침 reveals the options with the consensus preselected
                 expect(page.locator('.vlm-options')).to_have_count(2)
                 expect(page.locator('.vlm-question').nth(0).locator('ui-button[data-option="yes"]')).to_have_attribute('aria-pressed', 'true')
                 page.locator('.vlm-question').nth(0).locator('ui-button[data-option="no"]').click()
+                _capture(page, 'vlm-audit-human-correction')
                 page.locator('#vlm-save').click()
                 expect(page.locator('#vlm-image-message')).to_contain_text('이 조건의 사진이 없습니다')
                 assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
                 page.locator('#tab-eval').click()
                 expect(page.locator('#panel-eval')).to_contain_text('승인·승격이 아닙니다')
                 expect(page.locator('#vlm-eval')).to_contain_text('임시 정답 점검')
+                _capture(page, 'vlm-audit-confirm-and-fix-results')
                 assert errors == []
             finally:
                 browser.close()

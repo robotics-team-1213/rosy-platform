@@ -8,7 +8,6 @@
   font: var(--weight-emphasis) var(--text-label)/var(--leading-copy) var(--body);
   overflow-wrap: anywhere;
 }
-.host-card-readout[open] > .ui-readout { margin-top: var(--space-2); }
 .surface-disclosure { min-width: 0; }
 .surface-disclosure summary {
   display: flex;

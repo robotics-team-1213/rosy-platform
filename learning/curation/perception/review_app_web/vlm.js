@@ -174,7 +174,10 @@ async function importRows(){
   for(const view of Object.keys(summary.views))if(!views.has(view))$('vlm-view').append(new Option(view,view));
 }
 function tab(name){
-  for(const button of document.querySelectorAll('.vlm-tabs ui-button'))button.setAttribute('aria-pressed',String(button.dataset.tab===name));
+  for(const button of document.querySelectorAll('.vlm-tabs ui-button')){
+    button.setAttribute('aria-pressed',String(button.dataset.tab===name));
+    button.parentElement.dataset.state=button.dataset.tab===name?'now':'todo';
+  }
   for(const key of ['label','eval','import'])$('panel-'+key).hidden=key!==name;
   if(name==='eval')work(evaluate);
 }
@@ -217,6 +220,7 @@ work(async()=>{
   const account=await session.json();  // read the local-mode 404 too; an unread body stays an open request
   if(session.ok){editor=account.capabilities.includes('edit');manager=false;}
   $('tab-import').hidden=!manager;
+  $('tab-import').parentElement.hidden=!manager;
   $('vlm-export').hidden=session.ok&&!account.capabilities.includes('manage');  // the export carries provisional answers
   await load(null);
   if(location.hash==='#eval')tab('eval');  // the 평가·승격 page links here

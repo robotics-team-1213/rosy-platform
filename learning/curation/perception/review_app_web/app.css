@@ -40,10 +40,6 @@ main { padding: var(--inset-pane); min-width: 0; }
 .review-editor-canvas { min-width: 0; }
 .review-draft-bar { display: grid; gap: var(--space-2); padding: var(--space-3); margin-bottom: var(--space-2); border: 1px solid var(--surface-line); border-radius: var(--radius-control); background: var(--surface-recessed); font-size: var(--text-label); }
 .review-flow { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); margin-block: var(--space-2); font-size: var(--text-label); }
-.review-flow ol { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
-.review-flow li { color: var(--text-secondary); }
-.review-flow li + li::before { content: '›'; margin-right: var(--space-2); color: var(--text-secondary); }
-.review-flow li[aria-current="step"] { color: var(--text-primary); font-weight: var(--weight-strong); }
 .review-flow details { position: relative; }
 .review-flow summary { white-space: nowrap; color: var(--text-primary); }
 .review-flow details p { position: absolute; z-index: 5; right: 0; width: min(27rem, 90vw); margin: var(--space-1) 0 0; padding: var(--space-3); border: 1px solid var(--surface-line); border-radius: var(--radius-control); background: var(--surface-recessed); box-shadow: none; line-height: var(--leading-copy); }
@@ -139,22 +135,15 @@ ui-topbar:has([data-learning-account-entry]) { flex-wrap: wrap; }
 .learning-route-steps { display: flex; flex-wrap: wrap; gap: var(--space-3); }
 .learning-route-steps a { display: inline-flex; align-items: center; min-height: var(--target-secondary); }
 #learning-main > [tabindex="-1"] { scroll-margin-block-start: var(--space-5); }
-.learning-workflow-layout { display: grid; grid-template-columns: minmax(11rem, 14rem) minmax(0, 1fr); gap: var(--space-5); align-items: start; margin-top: var(--space-5); }
+.learning-workflow-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-5); align-items: start; margin-top: var(--space-5); }
 .learning-workflow-content { min-width: 0; }
 .learning-workflow-content > :first-child { margin-top: 0; }
 .learning-workflow-content > .learning-section, #native-review-heading { scroll-margin-block-start: var(--space-4); }
-.learning-step-menu { display: grid; gap: var(--space-1); position: sticky; top: var(--space-4); }
-.learning-step-menu h2 { margin-top: 0; font-size: var(--text-body); }
-.learning-step-menu a { display: flex; align-items: center; min-height: var(--target-secondary); padding: var(--space-2); border-inline-start: var(--space-1) solid transparent; text-decoration: none; overflow-wrap: anywhere; }
-.learning-step-menu a[aria-current="location"] { border-inline-start-color: var(--focus-ring); background: var(--surface-raised); }
 .learning-panel > h2:first-child { margin-top: 0; }
 .learning-panel > summary { min-height: var(--target-secondary); cursor: pointer; font-weight: var(--weight-medium); }
 .learning-panel .ui-field-label { min-width: 0; }
 .learning-panel .ui-field-label > .ui-field { max-width: 100%; }
 @media (width < 64rem) {
-  .learning-workflow-layout { grid-template-columns: minmax(0, 1fr); }
-  .learning-step-menu { position: static; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .learning-step-menu h2 { grid-column: 1 / -1; }
 }
 /* Account pages compose shared sections and fields; only placement lives here. */
 #accounts-main { container-type: inline-size; }
@@ -361,7 +350,6 @@ ui-topbar:has([data-learning-account-entry]) { flex-wrap: wrap; }
 #pixel-coverage { margin: var(--space-2) 0; font-variant-numeric: tabular-nums; }
 @media (height <= 700px) and (width >= 64rem) {
   .image-stage, .pixel-stage { max-height: clamp(12rem, calc(100dvh - 20rem), 24rem); }
-  #pixel-flow ol { display: none; }
   #pixel-main > .ui-workspace-bar { margin-block: var(--space-2); }
   .pixel-frame-strip { margin-block: var(--space-1); }
   .pixel-frame-strip .frame-thumb { width: 2.5rem; }

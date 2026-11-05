@@ -4,6 +4,8 @@ from urllib.parse import urlsplit
 import pytest
 
 from browser_harness import browser_tests_enabled
+import review_masks
+from test_review_cycle import CLASSES
 from test_review_app import open_store
 from test_review_flow_browser import browser_workspace, serve  # noqa: F401
 
@@ -19,7 +21,7 @@ STAGE_PAGES = [('홈', None, None, '/learning'), ('자료 등록', '자료 하�
                ('평가·승격', None, None, '/learning/evaluate')]
 
 
-@pytest.mark.parametrize('width', [320, 1366])
+@pytest.mark.parametrize('width', [320, 390, 1366])
 @pytest.mark.parametrize('theme', ['dark', 'light'])
 def test_task_pages_share_body_and_native_navigation_controls(browser_workspace, width, theme):
     import re
@@ -27,7 +29,7 @@ def test_task_pages_share_body_and_native_navigation_controls(browser_workspace,
     page, _, expect = browser_workspace
     origin = urlsplit(page.url)
     base = f'{origin.scheme}://{origin.netloc}'
-    page.set_viewport_size({'width': width, 'height': 844})
+    page.set_viewport_size({'width': width, 'height': 768 if width == 1366 else 844})
     targets = ['/learning', '/catalog', '/learning/camera', '/learning/workspaces', '/learning/omx',
                '/learning/vlm', '/learning/tasks', '/learning/sim', '/learning/evaluate', '/accounts']
     for target in targets:
@@ -147,3 +149,43 @@ def test_workspaces_page_lists_this_center_first_then_same_tab_links(tmp_path, w
         assert all(link.bounding_box()['height'] >= 44 for link in links.all())
         expect(page.locator('#workspaces-status')).to_have_text('연결된 작업 공간 2개')
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+
+
+@pytest.mark.parametrize('width', [1366, 390])
+@pytest.mark.parametrize('theme', ['dark', 'light'])
+def test_review_studio_steps_and_keyboard_help_share_the_same_flow(browser_workspace, width, theme):
+    page, store, expect = browser_workspace
+    page.set_viewport_size({'width': width, 'height': 844})
+    page.evaluate('(theme) => document.documentElement.dataset.theme = theme', theme)
+    expect(page.locator('#object-flow')).to_have_class('ui-stage-track')
+    expect(page.locator('#object-flow')).to_have_attribute('data-line', 'learning')
+    expect(page.locator('#object-flow > .ui-stage')).to_have_count(4)
+    expect(page.locator('#object-flow [aria-current="step"]')).to_have_text('전체 확인 · 결정')
+    expect(page.locator('#object-flow [data-state="now"]')).to_have_text('전체 확인 · 결정')
+    expect(page.locator('#object-flow [data-state="done"]')).to_have_count(0)
+    page.keyboard.press('Shift+/')
+    expect(page.locator('#object-keys')).to_be_visible()
+    page.locator('#filter').focus()
+    page.keyboard.press('Shift+/')
+    expect(page.locator('#object-keys')).to_be_visible()
+    review_masks.bind_classes(store, CLASSES)
+    page.goto(page.url.split('?')[0].rstrip('/') + '/pixels?frame=0', wait_until='networkidle')
+    page.evaluate('(theme) => document.documentElement.dataset.theme = theme', theme)
+    expect(page.locator('#pixel-flow')).to_have_class('ui-stage-track')
+    expect(page.locator('#pixel-flow')).to_have_attribute('data-line', 'learning')
+    expect(page.locator('#pixel-flow > .ui-stage')).to_have_count(4)
+    expect(page.locator('#pixel-flow')).to_be_visible()
+    assert page.locator('#pixel-flow').evaluate("node => !node.closest('details')")
+    expect(page.locator('#pixel-flow [aria-current="step"]')).to_have_text('영역 수정 · 초안 저장')
+    expect(page.locator('#pixel-flow [data-state="now"]')).to_have_text('영역 수정 · 초안 저장')
+    expect(page.locator('#pixel-flow [data-state="done"]')).to_have_count(0)
+    page.keyboard.press('Shift+/')
+    expect(page.locator('#pixel-keys')).to_be_visible()
+    page.locator('#pixel-brush-tool').click()
+    expect(page.locator('#pixel-brush-tool')).to_have_attribute('aria-pressed', 'true')
+    expect(page.locator('#pixel-keyboard-help')).to_contain_text('Alt+방향키')
+    expect(page.locator('#pixel-keyboard-help')).to_contain_text('Space')
+    assert store.get(0)['status'] == 'approved'
+    assert review_masks.get(store, 0)['status'] == 'pending'
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+

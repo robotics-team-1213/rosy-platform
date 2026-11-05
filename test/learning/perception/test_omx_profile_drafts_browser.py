@@ -10,6 +10,23 @@ from review_app import ReviewStore, make_server
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason='requires explicit Chromium run')
 
 
+def _capture(page, state, **details):
+    import json
+    import os
+    from pathlib import Path
+    if not (output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR') or os.getenv('ROSY_SHOT_DIR')):
+        return
+    root = Path(output).expanduser()
+    root.mkdir(parents=True, exist_ok=True)
+    viewport = page.viewport_size
+    theme = page.evaluate('document.documentElement.dataset.theme || "default"')
+    name = f'{state}-{theme}-{viewport["width"]}x{viewport["height"]}'
+    page.screenshot(path=str(root / f'{name}.png'), full_page=True)
+    (root / f'{name}.json').write_text(json.dumps(
+        dict(state=state, viewport=viewport, theme=theme, filename=f'{name}.png', **details),
+        ensure_ascii=False, indent=2), encoding='utf-8')
+
+
 @pytest.fixture
 def profile_editor(tmp_path):
     playwright = pytest.importorskip('playwright.sync_api')
@@ -45,7 +62,7 @@ def profile_editor(tmp_path):
                 page.goto(url, wait_until='networkidle')
                 if page.locator('#dataset option').count() > 1:
                     page.locator('#dataset').select_option(index=1)
-                page.locator('#profile-panel').evaluate('node => node.open = true')
+                page.locator('#omx-sections a[href="#profile-panel"]').click()
                 page.locator('#profile-clone').click()
                 yield page, playwright.expect, url, saves
             finally:
@@ -60,6 +77,7 @@ def profile_editor(tmp_path):
 def test_cancel_replacement_preserves_exact_unsaved_inputs(profile_editor, replacement):
     page, expect, _, saves = profile_editor
     page.locator('#profile-name').fill('  Unsaved input  ')
+    _capture(page, f'profile-{replacement}-unsaved')
     if replacement == 'profile-bench':
         page.locator('#profile-bench').set_input_files({'name': 'inventory.json', 'mimeType': 'application/json',
             'buffer': json.dumps({'schema': 'rosy.omx-bench-inventory/1', 'draft': {
@@ -68,11 +86,13 @@ def test_cancel_replacement_preserves_exact_unsaved_inputs(profile_editor, repla
     else:
         page.locator('#'+replacement).click()
     expect(page.locator('dialog.ui-confirm')).to_be_visible()
+    _capture(page, f'profile-{replacement}-confirm')
     page.locator('dialog.ui-confirm ui-button[kind="quiet"]').click()
     expect(page.locator('#profile-name')).to_have_value('  Unsaved input  ')
     expect(page.locator('#profile-arms > fieldset')).to_have_count(1)
     expect(page.locator('#profile-draft-status')).to_contain_text('로컬 초안')
     assert saves == []
+    _capture(page, f'profile-{replacement}-cancelled', saves=len(saves))
 
 
 def test_reload_and_navigation_restore_draft_without_selecting_saved_profile(profile_editor):
@@ -90,7 +110,7 @@ def test_reload_and_navigation_restore_draft_without_selecting_saved_profile(pro
     expect(page.locator('#profiles-status')).to_contain_text('새 불변 프로필 저장됨')
     assert len(saves) == 1
     page.reload(wait_until='networkidle')
-    page.locator('#profile-panel').evaluate('node => node.open = true')
+    page.locator('#omx-sections a[href="#profile-panel"]').click()
     expect(page.locator('#profile-name')).to_have_value('')
 
 
@@ -133,7 +153,7 @@ def test_draft_is_not_restored_in_another_project(profile_editor):
         'project_id': 'other-project', 'tasks': [], 'robots': [], 'runs': []}))
     page.on('dialog', lambda dialog: dialog.accept())
     page.reload(wait_until='networkidle')
-    page.locator('#profile-panel').evaluate('node => node.open = true')
+    page.locator('#omx-sections a[href="#profile-panel"]').click()
     expect(page.locator('#profile-name')).to_have_value('')
 
 
@@ -146,13 +166,13 @@ def test_legacy_collaboration_users_have_separate_drafts_after_reload(profile_ed
         'project_id': 'fixture-project', 'user_id': user['id'], 'capabilities': []}))
     page.on('dialog', lambda dialog: dialog.accept())
     page.reload(wait_until='networkidle')
-    page.locator('#profile-panel').evaluate('node => node.open = true')
+    page.locator('#omx-sections a[href="#profile-panel"]').click()
     page.locator('#profile-name').fill('User A private draft')
     page.reload(wait_until='networkidle')
     expect(page.locator('#profile-name')).to_have_value('User A private draft')
     user['id'] = 'user-b'
     page.reload(wait_until='networkidle')
-    page.locator('#profile-panel').evaluate('node => node.open = true')
+    page.locator('#omx-sections a[href="#profile-panel"]').click()
     expect(page.locator('#profile-name')).to_have_value('')
     page.locator('#profile-name').fill('User B private draft')
     user['id'] = 'user-a'
@@ -165,7 +185,7 @@ def test_context_query_change_keeps_the_same_editor_draft(profile_editor):
     page, expect, url, _ = profile_editor
     page.on('dialog', lambda dialog: dialog.accept())
     page.goto(url + '&task=stale-task', wait_until='networkidle')
-    page.locator('#profile-panel').evaluate('node => node.open = true')
+    page.locator('#omx-sections a[href="#profile-panel"]').click()
     page.locator('#profile-name').fill('Keep after context reset')
     page.evaluate("history.replaceState(null, '', '/learning/omx?view=all')")
     page.reload(wait_until='networkidle')
@@ -177,7 +197,7 @@ def test_recording_preset_keeps_draft_confirmation_and_separate_store(profile_ed
     page.locator('#profile-name').fill('Center draft')
     page.on('dialog', lambda dialog: dialog.accept())
     page.goto(url+'&profile-store=recording', wait_until='networkidle')
-    page.locator('#profile-panel').evaluate('node => node.open = true')
+    page.locator('#omx-sections a[href="#profile-panel"]').click()
     page.locator('#profile-name').fill('Recording draft')
     page.locator('#profile-preset-single').click()
     expect(page.locator('dialog.ui-confirm')).to_be_visible()

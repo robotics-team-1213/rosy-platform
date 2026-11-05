@@ -17,7 +17,6 @@ function overview() {
     const title=document.getElementById('pixel-title') || document.getElementById('frame-title');
     title.after(node);
     const link=document.createElement('a');link.href='#review-history-events';link.textContent='검수 이력 보기';link.className='review-history-link';
-    link.onclick=()=>{const details=document.querySelector('.review-history');details.open=true;document.getElementById('review-history-events').focus();};
     node.after(link);document.getElementById('review-history-events').tabIndex=-1;
   }
   return node;

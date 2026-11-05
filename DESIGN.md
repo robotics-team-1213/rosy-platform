@@ -544,7 +544,7 @@ D-741(Accepted)이 정한, 모든 웹 표면이 같이 쓸 자리다. Rosy Fleet
 | --- | --- | --- |
 | 측정 행(이름–값) | `.ui-readout` · `.ui-readback` | 로봇 카드, Fleet 상세, 견본 |
 | 작업 목록 행 | `.ui-task-row` · `taskRow()` | 로봇 작업, Fleet 작업 선택 |
-| 절차 단계 | `.ui-stage-track` · `.ui-stage` | `applications/fleet/web/installation/install.html` · `applications/fleet/web/cell/cell.html` · `middleware/robot_ui/robot/styleguide.html` · `learning/curation/perception/review_app_web/learning.html` |
+| 절차 단계 | `.ui-stage-track` · `.ui-stage` | `applications/fleet/web/installation/install.html` · `applications/fleet/web/cell/cell.html` · `middleware/robot_ui/robot/styleguide.html` · `learning/curation/perception/review_app_web/learning.html` · `learning/curation/perception/review_app_web/index.html` · `learning/curation/perception/review_app_web/pixels.html` · `learning/curation/perception/review_app_web/omx.html` · `learning/curation/perception/review_app_web/vlm.html` |
 | 화면 머리 수치 띠 | `.ui-readout[data-form="strip"]` | `applications/fleet/web/work/policy.html` · `applications/fleet/web/cell/cell.html` · `middleware/robot_ui/robot/styleguide.html` · `middleware/robot_ui/robot/panels/host/system.js` |
 | 증거 블록 | `<ui-evidence>` · `<ui-empty>` | 로봇 카드, Fleet 큐 |
 | 절차 작업 열 | `.ui-sidebar` | 설치·정비, Fleet 작업 선택 |

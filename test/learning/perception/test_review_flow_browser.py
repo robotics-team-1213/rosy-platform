@@ -52,7 +52,11 @@ def browser_workspace(tmp_path):
 
 
 def open_action_disclosure(page, selector):
-    for summary in page.locator(f'details:not([open]):has({selector}) > summary').all():
+    target = page.locator(selector).first.evaluate("n => {const view=n.closest('[data-review-tool]');return view && (view.querySelector('[id]')?.id);}")
+    if target:
+        page.evaluate('(id)=>location.hash=id', target)
+        page.wait_for_function('(selector)=>document.querySelector(selector).getBoundingClientRect().height>0', arg=selector)
+    for summary in page.locator(f'{selector}:is(details):not([open]) > summary, details:not([open]):has({selector}) > summary').all():
         summary.click()
 
 
@@ -78,7 +82,7 @@ def test_owned_pipeline_controls_work_from_keyboard_search(tmp_path, width):
             return response;
           };""")
         page.set_viewport_size({'width': width, 'height': 844})
-        page.goto(page.url.split('?')[0].rstrip('/') + '/learning', wait_until='networkidle')
+        page.goto(page.url.split('?')[0].rstrip('/') + '/learning#pipeline', wait_until='networkidle')
         expect(page.get_by_role('button', name='학습 시작', exact=True)).to_be_enabled()
         for action in ['학습 시작', '학습 중지', '학습 재시도']:
             # Status renders before storage refresh releases the controls.
@@ -99,6 +103,7 @@ def test_owned_pipeline_controls_work_from_keyboard_search(tmp_path, width):
         expect(page.locator('#owner-control-status')).to_contain_text('자동 확인 중지됨', timeout=8000)
         expect(page.get_by_role('dialog', name='기능 검색')).to_be_visible()
         page.keyboard.press('Escape')
+        page.locator('.learning-home-nav a[href="#learning-results"]').click()
         expect(page.get_by_text('학습 후보 저장됨', exact=True)).to_be_visible(timeout=8000)
         assert review_evidence.decisions(store) == before
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
@@ -200,7 +205,7 @@ def test_review_studio_help_stays_inside_narrow_viewport(browser_workspace):
     for path, help_id in [('/', 'object-keys'), ('/pixels', 'pixel-keys')]:
         page.goto(page.url.split('?')[0].split('/pixels')[0].rstrip('/') + path,
                   wait_until='networkidle')
-        page.locator(f'#{help_id} summary').click()
+        page.locator(f'.review-tool-nav a[href="#{help_id}"]').click()
         for paragraph in page.locator(f'#{help_id} p').all():
             if not paragraph.text_content().strip():
                 continue
@@ -229,25 +234,6 @@ def test_disabled_ai_draft_and_photo_caption_keep_their_words_in_their_boxes(bro
     assert fit['captionRight'] <= fit['width'] and fit['captionCut'] <= 0, fit
 
 
-def test_review_studio_steps_and_keyboard_help_share_the_same_flow(browser_workspace):
-    page, store, expect = browser_workspace
-    expect(page.locator('#object-flow [aria-current="step"]')).to_have_text('전체 확인 · 결정')
-    page.keyboard.press('Shift+/')
-    expect(page.locator('#object-keys')).to_have_attribute('open', '')
-    page.locator('#filter').focus()
-    page.keyboard.press('Shift+/')
-    expect(page.locator('#object-keys')).to_have_attribute('open', '')
-    review_masks.bind_classes(store, CLASSES)
-    page.goto(page.url.split('?')[0].rstrip('/') + '/pixels?frame=0', wait_until='networkidle')
-    expect(page.locator('#pixel-flow [aria-current="step"]')).to_have_text('영역 수정 · 초안 저장')
-    page.keyboard.press('Shift+/')
-    expect(page.locator('#pixel-keys')).to_have_attribute('open', '')
-    page.locator('#pixel-brush-tool').click()
-    expect(page.locator('#pixel-brush-tool')).to_have_attribute('aria-pressed', 'true')
-    expect(page.locator('#pixel-keyboard-help')).to_contain_text('Alt+방향키')
-    expect(page.locator('#pixel-keyboard-help')).to_contain_text('Space')
-    assert store.get(0)['status'] == 'approved'
-    assert review_masks.get(store, 0)['status'] == 'pending'
 
 
 def test_object_workspace_purpose_and_eval_export_guard(tmp_path):
@@ -361,7 +347,7 @@ def test_object_candidate_is_findable_and_empty_review_is_neutral(tmp_path):
         expect(page.locator('#candidates')).to_be_visible()
         page.on('dialog', lambda dialog: dialog.accept())
         page.locator('#candidates').click()
-        expect(page.locator('#boxes summary')).to_contain_text('박스 1')
+        expect(page.locator('#boxes h3')).to_contain_text('박스 1')
         page.get_by_role('button', name='박스 1 삭제').click()
         expect(page.locator('#empty')).to_contain_text('객체가 없으면 전체 확인 후 승인하세요')
         page.reload(wait_until='networkidle')
@@ -548,11 +534,13 @@ def test_learning_compact_actions_and_connection_form_use_full_width(browser_wor
     page, _, _ = browser_workspace
     page.set_viewport_size({'width': width, 'height': 844})
     page.goto(page.url.split('?')[0].rstrip('/') + '/learning', wait_until='networkidle')
-    main = page.locator('#pipeline').bounding_box()
-    for selector in ('#new-task', '#refresh'):
+    for selector,screen in (('#new-task','learning-results'),('#refresh','pipeline')):
+        page.locator(f'.learning-home-nav a[href="#{screen}"]').click()
+        main = page.locator('#'+screen).bounding_box()
         box = page.locator(selector).bounding_box()
         assert abs(box['x'] - main['x']) <= 1 and abs(box['width'] - main['width']) <= 1, (selector, box, main)
-    page.locator('#connection-panel summary').click()
+    page.locator('.learning-home-nav a[href="#learning-results"]').click()
+    page.locator('#new-task').click()
     form = page.locator('#register').bounding_box()
     for selector in ('#kind', '#name', '#path', '#connect'):
         box = page.locator(selector).bounding_box()
@@ -574,6 +562,7 @@ def test_learning_report_age_advances_and_refreshes(browser_workspace, tmp_path,
     page.clock.install()
     page.set_viewport_size({'width': width, 'height': 844})
     page.goto(page.url.split('?')[0].rstrip('/') + '/learning', wait_until='networkidle')
+    page.locator('.learning-home-nav a[href="#learning-results"]').click()
     page.locator('#new-task').click()
     page.locator('#name').fill('검수할 결과')
     page.locator('#path').fill(str(report))
@@ -606,6 +595,7 @@ def test_owner_hold_stays_visible_after_timer_report_changes(browser_workspace, 
     for name in ['state.json', 'summary.json']:
         (report / name).write_text(json.dumps(held))
     page.goto(page.url.split('?')[0].rstrip('/') + '/learning', wait_until='networkidle')
+    page.locator('.learning-home-nav a[href="#learning-results"]').click()
     page.locator('#new-task').click()
     page.locator('#name').fill('자동 학습')
     page.locator('#path').fill(str(report))
@@ -627,6 +617,7 @@ def test_learning_filter_shows_visible_count(browser_workspace, tmp_path, width)
     page.set_viewport_size({'width': width, 'height': 844})
     page.goto(page.url.split('?')[0].rstrip('/') + '/learning', wait_until='networkidle')
     expect(page.locator('.ui-pathbar h1')).to_have_text('학습센터')
+    page.locator('.learning-home-nav a[href="#learning-results"]').click()
     page.locator('#new-task').click()
     page.locator('#name').fill('검수할 결과')
     page.locator('#path').fill(str(report))
@@ -635,6 +626,7 @@ def test_learning_filter_shows_visible_count(browser_workspace, tmp_path, width)
     other = tmp_path / 'other-learning-result'
     other.mkdir()
     (other / 'state.json').write_text('{"status":"done"}', encoding='utf-8')
+    page.locator('.learning-home-nav a[href="#learning-results"]').click()
     page.locator('#new-task').click()
     page.locator('#name').fill('다른 결과')
     page.locator('#path').fill(str(other))
@@ -683,6 +675,7 @@ def test_object_to_pixel_review_keeps_photo_and_shows_decision(browser_workspace
         page.evaluate('window.scrollTo(0, 0)')
         page.screenshot(path=str(Path(output) / f'learning-pixel-decision-{width}.png'), full_page=True)
     page.locator('.workspace-tabs a[href="/learning"]').click()
+    page.locator('.learning-home-nav a[href="#review-section"]').click()
     expect(page.locator('#review-counts')).to_contain_text('검수 대기 1장')
     expect(page.locator('#pixel-counts')).to_contain_text('승인 1장 · 검수 대기 1장')
     page.locator('#pixel-review-link').click()
@@ -950,6 +943,8 @@ def test_learning_list_and_catalog_show_delayed_response_age(browser_workspace, 
     with page.expect_request(f'**/api/{api}'):
         page.goto(page.url.split('?')[0].rstrip('/') + route, wait_until='domcontentloaded')
     expect(page.locator(status)).to_contain_text(re.compile(r'서버 응답 대기 [3-9]\d*초'), timeout=15000)
+    if route == '/learning':
+        page.locator('.learning-home-nav a[href="#learning-results"]').click()
     expect(page.locator(action)).to_be_disabled()
     if route == '/learning':
         expect(page.locator('#empty-jobs')).to_be_hidden()
@@ -1110,6 +1105,7 @@ def test_learning_registration_denial_blocks_repeat_until_retry(
     page.route(f'**/api/{post}', lambda request: request.fulfill(
         status=403, content_type='application/json', body='{"error":"local workspace authorization required"}'))
     if route == '/learning':
+        page.locator('.learning-home-nav a[href="#learning-results"]').click()
         page.locator('#new-task').click()
         page.locator('#name').fill('권한 확인')
         page.locator('#path').fill('X:/DevTemp/permission-check')
@@ -1364,7 +1360,7 @@ def test_custom_class_set_names_and_saves(custom_class_workspace):
     expect(select.locator('option')).to_have_text(['클래스 선택 필요', '자동차', '신호등'])
     select.select_option('car')
     expect(page.locator('#save-status')).to_contain_text('v2')
-    expect(page.locator('#boxes summary').first).to_contain_text('자동차')
+    expect(page.locator('#boxes h3').first).to_contain_text('자동차')
     assert store.get(0)['review']['boxes'][0]['label'] == 'car'
 
 
@@ -1423,19 +1419,20 @@ def test_review_shortcuts_confirm_then_move_without_approving(browser_workspace)
 def test_learning_summary_separates_review_from_training(browser_workspace):
     page, store, expect = browser_workspace
     store.update(0, {'version': store.get(0)['version'], 'action': 'reopen'})
-    page.goto(page.url.split('?')[0].rstrip('/') + '/learning', wait_until='networkidle')
+    page.goto(page.url.split('?')[0].rstrip('/') + '/learning#review-section', wait_until='networkidle')
     expect(page.locator('#review-stage-summary')).to_contain_text('등록 2장')
     expect(page.locator('#training-data-state')).to_contain_text('픽셀 승인 0장')
+    page.locator('.learning-home-nav a[href="#learning-results"]').click()
     expect(page.get_by_text('현재 검수 중인 사진의 학습 완료를 뜻하지 않습니다.')).to_be_visible()
+    page.locator('.learning-home-nav a[href="#review-section"]').click()
     expect(page.locator('#object-review-link')).to_contain_text('검수·승인')
     expect(page.locator('#pixel-review-link')).to_contain_text('검수·승인')
     page.locator('#object-review-link').click()
     page.wait_for_load_state('networkidle')
     expect(page.locator('#approve')).to_be_visible()
-    page.goto(page.url.split('?')[0].rstrip('/') + '/learning', wait_until='networkidle')
+    page.goto(page.url.split('?')[0].rstrip('/') + '/learning#review-section', wait_until='networkidle')
     page.locator('#pixel-review-link').click()
     expect(page.locator('#pixel-approve')).to_be_visible()
-
 
 def test_learning_shows_prepared_export_and_stale_decision(browser_workspace):
     page, store, expect = browser_workspace

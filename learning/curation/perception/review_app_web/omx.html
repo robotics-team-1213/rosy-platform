@@ -2,8 +2,8 @@
 <html lang="ko" data-theme="dark">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Rosy Learning — 로봇암 시범 검수</title><link rel="stylesheet" href="/common/tokens.css"><script src="/common/theme.js"></script>
-<link rel="stylesheet" href="/common/components.css"><link rel="stylesheet" href="/common/component-controls.css"><link rel="stylesheet" href="/common/app-shell.css"><link rel="stylesheet" href="/app.css">
-<script type="module" src="/omx.js"></script></head>
+<link rel="stylesheet" href="/common/components.css"><link rel="stylesheet" href="/common/component-controls.css"><link rel="stylesheet" href="/common/app-shell.css"><link rel="stylesheet" href="/common/stage-strip.css"><link rel="stylesheet" href="/app.css">
+<script type="module" src="/omx.js"></script><link rel="stylesheet" href="/file-picker.css"><script type="module" src="/file-picker.js"></script></head>
 <body><a class="skip-link" href="#omx-main">로봇암 시범 검수로 이동</a>
 <ui-shell grammar="procedure" class="ui-app-shell"><!-- review:header:start -->
 <ui-topbar role="banner"><ui-brand href="/learning" aria-label="Rosy Learning"><b>Learning</b></ui-brand><span data-spacer></span><a data-kind="quiet" class="ui-action-link" data-action-icon="account" data-learning-account-entry href="/accounts" title="로그인·계정">로그인·계정</a>
@@ -12,7 +12,7 @@
 <div class="ui-app-body" data-seats="rail"><div class="ui-rail"><nav class="ui-rail-nav workspace-tabs" aria-label="학습 화면"><!-- review:rail:start -->
 <a class="ui-rail-item" data-action-icon="list" href="/learning" aria-label="홈">홈</a><a class="ui-rail-item" data-action-icon="folder" href="/catalog" aria-label="자료 등록">자료</a><a class="ui-rail-item" data-action-icon="pencil" href="/" aria-label="정답 달기" aria-current="true">정답</a><a class="ui-rail-item" data-action-icon="robot" href="/learning/tasks" aria-label="학습 실행">학습</a><a class="ui-rail-item" data-action-icon="check" href="/learning/evaluate" aria-label="평가·승격">평가·승격</a>
 <!-- review:rail:end --></nav></div>
-<div class="ui-app-main"><div class="ui-pathbar"><h1>로봇암 시범 검수</h1><span data-spacer></span><ui-button id="refresh" data-action-icon="refresh" kind="quiet">다시 확인</ui-button></div><nav class="review-kinds" aria-label="정답 하위 메뉴"><a class="ui-subnav-item" href="/">객체 검수</a><a class="ui-subnav-item" href="/pixels">픽셀 검수</a><a class="ui-subnav-item" href="/learning/omx" aria-current="page">로봇암 시범 검수</a><a class="ui-subnav-item" href="/learning/vlm">VLM 판단</a></nav>
+<div class="ui-app-main"><div class="ui-pathbar"><nav class="ui-crumbs" aria-label="현재 위치"><a href="/learning">Learning</a><span aria-hidden="true">/</span></nav><h1>로봇암 시범 검수</h1><span class="ui-crumbs" id="learning-tool-path"></span><span data-spacer></span><ui-button id="refresh" data-action-icon="refresh" kind="quiet">다시 확인</ui-button></div><nav class="review-kinds" aria-label="정답 하위 메뉴"><a class="ui-subnav-item" href="/">객체 검수</a><a class="ui-subnav-item" href="/pixels">픽셀 검수</a><a class="ui-subnav-item" href="/learning/omx" aria-current="page">로봇암 시범 검수</a><a class="ui-subnav-item" href="/learning/vlm">VLM 판단</a></nav>
 <main id="omx-main" class="learning-main ui-task-page" tabindex="-1">
 <p class="learning-lede">과제에 맞는 팔 설정과 시연을 준비하고, 검수한 자료로 학습·평가를 이어갑니다.</p>
 <p id="workflow-context" hidden><a id="workflow-return" data-kind="quiet" class="ui-action-link">저장 후 학습 과제로 돌아가기</a></p>
@@ -22,23 +22,31 @@
 <p id="journey-goal">과제는 아직 선택하지 않았습니다.</p><p id="journey-data" class="quiet">학습 데이터를 확인하는 중입니다.</p>
 <label class="ui-field-label">이번 과제의 학습 데이터 <select id="dataset" class="ui-field" disabled><option value="">데이터를 불러오는 중</option></select></label>
 <p id="journey-reason" role="status">과제와 자료를 확인하는 중입니다.</p><div class="learning-next-actions"><a id="journey-next" class="ui-action-link" data-kind="quiet" href="#profile-panel">과제와 성공 조건 정하기</a><a id="journey-task-link" class="ui-action-link" data-kind="quiet" href="/learning/tasks/manage">학습 과제 선택·만들기</a></div>
-<details><summary id="learning-entry-heading">로그인·외부 자료 연결 상태</summary>
+<section aria-labelledby="learning-entry-heading"><h3 id="learning-entry-heading">로그인·외부 자료 연결 상태</h3>
 <p id="learning-account-state" role="status">로그인과 계정 연결을 확인하는 중입니다.</p>
 <div class="learning-next-actions"><a data-kind="quiet" id="learning-account-link" class="ui-action-link" href="/accounts">로그인·Hugging Face 연결 확인</a><a data-kind="quiet" id="learning-task-link" class="ui-action-link" href="#profile-panel">과제·팔·카메라 설정</a></div>
-</details><ui-status id="center-status" state="pending" role="status">실행기 연결을 확인하는 중입니다.</ui-status><p id="center-read-error" role="alert" hidden></p><p id="center-error" role="alert" hidden></p></section>
-<div class="learning-workflow-layout"><nav id="omx-sections" class="learning-step-menu" aria-label="로봇암 학습 단계">
-<h2>과제 작업</h2>
-<a href="#profile-panel">1 · 과제·팔·카메라</a><a href="#owner-section">2 · 현장 상태</a><a href="#capture-section">3 · 시범·교정 수집</a><a href="#dataset-section">4 · 검수·학습 데이터</a><a href="#reward-section">5 · 성공 판정·초기화</a><a href="#train-section">6 · ACT / HIL-SERL</a><a href="#comparison-section">7 · 평가·실물 적용</a><a href="/accounts">계정·Hugging Face</a>
+</section><ui-status id="center-status" state="pending" role="status">실행기 연결을 확인하는 중입니다.</ui-status><p id="center-read-error" role="alert" hidden></p><p id="center-error" role="alert" hidden></p></section>
+<div class="learning-workflow-layout"><nav aria-label="로봇암 학습 단계"><h2 class="ui-section-heading">과제 작업</h2>
+<ol id="omx-sections" class="ui-stage-track" data-line="learning">
+<li class="ui-stage" data-state="todo"><a class="ui-action-link" data-kind="quiet" href="#profile-panel">과제·팔·카메라</a></li>
+<li class="ui-stage" data-state="todo"><a class="ui-action-link" data-kind="quiet" href="#owner-section">현장 상태</a></li>
+<li class="ui-stage" data-state="todo"><a class="ui-action-link" data-kind="quiet" href="#capture-section">시범·교정 수집</a></li>
+<li class="ui-stage" data-state="todo"><a class="ui-action-link" data-kind="quiet" href="#dataset-section">검수·학습 데이터</a></li>
+<li class="ui-stage" data-state="todo"><a class="ui-action-link" data-kind="quiet" href="#reward-section">성공 판정·초기화</a></li>
+<li class="ui-stage" data-state="todo"><a class="ui-action-link" data-kind="quiet" href="#train-section">ACT / HIL-SERL</a></li>
+<li class="ui-stage" data-state="todo"><a class="ui-action-link" data-kind="quiet" href="#comparison-section">평가·실물 적용</a></li>
+</ol>
+<a class="ui-action-link" data-kind="quiet" href="/accounts">계정·Hugging Face</a>
 </nav><div class="learning-workflow-content">
 <section class="learning-section learning-panel omx-stage-intro" aria-labelledby="stage-question"><h2 id="stage-question">무엇을 성공으로 볼까요?</h2><p id="stage-purpose"></p><details><summary>단계 완료 기준·전체 도구</summary><p id="stage-done" class="quiet"></p><p class="quiet">단계 이동은 완료나 승인을 기록하지 않습니다. 프로필 초안은 이 탭에 임시 보관되며 서버 저장·장치 검증과 구분합니다.</p><a id="workflow-view" class="ui-action-link" data-kind="quiet" href="?view=all">전체 도구 펼쳐 보기</a></details><a id="stage-next" class="ui-action-link" data-kind="quiet" href="#owner-section">이후 현장 상태 확인</a></section>
-<details id="profile-panel" class="learning-section learning-panel"><summary>1 · 과제·팔·카메라 설정</summary>
+<section id="profile-panel" class="learning-section learning-panel" aria-labelledby="profile-heading"><h2 id="profile-heading">1 · 과제·팔·카메라 설정</h2>
 <p>기존 작업대는 저장 프로필을 선택해 재사용하세요. 현재 시연 → ACT 데이터 변환은 팔 1대·6관절을 지원합니다. 새 작업대는 장치 목록을 불러와 확인하고, 모르는 단위·관절 범위를 추정해 채우지 마세요.</p>
 <p class="quiet">학습할 작업 팔을 등록합니다. 리더 팔은 시범·교정 입력 장치로 구분합니다. 입력 순서·단위·카메라 출처와 배치를 확인하세요. 장치 연결·교정·실행 승인은 별도이며, 협동 학습 결과도 실제 협동 동작의 검증이 필요합니다. 현재 native 자료 변환은 팔 1대·6관절을 지원합니다.</p>
 <label class="ui-field-label">저장 프로필 <select id="profile-record" class="ui-field" disabled></select></label>
 <ui-button kind="quiet" id="profiles-refresh" class="ui-field" type="button">프로필 목록 다시 확인</ui-button><ui-button kind="quiet" id="profile-clone" class="ui-field" type="button" disabled>선택 프로필 복사·새 버전 편집</ui-button>
 <ui-button kind="quiet" id="profile-new" class="ui-field" type="button">빈 프로필 작성</ui-button><ui-button kind="quiet" id="profile-import-dataset" class="ui-field" type="button" disabled>현재 데이터 프로필 가져오기</ui-button>
 <ui-button kind="quiet" id="profile-preset-single" type="button" hidden>작업 팔 1대·상단·손목 구성 초안</ui-button><ui-button kind="quiet" id="profile-preset-bimanual" type="button" hidden>작업 팔 2대·상단·각 손목 구성 초안</ui-button><a id="profile-recording-return" data-kind="quiet" class="ui-action-link" href="/learning/record" hidden>시연 녹화로 돌아가기</a>
-<label class="ui-field-label">작업대 장치 목록으로 초안 채우기 <input id="profile-bench" class="ui-field" type="file" accept="application/json,.json"></label><p id="profile-bench-status" class="quiet" role="status">작업대 화면의 inventory.json(관찰 서비스가 맡은 팔, 카메라 설정)을 불러옵니다. 역할을 모르는 보드는 채우지 않고 알려 줍니다.</p>
+<label class="ui-field-label">작업대 장치 목록으로 초안 채우기 <span class="file-picker"><input id="profile-bench" class="ui-field" type="file" accept="application/json,.json" aria-describedby="profile-bench-filename"><span class="file-picker-button" aria-hidden="true">파일 선택</span><span id="profile-bench-filename" data-file-name aria-live="polite">선택한 파일 없음</span></span></label><p id="profile-bench-status" class="quiet" role="status">작업대 화면의 inventory.json(관찰 서비스가 맡은 팔, 카메라 설정)을 불러옵니다. 역할을 모르는 보드는 채우지 않고 알려 줍니다.</p>
 <p id="profiles-status" role="status"></p><details><summary>저장 설정의 식별자·검증 범위</summary><p id="profile-record-meta" class="quiet"></p></details>
 <a id="profile-download" class="ui-field" aria-disabled="true">저장 JSON 내려받기</a><ui-button kind="quiet" id="profile-use" class="ui-field" type="button" disabled>이 저장 프로필로 학습·변환 준비</ui-button>
 <form id="profile-form"><fieldset id="profile-fields"><legend>새 불변 버전의 입력</legend>
@@ -50,7 +58,7 @@
 <h3>순서가 있는 팔 (1–32)</h3><div id="profile-arms"></div><ui-button kind="quiet" id="profile-add-arm" class="ui-field" type="button">팔 추가</ui-button>
 <h3>순서가 있는 카메라 (1–64)</h3><div id="profile-cameras"></div><ui-button kind="quiet" id="profile-add-camera" class="ui-field" type="button">카메라 추가</ui-button>
 <h3>부모 버전과의 변경</h3><pre id="profile-diff"></pre><ui-button kind="quiet" id="profile-save" class="ui-field" type="submit">새 프로필 버전 저장</ui-button>
-</fieldset></form></details>
+</fieldset></form></section>
 <section id="owner-section" class="learning-section learning-panel" aria-labelledby="owner-heading"><h2 id="owner-heading">2 · 현장 팔 상태</h2>
 <p id="owner-control-status" class="quiet">상태 조회 전용입니다. 실물 학습 제어는 연결되지 않았습니다. 조회 성공은 관절 상태의 신선도나 실제 정지를 보증하지 않습니다.</p>
 <label class="ui-field-label">연결된 작업대 <select id="owner-target" class="ui-field" disabled><option value="">상태 연결 설정 없음</option></select></label>
@@ -75,7 +83,7 @@
 <form id="native-export-form" class="ui-form learning-form"><label class="ui-field-label">등록된 검수 시연 <select id="prepared-set" class="ui-field" required disabled><option value="">등록 자료를 불러오는 중</option></select></label>
 <p id="prepared-status" role="status"></p>
 <label class="ui-field-label">변환 데이터 이름 <input id="export-name" class="ui-field" maxlength="100" required></label>
-<label class="ui-field-label">팔·카메라 프로필 JSON <input id="export-profile" class="ui-field" type="file" accept=".json,application/json" required></label>
+<label class="ui-field-label">팔·카메라 프로필 JSON <span class="file-picker"><input id="export-profile" class="ui-field" type="file" accept=".json,application/json" required aria-describedby="export-profile-filename"><span class="file-picker-button" aria-hidden="true">파일 선택</span><span id="export-profile-filename" data-file-name aria-live="polite">선택한 파일 없음</span></span></label>
 <label class="ui-check"><input id="export-saved-review" class="ui-field" type="checkbox" aria-describedby="export-review-status" disabled> 현재 불러온 저장 검수 사용</label><p id="export-review-status" class="quiet" role="status">선택하지 않으면 원본 검수 결정을 사용합니다.</p>
 <p class="quiet">단일 6관절 팔, normalized_-100_100 단위와 원본에 기록된 모든 카메라의 입력 키·영상 크기가 일치하는 프로필 파일이 필요합니다(1 MiB 이하). 추가 카메라도 원본 그대로 변환합니다. 서버가 시연·분할·영수증과 대응을 검증합니다. 미상·시험 fixture 자료는 변환 실행이 거절됩니다.</p>
 <ui-button kind="quiet" id="native-export" type="submit" class="ui-field" disabled>시연 검증하고 ACT 데이터 만들기</ui-button><p id="export-status" role="status"></p></form>
@@ -112,7 +120,7 @@
 <ui-button kind="quiet" id="review-save" class="ui-field" type="submit" disabled>원본과 분리된 검수 저장</ui-button></fieldset></form>
 </div></section>
 <h3>이미 변환한 데이터 폴더 올리기</h3>
-<form id="upload-form" class="ui-form learning-form"><label class="ui-field-label">데이터 폴더 <input id="dataset-folder" class="ui-field" type="file" webkitdirectory multiple required></label>
+<form id="upload-form" class="ui-form learning-form"><label class="ui-field-label">데이터 폴더 <span class="file-picker"><input id="dataset-folder" class="ui-field" type="file" webkitdirectory multiple required aria-describedby="dataset-folder-filename"><span class="file-picker-button" aria-hidden="true">폴더 선택</span><span id="dataset-folder-filename" data-file-name aria-live="polite">선택한 파일 없음</span></span></label>
 <label class="ui-field-label">표시 이름 <input id="dataset-name" class="ui-field" maxlength="100" required></label>
 <p class="quiet">데이터 설명 파일과 시도별 기록 파일이 있는 폴더를 선택하세요. 업로드 후 입력과 분할을 검증합니다.</p>
 <ui-button kind="quiet" id="upload" type="submit" class="ui-field">폴더 올리고 검증</ui-button></form><p id="upload-status" role="status"></p>

@@ -44,7 +44,7 @@ async function restoreDraft(){
       try{draft=saved.draft;parent=saved.parent;pending=saved.pending||null;render();}
       catch(error){({draft,parent,pending}=previous);render();throw error;}
       try{if(profileDocumentKey(pending?.profile)!==profileDocumentKey(documentValue())||pending?.parent_id!==parent?.id)pending=null;}catch{pending=null;}
-      $('profile-panel').open=true;draftNotice(true);
+      location.hash='profile-panel';draftNotice(true);
     }else draftNotice();
   }catch{
     storageWarning='로컬 초안을 보관하지 못했습니다. 프로젝트·계정 또는 브라우저 저장소를 확인하고 화면을 떠나기 전에 서버에 저장하세요.';draftNotice();
@@ -182,7 +182,7 @@ async function preset(kind){
   const camera=(id,arm_id,role)=>({id,input_key:'observation.images.'+id,arm_id,role,source_identity:'',placement:role,shape:[3,'',''],purposes:['policy']});
   value.cameras=[camera('top',null,'top'),...arms.map(id=>camera(id+'_wrist',id,'wrist'))];
   if(!await replaceDraft(value))return;
-  $('profile-panel').open=true;$('profiles-status').textContent='미검증 구성 초안 · 실제 출처·관절·단위·해상도를 직접 확인하세요. 팔·카메라 수와 순서·역할은 계속 편집할 수 있습니다.';
+  location.hash='profile-panel';$('profiles-status').textContent='미검증 구성 초안 · 실제 출처·관절·단위·해상도를 직접 확인하세요. 팔·카메라 수와 순서·역할은 계속 편집할 수 있습니다.';
 }
 for(const kind of ['single','bimanual']){const button=$('profile-preset-'+kind);if(button){button.hidden=!recordingStore;button.onclick=()=>preset(kind);}}
 document.addEventListener('omx-dataset-profile',event=>{datasetProfile=event.detail;$('profile-import-dataset').disabled=!datasetProfile?.schema;});

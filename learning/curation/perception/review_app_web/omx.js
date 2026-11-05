@@ -246,6 +246,7 @@ function showSection(){
   const stage=STAGES.find(([key])=>requested&&(requested.id===key||$(key).contains(requested)))||STAGES[0];
   const [id,question,purpose,done,next]=stage,target=requested&&$(id).contains(requested)?requested:$(id);
   const all=new URLSearchParams(location.search).get('view')==='all';
+  $('learning-tool-path').textContent=' / '+(all?'전체 도구':document.querySelector(`#omx-sections a[href="#${id}"]`)?.textContent||question);
   for(const [key] of STAGES)$(key).hidden=!all&&key!==id;
   $('sets').parentElement.hidden=!all&&id!=='dataset-section';
   $('stage-question').textContent=all?'전체 도구':question;$('stage-purpose').textContent=all?'과제 설정부터 검수·변환·학습·평가까지 펼쳐 봅니다. 왼쪽 메뉴에서 필요한 작업으로 이동하세요.':purpose;$('stage-done').textContent=all?'도구를 펼치거나 단계로 이동해도 작업 완료나 승인을 기록하지 않습니다.':done;
@@ -253,6 +254,7 @@ function showSection(){
   const view=new URL(location.href);if(all)view.searchParams.delete('view');else view.searchParams.set('view','all');
   $('workflow-view').textContent=all?'단계별 작업으로 돌아가기':'전체 도구 펼쳐 보기';$('workflow-view').href=view.pathname+view.search+view.hash;
   for(const link of $('omx-sections').querySelectorAll('a')){
+    link.parentElement.dataset.state=!all&&link.getAttribute('href')==='#'+id?'now':'todo';
     if(!all&&link.getAttribute('href')==='#'+id)link.setAttribute('aria-current','location');
     else link.removeAttribute('aria-current');
   }
