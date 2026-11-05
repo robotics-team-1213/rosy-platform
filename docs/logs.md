@@ -14188,3 +14188,10 @@ osy-d395-s1d\`.
 - 증거: 변경 전 원격 `test_committed_review_archive_starts_without_checkout_imports`가 누락된 perception·Drive 의존성으로 실패했다. 변경 커밋의 `test_model_pc_autoupdate.py`·`test_model_review_release.py` 원격 검증 결과는 작업 인계에 남긴다.
 - gate 변화: 없음
 - CE: 해당 없음 — 원인과 재발 검사는 소스 목록과 기존 실제 Git 아카이브 부팅 시험에 드러난다.
+
+## 2026-11-05 · uncommitted · test(games): 복구 시 진행 중인 overlay route handler를 기다린다
+
+- 변경: 오류 모의 해제6곳에 `unroute_all(behavior="wait")`를 사용했다. 해당 시점에는 overlay 모의만 있으며 점수·연결·복구·레이아웃·정지 표시와 오류 단언을 유지한다. 오류를 삼키거나 실패 baseline을 바꾸지 않았다.
+- 증거: 원래 FULL chunk1 failed/158 passed의 오류는 `Route.fulfill: Route is already handled!`였다. 같은 case의 단독1 passed는 LOAD-FLAKY이며 FULL 통과가 아니다. 수정 commitd21cd5e7a1의 원격 opt-in 파일전체61 passed/0 skipped/163.27초, exit0/NEW0 및 독립 리뷰를 확인했다. 최종 수정 소스의 정본 FULL은 별도다.
+- gate 변화: 없음. 브라우저 시험 fixture 보완은 모델 품질·실물 수용을 대체하지 않는다.
+- CE: [route 해제와 실행 중 handler의 경합](solutions/test-failures/playwright-overlay-route-removal-needs-handler-drain-2026-11-05.md). 환경이 다른 두 실행으로 부하 재발률을 주장하지 않는다.
