@@ -21,12 +21,14 @@ pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason='requires ex
 def test_next_pending_locks_editing_until_both_lookups_finish(browser_workspace, pixel, lookup, failed):
     page, store, expect = browser_workspace
     base = page.url.split('?')[0].rstrip('/')
+    store.update(1, {'version': store.get(1)['version'], 'action': 'reopen'})
     if pixel:
         review_masks.bind_classes(store, CLASSES)
         page.goto(base + '/pixels?frame=0', wait_until='networkidle')
         page.locator('#pixel-class').select_option('4')
         page.locator('#pixel-brush-tool').click()
     else:
+        page.goto(base + '/?frame=0', wait_until='networkidle')
         page.locator('#reopen').click()
     prefix = 'pixel-' if pixel else ''
     canvas = page.locator('#pixel-canvas' if pixel else '#canvas')
