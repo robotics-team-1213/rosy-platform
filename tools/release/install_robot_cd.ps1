@@ -83,7 +83,9 @@ if ($BaseSourceRevision) {
     $config | Add-Member -NotePropertyName base_source_revision -NotePropertyValue $BaseSourceRevision -Force
 }
 $config | Add-Member -NotePropertyName trusted_root -NotePropertyValue $snapshot -Force
-$config | Add-Member -NotePropertyName source_repository -NotePropertyValue $repo -Force
+if (-not $config.PSObject.Properties['source_repository']) {
+    $config | Add-Member -NotePropertyName source_repository -NotePropertyValue $repo
+}
 New-Item -ItemType Directory -Path $base -Force | Out-Null
 $installedConfig = Join-Path $base "config.json"
 [IO.File]::WriteAllText($installedConfig, ($config | ConvertTo-Json -Depth 8), $utf8)

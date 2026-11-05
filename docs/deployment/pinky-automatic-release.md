@@ -60,7 +60,12 @@ OS 게시를 승인한 운영자는 private JSON에 `os_engineering: true`와
 `os_cms_private_key`를 추가한다. 후자는 기존 운영 PC의 CMS 개인키 **절대 경로**이며
 키나 private JSON을 저장소·GitHub runner에 복사하지 않는다. Ed25519 키는 기존
 `key_name`을 사용한다. CMS 공개 SPKI·인증서·빌드 pin 검증도 그대로 적용한다.
-`source_repository`는 설치 도구가 원래 Git 저장소의 절대 경로로 기록한다.
+`source_repository`는 private JSON에서 수명이 긴 정본 Git 저장소의 절대 경로로 지정한다.
+설치 도구는 지정한 값을 보존하고, 속성이 없을 때만 설치에 사용한 저장소 경로를 기본값으로
+기록한다. worktree에서 설치했다면 정리 전에 이 경로가 곧 삭제할 worktree를 가리키지
+않는지 확인한다. 고정 설치본은 남더라도 Git archive의 데이터원이 사라지면 준비가 중단된다.
+지정한 저장소에서도 정확한 tools commit object와 설치 파일의 byte 대조는 그대로 요구하며,
+경로를 바꾸어 최신 HEAD 코드로 대체하거나 검증을 건너뛰지 않는다.
 
 최초 활성화 전에 공개 main에 필요한 OS 수정이 포함됐는지 전체 SHA와 ancestry로
 확인한다. 작업은 설치 1분 뒤 실행될 수 있으므로, 옛 main을 빌드할 상태에서 먼저
