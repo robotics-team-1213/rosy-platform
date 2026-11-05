@@ -452,8 +452,37 @@ def page_site(tmp_path, request):
                                               args=[f"--explicitly-allowed-ports={listener.getsockname()[1]}"])
             try:
                 page = browser.new_page(viewport={"width": 1440, "height": 1000})
+                if os.environ.get('ROSY_TOKEN_TRACE') == '1':
+                    page.add_init_script('''
+                        window.tokenTrace = [];
+                        function trace(kind, target) {
+                            if (window.tokenTrace.length >= 100) return;
+                            const ids = ['topbar-more', 'topbar-extra', 'token-access', 'token-save'];
+                            window.tokenTrace.push({time: performance.now(), kind, target,
+                                state: ids.map(id => {
+                                    const e = document.getElementById(id);
+                                    return e && {id, expanded: e.getAttribute('aria-expanded'),
+                                        open: e.getAttribute('open'), dataOpen: e.dataset.open,
+                                        hidden: e.hidden, display: getComputedStyle(e).display,
+                                        width: e.getBoundingClientRect().width};
+                                })});
+                        }
+                        document.addEventListener('click', e => trace('click', e.target.id), true);
+                        document.addEventListener('keydown', e => {
+                            if (e.key === 'Escape') trace('escape', e.target.id);
+                        }, true);
+                        new MutationObserver(records => records.forEach(r => {
+                            if (['topbar-more', 'topbar-extra', 'token-access'].includes(r.target.id))
+                                trace(r.attributeName, r.target.id);
+                        })).observe(document, {subtree: true, attributes: true,
+                            attributeFilter: ['aria-expanded', 'data-open', 'open', 'hidden']});
+                    ''')
                 page.goto(origin + "/console/site-map")
-                yield page, store, robot
+                try:
+                    yield page, store, robot
+                finally:
+                    if os.environ.get('ROSY_TOKEN_TRACE') == '1':
+                        print('TOKEN_TRACE', json.dumps(page.evaluate('window.tokenTrace')))
             finally:
                 browser.close()
     finally:
