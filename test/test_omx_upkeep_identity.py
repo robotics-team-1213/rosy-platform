@@ -88,8 +88,7 @@ def test_missing_usb_chain_is_bounded_and_explicit_oserror(tmp_path,monkeypatch,
 
 
 def write_trace(path,shaky=True):
-    path.write_text('\n'.join(json.dumps(row) for row in trace(4,4.0,0.6) if shaky) if shaky else
-                    '\n'.join(json.dumps(row) for row in trace(4)))
+    path.write_text('\n'.join(json.dumps(row) for row in (trace(4,4.0,0.6) if shaky else trace(4))))
 
 
 def test_simultaneous_arms_use_explicit_trace_name_not_first_health_mtime(tmp_path):
@@ -97,7 +96,7 @@ def test_simultaneous_arms_use_explicit_trace_name_not_first_health_mtime(tmp_pa
     health_log(a,pwm=0);health_log(b,pwm=0)
     b.write_text(b.read_text().replace('FF06202D','FF061D2D'))
     trace_b=tmp_path/'trace-arm_b-shaky.jsonl';write_trace(trace_b)
-    for path in (a,b,trace_b):os.utime(path,(1000,1000))
+    for path,stamp in ((a,1000),(b,1001),(trace_b,1002)):os.utime(path,(stamp,stamp))
     result=jr.replay([trace_b],[a,b])
     assert not result['arm_a']['flagged']
     assert result['arm_b']['flagged']
