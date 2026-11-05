@@ -72,6 +72,8 @@ NO_PINKY_FILES = {
     ".dockerignore",
     "deploy/robot/pinky_pro/Dockerfile",
     "deploy/robot/pinky_pro/compose.yaml",
+    "deploy/robot/pinky_pro/calibration_tls_read.py",
+    "deploy/robot/pinky_pro/rosy-calibration-guard.ps1",
     "deploy/hosts/gpu_tenants.py",
     "deploy/hosts/rosy-gpu-tenants.service",
     "deploy/hosts/rosy-gpu-tenants.timer",
