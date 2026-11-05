@@ -14253,3 +14253,14 @@ osy-d395-s1d\`.
 - 증거: df46d9a2f4의 capture2개/넓은171개는 각각0skip/NEW0,320/390 항목폭101.59/129.59px. 독립 검토자가 새5장과2CSS규칙을 보고 P2 ADDRESSED/새 문제0으로 승인했다. metadata0cc의 전체92 size/safety와lint0오류를 확인했다.
 - gate 변화: UI 차단 사항은 해소됐으며 최신 G1에 실제styleguide route/dialog 계약을 포함해 재실행하고 새 source의 기본 공식 AUTO/FULL·main을 확인한다. 취소015709의 부분 결과는 FULL로 세지 않는다.
 - CE: 해당 없음 — 기존 디자인 요구와 실제 폭/화면 회귀에 원인·보장을 남겼다.
+
+## 2026-11-05 · uncommitted · 사용자 제보의 동일 위계 UI 통일 결속
+- 변경: hierarchy-followup.md와153행 표준 hierarchy.sha256에30카드 소스 감사·공용 하위 탐색·실제4제품 소비처·보존 의미·RED/GREEN·원격 소비처 closure·독립 소스/시각 수용을 기록했다. 기존 README는 후속 링크만 추가하고 당시 결과를 보존했다.
+- 증거: 제품0de561052a 동일13개 GREEN,1a390c9d40 비교14개/보충2개 각각0skip·NEW0,원본153해시일치·실제30PNG G3 PASS다. Home 메뉴focus는65/66,setup은좁은default dark2셀로만 기록한다. 넓은317개의315PASS/2FAIL은 보존하고 제품불변a27e97c186의두전체파일36PASS/0skip/NEW0로두소비처를 닫았다. 각 실행을 새 SHA 하나의 전체 통과로 합산하지 않는다.
+- gate 변화: scoped UI/직접 소비처·독립 리뷰 완료. 최종 metadata 원격 필수검증과 기본 공식 AUTO/FULL·실제 main ancestry는 별도로 확인한다. 추가 지시 전030241은 소유 FULL 사전대기 중 취소했고 부분 결과를 재사용하지 않는다.
+- CE: 해당 없음 — 공용 소유권·기존 overlay 정책·실제 코드/회귀와 소스별 검증 기록으로 판단을 재구성할 수 있다.
+
+## 2026-11-05 · uncommitted · 캡처 목록 지문의 정규화 기준 명시
+- 변경: hierarchy-followup의 목록 자체 지문은 Git blob(LF 정규화) 기준이라고 명시했다. Windows checkout 줄바꿈과 원본153개 digest를 섞지 않는다. 목록과 제품·시험·원본은 바꾸지 않았다.
+- 증거: 실제 Git blob(LF 정규화) 바이트의 SHA256을 대조했으며 원본153개 digest는 그대로 보존했다.
+- gate 변화: 최종 metadata G1/문서·비밀 guard 및 공식 AUTO/FULL을 같은 최종 소스로 진행한다. CE: 해당 없음 — Git 텍스트 정규화와 기존 표준 checksum 형식으로 설명된다.

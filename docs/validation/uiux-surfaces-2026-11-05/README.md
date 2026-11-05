@@ -1,5 +1,7 @@
 # 화면 지도 UI·UX LOCAL 평가
 
+후속 검증은 [최종 경합 해소](final-closure.md), [긴 읽기값 옆 항목명](readback-header-followup.md), [동일 위계 공용 UI 통일](hierarchy-followup.md)에서 각 실제 소스·범위와 함께 읽는다. 아래 당시 결과를 새 소스의 전체 FULL·착지 결과로 소급하지 않는다.
+
 ## 최종 Learning G3 — LOCAL PASS
 
 독립 검토자가 최종42c97133c1의 실제 PNG31개(계정2개 포함)를 열고439개 receipt 파일을 다시 해시해 불일치0을 확인했다. JUnit440개와 홈25개는 각각 실패/오류/건너뜀0이며 이전35개 실패 node가 모두 최종 통과한 closure를 대조했다. 제품은733441ec49의 시험 한 줄 보완과6478fe9b27의 main 병합까지 바이트가 같다. 기존 R5 HOLD를 이 관측 범위에서 해소했다.
