@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import glob
 import json
+import os
 import re
 import statistics
 import subprocess
@@ -108,6 +109,54 @@ def unit_restart(role) -> None:
     time.sleep(8)  # the preview republishes within a few seconds (2026-11-04)
 
 
+def camera_device(role):
+    """The registry's device name for a preview role (omx-cameras.json), or None."""
+    path = Path.home() / ".config/rosy/omx-cameras.json"
+    return next((c["device"] for c in json.loads(path.read_text())["cameras"] if c["role"] == role), None) if path.exists() else None
+
+
+def usb_port(device):
+    """Root port of the camera behind a /dev/v4l/by-id name: {"ports": [port, peer], "speed": Mbit/s, "boards": by-id
+    serial names below that root port}. Raises OSError when sysfs does not show the chain."""
+    node = Path(os.path.realpath(device)).name
+    dev = Path(os.path.realpath(f"/sys/class/video4linux/{node}/device"))
+    while not (dev / "idVendor").exists():
+        dev = dev.parent
+    bus, _, path = dev.name.partition("-")
+    root = dev
+    while root.name != f"{bus}-{path.split('.')[0]}":
+        root = root.parent
+    port = Path(f"/sys/bus/usb/devices/{bus}-0:1.0/usb{bus}-port{path.split('.')[0]}")
+    peer = os.path.realpath(port / "peer") if (port / "peer").exists() else None
+    boards = [Path(b).name for b in glob.glob("/dev/serial/by-id/*")
+              if os.path.realpath(f"/sys/class/tty/{Path(os.path.realpath(b)).name}/device").startswith(str(root))]
+    return {"ports": [str(port)] + ([peer] if peer else []), "speed": int((dev / "speed").read_text()), "boards": boards}
+
+
+def frames_flow(device) -> bool:
+    """A direct read: v4l2-ctl gets bytes from the node itself, so the service is ruled out."""
+    try:
+        out = subprocess.run(["v4l2-ctl", "-d", str(device), "--set-fmt-video=width=640,height=480", "--stream-mmap",
+                              "--stream-count=3", "--stream-to=-"], capture_output=True, timeout=15)
+    except subprocess.TimeoutExpired:
+        return False
+    return len(out.stdout) > 0
+
+
+def port_set(ports, disabled) -> None:
+    for port in ports:
+        subprocess.run(["sudo", "-n", "tee", f"{port}/disable"], input="1" if disabled else "0", text=True,
+                       capture_output=True, check=True)
+
+
+def camera_units(role, up) -> None:
+    """The bind timer restarts the preview every 20 s, so it goes down first and up last."""
+    names = ["rosy-omx-cameras-bind.timer", f"rosy-omx-camera@{role}"]
+    subprocess.run(["systemctl", "--user", "start" if up else "stop", *names], check=True)
+    if up:
+        time.sleep(8)
+
+
 def sessions():
     """Command lines of every running record_session.py: a `--io chunk-io` one is the runner that owns the bus."""
     text = subprocess.run(["ps", "-eo", "args"], capture_output=True, text=True).stdout
@@ -152,10 +201,45 @@ class Io:
         self.fetch, self.decode, self.bus_read, self.bus_fix = fetch_url, decode_frame, bus_read, bus_fix
         self.sessions, self.lock_free, self.calibrate, self.replays = sessions, lock_free, calibrate_check, replays
         self.labels, self.roles, self.unit_tail, self.unit_restart = viewer_labels, camera_roles, unit_tail, unit_restart
+        self.device, self.usb_port, self.frames, self.ports = camera_device, usb_port, frames_flow, port_set
+        self.units, self.sleep = camera_units, time.sleep
         for name, fn in seams.items():
             if not hasattr(self, name):
                 raise TypeError(f"unknown seam {name}")
             setattr(self, name, fn)
+
+
+def usb_recover(role, io):
+    """2026-11-05: a D435 came back on a USB2 root port and gave no frames until that port and its peer were off for
+    30 s. Only a camera whose direct read yields nothing is cycled, and never a port that also carries an arm board."""
+    device = io.device(role)
+    if not device:
+        return f"no registry device for {role}"
+    try:
+        port = io.usb_port(device)
+    except OSError as e:
+        return f"cannot resolve the USB port of {role}: {e}"
+    boards = [b for b in port["boards"] if "OpenRB" in b]
+    if boards:
+        return f"refused to power-cycle the port of {role}: it also carries {', '.join(boards)}"
+    io.units(role, False)
+    try:
+        if io.frames(device):
+            return f"{role} streams when read directly (not a USB fault)"
+        io.ports(port["ports"], True)
+        io.sleep(30)
+        io.ports(port["ports"], False)
+        for _ in range(9):  # the first read right after re-enable still gave nothing; one a minute later streamed
+            io.sleep(10)
+            if io.frames(device):
+                break
+        else:
+            return f"power-cycled the USB port of {role} (30 s off) but it still gives no frames"
+    finally:
+        io.units(role, True)
+    speed = io.usb_port(device)["speed"]
+    return f"power-cycled the USB port of {role} and its peer (30 s off), frames flow at {speed} Mbit/s" + (
+        "; WARN: USB2, the camera needs a USB3 port and cable" if speed < 5000 else "")
 
 
 # ---- checks ------------------------------------------------------------------------------------------------------
@@ -238,14 +322,24 @@ def check_cameras(arm, cameras, io, fix=False, bus_free=True):
                 f"; {want} is served as '{served}': use {camera['url'].replace(label + '.jpg', served + '.jpg')}" if served else ""))
             continue
         role = io.roles().get(labels.get(label))
-        if role and "unavailable" in io.unit_tail(role):
-            if fix and bus_free:
+        unavailable = bool(role) and "unavailable" in io.unit_tail(role)
+        if role and fix and bus_free:
+            if unavailable:
                 io.unit_restart(role)
                 code, body = io.fetch(camera["url"])
                 if code == 200 and body.startswith(b"\xff\xd8"):
                     fixed.append(f"{name}: restarted rosy-omx-camera@{role} (it held a device node a reconnect replaced)")
                     top = body if name == "top" else top
                     continue
+            note = usb_recover(role, io)
+            code, body = io.fetch(camera["url"])
+            if code == 200 and body.startswith(b"\xff\xd8"):
+                fixed.append(f"{name}: {note}")
+                top = body if name == "top" else top
+            else:
+                bad.append(f"{name}: {note}")
+            continue
+        if unavailable:
             bad.append(f"{name}: rosy-omx-camera@{role} reports the camera unavailable (restart it after a reconnect)")
             continue
         bad.append(f"{name} {camera['url']}: {code or 'no answer'}" + ("" if code != 200 else ", not a JPEG"))

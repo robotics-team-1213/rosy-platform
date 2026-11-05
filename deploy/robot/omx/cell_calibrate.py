@@ -129,10 +129,13 @@ def remap(cell, config: dict, points: list, work: Path, log=print) -> dict:
         except SystemExit as exc:
             log({"point": [x, y], "skipped": str(exc)[:100]})
             continue
-        for command in (f"load {lib}", "goto above_pick"):
-            if not cell.act(command).get("ok"):
-                cell.act("park")
-                raise SystemExit(f"remap stopped at {command} for {[x, y]}")
+        failed = next((c for c in (f"load {lib}", "goto above_pick") if not cell.act(c).get("ok")), None)
+        if failed:
+            # folded after a refused move: fit the marks so far (arm_b 2026-11-05: 8 marks lost to a roll stall at -13)
+            if not cell.act("park").get("ok"):
+                raise SystemExit(f"remap stopped at {failed} for {[x, y]} and the park failed")
+            log({"point": [x, y], "stopped": failed})
+            break
         near = predicted(marks, (x, y))
         mark = cell_pivot.mark_jaws(cell, config, near=near and ([near], prm.get(config.get("params"), "pivot.follow_px")))
         log({"point": [x, y], "mark": mark, "near": near})
