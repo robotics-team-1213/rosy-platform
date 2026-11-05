@@ -49,7 +49,65 @@ CI 성공 후에만 ABI 검사·서명을 진행한다. main 이외 artifact와 
 publisher만 서명된 wave를 연다. 게시 직후 canary가 자동 설치를 시작할 수 있으므로
 운영 창 없이 예약 작업을 활성화하지 않는다. hold·보정·idle·정상 상태·롤백 가드는 유지한다.
 
-`delivery_held`는 `reason`을 읽는다. frozen OS 파일·서비스는 `os-image`이며 별도
-OS build/sign/publish 승인이 필요하다. 이를 payload로 바꾸거나 BUILD GO를 우회하지 않는다.
+`delivery_held`는 `reason`을 읽는다. frozen OS 파일·서비스는 `os-image`이며 아래
+engineering 게시 opt-in이 없으면 대기한다. 이를 payload로 바꾸거나 BUILD GO를 우회하지 않는다.
 기존 거래 재개는 같은 source·tar digest·canary의 서명된 rollout 일치부터 검사한다.
 `canary_ok=false`, 실패·철회 또는 장치 대기를 성공으로 기록하지 않는다.
+
+## OS engineering 게시
+
+OS 게시를 승인한 운영자는 private JSON에 `os_engineering: true`와
+`os_cms_private_key`를 추가한다. 후자는 기존 운영 PC의 CMS 개인키 **절대 경로**이며
+키나 private JSON을 저장소·GitHub runner에 복사하지 않는다. Ed25519 키는 기존
+`key_name`을 사용한다. CMS 공개 SPKI·인증서·빌드 pin 검증도 그대로 적용한다.
+`source_repository`는 설치 도구가 원래 Git 저장소의 절대 경로로 기록한다.
+
+최초 활성화 전에 공개 main에 필요한 OS 수정이 포함됐는지 전체 SHA와 ancestry로
+확인한다. 작업은 설치 1분 뒤 실행될 수 있으므로, 옛 main을 빌드할 상태에서 먼저
+활성화하지 않는다. 이미 빌드 중인 같은 source의 작업·예약 tag·상태 파일도 확인한다.
+
+하나의 coordinator와 잠금·`state.json`을 그대로 쓴다. 정확한 main push CI 성공과
+main ancestry를 확인하고, `payload-reserved-<id>`를 원자 예약하여 그 tag에서만 이미지
+workflow를 dispatch한다. workflow·repo/head repo ID·source SHA·tag·run ID·run attempt를
+고정하고, 완료된 같은 run의 source-bound artifact ID·크기·SHA256까지 검증한다.
+공개 tag `os-pinky-pro-<id>`는 빌드 예약 tag와 구분한다. 긴 CI 빌드는 tick마다
+관측하며 기다리는 동안 작업 프로세스를 유지하지 않는다.
+
+서명 PC는 들어오는 main의 코드를 실행하지 않는다. 설치 manifest의 **tools SHA**와
+설치 파일 해시·그 SHA의 Git blob을 대조하고, 정확한 tools SHA의 `git archive`만
+소유 VM에 전달한다. 이미지의 candidate SHA는 별도로 검사한다. 로컬 CMS 키는
+기존 외부 서명 절차에만 사용하고 VM에도 전달하지 않는다. 독립적인 이미지·factory
+인증, CMS/verity 및 최종 consumer 검증을 거쳐 완성된 다섯 자산만 노출한다.
+
+자동 OS 게시는 항상 **`canary=[]`, `canary_ok=false`**를 서명한다. 이 정책은 모든
+현재·미래 기체의 `authorize`를 DEFER한다. prerelease 표시나 `canary_ok=false`만으로는
+닫힌 배포가 되지 않는다. 목록에 실제 기체가 있으면 그 기체는 즉시 허용되기 때문이다.
+자동 route는 실제 OS canary 활성화나 승격을 수행하지 않는다.
+
+게시 전에 nonce·source·tag·각 transport 자산의 크기/해시를 원장에 저장한다. 같은 nonce와
+숫자 Release ID의 소유 초안만 재개하며, 맞는 기존 자산은 보존하고 빠진 자산만 올린다.
+불명 초안·다른 source·다른 자산은 덮지 않는다. 공개 후에는 다시 GET하여 public
+prerelease·정확한 tag SHA·전체 자산 크기/해시와 실제 서명 sidecar 바이트를 검증한다.
+그 증거가 있어야 `os_published`를 남긴다. `deployed_sha`와 `delivery_base_sha`는 진전시키지
+않으므로 게시를 기체 설치로 기록하지 않는다.
+
+재시작은 같은 run/attempt와 같은 초안을 관측한다. dispatch 등록이 모호하거나 예약 ref의
+생성 응답이 유실되면 새 빌드를 만들지 않고 검토를 요구한다. 서명 준비의 중단 자료는
+소유 attempt에 보존하고 최대 세 번 준비하며, 원자적으로 완성된 signed 출력은 재검증해
+재사용한다. 자동 준비의 다운로드는 1시간, 네 guest 작업은 각각 1시간, 기존 검증된
+guest 전송은 8시간 상한이다. OS opt-in 설치의 예약 작업 한도는 이를 감안해 16시간이며
+payload 전용 설치는 기존 60분이다. 공개 도구 캐시 준비 실패도 성공으로 처리하지 않는다.
+
+이 경로는 engineering GitHub Release 게시다. production `BUILD_GO`, 장치의 idle/정지·
+claim·source health·trial/rollback 가드를 바꾸지 않는다. 실제 OS 설치·재부팅·새 G4·SLAM
+수용은 별도다. 기존 unit 문제와 frozen OS 소유 경계는
+[검증된 OS poll 교훈](../solutions/deployment/os-update-poll-starts-conflicting-io-2026-11-05.md)을 따른다.
+
+검증 기록(2026-11-06): 소스 `541621bd8a47a1752a1e4efb565d0696bec8cf02`를 원격 시험 PC에서
+OS coordinator·기존 payload coordinator·publisher·preparer·고정 snapshot·완전 source inventory·
+rollout·영향 분류의 8개 시험 파일로 확인했다. **219 passed, skip 0, NEW/known/flaky 0**.
+고정 설치본의 import 폐쇄성, run/attempt 고정, artifact 오류 거절, 실제 coordinator의 OS
+분기/no-SSH, 빈 rollout의 실제 authorize 거절, 소유 초안 재개 및 공개 sidecar readback을
+포함한다. VM·RAUC 동작은 해당 기존 시험의 모델/도구 fixture 범위이며, 이 결과가 실제
+GitHub 이미지 빌드·운영 키 서명·공개 게시·Windows 예약 작업·기체 설치를 실행했다는 뜻은 아니다.
+최초 운영 실행에서는 그 단계별 원장과 실제 GitHub 자산을 별도로 확인해야 한다.

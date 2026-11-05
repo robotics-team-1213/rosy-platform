@@ -14265,3 +14265,10 @@ osy-d395-s1d\`.
 - 증거: 회귀만 추가한 1489498e90은 원격9실패/52통과, 수정6c6982d520은 robot_cd·prepare·publish·ship·artifact-impact 전체210통과/skip0, known-failures NEW/known/flaky0이다. 공개004의 main 출처·rollout 서명·tar digest는 별도 읽기 전용으로 확인했으며 canary_ok=false를 유지했다.
 - gate 변화: source 회귀 확인이며 독립 검토·최종 통합 검증은 별도다. 예약 설치·새 Release 게시·로봇 활성화·주행은 실행하지 않았다. frozen OS는 기존 os-image 경로로 유지한다.
 - CE: 해당 없음. v2 누락과 pin 전달의 재발 방지는 최종 코드·실행 회귀에 직접 남고 설치 부재/고정 snapshot 판단은 기존 D-553 및 운영 문서로 설명된다. 운영 자동화 수용은 아직 미해결이다.
+
+## 2026-11-06 · uncommitted · feat(release): 단일 coordinator의 닫힌 OS engineering 게시
+
+- 변경: 명시적 OS opt-in을 기존 coordinator의 예약·비동기 빌드 관측·운영 PC 서명·소유 초안 재개·공개 자산 재조회에 연결했다. 고정 설치 tools SHA와 이미지 source SHA를 분리하고 원래 Git 저장소는 정확한 tools SHA archive의 데이터원으로만 쓴다. 빈 canary와 닫힌 wave를 서명하며 장치 기준선은 진전시키지 않는다. [운영 절차](deployment/pinky-automatic-release.md)에 설정·실패 재개·실행 한계를 기록했다.
+- 증거: 최초 RED faf1b29fcf에서 새 OS helper 부재9실패/닫힌 rollout 거절1통과. bdb97cc7a8 원격193통과/1실패는 고정 snapshot의 실제 import 폐쇄성 검사에서 native helper3개 누락을 찾았다. 후속541621bd8a는 snapshot import·기존/OS coordinator·publisher·preparer·source inventory·rollout·영향 분류219통과/skip0, known-failures NEW/known/flaky0이다. 독립 source 검토는 누락 해결과 run ID/attempt·source·publication-only 경계에서 추가 발견이 없었다.
+- gate 변화: source·원격 회귀 확인이다. 실제 이미지 workflow dispatch·운영 키 서명·Release 게시·Windows task 실행·OS 설치·재부팅·새 G4/SLAM 수용은 실행하지 않았다. production BUILD_GO와 장치의 claim/idle/source health/trial/rollback은 유지한다.
+- CE: 해당 없음. 새 route의 판단은 코드·회귀·정본 운영 절차에 직접 남겼다. frozen OS 소유·no-update의 systemd 부작용은 기존 검증 교훈을 참조하고 중복 교훈을 만들지 않았다.
